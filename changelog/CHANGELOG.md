@@ -1,5 +1,24 @@
 # CHANGELOG — GEX-Signal-Tapereader
 
+## v10.41 — 2026-08-14 — TWO-COLUMN DASHBOARD
+
+One column could no longer hold the King analyzer + Deflections + Node Map (user call
+after seeing v10.40 live). Dashboard is now TWO COLUMNS:
+- **LEFT — everything King:** badge cluster, King Analyzer narrative + chips, King Path chart.
+- **RIGHT — Deflections + Node Map** (accumBlock, which renders both).
+
+Responsive by construction: the wrapper is `flex-wrap` with `flex:1 1 300px` per column,
+so a panel narrower than ~620px stacks vertically (identical to the old layout) and a wide
+panel goes side-by-side. The sync-gate suppression panel and the footer stay full-width.
+
+**Width migration (one-time):** saved single-column-era widths (<620px) would leave the
+columns permanently stacked — the user would see "no change". `restoreSize()` bumps such
+widths to 690px ONCE (flag `gpts_2col_migr_v1`), then never touches user resizes again.
+Fresh-install default width 300px → 690px.
+
+Tests: `test_layout_2col.js` (12 guards: column composition, wrap fallback, gate stays
+above columns, migration one-time). Full suite 26/27 green.
+
 ## v10.40 — 2026-08-14 — KING PATH v2 (Batch 2): analyzer + narrative-first layout + gutter
 
 **LAYOUT (approved mockup).** The "KING PATH · today · drift · rolls · verdict" header row

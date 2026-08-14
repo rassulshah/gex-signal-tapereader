@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    10.40
+// @version    10.41
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -264,7 +264,7 @@ function onFeed(sym, feed, j){
   if(feed==='gamma' || feed==='combined'){ var _ts=Date.now(); LASTFEED[sym] = { j:j, feed:feed, ts:_ts }; observeFeedCadence(sym, _ts); }
 }
 
-console.log('[GPTS] v10.40 part1 loaded');
+console.log('[GPTS] v10.41 part1 loaded');
 
 function fiberKeyOf(el){
   var ks=Object.keys(el);
@@ -2990,7 +2990,7 @@ function buildPanel(){
   if(document.getElementById('gpts-panel')) return;
   PANEL=document.createElement('div');
   PANEL.id='gpts-panel';
-  css(PANEL,{position:'fixed', top:'60px', left:'', right:'12px', width:'300px',
+  css(PANEL,{position:'fixed', top:'60px', left:'', right:'12px', width:'690px',
     background:PAL.bg, color:PAL.ink, font:'12px/1.4 Inter,Arial,sans-serif',
     border:'1px solid '+PAL.line, borderRadius:'10px', zIndex:'999999',
     boxShadow:'0 8px 28px rgba(0,0,0,0.6)', userSelect:'none', overflow:'visible'});
@@ -3151,6 +3151,17 @@ function restorePos(){
 function restoreSize(){
   try{ var s=JSON.parse(localStorage.getItem(SIZE_KEY)||'null');
     if(s&&s.w){ PANEL.style.width=s.w; if(s.h) PANEL.style.height=s.h; }
+    // (v10.41) ONE-TIME 2-COLUMN MIGRATION: the dashboard is now two columns
+    // side by side, which needs ~680px. A saved (or default) width from the
+    // single-column era leaves the columns stacked and the user seeing "no
+    // change". Bump once, remember we did, keep any later user resize sacred.
+    var did=null; try{ did=localStorage.getItem('gpts_2col_migr_v1'); }catch(e2){}
+    var wNow=parseInt((PANEL.style.width||'0'),10)||0;
+    if(!did && wNow<620){
+      PANEL.style.width='690px';
+      try{ localStorage.setItem('gpts_2col_migr_v1','1');
+           localStorage.setItem(SIZE_KEY, JSON.stringify({w:'690px', h:PANEL.style.height||''})); }catch(e3){}
+    } else if(!did){ try{ localStorage.setItem('gpts_2col_migr_v1','1'); }catch(e4){} }
   }catch(e){}
 }
 
@@ -6128,7 +6139,7 @@ function feedStatusHtml(){
   return '<div style="display:flex;justify-content:space-between;align-items:center;color:'+PAL.sub+';font-size:9px;letter-spacing:0.3px">'+
     '<span style="color:'+col+'">'+txt+'</span>'+
     warn+
-    '<span>feed v10.40</span>'+
+    '<span>feed v10.41</span>'+
     '</div>';
 }
 
@@ -7001,14 +7012,22 @@ function render(){
     var gEl0=document.getElementById('gpts-grade'); if(gEl0){ gEl0.style.display='none'; }
     return;
   }
-  html+=kingBlock();            // King tracker (3-magnet header + ①②③ + sparkline + verdict)
-  html+=sep();
+  // (v10.41) TWO-COLUMN DASHBOARD. One column could no longer hold the King
+  // analyzer + Deflections + Node Map. LEFT = everything King (badge, narrative,
+  // path chart). RIGHT = Deflections + Node Map (accumBlock). Responsive: each
+  // column is flex:1 1 300px, so a NARROW panel (<~620px) stacks them vertically
+  // — identical to the old single-column layout — and a wide panel goes side by
+  // side. The one-time width migration lives in restoreSize().
+  html+='<div id="gpts-2col" style="display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start">'+
+          '<div style="flex:1 1 300px;min-width:0">'+kingBlock()+'</div>'+
+          '<div style="flex:1 1 300px;min-width:0">';
   // (v10.37) standalone gatekeeperBlock() REMOVED - gatekeeper strike + distance now in King badge.
   // (v10.27) Standalone BO / SPY Signals section REMOVED. The breakout-pullback
   // lifecycle is now shown as a per-node tag (BO / BO\u00b7FT\u00b7\u2026) on the Node Map row it
   // belongs to (see nodeMapBlock -> setupTagForNode). The state machine still runs
   // (runMachine/newSetup/STATE.setups) \u2014 only the grid rendering is gone. Saves space.
-  html+=accumBlock();           // (v10.27 Step 5) Node Map (carries flow + per-node BO tag)
+  html+=accumBlock();           // (v10.27 Step 5) Deflections + Node Map (right column)
+  html+='</div></div>';         // close right column + two-col wrapper
   html+='<div style="border-top:1px solid '+PAL.line+';margin:6px 0 3px 0"></div>';
   html+=feedStatusHtml();
   elBody.innerHTML=html;
