@@ -16,6 +16,7 @@ function extract(name){
   for(let k=i;k<src.length;k++){ if(src[k]==='{')depth++; else if(src[k]==='}'){depth--; if(depth===0){end=k;break;}} }
   return src.slice(m.index, end+1);
 }
+eval(extract('kingPathSigMoves'));
 eval(extract('kingSparkline'));
 
 const now = 1000*60*60*10;   // arbitrary

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>The King Area — Field Guide & Reading Process (v10.43)</title>
+<style>
+  :root{--bg:#0b0e14;--card:#12161f;--line:#1e2530;--green:#2ec27e;--red:#f0616d;--gold:#e3c341;--sub:#8b98a9;--amber:#f2b45a;--blue:#4a90d9;--ink:#d7dde6;--purp:#b48ce3}
+  body{background:var(--bg);color:var(--ink);font:13px/1.55 -apple-system,Segoe UI,system-ui,sans-serif;margin:0;padding:26px;max-width:880px;margin:0 auto}
+  h1{font-size:20px;color:var(--gold);margin:6px 0 2px} .sub{color:var(--sub);font-size:11.5px;margin-bottom:18px}
+  h2{font-size:15px;color:var(--gold);border-bottom:1px solid var(--line);padding-bottom:4px;margin:26px 0 8px}
+  h3{font-size:13px;color:var(--ink);margin:14px 0 4px}
+  .el{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:6px;padding:8px 12px;margin:8px 0}
+  .el b.n{color:var(--gold)} .w{color:var(--sub)}
+  .tag{font-size:10px;border:1px solid var(--line);border-radius:8px;padding:0 6px;color:var(--sub)}
+  .m{color:var(--blue);font-weight:600}.a{color:var(--gold);font-weight:600}
+  table{border-collapse:collapse;width:100%;font-size:11.5px;margin:8px 0}
+  th{color:var(--sub);text-align:left;font-weight:600;border-bottom:1px solid var(--line);padding:4px 6px}
+  td{border-bottom:1px dashed rgba(255,255,255,.06);padding:4px 6px;vertical-align:top}
+  .hot{color:var(--amber);font-weight:700}.pos{color:var(--green)}.neg{color:var(--red)}
+  .case{background:rgba(74,144,217,.06);border:1px solid rgba(74,144,217,.25);border-radius:6px;padding:8px 12px;margin:8px 0;font-size:12px}
+  .step{display:flex;gap:10px;margin:6px 0}.step .num{color:var(--gold);font-weight:800;min-width:18px}
+  code{background:rgba(255,255,255,.06);border-radius:3px;padding:0 4px;font-size:11px}
+  .warn{color:var(--amber)}
+</style></head><body>
+
+<h1>👑 The King Area — Field Guide &amp; Reading Process</h1>
+<div class="sub">v10.43 · prepared 2026-08-14 for the post-close review · Every claim tagged:
+<span class="a">⚖ Academy doctrine</span> · <span class="m">📊 measured on our recorded bars (n shown)</span> · ◦ heuristic/untested.
+Worked examples use TODAY'S real session.</div>
+
+<h2>0 · The trust layer (read this first, always)</h2>
+<div class="el"><b class="n">⚠ Sync gate / suppression panel</b><br>
+<b>What:</b> before anything King-related renders, three independent King derivations must agree (tape $K tag · raw feed · parsed tape max). No consensus → the whole structural read is <i>hidden</i>, replaced by a panel naming the disagreement.<br>
+<b>Why:</b> this morning's bug — panel crowned 775 while tape and feed said 780 — ran for hours because a wrong King <i>looks</i> like a normal King. Fail-closed beats confidently wrong.<br>
+<b>How to use:</b> if you ever see the suppression panel or a <span class="neg">⚠ tape</span> chip in the footer, <b>trust nothing structural on the panel</b> until it clears. <code>__gptsDebug.syncReport()</code> names the dissenting source.</div>
+
+<h2>1 · Header magnets &amp; the King badge</h2>
+<div class="el"><b class="n">★ SUP / 👑 / ★ RES badges</b> — strongest support below, the King, strongest resistance above, each with %King strength. <b>Note an approved divergence:</b> the ★ picks blend strength with <i>proximity</i> (your 2026-08-13 decision — "more practical intraday"), while pure Academy doctrine ranks by size alone. So a huge-but-far floor can lose the ★ to a strong-and-near one. <b>Use:</b> the triangle SUP–KING–RES is the room price is trading in.</div>
+<div class="el"><b class="n">King badge (gold pill)</b> — King strike + signed offset vs price (<span class="pos">+n↑</span> above / <span class="neg">−n↓</span> below), gatekeeper strike + its distance underneath. Dimmed gate = clear path to the King.</div>
+
+<h2>2 · The 8 console tiles — what, why, how</h2>
+<table>
+<tr><th>Tile</th><th>What it is</th><th>How to use it</th></tr>
+<tr><td><b>KING</b> +γ/−γ</td><td>The largest-|exposure| strike + its gamma sign</td><td>Polarity sets contact behavior: <span class="pos">+γ</span> = friction — dealers buy dips/sell rips into it → sticky, pin-prone <span class="a">⚖</span>. <span style="color:var(--purp)">−γ</span> = fuel — pro-cyclical hedging → wicky, overshoot-prone <span class="a">⚖</span>. Same strike, opposite personality.</td></tr>
+<tr><td><b>K$ · TODAY</b></td><td>King's dollar magnitude (tape $K) + change vs open</td><td>The single best "is the magnet real" gauge. Growth = intent, conviction <span class="a">⚖</span>. Bleed = hedge decay → pin thesis weakening, reshuffle risk <span class="a">⚖</span>. <b>Today:</b> −29% bleed all morning while price stalled below — the tape said "this pin is dissolving" hours before price proved it.</td></tr>
+<tr><td><b>DIST</b></td><td>Strikes to King + gravity gate</td><td><span class="m">📊 Within ≤3 strikes the toward-King edge exists (54–60%); beyond 3 it flips (47%, 0/3 at 5+)</span>. When the tile says <code>out</code>, King-pull reasoning is suspended — don't fight that.</td></tr>
+<tr><td><b>VALUE 70%</b></td><td>eVA: tightest band around the King holding ~70% of dealer mass (the POC concept you suggested)</td><td>Inside = rotation regime — fade edges toward the King <span class="m">📊 57% n=260</span>. <b>OUTSIDE = imbalance — continuation, do NOT fade</b> <span class="m">📊 n=25</span>. Note this inverts the naive value-area fade.</td></tr>
+<tr><td><b>SUCCESSION</b> ⚠</td><td>Strongest non-King strike as % of King mass</td><td>The #1 backtested leading indicator: <span class="m">📊 at ≥60%, the crown rolled to that exact strike within 20 bars 76% of the time, median 12 min (n=148)</span>. Amber ⚠ = hot. This predicts King <i>relocation before it prints</i>.</td></tr>
+<tr><td><b>TAPS · CROSS</b></td><td>Tap episodes at the King · side crossings today</td><td>Freshness: <span class="a">⚖ claimed decay 80/66/33% by tap (unverified)</span> — a 3rd tap needs exceptional confluence. Many crossings = the King is a chop axis, not a wall.</td></tr>
+<tr><td><b>PHASE</b></td><td>Session phase (CT) + minutes to close</td><td>Phase reweights everything: OPEN reach → drive-off risk <span class="a">⚖</span>; LUNCH = low-conviction; POWER (last 30m) + proximity = pin window <span class="a">⚖</span> <span class="m">📊 late-reach→pin 3/4 days</span>.</td></tr>
+<tr><td><b>ALIGN</b></td><td>QQQ King same-side? (VIX pending)</td><td>✓ = system-wide pull one way (trinity logic <span class="a">⚖</span>); ✗ = split boards — size conviction down.</td></tr>
+</table>
+
+<h2>3 · STRUCTURE ▸ / READ ▸</h2>
+<div class="el"><b class="n">STRUCTURE ▸</b> = what <i>is</i>: King, polarity mechanics, distance, value position. Purely descriptive — if this line is wrong, the parse is wrong, not the market.<br>
+<b class="n">READ ▸</b> = what's <i>likely</i>, priority-ordered (max 3): Overshoot/Beach-Ball ⚖ → Succession 📊 → gravity/approach-ETA 📊 (+pin window ⚖) → outside-value 📊 → K$ bleed/build ⚖. Every claim carries its tag; the 📊 numbers re-read from the live scorecard as it unlocks.</div>
+
+<h2>4 · King Path (history chart) — and how to read King MOVEMENT</h2>
+<div class="el"><b class="n">The staircase</b> — King strike vs clock time. Steps at each confirmed roll; color by running trend with hysteresis (won't recolor on 1-strike wiggles). <b class="n">Dashed blue</b> = price. <b class="n">Gutter</b> = price pill + 👑 label, physically outside the plot. <b class="n">drift chip</b> (in-chart) = net migration + roll count — <span class="warn">descriptive only: tested 50.0% vs next-30m (n=68), a coin flip</span>. <b class="n">Verdict pill</b> = drift+magnet+stability composite (context, not signal). <b class="n">pinned Xm</b> = time at the current strike.</div>
+
+<h3>The movement vocabulary</h3>
+<table>
+<tr><th>Pattern on the staircase</th><th>Reading</th><th>Evidence</th></tr>
+<tr><td>One-way migration (steps keep stepping the same way)</td><td>Trend evidence — dealers re-centering directionally; expect stairstepping continuation</td><td><span class="a">⚖ rolling-floors: 1=noise, 2=signal, 3=confirmation</span></td></tr>
+<tr><td>Flip-flop (up-down-up in a tight core)</td><td>Whipsaw core — contested settlement; fade extremes, never the middle</td><td><span class="a">⚖</span> + our 8/11–8/13 days printed exactly this (7u/7d, 8u/7d)</td></tr>
+<tr><td>Long flat + growing K$</td><td>Conviction pin forming at that strike</td><td><span class="a">⚖ growth=intent</span></td></tr>
+<tr><td>Long flat + bleeding K$</td><td>Stale crown — magnet dissolving; succession or reshuffle ahead</td><td><span class="a">⚖ decay=hedge</span>; today's morning</td></tr>
+<tr><td>Roll <i>toward</i> price after succession ⚠</td><td>The predicted relocation printing — the new strike is the operative anchor</td><td><span class="m">📊 76% n=148</span></td></tr>
+<tr><td>Roll <i>away</i> from price (King runs)</td><td>Target extension — trend-day mechanic (next node crowned ahead of price)</td><td><span class="a">⚖ pattern-trend</span></td></tr>
+</table>
+
+<div class="case"><b>Today, read with this vocabulary:</b> crown opened at 780 ($1.40B) → bled −29% by 11am (stale-crown signature) → succession lit 775 → crown collapsed down to the 775/776 contest → afternoon flip-flopped 775↔776↔777 with 7 rolls (whipsaw core signature) while price orbited 776. The K$ bleed was the first domino, succession named each next crown, and the flip-flop said "fade edges, expect pin near the contest." That's the whole system working in sequence.</div>
+
+<h2>5 · 🎯 Projected chart — element by element</h2>
+<table>
+<tr><th>Element</th><th>What / when drawn</th><th>How to use</th></tr>
+<tr><td><b>Gold solid → dashed step</b></td><td>Current King rail; dashed step to the projected crown — drawn <i>only</i> when Succession ≥60%</td><td>Your forward anchor. If the step is drawn, plan around the <i>projected</i> King, not the current one <span class="m">📊 76%</span></td></tr>
+<tr><td><b>Blue dashed path + cone</b></td><td>Price path toward the operative target at the measured 3-bar approach rate; cone = recent bar range × √bars, tapering after ETA into the pin range</td><td>The cone is a <i>normalcy envelope</i> — price outside it means something changed (news, reshuffle). Not a forecast band <span class="m">📊 coverage target ~70%, scored nightly</span></td></tr>
+<tr><td><b>ETA circle</b></td><td>Projected arrival time at current pace</td><td>Late ETA (after ~2:30 CT) biases pin; early biases drive-off <span class="a">⚖</span>. ETA error is scored nightly</td></tr>
+<tr><td><b>Rails: T1 / T2 / eVA / HOD / LOD</b></td><td>Gatekeeper (first checkpoint) · King (target cap — no T3 <span class="a">⚖</span>) · value edges · session extremes; far rails collapse into ▲/▼ edge tags</td><td>Your ladder. T1 behavior gates T2: a hold at the gatekeeper stalls the whole path <span class="a">⚖</span></td></tr>
+<tr><td><b>Amber pin band</b></td><td>±0.5 at target; drawn in POWER phase + proximity</td><td>Settlement gravity zone — expect wicks into it, not breaks through it, while +γ holds <span class="a">⚖</span> <span class="m">📊 3/4</span></td></tr>
+</table>
+
+<h2>6 · THE KING READ — the 7-step process</h2>
+<div class="step"><span class="num">1</span><div><b>Trust:</b> no ⚠ tape, no suppression panel. If flagged — stop, nothing else counts.</div></div>
+<div class="step"><span class="num">2</span><div><b>Anchor quality:</b> KING tile (strike + polarity) + K$ trend. Growing +γ King = strong sticky magnet. Bleeding King = discount everything downstream and expect relocation.</div></div>
+<div class="step"><span class="num">3</span><div><b>Succession scan:</b> ⚠ hot? Then the <i>projected</i> King is the operative anchor for targets — the current crown is a lame duck (📊 76%, median 12 min).</div></div>
+<div class="step"><span class="num">4</span><div><b>Geometry:</b> DIST inside gravity (≤3)? VALUE inside or outside? Inside both = rotation regime toward the King. Outside value = imbalance — do not fade, expect continuation.</div></div>
+<div class="step"><span class="num">5</span><div><b>Approach &amp; clock:</b> converging or receding (📊 63% vs 47%)? ETA vs PHASE: late+near = pin window; early reach = drive-off risk; LUNCH = downgrade conviction.</div></div>
+<div class="step"><span class="num">6</span><div><b>Contact:</b> TAPS (freshness left?) and overshoot state (+γ King overshot without a 14-bar extreme = Beach-Ball reversion watch ⚖).</div></div>
+<div class="step"><span class="num">7</span><div><b>Confluence:</b> ALIGN ✓/✗, Node Map agreement, deflections at the same strikes. Then read the projected chart as the composed conclusion of steps 2–6 — if it doesn't match your own step-through, one of the inputs changed: find which tile.</div></div>
+
+<h2>7 · Common configurations → structural expectation</h2>
+<table>
+<tr><th>Configuration</th><th>Structural expectation</th><th>Evidence</th></tr>
+<tr><td>+γ King · K$ building · inside value · late · near</td><td><b>Pin at the King</b> into close; fade pokes out of the band</td><td>⚖ + 📊 3/4</td></tr>
+<tr><td>K$ bleeding &gt;15% · succession ⚠</td><td><b>Crown migration</b> — anchor to the successor strike; old King's S/R weakens</td><td>⚖ + 📊 76%</td></tr>
+<tr><td>−γ King, price approaching</td><td>Hot contact — wicks/overshoots through, not sticky; don't treat as a wall</td><td>⚖</td></tr>
+<tr><td>Price above +γ King, no 14-bar high</td><td>Stretch not break — reversion through the King favored (Beach Ball)</td><td>⚖ (volume cue unobservable)</td></tr>
+<tr><td>Outside value area</td><td>Imbalance — continuation; re-entry into value re-arms rotation</td><td>📊 n=25 (small — watch it sharpen)</td></tr>
+<tr><td>DIST &gt; 3 strikes</td><td>King irrelevant for now — trade the local structure, ignore pull language</td><td>📊 flip beyond 3</td></tr>
+<tr><td>Staircase flip-flopping · ALIGN ✗</td><td>Whipsaw regime — edges only, middle is a trap</td><td>⚖ + our 8/11 validation</td></tr>
+<tr><td>One-way rolls ×3 · K$ building ahead</td><td>Trend day — stairstep with it; pullback entries at fresh nodes</td><td>⚖ (0 one-way days recorded yet — will sharpen)</td></tr>
+</table>
+
+<h2>8 · The sharpening loop (what improves itself)</h2>
+<div class="el">Every bar records what was projected (<code>snap.proj</code>). Nightly, <b>Analysis ▸ 🎯 PROJECTION SCORECARD</b> scores it all — succession hit rate, target-reach, ETA error, cone coverage, pin hits — and <b>🔧 RECOMMENDATIONS</b> converts scores into concrete tuning (widen cone / adjust rate window / move the 60% threshold). The same payload rides in the day export (<code>projReview</code>) so the end-of-day LLM review consumes it automatically. <b>The 📊 numbers in this guide are launch values from a 4-day/324-bar backtest — they are designed to be replaced by your own live rates as n unlocks.</b> When we review, compare what the panel claimed against what the scorecard measured: that's the conversation that tunes the system.</div>
+
+<div class="sub" style="margin-top:18px">Prepared by Claude · GEX-Signal-Tapereader · together with the mockups in <code>mockups/</code>, this file belongs in the repo (suggest: <code>docs/KING-FIELD-GUIDE.html</code>).</div>
+</body></html>

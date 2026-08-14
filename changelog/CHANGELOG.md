@@ -1,5 +1,37 @@
 # CHANGELOG — GEX-Signal-Tapereader
 
+## v10.43 — 2026-08-14 — PROJECTED-CHART RENDERING FIXES (user-reported, live)
+
+User caught the projected chart "looking weird" minutes after v10.42 went live — on a day
+where the crown contest (775↔776↔777, all within 2 strikes) hit the layout's worst case.
+
+- **Focused y-domain.** The chart now scales to the price↔target ACTION; rails outside the
+  window (eVAH 780, HOD 778.8 that day) collapse into ▲/▼ edge tags instead of stretching
+  the axis and squashing the projection into the bottom fifth.
+- **Post-ETA cone taper** (`projTaperHalf`, pure + tested). The volatility cone widens with
+  √bars until projected arrival, then TAPERS into the pin range (floor ±0.5) — kills the
+  "black wedge" of endless widening. With no ETA, growth caps at the 10-bar envelope.
+- **Rail-label anti-collision** — labels nudge to ≥9px separation (LOD 775.4 vs T2 King 775
+  are both readable now).
+- **History-chart gutter min-gap 11→15px** — the price pill can no longer sit on the 👑
+  label when price and King are within a fraction of a strike (776.16 vs 776).
+- **Console tiles wrap** instead of ellipsizing ("$1.32B ▼7%", "POWER · 12m" fully visible).
+
+**BO-TAG FIX (user-reported).** The Node Map's lifecycle chip showed "BO·FT·TST·CONF·GO"
+all day because the selector took the HIGHEST-STAGE setup ever seen at the strike — a
+finished morning GO haunted the row while the LIVE setup sat at BO·FT. Now terminal
+setups (T2/FAILED/EXPIRED) are skipped (the resolved-outcome echo already shows those)
+and among live setups the MOST RECENT wins — the chip shows what is happening NOW.
+
+**KING PATH MOVE LABELS (user request).** Significant King moves now carry their own
+price label on the staircase — a move counts when the step is ≥2 strikes OR the level
+then held ≥15 min; capped at 5, x-collision-skipped, last vertex left to the gutter 👑.
+The path now reads at a glance without hovering.
+
+Tests: +10 assertions in test_king_projection (taper math, edge tags, collision nudging,
+gutter gap, tile wrap) + new test_bo_tag_labels.js (12: recency selection, terminal-skip,
+exact chip text, sig-move selection rules, cap, collision skip). Full suite 28/29 green.
+
 ## v10.42 — 2026-08-14 — KING CONSOLE + 🎯 PROJECTED PATH + AUTOMATIC FEEDBACK LOOP
 
 **KING CONSOLE (approved mockup).** The narrative prose blob is now a labeled 4×2 INDICATOR

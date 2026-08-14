@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>v10.42.1 — projected chart fix (before / after)</title>
+<style>
+  :root{--bg:#0b0e14;--card:#12161f;--line:#1e2530;--green:#2ec27e;--red:#f0616d;--gold:#e3c341;--sub:#8b98a9;--amber:#f2b45a;--blue:#4a90d9;--ink:#d7dde6}
+  body{background:#06080c;color:var(--ink);font:11px/1.45 -apple-system,Segoe UI,system-ui,sans-serif;margin:0;padding:16px}
+  h1{font-size:13px;margin:0 0 8px}.wrap{display:flex;gap:16px;flex-wrap:wrap}
+  .card{width:340px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+  .sect{font-size:8px;letter-spacing:.8px;color:var(--sub);font-weight:700;margin-bottom:3px;display:flex;justify-content:space-between}
+  .bad{color:var(--red);font-weight:700}.good{color:var(--green);font-weight:700}
+  svg text{font:8px -apple-system,Segoe UI,sans-serif}
+  .cap{font-size:9px;color:var(--sub);margin-top:5px;line-height:1.4}
+</style></head><body>
+<h1>Projected chart — what went wrong vs the v10.42.1 fix</h1>
+<div class="wrap">
+
+  <div class="card">
+    <div class="sect"><span>❌ NOW (your screenshot)</span><span class="bad">3 defects</span></div>
+    <svg width="322" height="150" viewBox="0 0 322 150" style="display:block;width:100%">
+      <line x1="276" y1="0" x2="276" y2="150" stroke="#1e2530"/>
+      <line x1="4" y1="14" x2="276" y2="14" stroke="#4a90d9" stroke-width="1" stroke-dasharray="2,3" opacity=".6"/>
+      <text x="6" y="11" fill="#4a90d9">eVAH 780</text>
+      <line x1="4" y1="34" x2="276" y2="34" stroke="#8b98a9" stroke-width="1" stroke-dasharray="1,4" opacity=".5"/>
+      <text x="6" y="31" fill="#8b98a9">HOD 778.79</text>
+      <!-- huge empty middle -->
+      <text x="100" y="72" fill="#f0616d" opacity=".8">← 60% of the chart is empty</text>
+      <!-- cramped action at bottom -->
+      <line x1="4" y1="118" x2="276" y2="118" stroke="#8b98a9" stroke-width="1" stroke-dasharray="2,3" opacity=".6"/>
+      <text x="6" y="115" fill="#8b98a9">LOD 775.4</text>
+      <line x1="4" y1="126" x2="276" y2="126" stroke="#e3c341" stroke-width="1.6" stroke-dasharray="5,4"/>
+      <text x="6" y="135" fill="#e3c341">T2 · King 775</text>
+      <text x="70" y="124" fill="#f0616d">← labels collide</text>
+      <!-- black wedge -->
+      <path d="M4,108 L200,118 276,146 276,120 200,112 4,106 Z" fill="rgba(0,0,0,0.55)" stroke="#4a90d9" stroke-opacity=".3"/>
+      <text x="150" y="143" fill="#f0616d">← cone never stops widening = black wedge</text>
+      <circle cx="4" cy="107" r="2.5" fill="#4a90d9"/>
+      <text x="280" y="129" fill="#e3c341" font-weight="800">775</text>
+    </svg>
+    <div class="cap">Y-axis forced to hold every rail (780 → 775.4) while the action lives in 1.2 strikes at the bottom. Cone keeps √-widening after arrival and dives under the King rail.</div>
+  </div>
+
+  <div class="card">
+    <div class="sect"><span>✅ v10.42.1 FIX</span><span class="good">focused + tapered</span></div>
+    <svg width="322" height="150" viewBox="0 0 322 150" style="display:block;width:100%">
+      <line x1="276" y1="0" x2="276" y2="150" stroke="#1e2530"/>
+      <!-- edge tags for out-of-range rails -->
+      <g><text x="6" y="10" fill="#4a90d9" opacity=".9">▲ eVAH 780 · HOD 778.8</text>
+      <line x1="4" y1="14" x2="276" y2="14" stroke="#4a90d9" stroke-width="1" stroke-dasharray="1,5" opacity=".35"/></g>
+      <!-- focused domain: 774.6 – 777 -->
+      <line x1="4" y1="46" x2="276" y2="46" stroke="#8b98a9" stroke-width="1" stroke-dasharray="2,3" opacity=".55"/>
+      <text x="6" y="43" fill="#8b98a9">gate · T1 776</text>
+      <!-- price + cone with POST-ETA TAPER -->
+      <path d="M4,60 C 60,64 110,74 150,86 L 216,92 C 246,92 262,92 272,92
+               L 272,102 C 246,102 216,102 216,102 L 150,100 C 110,92 60,72 4,64 Z"
+            fill="rgba(74,144,217,0.12)" stroke="rgba(74,144,217,0.35)" stroke-width="0.6"/>
+      <path d="M4,62 C 70,68 120,80 150,93 L 272,97" stroke="#4a90d9" stroke-width="1.6" stroke-dasharray="4,3" fill="none"/>
+      <circle cx="4" cy="62" r="2.6" fill="#4a90d9"/>
+      <circle cx="150" cy="93" r="3.2" fill="none" stroke="#4a90d9" stroke-width="1.4"/>
+      <text x="120" y="118" fill="#4a90d9">ETA ~2:38p</text>
+      <!-- king rails: current 776 solid → projected 775 dashed -->
+      <path d="M4,50 H60" stroke="#e3c341" stroke-width="2"/>
+      <path d="M60,50 V97 H276" stroke="#e3c341" stroke-width="2" stroke-dasharray="5,4"/>
+      <text x="66" y="72" fill="#e3c341" font-weight="700">proj King → 775 · 📊76%</text>
+      <!-- pin band -->
+      <rect x="216" y="90" width="56" height="14" fill="rgba(227,195,65,.10)" stroke="rgba(227,195,65,.4)" stroke-dasharray="2,2"/>
+      <!-- LOD label nudged clear -->
+      <line x1="4" y1="130" x2="276" y2="130" stroke="#8b98a9" stroke-width="1" stroke-dasharray="2,3" opacity=".5"/>
+      <text x="6" y="141" fill="#8b98a9">LOD 775.4</text>
+      <!-- gutter -->
+      <text x="280" y="100" fill="#e3c341" font-weight="800">775</text>
+      <text x="280" y="66" fill="#4a90d9">776.2</text>
+      <text x="280" y="146" fill="#8b98a9">close</text>
+    </svg>
+    <div class="cap"><b>Focused y-domain</b> on the price↔target action; far rails collapse into an <b>edge tag</b> (▲ eVAH 780 · HOD 778.8). <b>Cone tapers after ETA</b> into the pin range — no wedge. <b>Labels auto-nudge</b> apart (min 9px). Same data, honest scale.</div>
+  </div>
+
+</div>
+<div style="color:#8b98a9;font-size:9.5px;margin-top:10px;max-width:700px">
+Also in v10.42.1: history-chart gutter min-gap raised so the price pill can't sit on the 👑 label (your 776.16 vs 776 case), and the K$/PHASE tiles wrap to two lines instead of truncating ("$1.32B ▼7%" fully visible).</div>
+</body></html>

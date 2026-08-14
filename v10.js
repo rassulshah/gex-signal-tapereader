@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    10.42
+// @version    10.43
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -264,7 +264,7 @@ function onFeed(sym, feed, j){
   if(feed==='gamma' || feed==='combined'){ var _ts=Date.now(); LASTFEED[sym] = { j:j, feed:feed, ts:_ts }; observeFeedCadence(sym, _ts); }
 }
 
-console.log('[GPTS] v10.42 part1 loaded');
+console.log('[GPTS] v10.43 part1 loaded');
 
 function fiberKeyOf(el){
   var ks=Object.keys(el);
@@ -5393,13 +5393,21 @@ function nodeMapBlock(){
   function setupTagForNode(k){
     var S=STATE[sym]; if(!S||!S.setups) return '';
     var STAGES=['BO','FT','TST','CONF','GO'];
-    var best=null, bestRank=-1;
+    // (v10.43 BO-TAG FIX, user-reported) The old selector took the HIGHEST-STAGE
+    // setup ever seen at the strike — so a finished GO setup from the morning
+    // showed "BO·FT·TST·CONF·GO" all day while the LIVE setup was only at BO·FT.
+    // Now: terminal setups (T2/FAILED/EXPIRED) are skipped entirely (the Node
+    // Map's resolved-outcome echo already shows those), and among LIVE setups
+    // the MOST RECENT wins — the chip reflects what is happening NOW.
+    var best=null, bestT=-1;
     for(var key in S.setups){
       var s=S.setups[key];
       if(!s || s.voided || s.strike!==k) continue;
-      var rank=STAGES.indexOf(s.stage);
-      if(rank>bestRank){ bestRank=rank; best=s; }
+      if(s.outcome==='T2'||s.outcome==='FAILED'||s.outcome==='EXPIRED') continue;
+      var tSel=(s.updated||s.ts||0);
+      if(tSel>bestT){ bestT=tSel; best=s; }
     }
+    var bestRank=best?STAGES.indexOf(best.stage):-1;
     if(!best || bestRank<0) return '';
     // build the chain up to the current stage from the canonical order (not raw
     // tokens, so VOID/T1/T2 noise never shows); join with a middot.
@@ -5523,6 +5531,25 @@ function sessionBoundsCT(){
 // 'now'. Time axis => a King that held all morning is a long flat left segment;
 // a burst of rolls is a tight cluster (correctly signals instability). Faint
 // current-price reference line overlaid; gold dot on the current King.
+// (v10.43, user request) SIGNIFICANT King moves get their own price label on the
+// path — not just the latest strike. A move is significant when the step is >=2
+// strikes OR the level then held >=15 min. Capped at 5, last vertex excluded
+// (the gutter 👑 already labels it). PURE for testability.
+function kingPathSigMoves(pts, now){
+  var out=[];
+  for(var v=1; v<pts.length-0; v++){
+    if(v===pts.length-1) continue;                        // last = gutter's job
+    var step=Math.abs(pts[v].k-pts[v-1].k);
+    var dwell=((v+1<pts.length)?pts[v+1].t:now)-pts[v].t;
+    if(step>=2 || dwell>=15*60000) out.push({i:v, k:pts[v].k, up:pts[v].k>pts[v-1].k, step:step, dwellM:Math.round(dwell/60000)});
+  }
+  if(out.length>5){                                        // keep the 5 most significant
+    out.sort(function(a,b){ return (b.step*30+b.dwellM)-(a.step*30+a.dwellM); });
+    out=out.slice(0,5);
+    out.sort(function(a,b){ return a.i-b.i; });
+  }
+  return out;
+}
 function kingSparkline(mv, kingK, px, now, sess, verdictCol){
   // (v10.23 Issue A) +33% taller so the drift shape + always-on price line are legible.
   // (v10.40) padR widened into a reserved RIGHT GUTTER: price + King labels live
@@ -5628,6 +5655,17 @@ function kingSparkline(mv, kingK, px, now, sess, verdictCol){
   // roll vertices + gold current-King dot
   for(var v=1;v<pts.length;v++){ var cx=X(pts[v].t).toFixed(1), cy=Y(pts[v].k).toFixed(1); var up=pts[v].k>pts[v-1].k;
     svg+='<circle cx="'+cx+'" cy="'+cy+'" r="1.6" fill="'+(up?PAL.longAccent:PAL.shortAccent)+'"/>'; }
+  // (v10.43) price labels at SIGNIFICANT moves so the path reads without hovering.
+  var sig=kingPathSigMoves(pts, xMax);
+  var lastLabX=-99;
+  for(var g=0; g<sig.length; g++){ var sv=sig[g];
+    var gx=X(pts[sv.i].t), gy=Y(pts[sv.i].k);
+    if(gx-lastLabX<22) continue;                          // x-collision: skip crowded
+    lastLabX=gx;
+    var above=sv.up;                                       // label on the far side of the step
+    var ty=above? Math.max(padT+7, gy-4) : Math.min(H-padB-2, gy+9);
+    svg+='<text x="'+gx.toFixed(1)+'" y="'+ty.toFixed(1)+'" text-anchor="middle" fill="'+(sv.up?PAL.longAccent:PAL.shortAccent)+'" style="font-size:7.5px;font-weight:700;font-variant-numeric:tabular-nums">'+fmtNum(sv.k)+'</text>';
+  }
   var lx=X(xMax).toFixed(1), ly=Y(pts[pts.length-1].k).toFixed(1);
   svg+='<circle cx="'+lx+'" cy="'+ly+'" r="3" fill="'+PAL.gold+'" stroke="'+PAL.card+'" stroke-width="1"/>';
   // (v10.27) King + price labels: place them so they NEVER collide even when King and
@@ -5641,7 +5679,7 @@ function kingSparkline(mv, kingK, px, now, sess, verdictCol){
   var kingLineY = parseFloat(ly);
   var kingLabelY = clampY(kingLineY);
   var priceLabelY = (priceLineY!=null) ? clampY(priceLineY) : null;
-  var MINGAP=11;
+  var MINGAP=15;   // (v10.43) raised: 13px price pill was overlapping the King label
   if(priceLabelY!=null && Math.abs(kingLabelY - priceLabelY) < MINGAP){
     // Too close -> separate around their midpoint: whichever sits HIGHER on the axis
     // (smaller Y) gets pinned MINGAP/2 above the midpoint, the other MINGAP/2 below.
@@ -5827,7 +5865,7 @@ function kingReadHtml(A, kv){
     return '<div title="'+(tip||'').replace(/"/g,'&quot;')+'" style="background:'+(hot?'rgba(242,180,90,0.07)':'rgba(255,255,255,0.025)')+
       ';border:1px solid '+(hot?'rgba(242,180,90,0.55)':PAL.line)+';border-radius:6px;padding:3px 6px;min-width:0">'+
       '<div style="font-size:7px;letter-spacing:.6px;color:'+PAL.sub+'">'+label+'</div>'+
-      '<div style="font-size:10.5px;font-weight:700;color:'+PAL.ink+';font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+value+'</div></div>';
+      '<div style="font-size:10.5px;font-weight:700;color:'+PAL.ink+';font-variant-numeric:tabular-nums;line-height:1.25">'+value+'</div></div>';
   }
   var g=function(t,c){ return '<b style="color:'+(c||PAL.ink)+'">'+t+'</b>'; };
   var polV=(A.pol===true)?fmtNum(A.king)+' <span style="color:'+PAL.longAccent+';font-size:8.5px">+γ</span>'
@@ -5930,31 +5968,66 @@ function kingProjectionLive(sym, A){
       phase:A.phase, toClose:A.toClose, evaLo:(A.eva?A.eva.lo:null), evaHi:(A.eva?A.eva.hi:null) });
   }catch(e){ return null; }
 }
+// (v10.43) PURE: cone half-width with POST-ETA TAPER. Before arrival the
+// envelope widens with sqrt(bars); after the projected arrival it TAPERS into a
+// pin range (floor 0.5) instead of ballooning forever — the "black wedge" fix.
+function projTaperHalf(b, etaBars, barsLeft, halfFn){
+  if(etaBars==null || b<=etaBars){
+    // no ETA: still cap growth at the 10-bar envelope so a flat projection
+    // cannot blow the y-domain.
+    return (etaBars==null && b>10) ? halfFn(10) : halfFn(b);
+  }
+  var hEta=halfFn(etaBars);
+  var span=Math.max(1,(barsLeft-etaBars));
+  var frac=Math.min(1,(b-etaBars)/span);
+  return Math.max(0.5, hEta*(1-0.5*frac));
+}
 // ---- the projected-path chart (SVG <title> children = native hover tooltips) ----
 function projChartHtml(A, P){
   if(!A||!A.ok||!P) return '';
   var W=262,H=118,padL=4,padR=46,padT=8,padB=14;
   var barsLeft=Math.max(4, Math.round((A.toClose||30)/3));
-  var ys=[A.px, P.tgt]; for(var i=0;i<P.rails.length;i++) ys.push(P.rails[i].k);
-  var cH=P.cone.half(barsLeft);
-  ys.push(A.px+cH, A.px-cH);
-  var yLo=Math.min.apply(null,ys)-0.6, yHi=Math.max.apply(null,ys)+0.6;
+  function half(b){ return projTaperHalf(b, P.etaBars, barsLeft, P.cone.half); }
+  // ---- (v10.43) FOCUSED Y-DOMAIN: scale to the price<->target ACTION, not to
+  // every rail. Rails outside the window collapse into edge tags so a far HOD
+  // can no longer squash the projection into the bottom fifth of the chart.
+  var ys=[A.px, P.tgt, A.px+half(barsLeft), A.px-half(barsLeft), P.tgt+0.6, P.tgt-0.6];
+  if(P.t1!=null) ys.push(P.t1);
+  var aLo=Math.min.apply(null,ys), aHi=Math.max.apply(null,ys);
+  var inRails=[], edgeHi=[], edgeLo=[];
+  for(var rI=0;rI<P.rails.length;rI++){ var R0=P.rails[rI];
+    if(R0.k>=aLo-1.2 && R0.k<=aHi+1.2) inRails.push(R0);
+    else if(R0.k>aHi) edgeHi.push(R0.label+' '+fmtNum(R0.k));
+    else edgeLo.push(R0.label+' '+fmtNum(R0.k));
+  }
+  for(var rj=0;rj<inRails.length;rj++){ ys.push(inRails[rj].k); }
+  var yLo=Math.min.apply(null,ys)-0.5, yHi=Math.max.apply(null,ys)+0.5;
   function Y(k){ return padT+(yHi-k)/(yHi-yLo)*(H-padT-padB); }
   function X(b){ return padL+(b/barsLeft)*(W-padL-padR); }
   function esc(t){ return (''+t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
   function tt(t){ return '<title>'+esc(t)+'</title>'; }
   var svg='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto">';
   svg+='<line x1="'+(W-padR)+'" y1="0" x2="'+(W-padR)+'" y2="'+H+'" stroke="'+PAL.line+'"/>';
-  // rails
-  for(var rI=0;rI<P.rails.length;rI++){ var R0=P.rails[rI]; var y=Y(R0.k).toFixed(1);
-    var col=R0.cls==='tgt'?PAL.gold:(R0.cls==='t1'?PAL.sub:(R0.cls==='eva'?PAL.blue:PAL.sub));
-    var explain={tgt:'T2 target = the operative King. Targets cap at the King (doctrine — no T3).',
-      t1:'T1 = the gatekeeper between price and the King — first structural checkpoint.',
-      eva:'Exposure value-area edge (70% of dealer mass). Inside = rotation; outside = imbalance — don’t fade (measured).',
-      ref:'Session reference level (HOD/LOD).'}[R0.cls]||'';
-    svg+='<g>'+tt(R0.label+' '+fmtNum(R0.k)+' — '+explain)+
-      '<line x1="'+padL+'" y1="'+y+'" x2="'+(W-padR)+'" y2="'+y+'" stroke="'+col+'" stroke-width="1" stroke-dasharray="2,3" opacity="0.65"/>'+
-      '<text x="'+(padL+2)+'" y="'+(parseFloat(y)-2)+'" fill="'+col+'" opacity="0.9">'+R0.label+' '+fmtNum(R0.k)+'</text></g>';
+  // edge tags for out-of-window rails
+  if(edgeHi.length){ svg+='<g>'+tt('Above this view: '+edgeHi.join(' · ')+'. Rails outside the action window are tagged here instead of stretching the axis.')+
+    '<text x="'+(padL+2)+'" y="8" fill="'+PAL.blue+'" opacity="0.9">▲ '+esc(edgeHi.join(' · '))+'</text></g>'; }
+  if(edgeLo.length){ svg+='<g>'+tt('Below this view: '+edgeLo.join(' · '))+
+    '<text x="'+(padL+2)+'" y="'+(H-3)+'" fill="'+PAL.sub+'" opacity="0.9">▼ '+esc(edgeLo.join(' · '))+'</text></g>'; }
+  // rails with LABEL ANTI-COLLISION (nudge to >=9px separation)
+  var explain={tgt:'T2 target = the operative King. Targets cap at the King (doctrine — no T3).',
+    t1:'T1 = the gatekeeper between price and the King — first structural checkpoint.',
+    eva:'Exposure value-area edge (70% of dealer mass). Inside = rotation; outside = imbalance — don’t fade (measured).',
+    ref:'Session reference level (HOD/LOD).'};
+  var placed=[];
+  inRails.sort(function(a,b){ return Y(a.k)-Y(b.k); });
+  for(var r2=0;r2<inRails.length;r2++){ var RR=inRails[r2]; var y=Y(RR.k);
+    var col=RR.cls==='tgt'?PAL.gold:(RR.cls==='t1'?PAL.sub:(RR.cls==='eva'?PAL.blue:PAL.sub));
+    var ly=y-2;
+    for(var pQ=0;pQ<placed.length;pQ++){ if(Math.abs(ly-placed[pQ])<9) ly=placed[pQ]+9; }
+    ly=Math.max(padT+6, Math.min(H-padB-2, ly)); placed.push(ly);
+    svg+='<g>'+tt(RR.label+' '+fmtNum(RR.k)+' — '+(explain[RR.cls]||''))+
+      '<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'" stroke="'+col+'" stroke-width="1" stroke-dasharray="2,3" opacity="0.6"/>'+
+      '<text x="'+(padL+2)+'" y="'+ly.toFixed(1)+'" fill="'+col+'" opacity="0.9">'+RR.label+' '+fmtNum(RR.k)+'</text></g>';
   }
   // current King rail + projected step
   var yK=Y(A.king).toFixed(1);
@@ -5968,17 +6041,17 @@ function projChartHtml(A, P){
     svg+='<g>'+tt('King rail '+fmtNum(A.king)+' — no hot succession candidate; crown projected to hold.')+
       '<path d="M '+padL+' '+yK+' H '+(W-padR)+'" stroke="'+PAL.gold+'" stroke-width="2" stroke-dasharray="6,4"/></g>';
   }
-  // price cone + center path + ETA
-  var x0=padL, y0=Y(A.px), steps=8, up=[],dn=[],mid=[];
+  // price cone (tapered) + center path + ETA
+  var x0=padL, y0=Y(A.px), steps=10, up=[],dn=[],mid=[];
   for(var sI=0;sI<=steps;sI++){ var b=barsLeft*sI/steps; var x=X(b);
     var drift=(P.etaBars!=null)?(P.tgt-A.px)*Math.min(1,b/P.etaBars):0;
-    var cph=P.cone.half(b);
+    var cph=half(b);
     mid.push([x, Y(A.px+drift)]); up.push([x, Y(A.px+drift+cph)]); dn.push([x, Y(A.px+drift-cph)]);
   }
-  function path(pts){ var d=''; for(var q=0;q<pts.length;q++){ d+=(q?' L ':'M ')+pts[q][0].toFixed(1)+' '+pts[q][1].toFixed(1);} return d; }
+  function path(pts){ var d0=''; for(var q=0;q<pts.length;q++){ d0+=(q?' L ':'M ')+pts[q][0].toFixed(1)+' '+pts[q][1].toFixed(1);} return d0; }
   var cone=path(up); for(var q2=dn.length-1;q2>=0;q2--){ cone+=' L '+dn[q2][0].toFixed(1)+' '+dn[q2][1].toFixed(1); } cone+=' Z';
-  svg+='<g>'+tt('Volatility cone: recent avg 3m bar range ('+P.cone.r.toFixed(2)+') widening with √bars. An envelope of normal movement — NOT a forecast band. Coverage is scored nightly (target ~70%).')+
-    '<path d="'+cone+'" fill="rgba(74,144,217,0.10)"/></g>';
+  svg+='<g>'+tt('Volatility cone: recent avg 3m bar range ('+P.cone.r.toFixed(2)+') widening with √bars until arrival, then TAPERING into the pin range. An envelope of normal movement — NOT a forecast band. Coverage scored nightly (target ~70%).')+
+    '<path d="'+cone+'" fill="rgba(74,144,217,0.12)" stroke="rgba(74,144,217,0.30)" stroke-width="0.6"/></g>';
   svg+='<g>'+tt('Projected price path toward '+fmtNum(P.tgt)+(P.etaBars!=null?' at the measured 3-bar approach rate. '+(P.basis.eta||''):' — no approach in progress; flat projection.'))+
     '<path d="'+path(mid)+'" stroke="'+PAL.blue+'" stroke-width="1.6" stroke-dasharray="4,3" fill="none"/></g>';
   svg+='<circle cx="'+x0+'" cy="'+y0.toFixed(1)+'" r="2.6" fill="'+PAL.blue+'">'+tt('Price now: '+fmtNum(A.px))+'</circle>';
@@ -5989,10 +6062,9 @@ function projChartHtml(A, P){
   }
   if(P.pin){
     var yT=Y(P.tgt+0.5).toFixed(1), hB=(Y(P.tgt-0.5)-Y(P.tgt+0.5)).toFixed(1);
-    svg+='<g>'+tt('PIN BAND ±0.5: POWER phase + proximity — Academy expects settlement gravity at the King. '+(P.basis.pin||''))+
+    svg+='<g>'+tt('PIN BAND ±0.5: POWER phase + proximity — settlement gravity at the King. '+(P.basis.pin||''))+
       '<rect x="'+X(barsLeft*0.72).toFixed(1)+'" y="'+yT+'" width="'+(W-padR-X(barsLeft*0.72)).toFixed(1)+'" height="'+hB+'" fill="rgba(227,195,65,0.10)" stroke="rgba(227,195,65,0.4)" stroke-dasharray="2,2"/></g>';
   }
-  // gutter
   svg+='<text x="'+(W-padR+4)+'" y="'+(Y(P.tgt)+3).toFixed(1)+'" fill="'+PAL.gold+'" font-weight="800">'+fmtNum(P.tgt)+'</text>';
   svg+='<text x="'+(W-padR+4)+'" y="'+(H-3)+'" fill="'+PAL.sub+'">close</text>';
   svg+='</svg>';
@@ -6374,7 +6446,7 @@ function feedStatusHtml(){
   return '<div style="display:flex;justify-content:space-between;align-items:center;color:'+PAL.sub+';font-size:9px;letter-spacing:0.3px">'+
     '<span style="color:'+col+'">'+txt+'</span>'+
     warn+
-    '<span>feed v10.42</span>'+
+    '<span>feed v10.43</span>'+
     '</div>';
 }
 

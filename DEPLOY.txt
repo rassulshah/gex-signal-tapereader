@@ -1,16 +1,14 @@
-DEPLOY v10.42 — King console + projected path + feedback loop
-=============================================================
-EASIEST PATH (no folder mistakes possible):
-1. Extract this zip ANYWHERE (Downloads is fine — nested subfolder is fine too).
-2. Double-click install.bat  (if Windows warns: More info -> Run anyway;
-   it's a 12-line copy script — open it in Notepad if you want to read it).
-   It copies every file into C:\Dev\gex-signal-tapereader at the right paths.
-3. GitHub Desktop -> Summary: "v10.42 projection + feedback loop" -> Commit -> Push origin.
-4. WAIT ~2 MINUTES (GitHub raw-file cache).
-5. Open the update URL, click Update:
+DEPLOY v10.43 — projection rendering fixes + BO-tag fix + King Path move labels
+===============================================================================
+1. Extract this zip ANYWHERE (nested subfolder is fine).
+2. Double-click install.bat (Windows warning: More info -> Run anyway).
+   It copies everything into C:\Dev\gex-signal-tapereader (incl. docs\KING-FIELD-GUIDE.html).
+3. GitHub Desktop -> Summary: "v10.43 rendering + BO tag + path labels" -> Commit -> Push origin.
+4. WAIT ~2 MINUTES (GitHub raw cache).
+5. Open + click Update:
    https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
 6. Hard-reload Atlas (Ctrl+Shift+R).
 
-VERIFY: footer "feed v10.42" · indicator tiles replace the text blob · a second
-chart "KING PATH · PROJECTED" under the first · hover anything for its explanation
-· Analysis tab opens with the 🎯 PROJECTION SCORECARD + 🔧 RECOMMENDATIONS on top.
+VERIFY: footer "feed v10.43" · projected chart focused (no black wedge, far rails
+as ▲ edge tags) · BO chip shows only live progress (e.g. BO·FT) · King Path shows
+price labels at significant moves · tiles no longer truncate.

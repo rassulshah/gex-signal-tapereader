@@ -61,5 +61,21 @@ var seg2=src.slice(src.indexOf('function projChartHtml'), src.indexOf('function 
 ok((seg2.match(/tt\(/g)||[]).length>=7, 'GUARD: projection SVG elements carry native hover tooltips (7+ tt() call sites)');
 ok(!/▼'-/.test(src) && /fmtChg/.test(src),          'GUARD: no double-signed change strings');
 
+
+// ---- (v10.43) rendering fixes ----
+eval(ex('projTaperHalf'));
+var hf=function(b){ return 0.3*Math.sqrt(Math.max(1,b)); };
+ok(projTaperHalf(4,9,20,hf)===hf(4),          'taper: pre-ETA cone follows sqrt growth');
+ok(projTaperHalf(9,9,20,hf)===hf(9),          'taper: at ETA = full width');
+ok(projTaperHalf(20,9,20,hf)<hf(9),           'taper: POST-ETA the cone NARROWS (black-wedge fix)');
+ok(projTaperHalf(20,9,20,hf)>=0.5,            'taper: floor 0.5 = the pin range');
+ok(projTaperHalf(15,null,20,hf)===hf(10),     'no ETA: growth capped at the 10-bar envelope');
+ok(/inRails/.test(src) && /edgeHi/.test(src), 'GUARD: focused domain with edge-tag rails');
+ok(/▲ /.test(src),                            'GUARD: above-window rails render as ▲ edge tag');
+ok(/placed\.push\(ly\)/.test(src),            'GUARD: rail-label anti-collision nudging');
+ok(/var MINGAP=15/.test(src),                 'GUARD: history-gutter min gap raised to 15px');
+ok(src.indexOf('white-space:nowrap;overflow:hidden;text-overflow:ellipsis')===-1,
+                                              'GUARD: tiles wrap instead of ellipsizing');
+
 console.log('\n'+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
