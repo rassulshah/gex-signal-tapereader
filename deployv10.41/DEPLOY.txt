@@ -1,0 +1,17 @@
+DEPLOY v10.41 — two-column dashboard
+====================================
+⚠ EXTRACTION TRAP: Windows "Extract All" creates a SUBFOLDER by default.
+  The extract TARGET must be the repo root itself:  C:\Dev\gex-signal-tapereader
+  If you end up with C:\Dev\gex-signal-tapereader\deploy-v10.41\... it's wrong —
+  move the CONTENTS up one level (that's what went wrong with v10.40).
+
+1. Extract this zip so v10.js lands DIRECTLY in C:\Dev\gex-signal-tapereader\
+   (replacing the existing one). Choose "Replace the files in the destination".
+2. GitHub Desktop -> Summary: "v10.41 two-column dashboard" -> Commit -> Push origin.
+3. Open the raw URL and click Update on Tampermonkey's page:
+   https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+4. Hard-reload Atlas (Ctrl+Shift+R).
+
+VERIFY: footer "feed v10.41" · panel widens to ~690px once, King on the left,
+Deflections + Node Map on the right. Resize freely afterward — your size sticks;
+below ~620px wide the columns stack vertically on purpose.

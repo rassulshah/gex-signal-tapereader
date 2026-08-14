@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>King Path v2 — mockup (v10.39 proposal)</title>
+<style>
+  :root{ --bg:#0b0e14; --card:#12161f; --line:#1e2530; --green:#2ec27e; --red:#f0616d;
+         --gold:#e3c341; --sub:#8b98a9; --amber:#f2b45a; --blue:#4a90d9; --ink:#d7dde6; }
+  body{ background:var(--bg); color:var(--ink); font:11px/1.45 -apple-system,Segoe UI,system-ui,sans-serif;
+        margin:0; padding:18px; }
+  h1{ font-size:14px; color:var(--ink); margin:0 0 2px 0; }
+  .note{ color:var(--sub); font-size:10px; margin-bottom:14px; max-width:1180px }
+  .wrap{ display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start }
+  .panel{ width:342px; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:9px 10px; }
+  .ptitle{ font-size:9px; letter-spacing:1px; color:var(--sub); text-transform:uppercase; margin-bottom:7px;
+           display:flex; justify-content:space-between }
+  .callout{ color:var(--amber); font-size:9px; }
+  /* badge row */
+  .badges{ display:flex; align-items:center; gap:6px; margin-bottom:7px }
+  .kpill{ background:rgba(227,195,65,.12); border:1px solid rgba(227,195,65,.45); border-radius:6px;
+          padding:3px 8px; display:flex; flex-direction:column; gap:1px }
+  .kpill .r1{ color:var(--gold); font-weight:700; font-size:12px }
+  .kpill .r2{ color:var(--ink); font-size:9px; opacity:.85 }
+  .chip{ border:1px solid var(--line); border-radius:9px; padding:2px 7px; font-size:9px; color:var(--sub); background:rgba(255,255,255,.02) }
+  .chip b{ color:var(--ink); font-weight:600 }
+  .chip.warn b{ color:var(--amber) } .chip.up b{ color:var(--green) } .chip.dn b{ color:var(--red) }
+  /* narrative */
+  .narr{ border-left:2px solid var(--gold); padding:2px 0 2px 8px; margin:2px 0 7px 0 }
+  .narr .d{ color:var(--ink); font-size:10.5px; }
+  .narr .p{ color:var(--ink); font-size:10.5px; margin-top:4px }
+  .narr .p .tag{ color:var(--gold); font-weight:700 }
+  .narr .src{ color:var(--sub); font-size:9px; margin-top:3px }
+  .chips{ display:flex; flex-wrap:wrap; gap:4px; margin:0 0 7px 0 }
+  /* chart */
+  .chart{ position:relative; background:rgba(255,255,255,.015); border:1px solid var(--line); border-radius:6px; }
+  svg text{ font:8.5px -apple-system,Segoe UI,system-ui,sans-serif }
+  .inchart{ position:absolute; font-size:8.5px; color:var(--sub); background:rgba(11,14,20,.75);
+            border-radius:4px; padding:1px 5px }
+  .legend{ color:var(--sub); font-size:8.5px; margin-top:5px; display:flex; gap:10px }
+  .legend i{ font-style:normal }
+  /* analysis card */
+  .arow{ display:flex; justify-content:space-between; padding:2.5px 0; border-bottom:1px dashed rgba(255,255,255,.05); font-size:10px }
+  .arow .l{ color:var(--sub) } .arow .v{ color:var(--ink); font-weight:600 }
+  .arow .v .n{ color:var(--sub); font-weight:400; font-size:9px }
+  .locked{ opacity:.55 } .locked .v{ color:var(--sub); font-weight:400 }
+  .sect{ font-size:9px; color:var(--gold); letter-spacing:.6px; margin:7px 0 2px 0 }
+</style></head><body>
+
+<h1>King Path v2 — proposal mockup</h1>
+<div class="note">
+  What changed vs v10.37: ① the "KING PATH · today · drift flat · 0 rolls" header row is <b>gone</b> — the narrative (old bottom verdict, expanded) now sits on top.
+  ② drift + rolls moved <b>inside the chart</b> (top-left chip). ③ current price moved to a <b>right gutter</b> — the plot never draws under it again.
+  Tags: <b style="color:#e3c341">⚖</b>=Academy doctrine · <b style="color:#4a90d9">📊</b>=measured base rate (honest n) · ◦=heuristic. Values below are today's real numbers.
+</div>
+
+<div class="wrap">
+
+<!-- ============ PANEL A — APPROACH / MIDDAY (real state right now) ============ -->
+<div class="panel">
+  <div class="ptitle"><span>A · Approach — midday</span><span class="callout">real 8/14 state</span></div>
+  <div class="badges">
+    <div class="kpill"><span class="r1">👑 780 <span style="color:var(--red)">+3.5↑</span></span>
+      <span class="r2">🚪 779 · +2.5↑</span></div>
+    <span class="chip up"><b>+γ</b> Pika King</span>
+    <span class="chip dn">K$ <b>$997M ▼29%</b> today</span>
+  </div>
+  <div class="narr">
+    <div class="d">King 780 (+γ) holds <b>$997M</b> — 3.5 above price with 779 gatekeeping.
+      Dealers there are <b>long gamma: buy dips, sell rips into 780</b> → friction on approach, moves compress near it.</div>
+    <div class="p"><span class="tag">READ ▸</span> Magnet is <b>bleeding</b> (−29% since open — hedge-decay read ⚖: fading node = protection unwinding, not intent).
+      Pull toward 780 <b>weakening</b>; continued bleed → pin thesis softens, reshuffle risk ↑.
+      ETA at current pace ~3:05E → late reach favors <b>pin</b> ⚖ — but low conviction: midday + bleed.</div>
+    <div class="src">⚖ node-lifecycle · gamma-regimes &nbsp;·&nbsp; 📊 base rates: n&lt;5 — recording</div>
+  </div>
+  <div class="chips">
+    <span class="chip">ETA <b>~3:05E</b></span><span class="chip">taps <b>0</b> <span style="opacity:.7">(fresh ⚖80%)</span></span>
+    <span class="chip">cross <b>0</b></span><span class="chip">contender <b>775 · 45%</b></span>
+    <span class="chip up">kings <b>2/2 ↑</b> <span style="opacity:.7">SPY·QQQ</span></span><span class="chip up">VIX <b>14.6 ▼</b></span>
+  </div>
+  <div class="chart" style="height:96px">
+    <span class="inchart" style="top:4px;left:6px">drift <b style="color:var(--ink)">−0.2 ↘</b> · rolls 0</span>
+    <span class="inchart" style="bottom:4px;left:6px">9:30E — now</span>
+    <svg width="320" height="96" viewBox="0 0 320 96">
+      <line x1="0" y1="24" x2="278" y2="24" stroke="#e3c341" stroke-width="1" stroke-dasharray="3,3" opacity=".5"/>
+      <path d="M4,24 H278" stroke="#e3c341" stroke-width="2" fill="none"/>
+      <path d="M4,72 L40,64 60,70 92,56 120,60 150,48 180,54 210,44 240,52 278,46"
+            stroke="#d7dde6" stroke-width="2" fill="none" opacity=".9"/>
+      <!-- right gutter -->
+      <rect x="280" y="0" width="40" height="96" fill="#12161f"/>
+      <line x1="280" y1="0" x2="280" y2="96" stroke="#1e2530"/>
+      <rect x="284" y="17" width="33" height="13" rx="3" fill="rgba(227,195,65,.15)" stroke="rgba(227,195,65,.5)"/>
+      <text x="300" y="26.5" fill="#e3c341" text-anchor="middle" font-weight="700">780</text>
+      <rect x="284" y="39" width="33" height="13" rx="3" fill="rgba(215,221,230,.1)" stroke="rgba(215,221,230,.35)"/>
+      <text x="300" y="48.5" fill="#d7dde6" text-anchor="middle">776.5</text>
+    </svg>
+  </div>
+  <div class="legend"><i><b style="color:#e3c341">▬</b> king</i><i><b style="color:#d7dde6">—</b> price</i><i>price/king labels live in the gutter — no more line-over-text</i></div>
+</div>
+
+<!-- ============ PANEL B — PIN WINDOW / POWER HOUR ============ -->
+<div class="panel">
+  <div class="ptitle"><span>B · Pin window — power hour</span></div>
+  <div class="badges">
+    <div class="kpill"><span class="r1">👑 780 <span style="color:var(--red)">+0.9↑</span></span>
+      <span class="r2">🚪 — · clear path</span></div>
+    <span class="chip up"><b>+γ</b></span>
+    <span class="chip up">K$ <b>$1.12B ▲12%</b> last hr</span>
+  </div>
+  <div class="narr">
+    <div class="d">Price 0.9 from King inside the deflection zone (±0.50 nears ⚖). One prior tap (~66% reaction claim ⚖).
+      K$ <b>rebuilding</b> — dealers re-loading the pin book into the close.</div>
+    <div class="p"><span class="tag">READ ▸</span> <b>POWER HOUR</b> + late proximity + drift flattening + K$ growth
+      → ⚖ classic <b>pin window at 780</b> into settlement. Forced-flow volatility 3:30E can poke the zone — expect wicks, not breaks, while +γ holds.</div>
+    <div class="src">⚖ core-concepts (pin jobs · power hour) · execution-doctrine &nbsp;·&nbsp; 📊 late-reach → pin: 3/4 recorded days</div>
+  </div>
+  <div class="chips">
+    <span class="chip warn">phase <b>POWER 3:30E</b></span><span class="chip">taps <b>1</b></span>
+    <span class="chip">dwell <b>14m</b> in zone</span><span class="chip">contender <b>775 · 31% ▼</b></span>
+    <span class="chip up">kings <b>2/2 ↑</b></span><span class="chip dn">VIX <b>15.1 ▲</b></span>
+  </div>
+  <div class="chart" style="height:96px">
+    <span class="inchart" style="top:4px;left:6px">drift <b style="color:var(--ink)">+0.6 ↗</b> · rolls 1 <span style="color:#2ec27e">▲</span></span>
+    <span class="inchart" style="bottom:4px;left:6px">9:30E — now</span>
+    <svg width="320" height="96" viewBox="0 0 320 96">
+      <line x1="0" y1="22" x2="278" y2="22" stroke="#e3c341" stroke-width="1" stroke-dasharray="3,3" opacity=".5"/>
+      <path d="M4,34 H120 V22 H278" stroke="#e3c341" stroke-width="2" fill="none"/>
+      <circle cx="120" cy="28" r="4.5" fill="#e3c341" stroke="#12161f" stroke-width="2"/>
+      <path d="M4,78 L50,70 90,74 130,58 170,48 210,40 240,32 278,27"
+            stroke="#d7dde6" stroke-width="2" fill="none" opacity=".9"/>
+      <rect x="280" y="0" width="40" height="96" fill="#12161f"/>
+      <line x1="280" y1="0" x2="280" y2="96" stroke="#1e2530"/>
+      <rect x="284" y="15" width="33" height="13" rx="3" fill="rgba(227,195,65,.15)" stroke="rgba(227,195,65,.5)"/>
+      <text x="300" y="24.5" fill="#e3c341" text-anchor="middle" font-weight="700">780</text>
+      <rect x="284" y="21" width="0" height="0"/>
+      <rect x="284" y="30" width="33" height="13" rx="3" fill="rgba(215,221,230,.1)" stroke="rgba(215,221,230,.35)"/>
+      <text x="300" y="39.5" fill="#d7dde6" text-anchor="middle">779.1</text>
+    </svg>
+  </div>
+  <div class="legend"><i>● = King roll marker (was a text row — now on the path itself)</i></div>
+</div>
+
+<!-- ============ PANEL C — OVERSHOOT / BEACH BALL WATCH ============ -->
+<div class="panel">
+  <div class="ptitle"><span>C · Overshoot — stretch, not break</span></div>
+  <div class="badges">
+    <div class="kpill"><span class="r1">👑 780 <span style="color:var(--green)">−1.2↓</span></span>
+      <span class="r2">price ABOVE King</span></div>
+    <span class="chip up"><b>+γ</b></span>
+    <span class="chip">K$ <b>$1.05B ≈</b> steady</span>
+  </div>
+  <div class="narr">
+    <div class="d">Price has pushed <b>1.2 above the +γ King</b> (3 bars). No 14-bar high printed — the breakout gate has NOT confirmed.
+      A +γ node absorbs, it doesn't fail: this is a <b>stretch</b>, not a break ⚖.</div>
+    <div class="p"><span class="tag">READ ▸</span> <b>Beach Ball watch</b>: overshoot of a significant +γ node without follow-through →
+      ⚖ reversion back through 780 is the favored resolution. Chasing the break is the named mistake.
+      <span style="color:var(--sub)">(volume-dry-up cue unobservable — no volume feed)</span></div>
+    <div class="src">⚖ heatseeker-patterns (Beach Ball) · v10.27 BO gate &nbsp;·&nbsp; 📊 overshoot→reversion: n&lt;5 — recording</div>
+  </div>
+  <div class="chips">
+    <span class="chip warn">state <b>OVERSHOOT +1.2</b></span><span class="chip">bars over <b>3</b></span>
+    <span class="chip">14-bar high <b>no</b></span><span class="chip">taps <b>2</b></span>
+    <span class="chip dn">kings <b>1/2 split</b></span><span class="chip">VIX <b>14.2 ▼</b></span>
+  </div>
+  <div class="chart" style="height:96px">
+    <span class="inchart" style="top:4px;left:6px">drift <b style="color:var(--ink)">flat →</b> · rolls 0</span>
+    <span class="inchart" style="bottom:4px;left:6px">9:30E — now</span>
+    <svg width="320" height="96" viewBox="0 0 320 96">
+      <line x1="0" y1="46" x2="278" y2="46" stroke="#e3c341" stroke-width="1" stroke-dasharray="3,3" opacity=".5"/>
+      <path d="M4,46 H278" stroke="#e3c341" stroke-width="2" fill="none"/>
+      <path d="M4,84 L60,74 110,66 160,56 200,50 232,44 252,38 278,34"
+            stroke="#d7dde6" stroke-width="2" fill="none" opacity=".9"/>
+      <rect x="234" y="24" width="50" height="20" rx="3" fill="rgba(242,180,90,.08)" stroke="rgba(242,180,90,.35)" stroke-dasharray="2,2"/>
+      <rect x="280" y="0" width="40" height="96" fill="#12161f"/>
+      <line x1="280" y1="0" x2="280" y2="96" stroke="#1e2530"/>
+      <rect x="284" y="27" width="33" height="13" rx="3" fill="rgba(215,221,230,.1)" stroke="rgba(215,221,230,.35)"/>
+      <text x="300" y="36.5" fill="#d7dde6" text-anchor="middle">781.2</text>
+      <rect x="284" y="39" width="33" height="13" rx="3" fill="rgba(227,195,65,.15)" stroke="rgba(227,195,65,.5)"/>
+      <text x="300" y="48.5" fill="#e3c341" text-anchor="middle" font-weight="700">780</text>
+    </svg>
+  </div>
+  <div class="legend"><i>amber dashed box = overshoot zone annotation</i></div>
+</div>
+
+<!-- ============ PANEL D — ANALYSIS TAB · KING PERFORMANCE ============ -->
+<div class="panel">
+  <div class="ptitle"><span>D · Analysis tab — 👑 King performance (recorded days)</span></div>
+  <div class="sect">REACH &amp; TIMING</div>
+  <div class="arow"><span class="l">Touch rate by 10:00E distance ≤3 / 3–6 / &gt;6</span><span class="v">4/5 · 2/4 · 0/3 <span class="n">n=12d</span></span></div>
+  <div class="arow"><span class="l">Early reach (&lt;11E) → drive-off ⚖ test</span><span class="v">2/2 <span class="n">n small</span></span></div>
+  <div class="arow"><span class="l">Late reach (&gt;2:30E) → pin (close ±0.5)</span><span class="v">3/4 <span class="n">n=4</span></span></div>
+  <div class="sect">LEADING-INDICATOR CALIBRATION</div>
+  <div class="arow"><span class="l">Drift(3-bar) sign → next-30m direction</span><span class="v">61% <span class="n">n=44 bars · base 52%</span></span></div>
+  <div class="arow"><span class="l">One-way roll day → close in roll direction</span><span class="v">3/3 <span class="n">n small</span></span></div>
+  <div class="arow locked"><span class="l">K$ bleed &gt;20% → no-pin / reshuffle</span><span class="v">● recording <span class="n">unlocks n≥5</span></span></div>
+  <div class="arow locked"><span class="l">Contender &gt;0.8 → King rolls ≤60m</span><span class="v">● recording <span class="n">unlocks n≥5</span></span></div>
+  <div class="arow locked"><span class="l">Overshoot(+γ) → reversion through King</span><span class="v">● recording <span class="n">unlocks n≥5</span></span></div>
+  <div class="sect">BY KING POLARITY</div>
+  <div class="arow"><span class="l">+γ King days → pin rate · MFE/MAE</span><span class="v">2/3 · 0.8/0.5 <span class="n">n=3</span></span></div>
+  <div class="arow locked"><span class="l">−γ King days → overshoot rate</span><span class="v">● recording <span class="n">n=1</span></span></div>
+  <div class="legend" style="margin-top:7px"><i>grades hidden until unlock n — same honesty rule as Deflection grades (v10.36)</i></div>
+</div>
+
+</div>
+</body></html>

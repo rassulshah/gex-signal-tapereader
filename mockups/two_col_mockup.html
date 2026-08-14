@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>v10.41 mockup — two-column dashboard</title>
+<style>
+  :root{ --bg:#0b0e14; --card:#12161f; --line:#1e2530; --green:#2ec27e; --red:#f0616d;
+         --gold:#e3c341; --sub:#8b98a9; --amber:#f2b45a; --blue:#4a90d9; --ink:#d7dde6; }
+  body{ background:#06080c; color:var(--ink); font:11px/1.45 -apple-system,Segoe UI,system-ui,sans-serif; margin:0; padding:16px }
+  h1{font-size:13px;margin:0 0 2px}
+  .note{color:var(--sub);font-size:10px;margin-bottom:10px;max-width:960px}
+  .callout{position:absolute;font-size:8.5px;color:#06080c;background:var(--amber);border-radius:3px;padding:0 5px;font-weight:700;z-index:5}
+  /* the panel */
+  .panel{ position:relative;width:690px;background:var(--bg);border:1px solid #2a3342;border-radius:10px;padding:8px 9px;box-shadow:0 8px 30px rgba(0,0,0,.5) }
+  .tabs{display:flex;gap:8px;align-items:center;margin-bottom:6px;border-bottom:1px solid var(--line);padding-bottom:4px}
+  .tab{font-size:10px;color:var(--ink);font-weight:700;border-bottom:2px solid var(--gold);padding-bottom:2px}
+  .tab.off{color:var(--sub);font-weight:400;border-color:transparent}
+  .cols{display:flex;gap:6px;align-items:flex-start}
+  .col{flex:1 1 300px;min-width:0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin-bottom:5px}
+  .chip{border:1px solid var(--line);border-radius:9px;padding:1px 6px;font-size:8.5px;color:var(--sub);background:rgba(255,255,255,.02);white-space:nowrap}
+  .chip b{color:var(--ink)}
+  .kpill{background:rgba(227,195,65,.12);border:1.5px solid var(--gold);border-radius:14px;padding:3px 9px;display:inline-flex;flex-direction:column;align-items:center;gap:1px}
+  .narr{border-left:2px solid var(--gold);padding:2px 0 2px 8px;margin:5px 0}
+  .narr .d,.narr .p{font-size:9.5px;line-height:1.4}
+  .narr .p .t{color:var(--gold);font-weight:800}
+  .foot{display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:5px;padding-top:4px;font-size:9px;color:var(--sub)}
+  svg text{font:8.5px -apple-system,Segoe UI,sans-serif}
+  .inchip{position:absolute;font-size:8px;color:var(--sub);background:rgba(11,14,20,.75);border-radius:4px;padding:0 4px}
+  /* node map */
+  .nmh{display:flex;font-size:7.5px;color:var(--sub);letter-spacing:.5px;padding:2px 0;border-bottom:1px solid var(--line)}
+  .nmr{display:flex;align-items:center;font-size:9.5px;padding:2.5px 0;border-bottom:1px dashed rgba(255,255,255,.04)}
+  .c1{width:64px}.c2{width:74px;font-variant-numeric:tabular-nums}.c3{width:52px}.c4{flex:1}
+  .pill{border-radius:8px;padding:0 6px;font-size:8.5px;font-weight:700}
+  .pxrow{display:flex;justify-content:center;font-size:8.5px;color:var(--blue);padding:2px 0;border-bottom:1px dashed rgba(74,144,217,.35)}
+  .dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-left:4px}
+</style></head><body>
+
+<h1>v10.41 — two-column dashboard mockup <span style="color:var(--sub);font-weight:400">(live values, ~1:10p CT)</span></h1>
+<div class="note">Panel at its new 690px default. <b style="color:var(--amber)">Amber tags</b> mark what changed.
+Drag narrower than ~620px → columns stack vertically (old single-column look). Sync-gate warnings + footer stay full-width.</div>
+
+<div class="panel">
+  <span class="callout" style="top:-8px;left:180px">NEW · 690px default (one-time; your resizes stick)</span>
+  <div class="tabs"><span class="tab">Dashboard</span><span class="tab off">📊 Analysis</span>
+    <span style="margin-left:auto;color:var(--sub);font-size:9px">Tapereader · ● live · <span style="color:var(--gold)">Clear</span></span></div>
+
+  <div class="cols">
+    <!-- ================= LEFT — KING ================= -->
+    <div class="col" style="position:relative">
+      <span class="callout" style="top:-4px;left:6px">LEFT · everything King</span>
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="kpill">
+            <span style="line-height:1"><span style="font-size:12px">👑</span>
+              <b style="color:var(--gold);font-size:13px">775</b>
+              <b style="color:var(--red);font-size:11px"> −1↓</b></span>
+            <span style="width:100%;height:1px;background:var(--line)"></span>
+            <span style="font-size:10px;color:var(--ink)">🚪 776 · 0</span>
+          </span>
+          <span class="chip"><b style="color:#b48ce3">−γ</b> Barney King</span>
+          <span class="chip">K$ <b>$1.28B ▼8%</b></span>
+        </div>
+        <div class="narr">
+          <div class="d">King <b style="color:var(--gold)">775</b> (−γ — dealers hedge <b>pro-cyclically → fuel</b>,
+            wicky contact, overshoot risk) · $1.28B ▼8% today · <b>1 below</b> price · value 775–780 (inside)</div>
+          <div class="p"><span class="t">READ ▸</span> price sitting just <b>above a −γ King</b> — contact here runs hot,
+            not sticky ⚖ · in gravity, flat approach · succ 780·38% (not hot) · MID · 110m to close</div>
+          <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px">
+            <span class="chip">MID · <b>110m</b></span><span class="chip">taps <b>4</b> · x<b>3</b></span>
+            <span class="chip">succ <b>780·38%</b></span><span class="chip">K$ <b>▼8%</b></span>
+            <span class="chip">QQQ <b style="color:var(--green)">✓</b></span>
+          </div>
+          <div style="font-size:7.5px;color:var(--sub);margin-top:3px;opacity:.8">⚖ Academy · 📊 measured (4d/324 bars) · drift descriptive-only</div>
+        </div>
+        <div style="position:relative;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.015)">
+          <span class="inchip" style="top:3px;left:5px">drift <b style="color:var(--red)">down</b> · 2 rolls</span>
+          <span class="inchip" style="top:3px;right:5px;border:1px solid var(--gold);border-radius:20px;color:var(--gold);font-weight:800">Neutral</span>
+          <span class="inchip" style="bottom:3px;left:5px">8:30 — now · pinned 22m</span>
+          <span class="callout" style="bottom:-8px;right:4px">gutter — line never under label</span>
+          <svg width="318" height="104" viewBox="0 0 318 104" style="display:block;width:100%">
+            <line x1="272" y1="0" x2="272" y2="104" stroke="#1e2530"/>
+            <line x1="4" y1="56" x2="272" y2="56" stroke="#e3c341" stroke-width="1" stroke-dasharray="3,3" opacity=".5"/>
+            <path d="M4,38 H120 V56 H272" stroke="#e3c341" stroke-width="2" fill="none"/>
+            <circle cx="120" cy="47" r="4" fill="#e3c341" stroke="#12161f" stroke-width="2"/>
+            <line x1="4" y1="44" x2="272" y2="44" stroke="#4a90d9" stroke-width="1.4" stroke-dasharray="4,3" opacity=".85"/>
+            <line x1="269" y1="56" x2="274" y2="56" stroke="#e3c341" stroke-width="1.4"/>
+            <text x="277" y="59" fill="#e3c341" font-weight="800">👑775</text>
+            <line x1="269" y1="44" x2="274" y2="44" stroke="#4a90d9" stroke-width="1.4"/>
+            <rect x="275" y="31" width="40" height="13" rx="3" fill="rgba(74,144,217,.12)" stroke="rgba(74,144,217,.45)"/>
+            <text x="277" y="41" fill="#4a90d9" font-weight="700">776.0</text>
+            <text x="277" y="53" fill="#8b98a9" style="font-size:7.5px">(+1.0)</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= RIGHT — DEFLECTIONS + NODE MAP ================= -->
+    <div class="col" style="position:relative">
+      <span class="callout" style="top:-4px;left:6px">RIGHT · Deflections + Node Map</span>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:9.5px;font-weight:700">⚡ Deflections <span style="color:var(--sub);font-weight:400">1 live</span></span>
+        </div>
+        <div style="display:flex;gap:4px;overflow-x:auto;margin-top:3px">
+          <span class="chip" style="border-color:rgba(227,195,65,.5)"><b style="color:var(--gold)">King</b> 775 ↑ · BO·FT ⭑ · <span style="color:var(--sub)">● rec n3</span></span>
+        </div>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+          <span style="font-size:9.5px;font-weight:700">⑤ Node Map</span>
+          <span class="chip">Whipsaw · fade edges ⚖</span>
+        </div>
+        <div style="font-size:8.5px;color:var(--amber);padding:1px 0">🕳 Liquidity Vacuum 776–780 · pathway → 780</div>
+        <div class="nmh"><span class="c1">IDENTITY</span><span class="c2">STRIKE·%</span><span class="c3">STATE</span><span class="c4">ACTIVITY·LIFE</span></div>
+        <div class="nmr"><span class="c1"><span class="pill" style="background:rgba(46,194,126,.15);color:var(--green)">★ Flr</span></span>
+          <span class="c2">772 · 6%</span><span class="c3" style="color:var(--sub)">Steady</span><span class="c4" style="color:var(--sub)">—<span class="dot" style="background:var(--sub)"></span></span></div>
+        <div class="nmr"><span class="c1"><span class="pill" style="background:rgba(240,97,109,.15);color:var(--red)">★ Res</span></span>
+          <span class="c2">780 · 38%</span><span class="c3" style="color:var(--green)">Acm</span><span class="c4">attracting<span class="dot" style="background:var(--green)"></span></span></div>
+        <div class="pxrow">— SPY 776.0 —</div>
+        <div class="nmr" style="background:rgba(227,195,65,.05)"><span class="c1"><span class="pill" style="background:rgba(227,195,65,.2);color:var(--gold)">👑 King</span></span>
+          <span class="c2" style="color:var(--gold)">775 · 100%</span><span class="c3" style="color:var(--red)">Diss</span><span class="c4">Defl ↑ · <span style="color:var(--sub)">T</span><span class="dot" style="background:var(--amber)"></span></span></div>
+        <div class="nmr"><span class="c1"><span class="pill" style="background:rgba(180,140,227,.15);color:#b48ce3">🍆 Barn</span></span>
+          <span class="c2">774 · −5%</span><span class="c3" style="color:var(--sub)">Steady</span><span class="c4" style="color:var(--sub)">—</span></div>
+        <div class="nmr"><span class="c1"><span class="pill" style="background:rgba(46,194,126,.15);color:var(--green)">⛰ Flr</span></span>
+          <span class="c2">771 · 3%</span><span class="c3" style="color:var(--sub)">Steady</span><span class="c4" style="color:var(--sub)">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><span style="color:var(--green)">SPY:feed</span><span>feed v10.41</span></div>
+  <span class="callout" style="bottom:-8px;left:250px">footer + ⚠ sync warnings stay full-width</span>
+</div>
+
+<div class="note" style="margin-top:14px">Narrow (&lt;620px) behavior: columns stack — King on top, Deflections + Node Map below — identical to today's single-column flow. Nothing is lost, only rearranged.</div>
+</body></html>
