@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Step 5 — Full Node Identity (Cluster + Double-Stack)</title>
+<style>
+  :root{--bg:#0b0e14;--card:#12161f;--line:#1e2530;--long:#2ec27e;--short:#f0616d;--ink:#e6edf3;--sub:#8b98a9;--amber:#f2b45a;--gold:#e3c341;--blue:#4a90d9;--purple:#b58bff}
+  *{box-sizing:border-box}
+  body{background:#05070c;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;margin:0;padding:24px;display:flex;flex-direction:column;align-items:center;gap:14px}
+  .note{max-width:420px;font-size:12px;color:var(--sub);line-height:1.55;text-align:center}
+  .note b{color:var(--ink)}
+  #panel{width:400px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 11px;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+  .sec-hdr{font-size:9px;font-weight:800;letter-spacing:.6px;color:var(--sub);text-transform:uppercase;margin:2px 2px 6px}
+  .regime{display:flex;justify-content:space-between;font-size:10px;margin:0 2px 6px}
+  .legend{max-width:420px;font-size:11px;color:var(--sub);line-height:1.7;background:#0e1420;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .legend b{color:var(--ink)}
+</style>
+</head>
+<body>
+  <div class="note">Complete Step 5 <b>node identity</b> with the two new detectors. Callout lines announce the <b>Double-Stack</b> (bounce shelf) and <b>Cluster</b> (pin/chop zone); each participating node also carries the role badge. Everything factual — nothing predicted.</div>
+
+  <div id="panel">
+    <div class="sec-hdr">Node Map · Step 5</div>
+    <div class="regime"><span style="color:var(--short);font-weight:800">Regime: Trend ↓ (2.1×)</span><span style="color:var(--sub)">enter on pullbacks · ⑤</span></div>
+    <div id="callouts"></div>
+    <div id="ladder"></div>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+<script>
+var PAL={card:'#12161f',line:'#1e2530',longAccent:'#2ec27e',shortAccent:'#f0616d',ink:'#e6edf3',sub:'#8b98a9',amber:'#f2b45a',gold:'#e3c341',blue:'#4a90d9',purple:'#b58bff',long:'#2ec27e',short:'#f0616d'};
+var STACK_GAP=1.0, CLUSTER_BAND=3.0;
+
+function nodeStatusTag(L){
+  var lab=L.state==='Building'?'Acm':(L.state==='Fading'?'Diss':'Steady');
+  var col=L.state==='Building'?PAL.long:(L.state==='Fading'?PAL.short:PAL.sub);
+  var reshuf=''; if(L.rapid){var ic=(L.rapidDir>0)?'🔥':'❄';reshuf=' <span title="Reshuffling — rapid exposure change." style="font-size:9px">'+ic+'</span>';}
+  return '<span style="color:'+col+';font-size:8.5px;font-weight:800;border:1px solid '+col+';border-radius:9px;padding:0 5px">'+lab+'</span>'+reshuf;
+}
+function nodeTypeTag(L){
+  if(L.pos===true) return '<span style="color:'+PAL.gold+';font-size:8.5px;font-weight:800">+γ</span>';
+  if(L.pos===false) return '<span style="color:'+PAL.purple+';font-size:8.5px;font-weight:800">−γ</span>';
+  return '';
+}
+function nodeRoleBadge(L){
+  var label=null,col=PAL.sub;
+  if(L.isKing){label='King';col=PAL.gold;}
+  else if(L.isGatekeeper){label='Gatekeeper';col=PAL.amber;}
+  else if(L.isRugCeil){label=(L.rugType==='Reverse-Rug')?'RevRug-floor':'Rug-ceiling';col=PAL.purple;}
+  else if(L.isRugFloor){label=(L.rugType==='Reverse-Rug')?'RevRug-ceiling':'Rug-floor';col=PAL.purple;}
+  else if(L.isStack){label='Double-Stack';col=PAL.longAccent;}
+  else if(L.isCluster){label='Cluster';col=PAL.blue;}
+  else if(L.role==='Floor'){label='Floor';col=PAL.longAccent;}
+  else if(L.role==='Ceiling'){label='Ceiling';col=PAL.shortAccent;}
+  if(!label) return '';
+  return '<span style="color:'+col+';font-size:8.5px;font-weight:800;border:1px solid '+col+';border-radius:10px;padding:0 6px">'+label+'</span>';
+}
+function row(L){
+  var statusHtml=nodeStatusTag(L),typeHtml=nodeTypeTag(L),roleBadge=nodeRoleBadge(L);
+  var marks=(L.isStrong?'★':'')+(L.isKing?'👑':'')+(L.isGatekeeper?'🚪':'')+(L.isRugTarget?'🧶':'');
+  var bg=L.onEmphasis?(L.side==='above'?'rgba(240,97,109,0.06)':'rgba(46,194,126,0.06)'):'transparent';
+  var stageHtml='';
+  if(L.attract==='at-node')stageHtml='<span style="color:'+PAL.gold+';font-size:8.5px;font-weight:800">at node · watch BO</span>';
+  else if(L.attract==='attracting')stageHtml='<span style="color:'+PAL.blue+';font-size:8.5px;font-weight:700">attracting</span>';
+  var stageCell='<span style="width:92px;text-align:right">'+stageHtml+'</span>';
+  return '<div style="display:flex;align-items:center;gap:5px;font-size:10px;padding:3px 5px;border-radius:5px;background:'+bg+'">'+
+    '<span style="width:52px;font-weight:800;color:'+(L.isKing?PAL.gold:PAL.ink)+'">'+marks+L.k+'</span>'+
+    '<span style="width:36px;text-align:right;color:'+PAL.sub+'">'+L.pct+'%</span>'+
+    '<span>'+statusHtml+'</span><span>'+typeHtml+'</span>'+stageCell+
+    '<span style="flex:1;text-align:right">'+roleBadge+'</span></div>';
+}
+
+// callouts (Double-Stack + Cluster), like the Rug flag
+document.getElementById('callouts').innerHTML=
+  '<div title="Double-Stack: 2 adjacent significant nodes within 1 strike — a strong-bounce shelf." style="font-size:9.5px;color:'+PAL.longAccent+';font-weight:800;margin:0 2px 4px">⬛⬛ Double-Stack 769–769.5 — strong-bounce shelf</div>'+
+  '<div title="Cluster: 3 large nodes grouped within 3 strikes — price pins/chops here. Trade the edges." style="font-size:9.5px;color:'+PAL.blue+';font-weight:800;margin:0 2px 4px">▦ Cluster 773–775 (3 nodes) — pin/chop zone</div>';
+
+var levels=[
+  {k:'780',pct:60,side:'above',state:'Fading',pos:true,role:'Ceiling'},
+  {k:'775',pct:100,side:'above',state:'Building',rapid:true,rapidDir:1,pos:false,isStrong:true,isCluster:true,onEmphasis:true},
+  {k:'774',pct:52,side:'above',state:'Steady',pos:false,isCluster:true,onEmphasis:true},
+  {k:'773',pct:48,side:'above',state:'Building',pos:false,isCluster:true,onEmphasis:true},
+  {k:'771',pct:88,side:'below',state:'Steady',pos:true,isKing:true,attract:'at-node',onEmphasis:true},
+  {k:'769.5',pct:45,side:'below',state:'Building',pos:true,isStack:true,attract:'attracting'},
+  {k:'769',pct:55,side:'below',state:'Building',pos:true,isStrong:true,isStack:true,attract:'attracting'}
+];
+var html='',pxDone=false,px=772.5;
+levels.forEach(function(L){
+  if(!pxDone && parseFloat(L.k)<=px){html+='<div style="display:flex;justify-content:center;align-items:center;height:16px;margin:3px 0;background:'+PAL.card+';border:1px dashed '+PAL.blue+';border-radius:6px;color:'+PAL.blue+';font-size:10px;font-weight:800">— SPY 772.5 —</div>';pxDone=true;}
+  html+=row(L);
+});
+document.getElementById('ladder').innerHTML=html;
+
+document.getElementById('legend').innerHTML=
+  '<b>Node identity (all factual, nothing predicted):</b><br>'+
+  'markers ★👑🚪🧶 · strike · %King · <b style="color:'+PAL.long+'">status</b> (Acm/Diss/Steady 🔥❄) · <b>type</b> (<span style="color:'+PAL.gold+'">+γ</span>/<span style="color:'+PAL.purple+'">−γ</span>) · stage · <b>role badge</b><br><br>'+
+  '<b>Role/setup badges (priority order):</b><br>'+
+  '<span style="color:'+PAL.gold+'">King</span> › <span style="color:'+PAL.amber+'">Gatekeeper</span> › <span style="color:'+PAL.purple+'">Rug</span> › <span style="color:'+PAL.long+'">Double-Stack</span> (bounce) › <span style="color:'+PAL.blue+'">Cluster</span> (chop) › <span style="color:'+PAL.long+'">Floor</span>/<span style="color:'+PAL.short+'">Ceiling</span>';
+</script>
+</body>
+</html>

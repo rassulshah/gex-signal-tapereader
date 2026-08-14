@@ -1,0 +1,16 @@
+{
+  "project": "GEX-Signal-Tapereader",
+  "purpose": "Immutable backup inventory for recovery, comparison, and corruption protection.",
+  "storage_rule": "Backups are additive snapshots and should not replace the canonical current file.",
+  "entries": [
+    {
+      "backup_file": "2026-08-09_v9.0_verified__initial-backup.user.js",
+      "source_file": "/GEX-Signal-Tapereader/current/gex-signal-tapereader.user.js",
+      "version": "v9.0",
+      "status": "verified",
+      "created_date": "2026-08-09",
+      "reason": "Initial immutable backup baseline after establishing AI Drive project workflow.",
+      "notes": "Use for rollback, diff comparison, or recovery if the canonical current file is damaged."
+    }
+  ]
+}

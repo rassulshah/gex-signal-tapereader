@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GEX Analysis Tab — Design Mockup</title>
+<style>
+  body{margin:0;background:#05070c;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:24px 12px;color:#e6edf3}
+  .note{max-width:758px;margin:0 auto 14px;color:#8b98a9;font-size:12px;text-align:center}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-track{background:#0b0e14}
+  ::-webkit-scrollbar-thumb{background:#2a3140;border-radius:6px}
+  ::-webkit-scrollbar-thumb:hover{background:#3a4250}
+</style></head>
+<body>
+<div class="note">GEX Signal Tapereader — <b>Analysis Tab</b> design mockup (placeholder data · layout only)</div>
+<div style="max-width:758px;margin:0 auto;background:#0b0e14;border:1px solid #1e2530;border-radius:12px;overflow:hidden;color:#e6edf3;font-size:13px;line-height:1.4">
+
+  <div style="display:flex;gap:2px;background:#12161f;border-bottom:1px solid #1e2530;padding:6px 8px 0;position:sticky;top:0;z-index:5">
+    <div style="padding:6px 12px;color:#8b98a9;font-size:11px;font-weight:600">Signals</div>
+    <div style="padding:6px 12px;color:#8b98a9;font-size:11px;font-weight:600">Nodes</div>
+    <div style="padding:6px 12px;color:#e6edf3;font-size:11px;font-weight:800;border-bottom:2px solid #e3c341;background:#0b0e14;border-radius:6px 6px 0 0">📊 Analysis</div>
+  </div>
+
+  <div style="max-height:620px;overflow-y:auto;padding:12px 14px">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div>
+        <div style="font-size:14px;font-weight:800">End-of-Day Review</div>
+        <div style="font-size:10px;color:#8b98a9">SPY · 2026-08-12 · 129 bars · regime: trending down</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:9px;color:#4a90d9">◷ auto-reviewed 3:34 PM CT</div>
+        <div style="font-size:9px;color:#8b98a9">◂ 08-11 · <b style="color:#e6edf3">08-12</b> · 08-13 ▸</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <div style="flex:0 0 84px;background:#12161f;border:1px solid #1e2530;border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:9px;color:#8b98a9;letter-spacing:.5px">DAY GRADE</div>
+        <div style="font-size:28px;font-weight:800;color:#2ec27e;line-height:1.2">B+</div>
+      </div>
+      <div style="flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        <div style="background:#12161f;border:1px solid #1e2530;border-radius:8px;padding:6px 8px"><div style="font-size:9px;color:#8b98a9">Direction hit</div><div style="font-size:15px;font-weight:800;color:#2ec27e">73%</div><div style="font-size:8px;color:#8b98a9">30m fwd</div></div>
+        <div style="background:#12161f;border:1px solid #1e2530;border-radius:8px;padding:6px 8px"><div style="font-size:9px;color:#8b98a9">Reversal catch</div><div style="font-size:15px;font-weight:800;color:#f2b45a">58%</div><div style="font-size:8px;color:#8b98a9">~1 bar lag</div></div>
+        <div style="background:#12161f;border:1px solid #1e2530;border-radius:8px;padding:6px 8px"><div style="font-size:9px;color:#8b98a9">Target hit</div><div style="font-size:15px;font-weight:800;color:#2ec27e">4/6</div><div style="font-size:8px;color:#8b98a9">King magnet</div></div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="flex:0 0 22px;height:22px;border-radius:50%;background:#e3c341;color:#0b0e14;font-weight:800;font-size:12px;text-align:center;line-height:22px">1</div>
+      <div style="font-size:12px;font-weight:800">How the day moved together</div>
+      <div style="flex:1;height:1px;background:#1e2530"></div>
+    </div>
+    <div style="font-size:10px;color:#8b98a9;margin:0 0 6px 30px">King · price · S/R dominance on one axis — horizontal scroll →</div>
+    <div style="margin:0 0 6px 30px;background:#12161f;border:1px solid #1e2530;border-radius:10px;padding:8px">
+      <div style="overflow-x:auto;padding-bottom:4px">
+        <svg width="900" height="150" viewBox="0 0 900 150" style="display:block">
+          <rect x="0" y="0" width="300" height="150" fill="#0e1a13"/>
+          <rect x="300" y="0" width="140" height="150" fill="#1c1113"/>
+          <rect x="440" y="0" width="180" height="150" fill="#0e1a13"/>
+          <rect x="620" y="0" width="280" height="150" fill="#1c1113"/>
+          <polyline points="0,40 150,40 150,55 320,55 320,70 480,70 480,88 660,88 660,100 900,100" fill="none" stroke="#e3c341" stroke-width="2.2"/>
+          <polyline points="0,50 80,44 160,60 240,72 320,64 400,82 480,95 560,86 640,104 720,120 800,110 900,116" fill="none" stroke="#c8d3df" stroke-width="1.4" opacity="0.85"/>
+          <circle cx="300" cy="64" r="4" fill="#f0616d"/><text x="300" y="18" fill="#f0616d" font-size="9" text-anchor="middle">▼ short 1:48</text>
+          <circle cx="620" cy="104" r="4" fill="#2ec27e"/><text x="620" y="18" fill="#2ec27e" font-size="9" text-anchor="middle">▲ bounce 2:39</text>
+          <text x="6" y="145" fill="#e3c341" font-size="9">━ King</text>
+          <text x="70" y="145" fill="#c8d3df" font-size="9">━ price</text>
+          <text x="140" y="145" fill="#2ec27e" font-size="9">▮ support-dom</text>
+          <text x="250" y="145" fill="#f0616d" font-size="9">▮ resistance-dom</text>
+        </svg>
+      </div>
+    </div>
+    <div style="margin:0 0 16px 30px;font-size:10px;color:#c8d3df;background:#0d1420;border-left:2px solid #4a90d9;padding:6px 8px;border-radius:0 6px 6px 0">
+      King leaned down from open; price followed. Band flipped red at 1:48 as the floor dissipated → the short. Green bounce zones held twice but each rolled back under the King.
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="flex:0 0 22px;height:22px;border-radius:50%;background:#e3c341;color:#0b0e14;font-weight:800;font-size:12px;text-align:center;line-height:22px">2</div>
+      <div style="font-size:12px;font-weight:800">Was the King pulling price?</div>
+      <div style="flex:1;height:1px;background:#1e2530"></div>
+    </div>
+    <div style="margin:0 0 6px 30px;background:#12161f;border:1px solid #1e2530;border-radius:10px;padding:8px">
+      <div style="overflow-x:auto">
+        <svg width="900" height="80" viewBox="0 0 900 80" style="display:block">
+          <line x1="0" y1="40" x2="900" y2="40" stroke="#1e2530" stroke-width="1" stroke-dasharray="3 3"/>
+          <text x="4" y="12" fill="#8b98a9" font-size="8">King above price (+)</text>
+          <text x="4" y="76" fill="#8b98a9" font-size="8">King below price (−)</text>
+          <polyline points="0,10 120,18 240,30 360,38 480,42 600,40 720,52 840,66 900,70" fill="none" stroke="#b58ce0" stroke-width="2"/>
+          <rect x="360" y="30" width="240" height="20" fill="#2ec27e" opacity="0.12"/>
+          <text x="480" y="26" fill="#2ec27e" font-size="8" text-anchor="middle">converging (magnet)</text>
+          <text x="800" y="76" fill="#f0616d" font-size="8" text-anchor="middle">diverging (King leads lower)</text>
+        </svg>
+      </div>
+    </div>
+    <div style="margin:0 0 16px 30px;font-size:10px;color:#c8d3df;background:#0d1420;border-left:2px solid #4a90d9;padding:6px 8px;border-radius:0 6px 6px 0">
+      Midday the gap closed — magnet pulling price into the King (continuation). Late day the King dropped below price and led it lower — a new bearish leg, not mean-reversion.
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="flex:0 0 22px;height:22px;border-radius:50%;background:#e3c341;color:#0b0e14;font-weight:800;font-size:12px;text-align:center;line-height:22px">3</div>
+      <div style="font-size:12px;font-weight:800">What the nodes did (multi-strike)</div>
+      <div style="flex:1;height:1px;background:#1e2530"></div>
+    </div>
+    <div style="margin:0 0 16px 30px;background:#12161f;border:1px solid #1e2530;border-radius:10px;padding:8px;max-height:150px;overflow-y:auto">
+      <div style="font-size:9px;color:#8b98a9;margin-bottom:4px">strike · role · lifecycle (scroll ↕)</div>
+      <div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #161b26"><span style="flex:0 0 40px;color:#f0616d;font-weight:700;font-size:11px">773</span><span style="flex:0 0 62px;font-size:9px;color:#8b98a9">ceiling</span><span style="flex:1;font-size:10px">built +18 overhead 12:30→14:00 <span style="color:#f0616d">held all day</span></span></div>
+      <div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #161b26"><span style="flex:0 0 40px;color:#f0616d;font-weight:700;font-size:11px">772</span><span style="flex:0 0 62px;font-size:9px;color:#8b98a9">ceiling</span><span style="flex:1;font-size:10px">building +12 as price rejected <span style="color:#f0616d">resistance</span></span></div>
+      <div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #161b26"><span style="flex:0 0 40px;color:#e3c341;font-weight:700;font-size:11px">771</span><span style="flex:0 0 62px;font-size:9px;color:#e3c341">KING</span><span style="flex:1;font-size:10px">magnet · price gravitated here into close</span></div>
+      <div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #161b26"><span style="flex:0 0 40px;color:#2ec27e;font-weight:700;font-size:11px">769</span><span style="flex:0 0 62px;font-size:9px;color:#8b98a9">floor</span><span style="flex:1;font-size:10px">held 1:30–1:42 (+44) then <span style="color:#f0616d">dissipated −52 @1:48</span></span></div>
+      <div style="display:flex;align-items:center;gap:6px;padding:3px 0"><span style="flex:0 0 40px;color:#2ec27e;font-weight:700;font-size:11px">768</span><span style="flex:0 0 62px;font-size:9px;color:#8b98a9">floor</span><span style="flex:1;font-size:10px">faded through the afternoon <span style="color:#f2b45a">support giving way</span></span></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="flex:0 0 22px;height:22px;border-radius:50%;background:#e3c341;color:#0b0e14;font-weight:800;font-size:12px;text-align:center;line-height:22px">4</div>
+      <div style="font-size:12px;font-weight:800">Did agreement pay off?</div>
+      <div style="flex:1;height:1px;background:#1e2530"></div>
+    </div>
+    <div style="margin:0 0 16px 30px;background:#12161f;border:1px solid #1e2530;border-radius:10px;padding:8px">
+      <div style="display:grid;grid-template-columns:64px 1fr 1fr 1fr;gap:4px;font-size:10px">
+        <div style="color:#8b98a9;font-size:9px">agree</div><div style="color:#8b98a9;font-size:9px;text-align:center">dir correct</div><div style="color:#8b98a9;font-size:9px;text-align:center">target hit</div><div style="color:#8b98a9;font-size:9px;text-align:center">stopped</div>
+        <div style="font-weight:700">4/4</div><div style="text-align:center;background:#123526;border-radius:4px;padding:3px;color:#2ec27e;font-weight:700">88%</div><div style="text-align:center;background:#123526;border-radius:4px;padding:3px;color:#2ec27e">71%</div><div style="text-align:center;background:#1c1113;border-radius:4px;padding:3px;color:#f0616d">12%</div>
+        <div style="font-weight:700">3/4</div><div style="text-align:center;background:#14251c;border-radius:4px;padding:3px;color:#8ad6a8">70%</div><div style="text-align:center;background:#14251c;border-radius:4px;padding:3px;color:#8ad6a8">55%</div><div style="text-align:center;background:#1c1113;border-radius:4px;padding:3px;color:#f2b45a">24%</div>
+        <div style="font-weight:700">2/4</div><div style="text-align:center;background:#161b26;border-radius:4px;padding:3px;color:#8b98a9">51%</div><div style="text-align:center;background:#161b26;border-radius:4px;padding:3px;color:#8b98a9">38%</div><div style="text-align:center;background:#161b26;border-radius:4px;padding:3px;color:#8b98a9">44%</div>
+      </div>
+      <div style="font-size:9px;color:#8b98a9;margin-top:5px">The engine earns its keep: 4/4 alignment hit direction 88% vs coin-flip at 2/4.</div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="flex:0 0 22px;height:22px;border-radius:50%;background:#e3c341;color:#0b0e14;font-weight:800;font-size:12px;text-align:center;line-height:22px">5</div>
+      <div style="font-size:12px;font-weight:800">Which signal to trust — and how early</div>
+      <div style="flex:1;height:1px;background:#1e2530"></div>
+    </div>
+    <div style="margin:0 0 16px 30px;background:#12161f;border:1px solid #1e2530;border-radius:10px;padding:8px 10px">
+      <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #161b26"><div style="flex:0 0 92px;font-size:11px;font-weight:700">👑 King</div><div style="flex:1;height:8px;background:#0b0e14;border-radius:6px;overflow:hidden"><div style="width:78%;height:100%;background:#2ec27e"></div></div><div style="flex:0 0 30px;text-align:right;font-size:11px;font-weight:800;color:#2ec27e">78%</div><div style="flex:0 0 78px;font-size:9px;color:#4a90d9;text-align:right">leads +3 bars</div></div>
+      <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #161b26"><div style="flex:0 0 92px;font-size:11px;font-weight:700">📈 Trend</div><div style="flex:1;height:8px;background:#0b0e14;border-radius:6px;overflow:hidden"><div style="width:81%;height:100%;background:#2ec27e"></div></div><div style="flex:0 0 30px;text-align:right;font-size:11px;font-weight:800;color:#2ec27e">81%</div><div style="flex:0 0 78px;font-size:9px;color:#8b98a9;text-align:right">coincident</div></div>
+      <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #161b26"><div style="flex:0 0 92px;font-size:11px;font-weight:700">⚔️ S/R Battle</div><div style="flex:1;height:8px;background:#0b0e14;border-radius:6px;overflow:hidden"><div style="width:66%;height:100%;background:#f2b45a"></div></div><div style="flex:0 0 30px;text-align:right;font-size:11px;font-weight:800;color:#f2b45a">66%</div><div style="flex:0 0 78px;font-size:9px;color:#f0616d;text-align:right">lags −1 bar</div></div>
+      <div style="display:flex;align-items:center;gap:8px;padding:4px 0"><div style="flex:0 0 92px;font-size:11px;font-weight:700">🎯 Confluence</div><div style="flex:1;height:8px;background:#0b0e14;border-radius:6px;overflow:hidden"><div style="width:84%;height:100%;background:#2ec27e"></div></div><div style="flex:0 0 30px;text-align:right;font-size:11px;font-weight:800;color:#2ec27e">84%</div><div style="flex:0 0 78px;font-size:9px;color:#8b98a9;text-align:right">confirmation</div></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="flex:0 0 22px;height:22px;border-radius:50%;background:#e3c341;color:#0b0e14;font-weight:800;font-size:12px;text-align:center;line-height:22px">6</div>
+      <div style="font-size:12px;font-weight:800">What worked, what missed, why</div>
+      <div style="flex:1;height:1px;background:#1e2530"></div>
+    </div>
+    <div style="margin:0 0 8px 30px;display:flex;gap:8px">
+      <div style="flex:1;background:#0e1a13;border:1px solid #1c3a28;border-radius:10px;padding:8px 10px"><div style="font-size:10px;font-weight:800;color:#2ec27e;margin-bottom:4px">✓ WORKED</div><div style="font-size:10px;color:#c8d3df;line-height:1.5">1:48 floor-dissipation short on time · 3/3 pullback-high shorts profitable</div></div>
+      <div style="flex:1;background:#1c1113;border:1px solid #3a1c22;border-radius:10px;padding:8px 10px"><div style="font-size:10px;font-weight:800;color:#f0616d;margin-bottom:4px">✕ MISSED</div><div style="font-size:10px;color:#c8d3df;line-height:1.5">2:09 bounce flagged 1 bar late · counter-trend upbreak not suppressed</div></div>
+    </div>
+    <div style="margin:0 0 16px 30px;background:#12161f;border:1px solid #1e2530;border-radius:10px;padding:8px 10px"><div style="font-size:10px;font-weight:800;color:#4a90d9;margin-bottom:3px">🔍 WHY</div><div style="font-size:10px;color:#c8d3df;line-height:1.5">Bounce lag = srBattle needs 2 confirming polls; on fast reversals the floor rebuilds inside one bar. Cutting to 1 poll when force swing &gt;30 recovers ~1 bar.</div></div>
+
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="flex:0 0 22px;height:22px;border-radius:50%;background:#e3c341;color:#0b0e14;font-weight:800;font-size:12px;text-align:center;line-height:22px">7</div>
+      <div style="font-size:12px;font-weight:800">Discoveries &amp; what to change</div>
+      <div style="flex:1;height:1px;background:#1e2530"></div>
+    </div>
+    <div style="margin:0 0 8px 30px;background:#160f1f;border:1px solid #2e2140;border-radius:10px;padding:8px 10px"><div style="font-size:10px;font-weight:800;color:#b58ce0;margin-bottom:3px">💡 DISCOVERED</div><div style="font-size:10px;color:#c8d3df;line-height:1.5">King crossing below price <b>while</b> trend already "uptrend broken" → target hit 5/5 today. Candidate new high-conviction signal.</div></div>
+    <div style="margin:0 0 6px 30px;display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;gap:8px;align-items:flex-start;background:#12161f;border:1px solid #1e2530;border-radius:8px;padding:7px 9px"><div style="flex:0 0 18px;height:18px;border-radius:50%;background:#f0616d;color:#0b0e14;font-size:10px;font-weight:800;text-align:center;line-height:18px">1</div><div style="font-size:10px">Reduce srBattle flip-confirm to 1 poll on force swings &gt;30 <span style="color:#8b98a9">→ recover ~1 bar</span></div></div>
+      <div style="display:flex;gap:8px;align-items:flex-start;background:#12161f;border:1px solid #1e2530;border-radius:8px;padding:7px 9px"><div style="flex:0 0 18px;height:18px;border-radius:50%;background:#f2b45a;color:#0b0e14;font-size:10px;font-weight:800;text-align:center;line-height:18px">2</div><div style="font-size:10px">Add "King-crosses-price + trend broken" high-conviction signal <span style="color:#8b98a9">→ 5/5</span></div></div>
+      <div style="display:flex;gap:8px;align-items:flex-start;background:#12161f;border:1px solid #1e2530;border-radius:8px;padding:7px 9px"><div style="flex:0 0 18px;height:18px;border-radius:50%;background:#4a90d9;color:#0b0e14;font-size:10px;font-weight:800;text-align:center;line-height:18px">3</div><div style="font-size:10px">Raise confluence weight at 4/4 alignment <span style="color:#8b98a9">→ 88% justifies it</span></div></div>
+    </div>
+
+    <div style="margin-top:14px;padding-top:8px;border-top:1px solid #1e2530;font-size:10px;color:#8b98a9;text-align:center">7-day trend: direction hit ▲ 64% → 73% · reversal catch ▲ 49% → 58%</div>
+
+  </div>
+</div>
+</body></html>

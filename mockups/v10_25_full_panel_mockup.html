@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GEX v10.25 — Full Panel Mockup</title>
+<style>
+  :root{
+    --bg:#0b0e14; --card:#12161f; --line:#1e2530;
+    --long:#2ec27e; --longSoft:rgba(46,194,126,0.10);
+    --short:#f0616d; --shortSoft:rgba(240,97,109,0.10);
+    --ink:#e6edf3; --sub:#8b98a9; --amber:#f2b45a; --gold:#e3c341; --blue:#4a90d9;
+  }
+  *{box-sizing:border-box}
+  body{background:#05070c;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;margin:0;padding:24px;display:flex;flex-direction:column;align-items:center;gap:14px}
+  .note{max-width:360px;font-size:12px;color:var(--sub);line-height:1.5;text-align:center}
+  .note b{color:var(--ink)}
+  /* the panel replicates the live sidebar */
+  #panel{width:340px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:9px 10px;position:relative;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+  .titlebar{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--sub);border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:6px}
+  .titlebar .sym{color:var(--ink);font-weight:800;font-size:13px}
+  .sec-hdr{font-size:9px;font-weight:800;letter-spacing:.6px;color:var(--sub);text-transform:uppercase;margin:9px 2px 4px}
+  .gs-ico{width:16px;height:16px;border-radius:50%;border:1px solid var(--sub);color:var(--sub);font-size:9.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+  .gs-ico:hover{border-color:var(--ink);color:var(--ink)}
+  /* step popover */
+  #pop{position:absolute;left:10px;right:10px;top:60px;background:#0e1420;border:1px solid var(--blue);border-radius:10px;padding:12px 14px 14px;box-shadow:0 12px 40px rgba(0,0,0,.6);z-index:50;display:none;font-size:11.5px;line-height:1.5;max-height:380px;overflow:auto}
+  #pop.show{display:block}
+  #pop .gs-x{position:absolute;right:9px;top:7px;cursor:pointer;color:var(--sub);font-size:13px}
+  #pop .gs-x:hover{color:var(--ink)}
+  .gs-ttl{font-weight:800;font-size:13px;color:var(--ink);margin-bottom:6px}
+  .gs-sub{font-weight:800;font-size:10px;letter-spacing:.4px;color:var(--blue);text-transform:uppercase;margin:9px 0 3px}
+  #pop p{margin:5px 0;color:var(--ink)}
+  #pop ul{margin:4px 0;padding-left:18px}
+  #pop li{margin:2px 0;color:var(--ink)}
+  #pop b{color:#fff}
+  .stub{margin-top:10px;border-top:1px dashed var(--line);padding-top:7px;font-size:10px;color:var(--sub)}
+  .rowline{display:flex;justify-content:space-between;padding:2px 4px}
+  .toggles{display:flex;flex-wrap:wrap;gap:6px;max-width:360px;justify-content:center;margin-top:4px}
+  .toggles button{background:#12161f;color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:6px 10px;font-size:11px;cursor:pointer}
+  .toggles button:hover{border-color:var(--blue)}
+</style>
+</head>
+<body>
+  <div class="note">Faithful mockup of the <b>v10.25 live panel</b>, fully populated (live tape is thin right now). Colors, layout, the white gate icon, the 3-magnet header, and every ①–⑤ popover use the <b>exact strings + palette from the shipped code</b>. Click the numbered icons and the outcome buttons.</div>
+
+  <div id="panel">
+    <div class="titlebar"><span class="sym">SPY 772.53</span><span>feed v10.25</span></div>
+
+    <!-- ============ STEP 1: 3-MAGNET HEADER ============ -->
+    <div id="header"></div>
+
+    <!-- ============ STEP 4: GATEKEEPER AREA ============ -->
+    <div class="sec-hdr">King path</div>
+    <div id="gk"></div>
+
+    <!-- ============ STEP 5: NODE MAP (attraction-only) ============ -->
+    <div class="sec-hdr">Node Map · Step 5</div>
+    <div id="nodemap"></div>
+
+    <div class="stub">
+      <div class="rowline"><span>S/R Imbalance</span><span style="color:var(--short)">Resistance-led 773/769</span></div>
+      <div class="rowline"><span>Breadth</span><span style="color:var(--sub)">net −2 · leaning down</span></div>
+    </div>
+
+    <!-- popover -->
+    <div id="pop"><span class="gs-x" onclick="closePop()">✕</span><div id="popbody"></div></div>
+  </div>
+
+  <div class="toggles">
+    <button onclick="setOutcome('none')">Step 5: unresolved</button>
+    <button onclick="setOutcome('up')">broke ↑</button>
+    <button onclick="setOutcome('dn')">broke ↓</button>
+    <button onclick="setOutcome('held')">held</button>
+    <button onclick="setOutcome('false')">false break</button>
+  </div>
+
+<script>
+var PAL={card:'#12161f',line:'#1e2530',long:'#2ec27e',short:'#f0616d',ink:'#e6edf3',sub:'#8b98a9',amber:'#f2b45a',gold:'#e3c341',blue:'#4a90d9'};
+
+// ---- exact step text from shipped STEP_TEXT ----
+var STEP_TEXT = {
+  1:{t:'Step 1 — Identify the Magnets', h:
+    '<div class="gs-sub">Concept of Magnets</div>'+
+    '<p>Every node acts like a <b>magnet</b>. Price is attracted to these zones due to dealer positioning — yet the same areas can act as <b>walls that repel</b> price and create reversals.</p>'+
+    '<ul><li><b>Larger node values = stronger magnets.</b></li><li>The <b>closer price drifts</b>, the <b>stronger the pull</b>.</li></ul>'+
+    '<div class="gs-sub">Magnetic Behavior</div>'+
+    '<ul><li>Farther from a high-value node → pull <b>weakens</b>.</li><li>Approaching one → pull <b>strengthens</b>.</li><li>Direct interaction can cause a <b>deflection/repulsion</b>.</li></ul>'},
+  2:{t:'Step 2 — Spot the King Node', h:
+    '<p>The <b>King Node</b> is the most influential node — where Market Makers prefer to <b>settle price</b> by the <b>end of day (EOD)</b>. This is a day-trading tool, so the King is your <b>EOD settlement anchor</b>.</p>'+
+    '<div class="gs-sub">How to Use It</div>'+
+    '<ul><li>Your <b>primary destination target</b> for the session.</li><li>Mark it as your <b>EOD anchor</b>.</li><li>Watch early-day <b>drive-offs</b> or late-day <b>pinning</b>.</li></ul>'},
+  3:{t:'Step 3 — Define the Range', h:
+    '<p>Ranges provide some of the <b>highest-probability setups</b> and best risk-to-reward.</p>'+
+    '<ul><li>Find where price <b>consistently reverses</b> — these are the boundaries.</li><li>At the <b>extreme end</b>, <b>fade the edge</b> — don’t chase.</li><li>Avoid <b>midpoints</b> — poor R:R, uncertain direction.</li></ul>'},
+  4:{t:'Step 4 — Watch Gatekeeper Nodes', h:
+    '<p><b>Gatekeeper Nodes</b> are defensive levels that often <b>block price</b> from reaching the King Node. They act as <b>strong rejection zones</b>, and failed tests can <b>trigger trend shifts</b>.</p>'+
+    '<div class="gs-sub">How to Read Them</div>'+
+    '<ul><li>Rejection → potential <b>map reshuffling</b> or <b>directional change</b>.</li><li><b>Early-day rejections</b> often mark <b>powerful reversals</b>.</li><li>Align <b>SPX, SPY, QQQ</b> — confluence increases probability; mixed lowers it.</li></ul>'+
+    '<div class="gs-sub">Rule of thumb</div><p>SPX, SPY, and QQQ must agree — if one diverges, stand aside.</p>'},
+  5:{t:'Step 5 — Map the Flow', h:
+    '<p>Heatseeker updates <b>dynamically</b> as dealer positioning shifts. Each <b>reshuffle</b> is a change in Market Maker risk and can reshape your bias.</p>'+
+    '<div class="gs-sub">Watch for</div>'+
+    '<ul><li><b>Accumulation (Acm):</b> dealers building → <b>stronger</b> magnets.</li><li><b>Dissipation (Diss):</b> dealers closing → <b>weakening</b> nodes.</li><li><b>Reshuffling:</b> rapid changes → new structure.</li></ul>'+
+    '<p>By playing <b>direct deflections off key nodes</b>, you’re trading <b>ahead of the reshuffle</b>.</p>'+
+    '<div class="gs-sub">Our rule</div><p>Accumulation only <b>attracts</b> price to a node. We make <b>no</b> deflect/break call — the breakout tracker resolves the outcome (broke ↑ / broke ↓ / held / false break).</p>'}
+};
+
+function ico(n){ return '<span class="gs-ico" onclick="openPop('+n+')" title="Step '+n+' — click for the method">'+n+'</span>'; }
+function gateSvg(stroke){
+  return '<svg width="18" height="16" viewBox="0 0 20 18" fill="none" stroke="'+stroke+'" stroke-width="1.4" stroke-linecap="round" style="vertical-align:middle">'+
+    '<path d="M3 16 V7 a7 7 0 0 1 14 0 V16"/><line x1="3" y1="16" x2="17" y2="16"/>'+
+    '<line x1="7" y1="16" x2="7" y2="6"/><line x1="10" y1="16" x2="10" y2="4.2"/><line x1="13" y1="16" x2="13" y2="6"/>'+
+    '<line x1="4.5" y1="10" x2="15.5" y2="10"/></svg>';
+}
+
+// ---- Step 1: 3-magnet header (King in middle, SUP left, RES right) ----
+function sideMagnet(k, pct, isSup){
+  var col=isSup?PAL.long:PAL.short, lbl=isSup?'★ SUP':'★ RES';
+  return '<span style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 10px;height:42px;border-radius:16px;background:'+PAL.card+';border:1.5px solid '+col+'">'+
+    '<span style="font-size:8px;font-weight:800;color:'+col+';letter-spacing:.4px">'+lbl+'</span>'+
+    '<span style="width:100%;height:1px;background:'+PAL.line+';margin:2px 0"></span>'+
+    '<span><span style="font-weight:800;font-size:14px;color:'+col+'">'+k+'</span> <span style="color:'+PAL.sub+';font-size:9px;font-weight:600">'+pct+'%</span></span></span>';
+}
+function kingBadge(kingK, px){
+  var off=Math.round(kingK-px), above=off>0, arrC=above?PAL.long:PAL.short, arr=above?'↑':'↓', sign=above?'+':'−';
+  var arrHtml = off!==0 ? '<span style="color:'+arrC+';font-weight:800;font-size:14px;line-height:1">'+sign+Math.abs(off)+arr+'</span>' : '';
+  return '<span style="display:inline-flex;align-items:center;gap:7px;padding:3px 12px;border:1.5px solid '+PAL.gold+';border-radius:16px;background:'+PAL.card+'">'+
+    '<span style="font-size:14px;line-height:1">👑</span>'+
+    '<span style="display:inline-flex;flex-direction:column;align-items:center;line-height:1.05">'+
+      '<span style="color:'+PAL.gold+';font-weight:800;font-size:15px">'+kingK+'</span>'+
+      '<span style="width:100%;height:1px;background:'+PAL.line+';margin:1px 0"></span>'+
+      '<span style="color:'+PAL.sub+';font-weight:700;font-size:11px">'+px+'</span>'+
+    '</span>'+arrHtml+'</span>';
+}
+function renderHeader(){
+  document.getElementById('header').innerHTML =
+    '<div style="display:flex;justify-content:center;align-items:center;gap:7px;margin:4px 0 3px 0">'+
+      sideMagnet('769',54,true)+ kingBadge('771','772.5')+ sideMagnet('775',74,false)+
+    '</div>'+
+    '<div style="display:flex;gap:5px;align-items:center;justify-content:center;margin:0 0 5px">'+
+      '<span style="font-size:8.5px;color:'+PAL.sub+';font-weight:700;letter-spacing:.3px;margin-right:2px">5-STEP</span>'+
+      ico(1)+ico(2)+ico(3)+
+    '</div>';
+}
+
+// ---- Step 4: gatekeeper block ----
+function renderGK(){
+  var gate=gateSvg(PAL.ink);
+  var hdr='<div style="display:flex;align-items:center;gap:6px;margin:0 2px 5px">'+gate+ico(4)+
+    '<span style="font-size:8.5px;color:'+PAL.sub+';font-weight:700;letter-spacing:.3px">gatekeeper</span></div>';
+  var col=PAL.amber;
+  var card='<div style="background:'+PAL.card+';border:1px solid '+col+';border-radius:8px;padding:6px 9px">'+
+    '<div style="display:flex;align-items:center;gap:7px">'+gate+
+      '<span style="font-weight:800;font-size:14px;color:'+PAL.ink+'">773</span>'+
+      '<span style="font-size:10px;font-weight:800;color:'+col+';border:1px solid '+col+';border-radius:20px;padding:0 6px">3.0×</span>'+
+      '<span style="font-size:10px;font-weight:800;color:'+col+';margin-left:auto">Reversal likely</span></div>'+
+    '<div style="font-size:10px;line-height:1.4;color:'+PAL.sub+';margin-top:4px">Blocks the path to 👑 771. Ratio 3.0× vs the next node beyond — strong rejection zone; a failed test can reshuffle the map. <span style="color:'+PAL.amber+';font-weight:700">Early-session — higher-probability reversal.</span></div>'+
+    '<div style="font-size:9.5px;color:'+PAL.sub+';margin-top:5px">Tri-index: SPY + QQQ agree (down). Confluence supports the read.</div>'+
+  '</div>';
+  document.getElementById('gk').innerHTML=hdr+card;
+}
+
+// ---- Step 5: Node Map rows (attraction-only + outcome echo) ----
+var OUTCOME='none';
+function nmVerdictColor(v, side){
+  if(v==='Bounce')        return side==='below'?PAL.long:PAL.short;
+  if(v==='Break-through') return side==='below'?PAL.short:PAL.long;
+  if(v==='Pullback')      return PAL.blue;
+  return PAL.sub;
+}
+function outcomeMarker(o){
+  if(o==='up')   return {txt:'broke ↑', col:PAL.long};
+  if(o==='dn')   return {txt:'broke ↓', col:PAL.short};
+  if(o==='held') return {txt:'held', col:PAL.gold};
+  if(o==='false')return {txt:'false break', col:PAL.amber};
+  return null;
+}
+// L: {k,pct,side,state,verdict,marks,attract,isKing}
+function row(L){
+  var col=nmVerdictColor(L.verdict,L.side);
+  var arrow=L.state==='Building'?'↗':(L.state==='Fading'?'↘':'→');
+  var arrCol=L.side==='above'?(L.state==='Building'?PAL.short:(L.state==='Fading'?PAL.long:PAL.sub))
+                             :(L.state==='Building'?PAL.long:(L.state==='Fading'?PAL.short:PAL.sub));
+  var vtag='<span style="color:'+col+';font-size:8.5px;font-weight:800;border:1px solid '+col+';border-radius:10px;padding:0 6px">'+L.verdict+'</span>';
+  var stageHtml='';
+  var om = L.isTarget ? outcomeMarker(OUTCOME) : null;
+  if(om){ stageHtml='<span style="color:'+om.col+';font-size:8.5px;font-weight:800">'+om.txt+'</span>'; }
+  else if(L.attract==='at-node'){ stageHtml='<span style="color:'+PAL.gold+';font-size:8.5px;font-weight:800">at node · watch BO</span>'; }
+  else if(L.attract==='attracting'){ stageHtml='<span style="color:'+PAL.blue+';font-size:8.5px;font-weight:700">attracting</span>'; }
+  var bg = L.emph ? (L.side==='above'?'rgba(240,97,109,0.06)':'rgba(46,194,126,0.06)') : 'transparent';
+  return '<div style="display:flex;align-items:center;justify-content:space-between;font-size:10px;padding:2px 5px;border-radius:5px;background:'+bg+'">'+
+    '<span style="width:58px;font-weight:800;color:'+(L.isKing?PAL.gold:PAL.ink)+'">'+(L.marks||'')+L.k+'</span>'+
+    '<span style="width:40px;text-align:right;color:'+PAL.sub+'">'+L.pct+'%</span>'+
+    '<span style="width:20px;text-align:center;color:'+arrCol+';font-weight:800">'+arrow+'</span>'+
+    '<span style="width:92px;text-align:right">'+stageHtml+'</span>'+
+    '<span style="flex:1;text-align:right">'+vtag+'</span></div>';
+}
+function renderNodeMap(){
+  var regime='<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;margin:0 2px 5px"><span style="color:'+PAL.short+';font-weight:800">Regime: Trend ↓ (2.1×)</span><span style="color:'+PAL.sub+'">enter on pullbacks · '+ico(5)+'</span></div>';
+  var levels=[
+    {k:'780', pct:74, side:'above', state:'Fading', verdict:'Pullback', marks:'', attract:'none', emph:false},
+    {k:'775', pct:100,side:'above', state:'Building',verdict:'Break-through', marks:'★🚪', attract:'none', emph:true, isTarget:true},
+    {k:'773', pct:62, side:'above', state:'Building',verdict:'Bounce', marks:'', attract:'none', emph:true},
+    // price 772.5 line inserted here
+    {k:'771', pct:88, side:'below', state:'Building',verdict:'Bounce', marks:'👑', attract:'at-node', emph:true, isKing:true},
+    {k:'769', pct:54, side:'below', state:'Building',verdict:'Bounce', marks:'★', attract:'attracting', emph:false},
+    {k:'766', pct:41, side:'below', state:'Fading', verdict:'Break-through', marks:'', attract:'none', emph:false}
+  ];
+  var html=regime, priceDone=false, px=772.5;
+  levels.forEach(function(L){
+    if(!priceDone && parseFloat(L.k)<=px){
+      html+='<div style="display:flex;justify-content:center;align-items:center;height:16px;margin:2px 0;background:'+PAL.card+';border:1px dashed '+PAL.blue+';border-radius:6px;color:'+PAL.blue+';font-size:10px;font-weight:800">— SPY 772.5 —</div>';
+      priceDone=true;
+    }
+    html+=row(L);
+  });
+  document.getElementById('nodemap').innerHTML=html;
+}
+function setOutcome(o){ OUTCOME=o; renderNodeMap(); }
+
+// ---- popover ----
+function openPop(n){
+  var b=document.getElementById('popbody'); var p=document.getElementById('pop');
+  b.innerHTML='<div class="gs-ttl">'+STEP_TEXT[n].t+'</div>'+STEP_TEXT[n].h;
+  p.classList.add('show');
+}
+function closePop(){ document.getElementById('pop').classList.remove('show'); }
+
+renderHeader(); renderGK(); renderNodeMap();
+</script>
+</body>
+</html>
