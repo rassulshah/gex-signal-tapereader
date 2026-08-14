@@ -1,5 +1,166 @@
 # CHANGELOG — GEX-Signal-Tapereader
 
+## v10.40 — 2026-08-14 — KING PATH v2 (Batch 2): analyzer + narrative-first layout + gutter
+
+**LAYOUT (approved mockup).** The "KING PATH · today · drift · rolls · verdict" header row
+is REMOVED. The narrative — old bottom verdict line, expanded into the King Analyzer read —
+now leads the section. Drift + rolls moved INSIDE the chart (top-left overlay chip), the
+verdict pill to the top-right overlay, session times to the bottom-left overlay. Net: one
+full row saved, chart effectively taller.
+
+**GUTTER (the label-collision fix).** `kingSparkline` reserves a 46px right gutter
+(padR 4→46, W 236→262) with a divider. The price PILL and the 👑King label render in the
+gutter at their own Y (anti-collision separation kept), with tick marks into the plot. The
+dashed price line ends at the plot edge — it can never run under its label again. The
+signed offset-vs-King stays (small line under the pill; test_kingpath enforced it).
+
+**KING ANALYZER (`kingAnalyzer` + `kingReadHtml`).** Descriptive line: King strike,
+polarity (+γ friction / −γ fuel dealer mechanics), K$ magnitude + session change, distance,
+eVA value band + inside/outside. Predictive line, priority-ordered and TAGGED
+(⚖ Academy / 📊 measured-with-n): Overshoot→Beach-Ball watch ⚖ · SUCCESSION WATCH
+(contender ≥60% → 📊 76% King rolls to it within 20 bars, n=148) · gravity gate (≤3
+strikes; beyond → pull explicitly "unsupported" 📊) · approach/ETA (📊 63% vs 47%) with
+POWER-phase PIN WINDOW ⚖ · outside-value imbalance = don't-fade 📊 (n=25) · K$
+bleed/build ⚖. Chips: phase+mins-to-close, taps·crossings, succession, K$Δ, QQQ King
+alignment ✓/✗ (feed-derived). Provenance footer names the 4d/324-bar base.
+
+**DRIFT DEMOTED.** 3-bar King drift tested 50.0% vs next-30m direction (n=68) — coin flip.
+It survives as a DESCRIPTIVE overlay chip only, and says so in its tooltip.
+
+New pure helpers (all unit-tested): `evaBandFromPct`, `successionFromPct`,
+`kingTapsCross`, `sessPhaseCT`, `kingApproach`. `KD_TRACK` follows session King-$
+(first/last/peak). Analyzer is null-safe: missing inputs suppress claims, never invent.
+
+**Tests:** `test_king_analyzer.js` (26 assertions: helpers + layout/demotion guards).
+test_kingpath caught the dropped offset label — restored. Full suite 25/26 green.
+NEXT (Batch 3): Analysis-tab King stats recomputing the backtest tables nightly.
+
+## v10.39 — 2026-08-14 — KING DATA LAYER (Batch 1) + indicator backtest results
+
+**BACKTEST FIRST.** Before choosing which King indicators to build, all candidates were
+tested in-page against the 4 recorded days (324 usable bars, out10 = next-30m outcome).
+Small n — this RANKS candidates, it does not validate them. Results:
+
+| Candidate | Result | Verdict |
+|---|---|---|
+| Contender >=60% of King | King rolled TO THAT STRIKE within 20 bars **112/148 (76%)**, median 4 bars | BUILD — headline ("King Succession Watch") |
+| Convergence velocity | approaching -> **63%** continue toward King (n=161) vs receding 47% (n=148) | BUILD |
+| Distance gravity | toward-King edge at <=3 strikes (54/59/60%), FLIPS beyond (47%, 0/3 at 5+) | BUILD as a <=3-strike gravity gate |
+| eVA (70% exposure band) | inside -> 57% rotation (n=260); **outside -> continuation, NOT reversion** (revert 36%, n=25) | BUILD — outside-value = imbalance, do-not-fade read |
+| King drift (3-bar) | next-30m direction agreement **50.0%** (n=68) — coin flip | DEMOTE to descriptive-only chart chip |
+| Naked Kings / IB×King / one-way rolls | supportive anecdotes (n<=4 days) | TRACK, grade after data accumulates |
+| K$ momentum / polarity | UNTESTABLE — never recorded | THIS BATCH fixes that |
+
+**SHIPPED (data layer only, no UI change):**
+- `recNode()` now records **`pos`** (gamma polarity) and **`abs`** (magnitude) per node —
+  the long-committed KEYSTONE. Unblocks Academy Art.4 (net-gamma regime), Art.7
+  (day-over-day rolling), Art.9 (real-vs-hedge), plus contender/K$ backtesting.
+- New `parseKingDollarsK()`: the King row's dollar figure (e.g. `$996,886K`) is now
+  PARSED, exposed as `tapeMap().kingKd`, and recorded per bar as snapshot **`kd`**.
+  Live 2026-08-14: K$ bled $1,397,016K -> $996,886K (−29%) intraday while price stalled
+  below — the strongest leading signal on the board, previously discarded.
+- Captured in BOTH tape paths (tr/td and div-grid), null-safe, guarded.
+
+Taps/crossings/dwell, IB, HOD/LOD, eVA and naked-King ledgers are DERIVABLE offline from
+the already-recorded px/tking/nodes series — deliberately NOT duplicated into capture.
+
+**Tests:** new `test_king_data.js` (14 assertions incl. sync-guards on both capture paths).
+Full suite 24/25 green (test_tapeking needs jsdom). Batches ahead: B2 = King Path v2 UI +
+analyzer (approved mockup, drift demoted, VIX-confirm chip pending ladder spike);
+B3 = Analysis-tab King stats recomputing these tables as n grows.
+
+## v10.38b — 2026-08-14 — L0B TAPE RECONCILIATION: consensus gate, fail-closed display
+
+Follow-on to the v10.38 King fix. The parse defect was fixable; the ARCHITECTURE that
+let it ship silently was not addressed by fixing it. One parser was the sole authority
+on the King, so a single defect inverted the structural anchor with nothing to contradict it.
+
+**THREE INDEPENDENT PATHS.** The King is now derived three ways that fail differently:
+1. `kingFromTapeTag()` — Skylit's own `$K` marker in the rendered DOM
+2. `kingFromFeed()` — largest `|v|` in the raw network payload
+3. `kingFromTapeMax()` — largest `|%King|` in the parsed tape map
+
+A parse bug breaks (3) but not (1) or (2). A stale feed breaks (2) but not (1) or (3).
+A Skylit DOM change breaks (1) and (3) but not (2). **No single fault can take a majority.**
+
+**CONSENSUS REQUIRED.** `reconcileVotes()` (pure, 47 assertions) needs >=2 agreeing paths.
+Outcomes: unanimous / majority / no-consensus / single-source / no-source. A single source
+is explicitly NOT consensus — it cannot corroborate itself.
+
+**FAIL-CLOSED DISPLAY.** `render()` calls `tapeSync('SPY')` before any %King-derived block.
+Without consensus it renders `outOfSyncBlock()` — naming the reason and showing all three
+votes side by side — INSTEAD of the King badge and Node Map. Structural data is now
+suppressed rather than shown wrong. Aligns with LEARNING-SPEC S0: "NEVER fabricate a
+number the data can't support." A confident panel built on a wrong anchor is exactly that.
+
+**PARSE INVARIANTS FEED THE GATE.** A `kingConflict` from `kingResolve()` forces the gate
+closed even when the three votes agree — a flagged parse is never treated as healthy.
+
+**RECURRENCE TRACKING.** `RECON_STATE` counts consecutive failures per symbol. At
+`RECON_FAIL_ESCAL` (3) the fault is marked RECURRING and the panel says so. A bounded log
+(20 records) retains reason + all three votes + timestamp per failure so a repeating fault
+is diagnosable rather than guessed at. The streak resets on any healthy read.
+
+**OPERATOR DIAGNOSTICS.** `__gptsDebug.syncReport()` returns verdict, all three paths,
+agree/disagree lists, streak, recurring flag and the full failure log.
+`__gptsDebug.setTapeGate(false)` reverts to legacy behaviour if the gate ever misfires;
+`CFG.tapeGate` defaults true.
+
+**PROOF.** `test_tape_sync.js` replays the real 2026-08-14 board — tag 780, feed 780,
+broken parser 775 — and asserts the reconciler returns **780 with the parser still
+broken**, flags the dissenter by name, and never crowns 775. This layer would have
+caught the incident on the first render.
+
+Full suite 23/24 green (test_tapeking skipped — needs jsdom).
+
+
+## v10.38 — 2026-08-14 — CRITICAL: tape/tapereader King desync fixed + negative-gamma strikes recovered
+
+**Found live during market hours (SPY, 09:30 CT).** The panel was reporting `King 775 · 42%`
+while the Skylit tape tagged **780** with `$1,252,620K` and the feed independently showed 780
+at 3.71e9 vs 775 at 8.49e8 — 780 dominant by 4.4x. The structural anchor was inverted, and
+it was being RECORDED that way.
+
+**ROOT CAUSE (two defects in the same function).**
+
+1. *Cross-expiry read.* The King row prints the DOLLAR figure instead of `100%` (King ==
+   largest absolute exposure == 100% by definition). `firstStrengthPct()` returned null on
+   that cell, and the loop then fell back to `cells[2]` — a DIFFERENT EXPIRATION COLUMN —
+   assigning the King the next expiry's 3-4%. `kingResolve()` saw 775 at 45% beating the
+   "4%" King and fired `maxpct-override`, crowning the wrong strike. Every downstream read
+   inherited it: node roles, %King normalisation, target ladder, gatekeeper geometry,
+   regime, READ narrative.
+2. *Signed %King discarded.* %King carries gamma POLARITY. `firstStrengthPct()` accepted
+   only UNSIGNED values, treating every signed one as a change chip — so EVERY
+   NEGATIVE-GAMMA STRIKE was silently dropped from the tape map (774 `-1%`, 777, others).
+
+**FIX.**
+- New `tapeCellPct()` replaces `firstStrengthPct()` in the tape reader. Takes the FIRST
+  percentage in a cell as %King (sign preserved); any later percentage is the growth chip
+  and is ignored. A cell containing `$K` returns 100 unconditionally.
+- Path A never reads `cells[2]`. One column, one expiry, no crossing.
+- `kingResolve()`: **the `$K` tag is authoritative and can no longer be demoted.** The
+  `maxpct-override` branch is removed. If a parsed percentage disagrees with Skylit's own
+  King tag, the PARSE is wrong, not the tag. `maxpct` remains only for the no-tag case.
+- Two hard invariants, both flagged rather than silently absorbed:
+  `king-not-100` (tagged King didn't parse to 100) and `rival-at-or-above-king`
+  (some other strike met or exceeded 100). Invariant 2 scans every strike, not just the
+  max — a tie leaves the max pointing at the King itself and would slip through.
+
+**TESTS.** New `test_tape_king.js` — 37 assertions, fixtures captured verbatim from the
+live Skylit DOM. Includes SYNC-GUARDS that fail if `cells[2]` fallback or `maxpct-override`
+is ever reintroduced. Verified end-to-end against the real 2026-08-14 board:
+King 780 @ 100%, 775 @ 45% (not King), 777 present, 774 retained at -1.
+Full suite 22/22 green (test_tapeking skipped — needs jsdom).
+
+**NOTE.** Recorded snapshots store both `king` (feed) and `tking` (tape), so days captured
+before this fix are recoverable — the raw values were never lost, only the resolution.
+
+**DOC GAP.** `design/architecture-design.md` Layer 0A described the tape bridge without ever
+specifying the cell layout (two percentages: %King then growth; King row prints dollars).
+That omission is why the bug survived. Should be documented there.
+
+
 ## v10.37 — 2026-08-14 — King badge carries gatekeeper · Deflections one-line strip · Gatekeeper section removed
 
 **King badge redesign (kingBlock):** the single gold pill is now two stacked rows.

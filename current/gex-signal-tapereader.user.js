@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    10.37
+// @version    10.40
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -98,6 +98,7 @@ var RECORDER_SYMS = ['SPY','QQQ'];
 var READ_APPRX = 0.75;
 
 var CFG = {
+  tapeGate: true,   // (v10.38) suppress structural read when app/tape disagree. false = legacy behaviour.
   ftReq: true, boPb: true, dir: 'both', nodeThresh: 20, voidBackN: 2,
   trendOn: true, trendMA: { SPY:50, QQQ:50 },
   smaShort: { SPY:9, QQQ:9 }, smaLong: { SPY:21, QQQ:21 },
@@ -263,7 +264,7 @@ function onFeed(sym, feed, j){
   if(feed==='gamma' || feed==='combined'){ var _ts=Date.now(); LASTFEED[sym] = { j:j, feed:feed, ts:_ts }; observeFeedCadence(sym, _ts); }
 }
 
-console.log('[GPTS] v10.37 part1 loaded');
+console.log('[GPTS] v10.40 part1 loaded');
 
 function fiberKeyOf(el){
   var ks=Object.keys(el);
@@ -920,7 +921,7 @@ function tapeCells(table){
 function readTapeFromDOM(sym){
   var table=findTapeTable();
   if(!table) return null;
-  var pct={}, kingK=null, count=0;
+  var pct={}, kingK=null, count=0, kingKd=null;
   // ---- Path A: a real <tr>/<td> table (legacy / forward-compatible). ----
   var trs=table.querySelectorAll('tr');
   if(trs.length){
@@ -929,17 +930,20 @@ function readTapeFromDOM(sym){
       if(!cells || cells.length<2) continue;
       var strike=parseFloat((cells[0].textContent||'').replace(/[^0-9.]/g,''));
       if(!isFinite(strike) || strike<50) continue;
-      var rowTxt=(trs[i].textContent||'');
-      var v=firstStrengthPct(cells[1]!=null?cells[1].textContent:'');
-      if(v==null && cells.length>2) v=firstStrengthPct(cells[2].textContent);
-      var isKingRow=/[+\-\u2212]?\$[\d,]+K/.test(rowTxt);
-      // v10.22: DON'T clobber the King row's real %King with 100; keep the
-      // parsed strength (King is 96% here, not 100). Only mark the $K strike.
-      if(v!=null){ pct[strike.toFixed(2)]=v; count++; }
-      else if(isKingRow){ pct[strike.toFixed(2)]=100; count++; }   // no readable % -> fallback
-      if(isKingRow) kingK=strike;
+      // (v10.38 TAPE-SYNC FIX) Read ONLY the nearest-expiry cell (cells[1]).
+      // The old code fell back to cells[2] when cells[1] failed to parse -- but
+      // cells[2] is a DIFFERENT EXPIRATION column, so the King row (which prints
+      // "$1,252,620K" instead of "100%") silently inherited the NEXT expiry's
+      // percentage. That is how a 4% value got attached to the King and let
+      // kingResolve crown the wrong strike. Never cross expiry columns.
+      var c1=(cells[1]!=null?cells[1].textContent:'');
+      var isKingCell=TAPE_KING_DOLLAR_IN.test(c1);
+      var v=tapeCellPct(c1);
+      if(isKingCell){ pct[strike.toFixed(2)]=100; kingK=strike; count++;
+        var kd0=parseKingDollarsK(c1); if(kd0!=null) kingKd=kd0; }
+      else if(v!=null){ pct[strike.toFixed(2)]=v; count++; }
     }
-    if(count>=5) return kingResolve(pct, kingK, count);
+    if(count>=5){ var rA=kingResolve(pct, kingK, count); rA.kingKd=kingKd; return rA; }
   }
   // ---- Path B: div/grid table (current Skylit). Grid cells arrive in
   // document order as strike-then-values; each value cell is collapsed to its
@@ -965,6 +969,7 @@ function readTapeFromDOM(sym){
     var key=curStrike.toFixed(2);
     if(KING_DOLLAR_RE.test(txt)){
       kingK=curStrike;
+      var kdB=parseKingDollarsK(txt); if(kdB!=null) kingKd=kdB;
       // v10.22: the %King value cell precedes the $K cell in grid order, so a
       // real strength (e.g. 96) is usually already set. Keep it; only fill 100
       // as a last resort when no % was readable for this strike.
@@ -977,7 +982,7 @@ function readTapeFromDOM(sym){
       if(v2!=null){ pct[key]=v2; haveVal=true; count++; }
     }
   }
-  if(count>=5) return kingResolve(pct, kingK, count);
+  if(count>=5){ var rB=kingResolve(pct, kingK, count); rB.kingKd=kingKd; return rB; }
   return null;
 }
 // v10.22 CROSS-CHECK: docs say King = largest ABSOLUTE dealer exposure. The $K
@@ -993,14 +998,168 @@ function kingResolve(pct, kingK, count){
   if(kingK==null){                       // no $K tag seen -> fall back to data
     out.king=maxK; out.kingSrc='maxpct'; return out;
   }
+  // (v10.38 TAPE-SYNC FIX) THE $K TAG WINS -- ALWAYS.
+  // Skylit renders the $K figure on exactly the strike carrying the largest
+  // ABSOLUTE exposure. That IS the King (Academy: reading-heatseeker /
+  // intro-to-gamma Absolute Value Rule), and it is 100% by definition.
+  // The removed 'maxpct-override' branch used to demote the tagged King when
+  // some other strike parsed higher. On 2026-08-14 that crowned SPY 775 (33%)
+  // over the real King 780 ($1.25B), because a parser bug had assigned 780 the
+  // NEXT EXPIRY's 3%. Never let a parsed percentage outrank Skylit's own tag:
+  // if they disagree, the PARSE is wrong, not the tag.
   var tagV=Math.abs(pct[kingK.toFixed(2)]||0);
-  // If the largest-|value| strike is a DIFFERENT strike AND meaningfully bigger
-  // than the $K-tagged one, the tag is untrustworthy -> trust the data.
-  if(maxK!=null && maxK!==kingK && maxV >= tagV + 5){
-    out.king=maxK; out.kingSrc='maxpct-override'; out.kingConflict=true;
-    out.kingTagged=kingK;   // keep what the $K said, for diagnostics
+  // INVARIANT 1: the tagged King must read exactly 100.
+  if(tagV!==100){ out.kingConflict=true; out.parseSuspect='king-not-100'; out.taggedPct=tagV; }
+  // INVARIANT 2: no OTHER strike may meet or exceed the King (100). Scan every
+  // strike -- not just the max -- because a tie leaves maxK pointing at the
+  // King itself and the rival would slip through unflagged.
+  var rivalK=null;
+  for(var k2 in pct){ if(!pct.hasOwnProperty(k2)) continue;
+    var s2=parseFloat(k2);
+    if(s2===kingK) continue;
+    if(Math.abs(pct[k2])>=100){ rivalK=s2; break; }
   }
+  if(rivalK!=null){
+    out.kingConflict=true; out.parseSuspect='rival-at-or-above-king'; out.kingRival=rivalK;
+  }
+  out.kingTagged=kingK;    // always recorded for diagnostics
   return out;
+}
+// ===================== L0B: TAPE <-> APP RECONCILIATION (v10.38) =====================
+// WHY THIS EXISTS. On 2026-08-14 the panel reported King 775 while the tape and
+// the feed both said 780. A single parse defect silently inverted the structural
+// anchor and everything downstream inherited it. One parser = one point of
+// failure. This layer derives the King THREE INDEPENDENT WAYS and refuses to
+// render structural data unless they agree.
+//
+// THE THREE PATHS (deliberately independent - they fail differently):
+//   1. TAG     - Skylit's own $K marker in the rendered DOM (tapeMap kingTagged)
+//   2. FEED    - largest |v| in the raw network payload (LASTFEED levels)
+//   3. TAPEMAX - largest |%King| in the parsed tape map (data-derived)
+// A parse bug breaks 3 but not 1 or 2. A stale feed breaks 2 but not 1 or 3.
+// A DOM change breaks 1 and 3 but not 2. No single fault takes down a majority.
+//
+// POSTURE. Skylit Academy / LEARNING-SPEC S0: "NEVER fabricate a number the data
+// can't support." An out-of-sync panel showing confident node strengths is
+// exactly that. When consensus fails we SUPPRESS the structural read and say so.
+var RECON_MIN_AGREE  = 2;    // votes needed for consensus
+var RECON_FAIL_ESCAL = 3;    // consecutive failures before this is called recurring
+var RECON_LOG_MAX    = 20;   // retained failure records
+var RECON_STATE = { SPY:{streak:0,last:null,log:[]}, QQQ:{streak:0,last:null,log:[]} };
+
+// --- PURE: given the three votes, decide the King. Testable without a DOM. ---
+// votes = {tag:Number|null, feed:Number|null, tapemax:Number|null}
+function reconcileVotes(votes){
+  var names=['tag','feed','tapemax'], present=[], i, j;
+  for(i=0;i<names.length;i++){
+    var v=votes[names[i]];
+    if(typeof v==='number' && isFinite(v)) present.push({src:names[i], k:v});
+  }
+  var out={ king:null, confidence:'none', ok:false, agree:[], disagree:[],
+            votes:votes, sources:present.length, reason:'' };
+  if(!present.length){ out.reason='no-source'; return out; }
+  // tally identical strikes
+  var best=null, bestN=0;
+  for(i=0;i<present.length;i++){
+    var n=0, who=[];
+    for(j=0;j<present.length;j++){ if(present[j].k===present[i].k){ n++; who.push(present[j].src); } }
+    if(n>bestN || (n===bestN && best!=null && present[i].k===best.k)){ bestN=n; best={k:present[i].k, who:who}; }
+  }
+  out.king=best.k; out.agree=best.who;
+  for(i=0;i<present.length;i++){ if(present[i].k!==best.k) out.disagree.push(present[i].src+':'+present[i].k); }
+  if(present.length===1){
+    // single source: usable but explicitly low confidence, NOT consensus
+    out.confidence='low'; out.ok=false; out.reason='single-source'; return out;
+  }
+  if(bestN>=RECON_MIN_AGREE){
+    out.ok=true;
+    out.confidence=(bestN===3)?'high':(bestN===present.length?'high':'ok');
+    out.reason=(bestN===present.length)?'unanimous':'majority';
+    return out;
+  }
+  out.ok=false; out.confidence='none'; out.reason='no-consensus'; out.king=null;
+  return out;
+}
+
+// --- PATH 2: King straight from the raw feed payload (largest |v|). ---
+function kingFromFeed(sym){
+  try{
+    var lf=LASTFEED[sym]; if(!lf||!lf.j||!lf.j.levels||!lf.j.levels.length) return null;
+    var arr=lf.j.levels[0] && lf.j.levels[0].l; if(!arr||!arr.length) return null;
+    var bk=null, bv=-1;
+    for(var i=0;i<arr.length;i++){
+      var a=Math.abs(arr[i].v);
+      if(isFinite(a) && a>bv){ bv=a; bk=arr[i].k; }
+    }
+    return (typeof bk==='number')?bk:null;
+  }catch(e){ return null; }
+}
+// --- PATH 1 + 3: both come off the tape but fail independently. ---
+function kingFromTapeTag(sym){
+  try{ var t=tapeMap(sym); if(!t) return null;
+    var tag=(typeof t.kingTagged==='number')?t.kingTagged
+          : (t.kingSrc==='dollar' ? t.king : null);
+    return (typeof tag==='number')?tag:null;
+  }catch(e){ return null; }
+}
+function kingFromTapeMax(sym){
+  try{ var t=tapeMap(sym); if(!t||!t.pct) return null;
+    var bk=null, bv=-1;
+    for(var k in t.pct){ if(!t.pct.hasOwnProperty(k)) continue;
+      var a=Math.abs(t.pct[k]); if(a>bv){ bv=a; bk=parseFloat(k); } }
+    return (typeof bk==='number')?bk:null;
+  }catch(e){ return null; }
+}
+
+// --- The gate. Call before rendering anything derived from %King. ---
+function tapeSync(sym){
+  var st=RECON_STATE[sym] || (RECON_STATE[sym]={streak:0,last:null,log:[]});
+  var votes={ tag:kingFromTapeTag(sym), feed:kingFromFeed(sym), tapemax:kingFromTapeMax(sym) };
+  var r=reconcileVotes(votes);
+  // carry the parser's own invariant flags through - a flagged parse is never healthy
+  try{ var tm=tapeMap(sym);
+    if(tm && tm.kingConflict){ r.ok=false; r.parseSuspect=tm.parseSuspect||'flagged';
+      if(r.reason==='unanimous'||r.reason==='majority') r.reason='parse-invariant'; }
+  }catch(e){}
+  if(r.ok){ st.streak=0; }
+  else {
+    st.streak++;
+    if(st.log.length>=RECON_LOG_MAX) st.log.shift();
+    st.log.push({ t:Date.now(), reason:r.reason, votes:votes, suspect:r.parseSuspect||null });
+  }
+  r.streak=st.streak;
+  r.recurring=(st.streak>=RECON_FAIL_ESCAL);
+  st.last=r;
+  return r;
+}
+// Operator-facing suppression panel. Shown INSTEAD of the structural read.
+function outOfSyncBlock(r){
+  var why={ 'no-consensus':'the three King sources disagree',
+            'no-source':'no tape and no feed could be read',
+            'single-source':'only one King source is available',
+            'parse-invariant':'the tape parse failed an internal invariant' }[r.reason] || r.reason;
+  var rows='';
+  var names=['tag','feed','tapemax'];
+  var label={tag:'tape $K tag', feed:'raw feed', tapemax:'tape max %King'};
+  for(var i=0;i<names.length;i++){
+    var v=r.votes?r.votes[names[i]]:null;
+    var shown=(typeof v==='number')?v:'—';
+    var colr=(typeof v==='number' && r.king!=null && v===r.king)?PAL.longAccent:PAL.shortAccent;
+    rows+='<div style="display:flex;justify-content:space-between;font-size:10px;padding:1px 0">'+
+      '<span style="color:'+PAL.sub+'">'+label[names[i]]+'</span>'+
+      '<span style="color:'+colr+';font-weight:600">'+shown+'</span></div>';
+  }
+  return '<div style="border:1px solid '+PAL.shortAccent+';border-radius:6px;padding:7px 8px;margin:4px 0;background:rgba(240,97,109,0.07)">'+
+    '<div style="color:'+PAL.shortAccent+';font-weight:700;font-size:11px;letter-spacing:0.3px">'+
+      '⚠ STRUCTURAL READ SUPPRESSED</div>'+
+    '<div style="color:'+PAL.sub+';font-size:10px;margin:3px 0 5px 0;line-height:1.35">'+
+      'App is out of sync with the tape — '+why+'. Node strengths, King and targets are '+
+      'hidden rather than shown wrong.'+
+      (r.recurring?' <span style="color:'+PAL.amber+';font-weight:600">RECURRING ('+r.streak+' consecutive).</span>':'')+
+    '</div>'+ rows +
+    '<div style="color:'+PAL.sub+';font-size:9px;margin-top:5px;opacity:0.8">'+
+      'Diagnose: __gptsDebug.syncReport()</div>'+
+    '</div>';
 }
 // Leading signed %King from a single leaf cell, e.g. "-39%" -> -39, "25%" -> 25.
 function leadSignedPct(txt){
@@ -1010,7 +1169,44 @@ function leadSignedPct(txt){
   if(m[1]==='-'||m[1]==='\u2212') v=-v;
   return v;
 }
-// From a cell's text, return the unsigned %King strength (ignore signed change).
+// (v10.38) $K anywhere inside a single tape cell = that cell is the King cell.
+var TAPE_KING_DOLLAR_IN = /\$[\d,]+K/;
+// (v10.39) The King's DOLLAR magnitude, in $K units, parsed from the same cell.
+// Live observation 2026-08-14: this bled $1,397,016K -> $996,886K (-29%) across
+// the morning while price stalled below - the strongest leading signal on the
+// board, and until now it was discarded after being used as a boolean marker.
+function parseKingDollarsK(txt){
+  var m=(''+txt).match(/\$([\d,]+)K/);
+  return m ? parseInt(m[1].replace(/,/g,''),10) : null;
+}
+// (v10.38 TAPE-SYNC FIX) %King for one tape value cell.
+// Observed live cell shapes (Skylit Atlas, 2026-08-14):
+//   "45%"               -> 45    %King only (growth chip not rendered)
+//   "37% -1%"           -> 37    %King FIRST, growth chip SECOND
+//   "-1%"               -> -1    NEGATIVE %King == negative-gamma node
+//   "-2% +1%"           -> -2    negative %King with a growth chip
+//   "$1,252,620K"       -> 100   King row: Skylit prints the DOLLAR figure
+//   "$1,397,016K +4%"   -> 100   ...sometimes with a growth chip too
+// RULES (both were violated by the old firstStrengthPct):
+//   R1 The FIRST percentage in the cell is %King. Any later one is growth.
+//   R2 %King is SIGNED -- it carries gamma polarity. The old parser accepted
+//      only UNSIGNED values, so every negative-gamma strike was dropped from
+//      the map entirely (e.g. 774 "-1%" vanished, 777 likewise).
+//   R3 A cell containing $K IS the King and is 100% BY DEFINITION (King ==
+//      largest absolute exposure). Skylit renders the dollar amount there
+//      instead of the literal "100%".
+function tapeCellPct(txt){
+  if(txt==null) return null;
+  var t=(''+txt).replace(/\s+/g,' ').trim();
+  if(!t) return null;
+  if(TAPE_KING_DOLLAR_IN.test(t)) return 100;          // R3
+  var m=t.match(/([+\-\u2212]?)(\d{1,3})%/);            // R1: first only
+  if(!m) return null;
+  var v=parseInt(m[2],10);
+  if(m[1]==='-'||m[1]==='\u2212') v=-v;                 // R2: keep the sign
+  return v;
+}
+// Retained for compatibility; no longer used by the tape reader.
 function firstStrengthPct(txt){
   if(!txt) return null;
   txt=(''+txt).replace(/\s+/g,' ').trim();
@@ -1755,6 +1951,12 @@ function recorderDay(db){
 function recNode(r){
   return {
     k:r.k,
+    // (v10.39 DATA KEYSTONE) polarity + signed magnitude. Unblocks Academy Art.4
+    // (net-gamma regime), Art.7 (rolling day-over-day) and Art.9 (real-vs-hedge),
+    // plus K$/contender backtesting. Forward-only - days without these can never
+    // be retro-filled.
+    pos:(typeof r.pos==='boolean'?r.pos:null),
+    abs:(typeof r.abs==='number'?r.abs:null),
     role:r.role||null,
     side:r.side||null,                                   // 'above'=resistance, 'below'=support
     pct:(typeof r.pct==='number')?r.pct:null,            // %King (feed/wall)
@@ -1832,6 +2034,9 @@ function recordNodeSnapshot(sym){
       px:(typeof S.price==='number')?S.price:null,
       king:(typeof S.king==='number')?S.king:null,
       tking:tapeKingStrike(sym),
+      // (v10.39) King dollar magnitude this bar (tape $K, in $K units). null when
+      // the tape is unreadable. Enables K$-momentum backtests + real-vs-hedge.
+      kd:(function(){ try{ var tK=tapeMap(sym); return (tK&&typeof tK.kingKd==='number')?tK.kingKd:null; }catch(eKD){ return null; } })(),
       inplay:(fs.inPlay?{k:fs.inPlay.k, role:fs.inPlay.role, side:fs.inPlay.side,
               st:(fs.inPlay.state&&fs.inPlay.state.label)||null}:null),
       nodes:nodes,
@@ -5303,7 +5508,10 @@ function sessionBoundsCT(){
 // current-price reference line overlaid; gold dot on the current King.
 function kingSparkline(mv, kingK, px, now, sess, verdictCol){
   // (v10.23 Issue A) +33% taller so the drift shape + always-on price line are legible.
-  var W=236, H=112, padL=4, padR=4, padT=10, padB=10;
+  // (v10.40) padR widened into a reserved RIGHT GUTTER: price + King labels live
+  // there, OUTSIDE the plot, so the dashed price line can never run under its own
+  // label again (the old collision). Plot ends at W-padR; labels start after it.
+  var W=262, H=112, padL=4, padR=46, padT=10, padB=10;
   var t0=sess.start, t1=sess.end;
   var firstT = mv.length ? mv[0].t : now;
   var xMin = Math.max(t0, firstT - 3*60000);
@@ -5359,6 +5567,7 @@ function kingSparkline(mv, kingK, px, now, sess, verdictCol){
   })();
   function regColor(r){ return r>0?PAL.longAccent : (r<0?PAL.shortAccent : PAL.sub); }
   var svg='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto">';
+  svg+='<line x1="'+(W-padR)+'" y1="0" x2="'+(W-padR)+'" y2="'+H+'" stroke="'+PAL.line+'" stroke-width="1"/>';
   // faint neutral fill under the whole staircase (context only, direction-agnostic)
   var baseY=(H-padB).toFixed(1);
   var fullD='M '+X(pts[0].t).toFixed(1)+' '+Y(pts[0].k).toFixed(1);
@@ -5424,14 +5633,19 @@ function kingSparkline(mv, kingK, px, now, sess, verdictCol){
     if(kingLineY <= priceLineY){ kingLabelY = clampY(mid - MINGAP/2); priceLabelY = clampY(mid + MINGAP/2); }
     else                       { priceLabelY = clampY(mid - MINGAP/2); kingLabelY = clampY(mid + MINGAP/2); }
   }
-  // King label (gold) at the dot, nudged left so it doesn't run off the right edge.
-  var kLx = Math.max(padL+2, parseFloat(lx)-5);
-  svg+='<text x="'+kLx.toFixed(1)+'" y="'+kingLabelY.toFixed(1)+'" text-anchor="end" fill="'+PAL.gold+'" style="font-size:9px;font-weight:800;font-variant-numeric:tabular-nums">\uD83D\uDC51'+fmtNum(curK)+'</text>';
+  // (v10.40) King label in the GUTTER at the King's Y, with a tick into the plot.
+  svg+='<line x1="'+(W-padR-3)+'" y1="'+kingLineY.toFixed(1)+'" x2="'+(W-padR+2)+'" y2="'+kingLineY.toFixed(1)+'" stroke="'+PAL.gold+'" stroke-width="1.4"/>';
+  svg+='<text x="'+(W-padR+5)+'" y="'+(kingLabelY+3).toFixed(1)+'" text-anchor="start" fill="'+PAL.gold+'" style="font-size:9px;font-weight:800;font-variant-numeric:tabular-nums">\uD83D\uDC51'+fmtNum(curK)+'</text>';
   // Price label (blue) at the RIGHT end: value + signed offset vs King, e.g. '777.1 (+1.2)'.
   if(pxRef!=null && priceLabelY!=null){
-    var offv = (kingK!=null) ? (pxRef-kingK) : null;   // price relative to King
-    var offTxt = (offv!=null) ? (' ('+(offv>=0?'+':'\u2212')+Math.abs(offv).toFixed(1)+')') : '';
-    svg+='<text x="'+(W-padR-2)+'" y="'+priceLabelY.toFixed(1)+'" text-anchor="end" fill="'+PAL.blue+'" style="font-size:9px;font-weight:700;font-variant-numeric:tabular-nums">'+(pxStale?'':'')+fmtNum(pxRef)+offTxt+'</text>';
+    // (v10.40) price PILL in the gutter at the price line's Y — never overdrawn.
+    var pOp=pxStale?0.5:1;
+    svg+='<line x1="'+(W-padR-3)+'" y1="'+priceLineY.toFixed(1)+'" x2="'+(W-padR+2)+'" y2="'+priceLineY.toFixed(1)+'" stroke="'+PAL.blue+'" stroke-width="1.4" opacity="'+pOp+'"/>';
+    svg+='<rect x="'+(W-padR+3)+'" y="'+(priceLabelY-6.5).toFixed(1)+'" width="'+(padR-6)+'" height="13" rx="3" fill="rgba(74,144,217,0.12)" stroke="rgba(74,144,217,0.45)" opacity="'+pOp+'"/>';
+    svg+='<text x="'+(W-padR+5)+'" y="'+(priceLabelY+3).toFixed(1)+'" text-anchor="start" fill="'+PAL.blue+'" style="font-size:9px;font-weight:700;font-variant-numeric:tabular-nums" opacity="'+pOp+'">'+fmtNum(pxRef)+'</text>';
+    // signed offset vs King under the pill (kept from v10.27 — tested behavior)
+    if(kingK!=null){ var offv=pxRef-kingK;
+      svg+='<text x="'+(W-padR+5)+'" y="'+(priceLabelY+13.5).toFixed(1)+'" text-anchor="start" fill="'+PAL.sub+'" style="font-size:7.5px;font-variant-numeric:tabular-nums" opacity="'+pOp+'">('+(offv>=0?'+':'\u2212')+Math.abs(offv).toFixed(1)+')</text>'; }
   }
   svg+='</svg>';
   return { svg:svg, yLo:yLo, yHi:yHi, netDir:netDir, firstK:pts[0].k, lastK:pts[pts.length-1].k };
@@ -5491,6 +5705,144 @@ function kingVerdict(mv, kingK, px, now){
 // ---- KING tracker section ----
 // Shows the current King strike, its %-of-board magnitude behavior, and how it
 // has moved through the session (rolling up/down = directional dealer intent).
+// ===================== (v10.40) KING ANALYZER =====================
+// Descriptive + predictive King read. Every predictive claim is TAGGED:
+//   ⚖ = Skylit Academy doctrine   📊 = measured on OUR recorded days (n shown)
+// Backtest 2026-08-14 (4 days / 324 bars, out10=next-30m):
+//   succession(cont>=60) -> King rolled to that strike w/in 20 bars 112/148 (76%)
+//   approaching -> 63% continue toward King (n=161) vs receding 47% (n=148)
+//   gravity: toward-King edge exists <=3 strikes, FLIPS beyond (47%, 0/3 at 5+)
+//   eVA: inside -> 57% rotation (n=260); OUTSIDE -> continuation NOT reversion (n=25)
+//   drift(3-bar) -> 50.0% (n=68) = COIN FLIP -> drift is DESCRIPTIVE ONLY now.
+var KD_TRACK={};   // per-sym session King-$ tracking {first,last,peak}
+function evaBandFromPct(pctMap){
+  if(!pctMap) return null;
+  var arr=[]; var tot=0;
+  for(var k in pctMap){ if(!pctMap.hasOwnProperty(k)) continue;
+    var a=Math.abs(pctMap[k]); if(a>0){ arr.push([parseFloat(k),a]); tot+=a; } }
+  if(arr.length<4 || tot<=0) return null;
+  arr.sort(function(a,b){ return b[1]-a[1]; });
+  var acc=0, lo=null, hi=null;
+  for(var i=0;i<arr.length;i++){ var st=arr[i][0];
+    lo=(lo==null||st<lo)?st:lo; hi=(hi==null||st>hi)?st:hi;
+    acc+=arr[i][1]; if(acc>=0.7*tot) break; }
+  return {lo:lo, hi:hi, cov:+(acc/tot).toFixed(2)};
+}
+function successionFromPct(pctMap, kingK){
+  if(!pctMap) return null;
+  var bk=null, bv=0;
+  for(var k in pctMap){ if(!pctMap.hasOwnProperty(k)) continue;
+    var st=parseFloat(k); if(st===kingK) continue;
+    var a=Math.abs(pctMap[k]); if(a>bv){ bv=a; bk=st; } }
+  return (bk==null)?null:{k:bk, a:Math.round(bv)};
+}
+// pure: bars=[{h,l,c}] oldest-first; zone=tap tolerance in strikes
+function kingTapsCross(bars, k, zone){
+  var taps=0, cross=0, dwell=0, inTap=false, prevSide=0;
+  for(var i=0;i<bars.length;i++){ var b=bars[i];
+    var touching=(b.l<=k+zone && b.h>=k-zone);
+    if(touching){ dwell++; if(!inTap){ taps++; inTap=true; } } else inTap=false;
+    var sd=(b.c>k)?1:(b.c<k?-1:0);
+    if(sd!==0){ if(prevSide!==0 && sd!==prevSide) cross++; prevSide=sd; }
+  }
+  return {taps:taps, cross:cross, dwell:dwell};
+}
+// pure: CT seconds-of-day -> session phase (cash 8:30-15:00 CT; power = last 30m)
+function sessPhaseCT(sec){
+  var OPEN=30600, CLOSE=54000;
+  if(sec<OPEN || sec>=CLOSE) return {ph:'CLOSED', toClose:0};
+  var toClose=Math.round((CLOSE-sec)/60);
+  if(sec<OPEN+3600)  return {ph:'OPEN',   toClose:toClose};
+  if(sec>=CLOSE-1800)return {ph:'POWER',  toClose:toClose};
+  if(sec>=41400 && sec<46800) return {ph:'LUNCH', toClose:toClose};
+  return {ph:'MID', toClose:toClose};
+}
+// pure: adNow/adPrev = |px-king| now and nBars ago -> {approaching, etaBars}
+function kingApproach(adNow, adPrev, nBars){
+  if(adNow==null||adPrev==null||!nBars) return null;
+  var rate=(adNow-adPrev)/nBars;              // strikes per bar; negative = closing
+  if(rate>=-0.001) return {approaching:false, etaBars:null, rate:+rate.toFixed(3)};
+  return {approaching:true, etaBars:Math.ceil(adNow/(-rate)), rate:+rate.toFixed(3)};
+}
+function kingAnalyzer(sym){
+  var A={ok:false};
+  try{
+    var tp=tapeMap(sym); var S=STATE[sym]||{};
+    if(!tp || typeof tp.king!=='number' || typeof S.price!=='number') return A;
+    A.ok=true; A.king=tp.king; A.px=S.price;
+    A.dist=A.king-A.px; A.adist=Math.abs(A.dist);
+    A.grav=(A.adist<=3);                                     // 📊 gravity gate
+    var w=(S.walls||[]).filter(function(x){return x.k===A.king;})[0];
+    A.pol=(w && typeof w.pos==='boolean')?w.pos:null;        // +γ true / -γ false
+    // King $ tracking (session)
+    var kt=KD_TRACK[sym]||(KD_TRACK[sym]={first:null,last:null,peak:null});
+    if(typeof tp.kingKd==='number'){ if(kt.first==null)kt.first=tp.kingKd;
+      kt.last=tp.kingKd; kt.peak=Math.max(kt.peak||0,tp.kingKd); }
+    A.kd=kt.last; A.kdChg=(kt.first&&kt.last)?Math.round(100*(kt.last-kt.first)/kt.first):null;
+    A.eva=evaBandFromPct(tp.pct);
+    A.inVA=(A.eva)?(A.px>=A.eva.lo&&A.px<=A.eva.hi):null;
+    A.succ=successionFromPct(tp.pct, A.king);
+    A.succHot=!!(A.succ && A.succ.a>=60);
+    var cs=closedCandles(sym)||[];
+    var tc=kingTapsCross(cs.slice(-130), A.king, (typeof DEFLECT_ZONE==='number'?DEFLECT_ZONE:0.5));
+    A.taps=tc.taps; A.cross=tc.cross; A.dwell=tc.dwell;
+    if(cs.length>=4){
+      var p3=cs[cs.length-4].c;
+      A.appr=kingApproach(A.adist, Math.abs(A.king-p3), 3);
+    } else A.appr=null;
+    var phz=sessPhaseCT(ctNowSecOfDay()); A.phase=phz.ph; A.toClose=phz.toClose;
+    A.over=(A.pol===true && A.adist>(typeof DEFLECT_ZONE==='number'?DEFLECT_ZONE:0.5) &&
+            ((A.px>A.king)) && cs.length>=14 &&
+            !isNBarExtreme(cs,'long',(typeof BO_HL_LOOKBACK==='number'?BO_HL_LOOKBACK:14)));
+    // cross-market: QQQ king side agreement (feed-derived, independent path)
+    A.qqq=null;
+    try{ var qk=kingFromFeed('QQQ'); var qS=STATE.QQQ;
+      if(typeof qk==='number' && qS && typeof qS.price==='number'){
+        A.qqq=( (qk-qS.price>0) === (A.dist>0) ) ? 1 : 0; } }catch(eQ){}
+  }catch(e){ A.ok=false; A.err=String(e).slice(0,60); }
+  return A;
+}
+function kingReadHtml(A, kv){
+  if(!A || !A.ok) return '';
+  function chip(t,tip,col){ return '<span title="'+(tip||'')+'" style="border:1px solid '+PAL.line+';border-radius:9px;padding:1px 6px;font-size:8.5px;color:'+PAL.sub+';background:rgba(255,255,255,0.02);white-space:nowrap">'+t+'</span>'; }
+  var b=function(t,c){ return '<b style="color:'+(c||PAL.ink)+';font-weight:700">'+t+'</b>'; };
+  // ---- DESCRIPTIVE ----
+  var polTxt=(A.pol===true)?('+γ — dealers '+b('buy dips / sell rips into it')+' → friction, absorption')
+            :(A.pol===false)?('−γ — dealers hedge '+b('pro-cyclically')+' → fuel, overshoot risk')
+            :'polarity unknown';
+  var kdTxt=(A.kd!=null)?(' · $'+(A.kd/1000).toFixed(2).replace(/\.?0+$/,'')+'B'+
+      (A.kdChg!=null?(' '+b((A.kdChg>=0?'▲+':'▼')+A.kdChg+'%',A.kdChg>=-5?PAL.longAccent:PAL.shortAccent)+' today'):'')) : '';
+  var desc='King '+b(fmtNum(A.king),PAL.gold)+' ('+polTxt+')'+kdTxt+' · '+
+    (A.dist===0?'AT price':(Math.abs(Math.round(A.dist))+' '+(A.dist>0?'above':'below')))+
+    (A.eva?(' · value '+fmtNum(A.eva.lo)+'–'+fmtNum(A.eva.hi)+(A.inVA?' (inside)':' ('+b('OUTSIDE',PAL.amber)+')')):'');
+  // ---- PREDICTIVE (priority-ordered, tagged) ----
+  var P=[];
+  if(A.over) P.push(b('OVERSHOOT of +γ King',PAL.amber)+' without a 14-bar high — stretch not break; reversion through '+fmtNum(A.king)+' favored ⚖ (Beach Ball; volume cue unavailable)');
+  if(A.succHot && A.succ) P.push(b('SUCCESSION WATCH: '+fmtNum(A.succ.k),PAL.amber)+' at '+A.succ.a+'% of King — 📊 76% roll to it within 20 bars (n=148)');
+  if(!A.grav) P.push('outside the gravity band (>3 strikes) — King-pull reads '+b('unsupported')+' at this distance 📊');
+  else if(A.appr && A.appr.approaching){
+    var etaMin=A.appr.etaBars*3;
+    P.push('approaching ('+b(Math.abs(A.appr.rate*10).toFixed(1)+' str/30m')+') — 📊 63% continue toward when closing; ETA ~'+(etaMin>=A.toClose?b('after close',PAL.amber):etaMin+'m')+
+      ((A.phase==='POWER'&&A.adist<=1.5)?' — '+b('PIN WINDOW',PAL.gold)+' into settlement ⚖':''));
+  } else if(A.grav && A.phase==='POWER' && A.adist<=1.5) P.push(b('PIN WINDOW',PAL.gold)+' — late proximity to an untapped-enough King ⚖');
+  if(A.inVA===false) P.push('price '+b('outside value',PAL.amber)+' — imbalance: continuation favored, '+b('don’t fade')+' 📊 (n=25)');
+  if(A.kdChg!=null && A.kdChg<=-15) P.push('magnet '+b('bleeding '+A.kdChg+'%',PAL.shortAccent)+' — hedge-decay: pin thesis weakening, reshuffle risk ⚖');
+  if(A.kdChg!=null && A.kdChg>=15) P.push('magnet '+b('building +'+A.kdChg+'%',PAL.longAccent)+' — growth = intent: settlement conviction rising ⚖');
+  if(!P.length) P.push('no active King signal — '+ (A.grav?'in gravity, flat approach':'far from King')+'; watching');
+  var pred='<span style="color:'+PAL.gold+';font-weight:800">READ ▸</span> '+P.slice(0,3).join(' · ');
+  // ---- CHIPS ----
+  var chips=[chip(A.phase+(A.toClose?(' · '+A.toClose+'m'):''),'session phase · minutes to close')];
+  chips.push(chip('taps '+A.taps+' · x'+A.cross,'tap episodes at the King today · side crossings (⚖ freshness decays 80/66/33 — claim)'));
+  if(A.succ) chips.push(chip('succ '+fmtNum(A.succ.k)+'·'+A.succ.a+'%','strongest non-King strike — 📊 76% King rolls to it within 20 bars when ≥60%'));
+  if(A.kdChg!=null) chips.push(chip('K$ '+(A.kdChg>=0?'▲+':'▼')+A.kdChg+'%','King dollar magnitude vs session open (tape $K)'));
+  if(A.qqq!=null) chips.push(chip('QQQ '+(A.qqq?'✓':'✗'),'QQQ King on the '+(A.qqq?'SAME':'OPPOSITE')+' side of its price as SPY’s — alignment'));
+  return '<div style="padding:4px 8px 5px 8px;border-left:2px solid '+PAL.gold+';margin:3px 0 4px 0">'+
+    '<div style="font-size:9.5px;line-height:1.4;color:'+PAL.ink+'">'+desc+'</div>'+
+    '<div style="font-size:9.5px;line-height:1.4;margin-top:3px;color:'+PAL.ink+'">'+pred+'</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px">'+chips.join('')+'</div>'+
+    '<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;opacity:.8">⚖ Academy · 📊 measured (4d/324 bars — sharpens in Analysis) · drift is descriptive-only (tested 50%, n=68)</div>'+
+  '</div>';
+}
 function kingBlock(){
   var sym='SPY';
   var tp=tapeMap(sym);
@@ -5629,30 +5981,22 @@ function kingBlock(){
     'Net drift '+fmtNum(spark.firstK)+' \u2192 '+fmtNum(spark.lastK)+' ('+driftWord+', '+nRolls+' roll'+(nRolls===1?'':'s')+'). '+
     'Line color = King verdict (green bullish, red bearish, yellow neutral/flat). Gold dot = current King; dashed = current price. '+vWhy).replace(/"/g,'');
   html+='<div id="gpts-kingpath" title="'+sparkTip+'" style="padding:5px 8px;background:'+PAL.card+';border:1px solid '+PAL.line+';border-radius:8px;margin:2px 0">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">'+
-      '<span style="color:'+PAL.sub+';font-size:8px;font-weight:700;letter-spacing:.4px">KING PATH \u00b7 today</span>'+
-      '<span style="display:flex;align-items:center;gap:5px">'+
-        '<span style="font-size:8px;font-weight:700;color:'+driftCol+'">drift '+driftWord+' \u00b7 '+nRolls+' roll'+(nRolls===1?'':'s')+'</span>'+
-        '<span title="'+vWhy+'" style="font-size:9px;font-weight:800;color:'+vCol+';padding:1px 7px;border:1px solid '+vCol+';border-radius:20px">'+kv.word+'</span>'+
-      '</span>'+
-    '</div>'+
-    // y-extent label (top strike) / chart / (bottom strike) so the axis reads.
+    // (v10.40) NARRATIVE FIRST — replaces the old "KING PATH · today · drift ·
+    // verdict" header row AND the old bottom magnet-read line. Drift/rolls moved
+    // INSIDE the chart (overlay, descriptive-only: tested 50% n=68).
+    kingReadHtml(kingAnalyzer(sym), kv)+
     '<div style="display:flex;align-items:stretch;gap:4px">'+
       '<div style="display:flex;flex-direction:column;justify-content:space-between;font-size:7.5px;color:'+PAL.sub+';font-variant-numeric:tabular-nums;padding:1px 0">'+
         '<span>'+hiStrike+'</span><span>'+loStrike+'</span>'+
       '</div>'+
-      '<div style="flex:1;min-width:0">'+spark.svg+'</div>'+
+      '<div style="flex:1;min-width:0;position:relative">'+spark.svg+
+        '<span id="gpts-kp-drift" title="Session King migration — DESCRIPTIVE ONLY: 3-bar drift tested 50% vs next-30m direction (n=68). Not a prediction." '+
+          'style="position:absolute;top:3px;left:5px;font-size:8px;font-weight:700;color:'+driftCol+';background:rgba(11,14,20,.72);border-radius:4px;padding:0 4px">drift '+driftWord+' · '+nRolls+' roll'+(nRolls===1?'':'s')+'</span>'+
+        '<span title="'+vWhy+'" style="position:absolute;top:3px;right:5px;font-size:8.5px;font-weight:800;color:'+vCol+';background:rgba(11,14,20,.72);border:1px solid '+vCol+';border-radius:20px;padding:0 6px">'+kv.word+'</span>'+
+        '<span style="position:absolute;bottom:3px;left:5px;font-size:7.5px;color:'+PAL.sub+';background:rgba(11,14,20,.72);border-radius:4px;padding:0 4px">'+fmtClock(spark.firstK!=null && mv.length?mv[0].t:sess.start)+' — now · pinned '+pinnedTxt+'</span>'+
+      '</div>'+
     '</div>'+
-    // x-extent labels: session open (or first-move) time on the left, now on right.
-    '<div style="display:flex;justify-content:space-between;font-size:7.5px;color:'+PAL.sub+';margin-top:1px">'+
-      '<span>'+fmtClock(spark.firstK!=null && mv.length?mv[0].t:sess.start)+'</span>'+
-      '<span>now \u00b7 pinned '+pinnedTxt+'</span>'+
-    '</div>'+
-    // magnet-target read: the actionable price-prediction line.
-    '<div title="Where the King magnet is likely to pull price. Into expiry, price gravitates toward the King strike; distance + side tell you the pull." style="margin-top:4px;padding-top:4px;border-top:1px solid '+PAL.line+';font-size:9.5px;line-height:1.35;color:'+PAL.ink+'">'+
-      '<span style="color:'+vCol+';font-weight:800">\u25c9 '+kv.word+'</span> \u00b7 <span style="color:'+PAL.sub+'">'+magnetRead+'</span>'+
-    '</div>'+
-  '</div>';
+  '</div>';'</div>';
   return html;
 }
 
@@ -5762,11 +6106,29 @@ function feedStatusHtml(){
     else if(f){ txt='SPY:stale'; col=PAL.amber; }
     else { txt='SPY:idle'; col=PAL.sub; }
   }
+  // (v10.38) TAPE-PARSE HEALTH — visible, not silent.
+  // kingResolve() sets kingConflict/parseSuspect when the tape parse violates a
+  // King invariant. Before v10.38 those flags were WRITTEN AND NEVER READ, which
+  // is exactly how the 2026-08-14 King desync ran live and unnoticed: the flag
+  // was true the whole time. A parse failure now shows on the panel.
+  var warn='';
+  try{
+    var tpH=tapeMap('SPY');
+    if(tpH && tpH.kingConflict){
+      var why = tpH.parseSuspect==='king-not-100'
+        ? 'King '+(tpH.kingTagged!=null?tpH.kingTagged:'?')+' read '+(tpH.taggedPct!=null?tpH.taggedPct:'?')+'% not 100%'
+        : 'strike '+(tpH.kingRival!=null?tpH.kingRival:'?')+' rivals King';
+      warn='<span title="Tape parse invariant failed: '+why+'. The $K-tagged King is still being used. '+
+           'Structural reads may be degraded — re-check before trusting node strengths." '+
+           'style="color:'+PAL.shortAccent+';font-weight:600">⚠ tape</span>';
+    }
+  }catch(eW){}
   // (v10.17) The 📥 Save Day button moved OFF the dashboard footer and INTO the
   // Analysis tab as an in-tab "Save & prep review" banner (the tab is the trigger).
   return '<div style="display:flex;justify-content:space-between;align-items:center;color:'+PAL.sub+';font-size:9px;letter-spacing:0.3px">'+
     '<span style="color:'+col+'">'+txt+'</span>'+
-    '<span>feed v10.37</span>'+
+    warn+
+    '<span>feed v10.40</span>'+
     '</div>';
 }
 
@@ -6082,6 +6444,31 @@ var LOADED_DAY=null;   // parsed gex_YYYY-MM-DD.json to analyze instead of live 
 window.__gptsDebug.loadDay=function(json){ try{ LOADED_DAY=(typeof json==='string')?JSON.parse(json):json; ANALYSIS_VIEW=true; if(typeof render==='function') render(); return 'loaded day '+(LOADED_DAY&&LOADED_DAY.date); }catch(e){ return 'loadDay failed: '+e; } };
 window.__gptsDebug.loadReview=function(obj){ ANALYSIS_REVIEW=obj; if(typeof render==='function') render(); return 'review loaded'; };
 window.__gptsDebug.clearLoaded=function(){ LOADED_DAY=null; ANALYSIS_REVIEW=null; if(typeof render==='function') render(); return 'cleared'; };
+// (v10.38) TAPE SYNC DIAGNOSTICS. syncReport() is the operator's tool when the
+// suppression panel appears: it shows all three King derivations side by side,
+// the consecutive-failure streak, and the retained failure log so a RECURRING
+// fault can be diagnosed rather than guessed at.
+window.__gptsDebug.syncReport=function(sym){
+  sym=sym||'SPY';
+  var r=tapeSync(sym);
+  var st=RECON_STATE[sym]||{streak:0,log:[]};
+  return {
+    symbol: sym,
+    verdict: r.ok ? 'IN SYNC' : 'OUT OF SYNC',
+    king: r.king, confidence: r.confidence, reason: r.reason,
+    parseSuspect: r.parseSuspect||null,
+    paths: { tapeTag:r.votes.tag, feed:r.votes.feed, tapeMax:r.votes.tapemax },
+    agree: r.agree, disagree: r.disagree,
+    consecutiveFailures: r.streak,
+    recurring: !!r.recurring,
+    failureLog: (st.log||[]).map(function(e){
+      return { at:new Date(e.t).toTimeString().slice(0,8), reason:e.reason,
+               tag:e.votes.tag, feed:e.votes.feed, tapemax:e.votes.tapemax, suspect:e.suspect };
+    })
+  };
+};
+window.__gptsDebug.tapeSync=function(sym){ return tapeSync(sym||'SPY'); };
+window.__gptsDebug.setTapeGate=function(on){ CFG.tapeGate=(on!==false); if(typeof render==='function') render(); return 'tapeGate='+CFG.tapeGate; };
 
 // ============================================================================
 // (v10.21) DOC-DERIVED ANALYTICS CORE — pure functions over a day-export object.
@@ -6600,6 +6987,20 @@ function render(){
   // REMOVED (Issue F) — it conflated offset vs drift and duplicated the King Path /
   // S/R Imbalance / Trend, so the King header is now the top of the panel.
   // (readBlock() + structuralReadHtml() are left defined but no longer rendered.)
+  // (v10.38) TAPE SYNC GATE. Everything below is derived from %King. If the
+  // three independent King sources do not agree, we render the suppression
+  // panel INSTEAD of the structural read. Showing confident node strengths
+  // while out of sync with the tape is the failure mode that shipped on
+  // 2026-08-14 - a wrong anchor presented as fact. Honest degradation instead.
+  var __sync = (CFG.tapeGate===false) ? {ok:true} : tapeSync('SPY');
+  if(!__sync.ok){
+    html+=outOfSyncBlock(__sync);
+    html+='<div style="border-top:1px solid '+PAL.line+';margin:6px 0 3px 0"></div>';
+    html+=feedStatusHtml();
+    elBody.innerHTML=html;
+    var gEl0=document.getElementById('gpts-grade'); if(gEl0){ gEl0.style.display='none'; }
+    return;
+  }
   html+=kingBlock();            // King tracker (3-magnet header + ①②③ + sparkline + verdict)
   html+=sep();
   // (v10.37) standalone gatekeeperBlock() REMOVED - gatekeeper strike + distance now in King badge.
