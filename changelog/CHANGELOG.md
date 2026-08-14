@@ -1,5 +1,42 @@
 # CHANGELOG — GEX-Signal-Tapereader
 
+## v10.42 — 2026-08-14 — KING CONSOLE + 🎯 PROJECTED PATH + AUTOMATIC FEEDBACK LOOP
+
+**KING CONSOLE (approved mockup).** The narrative prose blob is now a labeled 4×2 INDICATOR
+GRID — KING/K$/DIST/VALUE/SUCCESSION/TAPS·CROSS/PHASE/ALIGN — with hot signals highlighted
+(succession ⚠ amber) and a 2-line STRUCTURE ▸ / READ ▸ underneath. **Every tile, chip, line,
+and chart element carries a hover tooltip explaining what it is, how it's computed, and what
+backs the claim** (⚖ doctrine / 📊 measured-with-n). Display bugs from the live screenshot
+fixed: `fmtKd` ($1.13B, was "$1125.69B") and `fmtChg` (▼7%, was "▼-7%"). King Path y-extent
+labels moved inside the chart (were clipping at the column edge).
+
+**🎯 KING PATH · PROJECTED (new chart).** Now → close, below the history chart. Draws ONLY
+data-backed elements, each with a native SVG hover tooltip:
+- **Projected King step** (gold dashed) — drawn only when Succession ≥60%, stamped with its
+  base rate (76%, n=148, med 12m).
+- **Price path + volatility cone** — toward the operative target at the measured 3-bar
+  approach rate (63%, n=161); cone = recent avg bar range × √bars. An envelope, not advice.
+- **Target rails** — T1 gatekeeper, T2 King (capped, no T3 per doctrine), eVA edges, HOD/LOD.
+- **Pin band** ±0.5 when POWER phase + proximity.
+
+**THE FEEDBACK LOOP (as automatic as it gets).**
+1. `projSnapshotRecord()` — every bar records what was projected (target, ETA, cone width,
+   pin flag, succession candidate) into the recorder (`snap.proj`).
+2. `projScorecard()` — scores every past projection: target-reach by close, ETA error
+   (median), cone coverage (target ~70%), succession hits, pin-band hits. Honest n, unlock
+   gates, live rates replace backtest labels as they mature.
+3. `projRecs()` — RULE-BASED AUTO RECOMMENDATIONS from the scores: widen/tighten the cone,
+   adjust the approach-rate window, raise/lower the succession threshold, widen the pin
+   band. Below unlock n it emits only honest "recording (x/N)" lines — never fabricated tuning.
+4. **Analysis tab** renders 🎯 PROJECTION SCORECARD + 🔧 RECOMMENDATIONS at the top.
+5. **Day export** now carries `projReview:{scorecard, recommendations}` — the end-of-day LLM
+   review consumes it with zero extra steps and closes the loop.
+`__gptsDebug.projReport()` exposes the same payload live.
+
+Tests: `test_king_projection.js` (33 assertions: fmt fixes, pure projection core, ETA math,
+cone scaling, pin logic, recommendations engine incl. the insufficient-n honesty case, and
+wiring guards). Full suite 27/28 green.
+
 ## v10.41 — 2026-08-14 — TWO-COLUMN DASHBOARD
 
 One column could no longer hold the King analyzer + Deflections + Node Map (user call

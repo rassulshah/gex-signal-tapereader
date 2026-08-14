@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    10.41
+// @version    10.42
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -264,7 +264,7 @@ function onFeed(sym, feed, j){
   if(feed==='gamma' || feed==='combined'){ var _ts=Date.now(); LASTFEED[sym] = { j:j, feed:feed, ts:_ts }; observeFeedCadence(sym, _ts); }
 }
 
-console.log('[GPTS] v10.41 part1 loaded');
+console.log('[GPTS] v10.42 part1 loaded');
 
 function fiberKeyOf(el){
   var ks=Object.keys(el);
@@ -2037,6 +2037,8 @@ function recordNodeSnapshot(sym){
       // (v10.39) King dollar magnitude this bar (tape $K, in $K units). null when
       // the tape is unreadable. Enables K$-momentum backtests + real-vs-hedge.
       kd:(function(){ try{ var tK=tapeMap(sym); return (tK&&typeof tK.kingKd==='number')?tK.kingKd:null; }catch(eKD){ return null; } })(),
+      // (v10.42) what the Dashboard PROJECTED at this bar — scored nightly (🎯).
+      proj:projSnapshotRecord(sym),
       inplay:(fs.inPlay?{k:fs.inPlay.k, role:fs.inPlay.role, side:fs.inPlay.side,
               st:(fs.inPlay.state&&fs.inPlay.state.label)||null}:null),
       nodes:nodes,
@@ -2902,6 +2904,10 @@ function buildDayExport(dateKey){
   var day=(db.days&&db.days[dk])?db.days[dk]:{snaps:{},events:{}};
   return {
     schema:'gex-day-export/v1',
+    // (v10.42) FEEDBACK LOOP payload: the projection scorecard + auto tuning
+    // recommendations ride in the export so the end-of-day LLM review consumes
+    // them with zero extra steps. proj per-bar records live in snaps[].proj.
+    projReview:(function(){ try{ var sc=projScorecard(); return {scorecard:sc, recommendations:projRecs(sc)}; }catch(ePE){ return null; } })(),
     version:'10.15',
     date:dk,
     generatedAt:new Date().toISOString(),
@@ -5815,44 +5821,272 @@ function kingAnalyzer(sym){
 }
 function kingReadHtml(A, kv){
   if(!A || !A.ok) return '';
-  function chip(t,tip,col){ return '<span title="'+(tip||'')+'" style="border:1px solid '+PAL.line+';border-radius:9px;padding:1px 6px;font-size:8.5px;color:'+PAL.sub+';background:rgba(255,255,255,0.02);white-space:nowrap">'+t+'</span>'; }
-  var b=function(t,c){ return '<b style="color:'+(c||PAL.ink)+';font-weight:700">'+t+'</b>'; };
-  // ---- DESCRIPTIVE ----
-  var polTxt=(A.pol===true)?('+γ — dealers '+b('buy dips / sell rips into it')+' → friction, absorption')
-            :(A.pol===false)?('−γ — dealers hedge '+b('pro-cyclically')+' → fuel, overshoot risk')
-            :'polarity unknown';
-  var kdTxt=(A.kd!=null)?(' · $'+(A.kd/1000).toFixed(2).replace(/\.?0+$/,'')+'B'+
-      (A.kdChg!=null?(' '+b((A.kdChg>=0?'▲+':'▼')+A.kdChg+'%',A.kdChg>=-5?PAL.longAccent:PAL.shortAccent)+' today'):'')) : '';
-  var desc='King '+b(fmtNum(A.king),PAL.gold)+' ('+polTxt+')'+kdTxt+' · '+
-    (A.dist===0?'AT price':(Math.abs(Math.round(A.dist))+' '+(A.dist>0?'above':'below')))+
-    (A.eva?(' · value '+fmtNum(A.eva.lo)+'–'+fmtNum(A.eva.hi)+(A.inVA?' (inside)':' ('+b('OUTSIDE',PAL.amber)+')')):'');
-  // ---- PREDICTIVE (priority-ordered, tagged) ----
-  var P=[];
-  if(A.over) P.push(b('OVERSHOOT of +γ King',PAL.amber)+' without a 14-bar high — stretch not break; reversion through '+fmtNum(A.king)+' favored ⚖ (Beach Ball; volume cue unavailable)');
-  if(A.succHot && A.succ) P.push(b('SUCCESSION WATCH: '+fmtNum(A.succ.k),PAL.amber)+' at '+A.succ.a+'% of King — 📊 76% roll to it within 20 bars (n=148)');
-  if(!A.grav) P.push('outside the gravity band (>3 strikes) — King-pull reads '+b('unsupported')+' at this distance 📊');
-  else if(A.appr && A.appr.approaching){
-    var etaMin=A.appr.etaBars*3;
-    P.push('approaching ('+b(Math.abs(A.appr.rate*10).toFixed(1)+' str/30m')+') — 📊 63% continue toward when closing; ETA ~'+(etaMin>=A.toClose?b('after close',PAL.amber):etaMin+'m')+
-      ((A.phase==='POWER'&&A.adist<=1.5)?' — '+b('PIN WINDOW',PAL.gold)+' into settlement ⚖':''));
-  } else if(A.grav && A.phase==='POWER' && A.adist<=1.5) P.push(b('PIN WINDOW',PAL.gold)+' — late proximity to an untapped-enough King ⚖');
-  if(A.inVA===false) P.push('price '+b('outside value',PAL.amber)+' — imbalance: continuation favored, '+b('don’t fade')+' 📊 (n=25)');
-  if(A.kdChg!=null && A.kdChg<=-15) P.push('magnet '+b('bleeding '+A.kdChg+'%',PAL.shortAccent)+' — hedge-decay: pin thesis weakening, reshuffle risk ⚖');
-  if(A.kdChg!=null && A.kdChg>=15) P.push('magnet '+b('building +'+A.kdChg+'%',PAL.longAccent)+' — growth = intent: settlement conviction rising ⚖');
-  if(!P.length) P.push('no active King signal — '+ (A.grav?'in gravity, flat approach':'far from King')+'; watching');
-  var pred='<span style="color:'+PAL.gold+';font-weight:800">READ ▸</span> '+P.slice(0,3).join(' · ');
-  // ---- CHIPS ----
-  var chips=[chip(A.phase+(A.toClose?(' · '+A.toClose+'m'):''),'session phase · minutes to close')];
-  chips.push(chip('taps '+A.taps+' · x'+A.cross,'tap episodes at the King today · side crossings (⚖ freshness decays 80/66/33 — claim)'));
-  if(A.succ) chips.push(chip('succ '+fmtNum(A.succ.k)+'·'+A.succ.a+'%','strongest non-King strike — 📊 76% King rolls to it within 20 bars when ≥60%'));
-  if(A.kdChg!=null) chips.push(chip('K$ '+(A.kdChg>=0?'▲+':'▼')+A.kdChg+'%','King dollar magnitude vs session open (tape $K)'));
-  if(A.qqq!=null) chips.push(chip('QQQ '+(A.qqq?'✓':'✗'),'QQQ King on the '+(A.qqq?'SAME':'OPPOSITE')+' side of its price as SPY’s — alignment'));
-  return '<div style="padding:4px 8px 5px 8px;border-left:2px solid '+PAL.gold+';margin:3px 0 4px 0">'+
-    '<div style="font-size:9.5px;line-height:1.4;color:'+PAL.ink+'">'+desc+'</div>'+
-    '<div style="font-size:9.5px;line-height:1.4;margin-top:3px;color:'+PAL.ink+'">'+pred+'</div>'+
-    '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px">'+chips.join('')+'</div>'+
-    '<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;opacity:.8">⚖ Academy · 📊 measured (4d/324 bars — sharpens in Analysis) · drift is descriptive-only (tested 50%, n=68)</div>'+
+  // (v10.42) KING CONSOLE: prose blob -> labeled indicator TILES + 2-line
+  // STRUCTURE/READ. Every element carries a hover tooltip that explains it.
+  function tile(label, value, tip, hot){
+    return '<div title="'+(tip||'').replace(/"/g,'&quot;')+'" style="background:'+(hot?'rgba(242,180,90,0.07)':'rgba(255,255,255,0.025)')+
+      ';border:1px solid '+(hot?'rgba(242,180,90,0.55)':PAL.line)+';border-radius:6px;padding:3px 6px;min-width:0">'+
+      '<div style="font-size:7px;letter-spacing:.6px;color:'+PAL.sub+'">'+label+'</div>'+
+      '<div style="font-size:10.5px;font-weight:700;color:'+PAL.ink+';font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+value+'</div></div>';
+  }
+  var g=function(t,c){ return '<b style="color:'+(c||PAL.ink)+'">'+t+'</b>'; };
+  var polV=(A.pol===true)?fmtNum(A.king)+' <span style="color:'+PAL.longAccent+';font-size:8.5px">+γ</span>'
+         :(A.pol===false)?fmtNum(A.king)+' <span style="color:#b48ce3;font-size:8.5px">−γ</span>'
+         :fmtNum(A.king);
+  var kdV=(A.kd!=null)?(fmtKd(A.kd)+(A.kdChg!=null?' <span style="color:'+(A.kdChg>=0?PAL.longAccent:PAL.shortAccent)+'">'+fmtChg(A.kdChg)+'</span>':'')):'—';
+  var distV=(A.dist===0)?'AT':(Math.abs(Math.round(A.dist))+(A.dist>0?'↑':'↓'))+(A.grav?' <span style="color:'+PAL.sub+';font-size:8px">grav≤3</span>':' <span style="color:'+PAL.amber+';font-size:8px">out</span>');
+  var evaV=(A.eva)?(fmtNum(A.eva.lo)+'–'+fmtNum(A.eva.hi)+' <span style="color:'+(A.inVA?PAL.longAccent:PAL.amber)+';font-size:8px">'+(A.inVA?'in':'OUT')+'</span>'):'—';
+  var succV=(A.succ)?(fmtNum(A.succ.k)+' · '+A.succ.a+'%'):'—';
+  var alignV='QQQ '+(A.qqq==null?'—':(A.qqq?'<span style="color:'+PAL.longAccent+'">✓</span>':'<span style="color:'+PAL.shortAccent+'">✗</span>'))+' <span style="color:'+PAL.sub+';font-size:8px">VIX —</span>';
+  var tiles='<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:3px">'+
+    tile('KING', polV, 'The King: strike with the LARGEST ABSOLUTE dealer exposure (Academy: settlement anchor, one per session). +γ = dealers long gamma there (friction/pin behavior); −γ = pro-cyclical hedging (fuel/overshoot behavior).')+
+    tile('K$ · TODAY', kdV, 'King dollar magnitude parsed from the tape ($K row) and its change vs session open. Growth = real directional intent; bleed = hedge decay, pin thesis weakening (Academy node-lifecycle). Recorded every bar.')+
+    tile('DIST', distV, 'Strikes between price and King. Gravity gate: on our recorded data the toward-King edge exists only within 3 strikes (54-60% inside vs 47%/0% beyond) — outside it, pull claims are suppressed.')+
+    tile('VALUE 70%', evaV, 'Exposure Value Area: the tightest strike band around the King holding ~70% of total dealer mass (POC concept). Inside = rotation regime (57% toward-King, n=260). OUTSIDE = imbalance — continuation, do NOT fade (n=25).')+
+    tile('SUCCESSION'+(A.succHot?' ⚠':''), (A.succHot?'<span style="color:'+PAL.amber+'">'+succV+'</span>':succV), 'Strongest non-King strike as % of King mass. When ≥60%: measured 76% chance the crown ROLLS TO THAT STRIKE within 20 bars, median 12 min (n=148). The #1 backtested leading indicator.', A.succHot)+
+    tile('TAPS · CROSS', A.taps+' · '+A.cross, 'Tap episodes at the King today and side crossings. Academy freshness claim: 1st tap ~80% reaction, 2nd ~66%, 3rd ~33% (unverified). Many crossings = chop axis, not a wall.')+
+    tile('PHASE', A.phase+(A.toClose?' · '+A.toClose+'m':''), 'Session phase (CT): OPEN 8:30-9:30 · MID · LUNCH 11:30-1:00 · POWER = last 30m (forced-flow volatility; pin window when near the King). Minutes shown = to the 15:00 close.')+
+    tile('ALIGN', alignV, 'Cross-market King agreement: is QQQ\'s King on the same side of its own price as SPY\'s? Aligned = system-wide pull. VIX confirmation chip pending the ladder spike.')+
   '</div>';
+  // STRUCTURE / READ
+  var polTxt=(A.pol===true)?('+γ — dealers '+g('buy dips / sell rips into it')+' → friction, absorption')
+            :(A.pol===false)?('−γ — dealers hedge '+g('pro-cyclically')+' → fuel, overshoot risk')
+            :'polarity unknown';
+  var P=[];
+  if(A.over) P.push(g('OVERSHOOT of +γ King',PAL.amber)+' without a 14-bar high — stretch not break; reversion through '+fmtNum(A.king)+' favored ⚖');
+  if(A.succHot && A.succ) P.push(g('SUCCESSION: '+fmtNum(A.succ.k)+' at '+A.succ.a+'%',PAL.amber)+' — 📊 76% crowned ≤20 bars (n=148)');
+  if(!A.grav) P.push('outside gravity (>3) — pull '+g('unsupported')+' 📊');
+  else if(A.appr && A.appr.approaching) P.push('approaching — 📊 63% continue; ETA ~'+(A.appr.etaBars*3)+'m'+((A.phase==='POWER'&&A.adist<=1.5)?' · '+g('PIN WINDOW',PAL.gold)+' ⚖':''));
+  if(A.inVA===false) P.push(g('outside value',PAL.amber)+' — imbalance: don’t fade 📊 (n=25)');
+  if(A.kdChg!=null && A.kdChg<=-15) P.push('magnet '+g('bleeding '+fmtChg(A.kdChg),PAL.shortAccent)+' — reshuffle risk ⚖');
+  if(A.kdChg!=null && A.kdChg>=15) P.push('magnet '+g('building '+fmtChg(A.kdChg),PAL.longAccent)+' — conviction rising ⚖');
+  if(!P.length) P.push('no active King signal — watching');
+  return '<div style="padding:4px 8px 5px 8px;border-left:2px solid '+PAL.gold+';margin:3px 0 4px 0">'+
+    tiles+
+    '<div title="What the structure IS right now — polarity-driven dealer mechanics at the King. Descriptive, not predictive." style="font-size:9.5px;line-height:1.45;color:'+PAL.ink+';margin-top:5px"><span style="color:'+PAL.gold+';font-weight:800">STRUCTURE ▸</span> +'+
+      ('γ'==='γ'?'':'')+'King '+g(fmtNum(A.king),PAL.gold)+' ('+polTxt+') · '+(A.dist===0?'AT price':(Math.abs(Math.round(A.dist))+' '+(A.dist>0?'above':'below')))+(A.eva?(A.inVA?' · inside value':' · outside value'):'')+'</div>'+
+    '<div title="What is LIKELY next, priority-ordered. ⚖ = Skylit Academy doctrine claim. 📊 = measured on our recorded bars, n shown. These labels re-read from the live Projection Scorecard as it unlocks." style="font-size:9.5px;line-height:1.45;color:'+PAL.ink+';margin-top:2px"><span style="color:'+PAL.gold+';font-weight:800">READ ▸</span> '+P.slice(0,3).join(' · ')+'</div>'+
+    '<div title="Provenance: what backs these claims. Drift was demoted to descriptive after testing at 50% (n=68) — a coin flip." style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;opacity:.85">⚖ Academy · 📊 measured 4d/324 bars — sharpens nightly in Analysis ▸ 🎯 · drift descriptive-only (50%, n=68)</div>'+
+  '</div>';
+}
+// ===================== (v10.42) KING PROJECTION + FEEDBACK LOOP =====================
+// The projected-path chart draws ONLY data-backed elements; every projection is
+// RECORDED per bar (snap.proj) and SCORED nightly (projScorecard) so the panel's
+// own claims tighten with evidence. projRecs() turns scores into concrete tuning
+// recommendations -> Analysis tab + day export -> end-of-day LLM review closes
+// the loop automatically.
+function fmtKd(kd){                       // kd arrives in $K units from the tape
+  if(typeof kd!=='number') return null;
+  if(kd>=1e6) return '$'+(kd/1e6).toFixed(2)+'B';
+  if(kd>=1e3) return '$'+Math.round(kd/1e3)+'M';
+  return '$'+Math.round(kd)+'K';
+}
+function fmtChg(chg){ if(typeof chg!=='number') return null;
+  return (chg>=0?'▲':'▼')+Math.abs(chg)+'%'; }
+// PURE. A = kingAnalyzer output; ctx = {gateK, hod, lod, avgRange, phase, toClose, evaLo, evaHi}
+function kingProjection(A, ctx){
+  if(!A || !A.ok) return null;
+  ctx=ctx||{};
+  var P={ projKing:null, projSrc:null, tgt:A.king, t1:null, rails:[], etaBars:null,
+          rate:null, cone:null, pin:false, basis:{} };
+  // Projected King: ONLY when Succession Watch is hot (>=60% of King mass).
+  if(A.succHot && A.succ){ P.projKing=A.succ.k; P.projSrc='succession';
+    P.basis.succ='76% crowned <=20 bars (n=148, sharpens in Analysis)'; }
+  P.tgt = (P.projKing!=null)?P.projKing:A.king;            // T2 = operative King (cap)
+  if(typeof ctx.gateK==='number' && ctx.gateK!==P.tgt &&
+     ((A.px<P.tgt && ctx.gateK>A.px && ctx.gateK<P.tgt) ||
+      (A.px>P.tgt && ctx.gateK<A.px && ctx.gateK>P.tgt))) P.t1=ctx.gateK;
+  // rails (dedup by strike)
+  var seen={};
+  function rail(k,label,cls){ if(typeof k!=='number') return; var key=k.toFixed(2);
+    if(seen[key]) return; seen[key]=1; P.rails.push({k:k,label:label,cls:cls}); }
+  rail(P.tgt,'T2 · King','tgt'); rail(P.t1,'T1 · gate','t1');
+  rail(ctx.evaHi,'eVAH','eva'); rail(ctx.evaLo,'eVAL','eva');
+  rail(ctx.hod,'HOD','ref'); rail(ctx.lod,'LOD','ref');
+  // ETA toward the target at the measured 3-bar approach rate
+  var adT=Math.abs(P.tgt-A.px);
+  if(A.appr && A.appr.approaching && A.appr.rate<0){
+    P.rate=A.appr.rate; P.etaBars=Math.ceil(adT/(-A.appr.rate));
+    P.basis.eta='63% continue toward King when approaching (n=161)';
+  }
+  // cone: recent-bar-range envelope widening with sqrt(bars). Volatility, not advice.
+  var r=(typeof ctx.avgRange==='number'&&ctx.avgRange>0)?ctx.avgRange:0.35;
+  P.cone={ half:function(b){ return +(r*0.8*Math.sqrt(Math.max(1,b))).toFixed(2); }, r:r };
+  P.pin = (ctx.phase==='POWER' && adT<=1.5);
+  if(P.pin) P.basis.pin='late proximity -> pin into settlement (Academy; measured 3/4 days)';
+  return P;
+}
+function kingProjectionLive(sym, A){
+  try{
+    var cs=closedCandles(sym)||[];
+    var hod=null,lod=null,rs=0,n=0;
+    for(var i=0;i<cs.length;i++){ var b=cs[i];
+      if(typeof b.h==='number'){ hod=(hod==null||b.h>hod)?b.h:hod; }
+      if(typeof b.l==='number'){ lod=(lod==null||b.l<lod)?b.l:lod; } }
+    for(var j=Math.max(0,cs.length-10);j<cs.length;j++){ var c=cs[j];
+      if(typeof c.h==='number'&&typeof c.l==='number'){ rs+=(c.h-c.l); n++; } }
+    var gk=null; try{ var g=gatekeeper(sym); if(g&&g.ok&&typeof g.k==='number') gk=g.k; }catch(eG){}
+    return kingProjection(A, { gateK:gk, hod:hod, lod:lod, avgRange:(n?rs/n:null),
+      phase:A.phase, toClose:A.toClose, evaLo:(A.eva?A.eva.lo:null), evaHi:(A.eva?A.eva.hi:null) });
+  }catch(e){ return null; }
+}
+// ---- the projected-path chart (SVG <title> children = native hover tooltips) ----
+function projChartHtml(A, P){
+  if(!A||!A.ok||!P) return '';
+  var W=262,H=118,padL=4,padR=46,padT=8,padB=14;
+  var barsLeft=Math.max(4, Math.round((A.toClose||30)/3));
+  var ys=[A.px, P.tgt]; for(var i=0;i<P.rails.length;i++) ys.push(P.rails[i].k);
+  var cH=P.cone.half(barsLeft);
+  ys.push(A.px+cH, A.px-cH);
+  var yLo=Math.min.apply(null,ys)-0.6, yHi=Math.max.apply(null,ys)+0.6;
+  function Y(k){ return padT+(yHi-k)/(yHi-yLo)*(H-padT-padB); }
+  function X(b){ return padL+(b/barsLeft)*(W-padL-padR); }
+  function esc(t){ return (''+t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+  function tt(t){ return '<title>'+esc(t)+'</title>'; }
+  var svg='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto">';
+  svg+='<line x1="'+(W-padR)+'" y1="0" x2="'+(W-padR)+'" y2="'+H+'" stroke="'+PAL.line+'"/>';
+  // rails
+  for(var rI=0;rI<P.rails.length;rI++){ var R0=P.rails[rI]; var y=Y(R0.k).toFixed(1);
+    var col=R0.cls==='tgt'?PAL.gold:(R0.cls==='t1'?PAL.sub:(R0.cls==='eva'?PAL.blue:PAL.sub));
+    var explain={tgt:'T2 target = the operative King. Targets cap at the King (doctrine — no T3).',
+      t1:'T1 = the gatekeeper between price and the King — first structural checkpoint.',
+      eva:'Exposure value-area edge (70% of dealer mass). Inside = rotation; outside = imbalance — don’t fade (measured).',
+      ref:'Session reference level (HOD/LOD).'}[R0.cls]||'';
+    svg+='<g>'+tt(R0.label+' '+fmtNum(R0.k)+' — '+explain)+
+      '<line x1="'+padL+'" y1="'+y+'" x2="'+(W-padR)+'" y2="'+y+'" stroke="'+col+'" stroke-width="1" stroke-dasharray="2,3" opacity="0.65"/>'+
+      '<text x="'+(padL+2)+'" y="'+(parseFloat(y)-2)+'" fill="'+col+'" opacity="0.9">'+R0.label+' '+fmtNum(R0.k)+'</text></g>';
+  }
+  // current King rail + projected step
+  var yK=Y(A.king).toFixed(1);
+  if(P.projKing!=null){
+    var xStep=X(Math.min(4,barsLeft*0.3)).toFixed(1), yP=Y(P.projKing).toFixed(1);
+    svg+='<g>'+tt('Current King '+fmtNum(A.king)+'. Solid = where the crown is now.')+
+      '<path d="M '+padL+' '+yK+' H '+xStep+'" stroke="'+PAL.gold+'" stroke-width="2"/></g>';
+    svg+='<g>'+tt('PROJECTED King roll → '+fmtNum(P.projKing)+'. Drawn only because Succession ≥ 60% of King mass. Base rate: '+(P.basis.succ||''))+
+      '<path d="M '+xStep+' '+yK+' V '+yP+' H '+(W-padR)+'" stroke="'+PAL.gold+'" stroke-width="2" stroke-dasharray="5,4"/></g>';
+  } else {
+    svg+='<g>'+tt('King rail '+fmtNum(A.king)+' — no hot succession candidate; crown projected to hold.')+
+      '<path d="M '+padL+' '+yK+' H '+(W-padR)+'" stroke="'+PAL.gold+'" stroke-width="2" stroke-dasharray="6,4"/></g>';
+  }
+  // price cone + center path + ETA
+  var x0=padL, y0=Y(A.px), steps=8, up=[],dn=[],mid=[];
+  for(var sI=0;sI<=steps;sI++){ var b=barsLeft*sI/steps; var x=X(b);
+    var drift=(P.etaBars!=null)?(P.tgt-A.px)*Math.min(1,b/P.etaBars):0;
+    var cph=P.cone.half(b);
+    mid.push([x, Y(A.px+drift)]); up.push([x, Y(A.px+drift+cph)]); dn.push([x, Y(A.px+drift-cph)]);
+  }
+  function path(pts){ var d=''; for(var q=0;q<pts.length;q++){ d+=(q?' L ':'M ')+pts[q][0].toFixed(1)+' '+pts[q][1].toFixed(1);} return d; }
+  var cone=path(up); for(var q2=dn.length-1;q2>=0;q2--){ cone+=' L '+dn[q2][0].toFixed(1)+' '+dn[q2][1].toFixed(1); } cone+=' Z';
+  svg+='<g>'+tt('Volatility cone: recent avg 3m bar range ('+P.cone.r.toFixed(2)+') widening with √bars. An envelope of normal movement — NOT a forecast band. Coverage is scored nightly (target ~70%).')+
+    '<path d="'+cone+'" fill="rgba(74,144,217,0.10)"/></g>';
+  svg+='<g>'+tt('Projected price path toward '+fmtNum(P.tgt)+(P.etaBars!=null?' at the measured 3-bar approach rate. '+(P.basis.eta||''):' — no approach in progress; flat projection.'))+
+    '<path d="'+path(mid)+'" stroke="'+PAL.blue+'" stroke-width="1.6" stroke-dasharray="4,3" fill="none"/></g>';
+  svg+='<circle cx="'+x0+'" cy="'+y0.toFixed(1)+'" r="2.6" fill="'+PAL.blue+'">'+tt('Price now: '+fmtNum(A.px))+'</circle>';
+  if(P.etaBars!=null && P.etaBars<=barsLeft){
+    var xe=X(P.etaBars).toFixed(1), ye=Y(P.tgt).toFixed(1);
+    svg+='<circle cx="'+xe+'" cy="'+ye+'" r="3.2" fill="none" stroke="'+PAL.blue+'" stroke-width="1.4">'+
+      tt('ETA at target ≈ '+(P.etaBars*3)+' min at current approach rate. ETA error is scored nightly.')+'</circle>';
+  }
+  if(P.pin){
+    var yT=Y(P.tgt+0.5).toFixed(1), hB=(Y(P.tgt-0.5)-Y(P.tgt+0.5)).toFixed(1);
+    svg+='<g>'+tt('PIN BAND ±0.5: POWER phase + proximity — Academy expects settlement gravity at the King. '+(P.basis.pin||''))+
+      '<rect x="'+X(barsLeft*0.72).toFixed(1)+'" y="'+yT+'" width="'+(W-padR-X(barsLeft*0.72)).toFixed(1)+'" height="'+hB+'" fill="rgba(227,195,65,0.10)" stroke="rgba(227,195,65,0.4)" stroke-dasharray="2,2"/></g>';
+  }
+  // gutter
+  svg+='<text x="'+(W-padR+4)+'" y="'+(Y(P.tgt)+3).toFixed(1)+'" fill="'+PAL.gold+'" font-weight="800">'+fmtNum(P.tgt)+'</text>';
+  svg+='<text x="'+(W-padR+4)+'" y="'+(H-3)+'" fill="'+PAL.sub+'">close</text>';
+  svg+='</svg>';
+  return '<div title="Projected path from now to the close. Every element explains itself on hover; every projection is recorded this bar and scored nightly in Analysis ▸ 🎯." '+
+    'style="padding:4px 6px;background:'+PAL.card+';border:1px solid '+PAL.line+';border-radius:8px;margin-top:4px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">'+
+      '<span style="color:'+PAL.sub+';font-size:8px;font-weight:700;letter-spacing:.5px">🎯 KING PATH · PROJECTED</span>'+
+      '<span title="Every projection drawn here is stored with this bar and scored after the fact — reach rate, ETA error, cone coverage, pin hits — in Analysis ▸ 🎯 Projection Scorecard." style="font-size:7.5px;color:'+PAL.sub+'">scored nightly 📊</span>'+
+    '</div>'+svg+'</div>';
+}
+// ---- per-bar compact record of what was projected (for scoring) ----
+function projSnapshotRecord(sym){
+  try{ var A=kingAnalyzer(sym); if(!A.ok) return null;
+    var P=kingProjectionLive(sym,A); if(!P) return null;
+    var b=(P.etaBars!=null)?P.etaBars:null;
+    return { tgt:P.tgt, src:(P.projSrc||'king'), eta:b,
+             ch:(b!=null?P.cone.half(b):P.cone.half(10)), pin:P.pin?1:0,
+             k:A.king, px:+A.px.toFixed(2), sk:(A.succ?A.succ.k:null), sa:(A.succ?A.succ.a:null) };
+  }catch(e){ return null; }
+}
+// ---- nightly scoring over recorded days ----
+function projScorecard(){
+  var db=recorderLoad(); var days=(db&&db.days)||{};
+  var sc={reachN:0,reach:0, etaErrs:[], covN:0,cov:0, succN:0,succ:0, pinN:0,pin:0, days:0};
+  for(var d in days){ if(!days.hasOwnProperty(d)) continue;
+    var spy=((days[d]||{}).snaps||{}).SPY||[]; var had=false;
+    for(var i=0;i<spy.length;i++){ var pr=spy[i].proj; if(!pr) continue; had=true;
+      // target reached by close?
+      var reached=null, firstAt=null;
+      for(var j=i+1;j<spy.length;j++){ var pj=spy[j].px;
+        if(typeof pj==='number' && Math.abs(pj-pr.tgt)<=0.5){ reached=true; if(firstAt==null) firstAt=j-i; break; } }
+      if(spy.length-i>=5){ sc.reachN++; if(reached) sc.reach++; }
+      if(pr.eta!=null && firstAt!=null){ sc.etaErrs.push((firstAt-pr.eta)*3); }
+      // cone coverage at eta (or 10 bars)
+      var hb=(pr.eta!=null?pr.eta:10);
+      if(i+hb<spy.length && typeof spy[i+hb].px==='number'){
+        sc.covN++; var drift=pr.tgt-pr.px, frac=1; var exp=pr.px+drift*Math.min(1,hb/(pr.eta||hb));
+        if(Math.abs(spy[i+hb].px-exp)<=pr.ch) sc.cov++; }
+      // succession scoring
+      if(pr.sa!=null && pr.sa>=60 && pr.sk!=null){
+        var hit=false; for(var q=i+1;q<Math.min(i+21,spy.length);q++){ if(spy[q].tking===pr.sk){ hit=true; break; } }
+        if(spy.length-i>=5){ sc.succN++; if(hit) sc.succ++; } }
+      // pin scoring: only score the LAST projection of the day that flagged pin
+      if(pr.pin && i>=spy.length-3){ var lastPx=spy[spy.length-1].px;
+        if(typeof lastPx==='number'){ sc.pinN++; if(Math.abs(lastPx-pr.tgt)<=0.5) sc.pin++; } }
+    }
+    if(had) sc.days++;
+  }
+  sc.etaErrs.sort(function(a,b){return a-b;});
+  sc.etaMed=sc.etaErrs.length?sc.etaErrs[Math.floor(sc.etaErrs.length/2)]:null;
+  return sc;
+}
+// ---- rule-based recommendations = the automatic feedback loop ----
+function projRecs(sc){
+  var recs=[];
+  function pct(a,b){ return b?Math.round(100*a/b):null; }
+  if(sc.covN>=20){ var cv=pct(sc.cov,sc.covN);
+    if(cv<60) recs.push({sev:'high', t:'Cone too narrow: coverage '+cv+'% < 70% target — raise cone multiplier (0.8 → ~1.0).'});
+    else if(cv>85) recs.push({sev:'low', t:'Cone too wide: coverage '+cv+'% — tighten multiplier for a more informative band.'});
+    else recs.push({sev:'ok', t:'Cone coverage '+cv+'% — within target band.'});
+  } else recs.push({sev:'info', t:'Cone coverage: recording ('+sc.covN+'/20 samples to unlock).'});
+  if(sc.etaMed!=null && sc.etaErrs.length>=15){
+    if(sc.etaMed>6) recs.push({sev:'med', t:'ETA runs late (median +'+sc.etaMed+'m): approach-rate window too short — try 5-bar rate.'});
+    else if(sc.etaMed<-6) recs.push({sev:'med', t:'ETA runs early (median '+sc.etaMed+'m): price accelerates into targets — consider convexity term.'});
+    else recs.push({sev:'ok', t:'ETA error median '+sc.etaMed+'m — acceptable.'});
+  } else recs.push({sev:'info', t:'ETA error: recording ('+sc.etaErrs.length+'/15).'});
+  if(sc.succN>=10){ var sr=pct(sc.succ,sc.succN);
+    if(sr<60) recs.push({sev:'high', t:'Succession hit '+sr+'% < backtest 76% — raise the 60% threshold or require 2 consecutive bars hot.'});
+    else recs.push({sev:'ok', t:'Succession hit '+sr+'% (n='+sc.succN+') — live rate replaces the n=148 backtest label.'});
+  } else recs.push({sev:'info', t:'Succession: '+sc.succN+'/10 live samples — label still uses the 4-day backtest (76%, n=148).'});
+  if(sc.pinN>=5){ var pr=pct(sc.pin,sc.pinN);
+    recs.push({sev:(pr>=60?'ok':'med'), t:'Pin-band hit '+pr+'% (n='+sc.pinN+').'+(pr<60?' Widen band to ±0.75 or require taps<3.':'')});
+  } else recs.push({sev:'info', t:'Pin band: '+sc.pinN+'/5 flagged closes recorded.'});
+  if(sc.reachN>=20){ recs.push({sev:'ok', t:'Target reach by close: '+pct(sc.reach,sc.reachN)+'% (n='+sc.reachN+').'}); }
+  return recs;
+}
+function projScorecardHtml(){
+  var sc=projScorecard(); var recs=projRecs(sc);
+  function row(l,v,tip){ return '<div title="'+(tip||'')+'" style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed rgba(255,255,255,0.05);font-size:10px">'+
+    '<span style="color:'+PAL.sub+'">'+l+'</span><span style="color:'+PAL.ink+';font-weight:600">'+v+'</span></div>'; }
+  function pct(a,b){ return b?Math.round(100*a/b)+'%':'● recording'; }
+  var h='<div style="padding:5px 8px;background:'+PAL.card+';border:1px solid '+PAL.line+';border-radius:8px;margin:4px 0">'+
+    '<div title="Scores every projection the Dashboard drew, after the fact. This is the sharpening loop: the projected chart’s labels re-read from these live rates once they unlock." style="color:'+PAL.gold+';font-size:9px;font-weight:800;letter-spacing:.5px;margin-bottom:3px">🎯 PROJECTION SCORECARD <span style="color:'+PAL.sub+';font-weight:400">('+sc.days+'d recorded)</span></div>'+
+    row('Succession ≥60% → crowned ≤20 bars', (sc.succN?pct(sc.succ,sc.succN)+' n='+sc.succN:'● recording'), 'Live version of the 76% (n=148) backtest.')+
+    row('Target reached by close', pct(sc.reach,sc.reachN)+(sc.reachN?' n='+sc.reachN:''), 'Any later bar within ±0.5 of the projected target.')+
+    row('ETA error (median)', (sc.etaMed!=null?(sc.etaMed>0?'+':'')+sc.etaMed+'m n='+sc.etaErrs.length:'● recording'), 'First-touch time minus projected ETA.')+
+    row('Cone coverage', pct(sc.cov,sc.covN)+(sc.covN?' n='+sc.covN:''), 'Price within the volatility cone at the projection horizon. Target ~70%.')+
+    row('Pin-band hit', pct(sc.pin,sc.pinN)+(sc.pinN?' n='+sc.pinN:''), 'Close within ±0.5 of target when a pin band was flagged.')+
+    '<div style="color:'+PAL.gold+';font-size:8.5px;font-weight:700;margin:4px 0 2px 0">🔧 RECOMMENDATIONS (auto)</div>';
+  for(var i=0;i<recs.length;i++){ var r=recs[i];
+    var col=r.sev==='high'?PAL.shortAccent:(r.sev==='med'?PAL.amber:(r.sev==='ok'?PAL.longAccent:PAL.sub));
+    h+='<div style="font-size:9px;color:'+PAL.ink+';padding:1px 0"><span style="color:'+col+'">▪</span> '+r.t+'</div>'; }
+  h+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;opacity:.8">included in the day export → consumed by the end-of-day LLM review automatically</div></div>';
+  return h;
 }
 function kingBlock(){
   var sym='SPY';
@@ -5997,17 +6231,18 @@ function kingBlock(){
     // INSIDE the chart (overlay, descriptive-only: tested 50% n=68).
     kingReadHtml(kingAnalyzer(sym), kv)+
     '<div style="display:flex;align-items:stretch;gap:4px">'+
-      '<div style="display:flex;flex-direction:column;justify-content:space-between;font-size:7.5px;color:'+PAL.sub+';font-variant-numeric:tabular-nums;padding:1px 0">'+
-        '<span>'+hiStrike+'</span><span>'+loStrike+'</span>'+
-      '</div>'+
       '<div style="flex:1;min-width:0;position:relative">'+spark.svg+
+        '<span title="Y-axis extent of today\'s King path (strikes)." style="position:absolute;top:14px;left:5px;font-size:7.5px;color:'+PAL.sub+'">'+hiStrike+'</span>'+
+        '<span style="position:absolute;bottom:14px;left:5px;font-size:7.5px;color:'+PAL.sub+'">'+loStrike+'</span>'+
         '<span id="gpts-kp-drift" title="Session King migration — DESCRIPTIVE ONLY: 3-bar drift tested 50% vs next-30m direction (n=68). Not a prediction." '+
           'style="position:absolute;top:3px;left:5px;font-size:8px;font-weight:700;color:'+driftCol+';background:rgba(11,14,20,.72);border-radius:4px;padding:0 4px">drift '+driftWord+' · '+nRolls+' roll'+(nRolls===1?'':'s')+'</span>'+
         '<span title="'+vWhy+'" style="position:absolute;top:3px;right:5px;font-size:8.5px;font-weight:800;color:'+vCol+';background:rgba(11,14,20,.72);border:1px solid '+vCol+';border-radius:20px;padding:0 6px">'+kv.word+'</span>'+
         '<span style="position:absolute;bottom:3px;left:5px;font-size:7.5px;color:'+PAL.sub+';background:rgba(11,14,20,.72);border-radius:4px;padding:0 4px">'+fmtClock(spark.firstK!=null && mv.length?mv[0].t:sess.start)+' — now · pinned '+pinnedTxt+'</span>'+
       '</div>'+
     '</div>'+
-  '</div>';'</div>';
+  '</div>';
+  // (v10.42) PROJECTED path chart below the history chart.
+  try{ var __A2=kingAnalyzer(sym); html+=projChartHtml(__A2, kingProjectionLive(sym,__A2)); }catch(ePJ){}'</div>';
   return html;
 }
 
@@ -6139,7 +6374,7 @@ function feedStatusHtml(){
   return '<div style="display:flex;justify-content:space-between;align-items:center;color:'+PAL.sub+';font-size:9px;letter-spacing:0.3px">'+
     '<span style="color:'+col+'">'+txt+'</span>'+
     warn+
-    '<span>feed v10.41</span>'+
+    '<span>feed v10.42</span>'+
     '</div>';
 }
 
@@ -6479,6 +6714,7 @@ window.__gptsDebug.syncReport=function(sym){
   };
 };
 window.__gptsDebug.tapeSync=function(sym){ return tapeSync(sym||'SPY'); };
+window.__gptsDebug.projReport=function(){ var sc=projScorecard(); return {scorecard:sc, recommendations:projRecs(sc)}; };
 window.__gptsDebug.setTapeGate=function(on){ CFG.tapeGate=(on!==false); if(typeof render==='function') render(); return 'tapeGate='+CFG.tapeGate; };
 
 // ============================================================================
@@ -6778,6 +7014,8 @@ function analysisBlock(){
   var st=analysisStats(sym);
   var R=ANALYSIS_REVIEW; // optional LLM narrative
   var h='';
+  // (v10.42) 🎯 Projection Scorecard + auto recommendations — the sharpening loop.
+  try{ h+=projScorecardHtml(); }catch(ePS){}
   // ---- header + day grade ----
   var grade = (R&&R.grade)?R.grade:(st.dirHit10==null?'\u2013':(st.dirHit10>=70?'A-':(st.dirHit10>=60?'B':(st.dirHit10>=50?'C':'D'))));
   var gCol = (st.dirHit10!=null&&st.dirHit10>=60)?PAL.longAccent:(st.dirHit10!=null&&st.dirHit10>=50?PAL.amber:PAL.shortAccent);

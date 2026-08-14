@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>v10.42 mockup — King console + projection chart</title>
+<style>
+  :root{ --bg:#0b0e14; --card:#12161f; --line:#1e2530; --green:#2ec27e; --red:#f0616d;
+         --gold:#e3c341; --sub:#8b98a9; --amber:#f2b45a; --blue:#4a90d9; --ink:#d7dde6; --purp:#b48ce3 }
+  body{background:#06080c;color:var(--ink);font:11px/1.45 -apple-system,Segoe UI,system-ui,sans-serif;margin:0;padding:16px}
+  h1{font-size:13px;margin:0 0 2px} .note{color:var(--sub);font-size:10px;margin-bottom:10px;max-width:980px}
+  .callout{position:absolute;font-size:8.5px;color:#06080c;background:var(--amber);border-radius:3px;padding:0 5px;font-weight:700;z-index:5}
+  .panel{position:relative;width:690px;background:var(--bg);border:1px solid #2a3342;border-radius:10px;padding:8px 9px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+  .cols{display:flex;gap:6px;align-items:flex-start}.col{flex:1 1 300px;min-width:0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin-bottom:5px}
+  .sect{font-size:8px;letter-spacing:1px;color:var(--sub);font-weight:700;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center}
+  /* indicator grid */
+  .ig{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:3px}
+  .tile{background:rgba(255,255,255,.025);border:1px solid var(--line);border-radius:6px;padding:3px 6px;min-width:0}
+  .tile .l{font-size:7px;letter-spacing:.6px;color:var(--sub)}
+  .tile .v{font-size:10.5px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tile.hot{border-color:rgba(242,180,90,.55);background:rgba(242,180,90,.07)}
+  .read{border-left:2px solid var(--gold);padding:2px 8px;margin-top:5px;font-size:9.5px;line-height:1.45}
+  .read .t{color:var(--gold);font-weight:800}
+  .prov{font-size:7.5px;color:var(--sub);opacity:.85;margin-top:3px}
+  svg text{font:8px -apple-system,Segoe UI,sans-serif}
+  .inchip{position:absolute;font-size:8px;color:var(--sub);background:rgba(11,14,20,.78);border-radius:4px;padding:0 4px}
+  .nmr{display:flex;align-items:center;font-size:9.5px;padding:2.5px 0;border-bottom:1px dashed rgba(255,255,255,.04)}
+  .pill{border-radius:8px;padding:0 6px;font-size:8.5px;font-weight:700}
+  .chip{border:1px solid var(--line);border-radius:9px;padding:1px 6px;font-size:8.5px;color:var(--sub)}
+  .foot{display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:5px;padding-top:4px;font-size:9px;color:var(--sub)}
+  .arow{display:flex;justify-content:space-between;padding:2.5px 0;border-bottom:1px dashed rgba(255,255,255,.05);font-size:10px}
+  .arow .l{color:var(--sub)}.arow .v{color:var(--ink);font-weight:600}.arow .n{color:var(--sub);font-weight:400;font-size:9px}
+  .locked{opacity:.55}
+</style></head><body>
+
+<h1>v10.42 mockup — King console, restructured text + NEW projection chart</h1>
+<div class="note">Left column rebuilt: prose blob → <b>indicator grid</b> (labeled tiles, hot signals highlighted) + a 2-line READ.
+Below the King Path: the new <b>PROJECTED path chart</b> (now → close) drawing only data-backed elements, each tagged.
+Bugs from your screenshot fixed here: K$ shows <b>$1.13B</b> (was "$1125.69B") and <b>▼7%</b> (was "▼-7%"). Live values ~1:50p CT.</div>
+
+<div class="panel">
+  <div class="cols">
+    <!-- ==================== LEFT — KING CONSOLE ==================== -->
+    <div class="col" style="position:relative">
+      <div class="card">
+        <div class="sect"><span>👑 KING CONSOLE</span><span class="chip">⚖ Academy · 📊 measured</span></div>
+        <span class="callout" style="top:20px;right:2px">prose → labeled tiles</span>
+        <div class="ig">
+          <div class="tile"><div class="l">KING</div><div class="v" style="color:var(--gold)">775 <span style="color:var(--green);font-size:8.5px">+γ</span></div></div>
+          <div class="tile"><div class="l">K$ · TODAY</div><div class="v">$1.13B <span style="color:var(--red)">▼7%</span></div></div>
+          <div class="tile"><div class="l">DIST</div><div class="v">1↓ <span style="color:var(--sub);font-size:8px">in grav ≤3</span></div></div>
+          <div class="tile"><div class="l">VALUE 70%</div><div class="v">775–780 <span style="color:var(--green);font-size:8px">in</span></div></div>
+          <div class="tile hot"><div class="l">SUCCESSION ⚠</div><div class="v" style="color:var(--amber)">780 · 65%</div></div>
+          <div class="tile"><div class="l">TAPS · CROSS</div><div class="v">2 · 0</div></div>
+          <div class="tile"><div class="l">PHASE</div><div class="v">MID · 69m</div></div>
+          <div class="tile"><div class="l">ALIGN</div><div class="v">QQQ <span style="color:var(--green)">✓</span> <span style="color:var(--sub);font-size:8px">VIX —</span></div></div>
+        </div>
+        <div class="read">
+          <div><span class="t">STRUCTURE ▸</span> +γ King at <b style="color:var(--gold)">775</b> — dealers buy dips / sell rips into it → friction. Price 1 above, inside value.</div>
+          <div style="margin-top:2px"><span class="t">READ ▸</span> <b style="color:var(--amber)">SUCCESSION: 780 at 65%</b> — 📊 76% the crown rolls there ≤20 bars (n=148) · K$ bleeding ▼7% ⚖ · overshoot stretch → reversion bias ⚖</div>
+        </div>
+        <div class="prov">drift descriptive-only (tested 50% n=68) · base 4d/324 bars · sharpens nightly in Analysis ▸ 🎯</div>
+      </div>
+
+      <!-- ---------- KING PATH (history) ---------- -->
+      <div class="card" style="position:relative">
+        <div class="sect"><span>KING PATH · TODAY</span></div>
+        <div style="position:relative;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.015)">
+          <span class="inchip" style="top:3px;left:5px">drift flat · 6 rolls</span>
+          <span class="inchip" style="top:3px;right:49px;border:1px solid var(--gold);border-radius:20px;color:var(--gold);font-weight:800">Neutral</span>
+          <span class="inchip" style="bottom:3px;left:5px">9:26a — now · pinned 48m</span>
+          <span class="callout" style="bottom:-7px;left:80px">y-labels now INSIDE (were clipped)</span>
+          <svg width="318" height="92" viewBox="0 0 318 92" style="display:block;width:100%">
+            <text x="6" y="26" fill="#8b98a9">783</text><text x="6" y="86" fill="#8b98a9">757</text>
+            <line x1="272" y1="0" x2="272" y2="92" stroke="#1e2530"/>
+            <line x1="4" y1="52" x2="272" y2="52" stroke="#e3c341" stroke-width="1" stroke-dasharray="3,3" opacity=".5"/>
+            <path d="M4,40 H60 V70 H110 V33 H150 V52 H272" stroke="#e3c341" stroke-width="2" fill="none"/>
+            <line x1="4" y1="46" x2="272" y2="46" stroke="#4a90d9" stroke-width="1.4" stroke-dasharray="4,3" opacity=".85"/>
+            <circle cx="272" cy="52" r="3" fill="#e3c341" stroke="#12161f" stroke-width="1"/>
+            <rect x="275" y="39" width="40" height="12" rx="3" fill="rgba(74,144,217,.12)" stroke="rgba(74,144,217,.45)"/>
+            <text x="277" y="48" fill="#4a90d9" font-weight="700">776.4</text>
+            <text x="277" y="60" fill="#e3c341" font-weight="800">👑775</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- ---------- NEW: PROJECTED PATH ---------- -->
+      <div class="card" style="position:relative">
+        <div class="sect"><span>🎯 KING PATH · PROJECTED (now → close)</span><span class="chip">scored nightly 📊</span></div>
+        <span class="callout" style="top:-6px;right:8px">NEW</span>
+        <div style="position:relative;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.015)">
+          <svg width="318" height="118" viewBox="0 0 318 118" style="display:block;width:100%">
+            <line x1="272" y1="0" x2="272" y2="118" stroke="#1e2530"/>
+            <!-- target rails -->
+            <line x1="4" y1="22" x2="272" y2="22" stroke="#f0616d" stroke-width="1" stroke-dasharray="2,3" opacity=".7"/>
+            <text x="6" y="19" fill="#f0616d">eVAH · T2 780</text>
+            <line x1="4" y1="86" x2="272" y2="86" stroke="#2ec27e" stroke-width="1" stroke-dasharray="2,3" opacity=".7"/>
+            <text x="6" y="97" fill="#2ec27e">eVAL 775 · King (now)</text>
+            <line x1="4" y1="62" x2="272" y2="62" stroke="#8b98a9" stroke-width="1" stroke-dasharray="2,3" opacity=".55"/>
+            <text x="6" y="59" fill="#8b98a9">gate · T1 776</text>
+            <line x1="4" y1="10" x2="272" y2="10" stroke="#8b98a9" stroke-width="1" stroke-dasharray="1,4" opacity=".45"/>
+            <text x="200" y="8.5" fill="#8b98a9" opacity=".8">HOD 779.4</text>
+            <!-- current king rail + PROJECTED king step -->
+            <path d="M4,86 H120" stroke="#e3c341" stroke-width="2"/>
+            <path d="M120,86 V22 H272" stroke="#e3c341" stroke-width="2" stroke-dasharray="5,4"/>
+            <text x="126" y="36" fill="#e3c341" font-weight="800">proj King → 780 · 📊76% n=148 · med 12m</text>
+            <!-- price cone -->
+            <path d="M4,66 C 90,58 180,40 268,28 L268,52 C 180,56 90,64 4,66 Z" fill="rgba(74,144,217,.10)" stroke="none"/>
+            <path d="M4,66 C 90,60 180,48 268,40" stroke="#4a90d9" stroke-width="1.6" stroke-dasharray="4,3"/>
+            <circle cx="4" cy="66" r="2.6" fill="#4a90d9"/>
+            <circle cx="196" cy="47" r="3.2" fill="none" stroke="#4a90d9" stroke-width="1.4"/>
+            <text x="150" y="76" fill="#4a90d9">ETA 780 ~2:22p 📊63%</text>
+            <!-- pin band -->
+            <rect x="230" y="16" width="42" height="12" fill="rgba(227,195,65,.10)" stroke="rgba(227,195,65,.4)" stroke-dasharray="2,2"/>
+            <text x="232" y="44" fill="#e3c341" opacity=".9">pin band ⚖</text>
+            <!-- gutter -->
+            <text x="277" y="26" fill="#e3c341" font-weight="800">780</text>
+            <text x="277" y="90" fill="#8b98a9">775</text>
+            <text x="277" y="112" fill="#8b98a9">close</text>
+          </svg>
+        </div>
+        <div class="prov">cone = recent bar-range envelope (volatility, not advice) · rails = gate/King/eVA/HOD · projected King only when SUCCESSION ≥60% · every projection recorded per bar → scored in Analysis ▸ 🎯</div>
+      </div>
+    </div>
+
+    <!-- ==================== RIGHT — unchanged ==================== -->
+    <div class="col">
+      <div class="card"><div class="sect"><span>⚡ DEFLECTIONS · 0 live</span></div><div style="color:var(--sub);font-size:9.5px">none right now</div></div>
+      <div class="card">
+        <div class="sect"><span>⑤ NODE MAP</span><span class="chip" style="color:var(--gold);border-color:rgba(227,195,65,.5)">Whipsaw</span></div>
+        <div class="nmr"><span class="pill" style="background:rgba(240,97,109,.15);color:var(--red);width:52px">Ceil</span><span style="width:70px">779 · 21%</span><span class="chip">Hold</span></div>
+        <div class="nmr"><span class="pill" style="background:rgba(240,97,109,.15);color:var(--red);width:52px">★ Ceil</span><span style="width:70px">777 · 41%</span><span class="chip" style="color:var(--green)">Acm</span></div>
+        <div style="display:flex;justify-content:center;font-size:8.5px;color:var(--blue);padding:2px 0;border-bottom:1px dashed rgba(74,144,217,.35)">— SPY 776.4 —</div>
+        <div class="nmr"><span class="pill" style="background:rgba(242,180,90,.15);color:var(--amber);width:52px">Gate</span><span style="width:70px">776 · 50%</span><span class="chip" style="color:var(--green)">Acm</span><span class="chip" style="color:var(--red)">BO·FT·TST</span></div>
+        <div class="nmr"><span class="pill" style="background:rgba(227,195,65,.2);color:var(--gold);width:52px">👑 King</span><span style="width:70px;color:var(--gold)">775 · 100%</span><span class="chip">Hold</span></div>
+        <div style="color:var(--sub);font-size:8px;margin-top:3px">(right column unchanged in this batch)</div>
+      </div>
+      <!-- Analysis preview -->
+      <div class="card" style="border-color:rgba(74,144,217,.35)">
+        <div class="sect"><span>📊 ANALYSIS ▸ 🎯 PROJECTION SCORECARD</span><span class="chip">nightly</span></div>
+        <span class="callout" style="top:-6px;right:8px">NEW · the sharpening loop</span>
+        <div class="arow"><span class="l">Succession ≥60% → crowned ≤20 bars</span><span class="v">76% <span class="n">n=148 · updates live</span></span></div>
+        <div class="arow"><span class="l">Approach-continuation (in gravity)</span><span class="v">63% <span class="n">n=161</span></span></div>
+        <div class="arow"><span class="l">Projected target reached by close</span><span class="v">● recording <span class="n">unlocks n≥20</span></span></div>
+        <div class="arow"><span class="l">ETA error (median, minutes)</span><span class="v">● recording <span class="n">unlocks n≥20</span></span></div>
+        <div class="arow locked"><span class="l">Cone coverage (px stayed in band)</span><span class="v">● recording <span class="n">target ~70%</span></span></div>
+        <div class="arow locked"><span class="l">Pin-band hit (close within ±0.5)</span><span class="v">● recording <span class="n">n=4 days</span></span></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span style="color:var(--green)">SPY:combined</span><span>feed v10.42</span></div>
+</div>
+
+<div class="note" style="margin-top:12px"><b>What gets recorded per bar for sharpening:</b> projected target strike, ETA, cone bounds, active succession candidate, pin-band state → next-day scoring fills the 🎯 scorecard; the live chart's 76%/63% labels re-read from the scorecard, so the panel's own claims tighten as evidence accumulates.</div>
+</body></html>
