@@ -1,6 +1,57 @@
 # CHANGELOG — GEX-Signal-Tapereader
 
-## v10.44 — PLANNED (design locked 2026-08-15, NOT YET BUILT) — magnet frame + single column
+## v10.44 — 2026-08-15 — MAGNET FRAME: single-column dashboard, Node Map rebuilt, data repository
+
+**Doctrine (from the design session):** nodes are magnets — they PULL and PUSH; every indicator is
+DESCRIPTIVE (field now) or PREDICTIVE (⚖ hand-set until n≥20 → 📊 measured, nightly-scored).
+
+**UI (user-directed simplification).** King console + King path chart + projected chart REMOVED
+from the Dashboard (all still computed/recorded; `kingBlock()` no longer rendered). Panel is ONE
+column: **READ ▸ → ⚡ Deflections → ⑤ Node Map**; default width 690→440 (one-time migration).
+
+**READ ▸ (`readBlock44`)** cites only measured/tagged magnet claims: King distance + ZONE
+(ORBIT ≤1 / PULL 1.5–3 / OUT >3) with the toward-King rate at that distance and this hour;
+Range Flr–Ceil inside/OUT with each boundary's state, episode and "walls like this held X%";
+non-King mass lean (repels 📊 57%); regime tag (chop/mixed/trend, efficiency ratio). No legacy
+King-verdict/confluence/Break-through claims (all ran contrarian on the 4 test days).
+
+**Node Map (all 5 fields per the locked spec).** IDENTITY: 👑 King · 🚪 Gate · **▔ Ceil / ⛰ Flr**
+= nearest strong magnet (≥`FLRCEIL_MIN_PCT`=15% of King) above/below = the live range (Step 3);
+★ Mag / Mag for the rest; Sup/Res retired; roles stack (King · Flr); **−γ identity purple**
+(Skylit convention) incl. a −γ King. STATE: **Acm / Dec / Steady** (Diss→Dec) + the node's ▲/▼%
+vs its session open (persisted), ±15% bright; ±γ text tag dropped (color carries it). ACTIVITY:
+**Pull tw% → BOw → BO·FT → Defl ↑/↓ → Push tw% → echoes** (priority fresh Defl > BO·FT > BOw >
+Push > Pull > echo); only BOw/BO·FT chips ever shown (chain retired); Push off a node below price
+= green. Header **Range chip**. Every chip carries the episode timeline in its hover.
+
+**Episode engine (`nodeEpisode`, pure).** Per node: zone, toward-share (% of last 10 closes
+moving nearer), last tag, crossings, state. Recorded per bar as `snap.ep`.
+
+**FT redefined (both directions):** full-hold OR two consecutive directional closes beyond the
+node with the 2nd progressing (`s.ftLenient`). Applies to the machine and the scorecard.
+
+**Data repository.** IndexedDB `gpts_repo_v1` (unbounded; migrates the localStorage recorder once;
+mirrors the last 12 snaps per bar so outcome back-fills land). New per-bar fields: `xm`
+(cross-market headers SPY/QQQ/SPXW/VIX from the Skylit sidebar — confluence was untestable with
+0 QQQ bars), `ep` (episodes), `rg` (regime tag). **Daily export** `data/YYYY-MM-DD.json` at 15:01
+CT into the repo folder via File System Access API (📁 one-time pick) with download fallback;
+`install.bat` registers a scheduled task (weekdays 15:30, run-if-missed) that commits+pushes
+`data/`. Footer: `rec ● · saved hh:mm ✓ · 💾 · 📁`.
+
+**Study module (`studyRun`)** = the 08-15 test battery as a nightly job over the repository
+(King pull by distance/hour, others-repel, contender-repel, wall-reached by state, net-force,
+episode Pull/Push scoring); cached for READ/hovers; 08-15 baseline (4d/391 bars) until first run.
+
+**Fixes.** `hitKing` labeler (fired 1–2%): uses tape King strike, rejects magnitude-as-King,
+counts range crossings. `parseKingDollarsK` explicit `Math.abs` (live signed $K seen);
+`parseKingDollarSign` exposed as candidate polarity source. %KCH baseline persisted per
+day+symbol (`gpts_kd_open_v1`) — survives reload.
+
+**Tests:** `test_magnet_v1044.js` (36) + suite updated for BOw vocabulary — 5 files all green.
+**Docs:** `docs/MAGNET-FIELD-GUIDE.html` (new). NEXT (10.45): 🧪 Testing tab, Analysis Insights,
+regime gate.
+
+## v10.44-PLAN — design record 2026-08-15 (superseded by the shipped entry above)
 
 Design session outcome; full spec in `session-state/latest-resume-note.md`, build mockup
 `design/nodemap_v1044_mockup.html`.
@@ -11,6 +62,9 @@ Deflections → Node Map. Node Map becomes the primary magnet surface:
 - IDENTITY: 👑 King · 🚪 Gate · **▔ Ceil / ⛰ Flr** = nearest strong magnet (≥15–20% King
   mass) above/below price = the live range (Step 3). Roles stack. Others: ★ Mag / Mag.
   **Sup/Res vocabulary retired.** −γ nodes (incl. a −γ King) render PURPLE (Skylit convention).
+- STATE: **Acm / Dec / Steady** (Diss→Dec; Acm kept — Step 5 doctrine) + per-node ▲/▼% vs
+  session open (`Dec ▼29%`), threshold-colored. ±γ text DROPPED — purple carries polarity.
+  STRIKE·% and LIFE unchanged.
 - ACTIVITY: `Pull tw%` → `BOw` → `BO·FT` (only BO chip; chain display removed) →
   `Defl ↑/↓` → `Push tw%` → echoes (broke/held/FBO). Priority: Defl > BO·FT > BOw > Push >
   Pull > echo. **FT redefined (both directions): full-hold OR two consecutive progressing
@@ -24,8 +78,16 @@ PUSH·after-tag/-break/-block), per-bar `snap.ep` with conditions-at-contact, ni
 (checkpoints × King-position × polarity), LLM nightly review must answer why/what-preceded/
 what-to-change. Everything ⚖ until n≥20 → 📊.
 
-**Shelved with return-spec:** ATTRACTION tile v2, %KCH tile flip, net-force indicator,
-King charts (return validated once scorecards mature).
+**Test battery (in-page, 4 days/391 bars):** net-force sum RETIRED (50%); King pulls 55% (69% at 2
+strikes; 74% 11am CT, 66% 2pm), non-King mass repels 57%, contender ≥60% repels 58%, Acm walls
+reached 15% vs Fading 23%; legacy King-verdict/conf/Break-through ran contrarian → regime gate
+(10.45). hitKing labeler bug found (1-2% fires) → fix. ADDED to 10.44: DIST→ZONE (ORBIT/PULL/OUT)
++ hour gate; READ ▸ citing measured rates; IndexedDB data repository + daily JSON export + QQQ/VIX
+recording; test battery as nightly module. v10.45: 🧪 Testing tab (question library, hypothesis
+builder, pattern miner, insights/recs, coverage) + Analysis insights + regime gate.
+
+**Shelved with return-spec:** ATTRACTION tile v2, %KCH tile flip, King charts (return validated
+once scorecards mature). Net-force chip retired on evidence.
 
 ## v10.40 — 2026-08-14 — KING PATH v2 (Batch 2): analyzer + narrative-first layout + gutter
 

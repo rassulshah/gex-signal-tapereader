@@ -46,7 +46,7 @@ global.STATE={SPY:{setups:{
   older_go:{strike:776,dir:'long',stage:'GO',outcome:null,voided:false,ts:100,updated:100},
   newer_bo:{strike:776,dir:'long',stage:'BO',outcome:null,voided:false,ts:500,updated:500}
 }}};
-ok(/>BO</.test(setupTagForNode(776)),            'two LIVE setups -> the MOST RECENT wins (BO), not the max stage');
+ok(/>BOw</.test(setupTagForNode(776)),           'two LIVE setups -> the MOST RECENT wins (BOw pre-FT, v10.44 vocabulary), not the max stage');
 
 // ---- guards ----
 ok(/s\.outcome==='T2'\|\|s\.outcome==='FAILED'\|\|s\.outcome==='EXPIRED'/.test(src), 'GUARD: terminal outcomes skipped');

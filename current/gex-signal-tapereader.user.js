@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    10.43
+// @version    10.44
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -1176,8 +1176,18 @@ var TAPE_KING_DOLLAR_IN = /\$[\d,]+K/;
 // the morning while price stalled below - the strongest leading signal on the
 // board, and until now it was discarded after being used as a boolean marker.
 function parseKingDollarsK(txt){
+  // (v10.44) MAGNITUDE BY DESIGN. Skylit prints SIGNED King dollars on -γ books
+  // (live 2026-08-14: "\u2212$27,399K" on the 2nd-expiry column, Unicode minus). The
+  // King's strength is unsigned; its personality (±γ) is carried separately by
+  // polarity/color. Math.abs is explicit here so this is a decision, not luck.
   var m=(''+txt).match(/\$([\d,]+)K/);
-  return m ? parseInt(m[1].replace(/,/g,''),10) : null;
+  return m ? Math.abs(parseInt(m[1].replace(/,/g,''),10)) : null;
+}
+// (v10.44) Sign of the King's own $ figure — candidate direct polarity source
+// (negative dollars = -γ). Returned separately; evaluated vs walls-derived pol.
+function parseKingDollarSign(txt){
+  var t=(''+txt).trim(); if(!/\$[\d,]+K/.test(t)) return null;
+  return /^[\-\u2212]/.test(t) ? false : true;
 }
 // (v10.38 TAPE-SYNC FIX) %King for one tape value cell.
 // Observed live cell shapes (Skylit Atlas, 2026-08-14):
@@ -2039,6 +2049,15 @@ function recordNodeSnapshot(sym){
       kd:(function(){ try{ var tK=tapeMap(sym); return (tK&&typeof tK.kingKd==='number')?tK.kingKd:null; }catch(eKD){ return null; } })(),
       // (v10.42) what the Dashboard PROJECTED at this bar — scored nightly (🎯).
       proj:projSnapshotRecord(sym),
+      // (v10.44) CROSS-MARKET headers scraped from the Skylit sidebar (SPY/QQQ/SPXW/VIX:
+      // price, %chg, King distance %, side). Confluence was UNTESTABLE before (0 QQQ bars).
+      xm:(function(){ try{ return readTrinityHeaders(); }catch(eX){ return null; } })(),
+      // (v10.44) per-node EPISODE states this bar (magnet frame): zone/toward-share/state.
+      ep:(function(){ try{ var csE=closedCandles(sym)||[]; var pxE=S.price; var arr=[];
+            (fs.above||[]).concat(fs.below||[]).forEach(function(r){ var e=nodeEpisode(csE,r.k,pxE,Date.now()); if(e.zone!=='OUT') arr.push({k:r.k,z:e.zone,tw:e.tw,st:e.state,tg:e.tagged,x:e.crosses}); });
+            return arr; }catch(eE){ return null; } })(),
+      // (v10.44) realized-range regime tag (chop vs trend) for the regime gate study.
+      rg:(function(){ try{ return regimeTag(closedCandles(sym)||[]); }catch(eG){ return null; } })(),
       inplay:(fs.inPlay?{k:fs.inPlay.k, role:fs.inPlay.role, side:fs.inPlay.side,
               st:(fs.inPlay.state&&fs.inPlay.state.label)||null}:null),
       nodes:nodes,
@@ -2056,8 +2075,136 @@ function recordNodeSnapshot(sym){
     // Back-fill forward outcomes on older snapshots now that a fresh bar landed.
     labelForwardOutcomes(sym, day.snaps[sym]);
     recorderSave(db);
+    // (v10.44 DATA REPOSITORY) mirror the last 12 snapshots (fresh + outcome-backfilled)
+    // into IndexedDB — unbounded history that the study module and Testing tab query.
+    try{ repoUpsertSnaps(sym, TODAY, day.snaps[sym].slice(-12)); }catch(eRepo){}
   }catch(e){}
 }
+
+// ============================================================================
+// (v10.44) CROSS-MARKET header scrape. Skylit's sidebar renders one header per
+// tape column: [SYM] [$px] [chg%] then a "● King  d% ↑/↓" row (d% = distance from
+// spot to that symbol's King, verified live 08-14: SPY 776.01→780 = 0.5%; VIX
+// 14.25→15.5 = 8.8%). Returns {SPY:{px,chg,kd,ks}, QQQ:{...}, ...} or null.
+function readTrinityHeaders(){
+  var hs=document.querySelectorAll('[class*="trinity-panel-fullscreen-header"]');
+  if(!hs.length) return null;
+  var out={}, any=false;
+  for(var i=0;i<hs.length;i++){
+    var h=hs[i]; var sp=h.querySelectorAll('span'); if(sp.length<2) continue;
+    var sym=(sp[0].textContent||'').trim(); if(!/^[A-Z]{2,5}$/.test(sym)) continue;
+    var px=null,chg=null;
+    for(var j=1;j<sp.length;j++){ var t=(sp[j].textContent||'').trim();
+      var mp=t.match(/^\$([\d,]+\.?\d*)$/); if(mp&&px==null){ px=parseFloat(mp[1].replace(/,/g,'')); continue; }
+      var mc=t.match(/^([+\-\u2212]?\d+\.?\d*)%$/); if(mc&&chg==null){ chg=parseFloat(mc[1].replace('\u2212','-')); } }
+    var kd=null,ks=null;
+    var sib=h.nextElementSibling;
+    if(sib && /King/.test(sib.textContent||'')){ var mk=(sib.textContent||'').match(/([\d.]+)%\s*([\u2191\u2193])/); if(mk){ kd=parseFloat(mk[1]); ks=(mk[2]==='\u2191')?1:-1; } }
+    if(px!=null){ out[sym]={px:px,chg:chg,kd:kd,ks:ks}; any=true; }
+  }
+  return any?out:null;
+}
+// (v10.44) REGIME TAG: chop vs trend from the last 20 closed bars — net move vs path
+// length (efficiency ratio). >=0.45 trend, <=0.25 chop, else mixed. Descriptive; the
+// regime GATE (suppressing trend/conf claims in chop) ships in 10.45 once measured.
+function regimeTag(cs){
+  if(!cs||cs.length<12) return null;
+  var w=cs.slice(-20), path=0;
+  for(var i=1;i<w.length;i++){ if(w[i].c!=null&&w[i-1].c!=null) path+=Math.abs(w[i].c-w[i-1].c); }
+  var net=Math.abs((w[w.length-1].c||0)-(w[0].c||0));
+  var er=path>0?net/path:0;
+  return {er:+er.toFixed(2), tag:(er>=0.45?'trend':(er<=0.25?'chop':'mixed'))};
+}
+
+// ============================================================================
+// (v10.44) DATA REPOSITORY — IndexedDB. Unbounded, every bar, all symbols. The
+// localStorage recorder (4-day cap) is MIRRORED here and migrated in on first run.
+// Daily export: repoExportDay() writes data/YYYY-MM-DD.json into the REPO FOLDER via
+// the File System Access API (one-time folder pick, "allow on every visit"), falling
+// back to a browser download. A Windows scheduled task (installed by install.bat)
+// commits + pushes data/ at 15:30 CT. The LLM reads it from raw GitHub on "load gex".
+var REPO_DB_NAME='gpts_repo_v1', REPO_DB=null;
+function repoOpen(cb){
+  if(REPO_DB){ cb(REPO_DB); return; }
+  try{
+    var req=indexedDB.open(REPO_DB_NAME, 1);
+    req.onupgradeneeded=function(e){ var db=e.target.result;
+      if(!db.objectStoreNames.contains('snaps')){ var st=db.createObjectStore('snaps',{keyPath:'id'}); st.createIndex('date','date',{unique:false}); st.createIndex('sym','sym',{unique:false}); }
+      if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'}); };
+    req.onsuccess=function(e){ REPO_DB=e.target.result; cb(REPO_DB); };
+    req.onerror=function(){ cb(null); };
+  }catch(e){ cb(null); }
+}
+function repoUpsertSnaps(sym, date, snaps){
+  repoOpen(function(db){ if(!db) return;
+    try{ var tx=db.transaction('snaps','readwrite'); var st=tx.objectStore('snaps');
+      snaps.forEach(function(sn){ if(!sn||!sn.t) return; var rec=JSON.parse(JSON.stringify(sn)); rec.id=sym+'|'+sn.t; rec.sym=sym; rec.date=date; st.put(rec); });
+    }catch(e){} });
+}
+function repoMigrateOnce(){
+  try{ if(localStorage.getItem('gpts_repo_migr_v1')) return; }catch(e){}
+  var db=recorderLoad();
+  Object.keys(db.days||{}).forEach(function(d){ var day=db.days[d]; Object.keys(day.snaps||{}).forEach(function(sym){ repoUpsertSnaps(sym, d, day.snaps[sym]||[]); }); });
+  try{ localStorage.setItem('gpts_repo_migr_v1','1'); }catch(e2){}
+}
+function repoDay(date, cb){   // -> {date, snaps:{SPY:[...],QQQ:[...]}}
+  repoOpen(function(db){ if(!db){ cb(null); return; }
+    try{ var out={date:date, snaps:{}}; var idx=db.transaction('snaps').objectStore('snaps').index('date');
+      idx.openCursor(IDBKeyRange.only(date)).onsuccess=function(e){ var c=e.target.result;
+        if(c){ var r=c.value; (out.snaps[r.sym]=out.snaps[r.sym]||[]).push(r); c.continue(); }
+        else { Object.keys(out.snaps).forEach(function(k){ out.snaps[k].sort(function(a,b){return a.t-b.t;}); }); cb(out); } };
+    }catch(e){ cb(null); } });
+}
+function repoAll(cb){         // -> array of {date, sym, ...snap} sorted by t (all days)
+  repoOpen(function(db){ if(!db){ cb([]); return; }
+    try{ var arr=[]; db.transaction('snaps').objectStore('snaps').openCursor().onsuccess=function(e){ var c=e.target.result; if(c){ arr.push(c.value); c.continue(); } else { arr.sort(function(a,b){return a.t-b.t;}); cb(arr); } }; }catch(e){ cb([]); } });
+}
+function repoCoverage(cb){    // -> {days:[...], bars, syms:{SPY:n,...}, fields:{kd:firstDate, pos:..., ep:..., xm:...}}
+  repoAll(function(arr){ var days={}, syms={}, fields={};
+    arr.forEach(function(r){ days[r.date]=1; syms[r.sym]=(syms[r.sym]||0)+1;
+      ['kd','proj','ep','xm','rg'].forEach(function(f){ if(r[f]!=null && !fields[f]) fields[f]=r.date; });
+      if(!fields.pos && (r.nodes||[]).some(function(n){return typeof n.pos==='boolean';})) fields.pos=r.date; });
+    cb({days:Object.keys(days).sort(), bars:arr.length, syms:syms, fields:fields}); });
+}
+function repoKvGet(k, cb){ repoOpen(function(db){ if(!db){cb(null);return;} try{ db.transaction('kv').objectStore('kv').get(k).onsuccess=function(e){ cb(e.target.result?e.target.result.v:null); }; }catch(e){ cb(null); } }); }
+function repoKvSet(k, v){ repoOpen(function(db){ if(!db) return; try{ db.transaction('kv','readwrite').objectStore('kv').put({k:k,v:v}); }catch(e){} }); }
+// Folder pick (one-time) — stores the directory handle in IndexedDB so later writes are silent.
+function repoPickFolder(){
+  if(!window.showDirectoryPicker){ alert('This browser lacks the File System Access API \u2014 the export will download instead.'); return; }
+  window.showDirectoryPicker({mode:'readwrite'}).then(function(h){ repoKvSet('dataDir', h); REPO_LAST_SAVE={t:Date.now(),how:'folder set'}; render(); }).catch(function(){});
+}
+var REPO_LAST_SAVE=null;
+function repoExportDay(date, silent){
+  date=date||TODAY;
+  repoDay(date, function(day){
+    if(!day){ return; }
+    var payload={version:VERSION_STR(), date:date, exportedAt:new Date().toISOString(), snaps:day.snaps,
+      events:(function(){ try{ var d=recorderLoad().days[date]; return d?d.events:null; }catch(e){ return null; } })()};
+    var txt=JSON.stringify(payload);
+    var name=date+'.json';
+    repoKvGet('dataDir', function(h){
+      if(h && h.createWritable!==undefined || (h && h.getFileHandle)){
+        var doWrite=function(){ h.getFileHandle(name,{create:true}).then(function(fh){ return fh.createWritable(); }).then(function(w){ return w.write(txt).then(function(){ return w.close(); }); }).then(function(){ REPO_LAST_SAVE={t:Date.now(),how:'repo folder',name:name}; try{ localStorage.setItem('gpts_last_export',date); }catch(e){} if(!silent) render(); }).catch(function(){ repoDownload(name, txt, silent); }); };
+        var q=h.queryPermission?h.queryPermission({mode:'readwrite'}):Promise.resolve('granted');
+        q.then(function(p){ if(p==='granted') doWrite(); else if(!silent && h.requestPermission){ h.requestPermission({mode:'readwrite'}).then(function(p2){ if(p2==='granted') doWrite(); else repoDownload(name,txt,silent); }); } else repoDownload(name,txt,silent); });
+      } else repoDownload(name, txt, silent);
+    });
+  });
+}
+function repoDownload(name, txt, silent){
+  try{ var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'})); a.download=name; document.body.appendChild(a); a.click(); setTimeout(function(){ document.body.removeChild(a); },500);
+    REPO_LAST_SAVE={t:Date.now(),how:'download',name:name}; try{ localStorage.setItem('gpts_last_export',name.replace('.json','')); }catch(e){} if(!silent) render(); }catch(e){}
+}
+// Auto-export once at/after the close (15:01 CT), once per day.
+function repoAutoExportTick(){
+  try{ var sec=ctNowSecOfDay(); if(sec<15*3600+60 || sec>16*3600) return;
+    var done=localStorage.getItem('gpts_last_export'); if(done===TODAY) return;
+    localStorage.setItem('gpts_last_export', TODAY);   // set first: never double-fire
+    repoExportDay(TODAY, true);
+  }catch(e){}
+}
+function VERSION_STR(){ try{ return (typeof GM_info!=='undefined'&&GM_info.script&&GM_info.script.version)||'10.44'; }catch(e){ return '10.44'; } }
+
 
 // ---- FORWARD-OUTCOME AUTO-LABELER (v10.15 DATA layer) ------------------------
 // For each snapshot, once >=H newer bars exist, stamp what price actually did
@@ -2069,13 +2216,22 @@ function _fwdStats(base, fwd){
   // base = snapshot being labeled; fwd = array of the next H snapshots.
   var px0=(typeof base.px==='number')?base.px:null;
   if(px0==null || !fwd.length) return null;
-  var kingK=(typeof base.king==='number')?base.king:null;
+  // (v10.44 hitKing FIX, found by the 08-15 test battery: hitKing fired on 1-2% of
+  // bars — implausible). Root causes: (1) base.king could still be the pre-fix
+  // MAGNITUDE (e.g. 5.3e8) on older days, so |p-king| was never <=0.25; (2) only
+  // exact-bar proximity counted, so a bar that crossed THROUGH the strike didn't
+  // register. Now: prefer the tape King STRIKE (base.tking), sanity-reject any
+  // "king" > 10000, and count a hit if the forward path came within 0.25 OR the
+  // hi/lo range spanned the strike.
+  var kingK=(typeof base.tking==='number' && base.tking<10000)?base.tking
+           :((typeof base.king==='number' && base.king<10000)?base.king:null);
   var hi=px0, lo=px0, hitKing=false, last=px0;
   for(var i=0;i<fwd.length;i++){
     var p=(typeof fwd[i].px==='number')?fwd[i].px:null; if(p==null) continue;
     if(p>hi) hi=p; if(p<lo) lo=p; last=p;
     if(kingK!=null && Math.abs(p-kingK)<=0.25) hitKing=true;
   }
+  if(kingK!=null && !hitKing && lo<=kingK+0.05 && hi>=kingK-0.05) hitKing=true;
   var mfe=+(hi-px0).toFixed(2);     // best up-move from entry
   var mae=+(lo-px0).toFixed(2);     // worst down-move (<=0)
   var net=+(last-px0).toFixed(2);
@@ -2329,8 +2485,23 @@ function runMachine(sym){
     }
     var holdBeyond = (dir==='long') ? (last.l>k) : (last.h<k);
     var barLaterThanBO = last.t > s.boBar;
-    if(s.stage==='BO' && barLaterThanBO && holdBeyond){
-      s.stage='FT'; s.ftBar=last.t; addToken(s,'FT');
+    // (v10.44 LENIENT FT, user-directed) FT also confirms on TWO CONSECUTIVE
+    // DIRECTIONAL CLOSES beyond the node where the 2nd close PROGRESSES:
+    //   long : two green closes above k, 2nd close > 1st close
+    //   short: two red closes below k,   2nd close < 1st close
+    // Catches grinding breakouts whose bars overlap the strike slightly but whose
+    // closes keep advancing (the old full-hold rule missed 08-14's slow bleed off 777).
+    // Progression is what makes it safe: two flat greens do NOT confirm.
+    var lenientFT=false;
+    if(cs.length>=2 && barLaterThanBO){
+      var prev=cs[cs.length-2];
+      if(prev && prev.t>=s.boBar){
+        if(dir==='long')  lenientFT = (prev.c>prev.o && last.c>last.o && prev.c>k && last.c>k && last.c>prev.c);
+        else              lenientFT = (prev.c<prev.o && last.c<last.o && prev.c<k && last.c<k && last.c<prev.c);
+      }
+    }
+    if(s.stage==='BO' && barLaterThanBO && (holdBeyond || lenientFT)){
+      s.stage='FT'; s.ftBar=last.t; s.ftLenient=!holdBeyond&&lenientFT; addToken(s,'FT');
     }
     var wickTouch = (dir==='long') ? (last.l<=k+tol) : (last.h>=k-tol);
     if((s.stage==='FT'||s.stage==='BO') && s.ftBar && last.t>s.ftBar && wickTouch){
@@ -2996,7 +3167,7 @@ function buildPanel(){
   if(document.getElementById('gpts-panel')) return;
   PANEL=document.createElement('div');
   PANEL.id='gpts-panel';
-  css(PANEL,{position:'fixed', top:'60px', left:'', right:'12px', width:'690px',
+  css(PANEL,{position:'fixed', top:'60px', left:'', right:'12px', width:'440px',
     background:PAL.bg, color:PAL.ink, font:'12px/1.4 Inter,Arial,sans-serif',
     border:'1px solid '+PAL.line, borderRadius:'10px', zIndex:'999999',
     boxShadow:'0 8px 28px rgba(0,0,0,0.6)', userSelect:'none', overflow:'visible'});
@@ -3161,13 +3332,15 @@ function restoreSize(){
     // side by side, which needs ~680px. A saved (or default) width from the
     // single-column era leaves the columns stacked and the user seeing "no
     // change". Bump once, remember we did, keep any later user resize sacred.
-    var did=null; try{ did=localStorage.getItem('gpts_2col_migr_v1'); }catch(e2){}
+    // (v10.44) ONE-TIME SINGLE-COLUMN MIGRATION: back to one column; a 690px panel
+    // wastes width. Shrink once to 440px, remember, keep later user resizes sacred.
+    var did=null; try{ did=localStorage.getItem('gpts_1col_migr_v44'); }catch(e2){}
     var wNow=parseInt((PANEL.style.width||'0'),10)||0;
-    if(!did && wNow<620){
-      PANEL.style.width='690px';
-      try{ localStorage.setItem('gpts_2col_migr_v1','1');
-           localStorage.setItem(SIZE_KEY, JSON.stringify({w:'690px', h:PANEL.style.height||''})); }catch(e3){}
-    } else if(!did){ try{ localStorage.setItem('gpts_2col_migr_v1','1'); }catch(e4){} }
+    if(!did && wNow>520){
+      PANEL.style.width='440px';
+      try{ localStorage.setItem('gpts_1col_migr_v44','1');
+           localStorage.setItem(SIZE_KEY, JSON.stringify({w:'440px', h:PANEL.style.height||''})); }catch(e3){}
+    } else if(!did){ try{ localStorage.setItem('gpts_1col_migr_v44','1'); }catch(e4){} }
   }catch(e){}
 }
 
@@ -3501,7 +3674,7 @@ function gridFor(dir, rows){
     else if(rd.key==='VOID') lblTip='If a setup failed, the time it voided.';
     else if(rd.key===confRow) lblTip=(dir==='long'?'Long':'Short')+' confirmation bar time.';
     else if(rd.key==='BO') lblTip='Breakout: first close beyond the node.';
-    else if(rd.key==='FT') lblTip='Follow-through: a later bar holds fully beyond the node.';
+    else if(rd.key==='FT') lblTip='Follow-through: a later bar holds fully beyond the node, OR two consecutive directional closes beyond it with the 2nd close progressing (v10.44 lenient rule).';
     else if(rd.key==='PB') lblTip='Pullback: price wicked back to retest the node after follow-through.';
     else lblTip=rd.lbl;
     html+='<tr>';
@@ -3597,7 +3770,7 @@ function combinedGrid(rows){
     else if(rd.key==='VOID') lblTip='If a setup failed, the time it voided.';
     else if(rd.key==='CONF') lblTip='Confirmation bar time (long: bullish close off retest; short: bearish close off retest).';
     else if(rd.key==='BO') lblTip='Breakout: first close beyond the node.';
-    else if(rd.key==='FT') lblTip='Follow-through: a later bar holds fully beyond the node.';
+    else if(rd.key==='FT') lblTip='Follow-through: a later bar holds fully beyond the node, OR two consecutive directional closes beyond it with the 2nd close progressing (v10.44 lenient rule).';
     else if(rd.key==='PB') lblTip='Pullback: price wicked back to retest the node after follow-through.';
     else lblTip=rd.lbl;
     html+='<tr>';
@@ -3665,7 +3838,7 @@ function passesFilters(s){
 function stageCellTip(stageName, dir, strike){
   var m={
     'BO':'BO (Breakout): first 3m close beyond '+fmtNum(strike)+' in the '+(dir==='long'?'long':'short')+' direction. Start of the setup.',
-    'FT':'FT (Follow-through): a later bar holds entirely beyond '+fmtNum(strike)+' (no wick back through). Confirms the break stuck.',
+    'FT':'FT (Follow-through): a later bar holds entirely beyond '+fmtNum(strike)+', OR two consecutive closes beyond it in the break direction with the 2nd close progressing past the 1st. Confirms the break stuck.',
     'PB':'PB (Pullback): price wicked back to retest '+fmtNum(strike)+' after follow-through.',
     'LONG':'Long confirm: a bullish bar closed in-direction off the retest of '+fmtNum(strike)+'.',
     'SHORT':'Short confirm: a bearish bar closed in-direction off the retest of '+fmtNum(strike)+'.',
@@ -4807,6 +4980,60 @@ function airPocketDetect(sym){
   out.ok=out.pockets.length>0;
   return out;
 }
+
+// ============================================================================
+// (v10.44) MAGNET FRAME — per-node EPISODE ENGINE + session-open tracker.
+// Doctrine: nodes are magnets. They PULL (attract) and PUSH (repel). Mode is not
+// fixed: approach -> contact -> deflection -> push is the lifecycle. Every claim is
+// DESCRIPTIVE (what the field is doing now) or PREDICTIVE (⚖ hand-set / 📊 measured,
+// nightly-scored). Constants below start ⚖ and graduate through the study store.
+var EP_TW_BARS      = 10;   // toward-share window (bars). ⚖ (candidate: adaptive 6 in POWER/EARLY)
+var EP_PULL_TW      = 60;   // toward-share >= this => Pull        ⚖ (baseline in-gate 54-60% 📊)
+var EP_PUSH_TW      = 40;   // toward-share <= this => Push        ⚖
+var EP_GATE_STRIKES = 3;    // gravity radius (📊 n=68 beyond = coin flip)
+var EP_ORBIT        = 1.0;  // <= this = ORBIT (contact zone; direction is noise 📊 50% n=201)
+var EP_PULLZONE_LO  = 1.5;  // PULL zone 1.5..3 (📊 69% toward at 2 strikes, n=59)
+var EP_CONTACT_ZONE = 0.30; // wick within this = a tag
+var EP_DEFL_HANDOFF = 3;    // bars a fresh Defl chip shows before yielding to Push ⚖
+var FLRCEIL_MIN_PCT = 15;   // Ceil/Flr = nearest node >= this % of King mass ⚖
+var NODE_OPEN_KEY   = 'gpts_node_open_v1';   // per-day per-node session-open magnitude
+var NODE_OPEN = null;
+function nodeOpenLoad(){ if(NODE_OPEN) return NODE_OPEN; try{ NODE_OPEN=JSON.parse(localStorage.getItem(NODE_OPEN_KEY)||'null'); }catch(e){ NODE_OPEN=null; }
+  if(!NODE_OPEN || NODE_OPEN.date!==TODAY) NODE_OPEN={date:TODAY, v:{}}; return NODE_OPEN; }
+function nodeOpenSave(){ try{ localStorage.setItem(NODE_OPEN_KEY, JSON.stringify(NODE_OPEN)); }catch(e){} }
+// Session %change of a node's MAGNITUDE (abs if recorded, else %King) vs its first reading
+// today. Persisted (survives reload) — same fix as %KCH. Returns null until baseline exists.
+function nodeSessChg(sym, k, mag){
+  if(typeof mag!=='number') return null;
+  var db=nodeOpenLoad(); var key=sym+':'+k.toFixed(2);
+  if(db.v[key]==null){ db.v[key]=mag; nodeOpenSave(); return 0; }
+  var o=db.v[key]; if(!o) return null;
+  return Math.round(100*(mag-o)/Math.abs(o));
+}
+// PURE: episode state for one node from closed candles. Returns
+// {zone:'ORBIT'|'PULL'|'FAR'|'OUT', dist, tw (0-100|null), tagged (bars since last tag|null),
+//  crosses, state:'Pull'|'Push'|'BOw'|'Contact'|'' , dir(+1 up/-1 dn) for push}
+function nodeEpisode(cs, k, px, now){
+  var out={zone:'OUT',dist:null,tw:null,tagged:null,crosses:0,state:'',dir:0};
+  if(px==null||k==null||!cs||!cs.length) return out;
+  var d=Math.abs(px-k); out.dist=+d.toFixed(2);
+  out.zone = d>EP_GATE_STRIKES?'OUT':(d<=EP_ORBIT?'ORBIT':(d>=EP_PULLZONE_LO?'PULL':'NEAR'));
+  var n=cs.length, from=Math.max(1,n-EP_TW_BARS);
+  var tw=0,twN=0, lastTag=null, crosses=0, prevSide=null;
+  for(var i=from;i<n;i++){
+    var b=cs[i], a=cs[i-1]; if(!b||b.c==null||!a||a.c==null) continue;
+    twN++; if(Math.abs(b.c-k)<Math.abs(a.c-k)) tw++;
+    if(b.l!=null&&b.h!=null&&b.l<=k+EP_CONTACT_ZONE&&b.h>=k-EP_CONTACT_ZONE) lastTag=(n-1)-i;
+    var side=(b.c>k)?1:(b.c<k?-1:0); if(prevSide!=null&&side!==0&&prevSide!==0&&side!==prevSide) crosses++; if(side!==0) prevSide=side;
+  }
+  out.tw = twN?Math.round(100*tw/twN):null; out.tagged=lastTag; out.crosses=crosses;
+  if(out.zone==='OUT') return out;
+  if(d<=EP_CONTACT_ZONE){ out.state='BOw'; return out; }                       // at the node
+  if(lastTag!=null && out.tw!=null && out.tw<=EP_PUSH_TW){ out.state='Push'; out.dir=(px>k)?1:-1; return out; }
+  if(lastTag==null && out.tw!=null && out.tw>=EP_PULL_TW && d>=EP_PULLZONE_LO){ out.state='Pull'; return out; }
+  if(lastTag!=null && out.tw!=null && out.tw>=EP_PULL_TW){ out.state='Pull'; return out; } // re-approach after tag
+  return out;
+}
 function nodeMapModel(sym){
   var S=STATE[sym]||{};
   var px=S.price;
@@ -4889,16 +5116,28 @@ function nodeMapModel(sym){
       attract:nodeAttraction(sym, row.k, row.side, (row.state?row.state.label:'Steady'), px, emphasis),
       outcome:nodeOutcome(sym, row.k),
       // (v10.34) DEFLECTION event: a DETECTED reversal off this node (report, not prediction)
-      deflection:deflectionAt(sym, row.k)
+      deflection:deflectionAt(sym, row.k),
+      // (v10.44) magnet frame: session %change of the node's magnitude + live episode state
+      chg:nodeSessChg(sym, row.k, (typeof row.abs==='number'?row.abs:row.pct)),
+      ep:nodeEpisode(closedCandles(sym)||[], row.k, px, Date.now())
     });
   });
-  // strongest floor (below) + ceiling (above) by blended strength (headline job).
+  // (v10.44) RANGE = ▔Ceil / ⛰Flr: the NEAREST strong magnet (>= FLRCEIL_MIN_PCT of King
+  // mass) on each side of price — Step 3 "define the range". Not the whole-board strongest
+  // (that was 780 all afternoon on 08-14 while price actually ranged under 777).
+  // strongSup/strongRes are kept as aliases so older consumers keep working.
+  var flr=null, ceil=null;
   mapped.forEach(function(m){
-    if(m.side==='below'){ if(!out.strongSup || m.strength>out.strongSup.strength) out.strongSup=m; }
-    else               { if(!out.strongRes || m.strength>out.strongRes.strength) out.strongRes=m; }
+    if(m.pct==null || m.pct<FLRCEIL_MIN_PCT) return;
+    if(m.side==='below'){ if(!flr || m.dist<flr.dist) flr=m; }
+    else                { if(!ceil|| m.dist<ceil.dist) ceil=m; }
   });
-  if(out.strongSup) out.strongSup.isStrong=true;
-  if(out.strongRes) out.strongRes.isStrong=true;
+  if(flr){ flr.isFlr=true; flr.isStrong=true; }
+  if(ceil){ ceil.isCeil=true; ceil.isStrong=true; }
+  out.flr=flr; out.ceil=ceil; out.strongSup=flr; out.strongRes=ceil;
+  out.range=(flr&&ceil)?{lo:flr.k,hi:ceil.k,inside:(px>=flr.k&&px<=ceil.k)}:null;
+  // other strong magnets (>= threshold) get ★ Mag
+  mapped.forEach(function(m){ if(!m.isKing&&!m.isFlr&&!m.isCeil&&m.pct!=null&&m.pct>=FLRCEIL_MIN_PCT) m.isStrongMag=true; });
   // DISPLAY order: highest strike at top -> lowest (price divider sits between).
   mapped.sort(function(a,b){ return b.k-a.k; });
   out.levels=mapped;
@@ -4975,18 +5214,27 @@ function triIndexNote(gk){
 // strengthening), Fading->Diss (red, weakening), Steady->grey. RAPID = the doc's
 // 'Reshuffling' state: append \uD83D\uDD25 (rapid Acm) / \u2744 (rapid Diss).
 function nodeStatusTag(L){
-  var lab = L.state==='Building' ? 'Acm' : (L.state==='Fading' ? 'Diss' : 'Hold');
+  // (v10.44) STATE = Acm / Dec / Steady (Diss RENAMED Dec; Acm kept — Step 5 doctrine)
+  // + the node's ▲/▼% vs its own session open (same convention as %KCH). Threshold-
+  // colored: |chg|>=15 bright, else dim. Measured note in the hover: Building walls within
+  // 1.5 strikes were reached only 15% of the time (n=167) vs Fading 23% (📊 4d study).
+  var lab = L.state==='Building' ? 'Acm' : (L.state==='Fading' ? 'Dec' : 'Steady');
   var col = L.state==='Building' ? PAL.longAccent : (L.state==='Fading' ? PAL.shortAccent : PAL.sub);
   var reshuf='';
   if(L.rapid){
-    // rapidDir>0 => rapidly strengthening (fire); <0 => rapidly weakening (snow).
     var ic = (L.rapidDir>0) ? '\uD83D\uDD25' : '\u2744';
     reshuf=' <span title="Reshuffling \u2014 rapid exposure change (new structure forming)." style="font-size:9px">'+ic+'</span>';
   }
-  var tip = (lab==='Acm'?'Accumulation \u2014 dealers building \u2192 STRONGER magnet.':
-            (lab==='Diss'?'Dissipation \u2014 dealers closing \u2192 WEAKENING node.':
-            'Steady \u2014 holding, no net build/decay.'));
-  return '<span title="'+tip+'" style="color:'+col+';font-size:8.5px;font-weight:800;border:1px solid '+col+';border-radius:9px;padding:0 5px">'+lab+'</span>'+reshuf;
+  var tip = (lab==='Acm'?'Accumulation \u2014 dealers building here \u2192 stronger magnet. \uD83D\uDCCA Acm walls within 1.5 strikes were reached only 15% of the time in 30m (n=167) \u2014 the sturdiest walls.':
+            (lab==='Dec'?'Decumulation \u2014 dealers closing here \u2192 weakening magnet. \uD83D\uDCCA Fading walls reached 23% (n=99) \u2014 the leakiest.':
+            'Steady \u2014 holding, no net build/decay. \uD83D\uDCCA reached 20% (n=508).'));
+  var chgHtml='';
+  if(typeof L.chg==='number' && L.chg!==0){
+    var big=Math.abs(L.chg)>=15;
+    var ccol=L.chg>0?PAL.longAccent:PAL.shortAccent;
+    chgHtml=' <span title="'+(L.chg>0?'\u25b2':'\u25bc')+Math.abs(L.chg)+'% \u2014 this node\u2019s magnitude vs its first reading today (quote-page %change convention). \u00b115% = big.'+'" style="color:'+ccol+';font-size:8px;font-weight:'+(big?'800':'600')+';opacity:'+(big?'1':'.65')+'">'+(L.chg>0?'\u25b2':'\u25bc')+Math.abs(L.chg)+'%</span>';
+  }
+  return '<span title="'+tip+'" style="color:'+col+';font-size:8.5px;font-weight:800;border:1px solid '+col+';border-radius:9px;padding:0 5px">'+lab+'</span>'+chgHtml+reshuf;
 }
 // (v10.33) NODE LIFECYCLE tag — Skylit Academy: Fresh (target these) / Tested / Delivered
 // (graveyard) / Decaying. Shows tap count + the Academy tap-reaction probability. FACTUAL
@@ -5025,7 +5273,7 @@ function nodeTypeTag(L){
 function nodeRoleBadge(L){
   var label=null, col=PAL.sub, tip='';
   if(L.isKing){
-    label='King'; col=PAL.gold; tip='King \u2014 dealer settlement target (highest-probability zone).';
+    label='King'+(L.isFlr?' \u00b7 Flr':(L.isCeil?' \u00b7 Ceil':'')); col=PAL.gold; tip='King \u2014 the strongest magnet on the board (largest |dealer exposure|); settlement anchor. \uD83D\uDCCA pulls price 55% at 30m (n=299) \u2014 69% at 2 strikes (n=59), 74% in the 11am CT hour (n=42); inside 1 strike price ORBITS (50%).'+(L.isFlr?' Also the range Floor.':(L.isCeil?' Also the range Ceiling.':''));
   } else if(L.isGatekeeper){
     label='Gate'; col=PAL.amber; tip='Gatekeeper \u2014 deflection zone where trend shifts often begin; can block the path to the King.';
   } else if(L.isRugCeil){
@@ -5058,12 +5306,19 @@ function nodeRoleBadge(L){
     var bd=L.barneyDetail;
     var bspan=bd?(fmtNum(bd.lo)+'\u2013'+fmtNum(bd.hi)):'';
     tip='Barney'+(bspan?(' '+bspan):'')+(bd?(' ('+bd.n+' \u2212gamma nodes)'):'')+' \u2014 dense cluster of NEGATIVE-gamma nodes (NOT a Pika Cloud); an instability / acceleration zone: moves amplify, wicky/violent, overshoots common. Trade with, not against.';
-  } else if(L.role==='Floor'){
-    label='Flr'; col=PAL.longAccent; tip='Floor \u2014 support node below price (dealers buy as price declines into it).';
-  } else if(L.role==='Ceiling'){
-    label='Ceil'; col=PAL.shortAccent; tip='Ceiling \u2014 resistance node above price (dealers sell as price rises into it).';
+  } else if(L.isFlr){
+    label='\u26F0 Flr'; col=PAL.longAccent; tip='FLOOR \u2014 the nearest strong magnet BELOW price (>= '+FLRCEIL_MIN_PCT+'% of King mass): the lower boundary of the live range (Step 3). A magnet, not a promise: it pulls, holds, or repels \u2014 see ACTIVITY. \uD83D\uDCCA non-King mass repelled price 57% of the time (n=350).';
+  } else if(L.isCeil){
+    label='\u2594 Ceil'; col=PAL.shortAccent; tip='CEILING \u2014 the nearest strong magnet ABOVE price (>= '+FLRCEIL_MIN_PCT+'% of King mass): the upper boundary of the live range (Step 3). A magnet, not a promise: see ACTIVITY for pull/push. \uD83D\uDCCA non-King mass repelled price 57% (n=350).';
+  } else if(L.isStrongMag){
+    label='\u2605 Mag'; col=PAL.sub; tip='Strong magnet (>= '+FLRCEIL_MIN_PCT+'% of King mass) inside the range. No directional word by design \u2014 which side of price it sits on is the ladder; what it is doing is ACTIVITY.';
+  } else {
+    label='Mag'; col=PAL.sub; tip='Minor magnet (< '+FLRCEIL_MIN_PCT+'% of King mass).';
   }
   if(!label) return '';
+  // (v10.44) Skylit convention: NEGATIVE-gamma identity renders PURPLE (incl. a -γ King).
+  if(L.pos===false){ col='#b58bff'; tip+=' \u2212\u03B3 (purple): dealers hedge WITH the move here \u2014 wicky contact, overshoot-prone accelerant.'; }
+  else if(L.pos===true){ tip+=' +\u03B3: dealers hedge AGAINST the move \u2014 sticky contact, pin-prone.'; }
   // secondary-role note in tooltip (e.g. a King that is also a rug participant)
   var extra=[];
   if(!L.isKing && L.isGatekeeper===false){}
@@ -5080,7 +5335,7 @@ function nodeRolePill(L){
   // pull the label + color out of the badge span (cheap: re-derive from nodeRoleBadge's rules)
   // (v10.36) crown-only for the King (drop the ★ when 👑 present, for column alignment);
   // ★ still marks a strongest floor/ceiling that is NOT the King.
-  var icon=(L.isKing?'\uD83D\uDC51':(L.isStrong?'\u2605':''))+(L.isGatekeeper?'\uD83D\uDEAA':'')+((L.isRugTarget||L.isRugCeil||L.isRugFloor)?'\uD83E\uDDF6':'');
+  var icon=(L.isKing?'\uD83D\uDC51':'')+(L.isGatekeeper?'\uD83D\uDEAA':'')+((L.isRugTarget||L.isRugCeil||L.isRugFloor)?'\uD83E\uDDF6':'');
   if(!icon) return badge; // Floor/Ceiling/Pika/Barn have no icon — the word badge stands alone
   // inject the icon right after the opening '>' of the badge span
   return badge.replace(/>([^<]*)<\/span>$/, function(_,txt){ return '>'+icon+' '+txt+'</span>'; });
@@ -5321,7 +5576,7 @@ function deflectionBlock(){
 function nodeMapBlock(){
   var sym='SPY';
   var m=nodeMapModel(sym);
-  var hdrTip=('NODE MAP \u2014 the dealer-positioning levels price will meet on BOTH sides, each tagged with what it should DO (Bounce / Pullback / Break-through). \u2605 = strongest floor/ceiling; \uD83D\uDC51 = King (settlement magnet). The highlighted side is where price is currently heading (trend + momentum); the other side is still shown. Verdicts sharpen once polarity lands.').replace(/"/g,'');
+  var hdrTip=('NODE MAP \u2014 every magnet price will meet on both sides. IDENTITY: \uD83D\uDC51 King (strongest) \u00b7 \uD83D\uDEAA Gate \u00b7 \u2594 Ceil / \u26F0 Flr = the live range \u00b7 \u2605 Mag strong \u00b7 purple = \u2212\u03B3. STATE: Acm/Dec/Steady + %chg. ACTIVITY: Pull \u00b7 BOw \u00b7 BO\u00b7FT \u00b7 Defl \u00b7 Push. Nodes are magnets: they attract and repel; the ladder shows which side, ACTIVITY shows what it is doing. The highlighted side is where price is currently heading (trend + momentum); the other side is still shown. Verdicts sharpen once polarity lands.').replace(/"/g,'');
   // (v10.24) REGIME chip in the header = whole-board GEX-structure read, colored by
   // direction; its instruction (fade edges / stand aside / pullbacks) rides below.
   var rg=m.regime||{label:'Forming',dir:0,conf:'low',why:''};
@@ -5329,7 +5584,10 @@ function nodeMapBlock(){
   var rgChip = '<span title="'+(rg.why||'').replace(/"/g,'')+'" style="color:'+rgCol+';font-size:9px;font-weight:800;padding:1px 7px;border:1px solid '+rgCol+';border-radius:20px">'+rg.label+(rg.skew!=null&&/Trend/.test(rg.label)?(' '+rg.skew+'\u00d7'):'')+'</span>';
   // (v10.28) \u2464 Step-5 icon in the Node Map header (Map the Flow). Rendered inside
   // the header title so it clicks open the Step-5 popover like the other step icons.
-  var html=sectionHdrRight(stepIcon(5,'vertical-align:middle;margin-right:4px')+'Node Map', (m.ok?rgChip:''), hdrTip);
+  // (v10.44) RANGE chip = ⛰Flr–▔Ceil (nearest strong magnets each side) + inside/OUT.
+  var rangeChip='';
+  if(m.range){ var rin=m.range.inside; rangeChip='<span title="Live range = nearest strong magnet below (Flr) to nearest strong magnet above (Ceil), each >= '+FLRCEIL_MIN_PCT+'% of King mass. Inside = rotation between two magnets; outside = the range is being redefined (a break + FT re-anchors it to the next strong magnet)." style="color:'+(rin?PAL.ink:PAL.amber)+';font-size:9px;font-weight:700;padding:1px 7px;border:1px solid '+PAL.line+';border-radius:20px;margin-right:4px">Range <b>'+fmtNum(m.range.lo)+'\u2013'+fmtNum(m.range.hi)+'</b> \u00b7 '+(rin?'inside':'OUT')+'</span>'; }
+  var html=sectionHdrRight(stepIcon(5,'vertical-align:middle;margin-right:4px')+'Node Map', (m.ok?(rangeChip+rgChip):''), hdrTip);
   if(!m.ok){ html+='<div style="color:'+PAL.sub+';padding:2px 6px;font-size:11px">Node Map \u2014 waiting on node data\u2026</div>'; return html; }
   // (v10.32) AIR POCKET note — only when a low-exposure gap sits ADJACENT to spot
   // (Academy Velocity checklist Q1). It is a fast PATHWAY, not a target: price travels
@@ -5409,11 +5667,13 @@ function nodeMapBlock(){
     }
     var bestRank=best?STAGES.indexOf(best.stage):-1;
     if(!best || bestRank<0) return '';
-    // build the chain up to the current stage from the canonical order (not raw
-    // tokens, so VOID/T1/T2 noise never shows); join with a middot.
-    var chain=STAGES.slice(0, bestRank+1).join('\u00b7');
+    // (v10.44, user-directed) Only TWO chips are ever displayed: BOw (initial break,
+    // pre-FT) and BO·FT (follow-through confirmed). TST/CONF/GO keep running internally
+    // for the scorecard but are NOT shown as a chain.
     var col = best.dir==='long'?PAL.longAccent:PAL.shortAccent;
-    var tip = (best.dir==='long'?'Long':'Short')+' breakout-pullback setup at '+fmtNum(k)+' \u2014 lifecycle '+chain+'. BO=first close beyond the node; FT=a later bar holds fully beyond; TST=wick back to test; CONF=confirming candle; GO=triggered. Requires a '+BO_HL_LOOKBACK+'-bar '+(best.dir==='long'?'high':'low')+' at breakout.';
+    var isFT = bestRank>=1;
+    var chain = isFT ? 'BO\u00b7FT' : 'BOw';
+    var tip = (best.dir==='long'?'Long':'Short')+' breakout at '+fmtNum(k)+' \u2014 '+(isFT?('FOLLOW-THROUGH confirmed'+(best.ftLenient?' (lenient rule: two progressing closes beyond)':' (bar held fully beyond)')+'. Internal stage: '+best.stage+'.'):'initial break \u2014 first close beyond the node; watching for FT (a bar holding fully beyond, OR two consecutive progressing closes beyond).')+' Requires a '+BO_HL_LOOKBACK+'-bar '+(best.dir==='long'?'high':'low')+' at breakout.';
     return '<span title="'+tip.replace(/"/g,'')+'" style="color:'+col+';font-size:8px;font-weight:800;letter-spacing:.3px;border:1px solid '+col+';border-radius:9px;padding:0 4px;white-space:nowrap">'+chain+'</span>';
   }
   // the two-sided ladder
@@ -5423,7 +5683,7 @@ function nodeMapBlock(){
     // (v10.26-prep Step 5) node STATUS (Acm/Diss/Steady + reshuffle) and TYPE (+\u03b3/\u2212\u03b3)
     // replace the old bare directional arrow with an explicit, doc-vocabulary identity.
     var statusHtml = nodeStatusTag(L);
-    var typeHtml = nodeTypeTag(L);
+    var typeHtml = '';   // (v10.44) ±γ text DROPPED — purple/default identity color carries polarity
     // (v10.33) lifecycle tag: show for tested/used/decaying always; for FRESH only on
     // structurally important nodes (King/Gatekeeper/strong) so untouched minor nodes
     // don't spam a 'Fresh' badge on every row.
@@ -5468,13 +5728,28 @@ function nodeMapBlock(){
     // ---- (v10.35) 4-ZONE ROW REDESIGN ----------------------------------------
     // ZONE 1 IDENTITY: one merged role pill (icon+word), no duplication.
     var idPill = nodeRolePill(L) || (L.forming ? '<span style="color:'+PAL.sub+';font-size:8px;font-weight:700">forming</span>' : '');
-    // ZONE 4 ACTIVITY: ONE element by priority: DEFLECTION > live BO chain > resolved
-    // outcome > attraction. (stageHtml already holds deflection/outcome/attract by the
-    // precedence above; the live BO chain slots between deflection and a resolved outcome.)
+    // (v10.44) ZONE 4 ACTIVITY — magnet vocabulary, ONE chip by priority:
+    //   fresh Defl (event) > BO·FT > BOw > Push > Pull > resolved echo > blank.
+    // Pull/Push carry the toward-share % (fraction of the last EP_TW_BARS closes that
+    // moved NEARER the node). Push off a node BELOW price = green (bullish bounce),
+    // above = red. Every chip carries the episode timeline in its hover.
+    var ep=L.ep||{};
+    var epTip=('Episode @ '+fmtNum(L.k)+' \u2014 zone '+ep.zone+(ep.dist!=null?(' ('+ep.dist+' strikes)'):'')+
+      (ep.tw!=null?(' \u00b7 toward-share '+ep.tw+'% of last '+EP_TW_BARS+' bars'):'')+
+      (ep.tagged!=null?(' \u00b7 last tag '+ep.tagged+' bars ago'):' \u00b7 no tag in window')+
+      (ep.crosses?(' \u00b7 crossings '+ep.crosses):'')+
+      '. Pull >= '+EP_PULL_TW+'% (baseline 54\u201360% \uD83D\uDCCA) \u00b7 Push <= '+EP_PUSH_TW+'% after contact \u00b7 BOw = at the node (watch / initial break) \u00b7 BO\u00b7FT = confirmed follow-through.').replace(/"/g,'');
+    var deflFresh = !!(L.deflection && L.deflection.bars<=DEFLECT_CONFIRM+EP_DEFL_HANDOFF);
+    var boChip = setupTagForNode(L.k);   // '' | BOw | BO·FT
     var activity='';
-    if(L.deflection){ activity=stageHtml; }              // deflection wins (already built above)
-    else if(boTag){ activity=boTag; }                    // live breakout chain
-    else if(stageHtml){ activity=stageHtml; }            // resolved outcome / attracting
+    if(deflFresh){ activity=stageHtml; }
+    else if(boChip && /FT/.test(boChip)){ activity=boChip; }
+    else if(boChip || ep.state==='BOw'){ activity = boChip || ('<span title="'+epTip+' At the node now \u2014 breakout WATCH: first close beyond = initial break; FT confirms." style="color:'+PAL.gold+';font-size:8.5px;font-weight:800;border:1px solid '+PAL.gold+';border-radius:9px;padding:0 5px">BOw</span>'); }
+    else if(ep.state==='Push'){ var pcol=(L.side==='below')?PAL.longAccent:PAL.shortAccent; var parr=(L.side==='below')?'\u2191':'\u2193';
+      activity='<span title="'+epTip+' PUSH \u2014 price tagged this magnet and is being repelled (don\u2019t fade the exit). \uD83D\uDCCA non-King mass repels 57% at 30m (n=350)." style="color:'+pcol+';font-size:8.5px;font-weight:800;border:1px solid '+pcol+';border-radius:9px;padding:0 5px">Push '+parr+' <span style="font-weight:600;opacity:.8">'+ep.tw+'%</span></span>'; }
+    else if(ep.state==='Pull'){ activity='<span title="'+epTip+' PULL \u2014 price closing in on this magnet. \uD83D\uDCCA King pull 69% at 2 strikes (n=59), 74% in the 11am hour." style="color:'+PAL.blue+';font-size:8.5px;font-weight:700;border:1px solid '+PAL.blue+';border-radius:9px;padding:0 5px">Pull <span style="font-weight:600;opacity:.8">'+ep.tw+'%</span></span>'; }
+    else if(L.deflection){ activity=stageHtml; }
+    else if(om){ activity='<span style="color:'+om.col+';font-size:8.5px;font-weight:800">'+om.txt+'</span>'; }
     var kcol=(L.isKing?PAL.gold:PAL.ink);
     return '<div style="display:flex;align-items:center;gap:8px;font-size:10px;padding:3px 6px;border-radius:6px;background:'+bg+'">'+
       // ZONE 1 — identity
@@ -5482,7 +5757,7 @@ function nodeMapBlock(){
       // ZONE 2 — strike · strength
       '<span style="width:74px;font-variant-numeric:tabular-nums;font-weight:700;color:'+PAL.sub+'"><b style="color:'+kcol+'">'+fmtNum(L.k)+'</b> \u00b7 '+L.pct+'%</span>'+
       // ZONE 3 — state (Acm/Diss + polarity)
-      '<span style="width:74px;display:flex;align-items:center;gap:6px">'+statusHtml+typeHtml+'</span>'+
+      '<span style="width:96px;display:flex;align-items:center;gap:4px;white-space:nowrap">'+statusHtml+typeHtml+'</span>'+
       // ZONE 4 — activity + lifecycle dot
       '<span style="flex:1;text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:7px">'+
         (activity?'<span>'+activity+'</span>':'')+
@@ -5494,8 +5769,8 @@ function nodeMapBlock(){
   html+='<div style="display:flex;align-items:center;gap:8px;font-size:7.5px;letter-spacing:.4px;text-transform:uppercase;color:'+PAL.sub+';font-weight:800;padding:0 6px 3px">'+
     '<span style="width:150px">Identity</span>'+
     '<span style="width:74px">Strike \u00b7 %</span>'+
-    '<span style="width:74px">State</span>'+
-    '<span style="flex:1;text-align:right">Activity \u00b7 Life</span></div>';
+    '<span style="width:96px" title="Acm / Dec / Steady + the node\u2019s \u25b2\u25bc% vs its session open">State</span>'+
+    '<span style="flex:1;text-align:right" title="Pull \u00b7 BOw \u00b7 BO\u00b7FT \u00b7 Defl \u00b7 Push \u00b7 echoes (broke/held/FBO) \u2014 then the lifecycle dot">Activity \u00b7 Life</span></div>';
   var printed=false;
   m.levels.forEach(function(L, i){
     if(!printed && L.k<=px){
@@ -5830,8 +6105,12 @@ function kingAnalyzer(sym){
     var w=(S.walls||[]).filter(function(x){return x.k===A.king;})[0];
     A.pol=(w && typeof w.pos==='boolean')?w.pos:null;        // +γ true / -γ false
     // King $ tracking (session)
+    // (v10.44) %KCH baseline PERSISTED per day+symbol: a mid-session reload no longer
+    // resets "first" to the reload-time value (which hid a morning bleed). Quote-page
+    // convention: change vs the TRUE session open.
     var kt=KD_TRACK[sym]||(KD_TRACK[sym]={first:null,last:null,peak:null});
-    if(typeof tp.kingKd==='number'){ if(kt.first==null)kt.first=tp.kingKd;
+    if(kt.first==null){ try{ var kdo=JSON.parse(localStorage.getItem('gpts_kd_open_v1')||'null'); if(kdo&&kdo.date===TODAY&&typeof kdo[sym]==='number') kt.first=kdo[sym]; }catch(eK){} }
+    if(typeof tp.kingKd==='number'){ if(kt.first==null){ kt.first=tp.kingKd; try{ var kdo2=JSON.parse(localStorage.getItem('gpts_kd_open_v1')||'null'); if(!kdo2||kdo2.date!==TODAY) kdo2={date:TODAY}; kdo2[sym]=tp.kingKd; localStorage.setItem('gpts_kd_open_v1',JSON.stringify(kdo2)); }catch(eK2){} }
       kt.last=tp.kingKd; kt.peak=Math.max(kt.peak||0,tp.kingKd); }
     A.kd=kt.last; A.kdChg=(kt.first&&kt.last)?Math.round(100*(kt.last-kt.first)/kt.first):null;
     A.eva=evaBandFromPct(tp.pct);
@@ -6085,6 +6364,121 @@ function projSnapshotRecord(sym){
              k:A.king, px:+A.px.toFixed(2), sk:(A.succ?A.succ.k:null), sa:(A.succ?A.succ.a:null) };
   }catch(e){ return null; }
 }
+
+// ============================================================================
+// (v10.44) STUDY MODULE — the 08-15 test battery as a re-runnable nightly job over
+// the IndexedDB repository. Results are cached in localStorage (STUDY_KEY) so the
+// synchronous READ ▸ block and Node Map hovers can cite MEASURED rates with n.
+// Until the first local run, the 08-15 baseline (4 days / 391 bars) is used and
+// labelled as such. Everything here is DESCRIPTIVE MEASUREMENT of the past; the
+// READ turns it into ⚖/📊-tagged expectations, never certainties.
+var STUDY_KEY='gpts_study_v1', STUDY=null;
+var STUDY_BASELINE={ src:'baseline 08-15 (4d/391 bars)', bars:391, days:4,
+  kingPull:{all:{h:165,n:299}, byDist:{'1':{h:101,n:201},'2':{h:41,n:59},'3':{h:2,n:8},'4+':{h:19,n:38}},
+            byHour:{'9':{h:12,n:28},'10':{h:23,n:50},'11':{h:31,n:42},'12':{h:19,n:40},'13':{h:32,n:66},'14':{h:25,n:38}}},
+  othersRepel:{h:200,n:350}, contenderRepel:{h:65,n:113},
+  reached:{Building:{h:25,n:167},Steady:{h:101,n:508},Fading:{h:23,n:99}, base:{h:149,n:774}},
+  netForce:{h:193,n:387}, kingVerdict:{h:115,n:273}, breakThrough:{h:3,n:36}, srb:{h:79,n:136},
+  ep:{Pull:{h:0,n:0},Push:{h:0,n:0}} };
+function studyLoad(){ try{ STUDY=JSON.parse(localStorage.getItem(STUDY_KEY)||'null'); }catch(e){ STUDY=null; } if(!STUDY) STUDY=STUDY_BASELINE; return STUDY; }
+function studyPct(o){ return (o&&o.n)?Math.round(100*o.h/o.n):null; }
+function studyTag(o){ return (o&&o.n>=20)?'📊':'⚖'; }
+function studyCite(o, word){ var p=studyPct(o); if(p==null) return ''; return studyTag(o)+' '+p+'% '+(word||'')+' (n='+o.n+')'; }
+// Run the battery over all repository rows (async); cache; re-render.
+function studyRun(cb){
+  repoAll(function(rows){
+    var R=rows.filter(function(r){ return r.sym==='SPY' && r.px!=null && r.out10 && typeof r.out10.net==='number'; });
+    if(R.length<30){ if(cb) cb(null); return; }
+    function sgn(x){ return x>0?1:(x<0?-1:0); }
+    function bump(o,hit){ o.n++; if(hit) o.h++; }
+    var res={ src:'local repo', bars:R.length, days:{}, kingPull:{all:{h:0,n:0},byDist:{},byHour:{}}, othersRepel:{h:0,n:0}, contenderRepel:{h:0,n:0},
+      reached:{Building:{h:0,n:0},Steady:{h:0,n:0},Fading:{h:0,n:0},base:{h:0,n:0}}, netForce:{h:0,n:0}, ep:{Pull:{h:0,n:0},Push:{h:0,n:0}}, computedAt:Date.now() };
+    R.forEach(function(r){
+      res.days[r.date]=1;
+      var px=r.px, king=(typeof r.tking==='number'&&r.tking<10000)?r.tking:null, o=r.out10.net;
+      if(o===0) return;
+      // King pull by distance / hour
+      if(king!=null){ var d=king-px, ad=Math.abs(d);
+        if(ad>=0.5&&ad<=3){ bump(res.kingPull.all, sgn(o)===sgn(d));
+          var hb=(new Date(r.t).getUTCHours()-5)+''; res.kingPull.byHour[hb]=res.kingPull.byHour[hb]||{h:0,n:0}; bump(res.kingPull.byHour[hb], sgn(o)===sgn(d)); }
+        var db=ad<0.5?'0':ad<1.5?'1':ad<2.5?'2':ad<3.5?'3':'4+'; if(db!=='0'){ res.kingPull.byDist[db]=res.kingPull.byDist[db]||{h:0,n:0}; bump(res.kingPull.byDist[db], sgn(o)===sgn(d)); } }
+      // others repel + net force + contender
+      var Fo=0, Fn=0, best=null;
+      (r.nodes||[]).forEach(function(n){ if(n.pct==null) return; var dd=n.k-px, add=Math.abs(dd);
+        if(add<=3&&add>=0.25){ var f=(dd>0?1:-1)*n.pct/add; Fn+=f; if(king==null||n.k!==king) Fo+=f; }
+        if(king!=null&&n.k!==king&&(best==null||n.pct>best.pct)) best=n; });
+      if(Fo!==0) bump(res.othersRepel, sgn(o)!==sgn(Fo));
+      if(Fn!==0) bump(res.netForce, sgn(o)===sgn(Fn));
+      if(best&&best.pct>=60&&Math.abs(best.k-px)>=0.25) bump(res.contenderRepel, sgn(o)!==sgn(best.k-px));
+      // reached by state (within 1.5)
+      (r.nodes||[]).forEach(function(n){ var dd=n.k-px, add=Math.abs(dd); if(add>1.5||add<0.1) return;
+        var through=(dd>0? r.out10.mfe>=dd : r.out10.mae<=dd); bump(res.reached.base, through);
+        var st=n.st; if(res.reached[st]) bump(res.reached[st], through); });
+      // episode states scored: Pull -> moved toward node? Push -> moved away?
+      (r.ep||[]).forEach(function(e){ var dd=e.k-px; if(!dd) return; if(e.st==='Pull') bump(res.ep.Pull, sgn(o)===sgn(dd)); if(e.st==='Push') bump(res.ep.Push, sgn(o)!==sgn(dd)); });
+    });
+    res.days=Object.keys(res.days).length;
+    STUDY=res; try{ localStorage.setItem(STUDY_KEY, JSON.stringify(res)); }catch(e){}
+    if(cb) cb(res);
+  });
+}
+function studyNightlyTick(){
+  try{ var sec=ctNowSecOfDay(); if(sec<15*3600+5*60 || sec>16*3600) return;
+    if(localStorage.getItem('gpts_study_ran')===TODAY) return;
+    localStorage.setItem('gpts_study_ran', TODAY);
+    studyRun(function(){ try{ render(); }catch(e){} });
+  }catch(e){}
+}
+// ---- (v10.44) READ ▸ block — the Dashboard's directional read, built ONLY from
+// measured (📊) or hand-set (⚖) magnet-frame claims. No legacy verdicts (King
+// bull/bear 42%, confluence 38%, Break-through 8% all ran contrarian on 4 days).
+function readBlock44(sym){
+  var S=STATE[sym]||{}; var px=S.price; if(px==null) return '';
+  var m=nodeMapModel(sym); if(!m||!m.ok) return '';
+  var st=studyLoad();
+  var lines=[];
+  var g=function(t,c){ return '<b style="color:'+(c||PAL.ink)+'">'+t+'</b>'; };
+  // 1) King zone + hour
+  var kingK=m.kingK;
+  if(kingK!=null){
+    var d=kingK-px, ad=Math.abs(d), up=d>0;
+    var zone= ad<=EP_ORBIT?'ORBIT':(ad>EP_GATE_STRIKES?'OUT':(ad>=EP_PULLZONE_LO?'PULL':'NEAR'));
+    var hr=ctNow().getHours(); var hb=st.kingPull.byHour[hr+''];
+    var db=ad<1.5?'1':ad<2.5?'2':ad<3.5?'3':'4+';
+    var byD=st.kingPull.byDist[db];
+    var kingL=(m.levels||[]).filter(function(L){return L.isKing;})[0];
+    var kcol=(kingL&&kingL.pos===false)?'#b58bff':PAL.gold;
+    var txt='👑 '+g(fmtNum(kingK),kcol)+' '+(ad<0.5?'AT':(Math.round(ad*10)/10+(up?'↑':'↓')))+' · zone '+g(zone,zone==='PULL'?PAL.longAccent:(zone==='OUT'?PAL.amber:PAL.sub));
+    if(zone==='PULL'||zone==='NEAR'){ txt+=' — pull '+studyCite(byD,'toward'); if(hb&&hb.n>=10) txt+=' · this hour '+studyCite(hb,''); }
+    else if(zone==='ORBIT') txt+=' — contact zone: price orbits, direction is noise 📊 (50%, n=201) — watch for the flip (Defl → Push)';
+    else txt+=' — beyond gravity: no measured pull 📊 (n=68 coin flip)';
+    if(kingL && typeof kingL.chg==='number' && Math.abs(kingL.chg)>=15) txt+=' · King magnet '+g((kingL.chg>0?'▲':'▼')+Math.abs(kingL.chg)+'%',kingL.chg>0?PAL.longAccent:PAL.shortAccent)+(kingL.chg<0?' (bleeding → pull unreliable; 08-13 case)':'');
+    lines.push(txt);
+  }
+  // 2) Range + Flr/Ceil episodes
+  if(m.range){
+    var parts=[];
+    [m.ceil,m.flr].forEach(function(L){ if(!L) return; var e=L.ep||{}; var nm=(L.isCeil?'▔ Ceil ':'⛰ Flr ')+fmtNum(L.k);
+      var stt=L.state==='Building'?'Acm':(L.state==='Fading'?'Dec':'Steady'); var rc=st.reached[L.state]||st.reached.base;
+      var held=rc&&rc.n?(100-Math.round(100*rc.h/rc.n)):null;
+      var eword=e.state==='Push'?g('Push',(L.side==='below')?PAL.longAccent:PAL.shortAccent):(e.state==='Pull'?g('Pull',PAL.blue):(e.state==='BOw'?g('at node',PAL.gold):'quiet'));
+      parts.push(nm+' '+stt+' · '+eword+(held!=null?(' · walls like this held '+held+'% '+studyTag(rc)):'')); });
+    lines.push('Range '+g(fmtNum(m.range.lo)+'–'+fmtNum(m.range.hi))+' '+(m.range.inside?'inside':g('OUT',PAL.amber))+' — '+parts.join(' · '));
+  }
+  // 3) Field lean: others repel
+  var Fo=0; (m.levels||[]).forEach(function(L){ if(L.isKing||L.pct==null||L.dist>3||L.dist<0.25) return; Fo+=(L.side==='above'?1:-1)*L.pct/L.dist; });
+  if(Fo!==0){ var lean=Fo>0?'heavier ABOVE → lean down':'heavier BELOW → lean up'; lines.push('Non-King mass '+g(lean,Fo>0?PAL.shortAccent:PAL.longAccent)+' — '+studyCite(st.othersRepel,'repel')+(st.contenderRepel&&st.contenderRepel.n?(' · contender ≥60% repels '+studyCite(st.contenderRepel,'')):'')); }
+  // 4) Regime tag
+  var rg=regimeTag(closedCandles(sym)||[]);
+  if(rg) lines.push('Regime '+g(rg.tag.toUpperCase(),rg.tag==='trend'?PAL.amber:PAL.sub)+' (efficiency '+rg.er+') — '+(rg.tag==='chop'?'fade edges of the range; trend/confluence calls unreliable in chop 📊':(rg.tag==='trend'?'respect the direction; range being redefined':'mixed')));
+  var prov='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;opacity:.85">📊 = measured on '+(st.src||'local repo')+(st.bars?(' · '+st.bars+' bars'):'')+' · ⚖ = hand-set until n≥20 · re-scored nightly · <span style="cursor:pointer;text-decoration:underline" onclick="window.__gptsStudyRun&&window.__gptsStudyRun()">re-run now</span></div>';
+  return '<div title="READ ▸ — what the magnet field says right now, in measured terms. King zone + pull rate at this distance/hour, the live range with each boundary’s state and episode, the non-King lean (mass repels), and the regime tag. Every rate has an n; nothing here is a legacy verdict." style="padding:4px 8px 5px 8px;border-left:2px solid '+PAL.gold+';margin:2px 0 4px 0;background:'+PAL.card+';border-radius:0 8px 8px 0">'+
+    '<div style="font-size:9.5px;line-height:1.5;color:'+PAL.ink+'"><span style="color:'+PAL.gold+';font-weight:800">READ ▸</span> '+lines.join('<br>')+'</div>'+prov+'</div>';
+}
+window.__gptsStudyRun=function(){ studyRun(function(r){ try{ render(); }catch(e){} }); };
+window.__gptsRepoExport=function(d){ repoExportDay(d||TODAY,false); };
+window.__gptsRepoPick=function(){ repoPickFolder(); };
+window.__gptsRepoCoverage=function(){ repoCoverage(function(c){ console.log('[GEX repo]',c); }); };
 // ---- nightly scoring over recorded days ----
 function projScorecard(){
   var db=recorderLoad(); var days=(db&&db.days)||{};
@@ -6443,10 +6837,22 @@ function feedStatusHtml(){
   }catch(eW){}
   // (v10.17) The 📥 Save Day button moved OFF the dashboard footer and INTO the
   // Analysis tab as an in-tab "Save & prep review" banner (the tab is the trigger).
-  return '<div style="display:flex;justify-content:space-between;align-items:center;color:'+PAL.sub+';font-size:9px;letter-spacing:0.3px">'+
+  // (v10.44) DATA REPOSITORY status: recording dot + last export + one-click actions.
+  var rec='';
+  try{
+    var lastExp=localStorage.getItem('gpts_last_export');
+    var savedTxt = REPO_LAST_SAVE ? ('saved '+new Date(REPO_LAST_SAVE.t).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',timeZone:'America/Chicago'})+' \u2713'+(REPO_LAST_SAVE.how==='download'?' (download)':''))
+                  : (lastExp===TODAY?'saved today \u2713':'not saved yet');
+    rec='<span title="Background recording is live: every 3m bar (price, King, K$, all nodes with state/polarity, cross-market headers, episodes, projections, forward outcomes) is written to the in-browser repository (IndexedDB, unbounded). At 15:01 CT the day is exported as data/YYYY-MM-DD.json into your repo folder (one-time folder pick), and a scheduled task commits it. \uD83D\uDCBE = export now \u00b7 \uD83D\uDCC1 = pick/repick the repo data folder." style="display:inline-flex;gap:5px;align-items:center">'+
+      '<span style="color:'+PAL.longAccent+'">rec \u25CF</span><span>'+savedTxt+'</span>'+
+      '<span onclick="window.__gptsRepoExport&&window.__gptsRepoExport()" style="cursor:pointer;border:1px solid '+PAL.line+';border-radius:6px;padding:0 4px" title="Export today\u2019s data now (writes into the chosen repo folder, or downloads).">\uD83D\uDCBE</span>'+
+      '<span onclick="window.__gptsRepoPick&&window.__gptsRepoPick()" style="cursor:pointer;border:1px solid '+PAL.line+';border-radius:6px;padding:0 4px" title="Pick the repo data folder (C:\\Dev\\gex-signal-tapereader\\data) once; choose \u201cAllow on every visit\u201d so nightly exports are silent.">\uD83D\uDCC1</span>'+
+      '</span>';
+  }catch(eRec){}
+  return '<div style="display:flex;justify-content:space-between;align-items:center;color:'+PAL.sub+';font-size:9px;letter-spacing:0.3px;gap:6px;flex-wrap:wrap">'+
     '<span style="color:'+col+'">'+txt+'</span>'+
-    warn+
-    '<span>feed v10.43</span>'+
+    warn+rec+
+    '<span>feed v10.44</span>'+
     '</div>';
 }
 
@@ -7328,16 +7734,19 @@ function render(){
   // column is flex:1 1 300px, so a NARROW panel (<~620px) stacks them vertically
   // — identical to the old single-column layout — and a wide panel goes side by
   // side. The one-time width migration lives in restoreSize().
-  html+='<div id="gpts-2col" style="display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start">'+
-          '<div style="flex:1 1 300px;min-width:0">'+kingBlock()+'</div>'+
-          '<div style="flex:1 1 300px;min-width:0">';
+  // (v10.44, user-directed) SINGLE COLUMN: READ ▸ → Deflections → Node Map. The King
+  // console + King path chart + projected chart are REMOVED from the UI (kingBlock() is
+  // no longer rendered; all King/projection/episode RECORDING + nightly scoring continues
+  // silently — see snapshotNodes/projScorecard). Charts return once scorecards mature.
+  html+='<div id="gpts-1col" style="display:flex;flex-direction:column;gap:4px">';
+  try{ html+=readBlock44('SPY'); }catch(eR){}
   // (v10.37) standalone gatekeeperBlock() REMOVED - gatekeeper strike + distance now in King badge.
   // (v10.27) Standalone BO / SPY Signals section REMOVED. The breakout-pullback
   // lifecycle is now shown as a per-node tag (BO / BO\u00b7FT\u00b7\u2026) on the Node Map row it
   // belongs to (see nodeMapBlock -> setupTagForNode). The state machine still runs
   // (runMachine/newSetup/STATE.setups) \u2014 only the grid rendering is gone. Saves space.
-  html+=accumBlock();           // (v10.27 Step 5) Deflections + Node Map (right column)
-  html+='</div></div>';         // close right column + two-col wrapper
+  html+=accumBlock();           // Deflections + Node Map
+  html+='</div>';               // close single column
   html+='<div style="border-top:1px solid '+PAL.line+';margin:6px 0 3px 0"></div>';
   html+=feedStatusHtml();
   elBody.innerHTML=html;
@@ -7457,6 +7866,8 @@ function tick(){
   recordNodeSnapshot('QQQ');
   recordDeflections('SPY');   // (v10.36) record confirmed deflections + score forward outcomes
   recordDeflections('QQQ');
+  repoAutoExportTick();        // (v10.44) write data/YYYY-MM-DD.json at the close
+  studyNightlyTick();          // (v10.44) re-run the test battery once per day after close
   render();
 }
 
@@ -7469,6 +7880,8 @@ function boot(){
   buildPanel();
   injectSliderCss();
   restoreState();
+  repoMigrateOnce();           // (v10.44) localStorage recorder -> IndexedDB repository (once)
+  studyLoad();                 // (v10.44) cached measured rates for READ ▸ / hovers
   render();
   tick();
   setInterval(tick, POLL_MS);

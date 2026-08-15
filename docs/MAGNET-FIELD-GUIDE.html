@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Magnet Field Guide — v10.44 dashboard</title>
+<style>
+  :root{--bg:#0b0e14;--card:#12161f;--line:#1e2530;--green:#2ec27e;--red:#f0616d;--gold:#e3c341;--sub:#8b98a9;--amber:#f2b45a;--blue:#4a90d9;--purple:#b58bff;--ink:#d7dde6}
+  body{background:#06080c;color:var(--ink);font:12px/1.55 -apple-system,Segoe UI,system-ui,sans-serif;margin:0;padding:22px;max-width:920px}
+  h1{font-size:18px;margin:0 0 4px} h2{font-size:14px;margin:22px 0 6px;color:var(--gold)} h3{font-size:12.5px;margin:14px 0 4px}
+  .sub{color:var(--sub)} .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:8px 0}
+  table{width:100%;border-collapse:collapse;font-size:11px} th{color:var(--sub);text-align:left;font-size:9.5px;letter-spacing:.5px;padding:4px;border-bottom:1px solid var(--line)} td{padding:5px 4px;border-bottom:1px dashed rgba(255,255,255,.06);vertical-align:top}
+  code{background:#0a0d13;border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:11px}
+  .g{color:var(--green)}.r{color:var(--red)}.b{color:var(--blue)}.a{color:var(--amber)}.p{color:var(--purple)}.y{color:var(--gold)}
+  .m{font-size:10px;color:var(--sub)}
+</style></head><body>
+<h1>Magnet Field Guide <span class="sub">— the v10.44 dashboard, element by element</span></h1>
+<div class="sub">Companion to KING-FIELD-GUIDE.html (the King console is hidden in 10.44 but keeps recording). Everything below is either <b>descriptive</b> (what the field is doing now) or <b>predictive</b> (⚖ hand-set until n≥20 · 📊 measured, re-scored nightly). Nothing else is allowed on the panel.</div>
+
+<h2>0. The idea in one paragraph</h2>
+<div class="card">Nodes are <b>magnets</b>. Each has <b>strength</b> (mass, % of King), <b>polarity</b> (±γ — how contact feels: +γ sticky/pin-prone, −γ wicky/overshoot-prone, drawn <span class="p">purple</span>), a <b>radius</b> (measured pull ≤3 strikes; beyond that 50/50, n=68), and a <b>charge trend</b> (Acm/Dec + %change vs its session open). A magnet's mode is not fixed: it <b>pulls</b> price in, price makes <b>contact</b> (tag / break attempt / blocked by a gatekeeper), then the node <b>deflects</b> and <b>pushes</b> price away. That flip is the tradeable moment. Measured on 4 days / 391 bars (08-11→08-14): the <b>King pulls</b> (55%; 69% at 2 strikes; 74% in the 11am CT hour) and <b>everything else repels</b> (57%; contender ≥60% repels 58%).</div>
+
+<h2>1. READ ▸ (top of the panel)</h2>
+<div class="card">Four lines, every claim with a tag and an n:<br>
+<b>👑 King · distance · zone</b> — <code>ORBIT</code> (≤1 strike: price orbits, direction is noise 📊 50%) · <code>PULL</code> (1.5–3: measured pull, cited at your distance and this hour) · <code>OUT</code> (&gt;3: no measured pull). If the King's magnitude is bleeding ≥15% the line says so — a bleeding King far from price stopped pulling on 08-13 (37%).<br>
+<b>Range Flr–Ceil</b> — inside/OUT, then each boundary's state (Acm/Dec/Steady), its live episode (Pull / Push / at node / quiet), and how often walls in that state <i>held</i> over 30m (📊 Acm 85%, Steady 80%, Fading 77%).<br>
+<b>Non-King mass lean</b> — where the non-King mass sits within 3 strikes; price tends to move <i>away</i> from the heavier side (📊 57%).<br>
+<b>Regime</b> — CHOP / MIXED / TREND from the last 20 bars' efficiency ratio. In chop, fade the range edges; trend/confluence calls were contrarian on chop days.<br>
+<span class="m">Provenance line: which store the rates come from (08-15 baseline until your local repository has run once) · "re-run now" recomputes.</span></div>
+
+<h2>2. ⚡ Deflections</h2>
+<div class="card">Confirmed reversals off nodes (tap → sustained move away), with strike, direction, time, and how the outcome scored. This is the <b>event log</b> the episode engine emits into — a deflection is the moment a magnet flips from pull to push.</div>
+
+<h2>3. ⑤ Node Map — the ladder</h2>
+<table>
+<tr><th>COLUMN</th><th>VALUES</th><th>MEANING</th></tr>
+<tr><td><b>IDENTITY</b></td><td>👑 King · 🚪 Gate · <span class="r">▔ Ceil</span> / <span class="g">⛰ Flr</span> · ★ Mag · Mag · 🍆 Barn · Pika · Rug…<br><span class="p">purple</span> = −γ (any role, incl. a −γ King)</td><td>Structural facts only. <b>Ceil/Flr = the live range</b>: nearest magnet ≥15% of King mass above / below price (Step 3 "define the range"). Roles stack ("👑 King · Flr"). Sup/Res words are retired — which side is the ladder's job, what it does is ACTIVITY's.</td></tr>
+<tr><td><b>STRIKE · %</b></td><td>775 · 100%</td><td>Strike and mass as % of King.</td></tr>
+<tr><td><b>STATE</b></td><td><span class="g">Acm</span> / <span class="r">Dec</span> / Steady + ▲/▼% </td><td>Charge trend (Step 5 accumulation). The % is the node's magnitude vs its first reading today (quote-page convention; ±15% = big, bright). 📊 Acm walls within 1.5 strikes were reached only 15% of the time in 30m — the sturdiest; Fading 23% — the leakiest.</td></tr>
+<tr><td><b>ACTIVITY</b></td><td><span class="b">Pull 70%</span> → <span class="y">BOw</span> → BO·FT → Defl ↑/↓ → <span class="r">Push ↓ 25%</span> / <span class="g">Push ↑ 25%</span> → echoes (broke ↑/↓ · held · FBO)</td><td>The episode, one chip by priority (fresh Defl &gt; BO·FT &gt; BOw &gt; Push &gt; Pull &gt; echo). Pull/Push carry the <b>toward-share</b> = % of the last 10 closes that moved nearer the node (Pull ≥60, Push ≤40 after a tag; baseline in-gate 54–60%). BOw = at the node — watch / initial break; <b>BO·FT</b> = follow-through confirmed: a bar holding fully beyond, <i>or</i> two consecutive closes beyond in the break direction with the 2nd progressing (both directions). Push off a node <i>below</i> price is green (bounce), above is red. Hover any chip for the episode timeline.</td></tr>
+<tr><td><b>LIFE</b></td><td>F / T / U / D</td><td>Fresh / Tested / Used / Decaying — tap history (Academy tap-reaction decay).</td></tr>
+</table>
+<div class="card"><b>Header chips:</b> <code>Range 775–777 · inside</code> — the Flr–Ceil pair and whether price is between them; a boundary break + FT re-anchors the range to the next strong magnet. Regime chip (Whipsaw / Trend / Mixed) as before.</div>
+
+<h2>4. Footer — the data repository</h2>
+<div class="card"><code>rec ●</code> every 3-minute bar is written to the in-browser repository (IndexedDB, unbounded): price, King, K$, every node (mass, state, polarity, tape %), cross-market headers (SPY/QQQ/SPXW/VIX price, %chg, King distance), episode states, projections, forward outcomes (15m/30m). At <b>15:01 CT</b> the day is exported as <code>data/YYYY-MM-DD.json</code> into your repo folder (📁 pick it once, "Allow on every visit"); the installer's scheduled task commits and pushes it at 15:30. 💾 exports now. The nightly LLM review reads these files from GitHub.</div>
+
+<h2>5. What the numbers say so far <span class="m">(4 days — treat as leads, not laws)</span></h2>
+<table>
+<tr><th>FINDING</th><th>RATE</th><th>n</th><th>USE</th></tr>
+<tr><td>King pulls price (30m)</td><td>55% · 69% at 2 strikes · 74% 11am · 66% 2pm</td><td>299 / 59 / 42 / 38</td><td>PULL zone + hour gate in READ</td></tr>
+<tr><td>Inside 1 strike of the King</td><td>50%</td><td>201</td><td>ORBIT: don't call direction</td></tr>
+<tr><td>Non-King mass repels</td><td>57% away</td><td>350</td><td>lean line in READ; Ceil/Flr behavior</td></tr>
+<tr><td>Contender ≥60% repels</td><td>58% away</td><td>113</td><td>second confirmation</td></tr>
+<tr><td>Wall reached within 30m (≤1.5 strk)</td><td>Acm 15% · Steady 20% · Fading 23%</td><td>167 / 508 / 99</td><td>STATE hover; READ "held" %</td></tr>
+<tr><td>Net-force sum</td><td>50%</td><td>387</td><td class="r">retired</td></tr>
+<tr><td>Legacy King verdict / confluence / Break-through</td><td>42% / 38% / 8%</td><td>273 / 74 / 36</td><td class="a">contrarian on chop days → regime gate (10.45)</td></tr>
+</table>
+
+<h2>6. What comes in 10.45</h2>
+<div class="card">🧪 <b>Testing tab</b>: question library (all of the above, re-run nightly, retired rows kept), hypothesis builder (WHEN factors → outcome, lift vs baseline), pattern miner (min n, multiple-testing corrected), insights &amp; recommendations (what the data says / what to change / how to improve testing / what to test next), data coverage. Analysis-tab Insights block. Regime gate.</div>
+</body></html>

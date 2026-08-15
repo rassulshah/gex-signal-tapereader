@@ -1,14 +1,17 @@
-DEPLOY v10.43 — projection rendering fixes + BO-tag fix + King Path move labels
-===============================================================================
-1. Extract this zip ANYWHERE (nested subfolder is fine).
-2. Double-click install.bat (Windows warning: More info -> Run anyway).
-   It copies everything into C:\Dev\gex-signal-tapereader (incl. docs\KING-FIELD-GUIDE.html).
-3. GitHub Desktop -> Summary: "v10.43 rendering + BO tag + path labels" -> Commit -> Push origin.
-4. WAIT ~2 MINUTES (GitHub raw cache).
-5. Open + click Update:
-   https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
-6. Hard-reload Atlas (Ctrl+Shift+R).
+DEPLOY v10.44 — magnet frame: single column, Node Map rebuilt, data repository
+==============================================================================
+You already ran the installer if you are reading this from the repo. It:
+  - placed v10.js, current\gex-signal-tapereader.user.js, changelog\, docs\, tests, tools\, data\
+  - registered Windows scheduled task "GEX data push" (weekdays 15:30, run-if-missed)
+  - committed + pushed
 
-VERIFY: footer "feed v10.43" · projected chart focused (no black wedge, far rails
-as ▲ edge tags) · BO chip shows only live progress (e.g. BO·FT) · King Path shows
-price labels at significant moves · tiles no longer truncate.
+REMAINING (one time):
+1. WAIT ~2 min (GitHub raw cache), then open + click Update in Tampermonkey:
+   https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+2. Hard-reload Atlas (Ctrl+Shift+R).
+3. In the panel footer click the folder icon (📁) once -> choose C:\Dev\gex-signal-tapereader\data
+   -> "Allow on every visit". From then on the day exports itself at 15:01 CT.
+
+VERIFY: footer "feed v10.44 · rec ●" · ONE column: READ ▸ / Deflections / Node Map ·
+Node Map identities Flr/Ceil/Mag, STATE Acm/Dec/Steady + %, ACTIVITY Pull/BOw/BO·FT/Defl/Push ·
+-γ nodes purple · Range chip in the Node Map header.

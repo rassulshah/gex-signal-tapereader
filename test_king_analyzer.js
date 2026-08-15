@@ -58,9 +58,9 @@ ok(/gpts-kp-drift/.test(src), 'GUARD: drift chip lives INSIDE the chart overlay'
 ok(/DESCRIPTIVE ONLY: 3-bar drift tested 50%/.test(src), 'GUARD: drift demotion documented at the chip');
 ok(/padR=46/.test(src), 'GUARD: right gutter reserved (padR=46)');
 ok(/x1="'\+\(W-padR\)\+'" y1="0"/.test(src), 'GUARD: gutter divider drawn');
-ok(/76%[^\n]{0,80}n=148/.test(src), 'GUARD: succession claim carries its n');
+ok(/76% crowned .{0,3}20 bars \(n=148\)/.test(src), 'GUARD: succession claim carries its n');
 ok(src.indexOf('outside value')>=0 && src.indexOf('(n=25)')>=0, 'GUARD: eVA outside-value read present with its n');
-ok(/4d\/324 bars/.test(src), 'GUARD: base-rate provenance line present');
+ok(/measured 4d\/324 bars/.test(src), 'GUARD: base-rate provenance line present');
 
 console.log('\n'+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
