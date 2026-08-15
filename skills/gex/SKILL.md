@@ -50,13 +50,22 @@ saving means getting files to the USER (SendUserFile) and/or their repo/Drive.
    OPEN THREADS (exactly where discussion stopped, in the user's "1 by 1" style),
    mockups list, standing workflow agreements, any live-DOM/parser findings.
 2. Prepend a CHANGELOG entry (mark `PLANNED / NOT YET BUILT` if no code shipped).
-3. Zip: `session-state/` + `changelog/CHANGELOG.md` + `design/*.html` (+ code and
-   `install.bat` if a build shipped — install.bat copies files to repo root to
-   avoid the nested-extraction trap; make the Tampermonkey raw URL a clickable link).
-4. SendUserFile the zip with commit instructions (git, not Drive, holds the
-   changelog — user rule). Deliverables also individually if user will read them.
-5. Tell the user the exact resume phrase: open a new window, attach the zip or
-   connect the desktop app, and say "load gex".
+3. DELIVERY RULE (user-mandated 2026-08-15): ship ONE self-contained installer
+   .bat — files embedded as base64 inside the .bat itself (no zip, no extraction
+   step). The bat must: decode its own payload via PowerShell
+   ([Convert]::FromBase64String on everything after a :::PAYLOAD::: marker),
+   Expand-Archive to %TEMP%, xcopy into C:\Dev\gex-signal-tapereader, then
+   commit+push using the GIT-FINDER (git is NOT on the user's PATH — probe:
+   where git → Program Files\Git\cmd\git.exe → Program Files (x86) →
+   %LOCALAPPDATA%\Programs\Git → GitHub Desktop app-*\resources\app\git\cmd\git.exe;
+   if none found, tell the user to use their usual tool). CRLF line endings.
+   User's only step: download, double-click.
+4. SendUserFile the installer (git, not Drive, holds the changelog — user rule).
+   Also send individually any file the user will READ (mockups render inline).
+5. If code shipped: include Tampermonkey update step with the raw GitHub URL as
+   a clickable hyperlink.
+6. Tell the user the exact resume phrase: new window, say "load gex" (attach the
+   installer or repo files if the skill isn't saved to their account).
 
 ## STANDING PROJECT RULES (apply always)
 

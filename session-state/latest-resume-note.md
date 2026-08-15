@@ -121,6 +121,10 @@ King never reached), 775 bottom-push (LOD) → afternoon pin 776. Session = chai
   nested-folder extraction trap).
 - Hover/tooltip explanations on everything new.
 - "load gex" / "save" procedures: see skills/gex/SKILL.md (drafted 2026-08-15).
+- **DELIVERY (user-mandated 2026-08-15): ONE self-contained installer .bat per delivery**
+  — payload base64-embedded in the bat (no zip/extract step), self-decodes, places files,
+  commits+pushes via git-finder (git NOT on user PATH; GitHub Desktop bundled git is a
+  fallback). User's only action: download + double-click.
 
 ## 6. LIVE-DOM FINDINGS (Skylit, 2026-08-14 — useful for parsers)
 
