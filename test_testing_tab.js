@@ -14,7 +14,7 @@ ok(/if\(ANALYSIS_VIEW\) TESTING_VIEW=false;/.test(src) && /if\(TESTING_VIEW\) AN
 ok(/window\.__gptsHypo=function/.test(src) && /window\.__gptsMineRun=function/.test(src) && /window\.__gptsHypoRun=function/.test(src), 'console + preset APIs exposed');
 ok(/function testingBlock\(\)/.test(src) && /① Question library/.test(src) && /② Hypothesis builder/.test(src) && /③ Pattern miner/.test(src) && /④ Insights/.test(src), 'testingBlock renders all 5 blocks');
 ok(/gpts_mine_v1/.test(src), 'miner result cached');
-ok(/@version\s+10\.45/.test(src), 'version 10.45');
+ok(/@version\s+10\.4[0-9]/.test(src), 'version 10.4x');
 ok((src.match(/^function render\(\)/gm)||[]).length===1 && /\}\)\(\);\s*$/.test(src), 'file shape rule 2.4 (one render, closes cleanly)');
 
 // --- pure logic: stub repoAll + localStorage, run miner/hypothesis on synthetic rows ---

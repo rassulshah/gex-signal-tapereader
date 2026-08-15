@@ -4,6 +4,9 @@
 registers the GEX-data-push scheduled task, commits+pushes). Repo `C:\Dev\gex-signal-tapereader`,
 GitHub `rassulshah/gex-signal-tapereader` (raw URL for TM:
 https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js).
+**v10.46 SHIPPED**: derived GEX factors (deriveFactors→snap.deriv: net-sign, zero-gamma, HHI,
+imbalance, call/put wall, ranks) + Testing tab ⑥ Recommended-tests (22 research-backed hypotheses,
+📗/📙/📕 tags, ✅/⏳ readiness). Research: Barbon-Buraschi, pinning, SpotGamma/MenthorQ, Skylit VEX.
 **v10.45 SHIPPED**: 🧪 Testing tab (question library, hypothesis builder + presets + __gptsHypo, pattern
 miner studyMine, insights rule engine, coverage strip). STILL PENDING (next): Analysis-tab Insights
 block + regime GATE (suppress trend/conf/King-verdict claims in chop). **Next build target: v10.46**
@@ -216,3 +219,39 @@ v10.45:
   change product / improve testing / next hypotheses) ⑤ data coverage.
 - Analysis tab "Insights" block (top measured edges + what changed overnight).
 - Regime gate (chop vs trend) suppressing trend/conf/King-verdict direction claims in chop.
+
+
+## 9. v10.46 SPEC (scheduled 2026-08-17 13:35Z / 8:35 CT — trigger trig_01PXXE978tzzq5Pv4pcmN4gA)
+
+WHY SCHEDULED: the multi-symbol tape parser MUST be built against a LIVE market-hours DOM
+(after-hours Skylit collapses the columns; a blind parser risks regressing the working SPY path).
+
+Coverage strip evidence (v10.45, 08-15): "SPY 474 bars", NO QQQ/SPXW/VIX. Fields kd/pos/proj/ep
+since 08-14; xm/rg not yet present (added v10.44, no live bars since install). So today ONLY SPY
+full ladders are saved; QQQ is in RECORDER_SYMS but captures 0 (its column is never parsed into
+STATE['QQQ']); SPXW/VIX not recorded. The `xm` header scrape (readTrinityHeaders) covers all 4
+symbols' price/%chg/King-distance but is header-only, not the ladder.
+
+BUILD (user chose: FULL ladders all 4, bundled with regime gate + Analysis Insights):
+(a) MULTI-SYMBOL PARSER — the centerpiece. Skylit `.chart-trinity-sidebar` has one column child
+    per symbol (SPY/QQQ/SPXW/VIX), each column's text starts with the symbol name. Add an ISOLATED
+    per-symbol column parser: find the column whose leading text == sym, run the proven grid parser
+    (tapeCells + Path B / kingResolve) scoped to that column subtree. DO NOT touch the SPY path —
+    separate code path so SPY can't regress. VIX = distinct type (vol points, not $): record, tag it.
+    Wire tapeMap(sym)/refreshSym(sym)/futureStructureSummary(sym) so STATE[QQQ/SPXW/VIX] populate.
+(b) RECORDING — RECORDER_SYMS = ['SPY','QQQ','SPXW','VIX']; recordNodeSnapshot each per bar → full
+    ladders into IndexedDB repo + daily export. Add CONFLUENCE factors to the Testing miner +
+    hypothesis builder: per-symbol King side/distance agreement vs SPY (was untestable = 0 bars).
+(c) REGIME GATE — in readBlock44 / claim sites: when regimeTag(cs).tag==='chop', SUPPRESS
+    trend/confluence/King-verdict DIRECTION claims (they ran contrarian: 42%/38%/45% on chop days).
+    Descriptive magnet claims (pull/repel rates) still show. Tag the gate ⚖.
+(d) ANALYSIS-TAB INSIGHTS block — render testingInsights() (already built v10.45: says/change/
+    improve/next) inside analysisBlock() via `try{ h+=... }catch(){}` at ~line 7514 pattern.
+TEST + SHIP: full test_*.js suite; add test_multisym; bump @version 10.46; changelog + MAGNET-
+FIELD-GUIDE; ONE installer .bat (git-finder, base64) + TM raw URL. Model-routing: delegate recon/
+tests/docs to Opus subagents, keep parser design+validation on main model.
+
+CAVEAT for the scheduled session: needs the user's browser connected to Skylit (Claude-in-Chrome).
+If tabs_context_mcp shows no Skylit tab, DO NOT guess the parser — prep everything else, message the
+user to open Skylit, stop. (Autonomous scheduled sessions may lack the browser bridge; that's the
+known risk of scheduling this — main-model judgment required at run time.)

@@ -1,3 +1,26 @@
+## v10.46 — 2026-08-15 — derived GEX factors + Recommended-tests section (research-backed)
+
+**Research (2 web passes, sourced):** Barbon–Buraschi gamma fragility (the one hard result: +gamma→
+mean-revert/low-vol, −gamma→momentum/wide range), Ni–Pearson–Poteshman expiration pinning,
+SpotGamma/MenthorQ level defs, Skylit VEX ("GEX governs range, VEX governs drift"). VEX/vanna
+directional claims are mechanistic but UNBACKTESTED — flagged 📕 so the tab measures rather than trusts.
+
+**Derived GEX factors (`deriveFactors`, recorded per bar as `snap.deriv`)** — computed from the
+strike tape we already parse (pct + polarity): net-GEX sign & magnitude, zero-gamma level + regime
+(pos/neg-gamma), abs gamma strength Σ|mass|, gamma concentration (HHI), above/below imbalance,
+call wall (largest +γ above) / put wall (largest mass below), GEX ranks 1–6. Unit-tested. Feeds the
+Testing miner as new factors; gamma-only, so it works today with no new tape reads.
+
+**Testing tab ⑥ Recommended tests** (`RECO_TESTS` + `recoTestsHtml`): 22 curated hypotheses grouped
+by theme (GEX regime, level, concentration, imbalance, accumulation, time-of-day, VEX, DTE gate,
+confluence, expiration, end-of-day), each tagged 📗 evidenced / 📙 plausible / 📕 folklore, with the
+data it needs and ✅ runnable-now vs ⏳ unlocks-at-open (VEX / multi-symbol / VIX-term). Sources noted.
+
+**Tests:** `test_reco_deriv.js` (18) + suite updated — 7 files, 192 assertions, all green.
+**Deferred to v10.47 (needs live/toggled tape, scheduled for Mon open):** VEX (vanna) capture from the
+Skylit VEX toggle, multi-symbol full ladders (QQQ/SPXW/VIX), VIX term structure, regime GATE,
+Analysis Insights block.
+
 ## v10.45 — 2026-08-15 — 🧪 Testing tab: hypothesis engine over the data repository
 
 **Frame.** A third tab (**🧪 Testing**, `TESTING_VIEW`, `window.__gptsDebug.showTesting`) beside

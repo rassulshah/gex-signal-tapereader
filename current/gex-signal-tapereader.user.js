@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    10.45
+// @version    10.46
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -1997,6 +1997,41 @@ function recNode(r){
     hist:(r.hist&&r.hist.length)?r.hist.slice(-8):(r.seq&&r.seq.length?r.seq.slice(-8):null)
   };
 }
+
+// ============================================================================
+// (v10.46) DERIVED GEX FACTORS — computed per bar from the strike-level ±gamma tape
+// we already record (nodes carry pct=%King mass + pos=polarity). Research-backed
+// (Barbon–Buraschi gamma fragility; SpotGamma/MenthorQ level defs). Recorded as
+// snap.deriv so the Testing miner can use net-GEX sign, zero-gamma regime, gamma
+// concentration, above/below imbalance, call/put walls. Gamma-only — VEX (vanna)
+// factors are added at market open when the VEX tape is read.
+function deriveFactors(nodes, px, king){
+  try{
+    if(!nodes || !nodes.length || px==null) return null;
+    var sm=[], sumAbs=0, upM=0, dnM=0;
+    nodes.forEach(function(n){ if(n.pct==null) return; var mag=Math.abs(n.pct);
+      var sign=(n.pos===true)?1:(n.pos===false?-1:0); sm.push({k:n.k, s:sign*mag, m:mag, pos:n.pos});
+      sumAbs+=mag; if(n.k>px) upM+=mag; else dnM+=mag; });
+    if(!sm.length) return null;
+    var netMag=sm.reduce(function(a,x){return a+x.s;},0);
+    var hhi=sumAbs>0?sm.reduce(function(a,x){var w=x.m/sumAbs;return a+w*w;},0):null;
+    var imb=sumAbs>0?((upM-dnM)/sumAbs):null;
+    // zero-gamma: cumulative signed mass sorted ascending; strike where it crosses 0.
+    var srt=sm.slice().sort(function(a,b){return a.k-b.k;}), cum=0, zg=null, prev=null;
+    for(var i=0;i<srt.length;i++){ var pc=cum; cum+=srt[i].s;
+      if(prev!=null && ((pc<=0&&cum>0)||(pc>=0&&cum<0))){ var kA=srt[i-1].k, kB=srt[i].k; var t=(0-pc)/(cum-pc||1); zg=+(kA+(kB-kA)*Math.max(0,Math.min(1,t))).toFixed(2); }
+      prev=srt[i]; }
+    // call wall = largest +γ mass above spot; put wall = largest mass below spot.
+    var cw=null,cwm=-1,pw=null,pwm=-1;
+    sm.forEach(function(x){ if(x.k>px && x.pos===true && x.m>cwm){cwm=x.m;cw=x.k;} if(x.k<px && x.m>pwm){pwm=x.m;pw=x.k;} });
+    // GEX ranks 2-N: strikes by |mass| (King is rank 1)
+    var ranks=sm.slice().sort(function(a,b){return b.m-a.m;}).slice(0,6).map(function(x){return {k:x.k,m:Math.round(x.m)};});
+    return { ns:(netMag>0?1:(netMag<0?-1:0)), nm:Math.round(netMag), ag:Math.round(sumAbs),
+      hhi:hhi!=null?+hhi.toFixed(3):null, imb:imb!=null?+imb.toFixed(2):null, zg:zg,
+      cw:cw, pw:pw, ranks:ranks, reg:(zg!=null?(px>=zg?'posGamma':'negGamma'):(netMag>0?'posGamma':'negGamma')) };
+  }catch(e){ return null; }
+}
+
 // Snapshot the whole node picture for a symbol, at most once per closed 3m bar.
 function recordNodeSnapshot(sym){
   try{
@@ -2076,6 +2111,9 @@ function recordNodeSnapshot(sym){
             return arr; }catch(eE){ return null; } })(),
       // (v10.44) realized-range regime tag (chop vs trend) for the regime gate study.
       rg:(function(){ try{ return regimeTag(closedCandles(sym)||[]); }catch(eG){ return null; } })(),
+      // (v10.46) derived GEX factors (net sign, zero-gamma regime, concentration, imbalance,
+      // call/put walls, gamma ranks) — research-backed, computed from the strike tape.
+      deriv:(function(){ try{ return deriveFactors(nodes, S.price, (typeof S.king==='number'?S.king:null)); }catch(eD){ return null; } })(),
       inplay:(fs.inPlay?{k:fs.inPlay.k, role:fs.inPlay.role, side:fs.inPlay.side,
               st:(fs.inPlay.state&&fs.inPlay.state.label)||null}:null),
       nodes:nodes,
@@ -6870,7 +6908,7 @@ function feedStatusHtml(){
   return '<div style="display:flex;justify-content:space-between;align-items:center;color:'+PAL.sub+';font-size:9px;letter-spacing:0.3px;gap:6px;flex-wrap:wrap">'+
     '<span style="color:'+col+'">'+txt+'</span>'+
     warn+rec+
-    '<span>feed v10.45</span>'+
+    '<span>feed v10.46</span>'+
     '</div>';
 }
 
@@ -7798,6 +7836,51 @@ function testingInsights(){
   out.next.push('Acm wall on FIRST touch → hold rate vs later touches (tap-decay).');
   return out;
 }
+
+// (v10.46) RECOMMENDED TESTS — curated from research (Barbon-Buraschi gamma fragility;
+// SpotGamma/MenthorQ level defs; Skylit VEX). Each: theme, hypothesis, support tier, the
+// data it needs, and whether that data is recorded yet. 📗 evidenced · 📙 plausible ·
+// 📕 folklore (test-hard). Rendered as Testing block ⑥. The VEX/multi-symbol/VIX rows go
+// live once the market-open session records those fields.
+var RECO_TESTS=[
+  {th:'GEX regime', t:'Negative-gamma regime (spot below zero-gamma) → higher realized vol + trend continuation next 15–30m', s:'📗', need:'deriv', ready:true},
+  {th:'GEX regime', t:'Positive-gamma + spot near King → mean-reversion to King; smaller |move| (the pin)', s:'📗', need:'deriv+King', ready:true},
+  {th:'GEX regime', t:'Gamma-flip crossing → regime change; 30m range expands vs the 30m before the cross', s:'📙', need:'deriv.zg', ready:true},
+  {th:'GEX level', t:'Call Wall rejects from below / Put Wall breaks are more violent than Call breaks (asymmetry)', s:'📕', need:'deriv.cw/pw', ready:true},
+  {th:'Concentration', t:'High gamma concentration (HHI top tercile) → pins win; low HHI → momentum wins', s:'📙', need:'deriv.hhi', ready:true},
+  {th:'Imbalance', t:'Above/below gamma imbalance predicts break direction (heavier side repels)', s:'📙', need:'deriv.imb', ready:true},
+  {th:'Accumulation', t:'A strike whose gamma mass is BUILDING is a stronger pin than one bleeding out (15–30m)', s:'📙', need:'chg', ready:true},
+  {th:'Accumulation', t:'King mass FALLING while spot sits on it → elevated pin-break probability within 30m', s:'📙', need:'chg+King', ready:true},
+  {th:'Accumulation', t:'King migration up/down (successive Kings at higher/lower strikes) = structural drift tell', s:'📙', need:'tking series', ready:true},
+  {th:'Time-of-day', t:'Vanna at open + charm in last 90m; midday quiet — vol/drift by session bucket', s:'📙', need:'time', ready:true},
+  {th:'VEX (vanna)', t:'VEX King and GEX King co-located → stronger, tighter pull to that level (superposition)', s:'📕', need:'VEX', ready:false},
+  {th:'VEX (vanna)', t:'Net VEX +near spot AND VIX falling → melt-up drift toward the VEX King', s:'📙', need:'VEX+VIX', ready:false},
+  {th:'VEX (vanna)', t:'GEX pins locally but drift bleeds toward the VEX King in the IV-move direction (tug)', s:'📙', need:'VEX+VIX', ready:false},
+  {th:'VEX (vanna)', t:'Zero-Vanna level flips the sign of the IV→spot response (untested anywhere)', s:'📕', need:'VEX', ready:false},
+  {th:'VEX (vanna)', t:'BUILDING VEX under falling VIX → stronger/longer melt than a static VEX King (hours)', s:'📕', need:'VEX Δ+VIX', ready:false},
+  {th:'DTE gate', t:'VEX signals only fire when 30–90 DTE OI present; on 0DTE bars VEX≈0 (enforce as filter)', s:'📗', need:'VEX', ready:false},
+  {th:'Confluence', t:'SPY & QQQ Kings same side + VIX falling → SPY continues toward its King (30m)', s:'📙', need:'multi-sym+VIX', ready:false},
+  {th:'Confluence', t:'QQQ leads SPY on turns — QQQ King-flip/break precedes SPY by ≥1 bar (test the lead is real)', s:'📕', need:'multi-sym', ready:false},
+  {th:'Confluence', t:'SPX breaks SPXW vol-trigger + SPY net-GEX<0 → SPY down-trend + vol expansion (cascade)', s:'📙', need:'multi-sym', ready:false},
+  {th:'Confluence', t:'VIX backwardation (VIX/VIX3M>1) → raise vol expectation, down-weight pin signals', s:'📗', need:'VIX term', ready:false},
+  {th:'Expiration', t:'On OPEX days, close clusters at/near the King vs non-OPEX (Ni-Pearson-Poteshman pinning)', s:'📗', need:'OPEX flag+King', ready:true},
+  {th:'End-of-day', t:'Charm: OPEX + spot near high-mass King at 14:30 → close pulls to the King', s:'📙', need:'OPEX+time', ready:true}
+];
+function recoTestsHtml(){
+  var themes={}; RECO_TESTS.forEach(function(r){ (themes[r.th]=themes[r.th]||[]).push(r); });
+  var readyN=RECO_TESTS.filter(function(r){return r.ready;}).length;
+  var h='<div style="font-size:9.5px;font-weight:700;color:'+PAL.gold+';margin:7px 0 2px">⑥ Recommended tests <span style="font-size:8px;font-weight:400;color:'+PAL.sub+'">— '+readyN+'/'+RECO_TESTS.length+' runnable on recorded data · 📗 evidenced · 📙 plausible · 📕 folklore</span></div>';
+  Object.keys(themes).forEach(function(th){
+    h+='<div style="font-size:8px;letter-spacing:.4px;color:'+PAL.sub+';font-weight:700;margin:4px 0 1px;text-transform:uppercase">'+th+'</div>';
+    themes[th].forEach(function(r){
+      var col=r.ready?PAL.ink:PAL.sub; var badge=r.ready?'<span style="color:'+PAL.longAccent+'">✅</span>':'<span style="color:'+PAL.amber+'" title="needs data recorded at market open">⏳ '+r.need+'</span>';
+      h+='<div style="font-size:9px;line-height:1.45;color:'+col+';padding:1px 0;display:flex;gap:5px"><span>'+r.s+'</span><span style="flex:1">'+r.t+'</span><span style="white-space:nowrap;font-size:8px">'+badge+'</span></div>';
+    });
+  });
+  h+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;opacity:.85">⏳ rows unlock when the market-open session records VEX / multi-symbol / VIX-term fields. Sources: Barbon–Buraschi (gamma fragility), Ni–Pearson–Poteshman (pinning), SpotGamma/MenthorQ level defs, Skylit VEX. VEX/vanna directional claims are mechanistic but unbacktested — this tab is how we measure them.</div>';
+  return h;
+}
+
 // ---- RENDER: self-contained card, mirrors projScorecardHtml. Async computes populate
 // from cache + a re-run button (same pattern as the READ block's studyRun).
 function testingBlock(){
@@ -7848,6 +7931,8 @@ function testingBlock(){
   h+=insList('Change the product:', ins.change, PAL.longAccent);
   h+=insList('Improve the testing:', ins.improve, PAL.amber);
   h+=insList('Hypotheses to test next:', ins.next, PAL.blue);
+  // ⑥ recommended tests (research-curated)
+  try{ h+=recoTestsHtml(); }catch(eR){}
   h+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;opacity:.85">📊 = n≥20 measured · ⚖ = hand-set until n≥20 · re-scored nightly after the close · miner rows are LEADS until they survive re-runs on new days.</div>';
   h+='</div>';
   return h;
