@@ -1,3 +1,16 @@
+## v10.44.1 — 2026-08-15 — hotfix: tape finder (heatmap sidebar was stealing the match)
+
+**Bug (user screenshot, 23:43 CT):** STRUCTURAL READ SUPPRESSED, "tape $K tag —", recurring.
+`findTapeTable()` matched the `chart-heatmap-sidebar` container — it also carries "Strike" + a
+$K TOTAL (e.g. `-$262,131K`) + 50+ rows — instead of the real tape column, so no King $K ROW was
+found and the sync gate (correctly) refused to show a wrong anchor.
+**Fix:** (a) reject `heatmap` containers by class; (b) `validKingRow()` requires the $K cell to sit
+in a strike row (a strike token immediately precedes it in cell order) — a lone $K total no longer
+qualifies; (c) accept the compact trinity per-symbol column fingerprint (`SPY$…King…`, no "Strike"
+header) with an SPY preference. Safe for market hours (the classic ladder still matches via the
+Strike+expiry branch; validKingRow passes on "775 $1,252,620K"). NOTE: after-hours Skylit renders a
+collapsed column that may still not fully parse — the definitive check is at market open.
+
 # CHANGELOG — GEX-Signal-Tapereader
 
 ## v10.44 — 2026-08-15 — MAGNET FRAME: single-column dashboard, Node Map rebuilt, data repository

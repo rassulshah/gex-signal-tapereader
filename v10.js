@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    10.44
+// @version    10.44.1
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -868,26 +868,44 @@ function tapeStrikeRowCount(txt){
   return c;
 }
 function findTapeTable(){
+  // (v10.44) Two fingerprints: (a) the classic ladder ("Strike" + expiry headers or a
+  // deep list); (b) the trinity per-symbol COLUMN as rendered after hours / compact
+  // ("SPY$775.77-0.20%King0.5% ↑895…") which carries NO "Strike" header at all
+  // (live 2026-08-15 23:40 — the old finder found nothing and the sync gate tripped).
+  var TRINITY_COL_RE=/^\s*(SPY|QQQ|SPXW|SPX|VIX|IWM|DIA)\$[\d,.]+[+\-\u2212]?[\d.]+%King/;
   function ok(txt){
-    if(txt.indexOf('Strike')===-1) return false;
     if(!/[+\-\u2212]?\$[\d,]+K/.test(txt)) return false;   // needs a King $K cell
     if(TAPE_REJECT_RE.test(txt)) return false;              // NOT the flow popup
-    // real ladder: has expiry-date headers OR is a deep strike list
+    if(TRINITY_COL_RE.test(txt) && tapeStrikeRowCount(txt)>=15) return true;
+    if(txt.indexOf('Strike')===-1) return false;
     return ISO_DATE_RE.test(txt) || tapeStrikeRowCount(txt) >= 15;
+  }
+  // prefer the SPY column when several trinity columns qualify
+  function symBonus(txt){ return /^\s*SPY\$/.test(txt) ? 1000 : 0; }
+  // (v10.44 SYNC FIX, live 2026-08-15 23:40) A "chart-heatmap-sidebar" container ALSO
+  // carries "Strike" + a $K total (e.g. "-$262,131K") + 50+ strike rows, and OUT-ROWED
+  // the real tape column — so the parser read the heatmap, found no King $K row, and the
+  // sync gate tripped (tape $K tag —). Candidates are now VALIDATED: the $K token must
+  // sit in a strike row (strike token immediately before it in cell order). Heatmap
+  // containers are also rejected by name as a cheap hint. Highest strike count among
+  // VALID candidates wins.
+  function validKingRow(el){
+    try{ var cells=tapeCells(el); for(var q=1;q<cells.length;q++){ if(KING_DOLLAR_RE.test(cells[q]) && /^\d{2,5}(?:\.\d+)?$/.test(cells[q-1])) return true; } }catch(eV){}
+    return false;
   }
   var best=null, bestRows=-1;
   var tables=document.querySelectorAll('table');
   for(var i=0;i<tables.length;i++){
     var head=(tables[i].textContent||'');
-    if(ok(head)){ var r=tapeStrikeRowCount(head); if(r>bestRows){ bestRows=r; best=tables[i]; } }
+    if(ok(head) && validKingRow(tables[i])){ var r=tapeStrikeRowCount(head); if(r>bestRows){ bestRows=r; best=tables[i]; } }
   }
   if(best) return best;
-  // Fallback: a container matching the same fingerprint, smallest subtree wins ties.
   var all=document.querySelectorAll('div,section');
   for(var j=0;j<all.length;j++){
     var t=all[j].textContent||'';
-    if(ok(t) && all[j].querySelectorAll('*').length<1200){
-      var r2=tapeStrikeRowCount(t); if(r2>bestRows){ bestRows=r2; best=all[j]; }
+    if(/heatmap/i.test(''+all[j].className)) continue;
+    if(ok(t) && all[j].querySelectorAll('*').length<1200 && validKingRow(all[j])){
+      var r2=tapeStrikeRowCount(t)+symBonus(t); if(r2>bestRows){ bestRows=r2; best=all[j]; }
     }
   }
   return best;
@@ -6852,7 +6870,7 @@ function feedStatusHtml(){
   return '<div style="display:flex;justify-content:space-between;align-items:center;color:'+PAL.sub+';font-size:9px;letter-spacing:0.3px;gap:6px;flex-wrap:wrap">'+
     '<span style="color:'+col+'">'+txt+'</span>'+
     warn+rec+
-    '<span>feed v10.44</span>'+
+    '<span>feed v10.44.1</span>'+
     '</div>';
 }
 
