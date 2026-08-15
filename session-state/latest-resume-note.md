@@ -255,3 +255,30 @@ CAVEAT for the scheduled session: needs the user's browser connected to Skylit (
 If tabs_context_mcp shows no Skylit tab, DO NOT guess the parser — prep everything else, message the
 user to open Skylit, stop. (Autonomous scheduled sessions may lack the browser bridge; that's the
 known risk of scheduling this — main-model judgment required at run time.)
+
+
+## 10. PREDICTION-TARGET FRAMEWORK (user north-star, 2026-08-15) — organizes ALL tests
+
+GOAL of the whole Testing effort: predict PRICE. Three linked targets, 15–30m horizon:
+  DIRECTION (up/down) · CONTINUATION (move keeps going) · REVERSAL/DEFLECTION (turns at/off a node).
+Already recorded in out5/out10 — no new outcome capture needed:
+  DIR = sign(out10.net)
+  CONT = sign(out5.net)==sign(out10.net) AND |out10.net|>=|out5.net| AND no rev flag
+  REV  = revUp||revDn || sign(out5)!=sign(out10) || confirmed deflection at the interacting node
+Magnet mapping: Pull-that-holds = CONTINUATION toward a node; Push/deflection = REVERSAL off it.
+PREDICTORS = node attributes (add %King-tier + rapid-accum as first-class miner factors):
+  %King tier (King=100/>=60/30-59/15-29/<15) · polarity ±γ · RAPID ACCUMULATION (reshuffle+%chg rate)
+  · accumulation state (Building/Fading+%chg) · distance zone (orbit/pull/out)+side · structure
+  (zero-gamma regime, HHI, imbalance, walls — snap.deriv) · episode state (Pull/Push/toward-share)
+  · (v10.47) VEX field + cross-symbol confluence + VIX own-structure.
+=> v10.47: score every factor vs all 3 targets; retag RECO_TESTS by DIR/CONT/REV; the tab reads
+   "these predict direction / continuation / reversal."
+
+VIX CLARIFICATION (user, screenshot): VIX is a FULL symbol with its own ladder (King ~15.5, per-
+strike mass). We HAVE: VIX spot+direction (header) AND VIX's full gamma ladder. We record it as the
+4th symbol + its own deriv + a lightweight risk overlay. The ONLY VIX gap = TERM STRUCTURE
+(VIX/VIX3M backwardation) — needs VIX3M, an external feed; that single test is parked "needs
+external feed". All other VIX tests (direction, own-King, vanna melt-up) are in.
+
+WORKING DEFAULTS proceeding on (state, refine if user disagrees): the CONT/REV definitions above;
+VIX recorded as a full symbol AND surfaced as a risk overlay (both).
