@@ -4,8 +4,10 @@
 registers the GEX-data-push scheduled task, commits+pushes). Repo `C:\Dev\gex-signal-tapereader`,
 GitHub `rassulshah/gex-signal-tapereader` (raw URL for TM:
 https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js).
-**Next build target: v10.45** = 🧪 Testing tab (design/testing_tab_mockup.html) + Analysis Insights
-block + regime gate. See CHANGELOG v10.44 entry for exactly what shipped; §8 below for the plan.
+**v10.45 SHIPPED**: 🧪 Testing tab (question library, hypothesis builder + presets + __gptsHypo, pattern
+miner studyMine, insights rule engine, coverage strip). STILL PENDING (next): Analysis-tab Insights
+block + regime GATE (suppress trend/conf/King-verdict claims in chop). **Next build target: v10.46**
+= regime gate + Analysis Insights. See CHANGELOG v10.44 entry for exactly what shipped; §8 below for the plan.
 User's first-run to-dos after installing 10.44: click 📁 in the footer once to pick
 C:\Dev\gex-signal-tapereader\data ("Allow on every visit"); confirm the scheduled task exists
 (Task Scheduler → "GEX data push"). Verify footer "feed v10.44 · rec ●".
@@ -141,6 +143,11 @@ King never reached), 775 bottom-push (LOD) → afternoon pin 776. Session = chai
   nested-folder extraction trap).
 - Hover/tooltip explanations on everything new.
 - "load gex" / "save" procedures: see skills/gex/SKILL.md (drafted 2026-08-15).
+- MODEL ROUTING (user-mandated 2026-08-15): cheapest model that does the job. Delegate
+  mechanical/well-specified work (code-to-spec, tests, packaging, search, scraping,
+  formatting) to subagents on Opus or lower via the Agent tool `model:`; reserve Fable for
+  judgment work (design/architecture, stats interpretation, deciding what to build, review).
+  Fable stays the orchestrator/reviewer; lower models do the legwork.
 - **DELIVERY (user-mandated 2026-08-15): ONE self-contained installer .bat per delivery**
   — payload base64-embedded in the bat (no zip/extract step), self-decodes, places files,
   commits+pushes via git-finder (git NOT on user PATH; GitHub Desktop bundled git is a

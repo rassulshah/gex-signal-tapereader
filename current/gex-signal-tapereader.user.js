@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    10.44.1
+// @version    10.45
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -6870,7 +6870,7 @@ function feedStatusHtml(){
   return '<div style="display:flex;justify-content:space-between;align-items:center;color:'+PAL.sub+';font-size:9px;letter-spacing:0.3px;gap:6px;flex-wrap:wrap">'+
     '<span style="color:'+col+'">'+txt+'</span>'+
     warn+rec+
-    '<span>feed v10.44.1</span>'+
+    '<span>feed v10.45</span>'+
     '</div>';
 }
 
@@ -7174,11 +7174,18 @@ function confluenceStrip(sym){
 // the numeric panels still render from the raw labeled data.
 // ============================================================================
 var ANALYSIS_VIEW=false;              // false = Dashboard, true = Analysis tab
+var TESTING_VIEW=false;               // (v10.45) true = 🧪 Testing tab (mutually exclusive)
 var ANALYSIS_SYM='SPY';
 var ANALYSIS_REVIEW=null;             // optional loaded LLM review {why,discoveries,recs,grade,...}
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.setReview=function(obj){ ANALYSIS_REVIEW=obj; if(typeof render==='function') render(); return 'review loaded'; };
-window.__gptsDebug.showAnalysis=function(b){ ANALYSIS_VIEW=(b!==false); if(typeof render==='function') render(); };
+window.__gptsDebug.showAnalysis=function(b){ ANALYSIS_VIEW=(b!==false); if(ANALYSIS_VIEW) TESTING_VIEW=false; if(typeof render==='function') render(); };
+window.__gptsDebug.showTesting=function(b){ TESTING_VIEW=(b!==false); if(TESTING_VIEW) ANALYSIS_VIEW=false; if(typeof render==='function') render(); };
+window.__gptsTestRefresh=function(){ repoCoverage(function(c){ var el=document.getElementById('gpts-tcov'); if(el) el.innerHTML='coverage: '+(c.days.length)+' days · '+c.bars+' bars · '+Object.keys(c.syms).map(function(k){return k+' '+c.syms[k];}).join(' · ')+' · fields: '+Object.keys(c.fields).map(function(f){return f+'\u2265'+c.fields[f];}).join(', '); }); };
+window.__gptsMineRun=function(){ studyMine(function(){ try{ render(); }catch(e){} }); };
+window.__gptsHypo=function(spec){ studyHypothesis(spec, function(r){ console.log('[GEX hypothesis]', r); var el=document.getElementById('gpts-thypo'); if(el) el.innerHTML='result: <b>'+r.rate+'%</b> (n='+r.n+') vs baseline '+r.base+'% · lift '+(r.lift>=0?'+':'')+r.lift; }); return 'running…'; };
+window.__gptsHypoRun=function(id){ var pz=(T_PRESETS||[]).filter(function(x){return x.id===id;})[0]; if(!pz) return; studyHypothesis(pz.spec, function(r){ var el=document.getElementById('gpts-thypo'); if(el) el.innerHTML='<b>'+pz.label+'</b> → <b style="color:'+((r.lift||0)>=0?PAL.longAccent:PAL.shortAccent)+'">'+r.rate+'%</b> (n='+r.n+') vs baseline '+r.base+'% · lift '+((r.lift||0)>=0?'+':'')+r.lift; }); };
+window.__gptsTestExport=function(){ try{ var s=studyLoad(),m=studyMineLoad(); console.log('[GEX study]',s); console.log('[GEX mine]',m); return 'logged'; }catch(e){ return ''+e; } };
 // (v10.21) LOADER: import a past day's export + structured review so the tab
 // renders that day instead of the empty live session. loadDay(json) sets the
 // snapshots source; loadReview(obj) sets the narrative. clearLoaded() reverts.
@@ -7701,14 +7708,161 @@ function convergenceSvg(sym,st){
   svg+='<path d="'+p+'" fill="none" stroke="#b58ce0" stroke-width="2"/>';
   svg+='</svg>'; return svg;
 }
+// ============================================================================
+// (v10.45) 🧪 TESTING TAB — hypothesis engine over the IndexedDB repository.
+// Measures the past (never predicts): question library, hypothesis builder, pattern
+// miner, insights/recs, data coverage. All results carry n + a ⚖/📊 tag; the miner
+// output is a LEAD (must survive nightly re-runs before the READ may cite it).
+// Fable-authored logic; render assembly mirrors projScorecardHtml (self-contained card).
+function _tRows(cb){ repoAll(function(rows){ cb((rows||[]).filter(function(r){ return r.sym==='SPY' && r.px!=null && r.out10 && typeof r.out10.net==='number' && r.out10.net!==0; })); }); }
+function _tKing(r){ return (typeof r.tking==='number' && r.tking<10000)?r.tking:null; }
+// categorical factors for one row (miner + hypothesis share this)
+function _tFacts(r){
+  var px=r.px, k=_tKing(r), o=r.out10.net, f={};
+  f.dir = o>0?'up':'down';
+  f.towardKing = (k!=null)? (((o>0)===(k>px))?'yes':'no') : null;
+  if(k!=null){ var ad=Math.abs(k-px); f.kzone = ad<=1?'orbit':(ad<=3?'pull':'out'); f.kside = k>px?'above':'below'; }
+  var hr=(new Date(r.t)).getUTCHours()-5; f.hour = hr<10?'9-10':hr<11?'10-11':hr<12?'11-12':hr<14?'12-14':'14+';
+  f.regime = r.rg?r.rg.tag:null;
+  var near=null; (r.nodes||[]).forEach(function(n){ if(n.pct==null) return; var d=Math.abs(n.k-px); if(d<=1.5 && (near==null||d<near.d)) near={d:d, st:n.st, pct:n.pct}; });
+  f.nearState = near?({Building:'Acm',Fading:'Dec',Steady:'Steady'}[near.st]||near.st):null;
+  f.nearStrong = near?(near.pct>=15?'strong':'weak'):null;
+  return f;
+}
+var T_FACTORS=['kzone','kside','hour','regime','nearState','nearStrong'];
+// ---- PATTERN MINER: scan single + pairwise factor buckets vs outcome, rank by lift.
+function studyMine(cb){
+  _tRows(function(rows){
+    if(rows.length<30){ if(cb) cb(null); return; }
+    var baseUpH=0, baseUpN=rows.length; rows.forEach(function(r){ if(r.out10.net>0) baseUpH++; });
+    var baseUp=baseUpH/baseUpN;
+    var cells={};
+    function add(key,r){ var c=cells[key]||(cells[key]={up:0,n:0,twH:0,twN:0}); c.n++; if(r.out10.net>0)c.up++;
+      var tw=_tFacts(r).towardKing; if(tw!=null){ c.twN++; if(tw==='yes')c.twH++; } }
+    rows.forEach(function(r){ var f=_tFacts(r);
+      T_FACTORS.forEach(function(k){ if(f[k]!=null) add(k+'='+f[k], r); });
+      for(var i=0;i<T_FACTORS.length;i++) for(var j=i+1;j<T_FACTORS.length;j++){ var a=T_FACTORS[i],b=T_FACTORS[j]; if(f[a]!=null&&f[b]!=null) add(a+'='+f[a]+' & '+b+'='+f[b], r); }
+    });
+    var out=[];
+    Object.keys(cells).forEach(function(key){ var c=cells[key]; if(c.n<30) return;
+      var dirRate=c.up/c.n, dirLift=Math.round(100*(dirRate-baseUp));
+      var twRate=c.twN>=20?c.twH/c.twN:null, twLift=twRate!=null?Math.round(100*(twRate-0.5)):null;
+      out.push({ key:key, n:c.n, dirUp:Math.round(100*dirRate), dirLift:dirLift,
+        tw:twRate!=null?Math.round(100*twRate):null, twN:c.twN, twLift:twLift,
+        score:Math.max(Math.abs(dirLift), twLift!=null?Math.abs(twLift):0) }); });
+    out.sort(function(a,b){ return b.score-a.score; });
+    var res={ base:Math.round(100*baseUp), n:rows.length, days:(function(){var d={};rows.forEach(function(r){d[r.date]=1;});return Object.keys(d).length;})(),
+      combosTested:Object.keys(cells).length, top:out.slice(0,12), at:Date.now() };
+    try{ localStorage.setItem('gpts_mine_v1', JSON.stringify(res)); }catch(e){}
+    if(cb) cb(res);
+  });
+}
+function studyMineLoad(){ try{ return JSON.parse(localStorage.getItem('gpts_mine_v1')||'null'); }catch(e){ return null; } }
+// ---- HYPOTHESIS: {when:[{f,v}], outcome:'toward'|'up'} -> rate vs baseline + lift.
+function studyHypothesis(spec, cb){
+  _tRows(function(rows){
+    var h=0,n=0,bh=0,bn=0;
+    rows.forEach(function(r){ var f=_tFacts(r);
+      var oc = spec.outcome==='toward' ? (f.towardKing==='yes'?1:(f.towardKing==='no'?0:null)) : (r.out10.net>0?1:0);
+      if(oc==null) return; bn++; bh+=oc;
+      if((spec.when||[]).every(function(w){ return f[w.f]===w.v; })){ n++; h+=oc; }
+    });
+    cb({ h:h, n:n, rate:n?Math.round(100*h/n):null, base:bn?Math.round(100*bh/bn):null,
+         lift:(n&&bn)?Math.round(100*(h/n-bh/bn)):null, outcome:spec.outcome });
+  });
+}
+var T_PRESETS=[
+  { id:'pull_11', label:'King PULL zone · 11am → toward King', spec:{when:[{f:'kzone',v:'pull'},{f:'hour',v:'11-12'}], outcome:'toward'} },
+  { id:'orbit',   label:'King ORBIT (≤1 strike) → up?',        spec:{when:[{f:'kzone',v:'orbit'}], outcome:'up'} },
+  { id:'acm_up',  label:'Nearest wall Acm → up?',              spec:{when:[{f:'nearState',v:'Acm'}], outcome:'up'} },
+  { id:'chop',    label:'Regime CHOP → up? (expect ~50)',      spec:{when:[{f:'regime',v:'chop'}], outcome:'up'} },
+  { id:'below_toward', label:'King BELOW price → toward King', spec:{when:[{f:'kside',v:'below'}], outcome:'toward'} }
+];
+// ---- INSIGHTS: rule engine over the cached study -> 4 buckets of text.
+function testingInsights(){
+  var s=studyLoad(), out={says:[],change:[],improve:[],next:[]};
+  var kp=studyPct(s.kingPull&&s.kingPull.all); if(kp!=null) out.says.push('King pulls price '+kp+'% at 30m (n='+s.kingPull.all.n+') — everything else repels.');
+  var d2=s.kingPull&&s.kingPull.byDist&&s.kingPull.byDist['2']; if(d2&&d2.n){ out.says.push('Pull peaks at 2 strikes ('+studyPct(d2)+'%, n='+d2.n+'); inside 1 strike price orbits.'); }
+  var h11=s.kingPull&&s.kingPull.byHour&&s.kingPull.byHour['11']; if(h11&&h11.n){ out.says.push('The 11am CT hour is the strongest pull window ('+studyPct(h11)+'%, n='+h11.n+').'); }
+  var orep=studyPct(s.othersRepel); if(orep!=null) out.says.push('Non-King mass repels '+orep+'% (n='+s.othersRepel.n+').');
+  var rB=s.reached&&s.reached.Building, rF=s.reached&&s.reached.Fading;
+  if(rB&&rB.n&&rF&&rF.n) out.says.push('Acm walls are sturdiest (reached '+studyPct(rB)+'%) vs Fading '+studyPct(rF)+'% — keep Acm in STATE.');
+  out.change.push('READ arms Pull only in the 1.5–3 strike zone; ORBIT shows contact, not direction.');
+  out.change.push('Suppress trend/confluence/King-verdict direction claims when regime=CHOP (they ran contrarian).');
+  out.improve.push('Most buckets are ⚖ (n<20 per day) — needs ~15 sessions before rates are trusted.');
+  out.improve.push('QQQ/VIX now recording every bar; cross-market confluence becomes testable in ~2 weeks.');
+  out.improve.push('Episode records (snap.ep) let us separate repel-at-contact from drift-from-distance — add that split.');
+  out.next.push('Does a +γ Ceil push harder than a −γ one? (polarity recorded since 08-14)');
+  out.next.push('Does the 11am pull window survive 10 more days, or is it a 4-day artifact?');
+  out.next.push('Contender ≥60% + King bleeding → does price go to the contender AFTER the crown relocates?');
+  out.next.push('Acm wall on FIRST touch → hold rate vs later touches (tap-decay).');
+  return out;
+}
+// ---- RENDER: self-contained card, mirrors projScorecardHtml. Async computes populate
+// from cache + a re-run button (same pattern as the READ block's studyRun).
+function testingBlock(){
+  var s=studyLoad();
+  var g=function(t,c){ return '<b style="color:'+(c||PAL.ink)+'">'+t+'</b>'; };
+  function bar(pct,col){ var w=Math.max(0,Math.min(100,pct||0)); return '<span style="display:inline-block;height:6px;width:56px;background:#1a2029;border-radius:3px;position:relative;vertical-align:middle;margin-right:4px"><span style="position:absolute;left:0;top:0;bottom:0;width:'+w+'%;background:'+col+';border-radius:3px"></span><span style="position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:rgba(255,255,255,.28)"></span></span>'; }
+  function pctCol(p,good){ if(p==null) return PAL.sub; if(good===false) return PAL.sub; return p>=57?PAL.longAccent:(p<=43?PAL.shortAccent:PAL.sub); }
+  var h='<div style="padding:5px 8px;background:'+PAL.card+';border:1px solid '+PAL.line+';border-radius:8px;margin:4px 0">';
+  h+='<div style="font-size:11px;font-weight:800;color:'+PAL.ink+';margin-bottom:2px">🧪 Testing <span style="font-size:9px;font-weight:400;color:'+PAL.sub+'">— measured on '+(s.src||'local repo')+(s.bars?(' · '+s.bars+' bars'):'')+'</span></div>';
+  // coverage strip (async)
+  h+='<div id="gpts-tcov" style="font-size:8.5px;color:'+PAL.sub+';margin-bottom:5px">coverage: computing… <span style="cursor:pointer;text-decoration:underline" onclick="window.__gptsTestRefresh&&window.__gptsTestRefresh()">refresh</span></div>';
+  // ① question library
+  h+='<div style="font-size:9.5px;font-weight:700;color:'+PAL.gold+';margin:5px 0 2px">① Question library</div>';
+  h+='<table style="width:100%;border-collapse:collapse;font-size:9px">';
+  h+='<tr style="color:'+PAL.sub+'"><td style="padding:2px 3px">HYPOTHESIS</td><td>RESULT</td><td style="text-align:right">n</td></tr>';
+  function qrow(label, o, good){ var p=studyPct(o); if(o==null) return ''; var tag=studyTag(o);
+    return '<tr><td style="padding:2px 3px;border-top:1px dashed rgba(255,255,255,.05)">'+label+'</td><td style="border-top:1px dashed rgba(255,255,255,.05)">'+bar(p,pctCol(p,good))+g(p+'%',pctCol(p,good))+' <span style="color:'+PAL.sub+'">'+tag+'</span></td><td style="text-align:right;border-top:1px dashed rgba(255,255,255,.05);color:'+PAL.sub+'">'+(o.n||0)+'</td></tr>'; }
+  h+=qrow('King pulls (30m)', s.kingPull&&s.kingPull.all);
+  h+=qrow('King pull · 2 strikes', s.kingPull&&s.kingPull.byDist&&s.kingPull.byDist['2']);
+  h+=qrow('King pull · 11am CT', s.kingPull&&s.kingPull.byHour&&s.kingPull.byHour['11']);
+  h+=qrow('Non-King mass repels', s.othersRepel);
+  h+=qrow('Contender ≥60% repels', s.contenderRepel);
+  h+=qrow('Acm wall reached ≤1.5 (leak)', s.reached&&s.reached.Building, false);
+  h+=qrow('Net-force sum predicts dir', s.netForce);
+  h+='</table>';
+  // ② hypothesis builder (presets + console API)
+  h+='<div style="font-size:9.5px;font-weight:700;color:'+PAL.gold+';margin:7px 0 2px">② Hypothesis builder</div>';
+  h+='<div style="display:flex;flex-wrap:wrap;gap:3px">';
+  T_PRESETS.forEach(function(pz){ h+='<span onclick="window.__gptsHypoRun&&window.__gptsHypoRun(\''+pz.id+'\')" style="cursor:pointer;font-size:8.5px;border:1px solid '+PAL.line+';border-radius:6px;padding:1px 6px;color:'+PAL.ink+'">'+pz.label+'</span>'; });
+  h+='</div><div id="gpts-thypo" style="font-size:9px;color:'+PAL.sub+';margin-top:3px">pick a hypothesis, or call <code>__gptsHypo({when:[{f:\'kzone\',v:\'pull\'}],outcome:\'toward\'})</code> in the console.</div>';
+  // ③ pattern miner
+  var mine=studyMineLoad();
+  h+='<div style="font-size:9.5px;font-weight:700;color:'+PAL.gold+';margin:7px 0 2px">③ Pattern miner <span style="font-size:8px;font-weight:400;color:'+PAL.sub+'">— <span style="cursor:pointer;text-decoration:underline" onclick="window.__gptsMineRun&&window.__gptsMineRun()">run</span></span></div>';
+  if(mine && mine.top){
+    h+='<div style="font-size:8px;color:'+PAL.sub+';margin-bottom:2px">'+mine.n+' bars · '+mine.days+' days · '+mine.combosTested+' combos tested (multiple-testing: treat as leads ⚖) · base up '+mine.base+'%</div>';
+    h+='<table style="width:100%;border-collapse:collapse;font-size:8.5px">';
+    mine.top.slice(0,8).forEach(function(m){ var showTw=(m.tw!=null && Math.abs(m.twLift)>=Math.abs(m.dirLift));
+      var val = showTw? (m.tw+'% toward') : (m.dirUp+'% up');
+      var lift= showTw? m.twLift : m.dirLift; var lc=lift>=0?PAL.longAccent:PAL.shortAccent;
+      h+='<tr><td style="padding:2px 3px;border-top:1px dashed rgba(255,255,255,.05)">'+m.key+'</td><td style="border-top:1px dashed rgba(255,255,255,.05);color:'+lc+'">'+val+' ('+(lift>=0?'+':'')+lift+')</td><td style="text-align:right;border-top:1px dashed rgba(255,255,255,.05);color:'+PAL.sub+'">'+(showTw?m.twN:m.n)+'</td></tr>'; });
+    h+='</table>';
+  } else { h+='<div style="font-size:9px;color:'+PAL.sub+'">not run yet — click run (needs ≥30 outcome-labelled bars).</div>'; }
+  // ④ insights & recs
+  var ins=testingInsights();
+  h+='<div style="font-size:9.5px;font-weight:700;color:'+PAL.gold+';margin:7px 0 2px">④ Insights &amp; recommendations</div>';
+  function insList(title,arr,col){ if(!arr.length) return ''; return '<div style="font-size:9px;line-height:1.5;margin-bottom:3px"><span style="color:'+col+';font-weight:700">'+title+'</span> '+arr.map(function(x){return x;}).join(' · ')+'</div>'; }
+  h+=insList('What the data says:', ins.says, PAL.ink);
+  h+=insList('Change the product:', ins.change, PAL.longAccent);
+  h+=insList('Improve the testing:', ins.improve, PAL.amber);
+  h+=insList('Hypotheses to test next:', ins.next, PAL.blue);
+  h+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;opacity:.85">📊 = n≥20 measured · ⚖ = hand-set until n≥20 · re-scored nightly after the close · miner rows are LEADS until they survive re-runs on new days.</div>';
+  h+='</div>';
+  return h;
+}
+
 // tab bar shown above every view
 function analysisTabBar(){
-  function tab(label,active,act){
-    return '<div onclick="window.__gptsDebug&&window.__gptsDebug.showAnalysis&&window.__gptsDebug.showAnalysis('+act+')" style="cursor:pointer;padding:5px 12px;font-size:11px;font-weight:'+(active?'800':'600')+';color:'+(active?PAL.ink:PAL.sub)+';'+(active?'border-bottom:2px solid '+PAL.gold+';background:#0b0e14;border-radius:6px 6px 0 0':'')+'">'+label+'</div>';
+  function tab(label,active,fn){
+    return '<div onclick="'+fn+'" style="cursor:pointer;padding:5px 12px;font-size:11px;font-weight:'+(active?'800':'600')+';color:'+(active?PAL.ink:PAL.sub)+';'+(active?'border-bottom:2px solid '+PAL.gold+';background:#0b0e14;border-radius:6px 6px 0 0':'')+'">'+label+'</div>';
   }
+  var onDash='window.__gptsDebug&&window.__gptsDebug.showAnalysis&&window.__gptsDebug.showAnalysis(false)';
   return '<div style="display:flex;gap:2px;background:#12161f;border-bottom:1px solid '+PAL.line+';padding:4px 4px 0;margin:-2px -2px 6px">'+
-    tab('Dashboard', !ANALYSIS_VIEW, 'false')+
-    tab('\uD83D\uDCCA Analysis', ANALYSIS_VIEW, 'true')+
+    tab('Dashboard', (!ANALYSIS_VIEW&&!TESTING_VIEW), onDash)+
+    tab('\uD83D\uDCCA Analysis', ANALYSIS_VIEW, 'window.__gptsDebug&&window.__gptsDebug.showAnalysis&&window.__gptsDebug.showAnalysis(true)')+
+    tab('\uD83E\uDDEA Testing', TESTING_VIEW, 'window.__gptsDebug&&window.__gptsDebug.showTesting&&window.__gptsDebug.showTesting(true)')+
   '</div>';
 }
 
@@ -7718,6 +7872,14 @@ function render(){
                   // crossover state isn't corrupted by being called twice.
   var html='';
   html+=analysisTabBar();
+  if(TESTING_VIEW){
+    html+='<div class="gpts-analysis-scroll" style="max-height:calc(100vh - 180px);min-height:240px;overflow-y:auto;overflow-x:hidden;padding-right:3px">';
+    try{ html+=testingBlock(); }catch(eT){ html+='<div style="color:'+PAL.sub+';padding:6px">Testing — '+eT+'</div>'; }
+    html+='</div>';
+    elBody.innerHTML=html;
+    try{ window.__gptsTestRefresh&&window.__gptsTestRefresh(); }catch(e2){}
+    return;
+  }
   if(ANALYSIS_VIEW){
     // (v10.20) wrap the Analysis content in its own vertical scroll container so
     // all 7 steps are reachable even when the panel height is fixed/short. Height

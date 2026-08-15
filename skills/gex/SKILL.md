@@ -35,6 +35,10 @@ Read, in order:
 5. `design/` mockups referenced by the resume note (build specs).
 6. `gex/SKYLIT-LLM-GROUNDING.md` — Skylit domain vocabulary (King, ±γ, nodes,
    eVA, succession, episodes/magnet frame).
+7. DATA (from v10.44): `data/YYYY-MM-DD.json` — one file per session day, written by the
+   userscript at the close and auto-pushed by a scheduled task. Fetch via raw GitHub URL
+   (same host TM updates from). Read the coverage summary first (days · bars · symbols ·
+   fields-since) — never run a study on fields that don't exist for the days in question.
 
 Then report: baseline version, next build target, open threads — and WAIT for
 the user's direction. Do not start building on load.
@@ -76,3 +80,11 @@ saving means getting files to the USER (SendUserFile) and/or their repo/Drive.
   nightly-scored, graduates at n≥20). Nothing vague in between.
 - Hover/tooltip explanations on every element, written for a new reader.
 - Every deploy ships with step-by-step instructions.
+- MODEL ROUTING (user-mandated 2026-08-15): use the CHEAPEST model that does the job.
+  Delegate mechanical / well-specified work to subagents on Opus or lower (Agent tool
+  `model: 'opus'|'sonnet'|'haiku'`): code edits to a clear spec, running tests, packaging
+  installers, code search, data scraping, doc formatting. Reserve Fable (the main loop, or
+  `model:'fable'`) for work that needs its judgment: novel design/architecture, statistical
+  interpretation, deciding WHAT to build, ambiguous trade-offs, reviewing another model's
+  output. When unsure whether a task needs Fable, it usually doesn't — delegate down, then
+  Fable-review the result.

@@ -1,3 +1,33 @@
+## v10.45 — 2026-08-15 — 🧪 Testing tab: hypothesis engine over the data repository
+
+**Frame.** A third tab (**🧪 Testing**, `TESTING_VIEW`, `window.__gptsDebug.showTesting`) beside
+Dashboard and Analysis. It reads the v10.44 IndexedDB repository (`gpts_repo_v1`) and does one thing:
+measure the PAST. Everything carries an n; nothing predicts. Five blocks.
+
+**① Question library.** The recurring hypotheses — King pulls 30m; King pull at 2 strikes; King pull
+11am CT; non-King mass repels; contender ≥60% repels; Acm wall reached / leak rate; net-force —
+each a rate bar with %, n, and a ⚖/📊 tag. Values come from the study store (`studyLoad`, run by
+`studyRun`); 08-15 baseline until the local repo has run once.
+
+**② Hypothesis builder.** Preset recipe chips ("King PULL zone · 11am → toward King", "Regime CHOP →
+up?") each compose a WHEN→outcome query over the repo and show rate vs baseline + lift. Console API
+`window.__gptsHypo({when:[{f:'kzone',v:'pull'}],outcome:'toward'})` for ad-hoc runs.
+
+**③ Pattern miner (`studyMine`).** Auto-scans single + pairwise factor buckets (kzone, kside, hour,
+regime, nearest-node state, nearest-node strong/weak) against the outcome, min n=30, ranked by lift,
+with a combos-tested count and a multiple-testing caution — rows are leads ⚖ until they survive the
+nightly re-run. Cached in `localStorage gpts_mine_v1`.
+
+**④ Insights & recommendations.** A rule engine over the study emitting four buckets: what the data
+says / change the product / improve the testing / hypotheses to test next.
+
+**⑤ Data coverage strip (`repoCoverage`).** Days · bars · symbols · which fields exist and since when.
+
+**Nightly.** The LLM review (day export → GitHub) consumes the same store, so page and review agree.
+
+**Still pending (10.45/10.46):** the Analysis-tab **Insights** block and the **regime gate** (suppress
+trend/confluence/King-verdict direction claims in chop) — both carried over, not yet built.
+
 ## v10.44.1 — 2026-08-15 — hotfix: tape finder (heatmap sidebar was stealing the match)
 
 **Bug (user screenshot, 23:43 CT):** STRUCTURAL READ SUPPRESSED, "tape $K tag —", recurring.
