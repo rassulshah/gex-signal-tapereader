@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>v10.44 candidate — DIST → ATTRACTION tile</title>
+<style>
+  :root{--bg:#0b0e14;--card:#12161f;--line:#1e2530;--green:#2ec27e;--red:#f0616d;--gold:#e3c341;--sub:#8b98a9;--amber:#f2b45a;--blue:#4a90d9;--purple:#b48ce3;--ink:#d7dde6}
+  body{background:#06080c;color:var(--ink);font:11px/1.45 -apple-system,Segoe UI,system-ui,sans-serif;margin:0;padding:16px}
+  h1{font-size:13px;margin:0 0 3px}
+  .note{color:var(--sub);font-size:10px;margin-bottom:12px;max-width:860px}
+  .wrap{display:flex;gap:12px;flex-wrap:wrap}
+  .card{width:250px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  .sect{font-size:8px;letter-spacing:.8px;font-weight:700;margin-bottom:6px}
+  .tile{display:inline-flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:6px;padding:5px 9px;background:rgba(255,255,255,.02);min-width:118px}
+  .tl{font-size:7.5px;letter-spacing:.6px;color:var(--sub);font-weight:700}
+  .tv{font-size:12.5px;font-weight:800}
+  .tv small{font-size:9px;font-weight:600;color:var(--sub)}
+  .bar{height:5px;border-radius:3px;background:#1a2029;margin-top:4px;position:relative;overflow:hidden}
+  .bar i{position:absolute;top:0;bottom:0;border-radius:3px}
+  .mid{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:rgba(255,255,255,.25)}
+  .cap{font-size:9px;color:var(--sub);margin-top:7px;line-height:1.5}
+  .cap b{color:var(--ink)}
+</style></head><body>
+<h1>DIST tile → ATTRACTION tile <span style="color:var(--sub);font-weight:400">(v10.44 candidate)</span></h1>
+<div class="note">Same tile slot. Strike count stays (gate math + projections still consume it). New: a <b>state word</b> +
+<b>toward-share</b> — % of the last 10 bars (~30&thinsp;min) that closed nearer the King. Benchmark line at 50&thinsp;% = no pull;
+measured baseline inside the gate is 54–60&thinsp;%. The little bar makes over/under-baseline visible at a glance.</div>
+
+<div class="wrap">
+
+  <div class="card">
+    <div class="sect" style="color:var(--green)">PULLING — King is winning</div>
+    <span class="tile"><span class="tl">ATTRACTION</span>
+      <span class="tv" style="color:var(--green)">PULLING <small>2↑ · 70%</small></span>
+      <span class="bar"><i style="left:50%;width:20%;background:var(--green)"></i><span class="mid"></span></span>
+    </span>
+    <div class="cap">In the field (≤3), DIST shrinking, toward-share <b>70%</b> — well above the 54–60% baseline.
+    Magnet live and stronger than normal. READ adds ETA: <i>"approaching — 📊 63% continue; ETA ~12m."</i>
+    <br><b>Hover:</b> "King is actively attracting — 7 of last 10 bars closed nearer. Expect continued convergence; watch for PINNED on contact."</div>
+  </div>
+
+  <div class="card">
+    <div class="sect" style="color:var(--gold)">PINNED — captured</div>
+    <span class="tile"><span class="tl">ATTRACTION</span>
+      <span class="tv" style="color:var(--gold)">PINNED <small>AT · 22m</small></span>
+      <span class="bar"><i style="left:46%;width:8%;background:var(--gold)"></i><span class="mid"></span></span>
+    </span>
+    <div class="cap">Contact. Toward-share hovers ~50% <i>by definition</i> — price orbits the strike, so the
+    number goes quiet and <b>dwell time</b> (22m) becomes the signal. Long dwell + building %KCH = pin hardening.
+    <br><b>Hover:</b> "Price captured at the King — orbiting, not traveling. Dwell counts up; +γ favors it holding into POWER phase."</div>
+  </div>
+
+  <div class="card">
+    <div class="sect" style="color:var(--red)">PUSHING — King is repelling</div>
+    <span class="tile"><span class="tl">ATTRACTION</span>
+      <span class="tv" style="color:var(--red)">PUSHING <small>2↑ · 25%</small></span>
+      <span class="bar"><i style="right:50%;width:25%;background:var(--red)"></i><span class="mid"></span></span>
+    </span>
+    <div class="cap">In the field but toward-share <b>25%</b> — price isn't drifting off, it's being <b>driven</b> away
+    (only 2–3 of 10 bars closed nearer). Classic −γ behavior: dealers hedge with the move, contact fuels the exit.
+    <b>PUSHING + bleeding %KCH = crown-death signature</b> → succession watch.
+    <br><b>Hover:</b> "King is repelling — price winning the tug-of-war despite being in range. Don't fade the exit; check SUCCESSION + %KCH."</div>
+  </div>
+
+  <div class="card">
+    <div class="sect" style="color:var(--sub)">OUT — no field</div>
+    <span class="tile"><span class="tl">ATTRACTION</span>
+      <span class="tv" style="color:var(--sub)">OUT <small>5↑</small></span>
+      <span class="bar"><span class="mid"></span></span>
+    </span>
+    <div class="cap">Beyond the 3-strike gate — toward-share isn't even computed (measured 50/50 out here, n=68).
+    Bar goes empty. Magnet thesis suspended; console says stand down on King-based entries.
+    <br><b>Hover:</b> "Outside gravity (&gt;3 strikes) — no measured pull at this distance. Attraction resumes if price re-enters the field."</div>
+  </div>
+
+</div>
+
+<div class="note" style="margin-top:14px;border-left:2px solid var(--line);padding-left:10px">
+<b style="color:var(--ink)">State rules</b> · gate&gt;3 → <b style="color:var(--sub)">OUT</b> · DIST=0(±0.25) → <b style="color:var(--gold)">PINNED</b> ·
+toward-share ≥60% → <b style="color:var(--green)">PULLING</b> · ≤40% → <b style="color:var(--red)">PUSHING</b> ·
+41–59% → <b>NEUTRAL</b> (grey, "in field, no winner yet").
+Thresholds start ⚖ (hand-set, symmetric around the 54–60% baseline) and graduate to 📊 as the nightly study accumulates n —
+same pipeline as the %KCH day-direction study, so <b>PUSHING×bleed → relocation</b> gets its own scored bucket.
+<br><br><b style="color:var(--ink)">Today, replayed with this tile:</b> morning would have read
+<b style="color:var(--red)">PUSHING 780 · ~30%</b> while K$ bled −29% (crown-death signature hours early) →
+crown fell to 775/776 → afternoon flip-flop reads <b style="color:var(--gold)">PINNED</b>/<b>NEUTRAL</b> around 776 —
+"fade edges" regime confirmed by the tile alone.</div>
+</body></html>

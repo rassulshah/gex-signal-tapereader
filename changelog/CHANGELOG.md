@@ -1,92 +1,31 @@
 # CHANGELOG — GEX-Signal-Tapereader
 
-## v10.43 — 2026-08-14 — PROJECTED-CHART RENDERING FIXES (user-reported, live)
+## v10.44 — PLANNED (design locked 2026-08-15, NOT YET BUILT) — magnet frame + single column
 
-User caught the projected chart "looking weird" minutes after v10.42 went live — on a day
-where the crown contest (775↔776↔777, all within 2 strikes) hit the layout's worst case.
+Design session outcome; full spec in `session-state/latest-resume-note.md`, build mockup
+`design/nodemap_v1044_mockup.html`.
 
-- **Focused y-domain.** The chart now scales to the price↔target ACTION; rails outside the
-  window (eVAH 780, HOD 778.8 that day) collapse into ▲/▼ edge tags instead of stretching
-  the axis and squashing the projection into the bottom fifth.
-- **Post-ETA cone taper** (`projTaperHalf`, pure + tested). The volatility cone widens with
-  √bars until projected arrival, then TAPERS into the pin range (floor ±0.5) — kills the
-  "black wedge" of endless widening. With no ETA, growth caps at the 10-bar envelope.
-- **Rail-label anti-collision** — labels nudge to ≥9px separation (LOD 775.4 vs T2 King 775
-  are both readable now).
-- **History-chart gutter min-gap 11→15px** — the price pill can no longer sit on the 👑
-  label when price and King are within a fraction of a strike (776.16 vs 776).
-- **Console tiles wrap** instead of ellipsizing ("$1.32B ▼7%", "POWER · 12m" fully visible).
+**UI (simplification, user-directed):** King console + King path chart + projected chart
+REMOVED from Dashboard (recording continues silently, footer "rec ●"). Single column:
+Deflections → Node Map. Node Map becomes the primary magnet surface:
+- IDENTITY: 👑 King · 🚪 Gate · **▔ Ceil / ⛰ Flr** = nearest strong magnet (≥15–20% King
+  mass) above/below price = the live range (Step 3). Roles stack. Others: ★ Mag / Mag.
+  **Sup/Res vocabulary retired.** −γ nodes (incl. a −γ King) render PURPLE (Skylit convention).
+- ACTIVITY: `Pull tw%` → `BOw` → `BO·FT` (only BO chip; chain display removed) →
+  `Defl ↑/↓` → `Push tw%` → echoes (broke/held/FBO). Priority: Defl > BO·FT > BOw > Push >
+  Pull > echo. **FT redefined (both directions): full-hold OR two consecutive progressing
+  closes beyond.** Range chip + range-redefinition echo on Ceil/Flr break+FT.
 
-**BO-TAG FIX (user-reported).** The Node Map's lifecycle chip showed "BO·FT·TST·CONF·GO"
-all day because the selector took the HIGHEST-STAGE setup ever seen at the strike — a
-finished morning GO haunted the row while the LIVE setup sat at BO·FT. Now terminal
-setups (T2/FAILED/EXPIRED) are skipped (the resolved-outcome echo already shows those)
-and among live setups the MOST RECENT wins — the chip shows what is happening NOW.
+**Data layer:** %KCH = King-$ %change vs TRUE open (persisted baseline, survives reload);
+parseKingDollarsK → explicit Math.abs (LIVE-VERIFIED signed $K exists: −$27,399K; sign =
+candidate polarity source). Episode engine per node (PULL → PIN/BREAKING/BLOCKED → Defl →
+PUSH·after-tag/-break/-block), per-bar `snap.ep` with conditions-at-contact, nightly
+`episodeScorecard()` incl. PREDICT-PUSH forecast arm, %KCh day-direction study
+(checkpoints × King-position × polarity), LLM nightly review must answer why/what-preceded/
+what-to-change. Everything ⚖ until n≥20 → 📊.
 
-**KING PATH MOVE LABELS (user request).** Significant King moves now carry their own
-price label on the staircase — a move counts when the step is ≥2 strikes OR the level
-then held ≥15 min; capped at 5, x-collision-skipped, last vertex left to the gutter 👑.
-The path now reads at a glance without hovering.
-
-Tests: +10 assertions in test_king_projection (taper math, edge tags, collision nudging,
-gutter gap, tile wrap) + new test_bo_tag_labels.js (12: recency selection, terminal-skip,
-exact chip text, sig-move selection rules, cap, collision skip). Full suite 28/29 green.
-
-## v10.42 — 2026-08-14 — KING CONSOLE + 🎯 PROJECTED PATH + AUTOMATIC FEEDBACK LOOP
-
-**KING CONSOLE (approved mockup).** The narrative prose blob is now a labeled 4×2 INDICATOR
-GRID — KING/K$/DIST/VALUE/SUCCESSION/TAPS·CROSS/PHASE/ALIGN — with hot signals highlighted
-(succession ⚠ amber) and a 2-line STRUCTURE ▸ / READ ▸ underneath. **Every tile, chip, line,
-and chart element carries a hover tooltip explaining what it is, how it's computed, and what
-backs the claim** (⚖ doctrine / 📊 measured-with-n). Display bugs from the live screenshot
-fixed: `fmtKd` ($1.13B, was "$1125.69B") and `fmtChg` (▼7%, was "▼-7%"). King Path y-extent
-labels moved inside the chart (were clipping at the column edge).
-
-**🎯 KING PATH · PROJECTED (new chart).** Now → close, below the history chart. Draws ONLY
-data-backed elements, each with a native SVG hover tooltip:
-- **Projected King step** (gold dashed) — drawn only when Succession ≥60%, stamped with its
-  base rate (76%, n=148, med 12m).
-- **Price path + volatility cone** — toward the operative target at the measured 3-bar
-  approach rate (63%, n=161); cone = recent avg bar range × √bars. An envelope, not advice.
-- **Target rails** — T1 gatekeeper, T2 King (capped, no T3 per doctrine), eVA edges, HOD/LOD.
-- **Pin band** ±0.5 when POWER phase + proximity.
-
-**THE FEEDBACK LOOP (as automatic as it gets).**
-1. `projSnapshotRecord()` — every bar records what was projected (target, ETA, cone width,
-   pin flag, succession candidate) into the recorder (`snap.proj`).
-2. `projScorecard()` — scores every past projection: target-reach by close, ETA error
-   (median), cone coverage (target ~70%), succession hits, pin-band hits. Honest n, unlock
-   gates, live rates replace backtest labels as they mature.
-3. `projRecs()` — RULE-BASED AUTO RECOMMENDATIONS from the scores: widen/tighten the cone,
-   adjust the approach-rate window, raise/lower the succession threshold, widen the pin
-   band. Below unlock n it emits only honest "recording (x/N)" lines — never fabricated tuning.
-4. **Analysis tab** renders 🎯 PROJECTION SCORECARD + 🔧 RECOMMENDATIONS at the top.
-5. **Day export** now carries `projReview:{scorecard, recommendations}` — the end-of-day LLM
-   review consumes it with zero extra steps and closes the loop.
-`__gptsDebug.projReport()` exposes the same payload live.
-
-Tests: `test_king_projection.js` (33 assertions: fmt fixes, pure projection core, ETA math,
-cone scaling, pin logic, recommendations engine incl. the insufficient-n honesty case, and
-wiring guards). Full suite 27/28 green.
-
-## v10.41 — 2026-08-14 — TWO-COLUMN DASHBOARD
-
-One column could no longer hold the King analyzer + Deflections + Node Map (user call
-after seeing v10.40 live). Dashboard is now TWO COLUMNS:
-- **LEFT — everything King:** badge cluster, King Analyzer narrative + chips, King Path chart.
-- **RIGHT — Deflections + Node Map** (accumBlock, which renders both).
-
-Responsive by construction: the wrapper is `flex-wrap` with `flex:1 1 300px` per column,
-so a panel narrower than ~620px stacks vertically (identical to the old layout) and a wide
-panel goes side-by-side. The sync-gate suppression panel and the footer stay full-width.
-
-**Width migration (one-time):** saved single-column-era widths (<620px) would leave the
-columns permanently stacked — the user would see "no change". `restoreSize()` bumps such
-widths to 690px ONCE (flag `gpts_2col_migr_v1`), then never touches user resizes again.
-Fresh-install default width 300px → 690px.
-
-Tests: `test_layout_2col.js` (12 guards: column composition, wrap fallback, gate stays
-above columns, migration one-time). Full suite 26/27 green.
+**Shelved with return-spec:** ATTRACTION tile v2, %KCH tile flip, net-force indicator,
+King charts (return validated once scorecards mature).
 
 ## v10.40 — 2026-08-14 — KING PATH v2 (Batch 2): analyzer + narrative-first layout + gutter
 

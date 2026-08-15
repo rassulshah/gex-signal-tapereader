@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>King polarity color — mockup</title>
+<style>
+  :root{--bg:#0b0e14;--card:#12161f;--line:#1e2530;--green:#2ec27e;--red:#f0616d;--gold:#e3c341;--sub:#8b98a9;--purple:#b48ce3;--ink:#d7dde6}
+  body{background:#06080c;color:var(--ink);font:11px/1.45 -apple-system,Segoe UI,system-ui,sans-serif;margin:0;padding:16px}
+  h1{font-size:13px;margin:0 0 8px}
+  .wrap{display:flex;gap:16px;flex-wrap:wrap}
+  .card{width:300px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  .sect{font-size:8px;letter-spacing:.8px;color:var(--sub);font-weight:700;margin-bottom:6px}
+  .tile{display:inline-flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:6px;padding:5px 9px;background:rgba(255,255,255,.02);min-width:86px}
+  .tl{font-size:7.5px;letter-spacing:.6px;color:var(--sub);font-weight:700}
+  .tv{font-size:13px;font-weight:800}
+  .cap{font-size:9px;color:var(--sub);margin-top:6px;line-height:1.45}
+  .old{opacity:.55}
+</style></head><body>
+<h1>KING tile — polarity via color (Skylit convention)</h1>
+<div class="wrap">
+
+  <div class="card old">
+    <div class="sect">CURRENT (tag)</div>
+    <span class="tile"><span class="tl">KING −γ</span><span class="tv" style="color:var(--gold)">👑 775</span></span>
+    <div class="cap">Sign lives in the label text ("KING −γ"). Extra characters, easy to miss.</div>
+  </div>
+
+  <div class="card">
+    <div class="sect">NEW · +γ KING (default gold)</div>
+    <span class="tile"><span class="tl">KING</span><span class="tv" style="color:var(--gold)">👑 776</span></span>
+    <div class="cap">Positive-gamma King = default gold, exactly as today. Label is just "KING". Tooltip on hover: "+γ — dealers hedge against the move · friction / pin-prone".</div>
+  </div>
+
+  <div class="card">
+    <div class="sect">NEW · −γ KING (purple)</div>
+    <span class="tile"><span class="tl">KING</span><span class="tv" style="color:var(--purple)">👑 775</span></span>
+    <div class="cap">Negative-gamma King = purple strike, Skylit convention. Tooltip on hover: "−γ — dealers hedge with the move · wicky / overshoot-prone". Matches the existing 🍆 Barney purple already used in the node map.</div>
+  </div>
+
+</div>
+<div style="color:#8b98a9;font-size:9.5px;margin-top:12px;max-width:640px">
+Open question — does purple propagate when −γ? <b>(a)</b> tile only, <b>(b)</b> tile + header 👑 pill, <b>(c)</b> everywhere the King is drawn (tile, pill, sparkline rail + 👑775 label, node map King row). Today all of those are gold.</div>
+</body></html>

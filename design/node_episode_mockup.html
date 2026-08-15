@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>v10.44 — node episode engine: Node Map + sharpening loop</title>
+<style>
+  :root{--bg:#0b0e14;--card:#12161f;--line:#1e2530;--green:#2ec27e;--red:#f0616d;--gold:#e3c341;--sub:#8b98a9;--amber:#f2b45a;--blue:#4a90d9;--purple:#b48ce3;--ink:#d7dde6}
+  body{background:#06080c;color:var(--ink);font:11px/1.45 -apple-system,Segoe UI,system-ui,sans-serif;margin:0;padding:16px}
+  h1{font-size:13px;margin:0 0 3px}
+  .note{color:var(--sub);font-size:10px;margin-bottom:12px;max-width:920px}
+  .wrap{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  .hdr{font-size:9.5px;font-weight:700;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center}
+  .nmh{display:flex;font-size:7.5px;color:var(--sub);letter-spacing:.5px;padding:2px 0;border-bottom:1px solid var(--line)}
+  .nmr{display:flex;align-items:center;font-size:9.5px;padding:3px 0;border-bottom:1px dashed rgba(255,255,255,.04)}
+  .c1{width:62px}.c2{width:66px;font-variant-numeric:tabular-nums}.c3{width:96px}.c4{flex:1}
+  .pill{border-radius:8px;padding:0 6px;font-size:8.5px;font-weight:700}
+  .ep{border-radius:4px;padding:0 5px;font-size:8.5px;font-weight:800;letter-spacing:.3px}
+  .ep small{font-weight:600;opacity:.85}
+  .pxrow{display:flex;justify-content:center;font-size:8.5px;color:var(--blue);padding:2px 0;border-bottom:1px dashed rgba(74,144,217,.35)}
+  .cap{font-size:9px;color:var(--sub);margin-top:6px;line-height:1.5}
+  .cap b{color:var(--ink)}
+  .mono{font:9px ui-monospace,Consolas,monospace;background:#0a0d13;border:1px solid var(--line);border-radius:6px;padding:7px 9px;line-height:1.6;color:#a8b4c4;overflow-x:auto}
+  .llm{border-left:2px solid var(--purple);padding:4px 0 4px 10px;font-size:9.5px;line-height:1.55}
+  .tag{font-size:8px;border:1px solid var(--line);border-radius:8px;padding:0 6px;color:var(--sub)}
+</style></head><body>
+<h1>Node episode engine — one engine, three views + sharpening loop</h1>
+<div class="note">Every mapped node runs the same episode state machine (approach → contact → deflection → push).
+The King tile shows the King's episode; the <b>Node Map ACTIVITY column shows every node's live state</b>;
+⚡ Deflections is the emitted event log. Below: yesterday's session as the engine would have shown it at ~1:00p, plus the nightly loop.</div>
+
+<div class="wrap">
+
+  <!-- ========= NODE MAP with live episode states ========= -->
+  <div class="card" style="width:352px">
+    <div class="hdr"><span>⑤ Node Map <span class="tag">episode states LIVE</span></span><span class="tag">Whipsaw · fade edges ⚖</span></div>
+    <div class="nmh"><span class="c1">IDENTITY</span><span class="c2">STRIKE·%</span><span class="c3">EPISODE</span><span class="c4">DETAIL</span></div>
+
+    <div class="nmr"><span class="c1"><span class="pill" style="background:rgba(240,97,109,.15);color:var(--red)">★ Res</span></span>
+      <span class="c2">779 · 30%</span>
+      <span class="c3"><span class="ep" style="background:rgba(240,97,109,.14);color:var(--red)">PUSH<small>·tag ↓</small></span></span>
+      <span class="c4" style="color:var(--sub)">9:32a top-push · HOD · held 4h ✓</span></div>
+
+    <div class="nmr"><span class="c1"><span class="pill" style="background:rgba(180,140,227,.15);color:var(--purple)">🍆 Cell</span></span>
+      <span class="c2">777 · −72%</span>
+      <span class="c3"><span class="ep" style="background:rgba(240,97,109,.14);color:var(--red)">PUSH<small>·block ↓</small></span></span>
+      <span class="c4" style="color:var(--sub)">11:48a rally rejected · trend resumed ✓</span></div>
+
+    <div class="pxrow">— SPY 776.1 —</div>
+
+    <div class="nmr" style="background:rgba(227,195,65,.05)"><span class="c1"><span class="pill" style="background:rgba(227,195,65,.2);color:var(--gold)">🚪 Gate</span></span>
+      <span class="c2">776 · 37%</span>
+      <span class="c3"><span class="ep" style="background:rgba(227,195,65,.16);color:var(--gold)">PIN<small> · 38m · t6</small></span></span>
+      <span class="c4" style="color:var(--sub)">orbiting since 12:55p · x2</span></div>
+
+    <div class="nmr"><span class="c1"><span class="pill" style="background:rgba(227,195,65,.2);color:var(--gold)">👑 King</span></span>
+      <span class="c2" style="color:var(--gold)">775 · 100%</span>
+      <span class="c3"><span class="ep" style="background:rgba(46,194,126,.14);color:var(--green)">PUSH<small>·tag ↑</small></span></span>
+      <span class="c4" style="color:var(--sub)">12:41p bottom-push · LOD · %KCH ▼12</span></div>
+
+    <div class="nmr"><span class="c1"><span class="pill" style="background:rgba(46,194,126,.15);color:var(--green)">⛰ Flr</span></span>
+      <span class="c2">772 · 6%</span>
+      <span class="c3"><span class="ep" style="background:rgba(255,255,255,.05);color:var(--sub)">IDLE</span></span>
+      <span class="c4" style="color:var(--sub)">no approach today</span></div>
+
+    <div class="cap"><b>EPISODE column</b> = live state per node: <b style="color:var(--green)">PULL</b> ·
+    <b style="color:var(--amber)">BLOCK</b> · <b style="color:var(--gold)">PIN</b> · <b style="color:var(--blue)">BREAK</b> ·
+    <b style="color:var(--red)">PUSH</b><small>·tag/·break/·block</small> · IDLE. Arrow = push direction. ✓ = outcome held so far.
+    Push <i>away from</i> a node below price is green (bullish bounce); above price, red. Hover any chip → full episode
+    timeline: "PULL 12:12→12:41 (tw 71%) · tag 775.38 12:41 · PUSH ↑ since (tw 22%)".</div>
+  </div>
+
+  <!-- ========= EPISODE LOG + NIGHTLY LOOP ========= -->
+  <div style="width:470px">
+    <div class="card" style="margin-bottom:10px">
+      <div class="hdr"><span>📼 Episode record <span class="tag">per bar → snap.ep</span></span><span class="tag">feeds nightly study</span></div>
+      <div class="mono">{ n:"775", id:"King", ep:7, st:"PUSH.tag", dir:+1, tw:22,<br>
+&nbsp;&nbsp;appr:{t0:"12:12",bars:10,tw:71}, tag:{t:"12:41",px:775.38,taps:2},<br>
+&nbsp;&nbsp;ctx:{kch:-12, pol:"-g", phase:"MID", gatekeeper:null, sma50:"below"},<br>
+&nbsp;&nbsp;out:{moveAfter:+0.9, heldBars:14, becameLOD:true} }</div>
+      <div class="cap">Every bar, every active episode. <b>ctx</b> captures the conditions at contact
+      (%KCH, polarity, phase, gatekeeper present?, trend side) — that's the raw material for "what conditions
+      make a node push vs break." <b>out</b> is filled in as the outcome resolves.</div>
+    </div>
+
+    <div class="card" style="margin-bottom:10px">
+      <div class="hdr"><span>🌙 Nightly scoring <span class="tag">episodeScorecard()</span></span></div>
+      <div class="mono">PUSH·tag after PULL≥65% .......... reversal ≥0.5 str: <b style="color:#2ec27e">9/12 (75%)</b> ⚖→📊 @n20<br>
+mid-trend BLOCK at −γ node ...... trend resumed: <b style="color:#2ec27e">7/9</b> · avg +1.2 str<br>
+PIN &gt;30m + %KCH ▲ ............... held to close: 5/6<br>
+<span style="color:#f2b45a">PREDICT-PUSH (arming): PULL≥65% + tag + %KCH▼ + −γ → push fires next 3 bars: 6/8 so far</span></div>
+      <div class="cap">Same graduation rule as the projection scorecard: buckets are ⚖ until n≥20, then the live 📊 rate
+      replaces the hand-set claim <i>in the tile hovers and the READ line</i>. The amber row is the goal you named:
+      a <b>predictive</b> arm — conditions that fire BEFORE the push, scored like any other projection.</div>
+    </div>
+
+    <div class="card">
+      <div class="hdr"><span>🤖 Nightly LLM review <span class="tag">day export → reasoning + recs</span></span></div>
+      <div class="llm">
+      <b>Why yesterday's pushes happened (reasoning):</b> all three pushes occurred at nodes with ≥30% mass
+      while %KCH was bleeding — the dissolving King (780→775 migration) left price hunting for the next anchor, so
+      each contact resolved as rejection rather than break. The 777 block fits the gatekeeper pattern: a −72% (−γ)
+      cell defending the approach path during a down-trend pullback; note price never reached the King on that leg.<br>
+      <b>Feature recommendations:</b> (1) tw-share window 10 bars was slow at 779 — the 9:32 push completed in 6 bars;
+      test an adaptive window (6 in POWER/EARLY, 10 in MID). (2) The 775 bottom-push was predicted by PULL≥65% + tag +
+      −γ + bleed 2 bars early — promote PREDICT-PUSH to a visible ⚠ arm on the tile once n≥20. (3) 772 floor never
+      engaged; consider suppressing IDLE rows below 5% mass to reduce map noise.</div>
+      <div class="cap">The LLM sees the full episode log + scorecard each night and must answer three questions:
+      <b>why</b> did each push/hold happen (mechanism, in Academy terms) · <b>what conditions</b> preceded it (candidate predictors)
+      · <b>what to change</b> (window sizes, thresholds, new buckets). Recommendations land in the Analysis tab
+      next morning — the same closed loop the projection system already runs.</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="note" style="margin-top:12px;border-left:2px solid var(--line);padding-left:10px;max-width:920px">
+<b style="color:var(--ink)">The sharpening loop, end to end:</b> live engine labels episodes → per-bar records with conditions at contact →
+nightly scorecard buckets (including the PREDICT-PUSH arm) → LLM reasoning + recommendations → thresholds/windows tuned →
+better live labels tomorrow. Nothing is discarded: even failed predictions are scored, because the misses are what
+sharpen the predictor. Yesterday alone contributed 4 complete episodes (779 top-push ✓, 777 gatekeeper block ✓, 775 bottom-push ✓, 776 pin —
+scored at close).</div>
+</body></html>

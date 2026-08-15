@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>v10.44 candidate — ATTRACTION tile v2 (contact-aware)</title>
+<style>
+  :root{--bg:#0b0e14;--card:#12161f;--line:#1e2530;--green:#2ec27e;--red:#f0616d;--gold:#e3c341;--sub:#8b98a9;--amber:#f2b45a;--blue:#4a90d9;--purple:#b48ce3;--ink:#d7dde6}
+  body{background:#06080c;color:var(--ink);font:11px/1.45 -apple-system,Segoe UI,system-ui,sans-serif;margin:0;padding:16px}
+  h1{font-size:13px;margin:0 0 3px}
+  .note{color:var(--sub);font-size:10px;margin-bottom:12px;max-width:900px}
+  .wrap{display:flex;gap:10px;flex-wrap:wrap}
+  .card{width:272px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  .sect{font-size:8px;letter-spacing:.8px;font-weight:700;margin-bottom:6px}
+  .tile{display:inline-flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:6px;padding:5px 9px;background:rgba(255,255,255,.02);min-width:140px}
+  .tl{font-size:7.5px;letter-spacing:.6px;color:var(--sub);font-weight:700}
+  .tv{font-size:12px;font-weight:800}
+  .tv small{font-size:8.5px;font-weight:600;color:var(--sub)}
+  .bar{height:5px;border-radius:3px;background:#1a2029;margin-top:4px;position:relative;overflow:hidden}
+  .bar i{position:absolute;top:0;bottom:0;border-radius:3px}
+  .mid{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:rgba(255,255,255,.25)}
+  .cap{font-size:9px;color:var(--sub);margin-top:7px;line-height:1.5}
+  .cap b{color:var(--ink)}
+  .flow{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:14px;max-width:900px}
+  .fl{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:10px}
+  .st{border:1px solid var(--line);border-radius:5px;padding:2px 8px;font-weight:700}
+  .arr{color:var(--sub)}
+</style></head><body>
+<h1>ATTRACTION tile v2 — contact-aware <span style="color:var(--sub);font-weight:400">(v10.44 candidate, revised)</span></h1>
+<div class="note">The push away from the King means different things depending on <b>what happened at contact</b>.
+The tile keeps an <b>episode memory per crown</b> (taps, crossings, nearest approach, gatekeeper hits — all already tracked;
+resets when the King relocates) and labels the push with its cause.</div>
+
+<div class="flow">
+  <div style="font-size:8px;letter-spacing:.8px;color:var(--sub);font-weight:700;margin-bottom:6px">THE EPISODE — how the states chain</div>
+  <div class="fl">
+    <span class="st" style="color:var(--green)">PULLING</span><span class="arr">→</span>
+    <span class="arr" style="font-size:9px">one of three contacts:</span>
+    <span class="st" style="color:var(--gold)">PINNED</span><span class="arr">/</span>
+    <span class="st" style="color:var(--blue)">BREAKING</span><span class="arr">/</span>
+    <span class="st" style="color:var(--amber)">BLOCKED 🚪</span>
+    <span class="arr">→ deflection →</span>
+    <span class="st" style="color:var(--red)">PUSHING</span>
+    <span class="arr" style="font-size:9px">(labeled with which contact preceded it)</span>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="card">
+    <div class="sect" style="color:var(--green)">PULLING — pre-contact approach</div>
+    <span class="tile"><span class="tl">ATTRACTION</span>
+      <span class="tv" style="color:var(--green)">PULLING <small>2↑ · 70%</small></span>
+      <span class="bar"><i style="left:50%;width:20%;background:var(--green)"></i><span class="mid"></span></span>
+    </span>
+    <div class="cap">In field, no tap yet this crown, toward-share 70% (baseline 54–60%). Magnet winning.
+    READ carries the ETA. Watch what happens at arrival — the <i>next</i> state is the information.
+    <br><b>Hover:</b> "King attracting — 7 of last 10 bars closed nearer. The contact outcome (pin / break / block) sets the next play."</div>
+  </div>
+
+  <div class="card">
+    <div class="sect" style="color:var(--amber)">BLOCKED — gatekeeper defense</div>
+    <span class="tile"><span class="tl">ATTRACTION</span>
+      <span class="tv" style="color:var(--amber)">BLOCKED <small>🚪776 · never tagged</small></span>
+      <span class="bar"><i style="right:50%;width:14%;background:var(--amber)"></i><span class="mid"></span></span>
+    </span>
+    <div class="cap">Approach stalled <b>before reaching the King</b>: toward-share collapsed while nearest-approach
+    stopped at an intermediate node (here the 🚪 gate at 776, King 775 beyond it). The King's pull lost to the
+    gatekeeper's defense — King never actually tested.
+    <br><b>Hover:</b> "Price turned away before contact — blocked at 776. The King remains untested; a later break of the gatekeeper re-opens the approach."</div>
+  </div>
+
+  <div class="card">
+    <div class="sect" style="color:var(--gold)">PINNED — captured at the strike</div>
+    <span class="tile"><span class="tl">ATTRACTION</span>
+      <span class="tv" style="color:var(--gold)">PINNED <small>AT · 22m · t4</small></span>
+      <span class="bar"><i style="left:46%;width:8%;background:var(--gold)"></i><span class="mid"></span></span>
+    </span>
+    <div class="cap">Contact holding: price orbits the strike, dwell counting (22m), taps accumulating (t4).
+    +γ favors this hardening into a pin; −γ makes it unstable — expect BREAKING or PUSHING soon.
+    <br><b>Hover:</b> "Captured — orbiting the King. Dwell + building %KCH = pin hardening; watch for the deflection that ends the episode."</div>
+  </div>
+
+  <div class="card">
+    <div class="sect" style="color:var(--blue)">BREAKING — testing through</div>
+    <span class="tile"><span class="tl">ATTRACTION</span>
+      <span class="tv" style="color:var(--blue)">BREAKING <small>AT · x3</small></span>
+      <span class="bar"><i style="left:38%;width:24%;background:var(--blue)"></i><span class="mid"></span></span>
+    </span>
+    <div class="cap">Price is at the King and <b>crossing it repeatedly</b> (x3) — an active break attempt, not a pin.
+    Resolution: crosses and <i>stays</i> → PUSHING (after break) from the far side; fails → deflection → PUSHING (after tag) back the way it came.
+    <br><b>Hover:</b> "Break attempt in progress — 3 crossings. Repeated crossing = whipsaw; a hold beyond = breakout, a rejection = deflection."</div>
+  </div>
+
+  <div class="card">
+    <div class="sect" style="color:var(--red)">PUSHING · after tag — deflection reversal</div>
+    <span class="tile"><span class="tl">ATTRACTION</span>
+      <span class="tv" style="color:var(--red)">PUSHING <small>1↓ · 25% · after tag</small></span>
+      <span class="bar"><i style="right:50%;width:25%;background:var(--red)"></i><span class="mid"></span></span>
+    </span>
+    <div class="cap">The state you flagged: price <b>came to the King, tagged it, deflected, and is being driven away</b>
+    (toward-share 25%). This is the ⚡ Deflection playing out — tile links to the live deflection card and its rec count.
+    PUSHING·after-tag + bleeding %KCH = crown-death signature → succession watch.
+    <br><b>Hover:</b> "Deflected off the King and repelled — don't fade the exit. Cross-check ⚡ Deflections, %KCH and SUCCESSION."</div>
+  </div>
+
+  <div class="card">
+    <div class="sect" style="color:var(--red)">PUSHING · after break — accepted beyond</div>
+    <span class="tile"><span class="tl">ATTRACTION</span>
+      <span class="tv" style="color:var(--red)">PUSHING <small>2↑ · 20% · after break</small></span>
+      <span class="bar"><i style="right:50%;width:28%;background:var(--red)"></i><span class="mid"></span></span>
+    </span>
+    <div class="cap">Price <b>broke through</b> the King and keeps extending from the far side — the break was accepted.
+    Old King's magnet is failing as S/R; typically pairs with succession lighting up in the direction of travel.
+    <br><b>Hover:</b> "Broke the King and holding beyond — magnet failing. Anchor shifts to the successor strike; old King weakens as S/R."</div>
+  </div>
+
+</div>
+
+<div class="note" style="margin-top:14px;border-left:2px solid var(--line);padding-left:10px">
+<b style="color:var(--ink)">Episode memory (per crown, resets on relocation):</b> taps, crossings, nearest approach (strikes),
+gatekeeper node hit (nearest node between price and King at the turn), last deflection id.
+<b>State rules:</b> OUT &gt;3 · PULLING = in-field, tw-share ≥60%, no unresolved contact · BLOCKED = turn before contact at an
+intermediate node · PINNED = |DIST| ≤ 0.25 &amp; dwell · BREAKING = at King, crossings incrementing · PUSHING = tw-share ≤40%
+<i>after</i> a contact event, sub-labeled <b>after tag</b> / <b>after break</b> / <b>after block</b>. NEUTRAL (grey) covers 41–59%.
+Thresholds ⚖ → 📊 via the nightly study; each PUSHING sub-label gets its own scored bucket (does after-tag push predict reversal?
+does after-break push predict succession? does BLOCKED predict gatekeeper holding?).
+<br><br><b style="color:var(--ink)">Yesterday replayed:</b> morning <b style="color:var(--red)">PUSHING·after-tag 780 · ~30%</b>
+while %KCH bled −29% → crown fell → afternoon 775/776 contest read <b style="color:var(--blue)">BREAKING x7</b>
+(the whipsaw flip-flop) → <b style="color:var(--gold)">PINNED 776</b> into the close. Every phase of the day maps to exactly one state.</div>
+</body></html>

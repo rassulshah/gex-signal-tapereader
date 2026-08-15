@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>v10.44 — single-column dashboard: Deflections + Node Map (magnet frame)</title>
+<style>
+  :root{--bg:#0b0e14;--card:#12161f;--line:#1e2530;--green:#2ec27e;--red:#f0616d;--gold:#e3c341;--sub:#8b98a9;--amber:#f2b45a;--blue:#4a90d9;--purple:#b48ce3;--ink:#d7dde6}
+  body{background:#06080c;color:var(--ink);font:11px/1.45 -apple-system,Segoe UI,system-ui,sans-serif;margin:0;padding:16px}
+  h1{font-size:13px;margin:0 0 2px}
+  .note{color:var(--sub);font-size:10px;margin-bottom:10px;max-width:900px}
+  .callout{position:absolute;font-size:8.5px;color:#06080c;background:var(--amber);border-radius:3px;padding:0 5px;font-weight:700;z-index:5;white-space:nowrap}
+  .panel{position:relative;width:390px;background:var(--bg);border:1px solid #2a3342;border-radius:10px;padding:8px 9px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+  .tabs{display:flex;gap:8px;align-items:center;margin-bottom:6px;border-bottom:1px solid var(--line);padding-bottom:4px}
+  .tab{font-size:10px;font-weight:700;border-bottom:2px solid var(--gold);padding-bottom:2px}
+  .tab.off{color:var(--sub);font-weight:400;border-color:transparent}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin-bottom:5px}
+  .chip{border:1px solid var(--line);border-radius:9px;padding:1px 6px;font-size:8.5px;color:var(--sub);background:rgba(255,255,255,.02);white-space:nowrap}
+  .chip b{color:var(--ink)}
+  .nmh{display:flex;font-size:7.5px;color:var(--sub);letter-spacing:.5px;padding:2px 0;border-bottom:1px solid var(--line)}
+  .nmr{display:flex;align-items:center;font-size:9.5px;padding:3px 0;border-bottom:1px dashed rgba(255,255,255,.04)}
+  .c1{width:88px}.c2{width:68px;font-variant-numeric:tabular-nums}.c3{width:66px}.c4{flex:1;text-align:right}
+  .pill{border-radius:8px;padding:0 6px;font-size:8.5px;font-weight:700}
+  .ep{border-radius:4px;padding:0 5px;font-size:8.5px;font-weight:800}
+  .ep small{font-weight:600;opacity:.85}
+  .pxrow{display:flex;justify-content:center;font-size:8.5px;color:var(--blue);padding:2px 0;border-bottom:1px dashed rgba(74,144,217,.35)}
+  .foot{display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:5px;padding-top:4px;font-size:9px;color:var(--sub)}
+</style></head><body>
+
+<h1>v10.44 — single column, magnet-frame Node Map <span style="color:var(--sub);font-weight:400">(yesterday ~1:00p replayed)</span></h1>
+<div class="note">King console + both King charts <b>removed from UI</b> (all recording + nightly scoring continues silently).
+One column: <b>Deflections → Node Map</b>. <b style="color:var(--amber)">Amber tags</b> mark what changed.</div>
+
+<div class="panel">
+  <span class="callout" style="top:-8px;left:110px">single column · King area removed</span>
+  <div class="tabs"><span class="tab">Dashboard</span><span class="tab off">📊 Analysis</span>
+    <span style="margin-left:auto;color:var(--sub);font-size:9px">Tapereader · ● live</span></div>
+
+  <div class="card" style="position:relative">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:9.5px;font-weight:700">⚡ Deflections <span style="color:var(--sub);font-weight:400">2 today</span></span>
+    </div>
+    <div style="display:flex;gap:4px;overflow-x:auto;margin-top:3px">
+      <span class="chip" style="border-color:rgba(180,140,227,.5)"><b style="color:var(--purple)">777</b> Defl ↓ 11:48a · trend resumed ✓</span>
+      <span class="chip" style="border-color:rgba(227,195,65,.5)"><b style="color:var(--gold)">775 👑</b> Defl ↑ 12:41p · LOD ✓</span>
+    </div>
+  </div>
+
+  <div class="card" style="position:relative">
+    <span class="callout" style="top:-7px;right:6px">NEW · Flr/Ceil = the live range</span>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+      <span style="font-size:9.5px;font-weight:700">⑤ Node Map</span>
+      <span class="chip">Range <b>775–777</b> · inside · Whipsaw ⚖</span>
+    </div>
+    <div class="nmh"><span class="c1">IDENTITY</span><span class="c2">STRIKE·%</span><span class="c3">STATE</span><span class="c4">ACTIVITY · LIFE</span></div>
+
+    <div class="nmr"><span class="c1"><span class="pill" style="background:rgba(139,152,169,.12);color:var(--sub)">★ Mag</span></span>
+      <span class="c2">779 · 30%</span><span class="c3" style="color:var(--sub)">Steady <span style="color:var(--green);font-size:8px">+γ</span></span>
+      <span class="c4"><span class="ep" style="background:rgba(255,255,255,.05);color:var(--sub)">held</span> <span style="color:var(--sub);font-size:8px">T</span></span></div>
+
+    <div class="nmr" style="position:relative"><span class="c1"><span class="pill" style="background:rgba(180,140,227,.18);color:var(--purple)">▔ Ceil 🍆</span></span>
+      <span class="c2" style="color:var(--purple)">777 · 72%</span><span class="c3" style="color:var(--sub)">Steady <span style="color:var(--purple);font-size:8px">−γ</span></span>
+      <span class="c4"><span class="ep" style="background:rgba(240,97,109,.14);color:var(--red)">Push <small>↓ 28%</small></span> <span style="color:var(--sub);font-size:8px">T</span></span>
+      <span class="callout" style="top:-6px;left:150px">nearest strong above = Ceil (not 779)</span></div>
+
+    <div class="pxrow">— SPY 776.1 —</div>
+
+    <div class="nmr"><span class="c1"><span class="pill" style="background:rgba(227,195,65,.15);color:var(--gold)">🚪 Gate</span></span>
+      <span class="c2">776 · 37%</span><span class="c3" style="color:var(--green)">Acm <span style="color:var(--green);font-size:8px">+γ</span></span>
+      <span class="c4"><span class="ep" style="background:rgba(227,195,65,.16);color:var(--gold)">BOw</span> <span style="color:var(--green);font-size:8px">●</span></span></div>
+
+    <div class="nmr" style="background:rgba(227,195,65,.05);position:relative">
+      <span class="c1"><span class="pill" style="background:rgba(180,140,227,.2);color:var(--purple)">👑 King · Flr</span></span>
+      <span class="c2" style="color:var(--purple)">775 · 100%</span><span class="c3" style="color:var(--red)">Diss <span style="color:var(--purple);font-size:8px">−γ</span></span>
+      <span class="c4"><span class="ep" style="background:rgba(46,194,126,.14);color:var(--green)">Push <small>↑ 22%</small></span> <span style="color:var(--amber);font-size:8px">●</span></span>
+      <span class="callout" style="bottom:-7px;left:150px">−γ King = purple · also range Flr</span></div>
+
+    <div class="nmr"><span class="c1"><span class="pill" style="background:rgba(139,152,169,.12);color:var(--sub)">Mag</span></span>
+      <span class="c2">772 · 6%</span><span class="c3" style="color:var(--sub)">Steady</span>
+      <span class="c4" style="color:var(--sub)">—</span></div>
+  </div>
+
+  <div class="foot"><span style="color:var(--green)">SPY:feed</span><span>rec ● king·proj·episodes</span></div>
+  <span class="callout" style="bottom:-8px;left:120px">recording continues silently (footer dot)</span>
+</div>
+
+<div class="note" style="margin-top:16px;border-left:2px solid var(--line);padding-left:10px;max-width:900px">
+<b style="color:var(--ink)">IDENTITY (final):</b> 👑 King · 🚪 Gate · <b>▔ Ceil / ⛰ Flr</b> = nearest strong magnet (≥15% of King mass)
+above / below price — together they ARE the live range (Step 3). Roles stack (👑 King · Flr). Other nodes: ★ Mag (strong) / Mag (minor) —
+no directional words. Sup/Res/Flr-old vocabulary retired. −γ identity = purple throughout (Skylit convention), including a −γ King.<br><br>
+<b style="color:var(--ink)">ACTIVITY (final):</b> <b style="color:var(--green)">Pull</b> <small>(w/ toward-share %)</small> →
+<b style="color:var(--gold)">BOw</b> <small>(at node · watch + initial break)</small> →
+<b style="color:var(--blue)">BO·FT</b> <small>(only breakout chip; FT = full-hold OR 2 consecutive progressing closes beyond, both directions)</small> →
+<b>Defl ↑/↓</b> <small>(event, hands off to)</small> → <b style="color:var(--red)">Push</b> <small>(w/ toward-share %)</small> →
+echoes <small>(broke ↑/↓ · held · FBO)</small>. Push off a node <i>below</i> price renders green (bullish), above = red.<br><br>
+<b style="color:var(--ink)">Range events:</b> Ceil/Flr break + FT ⇒ range redefines to next strong magnet; the redefinition is echoed
+and scored nightly (retest-from-other-side rate). Range chip in the header shows the pair + inside/outside.</div>
+</body></html>
