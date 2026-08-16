@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GEX v10.46 Dashboard Mockup</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  background: #0b0e14;
+  color: #c8d3df;
+  line-height: 1.4;
+  padding: 20px;
+}
+
+.container { max-width: 500px; margin: 0 auto; }
+.tab-bar {
+  display: flex;
+  gap: 2px;
+  background: #12161f;
+  border-bottom: 1px solid #1a2029;
+  padding: 4px 4px 0;
+  margin: -2px -2px 6px;
+  border-radius: 8px 8px 0 0;
+}
+.tab {
+  cursor: pointer;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #666;
+  border: none;
+  background: transparent;
+}
+.tab.active {
+  font-weight: 800;
+  color: #c8d3df;
+  border-bottom: 2px solid #d4a574;
+  background: #0b0e14;
+  border-radius: 6px 6px 0 0;
+}
+
+.panel {
+  background: #12161f;
+  border: 1px solid #1a2029;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.read-block {
+  padding: 4px 8px 5px;
+  border-left: 2px solid #d4a574;
+  margin: 2px 0 4px;
+  background: #0b0e14;
+  border-radius: 0 8px 8px 0;
+  font-size: 9.5px;
+  line-height: 1.5;
+}
+
+.read-label { color: #d4a574; font-weight: 800; }
+.read-text { color: #c8d3df; }
+.read-detail { color: #666; font-size: 7.5px; margin-top: 3px; opacity: 0.85; }
+
+.badge-row {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0;
+  align-items: center;
+}
+.badge {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 3px 8px;
+  border: 1.5px solid #d4a574;
+  border-radius: 14px;
+  background: #0b0e14;
+  font-size: 10px;
+  flex: 0 1 auto;
+}
+.badge-title { font-size: 11px; }
+.badge-divider {
+  width: 100%;
+  height: 1px;
+  background: #1a2029;
+  margin: 1px 0;
+}
+.badge-value { color: #d4a574; font-weight: 800; font-size: 13px; }
+.badge-sub { color: #666; font-size: 9px; }
+
+.node-map {
+  background: #0b0e14;
+  border: 1px solid #1a2029;
+  border-radius: 8px;
+  margin: 4px 0;
+  padding: 0;
+  font-size: 9px;
+}
+.node-row {
+  display: flex;
+  align-items: center;
+  font-size: 10px;
+  padding: 3px 6px;
+  border-bottom: 1px solid #161b26;
+  gap: 6px;
+}
+.node-row:last-child { border-bottom: none; }
+.node-strike { flex: 0 0 40px; color: #d4a574; font-weight: 700; font-size: 11px; }
+.node-identity { flex: 0 0 50px; color: #666; text-align: center; }
+.node-activity { flex: 1; color: #c8d3df; }
+.node-life { flex: 0 0 50px; color: #666; text-align: right; }
+
+.deflection-block {
+  background: #0b0e14;
+  border: 1px solid #1a2029;
+  border-radius: 8px;
+  padding: 6px;
+  margin: 4px 0;
+  font-size: 9px;
+}
+.defl-item {
+  padding: 3px 4px;
+  border-bottom: 1px solid #161b26;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.defl-item:last-child { border-bottom: none; }
+.defl-time { flex: 0 0 35px; color: #666; font-variant-numeric: tabular-nums; }
+.defl-level { flex: 0 0 40px; color: #d4a574; font-weight: 600; }
+.defl-event { flex: 1; }
+.defl-outcome { flex: 0 0 45px; text-align: right; color: #666; }
+
+.feed-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #666;
+  font-size: 9px;
+  letter-spacing: 0.3px;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #1a2029;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: #c8d3df;
+  margin: 8px 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.analysis-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+.analysis-title { font-size: 14px; font-weight: 800; }
+.analysis-sub { font-size: 10px; color: #666; }
+.grade-badge {
+  background: #12161f;
+  border: 1px solid #1a2029;
+  border-radius: 8px;
+  padding: 6px 4px;
+  text-align: center;
+  flex: 0 0 52px;
+}
+.grade-label { font-size: 8px; color: #666; letter-spacing: 0.5px; }
+.grade-value { font-size: 18px; font-weight: 800; color: #2ec27e; line-height: 1.1; margin-top: 2px; }
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+  margin: 8px 0;
+}
+.kpi-card {
+  background: #12161f;
+  border: 1px solid #1a2029;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 9px;
+}
+.kpi-label { color: #666; }
+.kpi-value { font-size: 15px; font-weight: 800; color: #2ec27e; margin: 3px 0; }
+.kpi-sub { font-size: 8px; color: #666; }
+
+.save-banner {
+  background: #1a160d;
+  border: 1px solid #3a301c;
+  border-radius: 8px;
+  padding: 7px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 10px;
+}
+.save-banner-label { color: #d4a574; }
+.save-button {
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 800;
+  color: #0b0e14;
+  background: #d4a574;
+  border-radius: 14px;
+  padding: 3px 10px;
+  border: none;
+}
+
+.step-row {
+  margin: 8px 0 6px;
+  font-size: 9.5px;
+}
+.step-header {
+  font-weight: 700;
+  color: #d4a574;
+  margin-bottom: 2px;
+}
+.step-content {
+  margin: 0 0 10px 14px;
+  background: #12161f;
+  border: 1px solid #1a2029;
+  border-radius: 10px;
+  padding: 8px;
+  font-size: 9px;
+  color: #c8d3df;
+}
+
+.insight-box {
+  background: #0e1a13;
+  border: 1px solid #1c3a28;
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin: 4px 0;
+  font-size: 10px;
+}
+.insight-title { color: #2ec27e; font-weight: 800; margin-bottom: 4px; }
+
+.testing-card {
+  background: #0b0e14;
+  border: 1px solid #1a2029;
+  border-radius: 8px;
+  padding: 8px;
+  margin: 4px 0;
+}
+.testing-title { font-size: 9.5px; font-weight: 700; color: #d4a574; margin-bottom: 4px; }
+.testing-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5px;
+}
+.testing-table tr { border-top: 1px dashed rgba(255,255,255,0.05); }
+.testing-table td { padding: 2px 3px; }
+.testing-table th { color: #666; font-weight: 600; padding: 2px 3px; text-align: left; }
+
+.hidden { display: none; }
+.active-view { display: block; }
+
+.mock-footer {
+  font-size: 8px;
+  color: #666;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #1a2029;
+  text-align: center;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<!-- TAB BAR -->
+<div class="tab-bar">
+  <button class="tab active" onclick="showDashboard()">Dashboard</button>
+  <button class="tab" onclick="showAnalysis()">📊 Analysis</button>
+  <button class="tab" onclick="showTesting()">🧪 Testing</button>
+</div>
+
+<!-- ============= DASHBOARD TAB ============= -->
+<div id="dashboard-view" class="active-view">
+
+<!-- TAPE-SYNC WARNING — header only, one line; hover carries the detail. App renders below. -->
+<div title="Tape out of sync — the three King sources (tape $K tag · raw feed · tape max %King) do not agree. Closed market or parse issue; structure shown is last-known. Diagnose: __gptsDebug.syncReport()" style="display:flex;align-items:center;gap:6px;border:1px solid #f0616d;background:rgba(240,97,109,.08);border-radius:6px;padding:2px 8px;margin:2px 0 6px;font-size:10px;font-weight:800;color:#f0616d;letter-spacing:.3px">⚠ STRUCTURAL READ OUT OF SYNC WITH TAPE</div>
+
+<!-- KING HEADER CLUSTER: ★SUP ← 👑 King / 🚪 gatekeeper → ★RES  (restored) -->
+<div style="display:flex;justify-content:space-between;align-items:center;gap:4px;margin:4px 0 3px;padding:0 2px">
+  <span style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 6px;min-height:40px;border-radius:14px;background:#0b0e14;border:1.5px solid #2ec27e">
+    <span style="font-size:7.5px;font-weight:800;color:#2ec27e;letter-spacing:.3px">★ SUP</span>
+    <span style="width:100%;height:1px;background:#1a2029;margin:2px 0"></span>
+    <span style="white-space:nowrap"><span style="font-weight:800;font-size:12.5px;color:#2ec27e">773.25</span> <span style="color:#666;font-size:8.5px;font-weight:600">41%</span></span>
+  </span>
+  <span style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;padding:3px 8px;border:1.5px solid #d4a574;border-radius:14px;background:#0b0e14">
+    <span style="display:inline-flex;align-items:center;line-height:1">
+      <span style="font-size:12px">👑</span>
+      <span style="color:#d4a574;font-weight:800;font-size:13px;margin-left:3px">775.38</span>
+      <span style="color:#2ec27e;font-weight:800;font-size:11px;margin-left:3px">+1↑</span>
+    </span>
+    <span style="width:100%;height:1px;background:#1a2029;margin:1px 0"></span>
+    <span style="display:inline-flex;align-items:center;gap:3px;line-height:1">
+      <svg width="14" height="12" viewBox="0 0 20 18" fill="none" stroke="#c8d3df" stroke-width="1.6" stroke-linecap="round" style="vertical-align:middle"><path d="M3 16 V7 a7 7 0 0 1 14 0 V16"/><line x1="3" y1="16" x2="17" y2="16"/><line x1="7" y1="16" x2="7" y2="6"/><line x1="10" y1="16" x2="10" y2="4.2"/><line x1="13" y1="16" x2="13" y2="6"/><line x1="4.5" y1="10" x2="15.5" y2="10"/></svg>
+      <span style="color:#c8d3df;font-weight:700;font-size:10px">774.50</span>
+      <span style="color:#2ec27e;font-weight:800;font-size:10px">+0↑</span>
+    </span>
+  </span>
+  <span style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 6px;min-height:40px;border-radius:14px;background:#0b0e14;border:1.5px solid #f0616d">
+    <span style="font-size:7.5px;font-weight:800;color:#f0616d;letter-spacing:.3px">★ RES</span>
+    <span style="width:100%;height:1px;background:#1a2029;margin:2px 0"></span>
+    <span style="white-space:nowrap"><span style="font-weight:800;font-size:12.5px;color:#f0616d">776.50</span> <span style="color:#666;font-size:8.5px;font-weight:600">33%</span></span>
+  </span>
+</div>
+<!-- 5-STEP ①②③ icons -->
+<div style="display:flex;gap:5px;align-items:center;justify-content:center;margin:0 0 6px">
+  <span style="font-size:8.5px;color:#666;font-weight:700;letter-spacing:.3px;margin-right:2px">5-STEP</span>
+  <span title="① Identify Magnets" style="display:inline-flex;width:15px;height:15px;border-radius:50%;border:1px solid #d4a574;color:#d4a574;font-size:9px;font-weight:800;align-items:center;justify-content:center;cursor:pointer">1</span>
+  <span title="② Spot the King" style="display:inline-flex;width:15px;height:15px;border-radius:50%;border:1px solid #d4a574;color:#d4a574;font-size:9px;font-weight:800;align-items:center;justify-content:center;cursor:pointer">2</span>
+  <span title="③ Define the Range" style="display:inline-flex;width:15px;height:15px;border-radius:50%;border:1px solid #d4a574;color:#d4a574;font-size:9px;font-weight:800;align-items:center;justify-content:center;cursor:pointer">3</span>
+</div>
+
+<!-- READ ▸ — one paragraph: verdict word, destination, what's between, S/R state, King state, odds, watch level -->
+<div class="read-block" style="font-size:10px;line-height:1.55">
+  <span class="read-label">READ ▸</span>
+  <b style="color:#2ec27e">BULLISH.</b> Price is going up toward the King at <b>775.38</b>, about a strike away. The Gate at <b>774.50</b> is in between and it has already held twice. Support at <b>773.25</b> is building while Resistance at <b>776.50</b> is fading. The King is getting heavier — dealers are pulling price up. This has worked <b>60%</b> of the time at this distance, <b>74%</b> in this hour 📊. Watch the floor at <b>773.25</b>: breaking it changes the read.
+  <div class="read-detail">📊 measured on local repo · 402 bars · 8 days · re-scored nightly · in CHOP the odds sentence is dropped and the verdict is SIDEWAYS</div>
+</div>
+
+<!-- ⚡ DEFLECTIONS — confirmed events; chips = Step-5 context at the moment of the deflection -->
+<div style="display:flex;align-items:center;gap:6px;margin:6px 2px 4px">
+  <span style="font-size:11px;font-weight:800;color:#c8d3df">⚡ Deflections</span>
+  <span style="font-size:9px;color:#666">2 · newest ←</span>
+</div>
+<div style="display:flex;gap:8px;overflow-x:auto;padding:0 2px 6px">
+  <div style="flex:0 0 auto;min-width:118px;background:#0b0e14;border:1px solid #2ec27e;border-radius:8px;padding:5px 8px">
+    <div style="display:flex;align-items:baseline;gap:5px"><span style="font-size:14px;font-weight:800">774.50</span><span style="font-size:10px;color:#2ec27e;font-weight:800">▲</span><span style="font-size:8.5px;color:#666;margin-left:auto">12:15</span></div>
+    <div style="font-size:10px;font-weight:700;margin:1px 0 3px">Defl · Gate</div>
+    <div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:3px"><span style="font-size:8px;border:1px solid #2ec27e;color:#2ec27e;border-radius:9px;padding:0 4px">Acm ▲9%</span><span style="font-size:8px;border:1px solid #1a2029;border-radius:9px;padding:0 4px;color:#666">+γ</span><span style="font-size:8px;border:1px solid #1a2029;border-radius:9px;padding:0 4px;color:#666">2nd tap</span><span style="font-size:8px;border:1px solid #1a2029;border-radius:9px;padding:0 4px;color:#666">settled</span></div>
+    <div><span style="font-size:14px;font-weight:800;color:#2ec27e">B</span> <span style="font-size:8.5px;color:#666">64% n22 📊</span></div>
+  </div>
+  <div style="flex:0 0 auto;min-width:118px;background:#0b0e14;border:1px solid #f0616d;border-radius:8px;padding:5px 8px">
+    <div style="display:flex;align-items:baseline;gap:5px"><span style="font-size:14px;font-weight:800">776.50</span><span style="font-size:10px;color:#f0616d;font-weight:800">▼</span><span style="font-size:8.5px;color:#666;margin-left:auto">11:48</span></div>
+    <div style="font-size:10px;font-weight:700;margin:1px 0 3px">Defl · Ceil</div>
+    <div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:3px"><span style="font-size:8px;border:1px solid #2ec27e;color:#2ec27e;border-radius:9px;padding:0 4px">Acm ▲14%</span><span style="font-size:8px;border:1px solid #1a2029;border-radius:9px;padding:0 4px;color:#666">+γ</span><span style="font-size:8px;border:1px solid #1a2029;border-radius:9px;padding:0 4px;color:#666">3rd tap</span><span style="font-size:8px;border:1px solid #d4a574;color:#d4a574;border-radius:9px;padding:0 4px">reshuf</span></div>
+    <div><span style="font-size:8.5px;font-weight:700;color:#666;border:1px dashed #666;border-radius:999px;padding:0 5px">● rec n11</span></div>
+  </div>
+</div>
+
+<!-- ⑤ NODE MAP — header is one plain sentence: verdict, node, destination, because + Acm/Dec of the nodes involved -->
+<div style="margin:6px 2px 4px;font-size:10px;line-height:1.5">
+  <span style="display:inline-flex;width:14px;height:14px;border-radius:50%;border:1px solid #d4a574;color:#d4a574;font-size:8.5px;font-weight:800;align-items:center;justify-content:center;vertical-align:middle;margin-right:5px">5</span><b style="color:#2ec27e">CONTINUATION</b> through <b>774.50</b> toward the King at <b>775.38</b> because the gate is decreasing (<span style="color:#f0616d">▼8%</span>), while the King above is accumulating (<span style="color:#2ec27e">▲12%</span>) and pulling harder. Support at <b>773.25</b> is accumulating too so the floor under the move is firm.
+</div>
+<div style="display:flex;gap:8px;font-size:7.5px;letter-spacing:.4px;text-transform:uppercase;color:#666;font-weight:800;padding:0 6px 3px">
+  <span style="width:105px">Identity</span><span style="width:62px">Strike</span><span style="width:92px">State</span><span style="flex:1;text-align:right">Activity · Life</span>
+</div>
+<div class="node-map">
+  <div class="node-row"><span style="width:105px;color:#666;font-size:9px;font-weight:700">★ Mag · next</span><span style="width:62px"><b style="color:#c8d3df">777.75</b></span><span style="width:92px;color:#2ec27e;font-weight:800">Acm ▲6%</span><span style="flex:1;text-align:right"><span style="color:#666;font-size:8px">● Fresh</span></span></div>
+  <div class="node-row"><span style="width:105px;color:#f0616d;font-size:9px;font-weight:700">▔ Ceil</span><span style="width:62px"><b style="color:#c8d3df">776.50</b></span><span style="width:92px;color:#f0616d;font-weight:800">Dec ▼3%</span><span style="flex:1;text-align:right"><span style="color:#f0616d;font-size:8.5px;font-weight:800">Defl ↓</span> <span style="color:#666;font-size:8px">● Tested 2</span></span></div>
+  <div class="node-row" style="background:rgba(46,194,126,.06)"><span style="width:105px;color:#d4a574;font-size:9px;font-weight:700">👑 King</span><span style="width:62px"><b style="color:#d4a574">775.38</b></span><span style="width:92px;color:#2ec27e;font-weight:800">Acm ▲12%</span><span style="flex:1;text-align:right"><span style="color:#6699dd;border:1px solid #6699dd;border-radius:9px;padding:0 5px;font-size:8.5px;font-weight:700">Pull</span> <span style="color:#666;font-size:8px">● Fresh</span></span></div>
+  <div class="node-row" style="background:rgba(46,194,126,.06)"><span style="width:105px;color:#c8d3df;font-size:9px;font-weight:700"><svg width="14" height="12" viewBox="0 0 20 18" fill="none" stroke="#c8d3df" stroke-width="1.6" stroke-linecap="round" style="vertical-align:middle"><path d="M3 16 V7 a7 7 0 0 1 14 0 V16"/><line x1="3" y1="16" x2="17" y2="16"/><line x1="7" y1="16" x2="7" y2="6"/><line x1="10" y1="16" x2="10" y2="4.2"/><line x1="13" y1="16" x2="13" y2="6"/><line x1="4.5" y1="10" x2="15.5" y2="10"/></svg> Gate</span><span style="width:62px"><b style="color:#c8d3df">774.50</b></span><span style="width:92px;color:#f0616d;font-weight:800">Dec ▼8%</span><span style="flex:1;text-align:right"><span style="color:#d4a574;border:1px solid #d4a574;border-radius:9px;padding:0 5px;font-size:8.5px;font-weight:800">BOw</span> <span style="color:#666;font-size:8px">● Tested 2</span></span></div>
+  <div style="display:flex;justify-content:center;align-items:center;height:16px;margin:2px 4px;background:#0b0e14;border:1px dashed #6699dd;border-radius:6px;color:#6699dd;font-size:10px;font-weight:800">— SPY 774.30 —</div>
+  <div class="node-row"><span style="width:105px;color:#2ec27e;font-size:9px;font-weight:700">⛰ Flr</span><span style="width:62px"><b style="color:#c8d3df">773.25</b></span><span style="width:92px;color:#2ec27e;font-weight:800">Acm ▲19%</span><span style="flex:1;text-align:right"><span style="color:#2ec27e;font-size:8.5px;font-weight:800">held</span> <span style="color:#666;font-size:8px">● Delivered</span></span></div>
+  <div class="node-row"><span style="width:105px;color:#b58bff;font-size:9px;font-weight:700">🍆 Mag · next</span><span style="width:62px"><b style="color:#c8d3df">771.50</b></span><span style="width:92px;color:#666;font-weight:700">Steady</span><span style="flex:1;text-align:right"></span></div>
+</div>
+
+<!-- FOOTER -->
+<div class="feed-status">
+  <span style="color:#2ec27e">SPY:gex</span>
+  <span style="color:#f0616d;font-weight:600">⚠ tape</span>
+  <span><span style="color:#2ec27e">rec ●</span> saved today ✓ <span style="border:1px solid #1a2029;border-radius:6px;padding:0 4px">💾</span> <span style="border:1px solid #1a2029;border-radius:6px;padding:0 4px">📁</span></span>
+  <span>feed v10.46</span>
+</div>
+
+</div>
+
+<!-- ============= ANALYSIS TAB ============= -->
+<div id="analysis-view" class="hidden">
+
+<div class="save-banner">
+  <span class="save-banner-label">Today's data isn't saved yet.</span>
+  <button class="save-button">📥 Save &amp; prep review</button>
+</div>
+
+<div class="analysis-header">
+  <div>
+    <div class="analysis-title">Did the dashboard tell the truth today?</div>
+    <div class="analysis-sub">SPY · 2026-08-15 · 127 bars · 94 scored · same order as the dashboard</div>
+  </div>
+  <div style="text-align:right">
+    <div class="analysis-sub" style="color:#d4a574">⚘ live from tape</div>
+    <div style="margin-top:4px;font-size:9px"><span style="cursor:pointer;color:#6699dd;border:1px solid #1a2029;border-radius:10px;padding:2px 7px">📂 Load day</span></div>
+  </div>
+</div>
+
+<!-- ① READ verdicts -->
+<div class="step-row">
+  <div class="step-header">① READ — direction & structure</div>
+  <div class="step-content" style="padding:6px 8px">
+    <table style="width:100%;border-collapse:collapse;font-size:8.5px">
+      <tr style="color:#666"><td>time</td><td>verdict</td><td>to</td><td>+30m</td><td>+60m</td><td>reached</td><td>watch</td></tr>
+      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>08:33</td><td style="color:#666">TBD</td><td>—</td><td>+0.4</td><td>+1.1</td><td>—</td><td>774.50 held</td></tr>
+      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>09:12</td><td style="color:#2ec27e;font-weight:800">BULLISH</td><td>👑 775.38 (1.1↑)</td><td style="color:#2ec27e">+0.9</td><td style="color:#2ec27e">+1.3</td><td style="color:#2ec27e">✓ 09:48</td><td>773.25 held</td></tr>
+      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>10:21</td><td style="color:#666;font-weight:800">SIDEWAYS</td><td>773.25–776.50</td><td>+0.2</td><td>−0.3</td><td>inside ✓</td><td>edges held</td></tr>
+      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>12:15</td><td style="color:#f0616d;font-weight:800">BEARISH</td><td>⛰ 773.25 (1.9↓)</td><td style="color:#f0616d">−0.8</td><td>+0.1</td><td style="color:#f0616d">✗</td><td style="color:#f0616d">776.50 broke 13:02</td></tr>
+      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>13:06</td><td style="color:#2ec27e;font-weight:800">BULLISH</td><td>▔ 777.75 (1.2↑)</td><td style="color:#2ec27e">+1.0</td><td style="color:#2ec27e">+1.4</td><td style="color:#2ec27e">✓ 13:39</td><td>776.50 held</td></tr>
+    </table>
+    <div style="font-size:8.5px;color:#666;margin-top:5px">verdicts <b style="color:#c8d3df">3 of 4</b> directional right · destination reached <b style="color:#c8d3df">2 of 3</b> · READ quoted 60% pull, today 67% · CHOP suppressed odds 10:21–12:12 (regime gate fired 1×)</div>
+  </div>
+</div>
+
+<!-- ② Node Map calls -->
+<div class="step-row">
+  <div class="step-header">② NODE MAP — continuation / deflection calls</div>
+  <div class="step-content" style="padding:6px 8px">
+    <table style="width:100%;border-collapse:collapse;font-size:8.5px">
+      <tr style="color:#666"><td>time</td><td>call</td><td>node</td><td>because</td><td>resolved</td></tr>
+      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>09:15</td><td style="color:#2ec27e;font-weight:800">CONT</td><td>Gate 774.50 → 👑</td><td>Gate Dec ▼8% · King Acm ▲12%</td><td style="color:#2ec27e">✓ through 09:27</td></tr>
+      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>09:44</td><td style="color:#f0616d;font-weight:800">DEFL</td><td>Ceil 776.50</td><td>Acm ▲14% · 2nd tap · 777.75 Acm</td><td style="color:#2ec27e">✓ Defl ↓ 09:51</td></tr>
+      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>11:30</td><td style="color:#d4a574;font-weight:800">RSHUF</td><td>—</td><td>3 nodes &gt;20% in 15m</td><td>settled 11:48 · new Gate 775.00</td></tr>
+      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>12:15</td><td style="color:#f0616d;font-weight:800">DEFL</td><td>Ceil 776.50</td><td>Steady · <b style="color:#f0616d">3rd tap</b> · −γ</td><td style="color:#f0616d">✗ broke 13:02</td></tr>
+      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>13:06</td><td style="color:#2ec27e;font-weight:800">CONT</td><td>776.50 → 777.75</td><td>Ceil Dec ▼11% · BO·FT</td><td style="color:#2ec27e">✓ through</td></tr>
+    </table>
+    <div style="font-size:8.5px;color:#666;margin-top:5px">CONT <b style="color:#c8d3df">2/2</b> · DEFL <b style="color:#c8d3df">1/2</b> (the miss was a 3rd tap — warning fired) · 1 reshuffle, 18m, no call issued during it</div>
+  </div>
+</div>
+
+<!-- ③ Deflections + setup performance -->
+<div class="step-row">
+  <div class="step-header">③ DEFLECTIONS — today's events + setup performance</div>
+  <div class="step-content" style="padding:6px 8px">
+    <table style="width:100%;border-collapse:collapse;font-size:8.5px;margin-bottom:6px">
+      <tr style="color:#666"><td>time</td><td>node</td><td>dir</td><td>context</td><td>+30m</td><td>grade</td></tr>
+      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>09:51</td><td>Ceil 776.50</td><td style="color:#f0616d">▼</td><td>Acm ▲14% · +γ · 2nd tap · settled</td><td style="color:#2ec27e">−1.1 ✓</td><td style="color:#2ec27e;font-weight:800">B</td></tr>
+      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>12:15</td><td>Gate 774.50</td><td style="color:#2ec27e">▲</td><td>Acm ▲9% · +γ · 2nd tap · RShuf</td><td style="color:#2ec27e">+0.9 ✓</td><td style="color:#666">● rec</td></tr>
+    </table>
+    <div style="font-size:9px;font-weight:700;color:#c8d3df;margin:6px 0 2px">Setup performance <span style="font-weight:400;color:#666">— % of confirmed deflections that continued in the deflection direction · drives the grade</span></div>
+    <div style="font-size:8.5px">
+      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="width:88px">BO·FT retest ↑</span><span style="flex:1;height:8px;background:#1a2029;border-radius:4px;position:relative"><span style="position:absolute;left:0;top:0;bottom:0;width:78%;background:#2ec27e;border-radius:4px"></span></span><span style="width:62px;text-align:right;color:#666">78% · n23</span></div>
+      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="width:88px">King defl</span><span style="flex:1;height:8px;background:#1a2029;border-radius:4px;position:relative"><span style="position:absolute;left:0;top:0;bottom:0;width:71%;background:#2ec27e;border-radius:4px"></span></span><span style="width:62px;text-align:right;color:#666">71% · n31</span></div>
+      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="width:88px">Ceil/Flr defl</span><span style="flex:1;height:8px;background:#1a2029;border-radius:4px;position:relative"><span style="position:absolute;left:0;top:0;bottom:0;width:66%;background:#6699dd;border-radius:4px"></span></span><span style="width:62px;text-align:right;color:#666">66% · n52</span></div>
+      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="width:88px">Reverse Rug</span><span style="flex:1;height:8px;background:#1a2029;border-radius:4px;position:relative"><span style="position:absolute;left:0;top:0;bottom:0;width:67%;background:#6699dd;border-radius:4px"></span></span><span style="width:62px;text-align:right;color:#666">67% · n27</span></div>
+      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="width:88px">Gate defl</span><span style="flex:1;height:8px;background:#1a2029;border-radius:4px;position:relative"><span style="position:absolute;left:0;top:0;bottom:0;width:44%;background:#d4a574;border-radius:4px"></span></span><span style="width:62px;text-align:right;color:#666">44% · n18</span></div>
+      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="width:88px;color:#f0616d">3rd+ tap (any)</span><span style="flex:1;height:8px;background:#1a2029;border-radius:4px;position:relative"><span style="position:absolute;left:0;top:0;bottom:0;width:31%;background:#f0616d;border-radius:4px"></span></span><span style="width:62px;text-align:right;color:#666">31% · n16</span></div>
+    </div>
+    <div style="font-size:7.5px;color:#666;margin-top:4px">A+ ≥75 · A ≥68 · B ≥58 · C ≥45 · D &lt;45 · grade unlocks at n≥20 · split by VWAP / session-level proximity once n allows</div>
+  </div>
+</div>
+
+<!-- ④ Flow -->
+<div class="step-row">
+  <div class="step-header">④ FLOW — reshuffles · rolling · state changes</div>
+  <div class="step-content" style="padding:6px 8px;font-size:8.5px;line-height:1.6">
+    <div><b style="color:#d4a574">RShuf</b> 11:30–11:48 · 776.50 Dec, 774.50 &amp; 773.25 Acm · new Gate 775.00 · price after: +0.6 in 30m</div>
+    <div><b style="color:#2ec27e">Flr rolled ↑</b> 772.00 → 773.25 at 10:04 (bullish) · price +1.4 next 60m ✓</div>
+    <div><b style="color:#f0616d">Ceil rolled ↓</b> 777.75 → 776.50 at 12:02 (bearish) · price −0.8 next 60m ✓ · rolled back ↑ 13:06</div>
+    <div>State flips on King/Gate/Flr/Ceil: 5 · Acm→Dec on Ceil preceded both breaks · Dec→Acm on Flr preceded the 09:51 bounce</div>
+    <div style="color:#666;margin-top:3px">rolling calls right <b style="color:#c8d3df">2/2</b> today · all-time 📊 64% n=39</div>
+  </div>
+</div>
+
+<!-- ⑤ King -->
+<div class="step-row">
+  <div class="step-header">⑤ KING — path &amp; projection scorecard</div>
+  <div class="step-content" style="padding:6px 8px;font-size:8.5px;line-height:1.6">
+    <div>👑 775.38 all day (0 rolls) · first tag 09:48 · reached again 13:20 · <b>closed 0.4 from King</b> — pinned ✓ · %KCh open→noon +12%, →close +19%</div>
+    <div style="color:#666">Projection: target reached 68% n=112 · ETA median +2m · cone coverage 71% · succession 71% n=34 · <span style="color:#2ec27e">▪</span> all within band</div>
+  </div>
+</div>
+
+<!-- ⑥ Review -->
+<div class="step-row">
+  <div class="step-header">⑥ REVIEW — nightly LLM · what worked / missed / change</div>
+  <div class="insight-box"><div class="insight-title">✓ WORKED</div><div style="line-height:1.5">Both CONTINUATION calls resolved; the Gate Dec ▼8% + King Acm pattern held. Flr roll-up at 10:04 was the earliest bullish tell of the day.</div></div>
+  <div class="insight-box" style="background:#1c1113;border-color:#3a1c22"><div style="color:#f0616d;font-weight:800;margin-bottom:4px">✕ MISSED</div><div style="line-height:1.5">12:15 DEFL call on a 3rd tap failed as the warning predicted — the call should have been suppressed, not warned. BEARISH verdict at 12:15 lasted 51m and never reached the floor.</div></div>
+  <div class="insight-box" style="background:#160f1f;border-color:#2e2140"><div style="color:#b58ce0;font-weight:800;margin-bottom:4px">💡 START TRACKING / CHANGE</div>
+    <div style="line-height:1.5">1 · Both failed deflections today were &gt;0.40 from VWAP; both holds were within 0.15 — split deflection grades by VWAP distance once n≥20.<br>2 · Suppress DEFL calls at 3rd+ tap (currently warns) — 31% n=16 all-time.<br>3 · Reshuffle threshold: 20%/15m fired once and matched a real structure change; keep.</div></div>
+</div>
+
+</div>
+
+<!-- ============= TESTING TAB ============= -->
+<div id="testing-view" class="hidden">
+
+<div class="panel">
+  <div style="font-size: 11px; font-weight: 800; color: #c8d3df; margin-bottom: 2px">
+    🧪 Testing <span style="font-size: 9px; font-weight: 400; color: #666">— measured on local repo · 402 bars</span>
+  </div>
+  <div style="font-size: 8.5px; color: #666; margin-bottom: 8px">
+    coverage: <strong style="color: #c8d3df">8d</strong> · <strong style="color: #c8d3df">402</strong> outcome-labeled bars · ⚖ hand-set | 📊 live rates
+  </div>
+</div>
+
+<div class="panel">
+  <div class="testing-title">① Question library</div>
+  <table class="testing-table">
+    <tr style="color: #666">
+      <td style="padding: 2px 3px">HYPOTHESIS</td>
+      <td>RESULT</td>
+      <td style="text-align: right">n</td>
+    </tr>
+    <tr>
+      <td style="padding: 2px 3px; border-top: 1px dashed rgba(255,255,255,0.05)">King pulls (30m)</td>
+      <td style="border-top: 1px dashed rgba(255,255,255,0.05)"><span style="display: inline-block; height: 6px; width: 40px; background: #1a2029; border-radius: 3px; position: relative; margin-right: 4px"><div style="position: absolute; left: 0; top: 0; bottom: 0; width: 58%; background: #2ec27e; border-radius: 3px"></div></span> <span style="color: #2ec27e; font-weight: 700">58%</span> <span style="color: #666">⚖</span></td>
+      <td style="text-align: right; border-top: 1px dashed rgba(255,255,255,0.05); color: #666">n=201</td>
+    </tr>
+    <tr>
+      <td style="padding: 2px 3px; border-top: 1px dashed rgba(255,255,255,0.05)">King pull · 2 strikes</td>
+      <td style="border-top: 1px dashed rgba(255,255,255,0.05)"><span style="display: inline-block; height: 6px; width: 40px; background: #1a2029; border-radius: 3px; position: relative; margin-right: 4px"><div style="position: absolute; left: 0; top: 0; bottom: 0; width: 62%; background: #2ec27e; border-radius: 3px"></div></span> <span style="color: #2ec27e; font-weight: 700">62%</span> <span style="color: #666">⚖</span></td>
+      <td style="text-align: right; border-top: 1px dashed rgba(255,255,255,0.05); color: #666">n=68</td>
+    </tr>
+    <tr>
+      <td style="padding: 2px 3px; border-top: 1px dashed rgba(255,255,255,0.05)">Non-King mass repels</td>
+      <td style="border-top: 1px dashed rgba(255,255,255,0.05)"><span style="display: inline-block; height: 6px; width: 40px; background: #1a2029; border-radius: 3px; position: relative; margin-right: 4px"><div style="position: absolute; left: 0; top: 0; bottom: 0; width: 55%; background: #2ec27e; border-radius: 3px"></div></span> <span style="color: #2ec27e; font-weight: 700">55%</span> <span style="color: #666">📊</span></td>
+      <td style="text-align: right; border-top: 1px dashed rgba(255,255,255,0.05); color: #666">n=85</td>
+    </tr>
+    <tr>
+      <td style="padding: 2px 3px; border-top: 1px dashed rgba(255,255,255,0.05)">Acm wall reached ≤1.5 (leak)</td>
+      <td style="border-top: 1px dashed rgba(255,255,255,0.05)"><span style="display: inline-block; height: 6px; width: 40px; background: #1a2029; border-radius: 3px; position: relative; margin-right: 4px"><div style="position: absolute; left: 0; top: 0; bottom: 0; width: 48%; background: #f0616d; border-radius: 3px"></div></span> <span style="color: #f0616d; font-weight: 700">48%</span> <span style="color: #666">📊</span></td>
+      <td style="text-align: right; border-top: 1px dashed rgba(255,255,255,0.05); color: #666">n=112</td>
+    </tr>
+  </table>
+</div>
+
+<div class="panel">
+  <div class="testing-title">② Hypothesis builder</div>
+  <div style="display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 8px">
+    <span style="cursor: pointer; font-size: 8.5px; border: 1px solid #1a2029; border-radius: 6px; padding: 1px 6px; color: #c8d3df; background: #0b0e14">King@orbit</span>
+    <span style="cursor: pointer; font-size: 8.5px; border: 1px solid #1a2029; border-radius: 6px; padding: 1px 6px; color: #c8d3df; background: #0b0e14">King+Trend</span>
+    <span style="cursor: pointer; font-size: 8.5px; border: 1px solid #1a2029; border-radius: 6px; padding: 1px 6px; color: #c8d3df; background: #0b0e14">Acm>70%</span>
+    <span style="cursor: pointer; font-size: 8.5px; border: 1px solid #1a2029; border-radius: 6px; padding: 1px 6px; color: #c8d3df; background: #0b0e14">Regime+Board</span>
+  </div>
+  <div style="font-size: 9px; color: #666">pick a hypothesis, or call <code>__gptsHypo({when:[...]})</code> in the console.</div>
+</div>
+
+<div class="panel">
+  <div class="testing-title">③ Pattern miner <span style="font-size: 8px; font-weight: 400; color: #666">— <span style="cursor: pointer; text-decoration: underline">run</span></span></div>
+  <div style="font-size: 8px; color: #666; margin-bottom: 6px">402 bars · 8 days · 2,140 combos tested · base up 51%</div>
+  <table class="testing-table">
+    <tr>
+      <td style="padding: 2px 3px; border-top: 1px dashed rgba(255,255,255,0.05)">regime=trend & kside=above</td>
+      <td style="border-top: 1px dashed rgba(255,255,255,0.05); color: #2ec27e">63% up (+12)</td>
+      <td style="text-align: right; border-top: 1px dashed rgba(255,255,255,0.05); color: #666">n=78</td>
+    </tr>
+    <tr>
+      <td style="padding: 2px 3px; border-top: 1px dashed rgba(255,255,255,0.05)">nearState=Acm & nearStrong=yes</td>
+      <td style="border-top: 1px dashed rgba(255,255,255,0.05); color: #f0616d">45% up (−6)</td>
+      <td style="text-align: right; border-top: 1px dashed rgba(255,255,255,0.05); color: #666">n=54</td>
+    </tr>
+    <tr>
+      <td style="padding: 2px 3px; border-top: 1px dashed rgba(255,255,255,0.05)">kzone=pull & hour=12-14</td>
+      <td style="border-top: 1px dashed rgba(255,255,255,0.05); color: #2ec27e">61% up (+10)</td>
+      <td style="text-align: right; border-top: 1px dashed rgba(255,255,255,0.05); color: #666">n=92</td>
+    </tr>
+  </table>
+</div>
+
+</div>
+
+<div class="mock-footer">
+  v10.46 · 2026-08-15
+</div>
+
+</div>
+
+<script>
+function showDashboard() {
+  document.getElementById('dashboard-view').className = 'active-view';
+  document.getElementById('analysis-view').className = 'hidden';
+  document.getElementById('testing-view').className = 'hidden';
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', i === 0);
+  });
+}
+function showAnalysis() {
+  document.getElementById('dashboard-view').className = 'hidden';
+  document.getElementById('analysis-view').className = 'active-view';
+  document.getElementById('testing-view').className = 'hidden';
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', i === 1);
+  });
+}
+function showTesting() {
+  document.getElementById('dashboard-view').className = 'hidden';
+  document.getElementById('analysis-view').className = 'hidden';
+  document.getElementById('testing-view').className = 'active-view';
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', i === 2);
+  });
+}
+</script>
+
+</body>
+</html>

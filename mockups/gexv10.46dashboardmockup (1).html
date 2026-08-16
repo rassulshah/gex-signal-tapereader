@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GEX v10.46 Dashboard Mockup</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  background: #0b0e14;
+  color: #c8d3df;
+  line-height: 1.4;
+  padding: 20px;
+}
+
+.container { max-width: 500px; margin: 0 auto; }
+.tab-bar {
+  display: flex;
+  gap: 2px;
+  background: #12161f;
+  border-bottom: 1px solid #1a2029;
+  padding: 4px 4px 0;
+  margin: -2px -2px 6px;
+  border-radius: 8px 8px 0 0;
+}
+.tab {
+  cursor: pointer;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #666;
+  border: none;
+  background: transparent;
+}
+.tab.active {
+  font-weight: 800;
+  color: #c8d3df;
+  border-bottom: 2px solid #d4a574;
+  background: #0b0e14;
+  border-radius: 6px 6px 0 0;
+}
+
+.panel {
+  background: #12161f;
+  border: 1px solid #1a2029;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.read-block {
+  padding: 4px 8px 5px;
+  border-left: 2px solid #d4a574;
+  margin: 2px 0 4px;
+  background: #0b0e14;
+  border-radius: 0 8px 8px 0;
+  font-size: 9.5px;
+  line-height: 1.5;
+}
+
+.read-label { color: #d4a574; font-weight: 800; }
+.read-text { color: #c8d3df; }
+.read-detail { color: #666; font-size: 7.5px; margin-top: 3px; opacity: 0.85; }
+
+.badge-row {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0;
+  align-items: center;
+}
+.badge {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 3px 8px;
+  border: 1.5px solid #d4a574;
+  border-radius: 14px;
+  background: #0b0e14;
+  font-size: 10px;
+  flex: 0 1 auto;
+}
+.badge-title { font-size: 11px; }
+.badge-divider {
+  width: 100%;
+  height: 1px;
+  background: #1a2029;
+  margin: 1px 0;
+}
+.badge-value { color: #d4a574; font-weight: 800; font-size: 13px; }
+.badge-sub { color: #666; font-size: 9px; }
+
+.node-map {
+  background: #0b0e14;
+  border: 1px solid #1a2029;
+  border-radius: 8px;
+  margin: 4px 0;
+  padding: 0;
+  font-size: 9px;
+}
+.node-row {
+  display: flex;
+  align-items: center;
+  font-size: 10px;
+  padding: 3px 6px;
+  border-bottom: 1px solid #161b26;
+  gap: 6px;
+}
+.node-row:last-child { border-bottom: none; }
+.node-strike { flex: 0 0 40px; color: #d4a574; font-weight: 700; font-size: 11px; }
+.node-identity { flex: 0 0 50px; color: #666; text-align: center; }
+.node-activity { flex: 1; color: #c8d3df; }
+.node-life { flex: 0 0 50px; color: #666; text-align: right; }
+
+.deflection-block {
+  background: #0b0e14;
+  border: 1px solid #1a2029;
+  border-radius: 8px;
+  padding: 6px;
+  margin: 4px 0;
+  font-size: 9px;
+}
+.defl-item {
+  padding: 3px 4px;
+  border-bottom: 1px solid #161b26;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.defl-item:last-child { border-bottom: none; }
+.defl-time { flex: 0 0 35px; color: #666; font-variant-numeric: tabular-nums; }
+.defl-level { flex: 0 0 40px; color: #d4a574; font-weight: 600; }
+.defl-event { flex: 1; }
+.defl-outcome { flex: 0 0 45px; text-align: right; color: #666; }
+
+.feed-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #666;
+  font-size: 9px;
+  letter-spacing: 0.3px;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #1a2029;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: #c8d3df;
+  margin: 8px 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.analysis-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+.analysis-title { font-size: 14px; font-weight: 800; }
+.analysis-sub { font-size: 10px; color: #666; }
+.grade-badge {
+  background: #12161f;
+  border: 1px solid #1a2029;
+  border-radius: 8px;
+  padding: 6px 4px;
+  text-align: center;
+  flex: 0 0 52px;
+}
+.grade-label { font-size: 8px; color: #666; letter-spacing: 0.5px; }
+.grade-value { font-size: 18px; font-weight: 800; color: #2ec27e; line-height: 1.1; margin-top: 2px; }
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+  margin: 8px 0;
+}
+.kpi-card {
+  background: #12161f;
+  border: 1px solid #1a2029;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 9px;
+}
+.kpi-label { color: #666; }
+.kpi-value { font-size: 15px; font-weight: 800; color: #2ec27e; margin: 3px 0; }
+.kpi-sub { font-size: 8px; color: #666; }
+
+.save-banner {
+  background: #1a160d;
+  border: 1px solid #3a301c;
+  border-radius: 8px;
+  padding: 7px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 10px;
+}
+.save-banner-label { color: #d4a574; }
+.save-button {
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 800;
+  color: #0b0e14;
+  background: #d4a574;
+  border-radius: 14px;
+  padding: 3px 10px;
+  border: none;
+}
+
+.step-row {
+  margin: 8px 0 6px;
+  font-size: 9.5px;
+}
+.step-header {
+  font-weight: 700;
+  color: #d4a574;
+  margin-bottom: 2px;
+}
+.step-content {
+  margin: 0 0 10px 14px;
+  background: #12161f;
+  border: 1px solid #1a2029;
+  border-radius: 10px;
+  padding: 8px;
+  font-size: 9px;
+  color: #c8d3df;
+}
+
+.insight-box {
+  background: #0e1a13;
+  border: 1px solid #1c3a28;
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin: 4px 0;
+  font-size: 10px;
+}
+.insight-title { color: #2ec27e; font-weight: 800; margin-bottom: 4px; }
+
+.testing-card {
+  background: #0b0e14;
+  border: 1px solid #1a2029;
+  border-radius: 8px;
+  padding: 8px;
+  margin: 4px 0;
+}
+.testing-title { font-size: 9.5px; font-weight: 700; color: #d4a574; margin-bottom: 4px; }
+.testing-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5px;
+}
+.testing-table tr { border-top: 1px dashed rgba(255,255,255,0.05); }
+.testing-table td { padding: 2px 3px; }
+.testing-table th { color: #666; font-weight: 600; padding: 2px 3px; text-align: left; }
+
+.hidden { display: none; }
+.active-view { display: block; }
+
+.mock-footer {
+  font-size: 8px;
+  color: #666;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #1a2029;
+  text-align: center;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<!-- TAB BAR -->
+<div class="tab-bar">
+  <button class="tab active" onclick="showDashboard()">Dashboard</button>
+  <button class="tab" onclick="showAnalysis()">📊 Analysis</button>
+  <button class="tab" onclick="showTesting()">🧪 Testing</button>
+</div>
+
+<!-- ============= DASHBOARD TAB ============= -->
+<div id="dashboard-view" class="active-view">
+
+<!-- (NEW) TAPE-SYNC WARNING — one line, replaces the full suppression panel. App still renders below. -->
+<div title="Tape sync: the three King sources (tape $K tag · raw feed · tape max %King) do not agree — weekend/closed-market or parse issue. Node strengths may be stale. Diagnose: __gptsDebug.syncReport()" style="display:flex;align-items:center;gap:6px;border:1px solid #f0616d;background:rgba(240,97,109,.08);border-radius:6px;padding:3px 8px;margin:2px 0 6px;font-size:9.5px">
+  <span style="color:#f0616d;font-weight:800">⚠</span>
+  <span style="color:#f0616d;font-weight:700">Tape out of sync</span>
+  <span style="color:#666">— no consensus (tag 775.38 · feed — · tapemax 775.38) · showing last-known structure</span>
+  <span style="margin-left:auto;color:#666;font-size:8.5px;text-decoration:underline;cursor:pointer">details</span>
+</div>
+
+<!-- KING HEADER CLUSTER: ★SUP ← 👑 King / 🚪 gatekeeper → ★RES  (restored) -->
+<div style="display:flex;justify-content:space-between;align-items:center;gap:4px;margin:4px 0 3px;padding:0 2px">
+  <span style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 6px;min-height:40px;border-radius:14px;background:#0b0e14;border:1.5px solid #2ec27e">
+    <span style="font-size:7.5px;font-weight:800;color:#2ec27e;letter-spacing:.3px">★ SUP</span>
+    <span style="width:100%;height:1px;background:#1a2029;margin:2px 0"></span>
+    <span style="white-space:nowrap"><span style="font-weight:800;font-size:12.5px;color:#2ec27e">773.25</span> <span style="color:#666;font-size:8.5px;font-weight:600">41%</span></span>
+  </span>
+  <span style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;padding:3px 8px;border:1.5px solid #d4a574;border-radius:14px;background:#0b0e14">
+    <span style="display:inline-flex;align-items:center;line-height:1">
+      <span style="font-size:12px">👑</span>
+      <span style="color:#d4a574;font-weight:800;font-size:13px;margin-left:3px">775.38</span>
+      <span style="color:#2ec27e;font-weight:800;font-size:11px;margin-left:3px">+3↑</span>
+    </span>
+    <span style="width:100%;height:1px;background:#1a2029;margin:1px 0"></span>
+    <span style="display:inline-flex;align-items:center;gap:3px;line-height:1">
+      <span style="font-size:10px">🚪</span>
+      <span style="color:#c8d3df;font-weight:700;font-size:10px">774.50</span>
+      <span style="color:#2ec27e;font-weight:800;font-size:10px">+2↑</span>
+    </span>
+  </span>
+  <span style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 6px;min-height:40px;border-radius:14px;background:#0b0e14;border:1.5px solid #f0616d">
+    <span style="font-size:7.5px;font-weight:800;color:#f0616d;letter-spacing:.3px">★ RES</span>
+    <span style="width:100%;height:1px;background:#1a2029;margin:2px 0"></span>
+    <span style="white-space:nowrap"><span style="font-weight:800;font-size:12.5px;color:#f0616d">776.50</span> <span style="color:#666;font-size:8.5px;font-weight:600">33%</span></span>
+  </span>
+</div>
+<!-- 5-STEP ①②③ icons -->
+<div style="display:flex;gap:5px;align-items:center;justify-content:center;margin:0 0 6px">
+  <span style="font-size:8.5px;color:#666;font-weight:700;letter-spacing:.3px;margin-right:2px">5-STEP</span>
+  <span title="① Identify Magnets" style="display:inline-flex;width:15px;height:15px;border-radius:50%;border:1px solid #d4a574;color:#d4a574;font-size:9px;font-weight:800;align-items:center;justify-content:center;cursor:pointer">1</span>
+  <span title="② Spot the King" style="display:inline-flex;width:15px;height:15px;border-radius:50%;border:1px solid #d4a574;color:#d4a574;font-size:9px;font-weight:800;align-items:center;justify-content:center;cursor:pointer">2</span>
+  <span title="③ Define the Range" style="display:inline-flex;width:15px;height:15px;border-radius:50%;border:1px solid #d4a574;color:#d4a574;font-size:9px;font-weight:800;align-items:center;justify-content:center;cursor:pointer">3</span>
+</div>
+
+<!-- READ ▸ -->
+<div class="read-block">
+  <span class="read-label">READ ▸</span>
+  <span class="read-text">👑 <b style="color:#d4a574">775.38</b> 0.6↑ · zone <b style="color:#2ec27e">PULL</b> — pull 📊 60% (n=201) · this hour 📊 74% (n=31) · King magnet <b style="color:#2ec27e">▲12%</b></span><br>
+  <span class="read-text">Range <b>773.25–776.50</b> inside — ▔ Ceil 776.50 Steady · quiet · walls like this held 66% 📊 · ⛰ Flr 773.25 Acm · <b style="color:#6699dd">Pull</b> · walls like this held 71% 📊</span><br>
+  <span class="read-text">Non-King mass <b style="color:#2ec27e">heavier BELOW → lean up</b> — repel 📊 57% (n=350) · contender ≥60% repels 📊 63% (n=41)</span><br>
+  <span class="read-text">Regime <b style="color:#d4a574">TREND</b> (efficiency 0.68) — respect the direction; range being redefined</span>
+  <div class="read-detail">📊 = measured on local repo · 402 bars · ⚖ = hand-set until n≥20 · re-scored nightly · <u>re-run now</u></div>
+</div>
+
+<!-- ⚡ DEFLECTIONS (horizontal cards, newest left) -->
+<div style="display:flex;align-items:center;gap:6px;margin:6px 2px 4px">
+  <span style="font-size:11px;font-weight:800;color:#c8d3df">⚡ Deflections</span>
+  <span style="font-size:9px;color:#666">2 live</span>
+</div>
+<div style="display:flex;gap:8px;overflow-x:auto;padding:0 2px 6px">
+  <div style="flex:0 0 auto;min-width:120px;background:#0b0e14;border:1px solid #2ec27e;border-radius:8px;padding:5px 8px">
+    <div style="display:flex;align-items:baseline;gap:5px"><span style="font-size:14px;font-weight:800">774.50</span><span style="font-size:10px;color:#2ec27e;font-weight:800">▲</span></div>
+    <div style="font-size:10px;font-weight:700;margin:1px 0 3px">⭑ Gate bounce</div>
+    <div style="display:flex;gap:3px;margin-bottom:3px"><span style="font-size:8px;border:1px solid #1a2029;border-radius:9px;padding:0 4px;color:#666">+γ</span><span style="font-size:8px;border:1px solid #1a2029;border-radius:9px;padding:0 4px;color:#666">Acm</span><span style="font-size:8px;border:1px solid #1a2029;border-radius:9px;padding:0 4px;color:#666">2nd tap</span></div>
+    <div><span style="font-size:14px;font-weight:800;color:#2ec27e">B</span> <span style="font-size:8.5px;color:#666">64% n22</span></div>
+  </div>
+  <div style="flex:0 0 auto;min-width:120px;background:#0b0e14;border:1px solid #f0616d;border-radius:8px;padding:5px 8px">
+    <div style="display:flex;align-items:baseline;gap:5px"><span style="font-size:14px;font-weight:800">776.50</span><span style="font-size:10px;color:#f0616d;font-weight:800">▼</span></div>
+    <div style="font-size:10px;font-weight:700;margin:1px 0 3px">Ceil reject</div>
+    <div style="display:flex;gap:3px;margin-bottom:3px"><span style="font-size:8px;border:1px solid #1a2029;border-radius:9px;padding:0 4px;color:#666">+γ</span><span style="font-size:8px;border:1px solid #1a2029;border-radius:9px;padding:0 4px;color:#666">Steady</span></div>
+    <div><span style="font-size:8.5px;font-weight:700;color:#666;border:1px dashed #666;border-radius:999px;padding:0 5px">● rec n11</span></div>
+  </div>
+</div>
+
+<!-- ⑤ NODE MAP -->
+<div style="display:flex;justify-content:space-between;align-items:center;margin:4px 2px 4px">
+  <span style="font-size:11px;font-weight:800;color:#c8d3df"><span style="display:inline-flex;width:14px;height:14px;border-radius:50%;border:1px solid #d4a574;color:#d4a574;font-size:8.5px;font-weight:800;align-items:center;justify-content:center;vertical-align:middle;margin-right:4px">5</span>Node Map</span>
+  <span>
+    <span style="color:#c8d3df;font-size:9px;font-weight:700;padding:1px 7px;border:1px solid #1a2029;border-radius:20px;margin-right:4px">Range <b>773.25–776.50</b> · inside</span>
+    <span style="color:#2ec27e;font-size:9px;font-weight:800;padding:1px 7px;border:1px solid #2ec27e;border-radius:20px">Trend 1.4×</span>
+  </span>
+</div>
+<div style="font-size:9.5px;margin:0 2px 4px"><b style="color:#2ec27e">Bullish imbalance</b> — <span style="color:#666;font-weight:600">support 773.25 building, resistance 776.50 fading</span></div>
+<div style="display:flex;gap:8px;font-size:7.5px;letter-spacing:.4px;text-transform:uppercase;color:#666;font-weight:800;padding:0 6px 3px">
+  <span style="width:110px">Identity</span><span style="width:70px">Strike · %</span><span style="width:80px">State</span><span style="flex:1;text-align:right">Activity · Life</span>
+</div>
+<div class="node-map">
+  <div class="node-row"><span style="width:110px;color:#b58bff;font-size:9px;font-weight:700">🍆 Barney</span><span style="width:70px;color:#666"><b style="color:#c8d3df">777.75</b> · 22%</span><span style="width:80px;color:#666">Steady</span><span style="flex:1;text-align:right"><span style="color:#6699dd;border:1px solid #6699dd;border-radius:9px;padding:0 5px;font-size:8.5px;font-weight:700">Pull 47%</span></span></div>
+  <div class="node-row"><span style="width:110px;color:#f0616d;font-size:9px;font-weight:700">▔ Ceil · ★ Mag</span><span style="width:70px;color:#666"><b style="color:#c8d3df">776.50</b> · 33%</span><span style="width:80px;color:#666">Steady ▼3%</span><span style="flex:1;text-align:right"><span style="color:#f0616d;font-size:8.5px;font-weight:800">Defl ↓</span> <span style="color:#666;font-size:8px">● Tested 2</span></span></div>
+  <div style="display:flex;justify-content:center;align-items:center;height:16px;margin:2px 4px;background:#0b0e14;border:1px dashed #6699dd;border-radius:6px;color:#6699dd;font-size:10px;font-weight:800">— SPY 774.78 —</div>
+  <div class="node-row" style="background:rgba(46,194,126,.06)"><span style="width:110px;color:#d4a574;font-size:9px;font-weight:700">👑 King</span><span style="width:70px;color:#666"><b style="color:#d4a574">775.38</b> · 100%</span><span style="width:80px;color:#2ec27e">Acm ▲12%</span><span style="flex:1;text-align:right"><span style="color:#d4a574;border:1px solid #d4a574;border-radius:9px;padding:0 5px;font-size:8.5px;font-weight:800">BOw</span> <span style="color:#666;font-size:8px">● Fresh</span></span></div>
+  <div class="node-row" style="background:rgba(46,194,126,.06)"><span style="width:110px;color:#c8d3df;font-size:9px;font-weight:700">🚪 Gate</span><span style="width:70px;color:#666"><b style="color:#c8d3df">774.50</b> · 28%</span><span style="width:80px;color:#2ec27e">Acm ▲8%</span><span style="flex:1;text-align:right"><span style="color:#2ec27e;font-size:8.5px;font-weight:800">Defl ↑</span> <span style="color:#666;font-size:8px">● Tested 2</span></span></div>
+  <div class="node-row"><span style="width:110px;color:#2ec27e;font-size:9px;font-weight:700">⛰ Flr · ★ Mag</span><span style="width:70px;color:#666"><b style="color:#c8d3df">773.25</b> · 41%</span><span style="width:80px;color:#2ec27e">Acm ▲19%</span><span style="flex:1;text-align:right"><span style="color:#2ec27e;border:1px solid #2ec27e;border-radius:9px;padding:0 5px;font-size:8.5px;font-weight:800">BO·FT</span> <span style="color:#666;font-size:8px">● Delivered</span></span></div>
+  <div class="node-row"><span style="width:110px;color:#666;font-size:9px;font-weight:700">Mag</span><span style="width:70px;color:#666"><b style="color:#c8d3df">771.50</b> · 18%</span><span style="width:80px;color:#f0616d">Dec ▼11%</span><span style="flex:1;text-align:right"><span style="color:#2ec27e;font-size:8.5px;font-weight:800">held</span></span></div>
+</div>
+
+<!-- FOOTER -->
+<div class="feed-status">
+  <span style="color:#2ec27e">SPY:gex</span>
+  <span style="color:#f0616d;font-weight:600">⚠ tape</span>
+  <span><span style="color:#2ec27e">rec ●</span> saved today ✓ <span style="border:1px solid #1a2029;border-radius:6px;padding:0 4px">💾</span> <span style="border:1px solid #1a2029;border-radius:6px;padding:0 4px">📁</span></span>
+  <span>feed v10.46</span>
+</div>
+
+</div>
+
+<!-- ============= ANALYSIS TAB ============= -->
+<div id="analysis-view" class="hidden">
+
+<div class="save-banner">
+  <span class="save-banner-label">Today's data isn't saved yet.</span>
+  <button class="save-button">📥 Save & prep review</button>
+</div>
+
+<div class="analysis-header">
+  <div>
+    <div class="analysis-title">End-of-Day Review</div>
+    <div class="analysis-sub">SPY · 2026-08-15 · 127 bars · 94 scored</div>
+  </div>
+  <div style="text-align: right">
+    <div class="analysis-sub" style="color: #d4a574">⚘ live from tape data</div>
+    <div style="margin-top: 4px; font-size: 9px">
+      <span style="cursor: pointer; color: #6699dd; border: 1px solid #1a2029; border-radius: 10px; padding: 2px 7px">📂 Load day</span>
+    </div>
+  </div>
+</div>
+
+<div class="kpi-row">
+  <div class="grade-badge">
+    <div class="grade-label">GRADE</div>
+    <div class="grade-value">A−</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Direction hit</div>
+    <div class="kpi-value">74%</div>
+    <div class="kpi-sub">30m fwd</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Reversal catch</div>
+    <div class="kpi-value">63%</div>
+    <div class="kpi-sub">flag vs actual</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">King target</div>
+    <div class="kpi-value">18/24</div>
+    <div class="kpi-sub">reached King</div>
+  </div>
+</div>
+
+<div class="panel" style="background: #12161f">
+  <div style="font-size: 11px; font-weight: 800; color: #d4a574; margin-bottom: 8px">🎯 PROJECTION SCORECARD <span style="color: #666; font-weight: 400">(8d recorded)</span></div>
+  <div style="font-size: 9px; display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed rgba(255,255,255,0.05)">
+    <span style="color: #666">Succession ≥60% → crowned ≤20 bars</span>
+    <span style="font-weight: 600">71% <span style="color: #666">n=34</span></span>
+  </div>
+  <div style="font-size: 9px; display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed rgba(255,255,255,0.05)">
+    <span style="color: #666">Target reached by close</span>
+    <span style="font-weight: 600">68% <span style="color: #666">n=112</span></span>
+  </div>
+  <div style="font-size: 9px; display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed rgba(255,255,255,0.05)">
+    <span style="color: #666">ETA error (median)</span>
+    <span style="font-weight: 600">+2m <span style="color: #666">n=52</span></span>
+  </div>
+  <div style="font-size: 9px; display: flex; justify-content: space-between; padding: 3px 0">
+    <span style="color: #666">Cone coverage</span>
+    <span style="font-weight: 600">71% <span style="color: #666">n=98</span></span>
+  </div>
+  <div style="font-size: 8.5px; color: #d4a574; font-weight: 700; margin: 6px 0 2px">🔧 RECOMMENDATIONS (auto)</div>
+  <div style="font-size: 9px; color: #c8d3df; padding: 2px 0"><span style="color: #2ec27e">▪</span> Cone coverage 71% — within target band.</div>
+  <div style="font-size: 9px; color: #c8d3df; padding: 2px 0"><span style="color: #2ec27e">▪</span> ETA error median +2m — acceptable.</div>
+</div>
+
+<div class="step-row">
+  <div class="step-header">① How the day moved together</div>
+  <div class="step-content">
+    <strong>King · price · S/R dominance band</strong><br><br>
+    <div style="width: 100%; height: 60px; background: #0b0e14; border: 1px solid #1a2029; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #666">[Timeline SVG Chart]</div>
+  </div>
+</div>
+
+<div class="step-row">
+  <div class="step-header">② Was the King pulling price?</div>
+  <div class="step-content">
+    <strong>King vs price convergence gap over the day</strong><br><br>
+    <div style="width: 100%; height: 50px; background: #0b0e14; border: 1px solid #1a2029; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #666">[Convergence SVG Chart]</div>
+  </div>
+</div>
+
+<div class="step-row">
+  <div class="step-header">⑤ Which signal to trust</div>
+  <div class="step-content">
+    <div style="font-size: 8.5px; display: flex; align-items: center; gap: 4px; margin: 3px 0">
+      <div style="display: inline-block; height: 6px; width: 40px; background: #1a2029; border-radius: 3px; position: relative"><div style="position: absolute; left: 0; top: 0; bottom: 0; width: 74%; background: #2ec27e; border-radius: 3px"></div></div>
+      <span style="flex: 1">👑 King</span>
+      <span style="color: #2ec27e; font-weight: 700">74%</span>
+    </div>
+    <div style="font-size: 8.5px; display: flex; align-items: center; gap: 4px; margin: 3px 0">
+      <div style="display: inline-block; height: 6px; width: 40px; background: #1a2029; border-radius: 3px; position: relative"><div style="position: absolute; left: 0; top: 0; bottom: 0; width: 68%; background: #2ec27e; border-radius: 3px"></div></div>
+      <span style="flex: 1">📈 Trend</span>
+      <span style="color: #2ec27e; font-weight: 700">68%</span>
+    </div>
+  </div>
+</div>
+
+<div class="insight-box">
+  <div class="insight-title">✓ WORKED</div>
+  <div style="font-size: 10px; color: #c8d3df; line-height: 1.5">King identified the day's range anchor (775.38). Trend machine caught the early breakout above 776 with high conviction. S/R imbalance flipped at the right time, catching the momentum reversal at 11:52.</div>
+</div>
+
+<div class="insight-box" style="background: #1c1113; border-color: #3a1c22">
+  <div style="color: #f0616d; font-weight: 800; margin-bottom: 4px">✕ MISSED</div>
+  <div style="font-size: 10px; color: #c8d3df; line-height: 1.5">Confluence suppressed near the 2pm dip. The regime chip stayed TREND even though the tape showed sideways chop for 12m. Timing on the final push to 776.50 was off by 3 bars.</div>
+</div>
+
+</div>
+
+<!-- ============= TESTING TAB ============= -->
+<div id="testing-view" class="hidden">
+
+<div class="panel">
+  <div style="font-size: 11px; font-weight: 800; color: #c8d3df; margin-bottom: 2px">
+    🧪 Testing <span style="font-size: 9px; font-weight: 400; color: #666">— measured on local repo · 402 bars</span>
+  </div>
+  <div style="font-size: 8.5px; color: #666; margin-bottom: 8px">
+    coverage: <strong style="color: #c8d3df">8d</strong> · <strong style="color: #c8d3df">402</strong> outcome-labeled bars · ⚖ hand-set | 📊 live rates
+  </div>
+</div>
+
+<div class="panel">
+  <div class="testing-title">① Question library</div>
+  <table class="testing-table">
+    <tr style="color: #666">
+      <td style="padding: 2px 3px">HYPOTHESIS</td>
+      <td>RESULT</td>
+      <td style="text-align: right">n</td>
+    </tr>
+    <tr>
+      <td style="padding: 2px 3px; border-top: 1px dashed rgba(255,255,255,0.05)">King pulls (30m)</td>
+      <td style="border-top: 1px dashed rgba(255,255,255,0.05)"><span style="display: inline-block; height: 6px; width: 40px; background: #1a2029; border-radius: 3px; position: relative; margin-right: 4px"><div style="position: absolute; left: 0; top: 0; bottom: 0; width: 58%; background: #2ec27e; border-radius: 3px"></div></span> <span style="color: #2ec27e; font-weight: 700">58%</span> <span style="color: #666">⚖</span></td>
+      <td style="text-align: right; border-top: 1px dashed rgba(255,255,255,0.05); color: #666">n=201</td>
+    </tr>
+    <tr>
+      <td style="padding: 2px 3px; border-top: 1px dashed rgba(255,255,255,0.05)">King pull · 2 strikes</td>
+      <td style="border-top: 1px dashed rgba(255,255,255,0.05)"><span style="display: inline-block; height: 6px; width: 40px; background: #1a2029; border-radius: 3px; position: relative; margin-right: 4px"><div style="position: absolute; left: 0; top: 0; bottom: 0; width: 62%; background: #2ec27e; border-radius: 3px"></div></span> <span style="color: #2ec27e; font-weight: 700">62%</span> <span style="color: #666">⚖</span></td>
+      <td style="text-align: right; border-top: 1px dashed rgba(255,255,255,0.05); color: #666">n=68</td>
+    </tr>
+    <tr>
+      <td style="padding: 2px 3px; border-top: 1px dashed rgba(255,255,255,0.05)">Non-King mass repels</td>
+      <td style="border-top: 1px dashed rgba(255,255,255,0.05)"><span style="display: inline-block; height: 6px; width: 40px; background: #1a2029; border-radius: 3px; position: relative; margin-right: 4px"><div style="position: absolute; left: 0; top: 0; bottom: 0; width: 55%; background: #2ec27e; border-radius: 3px"></div></span> <span style="color: #2ec27e; font-weight: 700">55%</span> <span style="color: #666">📊</span></td>
+      <td style="text-align: right; border-top: 1px dashed rgba(255,255,255,0.05); color: #666">n=85</td>
+    </tr>
+    <tr>
+      <td style="padding: 2px 3px; border-top: 1px dashed rgba(255,255,255,0.05)">Acm wall reached ≤1.5 (leak)</td>
+      <td style="border-top: 1px dashed rgba(255,255,255,0.05)"><span style="display: inline-block; height: 6px; width: 40px; background: #1a2029; border-radius: 3px; position: relative; margin-right: 4px"><div style="position: absolute; left: 0; top: 0; bottom: 0; width: 48%; background: #f0616d; border-radius: 3px"></div></span> <span style="color: #f0616d; font-weight: 700">48%</span> <span style="color: #666">📊</span></td>
+      <td style="text-align: right; border-top: 1px dashed rgba(255,255,255,0.05); color: #666">n=112</td>
+    </tr>
+  </table>
+</div>
+
+<div class="panel">
+  <div class="testing-title">② Hypothesis builder</div>
+  <div style="display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 8px">
+    <span style="cursor: pointer; font-size: 8.5px; border: 1px solid #1a2029; border-radius: 6px; padding: 1px 6px; color: #c8d3df; background: #0b0e14">King@orbit</span>
+    <span style="cursor: pointer; font-size: 8.5px; border: 1px solid #1a2029; border-radius: 6px; padding: 1px 6px; color: #c8d3df; background: #0b0e14">King+Trend</span>
+    <span style="cursor: pointer; font-size: 8.5px; border: 1px solid #1a2029; border-radius: 6px; padding: 1px 6px; color: #c8d3df; background: #0b0e14">Acm>70%</span>
+    <span style="cursor: pointer; font-size: 8.5px; border: 1px solid #1a2029; border-radius: 6px; padding: 1px 6px; color: #c8d3df; background: #0b0e14">Regime+Board</span>
+  </div>
+  <div style="font-size: 9px; color: #666">pick a hypothesis, or call <code>__gptsHypo({when:[...]})</code> in the console.</div>
+</div>
+
+<div class="panel">
+  <div class="testing-title">③ Pattern miner <span style="font-size: 8px; font-weight: 400; color: #666">— <span style="cursor: pointer; text-decoration: underline">run</span></span></div>
+  <div style="font-size: 8px; color: #666; margin-bottom: 6px">402 bars · 8 days · 2,140 combos tested · base up 51%</div>
+  <table class="testing-table">
+    <tr>
+      <td style="padding: 2px 3px; border-top: 1px dashed rgba(255,255,255,0.05)">regime=trend & kside=above</td>
+      <td style="border-top: 1px dashed rgba(255,255,255,0.05); color: #2ec27e">63% up (+12)</td>
+      <td style="text-align: right; border-top: 1px dashed rgba(255,255,255,0.05); color: #666">n=78</td>
+    </tr>
+    <tr>
+      <td style="padding: 2px 3px; border-top: 1px dashed rgba(255,255,255,0.05)">nearState=Acm & nearStrong=yes</td>
+      <td style="border-top: 1px dashed rgba(255,255,255,0.05); color: #f0616d">45% up (−6)</td>
+      <td style="text-align: right; border-top: 1px dashed rgba(255,255,255,0.05); color: #666">n=54</td>
+    </tr>
+    <tr>
+      <td style="padding: 2px 3px; border-top: 1px dashed rgba(255,255,255,0.05)">kzone=pull & hour=12-14</td>
+      <td style="border-top: 1px dashed rgba(255,255,255,0.05); color: #2ec27e">61% up (+10)</td>
+      <td style="text-align: right; border-top: 1px dashed rgba(255,255,255,0.05); color: #666">n=92</td>
+    </tr>
+  </table>
+</div>
+
+</div>
+
+<div class="mock-footer">
+  v10.46 · 2026-08-15
+</div>
+
+</div>
+
+<script>
+function showDashboard() {
+  document.getElementById('dashboard-view').className = 'active-view';
+  document.getElementById('analysis-view').className = 'hidden';
+  document.getElementById('testing-view').className = 'hidden';
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', i === 0);
+  });
+}
+function showAnalysis() {
+  document.getElementById('dashboard-view').className = 'hidden';
+  document.getElementById('analysis-view').className = 'active-view';
+  document.getElementById('testing-view').className = 'hidden';
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', i === 1);
+  });
+}
+function showTesting() {
+  document.getElementById('dashboard-view').className = 'hidden';
+  document.getElementById('analysis-view').className = 'hidden';
+  document.getElementById('testing-view').className = 'active-view';
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', i === 2);
+  });
+}
+</script>
+
+</body>
+</html>
