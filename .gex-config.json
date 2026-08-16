@@ -1,0 +1,56 @@
+{
+  "project": "GEX Signal Tapereader",
+  "description": "Feed-driven GEX signal state machine for SPY on Skylit Atlas",
+  "repository": {
+    "owner": "rassulshah",
+    "name": "gex-signal-tapereader",
+    "url": "https://github.com/rassulshah/gex-signal-tapereader",
+    "mainBranch": "main",
+    "rawUrlBase": "https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main"
+  },
+  "canonicalFiles": {
+    "projectFiles": [
+      "master-spec.md",
+      "teaching-spec.md",
+      "current/gex-signal-tapereader.user.js",
+      "session-state/latest-resume-note.md",
+      "changelog/CHANGELOG.md",
+      "design/architecture-design.md",
+      "skylit-docs/README.md"
+    ],
+    "skyliDocs": [
+      "skylit-docs/core-concepts/core-concepts.md",
+      "skylit-docs/read-the-heatmap/how-to-read-and-use-heatseeker.md",
+      "skylit-docs/learn/intro-to-gamma.md",
+      "skylit-docs/learn/node-lifecycle.md",
+      "SOURCE-OF-TRUTH.md"
+    ]
+  },
+  "loadCommand": {
+    "aliases": [
+      "load gex",
+      "load gex project",
+      "load tapereader",
+      "load gex tapereader",
+      "open gex",
+      "open gex project",
+      "open tapereader",
+      "open gex tapereader",
+      "retrieve gex",
+      "retrieve gex project",
+      "retrieve tapereader",
+      "retrieve gex tapereader",
+      "continue gex",
+      "continue gex project",
+      "continue tapereader",
+      "continue gex tapereader",
+      "get gex",
+      "get gex project",
+      "get tapereader",
+      "get gex tapereader"
+    ],
+    "instruction": "When user invokes any of the aliases above, fetch ALL canonical files from the GitHub repository (rawUrlBase URLs), read the full userscript, read all Skylit platform docs, and report: (1) files loaded, (2) code architecture understanding, (3) platform understanding, (4) current version, (5) patch state, (6) next step. Do NOT ask for clarification on repo location — use the URLs above."
+  },
+  "version": "2026-08-15",
+  "lastUpdated": "2026-08-15T23:59:59Z"
+}

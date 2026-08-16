@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    10.46
+// @version    10.47
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -1178,6 +1178,18 @@ function outOfSyncBlock(r){
     '<div style="color:'+PAL.sub+';font-size:9px;margin-top:5px;opacity:0.8">'+
       'Diagnose: __gptsDebug.syncReport()</div>'+
     '</div>';
+}
+// (v10.47) ONE-LINE sync banner — header only; full diagnostics in the hover title.
+function syncBannerHtml(r){
+  var why={ 'no-consensus':'the three King sources disagree',
+            'no-source':'no tape and no feed could be read',
+            'single-source':'only one King source is available',
+            'parse-invariant':'the tape parse failed an internal invariant' }[r.reason] || r.reason;
+  var v=r.votes||{};
+  var tip=('Tape out of sync \u2014 '+why+'. tape $K tag '+(v.tag!=null?v.tag:'\u2014')+' \u00b7 raw feed '+(v.feed!=null?v.feed:'\u2014')+' \u00b7 tape max %King '+(v.tapemax!=null?v.tapemax:'\u2014')+
+    (r.recurring?(' \u00b7 RECURRING ('+r.streak+' consecutive)'):'')+
+    '. Closed market or parse issue; the structure shown below is LAST-KNOWN and may be stale. Diagnose: __gptsDebug.syncReport()').replace(/"/g,'');
+  return '<div title="'+tip+'" style="border:1px solid '+PAL.shortAccent+';background:rgba(240,97,109,.08);border-radius:6px;padding:2px 8px;margin:2px 0 6px;font-size:10px;font-weight:800;color:'+PAL.shortAccent+';letter-spacing:.3px">\u26A0 STRUCTURAL READ OUT OF SYNC WITH TAPE</div>';
 }
 // Leading signed %King from a single leaf cell, e.g. "-39%" -> -39, "25%" -> 25.
 function leadSignedPct(txt){
@@ -5051,7 +5063,11 @@ var EP_ORBIT        = 1.0;  // <= this = ORBIT (contact zone; direction is noise
 var EP_PULLZONE_LO  = 1.5;  // PULL zone 1.5..3 (📊 69% toward at 2 strikes, n=59)
 var EP_CONTACT_ZONE = 0.30; // wick within this = a tag
 var EP_DEFL_HANDOFF = 3;    // bars a fresh Defl chip shows before yielding to Push ⚖
-var FLRCEIL_MIN_PCT = 15;   // Ceil/Flr = nearest node >= this % of King mass ⚖
+var FLRCEIL_MIN_PCT = 15;   // strong-magnet threshold (★ Mag / Gate / next-target) % of King mass ⚖
+// (v10.47, Skylit-consistent) Flr/Ceil = the LARGEST node on each side of price (the range edge is
+// "where price consistently reverses" / "at least two high value nodes"), not the nearest strong one.
+var FLRCEIL_EDGE_PCT = 40;  // a Flr/Ceil must be at least this % of King mass ⚖
+var FLRCEIL_FAR      = 6;   // if the largest is beyond this many strikes and a strong node is closer, the closer one is the working edge ⚖
 var NODE_OPEN_KEY   = 'gpts_node_open_v1';   // per-day per-node session-open magnitude
 var NODE_OPEN = null;
 function nodeOpenLoad(){ if(NODE_OPEN) return NODE_OPEN; try{ NODE_OPEN=JSON.parse(localStorage.getItem(NODE_OPEN_KEY)||'null'); }catch(e){ NODE_OPEN=null; }
@@ -5183,17 +5199,30 @@ function nodeMapModel(sym){
   // (that was 780 all afternoon on 08-14 while price actually ranged under 777).
   // strongSup/strongRes are kept as aliases so older consumers keep working.
   var flr=null, ceil=null;
-  mapped.forEach(function(m){
-    if(m.pct==null || m.pct<FLRCEIL_MIN_PCT) return;
-    if(m.side==='below'){ if(!flr || m.dist<flr.dist) flr=m; }
-    else                { if(!ceil|| m.dist<ceil.dist) ceil=m; }
-  });
+  // (v10.47) per side: LARGEST node (King excluded unless it is the only strong node there);
+  // guard: largest too far + a strong node closer => closer = working edge, far one = next target.
+  function pickEdge(side){
+    var cand=mapped.filter(function(m){ return m.side===side && m.pct!=null; });
+    var strong=cand.filter(function(m){ return m.pct>=FLRCEIL_MIN_PCT; });
+    var big=cand.filter(function(m){ return !m.isKing && m.pct>=FLRCEIL_EDGE_PCT; });
+    var pool = big.length ? big : strong.filter(function(m){ return !m.isKing; });
+    if(!pool.length) pool = strong;                     // King is the only strong node on this side
+    if(!pool.length) return null;
+    var best=null; pool.forEach(function(m){ if(!best || m.pct>best.pct || (m.pct===best.pct && m.dist<best.dist)) best=m; });
+    if(best && best.dist>FLRCEIL_FAR){
+      var closer=null; strong.forEach(function(m){ if(m.dist<best.dist && !m.isKing && (!closer||m.dist<closer.dist)) closer=m; });
+      if(closer){ closer.nextBeyond=best.k; best=closer; }
+    }
+    return best;
+  }
+  flr=pickEdge('below'); ceil=pickEdge('above');
   if(flr){ flr.isFlr=true; flr.isStrong=true; }
   if(ceil){ ceil.isCeil=true; ceil.isStrong=true; }
   out.flr=flr; out.ceil=ceil; out.strongSup=flr; out.strongRes=ceil;
   out.range=(flr&&ceil)?{lo:flr.k,hi:ceil.k,inside:(px>=flr.k&&px<=ceil.k)}:null;
-  // other strong magnets (>= threshold) get ★ Mag
-  mapped.forEach(function(m){ if(!m.isKing&&!m.isFlr&&!m.isCeil&&m.pct!=null&&m.pct>=FLRCEIL_MIN_PCT) m.isStrongMag=true; });
+  // other strong magnets (>= threshold) get ★ Mag; (v10.47) beyond the edge = "next target"
+  mapped.forEach(function(m){ if(!m.isKing&&!m.isFlr&&!m.isCeil&&m.pct!=null&&m.pct>=FLRCEIL_MIN_PCT){ m.isStrongMag=true;
+    if((m.side==='above' && ceil && m.k>ceil.k) || (m.side==='below' && flr && m.k<flr.k)) m.isNext=true; } });
   // DISPLAY order: highest strike at top -> lowest (price divider sits between).
   mapped.sort(function(a,b){ return b.k-a.k; });
   out.levels=mapped;
@@ -5215,6 +5244,13 @@ function nmVerdictColor(v, side){
   return PAL.sub;   // Forming
 }
 // (v10.25 Step 4) white castle-gate (portcullis) SVG icon, stroke tunable.
+// (v10.47) small castle-gate for row pills (the gatekeeper icon is ALWAYS this arch, never a door)
+function gateSvgSm(stroke){
+  return '<svg width="12" height="11" viewBox="0 0 20 18" fill="none" stroke="'+stroke+'" stroke-width="1.8" stroke-linecap="round" style="vertical-align:middle">'+
+    '<path d="M3 16 V7 a7 7 0 0 1 14 0 V16"/><line x1="3" y1="16" x2="17" y2="16"/>'+
+    '<line x1="7" y1="16" x2="7" y2="6"/><line x1="10" y1="16" x2="10" y2="4.2"/><line x1="13" y1="16" x2="13" y2="6"/>'+
+    '<line x1="4.5" y1="10" x2="15.5" y2="10"/></svg>';
+}
 function gateSvg(stroke){
   return '<svg width="18" height="16" viewBox="0 0 20 18" fill="none" stroke="'+stroke+'" stroke-width="1.4" stroke-linecap="round" style="vertical-align:middle">'+
     '<path d="M3 16 V7 a7 7 0 0 1 14 0 V16"/><line x1="3" y1="16" x2="17" y2="16"/>'+
@@ -5363,9 +5399,11 @@ function nodeRoleBadge(L){
     var bspan=bd?(fmtNum(bd.lo)+'\u2013'+fmtNum(bd.hi)):'';
     tip='Barney'+(bspan?(' '+bspan):'')+(bd?(' ('+bd.n+' \u2212gamma nodes)'):'')+' \u2014 dense cluster of NEGATIVE-gamma nodes (NOT a Pika Cloud); an instability / acceleration zone: moves amplify, wicky/violent, overshoots common. Trade with, not against.';
   } else if(L.isFlr){
-    label='\u26F0 Flr'; col=PAL.longAccent; tip='FLOOR \u2014 the nearest strong magnet BELOW price (>= '+FLRCEIL_MIN_PCT+'% of King mass): the lower boundary of the live range (Step 3). A magnet, not a promise: it pulls, holds, or repels \u2014 see ACTIVITY. \uD83D\uDCCA non-King mass repelled price 57% of the time (n=350).';
+    label='\u26F0 Flr'; col=PAL.longAccent; tip='FLOOR \u2014 the LARGEST magnet BELOW price (Skylit: the range edge is where price consistently reverses): the lower boundary of the live range (Step 3). A magnet, not a promise: it pulls, holds, or repels \u2014 see ACTIVITY. \uD83D\uDCCA non-King mass repelled price 57% of the time (n=350).';
   } else if(L.isCeil){
-    label='\u2594 Ceil'; col=PAL.shortAccent; tip='CEILING \u2014 the nearest strong magnet ABOVE price (>= '+FLRCEIL_MIN_PCT+'% of King mass): the upper boundary of the live range (Step 3). A magnet, not a promise: see ACTIVITY for pull/push. \uD83D\uDCCA non-King mass repelled price 57% (n=350).';
+    label='\u2594 Ceil'; col=PAL.shortAccent; tip='CEILING \u2014 the LARGEST magnet ABOVE price (Skylit: the range edge is where price consistently reverses): the upper boundary of the live range (Step 3). A magnet, not a promise: see ACTIVITY for pull/push. \uD83D\uDCCA non-King mass repelled price 57% (n=350).';
+  } else if(L.isStrongMag && L.isNext){
+    label='\u2605 Mag \u00b7 next'; col=PAL.sub; tip='Next target \u2014 a strong magnet BEYOND the range edge: where price goes if the ceiling/floor breaks.';
   } else if(L.isStrongMag){
     label='\u2605 Mag'; col=PAL.sub; tip='Strong magnet (>= '+FLRCEIL_MIN_PCT+'% of King mass) inside the range. No directional word by design \u2014 which side of price it sits on is the ladder; what it is doing is ACTIVITY.';
   } else {
@@ -5391,7 +5429,7 @@ function nodeRolePill(L){
   // pull the label + color out of the badge span (cheap: re-derive from nodeRoleBadge's rules)
   // (v10.36) crown-only for the King (drop the ★ when 👑 present, for column alignment);
   // ★ still marks a strongest floor/ceiling that is NOT the King.
-  var icon=(L.isKing?'\uD83D\uDC51':'')+(L.isGatekeeper?'\uD83D\uDEAA':'')+((L.isRugTarget||L.isRugCeil||L.isRugFloor)?'\uD83E\uDDF6':'');
+  var icon=(L.isKing?'\uD83D\uDC51':'')+(L.isGatekeeper?gateSvgSm(PAL.amber):'')+((L.isRugTarget||L.isRugCeil||L.isRugFloor)?'\uD83E\uDDF6':'');
   if(!icon) return badge; // Floor/Ceiling/Pika/Barn have no icon — the word badge stands alone
   // inject the icon right after the opening '>' of the badge span
   return badge.replace(/>([^<]*)<\/span>$/, function(_,txt){ return '>'+icon+' '+txt+'</span>'; });
@@ -5606,8 +5644,15 @@ function deflectionBlock(){
     var up=(r.d.dir>0);
     var dirTxt=up?'\u25b2':'\u25bc';
     var dirCol=up?PAL.longAccent:PAL.shortAccent;
-    var name=r.cls.name.replace(/^\u2b51\s*/,'\u2b51');   // keep the star marker if present
-    var chipsHtml=r.cls.chips.map(function(c){return _deflChipHtml(c.t);}).join(' ');
+    // (v10.47) abbreviated card name "Defl · Gate" + Step-5 context chips at the moment of the event
+    var star=/^\u2b51/.test(r.cls.name)?'\u2b51 ':'';
+    var roleAb = r.L.isKing?'King':(r.L.isGatekeeper?'Gate':(r.L.isRugCeil||r.L.isRugFloor||r.L.isRugTarget)?((r.cls.name.indexOf('Reverse')>=0)?'RRug':'Rug'):(r.L.role==='Pika'?'Pika':(r.L.role==='Barn'?'Barn':(up?'Flr':'Ceil'))));
+    var name=star+'Defl \u00b7 '+roleAb+(r.cls.brokeFT?' \u00b7 BO\u00b7FT':'')+(r.cls.isFBO?' \u00b7 FBO':'');
+    var ctx=[];
+    var stW=_nmAcc(r.L); if(stW!=='steady') ctx.push(stW.replace('accumulating','Acm').replace('decreasing','Dec').replace(/[()]/g,'')); else ctx.push('Steady');
+    if(r.L.pos===true) ctx.push('+\u03B3'); else if(r.L.pos===false) ctx.push('\u2212\u03B3');
+    var tp_=r.L.taps||0; if(tp_) ctx.push((tp_===1?'1st':tp_===2?'2nd':tp_===3?'3rd':tp_+'th')+' tap');
+    var chipsHtml=ctx.map(function(t){ var red=/^(3rd|[4-9]th|\d\dth) tap$/.test(t); return '<span style="font-size:8px;border:1px solid '+(red?PAL.shortAccent:PAL.line)+';color:'+(red?PAL.shortAccent:PAL.sub)+';border-radius:9px;padding:0 4px">'+t+'</span>'; }).join(' ');
     // grade: HIDDEN until unlock; else earned letter
     var gradeHtml;
     if(r.n>=unlockN){
@@ -5629,6 +5674,108 @@ function deflectionBlock(){
   return html;
 }
 
+
+// ============================================================================
+// (v10.47) NODE MAP SENTENCE — the middle tense of the tool. Top READ = direction & structure;
+// this = what is happening at the node price is engaging (continuation vs deflection) and WHY,
+// in Step-5 vocabulary (accumulating / decreasing / reshuffling); Deflections = what happened.
+// Locked templates (user, 2026-08-16):
+//  "CONTINUATION through 774.50 toward the King at 775.38 because the gate is decreasing (▼8%),
+//   while the King above is accumulating (▲12%) and pulling harder. Support at 773.25 is
+//   accumulating too so the floor under the move is firm."
+//  "REVERSAL likely at 776.50 — the ceiling is accumulating (▲14%) and has held twice, and
+//   777.75 behind it is accumulating as well, so resistance is stacking. Nothing below price is
+//   decreasing, so a deflection here would have support to fall back on."
+// Numbers only for Acm/Dec. Levels always named. Never "mass". No trade language.
+function _nmRole(L){ if(!L) return 'node'; if(L.isKing) return 'King'; if(L.isGatekeeper) return 'gate'; if(L.isFlr) return 'floor'; if(L.isCeil) return 'ceiling'; return 'node'; }
+function _nmAcc(L){ // 'accumulating (▲12%)' | 'decreasing (▼8%)' | 'steady'
+  if(!L) return 'steady';
+  var c=(typeof L.chg==='number')?L.chg:0;
+  if(L.state==='Building' || c>=8) return 'accumulating'+(c>0?(' (▲'+Math.round(c)+'%)'):'');
+  if(L.state==='Fading' || c<=-8) return 'decreasing'+(c<0?(' (▼'+Math.round(Math.abs(c))+'%)'):'');
+  return 'steady';
+}
+function _nmIsAcc(L){ return !!L && (L.state==='Building' || (typeof L.chg==='number' && L.chg>=8)); }
+function _nmIsDec(L){ return !!L && (L.state==='Fading' || (typeof L.chg==='number' && L.chg<=-8)); }
+function _nmB(t,c){ return '<b style="color:'+(c||PAL.ink)+'">'+t+'</b>'; }
+function nodeMapSentence(m, sym, tagFn){
+  var px=m.px, lv=(m.levels||[]).slice();
+  var b=_nmB, N=fmtNum;
+  if(!lv.length) return {verdict:'NONE', text:'Node Map — waiting on node data…'};
+  // engaged node by priority: fresh deflection > BOw > Push > Pull within 1.5 strikes
+  var eng=null, how=null;
+  lv.forEach(function(L){ if(L.deflection && L.deflection.bars<=DEFLECT_CONFIRM+EP_DEFL_HANDOFF && (!eng || L.dist<eng.dist)){ eng=L; how='defl'; } });
+  if(!eng) lv.forEach(function(L){ var ep=L.ep||{}; if(ep.state==='BOw' && (!eng||L.dist<eng.dist)){ eng=L; how='bow'; } });
+  if(!eng) lv.forEach(function(L){ var ep=L.ep||{}; if(ep.state==='Push' && (!eng||L.dist<eng.dist)){ eng=L; how='push'; } });
+  if(!eng) lv.forEach(function(L){ var ep=L.ep||{}; if(ep.state==='Pull' && L.dist<=1.5 && (!eng||L.dist<eng.dist)){ eng=L; how='pull'; } });
+  var above=lv.filter(function(L){return L.k>px;}).sort(function(a,c){return a.k-c.k;});
+  var below=lv.filter(function(L){return L.k<px;}).sort(function(a,c){return c.k-a.k;});
+  var king=lv.filter(function(L){return L.isKing;})[0]||null;
+  if(!eng){
+    var lo=below[0], hi=above[0];
+    var t='price is '+(lo&&hi?('between '+b(N(lo.k))+' and '+b(N(hi.k))):'away from every mapped node');
+    if(king){ t+='; the nearest pull is the King at '+b(N(king.k),PAL.gold)+((king.ep&&king.ep.state==='Pull')?' and price is closing toward it':''); }
+    return {verdict:'NO NODE IN PLAY', text:t+'.'};
+  }
+  var side=eng.side;                       // 'above' = price rising into it, 'below' = falling into it
+  var beyond=(side==='above'?above:below).filter(function(L){ return L!==eng && (side==='above'?L.k>eng.k:L.k<eng.k); })[0]||null;
+  var oppEdge = side==='above' ? m.flr : m.ceil;     // the edge behind price
+  var role=_nmRole(eng);
+  var acc=_nmAcc(eng);
+  var taps=eng.taps||0;
+  var purple=(eng.pos===false);
+  var beyondName = beyond ? (beyond.isKing?('the King at '+b(N(beyond.k),PAL.gold)):(beyond.isCeil?('the ceiling at '+b(N(beyond.k))):(beyond.isFlr?('the floor at '+b(N(beyond.k))):(beyond.isNext?('the next magnet at '+b(N(beyond.k))):b(N(beyond.k)))))) : null;
+  var verdict, text;
+  // ---- resolved deflection = report ----
+  if(how==='defl'){
+    var up=eng.deflection.dir>0;
+    verdict='DEFLECTED';
+    text='off the '+role+' at '+b(N(eng.k))+' — price tapped it and reversed '+(up?'up':'down')+(taps?(' on its '+(taps===1?'first':taps===2?'second':taps===3?'third':taps+'th')+' tap'):'')+
+      '. The '+role+' is '+acc+(_nmIsAcc(eng)?', so the deflection has weight behind it':(_nmIsDec(eng)?', so the deflection may not hold':''))+
+      (purple?'. It is a purple node, so a deflection here is against its character — expect a fast, wicky move':'')+'.';
+    return {verdict:verdict, text:text, node:eng};
+  }
+  // ---- 3rd-tap rule (Skylit: 1st ~80%, 2nd ~66%, 3rd ~33%) ----
+  var third = taps>=2;
+  var contBecause=[], revBecause=[];
+  if(_nmIsDec(eng)) contBecause.push('the '+role+' is '+acc);
+  if(third && !_nmIsDec(eng)) contBecause.push('it has already held '+(taps===2?'twice':taps+' times')+' — a third tap usually fails (~33%)');
+  if(beyond && _nmIsAcc(beyond)) contBecause.push(( beyond.isKing?'the King '+(side==='above'?'above':'below')+' is ':(beyondName+' is '))+_nmAcc(beyond)+(beyond.isKing?' and pulling harder':''));
+  if(_nmIsAcc(eng) && !third) revBecause.push('the '+role+' is '+acc+(taps?(' and has held '+(taps===1?'once':taps===2?'twice':taps+' times')):''));
+  if(beyond && _nmIsAcc(beyond) && !beyond.isKing) revBecause.push(N(beyond.k)+' behind it is accumulating as well, so '+(side==='above'?'resistance':'support')+' is stacking');
+  var boft = /FT/.test((typeof tagFn==='function')?(tagFn(eng.k)||''):'');
+  var cont = boft || (contBecause.length && !(_nmIsAcc(eng) && !third));
+  var rev  = !cont && revBecause.length>0;
+  var oppTxt='';
+  if(oppEdge){
+    var oppRole = side==='above'?'Support':'Resistance';
+    if(_nmIsAcc(oppEdge)) oppTxt=' '+oppRole+' at '+b(N(oppEdge.k))+' is accumulating too so the '+(side==='above'?'floor under the move is firm':'ceiling over the move is firm')+'.';
+    else if(_nmIsDec(oppEdge)) oppTxt=' '+oppRole+' at '+b(N(oppEdge.k))+' is decreasing, so there is less behind price if this fails.';
+    else if(rev) oppTxt=' Nothing '+(side==='above'?'below':'above')+' price is decreasing, so a deflection here would have '+(side==='above'?'support':'resistance')+' to fall back on.';
+  }
+  if(cont){
+    verdict='CONTINUATION';
+    text='through '+b(N(eng.k))+(beyondName?(' toward '+beyondName):'')+' because '+(contBecause.length?contBecause.join(', while '):'the '+role+' is steady and price keeps closing toward it')+
+      (purple?', and it is a purple node so the move through it can be fast':'')+'.'+oppTxt;
+  } else if(rev){
+    verdict='REVERSAL';
+    text='likely at '+b(N(eng.k))+' — '+revBecause.join(', and ')+(purple?'; note it is a purple node, so a deflection here is against its character and can be wicky':'')+'.'+oppTxt;
+  } else {
+    verdict='TBD';
+    text='at '+b(N(eng.k))+' — the '+role+' is '+acc+(how==='pull'?' and price is closing toward it':how==='bow'?' and price is sitting on it':' and price is being pushed away')+
+      (beyondName?(', with '+beyondName+' behind it'):'')+'; nothing has given way yet.'+oppTxt;
+  }
+  return {verdict:verdict, text:text, node:eng};
+}
+function nodeMapSentenceHtml(m, sym, tagFn, tip){
+  var r=(m&&m.ok)?nodeMapSentence(m, sym, tagFn):{verdict:'NONE',text:'Node Map — waiting on node data…'};
+  var col={CONTINUATION:PAL.longAccent, REVERSAL:PAL.shortAccent, DEFLECTED:PAL.shortAccent, TBD:PAL.gold, 'NO NODE IN PLAY':PAL.sub, NONE:PAL.sub}[r.verdict]||PAL.sub;
+  if(r.node && r.node.side==='below' && (r.verdict==='CONTINUATION')) col=PAL.shortAccent;   // continuing DOWN through a floor = bearish
+  if(r.node && r.node.side==='below' && (r.verdict==='REVERSAL'||r.verdict==='DEFLECTED')) col=PAL.longAccent; // bouncing off a floor = bullish
+  return '<div title="'+(tip||'').replace(/"/g,'')+'" style="margin:6px 2px 4px;font-size:10px;line-height:1.5;color:'+PAL.ink+'">'+
+    stepIcon(5,'vertical-align:middle;margin-right:5px')+'<b style="color:'+col+'">'+r.verdict+'</b> '+r.text+'</div>';
+}
+
 function nodeMapBlock(){
   var sym='SPY';
   var m=nodeMapModel(sym);
@@ -5643,7 +5790,10 @@ function nodeMapBlock(){
   // (v10.44) RANGE chip = ⛰Flr–▔Ceil (nearest strong magnets each side) + inside/OUT.
   var rangeChip='';
   if(m.range){ var rin=m.range.inside; rangeChip='<span title="Live range = nearest strong magnet below (Flr) to nearest strong magnet above (Ceil), each >= '+FLRCEIL_MIN_PCT+'% of King mass. Inside = rotation between two magnets; outside = the range is being redefined (a break + FT re-anchors it to the next strong magnet)." style="color:'+(rin?PAL.ink:PAL.amber)+';font-size:9px;font-weight:700;padding:1px 7px;border:1px solid '+PAL.line+';border-radius:20px;margin-right:4px">Range <b>'+fmtNum(m.range.lo)+'\u2013'+fmtNum(m.range.hi)+'</b> \u00b7 '+(rin?'inside':'OUT')+'</span>'; }
-  var html=sectionHdrRight(stepIcon(5,'vertical-align:middle;margin-right:4px')+'Node Map', (m.ok?(rangeChip+rgChip):''), hdrTip);
+  // (v10.47, user-directed) The header is ONE plain sentence: CONTINUATION / REVERSAL / TBD /
+  // NO NODE IN PLAY at the engaged node, and WHY in Step-5 vocabulary (accumulating / decreasing).
+  // Range + pattern chips retired from the header (they ride in the hover); imbalance line folded in.
+  var html=nodeMapSentenceHtml(m, sym, setupTagForNode, hdrTip+' '+(m.range?('Range '+fmtNum(m.range.lo)+'\u2013'+fmtNum(m.range.hi)+' \u00b7 '+(m.range.inside?'inside':'OUT')+'. '):'')+'Pattern: '+rg.label+'.');
   if(!m.ok){ html+='<div style="color:'+PAL.sub+';padding:2px 6px;font-size:11px">Node Map \u2014 waiting on node data\u2026</div>'; return html; }
   // (v10.32) AIR POCKET note — only when a low-exposure gap sits ADJACENT to spot
   // (Academy Velocity checklist Q1). It is a fast PATHWAY, not a target: price travels
@@ -5662,26 +5812,7 @@ function nodeMapBlock(){
   // This is the Step-5 flow conclusion: the DIVERGENCE in build-RATE between the two
   // sides near price (not who is bigger). srBattle is render-cached, so this matches
   // the same value the old section showed. Below it: the tradeable crossover banner.
-  (function(){
-    var srb = (typeof srBattle==='function') ? srBattle('SPY') : null;
-    if(!srb) return;
-    var forming = !!srb.forming;
-    var netCol = srb.dom==='support'?PAL.longAccent:(srb.dom==='resistance'?PAL.shortAccent:PAL.sub);
-    var head = forming ? '' : (srb.dom==='resistance'?'Bearish imbalance':srb.dom==='support'?'Bullish imbalance':'');
-    var mech = '';
-    if(!forming && srb.dom==='resistance'){ mech='resistance '+(srb.gain!=null?fmtNum(srb.gain):'\u2013')+' building, support '+(srb.fade!=null?fmtNum(srb.fade):'\u2013')+' fading'; }
-    else if(!forming && srb.dom==='support'){ mech='support '+(srb.gain!=null?fmtNum(srb.gain):'\u2013')+' building, resistance '+(srb.fade!=null?fmtNum(srb.fade):'\u2013')+' fading'; }
-    var imbTip=('S/R IMBALANCE \u2014 the DIVERGENCE in build-RATE between the two sides near price (not who is bigger). '+(forming?'Forming: not enough rate samples yet.':(srb.dom==='resistance'?('Bearish: '+mech+' \u2014 ceiling strengthening while floor gives way, so a pullback tends to fail and roll down.'):srb.dom==='support'?('Bullish: '+mech+' \u2014 floor strengthening while overhead gives way, so dips tend to hold.'):'Neither side clearly gaining.'))+' Committed on 3m bar close (de-flickered).').replace(/"/g,'');
-    if(head || mech){
-      html+='<div title="'+imbTip+'" style="font-size:9.5px;line-height:1.35;margin:0 2px 4px">'+(head?('<span style="font-weight:800;color:'+netCol+'">'+head+'</span>'+(mech?' \u2014 ':'')):'')+(mech?('<span style="color:'+PAL.sub+';font-weight:600">'+mech+'</span>'):'')+'</div>';
-    }
-    if(srb.cross){
-      var xBear=(srb.cross==='bears');
-      var xCol=xBear?PAL.shortAccent:PAL.longAccent;
-      var xTxt=xBear?'\u25bc BEARS TAKING OVER \u2014 floor giving way, pullback-high short trigger':'\u25b2 BULLS TAKING OVER \u2014 overhead giving way, bounce starting';
-      html+='<div style="background:'+(xBear?'rgba(240,97,109,0.12)':'rgba(46,194,126,0.12)')+';border:1px solid '+xCol+';border-radius:8px;padding:3px 8px;margin:2px 2px 4px;font-size:9.5px;font-weight:800;color:'+xCol+'">'+xTxt+'</div>';
-    }
-  })();
+  // (v10.47) imbalance sentence + crossover banner REMOVED from here — the header sentence carries the flow read.
   // strongest headline (preserves old PROJ job): strongest Sup + strongest Res.
   function strongChip(c, word, col){
     if(!c) return '<span style="color:'+PAL.sub+';font-size:10px">'+word+' \u2013</span>';
@@ -5802,8 +5933,8 @@ function nodeMapBlock(){
     else if(boChip && /FT/.test(boChip)){ activity=boChip; }
     else if(boChip || ep.state==='BOw'){ activity = boChip || ('<span title="'+epTip+' At the node now \u2014 breakout WATCH: first close beyond = initial break; FT confirms." style="color:'+PAL.gold+';font-size:8.5px;font-weight:800;border:1px solid '+PAL.gold+';border-radius:9px;padding:0 5px">BOw</span>'); }
     else if(ep.state==='Push'){ var pcol=(L.side==='below')?PAL.longAccent:PAL.shortAccent; var parr=(L.side==='below')?'\u2191':'\u2193';
-      activity='<span title="'+epTip+' PUSH \u2014 price tagged this magnet and is being repelled (don\u2019t fade the exit). \uD83D\uDCCA non-King mass repels 57% at 30m (n=350)." style="color:'+pcol+';font-size:8.5px;font-weight:800;border:1px solid '+pcol+';border-radius:9px;padding:0 5px">Push '+parr+' <span style="font-weight:600;opacity:.8">'+ep.tw+'%</span></span>'; }
-    else if(ep.state==='Pull'){ activity='<span title="'+epTip+' PULL \u2014 price closing in on this magnet. \uD83D\uDCCA King pull 69% at 2 strikes (n=59), 74% in the 11am hour." style="color:'+PAL.blue+';font-size:8.5px;font-weight:700;border:1px solid '+PAL.blue+';border-radius:9px;padding:0 5px">Pull <span style="font-weight:600;opacity:.8">'+ep.tw+'%</span></span>'; }
+      activity='<span title="'+epTip+' PUSH \u2014 price tagged this magnet and is being repelled (don\u2019t fade the exit). \uD83D\uDCCA non-King mass repels 57% at 30m (n=350)." style="color:'+pcol+';font-size:8.5px;font-weight:800;border:1px solid '+pcol+';border-radius:9px;padding:0 5px">Push '+parr+'</span>'; }
+    else if(ep.state==='Pull'){ activity='<span title="'+epTip+' PULL \u2014 price closing in on this magnet. \uD83D\uDCCA King pull 69% at 2 strikes (n=59), 74% in the 11am hour." style="color:'+PAL.blue+';font-size:8.5px;font-weight:700;border:1px solid '+PAL.blue+';border-radius:9px;padding:0 5px">Pull</span>'; }
     else if(L.deflection){ activity=stageHtml; }
     else if(om){ activity='<span style="color:'+om.col+';font-size:8.5px;font-weight:800">'+om.txt+'</span>'; }
     var kcol=(L.isKing?PAL.gold:PAL.ink);
@@ -6489,47 +6620,109 @@ function studyNightlyTick(){
 // measured (📊) or hand-set (⚖) magnet-frame claims. No legacy verdicts (King
 // bull/bear 42%, confluence 38%, Break-through 8% all ran contrarian on 4 days).
 function readBlock44(sym){
+  // (v10.47, user-directed) ONE PARAGRAPH, plain language. Verdict word first
+  // (BULLISH / BEARISH / SIDEWAYS / TBD), then: destination + distance, what is in between and
+  // its record, support vs resistance state, the King's state ("getting heavier — dealers are
+  // pulling price up"), ONE measured-odds sentence, ONE watch level. Levels always named;
+  // percentages only when Acm/Dec is the point; never "mass"; no trade language.
+  // Regime gate: CHOP => SIDEWAYS and the odds sentence is dropped.
   var S=STATE[sym]||{}; var px=S.price; if(px==null) return '';
   var m=nodeMapModel(sym); if(!m||!m.ok) return '';
-  var st=studyLoad();
-  var lines=[];
-  var g=function(t,c){ return '<b style="color:'+(c||PAL.ink)+'">'+t+'</b>'; };
-  // 1) King zone + hour
-  var kingK=m.kingK;
-  if(kingK!=null){
-    var d=kingK-px, ad=Math.abs(d), up=d>0;
-    var zone= ad<=EP_ORBIT?'ORBIT':(ad>EP_GATE_STRIKES?'OUT':(ad>=EP_PULLZONE_LO?'PULL':'NEAR'));
-    var hr=ctNow().getHours(); var hb=st.kingPull.byHour[hr+''];
-    var db=ad<1.5?'1':ad<2.5?'2':ad<3.5?'3':'4+';
-    var byD=st.kingPull.byDist[db];
-    var kingL=(m.levels||[]).filter(function(L){return L.isKing;})[0];
-    var kcol=(kingL&&kingL.pos===false)?'#b58bff':PAL.gold;
-    var txt='👑 '+g(fmtNum(kingK),kcol)+' '+(ad<0.5?'AT':(Math.round(ad*10)/10+(up?'↑':'↓')))+' · zone '+g(zone,zone==='PULL'?PAL.longAccent:(zone==='OUT'?PAL.amber:PAL.sub));
-    if(zone==='PULL'||zone==='NEAR'){ txt+=' — pull '+studyCite(byD,'toward'); if(hb&&hb.n>=10) txt+=' · this hour '+studyCite(hb,''); }
-    else if(zone==='ORBIT') txt+=' — contact zone: price orbits, direction is noise 📊 (50%, n=201) — watch for the flip (Defl → Push)';
-    else txt+=' — beyond gravity: no measured pull 📊 (n=68 coin flip)';
-    if(kingL && typeof kingL.chg==='number' && Math.abs(kingL.chg)>=15) txt+=' · King magnet '+g((kingL.chg>0?'▲':'▼')+Math.abs(kingL.chg)+'%',kingL.chg>0?PAL.longAccent:PAL.shortAccent)+(kingL.chg<0?' (bleeding → pull unreliable; 08-13 case)':'');
-    lines.push(txt);
+  var st=studyLoad(); var lv=m.levels||[]; var N=fmtNum;
+  var b=function(t,c){ return '<b style="color:'+(c||PAL.ink)+'">'+t+'</b>'; };
+  var king=lv.filter(function(L){return L.isKing;})[0]||null;
+  var flr=m.flr||null, ceil=m.ceil||null;
+  var above=lv.filter(function(L){return L.k>px;}).sort(function(a,c){return a.k-c.k;});
+  var below=lv.filter(function(L){return L.k<px;}).sort(function(a,c){return c.k-a.k;});
+  var rg=regimeTag(closedCandles(sym)||[]); var chop=!!(rg&&rg.tag==='chop');
+  function sw(L){ if(!L) return 'steady'; if(_nmIsAcc(L)) return 'building'; if(_nmIsDec(L)) return 'fading'; return 'steady'; }
+  function chg(L){ return (L&&typeof L.chg==='number')?L.chg:0; }
+  function distWords(d){ if(d<0.6) return 'less than a strike away'; if(d<1.5) return 'about a strike away'; return 'about '+(Math.round(d*2)/2)+' strikes away'; }
+  function tapsHeld(n){ return n<=0?'has not been tested yet':(n===1?'has already held once':(n===2?'has already held twice':('has held '+n+' times — a third tap usually fails (~33%)'))); }
+  // ---- lean ----
+  var kingDir = king ? (king.k>px?1:(king.k<px?-1:0)) : 0;
+  var kingW = kingDir*(1.5 + Math.max(-1,Math.min(1,chg(king)/15)));
+  var others=0;
+  if(flr){ if(_nmIsAcc(flr)) others+=1; else if(_nmIsDec(flr)) others-=1; }
+  if(ceil){ if(_nmIsAcc(ceil)) others-=1; else if(_nmIsDec(ceil)) others+=1; }
+  var srb=(typeof srBattle==='function')?srBattle(sym):null;
+  if(srb && !srb.forming){ if(srb.dom==='support') others+=1; else if(srb.dom==='resistance') others-=1; }
+  var lean=kingW+others;
+  var verdict;
+  if(chop) verdict='SIDEWAYS';
+  else if(kingDir!==0 && others*kingDir<=-2) verdict='TBD';
+  else if(lean>=1.5) verdict='BULLISH';
+  else if(lean<=-1.5) verdict='BEARISH';
+  else verdict='SIDEWAYS';
+  var vcol={BULLISH:PAL.longAccent,BEARISH:PAL.shortAccent,SIDEWAYS:PAL.sub,TBD:PAL.gold}[verdict];
+  var out='';
+  // ---- range position wording (item 4) ----
+  var posWord='';
+  if(m.range && m.range.inside && m.range.hi>m.range.lo){ var pos=(px-m.range.lo)/(m.range.hi-m.range.lo); posWord = pos<0.33?'near the floor':(pos>0.67?'near the ceiling':'near the midpoint'); }
+  if(verdict==='BULLISH'||verdict==='BEARISH'){
+    var dir=verdict==='BULLISH'?1:-1;
+    var cands=dir>0?above:below;
+    var dest = (king && kingDir===dir) ? king : (dir>0?ceil:flr) || cands[0] || null;
+    if(!dest){ verdict='SIDEWAYS'; }
+    else {
+      var destName = dest.isKing?('the King at '+b(N(dest.k),PAL.gold)):(dest.isCeil?('the ceiling at '+b(N(dest.k))):(dest.isFlr?('the floor at '+b(N(dest.k))):('the next magnet at '+b(N(dest.k)))));
+      var reached = dest.isKing && (dest.taps||0)>=1 ? ' — already reached once today —' : '';
+      out+='Price is going '+(dir>0?'up':'down')+' toward '+destName+reached+', '+distWords(Math.abs(dest.k-px))+'.';
+      // between: gate strictly between price and destination
+      var gate=lv.filter(function(L){ return L.isGatekeeper && !L.isKing && ((dir>0 && L.k>px && L.k<dest.k) || (dir<0 && L.k<px && L.k>dest.k)); })[0]||null;
+      if(gate){ out+=' The Gate at '+b(N(gate.k))+' is in between and it '+tapsHeld(gate.taps||0)+'.'; if(gate.pos===false) out+=' It is a purple node, so the reaction there can be fast.'; }
+      // support vs resistance
+      var sF=sw(flr), sC=sw(ceil);
+      if(flr&&ceil){ out+=' Support at '+b(N(flr.k))+' is '+sF+(sF!==sC?' while ':' and ')+'Resistance at '+b(N(ceil.k))+' is '+sC+'.'; }
+      else if(flr){ out+=' Support at '+b(N(flr.k))+' is '+sF+'.'; }
+      else if(ceil){ out+=' Resistance at '+b(N(ceil.k))+' is '+sC+'.'; }
+      // King state
+      if(king){
+        var kc=chg(king);
+        if(kc>=8) out+=' The King is getting heavier — dealers are pulling price '+(kingDir>0?'up':'down')+'.';
+        else if(kc<=-8) out+=' The King is bleeding — its pull is unreliable right now.';
+        else out+=' The King is steady.';
+        if(dest.isKing && king.pos===false) out+=' It is a purple node, so contact there can be wicky.';
+      }
+      // odds (dropped in chop; only when the destination is the King and we have a rate)
+      if(dest.isKing && st && st.kingPull){
+        var ad=Math.abs(dest.k-px); var db=ad<1.5?'1':ad<2.5?'2':ad<3.5?'3':'4+';
+        var byD=st.kingPull.byDist&&st.kingPull.byDist[db]; var hr=ctNow().getHours(); var hb=st.kingPull.byHour&&st.kingPull.byHour[hr+''];
+        var pD=studyPct(byD), pH=studyPct(hb);
+        if(pD!=null){ out+=' This has worked '+b(pD+'%')+' of the time at this distance'+((pH!=null&&hb.n>=10)?(', '+b(pH+'%')+' in this hour'):'')+' '+studyTag(byD)+'.'; }
+      }
+      // watch
+      var w = dir>0 ? flr : ceil;
+      if(w) out+=' Watch the '+(dir>0?'floor':'ceiling')+' at '+b(N(w.k))+': breaking it changes the read.';
+    }
   }
-  // 2) Range + Flr/Ceil episodes
-  if(m.range){
-    var parts=[];
-    [m.ceil,m.flr].forEach(function(L){ if(!L) return; var e=L.ep||{}; var nm=(L.isCeil?'▔ Ceil ':'⛰ Flr ')+fmtNum(L.k);
-      var stt=L.state==='Building'?'Acm':(L.state==='Fading'?'Dec':'Steady'); var rc=st.reached[L.state]||st.reached.base;
-      var held=rc&&rc.n?(100-Math.round(100*rc.h/rc.n)):null;
-      var eword=e.state==='Push'?g('Push',(L.side==='below')?PAL.longAccent:PAL.shortAccent):(e.state==='Pull'?g('Pull',PAL.blue):(e.state==='BOw'?g('at node',PAL.gold):'quiet'));
-      parts.push(nm+' '+stt+' · '+eword+(held!=null?(' · walls like this held '+held+'% '+studyTag(rc)):'')); });
-    lines.push('Range '+g(fmtNum(m.range.lo)+'–'+fmtNum(m.range.hi))+' '+(m.range.inside?'inside':g('OUT',PAL.amber))+' — '+parts.join(' · '));
+  if(verdict==='SIDEWAYS'){
+    if(m.range){
+      out+='Price is inside '+b(N(m.range.lo)+'–'+N(m.range.hi))+(posWord?(', '+posWord):'')+'.';
+    } else { out+='Price has no defined range yet'+((above[0]&&below[0])?(' — the nearest magnets are '+b(N(below[0].k))+' and '+b(N(above[0].k))):'')+'.'; }
+    if(king){ var kc2=chg(king); var kw = kc2>=8?'getting heavier':(kc2<=-8?'bleeding':'steady');
+      var sides = (_nmIsAcc(flr)&&!_nmIsAcc(ceil))?'support is building':(_nmIsAcc(ceil)&&!_nmIsAcc(flr))?'resistance is building':(_nmIsAcc(flr)&&_nmIsAcc(ceil))?'both sides are building':'neither side is building';
+      out+=' The King at '+b(N(king.k),PAL.gold)+' is '+kw+', '+sides+'.'; }
+    if(chop) out+=' Price action is choppy, so directional odds are not quoted.';
+    if(m.range) out+=' Watch '+b(N(m.range.hi))+' and '+b(N(m.range.lo))+': a break with follow-through sets direction.';
   }
-  // 3) Field lean: others repel
-  var Fo=0; (m.levels||[]).forEach(function(L){ if(L.isKing||L.pct==null||L.dist>3||L.dist<0.25) return; Fo+=(L.side==='above'?1:-1)*L.pct/L.dist; });
-  if(Fo!==0){ var lean=Fo>0?'heavier ABOVE → lean down':'heavier BELOW → lean up'; lines.push('Non-King mass '+g(lean,Fo>0?PAL.shortAccent:PAL.longAccent)+' — '+studyCite(st.othersRepel,'repel')+(st.contenderRepel&&st.contenderRepel.n?(' · contender ≥60% repels '+studyCite(st.contenderRepel,'')):'')); }
-  // 4) Regime tag
-  var rg=regimeTag(closedCandles(sym)||[]);
-  if(rg) lines.push('Regime '+g(rg.tag.toUpperCase(),rg.tag==='trend'?PAL.amber:PAL.sub)+' (efficiency '+rg.er+') — '+(rg.tag==='chop'?'fade edges of the range; trend/confluence calls unreliable in chop 📊':(rg.tag==='trend'?'respect the direction; range being redefined':'mixed')));
-  var prov='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;opacity:.85">📊 = measured on '+(st.src||'local repo')+(st.bars?(' · '+st.bars+' bars'):'')+' · ⚖ = hand-set until n≥20 · re-scored nightly · <span style="cursor:pointer;text-decoration:underline" onclick="window.__gptsStudyRun&&window.__gptsStudyRun()">re-run now</span></div>';
-  return '<div title="READ ▸ — what the magnet field says right now, in measured terms. King zone + pull rate at this distance/hour, the live range with each boundary’s state and episode, the non-King lean (mass repels), and the regime tag. Every rate has an n; nothing here is a legacy verdict." style="padding:4px 8px 5px 8px;border-left:2px solid '+PAL.gold+';margin:2px 0 4px 0;background:'+PAL.card+';border-radius:0 8px 8px 0">'+
-    '<div style="font-size:9.5px;line-height:1.5;color:'+PAL.ink+'"><span style="color:'+PAL.gold+';font-weight:800">READ ▸</span> '+lines.join('<br>')+'</div>'+prov+'</div>';
+  if(verdict==='TBD' && king){
+    var kAbove=kingDir>0;
+    var oppos = (kAbove ? lv.filter(function(L){return L.k>px && !L.isKing && _nmIsAcc(L);}) : lv.filter(function(L){return L.k<px && !L.isKing && _nmIsAcc(L);})).sort(function(a,c){return a.dist-c.dist;}).slice(0,2);
+    var oppWord = kAbove?'Resistance':'Support';
+    out+='The King at '+b(N(king.k),PAL.gold)+' is '+(kAbove?'above':'below')+' price and pulling '+(kAbove?'up':'down');
+    if(oppos.length){ out+=', but '+oppWord+' at '+oppos.map(function(L){return b(N(L.k));}).join(' and ')+' '+(oppos.length>1?'sit':'sits')+' right '+(kAbove?'above':'below')+' it and '+(oppos.length>1?'are':'is')+' building — '+(oppos.length>1?'they block':'it blocks')+' the way.'; }
+    else { out+=', but the other side is building against it.'; }
+    var help = kAbove?flr:ceil;
+    if(help) out+=' '+(kAbove?'Support':'Resistance')+' at '+b(N(help.k))+' is '+sw(help)+(sw(help)==='building'?', helping':', not helping')+'.';
+    var gate2=lv.filter(function(L){ return L.isGatekeeper && !L.isKing; })[0]||null;
+    if(gate2) out+=' Watch the gate at '+b(N(gate2.k))+': a hold means the King wins, a break means the '+oppWord.toLowerCase()+' wins.';
+    else out+=' Watch the King itself: a tag and hold means the King wins, a rejection means the '+oppWord.toLowerCase()+' wins.';
+  }
+  var prov='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;opacity:.85">📊 = measured on '+(st.src||'local repo')+(st.bars?(' · '+st.bars+' bars'):'')+' · ⚖ = hand-set until n≥20 · re-scored nightly · CHOP drops the odds sentence · <span style="cursor:pointer;text-decoration:underline" onclick="window.__gptsStudyRun&&window.__gptsStudyRun()">re-run now</span></div>';
+  var tip='READ — direction and structure in plain language: which way price is going, to which level, what is in between, how support/resistance and the King are behaving, the measured odds, and the one level that changes the read. Verdict = King side + King strength + floor/ceiling state + build-rate imbalance; CHOP forces SIDEWAYS. Descriptive; not advice.';
+  return '<div title="'+tip+'" style="padding:4px 8px 5px 8px;border-left:2px solid '+PAL.gold+';margin:2px 0 4px 0;background:'+PAL.card+';border-radius:0 8px 8px 0">'+
+    '<div style="font-size:10px;line-height:1.55;color:'+PAL.ink+'"><span style="color:'+PAL.gold+';font-weight:800">READ ▸</span> <b style="color:'+vcol+'">'+verdict+'.</b> '+out+'</div>'+prov+'</div>';
 }
 window.__gptsStudyRun=function(){ studyRun(function(r){ try{ render(); }catch(e){} }); };
 window.__gptsRepoExport=function(d){ repoExportDay(d||TODAY,false); };
@@ -6609,6 +6802,89 @@ function projScorecardHtml(){
     h+='<div style="font-size:9px;color:'+PAL.ink+';padding:1px 0"><span style="color:'+col+'">▪</span> '+r.t+'</div>'; }
   h+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;opacity:.8">included in the day export → consumed by the end-of-day LLM review automatically</div></div>';
   return h;
+}
+// (v10.47) KING HEADER — restored per user: ★SUP | 👑 King (+ gate row) | ★RES, then the 5-STEP
+// ①②③ icons. This is the top slice of kingBlock() (which stays unrendered: no charts/verdict pill).
+function kingHeaderBlock(){
+  var sym='SPY';
+  var tp=tapeMap(sym);
+  var kingK = (tp && typeof tp.king==='number') ? tp.king : null;
+  var px = STATE[sym] ? STATE[sym].price : null;
+  var offRaw = (px!=null && kingK!=null) ? (kingK - px) : null;
+  var off = (offRaw!=null) ? Math.round(offRaw) : null;
+  // (v10.37) King badge REDESIGN: two stacked rows inside ONE gold pill.
+  //   TOP  = 👑 crown + King strike + signed offset-vs-price arrow ('−3↓' etc.)
+  //   BELOW = white gate icon + GATEKEEPER strike + signed distance FROM PRICE
+  //           (was SPY price). No gatekeeper => a dimmed placeholder row (empty space).
+  // The standalone Gatekeeper section is removed — its price now lives here.
+  function signedOff(delta){                 // delta = level - price (rounded)
+    if(delta==null) return null;
+    var d=Math.round(delta);
+    if(d===0) return {sign:'', num:'0', arr:'', col:PAL.gold};
+    var above=d>0;
+    return { sign:above?'+':'\u2212', num:String(Math.abs(d)), arr:above?'\u2191':'\u2193',
+             col:above?PAL.longAccent:PAL.shortAccent };
+  }
+  var gkNow = (typeof gatekeeper==='function') ? (function(){ try{return gatekeeper(sym);}catch(e){return null;} })() : null;
+  var gkK = (gkNow && gkNow.ok && typeof gkNow.k==='number') ? gkNow.k : null;
+  var kingPxBadge='';
+  if(kingK!=null){
+    var ko=signedOff(offRaw);
+    var kArr = (ko && ko.arr) ? ('<span title="King is '+ko.num+' vs price (+ above, \u2212 below)." style="color:'+ko.col+';font-weight:800;font-size:11px;line-height:1;font-variant-numeric:tabular-nums;margin-left:3px">'+ko.sign+ko.num+ko.arr+'</span>') : '';
+    // bottom row: gatekeeper strike + signed distance from PRICE
+    var gkRow;
+    if(gkK!=null){
+      var go=signedOff((px!=null)?(gkK-px):null);
+      var gArr = (go && go.arr) ? ('<span title="Gatekeeper is '+go.num+' vs price (+ above, \u2212 below)." style="color:'+go.col+';font-weight:800;font-size:10px;line-height:1;font-variant-numeric:tabular-nums;margin-left:3px">'+go.sign+go.num+go.arr+'</span>') : '';
+      gkRow='<span style="display:inline-flex;align-items:center;gap:3px;line-height:1">'+gateSvg(PAL.ink)+
+        '<span style="color:'+PAL.ink+';font-weight:700;font-size:10px;font-variant-numeric:tabular-nums">'+fmtNum(gkK)+'</span>'+gArr+'</span>';
+    } else {
+      // no gatekeeper => keep the row height, dim placeholder (clear path)
+      gkRow='<span title="No gatekeeper \u2014 clear path to the King." style="display:inline-flex;align-items:center;gap:3px;line-height:1;opacity:.45">'+gateSvg(PAL.sub)+
+        '<span style="color:'+PAL.sub+';font-size:10px">\u2013</span></span>';
+    }
+    kingPxBadge=
+      '<span title="TOP: 👑 King strike '+fmtNum(kingK)+' + offset vs price. BELOW: gatekeeper strike + its distance from price (no gatekeeper => clear path)." '+
+        'style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;padding:3px 8px;border:1.5px solid '+PAL.gold+';border-radius:14px;background:'+PAL.card+';flex:0 1 auto;min-width:0">'+
+        '<span style="display:inline-flex;align-items:center;line-height:1">'+
+          '<span style="font-size:12px;line-height:1">\uD83D\uDC51</span>'+
+          '<span style="color:'+PAL.gold+';font-weight:800;font-size:13px;font-variant-numeric:tabular-nums;margin-left:3px">'+fmtNum(kingK)+'</span>'+
+          kArr+
+        '</span>'+
+        '<span style="width:100%;height:1px;background:'+PAL.line+';margin:1px 0"></span>'+
+        gkRow+
+      '</span>';
+  } else {
+    kingPxBadge='<span style="color:'+PAL.sub+';font-size:11px">Waiting on tape\u2026</span>';
+  }
+  // ---- Header (v10.25): centered 3-MAGNET CLUSTER — green ★ strongest SUPPORT (left),
+  // 👑 King (middle), red ★ strongest RESISTANCE (right). Trend badge REMOVED (the
+  // regime/instruction line in the Node Map carries trend now). Below: the ①②③ icons.
+  var nm = (typeof nodeMapModel==='function') ? (function(){ try{return nodeMapModel(sym);}catch(e){return null;} })() : null;
+  function sideMagnet(node, isSup){
+    var col = isSup?PAL.longAccent:PAL.shortAccent;
+    var lbl = isSup?'\u2605 SUP':'\u2605 RES';
+    if(!node){ return '<span style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 6px;min-height:40px;box-sizing:border-box;border-radius:14px;background:'+PAL.card+';border:1.5px solid '+PAL.line+';opacity:.6;flex:0 1 auto;min-width:0"><span style="font-size:7.5px;font-weight:800;line-height:1;color:'+PAL.sub+';letter-spacing:.3px">'+lbl+'</span><span style="width:100%;height:1px;background:'+PAL.line+';margin:2px 0"></span><span style="color:'+PAL.sub+';font-size:10px;line-height:1">\u2013</span></span>'; }
+    var tip=(isSup?'Strongest SUPPORT magnet below price':'Strongest RESISTANCE magnet above price')+' \u2014 '+fmtNum(node.k)+' at '+node.pct+'% of King (size+build-rate+nearness blend). A strong magnet attracts price toward it.';
+    return '<span title="'+tip.replace(/"/g,'')+'" style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 6px;min-height:40px;box-sizing:border-box;border-radius:14px;background:'+PAL.card+';border:1.5px solid '+col+';flex:0 1 auto;min-width:0">'+
+      '<span style="font-size:7.5px;font-weight:800;line-height:1;color:'+col+';letter-spacing:.3px">'+lbl+'</span>'+
+      '<span style="width:100%;height:1px;background:'+PAL.line+';margin:2px 0"></span>'+
+      '<span style="line-height:1;white-space:nowrap"><span style="font-weight:800;font-size:12.5px;color:'+col+';font-variant-numeric:tabular-nums">'+fmtNum(node.k)+'</span> <span style="color:'+PAL.sub+';font-size:8.5px;font-weight:600;font-variant-numeric:tabular-nums">'+node.pct+'%</span></span>'+
+    '</span>';
+  }
+  var supBadge = sideMagnet(nm?nm.strongSup:null, true);
+  var resBadge = sideMagnet(nm?nm.strongRes:null, false);
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;gap:4px;margin:4px 0 3px 0;width:100%;box-sizing:border-box;padding:0 2px">'+
+    supBadge+
+    '<span title="KING: the strike with the largest absolute dealer exposure \u2014 the day\u2019s EOD settlement magnet." style="display:inline-flex;flex:0 1 auto;min-width:0">'+kingPxBadge+'</span>'+
+    resBadge+
+  '</div>'+
+  // ①②③ info icons (Magnets / King / Range \u2014 the header trio)
+  '<div style="display:flex;gap:5px;align-items:center;justify-content:center;margin:0 0 5px">'+
+    '<span style="font-size:8.5px;color:'+PAL.sub+';font-weight:700;letter-spacing:.3px;margin-right:2px">5-STEP</span>'+
+    stepIcon(1)+stepIcon(2)+stepIcon(3)+
+  '</div>';
+  return html;
 }
 function kingBlock(){
   var sym='SPY';
@@ -6908,7 +7184,7 @@ function feedStatusHtml(){
   return '<div style="display:flex;justify-content:space-between;align-items:center;color:'+PAL.sub+';font-size:9px;letter-spacing:0.3px;gap:6px;flex-wrap:wrap">'+
     '<span style="color:'+col+'">'+txt+'</span>'+
     warn+rec+
-    '<span>feed v10.46</span>'+
+    '<span>feed v10.47</span>'+
     '</div>';
 }
 
@@ -7985,14 +8261,9 @@ function render(){
   // while out of sync with the tape is the failure mode that shipped on
   // 2026-08-14 - a wrong anchor presented as fact. Honest degradation instead.
   var __sync = (CFG.tapeGate===false) ? {ok:true} : tapeSync('SPY');
-  if(!__sync.ok){
-    html+=outOfSyncBlock(__sync);
-    html+='<div style="border-top:1px solid '+PAL.line+';margin:6px 0 3px 0"></div>';
-    html+=feedStatusHtml();
-    elBody.innerHTML=html;
-    var gEl0=document.getElementById('gpts-grade'); if(gEl0){ gEl0.style.display='none'; }
-    return;
-  }
+  // (v10.47, user-directed) One-line banner instead of a blocking panel: the app must stay
+  // visible (weekends / parse hiccups) so it can be inspected. Detail lives in the hover.
+  if(!__sync.ok){ html+=syncBannerHtml(__sync); }
   // (v10.41) TWO-COLUMN DASHBOARD. One column could no longer hold the King
   // analyzer + Deflections + Node Map. LEFT = everything King (badge, narrative,
   // path chart). RIGHT = Deflections + Node Map (accumBlock). Responsive: each
@@ -8004,6 +8275,7 @@ function render(){
   // no longer rendered; all King/projection/episode RECORDING + nightly scoring continues
   // silently — see snapshotNodes/projScorecard). Charts return once scorecards mature.
   html+='<div id="gpts-1col" style="display:flex;flex-direction:column;gap:4px">';
+  try{ html+=kingHeaderBlock(); }catch(eH){}          // (v10.47) header cluster + ①②③ restored
   try{ html+=readBlock44('SPY'); }catch(eR){}
   // (v10.37) standalone gatekeeperBlock() REMOVED - gatekeeper strike + distance now in King badge.
   // (v10.27) Standalone BO / SPY Signals section REMOVED. The breakout-pullback

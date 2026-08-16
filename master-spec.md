@@ -120,15 +120,34 @@ Operating rule: AI Drive is the source of project continuity; Tampermonkey is th
 ### 3.1.1 Load-command completion rule
 For this project, shorthand commands such as `load gex`, `open gex`, `continue gex`, `retrieve gex`, and `get gex` are not advisory; they are blocking bootstrap commands. This applies in all Genspark surfaces, including the Chrome extension.
 
-A load command is complete only when the assistant has actually read all canonical files required for startup:
+A load command is complete only when the assistant has actually read all canonical files AND platform docs required for startup:
+
+**Project files (7):**
 - `master-spec.md`
 - `teaching-spec.md`
-- `current/gex-signal-tapereader.user.js`
+- `current/gex-signal-tapereader.user.js` (FULL FILE — understand code architecture: Layer 0-7, render flow, key algorithms)
 - `session-state/latest-resume-note.md`
 - `changelog/CHANGELOG.md`
 - `design/architecture-design.md`
+- `skylit-docs/README.md` (doc archive overview)
 
-Until all five are read, the assistant must not claim the project is loaded, must not continue with project reasoning or coding, and must not imply sync. After a successful load it must explicitly report the loaded files, current baseline/version, approved patch state, and next concrete step. If any file is missing or unread, it must say the load is incomplete and stop.
+**Skylit platform foundation (minimum 3):**
+- `skylit-docs/core-concepts.md` (nodes, King, Gatekeeper, retest decay)
+- `skylit-docs/read-the-heatmap/how-to-read-and-use-heatseeker.md` (5-step framework)
+- `skylit-docs/learn/intro-to-gamma.md` (Pika/Barney, absolute value rule)
+
+**Additional platform docs (recommended):**
+- `skylit-docs/learn/node-lifecycle.md` (Fresh/Tested/Delivered/Decaying)
+- `SOURCE-OF-TRUTH.md` (Skylit Academy as source of truth)
+
+Until all required files are read, the assistant must not claim the project is loaded, must not continue with project reasoning or coding, and must not imply sync. After a successful load it must explicitly report:
+1. which project + platform files were loaded
+2. code architecture understanding (layers, render flow, key algorithms)
+3. current baseline/version
+4. approved patch state
+5. next concrete step
+
+If any required file is missing or unread, it must say the load is incomplete and stop.
 
 ### 3.1.2 Save-command completion rule
 For this project, shorthand save commands such as `save`, `save all`, and `save everything` are blocking persistence commands. This applies in all Genspark surfaces, including the Chrome extension.

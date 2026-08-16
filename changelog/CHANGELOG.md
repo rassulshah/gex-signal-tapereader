@@ -1,3 +1,32 @@
+## v10.47 — 2026-08-16 — PHASE A SHIPPED (dashboard) · Phases B–D still planned
+
+**Phase A built (candidate — verify live Monday):**
+- `kingHeaderBlock()` restored above READ: ★SUP | 👑 King (+ castle-gate row) | ★RES + 5-STEP ①②③ (top slice of the unrendered `kingBlock()`; no charts, no verdict pill).
+- Tape-sync gate → `syncBannerHtml()`: ONE red line "⚠ STRUCTURAL READ OUT OF SYNC WITH TAPE" (detail in hover), app renders normally underneath (was a blocking panel).
+- `readBlock44()` rewritten: ONE plain paragraph. Verdict word (BULLISH/BEARISH/SIDEWAYS/TBD) from King side+strength, Flr/Ceil state, srBattle; destination + distance; gate in between + tap record (3rd-tap warning); Support/Resistance state; King "getting heavier — dealers pulling price up" / "bleeding"; ONE odds sentence (King pull by distance + hour, dropped in CHOP); ONE watch level; range-position wording (near the floor / midpoint / ceiling); "already reached once today"; purple-node notes. Regime gate: CHOP ⇒ SIDEWAYS.
+- Node Map header = `nodeMapSentence()`: CONTINUATION / REVERSAL / DEFLECTED / TBD / NO NODE IN PLAY at the engaged node (fresh Defl > BOw > Push > Pull≤1.5) with the WHY in accumulating/decreasing vocabulary (locked templates), 3rd-tap flip, polarity note. Range/Trend chips + imbalance line + crossover banner removed from the header (range/pattern in hover).
+- Flr/Ceil REDEFINED (Skylit): `pickEdge()` = LARGEST node per side (≥`FLRCEIL_EDGE_PCT`=40% ⚖, King excluded unless only strong node; far-edge guard `FLRCEIL_FAR`=6). Strong nodes beyond the edge = "★ Mag · next" (`isNext`).
+- Gate icon everywhere = castle-gate svg (`gateSvgSm` in row pills; 🚪 removed). Pull/Push chips without toward-share % (in hover). Defl cards: "Defl · Gate/Ceil/Flr/King…", context chips = Acm/Dec %, ±γ, Nth tap (red at 3rd+).
+- Tests: `test_read_v1047.js` (32) + 3 tests updated; suite green except 5 pre-existing stale tests (layout_2col, node_identity, node_role_badge, nodemap, tapeking/jsdom) that were already failing on v10.46.
+- NOT in Phase A (Phase B+): reshuffle detector (RShuf chip/sentence), rolling, chart levels, MFE/MAE, gate-hour, GEX/VEX VWAP, Analysis rebuild, Testing pipeline, rules.json, nightly review.
+
+**Design session (2026-08-16) — locked scope for the whole learning pipeline:**
+
+Full ONE-AT-A-TIME design pass against Skylit's 5-step guide + doctrine docs. LOCKED scope, phased:
+**A Dashboard**: header cluster restored (★SUP | 👑/gate | ★RES + ①②③), sync gate → one-line banner
+(app renders), READ = one D-style paragraph (BULLISH/BEARISH/SIDEWAYS/TBD; locked texts), range
+position as wording, regime gate (chop→SIDEWAYS, odds dropped), Flr/Ceil = largest bounding node
+(Skylit) + Gate/next-target/cluster classes, Node Map header = one CONT/REVERSAL/RSHUF sentence
+(accumulating/decreasing vocabulary), 3rd-tap warning, polarity in why, King-already-reached, Defl
+cards with Step-5 context chips (abbrev.). **B Recorder**: reshuffle detector, rolling Flr/Ceil,
+gate-defl hour, chart levels (VWAP, PDH/L/C, PM H/L, IB30, POC/VAH/VAL), MFE/MAE, regime on outcomes,
+GEX/VEX VWAP computed internally. **C Analysis**: "did the dashboard tell the truth" — 6 sections in
+dashboard order + Setup Performance bars; nightly LLM review OPTION 1 (no cloud token; review/ file
+committed by local task). **D Testing**: question queue w/ lifecycle + auto conditional refinement +
+walk-forward promotion; learning engine `learning/rules.json` read by the panel; confidence tiers;
+event tag. Deferred: cross-index SPY/SPXW/QQQ(+VIX). Spec: session-state/latest-resume-note.md +
+mockups/gex-v10.46-dashboard-mockup.html. Rules added: one-item-at-a-time, panel abbreviations.
+
 ## v10.46 — 2026-08-15 — derived GEX factors + Recommended-tests section (research-backed)
 
 **Research (2 web passes, sourced):** Barbon–Buraschi gamma fragility (the one hard result: +gamma→

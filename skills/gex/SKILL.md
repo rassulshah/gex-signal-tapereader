@@ -12,36 +12,48 @@ description: >
 
 ## LOAD ("load gex")
 
-Goal: full project context before touching anything. Sources in priority order:
+Goal: full project context + code understanding + platform understanding before touching anything. Sources in priority order:
 
 1. **Attached files / zip** in this conversation (uploads directory) — use if present.
 2. **User's machine via device bridge** (Claude desktop app connected):
    `C:\Dev\gex-signal-tapereader` — stage needed files into the workspace.
-3. **Google Drive connector** (GEX-Tapereader folder). GOTCHAS (hard-won):
-   - `read_file_content` returns MARKDOWN-ESCAPED, TRUNCATED text — NEVER use it
-     for source files. Use `download_file_content` + base64 decode.
-   - Downloads >10 MB refused (whole-project zip won't pull; use the folder tree).
-   - `update_file` changes METADATA ONLY. In-place update pattern:
-     create_file new → rename old to *-archive → rename new into canonical slot.
+3. **GitHub raw URLs** (for Skylit docs + userscript):
+   - `https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js`
+   - `https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/skylit-docs/...`
 
 Read, in order:
 1. `session-state/latest-resume-note.md` — the single source of "where we are":
    locked scope for the next version, open threads, standing workflow agreements.
 2. `changelog/CHANGELOG.md` — head only (latest 2–3 entries).
 3. `master-spec.md` + `teaching-spec.md` — rules (file-shape rule 2.4 etc.).
-4. `current/gex-signal-tapereader.user.js` — the live baseline. VERIFY before
-   trusting: exactly one `render()`, final line `})();`, byte count matches the
-   versioned copy. If any check fails the copy is corrupt — re-pull.
-5. `design/` mockups referenced by the resume note (build specs).
-6. `gex/SKYLIT-LLM-GROUNDING.md` — Skylit domain vocabulary (King, ±γ, nodes,
-   eVA, succession, episodes/magnet frame).
+4. **`current/gex-signal-tapereader.user.js` — FULL FILE** (not summary). Understand:
+   - Layer 0 (feed intake): `installFeedObserver()`, `extractWalls()`, fiber candle reading
+   - Layer 1 (state): `STATE[sym]`, persistence keys, `LASTFEED`
+   - Layer 2 (trend): `trendVerdict()` 5-state machine, continuous SMA, sanity gates
+   - Layer 3 (setup): `newSetup()`, `runMachine()`, BO/FT/PB/CONF/GO lifecycle
+   - Layer 4 (accumulation): `accumData()`, Building/Steady/Fading detection
+   - Layer 5 (recorder): `repoWrite()`, IndexedDB storage, daily export
+   - Layer 6–7 (render): `render()`, block functions (`readBlock44`, `deflectionBlock`, `nodeMapBlock`)
+   - Verify: exactly one `render()`, final line `})();`, byte count matches version.
+5. **Skylit platform docs** (minimum 3, understand the framework the code implements):
+   - `skylit-docs/core-concepts.md` — nodes as magnets, King, Gatekeeper, retest decay
+   - `skylit-docs/read-the-heatmap/how-to-read-and-use-heatseeker.md` — 5-step framework
+   - `skylit-docs/learn/intro-to-gamma.md` — Pika/Barney polarity, absolute value rule
+   - **Optional:** `skylit-docs/learn/node-lifecycle.md`, `SOURCE-OF-TRUTH.md`
+6. `design/` mockups referenced by the resume note (build specs).
 7. DATA (from v10.44): `data/YYYY-MM-DD.json` — one file per session day, written by the
    userscript at the close and auto-pushed by a scheduled task. Fetch via raw GitHub URL
    (same host TM updates from). Read the coverage summary first (days · bars · symbols ·
    fields-since) — never run a study on fields that don't exist for the days in question.
 
-Then report: baseline version, next build target, open threads — and WAIT for
-the user's direction. Do not start building on load.
+Then report: 
+- baseline version
+- code architecture understanding (layers, render flow, key algorithms)
+- platform understanding (5-step framework, magnet concept, node lifecycle)
+- next build target
+- open threads
+
+WAIT for the user's direction. Do not start building on load.
 
 ## SAVE ("save" / "save gex")
 
@@ -71,10 +83,22 @@ saving means getting files to the USER (SendUserFile) and/or their repo/Drive.
 6. Tell the user the exact resume phrase: new window, say "load gex" (attach the
    installer or repo files if the skill isn't saved to their account).
 
+
+## STATUS ("status" / "where are we" / "how complete is it")
+
+Report completeness LAYER BY LAYER with an honest % and one sentence of what works vs what is
+missing per layer (user-approved format 2026-08-16): Sensing (L0–1) · Dashboard reader (READ/
+header/Node Map/Defl) · Recording & self-scoring · Analysis tab · Testing pipeline · Nightly review
+· Multi-symbol/Trinity. Close with an overall one-liner: usable-as-what today, and which phases turn
+it into what. Never inflate; unverified-live code stays "candidate".
+
 ## STANDING PROJECT RULES (apply always)
 
 - Before coding: ASK first (user may have more fixes) and show MOCKUPS for review.
-- Discuss one element at a time; confirm before moving on.
+- **ONE AT A TIME (user-mandated, repeated 2026-08-15): discuss exactly ONE element per
+  message. Never list all open items and their fixes in one reply. State the one item,
+  its fix, ask for the decision, STOP. Move to the next only after the user confirms.**
+  Everything-at-once lists are the recurring failure mode — do not do it.
 - Nodes are MAGNETS (attract/pull, repel/push): every indicator is either
   DESCRIPTIVE (what the field is doing) or PREDICTIVE (⚖ hand-set / 📊 measured,
   nightly-scored, graduates at n≥20). Nothing vague in between.

@@ -127,6 +127,7 @@ Blocking rule for **all Genspark environments including the Chrome extension**:
 - if canonical verification failed, say deployment-prep is incomplete and stop
 
 ## Operating rules
+- **DISCUSS ONE ITEM AT A TIME.** One element per message; ask, wait for the decision, then move on. Never dump the full list of open items + fixes in a single reply (user rule, 2026-08-15).
 - Do not reconstruct code from memory, summaries, or prior chat context.
 - Treat the current userscript file as the authoritative codebase.
 - Read the specs for constraints, doctrine, and roadmap, but do not let them override the pasted or stored source.
@@ -140,14 +141,16 @@ Blocking rule for **all Genspark environments including the Chrome extension**:
 1. Load and read:
    - `master-spec.md`
    - `teaching-spec.md`
-   - `current/gex-signal-tapereader.user.js`
+   - `current/gex-signal-tapereader.user.js` (full file, not summary) — understand the code architecture, layer structure, key functions (render, runMachine, extractWalls, trendVerdict, accumData, recorder layer)
    - `session-state/latest-resume-note.md`
    - `changelog/CHANGELOG.md`
    - `design/architecture-design.md`
+   - Skylit platform docs (at minimum): `skylit-docs/core-concepts.md`, `how-to-read-and-use-heatseeker.md`, `intro-to-gamma.md` — understand the 5-step framework, magnet concept, Pika/Barney polarity, node lifecycle
 2. If the user supplied external code from Claude or another assistant, treat that pasted code as the incoming update payload and reconcile it against the project files before continuing.
 3. Explicitly confirm:
-   - which canonical files were read
+   - which canonical files were read (including userscript + Skylit docs)
    - baseline/version from `current/gex-signal-tapereader.user.js`
+   - code architecture understanding (layers, render flow, key algorithms)
    - current approved patch state from the canonical notes
    - next concrete step
 4. If any canonical file was not read, say the load is incomplete and stop.

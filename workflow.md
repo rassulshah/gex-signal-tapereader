@@ -66,19 +66,23 @@ Any of these mean: load the canonical AI Drive project files and continue from t
 When used, the assistant should load:
 1. `master-spec.md`
 2. `teaching-spec.md`
-3. `current/gex-signal-tapereader.user.js`
+3. `current/gex-signal-tapereader.user.js` (FULL FILE) — understand architecture: Layer 0-7 structure, render flow, key algorithms (trend machine, setup engine, accumulation detector, recorder), function list
 4. `session-state/latest-resume-note.md`
 5. `changelog/CHANGELOG.md`
 6. `design/architecture-design.md`
+7. **Skylit platform docs** (core understanding): `skylit-docs/core-concepts.md`, `how-to-read-and-use-heatseeker.md` (5-step framework), `intro-to-gamma.md` (Pika/Barney, absolute value rule), `node-lifecycle.md` (Fresh/Tested/Delivered/Decaying)
 
 Blocking completion rule for **all Genspark environments including the Chrome extension**:
-- `load gex` is not complete until all five canonical files above have actually been read.
-- The assistant must not continue with project reasoning, patch planning, coding, or status claims until that read is finished.
+- `load gex` is not complete until ALL files above have actually been read.
+- The assistant must read the FULL userscript (not a summary) to understand code architecture, layers, and key functions.
+- The assistant must read the Skylit docs to understand the 5-step framework, magnet concept, and node lifecycle that the code implements.
+- The assistant must not continue with project reasoning, patch planning, coding, or status claims until all reads are finished.
 - After reading, the assistant must explicitly report:
-  1. which files were loaded
-  2. current code baseline/version
-  3. current approved patch state
-  4. next concrete step
+  1. which files were loaded (both project + Skylit docs)
+  2. code architecture understanding (layers 0-7, render flow, key algorithms)
+  3. current code baseline/version
+  4. current approved patch state
+  5. next concrete step
 - If any required file was not read, the assistant must say the load is incomplete, name the missing file(s), and stop rather than pretending the project is synced.
 - In the Chrome extension, `load gex` must be treated the same as `load gex and verify all canonical files were read before continuing`.
 

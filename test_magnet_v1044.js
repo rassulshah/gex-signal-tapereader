@@ -46,7 +46,7 @@ ok(/label='\\u2605 Mag'/.test(src), '★ Mag identity');
 ok(/if\(L\.pos===false\)\{ col='#b58bff'/.test(src), 'purple -γ identity');
 ok(/var typeHtml = '';/.test(src), '±γ text tag dropped');
 ok(/var chain = isFT \? 'BO\\u00b7FT' : 'BOw';/.test(src), 'only BOw / BO·FT chips');
-ok(/Push '\+parr\+/.test(src) && />Pull </.test(src), 'Pull/Push chips rendered');
+ok(/Push '\+parr\+'<\/span>/.test(src) && />Pull<\/span>/.test(src), 'Pull/Push chips rendered (v10.47: no toward-share % on the chip)');
 ok(/Range <b>'\+fmtNum\(m\.range\.lo\)/.test(src), 'range chip');
 ok(/out\.flr=flr; out\.ceil=ceil;/.test(src), 'nearest-strong Flr/Ceil in model');
 
