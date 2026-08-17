@@ -1189,7 +1189,7 @@ function syncBannerHtml(r){
   var tip=('Tape out of sync \u2014 '+why+'. tape $K tag '+(v.tag!=null?v.tag:'\u2014')+' \u00b7 raw feed '+(v.feed!=null?v.feed:'\u2014')+' \u00b7 tape max %King '+(v.tapemax!=null?v.tapemax:'\u2014')+
     (r.recurring?(' \u00b7 RECURRING ('+r.streak+' consecutive)'):'')+
     '. Closed market or parse issue; the structure shown below is LAST-KNOWN and may be stale. Diagnose: __gptsDebug.syncReport()').replace(/"/g,'');
-  return '<div title="'+tip+'" style="border:1px solid '+PAL.shortAccent+';background:rgba(240,97,109,.08);border-radius:6px;padding:2px 8px;margin:2px 0 6px;font-size:10px;font-weight:800;color:'+PAL.shortAccent+';letter-spacing:.3px">\u26A0 STRUCTURAL READ OUT OF SYNC WITH TAPE</div>';
+  return '<div title="'+tip+'" style="border:1px solid '+PAL.shortAccent+';background:rgba(240,97,109,.08);border-radius:6px;padding:1px 8px;margin:2px 0 4px;font-size:9.5px;font-weight:800;color:'+PAL.shortAccent+';letter-spacing:.3px;line-height:1.3">\u26A0 Out of sync</div>';
 }
 // Leading signed %King from a single leaf cell, e.g. "-39%" -> -39, "25%" -> 25.
 function leadSignedPct(txt){
@@ -5326,7 +5326,8 @@ function nodeStatusTag(L){
     var ccol=L.chg>0?PAL.longAccent:PAL.shortAccent;
     chgHtml=' <span title="'+(L.chg>0?'\u25b2':'\u25bc')+Math.abs(L.chg)+'% \u2014 this node\u2019s magnitude vs its first reading today (quote-page %change convention). \u00b115% = big.'+'" style="color:'+ccol+';font-size:8px;font-weight:'+(big?'800':'600')+';opacity:'+(big?'1':'.65')+'">'+(L.chg>0?'\u25b2':'\u25bc')+Math.abs(L.chg)+'%</span>';
   }
-  return '<span title="'+tip+'" style="color:'+col+';font-size:8.5px;font-weight:800;border:1px solid '+col+';border-radius:9px;padding:0 5px">'+lab+'</span>'+chgHtml+reshuf;
+  // (v10.47 A.3, approved mockup) plain text, no pill: "Acm ▲12%" / "Dec ▼8%" / "Steady"
+  return '<span title="'+tip+'" style="color:'+col+';font-size:8.5px;font-weight:800;white-space:nowrap">'+lab+'</span>'+chgHtml+reshuf;
 }
 // (v10.33) NODE LIFECYCLE tag — Skylit Academy: Fresh (target these) / Tested / Delivered
 // (graveyard) / Decaying. Shows tap count + the Academy tap-reaction probability. FACTUAL
@@ -5343,7 +5344,8 @@ function nodeLifecycleTag(L){
   // (v10.35) compact DOT form: single letter, % + full note in the hover (not on the face).
   var letter={Fresh:'F',Tested:'T',Delivered:'U',Decaying:'D'}[lc.stage]||'?';
   var pr=(lc.prob!=null)?(' \u00b7 ~'+lc.prob+'% reaction'):'';
-  return '<span title="'+m.tip.replace(/"/g,'')+pr+'" style="color:'+m.col+';border:1px solid '+m.col+';border-radius:50%;width:15px;height:15px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:900">'+letter+'</span>';
+  // (v10.47 A.3, approved mockup) compact "● T2" (letter + tap count), no circle border
+  return '<span title="'+m.tip.replace(/"/g,'')+pr+'" style="color:'+m.col+';font-size:8px;font-weight:800;white-space:nowrap">\u25CF '+letter+(lc.taps?lc.taps:'')+'</span>';
 }
 // (v10.26-prep Step 5) NODE TYPE = gamma polarity. +\u03b3 positive-gamma (pinning /
 // mean-reverting, yellow); \u2212\u03b3 negative-gamma (accelerant / breakout-prone,
@@ -5368,6 +5370,10 @@ function nodeRoleBadge(L){
     label='King'+(L.isFlr?' \u00b7 Flr':(L.isCeil?' \u00b7 Ceil':'')); col=PAL.gold; tip='King \u2014 the strongest magnet on the board (largest |dealer exposure|); settlement anchor. \uD83D\uDCCA pulls price 55% at 30m (n=299) \u2014 69% at 2 strikes (n=59), 74% in the 11am CT hour (n=42); inside 1 strike price ORBITS (50%).'+(L.isFlr?' Also the range Floor.':(L.isCeil?' Also the range Ceiling.':''));
   } else if(L.isGatekeeper){
     label='Gate'; col=PAL.amber; tip='Gatekeeper \u2014 deflection zone where trend shifts often begin; can block the path to the King.';
+  } else if(L.isFlr){   // (v10.47b) range edges outrank rug/cluster labels (those ride in the hover + cards)
+    label='\u26F0 Flr'; col=PAL.longAccent; tip='FLOOR \u2014 the LARGEST magnet BELOW price (Skylit: the range edge is where price consistently reverses); lower boundary of the live range (Step 3).'+(L.isRugFloor?' Also a Rug floor.':'');
+  } else if(L.isCeil){
+    label='\u2594 Ceil'; col=PAL.shortAccent; tip='CEILING \u2014 the LARGEST magnet ABOVE price (Skylit: the range edge is where price consistently reverses); upper boundary of the live range (Step 3).'+(L.isRugCeil?' Also a Rug ceiling.':'');
   } else if(L.isRugCeil){
     var rr=(L.rugType==='Reverse-Rug'); label=rr?'RRugF':'RugC'; col='#b58bff';
     // (v10.29) live geometry + state + targets folded into the hover (callout removed).
@@ -5418,7 +5424,7 @@ function nodeRoleBadge(L){
   if(!L.isKing && L.isGatekeeper===false){}
   if(L.isRugTarget && !L.isRugCeil && !L.isRugFloor) extra.push('rug-target');
   var fullTip = tip + (extra.length?(' Also: '+extra.join(', ')+'.'):'');
-  return '<span title="'+fullTip.replace(/"/g,'')+'" style="color:'+col+';font-size:8.5px;font-weight:800;border:1px solid '+col+';border-radius:10px;padding:0 6px">'+label+'</span>';
+  return '<span title="'+fullTip.replace(/"/g,'')+'" style="color:'+col+';font-size:8px;font-weight:800;border:1px solid '+col+';border-radius:10px;padding:0 5px;white-space:nowrap">'+label+'</span>';
 }
 // (v10.35) IDENTITY PILL — merges the role ICON (★/👑/🚪/🧶) with the role WORD into ONE
 // pill, killing the old duplication (icon in the strike column AND a separate word badge).
@@ -5634,7 +5640,7 @@ function deflectionBlock(){
     '<span style="font-size:9px;color:'+PAL.sub+'">'+rows.length+' live</span></div>';
 
   if(!rows.length){
-    html+='<div style="color:'+PAL.sub+';font-size:10px;padding:2px 2px 4px">none right now</div>';
+    html+='<div style="color:'+PAL.sub+';font-size:9px;padding:0 2px 3px">none</div>';
     return html;
   }
 
@@ -5699,81 +5705,70 @@ function _nmIsAcc(L){ return !!L && (L.state==='Building' || (typeof L.chg==='nu
 function _nmIsDec(L){ return !!L && (L.state==='Fading' || (typeof L.chg==='number' && L.chg<=-8)); }
 function _nmB(t,c){ return '<b style="color:'+(c||PAL.ink)+'">'+t+'</b>'; }
 function nodeMapSentence(m, sym, tagFn){
+  // (v10.47 A.2, user-directed) BARE BONES. e.g. "CONT thru Gate 774.50 → King 775.38: Gate Dec ▼8%, King Acm ▲12%. Sup 773.25 Acm."
   var px=m.px, lv=(m.levels||[]).slice();
   var b=_nmB, N=fmtNum;
-  if(!lv.length) return {verdict:'NONE', text:'Node Map — waiting on node data…'};
-  // engaged node by priority: fresh deflection > BOw > Push > Pull within 1.5 strikes
+  if(!lv.length) return {verdict:'NONE', text:''};
   var eng=null, how=null;
   lv.forEach(function(L){ if(L.deflection && L.deflection.bars<=DEFLECT_CONFIRM+EP_DEFL_HANDOFF && (!eng || L.dist<eng.dist)){ eng=L; how='defl'; } });
   if(!eng) lv.forEach(function(L){ var ep=L.ep||{}; if(ep.state==='BOw' && (!eng||L.dist<eng.dist)){ eng=L; how='bow'; } });
   if(!eng) lv.forEach(function(L){ var ep=L.ep||{}; if(ep.state==='Push' && (!eng||L.dist<eng.dist)){ eng=L; how='push'; } });
   if(!eng) lv.forEach(function(L){ var ep=L.ep||{}; if(ep.state==='Pull' && L.dist<=1.5 && (!eng||L.dist<eng.dist)){ eng=L; how='pull'; } });
+  if(!eng) return {verdict:'NO NODE IN PLAY', text:''};
+  var side=eng.side;
   var above=lv.filter(function(L){return L.k>px;}).sort(function(a,c){return a.k-c.k;});
   var below=lv.filter(function(L){return L.k<px;}).sort(function(a,c){return c.k-a.k;});
-  var king=lv.filter(function(L){return L.isKing;})[0]||null;
-  if(!eng){
-    var lo=below[0], hi=above[0];
-    var t='price is '+(lo&&hi?('between '+b(N(lo.k))+' and '+b(N(hi.k))):'away from every mapped node');
-    if(king){ t+='; the nearest pull is the King at '+b(N(king.k),PAL.gold)+((king.ep&&king.ep.state==='Pull')?' and price is closing toward it':''); }
-    return {verdict:'NO NODE IN PLAY', text:t+'.'};
-  }
-  var side=eng.side;                       // 'above' = price rising into it, 'below' = falling into it
   var beyond=(side==='above'?above:below).filter(function(L){ return L!==eng && (side==='above'?L.k>eng.k:L.k<eng.k); })[0]||null;
-  var oppEdge = side==='above' ? m.flr : m.ceil;     // the edge behind price
-  var role=_nmRole(eng);
-  var acc=_nmAcc(eng);
-  var taps=eng.taps||0;
-  var purple=(eng.pos===false);
-  var beyondName = beyond ? (beyond.isKing?('the King at '+b(N(beyond.k),PAL.gold)):(beyond.isCeil?('the ceiling at '+b(N(beyond.k))):(beyond.isFlr?('the floor at '+b(N(beyond.k))):(beyond.isNext?('the next magnet at '+b(N(beyond.k))):b(N(beyond.k)))))) : null;
+  var oppEdge = side==='above' ? m.flr : m.ceil;
+  function nm(L){ return (L.isKing?'King ':(L.isGatekeeper?'Gate ':(L.isFlr?'Flr ':(L.isCeil?'Ceil ':''))))+b(N(L.k),L.isKing?PAL.gold:PAL.ink); }
+  function stt(L){ // 'Acm ▲12%' | 'Dec ▼8%' | 'steady'
+    var c=(typeof L.chg==='number')?L.chg:0;
+    if(_nmIsAcc(L)) return 'Acm'+(c>0?(' ▲'+Math.round(c)+'%'):'');
+    if(_nmIsDec(L)) return 'Dec'+(c<0?(' ▼'+Math.round(Math.abs(c))+'%'):'');
+    return 'steady';
+  }
+  var taps=eng.taps||0, third=taps>=2, purple=(eng.pos===false);
+  var why=[];
   var verdict, text;
-  // ---- resolved deflection = report ----
   if(how==='defl'){
     var up=eng.deflection.dir>0;
-    verdict='DEFLECTED';
-    text='off the '+role+' at '+b(N(eng.k))+' — price tapped it and reversed '+(up?'up':'down')+(taps?(' on its '+(taps===1?'first':taps===2?'second':taps===3?'third':taps+'th')+' tap'):'')+
-      '. The '+role+' is '+acc+(_nmIsAcc(eng)?', so the deflection has weight behind it':(_nmIsDec(eng)?', so the deflection may not hold':''))+
-      (purple?'. It is a purple node, so a deflection here is against its character — expect a fast, wicky move':'')+'.';
+    verdict='DEFL';
+    why.push(nm(eng)+' '+stt(eng)); if(taps) why.push((taps===1?'1st':taps===2?'2nd':taps===3?'3rd':taps+'th')+' tap'); if(purple) why.push('−γ');
+    text=(up?'↑':'↓')+' off '+nm(eng)+': '+why.slice(1).concat([stt(eng)]).join(', ')+'.';
     return {verdict:verdict, text:text, node:eng};
   }
-  // ---- 3rd-tap rule (Skylit: 1st ~80%, 2nd ~66%, 3rd ~33%) ----
-  var third = taps>=2;
-  var contBecause=[], revBecause=[];
-  if(_nmIsDec(eng)) contBecause.push('the '+role+' is '+acc);
-  if(third && !_nmIsDec(eng)) contBecause.push('it has already held '+(taps===2?'twice':taps+' times')+' — a third tap usually fails (~33%)');
-  if(beyond && _nmIsAcc(beyond)) contBecause.push(( beyond.isKing?'the King '+(side==='above'?'above':'below')+' is ':(beyondName+' is '))+_nmAcc(beyond)+(beyond.isKing?' and pulling harder':''));
-  if(_nmIsAcc(eng) && !third) revBecause.push('the '+role+' is '+acc+(taps?(' and has held '+(taps===1?'once':taps===2?'twice':taps+' times')):''));
-  if(beyond && _nmIsAcc(beyond) && !beyond.isKing) revBecause.push(N(beyond.k)+' behind it is accumulating as well, so '+(side==='above'?'resistance':'support')+' is stacking');
   var boft = /FT/.test((typeof tagFn==='function')?(tagFn(eng.k)||''):'');
-  var cont = boft || (contBecause.length && !(_nmIsAcc(eng) && !third));
-  var rev  = !cont && revBecause.length>0;
-  var oppTxt='';
-  if(oppEdge){
-    var oppRole = side==='above'?'Support':'Resistance';
-    if(_nmIsAcc(oppEdge)) oppTxt=' '+oppRole+' at '+b(N(oppEdge.k))+' is accumulating too so the '+(side==='above'?'floor under the move is firm':'ceiling over the move is firm')+'.';
-    else if(_nmIsDec(oppEdge)) oppTxt=' '+oppRole+' at '+b(N(oppEdge.k))+' is decreasing, so there is less behind price if this fails.';
-    else if(rev) oppTxt=' Nothing '+(side==='above'?'below':'above')+' price is decreasing, so a deflection here would have '+(side==='above'?'support':'resistance')+' to fall back on.';
-  }
+  var engAcc=_nmIsAcc(eng), engDec=_nmIsDec(eng);
+  var cont = boft || engDec || third || (!engAcc && beyond && _nmIsAcc(beyond) && beyond.isKing);   // 3rd+ tap always flips to continuation (Skylit ~33%)
+  var rev  = !cont && (engAcc || (taps>=1 && !engDec));
+  var oppTxt = oppEdge ? ((side==='above'?'Sup ':'Res ')+b(N(oppEdge.k))+' '+stt(oppEdge)+'.') : '';
   if(cont){
-    verdict='CONTINUATION';
-    text='through '+b(N(eng.k))+(beyondName?(' toward '+beyondName):'')+' because '+(contBecause.length?contBecause.join(', while '):'the '+role+' is steady and price keeps closing toward it')+
-      (purple?', and it is a purple node so the move through it can be fast':'')+'.'+oppTxt;
+    verdict='CONT';
+    why.push(stt(eng)+((third && !engDec)?((engAcc?' but':',')+' held '+taps+'× — 3rd tap usually fails'):''));
+    if(beyond) why.push(nm(beyond)+' '+stt(beyond)+(beyond.isKing&&_nmIsAcc(beyond)?' pulling':''));
+    if(purple) why.push('−γ fast');
+    text='thru '+nm(eng)+(beyond?(' → '+nm(beyond)):'')+': '+why.join(', ')+'.'+(oppTxt?(' '+oppTxt):'');
   } else if(rev){
-    verdict='REVERSAL';
-    text='likely at '+b(N(eng.k))+' — '+revBecause.join(', and ')+(purple?'; note it is a purple node, so a deflection here is against its character and can be wicky':'')+'.'+oppTxt;
+    verdict='REV';
+    why.push(stt(eng)+(taps?(', held '+taps+'×'):''));
+    if(beyond && _nmIsAcc(beyond)) why.push(nm(beyond)+' '+stt(beyond)+' behind');
+    if(purple) why.push('−γ, counter-character');
+    text='at '+nm(eng)+': '+why.join(', ')+'.'+(oppTxt?(' '+oppTxt):'');
   } else {
     verdict='TBD';
-    text='at '+b(N(eng.k))+' — the '+role+' is '+acc+(how==='pull'?' and price is closing toward it':how==='bow'?' and price is sitting on it':' and price is being pushed away')+
-      (beyondName?(', with '+beyondName+' behind it'):'')+'; nothing has given way yet.'+oppTxt;
+    text='at '+nm(eng)+': '+stt(eng)+(beyond?(', '+nm(beyond)+' behind'):'')+'.'+(oppTxt?(' '+oppTxt):'');
   }
   return {verdict:verdict, text:text, node:eng};
 }
 function nodeMapSentenceHtml(m, sym, tagFn, tip){
-  var r=(m&&m.ok)?nodeMapSentence(m, sym, tagFn):{verdict:'NONE',text:'Node Map — waiting on node data…'};
-  var col={CONTINUATION:PAL.longAccent, REVERSAL:PAL.shortAccent, DEFLECTED:PAL.shortAccent, TBD:PAL.gold, 'NO NODE IN PLAY':PAL.sub, NONE:PAL.sub}[r.verdict]||PAL.sub;
-  if(r.node && r.node.side==='below' && (r.verdict==='CONTINUATION')) col=PAL.shortAccent;   // continuing DOWN through a floor = bearish
-  if(r.node && r.node.side==='below' && (r.verdict==='REVERSAL'||r.verdict==='DEFLECTED')) col=PAL.longAccent; // bouncing off a floor = bullish
-  return '<div title="'+(tip||'').replace(/"/g,'')+'" style="margin:6px 2px 4px;font-size:10px;line-height:1.5;color:'+PAL.ink+'">'+
-    stepIcon(5,'vertical-align:middle;margin-right:5px')+'<b style="color:'+col+'">'+r.verdict+'</b> '+r.text+'</div>';
+  var r=(m&&m.ok)?nodeMapSentence(m, sym, tagFn):{verdict:'NONE',text:''};
+  // (v10.47b) nothing engaged => no sentence at all (space); the ⑤ icon rides on the column header
+  if(r.verdict==='NONE' || r.verdict==='NO NODE IN PLAY') return '';
+  var col={CONT:PAL.longAccent, REV:PAL.shortAccent, DEFL:PAL.shortAccent, TBD:PAL.gold, 'NO NODE IN PLAY':PAL.sub, NONE:PAL.sub}[r.verdict]||PAL.sub;
+  if(r.node && r.node.side==='below' && (r.verdict==='CONT')) col=PAL.shortAccent;   // continuing DOWN through a floor = bearish
+  if(r.node && r.node.side==='below' && (r.verdict==='REV'||r.verdict==='DEFL')) col=PAL.longAccent; // bouncing off a floor = bullish
+  return '<div title="'+(tip||'').replace(/"/g,'')+' Full text: '+(r.verdict+' '+r.text).replace(/<[^>]+>/g,'').replace(/"/g,'')+'" style="margin:4px 2px 3px;font-size:9.5px;line-height:1.4;color:'+PAL.ink+';display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">'+
+    '<b style="color:'+col+'">'+r.verdict+'</b> '+r.text+'</div>';
 }
 
 function nodeMapBlock(){
@@ -5938,30 +5933,27 @@ function nodeMapBlock(){
     else if(L.deflection){ activity=stageHtml; }
     else if(om){ activity='<span style="color:'+om.col+';font-size:8.5px;font-weight:800">'+om.txt+'</span>'; }
     var kcol=(L.isKing?PAL.gold:PAL.ink);
-    return '<div style="display:flex;align-items:center;gap:8px;font-size:10px;padding:3px 6px;border-radius:6px;background:'+bg+'">'+
-      // ZONE 1 — identity
-      '<span style="width:150px;display:flex;align-items:center;gap:4px">'+idPill+'</span>'+
-      // ZONE 2 — strike · strength
-      '<span style="width:74px;font-variant-numeric:tabular-nums;font-weight:700;color:'+PAL.sub+'"><b style="color:'+kcol+'">'+fmtNum(L.k)+'</b> \u00b7 '+L.pct+'%</span>'+
-      // ZONE 3 — state (Acm/Diss + polarity)
-      '<span style="width:96px;display:flex;align-items:center;gap:4px;white-space:nowrap">'+statusHtml+typeHtml+'</span>'+
-      // ZONE 4 — activity + lifecycle dot
-      '<span style="flex:1;text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:7px">'+
+    // (v10.47b, user-directed) ONE LINE per node, fixed aligned columns, nothing wraps.
+    return '<div style="display:grid;grid-template-columns:96px 66px 78px 1fr;align-items:center;column-gap:4px;font-size:9.5px;padding:2px 5px;border-radius:5px;background:'+bg+';white-space:nowrap">'+
+      '<span style="display:flex;align-items:center;gap:3px;overflow:hidden;text-overflow:ellipsis;min-width:0">'+idPill+'</span>'+
+      '<span style="font-variant-numeric:tabular-nums;font-weight:700;color:'+PAL.sub+';overflow:hidden"><b style="color:'+kcol+'">'+fmtNum(L.k)+'</b> \u00b7 '+L.pct+'%</span>'+
+      '<span style="display:flex;align-items:center;gap:3px;overflow:hidden">'+statusHtml+typeHtml+'</span>'+
+      '<span style="display:flex;align-items:center;justify-content:flex-end;gap:5px;overflow:hidden">'+
         (activity?'<span>'+activity+'</span>':'')+
         (lifeHtml||'')+
       '</span></div>';
   }
   var px=m.px;
   // (v10.35) column header so the 4 zones read as aligned columns
-  html+='<div style="display:flex;align-items:center;gap:8px;font-size:7.5px;letter-spacing:.4px;text-transform:uppercase;color:'+PAL.sub+';font-weight:800;padding:0 6px 3px">'+
-    '<span style="width:150px">Identity</span>'+
-    '<span style="width:74px">Strike \u00b7 %</span>'+
-    '<span style="width:96px" title="Acm / Dec / Steady + the node\u2019s \u25b2\u25bc% vs its session open">State</span>'+
-    '<span style="flex:1;text-align:right" title="Pull \u00b7 BOw \u00b7 BO\u00b7FT \u00b7 Defl \u00b7 Push \u00b7 echoes (broke/held/FBO) \u2014 then the lifecycle dot">Activity \u00b7 Life</span></div>';
+  html+='<div style="display:grid;grid-template-columns:96px 66px 78px 1fr;column-gap:4px;font-size:7px;letter-spacing:.3px;text-transform:uppercase;color:'+PAL.sub+';font-weight:800;padding:0 5px 2px;white-space:nowrap">'+
+    '<span style="display:flex;align-items:center;gap:3px">'+stepIcon(5,'width:11px;height:11px;font-size:7px;')+'Identity</span>'+
+    '<span>Strike \u00b7 %</span>'+
+    '<span title="Acm / Dec / Steady + the node\u2019s \u25b2\u25bc% vs its session open">State</span>'+
+    '<span style="text-align:right" title="Pull \u00b7 BOw \u00b7 BO\u00b7FT \u00b7 Defl \u00b7 Push \u00b7 echoes (broke/held/FBO) \u2014 then the lifecycle dot">Activity \u00b7 Life</span></div>';
   var printed=false;
   m.levels.forEach(function(L, i){
     if(!printed && L.k<=px){
-      html+='<div title="Current SPY price." style="display:flex;justify-content:center;align-items:center;height:16px;margin:2px 0;background:'+PAL.card+';border:1px dashed '+PAL.blue+';border-radius:6px;color:'+PAL.blue+';font-size:10px;font-weight:800">\u2014 SPY '+fmtNum(px)+' \u2014</div>';
+      html+='<div title="Current SPY price." style="display:flex;justify-content:center;align-items:center;height:14px;margin:1px 0;background:'+PAL.card+';border:1px dashed '+PAL.blue+';border-radius:6px;color:'+PAL.blue+';font-size:9px;font-weight:800">\u2014 SPY '+fmtNum(px)+' \u2014</div>';
       printed=true;
     }
     html+=row(L);
@@ -6620,12 +6612,9 @@ function studyNightlyTick(){
 // measured (📊) or hand-set (⚖) magnet-frame claims. No legacy verdicts (King
 // bull/bear 42%, confluence 38%, Break-through 8% all ran contrarian on 4 days).
 function readBlock44(sym){
-  // (v10.47, user-directed) ONE PARAGRAPH, plain language. Verdict word first
-  // (BULLISH / BEARISH / SIDEWAYS / TBD), then: destination + distance, what is in between and
-  // its record, support vs resistance state, the King's state ("getting heavier — dealers are
-  // pulling price up"), ONE measured-odds sentence, ONE watch level. Levels always named;
-  // percentages only when Acm/Dec is the point; never "mass"; no trade language.
-  // Regime gate: CHOP => SIDEWAYS and the odds sentence is dropped.
+  // (v10.47 A.2, user-directed) BARE BONES. e.g. "BEARISH. Down to King 772. Sup 771 steady, Res 773 steady."
+  // Verdict word (BULLISH / BEARISH / SIDEWAYS / TBD) from King side+strength, Flr/Ceil state, srBattle;
+  // CHOP => SIDEWAYS. Then: destination · gate + taps · Sup/Res state · King state · odds · watch. ≤4 lines.
   var S=STATE[sym]||{}; var px=S.price; if(px==null) return '';
   var m=nodeMapModel(sym); if(!m||!m.ok) return '';
   var st=studyLoad(); var lv=m.levels||[]; var N=fmtNum;
@@ -6637,9 +6626,7 @@ function readBlock44(sym){
   var rg=regimeTag(closedCandles(sym)||[]); var chop=!!(rg&&rg.tag==='chop');
   function sw(L){ if(!L) return 'steady'; if(_nmIsAcc(L)) return 'building'; if(_nmIsDec(L)) return 'fading'; return 'steady'; }
   function chg(L){ return (L&&typeof L.chg==='number')?L.chg:0; }
-  function distWords(d){ if(d<0.6) return 'less than a strike away'; if(d<1.5) return 'about a strike away'; return 'about '+(Math.round(d*2)/2)+' strikes away'; }
-  function tapsHeld(n){ return n<=0?'has not been tested yet':(n===1?'has already held once':(n===2?'has already held twice':('has held '+n+' times — a third tap usually fails (~33%)'))); }
-  // ---- lean ----
+  function tapsTxt(n){ return n<=0?'untested':(n>=3?('held '+n+'× — 3rd tap usually fails'):('held '+n+'×')); }
   var kingDir = king ? (king.k>px?1:(king.k<px?-1:0)) : 0;
   var kingW = kingDir*(1.5 + Math.max(-1,Math.min(1,chg(king)/15)));
   var others=0;
@@ -6655,74 +6642,55 @@ function readBlock44(sym){
   else if(lean<=-1.5) verdict='BEARISH';
   else verdict='SIDEWAYS';
   var vcol={BULLISH:PAL.longAccent,BEARISH:PAL.shortAccent,SIDEWAYS:PAL.sub,TBD:PAL.gold}[verdict];
-  var out='';
-  // ---- range position wording (item 4) ----
+  var parts=[];
   var posWord='';
-  if(m.range && m.range.inside && m.range.hi>m.range.lo){ var pos=(px-m.range.lo)/(m.range.hi-m.range.lo); posWord = pos<0.33?'near the floor':(pos>0.67?'near the ceiling':'near the midpoint'); }
+  if(m.range && m.range.inside && m.range.hi>m.range.lo){ var pos=(px-m.range.lo)/(m.range.hi-m.range.lo); posWord = pos<0.33?'near Flr':(pos>0.67?'near Ceil':'mid-range'); }
+  var srTxt = (flr&&ceil)?('Sup '+b(N(flr.k))+' '+sw(flr)+', Res '+b(N(ceil.k))+' '+sw(ceil)+'.') : (flr?('Sup '+b(N(flr.k))+' '+sw(flr)+'.'):(ceil?('Res '+b(N(ceil.k))+' '+sw(ceil)+'.'):''));
   if(verdict==='BULLISH'||verdict==='BEARISH'){
     var dir=verdict==='BULLISH'?1:-1;
     var cands=dir>0?above:below;
     var dest = (king && kingDir===dir) ? king : (dir>0?ceil:flr) || cands[0] || null;
     if(!dest){ verdict='SIDEWAYS'; }
     else {
-      var destName = dest.isKing?('the King at '+b(N(dest.k),PAL.gold)):(dest.isCeil?('the ceiling at '+b(N(dest.k))):(dest.isFlr?('the floor at '+b(N(dest.k))):('the next magnet at '+b(N(dest.k)))));
-      var reached = dest.isKing && (dest.taps||0)>=1 ? ' — already reached once today —' : '';
-      out+='Price is going '+(dir>0?'up':'down')+' toward '+destName+reached+', '+distWords(Math.abs(dest.k-px))+'.';
-      // between: gate strictly between price and destination
+      var destName = (dest.isKing?'King ':(dest.isCeil?'Ceil ':(dest.isFlr?'Flr ':'')))+b(N(dest.k),dest.isKing?PAL.gold:PAL.ink);
+      var reached = dest.isKing && (dest.taps||0)>=1 ? ' (reached once today)' : '';
+      parts.push((dir>0?'Up':'Down')+' to '+destName+reached+'.');
       var gate=lv.filter(function(L){ return L.isGatekeeper && !L.isKing && ((dir>0 && L.k>px && L.k<dest.k) || (dir<0 && L.k<px && L.k>dest.k)); })[0]||null;
-      if(gate){ out+=' The Gate at '+b(N(gate.k))+' is in between and it '+tapsHeld(gate.taps||0)+'.'; if(gate.pos===false) out+=' It is a purple node, so the reaction there can be fast.'; }
-      // support vs resistance
-      var sF=sw(flr), sC=sw(ceil);
-      if(flr&&ceil){ out+=' Support at '+b(N(flr.k))+' is '+sF+(sF!==sC?' while ':' and ')+'Resistance at '+b(N(ceil.k))+' is '+sC+'.'; }
-      else if(flr){ out+=' Support at '+b(N(flr.k))+' is '+sF+'.'; }
-      else if(ceil){ out+=' Resistance at '+b(N(ceil.k))+' is '+sC+'.'; }
-      // King state
-      if(king){
-        var kc=chg(king);
-        if(kc>=8) out+=' The King is getting heavier — dealers are pulling price '+(kingDir>0?'up':'down')+'.';
-        else if(kc<=-8) out+=' The King is bleeding — its pull is unreliable right now.';
-        else out+=' The King is steady.';
-        if(dest.isKing && king.pos===false) out+=' It is a purple node, so contact there can be wicky.';
-      }
-      // odds (dropped in chop; only when the destination is the King and we have a rate)
+      if(gate) parts.push('Gate '+b(N(gate.k))+' '+tapsTxt(gate.taps||0)+(gate.pos===false?', −γ':'')+'.');
+      if(srTxt) parts.push(srTxt);
+      if(king){ var kc=chg(king);
+        parts.push('King '+(kc>=8?('heavier — pulling '+(kingDir>0?'up':'down')):(kc<=-8?'bleeding':'steady'))+((dest.isKing&&king.pos===false)?', −γ':'')+'.'); }
       if(dest.isKing && st && st.kingPull){
         var ad=Math.abs(dest.k-px); var db=ad<1.5?'1':ad<2.5?'2':ad<3.5?'3':'4+';
         var byD=st.kingPull.byDist&&st.kingPull.byDist[db]; var hr=ctNow().getHours(); var hb=st.kingPull.byHour&&st.kingPull.byHour[hr+''];
         var pD=studyPct(byD), pH=studyPct(hb);
-        if(pD!=null){ out+=' This has worked '+b(pD+'%')+' of the time at this distance'+((pH!=null&&hb.n>=10)?(', '+b(pH+'%')+' in this hour'):'')+' '+studyTag(byD)+'.'; }
+        if(pD!=null) parts.push(b(pD+'%')+' at this distance'+((pH!=null&&hb.n>=10)?(', '+b(pH+'%')+' this hour'):'')+' '+studyTag(byD)+'.');
       }
-      // watch
       var w = dir>0 ? flr : ceil;
-      if(w) out+=' Watch the '+(dir>0?'floor':'ceiling')+' at '+b(N(w.k))+': breaking it changes the read.';
+      if(w) parts.push('Watch '+b(N(w.k))+'.');
     }
   }
   if(verdict==='SIDEWAYS'){
-    if(m.range){
-      out+='Price is inside '+b(N(m.range.lo)+'–'+N(m.range.hi))+(posWord?(', '+posWord):'')+'.';
-    } else { out+='Price has no defined range yet'+((above[0]&&below[0])?(' — the nearest magnets are '+b(N(below[0].k))+' and '+b(N(above[0].k))):'')+'.'; }
-    if(king){ var kc2=chg(king); var kw = kc2>=8?'getting heavier':(kc2<=-8?'bleeding':'steady');
-      var sides = (_nmIsAcc(flr)&&!_nmIsAcc(ceil))?'support is building':(_nmIsAcc(ceil)&&!_nmIsAcc(flr))?'resistance is building':(_nmIsAcc(flr)&&_nmIsAcc(ceil))?'both sides are building':'neither side is building';
-      out+=' The King at '+b(N(king.k),PAL.gold)+' is '+kw+', '+sides+'.'; }
-    if(chop) out+=' Price action is choppy, so directional odds are not quoted.';
-    if(m.range) out+=' Watch '+b(N(m.range.hi))+' and '+b(N(m.range.lo))+': a break with follow-through sets direction.';
+    if(m.range) parts.push('Inside '+b(N(m.range.lo)+'–'+N(m.range.hi))+(posWord?(', '+posWord):'')+'.');
+    else parts.push('No range yet'+((above[0]&&below[0])?(' — '+b(N(below[0].k))+' / '+b(N(above[0].k))):'')+'.');
+    if(king){ var kc2=chg(king); parts.push('King '+b(N(king.k),PAL.gold)+' '+(kc2>=8?'heavier':(kc2<=-8?'bleeding':'steady'))+'.'); }
+    if(srTxt) parts.push(srTxt);
+    if(chop) parts.push('Choppy.');
+    if(m.range) parts.push('Watch '+b(N(m.range.hi))+' / '+b(N(m.range.lo))+'.');
   }
   if(verdict==='TBD' && king){
     var kAbove=kingDir>0;
     var oppos = (kAbove ? lv.filter(function(L){return L.k>px && !L.isKing && _nmIsAcc(L);}) : lv.filter(function(L){return L.k<px && !L.isKing && _nmIsAcc(L);})).sort(function(a,c){return a.dist-c.dist;}).slice(0,2);
-    var oppWord = kAbove?'Resistance':'Support';
-    out+='The King at '+b(N(king.k),PAL.gold)+' is '+(kAbove?'above':'below')+' price and pulling '+(kAbove?'up':'down');
-    if(oppos.length){ out+=', but '+oppWord+' at '+oppos.map(function(L){return b(N(L.k));}).join(' and ')+' '+(oppos.length>1?'sit':'sits')+' right '+(kAbove?'above':'below')+' it and '+(oppos.length>1?'are':'is')+' building — '+(oppos.length>1?'they block':'it blocks')+' the way.'; }
-    else { out+=', but the other side is building against it.'; }
-    var help = kAbove?flr:ceil;
-    if(help) out+=' '+(kAbove?'Support':'Resistance')+' at '+b(N(help.k))+' is '+sw(help)+(sw(help)==='building'?', helping':', not helping')+'.';
+    parts.push('King '+b(N(king.k),PAL.gold)+' '+(kAbove?'above':'below')+', pulling '+(kAbove?'up':'down')+(oppos.length?(' — but '+(kAbove?'Res ':'Sup ')+oppos.map(function(L){return b(N(L.k));}).join(', ')+' building against it'):' — but the other side is building')+'.');
+    var help = kAbove?flr:ceil; if(help) parts.push((kAbove?'Sup ':'Res ')+b(N(help.k))+' '+sw(help)+'.');
     var gate2=lv.filter(function(L){ return L.isGatekeeper && !L.isKing; })[0]||null;
-    if(gate2) out+=' Watch the gate at '+b(N(gate2.k))+': a hold means the King wins, a break means the '+oppWord.toLowerCase()+' wins.';
-    else out+=' Watch the King itself: a tag and hold means the King wins, a rejection means the '+oppWord.toLowerCase()+' wins.';
+    parts.push(gate2?('Watch Gate '+b(N(gate2.k))+'.'):('Watch King '+b(N(king.k))+'.'));
   }
-  var prov='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;opacity:.85">📊 = measured on '+(st.src||'local repo')+(st.bars?(' · '+st.bars+' bars'):'')+' · ⚖ = hand-set until n≥20 · re-scored nightly · CHOP drops the odds sentence · <span style="cursor:pointer;text-decoration:underline" onclick="window.__gptsStudyRun&&window.__gptsStudyRun()">re-run now</span></div>';
-  var tip='READ — direction and structure in plain language: which way price is going, to which level, what is in between, how support/resistance and the King are behaving, the measured odds, and the one level that changes the read. Verdict = King side + King strength + floor/ceiling state + build-rate imbalance; CHOP forces SIDEWAYS. Descriptive; not advice.';
-  return '<div title="'+tip+'" style="padding:4px 8px 5px 8px;border-left:2px solid '+PAL.gold+';margin:2px 0 4px 0;background:'+PAL.card+';border-radius:0 8px 8px 0">'+
-    '<div style="font-size:10px;line-height:1.55;color:'+PAL.ink+'"><span style="color:'+PAL.gold+';font-weight:800">READ ▸</span> <b style="color:'+vcol+'">'+verdict+'.</b> '+out+'</div>'+prov+'</div>';
+  var out=parts.join(' ');
+  var plain=out.replace(/<[^>]+>/g,'');
+  var tip=('READ — direction and structure, bare bones: verdict, destination, gate + taps, Sup/Res state, King state, measured odds, watch level. Verdict = King side + strength + floor/ceiling state + build-rate imbalance; CHOP forces SIDEWAYS. 📊 measured on '+(st.src||'local repo')+(st.bars?(' · '+st.bars+' bars'):'')+' · ⚖ hand-set until n≥20 · re-scored nightly. Full text: '+verdict+'. '+plain).replace(/"/g,'');
+  return '<div title="'+tip+'" style="padding:3px 7px 4px 7px;border-left:2px solid '+PAL.gold+';margin:2px 0 3px 0;background:'+PAL.card+';border-radius:0 8px 8px 0">'+
+    '<div style="font-size:9.5px;line-height:1.4;color:'+PAL.ink+';display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden"><b style="color:'+vcol+'">'+verdict+'.</b> '+out+'</div></div>';
 }
 window.__gptsStudyRun=function(){ studyRun(function(r){ try{ render(); }catch(e){} }); };
 window.__gptsRepoExport=function(d){ repoExportDay(d||TODAY,false); };
@@ -6810,6 +6778,9 @@ function kingHeaderBlock(){
   var tp=tapeMap(sym);
   var kingK = (tp && typeof tp.king==='number') ? tp.king : null;
   var px = STATE[sym] ? STATE[sym].price : null;
+  // (v10.47b) fall back to the model's King (S.king / last-known) so the pill never says "Waiting on tape" while the ladder shows a King
+  if(kingK==null){ try{ var _m0=nodeMapModel(sym); if(_m0 && _m0.kingK!=null) kingK=_m0.kingK; }catch(e0){} }
+  var stepMini=function(n){ return '<span class="gs-ico" data-gstep="'+n+'" title="Step '+n+' \u2014 click for the method" style="width:11px;height:11px;border-radius:50%;border:1px solid '+PAL.sub+';color:'+PAL.sub+';font-size:7px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;margin-right:2px;line-height:1">'+n+'</span>'; };
   var offRaw = (px!=null && kingK!=null) ? (kingK - px) : null;
   var off = (offRaw!=null) ? Math.round(offRaw) : null;
   // (v10.37) King badge REDESIGN: two stacked rows inside ONE gold pill.
@@ -6846,7 +6817,7 @@ function kingHeaderBlock(){
     kingPxBadge=
       '<span title="TOP: 👑 King strike '+fmtNum(kingK)+' + offset vs price. BELOW: gatekeeper strike + its distance from price (no gatekeeper => clear path)." '+
         'style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;padding:3px 8px;border:1.5px solid '+PAL.gold+';border-radius:14px;background:'+PAL.card+';flex:0 1 auto;min-width:0">'+
-        '<span style="display:inline-flex;align-items:center;line-height:1">'+
+        '<span style="display:inline-flex;align-items:center;line-height:1">'+stepMini(2)+
           '<span style="font-size:12px;line-height:1">\uD83D\uDC51</span>'+
           '<span style="color:'+PAL.gold+';font-weight:800;font-size:13px;font-variant-numeric:tabular-nums;margin-left:3px">'+fmtNum(kingK)+'</span>'+
           kArr+
@@ -6863,7 +6834,7 @@ function kingHeaderBlock(){
   var nm = (typeof nodeMapModel==='function') ? (function(){ try{return nodeMapModel(sym);}catch(e){return null;} })() : null;
   function sideMagnet(node, isSup){
     var col = isSup?PAL.longAccent:PAL.shortAccent;
-    var lbl = isSup?'\u2605 SUP':'\u2605 RES';
+    var lbl = (isSup?stepMini(1):stepMini(3))+(isSup?'\u2605 SUP':'\u2605 RES');
     if(!node){ return '<span style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 6px;min-height:40px;box-sizing:border-box;border-radius:14px;background:'+PAL.card+';border:1.5px solid '+PAL.line+';opacity:.6;flex:0 1 auto;min-width:0"><span style="font-size:7.5px;font-weight:800;line-height:1;color:'+PAL.sub+';letter-spacing:.3px">'+lbl+'</span><span style="width:100%;height:1px;background:'+PAL.line+';margin:2px 0"></span><span style="color:'+PAL.sub+';font-size:10px;line-height:1">\u2013</span></span>'; }
     var tip=(isSup?'Strongest SUPPORT magnet below price':'Strongest RESISTANCE magnet above price')+' \u2014 '+fmtNum(node.k)+' at '+node.pct+'% of King (size+build-rate+nearness blend). A strong magnet attracts price toward it.';
     return '<span title="'+tip.replace(/"/g,'')+'" style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 6px;min-height:40px;box-sizing:border-box;border-radius:14px;background:'+PAL.card+';border:1.5px solid '+col+';flex:0 1 auto;min-width:0">'+
@@ -6878,11 +6849,6 @@ function kingHeaderBlock(){
     supBadge+
     '<span title="KING: the strike with the largest absolute dealer exposure \u2014 the day\u2019s EOD settlement magnet." style="display:inline-flex;flex:0 1 auto;min-width:0">'+kingPxBadge+'</span>'+
     resBadge+
-  '</div>'+
-  // ①②③ info icons (Magnets / King / Range \u2014 the header trio)
-  '<div style="display:flex;gap:5px;align-items:center;justify-content:center;margin:0 0 5px">'+
-    '<span style="font-size:8.5px;color:'+PAL.sub+';font-weight:700;letter-spacing:.3px;margin-right:2px">5-STEP</span>'+
-    stepIcon(1)+stepIcon(2)+stepIcon(3)+
   '</div>';
   return html;
 }

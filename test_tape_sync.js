@@ -28,7 +28,7 @@ ok(/function kingFromTapeMax/.test(src),         'GUARD: PATH 3 (tape max %King)
 ok(/function tapeSync/.test(src),                'GUARD: tapeSync gate exists');
 ok(/function outOfSyncBlock/.test(src),          'GUARD: suppression panel exists');
 ok(/if\(!__sync\.ok\)\{/.test(src),              'GUARD: render() actually gates on the verdict');
-ok(/html\+=syncBannerHtml\(__sync\)/.test(src) && /OUT OF SYNC WITH TAPE/.test(src),  'GUARD (v10.47): one-line sync banner is rendered on failure and the app still renders');
+ok(/html\+=syncBannerHtml\(__sync\)/.test(src) && /Out of sync/.test(src),  'GUARD (v10.47): one-line sync banner is rendered on failure and the app still renders');
 ok(/tapeGate:\s*true/.test(src),                 'GUARD: CFG.tapeGate defaults ON');
 ok(/syncReport/.test(src),                       'GUARD: operator diagnostic hook exposed');
 

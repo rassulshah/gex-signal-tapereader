@@ -7,7 +7,7 @@ Tampermonkey from the raw URL). NOT yet verified on live tape — user was away 
 verdict word and reads like the locked texts; (3) Node Map header is one CONT/REVERSAL sentence; (4) on a
 sync failure only the one-line banner shows and the app still renders; (5) Flr/Ceil = the biggest node
 each side (matches Skylit), "★ Mag · next" beyond them; (6) gate icon is the castle arch; (7) Defl cards
-say "Defl · Gate" etc. Known-unfinished: RSHUF state (Phase B) so the sentence never says RESHUFFLING yet.
+say "Defl · Gate" etc. A.1 space fixes applied same evening after the user's first live screenshot (banner short, ①②③ in pills, READ 4-line clamp/no label, sentence only when engaged, one-line ladder rows). Known-unfinished: RSHUF state (Phase B) so the sentence never says RESHUFFLING yet.
 Phase A code map: `kingHeaderBlock`, `syncBannerHtml`, `readBlock44` (rewritten), `nodeMapSentence` /
 `nodeMapSentenceHtml` / `_nmAcc` helpers, `pickEdge` inside `nodeMapModel`, `gateSvgSm`, deflectionBlock
 card block. Test: `test_read_v1047.js`.

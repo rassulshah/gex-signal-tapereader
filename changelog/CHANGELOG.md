@@ -1,5 +1,11 @@
 ## v10.47 — 2026-08-16 — PHASE A SHIPPED (dashboard) · Phases B–D still planned
 
+**Phase A.3 (approved mockup `mockups/gex-v10.47-dashboard-mockup.html`):** ladder STATE is plain colored text ("Acm ▲12%", no pill); LIFE is "● T2" (stage letter + taps, no circle). Mockup file added.
+
+**Phase A.2 (same evening):** READ and Node Map sentence cut to BARE BONES per user — READ e.g. "BEARISH. Down to King 772. Gate 774.50 held 2×. Sup 771 steady, Res 773 steady. King steady, −γ. 50% at this distance 📊. Watch 773." Node Map e.g. "CONT thru Gate 774.5 → King 775.38: Dec ▼8%, King 775.38 Acm ▲12% pulling. Sup 773.25 Acm ▲19%." / "REV at Ceil 776.5: Acm ▲14%, held 1×, 777.75 Acm ▲9% behind. Sup 773.25 steady." / "DEFL ↑ off Gate 774.5: 2nd tap, Acm ▲9%." Verdict words abbreviated CONT / REV / DEFL / TBD. 3rd+ tap always flips to CONT with the warning (unless the node is already Dec).
+
+**Phase A.1 (2026-08-15 evening, after first live look):** banner text → "⚠ Out of sync" (one short line); King pill falls back to the model King (no "Waiting on tape…" while the ladder has a King); ①②③ now tiny icons INSIDE the ★SUP / 👑 / ★RES pills, 5-STEP row removed; READ has no "READ ▸" label, compressed wording, 4-line clamp (full text + provenance in hover); Node Map sentence only renders when a node is engaged (no "NO NODE IN PLAY"), 3-line clamp, ⑤ icon rides on the column header; ladder = CSS grid 96/66/78/1fr, one line per node, nowrap, smaller pills; Flr/Ceil labels outrank Rug labels; price divider tighter; Deflections "none".
+
 **Phase A built (candidate — verify live Monday):**
 - `kingHeaderBlock()` restored above READ: ★SUP | 👑 King (+ castle-gate row) | ★RES + 5-STEP ①②③ (top slice of the unrendered `kingBlock()`; no charts, no verdict pill).
 - Tape-sync gate → `syncBannerHtml()`: ONE red line "⚠ STRUCTURAL READ OUT OF SYNC WITH TAPE" (detail in hover), app renders normally underneath (was a blocking panel).
