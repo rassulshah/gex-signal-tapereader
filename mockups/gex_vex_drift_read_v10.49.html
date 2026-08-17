@@ -1,0 +1,102 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>GEX/VEX Drift Read — v10.49 mockup</title>
+<style>
+  body{background:#0d1117;color:#e6edf3;font:13px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;padding:24px;max-width:560px;margin:0 auto}
+  h1{font-size:15px;color:#8b949e;font-weight:600;margin:0 0 4px}
+  .sub{color:#6e7681;font-size:11px;margin:0 0 20px}
+  .panel{background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:10px 12px;margin:14px 0}
+  .cap{color:#6e7681;font-size:10px;letter-spacing:.4px;text-transform:uppercase;margin-bottom:8px}
+  /* the actual element */
+  .drift{border:1px solid #21262d;border-radius:6px;padding:7px 9px;background:#010409}
+  .row1{display:flex;align-items:center;gap:8px;font-weight:700;font-size:12px;margin-bottom:5px}
+  .verdict{padding:1px 7px;border-radius:4px;font-size:11px;letter-spacing:.3px}
+  .up{color:#3fb950;background:rgba(63,185,80,.12)}
+  .dn{color:#f0616d;background:rgba(240,97,109,.12)}
+  .split{color:#d29922;background:rgba(210,153,34,.12)}
+  .levels{display:flex;gap:14px;font-size:11px;margin-bottom:5px}
+  .lv{display:flex;flex-direction:column}
+  .lvk{font-weight:700}
+  .lvl{color:#6e7681;font-size:9px;letter-spacing:.3px}
+  .gex{color:#f2cc60}      /* gamma = gold */
+  .vex{color:#a371f7}      /* vanna = purple */
+  .px{color:#8b949e}
+  .read{color:#c9d1d9;font-size:11px;line-height:1.35}
+  .bar{position:relative;height:22px;margin:6px 0 4px;border-radius:3px;background:#161b22;overflow:hidden}
+  .tick{position:absolute;top:0;bottom:0;width:2px}
+  .tkpx{background:#8b949e}
+  .tkg{background:#f2cc60}
+  .tkv{background:#a371f7}
+  .band{position:absolute;top:6px;height:10px;border-radius:2px;opacity:.28}
+  .bg{background:#f2cc60}
+  .bv{background:#a371f7}
+  .lbl{position:absolute;top:-1px;font-size:8px;transform:translateX(-50%)}
+  .note{color:#6e7681;font-size:10px;margin-top:14px;line-height:1.5}
+  code{color:#79c0ff}
+</style></head><body>
+<h1>GEX / VEX Drift Read — v10.49 mockup</h1>
+<p class="sub">One new line under the READ. GEX-VWAP (gamma center = where the range is anchored) vs VEX-VWAP (vanna center = where drift pulls). Overlap = confluence. Descriptive only — no trade calls. Abbrev per panel rules: Drift, GVWAP, VVWAP, γ.</p>
+
+<div class="panel">
+  <div class="cap">State 1 — AGREE ↑ (both centers above price, bands overlap)</div>
+  <div class="drift">
+    <div class="row1"><span>↗ Drift</span><span class="verdict up">UP · confluence</span></div>
+    <div class="levels">
+      <div class="lv"><span class="lvk gex">GVWAP 775.4</span><span class="lvl">±0.6 gamma center</span></div>
+      <div class="lv"><span class="lvk vex">VVWAP 776.1</span><span class="lvl">±0.7 vanna drift</span></div>
+      <div class="lv"><span class="lvk px">px 774.1</span><span class="lvl">now</span></div>
+    </div>
+    <div class="bar">
+      <div class="band bg" style="left:58%;width:14%"></div>
+      <div class="band bv" style="left:66%;width:16%"></div>
+      <div class="tick tkpx" style="left:34%"></div>
+      <div class="tick tkg" style="left:64%"></div>
+      <div class="tick tkv" style="left:73%"></div>
+    </div>
+    <div class="read">Both centers sit above price and their bands overlap — gamma range and vanna drift agree upward. Lean up, higher confidence.</div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="cap">State 2 — AGREE ↓ (both below price)</div>
+  <div class="drift">
+    <div class="row1"><span>↘ Drift</span><span class="verdict dn">DOWN · confluence</span></div>
+    <div class="levels">
+      <div class="lv"><span class="lvk gex">GVWAP 772.3</span><span class="lvl">±0.5 gamma center</span></div>
+      <div class="lv"><span class="lvk vex">VVWAP 771.6</span><span class="lvl">±0.8 vanna drift</span></div>
+      <div class="lv"><span class="lvk px">px 774.1</span><span class="lvl">now</span></div>
+    </div>
+    <div class="bar">
+      <div class="band bg" style="left:28%;width:12%"></div>
+      <div class="band bv" style="left:18%;width:18%"></div>
+      <div class="tick tkpx" style="left:60%"></div>
+      <div class="tick tkg" style="left:34%"></div>
+      <div class="tick tkv" style="left:26%"></div>
+    </div>
+    <div class="read">Gamma range and vanna drift both sit below price and overlap — leans down, higher confidence.</div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="cap">State 3 — SPLIT (centers disagree, no overlap → caution)</div>
+  <div class="drift">
+    <div class="row1"><span>↔ Drift</span><span class="verdict split">SPLIT · low confidence</span></div>
+    <div class="levels">
+      <div class="lv"><span class="lvk gex">GVWAP 772.8</span><span class="lvl">±0.5 gamma center</span></div>
+      <div class="lv"><span class="lvk vex">VVWAP 776.4</span><span class="lvl">±0.6 vanna drift</span></div>
+      <div class="lv"><span class="lvk px">px 774.1</span><span class="lvl">now</span></div>
+    </div>
+    <div class="bar">
+      <div class="band bg" style="left:30%;width:12%"></div>
+      <div class="band bv" style="left:70%;width:14%"></div>
+      <div class="tick tkpx" style="left:52%"></div>
+      <div class="tick tkg" style="left:36%"></div>
+      <div class="tick tkv" style="left:77%"></div>
+    </div>
+    <div class="read">Gamma pins below, vanna drifts above — they disagree and don't overlap. No clean lean; expect chop / two-sided. Wait for them to align.</div>
+  </div>
+</div>
+
+<p class="note">
+  <b>Formula:</b> GVWAP = Σ(strike·|γ|)/Σ|γ| over the gamma nodes (LASTFEED); band = ±1σ of the same weighting. VVWAP = same over the vanna nodes (LASTVEX). <b>Verdict:</b> AGREE when both centers are on the same side of price <i>and</i> the bands overlap → UP/DOWN·confluence; else SPLIT·low-confidence. <br>
+  <b>Placement:</b> one line directly under the READ paragraph, above the Node Map. <b>Honesty:</b> confidence word is structural (agree/disagree), not a measured win-rate — no 📊 until the recorder scores it.
+</p>
+</body></html>

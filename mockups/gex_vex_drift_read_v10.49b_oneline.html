@@ -1,0 +1,54 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>GEX/VEX Drift — one line — v10.49</title>
+<style>
+  body{background:#0d1117;color:#e6edf3;font:13px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;padding:24px;max-width:300px;margin:0 auto}
+  h1{font-size:14px;color:#8b949e;font-weight:600;margin:0 0 2px}
+  .sub{color:#6e7681;font-size:10px;margin:0 0 16px}
+  .cap{color:#6e7681;font-size:9px;letter-spacing:.4px;text-transform:uppercase;margin:14px 0 4px}
+  /* the panel is ~250px wide — this is the real width */
+  .panel{width:250px;background:#010409;border:1px solid #21262d;border-radius:6px;padding:4px 8px}
+
+  /* THE ELEMENT — one single line, no wrap, no text below */
+  .drift{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:11px;line-height:1.5;overflow:hidden}
+  .arw{font-weight:700}
+  .ttl{color:#8b949e;font-weight:700;letter-spacing:.2px}
+  .vd{padding:0 5px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:.2px}
+  .up{color:#3fb950;background:rgba(63,185,80,.14)} .up .arw{color:#3fb950}
+  .dn{color:#f0616d;background:rgba(240,97,109,.14)}
+  .sp{color:#d29922;background:rgba(210,153,34,.14)}
+  .sep{color:#30363d}
+  .g{color:#f2cc60;font-weight:700}   /* gamma = gold */
+  .v{color:#a371f7;font-weight:700}   /* vanna = purple */
+  .arwUp{color:#3fb950;font-weight:700} .arwDn{color:#f0616d;font-weight:700} .arwSp{color:#d29922;font-weight:700}
+</style></head><body>
+<h1>GEX / VEX Drift — one line</h1>
+<p class="sub">Real width (250px). No wrap, nothing below. Arrow + verdict + the two centers (G=gamma/gold, V=vanna/purple). Sits as ONE row directly under the READ.</p>
+
+<div class="cap">AGREE ↑</div>
+<div class="panel"><div class="drift">
+  <span class="arwUp">↗</span><span class="ttl">Drift</span>
+  <span class="vd up">UP·conf</span>
+  <span class="sep">·</span><span class="g">G 774.0</span><span class="v">V 775.0</span>
+</div></div>
+
+<div class="cap">AGREE ↓</div>
+<div class="panel"><div class="drift">
+  <span class="arwDn">↘</span><span class="ttl">Drift</span>
+  <span class="vd dn">DN·conf</span>
+  <span class="sep">·</span><span class="g">G 772.3</span><span class="v">V 771.6</span>
+</div></div>
+
+<div class="cap">SPLIT (disagree → caution)</div>
+<div class="panel"><div class="drift">
+  <span class="arwSp">↔</span><span class="ttl">Drift</span>
+  <span class="vd sp">SPLIT</span>
+  <span class="sep">·</span><span class="g">G 772.8</span><span class="v">V 776.4</span>
+</div></div>
+
+<div class="cap">Live values right now (from the real feeds)</div>
+<div class="panel"><div class="drift">
+  <span class="arwUp">↗</span><span class="ttl">Drift</span>
+  <span class="vd up">UP·conf</span>
+  <span class="sep">·</span><span class="g">G 773.9</span><span class="v">V 775.0</span>
+</div></div>
+
+</body></html>

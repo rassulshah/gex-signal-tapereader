@@ -1,0 +1,116 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>GEX v10.49 — full dashboard mockup</title>
+<style>
+  body{background:#0d1117;color:#e6edf3;font:13px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;padding:22px;margin:0}
+  .wrap{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start}
+  h1{font-size:14px;color:#8b949e;font-weight:600;margin:0 0 2px}
+  .sub{color:#6e7681;font-size:10px;margin:0 0 14px;max-width:250px}
+  .cap{color:#6e7681;font-size:9px;text-transform:uppercase;letter-spacing:.4px;margin:0 0 6px}
+
+  .panel{width:250px;background:#010409;border:1px solid #21262d;border-radius:8px;padding:7px 8px}
+
+  /* ---- header cluster: SUP | King | RES + steps ---- */
+  .cluster{display:flex;gap:4px;align-items:stretch;margin-bottom:5px}
+  .pill{flex:1;border:1px solid #21262d;border-radius:7px;padding:3px 5px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative}
+  .pill .step{position:absolute;top:2px;left:4px;font-size:8px;color:#6e7681}
+  .pill .lab{font-size:8px;letter-spacing:.3px;color:#8b949e}
+  .sup{color:#3fb950}.res{color:#f0616d}
+  .pill .val{font-size:12px;font-weight:800}
+  .pill .pct{font-size:8px;color:#6e7681}
+  .king{flex:1.5;border-color:#8a6d1f;background:rgba(242,204,96,.05)}
+  .king .row{display:flex;align-items:center;gap:3px;font-weight:800}
+  .kgold{color:#f2cc60}
+  .king .off{font-size:9px}.g{color:#3fb950}
+  .king .gate{display:flex;align-items:center;gap:3px;font-size:9px;color:#c9d1d9;margin-top:1px}
+  .gate svg{width:9px;height:9px}
+
+  /* ---- drift line ---- */
+  .drift{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:10px;margin:5px 0;padding:2px 0;border-top:1px solid #12161c;border-bottom:1px solid #12161c}
+  .dg{color:#f2cc60;font-weight:700}.dv{color:#a371f7;font-weight:700}.dup{color:#3fb950;font-weight:700}
+  .vd{padding:0 5px;border-radius:3px;font-size:9px;font-weight:700;color:#3fb950;background:rgba(63,185,80,.14)}
+  .sep{color:#30363d}
+
+  /* ---- READ ---- */
+  .read{font-size:10.5px;line-height:1.4;color:#c9d1d9;margin:5px 0 7px}
+  .read b.vb{color:#3fb950}
+  .read .lc{color:#d29922;font-weight:700}
+
+  /* ---- deflection zones ---- */
+  .hdr{display:flex;align-items:center;gap:6px;font-size:10px;color:#8b949e;font-weight:700;letter-spacing:.3px;margin-bottom:4px}
+  .hdr .n{color:#6e7681;font-weight:600}
+  .z{padding:3px 2px;border-bottom:1px solid #12161c}
+  .z:last-of-type{border-bottom:0}
+  .z.play{background:rgba(63,185,80,.05);border-left:2px solid #3fb950;padding-left:6px;border-radius:2px}
+  .r1{display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap}
+  .stk{font-weight:800}.role{color:#8b949e;font-weight:700}.kg{color:#f2cc60}
+  .flag{font-size:9.5px;color:#8b949e}
+  .pg{color:#3fb950}.pn{color:#a371f7}
+  .tapF{color:#3fb950}.tapT{color:#d29922}.tapX{color:#f0616d}
+  .grade{margin-left:auto;font-weight:800;font-size:10px;padding:0 5px;border-radius:3px}
+  .gA{color:#3fb950;background:rgba(63,185,80,.15)}.gB{color:#58a6ff;background:rgba(88,166,255,.15)}.gC{color:#d29922;background:rgba(210,153,34,.15)}
+  .r2{display:flex;align-items:center;gap:6px;font-size:9.5px;color:#8b949e;margin-top:2px;white-space:nowrap}
+  .up2{color:#3fb950}.dn2{color:#f0616d}.conf{color:#79c0ff}.tail{color:#6e7681}
+  .legend{margin-top:6px;padding-top:5px;border-top:1px solid #161b22;font-size:8px;color:#6e7681;line-height:1.5}
+
+  .foot{display:flex;justify-content:space-between;font-size:8.5px;color:#6e7681;margin-top:6px;padding-top:4px;border-top:1px solid #12161c}
+  .flive{color:#3fb950}
+</style></head><body>
+<div class="wrap">
+ <div>
+  <h1>GEX v10.49 — full Dashboard</h1>
+  <p class="sub">Everything in order, real 250px. Header → drift → READ (drift woven in) → deflection-quality zones → footer. Live 773 data.</p>
+
+  <div class="panel">
+
+    <!-- HEADER CLUSTER -->
+    <div class="cluster">
+      <div class="pill"><span class="step">①</span><span class="lab sup">★SUP</span><span class="val sup">772</span><span class="pct">21%</span></div>
+      <div class="pill king"><span class="step">②</span>
+        <div class="row"><span class="kgold">👑 773</span><span class="off g">+0</span></div>
+        <div class="gate"><svg viewBox="0 0 10 10"><path d="M1 9V3l1.5-1.2M8.5 1.8L10-.. " /></svg><span>⛫ 776</span><span class="off" style="color:#f0616d">+3↑</span></div>
+      </div>
+      <div class="pill"><span class="step">③</span><span class="lab res">★RES</span><span class="val res">776</span><span class="pct">44%</span></div>
+    </div>
+
+    <!-- DRIFT -->
+    <div class="drift"><span class="dup">↗</span><span style="color:#8b949e;font-weight:700">Drift</span><span class="vd">UP·conf</span><span class="sep">·</span><span class="dg">G773.9</span><span class="dv">V775.0</span></div>
+
+    <!-- READ (drift woven in, reconciled with range) -->
+    <div class="read"><b class="vb">UP-lean</b> · <span class="lc">low conf</span>. Price on King 773 — clean +γ floor, 1st tap, building all day. VEX drift agrees up. But mid-range 772–776, so a bounce play, not a trend. Watch 776 caps it, 772 breaks it.</div>
+
+    <!-- DEFLECTION ZONES -->
+    <div class="hdr">⚡ Deflection zones <span class="n">· px 773.6</span></div>
+
+    <div class="z play">
+      <div class="r1"><span class="pg">●</span><span class="stk kg">773</span><span class="role kg">King</span>
+        <span class="flag"><span class="pg">+γ clean</span> · <span class="tapF">1st</span></span><span class="grade gA">A−</span></div>
+      <div class="r2"><span class="up2">Acm day▲ now▲</span><span class="sep">·</span><span class="conf">Q✓ V↑</span><span class="sep">·</span><span class="tail">brk→772→air</span></div>
+    </div>
+    <div class="z"><div class="r1"><span class="pg">◦</span><span class="stk">776</span><span class="role">Ceil</span>
+      <span class="flag">44% · <span class="pg">+γ</span> · <span class="tapT">2nd</span> · <span class="dn2">now▼</span></span><span class="grade gB">B</span></div></div>
+    <div class="z"><div class="r1"><span class="pg">◦</span><span class="stk">772</span><span class="role">Flr</span>
+      <span class="flag">21% · <span class="pg">+γ</span> · <span class="tapF">1st</span> · <span class="dn2">day▼</span></span><span class="grade gC">C</span></div></div>
+    <div class="z"><div class="r1"><span class="pn">◦</span><span class="stk">777</span><span class="role">Mag</span>
+      <span class="flag">18% · <span class="pn">−γ sharp</span> · <span class="tapF">1st</span> · <span class="up2">day▲</span></span><span class="grade gB">B</span></div></div>
+
+    <div class="legend">
+      <b>Grade</b> = polarity · tap · ROC · confluence &nbsp;|&nbsp; <b>A</b> clean+fresh+building+agree · <b>C</b> tired/fading/lone<br>
+      <span class="pg">+γ</span> clean · <span class="pn">−γ</span> sharp · tap <span class="tapF">1st</span>≈80% <span class="tapT">2nd</span>≈66% <span class="tapX">3rd</span>≈33% · ROC day=open, now=~6m · Q=QQQ V=VEX
+    </div>
+
+    <div class="foot"><span class="flive">SPY:gamma·feed</span><span>rec ●</span><span>feed v10.49</span></div>
+  </div>
+ </div>
+
+ <div style="max-width:300px">
+  <p class="cap">What changed vs today</p>
+  <p class="sub" style="max-width:300px;color:#8b949e">
+    • <b>Drift line</b> added under the King/SUP-RES cluster; its lean is <b>woven into the READ</b> ("VEX drift agrees up") so direction reads as one story, not two verdicts.<br><br>
+    • <b>Node area → deflection zones.</b> In-play node (773) gets 2 lines + a <b>quality grade (A−)</b>; others are one line with their own grade. The grade fuses <b>polarity · tap-freshness · ROC(now+since-open) · confluence</b>.<br><br>
+    • <b>Acm fixed:</b> one source (feed), shown the same everywhere, now with a <b>since-open</b> track (day▲) = the real-vs-hedge signal — no more Acm/Dec contradiction.<br><br>
+    • <b>%King rungs</b> now from the feed (776 = 44%, accurate), not the lagging DOM.<br><br>
+    • <b>−γ nodes flagged "sharp"</b> so you know a bounce there is violent, not clean.<br><br>
+    • Everything here <b>auto-records</b> and will grow a measured hit-rate (📊 replaces the hand-set grade once n≥20).
+  </p>
+ </div>
+</div>
+</body></html>

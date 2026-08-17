@@ -1,0 +1,88 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Deflection-quality node area — v10.49</title>
+<style>
+  body{background:#0d1117;color:#e6edf3;font:13px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;padding:22px;max-width:320px;margin:0 auto}
+  h1{font-size:14px;color:#8b949e;font-weight:600;margin:0 0 2px}
+  .sub{color:#6e7681;font-size:10px;margin:0 0 14px}
+  .panel{width:250px;background:#010409;border:1px solid #21262d;border-radius:6px;padding:6px 8px}
+  .hdr{display:flex;align-items:center;gap:6px;font-size:10px;color:#8b949e;font-weight:700;letter-spacing:.3px;margin-bottom:5px}
+  .hdr .n{color:#6e7681;font-weight:600}
+
+  /* drift line that sits just above (context) */
+  .drift{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:10px;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid #161b22}
+  .g{color:#f2cc60;font-weight:700}.v{color:#a371f7;font-weight:700}.up{color:#3fb950;font-weight:700}
+
+  /* a zone */
+  .z{padding:4px 2px;border-bottom:1px solid #12161c}
+  .z:last-child{border-bottom:0}
+  .z.play{background:rgba(63,185,80,.05);border-left:2px solid #3fb950;padding-left:6px;border-radius:2px}
+  .r1{display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap}
+  .dot{font-size:9px}
+  .stk{font-weight:800}
+  .role{color:#8b949e;font-weight:700}
+  .kg{color:#f2cc60}     /* king gold */
+  .flag{font-size:9.5px;color:#8b949e}
+  .pg{color:#3fb950}     /* +gamma clean = green */
+  .pn{color:#a371f7}     /* -gamma violent = purple */
+  .tapF{color:#3fb950}.tapT{color:#d29922}.tapX{color:#f0616d}
+  .grade{margin-left:auto;font-weight:800;font-size:10px;padding:0 5px;border-radius:3px}
+  .gA{color:#3fb950;background:rgba(63,185,80,.15)}
+  .gB{color:#58a6ff;background:rgba(88,166,255,.15)}
+  .gC{color:#d29922;background:rgba(210,153,34,.15)}
+  .r2{display:flex;align-items:center;gap:7px;font-size:9.5px;color:#8b949e;margin-top:2px;white-space:nowrap}
+  .up2{color:#3fb950}.dn2{color:#f0616d}.sep{color:#30363d}
+  .conf{color:#79c0ff}
+  .tail{color:#6e7681}
+  .legend{margin-top:8px;padding-top:6px;border-top:1px solid #161b22;font-size:8.5px;color:#6e7681;line-height:1.5}
+  .cap{color:#6e7681;font-size:9px;text-transform:uppercase;letter-spacing:.4px;margin:14px 0 4px}
+</style></head><body>
+<h1>Deflection-quality node area</h1>
+<p class="sub">Real 250px. The zone in play = full (2 lines + grade); others = one line. Grade fuses polarity·tap·ROC·confluence. Drift line sits just above for context.</p>
+
+<div class="panel">
+  <!-- drift context line (already spec'd) -->
+  <div class="drift"><span class="up">↗</span><span>Drift</span><span class="up">UP·conf</span><span class="sep">·</span><span class="g">G773.9</span><span class="v">V775.0</span></div>
+
+  <div class="hdr">⚡ Deflection zones <span class="n">· px 773.5</span></div>
+
+  <!-- IN-PLAY zone: full 2-line + grade -->
+  <div class="z play">
+    <div class="r1">
+      <span class="dot pg">●</span><span class="stk kg">773</span><span class="role kg">King</span>
+      <span class="flag"><span class="pg">+γ clean</span> · <span class="tapF">1st</span></span>
+      <span class="grade gA">A−</span>
+    </div>
+    <div class="r2"><span class="up2">Acm day▲ now▲</span><span class="sep">·</span><span class="conf">Q✓ V↑</span><span class="sep">·</span><span class="tail">brk→772→air</span></div>
+  </div>
+
+  <!-- other key nodes: one line each -->
+  <div class="z">
+    <div class="r1">
+      <span class="dot pg">◦</span><span class="stk">776</span><span class="role">Ceil</span>
+      <span class="flag">44% · <span class="pg">+γ</span> · <span class="tapT">2nd</span> · <span class="dn2">now▼</span></span>
+      <span class="grade gB">B</span>
+    </div>
+  </div>
+  <div class="z">
+    <div class="r1">
+      <span class="dot pg">◦</span><span class="stk">772</span><span class="role">Flr</span>
+      <span class="flag">21% · <span class="pg">+γ</span> · <span class="tapF">1st</span> · <span class="dn2">day▼</span></span>
+      <span class="grade gC">C</span>
+    </div>
+  </div>
+  <div class="z">
+    <div class="r1">
+      <span class="dot pn">◦</span><span class="stk">777</span><span class="role">Mag</span>
+      <span class="flag">18% · <span class="pn">−γ sharp</span> · <span class="tapF">1st</span> · <span class="up2">day▲</span></span>
+      <span class="grade gB">B</span>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>Grade</b> = polarity · tap · ROC · confluence &nbsp;|&nbsp; <b>A</b> clean+fresh+building+agree · <b>C</b> tired/fading/lone<br>
+    <span class="pg">+γ</span> clean bounce · <span class="pn">−γ</span> sharp/violent &nbsp;·&nbsp; tap <span class="tapF">1st</span>≈80% <span class="tapT">2nd</span>≈66% <span class="tapX">3rd</span>≈33% &nbsp;·&nbsp; ROC day=since open, now=~6m &nbsp;·&nbsp; Q=QQQ V=VEX-drift agree
+  </div>
+</div>
+
+<p class="cap">Reading the in-play line</p>
+<p class="sub" style="max-width:250px">“773 King, positive-gamma so a <b>clean</b> bounce, <b>1st</b> tap (~80%), accumulating <b>all day and right now</b>, QQQ and VEX both agree up → <b>A−</b> bounce zone; if it breaks, next stop 772 then an air pocket.” Everything a deflection needs, one glance.</p>
+</body></html>

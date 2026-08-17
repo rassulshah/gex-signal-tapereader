@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    10.47
+// @version    10.49
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -23,7 +23,7 @@ var ES_RATIO = 10.0676;
 var TODAY = null;
 var FEED_BASE = 'https://app.skylit.ai/tv/api/gex/levels';
 var MIN_STRENGTH = 20;
-var FEED_STALE_MS = 60000;
+var FEED_STALE_MS = 12000;
 
 var LOG_KEY   = 'gpts_inplay_v7';
 var SLICE_KEY = 'gpts_slices_v7';
@@ -168,6 +168,9 @@ var STATE = {
 var FUT = { ES:null, NQ:null };
 var LASTFEED = { SPY:null, QQQ:null };
 var LASTVEX = { SPY:null, QQQ:null };
+var LASTDISP = { SPY:null, QQQ:null };   // (v10.48) mode the user is DISPLAYING (gamma/vanna/combined) — distinct from what LASTFEED holds
+var LASTFEEDURL = null;                  // (v10.48) template of the real gex/levels request URL, for dual-capture self-fetch
+var LASTAUTH = null;                     // (v10.49 A) Authorization header captured off a REAL gex/levels request; self-fetch replays it (v10.48 self-fetch 401'd without it)
 var LASTNODEMAP = { SPY:null, QQQ:null };   // (v10.24) last emitted Node Map model (effectiveness capture)
 
 var RESHUFFLE = { SPY:false, QQQ:false };
@@ -201,6 +204,37 @@ function feedTypeFromUrl(u){
 }
 function symFromUrl(u){ return (u.indexOf('symbol=QQQ')!==-1) ? 'QQQ' : 'SPY'; }
 
+// (v10.49 A) AUTH CAPTURE. Skylit's gex/levels calls carry a bearer token. The
+// v10.48 self-fetch sent cookies only and 401'd, so VEX never refreshed when the
+// display was pure GEX. We now read the Authorization header off whatever the app
+// itself sends -- fetch(init.headers) as a Headers object OR a plain object (any
+// case), fetch(Request) via input.headers.get, and XHR via setRequestHeader -- and
+// replay it. PURE + testable: authFromHeaders/captureAuth take their inputs.
+function authFromHeaders(h){
+  try{
+    if(!h) return null;
+    if(typeof h.get==='function'){ var v=h.get('authorization'); return v?String(v):null; }
+    if(typeof h.forEach==='function' && typeof h.length!=='number'){
+      var got=null; h.forEach(function(val,key){ if(String(key).toLowerCase()==='authorization') got=String(val); });
+      if(got) return got;
+    }
+    if(Object.prototype.toString.call(h)==='[object Array]'){          // [[k,v],...] form
+      for(var i=0;i<h.length;i++){ var pr=h[i]; if(pr && String(pr[0]).toLowerCase()==='authorization') return String(pr[1]); }
+      return null;
+    }
+    for(var k in h){ if(k && String(k).toLowerCase()==='authorization'){ var vv=h[k]; return (vv==null)?null:String(vv); } }
+  }catch(e){}
+  return null;
+}
+function captureAuth(input, init){
+  try{
+    var a=null;
+    if(init && init.headers) a=authFromHeaders(init.headers);
+    if(!a && input && typeof input!=='string' && input.headers) a=authFromHeaders(input.headers);
+    if(a) LASTAUTH=a;
+  }catch(e){}
+  return LASTAUTH;
+}
 function installFeedObserver(){
   if(window.__gptsFeedHook) return;
   window.__gptsFeedHook = true;
@@ -211,6 +245,8 @@ function installFeedObserver(){
       var url = (typeof input==='string') ? input : (input && input.url) || '';
       var p = orig.apply(this, arguments);
       if(url.indexOf('gex/levels')!==-1){
+        LASTFEEDURL = url;
+        captureAuth(input, init);          // (v10.49 A) Headers | plain object | Request
         p.then(function(resp){
           try{
             if(resp && resp.status===200){
@@ -230,15 +266,24 @@ function installFeedObserver(){
     var XP = window.XMLHttpRequest && window.XMLHttpRequest.prototype;
     if(XP && !XP.__gptsHooked){
       XP.__gptsHooked = true;
-      var origOpen = XP.open, origSend = XP.send;
+      var origOpen = XP.open, origSend = XP.send, origSRH = XP.setRequestHeader;
       XP.open = function(method, url){
-        try{ this.__gptsUrl = (typeof url==='string') ? url : ''; }catch(e){}
+        try{ this.__gptsUrl = (typeof url==='string') ? url : ''; this.__auth = null; }catch(e){}
         return origOpen.apply(this, arguments);
       };
+      // (v10.49 A) record the Authorization header the app sets on this xhr
+      if(typeof origSRH==='function'){
+        XP.setRequestHeader = function(name, value){
+          try{ if(name && String(name).toLowerCase()==='authorization') this.__auth = (value==null?null:String(value)); }catch(e){}
+          return origSRH.apply(this, arguments);
+        };
+      }
       XP.send = function(){
         try{
           var xhr=this, u=xhr.__gptsUrl||'';
           if(u.indexOf('gex/levels')!==-1){
+            LASTFEEDURL = u;
+            if(xhr.__auth) LASTAUTH = xhr.__auth;   // (v10.49 A)
             xhr.addEventListener('load', function(){
               try{
                 if(xhr.status===200 && xhr.responseText){
@@ -253,18 +298,65 @@ function installFeedObserver(){
       };
     }
   }catch(e){}
+  // (v10.48) Dual-capture keep-alive: self-fetch whichever mode(s) the display
+  // is NOT showing, so GEX and VEX both stay fresh regardless of the toggle.
+  try{ if(!window.__gptsEnsure){ window.__gptsEnsure = true; setInterval(ensureFeeds, 5000); } }catch(e){}
 }
 // (v10.31-debug) RAW FEED FIELD PROBE — one-time dump per sym+feed of the COMPLETE
 // raw node object, so we can see EVERY field the feed carries (esp. volume / buy-sell)
 // BEFORE extractWalls() discards all but {k,v,d,net}. Remove after the audit.
-function onFeed(sym, feed, j){
+// (v10.48) onFeed gains a 4th param `viaSelf`. Skylit only sends the DISPLAYED
+// data_type; `combined` display must NOT contaminate the pure-gamma cache. The
+// missing mode(s) are supplied out-of-band by selfFetch(...,true).
+function onFeed(sym, feed, j, viaSelf){
   if(sym!=='SPY' && sym!=='QQQ') return;
   if(!j || !j.levels || !j.levels.length) return;
+  if(!viaSelf) LASTDISP[sym] = feed;
   if(feed==='vanna'){ LASTVEX[sym] = { j:j, ts:Date.now() }; return; }
-  if(feed==='gamma' || feed==='combined'){ var _ts=Date.now(); LASTFEED[sym] = { j:j, feed:feed, ts:_ts }; observeFeedCadence(sym, _ts); }
+  if(feed==='gamma'){ var _ts=Date.now(); LASTFEED[sym] = { j:j, feed:'gamma', ts:_ts }; observeFeedCadence(sym, _ts); return; }
+  // combined (or anything else): do NOT write LASTFEED — self-fetch supplies gamma.
+  return;
+}
+// (v10.48) SELF-FETCH the non-displayed mode(s). Builds its URL by swapping
+// symbol=, data_type= and v= on the last-seen real request URL, so it carries the
+// same auth/query shape. Errors (esp. 503) are swallowed. Throttled per (sym,type).
+var SELF_MIN_MS = 4000;
+var SELF_LAST = {};
+function selfFetch(sym, type){
+  try{
+    if(!LASTFEEDURL) return;
+    var key=sym+type, now=Date.now();
+    if(SELF_LAST[key] && (now-SELF_LAST[key])<SELF_MIN_MS) return;
+    SELF_LAST[key]=now;
+    var url=LASTFEEDURL;
+    if(/symbol=/.test(url))    url=url.replace(/symbol=[^&]*/, 'symbol='+sym);
+    if(/data_type=/.test(url)) url=url.replace(/data_type=[^&]*/, 'data_type='+type);
+    if(/[?&]v=/.test(url))     url=url.replace(/([?&])v=[^&]*/, '$1v='+now);
+    var hdrs = LASTAUTH ? {Authorization:LASTAUTH} : {};
+    fetch(url, {credentials:'include', headers:hdrs}).then(function(res){
+      // (v10.49 A) 401 = the token rotated. Clear NOTHING and do not retry-loop; the
+      // next real app request re-captures LASTAUTH and the next tick tries again.
+      try{ if(res && res.status===401) return; }catch(e401){}
+      try{ if(res && res.ok){ res.json().then(function(j){ try{ onFeed(sym, type, j, true); }catch(e){} }).catch(function(){}); } }catch(e){}
+    }).catch(function(){});
+  }catch(e){}
+}
+// (v10.48) Keep BOTH GEX and VEX fresh. The displayed mode stays fresh via the
+// network hook (never self-fetched); only stale mode(s) get a self-fetch, so it is
+// ≤1 extra request per cycle in a pure GEX or VEX display.
+function ensureFeeds(){
+  try{
+    if(document.visibilityState!=='visible' || !LASTFEEDURL) return;
+    var syms=['SPY','QQQ'], now=Date.now();
+    for(var i=0;i<syms.length;i++){
+      var s=syms[i];
+      if(!LASTFEED[s] || (now-LASTFEED[s].ts)>FEED_STALE_MS) selfFetch(s,'gamma');
+      if(!LASTVEX[s]  || (now-LASTVEX[s].ts)>FEED_STALE_MS)  selfFetch(s,'vanna');
+    }
+  }catch(e){}
 }
 
-console.log('[GPTS] v10.43 part1 loaded');
+console.log('[GPTS] v10.49 part1 loaded');
 
 function fiberKeyOf(el){
   var ks=Object.keys(el);
@@ -837,13 +929,34 @@ function livePctAt(sym, k){
 // %King strength you read when trading. Keyed off the data pattern + the
 // "Strike" header, not CSS classes, so it survives Skylit markup changes.
 var TAPE_CACHE = { SPY:{t:0, data:null}, QQQ:{t:0, data:null} };
+// (v10.48) STRUCTURAL SOURCE = the pure-gamma feed, mode-independent. Returns a
+// kingResolve-shaped object built straight from extractWalls(LASTFEED[sym].j), so
+// tag/tapemax/feed all derive from the SAME gamma data and tapeSync reconciles
+// cleanly no matter what the Skylit heatmap is displaying (GEX / VEX / GEX+VEX).
+function feedStructMap(sym){
+  try{
+    var lf=LASTFEED[sym]; if(!lf || !lf.j || !lf.j.levels || !lf.j.levels.length) return null;
+    var ew=extractWalls(lf.j);
+    if(!ew || ew.king==null) return null;
+    var pct={};
+    ew.walls.forEach(function(w){ pct[w.k.toFixed(2)] = (w.k===ew.king) ? 100 : (w.pos ? w.pct : -w.pct); });
+    return { pct:pct, king:ew.king, count:ew.walls.length, kingSrc:'feed', kingTagged:ew.king,
+             kingConflict:false, kingKd:null, fromFeed:true };
+  }catch(e){ return null; }
+}
 function tapeMap(sym){
   try{
     var now=Date.now();
     var c=TAPE_CACHE[sym];
     if(c && c.data && (now-c.t)<1000) return c.data;
+    // (v10.48) When the display is NOT pure gamma, the DOM tape shows the wrong
+    // book — read structure from the gamma feed instead.
+    var disp=LASTDISP[sym];
+    if(disp && disp!=='gamma'){ var fm=feedStructMap(sym); if(fm) return fm; }
     var data=readTapeFromDOM(sym);
     if(data && data.count>=5){ TAPE_CACHE[sym]={t:now, data:data}; return data; }
+    // Unreadable tape: prefer the gamma feed over a stale cache.
+    var fm2=feedStructMap(sym); if(fm2) return fm2;
     return c ? c.data : null;
   }catch(e){ return null; }
 }
@@ -2116,6 +2229,7 @@ function recordNodeSnapshot(sym){
         }
       }catch(eNM){}
     }catch(eSig){ sig=null; }
+    var __fctx=null; try{ __fctx=featureCtx(sym); }catch(eFc){ __fctx=null; }
     var snap={
       t:Date.now(),
       bar:bar,
@@ -2139,6 +2253,9 @@ function recordNodeSnapshot(sym){
       // (v10.46) derived GEX factors (net sign, zero-gamma regime, concentration, imbalance,
       // call/put walls, gamma ranks) — research-backed, computed from the strike tape.
       deriv:(function(){ try{ return deriveFactors(nodes, S.price, (typeof S.king==='number'?S.king:null)); }catch(eD){ return null; } })(),
+      // (v10.49 B) FEATURE REGISTRY records — one entry per FEATURES key, per bar.
+      // Written under snap.feat so the day export carries them with zero extra wiring.
+      feat:(function(){ try{ return featRecordAll(sym, __fctx); }catch(eFt){ return null; } })(),
       inplay:(fs.inPlay?{k:fs.inPlay.k, role:fs.inPlay.role, side:fs.inPlay.side,
               st:(fs.inPlay.state&&fs.inPlay.state.label)||null}:null),
       nodes:nodes,
@@ -2156,6 +2273,10 @@ function recordNodeSnapshot(sym){
     // Back-fill forward outcomes on older snapshots now that a fresh bar landed.
     labelForwardOutcomes(sym, day.snaps[sym]);
     recorderSave(db);
+    // (v10.49 B) queue this bar's feature records for forward scoring, then resolve any
+    // whose window has now closed. Both are idempotent + forward-only.
+    try{ if(snap.feat) featEnqueue(sym, snap.feat, __fctx); }catch(eFe){}
+    try{ resolveFeatureOutcomes(sym); }catch(eFr){}
     // (v10.44 DATA REPOSITORY) mirror the last 12 snapshots (fresh + outcome-backfilled)
     // into IndexedDB — unbounded history that the study module and Testing tab query.
     try{ repoUpsertSnaps(sym, TODAY, day.snaps[sym].slice(-12)); }catch(eRepo){}
@@ -3170,7 +3291,14 @@ function buildDayExport(dateKey){
     },
     syms:RECORDER_SYMS,
     snaps:day.snaps||{},
-    events:day.events||{}
+    events:day.events||{},
+    // (v10.49 B/H) the feature-registry layer: per-bar records under snaps[].feat, the
+    // resolved outcome queue here, plus the operator's take/pass log.
+    feat:day.feat||{},
+    act:day.act||{},
+    features:(function(){ try{ registerCoreFeatures(); return FEATURES.map(function(f){ return {key:f.key,label:f.label,phase:f.phase,fwd:f.fwd,rule:(f.rule&&f.rule.id)||null}; }); }catch(eFx){ return []; } })(),
+    rules:(function(){ try{ return rulesLoad(); }catch(eRl){ return null; } })(),
+    questions:(function(){ try{ return seedQuestions(); }catch(eQ){ return []; } })()
   };
 }
 var SAVED_TODAY=null;   // (v10.17) date-key of the day exported this session; drives the Analysis-tab banner
@@ -3349,6 +3477,7 @@ function isInteractiveTarget(t){
     if(tag==='input'||tag==='select'||tag==='textarea'||tag==='button'||tag==='a') return true;
     if(t.id==='gpts-gear'||t.id==='gpts-clear'||t.id==='gpts-cfg'||t.id==='gpts-grip') return true;
     if(t.classList && (t.classList.contains('gpts-clr-sym'))) return true;
+    if(t.classList && (t.classList.contains('gpts-act') || t.classList.contains('gpts-brief'))) return true;   // (v10.49 H) one-tap controls, never a drag
     t=t.parentNode;
   }
   return false;
@@ -5736,8 +5865,13 @@ function nodeMapSentence(m, sym, tagFn){
   function nm(L){ return (L.isKing?'King ':(L.isGatekeeper?'Gate ':(L.isFlr?'Flr ':(L.isCeil?'Ceil ':''))))+b(N(L.k),L.isKing?PAL.gold:PAL.ink); }
   function stt(L){ // 'Acm ▲12%' | 'Dec ▼8%' | 'steady'
     var c=(typeof L.chg==='number')?L.chg:0;
-    if(_nmIsAcc(L)) return 'Acm'+(c>0?(' ▲'+Math.round(c)+'%'):'');
-    if(_nmIsDec(L)) return 'Dec'+(c<0?(' ▼'+Math.round(Math.abs(c))+'%'):'');
+    var acc=_nmIsAcc(L), dec=_nmIsDec(L);
+    // (v10.49 I) accumCanon is THE single Acm source — the sentence and the zone rows read
+    // the SAME numbers, so "Acm" here and "Dec" there can no longer contradict each other.
+    try{ var __a=accumCanon(sym, L.k);
+         if(__a && __a.day && typeof __a.day.pct==='number'){ c=__a.day.pct; acc=(__a.day.label==='Acm'); dec=(__a.day.label==='Dec'); } }catch(eAC){}
+    if(acc) return 'Acm'+(c>0?(' ▲'+Math.round(c)+'%'):'');
+    if(dec) return 'Dec'+(c<0?(' ▼'+Math.round(Math.abs(c))+'%'):'');
     return 'steady';
   }
   var taps=eng.taps||0, third=taps>=2, purple=(eng.pos===false);
@@ -5957,6 +6091,11 @@ function nodeMapBlock(){
       '</span></div>';
   }
   var px=m.px;
+  // (v10.49 F) DEFLECTION-QUALITY ZONES replace the full ladder body: the engaged node in
+  // full + the next 3 that matter. The ladder row() above stays as the FALLBACK renderer
+  // for boards where no node is meaningful enough to make the zone list.
+  var __zones=''; try{ __zones=deflZonesBlock(sym); }catch(eZ){ __zones=''; }
+  if(__zones){ html+=__zones; return html; }
   // (v10.35) column header so the 4 zones read as aligned columns
   html+='<div style="display:grid;grid-template-columns:96px 66px 78px 1fr;column-gap:4px;font-size:7px;letter-spacing:.3px;text-transform:uppercase;color:'+PAL.sub+';font-weight:800;padding:0 5px 2px;white-space:nowrap">'+
     '<span style="display:flex;align-items:center;gap:3px">'+stepIcon(5,'width:11px;height:11px;font-size:7px;')+'Identity</span>'+
@@ -6621,6 +6760,1425 @@ function studyNightlyTick(){
     studyRun(function(){ try{ render(); }catch(e){} });
   }catch(e){}
 }
+// ============================================================================
+// (v10.49) MENTAL-MODEL SPINE — one Direction verdict, one Node grade per zone,
+// one DECISION cell. Everything below either FEEDS the spine or RENDERS it.
+// Companion specs: design/spec-v10.49-build.md (A-L) + spec-v10.49-mental-model-layers.md.
+// Every block here is DESCRIPTIVE. The decision-matrix labels are the ONLY place an
+// action word appears, and they are deliberately non-executional (no entry/stop/size).
+// ============================================================================
+
+// ---- (K) LEARNING STORE: learning/rules.json, read at boot, written nightly ----
+// Rules are the mental model in data form. Each rule is hand-set (⚖) until its own
+// measured record reaches n>=RULE_UNLOCK_N, when the nightly review promotes it (📊).
+// The panel NEVER asserts an unearned probability: an odds sentence may only cite a
+// PROMOTED rule.
+var RULES_KEY='gpts_rules_v1';
+var RULE_UNLOCK_N=20;
+var RULES=null;
+var RULES_FETCHED=false;
+var RULES_URL='https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/learning/rules.json';
+function ruleSeed(id, mechanism, condition){
+  return { id:id, condition:condition||'', rate:null, n:0, mfe:null, mae:null, regime:null,
+           mechanism:mechanism||'', tier:'hand', promoted:false, lastVerified:null };
+}
+// The seeded ruleset = FEATURES[].rule roots + the per-grade / per-input children from
+// layer spec S4 + the KILL LIST (conditions under which the tool says: no read).
+function rulesSeed(){
+  var out={};
+  function add(r){ out[r.id]=r; }
+  try{ FEATURES.forEach(function(f){ if(f && f.rule && f.rule.id) add(ruleSeed(f.rule.id, f.rule.mechanism, f.rule.condition)); }); }catch(e){}
+  add(ruleSeed('dir.A','Direction A = drift agrees + structure aligned + trending regime; the fusion should follow through.','dirGrade=A'));
+  add(ruleSeed('dir.B','Direction B = one leg of the fusion missing or mid-range capped.','dirGrade=B'));
+  add(ruleSeed('dir.C','Direction C = chop, mid-range, or opposed structure. No directional claim.','dirGrade=C'));
+  add(ruleSeed('drift.conf','GEX centre and VEX centre on the same side of price with overlapping bands = a real lean.','driftVerdict=AGREE'));
+  add(ruleSeed('node.grade.A','Fresh clean +gamma node building into the tap.','nodeGrade=A'));
+  add(ruleSeed('node.grade.B','Node good on most inputs but one is stale or opposed.','nodeGrade=B'));
+  add(ruleSeed('node.grade.C','Spent or bleeding node; reactions are unreliable.','nodeGrade=C'));
+  add(ruleSeed('node.tap.1','1st tap of an untested node (Academy ~80%).','tap=0'));
+  add(ruleSeed('node.tap.2','2nd tap (Academy ~66%).','tap=1'));
+  add(ruleSeed('node.tap.3','3rd+ tap = graveyard (Academy ~33%).','tap>=2'));
+  add(ruleSeed('node.pol.pos','+gamma nodes deflect cleanly (dealers sell into strength).','pol=+'));
+  add(ruleSeed('node.pol.neg','-gamma nodes accelerate; a deflection there is counter-character.','pol=-'));
+  add(ruleSeed('node.rocDay.up','Since-open growers are real positioning, not intraday hedge noise.','rocDay=Acm'));
+  add(ruleSeed('node.rocDay.dn','Since-open faders are being unwound; the level is leaving.','rocDay=Dec'));
+  add(ruleSeed('acm.realVsHedge','Growth measured since the session open separates real accumulation from intraday hedging.','rocDay'));
+  ['A×A','A×B','A×C','B×A','B×B','B×C','C×A','C×B','C×C'].forEach(function(c){
+    add(ruleSeed('decision.'+c,'Matrix cell '+c+' must earn its label from measured outcomes.','decisionCell='+c));
+  });
+  // ---- KILL LIST: the four conditions that void a read outright ----
+  add(ruleSeed('kill.tap3','3rd+ tap of a node: the zone is spent, reactions stop paying.','tap>=2'));
+  add(ruleSeed('kill.midrange','Mid-range (0.35-0.65 of Flr..Ceil): no edge either way (Skylit midpoint rule).','rangePos=mid'));
+  add(ruleSeed('kill.noConf','Neither VEX drift nor structure agrees with the direction: nothing is confirming.','driftVerdict=SPLIT & structAsym=opposed'));
+  add(ruleSeed('kill.negGammaWide','-gamma node inside a wide/low-exposure pathway: moves accelerate through, they do not deflect.','pol=- & path=air'));
+  return out;
+}
+function rulesNormalize(obj){
+  var seeded=rulesSeed();
+  if(!obj || typeof obj!=='object') return seeded;
+  for(var id in seeded){ if(!obj[id]) obj[id]=seeded[id]; }
+  for(var k in obj){ var r=obj[k];
+    if(!r || typeof r!=='object'){ delete obj[k]; continue; }   // never let a stray non-rule value in
+    if(r.tier!=='measured' && r.tier!=='hand') r.tier = r.promoted?'measured':'hand';
+    if(r.promoted && r.tier!=='measured') r.tier='measured';
+  }
+  return obj;
+}
+function rulesLoad(){
+  if(RULES) return RULES;
+  var stored=null;
+  try{ stored=JSON.parse(localStorage.getItem(RULES_KEY)||'null'); }catch(e){ stored=null; }
+  RULES=rulesNormalize(stored && stored.rules ? stored.rules : stored);
+  // fail-soft remote refresh: the nightly LLM loop writes learning/rules.json into the
+  // repo; if it is unreachable (offline / rate-limited) the seeded local copy stands.
+  try{
+    if(typeof fetch==='function' && !RULES_FETCHED){
+      RULES_FETCHED=true;
+      fetch(RULES_URL,{cache:'no-store'}).then(function(res){ return (res&&res.ok)?res.json():null; })
+        .then(function(j){ if(!j) return; RULES=rulesNormalize(j.rules||j); rulesSave(); try{ render(); }catch(eR){} })
+        .catch(function(){});
+    }
+  }catch(e2){}
+  return RULES;
+}
+function rulesSave(){ try{ localStorage.setItem(RULES_KEY, JSON.stringify({v:1, at:Date.now(), rules:RULES})); }catch(e){} }
+function ruleGet(id){ var R=rulesLoad(); return (R && R[id]) || null; }
+function ruleTier(id){ var r=ruleGet(id); return (r && (r.promoted || r.tier==='measured')) ? '📊' : '⚖'; }
+function rulePromoted(id){ var r=ruleGet(id); return !!(r && (r.promoted || (r.tier==='measured' && (r.n||0)>=RULE_UNLOCK_N))); }
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.rules=function(){ return rulesLoad(); };
+
+// ============================================================================
+// (B) FEATURE REGISTRY — the enrollment mechanism. One entry per feature; the
+// DATA / ANALYSIS / TESTING / LEARNING layers all ITERATE this array, so adding a
+// feature auto-enrolls it everywhere (design/spec-feature-enrollment.md).
+// ============================================================================
+var FEATURES = [];
+function registerFeature(f){
+  if(!f || !f.key) return null;
+  for(var i=0;i<FEATURES.length;i++){ if(FEATURES[i].key===f.key){ FEATURES[i]=f; return f; } }
+  FEATURES.push(f);
+  return f;
+}
+function featureByKey(k){ for(var i=0;i<FEATURES.length;i++){ if(FEATURES[i].key===k) return FEATURES[i]; } return null; }
+var FEAT_FWD  = 10;    // forward bars (10 x 3m = 30m) for every feature outcome
+var DIR_PTS   = 0.5;   // strikes price must travel for a direction call to count
+var DRIFT_PTS = 0.5;   // strikes for a drift call to count
+
+// ---- (G) TIME AWARENESS ----------------------------------------------------
+// The same read does not mean the same thing at 08:35 and at 14:45. sessionBucket
+// is recorded on every feature rec and feeds the Direction spine (power hour caps odds).
+function isOpexDay(d){
+  d = d || ctNow();
+  if(d.getDay()!==5) return false;                       // Fridays only
+  var dom=d.getDate();
+  return dom>=15 && dom<=21;                             // the 3rd Friday of the month
+}
+function sessionBucket(){
+  var mins=ctMinutesSinceMidnight();
+  var b;
+  if(mins < 8*60+30)      b='pre-open';
+  else if(mins < 10*60)   b='open-drive';
+  else if(mins < 11*60+30)b='morning';
+  else if(mins < 13*60+30)b='midday';
+  else if(mins < 14*60+30)b='afternoon';
+  else if(mins <= 15*60)  b='power';
+  else                    b='post';
+  return { bucket:b, mins:mins, opex:isOpexDay(), capOdds:(b==='power'||b==='open-drive') };
+}
+var SESSION_ABBR={'pre-open':'pre','open-drive':'open','morning':'am','midday':'mid','afternoon':'pm','power':'pwr','post':'post'};
+
+// ---- (G) MODEL CONFIDENCE META --------------------------------------------
+// Rolling hit-rate of the LAST 10 resolved dir/node grade records. Descriptive
+// self-report: "is the model reading this tape well right now?" Never a forecast.
+function modelHeat(sym){
+  sym=sym||'SPY';
+  var out={ n:0, hit:0, rate:null, state:'—' };
+  try{
+    var db=recorderLoad(); var days=(db&&db.days)||{};
+    var keys=Object.keys(days).sort(); var pool=[];
+    for(var i=keys.length-1;i>=0 && pool.length<40;i--){
+      var arr=((days[keys[i]]||{}).feat||{})[sym]||[];
+      for(var j=arr.length-1;j>=0;j--){ var r=arr[j];
+        if(!r || !r.resolved || (r.key!=='dir' && r.key!=='node')) continue;
+        if(r.hit==null) continue;
+        pool.push(r); if(pool.length>=10) break;
+      }
+    }
+    out.n=pool.length;
+    pool.forEach(function(r){ if(r.hit) out.hit++; });
+    if(out.n>=5){ out.rate=Math.round(100*out.hit/out.n); out.state = out.rate<40?'cold':(out.rate>60?'warm':'even'); }
+  }catch(e){}
+  return out;
+}
+
+// ============================================================================
+// (D) DRIFT READ — where each book's mass is CENTRED versus price.
+// GVWAP = exposure-weighted mean strike of the gamma book; VVWAP the same for the
+// vanna book; each with a +-1 sigma band. Weights are NORMALISED WITHIN THEIR OWN
+// FEED, so the fact that vanna magnitudes run ~10x gamma cannot tilt the read.
+// Verdict AGREE-* only when both centres sit on the SAME side of price AND the two
+// bands overlap (they are describing the same move, not two different ones).
+// ============================================================================
+function driftNodesOf(j){
+  try{
+    var lv=(j && j.levels) || []; if(!lv.length) return null;
+    var last=lv[lv.length-1]; var arr=(last && last.l) || [];
+    var out=[];
+    for(var i=0;i<arr.length;i++){
+      var n=arr[i]; if(!n || typeof n.k!=='number') continue;
+      var w=Math.abs(typeof n.v==='number'?n.v:0);
+      if(w>0) out.push([n.k, w]);
+    }
+    return out.length?out:null;
+  }catch(e){ return null; }
+}
+// PURE: weighted mean + population sigma over [[strike, weight], ...].
+// Weights are divided by their own sum first (scale-invariance is explicit, not implied).
+function driftStat(rows){
+  if(!rows || !rows.length) return null;
+  var sw=0, i;
+  for(i=0;i<rows.length;i++) sw+=rows[i][1];
+  if(!(sw>0)) return null;
+  var m=0;
+  for(i=0;i<rows.length;i++) m += rows[i][0]*(rows[i][1]/sw);
+  var v=0;
+  for(i=0;i<rows.length;i++){ var d=rows[i][0]-m; v += (rows[i][1]/sw)*d*d; }
+  var sd=Math.sqrt(v);
+  return { vwap:+m.toFixed(4), sd:+sd.toFixed(4), lo:+(m-sd).toFixed(4), hi:+(m+sd).toFixed(4), n:rows.length };
+}
+function driftRead(sym){
+  sym=sym||'SPY';
+  var out={ verdict:'NONE', label:'—', dir:0, px:null, gvwap:null, vvwap:null,
+            gLo:null, gHi:null, vLo:null, vHi:null, overlap:false, g:null, v:null };
+  try{
+    var S=STATE[sym]||{}; var px=(typeof S.price==='number')?S.price:null;
+    out.px=px;
+    var lf=LASTFEED[sym], lx=LASTVEX[sym];
+    var G = lf ? driftStat(driftNodesOf(lf.j)) : null;
+    var V = lx ? driftStat(driftNodesOf(lx.j)) : null;
+    out.g=G; out.v=V;
+    if(G){ out.gvwap=+G.vwap.toFixed(2); out.gLo=+G.lo.toFixed(2); out.gHi=+G.hi.toFixed(2); }
+    if(V){ out.vvwap=+V.vwap.toFixed(2); out.vLo=+V.lo.toFixed(2); out.vHi=+V.hi.toFixed(2); }
+    if(!G || !V || px==null){ out.verdict='NONE'; out.label='—'; return out; }
+    out.overlap = (Math.max(G.lo,V.lo) <= Math.min(G.hi,V.hi));
+    var gUp=(G.vwap>px), vUp=(V.vwap>px);
+    var gDn=(G.vwap<px), vDn=(V.vwap<px);
+    if(gUp && vUp && out.overlap){ out.verdict='AGREE-UP'; out.label='UP·conf'; out.dir=1; }
+    else if(gDn && vDn && out.overlap){ out.verdict='AGREE-DN'; out.label='DN·conf'; out.dir=-1; }
+    else { out.verdict='SPLIT'; out.label='split'; out.dir=0; }
+  }catch(e){}
+  return out;
+}
+// ONE line under the King header cluster. Shows the two centres; the verdict chip is
+// an INPUT to the Direction spine, never a rival verdict (layer spec S0).
+function driftLineHtml(sym){
+  sym=sym||'SPY';
+  var d;
+  try{ d=driftRead(sym); }catch(e){ return ''; }
+  if(!d) return '';
+  var up=(d.dir>0), dn=(d.dir<0);
+  var arrow = up?'↗':(dn?'↘':'→');
+  var acol  = up?PAL.longAccent:(dn?PAL.shortAccent:PAL.sub);
+  var chipCol = (d.verdict==='NONE')?PAL.sub:(up?PAL.longAccent:(dn?PAL.shortAccent:PAL.amber));
+  var chipBg  = (d.verdict==='NONE')?'transparent':(up?'rgba(46,194,126,.14)':(dn?'rgba(240,97,109,.14)':'rgba(242,180,90,.14)'));
+  var tip=('DRIFT — where each book’s exposure is CENTRED vs price. GVWAP = exposure-weighted mean strike of the gamma book'+
+    (d.gvwap!=null?(' ('+d.gvwap+', band '+d.gLo+'–'+d.gHi+')'):' (waiting)')+
+    '; VVWAP the same for the vanna book'+(d.vvwap!=null?(' ('+d.vvwap+', band '+d.vLo+'–'+d.vHi+')'):' (waiting on VEX)')+
+    '. px '+(d.px!=null?d.px:'–')+' · bands '+(d.overlap?'OVERLAP':'do NOT overlap')+
+    '. Weights are normalised inside each feed, so vanna’s larger magnitudes cannot tilt the read. '+
+    'AGREE = both centres on the same side of price AND overlapping bands; otherwise SPLIT. This is an INPUT to the Direction grade, not a verdict.').replace(/"/g,'');
+  return '<div title="'+tip+'" style="display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:10px;margin:3px 0;padding:2px 2px;border-top:1px solid '+PAL.line+';border-bottom:1px solid '+PAL.line+';overflow:hidden">'+
+    '<span style="color:'+acol+';font-weight:800">'+arrow+'</span>'+
+    '<span style="color:'+PAL.sub+';font-weight:700">Drift</span>'+
+    '<span style="padding:0 5px;border-radius:3px;font-size:9px;font-weight:700;color:'+chipCol+';background:'+chipBg+'">'+d.label+'</span>'+
+    '<span style="color:'+PAL.line+'">·</span>'+
+    '<span style="color:'+PAL.gold+';font-weight:700">G'+(d.gvwap!=null?d.gvwap:'–')+'</span>'+
+    '<span style="color:#a371f7;font-weight:700">V'+(d.vvwap!=null?d.vvwap:'–')+'</span>'+
+  '</div>';
+}
+
+// ============================================================================
+// (I) ACM CANONICAL — ONE accumulation source with two LABELLED horizons, so the
+// Node Map sentence and the zone rows can never contradict each other again
+// ("Acm" in one place and "Dec" in the other was the v10.48 bug).
+//   now = the last ~6 minutes (2 feed samples)
+//   day = versus the FIRST reading of this node today (real positioning vs hedging)
+// ============================================================================
+var ACMDAY_KEY='gpts_acmday_v1';
+var ACMDAY=null;
+function acmDayLoad(){
+  if(ACMDAY && ACMDAY.date===TODAY) return ACMDAY;
+  try{ ACMDAY=JSON.parse(localStorage.getItem(ACMDAY_KEY)||'null'); }catch(e){ ACMDAY=null; }
+  if(!ACMDAY || ACMDAY.date!==TODAY) ACMDAY={date:TODAY, v:{}};
+  return ACMDAY;
+}
+function acmDaySave(){ try{ localStorage.setItem(ACMDAY_KEY, JSON.stringify(ACMDAY)); }catch(e){} }
+var ACM_BAND=8;    // +-% inside which a node counts as Steady (matches the Node Map vocabulary)
+function acmLabel(p){ if(p==null) return 'Steady'; if(p>=ACM_BAND) return 'Acm'; if(p<=-ACM_BAND) return 'Dec'; return 'Steady'; }
+// THE single Acm source. Read by nodeMapSentence AND by the zone rows.
+function accumCanon(sym, k){
+  var out={ now:{pct:null,label:'Steady'}, day:{pct:null,label:'Steady'} };
+  try{
+    if(k==null) return out;
+    // ---- NOW: last two samples of the node's %King history (~6m at a 3m cadence)
+    var h=nodeHistory(sym, k);
+    if(h && h.length>=2){
+      var a=h[h.length-3]!=null?h[h.length-3]:h[0], b=h[h.length-1];
+      if(typeof a==='number' && typeof b==='number' && Math.abs(a)>0.0001){
+        out.now.pct=Math.round(100*(b-a)/Math.abs(a));
+        out.now.label=acmLabel(out.now.pct);
+      }
+    }
+    // ---- DAY: vs the first magnitude seen today (persisted, survives reload)
+    var mag=null;
+    try{
+      var fm=feedStructMap(sym);
+      if(fm && fm.pct){ var pv=fm.pct[k.toFixed(2)]; if(typeof pv==='number') mag=Math.abs(pv); }
+    }catch(eF){}
+    if(mag==null){ var lp=livePctAt(sym,k); if(typeof lp==='number') mag=Math.abs(lp); }
+    if(mag!=null && mag>0){
+      var db=acmDayLoad(); var key=sym+':'+k.toFixed(2);
+      if(db.v[key]==null){ db.v[key]=mag; acmDaySave(); out.day.pct=0; }
+      else {
+        var o=db.v[key];
+        if(o>0){ out.day.pct=Math.round(100*(mag-o)/o); }
+      }
+      out.day.label=acmLabel(out.day.pct);
+    }
+  }catch(e){}
+  return out;
+}
+// Compact arrow rendering used by the zone rows: "day▲ now▼"
+function acmChipHtml(a){
+  function one(word, o){
+    var arr = o.label==='Acm'?'▲':(o.label==='Dec'?'▼':'▬');
+    var col = o.label==='Acm'?PAL.longAccent:(o.label==='Dec'?PAL.shortAccent:PAL.sub);
+    return '<span style="color:'+col+'">'+word+arr+'</span>';
+  }
+  return 'Acm '+one('day',a.day)+' '+one('now',a.now);
+}
+
+// ============================================================================
+// (C) THE SPINE — Direction grade, Node grade, Decision cell.
+// Computed ONCE per closed bar and cached; every renderer reads the cache so the
+// header, the READ, the zone rows and the recorder can never disagree.
+// ============================================================================
+var SPINE_CACHE={ SPY:null, QQQ:null };
+function spineBarKey(sym){
+  var S=STATE[sym]||{};
+  return (S.lastClosedB||0)+':'+((S.candles||[]).length)+':'+(S.price!=null?S.price.toFixed(2):'-');
+}
+function spineOf(sym){
+  sym=sym||'SPY';
+  var key=spineBarKey(sym);
+  var c=SPINE_CACHE[sym];
+  if(c && c.key===key) return c.val;
+  var val={};
+  try{ val.dir=directionGrade(sym); }catch(e){ val.dir=null; }
+  try{ val.inPlay=inPlayZone(sym); }catch(e2){ val.inPlay=null; }
+  try{ val.node=val.inPlay?nodeGrade(sym, val.inPlay):null; }catch(e3){ val.node=null; }
+  try{ val.decision=decisionCell(sym); }catch(e4){ val.decision=null; }
+  SPINE_CACHE[sym]={key:key, val:val};
+  return val;
+}
+// Range position of price inside the live Flr..Ceil band (pickEdge output).
+// The Skylit midpoint rule: mid-range is where BOTH sides are wrong, so it HARD-CAPS
+// the Direction grade to C no matter how good the other inputs look.
+function rangePosOf(m, px){
+  try{
+    if(!m || !m.flr || !m.ceil || px==null) return { pos:null, zone:'unknown' };
+    var lo=m.flr.k, hi=m.ceil.k;
+    if(!(hi>lo)) return { pos:null, zone:'unknown' };
+    var pos=(px-lo)/(hi-lo);
+    var zone = pos<0.35?'lower':(pos>0.65?'upper':'mid');
+    return { pos:+pos.toFixed(3), zone:zone, lo:lo, hi:hi };
+  }catch(e){ return { pos:null, zone:'unknown' }; }
+}
+function gradeOfScore(s){ return s>=5?'A':(s>=3?'B':'C'); }
+function gradeDisp(g, score){
+  // "A-" in the mockup = the grade was reached exactly at its threshold.
+  if(g==='A' && score===5) return 'A−';
+  if(g==='B' && score===3) return 'B−';
+  return g;
+}
+function directionGrade(sym){
+  sym=sym||'SPY';
+  var out={ grade:'C', disp:'C', dir:'SIDE', score:0, tier:'⚖', capped:null, noOdds:false,
+            inputs:{ drift:null, structAsym:null, rangePos:null, regime:null, session:null } };
+  try{
+    var S=STATE[sym]||{}; var px=(typeof S.price==='number')?S.price:null;
+    var m=null;    try{ m=nodeMapModel(sym); }catch(e1){}
+    var drift={verdict:'NONE',dir:0,gvwap:null,vvwap:null}; try{ drift=driftRead(sym)||drift; }catch(e2){}
+    var net=null;  try{ net=(typeof netPositioning==='function')?netPositioning(sym):null; }catch(e3){}
+    var rg=null;   try{ rg=regimeTag(closedCandles(sym)||[]); }catch(e4){}
+    var rp=rangePosOf(m, px);
+    var sb=sessionBucket();
+    out.inputs.drift={ verdict:drift.verdict, dir:drift.dir, gvwap:drift.gvwap, vvwap:drift.vvwap };
+    out.inputs.structAsym={ bias:net?net.bias:null, dir:net?net.dir:0, ratio:net?+(net.ratio||0).toFixed(2):null, decisive:!!(net&&net.decisive) };
+    out.inputs.rangePos={ pos:rp.pos, zone:rp.zone, lo:rp.lo!=null?rp.lo:null, hi:rp.hi!=null?rp.hi:null };
+    out.inputs.regime = rg?{ tag:rg.tag, er:rg.er }:null;
+    out.inputs.session={ bucket:sb.bucket, opex:sb.opex };
+    // ---- 1. the DIRECTION itself: drift (weighted) + structural tilt ----
+    var driftD=drift.dir||0;
+    var structD=(net && net.bias!=='balanced') ? (net.dir||0) : 0;
+    var lean = driftD*2 + structD;
+    out.dir = lean>0?'UP':(lean<0?'DN':'SIDE');
+    var dirNum = lean>0?1:(lean<0?-1:0);
+    // ---- 2. the SCORE ----
+    var score=0;
+    if(drift.verdict==='NONE') score+=1;                                  // nothing to contradict
+    else if(drift.verdict==='SPLIT') score+=0;
+    else if(driftD!==0 && driftD===dirNum) score+=2;                      // conf agree
+    if(structD!==0 && dirNum!==0){ if(structD===dirNum) score+=2; else score-=1; }
+    if(rg && rg.tag==='trend') score+=1;
+    out.score=score;
+    var grade=gradeOfScore(score);
+    // ---- 3. the HARD CAPS ----
+    if(rp.zone==='mid'){ if(grade!=='C'){ out.capped='mid-range'; } grade='C'; out.noOdds=true; }
+    if(rg && rg.tag==='chop'){ out.capped=out.capped?(out.capped+' + chop'):'chop'; grade='C'; out.dir='SIDE'; out.noOdds=true; }
+    if(sb.capOdds) out.noOdds=true;                                       // power hour / open drive: no odds claim
+    if(out.dir==='SIDE' && grade==='A') grade='B';                        // an A needs a side
+    out.grade=grade;
+    out.disp=gradeDisp(grade, score);
+    out.tier=ruleTier('dir.'+grade);
+  }catch(e){}
+  return out;
+}
+// The node price is actually engaging: nearest meaningful level inside the contact
+// band, structural nodes preferred. This is the node the READ and the DECISION use.
+var INPLAY_BAND=1.20;
+function inPlayZone(sym){
+  try{
+    var m=nodeMapModel(sym); if(!m || !m.ok) return null;
+    var px=m.px; if(px==null) return null;
+    var best=null, bestScore=-1;
+    (m.levels||[]).forEach(function(L){
+      var d=Math.abs(L.k-px); if(d>INPLAY_BAND) return;
+      var sc = (INPLAY_BAND-d)*10 + (L.isKing?6:0) + (L.isGatekeeper?4:0) + ((L.isFlr||L.isCeil)?3:0) + ((L.pct||0)/50);
+      if(sc>bestScore){ bestScore=sc; best=L; }
+    });
+    if(!best){
+      // nothing in contact: the working edge in the direction of travel is the zone to watch
+      var d2=directionGradeDirCheap(m);
+      best = (d2>0 ? m.ceil : m.flr) || m.ceil || m.flr || null;
+    }
+    return best;
+  }catch(e){ return null; }
+}
+function directionGradeDirCheap(m){
+  try{ var e=m&&m.emphasis; return e==='above'?1:(e==='below'?-1:0); }catch(e){ return 0; }
+}
+// The node's own implied direction if it HOLDS: a floor below holds -> up, a ceiling
+// above holds -> down. Confluence (QQQ, VEX drift) is scored against THIS.
+function nodeHoldDir(L, px){
+  if(!L || px==null) return 0;
+  return (L.k < px) ? 1 : (L.k > px ? -1 : 0);
+}
+function qqqAgrees(dirNum){
+  try{
+    if(!dirNum) return false;
+    var cs=closedCandles('QQQ')||[];
+    if(cs.length<3) return false;
+    var mo=cs[cs.length-1].c - cs[cs.length-3].c;
+    if(!mo) return false;
+    return (mo>0?1:-1)===dirNum;
+  }catch(e){ return false; }
+}
+function nodeGrade(sym, L){
+  sym=sym||'SPY';
+  var out={ grade:'C', disp:'C', score:0, tier:'⚖', k:(L&&L.k!=null)?L.k:null,
+            inputs:{ pol:null, tap:null, rocNow:null, rocDay:null, conf:null } };
+  if(!L) return out;
+  try{
+    var S=STATE[sym]||{}; var px=(typeof S.price==='number')?S.price:null;
+    var score=0;
+    // polarity: +gamma deflects cleanly, -gamma accelerates (flagged, not banned)
+    var pol=(L.pos===true)?'+':(L.pos===false?'-':null);
+    if(pol==='+') score+=1;
+    out.inputs.pol=pol;
+    // tap freshness (Academy 80/66/33)
+    var tap=(typeof L.taps==='number')?L.taps:nodeTapCount(sym, L.k);
+    if(tap<=0) score+=2; else if(tap===1) score+=1; else score-=1;
+    out.inputs.tap=tap;
+    // ROC now (the live build state)
+    var acm=accumCanon(sym, L.k);
+    var rocNow = (L.state==='Building')?'Building':((L.state==='Fading')?'Fading':(acm.now.label==='Acm'?'Building':(acm.now.label==='Dec'?'Fading':'Steady')));
+    if(rocNow==='Building') score+=1; else if(rocNow==='Fading') score-=1;
+    out.inputs.rocNow=rocNow;
+    // ROC since open (real positioning vs intraday hedging)
+    var dayPct=(acm.day.pct!=null)?acm.day.pct:((typeof L.chg==='number')?L.chg:null);
+    if(dayPct!=null){ if(dayPct>=15) score+=1; else if(dayPct<=-15) score-=1; }
+    out.inputs.rocDay={ pct:dayPct, label:acmLabel(dayPct) };
+    // confluence: does the cross-market tape and the VEX drift agree with a hold here?
+    var hd=nodeHoldDir(L, px);
+    var q=qqqAgrees(hd);
+    var dr=driftRead(sym);
+    var v=(dr.dir!==0 && dr.dir===hd);
+    if(q) score+=1;
+    if(v) score+=1;
+    out.inputs.conf={ q:!!q, v:!!v, holdDir:hd };
+    out.score=score;
+    out.grade=gradeOfScore(score);
+    out.disp=gradeDisp(out.grade, score);
+    out.tier=ruleTier('node.grade.'+out.grade);
+  }catch(e){}
+  return out;
+}
+// (C) The 3x3. These labels are DESCRIPTIVE characterisations of the setup quality,
+// never instructions: no entry, no stop, no size, no buy/sell/long/short.
+var DECISION_MATRIX={
+  A:{ A:'take · follow-thru', B:'take · tight tgt', C:'wait fresher node' },
+  B:{ A:'bounce play',            B:'scalp',               C:'skip' },
+  C:{ A:'scalp only',             B:'skip',                C:'stand aside' }
+};
+function decisionCell(sym){
+  sym=sym||'SPY';
+  var out={ cell:'C×C', text:DECISION_MATRIX.C.C, dirGrade:'C', nodeGrade:'C', tier:'⚖', k:null };
+  try{
+    var d=directionGrade(sym);
+    var L=inPlayZone(sym);
+    var n=nodeGrade(sym, L);
+    out.dirGrade=d.grade; out.nodeGrade=n.grade; out.k=(L&&L.k!=null)?L.k:null;
+    out.cell=d.grade+'×'+n.grade;
+    out.text=(DECISION_MATRIX[d.grade]&&DECISION_MATRIX[d.grade][n.grade])||DECISION_MATRIX.C.C;
+    // a rule that measured badly may RE-WORD its own cell (learning layer S4)
+    var r=ruleGet('decision.'+out.cell);
+    if(r && r.promoted && typeof r.rate==='number' && r.rate<45 && !/skip|stand aside|wait/.test(out.text)) out.text='skip (measured '+r.rate+'%)';
+    out.tier=ruleTier('decision.'+out.cell);
+  }catch(e){}
+  return out;
+}
+
+// ============================================================================
+// (E) DESCRIPTIVE TRADE FRAME — the geometry around an in-play zone.
+// Vocabulary is LOCKED to zone / inval / tgt / path. These are map words (where the
+// level is, where the read stops being true, what is next, what is in between), NOT
+// order words. Nothing here sizes, times or directs anything.
+// ============================================================================
+var FRAME_HALF=0.25;      // the zone is the strike +- this (the tape reacts to a band, not a point)
+var FRAME_FALLBACK=0.5;   // when there is no node beyond, the invalidation is half a strike past
+function tradeFrame(sym, L, dir){
+  sym=sym||'SPY';
+  var out={ zone:null, inval:null, tgt:null, path:'wall', k:(L&&L.k!=null)?L.k:null, dir:dir||0 };
+  try{
+    if(!L || L.k==null) return out;
+    var k=L.k;
+    out.zone=[+(k-FRAME_HALF).toFixed(2), +(k+FRAME_HALF).toFixed(2)];
+    var m=nodeMapModel(sym);
+    var lv=(m&&m.levels)?m.levels.slice():[];
+    var d=(dir>0)?1:((dir<0)?-1:0);
+    if(!d){ d=(m && m.emphasis==='below')?-1:1; }
+    // INVAL = the next node BEYOND L against the direction. Past it, the read is wrong.
+    var against = lv.filter(function(x){ return d>0 ? (x.k < k-0.01) : (x.k > k+0.01); })
+                    .sort(function(a,b){ return d>0 ? (b.k-a.k) : (a.k-b.k); })[0]||null;
+    out.inval = against ? against.k : +(k - d*FRAME_FALLBACK).toFixed(2);
+    // TGT = the next node IN the direction, capped at the King (the day's settlement magnet)
+    var ahead = lv.filter(function(x){ return d>0 ? (x.k > k+0.01) : (x.k < k-0.01); })
+                  .sort(function(a,b){ return d>0 ? (a.k-b.k) : (b.k-a.k); })[0]||null;
+    var tgt = ahead ? ahead.k : null;
+    var kingK=(m&&m.kingK!=null)?m.kingK:null;
+    if(tgt!=null && kingK!=null){
+      if(d>0 && kingK>k && tgt>kingK) tgt=kingK;
+      if(d<0 && kingK<k && tgt<kingK) tgt=kingK;
+    }
+    if(tgt==null && kingK!=null && ((d>0&&kingK>k)||(d<0&&kingK<k))) tgt=kingK;
+    out.tgt=tgt;
+    // PATH = what sits between the zone and the target.
+    var lo=Math.min(k, tgt!=null?tgt:k), hi=Math.max(k, tgt!=null?tgt:k);
+    var path='wall';
+    try{
+      var ap=(m&&m.airpocket)||null;
+      if(ap && ap.pockets){
+        ap.pockets.forEach(function(p){ if(p.lo < hi+0.01 && p.hi > lo-0.01) path='air'; });
+      }
+    }catch(eA){}
+    if(path!=='air'){
+      try{
+        var cl=(m&&m.cluster)||null;
+        if(cl && cl.ok && cl.regions){
+          cl.regions.forEach(function(r){ if(r.lo < hi+0.01 && r.hi > lo-0.01) path='cluster'; });
+        }
+      }catch(eC){}
+    }
+    out.path=path;
+  }catch(e){}
+  return out;
+}
+// Escape the frame text for HTML: it legitimately contains '<' and '>' (inval <772),
+// which must never be handed to innerHTML raw.
+function _escHtml(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function frameTextOf(fr){
+  if(!fr || fr.k==null) return '';
+  var parts=['zone '+fmtNum(fr.k)+'±'+String(FRAME_HALF).replace(/^0/,'')];
+  if(fr.inval!=null) parts.push('inval '+((fr.dir>=0)?'<':'>')+fmtNum(fr.inval));
+  if(fr.tgt!=null)   parts.push('tgt '+fmtNum(fr.tgt)+' ('+fr.path+')');
+  return parts.join(' · ');
+}
+
+// ============================================================================
+// (F) REACTION QUALITY + DEFLECTION ANTICIPATION.
+// Both are LIVE observations of the tape at a node, never forecasts: reactionQuality
+// only speaks once price is actually in the zone, and the '▶ setup' flag only says
+// "a graded node is being approached", which is a statement about geometry.
+// ============================================================================
+var REACT_ZONE=0.35;    // price must be this close to the node for a reaction to be judged
+var REACT_WICK=0.40;    // the rejection wick must be >= this fraction of the bar's range
+function reactionQuality(sym, L){
+  var out={ q:'—', why:'not engaged' };
+  try{
+    if(!L || L.k==null) return out;
+    var S=STATE[sym]||{}; var px=S.price; var cs=S.candles||[];
+    if(px==null || !cs.length) return out;
+    var k=L.k;
+    var b=cs[cs.length-1];
+    if(!b || b.h==null || b.l==null || b.c==null) return out;
+    var tapped=(b.l<=k+REACT_ZONE && b.h>=k-REACT_ZONE);
+    if(!tapped && Math.abs(px-k)>REACT_ZONE) return out;
+    var rng=(b.h-b.l);
+    if(!(rng>0)) return { q:'weak', why:'no range in the bar at the node' };
+    // rejection wick on the node's side: price probed the level and gave it back
+    var wick = (k<=px) ? (Math.min(b.o!=null?b.o:b.c, b.c) - b.l) : (b.h - Math.max(b.o!=null?b.o:b.c, b.c));
+    var frac = wick/rng;
+    var fading = (L.state==='Fading');
+    try{ var a=accumCanon(sym,k); if(a && a.now.label==='Dec') fading=true; }catch(eA){}
+    if(frac>=REACT_WICK && !fading) return { q:'confirmed', why:'wick rejection '+Math.round(100*frac)+'% of the bar, node not fading' };
+    if(frac>=REACT_WICK && fading)  return { q:'weak', why:'wick rejection but the node is bleeding' };
+    return { q:'weak', why:'no rejection wick ('+Math.round(100*frac)+'% of the bar)' };
+  }catch(e){}
+  return out;
+}
+var ANTICIP_DIST=0.6;
+// '▶ setup': price is within ANTICIP_DIST of a graded (>=B) node and approaching it.
+function deflAnticipation(sym, L){
+  var out={ fired:false, grade:null, dist:null };
+  try{
+    if(!L || L.k==null) return out;
+    var S=STATE[sym]||{}; var px=S.price; if(px==null) return out;
+    var d=Math.abs(px-L.k); out.dist=+d.toFixed(2);
+    if(d>ANTICIP_DIST) return out;
+    var g=nodeGrade(sym, L); out.grade=g.grade;
+    if(g.grade==='C') return out;
+    var ep=L.ep||{};
+    var approaching = (ep.state==='Pull') || (ep.tw!=null && ep.tw>=EP_PULL_TW) || (ep.state==='BOw');
+    if(!approaching){
+      var cs=S.candles||[];
+      if(cs.length>=2 && cs[cs.length-1].c!=null && cs[cs.length-2].c!=null){
+        approaching = Math.abs(cs[cs.length-1].c-L.k) < Math.abs(cs[cs.length-2].c-L.k);
+      }
+    }
+    out.fired=!!approaching;
+  }catch(e){}
+  return out;
+}
+
+// ============================================================================
+// (H) ACTION CAPTURE — one tap records what the OPERATOR did with the read, so the
+// Analysis tab can measure SELECTION quality (were the takes better than the passes?).
+// No price, no size, no P&L: this is a label on the read, nothing more.
+// ============================================================================
+function actRecord(sym, action){
+  try{
+    if(RECORDER_SYMS.indexOf(sym)<0 || !TODAY) return null;
+    var sp=spineOf(sym);
+    var rec={ t:Date.now(), sym:sym,
+              k:(sp.inPlay&&sp.inPlay.k!=null)?sp.inPlay.k:null,
+              cell:(sp.decision&&sp.decision.cell)||null,
+              dirGrade:(sp.dir&&sp.dir.grade)||null,
+              nodeGrade:(sp.node&&sp.node.grade)||null,
+              session:sessionBucket().bucket,
+              action:(action==='take')?'take':'pass' };
+    var db=recorderLoad(); var day=recorderDay(db);
+    if(!day.act) day.act={};
+    if(!day.act[sym]) day.act[sym]=[];
+    day.act[sym].push(rec);
+    if(day.act[sym].length>400) day.act[sym]=day.act[sym].slice(-400);
+    recorderSave(db);
+    ACT_LAST={sym:sym, t:rec.t, action:rec.action};
+    try{ render(); }catch(eR){}
+    return rec;
+  }catch(e){ return null; }
+}
+var ACT_LAST=null;
+function actToday(sym){
+  try{ var db=recorderLoad(); var day=recorderDay(db); return ((day.act||{})[sym])||[]; }catch(e){ return []; }
+}
+// Latest action recorded on the CURRENT in-play strike (drives the button highlight).
+function actCurrent(sym, k){
+  try{
+    if(k==null) return null;
+    var arr=actToday(sym), last=null;
+    arr.forEach(function(a){ if(a.k!=null && Math.abs(a.k-k)<0.001) last=a; });
+    return last;
+  }catch(e){ return null; }
+}
+function actButtonsHtml(sym, k){
+  var cur=actCurrent(sym, k);
+  function btn(act, label, col){
+    var on = !!(cur && cur.action===act);
+    var tip=(act==='take'
+      ? 'Log that you ACTED on this read (one tap). Recorded as {time, strike, decision cell, both grades} so the Analysis tab can measure selection quality — were the reads you took better than the ones you passed? No price, no size, no P&L is stored.'
+      : 'Log that you PASSED on this read. Passes are as valuable as takes: they are the control group for selection quality.');
+    return '<span class="gpts-act" data-gact="'+act+'" data-gsym="'+sym+'" title="'+tip.replace(/"/g,'')+'" '+
+      'style="cursor:pointer;user-select:none;font-size:8px;font-weight:800;line-height:1.4;padding:0 4px;border-radius:8px;'+
+      'border:1px solid '+col+';color:'+(on?PAL.bg:col)+';background:'+(on?col:'transparent')+'">'+label+'</span>';
+  }
+  return '<span style="display:inline-flex;gap:3px;margin-left:4px">'+
+    btn('take','✓ take',PAL.longAccent)+btn('pass','– pass',PAL.sub)+'</span>';
+}
+
+// ============================================================================
+// (F) DEFLECTION-QUALITY ZONES — replaces the Node Map ladder BODY.
+// The old ladder listed every magnet with equal weight. This lists the ONE node
+// price is engaging in full (identity, polarity, tap, grade, Acm both horizons,
+// confluence, frame) and then the next three that matter, one line each.
+// %King is read from the FEED (feedStructMap), never from the DOM heatmap, so the
+// numbers survive a GEX/VEX/GEX+VEX display toggle.
+// ============================================================================
+var DEFLZONES_N=3;
+function zoneRole(L){
+  if(!L) return '';
+  if(L.isKing) return 'King';
+  if(L.isGatekeeper) return 'Gate';
+  if(L.isCeil) return 'Ceil';
+  if(L.isFlr) return 'Flr';
+  if(L.isStrongMag) return 'Mag';
+  return L.role||'Node';
+}
+function zoneMeaningful(L){
+  return !!(L && (L.isKing||L.isGatekeeper||L.isCeil||L.isFlr||L.isStrongMag));
+}
+// %King straight off the pure-gamma feed. Falls back to the model's own pct.
+function feedPctAt(sym, k){
+  try{
+    var fm=feedStructMap(sym);
+    if(fm && fm.pct){ var v=fm.pct[k.toFixed(2)]; if(typeof v==='number') return Math.abs(v); }
+  }catch(e){}
+  return null;
+}
+function tapWord(n){ return n<=0?'1st':(n===1?'2nd':(n===2?'3rd':(n+1)+'th')); }
+function tapCol(n){ return n<=0?PAL.longAccent:(n===1?PAL.amber:PAL.shortAccent); }
+function gradeChipHtml(g, disp, tier, tip){
+  var col = g==='A'?PAL.longAccent:(g==='B'?PAL.blue:PAL.amber);
+  var bg  = g==='A'?'rgba(46,194,126,.15)':(g==='B'?'rgba(74,144,217,.15)':'rgba(242,180,90,.15)');
+  return '<span title="'+(tip||'').replace(/"/g,'')+'" style="margin-left:auto;font-weight:800;font-size:10px;padding:0 5px;border-radius:3px;color:'+col+';background:'+bg+'">'+(disp||g)+(tier?('<span style="color:'+PAL.sub+';font-weight:600;font-size:8px;margin-left:2px">'+tier+'</span>'):'')+'</span>';
+}
+function deflZonesBlock(sym){
+  sym=sym||'SPY';
+  var m; try{ m=nodeMapModel(sym); }catch(e){ return ''; }
+  if(!m || !m.ok) return '';
+  var px=m.px; if(px==null) return '';
+  var sp=spineOf(sym);
+  var inPlay=sp.inPlay||null;
+  var dirNum=(sp.dir&&sp.dir.dir==='UP')?1:((sp.dir&&sp.dir.dir==='DN')?-1:0);
+  var html='', rows=0;
+  // ---- section header (mockup: "⚡ Deflection zones · px 773.6") ----
+  var hdrTip=('DEFLECTION ZONES — the levels price can actually react at, best first. The engaged zone is shown in full '+
+    '(identity · polarity · tap number · node grade, then Acm on both horizons, confluence and the descriptive frame); the next '+
+    DEFLZONES_N+' meaningful nodes get one line each. %King comes from the gamma FEED, so it is correct no matter which book the Skylit heatmap is displaying.').replace(/"/g,'');
+  html+='<div title="'+hdrTip+'" style="display:flex;align-items:center;gap:6px;font-size:10px;color:'+PAL.sub+';font-weight:700;letter-spacing:.3px;margin:4px 2px 3px;white-space:nowrap">'+
+    '⚡ Deflection zones <span style="color:'+PAL.sub+';font-weight:600">· px '+fmtNum(px)+'</span></div>';
+  // ---- column-header row (kept for column alignment across the rows) ----
+  html+='<div style="display:grid;grid-template-columns:1fr 34px;column-gap:4px;font-size:7px;letter-spacing:.3px;text-transform:uppercase;color:'+PAL.sub+';font-weight:800;padding:0 4px 2px;white-space:nowrap">'+
+    '<span title="Strike · role · %King · polarity · tap number">Zone</span>'+
+    '<span style="text-align:right" title="Node grade = polarity · tap · ROC · confluence. ⚖ hand-set until n≥20, then 📊.">Grade</span></div>';
+  // ---- 1. the IN-PLAY zone, in full ----
+  if(inPlay){
+    rows++;
+    var L=inPlay;
+    var ng=sp.node||nodeGrade(sym,L);
+    var pct=feedPctAt(sym,L.k);
+    var pol=(L.pos===true)?'+γ clean':((L.pos===false)?'−γ sharp':'γ ?');
+    var polCol=(L.pos===false)?'#a371f7':PAL.longAccent;
+    var tap=(typeof L.taps==='number')?L.taps:0;
+    var rq=reactionQuality(sym,L);
+    var ant=deflAnticipation(sym,L);
+    var acm=accumCanon(sym,L.k);
+    var fr=tradeFrame(sym,L,dirNum||nodeHoldDir(L,px));
+    var chips='';
+    if(rq.q==='confirmed') chips+='<span title="Reaction quality at the tap: '+rq.why.replace(/"/g,'')+'. Live observation of the last bar, not a forecast." style="font-size:8px;font-weight:800;color:'+PAL.longAccent+';border:1px solid '+PAL.longAccent+';border-radius:9px;padding:0 4px">⚡conf</span>';
+    else if(rq.q==='weak') chips+='<span title="Reaction quality at the tap: '+rq.why.replace(/"/g,'')+'." style="font-size:8px;font-weight:800;color:'+PAL.amber+';border:1px solid '+PAL.amber+';border-radius:9px;padding:0 4px">⚡weak</span>';
+    if(ant.fired) chips+=' <span title="Price is within '+ANTICIP_DIST+' of a grade-'+ant.grade+' node and approaching it. A statement about geometry — it says a reaction is POSSIBLE here, never that one will happen." style="font-size:8px;font-weight:800;color:'+PAL.blue+';border:1px solid '+PAL.blue+';border-radius:9px;padding:0 4px">▶ setup</span>';
+    var gTip='Node '+fmtNum(L.k)+' grade '+ng.grade+' (score '+ng.score+'): polarity '+(ng.inputs.pol||'?')+
+      ' · tap '+tapWord(ng.inputs.tap||0)+' · ROC now '+(ng.inputs.rocNow||'?')+
+      ' · since open '+((ng.inputs.rocDay&&ng.inputs.rocDay.pct!=null)?(ng.inputs.rocDay.pct+'%'):'–')+
+      ' · confluence Q '+((ng.inputs.conf&&ng.inputs.conf.q)?'agrees':'no')+' / V '+((ng.inputs.conf&&ng.inputs.conf.v)?'agrees':'no')+
+      '. A ≥5, B ≥3, else C. '+ng.tier+(ng.tier==='⚖'?' hand-set until n≥20 measured.':' measured.');
+    html+='<div style="background:rgba(46,194,126,.05);border-left:2px solid '+PAL.longAccent+';border-radius:2px;padding:3px 4px 3px 6px;margin-bottom:2px">'+
+      '<div style="display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap;overflow:hidden">'+
+        '<span style="color:'+polCol+'">●</span>'+
+        '<span style="font-weight:800;color:'+(L.isKing?PAL.gold:PAL.ink)+'">'+fmtNum(L.k)+'</span>'+
+        '<span style="color:'+(L.isKing?PAL.gold:PAL.sub)+';font-weight:700">'+zoneRole(L)+'</span>'+
+        '<span style="font-size:9.5px;color:'+PAL.sub+'">'+(pct!=null?(pct+'% · '):'')+'<span style="color:'+polCol+'">'+pol+'</span> · <span style="color:'+tapCol(tap)+'">'+tapWord(tap)+'</span></span>'+
+        (chips?('<span style="display:inline-flex;gap:3px">'+chips+'</span>'):'')+
+        gradeChipHtml(ng.grade, ng.disp, ng.tier, gTip)+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:6px;font-size:9.5px;color:'+PAL.sub+';margin-top:2px;white-space:nowrap;overflow:hidden">'+
+        '<span title="ONE accumulation source, two horizons: day = versus this node’s first reading today (real positioning); now = the last ~6 minutes (live build). day '+(acm.day.pct!=null?acm.day.pct+'%':'–')+' · now '+(acm.now.pct!=null?acm.now.pct+'%':'–')+'">'+acmChipHtml(acm)+'</span>'+
+        '<span style="color:'+PAL.line+'">·</span>'+
+        '<span title="Confluence: Q = the QQQ tape agrees with this node holding; V = the VEX drift agrees." style="color:'+PAL.blue+'">Q'+((ng.inputs.conf&&ng.inputs.conf.q)?'✓':'–')+' V'+((ng.inputs.conf&&ng.inputs.conf.v)?'✓':'–')+'</span>'+
+        '<span style="color:'+PAL.line+'">·</span>'+
+        '<span title="Descriptive frame. zone = the band the tape reacts in; inval = where this read stops being true; tgt = the next node in the direction, capped at the King; path = what lies between (air pocket / wall / cluster). Map words, not order words." style="color:'+PAL.sub+'">'+_escHtml(frameTextOf(fr))+'</span>'+
+        actButtonsHtml(sym, L.k)+
+      '</div>'+
+    '</div>';
+  }
+  // ---- 2. the next N meaningful nodes, one line each ----
+  var others=(m.levels||[]).filter(function(L){
+    if(inPlay && Math.abs(L.k-inPlay.k)<0.001) return false;
+    return zoneMeaningful(L);
+  });
+  others.sort(function(a,b){
+    var wa=(a.isKing?4:0)+(a.isGatekeeper?2:0)+((a.isFlr||a.isCeil)?3:0)+((a.pct||0)/100);
+    var wb=(b.isKing?4:0)+(b.isGatekeeper?2:0)+((b.isFlr||b.isCeil)?3:0)+((b.pct||0)/100);
+    if(wb!==wa) return wb-wa;
+    return a.dist-b.dist;
+  });
+  others.slice(0,DEFLZONES_N).forEach(function(L){
+    rows++;
+    var ng=nodeGrade(sym,L);
+    var pct=feedPctAt(sym,L.k);
+    var polCol=(L.pos===false)?'#a371f7':PAL.longAccent;
+    var polTxt=(L.pos===true)?'+γ':((L.pos===false)?'−γ':'γ?');
+    var tap=(typeof L.taps==='number')?L.taps:0;
+    var acm=accumCanon(sym,L.k);
+    var mv = (acm.now.label!=='Steady') ? {w:'now', l:acm.now.label} : {w:'day', l:acm.day.label};
+    var mvArr = mv.l==='Acm'?'▲':(mv.l==='Dec'?'▼':'▬');
+    var mvCol = mv.l==='Acm'?PAL.longAccent:(mv.l==='Dec'?PAL.shortAccent:PAL.sub);
+    var gTip='Node '+fmtNum(L.k)+' grade '+ng.grade+' (score '+ng.score+'): polarity '+(ng.inputs.pol||'?')+' · '+tapWord(tap)+' tap · ROC '+(ng.inputs.rocNow||'?')+' · since open '+((ng.inputs.rocDay&&ng.inputs.rocDay.pct!=null)?(ng.inputs.rocDay.pct+'%'):'–')+'. '+ng.tier;
+    html+='<div style="padding:3px 4px;border-bottom:1px solid #12161c">'+
+      '<div style="display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap;overflow:hidden">'+
+        '<span style="color:'+polCol+'">◦</span>'+
+        '<span style="font-weight:800;color:'+(L.isKing?PAL.gold:PAL.ink)+'">'+fmtNum(L.k)+'</span>'+
+        '<span style="color:'+(L.isKing?PAL.gold:PAL.sub)+';font-weight:700">'+zoneRole(L)+'</span>'+
+        '<span style="font-size:9.5px;color:'+PAL.sub+'">'+(pct!=null?(pct+'% · '):'')+'<span style="color:'+polCol+'">'+polTxt+'</span> · <span style="color:'+tapCol(tap)+'">'+tapWord(tap)+'</span> · <span style="color:'+mvCol+'">'+mv.w+mvArr+'</span></span>'+
+        gradeChipHtml(ng.grade, ng.disp, ng.tier, gTip)+
+      '</div></div>';
+  });
+  // Nothing meaningful to show: hand back to the full ladder rather than render a bare header.
+  if(!rows) return '';
+  // ---- 3. legend (mockup, 8px) ----
+  html+='<div style="margin-top:5px;padding-top:4px;border-top:1px solid #161b22;font-size:8px;color:'+PAL.sub+';line-height:1.5">'+
+    '<b>Dir grade</b> = drift · structure · range · regime &nbsp;|&nbsp; <b>Node grade</b> = polarity · tap · ROC · confluence<br>'+
+    '<span style="color:'+PAL.longAccent+'">+γ</span> clean · <span style="color:#a371f7">−γ</span> sharp · tap <span style="color:'+PAL.longAccent+'">1st</span>≈80% <span style="color:'+PAL.amber+'">2nd</span>≈66% <span style="color:'+PAL.shortAccent+'">3rd</span>≈33% · day=since open · ⚖ hand-set → 📊 measured at n≥20'+
+  '</div>';
+  return html;
+}
+
+// ============================================================================
+// (G) READ — head (two grades) + why + decision line. The READ is the ONLY narrator.
+// ============================================================================
+function readHeadHtml(sym){
+  sym=sym||'SPY';
+  var sp=spineOf(sym);
+  var d=sp.dir; if(!d) return '';
+  var n=sp.node;
+  var arrow = d.dir==='UP'?'↑':(d.dir==='DN'?'↓':'→');
+  var dcol  = d.dir==='UP'?PAL.longAccent:(d.dir==='DN'?PAL.shortAccent:PAL.sub);
+  function gr(g, disp){
+    var col = g==='A'?PAL.longAccent:(g==='B'?PAL.blue:PAL.amber);
+    var bg  = g==='A'?'rgba(46,194,126,.15)':(g==='B'?'rgba(74,144,217,.15)':'rgba(242,180,90,.15)');
+    return '<span style="padding:0 5px;border-radius:3px;font-size:10px;font-weight:800;color:'+col+';background:'+bg+'">'+(disp||g)+'</span>';
+  }
+  var dTip=('DIRECTION '+d.grade+' — one verdict per bar, fused from four inputs: drift '+(d.inputs.drift?d.inputs.drift.verdict:'?')+
+    ' · structure '+((d.inputs.structAsym&&d.inputs.structAsym.bias)||'?')+
+    ' · range position '+((d.inputs.rangePos&&d.inputs.rangePos.zone)||'?')+
+    ' · regime '+((d.inputs.regime&&d.inputs.regime.tag)||'?')+'. Score '+d.score+' (A ≥5, B ≥3, else C)'+
+    (d.capped?('; HARD-CAPPED to C by '+d.capped):'')+
+    '. Nothing else on the panel opines on direction — the header pills and the drift line are INPUTS.').replace(/"/g,'');
+  var nTip = n ? ('NODE '+(n.k!=null?fmtNum(n.k):'')+' grade '+n.grade+' — polarity '+(n.inputs.pol||'?')+
+    ' · '+tapWord(n.inputs.tap||0)+' tap · ROC '+(n.inputs.rocNow||'?')+
+    ' · since open '+((n.inputs.rocDay&&n.inputs.rocDay.pct!=null)?(n.inputs.rocDay.pct+'%'):'–')+
+    ' · confluence Q'+((n.inputs.conf&&n.inputs.conf.q)?'✓':'–')+' V'+((n.inputs.conf&&n.inputs.conf.v)?'✓':'–')+
+    '. Score '+n.score+' (A ≥5, B ≥3, else C).').replace(/"/g,'') : 'No node is in contact right now.';
+  var sb=sessionBucket();
+  var sTip=('Session bucket: '+sb.bucket+(sb.opex?' · OPEX (3rd Friday)':'')+
+    '. The same structure does not mean the same thing at 08:35 and 14:45 — the bucket is recorded on every feature record and '+
+    (sb.capOdds?'currently SUPPRESSES the odds sentence.':'does not suppress the odds sentence right now.')).replace(/"/g,'');
+  var sBadge='<span title="'+sTip+'" style="font-size:8px;font-weight:700;color:'+PAL.sub+';border:1px solid '+PAL.line+';border-radius:8px;padding:0 4px">'+(SESSION_ABBR[sb.bucket]||sb.bucket)+(sb.opex?' opex':'')+'</span>';
+  var heat=modelHeat(sym);
+  var hBadge='';
+  if(heat.state==='cold'||heat.state==='warm'){
+    var hc=(heat.state==='cold')?PAL.shortAccent:PAL.longAccent;
+    hBadge='<span title="Model confidence meta: the last '+heat.n+' resolved direction/node grades were '+heat.rate+'% right. Below 40% = cold, above 60% = warm. This is the tool grading ITSELF on the current tape — descriptive, never a forecast." style="font-size:8px;font-weight:700;color:'+hc+';opacity:.85;border:1px solid '+hc+';border-radius:8px;padding:0 4px">model '+heat.state+'</span>';
+  }
+  return '<div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:800;margin:5px 2px 2px;white-space:nowrap;overflow:hidden">'+
+    '<span title="'+dTip+'" style="color:'+dcol+'">'+arrow+' '+d.dir+'</span>'+
+    '<span title="'+dTip+'">'+gr(d.grade, d.disp)+'</span>'+
+    '<span style="color:'+PAL.line+'">·</span>'+
+    (n && n.k!=null ? ('<span title="'+nTip+'">Node '+fmtNum(n.k)+'</span><span title="'+nTip+'">'+gr(n.grade,n.disp)+'</span>')
+                    : '<span title="'+nTip+'" style="color:'+PAL.sub+';font-weight:600">no node in contact</span>')+
+    '<span title="⚖ = hand-set (the grade is a hypothesis). 📊 = measured on n≥20 recorded outcomes. The panel never asserts an unearned probability." style="color:'+PAL.sub+';font-size:9px;font-weight:600">'+((n&&n.tier)||d.tier)+'</span>'+
+    sBadge+hBadge+
+  '</div>';
+}
+// The mockup's `.read` line: WHY each grade is what it is, in one sentence each.
+function readWhyHtml(sym){
+  sym=sym||'SPY';
+  var sp=spineOf(sym);
+  var d=sp.dir; if(!d) return '';
+  var n=sp.node, L=sp.inPlay;
+  var B=function(t){ return '<b style="color:'+PAL.ink+'">'+t+'</b>'; };
+  var why=[];
+  var dr=d.inputs.drift||{};
+  if(dr.verdict==='AGREE-UP') why.push('drift agrees up');
+  else if(dr.verdict==='AGREE-DN') why.push('drift agrees down');
+  else if(dr.verdict==='SPLIT') why.push('GEX and VEX split');
+  else why.push('no VEX drift yet');
+  var sa=d.inputs.structAsym||{};
+  if(sa.bias==='support-heavy') why.push('structure heavier below');
+  else if(sa.bias==='resistance-heavy') why.push('structure heavier above');
+  else why.push('structure balanced');
+  var rgt=(d.inputs.regime&&d.inputs.regime.tag)||null;
+  if(rgt==='trend') why.push('regime trending');
+  var rp=d.inputs.rangePos||{};
+  var capTxt='';
+  if(rp.zone==='mid' && rp.lo!=null) capTxt=' — but '+B('mid-range')+' '+fmtNum(rp.lo)+'–'+fmtNum(rp.hi)+' caps it';
+  else if(rgt==='chop') capTxt=' — but '+B('chop')+' caps it';
+  var s1='Direction '+B(d.disp)+': '+why.join(', ')+capTxt+'.';
+  var s2='';
+  if(n && L){
+    var nw=[];
+    nw.push((n.inputs.pol==='+'?'clean +γ':(n.inputs.pol==='-'?'sharp −γ':'unknown polarity'))+' '+zoneRole(L));
+    nw.push(tapWord(n.inputs.tap||0)+' tap');
+    var rd=n.inputs.rocDay||{};
+    if(rd.label==='Acm') nw.push('building since open');
+    else if(rd.label==='Dec') nw.push('bleeding since open');
+    else nw.push(n.inputs.rocNow==='Building'?'building now':(n.inputs.rocNow==='Fading'?'fading now':'steady'));
+    if(n.inputs.conf && n.inputs.conf.q) nw.push('QQQ agrees');
+    if(n.inputs.conf && n.inputs.conf.v) nw.push('VEX agrees');
+    s2=' Node '+B(n.disp)+': '+nw.join(', ')+'.';
+  }
+  var tip=('The WHY behind both grades, one clause per input. Direction inputs: drift · structure · range position · regime. '+
+    'Node inputs: polarity · tap freshness · ROC (now + since open) · confluence. Descriptive: it explains the grade, it does not forecast.').replace(/"/g,'');
+  return '<div title="'+tip+'" style="font-size:10px;line-height:1.4;color:'+PAL.sub+';margin:0 2px 3px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">'+s1+s2+'</div>';
+}
+// The DECISION line = the matrix cell + the frame. This is the ONLY place an action
+// word appears anywhere in the tool, and even here it characterises the SETUP.
+function decisionLineHtml(sym){
+  sym=sym||'SPY';
+  var sp=spineOf(sym);
+  var dc=sp.decision; if(!dc) return '';
+  var L=sp.inPlay;
+  var dirNum=(sp.dir&&sp.dir.dir==='UP')?1:((sp.dir&&sp.dir.dir==='DN')?-1:0);
+  var frTxt='';
+  if(L){ var fr=tradeFrame(sym,L,dirNum||nodeHoldDir(L, (STATE[sym]||{}).price));
+         var bits=[]; if(fr.tgt!=null) bits.push('tgt '+fmtNum(fr.tgt)); if(fr.inval!=null) bits.push('inval '+((fr.dir>=0)?'&lt;':'&gt;')+fmtNum(fr.inval));
+         frTxt=bits.join(' · '); }
+  var odds='';
+  try{
+    if(!(sp.dir&&sp.dir.noOdds)){
+      var rid='decision.'+dc.cell;
+      if(rulePromoted(rid)){ var r=ruleGet(rid); if(r && typeof r.rate==='number') odds=' <span style="color:'+PAL.sub+'">'+r.rate+'% n'+r.n+' 📊</span>'; }
+    }
+  }catch(eO){}
+  var tip=('DECISION = the Direction grade × the in-play Node grade, read off the 3×3 matrix. Cell '+dc.cell+' → “'+dc.text+'”. '+
+    'These labels characterise the SETUP QUALITY; they are not instructions and carry no entry, stop or size. Each cell keeps its own '+
+    'scorecard in the Analysis tab and can be RE-WORDED by its measured rate. '+dc.tier+(dc.tier==='⚖'?' = hand-set until n≥20.':' = measured.')).replace(/"/g,'');
+  return '<div title="'+tip+'" style="font-size:10px;line-height:1.35;color:'+PAL.ink+';background:rgba(74,144,217,.07);border-left:2px solid '+PAL.blue+';padding:2px 6px;border-radius:2px;margin:2px 2px 5px">'+
+    '<b style="color:#79c0ff">Decision</b> <span style="color:'+PAL.sub+'">'+dc.cell+'</span> · <b>'+dc.text+'</b>'+
+    (frTxt?(' <span style="color:'+PAL.sub+'">· '+frTxt+'</span>'):'')+odds+
+  '</div>';
+}
+// (G) Odds gate: an odds sentence may only appear when the regime, the session and
+// the rule tier all permit it. Anything else would be an unearned probability.
+function readOddsAllowed(sym){
+  try{
+    var d=directionGrade(sym||'SPY');
+    if(d && d.noOdds) return false;
+    return true;
+  }catch(e){ return true; }
+}
+
+// ============================================================================
+// (J) PRE-OPEN BRIEF — one collapsible descriptive line: what the map looks like
+// before the bell, plus how yesterday's grades actually did. Shown before 08:30 CT,
+// or on demand via __gptsDebug.brief().
+// ============================================================================
+var BRIEF_FORCE=false, BRIEF_OPEN=false;
+function briefYesterday(sym){
+  var out={ date:null, dirA:null, n:0, hit:0 };
+  try{
+    var db=recorderLoad(); var days=(db&&db.days)||{};
+    var keys=Object.keys(days).sort().filter(function(d){ return d!==TODAY; });
+    if(!keys.length) return out;
+    var dk=keys[keys.length-1]; out.date=dk;
+    var arr=((days[dk]||{}).feat||{})[sym]||[];
+    arr.forEach(function(r){
+      if(r.key!=='dir' || !r.resolved || r.hit==null) return;
+      if(!r.rec || r.rec.grade!=='A') return;
+      out.n++; if(r.hit) out.hit++;
+    });
+    if(out.n) out.dirA=out.hit+'/'+out.n;
+  }catch(e){}
+  return out;
+}
+function briefLine(sym){
+  sym=sym||'SPY';
+  var parts=[];
+  // each clause is guarded on its own: one unavailable input must not truncate the brief
+  try{ var m=nodeMapModel(sym);
+       if(m && m.kingK!=null) parts.push('King '+fmtNum(m.kingK));
+       if(m && m.range) parts.push('range '+fmtNum(m.range.lo)+'–'+fmtNum(m.range.hi)); }catch(e1){}
+  try{ var rg=regimeTag(closedCandles(sym)||[]);
+       parts.push('regime '+(rg?rg.tag:'—')+(rg&&rg.tag==='chop'?'?':'')); }catch(e2){}
+  try{ parts.push('OPEX '+(isOpexDay()?'yes':'no')); }catch(e3){}
+  try{ var y=briefYesterday(sym);
+       if(y.dirA) parts.push('yday: dir A '+y.dirA+' hit');
+       else if(y.date) parts.push('yday: no resolved A grades'); }catch(e4){}
+  return 'Brief · '+parts.join(' · ');
+}
+function briefBlockHtml(sym){
+  try{
+    var sb=sessionBucket();
+    if(!BRIEF_FORCE && sb.bucket!=='pre-open') return '';
+    var txt=briefLine(sym);
+    var tip=('PRE-OPEN BRIEF — a descriptive snapshot of the map before the bell plus how yesterday’s grade-A direction calls '+
+      'actually resolved. Click to expand. No forecast, no plan, no levels to act on: it is orientation only. Force it any time with __gptsDebug.brief().').replace(/"/g,'');
+    return '<div class="gpts-brief" data-gbrief="1" title="'+tip+'" style="cursor:pointer;font-size:9px;color:'+PAL.sub+';background:'+PAL.card+';border:1px solid '+PAL.line+';border-radius:6px;padding:2px 6px;margin:2px 2px 3px;'+
+      (BRIEF_OPEN?'white-space:normal;line-height:1.45':'overflow:hidden;white-space:nowrap;text-overflow:ellipsis')+'">'+
+      (BRIEF_OPEN?'▾ ':'▸ ')+txt+'</div>';
+  }catch(e){ return ''; }
+}
+window.__gptsDebug.brief=function(){ BRIEF_FORCE=!BRIEF_FORCE; BRIEF_OPEN=BRIEF_FORCE; try{ render(); }catch(e){} return briefLine('SPY'); };
+
+// ============================================================================
+// (B/K) FEATURE DECLARATIONS. Each entry self-declares its DATA record, its forward
+// OUTCOME, the TESTING questions it raises and its LEARNING rule seed. The recorder,
+// the Analysis tab, the question queue and rules.json all iterate this list, so a
+// feature added here is enrolled in every layer automatically and can never ship
+// un-scrutinised (design/spec-feature-enrollment.md).
+// ============================================================================
+function _fwdHitDir(fwd, dirWord){
+  if(!fwd) return null;
+  if(dirWord==='UP') return (fwd.mfe>=DIR_PTS)?1:0;
+  if(dirWord==='DN') return (fwd.mae<=-DIR_PTS)?1:0;
+  return (fwd.mfe<DIR_PTS && fwd.mae>-DIR_PTS)?1:0;      // SIDE: staying inside was right
+}
+function _fwdHitNum(fwd, dirNum, pts){
+  if(!fwd || !dirNum) return null;
+  pts=(pts==null)?DIR_PTS:pts;
+  return (dirNum>0 ? (fwd.mfe>=pts) : (fwd.mae<=-pts)) ? 1 : 0;
+}
+function registerCoreFeatures(){
+  if(FEATURES.length) return FEATURES;
+
+  registerFeature({ key:'dir', label:'Direction grade', phase:'dashboard', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var d=(ctx&&ctx.spine&&ctx.spine.dir)||directionGrade(sym);
+      return { grade:d.grade, verdict:d.dir, score:d.score, tier:d.tier, capped:d.capped||null,
+               drift:(d.inputs.drift&&d.inputs.drift.verdict)||null,
+               structAsym:(d.inputs.structAsym&&d.inputs.structAsym.bias)||null,
+               rangePos:(d.inputs.rangePos&&d.inputs.rangePos.zone)||null,
+               regime:(d.inputs.regime&&d.inputs.regime.tag)||null,
+               session:(d.inputs.session&&d.inputs.session.bucket)||null,
+               opex:!!(d.inputs.session&&d.inputs.session.opex) };
+    },
+    outcome:function(rec, fwd){
+      return { hit:_fwdHitDir(fwd, rec&&rec.verdict), mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
+               kingReached:fwd?!!fwd.kingReached:null };
+    },
+    questions:[
+      { id:'dir_A_follow',    when:[{f:'dirGrade',v:'A'}],   outcome:'dirMove', note:'grade A should move >= DIR_PTS in the stated direction' },
+      { id:'dir_midrange_cap',when:[{f:'rangePos',v:'mid'}], outcome:'dirMove', note:'do mid-range verdicts fail more (Skylit midpoint rule)?' }
+    ],
+    rule:{ id:'dir', tier:'hand', condition:'directionGrade fused from drift+structure+range+regime',
+           mechanism:'One direction verdict per bar; a fusion beats any single input only if A outranks B outranks C.' } });
+
+  registerFeature({ key:'drift', label:'GEX/VEX drift', phase:'dashboard', fwd:FEAT_FWD,
+    record:function(sym){
+      var d=driftRead(sym);
+      return { verdict:d.verdict, gvwap:d.gvwap, vvwap:d.vvwap, gLo:d.gLo, gHi:d.gHi,
+               vLo:d.vLo, vHi:d.vHi, overlap:!!d.overlap, px:d.px, dir:d.dir };
+    },
+    outcome:function(rec, fwd){
+      var h=null;
+      if(rec && rec.dir) h=_fwdHitNum(fwd, rec.dir, DRIFT_PTS);
+      else if(rec && rec.verdict==='SPLIT' && fwd) h=(fwd.mfe<DRIFT_PTS && fwd.mae>-DRIFT_PTS)?1:0;
+      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
+    },
+    questions:[ { id:'drift_conf', when:[{f:'driftVerdict',v:'AGREE-UP'}], outcome:'driftMove', note:'UP·conf vs SPLIT realised drift' } ],
+    rule:{ id:'drift', tier:'hand', condition:'both book centres same side of price + overlapping bands',
+           mechanism:'GEX range and VEX drift agreeing means one story, not two — a higher-probability lean.' } });
+
+  registerFeature({ key:'node', label:'Node grade', phase:'dashboard', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var m=(ctx&&ctx.m)||nodeMapModel(sym);
+      var px=(ctx&&ctx.px!=null)?ctx.px:((STATE[sym]||{}).price);
+      var inPlay=(ctx&&ctx.spine&&ctx.spine.inPlay)||inPlayZone(sym);
+      var zones=[];
+      ((m&&m.levels)||[]).forEach(function(L){
+        if(!zoneMeaningful(L)) return;
+        var g=nodeGrade(sym,L); var a=accumCanon(sym,L.k);
+        zones.push({ k:L.k, role:zoneRole(L), pol:g.inputs.pol, tap:g.inputs.tap,
+                     rocNow:g.inputs.rocNow, rocDay:(g.inputs.rocDay&&g.inputs.rocDay.label)||null,
+                     sinceOpenGrowth:(a.day.pct!=null)?a.day.pct:null,
+                     confQ:!!(g.inputs.conf&&g.inputs.conf.q), confV:!!(g.inputs.conf&&g.inputs.conf.v),
+                     grade:g.grade, score:g.score,
+                     inPlay:!!(inPlay && Math.abs(L.k-inPlay.k)<0.001) });
+      });
+      var ip=(ctx&&ctx.spine&&ctx.spine.node)||(inPlay?nodeGrade(sym,inPlay):null);
+      return { zones:zones,
+               k:(inPlay&&inPlay.k!=null)?inPlay.k:null,
+               grade:ip?ip.grade:null, score:ip?ip.score:null,
+               pol:ip?ip.inputs.pol:null, tap:ip?ip.inputs.tap:null,
+               rocNow:ip?ip.inputs.rocNow:null,
+               rocDay:(ip&&ip.inputs.rocDay)?ip.inputs.rocDay.label:null,
+               holdDir:(ip&&ip.inputs.conf)?ip.inputs.conf.holdDir:0 };
+    },
+    outcome:function(rec, fwd){
+      var h=null;
+      if(rec && rec.holdDir) h=_fwdHitNum(fwd, rec.holdDir, DIR_PTS);
+      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
+               held:(h===1), broke:(h===0), nextReached:fwd?!!fwd.kingReached:null };
+    },
+    questions:[
+      { id:'node_grade_hold', when:[{f:'nodeGrade',v:'A'}], outcome:'nodeHold', note:'A vs C nodes on the tap' },
+      { id:'tap_decay',       when:[{f:'tap',v:'0'}],       outcome:'nodeHold', note:'does 80/66/33 hold for SPY?' },
+      { id:'pol_char',        when:[{f:'pol',v:'+'}],       outcome:'nodeHold', note:'+γ taps clean (low mae) vs −γ' }
+    ],
+    rule:{ id:'node.grade', tier:'hand', condition:'polarity + tap + ROC + confluence',
+           mechanism:'Fresh clean +gamma nodes still growing are where dealer hedging actually defends.' } });
+
+  registerFeature({ key:'decision', label:'Decision matrix', phase:'dashboard', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var dc=(ctx&&ctx.spine&&ctx.spine.decision)||decisionCell(sym);
+      var d=(ctx&&ctx.spine&&ctx.spine.dir)||directionGrade(sym);
+      return { cell:dc.cell, text:dc.text, dirGrade:dc.dirGrade, nodeGrade:dc.nodeGrade,
+               verdict:d.dir, k:dc.k, tier:dc.tier };
+    },
+    outcome:function(rec, fwd){
+      if(!rec) return { hit:null, mfe:null, mae:null };
+      var standAside=/skip|stand aside|wait/.test(rec.text||'');
+      var moved=_fwdHitDir(fwd, rec.verdict);
+      var h = (moved==null)?null:(standAside ? (moved?0:1) : moved);
+      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null, standAside:standAside };
+    },
+    questions:[ { id:'matrix_cells', when:[{f:'decisionCell',v:'B×A'}], outcome:'dirMove', note:'each cell vs its label' } ],
+    rule:{ id:'decision', tier:'hand', condition:'Direction grade × in-play Node grade',
+           mechanism:'The matrix earns or loses its cell labels; a cell measured under 45% gets re-worded to skip.' } });
+
+  registerFeature({ key:'acm', label:'Accumulation (real vs hedge)', phase:'dashboard', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var m=(ctx&&ctx.m)||nodeMapModel(sym);
+      var inPlay=(ctx&&ctx.spine&&ctx.spine.inPlay)||inPlayZone(sym);
+      var nodes=[];
+      ((m&&m.levels)||[]).forEach(function(L){
+        if(!zoneMeaningful(L)) return;
+        var a=accumCanon(sym,L.k);
+        nodes.push({ k:L.k, rocNow:a.now.pct, rocDay:a.day.pct, label:a.day.label, nowLabel:a.now.label });
+      });
+      var ia=inPlay?accumCanon(sym,inPlay.k):null;
+      return { nodes:nodes, k:(inPlay&&inPlay.k!=null)?inPlay.k:null,
+               rocNow:ia?ia.now.pct:null, rocDay:ia?ia.day.pct:null,
+               label:ia?ia.day.label:null, nowLabel:ia?ia.now.label:null,
+               holdDir:(inPlay&&ctx&&ctx.px!=null)?nodeHoldDir(inPlay, ctx.px):0 };
+    },
+    outcome:function(rec, fwd){
+      var h=(rec&&rec.holdDir)?_fwdHitNum(fwd, rec.holdDir, DIR_PTS):null;
+      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null, grower:(rec&&rec.label==='Acm') };
+    },
+    questions:[ { id:'roc_day', when:[{f:'rocDay',v:'Acm'}], outcome:'nodeHold', note:'since-open growers hold more than faders' } ],
+    rule:{ id:'acm.realVsHedge', tier:'hand', condition:'node growth measured since the session open',
+           mechanism:'Since-open growth separates real positioning from intraday hedge churn.' } });
+
+  registerFeature({ key:'defl_ant', label:'Deflection anticipation', phase:'zones', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var inPlay=(ctx&&ctx.spine&&ctx.spine.inPlay)||inPlayZone(sym);
+      if(!inPlay) return { k:null, fired:false, gradeAtFire:null, holdDir:0 };
+      var a=deflAnticipation(sym, inPlay);
+      return { k:inPlay.k, fired:!!a.fired, gradeAtFire:a.grade, dist:a.dist,
+               holdDir:(ctx&&ctx.px!=null)?nodeHoldDir(inPlay, ctx.px):0 };
+    },
+    outcome:function(rec, fwd){
+      if(!rec || !rec.fired || !rec.holdDir) return { hit:null, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
+      return { hit:_fwdHitNum(fwd, rec.holdDir, DIR_PTS), mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
+    },
+    questions:[ { id:'defl_ant_fire', when:[{f:'nodeGrade',v:'B'}], outcome:'nodeHold', note:'did the anticipated tap actually deflect?' } ],
+    rule:{ id:'defl_ant', tier:'hand', condition:'px within 0.6 of a grade>=B node and approaching',
+           mechanism:'Anticipation is geometry, not prophecy — it must still be scored like everything else.' } });
+
+  registerFeature({ key:'reaction', label:'Reaction quality', phase:'zones', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var inPlay=(ctx&&ctx.spine&&ctx.spine.inPlay)||inPlayZone(sym);
+      if(!inPlay) return { k:null, quality:'—', holdDir:0 };
+      var r=reactionQuality(sym, inPlay);
+      return { k:inPlay.k, quality:r.q, why:r.why,
+               holdDir:(ctx&&ctx.px!=null)?nodeHoldDir(inPlay, ctx.px):0 };
+    },
+    outcome:function(rec, fwd){
+      if(!rec || rec.quality==='—' || !rec.holdDir) return { hit:null, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
+      return { hit:_fwdHitNum(fwd, rec.holdDir, DIR_PTS), mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
+    },
+    questions:[ { id:'reaction_conf', when:[{f:'nodeGrade',v:'A'}], outcome:'nodeHold', note:'confirmed reactions vs weak ones' } ],
+    rule:{ id:'reaction', tier:'hand', condition:'wick rejection at the node while it is not fading',
+           mechanism:'A rejection wick on a node that is still building is the tape confirming the level in real time.' } });
+
+  registerFeature({ key:'act', label:'Action selection', phase:'operator', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var arr=actToday(sym); var last=arr.length?arr[arr.length-1]:null;
+      var fresh = !!(last && ctx && ctx.t && (ctx.t-last.t)<=(FEAT_FWD*CANDLE_MS));
+      var d=(ctx&&ctx.spine&&ctx.spine.dir)||directionGrade(sym);
+      return { action:fresh?last.action:null, k:fresh?last.k:null, cell:fresh?last.cell:null,
+               dirGrade:fresh?last.dirGrade:null, nodeGrade:fresh?last.nodeGrade:null,
+               verdict:d.dir, n:arr.length };
+    },
+    outcome:function(rec, fwd){
+      if(!rec || !rec.action) return { hit:null, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
+      var moved=_fwdHitDir(fwd, rec.verdict);
+      var h=(moved==null)?null:((rec.action==='take') ? moved : (moved?0:1));
+      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null, action:rec.action };
+    },
+    questions:[ { id:'act_selection', when:[{f:'decisionCell',v:'A×A'}], outcome:'dirMove', note:'were the reads you took better than the ones you passed?' } ],
+    rule:{ id:'act', tier:'hand', condition:'operator logged take vs pass on the in-play zone',
+           mechanism:'Selection quality is a separate skill from read quality; passes are the control group.' } });
+
+  // ---- Phase-B recorder items, enrolled the same way (pass-through records) ----
+  registerFeature({ key:'rshuf', label:'Node reshuffle', phase:'structure', fwd:FEAT_FWD,
+    record:function(sym){ return { reshuffled:!!RESHUFFLE[sym], king:(STATE[sym]||{}).king!=null?STATE[sym].king:null }; },
+    outcome:function(rec, fwd){
+      var h=(rec&&rec.reshuffled&&fwd)?((fwd.mfe>=DIR_PTS||fwd.mae<=-DIR_PTS)?1:0):null;
+      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
+    },
+    questions:[ { id:'rshuf_move', when:[{f:'regime',v:'trend'}], outcome:'dirMove', note:'does a board reshuffle precede a real move?' } ],
+    rule:{ id:'rshuf', tier:'hand', condition:'>50% of wall keys turned over between feeds',
+           mechanism:'A wholesale board reshuffle means the old map is void; movement usually follows.' } });
+
+  registerFeature({ key:'roll', label:'King roll', phase:'structure', fwd:FEAT_FWD,
+    record:function(sym){
+      var r=0; try{ r=kingRoll(sym)||0; }catch(e){}
+      return { roll:r, king:(STATE[sym]||{}).king!=null?STATE[sym].king:null };
+    },
+    outcome:function(rec, fwd){
+      var h=(rec&&rec.roll)?_fwdHitNum(fwd, rec.roll>0?1:-1, DIR_PTS):null;
+      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
+    },
+    questions:[ { id:'roll_leads', when:[{f:'kside',v:'above'}], outcome:'dirMove', note:'does the King roll lead price?' } ],
+    rule:{ id:'roll', tier:'hand', condition:'King migrated up/down over the roll window',
+           mechanism:'The settlement magnet moving is the board repositioning; price tends to follow it.' } });
+
+  registerFeature({ key:'gateHour', label:'Gate + hour', phase:'structure', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var g=null; try{ var gk=gatekeeper(sym); if(gk&&gk.ok) g=gk.k; }catch(e){}
+      return { gate:g, hour:ctNow().getHours(), session:sessionBucket().bucket,
+               px:(ctx&&ctx.px!=null)?ctx.px:((STATE[sym]||{}).price) };
+    },
+    outcome:function(rec, fwd){
+      var h=null;
+      if(rec && rec.gate!=null && rec.px!=null && fwd){
+        h = (rec.gate>rec.px) ? ((rec.px+fwd.mfe)>=rec.gate?1:0) : ((rec.px+fwd.mae)<=rec.gate?1:0);
+      }
+      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
+    },
+    questions:[ { id:'gate_hour', when:[{f:'session',v:'midday'}], outcome:'dirMove', note:'is the gate reached more in some session buckets?' } ],
+    rule:{ id:'gateHour', tier:'hand', condition:'gatekeeper strike + session bucket',
+           mechanism:'The blocker on the path to the King behaves differently by time of day.' } });
+
+  return FEATURES;
+}
+// (Consumer 3) the question queue is DERIVED from the registry, never hand-listed.
+function seedQuestions(){
+  registerCoreFeatures();
+  var out=[];
+  FEATURES.forEach(function(f){
+    (f.questions||[]).forEach(function(q){
+      out.push({ id:q.id, feature:f.key, label:f.label, when:q.when||[], outcome:q.outcome||null,
+                 note:q.note||'', state:'proposed', tier:ruleTier(f.rule&&f.rule.id) });
+    });
+  });
+  return out;
+}
+
+// ---- (Consumer 1) DATA: record every feature on the closed bar ----
+function featureCtx(sym){
+  var S=STATE[sym]||{};
+  return { px:(typeof S.price==='number')?S.price:null, t:Date.now(),
+           bar:S.lastClosedB||0, n:(S.candles||[]).length,
+           m:(function(){ try{ return nodeMapModel(sym); }catch(e){ return null; } })(),
+           spine:(function(){ try{ return spineOf(sym); }catch(e){ return {}; } })(),
+           session:sessionBucket() };
+}
+function featRecordAll(sym, ctx){
+  registerCoreFeatures();
+  var out={};
+  FEATURES.forEach(function(f){
+    try{ out[f.key]=f.record(sym, ctx); }catch(e){ out[f.key]=null; }
+  });
+  return out;
+}
+// Append this bar's feature records to the day's pending queue. Idempotent per
+// (feature key, bar timestamp) — re-running the cycle can never double-record.
+function featEnqueue(sym, snapFeat, ctx){
+  try{
+    var db=recorderLoad(); var day=recorderDay(db);
+    if(!day.feat) day.feat={};
+    if(!day.feat[sym]) day.feat[sym]=[];
+    var arr=day.feat[sym];
+    var t=(ctx&&ctx.t)||Date.now(), bar=(ctx&&ctx.bar)||0, n=(ctx&&ctx.n)||0;
+    var changed=false;
+    for(var k in snapFeat){
+      if(!snapFeat.hasOwnProperty(k)) continue;
+      var dup=false;
+      for(var i=arr.length-1;i>=0 && i>arr.length-40;i--){ if(arr[i].key===k && arr[i].bar===bar){ dup=true; break; } }
+      if(dup) continue;
+      arr.push({ key:k, t:t, bar:bar, n:n,
+                 px:(ctx&&ctx.px!=null)?ctx.px:null,
+                 session:(ctx&&ctx.session)?ctx.session.bucket:null,
+                 rec:snapFeat[k], hit:null, mfe:null, mae:null, resolved:false });
+      changed=true;
+    }
+    if(arr.length>1200) day.feat[sym]=arr.slice(arr.length-1200);
+    if(changed) recorderSave(db);
+  }catch(e){}
+}
+// ---- (Consumer 1b) resolve pending outcomes. FORWARD-ONLY and IDEMPOTENT: a record
+// is scored once, only from bars that closed AFTER it, and never re-scored.
+function resolveFeatureOutcomes(sym){
+  try{
+    registerCoreFeatures();
+    if(RECORDER_SYMS.indexOf(sym)<0 || !TODAY) return 0;
+    var S=STATE[sym]||{}; var cs=S.candles||[]; var n=cs.length;
+    if(!n) return 0;
+    var db=recorderLoad(); var day=recorderDay(db);
+    var arr=(day.feat&&day.feat[sym])||[];
+    if(!arr.length) return 0;
+    var m=null; try{ m=nodeMapModel(sym); }catch(eM){}
+    var kingK=(m&&m.kingK!=null)?m.kingK:null;
+    var changed=0;
+    arr.forEach(function(r){
+      if(!r || r.resolved) return;
+      var f=featureByKey(r.key); if(!f) return;
+      var fwdN=f.fwd||FEAT_FWD;
+      var startIdx=r.n;                                  // bars that existed WHEN it was recorded
+      if(startIdx==null || startIdx<=0) return;
+      if((n-startIdx) < fwdN) return;                    // window not closed yet
+      var px0=(r.px!=null)?r.px:null; if(px0==null) return;
+      var endIdx=Math.min(n, startIdx+fwdN);
+      var mfe=0, mae=0, pxEnd=px0, first=null, kingReached=false;
+      for(var i=startIdx;i<endIdx;i++){
+        var b=cs[i]; if(!b) continue;
+        if(b.h!=null && (b.h-px0)>mfe) mfe=b.h-px0;
+        if(b.l!=null && (b.l-px0)<mae) mae=b.l-px0;
+        if(b.c!=null) pxEnd=b.c;
+        if(first==null){ if(b.h!=null && (b.h-px0)>=DIR_PTS) first='up'; else if(b.l!=null && (b.l-px0)<=-DIR_PTS) first='dn'; }
+        if(kingK!=null && b.h!=null && b.l!=null && b.l<=kingK+0.25 && b.h>=kingK-0.25) kingReached=true;
+      }
+      var fwd={ px0:px0, pxEnd:pxEnd, mfe:+mfe.toFixed(2), mae:+mae.toFixed(2),
+                net:+(pxEnd-px0).toFixed(2), n:endIdx-startIdx, first:first, kingReached:kingReached };
+      var res=null;
+      try{ res=f.outcome(r.rec, fwd); }catch(eO){ res=null; }
+      r.hit=(res && res.hit!=null)?(res.hit?1:0):null;
+      r.mfe=(res && res.mfe!=null)?res.mfe:fwd.mfe;
+      r.mae=(res && res.mae!=null)?res.mae:fwd.mae;
+      r.out=res||null;
+      r.resolved=true;
+      changed++;
+    });
+    if(changed) recorderSave(db);
+    return changed;
+  }catch(e){ return 0; }
+}
+window.__gptsDebug.features=function(){ registerCoreFeatures(); return FEATURES.map(function(f){ return {key:f.key,label:f.label,phase:f.phase,fwd:f.fwd,questions:(f.questions||[]).length,rule:f.rule&&f.rule.id}; }); };
+window.__gptsDebug.questions=function(){ return seedQuestions(); };
+window.__gptsDebug.resolveFeatures=function(s){ return resolveFeatureOutcomes(s||'SPY'); };
+
+// ============================================================================
+// (K) ANALYSIS — "did the dashboard tell the truth?" One scorecard per FEATURES
+// entry, in dashboard order, each with rate% + n + MFE/MAE, plus the by-grade
+// monotone check, the 3x3 cell table and the operator's selection quality.
+// ============================================================================
+function featStats(sym){
+  var out={ byKey:{}, byGrade:{dir:{},node:{}}, cells:{}, act:{take:{n:0,hit:0},pass:{n:0,hit:0}}, days:0 };
+  try{
+    var db=recorderLoad(); var days=(db&&db.days)||{};
+    Object.keys(days).forEach(function(dk){
+      var arr=((days[dk]||{}).feat||{})[sym]||[];
+      if(arr.length) out.days++;
+      arr.forEach(function(r){
+        var b=out.byKey[r.key]||(out.byKey[r.key]={n:0,hit:0,pending:0,mfe:0,mae:0,mn:0});
+        if(!r.resolved || r.hit==null){ b.pending++; }
+        else { b.n++; if(r.hit) b.hit++; }
+        if(r.mfe!=null){ b.mfe+=r.mfe; b.mae+=(r.mae||0); b.mn++; }
+        if(!r.resolved || r.hit==null) return;
+        if(r.key==='dir' && r.rec && r.rec.grade){ var g=out.byGrade.dir[r.rec.grade]||(out.byGrade.dir[r.rec.grade]={n:0,hit:0}); g.n++; if(r.hit) g.hit++; }
+        if(r.key==='node' && r.rec && r.rec.grade){ var g2=out.byGrade.node[r.rec.grade]||(out.byGrade.node[r.rec.grade]={n:0,hit:0}); g2.n++; if(r.hit) g2.hit++; }
+        if(r.key==='decision' && r.rec && r.rec.cell){ var c=out.cells[r.rec.cell]||(out.cells[r.rec.cell]={n:0,hit:0}); c.n++; if(r.hit) c.hit++; }
+        if(r.key==='act' && r.rec && r.rec.action){ var a=out.act[r.rec.action]; if(a){ a.n++; if(r.hit) a.hit++; } }
+      });
+    });
+  }catch(e){}
+  return out;
+}
+function _fpct(h,n){ return n>0?Math.round(100*h/n):null; }
+// A>B>C must hold. If it does not, the FUSION is wrong and the panel says so — that
+// is the whole point of the analysis layer (layer spec S2 (1)).
+function gradeMonotone(g){
+  var a=_fpct((g.A||{}).hit,(g.A||{}).n), b=_fpct((g.B||{}).hit,(g.B||{}).n), c=_fpct((g.C||{}).hit,(g.C||{}).n);
+  var have=[a,b,c].filter(function(x){ return x!=null; });
+  if(have.length<2) return { ok:null, a:a, b:b, c:c };
+  var ok=true;
+  if(a!=null && b!=null && a<b) ok=false;
+  if(b!=null && c!=null && b<c) ok=false;
+  if(a!=null && c!=null && a<c) ok=false;
+  return { ok:ok, a:a, b:b, c:c };
+}
+function featureScorecardsHtml(sym){
+  sym=sym||'SPY';
+  registerCoreFeatures();
+  var st=featStats(sym);
+  var h='<div style="padding:6px 8px;background:'+PAL.card+';border:1px solid '+PAL.line+';border-radius:8px;margin:4px 0">';
+  h+='<div title="Every FEATURES entry gets a scorecard here automatically — a feature is not done until the data, analysis, testing and learning layers all consume it. Rate is the measured forward hit-rate; MFE/MAE are the average max favourable / adverse excursions over the 30-minute window." style="color:'+PAL.gold+';font-size:9px;font-weight:800;letter-spacing:.5px;margin-bottom:4px">🧬 FEATURE SCORECARDS <span style="color:'+PAL.sub+';font-weight:400">('+FEATURES.length+' enrolled · '+st.days+'d)</span></div>';
+  FEATURES.forEach(function(f){
+    var b=st.byKey[f.key]||{n:0,hit:0,pending:0,mfe:0,mae:0,mn:0};
+    var rate=_fpct(b.hit,b.n);
+    var mfe=b.mn?(b.mfe/b.mn):null, mae=b.mn?(b.mae/b.mn):null;
+    var unlocked=(b.n>=RULE_UNLOCK_N);
+    var col=(rate==null)?PAL.sub:(rate>=57?PAL.longAccent:(rate<=43?PAL.shortAccent:PAL.sub));
+    var tip=(f.label+' — '+((f.rule&&f.rule.mechanism)||'')+' Forward window '+(f.fwd||FEAT_FWD)+' bars. '+
+      (unlocked?('Measured 📊 on n='+b.n+'.'):('● recording n='+b.n+'/'+RULE_UNLOCK_N+' — hand-set ⚖ until then.'))).replace(/"/g,'');
+    h+='<div title="'+tip+'" style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:2px 0;border-bottom:1px dashed rgba(255,255,255,.05);font-size:9.5px">'+
+      '<span style="color:'+PAL.ink+'">'+f.label+' <span style="color:'+PAL.sub+';font-size:8px">'+f.key+'</span></span>'+
+      '<span style="white-space:nowrap;color:'+col+';font-weight:700">'+
+        (unlocked?(rate+'% 📊'):('<span style="color:'+PAL.sub+';font-weight:600">● recording n='+b.n+'/'+RULE_UNLOCK_N+'</span>'))+
+        (b.mn?(' <span style="color:'+PAL.sub+';font-weight:600">MFE '+mfe.toFixed(2)+' / MAE '+mae.toFixed(2)+'</span>'):'')+
+        ' <span style="color:'+PAL.sub+';font-weight:600">n'+b.n+(b.pending?('+'+b.pending+'p'):'')+'</span>'+
+      '</span></div>';
+  });
+  // ---- by-grade monotone checks ----
+  function gradeRow(title, g, tipExtra){
+    var mo=gradeMonotone(g);
+    var txt=['A','B','C'].map(function(k){ var o=g[k]||{n:0,hit:0}; var p=_fpct(o.hit,o.n); return k+' '+(p==null?'–':p+'%')+' (n'+(o.n||0)+')'; }).join(' · ');
+    var flag = (mo.ok===false) ? '<span style="color:'+PAL.shortAccent+';font-weight:800"> ⚠ not monotone — the fusion is wrong</span>'
+             : (mo.ok===true ? '<span style="color:'+PAL.longAccent+'"> ✓ monotone A·B·C</span>' : '<span style="color:'+PAL.sub+'"> ● recording</span>');
+    return '<div title="'+(tipExtra||'').replace(/"/g,'')+'" style="font-size:9px;color:'+PAL.sub+';padding:2px 0">'+title+': '+txt+flag+'</div>';
+  }
+  h+='<div style="margin-top:5px;font-size:9px;font-weight:700;color:'+PAL.gold+'">BY GRADE</div>';
+  h+=gradeRow('Direction', st.byGrade.dir, 'Grade A should beat B should beat C. If it does not, the input weights inside directionGrade are wrong and must be re-tuned through the nightly loop — never hand-edited to fit one day.');
+  h+=gradeRow('Node', st.byGrade.node, 'Same monotone requirement for the node grade. Which INPUT carries the edge is broken out per input in the rules file.');
+  // ---- 3x3 decision cells ----
+  h+='<div style="margin-top:5px;font-size:9px;font-weight:700;color:'+PAL.gold+'">DECISION MATRIX (rate · n)</div>';
+  h+='<table style="width:100%;border-collapse:collapse;font-size:8.5px;margin-top:2px"><tr><td></td><td style="color:'+PAL.sub+';text-align:center">Node A</td><td style="color:'+PAL.sub+';text-align:center">Node B</td><td style="color:'+PAL.sub+';text-align:center">Node C</td></tr>';
+  ['A','B','C'].forEach(function(dg){
+    h+='<tr><td style="color:'+PAL.sub+'">Dir '+dg+'</td>';
+    ['A','B','C'].forEach(function(ng){
+      var cell=dg+'×'+ng; var c=st.cells[cell]||{n:0,hit:0}; var p=_fpct(c.hit,c.n);
+      var cc=(p==null)?PAL.sub:(p>=57?PAL.longAccent:(p<=43?PAL.shortAccent:PAL.ink));
+      h+='<td title="'+cell+' — label: '+DECISION_MATRIX[dg][ng]+'. A cell measured under 45% on n≥20 is re-worded to skip by the learning loop." style="border:1px solid '+PAL.line+';text-align:center;color:'+cc+'">'+(p==null?'–':p+'%')+'<span style="color:'+PAL.sub+'"> n'+c.n+'</span></td>';
+    });
+    h+='</tr>';
+  });
+  h+='</table>';
+  // ---- operator selection quality ----
+  var tk=st.act.take, ps=st.act.pass;
+  var tp=_fpct(tk.hit,tk.n), pp=_fpct(ps.hit,ps.n);
+  h+='<div title="Selection quality: of the reads you TOOK, how many resolved in the stated direction; of the ones you PASSED, how many correctly did not. If takes are not better than passes, the filter you are applying by hand is not adding anything." style="margin-top:5px;font-size:9px;color:'+PAL.sub+'">'+
+    '<span style="font-weight:700;color:'+PAL.gold+'">ACT</span> take '+(tp==null?'–':tp+'%')+' (n'+tk.n+') · pass '+(pp==null?'–':pp+'%')+' (n'+ps.n+')'+
+    ((tp!=null&&pp!=null)?(' · edge '+((tp-pp)>=0?'+':'')+(tp-pp)+'pts'):'')+'</div>';
+  h+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:4px;opacity:.85">● recording n=x/'+RULE_UNLOCK_N+' until unlock · ⚖→📊 flips here first · every record is forward-only with MFE/MAE</div>';
+  h+='</div>';
+  return h;
+}
+
 // ---- (v10.44) READ ▸ block — the Dashboard's directional read, built ONLY from
 // measured (📊) or hand-set (⚖) magnet-frame claims. No legacy verdicts (King
 // bull/bear 42%, confluence 38%, Break-through 8% all ran contrarian on 4 days).
@@ -6673,7 +8231,10 @@ function readBlock44(sym){
       if(srTxt) parts.push(srTxt);
       if(king){ var kc=chg(king);
         parts.push('King '+(kc>=8?('heavier — pulling '+(kingDir>0?'up':'down')):(kc<=-8?'bleeding':'steady'))+((dest.isKing&&king.pos===false)?', −γ':'')+'.'); }
-      if(dest.isKing && st && st.kingPull){
+      // (v10.49 G) odds may only be cited when the regime, the session bucket and the
+      // rule tier all permit it; otherwise the panel would assert an unearned probability.
+      var __oddsOk=true; try{ __oddsOk=readOddsAllowed(sym); }catch(eOA){ __oddsOk=true; }
+      if(dest.isKing && st && st.kingPull && __oddsOk){
         var ad=Math.abs(dest.k-px); var db=ad<1.5?'1':ad<2.5?'2':ad<3.5?'3':'4+';
         var byD=st.kingPull.byDist&&st.kingPull.byDist[db]; var hr=ctNow().getHours(); var hb=st.kingPull.byHour&&st.kingPull.byHour[hr+''];
         var pD=studyPct(byD), pH=studyPct(hb);
@@ -6701,9 +8262,16 @@ function readBlock44(sym){
   }
   var out=parts.join(' ');
   var plain=out.replace(/<[^>]+>/g,'');
+  // (v10.49 G) HEAD (two grades) + WHY + DECISION wrap the structural sentence. Each is
+  // resolved defensively so the block still renders if a spine helper is unavailable.
+  var __head=''; try{ __head=readHeadHtml(sym); }catch(eHd){ __head=''; }
+  var __why='';  try{ __why=readWhyHtml(sym); }catch(eWy){ __why=''; }
+  var __dec='';  try{ __dec=decisionLineHtml(sym); }catch(eDc){ __dec=''; }
   var tip=('READ — direction and structure, bare bones: verdict, destination, gate + taps, Sup/Res state, King state, measured odds, watch level. Verdict = King side + strength + floor/ceiling state + build-rate imbalance; CHOP forces SIDEWAYS. 📊 measured on '+(st.src||'local repo')+(st.bars?(' · '+st.bars+' bars'):'')+' · ⚖ hand-set until n≥20 · re-scored nightly. Full text: '+verdict+'. '+plain).replace(/"/g,'');
-  return '<div title="'+tip+'" style="padding:3px 7px 4px 7px;border-left:2px solid '+PAL.gold+';margin:2px 0 3px 0;background:'+PAL.card+';border-radius:0 8px 8px 0">'+
-    '<div style="font-size:9.5px;line-height:1.4;color:'+PAL.ink+';display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden"><b style="color:'+vcol+'">'+verdict+'.</b> '+out+'</div></div>';
+  return __head+__why+
+    '<div title="'+tip+'" style="padding:3px 7px 4px 7px;border-left:2px solid '+PAL.gold+';margin:2px 0 3px 0;background:'+PAL.card+';border-radius:0 8px 8px 0">'+
+    '<div style="font-size:9.5px;line-height:1.4;color:'+PAL.ink+';display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden"><b style="color:'+vcol+'">'+verdict+'.</b> '+out+'</div></div>'+
+    __dec;
 }
 window.__gptsStudyRun=function(){ studyRun(function(r){ try{ render(); }catch(e){} }); };
 window.__gptsRepoExport=function(d){ repoExportDay(d||TODAY,false); };
@@ -7120,7 +8688,15 @@ function feedStatusHtml(){
   var txt, col;
   var age=f?(now-f.ts):Infinity;
   var feedLive = f && age<=FEED_STALE_MS;
-  if(feedLive){ txt='SPY:'+f.feed; col=PAL.longAccent; }
+  if(feedLive){
+    // (v10.48) When the display is VEX or GEX+VEX, structure still comes from the
+    // pure-gamma feed — say so explicitly rather than implying the displayed mode.
+    if(LASTDISP.SPY && LASTDISP.SPY!=='gamma'){
+      var dm=(LASTDISP.SPY==='vanna')?'VEX':'GEX+VEX';
+      txt='SPY:gamma·feed (disp '+dm+')';
+    } else { txt='SPY:'+f.feed; }
+    col=PAL.longAccent;
+  }
   else {
     // No live network feed — are we running off the visible DOM tape instead?
     var tp=tapeMap('SPY');
@@ -7129,6 +8705,18 @@ function feedStatusHtml(){
     else if(f){ txt='SPY:stale'; col=PAL.amber; }
     else { txt='SPY:idle'; col=PAL.sub; }
   }
+  // (v10.49 A) VEX honesty: if the vanna book is stale AND we have no captured
+  // Authorization header, the self-fetch cannot succeed — say "waiting", never imply live.
+  var vexTxt='';
+  try{
+    var vx=LASTVEX.SPY;
+    var vexStale = !vx || (now-vx.ts)>FEED_STALE_MS;
+    if(vexStale && !LASTAUTH){
+      vexTxt='<span title="VEX (vanna) is stale and no Authorization header has been captured from a real gex/levels request yet, so the out-of-band self-fetch cannot authenticate. It will resolve as soon as the Skylit app makes its next request. Drift falls back to NONE until then." style="color:'+PAL.sub+';opacity:.7">vex ⏳</span>';
+    } else if(vexStale){
+      vexTxt='<span title="VEX (vanna) is stale; a self-fetch is in flight." style="color:'+PAL.sub+';opacity:.7">vex ⏳</span>';
+    }
+  }catch(eVx){}
   // (v10.38) TAPE-PARSE HEALTH — visible, not silent.
   // kingResolve() sets kingConflict/parseSuspect when the tape parse violates a
   // King invariant. Before v10.38 those flags were WRITTEN AND NEVER READ, which
@@ -7162,8 +8750,8 @@ function feedStatusHtml(){
   }catch(eRec){}
   return '<div style="display:flex;justify-content:space-between;align-items:center;color:'+PAL.sub+';font-size:9px;letter-spacing:0.3px;gap:6px;flex-wrap:wrap">'+
     '<span style="color:'+col+'">'+txt+'</span>'+
-    warn+rec+
-    '<span>feed v10.47</span>'+
+    vexTxt+warn+rec+
+    '<span>feed v10.49</span>'+
     '</div>';
 }
 
@@ -7810,6 +9398,8 @@ function analysisBlock(){
   var st=analysisStats(sym);
   var R=ANALYSIS_REVIEW; // optional LLM narrative
   var h='';
+  // (v10.49 K) FEATURE SCORECARDS first — the enrollment contract's Analysis consumer.
+  try{ h+=featureScorecardsHtml(sym); }catch(eFS){}
   // (v10.42) 🎯 Projection Scorecard + auto recommendations — the sharpening loop.
   try{ h+=projScorecardHtml(); }catch(ePS){}
   // ---- header + day grade ----
@@ -8020,9 +9610,22 @@ function _tFacts(r){
   var near=null; (r.nodes||[]).forEach(function(n){ if(n.pct==null) return; var d=Math.abs(n.k-px); if(d<=1.5 && (near==null||d<near.d)) near={d:d, st:n.st, pct:n.pct}; });
   f.nearState = near?({Building:'Acm',Fading:'Dec',Steady:'Steady'}[near.st]||near.st):null;
   f.nearStrong = near?(near.pct>=15?'strong':'weak'):null;
+  // (v10.49 K) spine factors — the miner can now slice by the grades the panel actually
+  // showed, not just by raw structure. Null on bars recorded before v10.49 (forward-only).
+  var ft=r.feat||{};
+  f.dirGrade     = (ft.dir&&ft.dir.grade)||null;
+  f.nodeGrade    = (ft.node&&ft.node.grade)||null;
+  f.decisionCell = (ft.decision&&ft.decision.cell)||null;
+  f.driftVerdict = (ft.drift&&ft.drift.verdict)||null;
+  f.rocDay       = (ft.acm&&ft.acm.label)||null;
+  f.tap          = (ft.node&&ft.node.tap!=null)?String(ft.node.tap):null;
+  f.pol          = (ft.node&&ft.node.pol)||null;
+  f.rangePos     = (ft.dir&&ft.dir.rangePos)||null;
+  f.session      = (ft.dir&&ft.dir.session)||null;
   return f;
 }
-var T_FACTORS=['kzone','kside','hour','regime','nearState','nearStrong'];
+var T_FACTORS=['kzone','kside','hour','regime','nearState','nearStrong',
+               'dirGrade','nodeGrade','decisionCell','driftVerdict','rocDay','tap','pol','rangePos','session'];
 // ---- PATTERN MINER: scan single + pairwise factor buckets vs outcome, rank by lift.
 function studyMine(cb){
   _tRows(function(rows){
@@ -8161,6 +9764,16 @@ function testingBlock(){
   h+=qrow('Acm wall reached ≤1.5 (leak)', s.reached&&s.reached.Building, false);
   h+=qrow('Net-force sum predicts dir', s.netForce);
   h+='</table>';
+  // (v10.49 K) the seeded queue is DERIVED from FEATURES[].questions — adding a feature
+  // adds its questions here automatically. Lifecycle: proposed → testing → answered(📊,n).
+  try{
+    var __sq=seedQuestions();
+    if(__sq.length){
+      h+='<div title="Seeded from FEATURES[].questions — one entry per question every registered feature raises. proposed → testing → answered(📊, n≥20) → refined | parked. Promotion also requires 3 nightly re-runs and a walk-forward hold on 3 NEW sessions." style="font-size:8.5px;color:'+PAL.sub+';margin-top:4px">'+
+        '<span style="color:'+PAL.gold+';font-weight:700">seeded queue ('+__sq.length+'):</span> '+
+        __sq.map(function(q){ return '<span style="border:1px solid '+PAL.line+';border-radius:6px;padding:0 4px;margin-right:3px;white-space:nowrap">'+q.id+' '+q.tier+'</span>'; }).join('')+'</div>';
+    }
+  }catch(eSQ){}
   // ② hypothesis builder (presets + console API)
   h+='<div style="font-size:9.5px;font-weight:700;color:'+PAL.gold+';margin:7px 0 2px">② Hypothesis builder</div>';
   h+='<div style="display:flex;flex-wrap:wrap;gap:3px">';
@@ -8255,6 +9868,8 @@ function render(){
   // silently — see snapshotNodes/projScorecard). Charts return once scorecards mature.
   html+='<div id="gpts-1col" style="display:flex;flex-direction:column;gap:4px">';
   try{ html+=kingHeaderBlock(); }catch(eH){}          // (v10.47) header cluster + ①②③ restored
+  try{ html+=briefBlockHtml('SPY'); }catch(eBr){}     // (v10.49 J) pre-open brief (collapsible)
+  try{ html+=driftLineHtml('SPY'); }catch(eD49){}     // (v10.49 D) GEX/VEX drift — an INPUT line
   try{ html+=readBlock44('SPY'); }catch(eR){}
   // (v10.37) standalone gatekeeperBlock() REMOVED - gatekeeper strike + distance now in King badge.
   // (v10.27) Standalone BO / SPY Signals section REMOVED. The breakout-pullback
@@ -8283,6 +9898,28 @@ function render(){
   elBody.style.opacity = (fr.state==='red') ? '0.55' : '1';
   // #10 fire any armed alerts for state transitions this render.
   runAlerts('SPY', fr);
+  // (v10.49 H) ACTION CAPTURE + brief toggle via ONE delegated listener on the panel body
+  // (re-attached each render because innerHTML is replaced). Attached with a guard flag so
+  // it never stacks, and the drag handler ignores .gpts-act / .gpts-brief targets.
+  if(!elBody.__gptsActWired){
+    elBody.__gptsActWired=true;
+    elBody.addEventListener('click', function(ev){
+      try{
+        var t=ev.target;
+        while(t && t!==elBody){
+          if(t.getAttribute && t.getAttribute('data-gact')){
+            ev.stopPropagation(); ev.preventDefault();
+            actRecord(t.getAttribute('data-gsym')||'SPY', t.getAttribute('data-gact'));
+            return;
+          }
+          if(t.getAttribute && t.getAttribute('data-gbrief')){
+            ev.stopPropagation(); BRIEF_OPEN=!BRIEF_OPEN; try{ render(); }catch(eRb){} return;
+          }
+          t=t.parentNode;
+        }
+      }catch(e){}
+    }, true);
+  }
   var csx=elBody.querySelectorAll('.gpts-clr-sym');
   for(var j=0;j<csx.length;j++){
     (function(el){ el.addEventListener('click', function(){ clearSignalsSym(el.getAttribute('data-sym')); }); })(csx[j]);
@@ -8380,6 +10017,7 @@ function tick(){
   // DATA layer: once-per-closed-bar node snapshots (throttled internally).
   recordNodeSnapshot('SPY');
   recordNodeSnapshot('QQQ');
+  resolveFeatureOutcomes('SPY');   // (v10.49 B) forward-only, idempotent feature scoring
   recordDeflections('SPY');   // (v10.36) record confirmed deflections + score forward outcomes
   recordDeflections('QQQ');
   repoAutoExportTick();        // (v10.44) write data/YYYY-MM-DD.json at the close
@@ -8398,6 +10036,8 @@ function boot(){
   restoreState();
   repoMigrateOnce();           // (v10.44) localStorage recorder -> IndexedDB repository (once)
   studyLoad();                 // (v10.44) cached measured rates for READ ▸ / hovers
+  registerCoreFeatures();      // (v10.49 B) enroll every feature in DATA/ANALYSIS/TESTING/LEARNING
+  rulesLoad();                 // (v10.49 K) the mental model: localStorage + learning/rules.json
   render();
   tick();
   setInterval(tick, POLL_MS);

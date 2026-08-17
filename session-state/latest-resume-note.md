@@ -1,3 +1,47 @@
+# RESUME NOTE — 2026-08-17 (late) — v10.49 BUILT (candidate): mental-model dashboard · NEXT = live-verify, then Phase C/D full
+
+**Baseline: v10.49 candidate** (`@version 10.49`, footer "feed v10.49"). Built on v10.48. Delivered as installer .bat.
+NOT yet verified live. **Verify at open:** (1) `__gptsDebug.LASTVEX.SPY` populated while displaying GEX (auth fix); (2) drift line
+under header; (3) READ head shows two grades + ⚖ + session badge, decision line with tgt/inval; (4) deflection zones w/ grades,
+%King matches feed, ⚡conf on a tap, ▶ setup on approach; (5) TAKE/PASS buttons record; (6) Analysis tab shows FEATURES scorecards
+"● recording n=x/20"; (7) King correct in GEX/VEX/GEX+VEX (v10.48). Specs: design/spec-v10.49-build.md,
+design/spec-v10.49-mental-model-layers.md, design/spec-feature-enrollment.md. Mockup: mockups/gex-v10.49-full-dashboard-mockup.html.
+
+**Standing rules added today (in skills/gex/SKILL.md):** git is the ONLY source (Drive is a stale mirror); hand the user RUNNABLE
+FILES not instructions; FEATURE ENROLLMENT — no feature ships un-enrolled (FEATURES registry → data/analysis/testing/learning/LLM).
+
+**Open threads / NEXT:** live-verify list above → then full Phase C Analysis tab (beyond the scorecard slice) and Phase D nightly
+review runner (reads day file + rules.json, writes review/YYYY-MM-DD.json per docs/LLM-NIGHTLY-BRIEF.md) → grades earn 📊 at n≥20.
+Watch: TAKE/PASS overfitting guard (walk-forward + 3-session), part1 log now correct. Deflections strip kept (mockup omitted it) — user call.
+
+---
+
+# RESUME NOTE — 2026-08-17 — v10.48 BUILT (candidate): GEX/VEX dual-capture + mode-independent King
+
+**Baseline: v10.48 candidate** (`@version 10.48`, footer "feed v10.48", part1 log fixed to v10.48).
+Built this session on top of the v10.47 Phase-A baseline. Delivered via installer .bat (writes repo +
+commit/push); user updates Tampermonkey from the raw URL.
+
+**Phase A live-verified earlier today (GEX mode):** header cluster + ①②③, READ one-paragraph verdict,
+ladder Identity·Strike%·State with ★Mag·next + castle-gate icon, no false out-of-sync. PASS. (Deflection
+card format + full Node Map CONT/REVERSAL sentence still need a live node-tap to observe.)
+
+**v10.48 shipped (this session) — see CHANGELOG for detail:**
+Capture is now decoupled from the Skylit display toggle. `onFeed` no longer lets `combined` contaminate
+the gamma cache; `selfFetch`/`ensureFeeds` keep BOTH `LASTFEED` (gamma) and `LASTVEX` (vanna) fresh
+regardless of what's displayed (VEX now always captured for analysis); `feedStructMap` + `tapeMap`
+routing make the King AND the whole ladder read pure gamma in GEX / VEX / GEX+VEX. Footer says
+`gamma·feed (disp …)` when off-GEX. Tests: `test_mode_king.js` (29) green; suite green except the 5
+known-stale. Spec: `design/spec-v10.48-dual-capture.md`.
+
+**NEXT:** (1) live-verify v10.48 — flip GEX/VEX/GEX+VEX, King stays put, footer shows `gamma·feed`,
+`__gptsDebug.LASTVEX.SPY` populated while on GEX. (2) Then the real VEX payoff: compute GEX-VWAP +
+VEX-VWAP internally and the GEX/VEX overlap-confluence read (Best Practices #5), now that both feeds
+are captured. (3) Remaining Phase B: reshuffle detector, rolling Flr/Ceil, gate-deflection hour,
+chart levels, MFE/MAE.
+
+---
+
 # RESUME NOTE — 2026-08-16 (late) — v10.47 PHASE A BUILT (candidate); NEXT = verify live Mon, then Phase B
 
 **Baseline: v10.47 candidate** (`@version 10.47`, footer "feed v10.47"), delivered as

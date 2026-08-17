@@ -1,3 +1,74 @@
+## v10.49 — 2026-08-17 — MENTAL-MODEL DASHBOARD: two-grade READ + decision · deflection-quality zones · full 5-layer enrollment (candidate — verify live)
+
+**A · Auth fix (blocking).** v10.48 self-fetch 401'd: Skylit's `gex/levels` needs an in-memory `Authorization: Bearer <JWT>`.
+Now captured off real requests (fetch Headers/object/Request + XHR setRequestHeader) into `LASTAUTH` and replayed by `selfFetch`.
+VEX is now ACTUALLY captured continuously. Footer shows `vex ⏳` until first auth is seen.
+
+**B · FEATURES registry (the enrollment mechanism, user rule 2026-08-17).** `registerFeature({key,label,record,outcome,fwd,questions,rule})`;
+5 consumers: recorder (`snap.feat`, `recorderDay.feat[sym]`, `resolveFeatureOutcomes` idempotent/forward-only w/ MFE/MAE),
+Analysis scorecards, question seeds, `RULES` (`learning/rules.json`, `gpts_rules_v1`, fail-soft), export. 11 features enrolled:
+dir, drift, node, decision, acm, defl_ant, reaction, act, rshuf, roll, gateHour. `test_feature_enrollment.js` (429) enforces it.
+
+**C · Spine.** `directionGrade` (drift·structure·range·regime; MID-RANGE and CHOP hard-cap to C) · `nodeGrade`
+(polarity·tap·rocNow·rocDay·confluence) · `decisionCell` = 3×3 DECISION_MATRIX (descriptive words only). Cached per bar (`spineOf`).
+Grades render ⚖ until RULES promote them 📊 (n≥20).
+
+**D · Drift line** under the header: `↗ Drift UP·conf · G773.9 V775.0` (GVWAP/VVWAP ±σ, normalized per feed; AGREE when same
+side of px AND bands overlap). Pinned to live 773 numbers in `test_drift_read.js`.
+
+**E · Descriptive trade frame** per in-play zone: `zone 773±.25 · inval <772 · tgt 776 (air)` (vocabulary locked; tgt capped at King;
+path from air-pocket/cluster). Echoed in the decision line. Nothing prescriptive.
+
+**F · Deflection-quality zones** replace the ladder body: in-play node full (identity · +γ clean/−γ sharp · tap · GRADE; row2 =
+Acm day/now · Q/V · frame), top-3 others one line each with grade; %King from the feed; `reactionQuality` chip (⚡conf/⚡weak) at the tap;
+`▶ setup` anticipation when approaching a ≥B node; legend. Ladder retained as fallback when no node qualifies.
+
+**G · READ** = head `↑ UP B · Node 773 A− ⚖` + why + DECISION line; `sessionBucket` badge (open-drive/morning/midday/afternoon/power,
+OPEX) feeds dir; `modelHeat` badge (model warm/cold from last 10 resolved grades); odds ONLY from promoted rules; CHOP ⇒ SIDE/C.
+
+**H · TAKE/PASS** buttons on the in-play zone → `recorderDay.act[sym]` (selection-quality stat in Analysis). No P&L.
+**I · accumCanon** = ONE Acm source (now ≈6m, day = since open via `gpts_acmday_v1`) used by sentence, zones and nodeGrade —
+Acm/Dec contradiction eliminated. **J · Pre-open brief** line (before 08:30 CT / `__gptsDebug.brief()`).
+**K · Analysis** prepends FEATURES scorecards (rate·n·MFE/MAE; dir/node BY GRADE with A>B>C monotone check; 3×3 decision cells;
+act selection quality); Testing seeds questions + 9 miner factors; `learning/rules.json` 38 ⚖ rules incl. KILL LIST
+(kill.tap3 / kill.midrange / kill.noConf / kill.negGammaWide); `docs/LLM-NIGHTLY-BRIEF.md` (nightly, proposals only).
+
+**Tests.** 8 new files, 696 assertions, all PASS. Suite green except the 5 pre-existing stale. `test_read_v1047` pin → 10.49.
+**Verify live:** VEX captured while on GEX (`__gptsDebug.LASTVEX.SPY`); drift line; two-grade READ + decision; zones with grades;
+TAKE/PASS writes; footer `feed v10.49`.
+
+## v10.48 — 2026-08-17 — GEX/VEX dual-capture + mode-independent King & ladder
+
+**Problem.** Skylit only sends the `data_type` for what you DISPLAY. `onFeed` routed `combined`
+into the gamma cache (`LASTFEED`), and `tapeMap()` reads the DOM tape — which shows the displayed
+book. So VEX display gave a false out-of-sync, and GEX+VEX display gave a unanimous-but-WRONG King
+(the 780 from A.4). You could never hold clean GEX and clean VEX at once.
+
+**Fix — capture is now decoupled from display.**
+- `onFeed(sym,feed,j,viaSelf)`: `vanna`→`LASTVEX`, `gamma`→`LASTFEED`, **`combined` is ignored for
+  the caches** (no more contamination). `LASTDISP[sym]` records what you're displaying (hook only).
+- `selfFetch(sym,type)` + `ensureFeeds()` (5s interval, tab-visible + URL guard): self-fetches
+  whichever mode the display ISN'T showing, off the last real `gex/levels` URL (same auth/query),
+  throttled per (sym,type), 503s swallowed. Net ≤1 extra request/cycle. `LASTFEED` (gamma) and
+  `LASTVEX` (vanna) now stay fresh continuously regardless of the toggle → VEX is always captured
+  for analysis.
+- `feedStructMap(sym)` builds a `kingResolve`-shaped map straight from `extractWalls(LASTFEED.j)`
+  (King node 100%, others signed by polarity). `tapeMap()` returns it whenever the display isn't
+  pure GEX (and as the unreadable-tape fallback), so the WHOLE panel — King, ladder %s, accumulation,
+  Flr/Ceil — reads pure gamma in GEX, VEX, or GEX+VEX. The 3-vote reconciler then agrees cleanly
+  (no false out-of-sync).
+- Footer states it plainly when relevant: `SPY:gamma·feed (disp VEX)`.
+- `FEED_STALE_MS` 60s → 12s (matches the 5s keep-alive; tightens the footer live/stale line).
+
+**Tests.** `test_mode_king.js` (29): feedStructMap build, onFeed routing, King-from-gamma-feed under
+combined AND vanna display (DOM used only in pure GEX), unreadable-tape fallback, ensureFeeds
+stale-mode selection + guards. Full suite green except the 5 pre-existing stale (layout_2col,
+node_identity, node_role_badge, nodemap, tapeking/jsdom). `test_read_v1047.js` version pin → 10.48.
+
+**Verify live:** flip GEX → VEX → GEX+VEX; King stays 776 (or whatever GEX says) in all three, footer
+shows `gamma·feed (disp …)` off-GEX, no out-of-sync banner. `__gptsDebug.LASTVEX.SPY` populated while
+displaying GEX.
+
 ## v10.47 — 2026-08-16 — PHASE A SHIPPED (dashboard) · Phases B–D still planned
 
 **Phase A.4 (LIVE FIX 2026-08-17 08:55 CT):** tape sync tripped all morning — Skylit now renders the strike ladder as a real `<table>`; `findTapeTable().validKingRow()` collapsed each `<tr>` to one token so the strike→$K adjacency never matched. Now validates per row (strike in td[0], King $K in a later td). Verified in-page: King 775, 50 rows, 776=97%. Also: feed was `combined` (GEX+VEX toggle) with King 780 — user must run the heatmap in **GEX** mode for the model; VEX is captured separately.

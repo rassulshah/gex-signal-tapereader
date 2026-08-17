@@ -104,13 +104,15 @@ an overall one-liner. Never inflate; unverified-live code stays "candidate".
 
 ## STANDING PROJECT RULES (apply always)
 
-- **DELIVERY (user-mandated 2026-08-17): hand the user RUNNABLE FILES, not instructions.**
-  Whenever a task can be packaged, ship a double-click artifact — a self-contained installer
-  `.bat` (base64 payload, git-finder, commit+push), a `.skill`, a generated file — via
-  SendUserFile. Do NOT reply with a list of manual steps for the user to carry out. The ONLY
-  step that may remain manual is installing the Claude ACCOUNT skill (a one-click save on the
-  skill card in the app) — that writes to the account in the cloud and no local file can do it;
-  everything else gets automated.
+- **FEATURE ENROLLMENT (user-mandated 2026-08-17): no feature ships un-enrolled.**
+  Every feature — new ones included — must AUTOMATICALLY enter all three improvement layers and
+  become part of the tape-reader mental model: DATA (recorded per bar in the day file), ANALYSIS
+  (a "did it tell the truth?" scorecard with rate + n), and TESTING/LEARNING (a question in the
+  queue + a rule in learning/rules.json, scored nightly, graduates at n>=20, decays if it
+  underperforms). Mechanism = the FEATURES registry: each feature self-declares once
+  {key,label,record,outcome,fwd,questions,rule} and the recorder / Analysis tab / testing pipeline
+  iterate it. Adding a feature = one registry entry = auto-enrolled everywhere. A feature is NOT
+  "done" until it is in FEATURES and the three layers consume it. See design/spec-feature-enrollment.md.
 
 - Before coding: ASK first (user may have more fixes) and show MOCKUPS for review.
 - **ONE AT A TIME (user-mandated, repeated 2026-08-15): discuss exactly ONE element per message.**

@@ -113,5 +113,5 @@ ok(!/uD83D\\uDEAA':''\)/.test(grab('nodeRolePill')) && /gateSvgSm/.test(grab('no
 ok(/FLRCEIL_EDGE_PCT/.test(grab('nodeMapModel')) && /pickEdge/.test(grab('nodeMapModel')),'Flr/Ceil = largest bounding node (pickEdge)');
 ok(/isNext=true/.test(grab('nodeMapModel')) && /Mag \\u00b7 next/.test(grab('nodeRoleBadge')),'next-target class exists');
 ok(/Defl \\u00b7 '\+roleAb/.test(grab('deflectionBlock')),'defl card abbreviated name');
-ok(/@version\s+10\.47/.test(src) && /feed v10\.47/.test(src),'version 10.47');
+ok(/@version\s+10\.49/.test(src) && /feed v10\.49/.test(src),'version 10.49');
 console.log('test_read_v1047: '+p+' passed, '+f+' failed'); process.exit(f?1:0);
