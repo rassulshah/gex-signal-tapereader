@@ -1,3 +1,19 @@
+## v10.49.1 — 2026-08-17 — coherence fixes (live-verify caught 3)
+
+**1 · Drift SPLIT bug.** `driftRead` required same-side-of-price AND band-overlap → tight/offset bands
+forced a false SPLIT even with both centres above price. Now: SAME side = AGREE on direction (dir set);
+band-overlap only decides conf (`UP·conf`) vs plain lean (`UP`). SPLIT reserved for opposite sides.
+Regression pinned in test_drift_read (same-side disjoint → LEAN-UP, opposite → SPLIT).
+
+**2 · Two-voice READ.** `readBlock44` computed its OWN BULLISH/BEARISH verdict, contradicting the spine
+head (DN vs BULLISH on the same panel). It now takes the verdict word from `directionGrade` (the spine)
+when available; legacy lean-based verdict only as fallback (unit-test scope). One direction voice.
+
+**3 · King graded C.** `nodeGrade` ignored magnitude, so the dominant +γ King scored C on tap/roc alone.
+Added a dominance input (Academy absolute-value rule): King / %King≥70 → +1, trivial <25 → −1.
+
+Suite green except the 5 pre-existing stale. v10.49 → 10.49.1 (3 spots).
+
 ## v10.49 — 2026-08-17 — MENTAL-MODEL DASHBOARD: two-grade READ + decision · deflection-quality zones · full 5-layer enrollment (candidate — verify live)
 
 **A · Auth fix (blocking).** v10.48 self-fetch 401'd: Skylit's `gex/levels` needs an in-memory `Authorization: Bearer <JWT>`.

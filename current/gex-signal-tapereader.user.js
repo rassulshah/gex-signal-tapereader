@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    10.49
+// @version    10.49.1
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -356,7 +356,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-console.log('[GPTS] v10.49 part1 loaded');
+console.log('[GPTS] v10.49.1 part1 loaded');
 
 function fiberKeyOf(el){
   var ks=Object.keys(el);
@@ -6964,8 +6964,11 @@ function driftRead(sym){
     out.overlap = (Math.max(G.lo,V.lo) <= Math.min(G.hi,V.hi));
     var gUp=(G.vwap>px), vUp=(V.vwap>px);
     var gDn=(G.vwap<px), vDn=(V.vwap<px);
-    if(gUp && vUp && out.overlap){ out.verdict='AGREE-UP'; out.label='UP·conf'; out.dir=1; }
-    else if(gDn && vDn && out.overlap){ out.verdict='AGREE-DN'; out.label='DN·conf'; out.dir=-1; }
+    // (v10.49.1 FIX) SAME SIDE of price = AGREE on direction; band-overlap only decides
+    // conf vs plain-lean. SPLIT is reserved for genuine disagreement (opposite sides).
+    // Prev bug: tight/offset bands forced SPLIT even when both centres were above price.
+    if(gUp && vUp){ out.dir=1; if(out.overlap){ out.verdict='AGREE-UP'; out.label='UP·conf'; } else { out.verdict='LEAN-UP'; out.label='UP'; } }
+    else if(gDn && vDn){ out.dir=-1; if(out.overlap){ out.verdict='AGREE-DN'; out.label='DN·conf'; } else { out.verdict='LEAN-DN'; out.label='DN'; } }
     else { out.verdict='SPLIT'; out.label='split'; out.dir=0; }
   }catch(e){}
   return out;
@@ -7129,7 +7132,7 @@ function directionGrade(sym){
     var score=0;
     if(drift.verdict==='NONE') score+=1;                                  // nothing to contradict
     else if(drift.verdict==='SPLIT') score+=0;
-    else if(driftD!==0 && driftD===dirNum) score+=2;                      // conf agree
+    else if(driftD!==0 && driftD===dirNum) score+=2;                      // drift agrees on direction (conf vs lean shown in the label, not double-counted here)
     if(structD!==0 && dirNum!==0){ if(structD===dirNum) score+=2; else score-=1; }
     if(rg && rg.tag==='trend') score+=1;
     out.score=score;
@@ -7197,6 +7200,13 @@ function nodeGrade(sym, L){
     var pol=(L.pos===true)?'+':(L.pos===false?'-':null);
     if(pol==='+') score+=1;
     out.inputs.pol=pol;
+    // (v10.49.1 FIX) dominance — a bigger node is a stronger magnet (Academy absolute-value
+    // rule). The King / a heavy node deflects harder; a trivial node barely holds. This
+    // stops the dominant King from grading C on tap/roc alone.
+    var pk=(typeof L.pct==='number')?Math.abs(L.pct):(L.isKing?100:null);
+    if(L.isKing || (pk!=null && pk>=70)) score+=1;
+    else if(pk!=null && pk<25) score-=1;
+    out.inputs.dom=pk;
     // tap freshness (Academy 80/66/33)
     var tap=(typeof L.taps==='number')?L.taps:nodeTapCount(sym, L.k);
     if(tap<=0) score+=2; else if(tap===1) score+=1; else score-=1;
@@ -8206,12 +8216,22 @@ function readBlock44(sym){
   var srb=(typeof srBattle==='function')?srBattle(sym):null;
   if(srb && !srb.forming){ if(srb.dom==='support') others+=1; else if(srb.dom==='resistance') others-=1; }
   var lean=kingW+others;
+  // (v10.49.1 FIX) ONE direction voice: the Direction spine is authoritative for the
+  // verdict word when it is available, so the READ body can never contradict the head.
+  // Falls back to the legacy lean-based verdict when the spine is unavailable (e.g. the
+  // unit-test scope, which evals readBlock44 without directionGrade).
+  var __spineDir=null; try{ var __sp=directionGrade(sym); if(__sp&&__sp.dir) __spineDir=__sp.dir; }catch(eSp){}
   var verdict;
-  if(chop) verdict='SIDEWAYS';
-  else if(kingDir!==0 && others*kingDir<=-2) verdict='TBD';
-  else if(lean>=1.5) verdict='BULLISH';
-  else if(lean<=-1.5) verdict='BEARISH';
-  else verdict='SIDEWAYS';
+  if(__spineDir){
+    verdict = (__spineDir==='UP')?'BULLISH':((__spineDir==='DN')?'BEARISH':'SIDEWAYS');
+    if(verdict==='SIDEWAYS' && !chop && kingDir!==0 && others*kingDir<=-2) verdict='TBD';
+  } else {
+    if(chop) verdict='SIDEWAYS';
+    else if(kingDir!==0 && others*kingDir<=-2) verdict='TBD';
+    else if(lean>=1.5) verdict='BULLISH';
+    else if(lean<=-1.5) verdict='BEARISH';
+    else verdict='SIDEWAYS';
+  }
   var vcol={BULLISH:PAL.longAccent,BEARISH:PAL.shortAccent,SIDEWAYS:PAL.sub,TBD:PAL.gold}[verdict];
   var parts=[];
   var posWord='';
@@ -8751,7 +8771,7 @@ function feedStatusHtml(){
   return '<div style="display:flex;justify-content:space-between;align-items:center;color:'+PAL.sub+';font-size:9px;letter-spacing:0.3px;gap:6px;flex-wrap:wrap">'+
     '<span style="color:'+col+'">'+txt+'</span>'+
     vexTxt+warn+rec+
-    '<span>feed v10.49</span>'+
+    '<span>feed v10.49.1</span>'+
     '</div>';
 }
 

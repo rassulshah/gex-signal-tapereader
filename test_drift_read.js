@@ -68,11 +68,12 @@ global.STATE.SPY.price=774.50;                       // between the two centres
 var sp=driftRead('SPY');
 ok(sp.verdict==='SPLIT' && sp.label==='split' && sp.dir===0, '5b centres straddle price -> SPLIT', sp.verdict);
 
-// non-overlapping bands, same side => still SPLIT (two different stories)
+// (v10.49.1) non-overlapping bands but SAME side of price => LEAN (agree on direction,
+// lower confidence). SPLIT is reserved for opposite sides. Bands only set conf vs lean.
 global.STATE.SPY.price=700.00;
 global.LASTVEX.SPY={ j:payload([[900,1],[900.01,1]],700), ts:Date.now() };
 var noOv=driftRead('SPY');
-ok(noOv.verdict==='SPLIT' && noOv.overlap===false, '5c same side but disjoint bands -> SPLIT', noOv.verdict);
+ok(noOv.verdict==='LEAN-UP' && noOv.dir===1 && noOv.overlap===false, '5c same side disjoint bands -> LEAN-UP not SPLIT', noOv.verdict);
 
 global.LASTVEX.SPY=null; global.STATE.SPY.price=773.66;
 var none=driftRead('SPY');
@@ -86,3 +87,20 @@ global.STATE.SPY.price=null;
 ok(driftRead('SPY').verdict==='NONE', '5g no price -> NONE (never guesses a side)');
 
 console.log('\n'+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);
+
+// ---- v10.49.1 regression: same side of price => NOT split (band overlap only sets conf) ----
+(function(){
+  try{
+    // gamma centred 774 tight, vanna centred 776 tight — bands do NOT overlap, but BOTH above px 772
+    global.LASTFEED={SPY:{j:{levels:[{s:772,l:[{k:774,v:900},{k:773,v:300},{k:775,v:250}]}]}}};
+    global.LASTVEX ={SPY:{j:{levels:[{s:772,l:[{k:776,v:900},{k:777,v:300},{k:775,v:250}]}]}}};
+    global.STATE={SPY:{price:772}};
+    var d=driftRead('SPY');
+    ok(d.dir===1, 'both centres above px -> dir UP (not split), got dir='+d.dir+' verdict='+d.verdict);
+    ok(d.verdict!=='SPLIT', 'same side => not SPLIT, got '+d.verdict);
+    // opposite sides => SPLIT
+    global.LASTVEX={SPY:{j:{levels:[{s:772,l:[{k:769,v:900},{k:768,v:300},{k:770,v:250}]}]}}};
+    var d2=driftRead('SPY');
+    ok(d2.verdict==='SPLIT', 'opposite sides of px => SPLIT, got '+d2.verdict);
+  }catch(e){ ok(false,'v10.49.1 regression threw: '+e); }
+})();
