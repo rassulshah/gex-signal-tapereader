@@ -890,7 +890,20 @@ function findTapeTable(){
   // containers are also rejected by name as a cheap hint. Highest strike count among
   // VALID candidates wins.
   function validKingRow(el){
-    try{ var cells=tapeCells(el); for(var q=1;q<cells.length;q++){ if(KING_DOLLAR_RE.test(cells[q]) && /^\d{2,5}(?:\.\d+)?$/.test(cells[q-1])) return true; } }catch(eV){}
+    // (v10.47 A.4, live 2026-08-17 08:55) Skylit now renders the strike ladder as a REAL <table>
+    // (tr/td). tapeCells() collapses a whole <tr> to its leading strike token, so the old
+    // strike-then-$K adjacency check never fired and the sync gate tripped all morning.
+    // For real tables validate per ROW: cells[0] = strike, any later cell = King $K.
+    try{
+      var trs=el.querySelectorAll ? el.querySelectorAll('tr') : null;
+      if(trs && trs.length){
+        for(var r=0;r<trs.length;r++){ var cs=trs[r].children; if(!cs||cs.length<2) continue;
+          var sk=parseFloat((cs[0].textContent||'').replace(/[^0-9.]/g,'')); if(!isFinite(sk)||sk<50) continue;
+          for(var c=1;c<cs.length;c++){ if(TAPE_KING_DOLLAR_IN.test((cs[c].textContent||'').replace(/\s+/g,''))) return true; } }
+        return false;
+      }
+      var cells=tapeCells(el); for(var q=1;q<cells.length;q++){ if(KING_DOLLAR_RE.test(cells[q]) && /^\d{2,5}(?:\.\d+)?$/.test(cells[q-1])) return true; }
+    }catch(eV){}
     return false;
   }
   var best=null, bestRows=-1;

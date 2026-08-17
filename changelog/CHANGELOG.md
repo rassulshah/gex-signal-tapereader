@@ -1,5 +1,7 @@
 ## v10.47 — 2026-08-16 — PHASE A SHIPPED (dashboard) · Phases B–D still planned
 
+**Phase A.4 (LIVE FIX 2026-08-17 08:55 CT):** tape sync tripped all morning — Skylit now renders the strike ladder as a real `<table>`; `findTapeTable().validKingRow()` collapsed each `<tr>` to one token so the strike→$K adjacency never matched. Now validates per row (strike in td[0], King $K in a later td). Verified in-page: King 775, 50 rows, 776=97%. Also: feed was `combined` (GEX+VEX toggle) with King 780 — user must run the heatmap in **GEX** mode for the model; VEX is captured separately.
+
 **Phase A.3 (approved mockup `mockups/gex-v10.47-dashboard-mockup.html`):** ladder STATE is plain colored text ("Acm ▲12%", no pill); LIFE is "● T2" (stage letter + taps, no circle). Mockup file added.
 
 **Phase A.2 (same evening):** READ and Node Map sentence cut to BARE BONES per user — READ e.g. "BEARISH. Down to King 772. Gate 774.50 held 2×. Sup 771 steady, Res 773 steady. King steady, −γ. 50% at this distance 📊. Watch 773." Node Map e.g. "CONT thru Gate 774.5 → King 775.38: Dec ▼8%, King 775.38 Acm ▲12% pulling. Sup 773.25 Acm ▲19%." / "REV at Ceil 776.5: Acm ▲14%, held 1×, 777.75 Acm ▲9% behind. Sup 773.25 steady." / "DEFL ↑ off Gate 774.5: 2nd tap, Acm ▲9%." Verdict words abbreviated CONT / REV / DEFL / TBD. 3rd+ tap always flips to CONT with the warning (unless the node is already Dec).

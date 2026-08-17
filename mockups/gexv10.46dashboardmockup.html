@@ -102,7 +102,6 @@ body {
 .node-row {
   display: flex;
   align-items: center;
-  font-size: 10px;
   padding: 3px 6px;
   border-bottom: 1px solid #161b26;
   gap: 6px;
@@ -288,31 +287,96 @@ body {
   <button class="tab" onclick="showTesting()">🧪 Testing</button>
 </div>
 
-<!-- ============= DASHBOARD TAB (A.2 as shipped) ============= -->
+<!-- ============= DASHBOARD TAB ============= -->
 <div id="dashboard-view" class="active-view">
-<div style="border:1px solid #f0616d;background:rgba(240,97,109,.08);border-radius:6px;padding:1px 8px;margin:2px 0 4px;font-size:9.5px;font-weight:800;color:#f0616d">⚠ Out of sync</div>
-<div style="display:flex;justify-content:space-between;align-items:center;gap:4px;margin:4px 0 6px;padding:0 2px">
-  <span style="display:inline-flex;flex-direction:column;align-items:center;padding:3px 6px;border-radius:14px;background:#0b0e14;border:1.5px solid #2ec27e"><span style="font-size:7.5px;font-weight:800;color:#2ec27e"><span style="display:inline-flex;width:11px;height:11px;border-radius:50%;border:1px solid #666;color:#666;font-size:7px;font-weight:800;align-items:center;justify-content:center;margin-right:2px;vertical-align:middle">1</span>★ SUP</span><span style="width:100%;height:1px;background:#1a2029;margin:2px 0"></span><span><b style="font-size:12.5px;color:#2ec27e">773.25</b> <span style="color:#666;font-size:8.5px">41%</span></span></span>
-  <span style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;padding:3px 8px;border:1.5px solid #d4a574;border-radius:14px;background:#0b0e14"><span style="display:inline-flex;align-items:center"><span style="display:inline-flex;width:11px;height:11px;border-radius:50%;border:1px solid #666;color:#666;font-size:7px;font-weight:800;align-items:center;justify-content:center;margin-right:2px;vertical-align:middle">2</span><span style="font-size:12px">👑</span><span style="color:#d4a574;font-weight:800;font-size:13px;margin-left:3px">775.38</span><span style="color:#2ec27e;font-weight:800;font-size:11px;margin-left:3px">+1↑</span></span><span style="width:100%;height:1px;background:#1a2029"></span><span style="display:inline-flex;align-items:center;gap:3px"><svg width="12" height="11" viewBox="0 0 20 18" fill="none" stroke="#c8d3df" stroke-width="1.8" stroke-linecap="round" style="vertical-align:middle"><path d="M3 16 V7 a7 7 0 0 1 14 0 V16"/><line x1="3" y1="16" x2="17" y2="16"/><line x1="7" y1="16" x2="7" y2="6"/><line x1="10" y1="16" x2="10" y2="4.2"/><line x1="13" y1="16" x2="13" y2="6"/><line x1="4.5" y1="10" x2="15.5" y2="10"/></svg><span style="font-weight:700;font-size:10px">774.50</span><span style="color:#2ec27e;font-weight:800;font-size:10px">+0↑</span></span></span>
-  <span style="display:inline-flex;flex-direction:column;align-items:center;padding:3px 6px;border-radius:14px;background:#0b0e14;border:1.5px solid #f0616d"><span style="font-size:7.5px;font-weight:800;color:#f0616d"><span style="display:inline-flex;width:11px;height:11px;border-radius:50%;border:1px solid #666;color:#666;font-size:7px;font-weight:800;align-items:center;justify-content:center;margin-right:2px;vertical-align:middle">3</span>★ RES</span><span style="width:100%;height:1px;background:#1a2029;margin:2px 0"></span><span><b style="font-size:12.5px;color:#f0616d">776.50</b> <span style="color:#666;font-size:8.5px">33%</span></span></span>
+
+<!-- READ BLOCK -->
+<div class="read-block">
+  <span class="read-label">READ ▸</span>
+  <div class="read-text">
+    <div><strong>👑 775.38</strong> · zone <strong style="color: #d4a574">PULL</strong> — pull toward 60% [📊 n=201] · King magnet <strong style="color: #2ec27e">▲ 12%</strong></div>
+    <div style="margin-top: 3px">Range <strong>773.25–776.50</strong> inside — ▔ Ceil 776.50 Steady · ⛰ Flr 773.25 Building</div>
+    <div style="margin-top: 3px">Non-King mass <strong style="color: #2ec27e">heavier BELOW → lean up</strong> — repel 62% [📊 n=85]</div>
+    <div style="margin-top: 3px">Regime <strong style="color: #d4a574">TREND</strong> (efficiency 68%) — respect the direction; range being redefined</div>
+  </div>
+  <div class="read-detail">📊 = measured on local repo · 201 bars · ⚖ = hand-set until n≥20 · re-scored nightly</div>
 </div>
-<div style="padding:3px 7px 4px;border-left:2px solid #d4a574;margin:2px 0 3px;background:#0b0e14;border-radius:0 8px 8px 0;font-size:9.5px;line-height:1.4"><b style="color:#2ec27e">BULLISH.</b> Up to King <b style="color:#d4a574">775.38</b>. Gate <b>774.5</b> held 2×. Sup <b>773.25</b> building, Res <b>776.5</b> steady. King heavier — pulling up. <b>60%</b> at this distance, <b>74%</b> this hour 📊. Watch <b>773.25</b>.</div>
-<div style="display:flex;align-items:center;gap:6px;margin:5px 2px 3px"><span style="font-size:11px;font-weight:800">⚡ Deflections</span><span style="font-size:9px;color:#666">1 · newest ←</span></div>
-<div style="display:flex;gap:8px;overflow-x:auto;padding:0 2px 5px">
-  <div style="flex:0 0 auto;min-width:118px;background:#0b0e14;border:1px solid #2ec27e;border-radius:8px;padding:4px 8px"><div style="display:flex;align-items:baseline;gap:5px"><span style="font-size:13px;font-weight:800">774.50</span><span style="font-size:10px;color:#2ec27e;font-weight:800">▲</span><span style="font-size:8px;color:#666;margin-left:auto">12:15</span></div><div style="font-size:9.5px;font-weight:700;margin:1px 0 2px">Defl · Gate</div><div style="display:flex;gap:3px;margin-bottom:2px"><span style="font-size:8px;border:1px solid #1a2029;border-radius:9px;padding:0 4px;color:#666">Acm ▲9%</span><span style="font-size:8px;border:1px solid #1a2029;border-radius:9px;padding:0 4px;color:#666">+γ</span><span style="font-size:8px;border:1px solid #1a2029;border-radius:9px;padding:0 4px;color:#666">2nd tap</span></div><div><span style="font-size:13px;font-weight:800;color:#2ec27e">B</span> <span style="font-size:8px;color:#666">64% n22 📊</span></div></div>
+
+<!-- KING BADGE -->
+<div class="badge-row">
+  <div class="badge" style="border-color: #2ec27e">
+    <span class="badge-title">👑</span>
+    <div class="badge-divider"></div>
+    <span class="badge-value">775.38</span>
+    <span class="badge-sub">+3↑</span>
+  </div>
 </div>
-<div style="margin:4px 2px 3px;font-size:9.5px;line-height:1.4"><b style="color:#2ec27e">CONT</b> thru Gate <b>774.5</b> → King <b style="color:#d4a574">775.38</b>: Dec ▼8%, King <b style="color:#d4a574">775.38</b> Acm ▲12% pulling. Sup <b>773.25</b> Acm ▲19%.</div>
-<div style="display:grid;grid-template-columns:96px 66px 78px 1fr;column-gap:4px;font-size:7px;letter-spacing:.3px;text-transform:uppercase;color:#666;font-weight:800;padding:0 5px 2px"><span><span style="display:inline-flex;width:11px;height:11px;border-radius:50%;border:1px solid #666;color:#666;font-size:7px;font-weight:800;align-items:center;justify-content:center;margin-right:2px;vertical-align:middle">5</span>Identity</span><span>Strike · %</span><span>State</span><span style="text-align:right">Activity · Life</span></div>
+
+<!-- DEFLECTION SIGNALS -->
+<div class="section-title">Deflections</div>
+<div class="deflection-block">
+  <div class="defl-item">
+    <span class="defl-time">12:15</span>
+    <span class="defl-level">774.50</span>
+    <span class="defl-event">Defl ↑</span>
+    <span class="defl-outcome">+0.88</span>
+  </div>
+  <div class="defl-item">
+    <span class="defl-time">12:08</span>
+    <span class="defl-level">776.25</span>
+    <span class="defl-event">Push ↓</span>
+    <span class="defl-outcome">−1.75</span>
+  </div>
+  <div class="defl-item">
+    <span class="defl-time">11:52</span>
+    <span class="defl-level">775.38</span>
+    <span class="defl-event">BOw · FT ↑</span>
+    <span class="defl-outcome">+2.12</span>
+  </div>
+</div>
+
+<!-- NODE MAP -->
+<div class="section-title">Node Map</div>
 <div class="node-map">
-<div style="display:grid;grid-template-columns:96px 66px 78px 1fr;column-gap:4px;align-items:center;font-size:9.5px;padding:2px 5px;background:transparent;white-space:nowrap"><span style="color:#666;font-size:8px;font-weight:800;border:1px solid #666;border-radius:10px;padding:0 5px;justify-self:start">★ Mag · next</span><span style="color:#666;font-weight:700"><b style="color:#c8d3df">777.75</b> · 22%</span><span style="color:#2ec27e;font-weight:800;font-size:8px">Acm ▲6%</span><span style="text-align:right;display:flex;justify-content:flex-end;gap:5px"><span style="color:#666;font-size:8px">● F</span></span></div>
-<div style="display:grid;grid-template-columns:96px 66px 78px 1fr;column-gap:4px;align-items:center;font-size:9.5px;padding:2px 5px;background:transparent;white-space:nowrap"><span style="color:#f0616d;font-size:8px;font-weight:800;border:1px solid #f0616d;border-radius:10px;padding:0 5px;justify-self:start">▔ Ceil</span><span style="color:#666;font-weight:700"><b style="color:#c8d3df">776.50</b> · 33%</span><span style="color:#f0616d;font-weight:800;font-size:8px">Dec ▼3%</span><span style="text-align:right;display:flex;justify-content:flex-end;gap:5px"><span style="color:#f0616d;border:1px solid #f0616d;border-radius:9px;padding:0 5px;font-size:8px;font-weight:800">Defl ↓</span><span style="color:#666;font-size:8px">● T2</span></span></div>
-<div style="display:grid;grid-template-columns:96px 66px 78px 1fr;column-gap:4px;align-items:center;font-size:9.5px;padding:2px 5px;background:rgba(46,194,126,.06);white-space:nowrap"><span style="color:#d4a574;font-size:8px;font-weight:800;border:1px solid #d4a574;border-radius:10px;padding:0 5px;justify-self:start">👑 King</span><span style="color:#666;font-weight:700"><b style="color:#d4a574">775.38</b> · 100%</span><span style="color:#2ec27e;font-weight:800;font-size:8px">Acm ▲12%</span><span style="text-align:right;display:flex;justify-content:flex-end;gap:5px"><span style="color:#6699dd;border:1px solid #6699dd;border-radius:9px;padding:0 5px;font-size:8px;font-weight:800">Pull</span><span style="color:#666;font-size:8px">● F</span></span></div>
-<div style="display:grid;grid-template-columns:96px 66px 78px 1fr;column-gap:4px;align-items:center;font-size:9.5px;padding:2px 5px;background:rgba(46,194,126,.06);white-space:nowrap"><span style="color:#f2b45a;font-size:8px;font-weight:800;border:1px solid #f2b45a;border-radius:10px;padding:0 5px;justify-self:start"><svg width="12" height="11" viewBox="0 0 20 18" fill="none" stroke="#f2b45a" stroke-width="1.8" stroke-linecap="round" style="vertical-align:middle"><path d="M3 16 V7 a7 7 0 0 1 14 0 V16"/><line x1="3" y1="16" x2="17" y2="16"/><line x1="7" y1="16" x2="7" y2="6"/><line x1="10" y1="16" x2="10" y2="4.2"/><line x1="13" y1="16" x2="13" y2="6"/><line x1="4.5" y1="10" x2="15.5" y2="10"/></svg> Gate</span><span style="color:#666;font-weight:700"><b style="color:#c8d3df">774.50</b> · 28%</span><span style="color:#f0616d;font-weight:800;font-size:8px">Dec ▼8%</span><span style="text-align:right;display:flex;justify-content:flex-end;gap:5px"><span style="color:#d4a574;border:1px solid #d4a574;border-radius:9px;padding:0 5px;font-size:8px;font-weight:800">BOw</span><span style="color:#666;font-size:8px">● T2</span></span></div>
-<div style="display:flex;justify-content:center;align-items:center;height:14px;margin:1px 4px;background:#0b0e14;border:1px dashed #6699dd;border-radius:6px;color:#6699dd;font-size:9px;font-weight:800">— SPY 774.30 —</div>
-<div style="display:grid;grid-template-columns:96px 66px 78px 1fr;column-gap:4px;align-items:center;font-size:9.5px;padding:2px 5px;background:transparent;white-space:nowrap"><span style="color:#2ec27e;font-size:8px;font-weight:800;border:1px solid #2ec27e;border-radius:10px;padding:0 5px;justify-self:start">⛰ Flr</span><span style="color:#666;font-weight:700"><b style="color:#c8d3df">773.25</b> · 41%</span><span style="color:#2ec27e;font-weight:800;font-size:8px">Acm ▲19%</span><span style="text-align:right;display:flex;justify-content:flex-end;gap:5px"><span style="color:#2ec27e;font-size:8px;font-weight:800">held</span><span style="color:#666;font-size:8px">● D</span></span></div>
-<div style="display:grid;grid-template-columns:96px 66px 78px 1fr;column-gap:4px;align-items:center;font-size:9.5px;padding:2px 5px;background:transparent;white-space:nowrap"><span style="color:#b58bff;font-size:8px;font-weight:800;border:1px solid #b58bff;border-radius:10px;padding:0 5px;justify-self:start">🍆 Mag · next</span><span style="color:#666;font-weight:700"><b style="color:#c8d3df">771.50</b> · 18%</span><span style="color:#666;font-weight:800;font-size:8px">Steady</span><span style="text-align:right;display:flex;justify-content:flex-end;gap:5px"><span style="color:#666;font-size:8px"></span></span></div>
+  <div class="node-row">
+    <span class="node-strike" style="color: #f0616d">777.75</span>
+    <span class="node-identity">🍆 King</span>
+    <span class="node-activity">Pull 47%</span>
+    <span class="node-life">−γ</span>
+  </div>
+  <div class="node-row">
+    <span class="node-strike" style="color: #f0616d">776.50</span>
+    <span class="node-identity">▔ Ceil</span>
+    <span class="node-activity">Steady · quiet</span>
+    <span class="node-life">2 taps</span>
+  </div>
+  <div class="node-row">
+    <span class="node-strike" style="color: #c8d3df">775.38</span>
+    <span class="node-identity">👑 King</span>
+    <span class="node-activity">at node · 71% tw</span>
+    <span class="node-life">★ 48%</span>
+  </div>
+  <div class="node-row">
+    <span class="node-strike" style="color: #2ec27e">773.25</span>
+    <span class="node-identity">⛰ Flr</span>
+    <span class="node-activity">Building · 12% tw</span>
+    <span class="node-life">1 tap</span>
+  </div>
+  <div class="node-row">
+    <span class="node-strike" style="color: #2ec27e">771.50</span>
+    <span class="node-identity">★ Mag</span>
+    <span class="node-activity">Pull 52%</span>
+    <span class="node-life">Fresh</span>
+  </div>
 </div>
-<div class="feed-status"><span style="color:#2ec27e">SPY:gex</span><span style="color:#f0616d;font-weight:600">⚠ tape</span><span><span style="color:#2ec27e">rec ●</span> saved ✓</span><span>feed v10.47</span></div>
+
+<!-- FEED STATUS -->
+<div class="feed-status">
+  <span style="color: #2ec27e">SPY:gex</span>
+  <span>rec ●</span>
+  <span style="color: #666">feed v10.46</span>
+</div>
+
 </div>
 
 <!-- ============= ANALYSIS TAB ============= -->
@@ -320,102 +384,107 @@ body {
 
 <div class="save-banner">
   <span class="save-banner-label">Today's data isn't saved yet.</span>
-  <button class="save-button">📥 Save &amp; prep review</button>
+  <button class="save-button">📥 Save & prep review</button>
 </div>
 
 <div class="analysis-header">
   <div>
-    <div class="analysis-title">Did the dashboard tell the truth today?</div>
-    <div class="analysis-sub">SPY · 2026-08-15 · 127 bars · 94 scored · same order as the dashboard</div>
+    <div class="analysis-title">End-of-Day Review</div>
+    <div class="analysis-sub">SPY · 2026-08-15 · 127 bars · 94 scored</div>
   </div>
-  <div style="text-align:right">
-    <div class="analysis-sub" style="color:#d4a574">⚘ live from tape</div>
-    <div style="margin-top:4px;font-size:9px"><span style="cursor:pointer;color:#6699dd;border:1px solid #1a2029;border-radius:10px;padding:2px 7px">📂 Load day</span></div>
-  </div>
-</div>
-
-<!-- ① READ verdicts -->
-<div class="step-row">
-  <div class="step-header">① READ — direction & structure</div>
-  <div class="step-content" style="padding:6px 8px">
-    <table style="width:100%;border-collapse:collapse;font-size:8.5px">
-      <tr style="color:#666"><td>time</td><td>verdict</td><td>to</td><td>+30m</td><td>+60m</td><td>reached</td><td>watch</td></tr>
-      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>08:33</td><td style="color:#666">TBD</td><td>—</td><td>+0.4</td><td>+1.1</td><td>—</td><td>774.50 held</td></tr>
-      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>09:12</td><td style="color:#2ec27e;font-weight:800">BULLISH</td><td>👑 775.38 (1.1↑)</td><td style="color:#2ec27e">+0.9</td><td style="color:#2ec27e">+1.3</td><td style="color:#2ec27e">✓ 09:48</td><td>773.25 held</td></tr>
-      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>10:21</td><td style="color:#666;font-weight:800">SIDEWAYS</td><td>773.25–776.50</td><td>+0.2</td><td>−0.3</td><td>inside ✓</td><td>edges held</td></tr>
-      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>12:15</td><td style="color:#f0616d;font-weight:800">BEARISH</td><td>⛰ 773.25 (1.9↓)</td><td style="color:#f0616d">−0.8</td><td>+0.1</td><td style="color:#f0616d">✗</td><td style="color:#f0616d">776.50 broke 13:02</td></tr>
-      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>13:06</td><td style="color:#2ec27e;font-weight:800">BULLISH</td><td>▔ 777.75 (1.2↑)</td><td style="color:#2ec27e">+1.0</td><td style="color:#2ec27e">+1.4</td><td style="color:#2ec27e">✓ 13:39</td><td>776.50 held</td></tr>
-    </table>
-    <div style="font-size:8.5px;color:#666;margin-top:5px">verdicts <b style="color:#c8d3df">3 of 4</b> directional right · destination reached <b style="color:#c8d3df">2 of 3</b> · READ quoted 60% pull, today 67% · CHOP suppressed odds 10:21–12:12 (regime gate fired 1×)</div>
-  </div>
-</div>
-
-<!-- ② Node Map calls -->
-<div class="step-row">
-  <div class="step-header">② NODE MAP — continuation / deflection calls</div>
-  <div class="step-content" style="padding:6px 8px">
-    <table style="width:100%;border-collapse:collapse;font-size:8.5px">
-      <tr style="color:#666"><td>time</td><td>call</td><td>node</td><td>because</td><td>resolved</td></tr>
-      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>09:15</td><td style="color:#2ec27e;font-weight:800">CONT</td><td>Gate 774.50 → 👑</td><td>Gate Dec ▼8% · King Acm ▲12%</td><td style="color:#2ec27e">✓ through 09:27</td></tr>
-      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>09:44</td><td style="color:#f0616d;font-weight:800">DEFL</td><td>Ceil 776.50</td><td>Acm ▲14% · 2nd tap · 777.75 Acm</td><td style="color:#2ec27e">✓ Defl ↓ 09:51</td></tr>
-      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>11:30</td><td style="color:#d4a574;font-weight:800">RSHUF</td><td>—</td><td>3 nodes &gt;20% in 15m</td><td>settled 11:48 · new Gate 775.00</td></tr>
-      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>12:15</td><td style="color:#f0616d;font-weight:800">DEFL</td><td>Ceil 776.50</td><td>Steady · <b style="color:#f0616d">3rd tap</b> · −γ</td><td style="color:#f0616d">✗ broke 13:02</td></tr>
-      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>13:06</td><td style="color:#2ec27e;font-weight:800">CONT</td><td>776.50 → 777.75</td><td>Ceil Dec ▼11% · BO·FT</td><td style="color:#2ec27e">✓ through</td></tr>
-    </table>
-    <div style="font-size:8.5px;color:#666;margin-top:5px">CONT <b style="color:#c8d3df">2/2</b> · DEFL <b style="color:#c8d3df">1/2</b> (the miss was a 3rd tap — warning fired) · 1 reshuffle, 18m, no call issued during it</div>
-  </div>
-</div>
-
-<!-- ③ Deflections + setup performance -->
-<div class="step-row">
-  <div class="step-header">③ DEFLECTIONS — today's events + setup performance</div>
-  <div class="step-content" style="padding:6px 8px">
-    <table style="width:100%;border-collapse:collapse;font-size:8.5px;margin-bottom:6px">
-      <tr style="color:#666"><td>time</td><td>node</td><td>dir</td><td>context</td><td>+30m</td><td>grade</td></tr>
-      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>09:51</td><td>Ceil 776.50</td><td style="color:#f0616d">▼</td><td>Acm ▲14% · +γ · 2nd tap · settled</td><td style="color:#2ec27e">−1.1 ✓</td><td style="color:#2ec27e;font-weight:800">B</td></tr>
-      <tr style="border-top:1px dashed rgba(255,255,255,.06)"><td>12:15</td><td>Gate 774.50</td><td style="color:#2ec27e">▲</td><td>Acm ▲9% · +γ · 2nd tap · RShuf</td><td style="color:#2ec27e">+0.9 ✓</td><td style="color:#666">● rec</td></tr>
-    </table>
-    <div style="font-size:9px;font-weight:700;color:#c8d3df;margin:6px 0 2px">Setup performance <span style="font-weight:400;color:#666">— % of confirmed deflections that continued in the deflection direction · drives the grade</span></div>
-    <div style="font-size:8.5px">
-      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="width:88px">BO·FT retest ↑</span><span style="flex:1;height:8px;background:#1a2029;border-radius:4px;position:relative"><span style="position:absolute;left:0;top:0;bottom:0;width:78%;background:#2ec27e;border-radius:4px"></span></span><span style="width:62px;text-align:right;color:#666">78% · n23</span></div>
-      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="width:88px">King defl</span><span style="flex:1;height:8px;background:#1a2029;border-radius:4px;position:relative"><span style="position:absolute;left:0;top:0;bottom:0;width:71%;background:#2ec27e;border-radius:4px"></span></span><span style="width:62px;text-align:right;color:#666">71% · n31</span></div>
-      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="width:88px">Ceil/Flr defl</span><span style="flex:1;height:8px;background:#1a2029;border-radius:4px;position:relative"><span style="position:absolute;left:0;top:0;bottom:0;width:66%;background:#6699dd;border-radius:4px"></span></span><span style="width:62px;text-align:right;color:#666">66% · n52</span></div>
-      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="width:88px">Reverse Rug</span><span style="flex:1;height:8px;background:#1a2029;border-radius:4px;position:relative"><span style="position:absolute;left:0;top:0;bottom:0;width:67%;background:#6699dd;border-radius:4px"></span></span><span style="width:62px;text-align:right;color:#666">67% · n27</span></div>
-      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="width:88px">Gate defl</span><span style="flex:1;height:8px;background:#1a2029;border-radius:4px;position:relative"><span style="position:absolute;left:0;top:0;bottom:0;width:44%;background:#d4a574;border-radius:4px"></span></span><span style="width:62px;text-align:right;color:#666">44% · n18</span></div>
-      <div style="display:flex;align-items:center;gap:6px;margin:3px 0"><span style="width:88px;color:#f0616d">3rd+ tap (any)</span><span style="flex:1;height:8px;background:#1a2029;border-radius:4px;position:relative"><span style="position:absolute;left:0;top:0;bottom:0;width:31%;background:#f0616d;border-radius:4px"></span></span><span style="width:62px;text-align:right;color:#666">31% · n16</span></div>
+  <div style="text-align: right">
+    <div class="analysis-sub" style="color: #d4a574">⚘ live from tape data</div>
+    <div style="margin-top: 4px; font-size: 9px">
+      <span style="cursor: pointer; color: #6699dd; border: 1px solid #1a2029; border-radius: 10px; padding: 2px 7px">📂 Load day</span>
     </div>
-    <div style="font-size:7.5px;color:#666;margin-top:4px">A+ ≥75 · A ≥68 · B ≥58 · C ≥45 · D &lt;45 · grade unlocks at n≥20 · split by VWAP / session-level proximity once n allows</div>
   </div>
 </div>
 
-<!-- ④ Flow -->
-<div class="step-row">
-  <div class="step-header">④ FLOW — reshuffles · rolling · state changes</div>
-  <div class="step-content" style="padding:6px 8px;font-size:8.5px;line-height:1.6">
-    <div><b style="color:#d4a574">RShuf</b> 11:30–11:48 · 776.50 Dec, 774.50 &amp; 773.25 Acm · new Gate 775.00 · price after: +0.6 in 30m</div>
-    <div><b style="color:#2ec27e">Flr rolled ↑</b> 772.00 → 773.25 at 10:04 (bullish) · price +1.4 next 60m ✓</div>
-    <div><b style="color:#f0616d">Ceil rolled ↓</b> 777.75 → 776.50 at 12:02 (bearish) · price −0.8 next 60m ✓ · rolled back ↑ 13:06</div>
-    <div>State flips on King/Gate/Flr/Ceil: 5 · Acm→Dec on Ceil preceded both breaks · Dec→Acm on Flr preceded the 09:51 bounce</div>
-    <div style="color:#666;margin-top:3px">rolling calls right <b style="color:#c8d3df">2/2</b> today · all-time 📊 64% n=39</div>
+<div class="kpi-row">
+  <div class="grade-badge">
+    <div class="grade-label">GRADE</div>
+    <div class="grade-value">A−</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Direction hit</div>
+    <div class="kpi-value">74%</div>
+    <div class="kpi-sub">30m fwd</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Reversal catch</div>
+    <div class="kpi-value">63%</div>
+    <div class="kpi-sub">flag vs actual</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">King target</div>
+    <div class="kpi-value">18/24</div>
+    <div class="kpi-sub">reached King</div>
   </div>
 </div>
 
-<!-- ⑤ King -->
+<div class="panel" style="background: #12161f">
+  <div style="font-size: 11px; font-weight: 800; color: #d4a574; margin-bottom: 8px">🎯 PROJECTION SCORECARD <span style="color: #666; font-weight: 400">(8d recorded)</span></div>
+  <div style="font-size: 9px; display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed rgba(255,255,255,0.05)">
+    <span style="color: #666">Succession ≥60% → crowned ≤20 bars</span>
+    <span style="font-weight: 600">71% <span style="color: #666">n=34</span></span>
+  </div>
+  <div style="font-size: 9px; display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed rgba(255,255,255,0.05)">
+    <span style="color: #666">Target reached by close</span>
+    <span style="font-weight: 600">68% <span style="color: #666">n=112</span></span>
+  </div>
+  <div style="font-size: 9px; display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed rgba(255,255,255,0.05)">
+    <span style="color: #666">ETA error (median)</span>
+    <span style="font-weight: 600">+2m <span style="color: #666">n=52</span></span>
+  </div>
+  <div style="font-size: 9px; display: flex; justify-content: space-between; padding: 3px 0">
+    <span style="color: #666">Cone coverage</span>
+    <span style="font-weight: 600">71% <span style="color: #666">n=98</span></span>
+  </div>
+  <div style="font-size: 8.5px; color: #d4a574; font-weight: 700; margin: 6px 0 2px">🔧 RECOMMENDATIONS (auto)</div>
+  <div style="font-size: 9px; color: #c8d3df; padding: 2px 0"><span style="color: #2ec27e">▪</span> Cone coverage 71% — within target band.</div>
+  <div style="font-size: 9px; color: #c8d3df; padding: 2px 0"><span style="color: #2ec27e">▪</span> ETA error median +2m — acceptable.</div>
+</div>
+
 <div class="step-row">
-  <div class="step-header">⑤ KING — path &amp; projection scorecard</div>
-  <div class="step-content" style="padding:6px 8px;font-size:8.5px;line-height:1.6">
-    <div>👑 775.38 all day (0 rolls) · first tag 09:48 · reached again 13:20 · <b>closed 0.4 from King</b> — pinned ✓ · %KCh open→noon +12%, →close +19%</div>
-    <div style="color:#666">Projection: target reached 68% n=112 · ETA median +2m · cone coverage 71% · succession 71% n=34 · <span style="color:#2ec27e">▪</span> all within band</div>
+  <div class="step-header">① How the day moved together</div>
+  <div class="step-content">
+    <strong>King · price · S/R dominance band</strong><br><br>
+    <div style="width: 100%; height: 60px; background: #0b0e14; border: 1px solid #1a2029; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #666">[Timeline SVG Chart]</div>
   </div>
 </div>
 
-<!-- ⑥ Review -->
 <div class="step-row">
-  <div class="step-header">⑥ REVIEW — nightly LLM · what worked / missed / change</div>
-  <div class="insight-box"><div class="insight-title">✓ WORKED</div><div style="line-height:1.5">Both CONTINUATION calls resolved; the Gate Dec ▼8% + King Acm pattern held. Flr roll-up at 10:04 was the earliest bullish tell of the day.</div></div>
-  <div class="insight-box" style="background:#1c1113;border-color:#3a1c22"><div style="color:#f0616d;font-weight:800;margin-bottom:4px">✕ MISSED</div><div style="line-height:1.5">12:15 DEFL call on a 3rd tap failed as the warning predicted — the call should have been suppressed, not warned. BEARISH verdict at 12:15 lasted 51m and never reached the floor.</div></div>
-  <div class="insight-box" style="background:#160f1f;border-color:#2e2140"><div style="color:#b58ce0;font-weight:800;margin-bottom:4px">💡 START TRACKING / CHANGE</div>
-    <div style="line-height:1.5">1 · Both failed deflections today were &gt;0.40 from VWAP; both holds were within 0.15 — split deflection grades by VWAP distance once n≥20.<br>2 · Suppress DEFL calls at 3rd+ tap (currently warns) — 31% n=16 all-time.<br>3 · Reshuffle threshold: 20%/15m fired once and matched a real structure change; keep.</div></div>
+  <div class="step-header">② Was the King pulling price?</div>
+  <div class="step-content">
+    <strong>King vs price convergence gap over the day</strong><br><br>
+    <div style="width: 100%; height: 50px; background: #0b0e14; border: 1px solid #1a2029; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #666">[Convergence SVG Chart]</div>
+  </div>
+</div>
+
+<div class="step-row">
+  <div class="step-header">⑤ Which signal to trust</div>
+  <div class="step-content">
+    <div style="font-size: 8.5px; display: flex; align-items: center; gap: 4px; margin: 3px 0">
+      <div style="display: inline-block; height: 6px; width: 40px; background: #1a2029; border-radius: 3px; position: relative"><div style="position: absolute; left: 0; top: 0; bottom: 0; width: 74%; background: #2ec27e; border-radius: 3px"></div></div>
+      <span style="flex: 1">👑 King</span>
+      <span style="color: #2ec27e; font-weight: 700">74%</span>
+    </div>
+    <div style="font-size: 8.5px; display: flex; align-items: center; gap: 4px; margin: 3px 0">
+      <div style="display: inline-block; height: 6px; width: 40px; background: #1a2029; border-radius: 3px; position: relative"><div style="position: absolute; left: 0; top: 0; bottom: 0; width: 68%; background: #2ec27e; border-radius: 3px"></div></div>
+      <span style="flex: 1">📈 Trend</span>
+      <span style="color: #2ec27e; font-weight: 700">68%</span>
+    </div>
+  </div>
+</div>
+
+<div class="insight-box">
+  <div class="insight-title">✓ WORKED</div>
+  <div style="font-size: 10px; color: #c8d3df; line-height: 1.5">King identified the day's range anchor (775.38). Trend machine caught the early breakout above 776 with high conviction. S/R imbalance flipped at the right time, catching the momentum reversal at 11:52.</div>
+</div>
+
+<div class="insight-box" style="background: #1c1113; border-color: #3a1c22">
+  <div style="color: #f0616d; font-weight: 800; margin-bottom: 4px">✕ MISSED</div>
+  <div style="font-size: 10px; color: #c8d3df; line-height: 1.5">Confluence suppressed near the 2pm dip. The regime chip stayed TREND even though the tape showed sideways chop for 12m. Timing on the final push to 776.50 was off by 3 bars.</div>
 </div>
 
 </div>
