@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.0
+// @version    11.0.1
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -375,7 +375,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.0';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.0.1';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3486,7 +3486,15 @@ function restoreSize(){
 }
 
 function fmtNum(x){ return (Math.round(mul(x,100))/100).toString(); }
-function fmtFut(x){ return (Math.round(mul(x,100))/100).toString(); }
+// (v11.0.1) a futures LEVEL is spoken on the instrument's tick — ES/MES/NQ/MNQ trade in 0.25
+// points, so 7716.36 is not a price anyone can trade; 7716.25 is.
+var FUT_TICK={ ES:0.25, NQ:0.25 };
+function futTick(){ try{ var f=(typeof FUTMODE!=='undefined'&&FUTMODE)?FUTMODE.fam:null; return (f && FUT_TICK[f])||null; }catch(e){ return null; } }
+function fmtFut(x){
+  var tk=futTick();
+  if(tk){ var r=Math.round(x/tk)*tk; return (Math.round(mul(r,100))/100).toString(); }
+  return (Math.round(mul(x,100))/100).toString();
+}
 
 // ============================================================================
 // (v10.55 PART E) FUTURES MODE — the chart may be a FUTURE, and then every level
@@ -8215,7 +8223,15 @@ function legVoice(leg){
     // 3 — the node has formed and price is away from it
     if(leg.pbDetected && leg.pbDetected.k!=null && mag!=null){
       out.id=pre+'3';
-      out.s=SRC+' pullback node formed at '+fmtLvl(leg.pbDetected.k)+'. Deflection expected to target '+mag+'.';
+      // (v11.0.1) ON THE BAR IT LANDS the sentence carries what the ⚑ banner used to say —
+      // "rolled down from X" (dn) / "rolled up from X" (up) — and the read takes the ⚑ style;
+      // the separate banner is gone (user: "i dont like the repetition of the same text").
+      var landed=(leg.event==='pbDetected');
+      var rf=leg.pbDetected.rolledFrom;
+      out.event=landed;
+      out.s=SRC+' pullback node formed at '+fmtLvl(leg.pbDetected.k)+
+            ((landed && rf!=null)?(' rolled '+(dn?'down':'up')+' from '+fmtLvl(rf)):'')+
+            '. Deflection expected to target '+mag+'.';
       return out;
     }
     // 1 — the leg is running and the pullback node has not formed yet
@@ -8260,10 +8276,11 @@ function legZoneTag(leg, L){
     if(!leg || leg.dir==='none' || !L || L.k==null) return null;
     var dn=(leg.dir==='dn');
     if(leg.pbDetected && Math.abs(L.k-leg.pbDetected.k)<0.001){
+      // (v11.0.1) the tag is just PB; the roll step lives in the hover (user: "why does it say PB · 2nd lower and not just PB?")
       var lab='PB';
-      if(leg.roll && leg.roll.count>=2) lab+=' · '+legStepWord(leg.roll.count)+' '+(dn?'lower':'higher');
+      var stepTxt=(leg.roll && leg.roll.count>=2)?(' Roll step: '+legStepWord(leg.roll.count)+' '+(dn?'lower':'higher')+(leg.roll.confirmed?' (confirmed)':'')+'.'):'';
       return { lab:lab, dim:false, roll:(leg.roll?leg.roll.count:0),
-               tip:'PULLBACK NODE — the node that formed on the counter-move; the '+(dn?'resistance to sell from':'support to buy from')+'. Its roll step is the Academy count: 2 = signal, 3 = confirmation.' };
+               tip:'PULLBACK NODE — the node that formed on the counter-move; the '+(dn?'resistance to sell from':'support to buy from')+'.'+stepTxt };
     }
     if(leg.magnet && Math.abs(L.k-leg.magnet.k)<0.001){
       return { lab:'TGT', dim:false, roll:0,
@@ -8286,6 +8303,9 @@ function legTagHtml(t, leg){
 }
 // ⚑ the one-line banner for the bar a pullback node lands on.
 function legBannerHtml(sym){
+  // (v11.0.1) RETIRED from the face: the read carries the event (⚑ style + "rolled down from X")
+  // on the bar a pullback node lands. Kept returning '' for any caller.
+  return '';
   try{
     var leg=legEngine(sym||'SPY');
     if(!leg || leg.event!=='pbDetected' || !leg.pbDetected) return '';
@@ -9295,52 +9315,96 @@ function mapSrcHtml(L){
   return '<span title="Which book is this from? '+(L.src||'SPXW')+' — the SPX weekly book converted at today\u2019s ratio; the diamond lanes on the chart. %King is relative to that book\u2019s own King." style="font-size:7.5px;font-weight:800;color:#a371f7;letter-spacing:.3px">'+(L.src||'SPXW')+'</span>';
 }
 // The Map line under the READ. Descriptive: what is bleeding, what is building, what it means.
-function mapLineText(sym, legR, trendConfirmed){
-  var f=nodeFlow(sym); if(!f || !f.ok) return { s:'', html:'', lean:'none' };
-  var parts=[], html=[];
-  function L(k){ return fmtLvl(k); }
-  function W(state){ return mapWord(state); }
-  function P(state){ return state==='acm'?'acm':'dec'; }
-  if(f.widening){
-    var dead=f.widening.dead.map(L).join(' and ');
-    parts.push(dead+' dec; '+L(f.widening.up)+' and '+L(f.widening.dn)+' acm — range widening to '+L(f.widening.dn)+'–'+L(f.widening.up)+'.');
-    html.push(dead+' '+W('dec')+'; '+L(f.widening.up)+' and '+L(f.widening.dn)+' '+W('acm')+' — range widening to '+L(f.widening.dn)+'–'+L(f.widening.up)+'.');
-  }
+// (v11.0.1) THE STRUCTURE SENTENCE — one sentence per situation, in the user's words (2026-08-18):
+// "Ceiling rolling down from 7735 to 7730: 7735 Dec, 7730 Acm. Pullback node likely at 7730."
+// Words: Acm (green) / Dec (red) — never "accumulating/dissipating"; "Dec" is used for gone
+// too. `opts.saidPB` / `opts.saidMagnet` = the leg sentence already named them, so this one
+// does not repeat them. Returns { s (plain), html, id, lean }.
+function mapWordCap(state){
+  var col=state==='acm'?PAL.longAccent:PAL.shortAccent;
+  return '<span style="color:'+col+';font-weight:800">'+(state==='acm'?'Acm':'Dec')+'</span>';
+}
+function mapSentence(sym, legR, trendConfirmed, opts){
+  opts=opts||{};
+  var out={ s:'', html:'', id:null, lean:'none' };
+  var f=nodeFlow(sym); if(!f || !f.ok) return out;
+  var px=f.px; var L=function(k){ return fmtLvl(k); };
+  var A=function(){ return mapWordCap('acm'); }, D=function(){ return mapWordCap('dec'); };
   var ce=f.transfers.filter(function(t){ return t.side==='ceil'; }), fl=f.transfers.filter(function(t){ return t.side==='flr'; });
-  function tr(list, word){
-    return list.slice(0,2).map(function(t){ return word+' '+L(t.from)+' '+P('dec')+' → '+L(t.to)+' '+P('acm'); }).join(' · ');
+  var cUp=ce.filter(function(t){ return t.dir==='up'; }), cDn=ce.filter(function(t){ return t.dir==='dn'; });
+  var fUp=fl.filter(function(t){ return t.dir==='up'; }), fDn=fl.filter(function(t){ return t.dir==='dn'; });
+  var pbClause=function(k){ return opts.saidPB?'':(' Pullback node likely at '+L(k)+'.'); };
+  var magClause=function(k){ return opts.saidMagnet?'':(' Magnet '+L(k)+'.'); };
+  var s='', h='', id=null;
+  function one(word, t, dirWord, tail){        // "Ceiling rolling down from X to Y: X Dec, Y Acm." + tail
+    var base=word+' rolling '+dirWord+' from '+L(t.from)+' to '+L(t.to)+': ';
+    s=base+L(t.from)+' Dec, '+L(t.to)+' Acm.'+tail;
+    h=base+L(t.from)+' '+D()+', '+L(t.to)+' '+A()+'.'+tail;
   }
-  function trH(list, word){
-    return list.slice(0,2).map(function(t){ return word+' '+L(t.from)+' '+W(t.fromState==='gone'?'gone':'dec')+' → '+L(t.to)+' '+W('acm'); }).join(' · ');
+  // priority: both sides same way → compression/expansion → converging → single side → widening → magnet → holding
+  if(cDn.length && fDn.length){
+    id='both-dn'; var c=cDn[0], g=fDn[0];
+    s='Ceiling rolling down from '+L(c.from)+' to '+L(c.to)+', floor rolling down from '+L(g.from)+' to '+L(g.to)+' — structure leaning down.'+pbClause(c.to)+magClause(g.to);
+    h='Ceiling rolling down from '+L(c.from)+' to '+L(c.to)+', floor rolling down from '+L(g.from)+' to '+L(g.to)+' — structure leaning down.'+pbClause(c.to)+magClause(g.to);
+  } else if(cUp.length && fUp.length){
+    id='both-up'; var c2=cUp[0], g2=fUp[0];
+    s='Floor rolling up from '+L(g2.from)+' to '+L(g2.to)+', ceiling rolling up from '+L(c2.from)+' to '+L(c2.to)+' — structure leaning up.'+pbClause(g2.to)+magClause(c2.to);
+    h=s;
+  } else if(cDn.length && fUp.length){
+    id='compress'; var c3=cDn[0], g3=fUp[0];
+    s='Ceiling rolling down from '+L(c3.from)+' to '+L(c3.to)+', floor rolling up from '+L(g3.from)+' to '+L(g3.to)+' — range compressing to '+L(g3.to)+'–'+L(c3.to)+'. Break pending, direction undecided.'; h=s;
+  } else if(cUp.length && fDn.length){
+    id='expand'; var c4=cUp[0], g4=fDn[0];
+    s='Ceiling rolling up from '+L(c4.from)+' to '+L(c4.to)+', floor rolling down from '+L(g4.from)+' to '+L(g4.to)+' — range widening to '+L(g4.to)+'–'+L(c4.to)+'. Rotation between them.'; h=s;
+  } else if(cUp.length && cDn.length && Math.abs(cUp[0].to-cDn[0].to)<0.001){
+    id='converge'; var k5=cUp[0].to;
+    s='Ceilings converging on '+L(k5)+': '+L(cUp[0].from)+' rolling up, '+L(cDn[0].from)+' rolling down. '+L(k5)+' becoming the resistance.'; h=s;
+  } else if(fUp.length && fDn.length && Math.abs(fUp[0].to-fDn[0].to)<0.001){
+    id='converge-flr'; var k6=fUp[0].to;
+    s='Floors converging on '+L(k6)+': '+L(fDn[0].from)+' rolling down, '+L(fUp[0].from)+' rolling up. '+L(k6)+' becoming the support.'; h=s;
+  } else if(cDn.length){ id='ceil-dn'; one('Ceiling', cDn[0], 'down', pbClause(cDn[0].to)); }
+  else if(cUp.length){ id='ceil-up'; one('Ceiling', cUp[0], 'up', ' Room above to '+L(cUp[0].to)+'.'); }
+  else if(fUp.length){ id='flr-up'; one('Floor', fUp[0], 'up', pbClause(fUp[0].to)); }
+  else if(fDn.length){ id='flr-dn'; one('Floor', fDn[0], 'down', ' Room below to '+L(fDn[0].to)+'.'); }
+  else if(f.widening){
+    id='middle'; var dead=f.widening.dead.map(L).join(' and ');
+    s=dead+' Dec between '+L(f.widening.up)+' and '+L(f.widening.dn)+', both Acm. Middle emptying — faster travel between them.';
+    h=dead+' '+D()+' between '+L(f.widening.up)+' and '+L(f.widening.dn)+', both '+A()+'. Middle emptying — faster travel between them.';
   }
-  if(ce.length || fl.length){
-    var seg=[tr(ce,'ceiling'), tr(fl,'floor')].filter(Boolean).join(' · ');
-    var segH=[trH(ce,'ceiling'), trH(fl,'floor')].filter(Boolean).join(' · ');
-    var mean='';
-    if(f.lean==='dn') mean=' — '+f.leanWhy+', structure leaning down.';
-    else if(f.lean==='up') mean=' — '+f.leanWhy+', structure leaning up.';
-    else if(ce.length && fl.length) mean=' — sides rolling apart.';
-    else mean='.';
-    parts.push(seg+mean); html.push(segH+mean);
-  }
-  // an accumulating node beyond the magnet in the leg direction: the magnet is moving
+  // magnet moving (rides on any of the above, or stands alone)
   try{
     if(legR && legR.dir!=='none' && legR.magnet){
       var dn=(legR.dir==='dn'); var mk=legR.magnet.k;
       var beyond=f.nodes.filter(function(n){ return n.state==='acm' && (dn?(n.k<mk-0.001):(n.k>mk+0.001)) && n.pct>=PB_MIN_PCT; })
                         .sort(function(a,b){ return Math.abs(a.k-mk)-Math.abs(b.k-mk); })[0];
-      if(beyond){ var w=(legR.magnet.isKing?'the King':L(mk));
-        parts.push(L(beyond.k)+' acm '+(dn?'below':'above')+' '+w+' — magnet moving '+(dn?'down':'up')+' to '+L(beyond.k)+'.');
-        html.push(L(beyond.k)+' '+W('acm')+' '+(dn?'below':'above')+' '+w+' — magnet moving '+(dn?'down':'up')+' to '+L(beyond.k)+'.'); }
+      if(beyond){
+        var w=(legR.magnet.isKing?'the King':L(mk));
+        var ms=L(beyond.k)+' Acm '+(dn?'below':'above')+' '+w+' — magnet moving '+(dn?'down':'up')+' to '+L(beyond.k)+'.';
+        var mh=L(beyond.k)+' '+A()+' '+(dn?'below':'above')+' '+w+' — magnet moving '+(dn?'down':'up')+' to '+L(beyond.k)+'.';
+        s=(s?s+' ':'')+ms; h=(h?h+' ':'')+mh; if(!id) id='magnet';
+      }
     }
   }catch(eM){}
+  if(!s){
+    // holding: name the edges once
+    var up=f.nodes.filter(function(n){ return n.side==='above' && n.state!=='gone'; }).sort(function(a,b){ return a.k-b.k; })[0];
+    var dnN=f.nodes.filter(function(n){ return n.side==='below' && n.state!=='gone'; }).sort(function(a,b){ return b.k-a.k; })[0];
+    if(up || dnN){ id='holding'; s='Structure holding: '+(up?(L(up.k)+' ceiling'):'')+(up&&dnN?', ':'')+(dnN?(L(dnN.k)+' floor'):'')+', no transfer under way.'; h=s; }
+  }
   var cav='';
   if(f.lean!=='none' && !trendConfirmed) cav=' SMA-50 has no trend: structure leads, trend unconfirmed.';
   else if(f.lean!=='none' && trendConfirmed && legR && legR.dir!=='none' && legR.dir!==f.lean) cav=' Structure rolling against the trend — caution.';
-  if(!parts.length) return { s:'', html:'', lean:f.lean };
-  return { s:parts.join(' ')+cav, html:html.join(' ')+(cav?'<span style="color:'+PAL.sub+'">'+cav+'</span>':''), lean:f.lean, transfers:f.transfers.length, widening:!!f.widening };
+  out.s=s?(s+cav):''; out.html=h?(h+(cav?'<span style="color:'+PAL.sub+'">'+cav+'</span>':'')):''; out.id=id; out.lean=f.lean;
+  return out;
+}
+// kept for the recorder (LAST_READ.map) and older callers: plain text of the structure sentence
+function mapLineText(sym, legR, trendConfirmed){
+  try{ var m=mapSentence(sym, legR, trendConfirmed, {}); return { s:m.s, html:m.html, lean:m.lean, id:m.id }; }catch(e){ return { s:'', html:'', lean:'none' }; }
 }
 function mapLineHtml(sym, legR, trendConfirmed){
+  // (v11.0.1) the structure sentence is part of the ONE read now (readBlock44); this separate
+  // line is retired. Kept returning '' so nothing that still calls it can break.
+  return '';
   try{
     var m=mapLineText(sym, legR, trendConfirmed); if(!m.html) return '';
     var tip=('What is the structure doing? Every meaningful node within '+PB_REACH+' strikes (SPY strikes and the SPXW-derived lanes) is read for accumulation: acm = %King up ≥'+MAP_ACM+'% over 15m; dec = down ≥'+(-MAP_DEC)+'% or ≥'+MAP_DROP+'% off its session peak; a node that drops out of the book counts as dissipated. A dec node with an acm neighbour on the same side = the ceiling/floor rolling; a dec node between acm nodes on both sides = the range widening; both sides rolling the same way = a structural lean. Always on, both sides, independent of the SMA — the SMA confirms, it does not gate. Descriptive, never an instruction.').replace(/"/g,'');
@@ -9485,7 +9549,6 @@ function deflZonesBlock(sym){
         '<span style="color:'+pcol+'">●</span>'+
         '<span style="font-weight:800;color:'+(L.isKing?PAL.gold:PAL.ink)+'">'+fmtLvl(L.k)+'</span>'+
         '<span style="color:'+(L.isKing?PAL.gold:PAL.sub)+';font-weight:700">'+zoneRole(L)+'</span>'+
-        mapSrcHtml(L)+
         legZoneTagHtml(legR, L)+
         mapChipHtml(mapStateOf(sym,L))+
         trigHtml+
@@ -9537,7 +9600,6 @@ function deflZonesBlock(sym){
         '<span style="color:'+pcol+'">◦</span>'+
         '<span style="font-weight:800;color:'+(L.isKing?PAL.gold:PAL.ink)+'">'+fmtLvl(L.k)+'</span>'+
         '<span style="color:'+(L.isKing?PAL.gold:PAL.sub)+';font-weight:700">'+zoneRole(L)+'</span>'+
-        mapSrcHtml(L)+
         legTagHtml(lt, legR)+
         mapChipHtml(mapStateOf(sym,L))+
         zoneGradePill(ng, zoneGradeTip(sym,L,ng))+
@@ -11196,10 +11258,31 @@ function read3Beat(dirWord, L, px, flr, ceil, dr, tgtK, tgtRole, relation, leg, 
     out.base=out.sentence; out.legSentence=legTxt; out.sentence=legTxt+cav;
     out.voiceId=legId; out.caveat=cav.trim()||null;
     out.leg={ dir:leg.dir, phase:leg.phase, count:(leg.roll?leg.roll.count:0) };
+    try{ out.event=!!(legVoice(leg).event); }catch(eEv){ out.event=false; }
   }
+  // (v11.0.1) ONE READ: the structure sentence follows the leg sentence (or stands alone when
+  // there is no leg) in the same paragraph — no "Map:" label, no second block. It does not
+  // repeat a pullback node / magnet the leg sentence has already named.
+  try{
+    var vid=String(out.voiceId||'');
+    var saidPB=/(2|3|4|5|6a|6b)$/.test(vid);            // handoff / formed / pulling back / deflected / stacking name the PB
+    var saidMag=/(1|2|3|4|5|7)$/.test(vid);             // those name the target / magnet
+    var trendConf=(relation==='trend-only'||relation==='confirmed'||relation==='divergence');
+    var ms=mapSentence(READ_SYM||'SPY', leg, trendConf, { saidPB:saidPB, saidMagnet:saidMag });
+    var lead=out.legSentence||out.sentence;             // plain text of what comes first
+    var cavTxt=out.caveat?(' '+out.caveat):'';
+    if(ms && ms.s){
+      out.structure=ms.s; out.structureId=ms.id;
+      out.sentence=lead+' '+ms.s+cavTxt;
+      out.sentenceHtml=lead+' '+ms.html+(out.caveat?(' <span style="color:'+PAL.sub+'">'+out.caveat+'</span>'):'');
+    } else {
+      out.sentenceHtml=lead+(out.caveat?(' <span style="color:'+PAL.sub+'">'+out.caveat+'</span>'):'');
+    }
+  }catch(eMs){}
   return out;
 }
 var LAST_READ={};   // (v11.0 G8) the last rendered READ per sym — recorded on the dir feature
+var READ_SYM='SPY';  // (v11.0.1) the sym read3Beat is speaking for (it has no sym parameter)
 function readBlock44(sym){
   sym=sym||'SPY';
   var S=STATE[sym]||{}; var px=S.price; if(px==null) return '';
@@ -11219,13 +11302,14 @@ function readBlock44(sym){
   }catch(eFr){}
   var legR=(sp&&sp.leg)||null;
   if(!legR){ try{ legR=legEngine(sym); }catch(eLg){ legR=null; } }
+  READ_SYM=sym;
   var v=read3Beat(dirWord, L, px, m.flr, m.ceil, dr, tgtK, tgtRole, d.relation||null, legR, d.capped||null);
   // (v11.0 audit G8) THE READ IS ON THE RECORD. The sentence the user actually saw (and the leg
   // voice id) was never recorded, so the brief's contradiction #1 (READ vs direction) was
   // vacuous. LAST_READ is picked up by the `dir` feature record on the closed bar.
   try{ LAST_READ[sym]={ t:Date.now(), verdict:v.verdict, sentence:String(v.sentence||'').slice(0,240), voiceId:v.voiceId||null,
                         legDir:legR?legR.dir:'none', legPhase:legR?legR.phase:'none', dirSrc:legR?(legR.dirSrc||'sma'):null,
-                        map:(function(){ try{ var mm=mapLineText(sym, legR, (d.trendState==='up'||d.trendState==='dn')); return mm&&mm.s?String(mm.s).slice(0,240):''; }catch(e){ return ''; } })() }; }catch(eLR){}
+                        map:String(v.structure||'').slice(0,240), structureId:v.structureId||null }; }catch(eLR){}
   var vcol={BULLISH:PAL.longAccent,BEARISH:PAL.shortAccent,SIDEWAYS:PAL.sub}[v.verdict]||PAL.sub;
   // Direction grade chip — letter only, NO ⚖ (the tier + regime live in the hover).
   var g=d.grade||'C', gdisp=d.disp||g;
@@ -11262,18 +11346,23 @@ function readBlock44(sym){
   if(heat.state==='cold'){
     hBadge='<span title="Is the model reading this tape well? The last '+heat.n+' resolved direction/node grades were '+heat.rate+'% right (below 40% = cold). Descriptive self-report, never a forecast." style="font-size:8px;font-weight:700;color:'+PAL.shortAccent+';border:1px solid '+PAL.shortAccent+';border-radius:8px;padding:0 4px">model cold</span>';
   }
-  var rTip=('Which way is the tape leaning, and where can it go? '+v.verdict+' — '+v.sentence).replace(/"/g,'');
-  return '<div style="border-left:2px solid '+PAL.gold+';background:'+PAL.card+';border-radius:0 8px 8px 0;padding:3px 7px;margin:2px 0 5px">'+
+  var rTip=('Which way is the tape leaning, and where can it go? '+v.verdict+' — '+v.sentence+
+    ' · Structure: every meaningful node within '+PB_REACH+' strikes (SPY strikes and the SPXW lanes) is read for accumulation — Acm = %King up ≥'+MAP_ACM+'% over 15m, Dec = down ≥'+(-MAP_DEC)+'% or ≥'+MAP_DROP+'% off its session peak or dropped out of the book; a Dec node with an Acm neighbour on the same side = the ceiling/floor rolling. Descriptive, never an instruction.').replace(/"/g,'');
+  // (v11.0.1) the bar a pullback node lands: the read takes the ⚑ style (red down / green up)
+  var evt=!!v.event; var evCol=evt?((legR&&legR.dir==='dn')?PAL.shortAccent:PAL.longAccent):PAL.gold;
+  var evBg=evt?((legR&&legR.dir==='dn')?'rgba(240,97,109,.07)':'rgba(63,185,80,.07)'):PAL.card;
+  if(evt){ try{ fireAlert('pbNode', String(legR.pbDetected.k), evCol); }catch(eA){} }
+  var bodyHtml=(v.sentenceHtml||v.sentence);
+  if(evt){ var cut=bodyHtml.indexOf('. Deflection expected'); if(cut>0) bodyHtml='<b style="color:'+evCol+'">⚑ '+bodyHtml.slice(0,cut+1)+'</b>'+bodyHtml.slice(cut+1); else bodyHtml='<b style="color:'+evCol+'">⚑</b> '+bodyHtml; }
+  return '<div style="border-left:2px solid '+evCol+';background:'+evBg+';border-radius:0 8px 8px 0;padding:3px 7px;margin:2px 0 5px">'+
     '<div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:800;white-space:nowrap;overflow:hidden;margin-bottom:1px">'+
       '<span title="'+dTip+'" style="color:'+vcol+'">'+v.arrow+' '+v.verdict+'</span>'+
       '<span title="'+dTip+'" style="color:'+gcol+';background:'+gbg+';padding:0 5px;border-radius:3px;font-size:10px">'+gdisp+'</span>'+
       '<span style="color:'+PAL.line+'">·</span>'+sBadge+hBadge+
     '</div>'+
-    '<div title="'+rTip+'" style="font-size:9.5px;line-height:1.35;color:'+PAL.ink+';display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">'+v.sentence+'</div>'+
-    // (v10.58) THE MAP LINE — the structure read, always on, under the sentence
-    (function(){ try{ return mapLineHtml(sym, legR, (d.trendState==='up'||d.trendState==='dn')); }catch(eMp){ return ''; } })()+
-  '</div>'+
-  (function(){ try{ return legBannerHtml(sym); }catch(eB){ return ''; } })();
+    '<div title="'+rTip+'" style="font-size:9.5px;line-height:1.35;color:'+PAL.ink+';display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden">'+bodyHtml+'</div>'+
+  '</div>';
+  // (v11.0.1) the separate ⚑ banner and the "Map:" line are folded INTO the read above.
 }
 window.__gptsStudyRun=function(){ studyRun(function(r){ try{ render(); }catch(e){} }); };
 window.__gptsRepoExport=function(d){ repoExportDay(d||TODAY,false); };

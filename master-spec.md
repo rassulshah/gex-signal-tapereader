@@ -1041,3 +1041,10 @@ Merges: `drift` → `dir.drift`, `roll` → `dir.kingRoll` (one record each); on
 (`ACM_UP=8`, `ACM_DN=−8`, `ACM_DROP=25`) shared by ledger, Map, leg engine and handoff; the handoff reads
 `mapNodeState`, so it fires on the same evidence as a Map transfer; `accumCanon` reads the feed series first.
 Nothing here adds a claim to the face — it makes the claims already there countable.
+
+## 29. ONE READ (v11.0.1, user-directed 2026-08-18)
+The read is one paragraph: leg sentence (§24.2) → structure sentence (`mapSentence`, twelve situations, Acm/Dec
+words, "rolling down from X to Y") → caveat. No "Map:" label, no separate ⚑ banner: on the bar a pullback node
+lands the read takes the ⚑ style and the sentence reads "Resistance pullback node formed at X rolled down from
+Y." (mirror: "rolled up from"). Roll-count words are hover-only. Futures levels on the instrument tick (ES/NQ
+0.25). Nodes-on-watch tags: PB (plain), TGT, next PB, next wall; SPXW is hover-only.

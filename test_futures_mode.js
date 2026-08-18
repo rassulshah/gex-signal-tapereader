@@ -38,7 +38,8 @@ global.FUT_EMA_A=0.25;
 global.FUTCFG={ mode:'auto' };
 global.FUTMODE={ chart:'SPY', fam:null, underlying:'SPY', r:1, live:true, approx:false, ok:true };
 
-eval(['mul','fmtNum','fmtFut','futCfgLoad','futCfgSave','chartSymFromText','chartPxFromText',
+global.FUT_TICK={ES:0.25,NQ:0.25};
+eval(['mul','fmtNum','futTick','fmtFut','futCfgLoad','futCfgSave','chartSymFromText','chartPxFromText',
       'futRatioStep','feedUnderlyingPx','futDetect','futModeCompute','futModeRefresh','futMode',
       'activeSym','dispIsFut','dispR','dispVal','futMark','fmtLvl','fmtSpan',
       'futCandlesToUnderlying','futRawCandles','futUnderlyingPx','futRatioText','futUnavailableHtml'].map(ex).join('\n'));
@@ -104,9 +105,9 @@ ok(futRatioStep({ema:null,last:null,t:0}, null, null, 'NQ').r===41.36, '3e NQ ha
 // ================= 4. EVERY DISPLAYED LEVEL CONVERTS ==============================
 global.FUTMODE={ chart:'ES', fam:'ES', underlying:'SPY', r:10.0676, live:true, approx:false, ok:true, ratioSrc:'live' };
 ok(dispIsFut()===true && dispR()===10.0676, '4a futures display mode is active');
-ok(fmtLvl(772)==='7772.19', '4b a STRIKE is shown in ES points', fmtLvl(772));
+ok(fmtLvl(772)==='7772.25', '4b a STRIKE is shown in ES points, on the ES 0.25 tick (v11.0.1: 7772.19 → 7772.25)', fmtLvl(772));
 ok(fmtLvl(772).indexOf('772')!==0, '4c ...and the SPY strike is NOT shown alongside it (user decision)', fmtLvl(772));
-ok(fmtSpan(0.5)==='5.03', '4d a zone WIDTH scales by r (0.50 SPY -> ~5 ES points)', fmtSpan(0.5));
+ok(fmtSpan(0.5)==='5', '4d a zone WIDTH scales by r and rounds to the tick (0.50 SPY -> 5 ES points)', fmtSpan(0.5));
 ok(fmtLvl(null)==='–', '4e a missing level is a dash, never a converted zero');
 global.FUTMODE.approx=true; global.FUTMODE.live=false;
 ok(fmtLvl(772).charAt(0)==='≈', '4f once the ratio is assumed, EVERY converted level carries the ≈', fmtLvl(772));
@@ -123,7 +124,7 @@ var DZ=ex('deflZonesBlock');
 ok(/fmtLvl\(L\.k\)/.test(DZ) && /fmtLvl\(fr\.tgt\)/.test(DZ) && /fmtLvl\(fr\.inval\)/.test(DZ),
    '4k the zone rows, the target and the invalidation all go through fmtLvl');
 ok(/fmtSpan\(Math\.abs\(px-L\.k\)\)/.test(DZ), '4l ...and so does the distance');
-ok(/fmtLvl\(leg\.magnet\.k\)/.test(ex('legSentence')) && /fmtLvl\(pb\.k\)/.test(ex('legSentence')),
+ok(/fmtLvl\(leg\.magnet\.k\)/.test(ex('legVoice')) && /fmtLvl\(leg\.pbDetected\.k\)/.test(ex('legVoice')),
    '4m the READ speaks the magnet and the pullback node in the displayed instrument too');
 ok(/fmtLvl\(leg\.pbDetected\.k\)/.test(ex('legDecisionLine')), '4n ...and the decision line');
 ok(/fmtLvl\(kingK\)/.test(ex('kingHeaderBlock')) && /fmtLvl\(gkK\)/.test(ex('kingHeaderBlock')),

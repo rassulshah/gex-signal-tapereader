@@ -1,3 +1,20 @@
+## v11.0.1 — 2026-08-18 — ONE READ (voice fix inside the lockdown)
+
+User-directed: the read and the structure text are one paragraph now — leg sentence first (the 15, unchanged),
+then ONE structure sentence in the user's words, then the caveat; no "Map:" label, no separate ⚑ banner. On the
+bar a pullback node lands the read itself takes the ⚑ style (red down / green up) and the sentence carries the
+banner's detail: "Resistance pullback node formed at 7716.25 rolled down from 7726.25. Deflection expected to
+target 7710." The roll-count words ("2nd step, signal") are gone from the face (hover only). Structure sentences
+(`mapSentence`, twelve situations): "Ceiling rolling down from 7735 to 7730: 7735 Dec, 7730 Acm. Pullback node
+likely at 7730." · ceiling rolling up ("Room above to …") · floor rolling up/down · both down/up ("structure
+leaning …, Pullback node likely at …, Magnet …") · compression · expansion · converging ceilings/floors · middle
+emptying · magnet moving · holding. Words are Acm (green) / Dec (red), never "accumulating/dissipating". A
+pullback node or magnet the leg sentence already named is not repeated. Futures levels round to the instrument
+tick (ES/NQ 0.25: 7716.36 → 7716.25). Nodes on watch: the PB tag is plain "PB" (roll step in the hover), the
+SPXW tag is off the rows (hover only). Recorded: `dir.read.map` = the structure sentence, `structureId`.
+Tests: test_one_read (24); test_leg_engine / test_futures_mode / test_node_map re-pinned. Suite green except
+the 4 known-stale.
+
 ## v11.0 — 2026-08-18 — LOCKDOWN: the stack, the node ledger, the learning path made trustworthy, −1,170 lines of dead code
 
 **Why.** A whole-file audit (design/ARCHITECTURE-AUDIT.md — four independent line-range passes over 14,369 lines

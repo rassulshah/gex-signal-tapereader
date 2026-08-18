@@ -80,11 +80,11 @@ ok(S.magnet.k===773, '1r the magnet is still the King below — the target of th
 // ---- the VOICE (v10.56: the user's own fifteen sentences, verbatim; the full set is
 // pinned character-for-character in test_read_voice_leg.js) ----
 var sent=legSentence(S);
-ok(sent==='Resistance pullback node formed at 775. Deflection expected to target 773.',
-   '1s the READ is the user\'s own sentence: the node that formed, and what the deflection targets', sent);
+ok(sent==='Resistance pullback node formed at 775 rolled down from 775.5. Deflection expected to target 773.',
+   '1s the READ is the user\'s own sentence; ON THE BAR IT LANDS it carries "rolled down from X" (v11.0.1 — the ⚑ banner folded in)', sent);
 ok(legVoice(S).id==='dn3', '1t ...selected by state, not by the renderer', legVoice(S).id);
-ok(!/3rd step/.test(sent) && legZoneTag(S,{k:775}).lab==='PB · 3rd lower',
-   '1u the roll step is on the ROW TAG, never inside the locked sentence', legZoneTag(S,{k:775}).lab);
+ok(!/3rd step/.test(sent) && legZoneTag(S,{k:775}).lab==='PB' && /Roll step: 3rd lower/.test(legZoneTag(S,{k:775}).tip),
+   '1u the roll step is in the ROW HOVER, never on the tag or inside the sentence (v11.0.1: tag is just PB)', legZoneTag(S,{k:775}).lab);
 ok(!/magnet|sell level|resistance to sell from/i.test(sent),
    '1v ...and the sentence quotes plain levels — no jargon the user did not write', sent);
 ok(!/(sell now|go short|enter|stop at|size )/i.test(sent), '1w ...and never an instruction', sent);
@@ -99,7 +99,7 @@ ok(T[3].phase==='RLY' && T[3].pbDetected.k===776,
 // the decision line + the row tags
 ok(legDecisionLine(S,{k:775})==='sell-side deflection · tgt magnet 773 · inval above PB 775',
    '1y the decision line at the pullback node', legDecisionLine(S,{k:775}));
-ok(legZoneTag(S,{k:775}).lab==='PB · 3rd lower', '1z1 the PB row carries its roll step', legZoneTag(S,{k:775}).lab);
+ok(legZoneTag(S,{k:775}).lab==='PB', '1z1 the PB row tag is plain PB (roll step in the hover)', legZoneTag(S,{k:775}).lab);
 ok(legZoneTag(S,{k:773}).lab==='TGT', '1z2 the magnet row is the target', legZoneTag(S,{k:773}).lab);
 ok(legZoneTag(S,{k:776}).lab==='rolled off' && legZoneTag(S,{k:776}).dim===true,
    '1z3 a rolled-off ceiling is marked and dimmed', legZoneTag(S,{k:776}).lab);
@@ -118,8 +118,8 @@ ok(JSON.stringify(U.roll.steps)===JSON.stringify([770,771,772]), '2b pullback SU
 ok(U.roll.count===3 && U.roll.confirmed===true, '2c 3 higher supports = confirmed uptrend', U.roll.count);
 ok(U.roll.side==='flr', '2d the roll is on the FLOOR side in an uptrend', U.roll.side);
 var us=legSentence(U);
-ok(us==='Support pullback node formed at 772. Deflection expected to target 774.',
-   '2e the mirrored voice: SUPPORT pullback node, target above', us);
+ok(us==='Support pullback node formed at 772 rolled up from 771. Deflection expected to target 774.',
+   '2e the mirrored voice: SUPPORT pullback node, target above (landing bar → "rolled up from")', us);
 ok(legVoice(U).id==='up3', '2e2 ...the same state, mirrored', legVoice(U).id);
 ok(legDecisionLine(U,{k:772})==='buy-side deflection · tgt magnet 774 · inval below PB 772',
    '2f ...and the mirrored decision line', legDecisionLine(U,{k:772}));

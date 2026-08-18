@@ -88,8 +88,8 @@ ok('4h ceiling rolling down + floor rolling up (compression) → no lean', mapTr
 ok('5a acm is GREEN, dec is RED, plain words (no arrows)', /#2ec27e/.test(mapWord('acm')) && />acm</.test(mapWord('acm')) && /#f0616d/.test(mapWord('dec')) && />dec</.test(mapWord('dec')) && !/[▲▼↑↓]/.test(mapWord('acm')+mapWord('dec')));
 ok('5b the READ line is labelled "Map:"', /<b style="color:'\+PAL\.sub\+'">Map:<\/b>/.test(src));
 ok('5c the Map line hover is question-first ("What is the structure doing?") and says it is independent of the SMA', /What is the structure doing\?[\s\S]{0,900}independent of the SMA/.test(src));
-ok('5d rows carry the acm/dec/holding chip and the SPXW source tag (in-play card AND other rows)', (src.match(/mapChipHtml\(mapStateOf\(sym,L\)\)/g)||[]).length===2 && (src.match(/mapSrcHtml\(L\)\+/g)||[]).length===2);
-ok('5e the Map line renders under the READ sentence', /mapLineHtml\(sym, legR, \(d\.trendState==='up'\|\|d\.trendState==='dn'\)\)/.test(src));
+ok('5d rows carry the acm/dec/holding chip (in-play card AND other rows); the SPXW tag is OFF the rows (v11.0.1, hover only)', (src.match(/mapChipHtml\(mapStateOf\(sym,L\)\)/g)||[]).length===2 && (src.match(/mapSrcHtml\(L\)\+/g)||[]).length===0);
+ok('5e the structure sentence is part of the ONE read (mapSentence inside read3Beat), no separate Map line', /mapSentence\(READ_SYM\|\|'SPY', leg, trendConf/.test(src) && !/return mapLineHtml\(sym, legR/.test(src));
 
 // ---- 6. structure leads when the SMA has no trend ----
 ok('6a legCtxOf: dirIn falls back to the Map lean when the five-state has no trend (dirSrc map)', /if\(dirIn==='none'\)\{\s*try\{ var mf=nodeFlow\(sym\); if\(mf && mf\.ok && \(mf\.lean==='dn'\|\|mf\.lean==='up'\)\)\{ dirIn=mf\.lean; dirSrc='map'; \}/.test(src));
