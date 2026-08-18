@@ -17,29 +17,29 @@ const T=(side,from,to)=>({side:side,from:from,to:to,dir:(to<from)?'dn':'up',from
 // ---- the twelve structure sentences ----
 FLOW=flow({transfers:[T('ceil',7735,7730)],lean:'dn'});
 let m=mapSentence('SPY',null,true,{});
-ok('1 ceiling rolling down', m.s==='Ceiling rolling down from 7735 to 7730: 7735 Dec, 7730 Acm. Pullback node likely at 7730.', m.s);
+ok('1 ceiling rolling down', m.s==='Ceiling rolling down from 7735 Dec to 7730 Acm. Pullback node likely at 7730.', m.s);
 ok('1h ...Acm green / Dec red words, capitalised, no arrows', /Acm/.test(m.html) && /Dec/.test(m.html) && /#2ec27e/.test(m.html) && /#f0616d/.test(m.html) && !/[→▲▼]/.test(m.html));
 FLOW=flow({transfers:[T('ceil',7725,7730)]});
 m=mapSentence('SPY',null,true,{});
-ok('2 ceiling rolling up', m.s==='Ceiling rolling up from 7725 to 7730: 7725 Dec, 7730 Acm. Room above to 7730.', m.s);
+ok('2 ceiling rolling up', m.s==='Ceiling rolling up from 7725 Dec to 7730 Acm. Room above to 7730.', m.s);
 FLOW=flow({transfers:[T('flr',7710,7715)],lean:'up'});
 m=mapSentence('SPY',null,true,{});
-ok('3 floor rolling up', m.s==='Floor rolling up from 7710 to 7715: 7710 Dec, 7715 Acm. Pullback node likely at 7715.', m.s);
+ok('3 floor rolling up', m.s==='Floor rolling up from 7710 Dec to 7715 Acm. Pullback node likely at 7715.', m.s);
 FLOW=flow({transfers:[T('flr',7715,7710)]});
 m=mapSentence('SPY',null,true,{});
-ok('4 floor rolling down', m.s==='Floor rolling down from 7715 to 7710: 7715 Dec, 7710 Acm. Room below to 7710.', m.s);
+ok('4 floor rolling down', m.s==='Floor rolling down from 7715 Dec to 7710 Acm. Room below to 7710.', m.s);
 FLOW=flow({transfers:[T('ceil',7735,7730),T('flr',7715,7710)],lean:'dn'});
 m=mapSentence('SPY',null,true,{});
-ok('5 both rolling down', m.s==='Ceiling rolling down from 7735 to 7730, floor rolling down from 7715 to 7710 — structure leaning down. Pullback node likely at 7730. Magnet 7710.', m.s);
+ok('5 both rolling down', m.s==='Ceiling rolling down from 7735 Dec to 7730 Acm, floor rolling down from 7715 Dec to 7710 Acm — structure leaning down. Pullback node likely at 7730. Magnet 7710.', m.s);
 FLOW=flow({transfers:[T('ceil',7725,7730),T('flr',7710,7715)],lean:'up'});
 m=mapSentence('SPY',null,true,{});
-ok('6 both rolling up', m.s==='Floor rolling up from 7710 to 7715, ceiling rolling up from 7725 to 7730 — structure leaning up. Pullback node likely at 7715. Magnet 7730.', m.s);
+ok('6 both rolling up', m.s==='Floor rolling up from 7710 Dec to 7715 Acm, ceiling rolling up from 7725 Dec to 7730 Acm — structure leaning up. Pullback node likely at 7715. Magnet 7730.', m.s);
 FLOW=flow({transfers:[T('ceil',7735,7730),T('flr',7710,7715)]});
 m=mapSentence('SPY',null,true,{});
-ok('7 compression', m.s==='Ceiling rolling down from 7735 to 7730, floor rolling up from 7710 to 7715 — range compressing to 7715–7730. Break pending, direction undecided.', m.s);
+ok('7 compression', m.s==='Ceiling rolling down from 7735 Dec to 7730 Acm, floor rolling up from 7710 Dec to 7715 Acm — range compressing to 7715–7730. Break pending, direction undecided.', m.s);
 FLOW=flow({transfers:[T('ceil',7725,7730),T('flr',7715,7710)]});
 m=mapSentence('SPY',null,true,{});
-ok('8 expansion', m.s==='Ceiling rolling up from 7725 to 7730, floor rolling down from 7715 to 7710 — range widening to 7710–7730. Rotation between them.', m.s);
+ok('8 expansion', m.s==='Ceiling rolling up from 7725 Dec to 7730 Acm, floor rolling down from 7715 Dec to 7710 Acm — range widening to 7710–7730. Rotation between them.', m.s);
 FLOW=flow({transfers:[T('ceil',7725,7730),T('ceil',7735,7730)]});
 m=mapSentence('SPY',null,true,{});
 ok('9 converging ceilings', m.s==='Ceilings converging on 7730: 7725 rolling up, 7735 rolling down. 7730 becoming the resistance.', m.s);
@@ -56,7 +56,7 @@ ok('12 holding', m.s==='Structure holding: 7730 ceiling, 7715 floor, no transfer
 // ---- combination rules ----
 FLOW=flow({transfers:[T('ceil',7735,7730),T('flr',7715,7710)],lean:'dn'});
 m=mapSentence('SPY',{dir:'dn',magnet:{k:7710}},true,{saidPB:true,saidMagnet:true});
-ok('13 when the leg sentence already named the pullback node and the magnet, the structure sentence repeats neither', m.s==='Ceiling rolling down from 7735 to 7730, floor rolling down from 7715 to 7710 — structure leaning down.', m.s);
+ok('13 when the leg sentence already named the pullback node and the magnet, the structure sentence repeats neither', m.s==='Ceiling rolling down from 7735 Dec to 7730 Acm, floor rolling down from 7715 Dec to 7710 Acm — structure leaning down.', m.s);
 m=mapSentence('SPY',null,false,{});
 ok('14 no trend + lean → the caveat "SMA-50 has no trend: structure leads, trend unconfirmed."', /structure leads, trend unconfirmed\.$/.test(m.s), m.s);
 m=mapSentence('SPY',{dir:'up',magnet:{k:7730}},true,{});

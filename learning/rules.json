@@ -1701,6 +1701,68 @@
         "sessions": 0,
         "held": false
       }
+    },
+    "nextStop": {
+      "id": "nextStop",
+      "tier": "hand",
+      "condition": "rule-based pick: leg magnet → PB target → Map lean node → wall on the King side → nearer wall",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "The one forward call the panel makes. If a rule cannot reach ~50% at 30m with n, it is demoted in the picker order; A is earned by promotion only.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "nextStop.60": {
+      "id": "nextStop.60",
+      "tier": "hand",
+      "condition": "same pick, 60-minute window",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "Separates a wrong level from a slow one.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
     }
   },
   "proposals": [],

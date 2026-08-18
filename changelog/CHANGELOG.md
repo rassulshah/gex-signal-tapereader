@@ -1,3 +1,20 @@
+## v11.1 — 2026-08-18 — NEXT STOP: the one forward call, above the read (user-directed, enrolled from day one)
+
+"Next Stop: 7721.25 · 30–60m · B" — the level price is expected to reach next, with a confidence grade; hover
+answers "Why this level?" (rule, distance, measured hit-rate with n once it exists). Picker, until data teaches
+otherwise: leg magnet → pullback-node target when the ✓ is latched → the accumulating node in the Map's lean →
+the next wall on the King's side → the nearer wall; grade B when leg and SMA-50 agree and the level is within
+~2× a 30-minute leg, C for structure-only / chop / mid-range, A only by promotion. Never invents: no nodes = no
+line. Recorded at two horizons (`nextStop` 30m, `nextStop.60` 60m — the first feature with its own 20-bar
+window): hit = touched within the contact zone, approach 0..1, wrongFirst; Analysis ① tiles, ⊕ scorecard by
+rule/grade, rules.json (56 ids), nightly brief asks for grading by rule and re-ordering proposals through the
+promotion bar; master-spec §30. Tests: test_next_stop (20). Suite green except the 4 known-stale.
+
+## v11.0.2 — 2026-08-18 — levels said once: "Ceiling rolling down from 7731.25 Dec to 7721.25 Acm."
+
+User-directed wording fix to every rolling sentence: the levels carry their state the first time they are named
+("from X Dec to Y Acm") instead of being repeated after a colon. test_one_read re-pinned.
+
 ## v11.0.1 — 2026-08-18 — ONE READ (voice fix inside the lockdown)
 
 User-directed: the read and the structure text are one paragraph now — leg sentence first (the 15, unchanged),

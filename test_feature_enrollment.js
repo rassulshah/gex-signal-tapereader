@@ -213,13 +213,14 @@ ok(resolveFeatureOutcomes('SPY')===0, '9e FORWARD-ONLY: nothing resolves before 
 for(var b9=0;b9<9;b9++) cs.push({o:774,h:774.3,l:773.9,c:774.1});
 ok(resolveFeatureOutcomes('SPY')===0, '9f 9 bars is still short of fwd=10');
 cs.push({o:774.1,h:775.2,l:774.0,c:775.2});                       // +1.2 up move closes the window
-ok(resolveFeatureOutcomes('SPY')===FEATURES.length, '9g the window closes and every pending record resolves');
+var long9=FEATURES.filter(function(f){ return (f.fwd||FEAT_FWD)>10; }).length;   // (v11.1) nextStop.60 has a 20-bar window
+ok(resolveFeatureOutcomes('SPY')===FEATURES.length-long9, '9g the window closes and every 10-bar record resolves (longer-window features stay pending)');
 ok(resolveFeatureOutcomes('SPY')===0, '9h IDEMPOTENT: a resolved record is never re-scored');
 var q9=recorderDay(recorderLoad()).feat.SPY;
 var dir9=q9.filter(function(r){ return r.key==='dir'; })[0];
 ok(dir9.resolved===true && dir9.hit===1, '9i an UP grade hits on a +1.2 excursion', dir9.hit);
 ok(dir9.mfe>=1.19 && dir9.mae<=0, '9j MFE/MAE written on the record', dir9.mfe+'/'+dir9.mae);
-ok(q9.every(function(r){ return r.mfe!=null && r.mae!=null; }), '9k EVERY resolved record carries MFE/MAE');
+ok(q9.filter(function(r){ return r.resolved; }).every(function(r){ return r.mfe!=null && r.mae!=null; }), '9k EVERY resolved record carries MFE/MAE');
 // ANALYSIS consumer
 var html9=featureScorecardsHtml('SPY');
 ok(html9.length>1000, '9l the Analysis scorecards render', html9.length);

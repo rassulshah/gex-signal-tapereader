@@ -68,5 +68,5 @@ ok('8a Analysis ⑦ NODES section renders the ledger', /tabSection\('a7','⑦','
 ok('8b the ledger section answers the two questions with n', /Does accumulation pull price\?/.test(src) && /Do accumulating nodes deflect more than dissipating ones\?/.test(src));
 ok('8c the node hovers carry the life line', (src.match(/ledgerLifeText\(sym,L\.k\)/g)||[]).length>=2);
 ok('8d ledger.touch is a registered FEATURE with the acm-vs-dec question', /registerFeature\(\{ key:'ledger\.touch'/.test(src) && /acm_deflects_more/.test(src));
-ok('8e rules.json seeds ledger.touch (54 ids after the roll/drift merges)', (function(){ var RJ=JSON.parse(fs.readFileSync('./learning/rules.json','utf8')); return !!RJ.rules['ledger.touch'] && Object.keys(RJ.rules).length===54; })());
+ok('8e rules.json seeds ledger.touch (56 ids)', (function(){ var RJ=JSON.parse(fs.readFileSync('./learning/rules.json','utf8')); return !!RJ.rules['ledger.touch'] && Object.keys(RJ.rules).length===56; })());
 console.log('test_node_ledger: '+p+' passed, '+f+' failed');

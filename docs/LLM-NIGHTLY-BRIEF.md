@@ -281,6 +281,14 @@ Report, with n · effN · vote-split · regime split · MFE/MAE, and NEVER witho
   the range actually widen? These are recorded, non-voting; say plainly whether they have earned a vote.
 
 ## LAYER 2 — STRUCTURE · HANDOFF
+- NEXT STOP (v11.1, USER PRIORITY — "a header above the read saying Next Stop: 7789"). The panel's one forward
+  call: `nextStop` (reached within 30m) and `nextStop.60` (60m), each record {level, rule, dir, grade, dist, px},
+  outcome {hit = touched within DEFLECT_ZONE, approach 0..1, wrongFirst}. Rules in picker order: leg.magnet →
+  leg.pbTarget → map.lean → wall.king → wall.near; grade B = leg + SMA agree and within reach, C otherwise, A only
+  by promotion. Report, with n and effN: hit-rate at 30m and 60m BY RULE and BY GRADE, mean approach on misses,
+  wrongFirst rate, regime split; say which rule is earning its place and which is not; PROPOSE a re-ordering or a
+  demotion through the normal proposal path (local bar decides). This is the seed of the prediction engine — grade
+  it hard, never flatter it, never from one session.
 - `leg.handoff` (v10.56, USER PRIORITY) — when the engine flagged the old ceiling DISSIPATING while a lower node
   built (the handoff), did the `to` node become the PB within fwd, and did price deflect off it toward the magnet?
   Report the LEAD TIME (leadBars before pbDetected) and the false-handoff rate (flagged, never resolved). Mirror for floors.

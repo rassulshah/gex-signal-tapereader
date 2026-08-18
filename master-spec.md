@@ -1048,3 +1048,12 @@ words, "rolling down from X to Y") → caveat. No "Map:" label, no separate ⚑ 
 lands the read takes the ⚑ style and the sentence reads "Resistance pullback node formed at X rolled down from
 Y." (mirror: "rolled up from"). Roll-count words are hover-only. Futures levels on the instrument tick (ES/NQ
 0.25). Nodes-on-watch tags: PB (plain), TGT, next PB, next wall; SPXW is hover-only.
+
+## 30. NEXT STOP (v11.1, user-directed 2026-08-18)
+"Next Stop: <level> · 30–60m · <grade>" above the read — the panel's one forward call. `nextStopPick`: leg magnet →
+PB target (✓ latched) → Map-lean accumulating node → wall on the King's side → nearer wall; grade B when leg + SMA
+agree and the level is within ~2× a 30-minute leg, C for structure-only / chop / mid-range, A only by promotion.
+Recorded as `nextStop` (fwd 10) and `nextStop.60` (fwd 20): hit = touched within DEFLECT_ZONE, approach, wrongFirst;
+Analysis ① tiles at both horizons, ⊕ scorecard by rule/grade; rules.json seeds; the nightly review grades by rule
+and proposes re-ordering through the promotion bar. Rule-based until measured; a learned model plugs into the same
+key. Descriptive: a level, never an instruction.

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.1
+// @version    11.0.2
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -375,7 +375,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.1';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.0.2';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -10288,36 +10288,6 @@ function registerCoreFeatures(){
            condition:'old pullback node/ceiling Dec (m15 ≤ −8% or ≥25% off its session peak) AND a lower node above price building (m15 ≥ +8% or ≥ PB_MIN_PCT)',
            mechanism:'The roll is a STRENGTH transfer before it is a strike change. If the transfer is visible early, the pullback node can be named before it qualifies; if it is not, this is a story and the count rule is all we have.' } });
 
-  // ---- (v11.1) NEXT STOP, RECORDED at two horizons. Outcome: did price touch within
-  // DEFLECT_ZONE of the level (hit); how far toward it price got (approach 0..1); did it go the
-  // other way ≥DIR_PTS first (wrongFirst). Sliced by rule / grade / regime downstream.
-  function _nextStopRecord(sym, ctx){
-    var ns=null; try{ ns=nextStopPick(sym); }catch(e){ ns=null; }
-    var px=(STATE[sym]||{}).price;
-    if(!ns || !ns.ok) return { level:null, rule:null, dir:0, dirNum:0, grade:null, dist:null, px:(typeof px==='number')?px:null, voting:false };
-    return { level:ns.level, rule:ns.rule, dir:ns.dir, dirNum:ns.dir, grade:ns.grade, dist:ns.dist, px:ns.px, k:ns.level, tgt:ns.level, voting:false };
-  }
-  function _nextStopOutcome(rec, fwd){
-    if(!rec || rec.level==null || !fwd || typeof rec.px!=='number') return { hit:null, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
-    var zone=(typeof DEFLECT_ZONE==='number')?DEFLECT_ZONE:0.5;
-    var need=rec.level-rec.px;                 // signed distance to the level
-    var got=(need>=0)?fwd.mfe:fwd.mae;         // signed extreme the same way
-    var hit=(need>=0)?(fwd.mfe>=need-zone):(fwd.mae<=need+zone);
-    var approach=(Math.abs(need)>0.001)?Math.max(0,Math.min(1,got/need)):1;
-    var wrongFirst=(fwd.first==='up' && need<0) || (fwd.first==='dn' && need>0);
-    return { hit:hit?1:0, mfe:fwd.mfe, mae:fwd.mae, approach:+approach.toFixed(2), wrongFirst:!!wrongFirst, rule:rec.rule, grade:rec.grade, dist:rec.dist };
-  }
-  registerFeature({ key:'nextStop', label:'Next Stop · reached within 30m', phase:'dashboard', fwd:FEAT_FWD,
-    record:_nextStopRecord, outcome:_nextStopOutcome,
-    questions:[ { id:'nextstop_30', when:[{f:'grade',v:'B'}], outcome:'tgtHit', note:'does the Next Stop level print within 30 minutes — by rule (leg.magnet / leg.pbTarget / map.lean / wall.*) and by grade?' } ],
-    rule:{ id:'nextStop', tier:'hand', condition:'rule-based pick: leg magnet → PB target → Map lean node → wall on the King side → nearer wall',
-           mechanism:'The one forward call the panel makes. If a rule cannot reach ~50% at 30m with n, it is demoted in the picker order; A is earned by promotion only.' } });
-  registerFeature({ key:'nextStop.60', label:'Next Stop · reached within 60m', phase:'dashboard', fwd:FEAT_FWD*2,
-    record:_nextStopRecord, outcome:_nextStopOutcome,
-    questions:[ { id:'nextstop_60', when:[{f:'grade',v:'B'}], outcome:'tgtHit', note:'the same call at a 60-minute horizon: how much of the miss at 30m is just time?' } ],
-    rule:{ id:'nextStop.60', tier:'hand', condition:'same pick, 60-minute window',
-           mechanism:'Separates a wrong level from a slow one.' } });
-
   // ---- (v11.0) THE LEDGER, RECORDED. The one question the ledger exists to settle as a
   // feature: at the moment price touches a node, does an ACCUMULATING node deflect it more
   // reliably than a DISSIPATING one? Recorded on the in-play node each bar with its ledger
@@ -11311,107 +11281,6 @@ function read3Beat(dirWord, L, px, flr, ceil, dr, tgtK, tgtRole, relation, leg, 
   }catch(eMs){}
   return out;
 }
-
-// ============================================================================
-// (v11.1) NEXT STOP — the panel's one forward call: the level price is expected to reach
-// next (30–60 min), with a confidence grade. User (2026-08-18): "I want a header above the
-// read saying Next Stop: 7789 ... until you have data use whatever you can ... this becomes
-// part of our mental model and data is collected and analyzed and tested and refined and the
-// llm also tries to improve this." RULE-BASED until measured: the picker below is the
-// hand-set hypothesis; every call is RECORDED (nextStop, fwd 10 bars = 30m; nextStop.60,
-// fwd 20 bars = 60m), scored on "did price touch within DEFLECT_ZONE of the level" plus how
-// close it got and whether it went the other way first, sliced by rule / grade / regime in
-// Analysis, seeded in rules.json, and handed to the nightly review to grade calibration by
-// rule and propose re-ordering — through the SAME promotion path as everything else. When
-// a learned model exists it plugs into the same feature key. Descriptive: names a level,
-// never an instruction.
-// ============================================================================
-var NEXTSTOP_RULES={
-  'leg.magnet':   'the magnet in the active leg (price is rallying to it)',
-  'leg.pbTarget': 'the target across the pullback node price is deflecting off (✓ latched)',
-  'map.lean':     'the accumulating node in the direction the structure is rolling',
-  'wall.king':    'the next wall on the King’s side of price (nothing else in play)',
-  'wall.near':    'the nearer wall (no leg, no lean, price at the King)'
-};
-function nextStopPick(sym){
-  sym=sym||'SPY';
-  var out={ ok:false, level:null, rule:null, why:'', dir:0, grade:'C', dist:null, horizon:'30–60m', px:null };
-  try{
-    var S=STATE[sym]||{}; var px=(typeof S.price==='number')?S.price:null; if(px==null) return out;
-    out.px=px;
-    var leg=null; try{ leg=legEngine(sym); }catch(e0){}
-    var d=null; try{ d=directionGrade(sym); }catch(e1){}
-    var m=null; try{ m=nodeMapModel(sym); }catch(e2){}
-    var f=null; try{ f=nodeFlow(sym); }catch(e3){}
-    var trendOk=!!(d && (d.trendState==='up'||d.trendState==='dn'));
-    var a=0.5; try{ a=atr(sym)||0.5; }catch(e4){}
-    var reach30=Math.max(0.5, a*3);           // ~what a normal 30-minute leg travels (3m ATR × ~3, floor half a strike)
-    function set(level, rule, dirNum, base){
-      out.ok=true; out.level=+level.toFixed(2); out.rule=rule; out.dir=dirNum; out.why=NEXTSTOP_RULES[rule]||rule;
-      out.dist=+Math.abs(level-px).toFixed(2);
-      // confidence: B when trend + structure agree and the level is within ~30 min of travel; C otherwise;
-      // A is reserved for a promoted (measured) rule — never hand-set.
-      var g='C';
-      if(base==='leg' && trendOk && out.dist<=reach30*2) g='B';
-      if(d && d.capped && /chop/.test(d.capped)) g='C';
-      if(typeof killActive==='function' && killActive('kill.midrange') && d && d.inputs && d.inputs.rangePos && d.inputs.rangePos.zone==='mid') g='C';
-      out.grade=g;
-    }
-    // 1. an active leg: pulling into / off the PB with a latched ✓ → the target; else the magnet
-    if(leg && leg.dir!=='none'){
-      var dn=(leg.dir==='dn');
-      var latched=false; try{ if(leg.pbDetected){ var ts=deflTriggerState(sym, leg.pbDetected.k, leg.legId); latched=!!(ts && ts.indexOf('✓')===0); } }catch(e5){}
-      if(leg.magnet && leg.magnet.k!=null && ((dn && leg.magnet.k<px) || (!dn && leg.magnet.k>px))){
-        set(leg.magnet.k, latched?'leg.pbTarget':'leg.magnet', dn?-1:1, 'leg'); return out;
-      }
-    }
-    // 2. the Map's lean → the accumulating node in that direction
-    if(f && f.ok && (f.lean==='dn'||f.lean==='up')){
-      var want=(f.lean==='dn')?-1:1;
-      var cand=(f.nodes||[]).filter(function(n){ return n.state==='acm' && n.pct>=PB_MIN_PCT && (want<0?(n.k<px):(n.k>px)); })
-                            .sort(function(x,y){ return Math.abs(x.k-px)-Math.abs(y.k-px); })[0];
-      if(cand){ set(cand.k, 'map.lean', want, 'map'); return out; }
-    }
-    // 3. the next wall on the King's side (the settlement magnet pulls); 4. else the nearer wall
-    var lv=(m&&m.levels)||[]; var kingK=(m&&m.kingK!=null)?m.kingK:null;
-    var walls=lv.filter(function(L){ return L && (L.isKing||L.isFlr||L.isCeil||L.isGatekeeper||L.isStrongMag) && Math.abs(L.k-px)>0.001; });
-    var up=walls.filter(function(L){ return L.k>px; }).sort(function(x,y){ return x.k-y.k; })[0];
-    var dnW=walls.filter(function(L){ return L.k<px; }).sort(function(x,y){ return y.k-x.k; })[0];
-    if(kingK!=null && Math.abs(kingK-px)>0.001){
-      var kUp=(kingK>px); var w=kUp?up:dnW;
-      if(w){ set(w.k, 'wall.king', kUp?1:-1, 'wall'); return out; }
-    }
-    if(up || dnW){
-      var pick=(up && dnW)?((Math.abs(up.k-px)<=Math.abs(dnW.k-px))?up:dnW):(up||dnW);
-      set(pick.k, 'wall.near', (pick.k>px)?1:-1, 'wall'); return out;
-    }
-  }catch(e){}
-  return out;
-}
-// the header line above the read
-function nextStopHtml(sym){
-  try{
-    var ns=nextStopPick(sym); if(!ns.ok || ns.level==null) return '';
-    var st=null; try{ st=featStatsCached(sym); }catch(e){}
-    var b30=(st&&st.byKey&&st.byKey['nextStop'])||{n:0,hit:0}, b60=(st&&st.byKey&&st.byKey['nextStop.60'])||{n:0,hit:0};
-    var r30=b30.n?Math.round(100*b30.hit/b30.n):null, r60=b60.n?Math.round(100*b60.hit/b60.n):null;
-    var e30=effN(b30.n), e60=effN(b60.n);
-    var gcol=ns.grade==='A'?PAL.longAccent:(ns.grade==='B'?PAL.blue:PAL.amber);
-    var lineCol=(ns.grade==='C')?PAL.sub:PAL.gold;
-    var tip=('Why this level? '+ns.why+' — '+fmtSpan(ns.dist)+' '+(ns.dir>0?'above':'below')+' price. Confidence '+ns.grade+' (B = leg and SMA-50 agree and the level is within ~30 min of travel; C = structure-only, chop or mid-range; A only after promotion). '+
-      'Measured here: reached within 30m '+(r30!=null&&e30>=RULE_UNLOCK_N?(r30+'% (eff n '+e30+')'):('— (eff n '+e30+', need '+RULE_UNLOCK_N+')'))+
-      ' · within 60m '+(r60!=null&&e60>=RULE_UNLOCK_N?(r60+'% (eff n '+e60+')'):('— (eff n '+e60+')'))+
-      '. Rule-based until measured; the nightly review grades each rule and proposes re-ordering through the promotion bar. Descriptive — a level, never an instruction.').replace(/"/g,'');
-    return '<div title="'+tip+'" style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:'+lineCol+';padding:1px 7px;margin:2px 0 1px;white-space:nowrap">'+
-      '<span>Next Stop:</span><span style="font-size:12px">'+fmtLvl(ns.level)+'</span>'+
-      '<span style="color:'+PAL.sub+';font-weight:600;font-size:9px">· '+ns.horizon+'</span>'+
-      '<span style="color:'+gcol+';background:rgba(255,255,255,.06);padding:0 5px;border-radius:3px;font-size:10px">'+ns.grade+'</span>'+
-      (r30!=null&&e30>=RULE_UNLOCK_N?('<span style="color:'+PAL.sub+';font-weight:600;font-size:9px">· '+r30+'% @30m</span>'):'')+
-    '</div>';
-  }catch(e){ return ''; }
-}
-window.__gptsDebug=window.__gptsDebug||{};
-window.__gptsDebug.nextStop=function(s){ try{ return nextStopPick(s||'SPY'); }catch(e){ return String(e); } };
 var LAST_READ={};   // (v11.0 G8) the last rendered READ per sym — recorded on the dir feature
 var READ_SYM='SPY';  // (v11.0.1) the sym read3Beat is speaking for (it has no sym parameter)
 function readBlock44(sym){
@@ -12922,11 +12791,6 @@ function analysisBlock(){
     tabTile('Node C', _fpct((nodeG.C||{}).hit,(nodeG.C||{}).n), (nodeG.C||{}).n||0, 'Did grade-C nodes hold? They should be the WORST — that is what makes the grade mean something.')+
     tabTile('Take cells', _fpct(takeHit,takeN), takeN,
       'Of the matrix cells labelled as takes, how many worked? Take cells are scored on the FRAME the card drew (target before invalidation), not on a generic drift.')+
-    // (v11.1) the one forward call, at both horizons
-    tabTile('Next Stop 30m', _fpct(((fs&&fs.byKey&&fs.byKey['nextStop'])||{}).hit,((fs&&fs.byKey&&fs.byKey['nextStop'])||{}).n), ((fs&&fs.byKey&&fs.byKey['nextStop'])||{}).n||0,
-      'Did price reach the Next Stop level (within the contact zone) inside 30 minutes? By rule and grade in the ⊕ scorecard.')+
-    tabTile('Next Stop 60m', _fpct(((fs&&fs.byKey&&fs.byKey['nextStop.60'])||{}).hit,((fs&&fs.byKey&&fs.byKey['nextStop.60'])||{}).n), ((fs&&fs.byKey&&fs.byKey['nextStop.60'])||{}).n||0,
-      'The same call with 60 minutes: how much of a 30-minute miss is just time?')+
   '</div>'+
   '<div style="font-size:8px;color:'+(mono.ok===false?PAL.shortAccent:PAL.sub)+';margin-top:4px;white-space:normal">'+
     (mono.ok===false ? '⚠ node grades are NOT monotone (A '+(mono.a==null?'–':mono.a+'%')+' · B '+(mono.b==null?'–':mono.b+'%')+' · C '+(mono.c==null?'–':mono.c+'%')+') — the fusion is wrong, not the tape.'
@@ -13558,7 +13422,6 @@ function render(){
   try{ html+=kingHeaderBlock(); }catch(eH){}          // (v10.47) header cluster + ①②③ restored
   try{ html+=briefBlockHtml(__asym); }catch(eBr){}    // (v10.49 J) pre-open brief (collapsible)
   if(DRIFT_LIVE){ try{ html+=driftLineHtml(__asym); }catch(eD49){} }   // (v10.57) shadow mode: off the face until proven
-  try{ html+=nextStopHtml(__asym); }catch(eNS){}   // (v11.1) NEXT STOP — the one forward call, above the read
   try{ html+=readBlock44(__asym); }catch(eR){}
   // (v10.37) standalone gatekeeperBlock() REMOVED - gatekeeper strike + distance now in King badge.
   // (v10.27) Standalone BO / SPY Signals section REMOVED. The breakout-pullback

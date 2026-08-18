@@ -62,7 +62,7 @@ const RJ=JSON.parse(fs.readFileSync('./learning/rules.json','utf8'));
 ok(RJ.schema==='gex-rules/v2', '1a learning/rules.json declares schema gex-rules/v2', RJ.schema);
 ok(typeof RJ.asOf==='string' && /^\d{4}-\d{2}-\d{2}$/.test(RJ.asOf), '1b it carries an asOf date', RJ.asOf);
 ok(RJ.weights && RJ.weights.dir && typeof RJ.weights.dir.trend==='number', '1c weights.dir exists and is numeric');
-ok(Object.keys(RJ.rules).length===54, '1d all 54 rule ids carried over (56 + ledger.touch − roll − drift, merged into dir.kingRoll / dir.drift)', Object.keys(RJ.rules).length);
+ok(Object.keys(RJ.rules).length===56, '1d all 56 rule ids carried over (54 + nextStop, nextStop.60)', Object.keys(RJ.rules).length);
 ok(Object.keys(RJ.rules).every(id=>RJ.rules[id].tier==='hand' && RJ.rules[id].promoted===false),
    '1e every carried rule is tier "hand" — nothing ships pre-promoted');
 ok(Object.keys(RJ.rules).every(id=>RJ.rules[id].regime && RJ.rules[id].regime.trend && RJ.rules[id].regime.chop),
@@ -183,7 +183,7 @@ ok(/learning\/rules\.json/.test(ex('pipeRulesTry')), '6e pipeCheck fetches learn
 ok(/PIPE_RAW_BASE/.test(ex('pipeRulesTry')), '6f ...via the same PIPE_RAW_BASE as the review');
 ok(/pipeRulesTry\(P\);/.test(ex('pipeCheck')), '6g ...and it is wired into pipeCheck alongside the review');
 ok(/rulesIngest/.test(ex('pipeRulesTry')), '6h ...a fresh document re-runs the promotion pass');
-ok(/@version\s+11\.0/.test(src) && /v'\+GPTS_VERSION\+' part1 loaded/.test(src) && />v'\+GPTS_VERSION\+'<\/span>/.test(src),
+ok(/@version\s+11\.1/.test(src) && /v'\+GPTS_VERSION\+' part1 loaded/.test(src) && />v'\+GPTS_VERSION\+'<\/span>/.test(src),
    '6i version 10.56 in all three spots');
 
 // ================= 7. SOURCE: THE FIAT PATHS ARE CLOSED ======================
