@@ -1,3 +1,4 @@
+global.FEAT_ARCHIVE={};   // (v11.0) IDB archive of resolved records (empty in the harness)
 // (v10.54, audit 14) ONE TAP = ONE RECORD.
 //
 // The `act` feature decided whether to record the operator's last take/pass with:

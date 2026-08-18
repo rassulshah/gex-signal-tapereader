@@ -1,4 +1,4 @@
-# REVIEW ACCEPTANCE — the self-test for the weekly learning run (v10.53)
+# REVIEW ACCEPTANCE — the self-test for the weekly learning run (v10.53; (f) added v11.0)
 
 The weekly run is an LLM. Nothing else checks whether it reasons honestly about numbers.
 This file is the answer key for a synthetic day with three properties planted at known strengths.
@@ -65,3 +65,11 @@ reporting the rolled-off 776 as live resistance, is a FAIL.
 The review must report `leg.handoff` (n, lead time before pbDetected, false-handoff rate — old ceiling dissipating
 while the new one builds) and `defl.trigger` (✓ hit-rate tgt-before-inval by roll step and grade, ✗ follow-through),
 each with n and effN. Treating a later-failed ✓ as if it had been ✗, or citing a hit-rate without n, is a FAIL.
+
+## (f) Ledger (v11.0) — the reviewer must report the acm-vs-dec deflect rates from `ledger`, with n
+The day file carries `ledger[SYM]` (per node: life, state, touches `{t,bar,react,side,state}`, `infl`). The review
+must report, pooled across nodes and sessions, the deflect-on-touch rate for touches made while the node was `acm`
+against touches made while it was `dec`/`gone`, each with its n — and the toward-rate while acm / away-rate while dec
+from `infl`, with n. If the pooled n is under 20 the review must say plainly "insufficient — n=X" and draw nothing.
+Claiming that accumulating nodes deflect more (or less), or that the SPXW lanes matter as much as native strikes,
+without the n beside the number — or from a single session — is a FAIL.

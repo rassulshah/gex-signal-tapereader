@@ -93,7 +93,7 @@ reset();
 var A=analysisBlock();
 ok(typeof A==='string' && A.length>0, '1a the Analysis tab renders');
 var ASECS=[['①','HEADLINE'],['②','WHAT CHANGED'],['③','DIRECTION FACTORS'],['④','DEFLECTIONS'],
-           ['⑤','YOUR CALLS'],['⑥','NIGHTLY REVIEW'],['⑦','PIPELINE']];
+           ['⑤','YOUR CALLS'],['⑥','REVIEW']]   /* (v11.0) ⑦ PIPELINE lives in the footer; ⑥ = nightly + weekly */;
 var lastAt=-1, inOrder=true;
 ASECS.forEach(function(p){
   var at=A.indexOf(p[0]+' '+p[1]);
@@ -122,7 +122,7 @@ ok(inOrder, '2b ...and they appear in the spec order');
 // ================= 3. EVERY SECTION IS COLLAPSIBLE ==========================
 reset();
 A=analysisBlock();
-ok((A.match(/data-gsec="/g)||[]).length>=8, '3a every Analysis section carries a toggle handle', (A.match(/data-gsec="/g)||[]).length);
+ok((A.match(/data-gsec="/g)||[]).length>=7, '3a every Analysis section carries a toggle handle (①-⑥ + ⊕; ⑦ moved to the footer in v11.0)', (A.match(/data-gsec="/g)||[]).length);
 T=testingBlock();
 ok((T.match(/data-gsec="/g)||[]).length>=7, '3b every Testing section too', (T.match(/data-gsec="/g)||[]).length);
 // a CLOSED section renders its header but not its body
@@ -211,7 +211,7 @@ var qFirst=titles.filter(function(t){ return /\?/.test(t); }).length;
 ok(qFirst>=8, '6b ...and the hovers ask a QUESTION rather than restating the label', qFirst+'/'+titles.length);
 ['Did the dashboard tell the truth today?','Did the model move under me?','Which inputs actually predict?',
  'Which nodes actually hold?','Are the reads you TAKE better than the ones you PASS?',
- 'What did last night’s read-back actually say?','Is the data even getting through?'].forEach(function(q){
+ 'What did the review actually say?'].forEach(function(q){
   ok(A.indexOf(q)>=0, '6·Analysis subtitle asks: '+q);
 });
 ['What is open, and how far from an answer?','What is asking to change the model, and does it clear the bar?',

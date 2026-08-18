@@ -1,3 +1,4 @@
+global.FEAT_ARCHIVE={};   // (v11.0) IDB archive of resolved records (empty in the harness)
 // (v10.49 B) FEATURE ENROLLMENT — the ENFORCEMENT test for the standing rule that no
 // feature ships un-scrutinised. Every FEATURES entry must carry all seven fields, and
 // every key must appear in the recorder export, the analysis iterator and the rules seed.
@@ -69,10 +70,10 @@ F.forEach(function(f){
 
 // ================= 2. the spec's required keys are all present =================
 var keys=F.map(function(f){ return f.key; });
-['dir','drift','node','decision','acm','defl_ant','reaction','act'].forEach(function(k){
+['dir','dir.drift','node','decision','acm','defl_ant','reaction','act'].forEach(function(k){   // (v11.0) drift merged into dir.drift
   ok(keys.indexOf(k)>=0, '2·'+k+' is enrolled');
 });
-['rshuf','roll','gateHour'].forEach(function(k){
+['rshuf','dir.kingRoll','gateHour'].forEach(function(k){   // (v11.0) roll merged into dir.kingRoll
   ok(keys.indexOf(k)>=0, '2·'+k+' Phase-B item enrolled the same way');
 });
 ok(keys.length===new Set(keys).size, '2z no duplicate keys');
@@ -227,8 +228,8 @@ ok(FEATURES.every(function(f){ return html9.indexOf(f.label)>=0; }), '9m every e
 // bar-records of one feature are ONE 30-minute outcome, not ten.
 ok(/● recording eff 0\/20/.test(html9), '9n features under the unlock show "● recording eff x/20"');
 ok(/n=1 bars → eff 0/.test(html9), '9n2 ...and every n is rendered as "n=X bars → eff Y"');
-ok(/BY GRADE/.test(html9) && /DECISION MATRIX/.test(html9) && /YOUR CALLS/.test(html9),
-   '9o by-grade, 3x3 and the takes-vs-passes sections all present');
+ok(/BY GRADE/.test(html9) && /DECISION MATRIX/.test(html9) && !/YOUR CALLS/.test(html9),
+   '9o by-grade and 3x3 present; takes-vs-passes lives ONLY in Analysis ⑤ now (v11.0 dedup)');
 ok(/Direction · SIDE/.test(html9), '9o2 ...with SIDE bars kept in their own by-grade row (v10.54)');
 // OPERATOR consumer
 var act9=actRecord('SPY','take');

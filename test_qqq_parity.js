@@ -37,7 +37,7 @@ ok(/divLab=dispIsFut\(\)\?FUTMODE\.chart:sym/.test(ex('deflZonesBlock')),
 var T=ex('tick');
 ok(/var ASYM=activeSym\(\)/.test(T), '3a the tick resolves the active symbol once');
 ok(/if\(ASYM!=='SPY'\) refreshSym\(ASYM\)/.test(T), '3b QQQ is refreshed when it is the active underlying');
-ok(/if\(ASYM!=='SPY'\) resolveFeatureOutcomes\(ASYM\)/.test(T), '3c ...and its feature outcomes resolve on the same loop');
+ok(/resolveFeatureOutcomes\(sym\)/.test(ex('recordNodeSnapshot')), '3c ...and its feature outcomes resolve on the same loop (inside recordNodeSnapshot, per sym — v11.0 removed the per-tick duplicate)');
 ok(/legEngine\(ASYM\)/.test(T), '3d ...and the leg engine runs on it');
 ok(/nodeHistSample\('SPY'\);\s*\n\s*nodeHistSample\('QQQ'\);/.test(T),
    '3e the node-cluster history is sampled for BOTH symbols, always');

@@ -152,13 +152,17 @@ doc=docWith([ goodProposal({ n:9999 }) ]); RULES_DOC=doc;
 r=applyProposals(doc);
 ok(r.applied.length===0, '1g n=9999 asserted with NOTHING recorded locally does not apply', r.applied.length);
 ok(/eff n=0/.test(r.skipped[0].why), '1h ...the panel reports its OWN n, not the document\'s', r.skipped[0].why);
-// a document that DISAGREES with local truth is refused even when local n clears the bar
+// (v11.0 audit G4) the "self-report within 20% of local n" test is GONE: the reviewer's n spans the
+// whole repo, local truth spans what this machine kept, so the test made promotion impossible as
+// the repo grew. The bar is LOCAL evidence only; a proposal must still carry an n.
 reset(); doc=docWith([ goodProposal({ n:200 }) ]); RULES_DOC=doc;   // local eff n is 42
 r=applyProposals(doc);
-ok(r.applied.length===0, '1i a self-report 5x the local n is refused outright', r.applied.length);
-ok(/disagrees with local eff n=42/.test(r.skipped[0].why), '1j ...and says so', r.skipped[0].why);
-reset(); doc=docWith([ goodProposal({ n:44 }) ]); RULES_DOC=doc;    // within 20% of 42
-ok(applyProposals(doc).applied.length===1, '1k ...while a self-report within 20% of local truth is accepted');
+ok(r.applied.length===1, '1i a self-report far above local n is NOT refused for that reason (local evidence decides)', r.applied.length);
+reset(); doc=docWith([ goodProposal({ n:0 }) ]); RULES_DOC=doc;
+r=applyProposals(doc);
+ok(r.applied.length===0 && /carries no n/.test(r.skipped[0].why), '1j a proposal with no n is malformed and refused', r.skipped[0]&&r.skipped[0].why);
+reset(); doc=docWith([ goodProposal({ n:44 }) ]); RULES_DOC=doc;
+ok(applyProposals(doc).applied.length===1, '1k ...a normal proposal with local eff n>=20, walk-forward held, no flip is accepted');
 // a proposal nothing local measures can never clear the bar
 reset(); doc=docWith([ goodProposal({ id:'p.unknown', target:'', rule:null, kind:'weight' }) ]); RULES_DOC=doc;
 r=applyProposals(doc);
@@ -372,7 +376,7 @@ const PCB=ex('proposalClearsBar');
 ok(/proposalLocalN/.test(PCB), '9k the bar is derived from LOCAL n, not from the proposal');
 ok(/proposalWalkForwardLocal/.test(PCB), '9l ...and the walk-forward from LOCAL sessions');
 ok(!/p\.wf|p\.walkForward/.test(PCB), '9m ...the document\'s own wf block is not consulted at all');
-ok(/disagrees with local/.test(PCB), '9n ...and a self-report that contradicts local truth is refused');
+ok(/carries no n/.test(PCB) && !/dev>0\.20/.test(PCB), '9n ...a proposal must carry an n; the 20% self-report test is gone (v11.0 G4)');
 
 // ================= 10. DEMOTION — promotion is no longer one-way ==============
 // (v10.54, audit 24) Nothing that cleared the bar could ever be taken back, so a rule

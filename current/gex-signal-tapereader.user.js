@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    10.57
+// @version    11.0
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -32,7 +32,6 @@ var SIZE_KEY  = 'gpts_panelsize_v7';
 var STATE_KEY = 'gpts_state_v7';
 var CFG_KEY     = 'gpts_cfg_v8';
 var CFG_KEY_OLD = 'gpts_cfg_v7';   // migrated forward on first v8 load
-var STATS_KEY = 'gpts_stats_v7';
 var RECORDER_KEY = 'gpts_recorder_v7';   // DATA layer: node snapshots + outcome events for LLM analytics
 
 var TREND_WINDOW = 20;
@@ -188,17 +187,14 @@ var STATE = {
   SPY: { price:null, king:null, walls:[], candles:[], cur:null, setups:{}, lastClosedB:0 },
   QQQ: { price:null, king:null, walls:[], candles:[], cur:null, setups:{}, lastClosedB:0 }
 };
-var FUT = { ES:null, NQ:null };
 var LASTFEED = { SPY:null, QQQ:null };
 var LASTVEX = { SPY:null, QQQ:null };
 var LASTDISP = { SPY:null, QQQ:null };   // (v10.48) mode the user is DISPLAYING (gamma/vanna/combined) — distinct from what LASTFEED holds
 var LASTFEEDURL = null;                  // (v10.48) template of the real gex/levels request URL, for dual-capture self-fetch
 var LASTAUTH = null;                     // (v10.49 A) Authorization header captured off a REAL gex/levels request; self-fetch replays it (v10.48 self-fetch 401'd without it)
-var LASTNODEMAP = { SPY:null, QQQ:null };   // (v10.24) last emitted Node Map model (effectiveness capture)
 
 var RESHUFFLE = { SPY:false, QQQ:false };
 var PREVWALLKEYS = { SPY:null, QQQ:null };
-var PREVKING = { SPY:null, QQQ:null };
 
 function ctNow(){ return new Date(new Date().toLocaleString('en-US',{timeZone:'America/Chicago'})); }
 function ctDateStr(d){ d=d||ctNow(); return d.getFullYear()+'-'+two(d.getMonth()+1)+'-'+two(d.getDate()); }
@@ -379,7 +375,8 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-console.log('[GPTS] v10.57 part1 loaded');
+var GPTS_VERSION='11.0';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
   var ks=Object.keys(el);
@@ -407,12 +404,6 @@ function readFiberCandles(sym){
     }
   }
   return null;
-}
-function lastCloseOf(sym){
-  var raw=readFiberCandles(sym);
-  if(!raw || !raw.length) return null;
-  var lastC=raw[raw.length-1];
-  return (lastC && typeof lastC.close==='number') ? lastC.close : null;
 }
 function convertFiberCandles(raw){
   var todayStr=ctTodayStr();
@@ -503,7 +494,6 @@ function captureGuards(sym, walls, king){
       RESHUFFLE[sym] = (common / uCount) < 0.5;
     }
     PREVWALLKEYS[sym]=keys;
-    if(king!=null) PREVKING[sym]=king;
   }catch(e){}
 }
 
@@ -533,16 +523,25 @@ function extractWalls(j){
     (j.derived||[]).forEach(function(dd){
       if(!dd.levels || !dd.levels.length) return;
       var dlast = dd.levels[dd.levels.length-1];
+      // (v10.58) THE DERIVED BOOK IS NORMALISED TO ITS OWN KING. The SPXW-derived lanes
+      // (7715 → 769.5, 7690 → 767.0 at today's ratio) are the diamonds on the user's chart,
+      // and they were being scaled against the SPY King magnitude — a 5.9M SPXW node vs an
+      // 883M SPY node = 0.7%, i.e. every derived lane fell under MIN_STRENGTH and the whole
+      // book was invisible. Each book's %King is relative to that book's own maximum; the
+      // row carries `src` so the face can say which book a node comes from.
+      var dMag=0;
+      (dlast.l||[]).forEach(function(n){ var a=Math.abs(n.v); if(a>dMag) dMag=a; });
+      if(dMag<=0) return;
       (dlast.l||[]).forEach(function(n){
         var snapped = Math.round(mul(n.k,2))/2;
-        var pct = Math.round(mul(100, Math.abs(n.v)/kingMag));
+        var pct = Math.round(mul(100, Math.abs(n.v)/dMag));
         if(pct<MIN_STRENGTH) return;
         var isInt = Math.abs(snapped - Math.round(snapped)) < 0.001;
         if(isInt && byK[Math.round(snapped).toFixed(2)]) return;
         var key = snapped.toFixed(2);
         if(byK[key] && !byK[key].derived) return;
         if(!byK[key] || (byK[key].derived && pct>byK[key].pct)){
-          byK[key] = {k:snapped, pct:pct, abs:n.v, pos:(n.d>0), derived:true, net:(typeof n.net==='number'?n.net:null)};
+          byK[key] = {k:snapped, pct:pct, abs:n.v, pos:(n.d>0), derived:true, src:(dd.source||'SPXW'), net:(typeof n.net==='number'?n.net:null)};
         }
       });
     });
@@ -576,7 +575,7 @@ function synthDerived(native, king, byK){
   }
 }
 
-console.log('[GPTS] v9.1 part2 loaded');
+console.log('[GPTS] v'+GPTS_VERSION+' part2 loaded');
 
 function closedCandles(sym){ return STATE[sym].candles; }
 function atr(sym){
@@ -664,12 +663,6 @@ function trendOkFor(sym, dir){
   var st=trendVerdict(sym).state;
   if(dir==='long')  return (st==='up' || st==='dn-broken');   // uptrend, or downtrend breaking up
   /* short */       return (st==='dn' || st==='up-broken');   // downtrend, or uptrend breaking down
-}
-// conviction tag for a breakout given the current trend state (used by BO labels)
-function breakoutConviction(sym, dir){
-  var st=trendVerdict(sym).state;
-  if(dir==='long')  return st==='up' ? 'high' : (st==='dn-broken'?'early':'none');
-  return st==='dn' ? 'high' : (st==='up-broken'?'early':'none');
 }
 
 // (v10.18) FIVE-STATE trend machine per spec:
@@ -780,8 +773,6 @@ function trendFast(sym){
   return { p10:trendWindowRead(sym,10), p20:trendWindowRead(sym,20) };
 }
 // helpers so the rest of the app reads the machine consistently
-function trendIsUpish(s){ return s==='up'; }
-function trendIsDnish(s){ return s==='dn'; }
 function trendWordOf(state){
   return state==='up'?'Uptrend':state==='dn'?'Downtrend':
          state==='up-broken'?'Uptrend broken':state==='dn-broken'?'Downtrend broken':
@@ -804,6 +795,7 @@ function trendCodeOf(state){
 // bar-count with a state-colored arrow (\u2191 above SMA / \u2193 below). A slope tick sits
 // to the RIGHT of the stack, vertically centered (parallel to the King node's offset
 // arrow), colored by slope DIRECTION (green rising / red falling / grey flat).
+// (v11.0 audit) PARKED — no live caller; kept because test_trendbadge.js pins it.
 function trendBadgeHtml(sym){
   var tv = trendVerdict(sym);
   var st = tv.state;
@@ -842,8 +834,6 @@ function trendBadgeHtml(sym){
   '</span>';
 }
 
-function saveLog(){ }
-var LOG = null;
 
 function stashSlice(sym, j){
   try{
@@ -928,49 +918,6 @@ function rawAccumNode(sym, k){
   return map[k.toFixed(2)] || null;
 }
 
-function accumData(sym){
-  var slices=slicesFor(sym);
-  if(!slices.length) return [];
-  var take=Math.min(ACC_WINDOW, slices.length);
-  var window=slices.slice(slices.length-take);
-  var snaps=[];
-  var step=ACC_SAMPLE_STEP;
-  for(var i=window.length-1; i>=0 && snaps.length<ACC_SAMPLES; i-=step){ snaps.unshift(window[i]); }
-  if(!snaps.length) snaps=[window[window.length-1]];
-  function kingOf(s){ var k=0; (s.l||[]).forEach(function(n){ if(n.v>k) k=n.v; }); return k; }
-  var byK={};
-  snaps.forEach(function(s){
-    var kg=kingOf(s) || STATE[sym].king; if(kg<=0) return;
-    (s.l||[]).forEach(function(n){
-      var pct=Math.round(mul(100, n.v/kg));
-      var key=n.k.toFixed(2);
-      if(!byK[key]) byK[key]={k:n.k, seq:[], absSeq:[], net:(typeof n.net==='number'?n.net:null), pos:(n.d>0)};
-      byK[key].seq.push(pct);
-      byK[key].absSeq.push(n.v);
-      if(typeof n.net==='number') byK[key].net=n.net;
-      byK[key].pos=(n.d>0);
-    });
-  });
-  var rows=[];
-  for(var key in byK){
-    var r=byK[key];
-    if(r.seq.length<2) continue;
-    r.last=r.seq[r.seq.length-1];
-    r.first=r.seq[0];
-    r.delta=r.last-r.first;
-    if(r.absSeq.length){
-      r.absLast=r.absSeq[r.absSeq.length-1];
-      r.absFirst=r.absSeq[0];
-      r.absDelta=r.absLast-r.absFirst;
-    }
-    if(r.last<ACC_FLOOR_PCT) continue;
-    if(r.delta<ACC_NET) continue;
-    r.hero=(r.delta>=15 && r.last>=40);
-    rows.push(r);
-  }
-  rows.sort(function(a,b){ return b.delta-a.delta; });
-  return rows.slice(0, ACC_ROWS);
-}
 function livePctAt(sym, k){
   // Prefer the value Skylit actually renders on its heatmap tape, so ACM %s
   // match the tape exactly. Fall back to the script's own derived walls.
@@ -1343,6 +1290,7 @@ function tapeSync(sym){
   return r;
 }
 // Operator-facing suppression panel. Shown INSTEAD of the structural read.
+// (v11.0 audit) PARKED — no live caller; kept because test_tape_sync.js pins it.
 function outOfSyncBlock(r){
   var why={ 'no-consensus':'the three King sources disagree',
             'no-source':'no tape and no feed could be read',
@@ -1415,6 +1363,7 @@ function parseKingDollarsK(txt){
 }
 // (v10.44) Sign of the King's own $ figure — candidate direct polarity source
 // (negative dollars = -γ). Returned separately; evaluated vs walls-derived pol.
+// (v11.0 audit) PARKED — no live caller; kept because test_magnet_v1044.js pins it.
 function parseKingDollarSign(txt){
   var t=(''+txt).trim(); if(!/\$[\d,]+K/.test(t)) return null;
   return /^[\-\u2212]/.test(t) ? false : true;
@@ -1447,6 +1396,7 @@ function tapeCellPct(txt){
   return v;
 }
 // Retained for compatibility; no longer used by the tape reader.
+// (v11.0 audit) PARKED — no live caller; kept because test_tapeking.js pins it.
 function firstStrengthPct(txt){
   if(!txt) return null;
   txt=(''+txt).replace(/\s+/g,' ').trim();
@@ -1629,21 +1579,6 @@ function updateKingJourney(sym, king){
   }
 }
 function kingDay(sym){ return KINGDAY[sym]; }
-// #3 ex-King check: was this strike the King earlier today but is not now? If so
-// the signal anchored to it is built on a premise that has changed. Returns the
-// {from,to,t} of the roll that took King off this strike, or null.
-function exKingInfo(sym, strike){
-  var kd=kingDay(sym); if(!kd || !kd.moves || !kd.moves.length) return null;
-  var curKing=kd.cur;
-  if(Math.abs(curKing-strike)<0.001) return null; // still King, not ex-King
-  var wasKing=false, whenLeft=null, toK=null;
-  for(var i=0;i<kd.moves.length;i++){
-    if(Math.abs(kd.moves[i].k-strike)<0.001) wasKing=true;
-    else if(wasKing && whenLeft==null){ whenLeft=kd.moves[i].t; toK=kd.moves[i].k; }
-  }
-  if(!wasKing) return null;
-  return { from:strike, to:(toK!=null?toK:curKing), t:whenLeft };
-}
 function nodeHistory(sym, k){
   var store=HIST[sym]; if(!store) return null;
   var rec=store[k.toFixed(2)];
@@ -2056,57 +1991,6 @@ function netPositioning(sym){
   return { bias:bias, dir:dir, ratio:ratio, decisive:decisive, above:above, below:below };
 }
 
-// ===== #9 SETUP GRADE =====
-// One letter (A-D) on the in-play pullback, a weighted composite of the factors
-// already computed: node accumulation + relative trap read (heaviest), net tilt,
-// target confluence, reach, minus an absorption-against penalty. Direction is
-// the current trade bias; the opposite side's grade is exposed in the tooltip.
-function setupGrade(sym){
-  var S=STATE[sym]||{};
-  var px=S.price;
-  var v=trendVerdict(sym);
-  if(px==null || (v.state!=='up' && v.state!=='dn')) return null;   // (v10.18) only act on CONFIRMED trend
-  var longSide = v.state==='up';
-  var rel=relativeRead(sym);
-  var net=netPositioning(sym);
-  var lad=targetLadder();
-  var score=0, parts=[];
-  // Relative trap read (heaviest): aligned with our direction?
-  if(rel){
-    var favor = longSide ? rel.longScore : -rel.longScore;
-    if(favor>=HIST_STEADY_BAND){ score+=35; parts.push('local read favors '+(longSide?'long':'short')+' (+35)'); }
-    else if(favor<=-HIST_STEADY_BAND){ score-=25; parts.push('local read AGAINST ('+'-25)'); }
-    else parts.push('local read mixed (0)');
-  }
-  // Net board tilt aligned?
-  if(net && net.bias!=='balanced'){
-    var tiltFavor = longSide ? (net.dir>0) : (net.dir<0);
-    if(tiltFavor){ var add=net.decisive?25:15; score+=add; parts.push('board '+net.bias+' aligned (+'+add+')'); }
-    else { score-=15; parts.push('board '+net.bias+' against (-15)'); }
-  }
-  // Target confluence present?
-  if(lad && lad.t1star){ score+=15; parts.push('T1 confluence \u2605 (+15)'); }
-  // Reach: is T1 comfortably reachable?
-  if(lad && lad.t1!=null){
-    var prox=adaptiveProxStrikes(sym);
-    var d1=Math.abs(lad.t1-px);
-    if(d1<=prox){ score+=15; parts.push('T1 in reach (+15)'); }
-    else parts.push('T1 a stretch (0)');
-  }
-  // In-play node itself building in our favor?
-  var anchor=resolveAnchor(sym);
-  if(anchor && anchor.ok && anchor.active){
-    var h=nodeHistory(sym, anchor.active.k);
-    var ft = (h&&h.length>=2)?histTrend(h, liveNodePct(sym,anchor.active.k)):null;
-    if(ft && ft.label==='Building'){ score+=10; parts.push('in-play node building (+10)'); }
-    else if(ft && ft.label==='Fading'){ score-=10; parts.push('in-play node fading (-10)'); }
-  }
-  // clamp 0-100
-  if(score<0) score=0; if(score>100) score=100;
-  var letter = score>=75?'A':(score>=55?'B':(score>=35?'C':'D'));
-  return { letter:letter, score:Math.round(score), dir:(longSide?'Long':'Short'),
-           parts:parts, oppLetter:null };
-}
 // Judge accumulation from the VISIBLE 1-minute %King series (what the strip
 // shows), so tag and strip always agree. Dip-tolerant via the drop budget.
 function histTrend(seq, liveVal){
@@ -2167,43 +2051,7 @@ function restoreState(){
         STATE[sym].lastClosedB=snap[sym].lastClosedB||0;
       }
     });
-    syncLog('SPY'); syncLog('QQQ');
-  }catch(e){}
-}
-
-function recordSession(){
-  try{
-    var raw=localStorage.getItem(STATS_KEY);
-    var db = raw ? JSON.parse(raw) : { days:{} };
-    if(!db.days) db.days={};
-    var day = db.days[TODAY] || { date:TODAY, px:[], setups:{} };
-    var px = STATE.SPY.price;
-    if(px!=null){
-      var bucket = Math.floor(ctNowSecOfDay()/CANDLE_S)*CANDLE_S;
-      var lastPx = day.px.length ? day.px[day.px.length-1] : null;
-      if(!lastPx || lastPx.b!==bucket){ day.px.push({b:bucket, s:px}); }
-      else { lastPx.s = px; }
-      if(day.px.length>200) day.px = day.px.slice(day.px.length-200);
-    }
-    for(var key in STATE.SPY.setups){
-      var s=STATE.SPY.setups[key];
-      if(s.voided || s.stage==='GO'){
-        day.setups[key] = {
-          strike:s.strike, dir:s.dir, attempt:s.attempt, stage:s.stage,
-          voided:!!s.voided, boBar:s.boBar, ftBar:s.ftBar, testBar:s.testBar,
-          confBar:s.confBar, goBar:s.goBar, voidBar:s.voidBar,
-          boPct:(typeof s.boPct==='number'?s.boPct:null), targets:s.targets||null
-        };
-      }
-    }
-    db.days[TODAY]=day;
-    var dates=Object.keys(db.days).sort();
-    while(dates.length>STATS_DAYS){ delete db.days[dates.shift()]; }
-    try{ localStorage.setItem(STATS_KEY, JSON.stringify(db)); }
-    catch(qe){
-      var d2=Object.keys(db.days).sort();
-      if(d2.length){ delete db.days[d2[0]]; try{ localStorage.setItem(STATS_KEY, JSON.stringify(db)); }catch(e2){} }
-    }
+    render();   // (v11.0 audit) was syncLog('SPY'); syncLog('QQQ'): LOGCACHE was write-only, only the render() side effect remains
   }catch(e){}
 }
 
@@ -2467,10 +2315,14 @@ var REPO_DB_NAME='gpts_repo_v1', REPO_DB=null;
 function repoOpen(cb){
   if(REPO_DB){ cb(REPO_DB); return; }
   try{
-    var req=indexedDB.open(REPO_DB_NAME, 1);
+    var req=indexedDB.open(REPO_DB_NAME, 2);
     req.onupgradeneeded=function(e){ var db=e.target.result;
       if(!db.objectStoreNames.contains('snaps')){ var st=db.createObjectStore('snaps',{keyPath:'id'}); st.createIndex('date','date',{unique:false}); st.createIndex('sym','sym',{unique:false}); }
-      if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'}); };
+      if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'});
+      // (v11.0 audit G4/G9) RESOLVED FEATURE RECORDS, per day. localStorage keeps ≤10 days and
+      // evicts under quota; local truth (effN, promotion, the tabs) used to be that window and
+      // nothing else. Every resolved record is mirrored here and merged back into featStats.
+      if(!db.objectStoreNames.contains('feat')){ var ft=db.createObjectStore('feat',{keyPath:'id'}); ft.createIndex('date','date',{unique:false}); ft.createIndex('sym','sym',{unique:false}); } };
     req.onsuccess=function(e){ REPO_DB=e.target.result; cb(REPO_DB); };
     req.onerror=function(){ cb(null); };
   }catch(e){ cb(null); }
@@ -2480,6 +2332,23 @@ function repoUpsertSnaps(sym, date, snaps){
     try{ var tx=db.transaction('snaps','readwrite'); var st=tx.objectStore('snaps');
       snaps.forEach(function(sn){ if(!sn||!sn.t) return; var rec=JSON.parse(JSON.stringify(sn)); rec.id=sym+'|'+sn.t; rec.sym=sym; rec.date=date; st.put(rec); });
     }catch(e){} });
+}
+var FEAT_ARCHIVE={};   // {sym:{date:[FEATREC...]}} — IDB-backed, loaded at boot, merged by featStats
+function repoUpsertFeat(sym, date, recs){
+  repoOpen(function(db){ if(!db) return;
+    try{ if(!db.objectStoreNames.contains('feat')) return;
+      var tx=db.transaction('feat','readwrite'); var st=tx.objectStore('feat');
+      (recs||[]).forEach(function(r){ if(!r||!r.key||!r.t) return; var rec=JSON.parse(JSON.stringify(r)); rec.id=sym+'|'+date+'|'+r.key+'|'+r.t; rec.sym=sym; rec.date=date; st.put(rec); });
+    }catch(e){} });
+}
+function repoLoadFeatArchive(cb){
+  repoOpen(function(db){ if(!db){ if(cb) cb(); return; }
+    try{ if(!db.objectStoreNames.contains('feat')){ if(cb) cb(); return; }
+      var out={};
+      db.transaction('feat').objectStore('feat').openCursor().onsuccess=function(e){ var c=e.target.result;
+        if(c){ var r=c.value; var bySym=out[r.sym]||(out[r.sym]={}); (bySym[r.date]||(bySym[r.date]=[])).push(r); c.continue(); }
+        else { FEAT_ARCHIVE=out; try{ featStatsInvalidate(); }catch(e2){} if(cb) cb(); } };
+    }catch(e){ if(cb) cb(); } });
 }
 function repoMigrateOnce(){
   try{ if(localStorage.getItem('gpts_repo_migr_v1')) return; }catch(e){}
@@ -2539,7 +2408,7 @@ function repoExportDay(date, silent){
     var name=date+'.json';
     repoKvGet('dataDir', function(h){
       if(h && h.createWritable!==undefined || (h && h.getFileHandle)){
-        var doWrite=function(){ h.getFileHandle(name,{create:true}).then(function(fh){ return fh.createWritable(); }).then(function(w){ return w.write(txt).then(function(){ return w.close(); }); }).then(function(){ REPO_LAST_SAVE={t:Date.now(),how:'repo folder',name:name}; try{ localStorage.setItem('gpts_last_export',date); }catch(e){} try{ pipeNoteSave(date,'repo folder'); }catch(e9){} if(!silent) render(); }).catch(function(){ repoDownload(name, txt, silent); }); };
+        var doWrite=function(){ h.getFileHandle(name,{create:true}).then(function(fh){ return fh.createWritable(); }).then(function(w){ return w.write(txt).then(function(){ return w.close(); }); }).then(function(){ REPO_LAST_SAVE={t:Date.now(),how:'repo folder',name:name}; SAVED_TODAY=date; try{ localStorage.setItem('gpts_last_export',date); }catch(e){} try{ pipeNoteSave(date,'repo folder'); }catch(e9){} if(!silent) render(); }).catch(function(){ repoDownload(name, txt, silent); }); };
         var q=h.queryPermission?h.queryPermission({mode:'readwrite'}):Promise.resolve('granted');
         q.then(function(p){ if(p==='granted') doWrite(); else if(!silent && h.requestPermission){ h.requestPermission({mode:'readwrite'}).then(function(p2){ if(p2==='granted') doWrite(); else repoDownload(name,txt,silent); }); } else repoDownload(name,txt,silent); });
       } else repoDownload(name, txt, silent);
@@ -2568,7 +2437,7 @@ function repoAutoExportTick(){
 // (v10.54, audit 25) ONE VERSION STRING. The fallback was frozen at '10.44' while the
 // header said 10.53 and the export said 10.15 — three different answers to "which build
 // wrote this?". The fallback is the shipping version now, and buildDayExport uses this.
-function VERSION_STR(){ try{ return (typeof GM_info!=='undefined'&&GM_info.script&&GM_info.script.version)||'10.56'; }catch(e){ return '10.56'; } }
+function VERSION_STR(){ try{ return (typeof GM_info!=='undefined'&&GM_info.script&&GM_info.script.version)||GPTS_VERSION; }catch(e){ return GPTS_VERSION; } }
 
 // ============================================================================
 // (v10.52) THE PIPELINE. A day's data travels four stages:
@@ -2674,7 +2543,7 @@ function pipeReviewTry(P, day, allowPrior){
 }
 function pipeReviewLine(j){
   try{
-    var s=j&&(j.headline||j.why||j.worked||j.summary);
+    var s=j&&(j.headline||j.brief||j.preOpen||j.preOpenBrief||j.line||j.why||j.worked||j.summary);
     if(!s) return null;
     s=String(s).replace(/\s+/g,' ').trim();
     return s.length>140 ? (s.slice(0,137)+'…') : s;
@@ -2695,8 +2564,28 @@ function pipeCheck(force){
     }).catch(function(){ P.pushed='unknown'; P.pushedDay=today; pipeSave(P); pipeRender(); });
   }
   pipeReviewTry(P, lastTradingDay(0), true);
+  try{ pipeNightlyTry(P, lastTradingDay(0), true); }catch(eN){}   // (v11.0 G2) the nightly log is read back too
   try{ pipeRulesTry(P); }catch(eRules){}      // fail-soft: a rules fetch never blocks the pipeline
   return P;
+}
+// (v11.0 audit G2) THE NIGHTLY LOG COMES BACK. The panel only ever fetched review/<day>.json
+// (the WEEKLY file) — the nightly learning/log/<day>.json, which carries the per-bar
+// contradictions and the pre-open line the user asked for, had no path into the panel.
+var ANALYSIS_NIGHTLY=null;
+function pipeNightlyTry(P, day, allowPrior){
+  if(!day){ P.nightly='unknown'; pipeSave(P); return; }
+  pipeFetch(PIPE_RAW_BASE+'/learning/log/'+day+'.json').then(function(r){
+    if(r && r.ok && typeof r.json==='function'){
+      r.json().then(function(j){
+        P.nightly='yes'; P.nightlyDay=day; P.nightlyLine=pipeReviewLine(j); pipeSave(P);
+        try{ ANALYSIS_NIGHTLY=j; }catch(eA){}
+        pipeRender();
+      }).catch(function(){ P.nightly='unknown'; P.nightlyDay=day; pipeSave(P); });
+      return;
+    }
+    if(allowPrior){ pipeNightlyTry(P, lastTradingDay(1), false); return; }
+    P.nightly=(r && r.status===404)?'no':'unknown'; P.nightlyDay=day; pipeSave(P); pipeRender();
+  }).catch(function(){ P.nightly='unknown'; P.nightlyDay=day; pipeSave(P); });
 }
 // (v10.53 B) the weekly learning run writes learning/rules.json; it is fetched on the SAME
 // cadence and with the SAME fail-soft contract as the review. A fresh document re-runs
@@ -2879,14 +2768,12 @@ var RECORDER = { _lastSnapBar:{} };
 function clearSignalsAll(){
   STATE.SPY.setups={}; STATE.QQQ.setups={};
   STATE.SPY.lastClosedB=0; STATE.QQQ.lastClosedB=0;
-  LOGCACHE={SPY:[],QQQ:[]};
   try{ localStorage.removeItem(STATE_KEY); localStorage.removeItem(LOG_KEY); }catch(e){}
   render();
 }
 function clearSignalsSym(sym){
   STATE[sym].setups={};
   STATE[sym].lastClosedB=0;
-  LOGCACHE[sym]=[];
   persistState();
   render();
 }
@@ -3106,14 +2993,10 @@ function runMachine(sym){
     }
   }
   runOutcome(sym, last);
-  syncLog(sym);
+  render();   // (v11.0 audit) was syncLog(sym): LOGCACHE was write-only, only the render() side effect remains
   persistState();
 }
 
-function countBarsSince(cs, boBarT){
-  var idx=-1; for(var i=0;i<cs.length;i++){ if(cs[i].t===boBarT){ idx=i; break; } }
-  if(idx<0) return 0; return (cs.length-1)-idx;
-}
 function assignTargets(s,S){
   var beyond=S.walls.filter(function(w){ return s.dir==='long' ? w.k>s.strike : w.k<s.strike; });
   beyond.sort(function(a,b){ return s.dir==='long' ? a.k-b.k : b.k-a.k; });
@@ -3232,403 +3115,8 @@ function resolveAnchor(sym){
   };
 }
 
-function absAccumStateFor(sym, k){
-  var r = rawAccumNode(sym, k);
-  if(r && typeof r.absDelta==='number' && r.absSeq && r.absSeq.length>=2){
-    return {
-      available:true,
-      absDelta:r.absDelta,
-      absSeq:r.absSeq || null,
-      delta:(typeof r.delta==='number'?r.delta:null),
-      seq:r.seq || null
-    };
-  }
-  return { available:false, absDelta:null, absSeq:null, delta:null, seq:null };
-}
-
-function nodeQuality(sym){
-  var none = { ok:false, reason:'insufficient structure', sym:sym,
-               cls:null, factors:null, gate:null, active:null };
-
-  var anc = resolveAnchor(sym);
-  if(!anc || !anc.ok) return none;
-
-  var active = anc.active;
-  var wall = active ? active.wall : null;
-  if(!wall || typeof wall.abs!=='number'){
-    return { ok:false, reason:'active node has no live strength', sym:sym,
-             cls:null, factors:null, gate:null, active:active };
-  }
-
-  var S = STATE[sym];
-  var king = (S && typeof S.king==='number') ? S.king : null;
-  var dir  = anc.dir;
-
-  var f = {};
-
-  var absShare = (king && king>0) ? (wall.abs/king) : null;
-  f.absStrength = { value:wall.abs, absShareOfKing:absShare,
-                    band:(absShare==null)?'unknown':(absShare>=0.75?'top':(absShare>=0.40?'mid':'low')) };
-
-  var role = (anc.price!=null) ? (anc.price>=active.k ? 'support' : 'resistance') : 'unknown';
-  f.role = { value:role, nodeSideDir:(wall.pos===true?'pos':(wall.pos===false?'neg':'unknown')) };
-
-  var acc = absAccumStateFor(sym, active.k);
-  f.accumulation = acc.available
-    ? { available:true, absDelta:acc.absDelta,
-        state:(acc.absDelta>0?'building':(acc.absDelta<0?'bleeding':'flat')) }
-    : { available:false, state:'unavailable' };
-
-  var opp = anc.opposing;
-  var nearBand = (typeof anc.atr==='number') ? anc.atr : null;
-  var oppDominant = false, oppState='none';
-  if(opp && opp.wall && typeof opp.wall.abs==='number'){
-    var closeEnough = (nearBand!=null) ? (opp.distFromPrice <= nearBand) : false;
-    var stronger = (opp.wall.abs >= wall.abs);
-    oppDominant = closeEnough && stronger;
-    oppState = oppDominant ? 'dominant-near' : 'present';
-  }
-  f.nearbyOpposition = { available:!!opp, state:oppState,
-                         k:opp?opp.k:null,
-                         distFromPrice:opp?opp.distFromPrice:null,
-                         dominant:oppDominant };
-
-  f.freshness  = { available:false, state:'unavailable', note:'no touch counter yet' };
-  f.confluence = { available:false, state:'unavailable' };
-  f.regimeFit  = { available:false, state:'unavailable' };
-  f.topology   = { available:false, state:'unavailable' };
-  f.divergence = { available:false, state:'unavailable' };
-
-  var gate = null;
-  if(RESHUFFLE[sym]===true){ gate = 'reshuffle'; }
-
-  var trail = [];
-  var cls;
-
-  if(gate==='reshuffle'){
-    cls = 'compromised';
-    trail.push('gate: reshuffle');
-  } else {
-    if(f.absStrength.band==='top'){ cls='solid'; trail.push('absolute strong'); }
-    else if(f.absStrength.band==='mid'){ cls='usable-but-contested'; trail.push('absolute mid'); }
-    else if(f.absStrength.band==='low'){ cls='fragile'; trail.push('absolute low'); }
-    else { cls='fragile'; trail.push('absolute unknown'); }
-
-    var order = ['solid','usable-but-contested','fragile'];
-    function demote(reason){
-      var idx=order.indexOf(cls);
-      if(idx>=0 && idx<order.length-1){ cls=order[idx+1]; }
-      trail.push('demote: '+reason);
-    }
-    if(f.accumulation.available && f.accumulation.state==='bleeding'){ demote('accum bleeding (abs)'); }
-    if(f.nearbyOpposition.dominant){ demote('dominant nearby opposition'); }
-    if(f.accumulation.available && f.accumulation.state==='building'){ trail.push('confirm: accum building (abs)'); }
-  }
-
-  return {
-    ok:true, reason:null, sym:sym,
-    cls:cls,
-    gate:gate,
-    dir:dir,
-    active:{ k:active.k, stage:active.stage, abs:wall.abs, pct:wall.pct,
-             absShareOfKing:absShare, role:role },
-    factors:f,
-    trail:trail,
-    supported:['absStrength','role','accumulation(abs)','nearbyOpposition'],
-    unavailable:['freshness','confluence','regimeFit','topology','divergence'],
-    note:'classes limited to {solid, usable-but-contested, fragile, compromised(=reshuffle gate)} from currently-supported factors; elite/exhausted require freshness/breach detection not yet present.'
-  };
-}
-
-function pathQuality(sym){
-  var anc = resolveAnchor(sym);
-  if(!anc || !anc.ok){
-    return {
-      ok:false,
-      reason:(anc && anc.reason) ? anc.reason : 'insufficient structure',
-      sym:sym,
-      cls:'insufficient-structure',
-      factors:null,
-      supported:null,
-      unavailable:null
-    };
-  }
-
-  var S = STATE[sym];
-  var walls = (S && S.walls) ? S.walls : [];
-  var dir   = anc.dir;
-  var a     = (typeof anc.atr==='number') ? anc.atr : atr(sym);
-
-  var f = {};
-  f.activeAnchor = { available:true, k:anc.active.k, dir:dir };
-  f.hasOpposing  = { available:true, value:!!anc.hasOpposing };
-
-  var trail = [];
-  var cls;
-
-  if(!anc.hasOpposing || !anc.opposing || !anc.opposing.wall){
-    var ahead=0;
-    for(var i=0;i<walls.length;i++){
-      var w=walls[i];
-      if(dir==='long'){ if(w.k>anc.active.k) ahead++; }
-      else if(dir==='short'){ if(w.k<anc.active.k) ahead++; }
-    }
-
-    f.opposing = { available:false, note:'no opposing wall yet' };
-    f.pathSparsity = { available:true, wallsAhead:ahead };
-
-    if(ahead===0){
-      cls='open-path';
-      trail.push('no walls ahead in direction');
-    } else {
-      cls='mostly-open';
-      trail.push('no opposing wall; '+ahead+' minor wall(s) ahead');
-    }
-    trail.push('opposing: none yet');
-
-    return finalizePath(sym, cls, dir, anc, f, trail,
-      ['activeAnchor','hasOpposing','pathSparsity'],
-      ['stackedClusters','compressionTrend','topology','targetLadder','asymmetry','regimeFit','confluence','airPocketSpans']);
-  }
-
-  var opp = anc.opposing;
-  var oppWall = opp.wall;
-  var activeWall = anc.active.wall;
-
-  var distPrice = (typeof opp.distFromPrice==='number') ? opp.distFromPrice : null;
-  var distActive = (typeof opp.dist==='number') ? opp.dist : null;
-
-  var band='unknown';
-  if(distPrice!=null && a>0){
-    if(distPrice <= a) band='near';
-    else if(distPrice <= mul(a,2)) band='mid';
-    else band='far';
-  }
-
-  var oppAbs = (oppWall && typeof oppWall.abs==='number') ? oppWall.abs : null;
-  var actAbs = (activeWall && typeof activeWall.abs==='number') ? activeWall.abs : null;
-  var rel='unknown';
-  if(oppAbs!=null && actAbs!=null && actAbs>0){
-    if(oppAbs >= actAbs) rel='stronger-equal';
-    else rel='weaker';
-  } else if(oppAbs!=null && actAbs==null){
-    rel='opposing-only';
-  }
-
-  f.opposing = {
-    available:true,
-    k:opp.k,
-    distFromPrice:distPrice,
-    distFromActive:distActive,
-    band:band
-  };
-  f.relStrength = {
-    available:true,
-    opposingAbs:oppAbs,
-    activeAbs:actAbs,
-    rel:rel
-  };
-
-  var strong = (rel==='stronger-equal' || rel==='opposing-only');
-  if(strong && band==='near'){
-    cls='heavy-overhead';
-    trail.push('opposing stronger/equal and near (<=1 ATR)');
-  } else if((strong && band==='mid') || (!strong && band==='near')){
-    cls='contested';
-    trail.push('opposing '+rel+' at '+band+' distance');
-  } else {
-    cls='mostly-open';
-    trail.push('opposing '+rel+' at '+band+' distance');
-  }
-
-  return finalizePath(sym, cls, dir, anc, f, trail,
-    ['activeAnchor','hasOpposing','opposing','relStrength'],
-    ['stackedClusters','compressionTrend','topology','targetLadder','asymmetry','regimeFit','confluence','airPocketSpans']);
-}
-
-function finalizePath(sym, cls, dir, anc, factors, trail, supported, unavailable){
-  return {
-    ok:true,
-    reason:null,
-    sym:sym,
-    cls:cls,
-    dir:dir,
-    active:{ k:anc.active.k },
-    opposing: anc.opposing ? { k:anc.opposing.k } : null,
-    factors:factors,
-    trail:trail,
-    supported:supported,
-    unavailable:unavailable,
-    note:'classes limited to {open-path, mostly-open, contested, heavy-overhead, insufficient-structure} from distance + relative absolute strength only; compression/reversal-risk require trend/cluster inputs not yet present.'
-  };
-}
-
-function setupHealth(sym){
-  var anc = resolveAnchor(sym);
-  if(!anc || !anc.ok){
-    return { ok:false, reason:(anc && anc.reason) ? anc.reason : 'insufficient structure',
-             sym:sym, cls:'insufficient-structure', factors:null,
-             supported:null, unavailable:null };
-  }
-
-  var nq = nodeQuality(sym);
-  var pq = pathQuality(sym);
-
-  if(!nq || !nq.ok){
-    return { ok:false, reason:(nq && nq.reason) ? nq.reason : 'node quality unavailable',
-             sym:sym, cls:'insufficient-structure', factors:null,
-             supported:null, unavailable:null };
-  }
-
-  var liveStage=null;
-  var S = STATE[sym];
-  if(S && S.setups){
-    var chosen=null;
-    for(var key in S.setups){
-      var s=S.setups[key];
-      if(!s || s.voided || s.stage==='GO' || s.goFired) continue;
-      if(!chosen || (s.updated||0) > (chosen.updated||0)) chosen=s;
-    }
-    if(chosen) liveStage=chosen.stage;
-  }
-
-  var f = {};
-  f.anchor       = { available:true, k:anc.active.k, dir:anc.dir };
-  f.reshuffle    = { available:true, active:(RESHUFFLE[sym]===true) };
-  f.nodeQuality  = { available:true, cls:nq.cls, gate:nq.gate||null };
-  f.pathQuality  = pq && pq.ok ? { available:true, cls:pq.cls }
-                               : { available:false, cls:(pq?pq.cls:null), reason:(pq?pq.reason:'unavailable') };
-  f.liveStage    = { available:(liveStage!=null), stage:liveStage, note:'context only' };
-
-  var trail = [];
-  var cls;
-
-  if(RESHUFFLE[sym]===true || nq.gate==='reshuffle'){
-    cls='failing-structurally'; trail.push('gate: reshuffle active');
-  }
-  else if(nq.cls==='exhausted'){
-    cls='failing-structurally'; trail.push('node exhausted');
-  }
-  else if(nq.cls==='compromised'){
-    cls='weakening'; trail.push('node compromised');
-  }
-  else if(nq.cls==='fragile'){
-    cls='weakening'; trail.push('node fragile');
-    if(pq && pq.ok && pq.cls==='heavy-overhead'){ trail.push('path heavy-overhead reinforces weakening'); }
-  }
-  else if(pq && pq.ok && pq.cls==='heavy-overhead'){
-    cls='weakening'; trail.push('path heavy-overhead against a non-fragile node');
-  }
-  else if(pq && pq.ok && pq.cls==='contested'){
-    cls='crowded'; trail.push('path contested');
-  }
-  else {
-    cls='stable';
-    trail.push('node '+nq.cls+(pq&&pq.ok?(' + path '+pq.cls):' (path insufficient)'));
-  }
-
-  return {
-    ok:true, reason:null, sym:sym,
-    cls:cls, dir:anc.dir,
-    active:{ k:anc.active.k },
-    liveStage:liveStage,
-    factors:f, trail:trail,
-    supported:['anchor','reshuffleGate','nodeQuality.cls/gate','pathQuality.cls','liveStage(context)'],
-    unavailable:['nodeDelta','pathDelta','touchTrend','divergence','regimeFit','transitionLog','timeOfDay','momentum','confidence'],
-    note:'health is orthogonal to the BO/FT/TST/CONF/GO stage machine and derived from current state only; improving/late and trend-based re-grades require delta history not yet present.'
-  };
-}
-
-function reader(sym){
-  var anc = resolveAnchor(sym);
-
-  if(!anc || !anc.ok){
-    var why = (anc && anc.reason) ? anc.reason : 'insufficient structure';
-    var fb;
-    if(why.indexOf('flat trend')!==-1) fb='No directional idea right now — trend is flat and there is no live setup to anchor.';
-    else if(why==='no price' || why==='no walls') fb='Waiting on structure — no live map to read yet.';
-    else fb='Limited structure to read right now.';
-    return { ok:false, reason:why, sym:sym, text:fb,
-             slots:null, supported:null, unavailable:null };
-  }
-
-  var nq = nodeQuality(sym);
-  var pq = pathQuality(sym);
-  var sh = setupHealth(sym);
-
-  var dir = anc.dir;
-  var role = (anc.price!=null && anc.active) ? (anc.price>=anc.active.k ? 'support' : 'resistance') : null;
-
-  var slots = {};
-
-  if(anc.active && anc.active.k!=null){
-    slots.activeNode = (role ? role+' node ' : 'node ') + fmtNum(anc.active.k);
-  }
-  if(nq && nq.ok && nq.cls){
-    slots.nodeState = nq.cls;
-  }
-  if(pq && pq.ok && pq.cls){
-    slots.pathState = pq.cls;
-  }
-  if(sh && sh.ok && sh.cls){
-    slots.healthState = sh.cls;
-  }
-  if(anc.hasOpposing && anc.opposing && anc.opposing.k!=null){
-    slots.opposing = fmtNum(anc.opposing.k);
-  }
-
-  var sentences = [];
-
-  if(slots.activeNode){
-    var s1 = 'Active ' + slots.activeNode;
-    if(slots.nodeState){ s1 += ', graded ' + slots.nodeState; }
-    if(slots.opposing){ s1 += '; nearest opposing structure at ' + slots.opposing; }
-    s1 += '.';
-    sentences.push(s1);
-  }
-
-  if(slots.pathState){
-    var pathPhrase = {
-      'open-path':'The path ahead is open',
-      'mostly-open':'The path ahead is mostly open',
-      'contested':'The path ahead is contested',
-      'heavy-overhead':'There is heavy overhead structure ahead',
-      'insufficient-structure':null
-    }[slots.pathState];
-    if(pathPhrase){ sentences.push(pathPhrase + '.'); }
-  }
-
-  if(slots.healthState && slots.healthState!=='insufficient-structure'){
-    var healthPhrase = {
-      'stable':'The setup is structurally stable',
-      'crowded':'The setup looks crowded',
-      'weakening':'The setup is weakening structurally',
-      'failing-structurally':'The setup is failing structurally'
-    }[slots.healthState];
-    if(healthPhrase){ sentences.push(healthPhrase + '.'); }
-  }
-
-  if(!sentences.length){ sentences.push('Limited structure to read right now.'); }
-  if(sentences.length>3) sentences = sentences.slice(0,3);
-
-  return {
-    ok:true, reason:null, sym:sym,
-    text: sentences.join(' '),
-    slots: slots,
-    dir: dir,
-    supported:['activeNode','nodeState','pathState','healthState','opposing'],
-    unavailable:['probability','confidence','entry','stop','size','targetAdvice','divergence','regimeFit','LLMStyling'],
-    note:'descriptive-only narrative assembled from present engine slots; absent slots suppressed; no advice or confidence.'
-  };
-}
-
 window.__gptsDebug = window.__gptsDebug || {};
 window.__gptsDebug.resolveAnchor = resolveAnchor;
-window.__gptsDebug.accumData = accumData;
-window.__gptsDebug.nodeQuality = nodeQuality;
-window.__gptsDebug.pathQuality = pathQuality;
-window.__gptsDebug.setupHealth = setupHealth;
-window.__gptsDebug.reader = reader;
 window.__gptsDebug.tape = function(sym){ return readTapeFromDOM(sym||'SPY'); };
 window.__gptsDebug.tapeKing = function(sym){ return tapeKingStrike(sym||'SPY'); };
 window.__gptsDebug.STATE = STATE;
@@ -3747,6 +3235,8 @@ function buildDayExport(dateKey){
     // (v10.55 PART A/D) the per-bar node-cluster history the leg engine reads, and the
     // multi-session rolling read derived from FCHIST.
     nodeHist:(function(){ try{ var o={}; RECORDER_SYMS.forEach(function(s){ o[s]=nodeHistOf(s); }); return o; }catch(eNh){ return null; } })(),
+    // (v11.0) THE NODE LEDGER — every node's life, touches, reactions, influence (layer 1)
+    ledger:(function(){ try{ var o={}; RECORDER_SYMS.forEach(function(s){ o[s]=ledgerExport(s); }); return o; }catch(eLd){ return null; } })(),
     sessionRoll:(function(){ try{ var o={}; RECORDER_SYMS.forEach(function(s){ o[s]=sessionRoll(s); }); return o; }catch(eSr){ return null; } })(),
     futures:(function(){ try{ return { chart:FUTMODE.chart, underlying:FUTMODE.underlying, r:FUTMODE.r,
                                        live:!!FUTMODE.live, approx:!!FUTMODE.approx, ok:!!FUTMODE.ok }; }catch(eFu){ return null; } })(),
@@ -3762,9 +3252,14 @@ function buildDayExport(dateKey){
 }
 var SAVED_TODAY=null;   // (v10.17) date-key of the day exported this session; drives the Analysis-tab banner
 function saveDayToFile(dateKey){
+  // (v11.0 audit G1/G11) ONE export path. The manual button used to download `gex_<date>.json`
+  // (a name the push task never looks for) while the auto export wrote `data/<date>.json`; the
+  // banner flipped only for the download. Both buttons now go through repoExportDay (repo folder
+  // first, download of the SAME filename as fallback) and success flips the banner.
+  try{ if(typeof repoExportDay==='function'){ repoExportDay(dateKey||TODAY, false); return (dateKey||TODAY)+'.json'; } }catch(e0){}
   try{
     var payload=buildDayExport(dateKey);
-    var name='gex_'+payload.date+'.json';
+    var name=payload.date+'.json';
     var blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
     var url=URL.createObjectURL(blob);
     var a=document.createElement('a');
@@ -3780,17 +3275,8 @@ window.__gptsDebug.saveDayToFile = saveDayToFile;
 window.__gptsDebug.LASTFEED = LASTFEED;
 window.__gptsDebug.refreshSym = refreshSym;
 
-var LOGCACHE={ SPY:[], QQQ:[] };
-function syncLog(sym){
-  var S=STATE[sym];
-  var rows=[];
-  for(var key in S.setups){ var s=S.setups[key]; rows.push(s); }
-  rows.sort(function(a,b){ return b.updated-a.updated; });
-  LOGCACHE[sym]=rows;
-  render();
-}
 
-console.log('[GPTS] v9.1 part3 loaded');
+console.log('[GPTS] v'+GPTS_VERSION+' part3 loaded');
 
 var PANEL=null, elBody=null, elCfg=null;
 function css(el,obj){ for(var k in obj){ el.style[k]=obj[k]; } }
@@ -3815,20 +3301,6 @@ function stageEpoch(s, tok){
   if(tok==='GO') return s.goBar || null;
   if(tok==='VOID') return s.voidBar || s.updated || null;
   return null;
-}
-function stageTimeline(s){
-  var parts=[];
-  for(var i=0;i<s.tokens.length;i++){
-    var t=s.tokens[i];
-    if(t==='VOID'){ parts.push('VOID'); continue; }
-    if(t==='T1'||t==='T2'||t==='T3'){ parts.push(t); continue; }
-    var lbl=tokenLabel(t, s.dir);
-    var ep=stageEpoch(s, t);
-    if(ep){ parts.push(lbl+' '+fmtClock(ep)); }
-    else { parts.push(lbl); }
-  }
-  var head=(s.dir==='long'?'LONG ':'SHORT ')+fmtNum(s.strike);
-  return head+' | '+parts.join(' -> ');
 }
 
 function buildPanel(){
@@ -4013,7 +3485,6 @@ function restoreSize(){
   }catch(e){}
 }
 
-function dirColor(dir){ return dir==='long' ? PAL.longAccent : PAL.shortAccent; }
 function fmtNum(x){ return (Math.round(mul(x,100))/100).toString(); }
 function fmtFut(x){ return (Math.round(mul(x,100))/100).toString(); }
 
@@ -4144,6 +3615,7 @@ function dispIsFut(){ try{ return !!(FUTMODE && FUTMODE.fam && FUTMODE.ok); }cat
 function dispR(){ try{ return (dispIsFut() && FUTMODE.r>0) ? FUTMODE.r : 1; }catch(e){ return 1; } }
 // A LEVEL as the user should read it on THIS chart. In SPY/QQQ mode this is exactly
 // fmtNum, so nothing about the cash panel changes.
+// (v11.0 audit) PARKED — no live caller; kept because test_futures_mode.js pins it.
 function dispVal(x){ if(x==null) return null; return dispIsFut()? mul(x, dispR()) : x; }
 function futMark(){ return (dispIsFut() && FUTMODE.approx) ? '≈' : ''; }
 function fmtLvl(x){
@@ -4243,6 +3715,7 @@ var STEP_TEXT = {
     '<div class="gs-sub">Our rule</div><p>Accumulation only <b>attracts</b> price to a node. We make <b>no</b> deflect/break call \u2014 the breakout tracker resolves the outcome (broke \u2191 / broke \u2193 / held / false break).</p>'}
 };
 // small circular icon; data-gstep drives the delegated click handler in the panel.
+// (v11.0 audit) PARKED — no live caller; kept because PARKED kingBlock chain pins it.
 function stepIcon(n, extraStyle){
   return '<span class="gs-ico" data-gstep="'+n+'" title="Step '+n+' \u2014 click for the method" '+
     'style="width:16px;height:16px;border-radius:50%;border:1px solid '+PAL.sub+';color:'+PAL.sub+';'+
@@ -4536,189 +4009,8 @@ function wireConfig(){
   wireAlert('.gpts-al-snd','snd');
 }
 
-console.log('[GPTS] v9.1 part4 loaded');
+console.log('[GPTS] v'+GPTS_VERSION+' part4 loaded');
 
-function gridFor(dir, rows){
-  var setups=rows.filter(function(s){ return s.dir===dir && passesFilters(s); });
-  var label = dir==='long' ? 'Long' : 'Short';
-  var accent = dir==='long' ? PAL.longAccent : PAL.shortAccent;
-  var hdrbg = dir==='long' ? PAL.longHdr : PAL.shortHdr;
-  var confRow = dir==='long' ? 'LONG' : 'SHORT';
-  var confLabel = dir==='long' ? 'Long' : 'Short';
-  var head='<div style="color:'+accent+';background:'+hdrbg+';font-size:10px;font-weight:800;'+
-    'letter-spacing:0.4px;padding:2px 8px;margin:3px 0 0 0;border-radius:5px 5px 0 0">'+label+'</div>';
-  if(!setups.length){
-    return head+'<div style="color:'+PAL.sub+';padding:3px 8px;font-size:11px;background:'+PAL.card+';border-radius:0 0 5px 5px">none</div>';
-  }
-  var rowDefs=[
-    {key:'STRIKE', lbl:'Strike'},
-    {key:'PCT',    lbl:'%King'},
-    {key:'BO',     lbl:'BO'},
-    {key:'FT',     lbl:'FT'},
-    {key:'PB',     lbl:'PB'},
-    {key:confRow,  lbl:confLabel},
-    {key:'GO',     lbl:'Go'},
-    {key:'VOID',   lbl:'Void'}
-  ];
-  var html='<div class="gpts-gridwrap" style="background:'+PAL.card+';border-radius:0 0 6px 6px;padding-bottom:2px">';
-  html+='<table class="gpts-grid"><tbody>';
-  rowDefs.forEach(function(rd){
-    var underStrike = (rd.key==='STRIKE') ? ';border-bottom:2px solid '+accent : '';
-    var lblTip;
-    if(rd.key==='STRIKE') lblTip='Node price each setup is anchored at.';
-    else if(rd.key==='PCT') lblTip='Node strength as % of King (breakout to current).';
-    else if(rd.key==='VOID') lblTip='If a setup failed, the time it voided.';
-    else if(rd.key===confRow) lblTip=(dir==='long'?'Long':'Short')+' confirmation bar time.';
-    else if(rd.key==='BO') lblTip='Breakout: first close beyond the node.';
-    else if(rd.key==='FT') lblTip='Follow-through: a later bar holds fully beyond the node, OR two consecutive directional closes beyond it with the 2nd close progressing (v10.44 lenient rule).';
-    else if(rd.key==='PB') lblTip='Pullback: price wicked back to retest the node after follow-through.';
-    else lblTip=rd.lbl;
-    html+='<tr>';
-    html+='<td class="g-lbl" title="'+lblTip.replace(/"/g,'')+'" style="background:'+PAL.card+underStrike+'">'+rd.lbl+'</td>';
-    setups.forEach(function(s, ci){
-      var sepCls = ci>0 ? ' g-sep' : '';
-      var extra = (rd.key==='STRIKE') ? ';border-bottom:2px solid '+accent : '';
-      var cellCls='', cellTxt='', cellTip='';
-      if(rd.key==='STRIKE'){
-        cellCls=sepCls; cellTxt='<span style="color:'+accent+';font-weight:800">'+fmtNum(s.strike)+'</span>';
-        cellTip=strikeCellTip(dir, s.strike);
-        html+='<td class="'+cellCls.trim()+'" title="'+cellTip+'" style="'+extra+'">'+cellTxt+'</td>';
-        return;
-      }
-      if(rd.key==='PCT'){
-        var cur=livePctAt('SPY', s.strike);
-        var bo=(typeof s.boPct==='number')?s.boPct:null;
-        if(bo!=null && cur!=null){ cellTxt=bo+'%–'+cur+'%'; cellCls=sepCls; }
-        else if(cur!=null){ cellTxt=cur+'%'; cellCls=sepCls; }
-        else { cellTxt='NA'; cellCls=sepCls+' g-na'; }
-        cellTip=kingCellTip(s.strike);
-        html+='<td class="'+cellCls.trim()+'" title="'+cellTip+'">'+cellTxt+'</td>';
-        return;
-      }
-      var eps=setupStageEpochs(s);
-      var ep=eps[rd.key];
-      var isVoidRow=(rd.key==='VOID');
-      if(ep!=null){
-        cellCls=sepCls+(isVoidRow?' g-void':' g-time');
-        cellTxt=fmtClock(ep);
-      } else {
-        cellCls=sepCls;
-        cellTxt='<span style="color:'+PAL.line+'">·</span>';
-      }
-      cellTip=stageCellTip(rd.key, dir, s.strike);
-      html+='<td class="'+cellCls.trim()+'" title="'+cellTip+'">'+cellTxt+'</td>';
-    });
-    html+='</tr>';
-  });
-  html+='</tbody></table></div>';
-  return head+html;
-}
-function signalGrid(){
-  var rows=LOGCACHE.SPY||[];
-  if(CFG.boPb!==true){
-    return '<div style="color:'+PAL.sub+';padding:2px 6px;font-size:11px">BO Pullback signals off</div>';
-  }
-  var html=combinedGrid(rows);
-  return html;
-}
-
-// Combined Long+Short grid: one table, no per-direction heading bars, each
-// setup is a column tinted by its direction (green=long, red=short) with an
-// L/S tag on the strike. Saves the vertical space the two stacked sections
-// (plus their "none" rows) used to cost.
-function combinedGrid(rows){
-  var showLong = CFG.dir!=='shorts';
-  var showShort = CFG.dir!=='longs';
-  var setups=[];
-  rows.forEach(function(s){
-    if(!passesFilters(s)) return;
-    if(s.dir==='long' && !showLong) return;
-    if(s.dir==='short' && !showShort) return;
-    setups.push(s);
-  });
-  // Newest first: sort by most-recent activity across BOTH directions so the
-  // latest signal is the left-most column, regardless of long/short.
-  function recencyOf(s){
-    return Math.max(
-      s.updated||0, s.voidBar||0, s.goBar||0, s.confBar||0,
-      s.testBar||0, s.ftBar||0, s.boBar||0, s.ts||0
-    );
-  }
-  setups.sort(function(a,b){ return recencyOf(b)-recencyOf(a); });
-  if(!setups.length){
-    return '<div style="color:'+PAL.sub+';padding:3px 8px;font-size:11px;background:'+PAL.card+';border-radius:0 0 6px 6px">No active setups</div>';
-  }
-  // Trimmed to the essentials: Strike, %King, BO, FT. (PB, Conf, Go, and the
-  // Void ROW removed to save space — a voided signal shows a ⊘ icon next to its
-  // strike instead; an ex-King anchor shows a ⚠ flag. #3 / v2 layout)
-  var rowDefs=[
-    {key:'STRIKE', lbl:'Strike'},
-    {key:'PCT',    lbl:'%King'},
-    {key:'BO',     lbl:'BO'},
-    {key:'FT',     lbl:'FT'}
-  ];
-  var html='<div class="gpts-gridwrap" style="background:'+PAL.card+';border-radius:0 0 6px 6px;padding:2px 0">';
-  html+='<table class="gpts-grid"><tbody>';
-  rowDefs.forEach(function(rd){
-    var lblTip;
-    if(rd.key==='STRIKE') lblTip='Node price each setup is anchored at. Green = long, red = short.';
-    else if(rd.key==='PCT') lblTip='Node strength as % of King (breakout to current).';
-    else if(rd.key==='VOID') lblTip='If a setup failed, the time it voided.';
-    else if(rd.key==='CONF') lblTip='Confirmation bar time (long: bullish close off retest; short: bearish close off retest).';
-    else if(rd.key==='BO') lblTip='Breakout: first close beyond the node.';
-    else if(rd.key==='FT') lblTip='Follow-through: a later bar holds fully beyond the node, OR two consecutive directional closes beyond it with the 2nd close progressing (v10.44 lenient rule).';
-    else if(rd.key==='PB') lblTip='Pullback: price wicked back to retest the node after follow-through.';
-    else lblTip=rd.lbl;
-    html+='<tr>';
-    var underRow = (rd.key==='STRIKE') ? ';border-bottom:2px solid '+PAL.line : '';
-    html+='<td class="g-lbl" title="'+lblTip.replace(/"/g,'')+'" style="background:'+PAL.card+underRow+'">'+rd.lbl+'</td>';
-    setups.forEach(function(s, ci){
-      var accent = s.dir==='long' ? PAL.longAccent : PAL.shortAccent;
-      var confRow = s.dir==='long' ? 'LONG' : 'SHORT';
-      var sepCls = ci>0 ? ' g-sep' : '';
-      var extra = (rd.key==='STRIKE') ? ';border-bottom:2px solid '+accent : '';
-      if(rd.key==='STRIKE'){
-        var tag = s.dir==='long' ? 'L' : 'S';
-        // ⊘ void icon (Void row removed) + ⚠ ex-King flag. #3 / v2 layout
-        var voidIc='';
-        if(s.voided){
-          var vt = s.voidBar ? (' '+fmtClock(s.voidBar)) : '';
-          voidIc=' <span title="This setup voided'+vt+'." style="color:'+PAL.shortAccent+';font-size:9px">\u2298</span>';
-        }
-        var xk=exKingInfo('SPY', s.strike);
-        var xkIc='';
-        if(xk){
-          xkIc=' <span title="Anchored to '+fmtNum(s.strike)+', which was King until '+(xk.t?fmtClock(xk.t):'earlier')+'; King has since rolled to '+fmtNum(xk.to)+'. This setup\u2019s premise (this strike is King) has changed \u2014 scrutinize before trusting it." style="color:'+PAL.amber+';font-size:9px">\u26a0</span>';
-        }
-        var cellTxt='<span style="color:'+accent+';font-weight:800">'+fmtNum(s.strike)+'</span>'+
-          '<span style="color:'+accent+';font-size:8px;font-weight:800;margin-left:3px;border:1px solid '+accent+';border-radius:3px;padding:0 2px">'+tag+'</span>'+xkIc+voidIc;
-        html+='<td class="'+sepCls.trim()+'" title="'+strikeCellTip(s.dir, s.strike)+'" style="'+extra+'">'+cellTxt+'</td>';
-        return;
-      }
-      if(rd.key==='PCT'){
-        var cur=livePctAt('SPY', s.strike);
-        var bo=(typeof s.boPct==='number')?s.boPct:null;
-        var cellTxt2, cellCls2=sepCls;
-        if(bo!=null && cur!=null){ cellTxt2=bo+'%–'+cur+'%'; }
-        else if(cur!=null){ cellTxt2=cur+'%'; }
-        else { cellTxt2='NA'; cellCls2=sepCls+' g-na'; }
-        html+='<td class="'+cellCls2.trim()+'" title="'+kingCellTip(s.strike)+'">'+cellTxt2+'</td>';
-        return;
-      }
-      var eps=setupStageEpochs(s);
-      var epKey = (rd.key==='CONF') ? confRow : rd.key;
-      var ep=eps[epKey];
-      var isVoidRow=(rd.key==='VOID');
-      var cellCls3, cellTxt3;
-      if(ep!=null){ cellCls3=sepCls+(isVoidRow?' g-void':' g-time'); cellTxt3=fmtClock(ep); }
-      else { cellCls3=sepCls; cellTxt3='<span style="color:'+PAL.line+'">·</span>'; }
-      html+='<td class="'+cellCls3.trim()+'" title="'+stageCellTip(rd.key==='CONF'?confRow:rd.key, s.dir, s.strike)+'">'+cellTxt3+'</td>';
-    });
-    html+='</tr>';
-  });
-  html+='</tbody></table></div>';
-  return html;
-}
 
 function passesFilters(s){
   if(CFG.boPb!==true) return false;
@@ -5106,7 +4398,8 @@ function futureStructureSummary(sym){
       roll:roll,
       peak:pk,
       absorb:absorb,
-      abs:w.abs
+      abs:w.abs,
+      derived:!!w.derived, src:w.src||null      // (v10.58) which book the node is from
     };
     if(htrend){
       // Override the badge with the history-based judgement (tag == strip).
@@ -5179,195 +4472,6 @@ function futureStructureSummary(sym){
   };
 }
 
-// Legacy read helper retained only as dormant reference; no longer rendered.
-function readLine(){
-  var S=STATE.SPY;
-  var px=S.price;
-  var v=trendVerdict('SPY');
-  var a=atr('SPY');
-  var walls=S.walls||[];
-  var acc=accumData('SPY');
-  var lad=targetLadder();
-  var nearD=mul(a, READ_NEARX);
-  var apprD=mul(a, READ_APPRX);
-  var msg='', watch='';
-  function nearestNode(){
-    var best=null;
-    walls.forEach(function(w){ var d=Math.abs(w.k-px); if(best==null||d<best.d) best={w:w,d:d}; });
-    return best;
-  }
-  if(px==null || !walls.length){
-    msg='Waiting on feed — no live map yet.';
-  } else if(RESHUFFLE.SPY){
-    msg='Levels just reshuffled — map uncertain, stand by for the new structure to settle.';
-  } else {
-    var nn=nearestNode();
-    var atKing = (lad.t2!=null && Math.abs(lad.t2-px)<=nearD);
-    if(atKing){
-      msg='At King '+fmtNum(lad.t2)+' — decision point: accept and continue, or reject and fade.';
-    } else if(nn && nn.d<=nearD){
-      msg='Reacting at '+fmtNum(nn.w.k)+' ('+nn.w.pct+'% King) — watching how price handles it.';
-    } else if(nn && nn.d<=apprD){
-      msg='Approaching '+fmtNum(nn.w.k)+' ('+nn.w.pct+'% King) from '+(px<nn.w.k?'below':'above')+'.';
-    } else if(v.state==='up' && lad.t2!=null){
-      msg='In transit — grinding up toward King '+fmtNum(lad.t2)+'.';
-    } else if(v.state==='dn' && lad.t2!=null){
-      msg='In transit — sliding down toward King '+fmtNum(lad.t2)+'.';
-    } else if(v.state==='flat'){
-      var below=null, above=null;
-      walls.forEach(function(w){ if(w.k<px){ if(!below||w.k>below.k) below=w; } if(w.k>px){ if(!above||w.k<above.k) above=w; } });
-      if(below&&above){ msg='Rangebound '+fmtNum(below.k)+'–'+fmtNum(above.k)+' — no trend, fading edges.'; }
-      else { msg='Holding '+(v.ma!=null&&px>v.ma?'above':'below')+' the '+(v.slope>=0?'rising':'falling')+' 50MA.'; }
-    } else {
-      msg='Holding '+(v.ma!=null&&px>v.ma?'above':'below')+' the '+(v.slope>=0?'rising':'falling')+' 50MA.';
-    }
-  }
-  var watchBits=[];
-  if(px!=null && walls.length){
-    var up2=null, dn2=null;
-    walls.forEach(function(w){ if(w.k>px){ if(!up2||w.k<up2.k) up2=w; } if(w.k<px){ if(!dn2||w.k>dn2.k) dn2=w; } });
-    if(up2) watchBits.push(fmtNum(up2.k)+' above');
-    if(dn2) watchBits.push(fmtNum(dn2.k)+' below');
-  }
-  if(acc.length){ watchBits.push(fmtNum(acc[0].k)+'★ accumulating'); }
-  if(watchBits.length) watch=watchBits.join(' · ');
-  var tip='Legacy READ helper retained for fallback reference.';
-  return '<div title="'+tip.replace(/"/g,'')+'" style="padding:5px 9px;background:'+PAL.card+';border:1px solid '+PAL.line+';border-radius:8px;margin:2px 0">'+
-    '<div style="color:'+PAL.ink+';font-size:11px;line-height:1.35">'+msg+'</div>'+
-    (watch?'<div style="color:'+PAL.sub+';font-size:10px;margin-top:2px">Watching: '+watch+'</div>':'')+
-    '</div>';
-}
-
-function structuralBox(title, body, sub, borderColor){
-  borderColor = borderColor || PAL.line;
-  return '<div style="padding:5px 9px;background:'+PAL.card+';border:1px solid '+borderColor+';border-radius:8px;margin:2px 0">'+
-    '<div style="color:'+PAL.blue+';font-weight:800;font-size:10px;letter-spacing:0.5px;margin-bottom:2px">'+title+'</div>'+
-    '<div style="color:'+PAL.ink+';font-size:11px;line-height:1.35">'+body+'</div>'+
-    (sub?'<div style="color:'+PAL.sub+';font-size:10px;margin-top:2px">'+sub+'</div>':'')+
-    '</div>';
-}
-function structuralWarn(title, body){
-  return '<div style="padding:5px 9px;background:'+PAL.card+';border:1px solid '+PAL.amber+';border-radius:8px;margin:2px 0">'+
-    '<div style="color:'+PAL.amber+';font-weight:800;font-size:10px;letter-spacing:0.5px;margin-bottom:2px">'+title+'</div>'+
-    '<div style="color:'+PAL.ink+';font-size:11px;line-height:1.35">'+body+'</div>'+
-    '</div>';
-}
-function structuralReadHtml(){
-  var fs = futureStructureSummary('SPY');
-  var info = trendStateInfo();
-  var meta = fs.meta || targetMeta();
-  var anc = fs.current;
-  // Trend + T1 + T2 badges inline ON the Read header row (not a separate box).
-  // T1/T2 colored by GEOMETRY: green if the target is above price, red if below.
-  var pxT = STATE.SPY ? STATE.SPY.price : null;
-  // #2 (v10.6) TARGET BADGE COLOR \u2014 SAME rule for BOTH T1 and T2:
-  //   \u2022 YELLOW if the target is a STRETCH (too far to reach at the recent pace);
-  //   \u2022 otherwise GREEN if it is ABOVE price (a long/bullish target),
-  //   \u2022 otherwise RED if it is BELOW price (a short/bearish target).
-  // (Previously T2 used a reach scale that painted an in-reach downside target
-  //  green \u2014 e.g. 769 below price showed green. Fixed: direction wins, stretch
-  //  overrides to yellow.) Full distance sentence stays in each badge's tooltip.
-  var proxS = adaptiveProxStrikes('SPY');
-  function reachWord(k){
-    if(pxT==null||k==null) return '\u2013';
-    var aStr=Math.abs(k-pxT);
-    if(aStr<=proxS)     return 'in reach';
-    if(aStr<=proxS*1.8) return 'stretch';
-    return 'far';
-  }
-  function tgtCol(k){
-    if(pxT==null||k==null) return PAL.sub;
-    var w=reachWord(k);
-    if(w==='stretch' || w==='far') return PAL.amber;      // stretch \u2192 yellow, direction-agnostic
-    return (k>pxT) ? PAL.longAccent : PAL.shortAccent;     // long target green, short target red
-  }
-  function tgtTip(k, tag){
-    if(pxT==null||k==null) return '';
-    var pts=(k-pxT), aStr=Math.abs(k-pxT), w=reachWord(k);
-    var dir=(pts>0?'above (long/bullish target)':'below (short/bearish target)');
-    var base=tag+' '+fmtNum(k)+' is '+(pts>0?'+':'')+pts.toFixed(1)+' pts ('+aStr.toFixed(0)+' strike'+(aStr>=2?'s':'')+') '+dir+'. At the recent 3m pace (~'+proxS+' strikes/pullback) it is '+w+'.';
-    return (base+' Color: green = long target (above), red = short target (below), yellow = stretch (too far for now).').replace(/"/g,'');
-  }
-  var c1=tgtCol(meta.t1), c2=tgtCol(meta.t2);
-  var hdrRight = trendBadgeHtml()+
-      (meta.t1Label?'<span title="'+tgtTip(meta.t1,'T1')+'" style="color:'+c1+';font-weight:700;font-size:10px;padding:1px 7px;border:1px solid '+c1+';border-radius:20px">'+meta.t1Label+'</span>':'')+
-      (meta.t2Label?'<span title="'+tgtTip(meta.t2,'T2')+'" style="color:'+c2+';font-weight:700;font-size:10px;padding:1px 7px;border:1px solid '+c2+';border-radius:20px">'+meta.t2Label+'</span>':'');
-  var html = sectionHdrRight('Trend', hdrRight, 'TREND: the coordinated one-line take on structure right now \u2014 what price is doing relative to the nearest node, the trend (Up/Dn/Side/NA), and the two targets T1/T2. Target color: green = long target (above price), red = short target (below), yellow = stretch (too far to reach at the recent pace). Hover a target for its exact distance.');
-
-  if(!anc || !anc.ok || !anc.active || anc.active.k==null){
-    return html + '<div style="padding:6px 9px;background:'+PAL.card+';border:1px solid '+PAL.line+';border-radius:8px;margin:2px 0;color:'+PAL.sub+';font-size:11px;line-height:1.4">Flat market.</div>';
-  }
-
-  // #3 (v10.6) Abbreviate Support/Resistance to Sup/Res in the body, and lead
-  // with a short TREND clause before the S/R text.
-  var roleAb = (anc.price!=null && anc.price>=anc.active.k) ? 'Sup' : 'Res';
-  var currentK = fmtNum(anc.active.k);
-  var opp = anc.opposing;
-  var sentence='';
-
-  if(RESHUFFLE.SPY===true){
-    if(opp && opp.k!=null) sentence = fmtNum(opp.k)+' remains overhead while '+currentK+' is still holding below. Direction is tbd.';
-    else sentence = roleAb+' at '+currentK+' is active. Direction is tbd.';
-  } else if(fs.dir==='long'){
-    if(opp && opp.k!=null){
-      var oppState = accumulationStateFor('SPY', opp.k);
-      sentence = roleAb+' at '+currentK+' is holding while '+fmtNum(opp.k)+' remains overhead Res. ';
-      if(oppState.label==='Building') sentence += 'Price is likely moving higher, but '+fmtNum(opp.k)+' is building as Res. ';
-      else sentence += 'Price is likely moving higher. ';
-      if(meta.t1!=null && meta.t2!=null && Math.abs(meta.t1-opp.k)<0.001) sentence += 'If '+fmtNum(opp.k)+' clears, the next meaningful target is '+fmtNum(meta.t2)+' King.';
-      else if(meta.t1!=null && meta.t2!=null) sentence += 'The next meaningful targets are '+fmtNum(meta.t1)+' then '+fmtNum(meta.t2)+' King.';
-      else if(meta.t2!=null) sentence += 'The next meaningful target is '+fmtNum(meta.t2)+' King.';
-      if(fs.bestLowerSupport) sentence += ' '+fmtNum(fs.bestLowerSupport.k)+' is building as stronger Sup below.';
-    } else {
-      sentence = roleAb+' at '+currentK+' is holding. Price is likely moving higher.';
-    }
-  } else if(fs.dir==='short'){
-    var lower = fs.nearestBelow;
-    if(lower){
-      sentence = roleAb+' at '+currentK+' is holding while '+fmtNum(lower.k)+' remains Sup below. Price is likely moving lower. ';
-      if(meta.t1!=null && meta.t2!=null && Math.abs(meta.t1-lower.k)<0.001) sentence += 'If '+fmtNum(lower.k)+' breaks, the next meaningful target is '+fmtNum(meta.t2)+' King.';
-      else if(meta.t1!=null && meta.t2!=null) sentence += 'The next meaningful targets are '+fmtNum(meta.t1)+' then '+fmtNum(meta.t2)+' King below.';
-      else if(meta.t2!=null) sentence += 'The next meaningful target is '+fmtNum(meta.t2)+' King.';
-    } else {
-      sentence = roleAb+' at '+currentK+' is active. Price is likely moving lower.';
-    }
-  } else {
-    if(opp && opp.k!=null) sentence = roleAb+' at '+currentK+' is holding while '+fmtNum(opp.k)+' remains overhead gatekeeper. Price is still flat.';
-    else sentence = roleAb+' at '+currentK+' is active. Price is still flat.';
-  }
-
-  // Lead the body with a compact trend clause so the reader sees the trend first,
-  // then the S/R structure. Colored to match the Trend badge.
-  var ti = trendStateInfo();
-  var tv = ti.verdict||{};
-  var trendWord = ti.label==='Up'?'Uptrend':(ti.label==='Dn'?'Downtrend':(ti.label==='Side'?'Sideways':'Trend N/A'));
-  // Show the bar counter ONLY for a real directional trend (Up/Dn). On Sideways
-  // or N/A there is no bias, so the x/y count is noise \u2014 omit it.
-  var directional = (ti.label==='Up' || ti.label==='Dn');
-  var trendCounter = (directional && tv.win) ? (' ('+tv.up+'/'+tv.win+' bars)') : '';
-  var trendClause = '<b style="color:'+ti.color+'">'+trendWord+trendCounter+'.</b> ';
-
-  return html + '<div title="Read = coordinated output from trend, current node, future structure, accumulation, and signal context. Sup = support, Res = resistance." style="padding:6px 9px;background:'+PAL.card+';border:1px solid '+PAL.line+';border-radius:8px;margin:2px 0;color:'+PAL.ink+';font-size:11px;line-height:1.45">'+trendClause+sentence+'</div>';
-}
-
-function accTrajHtml(seq){ return seq.map(function(p){ return p+'%'; }).join(' '); }
-
-// Build a %King-history-with-timestamps string for tooltips, e.g.
-// "9:41 40 -> 9:42 44 -> 9:43 55(+11) -> ...". Marks sharp steps.
-function histDetail(sym, k){
-  var store=HIST[sym]; if(!store) return '';
-  var rec=store[k.toFixed(2)];
-  if(!rec || !rec.seq.length) return '';
-  var out=[];
-  for(var i=0;i<rec.seq.length;i++){
-    var p=rec.seq[i];
-    var t=fmtClock(p.t);
-    var step=(i>0)?(p.v-rec.seq[i-1].v):0;
-    var mark=(step>=HIST_SHARP_STEP)?(' (+'+step+' sharp)'):(step<=-HIST_SHARP_STEP?(' ('+step+' sharp)'):'');
-    out.push(t+' '+p.v+'%'+mark);
-  }
-  return out.join('  ->  ');
-}
 
 // Scan a WIDE band around price (not just the 3 shown per side) and find the
 // single strongest current accumulator on each side, so a wall forming a few
@@ -5992,6 +5096,7 @@ function nodeMapModel(sym){
     var v=nmVerdict(row, emphasis);
     mapped.push({
       k:row.k, side:row.side, pct:row.pct, dist:+dist.toFixed(2),
+      derived:!!row.derived, src:row.src||null,   // (v10.58) SPXW-derived lanes ride with a source tag
       state:(row.state?row.state.label:'Steady'), net:(row.state?row.state.net:0),
       rapid:!!(row.state&&row.state.rapid), rapidDir:(row.state&&row.state.rapidDir)||0,
       role:row.role, pos:row.pos, isKing:(kingK!=null && Math.abs(row.k-kingK)<0.001),
@@ -6092,51 +5197,6 @@ function gateSvg(stroke){
     '<line x1="7" y1="16" x2="7" y2="6"/><line x1="10" y1="16" x2="10" y2="4.2"/><line x1="13" y1="16" x2="13" y2="6"/>'+
     '<line x1="4.5" y1="10" x2="15.5" y2="10"/></svg>';
 }
-// (v10.25 Step 4) GATEKEEPER area — own section below the King header. No spelled-out
-// title (space). Lists JUST the primary gatekeeper (nearest blocker to the King) with
-// strike + strength-ratio + verdict + a tri-index confluence note (soft booster).
-function gatekeeperBlock(){
-  var sym='SPY';
-  var gk = (typeof gatekeeper==='function') ? (function(){ try{return gatekeeper(sym);}catch(e){return null;} })() : null;
-  var gate=gateSvg(PAL.ink);
-  // (v10.28) \u2463 icon BEFORE the gate icon (was gate+\u2463).
-  var hdr='<div style="display:flex;align-items:center;gap:6px;margin:0 2px 5px">'+stepIcon(4)+gate+
-    '<span style="font-size:8.5px;color:'+PAL.sub+';font-weight:700;letter-spacing:.3px">gatekeeper</span></div>';
-  if(!gk || !gk.ok){
-    // clear path to the King (honest positive note) — or nothing to gatekeep toward
-    var msg = (gk && gk.kingK!=null) ? ('Clear path to \uD83D\uDC51 '+fmtNum(gk.kingK)+' \u2014 no gatekeeper blocking.') : 'No gatekeeper (King at/na).';
-    return hdr+'<div style="font-size:10px;color:'+PAL.sub+';padding:2px 4px">'+msg+'</div>';
-  }
-  var col = gk.strong?PAL.amber:PAL.sub;
-  var ratioTxt = (gk.ratio!=null)?(gk.ratio+'\u00d7'):'\u2013';
-  var early = isEarlySession() ? ' <span style="color:'+PAL.amber+';font-weight:700">Early-session \u2014 higher-probability reversal.</span>' : '';
-  // tri-index confluence (soft): show a small note. Uses gexRegime dir agreement across symbols if available.
-  var conf = triIndexNote(gk);
-  var card='<div style="background:'+PAL.card+';border:1px solid '+col+';border-radius:8px;padding:6px 9px">'+
-    '<div style="display:flex;align-items:center;gap:7px">'+gateSvg(PAL.ink)+
-      '<span style="font-weight:800;font-size:14px;color:'+PAL.ink+';font-variant-numeric:tabular-nums">'+fmtNum(gk.k)+'</span>'+
-      '<span style="font-size:10px;font-weight:800;color:'+col+';border:1px solid '+col+';border-radius:20px;padding:0 6px">'+ratioTxt+'</span>'+
-      '<span style="font-size:10px;font-weight:800;color:'+col+';margin-left:auto">'+(gk.strong?'Reversal likely':'Watch')+'</span></div>'+
-    '<div style="font-size:10px;line-height:1.4;color:'+PAL.sub+';margin-top:4px">Blocks the path to \uD83D\uDC51 '+(gk.kingK!=null?fmtNum(gk.kingK):'?')+'. Ratio '+ratioTxt+' vs the next node beyond'+(gk.strong?' \u2014 strong rejection zone; a failed test can reshuffle the map.':'.')+early+'</div>'+
-    (conf?('<div style="font-size:9.5px;color:'+PAL.sub+';margin-top:5px">'+conf+'</div>'):'')+
-  '</div>';
-  return hdr+card;
-}
-// tri-index confluence note (SOFT booster, NOT a gate). Compares gexRegime dir across
-// SPY/QQQ/SPXW; agreement boosts, divergence is noted, never blocks.
-function triIndexNote(gk){
-  try{
-    var dirs={};
-    ['SPY','QQQ','SPXW'].forEach(function(s){ if(STATE[s]){ var r=gexRegime(s); dirs[s]=r?r.dir:0; } });
-    var have=Object.keys(dirs); if(have.length<2) return '';
-    var gkDir = (gk.side==='above')?1:-1;   // toward-King direction
-    var agree=0, tot=0;
-    have.forEach(function(s){ tot++; if((dirs[s]>0&&gkDir>0)||(dirs[s]<0&&gkDir<0)) agree++; });
-    if(agree===tot && tot>=2) return '<span style="color:'+PAL.longAccent+'">\u25CF</span> '+have.join(' + ')+' aligned \u2014 confluence <b style="color:'+PAL.longAccent+'">boosts</b> confidence.';
-    if(agree===0) return '<span style="color:'+PAL.amber+'">\u25CF</span> indices diverge \u2014 lower confluence (noted, not blocking).';
-    return '<span style="color:'+PAL.amber+'">\u25CF</span> mixed confluence ('+agree+'/'+tot+' aligned).';
-  }catch(e){ return ''; }
-}
 // (v10.26-prep Step 5) NODE STATUS = the doc's flow read. Building->Acm (green,
 // strengthening), Fading->Diss (red, weakening), Steady->grey. RAPID = the doc's
 // 'Reshuffling' state: append \uD83D\uDD25 (rapid Acm) / \u2744 (rapid Diss).
@@ -6185,6 +5245,7 @@ function nodeLifecycleTag(L){
 // (v10.26-prep Step 5) NODE TYPE = gamma polarity. +\u03b3 positive-gamma (pinning /
 // mean-reverting, yellow); \u2212\u03b3 negative-gamma (accelerant / breakout-prone,
 // purple). Same axis that drives Rug detection.
+// (v11.0 audit) PARKED — no live caller; kept because test_node_identity.js pins it.
 function nodeTypeTag(L){
   if(L.pos===true){
     return '<span title="Positive-gamma node \u2014 dealers dampen moves here (pinning / mean-reverting). Yellow." style="color:'+PAL.gold+';font-size:8.5px;font-weight:800">+\u03b3</span>';
@@ -6397,29 +5458,9 @@ function labelDeflectionOutcomes(sym, day){
   return changed;
 }
 
-// Aggregate ALL recorded days into per-setup continuation stats for a symbol.
-function deflStats(sym){
-  var out={ perKey:{}, totalResolved:0, daysSeen:0, perDayCount:0 };
-  try{
-    var db=recorderLoad(); var days=db.days||{};
-    var dayKeys=Object.keys(days); var totalEvents=0;
-    dayKeys.forEach(function(dk){
-      var day=days[dk]; var arr=(day.defl&&day.defl[sym])||[];
-      if(arr.length) out.daysSeen++;
-      totalEvents+=arr.length;
-      arr.forEach(function(e){
-        var b=out.perKey[e.key]||(out.perKey[e.key]={n:0,hit:0,pending:0,name:e.name,dir:e.dir});
-        if(e.cont==null){ b.pending++; }
-        else { b.n++; if(e.cont) b.hit++; out.totalResolved++; }
-      });
-    });
-    out.perDayCount = out.daysSeen>0 ? +(totalEvents/out.daysSeen).toFixed(1) : 0;
-  }catch(e){}
-  return out;
-}
-
 // Auto-tuned unlock sample size: the more setups you record per day, the higher
 // the bar we can afford (cheap to reach) — capped both ways. Recommended, not final.
+// (v11.0 audit) PARKED — no live caller; kept because test_defl_signals.js (and PARKED deflectionBlock) pins it.
 function deflUnlockN(perDayCount){
   if(!perDayCount || perDayCount<=0) return DEFL_UNLOCK_MIN;
   var n=Math.round(perDayCount*3);               // ~3 trading days' worth
@@ -6450,6 +5491,7 @@ function _deflChipHtml(t){
 // starts scrolled fully left. No unlock message (saves vertical space for the Node
 // Map below). Per-card data for now: node type (setup name) + strike + direction.
 // Grades stay HIDDEN until the setup has enough recorded outcomes (data-earned).
+// (v11.0 audit) PARKED — no live caller; kept because test_layout_2col.js/test_read_v1047.js pins it.
 function deflectionBlock(){
   var sym='SPY';
   var m=nodeMapModel(sym); if(!m||!m.ok) return '';
@@ -6528,7 +5570,9 @@ function deflectionBlock(){
 //   777.75 behind it is accumulating as well, so resistance is stacking. Nothing below price is
 //   decreasing, so a deflection here would have support to fall back on."
 // Numbers only for Acm/Dec. Levels always named. Never "mass". No trade language.
+// (v11.0 audit) PARKED — no live caller; kept because test_read_v1047.js pins it.
 function _nmRole(L){ if(!L) return 'node'; if(L.isKing) return 'King'; if(L.isGatekeeper) return 'gate'; if(L.isFlr) return 'floor'; if(L.isCeil) return 'ceiling'; return 'node'; }
+// (v11.0 audit) PARKED — no live caller; kept because test_read_v1047.js pins it.
 function _nmAcc(L){ // 'accumulating (▲12%)' | 'decreasing (▼8%)' | 'steady'
   if(!L) return 'steady';
   var c=(typeof L.chg==='number')?L.chg:0;
@@ -6538,7 +5582,9 @@ function _nmAcc(L){ // 'accumulating (▲12%)' | 'decreasing (▼8%)' | 'steady'
 }
 function _nmIsAcc(L){ return !!L && (L.state==='Building' || (typeof L.chg==='number' && L.chg>=8)); }
 function _nmIsDec(L){ return !!L && (L.state==='Fading' || (typeof L.chg==='number' && L.chg<=-8)); }
+// (v11.0 audit) PARKED — no live caller; kept because test_read_v1047.js pins it.
 function _nmB(t,c){ return '<b style="color:'+(c||PAL.ink)+'">'+t+'</b>'; }
+// (v11.0 audit) PARKED — no live caller; kept because test_read_v1047.js/test_accum_canon.js pins it.
 function nodeMapSentence(m, sym, tagFn){
   // (v10.47 A.2, user-directed) BARE BONES. e.g. "CONT thru Gate 774.50 → King 775.38: Gate Dec ▼8%, King Acm ▲12%. Sup 773.25 Acm."
   var px=m.px, lv=(m.levels||[]).slice();
@@ -6600,6 +5646,7 @@ function nodeMapSentence(m, sym, tagFn){
   }
   return {verdict:verdict, text:text, node:eng};
 }
+// (v11.0 audit) PARKED — no live caller; kept because test_read_v1047.js pins it.
 function nodeMapSentenceHtml(m, sym, tagFn, tip){
   var r=(m&&m.ok)?nodeMapSentence(m, sym, tagFn):{verdict:'NONE',text:''};
   // (v10.47b) nothing engaged => no sentence at all (space); the ⑤ icon rides on the column header
@@ -6805,6 +5852,7 @@ function nodeMapBlock(){
 }
 
 // ---- King session bounds (CT cash session 8:30\u201315:00) as epoch ms today ----
+// (v11.0 audit) PARKED — no live caller; kept because PARKED kingBlock chain pins it.
 function sessionBoundsCT(){
   var d=ctNow();
   function atCT(h,m){
@@ -6829,6 +5877,7 @@ function sessionBoundsCT(){
 // path — not just the latest strike. A move is significant when the step is >=2
 // strikes OR the level then held >=15 min. Capped at 5, last vertex excluded
 // (the gutter 👑 already labels it). PURE for testability.
+// (v11.0 audit) PARKED — no live caller; kept because test_kingpath.js/test_bo_tag_labels.js pins it.
 function kingPathSigMoves(pts, now){
   var out=[];
   for(var v=1; v<pts.length-0; v++){
@@ -6844,6 +5893,7 @@ function kingPathSigMoves(pts, now){
   }
   return out;
 }
+// (v11.0 audit) PARKED — no live caller; kept because test_kingpath.js pins it.
 function kingSparkline(mv, kingK, px, now, sess, verdictCol){
   // (v10.23 Issue A) +33% taller so the drift shape + always-on price line are legible.
   // (v10.40) padR widened into a reserved RIGHT GUTTER: price + King labels live
@@ -7155,6 +6205,7 @@ function kingAnalyzer(sym){
   }catch(e){ A.ok=false; A.err=String(e).slice(0,60); }
   return A;
 }
+// (v11.0 audit) PARKED — no live caller; kept because test_king_analyzer.js pins it.
 function kingReadHtml(A, kv){
   if(!A || !A.ok) return '';
   // (v10.42) KING CONSOLE: prose blob -> labeled indicator TILES + 2-line
@@ -7269,6 +6320,7 @@ function kingProjectionLive(sym, A){
 // (v10.43) PURE: cone half-width with POST-ETA TAPER. Before arrival the
 // envelope widens with sqrt(bars); after the projected arrival it TAPERS into a
 // pin range (floor 0.5) instead of ballooning forever — the "black wedge" fix.
+// (v11.0 audit) PARKED — no live caller; kept because test_king_projection.js pins it.
 function projTaperHalf(b, etaBars, barsLeft, halfFn){
   if(etaBars==null || b<=etaBars){
     // no ETA: still cap growth at the 10-bar envelope so a flat projection
@@ -7281,6 +6333,7 @@ function projTaperHalf(b, etaBars, barsLeft, halfFn){
   return Math.max(0.5, hEta*(1-0.5*frac));
 }
 // ---- the projected-path chart (SVG <title> children = native hover tooltips) ----
+// (v11.0 audit) PARKED — no live caller; kept because test_king_projection.js pins it.
 function projChartHtml(A, P){
   if(!A||!A.ok||!P) return '';
   var W=262,H=118,padL=4,padR=46,padT=8,padB=14;
@@ -7401,8 +6454,6 @@ var STUDY_BASELINE={ src:'baseline 08-15 (4d/391 bars)', bars:391, days:4,
   ep:{Pull:{h:0,n:0},Push:{h:0,n:0}} };
 function studyLoad(){ try{ STUDY=JSON.parse(localStorage.getItem(STUDY_KEY)||'null'); }catch(e){ STUDY=null; } if(!STUDY) STUDY=STUDY_BASELINE; return STUDY; }
 function studyPct(o){ return (o&&o.n)?Math.round(100*o.h/o.n):null; }
-function studyTag(o){ return (o&&o.n>=20)?'📊':'⚖'; }
-function studyCite(o, word){ var p=studyPct(o); if(p==null) return ''; return studyTag(o)+' '+p+'% '+(word||'')+' (n='+o.n+')'; }
 // Run the battery over all repository rows (async); cache; re-render.
 function studyRun(cb){
   repoAll(function(rows){
@@ -7603,6 +6654,7 @@ function rulesSave(){
   try{ localStorage.setItem(RULES_KEY, JSON.stringify({v:1, at:Date.now(), rules:RULES})); }catch(e){}
   try{ localStorage.setItem(RULES2_KEY, JSON.stringify({v:2, at:Date.now(), doc:RULES_DOC})); }catch(e2){}
 }
+// (v11.0 audit) PARKED — no live caller; kept because test_rules_v2.js et al. pins it.
 function ruleGet(id){ var R=rulesLoad(); return (R && R[id]) || null; }
 // ============================================================================
 // (v10.54, audit 1/4/6) EFFECTIVE N — THE ONLY N THAT COUNTS.
@@ -7652,9 +6704,21 @@ function ruleLocalRate(id, sym){
     var mg=String(id).match(/^dir\.([ABC])$/);
     var mn=String(id).match(/^node\.grade\.([ABC])$/);
     var md=String(id).match(/^decision\.(.+)$/);
+    var mt=String(id).match(/^node\.tap\.([123])$/);
+    var mp=String(id).match(/^node\.pol\.(pos|neg)$/);
+    var mr=String(id).match(/^node\.rocDay\.(up|dn)$/);
+    var ds=null; if(mt||mp||mr||/^kill\./.test(id)){ try{ ds=deflStats(sym||'SPY'); }catch(eD){ ds=null; } }
     if(mg){ b=(st.byGrade&&st.byGrade.dir)?st.byGrade.dir[mg[1]]:null; out.key='dir/'+mg[1]; }
     else if(mn){ b=(st.byGrade&&st.byGrade.node)?st.byGrade.node[mn[1]]:null; out.key='node/'+mn[1]; }
     else if(md){ b=(st.cells||{})[md[1]]; out.key='decision/'+md[1]; }
+    // (v11.0 audit G5) sub-rules + kills read the ④ DEFLECTIONS / dir slices
+    else if(mt && ds){ b=ds.tap['tap '+mt[1]]||null; out.key='node/tap '+mt[1]; }
+    else if(mp && ds){ b=ds.pol[mp[1]==='pos'?'+γ':'−γ']||null; out.key='node/'+(mp[1]==='pos'?'+γ':'−γ'); }
+    else if(mr && ds){ b=ds.rocDay[mr[1]==='up'?'Acm':'Dec']||null; out.key='node/rocDay '+mr[1]; }
+    else if(id==='kill.tap3' && ds){ b=ds.tap['tap 3']||null; out.key='node/tap 3'; }
+    else if(id==='kill.negGammaWide' && ds){ b=ds.negGammaAir['−γ air']||null; out.key='node/−γ air'; }
+    else if(id==='kill.midrange' && ds){ b=ds.dirZone['mid']||null; out.key='dir/mid-range'; }
+    else if(id==='kill.noConf' && ds){ b=ds.dirNoConf['noConf']||null; out.key='dir/noConf'; }
     else {
       var fk=id;
       if(!st.byKey[fk]){
@@ -7788,11 +6852,13 @@ function proposalClearsBar(p){
   // 1. LOCAL effective n clears the bar, or nothing else matters.
   if(!(loc.effN>=PROMO_MIN_N))
     return { ok:false, why:'insufficient local evidence — eff n='+loc.effN+' ('+nTxt(loc.n)+'), need '+PROMO_MIN_N };
-  // 2. the self-report has to MATCH what is on this machine, within 20%.
+  // 2. (v11.0 audit G4) the "self-reported n within 20% of local n" test is GONE. The reviewer's
+  // n spans every day in the repo; local truth spans what this machine has kept — the two
+  // diverge by construction as the repo grows, and the test made every promotion structurally
+  // impossible. The bar is LOCAL evidence: eff n, walk-forward sessions, no regime flip. The
+  // reviewer's n is still required to be present (a proposal without an n is malformed).
   var claimed=(typeof p.n==='number')?p.n:0;
-  var dev=(loc.effN>0)?Math.abs(claimed-loc.effN)/loc.effN:1;
-  if(!(claimed>0) || dev>0.20)
-    return { ok:false, why:'self-reported n='+claimed+' disagrees with local eff n='+loc.effN+' by more than 20%' };
+  if(!(claimed>0)) return { ok:false, why:'proposal carries no n' };
   // 3. walk-forward re-derived from locally recorded session-days after madeOn.
   var wfl=proposalWalkForwardLocal(p);
   if(!(wfl.sessions>=PROMO_WF_SESSIONS))
@@ -8316,12 +7382,102 @@ function acmLabel(p){ if(p==null) return 'Steady'; if(p>=ACM_BAND) return 'Acm';
 // that is DISSIPATING is one whose %King has bled DOWN FROM ITS OWN SESSION HIGH, which
 // the "vs the first reading of the day" number cannot see (a node that built all morning
 // and is now rolling over still reads +200% against its open).
+// ============================================================================
+// (v10.58) THE FEED IS ITS OWN HISTORY. Every gex/levels response carries the whole
+// session as per-minute snapshots (native SPY strikes AND the SPXW-derived lanes), so a
+// node's %King series does not need the tape strip: it is read straight off the feed —
+// each book normalised to its own King per snapshot, and a node that DROPS OUT of the
+// list after having been in it reads 0 (that IS dissipation; "no data" was hiding it).
+// ============================================================================
+var FEED_SERIES_CACHE={};
+function feedSeriesAll(sym){
+  try{
+    var lf=LASTFEED[sym]; if(!lf || !lf.j || !lf.j.levels || !lf.j.levels.length) return null;
+    var c=FEED_SERIES_CACHE[sym];
+    if(c && c.src===lf.j) return c.val;
+    var lv=lf.j.levels, N=lv.length, out={ t:[], k:{} , n:N };
+    var tIdx={};                                   // snapshot time → native index (the derived
+    lv.forEach(function(snap,i){ if(snap && snap.t!=null) tIdx[snap.t]=i; });   // book can skip a minute)
+    function put(key, i, pct){ var a=out.k[key]; if(!a){ a=out.k[key]={ v:new Array(N), first:i, src:null }; for(var q=0;q<N;q++) a.v[q]=null; } if(a.v[i]==null || pct>a.v[i]) a.v[i]=pct; if(a.first==null||i<a.first) a.first=i; }
+    lv.forEach(function(snap,i){
+      out.t.push(snap.t||null);
+      var mag=0; (snap.l||[]).forEach(function(n){ var a=Math.abs(n.v); if(a>mag) mag=a; });
+      if(mag>0) (snap.l||[]).forEach(function(n){ put(n.k.toFixed(2), i, Math.round(mul(100, Math.abs(n.v)/mag))); });
+    });
+    (lf.j.derived||[]).forEach(function(dd){
+      (dd.levels||[]).forEach(function(snap,di){
+        // (v10.58) ALIGN BY TIME, never by index: live 2026-08-18 the SPXW book skipped one
+        // minute mid-session, and index alignment shifted every later sample by one.
+        var i=(snap && snap.t!=null && tIdx[snap.t]!=null)?tIdx[snap.t]:((di<N)?di:-1);
+        if(i<0 || i>=N) return;
+        var mag=0; (snap.l||[]).forEach(function(n){ var a=Math.abs(n.v); if(a>mag) mag=a; });
+        if(mag<=0) return;
+        (snap.l||[]).forEach(function(n){
+          var kk=Math.round(mul(n.k,2))/2; var key=kk.toFixed(2);
+          var isInt=Math.abs(kk-Math.round(kk))<0.001;
+          if(isInt && out.k[key] && out.k[key].src==null) return;     // native owns integer strikes
+          put(key, i, Math.round(mul(100, Math.abs(n.v)/mag)));
+          out.k[key].src=dd.source||'SPXW';
+        });
+      });
+    });
+    // absent AFTER first presence = 0 (dropped out of the book), never null
+    Object.keys(out.k).forEach(function(key){ var a=out.k[key]; for(var i=(a.first||0);i<N;i++){ if(a.v[i]==null) a.v[i]=0; } });
+    FEED_SERIES_CACHE[sym]={ src:lf.j, val:out };
+    return out;
+  }catch(e){ return null; }
+}
+// A single missing minute is a feed hiccup, not a node dying: read a sample as the max
+// of itself and its neighbour, so one 0 never becomes "acm +100%" or "gone" on its own.
+function feedSampleAt(v, i){
+  if(!v || i<0 || i>=v.length) return null;
+  var a=v[i], b=(i>0)?v[i-1]:null;
+  if(typeof a!=='number') return (typeof b==='number')?b:null;
+  if(typeof b==='number' && a===0 && b>0) return b;
+  return a;
+}
+// A node is GONE when it has been absent for the last FEED_GONE_N samples after having been
+// meaningful (≥ PB_MIN_PCT) inside the 15m window.
+var FEED_GONE_N=3;
+function feedGoneAt(v, i, anyTime){
+  try{
+    if(!v || i<FEED_GONE_N) return false;
+    for(var q=i-FEED_GONE_N+1;q<=i;q++){ if(v[q]!==0) return false; }
+    var was=v[Math.max(0,i-FEED_M15_SAMPLES)], pk=0;
+    for(var r=0;r<=i;r++){ if(typeof v[r]==='number' && v[r]>pk) pk=v[r]; }
+    if(pk<PB_MIN_PCT) return false;
+    // the Map wants RECENT deaths (a transfer in the window); the ledger wants the fact
+    return anyTime ? true : (typeof was==='number' && was>=PB_MIN_PCT);
+  }catch(e){ return false; }
+}
+function feedSeries(sym, k){
+  try{ var all=feedSeriesAll(sym); if(!all || k==null) return null; var a=all.k[(+k).toFixed(2)]; return a?a.v:null; }catch(e){ return null; }
+}
+var FEED_M15_SAMPLES=15;   // feed snapshots are ~1/min; 15 = the 15-minute window
 function accumCanon(sym, k){
   var out={ m15:{pct:null,label:'Steady'}, session:{pct:null,label:'Steady',peak:null,fromPeak:null} };
   try{
     if(k==null) return out;
-    // ---- m15: last two samples of the node's %King history (~15m / ~5-bar window)
-    var h=nodeHistory(sym, k);
+    // (v11.0 audit — ONE accumulation reading) THE FEED SERIES IS PRIMARY for every node, SPY
+    // strikes and SPXW lanes alike: one 15-minute window, one per-book normalisation, and the
+    // only path that sees a node DROP OUT (→ 0). The tape strip (~1/min for SPY strikes only,
+    // "m15" ≈ 6 min there) is the fallback when the feed has no series for the strike.
+    var h=null;
+    var fsv=feedSeries(sym,k);
+    var fedOk=!!(fsv && fsv.length>=2);
+    if(!fedOk){ h=nodeHistory(sym, k); }
+    if(fedOk){
+      if(fsv && fsv.length>=2){
+        var last=fsv.length-1, cur=feedSampleAt(fsv,last), from=feedSampleAt(fsv,Math.max(0,last-FEED_M15_SAMPLES));
+        out.gone=feedGoneAt(fsv,last);
+        if(typeof cur==='number' && typeof from==='number' && Math.abs(from)>0.0001){
+          out.m15.pct=Math.round(100*(cur-from)/Math.abs(from)); out.m15.label=acmLabel(out.m15.pct);
+        } else if(typeof cur==='number' && cur>0 && (from===0 || from==null)){ out.m15.pct=100; out.m15.label=acmLabel(100); }   // born inside the window
+        var pk=0, first=null; fsv.forEach(function(v){ if(typeof v==='number'){ if(first==null) first=v; if(v>pk) pk=v; } });
+        if(pk>0 && typeof cur==='number'){ out.session.peak=pk; out.session.fromPeak=Math.round(100*(pk-cur)/pk);
+          if(first!=null && first>0){ out.session.pct=Math.round(100*(cur-first)/first); out.session.label=acmLabel(out.session.pct); } }
+      }
+    }
     if(h && h.length>=2){
       var a=h[h.length-3]!=null?h[h.length-3]:h[0], b=h[h.length-1];
       if(typeof a==='number' && typeof b==='number' && Math.abs(a)>0.0001){
@@ -8329,9 +7485,10 @@ function accumCanon(sym, k){
         out.m15.label=acmLabel(out.m15.pct);
       }
     }
-    // ---- session: vs the first magnitude seen today (persisted, survives reload)
+    // ---- session: vs the first magnitude seen today (persisted, survives reload) — FALLBACK
+    // path only (v11.0): with a feed series the session numbers above are complete already.
     var mag=null;
-    try{
+    if(!fedOk) try{
       var fm=feedStructMap(sym);
       if(fm && fm.pct){ var pv=fm.pct[k.toFixed(2)]; if(typeof pv==='number') mag=Math.abs(pv); }
     }catch(eF){}
@@ -8352,15 +7509,6 @@ function accumCanon(sym, k){
     }
   }catch(e){}
   return out;
-}
-// Compact arrow rendering used by the zone rows: "Acm 15m▲ session▼"
-function acmChipHtml(a){
-  function one(word, o){
-    var arr = o.label==='Acm'?'▲':(o.label==='Dec'?'▼':'▬');
-    var col = o.label==='Acm'?PAL.longAccent:(o.label==='Dec'?PAL.shortAccent:PAL.sub);
-    return '<span style="color:'+col+'">'+word+arr+'</span>';
-  }
-  return 'Acm '+one('15m',a.m15)+' '+one('session',a.session);
 }
 
 // ============================================================================
@@ -8452,23 +7600,31 @@ function legStepWord(n){ return n===1?'1st':(n===2?'2nd':(n===3?'3rd':(n+'th')))
 // dissipating when it is losing %King now (m15 Dec) or has bled off its session peak,
 // and building when it is gaining now or is already big enough to be a pullback node.
 // ============================================================================
-var HANDOFF_DEC  = -8;   // m15 %King change at/below this = the old node is DISSIPATING
-var HANDOFF_DROP = 25;   // ...or it has lost this much of its SESSION PEAK
-var HANDOFF_ACM  = 8;    // m15 %King change at/above this = the new node is BUILDING
+// (v11.0 audit MERGE) ONE accumulation threshold set for the whole stack — the ledger, the Map,
+// the leg engine's handoff and the acm/dec chip all read these. They were defined three times
+// (ACM_BAND / HANDOFF_* / MAP_*) with the same values, which is how they would have drifted apart.
+var ACM_UP   = 8;    // m15 %King change at/above this = ACCUMULATING (acm)
+var ACM_DN   = -8;   // m15 %King change at/below this = DISSIPATING (dec)
+var ACM_DROP = 25;   // ...or this much off the node's SESSION PEAK = dec
+var HANDOFF_DEC  = ACM_DN;    // aliases kept for the leg engine's vocabulary
+var HANDOFF_DROP = ACM_DROP;
+var HANDOFF_ACM  = ACM_UP;
 // PURE: is this level bleeding? (level rows carry acm15 / pctPeak from accumCanon)
 function legNodeDissipating(L){
   if(!L) return false;
-  if(typeof L.acm15==='number' && L.acm15<=HANDOFF_DEC) return true;
-  if(typeof L.pctPeak==='number' && L.pctPeak>0 && typeof L.pct==='number'){
-    if(100*(L.pctPeak-Math.abs(L.pct))/L.pctPeak >= HANDOFF_DROP) return true;
-  }
+  // (v11.0 MERGE) the Map's node-state test IS the handoff's test — one detector, two consumers
+  var fp=(typeof L.pctPeak==='number' && L.pctPeak>0 && typeof L.pct==='number')?Math.round(100*(L.pctPeak-Math.abs(L.pct))/L.pctPeak):null;
+  var st=(typeof mapNodeState==='function')?mapNodeState({ m15:{pct:(typeof L.acm15==='number')?L.acm15:null}, session:{fromPeak:fp} }):'hold';
+  if(st==='dec' || st==='gone') return true;
   return false;
 }
-// PURE: is this level building into a pullback node?
+// PURE: is this level building into a pullback node? (v11.0 audit) it must actually be BUILDING —
+// acm on the 15m window, or the tape's Building state — not merely large; "≥ PB_MIN_PCT" alone
+// made every meaningful node a handoff target.
 function legNodeBuilding(L){
   if(!L) return false;
   if(typeof L.acm15==='number' && L.acm15>=HANDOFF_ACM) return true;
-  if(typeof L.pct==='number' && Math.abs(L.pct)>=PB_MIN_PCT) return true;
+  if(L.state==='Building' && typeof L.pct==='number' && Math.abs(L.pct)>=PB_MIN_PCT) return true;
   return false;
 }
 function legBlank(dir){
@@ -8508,7 +7664,7 @@ function legStep(prev, ctx){
     st.event=null; st.note=null;
     st.invalidations={ trendBreak:false, pbBreak:false };
   }
-  st.dir=dirIn; st.t=ctx.t||0; st.bar=ctx.bar||0; st.px=(px!=null)?+px.toFixed(2):null;
+  st.dir=dirIn; st.dirSrc=ctx.dirSrc||'sma'; st.t=ctx.t||0; st.bar=ctx.bar||0; st.px=(px!=null)?+px.toFixed(2):null;
   // Per-bar observations reset every bar: they describe THIS bar, never a carried state.
   st.handoff=null; st.stack=null; st.atPB=false; st.magnetReached=false; st.pbDissipating=false;
   st.deflected=!!ctx.deflected;
@@ -8708,6 +7864,30 @@ function legStep(prev, ctx){
 var LEG_STATE={ SPY:null, QQQ:null };
 var LEG_CACHE={ SPY:null, QQQ:null };
 var LEG_PB_LOG={ SPY:[], QQQ:[] };     // every detected PB {t,k,step} — the pbPredict outcome reads it
+// (v11.0 audit G7) THE PB LOG SURVIVES A RELOAD. It was RAM-only, so after any reload every
+// pending pbPredict / handoff record resolved as a MISS (hit=0) — a false miss on exactly the
+// two rates the nightly review is asked to report. Persisted per day in the recorder
+// (`day.pblog`) and restored at boot; outcomes return null (unscorable), never 0, when the
+// day's log is absent.
+function pbLogSave(sym){
+  try{ var db=recorderLoad(); var day=recorderDay(db); day.pblog=day.pblog||{}; day.pblog[sym]=(LEG_PB_LOG[sym]||[]).slice(-200); recorderSave(db); }catch(e){}
+}
+function pbLogRestore(){
+  try{ var db=recorderLoad(); var day=(db.days||{})[TODAY]; if(!day||!day.pblog) return;
+    Object.keys(day.pblog).forEach(function(sym){ if(Array.isArray(day.pblog[sym]) && (!LEG_PB_LOG[sym]||!LEG_PB_LOG[sym].length)) LEG_PB_LOG[sym]=day.pblog[sym].slice(); });
+  }catch(e){}
+}
+function pbLogFor(sym, t){
+  // the log that covers time t: today's live log, else the recorder day that contains t
+  try{
+    var live=LEG_PB_LOG[sym]||[];
+    if(live.length && t>=live[0].t-1) return live;
+    var db=recorderLoad(); var days=(db&&db.days)||{};
+    var keys=Object.keys(days).sort();
+    for(var i=keys.length-1;i>=0;i--){ var d=days[keys[i]]; var lg=(d&&d.pblog&&d.pblog[sym])||null; if(lg && lg.length && t>=lg[0].t-1) return lg; }
+    return live.length?live:null;
+  }catch(e){ return null; }
+}
 function legDirOf(state){
   if(state==='dn'||state==='dn-broken') return 'dn';
   if(state==='up'||state==='up-broken') return 'up';
@@ -8744,7 +7924,15 @@ function legCtxOf(sym){
       if(ts && ts.indexOf('✓')===0){ defl=true; deflK=prevSt.pbDetected.k; }
     }
   }catch(eT){}
-  return { dirIn:legDirOf(tv.state), px:px, close:close,
+  // (v10.58) STRUCTURE LEADS WHEN THE SMA HAS NO TREND. The user's rolls happen with the
+  // SMA flat under price; gating the leg on the SMA left the engine blind to them. When
+  // the five-state has no confirmed trend, the Map's lean (both sides rolling the same
+  // way) drives the leg; the READ says "structure leads, trend unconfirmed".
+  var dirIn=legDirOf(tv.state), dirSrc='sma';
+  if(dirIn==='none'){
+    try{ var mf=nodeFlow(sym); if(mf && mf.ok && (mf.lean==='dn'||mf.lean==='up')){ dirIn=mf.lean; dirSrc='map'; } }catch(eMf){}
+  }
+  return { dirIn:dirIn, dirSrc:dirSrc, px:px, close:close,
            levels:lv, kingK:(m&&m.kingK!=null)?m.kingK:null,
            zone:(typeof DEFLECT_ZONE==='number')?DEFLECT_ZONE:0.5,
            deflected:defl, deflectedK:deflK,
@@ -8777,6 +7965,7 @@ function legEngine(sym){
       var log=LEG_PB_LOG[sym]||(LEG_PB_LOG[sym]=[]);
       log.push({ t:st.t, k:st.pbDetected.k, step:st.pbDetected.step, dir:st.dir });
       if(log.length>200) LEG_PB_LOG[sym]=log.slice(log.length-200);
+      try{ pbLogSave(sym); }catch(ePs){}
     }
   }catch(e3){}
   LEG_BUSY[sym]=false;
@@ -9250,8 +8439,14 @@ function directionGrade(sym){
     } else {
       // flat | up-broken | dn-broken | na — no confirmed trend to own the direction.
       dirNum = driftD;                                      // provisional lean only (SIDE when 0)
+      // (v10.58) THE MAP LEAN: both sides of the board rolling the same way is structure
+      // saying which way, and it may lead when the SMA has nothing — capped at C, named.
+      var mapLean='none';
+      try{ var mfl=nodeFlow(sym); if(mfl && mfl.ok) mapLean=mfl.lean; }catch(eMl){}
+      if(dirNum===0 && (mapLean==='dn'||mapLean==='up')){ dirNum=(mapLean==='dn')?-1:1; out.relation='structure-leads'; }
+      else out.relation='tentative';
+      out.inputs.map={ lean:mapLean };
       score = W.tentative;
-      out.relation='tentative';
       out.tentative=true;
       hardC=true;                                           // tentative is capped at C, always
     }
@@ -9621,8 +8816,7 @@ function rrText(rr){ return (rr==null)?'':('R:R '+rr.toFixed(1)+':1'); }
 // (v10.54, audit 25) frameTextOf / readHeadHtml / readWhyHtml / decisionLineHtml were
 // DELETED: four narrators for one read, none of them rendered since v10.50, all of them
 // still being maintained and tested as if they shipped. The live voice is read3Beat +
-// readBlock44 + the deflection-zone row 3. _escHtml stays — it is used by live renders.
-function _escHtml(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// readBlock44 + the deflection-zone row 3. (_escHtml removed in the v11.0 audit: no live caller.)
 
 // ============================================================================
 // (F) REACTION QUALITY + DEFLECTION ANTICIPATION.
@@ -9765,12 +8959,6 @@ function feedPctAt(sym, k){
   return null;
 }
 function tapWord(n){ return n<=0?'1st':(n===1?'2nd':(n===2?'3rd':(n+1)+'th')); }
-function tapCol(n){ return n<=0?PAL.longAccent:(n===1?PAL.amber:PAL.shortAccent); }
-function gradeChipHtml(g, disp, tier, tip){
-  var col = g==='A'?PAL.longAccent:(g==='B'?PAL.blue:PAL.amber);
-  var bg  = g==='A'?'rgba(46,194,126,.15)':(g==='B'?'rgba(74,144,217,.15)':'rgba(242,180,90,.15)');
-  return '<span title="'+(tip||'').replace(/"/g,'')+'" style="margin-left:auto;font-weight:800;font-size:10px;padding:0 5px;border-radius:3px;color:'+col+';background:'+bg+'">'+(disp||g)+(tier?('<span style="color:'+PAL.sub+';font-weight:600;font-size:8px;margin-left:2px">'+tier+'</span>'):'')+'</span>';
-}
 // (v10.50) ACTIVITY tag — ported out of nodeMapBlock's closure so the zone rows can
 // reuse the exact same lifecycle vocabulary (Pull · Push · Defl · BO·FT · BOw).
 function nodeBOchip(sym, k){
@@ -9802,14 +8990,10 @@ function nodeActivityWord(sym, L){
 }
 var ACTIVITY_TIP=('What is the node doing? Pull = closing in · Push = repelled · Defl = tapped & reversed · '+
   'BOw = at the node, break watch · BO·FT = break with follow-through.');
-function activityPillHtml(sym, L){
-  var w=nodeActivityWord(sym, L); if(!w) return '';
-  var col=/Push ↑|Defl ↑/.test(w)?PAL.longAccent:(/Push ↓|Defl ↓/.test(w)?PAL.shortAccent:(/FT/.test(w)?PAL.longAccent:(/BOw/.test(w)?PAL.gold:PAL.sub)));
-  return '<span title="'+ACTIVITY_TIP.replace(/"/g,'')+'" style="font-size:8.5px;color:'+col+';border:1px solid '+PAL.line+';border-radius:8px;padding:0 4px;white-space:nowrap">'+w+'</span>';
-}
 // A colored `g` = node polarity: YELLOW g (+γ, clean bounce) / PURPLE g (−γ, sharp/violent).
 var GPOL_TIP='What kind of node? Yellow g = +γ clean bounce; purple g = −γ sharp/violent.';
 function zonePolCol(L){ return (L.pos===false)?'#a371f7':PAL.gold; }
+// (v11.0 audit) PARKED — no live caller; kept because test_zone_row.js pins it.
 function zoneGGlyph(L){ return '<span title="'+GPOL_TIP+'" style="color:'+zonePolCol(L)+';font-weight:800">g</span>'; }
 function zoneGradePill(ng, tip){
   var g=ng.grade||'C'; var col=g==='A'?PAL.longAccent:(g==='B'?PAL.blue:PAL.amber);
@@ -9830,6 +9014,341 @@ function zoneConfHtml(conf){
   var S='S'+(s===true?'✓':(s===false?'✗':'–'))+((s!==null&&sc)?'':(s!==null?'·':'')), Q='Q'+(q?'✓':'✗'), V='V'+(v?'✓':'✗');
   return '<span title="Does everything agree? SPXW · QQQ · VEX-drift. S– = no SPXW captured at all. S✓· = SPXW agrees on header momentum only (display, unscored). S✓ = an SPXW strike LADDER agrees, and that one is scored like Q." style="color:'+PAL.blue+'">'+S+' '+Q+' '+V+'</span>';
 }
+// ============================================================================
+// (v10.58) THE MAP — node flow. User (2026-08-18): "you must build the ability to detect this
+// rolling feature to see how as nodes dissipate, other nodes accumulate and start
+// influencing price." A structural observation, ALWAYS ON, BOTH SIDES of price, and
+// INDEPENDENT of the SMA: for every meaningful node (SPY strikes and the SPXW-derived
+// lanes) — is it accumulating (acm), dissipating (dec) or holding? — then the TRANSFERS
+// (a dec node with an acm neighbour on the same side = the ceiling/floor rolling), the
+// widening (a dec node between acm nodes on both sides), and the LEAN (both sides rolling
+// the same way). The leg engine consumes it (a ceiling transfer names the next PB); the
+// direction spine takes it as a structural input when the SMA has no trend.
+// ============================================================================
+var MAP_ACM=ACM_UP;      // (v11.0) aliases of the ONE threshold set (ACM_UP / ACM_DN / ACM_DROP)
+var MAP_DEC=ACM_DN;
+var MAP_DROP=ACM_DROP;
+function mapNodeState(a){
+  // PURE: from an accumCanon-shaped object → 'acm' | 'dec' | 'gone' | 'hold'
+  try{
+    if(!a) return 'hold';
+    var m=(a.m15&&typeof a.m15.pct==='number')?a.m15.pct:null;
+    var fp=(a.session&&typeof a.session.fromPeak==='number')?a.session.fromPeak:null;
+    if(a.gone) return 'gone';
+    if(m!=null && m>=MAP_ACM) return 'acm';
+    if((m!=null && m<=MAP_DEC) || (fp!=null && fp>=MAP_DROP)) return 'dec';
+    return 'hold';
+  }catch(e){ return 'hold'; }
+}
+// PURE: nodes = [{k, pct, side:'above'|'below', state:'acm'|'dec'|'gone'|'hold', src}], px
+function mapTransfersOf(nodes, px){
+  var out={ transfers:[], widening:null, lean:'none', leanWhy:'' };
+  try{
+    var A=nodes.filter(function(n){ return n.side==='above'; }).sort(function(a,b){ return a.k-b.k; });
+    var B=nodes.filter(function(n){ return n.side==='below'; }).sort(function(a,b){ return b.k-a.k; });
+    function side(list, sideName){
+      // a dissipating node with an accumulating node on the same side = a transfer;
+      // the roll direction is where the strength went (toward or away from price).
+      list.forEach(function(d){
+        if(d.state!=='dec' && d.state!=='gone') return;
+        var best=null;
+        list.forEach(function(a){
+          if(a.state!=='acm' || Math.abs(a.k-d.k)<0.001) return;
+          if(!best || Math.abs(a.k-d.k)<Math.abs(best.k-d.k)) best=a;
+        });
+        if(best) out.transfers.push({ side:sideName, from:d.k, to:best.k, dir:(best.k<d.k)?'dn':'up', fromState:d.state, fromSrc:d.src||null, toSrc:best.src||null });
+      });
+    }
+    side(A,'ceil'); side(B,'flr');
+    // widening: the nearest node on either side is dec/gone and there is an acm node
+    // farther out on BOTH sides
+    var nearA=A[0], nearB=B[0];
+    var accA=A.filter(function(n){ return n.state==='acm'; }), accB=B.filter(function(n){ return n.state==='acm'; });
+    var deadNear=[nearA,nearB].filter(function(n){ return n && (n.state==='dec'||n.state==='gone'); });
+    if(deadNear.length && accA.length && accB.length){
+      out.widening={ dead:deadNear.map(function(n){ return n.k; }), lo:accB[accB.length-1].k, hi:accA[accA.length-1].k,
+                     up:accA[0].k, dn:accB[0].k };
+    }
+    var cd=out.transfers.filter(function(t){ return t.side==='ceil'; }).map(function(t){ return t.dir; });
+    var fd=out.transfers.filter(function(t){ return t.side==='flr'; }).map(function(t){ return t.dir; });
+    var cDn=cd.length&&cd.every(function(x){return x==='dn';}), cUp=cd.length&&cd.every(function(x){return x==='up';});
+    var fDn=fd.length&&fd.every(function(x){return x==='dn';}), fUp=fd.length&&fd.every(function(x){return x==='up';});
+    if(cDn && fDn){ out.lean='dn'; out.leanWhy='both sides rolling down'; }
+    else if(cUp && fUp){ out.lean='up'; out.leanWhy='both sides rolling up'; }
+    else if(cDn && !fd.length){ out.lean='dn'; out.leanWhy='ceiling rolling down'; }
+    else if(fUp && !cd.length){ out.lean='up'; out.leanWhy='floor rolling up'; }
+  }catch(e){}
+  return out;
+}
+
+// ============================================================================
+// (v11.0) THE NODE LEDGER — layer 1 of the stack. User (2026-08-18): "a layer that tracks
+// all the nodes like a map to figure out how they influence price as they grow, accumulate
+// or dissipate, and detect how one node dissipates and the other accumulates and the impact
+// on price." Every node's LIFE (birth, growth, peak, decay, gone) for SPY strikes AND the
+// SPXW-derived lanes, straight off the feed's own session history (feedSeriesAll); every
+// TOUCH price made on it and what happened (deflect / through / stall) from the closed
+// candles; and its INFLUENCE — while it was accumulating, did price travel toward it; while
+// it was dissipating, did price travel away. PURE given (series, candles); recomputed per bar
+// (the feed carries the whole session, so a reload loses nothing); exported per day.
+// ============================================================================
+var LEDGER_TOUCH_ZONE=null;      // null = DEFLECT_ZONE
+var LEDGER_INFL_BARS=5;          // influence horizon: |px−k| change over the next 5 closed bars
+var LEDGER_CACHE={};
+function ledgerStateAt(v, i){
+  // PURE: node state at sample i from its %King series (same thresholds as the Map)
+  var cur=feedSampleAt(v,i), from=feedSampleAt(v,Math.max(0,i-FEED_M15_SAMPLES));
+  var pk=0; for(var q=0;q<=i;q++){ if(typeof v[q]==='number' && v[q]>pk) pk=v[q]; }
+  if(feedGoneAt(v,i,true)) return { st:'gone', cur:cur, m15:-100, fromPeak:100, peak:pk };
+  var m15=null;
+  if(typeof cur==='number' && typeof from==='number' && from>0) m15=Math.round(100*(cur-from)/from);
+  else if(typeof cur==='number' && cur>0 && (from===0 || from==null)) m15=100;   // born inside the window = accumulating
+  var fp=(pk>0 && typeof cur==='number')?Math.round(100*(pk-cur)/pk):null;
+  return { st:mapNodeState({ m15:{pct:m15}, session:{fromPeak:fp} }), cur:cur, m15:m15, fromPeak:fp, peak:pk };
+}
+// PURE: the ledger from a feed-series map {t[], k:{key:{v[],src}}} + closed candles [{t,o,h,l,c}]
+function ledgerBuild(all, candles, opts){
+  opts=opts||{};
+  var zone=(typeof opts.zone==='number')?opts.zone:((typeof DEFLECT_ZONE==='number')?DEFLECT_ZONE:0.5);
+  var minPct=(typeof opts.minPct==='number')?opts.minPct:((typeof PB_MIN_PCT==='number')?PB_MIN_PCT:20);
+  var out={ nodes:{}, n:0, bars:(candles||[]).length };
+  if(!all || !all.k) return out;
+  var N=all.n||all.t.length;
+  var T=all.t||[];
+  // candle index by time: the sample i belongs to the last closed bar with t <= T[i]
+  var cs=(candles||[]).filter(function(c){ return c && typeof c.c==='number'; });
+  Object.keys(all.k).forEach(function(key){
+    var v=all.k[key].v, k=+key; if(!v || !v.length) return;
+    var pk=0, pkAt=null, first=null, last=null;
+    for(var i=0;i<N;i++){ var x=v[i]; if(typeof x==='number'){ if(first==null && x>0) first=i; if(x>0) last=i; if(x>pk){ pk=x; pkAt=i; } } }
+    if(pk<minPct) return;                                   // never meaningful: not a node
+    var now=ledgerStateAt(v, N-1);
+    var node={ k:k, src:all.k[key].src||null, derived:!!all.k[key].src,
+               first:first, firstT:(first!=null?T[first]:null), peak:pk, peakAt:pkAt, peakT:(pkAt!=null?T[pkAt]:null),
+               last:last, cur:now.cur, state:now.st, m15:now.m15, fromPeak:now.fromPeak, gone:now.st==='gone',
+               // life phases in samples: build (first→peak), hold/decay (peak→last), gone (last→N)
+               life:{ build:(first!=null&&pkAt!=null)?(pkAt-first):null, after:(pkAt!=null&&last!=null)?(last-pkAt):null, goneFor:(last!=null)?(N-1-last):null },
+               touches:[], deflect:0, through:0, stall:0,
+               infl:{ acmN:0, acmToward:0, decN:0, decAway:0 } };
+    // touches + reactions from the closed candles
+    for(var b=0;b<cs.length;b++){
+      var c=cs[b];
+      // approach side = where the bar OPENED. From below the node is resistance: touched if the
+      // high reached the zone; deflect = closed back below the zone, through = closed above it.
+      // From above it is support (mirror). Opened inside the zone: it is being sat on — a close
+      // outside the zone either way is a break out of it, not a deflection.
+      var fromBelow=(c.o<k-zone), fromAbove=(c.o>k+zone), inside=(!fromBelow && !fromAbove);
+      var touched= fromBelow ? (c.h>=k-zone) : (fromAbove ? (c.l<=k+zone) : true);
+      if(!touched) continue;
+      var react='stall';
+      if(fromBelow){ if(c.c<k-zone) react='deflect'; else if(c.c>k+zone) react='through'; }
+      else if(fromAbove){ if(c.c>k+zone) react='deflect'; else if(c.c<k-zone) react='through'; }
+      else { react=(Math.abs(c.c-k)<=zone)?'stall':'through'; }
+      var above=fromBelow, below=fromAbove;
+      // node state at the touch: sample whose time is the last <= bar time
+      var si=-1; for(var q=T.length-1;q>=0;q--){ if(T[q]!=null && T[q]<=(c.t||0)){ si=q; break; } }
+      var stAt=(si>=0)?ledgerStateAt(v,si).st:'hold';
+      node.touches.push({ t:c.t||null, bar:b, react:react, side:above?'above':(below?'below':'at'), state:stAt });
+      if(react==='deflect') node.deflect++; else if(react==='through') node.through++; else node.stall++;
+    }
+    if(node.touches.length>60) node.touches=node.touches.slice(-60);
+    // influence: for each sample where the node was acm/dec, did |px−k| shrink (toward) /
+    // grow (away) over the next LEDGER_INFL_BARS closed bars?
+    for(var b2=0;b2+LEDGER_INFL_BARS<cs.length;b2++){
+      var c0=cs[b2], c1=cs[b2+LEDGER_INFL_BARS];
+      var sj=-1; for(var q2=T.length-1;q2>=0;q2--){ if(T[q2]!=null && T[q2]<=(c0.t||0)){ sj=q2; break; } }
+      if(sj<0) continue;
+      var st0=ledgerStateAt(v,sj).st;
+      var d0=Math.abs(c0.c-k), d1=Math.abs(c1.c-k);
+      if(st0==='acm'){ node.infl.acmN++; if(d1<d0-0.05) node.infl.acmToward++; }
+      else if(st0==='dec'||st0==='gone'){ node.infl.decN++; if(d1>d0+0.05) node.infl.decAway++; }
+    }
+    out.nodes[key]=node; out.n++;
+  });
+  return out;
+}
+function nodeLedger(sym){
+  sym=sym||'SPY';
+  try{
+    var key=null; try{ key=legBarKey(sym); }catch(e0){}
+    var c=LEDGER_CACHE[sym]; if(c && key && c.key===key) return c.val;
+    var all=feedSeriesAll(sym); var cs=[]; try{ cs=closedCandles(sym)||[]; }catch(e1){}
+    var led=ledgerBuild(all, cs, {});
+    led.sym=sym; led.t=Date.now();
+    LEDGER_CACHE[sym]={ key:key, val:led };
+    return led;
+  }catch(e){ return { nodes:{}, n:0, bars:0, sym:sym }; }
+}
+function ledgerNode(sym, k){ try{ var L=nodeLedger(sym); return (L&&L.nodes)?(L.nodes[(+k).toFixed(2)]||null):null; }catch(e){ return null; } }
+// Compact per-day export (no touch arrays beyond counts + last 12)
+function ledgerExport(sym){
+  try{ var L=nodeLedger(sym); var o={ n:L.n, bars:L.bars, nodes:{} };
+    Object.keys(L.nodes||{}).forEach(function(kk){ var n=L.nodes[kk];
+      o.nodes[kk]={ k:n.k, src:n.src, first:n.firstT, peak:n.peak, peakT:n.peakT, cur:n.cur, state:n.state, m15:n.m15, fromPeak:n.fromPeak, gone:n.gone,
+                    life:n.life, deflect:n.deflect, through:n.through, stall:n.stall, touches:n.touches.slice(-12), infl:n.infl }; });
+    return o; }catch(e){ return null; }
+}
+// The words for the node hover: its life in one line.
+function ledgerLifeText(sym, k){
+  try{
+    var n=ledgerNode(sym,k); if(!n) return '';
+    var fmtT=function(t){ try{ return t?new Date(t*1000).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',timeZone:'America/Chicago'}):'?'; }catch(e){ return '?'; } };
+    var s='Life: born '+fmtT(n.firstT)+' · peak '+n.peak+'% at '+fmtT(n.peakT)+' · now '+(n.cur!=null?n.cur:'–')+'% ('+(n.state==='acm'?'acm':(n.state==='dec'?'dec':(n.state==='gone'?'gone':'holding')))+(n.fromPeak!=null?(', '+n.fromPeak+'% off peak'):'')+')';
+    var tn=n.touches.length;
+    if(tn) s+=' · touches '+tn+': deflect '+n.deflect+' / through '+n.through+' / stall '+n.stall;
+    if(n.infl.acmN>=3) s+=' · while acm, price came toward it '+Math.round(100*n.infl.acmToward/n.infl.acmN)+'% of the time (n '+n.infl.acmN+')';
+    if(n.infl.decN>=3) s+=' · while dec, price moved away '+Math.round(100*n.infl.decAway/n.infl.decN)+'% (n '+n.infl.decN+')';
+    return s+'.';
+  }catch(e){ return ''; }
+}
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.ledger=function(s){ try{ return nodeLedger(s||'SPY'); }catch(e){ return String(e); } };
+function ledgerSectionHtml(sym){
+  var L=nodeLedger(sym); var keys=Object.keys((L&&L.nodes)||{});
+  if(!keys.length) return tabEmpty('no node history yet today — the ledger reads the feed\u2019s own session snapshots, so it fills within minutes of the open.');
+  var px=null; try{ px=(STATE[sym]||{}).price; }catch(e){}
+  keys.sort(function(a,b){ return (+b)-(+a); });
+  var stCol=function(st){ return st==='acm'?PAL.longAccent:((st==='dec'||st==='gone')?PAL.shortAccent:PAL.sub); };
+  var h='<table style="width:100%;border-collapse:collapse;font-size:8.5px;line-height:1.3">'+
+    '<tr style="color:'+PAL.sub+';font-size:7.5px;text-transform:uppercase;letter-spacing:.3px"><td>node</td><td>life</td><td>now</td><td title="touches: deflect / through / stall">touch d/t/s</td><td title="while accumulating, % of 5-bar windows where price came toward it (n)">toward</td><td title="while dissipating, % of 5-bar windows where price moved away (n)">away</td></tr>';
+  var printedPx=false;
+  keys.forEach(function(kk){ var n=L.nodes[kk];
+    if(px!=null && !printedPx && n.k<px){ h+='<tr><td colspan="6" style="text-align:center;color:'+PAL.sub+';font-size:8px">— '+sym+' '+fmtLvl(px)+' —</td></tr>'; printedPx=true; }
+    var tw=(n.infl.acmN>=3)?(Math.round(100*n.infl.acmToward/n.infl.acmN)+'% <span style="color:'+PAL.sub+'">('+n.infl.acmN+')</span>'):('<span style="color:'+PAL.sub+'">– ('+n.infl.acmN+')</span>');
+    var aw=(n.infl.decN>=3)?(Math.round(100*n.infl.decAway/n.infl.decN)+'% <span style="color:'+PAL.sub+'">('+n.infl.decN+')</span>'):('<span style="color:'+PAL.sub+'">– ('+n.infl.decN+')</span>');
+    var life='peak '+n.peak+'%'+(n.life&&n.life.build!=null?(' after '+n.life.build+'m'):'')+(n.gone?(' · gone '+(n.life.goneFor||0)+'m'):'');
+    h+='<tr title="'+String(ledgerLifeText(sym,n.k)).replace(/"/g,'')+'" style="border-top:1px solid rgba(255,255,255,.04)">'+
+      '<td style="font-weight:800;color:'+(n.derived?'#a371f7':PAL.ink)+'">'+fmtLvl(n.k)+(n.derived?' <span style="font-size:7px;font-weight:800">'+(n.src||'SPXW')+'</span>':'')+'</td>'+
+      '<td style="color:'+PAL.sub+'">'+life+'</td>'+
+      '<td style="color:'+stCol(n.state)+';font-weight:700">'+(n.cur!=null?n.cur+'%':'–')+' '+(n.state==='hold'?'holding':n.state)+'</td>'+
+      '<td>'+n.deflect+'/'+n.through+'/'+n.stall+'</td>'+
+      '<td>'+tw+'</td><td>'+aw+'</td></tr>';
+  });
+  h+='</table>';
+  // the two questions the ledger exists to answer, pooled across nodes
+  var acmT=0,acmN=0,decA=0,decN=0,dA=0,dN=0,gA=0,gN=0;
+  keys.forEach(function(kk){ var n=L.nodes[kk]; acmT+=n.infl.acmToward; acmN+=n.infl.acmN; decA+=n.infl.decAway; decN+=n.infl.decN;
+    n.touches.forEach(function(t){ if(t.state==='acm'){ dN++; if(t.react==='deflect') dA++; } else if(t.state==='dec'||t.state==='gone'){ gN++; if(t.react==='deflect') gA++; } }); });
+  h+='<div style="font-size:8.5px;color:'+PAL.sub+';margin-top:4px;white-space:normal;line-height:1.4">'+
+    '<b style="color:'+PAL.ink+'">Does accumulation pull price?</b> toward an acm node '+(acmN>=5?(Math.round(100*acmT/acmN)+'% of 5-bar windows (n '+acmN+')'):('– (n '+acmN+', need 5)'))+
+    ' · away from a dec node '+(decN>=5?(Math.round(100*decA/decN)+'% (n '+decN+')'):('– (n '+decN+', need 5)'))+'.<br>'+
+    '<b style="color:'+PAL.ink+'">Do accumulating nodes deflect more than dissipating ones?</b> deflect on touch: acm '+(dN>=5?(Math.round(100*dA/dN)+'% (n '+dN+')'):('– (n '+dN+')'))+' vs dec/gone '+(gN>=5?(Math.round(100*gA/gN)+'% (n '+gN+')'):('– (n '+gN+')'))+'.'+
+    ' Today only; the nightly review pools the exported ledgers across sessions.</div>';
+  return h;
+}
+var MAP_CACHE={};
+function nodeFlow(sym){
+  sym=sym||'SPY';
+  var out={ ok:false, nodes:[], transfers:[], widening:null, lean:'none', leanWhy:'', px:null };
+  try{
+    var S=STATE[sym]||{}; var px=(typeof S.price==='number')?S.price:null; if(px==null) return out;
+    var key=null; try{ key=legBarKey(sym); }catch(e0){}
+    var c=MAP_CACHE[sym]; if(c && key && c.key===key) return c.val;
+    var m=null; try{ m=nodeMapModel(sym); }catch(e1){}
+    var lv=(m&&m.levels)||[];
+    var all=null; try{ all=feedSeriesAll(sym); }catch(e2){}
+    var reach=(typeof PB_REACH==='number')?PB_REACH:5;
+    var seen={};
+    lv.forEach(function(L){
+      if(!L || typeof L.k!=='number' || Math.abs(L.k-px)>reach) return;
+      var a=null; try{ a=accumCanon(sym,L.k); }catch(e3){ a=null; }
+      var st=mapNodeState(a);
+      seen[L.k.toFixed(2)]=true;
+      out.nodes.push({ k:L.k, pct:L.pct, side:(L.k>px)?'above':'below', state:st, src:L.src||null, derived:!!L.derived,
+                       m15:(a&&a.m15)?a.m15.pct:null, fromPeak:(a&&a.session)?a.session.fromPeak:null, isKing:!!L.isKing });
+    });
+    // nodes that have DROPPED OUT of the board but were meaningful earlier this session:
+    // they are the "dissipated" half of a transfer and must still be seen
+    if(all && all.k){
+      Object.keys(all.k).forEach(function(kk){
+        if(seen[kk]) return; var k=+kk; if(Math.abs(k-px)>reach) return;
+        var v=all.k[kk].v;
+        if(!feedGoneAt(v, v.length-1)) return;                          // absent ≥3 samples after being meaningful in the window
+        out.nodes.push({ k:k, pct:0, side:(k>px)?'above':'below', state:'gone', src:all.k[kk].src||null, derived:!!all.k[kk].src, m15:-100, fromPeak:100, isKing:false });
+      });
+    }
+    var tr=mapTransfersOf(out.nodes, px);
+    out.transfers=tr.transfers; out.widening=tr.widening; out.lean=tr.lean; out.leanWhy=tr.leanWhy; out.px=px; out.ok=true;
+    MAP_CACHE[sym]={ key:key, val:out };
+  }catch(e){}
+  return out;
+}
+// The words. Green "acm" / red "dec" (user-chosen), never arrows.
+function mapWord(state){
+  var col=state==='acm'?PAL.longAccent:((state==='dec'||state==='gone')?PAL.shortAccent:PAL.sub);
+  var w=state==='acm'?'acm':(state==='dec'?'dec':(state==='gone'?'gone':'holding'));
+  return '<span style="color:'+col+';font-weight:800">'+w+'</span>';
+}
+function mapChipHtml(state){
+  if(!state || state==='hold') return '<span title="Is this node building or bleeding? holding — no 15m change beyond ±'+MAP_ACM+'% and near its session peak." style="font-size:8px;font-weight:700;color:'+PAL.sub+';background:rgba(139,152,169,.12);border-radius:3px;padding:0 3px">holding</span>';
+  var col=state==='acm'?PAL.longAccent:PAL.shortAccent, bg=state==='acm'?'rgba(46,194,126,.12)':'rgba(240,97,109,.12)';
+  var tip=state==='acm'?('Is this node building or bleeding? ACCUMULATING — %King up ≥'+MAP_ACM+'% over 15m.')
+         :(state==='gone'?'Is this node building or bleeding? GONE — it dropped out of the book within the last 15m (that is dissipation, not missing data).'
+                         :('Is this node building or bleeding? DISSIPATING — %King down ≥'+(-MAP_DEC)+'% over 15m or ≥'+MAP_DROP+'% off its session peak.'));
+  return '<span title="'+tip+'" style="font-size:8px;font-weight:700;color:'+col+';background:'+bg+';border-radius:3px;padding:0 3px">'+(state==='acm'?'acm':(state==='gone'?'gone':'dec'))+'</span>';
+}
+function mapStateOf(sym, L){
+  try{ var f=nodeFlow(sym); if(!f||!f.ok||!L) return 'hold'; var n=null; f.nodes.forEach(function(x){ if(Math.abs(x.k-L.k)<0.001) n=x; }); return n?n.state:'hold'; }catch(e){ return 'hold'; }
+}
+function mapSrcHtml(L){
+  if(!L || !L.derived) return '';
+  return '<span title="Which book is this from? '+(L.src||'SPXW')+' — the SPX weekly book converted at today\u2019s ratio; the diamond lanes on the chart. %King is relative to that book\u2019s own King." style="font-size:7.5px;font-weight:800;color:#a371f7;letter-spacing:.3px">'+(L.src||'SPXW')+'</span>';
+}
+// The Map line under the READ. Descriptive: what is bleeding, what is building, what it means.
+function mapLineText(sym, legR, trendConfirmed){
+  var f=nodeFlow(sym); if(!f || !f.ok) return { s:'', html:'', lean:'none' };
+  var parts=[], html=[];
+  function L(k){ return fmtLvl(k); }
+  function W(state){ return mapWord(state); }
+  function P(state){ return state==='acm'?'acm':'dec'; }
+  if(f.widening){
+    var dead=f.widening.dead.map(L).join(' and ');
+    parts.push(dead+' dec; '+L(f.widening.up)+' and '+L(f.widening.dn)+' acm — range widening to '+L(f.widening.dn)+'–'+L(f.widening.up)+'.');
+    html.push(dead+' '+W('dec')+'; '+L(f.widening.up)+' and '+L(f.widening.dn)+' '+W('acm')+' — range widening to '+L(f.widening.dn)+'–'+L(f.widening.up)+'.');
+  }
+  var ce=f.transfers.filter(function(t){ return t.side==='ceil'; }), fl=f.transfers.filter(function(t){ return t.side==='flr'; });
+  function tr(list, word){
+    return list.slice(0,2).map(function(t){ return word+' '+L(t.from)+' '+P('dec')+' → '+L(t.to)+' '+P('acm'); }).join(' · ');
+  }
+  function trH(list, word){
+    return list.slice(0,2).map(function(t){ return word+' '+L(t.from)+' '+W(t.fromState==='gone'?'gone':'dec')+' → '+L(t.to)+' '+W('acm'); }).join(' · ');
+  }
+  if(ce.length || fl.length){
+    var seg=[tr(ce,'ceiling'), tr(fl,'floor')].filter(Boolean).join(' · ');
+    var segH=[trH(ce,'ceiling'), trH(fl,'floor')].filter(Boolean).join(' · ');
+    var mean='';
+    if(f.lean==='dn') mean=' — '+f.leanWhy+', structure leaning down.';
+    else if(f.lean==='up') mean=' — '+f.leanWhy+', structure leaning up.';
+    else if(ce.length && fl.length) mean=' — sides rolling apart.';
+    else mean='.';
+    parts.push(seg+mean); html.push(segH+mean);
+  }
+  // an accumulating node beyond the magnet in the leg direction: the magnet is moving
+  try{
+    if(legR && legR.dir!=='none' && legR.magnet){
+      var dn=(legR.dir==='dn'); var mk=legR.magnet.k;
+      var beyond=f.nodes.filter(function(n){ return n.state==='acm' && (dn?(n.k<mk-0.001):(n.k>mk+0.001)) && n.pct>=PB_MIN_PCT; })
+                        .sort(function(a,b){ return Math.abs(a.k-mk)-Math.abs(b.k-mk); })[0];
+      if(beyond){ var w=(legR.magnet.isKing?'the King':L(mk));
+        parts.push(L(beyond.k)+' acm '+(dn?'below':'above')+' '+w+' — magnet moving '+(dn?'down':'up')+' to '+L(beyond.k)+'.');
+        html.push(L(beyond.k)+' '+W('acm')+' '+(dn?'below':'above')+' '+w+' — magnet moving '+(dn?'down':'up')+' to '+L(beyond.k)+'.'); }
+    }
+  }catch(eM){}
+  var cav='';
+  if(f.lean!=='none' && !trendConfirmed) cav=' SMA-50 has no trend: structure leads, trend unconfirmed.';
+  else if(f.lean!=='none' && trendConfirmed && legR && legR.dir!=='none' && legR.dir!==f.lean) cav=' Structure rolling against the trend — caution.';
+  if(!parts.length) return { s:'', html:'', lean:f.lean };
+  return { s:parts.join(' ')+cav, html:html.join(' ')+(cav?'<span style="color:'+PAL.sub+'">'+cav+'</span>':''), lean:f.lean, transfers:f.transfers.length, widening:!!f.widening };
+}
+function mapLineHtml(sym, legR, trendConfirmed){
+  try{
+    var m=mapLineText(sym, legR, trendConfirmed); if(!m.html) return '';
+    var tip=('What is the structure doing? Every meaningful node within '+PB_REACH+' strikes (SPY strikes and the SPXW-derived lanes) is read for accumulation: acm = %King up ≥'+MAP_ACM+'% over 15m; dec = down ≥'+(-MAP_DEC)+'% or ≥'+MAP_DROP+'% off its session peak; a node that drops out of the book counts as dissipated. A dec node with an acm neighbour on the same side = the ceiling/floor rolling; a dec node between acm nodes on both sides = the range widening; both sides rolling the same way = a structural lean. Always on, both sides, independent of the SMA — the SMA confirms, it does not gate. Descriptive, never an instruction.').replace(/"/g,'');
+    return '<div title="'+tip+'" style="font-size:9.5px;line-height:1.35;color:'+PAL.ink+';margin-top:3px;padding-top:3px;border-top:1px dashed '+PAL.line+';display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden"><b style="color:'+PAL.sub+'">Map:</b> '+m.html+'</div>';
+  }catch(e){ return ''; }
+}
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.map=function(s){ try{ return nodeFlow(s||'SPY'); }catch(e){ return String(e); } };
 var WATCH_N=4;   // rows under the in-play card
 // PURE: the watch list. Returns levels (with a `watch` reason) as a price ladder, highest first.
 function nodesOnWatch(m, px, legR, inPlay){
@@ -9954,7 +9473,8 @@ function deflZonesBlock(sym){
       ' · reaction now: '+rq.q+' ('+rq.why+')'+
       (legLine?(' · '+legLine):'')+
       (inContact?'':(' · nothing is in contact — this is the nearest zone, '+fmtSpan(Math.abs(px-L.k))+' away (contact = within '+fmtSpan(inPlayBand())+')'))+
-      '. Descriptive characterisation, never an instruction.').replace(/"/g,'');
+      ' · '+(function(){ try{ return ledgerLifeText(sym,L.k); }catch(e){ return ''; } })()+
+      ' Descriptive characterisation, never an instruction.').replace(/"/g,'');
     var decTip=('What is this setup? '+(dc?dc.cell+' → ':'')+cellTxt+
       (tradeable?'':(!inContact?' — nothing is in contact yet':(thin?(' — '+rrText(rr)+', below the '+RR_FLOOR+':1 floor'):'')))+
       '. tgt = the next node in the direction (air = fast, thin exposure); inval = where this read stops being true. '+
@@ -9965,7 +9485,9 @@ function deflZonesBlock(sym){
         '<span style="color:'+pcol+'">●</span>'+
         '<span style="font-weight:800;color:'+(L.isKing?PAL.gold:PAL.ink)+'">'+fmtLvl(L.k)+'</span>'+
         '<span style="color:'+(L.isKing?PAL.gold:PAL.sub)+';font-weight:700">'+zoneRole(L)+'</span>'+
+        mapSrcHtml(L)+
         legZoneTagHtml(legR, L)+
+        mapChipHtml(mapStateOf(sym,L))+
         trigHtml+
         zoneGradePill(ng, gradeTip)+
       '</div>'+
@@ -10009,13 +9531,15 @@ function deflZonesBlock(sym){
     var oAct=''; try{ oAct=nodeActivityWord(sym,L)||''; }catch(eOa){ oAct=''; }
     var oTip=('What is this node? '+fmtLvl(L.k)+' '+zoneRole(L)+(pct!=null?(' · '+pct+'% of King'):'')+
       ' · '+((L.pos===false)?'−γ sharp':'+γ clean')+' · '+tapWord(tap)+' tap'+(oAct?(' · '+oAct):'')+
-      (lt?(' · '+lt.lab):'')+'. Not in contact — this is where price could react next, not an engagement.').replace(/"/g,'');
+      (lt?(' · '+lt.lab):'')+'. Not in contact — this is where price could react next, not an engagement. '+(function(){ try{ return ledgerLifeText(sym,L.k); }catch(e){ return ''; } })()).replace(/"/g,'');
     html+='<div title="'+oTip+'" style="padding:3px 2px;border-bottom:1px solid #12161c'+((lt&&lt.dim)?';opacity:.55':'')+'">'+
       '<div style="display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap;overflow:hidden">'+
         '<span style="color:'+pcol+'">◦</span>'+
         '<span style="font-weight:800;color:'+(L.isKing?PAL.gold:PAL.ink)+'">'+fmtLvl(L.k)+'</span>'+
         '<span style="color:'+(L.isKing?PAL.gold:PAL.sub)+';font-weight:700">'+zoneRole(L)+'</span>'+
+        mapSrcHtml(L)+
         legTagHtml(lt, legR)+
+        mapChipHtml(mapStateOf(sym,L))+
         zoneGradePill(ng, zoneGradeTip(sym,L,ng))+
       '</div></div>';
   });
@@ -10035,15 +9559,6 @@ function deflZonesBlock(sym){
 // render went unasserted. The live voice is read3Beat + readBlock44 + the deflection
 // zone row 3, and those are what the tests pin now.
 // ============================================================================
-// (G) Odds gate: an odds sentence may only appear when the regime, the session and
-// the rule tier all permit it. Anything else would be an unearned probability.
-function readOddsAllowed(sym){
-  try{
-    var d=directionGrade(sym||'SPY');
-    if(d && d.noOdds) return false;
-    return true;
-  }catch(e){ return true; }
-}
 
 // ============================================================================
 // (J) PRE-OPEN BRIEF — one collapsible descriptive line: what the map looks like
@@ -10163,7 +9678,10 @@ function registerCoreFeatures(){
                rangePos:(d.inputs.rangePos&&d.inputs.rangePos.zone)||null,
                regime:(d.inputs.regime&&d.inputs.regime.tag)||null,
                session:(d.inputs.session&&d.inputs.session.bucket)||null,
-               opex:!!(d.inputs.session&&d.inputs.session.opex) };
+               opex:!!(d.inputs.session&&d.inputs.session.opex),
+               // (v11.0 G8) what the READ actually said on this bar
+               read:(typeof LAST_READ!=='undefined' && LAST_READ[sym])?{ voiceId:LAST_READ[sym].voiceId, sentence:LAST_READ[sym].sentence,
+                     legDir:LAST_READ[sym].legDir, legPhase:LAST_READ[sym].legPhase, dirSrc:LAST_READ[sym].dirSrc, map:LAST_READ[sym].map }:null };
     },
     outcome:function(rec, fwd){
       return { hit:_fwdHitDir(fwd, rec&&rec.verdict), mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
@@ -10176,22 +9694,8 @@ function registerCoreFeatures(){
     rule:{ id:'dir', tier:'hand', condition:'directionGrade: SMA-50 trend sets direction, drift confirms or diverges, hard caps override',
            mechanism:'One direction verdict per bar; the hierarchy beats any single input only if A outranks B outranks C.' } });
 
-  registerFeature({ key:'drift', label:'GEX/VEX drift', phase:'dashboard', fwd:FEAT_FWD,
-    record:function(sym){
-      var d=driftRead(sym);
-      return { verdict:d.verdict, gvwap:d.gvwap, vvwap:d.vvwap, gLo:d.gLo, gHi:d.gHi,
-               vLo:d.vLo, vHi:d.vHi, overlap:!!d.overlap, px:d.px, dir:d.dir };
-    },
-    outcome:function(rec, fwd){
-      var h=null;
-      if(rec && rec.dir) h=_fwdHitNum(fwd, rec.dir, DRIFT_PTS);
-      else if(rec && rec.verdict==='SPLIT' && fwd) h=(fwd.mfe<DRIFT_PTS && fwd.mae>-DRIFT_PTS)?1:0;
-      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
-    },
-    questions:[ { id:'drift_conf', when:[{f:'driftVerdict',v:'AGREE-UP'}], outcome:'driftMove', note:'UP·conf vs SPLIT realised drift' } ],
-    rule:{ id:'drift', tier:'hand', condition:'both book centres same side of price + overlapping bands',
-           mechanism:'GEX range and VEX drift agreeing means one story, not two — a higher-probability lean.' } });
-
+  // (v11.0 audit MERGE) the `drift` feature was a duplicate of `dir.drift` (same driftRead, same
+  // outcome). Its bands and the SPLIT question now ride on dir.drift; the id is retired.
   registerFeature({ key:'node', label:'Node grade', phase:'dashboard', fwd:FEAT_FWD,
     record:function(sym, ctx){
       var m=(ctx&&ctx.m)||nodeMapModel(sym);
@@ -10359,19 +9863,8 @@ function registerCoreFeatures(){
     rule:{ id:'rshuf', tier:'hand', condition:'>50% of wall keys turned over between feeds',
            mechanism:'A wholesale board reshuffle means the old map is void; movement usually follows.' } });
 
-  registerFeature({ key:'roll', label:'King roll', phase:'structure', fwd:FEAT_FWD,
-    record:function(sym){
-      var r=0; try{ r=kingRoll(sym)||0; }catch(e){}
-      return { roll:r, king:(STATE[sym]||{}).king!=null?STATE[sym].king:null };
-    },
-    outcome:function(rec, fwd){
-      var h=(rec&&rec.roll)?_fwdHitNum(fwd, rec.roll>0?1:-1, DIR_PTS):null;
-      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
-    },
-    questions:[ { id:'roll_leads', when:[{f:'kside',v:'above'}], outcome:'dirMove', note:'does the King roll lead price?' } ],
-    rule:{ id:'roll', tier:'hand', condition:'King migrated up/down over the roll window',
-           mechanism:'The settlement magnet moving is the board repositioning; price tends to follow it.' } });
-
+  // (v11.0 audit MERGE) `roll` (King roll) was a duplicate of `dir.kingRoll` (same kingRoll sign,
+  // same outcome). Retired; dir.kingRoll carries the claim.
   registerFeature({ key:'gateHour', label:'Gate + hour', phase:'structure', fwd:FEAT_FWD,
     record:function(sym, ctx){
       var g=null; try{ var gk=gatekeeper(sym); if(gk&&gk.ok) g=gk.k; }catch(e){}
@@ -10420,15 +9913,21 @@ function registerCoreFeatures(){
     record:function(sym){
       var d={verdict:'NONE',dir:0,overlap:false};
       try{ d=driftRead(sym)||d; }catch(e){}
-      return { vote:d.dir||0, verdict:d.verdict, overlap:!!d.overlap, gvwap:d.gvwap, vvwap:d.vvwap };
+      return { vote:d.dir||0, verdict:d.verdict, overlap:!!d.overlap, gvwap:d.gvwap, vvwap:d.vvwap,
+               gLo:d.gLo, gHi:d.gHi, vLo:d.vLo, vHi:d.vHi, px:d.px, live:(typeof DRIFT_LIVE!=='undefined')?!!DRIFT_LIVE:null };
     },
     outcome:function(rec, fwd){
       var v=(rec&&rec.vote)||0;
-      return { hit:(v?_fwdHitNum(fwd, v, DIR_PTS):null), mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
+      // (v11.0 merge of `drift`) a SPLIT is scored on "price stayed inside ±DRIFT_PTS"
+      var h=null;
+      if(v) h=_fwdHitNum(fwd, v, DIR_PTS);
+      else if(rec && rec.verdict==='SPLIT' && fwd) h=(fwd.mfe<DRIFT_PTS && fwd.mae>-DRIFT_PTS)?1:0;
+      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
                verdict:(rec&&rec.verdict)||null, vote:v };
     },
     questions:[
-      { id:'dir_drift_vote', when:[{f:'driftVerdict',v:'AGREE-UP'}], outcome:'dirMove', note:'AGREE (overlapping bands) vs LEAN (same side only) — is the overlap worth a whole grade?' }
+      { id:'dir_drift_vote', when:[{f:'driftVerdict',v:'AGREE-UP'}], outcome:'dirMove', note:'AGREE (overlapping bands) vs LEAN (same side only) — is the overlap worth a whole grade?' },
+      { id:'drift_conf', when:[{f:'verdict',v:'AGREE-UP'}], outcome:'driftMove', note:'UP·conf vs SPLIT realised drift (was the `drift` feature)' }
     ],
     rule:{ id:'dir.drift', tier:'hand', condition:'driftRead dir + verdict, scored on its own',
            mechanism:'Drift is only allowed to CONFIRM or DIVERGE, so its stand-alone rate is the honest test of that role.' } });
@@ -10585,10 +10084,12 @@ function registerCoreFeatures(){
       var h=null;
       try{
         if(rec && rec.predicted && rec.zoneLo!=null && rec.zoneHi!=null){
-          h=0;
-          var log=[]; try{ log=(typeof LEG_PB_LOG!=='undefined' && LEG_PB_LOG[rec.sym])||[]; }catch(e1){}
-          var t0=rec.t||0, t1=t0+mul(FEAT_FWD, CANDLE_MS);
-          log.forEach(function(e){ if(e && e.t>t0 && e.t<=t1 && e.k>=rec.zoneLo-0.001 && e.k<=rec.zoneHi+0.001) h=1; });
+          var log=null; try{ log=pbLogFor(rec.sym, rec.t||0); }catch(e1){ log=null; }
+          if(log){                                   // (v11.0 G7) no log = unscorable (null), never a miss
+            h=0;
+            var t0=rec.t||0, t1=t0+mul(FEAT_FWD, CANDLE_MS);
+            log.forEach(function(e){ if(e && e.t>t0 && e.t<=t1 && e.k>=rec.zoneLo-0.001 && e.k<=rec.zoneHi+0.001) h=1; });
+          }
         }
       }catch(e2){ h=null; }
       return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
@@ -10633,11 +10134,16 @@ function registerCoreFeatures(){
       var r=(lg&&lg.roll)||{ count:0, side:null, confirmed:false, signal:false, weakening:false, steps:[] };
       var dirNum=lg?((lg.dir==='dn')?-1:((lg.dir==='up')?1:0)):0;
       var sig=2; try{ if(typeof LEG_ROLL_SIGNAL==='number') sig=LEG_ROLL_SIGNAL; }catch(e0){}
-      var v=(r.count>=sig && !r.weakening)?dirNum:0;
+      // (v11.0 audit bug 7) THE RECORDED VOTE IS THE LIVE VOTE. directionGrade adds +1 only on a
+      // CONFIRMED roll in the trend's direction and −1 on weakening; the record used to vote at
+      // the 2-step SIGNAL, so the factor table scored a rule the grade never used. `signalVote`
+      // keeps the 2-step claim measurable as its own question.
+      var v=r.weakening?-dirNum:((r.confirmed && dirNum!==0)?dirNum:0);
+      var vSig=(r.count>=sig && !r.weakening)?dirNum:0;
       var sr=null; try{ sr=(typeof sessionRoll==='function')?sessionRoll(sym):null; }catch(e2){}
       return { count:r.count||0, side:r.side||null, steps:(r.steps||[]).slice(-4),
                signal:!!r.signal, confirmed:!!r.confirmed, weakening:!!r.weakening,
-               dir:lg?lg.dir:'none', vote:v, voting:true,
+               dir:lg?lg.dir:'none', vote:v, signalVote:vSig, voting:true,
                session:{ sessions:sr?sr.sessions:0, ready:!!(sr&&sr.ready), vote:sr?sr.vote:0,
                          flr:sr?sr.flr.count:0, ceil:sr?sr.ceil.count:0 } };
     },
@@ -10700,12 +10206,14 @@ function registerCoreFeatures(){
       var becamePB=null, deflected=null, h=null;
       try{
         if(rec && rec.active && rec.to!=null){
-          becamePB=0;
-          var log=[]; try{ log=(typeof LEG_PB_LOG!=='undefined' && LEG_PB_LOG[rec.sym])||[]; }catch(e1){}
-          var t0=rec.t||0, t1=t0+mul(FEAT_FWD, CANDLE_MS);
-          log.forEach(function(e){ if(e && e.t>t0 && e.t<=t1 && Math.abs(e.k-rec.to)<0.001) becamePB=1; });
-          deflected=(fwd && fwd.frame && fwd.frame.first)?((fwd.frame.first==='tgt')?1:0):null;
-          h=(becamePB && deflected===1)?1:0;
+          var log=null; try{ log=pbLogFor(rec.sym, rec.t||0); }catch(e1){ log=null; }
+          if(log){                                   // (v11.0 G7) no log = unscorable, never a miss
+            becamePB=0;
+            var t0=rec.t||0, t1=t0+mul(FEAT_FWD, CANDLE_MS);
+            log.forEach(function(e){ if(e && e.t>t0 && e.t<=t1 && Math.abs(e.k-rec.to)<0.001) becamePB=1; });
+            deflected=(fwd && fwd.frame && fwd.frame.first)?((fwd.frame.first==='tgt')?1:0):null;
+            h=(becamePB && deflected===1)?1:0;
+          }
         }
       }catch(e2){ h=null; }
       return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
@@ -10717,6 +10225,65 @@ function registerCoreFeatures(){
     rule:{ id:'leg.handoff', tier:'hand',
            condition:'old pullback node/ceiling Dec (m15 ≤ −8% or ≥25% off its session peak) AND a lower node above price building (m15 ≥ +8% or ≥ PB_MIN_PCT)',
            mechanism:'The roll is a STRENGTH transfer before it is a strike change. If the transfer is visible early, the pullback node can be named before it qualifies; if it is not, this is a story and the count rule is all we have.' } });
+
+  // ---- (v11.0) THE LEDGER, RECORDED. The one question the ledger exists to settle as a
+  // feature: at the moment price touches a node, does an ACCUMULATING node deflect it more
+  // reliably than a DISSIPATING one? Recorded on the in-play node each bar with its ledger
+  // state; outcome = the frame (tgt before inval) or the hold direction.
+  registerFeature({ key:'ledger.touch', label:'Ledger · touch by node state (acm vs dec)', phase:'zones', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var L=(ctx&&ctx.spine&&ctx.spine.inPlay)||null; if(!L){ try{ L=inPlayZone(sym); }catch(e){ L=null; } }
+      var px=(STATE[sym]||{}).price; var band=0.5; try{ band=inPlayBand(); }catch(eB){}
+      var inContact=!!(L && typeof px==='number' && Math.abs(px-L.k)<=band);
+      var n=null; try{ n=(L&&typeof ledgerNode==='function')?ledgerNode(sym,L.k):null; }catch(e2){}
+      var hd=0; try{ hd=L?nodeHoldDir(L,px):0; }catch(e3){}
+      var fr={tgt:null,inval:null}; try{ fr=_frameRecOf(sym, ctx)||fr; }catch(eF){}
+      return { k:L?L.k:null, inContact:inContact, state:n?n.state:null, src:n?n.src:null, derived:!!(n&&n.derived),
+               peak:n?n.peak:null, cur:n?n.cur:null, fromPeak:n?n.fromPeak:null, touchesBefore:n?n.touches.length:0,
+               holdDir:hd, dirNum:hd, tgt:fr.tgt, inval:fr.inval, voting:false };
+    },
+    outcome:function(rec, fwd){
+      if(!rec || !rec.inContact || !rec.state) return { hit:null, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
+      var h=null; try{ if(fwd && fwd.frame && fwd.frame.first) h=(fwd.frame.first==='tgt')?1:0; else if(rec.holdDir) h=_fwdHitNum(fwd, rec.holdDir, DIR_PTS); }catch(e){}
+      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null, state:rec.state, derived:rec.derived };
+    },
+    questions:[ { id:'acm_deflects_more', when:[{f:'state',v:'acm'}], outcome:'deflHit', note:'does a node that is ACCUMULATING at the touch deflect more reliably than one that is dissipating? (the ledger question)' } ],
+    rule:{ id:'ledger.touch', tier:'hand', condition:'in-play node touched; ledger state acm | dec | gone | hold at the touch',
+           mechanism:'A node is respected while dealers are adding to it and abandoned while they unwind. If true, the acm/dec chip is a deflection filter; if not, it is decoration.' } });
+
+  // ---- (v10.58) THE MAP, RECORDED. Two claims: (1) a TRANSFER (old node dec, neighbour
+  // acm on the same side) is followed by price respecting the new node / moving the roll's
+  // way; (2) the structural LEAN (both sides rolling the same way) predicts the next move.
+  registerFeature({ key:'map.transfer', label:'Map · node transfer (dec → acm on one side)', phase:'structure', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var f=null; try{ f=nodeFlow(sym); }catch(e){}
+      var t=(f&&f.transfers&&f.transfers[0])||null;
+      var px=(STATE[sym]||{}).price;
+      return { sym:sym, t:(ctx&&ctx.t)||Date.now(), active:!!t, n:(f&&f.transfers)?f.transfers.length:0,
+               side:t?t.side:null, from:t?t.from:null, to:t?t.to:null, rollDir:t?t.dir:null,
+               dirNum:t?((t.dir==='dn')?-1:1):0, k:t?t.to:null, px:(typeof px==='number')?px:null,
+               widening:!!(f&&f.widening), lean:f?f.lean:'none', voting:false };
+    },
+    outcome:function(rec, fwd){
+      // did price move the roll's way (DIR_PTS) within fwd? + MFE/MAE
+      var h=null; try{ if(rec&&rec.active&&rec.dirNum) h=_fwdHitNum(fwd, rec.dirNum, DIR_PTS); }catch(e){}
+      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null, side:rec?rec.side:null, rollDir:rec?rec.rollDir:null };
+    },
+    questions:[ { id:'transfer_moves_price', when:[{f:'active',v:true}], outcome:'dirMove',
+                  note:'when a ceiling/floor hands its strength to a neighbour, does price then move the way the roll points?' } ],
+    rule:{ id:'map.transfer', tier:'hand', condition:'a dec/gone node with an acm node on the same side within PB_REACH',
+           mechanism:'The rolling ceiling/floor IS the strength transfer. If transfers predict the next move, the Map line earns a vote; if not, it stays descriptive.' } });
+  registerFeature({ key:'map.lean', label:'Map · structural lean (both sides rolling the same way)', phase:'direction', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var f=null; try{ f=nodeFlow(sym); }catch(e){}
+      var lean=(f&&f.lean)||'none'; var tv=null; try{ tv=trendVerdict(sym); }catch(e2){}
+      return { sym:sym, t:(ctx&&ctx.t)||Date.now(), lean:lean, vote:(lean==='dn')?-1:((lean==='up')?1:0),
+               why:f?f.leanWhy:'', trendState:tv?tv.state:'na', smaAgrees:(tv&&((tv.state==='up'&&lean==='up')||(tv.state==='dn'&&lean==='dn')))?1:((tv&&(tv.state==='up'||tv.state==='dn')&&lean!=='none')?0:null), voting:false };
+    },
+    outcome:function(rec, fwd){ var h=null; try{ if(rec&&rec.vote) h=_fwdHitNum(fwd, rec.vote, DIR_PTS); }catch(e){} return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null, lean:rec?rec.lean:null, smaAgrees:rec?rec.smaAgrees:null }; },
+    questions:[ { id:'lean_predicts_move', when:[{f:'vote',v:-1},{f:'vote',v:1}], outcome:'dirMove', note:'does both sides rolling the same way predict the next DIR_PTS move — and does it beat / lead the SMA-50?' } ],
+    rule:{ id:'map.lean', tier:'hand', condition:'ceiling and floor transfers rolling the same direction (or one side rolling with the other silent)',
+           mechanism:'Structure leading the SMA is the user\'s core observation. Measured as a direction vote in shadow; promotion would let it grade above C when it leads.' } });
 
   // ---- (v10.56 PART C) THE LATCHED DEFLECTION TRIGGER, RECORDED. This is the deflection
   // hit-rate the whole loop is trying to measure: ✓ = a rejection candle CLOSED away from
@@ -11021,6 +10588,8 @@ function resolveFeatureOutcomes(sym){
     });
     if(changed){
       recorderSave(db);
+      // (v11.0 G4/G9) mirror the resolved records to IndexedDB so local truth outlives LS
+      try{ repoUpsertFeat(sym, day.date||TODAY, arr.filter(function(r){ return r && r.resolved; })); }catch(eU){}
       // (v10.54) new outcomes exist -> the memoised featStats is stale. Every local-truth
       // check (ruleTier, the promotion bar, the tabs) reads through that cache.
       try{ featStatsInvalidate(); }catch(eI){}
@@ -11047,8 +10616,13 @@ function featStats(sym){
   var seenAct={};
   try{
     var db=recorderLoad(); var days=(db&&db.days)||{};
-    Object.keys(days).sort().forEach(function(dk){
+    // (v11.0 G4/G9) local truth = the localStorage days PLUS the IndexedDB archive of resolved
+    // records for every day localStorage has already evicted (LS wins for a day it still has).
+    var arch=(FEAT_ARCHIVE&&FEAT_ARCHIVE[sym])||{};
+    var allDays={}; Object.keys(days).forEach(function(d){ allDays[d]=1; }); Object.keys(arch).forEach(function(d){ allDays[d]=1; });
+    Object.keys(allDays).sort().forEach(function(dk){
       var arr=((days[dk]||{}).feat||{})[sym]||[];
+      if(!arr.length) arr=arch[dk]||[];
       if(arr.length){ out.days++; out.dayKeys.push(dk); }
       arr.forEach(function(r){
         var b=out.byKey[r.key]||(out.byKey[r.key]={n:0,hit:0,pending:0,mfe:0,mae:0,mn:0,partial:0});
@@ -11196,8 +10770,7 @@ function featureScorecardsHtml(sym){
     h+='</tr>';
   });
   h+='</table>';
-  // ---- operator selection quality ----
-  h+=yourCallsHtml(st);
+  // (v11.0 audit) operator selection quality lives ONLY in ⑤ YOUR CALLS now (was duplicated here)
   h+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:4px;opacity:.85">● recording until eff n≥'+RULE_UNLOCK_N+' · every n reads "n=bars → eff n/'+FEAT_FWD+'" · ⚖→📊 needs a LOCAL promotion AND local eff n · every record is forward-only with MFE/MAE</div>';
   h+='</div>';
   return h;
@@ -11294,7 +10867,8 @@ function dirFactorStats(sym){
         if(!b.trend){ b.trend={n:0,hit:0}; b.chop={n:0,hit:0}; }
         var vote=(r.rec&&typeof r.rec.vote==='number')?r.rec.vote
                 : ((r.out&&typeof r.out.vote==='number')?r.out.vote
-                : ((r.rec&&typeof r.rec.vote20==='number')?r.rec.vote20:0));
+                : ((r.rec&&typeof r.rec.vote20==='number')?r.rec.vote20
+                : ((r.rec&&typeof r.rec.dirNum==='number')?r.rec.dirNum:0)));   // (v11.0 bug 6) handoff/trigger/pbDetect rows carry dirNum
         if(vote>0) b.up++; else if(vote<0) b.dn++;
         if(r.mfe!=null){ b.mfe+=r.mfe; b.mae+=(r.mae||0); b.mn++; }
         // (v10.54, audit 12) LIFT OVER THE INCUMBENT, on the bars where they differ.
@@ -11421,7 +10995,7 @@ function dirFactorsHtml(sym){
 //   CHALLENGERS— parked factor vs the incumbent it is trying to replace, side by side.
 // Descriptive: it reports what the code did, it never argues for it.
 // ============================================================================
-function learningStripsHtml(){
+function learningStripsHtml(onlyPromoted){
   var doc=null; try{ doc=rulesDoc(); }catch(e){ doc=null; }
   var promo=[]; try{ promo=promotionsList(); }catch(e1){}
   var props=(doc&&doc.proposals)||[];
@@ -11451,6 +11025,7 @@ function learningStripsHtml(){
   }
   pb+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;opacity:.85">direction weights source: <b>'+DIR_WEIGHTS_SOURCE+'</b> · A ≥'+DIR_WEIGHTS.gradeA+' · B ≥'+DIR_WEIGHTS.gradeB+'</div>';
   h+=box('📊 PROMOTED', 'What the panel auto-applied after re-checking the promotion bar in code. The weekly run only PROPOSES; the bar is enforced here, not by the reviewer.', pb);
+  if(onlyPromoted) return h;   // (v11.0 audit) Analysis ② = PROMOTED only; proposals/challengers/kills live in Testing ②③④
   // ---- PROPOSALS ----
   var qb='';
   if(!props.length){
@@ -11589,7 +11164,7 @@ function read3Beat(dirWord, L, px, flr, ceil, dr, tgtK, tgtRole, relation, leg, 
     out.sentence=(posHead||'No range defined.')+((typeof DRIFT_LIVE!=='undefined' && !DRIFT_LIVE)?' No lean — rotation likely.':' GEX and VEX split — no clean lean, rotation likely.');
   } else if(kind==='cont'){
     var b3=(tgtK!=null)?('Potential run to '+(tgtRole?(tgtRole+' '):'')+fmtNum(tgtK)+'.'):'';
-    var cMid = (relation==='trend-only') ? '' :
+    var cMid = (relation==='trend-only'||relation==='structure-leads') ? '' :
                (relation==='confirmed' ? (TrendWord+' confirmed by GEX and VEX '+leanWord+'.')
                                        : ('GEX and VEX '+leanWord+'.'));
     out.sentence=['Through '+role+' '+fmtNum(L.k)+'.', cMid, b3].filter(Boolean).join(' ');
@@ -11598,7 +11173,7 @@ function read3Beat(dirWord, L, px, flr, ceil, dr, tgtK, tgtRole, relation, leg, 
     var srWord = (kind==='bounce') ? 'Support' : 'Resistance';
     var pb=(tgtK!=null)?('Potential '+(kind==='bounce'?'bounce':'drop')+' to '+fmtNum(tgtK)+'.'):'';
     var bMid;
-    if(relation==='trend-only')      bMid = srWord+' '+bstate(srNode)+'.';
+    if(relation==='trend-only'||relation==='structure-leads') bMid = srWord+' '+bstate(srNode)+'.';
     else if(relation==='confirmed')  bMid = srWord+' '+bstate(srNode)+', '+trendWord+' confirmed by GEX and VEX '+leanWord+'.';
     else                             bMid = srWord+' '+bstate(srNode)+' with GEX and VEX '+leanWord+'.';
     out.sentence=['At '+role+' '+fmtNum(L.k)+'.', bMid, pb].filter(Boolean).join(' ');
@@ -11624,6 +11199,7 @@ function read3Beat(dirWord, L, px, flr, ceil, dr, tgtK, tgtRole, relation, leg, 
   }
   return out;
 }
+var LAST_READ={};   // (v11.0 G8) the last rendered READ per sym — recorded on the dir feature
 function readBlock44(sym){
   sym=sym||'SPY';
   var S=STATE[sym]||{}; var px=S.price; if(px==null) return '';
@@ -11644,6 +11220,12 @@ function readBlock44(sym){
   var legR=(sp&&sp.leg)||null;
   if(!legR){ try{ legR=legEngine(sym); }catch(eLg){ legR=null; } }
   var v=read3Beat(dirWord, L, px, m.flr, m.ceil, dr, tgtK, tgtRole, d.relation||null, legR, d.capped||null);
+  // (v11.0 audit G8) THE READ IS ON THE RECORD. The sentence the user actually saw (and the leg
+  // voice id) was never recorded, so the brief's contradiction #1 (READ vs direction) was
+  // vacuous. LAST_READ is picked up by the `dir` feature record on the closed bar.
+  try{ LAST_READ[sym]={ t:Date.now(), verdict:v.verdict, sentence:String(v.sentence||'').slice(0,240), voiceId:v.voiceId||null,
+                        legDir:legR?legR.dir:'none', legPhase:legR?legR.phase:'none', dirSrc:legR?(legR.dirSrc||'sma'):null,
+                        map:(function(){ try{ var mm=mapLineText(sym, legR, (d.trendState==='up'||d.trendState==='dn')); return mm&&mm.s?String(mm.s).slice(0,240):''; }catch(e){ return ''; } })() }; }catch(eLR){}
   var vcol={BULLISH:PAL.longAccent,BEARISH:PAL.shortAccent,SIDEWAYS:PAL.sub}[v.verdict]||PAL.sub;
   // Direction grade chip — letter only, NO ⚖ (the tier + regime live in the hover).
   var g=d.grade||'C', gdisp=d.disp||g;
@@ -11688,6 +11270,8 @@ function readBlock44(sym){
       '<span style="color:'+PAL.line+'">·</span>'+sBadge+hBadge+
     '</div>'+
     '<div title="'+rTip+'" style="font-size:9.5px;line-height:1.35;color:'+PAL.ink+';display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">'+v.sentence+'</div>'+
+    // (v10.58) THE MAP LINE — the structure read, always on, under the sentence
+    (function(){ try{ return mapLineHtml(sym, legR, (d.trendState==='up'||d.trendState==='dn')); }catch(eMp){ return ''; } })()+
   '</div>'+
   (function(){ try{ return legBannerHtml(sym); }catch(eB){ return ''; } })();
 }
@@ -11871,6 +11455,7 @@ function kingHeaderBlock(){
   '</div>';
   return html;
 }
+// (v11.0 audit) PARKED — no live caller; kept because test_magnet_v1044.js pins it.
 function kingBlock(){
   var sym='SPY';
   var tp=tapeMap(sym);
@@ -12084,9 +11669,6 @@ function accumBlock(){
   // (v10.50) legacy "Deflections" section RETIRED from the live render — its history +
   // forward scoring live on in Analysis only (recordDeflections still runs every bar).
   html+=nodeMapBlock();
-  // (v10.24) EFFECTIVENESS CAPTURE: stash the emitted node-map model for the
-  // recorder so predictive accuracy can be measured later (mandate: record from v1).
-  try{ LASTNODEMAP.SPY = nodeMapModel('SPY'); }catch(e){}
 
   return html;   // (v10.27) old two-sided ladder + PROJ block REMOVED — fully superseded by nodeMapBlock() (Step-5 identity). accumBlock is now just the Node Map wrapper.
 }
@@ -12223,7 +11805,7 @@ function feedStatusHtml(){
     strip+
     futTxt+evTxt+
     ctrls+
-    '<span style="margin-left:auto">v10.57</span>'+
+    '<span style="margin-left:auto">v'+GPTS_VERSION+'</span>'+
   '</div>';
 }
 
@@ -12380,143 +11962,7 @@ function confluence(sym){
            contribs:contribs, kv:kv, nb:nb, np:np, tv:tv, bias:bias,
            kingK:kingK, px:px };
 }
-// ============================================================================
-// READ (v10.18) — replaces the old MIXED/NO EDGE confluence strip + 4 badges.
-// A plain-language summary of the THREE signals we kept (King, Trend, S/R).
-// No vote, no badges, no CONTEXT voter (dropped — proved wrong on 2026-08-11).
-// Leads with the dominant/most-directional signal, then names any conflict in
-// plain words, and colors the left border by the net lean (green/red/amber).
-// ============================================================================
-function readBlock(sym){
-  sym=sym||'SPY';
-  var S=STATE[sym]||{}; var px=S.price;
-  // --- the three reads ---
-  var kd=kingDay(sym); var mv=(kd&&kd.moves)?kd.moves:[];
-  var tp=tapeMap(sym); var kingK=(tp&&typeof tp.king==='number')?tp.king:null;
-  var kv=kingVerdict(mv, kingK, px, Date.now());       // King: dir -1/0/+1, word
-  var tv=trendVerdict(sym);                            // Trend: 5-state machine
-  var srb=srBattle(sym);                               // S/R: dom support/resistance/balanced
-  // numeric leans
-  var kingDir=kv.dir||0;
-  var trendDir = tv.state==='up'?1:(tv.state==='dn'?-1:0);
-  var trendBroken = (tv.state==='up-broken'||tv.state==='dn-broken');
-  var srDir = srb ? (srb.dom==='support'?1:(srb.dom==='resistance'?-1:0)) : 0;
-  // net lean for the border color (simple sum of the three)
-  var net = kingDir+trendDir+srDir;
-  var leanCol = trendBroken ? PAL.amber : (net>0?PAL.longAccent:(net<0?PAL.shortAccent:PAL.gold));
-  // --- headline: lead with the dominant piece ---
-  // Priority: a CONFIRMED trend leads; else a broken trend (caution) leads; else
-  // the King lean; else S/R; else "no clear edge".
-  var head, headCol;
-  if(tv.state==='up'||tv.state==='dn'){ head=trendWordOf(tv.state)+' ('+tv.dom+'/'+tv.win+')'; headCol=trendColorOf(tv.state); }
-  else if(trendBroken){ head=trendWordOf(tv.state); headCol=PAL.amber; }
-  else if(kingDir!==0){ head='King '+(kingDir>0?'bullish':'bearish'); headCol=(kingDir>0?PAL.longAccent:PAL.shortAccent); }
-  else if(srDir!==0){ head=(srDir>0?'Support-led':'Resistance-led'); headCol=(srDir>0?PAL.longAccent:PAL.shortAccent); }
-  else { head='No clear edge'; headCol=PAL.gold; }
-  // --- body sentences (plain language, no jargon badges) ---
-  function kingPhrase(){
-    if(kingK==null) return 'King unset';
-    var off=(px!=null)?Math.round(kingK-px):null;
-    var side=off==null?'':(off>0?(Math.abs(off)+' above'):off<0?(Math.abs(off)+' below'):'at price');
-    var lean=kingDir>0?'pulling up':kingDir<0?'pulling down':'neutral';
-    return 'King '+fmtNum(kingK)+' '+(side?('('+side+') '):'')+lean;
-  }
-  function srPhrase(){
-    if(!srb) return 'S/R forming';
-    if(srb.dom==='support') return 'support winning'+(srb.cross==='bulls'?' (just flipped \u2014 bounce)':'');
-    if(srb.dom==='resistance') return 'resistance winning'+(srb.cross==='bears'?' (just flipped \u2014 pullback-high)':'');
-    return 'S/R balanced';
-  }
-  function trendPhrase(){
-    if(tv.state==='up'||tv.state==='dn') return trendWordOf(tv.state).toLowerCase()+' '+tv.dom+'/'+tv.win+' bars';
-    if(trendBroken) return trendWordOf(tv.state).toLowerCase()+' \u2014 momentum paused, watch for reversal';
-    if(tv.state==='na') return 'trend N/A (need more bars)';
-    return 'no trend (chop)';
-  }
-  // conflict detection among the directional reads
-  var dirs=[kingDir,trendDir,srDir].filter(function(d){return d!==0;});
-  var allAgreePos = dirs.length && dirs.every(function(d){return d>0;});
-  var allAgreeNeg = dirs.length && dirs.every(function(d){return d<0;});
-  var conflict = !(allAgreePos||allAgreeNeg) && dirs.length>=2;
-  var body;
-  if(trendBroken){
-    body='Trend '+trendPhrase()+'. King '+ (kingDir>0?'still leaning up':kingDir<0?'leaning down':'neutral') +', '+srPhrase()+'. Stand aside until the next trend confirms.';
-  } else if(allAgreePos){
-    body='All three align bullish \u2014 '+trendPhrase()+', '+kingPhrase()+', '+srPhrase()+'. Favor longs on pullbacks into support.';
-  } else if(allAgreeNeg){
-    body='All three align bearish \u2014 '+trendPhrase()+', '+kingPhrase()+', '+srPhrase()+'. Favor shorts on pullbacks into resistance.';
-  } else if(conflict){
-    body='Signals mixed \u2014 '+trendPhrase()+', '+kingPhrase()+', '+srPhrase()+'. No clean edge; wait for them to line up.';
-  } else {
-    body=trendPhrase()+'. '+kingPhrase()+'. '+srPhrase()+'.';
-  }
-  var tip=('READ \u2014 plain-language synthesis of the three signals we track: Trend (15/20 state machine), King (dealer lean), and S/R battle. No vote; it just tells you what the sections are collectively saying and whether they agree.').replace(/"/g,'');
-  return '<div title="'+tip+'" style="background:'+PAL.card+';border:1px solid '+PAL.line+';border-left:3px solid '+leanCol+';border-radius:8px;padding:6px 9px;margin:0 0 3px 0">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">'+
-      '<span style="font-size:12px;font-weight:800;color:'+headCol+';letter-spacing:.3px">READ</span>'+
-      '<span style="font-size:9.5px;font-weight:700;color:'+headCol+'">'+head+'</span>'+
-    '</div>'+
-    '<div style="font-size:9.5px;line-height:1.4;color:'+PAL.ink+'">'+body+'</div>'+
-  '</div>';
-}
 
-// Human sentence for the confluence thesis (used by the top strip + tooltip).
-function confluenceThesis(cf, sym){
-  var d=cf.dir;
-  function agreeMark(c){ if(c.dir===0) return '\u2013'; return (c.dir===d && d!==0)?'\u2713':(d!==0?'\u2717':'\u2013'); }
-  var parts=[];
-  cf.contribs.forEach(function(c){
-    var w = c.dir>0?'bull':(c.dir<0?'bear':'flat');
-    parts.push(c.role+' '+agreeMark(c)+' '+w);
-  });
-  // action line
-  var action='';
-  if(cf.declared){
-    var kK=cf.kingK!=null?fmtNum(cf.kingK):'King';
-    if(d<0){
-      var resK=(cf.nb && cf.np) ? null : null;
-      action='Short rallies into overhead resistance; magnet target '+kK+'.';
-    } else {
-      action='Buy dips into support below; magnet target '+kK+'.';
-    }
-  } else {
-    action='Signals conflict \u2014 stand aside until they align.';
-  }
-  return { parts:parts, action:action };
-}
-// Top CONFLUENCE strip: one-line thesis + aligned count + action, colored to
-// the thesis. This IS the coherence layer \u2014 it states the integrated read the
-// three sections below then support in order (King=LEAN, S/R Bias=CONTEXT/
-// BREADTH, BO=TRIGGER).
-function confluenceStrip(sym){
-  var cf=confluence(sym);
-  var th=confluenceThesis(cf, sym);
-  var col = cf.dir>0?PAL.longAccent:(cf.dir<0?PAL.shortAccent:PAL.gold);
-  var arrow = cf.dir>0?'\u25B2':(cf.dir<0?'\u25BC':'\u25C6');
-  var alignTxt = cf.declared ? (cf.aligned+'/4 aligned') : ((Math.max(cf.bull,cf.bear))+'/4 \u2014 mixed');
-  // contributor chips: role + \u2713/\u2717/\u2013 colored per agreement with the thesis
-  var chips='';
-  cf.contribs.forEach(function(c){
-    var mark = c.dir===0?'\u2013':((c.dir===cf.dir && cf.dir!==0)?'\u2713':(cf.dir!==0?'\u2717':'\u2013'));
-    var cc = c.dir===0?PAL.sub : (c.dir>0?PAL.longAccent:PAL.shortAccent);
-    // when a contributor disagrees with a declared thesis, show it red-\u2717
-    var showCol = (cf.dir!==0 && c.dir!==0 && c.dir!==cf.dir) ? PAL.shortAccent : cc;
-    chips+='<span style="font-size:8px;font-weight:700;color:'+showCol+';padding:0 4px;border:1px solid '+showCol+';border-radius:20px;white-space:nowrap">'+c.role+' '+mark+'</span>';
-  });
-  var tip=('CONFLUENCE \u2014 the integrated read from all four signals. '+
-    'LEAN = King dealer lean; TRIGGER = price trend + live BO/short setup; CONTEXT = board support/resistance tilt; BREADTH = multiple nodes (resistance building overhead & support dissipating = bearish, and vice-versa). '+
-    '\u2713 = agrees with the thesis, \u2717 = disagrees, \u2013 = neutral. A direction is declared only when \u22653 of 4 align; otherwise "mixed / no edge". '+
-    th.action).replace(/"/g,'');
-  var html='<div title="'+tip+'" style="background:linear-gradient(180deg,'+PAL.card+','+PAL.bg+');border:1px solid '+col+';border-left:3px solid '+col+';border-radius:8px;padding:5px 9px;margin:0 0 3px 0">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:3px">'+
-      '<span style="font-size:12px;font-weight:800;color:'+col+';letter-spacing:.3px">'+arrow+' '+cf.word+'</span>'+
-      '<span style="font-size:8.5px;font-weight:700;color:'+PAL.sub+'">'+alignTxt+'</span>'+
-    '</div>'+
-    '<div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:3px">'+chips+'</div>'+
-    '<div style="font-size:9.5px;line-height:1.35;color:'+PAL.ink+'">'+th.action+'</div>'+
-  '</div>';
-  return html;
-}
 
 // ============================================================================
 // ANALYSIS TAB (v10.16) — in-app end-of-day review dashboard.
@@ -12785,6 +12231,7 @@ function analysisStats(sym){
   return out;
 }
 
+// (v11.0 audit) PARKED — no live caller; kept because test_render.js pins it.
 function _accBar(pct,label,note){
   var col = pct==null?PAL.sub : (pct>=70?PAL.longAccent:(pct>=55?PAL.amber:PAL.shortAccent));
   var w = pct==null?0:pct;
@@ -12972,13 +12419,31 @@ function tabGuide(which){
 
 // ---- (GROUP 5 ④) DEFLECTIONS, sliced the four ways a trader actually asks about them.
 function deflStats(sym){
-  var out={ grade:{}, tap:{}, pol:{}, session:{}, n:0 };
+  // (v11.0 audit G5) THE SUB-RULES AND KILLS GET A LOCAL MEASURE. node.tap.* / node.pol.* /
+  // node.rocDay.* / kill.tap3 / kill.negGammaWide read the node slices below; kill.midrange
+  // and kill.noConf read the dir slices. Before this they mapped to nothing and could never
+  // leave "proposed" — the tabs said "● recording" forever.
+  var out={ grade:{}, tap:{}, pol:{}, session:{}, rocDay:{}, negGammaAir:{}, dirZone:{}, dirNoConf:{}, n:0 };
   try{
     var db=recorderLoad(); var days=(db&&db.days)||{};
-    Object.keys(days).forEach(function(dk){
+    var arch=(typeof FEAT_ARCHIVE!=='undefined' && FEAT_ARCHIVE && FEAT_ARCHIVE[sym])||{};
+    var allDays={}; Object.keys(days).forEach(function(d){ allDays[d]=1; }); Object.keys(arch).forEach(function(d){ allDays[d]=1; });
+    Object.keys(allDays).forEach(function(dk){
       var arr=((days[dk]||{}).feat||{})[sym]||[];
+      if(!arr.length) arr=arch[dk]||[];
       arr.forEach(function(r){
-        if(!r || r.key!=='node' || !r.resolved || r.hit==null || !r.rec) return;
+        if(!r || !r.resolved || r.hit==null || !r.rec) return;
+        if(r.key==='dir'){
+          var rz=(r.rec.inputs&&r.rec.inputs.rangePos)?r.rec.inputs.rangePos.zone:null;
+          var dv=(r.rec.inputs&&r.rec.inputs.drift)?r.rec.inputs.drift.verdict:null;
+          var so=(r.rec.inputs&&r.rec.inputs.structAsym)?r.rec.inputs.structAsym:null;
+          var dn=(r.rec.verdict==='UP')?1:((r.rec.verdict==='DN')?-1:0);
+          function bumpD(m,k){ if(k==null) return; var b=m[k]||(m[k]={n:0,hit:0,mfe:0,mae:0,mn:0,fn:0,ftgt:0}); b.n++; if(r.hit) b.hit++; if(r.mfe!=null){ b.mfe+=r.mfe; b.mae+=(r.mae||0); b.mn++; } }
+          bumpD(out.dirZone, rz||null);
+          bumpD(out.dirNoConf, (dv==='SPLIT' && so && so.dir!==0 && dn!==0 && so.dir!==dn)?'noConf':'conf');
+          return;
+        }
+        if(r.key!=='node') return;
         out.n++;
         function bump(m, k){
           if(k==null || k==='') return;
@@ -12991,6 +12456,8 @@ function deflStats(sym){
         bump(out.tap, (typeof r.rec.tap==='number')?('tap '+(r.rec.tap+1)):null);
         bump(out.pol, r.rec.pol==='+'?'+γ':(r.rec.pol==='-'?'−γ':null));
         bump(out.session, r.session||null);
+        bump(out.rocDay, r.rec.rocDay||null);
+        bump(out.negGammaAir, (r.rec.pol==='-' && r.rec.path==='air')?'−γ air':'other');
       });
     });
   }catch(e){}
@@ -13252,7 +12719,7 @@ function analysisBlock(){
     wc+='<div style="background:rgba(240,97,109,.12);border:1px solid '+PAL.shortAccent+';border-radius:6px;padding:4px 6px;margin-bottom:4px;font-size:9px;font-weight:800;color:'+PAL.shortAccent+';white-space:normal">'+
       '⚠ MODEL CHANGED TODAY — '+changedToday.length+' '+(changedToday.length===1?'change':'changes')+'. Bars recorded before and after it were scored by different models.</div>';
   }
-  try{ wc+=learningStripsHtml(); }catch(eL){ wc+=tabEmpty('the learning strips could not be rendered.'); }
+  try{ wc+=learningStripsHtml(true); }catch(eL){ wc+=tabEmpty('the learning strips could not be rendered.'); }
   if(ev.length){
     wc+='<div style="font-size:8px;font-weight:700;color:'+PAL.sub+';margin-top:4px">CHANGE LOG</div>';
     ev.slice(-8).reverse().forEach(function(x){
@@ -13265,7 +12732,7 @@ function analysisBlock(){
   } else {
     wc+=tabEmpty('nothing has ever been promoted or demoted on this machine — every weight is still the hand-set hypothesis ⚖.');
   }
-  h+=tabSection('a2','②','WHAT CHANGED','Did the model move under me? Only proposals THIS panel promoted past the local bar can move anything; a fetched rules.json changes nothing on its own.', wc);
+  h+=tabSection('a2','②','WHAT CHANGED','Did the model move under me? Only proposals THIS panel promoted past the local bar can move anything; a fetched rules.json changes nothing on its own. Proposals, challengers and the kill list are in the Testing tab.', wc);
 
   // ---- ③ DIRECTION FACTORS --------------------------------------------------
   var df='';
@@ -13282,45 +12749,57 @@ function analysisBlock(){
   try{ yc=yourCallsHtml(fs||{act:{take:{n:0,hit:0},pass:{n:0,hit:0}}}); }catch(eY){ yc=tabEmpty('selection quality could not be computed.'); }
   h+=tabSection('a5','⑤','YOUR CALLS','Are the reads you TAKE better than the ones you PASS? Passes are the control group — without them a take rate on its own says nothing at all.', yc, false);
 
-  // ---- ⑥ NIGHTLY REVIEW -----------------------------------------------------
+  // ---- ⑥ REVIEW (nightly log + weekly review) ---------------------------------
+  // (v11.0 audit G2/G3) renders BOTH files as they are actually shaped: the nightly
+  // learning/log/<day>.json (headline / pre-open line / contradictions / per-factor lines) and
+  // the weekly review/<day>.json v2 (headline, features[], contradictions[], calibration[],
+  // killList, questions, missingFields). The old ⑥ read fields (worked/missed/why/discovered)
+  // that the v2 schema does not have, so only a headline could ever show.
   var nr='';
-  var pRev=null, pWay=null;
-  try{ var P=pipeLoad(); if(P && P.review==='yes'){ pRev=P.reviewDay||null; pWay='read back from GitHub'; } }catch(ePR){}
+  function revList(title, arr, col, fmt){
+    if(!arr || !arr.length) return '';
+    var h2='<div style="margin-top:3px;font-size:8px;font-weight:700;color:'+col+'">'+title+'</div>';
+    arr.slice(0,8).forEach(function(x){ var t=''; try{ t=fmt(x); }catch(e){ t=String(x); } if(t) h2+='<div style="font-size:8.5px;line-height:1.35;color:'+PAL.sub+';white-space:normal">· '+t+'</div>'; });
+    return h2;
+  }
+  function revStr(x){ if(x==null) return ''; if(typeof x==='string') return x; if(typeof x==='object'){ return (x.text||x.note||x.claim||x.msg||x.id||x.key||x.feature||JSON.stringify(x)).toString().slice(0,200); } return String(x); }
+  var N=null; try{ N=(typeof ANALYSIS_NIGHTLY!=='undefined')?ANALYSIS_NIGHTLY:null; }catch(eN0){}
+  var Pp=null; try{ Pp=pipeLoad(); }catch(eP0){}
+  if(N){
+    nr+='<div style="font-size:8px;color:'+PAL.sub+';margin-bottom:2px">NIGHTLY · '+((Pp&&Pp.nightlyDay)||N.date||'last session')+' · read back from GitHub</div>';
+    var nl=null; try{ nl=pipeReviewLine(N); }catch(eNL){}
+    if(nl) nr+='<div style="font-size:9px;line-height:1.4;color:'+PAL.ink+';white-space:normal">'+nl+'</div>';
+    nr+=revList('CONTRADICTIONS', N.contradictions, PAL.shortAccent, revStr);
+    nr+=revList('FACTORS', N.factors||N.features, PAL.blue, function(f){ return revStr(f)+((f&&f.n!=null)?(' · n '+f.n):'')+((f&&f.rate!=null)?(' · '+f.rate+'%'):''); });
+    nr+=revList('OPEN QUESTIONS', N.questions, PAL.amber, revStr);
+  }
   if(R){
-    nr+='<div style="font-size:8px;color:'+PAL.sub+';margin-bottom:3px">for '+(pRev||R.date||'the last session')+' · '+(pWay||'loaded by hand')+'</div>';
+    nr+='<div style="font-size:8px;color:'+PAL.sub+';margin:'+(N?'6px':'0')+' 0 2px">WEEKLY · '+((Pp&&Pp.review==='yes'&&Pp.reviewDay)||R.date||R.span||'last review')+(R.grade?(' · grade '+R.grade):'')+'</div>';
     var line=null; try{ line=pipeReviewLine(R); }catch(eRL){}
     if(line) nr+='<div style="font-size:9px;line-height:1.4;color:'+PAL.ink+';white-space:normal">'+line+'</div>';
+    nr+=revList('FEATURES', R.features, PAL.blue, function(f){ return revStr(f)+((f&&f.n!=null)?(' · n '+f.n):'')+((f&&f.rate!=null)?(' · '+f.rate+'%'):'')+((f&&f.verdict)?(' · '+f.verdict):''); });
+    nr+=revList('CONTRADICTIONS', R.contradictions, PAL.shortAccent, revStr);
+    nr+=revList('CALIBRATION', R.calibration, '#b58ce0', function(c){ return revStr(c)+((c&&c.claimed!=null)?(' · claimed '+c.claimed+'% vs actual '+(c.actual!=null?c.actual:'?')+'%'):''); });
+    nr+=revList('KILL LIST', R.killList, PAL.shortAccent, revStr);
+    nr+=revList('MISSING FIELDS', R.missingFields, PAL.amber, revStr);
+    // legacy shape (hand-loaded older reviews)
     [['✓ WORKED',R.worked,PAL.longAccent],['✕ MISSED',R.missed,PAL.shortAccent],['🔍 WHY',R.why,PAL.blue],['💡 DISCOVERED',R.discovered,'#b58ce0']].forEach(function(p){
-      if(!p[1]) return;
+      if(!p[1] || typeof p[1]!=='string') return;
       nr+='<div style="margin-top:3px;font-size:8.5px;line-height:1.4;white-space:normal"><b style="color:'+p[2]+'">'+p[0]+'</b> <span style="color:'+PAL.sub+'">'+p[1]+'</span></div>';
     });
-    (R.recs||[]).forEach(function(rc,i){
-      nr+='<div style="margin-top:2px;font-size:8.5px;line-height:1.4;color:'+PAL.sub+';white-space:normal">'+(i+1)+'. '+rc+'</div>';
-    });
-  } else {
-    nr=tabEmpty('no review has come back yet. It is written after the close from the day file this panel exports, then read back automatically from GitHub — if it never arrives, check the ⑥ PIPELINE section below.');
+    (Array.isArray(R.recs)?R.recs:[]).forEach(function(rc,i){ nr+='<div style="margin-top:2px;font-size:8.5px;line-height:1.4;color:'+PAL.sub+';white-space:normal">'+(i+1)+'. '+revStr(rc)+'</div>'; });
   }
-  h+=tabSection('a6','⑥','NIGHTLY REVIEW','What did last night’s read-back actually say? Quoted as written, never summarised into a forecast.', nr, false);
+  if(!N && !R){
+    nr=tabEmpty('no review has come back yet. The nightly log (learning/log/<day>.json) and the weekly review (review/<day>.json) are written from the day file this panel exports and read back automatically from GitHub — if nothing arrives, check the footer pipeline dots.');
+  }
+  h+=tabSection('a6','⑥','REVIEW','What did the review actually say? Nightly log and weekly review, quoted as written — never summarised into a forecast.', nr, false);
 
-  // ---- ⑦ PIPELINE -----------------------------------------------------------
-  var pl='';
-  try{
-    var stages=pipeStages();
-    pl='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:3px">';
-    stages.forEach(function(s){
-      pl+='<span title="'+String(s.tip).replace(/"/g,'&quot;')+'" style="font-size:8.5px;color:'+pipeColor(s.state)+';white-space:nowrap">● '+s.label+'</span>';
-    });
-    pl+='</div>';
-    stages.forEach(function(s){
-      pl+='<div style="font-size:8px;line-height:1.35;color:'+PAL.sub+';white-space:normal;border-top:1px solid rgba(255,255,255,.04);padding:2px 0"><b style="color:'+pipeColor(s.state)+'">'+s.label+'</b> — '+s.tip+'</div>';
-    });
-    var doc=null; try{ doc=rulesDoc(); }catch(eRD){}
-    var last=null; try{ var pr=promotionsList(); last=pr.length?pr[pr.length-1]:null; }catch(ePL){}
-    pl+='<div style="font-size:8px;color:'+PAL.sub+';margin-top:3px;white-space:normal">rules asOf '+((doc&&doc.asOf)||'— (never fetched)')+
-        ' · last promotion '+(last?((last.target||last.id)+' on '+last.on):'none') +
-        ' · direction weights: '+DIR_WEIGHTS_SOURCE+'</div>';
-  }catch(eP){ pl=tabEmpty('the pipeline could not be read.'); }
-  h+=tabSection('a7','⑦','PIPELINE','Is the data even getting through? recorded → saved into the repo folder → pushed to GitHub → review back. Every stage before v10.52 was assumed; each one is observed here.', pl, false);
+  // ---- ⑦ NODES (the ledger) ---------------------------------------------------
+  // (v11.0) layer 1 on the tab: every meaningful node's life today, its touches and reactions,
+  // and its influence — with n on every number, nothing without n.
+  var nl='';
+  try{ nl=ledgerSectionHtml(sym); }catch(eNL){ nl=tabEmpty('the node ledger could not be rendered.'); }
+  h+=tabSection('a7','⑦','NODES','What did each node do today, and did price respect it? Life (born → peak → now), touches with the reaction on each, and influence: while it accumulated did price come toward it, while it dissipated did price move away. n on everything.', nl, false);
 
   // ---- the legacy detail, kept but folded away -------------------------------
   var legacy='';
@@ -13333,7 +12812,7 @@ function analysisBlock(){
   // ---- save banner (the tab IS the trigger) ---------------------------------
   if(st.bars){
     if(SAVED_TODAY===st.date){
-      h+='<div style="margin:6px 0 0;background:#0e1a13;border:1px solid #1c3a28;border-radius:8px;padding:5px 8px;font-size:9px;color:'+PAL.longAccent+';white-space:normal">✓ Saved <b>gex_'+st.date+'.json</b> — the nightly review reads it from the repo.</div>';
+      h+='<div style="margin:6px 0 0;background:#0e1a13;border:1px solid #1c3a28;border-radius:8px;padding:5px 8px;font-size:9px;color:'+PAL.longAccent+';white-space:normal">✓ Saved <b>data/'+st.date+'.json</b> — the nightly review reads it from the repo.</div>';
     } else {
       h+='<div style="margin:6px 0 0;background:#1a160d;border:1px solid #3a301c;border-radius:8px;padding:5px 8px;display:flex;justify-content:space-between;align-items:center;gap:6px">'+
         '<span style="font-size:9px;color:'+PAL.amber+';white-space:normal">Today’s data isn’t saved yet.</span>'+
@@ -13344,13 +12823,16 @@ function analysisBlock(){
   return h;
 }
 // small KPI card
+// (v11.0 audit) PARKED — no live caller; kept because test_render.js pins it.
 function _kpi(label,val,sub,pct){
   var col = pct==null?PAL.ink:(pct>=70?PAL.longAccent:(pct>=55?PAL.amber:PAL.shortAccent));
   return '<div style="background:#12161f;border:1px solid '+PAL.line+';border-radius:8px;padding:6px 8px"><div style="font-size:9px;color:'+PAL.sub+'">'+label+'</div><div style="font-size:15px;font-weight:800;color:'+col+'">'+val+'</div><div style="font-size:8px;color:'+PAL.sub+'">'+sub+'</div></div>';
 }
 // timeline SVG from real snapshots (King gold, price light, S/R band)
 // panel inner width (px) for responsive SVG sizing; falls back to 280 if unknown.
+// (v11.0 audit) PARKED — no live caller; kept because test_render.js pins it.
 function _bodyW(){ try{ var w=elBody?elBody.clientWidth:0; return (w&&w>60)?(w-24):280; }catch(e){ return 280; } }
+// (v11.0 audit) PARKED — no live caller; kept because test_render.js pins it.
 function timelineSvg(sym,st){
   var day=A_day(); var snaps=(day.snaps&&day.snaps[sym])||[];
   if(snaps.length<2) return '<svg width="280" height="60" viewBox="0 0 280 60" style="display:block;width:100%"><text x="6" y="32" fill="'+PAL.sub+'" font-size="11">not enough bars yet \u2014 need \u22652</text></svg>';
@@ -13386,6 +12868,7 @@ function timelineSvg(sym,st){
   svg+='</svg>'; return svg;
 }
 // King-minus-price gap over the day
+// (v11.0 audit) PARKED — no live caller; kept because test_render.js pins it.
 function convergenceSvg(sym,st){
   var day=A_day(); var snaps=(day.snaps&&day.snaps[sym])||[];
   var gaps=[]; snaps.forEach(function(s){ if(typeof s.king==='number'&&typeof s.px==='number') gaps.push({i:gaps.length,g:s.king-s.px}); });
@@ -13738,8 +13221,53 @@ function analysisTabBar(){
   '</div>';
 }
 
+// (v11.0 audit bug 5) ONE delegated click listener for the whole panel body — action buttons,
+// brief toggle, tab sections, guide, self-test, coverage. It used to be wired only at the END of
+// the dashboard branch, so a first render on an unmapped instrument (futures early-return) or
+// on the Analysis/Testing tab left every section toggle inert. Guarded, so it never stacks.
+function wireBodyDelegation(){
+  if(!elBody) return;
+  // (re-attached each render because innerHTML is replaced). Attached with a guard flag so
+  // it never stacks, and the drag handler ignores .gpts-act / .gpts-brief targets.
+  if(!elBody.__gptsActWired){
+    elBody.__gptsActWired=true;
+    elBody.addEventListener('click', function(ev){
+      try{
+        var t=ev.target;
+        while(t && t!==elBody){
+          if(t.getAttribute && t.getAttribute('data-gact')){
+            ev.stopPropagation(); ev.preventDefault();
+            actRecord(t.getAttribute('data-gsym')||'SPY', t.getAttribute('data-gact'));
+            return;
+          }
+          if(t.getAttribute && t.getAttribute('data-gbrief')){
+            ev.stopPropagation(); BRIEF_OPEN=!BRIEF_OPEN; try{ render(); }catch(eRb){} return;
+          }
+          // (v10.54 GROUP 5) the Analysis / Testing tabs: collapsible sections, the "?"
+          // guide, the self-test button and the async coverage refresh.
+          if(t.getAttribute && t.getAttribute('data-gsec')){
+            ev.stopPropagation(); secToggle(t.getAttribute('data-gsec')); try{ render(); }catch(eS1){} return;
+          }
+          if(t.getAttribute && t.getAttribute('data-gguide')){
+            ev.stopPropagation(); var gw=t.getAttribute('data-gguide'); TAB_GUIDE[gw]=!TAB_GUIDE[gw]; try{ render(); }catch(eS2){} return;
+          }
+          if(t.getAttribute && t.getAttribute('data-gselftest')){
+            ev.stopPropagation();
+            try{ SELFTEST_LAST=selfTestRun(); }catch(eS3){ SELFTEST_LAST=null; }
+            try{ render(); }catch(eS4){} return;
+          }
+          if(t.getAttribute && t.getAttribute('data-gtcov')){
+            ev.stopPropagation(); try{ window.__gptsTestRefresh&&window.__gptsTestRefresh(); }catch(eS5){} return;
+          }
+          t=t.parentNode;
+        }
+      }catch(e){}
+    }, true);
+  }
+}
 function render(){
   if(!elBody) return;
+  try{ wireBodyDelegation(); }catch(eWD){}
   RENDER_SEQ++;   // (v10.14) new tick: srBattle memoizes per render so its
                   // crossover state isn't corrupted by being called twice.
   var html='';
@@ -13765,7 +13293,7 @@ function render(){
   // Section order (v10.23): King (TOP) → BO → S/R Imbalance. The READ section was
   // REMOVED (Issue F) — it conflated offset vs drift and duplicated the King Path /
   // S/R Imbalance / Trend, so the King header is now the top of the panel.
-  // (readBlock() + structuralReadHtml() are left defined but no longer rendered.)
+  // (readBlock() + structuralReadHtml() were removed in the v11.0 audit: no live caller.)
   // (v10.38) TAPE SYNC GATE. Everything below is derived from %King. If the
   // three independent King sources do not agree, we render the suppression
   // panel INSTEAD of the structural read. Showing confident node strengths
@@ -13833,44 +13361,7 @@ function render(){
   elBody.style.opacity = (fr.state==='red') ? '0.55' : '1';
   // #10 fire any armed alerts for state transitions this render.
   runAlerts('SPY', fr);
-  // (v10.49 H) ACTION CAPTURE + brief toggle via ONE delegated listener on the panel body
-  // (re-attached each render because innerHTML is replaced). Attached with a guard flag so
-  // it never stacks, and the drag handler ignores .gpts-act / .gpts-brief targets.
-  if(!elBody.__gptsActWired){
-    elBody.__gptsActWired=true;
-    elBody.addEventListener('click', function(ev){
-      try{
-        var t=ev.target;
-        while(t && t!==elBody){
-          if(t.getAttribute && t.getAttribute('data-gact')){
-            ev.stopPropagation(); ev.preventDefault();
-            actRecord(t.getAttribute('data-gsym')||'SPY', t.getAttribute('data-gact'));
-            return;
-          }
-          if(t.getAttribute && t.getAttribute('data-gbrief')){
-            ev.stopPropagation(); BRIEF_OPEN=!BRIEF_OPEN; try{ render(); }catch(eRb){} return;
-          }
-          // (v10.54 GROUP 5) the Analysis / Testing tabs: collapsible sections, the "?"
-          // guide, the self-test button and the async coverage refresh.
-          if(t.getAttribute && t.getAttribute('data-gsec')){
-            ev.stopPropagation(); secToggle(t.getAttribute('data-gsec')); try{ render(); }catch(eS1){} return;
-          }
-          if(t.getAttribute && t.getAttribute('data-gguide')){
-            ev.stopPropagation(); var gw=t.getAttribute('data-gguide'); TAB_GUIDE[gw]=!TAB_GUIDE[gw]; try{ render(); }catch(eS2){} return;
-          }
-          if(t.getAttribute && t.getAttribute('data-gselftest')){
-            ev.stopPropagation();
-            try{ SELFTEST_LAST=selfTestRun(); }catch(eS3){ SELFTEST_LAST=null; }
-            try{ render(); }catch(eS4){} return;
-          }
-          if(t.getAttribute && t.getAttribute('data-gtcov')){
-            ev.stopPropagation(); try{ window.__gptsTestRefresh&&window.__gptsTestRefresh(); }catch(eS5){} return;
-          }
-          t=t.parentNode;
-        }
-      }catch(e){}
-    }, true);
-  }
+  wireBodyDelegation();   // (v11.0 audit bug 5) idempotent; also called at the top of render()
   var csx=elBody.querySelectorAll('.gpts-clr-sym');
   for(var j=0;j<csx.length;j++){
     (function(el){ el.addEventListener('click', function(){ clearSignalsSym(el.getAttribute('data-sym')); }); })(csx[j]);
@@ -13973,12 +13464,9 @@ function tick(){
   TODAY=ctTodayStr();
   // (v10.55 PART E) which instrument is on the chart, and what the live ratio is.
   try{ futModeRefresh(); }catch(eFm){}
-  FUT.ES = (STATE.SPY.price!=null) ? mul(STATE.SPY.price, ES_RATIO) : null;
-  FUT.NQ = lastCloseOf('NQ1');
   var ASYM=activeSym();
   refreshSym('SPY');
   if(ASYM!=='SPY') refreshSym(ASYM);      // (v10.55 PART G) QQQ parity when QQQ is the active underlying
-  recordSession();
   // DATA layer: once-per-closed-bar node snapshots (throttled internally).
   recordNodeSnapshot('SPY');
   recordNodeSnapshot('QQQ');
@@ -13995,8 +13483,8 @@ function tick(){
   // 2 consecutive sessions = signal, 3 = confirmation), so a single session cannot produce one.
   fcHistSample('SPY');
   fcHistSample('QQQ');
-  resolveFeatureOutcomes('SPY');   // (v10.49 B) forward-only, idempotent feature scoring
-  if(ASYM!=='SPY') resolveFeatureOutcomes(ASYM);   // (v10.55 PART G) same loop, keyed by sym
+  // (v11.0 audit) resolveFeatureOutcomes runs inside recordNodeSnapshot on every closed bar; the
+  // per-tick call here was a second full pass over the same queue every 3 s. Removed.
   recordDeflections('SPY');   // (v10.36) record confirmed deflections + score forward outcomes
   recordDeflections('QQQ');
   repoAutoExportTick();        // (v10.44) write data/YYYY-MM-DD.json at the close
@@ -14018,7 +13506,9 @@ function boot(){
   buildPanel();
   injectSliderCss();
   restoreState();
+  pbLogRestore();              // (v11.0 G7) today's pullback-node log survives a reload
   repoMigrateOnce();           // (v10.44) localStorage recorder -> IndexedDB repository (once)
+  repoLoadFeatArchive();       // (v11.0 G4/G9) resolved outcomes beyond the localStorage window
   studyLoad();                 // (v10.44) cached measured rates for READ ▸ / hovers
   registerCoreFeatures();      // (v10.49 B) enroll every feature in DATA/ANALYSIS/TESTING/LEARNING
   trendLastLoad();             // (v10.54) rehydrate today's confirmed-trend memory (gpts_trendlast_v1)
@@ -14035,5 +13525,5 @@ if(document.readyState==='complete' || document.readyState==='interactive'){
   window.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 800); });
 }
 
-console.log('[GPTS] v9.1 part5 loaded');
+console.log('[GPTS] v'+GPTS_VERSION+' part5 loaded');
 })();

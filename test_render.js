@@ -66,10 +66,10 @@ A('range-day caveat present', /LOW-signal|range\/no-edge/.test(html));
 A('legacy per-day render lives in the DETAIL section', /DETAIL · every enrolled feature/.test(html) && /SCORECARDS/.test(html));
 // (v10.54 GROUP 5) the seven question-led sections
 [['①','HEADLINE'],['②','WHAT CHANGED'],['③','DIRECTION FACTORS'],['④','DEFLECTIONS'],
- ['⑤','YOUR CALLS'],['⑥','NIGHTLY REVIEW'],['⑦','PIPELINE']].forEach(function(p){
+ ['⑤','YOUR CALLS'],['⑥','REVIEW']]   /* (v11.0) ⑦ PIPELINE lives in the footer; ⑥ = nightly + weekly */.forEach(function(p){
   A('section '+p[0]+' '+p[1]+' renders', html.indexOf(p[0]+' '+p[1])>=0);
 });
-A('every section is collapsible', (html.match(/data-gsec="/g)||[]).length>=8);
+A('every section is collapsible', (html.match(/data-gsec="/g)||[]).length>=7);
 A('the tab carries a "?" guide', /data-gguide="analysis"/.test(html));
 A('empty sections print one honest line, never a blank', /no review has come back yet/.test(html));
 A('no bare NaN / undefined anywhere', html.indexOf('NaN')<0 && html.indexOf('undefined')<0);

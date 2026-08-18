@@ -1,4 +1,11 @@
-# LLM REVIEW CONTRACTS — NIGHTLY (light) and WEEKLY (heavy) · v10.53
+# LLM REVIEW CONTRACTS — NIGHTLY (light) and WEEKLY (heavy) · v11.0 LOCKDOWN
+
+> **LOCKDOWN (v11.0, 2026-08-18).** No new features are being built. For the next ≥20 sessions the review's whole
+> job is measurement and proposals: pool what the day files record, report it with n, propose (never apply), and
+> say plainly what is still unproven. The stack the panel is organised around — and the order in which this brief
+> asks you to review it — is master-spec §0: 0 FEED+TAPE · 1 NODE LEDGER · 2 STRUCTURE (Map, leg engine) ·
+> 3 DIRECTION · 4 SETUP (trigger) · 5 OUTCOME+LEARNING · 6 REVIEW (you) · 7 VOICE. Contracts 1 and 2 below say
+> WHEN and WHAT you write; the "BY LAYER" section after them says WHAT TO EVALUATE, layer by layer.
 
 Two runs, two jobs, two output files. They are **not** interchangeable.
 
@@ -32,7 +39,7 @@ proposals. No edits to `learning/rules.json`.**
 1. **The day file** — `data/<CT-date>.json`: per closed 3-minute bar it carries `snaps[SYM][].feat.*`
    (one record per FEATURES key), the resolved outcome queue at `feat[SYM][]`
    (`{key, t, bar, rec, hit, mfe, mae, resolved}`), and the structural context (`nodes`, `deriv`,
-   `ep`, `rg`, `xm`, `proj`, `out5`, `out10`).
+   `ep`, `rg`, `xm`, `proj`, `out5`, `out10`), and from v11.0 the node ledger at `ledger[SYM]` (LAYER 1 below).
 2. **`learning/rules.json`** — the current mental model (read only; the nightly never writes it).
 3. **The prior 3 reviews** — the last three `learning/log/*.json` entries, plus the most recent
    `review/*.json`, so tonight is judged against what was already said.
@@ -209,7 +216,50 @@ fail-soft 10-minute cadence (`pipeCheck`), and surfaces both in the Analysis tab
 executed by `applyProposals()` in `v10.js`, persisted to `gpts_promo_v1`, and listed by
 `__gptsDebug.promotions()`.
 
-## LEG ENGINE — magnets, pullback nodes, rolling (evaluate every run; user-critical)
+---
+
+# WHAT TO EVALUATE — BY LAYER OF THE STACK (both runs; every rule below still binds)
+
+The evaluation is ordered the way the panel is built (master-spec §0). Every claim in every layer is reported
+with n · effN · vote-split · regime split · MFE/MAE, and NEVER without n. Nothing below may be claimed from one
+session; the nightly records, the weekly pools.
+
+## LAYER 1 — NODE LEDGER (v11.0; the base layer, evaluate every run)
+The day export now carries `ledger[SYM]` — every node the feed showed this session, SPY strikes AND the SPXW-derived
+lanes (`src`), whose session peak reached PB_MIN_PCT. Per node: `k, src, first, peak, peakT, cur, state
+(acm|dec|gone|hold), m15, fromPeak, gone, life{build,after,goneFor}` (minutes first→peak, peak→last seen, last
+seen→now), the counts `deflect / through / stall`, the last 12 touches `{t,bar,react,side,state}` (`state` = the
+node's ledger state AT the touch; reaction decided by the side the bar opened on and the DEFLECT_ZONE — see
+master-spec §27), and `infl{acmN,acmToward,decN,decAway}` (5-bar windows: while acm did |price−node| shrink, while
+dec/gone did it grow). Report, with n, POOLED across nodes and across sessions:
+- **deflect-on-touch rate, acm vs dec/gone** — do accumulating nodes deflect more than dissipating ones? (touches
+  where `state:'acm'` vs `state:'dec'|'gone'`, `react:'deflect'` share of each);
+- **toward-rate while acm** (`acmToward/acmN`) and **away-rate while dec** (`decAway/decN`) — does accumulation
+  pull price and dissipation release it?;
+- **SPXW-derived lanes vs native strikes** — split both of the above by `src`: do the lanes influence SPY price as
+  much as the integer strikes, or less?;
+- **lead time** between a node's `peakT` and the bar where price first respected it (deflect) or abandoned it
+  (through / moved away) — does the ledger see the change before the tape does?
+- `ledger.touch` (FEATURES) — the in-play node touched, with the ledger state at the touch; outcome tgt-before-inval.
+  Evaluate its question `acm_deflects_more` by state, by src, by grade, with n and effN. It is non-voting; say
+  whether it has earned the acm/dec chip a job on the face or whether the chip is decoration.
+Never claim any of this from one session: a session gives a handful of touches per node. If pooled n is under 20
+say "insufficient — n=X" and stop there (REVIEW-ACCEPTANCE (f)).
+
+## NOTES FOR EVERY LAYER (v11.0 changes to what you read)
+- Merges: `drift` is now `dir.drift` and `roll` is now `dir.kingRoll` (one record each; older day files may still
+  carry the old keys — pool them under the new name and say so).
+- `dir` records now carry `read{voiceId,sentence,legDir,legPhase,dirSrc,map}` — the READ sentence as rendered on
+  that bar, its voice id, the leg's dir/phase, where the direction came from (trend / map) and the Map line. So
+  contradiction #1 (READ vs direction spine) is measurable PER BAR: compare `read.sentence`/`read.legDir` with
+  `dir.verdict` and name the bars.
+- The nightly log at `learning/log/<day>.json` is READ BACK by the panel (Analysis ⑥ REVIEW): the `headline` (or
+  `brief`) line, `contradictions[]`, `factors[]` (or `features`) and `questions[]` are rendered. Write those fields
+  — a log without them shows as an empty tile.
+- Proposals no longer need the reviewer's n to be within 20% of the local n. The bar is: local eff n ≥ 20, three
+  walk-forward sessions, no regime flip. `applyProposals()` still re-derives all three.
+
+## LAYER 2 — STRUCTURE · LEG ENGINE — magnets, pullback nodes, rolling (evaluate every run; user-critical)
 The trader's core model: a trend alternates MAGNETS (the node price rallies TO) and PULLBACK NODES (the node that
 forms on the counter-move and price DEFLECTS off — the level to sell from in a downtrend / buy from in an uptrend).
 PB nodes APPEAR AFTER the move and ROLL lower (dn) / higher (up) after each leg; 2 consecutive rolls = signal,
@@ -221,18 +271,41 @@ Report, with n · effN · vote-split · regime split · MFE/MAE, and NEVER witho
 - `leg.roll` — after a 2nd/3rd consecutive roll, did the trend continue DIR_PTS? Is 3-step confirmation actually
   more reliable than 2-step signal on THIS tape? (the doctrine claims so — measure it)
 - `leg.magnet` — was the magnet reached? how often does price make it vs stall at an intermediate node?
+
+## LAYER 2 — STRUCTURE · THE MAP
+- THE MAP (v10.58, USER PRIORITY — "as nodes dissipate, other nodes accumulate and start influencing price").
+  `map.transfer` = a dec/gone node with an acm neighbour on the same side (the ceiling/floor rolling; SPY strikes
+  AND the SPXW-derived lanes, drop-out counted as dissipation); `map.lean` = both sides rolling the same way.
+  Report: did price move the roll's way within fwd (n, effN, by side, by book), does the lean lead the SMA-50
+  (smaAgrees split), false-transfer rate, and the widening cases (dec node between acm nodes both sides) — did
+  the range actually widen? These are recorded, non-voting; say plainly whether they have earned a vote.
+
+## LAYER 2 — STRUCTURE · HANDOFF
+- `leg.handoff` (v10.56, USER PRIORITY) — when the engine flagged the old ceiling DISSIPATING while a lower node
+  built (the handoff), did the `to` node become the PB within fwd, and did price deflect off it toward the magnet?
+  Report the LEAD TIME (leadBars before pbDetected) and the false-handoff rate (flagged, never resolved). Mirror for floors.
+
+## LAYER 3 — DIRECTION · DRIFT SHADOW
 - DRIFT IS IN SHADOW MODE (v10.57): not shown, not voting. `dir.drift` and the SHADOW `dir.relation` (what drift
   WOULD have said) are still recorded every bar. Report whether the shadow relation lifts trend-only (lift, n,
   effN, both directions) — this is the evidence that decides whether drift returns to the face. Never claim it
   is proven from one session.
-- `leg.handoff` (v10.56, USER PRIORITY) — when the engine flagged the old ceiling DISSIPATING while a lower node
-  built (the handoff), did the `to` node become the PB within fwd, and did price deflect off it toward the magnet?
-  Report the LEAD TIME (leadBars before pbDetected) and the false-handoff rate (flagged, never resolved). Mirror for floors.
+
+## LAYER 4 — SETUP · TRIGGER
 - `defl.trigger` (v10.56) — the latched ✓/✗ IS the deflection hit-rate: after ✓↓/✓↑, tgt-before-inval + MFE/MAE, by
   roll step and by grade; after ✗, did the break follow through DIR_PTS? Never intrabar; latch cannot flip — a ✓ that
   later failed counts as a failed ✓, not a ✗.
+
+## LAYER 7 — VOICE · contradictions and the weakening tell
 - Cases where a PB formed AGAINST the trend (weakening flag) — did the trend then fail? (that is the early-reversal tell)
 - Contradictions: PB detected while direction said SIDE/chop-capped — was the PB level still tradeable? (this
   happened live 2026-08-18 09:19 CT: dn structure, magnet 768 / PB 769, direction capped SIDE by mid-range+chop)
+- Contradiction #1 per bar (v11.0): `dir.read.sentence` / `dir.read.legDir` vs `dir.verdict` — list the bars, the
+  values, and the mechanism (voice led by leg while the spine was capped SIDE, structure-leads with no trend, etc.).
+
+## LAYER 5 — OUTCOME + LEARNING · proposals
 Propose (never apply): PB_MIN_PCT, the roll-step confirmation count, whether the leg structure should soften the
 mid-range cap. Kill-list candidates: PB steps that never deflect (e.g. 1st PB in chop).
+Also propose, if the ledger earns it: whether the acm/dec state should filter deflection grades, and whether the
+SPXW lanes deserve the same weight as native strikes. Everything proposed goes through the bar; nothing is applied
+by the review, and during LOCKDOWN nothing new is built off a proposal — it waits for ≥20 sessions.

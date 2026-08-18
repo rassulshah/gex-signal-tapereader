@@ -21,7 +21,7 @@ ok(/function testingBlock\(\)/.test(src), 'testingBlock exists');
 });
 ok(/PATTERN MINER/.test(src) && /Hypothesis builder|hypothesis/i.test(src), 'the v10.45 exploration tools survive in DETAIL');
 ok(/gpts_mine_v1/.test(src), 'miner result cached');
-ok(/@version\s+10\.(4[0-9]|5[0-9])/.test(src), 'version 10.4x-5x');
+ok(/@version\s+(10\.(4[0-9]|5[0-9])|11\.\d+)/.test(src), 'version 10.4x-5x or 11.x');
 ok((src.match(/^function render\(\)/gm)||[]).length===1 && /\}\)\(\);\s*$/.test(src), 'file shape rule 2.4 (one render, closes cleanly)');
 
 // --- pure logic: stub repoAll + localStorage, run miner/hypothesis on synthetic rows ---

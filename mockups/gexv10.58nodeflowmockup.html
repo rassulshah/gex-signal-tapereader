@@ -1,0 +1,131 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>v10.58 — node flow mockup</title>
+<style>
+  body{background:#0d1117;color:#e6edf3;font:13px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;padding:22px;margin:0}
+  .wrap{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
+  h1{font-size:14px;color:#8b949e;font-weight:600;margin:0 0 2px}
+  .sub{color:#6e7681;font-size:10px;margin:0 0 12px;max-width:260px}
+  .panel{width:262px;background:#010409;border:1px solid #21262d;border-radius:8px;padding:7px 8px}
+  .steps{text-align:center;font-size:8px;color:#8b949e;font-weight:700;letter-spacing:.3px;margin:1px 0 3px}
+  .steps span{color:#58a6ff;border-bottom:1px dotted #58a6ff;margin:0 2px}
+  .cluster{display:flex;gap:4px;margin-bottom:6px}
+  .pill{flex:1;border:1px solid #21262d;border-radius:7px;padding:3px 5px;display:flex;flex-direction:column;align-items:center}
+  .lab{font-size:8px;color:#8b949e}.sup{color:#3fb950}.res{color:#f0616d}.val{font-size:12px;font-weight:800}.pct{font-size:8px;color:#6e7681}
+  .king{flex:1.5;border-color:#8a6d1f;background:rgba(242,204,96,.05)}.kgold{color:#f2cc60;font-weight:800}
+  .read{border-left:2px solid #f2cc60;padding:3px 7px;margin:0 0 6px;border-radius:0 8px 8px 0;background:#0d1117}
+  .rh{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:800;white-space:nowrap}
+  .side{color:#8b949e}.bear{color:#f0616d}
+  .gC{color:#d29922;background:rgba(210,153,34,.15);padding:0 5px;border-radius:3px;font-size:10px}
+  .sb{font-size:8px;font-weight:700;color:#8b949e;border:1px solid #21262d;border-radius:8px;padding:0 4px}
+  .rt{font-size:9.5px;line-height:1.35;color:#c9d1d9;margin-top:1px}
+  .flow{font-size:9.5px;line-height:1.35;color:#c9d1d9;margin-top:3px;padding-top:3px;border-top:1px dashed #21262d}
+  .flow b{color:#e6edf3}
+  .dis{color:#f0616d}.acc{color:#3fb950}.cav{color:#8b949e}
+  .zh{display:flex;justify-content:space-between;font-size:9.5px;color:#8b949e;font-weight:700;letter-spacing:.3px;margin:2px 2px 3px}
+  .colh{display:grid;grid-template-columns:1fr 26px;font-size:7px;letter-spacing:.3px;text-transform:uppercase;color:#6e7681;font-weight:800;padding:0 4px 2px}
+  .zplay{background:rgba(63,185,80,.05);border-left:2px solid #3fb950;border-radius:2px;padding:3px 4px 4px 6px;margin-bottom:2px}
+  .r1{display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap}
+  .stk{font-weight:800}.kg{color:#f2cc60}.role{color:#8b949e;font-weight:700}
+  .tag{font-size:8px;font-weight:800;border-radius:8px;padding:0 4px;white-space:nowrap;border:1px solid}
+  .tpb{color:#f0616d;border-color:#f0616d}.ttgt{color:#f0616d;border-color:#f0616d}.tnext{color:#8b949e;border-color:#8b949e}
+  .tflow{font-size:8px;font-weight:700;border-radius:3px;padding:0 3px}
+  .fdis{color:#f0616d;background:rgba(240,97,109,.12)}.facc{color:#3fb950;background:rgba(63,185,80,.12)}.fhold{color:#8b949e;background:rgba(139,152,169,.12)}
+  .src{font-size:7.5px;color:#a371f7;font-weight:800;letter-spacing:.3px}
+  .grade{margin-left:auto;font-weight:800;font-size:10px;padding:0 5px;border-radius:3px}
+  .gA{color:#3fb950;background:rgba(63,185,80,.15)}.gB{color:#58a6ff;background:rgba(88,166,255,.15)}.gCc{color:#d29922;background:rgba(210,153,34,.15)}
+  .r2{display:flex;align-items:center;gap:6px;font-size:9.5px;color:#8b949e;margin-top:3px;white-space:nowrap}
+  .dec{color:#e6edf3;font-weight:600}.frame{color:#6e7681}
+  .z{padding:3px 2px;border-bottom:1px solid #12161c}
+  .div{text-align:center;color:#6e7681;font-size:9px;margin:3px 0;letter-spacing:.5px}
+  .rx{font-weight:800;color:#3fb950}
+  .note{font-size:9.5px;color:#8b949e;line-height:1.55;max-width:330px}
+  .note b{color:#c9d1d9}
+  .tl{font-size:9.5px;color:#c9d1d9;line-height:1.5;max-width:330px}
+  .tl .t{color:#6e7681;display:inline-block;width:44px}
+  .legend{font-size:9px;color:#8b949e;margin-top:6px}
+</style></head><body>
+<div class="wrap">
+
+ <div>
+  <h1>A · 10:40 — the transfer starts (your first circle)</h1>
+  <p class="sub">768.5 bleeding while 769.5 and 767 build. No leg yet (SMA flat) — the flow line speaks anyway.</p>
+  <div class="panel">
+    <div class="steps">Steps <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div>
+    <div class="cluster"><div class="pill"><span class="lab sup">★SUP</span><span class="val sup">767</span><span class="pct">41%</span></div><div class="pill king"><span class="kgold">👑 768</span><span class="pct">−1↓ · –</span></div><div class="pill"><span class="lab res">★RES</span><span class="val res">769.5</span><span class="pct src">SPXW 33%</span></div></div>
+    <div class="read">
+      <div class="rh"><span class="side">→ SIDEWAYS</span><span class="gC">C</span><span class="sb">mid</span></div>
+      <div class="rt">No trend — no lean; rotation likely.</div>
+      <div class="flow"><b>Flow:</b> <span class="dis">768.5 dissipating</span>; <span class="acc">769.5 and 767 accumulating</span> — range widening to 767–769.5.</div>
+    </div>
+    <div class="zh"><span>⚡ Nodes on watch</span></div>
+    <div class="colh"><span>Zone</span><span style="text-align:right">Grade</span></div>
+    <div class="zplay">
+      <div class="r1"><span style="color:#f2cc60">●</span><span class="stk kg">768</span><span class="role kg">King</span><span class="tflow fhold">holding</span><span class="grade gB">B</span></div>
+      <div class="r2"><span>S✓ Q✗ V✗</span><span style="color:#21262d">·</span><span class="dec">watching — not in contact</span></div>
+    </div>
+    <div class="z"><div class="r1"><span style="color:#a371f7">◦</span><span class="stk">769.5</span><span class="src">SPXW</span><span class="role">Ceil</span><span class="tag tnext">next wall</span><span class="tflow facc">▲ acc</span><span class="grade gB">B</span></div></div>
+    <div class="z"><div class="r1"><span style="color:#f2cc60">◦</span><span class="stk">768.5</span><span class="src">SPXW</span><span class="role">Ceil</span><span class="tflow fdis">▼ dis</span><span class="grade gCc">C</span></div></div>
+    <div class="div">— SPY 768.32 —</div>
+    <div class="z"><div class="r1"><span style="color:#f2cc60">◦</span><span class="stk">767</span><span class="role">Flr</span><span class="tag tnext">next wall</span><span class="tflow facc">▲ acc</span><span class="grade gB">B</span></div></div>
+  </div>
+ </div>
+
+ <div>
+  <h1>B · 12:05 — the ceiling hands off (your second circle)</h1>
+  <p class="sub">769.5 rolling down to 769 while 767 has faded and 767 rebuilds below. Structure leans down; the leg engine takes the PB from the flow.</p>
+  <div class="panel">
+    <div class="steps">Steps <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div>
+    <div class="cluster"><div class="pill"><span class="lab sup">★SUP</span><span class="val sup">767</span><span class="pct">38%</span></div><div class="pill king"><span class="kgold">👑 768</span><span class="pct">−1↓ · –</span></div><div class="pill"><span class="lab res">★RES</span><span class="val res">769</span><span class="pct">45%</span></div></div>
+    <div class="read">
+      <div class="rh"><span class="bear">↓ Downtrend</span><span class="gC">C</span><span class="sb">mid</span></div>
+      <div class="rt">Downtrend. Rallying down to 768. 769.5 ceiling dissipating and rolling down to form pullback node at 769.</div>
+      <div class="flow"><b>Flow:</b> ceiling <span class="dis">769.5 ▼</span> → <span class="acc">769 ▲</span> · floor <span class="dis">767.5 ▼</span> → <span class="acc">767 ▲</span> — <b>both sides rolling down</b>. <span class="cav">SMA-50 flat: structure leads, trend unconfirmed.</span></div>
+    </div>
+    <div class="zh"><span>⚡ Nodes on watch</span></div>
+    <div class="colh"><span>Zone</span><span style="text-align:right">Grade</span></div>
+    <div class="z"><div class="r1"><span style="color:#a371f7">◦</span><span class="stk">769.5</span><span class="src">SPXW</span><span class="role">Ceil</span><span class="tflow fdis">▼ dis</span><span class="grade gCc">C</span></div></div>
+    <div class="zplay">
+      <div class="r1"><span style="color:#f2cc60">●</span><span class="stk">769</span><span class="role">Ceil</span><span class="tag tpb">PB</span><span class="tflow facc">▲ acc</span><span class="rx">✓↓</span><span class="grade gA">A</span></div>
+      <div class="r2"><span>S✓ Q✓ V✗</span><span style="color:#21262d">·</span><span class="dec">sell level</span><span class="frame">· tgt 768 · inval &gt;769.5</span></div>
+    </div>
+    <div class="div">— SPY 768.62 —</div>
+    <div class="z"><div class="r1"><span style="color:#f2cc60">◦</span><span class="stk kg">768</span><span class="role kg">King</span><span class="tag ttgt">TGT</span><span class="tflow fhold">holding</span><span class="grade gA">A</span></div></div>
+    <div class="z"><div class="r1"><span style="color:#f2cc60">◦</span><span class="stk">767</span><span class="role">Flr</span><span class="tag tnext">next wall</span><span class="tflow facc">▲ acc</span><span class="grade gB">B</span></div></div>
+  </div>
+ </div>
+
+ <div>
+  <h1>C · 12:45 — the roll continues to 767 (where price is going)</h1>
+  <p class="sub">769 has done its job; 767 is now the magnet below the King.</p>
+  <div class="panel">
+    <div class="steps">Steps <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div>
+    <div class="cluster"><div class="pill"><span class="lab sup">★SUP</span><span class="val sup">767</span><span class="pct">52%</span></div><div class="pill king"><span class="kgold">👑 768</span><span class="pct">−1↓ · –</span></div><div class="pill"><span class="lab res">★RES</span><span class="val res">769</span><span class="pct">40%</span></div></div>
+    <div class="read">
+      <div class="rh"><span class="bear">↓ Downtrend</span><span class="gC">C</span><span class="sb">mid</span></div>
+      <div class="rt">Deflected off 769. Rallying down to 767. Expect pullback node to form from 769 ceiling rolling down.</div>
+      <div class="flow"><b>Flow:</b> <span class="acc">767 accumulating</span> below the King — magnet moved down to 767. Ceiling 769 <span class="dis">▼</span>, 768.5 <span class="acc">▲</span> — next pullback node forming lower.</div>
+    </div>
+    <div class="zh"><span>⚡ Nodes on watch</span></div>
+    <div class="colh"><span>Zone</span><span style="text-align:right">Grade</span></div>
+    <div class="z"><div class="r1"><span style="color:#f2cc60">◦</span><span class="stk">769</span><span class="role">Ceil</span><span class="tag tpb">PB · 2nd lower</span><span class="tflow fdis">▼ dis</span><span class="grade gB">B</span></div></div>
+    <div class="z"><div class="r1"><span style="color:#a371f7">◦</span><span class="stk">768.5</span><span class="src">SPXW</span><span class="role">Ceil</span><span class="tag tnext">next PB</span><span class="tflow facc">▲ acc</span><span class="grade gB">B</span></div></div>
+    <div class="zplay">
+      <div class="r1"><span style="color:#f2cc60">●</span><span class="stk kg">768</span><span class="role kg">King</span><span class="tflow fhold">holding</span><span class="grade gB">B</span></div>
+      <div class="r2"><span>S✓ Q✓ V✗</span><span style="color:#21262d">·</span><span class="dec">through — continuation</span><span class="frame">· tgt 767</span></div>
+    </div>
+    <div class="div">— SPY 767.61 —</div>
+    <div class="z"><div class="r1"><span style="color:#f2cc60">◦</span><span class="stk">767</span><span class="role">Flr</span><span class="tag ttgt">TGT</span><span class="tflow facc">▲ acc</span><span class="grade gA">A</span></div></div>
+  </div>
+ </div>
+
+ <div class="note">
+  <h1>What is new</h1>
+  <p><b>Flow line in the READ</b> — one sentence, always on, both sides, independent of the SMA: which nodes are dissipating (▼ red), which are accumulating (▲ green), and what that means (range widening · ceiling rolling down · magnet moved). When the leg engine is active its sentence still leads; the flow line sits under it. When there is no leg, the flow line is the structure read.</p>
+  <p><b>SPXW-derived lanes on the board</b> — the 769.5 / 767.7 / 768.5 nodes from the feed's <code>derived</code> block, tagged <span class="src">SPXW</span> in purple-dot rows, graded and taggable like SPY strikes. This is where the rolls you circled live.</p>
+  <p><b>Flow chip on every row</b> — <span class="tflow facc">▲ acc</span> / <span class="tflow fdis">▼ dis</span> / <span class="tflow fhold">holding</span>, from the node's strength trajectory (m15 + session peak, and drop-out from the feed counted as dissipation).</p>
+  <p><b>Direction</b> — both sides rolling the same way becomes a structural roll input; when it disagrees with the SMA the READ says which is leading ("SMA-50 flat: structure leads, trend unconfirmed"). Recorded as <code>flow.transfer</code> / <code>flow.lean</code> for the review.</p>
+  <p class="legend">Hovers stay question-first: Flow line → "What is the structure doing?" · chip → "Is this node building or bleeding?" · SPXW tag → "Which book is this from?"</p>
+  <h1 style="margin-top:12px">Today, replayed</h1>
+  <p class="tl"><span class="t">10:40</span>Flow: 768.5 dissipating; 769.5 and 767 accumulating — range widening.<br><span class="t">11:30</span>Flow: 769.5 holding/strengthening; 767 dissipating — floor thinning, watch 768.<br><span class="t">12:05</span>Downtrend. Rallying down to 768. 769.5 ceiling dissipating and rolling down to form pullback node at 769.<br><span class="t">12:20</span>Resistance pullback node formed at 769. ✓↓ Deflection expected to target 768.<br><span class="t">12:45</span>Flow: 767 accumulating below the King — magnet moved down to 767.</p>
+ </div>
+
+</div></body></html>

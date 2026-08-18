@@ -1,3 +1,5 @@
+global.FEAT_ARCHIVE={};   // (v11.0) IDB archive of resolved records (empty in the harness)
+global.GPTS_VERSION='11.0';
 // (v10.50) LAYOUT — single-column dashboard. The two-column King-console layout was
 // retired (v10.44); this test was stale. Updated to the current render: header cluster →
 // drift → READ → deflZonesBlock (the single ladder) → footer. deflectionBlock() is RETIRED
@@ -35,7 +37,7 @@ ok(/function deflectionBlock/.test(src),             'deflectionBlock kept defin
 var foot=grab('feedStatusHtml');
 ok(/data-pipe="'\+sg\.key\+'"/.test(foot) && /pipeStages\(\)/.test(foot) && /pipeColor\(sg\.state\)/.test(foot),
    'footer renders the pipeStages() strip with a coloured dot per stage');
-ok(/>v10\.57<\/span>/.test(foot),                  'footer keeps the version at the right (10.56)');
+ok(/>v'\+GPTS_VERSION\+'<\/span>/.test(foot),   'footer keeps the version at the right (from GPTS_VERSION, v11.0)');
 ok(/white-space:nowrap/.test(foot),                 'footer strip is nowrap \u2014 one line at 250px');
 ok(/\uD83D\uDCBE/.test(foot) && /\uD83D\uDCC1/.test(foot), 'footer keeps the export and folder-pick buttons');
 ok(/feedLive\?'live':'waiting'/.test(foot) && /vexLive\?'capturing':'waiting'/.test(foot),

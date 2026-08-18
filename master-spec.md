@@ -5,6 +5,37 @@
 **Prepared:** 2026-08-09  
 **Purpose:** this document is meant to let any LLM resume the project safely, accurately, and without inventing missing code or assumptions.
 
+## §0. THE STACK (v11.0 LOCKDOWN — read this first)
+v11.0 (2026-08-18) is the LOCKDOWN release. The whole app was audited line by line (design/ARCHITECTURE-AUDIT.md);
+the verdict was that the core is sound, that it had grown by accretion (~1,600 unreachable lines, the same idea
+computed several ways, a learning loop that had never closed end to end), and that the cure was not a rewrite but
+one stack, one reading per idea, a trustworthy recording path, and then a lock. Every function in `v10.js` now
+belongs to exactly one of these eight layers; each layer feeds the next; anything that did not fit was merged into
+the row it serves or retired with its data preserved.
+
+| # | Layer | Purpose | Functions | Face |
+|---|---|---|---|---|
+| 0 | **FEED + TAPE** | capture the gamma/vanna feeds (SPY, QQQ; the SPXW-derived lanes inside them), read the tape, reconcile the King | feed observer, `extractWalls`, `tapeMap`, `tapeSync` | sync banner only |
+| 1 | **NODE LEDGER** (new) | every node's life — birth, growth, peak, decay, gone — plus touches, reactions and influence, for SPY strikes AND SPXW lanes; the ONE accumulation reading | `feedSeriesAll`, `ledgerBuild`, `nodeLedger`, `ledgerExport` | acm/dec chip, SPXW tag, node hover, Analysis ⑦ |
+| 2 | **STRUCTURE** | magnets, pullback nodes, rolls, handoffs, lean — the Map and the leg engine reading the ledger with one threshold set (ACM_UP / ACM_DN / ACM_DROP) | `nodeFlow`, `mapNodeState`, `legStep`, NODEHIST | Map line, leg tags, ⚑ banner |
+| 3 | **DIRECTION** | the SMA-50 five-state confirms or diverges from structure; caps; grade | `trendVerdict`, `directionGrade` | READ head + sentence |
+| 4 | **SETUP** | node in play, latched ✓/✗ trigger, frame (tgt/inval, R:R gate), S/Q/V, decision cell | `inPlayZone`, `deflTrigger`, `tradeFrame`, `decisionCell`, `nodeGrade` | in-play card, Nodes on watch |
+| 5 | **OUTCOME + LEARNING** | one recording path for every claim (FEATURES), forward outcomes, effN, rules v2, promotion/kill | features registry, recorder, IDB repo, rules/promo | Analysis ①–⑤, Testing |
+| 6 | **REVIEW** | nightly log + weekly review written by the LLM from `data/<day>.json`, read back into the panel | brief, skill, `pipeCheck` | Analysis ⑥ REVIEW, footer dots |
+| 7 | **VOICE** | the dashboard says what layers 1–4 concluded, once, in the user's words; nothing else | render blocks | everything visible |
+
+**Standing rules (unchanged, restated because they now bind harder):** the tool is DESCRIPTIVE only — never entries,
+stops, sizing, R:R or P&L. Ask before code and before creating files; mockup first. Git is the truth (the Drive
+folder is a stale mirror). Every feature auto-enrolls: one FEATURES entry = recorded per bar, scored with n, in the
+question queue and rules.json. No % without n, anywhere. Anything unproven stays in SHADOW (recorded, non-voting,
+off the face) until the promotion bar clears it — drift is the standing example. **LOCKDOWN:** from v11.0 no new
+feature is built until at least 20 sessions of data exist; only fixes ship. The job now is to collect and to measure.
+
+**Where to read next.** §24 — the leg model (magnets, pullback nodes, rolls, handoff, the READ voice, the latched
+trigger). §25 — Nodes on watch and drift in shadow. §26 — the Map (node flow, SPXW lanes, structure leads).
+§27 — the node ledger (v11.0, layer 1). §28 — the learning-path fixes (v11.0) that make the recorded data
+trustworthy from tomorrow on. The audit itself is design/ARCHITECTURE-AUDIT.md §0–3.
+
 ## 1. Project intent
 This project is a descriptive market-structure reader for Skylit Atlas. It reads GEX-related structure, accumulation, regime context, and setup lifecycle, then presents that information in a structural/observational panel.
 
@@ -933,3 +964,80 @@ handoff), King, nearest meaningful wall above/below (`nodesOnWatch`, cap 4, roll
 GEX/VEX drift is in SHADOW mode (`DRIFT_LIVE=false`): off the face, non-voting, still recorded (`dir.drift`,
 shadow `dir.relation`) — returns only when the review clears the promotion bar. Rule restated: nothing unproven
 gets a voice on the dashboard.
+
+## 26. THE MAP — node flow (v10.58, user-directed 2026-08-18)
+"You must build the ability to detect this rolling feature to see how as nodes dissipate, other nodes accumulate
+and start influencing price." Always on, both sides of price, independent of the SMA (the SMA confirms, it does
+not gate). Board = SPY strikes + the SPXW-derived lanes from the feed's `derived` block, each book normalised to
+its OWN King (`extractWalls`; rows carry `src`); history = the feed's own per-minute snapshots (`feedSeriesAll`),
+a node that drops out reads 0 (dissipation, not missing data); state per node = acm (m15 ≥ +8%) / dec (m15 ≤ −8%
+or ≥25% off session peak) / gone / holding (`mapNodeState`); transfers = dec node + acm neighbour on the same side
+(roll direction = where the strength went), widening = dec node between acm nodes on both sides, lean = both
+sides rolling the same way (`mapTransfersOf`, `nodeFlow`). Face: the "Map:" line under the READ (green acm / red
+dec, plain words), an acm/dec/holding chip and an SPXW tag on every watch row. Structure LEADS the leg engine and
+the direction spine (relation `structure-leads`, capped C) when the five-state has no trend; the READ says
+"structure leads, trend unconfirmed". Recorded as `map.transfer` / `map.lean` (rules.json 55 ids), reviewed
+nightly; promotion decides whether the Map ever votes above C.
+
+## 27. THE NODE LEDGER (v11.0) — layer 1, the one accumulation reading
+The ledger is the base layer under the Map and the leg engine: for every node the feed has ever shown this session,
+its whole life and what price did around it. `ledgerBuild(all, candles)` is pure (replayable, pinned by
+test_node_ledger); `nodeLedger(sym)` feeds it `feedSeriesAll(sym)` — the feed's own per-minute session snapshots for
+every strike in both books, SPY strikes AND the SPXW-derived lanes (rows carry `src`; drop-out reads 0, not
+"missing") — plus the closed candles, cached per closed bar. A strike whose session peak never reached PB_MIN_PCT
+is not a node and is not in the ledger.
+
+**Life.** Per node: `first` (born — first sample above 0), `peak` / `peakT` (the session high in %King and when),
+`cur` (now), `state` acm | dec | gone | hold from the same thresholds the Map uses (`ledgerStateAt` →
+`mapNodeState`: m15 ≥ +ACM_UP = acm, m15 ≤ ACM_DN or ≥ ACM_DROP off peak = dec, dropped out = gone), `m15`,
+`fromPeak`, and `life {build, after, goneFor}` in minutes: first→peak, peak→last seen, last seen→now.
+
+**Touches.** Every closed bar that reached the node's zone (DEFLECT_ZONE) is a touch, and the reaction is decided by
+the side the bar OPENED on: opened below, the node is resistance — the high reached the zone; a close back below the
+zone is `deflect`, a close above it is `through`, anything else `stall`. Opened above is the mirror. Opened inside the
+zone means price is sitting on it — a close outside either way is `through`, not a deflection. Each touch records
+`{t, bar, react, side, state}` where `state` is the node's ledger state AT the touch, so acm touches and dec touches
+can be compared. Counts `deflect / through / stall` per node.
+
+**Influence.** For every closed bar while the node was acm: did |price − node| shrink over the next 5 bars (`infl.acmN`,
+`infl.acmToward`)? While dec or gone: did it grow (`infl.decN`, `infl.decAway`)? These are the two questions the
+ledger exists to answer, pooled across nodes: does accumulation pull price, and does dissipation release it.
+
+**Recorded.** `ledger.touch` (FEATURES, phase zones): when the in-play node is touched, the record carries the
+ledger state at the touch (acm | dec | gone | hold), src/derived, peak/cur/fromPeak, touches so far, holdDir and the
+frame; the outcome is tgt-before-inval (or DIR_PTS the hold way). Its question — `acm_deflects_more`: do
+accumulating nodes deflect more reliably than dissipating ones? If yes the acm/dec chip is a deflection filter; if
+not it is decoration. Non-voting.
+
+**Exported.** The day file carries `ledger[SYM]` (`ledgerExport`): per node k, src, first, peak, peakT, cur, state,
+m15, fromPeak, gone, life, deflect/through/stall counts, the last 12 touches, and `infl`. The nightly review pools
+these across sessions (docs/LLM-NIGHTLY-BRIEF.md § LAYER 1).
+
+**Face.** Analysis ⑦ NODES: one row per node (SPXW lanes tagged, price line drawn between rows), life · now ·
+touch d/t/s · toward% (n) · away% (n), and under the table the two pooled questions with n — dashes until n ≥ 5,
+"today only" stated. The node hover on Nodes on watch reads `ledgerLifeText`. `__gptsDebug.ledger(sym)`.
+`accumCanon` reads the feed series first (the tape strip is only a faster confirm); `mapNodeState`,
+`legNodeDissipating/Building` and the handoff read the same states.
+
+## 28. LEARNING PATH FIXES (v11.0) — why data recorded from tomorrow on can be trusted
+The audit found the loop had never closed: no day file had reached `data/`, the nightly output was never read back,
+two user-priority outcomes resolved as false misses after a reload, and the promotion bar was structurally
+unclearable once repo history exceeded the localStorage window. v11.0 step 1 fixed the path before anything else
+was touched. `LEG_PB_LOG` is persisted per day by the recorder, and outcomes that depend on a log that is absent
+resolve to **null**, never 0 — a reload no longer manufactures misses. Resolved feature records are mirrored to
+IndexedDB per day (`repoUpsertFeat` → `FEAT_ARCHIVE`, loaded at boot, merged by `featStats`) so local truth
+outlives localStorage. `proposalClearsBar` no longer requires the reviewer's n to be within 20% of the local n
+(a self-report test that could not be met once history outgrew the window); the bar is local eff n ≥ 20, three
+walk-forward sessions, no regime flip. `dirFactorStats` falls back to `dirNum` for the vote, so handoff / trigger
+/ pbDetect rows get a vote split; `leg.roll` records the vote the grade actually used. `ruleLocalRate` maps the
+`node.tap.*` / `node.pol.*` / `node.rocDay.*` sub-rules and `kill.*` to their local slices (`deflStats` / their
+feature key) so they are measured here, not only by the reviewer. The READ sentence, its voiceId, leg dir/phase,
+dirSrc and the Map line are recorded on the `dir` feature (`LAST_READ` → `read{}`), so "READ vs direction" is
+measurable per bar. `pipeCheck` also fetches `learning/log/<day>.json` and Analysis ⑥ REVIEW renders the nightly
+log (headline/brief line, contradictions, factors, questions) beside the weekly. One export path (`data/<date>.json`,
+auto-export success flips the save banner), one version constant (`GPTS_VERSION`, read by header, footer, export
+and logs), `resolveFeatureOutcomes` once per tick, click delegation wired before the futures early-return.
+Merges: `drift` → `dir.drift`, `roll` → `dir.kingRoll` (one record each); one accumulation threshold set
+(`ACM_UP=8`, `ACM_DN=−8`, `ACM_DROP=25`) shared by ledger, Map, leg engine and handoff; the handoff reads
+`mapNodeState`, so it fires on the same evidence as a Map transfer; `accumCanon` reads the feed series first.
+Nothing here adds a claim to the face — it makes the claims already there countable.

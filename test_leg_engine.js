@@ -23,7 +23,8 @@ global.LEG_ROLL_SIGNAL=2; global.LEG_ROLL_CONFIRM=3;
 // (v10.56) the handoff thresholds + the contact band the engine reads for atPB / magnetReached
 global.HANDOFF_DEC=-8; global.HANDOFF_DROP=25; global.HANDOFF_ACM=8; global.DEFLECT_ZONE=0.50;
 global.FUTMODE={ chart:'SPY', fam:null, underlying:'SPY', r:1, live:true, approx:false, ok:true };
-eval(['mul','fmtNum','fmtFut','dispIsFut','dispR','futMark','fmtLvl',
+global.MAP_ACM=8; global.MAP_DEC=-8; global.MAP_DROP=25;   // (v11.0) one threshold set; the handoff reads mapNodeState
+eval(['mapNodeState','mul','fmtNum','fmtFut','dispIsFut','dispR','futMark','fmtLvl',
       'legStepWord','legNodeDissipating','legNodeBuilding','legBlank','legClone','legStep',
       'legVoiceRef','legVoice','legSentence','legDecisionLine','legZoneTag',
       'nodeHistRow','rollRun'].map(ex).join('\n'));
@@ -99,7 +100,7 @@ ok(T[3].phase==='RLY' && T[3].pbDetected.k===776,
 ok(legDecisionLine(S,{k:775})==='sell-side deflection · tgt magnet 773 · inval above PB 775',
    '1y the decision line at the pullback node', legDecisionLine(S,{k:775}));
 ok(legZoneTag(S,{k:775}).lab==='PB · 3rd lower', '1z1 the PB row carries its roll step', legZoneTag(S,{k:775}).lab);
-ok(legZoneTag(S,{k:773}).lab==='MAG · target', '1z2 the magnet row is the target', legZoneTag(S,{k:773}).lab);
+ok(legZoneTag(S,{k:773}).lab==='TGT', '1z2 the magnet row is the target', legZoneTag(S,{k:773}).lab);
 ok(legZoneTag(S,{k:776}).lab==='rolled off' && legZoneTag(S,{k:776}).dim===true,
    '1z3 a rolled-off ceiling is marked and dimmed', legZoneTag(S,{k:776}).lab);
 

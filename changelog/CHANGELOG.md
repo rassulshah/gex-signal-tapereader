@@ -1,3 +1,95 @@
+## v11.0 — 2026-08-18 — LOCKDOWN: the stack, the node ledger, the learning path made trustworthy, −1,170 lines of dead code
+
+**Why.** A whole-file audit (design/ARCHITECTURE-AUDIT.md — four independent line-range passes over 14,369 lines
+and 664 functions, every block's callers grepped) reached one verdict: the core is sound — feed capture, tape sync
+gate, SMA five-state, node map, leg engine, latched trigger, Map, FEATURES registry, effN/promotion, exporter — but
+the app had grown by accretion. ~1,600 lines were unreachable from `render()`/`tick()`; the same idea was computed
+several ways (accumulation ≥6 readings, direction tilt 4, King movement 3, node identity ~10, handoff ≡ Map
+transfer); and the learning loop had never closed end to end: no day file had reached `data/`, the nightly output
+was never read back, two user-priority outcomes resolved as false misses after a reload, and the promotion bar was
+structurally unclearable once repo history exceeded the localStorage window. Not a reason to rewrite — a reason to
+fix the recording path first, add the missing base layer, collapse duplicates to one reading each, remove the dead
+code, rewrite the docs around one stack, and lock.
+
+**What.** The stack (master-spec §0, read first): 0 FEED+TAPE · 1 NODE LEDGER (new) · 2 STRUCTURE (Map, leg
+engine, one threshold set) · 3 DIRECTION · 4 SETUP · 5 OUTCOME+LEARNING · 6 REVIEW · 7 VOICE. Every function
+belongs to exactly one row. **The node ledger (§27):** `ledgerBuild` (pure) / `nodeLedger(sym)` from
+`feedSeriesAll` — the feed's own per-minute session snapshots for SPY strikes AND the SPXW-derived lanes — plus
+closed candles: per node its life (born / peak / now / gone, `life{build,after,goneFor}`), state acm|dec|gone|hold
+from the same thresholds the Map uses, every touch with its reaction (deflect / through / stall, decided by the side
+the bar OPENED on and the DEFLECT_ZONE; the node's state AT the touch kept), and influence (while acm did price come
+toward it over 5 bars, while dec did it move away). Recorded as `ledger.touch` (question: do accumulating nodes
+deflect more than dissipating ones — if yes the acm/dec chip is a filter, if not decoration), exported as `ledger`,
+shown in Analysis ⑦ NODES (per node life · now · touch d/t/s · toward% (n) · away% (n), the two pooled questions
+under the table, dashes until n≥5) and in the node hover. `accumCanon` reads the feed series first; the tape strip is
+only a faster confirm.
+
+**Fixes (the learning path, §28 — this is what "collect data" depends on).** `LEG_PB_LOG` persisted per day;
+outcomes that depend on an absent log resolve **null**, never 0. Resolved feature records mirrored to IndexedDB
+per day (`repoUpsertFeat` → `FEAT_ARCHIVE`, merged by `featStats`) so local truth outlives localStorage.
+`proposalClearsBar` drops the "reviewer n within 20% of local n" self-report test — the bar is local eff n≥20,
+3 walk-forward sessions, no regime flip. `dirFactorStats` falls back to `dirNum` for the vote (handoff / trigger /
+pbDetect rows get a vote split); `leg.roll` records the vote the grade actually used. `ruleLocalRate` maps
+`node.tap.*` / `node.pol.*` / `node.rocDay.*` to the ④ DEFLECTIONS slices and `kill.*` to its feature key
+(`deflStats`). The READ sentence + voiceId + leg dir/phase + dirSrc + Map line are recorded on the `dir` feature
+(`LAST_READ` → `read{}`), so READ-vs-direction is measurable per bar. `pipeCheck` also fetches
+`learning/log/<day>.json`; Analysis ⑥ REVIEW renders the nightly (headline/brief, contradictions, factors,
+questions) beside the weekly v2 fields. One export path (`data/<date>.json`; auto-export success flips the save
+banner). One version constant `GPTS_VERSION` (header, footer, export, logs). `resolveFeatureOutcomes` once per
+tick. Click delegation wired before the futures early-return — the Dashboard tab from Testing works again.
+
+**Merges.** `drift` → `dir.drift`, `roll` → `dir.kingRoll` (one record each; `defl_ant` / `reaction` stay SHADOW).
+One accumulation threshold set — `ACM_UP=8`, `ACM_DN=−8`, `ACM_DROP=25` — shared by ledger, Map, leg engine and
+handoff (`ACM_BAND` / `HANDOFF_*` / `MAP_*` gone); the leg engine's `to` node must actually be building, not merely
+≥PB_MIN_PCT. The handoff reads `mapNodeState`, so it fires on the same evidence as a Map transfer (`leg.handoff`
+keeps the lead-time claim, `map.transfer` the price claim). `accumBlock` → `nodeMapBlock`; `_frameRecOf` once per
+bar; `nodeMapModel` memoised per poll. **Analysis tab:** ① HEADLINE · ② WHAT CHANGED = PROMOTED only (proposals,
+challengers, kill list live in Testing ②③④) · ③ DIRECTION FACTORS · ④ DEFLECTIONS · ⑤ YOUR CALLS once (out of ⊕) ·
+⑥ REVIEW nightly + weekly · ⑦ NODES (ledger); the pipeline health moved to the footer dots + hover.
+
+**Removed (−1,170 lines; data preserved where any; PARKED markers where a test still pins the code).**
+setupGrade; the debug-only reader / setupHealth / pathQuality / nodeQuality / absAccumStateFor; gridFor / signalGrid /
+combinedGrid + tips; readLine; structuralReadHtml + structuralBox / structuralWarn; readBlock; confluenceStrip /
+confluenceThesis; accumData; recordSession / gpts_stats_v7; exKingInfo; the legacy deflStats; LOGCACHE / syncLog
+reader; acmChipHtml; breakoutConviction, trendIsUpish/Dnish, trendCodeOf, saveLog/LOG, outOfSyncBlock,
+parseKingDollarSign, firstStrengthPct, countBarsSince, stageTimeline, accTrajHtml / histDetail, gatekeeperBlock /
+triIndexNote, nodeTypeTag, deflectionBlock, nodeMapSentence(+Html), _nmRole/_nmB/_nmAcc, studyCite / studyTag,
+dispVal, dirColor, stepIcon, ruleGet, _escHtml, tapCol, gradeChipHtml, activityPillHtml, zoneGGlyph,
+readOddsAllowed, the identity gradeDisp, timelineSvg, convergenceSvg, _kpi, _accBar, the analysisStats body,
+testingInsights prose, projScorecardHtml / projRecs, the write-only SMA_CONT_FLAG / LASTNODEMAP / PREVKING / FUT +
+lastCloseOf; the trendBadgeHtml duplicate. The kingBlock chain (kingSparkline, kingPathSigMoves, kingReadHtml,
+projChartHtml, projTaperHalf, sessionBoundsCT) and the other test-pinned pieces are kept as PARKED, not live.
+NODEHIST is now the ledger's touch source (no longer write-only).
+
+**Docs.** master-spec §0 (the stack + standing rules + LOCKDOWN), §27 (ledger), §28 (learning-path fixes);
+docs/LLM-NIGHTLY-BRIEF.md reorganised by layer with LAYER 1 — NODE LEDGER, the merges, `dir.read`, the nightly
+read-back fields, the local bar; REVIEW-ACCEPTANCE (f); skill v11.0 line; resume note.
+
+**LOCKDOWN.** No new features until ≥20 sessions of data exist; only fixes ship. The review's job for those
+sessions is measurement and proposals.
+
+**Tests:** test_node_ledger (20) new; suite green except the 4 known-stale.
+
+## v10.58 — 2026-08-18 — THE MAP: node flow (dissipate → accumulate → influence), SPXW lanes on the board
+
+**Why.** Two rolls the user circled today (768.5 dying while 769.5 and 767 built at 10:40; the ceiling handing off
+769.5 → 769 → 767 from 12:05) were invisible to the engine: (1) the SPXW-derived lanes (the diamonds on the chart:
+7715 → 769.5, 7690 → 767 at today's ratio) were scaled against the SPY King magnitude — 0.7% — and dropped under
+MIN_STRENGTH; (2) a node that dissipates DROPS OUT of the feed's top-N list and "absent" was read as "no data";
+(3) the handoff only ran inside a leg, and the leg only ran when the SMA-50 said trend.
+
+**Fixes.** `extractWalls` normalises each derived book to its own King and tags rows `src:'SPXW'` (integer
+strikes stay native). `feedSeriesAll` reads the whole session's per-minute snapshots straight off the feed for
+every strike in both books, drop-out = 0; `accumCanon` falls back to it when there is no tape strip (all
+SPXW lanes). `nodeFlow` (the Map): per-node acm / dec / gone / holding, transfers on both sides, widening, lean —
+always on, independent of the SMA. **Face:** "Map:" line under the READ in the user's words (green acm / red dec,
+no arrows), acm/dec/holding chip and SPXW tag on every Nodes-on-watch row. **Structure leads:** when the five-state
+has no trend the Map lean drives the leg engine (dirSrc map) and the direction spine (relation `structure-leads`,
+capped C); the READ adds "SMA-50 has no trend: structure leads, trend unconfirmed" — or "structure rolling against
+the trend — caution" when they disagree. **Recorded:** `map.transfer` (did price move the roll's way) and
+`map.lean` (does the lean predict / lead the SMA), rules.json 55, LLM brief, master-spec §26.
+**Tests:** test_node_map (37). Suite green except the 4 known-stale.
+
 ## v10.57 — 2026-08-18 — NODES ON WATCH · drift to SHADOW mode · Dashboard-tab fix
 
 **Nodes on watch** (was "Deflection zones"). User: "only nodes in play and relevant nodes." Under the in-play

@@ -55,7 +55,9 @@ load instruction. Then read, in order:
    - Layer 4 (accumulation): Building/Steady/Fading detection.
    - Layer 5 (recorder): IndexedDB store, daily `data/YYYY-MM-DD.json` export.
    - Layer 6–7 (render): one `render()`, block fns (`kingHeaderBlock`, `syncBannerHtml`,
-     `readBlock44`, `nodeMapSentence`, `pickEdge`, `deflectionBlock`).
+     the READ block, `nodeMapBlock`, the in-play card / Nodes on watch, Analysis/Testing tabs).
+   - (v11.0) The canonical layer map is now master-spec §0 (eight layers, one function per row);
+     the list above is the reading order, §0 is the truth. Layer 1 = `nodeLedger` (§27).
    - VERIFY integrity: exactly one `render()`, final line `})();`, `@version` consistent in all
      THREE spots (header ~L4, `part1 loaded` console.log, footer feed), byte count sane.
 5. **Skylit platform docs** (the framework the code implements):
@@ -219,6 +221,17 @@ an overall one-liner. Never inflate; unverified-live code stays "candidate".
 - v10.56 (2026-08-18): READ voice = user's 15 sentences (`legVoice`, master-spec §24.2, test_read_voice_leg);
   HANDOFF detection (`legStep.handoff`, §24.1); latched ✓/✗ trigger (`deflTriggerStep`, §24.3, never toggles);
   the review must evaluate `leg.handoff` (lead time) and `defl.trigger` (✓ hit-rate) with n — REVIEW-ACCEPTANCE (e).
+- **v11.0 (2026-08-18): LOCKDOWN release.** The app is one eight-layer stack — master-spec §0 (read it first: Feed+Tape ·
+  Node Ledger · Structure · Direction · Setup · Outcome+Learning · Review · Voice; every function belongs to one row).
+  New layer 1 = the node ledger (§27: `ledgerBuild`/`nodeLedger`, life · touches · influence for SPY strikes AND SPXW
+  lanes, `ledger.touch` feature, export field `ledger`, Analysis ⑦ NODES). The learning path was made trustworthy
+  (§28: LEG_PB_LOG persisted, null-not-zero outcomes, IDB FEAT_ARCHIVE, local promotion bar, READ recorded on `dir`,
+  nightly log read back into ⑥, one export path, one GPTS_VERSION, `drift`→`dir.drift`, `roll`→`dir.kingRoll`, one
+  ACM threshold set). −1,170 lines of dead code removed (PARKED markers where a test still pins). The review now reads
+  `ledger` (LAYER 1 in the brief; REVIEW-ACCEPTANCE (f)) and `dir.read` (READ vs direction per bar).
+  **LOCKDOWN rule: no new features until ≥20 sessions of data exist — only fixes ship.** Standing rules, reinforced:
+  ask before code AND before creating any file; mockup first; descriptive-only; git = truth; every feature auto-enrolls;
+  no % without n; ship runnable installers (the self-contained .bat) and ALWAYS include the Tampermonkey raw URL.
 - MODEL ROUTING (user-mandated 2026-08-15): delegate mechanical / well-specified work (code edits to
   a clear spec, running tests, packaging installers, search, scraping, formatting) to cheaper models
   via the Agent tool; reserve the main model for novel design, statistical interpretation, deciding

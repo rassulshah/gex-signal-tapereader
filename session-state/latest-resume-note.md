@@ -1,3 +1,28 @@
+# RESUME NOTE — 2026-08-18 (late) — v11.0 LOCKDOWN BUILT: the stack · node ledger · learning path fixed · dead code out · NEXT = collect ≥20 sessions
+
+**Baseline v11.0** (footer v11.0 via the one `GPTS_VERSION`). Audit design/ARCHITECTURE-AUDIT.md §0–3 → four
+shippable steps, all committed: (1) learning-path fixes (LEG_PB_LOG persisted, null-not-zero, IDB FEAT_ARCHIVE,
+local promotion bar, dirNum vote fallback, READ recorded on `dir.read`, nightly log read back into ⑥, one export
+path, one version); (2) the node ledger — `ledgerBuild`/`nodeLedger`, `ledger.touch`, export `ledger`, Analysis ⑦
+NODES, accumCanon feed-primary; (3) merges — `drift`→`dir.drift`, `roll`→`dir.kingRoll`, one ACM threshold set,
+handoff reads `mapNodeState`, building must build; (4) −1,170 lines of dead code, PARKED markers where a test pins.
+Docs rewritten around the stack: master-spec §0 / §27 / §28, LLM brief by layer (LAYER 1 — NODE LEDGER),
+REVIEW-ACCEPTANCE (f), skill, changelog. Tests: test_node_ledger (20) new; suite green except the 4 known-stale.
+
+**Verify next open (live):** Analysis ⑦ NODES fills within minutes of the open (SPXW lanes tagged, price line
+between rows, toward/away columns show n); `ledger.touch` records appear when the in-play node is touched (state
+acm|dec|gone|hold on the record, `__gptsDebug.ledger('SPY')` non-empty); ⑥ REVIEW shows the nightly log line once
+one exists at learning/log/<day>.json (headline · contradictions · factors · questions); footer dots green for
+export → data/<date>.json → nightly; the READ / Map / in-play card unchanged on the face; version 11.0 in header,
+footer and export.
+
+**THE RULE FROM HERE — LOCKDOWN.** No new features until ≥20 sessions of data exist. Only fixes ship. The
+work each day is: confirm the export landed, run the nightly (contract 1, by layer, ledger with n), and let the
+weekly pool. Standing rules unchanged: ask before code AND before creating files, mockup first, descriptive-only,
+git = truth, every feature auto-enrolls, no % without n, always send the Tampermonkey URL.
+
+---
+
 # RESUME NOTE — 2026-08-18 (evening) — v10.56 BUILT: READ voice · HANDOFF · latched ✓/✗ trigger · NEXT = live-verify
 
 **Baseline v10.56** (footer v10.56; releases/2026-08-18_voice-handoff-trigger_v10.56.user.js). Spec

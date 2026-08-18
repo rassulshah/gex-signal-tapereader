@@ -6,9 +6,9 @@
 const fs=require('fs'); const src=fs.readFileSync('./v10.js','utf8');
 function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.exec(src);if(!m)throw new Error('no fn '+n);let i=src.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}return src.slice(m.index,e+1);}
 global.PB_MIN_PCT=20; global.PB_LEG_PTS=0.5; global.PB_REACH=5; global.LEG_ROLL_SIGNAL=2; global.LEG_ROLL_CONFIRM=3;
-global.HANDOFF_DEC=-8; global.HANDOFF_DROP=25; global.HANDOFF_ACM=8; global.DEFLECT_ZONE=0.5;
+global.HANDOFF_DEC=-8; global.HANDOFF_DROP=25; global.HANDOFF_ACM=8; global.MAP_ACM=8; global.MAP_DEC=-8; global.MAP_DROP=25; global.DEFLECT_ZONE=0.5;
 global.dispIsFut=()=>false; global.futMark=()=>''; global.dispR=()=>1; global.fmtFut=String; function mul(a,b){return a/(1/b);} global.mul=mul;
-eval(['fmtNum','fmtLvl','legNodeDissipating','legNodeBuilding','legBlank','legClone','legStep','legVoiceRef','legVoice'].map(ex).join('\n'));
+eval(['fmtNum','fmtLvl','mapNodeState','legNodeDissipating','legNodeBuilding','legBlank','legClone','legStep','legVoiceRef','legVoice'].map(ex).join('\n'));
 let p=0,f=0;const ok=(n,c,g)=>{if(c){p++;console.log('PASS '+n);}else{f++;console.log('FAIL '+n+(g!==undefined?' -> '+JSON.stringify(g):''));}};
 
 // ---- pure predicates ----
@@ -16,7 +16,7 @@ ok('0a dissipating: m15 Dec <= HANDOFF_DEC', legNodeDissipating({k:771,pct:60,ac
 ok('0b dissipating: >= HANDOFF_DROP off session peak', legNodeDissipating({k:771,pct:40,pctPeak:60,acm15:0})===true);
 ok('0c NOT dissipating: small dec, near peak', legNodeDissipating({k:771,pct:58,pctPeak:60,acm15:-3})===false);
 ok('0d building: m15 Acm >= HANDOFF_ACM', legNodeBuilding({k:769,pct:15,acm15:10})===true);
-ok('0e building: pct >= PB_MIN_PCT even with flat acm', legNodeBuilding({k:769,pct:25,acm15:0})===true);
+ok('0e building: a Building-state node >= PB_MIN_PCT counts; a merely-large flat node does NOT (v11.0)', legNodeBuilding({k:769,pct:25,acm15:0,state:'Building'})===true && legNodeBuilding({k:769,pct:25,acm15:0})===false);
 ok('0f NOT building: thin and flat', legNodeBuilding({k:769,pct:10,acm15:2})===false);
 
 // ---- DOWNTREND: price 770, King 768 below. Old ceiling 771 (lastPB) bleeding, 769 building above price.
