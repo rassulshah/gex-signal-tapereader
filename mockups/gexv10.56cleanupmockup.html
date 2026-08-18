@@ -1,0 +1,111 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>v10.56 — cleanup mockup</title>
+<style>
+  body{background:#0d1117;color:#e6edf3;font:13px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;padding:22px;margin:0}
+  .wrap{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
+  h1{font-size:14px;color:#8b949e;font-weight:600;margin:0 0 2px}
+  .cap{color:#6e7681;font-size:9px;text-transform:uppercase;letter-spacing:.4px;margin:0 0 6px}
+  .sub{color:#6e7681;font-size:10px;margin:0 0 12px;max-width:250px}
+  .panel{width:250px;background:#010409;border:1px solid #21262d;border-radius:8px;padding:7px 8px}
+  .steps{font-size:8px;color:#8b949e;font-weight:700;letter-spacing:.3px;margin:1px 0 3px}
+  .steps.left{text-align:left;padding-left:3px}.steps.center{text-align:center}
+  .steps span{color:#58a6ff;border-bottom:1px dotted #58a6ff;margin:0 2px;cursor:pointer}
+  .cluster{display:flex;gap:4px;margin-bottom:6px}
+  .pill{flex:1;border:1px solid #21262d;border-radius:7px;padding:3px 5px;display:flex;flex-direction:column;align-items:center}
+  .lab{font-size:8px;color:#8b949e}.sup{color:#3fb950}.res{color:#f0616d}.val{font-size:12px;font-weight:800}.pct{font-size:8px;color:#6e7681}
+  .king{flex:1.5;border-color:#8a6d1f;background:rgba(242,204,96,.05)}.kgold{color:#f2cc60;font-weight:800}
+  .drift{display:flex;align-items:center;gap:5px;font-size:10px;margin:5px 0 3px;white-space:nowrap}
+  .dg{color:#f2cc60;font-weight:700}.dv{color:#a371f7;font-weight:700}
+  .vd{padding:0 5px;border-radius:3px;font-size:9px;font-weight:700;color:#d29922;background:rgba(210,153,34,.14)}
+  .arrDn{color:#f0616d;font-size:9px}.arrUp{color:#3fb950;font-size:9px}
+  .bar{position:relative;height:10px;border-radius:3px;background:#161b22;margin:0 2px 6px}
+  .lane{position:absolute;height:3px;border-radius:2px;opacity:.55}.lg{background:#f2cc60;top:1px}.lv{background:#a371f7;top:6px}
+  .pxl{position:absolute;top:-1px;height:12px;width:2px;background:#fff}
+  .read{border-left:2px solid #f2cc60;padding:3px 7px;margin:0 0 6px;border-radius:0 8px 8px 0;background:#0d1117}
+  .rh{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:800;white-space:nowrap}
+  .side{color:#8b949e}.bear{color:#f0616d}
+  .gC{color:#d29922;background:rgba(210,153,34,.15);padding:0 5px;border-radius:3px;font-size:10px}
+  .sb{font-size:8px;font-weight:700;color:#8b949e;border:1px solid #21262d;border-radius:8px;padding:0 4px}
+  .rt{font-size:9.5px;line-height:1.35;color:#c9d1d9;margin-top:1px}
+  .cav{color:#8b949e}
+  .zh{font-size:9.5px;color:#8b949e;font-weight:700;letter-spacing:.3px;margin:2px 2px 3px}
+  .colh{display:grid;grid-template-columns:1fr 26px;font-size:7px;letter-spacing:.3px;text-transform:uppercase;color:#6e7681;font-weight:800;padding:0 4px 2px}
+  .zplay{background:rgba(63,185,80,.05);border-left:2px solid #3fb950;border-radius:2px;padding:3px 4px 4px 6px;margin-bottom:2px}
+  .r1{display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap}
+  .stk{font-weight:800}.kg{color:#f2cc60}.role{color:#8b949e;font-weight:700}
+  .gY{color:#f2cc60;font-weight:800}
+  .tag{font-size:8.5px;color:#8b949e;border:1px solid #21262d;border-radius:8px;padding:0 4px}
+  .rx{font-weight:800}.rxno{color:#f0616d}.rxok{color:#3fb950}
+  .grade{margin-left:auto;font-weight:800;font-size:10px;padding:0 5px;border-radius:3px}
+  .gA{color:#3fb950;background:rgba(63,185,80,.15)}.gB{color:#58a6ff;background:rgba(88,166,255,.15)}.gCc{color:#d29922;background:rgba(210,153,34,.15)}
+  .r2{display:flex;align-items:center;gap:6px;font-size:9.5px;color:#8b949e;margin-top:2px;white-space:nowrap}
+  .r3{display:flex;align-items:center;gap:6px;font-size:9.5px;margin-top:3px;white-space:nowrap}
+  .dec{color:#e6edf3;font-weight:600}.frame{color:#6e7681}
+  .z{padding:3px 2px;border-bottom:1px solid #12161c}.z:last-of-type{border-bottom:0}
+  .dim{opacity:.45}
+  .div{text-align:center;color:#6e7681;font-size:9px;margin:3px 0}
+  .banner{border:1px solid #f0616d;background:rgba(240,97,109,.08);border-radius:6px;padding:1px 8px;font-size:9.5px;font-weight:800;color:#f0616d;margin:2px 0 4px}
+  .note{font-size:9.5px;color:#8b949e;line-height:1.55;max-width:300px}
+  .noise{color:#f0616d;text-decoration:line-through;opacity:.7}
+</style></head><body>
+<div class="wrap">
+
+ <div>
+  <h1>NOW (v10.55 live, 09:28)</h1>
+  <p class="sub">What it renders today — same numbers.</p>
+  <div class="panel">
+    <div class="steps left">Steps <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div>
+    <div class="cluster"><div class="pill"><span class="lab sup">★SUP</span><span class="val sup">767</span><span class="pct">37%</span></div><div class="pill king"><span class="kgold">👑 768</span></div><div class="pill"><span class="lab res">★RES</span><span class="val res">771</span><span class="pct">27%</span></div></div>
+    <div class="banner">⚠ Out of sync</div>
+    <div class="drift"><span>→</span><span style="color:#8b949e;font-weight:700">Drift</span><span class="vd">split</span><span style="color:#30363d">·</span><span class="dg">G768.7</span><span class="dv">V771.7</span></div>
+    <div class="bar"><div class="lane lg" style="left:5%;width:35%"></div><div class="lane lv" style="left:55%;width:40%"></div><div class="pxl" style="left:44%"></div></div>
+    <div class="read"><div class="rh"><span class="side">→ SIDEWAYS</span><span class="gC">C</span><span class="sb">open</span></div>
+      <div class="rt">Mid-range 767–771. GEX and VEX split — no clean lean, rotation likely.</div></div>
+    <div class="zh">⚡ Deflection zones</div><div class="colh"><span>Zone</span><span style="text-align:right">Grade</span></div>
+    <div class="zplay">
+      <div class="r1"><span class="gY">●</span><span class="stk kg">768</span><span class="role kg">King</span><span class="tag">MAG · target</span><span style="font-size:9.5px;color:#6e7681">100% · <span class="gY">g</span> · 3rd · <span class="rx rxno">✗</span></span><span class="tag">▶ setup</span><span class="grade gA">A</span></div>
+      <div class="r2"><span>Acm 15m▬ session▲</span><span>·</span><span style="color:#79c0ff">S✓ Q✗ V✓</span><span>·</span><span>—</span></div>
+      <div class="r3"><span class="dec">skip · R:R 1.0:1 (below the 3:1 floor)</span><span class="frame">· entry 768 · tgt 769 · inval &lt;767 · R:R 1.0:1</span></div>
+    </div>
+    <div class="z dim"><div class="r1"><span class="gY">◦</span><span class="stk">771</span><span class="role">Mag</span><span class="tag">rolled off</span><span style="font-size:9.5px;color:#6e7681">27% · <span class="gY">g</span> · 1st</span><span class="grade gCc">C</span></div></div>
+    <div class="z"><div class="r1"><span class="gY">◦</span><span class="stk">769</span><span class="role">Ceil</span><span class="tag">PB · 2nd lower</span><span style="font-size:9.5px;color:#6e7681">73% · <span class="gY">g</span> · 2nd</span><span class="grade gB">B</span></div></div>
+    <div class="div">— SPY 768.31 —</div>
+    <div class="z"><div class="r1"><span class="gY">◦</span><span class="stk">767</span><span class="role">Flr</span><span style="font-size:9.5px;color:#6e7681">37% · <span class="gY">g</span> · 1st</span><span class="grade gA">A</span></div></div>
+  </div>
+ </div>
+
+ <div>
+  <h1>v10.56 (proposed)</h1>
+  <p class="sub">Steps centered · drift arrows · leg voice leads · clean in-play · sync grace.</p>
+  <div class="panel">
+    <div class="steps center">Steps <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div>
+    <div class="cluster"><div class="pill"><span class="lab sup">★SUP</span><span class="val sup">767</span><span class="pct">37%</span></div><div class="pill king"><span class="kgold">👑 768</span></div><div class="pill"><span class="lab res">★RES</span><span class="val res">771</span><span class="pct">27%</span></div></div>
+    <!-- no banner: 30s grace swallowed the transient -->
+    <div class="drift"><span>→</span><span style="color:#8b949e;font-weight:700">Drift</span><span class="vd">split</span><span style="color:#30363d">·</span><span class="dg">G768.7<span class="arrDn">↓</span></span><span class="dv">V771.7<span class="arrUp">↑</span></span></div>
+    <div class="bar"><div class="lane lg" style="left:5%;width:35%"></div><div class="lane lv" style="left:55%;width:40%"></div><div class="pxl" style="left:44%"></div></div>
+    <div class="read"><div class="rh"><span class="bear">↓ Downtrend</span><span class="gC">C</span><span class="sb">open</span></div>
+      <div class="rt">Pullback node formed at <b>769</b> — resistance to sell from. Rallying down to magnet <b>768</b>. <span class="cav">Chop, mid-range — low confidence.</span></div></div>
+    <div class="zh">⚡ Deflection zones</div><div class="colh"><span>Zone</span><span style="text-align:right">Grade</span></div>
+    <div class="zplay">
+      <div class="r1"><span class="gY">●</span><span class="stk kg">768</span><span class="role kg">King</span><span class="tag">MAG</span><span class="rx rxno">✗</span><span class="grade gA">A</span></div>
+      <div class="r3"><span class="dec">skip · R:R 1.0:1 — below 3:1</span></div>
+    </div>
+    <div class="z dim"><div class="r1"><span class="gY">◦</span><span class="stk">771</span><span class="role">Mag</span><span class="tag">rolled off</span><span class="grade gCc">C</span></div></div>
+    <div class="z"><div class="r1"><span class="gY">◦</span><span class="stk">769</span><span class="role">Ceil</span><span class="tag">PB · 2nd lower</span><span class="grade gB">B</span></div></div>
+    <div class="div">— SPY 768.31 —</div>
+    <div class="z"><div class="r1"><span class="gY">◦</span><span class="stk">767</span><span class="role">Flr</span><span class="grade gA">A</span></div></div>
+  </div>
+ </div>
+
+ <div style="max-width:300px">
+  <p class="cap">What moved to hover (in-play card)</p>
+  <p class="note"><span class="noise">100% · g · 3rd · ▶ setup</span> → row hover: "How good is a deflection here? King, +γ clean, 3rd tap (~33%), approaching…"<br>
+  <span class="noise">Acm 15m▬ session▲ · S✓ Q✗ V✓</span> → grade hover: "Why A? Building since open, SPXW+VEX agree, QQQ doesn't."<br>
+  <span class="noise">entry 768 · tgt 769 · inval &lt;767 · R:R 1.0:1</span> (duplicate) → gone on a skip; shown ONCE only when tradeable.<br>
+  Polarity stays visible as the dot colour (yellow +γ / purple −γ). ✓/✗ stays visible (live "is it working"). Other rows: tag + grade only; %King/tap in hover.</p>
+  <p class="cap" style="margin-top:12px">READ change</p>
+  <p class="note">When a leg is active, the pullback-node read <b>leads</b> ("Pullback node formed at 769 — resistance to sell from…") and the cap becomes a trailing caveat ("Chop, mid-range — low confidence") instead of "SIDEWAYS" burying the level. Direction word/grade still from the spine, so no contradiction.</p>
+  <p class="cap" style="margin-top:12px">Sync grace</p>
+  <p class="note">"⚠ Out of sync" only after the disagreement persists 2 consecutive checks (~30s). This morning's 09:23:40–09:24:10 tag dropout would not have flashed.</p>
+ </div>
+</div>
+</body></html>

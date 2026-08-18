@@ -208,3 +208,27 @@ The panel reads `review/<day>.json` and `learning/rules.json` back from raw GitH
 fail-soft 10-minute cadence (`pipeCheck`), and surfaces both in the Analysis tab. Promotion is
 executed by `applyProposals()` in `v10.js`, persisted to `gpts_promo_v1`, and listed by
 `__gptsDebug.promotions()`.
+
+## LEG ENGINE — magnets, pullback nodes, rolling (evaluate every run; user-critical)
+The trader's core model: a trend alternates MAGNETS (the node price rallies TO) and PULLBACK NODES (the node that
+forms on the counter-move and price DEFLECTS off — the level to sell from in a downtrend / buy from in an uptrend).
+PB nodes APPEAR AFTER the move and ROLL lower (dn) / higher (up) after each leg; 2 consecutive rolls = signal,
+3 = confirmed. The 50-SMA confirms the trend; rolling ceilings ARE the successive pullback nodes.
+Report, with n · effN · vote-split · regime split · MFE/MAE, and NEVER without n:
+- `leg.pbPredict` — when the engine predicted "a PB node will form in this zone", did one form within fwd? (prediction accuracy)
+- `leg.pbDetect` — when a PB node was detected, did price DEFLECT off it toward the magnet (tgt-before-inval)? by roll
+  step (1st / 2nd / 3rd+): does a confirmed roll deflect more reliably than a first PB?
+- `leg.roll` — after a 2nd/3rd consecutive roll, did the trend continue DIR_PTS? Is 3-step confirmation actually
+  more reliable than 2-step signal on THIS tape? (the doctrine claims so — measure it)
+- `leg.magnet` — was the magnet reached? how often does price make it vs stall at an intermediate node?
+- `leg.handoff` (v10.56, USER PRIORITY) — when the engine flagged the old ceiling DISSIPATING while a lower node
+  built (the handoff), did the `to` node become the PB within fwd, and did price deflect off it toward the magnet?
+  Report the LEAD TIME (leadBars before pbDetected) and the false-handoff rate (flagged, never resolved). Mirror for floors.
+- `defl.trigger` (v10.56) — the latched ✓/✗ IS the deflection hit-rate: after ✓↓/✓↑, tgt-before-inval + MFE/MAE, by
+  roll step and by grade; after ✗, did the break follow through DIR_PTS? Never intrabar; latch cannot flip — a ✓ that
+  later failed counts as a failed ✓, not a ✗.
+- Cases where a PB formed AGAINST the trend (weakening flag) — did the trend then fail? (that is the early-reversal tell)
+- Contradictions: PB detected while direction said SIDE/chop-capped — was the PB level still tradeable? (this
+  happened live 2026-08-18 09:19 CT: dn structure, magnet 768 / PB 769, direction capped SIDE by mid-range+chop)
+Propose (never apply): PB_MIN_PCT, the roll-step confirmation count, whether the leg structure should soften the
+mid-range cap. Kill-list candidates: PB steps that never deflect (e.g. 1st PB in chop).

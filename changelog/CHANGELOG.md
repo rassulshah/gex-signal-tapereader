@@ -1,3 +1,71 @@
+## v10.56 — 2026-08-18 — the READ voice (user-authored) · dissipation HANDOFF · latched ✓/✗ trigger · clean in-play card
+
+**The handoff (user priority).** The roll is a STRENGTH transfer before it is a strike change. `legStep` now
+detects `handoff {active, from, to, since, leadBars}`: the current pullback node / nearest ceiling BLEEDING
+(m15 Dec ≤ −8% or ≥25% off its session peak) while a lower node above price BUILDS (m15 Acm ≥ +8% or ≥
+PB_MIN_PCT — a still-thin building node is now kept aside for this search). Flagged a bar or two before the
+new node qualifies; resolves into `pbDetected` (then `from` is rolled off) with the lead time recorded.
+Uptrend = mirror (floor building higher). Recorded as `leg.handoff`, seeded in rules.json, in the LLM brief.
+
+**The READ voice.** When a leg is active the leg speaks first, in the user's own 15 sentences verbatim
+(numbers live): 1 rallying → 2 handoff ("771 ceiling dissipating and rolling down to form pullback node at
+769") → 3 PB formed → 4 pulling back into it → 5 deflected, next leg → 6a stacking / 6b old node dissipated,
+new one higher (ceiling rolling up) → 7 target hit ("On watch for a pullback"). Uptrend mirror uses
+"building" in #2. Direction word/grade still from the spine; caps trail as a caveat. Pinned character-for-
+character by test_read_voice_leg.js.
+
+**The latched ✓/✗ trigger.** Per setup (sym, node, legId), CLOSED bars only: `✓↓`/`✓↑` latches on a rejection
+close away from the node (wick into the zone, close back outside, close against the open); `✗` on a close
+through it. Once latched it never re-evaluates ("make sure you dont toggle it back and forth"); resets only
+on a new leg / node or abandonment (>2× zone away for 3 closed bars unresolved). Persisted in
+`gpts_trigger_v1`. Recorded as `defl.trigger` = the deflection hit-rate the loop measures. reactionQuality
+is now only the "reaction now" hover input.
+
+**In-play card, user-decided fields.** r1: `● · strike · role · leg tag · ✓↓/✓↑/✗ · grade`. r2:
+`S✓ Q✗ V✓ · decision · tgt · inval` + take/pass ONLY when tradeable; on skip just `S/Q/V · skip`; not in
+contact: `watching — not in contact · nearest zone X away`. Removed from the face (kept in the question-first
+row hover): R:R text, %King, polarity word, tap, ▶ setup, Acm, activity, entry.
+
+**Small UI.** Steps 1-5 line centred. Drift `G768.7↓ · V771.7↑` — each centre says which side of price it
+sits on (red ↓ below / green ↑ above; blank when a number is missing). Sync banner grace: "⚠ Out of sync"
+needs 2 CONSECUTIVE failed reconciliations (a single 30s tag-vote dropout is silent but still logged).
+
+**Docs.** master-spec §24.1-24.3 (handoff, 15 sentences, latch), LLM brief `leg.handoff` + `defl.trigger`
+evaluation, REVIEW-ACCEPTANCE (e). **Tests:** test_handoff (31), test_read_voice_leg (18), test_defl_trigger
+(15), test_inplay_card (22), test_sync_grace (15), drift arrows + centred steps in test_drift_read; rules.json
+53 ids = rulesSeed(). Suite green except the 4 pre-existing stale.
+
+## v10.55 — 2026-08-18 — trend / magnet / PULLBACK-NODE engine · rolling factor · FUTURES mode (ES/NQ)
+
+`legEngine` (`legStep`, pure, replayable): dir/phase RLY|PB, magnet (strongest node with the trend, capped
+at the King), predicted PB zone BEFORE the node exists, pbDetected when a meaningful node appears/grows on
+the counter side, roll (2 = signal, 3 = confirmed), rolled-off levels lose target status (air), weakening
+flag when a PB forms against the trend. Roll factor +1 confirmed inside the direction hierarchy (never flips
+dir). Surfaced in the READ, zones, decision, ⚑ banner; recorded as `leg.pbPredict/pbDetect/roll/magnet`;
+seeded in rules.json; LLM brief LEG ENGINE section; master-spec §24. **Futures mode:** chart symbol
+detected from the header (ES/MES→SPY, NQ/MNQ→QQQ), live EMA ratio with `≈` fallback, only futures levels
+shown, honest "unavailable" for GC/CL. QQQ parity, SPXW confluence (S✓/✗/–), engine-ready matrix.
+Multi-session rolling recorded (needs 3 sessions). Tests: test_leg_engine (62, synthetic 08-17 fixture),
+test_roll_factor, test_futures_mode, test_qqq_parity, test_spxw_confluence.
+
+## v10.54 — 2026-08-18 — INTEGRITY release (whole-system audit)
+
+Fixed: weights were fiat on ingest (now inert; only PROMO.applied moves them); signed pct blinded −γ nodes
+(absolute value at the boundary); outcomes ≠ claims (frame outcome = tgt-before-inval); LLM-only bar numbers
+(proposalClearsBar re-derives n / walk-forward locally: n≥20 effN, 3 sessions, no regime flip); green
+"saved" on failure; n inflation (effN = n/FEAT_FWD); 1-way vote detector (≥90% flag); triple-count; take/pass
+×10; R:R gate (3:1 floor, hidden <2:1); kill list; regime tag; in-play = in contact. Analysis/Testing tabs
+redesigned. Tests: test_effn, test_frame_outcome, test_regime_tag, test_promotion_bar, test_zone_row,
+test_trade_frame, test_analysis_tabs, test_testing_tab.
+
+## v10.53 — 2026-08-18 — LEARNING LOOP with auto-promotion (user choices)
+
+rules.json v2, FEATURES registry (every feature auto-enrolls: record → outcome → questions → rule),
+challenger model, auto-apply + mark on promotion, sparse → keep hand-set, nightly/weekly review methodology
+in the gex skill (REVIEW-NIGHTLY / REVIEW-WEEKLY), review read-back into Analysis ⑥/⑦, scheduled tasks
+(evening primary 17:47 CT, morning catch-up). Tests: test_rules_v2, test_feature_enrollment,
+test_review_selftest.
+
 ## v10.52 — 2026-08-18 — end-to-end PIPELINE INDICATOR + automatic review read-back
 
 **Why.** There was no way to see whether a day's data reached the nightly review, or whether a review came

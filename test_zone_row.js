@@ -90,13 +90,13 @@ var dz=grab('deflZonesBlock');
 ok(/entry '\+fmt(Num|Lvl)\(L\.k\)/.test(dz),'r3 folds the decision frame (entry = the node; v10.55 formats it through fmtLvl so a futures chart reads in its own points)');
 ok(/rr=frameRR\(fr\)/.test(dz) && /rrText\(rr\)/.test(dz), 'row 3 computes and RENDERS the R:R');
 ok(/thin=\(rr!=null && rr<RR_MIN\)/.test(dz), 'below RR_MIN the row is flagged thin');
-ok(/'skip · '\+rrText\(rr\)\+' \(below the '\+RR_FLOOR\+':1 floor\)'/.test(dz),
-   "below 2:1 the decision text reads \"skip · R:R X:1 (below the 3:1 floor)\"");
-ok(/gateOK = inContact && !thin && !\/stand aside\|skip\|wait\|watching\//.test(dz),
+ok(/>skip<\/span>/.test(dz) && /below the '\+RR_FLOOR\+':1 floor/.test(dz),
+   "below 2:1 the visible decision is just \"skip\"; the R:R reason lives in the hover (v10.56)");
+ok(/tradeable = inContact && !thin && !\/stand aside\|skip\|wait\|watching\//.test(dz),
    'take/pass gated on the DECISION CELL (not the node grade), and hidden below 2:1');
 ok(!/ng\.grade==='A'\|\|ng\.grade==='B'/.test(dz), '...the old node-grade gate is gone');
-ok(/watching — not in contact/.test(dz), 'nothing in contact -> the card says "watching — not in contact"');
-ok(/frTxt='nearest zone '/.test(dz), '...and shows the distance instead of a frame');
+ok(/watching (—|\\u2014) not in contact/.test(dz), 'nothing in contact -> the card says "watching — not in contact"');
+ok(/nearest zone '\+fmtSpan\(Math\.abs\(px-L\.k\)\)\+' away/.test(dz), '...and shows the distance instead of a frame');
 ok(/tgtAir/.test(dz) && /invalAir/.test(dz),'air tag computed for BOTH tgt and inval');
 ok(!/· px /.test(dz) && !/sparkline/.test(dz),'header drops `· px`; no sparkline');
 ok(!/Dir grade<\/b> = /.test(dz) && !/Node grade<\/b> = /.test(dz),'gray legend line dropped');

@@ -186,6 +186,9 @@ back-filled). Plus a one-line "brief" the panel can show pre-open.
 
 Descriptive only: never entries, stops, sizing, or trade recommendations.
 
+- Both REVIEW runs MUST evaluate the LEG ENGINE section of docs/LLM-NIGHTLY-BRIEF.md (magnets /
+  pullback nodes / rolling) — it is user-critical.
+
 ## STATUS ("status" / "where are we" / "how complete is it")
 
 Report completeness LAYER BY LAYER with an honest % and one sentence of what works vs what is
@@ -213,6 +216,9 @@ an overall one-liner. Never inflate; unverified-live code stays "candidate".
   PREDICTIVE (⚖ hand-set / 📊 measured, nightly-scored, graduates at n≥20). Nothing vague between.
 - The tool is DESCRIPTIVE/observational only: never entries, stops, sizing, R:R, or P&L.
 - Hover/tooltip explanations on every element, written for a new reader.
+- v10.56 (2026-08-18): READ voice = user's 15 sentences (`legVoice`, master-spec §24.2, test_read_voice_leg);
+  HANDOFF detection (`legStep.handoff`, §24.1); latched ✓/✗ trigger (`deflTriggerStep`, §24.3, never toggles);
+  the review must evaluate `leg.handoff` (lead time) and `defl.trigger` (✓ hit-rate) with n — REVIEW-ACCEPTANCE (e).
 - MODEL ROUTING (user-mandated 2026-08-15): delegate mechanical / well-specified work (code edits to
   a clear spec, running tests, packaging installers, search, scraping, formatting) to cheaper models
   via the Agent tool; reserve the main model for novel design, statistical interpretation, deciding

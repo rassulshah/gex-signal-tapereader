@@ -881,3 +881,48 @@ Tomorrow's live priorities are:
 3. verify directional target correctness when multiple meaningful nodes exist
 4. identify what recorder fields are still missing for resolution tracking
 5. prepare the next engineering brief from recorded evidence
+
+
+## 24. TREND / MAGNET / PULLBACK-NODE MODEL (user-taught 2026-08-18 — core of the mental model)
+A trend, in node terms, alternates:
+- **MAGNET** — the node price is DRAWN TO (rallies to). Downtrend: the heavy node BELOW.
+- **PULLBACK NODE (PB)** — the node that FORMS on the counter-move and price DEFLECTS off. Downtrend: forms ABOVE =
+  the resistance a trader sells from. Uptrend: forms BELOW = the support to buy from.
+Sequence (dn): rally down to magnet → PB forms above → deflection → rally to the NEXT magnet → NEW PB forms LOWER.
+Lower-low (magnet) / lower-high (PB), each governed by a node. Uptrend = mirror.
+PB nodes APPEAR AFTER the move — so the engine PREDICTS the zone, DETECTS the strike when it lands, then flags the
+ROLL. 2 consecutive rolls = signal, 3 = confirmed. The 50-SMA confirms the trend; ROLLING CEILINGS ARE the successive
+pullback nodes (one mechanism, two angles). Rolled-off levels lose target status; the vacated zone is air.
+Implemented as `legEngine` (v10.55), surfaced in the READ / zones / decision / ⚑ banner, recorded as `leg.*` features,
+seeded in rules.json, evaluated by the nightly/weekly review (see docs/LLM-NIGHTLY-BRIEF.md § LEG ENGINE).
+
+### 24.1 The HANDOFF (v10.56) — detect the shift, not just the strike
+The roll is a STRENGTH transfer before it is a strike change: the old ceiling's %King bleeds (m15 Dec ≤ −8% or ≥25%
+off its session peak) while a lower node above price builds (m15 Acm ≥ +8% or ≥ PB_MIN_PCT). `legEngine.handoff`
+{active, from, to, since, leadBars} is ACTIVE while both hold and RESOLVES when `to` qualifies as the PB (then `from`
+is rolled off). Uptrend = mirror (floor building higher). Recorded as `leg.handoff` (outcome: did `to` become the PB
+within fwd and did price deflect off it toward the magnet; leadBars = how early the handoff called it).
+
+### 24.2 The READ voice (user-authored 2026-08-18, verbatim; numbers live) — leg voice LEADS when a leg is active
+Downtrend: 1 "Downtrend. Rallying down to 768. Expect pullback node to form from 771 ceiling rolling down." ·
+2 (handoff) "Downtrend. Rallying down to 768. 771 ceiling dissipating and rolling down to form pullback node at 769." ·
+3 "Resistance pullback node formed at 769. Deflection expected to target 768." ·
+4 "Pulling back to resistance pullback node 769. Deflection expected to target 768 below." ·
+5 "Deflected off 769. Rallying down to 768. Expect pullback node to form from 769 ceiling rolling down." ·
+6a "Pullback node 769 holding. New resistance forming above at 770 — resistance stacking." ·
+6b "Pullback node 769 dissipated. New pullback node formed higher at 770 — ceiling rolling up." ·
+7 "Rallied down to 768 target. On watch for a pullback."
+Uptrend mirror: 1 "Uptrend. Rallying up to 772. Expect pullback node to form from 768 floor rolling up." ·
+2 "Uptrend. Rallying up to 772. 768 floor building and rolling up to form pullback node at 769." · 3 "Support pullback
+node formed at 769. Deflection expected to target 772." · 4 "Pulling back to support pullback node 769. Deflection
+expected to target 772 above." · 5 "Deflected off 769. Rallying up to 772. Expect pullback node to form from 769 floor
+rolling up." · 6a "Pullback node 769 holding. New support forming below at 768 — support stacking." · 6b "Pullback node
+769 dissipated. New pullback node formed lower at 768 — floor rolling down." · 7 "Rallied up to 772 target. On watch
+for a pullback." Direction word/grade come from the spine; caps trail as a caveat. Pinned by test_read_voice_leg.js.
+
+### 24.3 The latched ✓/✗ trigger (v10.56)
+Per setup (sym, node, legId), CLOSED bars only: ✓↓/✓↑ latches on a rejection close away from the node (wick into the
+zone, close back outside, close against the open); ✗ latches on a close through it. Once latched it never re-evaluates
+("make sure you dont toggle it back and forth"); resets only on a new legId / node, or abandonment (>2× zone away for
+3 closed bars unresolved). Shown bold on the in-play card row 1; recorded as `defl.trigger` (✓ hit-rate = tgt before
+inval + MFE/MAE; ✗ follow-through). reactionQuality stays a hover input only.

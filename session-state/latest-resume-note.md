@@ -1,3 +1,27 @@
+# RESUME NOTE — 2026-08-18 (evening) — v10.56 BUILT: READ voice · HANDOFF · latched ✓/✗ trigger · NEXT = live-verify
+
+**Baseline v10.56** (footer v10.56; releases/2026-08-18_voice-handoff-trigger_v10.56.user.js). Spec
+design/spec-v10.56-voice-trigger-cleanup.md. What shipped: (A) `legStep.handoff` — old ceiling/floor
+DISSIPATING while a nearer node BUILDS, flagged before it qualifies, resolves into pbDetected with leadBars;
+(B) the leg voice leads the READ with the user's 15 sentences verbatim (`legVoice`, test_read_voice_leg);
+(C) `deflTriggerStep` latch — ✓↓/✓↑ on a rejection close away, ✗ on close through, closed bars only, never
+re-evaluates, reset on new legId/node/abandonment, persisted `gpts_trigger_v1`; (D) in-play card r1 dot ·
+strike · role · leg tag · trigger · grade, r2 S/Q/V · decision · tgt · inval only when tradeable, else
+"skip" / "watching — not in contact"; (E) steps centred, drift `G↓ · V↑` arrows, sync banner grace 2;
+(F) master-spec §24.1-24.3, LLM brief `leg.handoff` + `defl.trigger`, REVIEW-ACCEPTANCE (e). rules.json 53
+ids. New tests: test_handoff (31), test_defl_trigger (15), test_inplay_card (22), test_sync_grace (15).
+
+**Verify next open (live):** the handoff sentence appears while a ceiling bleeds and a lower node builds;
+✓↓ latches on the close of the rejection bar and does NOT flicker on later bars; card is clean (no R:R /
+%King on the face); drift arrows; no "Out of sync" flash on a single dropout. Then: real 08-17/08-18
+exports landing in data/ (pipeline), nightly review reading `leg.handoff` / `defl.trigger` with n.
+
+**Deferred (user-acknowledged):** prediction engine stages 2-3 (~150+ obs), Alpha Vantage HTF/VIX,
+event calendar. Standing rules unchanged: ask before code, mockup first, descriptive-only, git = truth,
+always send the Tampermonkey URL, every feature auto-enrolls.
+
+---
+
 # RESUME NOTE — 2026-08-18 — v10.51 BUILT (candidate): trend-primary direction · NEXT = accumulate sessions
 
 **Baseline v10.51** (footer v10.51). Direction is now HIERARCHICAL: SMA-50 five-state = the trend (primary);

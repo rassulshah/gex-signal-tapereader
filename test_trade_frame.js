@@ -66,17 +66,18 @@ MODEL.airpocket={ ok:false, pockets:[] }; MODEL.cluster={ ok:false, regions:[] }
 // ============ 5. THE LOCKED VOCABULARY, ON THE LIVE ROW-3 RENDER ==============
 ok(!/function frameTextOf/.test(src), '5a the dead frameTextOf narrator is deleted');
 var DZ=ex('deflZonesBlock');
-ok(/var frTxt='entry '\+fmt(Num|Lvl)\(L\.k\)/.test(DZ), '5b the LIVE row 3 opens with the zone (entry = the node)');
-ok(/frTxt\+=' · tgt '\+fmt(Num|Lvl)\(fr\.tgt\)/.test(DZ), '5c ...then the target');
-ok(/frTxt\+=' · inval '\+\(\(fr\.dir>=0\)\?'&lt;':'&gt;'\)/.test(DZ),
-   '5d ...then the invalidation, with "<" going up and ">" going down (HTML-escaped)');
-ok(/\(tgtAir\?'\(air\)':''\)/.test(DZ), '5e ...and the path is carried as the (air) tag');
-// R:R rides with the frame — the first number a trader looks at, and v10.53 did not have it
+// (v10.56) The VISIBLE frame is tgt · inval only, and only when tradeable. entry and R:R moved to the
+// row hover (user: "take the risk reward text out"). Pin the new layout, not the old one.
+ok(/frTxt\+='tgt '\+fmtLvl\(fr\.tgt\)/.test(DZ), '5b the visible frame opens with the target');
+ok(/frTxt\+=\(frTxt\?' · ':''\)\+'inval '\+\(\(fr\.dir>=0\)\?'&lt;':'&gt;'\)/.test(DZ),
+   '5c ...then the invalidation, with "<" going up and ">" going down (HTML-escaped)');
+ok(/\(tgtAir\?'\(air\)':''\)/.test(DZ), '5d ...and the path is carried as the (air) tag');
+ok(!/frTxt\+=' · '\+rrText\(rr\)/.test(DZ), '5e R:R is NOT rendered on the visible row (moved to hover)');
+ok(/rowTip=\([\s\S]*rrText\(rr\)/.test(DZ), '5f ...R:R rides in the row hover instead');
+ok(/rowTip=\([\s\S]*' · entry '\+fmtLvl\(L\.k\)/.test(DZ), '5g ...and so does entry (= the node)');
 var fUp=tradeFrame('SPY',{k:773},1);
-ok(frameRR(fUp)===1, '5f R:R = |tgt-k| / |k-inval| on the live frame (774-773)/(773-772)', frameRR(fUp));
-ok(/frTxt\+=' · '\+rrText\(rr\)/.test(DZ), '5g ...and it is RENDERED on the row');
-ok(/'skip · '\+rrText\(rr\)\+' \(below the '\+RR_FLOOR\+':1 floor\)'/.test(DZ),
-   '5h below RR_MIN the decision text says so descriptively');
+ok(frameRR(fUp)===1, '5h R:R = |tgt-k| / |k-inval| still computed (774-773)/(773-772)', frameRR(fUp));
+ok(/tradeable\s*\n?\s*\?/.test(DZ) && /'>skip<\/span>'|">skip</.test(DZ), '5i on a skip the row shows just "skip" — no frame, no R:R text');
 // VOCABULARY RED LINE — on the fields and on the live row
 var banned=/\b(entry|stop|size|buy|sell|long|short)\b/i;
 var fields=Object.keys(fUp).join(' ');

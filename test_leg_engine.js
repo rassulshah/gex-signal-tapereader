@@ -20,9 +20,12 @@ const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m+(g!==undefined?' -> '+g:'
 // ---------------- constants + display mocks (SPY cash mode: fmtLvl === fmtNum) -------
 global.PB_MIN_PCT=20; global.PB_LEG_PTS=0.5; global.PB_REACH=5;
 global.LEG_ROLL_SIGNAL=2; global.LEG_ROLL_CONFIRM=3;
+// (v10.56) the handoff thresholds + the contact band the engine reads for atPB / magnetReached
+global.HANDOFF_DEC=-8; global.HANDOFF_DROP=25; global.HANDOFF_ACM=8; global.DEFLECT_ZONE=0.50;
 global.FUTMODE={ chart:'SPY', fam:null, underlying:'SPY', r:1, live:true, approx:false, ok:true };
 eval(['mul','fmtNum','fmtFut','dispIsFut','dispR','futMark','fmtLvl',
-      'legStepWord','legBlank','legClone','legStep','legSentence','legDecisionLine','legZoneTag',
+      'legStepWord','legNodeDissipating','legNodeBuilding','legBlank','legClone','legStep',
+      'legVoiceRef','legVoice','legSentence','legDecisionLine','legZoneTag',
       'nodeHistRow','rollRun'].map(ex).join('\n'));
 
 function replay(bars, seed){
@@ -73,20 +76,24 @@ ok(S.air && S.air.lo===775 && S.air.hi===775.5,
    '1q the vacated zone between the old and new node is tagged AIR (fast travel, per doctrine)', JSON.stringify(S.air));
 ok(S.magnet.k===773, '1r the magnet is still the King below — the target of the deflection', S.magnet.k);
 
-// ---- the VOICE, in the user's own vocabulary ----
+// ---- the VOICE (v10.56: the user's own fifteen sentences, verbatim; the full set is
+// pinned character-for-character in test_read_voice_leg.js) ----
 var sent=legSentence(S);
-ok(/Downtrend \(SMA\)\./.test(sent), '1s the READ opens with the SMA-owned trend', sent);
-ok(/Pullback node formed at 775/.test(sent) && /rolled lower from 775\.5/.test(sent),
-   '1t ...names the node and what it rolled from');
-ok(/3rd step — confirmed downtrend/.test(sent), '1u ...and the roll step, in words');
-ok(/Resistance to sell from/.test(sent) && /Potential drop to magnet 773/.test(sent),
-   '1v ...the LEVEL description the user uses, plus the magnet as the potential target');
+ok(sent==='Resistance pullback node formed at 775. Deflection expected to target 773.',
+   '1s the READ is the user\'s own sentence: the node that formed, and what the deflection targets', sent);
+ok(legVoice(S).id==='dn3', '1t ...selected by state, not by the renderer', legVoice(S).id);
+ok(!/3rd step/.test(sent) && legZoneTag(S,{k:775}).lab==='PB · 3rd lower',
+   '1u the roll step is on the ROW TAG, never inside the locked sentence', legZoneTag(S,{k:775}).lab);
+ok(!/magnet|sell level|resistance to sell from/i.test(sent),
+   '1v ...and the sentence quotes plain levels — no jargon the user did not write', sent);
 ok(!/(sell now|go short|enter|stop at|size )/i.test(sent), '1w ...and never an instruction', sent);
 
-// the RLY/prediction variant
+// the RLY/prediction variant: the pullback node has formed and price has left it
 var pred=legSentence(T[3]);
-ok(/Rallying down to magnet 773\./.test(pred) && /Expect a pullback node to form above, below 776 — sell level\./.test(pred),
-   '1x the prediction sentence is the spec\'s own wording', pred);
+ok(pred==='Resistance pullback node formed at 776. Deflection expected to target 773.',
+   '1x price away from the node it just formed = sentence 3, naming the magnet as the target', pred);
+ok(T[3].phase==='RLY' && T[3].pbDetected.k===776,
+   '1x2 ...on a bar the engine calls RLY, with the node still standing', T[3].phase);
 
 // the decision line + the row tags
 ok(legDecisionLine(S,{k:775})==='sell-side deflection · tgt magnet 773 · inval above PB 775',
@@ -110,8 +117,9 @@ ok(JSON.stringify(U.roll.steps)===JSON.stringify([770,771,772]), '2b pullback SU
 ok(U.roll.count===3 && U.roll.confirmed===true, '2c 3 higher supports = confirmed uptrend', U.roll.count);
 ok(U.roll.side==='flr', '2d the roll is on the FLOOR side in an uptrend', U.roll.side);
 var us=legSentence(U);
-ok(/Uptrend \(SMA\)\./.test(us) && /rolled higher from 771/.test(us) && /Support to buy from/.test(us) &&
-   /Potential rise to magnet 774/.test(us), '2e the mirrored voice: buy level, support to buy from', us);
+ok(us==='Support pullback node formed at 772. Deflection expected to target 774.',
+   '2e the mirrored voice: SUPPORT pullback node, target above', us);
+ok(legVoice(U).id==='up3', '2e2 ...the same state, mirrored', legVoice(U).id);
 ok(legDecisionLine(U,{k:772})==='buy-side deflection · tgt magnet 774 · inval below PB 772',
    '2f ...and the mirrored decision line', legDecisionLine(U,{k:772}));
 
@@ -124,7 +132,18 @@ var AG=replay([{ bar:8, t:8000, px:774.30, close:774.30, dirIn:'dn', kingK:773,
 ok(AG.pbDetected && AG.pbDetected.k===776.5, '3a the higher node IS taken as the new pullback node', AG.pbDetected.k);
 ok(AG.roll.count===1 && AG.roll.confirmed===false, '3b ...and the roll count RESTARTS at 1', AG.roll.count);
 ok(AG.roll.weakening===true, '3c ...flagged as weakening (a lower-high that is no longer lower)', AG.roll.weakening);
-ok(/trend weakening/.test(legSentence(AG)), '3d ...and the READ says so out loud', legSentence(AG));
+// (v10.56) a node forming AGAINST the roll is sentence 6a/6b — which one depends on the
+// OLD node: still holding = stacking, dissipated = the ceiling rolling the wrong way.
+ok(AG.stack && AG.stack.from===775 && AG.stack.k===776.5,
+   '3d the READ knows WHICH node stacked on which', JSON.stringify(AG.stack));
+ok(legSentence(AG)==='Pullback node 775 holding. New resistance forming above at 776.5 — resistance stacking.',
+   '3e ...and says it in the user\'s words (old node holding = stacking)', legSentence(AG));
+ok(legVoice(AG).id==='dn6a', '3f ...sentence 6a', legVoice(AG).id);
+// the same bar with the old node BLEEDING is the other sentence
+var AGd=replay([{ bar:8, t:8000, px:774.30, close:774.30, dirIn:'dn', kingK:773,
+   levels:[{k:773,pct:100,isKing:true,state:'Steady'},{k:775,pct:50,state:'Steady',acm15:-30},{k:776.5,pct:60,state:'Building'}] }], S).st;
+ok(legSentence(AGd)==='Pullback node 775 dissipated. New pullback node formed higher at 776.5 — ceiling rolling up.',
+   '3g old node dissipating = sentence 6b, the ceiling rolling UP', legSentence(AGd));
 
 // ================= 4. INVALIDATION: A CLOSE THROUGH THE PULLBACK NODE ==============
 var INV=replay([{ bar:9, t:9000, px:775.60, close:775.60, dirIn:'dn', kingK:773,

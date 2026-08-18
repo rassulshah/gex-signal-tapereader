@@ -53,3 +53,15 @@ acceptance test and its findings for the week should be treated as unverified.
 
 `test_review_selftest.js` re-derives all three properties from the generator's output, so the
 numbers above cannot silently drift away from what `tools/synth_day.js` actually plants.
+
+## (d) Leg engine — the reviewer must recognise the magnet / pullback-node structure
+Given the 2026-08-17 synthetic replay (`daily-data/fixture_2026-08-17_synthetic.json`): a downtrend under the SMA,
+magnet/King 773 below, ceilings forming at 776 → 775.5 → 775 successively lower after each down leg. The review must
+report: PB detected at 776 (step 1), roll to 775.5 (step 2 = signal), roll to 775 (step 3 = confirmed), 776 and 775.5
+rolled off, magnet 773 the target — and evaluate `leg.pbDetect` by roll step with n. Failing to name the roll, or
+reporting the rolled-off 776 as live resistance, is a FAIL.
+
+## (e) Handoff + trigger (v10.56) — the reviewer must evaluate the shift and the latch
+The review must report `leg.handoff` (n, lead time before pbDetected, false-handoff rate — old ceiling dissipating
+while the new one builds) and `defl.trigger` (✓ hit-rate tgt-before-inval by roll step and grade, ✗ follow-through),
+each with n and effN. Treating a later-failed ✓ as if it had been ✗, or citing a hit-rate without n, is a FAIL.

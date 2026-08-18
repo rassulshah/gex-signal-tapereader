@@ -86,6 +86,19 @@ global.LASTVEX.SPY ={ j:payload(VANNA,773.66), ts:Date.now() };
 global.STATE.SPY.price=null;
 ok(driftRead('SPY').verdict==='NONE', '5g no price -> NONE (never guesses a side)');
 
+
+// ---- (v10.56 PART E) each centre says which side of price it sits on: ↓ below (red) / ↑ above (green)
+(function(){
+  try{
+    global.PAL=global.PAL||{}; PAL.shortAccent='#f0616d'; PAL.longAccent='#2ec27e';
+    eval(ex('driftSideArrow'));
+    ok(/↓/.test(driftSideArrow(768.7,770)) && /#f0616d/.test(driftSideArrow(768.7,770)), 'centre BELOW price -> red ↓');
+    ok(/↑/.test(driftSideArrow(771.7,770)) && /#2ec27e/.test(driftSideArrow(771.7,770)), 'centre ABOVE price -> green ↑');
+    ok(driftSideArrow(null,770)==='' && driftSideArrow(770,null)==='', 'missing number -> no arrow (no invented lean)');
+    ok(/G'\+\(d\.gvwap!=null\?fmtLvl\(d\.gvwap\):'–'\)\+driftSideArrow\(d\.gvwap,d\.px\)/.test(src) && /V'\+\(d\.vvwap!=null\?fmtLvl\(d\.vvwap\):'–'\)\+driftSideArrow\(d\.vvwap,d\.px\)/.test(src), 'the drift line renders G<n><arrow> · V<n><arrow>');
+    ok(/var stepsLine=\(function\(\)\{[\s\S]{0,600}justify-content:center;text-align:center/.test(src), 'Steps 1-5 line is CENTRED (v10.56 PART E)');
+  }catch(e){ ok(false,'v10.56 drift arrows / centred steps threw: '+e); }
+})();
 console.log('\n'+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);
 
 // ---- v10.49.1 regression: same side of price => NOT split (band overlap only sets conf) ----

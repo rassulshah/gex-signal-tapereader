@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    10.55
+// @version    10.56
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -379,7 +379,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-console.log('[GPTS] v10.55 part1 loaded');
+console.log('[GPTS] v10.56 part1 loaded');
 
 function fiberKeyOf(el){
   var ks=Object.keys(el);
@@ -1371,8 +1371,16 @@ function outOfSyncBlock(r){
       'Diagnose: __gptsDebug.syncReport()</div>'+
     '</div>';
 }
+// (v10.56 PART E) THE BANNER NEEDS A SECOND OPINION. One failed reconciliation is a
+// poll landing mid-repaint, not an out-of-sync app: the banner flashed on and off all
+// session and stopped meaning anything. It now needs SYNC_GRACE consecutive failed
+// checks (~30s) before it is shown. A single failure is still counted and still logged
+// in RECON_STATE — it is silent on the face, not invisible to the diagnostics.
+var SYNC_GRACE=2;
+function syncBannerShow(r){ try{ return !!r && r.ok!==true && (r.streak||0)>=SYNC_GRACE; }catch(e){ return false; } }
 // (v10.47) ONE-LINE sync banner — header only; full diagnostics in the hover title.
 function syncBannerHtml(r){
+  if(!syncBannerShow(r)) return '';
   var why={ 'no-consensus':'the three King sources disagree',
             'no-source':'no tape and no feed could be read',
             'single-source':'only one King source is available',
@@ -2560,7 +2568,7 @@ function repoAutoExportTick(){
 // (v10.54, audit 25) ONE VERSION STRING. The fallback was frozen at '10.44' while the
 // header said 10.53 and the export said 10.15 — three different answers to "which build
 // wrote this?". The fallback is the shipping version now, and buildDayExport uses this.
-function VERSION_STR(){ try{ return (typeof GM_info!=='undefined'&&GM_info.script&&GM_info.script.version)||'10.55'; }catch(e){ return '10.55'; } }
+function VERSION_STR(){ try{ return (typeof GM_info!=='undefined'&&GM_info.script&&GM_info.script.version)||'10.56'; }catch(e){ return '10.56'; } }
 
 // ============================================================================
 // (v10.52) THE PIPELINE. A day's data travels four stages:
@@ -8197,6 +8205,17 @@ function driftRead(sym){
   }catch(e){}
   return out;
 }
+// (v10.56 PART E) PURE: which side of price a book's centre sits on. ↓ below price =
+// pressure down (red), ↑ above price = support higher (green). Blank when either number
+// is missing — an arrow with nothing behind it would be an invented lean.
+function driftSideArrow(ctr, px){
+  try{
+    if(ctr==null || px==null) return '';
+    if(ctr<px) return '<span style="color:'+PAL.shortAccent+';font-weight:800">↓</span>';
+    if(ctr>px) return '<span style="color:'+PAL.longAccent+';font-weight:800">↑</span>';
+    return '';
+  }catch(e){ return ''; }
+}
 // ONE line under the King header cluster. Shows the two centres; the verdict chip is
 // an INPUT to the Direction spine, never a rival verdict (layer spec S0).
 function driftLineHtml(sym){
@@ -8224,8 +8243,12 @@ function driftLineHtml(sym){
     '<span style="color:'+PAL.sub+';font-weight:700">Drift</span>'+
     '<span style="padding:0 5px;border-radius:3px;font-size:9px;font-weight:700;color:'+chipCol+';background:'+chipBg+'">'+d.label+'</span>'+
     '<span style="color:'+PAL.line+'">·</span>'+
-    '<span style="color:'+PAL.gold+';font-weight:700">G'+(d.gvwap!=null?fmtLvl(d.gvwap):'–')+'</span>'+
-    '<span style="color:#a371f7;font-weight:700">V'+(d.vvwap!=null?fmtLvl(d.vvwap):'–')+'</span>'+
+    // (v10.56 PART E) EACH CENTRE SAYS WHICH SIDE OF PRICE IT IS ON. "G768.7" alone made
+    // the reader hold the price in their head to know whether gamma was pulling up or
+    // down; the arrow answers it on the face — ↓ below price (red), ↑ above (green).
+    '<span style="color:'+PAL.gold+';font-weight:700">G'+(d.gvwap!=null?fmtLvl(d.gvwap):'–')+driftSideArrow(d.gvwap,d.px)+'</span>'+
+    '<span style="color:'+PAL.line+'">·</span>'+
+    '<span style="color:#a371f7;font-weight:700">V'+(d.vvwap!=null?fmtLvl(d.vvwap):'–')+driftSideArrow(d.vvwap,d.px)+'</span>'+
   '</div>';
   // (v10.51.1 FIX) THIN BAR — TWO LANES: gold GEX band on top, purple VEX band below,
   // each with a brighter centre tick (GVWAP / VVWAP), and a WHITE price line spanning both.
@@ -8271,7 +8294,10 @@ var ACMDAY=null;
 function acmDayLoad(){
   if(ACMDAY && ACMDAY.date===TODAY) return ACMDAY;
   try{ ACMDAY=JSON.parse(localStorage.getItem(ACMDAY_KEY)||'null'); }catch(e){ ACMDAY=null; }
-  if(!ACMDAY || ACMDAY.date!==TODAY) ACMDAY={date:TODAY, v:{}};
+  if(!ACMDAY || ACMDAY.date!==TODAY) ACMDAY={date:TODAY, v:{}, p:{}};
+  // (v10.56 PART A) the SESSION PEAK rides in the SAME key (`p`) — nothing is renamed.
+  // A file written before v10.56 simply has no peaks yet and starts collecting them.
+  if(!ACMDAY.p) ACMDAY.p={};
   return ACMDAY;
 }
 function acmDaySave(){ try{ localStorage.setItem(ACMDAY_KEY, JSON.stringify(ACMDAY)); }catch(e){} }
@@ -8280,8 +8306,12 @@ function acmLabel(p){ if(p==null) return 'Steady'; if(p>=ACM_BAND) return 'Acm';
 // THE single Acm source. Read by nodeMapSentence AND by the zone rows.
 // (v10.50) HORIZONS RENAMED — now→m15 (the last ~5-bar window, "right now"), day→session
 // (since the open, "is it real?"). Return object: {m15:{pct,label}, session:{pct,label}}.
+// (v10.56 PART A) session.peak / session.fromPeak are added for the HANDOFF: a ceiling
+// that is DISSIPATING is one whose %King has bled DOWN FROM ITS OWN SESSION HIGH, which
+// the "vs the first reading of the day" number cannot see (a node that built all morning
+// and is now rolling over still reads +200% against its open).
 function accumCanon(sym, k){
-  var out={ m15:{pct:null,label:'Steady'}, session:{pct:null,label:'Steady'} };
+  var out={ m15:{pct:null,label:'Steady'}, session:{pct:null,label:'Steady',peak:null,fromPeak:null} };
   try{
     if(k==null) return out;
     // ---- m15: last two samples of the node's %King history (~15m / ~5-bar window)
@@ -8308,6 +8338,11 @@ function accumCanon(sym, k){
         if(o>0){ out.session.pct=Math.round(100*(mag-o)/o); }
       }
       out.session.label=acmLabel(out.session.pct);
+      // ---- session PEAK: the highest magnitude this node has reached today ----
+      var pk=db.p||(db.p={});
+      if(pk[key]==null || mag>pk[key]){ pk[key]=mag; acmDaySave(); }
+      out.session.peak=pk[key];
+      out.session.fromPeak=(pk[key]>0)?Math.round(100*(pk[key]-mag)/pk[key]):null;
     }
   }catch(e){}
   return out;
@@ -8401,12 +8436,46 @@ function nodeHistSample(sym, m){
 function nodeHistOf(sym){ var H=nodeHistLoad(); return (H.sym && H.sym[sym]) || []; }
 
 function legStepWord(n){ return n===1?'1st':(n===2?'2nd':(n===3?'3rd':(n+'th'))); }
+// ============================================================================
+// (v10.56 PART A) THE HANDOFF — "the key is identifying the dissipating old ceiling
+// and the new one forming" (user, 2026-08-18).
+// The roll is a STRENGTH TRANSFER before it is a strike change: the old ceiling's %King
+// bleeds while a LOWER node above price builds. Seeing that transfer names the next
+// pullback node a bar or two BEFORE it qualifies as one under the existing rule.
+// Both tests are on the node's OWN history, so nothing here is a forecast: a node is
+// dissipating when it is losing %King now (m15 Dec) or has bled off its session peak,
+// and building when it is gaining now or is already big enough to be a pullback node.
+// ============================================================================
+var HANDOFF_DEC  = -8;   // m15 %King change at/below this = the old node is DISSIPATING
+var HANDOFF_DROP = 25;   // ...or it has lost this much of its SESSION PEAK
+var HANDOFF_ACM  = 8;    // m15 %King change at/above this = the new node is BUILDING
+// PURE: is this level bleeding? (level rows carry acm15 / pctPeak from accumCanon)
+function legNodeDissipating(L){
+  if(!L) return false;
+  if(typeof L.acm15==='number' && L.acm15<=HANDOFF_DEC) return true;
+  if(typeof L.pctPeak==='number' && L.pctPeak>0 && typeof L.pct==='number'){
+    if(100*(L.pctPeak-Math.abs(L.pct))/L.pctPeak >= HANDOFF_DROP) return true;
+  }
+  return false;
+}
+// PURE: is this level building into a pullback node?
+function legNodeBuilding(L){
+  if(!L) return false;
+  if(typeof L.acm15==='number' && L.acm15>=HANDOFF_ACM) return true;
+  if(typeof L.pct==='number' && Math.abs(L.pct)>=PB_MIN_PCT) return true;
+  return false;
+}
 function legBlank(dir){
   return { dir:dir||'none', phase:'none', magnet:null, lastPB:null, pbZone:null,
            predictedPB:false, pbDetected:null,
            roll:{ side:null, steps:[], count:0, signal:false, confirmed:false, weakening:false },
            invalidations:{ trendBreak:false, pbBreak:false },
-           rolledOff:[], air:null, seen:{}, note:null, event:null, px:null, t:0, bar:0 };
+           rolledOff:[], air:null, seen:{}, note:null, event:null, px:null, t:0, bar:0,
+           // (v10.56) legId = the SETUP identity the ✓/✗ latch is keyed by; handoff = PART A;
+           // stack / deflected / atPB / magnetReached / pbDissipating are what the READ
+           // voice reads (PART B) — every one of them derived here, never in the renderer.
+           legId:1, handoff:null, stack:null, deflected:false, deflectedFrom:null,
+           atPB:false, magnetReached:false, pbDissipating:false };
 }
 function legClone(s){ try{ return JSON.parse(JSON.stringify(s)); }catch(e){ return legBlank(s&&s.dir); } }
 // ---------------------------------------------------------------------------
@@ -8421,9 +8490,12 @@ function legStep(prev, ctx){
   var levels=ctx.levels||[];
   var kingK=(typeof ctx.kingK==='number')?ctx.kingK:null;
   var close=(typeof ctx.close==='number')?ctx.close:px;
+  // (v10.56) the contact band the voice/latch use. Passed in so legStep stays PURE.
+  var zone=(typeof ctx.zone==='number')?ctx.zone:((typeof DEFLECT_ZONE==='number')?DEFLECT_ZONE:0.5);
   var st;
   if(!prev || prev.dir!==dirIn){
     st=legBlank(dirIn);
+    st.legId=((prev&&prev.legId)||0)+1;         // a trend flip is a NEW setup for the latch
     if(prev && prev.dir && prev.dir!=='none' && prev.dir!==dirIn) st.invalidations.trendBreak=true;
   } else {
     st=legClone(prev);
@@ -8431,19 +8503,37 @@ function legStep(prev, ctx){
     st.invalidations={ trendBreak:false, pbBreak:false };
   }
   st.dir=dirIn; st.t=ctx.t||0; st.bar=ctx.bar||0; st.px=(px!=null)?+px.toFixed(2):null;
+  // Per-bar observations reset every bar: they describe THIS bar, never a carried state.
+  st.handoff=null; st.stack=null; st.atPB=false; st.magnetReached=false; st.pbDissipating=false;
+  st.deflected=!!ctx.deflected;
+  st.deflectedFrom=(ctx.deflectedK!=null)?ctx.deflectedK:((st.deflected&&st.lastPB)?st.lastPB.k:null);
   if(dirIn==='none' || px==null){
     st.phase='none'; st.predictedPB=false; st.magnet=null; st.pbZone=null; st.pbDetected=null;
-    st.rolledOff=[]; st.air=null;
+    st.rolledOff=[]; st.air=null; st.deflected=false; st.deflectedFrom=null;
     return st;
   }
   var dn=(dirIn==='dn');
   // ---- the meaningful board, split by side ----
-  var seen={}, above=[], below=[];
+  var seen={}, above=[], below=[], thinBuilding=[];
   levels.forEach(function(L){
     if(!L || typeof L.k!=='number') return;
     var pct=(typeof L.pct==='number')?Math.abs(L.pct):(L.isKing?100:0);
-    if(!(L.isKing || pct>=PB_MIN_PCT)) return;
-    var row={ k:L.k, pct:pct, state:L.state||null, isKing:!!L.isKing };
+    // (v10.56 PART A) a node still UNDER the PB floor but BUILDING fast (m15 Acm) is exactly
+    // what the handoff is looking for — it is the new ceiling before it qualifies. It is kept
+    // aside for the handoff `to` search only; it cannot become a PB candidate until it counts.
+    if(!(L.isKing || pct>=PB_MIN_PCT)){
+      if(typeof L.acm15==='number' && L.acm15>=HANDOFF_ACM && ((L.k>px+0.001)===dn)){
+        thinBuilding.push({ k:L.k, pct:pct, state:L.state||null, isKing:false, acm15:L.acm15,
+                            pctPeak:(typeof L.pctPeak==='number')?L.pctPeak:null });
+      }
+      return;
+    }
+    // (v10.56 PART A) the accumulation numbers ride WITH the level: the handoff and the
+    // 6a/6b split are decided on them, and a copy that dropped them silently answered
+    // "is this node bleeding?" with "no" for every node on the board.
+    var row={ k:L.k, pct:pct, state:L.state||null, isKing:!!L.isKing,
+              acm15:(typeof L.acm15==='number')?L.acm15:null,
+              pctPeak:(typeof L.pctPeak==='number')?L.pctPeak:null };
     seen[L.k.toFixed(2)]=pct;
     if(L.k>px+0.001) above.push(row); else if(L.k<px-0.001) below.push(row);
   });
@@ -8478,6 +8568,41 @@ function legStep(prev, ctx){
     st.phase = away ? 'RLY' : 'PB';
   } else if(st.phase!=='PB'){
     st.phase='RLY';
+  }
+  // ---- (v10.56 PART A) THE HANDOFF, detected BEFORE the new node qualifies as a PB ----
+  // from = the node the trend is currently deflecting off (the last pullback node, or the
+  //        nearest meaningful ceiling above / floor below when there is none yet), and it
+  //        must be DISSIPATING. to = a meaningful node on the same side, LOWER (dn) /
+  //        HIGHER (up) than `from`, that is BUILDING. Both must hold for it to be active.
+  function legPoolLevel(k){
+    var f=null; if(k==null) return null;
+    pool.forEach(function(L){ if(Math.abs(L.k-k)<0.001) f=L; });
+    return f;
+  }
+  var hoFrom=null;
+  if(st.lastPB) hoFrom=legPoolLevel(st.lastPB.k) || { k:st.lastPB.k, pct:st.lastPB.pct };
+  if(!hoFrom) pool.forEach(function(L){ if(!hoFrom || Math.abs(L.k-px)<Math.abs(hoFrom.k-px)) hoFrom=L; });
+  if(!st.invalidations.pbBreak && hoFrom && legNodeDissipating(hoFrom)){
+    var hoTo=null;
+    pool.concat(thinBuilding).forEach(function(L){
+      if(Math.abs(L.k-hoFrom.k)<0.001) return;
+      var inside = dn ? (L.k<hoFrom.k-0.001) : (L.k>hoFrom.k+0.001);   // between price and `from`
+      if(!inside) return;
+      if(Math.abs(L.k-px)>PB_REACH) return;
+      if(!legNodeBuilding(L)) return;
+      if(!hoTo || Math.abs(L.k-px)<Math.abs(hoTo.k-px)) hoTo=L;
+    });
+    if(hoTo){
+      var wasSame=(prev && prev.handoff && prev.handoff.from && prev.handoff.to &&
+                   Math.abs(prev.handoff.from.k-hoFrom.k)<0.001 && Math.abs(prev.handoff.to.k-hoTo.k)<0.001);
+      st.handoff={ active:true, resolved:false,
+        from:{ k:hoFrom.k, pctNow:(hoFrom.pct!=null?hoFrom.pct:null),
+               pctPeak:(hoFrom.pctPeak!=null?hoFrom.pctPeak:null),
+               dec15m:(hoFrom.acm15!=null?hoFrom.acm15:null) },
+        to:{ k:hoTo.k, pctNow:(hoTo.pct!=null?hoTo.pct:null), acm15m:(hoTo.acm15!=null?hoTo.acm15:null) },
+        t:st.t, bar:st.bar,
+        since:(wasSame && prev.handoff.since!=null)?prev.handoff.since:st.bar };
+    }
   }
   // ---- PB DETECTION: a meaningful node APPEARS or GROWS on the counter side ----
   // The BOARD does not reset when the trend flips, so the "was this node here last bar?"
@@ -8518,6 +8643,25 @@ function legStep(prev, ctx){
     st.pbDetected={ k:cand.k, pct:cand.pct, t:st.t, bar:st.bar, rolledFrom:from, step:st.roll.count };
     st.lastPB={ k:cand.k, pct:cand.pct, t:st.t, step:st.roll.count };
     st.phase='PB'; st.event='pbDetected';
+    // (v10.56) a NEW setup for the ✓/✗ latch: every pullback node is its own question.
+    st.legId=(st.legId||0)+1;
+    st.deflected=false; st.deflectedFrom=null;
+    // (v10.56 PART A) THE HANDOFF RESOLVES: the node the transfer named has just become
+    // the pullback node. `from` is left behind by the roll (it lands in rolledOff below).
+    if(st.handoff && st.handoff.to && Math.abs(st.handoff.to.k-cand.k)<0.001){
+      st.handoff.active=false; st.handoff.resolved=true;
+      st.handoff.leadBars=(st.handoff.since!=null)?(st.bar-st.handoff.since):0;
+      // `event` STAYS 'pbDetected' — the ⚑ banner and the PB log key off it, and the
+      // handoff resolving IS a pullback node landing. The resolution rides beside it.
+      st.note='handoff resolved: '+st.handoff.from.k+' → '+st.handoff.to.k;
+    }
+    // (v10.56 PART B) 6a / 6b: a pullback node formed BEYOND the old one (dn: higher,
+    // up: lower). Which sentence it is depends on the OLD node — still holding (the
+    // stack) or dissipated (the ceiling rolling the wrong way). Same test as PART A.
+    if(from!=null && rolled===false){
+      var oldL=legPoolLevel(from);
+      st.stack={ k:cand.k, from:from, holding:!(oldL==null || legNodeDissipating(oldL)) };
+    }
   }
   // ---- PB ZONE + the PREDICTION (the zone is named BEFORE the node exists) ----
   var edgeK=null;
@@ -8545,6 +8689,12 @@ function legStep(prev, ctx){
       st.air={ lo:Math.min(prevStep, st.lastPB.k), hi:Math.max(prevStep, st.lastPB.k) };
     }
   }
+  // ---- (v10.56 PART B) WHAT THE VOICE READS. Derived here so the renderer never has to
+  // decide anything: is price AT the pullback node, has the magnet been REACHED, and is
+  // the pullback node itself bleeding (the 6a/6b split and the handoff use one test).
+  if(st.pbDetected && px!=null) st.atPB=(Math.abs(px-st.pbDetected.k)<=zone);
+  if(st.magnet && px!=null)     st.magnetReached=(Math.abs(px-st.magnet.k)<=zone);
+  if(st.lastPB){ var curL=legPoolLevel(st.lastPB.k); st.pbDissipating=legNodeDissipating(curL); }
   st.seen=seen;
   return st;
 }
@@ -8564,8 +8714,34 @@ function legCtxOf(sym){
   var tv={state:'na'}; try{ tv=trendVerdict(sym)||tv; }catch(e2){}
   var cs=[]; try{ cs=closedCandles(sym)||[]; }catch(e3){}
   var close=cs.length?cs[cs.length-1].c:px;
+  // (v10.56 PART A) every level carries its OWN accumulation history into the engine —
+  // m15 change and session peak — because the handoff is a statement about strength
+  // transfer, not about strikes. legStep stays pure: it reads the numbers, never the feed.
+  var lv=[];
+  try{
+    ((m&&m.levels)||[]).forEach(function(L){
+      if(!L || typeof L.k!=='number') return;
+      var row={ k:L.k, pct:L.pct, state:L.state, isKing:!!L.isKing, isFlr:!!L.isFlr,
+                isCeil:!!L.isCeil, isGatekeeper:!!L.isGatekeeper, isStrongMag:!!L.isStrongMag };
+      try{ var a=accumCanon(sym, L.k);
+        if(a){ row.acm15=a.m15.pct; row.pctPeak=a.session.peak; } }catch(eA){}
+      lv.push(row);
+    });
+  }catch(eL2){ lv=(m&&m.levels)||[]; }
+  // (v10.56 PART C) has the CURRENT pullback node's latch already said ✓? Read straight
+  // off the persisted latch — never by calling the trigger, which would re-enter here.
+  var prevSt=LEG_STATE[sym]||null;
+  var defl=false, deflK=null;
+  try{
+    if(prevSt && prevSt.pbDetected){
+      var ts=deflTriggerState(sym, prevSt.pbDetected.k, prevSt.legId);
+      if(ts && ts.indexOf('✓')===0){ defl=true; deflK=prevSt.pbDetected.k; }
+    }
+  }catch(eT){}
   return { dirIn:legDirOf(tv.state), px:px, close:close,
-           levels:(m&&m.levels)||[], kingK:(m&&m.kingK!=null)?m.kingK:null,
+           levels:lv, kingK:(m&&m.kingK!=null)?m.kingK:null,
+           zone:(typeof DEFLECT_ZONE==='number')?DEFLECT_ZONE:0.5,
+           deflected:defl, deflectedK:deflK,
            t:Date.now(), bar:(S.lastClosedB||0), n:cs.length };
 }
 // The engine advances ONCE PER CLOSED BAR. spineBarKey includes the live price, which
@@ -8600,6 +8776,116 @@ function legEngine(sym){
   LEG_BUSY[sym]=false;
   return st;
 }
+// ============================================================================
+// (v10.56 PART C) THE LATCHED ✓ / ✗ DEFLECTION TRIGGER.
+// The old per-bar reactionQuality answered "is the wick pretty RIGHT NOW", so the card's
+// mark flickered on and off inside a single bar and could never be the thing a trader
+// waits for. This is a LATCH, one per setup (sym · node · legId), evaluated ONLY on
+// CLOSED bars: it says ✓ once the rejection candle has actually closed away from the
+// node (the go signal in that direction), ✗ once a bar has closed through it, and then
+// it STOPS — it does not re-evaluate, so it cannot take itself back. reactionQuality
+// stays as an internal input and lives in the hover; it is no longer the visible mark.
+// ============================================================================
+var TRIG_KEY='gpts_trigger_v1';   // NEW key (latch persistence within the day)
+var TRIG_AWAY_MULT=2;             // price must leave the node by more than 2x the zone...
+var TRIG_AWAY_BARS=3;             // ...for this many closed bars before the setup is abandoned
+var TRIG=null;
+function trigLoad(){
+  if(TRIG && TRIG.date===TODAY) return TRIG;
+  try{ TRIG=JSON.parse(localStorage.getItem(TRIG_KEY)||'null'); }catch(e){ TRIG=null; }
+  if(!TRIG || TRIG.date!==TODAY) TRIG={ date:TODAY, v:{} };
+  if(!TRIG.v) TRIG.v={};
+  return TRIG;
+}
+function trigSave(){ try{ localStorage.setItem(TRIG_KEY, JSON.stringify(TRIG)); }catch(e){} }
+function trigKey(sym, k, legId){ return sym+':'+((k!=null)?k.toFixed(2):'-')+':'+(legId||0); }
+function trigBlank(o){
+  return { state:'', k:(o&&o.k!=null)?o.k:null, dir:(o&&o.dir)||null, legId:(o&&o.legId)||0,
+           latchedBar:null, away:0, bar:0, abandoned:false };
+}
+// PURE: advance ONE latch by ONE bar. o = {k, dir, legId, bar, closed, o,h,l,c, zone}.
+// Everything the latch claims is decided here, so it is unit-testable off a bar array.
+function deflTriggerStep(prev, o){
+  if(!o || o.k==null) return prev || trigBlank(o);
+  var st = prev ? { state:prev.state||'', k:prev.k, dir:prev.dir, legId:prev.legId,
+                    latchedBar:(prev.latchedBar!=null)?prev.latchedBar:null,
+                    away:prev.away||0, bar:prev.bar||0, abandoned:!!prev.abandoned }
+                : trigBlank(o);
+  // A NEW SETUP (new leg id, or a different strike) starts blank. Nothing carries over.
+  if(prev && (prev.legId!==o.legId || (prev.k!=null && Math.abs(prev.k-o.k)>0.001))) st=trigBlank(o);
+  st.k=o.k; st.dir=o.dir; st.legId=o.legId;
+  if(o.closed===false) return st;            // INTRABAR: a wick decides nothing
+  if(o.bar!=null) st.bar=o.bar;
+  if(st.state) return st;                    // LATCHED: never re-evaluated
+  if(st.abandoned) return st;                // the setup was dropped; a new leg revives it
+  var z=(typeof o.zone==='number')?o.zone:((typeof DEFLECT_ZONE==='number')?DEFLECT_ZONE:0.5);
+  var k=o.k, dn=(o.dir==='dn');
+  var h=o.h, l=o.l, c=o.c, op=(o.o!=null)?o.o:o.c;
+  if(h==null || l==null || c==null) return st;
+  if(dn){
+    // resistance pullback node: a close BACK ABOVE it is the setup failing
+    if(c>k+z){ st.state='✗'; st.latchedBar=st.bar; return st; }
+    if(h>=k-z && c<k-z && c<op){ st.state='✓↓'; st.latchedBar=st.bar; return st; }
+  } else {
+    if(c<k-z){ st.state='✗'; st.latchedBar=st.bar; return st; }
+    if(l<=k+z && c>k+z && c>op){ st.state='✓↑'; st.latchedBar=st.bar; return st; }
+  }
+  // ABANDONMENT: price walked away and never engaged. The setup is dropped, not failed.
+  if(Math.abs(c-k) > TRIG_AWAY_MULT*z) st.away=(st.away||0)+1; else st.away=0;
+  if(st.away>=TRIG_AWAY_BARS){ st.abandoned=true; st.away=0; }
+  return st;
+}
+function deflTriggerState(sym, k, legId){
+  try{ var db=trigLoad(); var r=db.v[trigKey(sym,k,legId)]; return (r&&r.state)||''; }catch(e){ return ''; }
+}
+// The LIVE wrapper: one evaluation per CLOSED bar, persisted for the day.
+function deflTrigger(sym, node, leg){
+  sym=sym||'SPY';
+  var out=trigBlank(node);
+  try{
+    if(!node || node.k==null) return out;
+    var lg=leg||null;
+    if(!lg){ try{ lg=(typeof legEngine==='function')?legEngine(sym):null; }catch(e0){ lg=null; } }
+    var dir=(lg&&lg.dir)||'none';
+    if(dir!=='dn' && dir!=='up') return out;
+    var legId=(lg&&lg.legId)||0;
+    var db=trigLoad(); var key=trigKey(sym, node.k, legId);
+    var prev=db.v[key]||null;
+    var S=STATE[sym]||{};
+    var cs=[]; try{ cs=closedCandles(sym)||[]; }catch(e1){ cs=[]; }
+    var bar=(S.lastClosedB||cs.length||0);
+    if(prev && prev.bar===bar) return prev;               // already evaluated on this bar
+    var b=cs.length?cs[cs.length-1]:null;
+    if(!b) return prev||out;
+    var st=deflTriggerStep(prev, { k:node.k, dir:dir, legId:legId, bar:bar, closed:true,
+                                   o:b.o, h:b.h, l:b.l, c:b.c,
+                                   zone:(typeof DEFLECT_ZONE==='number')?DEFLECT_ZONE:0.5 });
+    db.v[key]=st; trigSave();
+    return st;
+  }catch(e){ return out; }
+}
+// Advance the latch for the node the leg engine says is in question, once per bar, so
+// the mark is correct even on bars where that node is not the one being rendered.
+function deflTriggerTick(sym){
+  try{
+    sym=sym||'SPY';
+    var lg=(typeof legEngine==='function')?legEngine(sym):null;
+    if(!lg || !lg.pbDetected) return null;
+    return deflTrigger(sym, { k:lg.pbDetected.k }, lg);
+  }catch(e){ return null; }
+}
+var TRIG_TIP=('Has the deflection occurred? ✓ = rejection candle closed away from the node (the go signal in '+
+  'that direction); ✗ = closed through it. Latched on bar close — does not flicker.');
+function deflTriggerHtml(t){
+  try{
+    if(!t || !t.state) return '';
+    var col=(t.state==='✗')?PAL.shortAccent:PAL.longAccent;
+    return '<span title="'+TRIG_TIP.replace(/"/g,'')+'" style="font-weight:800;font-size:11px;color:'+col+'">'+t.state+'</span>';
+  }catch(e){ return ''; }
+}
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.trigger=function(s){ try{ return trigLoad(); }catch(e){ return null; } };
+
 // ============================================================================
 // (v10.55 PART D) MULTI-SESSION ROLLING, out of FCHIST. Intraday rolling is the PB
 // chain above; the Academy's other half is DAY-OVER-DAY: the dominant floor one or
@@ -8659,39 +8945,105 @@ function sessionRoll(sym){
   }catch(e){}
   return out;
 }
-// ---- (PART B) THE VOICE. Pure sentence builders, in the user's own vocabulary.
-// These describe LEVELS ("sell level", "resistance to sell from"), never an order:
-// nothing here says enter, size, stop or now.
-function legSentence(leg){
+// ---- (v10.56 PART B) THE VOICE — the user's own fifteen sentences, verbatim.
+// Authored by the trader on 2026-08-18 and locked: the wording, the punctuation and the
+// order of the clauses are the specification, and only the NUMBERS are live. They
+// describe LEVELS and what is expected of them — never an instruction, never a size, a
+// stop or a "now". The state → sentence mapping is decided here and nowhere else:
+//   7  magnet reached · 6a/6b a node formed beyond the pullback node (holding/dissipated)
+//   5  just deflected (the ✓ latch) and the next leg is running · 4 price AT the node
+//   2  the handoff is active · 3 the node has formed, price away from it · 1 the leg runs
+// A caveat from the direction grade's caps is appended by the READ block, never here, so
+// these fifteen stay character-for-character what the user wrote.
+// The reference node sentence 1 rolls "from": the current pullback node, or the edge of
+// the predicted zone (the nearest ceiling above / floor below) when none has formed yet.
+function legVoiceRef(leg){
   try{
-    if(!leg || leg.dir==='none') return '';
+    if(leg.lastPB && leg.lastPB.k!=null) return leg.lastPB.k;
+    var z=leg.pbZone; if(!z) return null;
+    return (leg.dir==='dn')?z.hi:z.lo;
+  }catch(e){ return null; }
+}
+function legVoice(leg){
+  var out={ id:null, s:'' };
+  try{
+    if(!leg || leg.dir==='none') return out;
     var dn=(leg.dir==='dn');
-    var parts=[ dn?'Downtrend (SMA).':'Uptrend (SMA).' ];
-    // AT the pullback node the READ is about that node; once price has left it the leg
-    // is running again and the READ goes back to the magnet + the next predicted zone.
-    if(leg.pbDetected && leg.phase==='PB'){
-      var pb=leg.pbDetected;
-      var stepTxt='';
-      if(leg.roll && leg.roll.count){
-        var w=legStepWord(leg.roll.count);
-        stepTxt=' ('+(leg.roll.confirmed ? (w+' step — confirmed '+(dn?'downtrend':'uptrend'))
-                    : (leg.roll.signal ? (w+' step, signal') : (w+' step')))+')';
+    var TREND   = dn?'Downtrend':'Uptrend';
+    var WAY     = dn?'down':'up';
+    var SIDE    = dn?'ceiling':'floor';          // the node word on the pullback side
+    var ROLLING = dn?'rolling down':'rolling up';
+    var SR      = dn?'resistance':'support';
+    var SRC     = dn?'Resistance':'Support';
+    var pre=(dn?'dn':'up');
+    var mag=(leg.magnet && leg.magnet.k!=null)?fmtLvl(leg.magnet.k):null;
+    var pbK=(leg.pbDetected && leg.pbDetected.k!=null)?leg.pbDetected.k
+           :((leg.lastPB && leg.lastPB.k!=null)?leg.lastPB.k:null);
+    // 7 — the leg arrived
+    if(leg.magnetReached && mag!=null){
+      out.id=pre+'7'; out.s='Rallied '+WAY+' to '+mag+' target. On watch for a pullback.'; return out;
+    }
+    // 6a / 6b — a new node formed beyond the pullback node
+    if(leg.stack && leg.stack.k!=null && leg.stack.from!=null){
+      var oldK=fmtLvl(leg.stack.from), newK=fmtLvl(leg.stack.k);
+      if(leg.stack.holding){
+        out.id=pre+'6a';
+        out.s='Pullback node '+oldK+' holding. New '+SR+' forming '+(dn?'above':'below')+' at '+newK+' — '+SR+' stacking.';
+      } else {
+        out.id=pre+'6b';
+        out.s='Pullback node '+oldK+' dissipated. New pullback node formed '+(dn?'higher':'lower')+' at '+newK+' — '+SIDE+' rolling '+(dn?'up':'down')+'.';
       }
-      var rolledTxt=(pb.rolledFrom!=null)?(' — rolled '+(dn?'lower':'higher')+' from '+fmtLvl(pb.rolledFrom)):'';
-      parts.push('Pullback node formed at '+fmtLvl(pb.k)+rolledTxt+stepTxt+'.');
-      parts.push(dn ? 'Resistance to sell from; deflection expected.' : 'Support to buy from; deflection expected.');
-      if(leg.magnet) parts.push('Potential '+(dn?'drop':'rise')+' to magnet '+fmtLvl(leg.magnet.k)+'.');
-      if(leg.roll && leg.roll.weakening) parts.push('PB rolled '+(dn?'UP':'DOWN')+' — trend weakening.');
-    } else {
-      if(leg.magnet) parts.push('Rallying '+(dn?'down':'up')+' to magnet '+fmtLvl(leg.magnet.k)+'.');
-      if(leg.predictedPB){
-        var edge=leg.pbZone?(dn?leg.pbZone.hi:leg.pbZone.lo):null;
-        parts.push('Expect a pullback node to form '+(dn?'above':'below')+
-          (edge!=null?(', '+(dn?'below':'above')+' '+fmtLvl(edge)):'')+' — '+(dn?'sell level':'buy level')+'.');
+      return out;
+    }
+    // 5 — deflected off the node, the next leg is running
+    if(leg.deflected && leg.phase==='RLY' && mag!=null){
+      var offK=(leg.deflectedFrom!=null)?leg.deflectedFrom:pbK;
+      if(offK!=null){
+        out.id=pre+'5';
+        out.s='Deflected off '+fmtLvl(offK)+'. Rallying '+WAY+' to '+mag+'. Expect pullback node to form from '+fmtLvl(offK)+' '+SIDE+' '+ROLLING+'.';
+        return out;
       }
     }
-    if(leg.invalidations && leg.invalidations.pbBreak) parts.push(dn?'Lower-high broken.':'Higher-low broken.');
-    return parts.join(' ');
+    // 4 — price is pulling back INTO the node
+    if(leg.atPB && pbK!=null && mag!=null){
+      out.id=pre+'4';
+      out.s='Pulling back to '+SR+' pullback node '+fmtLvl(pbK)+'. Deflection expected to target '+mag+' '+(dn?'below':'above')+'.';
+      return out;
+    }
+    // 2 — the handoff: the old node bleeding into the new one, before it qualifies
+    if(leg.handoff && leg.handoff.active && leg.handoff.from && leg.handoff.to && mag!=null){
+      out.id=pre+'2';
+      out.s=TREND+'. Rallying '+WAY+' to '+mag+'. '+fmtLvl(leg.handoff.from.k)+' '+SIDE+' '+
+            (dn?'dissipating':'building')+' and '+ROLLING+' to form pullback node at '+fmtLvl(leg.handoff.to.k)+'.';
+      return out;
+    }
+    // 3 — the node has formed and price is away from it
+    if(leg.pbDetected && leg.pbDetected.k!=null && mag!=null){
+      out.id=pre+'3';
+      out.s=SRC+' pullback node formed at '+fmtLvl(leg.pbDetected.k)+'. Deflection expected to target '+mag+'.';
+      return out;
+    }
+    // 1 — the leg is running and the pullback node has not formed yet
+    if(mag!=null){
+      var ref=legVoiceRef(leg);
+      if(ref!=null){
+        out.id=pre+'1';
+        out.s=TREND+'. Rallying '+WAY+' to '+mag+'. Expect pullback node to form from '+fmtLvl(ref)+' '+SIDE+' '+ROLLING+'.';
+        return out;
+      }
+    }
+  }catch(e){}
+  return out;
+}
+// What the READ actually says: the locked sentence, plus the ONE piece of state that is
+// not in it — the level having broken. The fifteen are never edited to carry it.
+function legSentence(leg){
+  try{
+    var v=legVoice(leg);
+    var brk=(leg && leg.invalidations && leg.invalidations.pbBreak)
+              ? ((leg.dir==='dn')?'Lower-high broken.':'Higher-low broken.') : '';
+    if(!v.s) return brk;            // the level breaking is the read even when no sentence applies
+    return brk ? (v.s+' '+brk) : v.s;
   }catch(e){ return ''; }
 }
 // The decision LINE at a PB node. Descriptive geometry in the user's vocabulary; the
@@ -9477,9 +9829,10 @@ function deflZonesBlock(sym){
     outFlag='<span title="Is the range still valid? Price is outside Flr–Ceil — a break + follow-through re-anchors the range to the next strong magnet." style="color:'+PAL.amber+';font-size:8.5px;font-weight:700">⚠ OUT · range redefining</span>';
   }
   // section header — DROP the `· px` (the price divider is the reference).
-  var hdrTip=('Where can price actually react, best first? The engaged zone is shown in full '+
-    '(identity · polarity · tap · grade, then Acm 15m/session, S/Q/V confluence, activity and the descriptive frame); the next '+DEFLZONES_N+
-    ' meaningful nodes get one line each. %King comes from the gamma FEED, so it is correct no matter which book the heatmap is displaying.').replace(/"/g,'');
+  var hdrTip=('Where can price actually react, best first? The engaged zone carries the identity, the leg tag, the '+
+    'latched ✓/✗ deflection trigger and the grade, then S/Q/V confluence with the frame (tgt · inval) when there is one; the next '+DEFLZONES_N+
+    ' meaningful nodes get one line each. Everything else — %King, polarity, taps, Acm, activity, entry, R:R — is in the row hover. '+
+    '%King comes from the gamma FEED, so it is correct no matter which book the heatmap is displaying.').replace(/"/g,'');
   html+='<div title="'+hdrTip+'" style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:9.5px;color:'+PAL.sub+';font-weight:700;letter-spacing:.3px;margin:4px 2px 3px;white-space:nowrap"><span>⚡ Deflection zones</span>'+outFlag+'</div>';
   html+='<div style="display:grid;grid-template-columns:1fr 26px;font-size:7px;letter-spacing:.3px;text-transform:uppercase;color:'+PAL.sub+';font-weight:800;padding:0 4px 2px;white-space:nowrap"><span>Zone</span><span style="text-align:right">Grade</span></div>';
   // ---- 1. the IN-PLAY zone, full 3-row card with the decision folded into row 3 ----
@@ -9490,70 +9843,74 @@ function deflZonesBlock(sym){
     var pct=feedPctAt(sym,L.k);
     var pcol=zonePolCol(L);
     var tap=(typeof L.taps==='number')?L.taps:0;
-    var rq=reactionQuality(sym,L);
+    var rq=reactionQuality(sym,L);          // (v10.56 C) INTERNAL input + hover, no longer the visible mark
     var ant=deflAnticipation(sym,L);
     var acm=accumCanon(sym,L.k);
     var fr=tradeFrame(sym,L,dirNum||nodeHoldDir(L,px));
-    var rxHtml = (rq.q==='confirmed') ? ' · <span title="Is the bounce working right now? '+rq.why.replace(/"/g,'')+'" style="color:'+PAL.longAccent+';font-weight:800">✓</span>'
-               : (rq.q==='weak')      ? ' · <span title="Is the bounce working right now? '+rq.why.replace(/"/g,'')+'" style="color:'+PAL.shortAccent+';font-weight:800">✗</span>' : '';
-    var setupChip = ant.fired ? '<span title="A grade-'+ant.grade+' node is being approached — a reaction is POSSIBLE here (geometry, not a forecast)." style="font-size:8px;font-weight:800;color:'+PAL.blue+';border:1px solid '+PAL.blue+';border-radius:9px;padding:0 4px">▶ setup</span>' : '';
+    // (v10.56 PART C) the LATCHED trigger is the one mark on row 1: ✓↓ / ✓↑ / ✗, blank
+    // until a CLOSED bar has answered the question. It replaces the per-bar reaction glyph.
+    var trig=null; try{ trig=deflTrigger(sym, L, legR); }catch(eTg){ trig=null; }
+    var trigHtml=''; try{ trigHtml=deflTriggerHtml(trig); }catch(eTh){ trigHtml=''; }
     var gradeTip=zoneGradeTip(sym,L,ng);
-    // r3 frame — air tag on tgt AND inval when a pocket lies that way.
+    // frame — air tag on tgt AND inval when a pocket lies that way.
     var tgtAir=(fr.path==='air'), invalAir=false;
     try{ var ap=m.airpocket; if(ap&&ap.pockets && fr.inval!=null){ var lo=Math.min(L.k,fr.inval), hi=Math.max(L.k,fr.inval);
       ap.pockets.forEach(function(p){ if(p.lo<hi+0.01 && p.hi>lo-0.01) invalAir=true; }); } }catch(eAp){}
-    var frTxt='entry '+fmtLvl(L.k);
-    if(fr.tgt!=null) frTxt+=' · tgt '+fmtLvl(fr.tgt)+(tgtAir?'(air)':'');
-    if(fr.inval!=null) frTxt+=' · inval '+((fr.dir>=0)?'&lt;':'&gt;')+fmtLvl(fr.inval)+(invalAir?'(air)':'');
     var dc=sp.decision||decisionCell(sym);
     var cellTxt=dc?dc.text:'';
-    // ---- (v10.54, audit 19/20) R:R + CONTACT gate the whole row ----
+    // ---- (v10.54, audit 19/20) R:R + CONTACT gate the whole row. (v10.56 PART D) the
+    // gate is now SILENT: the ratio never reaches the face, it only decides whether the
+    // frame is shown at all. A number the user does not read is not worth a row.
     var rr=frameRR(fr);
     var thin=(rr!=null && rr<RR_MIN);
-    if(rr!=null) frTxt+=' · '+rrText(rr);
-    if(!inContact){
-      // NOT IN CONTACT: no frame, no decision, no buttons. The card names the level it
-      // is watching and stops there — geometry, not an engagement.
-      cellTxt='watching — not in contact';
-      frTxt='nearest zone '+fmtLvl(L.k)+' · '+fmtSpan(Math.abs(px-L.k))+' away (contact = within '+fmtSpan(inPlayBand())+')';
-    } else if(thin){
-      // BELOW 2:1 the geometry itself is the finding, and it is said in the decision text.
-      cellTxt='skip · '+rrText(rr)+' (below the '+RR_FLOOR+':1 floor)';
-    }
-    // (v10.55) AT A PULLBACK NODE the frame is said in the user's own words. It rides
-    // BEHIND the matrix label and the R:R gate: no contact or a thin frame and it is
-    // not shown at all, exactly like the rest of the row.
-    var legLine=''; try{ legLine=(inContact && !thin) ? legDecisionLine(legR, L) : ''; }catch(eLd){ legLine=''; }
-    if(legLine) frTxt=legLine+' · '+frTxt;
-    // BUTTONS ARE GATED ON THE DECISION CELL, not on the node grade: a C×A bar could
-    // grade the node B and still read "scalp only", and the buttons appeared anyway.
-    var gateOK = inContact && !thin && !/stand aside|skip|wait|watching/.test(cellTxt);
-    var btns = gateOK ? '<span style="margin-left:auto">'+actButtonsHtml(sym,L.k)+'</span>' : '';
-    var frameTip=('Where does the trade live, and what is it worth? entry = the node; tgt = next node in the direction '+
-      '(air = fast, thin exposure); inval = where this read stops being true; R:R = |tgt−entry| / |entry−inval|, '+
-      'pure geometry off those two numbers. Below '+RR_MIN+':1 the row is described as a skip and the take/pass '+
-      'buttons are hidden — the frame is not worth its own risk. '+RR_FLOOR+':1 is the floor this tool describes as worth taking.').replace(/"/g,'');
+    var tradeable = inContact && !thin && !/stand aside|skip|wait|watching/.test(cellTxt);
+    // (v10.56 PART D) ROW 2 IS THE FRAME OR IT IS THE WORD "skip". Nothing in between.
+    var frTxt='';
+    if(fr.tgt!=null) frTxt+='tgt '+fmtLvl(fr.tgt)+(tgtAir?'(air)':'');
+    if(fr.inval!=null) frTxt+=(frTxt?' · ':'')+'inval '+((fr.dir>=0)?'&lt;':'&gt;')+fmtLvl(fr.inval)+(invalAir?'(air)':'');
+    var btns = tradeable ? '<span style="margin-left:auto">'+actButtonsHtml(sym,L.k)+'</span>' : '';
+    // (v10.55) the leg's own words for the frame, and (v10.56) the whole of what used to
+    // sit on the face — %King, polarity, tap, ▶ setup, Acm, activity, entry, R:R, the
+    // live reaction — now live in ONE question-first hover on the row.
+    var legLine=''; try{ legLine=legDecisionLine(legR, L); }catch(eLd){ legLine=''; }
+    var actWord=''; try{ actWord=nodeActivityWord(sym,L)||''; }catch(eAw){ actWord=''; }
+    var rowTip=('What is this node, and is it worth anything? '+fmtLvl(L.k)+' '+zoneRole(L)+
+      (pct!=null?(' · '+pct+'% of King'):'')+' · '+((L.pos===false)?'−γ sharp':'+γ clean')+
+      ' · '+tapWord(tap)+' tap'+(actWord?(' · '+actWord):'')+
+      ' · Acm 15m '+(acm.m15.pct!=null?acm.m15.pct+'%':'–')+' ('+acm.m15.label+')'+
+      ', session '+(acm.session.pct!=null?acm.session.pct+'%':'–')+' ('+acm.session.label+')'+
+      (acm.session.fromPeak!=null?(', '+acm.session.fromPeak+'% off its session peak'):'')+
+      (ant.fired?(' · ▶ setup: a grade-'+ant.grade+' node is being approached'):'')+
+      ' · entry '+fmtLvl(L.k)+(rr!=null?(' · '+rrText(rr)+(thin?(' — below the '+RR_FLOOR+':1 floor, so the frame is not shown'):'')):'')+
+      ' · reaction now: '+rq.q+' ('+rq.why+')'+
+      (legLine?(' · '+legLine):'')+
+      (inContact?'':(' · nothing is in contact — this is the nearest zone, '+fmtSpan(Math.abs(px-L.k))+' away (contact = within '+fmtSpan(inPlayBand())+')'))+
+      '. Descriptive characterisation, never an instruction.').replace(/"/g,'');
+    var decTip=('What is this setup? '+(dc?dc.cell+' → ':'')+cellTxt+
+      (tradeable?'':(!inContact?' — nothing is in contact yet':(thin?(' — '+rrText(rr)+', below the '+RR_FLOOR+':1 floor'):'')))+
+      '. tgt = the next node in the direction (air = fast, thin exposure); inval = where this read stops being true. '+
+      'Descriptive characterisation, never an instruction.').replace(/"/g,'');
     html+='<div style="background:'+(inContact?'rgba(63,185,80,.05)':'rgba(139,152,169,.05)')+';border-left:2px solid '+(inContact?PAL.longAccent:PAL.line)+';border-radius:2px;padding:3px 4px 4px 6px;margin-bottom:2px">'+
-      // r1
-      '<div style="display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap;overflow:hidden">'+
+      // r1 — dot · strike · role · leg tag · TRIGGER · grade
+      '<div title="'+rowTip+'" style="display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap;overflow:hidden">'+
         '<span style="color:'+pcol+'">●</span>'+
         '<span style="font-weight:800;color:'+(L.isKing?PAL.gold:PAL.ink)+'">'+fmtLvl(L.k)+'</span>'+
         '<span style="color:'+(L.isKing?PAL.gold:PAL.sub)+';font-weight:700">'+zoneRole(L)+'</span>'+
         legZoneTagHtml(legR, L)+
-        '<span style="font-size:9.5px;color:'+PAL.sub+'">'+(pct!=null?(pct+'% · '):'')+zoneGGlyph(L)+' · <span style="color:'+tapCol(tap)+'">'+tapWord(tap)+'</span>'+rxHtml+'</span>'+
-        (setupChip?('<span style="display:inline-flex;gap:3px">'+setupChip+'</span>'):'')+
+        trigHtml+
         zoneGradePill(ng, gradeTip)+
       '</div>'+
-      // r2
-      '<div style="display:flex;align-items:center;gap:6px;font-size:9px;color:'+PAL.sub+';margin-top:2px;white-space:nowrap;overflow:hidden">'+
-        '<span title="Is it building? 15m = right now; session = is it real (grown since the open)? 15m '+(acm.m15.pct!=null?acm.m15.pct+'%':'–')+' · session '+(acm.session.pct!=null?acm.session.pct+'%':'–')+'" style="color:'+PAL.longAccent+'">'+acmChipHtml(acm)+'</span>'+
-        '<span style="color:'+PAL.line+'">·</span>'+zoneConfHtml(ng.inputs.conf)+
-        '<span style="color:'+PAL.line+'">·</span>'+(activityPillHtml(sym,L)||'<span style="color:'+PAL.sub+'">—</span>')+
-      '</div>'+
-      // r3 (decision folded in)
-      '<div style="display:flex;align-items:center;gap:6px;font-size:9.5px;margin-top:3px;white-space:nowrap;overflow:hidden">'+
-        '<span title="'+(dc?('What is this setup? '+(inContact?(dc.cell+' → '+cellTxt):('nothing is in contact — the nearest zone is '+fmtNum(L.k)+', '+fmtNum(Math.abs(px-L.k))+' away'))+'. Descriptive characterisation, never an instruction.').replace(/"/g,''):'')+'" style="color:'+(inContact?PAL.ink:PAL.sub)+';font-weight:600">'+cellTxt+'</span>'+
-        '<span title="'+frameTip+'" style="color:'+PAL.sub+'">· '+frTxt+'</span>'+
+      // r2 — S/Q/V · decision · tgt · inval (+ take/pass), or S/Q/V · skip
+      '<div style="display:flex;align-items:center;gap:6px;font-size:9.5px;color:'+PAL.sub+';margin-top:3px;white-space:nowrap;overflow:hidden">'+
+        zoneConfHtml(ng.inputs.conf)+
+        '<span style="color:'+PAL.line+'">·</span>'+
+        (tradeable
+          ? ('<span title="'+decTip+'" style="color:'+PAL.ink+';font-weight:600">'+cellTxt+'</span>'+
+             (frTxt?('<span title="'+decTip+'" style="color:'+PAL.sub+'">· '+frTxt+'</span>'):''))
+          : (!inContact
+              ? ('<span title="'+decTip+'" style="color:'+PAL.sub+';font-weight:600">watching \u2014 not in contact</span>'+
+                 '<span title="'+decTip+'" style="color:'+PAL.sub+'">\u00b7 nearest zone '+fmtSpan(Math.abs(px-L.k))+' away</span>')
+              : ('<span title="'+decTip+'" style="color:'+PAL.sub+';font-weight:600">skip</span>')))+
         btns+
       '</div>'+
     '</div>';
@@ -9582,14 +9939,18 @@ function deflZonesBlock(sym){
     var pcol=zonePolCol(L);
     var tap=(typeof L.taps==='number')?L.taps:0;
     var lt=legZoneTag(legR, L);
-    html+='<div style="padding:3px 2px;border-bottom:1px solid #12161c'+((lt&&lt.dim)?';opacity:.55':'')+'">'+
+    // (v10.56 PART D) OTHER ROWS: dot · strike · role · leg tag · grade. %King, polarity,
+    // tap and activity are in the row hover — four numbers per line was a wall, not a read.
+    var oAct=''; try{ oAct=nodeActivityWord(sym,L)||''; }catch(eOa){ oAct=''; }
+    var oTip=('What is this node? '+fmtLvl(L.k)+' '+zoneRole(L)+(pct!=null?(' · '+pct+'% of King'):'')+
+      ' · '+((L.pos===false)?'−γ sharp':'+γ clean')+' · '+tapWord(tap)+' tap'+(oAct?(' · '+oAct):'')+
+      (lt?(' · '+lt.lab):'')+'. Not in contact — this is where price could react next, not an engagement.').replace(/"/g,'');
+    html+='<div title="'+oTip+'" style="padding:3px 2px;border-bottom:1px solid #12161c'+((lt&&lt.dim)?';opacity:.55':'')+'">'+
       '<div style="display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap;overflow:hidden">'+
         '<span style="color:'+pcol+'">◦</span>'+
         '<span style="font-weight:800;color:'+(L.isKing?PAL.gold:PAL.ink)+'">'+fmtLvl(L.k)+'</span>'+
         '<span style="color:'+(L.isKing?PAL.gold:PAL.sub)+';font-weight:700">'+zoneRole(L)+'</span>'+
         legZoneTagHtml(legR, L)+
-        '<span style="font-size:9.5px;color:'+PAL.sub+'">'+(pct!=null?(pct+'% · '):'')+zoneGGlyph(L)+' · <span style="color:'+tapCol(tap)+'">'+tapWord(tap)+'</span></span>'+
-        (activityPillHtml(sym,L)?('<span style="margin-left:6px">'+activityPillHtml(sym,L)+'</span>'):'')+
         zoneGradePill(ng, zoneGradeTip(sym,L,ng))+
       '</div></div>';
   });
@@ -10238,6 +10599,99 @@ function registerCoreFeatures(){
     rule:{ id:'leg.magnet', tier:'hand', condition:'strongest meaningful node in the trend direction, capped at the King',
            mechanism:'"Price rallies down to the magnet" is a testable claim: either it gets there inside the window or it does not.' } });
 
+  // ---- (v10.56 PART A) THE HANDOFF, RECORDED. The user's priority claim: the roll can
+  // be SEEN as a strength transfer a bar or two before the new pullback node qualifies.
+  // Two things have to be true for it to be worth anything — the named node must actually
+  // become the pullback node, AND price must deflect off it toward the magnet. Both are
+  // scored here, together, so "I can see it forming early" becomes a measured lead time.
+  registerFeature({ key:'leg.handoff', label:'Leg engine · dissipation HANDOFF (old ceiling → new)', phase:'structure', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var lg=null; try{ lg=(ctx&&ctx.spine&&ctx.spine.leg)||((typeof legEngine==='function')?legEngine(sym):null); }catch(e){}
+      var h=(lg&&lg.handoff)||null;
+      var dn=!!(lg&&lg.dir==='dn');
+      var mag=(lg&&lg.magnet)?lg.magnet.k:null;
+      var toK=h?h.to.k:null;
+      return { sym:sym, t:(ctx&&ctx.t)||Date.now(),
+               active:!!(h&&h.active), resolved:!!(h&&h.resolved),
+               from:h?h.from.k:null, fromPct:h?h.from.pctNow:null, fromPeak:h?h.from.pctPeak:null,
+               fromDec15m:h?h.from.dec15m:null,
+               to:toK, toPct:h?h.to.pctNow:null, toAcm15m:h?h.to.acm15m:null,
+               leadBars:(h&&h.leadBars!=null)?h.leadBars:null,
+               dir:lg?lg.dir:'none', dirNum:(lg?((lg.dir==='dn')?-1:((lg.dir==='up')?1:0)):0),
+               k:toK, magnet:mag, tgt:mag,
+               inval:(toK!=null)?(dn?+(toK+0.25).toFixed(2):+(toK-0.25).toFixed(2)):null,
+               voting:false };
+    },
+    outcome:function(rec, fwd){
+      // The claim has TWO halves and both must land: did `to` become the pullback node
+      // inside the window, and did price then deflect off it toward the magnet?
+      var becamePB=null, deflected=null, h=null;
+      try{
+        if(rec && rec.active && rec.to!=null){
+          becamePB=0;
+          var log=[]; try{ log=(typeof LEG_PB_LOG!=='undefined' && LEG_PB_LOG[rec.sym])||[]; }catch(e1){}
+          var t0=rec.t||0, t1=t0+mul(FEAT_FWD, CANDLE_MS);
+          log.forEach(function(e){ if(e && e.t>t0 && e.t<=t1 && Math.abs(e.k-rec.to)<0.001) becamePB=1; });
+          deflected=(fwd && fwd.frame && fwd.frame.first)?((fwd.frame.first==='tgt')?1:0):null;
+          h=(becamePB && deflected===1)?1:0;
+        }
+      }catch(e2){ h=null; }
+      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
+               becamePB:becamePB, deflected:deflected,
+               first:(fwd&&fwd.frame)?fwd.frame.first:null, leadBars:(rec&&rec.leadBars)||null };
+    },
+    questions:[ { id:'handoff_leads_pb', when:[{f:'active',v:true}], outcome:'pbFormed',
+                  note:'when the old ceiling is bleeding and a lower one is building, does the named node actually become the pullback node — and how many bars early?' } ],
+    rule:{ id:'leg.handoff', tier:'hand',
+           condition:'old pullback node/ceiling Dec (m15 ≤ −8% or ≥25% off its session peak) AND a lower node above price building (m15 ≥ +8% or ≥ PB_MIN_PCT)',
+           mechanism:'The roll is a STRENGTH transfer before it is a strike change. If the transfer is visible early, the pullback node can be named before it qualifies; if it is not, this is a story and the count rule is all we have.' } });
+
+  // ---- (v10.56 PART C) THE LATCHED DEFLECTION TRIGGER, RECORDED. This is the deflection
+  // hit-rate the whole loop is trying to measure: ✓ = a rejection candle CLOSED away from
+  // the node; ✗ = a bar closed through it. Latched on close, so what is scored is exactly
+  // what the card showed, not a wick that later disappeared.
+  registerFeature({ key:'defl.trigger', label:'Deflection trigger (latched ✓/✗ on bar close)', phase:'zones', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var lg=null; try{ lg=(ctx&&ctx.spine&&ctx.spine.leg)||((typeof legEngine==='function')?legEngine(sym):null); }catch(e){}
+      var L=null; try{ L=(ctx&&ctx.spine&&ctx.spine.inPlay)||((typeof inPlayZone==='function')?inPlayZone(sym):null); }catch(e1){}
+      var t=null; try{ if(L && L.k!=null) t=deflTrigger(sym, L, lg); }catch(e2){ t=null; }
+      var dn=!!(lg&&lg.dir==='dn');
+      var mag=(lg&&lg.magnet)?lg.magnet.k:null;
+      var k=(t&&t.k!=null)?t.k:(L?L.k:null);
+      var fr=null; try{ if(L) fr=tradeFrame(sym, L, dn?-1:1); }catch(e3){ fr=null; }
+      return { k:k, state:(t&&t.state)||'', dir:(t&&t.dir)||(lg?lg.dir:'none'),
+               latchedBar:(t&&t.latchedBar!=null)?t.latchedBar:null,
+               legId:(t&&t.legId)||null, abandoned:!!(t&&t.abandoned),
+               dirNum:(t&&t.state==='✓↑')?1:((t&&t.state==='✓↓')?-1:0),
+               tgt:(fr&&fr.tgt!=null)?fr.tgt:mag,
+               inval:(fr&&fr.inval!=null)?fr.inval:((k!=null)?(dn?+(k+0.25).toFixed(2):+(k-0.25).toFixed(2)):null),
+               voting:false };
+    },
+    outcome:function(rec, fwd){
+      var h=null, follow=null;
+      try{
+        if(rec && rec.state){
+          if(rec.state==='✗'){
+            // a ✗ claims the node BROKE — the question is whether the break followed through
+            var dn=(rec.dir==='dn');
+            follow=(fwd)?(((dn? (fwd.mfe>=DIR_PTS) : (fwd.mae<=-DIR_PTS))?1:0)):null;
+            h=follow;
+          } else {
+            // a ✓ claims the deflection — target before invalidation, the frame's own test
+            if(fwd && fwd.frame && fwd.frame.first) h=(fwd.frame.first==='tgt')?1:0;
+            else if(rec.dirNum && fwd) h=_fwdHitNum(fwd, rec.dirNum, DIR_PTS);
+          }
+        }
+      }catch(e){ h=null; }
+      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null, state:(rec&&rec.state)||'',
+               follow:follow, first:(fwd&&fwd.frame)?fwd.frame.first:null };
+    },
+    questions:[ { id:'defl_trigger_hits', when:[{f:'state',v:'✓↓'}], outcome:'deflHit',
+                  note:'once the rejection candle has CLOSED away from the node, does price reach the target before the invalidation? (the deflection hit-rate)' } ],
+    rule:{ id:'defl.trigger', tier:'hand',
+           condition:'closed bar tags the node zone and closes back away from it (✓), or closes through it (✗)',
+           mechanism:'reactionQuality judged the wick every poll and flickered. A latch decided on bar close is the only version of this claim that can be scored the way it was shown.' } });
+
   // ---- (v10.55 PART F) CONTEXT PREDICTORS — recorded, never voted. These are the
   // columns a model needs and the panel never wrote down.
   registerFeature({ key:'predictors', label:'Context predictors (recorded, never voted)', phase:'structure', fwd:FEAT_FWD,
@@ -10719,6 +11173,16 @@ function dirFactorGroups(){
       of:function(rec){ return (rec&&rec.weakening)?'weakening':((rec&&rec.confirmed)?'confirmed':((rec&&rec.signal)?'signal':'none')); },
       order:['confirmed','signal','weakening','none'],
       tip:'2 consecutive pullback nodes rolling with the trend = signal, 3 = confirmed (Academy count rule). The doctrine says this is strong presumptive evidence; this row is where that gets measured on THIS tape.' },
+    // (v10.56 PART A/C) the handoff and the latched trigger get the same table: the
+    // handoff is the user's priority claim, and the trigger IS the deflection hit-rate.
+    { key:'leg.handoff', title:'DISSIPATION HANDOFF (old ceiling bleeding → new one building)',
+      of:function(rec){ return (rec&&rec.resolved)?'resolved':((rec&&rec.active)?'active':'none'); },
+      order:['active','resolved','none'],
+      tip:'Detected a bar or two BEFORE the new node qualifies as a pullback node. It counts as a hit only when the named node BECAME the pullback node AND price then deflected off it toward the magnet — and the lead time in bars is recorded beside it.' },
+    { key:'defl.trigger', title:'DEFLECTION TRIGGER (latched on bar close)',
+      of:function(rec){ return (rec&&rec.state)?rec.state:'blank'; },
+      order:['✓↓','✓↑','✗','blank'],
+      tip:'✓ = a rejection candle closed away from the node; ✗ = a bar closed through it. Latched once and never re-evaluated, so this row measures exactly what the card showed at the time.' },
     { key:'leg.pbDetect', title:'PULLBACK NODE, BY ROLL STEP', of:function(rec){ return (rec&&rec.step)?('step '+rec.step):'none'; },
       order:['step 1','step 2','step 3','step 4','none'],
       tip:'Did the deflection off the pullback node reach the magnet before a close back through the node? Split by which step of the roll it was.' },
@@ -10999,7 +11463,10 @@ function learningStripsHtml(){
 // voice (the sentence tests keep pinning the legacy beats). Supplied and active, the
 // READ speaks the user's leg language — magnet, pullback node, roll step, sell/buy
 // level — because that is the model the trader is actually reading the tape with.
-function read3Beat(dirWord, L, px, flr, ceil, dr, tgtK, tgtRole, relation, leg){
+// (v10.56 PART B) `caps` is OPTIONAL and LAST: the direction grade's hard caps, which the
+// leg voice carries as a TRAILING CAVEAT ("Chop, mid-range — low confidence.") instead of
+// letting them rewrite the user's sentence.
+function read3Beat(dirWord, L, px, flr, ceil, dr, tgtK, tgtRole, relation, leg, caps){
   var out={ verdict:'SIDEWAYS', dir:dirWord||'SIDE', arrow:'→', kind:'split', sentence:'', relation:relation||null };
   var dirNum = dirWord==='UP'?1:(dirWord==='DN'?-1:0);
   var leanWord = (dr&&dr.dir>0)?'leaning up':((dr&&dr.dir<0)?'leaning down':'split');
@@ -11067,9 +11534,21 @@ function read3Beat(dirWord, L, px, flr, ceil, dr, tgtK, tgtRole, relation, leg){
   out.arrow   = dirWord==='UP'?'↑':(dirWord==='DN'?'↓':'→');
   // (v10.55) the leg voice REPLACES the beat sentence when the engine is active; the
   // 3-beat text is kept as `base` so the hover can still show where price sits.
-  var legTxt=''; try{ legTxt=(typeof legSentence==='function')?legSentence(leg):''; }catch(eL){ legTxt=''; }
-  if(legTxt){ out.base=out.sentence; out.legSentence=legTxt; out.sentence=legTxt;
-              out.leg={ dir:leg.dir, phase:leg.phase, count:(leg.roll?leg.roll.count:0) }; }
+  var legTxt='', legId=null;
+  try{ legTxt=(typeof legSentence==='function')?legSentence(leg):'';
+       legId=(typeof legVoice==='function')?(legVoice(leg).id):null; }catch(eL){ legTxt=''; }
+  if(legTxt){
+    // the caps do not get to rewrite the user's sentence — they trail it as a caveat
+    var cav='';
+    if(caps){
+      var words=String(caps).split(/\s*\+\s*/).filter(Boolean);
+      if(words.length){ var head=words[0].charAt(0).toUpperCase()+words[0].slice(1);
+        cav=' '+[head].concat(words.slice(1)).join(', ')+' — low confidence.'; }
+    }
+    out.base=out.sentence; out.legSentence=legTxt; out.sentence=legTxt+cav;
+    out.voiceId=legId; out.caveat=cav.trim()||null;
+    out.leg={ dir:leg.dir, phase:leg.phase, count:(leg.roll?leg.roll.count:0) };
+  }
   return out;
 }
 function readBlock44(sym){
@@ -11091,7 +11570,7 @@ function readBlock44(sym){
   }catch(eFr){}
   var legR=(sp&&sp.leg)||null;
   if(!legR){ try{ legR=legEngine(sym); }catch(eLg){ legR=null; } }
-  var v=read3Beat(dirWord, L, px, m.flr, m.ceil, dr, tgtK, tgtRole, d.relation||null, legR);
+  var v=read3Beat(dirWord, L, px, m.flr, m.ceil, dr, tgtK, tgtRole, d.relation||null, legR, d.capped||null);
   var vcol={BULLISH:PAL.longAccent,BEARISH:PAL.shortAccent,SIDEWAYS:PAL.sub}[v.verdict]||PAL.sub;
   // Direction grade chip — letter only, NO ⚖ (the tier + regime live in the hover).
   var g=d.grade||'C', gdisp=d.disp||g;
@@ -11298,7 +11777,9 @@ function kingHeaderBlock(){
   // was still in the file but had no caller, i.e. unreachable.
   var stepsLine=(function(){
     var STEP_LBL={1:'Magnets',2:'King',3:'Range',4:'Gatekeepers',5:'Flow'};
-    var s='<div style="display:flex;align-items:center;gap:4px;font-size:8px;line-height:1;color:'+PAL.sub+';margin:1px 0 2px 3px;white-space:nowrap">'+
+    // (v10.56 PART E) CENTRED. It sits above a centred three-badge cluster; left-aligned
+    // it read as a stray label rather than the header of what is under it.
+    var s='<div style="display:flex;align-items:center;justify-content:center;text-align:center;gap:4px;font-size:8px;line-height:1;color:'+PAL.sub+';margin:1px 0 2px;white-space:nowrap">'+
           '<span style="font-weight:700;letter-spacing:.3px">Steps</span>';
     for(var n=1;n<=5;n++){
       s+='<span class="gs-ico" data-gstep="'+n+'" title="Step '+n+' \u2014 '+STEP_LBL[n]+' (click for the method)" '+
@@ -11666,7 +12147,7 @@ function feedStatusHtml(){
     strip+
     futTxt+evTxt+
     ctrls+
-    '<span style="margin-left:auto">v10.55</span>'+
+    '<span style="margin-left:auto">v10.56</span>'+
   '</div>';
 }
 
@@ -13214,7 +13695,9 @@ function render(){
   var __sync = (CFG.tapeGate===false) ? {ok:true} : tapeSync('SPY');
   // (v10.47, user-directed) One-line banner instead of a blocking panel: the app must stay
   // visible (weekends / parse hiccups) so it can be inspected. Detail lives in the hover.
-  if(!__sync.ok){ html+=syncBannerHtml(__sync); }
+  // (v10.56 PART E) shown only after SYNC_GRACE consecutive failed checks; a single one
+  // is logged and stays silent.
+  if(syncBannerShow(__sync)){ html+=syncBannerHtml(__sync); }
   // (v10.41) TWO-COLUMN DASHBOARD. One column could no longer hold the King
   // analyzer + Deflections + Node Map. LEFT = everything King (badge, narrative,
   // path chart). RIGHT = Deflections + Node Map (accumBlock). Responsive: each
@@ -13425,6 +13908,9 @@ function tick(){
   nodeHistSample('SPY');
   nodeHistSample('QQQ');
   try{ legEngine(ASYM); }catch(eLg){}
+  // (v10.56 PART C) the ✓/✗ latch advances ONCE per closed bar, whether or not the node
+  // it belongs to happens to be the one being rendered.
+  try{ deflTriggerTick(ASYM); }catch(eDT){}
   // (v10.51) sample the Flr/Ceil strikes into FCHIST. SAMPLING ONLY — no rolling value
   // is computed and nothing votes on it: rolling is a DAY-OVER-DAY measurement (Academy:
   // 2 consecutive sessions = signal, 3 = confirmation), so a single session cannot produce one.
