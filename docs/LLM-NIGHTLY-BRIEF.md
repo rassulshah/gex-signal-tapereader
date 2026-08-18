@@ -221,6 +221,10 @@ Report, with n · effN · vote-split · regime split · MFE/MAE, and NEVER witho
 - `leg.roll` — after a 2nd/3rd consecutive roll, did the trend continue DIR_PTS? Is 3-step confirmation actually
   more reliable than 2-step signal on THIS tape? (the doctrine claims so — measure it)
 - `leg.magnet` — was the magnet reached? how often does price make it vs stall at an intermediate node?
+- DRIFT IS IN SHADOW MODE (v10.57): not shown, not voting. `dir.drift` and the SHADOW `dir.relation` (what drift
+  WOULD have said) are still recorded every bar. Report whether the shadow relation lifts trend-only (lift, n,
+  effN, both directions) — this is the evidence that decides whether drift returns to the face. Never claim it
+  is proven from one session.
 - `leg.handoff` (v10.56, USER PRIORITY) — when the engine flagged the old ceiling DISSIPATING while a lower node
   built (the handoff), did the `to` node become the PB within fwd, and did price deflect off it toward the magnet?
   Report the LEAD TIME (leadBars before pbDetected) and the false-handoff rate (flagged, never resolved). Mirror for floors.

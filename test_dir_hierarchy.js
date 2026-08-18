@@ -15,6 +15,9 @@ let pass=0, fail=0;
 const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m+(g!==undefined?' -> '+g:''));} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+g:''));} };
 
 // ---------------- mocks ----------------
+// (v10.57) drift is in SHADOW mode live (DRIFT_LIVE=false). These pins exercise the hierarchy AS IT RUNS
+// WHEN DRIFT IS PROMOTED, so the flag is forced on here; test_drift_shadow.js pins the live shadow behaviour.
+global.DRIFT_LIVE=true;
 global.STATE={SPY:{price:772.6, candles:[], lastClosedB:1}, QQQ:{price:null, candles:[]}};
 var TV={state:'up', up:16, dn:1, win:20, slope:0.4};
 var DRIFT={verdict:'AGREE-UP', dir:1, gvwap:773.9, vvwap:775.0, overlap:true};

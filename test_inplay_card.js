@@ -10,7 +10,7 @@ let p=0,f=0;const ok=(n,c,g)=>{if(c){p++;console.log('PASS '+n);}else{f++;consol
 
 const blk=grab('deflZonesBlock');
 // isolate the in-play card: from the r1 comment to the closing of the card div
-const i1=blk.indexOf('// r1'); const i2=blk.indexOf('// ---- 2. the next N meaningful nodes');
+const i1=blk.indexOf('// r1'); const i2=blk.indexOf('// ---- 2. (v10.57) NODES ON WATCH');
 const card=blk.slice(i1,i2);
 ok('0 the in-play card block is located', i1>0 && i2>i1);
 const r1=card.slice(0, card.indexOf('// r2')); const r2=card.slice(card.indexOf('// r2'));

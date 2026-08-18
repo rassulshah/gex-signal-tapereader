@@ -183,7 +183,7 @@ ok(/learning\/rules\.json/.test(ex('pipeRulesTry')), '6e pipeCheck fetches learn
 ok(/PIPE_RAW_BASE/.test(ex('pipeRulesTry')), '6f ...via the same PIPE_RAW_BASE as the review');
 ok(/pipeRulesTry\(P\);/.test(ex('pipeCheck')), '6g ...and it is wired into pipeCheck alongside the review');
 ok(/rulesIngest/.test(ex('pipeRulesTry')), '6h ...a fresh document re-runs the promotion pass');
-ok(/@version\s+10\.56/.test(src) && /v10\.56 part1 loaded/.test(src) && />v10\.56<\/span>/.test(src),
+ok(/@version\s+10\.57/.test(src) && /v10\.57 part1 loaded/.test(src) && />v10\.57<\/span>/.test(src),
    '6i version 10.56 in all three spots');
 
 // ================= 7. SOURCE: THE FIAT PATHS ARE CLOSED ======================

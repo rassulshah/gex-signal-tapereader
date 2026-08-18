@@ -1,4 +1,23 @@
-## v10.56 — 2026-08-18 — the READ voice (user-authored) · dissipation HANDOFF · latched ✓/✗ trigger · clean in-play card
+## v10.57 — 2026-08-18 — NODES ON WATCH · drift to SHADOW mode · Dashboard-tab fix
+
+**Nodes on watch** (was "Deflection zones"). User: "only nodes in play and relevant nodes." Under the in-play
+card the ladder now lists only nodes with a job — `nodesOnWatch()`: the leg's PB, its TGT (magnet), the node
+building to be the `next PB` while a handoff is active, the King, then the nearest meaningful `next wall` above
+and below price. Rolled-off levels, thin strikes and anything beyond PB_REACH are out; no leg = King + nearest
+ceiling + floor. Cap 4 rows. Header hover: "Why these nodes?".
+
+**Drift → SHADOW mode.** User: "remove it until it is tested and proven." `DRIFT_LIVE=false`: the Drift row is
+off the face and drift no longer votes in the direction hierarchy (relation is trend-only / tentative; no
+divergence cap; no tentative lean — no trend = SIDE). It is STILL computed and recorded every bar: `dir.drift`
+as before, and `dir.relation` now records the SHADOW relation/direction (what drift would have said) so the
+"does drift lift the trend" question stays measurable. The READ drops the "GEX and VEX lean" beat; the
+direction hover says why. Promotion path (n≥20 effN, 3 sessions, both up and down days) brings it back —
+flip DRIFT_LIVE when the review clears it. Hierarchy tests pin the promoted behaviour with DRIFT_LIVE=true.
+
+**Fix.** Dashboard tab from the Testing tab did nothing (it only cleared the Analysis flag) — now
+`showDashboard()` clears both. **Tests:** test_nodes_on_watch (28). Suite green except the 4 known-stale.
+
+## v10.56 — 2026-08-18 — the READ voice (user-authored) [10.56.1: tags TGT/PB, sentence 7 drops 'target'] · dissipation HANDOFF · latched ✓/✗ trigger · clean in-play card
 
 **The handoff (user priority).** The roll is a STRENGTH transfer before it is a strike change. `legStep` now
 detects `handoff {active, from, to, since, leadBars}`: the current pullback node / nearest ceiling BLEEDING

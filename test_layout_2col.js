@@ -35,7 +35,7 @@ ok(/function deflectionBlock/.test(src),             'deflectionBlock kept defin
 var foot=grab('feedStatusHtml');
 ok(/data-pipe="'\+sg\.key\+'"/.test(foot) && /pipeStages\(\)/.test(foot) && /pipeColor\(sg\.state\)/.test(foot),
    'footer renders the pipeStages() strip with a coloured dot per stage');
-ok(/>v10\.55<\/span>/.test(foot),                  'footer keeps the version at the right (10.55)');
+ok(/>v10\.57<\/span>/.test(foot),                  'footer keeps the version at the right (10.56)');
 ok(/white-space:nowrap/.test(foot),                 'footer strip is nowrap \u2014 one line at 250px');
 ok(/\uD83D\uDCBE/.test(foot) && /\uD83D\uDCC1/.test(foot), 'footer keeps the export and folder-pick buttons');
 ok(/feedLive\?'live':'waiting'/.test(foot) && /vexLive\?'capturing':'waiting'/.test(foot),

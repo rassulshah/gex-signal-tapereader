@@ -911,13 +911,13 @@ Downtrend: 1 "Downtrend. Rallying down to 768. Expect pullback node to form from
 5 "Deflected off 769. Rallying down to 768. Expect pullback node to form from 769 ceiling rolling down." ·
 6a "Pullback node 769 holding. New resistance forming above at 770 — resistance stacking." ·
 6b "Pullback node 769 dissipated. New pullback node formed higher at 770 — ceiling rolling up." ·
-7 "Rallied down to 768 target. On watch for a pullback."
+7 "Rallied down to 768. On watch for a pullback."
 Uptrend mirror: 1 "Uptrend. Rallying up to 772. Expect pullback node to form from 768 floor rolling up." ·
 2 "Uptrend. Rallying up to 772. 768 floor building and rolling up to form pullback node at 769." · 3 "Support pullback
 node formed at 769. Deflection expected to target 772." · 4 "Pulling back to support pullback node 769. Deflection
 expected to target 772 above." · 5 "Deflected off 769. Rallying up to 772. Expect pullback node to form from 769 floor
 rolling up." · 6a "Pullback node 769 holding. New support forming below at 768 — support stacking." · 6b "Pullback node
-769 dissipated. New pullback node formed lower at 768 — floor rolling down." · 7 "Rallied up to 772 target. On watch
+769 dissipated. New pullback node formed lower at 768 — floor rolling down." · 7 "Rallied up to 772. On watch
 for a pullback." Direction word/grade come from the spine; caps trail as a caveat. Pinned by test_read_voice_leg.js.
 
 ### 24.3 The latched ✓/✗ trigger (v10.56)
@@ -926,3 +926,10 @@ zone, close back outside, close against the open); ✗ latches on a close throug
 ("make sure you dont toggle it back and forth"); resets only on a new legId / node, or abandonment (>2× zone away for
 3 closed bars unresolved). Shown bold on the in-play card row 1; recorded as `defl.trigger` (✓ hit-rate = tgt before
 inval + MFE/MAE; ✗ follow-through). reactionQuality stays a hover input only.
+
+## 25. NODES ON WATCH + DRIFT SHADOW (v10.57, user-directed 2026-08-18)
+The zone ladder is "Nodes on watch": in-play card, then ONLY nodes with a job — PB, TGT, next PB (during a
+handoff), King, nearest meaningful wall above/below (`nodesOnWatch`, cap 4, rolled-off/thin/beyond-reach out).
+GEX/VEX drift is in SHADOW mode (`DRIFT_LIVE=false`): off the face, non-voting, still recorded (`dir.drift`,
+shadow `dir.relation`) — returns only when the review clears the promotion bar. Rule restated: nothing unproven
+gets a voice on the dashboard.

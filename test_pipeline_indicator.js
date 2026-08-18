@@ -345,7 +345,7 @@ ok(lastTradingDay(1)==='2026-08-18', '3d Wednesday -> Tuesday', lastTradingDay(1
   // the capabilities that must survive the redesign
   ok(html.indexOf('💾')>=0, '7j the 💾 export button is kept');
   ok(html.indexOf('📁')>=0, '7k the 📁 folder-pick button is kept');
-  ok(/>v10\.55<\/span>/.test(html), '7l the version is kept, at the right');
+  ok(/>v10\.57<\/span>/.test(html), '7l the version is kept, at the right');
   ok(/margin-left:auto/.test(html), '7m the version pins right so the strip stays left');
   // the three v10.50 dots are gone, replaced by the pipeline
   ok(!/>feed</.test(html) && !/>vex</.test(html), '7n the old feed/vex dots are replaced');
@@ -375,8 +375,8 @@ ok(lastTradingDay(1)==='2026-08-18', '3d Wednesday -> Tuesday', lastTradingDay(1
   ok(/PIPE_TTL_MS=600000/.test(src), '8f the remote check is throttled to 10 minutes');
   ok(/visibilityState/.test(ex('pipeCheck')), '8g pipeCheck skips a hidden tab');
   ok(/pipeCheck\(\);/.test(ex('tick')), '8h the render loop drives pipeCheck');
-  ok(/@version\s+10\.55/.test(src) && /v10\.55 part1 loaded/.test(src) && />v10\.55<\/span>/.test(src),
-     '8i version 10.55 in all three spots');
+  ok(/@version\s+10\.57/.test(src) && /v10\.57 part1 loaded/.test(src) && />v10\.57<\/span>/.test(src),
+     '8i version 10.56 in all three spots');
   ok(/pipeReviewLine\(RV\)/.test(ex('briefLine')), '8j the pre-open brief may cite one review line');
 
   console.log('\n'+pass+' passed, '+fail+' failed');

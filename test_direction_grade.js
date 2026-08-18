@@ -9,6 +9,9 @@ let pass=0, fail=0;
 const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m+(g!==undefined?' -> '+g:''));} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+g:''));} };
 
 // ---- mocks: each spine input is injectable so we can test the hierarchy in isolation ----
+// (v10.57) drift is in SHADOW mode live (DRIFT_LIVE=false). These pins exercise the hierarchy AS IT RUNS
+// WHEN DRIFT IS PROMOTED, so the flag is forced on here; test_drift_shadow.js pins the live shadow behaviour.
+global.DRIFT_LIVE=true;
 global.STATE={SPY:{price:774.0, candles:[], lastClosedB:1}, QQQ:{price:null, candles:[]}};
 var TV={state:'up', up:16, dn:1, win:20, slope:0.42};
 var DRIFT={verdict:'AGREE-UP', dir:1, gvwap:773.9, vvwap:775.0, overlap:true};
@@ -158,6 +161,6 @@ ok(/HARD-CAP|HARD-CAPS/.test(src), '10a the mid-range cap is documented in sourc
 ok(/DECISION_MATRIX/.test(src),    '10b the matrix exists');
 ok(!/directionGrade[^]{0,3000}(buy|sell|long side entry)/i.test(src.slice(src.indexOf('function directionGrade'), src.indexOf('function directionGrade')+2000)), '10c no trade words inside directionGrade');
 ok(/drift NEVER overrides the direction/i.test(src), '10d the hierarchy rule is stated in source');
-ok(/@version\s+10\.55/.test(src), '10e version pinned to 10.55');
+ok(/@version\s+10\.57/.test(src), '10e version pinned to 10.56');
 
 console.log('\n'+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);

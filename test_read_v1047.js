@@ -10,6 +10,7 @@ var f=0,p=0; function ok(c,n){ if(c){p++;} else {f++; console.log('  FAIL: '+n);
 
 var PAL={bg:'#0b0e14',card:'#12161f',line:'#1e2530',longAccent:'#2ec27e',shortAccent:'#f0616d',ink:'#e6edf3',sub:'#8b98a9',amber:'#f2b45a',gold:'#e3c341',blue:'#5aa9ff'};
 var DEFLECT_CONFIRM=2, EP_DEFL_HANDOFF=3, BO_HL_LOOKBACK=14;
+var SYNC_GRACE=2;                 // (v10.56 PART E) consecutive failed checks before the banner
 function fmtNum(x){ return (Math.round(x*100)/100).toString(); }
 function ctNow(){ return new Date(2026,7,17,11,5); }
 function closedCandles(){ return []; }
@@ -21,7 +22,7 @@ function mk(px, levels, range){ levels.forEach(function(x){ x.dist=Math.abs(x.k-
   var flr=levels.filter(function(x){return x.isFlr;})[0]||null, ceil=levels.filter(function(x){return x.isCeil;})[0]||null;
   return {ok:true,px:px,levels:levels.slice().sort(function(a,b){return b.k-a.k;}),kingK:(levels.filter(function(x){return x.isKing;})[0]||{}).k,flr:flr,ceil:ceil,range:(flr&&ceil)?{lo:flr.k,hi:ceil.k,inside:px>=flr.k&&px<=ceil.k}:null,regime:{label:'Trend'}}; }
 
-eval(['_nmRole','_nmAcc','_nmIsAcc','_nmIsDec','_nmB','nodeMapSentence','nodeMapSentenceHtml','syncBannerHtml'].map(grab).join('\n'));
+eval(['_nmRole','_nmAcc','_nmIsAcc','_nmIsDec','_nmB','nodeMapSentence','nodeMapSentenceHtml','syncBannerShow','syncBannerHtml'].map(grab).join('\n'));
 function strip(h){ return h.replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim(); }
 
 // ---- Scenario A: continuation through the gate toward the King ----
@@ -65,8 +66,12 @@ var s5=nodeMapSentence(MODEL,'SPY',function(){return '';}); console.log('NM E:',
 ok(s5.verdict==='NO NODE IN PLAY' && nodeMapSentenceHtml(MODEL,'SPY',function(){return '';},'')==='','E nothing engaged -> no sentence rendered');
 
 // ---- sync banner ----
-var bn=syncBannerHtml({reason:'no-consensus',votes:{tag:775.38,feed:null,tapemax:775.38}});
+// (v10.56 PART E) the banner needs SYNC_GRACE consecutive failed checks before it is
+// shown at all — a single failed reconciliation is silent (and still logged).
+var bn=syncBannerHtml({reason:'no-consensus',streak:2,votes:{tag:775.38,feed:null,tapemax:775.38}});
 ok(/Out of sync/.test(bn) && /three King sources disagree/.test(bn) && !/Diagnose[^"]*<\/div>\s*<div/.test(bn),'sync banner is one line with hover detail');
+ok(syncBannerHtml({reason:'no-consensus',streak:1,votes:{tag:775.38,feed:null,tapemax:775.38}})==='',
+   '...and one failed check alone renders nothing');
 
 // ---- render structure ----
 ok(/html\+=kingHeaderBlock\(\)/.test(src) && src.indexOf('html+=kingHeaderBlock()')<src.indexOf("html+=readBlock44(__asym)"),'render(): header block before READ');
@@ -78,5 +83,5 @@ ok(/FLRCEIL_EDGE_PCT/.test(grab('nodeMapModel')) && /pickEdge/.test(grab('nodeMa
 ok(/isNext=true/.test(grab('nodeMapModel')) && /Mag \\u00b7 next/.test(grab('nodeRoleBadge')),'next-target class exists');
 ok(/Defl \\u00b7 '\+roleAb/.test(grab('deflectionBlock')),'defl card abbreviated name');
 // (v10.50) three version spots: @version header, part1 console.log, footer version marker.
-ok(/@version\s+10\.55/.test(src) && /v10\.55 part1 loaded/.test(src) && />v10\.55<\/span>/.test(src),'version 10.55 in all three spots');
+ok(/@version\s+10\.57/.test(src) && /v10\.57 part1 loaded/.test(src) && />v10\.57<\/span>/.test(src),'version 10.56 in all three spots');
 console.log('test_read_v1047: '+p+' passed, '+f+' failed'); process.exit(f?1:0);

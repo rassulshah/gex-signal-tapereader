@@ -32,6 +32,9 @@ global.render=function(){};
 global.ctTodayStr=function(){ return '2026-08-18'; };
 global.ctNow=function(){ return new Date(2026,7,18,11,0); };
 global.ctMinutesSinceMidnight=function(){ return 10*60+30; };
+// (v10.57) drift is in SHADOW mode live (DRIFT_LIVE=false). These pins exercise the hierarchy AS IT RUNS
+// WHEN DRIFT IS PROMOTED, so the flag is forced on here; test_drift_shadow.js pins the live shadow behaviour.
+global.DRIFT_LIVE=true;
 global.FEATURES=[];
 global.TREND_WINDOW=20;
 global.RULE_UNLOCK_N=20;

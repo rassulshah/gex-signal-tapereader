@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    10.56
+// @version    10.57
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -379,7 +379,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-console.log('[GPTS] v10.56 part1 loaded');
+console.log('[GPTS] v10.57 part1 loaded');
 
 function fiberKeyOf(el){
   var ks=Object.keys(el);
@@ -8179,6 +8179,12 @@ function driftStat(rows){
   var sd=Math.sqrt(v);
   return { vwap:+m.toFixed(4), sd:+sd.toFixed(4), lo:+(m-sd).toFixed(4), hi:+(m+sd).toFixed(4), n:rows.length };
 }
+// (v10.57) DRIFT IS IN SHADOW MODE. User 2026-08-18: "remove it until it is tested and proven."
+// The whole Drift row is off the face and drift no longer votes in the direction hierarchy
+// (relation is trend-only / tentative). It is STILL computed and STILL recorded every bar
+// (dir.drift, dir.relation shadow) so the nightly review can prove or kill it; the promotion
+// path (n>=20 effN, 3 sessions, both up and down days) is what brings it back — not opinion.
+var DRIFT_LIVE=false;
 function driftRead(sym){
   sym=sym||'SPY';
   var out={ verdict:'NONE', label:'—', dir:0, px:null, gvwap:null, vvwap:null,
@@ -8981,7 +8987,7 @@ function legVoice(leg){
            :((leg.lastPB && leg.lastPB.k!=null)?leg.lastPB.k:null);
     // 7 — the leg arrived
     if(leg.magnetReached && mag!=null){
-      out.id=pre+'7'; out.s='Rallied '+WAY+' to '+mag+' target. On watch for a pullback.'; return out;
+      out.id=pre+'7'; out.s='Rallied '+WAY+' to '+mag+'. On watch for a pullback.'; return out;
     }
     // 6a / 6b — a new node formed beyond the pullback node
     if(leg.stack && leg.stack.k!=null && leg.stack.from!=null){
@@ -9071,7 +9077,7 @@ function legZoneTag(leg, L){
                tip:'PULLBACK NODE — the node that formed on the counter-move; the '+(dn?'resistance to sell from':'support to buy from')+'. Its roll step is the Academy count: 2 = signal, 3 = confirmation.' };
     }
     if(leg.magnet && Math.abs(L.k-leg.magnet.k)<0.001){
-      return { lab:'MAG · target', dim:false, roll:0,
+      return { lab:'TGT', dim:false, roll:0,
                tip:'MAGNET — the node price is being drawn to in the trend direction (capped at the King). This is the target the pullback deflection points at.' };
     }
     if((leg.rolledOff||[]).some(function(k){ return Math.abs(k-L.k)<0.001; })){
@@ -9081,9 +9087,11 @@ function legZoneTag(leg, L){
     return null;
   }catch(e){ return null; }
 }
-function legZoneTagHtml(leg, L){
-  var t=legZoneTag(leg, L); if(!t) return '';
-  var col=t.dim?PAL.sub:(leg.dir==='dn'?PAL.shortAccent:PAL.longAccent);
+function legZoneTagHtml(leg, L){ return legTagHtml(legZoneTag(leg, L), leg); }
+function legTagHtml(t, leg){
+  if(!t) return '';
+  var col=t.dim?PAL.sub:((leg&&leg.dir==='dn')?PAL.shortAccent:((leg&&leg.dir==='up')?PAL.longAccent:PAL.sub));
+  if(t.lab==='next wall') col=PAL.sub;
   return '<span title="'+String(t.tip).replace(/"/g,'')+'" style="font-size:8px;font-weight:800;color:'+col+
     ';opacity:'+(t.dim?'.55':'1')+';border:1px solid '+col+';border-radius:8px;padding:0 4px;white-space:nowrap">'+t.lab+'</span>';
 }
@@ -9216,6 +9224,10 @@ function directionGrade(sym){
     var confirmedTrend = (tv.state==='up' || tv.state==='dn');
     var trendDir = tv.state==='up' ? 1 : (tv.state==='dn' ? -1 : 0);
     var driftD = drift.dir||0;
+    // (v10.57) SHADOW: what the hierarchy WOULD say with drift voting is kept for the
+    // learning loop; the LIVE spine below runs with driftD forced to 0 while !DRIFT_LIVE.
+    var shadowDriftD=driftD;
+    if(!DRIFT_LIVE) driftD=0;
     var dirNum, score, hardC=false;
     if(confirmedTrend){
       dirNum = trendDir;                                    // drift NEVER overrides the direction
@@ -9244,6 +9256,16 @@ function directionGrade(sym){
       hardC=true;                                           // tentative is capped at C, always
     }
     out.dir = dirNum>0?'UP':(dirNum<0?'DN':'SIDE');
+    out.driftLive=DRIFT_LIVE;
+    // the shadow relation/direction (drift voting) — recorded, never shown while !DRIFT_LIVE
+    try{
+      var sRel, sDir;
+      if(confirmedTrend){
+        sDir=trendDir;
+        sRel=(shadowDriftD!==0 && shadowDriftD===trendDir)?'confirmed':((shadowDriftD!==0)?'divergence':'trend-only');
+      } else { sDir=shadowDriftD; sRel='tentative'; }
+      out.shadow={ relation:sRel, dir:sDir>0?'UP':(sDir<0?'DN':'SIDE'), driftDir:shadowDriftD, driftVerdict:drift.verdict };
+    }catch(eSh){ out.shadow=null; }
     // ---- 1b. (v10.55) THE ROLL FACTOR, INSIDE THE HIERARCHY ----
     // Rolling pullback nodes are the Academy's strongest presumptive evidence that a
     // thesis is playing out, so a CONFIRMED roll in the trend's own direction is worth
@@ -9808,6 +9830,53 @@ function zoneConfHtml(conf){
   var S='S'+(s===true?'✓':(s===false?'✗':'–'))+((s!==null&&sc)?'':(s!==null?'·':'')), Q='Q'+(q?'✓':'✗'), V='V'+(v?'✓':'✗');
   return '<span title="Does everything agree? SPXW · QQQ · VEX-drift. S– = no SPXW captured at all. S✓· = SPXW agrees on header momentum only (display, unscored). S✓ = an SPXW strike LADDER agrees, and that one is scored like Q." style="color:'+PAL.blue+'">'+S+' '+Q+' '+V+'</span>';
 }
+var WATCH_N=4;   // rows under the in-play card
+// PURE: the watch list. Returns levels (with a `watch` reason) as a price ladder, highest first.
+function nodesOnWatch(m, px, legR, inPlay){
+  var out=[], seen={};
+  function add(L, why){
+    if(!L || L.k==null) return;
+    if(inPlay && Math.abs(L.k-inPlay.k)<0.001) return;
+    var key=L.k.toFixed(2); if(seen[key]) return;
+    if(px!=null && typeof PB_REACH==='number' && Math.abs(L.k-px)>PB_REACH) return;
+    if(legR && (legR.rolledOff||[]).some(function(k){ return Math.abs(k-L.k)<0.001; })) return;
+    seen[key]=true; L.watch=why; out.push(L);
+  }
+  var lv=(m&&m.levels)||[];
+  function at(k){ if(k==null) return null; var f=null; lv.forEach(function(L){ if(Math.abs(L.k-k)<0.001) f=L; }); return f; }
+  try{
+    if(legR && legR.dir && legR.dir!=='none'){
+      if(legR.pbDetected) add(at(legR.pbDetected.k)||{k:legR.pbDetected.k,pct:legR.pbDetected.pct}, 'PB');
+      if(legR.magnet)     add(at(legR.magnet.k)||{k:legR.magnet.k,pct:legR.magnet.pct,isKing:!!legR.magnet.isKing}, 'TGT');
+      if(legR.handoff && legR.handoff.active && legR.handoff.to) add(at(legR.handoff.to.k)||{k:legR.handoff.to.k,pct:legR.handoff.to.pctNow}, 'next PB');
+    }
+    lv.forEach(function(L){ if(L.isKing) add(L,'King'); });
+    var meaningful=lv.filter(zoneMeaningful);
+    var up=null, dn=null;
+    meaningful.forEach(function(L){
+      if(px==null) return;
+      if(L.k>px+0.001){ if(!up || L.k<up.k) up=L; }
+      else if(L.k<px-0.001){ if(!dn || L.k>dn.k) dn=L; }
+    });
+    // the nearest wall each side that is not already listed (or rolled off)
+    function nearestFree(side){
+      var best=null;
+      meaningful.forEach(function(L){
+        if(px==null) return;
+        var ok=(side>0)?(L.k>px+0.001):(L.k<px-0.001); if(!ok) return;
+        if(seen[L.k.toFixed(2)]) return;
+        if(inPlay && Math.abs(L.k-inPlay.k)<0.001) return;
+        if(legR && (legR.rolledOff||[]).some(function(k){ return Math.abs(k-L.k)<0.001; })) return;
+        if(!best || Math.abs(L.k-px)<Math.abs(best.k-px)) best=L;
+      });
+      return best;
+    }
+    add(nearestFree(1),'next wall'); add(nearestFree(-1),'next wall');
+  }catch(e){}
+  out=out.slice(0,WATCH_N);
+  out.sort(function(a,b){ return b.k-a.k; });
+  return out;
+}
 function deflZonesBlock(sym){
   sym=sym||'SPY';
   var m; try{ m=nodeMapModel(sym); }catch(e){ return ''; }
@@ -9829,11 +9898,11 @@ function deflZonesBlock(sym){
     outFlag='<span title="Is the range still valid? Price is outside Flr–Ceil — a break + follow-through re-anchors the range to the next strong magnet." style="color:'+PAL.amber+';font-size:8.5px;font-weight:700">⚠ OUT · range redefining</span>';
   }
   // section header — DROP the `· px` (the price divider is the reference).
-  var hdrTip=('Where can price actually react, best first? The engaged zone carries the identity, the leg tag, the '+
-    'latched ✓/✗ deflection trigger and the grade, then S/Q/V confluence with the frame (tgt · inval) when there is one; the next '+DEFLZONES_N+
-    ' meaningful nodes get one line each. Everything else — %King, polarity, taps, Acm, activity, entry, R:R — is in the row hover. '+
-    '%King comes from the gamma FEED, so it is correct no matter which book the heatmap is displaying.').replace(/"/g,'');
-  html+='<div title="'+hdrTip+'" style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:9.5px;color:'+PAL.sub+';font-weight:700;letter-spacing:.3px;margin:4px 2px 3px;white-space:nowrap"><span>⚡ Deflection zones</span>'+outFlag+'</div>';
+  var hdrTip=('Why these nodes? The engaged node on top (leg tag, latched ✓/✗ trigger, grade, S/Q/V + frame when there is one). '+
+    'Under it, only nodes with a job: the pullback node (PB), the target (TGT), the next PB while a handoff is active, the King, '+
+    'and the nearest meaningful wall above and below price. Rolled-off levels, thin strikes and anything beyond '+PB_REACH+' strikes are left out. '+
+    'Everything else — %King, polarity, taps, Acm, activity, entry, R:R — is in the row hover. %King comes from the gamma FEED.').replace(/"/g,'');
+  html+='<div title="'+hdrTip+'" style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:9.5px;color:'+PAL.sub+';font-weight:700;letter-spacing:.3px;margin:4px 2px 3px;white-space:nowrap"><span>⚡ Nodes on watch</span>'+outFlag+'</div>';
   html+='<div style="display:grid;grid-template-columns:1fr 26px;font-size:7px;letter-spacing:.3px;text-transform:uppercase;color:'+PAL.sub+';font-weight:800;padding:0 4px 2px;white-space:nowrap"><span>Zone</span><span style="text-align:right">Grade</span></div>';
   // ---- 1. the IN-PLAY zone, full 3-row card with the decision folded into row 3 ----
   if(inPlay){
@@ -9915,19 +9984,13 @@ function deflZonesBlock(sym){
       '</div>'+
     '</div>';
   }
-  // ---- 2. the next N meaningful nodes, one line each, price-divider between above/below ----
-  var others=(m.levels||[]).filter(function(L){
-    if(inPlay && Math.abs(L.k-inPlay.k)<0.001) return false;
-    return zoneMeaningful(L);
-  });
-  others.sort(function(a,b){
-    var wa=(a.isKing?4:0)+(a.isGatekeeper?2:0)+((a.isFlr||a.isCeil)?3:0)+((a.pct||0)/100);
-    var wb=(b.isKing?4:0)+(b.isGatekeeper?2:0)+((b.isFlr||b.isCeil)?3:0)+((b.pct||0)/100);
-    if(wb!==wa) return wb-wa;
-    return a.dist-b.dist;
-  });
-  var pick=others.slice(0,DEFLZONES_N);
-  pick.sort(function(a,b){ return b.k-a.k; });   // price ladder, highest first
+  // ---- 2. (v10.57) NODES ON WATCH — only nodes with a job in the leg, or the next wall ----
+  // User: "only nodes in play and relevant nodes". Selection, in priority order, capped at
+  // WATCH_N rows under the card: the leg's PB, its TGT (magnet), the node building to be
+  // the next PB while a handoff is active, the King, then the nearest meaningful wall on
+  // each side of price. Rolled-off levels are OUT (they are air now), thin strikes are OUT,
+  // anything beyond PB_REACH strikes is OUT. With no leg: King + nearest ceiling + floor.
+  var pick=nodesOnWatch(m, px, legR, inPlay);
   var divLab=dispIsFut()?FUTMODE.chart:sym;
   var divHtml='<div title="Current '+divLab+' price." style="text-align:center;color:'+PAL.sub+';font-size:9px;margin:3px 0;letter-spacing:.5px">— '+divLab+' '+fmtLvl(px)+' —</div>';
   var printedDiv=false;
@@ -9939,6 +10002,8 @@ function deflZonesBlock(sym){
     var pcol=zonePolCol(L);
     var tap=(typeof L.taps==='number')?L.taps:0;
     var lt=legZoneTag(legR, L);
+    if(!lt && L.watch==='next PB') lt={ lab:'next PB', dim:false, roll:0, tip:'NEXT PULLBACK NODE — the node the handoff says is building to become the pullback node while the old one dissipates.' };
+    else if(!lt && L.watch==='next wall') lt={ lab:'next wall', dim:false, roll:0, tip:'NEXT WALL — the nearest meaningful node on this side of price; the first place price can react if it goes this way.' };
     // (v10.56 PART D) OTHER ROWS: dot · strike · role · leg tag · grade. %King, polarity,
     // tap and activity are in the row hover — four numbers per line was a wall, not a read.
     var oAct=''; try{ oAct=nodeActivityWord(sym,L)||''; }catch(eOa){ oAct=''; }
@@ -9950,7 +10015,7 @@ function deflZonesBlock(sym){
         '<span style="color:'+pcol+'">◦</span>'+
         '<span style="font-weight:800;color:'+(L.isKing?PAL.gold:PAL.ink)+'">'+fmtLvl(L.k)+'</span>'+
         '<span style="color:'+(L.isKing?PAL.gold:PAL.sub)+';font-weight:700">'+zoneRole(L)+'</span>'+
-        legZoneTagHtml(legR, L)+
+        legTagHtml(lt, legR)+
         zoneGradePill(ng, zoneGradeTip(sym,L,ng))+
       '</div></div>';
   });
@@ -10381,10 +10446,17 @@ function registerCoreFeatures(){
       // The trend's OWN vote now rides along on the record, so relation can be measured
       // as the DIFFERENCE it makes on the bars where the two disagree.
       var tv=0; try{ tv=_trend5Vote(d.trendState||'na'); }catch(eT){ tv=0; }
-      return { relation:d.relation||null, dir:d.dir||null, trendState:d.trendState||null,
+      // (v10.57) while drift is in SHADOW mode the live relation is always trend-only /
+      // tentative, which would make this question unanswerable. Record the SHADOW relation
+      // and direction (drift voting) — that is the claim under test.
+      var sh=(d.shadow&&!d.driftLive)?d.shadow:null;
+      var relRec=sh?sh.relation:(d.relation||null);
+      var dirRec=sh?sh.dir:(d.dir||null);
+      var dvRec = dirRec==='UP'?1:(dirRec==='DN'?-1:0);
+      return { relation:relRec, dir:dirRec, trendState:d.trendState||null,
                driftVerdict:(d.inputs&&d.inputs.drift&&d.inputs.drift.verdict)||null,
-               grade:d.grade||null, tentative:!!d.tentative, vote:dv, trendVote:tv,
-               differs:(tv!==dv) };
+               grade:d.grade||null, tentative:!!d.tentative, vote:dvRec, trendVote:tv,
+               differs:(tv!==dvRec), shadow:!!sh, liveDir:d.dir||null };
     },
     outcome:function(rec, fwd){
       // THE POINT OF THE HIERARCHY: confirmed should beat trend-only should beat
@@ -11502,7 +11574,8 @@ function read3Beat(dirWord, L, px, flr, ceil, dr, tgtK, tgtRole, relation, leg, 
   if(relation==='tentative'){
     // No confirmed trend. Drift may only offer a provisional lean, and the sentence says so.
     var tHead = posHead || (L?('At '+role+' '+fmtNum(L.k)+'.'):'');
-    var tBody = (dr && dr.dir) ? ('No trend; GEX and VEX '+leanVerb+' — tentative only.')
+    var tBody = (typeof DRIFT_LIVE!=='undefined' && !DRIFT_LIVE) ? 'No trend — no lean; rotation likely.'
+              : (dr && dr.dir) ? ('No trend; GEX and VEX '+leanVerb+' — tentative only.')
                                : 'No trend; GEX and VEX split — no clean lean, rotation likely.';
     out.sentence=[tHead, tBody].filter(Boolean).join(' ');
   } else if(relation==='divergence' && dirNum!==0){
@@ -11513,7 +11586,7 @@ function read3Beat(dirWord, L, px, flr, ceil, dr, tgtK, tgtRole, relation, leg, 
     var dWatch = (tgtK!=null)?('Watch '+fmtNum(tgtK)+'.'):'';
     out.sentence=[dHead, TrendWord+', but GEX and VEX '+leanVerb+' — divergence, lower confidence.', dWatch].filter(Boolean).join(' ');
   } else if(kind==='split'){
-    out.sentence=(posHead||'No range defined.')+' GEX and VEX split — no clean lean, rotation likely.';
+    out.sentence=(posHead||'No range defined.')+((typeof DRIFT_LIVE!=='undefined' && !DRIFT_LIVE)?' No lean — rotation likely.':' GEX and VEX split — no clean lean, rotation likely.');
   } else if(kind==='cont'){
     var b3=(tgtK!=null)?('Potential run to '+(tgtRole?(tgtRole+' '):'')+fmtNum(tgtK)+'.'):'';
     var cMid = (relation==='trend-only') ? '' :
@@ -11579,8 +11652,11 @@ function readBlock44(sym){
   var di=d.inputs||{};
   // (v10.51) QUESTION-FIRST direction hover: the hierarchy, stated in one breath, then
   // this bar's actual values. The grade is a confidence read on the TREND, not a blend.
-  var dTip=('Which way, and how sure? SMA-50 sets the trend (15/20 closes); GEX/VEX drift confirms it or diverges from it. '+
-    'Trend UP + drift UP = confirmed. Trend UP + drift DOWN = divergence, caution. No trend = drift gives a tentative lean, never better than C. '+
+  var dTip=((DRIFT_LIVE
+    ? ('Which way, and how sure? SMA-50 sets the trend (15/20 closes); GEX/VEX drift confirms it or diverges from it. '+
+       'Trend UP + drift UP = confirmed. Trend UP + drift DOWN = divergence, caution. No trend = drift gives a tentative lean, never better than C. ')
+    : ('Which way, and how sure? SMA-50 sets the trend (15/20 closes): a confirmed trend is a B, a confirmed roll adds a point, mid-range and chop cap at C, no trend = SIDE at C. '+
+       'GEX/VEX drift is in SHADOW mode — recorded every bar and reviewed nightly, not shown and not voting until it clears the promotion bar. '))+
     'Now: trend '+(d.trendState||'?')+' ('+((di.trend&&di.trend.up)||0)+' up / '+((di.trend&&di.trend.dn)||0)+' dn of '+((di.trend&&di.trend.win)||0)+') '+
     '· drift '+((di.drift&&di.drift.verdict)||'?')+' → '+(d.relation||'?')+' → '+(dirWord==='UP'?'Up':(dirWord==='DN'?'Down':'Sideways'))+' '+gdisp+
     '. Score '+(d.score!=null?d.score:'?')+' (live cut points A≥'+DIR_WEIGHTS.gradeA+', B≥'+DIR_WEIGHTS.gradeB+', else C)'+(d.capped?('; hard-capped to C by '+d.capped):'')+
@@ -12147,7 +12223,7 @@ function feedStatusHtml(){
     strip+
     futTxt+evTxt+
     ctrls+
-    '<span style="margin-left:auto">v10.56</span>'+
+    '<span style="margin-left:auto">v10.57</span>'+
   '</div>';
 }
 
@@ -12457,6 +12533,7 @@ var ANALYSIS_REVIEW=null;             // optional loaded LLM review {why,discove
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.setReview=function(obj){ ANALYSIS_REVIEW=obj; if(typeof render==='function') render(); return 'review loaded'; };
 window.__gptsDebug.showAnalysis=function(b){ ANALYSIS_VIEW=(b!==false); if(ANALYSIS_VIEW) TESTING_VIEW=false; if(typeof render==='function') render(); };
+window.__gptsDebug.showDashboard=function(){ ANALYSIS_VIEW=false; TESTING_VIEW=false; if(typeof render==='function') render(); };
 window.__gptsDebug.showTesting=function(b){ TESTING_VIEW=(b!==false); if(TESTING_VIEW) ANALYSIS_VIEW=false; if(typeof render==='function') render(); };
 window.__gptsTestRefresh=function(){ repoCoverage(function(c){ var el=document.getElementById('gpts-tcov'); if(!el) return;
   var days=c.days.length, bars=c.bars;
@@ -13651,7 +13728,9 @@ function analysisTabBar(){
   function tab(label,active,fn){
     return '<div onclick="'+fn+'" style="cursor:pointer;padding:5px 12px;font-size:11px;font-weight:'+(active?'800':'600')+';color:'+(active?PAL.ink:PAL.sub)+';'+(active?'border-bottom:2px solid '+PAL.gold+';background:#0b0e14;border-radius:6px 6px 0 0':'')+'">'+label+'</div>';
   }
-  var onDash='window.__gptsDebug&&window.__gptsDebug.showAnalysis&&window.__gptsDebug.showAnalysis(false)';
+  // (v10.57 FIX) Dashboard must clear BOTH view flags: showAnalysis(false) left TESTING_VIEW
+  // set, so from the Testing tab the Dashboard click did nothing until Analysis was visited.
+  var onDash='window.__gptsDebug&&window.__gptsDebug.showDashboard&&window.__gptsDebug.showDashboard()';
   return '<div style="display:flex;gap:2px;background:#12161f;border-bottom:1px solid '+PAL.line+';padding:4px 4px 0;margin:-2px -2px 6px">'+
     tab('Dashboard', (!ANALYSIS_VIEW&&!TESTING_VIEW), onDash)+
     tab('\uD83D\uDCCA Analysis', ANALYSIS_VIEW, 'window.__gptsDebug&&window.__gptsDebug.showAnalysis&&window.__gptsDebug.showAnalysis(true)')+
@@ -13725,7 +13804,7 @@ function render(){
   }
   try{ html+=kingHeaderBlock(); }catch(eH){}          // (v10.47) header cluster + ①②③ restored
   try{ html+=briefBlockHtml(__asym); }catch(eBr){}    // (v10.49 J) pre-open brief (collapsible)
-  try{ html+=driftLineHtml(__asym); }catch(eD49){}    // (v10.49 D) GEX/VEX drift — an INPUT line
+  if(DRIFT_LIVE){ try{ html+=driftLineHtml(__asym); }catch(eD49){} }   // (v10.57) shadow mode: off the face until proven
   try{ html+=readBlock44(__asym); }catch(eR){}
   // (v10.37) standalone gatekeeperBlock() REMOVED - gatekeeper strike + distance now in King badge.
   // (v10.27) Standalone BO / SPY Signals section REMOVED. The breakout-pullback
