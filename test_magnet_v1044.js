@@ -47,14 +47,14 @@ ok(/if\(L\.pos===false\)\{ col='#b58bff'/.test(src), 'purple -γ identity');
 ok(/var typeHtml = '';/.test(src), '±γ text tag dropped');
 ok(/var chain = isFT \? 'BO\\u00b7FT' : 'BOw';/.test(src), 'only BOw / BO·FT chips');
 ok(/Push '\+parr\+'<\/span>/.test(src) && />Pull<\/span>/.test(src), 'Pull/Push chips rendered (v10.47: no toward-share % on the chip)');
-ok(/Range <b>'\+fmtNum\(m\.range\.lo\)/.test(src), 'range chip');
+ok(/Range <b>'\+fmt(Num|Lvl)\(m\.range\.lo\)/.test(src), 'range chip (v10.55: through fmtLvl so a futures chart reads in its own points)');
 ok(/out\.flr=flr; out\.ceil=ceil;/.test(src), 'nearest-strong Flr/Ceil in model');
 
 // --- layout ---
 ok(/id="gpts-1col"/.test(src) && !/id="gpts-2col"/.test(src), 'single column');
 ok(!/'<div style="flex:1 1 300px;min-width:0">'\+kingBlock\(\)/.test(src), 'kingBlock no longer rendered');
 ok(/function kingBlock\(\)/.test(src) && /function projScorecard\(\)/.test(src), 'King code retained (recording continues)');
-ok(/readBlock44\('SPY'\)/.test(src), 'READ ▸ block rendered');
+ok(/readBlock44\((__asym|'SPY')\)/.test(src), 'READ ▸ block rendered (v10.55: for the ACTIVE underlying)');
 ok(/function studyRun\(/.test(src) && /STUDY_BASELINE/.test(src), 'study module present');
 ok(/function repoUpsertSnaps\(/.test(src) && /indexedDB\.open\(REPO_DB_NAME/.test(src), 'IndexedDB repository');
 ok(/function readTrinityHeaders\(/.test(src) && /xm:\(function/.test(src), 'cross-market headers recorded');

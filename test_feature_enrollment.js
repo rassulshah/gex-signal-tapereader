@@ -26,6 +26,9 @@ global.directionGrade=function(){ return {grade:'B',dir:'UP',score:3,tier:'⚖',
 global.driftRead=function(){ return {verdict:'AGREE-UP',gvwap:773.9,vvwap:775,gLo:772.6,gHi:775.2,vLo:773.2,vHi:776.8,overlap:true,px:774,dir:1}; };
 global.nodeMapModel=function(){ return {ok:true,px:774,kingK:775,levels:[{k:773,isFlr:true,pos:true,taps:0,state:'Building',chg:12}]}; };
 global.inPlayZone=function(){ return {k:773,isFlr:true,pos:true,taps:0,state:'Building',chg:12}; };
+// (v10.54) the frame the card drew rides on dir/node/decision/act records so the frame
+// outcome (tgt before inval) is scoreable after the fact.
+global.tradeFrame=function(sym,L,dir){ return {zone:[772.75,773.25], inval:771, tgt:776, path:'wall', k:L?L.k:null, dir:dir||1}; };
 global.nodeGrade=function(){ return {grade:'A',score:5,tier:'⚖',inputs:{pol:'+',tap:0,rocNow:'Building',rocDay:{pct:20,label:'Acm'},conf:{q:true,v:true,holdDir:1}}}; };
 global.decisionCell=function(){ return {cell:'B×A',text:'bounce play',dirGrade:'B',nodeGrade:'A',tier:'⚖',k:773}; };
 global.accumCanon=function(){ return {m15:{pct:10,label:'Acm'},session:{pct:20,label:'Acm'}}; };
@@ -41,8 +44,11 @@ global.gatekeeper=function(){ return {ok:true,k:774}; };
 global.ctNow=function(){ return new Date(2026,7,17,11,0); };
 global.render=function(){};
 
-eval([ 'ruleSeed','rulesSeed','rulesNormalize','rulesLoad','rulesSave','ruleGet','ruleTier','rulePromoted',
-       'registerFeature','featureByKey','_fwdHitDir','_fwdHitNum','registerCoreFeatures','seedQuestions' ].map(ex).join('\n'));
+// (v10.54, audit 1) a tier is earned LOCALLY: promoted by this panel AND locally measured.
+eval([ 'ruleSeed','rulesSeed','rulesNormalize','rulesLoad','rulesSave','ruleGet','effN','nTxt',
+       'featStatsCached','featStatsInvalidate','ruleLocalRate','rulePromotedApplied','promoLoad','ruleTier','rulePromoted',
+       'registerFeature','featureByKey','_fwdHitDir','_fwdHitNum','frameRR','_frameRecOf',
+       'registerCoreFeatures','seedQuestions' ].map(ex).join('\n'));
 
 var F=registerCoreFeatures();
 
@@ -138,9 +144,25 @@ Object.keys(rules).forEach(function(id){
 LS={}; global.RULES=null;
 ok(ruleTier('dir.A')==='⚖', '7a an unmeasured rule renders ⚖');
 ok(rulePromoted('dir.A')===false, '7b ...and may not be cited as odds');
+// (v10.54, audit 1) A TIER IS EARNED LOCALLY. A rule carrying promoted:true /
+// tier:'measured' / rate:71 / n:34 in a FETCHED document is documentation about what the
+// weekly run believes — nothing on THIS machine measured it, so the panel says ⚖. Before
+// 10.54 one edited JSON file could make the tool claim a measurement it had never taken.
 global.RULES=null; LS['gpts_rules_v1']=JSON.stringify({rules:{'dir.A':{id:'dir.A',promoted:true,tier:'measured',rate:71,n:34}}});
-ok(ruleTier('dir.A')==='📊', '7c a promoted rule renders 📊');
-ok(rulePromoted('dir.A')===true, '7d ...and may be cited');
+ok(ruleTier('dir.A')==='⚖', '7c a rule promoted only IN A FETCHED FILE still renders ⚖', ruleTier('dir.A'));
+ok(rulePromoted('dir.A')===false, '7d ...and may NOT be cited as odds');
+// it takes BOTH: a local promotion AND locally measured effN
+var __realPromoApplied=rulePromotedApplied;
+rulePromotedApplied=function(){ return { id:'p.x', rule:'dir.A' }; };
+global.featStats=function(){ return { byGrade:{ dir:{ A:{ n:400, hit:280 } }, node:{}, dirSide:{} },
+  byKey:{}, cells:{}, frame:{}, act:{take:{n:0},pass:{n:0}}, partial:0, days:3, dayKeys:[] }; };
+featStatsInvalidate();
+ok(ruleTier('dir.A')==='📊', '7c2 a LOCAL promotion plus local eff n=40 earns the 📊', ruleTier('dir.A'));
+global.featStats=function(){ return { byGrade:{ dir:{ A:{ n:60, hit:42 } }, node:{}, dirSide:{} },
+  byKey:{}, cells:{}, frame:{}, act:{take:{n:0},pass:{n:0}}, partial:0, days:1, dayKeys:[] }; };
+featStatsInvalidate();
+ok(ruleTier('dir.A')==='⚖', '7c3 ...drop the local evidence to eff n=6 and it goes straight back to ⚖', ruleTier('dir.A'));
+rulePromotedApplied=__realPromoApplied; delete global.featStats; featStatsInvalidate();
 ok(ruleTier('kill.tap3')==='⚖', '7e rules missing from a stored file are back-filled from the seed');
 
 // ================= 8. seedQuestions =================
@@ -169,11 +191,13 @@ global.DECISION_MATRIX={A:{A:'take · follow-thru',B:'take · tight tgt',C:'wait
 global.spineOf=function(){ return {dir:directionGrade(), inPlay:inPlayZone(), node:nodeGrade(), decision:decisionCell()}; };
 var cs=[]; for(var ci=0;ci<20;ci++) cs.push({o:774,h:774.2,l:773.8,c:774});
 global.STATE.SPY.candles=cs; global.STATE.SPY.lastClosedB=20;
-eval([ 'zoneMeaningful','zoneRole','nodeHoldDir','acmLabel',
+global.ctNowSecOfDay=function(){ return 11*3600; };   // mid-session: no partial resolution
+eval([ 'zoneMeaningful','zoneRole','nodeHoldDir','acmLabel','pctN','frameOutcome','yourCallsHtml',
        'recorderLoad','recorderSave','recorderDay','featureCtx','featRecordAll','featEnqueue',
        'resolveFeatureOutcomes','featStats','_fpct','gradeMonotone','featureScorecardsHtml',
        'actRecord','actToday','actCurrent','modelHeat' ].map(ex).join('\n'));
 LS={};
+global.FEAT_KEEP_BARS=160;   // (v10.54) records are capped by BARS, not by count
 var ctx9=featureCtx('SPY');
 var snap9=featRecordAll('SPY', ctx9);
 ok(Object.keys(snap9).length===FEATURES.length, '9a snap.feat carries one record per enrolled feature', Object.keys(snap9).length);
@@ -199,8 +223,13 @@ ok(q9.every(function(r){ return r.mfe!=null && r.mae!=null; }), '9k EVERY resolv
 var html9=featureScorecardsHtml('SPY');
 ok(html9.length>1000, '9l the Analysis scorecards render', html9.length);
 ok(FEATURES.every(function(f){ return html9.indexOf(f.label)>=0; }), '9m every enrolled feature appears in the Analysis tab');
-ok(/● recording n=1\/20/.test(html9), '9n features under the unlock show "● recording n=x/20"');
-ok(/BY GRADE/.test(html9) && /DECISION MATRIX/.test(html9) && /ACT/.test(html9), '9o by-grade, 3x3 and act sections all present');
+// (v10.54, audit 8) the unlock counter is in EFFECTIVE observations: 10 overlapping
+// bar-records of one feature are ONE 30-minute outcome, not ten.
+ok(/● recording eff 0\/20/.test(html9), '9n features under the unlock show "● recording eff x/20"');
+ok(/n=1 bars → eff 0/.test(html9), '9n2 ...and every n is rendered as "n=X bars → eff Y"');
+ok(/BY GRADE/.test(html9) && /DECISION MATRIX/.test(html9) && /YOUR CALLS/.test(html9),
+   '9o by-grade, 3x3 and the takes-vs-passes sections all present');
+ok(/Direction · SIDE/.test(html9), '9o2 ...with SIDE bars kept in their own by-grade row (v10.54)');
 // OPERATOR consumer
 var act9=actRecord('SPY','take');
 ok(act9 && actToday('SPY').length===1, '9p actRecord writes recorderDay(db).act[sym]');

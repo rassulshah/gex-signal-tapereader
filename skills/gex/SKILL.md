@@ -95,6 +95,97 @@ getting files to the USER (SendUserFile) and into the git repo (source of truth)
 5. If code shipped: include the Tampermonkey update step with the raw GitHub URL as a clickable link.
 6. Tell the user the resume phrase: new window, say "load gex".
 
+## REVIEW — TWO RUNS (v10.53)
+
+The review split into two differently-sized jobs. `docs/LLM-NIGHTLY-BRIEF.md` holds both contracts in
+full; this section is the operating summary. **They are not interchangeable.**
+
+Why: a session is ~67 bars on overlapping 10-bar forward windows ≈ **6.7 independent observations**. A
+nightly run has no power to conclude anything about a weight, and the old single process both over-claimed
+and closed no loop. So the nightly keeps a logbook, the weekly does the learning, and **the panel — not
+the LLM — promotes**.
+
+### REVIEW-NIGHTLY ("nightly review" / scheduled weekday run, after the close)
+
+Produces `learning/log/YYYY-MM-DD.json`. **No weight proposals. No edits to `learning/rules.json`.**
+
+**1. Read.** `git clone --depth 1 https://github.com/rassulshah/gex-signal-tapereader.git` (read works; the
+cloud CANNOT push — github.com is blocked at the network proxy, and the claude.ai "GitHub Integration" is a
+knowledge integration with NO write tools). Read `docs/LLM-NIGHTLY-BRIEF.md` (contract 1), today's
+`data/<CT-date>.json`, and `learning/rules.json`.
+
+**2. Data arrived?** `data/<CT-date>.json` present with `bars > 0`. If not: report which stage broke and
+**STOP** — no review, no log file, no speculation about a day whose data never landed.
+
+**3. Contradictions, per bar (this is the part one day CAN answer).** Bars where the READ verdict ≠ the
+direction spine; drift flipping a confirmed trend; any grade A that resolved under 30% today. Name the bar,
+the values, and the mechanism.
+
+**4. Today's regime + vote split, TODAY ONLY.** The day's regime tag / OPEX / event (every FEATURES record
+now carries `regime:{tag,opex,event}`), the baseline drift, and per factor the **vote-direction split**.
+Flag ≥90% one-directional factors as `1-way, not evidence`.
+
+**5. Write the logbook** — `learning/log/YYYY-MM-DD.json`, shape in `learning/log/README.md`. Append-only.
+
+**6. Say the power out loud:** "one day = ~N independent observations; no weight conclusions from a single
+day," with N = bars / forward-window.
+
+**7. One-line pre-open brief.** Then deliver via the cascade below.
+
+### REVIEW-WEEKLY ("weekly learning run" / scheduled Saturday run)
+
+Produces `learning/rules.json` (v2) + `review/YYYY-MM-DD.json`. This is where learning happens.
+
+**1. Read.** ALL `data/*.json`, **all** `learning/log/*.json`, `learning/rules.json` v2, and the prior
+weekly reviews.
+
+**2. Analyse — honesty rules that matter more than the findings:**
+- Report every factor with n, hit-rate, avg MFE/MAE **and its VOTE-DIRECTION SPLIT** (how many UP vs DOWN
+  votes) **plus the period baseline drift, re-weighted by that factor's own vote mix**. A one-directional
+  factor on a trending day earns accuracy for free — flag it `1-way, not evidence`. This already fooled us
+  once: 2026-08-11 structure voted DOWN 46/49 on a down day and looked like 71% edge.
+- **Break every factor down PER REGIME** (trend / chop / opex). A rule that works in trend and fails in
+  chop averages to "meh" and teaches nothing.
+- State effective sample size. Overlapping forward windows mean effective n ≈ bars/10, NOT bars.
+- Calibration: is A > B > C monotone? If not, the fusion is wrong — surface it.
+- If there is not enough data to conclude anything, SAY THAT. Never invent findings or numbers.
+- **Walk-forward** every open proposal on the sessions since it was made; update `wf.sessions` / `wf.held`.
+- **Challengers**: score the parked factors (`dir.trendFast` 10/20 vs `dir.trend5`; `dir.struct`,
+  `dir.kingRoll`, `netGamma`; floor/ceiling rolling only once FCHIST has ≥5 sessions) against the incumbents
+  on the SAME bars. Emit `challengers`, and a `swap` proposal where the lift is real and over the bar.
+- Propose KILL-LIST additions (conditions to avoid), not just what works.
+
+**3. Emit proposals — and never apply them.** Kinds `weight` / `swap` / `kill` / `threshold`, each with
+`clearsBar` computed against the HARD BAR: **n ≥ 20 AND walk-forward held over ≥3 NEW sessions AND no
+regime flip**. Sparse → `clearsBar:false, reason:"insufficient — n=X, need 20"` and the hand-set value
+stands; there is no provisional nudge. `clearsBar` is an assertion, not authority: `applyProposals()` in
+`v10.js` re-derives n, the walk-forward hold and the regime flip from the proposal's own numbers and
+refuses anything that does not survive. Write `rules` / `proposals` / `challengers` / `killList`; leave
+`weights` and `promoted` **untouched** — the panel owns them.
+
+**4. Self-test.** If `_selftest` is present in the data dir (`data/_selftest.json`, from
+`node tools/synth_day.js`), analyse it with the same procedure and report FIRST whether you recovered all
+three planted properties — the true edge, the 1-way trap, the regime split. Answer key and pass criteria:
+`docs/REVIEW-ACCEPTANCE.md`. Never aggregate it with real days; never emit a proposal off it.
+
+### DELIVERY CASCADE (both runs) — in order, stop at the first that succeeds
+
+1. **Device bridge** (`mcp__remote-devices__*`, needs the Claude desktop app running): write the file
+   directly into `C:\Dev\gex-signal-tapereader\learning\log\` (nightly) or `...\learning\` + `...\review\`
+   (weekly). The user's local "GEX data push" task then commits it.
+2. **Google Drive** (connector, always available): create the file in Drive folder `GEX-review-inbox`.
+   The user's local task moves it into the repo. Drive is a TRANSPORT ONLY here — the repo remains the
+   single source of truth (see the git-first rule above).
+3. **Chat**: SendUserFile the JSON.
+
+Always report WHICH path was used, so the panel's `review` pipeline stage can be interpreted.
+
+**Summarise** in 5-10 plain lines: what is now measured, what got promotion candidates, what is still
+unproven, what field was missing that would have answered a question (forward-only data can never be
+back-filled). Plus a one-line "brief" the panel can show pre-open.
+
+Descriptive only: never entries, stops, sizing, or trade recommendations.
+
 ## STATUS ("status" / "where are we" / "how complete is it")
 
 Report completeness LAYER BY LAYER with an honest % and one sentence of what works vs what is

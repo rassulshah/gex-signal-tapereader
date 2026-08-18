@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    10.55
+// @version    10.51.1
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -43,28 +43,6 @@ var TREND_DOM = 15;   // (v10.50.1, user) 15 of 20 bars = 75% dominance = confir
 // node that aren't backed by genuine range expansion. Symmetric (longs + shorts).
 var BO_HL_LOOKBACK = 14;   // closed 3m bars in the high/low window (tunable)
 var TREND_LAST = { SPY:null, QQQ:null };   // last CONFIRMED trend dir ('up'|'dn') for broken-state detection
-// (v10.54, audit 15) TREND_LAST IS THE ONLY MEMORY THE FIVE-STATE MACHINE HAS, and it
-// lived in RAM alone: any page reload wiped it, so a genuinely BROKEN uptrend came back
-// as plain 'flat' and the whole up-broken / dn-broken distinction vanished mid-session.
-// Persisted per DAY (the memory is intraday — yesterday's trend must not leak in).
-var TRENDLAST_KEY='gpts_trendlast_v1';
-function trendLastSave(){
-  try{
-    var d=null; try{ d=ctTodayStr(); }catch(e0){ d=TODAY; }
-    localStorage.setItem(TRENDLAST_KEY, JSON.stringify({ date:d, last:TREND_LAST }));
-  }catch(e){}
-}
-function trendLastLoad(){
-  try{
-    var o=JSON.parse(localStorage.getItem(TRENDLAST_KEY)||'null');
-    if(!o || !o.last) return false;
-    var d=null; try{ d=ctTodayStr(); }catch(e0){ d=TODAY; }
-    if(o.date!==d) return false;                 // a NEW day starts with no memory
-    if(o.last.SPY==='up'||o.last.SPY==='dn') TREND_LAST.SPY=o.last.SPY;
-    if(o.last.QQQ==='up'||o.last.QQQ==='dn') TREND_LAST.QQQ=o.last.QQQ;
-    return true;
-  }catch(e){ return false; }
-}
 var SMA_CONT_FLAG = { SPY:false, QQQ:false };  // (v10.23 C) set when the continuous SMA failed sanity and we fell back
 var TREND_RUNMIN = 3;
 var TREND_BANDX = 0.25;
@@ -133,7 +111,6 @@ var CFG = {
     inplayAccum: { on:true,  vis:true,  snd:false },
     dissipate:   { on:false, vis:true,  snd:false },
     kingRoll:    { on:true,  vis:true,  snd:true  },
-    pbNode:      { on:true,  vis:true,  snd:false },   // (v10.55) a pullback node lands
     trap:        { on:true,  vis:true,  snd:false },
     absorption:  { on:false, vis:true,  snd:false },
     feedStale:   { on:true,  vis:true,  snd:true  }
@@ -379,7 +356,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-console.log('[GPTS] v10.55 part1 loaded');
+console.log('[GPTS] v10.51.1 part1 loaded');
 
 function fiberKeyOf(el){
   var ks=Object.keys(el);
@@ -728,8 +705,8 @@ function trendVerdict(sym){
   var confDn = dn>=TREND_DOM;
   var prior = TREND_LAST[sym];   // 'up' | 'dn' | null
   var state;
-  if(confUp){ state='up'; if(TREND_LAST[sym]!=='up'){ TREND_LAST[sym]='up'; trendLastSave(); } }
-  else if(confDn){ state='dn'; if(TREND_LAST[sym]!=='dn'){ TREND_LAST[sym]='dn'; trendLastSave(); } }
+  if(confUp){ state='up'; TREND_LAST[sym]='up'; }
+  else if(confDn){ state='dn'; TREND_LAST[sym]='dn'; }
   else if(prior==='up'){ state='up-broken'; }   // was up, lost 15/20, dn not yet 15 -> broken
   else if(prior==='dn'){ state='dn-broken'; }
   else { state='flat'; }
@@ -2356,10 +2333,6 @@ function recordNodeSnapshot(sym){
       t:Date.now(),
       bar:bar,
       px:(typeof S.price==='number')?S.price:null,
-      // (v10.54, audit 9) the CLOSED BAR's high/low travel with the snapshot so _fwdStats
-      // can measure excursions the same way resolveFeatureOutcomes does.
-      h:(function(){ try{ var cH=closedCandles(sym)||[]; var bH=cH[cH.length-1]; return (bH&&bH.h!=null)?bH.h:null; }catch(eHh){ return null; } })(),
-      l:(function(){ try{ var cL=closedCandles(sym)||[]; var bL=cL[cL.length-1]; return (bL&&bL.l!=null)?bL.l:null; }catch(eLl){ return null; } })(),
       king:(typeof S.king==='number')?S.king:null,
       tking:tapeKingStrike(sym),
       // (v10.39) King dollar magnitude this bar (tape $K, in $K units). null when
@@ -2396,10 +2369,6 @@ function recordNodeSnapshot(sym){
     arr.push(snap);
     if(arr.length>RECORDER_MAX_SNAPS) day.snaps[sym]=arr.slice(arr.length-RECORDER_MAX_SNAPS);
     RECORDER._lastSnapBar[sym]=bar;
-    // (v10.52) WHEN the last bar actually landed. _lastSnapBar answers "which bar";
-    // the pipeline indicator's `rec` stage needs "how long ago", because a recorder
-    // that silently stopped still holds a plausible-looking bar index forever.
-    RECORDER._lastSnapT=Date.now();
     // Back-fill forward outcomes on older snapshots now that a fresh bar landed.
     labelForwardOutcomes(sym, day.snaps[sym]);
     recorderSave(db);
@@ -2510,28 +2479,13 @@ function repoExportDay(date, silent){
   date=date||TODAY;
   repoDay(date, function(day){
     if(!day){ return; }
-    // (v10.54, audit 5) THE AUTO EXPORT IS THE FULL FILE. It used to write snaps+events
-    // only, so the nightly review — the one consumer that could measure anything — never
-    // saw feat[] (hit / mfe / mae / resolved), act[], flrCeilHist or the rules the day was
-    // scored under. Everything the manual "Save & prep review" produced was silently
-    // missing from the file git actually pushes. buildDayExport IS that file; the richer
-    // IndexedDB snaps (unbounded, all symbols) replace the 4-day localStorage mirror.
-    var payload=null;
-    try{
-      payload=buildDayExport(date);
-      payload.snaps=day.snaps;
-      payload.exportedAt=new Date().toISOString();
-      payload.rulesAsOf=(function(){ try{ return (rulesDoc()||{}).asOf||null; }catch(eR){ return null; } })();
-      payload.model=(function(){ try{ return modelStamp(); }catch(eM){ return null; } })();
-    }catch(eB){
-      payload={ version:VERSION_STR(), date:date, exportedAt:new Date().toISOString(), snaps:day.snaps,
-        events:(function(){ try{ var d=recorderLoad().days[date]; return d?d.events:null; }catch(e){ return null; } })() };
-    }
+    var payload={version:VERSION_STR(), date:date, exportedAt:new Date().toISOString(), snaps:day.snaps,
+      events:(function(){ try{ var d=recorderLoad().days[date]; return d?d.events:null; }catch(e){ return null; } })()};
     var txt=JSON.stringify(payload);
     var name=date+'.json';
     repoKvGet('dataDir', function(h){
       if(h && h.createWritable!==undefined || (h && h.getFileHandle)){
-        var doWrite=function(){ h.getFileHandle(name,{create:true}).then(function(fh){ return fh.createWritable(); }).then(function(w){ return w.write(txt).then(function(){ return w.close(); }); }).then(function(){ REPO_LAST_SAVE={t:Date.now(),how:'repo folder',name:name}; try{ localStorage.setItem('gpts_last_export',date); }catch(e){} try{ pipeNoteSave(date,'repo folder'); }catch(e9){} if(!silent) render(); }).catch(function(){ repoDownload(name, txt, silent); }); };
+        var doWrite=function(){ h.getFileHandle(name,{create:true}).then(function(fh){ return fh.createWritable(); }).then(function(w){ return w.write(txt).then(function(){ return w.close(); }); }).then(function(){ REPO_LAST_SAVE={t:Date.now(),how:'repo folder',name:name}; try{ localStorage.setItem('gpts_last_export',date); }catch(e){} if(!silent) render(); }).catch(function(){ repoDownload(name, txt, silent); }); };
         var q=h.queryPermission?h.queryPermission({mode:'readwrite'}):Promise.resolve('granted');
         q.then(function(p){ if(p==='granted') doWrite(); else if(!silent && h.requestPermission){ h.requestPermission({mode:'readwrite'}).then(function(p2){ if(p2==='granted') doWrite(); else repoDownload(name,txt,silent); }); } else repoDownload(name,txt,silent); });
       } else repoDownload(name, txt, silent);
@@ -2540,240 +2494,17 @@ function repoExportDay(date, silent){
 }
 function repoDownload(name, txt, silent){
   try{ var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'application/json'})); a.download=name; document.body.appendChild(a); a.click(); setTimeout(function(){ document.body.removeChild(a); },500);
-    REPO_LAST_SAVE={t:Date.now(),how:'download',name:name}; try{ localStorage.setItem('gpts_last_export',name.replace('.json','')); }catch(e){} try{ pipeNoteSave(name.replace('.json',''),'download'); }catch(e9){} if(!silent) render(); }catch(e){}
+    REPO_LAST_SAVE={t:Date.now(),how:'download',name:name}; try{ localStorage.setItem('gpts_last_export',name.replace('.json','')); }catch(e){} if(!silent) render(); }catch(e){}
 }
 // Auto-export once at/after the close (15:01 CT), once per day.
-// (v10.54, audit 5) THE FLAG IS EVIDENCE, NOT INTENT. It used to be written BEFORE the
-// export was attempted, "so it can never double-fire" — which meant a failed write left
-// gpts_last_export=TODAY behind and the panel reported a day as saved that had never
-// reached disk. The one-attempt guard is now in memory; the flag is written only by the
-// success callbacks in repoExportDay / repoDownload.
-var REPO_AUTO_TRIED=null;
 function repoAutoExportTick(){
   try{ var sec=ctNowSecOfDay(); if(sec<15*3600+60 || sec>16*3600) return;
     var done=localStorage.getItem('gpts_last_export'); if(done===TODAY) return;
-    if(REPO_AUTO_TRIED===TODAY) return;
-    REPO_AUTO_TRIED=TODAY;
+    localStorage.setItem('gpts_last_export', TODAY);   // set first: never double-fire
     repoExportDay(TODAY, true);
   }catch(e){}
 }
-// (v10.54, audit 25) ONE VERSION STRING. The fallback was frozen at '10.44' while the
-// header said 10.53 and the export said 10.15 — three different answers to "which build
-// wrote this?". The fallback is the shipping version now, and buildDayExport uses this.
-function VERSION_STR(){ try{ return (typeof GM_info!=='undefined'&&GM_info.script&&GM_info.script.version)||'10.55'; }catch(e){ return '10.55'; } }
-
-// ============================================================================
-// (v10.52) THE PIPELINE. A day's data travels four stages:
-//     recorded  ->  saved into the repo folder  ->  pushed to GitHub  ->  review back
-// Every stage before v10.52 was ASSUMED. Two real breaks were found: the v10.50
-// footer redesign dropped the "saved / not saved" text entirely, and a review that
-// existed on GitHub could only enter the panel through a console call. This module
-// OBSERVES each stage and says so; it decides nothing and changes no read.
-// ============================================================================
-var PIPE_RAW_BASE='https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main';
-var PIPE_KEY='gpts_pipe_v1';       // {t, pushed, pushedDay, review, reviewDay, reviewLine, saveDate, saveHow, saveT}
-var PIPE_TTL_MS=600000;            // at most ONE round of remote checks per 10 minutes
-var PIPE_REC_MS=360000;            // a bar within ~6 min = still recording (3m bars + slack)
-
-function pipeLoad(){
-  try{ var o=JSON.parse(localStorage.getItem(PIPE_KEY)||'null'); return (o && typeof o==='object')?o:{}; }
-  catch(e){ return {}; }
-}
-function pipeSave(o){ try{ localStorage.setItem(PIPE_KEY, JSON.stringify(o||{})); }catch(e){} }
-function pipeRender(){ try{ if(typeof render==='function') render(); }catch(e){} }
-// Remember HOW the last export landed, so "download-only" survives a page reload.
-// localStorage's gpts_last_export records only the date; a reloaded session would
-// otherwise report a download (which never reaches the repo) as a real save.
-function pipeNoteSave(date, how){
-  try{ var P=pipeLoad(); P.saveDate=date; P.saveHow=how; P.saveT=Date.now(); pipeSave(P); }catch(e){}
-}
-
-// ---- A. SAVE STATE ---------------------------------------------------------
-// saved    = written into the repo FOLDER — git, and therefore the review, can see it
-// download = exported, but only as a browser download: it is NOT in the repo and the
-//            nightly review will never read it. This is the silent failure mode.
-// none     = today has not been exported at all.
-// The date compared is the CHICAGO trading date, NEVER the UTC date. After 19:00 CT
-// the UTC clock already reads tomorrow, and a UTC comparison reported a day that HAD
-// been exported as "not exported" (observed 2026-08-17).
-function saveState(){
-  var today=null; try{ today=ctTodayStr(); }catch(e){}
-  var last=null;  try{ last=localStorage.getItem('gpts_last_export'); }catch(e2){}
-  var P={};       try{ P=pipeLoad(); }catch(e3){}
-  // 1. this session's own export is the most specific evidence
-  try{
-    var S=(typeof REPO_LAST_SAVE!=='undefined')?REPO_LAST_SAVE:null;
-    if(S && S.how && S.how!=='folder set'){
-      var sd = S.name ? String(S.name).replace(/\.json$/,'') : today;
-      if(sd===today) return { code:(S.how==='download')?'download':'saved', t:S.t||null, name:S.name||(today+'.json') };
-    }
-  }catch(e4){}
-  // 2. an export from an earlier session today (survives a reload)
-  if(today && last===today){
-    var how=(P.saveDate===today)?P.saveHow:null;
-    if(!how){
-      // (v10.54, audit 5) THE ORPHAN FLAG. gpts_last_export says today was exported but
-      // no pipeNoteSave record backs it up, so nothing confirmed the write. In-flight
-      // this session = PENDING (amber). Anything else is a write that never landed =
-      // FAILED (red). Reporting it as "saved" is how a whole day of data went missing.
-      var pend=false; try{ pend=(REPO_AUTO_TRIED===today); }catch(e5){}
-      return { code:(pend?'pending':'failed'), t:null, name:today+'.json' };
-    }
-    return { code:(how==='download')?'download':'saved', t:(P.saveDate===today?(P.saveT||null):null), name:today+'.json' };
-  }
-  return { code:'none', t:null, name:null };
-}
-
-// Most recent weekday on/before today in CT. `back` steps whole calendar days back
-// first (so back=1 from a Monday lands on the previous Friday). Holidays are not
-// modelled: a holiday simply 404s, and pipeCheck falls back one weekday once.
-function lastTradingDay(back){
-  try{
-    var d=ctNow(); d.setDate(d.getDate()-(back||0));
-    var guard=0;
-    while(guard<8 && (d.getDay()===0 || d.getDay()===6)){ d.setDate(d.getDate()-1); guard++; }
-    return ctDateStr(d);
-  }catch(e){ return null; }
-}
-
-// ---- B. REMOTE CHECKS ------------------------------------------------------
-// Public raw.githubusercontent.com files are CORS-open, so a plain fetch works from
-// the Skylit page. Everything here FAILS SOFT: a rejected fetch leaves the stage
-// 'unknown' (grey). It never throws and never blocks a render.
-function pipeFetch(url){
-  try{
-    if(typeof fetch!=='function') return Promise.reject(new Error('no fetch'));
-    return fetch(url, {cache:'no-store'});
-  }catch(e){ return Promise.reject(e); }
-}
-function pipeReviewTry(P, day, allowPrior){
-  if(!day){ P.review='unknown'; pipeSave(P); return; }
-  pipeFetch(PIPE_RAW_BASE+'/review/'+day+'.json').then(function(r){
-    if(r && r.ok && typeof r.json==='function'){
-      r.json().then(function(j){
-        P.review='yes'; P.reviewDay=day; P.reviewLine=pipeReviewLine(j);
-        pipeSave(P);
-        // AUTO READ-BACK: this is the same variable __gptsDebug.setReview writes, so
-        // the Analysis tab and the pre-open brief pick it up with no further wiring.
-        try{ ANALYSIS_REVIEW=j; }catch(eA){}
-        pipeRender();
-      }).catch(function(){ P.review='unknown'; P.reviewDay=day; pipeSave(P); pipeRender(); });
-      return;
-    }
-    if(allowPrior){ pipeReviewTry(P, lastTradingDay(1), false); return; }
-    P.review=(r && r.status===404)?'no':'unknown'; P.reviewDay=day; pipeSave(P); pipeRender();
-  }).catch(function(){ P.review='unknown'; P.reviewDay=day; pipeSave(P); pipeRender(); });
-}
-function pipeReviewLine(j){
-  try{
-    var s=j&&(j.headline||j.why||j.worked||j.summary);
-    if(!s) return null;
-    s=String(s).replace(/\s+/g,' ').trim();
-    return s.length>140 ? (s.slice(0,137)+'…') : s;
-  }catch(e){ return null; }
-}
-function pipeCheck(force){
-  var P=pipeLoad();
-  // A hidden tab is not worth a network round trip — nobody is reading the footer.
-  try{ if(!force && typeof document!=='undefined' && document.visibilityState && document.visibilityState!=='visible') return P; }catch(e){}
-  var now=Date.now();
-  if(!force && P.t && (now-P.t)<PIPE_TTL_MS) return P;   // cached: no refetch inside 10 min
-  P.t=now; pipeSave(P);        // stamp BEFORE fetching: a failing network must not retry every tick
-  var today=null; try{ today=ctTodayStr(); }catch(e2){}
-  if(today){
-    pipeFetch(PIPE_RAW_BASE+'/data/'+today+'.json').then(function(r){
-      P.pushed=(r && r.ok)?'yes':((r && r.status===404)?'no':'unknown');
-      P.pushedDay=today; pipeSave(P); pipeRender();
-    }).catch(function(){ P.pushed='unknown'; P.pushedDay=today; pipeSave(P); pipeRender(); });
-  }
-  pipeReviewTry(P, lastTradingDay(0), true);
-  try{ pipeRulesTry(P); }catch(eRules){}      // fail-soft: a rules fetch never blocks the pipeline
-  return P;
-}
-// (v10.53 B) the weekly learning run writes learning/rules.json; it is fetched on the SAME
-// cadence and with the SAME fail-soft contract as the review. A fresh document re-runs
-// applyProposals(), which is idempotent, so nothing double-applies.
-function pipeRulesTry(P){
-  pipeFetch(PIPE_RAW_BASE+'/learning/rules.json').then(function(r){
-    if(r && r.ok && typeof r.json==='function'){
-      r.json().then(function(j){
-        if(!j){ P.rules='unknown'; pipeSave(P); return; }
-        P.rules='yes'; P.rulesAt=Date.now();
-        try{ P.rulesAsOf=j.asOf||j.generated||null; }catch(eS){}
-        pipeSave(P);
-        try{ rulesIngest(j); }catch(eI){}
-        try{ render(); }catch(eR){}
-      }).catch(function(){ P.rules='unknown'; pipeSave(P); });
-    } else { P.rules=(r && r.status===404)?'no':'unknown'; pipeSave(P); }
-  }).catch(function(){ P.rules='unknown'; pipeSave(P); });
-}
-
-// ---- C. STAGE MODEL --------------------------------------------------------
-// green = the stage happened, amber = it did not but that is expected/benign,
-// red = it did not and that BREAKS the chain, grey = not knowable right now.
-function pipeColor(state){
-  if(state==='green') return PAL.longAccent;
-  if(state==='amber') return PAL.amber;
-  if(state==='red')   return PAL.shortAccent;
-  return PAL.sub;                       // 'grey' / unknown
-}
-function pipeStages(){
-  var P={};  try{ P=pipeLoad(); }catch(e){ P={}; }
-  var sv={code:'none'}; try{ sv=saveState()||sv; }catch(e2){}
-  var today=null; try{ today=ctTodayStr(); }catch(e3){}
-  var out=[];
-
-  // 1. rec — is a bar still landing in the recorder?
-  var recAge=Infinity;
-  try{ if(typeof RECORDER!=='undefined' && RECORDER && RECORDER._lastSnapT) recAge=Date.now()-RECORDER._lastSnapT; }catch(e4){}
-  var recFresh=(recAge<=PIPE_REC_MS);
-  out.push({ key:'rec', label:'rec', state:recFresh?'green':'amber',
-    tip:'Is it recording? '+(recFresh
-      ? ('yes — the last 3m bar landed '+Math.round(recAge/60000)+'m ago.')
-      : (recAge===Infinity ? 'no bar has been recorded yet this session (the first closes a few minutes after the open).'
-                           : ('the last bar landed '+Math.round(recAge/60000)+'m ago — bars close every 3m, so this is stale.')))+
-      ' Nothing downstream can exist without this.' });
-
-  // 2. saved — did today's file reach the repo FOLDER (not just a download)?
-  // (v10.54, audit 5) two new states: PENDING (amber) = an export is in flight this
-  // session and nothing has confirmed it yet; FAILED (red) = the day is flagged exported
-  // but no write ever confirmed. Both used to render as a green "saved".
-  var svLabel=({saved:'saved', download:'dl', pending:'pending', failed:'FAILED'})[sv.code]||'none';
-  var svState=({saved:'green', download:'amber', pending:'amber', failed:'red'})[sv.code]||'red';
-  var svWhen=''; try{ if(sv.t) svWhen=' at '+new Date(sv.t).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',timeZone:'America/Chicago'})+' CT'; }catch(e5){}
-  out.push({ key:'saved', label:svLabel, state:svState,
-    tip:'Is today’s data written where git can see it? '+(
-      sv.code==='saved'   ? ('yes — '+(sv.name||(today+'.json'))+' was written into the repo data folder'+svWhen+'.')
-    : sv.code==='download'? ('NO — it was exported'+svWhen+' as a browser DOWNLOAD only. A download sits in your Downloads folder, not in the repo, so it never gets committed and the nightly review will not see it. Pick the repo folder with 📁 and export again with 💾.')
-    : sv.code==='pending' ? ('PENDING — an export was started this session but no write has confirmed yet. If it stays here, the folder permission was refused or the write threw.')
-    : sv.code==='failed'  ? ('FAILED — today is flagged as exported but no confirmed write exists for it. The file is NOT in the repo. Re-export with 💾 and re-pick the folder with 📁.')
-                          : ('not yet — today has not been exported. The auto-export runs at 15:01 CT; 💾 exports now.')) });
-
-  // 3. pushed — is today's file actually on GitHub?
-  var pushed=(P.pushedDay===today)?P.pushed:null;
-  var pushState=(pushed==='yes')?'green':((pushed==='no')?'red':'grey');
-  out.push({ key:'pushed', label:'pushed', state:pushState,
-    tip:'Has today’s data reached GitHub, where the nightly review reads it? '+(
-      pushed==='yes' ? 'yes — data/'+today+'.json is on main.'
-    : pushed==='no'  ? ('not yet — data/'+today+'.json is not on main. The scheduled commit runs at 15:30 CT; if it already ran, the push failed.')
-                     : 'unknown — the check has not run or the network call failed. Grey means unknown, not bad.') });
-
-  // 4. review — did the nightly review run, and did it come back into this panel?
-  var loaded=false; try{ loaded=!!ANALYSIS_REVIEW; }catch(e6){}
-  var rev=P.review;
-  var revState=(rev==='yes'&&loaded)?'green':((rev==='no')?'amber':(rev==='yes'?'amber':'grey'));
-  out.push({ key:'review', label:'review', state:revState,
-    tip:'Did the nightly review run and come back? '+(
-      (rev==='yes'&&loaded) ? ('yes — review/'+(P.reviewDay||'?')+'.json is loaded into the Analysis tab.'+(P.reviewLine?(' It says: '+P.reviewLine):''))
-    : rev==='yes'          ? 'the file exists but could not be parsed into the panel.'
-    : rev==='no'           ? ('no review file for '+(P.reviewDay||'the last session')+' yet — it is written after the close.')
-                           : 'unknown — the check has not run or the network call failed.') });
-  return out;
-}
-// Console access is kept: setReview/loadReview still work, and pipe() forces a check.
-window.__gptsDebug=window.__gptsDebug||{};
-window.__gptsDebug.pipe=function(){ try{ return pipeCheck(true); }catch(e){ return ''+e; } };
-window.__gptsDebug.saveState=function(){ try{ return saveState(); }catch(e){ return ''+e; } };
+function VERSION_STR(){ try{ return (typeof GM_info!=='undefined'&&GM_info.script&&GM_info.script.version)||'10.44'; }catch(e){ return '10.44'; } }
 
 
 // ---- FORWARD-OUTCOME AUTO-LABELER (v10.15 DATA layer) ------------------------
@@ -2797,16 +2528,9 @@ function _fwdStats(base, fwd){
            :((typeof base.king==='number' && base.king<10000)?base.king:null);
   var hi=px0, lo=px0, hitKing=false, last=px0;
   for(var i=0;i<fwd.length;i++){
-    var f=fwd[i];
-    var p=(typeof f.px==='number')?f.px:null; if(p==null) continue;
-    // (v10.54, audit 9) CANDLE HIGH/LOW, the same basis resolveFeatureOutcomes uses.
-    // Close-only excursions made snaps[].out5/out10 systematically SMALLER than the
-    // feat[] outcomes computed over the identical window, so the two halves of the
-    // analysis disagreed about the same bars. Falls back to the close on older records.
-    var bh=(typeof f.h==='number')?f.h:p;
-    var bl=(typeof f.l==='number')?f.l:p;
-    if(bh>hi) hi=bh; if(bl<lo) lo=bl; last=p;
-    if(kingK!=null && (Math.abs(p-kingK)<=0.25 || (bl<=kingK && bh>=kingK))) hitKing=true;
+    var p=(typeof fwd[i].px==='number')?fwd[i].px:null; if(p==null) continue;
+    if(p>hi) hi=p; if(p<lo) lo=p; last=p;
+    if(kingK!=null && Math.abs(p-kingK)<=0.25) hitKing=true;
   }
   if(kingK!=null && !hitKing && lo<=kingK+0.05 && hi>=kingK-0.05) hitKing=true;
   var mfe=+(hi-px0).toFixed(2);     // best up-move from entry
@@ -3646,63 +3370,6 @@ window.__gptsDebug.clearRecorder = function(){ try{ localStorage.removeItem(RECO
 // end-of-day LLM review knows the schema without guessing. This is what gets
 // dropped into AI Drive /GEX-Signal-Tapereader/daily-data/ for the scheduled
 // review workflow to consume.
-// ============================================================================
-// (v10.55 PART F) ENGINE-READY DATA. The day export already carried every feature
-// record and every resolved outcome — but as a per-feature queue, which is not a
-// shape any model can read. `matrix` is ONE ROW PER BAR PER SYMBOL: every recorded
-// vote / grade / input flattened into `feature.field` columns, the regime, session
-// and model stamp beside them, and the four labels (dirHit, deflHit, contHit,
-// tgtHit) plus MFE/MAE at the end. CSV is one map() away; so is a model.
-// ============================================================================
-function buildFeatureMatrix(day){
-  var rows=[];
-  try{
-    var feat=(day&&day.feat)||{};
-    Object.keys(feat).forEach(function(sym){
-      var byBar={}, order=[];
-      (feat[sym]||[]).forEach(function(r){
-        if(!r || typeof r.bar!=='number') return;
-        var id=sym+'|'+r.bar;
-        var row=byBar[id];
-        if(!row){
-          row=byBar[id]={ sym:sym, bar:r.bar, t:r.t||null, n:(r.n!=null?r.n:null), px:(r.px!=null?r.px:null),
-                          session:r.session||null, regime:null, opex:null, event:null,
-                          rulesAsOf:null, weightsHash:null,
-                          dirHit:null, deflHit:null, contHit:null, tgtHit:null, mfe:null, mae:null, partial:null };
-          order.push(id);
-        }
-        var rec=r.rec||{};
-        Object.keys(rec).forEach(function(f){
-          var v=rec[f];
-          if(v && typeof v==='object'){
-            if(f==='regime'){ row.regime=v.tag||null; row.opex=!!v.opex; row.event=(v.event===true)?1:0; }
-            else if(f==='model'){ row.rulesAsOf=v.rulesAsOf||null; row.weightsHash=v.weightsHash||null; }
-            else if(!(v instanceof Array)){
-              Object.keys(v).forEach(function(f2){ var v2=v[f2];
-                if(v2==null || typeof v2!=='object') row[r.key+'.'+f+'.'+f2]=v2; });
-            }
-            return;
-          }
-          row[r.key+'.'+f]=v;
-        });
-        // ---- the four labels ----
-        if(r.key==='dir'){
-          row.dirHit=(r.hit!=null)?r.hit:null;
-          row.mfe=(r.mfe!=null)?r.mfe:row.mfe; row.mae=(r.mae!=null)?r.mae:row.mae;
-          row.partial=r.partial?1:0;
-          if(r.frame) row.tgtHit=(r.frame.first==='tgt')?1:((r.frame.first==='inval')?0:null);
-        }
-        if(r.key==='node'  && r.hit!=null) row.deflHit=r.hit;
-        if(r.key==='leg.pbDetect' && r.hit!=null && row.deflHit==null) row.deflHit=r.hit;
-        if(r.key==='leg.roll' && r.hit!=null) row.contHit=r.hit;
-        if(row.mfe==null && r.mfe!=null){ row.mfe=r.mfe; row.mae=r.mae; }
-      });
-      order.forEach(function(id){ rows.push(byBar[id]); });
-    });
-    rows.sort(function(a,b){ return (a.sym===b.sym) ? (a.bar-b.bar) : (a.sym<b.sym?-1:1); });
-  }catch(e){}
-  return rows;
-}
 function buildDayExport(dateKey){
   var db=recorderLoad();
   var dk=dateKey||TODAY;
@@ -3713,12 +3380,7 @@ function buildDayExport(dateKey){
     // recommendations ride in the export so the end-of-day LLM review consumes
     // them with zero extra steps. proj per-bar records live in snaps[].proj.
     projReview:(function(){ try{ var sc=projScorecard(); return {scorecard:sc, recommendations:projRecs(sc)}; }catch(ePE){ return null; } })(),
-    // (v10.54, audit 5) the export version was frozen at '10.15' for 39 releases, so no
-    // consumer could tell which panel wrote a file. It is the real version now.
-    version:VERSION_STR(),
-    rulesAsOf:(function(){ try{ return (rulesDoc()||{}).asOf||null; }catch(eRa){ return null; } })(),
-    model:(function(){ try{ return modelStamp(); }catch(eMs){ return null; } })(),
-    effN:{ fwd:FEAT_FWD, note:'every feature record is one BAR; effective observations = n / fwd' },
+    version:'10.15',
     date:dk,
     generatedAt:new Date().toISOString(),
     horizons:{ out5:'5 bars = 15 min forward', out10:'10 bars = 30 min forward' },
@@ -3733,16 +3395,6 @@ function buildDayExport(dateKey){
     // resolved outcome queue here, plus the operator's take/pass log.
     feat:day.feat||{},
     act:day.act||{},
-    // (v10.55 PART F) the same records, ENGINE-READY: one row per bar per symbol.
-    matrix:(function(){ try{ return buildFeatureMatrix(day); }catch(eMx){ return []; } })(),
-    matrixLegend:'one row per (sym, bar); columns are feature.field of every recorded input/vote plus regime/session/model; labels dirHit (direction travelled DIR_PTS), deflHit (node/pullback held), contHit (roll continued), tgtHit (frame target before invalidation), with MFE/MAE',
-    // (v10.55 PART A/D) the per-bar node-cluster history the leg engine reads, and the
-    // multi-session rolling read derived from FCHIST.
-    nodeHist:(function(){ try{ var o={}; RECORDER_SYMS.forEach(function(s){ o[s]=nodeHistOf(s); }); return o; }catch(eNh){ return null; } })(),
-    sessionRoll:(function(){ try{ var o={}; RECORDER_SYMS.forEach(function(s){ o[s]=sessionRoll(s); }); return o; }catch(eSr){ return null; } })(),
-    futures:(function(){ try{ return { chart:FUTMODE.chart, underlying:FUTMODE.underlying, r:FUTMODE.r,
-                                       live:!!FUTMODE.live, approx:!!FUTMODE.approx, ok:!!FUTMODE.ok }; }catch(eFu){ return null; } })(),
-    event:(function(){ try{ return eventTagLabel(); }catch(eEv){ return null; } })(),
     // (v10.51) FCHIST — raw Flr/Ceil strike samples. Carried in the export so the
     // day-over-day rolling study is computable once 2+ sessions exist. NOT a verdict:
     // no rolling value is computed anywhere in the panel yet.
@@ -4007,200 +3659,7 @@ function restoreSize(){
 
 function dirColor(dir){ return dir==='long' ? PAL.longAccent : PAL.shortAccent; }
 function fmtNum(x){ return (Math.round(mul(x,100))/100).toString(); }
-function fmtFut(x){ return (Math.round(mul(x,100))/100).toString(); }
-
-// ============================================================================
-// (v10.55 PART E) FUTURES MODE — the chart may be a FUTURE, and then every level
-// the panel draws must be spoken in that future's points.
-//
-// The options tape only exists for the CASH underlyings (SPY / QQQ). So the panel
-// keeps computing everything in SPY/QQQ strikes — the recording, the learning and
-// the whole feature registry are UNCHANGED — and converts only what it DISPLAYS,
-// through a live ratio r = futPrice / underlyingPrice (EMA-smoothed).
-//   ES,MES -> SPY tape · NQ,MNQ -> QQQ tape · SPY -> SPY · QQQ -> QQQ
-//   anything else -> "No options tape for <SYM> — levels unavailable". NEVER an
-//   invented level: a GC or CL chart has no dealer-exposure map here, full stop.
-// When the fut price cannot be read we fall back to the last good ratio, then to
-// the constant, and EVERY converted number is marked with '≈' so the difference
-// between a measured conversion and an assumed one is visible on the face.
-// ============================================================================
-var FUTCFG_KEY='gpts_futcfg_v1';
-var FUTCFG={ mode:'auto' };                    // auto | SPY | ES | NQ  (⚙ override)
-function futCfgLoad(){
-  try{ var o=JSON.parse(localStorage.getItem(FUTCFG_KEY)||'null');
-    if(o && (o.mode==='auto'||o.mode==='SPY'||o.mode==='ES'||o.mode==='NQ')) FUTCFG.mode=o.mode; }catch(e){}
-  return FUTCFG;
-}
-function futCfgSave(){ try{ localStorage.setItem(FUTCFG_KEY, JSON.stringify(FUTCFG)); }catch(e){} }
-var NQ_RATIO = 41.36;                          // last-known QQQ→NQ constant (fallback only)
-var FUT_FAMILY={ ES:'ES', MES:'ES', NQ:'NQ', MNQ:'NQ' };
-var FUT_UNDERLYING={ ES:'SPY', MES:'SPY', SPY:'SPY', NQ:'QQQ', MNQ:'QQQ', QQQ:'QQQ' };
-var FUT_CONST={ ES:ES_RATIO, NQ:NQ_RATIO };
-var FUT_EMA_A=0.25;                            // ratio smoothing
-var FUTR={ ES:{ ema:null, last:null, t:0 }, NQ:{ ema:null, last:null, t:0 } };
-var FUTMODE={ chart:'SPY', fam:null, underlying:'SPY', r:1, live:false, approx:false,
-              ok:true, msg:null, futPx:null, undPx:null, source:'default', forced:false };
-// PURE: pull a chart symbol out of a title / header string. 'ES1 $7768.75' -> 'ES'.
-var FUT_KNOWN=['MES','MNQ','ES','NQ','SPY','QQQ'];
-function chartSymFromText(txt){
-  if(!txt) return null;
-  var t=String(txt).toUpperCase();
-  for(var i=0;i<FUT_KNOWN.length;i++){
-    var s=FUT_KNOWN[i];
-    if(new RegExp('(^|[^A-Z])'+s+'[0-9!]?([^A-Z0-9]|$)').test(t)) return s;
-  }
-  var m=t.match(/(^|[^A-Z])([A-Z]{1,4})[0-9!]?\s*\$/);   // "GC1 $2465.10" — a symbol we cannot map
-  return m?m[2]:null;
-}
-// PURE: the dollar price out of the same string.
-function chartPxFromText(txt){
-  if(!txt) return null;
-  var m=String(txt).match(/\$\s*([\d,]+\.?\d*)/);
-  if(!m) return null;
-  var v=parseFloat(m[1].replace(/,/g,''));
-  return isFinite(v)?v:null;
-}
-// PURE: r update with EMA smoothing + the honest fallback chain.
-function futRatioStep(st, futPx, undPx, fam){
-  st=st||{ ema:null, last:null, t:0 };
-  if(typeof futPx==='number' && typeof undPx==='number' && futPx>0 && undPx>0){
-    var r=futPx/undPx;
-    if(isFinite(r) && r>0){
-      st.ema=(st.ema==null)?r:(st.ema+mul(FUT_EMA_A,(r-st.ema)));
-      st.last=st.ema; st.t=Date.now();
-      return { r:st.ema, live:true, approx:false, src:'live' };
-    }
-  }
-  if(st.last!=null) return { r:st.last, live:false, approx:true, src:'last-good' };
-  return { r:(FUT_CONST[fam]!=null?FUT_CONST[fam]:1), live:false, approx:true, src:'const' };
-}
-// The underlying's own price, straight off the feed (levels[last].s) when we have one.
-function feedUnderlyingPx(sym){
-  try{
-    var f=LASTFEED[sym];
-    var lv=(f && f.j && f.j.levels)||null;
-    if(lv && lv.length){ var s=lv[lv.length-1].s; if(typeof s==='number' && s>0) return s; }
-  }catch(e){}
-  try{ var p=(STATE[sym]||{}).price; if(typeof p==='number' && p>0) return p; }catch(e2){}
-  return null;
-}
-// What is on the chart right now? title first, then the trinity header ticker.
-function futDetect(){
-  var sym=null, px=null, src='none';
-  try{ var t=document.title; var s=chartSymFromText(t); if(s){ sym=s; px=chartPxFromText(t); src='title'; } }catch(e){}
-  if(!sym || px==null){
-    try{
-      var hs=readTrinityHeaders();
-      if(hs){ for(var k in hs){ if(!hs.hasOwnProperty(k)) continue;
-        var kk=chartSymFromText(k);
-        if(kk && (!sym || kk===sym)){ if(!sym){ sym=kk; src='header'; } if(px==null && hs[k] && typeof hs[k].px==='number'){ px=hs[k].px; if(src==='none') src='header'; } } } }
-    }catch(e2){}
-  }
-  return { sym:sym, px:px, src:src };
-}
-// Recomputed each render. Never throws; a failure degrades to plain SPY mode.
-function futModeCompute(){
-  var out={ chart:'SPY', fam:null, underlying:'SPY', r:1, live:false, approx:false,
-            ok:true, msg:null, futPx:null, undPx:null, source:'default', forced:false };
-  try{
-    var det=futDetect();
-    var chart=det.sym||'SPY';
-    if(FUTCFG.mode && FUTCFG.mode!=='auto'){ chart=FUTCFG.mode; out.forced=true; }
-    out.chart=chart; out.source=out.forced?'forced':det.src;
-    out.futPx=(det.sym===chart)?det.px:null;
-    var und=FUT_UNDERLYING[chart]||null;
-    if(!und){
-      out.ok=false; out.underlying='SPY'; out.r=1;
-      out.msg='No options tape for '+chart+' — levels unavailable';
-      return out;
-    }
-    out.underlying=und;
-    var fam=FUT_FAMILY[chart]||null;
-    out.fam=fam;
-    if(!fam){ out.r=1; out.live=true; return out; }          // a cash chart: no conversion at all
-    var undPx=feedUnderlyingPx(und);
-    out.undPx=undPx;
-    var step=futRatioStep(FUTR[fam], out.futPx, undPx, fam);
-    FUTR[fam]=FUTR[fam]||{ema:null,last:null,t:0};
-    out.r=step.r; out.live=step.live; out.approx=step.approx; out.ratioSrc=step.src;
-  }catch(e){}
-  return out;
-}
-function futModeRefresh(){ try{ FUTMODE=futModeCompute(); }catch(e){} return FUTMODE; }
-function futMode(){ return FUTMODE; }
-// The symbol whose tape everything is computed from RIGHT NOW (PART G: QQQ parity).
-function activeSym(){
-  try{ return (FUTMODE && FUTMODE.underlying==='QQQ') ? 'QQQ' : 'SPY'; }catch(e){ return 'SPY'; }
-}
-function dispIsFut(){ try{ return !!(FUTMODE && FUTMODE.fam && FUTMODE.ok); }catch(e){ return false; } }
-function dispR(){ try{ return (dispIsFut() && FUTMODE.r>0) ? FUTMODE.r : 1; }catch(e){ return 1; } }
-// A LEVEL as the user should read it on THIS chart. In SPY/QQQ mode this is exactly
-// fmtNum, so nothing about the cash panel changes.
-function dispVal(x){ if(x==null) return null; return dispIsFut()? mul(x, dispR()) : x; }
-function futMark(){ return (dispIsFut() && FUTMODE.approx) ? '≈' : ''; }
-function fmtLvl(x){
-  if(x==null) return '–';
-  if(!dispIsFut()) return fmtNum(x);
-  return futMark()+fmtFut(mul(x, dispR()));
-}
-// A DISTANCE / width in the displayed instrument's points (0.50 SPY -> 5.0 ES).
-function fmtSpan(x){
-  if(x==null) return '–';
-  if(!dispIsFut()) return fmtNum(x);
-  return futMark()+fmtFut(mul(x, dispR()));
-}
-// PURE: futures chart candles -> underlying candles, so trendVerdict / in-play /
-// drift / R:R keep working on the cash scale while the chart shows a future.
-function futCandlesToUnderlying(raw, r){
-  if(!raw || !raw.length || !(r>0)) return null;
-  var out=[];
-  for(var i=0;i<raw.length;i++){
-    var x=raw[i]; if(!x || typeof x.time!=='number') continue;
-    out.push({ time:x.time, open:x.open/r, high:x.high/r, low:x.low/r, close:x.close/r });
-  }
-  return out.length?out:null;
-}
-// The raw candle array for a symbol, reconstructed from the futures chart when that
-// is what the page is showing.
-function futRawCandles(sym){
-  var raw=null;
-  try{ raw=readFiberCandles(sym); }catch(e){}
-  if(raw && raw.length) return raw;
-  try{
-    if(!dispIsFut()) return null;
-    var r=dispR(); if(!(r>0)) return null;
-    var names=[FUTMODE.chart, FUTMODE.chart+'1', FUTMODE.chart+'1!'];
-    for(var i=0;i<names.length;i++){
-      var fr=null; try{ fr=readFiberCandles(names[i]); }catch(e2){}
-      if(fr && fr.length) return futCandlesToUnderlying(fr, r);
-    }
-  }catch(e3){}
-  return null;
-}
-// The underlying price implied by the futures print (used only when the cash feed
-// has nothing — the feed's own price always wins).
-function futUnderlyingPx(){
-  try{
-    if(!dispIsFut() || FUTMODE.futPx==null) return null;
-    var r=dispR(); if(!(r>0)) return null;
-    return FUTMODE.futPx/r;
-  }catch(e){ return null; }
-}
-// The footer line: 'ES/SPY 10.071 (live)' / '(≈ const)'.
-function futRatioText(){
-  try{
-    if(!dispIsFut()) return '';
-    var lab=FUTMODE.fam+'/'+FUTMODE.underlying+' '+(Math.round(mul(FUTMODE.r,1000))/1000);
-    var tag=FUTMODE.live?'(live)':('(≈ '+((FUTMODE.ratioSrc==='last-good')?'last':'const')+')');
-    return lab+' '+tag;
-  }catch(e){ return ''; }
-}
-function futUnavailableHtml(){
-  var msg=(FUTMODE&&FUTMODE.msg)||'No options tape — levels unavailable';
-  return '<div title="The options dealer-exposure tape only exists for SPY and QQQ (and the ES/NQ futures that track them). For any other instrument this panel has no map, and it will not invent one." '+
-    'style="border-left:2px solid '+PAL.amber+';background:'+PAL.card+';border-radius:0 8px 8px 0;padding:6px 9px;margin:3px 0;font-size:10px;color:'+PAL.amber+';font-weight:700">'+
-    msg+'</div>';
-}
+function fmtFut(x){ return (Math.round(x)).toString(); }
 
 // ============================================================================
 // 5-STEP INFO ICONS (v10.25) — the Skylit 'How to Read & Use Heatseeker' method,
@@ -4377,32 +3836,9 @@ function cfgHtml(){
   html+=alertRow('inplayAccum','In-play \u2192 Accumulating');
   html+=alertRow('dissipate','Node \u2192 Dissipating');
   html+=alertRow('kingRoll','King rolls');
-  html+=alertRow('pbNode','Pullback node forms');
   html+=alertRow('trap','Trap / clean forms');
   html+=alertRow('absorption','Absorption confirms');
   html+=alertRow('feedStale','Feed goes stale');
-
-  // ===== (v10.55 PART E/F) CHART + CONTEXT =====
-  html+=cfgGroup('Chart + context');
-  var fm=(typeof FUTMODE!=='undefined')?FUTMODE:{chart:'SPY',underlying:'SPY',r:1,live:false,ok:true};
-  function futBtn(v,label,tip){
-    var on=(FUTCFG.mode===v);
-    return '<span class="gpts-fut" data-fut="'+v+'" title="'+tip.replace(/"/g,'')+'" style="cursor:pointer;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:700;'+
-      'border:1px solid '+(on?PAL.blue:PAL.line)+';color:'+(on?PAL.bg:PAL.sub)+';background:'+(on?PAL.blue:'transparent')+'">'+label+'</span>';
-  }
-  html+='<div style="padding:2px 4px" title="Which instrument is on the chart. AUTO reads it from the page each render (title / header ticker). ES and NQ display every level in futures points through the live ratio; SPY forces the cash view. The options tape itself is always SPY or QQQ \u2014 that is where the map exists.">'+
-    '<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span>Futures</span><span style="color:'+PAL.sub+';font-size:9px">'+
-      (fm.ok?((fm.fam?(fm.chart+' \u2192 '+fm.underlying+' \u00b7 r '+(Math.round(mul(fm.r,1000))/1000)+(fm.live?' live':' \u2248')):(fm.chart+' cash'))):('no tape for '+fm.chart))+'</span></div>'+
-    '<div style="display:flex;gap:4px">'+
-      futBtn('auto','auto','Detect the chart symbol from the page each render.')+
-      futBtn('SPY','force SPY','Always read the SPY cash map, whatever the chart shows.')+
-      futBtn('ES','force ES','Always display in ES points (SPY tape underneath).')+
-      futBtn('NQ','force NQ','Always display in NQ points (QQQ tape underneath).')+
-    '</div></div>';
-  html+='<div style="padding:2px 4px" title="Event tag for TODAY (FOMC / CPI / OPEX / half-day / \u2026). It rides on every feature record so an event day can be separated from an ordinary one instead of being averaged into it. Blank = no event, which is what the tool assumed before v10.55.">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center"><span>Event tag</span>'+
-    '<input type="text" maxlength="16" class="gpts-event" value="'+String((typeof EVENT_TAG!=='undefined'&&EVENT_TAG)||'').replace(/"/g,'')+'" placeholder="none" '+
-    'style="width:92px;text-align:center;background:#14161c;color:'+PAL.ink+';border:1px solid '+PAL.line+';border-radius:3px;box-sizing:border-box"></div></div>';
 
   html+='<div style="color:'+PAL.sub+';font-size:8.5px;padding:5px 4px 1px;line-height:1.4">Existing settings (thresholds, FT, trend, MA) carry over automatically \u2014 config migrated v7\u2192v8.</div>';
   return html;
@@ -4465,17 +3901,6 @@ function injectSliderCss(){
 
 function wireConfig(){
   if(!elCfg) return;
-  // (v10.55 PART E/F) the futures override + the event tag.
-  var futs=elCfg.querySelectorAll('.gpts-fut');
-  for(var fi=0;fi<futs.length;fi++){
-    (function(el){ el.addEventListener('click', function(){
-      FUTCFG.mode=el.getAttribute('data-fut')||'auto'; futCfgSave();
-      try{ futModeRefresh(); }catch(e){}
-      renderCfg(); render();
-    }); })(futs[fi]);
-  }
-  var evI=elCfg.querySelector('.gpts-event');
-  if(evI) evI.addEventListener('change', function(){ try{ eventTagSet(evI.value); }catch(e){} render(); });
   var bo=elCfg.querySelector('.gpts-bopb');
   if(bo) bo.addEventListener('change', function(){ CFG.boPb=bo.checked; saveCfg(); render(); });
   var ft=elCfg.querySelector('.gpts-ftreq');
@@ -5081,14 +4506,7 @@ function futureStructureSummary(sym){
     var roll = (role==='King') ? kingRoll(sym) : 0;
     var row={
       k:w.k,
-      // (v10.54, audit 2) MAGNITUDE AT THE BOUNDARY. A −gamma node arrived here with a
-      // NEGATIVE pct, so every downstream magnitude test (pickEdge's >=FLRCEIL_MIN_PCT,
-      // isStrongMag, nmStrength, the zone sort) silently treated the heaviest −γ walls
-      // on the board as the weakest: an 85%-of-King put wall could not become a Flr, a
-      // Ceil or a ★Mag and was never recorded as one. Polarity is NOT lost — it lives in
-      // row.pos, which is the only thing that should ever carry it.
-      pct:(function(){ var v=(typeof tapePct==='number')?tapePct:w.pct; return (typeof v==='number')?Math.abs(v):v; })(),
-      pctSigned:(typeof tapePct==='number'?tapePct:w.pct),
+      pct:(typeof tapePct==='number'?tapePct:w.pct),
       pos:w.pos,
       role:role,
       side:(px!=null && w.k>px)?'above':'below',
@@ -6604,7 +6022,7 @@ function nodeMapSentenceHtml(m, sym, tagFn, tip){
 }
 
 function nodeMapBlock(){
-  var sym=activeSym();   // (v10.55 PART G) whichever underlying is active (SPY, or QQQ under an NQ/QQQ chart)
+  var sym='SPY';
   var m=nodeMapModel(sym);
   if(!m || !m.ok){ return '<div style="color:'+PAL.sub+';padding:2px 6px;font-size:11px">Node Map \u2014 waiting on node data\u2026</div>'; }
   // (v10.50) The single Deflection-zones ladder IS the Node Map body now. The Node-Map
@@ -6625,7 +6043,7 @@ function nodeMapBlock(){
   // the header title so it clicks open the Step-5 popover like the other step icons.
   // (v10.44) RANGE chip = ⛰Flr–▔Ceil (nearest strong magnets each side) + inside/OUT.
   var rangeChip='';
-  if(m.range){ var rin=m.range.inside; rangeChip='<span title="Live range = nearest strong magnet below (Flr) to nearest strong magnet above (Ceil), each >= '+FLRCEIL_MIN_PCT+'% of King mass. Inside = rotation between two magnets; outside = the range is being redefined (a break + FT re-anchors it to the next strong magnet)." style="color:'+(rin?PAL.ink:PAL.amber)+';font-size:9px;font-weight:700;padding:1px 7px;border:1px solid '+PAL.line+';border-radius:20px;margin-right:4px">Range <b>'+fmtLvl(m.range.lo)+'\u2013'+fmtLvl(m.range.hi)+'</b> \u00b7 '+(rin?'inside':'OUT')+'</span>'; }
+  if(m.range){ var rin=m.range.inside; rangeChip='<span title="Live range = nearest strong magnet below (Flr) to nearest strong magnet above (Ceil), each >= '+FLRCEIL_MIN_PCT+'% of King mass. Inside = rotation between two magnets; outside = the range is being redefined (a break + FT re-anchors it to the next strong magnet)." style="color:'+(rin?PAL.ink:PAL.amber)+';font-size:9px;font-weight:700;padding:1px 7px;border:1px solid '+PAL.line+';border-radius:20px;margin-right:4px">Range <b>'+fmtNum(m.range.lo)+'\u2013'+fmtNum(m.range.hi)+'</b> \u00b7 '+(rin?'inside':'OUT')+'</span>'; }
   // (v10.47, user-directed) The header is ONE plain sentence: CONTINUATION / REVERSAL / TBD /
   // NO NODE IN PLAY at the engaged node, and WHY in Step-5 vocabulary (accumulating / decreasing).
   // Range + pattern chips retired from the header (they ride in the hover); imbalance line folded in.
@@ -6644,7 +6062,7 @@ function nodeMapBlock(){
   // strongest headline (preserves old PROJ job): strongest Sup + strongest Res.
   function strongChip(c, word, col){
     if(!c) return '<span style="color:'+PAL.sub+';font-size:10px">'+word+' \u2013</span>';
-    return '<span title="Strongest '+(word==='Sup'?'floor below':'ceiling above')+' (size+build-rate+nearness blend)" style="display:inline-flex;align-items:center;gap:3px;color:'+col+';font-weight:800;font-size:10px;padding:1px 7px;border:1px solid '+col+';border-radius:20px">\u2605 '+word+' '+fmtLvl(c.k)+'<span style="color:'+PAL.sub+';font-weight:600;font-size:9px">'+c.pct+'%</span></span>';
+    return '<span title="Strongest '+(word==='Sup'?'floor below':'ceiling above')+' (size+build-rate+nearness blend)" style="display:inline-flex;align-items:center;gap:3px;color:'+col+';font-weight:800;font-size:10px;padding:1px 7px;border:1px solid '+col+';border-radius:20px">\u2605 '+word+' '+fmtNum(c.k)+'<span style="color:'+PAL.sub+';font-weight:600;font-size:9px">'+c.pct+'%</span></span>';
   }
   // (v10.27) Strongest Sup/Res chips REMOVED here \u2014 redundant with the King
   // 3-magnet header (\u2605SUP \u2190 \uD83D\uDC51 \u2192 \u2605RES). Snapback warning retained.
@@ -6686,7 +6104,7 @@ function nodeMapBlock(){
     var col = best.dir==='long'?PAL.longAccent:PAL.shortAccent;
     var isFT = bestRank>=1;
     var chain = isFT ? 'BO\u00b7FT' : 'BOw';
-    var tip = (best.dir==='long'?'Long':'Short')+' breakout at '+fmtLvl(k)+' \u2014 '+(isFT?('FOLLOW-THROUGH confirmed'+(best.ftLenient?' (lenient rule: two progressing closes beyond)':' (bar held fully beyond)')+'. Internal stage: '+best.stage+'.'):'initial break \u2014 first close beyond the node; watching for FT (a bar holding fully beyond, OR two consecutive progressing closes beyond).')+' Requires a '+BO_HL_LOOKBACK+'-bar '+(best.dir==='long'?'high':'low')+' at breakout.';
+    var tip = (best.dir==='long'?'Long':'Short')+' breakout at '+fmtNum(k)+' \u2014 '+(isFT?('FOLLOW-THROUGH confirmed'+(best.ftLenient?' (lenient rule: two progressing closes beyond)':' (bar held fully beyond)')+'. Internal stage: '+best.stage+'.'):'initial break \u2014 first close beyond the node; watching for FT (a bar holding fully beyond, OR two consecutive progressing closes beyond).')+' Requires a '+BO_HL_LOOKBACK+'-bar '+(best.dir==='long'?'high':'low')+' at breakout.';
     return '<span title="'+tip.replace(/"/g,'')+'" style="color:'+col+';font-size:8px;font-weight:800;letter-spacing:.3px;border:1px solid '+col+';border-radius:9px;padding:0 4px;white-space:nowrap">'+chain+'</span>';
   }
   // the two-sided ladder
@@ -6726,7 +6144,7 @@ function nodeMapBlock(){
       var roleName=(L.isKing?'King':(L.isGatekeeper?'Gatekeeper':(L.role||'node')));
       var flav=(df.pos===false)?' \u2014 note: \u2212gamma node (accelerant), a deflection here is counter-character'
               :(df.pos===true?' \u2014 +gamma node (deflection expected)':'');
-      var dtip=('DEFLECTION off the '+roleName+' at '+fmtLvl(L.k)+' \u2014 price tapped it and reversed '+(df.dir>0?'UP (bounce off support)':'DOWN (rejection off resistance)')+', ~'+df.awayPts+' strikes over '+df.bars+' bars. Detected event (reported after confirmation), not a prediction.'+flav).replace(/"/g,'');
+      var dtip=('DEFLECTION off the '+roleName+' at '+fmtNum(L.k)+' \u2014 price tapped it and reversed '+(df.dir>0?'UP (bounce off support)':'DOWN (rejection off resistance)')+', ~'+df.awayPts+' strikes over '+df.bars+' bars. Detected event (reported after confirmation), not a prediction.'+flav).replace(/"/g,'');
       stageHtml='<span title="'+dtip+'" style="color:'+dcol+';font-size:8.5px;font-weight:800">Defl '+darrow+'</span>';
     } else if(om){
       // resolved: the node echoes what actually happened (report, not prediction).
@@ -6747,7 +6165,7 @@ function nodeMapBlock(){
     // moved NEARER the node). Push off a node BELOW price = green (bullish bounce),
     // above = red. Every chip carries the episode timeline in its hover.
     var ep=L.ep||{};
-    var epTip=('Episode @ '+fmtLvl(L.k)+' \u2014 zone '+ep.zone+(ep.dist!=null?(' ('+ep.dist+' strikes)'):'')+
+    var epTip=('Episode @ '+fmtNum(L.k)+' \u2014 zone '+ep.zone+(ep.dist!=null?(' ('+ep.dist+' strikes)'):'')+
       (ep.tw!=null?(' \u00b7 toward-share '+ep.tw+'% of last '+EP_TW_BARS+' bars'):'')+
       (ep.tagged!=null?(' \u00b7 last tag '+ep.tagged+' bars ago'):' \u00b7 no tag in window')+
       (ep.crosses?(' \u00b7 crossings '+ep.crosses):'')+
@@ -6767,7 +6185,7 @@ function nodeMapBlock(){
     // (v10.47b, user-directed) ONE LINE per node, fixed aligned columns, nothing wraps.
     return '<div style="display:grid;grid-template-columns:96px 66px 78px 1fr;align-items:center;column-gap:4px;font-size:9.5px;padding:2px 5px;border-radius:5px;background:'+bg+';white-space:nowrap">'+
       '<span style="display:flex;align-items:center;gap:3px;overflow:hidden;text-overflow:ellipsis;min-width:0">'+idPill+'</span>'+
-      '<span style="font-variant-numeric:tabular-nums;font-weight:700;color:'+PAL.sub+';overflow:hidden"><b style="color:'+kcol+'">'+fmtLvl(L.k)+'</b> \u00b7 '+L.pct+'%</span>'+
+      '<span style="font-variant-numeric:tabular-nums;font-weight:700;color:'+PAL.sub+';overflow:hidden"><b style="color:'+kcol+'">'+fmtNum(L.k)+'</b> \u00b7 '+L.pct+'%</span>'+
       '<span style="display:flex;align-items:center;gap:3px;overflow:hidden">'+statusHtml+typeHtml+'</span>'+
       '<span style="display:flex;align-items:center;justify-content:flex-end;gap:5px;overflow:hidden">'+
         (activity?'<span>'+activity+'</span>':'')+
@@ -6785,13 +6203,13 @@ function nodeMapBlock(){
   var printed=false;
   m.levels.forEach(function(L, i){
     if(!printed && L.k<=px){
-      html+='<div title="Current SPY price." style="display:flex;justify-content:center;align-items:center;height:14px;margin:1px 0;background:'+PAL.card+';border:1px dashed '+PAL.blue+';border-radius:6px;color:'+PAL.blue+';font-size:9px;font-weight:800">\u2014 SPY '+fmtLvl(px)+' \u2014</div>';
+      html+='<div title="Current SPY price." style="display:flex;justify-content:center;align-items:center;height:14px;margin:1px 0;background:'+PAL.card+';border:1px dashed '+PAL.blue+';border-radius:6px;color:'+PAL.blue+';font-size:9px;font-weight:800">\u2014 SPY '+fmtNum(px)+' \u2014</div>';
       printed=true;
     }
     html+=row(L);
   });
   if(!printed){ // price is below every mapped level
-    html+='<div style="display:flex;justify-content:center;align-items:center;height:16px;margin:2px 0;background:'+PAL.card+';border:1px dashed '+PAL.blue+';border-radius:6px;color:'+PAL.blue+';font-size:10px;font-weight:800">\u2014 SPY '+fmtLvl(px)+' \u2014</div>';
+    html+='<div style="display:flex;justify-content:center;align-items:center;height:16px;margin:2px 0;background:'+PAL.card+';border:1px dashed '+PAL.blue+';border-radius:6px;color:'+PAL.blue+';font-size:10px;font-weight:800">\u2014 SPY '+fmtNum(px)+' \u2014</div>';
   }
   return html;
 }
@@ -7454,20 +6872,13 @@ function studyNightlyTick(){
 // The panel NEVER asserts an unearned probability: an odds sentence may only cite a
 // PROMOTED rule.
 var RULES_KEY='gpts_rules_v1';
-var RULES2_KEY='gpts_rules_v2';    // (v10.53) the whole v2 document (weights/proposals/promoted/...)
-var PROMO_KEY='gpts_promo_v1';     // (v10.53) what the panel has ALREADY auto-applied
 var RULE_UNLOCK_N=20;
 var RULES=null;
-var RULES_DOC=null;                // (v10.53) the v2 document; RULES stays the rule map
 var RULES_FETCHED=false;
 var RULES_URL='https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/learning/rules.json';
 function ruleSeed(id, mechanism, condition){
-  // (v10.53) v2 adds the per-regime split and the walk-forward counter to every rule.
-  // A seeded rule is hand-set (⚖) with an EMPTY record — never pre-promoted.
-  return { id:id, condition:condition||'', rate:null, n:0, mfe:null, mae:null,
-           regime:{ trend:{rate:null,n:0}, chop:{rate:null,n:0}, opex:{rate:null,n:0} },
-           mechanism:mechanism||'', tier:'hand', promoted:false, promotedOn:null, lastVerified:null,
-           walkForward:{ sessions:0, held:false } };
+  return { id:id, condition:condition||'', rate:null, n:0, mfe:null, mae:null, regime:null,
+           mechanism:mechanism||'', tier:'hand', promoted:false, lastVerified:null };
 }
 // The seeded ruleset = FEATURES[].rule roots + the per-grade / per-input children from
 // layer spec S4 + the KILL LIST (conditions under which the tool says: no read).
@@ -7506,570 +6917,34 @@ function rulesNormalize(obj){
   for(var id in seeded){ if(!obj[id]) obj[id]=seeded[id]; }
   for(var k in obj){ var r=obj[k];
     if(!r || typeof r!=='object'){ delete obj[k]; continue; }   // never let a stray non-rule value in
-    if(r.promotedOn && !r.promoted) r.promoted=true;            // (v10.53) v2 spelling
     if(r.tier!=='measured' && r.tier!=='hand') r.tier = r.promoted?'measured':'hand';
     if(r.promoted && r.tier!=='measured') r.tier='measured';
-    if(!r.walkForward || typeof r.walkForward!=='object') r.walkForward={sessions:0, held:false};
   }
   return obj;
 }
-// ============================================================================
-// (v10.53 A) rules.json v2 — the machine-applicable mental model.
-//   { schema, asOf, weights:{dir:{...}}, rules:{...}, proposals:[], promoted:[],
-//     challengers:{}, killList:[] }
-// The LIVE direction weights are read OUT of this document at boot. The LLM writes
-// everything EXCEPT `weights`; only applyProposals() (below) moves a weight, and only
-// after re-checking the promotion bar itself.
-// ============================================================================
-var DIR_WEIGHTS_HAND={ trend:3, driftAgree:2, driftLean:1, diverge:-2, tentative:1, gradeA:5, gradeB:3 };
-var DIR_WEIGHTS={ trend:3, driftAgree:2, driftLean:1, diverge:-2, tentative:1, gradeA:5, gradeB:3 };
-// (v10.54, audit 21) THE NODE GRADE HAS ITS OWN CUT POINTS. It shared DIR_WEIGHTS.gradeA
-// / gradeB with the direction grade, so a promoted DIRECTION threshold silently re-graded
-// every node on the board — two unrelated scoring scales moved by one number. They are
-// separate constants now, and every hover reads the LIVE value instead of the hardcoded
-// "A≥5, B≥3" text that had already drifted out of date.
-var NODE_WEIGHTS_HAND={ gradeA:5, gradeB:3 };
-var NODE_WEIGHTS={ gradeA:5, gradeB:3 };
-var DIR_WEIGHTS_SOURCE='hand-set';     // -> 'measured' only when a PROMOTED proposal moved one
-var PROMO_MIN_N=20;                    // the hard bar: n
-var PROMO_WF_SESSIONS=3;               // the hard bar: NEW sessions the proposal had to hold over
-function rulesDefaultWeights(){
-  var d={}; for(var k in DIR_WEIGHTS_HAND) d[k]=DIR_WEIGHTS_HAND[k];
-  return { dir:d };
-}
-function rulesDocNormalize(obj){
-  var doc={ schema:'gex-rules/v2', asOf:null, weights:rulesDefaultWeights(),
-            rules:null, proposals:[], promoted:[], challengers:{}, killList:[] };
-  if(obj && typeof obj==='object' && obj.schema==='gex-rules/v2'){
-    doc.asOf=obj.asOf||obj.generated||null;
-    if(obj.weights && obj.weights.dir && typeof obj.weights.dir==='object'){
-      for(var k in obj.weights.dir){ if(typeof obj.weights.dir[k]==='number' && (k in doc.weights.dir)) doc.weights.dir[k]=obj.weights.dir[k]; }
-    }
-    doc.proposals   = Array.isArray(obj.proposals)?obj.proposals:[];
-    doc.promoted    = Array.isArray(obj.promoted)?obj.promoted:[];
-    doc.challengers = (obj.challengers && typeof obj.challengers==='object')?obj.challengers:{};
-    doc.killList    = Array.isArray(obj.killList)?obj.killList:[];
-    doc.rules       = rulesNormalize(obj.rules||{});
-  } else {
-    // v1 FALLBACK: a bare rule map, or {rules:{...}}. Weights stay hand-set.
-    doc.asOf=(obj && obj.generated)||null;
-    doc.rules=rulesNormalize((obj && obj.rules) ? obj.rules : obj);
-  }
-  return doc;
-}
-function rulesDoc(){ if(!RULES_DOC) rulesLoad(); return RULES_DOC; }
 function rulesLoad(){
   if(RULES) return RULES;
-  var raw=null;
-  try{ raw=JSON.parse(localStorage.getItem(RULES2_KEY)||'null'); }catch(e){ raw=null; }
-  if(raw && raw.doc) raw=raw.doc;
-  if(!raw){
-    var s1=null; try{ s1=JSON.parse(localStorage.getItem(RULES_KEY)||'null'); }catch(e0){ s1=null; }
-    if(s1) raw=(s1.rules && !s1.schema) ? {rules:s1.rules} : s1;
-  }
-  try{ RULES_DOC=rulesDocNormalize(raw); }catch(eD){ RULES_DOC=null; }
-  RULES=RULES_DOC ? RULES_DOC.rules : rulesNormalize((raw && raw.rules) ? raw.rules : raw);
-  try{ rulesApply(); }catch(eA){}            // weights + auto-promotion, offline-safe
-  // fail-soft remote refresh: the weekly LLM run writes learning/rules.json into the
-  // repo; if it is unreachable (offline / rate-limited) the cached copy stands.
+  var stored=null;
+  try{ stored=JSON.parse(localStorage.getItem(RULES_KEY)||'null'); }catch(e){ stored=null; }
+  RULES=rulesNormalize(stored && stored.rules ? stored.rules : stored);
+  // fail-soft remote refresh: the nightly LLM loop writes learning/rules.json into the
+  // repo; if it is unreachable (offline / rate-limited) the seeded local copy stands.
   try{
     if(typeof fetch==='function' && !RULES_FETCHED){
       RULES_FETCHED=true;
       fetch(RULES_URL,{cache:'no-store'}).then(function(res){ return (res&&res.ok)?res.json():null; })
-        .then(function(j){ if(!j) return; rulesIngest(j); try{ render(); }catch(eR){} })
+        .then(function(j){ if(!j) return; RULES=rulesNormalize(j.rules||j); rulesSave(); try{ render(); }catch(eR){} })
         .catch(function(){});
     }
   }catch(e2){}
   return RULES;
 }
-// A freshly fetched rules.json (boot fetch or pipeCheck read-back) replaces the doc and
-// re-runs the promotion pass. Idempotent: applyProposals skips anything already applied.
-function rulesIngest(j){
-  RULES_DOC=rulesDocNormalize(j);
-  RULES=RULES_DOC.rules;
-  var r=null; try{ r=rulesApply(); }catch(eA){}
-  rulesSave();
-  return r;
-}
-function rulesSave(){
-  try{ localStorage.setItem(RULES_KEY, JSON.stringify({v:1, at:Date.now(), rules:RULES})); }catch(e){}
-  try{ localStorage.setItem(RULES2_KEY, JSON.stringify({v:2, at:Date.now(), doc:RULES_DOC})); }catch(e2){}
-}
+function rulesSave(){ try{ localStorage.setItem(RULES_KEY, JSON.stringify({v:1, at:Date.now(), rules:RULES})); }catch(e){} }
 function ruleGet(id){ var R=rulesLoad(); return (R && R[id]) || null; }
-// ============================================================================
-// (v10.54, audit 1/4/6) EFFECTIVE N — THE ONLY N THAT COUNTS.
-// A feature is recorded once per 3-minute BAR, and every record is scored over the
-// SAME FEAT_FWD-bar forward window. Ten consecutive bar-records of one feature are
-// ten overlapping views of one 30-minute outcome, not ten independent observations.
-// Counting them as ten inflated every n on the panel by ~10x and let the promotion
-// bar be cleared by a single afternoon. effN divides that out.
-// ============================================================================
-function effN(n){
-  n=(typeof n==='number' && n>0)?n:0;
-  var f=(typeof FEAT_FWD==='number' && FEAT_FWD>0)?FEAT_FWD:10;
-  return Math.round(n/f);
-}
-// The house rendering of any n: never a bare count, never a % without it.
-function nTxt(n){
-  n=(typeof n==='number' && n>0)?n:0;
-  return 'n='+n+' bars → eff '+effN(n);
-}
-// A % is never rendered without its n. pctN(null,...) says "recording", never "–%".
-function pctN(rate, n){
-  if(rate==null) return '● recording ('+nTxt(n)+')';
-  return rate+'% ('+nTxt(n)+')';
-}
-// ---- LOCAL TRUTH: what THIS machine has actually measured for a rule ----------
-// featStats is the only source. A rule with no local record is UNMEASURED, whatever
-// a fetched document claims about it.
-var _FEATSTATS_CACHE={};
-function featStatsCached(sym){
-  sym=sym||'SPY';
-  try{
-    var c=_FEATSTATS_CACHE[sym];
-    if(c && (Date.now()-c.t)<30000) return c.v;
-    var v=(typeof featStats==='function')?featStats(sym):null;
-    _FEATSTATS_CACHE[sym]={ t:Date.now(), v:v };
-    return v;
-  }catch(e){ return null; }
-}
-function featStatsInvalidate(){ _FEATSTATS_CACHE={}; }
-// rule id -> the FEATURES key whose records measure it, plus the sub-bucket if any.
-function ruleLocalRate(id, sym){
-  var out={ n:0, hit:0, rate:null, effN:0, key:null };
-  try{
-    if(!id) return out;
-    var st=featStatsCached(sym||'SPY'); if(!st) return out;
-    var b=null;
-    var mg=String(id).match(/^dir\.([ABC])$/);
-    var mn=String(id).match(/^node\.grade\.([ABC])$/);
-    var md=String(id).match(/^decision\.(.+)$/);
-    if(mg){ b=(st.byGrade&&st.byGrade.dir)?st.byGrade.dir[mg[1]]:null; out.key='dir/'+mg[1]; }
-    else if(mn){ b=(st.byGrade&&st.byGrade.node)?st.byGrade.node[mn[1]]:null; out.key='node/'+mn[1]; }
-    else if(md){ b=(st.cells||{})[md[1]]; out.key='decision/'+md[1]; }
-    else {
-      var fk=id;
-      if(!st.byKey[fk]){
-        try{ registerCoreFeatures(); }catch(eR){}
-        for(var i=0;i<FEATURES.length;i++){ if(FEATURES[i].rule && FEATURES[i].rule.id===id){ fk=FEATURES[i].key; break; } }
-      }
-      b=st.byKey[fk]||null; out.key=fk;
-    }
-    if(!b) return out;
-    out.n=b.n||0; out.hit=b.hit||0;
-    out.rate=(out.n>0)?Math.round(100*out.hit/out.n):null;
-    out.effN=effN(out.n);
-  }catch(e){}
-  return out;
-}
-// (v10.54, audit 1) A TIER IS EARNED LOCALLY, TWICE OVER: the rule must have been
-// PROMOTED by this panel (it is in gpts_promo_v1) AND its locally measured effective n
-// must clear RULE_UNLOCK_N. `tier:'measured'` / `promoted:true` inside a fetched
-// rules.json is documentation about the weekly run — it can no longer make the panel
-// claim a measurement it has not taken.
-function rulePromotedApplied(id){
-  try{
-    if(!id) return null;
-    var P=promoLoad();
-    for(var k in P.applied){
-      var a=P.applied[k]; if(!a) continue;
-      if(a.rule===id || a.target===id || a.id===id) return a;
-    }
-  }catch(e){}
-  return null;
-}
-function ruleTier(id){
-  if(!id) return '⚖';
-  if(!rulePromotedApplied(id)) return '⚖';
-  return (ruleLocalRate(id).effN >= RULE_UNLOCK_N) ? '📊' : '⚖';
-}
-function rulePromoted(id){ return ruleTier(id)==='📊'; }
-
-// ---- (v10.53 B) WHAT THE PANEL HAS ALREADY APPLIED (gpts_promo_v1) ----------
-// Persisted so a boot with NO network still runs on the last-applied weights, and so
-// re-reading the same rules.json cannot double-apply a proposal.
-var PROMO=null;
-function promoLoad(){
-  if(PROMO) return PROMO;
-  var o=null; try{ o=JSON.parse(localStorage.getItem(PROMO_KEY)||'null'); }catch(e){ o=null; }
-  PROMO=(o && typeof o==='object')?o:{};
-  if(!PROMO.applied || typeof PROMO.applied!=='object') PROMO.applied={};
-  if(!PROMO.weights || typeof PROMO.weights!=='object') PROMO.weights={};
-  if(!Array.isArray(PROMO.kills)) PROMO.kills=[];
-  if(!Array.isArray(PROMO.swaps)) PROMO.swaps=[];
-  PROMO.v=1;
-  return PROMO;
-}
-function promoSave(){ try{ localStorage.setItem(PROMO_KEY, JSON.stringify(promoLoad())); }catch(e){} }
-function promoToday(){ try{ return ctTodayStr(); }catch(e){ return null; } }
-// THE HARD BAR, RE-CHECKED IN CODE. `clearsBar` from the LLM is advisory: the panel
-// re-derives n / walk-forward / regime-flip from the numbers INSIDE the proposal, so a
-// proposal marked clearsBar:true with n=12 is refused.
-function proposalRegimeFlip(p){
-  try{
-    var rs=(p && (p.regimeSplit || p.regimes || (p.regime && typeof p.regime==='object' ? p.regime : null))) || null;
-    if(!rs) return null;
-    var t=rs.trend, c=rs.chop;
-    if(!t || !c || typeof t.rate!=='number' || typeof c.rate!=='number') return null;
-    var base=(typeof p.baseline==='number')?p.baseline:50;
-    if((t.rate-base)*(c.rate-base) < 0)
-      return 'trend '+t.rate+'% vs chop '+c.rate+'% straddle the '+base+'% baseline';
-    return null;
-  }catch(e){ return null; }
-}
-// (v10.54, audit 4) WHICH LOCAL RECORD MEASURES THIS PROPOSAL. Explicit first, then
-// the rule it names, then the target spelling. null = nothing local measures it, and a
-// proposal nothing local measures can never clear the bar.
-function proposalFeatureKey(p){
-  try{
-    if(!p) return null;
-    if(p.featureKey) return p.featureKey;
-    if(p.feature) return p.feature;
-    var rid=p.rule||p.ruleId||null;
-    if(rid) return rid;
-    var t=String(p.target||'');
-    if(/^kill\./.test(t)) return t;
-    if(/trend.*window|window.*trend|trend5|trendMA|sma/i.test(t)) return 'dir.trend5';
-    if(/drift/i.test(t)) return 'dir.drift';
-    if(/gradeA|gradeB|dir/i.test(t)) return 'dir';
-  }catch(e){}
-  return null;
-}
-// LOCAL n, in EFFECTIVE observations. Never the proposal's own number.
-function proposalLocalN(p){
-  var st=ruleLocalRate(proposalFeatureKey(p));
-  return { n:st.n, effN:st.effN, rate:st.rate, key:st.key };
-}
-// LOCAL walk-forward: distinct recorded session-days STRICTLY AFTER p.madeOn on which
-// the feature's own measured rate stayed over the bar. The reviewer's `wf` block is not
-// consulted at all — it describes days this machine may never have seen.
-function proposalWalkForwardLocal(p, sym){
-  var out={ sessions:0, days:[], checked:0 };
-  try{
-    var fk=proposalFeatureKey(p); if(!fk) return out;
-    var st=featStatsCached(sym||'SPY');          // resolves the rule id -> feature key
-    var key=(ruleLocalRate(fk, sym).key)||fk;
-    var made=String((p&&p.madeOn)||'');
-    var bar=(typeof p.baseline==='number')?p.baseline:50;
-    var db=recorderLoad(); var days=(db&&db.days)||{};
-    Object.keys(days).sort().forEach(function(dk){
-      if(!(String(dk)>made)) return;                       // strictly AFTER
-      var arr=((days[dk]||{}).feat||{})[(sym||'SPY')]||[];
-      var n=0,h=0;
-      arr.forEach(function(r){
-        if(!r || r.key!==key || !r.resolved || r.hit==null) return;
-        n++; if(r.hit) h++;
-      });
-      if(!n) return;
-      out.checked++;
-      if(Math.round(100*h/n) > bar){ out.sessions++; out.days.push(dk); }
-    });
-  }catch(e){}
-  return out;
-}
-// (v10.54, audit 4) THE BAR IS LOCAL TRUTH.
-// Before this, every number the bar was checked against came out of the same document
-// that asked for the promotion: a weekly run could assert n, assert the walk-forward
-// hold, assert clearsBar, and the panel would agree with itself. Now the panel derives
-// n and the walk-forward from ITS OWN recorded sessions; the proposal's numbers are
-// advisory and are only used to catch a document that disagrees with local reality.
-function proposalClearsBar(p){
-  if(!p || !p.id || !p.kind) return { ok:false, why:'malformed proposal' };
-  var loc=proposalLocalN(p);
-  if(!loc.key) return { ok:false, why:'nothing local measures this proposal (no feature key for '+(p.target||p.kind)+')' };
-  // 1. LOCAL effective n clears the bar, or nothing else matters.
-  if(!(loc.effN>=PROMO_MIN_N))
-    return { ok:false, why:'insufficient local evidence — eff n='+loc.effN+' ('+nTxt(loc.n)+'), need '+PROMO_MIN_N };
-  // 2. the self-report has to MATCH what is on this machine, within 20%.
-  var claimed=(typeof p.n==='number')?p.n:0;
-  var dev=(loc.effN>0)?Math.abs(claimed-loc.effN)/loc.effN:1;
-  if(!(claimed>0) || dev>0.20)
-    return { ok:false, why:'self-reported n='+claimed+' disagrees with local eff n='+loc.effN+' by more than 20%' };
-  // 3. walk-forward re-derived from locally recorded session-days after madeOn.
-  var wfl=proposalWalkForwardLocal(p);
-  if(!(wfl.sessions>=PROMO_WF_SESSIONS))
-    return { ok:false, why:'walk-forward not held locally ('+wfl.sessions+' of '+PROMO_WF_SESSIONS+' recorded sessions since '+((p&&p.madeOn)||'?')+')' };
-  var fl=proposalRegimeFlip(p);
-  if(fl) return { ok:false, why:'regime flip — '+fl };
-  return { ok:true, why:'local eff n='+loc.effN+' ('+nTxt(loc.n)+') · walk-forward '+wfl.sessions+'/'+PROMO_WF_SESSIONS+' held locally · no regime flip' };
-}
-// target spellings the weekly run may use: dir.weights.trend | weights.dir.trend | dir.trend
-function promoDirWeightKey(target){
-  if(!target) return null;
-  var m=String(target).match(/^(?:weights\.dir|dir\.weights|dir)\.([A-Za-z0-9_]+)$/);
-  return (m && (m[1] in DIR_WEIGHTS)) ? m[1] : null;
-}
-function promoApplyWeight(p){
-  var k=promoDirWeightKey(p.target);
-  if(!k || typeof p.proposed!=='number') return false;
-  DIR_WEIGHTS[k]=p.proposed;
-  DIR_WEIGHTS_SOURCE='measured';
-  var P=promoLoad();
-  if(!P.weights.dir) P.weights.dir={};
-  P.weights.dir[k]=p.proposed;
-  try{ if(RULES_DOC && RULES_DOC.weights && RULES_DOC.weights.dir) RULES_DOC.weights.dir[k]=p.proposed; }catch(e){}
-  return true;
-}
-// A swap replaces an incumbent voter with its challenger. TREND_WINDOW is the one
-// voting-set constant that exists today (dir.trend window); anything else is RECORDED
-// as a swap and surfaced, because no other candidate votes yet (they are still parked).
-function promoApplySwap(p){
-  var P=promoLoad();
-  var rec={ id:p.id, target:p.target||null, from:(p.current!=null?p.current:null),
-            to:(p.proposed!=null?p.proposed:null), incumbent:p.incumbent||null, challenger:p.challenger||null };
-  var t=String(p.target||'');
-  if(/trend.*window|window.*trend/i.test(t) && typeof p.proposed==='number' && p.proposed>1){
-    // (v10.54, audit 8) THE DOMINANCE COUNT MOVES WITH THE WINDOW. TREND_WINDOW alone
-    // silently re-defined the rule: 15 of 20 (75%) became 15 of 10 (unreachable), so a
-    // promoted window swap turned every trend flat. They are one constant in two parts.
-    try{ TREND_WINDOW=p.proposed; TREND_DOM=Math.round(0.75*TREND_WINDOW); rec.live=true; rec.dom=TREND_DOM; }
-    catch(e){ rec.live=false; }
-  } else if(/trendMA|sma.*period|period.*sma|trend.*ma\b/i.test(t) && typeof p.proposed==='number' && p.proposed>1){
-    // the SMA PERIOD lives in CFG.trendMA, not TREND_WINDOW — a swap aimed at "SMA-20
-    // instead of SMA-50" was previously recorded as inert because it matched neither.
-    try{ CFG.trendMA.SPY=p.proposed; CFG.trendMA.QQQ=p.proposed; if(typeof saveCfg==='function') saveCfg(); rec.live=true; rec.field='CFG.trendMA'; }
-    catch(e2){ rec.live=false; }
-  } else { rec.live=false; }     // recorded + surfaced; the challenger does not vote yet
-  for(var i=0;i<P.swaps.length;i++){ if(P.swaps[i] && P.swaps[i].id===rec.id){ P.swaps[i]=rec; return true; } }
-  P.swaps.push(rec);
-  return true;
-}
-// A persisted swap has to be re-applied on a network-less boot, exactly like a weight.
-function promoApplySwapsPersisted(){
-  try{
-    var P=promoLoad();
-    (P.swaps||[]).forEach(function(s){
-      if(!s || s.live!==true || typeof s.to!=='number') return;
-      var t=String(s.target||'');
-      if(/trend.*window|window.*trend/i.test(t)){ TREND_WINDOW=s.to; TREND_DOM=Math.round(0.75*TREND_WINDOW); }
-      else if(/trendMA|sma.*period|period.*sma|trend.*ma\b/i.test(t)){ try{ CFG.trendMA.SPY=s.to; CFG.trendMA.QQQ=s.to; }catch(e2){} }
-    });
-  }catch(e){}
-}
-function promoApplyKill(p){
-  var P=promoLoad();
-  var id=p.target||p.killId||p.id;
-  var cond=p.condition||p.proposed||null;
-  for(var i=0;i<P.kills.length;i++){ if(P.kills[i].id===id) return true; }
-  P.kills.push({ id:id, condition:cond, on:promoToday(), n:p.n||0 });
-  try{
-    if(RULES_DOC && Array.isArray(RULES_DOC.killList)){
-      var found=false;
-      RULES_DOC.killList.forEach(function(k){ if(k && k.id===id){ k.tier='measured'; k.promoted=true; found=true; } });
-      if(!found) RULES_DOC.killList.push({ id:id, condition:cond, rate:(p.rate!=null?p.rate:null), n:p.n||0, tier:'measured', promoted:true });
-    }
-  }catch(e){}
-  return true;
-}
-// AUTO-APPLY, MARK IT. Every proposal that survives the re-check is applied exactly
-// once, recorded in gpts_promo_v1 and echoed into the doc's `promoted` array.
-function applyProposals(doc){
-  doc=doc||RULES_DOC;
-  var out={ applied:[], skipped:[] };
-  if(!doc) return out;
-  var P=promoLoad();
-  var props=Array.isArray(doc.proposals)?doc.proposals:[];
-  var today=promoToday();
-  var dirty=false;
-  props.forEach(function(p){
-    if(!p || !p.id) return;
-    if(P.applied[p.id]){ out.skipped.push({ id:p.id, why:'already applied on '+(P.applied[p.id].on||'?') }); return; }
-    if(p.clearsBar!==true){ out.skipped.push({ id:p.id, why:(p.reason||'not asserted as clearing the bar') }); return; }
-    var chk=proposalClearsBar(p);                    // <- the panel's own re-check
-    if(!chk.ok){ out.skipped.push({ id:p.id, why:chk.why }); return; }
-    var done=false;
-    if(p.kind==='weight' || p.kind==='threshold') done=promoApplyWeight(p);
-    else if(p.kind==='swap') done=promoApplySwap(p);
-    else if(p.kind==='kill') done=promoApplyKill(p);
-    if(!done){ out.skipped.push({ id:p.id, why:'no applicable target ('+(p.target||p.kind)+')' }); return; }
-    var __loc=proposalLocalN(p);
-    var rec={ id:p.id, kind:p.kind, target:p.target||null, rule:(p.rule||p.ruleId||null),
-              from:(p.current!=null?p.current:null), to:(p.proposed!=null?p.proposed:null),
-              on:today, strikes:0, baseline:(typeof p.baseline==='number')?p.baseline:50,
-              evidence:{ n:p.n||0, localN:__loc.n, localEffN:__loc.effN,
-                         lift:(p.lift!=null?p.lift:null), wf:(p.wf||p.walkForward||null),
-                         wfLocal:proposalWalkForwardLocal(p).sessions } };
-    P.applied[p.id]=rec;
-    if(!Array.isArray(P.events)) P.events=[];
-    P.events.push({ t:Date.now(), on:today, kind:'promotion', id:p.id, target:p.target||null,
-                    from:rec.from, to:rec.to, why:chk.why });
-    dirty=true;
-    if(!Array.isArray(doc.promoted)) doc.promoted=[];
-    var seen=false;
-    doc.promoted.forEach(function(q){ if(q && q.id===p.id) seen=true; });
-    if(!seen) doc.promoted.push(rec);
-    // the rule behind the proposal is now MEASURED: ⚖ -> 📊
-    var rid=p.rule||p.ruleId||null;
-    if(rid && doc.rules && doc.rules[rid]){ doc.rules[rid].tier='measured'; doc.rules[rid].promoted=true; doc.rules[rid].promotedOn=today; }
-    out.applied.push(rec);
-  });
-  if(dirty) promoSave();
-  return out;
-}
-// (v10.54, audit 1) `weights` IN A FETCHED DOCUMENT IS INERT.
-// It used to be read straight into the live constants at boot, which meant anyone (or
-// any weekly run) who edited learning/rules.json re-tuned the panel with no evidence,
-// no promotion bar and no record that it had happened. The live weights now come from
-// exactly two places: the hand-set hypothesis, and proposals THIS PANEL promoted past
-// the bar. The document's weights block is documentation of what the run believes.
-function rulesApplyWeights(){
-  var src='hand-set';
-  try{
-    for(var k in DIR_WEIGHTS_HAND) DIR_WEIGHTS[k]=DIR_WEIGHTS_HAND[k];
-    var P=promoLoad();
-    var w=(P && P.weights && P.weights.dir)||null;
-    if(w){ for(var k2 in w){ if((k2 in DIR_WEIGHTS_HAND) && typeof w[k2]==='number'){ DIR_WEIGHTS[k2]=w[k2]; src='measured'; } } }
-  }catch(e){}
-  DIR_WEIGHTS_SOURCE=src;
-  return DIR_WEIGHTS;
-}
-function promoApplyPersisted(){
-  try{
-    var P=promoLoad();
-    var w=P.weights && P.weights.dir;
-    if(w){ for(var k in w){ if((k in DIR_WEIGHTS) && typeof w[k]==='number'){ DIR_WEIGHTS[k]=w[k]; DIR_WEIGHTS_SOURCE='measured'; } } }
-    promoApplySwapsPersisted();
-  }catch(e){}
-  return DIR_WEIGHTS;
-}
-// ---- (v10.54, audit 24) DEMOTION. Promotion was one-way: nothing that had cleared the
-// bar could ever be taken back, so a rule that stopped working kept moving the weights
-// forever. A promoted item whose LOCALLY measured rate sits under its own baseline on
-// PROMO_DEMOTE_STRIKES consecutive WEEKLY checks reverts to hand-set, its tier goes back
-// to ⚖ and the demotion is logged as an event.
-var PROMO_DEMOTE_STRIKES=3;
-var PROMO_WEEK_MS=604800000;
-function promoDemote(a, P){
-  try{
-    var k=promoDirWeightKey(a.target);
-    if(k && P.weights && P.weights.dir){ delete P.weights.dir[k]; DIR_WEIGHTS[k]=DIR_WEIGHTS_HAND[k]; }
-    P.kills=(P.kills||[]).filter(function(x){ return !(x && x.id===a.target); });
-    P.swaps=(P.swaps||[]).filter(function(x){ return !(x && x.id===a.id); });
-    if(a.kind==='swap'){ try{ TREND_WINDOW=20; TREND_DOM=15; }catch(eW){} }
-    if(a.rule && RULES_DOC && RULES_DOC.rules && RULES_DOC.rules[a.rule]){
-      RULES_DOC.rules[a.rule].tier='hand'; RULES_DOC.rules[a.rule].promoted=false; RULES_DOC.rules[a.rule].promotedOn=null;
-    }
-  }catch(e){}
-  delete P.applied[a.id];
-  if(!Array.isArray(P.events)) P.events=[];
-  P.events.push({ t:Date.now(), on:promoToday(), kind:'demotion', id:a.id, target:a.target||null,
-                  from:a.to, to:a.from,
-                  why:'locally measured under its '+((a.baseline!=null)?a.baseline:50)+'% baseline on '+PROMO_DEMOTE_STRIKES+' consecutive weekly checks' });
-}
-function promoDemoteCheck(force){
-  var out={ checked:0, struck:[], demoted:[] };
-  try{
-    var P=promoLoad();
-    var now=Date.now();
-    if(!force && P.lastDemoCheck && (now-P.lastDemoCheck)<PROMO_WEEK_MS) return out;
-    P.lastDemoCheck=now;
-    Object.keys(P.applied).forEach(function(id){
-      var a=P.applied[id]; if(!a) return;
-      out.checked++;
-      var bar=(a.baseline!=null)?a.baseline:50;
-      var st=ruleLocalRate(a.rule||a.target);
-      if(st.effN>=PROMO_MIN_N && st.rate!=null && st.rate<bar){ a.strikes=(a.strikes||0)+1; out.struck.push(id); }
-      else if(st.effN>=PROMO_MIN_N){ a.strikes=0; }
-      if((a.strikes||0)>=PROMO_DEMOTE_STRIKES){ promoDemote(a, P); out.demoted.push(id); }
-    });
-    promoSave();
-    if(out.demoted.length) rulesApplyWeights();
-  }catch(e){}
-  return out;
-}
-function promoEvents(){ try{ return (promoLoad().events)||[]; }catch(e){ return []; } }
-// (v10.54, audit 6) THE MODEL IS FROZEN DURING THE SESSION. rulesApply moved live
-// weights the moment a fetch landed, so a bar recorded at 10:00 and a bar recorded at
-// 10:05 could have been scored by two different models with nothing on the record to
-// say so. It now runs at BOOT and after the close only; everything else is deferred.
-var RULES_APPLIED_AT=null;
-var RULES_APPLIED_DAY=null;
-function rulesApplyAllowed(){
-  try{ var sec=ctNowSecOfDay(); return (sec < 8*3600+30*60) || (sec >= 15*3600+60); }
-  catch(e){ return true; }
-}
-// Runs at boot and again whenever a fresh rules.json arrives.
-function rulesApply(force){
-  if(!force && RULES_APPLIED_AT!=null && !rulesApplyAllowed()){
-    return { applied:[], skipped:[{ id:'*', why:'mid-session — the model is frozen until after the close' }], deferred:true };
-  }
-  RULES_APPLIED_AT=Date.now();
-  rulesApplyWeights();     // 1. hand-set + what THIS panel promoted (the doc is inert)
-  promoApplyPersisted();   // 2. the last-applied promotions (network-less boot)
-  promoDemoteCheck();      // 3. weekly: has anything promoted stopped working?
-  return applyProposals(RULES_DOC);   // 4. anything new that clears the bar
-}
-// The model each feature record was scored under, so a mid-flight change is visible
-// after the fact instead of being averaged into the day.
-function weightsHash(){
-  try{
-    var s=''; Object.keys(DIR_WEIGHTS).sort().forEach(function(k){ s+=k+':'+DIR_WEIGHTS[k]+';'; });
-    var h=0; for(var i=0;i<s.length;i++){ h=((h<<5)-h+s.charCodeAt(i))|0; }
-    return (h>>>0).toString(16);
-  }catch(e){ return null; }
-}
-function modelStamp(){
-  var asOf=null; try{ asOf=(RULES_DOC&&RULES_DOC.asOf)||null; }catch(e){}
-  return { rulesAsOf:asOf, weightsHash:weightsHash() };
-}
-function promotionsList(){
-  var P=promoLoad(); var out=[];
-  for(var id in P.applied) out.push(P.applied[id]);
-  out.sort(function(a,b){ return String(a.on||'').localeCompare(String(b.on||'')); });
-  return out;
-}
-function promoMarker(id){
-  try{
-    var P=promoLoad();
-    if(id && P.applied[id]) return '📊 promoted '+(P.applied[id].on||'');
-    if(!id && DIR_WEIGHTS_SOURCE==='measured'){
-      var last=null;
-      for(var k in P.applied){ if(P.applied[k] && (P.applied[k].kind==='weight'||P.applied[k].kind==='threshold')) last=P.applied[k]; }
-      return '📊 promoted '+((last&&last.on)||'');
-    }
-  }catch(e){}
-  return '';
-}
-
-// ---- (v10.53 B) THE KILL LIST — a PROMOTED kill condition caps the grade at C ----
-// Descriptive: the read still renders, it simply refuses to claim more than C and says
-// which condition voided it. Hand-set (⚖) kill entries do NOT cap anything.
-var KILL_DEFS={
-  'kill.tap3':        { label:'3rd tap',        scope:'node', test:function(x){ return typeof x.tap==='number' && x.tap>=2; } },
-  'kill.midrange':    { label:'mid-range',      scope:'dir',  test:function(x){ return x.rangeZone==='mid'; } },
-  'kill.noConf':      { label:'no confluence',  scope:'dir',  test:function(x){ return x.driftVerdict==='SPLIT' && x.structOpposed===true; } },
-  'kill.negGammaWide':{ label:'−γ into air',    scope:'node', test:function(x){ return x.pol==='-' && x.path==='air'; } }
-};
-// (v10.54, audit 1) ONLY gpts_promo_v1 CAN ACTIVATE A KILL. A killList entry carrying
-// promoted:true / tier:'measured' in a FETCHED document used to cap grades directly —
-// a one-line edit to a JSON file on GitHub could void every read on the panel without
-// passing the bar. That path is closed: the fetched list is documentation.
-function killActive(id){
-  try{
-    var P=promoLoad();
-    for(var i=0;i<P.kills.length;i++){ if(P.kills[i].id===id) return true; }
-  }catch(e){}
-  return false;
-}
-function killCheck(scope, x){
-  try{
-    for(var id in KILL_DEFS){
-      var d=KILL_DEFS[id];
-      if(d.scope!==scope) continue;
-      if(!killActive(id)) continue;
-      if(d.test(x||{})) return { id:id, label:d.label, reason:'kill: '+d.label };
-    }
-  }catch(e){}
-  return null;
-}
+function ruleTier(id){ var r=ruleGet(id); return (r && (r.promoted || r.tier==='measured')) ? '📊' : '⚖'; }
+function rulePromoted(id){ var r=ruleGet(id); return !!(r && (r.promoted || (r.tier==='measured' && (r.n||0)>=RULE_UNLOCK_N))); }
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.rules=function(){ return rulesLoad(); };
-window.__gptsDebug.rulesDoc=function(){ return rulesDoc(); };
-window.__gptsDebug.promotions=function(){
-  return { source:DIR_WEIGHTS_SOURCE, weights:DIR_WEIGHTS, applied:promotionsList(),
-           proposals:((rulesDoc()||{}).proposals)||[], challengers:((rulesDoc()||{}).challengers)||{},
-           killList:((rulesDoc()||{}).killList)||[] };
-};
 
 // ============================================================================
 // (B) FEATURE REGISTRY — the enrollment mechanism. One entry per feature; the
@@ -8085,7 +6960,6 @@ function registerFeature(f){
 }
 function featureByKey(k){ for(var i=0;i<FEATURES.length;i++){ if(FEATURES[i].key===k) return FEATURES[i]; } return null; }
 var FEAT_FWD  = 10;    // forward bars (10 x 3m = 30m) for every feature outcome
-var FEAT_KEEP_BARS = 160;   // (v10.54) feature records are capped by BARS, never by count
 var DIR_PTS   = 0.5;   // strikes price must travel for a direction call to count
 var DRIFT_PTS = 0.5;   // strikes for a drift call to count
 
@@ -8224,8 +7098,8 @@ function driftLineHtml(sym){
     '<span style="color:'+PAL.sub+';font-weight:700">Drift</span>'+
     '<span style="padding:0 5px;border-radius:3px;font-size:9px;font-weight:700;color:'+chipCol+';background:'+chipBg+'">'+d.label+'</span>'+
     '<span style="color:'+PAL.line+'">·</span>'+
-    '<span style="color:'+PAL.gold+';font-weight:700">G'+(d.gvwap!=null?fmtLvl(d.gvwap):'–')+'</span>'+
-    '<span style="color:#a371f7;font-weight:700">V'+(d.vvwap!=null?fmtLvl(d.vvwap):'–')+'</span>'+
+    '<span style="color:'+PAL.gold+';font-weight:700">G'+(d.gvwap!=null?d.gvwap:'–')+'</span>'+
+    '<span style="color:#a371f7;font-weight:700">V'+(d.vvwap!=null?d.vvwap:'–')+'</span>'+
   '</div>';
   // (v10.51.1 FIX) THIN BAR — TWO LANES: gold GEX band on top, purple VEX band below,
   // each with a brighter centre tick (GVWAP / VVWAP), and a WHITE price line spanning both.
@@ -8323,440 +7197,6 @@ function acmChipHtml(a){
 }
 
 // ============================================================================
-// (v10.55 PART A) THE TREND / MAGNET / PULLBACK-NODE ENGINE.
-//
-// THE MENTAL MODEL (user-taught, 2026-08-18). A trend, in node terms, is an
-// ALTERNATION of two nodes:
-//   MAGNET       — the node price is DRAWN TO. In a downtrend it is the heavy node
-//                  BELOW; price "rallies down" to it (RLY).
-//   PULLBACK NODE— the node that FORMS on the counter-move and price DEFLECTS off.
-//                  In a downtrend it forms ABOVE price (the resistance a trader
-//                  sells from); in an uptrend BELOW (the support to buy from).
-// Sequence (dn): RLY down to the magnet → a PB node forms above → deflection off it
-// → RLY to the NEXT magnet → a NEW PB node forms, LOWER than the last. Lower-low
-// (magnet) / lower-high (PB), each governed by a node. Uptrend = exact mirror.
-//
-// PB nodes APPEAR AFTER the move, never before. So the engine PREDICTS the zone,
-// DETECTS the strike the moment it lands, and then flags the ROLL — and the rolling
-// ceilings of the Academy ARE those successive PB nodes (2 consecutive migrations =
-// signal, 3 = confirmation; a rolled-off level LOSES target status; the vacated zone
-// is an air pocket). Rolling detection and PB detection are ONE mechanism seen from
-// two angles. The SMA still OWNS the direction — this engine never chooses it.
-// ============================================================================
-var NODEHIST_KEY='gpts_nodehist_v1';           // NEW key; nothing existing is renamed
-var NODEHIST_MAX=400;
-var NODEHIST=null;
-var PB_MIN_PCT=20;        // a PB node must be at least this % of the King to count
-var PB_LEG_PTS=0.5;       // price must travel this far off a PB before a NEW leg starts
-var PB_REACH=5;           // a PB node beyond this many strikes is not this leg's PB
-var LEG_ROLL_SIGNAL=2;    // 2 consecutive PB nodes rolling the same way = signal
-var LEG_ROLL_CONFIRM=3;   // 3 = confirmation (Academy count rule)
-function nodeHistLoad(){
-  if(NODEHIST) return NODEHIST;
-  try{ NODEHIST=JSON.parse(localStorage.getItem(NODEHIST_KEY)||'null'); }catch(e){ NODEHIST=null; }
-  if(!NODEHIST || typeof NODEHIST!=='object') NODEHIST={ v:1, sym:{} };
-  if(!NODEHIST.sym) NODEHIST.sym={};
-  return NODEHIST;
-}
-function nodeHistSave(){ try{ localStorage.setItem(NODEHIST_KEY, JSON.stringify(NODEHIST)); }catch(e){} }
-// PURE: the nearest MEANINGFUL ceiling above and floor below price on this bar. This
-// is the per-bar cluster memory PB detection needs: a node that was not here last bar
-// and is here now APPEARED, and that is the whole detection.
-function nodeHistRow(m){
-  var out={ px:null, ceil:null, flr:null };
-  try{
-    if(!m || m.px==null) return out;
-    var px=m.px; out.px=+px.toFixed(2);
-    (m.levels||[]).forEach(function(L){
-      if(!L || typeof L.k!=='number') return;
-      var pct=(typeof L.pct==='number')?Math.abs(L.pct):(L.isKing?100:0);
-      if(!(L.isKing || pct>=PB_MIN_PCT)) return;
-      if(L.k>px+0.001){ if(!out.ceil || L.k<out.ceil.k) out.ceil={ k:L.k, pct:pct, state:L.state||null }; }
-      else if(L.k<px-0.001){ if(!out.flr || L.k>out.flr.k) out.flr={ k:L.k, pct:pct, state:L.state||null }; }
-    });
-  }catch(e){}
-  return out;
-}
-// Idempotent per (day, closed bar) — same contract as fcHistSample.
-function nodeHistSample(sym, m){
-  try{
-    sym=sym||'SPY';
-    if(!m){ try{ m=nodeMapModel(sym); }catch(e1){ m=null; } }
-    if(!m || !m.ok) return null;
-    var row=nodeHistRow(m);
-    if(row.px==null) return null;
-    var H=nodeHistLoad();
-    var arr=H.sym[sym]||(H.sym[sym]=[]);
-    var bar=(STATE[sym]||{}).lastClosedB||0;
-    var last=arr.length?arr[arr.length-1]:null;
-    var rec={ d:TODAY, t:Date.now(), bar:bar, px:row.px, ceil:row.ceil, flr:row.flr };
-    if(last && last.d===TODAY && last.bar===bar) arr[arr.length-1]=rec;
-    else arr.push(rec);
-    if(arr.length>NODEHIST_MAX) H.sym[sym]=arr.slice(arr.length-NODEHIST_MAX);
-    nodeHistSave();
-    var a2=H.sym[sym];
-    return a2[a2.length-1];
-  }catch(e){ return null; }
-}
-function nodeHistOf(sym){ var H=nodeHistLoad(); return (H.sym && H.sym[sym]) || []; }
-
-function legStepWord(n){ return n===1?'1st':(n===2?'2nd':(n===3?'3rd':(n+'th'))); }
-function legBlank(dir){
-  return { dir:dir||'none', phase:'none', magnet:null, lastPB:null, pbZone:null,
-           predictedPB:false, pbDetected:null,
-           roll:{ side:null, steps:[], count:0, signal:false, confirmed:false, weakening:false },
-           invalidations:{ trendBreak:false, pbBreak:false },
-           rolledOff:[], air:null, seen:{}, note:null, event:null, px:null, t:0, bar:0 };
-}
-function legClone(s){ try{ return JSON.parse(JSON.stringify(s)); }catch(e){ return legBlank(s&&s.dir); } }
-// ---------------------------------------------------------------------------
-// PURE state machine. ctx = { dirIn:'dn'|'up'|'none', px, close, levels[], kingK, t, bar }
-// Everything the engine claims is derivable from those inputs, so the whole thing is
-// unit-testable on a replayed tape (test_leg_engine.js).
-// ---------------------------------------------------------------------------
-function legStep(prev, ctx){
-  ctx=ctx||{};
-  var dirIn=ctx.dirIn||'none';
-  var px=(typeof ctx.px==='number')?ctx.px:null;
-  var levels=ctx.levels||[];
-  var kingK=(typeof ctx.kingK==='number')?ctx.kingK:null;
-  var close=(typeof ctx.close==='number')?ctx.close:px;
-  var st;
-  if(!prev || prev.dir!==dirIn){
-    st=legBlank(dirIn);
-    if(prev && prev.dir && prev.dir!=='none' && prev.dir!==dirIn) st.invalidations.trendBreak=true;
-  } else {
-    st=legClone(prev);
-    st.event=null; st.note=null;
-    st.invalidations={ trendBreak:false, pbBreak:false };
-  }
-  st.dir=dirIn; st.t=ctx.t||0; st.bar=ctx.bar||0; st.px=(px!=null)?+px.toFixed(2):null;
-  if(dirIn==='none' || px==null){
-    st.phase='none'; st.predictedPB=false; st.magnet=null; st.pbZone=null; st.pbDetected=null;
-    st.rolledOff=[]; st.air=null;
-    return st;
-  }
-  var dn=(dirIn==='dn');
-  // ---- the meaningful board, split by side ----
-  var seen={}, above=[], below=[];
-  levels.forEach(function(L){
-    if(!L || typeof L.k!=='number') return;
-    var pct=(typeof L.pct==='number')?Math.abs(L.pct):(L.isKing?100:0);
-    if(!(L.isKing || pct>=PB_MIN_PCT)) return;
-    var row={ k:L.k, pct:pct, state:L.state||null, isKing:!!L.isKing };
-    seen[L.k.toFixed(2)]=pct;
-    if(L.k>px+0.001) above.push(row); else if(L.k<px-0.001) below.push(row);
-  });
-  var pool = dn?above:below;            // the PB side (counter-move)
-  var magPool = dn?below:above;         // the magnet side (with the trend)
-  // ---- MAGNET: the strongest meaningful node in the trend direction, capped at the King ----
-  var mag=null;
-  magPool.forEach(function(L){
-    if(!mag || L.pct>mag.pct || (L.pct===mag.pct && Math.abs(L.k-px)<Math.abs(mag.k-px))) mag=L;
-  });
-  if(kingK!=null && ((dn && kingK<px-0.001) || (!dn && kingK>px+0.001))){
-    var kl=null;
-    magPool.forEach(function(L){ if(Math.abs(L.k-kingK)<0.001) kl=L; });
-    mag = kl || { k:kingK, pct:100, isKing:true, state:null };    // the King IS the cap
-  }
-  st.magnet = mag ? { k:mag.k, pct:(mag.pct!=null?mag.pct:null), isKing:!!mag.isKing } : null;
-  // ---- INVALIDATION: a close THROUGH the current PB node, against the trend ----
-  if(st.lastPB && ((dn && close>st.lastPB.k+0.001) || (!dn && close<st.lastPB.k-0.001))){
-    st.invalidations.pbBreak=true;
-    st.phase='none';
-    st.note = dn?'lower-high broken':'higher-low broken';
-    st.lastBroken={ k:st.lastPB.k, t:st.t, steps:(st.roll.steps||[]).slice() };
-    st.pbDetected=null; st.lastPB=null;
-    st.roll={ side:st.roll.side, steps:[], count:0, signal:false, confirmed:false, weakening:false };
-  }
-  // ---- PHASE: a leg away from the PB re-opens the RLY toward the magnet ----
-  if(st.invalidations.pbBreak){
-    st.phase='none';                      // the read stopped being true THIS bar
-  } else if(st.pbDetected){
-    var pk=st.pbDetected.k;
-    var away = dn ? (px < pk-PB_LEG_PTS) : (px > pk+PB_LEG_PTS);
-    st.phase = away ? 'RLY' : 'PB';
-  } else if(st.phase!=='PB'){
-    st.phase='RLY';
-  }
-  // ---- PB DETECTION: a meaningful node APPEARS or GROWS on the counter side ----
-  // The BOARD does not reset when the trend flips, so the "was this node here last bar?"
-  // memory is read from the previous state whatever its direction. With no previous bar
-  // at all, nothing can be said to have APPEARED — only a node that is GROWING may fire.
-  var prevSeen=(prev && prev.seen)?prev.seen:null;
-  var cand=null;
-  if(!st.invalidations.pbBreak){
-    pool.forEach(function(L){
-      if(Math.abs(L.k-px)>PB_REACH) return;                       // not this leg's pullback
-      if(st.lastPB && Math.abs(L.k-st.lastPB.k)<0.001) return;     // the SAME node, not a new step
-      // A strike that has ALREADY been a step of this roll cannot be one again: a node
-      // that keeps re-building would otherwise oscillate the count between two strikes.
-      var already=false;
-      (st.roll.steps||[]).forEach(function(k0){ if(Math.abs(k0-L.k)<0.001) already=true; });
-      if(already) return;
-      var appeared = prevSeen ? !(L.k.toFixed(2) in prevSeen) : false;
-      var growing  = (L.state==='Building');
-      if(!appeared && !growing) return;
-      if(!cand || Math.abs(L.k-px)<Math.abs(cand.k-px)) cand=L;    // the first wall the move meets
-    });
-  }
-  if(cand){
-    var from = st.lastPB ? st.lastPB.k : null;
-    var rolled = (from==null) ? null : (dn ? (cand.k<from-0.001) : (cand.k>from+0.001));
-    if(from==null){
-      st.roll.steps=[cand.k]; st.roll.count=1; st.roll.weakening=false;
-    } else if(rolled){
-      st.roll.steps=(st.roll.steps||[]).concat([cand.k]); st.roll.count=(st.roll.count||0)+1; st.roll.weakening=false;
-    } else {
-      // A PB that forms AGAINST the trend breaks the roll: the count restarts and the
-      // panel says so ("PB rolled UP — trend weakening").
-      st.roll.steps=[cand.k]; st.roll.count=1; st.roll.weakening=true;
-    }
-    st.roll.side = dn?'ceil':'flr';
-    st.roll.signal = st.roll.count>=LEG_ROLL_SIGNAL;
-    st.roll.confirmed = st.roll.count>=LEG_ROLL_CONFIRM;
-    st.pbDetected={ k:cand.k, pct:cand.pct, t:st.t, bar:st.bar, rolledFrom:from, step:st.roll.count };
-    st.lastPB={ k:cand.k, pct:cand.pct, t:st.t, step:st.roll.count };
-    st.phase='PB'; st.event='pbDetected';
-  }
-  // ---- PB ZONE + the PREDICTION (the zone is named BEFORE the node exists) ----
-  var edgeK=null;
-  if(st.lastPB) edgeK=st.lastPB.k;
-  else { var nearEdge=null; pool.forEach(function(L){ if(!nearEdge || Math.abs(L.k-px)<Math.abs(nearEdge.k-px)) nearEdge=L; }); edgeK=nearEdge?nearEdge.k:null; }
-  // The zone is named even when there is NO reference level yet — "a pullback node will
-  // form above" is still the honest claim; it simply has no upper bound to quote.
-  st.pbZone = dn ? { lo:+px.toFixed(2), hi:(edgeK!=null?+edgeK.toFixed(2):null) }
-                 : { lo:(edgeK!=null?+edgeK.toFixed(2):null), hi:+px.toFixed(2) };
-  var zoneEmpty=true;
-  if(st.lastPB){
-    pool.forEach(function(L){
-      if(Math.abs(L.k-st.lastPB.k)<0.001) return;
-      if(dn ? (L.k<st.lastPB.k-0.001 && L.k>px+0.001) : (L.k>st.lastPB.k+0.001 && L.k<px-0.001)) zoneEmpty=false;
-    });
-  }
-  st.predictedPB = (st.phase==='RLY' && zoneEmpty);
-  // ---- ROLLED-OFF levels + the AIR the roll left behind ----
-  st.rolledOff=[]; st.air=null;
-  if(st.lastPB){
-    pool.forEach(function(L){ if(dn ? (L.k>st.lastPB.k+0.001) : (L.k<st.lastPB.k-0.001)) st.rolledOff.push(L.k); });
-    var steps=st.roll.steps||[];
-    if(steps.length>=2){
-      var prevStep=steps[steps.length-2];
-      st.air={ lo:Math.min(prevStep, st.lastPB.k), hi:Math.max(prevStep, st.lastPB.k) };
-    }
-  }
-  st.seen=seen;
-  return st;
-}
-// ---- the LIVE wrapper: one evaluation per closed bar, cached beside the spine ----
-var LEG_STATE={ SPY:null, QQQ:null };
-var LEG_CACHE={ SPY:null, QQQ:null };
-var LEG_PB_LOG={ SPY:[], QQQ:[] };     // every detected PB {t,k,step} — the pbPredict outcome reads it
-function legDirOf(state){
-  if(state==='dn'||state==='dn-broken') return 'dn';
-  if(state==='up'||state==='up-broken') return 'up';
-  return 'none';
-}
-function legCtxOf(sym){
-  var S=STATE[sym]||{};
-  var px=(typeof S.price==='number')?S.price:null;
-  var m=null; try{ m=nodeMapModel(sym); }catch(e){}
-  var tv={state:'na'}; try{ tv=trendVerdict(sym)||tv; }catch(e2){}
-  var cs=[]; try{ cs=closedCandles(sym)||[]; }catch(e3){}
-  var close=cs.length?cs[cs.length-1].c:px;
-  return { dirIn:legDirOf(tv.state), px:px, close:close,
-           levels:(m&&m.levels)||[], kingK:(m&&m.kingK!=null)?m.kingK:null,
-           t:Date.now(), bar:(S.lastClosedB||0), n:cs.length };
-}
-// The engine advances ONCE PER CLOSED BAR. spineBarKey includes the live price, which
-// changes on every poll — keying the engine off that would re-run the state machine a
-// dozen times inside one bar and let a single node count as several roll steps.
-function legBarKey(sym){
-  var S=STATE[sym]||{};
-  return sym+':'+(S.lastClosedB||0)+':'+((S.candles||[]).length);
-}
-var LEG_BUSY={ SPY:false, QQQ:false };
-function legEngine(sym){
-  sym=sym||'SPY';
-  var key=null; try{ key=legBarKey(sym); }catch(e){ key=null; }
-  var c=LEG_CACHE[sym];
-  if(c && key && c.key===key) return c.val;
-  // Re-entrancy guard: legCtxOf builds the node map, and anything the node map reaches
-  // that asks for the in-play zone would ask for the engine again. The state machine may
-  // advance ONCE per bar, so a nested call gets the last state, never a second step.
-  if(LEG_BUSY[sym]) return (c&&c.val) || LEG_STATE[sym] || legBlank('none');
-  LEG_BUSY[sym]=true;
-  var st=legBlank('none');
-  try{ st=legStep(LEG_STATE[sym], legCtxOf(sym)); }catch(e2){ st=legBlank('none'); }
-  LEG_STATE[sym]=st;
-  LEG_CACHE[sym]={ key:key, val:st };
-  try{
-    if(st.event==='pbDetected' && st.pbDetected){
-      var log=LEG_PB_LOG[sym]||(LEG_PB_LOG[sym]=[]);
-      log.push({ t:st.t, k:st.pbDetected.k, step:st.pbDetected.step, dir:st.dir });
-      if(log.length>200) LEG_PB_LOG[sym]=log.slice(log.length-200);
-    }
-  }catch(e3){}
-  LEG_BUSY[sym]=false;
-  return st;
-}
-// ============================================================================
-// (v10.55 PART D) MULTI-SESSION ROLLING, out of FCHIST. Intraday rolling is the PB
-// chain above; the Academy's other half is DAY-OVER-DAY: the dominant floor one or
-// two strikes higher today than yesterday and the day before. 2 consecutive
-// migrations = signal, 3 = confirmation — which needs at least 3 recorded sessions,
-// so before that this RECORDS ONLY and the Testing tab says how far off it is.
-// ============================================================================
-function sessionRollSeries(sym){
-  var byDay={}, order=[];
-  try{
-    (fcHistOf(sym)||[]).forEach(function(r){
-      if(!r || !r.d) return;
-      if(!byDay[r.d]){ byDay[r.d]={ d:r.d, flr:null, ceil:null }; order.push(r.d); }
-      if(r.flr!=null) byDay[r.d].flr=r.flr;
-      if(r.ceil!=null) byDay[r.d].ceil=r.ceil;
-    });
-  }catch(e){}
-  order.sort();
-  return order.map(function(d){ return byDay[d]; });
-}
-// PURE: how many consecutive same-direction migrations end the series.
-function rollRun(vals){
-  var out={ count:0, dir:0 };
-  if(!vals || vals.length<2) return out;
-  var i=vals.length-1;
-  var d=0;
-  while(i>0){
-    var a=vals[i-1], b=vals[i];
-    if(a==null || b==null) break;
-    var s=(b>a+0.001)?1:((b<a-0.001)?-1:0);
-    if(s===0) break;
-    if(d===0) d=s; else if(s!==d) break;
-    out.count++; i--;
-  }
-  out.dir=out.count?d:0;
-  return out;
-}
-function sessionRoll(sym){
-  var out={ sessions:0, ready:false, flr:{count:0,dir:0}, ceil:{count:0,dir:0},
-            vote:0, signal:false, confirmed:false, note:null };
-  try{
-    var sess=sessionRollSeries(sym);
-    out.sessions=sess.length;
-    out.ready=(sess.length>=LEG_ROLL_CONFIRM);
-    out.flr=rollRun(sess.map(function(s){ return s.flr; }));
-    out.ceil=rollRun(sess.map(function(s){ return s.ceil; }));
-    // floors rolling UP = bullish · ceilings rolling DOWN = bearish (doctrine)
-    var v=0, n=0;
-    if(out.flr.count>=LEG_ROLL_SIGNAL && out.flr.dir>0){ v+=1; n=Math.max(n,out.flr.count); }
-    if(out.flr.count>=LEG_ROLL_SIGNAL && out.flr.dir<0){ v-=1; n=Math.max(n,out.flr.count); }
-    if(out.ceil.count>=LEG_ROLL_SIGNAL && out.ceil.dir<0){ v-=1; n=Math.max(n,out.ceil.count); }
-    if(out.ceil.count>=LEG_ROLL_SIGNAL && out.ceil.dir>0){ v+=1; n=Math.max(n,out.ceil.count); }
-    out.vote=(v>0)?1:((v<0)?-1:0);
-    out.signal=(n>=LEG_ROLL_SIGNAL);
-    out.confirmed=(n>=LEG_ROLL_CONFIRM);
-    if(!out.ready) out.note='needs '+LEG_ROLL_CONFIRM+' sessions, have '+out.sessions;
-  }catch(e){}
-  return out;
-}
-// ---- (PART B) THE VOICE. Pure sentence builders, in the user's own vocabulary.
-// These describe LEVELS ("sell level", "resistance to sell from"), never an order:
-// nothing here says enter, size, stop or now.
-function legSentence(leg){
-  try{
-    if(!leg || leg.dir==='none') return '';
-    var dn=(leg.dir==='dn');
-    var parts=[ dn?'Downtrend (SMA).':'Uptrend (SMA).' ];
-    // AT the pullback node the READ is about that node; once price has left it the leg
-    // is running again and the READ goes back to the magnet + the next predicted zone.
-    if(leg.pbDetected && leg.phase==='PB'){
-      var pb=leg.pbDetected;
-      var stepTxt='';
-      if(leg.roll && leg.roll.count){
-        var w=legStepWord(leg.roll.count);
-        stepTxt=' ('+(leg.roll.confirmed ? (w+' step — confirmed '+(dn?'downtrend':'uptrend'))
-                    : (leg.roll.signal ? (w+' step, signal') : (w+' step')))+')';
-      }
-      var rolledTxt=(pb.rolledFrom!=null)?(' — rolled '+(dn?'lower':'higher')+' from '+fmtLvl(pb.rolledFrom)):'';
-      parts.push('Pullback node formed at '+fmtLvl(pb.k)+rolledTxt+stepTxt+'.');
-      parts.push(dn ? 'Resistance to sell from; deflection expected.' : 'Support to buy from; deflection expected.');
-      if(leg.magnet) parts.push('Potential '+(dn?'drop':'rise')+' to magnet '+fmtLvl(leg.magnet.k)+'.');
-      if(leg.roll && leg.roll.weakening) parts.push('PB rolled '+(dn?'UP':'DOWN')+' — trend weakening.');
-    } else {
-      if(leg.magnet) parts.push('Rallying '+(dn?'down':'up')+' to magnet '+fmtLvl(leg.magnet.k)+'.');
-      if(leg.predictedPB){
-        var edge=leg.pbZone?(dn?leg.pbZone.hi:leg.pbZone.lo):null;
-        parts.push('Expect a pullback node to form '+(dn?'above':'below')+
-          (edge!=null?(', '+(dn?'below':'above')+' '+fmtLvl(edge)):'')+' — '+(dn?'sell level':'buy level')+'.');
-      }
-    }
-    if(leg.invalidations && leg.invalidations.pbBreak) parts.push(dn?'Lower-high broken.':'Higher-low broken.');
-    return parts.join(' ');
-  }catch(e){ return ''; }
-}
-// The decision LINE at a PB node. Descriptive geometry in the user's vocabulary; the
-// matrix label and the R:R gate above it are untouched.
-function legDecisionLine(leg, L){
-  try{
-    if(!leg || leg.dir==='none' || !leg.pbDetected || !L || L.k==null) return '';
-    if(Math.abs(L.k-leg.pbDetected.k)>0.001) return '';
-    var dn=(leg.dir==='dn');
-    var s=dn?'sell-side deflection':'buy-side deflection';
-    if(leg.magnet) s+=' · tgt magnet '+fmtLvl(leg.magnet.k);
-    s+=' · inval '+(dn?'above':'below')+' PB '+fmtLvl(leg.pbDetected.k);
-    return s;
-  }catch(e){ return ''; }
-}
-// The zone-row marker: PB (with its roll step) / MAG · target / rolled off (dimmed).
-function legZoneTag(leg, L){
-  try{
-    if(!leg || leg.dir==='none' || !L || L.k==null) return null;
-    var dn=(leg.dir==='dn');
-    if(leg.pbDetected && Math.abs(L.k-leg.pbDetected.k)<0.001){
-      var lab='PB';
-      if(leg.roll && leg.roll.count>=2) lab+=' · '+legStepWord(leg.roll.count)+' '+(dn?'lower':'higher');
-      return { lab:lab, dim:false, roll:(leg.roll?leg.roll.count:0),
-               tip:'PULLBACK NODE — the node that formed on the counter-move; the '+(dn?'resistance to sell from':'support to buy from')+'. Its roll step is the Academy count: 2 = signal, 3 = confirmation.' };
-    }
-    if(leg.magnet && Math.abs(L.k-leg.magnet.k)<0.001){
-      return { lab:'MAG · target', dim:false, roll:0,
-               tip:'MAGNET — the node price is being drawn to in the trend direction (capped at the King). This is the target the pullback deflection points at.' };
-    }
-    if((leg.rolledOff||[]).some(function(k){ return Math.abs(k-L.k)<0.001; })){
-      return { lab:'rolled off', dim:true, roll:0,
-               tip:'ROLLED OFF — a level the roll has left behind. Doctrine: it LOSES target status (the new pullback node has it) and the vacated zone travels fast (air).' };
-    }
-    return null;
-  }catch(e){ return null; }
-}
-function legZoneTagHtml(leg, L){
-  var t=legZoneTag(leg, L); if(!t) return '';
-  var col=t.dim?PAL.sub:(leg.dir==='dn'?PAL.shortAccent:PAL.longAccent);
-  return '<span title="'+String(t.tip).replace(/"/g,'')+'" style="font-size:8px;font-weight:800;color:'+col+
-    ';opacity:'+(t.dim?'.55':'1')+';border:1px solid '+col+';border-radius:8px;padding:0 4px;white-space:nowrap">'+t.lab+'</span>';
-}
-// ⚑ the one-line banner for the bar a pullback node lands on.
-function legBannerHtml(sym){
-  try{
-    var leg=legEngine(sym||'SPY');
-    if(!leg || leg.event!=='pbDetected' || !leg.pbDetected) return '';
-    var dn=(leg.dir==='dn');
-    var col=dn?PAL.shortAccent:PAL.longAccent;
-    var pb=leg.pbDetected;
-    var txt='⚑ Pullback node formed '+fmtLvl(pb.k)+
-      (pb.rolledFrom!=null?(' — rolled '+(dn?'lower':'higher')+' from '+fmtLvl(pb.rolledFrom)):'')+
-      (leg.roll&&leg.roll.count>=2?(' · '+legStepWord(leg.roll.count)+' step'+(leg.roll.confirmed?' — confirmed':', signal')):'');
-    try{ fireAlert('pbNode', String(pb.k), col); }catch(eA){}
-    return '<div title="A meaningful node just APPEARED or GREW on the counter-move side inside the predicted pullback zone. Descriptive: this names the level, never an action." '+
-      'style="border-left:2px solid '+col+';background:rgba(240,97,109,.07);border-radius:0 6px 6px 0;padding:2px 7px;margin:0 0 4px;font-size:9.5px;font-weight:700;color:'+col+'">'+txt+'</div>';
-  }catch(e){ return ''; }
-}
-window.__gptsDebug=window.__gptsDebug||{};
-window.__gptsDebug.leg=function(s){ return legEngine(s||activeSym()); };
-window.__gptsDebug.sessionRoll=function(s){ return sessionRoll(s||activeSym()); };
-window.__gptsDebug.futMode=function(){ return futModeRefresh(); };
-
-// ============================================================================
 // (C) THE SPINE — Direction grade, Node grade, Decision cell.
 // Computed ONCE per closed bar and cached; every renderer reads the cache so the
 // header, the READ, the zone rows and the recorder can never disagree.
@@ -8772,9 +7212,8 @@ function spineOf(sym){
   var c=SPINE_CACHE[sym];
   if(c && c.key===key) return c.val;
   var val={};
-  try{ val.leg=legEngine(sym); }catch(eL){ val.leg=null; }   // (v10.55) the leg engine rides the same per-bar cache
   try{ val.dir=directionGrade(sym); }catch(e){ val.dir=null; }
-  try{ var __z=inPlayZoneOf(sym); val.inPlay=__z?__z.L:null; val.inContact=!!(__z&&__z.inContact); }catch(e2){ val.inPlay=null; val.inContact=false; }
+  try{ val.inPlay=inPlayZone(sym); }catch(e2){ val.inPlay=null; }
   try{ val.node=val.inPlay?nodeGrade(sym, val.inPlay):null; }catch(e3){ val.node=null; }
   try{ val.decision=decisionCell(sym); }catch(e4){ val.decision=null; }
   SPINE_CACHE[sym]={key:key, val:val};
@@ -8793,26 +7232,13 @@ function rangePosOf(m, px){
     return { pos:+pos.toFixed(3), zone:zone, lo:lo, hi:hi };
   }catch(e){ return { pos:null, zone:'unknown' }; }
 }
-// (v10.53) the cut points live in DIR_WEIGHTS so a promoted `threshold` proposal can move
-// them. Defensive lookup: the defaults ARE the hand-set 5 / 3.
-function gradeOfScore(s){
-  var W=(typeof DIR_WEIGHTS!=='undefined' && DIR_WEIGHTS)?DIR_WEIGHTS:null;
-  var a=(W && typeof W.gradeA==='number')?W.gradeA:5;
-  var b=(W && typeof W.gradeB==='number')?W.gradeB:3;
-  return s>=a?'A':(s>=b?'B':'C');
+function gradeOfScore(s){ return s>=5?'A':(s>=3?'B':'C'); }
+function gradeDisp(g, score){
+  // "A-" in the mockup = the grade was reached exactly at its threshold.
+  if(g==='A' && score===5) return 'A−';
+  if(g==='B' && score===3) return 'B−';
+  return g;
 }
-// (v10.54, audit 21) the NODE scale, separate from the direction scale.
-function nodeGradeOfScore(s){
-  var W=(typeof NODE_WEIGHTS!=='undefined' && NODE_WEIGHTS)?NODE_WEIGHTS:null;
-  var a=(W && typeof W.gradeA==='number')?W.gradeA:5;
-  var b=(W && typeof W.gradeB==='number')?W.gradeB:3;
-  return s>=a?'A':(s>=b?'B':'C');
-}
-// (v10.54, audit 25) A SCORE AT THE THRESHOLD IS THE GRADE. The old rule hardcoded the
-// cut points as 5 and 3, so once a promoted threshold moved gradeA to 6 the panel showed
-// "A−" for a score of 5 (which was now a B) and plain "A" for the score that had only
-// just reached the bar — exactly backwards. There is no half-grade: A means A.
-function gradeDisp(g, score){ return g; }
 // ============================================================================
 // (v10.51) DIRECTION = A HIERARCHY, NOT A WEIGHTED SUM.
 //
@@ -8835,15 +7261,8 @@ function directionGrade(sym){
   sym=sym||'SPY';
   var out={ grade:'C', disp:'C', dir:'SIDE', score:0, tier:'⚖', capped:null, noOdds:false,
             trendState:'na', relation:'tentative', tentative:true, dirWeightsSource:'hand-set',
-            kill:null, promoted:null,
             inputs:{ trend:null, drift:null, structAsym:null, rangePos:null, regime:null, session:null } };
   try{
-    // (v10.53 A) the scoring constants come from rules.json v2 weights.dir when a proposal
-    // was promoted past the bar; otherwise they ARE the hand-set numbers below.
-    var W=(typeof DIR_WEIGHTS!=='undefined' && DIR_WEIGHTS)?DIR_WEIGHTS
-          :{ trend:3, driftAgree:2, driftLean:1, diverge:-2, tentative:1 };
-    out.dirWeightsSource=(typeof DIR_WEIGHTS_SOURCE!=='undefined')?DIR_WEIGHTS_SOURCE:'hand-set';
-    out.promoted=(typeof promoMarker==='function')?(promoMarker()||null):null;
     var S=STATE[sym]||{}; var px=(typeof S.price==='number')?S.price:null;
     var m=null;    try{ m=nodeMapModel(sym); }catch(e1){}
     var tv={state:'na',up:0,dn:0,win:0,slope:0};
@@ -8869,14 +7288,14 @@ function directionGrade(sym){
       dirNum = trendDir;                                    // drift NEVER overrides the direction
       var agree   = (driftD!==0 && driftD===trendDir);
       var diverge = (driftD!==0 && driftD!==trendDir);
-      score = W.trend;                                      // a confirmed trend, on its own, is a B
+      score = 3;                                            // a confirmed trend, on its own, is a B
       if(agree){
         // AGREE-* means the two book centres are on the same side of price AND their
         // bands overlap — one story, not two. LEAN-* is the same side without overlap.
-        score += (drift.verdict==='AGREE-UP' || drift.verdict==='AGREE-DN') ? W.driftAgree : W.driftLean;
+        score += (drift.verdict==='AGREE-UP' || drift.verdict==='AGREE-DN') ? 2 : 1;
         out.relation='confirmed';
       } else if(diverge){
-        score += W.diverge;
+        score -= 2;
         out.relation='divergence';
         hardC=true;                                         // a diverging trend may never grade above C
       } else {
@@ -8886,43 +7305,12 @@ function directionGrade(sym){
     } else {
       // flat | up-broken | dn-broken | na — no confirmed trend to own the direction.
       dirNum = driftD;                                      // provisional lean only (SIDE when 0)
-      score = W.tentative;
+      score = 1;
       out.relation='tentative';
       out.tentative=true;
       hardC=true;                                           // tentative is capped at C, always
     }
     out.dir = dirNum>0?'UP':(dirNum<0?'DN':'SIDE');
-    // ---- 1b. (v10.55) THE ROLL FACTOR, INSIDE THE HIERARCHY ----
-    // Rolling pullback nodes are the Academy's strongest presumptive evidence that a
-    // thesis is playing out, so a CONFIRMED roll in the trend's own direction is worth
-    // a point of confidence — and a pullback node that rolls the OTHER way costs one
-    // and is called weakening. It touches the SCORE ONLY: the SMA owns `dir`, and
-    // nothing below may flip it (test_roll_factor.js pins exactly that).
-    var rollVote=0, sessVote=0, legR=null, sessR=null;
-    try{ legR=(typeof legEngine==='function')?legEngine(sym):null; }catch(eLg){ legR=null; }
-    try{
-      if(legR && legR.dir!=='none' && legR.roll){
-        var legDirNum=(legR.dir==='dn')?-1:1;
-        if(legR.roll.weakening) rollVote=-1;
-        else if(legR.roll.confirmed && dirNum!==0 && legDirNum===dirNum) rollVote=1;
-      }
-    }catch(eRv){ rollVote=0; }
-    try{ sessR=(typeof sessionRoll==='function')?sessionRoll(sym):null; }catch(eSr){ sessR=null; }
-    try{
-      if(sessR && sessR.ready && sessR.vote && dirNum!==0){
-        if(sessR.vote===dirNum) sessVote=1; else if(sessR.vote===-dirNum) sessVote=-1;
-      }
-    }catch(eSv){ sessVote=0; }
-    score += rollVote + sessVote;
-    out.weakening = !!(legR && legR.roll && legR.roll.weakening);
-    out.inputs.roll={ dir:legR?legR.dir:'none', phase:legR?legR.phase:'none',
-                      count:(legR&&legR.roll)?legR.roll.count:0,
-                      signal:!!(legR&&legR.roll&&legR.roll.signal),
-                      confirmed:!!(legR&&legR.roll&&legR.roll.confirmed),
-                      weakening:out.weakening, pb:(legR&&legR.lastPB)?legR.lastPB.k:null,
-                      magnet:(legR&&legR.magnet)?legR.magnet.k:null, vote:rollVote,
-                      session:{ sessions:sessR?sessR.sessions:0, ready:!!(sessR&&sessR.ready),
-                                vote:sessVote, note:sessR?sessR.note:null } };
     out.score=score;
     var grade=gradeOfScore(score);
     if(hardC) grade='C';                                    // divergence / tentative ceiling
@@ -8931,13 +7319,6 @@ function directionGrade(sym){
     if(rg && rg.tag==='chop'){ out.capped=out.capped?(out.capped+' + chop'):'chop'; grade='C'; out.dir='SIDE'; out.noOdds=true; }
     if(sb.capOdds) out.noOdds=true;                                       // power hour / open drive: no odds claim
     if(out.dir==='SIDE' && grade==='A') grade='B';                        // an A needs a side
-    // ---- 3. (v10.53 B) PROMOTED KILL CONDITIONS cap the grade at C ----
-    try{
-      var kOpp=(net && net.dir!==0 && dirNum!==0 && net.dir!==dirNum);
-      var kk=(typeof killCheck==='function')?killCheck('dir', { rangeZone:rp.zone,
-              driftVerdict:drift.verdict, structOpposed:!!kOpp }):null;
-      if(kk){ out.kill=kk; grade='C'; out.noOdds=true; out.capped=out.capped?(out.capped+' + '+kk.label):kk.label; }
-    }catch(eK){}
     out.grade=grade;
     out.disp=gradeDisp(grade, score);
     out.tier=ruleTier('dir.'+grade);
@@ -8946,39 +7327,23 @@ function directionGrade(sym){
 }
 // The node price is actually engaging: nearest meaningful level inside the contact
 // band, structural nodes preferred. This is the node the READ and the DECISION use.
-// (v10.54, audit 20) IN PLAY MEANS IN CONTACT. INPLAY_BAND was 1.20 strikes — more than
-// twice the DEFLECT_ZONE the rest of the tool uses to decide a node has been TAPPED — so
-// the card presented a full frame, a decision cell and take/pass buttons for a node price
-// was nowhere near. The band is DEFLECT_ZONE now, and when nothing is in contact the card
-// says so instead of dressing the nearest edge up as an engagement.
-var INPLAY_BAND=(typeof DEFLECT_ZONE==='number')?DEFLECT_ZONE:0.50;
-function inPlayBand(){ return (typeof DEFLECT_ZONE==='number')?DEFLECT_ZONE:INPLAY_BAND; }
+var INPLAY_BAND=1.20;
 function inPlayZone(sym){
-  var z=inPlayZoneOf(sym);
-  return z?z.L:null;
-}
-// The same pick, with the honest answer to "is anything actually in contact?" attached.
-function inPlayZoneOf(sym){
   try{
     var m=nodeMapModel(sym); if(!m || !m.ok) return null;
     var px=m.px; if(px==null) return null;
-    var band=inPlayBand();
     var best=null, bestScore=-1;
-    // (v10.55) the PULLBACK NODE is preferred when price is retracing to it: it is the
-    // level the leg engine says this counter-move is aimed at.
-    var pbK=null; try{ var lg=(typeof legEngine==='function')?legEngine(sym):null; if(lg&&lg.pbDetected) pbK=lg.pbDetected.k; }catch(eLg){}
     (m.levels||[]).forEach(function(L){
-      var d=Math.abs(L.k-px); if(d>band) return;
-      var sc = (band-d)*10 + (L.isKing?6:0) + (L.isGatekeeper?4:0) + ((L.isFlr||L.isCeil)?3:0) + ((L.pct||0)/50)
-             + ((pbK!=null && Math.abs(L.k-pbK)<0.001)?5:0);
+      var d=Math.abs(L.k-px); if(d>INPLAY_BAND) return;
+      var sc = (INPLAY_BAND-d)*10 + (L.isKing?6:0) + (L.isGatekeeper?4:0) + ((L.isFlr||L.isCeil)?3:0) + ((L.pct||0)/50);
       if(sc>bestScore){ bestScore=sc; best=L; }
     });
-    if(best) return { L:best, inContact:true, band:band };
-    // nothing in contact: the working edge in the direction of travel is the zone to
-    // WATCH. It is returned flagged, and the card renders "watching — not in contact".
-    var d2=directionGradeDirCheap(m);
-    var watch = (d2>0 ? m.ceil : m.flr) || m.ceil || m.flr || null;
-    return watch ? { L:watch, inContact:false, band:band } : null;
+    if(!best){
+      // nothing in contact: the working edge in the direction of travel is the zone to watch
+      var d2=directionGradeDirCheap(m);
+      best = (d2>0 ? m.ceil : m.flr) || m.ceil || m.flr || null;
+    }
+    return best;
   }catch(e){ return null; }
 }
 function directionGradeDirCheap(m){
@@ -9004,67 +7369,9 @@ function qqqAgrees(dirNum){
 // STATE feeds); the Skylit trinity sidebar header carries SPXW price + %chg, so agreement
 // is read from that momentum sign. Returns null when SPXW is not present in the header
 // scrape — the caller then renders `S–` (honest "no SPXW data"), never a false ✓.
-// (v10.55 PART G) SPXW AS A WALL MAP, not just a momentum sign. The trinity sidebar
-// renders an SPXW strike ladder; parsed, it is the same kind of object SPY/QQQ have —
-// a King and a %-of-King per strike — and THEN `S` can be scored like Q, because it is
-// structure and not a tick. PURE parser (a text blob in, a wall map out) so a synthetic
-// ladder can pin it; when the ladder is absent everything falls back to the header
-// momentum and `S–` stays honest.
-function parseSpxwLadder(txt){
-  var out={ ok:false, king:null, price:null, pct:{}, count:0 };
-  try{
-    if(!txt) return out;
-    var t=String(txt);
-    var mp=t.match(/\$\s*([\d,]+\.?\d*)/);
-    if(mp){ var pv=parseFloat(mp[1].replace(/,/g,'')); if(isFinite(pv)) out.price=pv; }
-    // rows look like "6420  85%" / "6415 -100%" — a strike then a signed percentage.
-    var re=/(\d{3,5}(?:\.\d+)?)\s*[^0-9%\-+]{0,6}([+\-−]?\d{1,3})\s*%/g, m;
-    var best=0;
-    while((m=re.exec(t))!==null){
-      var k=parseFloat(m[1]);
-      var p=parseFloat(String(m[2]).replace('−','-'));
-      if(!isFinite(k) || !isFinite(p)) continue;
-      if(Math.abs(p)>100) continue;
-      var a=Math.abs(p);
-      out.pct[k.toFixed(2)]=p;
-      out.count++;
-      if(a>best){ best=a; out.king=k; }
-    }
-    out.ok=(out.count>=3 && out.king!=null);
-  }catch(e){}
-  return out;
-}
-var SPXW_MAP=null, SPXW_MAP_T=0;
-function spxwWallMap(){
-  try{
-    if(SPXW_MAP && (Date.now()-SPXW_MAP_T)<15000) return SPXW_MAP;
-    var hs=document.querySelectorAll('[class*="trinity"]');
-    var blob=null;
-    for(var i=0;i<hs.length;i++){
-      var txt=hs[i].textContent||'';
-      if(txt.indexOf('SPXW')>=0 && txt.length>20){ blob=(blob?blob+'\n':'')+txt; }
-    }
-    var m=blob?parseSpxwLadder(blob):null;
-    SPXW_MAP=(m && m.ok)?m:null; SPXW_MAP_T=Date.now();
-    return SPXW_MAP;
-  }catch(e){ return null; }
-}
-// Is the S confluence SCORED this bar (a real ladder) or display-only (header momentum)?
-function spxwScored(){ try{ return !!spxwWallMap(); }catch(e){ return false; } }
 function spxwAgrees(dirNum){
   try{
     if(!dirNum) return null;
-    // 1) the LADDER, when we have one: the King's side of price is the structural lean.
-    var wm=spxwWallMap();
-    if(wm && wm.king!=null){
-      var px=wm.price;
-      if(px==null){ try{ var xm0=readTrinityHeaders(); if(xm0 && xm0.SPXW && typeof xm0.SPXW.px==='number') px=xm0.SPXW.px; }catch(e0){} }
-      if(px!=null){
-        var side=(wm.king>px)?1:((wm.king<px)?-1:0);
-        if(side!==0) return side===dirNum;
-      }
-    }
-    // 2) otherwise the header momentum, exactly as before (display-only, never scored).
     var xm=readTrinityHeaders(); if(!xm || !xm.SPXW) return null;
     var s=xm.SPXW;
     var mo=(typeof s.chg==='number' && s.chg!==0) ? (s.chg>0?1:-1)
@@ -9075,7 +7382,7 @@ function spxwAgrees(dirNum){
 }
 function nodeGrade(sym, L){
   sym=sym||'SPY';
-  var out={ grade:'C', disp:'C', score:0, tier:'⚖', k:(L&&L.k!=null)?L.k:null, kill:null,
+  var out={ grade:'C', disp:'C', score:0, tier:'⚖', k:(L&&L.k!=null)?L.k:null,
             inputs:{ pol:null, tap:null, rocNow:null, rocDay:null, conf:null } };
   if(!L) return out;
   try{
@@ -9113,22 +7420,11 @@ function nodeGrade(sym, L){
     var s=spxwAgrees(hd);   // (v10.50) null = no SPXW data, true/false = agrees/not
     if(q) score+=1;
     if(v) score+=1;
-    // (v10.55 PART G) S IS SCORED WHEN IT IS STRUCTURE. With an SPXW strike LADDER
-    // parsed out of the trinity sidebar, S is the same kind of evidence Q is (a wall map
-    // agreeing), so it earns its +1. With only the header momentum it stays DISPLAY-ONLY
-    // and renders the honest `S–` / unscored ✓ — the grade thresholds are untouched.
-    var sScored=false; try{ sScored=(typeof spxwScored==='function')?spxwScored():false; }catch(eSs){ sScored=false; }
-    if(s===true && sScored) score+=1;
-    out.inputs.conf={ q:!!q, v:!!v, s:s, sScored:sScored, holdDir:hd };
+    // S is DISPLAY-ONLY confluence (not scored) — SPXW comes from the header momentum,
+    // not a full wall map, so it does not move the grade thresholds (test_node_grade stays valid).
+    out.inputs.conf={ q:!!q, v:!!v, s:s, holdDir:hd };
     out.score=score;
-    out.grade=nodeGradeOfScore(score);          // (v10.54) the NODE scale, not the direction's
-    // (v10.53 B) a PROMOTED kill condition caps the node grade at C and says which one.
-    try{
-      var pathK=null;
-      try{ var fr=tradeFrame(sym, L, hd); pathK=fr?fr.path:null; }catch(eF){}
-      var kk=(typeof killCheck==='function')?killCheck('node', { tap:tap, pol:pol, path:pathK }):null;
-      if(kk){ out.kill=kk; out.grade='C'; }
-    }catch(eK){}
+    out.grade=gradeOfScore(score);
     out.disp=gradeDisp(out.grade, score);
     out.tier=ruleTier('node.grade.'+out.grade);
   }catch(e){}
@@ -9143,7 +7439,7 @@ var DECISION_MATRIX={
 };
 function decisionCell(sym){
   sym=sym||'SPY';
-  var out={ cell:'C×C', text:DECISION_MATRIX.C.C, dirGrade:'C', nodeGrade:'C', tier:'⚖', k:null, kill:null };
+  var out={ cell:'C×C', text:DECISION_MATRIX.C.C, dirGrade:'C', nodeGrade:'C', tier:'⚖', k:null };
   try{
     var d=directionGrade(sym);
     var L=inPlayZone(sym);
@@ -9151,18 +7447,9 @@ function decisionCell(sym){
     out.dirGrade=d.grade; out.nodeGrade=n.grade; out.k=(L&&L.k!=null)?L.k:null;
     out.cell=d.grade+'×'+n.grade;
     out.text=(DECISION_MATRIX[d.grade]&&DECISION_MATRIX[d.grade][n.grade])||DECISION_MATRIX.C.C;
-    // (v10.54, audit 1) a cell may RE-WORD ITSELF only on LOCAL evidence: it must have
-    // been promoted by this panel AND carry effN >= RULE_UNLOCK_N here. A rate typed
-    // into a fetched rules.json can no longer rewrite what the panel says.
-    var rid='decision.'+out.cell;
-    if(rulePromoted(rid)){
-      var lr=ruleLocalRate(rid);
-      if(lr.rate!=null && lr.rate<45 && !/skip|stand aside|wait/.test(out.text))
-        out.text='skip (measured '+lr.rate+'% · '+nTxt(lr.n)+')';
-    }
-    // (v10.53 B) a promoted kill condition names itself on the decision line, descriptively.
-    var kk=(d&&d.kill)||(n&&n.kill)||null;
-    if(kk){ out.kill=kk; out.text=out.text+' ('+kk.reason+')'; }
+    // a rule that measured badly may RE-WORD its own cell (learning layer S4)
+    var r=ruleGet('decision.'+out.cell);
+    if(r && r.promoted && typeof r.rate==='number' && r.rate<45 && !/skip|stand aside|wait/.test(out.text)) out.text='skip (measured '+r.rate+'%)';
     out.tier=ruleTier('decision.'+out.cell);
   }catch(e){}
   return out;
@@ -9223,32 +7510,16 @@ function tradeFrame(sym, L, dir){
   }catch(e){}
   return out;
 }
-// ============================================================================
-// (v10.54, audit 19) R:R — THE FIRST NUMBER A TRADER LOOKS AT, AND THE PANEL DID NOT
-// COMPUTE IT. The card drew a target and an invalidation on every in-play row and never
-// said what the geometry was worth: a "take · follow-thru" cell could be offering 0.7
-// units of reward per unit of risk and read exactly like one offering 3. This is pure
-// geometry off the numbers already on the row — descriptive, like the rest of the frame.
-//   rr = |tgt − k| / |k − inval|
-// ============================================================================
-var RR_FLOOR=3;          // the frame the tool describes as worth taking
-var RR_MIN=2;            // below this the row is described as a skip and the buttons go
-function frameRR(fr){
-  try{
-    if(!fr || fr.k==null || fr.tgt==null || fr.inval==null) return null;
-    var risk=Math.abs(fr.k-fr.inval);
-    if(!(risk>0.001)) return null;
-    return +(Math.abs(fr.tgt-fr.k)/risk).toFixed(2);
-  }catch(e){ return null; }
-}
-function rrText(rr){ return (rr==null)?'':('R:R '+rr.toFixed(1)+':1'); }
 // Escape the frame text for HTML: it legitimately contains '<' and '>' (inval <772),
 // which must never be handed to innerHTML raw.
-// (v10.54, audit 25) frameTextOf / readHeadHtml / readWhyHtml / decisionLineHtml were
-// DELETED: four narrators for one read, none of them rendered since v10.50, all of them
-// still being maintained and tested as if they shipped. The live voice is read3Beat +
-// readBlock44 + the deflection-zone row 3. _escHtml stays — it is used by live renders.
 function _escHtml(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function frameTextOf(fr){
+  if(!fr || fr.k==null) return '';
+  var parts=['zone '+fmtNum(fr.k)+'±'+String(FRAME_HALF).replace(/^0/,'')];
+  if(fr.inval!=null) parts.push('inval '+((fr.dir>=0)?'<':'>')+fmtNum(fr.inval));
+  if(fr.tgt!=null)   parts.push('tgt '+fmtNum(fr.tgt)+' ('+fr.path+')');
+  return parts.join(' · ');
+}
 
 // ============================================================================
 // (F) REACTION QUALITY + DEFLECTION ANTICIPATION.
@@ -9447,14 +7718,12 @@ function zoneGradeTip(sym, L, ng){
   var sqv='S'+(c.s===true?'✓':(c.s===false?'✗':'–'))+' Q'+(c.q?'✓':'✗')+' V'+(c.v?'✓':'✗');
   return ('How good is a deflection here? '+(ng.inputs.pol==='+'?'+γ clean':(ng.inputs.pol==='-'?'−γ sharp':'γ ?'))+' '+zoneRole(L)+
     ', '+tapWord(ng.inputs.tap||0)+' tap, '+(ng.inputs.rocNow||'steady').toLowerCase()+', '+sqv+' agree. '+
-    'Node scale (v10.54, live): A≥'+NODE_WEIGHTS.gradeA+' · B≥'+NODE_WEIGHTS.gradeB+' · else C — its OWN cut points, not the direction grade\u2019s. '+
-    (ng.tier==='⚖'?'Hand-set \u2696 until this panel has promoted it AND measured eff n\u2265'+RULE_UNLOCK_N+'.':'Measured \uD83D\uDCCA on local evidence.'));
+    'A≥5 · B≥3 · else C. '+(ng.tier==='⚖'?'Hand-set until n≥20 measured.':'Measured.'));
 }
 function zoneConfHtml(conf){
   var s=conf?conf.s:null, q=conf?!!conf.q:false, v=conf?!!conf.v:false;
-  var sc=conf?!!conf.sScored:false;
-  var S='S'+(s===true?'✓':(s===false?'✗':'–'))+((s!==null&&sc)?'':(s!==null?'·':'')), Q='Q'+(q?'✓':'✗'), V='V'+(v?'✓':'✗');
-  return '<span title="Does everything agree? SPXW · QQQ · VEX-drift. S– = no SPXW captured at all. S✓· = SPXW agrees on header momentum only (display, unscored). S✓ = an SPXW strike LADDER agrees, and that one is scored like Q." style="color:'+PAL.blue+'">'+S+' '+Q+' '+V+'</span>';
+  var S='S'+(s===true?'✓':(s===false?'✗':'–')), Q='Q'+(q?'✓':'✗'), V='V'+(v?'✓':'✗');
+  return '<span title="Does everything agree? SPXW · QQQ · VEX-drift. S– = no SPXW header captured." style="color:'+PAL.blue+'">'+S+' '+Q+' '+V+'</span>';
 }
 function deflZonesBlock(sym){
   sym=sym||'SPY';
@@ -9463,13 +7732,7 @@ function deflZonesBlock(sym){
   var px=m.px; if(px==null) return '';
   var sp=spineOf(sym);
   var inPlay=sp.inPlay||null;
-  var inContact=!!sp.inContact;
   var dirNum=(sp.dir&&sp.dir.dir==='UP')?1:((sp.dir&&sp.dir.dir==='DN')?-1:0);
-  // (v10.55) the leg engine marks the rows: which one is the PULLBACK NODE (with its
-  // roll step), which one is the MAGNET the deflection targets, and which ones the roll
-  // has left behind (dimmed — a rolled-off level has lost its target status).
-  var legR=(sp&&sp.leg)||null;
-  if(!legR){ try{ legR=legEngine(sym); }catch(eLg){ legR=null; } }
   var html='', rows=0;
   // EXCEPTION flag (replaces the range chip): shown ONLY when price is OUTSIDE Flr..Ceil.
   var outFlag='';
@@ -9502,44 +7765,20 @@ function deflZonesBlock(sym){
     var tgtAir=(fr.path==='air'), invalAir=false;
     try{ var ap=m.airpocket; if(ap&&ap.pockets && fr.inval!=null){ var lo=Math.min(L.k,fr.inval), hi=Math.max(L.k,fr.inval);
       ap.pockets.forEach(function(p){ if(p.lo<hi+0.01 && p.hi>lo-0.01) invalAir=true; }); } }catch(eAp){}
-    var frTxt='entry '+fmtLvl(L.k);
-    if(fr.tgt!=null) frTxt+=' · tgt '+fmtLvl(fr.tgt)+(tgtAir?'(air)':'');
-    if(fr.inval!=null) frTxt+=' · inval '+((fr.dir>=0)?'&lt;':'&gt;')+fmtLvl(fr.inval)+(invalAir?'(air)':'');
+    var frTxt='entry '+fmtNum(L.k);
+    if(fr.tgt!=null) frTxt+=' · tgt '+fmtNum(fr.tgt)+(tgtAir?'(air)':'');
+    if(fr.inval!=null) frTxt+=' · inval '+((fr.dir>=0)?'&lt;':'&gt;')+fmtNum(fr.inval)+(invalAir?'(air)':'');
     var dc=sp.decision||decisionCell(sym);
     var cellTxt=dc?dc.text:'';
-    // ---- (v10.54, audit 19/20) R:R + CONTACT gate the whole row ----
-    var rr=frameRR(fr);
-    var thin=(rr!=null && rr<RR_MIN);
-    if(rr!=null) frTxt+=' · '+rrText(rr);
-    if(!inContact){
-      // NOT IN CONTACT: no frame, no decision, no buttons. The card names the level it
-      // is watching and stops there — geometry, not an engagement.
-      cellTxt='watching — not in contact';
-      frTxt='nearest zone '+fmtLvl(L.k)+' · '+fmtSpan(Math.abs(px-L.k))+' away (contact = within '+fmtSpan(inPlayBand())+')';
-    } else if(thin){
-      // BELOW 2:1 the geometry itself is the finding, and it is said in the decision text.
-      cellTxt='skip · '+rrText(rr)+' (below the '+RR_FLOOR+':1 floor)';
-    }
-    // (v10.55) AT A PULLBACK NODE the frame is said in the user's own words. It rides
-    // BEHIND the matrix label and the R:R gate: no contact or a thin frame and it is
-    // not shown at all, exactly like the rest of the row.
-    var legLine=''; try{ legLine=(inContact && !thin) ? legDecisionLine(legR, L) : ''; }catch(eLd){ legLine=''; }
-    if(legLine) frTxt=legLine+' · '+frTxt;
-    // BUTTONS ARE GATED ON THE DECISION CELL, not on the node grade: a C×A bar could
-    // grade the node B and still read "scalp only", and the buttons appeared anyway.
-    var gateOK = inContact && !thin && !/stand aside|skip|wait|watching/.test(cellTxt);
+    var gateOK=(ng.grade==='A'||ng.grade==='B') && !/stand aside/.test(cellTxt);
     var btns = gateOK ? '<span style="margin-left:auto">'+actButtonsHtml(sym,L.k)+'</span>' : '';
-    var frameTip=('Where does the trade live, and what is it worth? entry = the node; tgt = next node in the direction '+
-      '(air = fast, thin exposure); inval = where this read stops being true; R:R = |tgt−entry| / |entry−inval|, '+
-      'pure geometry off those two numbers. Below '+RR_MIN+':1 the row is described as a skip and the take/pass '+
-      'buttons are hidden — the frame is not worth its own risk. '+RR_FLOOR+':1 is the floor this tool describes as worth taking.').replace(/"/g,'');
-    html+='<div style="background:'+(inContact?'rgba(63,185,80,.05)':'rgba(139,152,169,.05)')+';border-left:2px solid '+(inContact?PAL.longAccent:PAL.line)+';border-radius:2px;padding:3px 4px 4px 6px;margin-bottom:2px">'+
+    var frameTip=('Where does the trade live? entry = the node; tgt = next node in the direction (air = fast, thin exposure); inval = where this read stops being true.').replace(/"/g,'');
+    html+='<div style="background:rgba(63,185,80,.05);border-left:2px solid '+PAL.longAccent+';border-radius:2px;padding:3px 4px 4px 6px;margin-bottom:2px">'+
       // r1
       '<div style="display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap;overflow:hidden">'+
         '<span style="color:'+pcol+'">●</span>'+
-        '<span style="font-weight:800;color:'+(L.isKing?PAL.gold:PAL.ink)+'">'+fmtLvl(L.k)+'</span>'+
+        '<span style="font-weight:800;color:'+(L.isKing?PAL.gold:PAL.ink)+'">'+fmtNum(L.k)+'</span>'+
         '<span style="color:'+(L.isKing?PAL.gold:PAL.sub)+';font-weight:700">'+zoneRole(L)+'</span>'+
-        legZoneTagHtml(legR, L)+
         '<span style="font-size:9.5px;color:'+PAL.sub+'">'+(pct!=null?(pct+'% · '):'')+zoneGGlyph(L)+' · <span style="color:'+tapCol(tap)+'">'+tapWord(tap)+'</span>'+rxHtml+'</span>'+
         (setupChip?('<span style="display:inline-flex;gap:3px">'+setupChip+'</span>'):'')+
         zoneGradePill(ng, gradeTip)+
@@ -9552,7 +7791,7 @@ function deflZonesBlock(sym){
       '</div>'+
       // r3 (decision folded in)
       '<div style="display:flex;align-items:center;gap:6px;font-size:9.5px;margin-top:3px;white-space:nowrap;overflow:hidden">'+
-        '<span title="'+(dc?('What is this setup? '+(inContact?(dc.cell+' → '+cellTxt):('nothing is in contact — the nearest zone is '+fmtNum(L.k)+', '+fmtNum(Math.abs(px-L.k))+' away'))+'. Descriptive characterisation, never an instruction.').replace(/"/g,''):'')+'" style="color:'+(inContact?PAL.ink:PAL.sub)+';font-weight:600">'+cellTxt+'</span>'+
+        '<span title="'+(dc?('What is this setup? '+dc.cell+' → '+cellTxt+'. Descriptive characterisation, never an instruction.').replace(/"/g,''):'')+'" style="color:'+PAL.ink+';font-weight:600">'+cellTxt+'</span>'+
         '<span title="'+frameTip+'" style="color:'+PAL.sub+'">· '+frTxt+'</span>'+
         btns+
       '</div>'+
@@ -9571,8 +7810,7 @@ function deflZonesBlock(sym){
   });
   var pick=others.slice(0,DEFLZONES_N);
   pick.sort(function(a,b){ return b.k-a.k; });   // price ladder, highest first
-  var divLab=dispIsFut()?FUTMODE.chart:sym;
-  var divHtml='<div title="Current '+divLab+' price." style="text-align:center;color:'+PAL.sub+';font-size:9px;margin:3px 0;letter-spacing:.5px">— '+divLab+' '+fmtLvl(px)+' —</div>';
+  var divHtml='<div title="Current SPY price." style="text-align:center;color:'+PAL.sub+';font-size:9px;margin:3px 0;letter-spacing:.5px">— SPY '+fmtNum(px)+' —</div>';
   var printedDiv=false;
   pick.forEach(function(L){
     if(!printedDiv && L.k<=px){ html+=divHtml; printedDiv=true; }
@@ -9581,13 +7819,11 @@ function deflZonesBlock(sym){
     var pct=feedPctAt(sym,L.k);
     var pcol=zonePolCol(L);
     var tap=(typeof L.taps==='number')?L.taps:0;
-    var lt=legZoneTag(legR, L);
-    html+='<div style="padding:3px 2px;border-bottom:1px solid #12161c'+((lt&&lt.dim)?';opacity:.55':'')+'">'+
+    html+='<div style="padding:3px 2px;border-bottom:1px solid #12161c">'+
       '<div style="display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap;overflow:hidden">'+
         '<span style="color:'+pcol+'">◦</span>'+
-        '<span style="font-weight:800;color:'+(L.isKing?PAL.gold:PAL.ink)+'">'+fmtLvl(L.k)+'</span>'+
+        '<span style="font-weight:800;color:'+(L.isKing?PAL.gold:PAL.ink)+'">'+fmtNum(L.k)+'</span>'+
         '<span style="color:'+(L.isKing?PAL.gold:PAL.sub)+';font-weight:700">'+zoneRole(L)+'</span>'+
-        legZoneTagHtml(legR, L)+
         '<span style="font-size:9.5px;color:'+PAL.sub+'">'+(pct!=null?(pct+'% · '):'')+zoneGGlyph(L)+' · <span style="color:'+tapCol(tap)+'">'+tapWord(tap)+'</span></span>'+
         (activityPillHtml(sym,L)?('<span style="margin-left:6px">'+activityPillHtml(sym,L)+'</span>'):'')+
         zoneGradePill(ng, zoneGradeTip(sym,L,ng))+
@@ -9600,15 +7836,124 @@ function deflZonesBlock(sym){
 }
 
 // ============================================================================
-// (v10.54, audit 25) THE DEAD NARRATORS ARE GONE.
-// readHeadHtml / readWhyHtml / decisionLineHtml / frameTextOf were four separate
-// voices for one read. None of them has been rendered since the v10.50 single-voice
-// redesign, yet all four were still maintained, still carried their own doctrine (and
-// their own hardcoded "A \u22655, B \u22653" text, already wrong), and were still pinned by
-// tests \u2014 so the test suite was guarding output no user could see while the LIVE
-// render went unasserted. The live voice is read3Beat + readBlock44 + the deflection
-// zone row 3, and those are what the tests pin now.
+// (G) READ — head (two grades) + why + decision line. The READ is the ONLY narrator.
 // ============================================================================
+function readHeadHtml(sym){
+  sym=sym||'SPY';
+  var sp=spineOf(sym);
+  var d=sp.dir; if(!d) return '';
+  var n=sp.node;
+  var arrow = d.dir==='UP'?'↑':(d.dir==='DN'?'↓':'→');
+  var dcol  = d.dir==='UP'?PAL.longAccent:(d.dir==='DN'?PAL.shortAccent:PAL.sub);
+  function gr(g, disp){
+    var col = g==='A'?PAL.longAccent:(g==='B'?PAL.blue:PAL.amber);
+    var bg  = g==='A'?'rgba(46,194,126,.15)':(g==='B'?'rgba(74,144,217,.15)':'rgba(242,180,90,.15)');
+    return '<span style="padding:0 5px;border-radius:3px;font-size:10px;font-weight:800;color:'+col+';background:'+bg+'">'+(disp||g)+'</span>';
+  }
+  var dTip=('Which way, and how sure? SMA-50 sets the trend (15/20 closes); GEX/VEX drift confirms it or diverges from it. '+
+    'Trend UP + drift UP = confirmed. Trend UP + drift DOWN = divergence, caution. No trend = drift gives a tentative lean, never better than C. '+
+    'Now: trend '+(d.trendState||'?')+' · drift '+(d.inputs.drift?d.inputs.drift.verdict:'?')+' → '+(d.relation||'?')+' → '+d.dir+' '+d.grade+
+    '. Score '+d.score+' (A ≥5, B ≥3, else C)'+(d.capped?('; HARD-CAPPED to C by '+d.capped):'')+
+    '. Nothing else on the panel opines on direction — the header pills and the drift line are INPUTS.').replace(/"/g,'');
+  var nTip = n ? ('NODE '+(n.k!=null?fmtNum(n.k):'')+' grade '+n.grade+' — polarity '+(n.inputs.pol||'?')+
+    ' · '+tapWord(n.inputs.tap||0)+' tap · ROC '+(n.inputs.rocNow||'?')+
+    ' · since open '+((n.inputs.rocDay&&n.inputs.rocDay.pct!=null)?(n.inputs.rocDay.pct+'%'):'–')+
+    ' · confluence Q'+((n.inputs.conf&&n.inputs.conf.q)?'✓':'–')+' V'+((n.inputs.conf&&n.inputs.conf.v)?'✓':'–')+
+    '. Score '+n.score+' (A ≥5, B ≥3, else C).').replace(/"/g,'') : 'No node is in contact right now.';
+  var sb=sessionBucket();
+  var sTip=('Session bucket: '+sb.bucket+(sb.opex?' · OPEX (3rd Friday)':'')+
+    '. The same structure does not mean the same thing at 08:35 and 14:45 — the bucket is recorded on every feature record and '+
+    (sb.capOdds?'currently SUPPRESSES the odds sentence.':'does not suppress the odds sentence right now.')).replace(/"/g,'');
+  var sBadge='<span title="'+sTip+'" style="font-size:8px;font-weight:700;color:'+PAL.sub+';border:1px solid '+PAL.line+';border-radius:8px;padding:0 4px">'+(SESSION_ABBR[sb.bucket]||sb.bucket)+(sb.opex?' opex':'')+'</span>';
+  var heat=modelHeat(sym);
+  var hBadge='';
+  if(heat.state==='cold'||heat.state==='warm'){
+    var hc=(heat.state==='cold')?PAL.shortAccent:PAL.longAccent;
+    hBadge='<span title="Model confidence meta: the last '+heat.n+' resolved direction/node grades were '+heat.rate+'% right. Below 40% = cold, above 60% = warm. This is the tool grading ITSELF on the current tape — descriptive, never a forecast." style="font-size:8px;font-weight:700;color:'+hc+';opacity:.85;border:1px solid '+hc+';border-radius:8px;padding:0 4px">model '+heat.state+'</span>';
+  }
+  return '<div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:800;margin:5px 2px 2px;white-space:nowrap;overflow:hidden">'+
+    '<span title="'+dTip+'" style="color:'+dcol+'">'+arrow+' '+d.dir+'</span>'+
+    '<span title="'+dTip+'">'+gr(d.grade, d.disp)+'</span>'+
+    '<span style="color:'+PAL.line+'">·</span>'+
+    (n && n.k!=null ? ('<span title="'+nTip+'">Node '+fmtNum(n.k)+'</span><span title="'+nTip+'">'+gr(n.grade,n.disp)+'</span>')
+                    : '<span title="'+nTip+'" style="color:'+PAL.sub+';font-weight:600">no node in contact</span>')+
+    '<span title="⚖ = hand-set (the grade is a hypothesis). 📊 = measured on n≥20 recorded outcomes. The panel never asserts an unearned probability." style="color:'+PAL.sub+';font-size:9px;font-weight:600">'+((n&&n.tier)||d.tier)+'</span>'+
+    sBadge+hBadge+
+  '</div>';
+}
+// The mockup's `.read` line: WHY each grade is what it is, in one sentence each.
+function readWhyHtml(sym){
+  sym=sym||'SPY';
+  var sp=spineOf(sym);
+  var d=sp.dir; if(!d) return '';
+  var n=sp.node, L=sp.inPlay;
+  var B=function(t){ return '<b style="color:'+PAL.ink+'">'+t+'</b>'; };
+  var why=[];
+  // (v10.51) the TREND leads the clause list — it is what actually sets the direction.
+  var tw={ 'up':'uptrend confirmed', 'dn':'downtrend confirmed', 'up-broken':'uptrend broken',
+           'dn-broken':'downtrend broken', 'flat':'no trend', 'na':'trend unknown' }[d.trendState||'na'];
+  why.push(tw||'trend unknown');
+  var dr=d.inputs.drift||{};
+  if(d.relation==='confirmed') why.push('drift confirms it');
+  else if(d.relation==='divergence') why.push('drift DIVERGES — lower confidence');
+  else if(d.relation==='tentative') why.push((dr.dir?'drift gives a tentative lean only':'no lean to fall back on'));
+  else if(dr.verdict==='SPLIT') why.push('GEX and VEX split');
+  else why.push('no VEX drift yet');
+  var sa=d.inputs.structAsym||{};
+  if(sa.bias==='support-heavy') why.push('structure heavier below');
+  else if(sa.bias==='resistance-heavy') why.push('structure heavier above');
+  else why.push('structure balanced');
+  var rgt=(d.inputs.regime&&d.inputs.regime.tag)||null;
+  if(rgt==='trend') why.push('regime trending');
+  var rp=d.inputs.rangePos||{};
+  var capTxt='';
+  if(rp.zone==='mid' && rp.lo!=null) capTxt=' — but '+B('mid-range')+' '+fmtNum(rp.lo)+'–'+fmtNum(rp.hi)+' caps it';
+  else if(rgt==='chop') capTxt=' — but '+B('chop')+' caps it';
+  var s1='Direction '+B(d.disp)+': '+why.join(', ')+capTxt+'.';
+  var s2='';
+  if(n && L){
+    var nw=[];
+    nw.push((n.inputs.pol==='+'?'clean +γ':(n.inputs.pol==='-'?'sharp −γ':'unknown polarity'))+' '+zoneRole(L));
+    nw.push(tapWord(n.inputs.tap||0)+' tap');
+    var rd=n.inputs.rocDay||{};
+    if(rd.label==='Acm') nw.push('building since open');
+    else if(rd.label==='Dec') nw.push('bleeding since open');
+    else nw.push(n.inputs.rocNow==='Building'?'building now':(n.inputs.rocNow==='Fading'?'fading now':'steady'));
+    if(n.inputs.conf && n.inputs.conf.q) nw.push('QQQ agrees');
+    if(n.inputs.conf && n.inputs.conf.v) nw.push('VEX agrees');
+    s2=' Node '+B(n.disp)+': '+nw.join(', ')+'.';
+  }
+  var tip=('The WHY behind both grades, one clause per input. Direction inputs: drift · structure · range position · regime. '+
+    'Node inputs: polarity · tap freshness · ROC (now + since open) · confluence. Descriptive: it explains the grade, it does not forecast.').replace(/"/g,'');
+  return '<div title="'+tip+'" style="font-size:10px;line-height:1.4;color:'+PAL.sub+';margin:0 2px 3px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">'+s1+s2+'</div>';
+}
+// The DECISION line = the matrix cell + the frame. This is the ONLY place an action
+// word appears anywhere in the tool, and even here it characterises the SETUP.
+function decisionLineHtml(sym){
+  sym=sym||'SPY';
+  var sp=spineOf(sym);
+  var dc=sp.decision; if(!dc) return '';
+  var L=sp.inPlay;
+  var dirNum=(sp.dir&&sp.dir.dir==='UP')?1:((sp.dir&&sp.dir.dir==='DN')?-1:0);
+  var frTxt='';
+  if(L){ var fr=tradeFrame(sym,L,dirNum||nodeHoldDir(L, (STATE[sym]||{}).price));
+         var bits=[]; if(fr.tgt!=null) bits.push('tgt '+fmtNum(fr.tgt)); if(fr.inval!=null) bits.push('inval '+((fr.dir>=0)?'&lt;':'&gt;')+fmtNum(fr.inval));
+         frTxt=bits.join(' · '); }
+  var odds='';
+  try{
+    if(!(sp.dir&&sp.dir.noOdds)){
+      var rid='decision.'+dc.cell;
+      if(rulePromoted(rid)){ var r=ruleGet(rid); if(r && typeof r.rate==='number') odds=' <span style="color:'+PAL.sub+'">'+r.rate+'% n'+r.n+' 📊</span>'; }
+    }
+  }catch(eO){}
+  var tip=('DECISION = the Direction grade × the in-play Node grade, read off the 3×3 matrix. Cell '+dc.cell+' → “'+dc.text+'”. '+
+    'These labels characterise the SETUP QUALITY; they are not instructions and carry no entry, stop or size. Each cell keeps its own '+
+    'scorecard in the Analysis tab and can be RE-WORDED by its measured rate. '+dc.tier+(dc.tier==='⚖'?' = hand-set until n≥20.':' = measured.')).replace(/"/g,'');
+  return '<div title="'+tip+'" style="font-size:10px;line-height:1.35;color:'+PAL.ink+';background:rgba(74,144,217,.07);border-left:2px solid '+PAL.blue+';padding:2px 6px;border-radius:2px;margin:2px 2px 5px">'+
+    '<b style="color:#79c0ff">Decision</b> <span style="color:'+PAL.sub+'">'+dc.cell+'</span> · <b>'+dc.text+'</b>'+
+    (frTxt?(' <span style="color:'+PAL.sub+'">· '+frTxt+'</span>'):'')+odds+
+  '</div>';
+}
 // (G) Odds gate: an odds sentence may only appear when the regime, the session and
 // the rule tier all permit it. Anything else would be an unearned probability.
 function readOddsAllowed(sym){
@@ -9655,12 +8000,6 @@ function briefLine(sym){
   try{ var y=briefYesterday(sym);
        if(y.dirA) parts.push('yday: dir A '+y.dirA+' hit');
        else if(y.date) parts.push('yday: no resolved A grades'); }catch(e4){}
-  // (v10.52 D) ONE line from the nightly review, if it came back (auto read-back or
-  // console load). Cited, not summarised, and never a forecast — it is last session's
-  // finding, quoted as-is.
-  try{ var RV=(typeof ANALYSIS_REVIEW!=='undefined')?ANALYSIS_REVIEW:null;
-       var rl=RV?pipeReviewLine(RV):null;
-       if(rl) parts.push('review: '+rl); }catch(e5){}
   return 'Brief · '+parts.join(' · ');
 }
 function briefBlockHtml(sym){
@@ -9704,33 +8043,13 @@ function _trend5Vote(state){
   if(state==='dn' || state==='dn-broken') return -1;
   return 0;
 }
-// (v10.54, audit 3) THE FRAME, ON THE RECORD. The tgt / inval a card rendered has to be
-// stored on the bar that rendered it, or the frame outcome is unscoreable after the
-// fact. Returns the same numbers row 3 shows, plus the R:R the trader was offered.
-function _frameRecOf(sym, ctx){
-  var out={ k:null, tgt:null, inval:null, path:null, rr:null, frameDir:0 };
-  try{
-    var L=(ctx&&ctx.spine&&ctx.spine.inPlay)||inPlayZone(sym);
-    if(!L || L.k==null) return out;
-    var px=(ctx&&ctx.px!=null)?ctx.px:((STATE[sym]||{}).price);
-    var d=(ctx&&ctx.spine&&ctx.spine.dir)||null;
-    var dirNum=d?(d.dir==='UP'?1:(d.dir==='DN'?-1:0)):0;
-    var fr=tradeFrame(sym, L, dirNum||nodeHoldDir(L, px));
-    out.k=L.k; out.tgt=(fr&&fr.tgt!=null)?fr.tgt:null; out.inval=(fr&&fr.inval!=null)?fr.inval:null;
-    out.path=fr?fr.path:null; out.frameDir=fr?fr.dir:0;
-    out.rr=frameRR(fr);
-  }catch(e){}
-  return out;
-}
 function registerCoreFeatures(){
   if(FEATURES.length) return FEATURES;
 
   registerFeature({ key:'dir', label:'Direction grade', phase:'dashboard', fwd:FEAT_FWD,
     record:function(sym, ctx){
       var d=(ctx&&ctx.spine&&ctx.spine.dir)||directionGrade(sym);
-      var fr=_frameRecOf(sym, ctx);
-      return { k:fr.k, tgt:fr.tgt, inval:fr.inval, rr:fr.rr, path:fr.path,
-               grade:d.grade, verdict:d.dir, score:d.score, tier:d.tier, capped:d.capped||null,
+      return { grade:d.grade, verdict:d.dir, score:d.score, tier:d.tier, capped:d.capped||null,
                trendState:d.trendState||null, relation:d.relation||null, tentative:!!d.tentative,
                drift:(d.inputs.drift&&d.inputs.drift.verdict)||null,
                structAsym:(d.inputs.structAsym&&d.inputs.structAsym.bias)||null,
@@ -9783,9 +8102,7 @@ function registerCoreFeatures(){
                      inPlay:!!(inPlay && Math.abs(L.k-inPlay.k)<0.001) });
       });
       var ip=(ctx&&ctx.spine&&ctx.spine.node)||(inPlay?nodeGrade(sym,inPlay):null);
-      var nfr=_frameRecOf(sym, ctx);
       return { zones:zones,
-               tgt:nfr.tgt, inval:nfr.inval, rr:nfr.rr, path:nfr.path,
                k:(inPlay&&inPlay.k!=null)?inPlay.k:null,
                grade:ip?ip.grade:null, score:ip?ip.score:null,
                pol:ip?ip.inputs.pol:null, tap:ip?ip.inputs.tap:null,
@@ -9811,31 +8128,15 @@ function registerCoreFeatures(){
     record:function(sym, ctx){
       var dc=(ctx&&ctx.spine&&ctx.spine.decision)||decisionCell(sym);
       var d=(ctx&&ctx.spine&&ctx.spine.dir)||directionGrade(sym);
-      var dfr=_frameRecOf(sym, ctx);
       return { cell:dc.cell, text:dc.text, dirGrade:dc.dirGrade, nodeGrade:dc.nodeGrade,
-               verdict:d.dir, k:dc.k, tier:dc.tier,
-               tgt:dfr.tgt, inval:dfr.inval, rr:dfr.rr, path:dfr.path,
-               take:/^take|bounce play|scalp/.test(dc.text||'') && !/skip|stand aside|wait/.test(dc.text||'') };
+               verdict:d.dir, k:dc.k, tier:dc.tier };
     },
     outcome:function(rec, fwd){
       if(!rec) return { hit:null, mfe:null, mae:null };
-      // (v10.54, audit 11) A TAKE CELL AND A SKIP CELL ARE NOT THE SAME QUESTION, and
-      // scoring both as "did price move 0.5 the stated way" made them look like one.
-      // A take cell is asked the card's own question — did the FRAME work. A skip /
-      // stand-aside cell is asked whether standing aside was right: no |move| >= DIR_PTS
-      // EITHER WAY. Before, a skip cell "won" whenever price fell, which is not a claim
-      // it ever made.
       var standAside=/skip|stand aside|wait/.test(rec.text||'');
-      var h=null;
-      if(standAside){
-        h=(fwd==null)?null:((fwd.mfe<DIR_PTS && fwd.mae>-DIR_PTS)?1:0);
-      } else if(rec.tgt!=null && rec.inval!=null && fwd && fwd.frame){
-        h=(fwd.frame.first==='tgt')?1:0;                 // the frame it drew, scored
-      } else {
-        h=_fwdHitDir(fwd, rec.verdict);
-      }
-      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null, standAside:standAside,
-               scoredOn:(standAside?'no-move':((rec.tgt!=null&&rec.inval!=null&&fwd&&fwd.frame)?'frame':'drift')) };
+      var moved=_fwdHitDir(fwd, rec.verdict);
+      var h = (moved==null)?null:(standAside ? (moved?0:1) : moved);
+      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null, standAside:standAside };
     },
     questions:[ { id:'matrix_cells', when:[{f:'decisionCell',v:'B×A'}], outcome:'dirMove', note:'each cell vs its label' } ],
     rule:{ id:'decision', tier:'hand', condition:'Direction grade × in-play Node grade',
@@ -9900,16 +8201,10 @@ function registerCoreFeatures(){
   registerFeature({ key:'act', label:'Action selection', phase:'operator', fwd:FEAT_FWD,
     record:function(sym, ctx){
       var arr=actToday(sym); var last=arr.length?arr[arr.length-1]:null;
-      // (v10.54, audit 14) ONE TAP = ONE RECORD. `fresh` used a FEAT_FWD*CANDLE_MS window,
-      // so a single take was re-recorded on all ten bars of its own forward window and
-      // one decision counted as ten in the selection-quality numbers. It is recorded on
-      // the TAP BAR only — the first snapshot that closes after the tap.
-      var onTapBar = !!(last && ctx && ctx.t && (ctx.t-last.t)>=0 && (ctx.t-last.t)<CANDLE_MS);
+      var fresh = !!(last && ctx && ctx.t && (ctx.t-last.t)<=(FEAT_FWD*CANDLE_MS));
       var d=(ctx&&ctx.spine&&ctx.spine.dir)||directionGrade(sym);
-      var afr=_frameRecOf(sym, ctx);
-      return { action:onTapBar?last.action:null, k:onTapBar?last.k:null, cell:onTapBar?last.cell:null,
-               dirGrade:onTapBar?last.dirGrade:null, nodeGrade:onTapBar?last.nodeGrade:null,
-               tapT:onTapBar?last.t:null, tgt:afr.tgt, inval:afr.inval,
+      return { action:fresh?last.action:null, k:fresh?last.k:null, cell:fresh?last.cell:null,
+               dirGrade:fresh?last.dirGrade:null, nodeGrade:fresh?last.nodeGrade:null,
                verdict:d.dir, n:arr.length };
     },
     outcome:function(rec, fwd){
@@ -10013,30 +8308,16 @@ function registerCoreFeatures(){
       if(!d){ try{ d=directionGrade(sym); }catch(e){ d=null; } }
       if(!d) return { relation:null, dir:null, trendState:null, driftVerdict:null, grade:null, vote:0 };
       var dv = d.dir==='UP'?1:(d.dir==='DN'?-1:0);
-      // (v10.54, audit 12) THE RELATION MUST BE SCORED AS A LIFT, NOT A DUPLICATE.
-      // `dir.relation` used to record the same vote as `dir.trend5` and score it the same
-      // way, so on every confirmed-trend bar the two features recorded one observation
-      // twice and the "relation beats trend-only" question was structurally unanswerable.
-      // The trend's OWN vote now rides along on the record, so relation can be measured
-      // as the DIFFERENCE it makes on the bars where the two disagree.
-      var tv=0; try{ tv=_trend5Vote(d.trendState||'na'); }catch(eT){ tv=0; }
       return { relation:d.relation||null, dir:d.dir||null, trendState:d.trendState||null,
                driftVerdict:(d.inputs&&d.inputs.drift&&d.inputs.drift.verdict)||null,
-               grade:d.grade||null, tentative:!!d.tentative, vote:dv, trendVote:tv,
-               differs:(tv!==dv) };
+               grade:d.grade||null, tentative:!!d.tentative, vote:dv };
     },
     outcome:function(rec, fwd){
       // THE POINT OF THE HIERARCHY: confirmed should beat trend-only should beat
       // divergence/tentative. If it does not, the hierarchy is wrong, not the tape.
       var v=(rec&&rec.vote)||0;
-      var tv=(rec&&rec.trendVote)||0;
-      var relHit=v?_fwdHitNum(fwd, v, DIR_PTS):null;
-      var trendHit=tv?_fwdHitNum(fwd, tv, DIR_PTS):null;
-      // LIFT on this bar: +1 the relation was right where the trend alone was wrong,
-      // -1 the reverse, 0 they agree or neither can be scored.
-      var lift=(relHit==null||trendHit==null)?null:(relHit-trendHit);
-      return { hit:relHit, trendHit:trendHit, lift:lift, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
-               relation:(rec&&rec.relation)||null, vote:v, differs:!!(rec&&rec.differs) };
+      return { hit:(v?_fwdHitNum(fwd, v, DIR_PTS):null), mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
+               relation:(rec&&rec.relation)||null, vote:v };
     },
     questions:[
       { id:'rel_confirmed_vs_trendonly', when:[{f:'relation',v:'confirmed'}],  outcome:'dirMove', note:'does drift CONFIRMING a trend beat the trend alone?' },
@@ -10119,168 +8400,6 @@ function registerCoreFeatures(){
     rule:{ id:'dir.trendFast', tier:'hand', condition:'SMA 10 and 20 with the same 15/20 dominance rule, RECORDED not voted',
            mechanism:'The 50-period window is an inherited assumption; 10/20 must be measured against it before anything changes.' } });
 
-  // ---- (v10.55 PART C) THE LEG ENGINE, RECORDED. Every claim the trend/magnet/
-  // pullback model makes is written down with its outcome, so "rolling ceilings are
-  // strong presumptive evidence" stops being doctrine and becomes a measured rate.
-  registerFeature({ key:'leg.dir', label:'Leg engine · direction + phase', phase:'dashboard', fwd:FEAT_FWD,
-    record:function(sym, ctx){
-      var lg=null; try{ lg=(ctx&&ctx.spine&&ctx.spine.leg)||((typeof legEngine==='function')?legEngine(sym):null); }catch(e){}
-      var v=lg?((lg.dir==='dn')?-1:((lg.dir==='up')?1:0)):0;
-      return { dir:lg?lg.dir:'none', phase:lg?lg.phase:'none', vote:v,
-               pb:(lg&&lg.lastPB)?lg.lastPB.k:null, magnet:(lg&&lg.magnet)?lg.magnet.k:null,
-               predictedPB:!!(lg&&lg.predictedPB), voting:false };
-    },
-    outcome:function(rec, fwd){
-      var v=(rec&&rec.vote)||0;
-      return { hit:(v?_fwdHitNum(fwd, v, DIR_PTS):null), mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null, vote:v };
-    },
-    questions:[ { id:'leg_phase_dir', when:[{f:'phase',v:'RLY'}], outcome:'dirMove', note:'does the RLY leg toward the magnet actually travel, or is the phase label cosmetic?' } ],
-    rule:{ id:'leg.dir', tier:'hand', condition:'leg engine dir/phase (dir OWNED by the SMA)',
-           mechanism:'A trend in node terms is magnet → pullback node → magnet. If the phases do not separate outcomes, the model is a story.' } });
-
-  registerFeature({ key:'leg.pbPredict', label:'Leg engine · pullback-node PREDICTION', phase:'dashboard', fwd:FEAT_FWD,
-    record:function(sym, ctx){
-      var lg=null; try{ lg=(ctx&&ctx.spine&&ctx.spine.leg)||((typeof legEngine==='function')?legEngine(sym):null); }catch(e){}
-      var z=(lg&&lg.pbZone)||null;
-      return { sym:sym, t:(ctx&&ctx.t)||Date.now(), predicted:!!(lg&&lg.predictedPB),
-               dir:lg?lg.dir:'none', zoneLo:z?z.lo:null, zoneHi:z?z.hi:null,
-               edge:(lg&&lg.lastPB)?lg.lastPB.k:null, voting:false };
-    },
-    outcome:function(rec, fwd){
-      // The claim is "a pullback node will FORM in this zone" — so the outcome is
-      // whether one actually landed there inside the forward window, not price travel.
-      var h=null;
-      try{
-        if(rec && rec.predicted && rec.zoneLo!=null && rec.zoneHi!=null){
-          h=0;
-          var log=[]; try{ log=(typeof LEG_PB_LOG!=='undefined' && LEG_PB_LOG[rec.sym])||[]; }catch(e1){}
-          var t0=rec.t||0, t1=t0+mul(FEAT_FWD, CANDLE_MS);
-          log.forEach(function(e){ if(e && e.t>t0 && e.t<=t1 && e.k>=rec.zoneLo-0.001 && e.k<=rec.zoneHi+0.001) h=1; });
-        }
-      }catch(e2){ h=null; }
-      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
-    },
-    questions:[ { id:'pb_zone_forms', when:[{f:'predicted',v:true}], outcome:'pbFormed', note:'when the engine names the zone, does a pullback node actually form there within 30m?' } ],
-    rule:{ id:'leg.pbPredict', tier:'hand', condition:'RLY phase + an empty zone between price and the last pullback node',
-           mechanism:'Pullback nodes appear AFTER the move, so the only honest forecast is the ZONE — and it must be scored as one.' } });
-
-  registerFeature({ key:'leg.pbDetect', label:'Leg engine · pullback node DETECTED', phase:'zones', fwd:FEAT_FWD,
-    record:function(sym, ctx){
-      var lg=null; try{ lg=(ctx&&ctx.spine&&ctx.spine.leg)||((typeof legEngine==='function')?legEngine(sym):null); }catch(e){}
-      var pb=(lg&&lg.pbDetected)||null;
-      var dn=(lg&&lg.dir==='dn');
-      var mag=(lg&&lg.magnet)?lg.magnet.k:null;
-      return { k:pb?pb.k:null, rolledFrom:pb?pb.rolledFrom:null, step:pb?pb.step:null,
-               dir:lg?lg.dir:'none', dirNum:(lg?((lg.dir==='dn')?-1:((lg.dir==='up')?1:0)):0),
-               fresh:!!(lg&&lg.event==='pbDetected'),
-               magnet:mag, tgt:mag,
-               inval:pb?(dn?+(pb.k+0.25).toFixed(2):+(pb.k-0.25).toFixed(2)):null,
-               voting:false };
-    },
-    outcome:function(rec, fwd){
-      // Did price DEFLECT off it — the frame's target (the magnet) before the frame's
-      // invalidation (a close through the pullback node)?
-      var h=null;
-      try{
-        if(rec && rec.k!=null){
-          if(fwd && fwd.frame && fwd.frame.first) h=(fwd.frame.first==='tgt')?1:0;
-          else if(rec.dirNum) h=_fwdHitNum(fwd, rec.dirNum, DIR_PTS);
-        }
-      }catch(e){ h=null; }
-      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
-               first:(fwd&&fwd.frame)?fwd.frame.first:null, step:(rec&&rec.step)||null };
-    },
-    questions:[ { id:'pb_deflects', when:[{f:'step',v:2}], outcome:'deflHit', note:'does a pullback node that ROLLED deflect better than the first one of a leg?' } ],
-    rule:{ id:'leg.pbDetect', tier:'hand', condition:'a meaningful node APPEARS or GROWS in the pullback zone after a leg',
-           mechanism:'The pullback node is the level the user actually trades from; its deflection rate is the whole claim.' } });
-
-  registerFeature({ key:'leg.roll', label:'Leg engine · rolling pullback nodes', phase:'structure', fwd:FEAT_FWD,
-    record:function(sym, ctx){
-      var lg=null; try{ lg=(ctx&&ctx.spine&&ctx.spine.leg)||((typeof legEngine==='function')?legEngine(sym):null); }catch(e){}
-      var r=(lg&&lg.roll)||{ count:0, side:null, confirmed:false, signal:false, weakening:false, steps:[] };
-      var dirNum=lg?((lg.dir==='dn')?-1:((lg.dir==='up')?1:0)):0;
-      var sig=2; try{ if(typeof LEG_ROLL_SIGNAL==='number') sig=LEG_ROLL_SIGNAL; }catch(e0){}
-      var v=(r.count>=sig && !r.weakening)?dirNum:0;
-      var sr=null; try{ sr=(typeof sessionRoll==='function')?sessionRoll(sym):null; }catch(e2){}
-      return { count:r.count||0, side:r.side||null, steps:(r.steps||[]).slice(-4),
-               signal:!!r.signal, confirmed:!!r.confirmed, weakening:!!r.weakening,
-               dir:lg?lg.dir:'none', vote:v, voting:true,
-               session:{ sessions:sr?sr.sessions:0, ready:!!(sr&&sr.ready), vote:sr?sr.vote:0,
-                         flr:sr?sr.flr.count:0, ceil:sr?sr.ceil.count:0 } };
-    },
-    outcome:function(rec, fwd){
-      var v=(rec&&rec.vote)||0;
-      return { hit:(v?_fwdHitNum(fwd, v, DIR_PTS):null), mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null, vote:v };
-    },
-    questions:[ { id:'roll_continues', when:[{f:'count',v:3}], outcome:'contHit', note:'after a 2nd / 3rd rolling step, does the trend actually continue DIR_PTS?' } ],
-    rule:{ id:'leg.roll', tier:'hand', condition:'2 consecutive pullback nodes rolling with the trend = signal, 3 = confirmed',
-           mechanism:'Academy doctrine says a rolling ceiling is strong presumptive evidence. This is the local test of that claim.' } });
-
-  registerFeature({ key:'leg.magnet', label:'Leg engine · magnet', phase:'structure', fwd:FEAT_FWD,
-    record:function(sym, ctx){
-      var lg=null; try{ lg=(ctx&&ctx.spine&&ctx.spine.leg)||((typeof legEngine==='function')?legEngine(sym):null); }catch(e){}
-      var px=(ctx&&ctx.px!=null)?ctx.px:((STATE[sym]||{}).price);
-      var mk=(lg&&lg.magnet)?lg.magnet.k:null;
-      return { k:mk, pct:(lg&&lg.magnet)?lg.magnet.pct:null, isKing:!!(lg&&lg.magnet&&lg.magnet.isKing),
-               dir:lg?lg.dir:'none', dirNum:(lg?((lg.dir==='dn')?-1:((lg.dir==='up')?1:0)):0),
-               dist:(mk!=null && px!=null)?+Math.abs(mk-px).toFixed(2):null, voting:false };
-    },
-    outcome:function(rec, fwd){
-      var h=null;
-      try{
-        if(rec && rec.dist!=null && rec.dirNum && fwd){
-          h=(rec.dirNum>0 ? (fwd.mfe>=rec.dist) : (fwd.mae<=-rec.dist)) ? 1 : 0;
-        }
-      }catch(e){ h=null; }
-      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null, dist:(rec&&rec.dist)||null };
-    },
-    questions:[ { id:'magnet_reached', when:[{f:'isKing',v:true}], outcome:'tgtHit', note:'is the King-capped magnet reached more often than a non-King one?' } ],
-    rule:{ id:'leg.magnet', tier:'hand', condition:'strongest meaningful node in the trend direction, capped at the King',
-           mechanism:'"Price rallies down to the magnet" is a testable claim: either it gets there inside the window or it does not.' } });
-
-  // ---- (v10.55 PART F) CONTEXT PREDICTORS — recorded, never voted. These are the
-  // columns a model needs and the panel never wrote down.
-  registerFeature({ key:'predictors', label:'Context predictors (recorded, never voted)', phase:'structure', fwd:FEAT_FWD,
-    record:function(sym, ctx){
-      var out={ timeToClose:null, barOfDay:null, distToKing:null, distToMagnet:null,
-                pbActive:false, rollCount:0, sessionRangePos:null, dayNet:null,
-                pdc:null, pdcRel:null, event:null, voting:false };
-      try{
-        var px=(ctx&&ctx.px!=null)?ctx.px:((STATE[sym]||{}).price);
-        var mins=null; try{ mins=ctMinutesSinceMidnight(); }catch(e1){}
-        if(mins!=null) out.timeToClose=Math.round(mul(15,60)-mins);
-        var cs=[]; try{ cs=closedCandles(sym)||[]; }catch(e2){ cs=[]; }
-        out.barOfDay=(ctx&&ctx.n!=null)?ctx.n:cs.length;
-        var m=(ctx&&ctx.m)||null; if(!m){ try{ m=nodeMapModel(sym); }catch(e3){} }
-        if(m && m.kingK!=null && px!=null) out.distToKing=+(px-m.kingK).toFixed(2);
-        var lg=null; try{ lg=(ctx&&ctx.spine&&ctx.spine.leg)||((typeof legEngine==='function')?legEngine(sym):null); }catch(e4){}
-        if(lg){ out.pbActive=!!lg.pbDetected; out.rollCount=(lg.roll&&lg.roll.count)||0;
-                if(lg.magnet && px!=null) out.distToMagnet=+(px-lg.magnet.k).toFixed(2); }
-        if(cs.length && px!=null){
-          var hi=-Infinity, lo=Infinity, first=cs[0];
-          cs.forEach(function(b){ if(b.h!=null && b.h>hi) hi=b.h; if(b.l!=null && b.l<lo) lo=b.l; });
-          if(isFinite(hi) && isFinite(lo) && hi>lo) out.sessionRangePos=+((px-lo)/(hi-lo)).toFixed(3);
-          if(first && first.o!=null) out.dayNet=+(px-first.o).toFixed(2);
-        }
-        var S=STATE[sym]||{};
-        var pdc=null;
-        try{
-          var cc=S.contCloses||[];
-          for(var i=cc.length-1;i>=0;i--){ if(cc[i] && cc[i].day && cc[i].day!==TODAY){ pdc=cc[i].c; break; } }
-        }catch(e5){}
-        if(pdc!=null){ out.pdc=+pdc.toFixed(2); if(px!=null) out.pdcRel=(px>pdc)?'above':((px<pdc)?'below':'at'); }
-        try{ out.event=eventTagLabel(); }catch(e6){ out.event=null; }
-      }catch(e){}
-      return out;
-    },
-    outcome:function(rec, fwd){
-      // Deliberately UNSCORED: these are inputs for a model, not claims of their own.
-      return { hit:null, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
-    },
-    questions:[ { id:'ctx_timeofday', when:[{f:'session',v:'power'}], outcome:'dirMove', note:'which context columns separate outcomes once a model can read them?' } ],
-    rule:{ id:'predictors', tier:'hand', condition:'time-to-close, bar of day, distances, session range position, PDC relation, event tag',
-           mechanism:'A model cannot find what was never written down; these are recorded from the start and vote on nothing.' } });
-
   return FEATURES;
 }
 // (Consumer 3) the question queue is DERIVED from the registry, never hand-listed.
@@ -10305,55 +8424,11 @@ function featureCtx(sym){
            spine:(function(){ try{ return spineOf(sym); }catch(e){ return {}; } })(),
            session:sessionBucket() };
 }
-// (v10.53 C) REGIME TAG ON EVERY OUTCOME. Without it a rule that works in trend and
-// fails in chop averages out to "meh" and nobody can see why. {tag, opex, event} rides
-// on every FEATURES record, so every outcome is aggregable per regime.
-// (v10.55 PART F) THE EVENT TAG IS NOW SETTABLE. `event` was hard-wired false on every
-// record, so FOMC / CPI / OPEX / half-day bars were pooled with ordinary ones and no
-// regime split could ever separate them. The user sets it in ⚙ (persisted under the new
-// gpts_event_v1 key); absent a setting the honest answer is still false.
-var EVENT_KEY='gpts_event_v1';
-var EVENT_TAG='';
-function eventTagLoad(){
-  try{ var o=JSON.parse(localStorage.getItem(EVENT_KEY)||'null');
-    if(o && typeof o.tag==='string' && o.d===ctTodayStr()) EVENT_TAG=o.tag; }catch(e){}
-  return EVENT_TAG;
-}
-function eventTagSet(v){
-  EVENT_TAG=String(v==null?'':v).slice(0,24);
-  try{ localStorage.setItem(EVENT_KEY, JSON.stringify({ d:ctTodayStr(), tag:EVENT_TAG })); }catch(e){}
-  return EVENT_TAG;
-}
-function eventTagNow(){
-  // The tag is whatever the user set in the drawer for TODAY; absent one the honest
-  // answer is false — never a guess, and never an invented calendar.
-  try{ if(typeof EVENT_TAG!=='undefined' && EVENT_TAG && EVENT_TAG!=='none') return true; }catch(e){}
-  try{ var d=recorderDay(recorderLoad()); if(d && (d.event||d.eventTag)) return true; }catch(e2){}
-  return false;
-}
-function eventTagLabel(){ try{ return (EVENT_TAG && EVENT_TAG!=='none')?EVENT_TAG:null; }catch(e){ return null; } }
-function featRegime(sym, ctx){
-  var tag='na', opex=false, event=false;
-  try{ var rg=regimeTag(closedCandles(sym)||[]); if(rg && rg.tag) tag=rg.tag; }catch(e){}
-  try{ opex=!!((ctx && ctx.session && ctx.session.opex!=null) ? ctx.session.opex : isOpexDay()); }catch(e2){}
-  try{ event=!!eventTagNow(); }catch(e3){}
-  return { tag:tag, opex:opex, event:event };
-}
 function featRecordAll(sym, ctx){
   registerCoreFeatures();
   var out={};
-  var rg={ tag:'na', opex:false, event:false };
-  try{ rg=featRegime(sym, ctx)||rg; }catch(e0){}
-  // (v10.54, audit 6) WHICH MODEL SCORED THIS BAR. Computed once per bar and stamped in
-  // ONE place, so a newly enrolled feature gets it for free.
-  var ms={ rulesAsOf:null, weightsHash:null };
-  try{ ms=modelStamp()||ms; }catch(e2){}
   FEATURES.forEach(function(f){
     try{ out[f.key]=f.record(sym, ctx); }catch(e){ out[f.key]=null; }
-    try{ if(out[f.key] && typeof out[f.key]==='object'){
-      out[f.key].regime={ tag:rg.tag, opex:rg.opex, event:rg.event };
-      out[f.key].model={ rulesAsOf:ms.rulesAsOf, weightsHash:ms.weightsHash };
-    } }catch(e1){}
   });
   return out;
 }
@@ -10378,57 +8453,9 @@ function featEnqueue(sym, snapFeat, ctx){
                  rec:snapFeat[k], hit:null, mfe:null, mae:null, resolved:false });
       changed=true;
     }
-    // (v10.54, audit 16) CAP BY BARS, NOT BY RECORD COUNT. With 18 enrolled features the
-    // flat 1200-record cap was ~66 bars: on any normal session the panel silently threw
-    // away the whole MORNING, and every "since the open" statistic was computed on an
-    // afternoon-only sample. Keep the last FEAT_KEEP_BARS bars — for every feature.
-    if(arr.length){
-      var maxBar=0;
-      for(var q=0;q<arr.length;q++){ if(arr[q] && typeof arr[q].bar==='number' && arr[q].bar>maxBar) maxBar=arr[q].bar; }
-      var cutoff=maxBar-FEAT_KEEP_BARS;
-      if(cutoff>0){
-        var kept=arr.filter(function(r){ return !r || typeof r.bar!=='number' || r.bar>cutoff; });
-        if(kept.length!==arr.length){ day.feat[sym]=kept; changed=true; }
-      }
-    }
+    if(arr.length>1200) day.feat[sym]=arr.slice(arr.length-1200);
     if(changed) recorderSave(db);
   }catch(e){}
-}
-// ============================================================================
-// (v10.54, audit 3) THE FRAME OUTCOME — the panel finally measures what it SHOWED.
-// Every in-play card renders a tgt and an inval. Nothing scored them: the only outcome
-// recorded was "did price travel 0.5 in the stated direction within 30 minutes", which
-// is not the claim the card makes. `frame` asks the card's own question — did price
-// reach the RECORDED target before the RECORDED invalidation, inside the same forward
-// window — using candle HIGH/LOW, because a target is touched intrabar. The 0.5-point
-// drift hit is kept alongside it as `drift`; neither replaces the other.
-//   first:'tgt'   target first  ·  first:'inval' invalidation first  ·  null neither
-// A bar that trades through BOTH is scored 'inval': the pessimistic reading is the only
-// honest one when the tick order inside the bar is unknown.
-// ============================================================================
-function frameOutcome(rec, cs, startIdx, endIdx){
-  try{
-    if(!rec || rec.tgt==null || rec.inval==null) return null;
-    var tgt=rec.tgt, inval=rec.inval;
-    if(!(Math.abs(tgt-inval)>0.001)) return null;
-    var up=(tgt>inval);                      // the frame points up when tgt sits above inval
-    var tgtHit=false, invalHit=false, first=null;
-    for(var i=startIdx;i<endIdx;i++){
-      var b=cs[i]; if(!b || b.h==null || b.l==null) continue;
-      var t = up ? (b.h>=tgt)   : (b.l<=tgt);
-      var v = up ? (b.l<=inval) : (b.h>=inval);
-      if(t) tgtHit=true;
-      if(v) invalHit=true;
-      if(first==null){
-        if(t && !v) first='tgt';
-        else if(v) first='inval';            // both in one bar -> the pessimistic reading
-      }
-    }
-    var k=(rec.k!=null)?rec.k:null;
-    var rr=null;
-    if(k!=null && Math.abs(k-inval)>0.001) rr=+(Math.abs(tgt-k)/Math.abs(k-inval)).toFixed(2);
-    return { tgtHit:tgtHit, invalHit:invalHit, first:first, rr:rr };
-  }catch(e){ return null; }
 }
 // ---- (Consumer 1b) resolve pending outcomes. FORWARD-ONLY and IDEMPOTENT: a record
 // is scored once, only from bars that closed AFTER it, and never re-scored.
@@ -10450,19 +8477,7 @@ function resolveFeatureOutcomes(sym){
       var fwdN=f.fwd||FEAT_FWD;
       var startIdx=r.n;                                  // bars that existed WHEN it was recorded
       if(startIdx==null || startIdx<=0) return;
-      // (v10.54, audit 13) LATE-SESSION RECORDS ARE NOT DROPPED. Everything recorded in
-      // the last 30 minutes never got its full window, stayed pending forever and was
-      // discarded with the day — which is exactly why the power-hour bucket could never
-      // accumulate a single observation. After the close a short window is scored on the
-      // bars that DID exist and marked partial:true with the window actually used, so it
-      // is aggregable and can never be mistaken for a full-window result.
-      var avail=n-startIdx;
-      var partial=false;
-      if(avail < fwdN){
-        var late=false; try{ late=(ctNowSecOfDay()>=15*3600); }catch(eL){ late=false; }
-        if(!(late && avail>=3)) return;                  // window not closed yet
-        partial=true;
-      }
+      if((n-startIdx) < fwdN) return;                    // window not closed yet
       var px0=(r.px!=null)?r.px:null; if(px0==null) return;
       var endIdx=Math.min(n, startIdx+fwdN);
       var mfe=0, mae=0, pxEnd=px0, first=null, kingReached=false;
@@ -10475,30 +8490,17 @@ function resolveFeatureOutcomes(sym){
         if(kingK!=null && b.h!=null && b.l!=null && b.l<=kingK+0.25 && b.h>=kingK-0.25) kingReached=true;
       }
       var fwd={ px0:px0, pxEnd:pxEnd, mfe:+mfe.toFixed(2), mae:+mae.toFixed(2),
-                net:+(pxEnd-px0).toFixed(2), n:endIdx-startIdx, first:first, kingReached:kingReached,
-                partial:partial,
-                frame:frameOutcome(r.rec, cs, startIdx, endIdx) };
+                net:+(pxEnd-px0).toFixed(2), n:endIdx-startIdx, first:first, kingReached:kingReached };
       var res=null;
       try{ res=f.outcome(r.rec, fwd); }catch(eO){ res=null; }
       r.hit=(res && res.hit!=null)?(res.hit?1:0):null;
       r.mfe=(res && res.mfe!=null)?res.mfe:fwd.mfe;
       r.mae=(res && res.mae!=null)?res.mae:fwd.mae;
       r.out=res||null;
-      // (v10.54, audit 3) TWO outcomes, side by side: the 0.5-point drift hit the panel
-      // has always recorded, and the FRAME the card actually drew.
-      r.drift=r.hit;
-      r.frame=fwd.frame;
-      r.partial=partial;
-      r.fwdUsed=endIdx-startIdx;
       r.resolved=true;
       changed++;
     });
-    if(changed){
-      recorderSave(db);
-      // (v10.54) new outcomes exist -> the memoised featStats is stale. Every local-truth
-      // check (ruleTier, the promotion bar, the tabs) reads through that cache.
-      try{ featStatsInvalidate(); }catch(eI){}
-    }
+    if(changed) recorderSave(db);
     return changed;
   }catch(e){ return 0; }
 }
@@ -10515,50 +8517,22 @@ window.__gptsDebug.resolveFeatures=function(s){ return resolveFeatureOutcomes(s|
 // monotone check, the 3x3 cell table and the operator's selection quality.
 // ============================================================================
 function featStats(sym){
-  var out={ byKey:{}, byGrade:{dir:{},node:{},dirSide:{}}, cells:{},
-            act:{take:{n:0,hit:0,mfe:0,mae:0,mn:0},pass:{n:0,hit:0,mfe:0,mae:0,mn:0}},
-            frame:{}, partial:0, days:0, dayKeys:[] };
-  var seenAct={};
+  var out={ byKey:{}, byGrade:{dir:{},node:{}}, cells:{}, act:{take:{n:0,hit:0},pass:{n:0,hit:0}}, days:0 };
   try{
     var db=recorderLoad(); var days=(db&&db.days)||{};
-    Object.keys(days).sort().forEach(function(dk){
+    Object.keys(days).forEach(function(dk){
       var arr=((days[dk]||{}).feat||{})[sym]||[];
-      if(arr.length){ out.days++; out.dayKeys.push(dk); }
+      if(arr.length) out.days++;
       arr.forEach(function(r){
-        var b=out.byKey[r.key]||(out.byKey[r.key]={n:0,hit:0,pending:0,mfe:0,mae:0,mn:0,partial:0});
+        var b=out.byKey[r.key]||(out.byKey[r.key]={n:0,hit:0,pending:0,mfe:0,mae:0,mn:0});
         if(!r.resolved || r.hit==null){ b.pending++; }
         else { b.n++; if(r.hit) b.hit++; }
-        if(r.partial) { b.partial++; out.partial++; }
         if(r.mfe!=null){ b.mfe+=r.mfe; b.mae+=(r.mae||0); b.mn++; }
-        // (v10.54, audit 3) the FRAME outcome is tallied per feature key beside the drift
-        // hit, so "did the card's own target print before its own invalidation" is a
-        // number the Analysis tab can show.
-        if(r.frame && (r.frame.first==='tgt' || r.frame.first==='inval')){
-          var fb=out.frame[r.key]||(out.frame[r.key]={n:0,tgt:0,rr:0,rn:0});
-          fb.n++; if(r.frame.first==='tgt') fb.tgt++;
-          if(typeof r.frame.rr==='number'){ fb.rr+=r.frame.rr; fb.rn++; }
-        }
         if(!r.resolved || r.hit==null) return;
-        // (v10.54, audit 12) SIDE IS NOT A DIRECTIONAL CALL. A SIDE bar is scored on
-        // "price stayed inside ±DIR_PTS", the opposite test to an UP/DN bar, so pooling
-        // them made the A>B>C monotone check meaningless: a chop-heavy day full of
-        // correct SIDE calls inflated C. SIDE records are kept in their own bucket.
-        if(r.key==='dir' && r.rec && r.rec.grade){
-          var side=(r.rec.verdict==='SIDE');
-          var tgt=side?out.byGrade.dirSide:out.byGrade.dir;
-          var g=tgt[r.rec.grade]||(tgt[r.rec.grade]={n:0,hit:0}); g.n++; if(r.hit) g.hit++;
-        }
+        if(r.key==='dir' && r.rec && r.rec.grade){ var g=out.byGrade.dir[r.rec.grade]||(out.byGrade.dir[r.rec.grade]={n:0,hit:0}); g.n++; if(r.hit) g.hit++; }
         if(r.key==='node' && r.rec && r.rec.grade){ var g2=out.byGrade.node[r.rec.grade]||(out.byGrade.node[r.rec.grade]={n:0,hit:0}); g2.n++; if(r.hit) g2.hit++; }
         if(r.key==='decision' && r.rec && r.rec.cell){ var c=out.cells[r.rec.cell]||(out.cells[r.rec.cell]={n:0,hit:0}); c.n++; if(r.hit) c.hit++; }
-        if(r.key==='act' && r.rec && r.rec.action){
-          // (v10.54, audit 14) DE-DUPLICATE BY TAP. Older days still hold the repeated
-          // records the pre-10.54 recorder wrote; one tap must count once here too.
-          var tk=(r.rec.tapT!=null)?('t'+r.rec.tapT):(dk+'|'+r.rec.action+'|'+(r.rec.k==null?'-':r.rec.k)+'|'+(r.rec.cell||'-'));
-          if(seenAct[tk]) return;
-          seenAct[tk]=1;
-          var a=out.act[r.rec.action];
-          if(a){ a.n++; if(r.hit) a.hit++; if(r.mfe!=null){ a.mfe+=r.mfe; a.mae+=(r.mae||0); a.mn++; } }
-        }
+        if(r.key==='act' && r.rec && r.rec.action){ var a=out.act[r.rec.action]; if(a){ a.n++; if(r.hit) a.hit++; } }
       });
     });
   }catch(e){}
@@ -10568,52 +8542,14 @@ function _fpct(h,n){ return n>0?Math.round(100*h/n):null; }
 // A>B>C must hold. If it does not, the FUSION is wrong and the panel says so — that
 // is the whole point of the analysis layer (layer spec S2 (1)).
 function gradeMonotone(g){
-  g=g||{};
   var a=_fpct((g.A||{}).hit,(g.A||{}).n), b=_fpct((g.B||{}).hit,(g.B||{}).n), c=_fpct((g.C||{}).hit,(g.C||{}).n);
-  var an=(g.A||{}).n||0, bn=(g.B||{}).n||0, cn=(g.C||{}).n||0;
-  // (v10.54, audit 12) THE CHECK ONLY MEANS SOMETHING ON EFFECTIVE OBSERVATIONS.
-  // A grade with eff n under 2 is one 30-minute outcome; calling the fusion "wrong"
-  // off that is the same fiat this release is closing everywhere else.
-  var thin=(effN(an)<2 && effN(bn)<2 && effN(cn)<2);
   var have=[a,b,c].filter(function(x){ return x!=null; });
-  if(have.length<2 || thin) return { ok:null, a:a, b:b, c:c, an:an, bn:bn, cn:cn };
+  if(have.length<2) return { ok:null, a:a, b:b, c:c };
   var ok=true;
   if(a!=null && b!=null && a<b) ok=false;
   if(b!=null && c!=null && b<c) ok=false;
   if(a!=null && c!=null && a<c) ok=false;
-  return { ok:ok, a:a, b:b, c:c, an:an, bn:bn, cn:cn };
-}
-// (v10.54, GROUP 5 ⑤) YOUR CALLS — takes vs passes, with the gap stated in words.
-// act records are ONE PER TAP (audit 14), so their n is already an independent count:
-// it is labelled "taps", never run through effN, and never shown without its number.
-function yourCallsHtml(st){
-  var tk=(st&&st.act&&st.act.take)||{n:0,hit:0,mfe:0,mae:0,mn:0};
-  var ps=(st&&st.act&&st.act.pass)||{n:0,hit:0,mfe:0,mae:0,mn:0};
-  var tp=_fpct(tk.hit,tk.n), pp=_fpct(ps.hit,ps.n);
-  var tip=('Are the reads you TAKE better than the ones you PASS? Takes are scored on whether the read resolved '+
-    'in its stated direction; passes on whether standing aside was right. Passes are the control group — without them '+
-    'a take rate on its own says nothing at all. One tap = one observation.').replace(/"/g,'');
-  var body='';
-  if(!tk.n && !ps.n){
-    body='<div style="font-size:8.5px;color:'+PAL.sub+'">no taps logged yet — use ✓ take / – pass on the in-play card and this fills in.</div>';
-  } else {
-    function line(lab, o, p){
-      var mfe=o.mn?(o.mfe/o.mn):null, mae=o.mn?(o.mae/o.mn):null;
-      return '<div style="display:flex;justify-content:space-between;gap:6px;font-size:9px;padding:1px 0">'+
-        '<span style="color:'+PAL.ink+'">'+lab+'</span>'+
-        '<span style="color:'+PAL.sub+';white-space:nowrap">'+(p==null?'● recording':(p+'%'))+' · n='+o.n+' taps'+
-        (o.mn?(' · MFE '+mfe.toFixed(2)+' / MAE '+mae.toFixed(2)):'')+'</span></div>';
-    }
-    body+=line('✓ takes', tk, tp)+line('– passes', ps, pp);
-    var gap='';
-    if(tp==null || pp==null || tk.n<5 || ps.n<5) gap='not enough taps yet — need at least 5 of each to compare (have '+tk.n+' takes, '+ps.n+' passes).';
-    else if(tp>pp) gap='your takes beat your passes by '+(tp-pp)+' pts on '+tk.n+'/'+ps.n+' taps — the filter you apply by hand is adding something.';
-    else if(pp>tp) gap='your PASSES beat your takes by '+(pp-tp)+' pts on '+ps.n+'/'+tk.n+' taps — on this sample the hand filter is subtracting.';
-    else gap='takes and passes are level on '+tk.n+'/'+ps.n+' taps — no measurable selection edge yet.';
-    body+='<div style="font-size:8.5px;color:'+PAL.sub+';margin-top:2px;line-height:1.35">'+gap+'</div>';
-  }
-  return '<div title="'+tip+'" style="margin-top:5px;font-size:9px;color:'+PAL.sub+'">'+
-    '<span style="font-weight:700;color:'+PAL.gold+'">⑤ YOUR CALLS — takes vs passes</span>'+body+'</div>';
+  return { ok:ok, a:a, b:b, c:c };
 }
 function featureScorecardsHtml(sym){
   sym=sym||'SPY';
@@ -10622,39 +8558,31 @@ function featureScorecardsHtml(sym){
   var h='<div style="padding:6px 8px;background:'+PAL.card+';border:1px solid '+PAL.line+';border-radius:8px;margin:4px 0">';
   h+='<div title="Every FEATURES entry gets a scorecard here automatically — a feature is not done until the data, analysis, testing and learning layers all consume it. Rate is the measured forward hit-rate; MFE/MAE are the average max favourable / adverse excursions over the 30-minute window." style="color:'+PAL.gold+';font-size:9px;font-weight:800;letter-spacing:.5px;margin-bottom:4px">🧬 FEATURE SCORECARDS <span style="color:'+PAL.sub+';font-weight:400">('+FEATURES.length+' enrolled · '+st.days+'d)</span></div>';
   FEATURES.forEach(function(f){
-    var b=st.byKey[f.key]||{n:0,hit:0,pending:0,mfe:0,mae:0,mn:0,partial:0};
+    var b=st.byKey[f.key]||{n:0,hit:0,pending:0,mfe:0,mae:0,mn:0};
     var rate=_fpct(b.hit,b.n);
     var mfe=b.mn?(b.mfe/b.mn):null, mae=b.mn?(b.mae/b.mn):null;
-    // (v10.54, audit 8) UNLOCK ON EFFECTIVE n. 200 overlapping bar-records of one
-    // feature are 20 independent 30-minute outcomes, not 200.
-    var en=effN(b.n);
-    var unlocked=(en>=RULE_UNLOCK_N);
-    var fb=st.frame[f.key]||null;
+    var unlocked=(b.n>=RULE_UNLOCK_N);
     var col=(rate==null)?PAL.sub:(rate>=57?PAL.longAccent:(rate<=43?PAL.shortAccent:PAL.sub));
     var tip=(f.label+' — '+((f.rule&&f.rule.mechanism)||'')+' Forward window '+(f.fwd||FEAT_FWD)+' bars. '+
-      'Every record is ONE BAR; effective observations = n / '+(f.fwd||FEAT_FWD)+'. '+
-      (unlocked?('Measured 📊 on '+nTxt(b.n)+'.'):('● recording — '+nTxt(b.n)+', need eff '+RULE_UNLOCK_N+'; hand-set ⚖ until then.'))+
-      (b.partial?(' '+b.partial+' late-session records are partial (short window).'):'')).replace(/"/g,'');
+      (unlocked?('Measured 📊 on n='+b.n+'.'):('● recording n='+b.n+'/'+RULE_UNLOCK_N+' — hand-set ⚖ until then.'))).replace(/"/g,'');
     h+='<div title="'+tip+'" style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:2px 0;border-bottom:1px dashed rgba(255,255,255,.05);font-size:9.5px">'+
       '<span style="color:'+PAL.ink+'">'+f.label+' <span style="color:'+PAL.sub+';font-size:8px">'+f.key+'</span></span>'+
       '<span style="white-space:nowrap;color:'+col+';font-weight:700">'+
-        (unlocked?(rate+'% 📊'):('<span style="color:'+PAL.sub+';font-weight:600">● recording eff '+en+'/'+RULE_UNLOCK_N+'</span>'))+
-        (fb&&fb.n?(' <span title="Did the card&#39;s own target print before its own invalidation?" style="color:'+PAL.blue+';font-weight:600">frame '+Math.round(100*fb.tgt/fb.n)+'% ('+nTxt(fb.n)+')</span>'):'')+
+        (unlocked?(rate+'% 📊'):('<span style="color:'+PAL.sub+';font-weight:600">● recording n='+b.n+'/'+RULE_UNLOCK_N+'</span>'))+
         (b.mn?(' <span style="color:'+PAL.sub+';font-weight:600">MFE '+mfe.toFixed(2)+' / MAE '+mae.toFixed(2)+'</span>'):'')+
-        ' <span style="color:'+PAL.sub+';font-weight:600">'+nTxt(b.n)+(b.pending?(' +'+b.pending+'p'):'')+'</span>'+
+        ' <span style="color:'+PAL.sub+';font-weight:600">n'+b.n+(b.pending?('+'+b.pending+'p'):'')+'</span>'+
       '</span></div>';
   });
   // ---- by-grade monotone checks ----
   function gradeRow(title, g, tipExtra){
     var mo=gradeMonotone(g);
-    var txt=['A','B','C'].map(function(k){ var o=g[k]||{n:0,hit:0}; var p=_fpct(o.hit,o.n); return k+' '+pctN(p,o.n||0); }).join(' · ');
+    var txt=['A','B','C'].map(function(k){ var o=g[k]||{n:0,hit:0}; var p=_fpct(o.hit,o.n); return k+' '+(p==null?'–':p+'%')+' (n'+(o.n||0)+')'; }).join(' · ');
     var flag = (mo.ok===false) ? '<span style="color:'+PAL.shortAccent+';font-weight:800"> ⚠ not monotone — the fusion is wrong</span>'
              : (mo.ok===true ? '<span style="color:'+PAL.longAccent+'"> ✓ monotone A·B·C</span>' : '<span style="color:'+PAL.sub+'"> ● recording</span>');
     return '<div title="'+(tipExtra||'').replace(/"/g,'')+'" style="font-size:9px;color:'+PAL.sub+';padding:2px 0">'+title+': '+txt+flag+'</div>';
   }
   h+='<div style="margin-top:5px;font-size:9px;font-weight:700;color:'+PAL.gold+'">BY GRADE</div>';
-  h+=gradeRow('Direction', st.byGrade.dir, 'Does grade A beat B beat C on DIRECTIONAL bars? If it does not, the input weights inside directionGrade are wrong and must be re-tuned through the nightly loop — never hand-edited to fit one day. SIDE bars are excluded: they are scored on the opposite test.');
-  h+=gradeRow('Direction · SIDE', st.byGrade.dirSide, 'SIDE bars, kept SEPARATE (v10.54): a SIDE call is right when price stays INSIDE ±'+DIR_PTS+', the opposite test to an UP/DN call. Pooling them made the monotone check meaningless on chop-heavy days.');
+  h+=gradeRow('Direction', st.byGrade.dir, 'Grade A should beat B should beat C. If it does not, the input weights inside directionGrade are wrong and must be re-tuned through the nightly loop — never hand-edited to fit one day.');
   h+=gradeRow('Node', st.byGrade.node, 'Same monotone requirement for the node grade. Which INPUT carries the edge is broken out per input in the rules file.');
   // ---- 3x3 decision cells ----
   h+='<div style="margin-top:5px;font-size:9px;font-weight:700;color:'+PAL.gold+'">DECISION MATRIX (rate · n)</div>';
@@ -10663,16 +8591,19 @@ function featureScorecardsHtml(sym){
     h+='<tr><td style="color:'+PAL.sub+'">Dir '+dg+'</td>';
     ['A','B','C'].forEach(function(ng){
       var cell=dg+'×'+ng; var c=st.cells[cell]||{n:0,hit:0}; var p=_fpct(c.hit,c.n);
-      var ce=effN(c.n);
-      var cc=(p==null||ce<RULE_UNLOCK_N)?PAL.sub:(p>=57?PAL.longAccent:(p<=43?PAL.shortAccent:PAL.ink));
-      h+='<td title="'+cell+' — label: '+DECISION_MATRIX[dg][ng]+'. Take cells are scored on the FRAME they drew (target before invalidation); skip / stand-aside cells are scored on "no move ≥'+DIR_PTS+' either way". '+nTxt(c.n)+'; a cell under 45% on eff n≥'+RULE_UNLOCK_N+' is re-worded to skip." style="border:1px solid '+PAL.line+';text-align:center;color:'+cc+'">'+(p==null?'–':p+'%')+'<span style="color:'+PAL.sub+'"> eff '+ce+'</span></td>';
+      var cc=(p==null)?PAL.sub:(p>=57?PAL.longAccent:(p<=43?PAL.shortAccent:PAL.ink));
+      h+='<td title="'+cell+' — label: '+DECISION_MATRIX[dg][ng]+'. A cell measured under 45% on n≥20 is re-worded to skip by the learning loop." style="border:1px solid '+PAL.line+';text-align:center;color:'+cc+'">'+(p==null?'–':p+'%')+'<span style="color:'+PAL.sub+'"> n'+c.n+'</span></td>';
     });
     h+='</tr>';
   });
   h+='</table>';
   // ---- operator selection quality ----
-  h+=yourCallsHtml(st);
-  h+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:4px;opacity:.85">● recording until eff n≥'+RULE_UNLOCK_N+' · every n reads "n=bars → eff n/'+FEAT_FWD+'" · ⚖→📊 needs a LOCAL promotion AND local eff n · every record is forward-only with MFE/MAE</div>';
+  var tk=st.act.take, ps=st.act.pass;
+  var tp=_fpct(tk.hit,tk.n), pp=_fpct(ps.hit,ps.n);
+  h+='<div title="Selection quality: of the reads you TOOK, how many resolved in the stated direction; of the ones you PASSED, how many correctly did not. If takes are not better than passes, the filter you are applying by hand is not adding anything." style="margin-top:5px;font-size:9px;color:'+PAL.sub+'">'+
+    '<span style="font-weight:700;color:'+PAL.gold+'">ACT</span> take '+(tp==null?'–':tp+'%')+' (n'+tk.n+') · pass '+(pp==null?'–':pp+'%')+' (n'+ps.n+')'+
+    ((tp!=null&&pp!=null)?(' · edge '+((tp-pp)>=0?'+':'')+(tp-pp)+'pts'):'')+'</div>';
+  h+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:4px;opacity:.85">● recording n=x/'+RULE_UNLOCK_N+' until unlock · ⚖→📊 flips here first · every record is forward-only with MFE/MAE</div>';
   h+='</div>';
   return h;
 }
@@ -10698,36 +8629,7 @@ function dirFactorGroups(){
       tip:'AGREE-* = both book centres one side of price AND bands overlap. LEAN-* = same side, no overlap. Drift never chooses direction; this measures whether it is worth the confidence it adds.' },
     { key:'dir.relation', title:'RELATION (trend × drift)', of:function(rec){ return rec&&rec.relation; },
       order:['confirmed','divergence','tentative','trend-only'],
-      tip:'The whole point of the hierarchy: confirmed should beat trend-only, and divergence/tentative should trail both. If it does not separate, the hierarchy is wrong. LIFT here is measured against the TREND ALONE on the same bars, not against the tape.' },
-    // (v10.54, audit 12) THE PARKED CANDIDATES GET THE SAME TABLE. They were recorded but
-    // never grouped, so the four factors the panel is deciding whether to promote were
-    // the only ones with no vote-split, no baseline, no lift, no 1-way flag and no regime
-    // split — precisely the columns a promotion decision needs.
-    { key:'dir.struct', title:'STRUCTURE TILT (parked · recorded, not voted)', of:function(rec){ return rec&&rec.bias; },
-      order:['support-heavy','resistance-heavy','balanced'],
-      tip:'Net structure tilt from netPositioning. On 2026-08-11 this voted DOWN on 46 of 49 bars of a down day and "scored" ~94% — read the ⚠1-way flag and the lift, never the rate.' },
-    { key:'dir.kingRoll', title:'KING ROLL (parked · recorded, not voted)', of:function(rec){ return (rec&&rec.vote>0)?'roll-up':((rec&&rec.vote<0)?'roll-dn':'flat'); },
-      order:['roll-up','roll-dn','flat'],
-      tip:'Does the settlement magnet MOVING lead price? It is recorded and not voted until this row separates.' },
-    { key:'netGamma', title:'NET GAMMA SIGN (parked · recorded, not voted)', of:function(rec){ return (rec&&rec.vote>0)?'net+':((rec&&rec.vote<0)?'net−':'flat'); },
-      order:['net+','net−','flat'],
-      tip:'Net gamma sign describes how moves TRAVEL. Whether it also predicts WHICH WAY is exactly what this row measures.' },
-    // (v10.55) THE LEG ENGINE GETS THE SAME TABLE. The roll is the one factor here that
-    // actually votes (+1 confirmed with the trend / −1 weakening), so it needs the
-    // vote-split, the baseline and the lift column more than anything parked does.
-    { key:'leg.roll', title:'ROLLING PULLBACK NODES (voting: confirmed +1 / weakening −1)',
-      of:function(rec){ return (rec&&rec.weakening)?'weakening':((rec&&rec.confirmed)?'confirmed':((rec&&rec.signal)?'signal':'none')); },
-      order:['confirmed','signal','weakening','none'],
-      tip:'2 consecutive pullback nodes rolling with the trend = signal, 3 = confirmed (Academy count rule). The doctrine says this is strong presumptive evidence; this row is where that gets measured on THIS tape.' },
-    { key:'leg.pbDetect', title:'PULLBACK NODE, BY ROLL STEP', of:function(rec){ return (rec&&rec.step)?('step '+rec.step):'none'; },
-      order:['step 1','step 2','step 3','step 4','none'],
-      tip:'Did the deflection off the pullback node reach the magnet before a close back through the node? Split by which step of the roll it was.' },
-    { key:'leg.dir', title:'LEG PHASE (magnet leg vs pullback)', of:function(rec){ return (rec&&rec.dir&&rec.dir!=='none')?(rec.dir+'/'+(rec.phase||'none')):'idle'; },
-      order:['dn/RLY','dn/PB','up/RLY','up/PB','idle'],
-      tip:'RLY = rallying to the magnet, PB = at the pullback node. If these two phases do not separate outcomes, the alternation model is decoration.' },
-    { key:'dir.trendFast', title:'FASTER SMA 10/20 (parked · challenger to SMA-50)', of:function(rec){ return rec&&rec.p20; },
-      order:['up','dn','up-broken','dn-broken','flat','na'],
-      tip:'The SMA-50 window is an inherited assumption. This is the challenger, scored on the SAME bars, so 10 vs 20 vs 50 is settled by measurement instead of by preference.' }
+      tip:'The whole point of the hierarchy: confirmed should beat trend-only, and divergence/tentative should trail both. If it does not separate, the hierarchy is wrong.' }
   ];
 }
 function dirFactorStats(sym){
@@ -10753,28 +8655,13 @@ function dirFactorStats(sym){
         var gd=null;
         for(var i=0;i<groups.length;i++){ if(groups[i].key===r.key){ gd=groups[i]; break; } }
         var lab=gd?gd.of(r.rec):null; if(!lab) return;
-        var b=B[lab]||(B[lab]={ label:lab, n:0, hit:0, up:0, dn:0, mfe:0, mae:0, mn:0, skipped:0,
-                                trend:{n:0,hit:0}, chop:{n:0,hit:0} });
-        if(!b.trend){ b.trend={n:0,hit:0}; b.chop={n:0,hit:0}; }
+        var b=B[lab]||(B[lab]={ label:lab, n:0, hit:0, up:0, dn:0, mfe:0, mae:0, mn:0, skipped:0 });
         var vote=(r.rec&&typeof r.rec.vote==='number')?r.rec.vote
-                : ((r.out&&typeof r.out.vote==='number')?r.out.vote
-                : ((r.rec&&typeof r.rec.vote20==='number')?r.rec.vote20:0));
+                : ((r.out&&typeof r.out.vote==='number')?r.out.vote:0);
         if(vote>0) b.up++; else if(vote<0) b.dn++;
         if(r.mfe!=null){ b.mfe+=r.mfe; b.mae+=(r.mae||0); b.mn++; }
-        // (v10.54, audit 12) LIFT OVER THE INCUMBENT, on the bars where they differ.
-        // Only dir.relation records it (it is the one factor whose whole claim is "I
-        // improve on the trend alone"), and only the DIFFERING bars carry information.
-        if(r.out && typeof r.out.lift==='number'){
-          if(!b.rel) b.rel={ n:0, sum:0, diffN:0, diffSum:0 };
-          b.rel.n++; b.rel.sum+=r.out.lift;
-          if(r.rec && r.rec.differs){ b.rel.diffN++; b.rel.diffSum+=r.out.lift; }
-        }
         if(r.hit==null){ b.skipped++; return; }     // flat/na imply nothing: never a miss
         b.n++; if(r.hit) b.hit++;
-        // (v10.53 C) REGIME SPLIT — the same row, separated by the day's regime tag.
-        var rtag=(r.rec && r.rec.regime && r.rec.regime.tag)||null;
-        if(rtag==='trend'){ b.trend.n++; if(r.hit) b.trend.hit++; }
-        else if(rtag==='chop'){ b.chop.n++; if(r.hit) b.chop.hit++; }
       });
     });
     if(out.base.n>0){
@@ -10797,24 +8684,7 @@ function dirFactorStats(sym){
         b.expected=(vn>0 && out.base.upPct!=null)
           ? Math.round((b.up*out.base.upPct + b.dn*out.base.dnPct)/vn) : null;
         b.lift=(b.rate!=null && b.expected!=null)?(b.rate-b.expected):null;
-        // (v10.54, audit 10) 1-WAY IS A RATIO, NOT AN ABSOLUTE ZERO. `up===0 || dn===0`
-        // meant a factor that voted DOWN on 46 of 49 bars of a down day — the exact
-        // 2026-08-11 artifact this column exists to catch — was NOT flagged, because
-        // three stray up-votes made it "two-sided". >= 90% one way is one way.
-        b.oneWayShare=(vn>0)?(Math.max(b.up,b.dn)/vn):0;
-        b.oneSided=(vn>=10 && b.oneWayShare>=0.90);
-        if(!b.trend){ b.trend={n:0,hit:0}; b.chop={n:0,hit:0}; }
-        b.trendRate=_fpct(b.trend.hit,b.trend.n);
-        b.chopRate=_fpct(b.chop.hit,b.chop.n);
-        // a row whose trend and chop rates sit on opposite sides of the baseline is not
-        // one rule, it is two. Averaging them to "meh" is the failure this flags.
-        b.regimeSplit=(b.trendRate!=null && b.chopRate!=null && b.trend.n>=5 && b.chop.n>=5
-                       && ((b.trendRate-50)*(b.chopRate-50)<0));
-        b.effN=effN(b.n);
-        // LIFT over the INCUMBENT (trend-only), where such a comparison exists.
-        b.relLift=(b.rel && b.rel.n)?Math.round(100*b.rel.sum/b.rel.n):null;
-        b.relLiftDiff=(b.rel && b.rel.diffN)?Math.round(100*b.rel.diffSum/b.rel.diffN):null;
-        b.relDiffN=(b.rel?b.rel.diffN:0);
+        b.oneSided=(vn>=10 && (b.up===0 || b.dn===0));
         rows.push(b);
       });
       out.groups.push({ key:g.key, title:g.title, tip:g.tip, rows:rows });
@@ -10837,37 +8707,23 @@ function dirFactorsHtml(sym){
   st.groups.forEach(function(g){
     h+='<div title="'+(g.tip||'').replace(/"/g,'')+'" style="margin-top:5px;font-size:9px;font-weight:700;color:'+PAL.gold+'">'+g.title+'</div>';
     h+='<table style="width:100%;border-collapse:collapse;font-size:8.5px;margin-top:1px">'+
-       '<tr style="color:'+PAL.sub+'"><td>value</td><td title="EFFECTIVE observations = bar-records / '+FEAT_FWD+'. Ten consecutive bars of one feature are ten overlapping views of ONE 30-minute outcome." style="text-align:right">eff n</td><td style="text-align:right">rate</td>'+
+       '<tr style="color:'+PAL.sub+'"><td>value</td><td style="text-align:right">n</td><td style="text-align:right">rate</td>'+
        '<td style="text-align:right">votes ↑/↓</td><td style="text-align:right">exp.</td><td style="text-align:right">lift</td>'+
-       '<td title="REGIME SPLIT (v10.53): the same row measured only on trend-tagged bars and only on chop-tagged bars. A rule that works in trend and fails in chop averages to nothing without this column." style="text-align:right">trend / chop</td>'+
        '<td style="text-align:right">MFE/MAE</td></tr>';
     if(!g.rows.length){
-      h+='<tr><td colspan="8" style="color:'+PAL.sub+'">no rows recorded yet for this factor — it fills in one row per value as bars close (need eff '+RULE_UNLOCK_N+' to unlock).</td></tr>';
+      h+='<tr><td colspan="7" style="color:'+PAL.sub+'">● recording n=0/'+RULE_UNLOCK_N+'</td></tr>';
     }
-    // (v10.54, GROUP 5 ③) SORTED BY LIFT — the only column that means anything — so the
-    // factors that actually predict sit at the top instead of in declaration order.
-    g.rows.slice().sort(function(a,b){
-      var la=(a.lift==null)?-999:a.lift, lb=(b.lift==null)?-999:b.lift;
-      if(lb!==la) return lb-la;
-      return (b.n||0)-(a.n||0);
-    }).forEach(function(r){
-      var unlocked=(effN(r.n)>=RULE_UNLOCK_N);
+    g.rows.forEach(function(r){
+      var unlocked=(r.n>=RULE_UNLOCK_N);
       var lc=(r.lift==null||!unlocked)?PAL.sub:(r.lift>=7?PAL.longAccent:(r.lift<=-7?PAL.shortAccent:PAL.ink));
-      var warn=r.oneSided?('<span title="Does this row describe the FACTOR or the DAY? '+Math.round(100*(r.oneWayShare||0))+'% of its votes pointed the same way, so its rate is telling you about the period. Read the lift." style="color:'+PAL.amber+'"> ⚠1-way</span>'):'';
-      var rowTip=('Does this value predict? Rate is what happened after it; EXPECTED is what a coin voting the same '+
-        'UP/DOWN mix would have scored on the same tape; LIFT is the difference and the only number that is about the factor. '+
-        nTxt(r.n)+(r.relLiftDiff!=null?(' · vs the trend alone on the '+r.relDiffN+' bars where they differ: '+(r.relLiftDiff>0?'+':'')+r.relLiftDiff+' pts'):'')).replace(/"/g,'');
-      h+='<tr title="'+rowTip+'" style="border-top:1px solid rgba(255,255,255,.04)">'+
+      var warn=r.oneSided?'<span title="Every vote in this row pointed the same way. Its rate is telling you about the PERIOD, not about the factor." style="color:'+PAL.amber+'"> ⚠1-way</span>':'';
+      h+='<tr style="border-top:1px solid rgba(255,255,255,.04)">'+
         '<td style="color:'+PAL.ink+'">'+r.label+warn+'</td>'+
-        '<td title="'+nTxt(r.n)+'" style="text-align:right;color:'+PAL.sub+'">'+effN(r.n)+(r.skipped?('+'+r.skipped+'s'):'')+'</td>'+
-        '<td style="text-align:right;color:'+PAL.ink+'">'+(unlocked?(r.rate+'% 📊'):('<span style="color:'+PAL.sub+'">● eff '+effN(r.n)+'/'+RULE_UNLOCK_N+'</span>'))+'</td>'+
+        '<td style="text-align:right;color:'+PAL.sub+'">'+r.n+(r.skipped?('+'+r.skipped+'s'):'')+'</td>'+
+        '<td style="text-align:right;color:'+PAL.ink+'">'+(unlocked?(r.rate+'% 📊'):('<span style="color:'+PAL.sub+'">● '+r.n+'/'+RULE_UNLOCK_N+'</span>'))+'</td>'+
         '<td style="text-align:right;color:'+PAL.sub+'">'+r.up+'/'+r.dn+'</td>'+
         '<td style="text-align:right;color:'+PAL.sub+'">'+(r.expected==null?'–':r.expected+'%')+'</td>'+
         '<td style="text-align:right;font-weight:700;color:'+lc+'">'+(r.lift==null?'–':((r.lift>0?'+':'')+r.lift))+'</td>'+
-        '<td style="text-align:right;color:'+(r.regimeSplit?PAL.amber:PAL.sub)+'">'+
-          (r.trendRate==null?'–':(r.trendRate+'% n'+r.trend.n))+' / '+
-          (r.chopRate==null?'–':(r.chopRate+'% n'+r.chop.n))+
-          (r.regimeSplit?'<span title="This row inverts between regimes — it is two rules, not one."> ⚠regime</span>':'')+'</td>'+
         '<td style="text-align:right;color:'+PAL.sub+'">'+(r.avgMfe==null?'–':(r.avgMfe.toFixed(2)+'/'+r.avgMae.toFixed(2)))+'</td>'+
       '</tr>';
     });
@@ -10875,105 +8731,6 @@ function dirFactorsHtml(sym){
   });
   h+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:4px;opacity:.85">which factors actually predict — the hierarchy and its weights stay hand-set ⚖ until these rows mature · "s" = samples the state implied nothing (flat/na), skipped rather than counted as misses</div>';
   h+='</div>';
-  return h;
-}
-
-// ============================================================================
-// (v10.53 F) THE LEARNING LOOP, VISIBLE. Three strips above the factor table:
-//   PROMOTED   — what the panel auto-applied, when, on what evidence.
-//   PROPOSALS  — the open queue with its distance from the bar (n / need 20 / wf x of 3).
-//   CHALLENGERS— parked factor vs the incumbent it is trying to replace, side by side.
-// Descriptive: it reports what the code did, it never argues for it.
-// ============================================================================
-function learningStripsHtml(){
-  var doc=null; try{ doc=rulesDoc(); }catch(e){ doc=null; }
-  var promo=[]; try{ promo=promotionsList(); }catch(e1){}
-  var props=(doc&&doc.proposals)||[];
-  var chals=(doc&&doc.challengers)||{};
-  var kills=(doc&&doc.killList)||[];
-  var box=function(title, tip, body){
-    return '<div style="padding:6px 8px;background:'+PAL.card+';border:1px solid '+PAL.line+';border-radius:8px;margin:4px 0">'+
-      '<div title="'+String(tip).replace(/"/g,'')+'" style="color:'+PAL.gold+';font-size:9px;font-weight:800;letter-spacing:.5px;margin-bottom:3px">'+title+'</div>'+
-      body+'</div>';
-  };
-  var h='';
-  // ---- PROMOTED ----
-  var pb='';
-  if(!promo.length){
-    pb='<div style="font-size:8.5px;color:'+PAL.sub+'">nothing promoted yet — every weight is still hand-set ⚖. A proposal only applies at n≥'+PROMO_MIN_N+' with a walk-forward hold on '+PROMO_WF_SESSIONS+' NEW sessions and no regime flip.</div>';
-  } else {
-    pb='<table style="width:100%;border-collapse:collapse;font-size:8.5px">'+
-       '<tr style="color:'+PAL.sub+'"><td>what</td><td style="text-align:right">from → to</td><td style="text-align:right">on</td><td style="text-align:right">evidence</td></tr>';
-    promo.forEach(function(q){
-      pb+='<tr style="border-top:1px solid rgba(255,255,255,.04)">'+
-        '<td style="color:'+PAL.ink+'">📊 '+(q.target||q.id)+' <span style="color:'+PAL.sub+'">'+(q.kind||'')+'</span></td>'+
-        '<td style="text-align:right;color:'+PAL.sub+'">'+(q.from==null?'–':q.from)+' → '+(q.to==null?'–':q.to)+'</td>'+
-        '<td style="text-align:right;color:'+PAL.sub+'">'+(q.on||'–')+'</td>'+
-        '<td style="text-align:right;color:'+PAL.sub+'">eff n'+((q.evidence&&(q.evidence.localEffN!=null?q.evidence.localEffN:q.evidence.n))||0)+((q.evidence&&q.evidence.lift!=null)?(' · lift '+((q.evidence.lift>0?'+':'')+q.evidence.lift)):'')+'</td></tr>';
-    });
-    pb+='</table>';
-  }
-  pb+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;opacity:.85">direction weights source: <b>'+DIR_WEIGHTS_SOURCE+'</b> · A ≥'+DIR_WEIGHTS.gradeA+' · B ≥'+DIR_WEIGHTS.gradeB+'</div>';
-  h+=box('📊 PROMOTED', 'What the panel auto-applied after re-checking the promotion bar in code. The weekly run only PROPOSES; the bar is enforced here, not by the reviewer.', pb);
-  // ---- PROPOSALS ----
-  var qb='';
-  if(!props.length){
-    qb='<div style="font-size:8.5px;color:'+PAL.sub+'">no open proposals — the weekly learning run writes them into learning/rules.json.</div>';
-  } else {
-    qb='<table style="width:100%;border-collapse:collapse;font-size:8.5px">'+
-       '<tr style="color:'+PAL.sub+'"><td>proposal</td><td style="text-align:right">n / need</td><td style="text-align:right">walk-fwd</td><td style="text-align:right">state</td></tr>';
-    props.forEach(function(p){
-      var chk={ok:false,why:'—'}; try{ chk=proposalClearsBar(p); }catch(eC){}
-      var applied=false; try{ applied=!!promoLoad().applied[p.id]; }catch(eA){}
-      // (v10.54) LOCAL truth in every column: the reviewer's own n and walk-forward are
-      // advisory, so the strip shows what THIS machine measured, not what the file claims.
-      var loc={n:0,effN:0}; try{ loc=proposalLocalN(p); }catch(eLn){}
-      var wfl={sessions:0}; try{ wfl=proposalWalkForwardLocal(p); }catch(eWf){}
-      var ses=wfl.sessions;
-      var col=applied?PAL.longAccent:(chk.ok?PAL.blue:PAL.sub);
-      qb+='<tr title="'+('measured here: '+nTxt(loc.n)+'; the proposal claims eff n='+((typeof p.n==='number')?p.n:0)).replace(/"/g,'')+'" style="border-top:1px solid rgba(255,255,255,.04)">'+
-        '<td style="color:'+PAL.ink+'">'+(p.target||p.id)+' <span style="color:'+PAL.sub+'">'+(p.kind||'')+' '+(p.current==null?'':(p.current+'→'+p.proposed))+'</span></td>'+
-        '<td style="text-align:right;color:'+PAL.sub+'">eff '+loc.effN+' / need '+PROMO_MIN_N+'</td>'+
-        '<td style="text-align:right;color:'+PAL.sub+'">'+ses+' of '+PROMO_WF_SESSIONS+' local</td>'+
-        '<td style="text-align:right;color:'+col+'">'+(applied?'applied':(chk.ok?'clears the bar':(chk.why||p.reason||'below the bar')))+'</td></tr>';
-    });
-    qb+='</table>';
-  }
-  h+=box('⚖ PROPOSALS (queue)', 'Open proposals and exactly how far each is from the bar. `clearsBar` asserted by the reviewer is advisory — the state shown here is the panel’s own re-check of n, walk-forward and regime flip.', qb);
-  // ---- CHALLENGERS ----
-  var ck=Object.keys(chals);
-  var cb='';
-  if(!ck.length){
-    cb='<div style="font-size:8.5px;color:'+PAL.sub+'">no challengers evaluated yet — parked factors (dir.trendFast, dir.struct, dir.kingRoll, netGamma) are scored against incumbents in the weekly run.</div>';
-  } else {
-    cb='<table style="width:100%;border-collapse:collapse;font-size:8.5px">'+
-       '<tr style="color:'+PAL.sub+'"><td>challenger</td><td style="text-align:right">vs incumbent</td><td style="text-align:right">rates</td><td style="text-align:right">n</td><td style="text-align:right">lift</td></tr>';
-    ck.forEach(function(k){
-      var c=chals[k]||{};
-      cb+='<tr style="border-top:1px solid rgba(255,255,255,.04)">'+
-        '<td style="color:'+PAL.ink+'">'+k+'</td>'+
-        '<td style="text-align:right;color:'+PAL.sub+'">'+(c.vs||'–')+'</td>'+
-        '<td style="text-align:right;color:'+PAL.ink+'">'+(c.chalRate==null?'–':c.chalRate+'%')+' vs '+(c.incRate==null?'–':c.incRate+'%')+'</td>'+
-        '<td style="text-align:right;color:'+PAL.sub+'">'+(c.n==null?'–':c.n)+'</td>'+
-        '<td style="text-align:right;color:'+PAL.sub+'">'+(c.lift==null?'–':((c.lift>0?'+':'')+c.lift))+'</td></tr>';
-    });
-    cb+='</table>';
-  }
-  h+=box('⚔ CHALLENGERS', 'A parked factor measured on the SAME bars as the incumbent it would replace. A challenger only becomes a swap proposal when it beats the incumbent over the bar.', cb);
-  // ---- KILL LIST ----
-  if(kills.length){
-    var kb='<table style="width:100%;border-collapse:collapse;font-size:8.5px">';
-    kills.forEach(function(k){
-      var act=false; try{ act=killActive(k.id); }catch(eK){}
-      var klr={rate:null,n:0}; try{ klr=ruleLocalRate(k.id); }catch(eKr){}
-      kb+='<tr style="border-top:1px solid rgba(255,255,255,.04)"><td style="color:'+PAL.ink+'">'+(act?'📊 ':'⚖ ')+k.id+'</td>'+
-        '<td style="color:'+PAL.sub+'">'+(k.condition||'')+'</td>'+
-        '<td style="text-align:right;color:'+PAL.sub+'">'+pctN(klr.rate, klr.n)+'</td>'+
-        '<td style="text-align:right;color:'+(act?PAL.amber:PAL.sub)+'">'+(act?'caps the grade at C':'descriptive only')+'</td></tr>';
-    });
-    kb+='</table>';
-    h+=box('🛑 KILL LIST', 'Conditions under which the tool refuses to claim a read. Only a PROMOTED kill entry caps a grade; hand-set ones are listed but change nothing.', kb);
-  }
   return h;
 }
 
@@ -10995,11 +8752,7 @@ function learningStripsHtml(){
 //   'trend-only' — trend with nothing confirming it  → the v10.50 3-beat sentence, drift clause dropped.
 // relation is OPTIONAL: omitted (null) the function emits the exact v10.50 voice, so
 // the pure sentence tests keep pinning the legacy beats.
-// (v10.55) `leg` is OPTIONAL and LAST: omitted, the function emits the exact v10.51
-// voice (the sentence tests keep pinning the legacy beats). Supplied and active, the
-// READ speaks the user's leg language — magnet, pullback node, roll step, sell/buy
-// level — because that is the model the trader is actually reading the tape with.
-function read3Beat(dirWord, L, px, flr, ceil, dr, tgtK, tgtRole, relation, leg){
+function read3Beat(dirWord, L, px, flr, ceil, dr, tgtK, tgtRole, relation){
   var out={ verdict:'SIDEWAYS', dir:dirWord||'SIDE', arrow:'→', kind:'split', sentence:'', relation:relation||null };
   var dirNum = dirWord==='UP'?1:(dirWord==='DN'?-1:0);
   var leanWord = (dr&&dr.dir>0)?'leaning up':((dr&&dr.dir<0)?'leaning down':'split');
@@ -11007,25 +8760,10 @@ function read3Beat(dirWord, L, px, flr, ceil, dr, tgtK, tgtRole, relation, leg){
   var holdDir = L ? ((L.k<px)?1:(L.k>px?-1:0)) : 0;
   var role = L ? zoneRole(L) : '';
   var rngTxt = (flr&&ceil)?(fmtNum(flr.k)+'–'+fmtNum(ceil.k)):'';
-  // (v10.54, audit 7) WHERE IN THE RANGE, ACTUALLY. The tentative and split heads both
-  // opened with the literal words "Mid-range" whatever price was doing, so a tape sitting
-  // right on the Ceil was announced as mid-range. The head now comes from the same
-  // rangePosOf zoning the direction grade's mid-range cap uses.
-  var zone='unknown';
-  try{
-    if(flr && ceil && px!=null){ var rp=rangePosOf({flr:flr, ceil:ceil}, px); zone=rp.zone||'unknown'; }
-  }catch(eZ){}
-  var zoneWord = zone==='lower' ? 'Near Flr' : (zone==='upper' ? 'Near Ceil' : (zone==='mid' ? 'Mid-range' : ''));
-  var posHead = zoneWord ? (zoneWord+(rngTxt?(' '+rngTxt):'')+'.') : (rngTxt?('Range '+rngTxt+'.'):'');
-  out.zone=zone;
   var kind;
   if(relation==='tentative') kind='split';
   else if(dirNum===0 || (!relation && dr && dr.verdict==='SPLIT')) kind='split';
-  // (v10.54, audit 7) 'cont' = price is travelling THROUGH the node it is engaging, i.e.
-  // the direction opposes what the node would do if it held. `L.isGatekeeper` was ORed in,
-  // so every gatekeeper node produced a "Through …" continuation sentence even when the
-  // read was a clean bounce off it in the opposite direction.
-  else if(L && dirNum===-holdDir) kind='cont';
+  else if(L && (L.isGatekeeper || dirNum===-holdDir)) kind='cont';
   else if(dirNum>0) kind='bounce';
   else kind='reject';
   out.kind=kind;
@@ -11034,7 +8772,7 @@ function read3Beat(dirWord, L, px, flr, ceil, dr, tgtK, tgtRole, relation, leg){
   var TrendWord = dirNum>0?'Uptrend':'Downtrend';
   if(relation==='tentative'){
     // No confirmed trend. Drift may only offer a provisional lean, and the sentence says so.
-    var tHead = posHead || (L?('At '+role+' '+fmtNum(L.k)+'.'):'');
+    var tHead = rngTxt ? ('Mid-range '+rngTxt+'.') : (L?('At '+role+' '+fmtNum(L.k)+'.'):'');
     var tBody = (dr && dr.dir) ? ('No trend; GEX and VEX '+leanVerb+' — tentative only.')
                                : 'No trend; GEX and VEX split — no clean lean, rotation likely.';
     out.sentence=[tHead, tBody].filter(Boolean).join(' ');
@@ -11042,11 +8780,11 @@ function read3Beat(dirWord, L, px, flr, ceil, dr, tgtK, tgtRole, relation, leg){
     // (dirNum can still be 0 here when the chop cap forced SIDE — then the split
     // sentence below is the honest one, and naming a trend would contradict it.)
     // The trend still owns the direction; the drift disagreeing is the headline caution.
-    var dHead = L ? ('At '+role+' '+fmtNum(L.k)+'.') : posHead;
+    var dHead = L ? ('At '+role+' '+fmtNum(L.k)+'.') : (rngTxt?('Mid-range '+rngTxt+'.'):'');
     var dWatch = (tgtK!=null)?('Watch '+fmtNum(tgtK)+'.'):'';
     out.sentence=[dHead, TrendWord+', but GEX and VEX '+leanVerb+' — divergence, lower confidence.', dWatch].filter(Boolean).join(' ');
   } else if(kind==='split'){
-    out.sentence=(posHead||'No range defined.')+' GEX and VEX split — no clean lean, rotation likely.';
+    out.sentence='Mid-range'+(rngTxt?(' '+rngTxt):'')+'. GEX and VEX split — no clean lean, rotation likely.';
   } else if(kind==='cont'){
     var b3=(tgtK!=null)?('Potential run to '+(tgtRole?(tgtRole+' '):'')+fmtNum(tgtK)+'.'):'';
     var cMid = (relation==='trend-only') ? '' :
@@ -11065,11 +8803,6 @@ function read3Beat(dirWord, L, px, flr, ceil, dr, tgtK, tgtRole, relation, leg){
   }
   out.verdict = dirWord==='UP'?'BULLISH':(dirWord==='DN'?'BEARISH':'SIDEWAYS');
   out.arrow   = dirWord==='UP'?'↑':(dirWord==='DN'?'↓':'→');
-  // (v10.55) the leg voice REPLACES the beat sentence when the engine is active; the
-  // 3-beat text is kept as `base` so the hover can still show where price sits.
-  var legTxt=''; try{ legTxt=(typeof legSentence==='function')?legSentence(leg):''; }catch(eL){ legTxt=''; }
-  if(legTxt){ out.base=out.sentence; out.legSentence=legTxt; out.sentence=legTxt;
-              out.leg={ dir:leg.dir, phase:leg.phase, count:(leg.roll?leg.roll.count:0) }; }
   return out;
 }
 function readBlock44(sym){
@@ -11089,9 +8822,7 @@ function readBlock44(sym){
       if(fr && fr.tgt!=null){ tgtK=fr.tgt;
         var tl=(m.levels||[]).filter(function(x){return Math.abs(x.k-tgtK)<0.001;})[0]; if(tl) tgtRole=zoneRole(tl); } }
   }catch(eFr){}
-  var legR=(sp&&sp.leg)||null;
-  if(!legR){ try{ legR=legEngine(sym); }catch(eLg){ legR=null; } }
-  var v=read3Beat(dirWord, L, px, m.flr, m.ceil, dr, tgtK, tgtRole, d.relation||null, legR);
+  var v=read3Beat(dirWord, L, px, m.flr, m.ceil, dr, tgtK, tgtRole, d.relation||null);
   var vcol={BULLISH:PAL.longAccent,BEARISH:PAL.shortAccent,SIDEWAYS:PAL.sub}[v.verdict]||PAL.sub;
   // Direction grade chip — letter only, NO ⚖ (the tier + regime live in the hover).
   var g=d.grade||'C', gdisp=d.disp||g;
@@ -11104,16 +8835,9 @@ function readBlock44(sym){
     'Trend UP + drift UP = confirmed. Trend UP + drift DOWN = divergence, caution. No trend = drift gives a tentative lean, never better than C. '+
     'Now: trend '+(d.trendState||'?')+' ('+((di.trend&&di.trend.up)||0)+' up / '+((di.trend&&di.trend.dn)||0)+' dn of '+((di.trend&&di.trend.win)||0)+') '+
     '· drift '+((di.drift&&di.drift.verdict)||'?')+' → '+(d.relation||'?')+' → '+(dirWord==='UP'?'Up':(dirWord==='DN'?'Down':'Sideways'))+' '+gdisp+
-    '. Score '+(d.score!=null?d.score:'?')+' (live cut points A≥'+DIR_WEIGHTS.gradeA+', B≥'+DIR_WEIGHTS.gradeB+', else C)'+(d.capped?('; hard-capped to C by '+d.capped):'')+
-    '. '+((function(){ var R=di.roll; if(!R || R.dir==='none') return 'No leg engine reading (no confirmed trend). ';
-      var w=(R.dir==='dn')?'lower':'higher';
-      var s='Roll: '+R.count+' pullback node'+(R.count===1?'':'s')+' '+w+(R.confirmed?' — confirmed (+1)':(R.signal?' — signal':''))+
-            (R.weakening?(' · PB rolled AGAINST the trend — weakening ('+(R.vote||-1)+')'):(R.vote>0?'':''))+
-            (R.pb!=null?(' · PB '+fmtLvl(R.pb)):'')+(R.magnet!=null?(' · magnet '+fmtLvl(R.magnet)):'')+
-            '. Multi-session rolling '+(R.session&&R.session.ready?('votes '+R.session.vote):('records only — '+((R.session&&R.session.note)||'needs 3 sessions')))+'. ';
-      return s; })())+
-    'Structure '+((di.structAsym&&di.structAsym.bias)||'?')+' and King roll are RECORDED, not voted, until measured. '+
-    ((d.tier==='⚖')?('Hand-set \u2696 \u2014 becomes \uD83D\uDCCA only when this panel has promoted it past the bar AND measured eff n\u2265'+RULE_UNLOCK_N+' locally.'):'Measured \uD83D\uDCCA on local evidence.')).replace(/"/g,'');
+    '. Score '+(d.score!=null?d.score:'?')+' (A≥5, B≥3, else C)'+(d.capped?('; hard-capped to C by '+d.capped):'')+
+    '. Structure '+((di.structAsym&&di.structAsym.bias)||'?')+' and King roll are RECORDED, not voted, until measured. '+
+    ((d.tier==='⚖')?'Hand-set until n≥20 measured.':'Measured.')).replace(/"/g,'');
   // Session badge — dim normally; HIGHLIGHT only power hour / OPEX.
   var sb=sessionBucket();
   var hot=(sb.bucket==='power'||sb.opex);
@@ -11133,8 +8857,7 @@ function readBlock44(sym){
       '<span style="color:'+PAL.line+'">·</span>'+sBadge+hBadge+
     '</div>'+
     '<div title="'+rTip+'" style="font-size:9.5px;line-height:1.35;color:'+PAL.ink+';display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">'+v.sentence+'</div>'+
-  '</div>'+
-  (function(){ try{ return legBannerHtml(sym); }catch(eB){ return ''; } })();
+  '</div>';
 }
 window.__gptsStudyRun=function(){ studyRun(function(r){ try{ render(); }catch(e){} }); };
 window.__gptsRepoExport=function(d){ repoExportDay(d||TODAY,false); };
@@ -11218,7 +8941,7 @@ function projScorecardHtml(){
 // (v10.47) KING HEADER — restored per user: ★SUP | 👑 King (+ gate row) | ★RES, then the 5-STEP
 // ①②③ icons. This is the top slice of kingBlock() (which stays unrendered: no charts/verdict pill).
 function kingHeaderBlock(){
-  var sym=activeSym();   // (v10.55 PART G) keyed by sym like everything else
+  var sym='SPY';
   var tp=tapeMap(sym);
   var kingK = (tp && typeof tp.king==='number') ? tp.king : null;
   var px = STATE[sym] ? STATE[sym].price : null;
@@ -11254,18 +8977,18 @@ function kingHeaderBlock(){
       var go=signedOff((px!=null)?(gkK-px):null);
       var gArr = (go && go.arr) ? ('<span title="Gatekeeper is '+go.num+' vs price (+ above, \u2212 below)." style="color:'+go.col+';font-weight:800;font-size:10px;line-height:1;font-variant-numeric:tabular-nums;margin-left:3px">'+go.sign+go.num+go.arr+'</span>') : '';
       gkRow='<span style="display:inline-flex;align-items:center;gap:3px;line-height:1">'+gateSvg(PAL.ink)+
-        '<span style="color:'+PAL.ink+';font-weight:700;font-size:10px;font-variant-numeric:tabular-nums">'+fmtLvl(gkK)+'</span>'+gArr+'</span>';
+        '<span style="color:'+PAL.ink+';font-weight:700;font-size:10px;font-variant-numeric:tabular-nums">'+fmtNum(gkK)+'</span>'+gArr+'</span>';
     } else {
       // no gatekeeper => keep the row height, dim placeholder (clear path)
       gkRow='<span title="No gatekeeper \u2014 clear path to the King." style="display:inline-flex;align-items:center;gap:3px;line-height:1;opacity:.45">'+gateSvg(PAL.sub)+
         '<span style="color:'+PAL.sub+';font-size:10px">\u2013</span></span>';
     }
     kingPxBadge=
-      '<span title="TOP: 👑 King strike '+fmtLvl(kingK)+' + offset vs price. BELOW: gatekeeper strike + its distance from price (no gatekeeper => clear path)." '+
+      '<span title="TOP: 👑 King strike '+fmtNum(kingK)+' + offset vs price. BELOW: gatekeeper strike + its distance from price (no gatekeeper => clear path)." '+
         'style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;padding:3px 8px;border:1.5px solid '+PAL.gold+';border-radius:14px;background:'+PAL.card+';flex:0 1 auto;min-width:0">'+
         '<span style="display:inline-flex;align-items:center;line-height:1">'+
           '<span style="font-size:12px;line-height:1">\uD83D\uDC51</span>'+
-          '<span style="color:'+PAL.gold+';font-weight:800;font-size:13px;font-variant-numeric:tabular-nums;margin-left:3px">'+fmtLvl(kingK)+'</span>'+
+          '<span style="color:'+PAL.gold+';font-weight:800;font-size:13px;font-variant-numeric:tabular-nums;margin-left:3px">'+fmtNum(kingK)+'</span>'+
           kArr+
         '</span>'+
         '<span style="width:100%;height:1px;background:'+PAL.line+';margin:1px 0"></span>'+
@@ -11282,32 +9005,16 @@ function kingHeaderBlock(){
     var col = isSup?PAL.longAccent:PAL.shortAccent;
     var lbl = (isSup?'\u2605 SUP':'\u2605 RES');
     if(!node){ return '<span style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 6px;min-height:40px;box-sizing:border-box;border-radius:14px;background:'+PAL.card+';border:1.5px solid '+PAL.line+';opacity:.6;flex:0 1 auto;min-width:0"><span style="font-size:7.5px;font-weight:800;line-height:1;color:'+PAL.sub+';letter-spacing:.3px">'+lbl+'</span><span style="width:100%;height:1px;background:'+PAL.line+';margin:2px 0"></span><span style="color:'+PAL.sub+';font-size:10px;line-height:1">\u2013</span></span>'; }
-    var tip=(isSup?'Strongest SUPPORT magnet below price':'Strongest RESISTANCE magnet above price')+' \u2014 '+fmtLvl(node.k)+' at '+node.pct+'% of King (size+build-rate+nearness blend). A strong magnet attracts price toward it.';
+    var tip=(isSup?'Strongest SUPPORT magnet below price':'Strongest RESISTANCE magnet above price')+' \u2014 '+fmtNum(node.k)+' at '+node.pct+'% of King (size+build-rate+nearness blend). A strong magnet attracts price toward it.';
     return '<span title="'+tip.replace(/"/g,'')+'" style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 6px;min-height:40px;box-sizing:border-box;border-radius:14px;background:'+PAL.card+';border:1.5px solid '+col+';flex:0 1 auto;min-width:0">'+
       '<span style="font-size:7.5px;font-weight:800;line-height:1;color:'+col+';letter-spacing:.3px">'+lbl+'</span>'+
       '<span style="width:100%;height:1px;background:'+PAL.line+';margin:2px 0"></span>'+
-      '<span style="line-height:1;white-space:nowrap"><span style="font-weight:800;font-size:12.5px;color:'+col+';font-variant-numeric:tabular-nums">'+fmtLvl(node.k)+'</span> <span style="color:'+PAL.sub+';font-size:8.5px;font-weight:600;font-variant-numeric:tabular-nums">'+node.pct+'%</span></span>'+
+      '<span style="line-height:1;white-space:nowrap"><span style="font-weight:800;font-size:12.5px;color:'+col+';font-variant-numeric:tabular-nums">'+fmtNum(node.k)+'</span> <span style="color:'+PAL.sub+';font-size:8.5px;font-weight:600;font-variant-numeric:tabular-nums">'+node.pct+'%</span></span>'+
     '</span>';
   }
   var supBadge = sideMagnet(nm?nm.strongSup:null, true);
   var resBadge = sideMagnet(nm?nm.strongRes:null, false);
-  // (v10.51.2) STEPS 1-5 restored as a tiny clickable line ABOVE the cluster. Each numeral
-  // opens its OWN popover (Skylit's 5-step method) via the existing .gs-ico/data-gstep
-  // delegation in wireStepIcons(). Deliberately its own row so the SUP/King/RES pill
-  // alignment below is untouched. v10.50 had retired these; the doctrine text (STEP_TEXT)
-  // was still in the file but had no caller, i.e. unreachable.
-  var stepsLine=(function(){
-    var STEP_LBL={1:'Magnets',2:'King',3:'Range',4:'Gatekeepers',5:'Flow'};
-    var s='<div style="display:flex;align-items:center;gap:4px;font-size:8px;line-height:1;color:'+PAL.sub+';margin:1px 0 2px 3px;white-space:nowrap">'+
-          '<span style="font-weight:700;letter-spacing:.3px">Steps</span>';
-    for(var n=1;n<=5;n++){
-      s+='<span class="gs-ico" data-gstep="'+n+'" title="Step '+n+' \u2014 '+STEP_LBL[n]+' (click for the method)" '+
-         'style="cursor:pointer;font-size:8px;font-weight:800;color:'+PAL.blue+';padding:0 1px;border-bottom:1px dotted '+PAL.blue+'">'+n+'</span>';
-    }
-    return s+'</div>';
-  })();
-  var html=stepsLine+
-  '<div style="display:flex;justify-content:space-between;align-items:center;gap:4px;margin:4px 0 3px 0;width:100%;box-sizing:border-box;padding:0 2px">'+
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;gap:4px;margin:4px 0 3px 0;width:100%;box-sizing:border-box;padding:0 2px">'+
     supBadge+
     '<span title="KING: the strike with the largest absolute dealer exposure \u2014 the day\u2019s EOD settlement magnet." style="display:inline-flex;flex:0 1 auto;min-width:0">'+kingPxBadge+'</span>'+
     resBadge+
@@ -11473,8 +9180,7 @@ function kingBlock(){
 }
 
 function accumBlock(){
-  var __asym=activeSym();   // (v10.55 PART G)
-  var fs = futureStructureSummary(__asym);
+  var fs = futureStructureSummary('SPY');
   // #5 ONLY SHOW STRIKES THAT MATTER. Instead of a fixed 3-above / 3-below
   // ladder padded with Steady placeholders, surface only nodes a trader needs
   // to act on: those actively Accumulating (Building) or Dissipating (Fading),
@@ -11496,7 +9202,7 @@ function accumBlock(){
   // whole panel then reads: 776 775 774 [SPY] 773 772 771.
   rowsAbove = rowsAbove.slice().sort(function(a,b){ return b.k-a.k; });
   rowsBelow = rowsBelow.slice().sort(function(a,b){ return b.k-a.k; });
-  var px = (STATE[__asym]||STATE.SPY).price;
+  var px = STATE.SPY.price;
   // ===== MERGED S/R BIAS BLOCK =====
   // #4 (v10.6) Combined into ONE header: "S/R Bias". The board-tilt headline
   // (Support-heavy / Resistance-heavy N\u00d7) rides on the right of this single
@@ -11619,54 +9325,39 @@ function feedStatusHtml(){
   }catch(eW){}
   // (v10.17) The 📥 Save Day button moved OFF the dashboard footer and INTO the
   // Analysis tab as an in-tab "Save & prep review" banner (the tab is the trigger).
-  // (v10.52) PIPELINE INDICATOR — replaces the v10.50 feed/vex/rec dots. Those three
-  // asked "is the tool alive?". They could all be green while the day's data never
-  // left the browser, which is exactly what happened: v10.50 also dropped the old
-  // "saved ✓ / not saved" text, so a download-only export looked identical to a real
-  // repo write. The four stages below follow the data instead — recorded → saved →
-  // pushed → review — and feed/vex liveness is folded into the `rec` hover so no
-  // health signal was lost. The 💾 export / 📁 pick controls and the ⚠ tape-parse flag
-  // still ride to the right; the strip is nowrap so it stays ONE line at 250px.
-  var vxNow=LASTVEX.SPY; var vexLive = !!(vxNow && (now-vxNow.ts)<=FEED_STALE_MS);
-  var stages=[]; try{ stages=pipeStages()||[]; }catch(ePS){ stages=[]; }
-  var strip='';
+  // (v10.44) DATA REPOSITORY status: recording dot + last export + one-click actions.
+  var rec='';
   try{
-    stages.forEach(function(sg,i){
-      var extra=(sg.key==='rec') ? (' Feed is '+(feedLive?'live':'waiting')+', vex '+(vexLive?'capturing':'waiting')+'.') : '';
-      var tip=(sg.tip+extra).replace(/"/g,'');
-      strip+='<span data-pipe="'+sg.key+'" title="'+tip+'" style="display:inline-flex;align-items:center;white-space:nowrap">'+
-        '<span style="width:5px;height:5px;border-radius:50%;display:inline-block;margin-right:2px;background:'+pipeColor(sg.state)+'"></span>'+
-        sg.label+'</span>';
-    });
-  }catch(eST){}
-  var footTip=('Where is today’s data in the pipeline? recorded → saved into the repo folder → pushed to GitHub → nightly review back. '+
-    'Green = that stage happened, amber = it has not but that is expected, red = it is broken, grey = not knowable right now. Hover any stage for the detail.').replace(/"/g,'');
+    var lastExp=localStorage.getItem('gpts_last_export');
+    var savedTxt = REPO_LAST_SAVE ? ('saved '+new Date(REPO_LAST_SAVE.t).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',timeZone:'America/Chicago'})+' \u2713'+(REPO_LAST_SAVE.how==='download'?' (download)':''))
+                  : (lastExp===TODAY?'saved today \u2713':'not saved yet');
+    rec='<span title="Background recording is live: every 3m bar (price, King, K$, all nodes with state/polarity, cross-market headers, episodes, projections, forward outcomes) is written to the in-browser repository (IndexedDB, unbounded). At 15:01 CT the day is exported as data/YYYY-MM-DD.json into your repo folder (one-time folder pick), and a scheduled task commits it. \uD83D\uDCBE = export now \u00b7 \uD83D\uDCC1 = pick/repick the repo data folder." style="display:inline-flex;gap:5px;align-items:center">'+
+      '<span style="color:'+PAL.longAccent+'">rec \u25CF</span><span>'+savedTxt+'</span>'+
+      '<span onclick="window.__gptsRepoExport&&window.__gptsRepoExport()" style="cursor:pointer;border:1px solid '+PAL.line+';border-radius:6px;padding:0 4px" title="Export today\u2019s data now (writes into the chosen repo folder, or downloads).">\uD83D\uDCBE</span>'+
+      '<span onclick="window.__gptsRepoPick&&window.__gptsRepoPick()" style="cursor:pointer;border:1px solid '+PAL.line+';border-radius:6px;padding:0 4px" title="Pick the repo data folder (C:\\Dev\\gex-signal-tapereader\\data) once; choose \u201cAllow on every visit\u201d so nightly exports are silent.">\uD83D\uDCC1</span>'+
+      '</span>';
+  }catch(eRec){}
+  // (v10.50) FOOTER REDESIGN — three health dots + version. Green = healthy, amber =
+  // waiting/degraded. Question-first hover. The 💾 export / 📁 pick controls and the
+  // tape-parse ⚠ flag ride to the right so no capability or health signal is lost.
+  var vxNow=LASTVEX.SPY; var vexLive = !!(vxNow && (now-vxNow.ts)<=FEED_STALE_MS);
+  var recOn=false; try{ recOn = (RECORDER_SYMS.indexOf('SPY')>=0 && !!TODAY); }catch(eRO){}
+  function dot(on){ return '<span style="width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px;background:'+(on?PAL.longAccent:PAL.amber)+'"></span>'; }
+  var footTip=('Is the tool healthy? feed '+(feedLive?'live':'waiting')+' · vex '+(vexLive?'capturing':'waiting')+' · recording '+(recOn?'on':'off')+
+    ' — any amber = the read above may be stale.').replace(/"/g,'');
   var ctrls='';
   try{
     ctrls='<span style="display:inline-flex;gap:4px;align-items:center">'+warn+
-      '<span onclick="window.__gptsRepoExport&&window.__gptsRepoExport()" style="cursor:pointer;border:1px solid '+PAL.line+';border-radius:6px;padding:0 3px" title="Export today’s data now (writes into the chosen repo folder, or downloads).">💾</span>'+
-      '<span onclick="window.__gptsRepoPick&&window.__gptsRepoPick()" style="cursor:pointer;border:1px solid '+PAL.line+';border-radius:6px;padding:0 3px" title="Pick the repo data folder once; choose “Allow on every visit” so nightly exports are silent.">📁</span>'+
+      '<span onclick="window.__gptsRepoExport&&window.__gptsRepoExport()" style="cursor:pointer;border:1px solid '+PAL.line+';border-radius:6px;padding:0 4px" title="Export today’s data now (writes into the chosen repo folder, or downloads).">💾</span>'+
+      '<span onclick="window.__gptsRepoPick&&window.__gptsRepoPick()" style="cursor:pointer;border:1px solid '+PAL.line+';border-radius:6px;padding:0 4px" title="Pick the repo data folder once; choose “Allow on every visit” so nightly exports are silent.">📁</span>'+
       '</span>';
   }catch(eC){}
-  // (v10.55 PART E) the conversion the panel is doing, on the face: 'ES/SPY 10.071 (live)'
-  // when the ratio is being measured this bar, '(≈ last)' / '(≈ const)' when it is not —
-  // and every converted level upstairs carries the same ≈ so the two can never disagree.
-  var futTxt='';
-  try{
-    var ft=futRatioText();
-    if(ft){
-      futTxt='<span title="Every level on this panel is computed in '+FUTMODE.underlying+' strikes (that is where the options tape lives) and DISPLAYED in '+FUTMODE.chart+
-        ' points through this ratio. (live) = measured from the chart price this bar. (≈ …) = the last good ratio or the constant, and then every converted number is marked ≈. Recording stays in '+
-        FUTMODE.underlying+' strikes, so the learning is unaffected." style="color:'+(FUTMODE.live?PAL.blue:PAL.amber)+'">'+ft+'</span>';
-    }
-  }catch(eFt){}
-  var evTxt='';
-  try{ var el=eventTagLabel(); if(el) evTxt='<span title="Event tag set for today in ⚙ — recorded on every feature record so an event day can be separated from an ordinary one." style="color:'+PAL.gold+'">'+el+'</span>'; }catch(eEv){}
-  return '<div title="'+footTip+'" style="display:flex;align-items:center;gap:5px;color:'+PAL.sub+';font-size:8px;letter-spacing:0.2px;white-space:nowrap;overflow:hidden">'+
-    strip+
-    futTxt+evTxt+
+  return '<div title="'+footTip+'" style="display:flex;align-items:center;gap:8px;color:'+PAL.sub+';font-size:8.5px;letter-spacing:0.3px">'+
+    '<span>'+dot(feedLive)+'feed</span>'+
+    '<span>'+dot(vexLive)+'vex</span>'+
+    '<span>'+dot(recOn)+'rec</span>'+
     ctrls+
-    '<span style="margin-left:auto">v10.55</span>'+
+    '<span style="margin-left:auto">v10.51.1</span>'+
   '</div>';
 }
 
@@ -11977,12 +9668,7 @@ window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.setReview=function(obj){ ANALYSIS_REVIEW=obj; if(typeof render==='function') render(); return 'review loaded'; };
 window.__gptsDebug.showAnalysis=function(b){ ANALYSIS_VIEW=(b!==false); if(ANALYSIS_VIEW) TESTING_VIEW=false; if(typeof render==='function') render(); };
 window.__gptsDebug.showTesting=function(b){ TESTING_VIEW=(b!==false); if(TESTING_VIEW) ANALYSIS_VIEW=false; if(typeof render==='function') render(); };
-window.__gptsTestRefresh=function(){ repoCoverage(function(c){ var el=document.getElementById('gpts-tcov'); if(!el) return;
-  var days=c.days.length, bars=c.bars;
-  el.innerHTML='repository: <b>'+days+'</b> day'+(days===1?'':'s')+' · <b>'+bars+'</b> bars ('+ 'about '+Math.round(bars/(FEAT_FWD||10))+' effective observations if every bar carried one feature) · '+
-    Object.keys(c.syms).map(function(k){return k+' '+c.syms[k];}).join(' · ')+
-    ' · fields recorded since: '+(Object.keys(c.fields).length?Object.keys(c.fields).map(function(f){return f+' \u2265'+c.fields[f];}).join(', '):'none yet')+
-    ' <span data-gtcov="1" style="cursor:pointer;text-decoration:underline">refresh</span>'; }); };
+window.__gptsTestRefresh=function(){ repoCoverage(function(c){ var el=document.getElementById('gpts-tcov'); if(el) el.innerHTML='coverage: '+(c.days.length)+' days · '+c.bars+' bars · '+Object.keys(c.syms).map(function(k){return k+' '+c.syms[k];}).join(' · ')+' · fields: '+Object.keys(c.fields).map(function(f){return f+'\u2265'+c.fields[f];}).join(', '); }); };
 window.__gptsMineRun=function(){ studyMine(function(){ try{ render(); }catch(e){} }); };
 window.__gptsHypo=function(spec){ studyHypothesis(spec, function(r){ console.log('[GEX hypothesis]', r); var el=document.getElementById('gpts-thypo'); if(el) el.innerHTML='result: <b>'+r.rate+'%</b> (n='+r.n+') vs baseline '+r.base+'% · lift '+(r.lift>=0?'+':'')+r.lift; }); return 'running…'; };
 window.__gptsHypoRun=function(id){ var pz=(T_PRESETS||[]).filter(function(x){return x.id===id;})[0]; if(!pz) return; studyHypothesis(pz.spec, function(r){ var el=document.getElementById('gpts-thypo'); if(el) el.innerHTML='<b>'+pz.label+'</b> → <b style="color:'+((r.lift||0)>=0?PAL.longAccent:PAL.shortAccent)+'">'+r.rate+'%</b> (n='+r.n+') vs baseline '+r.base+'% · lift '+((r.lift||0)>=0?'+':'')+r.lift; }); };
@@ -12313,478 +9999,147 @@ function A_renderTop(sym){
   return h;
 }
 
-// ============================================================================
-// (v10.54 GROUP 5) THE ANALYSIS + TESTING TABS, REBUILT AROUND THE TRADER'S
-// QUESTIONS INSTEAD OF THE CODE'S HISTORY.
-//
-// Both tabs had grown by accretion: whichever block shipped last went on top, every
-// section was always expanded, half the numbers were percentages with no n beside them,
-// and the jargon (lift, walk-forward, effective n, monotone) was never explained where
-// it was used. At 250px the result was an unreadable wall.
-//
-// The rebuild is structural, not cosmetic:
-//   · SECTIONS ARE COLLAPSIBLE and ordered by the question they answer.
-//   · EVERY empty section prints ONE honest line — never a blank, never a fake zero.
-//   · NO % WITHOUT ITS n, and every n is stated in EFFECTIVE observations (pctN/nTxt).
-//   · HOVERS ARE QUESTION-FIRST: the tooltip opens with the question the row answers.
-//   · A "?" in each tab header opens a one-screen guide to reading that tab.
-//   · nowrap is avoided and every table is width:100%, so the 250px panel still reads.
-// ============================================================================
-var TAB_SECTIONS={};          // id -> open?  (in-memory: no new localStorage key)
-var TAB_GUIDE={};             // 'analysis' | 'testing' -> open?
-function secOpen(id, dflt){
-  if(TAB_SECTIONS[id]===undefined) TAB_SECTIONS[id]=(dflt!==false);
-  return TAB_SECTIONS[id];
-}
-function secToggle(id){ TAB_SECTIONS[id]=!secOpen(id); }
-// One collapsible section. `question` is the plain-language question the section answers
-// and is BOTH the hover and the subtitle, so nothing is explained only in a tooltip.
-function tabSection(id, num, title, question, body, dflt){
-  var open=secOpen(id, dflt);
-  var tip=String(question||'').replace(/"/g,'&quot;');
-  return '<div style="margin:5px 0;border:1px solid '+PAL.line+';border-radius:8px;background:'+PAL.card+';overflow:hidden">'+
-    '<div data-gsec="'+id+'" title="'+tip+'" style="cursor:pointer;display:flex;align-items:flex-start;gap:5px;padding:5px 7px;background:rgba(255,255,255,.02)">'+
-      '<span style="color:'+PAL.sub+';font-size:9px;line-height:1.5">'+(open?'▾':'▸')+'</span>'+
-      '<span style="flex:1;min-width:0">'+
-        '<span style="display:block;color:'+PAL.gold+';font-size:9.5px;font-weight:800;letter-spacing:.4px">'+num+' '+title+'</span>'+
-        '<span style="display:block;color:'+PAL.sub+';font-size:8px;line-height:1.35;white-space:normal">'+question+'</span>'+
-      '</span>'+
-    '</div>'+
-    (open?('<div style="padding:5px 7px 7px">'+body+'</div>'):'')+
-  '</div>';
-}
-// The single honest line an empty section prints. Never blank, never a zero dressed up.
-function tabEmpty(txt){
-  return '<div style="font-size:8.5px;color:'+PAL.sub+';line-height:1.4;white-space:normal">'+txt+'</div>';
-}
-// A headline tile. Greys out and says what it is waiting for under the bar; never shows
-// a % without its n.
-function tabTile(label, rate, n, question, unlockAt){
-  var en=effN(n), need=(unlockAt==null?RULE_UNLOCK_N:unlockAt);
-  var ready=(rate!=null && en>=need);
-  var col=ready?(rate>=57?PAL.longAccent:(rate<=43?PAL.shortAccent:PAL.ink)):PAL.sub;
-  var val=ready?(rate+'%'):'—';
-  var sub=ready?('eff n='+en):('recording — need '+need+' (eff n='+en+')');
-  return '<div title="'+String(question||'').replace(/"/g,'&quot;')+'" style="flex:1 1 70px;min-width:70px;background:#12161f;border:1px solid '+PAL.line+';border-radius:7px;padding:4px 5px'+(ready?'':';opacity:.65')+'">'+
-    '<div style="font-size:8px;color:'+PAL.sub+';white-space:normal;line-height:1.25">'+label+'</div>'+
-    '<div style="font-size:15px;font-weight:800;color:'+col+';line-height:1.2">'+val+'</div>'+
-    '<div style="font-size:7.5px;color:'+PAL.sub+';white-space:normal;line-height:1.25">'+sub+'</div></div>';
-}
-function tabGuideBtn(which){
-  return '<span data-gguide="'+which+'" title="How do I read this tab? Opens a one-screen guide." '+
-    'style="cursor:pointer;font-size:10px;font-weight:800;color:'+PAL.blue+';border:1px solid '+PAL.line+';border-radius:50%;padding:0 5px;margin-left:auto">?</span>';
-}
-function tabHeader(which, title, sub){
-  return '<div style="display:flex;align-items:center;gap:6px;padding:2px 2px 4px">'+
-    '<span style="font-size:12px;font-weight:800;color:'+PAL.ink+'">'+title+'</span>'+
-    '<span style="font-size:8.5px;color:'+PAL.sub+';white-space:normal;flex:1;min-width:0">'+sub+'</span>'+
-    tabGuideBtn(which)+
-  '</div>'+(TAB_GUIDE[which]?tabGuide(which):'');
-}
-function tabGuide(which){
-  var rows;
-  if(which==='analysis'){
-    rows=[
-      ['Did the dashboard tell the truth today?','That is the ONLY question this tab answers. Everything here is measured after the fact from bars that already closed. Nothing here is a forecast.'],
-      ['eff n','EFFECTIVE observations. A feature is recorded every 3-minute bar and scored over the next '+FEAT_FWD+' bars, so '+FEAT_FWD+' consecutive records are '+FEAT_FWD+' overlapping views of ONE outcome. eff n = bars / '+FEAT_FWD+'. Nothing unlocks until eff n ≥ '+RULE_UNLOCK_N+'.'],
-      ['lift','Rate minus what a coin voting the SAME up/down mix would have scored on the same tape. Rate alone rewards a factor that simply voted with a one-way day. Read lift.'],
-      ['⚠1-way','90% or more of that row’s votes pointed one direction. Its rate is telling you about the PERIOD, not the factor.'],
-      ['monotone A·B·C','Grade A should beat B should beat C. If it does not, the fusion is wrong — that finding is the point of the tab.'],
-      ['frame %','Did the card’s OWN target print before its OWN invalidation, inside the same window. This is the claim the card actually made.'],
-      ['⚖ vs 📊','⚖ = hand-set hypothesis. 📊 = this panel promoted it past the bar AND has measured eff n ≥ '+RULE_UNLOCK_N+' locally. A number in a fetched file can never produce a 📊.']
-    ];
-  } else {
-    rows=[
-      ['What is being tested, and what would settle it?','This tab is the queue: open questions, the proposals they turn into, the challengers waiting to replace an incumbent, and the conditions that void a read.'],
-      ['the bar','A proposal only applies at eff n ≥ '+PROMO_MIN_N+' MEASURED HERE, a walk-forward hold on '+PROMO_WF_SESSIONS+' NEW locally recorded sessions, and no regime flip. The weekly run only PROPOSES.'],
-      ['walk-forward','Sessions recorded on this machine AFTER the proposal was made, on which the rate stayed over its baseline. Days before it was made are in-sample and do not count.'],
-      ['regime flip','A rule whose rate sits on opposite sides of the baseline in trend and in chop is two rules, not one. It is refused.'],
-      ['challenger','A parked factor scored on the SAME bars as the incumbent it would replace. It becomes a swap proposal only when it beats it over the bar.'],
-      ['self-test','Runs a synthetic day with three properties planted at known strengths through this panel’s own scorer. If the scorer cannot find them, no number on the Analysis tab can be trusted.']
-    ];
-  }
-  var h='<div style="margin:0 0 6px;padding:6px 7px;border:1px solid '+PAL.blue+';border-radius:8px;background:rgba(74,144,217,.06)">'+
-    '<div style="font-size:9px;font-weight:800;color:'+PAL.blue+';margin-bottom:3px">HOW TO READ THIS TAB <span data-gguide="'+which+'" style="cursor:pointer;float:right;color:'+PAL.sub+'">✕</span></div>';
-  rows.forEach(function(r){
-    h+='<div style="font-size:8.5px;line-height:1.4;margin-bottom:3px;white-space:normal">'+
-       '<b style="color:'+PAL.ink+'">'+r[0]+'</b> — <span style="color:'+PAL.sub+'">'+r[1]+'</span></div>';
-  });
-  return h+'</div>';
-}
-
-// ---- (GROUP 5 ④) DEFLECTIONS, sliced the four ways a trader actually asks about them.
-function deflStats(sym){
-  var out={ grade:{}, tap:{}, pol:{}, session:{}, n:0 };
-  try{
-    var db=recorderLoad(); var days=(db&&db.days)||{};
-    Object.keys(days).forEach(function(dk){
-      var arr=((days[dk]||{}).feat||{})[sym]||[];
-      arr.forEach(function(r){
-        if(!r || r.key!=='node' || !r.resolved || r.hit==null || !r.rec) return;
-        out.n++;
-        function bump(m, k){
-          if(k==null || k==='') return;
-          var b=m[k]||(m[k]={ n:0, hit:0, mfe:0, mae:0, mn:0, fn:0, ftgt:0 });
-          b.n++; if(r.hit) b.hit++;
-          if(r.mfe!=null){ b.mfe+=r.mfe; b.mae+=(r.mae||0); b.mn++; }
-          if(r.frame && (r.frame.first==='tgt' || r.frame.first==='inval')){ b.fn++; if(r.frame.first==='tgt') b.ftgt++; }
-        }
-        bump(out.grade, r.rec.grade);
-        bump(out.tap, (typeof r.rec.tap==='number')?('tap '+(r.rec.tap+1)):null);
-        bump(out.pol, r.rec.pol==='+'?'+γ':(r.rec.pol==='-'?'−γ':null));
-        bump(out.session, r.session||null);
-      });
-    });
-  }catch(e){}
-  return out;
-}
-function deflTableHtml(title, m, question){
-  var keys=Object.keys(m||{});
-  if(!keys.length) return '<div style="font-size:8.5px;font-weight:700;color:'+PAL.sub+';margin-top:4px">'+title+'</div>'+
-    tabEmpty('no resolved node records in this slice yet.');
-  keys.sort();
-  var h='<div title="'+String(question||'').replace(/"/g,'&quot;')+'" style="font-size:8.5px;font-weight:700;color:'+PAL.sub+';margin-top:4px">'+title+'</div>'+
-    '<table style="width:100%;border-collapse:collapse;font-size:8.5px">'+
-    '<tr style="color:'+PAL.sub+'"><td>slice</td><td style="text-align:right">rate</td><td style="text-align:right">eff n</td>'+
-    '<td title="Did the card’s own target print before its own invalidation?" style="text-align:right">frame</td>'+
-    '<td style="text-align:right">MFE/MAE</td></tr>';
-  keys.forEach(function(k){
-    var b=m[k];
-    var p=_fpct(b.hit,b.n), en=effN(b.n);
-    var ready=(p!=null && en>=RULE_UNLOCK_N);
-    var col=ready?(p>=57?PAL.longAccent:(p<=43?PAL.shortAccent:PAL.ink)):PAL.sub;
-    var fr=b.fn?Math.round(100*b.ftgt/b.fn):null;
-    h+='<tr title="'+nTxt(b.n).replace(/"/g,'')+'" style="border-top:1px solid rgba(255,255,255,.04)">'+
-      '<td style="color:'+PAL.ink+'">'+k+'</td>'+
-      '<td style="text-align:right;color:'+col+';font-weight:700">'+(ready?(p+'%'):'● rec')+'</td>'+
-      '<td style="text-align:right;color:'+PAL.sub+'">'+en+'</td>'+
-      '<td style="text-align:right;color:'+PAL.sub+'">'+(fr==null?'–':(fr+'% ('+nTxt(b.fn).replace('n=','').replace(' bars → eff ',' b/')+')'))+'</td>'+
-      '<td style="text-align:right;color:'+PAL.sub+'">'+(b.mn?((b.mfe/b.mn).toFixed(2)+'/'+(b.mae/b.mn).toFixed(2)):'–')+'</td>'+
-    '</tr>';
-  });
-  return h+'</table>';
-}
-function deflectionsSectionHtml(sym){
-  var d=deflStats(sym);
-  if(!d.n) return tabEmpty('no resolved deflection records yet — the node grade is recorded every closed bar and scored '+FEAT_FWD+' bars later, so the first rows appear about 30 minutes into a session.');
-  var h='';
-  h+=deflTableHtml('by GRADE', d.grade, 'Does a better-graded node actually deflect more often? A should beat B should beat C.');
-  h+=deflTableHtml('by TAP #', d.tap, 'Does the Academy 80/66/33 tap decay hold on SPY? 1st tap should beat 2nd should beat 3rd.');
-  h+=deflTableHtml('by POLARITY', d.pol, 'Do +γ nodes deflect cleanly while −γ nodes accelerate through? Compare the MAE column as much as the rate.');
-  h+=deflTableHtml('by SESSION', d.session, 'Does the same structure mean the same thing at 08:35 and 14:45? Power hour is the bucket to watch.');
-  return h;
-}
-
-// ---- (GROUP 5 ⑤ testing) THE SELF-TEST: does this panel's scorer actually work? ----
-// A deterministic synthetic day with three properties planted at known strengths, run
-// through the SAME arithmetic dirFactorStats uses (period baseline, vote-mix-weighted
-// expectation, lift, the 1-way ratio, the regime split). No RNG, no clock, no network:
-// the generator is embedded so the button works offline and in a fresh profile.
-//   (a) synth.edge   — balanced votes, ~75% hit  -> must be FOUND (lift >= +20)
-//   (b) synth.trap   — ~95% of votes one way on a one-way day -> must be FLAGGED 1-way
-//   (c) synth.regime — ~80% in trend, ~30% in chop -> must SPLIT (gap >= 40 pts)
-// If the scorer cannot recover these, no number on the Analysis tab means anything.
-function selfTestDay(){
-  var BARS=120, TREND_BARS=60;
-  var bars=[], i;
-  for(i=0;i<BARS;i++){
-    var o=((i%10)<7)?'dn':'up';
-    bars.push({ i:i, out:o, dirNum:(o==='up'?1:-1), regime:(i<TREND_BARS)?'trend':'chop' });
-  }
-  var upBars=bars.filter(function(b){ return b.out==='up'; });
-  var dnBars=bars.filter(function(b){ return b.out==='dn'; });
-  var edge={}, trap={}, reg={};
-  upBars.forEach(function(b,ix){ edge[b.i]=(ix%12===11)?-1:1; });
-  dnBars.forEach(function(b,ix){ edge[b.i]=((ix%3===0 && ix!==81))?1:-1; });
-  upBars.forEach(function(b,ix){ trap[b.i]=(ix<2)?1:-1; });
-  dnBars.forEach(function(b,ix){ trap[b.i]=(ix<4)?1:-1; });
-  var tB=bars.filter(function(b){ return b.regime==='trend'; });
-  var cB=bars.filter(function(b){ return b.regime==='chop'; });
-  tB.forEach(function(b,ix){ reg[b.i]=(ix<48)?b.dirNum:-b.dirNum; });
-  cB.forEach(function(b,ix){ reg[b.i]=(ix<18)?b.dirNum:-b.dirNum; });
-  var recs=[];
-  bars.forEach(function(b){
-    var mfe=(b.out==='up')?0.9:0.12, mae=(b.out==='dn')?-0.9:-0.12;
-    var fwd={ mfe:mfe, mae:mae };
-    [['synth.edge',edge[b.i]],['synth.trap',trap[b.i]],['synth.regime',reg[b.i]]].forEach(function(p){
-      var v=p[1];
-      recs.push({ key:p[0], bar:b.i, vote:v, regime:b.regime, mfe:mfe, mae:mae,
-                  hit:(v>0 ? (mfe>=DIR_PTS?1:0) : (mae<=-DIR_PTS?1:0)) });
-    });
-  });
-  return { bars:bars, recs:recs };
-}
-function selfTestRun(){
-  var day=selfTestDay();
-  // the PERIOD baseline, exactly as dirFactorStats derives it
-  var bn=0, bu=0, bd=0;
-  day.bars.forEach(function(b){
-    var mfe=(b.out==='up')?0.9:0.12, mae=(b.out==='dn')?-0.9:-0.12;
-    bn++; if(mfe>=DIR_PTS) bu++; if(mae<=-DIR_PTS) bd++;
-  });
-  var upPct=Math.round(100*bu/bn), dnPct=Math.round(100*bd/bn);
-  function stat(key){
-    var n=0,hit=0,up=0,dn=0,tn=0,th=0,cn=0,ch=0;
-    day.recs.forEach(function(r){
-      if(r.key!==key) return;
-      n++; if(r.hit) hit++;
-      if(r.vote>0) up++; else if(r.vote<0) dn++;
-      if(r.regime==='trend'){ tn++; if(r.hit) th++; } else if(r.regime==='chop'){ cn++; if(r.hit) ch++; }
-    });
-    var vn=up+dn;
-    var rate=n?Math.round(100*hit/n):null;
-    var expected=vn?Math.round((up*upPct + dn*dnPct)/vn):null;
-    return { n:n, rate:rate, up:up, dn:dn, expected:expected,
-             lift:(rate!=null&&expected!=null)?(rate-expected):null,
-             oneWayShare:vn?(Math.max(up,dn)/vn):0,
-             oneSided:(vn>=10 && (Math.max(up,dn)/vn)>=0.90),
-             trendRate:tn?Math.round(100*th/tn):null, trendN:tn,
-             chopRate:cn?Math.round(100*ch/cn):null, chopN:cn };
-  }
-  var E=stat('synth.edge'), T=stat('synth.trap'), R=stat('synth.regime');
-  var checks=[
-    { id:'edge', label:'finds the planted edge',
-      want:'lift ≥ +20 on balanced votes',
-      got:'rate '+E.rate+'% vs expected '+E.expected+'% → lift '+(E.lift>0?'+':'')+E.lift+' (votes '+E.up+'↑/'+E.dn+'↓)',
-      pass:(E.lift!=null && E.lift>=20 && !E.oneSided) },
-    { id:'trap', label:'flags the 1-way trap',
-      want:'≥1-way flag AND lift ≈ 0',
-      got:'rate '+T.rate+'% looks fine, but '+Math.round(100*T.oneWayShare)+'% of votes are one way → lift '+(T.lift>0?'+':'')+T.lift,
-      pass:(T.oneSided===true && T.lift!=null && Math.abs(T.lift)<=5) },
-    { id:'regime', label:'splits the regime-dependent rule',
-      want:'trend − chop ≥ 40 pts',
-      got:'trend '+R.trendRate+'% (n'+R.trendN+') vs chop '+R.chopRate+'% (n'+R.chopN+') → pooled '+R.rate+'%',
-      pass:(R.trendRate!=null && R.chopRate!=null && (R.trendRate-R.chopRate)>=40) }
-  ];
-  return { baseline:{ up:upPct, dn:dnPct, n:bn }, checks:checks,
-           ok:checks.every(function(c){ return c.pass; }) };
-}
-var SELFTEST_LAST=null;
-function selfTestHtml(){
-  var btn='<span data-gselftest="1" title="Runs a synthetic day with three properties planted at KNOWN strengths through this panel’s own scorer. If the scorer cannot recover them, nothing on the Analysis tab can be trusted." '+
-    'style="cursor:pointer;font-size:9px;font-weight:800;color:#0b0e14;background:'+PAL.gold+';border-radius:10px;padding:2px 8px">▶ run self-test</span>';
-  if(!SELFTEST_LAST){
-    return '<div style="margin-bottom:4px">'+btn+'</div>'+
-      tabEmpty('not run yet — it takes no data and no network: the synthetic day is generated in-page and scored by the same code the Analysis tab uses.');
-  }
-  var r=SELFTEST_LAST;
-  var h='<div style="margin-bottom:4px">'+btn+' <span style="font-size:8px;color:'+(r.ok?PAL.longAccent:PAL.shortAccent)+';font-weight:800">'+(r.ok?'✓ scorer OK':'✕ SCORER FAILED')+'</span></div>';
-  h+='<div style="font-size:8px;color:'+PAL.sub+';margin-bottom:3px;white-space:normal">planted tape: a down day, baseline up '+r.baseline.up+'% / dn '+r.baseline.dn+'% on '+r.baseline.n+' bars.</div>';
-  r.checks.forEach(function(c){
-    h+='<div style="font-size:8.5px;line-height:1.4;padding:2px 0;border-top:1px solid rgba(255,255,255,.04);white-space:normal">'+
-      '<span style="color:'+(c.pass?PAL.longAccent:PAL.shortAccent)+';font-weight:800">'+(c.pass?'✓':'✕')+'</span> '+
-      '<b style="color:'+PAL.ink+'">'+c.label+'</b> <span style="color:'+PAL.sub+'">(want: '+c.want+')</span>'+
-      '<div style="color:'+PAL.sub+';padding-left:12px">'+c.got+'</div></div>';
-  });
-  return h;
-}
-
-// ---- (GROUP 5 ⑥ testing) DATA COVERAGE + WHAT UNLOCKS WHEN ----
-// The honest answer to "why is everything still ⚖?" is almost always "not enough days".
-// This says exactly which threshold each capability is waiting on, and how far off it is.
-function unlockRowsHtml(sym){
-  sym=sym||'SPY';
-  var rows=[];
-  try{
-    var st=featStatsCached(sym)||{ byKey:{}, days:0, byGrade:{dir:{},node:{}}, act:{take:{n:0},pass:{n:0}} };
-    function need(label, have, want, unit, what){
-      rows.push({ label:label, have:have, want:want, unit:unit, what:what, ok:(have>=want) });
-    }
-    var dirN=effN(((st.byKey||{}).dir||{}).n||0);
-    var nodeN=effN(((st.byKey||{}).node||{}).n||0);
-    var decN=effN(((st.byKey||{}).decision||{}).n||0);
-    need('direction grade rate', dirN, RULE_UNLOCK_N, 'eff obs', 'the Direction tile stops saying "recording" and the ⚖ becomes eligible for 📊');
-    need('node grade rate', nodeN, RULE_UNLOCK_N, 'eff obs', 'the deflection tables unlock per grade / tap / polarity');
-    need('decision cells', decN, RULE_UNLOCK_N, 'eff obs', 'a cell measured under 45% may re-word itself to skip');
-    var fc=0; try{ fc=fcHistSessions(sym)||0; }catch(e1){}
-    need('rolling floors/ceilings', fc, 5, 'sessions', 'day-over-day Flr/Ceil rolling becomes computable (2 consecutive = signal, 3 = confirmation)');
-    // (v10.55 PART D) the multi-session roll VOTES once 3 sessions exist; until then it
-    // records only, and this row says exactly how far off that is. Guarded on its own so
-    // a missing series can never truncate the rest of the coverage table.
-    try{
-      var sr=sessionRoll(sym);
-      var nd=(typeof LEG_ROLL_CONFIRM==='number')?LEG_ROLL_CONFIRM:3;
-      need('multi-session roll vote', (sr?sr.sessions:0), nd, 'sessions',
-           (sr&&sr.ready) ? ('day-over-day rolling VOTES (+1/−1) inside the hierarchy — floors '+sr.flr.count+' / ceilings '+sr.ceil.count+' consecutive migrations')
-                          : ('records only until then — '+((sr&&sr.note)||('needs '+nd+' sessions, have '+(sr?sr.sessions:0)))));
-    }catch(e1b){}
-    try{
-      var pbN=((typeof LEG_PB_LOG!=='undefined' && LEG_PB_LOG[sym])||[]).length;
-      need('pullback nodes detected today', pbN, 3, 'PB nodes', 'the leg engine’s deflection + roll-continuation rates start separating (each detection is one scored record)');
-    }catch(e1c){}
-    need('promotion bar', Math.min(dirN,nodeN), PROMO_MIN_N, 'eff obs', 'a proposal can clear the LOCAL n bar (it also needs '+PROMO_WF_SESSIONS+' walk-forward sessions)');
-    need('walk-forward', st.days||0, PROMO_WF_SESSIONS+1, 'recorded days', 'a proposal made on one day can be held over '+PROMO_WF_SESSIONS+' NEW ones');
-    var taps=(((st.act||{}).take||{}).n||0)+(((st.act||{}).pass||{}).n||0);
-    need('your calls (takes vs passes)', taps, 10, 'taps', 'the selection-quality gap becomes readable (5 takes AND 5 passes minimum)');
-  }catch(e){}
-  if(!rows.length) return tabEmpty('coverage could not be computed from the local recorder.');
-  var h='<table style="width:100%;border-collapse:collapse;font-size:8.5px">'+
-    '<tr style="color:'+PAL.sub+'"><td>what unlocks</td><td style="text-align:right">have / need</td></tr>';
-  rows.forEach(function(r){
-    h+='<tr title="'+String(r.what).replace(/"/g,'&quot;')+'" style="border-top:1px solid rgba(255,255,255,.04)">'+
-      '<td style="color:'+(r.ok?PAL.longAccent:PAL.ink)+';white-space:normal">'+(r.ok?'✓ ':'')+r.label+
-        '<div style="color:'+PAL.sub+';font-size:7.5px;line-height:1.3">'+r.what+'</div></td>'+
-      '<td style="text-align:right;color:'+(r.ok?PAL.longAccent:PAL.sub)+';white-space:nowrap;vertical-align:top">'+r.have+' / '+r.want+'<div style="font-size:7.5px">'+r.unit+'</div></td></tr>';
-  });
-  return h+'</table>';
-}
-
-// ============================================================================
-// (v10.54 GROUP 5.1) THE ANALYSIS TAB — "Did the dashboard tell the truth today?"
-// Seven collapsible sections, in the order a trader asks the questions:
-//   ① HEADLINE          did it tell the truth
-//   ② WHAT CHANGED      did the model move under me
-//   ③ DIRECTION FACTORS which inputs actually predict
-//   ④ DEFLECTIONS       which nodes actually hold
-//   ⑤ YOUR CALLS        am I adding anything by hand
-//   ⑥ NIGHTLY REVIEW    what did last night's read-back say
-//   ⑦ PIPELINE          is the data even getting through
-// The v10.49-53 blocks are REUSED (featureScorecardsHtml, dirFactorsHtml, the promoted /
-// proposals strips, projScorecardHtml, the legacy signal scorecard) — this reorganises
-// them and adds the honest empty states, the effective-n labelling and the guide.
-// ============================================================================
 function analysisBlock(){
   var sym=ANALYSIS_SYM;
-  var st=null;   try{ st=analysisStats(sym); }catch(eS){ st={date:'—',bars:0,ready:0,nodes:[],matrix:{},perSig:{}}; }
-  var fs=null;   try{ fs=featStatsCached(sym); }catch(eF){ fs=null; }
-  var R=ANALYSIS_REVIEW;
+  var st=analysisStats(sym);
+  var R=ANALYSIS_REVIEW; // optional LLM narrative
   var h='';
-
-  // ---- header + guide -------------------------------------------------------
+  // (v10.49 K) FEATURE SCORECARDS first — the enrollment contract's Analysis consumer.
+  try{ h+=featureScorecardsHtml(sym); }catch(eFS){}
+  // (v10.51) DIRECTION FACTORS — per five-state / per drift verdict / per relation,
+  // each with its vote split and the period baseline beside it.
+  try{ h+=dirFactorsHtml(sym); }catch(eDF){}
+  // (v10.42) 🎯 Projection Scorecard + auto recommendations — the sharpening loop.
+  try{ h+=projScorecardHtml(); }catch(ePS){}
+  // ---- header + day grade ----
+  var grade = (R&&R.grade)?R.grade:(st.dirHit10==null?'\u2013':(st.dirHit10>=70?'A-':(st.dirHit10>=60?'B':(st.dirHit10>=50?'C':'D'))));
+  var gCol = (st.dirHit10!=null&&st.dirHit10>=60)?PAL.longAccent:(st.dirHit10!=null&&st.dirHit10>=50?PAL.amber:PAL.shortAccent);
   var loaded=(typeof LOADED_DAY!=='undefined'&&LOADED_DAY);
-  var srcLabel = loaded ? ('📂 loaded '+(LOADED_DAY.date||'file'))
-               : (R ? '◷ review loaded' : '◷ live from tape data');
-  h+=tabHeader('analysis','📊 Analysis',
-     'Did the dashboard tell the truth? '+sym+' · '+st.date+' · '+st.bars+' bars · '+((fs&&fs.days)||0)+'d recorded · '+srcLabel);
+  var srcLabel = loaded? ('\uD83D\uDCC2 loaded '+(LOADED_DAY.date||'file')) : (R?'\u25f7 LLM review loaded':'\u25f7 live from tape data');
+  h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'+
+      '<div><div style="font-size:14px;font-weight:800">End-of-Day Review</div>'+
+      '<div style="font-size:10px;color:'+PAL.sub+'">'+sym+' \u00b7 '+st.date+' \u00b7 '+st.bars+' bars \u00b7 '+st.ready+' scored</div></div>'+
+      '<div style="text-align:right">'+
+        '<div style="font-size:9px;color:'+(loaded?PAL.gold:(R?PAL.blue:PAL.sub))+'">'+srcLabel+'</div>'+
+        '<div style="margin-top:4px">'+
+          '<span onclick="try{var j=window.prompt(\'Paste a saved gex_DATE.json to analyze:\');if(j)window.__gptsDebug.loadDay(j);}catch(e){}" title="Load a past day\u2019s export (or paste the recorder JSON) to render its analysis here." style="cursor:pointer;font-size:9px;color:'+PAL.blue+';border:1px solid '+PAL.line+';border-radius:10px;padding:2px 7px">\uD83D\uDCC2 Load day</span>'+
+          (loaded?(' <span onclick="window.__gptsDebug.clearLoaded()" title="Clear the loaded day and return to the live session." style="cursor:pointer;font-size:9px;color:'+PAL.amber+';border:1px solid '+PAL.line+';border-radius:10px;padding:2px 7px">\u2715 clear</span>'):'')+
+        '</div></div>'+
+    '</div>';
+  h+='<div style="display:flex;gap:8px;margin-bottom:16px;align-items:stretch">'+
+      '<div style="flex:0 0 52px;background:#12161f;border:1px solid '+PAL.line+';border-radius:8px;padding:6px 4px;text-align:center;display:flex;flex-direction:column;justify-content:center"'+A_tip('Legacy per-bar signal-direction grade (30m forward). The REGIME chip above is the primary read; this grades signal accuracy, not the day type.')+'>'+
+        '<div style="font-size:8px;color:'+PAL.sub+';letter-spacing:.5px">GRADE</div>'+
+        '<div style="font-size:18px;font-weight:800;color:'+gCol+';line-height:1.1">'+grade+'</div></div>'+
+      '<div style="flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">'+
+        _kpi('Direction hit', st.dirHit10==null?'\u2013':st.dirHit10+'%', '30m fwd', st.dirHit10)+
+        _kpi('Reversal catch', st.revCatch==null?'\u2013':st.revCatch+'%', 'flag vs actual', st.revCatch)+
+        _kpi('King target', st.targetN?(st.targetHitRaw+'/'+st.targetN):'\u2013', 'reached King', st.targetHit)+
+      '</div>'+
+    '</div>';
 
-  // ---- ① HEADLINE -----------------------------------------------------------
-  var dirB=(fs&&fs.byKey&&fs.byKey.dir)||{n:0,hit:0};
-  var nodeG=(fs&&fs.byGrade&&fs.byGrade.node)||{};
-  var mono=gradeMonotone(nodeG);
-  var takeN=0, takeHit=0;
-  try{
-    Object.keys((fs&&fs.cells)||{}).forEach(function(c){
-      var lbl=(DECISION_MATRIX[c.charAt(0)]||{})[c.charAt(2)]||'';
-      if(/skip|stand aside|wait/.test(lbl)) return;
-      takeN+=fs.cells[c].n; takeHit+=fs.cells[c].hit;
-    });
-  }catch(eT){}
-  var tiles='<div style="display:flex;flex-wrap:wrap;gap:4px">'+
-    tabTile('Direction', _fpct(dirB.hit,dirB.n), dirB.n,
-      'Did the direction grade resolve the way it said? Scored as: price travelled '+DIR_PTS+' in the stated direction within '+FEAT_FWD+' bars (SIDE bars are scored the opposite way and kept separate).')+
-    tabTile('Node A', _fpct((nodeG.A||{}).hit,(nodeG.A||{}).n), (nodeG.A||{}).n||0, 'Did grade-A nodes hold? A must beat B must beat C or the fusion is wrong.')+
-    tabTile('Node B', _fpct((nodeG.B||{}).hit,(nodeG.B||{}).n), (nodeG.B||{}).n||0, 'Did grade-B nodes hold?')+
-    tabTile('Node C', _fpct((nodeG.C||{}).hit,(nodeG.C||{}).n), (nodeG.C||{}).n||0, 'Did grade-C nodes hold? They should be the WORST — that is what makes the grade mean something.')+
-    tabTile('Take cells', _fpct(takeHit,takeN), takeN,
-      'Of the matrix cells labelled as takes, how many worked? Take cells are scored on the FRAME the card drew (target before invalidation), not on a generic drift.')+
-  '</div>'+
-  '<div style="font-size:8px;color:'+(mono.ok===false?PAL.shortAccent:PAL.sub)+';margin-top:4px;white-space:normal">'+
-    (mono.ok===false ? '⚠ node grades are NOT monotone (A '+(mono.a==null?'–':mono.a+'%')+' · B '+(mono.b==null?'–':mono.b+'%')+' · C '+(mono.c==null?'–':mono.c+'%')+') — the fusion is wrong, not the tape.'
-     : mono.ok===true ? '✓ node grades are monotone A·B·C — the grade is carrying real information.'
-     : '● monotone check recording — needs eff n≥2 in at least two grades before it can say anything.')+'</div>';
-  if(!dirB.n && !takeN) tiles=tabEmpty('nothing has resolved yet today. Records are written every closed 3-minute bar and scored '+FEAT_FWD+' bars later, so the first numbers appear about 30 minutes after the open.')+tiles;
-  h+=tabSection('a1','①','HEADLINE','Did the dashboard tell the truth today? Every tile greys out until it has eff n≥'+RULE_UNLOCK_N+' — a % with no n beside it is not shown anywhere on this tab.', tiles);
-
-  // ---- ② WHAT CHANGED -------------------------------------------------------
-  var ev=[]; try{ ev=promoEvents(); }catch(eE){}
-  var today=null; try{ today=ctTodayStr(); }catch(eD){}
-  var changedToday=ev.filter(function(x){ return x && x.on===today; });
-  var wc='';
-  if(changedToday.length){
-    wc+='<div style="background:rgba(240,97,109,.12);border:1px solid '+PAL.shortAccent+';border-radius:6px;padding:4px 6px;margin-bottom:4px;font-size:9px;font-weight:800;color:'+PAL.shortAccent+';white-space:normal">'+
-      '⚠ MODEL CHANGED TODAY — '+changedToday.length+' '+(changedToday.length===1?'change':'changes')+'. Bars recorded before and after it were scored by different models.</div>';
-  }
-  try{ wc+=learningStripsHtml(); }catch(eL){ wc+=tabEmpty('the learning strips could not be rendered.'); }
-  if(ev.length){
-    wc+='<div style="font-size:8px;font-weight:700;color:'+PAL.sub+';margin-top:4px">CHANGE LOG</div>';
-    ev.slice(-8).reverse().forEach(function(x){
-      var c=(x.kind==='demotion')?PAL.shortAccent:PAL.longAccent;
-      wc+='<div style="font-size:8.5px;line-height:1.35;color:'+PAL.sub+';white-space:normal;border-top:1px solid rgba(255,255,255,.04);padding:2px 0">'+
-        '<span style="color:'+c+';font-weight:800">'+(x.kind==='demotion'?'▼ demoted':'▲ promoted')+'</span> '+
-        (x.target||x.id)+' '+(x.from==null?'':(x.from+' → '+x.to))+' · '+(x.on||'?')+
-        '<div style="opacity:.8">'+(x.why||'')+'</div></div>';
-    });
-  } else {
-    wc+=tabEmpty('nothing has ever been promoted or demoted on this machine — every weight is still the hand-set hypothesis ⚖.');
-  }
-  h+=tabSection('a2','②','WHAT CHANGED','Did the model move under me? Only proposals THIS panel promoted past the local bar can move anything; a fetched rules.json changes nothing on its own.', wc);
-
-  // ---- ③ DIRECTION FACTORS --------------------------------------------------
-  var df='';
-  try{ df=dirFactorsHtml(sym); }catch(eDF){ df=tabEmpty('the direction-factor table could not be rendered.'); }
-  h+=tabSection('a3','③','DIRECTION FACTORS','Which inputs actually predict? Sorted by LIFT — rate alone rewards a factor that simply voted with a one-way day. Parked (non-voting) candidates get the same columns, because that is what a promotion decision needs.', df, false);
-
-  // ---- ④ DEFLECTIONS --------------------------------------------------------
-  var dz='';
-  try{ dz=deflectionsSectionHtml(sym); }catch(eDZ){ dz=tabEmpty('the deflection tables could not be rendered.'); }
-  h+=tabSection('a4','④','DEFLECTIONS','Which nodes actually hold? Sliced by grade, tap number, polarity and session bucket — each with its own n, its MFE/MAE, and the frame outcome (did the card’s own target print before its own invalidation).', dz, false);
-
-  // ---- ⑤ YOUR CALLS ---------------------------------------------------------
-  var yc='';
-  try{ yc=yourCallsHtml(fs||{act:{take:{n:0,hit:0},pass:{n:0,hit:0}}}); }catch(eY){ yc=tabEmpty('selection quality could not be computed.'); }
-  h+=tabSection('a5','⑤','YOUR CALLS','Are the reads you TAKE better than the ones you PASS? Passes are the control group — without them a take rate on its own says nothing at all.', yc, false);
-
-  // ---- ⑥ NIGHTLY REVIEW -----------------------------------------------------
-  var nr='';
-  var pRev=null, pWay=null;
-  try{ var P=pipeLoad(); if(P && P.review==='yes'){ pRev=P.reviewDay||null; pWay='read back from GitHub'; } }catch(ePR){}
-  if(R){
-    nr+='<div style="font-size:8px;color:'+PAL.sub+';margin-bottom:3px">for '+(pRev||R.date||'the last session')+' · '+(pWay||'loaded by hand')+'</div>';
-    var line=null; try{ line=pipeReviewLine(R); }catch(eRL){}
-    if(line) nr+='<div style="font-size:9px;line-height:1.4;color:'+PAL.ink+';white-space:normal">'+line+'</div>';
-    [['✓ WORKED',R.worked,PAL.longAccent],['✕ MISSED',R.missed,PAL.shortAccent],['🔍 WHY',R.why,PAL.blue],['💡 DISCOVERED',R.discovered,'#b58ce0']].forEach(function(p){
-      if(!p[1]) return;
-      nr+='<div style="margin-top:3px;font-size:8.5px;line-height:1.4;white-space:normal"><b style="color:'+p[2]+'">'+p[0]+'</b> <span style="color:'+PAL.sub+'">'+p[1]+'</span></div>';
-    });
-    (R.recs||[]).forEach(function(rc,i){
-      nr+='<div style="margin-top:2px;font-size:8.5px;line-height:1.4;color:'+PAL.sub+';white-space:normal">'+(i+1)+'. '+rc+'</div>';
-    });
-  } else {
-    nr=tabEmpty('no review has come back yet. It is written after the close from the day file this panel exports, then read back automatically from GitHub — if it never arrives, check the ⑥ PIPELINE section below.');
-  }
-  h+=tabSection('a6','⑥','NIGHTLY REVIEW','What did last night’s read-back actually say? Quoted as written, never summarised into a forecast.', nr, false);
-
-  // ---- ⑦ PIPELINE -----------------------------------------------------------
-  var pl='';
-  try{
-    var stages=pipeStages();
-    pl='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:3px">';
-    stages.forEach(function(s){
-      pl+='<span title="'+String(s.tip).replace(/"/g,'&quot;')+'" style="font-size:8.5px;color:'+pipeColor(s.state)+';white-space:nowrap">● '+s.label+'</span>';
-    });
-    pl+='</div>';
-    stages.forEach(function(s){
-      pl+='<div style="font-size:8px;line-height:1.35;color:'+PAL.sub+';white-space:normal;border-top:1px solid rgba(255,255,255,.04);padding:2px 0"><b style="color:'+pipeColor(s.state)+'">'+s.label+'</b> — '+s.tip+'</div>';
-    });
-    var doc=null; try{ doc=rulesDoc(); }catch(eRD){}
-    var last=null; try{ var pr=promotionsList(); last=pr.length?pr[pr.length-1]:null; }catch(ePL){}
-    pl+='<div style="font-size:8px;color:'+PAL.sub+';margin-top:3px;white-space:normal">rules asOf '+((doc&&doc.asOf)||'— (never fetched)')+
-        ' · last promotion '+(last?((last.target||last.id)+' on '+last.on):'none') +
-        ' · direction weights: '+DIR_WEIGHTS_SOURCE+'</div>';
-  }catch(eP){ pl=tabEmpty('the pipeline could not be read.'); }
-  h+=tabSection('a7','⑦','PIPELINE','Is the data even getting through? recorded → saved into the repo folder → pushed to GitHub → review back. Every stage before v10.52 was assumed; each one is observed here.', pl, false);
-
-  // ---- the legacy detail, kept but folded away -------------------------------
-  var legacy='';
-  try{ legacy+=featureScorecardsHtml(sym); }catch(eFS){}
-  try{ legacy+=projScorecardHtml(); }catch(ePS){}
-  try{ legacy+=A_renderTop(sym); }catch(eAT){}
-  if(!legacy) legacy=tabEmpty('no detailed scorecards yet.');
-  h+=tabSection('a8','⊕','DETAIL · every enrolled feature','One scorecard per FEATURES entry, the projection scorecard and the per-day breakdown. Folded away by default: the sections above are the summary of exactly this data.', legacy, false);
-
-  // ---- save banner (the tab IS the trigger) ---------------------------------
+  // ---- IN-TAB SAVE BANNER (v10.17): the tab IS the trigger. If today's data
+  // hasn't been exported this session, surface a one-tap "Save & prep review".
+  // Once saved, show a confirmation. No surprise auto-download on tab open. ----
   if(st.bars){
     if(SAVED_TODAY===st.date){
-      h+='<div style="margin:6px 0 0;background:#0e1a13;border:1px solid #1c3a28;border-radius:8px;padding:5px 8px;font-size:9px;color:'+PAL.longAccent+';white-space:normal">✓ Saved <b>gex_'+st.date+'.json</b> — the nightly review reads it from the repo.</div>';
+      h+='<div style="margin:0 0 12px 0;background:#0e1a13;border:1px solid #1c3a28;border-radius:8px;padding:7px 10px;font-size:10px;color:'+PAL.longAccent+'">\u2713 Saved <b>gex_'+st.date+'.json</b> \u2014 drop it into AI Drive <span style="color:'+PAL.sub+'">daily-data/</span> to run the review (or paste it to the assistant).</div>';
     } else {
-      h+='<div style="margin:6px 0 0;background:#1a160d;border:1px solid #3a301c;border-radius:8px;padding:5px 8px;display:flex;justify-content:space-between;align-items:center;gap:6px">'+
-        '<span style="font-size:9px;color:'+PAL.amber+';white-space:normal">Today’s data isn’t saved yet.</span>'+
-        '<span onclick="window.__gptsDebug&&window.__gptsDebug.saveDayToFile&&window.__gptsDebug.saveDayToFile()" title="Export today’s labelled data (full file: snaps, feat with hit/mfe/mae, act, flrCeilHist, rules asOf) for the nightly review." style="cursor:pointer;white-space:nowrap;font-size:9px;font-weight:800;color:#0b0e14;background:'+PAL.amber+';border-radius:12px;padding:2px 8px">📥 Save</span>'+
+      h+='<div style="margin:0 0 12px 0;background:#1a160d;border:1px solid #3a301c;border-radius:8px;padding:7px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px">'+
+        '<span style="font-size:10px;color:'+PAL.amber+'">Today\u2019s data isn\u2019t saved yet.</span>'+
+        '<span onclick="window.__gptsDebug&&window.__gptsDebug.saveDayToFile&&window.__gptsDebug.saveDayToFile()" title="Export today\u2019s labeled data as gex_'+st.date+'.json, then drop it into AI Drive daily-data/ for the scheduled review." style="cursor:pointer;white-space:nowrap;font-size:10px;font-weight:800;color:#0b0e14;background:'+PAL.amber+';border-radius:14px;padding:3px 10px">\uD83D\uDCE5 Save &amp; prep review</span>'+
       '</div>';
     }
   }
+
+  // ---- (v10.21) COHERENT TOP: regime chip + King behavior + edge families ----
+  // Reads the causal chain in order, every item tooltip'd with its role in the
+  // King\u2192price\u2192S/R\u2192nodes story. Uses A_day() so a LOADED past day renders here
+  // even when the live session (st.bars) is empty.
+  var topHtml=A_renderTop(sym);
+  h+=topHtml;
+
+  if(!st.bars && !topHtml){
+    h+=_await('No captured bars yet today. The recorder logs one snapshot per closed 3-min bar and labels outcomes after 5\u201310 bars. Come back after some live tape, or load a past day with __gptsDebug.loadDay(json).');
+    return h;
+  }
+  if(!st.bars){ return h; } // loaded/live top rendered; legacy scorecard needs live stats
+
+  // ===== LEGACY SIGNAL SCORECARD (per-bar signal accuracy + LLM narrative) =====
+  h+='<div style="margin:14px 0 8px 0;font-size:11px;font-weight:800;color:'+PAL.sub+';text-transform:uppercase;letter-spacing:.5px">Signal scorecard &amp; review</div>';
+  // ---- STEP 1: relationship timeline (King+price+S/R band) ----
+  h+=_step(1,'How the day moved together');
+  h+='<div style="font-size:10px;color:'+PAL.sub+';margin:0 0 6px 14px">King \u00b7 price \u00b7 S/R dominance band</div>';
+  h+='<div style="margin:0 0 14px 14px;background:#12161f;border:1px solid '+PAL.line+';border-radius:10px;padding:8px"><div style="overflow-x:auto;padding-bottom:4px">'+timelineSvg(sym,st)+'</div></div>';
+
+  // ---- STEP 2: King vs price convergence ----
+  h+=_step(2,'Was the King pulling price?');
+  h+='<div style="margin:0 0 14px 14px;background:#12161f;border:1px solid '+PAL.line+';border-radius:10px;padding:8px"><div style="overflow-x:auto">'+convergenceSvg(sym,st)+'</div></div>';
+
+  // ---- STEP 3: node lifecycle (scrollable) ----
+  h+=_step(3,'What the nodes did (multi-strike)');
+  h+='<div style="margin:0 0 14px 14px;background:#12161f;border:1px solid '+PAL.line+';border-radius:10px;padding:8px;max-height:150px;overflow-y:auto">';
+  h+='<div style="font-size:9px;color:'+PAL.sub+';margin-bottom:4px">strike \u00b7 role \u00b7 net drift (scroll \u2195)</div>';
+  if(!st.nodes.length){ h+='<div style="font-size:10px;color:'+PAL.sub+'">no node history yet</div>'; }
+  st.nodes.slice(0,14).forEach(function(n){
+    var role=Object.keys(n.roles).sort(function(a,b){return n.roles[b]-n.roles[a];})[0]||'\u2013';
+    var drift=(n.firstNet!=null&&n.lastNet!=null)?(n.lastNet-n.firstNet):null;
+    var kc = (n.side==='above')?PAL.shortAccent:(n.side==='below')?PAL.longAccent:PAL.gold;
+    var dtxt = drift==null?'':(drift>0?'built +'+drift:(drift<0?'faded '+drift:'flat'));
+    var dcol = drift==null?PAL.sub:(drift>0?PAL.longAccent:(drift<0?PAL.shortAccent:PAL.sub));
+    h+='<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #161b26">'+
+       '<span style="flex:0 0 40px;color:'+kc+';font-weight:700;font-size:11px">'+fmtNum(n.k)+'</span>'+
+       '<span style="flex:0 0 62px;font-size:9px;color:'+PAL.sub+'">'+role+'</span>'+
+       '<span style="flex:1;font-size:10px;color:'+dcol+'">'+dtxt+(n.lastSt?(' \u00b7 '+n.lastSt):'')+'</span></div>';
+  });
+  h+='</div>';
+
+  // ---- STEP 4: confluence-outcome matrix ----
+  h+=_step(4,'Did agreement pay off?');
+  h+='<div style="margin:0 0 14px 14px;background:#12161f;border:1px solid '+PAL.line+';border-radius:10px;padding:8px">';
+  h+='<div style="display:grid;grid-template-columns:64px 1fr 1fr;gap:4px;font-size:10px">'+
+     '<div style="color:'+PAL.sub+';font-size:9px">agree</div><div style="color:'+PAL.sub+';font-size:9px;text-align:center">dir correct</div><div style="color:'+PAL.sub+';font-size:9px;text-align:center">reached King</div>';
+  [4,3,2,1].forEach(function(a){ var m=st.matrix[a]; if(!m) return;
+    var dp=_pct(m.dir.hit,m.dir.n), tp=_pct(m.tgt.hit,m.tgt.n);
+    var dc=dp==null?PAL.sub:(dp>=70?PAL.longAccent:(dp>=55?PAL.amber:PAL.shortAccent));
+    h+='<div style="font-weight:700">'+a+'/4</div>'+
+       '<div style="text-align:center;background:#0b0e14;border-radius:4px;padding:3px;color:'+dc+';font-weight:700">'+(dp==null?'\u2013':dp+'%')+' <span style="color:'+PAL.sub+';font-weight:400">('+m.dir.n+')</span></div>'+
+       '<div style="text-align:center;background:#0b0e14;border-radius:4px;padding:3px;color:'+PAL.sub+'">'+(tp==null?'\u2013':tp+'%')+'</div>';
+  });
+  h+='</div><div style="font-size:9px;color:'+PAL.sub+';margin-top:5px">Higher agreement should predict better \u2014 watch 4/4 vs 2/4.</div></div>';
+
+  // ---- STEP 5: scorecard + (lead/lag when review present) ----
+  h+=_step(5,'Which signal to trust');
+  h+='<div style="margin:0 0 14px 14px;background:#12161f;border:1px solid '+PAL.line+';border-radius:10px;padding:8px 10px">';
+  h+=_accBar(st.perSig.king,'\uD83D\uDC51 King', (R&&R.lead&&R.lead.king)||'');
+  h+=_accBar(st.perSig.trend,'\uD83D\uDCC8 Trend', (R&&R.lead&&R.lead.trend)||'');
+  h+=_accBar(st.perSig.srb,'\u2694\uFE0F S/R', (R&&R.lead&&R.lead.srb)||'');
+  h+=_accBar(st.perSig.conf,'\uD83C\uDFAF Confluence', (R&&R.lead&&R.lead.conf)||'');
+  h+='</div>';
+
+  // ---- STEP 6: worked / missed / why (LLM) ----
+  h+=_step(6,'What worked, what missed, why');
+  if(R&&(R.worked||R.missed)){
+    h+='<div style="margin:0 0 8px 14px;display:flex;gap:8px">'+
+       '<div style="flex:1;background:#0e1a13;border:1px solid #1c3a28;border-radius:10px;padding:8px 10px"><div style="font-size:10px;font-weight:800;color:'+PAL.longAccent+';margin-bottom:4px">\u2713 WORKED</div><div style="font-size:10px;color:#c8d3df;line-height:1.5">'+(R.worked||'\u2013')+'</div></div>'+
+       '<div style="flex:1;background:#1c1113;border:1px solid #3a1c22;border-radius:10px;padding:8px 10px"><div style="font-size:10px;font-weight:800;color:'+PAL.shortAccent+';margin-bottom:4px">\u2715 MISSED</div><div style="font-size:10px;color:#c8d3df;line-height:1.5">'+(R.missed||'\u2013')+'</div></div></div>';
+    if(R.why) h+='<div style="margin:0 0 14px 14px;background:#12161f;border:1px solid '+PAL.line+';border-radius:10px;padding:8px 10px"><div style="font-size:10px;font-weight:800;color:'+PAL.blue+';margin-bottom:3px">\uD83D\uDD0D WHY</div><div style="font-size:10px;color:#c8d3df;line-height:1.5">'+R.why+'</div></div>';
+  } else {
+    h+=_await('Awaiting the end-of-day LLM review for the narrative (what worked / missed and the root-cause why). The numbers above are computed live from the labeled tape; the story is filled once the scheduled review runs on this day\u2019s export.');
+  }
+
+  // ---- STEP 7: discoveries + recommendations (LLM) ----
+  h+=_step(7,'Discoveries & what to change');
+  if(R&&(R.discovered||( R.recs&&R.recs.length))){
+    if(R.discovered) h+='<div style="margin:0 0 8px 14px;background:#160f1f;border:1px solid #2e2140;border-radius:10px;padding:8px 10px"><div style="font-size:10px;font-weight:800;color:#b58ce0;margin-bottom:3px">\uD83D\uDCA1 DISCOVERED</div><div style="font-size:10px;color:#c8d3df;line-height:1.5">'+R.discovered+'</div></div>';
+    (R.recs||[]).forEach(function(rc,i){ var col=[PAL.shortAccent,PAL.amber,PAL.blue][i]||PAL.sub;
+      h+='<div style="margin:0 0 6px 14px;display:flex;gap:8px;align-items:flex-start;background:#12161f;border:1px solid '+PAL.line+';border-radius:8px;padding:7px 9px"><div style="flex:0 0 18px;height:18px;border-radius:50%;background:'+col+';color:#0b0e14;font-size:10px;font-weight:800;text-align:center;line-height:18px">'+(i+1)+'</div><div style="font-size:10px">'+rc+'</div></div>';
+    });
+  } else {
+    h+=_await('Awaiting the LLM review for pattern discoveries and ranked recommendations. Trigger it with the \u201cSave &amp; prep review\u201d banner above (drops the file for the scheduled review), or paste the recorder JSON to the assistant.');
+  }
   return h;
 }
+
 // small KPI card
 function _kpi(label,val,sub,pct){
   var col = pct==null?PAL.ink:(pct>=70?PAL.longAccent:(pct>=55?PAL.amber:PAL.shortAccent));
@@ -12995,176 +10350,71 @@ function recoTestsHtml(){
 
 // ---- RENDER: self-contained card, mirrors projScorecardHtml. Async computes populate
 // from cache + a re-run button (same pattern as the READ block's studyRun).
-// ============================================================================
-// (v10.54 GROUP 5.2) THE TESTING TAB — "What is being tested, and what would settle it?"
-// Six collapsible sections in the order the learning loop actually runs:
-//   ① QUESTION QUEUE  what is open
-//   ② PROPOSALS       what is asking to change the model, and how far off the bar
-//   ③ CHALLENGERS     what is trying to replace an incumbent
-//   ④ KILL LIST       what would void a read, and whether it is ACTIVE
-//   ⑤ SELF-TEST       does the scorer itself work
-//   ⑥ DATA COVERAGE   what unlocks when
-// The v10.45 hypothesis builder / pattern miner / research table are kept, folded into
-// a DETAIL section: they are exploration, not the loop.
-// ============================================================================
-function questionQueueHtml(){
-  var qs=[];
-  try{ qs=seedQuestions(); }catch(e){ qs=[]; }
-  if(!qs.length) return tabEmpty('no questions in the queue — the queue is DERIVED from FEATURES[].questions, so it is empty only if nothing is enrolled.');
-  var byState={ answered:[], testing:[], proposed:[] };
-  qs.forEach(function(q){
-    var st=null; try{ st=ruleLocalRate(q.feature); }catch(e1){ st=null; }
-    var en=st?st.effN:0;
-    var rate=st?st.rate:null;
-    var promoted=false; try{ promoted=rulePromoted(q.feature); }catch(e2){}
-    var state = (promoted && en>=RULE_UNLOCK_N) ? 'answered' : (en>0 ? 'testing' : 'proposed');
-    byState[state].push({ q:q, en:en, rate:rate, n:st?st.n:0 });
-  });
-  var h='';
-  [['answered','📊 ANSWERED',PAL.longAccent],['testing','◐ TESTING',PAL.blue],['proposed','⚖ PROPOSED',PAL.sub]].forEach(function(g){
-    var arr=byState[g[0]];
-    h+='<div style="font-size:8px;font-weight:700;color:'+g[2]+';margin-top:4px">'+g[1]+' ('+arr.length+')</div>';
-    if(!arr.length){ h+=tabEmpty('none in this state.'); return; }
-    arr.forEach(function(x){
-      var need=Math.max(0, RULE_UNLOCK_N-x.en);
-      h+='<div title="'+String(x.q.note||'').replace(/"/g,'&quot;')+'" style="font-size:8.5px;line-height:1.35;border-top:1px solid rgba(255,255,255,.04);padding:2px 0;white-space:normal">'+
-        '<b style="color:'+PAL.ink+'">'+x.q.id+'</b> <span style="color:'+PAL.sub+'">'+x.q.feature+'</span>'+
-        '<div style="color:'+PAL.sub+'">condition: '+((x.q.when||[]).map(function(w){ return w.f+'='+w.v; }).join(' & ')||'—')+' → outcome '+(x.q.outcome||'—')+'</div>'+
-        '<div style="color:'+PAL.sub+'">'+(x.rate==null?('● recording · '+nTxt(x.n)):(x.rate+'% · '+nTxt(x.n)))+
-          (need>0?(' · need '+need+' more effective observations (~'+Math.ceil(need*FEAT_FWD/100)+' more sessions)'):' · unlocked')+'</div>'+
-      '</div>';
-    });
-  });
-  return h;
-}
-function proposalsQueueHtml(){
-  var doc=null; try{ doc=rulesDoc(); }catch(e){}
-  var props=(doc&&doc.proposals)||[];
-  if(!props.length) return tabEmpty('no open proposals. The weekly learning run writes them into learning/rules.json; until one arrives nothing is asking to change the model.');
-  var h='';
-  props.forEach(function(p){
-    var chk={ok:false,why:'—'}; try{ chk=proposalClearsBar(p); }catch(e1){}
-    var loc={n:0,effN:0}; try{ loc=proposalLocalN(p); }catch(e2){}
-    var wfl={sessions:0}; try{ wfl=proposalWalkForwardLocal(p); }catch(e3){}
-    var applied=false; try{ applied=!!promoLoad().applied[p.id]; }catch(e4){}
-    var col=applied?PAL.longAccent:(chk.ok?PAL.blue:PAL.sub);
-    var flip=null; try{ flip=proposalRegimeFlip(p); }catch(e5){}
-    h+='<div style="border-top:1px solid rgba(255,255,255,.04);padding:3px 0;font-size:8.5px;line-height:1.4;white-space:normal">'+
-      '<div><b style="color:'+PAL.ink+'">'+(p.target||p.id)+'</b> <span style="color:'+PAL.sub+'">'+(p.kind||'')+'</span>'+
-        (p.current==null?'':(' <span style="color:'+PAL.sub+'">'+p.current+' → '+p.proposed+'</span>'))+'</div>'+
-      '<div style="color:'+PAL.sub+'">measured HERE: '+nTxt(loc.n)+' (the proposal claims eff n='+((typeof p.n==='number')?p.n:0)+') · need eff '+PROMO_MIN_N+'</div>'+
-      '<div style="color:'+PAL.sub+'">walk-forward: '+wfl.sessions+' of '+PROMO_WF_SESSIONS+' locally recorded sessions held since '+(p.madeOn||'?')+'</div>'+
-      '<div style="color:'+PAL.sub+'">regime check: '+(flip?('⚠ '+flip):'no flip between trend and chop')+'</div>'+
-      '<div style="color:'+col+';font-weight:700">'+(applied?'APPLIED — it is moving the model now':(chk.ok?'clears the bar':'does NOT clear the bar: '+(chk.why||'')))+'</div>'+
-    '</div>';
-  });
-  h+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;white-space:normal;opacity:.85">The reviewer’s own clearsBar / n / walk-forward are ADVISORY. Every number above marked "measured HERE" is re-derived from this machine’s recorded sessions, and that is what the bar is checked against.</div>';
-  return h;
-}
-function challengersHtml2(){
-  var doc=null; try{ doc=rulesDoc(); }catch(e){}
-  var ch=(doc&&doc.challengers)||{};
-  var ks=Object.keys(ch);
-  if(!ks.length) return tabEmpty('no challengers evaluated yet — the parked factors (dir.trendFast, dir.struct, dir.kingRoll, netGamma) are recorded on every bar and scored against their incumbents in the weekly run.');
-  var h='';
-  ks.forEach(function(k){
-    var c=ch[k]||{};
-    var en=effN(c.n||0);
-    var gap=(c.chalRate!=null && c.incRate!=null)?(c.chalRate-c.incRate):null;
-    var read;
-    if(gap==null) read='not enough measured on both sides to compare yet.';
-    else if(en<RULE_UNLOCK_N) read=k+' is '+(gap>=0?'ahead':'behind')+' by '+Math.abs(gap)+' pts on '+en+' eff obs — not yet decisive (needs '+RULE_UNLOCK_N+').';
-    else if(gap>0) read=k+' beats '+(c.vs||'the incumbent')+' by '+gap+' pts on '+en+' eff obs — this is what a swap proposal would be built on.';
-    else read=k+' does NOT beat '+(c.vs||'the incumbent')+' ('+gap+' pts on '+en+' eff obs) — the incumbent stays.';
-    h+='<div style="border-top:1px solid rgba(255,255,255,.04);padding:3px 0;font-size:8.5px;line-height:1.4;white-space:normal">'+
-      '<div><b style="color:'+PAL.ink+'">'+k+'</b> <span style="color:'+PAL.sub+'">vs '+(c.vs||'–')+'</span></div>'+
-      '<div style="color:'+PAL.sub+'">challenger '+(c.chalRate==null?'● recording':(c.chalRate+'%'))+' · incumbent '+(c.incRate==null?'● recording':(c.incRate+'%'))+' · '+nTxt(c.n||0)+' · lift '+(c.lift==null?'–':((c.lift>0?'+':'')+c.lift))+'</div>'+
-      '<div style="color:'+PAL.ink+'">'+read+'</div></div>';
-  });
-  return h;
-}
-function killListHtml2(){
-  var doc=null; try{ doc=rulesDoc(); }catch(e){}
-  var kills=(doc&&doc.killList)||[];
-  var defs=[]; try{ for(var id in KILL_DEFS) defs.push(id); }catch(e1){}
-  // every DEFINED kill is listed, even when the fetched doc does not mention it: the
-  // reader needs to know which conditions exist, not only which ones a file described.
-  defs.forEach(function(id){ if(!kills.some(function(k){ return k && k.id===id; })) kills=kills.concat([{id:id, condition:'', rate:null, n:0}]); });
-  if(!kills.length) return tabEmpty('no kill conditions are defined.');
-  var h='';
-  kills.forEach(function(k){
-    var act=false; try{ act=killActive(k.id); }catch(e2){}
-    var lr={rate:null,n:0}; try{ lr=ruleLocalRate(k.id); }catch(e3){}
-    var lbl=''; try{ lbl=(KILL_DEFS[k.id]&&KILL_DEFS[k.id].label)||''; }catch(e4){}
-    h+='<div style="border-top:1px solid rgba(255,255,255,.04);padding:2px 0;font-size:8.5px;line-height:1.4;white-space:normal">'+
-      '<div><span style="color:'+(act?PAL.amber:PAL.sub)+';font-weight:800">'+(act?'📊 ACTIVE':'⚖ hand-set')+'</span> '+
-        '<b style="color:'+PAL.ink+'">'+k.id+'</b>'+(lbl?(' <span style="color:'+PAL.sub+'">('+lbl+')</span>'):'')+'</div>'+
-      '<div style="color:'+PAL.sub+'">'+(k.condition||'—')+'</div>'+
-      '<div style="color:'+PAL.sub+'">measured here: '+(lr.rate==null?'● recording':(lr.rate+'%'))+' · '+nTxt(lr.n)+
-        ' · '+(act?'caps the grade at C on matching bars':'listed only — it changes nothing until this panel promotes it')+'</div></div>';
-  });
-  h+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;white-space:normal;opacity:.85">(v10.54) A killList entry marked promoted:true in a FETCHED document is documentation. Only a kill THIS panel promoted past the bar can cap a grade.</div>';
-  return h;
-}
-// ---- RENDER ---------------------------------------------------------------
 function testingBlock(){
-  var h='';
-  var cov=null; try{ cov=featStatsCached('SPY'); }catch(e){}
-  h+=tabHeader('testing','🧪 Testing',
-    'What is being tested, and what would settle it? '+((cov&&cov.days)||0)+' recorded day'+(((cov&&cov.days)||0)===1?'':'s')+' on this machine.');
-
-  var q=''; try{ q=questionQueueHtml(); }catch(e1){ q=tabEmpty('the question queue could not be rendered.'); }
-  h+=tabSection('t1','①','QUESTION QUEUE','What is open, and how far from an answer? proposed → testing → answered(📊). Each row shows the exact condition, the rate measured HERE, its effective n and how many more observations it needs.', q);
-
-  var pr=''; try{ pr=proposalsQueueHtml(); }catch(e2){ pr=tabEmpty('the proposals queue could not be rendered.'); }
-  h+=tabSection('t2','②','PROPOSALS','What is asking to change the model, and does it clear the bar? The bar is LOCAL: eff n≥'+PROMO_MIN_N+' measured here, '+PROMO_WF_SESSIONS+' locally recorded walk-forward sessions, no regime flip.', pr);
-
-  var ch=''; try{ ch=challengersHtml2(); }catch(e3){ ch=tabEmpty('the challenger table could not be rendered.'); }
-  h+=tabSection('t3','③','CHALLENGERS','What is trying to replace an incumbent, and is it actually ahead? Both are scored on the SAME bars, and the one-line reading says whether the gap is decisive yet.', ch, false);
-
-  var kl=''; try{ kl=killListHtml2(); }catch(e4){ kl=tabEmpty('the kill list could not be rendered.'); }
-  h+=tabSection('t4','④','KILL LIST','Which conditions would void a read, and is each one ACTIVE or just written down? A hand-set kill changes nothing.', kl, false);
-
-  var stt=''; try{ stt=selfTestHtml(); }catch(e5){ stt=tabEmpty('the self-test could not be rendered.'); }
-  h+=tabSection('t5','⑤','SELF-TEST','Does the scorer itself work? A synthetic day with three properties planted at known strengths is run through this panel’s own arithmetic: it must FIND the edge, FLAG the 1-way trap, and SPLIT the regime-dependent rule.', stt);
-
-  var dcv=''; try{ dcv=unlockRowsHtml('SPY'); }catch(e6){ dcv=tabEmpty('coverage could not be computed.'); }
-  dcv+='<div id="gpts-tcov" style="font-size:8px;color:'+PAL.sub+';margin-top:4px;white-space:normal">repository: computing… <span data-gtcov="1" style="cursor:pointer;text-decoration:underline">refresh</span></div>';
-  h+=tabSection('t6','⑥','DATA COVERAGE','How much have we actually got, and what unlocks when? The honest answer to "why is everything still ⚖" is almost always "not enough recorded days" — this says exactly which threshold each capability is waiting on.', dcv);
-
-  // ---- exploration, folded away: it is not part of the loop ------------------
-  var det='';
+  var s=studyLoad();
+  var g=function(t,c){ return '<b style="color:'+(c||PAL.ink)+'">'+t+'</b>'; };
+  function bar(pct,col){ var w=Math.max(0,Math.min(100,pct||0)); return '<span style="display:inline-block;height:6px;width:56px;background:#1a2029;border-radius:3px;position:relative;vertical-align:middle;margin-right:4px"><span style="position:absolute;left:0;top:0;bottom:0;width:'+w+'%;background:'+col+';border-radius:3px"></span><span style="position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:rgba(255,255,255,.28)"></span></span>'; }
+  function pctCol(p,good){ if(p==null) return PAL.sub; if(good===false) return PAL.sub; return p>=57?PAL.longAccent:(p<=43?PAL.shortAccent:PAL.sub); }
+  var h='<div style="padding:5px 8px;background:'+PAL.card+';border:1px solid '+PAL.line+';border-radius:8px;margin:4px 0">';
+  h+='<div style="font-size:11px;font-weight:800;color:'+PAL.ink+';margin-bottom:2px">🧪 Testing <span style="font-size:9px;font-weight:400;color:'+PAL.sub+'">— measured on '+(s.src||'local repo')+(s.bars?(' · '+s.bars+' bars'):'')+'</span></div>';
+  // coverage strip (async)
+  h+='<div id="gpts-tcov" style="font-size:8.5px;color:'+PAL.sub+';margin-bottom:5px">coverage: computing… <span style="cursor:pointer;text-decoration:underline" onclick="window.__gptsTestRefresh&&window.__gptsTestRefresh()">refresh</span></div>';
+  // ① question library
+  h+='<div style="font-size:9.5px;font-weight:700;color:'+PAL.gold+';margin:5px 0 2px">① Question library</div>';
+  h+='<table style="width:100%;border-collapse:collapse;font-size:9px">';
+  h+='<tr style="color:'+PAL.sub+'"><td style="padding:2px 3px">HYPOTHESIS</td><td>RESULT</td><td style="text-align:right">n</td></tr>';
+  function qrow(label, o, good){ var p=studyPct(o); if(o==null) return ''; var tag=studyTag(o);
+    return '<tr><td style="padding:2px 3px;border-top:1px dashed rgba(255,255,255,.05)">'+label+'</td><td style="border-top:1px dashed rgba(255,255,255,.05)">'+bar(p,pctCol(p,good))+g(p+'%',pctCol(p,good))+' <span style="color:'+PAL.sub+'">'+tag+'</span></td><td style="text-align:right;border-top:1px dashed rgba(255,255,255,.05);color:'+PAL.sub+'">'+(o.n||0)+'</td></tr>'; }
+  h+=qrow('King pulls (30m)', s.kingPull&&s.kingPull.all);
+  h+=qrow('King pull · 2 strikes', s.kingPull&&s.kingPull.byDist&&s.kingPull.byDist['2']);
+  h+=qrow('King pull · 11am CT', s.kingPull&&s.kingPull.byHour&&s.kingPull.byHour['11']);
+  h+=qrow('Non-King mass repels', s.othersRepel);
+  h+=qrow('Contender ≥60% repels', s.contenderRepel);
+  h+=qrow('Acm wall reached ≤1.5 (leak)', s.reached&&s.reached.Building, false);
+  h+=qrow('Net-force sum predicts dir', s.netForce);
+  h+='</table>';
+  // (v10.49 K) the seeded queue is DERIVED from FEATURES[].questions — adding a feature
+  // adds its questions here automatically. Lifecycle: proposed → testing → answered(📊,n).
   try{
-    var s=studyLoad();
-    det+='<div style="font-size:8px;color:'+PAL.sub+';margin-bottom:3px;white-space:normal">measured on '+(s.src||'local repo')+(s.bars?(' · '+s.bars+' bars'):'')+'. These are EXPLORATION: leads, not findings. A lead becomes a question only after it survives re-runs on new days.</div>';
-    det+='<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:3px">';
-    T_PRESETS.forEach(function(pz){ det+='<span onclick="window.__gptsHypoRun&&window.__gptsHypoRun(\''+pz.id+'\')" style="cursor:pointer;font-size:8px;border:1px solid '+PAL.line+';border-radius:6px;padding:1px 5px;color:'+PAL.ink+';white-space:normal">'+pz.label+'</span>'; });
-    det+='</div><div id="gpts-thypo" style="font-size:8.5px;color:'+PAL.sub+';white-space:normal">pick a hypothesis, or call <code>__gptsHypo({when:[{f:\'kzone\',v:\'pull\'}],outcome:\'toward\'})</code> in the console.</div>';
-    var mine=studyMineLoad();
-    det+='<div style="font-size:8px;font-weight:700;color:'+PAL.sub+';margin-top:4px">PATTERN MINER <span style="cursor:pointer;text-decoration:underline;font-weight:400" onclick="window.__gptsMineRun&&window.__gptsMineRun()">run</span></div>';
-    if(mine && mine.top){
-      det+='<div style="font-size:8px;color:'+PAL.sub+';white-space:normal">'+mine.n+' bars · '+mine.days+' days · '+mine.combosTested+' combos tested — with that many combos some will look good by chance, so treat every row as a LEAD ⚖. Base up '+mine.base+'%.</div>';
-      det+='<table style="width:100%;border-collapse:collapse;font-size:8.5px">';
-      mine.top.slice(0,8).forEach(function(m){
-        var showTw=(m.tw!=null && Math.abs(m.twLift)>=Math.abs(m.dirLift));
-        var val=showTw?(m.tw+'% toward'):(m.dirUp+'% up');
-        var lift=showTw?m.twLift:m.dirLift; var lc=lift>=0?PAL.longAccent:PAL.shortAccent;
-        det+='<tr><td style="padding:1px 2px;border-top:1px dashed rgba(255,255,255,.05);white-space:normal">'+m.key+'</td>'+
-          '<td style="border-top:1px dashed rgba(255,255,255,.05);color:'+lc+';text-align:right;white-space:nowrap">'+val+' ('+(lift>=0?'+':'')+lift+')</td>'+
-          '<td style="text-align:right;border-top:1px dashed rgba(255,255,255,.05);color:'+PAL.sub+'">n'+(showTw?m.twN:m.n)+'</td></tr>';
-      });
-      det+='</table>';
-    } else { det+=tabEmpty('not run yet — needs ≥30 outcome-labelled bars in the repository.'); }
-    var ins=testingInsights();
-    [['What the data says',ins.says,PAL.ink],['Change the product',ins.change,PAL.longAccent],['Improve the testing',ins.improve,PAL.amber],['Test next',ins.next,PAL.blue]].forEach(function(p){
-      if(!p[1] || !p[1].length) return;
-      det+='<div style="font-size:8.5px;line-height:1.4;margin-top:3px;white-space:normal"><b style="color:'+p[2]+'">'+p[0]+':</b> <span style="color:'+PAL.sub+'">'+p[1].join(' · ')+'</span></div>';
-    });
-    det+=recoTestsHtml();
-  }catch(eD){ det=tabEmpty('the exploration tools could not be rendered.'); }
-  h+=tabSection('t7','⊕','DETAIL · exploration','Hypothesis builder, pattern miner and the research-curated test list. Exploration, not the loop: nothing here can promote anything.', det, false);
+    var __sq=seedQuestions();
+    if(__sq.length){
+      h+='<div title="Seeded from FEATURES[].questions — one entry per question every registered feature raises. proposed → testing → answered(📊, n≥20) → refined | parked. Promotion also requires 3 nightly re-runs and a walk-forward hold on 3 NEW sessions." style="font-size:8.5px;color:'+PAL.sub+';margin-top:4px">'+
+        '<span style="color:'+PAL.gold+';font-weight:700">seeded queue ('+__sq.length+'):</span> '+
+        __sq.map(function(q){ return '<span style="border:1px solid '+PAL.line+';border-radius:6px;padding:0 4px;margin-right:3px;white-space:nowrap">'+q.id+' '+q.tier+'</span>'; }).join('')+'</div>';
+    }
+  }catch(eSQ){}
+  // ② hypothesis builder (presets + console API)
+  h+='<div style="font-size:9.5px;font-weight:700;color:'+PAL.gold+';margin:7px 0 2px">② Hypothesis builder</div>';
+  h+='<div style="display:flex;flex-wrap:wrap;gap:3px">';
+  T_PRESETS.forEach(function(pz){ h+='<span onclick="window.__gptsHypoRun&&window.__gptsHypoRun(\''+pz.id+'\')" style="cursor:pointer;font-size:8.5px;border:1px solid '+PAL.line+';border-radius:6px;padding:1px 6px;color:'+PAL.ink+'">'+pz.label+'</span>'; });
+  h+='</div><div id="gpts-thypo" style="font-size:9px;color:'+PAL.sub+';margin-top:3px">pick a hypothesis, or call <code>__gptsHypo({when:[{f:\'kzone\',v:\'pull\'}],outcome:\'toward\'})</code> in the console.</div>';
+  // ③ pattern miner
+  var mine=studyMineLoad();
+  h+='<div style="font-size:9.5px;font-weight:700;color:'+PAL.gold+';margin:7px 0 2px">③ Pattern miner <span style="font-size:8px;font-weight:400;color:'+PAL.sub+'">— <span style="cursor:pointer;text-decoration:underline" onclick="window.__gptsMineRun&&window.__gptsMineRun()">run</span></span></div>';
+  if(mine && mine.top){
+    h+='<div style="font-size:8px;color:'+PAL.sub+';margin-bottom:2px">'+mine.n+' bars · '+mine.days+' days · '+mine.combosTested+' combos tested (multiple-testing: treat as leads ⚖) · base up '+mine.base+'%</div>';
+    h+='<table style="width:100%;border-collapse:collapse;font-size:8.5px">';
+    mine.top.slice(0,8).forEach(function(m){ var showTw=(m.tw!=null && Math.abs(m.twLift)>=Math.abs(m.dirLift));
+      var val = showTw? (m.tw+'% toward') : (m.dirUp+'% up');
+      var lift= showTw? m.twLift : m.dirLift; var lc=lift>=0?PAL.longAccent:PAL.shortAccent;
+      h+='<tr><td style="padding:2px 3px;border-top:1px dashed rgba(255,255,255,.05)">'+m.key+'</td><td style="border-top:1px dashed rgba(255,255,255,.05);color:'+lc+'">'+val+' ('+(lift>=0?'+':'')+lift+')</td><td style="text-align:right;border-top:1px dashed rgba(255,255,255,.05);color:'+PAL.sub+'">'+(showTw?m.twN:m.n)+'</td></tr>'; });
+    h+='</table>';
+  } else { h+='<div style="font-size:9px;color:'+PAL.sub+'">not run yet — click run (needs ≥30 outcome-labelled bars).</div>'; }
+  // ④ insights & recs
+  var ins=testingInsights();
+  h+='<div style="font-size:9.5px;font-weight:700;color:'+PAL.gold+';margin:7px 0 2px">④ Insights &amp; recommendations</div>';
+  function insList(title,arr,col){ if(!arr.length) return ''; return '<div style="font-size:9px;line-height:1.5;margin-bottom:3px"><span style="color:'+col+';font-weight:700">'+title+'</span> '+arr.map(function(x){return x;}).join(' · ')+'</div>'; }
+  h+=insList('What the data says:', ins.says, PAL.ink);
+  h+=insList('Change the product:', ins.change, PAL.longAccent);
+  h+=insList('Improve the testing:', ins.improve, PAL.amber);
+  h+=insList('Hypotheses to test next:', ins.next, PAL.blue);
+  // ⑥ recommended tests (research-curated)
+  try{ h+=recoTestsHtml(); }catch(eR){}
+  h+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;opacity:.85">📊 = n≥20 measured · ⚖ = hand-set until n≥20 · re-scored nightly after the close · miner rows are LEADS until they survive re-runs on new days.</div>';
+  h+='</div>';
   return h;
 }
+
 // tab bar shown above every view
 function analysisTabBar(){
   function tab(label,active,fn){
@@ -13226,24 +10476,10 @@ function render(){
   // no longer rendered; all King/projection/episode RECORDING + nightly scoring continues
   // silently — see snapshotNodes/projScorecard). Charts return once scorecards mature.
   html+='<div id="gpts-1col" style="display:flex;flex-direction:column;gap:4px">';
-  // (v10.55 PART E/G) WHICH INSTRUMENT IS ON THE CHART decides two things: whether we
-  // have an options tape at all, and which underlying's map everything below is built
-  // from. An unmapped instrument gets ONE honest line and nothing else — a GC or CL
-  // chart has no dealer-exposure map here and the panel will not invent one.
-  var __asym='SPY';
-  try{ futModeRefresh(); __asym=activeSym(); }catch(eFR){ __asym='SPY'; }
-  if(!futMode().ok){
-    html+=futUnavailableHtml();
-    html+='</div>';
-    html+='<div style="border-top:1px solid '+PAL.line+';margin:6px 0 3px 0"></div>';
-    html+=feedStatusHtml();
-    elBody.innerHTML=html;
-    return;
-  }
   try{ html+=kingHeaderBlock(); }catch(eH){}          // (v10.47) header cluster + ①②③ restored
-  try{ html+=briefBlockHtml(__asym); }catch(eBr){}    // (v10.49 J) pre-open brief (collapsible)
-  try{ html+=driftLineHtml(__asym); }catch(eD49){}    // (v10.49 D) GEX/VEX drift — an INPUT line
-  try{ html+=readBlock44(__asym); }catch(eR){}
+  try{ html+=briefBlockHtml('SPY'); }catch(eBr){}     // (v10.49 J) pre-open brief (collapsible)
+  try{ html+=driftLineHtml('SPY'); }catch(eD49){}     // (v10.49 D) GEX/VEX drift — an INPUT line
+  try{ html+=readBlock44('SPY'); }catch(eR){}
   // (v10.37) standalone gatekeeperBlock() REMOVED - gatekeeper strike + distance now in King badge.
   // (v10.27) Standalone BO / SPY Signals section REMOVED. The breakout-pullback
   // lifecycle is now shown as a per-node tag (BO / BO\u00b7FT\u00b7\u2026) on the Node Map row it
@@ -13287,22 +10523,6 @@ function render(){
           }
           if(t.getAttribute && t.getAttribute('data-gbrief')){
             ev.stopPropagation(); BRIEF_OPEN=!BRIEF_OPEN; try{ render(); }catch(eRb){} return;
-          }
-          // (v10.54 GROUP 5) the Analysis / Testing tabs: collapsible sections, the "?"
-          // guide, the self-test button and the async coverage refresh.
-          if(t.getAttribute && t.getAttribute('data-gsec')){
-            ev.stopPropagation(); secToggle(t.getAttribute('data-gsec')); try{ render(); }catch(eS1){} return;
-          }
-          if(t.getAttribute && t.getAttribute('data-gguide')){
-            ev.stopPropagation(); var gw=t.getAttribute('data-gguide'); TAB_GUIDE[gw]=!TAB_GUIDE[gw]; try{ render(); }catch(eS2){} return;
-          }
-          if(t.getAttribute && t.getAttribute('data-gselftest')){
-            ev.stopPropagation();
-            try{ SELFTEST_LAST=selfTestRun(); }catch(eS3){ SELFTEST_LAST=null; }
-            try{ render(); }catch(eS4){} return;
-          }
-          if(t.getAttribute && t.getAttribute('data-gtcov')){
-            ev.stopPropagation(); try{ window.__gptsTestRefresh&&window.__gptsTestRefresh(); }catch(eS5){} return;
           }
           t=t.parentNode;
         }
@@ -13357,10 +10577,7 @@ function refreshSym(sym){
     var f=LASTFEED[sym];
     var haveFeed = !!(f && f.j && (Date.now()-f.ts) <= FEED_STALE_MS);
     // Pull fiber candles first so we have a live price even with no feed.
-    // (v10.55 PART E) when the CHART is a future, the candles on the page belong to the
-    // future — futRawCandles converts them back to the underlying by 1/r so trendVerdict,
-    // in-play, drift and R:R all keep working on the cash scale they were built for.
-    var raw=futRawCandles(sym);
+    var raw=readFiberCandles(sym);
     var conv=null;
     if(raw && raw.length){
       // (v10.23 Issue C) build the CONTINUOUS close series BEFORE applyCandles so
@@ -13370,9 +10587,6 @@ function refreshSym(sym){
       applyCandles(sym, conv);
       if(conv.length){ S.price=conv[conv.length-1].c; }
     }
-    // (v10.55 PART E) no candles at all and the chart is a future: the underlying price
-    // is still knowable as futPrice / r. Used ONLY as a last resort — the feed wins.
-    if(S.price==null){ try{ var up=futUnderlyingPx(); if(up!=null && FUT_UNDERLYING[FUTMODE.chart]===sym) S.price=up; }catch(eUp){} }
     if(haveFeed){
       // ---- Primary path: network feed ----
       var j=f.j;
@@ -13403,41 +10617,24 @@ function refreshSym(sym){
 }
 
 function tick(){
-  // (v10.52) PIPELINE — at most one remote check per 10 min, skipped on a hidden tab,
-  // fails soft. Runs BEFORE the session gate so the pre-open brief can already cite
-  // last session's review.
-  try{ pipeCheck(); }catch(ePipe){}
-  if(!pastReset()){ try{ futModeRefresh(); }catch(eF0){} render(); return; }
+  if(!pastReset()){ render(); return; }
   TODAY=ctTodayStr();
-  // (v10.55 PART E) which instrument is on the chart, and what the live ratio is.
-  try{ futModeRefresh(); }catch(eFm){}
   FUT.ES = (STATE.SPY.price!=null) ? mul(STATE.SPY.price, ES_RATIO) : null;
   FUT.NQ = lastCloseOf('NQ1');
-  var ASYM=activeSym();
   refreshSym('SPY');
-  if(ASYM!=='SPY') refreshSym(ASYM);      // (v10.55 PART G) QQQ parity when QQQ is the active underlying
   recordSession();
   // DATA layer: once-per-closed-bar node snapshots (throttled internally).
   recordNodeSnapshot('SPY');
   recordNodeSnapshot('QQQ');
-  // (v10.55 PART A) the per-bar node-cluster memory the leg engine reads, then the
-  // engine itself — evaluated once per closed bar and cached beside the spine.
-  nodeHistSample('SPY');
-  nodeHistSample('QQQ');
-  try{ legEngine(ASYM); }catch(eLg){}
   // (v10.51) sample the Flr/Ceil strikes into FCHIST. SAMPLING ONLY — no rolling value
   // is computed and nothing votes on it: rolling is a DAY-OVER-DAY measurement (Academy:
   // 2 consecutive sessions = signal, 3 = confirmation), so a single session cannot produce one.
   fcHistSample('SPY');
   fcHistSample('QQQ');
   resolveFeatureOutcomes('SPY');   // (v10.49 B) forward-only, idempotent feature scoring
-  if(ASYM!=='SPY') resolveFeatureOutcomes(ASYM);   // (v10.55 PART G) same loop, keyed by sym
   recordDeflections('SPY');   // (v10.36) record confirmed deflections + score forward outcomes
   recordDeflections('QQQ');
   repoAutoExportTick();        // (v10.44) write data/YYYY-MM-DD.json at the close
-  // (v10.54, audit 6) AFTER THE CLOSE is the other moment the model may move. Anything
-  // a mid-session fetch deferred is applied here, once, when no more bars are recorded.
-  try{ if(RULES_APPLIED_AT!=null && rulesApplyAllowed() && ctNowSecOfDay()>=15*3600+60 && RULES_APPLIED_DAY!==TODAY){ RULES_APPLIED_DAY=TODAY; rulesApply(true); } }catch(eRA){}
   studyNightlyTick();          // (v10.44) re-run the test battery once per day after close
   render();
 }
@@ -13445,8 +10642,6 @@ function tick(){
 function boot(){
   installFeedObserver();
   loadCfg();
-  futCfgLoad();       // (v10.55 PART E) the futures auto/force override (gpts_futcfg_v1)
-  eventTagLoad();     // (v10.55 PART F) today's event tag, if the user set one (gpts_event_v1)
   loadKingDay();      // King persistence: rehydrate today's journey
   MIN_STRENGTH = CFG.nodeThresh;
   TODAY=ctTodayStr();
@@ -13456,9 +10651,7 @@ function boot(){
   repoMigrateOnce();           // (v10.44) localStorage recorder -> IndexedDB repository (once)
   studyLoad();                 // (v10.44) cached measured rates for READ ▸ / hovers
   registerCoreFeatures();      // (v10.49 B) enroll every feature in DATA/ANALYSIS/TESTING/LEARNING
-  trendLastLoad();             // (v10.54) rehydrate today's confirmed-trend memory (gpts_trendlast_v1)
   rulesLoad();                 // (v10.49 K) the mental model: localStorage + learning/rules.json
-  rulesApply(true);            // (v10.54) BOOT is one of the only two moments the model may move
   render();
   tick();
   setInterval(tick, POLL_MS);

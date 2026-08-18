@@ -1,3 +1,62 @@
+## v10.52 — 2026-08-18 — end-to-end PIPELINE INDICATOR + automatic review read-back
+
+**Why.** There was no way to see whether a day's data reached the nightly review, or whether a review came
+back. Two real breaks: v10.50's footer redesign silently DROPPED the old `saved ✓` text, and the panel
+could only receive a review through a console call, so a review sitting on GitHub never appeared.
+
+**Footer is now a 4-stage pipeline** (replaces the 3 health dots; feed/vex liveness folded into the `rec`
+hover, nothing lost): `● rec · ● saved · ● pushed · ● review`, each a coloured dot with a question-first
+hover. green ok · amber warn · red bad · grey unknown.
+- `saved` distinguishes **repo-folder save** from **download-only** (`dl`, amber) — a download never reaches
+  the repo, so the review would never see it. That state is now persisted so it survives a reload.
+- `pushed` = today's `data/<date>.json` is on GitHub. `review` = last session's review exists AND parsed.
+
+**CT-vs-UTC date bug fixed.** `saveState()` compares against the CHICAGO trading date. Comparing to the UTC
+date produced a false "not exported today" on 2026-08-17 (8pm CT = next-day UTC).
+
+**Automatic review read-back.** `pipeCheck()` (max one remote check per 10 min, cached in `gpts_pipe_v1`,
+skipped when the tab is hidden, fail-soft) fetches `review/<lastTradingDay>.json` from the raw URL, parses
+it into `ANALYSIS_REVIEW`, and re-renders — replacing the manual `__gptsDebug.setReview` call. Analysis ⑥/⑦
+and the pre-open brief now fill themselves. 404 falls back one weekday.
+
+**Also:** `gex` skill gains a **REVIEW** procedure (the nightly methodology + honesty rules + a delivery
+cascade: device bridge → Google Drive transport → chat), so the scheduled task just invokes the skill and
+the method lives in one versioned place. `review/` created with a README. Nightly rescheduled to 06:33 CT.
+
+**Tests:** test_pipeline_indicator.js (105) — saveState classification incl. the CT/UTC case, pipeCheck
+caching + fail-soft, stage colours, one-line render. Suite green except the 4 pre-existing stale.
+
+## v10.51.2 — 2026-08-18 — Steps 1-5 restored (small clickable line above the King badge)
+
+v10.50 retired the ①②③④⑤ icons and folded their doctrine "into element hovers" — but the STEP_TEXT
+content (all five Skylit method pages) was left in the file with NO CALLER, i.e. unreachable dead code.
+The per-element hovers explain individual elements; they do not carry the 5-step framework, which the
+project docs call the app's governing workflow.
+
+Restored as a tiny line ABOVE the SUP/King/RES cluster: `Steps 1 2 3 4 5`, 8px, each numeral separately
+clickable and opening ITS OWN popover through the existing `.gs-ico` / `data-gstep` delegation in
+`wireStepIcons()` (machinery was never removed). Deliberately on its own row so the pill alignment below
+is untouched. Hover names the step (1 Magnets · 2 King · 3 Range · 4 Gatekeepers · 5 Flow).
+
+## v10.51.1 — 2026-08-18 — drift bar FIX: correct scale + two readable lanes
+
+**Bug (found live).** The bar drew both ±1σ bands across the **Flr..Ceil** domain — which does not contain
+them. On 2026-08-18 (GEX band 769.04-771.68, σ 1.32; VEX centre 774.16; price 772.68) that clamped VEX to
+0-100% and GEX to 66%, so the two overlapping 50%-opacity bands smeared into one wash and only the white
+price tick was legible. The READ was correct (SPLIT — gamma centred below price, vanna above); the DRAWING
+was wrong.
+
+**Fix.** Domain is now the UNION of both bands and price, padded 8% — so the bands always fit and their
+relative positions are true. Same live numbers now render GEX 6.9-39.8% (left of price), VEX 48.3-93.1%
+(right), price 52.2% — a readable split picture. Bands moved into TWO STACKED LANES (gold GEX on top,
+purple VEX below, 3px each) instead of overlaying in one lane, each with a brighter centre tick for its
+VWAP, and the white price line spans both lanes. Per-lane hovers name the band and centre.
+
+**Also confirmed live:** VEX capture IS working (VVWAP 774.16 with the v10.49 auth self-fetch) — the earlier
+"LASTVEX null" reading was a probe artifact (LASTVEX is not exposed on __gptsDebug), not a capture failure.
+
+Suite green except the 4 pre-existing stale (node_identity, node_role_badge, nodemap, tapeking/jsdom).
+
 ## v10.51 — 2026-08-18 — Direction engine: SMA-50 PRIMARY, GEX/VEX drift CONFIRMS or DIVERGES
 
 Replaces the v10.50 weighted-sum lean with a HIERARCHY (user-directed). The 50-SMA five-state machine IS
@@ -1724,4 +1783,41 @@ Skylit layout"): it no longer matched.
 - Record only factual project changes
 - Include version target when a code change is made
 - Note whether a file is a candidate, verified build, or release snapshot
-- Do not use the changelog as a substitute for the session-state note
+- Do not use the changelog as a substitute for the session-state note## v10.55 — 2026-08-18 — TREND / MAGNET / PULLBACK-NODE engine · rolling · FUTURES mode · engine-ready data · QQQ parity · SPXW confluence
+
+**The mental model (user-taught).** A trend is an alternation of MAGNETS (the node price rallies TO) and PULLBACK NODES
+(the node that forms on the counter-move and price DEFLECTS off — the level to sell from in a downtrend, buy from in
+an uptrend). Lower-low (magnet) / lower-high (PB), each governed by a node; PB nodes APPEAR AFTER the move and ROLL
+lower after each leg. The 50-SMA confirms the trend; rolling ceilings ARE the successive pullback nodes.
+
+**Leg engine (`legEngine`)** per bar: dir from the SMA five-state · phase RLY/PB · magnet (capped at King) · PB ZONE
+prediction while rallying ("expect a pullback node to form above, below 775.5 — sell level") · PB DETECTION the
+moment a meaningful node appears/grows in the zone lower than the last · ROLL count (2 = signal, 3 = confirmed) ·
+rolled-off levels lose target status, vacated zone tagged air · invalidation on close through the PB ("lower-high
+broken") · a PB forming AGAINST the trend resets and flags weakening. Uptrend = mirror. NODEHIST records the nearest
+ceiling/floor per bar so it is testable. `test_leg_engine` recovers 776 → 775.5 → 775 (synthetic replay of the
+user's 08-17 sequence — no real 08-17 export exists in the repo).
+
+**Surfaced** in the READ (RLY/PB/confirmed sentences in the user's vocabulary), the ⚑ "Pullback node formed" banner,
+zone rows (`PB · 2nd lower`, `MAG · target`, dimmed `rolled off`), the decision line at a PB ("sell-side deflection ·
+tgt magnet 773 · inval above PB 775.0", still behind contact + R:R gates), and the direction hover. The roll is a
+score factor INSIDE the trend-primary hierarchy (+1 confirmed aligned / −1 against) — it never flips direction.
+Multi-session rolling from FCHIST votes only at ≥3 sessions ("needs 3, have N" until then).
+
+**FUTURES mode.** Chart symbol auto-detected each render (title/header). ES/MES → SPY tape · NQ/MNQ → QQQ tape ·
+anything else → "No options tape for GC — levels unavailable" (never invented). Live EMA ratio from the futures
+price ÷ underlying (footer `ES/SPY 10.068 (live)`); fallback last-good → constant with `≈` on EVERY converted level.
+ALL displayed levels convert (King, SUP/RES, gate, zones, magnet/PB, drift, entry/tgt/inval, R:R, contact band);
+only the futures value is shown. Underlying price + candles reconstructed by 1/r so trend/in-play/drift/R:R keep
+working on a futures chart. Recording stays in underlying strikes. ⚙ override auto|SPY|ES|NQ.
+
+**Engine-ready data.** `buildFeatureMatrix` → `matrix` in the export (one row per bar per sym, every feature +
+regime + model stamp, four outcome labels + MFE/MAE). New non-voting predictors: timeToClose, barOfDay,
+distToKing/Magnet, pbActive, rollCount, sessionRangePos, dayNet, PDC-rel, EVENT_TAG (⚙: FOMC/CPI/OPEX/half-day).
+**QQQ parity** (spine/zones/leg/features run for the active underlying). **SPXW confluence** parsed from the trinity
+ladder → `S` scored +1 when present, `S–` honestly otherwise.
+
+Tests: leg_engine 57 · futures_mode 62 · roll_factor 54 · feature_matrix 42 · spxw_confluence 26 · qqq_parity 41;
+feature_enrollment 772. Suite green except the 4 pre-existing stale.
+
+

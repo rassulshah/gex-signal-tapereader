@@ -7,7 +7,9 @@ function grab(name){ var i=src.indexOf('function '+name+'('); if(i<0){ console.e
 let p=0,f=0; function ok(c,m,g){ if(c){p++;} else {f++; console.log('  FAIL: '+m+(g!==undefined?' -> '+g:''));} }
 
 function fmtNum(x){ return (Math.round(x*100)/100).toString(); }
-eval(['_nmIsAcc','_nmIsDec','zoneRole','read3Beat'].map(grab).join('\n'));
+// (v10.54) the head now names the REAL range zone (near Flr / mid / near Ceil) via
+// rangePosOf, instead of saying "Mid-range" whatever price was doing.
+eval(['_nmIsAcc','_nmIsDec','zoneRole','rangePosOf','read3Beat'].map(grab).join('\n'));
 
 function L(o){ return Object.assign({state:'Steady',chg:0,taps:0,pos:true},o); }
 
@@ -28,13 +30,20 @@ ok(vR.kind==='reject','reject kind', vR.kind);
 ok(vR.sentence==='At Ceil 776. Resistance building with GEX and VEX leaning down. Potential drop to 772.','reject sentence', vR.sentence);
 ok(vR.verdict==='BEARISH' && vR.arrow==='↓','reject verdict word');
 
-// ---- CONT: dir UP, in-play Gate (gatekeeper), drift up, target King ----
+// ---- CONT: dir UP, price BELOW the in-play Gate, drift up, target King ----
+// (v10.54, audit 7) 'cont' means price is travelling THROUGH the node it is engaging,
+// i.e. dirNum === -holdDir. `L.isGatekeeper` used to be ORed in, so a clean bounce OFF a
+// gatekeeper was narrated as a break through it. Price is now placed below the gate,
+// which is what "through" actually requires.
 var flrC=L({k:772,isFlr:true}), ceilC=L({k:776,isCeil:true});
 var gate=L({k:774,isGatekeeper:true});
-var vC=read3Beat('UP', gate, 774, flrC, ceilC, {dir:1,verdict:'AGREE-UP'}, 776, 'King');
+var vC=read3Beat('UP', gate, 773.8, flrC, ceilC, {dir:1,verdict:'AGREE-UP'}, 776, 'King');
 console.log('CONT:', vC.kind, '|', vC.sentence);
 ok(vC.kind==='cont','cont kind', vC.kind);
 ok(vC.sentence==='Through Gate 774. GEX and VEX leaning up. Potential run to King 776.','cont sentence', vC.sentence);
+// a gatekeeper price is sitting ON TOP of, with the read pointing up, is a BOUNCE off it
+var vCb=read3Beat('UP', gate, 774.4, flrC, ceilC, {dir:1,verdict:'AGREE-UP'}, 776, 'King');
+ok(vCb.kind==='bounce','a gatekeeper BELOW price with an up read is a bounce, not a break through it', vCb.kind);
 
 // ---- SPLIT: dir SIDE (no lean), mid-range ----
 var flrS=L({k:772,isFlr:true}), ceilS=L({k:776,isCeil:true});

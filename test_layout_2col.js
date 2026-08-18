@@ -14,7 +14,7 @@ ok(!/id="gpts-2col"/.test(src),                      'legacy two-col wrapper rem
 
 // render order: header → drift → READ → accumBlock (zones)
 var iHdr=src.indexOf('html+=kingHeaderBlock()');
-var iRead=src.indexOf("html+=readBlock44('SPY')");
+var iRead=src.indexOf("html+=readBlock44(");   // (v10.55 PART G) the READ is keyed by the ACTIVE underlying, not the literal 'SPY'
 var iAcc=src.indexOf('html+=accumBlock()');
 ok(iHdr>0 && iRead>iHdr,                              'header cluster renders before the READ');
 ok(iAcc>iRead,                                        'zone ladder (accumBlock) renders after the READ');
@@ -29,9 +29,17 @@ var acc=grab('accumBlock');
 ok(!/html\+=deflectionBlock\(\)/.test(acc),          'deflectionBlock() NOT rendered inside accumBlock');
 ok(/function deflectionBlock/.test(src),             'deflectionBlock kept defined (Analysis/history only)');
 
-// footer = three health dots + version
+// (v10.52) footer = the four PIPELINE stages + version. The v10.50 feed/vex/rec health
+// dots were replaced: they could all be green while the day's data never left the
+// browser. Feed/vex liveness now lives in the `rec` stage hover.
 var foot=grab('feedStatusHtml');
-ok(/feed<\/span>/.test(foot) && /vex<\/span>/.test(foot) && /rec<\/span>/.test(foot) && />v10\.51<\/span>/.test(foot) && /dot\(feedLive\)/.test(foot), 'footer = feed · vex · rec dots + v10.51');
+ok(/data-pipe="'\+sg\.key\+'"/.test(foot) && /pipeStages\(\)/.test(foot) && /pipeColor\(sg\.state\)/.test(foot),
+   'footer renders the pipeStages() strip with a coloured dot per stage');
+ok(/>v10\.55<\/span>/.test(foot),                  'footer keeps the version at the right (10.55)');
+ok(/white-space:nowrap/.test(foot),                 'footer strip is nowrap \u2014 one line at 250px');
+ok(/\uD83D\uDCBE/.test(foot) && /\uD83D\uDCC1/.test(foot), 'footer keeps the export and folder-pick buttons');
+ok(/feedLive\?'live':'waiting'/.test(foot) && /vexLive\?'capturing':'waiting'/.test(foot),
+   'feed/vex health is preserved inside the rec hover (no signal dropped)');
 
 // sync-gate banner stays ABOVE the single column (full width)
 var gateIdx=src.indexOf('html+=syncBannerHtml'); var colIdx=src.indexOf('id="gpts-1col"');

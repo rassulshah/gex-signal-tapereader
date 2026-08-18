@@ -27,7 +27,9 @@ ok(/var RECO_TESTS=\[/.test(src) && /function recoTestsHtml\(\)/.test(src), 'rec
 ok(/⑥ Recommended tests/.test(src), 'section ⑥ rendered');
 ok((src.match(/th:'VEX \(vanna\)'/g)||[]).length>=4, 'VEX hypotheses included');
 ok(/th:'Confluence'/.test(src) && /th:'Accumulation'/.test(src), 'confluence + accumulation themes');
-ok(/try\{ h\+=recoTestsHtml\(\)/.test(src), 'recoTestsHtml called in testingBlock');
+// (v10.54 GROUP 5) the research-curated list is exploration, not the learning loop, so
+// it moved into the Testing tab's collapsible DETAIL section.
+ok(/det\+=recoTestsHtml\(\)/.test(src), 'recoTestsHtml called in testingBlock (DETAIL section)');
 ok(/@version\s+10\.(4[6-9]|5[0-9])/.test(src), 'version >= 10.46');
 ok((src.match(/^function render\(\)/gm)||[]).length===1 && /\}\)\(\);\s*$/.test(src), 'file shape rule 2.4');
 console.log('test_reco_deriv: '+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);

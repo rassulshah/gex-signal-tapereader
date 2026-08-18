@@ -43,7 +43,11 @@ ok(rangePosOf({flr:{k:775},ceil:{k:775}}, 775).zone==='unknown', '1h degenerate 
 ok(gradeOfScore(6)==='A' && gradeOfScore(5)==='A', '2a A at >=5');
 ok(gradeOfScore(4)==='B' && gradeOfScore(3)==='B', '2b B at >=3');
 ok(gradeOfScore(2)==='C' && gradeOfScore(-1)==='C','2c C below 3');
-ok(gradeDisp('A',5)==='A−' && gradeDisp('A',6)==='A', '2d exactly-at-threshold renders A−');
+// (v10.54, audit 25) THE HALF-GRADE IS GONE. gradeDisp hardcoded the cut points as 5
+// and 3, so once a promoted threshold moved gradeA the "A−" landed on the wrong score
+// entirely. A score AT the threshold is the grade: A means A.
+ok(gradeDisp('A',5)==='A' && gradeDisp('A',6)==='A', '2d a score AT the A threshold renders A, not A−');
+ok(gradeDisp('B',3)==='B' && gradeDisp('C',0)==='C', '2d2 ...and the same for B and C');
 
 // ================= 3. the A case: confirmed trend CONFIRMED by an overlapping drift ====
 global.STATE.SPY.price=772.6;                       // lower third of 772..778
@@ -51,7 +55,7 @@ var d=directionGrade('SPY');
 ok(d.dir==='UP',        '3a direction UP — set by the CONFIRMED UPTREND, not by drift', d.dir);
 ok(d.score===5,         '3b score 5 = confirmed trend 3 + drift agrees with overlap 2', d.score);
 ok(d.grade==='A',       '3c grade A', d.grade);
-ok(d.disp==='A−',       '3d displayed as A− (reached exactly at the threshold)', d.disp);
+ok(d.disp==='A',        '3d displayed as A (v10.54: no half-grade at the threshold)', d.disp);
 ok(d.relation==='confirmed', '3e relation = confirmed', d.relation);
 ok(d.tentative===false, '3f a confirmed trend is never tentative');
 ok(d.trendState==='up', '3g the five-state is reported verbatim', d.trendState);
@@ -154,6 +158,6 @@ ok(/HARD-CAP|HARD-CAPS/.test(src), '10a the mid-range cap is documented in sourc
 ok(/DECISION_MATRIX/.test(src),    '10b the matrix exists');
 ok(!/directionGrade[^]{0,3000}(buy|sell|long side entry)/i.test(src.slice(src.indexOf('function directionGrade'), src.indexOf('function directionGrade')+2000)), '10c no trade words inside directionGrade');
 ok(/drift NEVER overrides the direction/i.test(src), '10d the hierarchy rule is stated in source');
-ok(/@version\s+10\.51/.test(src), '10e version pinned to 10.51');
+ok(/@version\s+10\.55/.test(src), '10e version pinned to 10.55');
 
 console.log('\n'+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);

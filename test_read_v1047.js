@@ -69,7 +69,7 @@ var bn=syncBannerHtml({reason:'no-consensus',votes:{tag:775.38,feed:null,tapemax
 ok(/Out of sync/.test(bn) && /three King sources disagree/.test(bn) && !/Diagnose[^"]*<\/div>\s*<div/.test(bn),'sync banner is one line with hover detail');
 
 // ---- render structure ----
-ok(/html\+=kingHeaderBlock\(\)/.test(src) && src.indexOf('html+=kingHeaderBlock()')<src.indexOf("html+=readBlock44('SPY')"),'render(): header block before READ');
+ok(/html\+=kingHeaderBlock\(\)/.test(src) && src.indexOf('html+=kingHeaderBlock()')<src.indexOf("html+=readBlock44(__asym)"),'render(): header block before READ');
 // (v10.50) step icons ①②③ RETIRED from the header pills.
 var kh=grab('kingHeaderBlock');
 ok(!/stepMini\(1\)/.test(kh) && !/stepMini\(2\)/.test(kh) && !/stepMini\(3\)/.test(kh) && !/5-STEP/.test(kh) && /SUP/.test(kh),'kingHeaderBlock: no ①②③ step icons, SUP/RES pills remain');
@@ -78,5 +78,5 @@ ok(/FLRCEIL_EDGE_PCT/.test(grab('nodeMapModel')) && /pickEdge/.test(grab('nodeMa
 ok(/isNext=true/.test(grab('nodeMapModel')) && /Mag \\u00b7 next/.test(grab('nodeRoleBadge')),'next-target class exists');
 ok(/Defl \\u00b7 '\+roleAb/.test(grab('deflectionBlock')),'defl card abbreviated name');
 // (v10.50) three version spots: @version header, part1 console.log, footer version marker.
-ok(/@version\s+10\.51/.test(src) && /v10\.51 part1 loaded/.test(src) && />v10\.51<\/span>/.test(src),'version 10.51 in all three spots');
+ok(/@version\s+10\.55/.test(src) && /v10\.55 part1 loaded/.test(src) && />v10\.55<\/span>/.test(src),'version 10.55 in all three spots');
 console.log('test_read_v1047: '+p+' passed, '+f+' failed'); process.exit(f?1:0);

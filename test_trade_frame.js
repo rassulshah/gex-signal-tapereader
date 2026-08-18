@@ -12,7 +12,13 @@ var MODEL={ ok:true, px:773.66, kingK:775, emphasis:'above',
   airpocket:{ ok:false, pockets:[] }, cluster:{ ok:false, regions:[] } };
 global.nodeMapModel=function(){ return MODEL; };
 
-eval(['tradeFrame','frameTextOf'].map(ex).join('\n'));
+global.RR_FLOOR=3; global.RR_MIN=2;
+// (v10.54, audit 25) frameTextOf is DELETED. It was one of four narrators for one read,
+// none of them rendered since the v10.50 single-voice redesign, all still maintained and
+// still pinned by tests — so the suite was guarding output no user could see while the
+// LIVE render went unasserted. The vocabulary assertions below now run against
+// tradeFrame's own fields and the row-3 render that actually ships.
+eval(['tradeFrame','frameRR','rrText'].map(ex).join('\n'));
 global.FRAME_HALF=0.25;
 global.FRAME_FALLBACK=0.5;
 
@@ -57,18 +63,29 @@ MODEL.airpocket={ ok:true, pockets:[{lo:773.5, hi:774.5}] };
 ok(tradeFrame('SPY',{k:773},1).path==='air', '4e air wins over cluster (it is the faster pathway)');
 MODEL.airpocket={ ok:false, pockets:[] }; MODEL.cluster={ ok:false, regions:[] };
 
-// ================= 5. the rendered string is the locked vocabulary =================
-var txt=frameTextOf(tradeFrame('SPY',{k:773},1));
-ok(/^zone 773±\.25/.test(txt), '5a starts with the zone band', txt);
-ok(/inval <772/.test(txt),     '5b inval reads with the "<" side going up', txt);
-ok(/tgt 774 \(wall\)/.test(txt),'5c target carries its path', txt);
-var txtDn=frameTextOf(tradeFrame('SPY',{k:773},-1));
-ok(/inval >774/.test(txtDn),   '5d inval flips to ">" going down', txtDn);
-ok(frameTextOf(null)==='' && frameTextOf({k:null})==='', '5e no frame -> empty string');
-// VOCABULARY RED LINE
+// ============ 5. THE LOCKED VOCABULARY, ON THE LIVE ROW-3 RENDER ==============
+ok(!/function frameTextOf/.test(src), '5a the dead frameTextOf narrator is deleted');
+var DZ=ex('deflZonesBlock');
+ok(/var frTxt='entry '\+fmt(Num|Lvl)\(L\.k\)/.test(DZ), '5b the LIVE row 3 opens with the zone (entry = the node)');
+ok(/frTxt\+=' · tgt '\+fmt(Num|Lvl)\(fr\.tgt\)/.test(DZ), '5c ...then the target');
+ok(/frTxt\+=' · inval '\+\(\(fr\.dir>=0\)\?'&lt;':'&gt;'\)/.test(DZ),
+   '5d ...then the invalidation, with "<" going up and ">" going down (HTML-escaped)');
+ok(/\(tgtAir\?'\(air\)':''\)/.test(DZ), '5e ...and the path is carried as the (air) tag');
+// R:R rides with the frame — the first number a trader looks at, and v10.53 did not have it
+var fUp=tradeFrame('SPY',{k:773},1);
+ok(frameRR(fUp)===1, '5f R:R = |tgt-k| / |k-inval| on the live frame (774-773)/(773-772)', frameRR(fUp));
+ok(/frTxt\+=' · '\+rrText\(rr\)/.test(DZ), '5g ...and it is RENDERED on the row');
+ok(/'skip · '\+rrText\(rr\)\+' \(below the '\+RR_FLOOR\+':1 floor\)'/.test(DZ),
+   '5h below RR_MIN the decision text says so descriptively');
+// VOCABULARY RED LINE — on the fields and on the live row
 var banned=/\b(entry|stop|size|buy|sell|long|short)\b/i;
-ok(!banned.test(txt) && !banned.test(txtDn), '5f the frame text never uses an execution word');
-ok(/zone/.test(txt) && /inval/.test(txt) && /tgt/.test(txt), '5g exactly the locked words: zone / inval / tgt / path');
+var fields=Object.keys(fUp).join(' ');
+ok(!banned.test(fields), '5i the frame\'s own fields carry no execution word', fields);
+ok(/zone/.test(fields) && /inval/.test(fields) && /tgt/.test(fields) && /path/.test(fields),
+   '5j exactly the locked words: zone / inval / tgt / path', fields);
+ok(!/\b(buy|sell|long|short|stop loss|position size)\b/i.test(DZ),
+   '5k ...and the live row 3 render carries none either');
+ok(/descriptive|Descriptive|never an instruction/.test(DZ), '5l the row says out loud that it is descriptive');
 
 // ================= 6. defensive =================
 ok(tradeFrame('SPY', null, 1).zone===null, '6a null level -> empty frame, no throw');

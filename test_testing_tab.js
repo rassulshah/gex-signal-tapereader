@@ -12,7 +12,14 @@ ok(/if\(TESTING_VIEW\)\{/.test(src), 'render branch for Testing');
 ok(/tab\('\\uD83E\\uDDEA Testing', TESTING_VIEW/.test(src), 'third tab in the tab bar');
 ok(/if\(ANALYSIS_VIEW\) TESTING_VIEW=false;/.test(src) && /if\(TESTING_VIEW\) ANALYSIS_VIEW=false;/.test(src), 'tabs mutually exclusive');
 ok(/window\.__gptsHypo=function/.test(src) && /window\.__gptsMineRun=function/.test(src) && /window\.__gptsHypoRun=function/.test(src), 'console + preset APIs exposed');
-ok(/function testingBlock\(\)/.test(src) && /① Question library/.test(src) && /② Hypothesis builder/.test(src) && /③ Pattern miner/.test(src) && /④ Insights/.test(src), 'testingBlock renders all 5 blocks');
+// (v10.54 GROUP 5.2) the Testing tab was rebuilt around the learning loop: question
+// queue -> proposals -> challengers -> kill list -> self-test -> coverage. The v10.45
+// hypothesis builder / pattern miner / research list are kept in a DETAIL section.
+ok(/function testingBlock\(\)/.test(src), 'testingBlock exists');
+[['①','QUESTION QUEUE'],['②','PROPOSALS'],['③','CHALLENGERS'],['④','KILL LIST'],['⑤','SELF-TEST'],['⑥','DATA COVERAGE']].forEach(function(p){
+  ok(src.indexOf("'"+p[0]+"','"+p[1]+"'")>=0, 'testing section '+p[0]+' '+p[1]+' is rendered');
+});
+ok(/PATTERN MINER/.test(src) && /Hypothesis builder|hypothesis/i.test(src), 'the v10.45 exploration tools survive in DETAIL');
 ok(/gpts_mine_v1/.test(src), 'miner result cached');
 ok(/@version\s+10\.(4[0-9]|5[0-9])/.test(src), 'version 10.4x-5x');
 ok((src.match(/^function render\(\)/gm)||[]).length===1 && /\}\)\(\);\s*$/.test(src), 'file shape rule 2.4 (one render, closes cleanly)');

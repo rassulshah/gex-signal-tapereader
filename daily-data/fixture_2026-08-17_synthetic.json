@@ -1,0 +1,32 @@
+{
+  "schema": "gex-leg-fixture/v1",
+  "date": "2026-08-17",
+  "synthetic": true,
+  "why": "NO 2026-08-17 day file or FCHIST export exists in this repo (daily-data/ holds only gex_2026-08-11.json, data/ holds only README.json). This fixture is therefore a SYNTHETIC REPLAY of the sequence the user described and circled on their own chart: a downtrend under the 50-SMA with the magnet (King) at 773 below, and successive pullback-node ceilings appearing LOWER after each down leg - 776, then 775.5, then 775. It is written in the exact shape legStep() consumes (one row per closed 3-minute bar) so the engine is replayed, not re-implemented, by the test.",
+  "note": "pct is % of King, matching nodeMapModel levels. state mirrors the Acm/Building read. Replace this file with the real 2026-08-17 export the moment one exists; test_leg_engine.js reads whatever is here.",
+  "sym": "SPY",
+  "kingK": 773,
+  "bars": [
+    { "bar": 1, "t": 1000, "px": 777.40, "close": 777.40, "dirIn": "dn",
+      "levels": [ {"k":773,"pct":100,"state":"Steady","isKing":true}, {"k":778,"pct":12,"state":"Steady"} ] },
+    { "bar": 2, "t": 2000, "px": 776.60, "close": 776.60, "dirIn": "dn",
+      "levels": [ {"k":773,"pct":100,"state":"Steady","isKing":true}, {"k":778,"pct":12,"state":"Fading"} ] },
+    { "bar": 3, "t": 3000, "px": 775.60, "close": 775.60, "dirIn": "dn",
+      "levels": [ {"k":773,"pct":100,"state":"Steady","isKing":true}, {"k":776,"pct":45,"state":"Building"} ] },
+    { "bar": 4, "t": 4000, "px": 775.10, "close": 775.10, "dirIn": "dn",
+      "levels": [ {"k":773,"pct":100,"state":"Steady","isKing":true}, {"k":776,"pct":48,"state":"Steady"} ] },
+    { "bar": 5, "t": 5000, "px": 774.40, "close": 774.40, "dirIn": "dn",
+      "levels": [ {"k":773,"pct":100,"state":"Steady","isKing":true}, {"k":775.5,"pct":40,"state":"Building"}, {"k":776,"pct":44,"state":"Fading"} ] },
+    { "bar": 6, "t": 6000, "px": 774.20, "close": 774.20, "dirIn": "dn",
+      "levels": [ {"k":773,"pct":100,"state":"Steady","isKing":true}, {"k":775.5,"pct":42,"state":"Steady"}, {"k":776,"pct":38,"state":"Fading"} ] },
+    { "bar": 7, "t": 7000, "px": 773.90, "close": 773.90, "dirIn": "dn",
+      "levels": [ {"k":773,"pct":100,"state":"Steady","isKing":true}, {"k":775,"pct":55,"state":"Building"}, {"k":775.5,"pct":41,"state":"Steady"}, {"k":776,"pct":33,"state":"Fading"} ] }
+  ],
+  "expect": {
+    "rollSteps": [776, 775.5, 775],
+    "rollCount": 3,
+    "confirmed": true,
+    "magnet": 773,
+    "rolledOffAtEnd": [775.5, 776]
+  }
+}

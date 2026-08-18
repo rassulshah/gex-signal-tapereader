@@ -17,7 +17,10 @@ global.nodeTapCount=function(){ return 0; };
 global.ruleTier=function(){ return '⚖'; };
 global.ACM_BAND=8;
 
-eval(['gradeOfScore','gradeDisp','acmLabel','nodeHoldDir','nodeGrade'].map(ex).join('\n'));
+// (v10.54, audit 21) the node grade has its OWN cut points (NODE_WEIGHTS), so a promoted
+// DIRECTION threshold can no longer silently re-grade every node on the board.
+global.NODE_WEIGHTS={ gradeA:5, gradeB:3 };
+eval(['gradeOfScore','nodeGradeOfScore','gradeDisp','acmLabel','nodeHoldDir','nodeGrade'].map(ex).join('\n'));
 
 function N(o){ return Object.assign({k:773, pos:true, taps:0, state:'Steady', chg:0}, o); }
 
@@ -86,7 +89,15 @@ QAGREE=false; DRIFT={verdict:'NONE',dir:0};
 ACM={ m15:{pct:0,label:'Steady'}, session:{pct:0,label:'Steady'} };
 var B=nodeGrade('SPY', N({k:773, pos:true, taps:0, state:'Steady'}));
 ok(B.score===3 && B.grade==='B', '7c clean fresh node with no confluence = B', B.score+'/'+B.grade);
-ok(B.disp==='B−', '7d ...displayed B− at the threshold', B.disp);
+ok(B.disp==='B', '7d ...displayed B (v10.54: no half-grade at the threshold)', B.disp);
+// the node scale is INDEPENDENT of the direction scale
+global.DIR_WEIGHTS={ trend:3, driftAgree:2, driftLean:1, diverge:-2, tentative:1, gradeA:9, gradeB:8 };
+ok(nodeGrade('SPY', N({k:773, pos:true, taps:0, state:'Steady'})).grade==='B',
+   '7d2 moving the DIRECTION cut points leaves the node grade alone', nodeGrade('SPY', N({k:773,pos:true,taps:0,state:'Steady'})).grade);
+global.NODE_WEIGHTS={ gradeA:9, gradeB:8 };
+ok(nodeGrade('SPY', N({k:773, pos:true, taps:0, state:'Steady'})).grade==='C',
+   '7d3 ...while moving the NODE cut points does move it');
+global.NODE_WEIGHTS={ gradeA:5, gradeB:3 };
 ACM={ m15:{pct:0,label:'Steady'}, session:{pct:-40,label:'Dec'} };
 var C=nodeGrade('SPY', N({k:773, pos:false, taps:3, state:'Fading'}));
 ok(C.score===-3 && C.grade==='C', '7e spent bleeding −γ node = C', C.score+'/'+C.grade);

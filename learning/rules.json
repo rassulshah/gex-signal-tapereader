@@ -1,596 +1,1654 @@
 {
-  "schema": "gex-learning/rules-v1",
-  "version": "10.51",
-  "generated": "2026-08-17",
-  "note": "THE MENTAL MODEL IN DATA FORM. Seeded hand-set (⚖). The nightly review writes measured {rate,n,mfe,mae,regime} back and flips tier to \"measured\" (📊) at n>=20 plus a walk-forward hold on 3 NEW sessions. The panel reads this at boot: grade tiers, and the READ may cite ONLY promoted rules. Decay: 3 nightly runs under the bar demotes a rule back to ⚖. Grades are re-tuned ONLY through this loop — never hand-edited to fit a single day.",
-  "unlockN": 20,
-  "walkForwardSessions": 3,
-  "decayRuns": 3,
-  "rules": {
-    "dir": {
-      "id": "dir",
-      "condition": "directionGrade: SMA-50 trend sets direction, drift confirms or diverges, hard caps override",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "One direction verdict per bar; the hierarchy beats any single input only if A outranks B outranks C.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "drift": {
-      "id": "drift",
-      "condition": "both book centres same side of price + overlapping bands",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "GEX range and VEX drift agreeing means one story, not two — a higher-probability lean.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "node.grade": {
-      "id": "node.grade",
-      "condition": "polarity + tap + ROC + confluence",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Fresh clean +gamma nodes still growing are where dealer hedging actually defends.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "decision": {
-      "id": "decision",
-      "condition": "Direction grade × in-play Node grade",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "The matrix earns or loses its cell labels; a cell measured under 45% gets re-worded to skip.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "acm.realVsHedge": {
-      "id": "acm.realVsHedge",
-      "condition": "rocDay",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Growth measured since the session open separates real accumulation from intraday hedging.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "defl_ant": {
-      "id": "defl_ant",
-      "condition": "px within 0.6 of a grade>=B node and approaching",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Anticipation is geometry, not prophecy — it must still be scored like everything else.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "reaction": {
-      "id": "reaction",
-      "condition": "wick rejection at the node while it is not fading",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "A rejection wick on a node that is still building is the tape confirming the level in real time.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "act": {
-      "id": "act",
-      "condition": "operator logged take vs pass on the in-play zone",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Selection quality is a separate skill from read quality; passes are the control group.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "rshuf": {
-      "id": "rshuf",
-      "condition": ">50% of wall keys turned over between feeds",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "A wholesale board reshuffle means the old map is void; movement usually follows.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "roll": {
-      "id": "roll",
-      "condition": "King migrated up/down over the roll window",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "The settlement magnet moving is the board repositioning; price tends to follow it.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "gateHour": {
-      "id": "gateHour",
-      "condition": "gatekeeper strike + session bucket",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "The blocker on the path to the King behaves differently by time of day.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "dir.trend5": {
-      "id": "dir.trend5",
-      "condition": "trendVerdict five-state, recorded uncollapsed",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "The SMA-50 five-state is the direction; up-broken/dn-broken must earn their own rates before either is allowed to vote.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "dir.drift": {
-      "id": "dir.drift",
-      "condition": "driftRead dir + verdict, scored on its own",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Drift is only allowed to CONFIRM or DIVERGE, so its stand-alone rate is the honest test of that role.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "dir.relation": {
-      "id": "dir.relation",
-      "condition": "confirmed | divergence | tentative | trend-only",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "The hierarchy only earns its keep if the relation separates outcomes better than the trend on its own.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "dir.struct": {
-      "id": "dir.struct",
-      "condition": "netPositioning bias, RECORDED not voted",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "A one-directional factor on a trending day looks like edge; only vote-split vs baseline can tell them apart.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "dir.kingRoll": {
-      "id": "dir.kingRoll",
-      "condition": "kingRoll sign, RECORDED not voted",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "The settlement magnet moving is the board repositioning; whether it LEADS price is an open measurement.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "netGamma": {
-      "id": "netGamma",
-      "condition": "signed gamma mass sign from deriveFactors, RECORDED not voted",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Net gamma sign describes how moves TRAVEL; whether it also predicts WHICH WAY is unmeasured.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "dir.trendFast": {
-      "id": "dir.trendFast",
-      "condition": "SMA 10 and 20 with the same 15/20 dominance rule, RECORDED not voted",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "The 50-period window is an inherited assumption; 10/20 must be measured against it before anything changes.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "dir.A": {
-      "id": "dir.A",
-      "condition": "dirGrade=A",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Direction A = drift agrees + structure aligned + trending regime; the fusion should follow through.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "dir.B": {
-      "id": "dir.B",
-      "condition": "dirGrade=B",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Direction B = one leg of the fusion missing or mid-range capped.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "dir.C": {
-      "id": "dir.C",
-      "condition": "dirGrade=C",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Direction C = chop, mid-range, or opposed structure. No directional claim.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "drift.conf": {
-      "id": "drift.conf",
-      "condition": "driftVerdict=AGREE",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "GEX centre and VEX centre on the same side of price with overlapping bands = a real lean.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "node.grade.A": {
-      "id": "node.grade.A",
-      "condition": "nodeGrade=A",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Fresh clean +gamma node building into the tap.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "node.grade.B": {
-      "id": "node.grade.B",
-      "condition": "nodeGrade=B",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Node good on most inputs but one is stale or opposed.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "node.grade.C": {
-      "id": "node.grade.C",
-      "condition": "nodeGrade=C",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Spent or bleeding node; reactions are unreliable.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "node.tap.1": {
-      "id": "node.tap.1",
-      "condition": "tap=0",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "1st tap of an untested node (Academy ~80%).",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "node.tap.2": {
-      "id": "node.tap.2",
-      "condition": "tap=1",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "2nd tap (Academy ~66%).",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "node.tap.3": {
-      "id": "node.tap.3",
-      "condition": "tap>=2",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "3rd+ tap = graveyard (Academy ~33%).",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "node.pol.pos": {
-      "id": "node.pol.pos",
-      "condition": "pol=+",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "+gamma nodes deflect cleanly (dealers sell into strength).",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "node.pol.neg": {
-      "id": "node.pol.neg",
-      "condition": "pol=-",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "-gamma nodes accelerate; a deflection there is counter-character.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "node.rocDay.up": {
-      "id": "node.rocDay.up",
-      "condition": "rocDay=Acm",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Since-open growers are real positioning, not intraday hedge noise.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "node.rocDay.dn": {
-      "id": "node.rocDay.dn",
-      "condition": "rocDay=Dec",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Since-open faders are being unwound; the level is leaving.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "decision.A×A": {
-      "id": "decision.A×A",
-      "condition": "decisionCell=A×A",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Matrix cell A×A must earn its label from measured outcomes.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "decision.A×B": {
-      "id": "decision.A×B",
-      "condition": "decisionCell=A×B",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Matrix cell A×B must earn its label from measured outcomes.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "decision.A×C": {
-      "id": "decision.A×C",
-      "condition": "decisionCell=A×C",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Matrix cell A×C must earn its label from measured outcomes.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "decision.B×A": {
-      "id": "decision.B×A",
-      "condition": "decisionCell=B×A",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Matrix cell B×A must earn its label from measured outcomes.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "decision.B×B": {
-      "id": "decision.B×B",
-      "condition": "decisionCell=B×B",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Matrix cell B×B must earn its label from measured outcomes.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "decision.B×C": {
-      "id": "decision.B×C",
-      "condition": "decisionCell=B×C",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Matrix cell B×C must earn its label from measured outcomes.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "decision.C×A": {
-      "id": "decision.C×A",
-      "condition": "decisionCell=C×A",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Matrix cell C×A must earn its label from measured outcomes.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "decision.C×B": {
-      "id": "decision.C×B",
-      "condition": "decisionCell=C×B",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Matrix cell C×B must earn its label from measured outcomes.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "decision.C×C": {
-      "id": "decision.C×C",
-      "condition": "decisionCell=C×C",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Matrix cell C×C must earn its label from measured outcomes.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "kill.tap3": {
-      "id": "kill.tap3",
-      "condition": "tap>=2",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "3rd+ tap of a node: the zone is spent, reactions stop paying.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "kill.midrange": {
-      "id": "kill.midrange",
-      "condition": "rangePos=mid",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Mid-range (0.35-0.65 of Flr..Ceil): no edge either way (Skylit midpoint rule).",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "kill.noConf": {
-      "id": "kill.noConf",
-      "condition": "driftVerdict=SPLIT & structAsym=opposed",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "Neither VEX drift nor structure agrees with the direction: nothing is confirming.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    },
-    "kill.negGammaWide": {
-      "id": "kill.negGammaWide",
-      "condition": "pol=- & path=air",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": null,
-      "mechanism": "-gamma node inside a wide/low-exposure pathway: moves accelerate through, they do not deflect.",
-      "tier": "hand",
-      "promoted": false,
-      "lastVerified": null
-    }
+ "schema": "gex-rules/v2",
+ "asOf": "2026-08-18",
+ "version": "10.53",
+ "note": "THE MENTAL MODEL IN DATA FORM, MACHINE-APPLICABLE. weights.dir are the LIVE direction-scoring constants the panel reads at boot. The WEEKLY learning run writes rules/proposals/challengers/killList and NEVER touches weights; only the panel applyProposals() moves a weight, and only after RE-CHECKING the promotion bar in code (n>=20 AND walkForward.held over >=3 NEW sessions AND no regime flip). clearsBar asserted by the reviewer is advisory. The NIGHTLY run writes learning/log/YYYY-MM-DD.json only. Sparse data never nudges a weight: it is reported as insufficient and the hand-set value stands.",
+ "unlockN": 20,
+ "walkForwardSessions": 3,
+ "decayRuns": 3,
+ "weights": {
+  "dir": {
+   "trend": 3,
+   "driftAgree": 2,
+   "driftLean": 1,
+   "diverge": -2,
+   "tentative": 1,
+   "gradeA": 5,
+   "gradeB": 3
+  },
+  "_doc": {
+   "trend": "score a CONFIRMED SMA-50 trend earns on its own (a B)",
+   "driftAgree": "added when drift AGREE-* (same side of price AND bands overlap)",
+   "driftLean": "added when drift LEAN-* (same side, no overlap)",
+   "diverge": "added when drift opposes the trend (negative; also hard-caps at C)",
+   "tentative": "score when there is no confirmed trend (drift lean only, capped at C)",
+   "gradeA": "score cut point for grade A",
+   "gradeB": "score cut point for grade B",
+   "trendWindow": "TREND_WINDOW lives in code (20); a swap proposal targeting dir.trend.window moves it"
   }
+ },
+ "rules": {
+  "dir": {
+   "id": "dir",
+   "tier": "hand",
+   "condition": "directionGrade: SMA-50 trend sets direction, drift confirms or diverges, hard caps override",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "One direction verdict per bar; the hierarchy beats any single input only if A outranks B outranks C.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "drift": {
+   "id": "drift",
+   "tier": "hand",
+   "condition": "both book centres same side of price + overlapping bands",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "GEX range and VEX drift agreeing means one story, not two — a higher-probability lean.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "node.grade": {
+   "id": "node.grade",
+   "tier": "hand",
+   "condition": "polarity + tap + ROC + confluence",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Fresh clean +gamma nodes still growing are where dealer hedging actually defends.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "decision": {
+   "id": "decision",
+   "tier": "hand",
+   "condition": "Direction grade × in-play Node grade",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "The matrix earns or loses its cell labels; a cell measured under 45% gets re-worded to skip.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "acm.realVsHedge": {
+   "id": "acm.realVsHedge",
+   "tier": "hand",
+   "condition": "rocDay",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Growth measured since the session open separates real accumulation from intraday hedging.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "defl_ant": {
+   "id": "defl_ant",
+   "tier": "hand",
+   "condition": "px within 0.6 of a grade>=B node and approaching",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Anticipation is geometry, not prophecy — it must still be scored like everything else.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "reaction": {
+   "id": "reaction",
+   "tier": "hand",
+   "condition": "wick rejection at the node while it is not fading",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "A rejection wick on a node that is still building is the tape confirming the level in real time.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "act": {
+   "id": "act",
+   "tier": "hand",
+   "condition": "operator logged take vs pass on the in-play zone",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Selection quality is a separate skill from read quality; passes are the control group.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "rshuf": {
+   "id": "rshuf",
+   "tier": "hand",
+   "condition": ">50% of wall keys turned over between feeds",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "A wholesale board reshuffle means the old map is void; movement usually follows.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "roll": {
+   "id": "roll",
+   "tier": "hand",
+   "condition": "King migrated up/down over the roll window",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "The settlement magnet moving is the board repositioning; price tends to follow it.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "gateHour": {
+   "id": "gateHour",
+   "tier": "hand",
+   "condition": "gatekeeper strike + session bucket",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "The blocker on the path to the King behaves differently by time of day.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "dir.trend5": {
+   "id": "dir.trend5",
+   "tier": "hand",
+   "condition": "trendVerdict five-state, recorded uncollapsed",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "The SMA-50 five-state is the direction; up-broken/dn-broken must earn their own rates before either is allowed to vote.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "dir.drift": {
+   "id": "dir.drift",
+   "tier": "hand",
+   "condition": "driftRead dir + verdict, scored on its own",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Drift is only allowed to CONFIRM or DIVERGE, so its stand-alone rate is the honest test of that role.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "dir.relation": {
+   "id": "dir.relation",
+   "tier": "hand",
+   "condition": "confirmed | divergence | tentative | trend-only",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "The hierarchy only earns its keep if the relation separates outcomes better than the trend on its own.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "dir.struct": {
+   "id": "dir.struct",
+   "tier": "hand",
+   "condition": "netPositioning bias, RECORDED not voted",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "A one-directional factor on a trending day looks like edge; only vote-split vs baseline can tell them apart.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "dir.kingRoll": {
+   "id": "dir.kingRoll",
+   "tier": "hand",
+   "condition": "kingRoll sign, RECORDED not voted",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "The settlement magnet moving is the board repositioning; whether it LEADS price is an open measurement.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "netGamma": {
+   "id": "netGamma",
+   "tier": "hand",
+   "condition": "signed gamma mass sign from deriveFactors, RECORDED not voted",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Net gamma sign describes how moves TRAVEL; whether it also predicts WHICH WAY is unmeasured.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "dir.trendFast": {
+   "id": "dir.trendFast",
+   "tier": "hand",
+   "condition": "SMA 10 and 20 with the same 15/20 dominance rule, RECORDED not voted",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "The 50-period window is an inherited assumption; 10/20 must be measured against it before anything changes.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "dir.A": {
+   "id": "dir.A",
+   "tier": "hand",
+   "condition": "dirGrade=A",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Direction A = drift agrees + structure aligned + trending regime; the fusion should follow through.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "dir.B": {
+   "id": "dir.B",
+   "tier": "hand",
+   "condition": "dirGrade=B",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Direction B = one leg of the fusion missing or mid-range capped.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "dir.C": {
+   "id": "dir.C",
+   "tier": "hand",
+   "condition": "dirGrade=C",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Direction C = chop, mid-range, or opposed structure. No directional claim.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "drift.conf": {
+   "id": "drift.conf",
+   "tier": "hand",
+   "condition": "driftVerdict=AGREE",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "GEX centre and VEX centre on the same side of price with overlapping bands = a real lean.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "node.grade.A": {
+   "id": "node.grade.A",
+   "tier": "hand",
+   "condition": "nodeGrade=A",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Fresh clean +gamma node building into the tap.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "node.grade.B": {
+   "id": "node.grade.B",
+   "tier": "hand",
+   "condition": "nodeGrade=B",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Node good on most inputs but one is stale or opposed.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "node.grade.C": {
+   "id": "node.grade.C",
+   "tier": "hand",
+   "condition": "nodeGrade=C",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Spent or bleeding node; reactions are unreliable.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "node.tap.1": {
+   "id": "node.tap.1",
+   "tier": "hand",
+   "condition": "tap=0",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "1st tap of an untested node (Academy ~80%).",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "node.tap.2": {
+   "id": "node.tap.2",
+   "tier": "hand",
+   "condition": "tap=1",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "2nd tap (Academy ~66%).",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "node.tap.3": {
+   "id": "node.tap.3",
+   "tier": "hand",
+   "condition": "tap>=2",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "3rd+ tap = graveyard (Academy ~33%).",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "node.pol.pos": {
+   "id": "node.pol.pos",
+   "tier": "hand",
+   "condition": "pol=+",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "+gamma nodes deflect cleanly (dealers sell into strength).",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "node.pol.neg": {
+   "id": "node.pol.neg",
+   "tier": "hand",
+   "condition": "pol=-",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "-gamma nodes accelerate; a deflection there is counter-character.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "node.rocDay.up": {
+   "id": "node.rocDay.up",
+   "tier": "hand",
+   "condition": "rocDay=Acm",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Since-open growers are real positioning, not intraday hedge noise.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "node.rocDay.dn": {
+   "id": "node.rocDay.dn",
+   "tier": "hand",
+   "condition": "rocDay=Dec",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Since-open faders are being unwound; the level is leaving.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "decision.A×A": {
+   "id": "decision.A×A",
+   "tier": "hand",
+   "condition": "decisionCell=A×A",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Matrix cell A×A must earn its label from measured outcomes.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "decision.A×B": {
+   "id": "decision.A×B",
+   "tier": "hand",
+   "condition": "decisionCell=A×B",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Matrix cell A×B must earn its label from measured outcomes.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "decision.A×C": {
+   "id": "decision.A×C",
+   "tier": "hand",
+   "condition": "decisionCell=A×C",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Matrix cell A×C must earn its label from measured outcomes.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "decision.B×A": {
+   "id": "decision.B×A",
+   "tier": "hand",
+   "condition": "decisionCell=B×A",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Matrix cell B×A must earn its label from measured outcomes.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "decision.B×B": {
+   "id": "decision.B×B",
+   "tier": "hand",
+   "condition": "decisionCell=B×B",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Matrix cell B×B must earn its label from measured outcomes.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "decision.B×C": {
+   "id": "decision.B×C",
+   "tier": "hand",
+   "condition": "decisionCell=B×C",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Matrix cell B×C must earn its label from measured outcomes.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "decision.C×A": {
+   "id": "decision.C×A",
+   "tier": "hand",
+   "condition": "decisionCell=C×A",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Matrix cell C×A must earn its label from measured outcomes.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "decision.C×B": {
+   "id": "decision.C×B",
+   "tier": "hand",
+   "condition": "decisionCell=C×B",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Matrix cell C×B must earn its label from measured outcomes.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "decision.C×C": {
+   "id": "decision.C×C",
+   "tier": "hand",
+   "condition": "decisionCell=C×C",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Matrix cell C×C must earn its label from measured outcomes.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "kill.tap3": {
+   "id": "kill.tap3",
+   "tier": "hand",
+   "condition": "tap>=2",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "3rd+ tap of a node: the zone is spent, reactions stop paying.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "kill.midrange": {
+   "id": "kill.midrange",
+   "tier": "hand",
+   "condition": "rangePos=mid",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Mid-range (0.35-0.65 of Flr..Ceil): no edge either way (Skylit midpoint rule).",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "kill.noConf": {
+   "id": "kill.noConf",
+   "tier": "hand",
+   "condition": "driftVerdict=SPLIT & structAsym=opposed",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Neither VEX drift nor structure agrees with the direction: nothing is confirming.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "kill.negGammaWide": {
+   "id": "kill.negGammaWide",
+   "tier": "hand",
+   "condition": "pol=- & path=air",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "-gamma node inside a wide/low-exposure pathway: moves accelerate through, they do not deflect.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "leg.dir": {
+   "id": "leg.dir",
+   "tier": "hand",
+   "condition": "leg engine dir/phase (dir OWNED by the SMA)",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "A trend in node terms is magnet → pullback node → magnet. If the phases do not separate outcomes, the model is a story.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "leg.pbPredict": {
+   "id": "leg.pbPredict",
+   "tier": "hand",
+   "condition": "RLY phase + an empty zone between price and the last pullback node",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Pullback nodes appear AFTER the move, so the only honest forecast is the ZONE — and it must be scored as one.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "leg.pbDetect": {
+   "id": "leg.pbDetect",
+   "tier": "hand",
+   "condition": "a meaningful node APPEARS or GROWS in the pullback zone after a leg",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "The pullback node is the level the user actually trades from; its deflection rate is the whole claim.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "leg.roll": {
+   "id": "leg.roll",
+   "tier": "hand",
+   "condition": "2 consecutive pullback nodes rolling with the trend = signal, 3 = confirmed",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Academy doctrine says a rolling ceiling is strong presumptive evidence. This is the local test of that claim.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "leg.magnet": {
+   "id": "leg.magnet",
+   "tier": "hand",
+   "condition": "strongest meaningful node in the trend direction, capped at the King",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "\"Price rallies down to the magnet\" is a testable claim: either it gets there inside the window or it does not.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "predictors": {
+   "id": "predictors",
+   "tier": "hand",
+   "condition": "time-to-close, bar of day, distances, session range position, PDC relation, event tag",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "A model cannot find what was never written down; these are recorded from the start and vote on nothing.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  }
+ },
+ "proposals": [],
+ "promoted": [],
+ "challengers": {},
+ "killList": [
+  {
+   "id": "kill.tap3",
+   "condition": "tap>=2",
+   "mechanism": "3rd+ tap of a node: the zone is spent, reactions stop paying.",
+   "rate": null,
+   "n": 0,
+   "tier": "hand",
+   "promoted": false
+  },
+  {
+   "id": "kill.midrange",
+   "condition": "rangePos=mid",
+   "mechanism": "Mid-range (0.35-0.65 of Flr..Ceil): no edge either way (Skylit midpoint rule).",
+   "rate": null,
+   "n": 0,
+   "tier": "hand",
+   "promoted": false
+  },
+  {
+   "id": "kill.noConf",
+   "condition": "driftVerdict=SPLIT & structAsym=opposed",
+   "mechanism": "Neither VEX drift nor structure agrees with the direction: nothing is confirming.",
+   "rate": null,
+   "n": 0,
+   "tier": "hand",
+   "promoted": false
+  },
+  {
+   "id": "kill.negGammaWide",
+   "condition": "pol=- & path=air",
+   "mechanism": "-gamma node inside a wide/low-exposure pathway: moves accelerate through, they do not deflect.",
+   "rate": null,
+   "n": 0,
+   "tier": "hand",
+   "promoted": false
+  }
+ ]
 }

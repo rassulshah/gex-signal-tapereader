@@ -157,8 +157,8 @@ var vDiv=read3Beat('UP', king, 773.4, flr, ceil, {dir:-1,verdict:'AGREE-DN'}, 77
 ok(vDiv.sentence==='At King 773. Uptrend, but GEX and VEX lean down — divergence, lower confidence. Watch 772.',
    '6b divergence variant', vDiv.sentence);
 var vTent=read3Beat('UP', king, 773.4, flr, ceil, {dir:1,verdict:'AGREE-UP'}, null, '', 'tentative');
-ok(vTent.sentence==='Mid-range 772–776. No trend; GEX and VEX lean up — tentative only.',
-   '6c tentative variant', vTent.sentence);
+ok(vTent.sentence==='Near Flr 772–776. No trend; GEX and VEX lean up — tentative only.',
+   '6c tentative variant (v10.54: the head is the REAL range zone, not a fixed Mid-range)', vTent.sentence);
 var vOnly=read3Beat('UP', king, 773.4, flr, ceil, {dir:0,verdict:'SPLIT'}, 776, 'Ceil', 'trend-only');
 ok(vOnly.sentence==='At King 773. Support building. Potential bounce to 776.',
    '6d trend-only keeps the 3-beat shape with the drift clause dropped', vOnly.sentence);

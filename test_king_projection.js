@@ -48,7 +48,10 @@ ok(recs2.every(r=>r.sev==='info'),  'insufficient n -> only honest "recording" l
 
 // ---- wiring guards ----
 ok(/proj:projSnapshotRecord\(sym\)/.test(src),      'GUARD: projection recorded per bar in the snapshot');
-ok(/h\+=projScorecardHtml\(\)/.test(src),           'GUARD: 🎯 scorecard renders in the Analysis tab');
+// (v10.54 GROUP 5) the Analysis tab was reorganised into seven question-led sections;
+// the projection scorecard now lives inside the collapsible DETAIL section.
+ok(/legacy\+=projScorecardHtml\(\)/.test(src),      'GUARD: 🎯 scorecard renders in the Analysis tab (DETAIL section)');
+ok(/DETAIL · every enrolled feature/.test(src),      'GUARD: ...and that section exists and is named');
 ok(/projReview:\(function/.test(src),               'GUARD: scorecard+recs ride in the day export (EOD LLM review)');
 ok(/__gptsDebug\.projReport=/.test(src),            'GUARD: projReport() debug hook exposed');
 ok(/PROJECTION SCORECARD/.test(src),                'GUARD: scorecard section titled');

@@ -14,6 +14,15 @@ global.nodeGrade=function(){ return NODE; };
 global.inPlayZone=function(){ return INPLAY; };
 global.ruleGet=function(){ return RULE; };
 global.ruleTier=function(){ return '⚖'; };
+// (v10.54, audit 1) A CELL MAY ONLY RE-WORD ITSELF ON LOCAL EVIDENCE. `rate` typed into a
+// fetched rules.json used to rewrite the decision line directly; the panel now requires
+// a LOCAL promotion (rulePromoted) plus a LOCALLY measured rate (ruleLocalRate).
+var LOCAL={ n:0, hit:0, rate:null, effN:0, key:null };
+var PROMOTED=false;
+global.rulePromoted=function(){ return PROMOTED; };
+global.ruleLocalRate=function(){ return LOCAL; };
+global.FEAT_FWD=10;
+global.nTxt=function(n){ return 'n='+n+' bars \u2192 eff '+Math.round(n/10); };
 
 eval(exVar('DECISION_MATRIX')+'\n'+ex('decisionCell'));
 
@@ -49,14 +58,21 @@ ok(noNode.k===null && noNode.cell==='B×A', '3b no node in contact still yields 
 INPLAY={k:773};
 
 // ================= 4. LEARNING: a measured-bad cell re-words itself =================
-RULE={ id:'decision.B×A', promoted:true, rate:38, n:44, tier:'measured' };
+PROMOTED=true; LOCAL={ n:440, hit:167, rate:38, effN:44, key:'decision/B\u00d7A' };
 var reworded=decisionCell('SPY');
-ok(/skip/.test(reworded.text) && /38%/.test(reworded.text), '4a a promoted cell measured under 45% is re-worded to skip', reworded.text);
-RULE={ id:'decision.B×A', promoted:true, rate:64, n:44, tier:'measured' };
+ok(/skip/.test(reworded.text) && /38%/.test(reworded.text), '4a a LOCALLY promoted cell measured under 45% is re-worded to skip', reworded.text);
+ok(/eff 44/.test(reworded.text), '4a2 ...and the re-wording carries its own n, in effective observations', reworded.text);
+LOCAL={ n:440, hit:282, rate:64, effN:44, key:'decision/B\u00d7A' };
 ok(decisionCell('SPY').text==='bounce play', '4b a healthy measured rate leaves the label alone', decisionCell('SPY').text);
-RULE={ id:'decision.B×A', promoted:false, rate:20, n:3 };
-ok(decisionCell('SPY').text==='bounce play', '4c an UNPROMOTED bad rate may NOT re-word the cell (n too small)');
-RULE=null;
+// (v10.54) THE FIAT PATH: a fetched document asserting promoted:true / a bad rate can no
+// longer re-word anything. Only what THIS panel promoted and measured counts.
+PROMOTED=false; RULE={ id:'decision.B\u00d7A', promoted:true, rate:20, n:999, tier:'measured' };
+LOCAL={ n:440, hit:88, rate:20, effN:44, key:'decision/B\u00d7A' };
+ok(decisionCell('SPY').text==='bounce play', '4c a FETCHED promoted:true + bad rate may NOT re-word the cell', decisionCell('SPY').text);
+// promoted locally but with too little local evidence: rulePromoted is already false then
+PROMOTED=false; LOCAL={ n:30, hit:6, rate:20, effN:3, key:'decision/B\u00d7A' };
+ok(decisionCell('SPY').text==='bounce play', '4d ...nor may a locally bad rate on eff n=3');
+RULE=null; PROMOTED=false; LOCAL={ n:0, hit:0, rate:null, effN:0, key:null };
 
 // ================= 5. defensive =================
 global.directionGrade=function(){ throw new Error('boom'); };
@@ -75,6 +91,11 @@ ok(!banned.test(matrixSrc.replace(/\/\/[^\n]*/g,'')), '6z the matrix declaration
 
 // ================= 7. source guards =================
 ok(/never entry\/stop\/size|no entry, no stop, no size|not instructions/i.test(src), '7a the red line is documented in source');
-ok(/DECISION = the Direction grade|Direction grade × the in-play Node grade/.test(src), '7b the decision hover explains the fusion');
+// (v10.54, audit 25) the dead decisionLineHtml narrator was deleted; the LIVE decision
+// text is folded into deflZonesBlock row 3, and that is what is asserted now.
+ok(!/function decisionLineHtml/.test(src), '7b the dead decisionLineHtml narrator is gone');
+var DZ=ex('deflZonesBlock');
+ok(/What is this setup\?/.test(DZ), '7c the LIVE row-3 hover asks the question first');
+ok(/dc\.cell/.test(DZ) && /cellTxt/.test(DZ), '7d ...and names the cell + its label');
 
 console.log('\n'+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);
