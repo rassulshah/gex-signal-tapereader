@@ -1,3 +1,7 @@
+## v11.1.1 — 2026-08-18 — Next Stop styling: green above / red below, signed points, grades right-justified
+
+User-directed: the Next Stop level is green (↑) when above price and red (↓) when below, with the signed distance in points beside it; its grade and the read's grade sit at the right edge, level with each other; the "Why this level?" hover unchanged.
+
 ## v11.1 — 2026-08-18 — NEXT STOP: the one forward call, above the read (user-directed, enrolled from day one)
 
 "Next Stop: 7721.25 · 30–60m · B" — the level price is expected to reach next, with a confidence grade; hover

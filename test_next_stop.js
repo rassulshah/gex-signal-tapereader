@@ -47,7 +47,8 @@ ok('5a with no nodes at all there is NO Next Stop (nothing invented)', ns.ok===f
 // 6. header line
 LEG={dir:'dn',magnet:{k:766,isKing:true},pbDetected:{k:769},legId:1}; DIR={trendState:'dn',capped:null,inputs:{}}; MODEL={levels:[],kingK:766};
 const h=nextStopHtml('SPY');
-ok('6a the header reads "Next Stop: <level> · 30–60m · <grade>" with a question-first hover', /Next Stop:/.test(h) && /766/.test(h) && /30–60m/.test(h) && />B</.test(h) && /Why this level\?/.test(h));
+ok('6a the header reads "Next Stop: ↓ <level> −pts · 30–60m" + grade at the right, with a question-first hover', /Next Stop:/.test(h) && /↓ 766/.test(h) && /−2\.3 pts/.test(h) && /30–60m/.test(h) && /margin-left:auto[^>]*>B</.test(h) && /Why this level\?/.test(h));
+ok('6a2 the level is RED when below price (green when above)', /color:#f0616d">↓ 766/.test(h));
 ok('6b the hover shows the measured hit-rate only with n (dashes before)', /— \(eff n 0, need 20\)/.test(h));
 ok('6c descriptive, never an instruction', /never an instruction/.test(h) && !/\b(buy|sell|enter|go long|go short)\b/i.test(h.replace(/title="[^"]*"/,'')));
 ok('6d rendered ABOVE the read', /nextStopHtml\(__asym\)[\s\S]{0,200}readBlock44\(__asym\)/.test(src));

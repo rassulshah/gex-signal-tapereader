@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.1
+// @version    11.1.1
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -375,7 +375,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.1';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.1.1';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -11397,16 +11397,22 @@ function nextStopHtml(sym){
     var r30=b30.n?Math.round(100*b30.hit/b30.n):null, r60=b60.n?Math.round(100*b60.hit/b60.n):null;
     var e30=effN(b30.n), e60=effN(b60.n);
     var gcol=ns.grade==='A'?PAL.longAccent:(ns.grade==='B'?PAL.blue:PAL.amber);
-    var lineCol=(ns.grade==='C')?PAL.sub:PAL.gold;
+    var gbg=ns.grade==='A'?'rgba(46,194,126,.15)':(ns.grade==='B'?'rgba(74,144,217,.15)':'rgba(242,180,90,.15)');
+    // (v11.1.1) the level is GREEN when above price, RED when below; the distance is signed points
+    var upSide=(ns.dir>0);
+    var lvlCol=upSide?PAL.longAccent:PAL.shortAccent;
+    var ptsTxt=(upSide?'+':'−')+fmtSpan(ns.dist)+' pts';
     var tip=('Why this level? '+ns.why+' — '+fmtSpan(ns.dist)+' '+(ns.dir>0?'above':'below')+' price. Confidence '+ns.grade+' (B = leg and SMA-50 agree and the level is within ~30 min of travel; C = structure-only, chop or mid-range; A only after promotion). '+
       'Measured here: reached within 30m '+(r30!=null&&e30>=RULE_UNLOCK_N?(r30+'% (eff n '+e30+')'):('— (eff n '+e30+', need '+RULE_UNLOCK_N+')'))+
       ' · within 60m '+(r60!=null&&e60>=RULE_UNLOCK_N?(r60+'% (eff n '+e60+')'):('— (eff n '+e60+')'))+
       '. Rule-based until measured; the nightly review grades each rule and proposes re-ordering through the promotion bar. Descriptive — a level, never an instruction.').replace(/"/g,'');
-    return '<div title="'+tip+'" style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:'+lineCol+';padding:1px 7px;margin:2px 0 1px;white-space:nowrap">'+
-      '<span>Next Stop:</span><span style="font-size:12px">'+fmtLvl(ns.level)+'</span>'+
+    return '<div title="'+tip+'" style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:'+PAL.ink+';padding:1px 7px;margin:2px 0 1px;white-space:nowrap">'+
+      '<span style="color:'+PAL.sub+'">Next Stop:</span>'+
+      '<span style="font-size:12px;color:'+lvlCol+'">'+(upSide?'↑ ':'↓ ')+fmtLvl(ns.level)+'</span>'+
+      '<span style="color:'+lvlCol+';font-weight:700;font-size:9.5px">'+ptsTxt+'</span>'+
       '<span style="color:'+PAL.sub+';font-weight:600;font-size:9px">· '+ns.horizon+'</span>'+
-      '<span style="color:'+gcol+';background:rgba(255,255,255,.06);padding:0 5px;border-radius:3px;font-size:10px">'+ns.grade+'</span>'+
       (r30!=null&&e30>=RULE_UNLOCK_N?('<span style="color:'+PAL.sub+';font-weight:600;font-size:9px">· '+r30+'% @30m</span>'):'')+
+      '<span style="margin-left:auto;color:'+gcol+';background:'+gbg+';padding:0 5px;border-radius:3px;font-size:10px">'+ns.grade+'</span>'+
     '</div>';
   }catch(e){ return ''; }
 }
@@ -11488,8 +11494,9 @@ function readBlock44(sym){
   return '<div style="border-left:2px solid '+evCol+';background:'+evBg+';border-radius:0 8px 8px 0;padding:3px 7px;margin:2px 0 5px">'+
     '<div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:800;white-space:nowrap;overflow:hidden;margin-bottom:1px">'+
       '<span title="'+dTip+'" style="color:'+vcol+'">'+v.arrow+' '+v.verdict+'</span>'+
-      '<span title="'+dTip+'" style="color:'+gcol+';background:'+gbg+';padding:0 5px;border-radius:3px;font-size:10px">'+gdisp+'</span>'+
       '<span style="color:'+PAL.line+'">·</span>'+sBadge+hBadge+
+      // (v11.1.1) the grade sits at the RIGHT edge, level with the Next Stop grade above it
+      '<span title="'+dTip+'" style="margin-left:auto;color:'+gcol+';background:'+gbg+';padding:0 5px;border-radius:3px;font-size:10px">'+gdisp+'</span>'+
     '</div>'+
     '<div title="'+rTip+'" style="font-size:9.5px;line-height:1.35;color:'+PAL.ink+';display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden">'+bodyHtml+'</div>'+
   '</div>';
