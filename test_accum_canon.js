@@ -32,38 +32,38 @@ LS={}; global.ACMDAY=null;
 HIST=[50,50,40,50,60];               // two samples back (~6m) = 40 -> now 60 = +50%
 FEEDPCT={'773.00':60};
 var a=accumCanon('SPY',773);
-ok(a.now.pct===50, '2a now = +50% over the last window', a.now.pct);
-ok(a.now.label==='Acm', '2b -> Acm');
+ok(a.m15.pct===50, '2a now = +50% over the last window', a.m15.pct);
+ok(a.m15.label==='Acm', '2b -> Acm');
 HIST=[50,50,60,50,40];
 LS={}; global.ACMDAY=null; FEEDPCT={'773.00':40};
 var b=accumCanon('SPY',773);
-ok(b.now.pct===-33 && b.now.label==='Dec', '2c a bleeding node reads Dec', b.now.pct);
+ok(b.m15.pct===-33 && b.m15.label==='Dec', '2c a bleeding node reads Dec', b.m15.pct);
 HIST=[50,50,50,50,50];
 LS={}; global.ACMDAY=null; FEEDPCT={'773.00':50};
-ok(accumCanon('SPY',773).now.label==='Steady', '2d a flat node reads Steady');
+ok(accumCanon('SPY',773).m15.label==='Steady', '2d a flat node reads Steady');
 HIST=null;
-ok(accumCanon('SPY',773).now.pct===null, '2e no history -> null, not 0');
-ok(accumCanon('SPY',773).now.label==='Steady', '2f ...and the label degrades to Steady');
+ok(accumCanon('SPY',773).m15.pct===null, '2e no history -> null, not 0');
+ok(accumCanon('SPY',773).m15.label==='Steady', '2f ...and the label degrades to Steady');
 
 // ================= 3. the DAY horizon: vs the FIRST reading today =================
 LS={}; global.ACMDAY=null; HIST=null;
 FEEDPCT={'773.00':40};
 var d1=accumCanon('SPY',773);
-ok(d1.day.pct===0, '3a the first reading of the day establishes the baseline at 0%', d1.day.pct);
+ok(d1.session.pct===0, '3a the first reading of the day establishes the baseline at 0%', d1.session.pct);
 ok(LS['gpts_acmday_v1'] && /"SPY:773.00":40/.test(LS['gpts_acmday_v1']), '3b baseline persisted to localStorage');
 FEEDPCT={'773.00':60};
-ok(accumCanon('SPY',773).day.pct===50, '3c later in the day: 40 -> 60 = +50%', accumCanon('SPY',773).day.pct);
-ok(accumCanon('SPY',773).day.label==='Acm', '3d -> Acm (real positioning, not hedge churn)');
+ok(accumCanon('SPY',773).session.pct===50, '3c later in the day: 40 -> 60 = +50%', accumCanon('SPY',773).session.pct);
+ok(accumCanon('SPY',773).session.label==='Acm', '3d -> Acm (real positioning, not hedge churn)');
 FEEDPCT={'773.00':20};
-ok(accumCanon('SPY',773).day.pct===-50 && accumCanon('SPY',773).day.label==='Dec', '3e 40 -> 20 = −50% Dec');
+ok(accumCanon('SPY',773).session.pct===-50 && accumCanon('SPY',773).session.label==='Dec', '3e 40 -> 20 = −50% Dec');
 // the baseline SURVIVES a reload (a fresh in-memory module reading the same store)
 global.ACMDAY=null;
 FEEDPCT={'773.00':60};
-ok(accumCanon('SPY',773).day.pct===50, '3f the baseline survives a reload (read back from localStorage)');
+ok(accumCanon('SPY',773).session.pct===50, '3f the baseline survives a reload (read back from localStorage)');
 // a NEW day resets it
 global.TODAY='2026-08-18'; global.ACMDAY=null;
 FEEDPCT={'773.00':60};
-ok(accumCanon('SPY',773).day.pct===0, '3g a new day key resets the baseline', accumCanon('SPY',773).day.pct);
+ok(accumCanon('SPY',773).session.pct===0, '3g a new day key resets the baseline', accumCanon('SPY',773).session.pct);
 global.TODAY='2026-08-17'; global.ACMDAY=null; LS={};
 
 // ================= 4. the two horizons are INDEPENDENT and both reported ==========
@@ -73,20 +73,20 @@ accumCanon('SPY',773);                       // baseline 100
 HIST=[100,100,60,80,90];                     // two samples back = 60 -> now 90 = +50% (rebuilding)
 FEEDPCT={'773.00':90};
 var both=accumCanon('SPY',773);
-ok(both.now.label==='Acm' && both.day.label==='Dec',
-   '4a a node rebuilding NOW but still below its open reads Acm-now / Dec-day', both.now.label+'/'+both.day.label);
-ok(both.now.pct===50 && both.day.pct===-10, '4b both numbers reported, neither overwrites the other', both.now.pct+'/'+both.day.pct);
+ok(both.m15.label==='Acm' && both.session.label==='Dec',
+   '4a a node rebuilding NOW but still below its open reads Acm-now / Dec-day', both.m15.label+'/'+both.session.label);
+ok(both.m15.pct===50 && both.session.pct===-10, '4b both numbers reported, neither overwrites the other', both.m15.pct+'/'+both.session.pct);
 
 // ================= 5. sources + defensiveness =================
 LS={}; global.ACMDAY=null; FEEDPCT=null; LIVEPCT=55; HIST=null;
-ok(accumCanon('SPY',773).day.pct===0, '5a falls back to the tape %King when the feed map is unavailable');
+ok(accumCanon('SPY',773).session.pct===0, '5a falls back to the tape %King when the feed map is unavailable');
 LIVEPCT=null;
 LS={}; global.ACMDAY=null;
 var none=accumCanon('SPY',773);
-ok(none.day.pct===null && none.day.label==='Steady', '5b no magnitude anywhere -> null day pct');
-ok(accumCanon('SPY',null).day.pct===null, '5c null strike -> empty result, no throw');
+ok(none.session.pct===null && none.session.label==='Steady', '5b no magnitude anywhere -> null day pct');
+ok(accumCanon('SPY',null).session.pct===null, '5c null strike -> empty result, no throw');
 global.nodeHistory=function(){ throw new Error('boom'); };
-ok(accumCanon('SPY',773).now.label==='Steady', '5d a throwing history source degrades quietly');
+ok(accumCanon('SPY',773).m15.label==='Steady', '5d a throwing history source degrades quietly');
 global.nodeHistory=function(){ return HIST; };
 
 // ================= 6. ONE SOURCE: both consumers read accumCanon =================

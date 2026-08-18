@@ -6,12 +6,13 @@ let pass=0, fail=0;
 const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m+(g!==undefined?' -> '+g:''));} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+g:''));} };
 
 global.STATE={SPY:{price:774.0}, QQQ:{price:null}};
-var ACM={ now:{pct:0,label:'Steady'}, day:{pct:0,label:'Steady'} };
+var ACM={ m15:{pct:0,label:'Steady'}, session:{pct:0,label:'Steady'} };
 var DRIFT={verdict:'NONE', dir:0};
 var QAGREE=false;
 global.accumCanon=function(){ return ACM; };
 global.driftRead=function(){ return DRIFT; };
 global.qqqAgrees=function(){ return QAGREE; };
+global.spxwAgrees=function(){ return null; };
 global.nodeTapCount=function(){ return 0; };
 global.ruleTier=function(){ return '⚖'; };
 global.ACM_BAND=8;
@@ -45,21 +46,21 @@ ok(bNow.score-sNow.score===1, '4a Building now is +1');
 ok(sNow.score-fNow.score===1, '4b Fading now is −1');
 ok(bNow.inputs.rocNow==='Building' && fNow.inputs.rocNow==='Fading', '4c ROC state recorded');
 // accumCanon can supply the state when the level carries none
-ACM={ now:{pct:20,label:'Acm'}, day:{pct:0,label:'Steady'} };
-ok(nodeGrade('SPY', N({state:null})).inputs.rocNow==='Building', '4d accumCanon.now drives ROC when the level is silent');
-ACM={ now:{pct:0,label:'Steady'}, day:{pct:0,label:'Steady'} };
+ACM={ m15:{pct:20,label:'Acm'}, session:{pct:0,label:'Steady'} };
+ok(nodeGrade('SPY', N({state:null})).inputs.rocNow==='Building', '4d accumCanon.m15 drives ROC when the level is silent');
+ACM={ m15:{pct:0,label:'Steady'}, session:{pct:0,label:'Steady'} };
 
 // ================= 5. ROC since open: >=+15 -> +1, <=-15 -> −1 =================
-ACM={ now:{pct:0,label:'Steady'}, day:{pct:15,label:'Acm'} };
+ACM={ m15:{pct:0,label:'Steady'}, session:{pct:15,label:'Acm'} };
 var up=nodeGrade('SPY', N({}));
-ACM={ now:{pct:0,label:'Steady'}, day:{pct:14,label:'Acm'} };
+ACM={ m15:{pct:0,label:'Steady'}, session:{pct:14,label:'Acm'} };
 var flat=nodeGrade('SPY', N({}));
-ACM={ now:{pct:0,label:'Steady'}, day:{pct:-15,label:'Dec'} };
+ACM={ m15:{pct:0,label:'Steady'}, session:{pct:-15,label:'Dec'} };
 var dn=nodeGrade('SPY', N({}));
 ok(up.score-flat.score===1,   '5a +15% since open is the threshold (+1)', up.score+' vs '+flat.score);
 ok(flat.score-dn.score===1,   '5b −15% since open is −1', flat.score+' vs '+dn.score);
 ok(up.inputs.rocDay.pct===15 && up.inputs.rocDay.label==='Acm', '5c since-open growth recorded with its label');
-ACM={ now:{pct:0,label:'Steady'}, day:{pct:0,label:'Steady'} };
+ACM={ m15:{pct:0,label:'Steady'}, session:{pct:0,label:'Steady'} };
 
 // ================= 6. confluence: Q +1, V +1 =================
 var base=nodeGrade('SPY', N({}));
@@ -77,16 +78,16 @@ DRIFT={verdict:'NONE', dir:0};
 
 // ================= 7. the full A / B / C ladder =================
 QAGREE=true; DRIFT={verdict:'AGREE-UP', dir:1};
-ACM={ now:{pct:20,label:'Acm'}, day:{pct:30,label:'Acm'} };
+ACM={ m15:{pct:20,label:'Acm'}, session:{pct:30,label:'Acm'} };
 var A=nodeGrade('SPY', N({k:773, pos:true, taps:0, state:'Building'}));
 ok(A.score===7, '7a everything right = 7 (pol 1 + fresh 2 + building 1 + grown 1 + Q 1 + V 1)', A.score);
 ok(A.grade==='A', '7b -> grade A', A.grade);
 QAGREE=false; DRIFT={verdict:'NONE',dir:0};
-ACM={ now:{pct:0,label:'Steady'}, day:{pct:0,label:'Steady'} };
+ACM={ m15:{pct:0,label:'Steady'}, session:{pct:0,label:'Steady'} };
 var B=nodeGrade('SPY', N({k:773, pos:true, taps:0, state:'Steady'}));
 ok(B.score===3 && B.grade==='B', '7c clean fresh node with no confluence = B', B.score+'/'+B.grade);
 ok(B.disp==='B−', '7d ...displayed B− at the threshold', B.disp);
-ACM={ now:{pct:0,label:'Steady'}, day:{pct:-40,label:'Dec'} };
+ACM={ m15:{pct:0,label:'Steady'}, session:{pct:-40,label:'Dec'} };
 var C=nodeGrade('SPY', N({k:773, pos:false, taps:3, state:'Fading'}));
 ok(C.score===-3 && C.grade==='C', '7e spent bleeding −γ node = C', C.score+'/'+C.grade);
 

@@ -1,3 +1,80 @@
+## v10.51 — 2026-08-18 — Direction engine: SMA-50 PRIMARY, GEX/VEX drift CONFIRMS or DIVERGES
+
+Replaces the v10.50 weighted-sum lean with a HIERARCHY (user-directed). The 50-SMA five-state machine IS
+the trend; drift never chooses direction — it grades confidence.
+
+**Confirmed trend (`up`/`dn`):** direction = the trend, always. Base score 3 (a confirmed trend alone is a B).
+Drift agreeing adds +2 (AGREE-*, bands overlap) or +1 (LEAN-*, same side no overlap) → `confirmed`.
+Drift opposing subtracts 2 AND hard-caps the grade at **C** → `divergence` (price up while the book leans
+down is a caution, not a strong read). Drift SPLIT/NONE → `trend-only`.
+**No confirmed trend (`flat`/`up-broken`/`dn-broken`/`na`) — TENTATIVE (user choice):** drift supplies a
+PROVISIONAL lean so the panel still reads on rangebound days, but the grade can never exceed **C**. The two
+broken states vote 0 for now — we do not yet know whether a broken uptrend continues or reverses; the
+recorder will answer that.
+All v10.50 hard caps preserved: mid-range → C, chop → C + SIDE, SIDE can't be A, power/open-drive cap odds.
+
+**READ** gains relation-aware wording: confirmed / divergence ("Uptrend, but GEX and VEX lean down —
+divergence, lower confidence") / tentative / trend-only. Direction hover rewritten question-first.
+
+**Recording (feeds the future weight optimizer, changes no behaviour):** `dir.trend5` records the FULL
+five-state value (uncollapsed) so up-broken/dn-broken earn their own measured hit-rates; `dir.drift`;
+`dir.relation` (measures whether the hierarchy beats trend alone). Recorded but NOT voting: `dir.struct`,
+`dir.kingRoll`, `netGamma`, `dir.trendFast` (SMA 10 + 20, so windows can be compared empirically).
+**FCHIST** (`gpts_flrceilhist_v1`) starts sampling Flr/Ceil strikes per bar so multi-session ROLLING becomes
+computable later — rolling is NOT computed or voted yet (Academy: rolling is day-over-day across map
+updates; 2 consecutive = signal, 3 = confirmation).
+
+**Analysis — "Direction factors"** table: rows per five-state, per drift verdict, and per relation, each with
+n · rate · **vote split ↑/↓** · baseline-adjusted expectation · lift · MFE/MAE, plus a `⚠1-way` flag. The vote
+split is mandatory: on 2026-08-11 structure voted DOWN 46/49 on a down day and would otherwise have looked
+like 71% edge. Verified against that artifact — the row reads 100% but lift +6 and flags one-way.
+
+**Tests:** test_dir_hierarchy.js (80) — drift never flips a confirmed trend, divergence → C, tentative → C,
+caps intact; test_direction_grade rewritten (68); test_feature_enrollment (613). Suite clean except the 2
+pre-existing stale (node_identity, node_role_badge) + 2 environmental crashes (nodemap, tapeking/jsdom).
+
+## v10.50.1 — 2026-08-18 — trend confirmation 16/20 → 15/20
+
+`TREND_DOM` 16 → **15** (user). 15 of 20 closed 3-min bars on one side of the continuous SMA-50
+(±0.25 ATR band) now confirms a directional trend. This also corrects a long-standing comment error:
+the old constant was documented as ">=75%" but 16/20 is 80%; 15/20 is the true 75%. Slightly earlier
+trend confirmation, so `up` / `dn` are reached sooner and the `up-broken` / `dn-broken` transition
+states trigger on a 15-bar loss of dominance. Comments + test_sma_cont global synced. Suite green
+except the 5 pre-existing stale.
+
+## v10.50 — 2026-08-17 — DASHBOARD REDESIGN: one voice per decision, exceptions not defaults
+
+Full element-by-element review of the whole dashboard, implemented. Display-only redesign — all
+data/analysis/testing/learning enrollment intact (test_feature_enrollment 429✓).
+
+**READ — single direction voice.** Direction grade merged inline with the verdict (`↑ BULLISH B`, no ⚖).
+New 3-beat sentence style: WHERE · STATE+LEAN · POTENTIAL — e.g. "At King 773. Support building with GEX
+and VEX leaning up. Potential bounce to 776." Templates for bounce/reject/cont/split (test_read_voice 14✓).
+Invalidation off the READ (on the decision line). Regime no longer shown (input to the grade, in its hover
+only). Removed: standalone direction line, readWhy block, legacy BULLISH/BEARISH body, "↩ King behind" line.
+
+**DRIFT — one line + thin bar.** ~7px bar under the line: gold GVWAP±σ, purple VVWAP±σ, white price line.
+Hover simplified ("Which way do GEX & VEX lean? Both above price — supporting higher prices.").
+
+**DEFLECTION ZONES — the single ladder.** Legacy Node-Map ladder retired; zones are the one node list.
+In-play card = 3 rows with the DECISION folded into row 3 (`bounce play · entry 773 · tgt 776(air) · inval
+<772`) + TAKE/PASS gated to real setups (grade≥B, cell≠stand-aside). Polarity = colored `g` (yellow +γ /
+purple −γ). Reaction = ✓/✗. Confluence = S/Q/V (SPXW added, display-only from the trinity header, honest S–
+when absent). Acm horizons renamed 15m/session. ACTIVITY tag (Pull/Push/Defl/BO·FT) folded onto every row.
+%King from the gamma feed. Dropped: sparkline, "· px", the gray Dir/Node-grade legend, grade tier ⚖ (→ hover).
+
+**RETIRED:** node-map sentence, legacy ladder rows, duplicate in-map ★SUP/👑/★RES header, step icons ①–⑤
+(doctrine folded into element hovers), regime chip, legacy "Deflections" list, snapback line, air-pocket
+line (→ `(air)` tag on tgt AND inval), range chip (→ `⚠ OUT · range redefining` exception flag only).
+
+**KEPT as exceptions/health:** session badge (highlight power/OPEX), model-heat (cold-only), pre-open brief
+(one line), footer = 3 health dots (feed · vex · rec) + version. Question-first hovers on every element.
+
+**Tests:** +test_read_voice (14), +test_zone_row (24); updated test_read_v1047/layout_2col/accum_canon
+(m15/session)/node_grade/feature_enrollment. Suite green except the 5 pre-existing stale.
+**Verify live (next open):** the 3-beat READ, drift bar, single graded ladder with folded decision + take/pass,
+✓/✗ reaction on a tap, colored g, S/Q/V, footer health dots.
+
 ## v10.49.1 — 2026-08-17 — coherence fixes (live-verify caught 3)
 
 **1 · Drift SPLIT bug.** `driftRead` required same-side-of-price AND band-overlap → tight/offset bands

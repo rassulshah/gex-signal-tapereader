@@ -1,0 +1,133 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>GEX v10.50 — full redesign</title>
+<style>
+  body{background:#0d1117;color:#e6edf3;font:13px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;padding:22px;margin:0}
+  .wrap{display:flex;gap:30px;flex-wrap:wrap;align-items:flex-start}
+  h1{font-size:14px;color:#8b949e;font-weight:600;margin:0 0 2px}
+  .sub{color:#6e7681;font-size:10px;margin:0 0 14px;max-width:250px}
+  .cap{color:#6e7681;font-size:9px;text-transform:uppercase;letter-spacing:.4px;margin:0 0 6px}
+  .panel{width:250px;background:#010409;border:1px solid #21262d;border-radius:8px;padding:7px 8px}
+
+  /* header cluster */
+  .cluster{display:flex;gap:4px;align-items:stretch;margin-bottom:6px}
+  .pill{flex:1;border:1px solid #21262d;border-radius:7px;padding:3px 5px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .lab{font-size:8px;letter-spacing:.3px;color:#8b949e}.sup{color:#3fb950}.res{color:#f0616d}
+  .pill .val{font-size:12px;font-weight:800}.pill .pct{font-size:8px;color:#6e7681}
+  .king{flex:1.5;border-color:#8a6d1f;background:rgba(242,204,96,.05)}
+  .king .row{display:flex;align-items:center;gap:3px;font-weight:800}.kgold{color:#f2cc60}.off{font-size:9px}.gp{color:#3fb950}
+  .king .gate{display:flex;align-items:center;gap:3px;font-size:9px;color:#c9d1d9;margin-top:1px}
+
+  /* drift + thin bar */
+  .drift{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:10px;margin:5px 0 3px}
+  .dg{color:#f2cc60;font-weight:700}.dv{color:#a371f7;font-weight:700}.dup{color:#3fb950;font-weight:700}
+  .vd{padding:0 5px;border-radius:3px;font-size:9px;font-weight:700;color:#3fb950;background:rgba(63,185,80,.14)}
+  .sep{color:#30363d}
+  .bar{position:relative;height:7px;border-radius:4px;background:#161b22;margin:0 2px 6px}
+  .band{position:absolute;top:1px;height:5px;border-radius:3px;opacity:.5}
+  .bg{background:#f2cc60}.bv{background:#a371f7}
+  .pxline{position:absolute;top:-1px;height:9px;width:2px;background:#ffffff;border-radius:1px}
+
+  /* READ */
+  .read{border-left:2px solid #f2cc60;background:#0d1117;border-radius:0 8px 8px 0;padding:3px 7px;margin:0 0 6px}
+  .rhead{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:800;white-space:nowrap;margin-bottom:1px}
+  .vbull{color:#3fb950}.grB{color:#58a6ff;background:rgba(88,166,255,.15);padding:0 5px;border-radius:3px;font-size:10px}
+  .sbadge{font-size:8px;font-weight:700;color:#8b949e;border:1px solid #21262d;border-radius:8px;padding:0 4px}
+  .rtext{font-size:9.5px;line-height:1.35;color:#c9d1d9}
+
+  /* zones */
+  .zhdr{display:flex;align-items:center;justify-content:space-between;font-size:9.5px;color:#8b949e;font-weight:700;letter-spacing:.3px;margin:2px 2px 3px}
+  .colh{display:grid;grid-template-columns:1fr 26px;font-size:7px;letter-spacing:.3px;text-transform:uppercase;color:#6e7681;font-weight:800;padding:0 4px 2px}
+  .z{padding:3px 2px;border-bottom:1px solid #12161c}.z:last-of-type{border-bottom:0}
+  .zplay{background:rgba(63,185,80,.05);border-left:2px solid #3fb950;border-radius:2px;padding:3px 4px 4px 6px;margin-bottom:2px}
+  .r1{display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap}
+  .stk{font-weight:800}.role{color:#8b949e;font-weight:700}.kg{color:#f2cc60}
+  .gY{color:#f2cc60;font-weight:800}    /* +gamma = yellow g */
+  .gP{color:#a371f7;font-weight:800}    /* -gamma = purple g */
+  .tapF{color:#3fb950}.tapT{color:#d29922}.tapX{color:#f0616d}
+  .rx{font-weight:800}.rxok{color:#3fb950}.rxno{color:#f0616d}
+  .act{font-size:8.5px;color:#8b949e;border:1px solid #21262d;border-radius:8px;padding:0 4px}
+  .grade{margin-left:auto;font-weight:800;font-size:10px;padding:0 5px;border-radius:3px}
+  .gA{color:#3fb950;background:rgba(63,185,80,.15)}.gB{color:#58a6ff;background:rgba(88,166,255,.15)}.gC{color:#d29922;background:rgba(210,153,34,.15)}
+  .r2{display:flex;align-items:center;gap:6px;font-size:9px;color:#8b949e;margin-top:2px;white-space:nowrap}
+  .up2{color:#3fb950}.conf{color:#79c0ff}
+  .r3{display:flex;align-items:center;gap:6px;font-size:9.5px;margin-top:3px;white-space:nowrap}
+  .decide{color:#e6edf3;font-weight:600}.frame{color:#6e7681}
+  .tp{margin-left:auto;display:flex;gap:3px}
+  .btn{font-size:8px;font-weight:700;border-radius:8px;padding:0 5px;border:1px solid #30363d;color:#8b949e;cursor:pointer}
+  .btnT{border-color:#3fb950;color:#3fb950}.btnP{border-color:#f0616d;color:#f0616d}
+  .divider{text-align:center;color:#6e7681;font-size:9px;margin:3px 0;letter-spacing:.5px}
+
+  .foot{display:flex;align-items:center;gap:8px;font-size:8.5px;color:#6e7681;margin-top:6px;padding-top:4px;border-top:1px solid #12161c}
+  .dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px}
+  .ok{background:#3fb950}.wait{background:#d29922}
+  .ver{margin-left:auto}
+  .note{font-size:9px;color:#8b949e;line-height:1.55;max-width:320px}
+  .q{color:#79c0ff}
+</style></head><body>
+<div class="wrap">
+ <div>
+  <h1>GEX v10.50 — full redesign</h1>
+  <p class="sub">Every review decision, one panel. Real 250px, live 773 data. Hovers are question-first (shown at right).</p>
+  <div class="panel">
+
+    <!-- HEADER: SUP | King(+gate) | RES — shown once, no ①②③ -->
+    <div class="cluster">
+      <div class="pill"><span class="lab sup">★SUP</span><span class="val sup">772</span><span class="pct">21%</span></div>
+      <div class="pill king"><div class="row"><span class="kgold">👑 773</span><span class="off gp">+0</span></div><div class="gate"><span>⛫ 776</span><span class="off" style="color:#f0616d">+3↑</span></div></div>
+      <div class="pill"><span class="lab res">★RES</span><span class="val res">776</span><span class="pct">44%</span></div>
+    </div>
+
+    <!-- DRIFT: one line + thin bar, white price line -->
+    <div class="drift"><span class="dup">↗</span><span style="color:#8b949e;font-weight:700">Drift</span><span class="vd">UP·conf</span><span class="sep">·</span><span class="dg">G773.9</span><span class="dv">V775.0</span></div>
+    <div class="bar"><div class="band bg" style="left:52%;width:16%"></div><div class="band bv" style="left:62%;width:20%"></div><div class="pxline" style="left:40%"></div></div>
+
+    <!-- READ: single voice, direction grade merged in, session badge -->
+    <div class="read">
+      <div class="rhead"><span class="vbull">↑ BULLISH</span><span class="grB">B</span><span class="sep">·</span><span class="sbadge">pwr</span></div>
+      <div class="rtext">Price on King 773, drift agrees up. Sup 772 building, Res 776 above. Bounce off 773 the play — mid-range, so not a runner. King behind if it slips, pull-back risk.</div>
+    </div>
+
+    <!-- DEFLECTION ZONES: the single ladder -->
+    <div class="zhdr"><span>⚡ Deflection zones</span></div>
+    <div class="colh"><span>Zone</span><span style="text-align:right">Grade</span></div>
+
+    <!-- in-play node: full, decision folded in -->
+    <div class="zplay">
+      <div class="r1"><span class="gY">●</span><span class="stk kg">773</span><span class="role kg">King</span>
+        <span style="font-size:9.5px;color:#6e7681">100% · <span class="gY">g</span> · <span class="tapF">1st</span> · <span class="rx rxok">✓</span></span>
+        <span class="grade gA">A−</span></div>
+      <div class="r2"><span class="up2">Acm 15m▲ session▲</span><span class="sep">·</span><span class="conf">S✓ Q✓ V✓</span><span class="sep">·</span><span class="act">Pull</span></div>
+      <div class="r3"><span class="decide">bounce play</span><span class="frame">· entry 773 · tgt 776(air) · inval &lt;772</span>
+        <span class="tp"><span class="btn btnT">✓ take</span><span class="btn btnP">– pass</span></span></div>
+    </div>
+
+    <!-- other nodes: one line each -->
+    <div class="z"><div class="r1"><span class="gY">◦</span><span class="stk">776</span><span class="role">Ceil</span><span style="font-size:9.5px;color:#6e7681">44% · <span class="gY">g</span> · <span class="tapT">2nd</span></span><span class="act" style="margin-left:6px">Push</span><span class="grade gB">B</span></div></div>
+    <div class="divider">— SPY 773.4 —</div>
+    <div class="z"><div class="r1"><span class="gY">◦</span><span class="stk">772</span><span class="role">Flr</span><span style="font-size:9.5px;color:#6e7681">21% · <span class="gY">g</span> · <span class="tapF">1st</span></span><span class="act" style="margin-left:6px">Pull</span><span class="grade gC">C</span></div></div>
+    <div class="z"><div class="r1"><span class="gP">◦</span><span class="stk">777</span><span class="role">Mag</span><span style="font-size:9.5px;color:#6e7681">18% · <span class="gP">g</span> · <span class="tapF">1st</span></span><span class="act" style="margin-left:6px">BO·FT</span><span class="grade gB">B</span></div></div>
+
+    <!-- footer: 3 health dots + version -->
+    <div class="foot"><span><span class="dot ok"></span>feed</span><span><span class="dot wait"></span>vex</span><span><span class="dot ok"></span>rec</span><span class="ver">v10.50</span></div>
+  </div>
+ </div>
+
+ <div>
+  <p class="cap">Question-first hovers (samples)</p>
+  <p class="note">
+   <span class="q">Drift:</span> "Which way do GEX & VEX lean? Both above price → supporting higher prices."<br>
+   <span class="q">READ grade B:</span> "How trustworthy is the direction? Drift up + structure up, but mid-range caps it. Hand-set."<br>
+   <span class="q">Node grade A−:</span> "How good is a deflection here? Dominant +γ King, 1st tap, building, S/Q/V agree. Hand-set."<br>
+   <span class="q">Reaction ✓:</span> "Is the bounce working right now? Clean rejection, node holding."<br>
+   <span class="q">g (yellow/purple):</span> "What kind of node? Yellow = +γ clean bounce; purple = −γ sharp/violent."<br>
+   <span class="q">Acm:</span> "Is it building? 15m = right now; session = is it real (grown all day)?"<br>
+   <span class="q">S/Q/V:</span> "Does everything agree? SPXW · QQQ · VEX-drift."<br>
+   <span class="q">Activity:</span> "What's the node doing? Pull / Push / Defl / BO·FT."<br>
+   <span class="q">Frame:</span> "Where does the trade live? entry = the node; tgt = next node (air=fast); inval = where the read breaks."<br>
+   <span class="q">pwr:</span> "What part of the day? Power hour — mechanical 3:30 flows."<br>
+   <span class="q">Footer:</span> "Is the tool healthy? feed live · vex capturing · recording on."
+  </p>
+  <p class="cap" style="margin-top:14px">Removed vs before</p>
+  <p class="note">standalone direction line · Node-Map sentence · duplicate SUP/RES header · ①②③④⑤ step icons · regime chip · range chip (→ OUT-only flag) · air-pocket line (→ into frame) · legacy "Deflections" list · legacy ladder + sparkline · grade tier ⚖ (→ hover) · "px" in zones header · "King behind" line (→ into READ) · the gray legend.</p>
+ </div>
+</div>
+</body></html>

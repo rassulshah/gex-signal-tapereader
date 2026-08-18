@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    10.51
+// @version    10.50.1
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -356,7 +356,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-console.log('[GPTS] v10.51 part1 loaded');
+console.log('[GPTS] v10.50.1 part1 loaded');
 
 function fiberKeyOf(el){
   var ks=Object.keys(el);
@@ -712,49 +712,6 @@ function trendVerdict(sym){
   else { state='flat'; }
   var dom = (state==='dn'||state==='dn-broken') ? dn : up;
   return { state:state, up:up, dn:dn, dom:dom, win:win, ma:lastMa, slope:slope };
-}
-// (v10.51) FASTER SMA WINDOWS — RECORDED, NEVER VOTED. Same 15/20-style dominance rule
-// as trendVerdict but over shorter MA periods (10 and 20), so the optimizer can later
-// compare 10 vs 20 vs 50 EMPIRICALLY instead of by assertion. Deliberately has NO
-// TREND_LAST memory: the broken states belong to the primary (SMA-50) machine only,
-// because "broken" only means something relative to a previously CONFIRMED trend.
-function trendWindowRead(sym, mp){
-  var out={ period:mp, state:'na', up:0, dn:0, win:0, ma:null, slope:0 };
-  try{
-    mp=parseInt(mp,10); if(isNaN(mp)||mp<1) return out;
-    var c=closedCandles(sym)||[];
-    if(c.length<2) return out;
-    var S=STATE[sym]||{};
-    var haveCont = !!(S.contCloses && S.contCloses.length >= mp);
-    if(!haveCont && c.length<mp+1) return out;
-    var win=Math.min(TREND_WINDOW, haveCont ? c.length : (c.length-mp));
-    if(win<1) return out;
-    var band=mul(atr(sym), TREND_BANDX);
-    var up=0, dn=0, lastMa=null, firstMa=null, counted=0;
-    for(var i=c.length-win;i<c.length;i++){
-      var ma=null;
-      if(haveCont){ ma=contSMAAtTodayIdx(sym, mp, i); }
-      if(ma==null){
-        if(i-mp+1 < 0) continue;
-        var s2=0; for(var j=i-mp+1;j<=i;j++){ s2+=c[j].c; } ma=s2/mp;
-      }
-      if(firstMa==null) firstMa=ma;
-      lastMa=ma; counted++;
-      var px=c[i].c;
-      if(px > ma+band) up++;
-      else if(px < ma-band) dn++;
-    }
-    if(counted<1) return out;
-    out.up=up; out.dn=dn; out.win=counted; out.ma=lastMa;
-    out.slope=(lastMa!=null && firstMa!=null)?+(lastMa-firstMa).toFixed(4):0;
-    out.state = (up>=TREND_DOM) ? 'up' : ((dn>=TREND_DOM) ? 'dn' : 'flat');
-  }catch(e){}
-  return out;
-}
-// The two candidate fast windows, sampled together. Recording only — nothing on the
-// panel reads these, and nothing may vote on them until they have measured hit-rates.
-function trendFast(sym){
-  return { p10:trendWindowRead(sym,10), p20:trendWindowRead(sym,20) };
 }
 // helpers so the rest of the app reads the machine consistently
 function trendIsUpish(s){ return s==='up'; }
@@ -1493,62 +1450,6 @@ function kingRoll(sym){
   if(last - first >= 1) return 1;   // King moved up >=1 strike over the window
   if(first - last >= 1) return -1;  // King moved down >=1 strike
   return 0;
-}
-
-// ============================================================================
-// (v10.51) FCHIST — FLOOR / CEILING STRIKE HISTORY. One sample per closed bar of
-// nodeMapModel(sym).flr.k / .ceil.k, persisted under gpts_flrceilhist_v1 (a NEW key;
-// nothing existing is renamed) and capped.
-//
-// !!! DELIBERATELY NOT COMPUTED AND NOT VOTED YET !!!
-// Per the Academy, Flr/Ceil ROLLING is a DAY-OVER-DAY measurement taken across map
-// updates — 2 consecutive sessions rolling the same way = a signal, 3 = confirmation.
-// A single intraday session therefore cannot produce a rolling verdict, and inventing
-// an intraday one would be a fabricated factor. So v10.51 only SAMPLES: it builds the
-// multi-session series that a later version (and the optimizer) can measure. There is
-// intentionally no flrRoll()/ceilRoll() vote in directionGrade.
-// ============================================================================
-var FCHIST_KEY='gpts_flrceilhist_v1';
-var FCHIST_MAX=600;                 // ~4 sessions of 3-min bars, both edges per row
-var FCHIST=null;
-function fcHistLoad(){
-  if(FCHIST) return FCHIST;
-  try{ FCHIST=JSON.parse(localStorage.getItem(FCHIST_KEY)||'null'); }catch(e){ FCHIST=null; }
-  if(!FCHIST || typeof FCHIST!=='object') FCHIST={ v:1, sym:{} };
-  if(!FCHIST.sym) FCHIST.sym={};
-  return FCHIST;
-}
-function fcHistSave(){ try{ localStorage.setItem(FCHIST_KEY, JSON.stringify(FCHIST)); }catch(e){} }
-// Idempotent per (day, closed bar): re-running the cycle overwrites the bar's row
-// rather than appending a duplicate.
-function fcHistSample(sym){
-  try{
-    sym=sym||'SPY';
-    var m=null; try{ m=nodeMapModel(sym); }catch(e1){ m=null; }
-    if(!m) return null;
-    var flr=(m.flr && m.flr.k!=null)?m.flr.k:null;
-    var ceil=(m.ceil && m.ceil.k!=null)?m.ceil.k:null;
-    if(flr==null && ceil==null) return null;
-    var H=fcHistLoad();
-    var arr=H.sym[sym]||(H.sym[sym]=[]);
-    var bar=(STATE[sym]||{}).lastClosedB||0;
-    var last=arr.length?arr[arr.length-1]:null;
-    if(last && last.d===TODAY && last.bar===bar){ last.flr=flr; last.ceil=ceil; last.t=Date.now(); }
-    else arr.push({ d:TODAY, t:Date.now(), bar:bar, flr:flr, ceil:ceil });
-    if(arr.length>FCHIST_MAX) H.sym[sym]=arr.slice(arr.length-FCHIST_MAX);
-    fcHistSave();
-    var a2=H.sym[sym];
-    return a2[a2.length-1];
-  }catch(e){ return null; }
-}
-// Read-only accessor for the recorder / day export / future optimizer.
-function fcHistOf(sym){ var H=fcHistLoad(); return (H.sym && H.sym[sym]) || []; }
-// How many DISTINCT sessions the series covers — the gate a day-over-day rolling
-// verdict will need (>=2 for a signal, >=3 for confirmation). Descriptive only.
-function fcHistSessions(sym){
-  var seen={}, n=0;
-  fcHistOf(sym).forEach(function(r){ if(r && r.d && !seen[r.d]){ seen[r.d]=1; n++; } });
-  return n;
 }
 
 // ===== King daily journey (persisted per trading day) #3 + King persistence =====
@@ -3395,10 +3296,6 @@ function buildDayExport(dateKey){
     // resolved outcome queue here, plus the operator's take/pass log.
     feat:day.feat||{},
     act:day.act||{},
-    // (v10.51) FCHIST — raw Flr/Ceil strike samples. Carried in the export so the
-    // day-over-day rolling study is computable once 2+ sessions exist. NOT a verdict:
-    // no rolling value is computed anywhere in the panel yet.
-    flrCeilHist:(function(){ try{ var o={}; RECORDER_SYMS.forEach(function(s){ o[s]=fcHistOf(s); }); return o; }catch(eFC){ return null; } })(),
     features:(function(){ try{ registerCoreFeatures(); return FEATURES.map(function(f){ return {key:f.key,label:f.label,phase:f.phase,fwd:f.fwd,rule:(f.rule&&f.rule.id)||null}; }); }catch(eFx){ return []; } })(),
     rules:(function(){ try{ return rulesLoad(); }catch(eRl){ return null; } })(),
     questions:(function(){ try{ return seedQuestions(); }catch(eQ){ return []; } })()
@@ -7230,82 +7127,39 @@ function gradeDisp(g, score){
   if(g==='B' && score===3) return 'B−';
   return g;
 }
-// ============================================================================
-// (v10.51) DIRECTION = A HIERARCHY, NOT A WEIGHTED SUM.
-//
-//   1. The SMA-50 five-state machine IS the direction. trendVerdict(sym).state →
-//      up | dn | up-broken | dn-broken | flat | na.
-//   2. GEX/VEX drift CONFIRMS or DIVERGES. It never chooses the direction; it only
-//      grades how much confidence the trend has earned.
-//   3. With NO confirmed trend (flat / up-broken / dn-broken / na) the read is
-//      TENTATIVE: drift may supply a provisional lean, but the grade can never
-//      exceed C. Broken states are recorded distinctly and vote 0 — we do not yet
-//      know whether a broken uptrend continues or reverses, and the recorder
-//      (dir.trend5) is what will answer that.
-//
-// Structure, King roll, net gamma and the faster SMA windows are RECORDED but do
-// NOT vote; they get their own measured hit-rates first (see registerCoreFeatures).
-// The v10.50 hard caps are unchanged: mid-range → C, chop → C + SIDE, SIDE can
-// never be A, power hour / open drive suppress any odds claim.
-// ============================================================================
 function directionGrade(sym){
   sym=sym||'SPY';
   var out={ grade:'C', disp:'C', dir:'SIDE', score:0, tier:'⚖', capped:null, noOdds:false,
-            trendState:'na', relation:'tentative', tentative:true, dirWeightsSource:'hand-set',
-            inputs:{ trend:null, drift:null, structAsym:null, rangePos:null, regime:null, session:null } };
+            inputs:{ drift:null, structAsym:null, rangePos:null, regime:null, session:null } };
   try{
     var S=STATE[sym]||{}; var px=(typeof S.price==='number')?S.price:null;
     var m=null;    try{ m=nodeMapModel(sym); }catch(e1){}
-    var tv={state:'na',up:0,dn:0,win:0,slope:0};
-    try{ tv=trendVerdict(sym)||tv; }catch(e0){}
-    var drift={verdict:'NONE',dir:0,gvwap:null,vvwap:null,overlap:false}; try{ drift=driftRead(sym)||drift; }catch(e2){}
+    var drift={verdict:'NONE',dir:0,gvwap:null,vvwap:null}; try{ drift=driftRead(sym)||drift; }catch(e2){}
     var net=null;  try{ net=(typeof netPositioning==='function')?netPositioning(sym):null; }catch(e3){}
     var rg=null;   try{ rg=regimeTag(closedCandles(sym)||[]); }catch(e4){}
     var rp=rangePosOf(m, px);
     var sb=sessionBucket();
-    out.inputs.trend={ state:tv.state, up:tv.up||0, dn:tv.dn||0, win:tv.win||0, slope:+(tv.slope||0).toFixed(4) };
-    out.inputs.drift={ verdict:drift.verdict, dir:drift.dir, gvwap:drift.gvwap, vvwap:drift.vvwap, overlap:!!drift.overlap };
+    out.inputs.drift={ verdict:drift.verdict, dir:drift.dir, gvwap:drift.gvwap, vvwap:drift.vvwap };
     out.inputs.structAsym={ bias:net?net.bias:null, dir:net?net.dir:0, ratio:net?+(net.ratio||0).toFixed(2):null, decisive:!!(net&&net.decisive) };
     out.inputs.rangePos={ pos:rp.pos, zone:rp.zone, lo:rp.lo!=null?rp.lo:null, hi:rp.hi!=null?rp.hi:null };
     out.inputs.regime = rg?{ tag:rg.tag, er:rg.er }:null;
     out.inputs.session={ bucket:sb.bucket, opex:sb.opex };
-    out.trendState = tv.state;
-    // ---- 1. THE DIRECTION: the trend owns it ----
-    var confirmedTrend = (tv.state==='up' || tv.state==='dn');
-    var trendDir = tv.state==='up' ? 1 : (tv.state==='dn' ? -1 : 0);
-    var driftD = drift.dir||0;
-    var dirNum, score, hardC=false;
-    if(confirmedTrend){
-      dirNum = trendDir;                                    // drift NEVER overrides the direction
-      var agree   = (driftD!==0 && driftD===trendDir);
-      var diverge = (driftD!==0 && driftD!==trendDir);
-      score = 3;                                            // a confirmed trend, on its own, is a B
-      if(agree){
-        // AGREE-* means the two book centres are on the same side of price AND their
-        // bands overlap — one story, not two. LEAN-* is the same side without overlap.
-        score += (drift.verdict==='AGREE-UP' || drift.verdict==='AGREE-DN') ? 2 : 1;
-        out.relation='confirmed';
-      } else if(diverge){
-        score -= 2;
-        out.relation='divergence';
-        hardC=true;                                         // a diverging trend may never grade above C
-      } else {
-        out.relation='trend-only';                          // drift is SPLIT / NONE: nothing to confirm with
-      }
-      out.tentative=false;
-    } else {
-      // flat | up-broken | dn-broken | na — no confirmed trend to own the direction.
-      dirNum = driftD;                                      // provisional lean only (SIDE when 0)
-      score = 1;
-      out.relation='tentative';
-      out.tentative=true;
-      hardC=true;                                           // tentative is capped at C, always
-    }
-    out.dir = dirNum>0?'UP':(dirNum<0?'DN':'SIDE');
+    // ---- 1. the DIRECTION itself: drift (weighted) + structural tilt ----
+    var driftD=drift.dir||0;
+    var structD=(net && net.bias!=='balanced') ? (net.dir||0) : 0;
+    var lean = driftD*2 + structD;
+    out.dir = lean>0?'UP':(lean<0?'DN':'SIDE');
+    var dirNum = lean>0?1:(lean<0?-1:0);
+    // ---- 2. the SCORE ----
+    var score=0;
+    if(drift.verdict==='NONE') score+=1;                                  // nothing to contradict
+    else if(drift.verdict==='SPLIT') score+=0;
+    else if(driftD!==0 && driftD===dirNum) score+=2;                      // drift agrees on direction (conf vs lean shown in the label, not double-counted here)
+    if(structD!==0 && dirNum!==0){ if(structD===dirNum) score+=2; else score-=1; }
+    if(rg && rg.tag==='trend') score+=1;
     out.score=score;
     var grade=gradeOfScore(score);
-    if(hardC) grade='C';                                    // divergence / tentative ceiling
-    // ---- 2. the HARD CAPS (unchanged from v10.50) ----
+    // ---- 3. the HARD CAPS ----
     if(rp.zone==='mid'){ if(grade!=='C'){ out.capped='mid-range'; } grade='C'; out.noOdds=true; }
     if(rg && rg.tag==='chop'){ out.capped=out.capped?(out.capped+' + chop'):'chop'; grade='C'; out.dir='SIDE'; out.noOdds=true; }
     if(sb.capOdds) out.noOdds=true;                                       // power hour / open drive: no odds claim
@@ -7841,10 +7695,11 @@ function readHeadHtml(sym){
     var bg  = g==='A'?'rgba(46,194,126,.15)':(g==='B'?'rgba(74,144,217,.15)':'rgba(242,180,90,.15)');
     return '<span style="padding:0 5px;border-radius:3px;font-size:10px;font-weight:800;color:'+col+';background:'+bg+'">'+(disp||g)+'</span>';
   }
-  var dTip=('Which way, and how sure? SMA-50 sets the trend (15/20 closes); GEX/VEX drift confirms it or diverges from it. '+
-    'Trend UP + drift UP = confirmed. Trend UP + drift DOWN = divergence, caution. No trend = drift gives a tentative lean, never better than C. '+
-    'Now: trend '+(d.trendState||'?')+' · drift '+(d.inputs.drift?d.inputs.drift.verdict:'?')+' → '+(d.relation||'?')+' → '+d.dir+' '+d.grade+
-    '. Score '+d.score+' (A ≥5, B ≥3, else C)'+(d.capped?('; HARD-CAPPED to C by '+d.capped):'')+
+  var dTip=('DIRECTION '+d.grade+' — one verdict per bar, fused from four inputs: drift '+(d.inputs.drift?d.inputs.drift.verdict:'?')+
+    ' · structure '+((d.inputs.structAsym&&d.inputs.structAsym.bias)||'?')+
+    ' · range position '+((d.inputs.rangePos&&d.inputs.rangePos.zone)||'?')+
+    ' · regime '+((d.inputs.regime&&d.inputs.regime.tag)||'?')+'. Score '+d.score+' (A ≥5, B ≥3, else C)'+
+    (d.capped?('; HARD-CAPPED to C by '+d.capped):'')+
     '. Nothing else on the panel opines on direction — the header pills and the drift line are INPUTS.').replace(/"/g,'');
   var nTip = n ? ('NODE '+(n.k!=null?fmtNum(n.k):'')+' grade '+n.grade+' — polarity '+(n.inputs.pol||'?')+
     ' · '+tapWord(n.inputs.tap||0)+' tap · ROC '+(n.inputs.rocNow||'?')+
@@ -7880,14 +7735,9 @@ function readWhyHtml(sym){
   var n=sp.node, L=sp.inPlay;
   var B=function(t){ return '<b style="color:'+PAL.ink+'">'+t+'</b>'; };
   var why=[];
-  // (v10.51) the TREND leads the clause list — it is what actually sets the direction.
-  var tw={ 'up':'uptrend confirmed', 'dn':'downtrend confirmed', 'up-broken':'uptrend broken',
-           'dn-broken':'downtrend broken', 'flat':'no trend', 'na':'trend unknown' }[d.trendState||'na'];
-  why.push(tw||'trend unknown');
   var dr=d.inputs.drift||{};
-  if(d.relation==='confirmed') why.push('drift confirms it');
-  else if(d.relation==='divergence') why.push('drift DIVERGES — lower confidence');
-  else if(d.relation==='tentative') why.push((dr.dir?'drift gives a tentative lean only':'no lean to fall back on'));
+  if(dr.verdict==='AGREE-UP') why.push('drift agrees up');
+  else if(dr.verdict==='AGREE-DN') why.push('drift agrees down');
   else if(dr.verdict==='SPLIT') why.push('GEX and VEX split');
   else why.push('no VEX drift yet');
   var sa=d.inputs.structAsym||{};
@@ -8025,15 +7875,6 @@ function _fwdHitNum(fwd, dirNum, pts){
   pts=(pts==null)?DIR_PTS:pts;
   return (dirNum>0 ? (fwd.mfe>=pts) : (fwd.mae<=-pts)) ? 1 : 0;
 }
-// (v10.51) the direction a five-state trend IMPLIES, for scoring only. Broken states
-// imply the direction they came FROM — that is precisely the claim being measured, and
-// it is why they are recorded uncollapsed and vote 0 in directionGrade until answered.
-// flat / na imply nothing, so their outcome is null (skipped), never counted as a miss.
-function _trend5Vote(state){
-  if(state==='up' || state==='up-broken') return 1;
-  if(state==='dn' || state==='dn-broken') return -1;
-  return 0;
-}
 function registerCoreFeatures(){
   if(FEATURES.length) return FEATURES;
 
@@ -8041,7 +7882,6 @@ function registerCoreFeatures(){
     record:function(sym, ctx){
       var d=(ctx&&ctx.spine&&ctx.spine.dir)||directionGrade(sym);
       return { grade:d.grade, verdict:d.dir, score:d.score, tier:d.tier, capped:d.capped||null,
-               trendState:d.trendState||null, relation:d.relation||null, tentative:!!d.tentative,
                drift:(d.inputs.drift&&d.inputs.drift.verdict)||null,
                structAsym:(d.inputs.structAsym&&d.inputs.structAsym.bias)||null,
                rangePos:(d.inputs.rangePos&&d.inputs.rangePos.zone)||null,
@@ -8057,8 +7897,8 @@ function registerCoreFeatures(){
       { id:'dir_A_follow',    when:[{f:'dirGrade',v:'A'}],   outcome:'dirMove', note:'grade A should move >= DIR_PTS in the stated direction' },
       { id:'dir_midrange_cap',when:[{f:'rangePos',v:'mid'}], outcome:'dirMove', note:'do mid-range verdicts fail more (Skylit midpoint rule)?' }
     ],
-    rule:{ id:'dir', tier:'hand', condition:'directionGrade: SMA-50 trend sets direction, drift confirms or diverges, hard caps override',
-           mechanism:'One direction verdict per bar; the hierarchy beats any single input only if A outranks B outranks C.' } });
+    rule:{ id:'dir', tier:'hand', condition:'directionGrade fused from drift+structure+range+regime',
+           mechanism:'One direction verdict per bar; a fusion beats any single input only if A outranks B outranks C.' } });
 
   registerFeature({ key:'drift', label:'GEX/VEX drift', phase:'dashboard', fwd:FEAT_FWD,
     record:function(sym){
@@ -8249,148 +8089,6 @@ function registerCoreFeatures(){
     rule:{ id:'gateHour', tier:'hand', condition:'gatekeeper strike + session bucket',
            mechanism:'The blocker on the path to the King behaves differently by time of day.' } });
 
-  // ==========================================================================
-  // (v10.51) DIRECTION-HIERARCHY RECORDERS. These change NO behaviour: they exist so
-  // the optimizer can answer, empirically, questions the v10.51 model currently answers
-  // by doctrine. Only `dir.trend5` and `dir.drift` are wired into the live grade; the
-  // rest are recorded and explicitly DO NOT VOTE until they have measured hit-rates.
-  // ==========================================================================
-  registerFeature({ key:'dir.trend5', label:'Trend five-state (SMA-50)', phase:'dashboard', fwd:FEAT_FWD,
-    record:function(sym){
-      var tv={state:'na',up:0,dn:0,win:0,slope:0}, vote=0;
-      try{ tv=trendVerdict(sym)||tv; vote=_trend5Vote(tv.state); }catch(e){}
-      // The FULL five-state string is stored uncollapsed so up-broken / dn-broken earn
-      // their OWN hit-rates instead of hiding inside a ±1 vote.
-      return { state:tv.state, up:tv.up||0, dn:tv.dn||0, win:tv.win||0,
-               slope:+(tv.slope||0).toFixed(4), vote:vote };
-    },
-    outcome:function(rec, fwd){
-      var v=(rec&&rec.vote)||0;                       // flat / na → null (nothing was implied)
-      return { hit:(v?_fwdHitNum(fwd, v, DIR_PTS):null), mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
-               state:(rec&&rec.state)||null, vote:v };
-    },
-    questions:[
-      { id:'trend5_confirmed', when:[{f:'trend5',v:'up'}],        outcome:'dirMove', note:'does 15/20 dominance actually follow through?' },
-      { id:'trend5_broken',    when:[{f:'trend5',v:'up-broken'}], outcome:'dirMove', note:'does a BROKEN uptrend continue or reverse? (it votes 0 until this answers)' }
-    ],
-    rule:{ id:'dir.trend5', tier:'hand', condition:'trendVerdict five-state, recorded uncollapsed',
-           mechanism:'The SMA-50 five-state is the direction; up-broken/dn-broken must earn their own rates before either is allowed to vote.' } });
-
-  registerFeature({ key:'dir.drift', label:'Direction input · GEX/VEX drift vote', phase:'dashboard', fwd:FEAT_FWD,
-    record:function(sym){
-      var d={verdict:'NONE',dir:0,overlap:false};
-      try{ d=driftRead(sym)||d; }catch(e){}
-      return { vote:d.dir||0, verdict:d.verdict, overlap:!!d.overlap, gvwap:d.gvwap, vvwap:d.vvwap };
-    },
-    outcome:function(rec, fwd){
-      var v=(rec&&rec.vote)||0;
-      return { hit:(v?_fwdHitNum(fwd, v, DIR_PTS):null), mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
-               verdict:(rec&&rec.verdict)||null, vote:v };
-    },
-    questions:[
-      { id:'dir_drift_vote', when:[{f:'driftVerdict',v:'AGREE-UP'}], outcome:'dirMove', note:'AGREE (overlapping bands) vs LEAN (same side only) — is the overlap worth a whole grade?' }
-    ],
-    rule:{ id:'dir.drift', tier:'hand', condition:'driftRead dir + verdict, scored on its own',
-           mechanism:'Drift is only allowed to CONFIRM or DIVERGE, so its stand-alone rate is the honest test of that role.' } });
-
-  registerFeature({ key:'dir.relation', label:'Trend×drift relation', phase:'dashboard', fwd:FEAT_FWD,
-    record:function(sym, ctx){
-      var d=(ctx&&ctx.spine&&ctx.spine.dir)||null;
-      if(!d){ try{ d=directionGrade(sym); }catch(e){ d=null; } }
-      if(!d) return { relation:null, dir:null, trendState:null, driftVerdict:null, grade:null, vote:0 };
-      var dv = d.dir==='UP'?1:(d.dir==='DN'?-1:0);
-      return { relation:d.relation||null, dir:d.dir||null, trendState:d.trendState||null,
-               driftVerdict:(d.inputs&&d.inputs.drift&&d.inputs.drift.verdict)||null,
-               grade:d.grade||null, tentative:!!d.tentative, vote:dv };
-    },
-    outcome:function(rec, fwd){
-      // THE POINT OF THE HIERARCHY: confirmed should beat trend-only should beat
-      // divergence/tentative. If it does not, the hierarchy is wrong, not the tape.
-      var v=(rec&&rec.vote)||0;
-      return { hit:(v?_fwdHitNum(fwd, v, DIR_PTS):null), mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
-               relation:(rec&&rec.relation)||null, vote:v };
-    },
-    questions:[
-      { id:'rel_confirmed_vs_trendonly', when:[{f:'relation',v:'confirmed'}],  outcome:'dirMove', note:'does drift CONFIRMING a trend beat the trend alone?' },
-      { id:'rel_divergence_cost',        when:[{f:'relation',v:'divergence'}], outcome:'dirMove', note:'does a diverging drift really cost the trend its edge?' }
-    ],
-    rule:{ id:'dir.relation', tier:'hand', condition:'confirmed | divergence | tentative | trend-only',
-           mechanism:'The hierarchy only earns its keep if the relation separates outcomes better than the trend on its own.' } });
-
-  // ---- RECORDED, NOT VOTED (candidates awaiting measured rates) ----------------
-  registerFeature({ key:'dir.struct', label:'Direction candidate · net structure tilt', phase:'dashboard', fwd:FEAT_FWD,
-    record:function(sym){
-      var net=null; try{ net=(typeof netPositioning==='function')?netPositioning(sym):null; }catch(e){}
-      var v=(net && net.bias!=='balanced')?(net.dir||0):0;
-      return { vote:v, bias:net?net.bias:null, ratio:net?+(net.ratio||0).toFixed(2):null,
-               decisive:!!(net&&net.decisive), voting:false };
-    },
-    outcome:function(rec, fwd){
-      var v=(rec&&rec.vote)||0;
-      return { hit:(v?_fwdHitNum(fwd, v, DIR_PTS):null), mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null, vote:v };
-    },
-    questions:[ { id:'struct_tilt_vote', when:[{f:'structAsym',v:'support-heavy'}], outcome:'dirMove', note:'on 2026-08-11 structure voted DOWN 46/49 on a down day — is that edge or just the day? (needs the vote-split + baseline columns)' } ],
-    rule:{ id:'dir.struct', tier:'hand', condition:'netPositioning bias, RECORDED not voted',
-           mechanism:'A one-directional factor on a trending day looks like edge; only vote-split vs baseline can tell them apart.' } });
-
-  registerFeature({ key:'dir.kingRoll', label:'Direction candidate · King roll', phase:'dashboard', fwd:FEAT_FWD,
-    record:function(sym){
-      var r=0; try{ r=kingRoll(sym)||0; }catch(e){}
-      return { vote:r, king:(STATE[sym]||{}).king!=null?STATE[sym].king:null, voting:false };
-    },
-    outcome:function(rec, fwd){
-      var v=(rec&&rec.vote)||0;
-      return { hit:(v?_fwdHitNum(fwd, v, DIR_PTS):null), mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null, vote:v };
-    },
-    questions:[ { id:'kingroll_leads_dir', when:[{f:'kside',v:'above'}], outcome:'dirMove', note:'does the King migrating lead price enough to deserve a vote?' } ],
-    rule:{ id:'dir.kingRoll', tier:'hand', condition:'kingRoll sign, RECORDED not voted',
-           mechanism:'The settlement magnet moving is the board repositioning; whether it LEADS price is an open measurement.' } });
-
-  registerFeature({ key:'netGamma', label:'Direction candidate · net gamma sign', phase:'structure', fwd:FEAT_FWD,
-    record:function(sym, ctx){
-      // Derived from the same strike tape deriveFactors() already reads. NOTE: price-VWAP
-      // position and options skew are NOT available (no VWAP feed, no skew feed) — they
-      // stay unrecorded rather than faked.
-      var d=null;
-      try{
-        var fsum=futureStructureSummary(sym);
-        var nodes=[];
-        ((fsum&&fsum.above)||[]).forEach(function(r){ nodes.push(recNode(r)); });
-        ((fsum&&fsum.below)||[]).forEach(function(r){ nodes.push(recNode(r)); });
-        var pxN=(ctx&&ctx.px!=null)?ctx.px:((STATE[sym]||{}).price);
-        d=deriveFactors(nodes, pxN, (typeof (STATE[sym]||{}).king==='number')?STATE[sym].king:null);
-      }catch(e){ d=null; }
-      return { vote:d?(d.ns||0):0, ns:d?d.ns:null, nm:d?d.nm:null, reg:d?d.reg:null,
-               zg:d?d.zg:null, imb:d?d.imb:null, voting:false };
-    },
-    outcome:function(rec, fwd){
-      var v=(rec&&rec.vote)||0;
-      return { hit:(v?_fwdHitNum(fwd, v, DIR_PTS):null), mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null, vote:v };
-    },
-    questions:[ { id:'netgamma_regime', when:[{f:'regime',v:'trend'}], outcome:'dirMove', note:'does net-gamma sign carry direction, or only volatility character?' } ],
-    rule:{ id:'netGamma', tier:'hand', condition:'signed gamma mass sign from deriveFactors, RECORDED not voted',
-           mechanism:'Net gamma sign describes how moves TRAVEL; whether it also predicts WHICH WAY is unmeasured.' } });
-
-  registerFeature({ key:'dir.trendFast', label:'Direction candidate · faster SMA (10/20)', phase:'dashboard', fwd:FEAT_FWD,
-    record:function(sym){
-      var f={p10:{state:'na',up:0,dn:0,win:0,slope:0}, p20:{state:'na',up:0,dn:0,win:0,slope:0}};
-      var v10=0, v20=0;
-      try{ f=trendFast(sym)||f; v10=_trend5Vote(f.p10.state); v20=_trend5Vote(f.p20.state); }catch(e){}
-      return { p10:f.p10.state, up10:f.p10.up, dn10:f.p10.dn, win10:f.p10.win, vote10:v10,
-               p20:f.p20.state, up20:f.p20.up, dn20:f.p20.dn, win20:f.p20.win, vote20:v20,
-               voting:false };
-    },
-    outcome:function(rec, fwd){
-      // Scored on the 20-period window; the 10-period vote rides along in the record so
-      // 10 vs 20 vs 50 can be compared side by side later.
-      var v=(rec&&rec.vote20)||0;
-      return { hit:(v?_fwdHitNum(fwd, v, DIR_PTS):null), mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
-               vote:v, vote10:(rec&&rec.vote10)||0 };
-    },
-    questions:[ { id:'trendfast_window', when:[{f:'trend5',v:'flat'}], outcome:'dirMove', note:'is 50 the right SMA window, or do 10/20 read this tape better?' } ],
-    rule:{ id:'dir.trendFast', tier:'hand', condition:'SMA 10 and 20 with the same 15/20 dominance rule, RECORDED not voted',
-           mechanism:'The 50-period window is an inherited assumption; 10/20 must be measured against it before anything changes.' } });
-
   return FEATURES;
 }
 // (Consumer 3) the question queue is DERIVED from the registry, never hand-listed.
@@ -8497,9 +8195,6 @@ function resolveFeatureOutcomes(sym){
 }
 window.__gptsDebug.features=function(){ registerCoreFeatures(); return FEATURES.map(function(f){ return {key:f.key,label:f.label,phase:f.phase,fwd:f.fwd,questions:(f.questions||[]).length,rule:f.rule&&f.rule.id}; }); };
 window.__gptsDebug.questions=function(){ return seedQuestions(); };
-// (v10.51) inspect the direction hierarchy and the raw Flr/Ceil series it is building.
-window.__gptsDebug.dir=function(s){ var d=directionGrade(s||'SPY'); return { dir:d.dir, grade:d.disp, trendState:d.trendState, relation:d.relation, tentative:d.tentative, score:d.score, capped:d.capped, inputs:d.inputs }; };
-window.__gptsDebug.fchist=function(s){ s=s||'SPY'; return { sessions:fcHistSessions(s), n:fcHistOf(s).length, rows:fcHistOf(s).slice(-12), note:'sampling only — rolling is day-over-day (2 consecutive = signal, 3 = confirmation) and is not computed yet' }; };
 window.__gptsDebug.resolveFeatures=function(s){ return resolveFeatureOutcomes(s||'SPY'); };
 
 // ============================================================================
@@ -8599,132 +8294,6 @@ function featureScorecardsHtml(sym){
   return h;
 }
 
-// ============================================================================
-// (v10.51) DIRECTION FACTORS — the table the optimizer will consume. One row per
-// five-state trend value, per drift verdict and per trend×drift RELATION, with n,
-// hit-rate, avg MFE/MAE.
-//
-// CRITICAL COLUMNS — the vote split (UP votes / DOWN votes) and the PERIOD BASELINE.
-// Without them a factor that voted one way all day on a trending day reads as edge:
-// on 2026-08-11 structure voted DOWN 46 of 49 bars on a down day and "scored" ~94%.
-// The baseline is what a coin voting the SAME MIX would have scored, so `lift` is the
-// only number here that means anything.
-// ============================================================================
-function dirFactorGroups(){
-  return [
-    { key:'dir.trend5',   title:'TREND five-state (SMA-50)', of:function(rec){ return rec&&rec.state; },
-      order:['up','dn','up-broken','dn-broken','flat','na'],
-      tip:'Each state is scored on its OWN forward record. up-broken / dn-broken vote 0 in the live grade precisely because these rows do not exist yet.' },
-    { key:'dir.drift',    title:'DRIFT by verdict', of:function(rec){ return rec&&rec.verdict; },
-      order:['AGREE-UP','AGREE-DN','LEAN-UP','LEAN-DN','SPLIT','NONE'],
-      tip:'AGREE-* = both book centres one side of price AND bands overlap. LEAN-* = same side, no overlap. Drift never chooses direction; this measures whether it is worth the confidence it adds.' },
-    { key:'dir.relation', title:'RELATION (trend × drift)', of:function(rec){ return rec&&rec.relation; },
-      order:['confirmed','divergence','tentative','trend-only'],
-      tip:'The whole point of the hierarchy: confirmed should beat trend-only, and divergence/tentative should trail both. If it does not separate, the hierarchy is wrong.' }
-  ];
-}
-function dirFactorStats(sym){
-  sym=sym||'SPY';
-  var out={ groups:[], base:{ n:0, up:0, dn:0, upPct:null, dnPct:null }, days:0 };
-  try{
-    var groups=dirFactorGroups();
-    var buckets={};                       // key -> label -> tallies
-    groups.forEach(function(g){ buckets[g.key]={}; });
-    var db=recorderLoad(); var days=(db&&db.days)||{};
-    Object.keys(days).forEach(function(dk){
-      var arr=((days[dk]||{}).feat||{})[sym]||[];
-      if(arr.length) out.days++;
-      arr.forEach(function(r){
-        if(!r || !r.resolved) return;
-        // ---- period baseline: what the tape itself did, one sample per bar ----
-        if(r.key==='dir' && r.mfe!=null && r.mae!=null){
-          out.base.n++;
-          if(r.mfe>=DIR_PTS) out.base.up++;
-          if(r.mae<=-DIR_PTS) out.base.dn++;
-        }
-        var B=buckets[r.key]; if(!B) return;
-        var gd=null;
-        for(var i=0;i<groups.length;i++){ if(groups[i].key===r.key){ gd=groups[i]; break; } }
-        var lab=gd?gd.of(r.rec):null; if(!lab) return;
-        var b=B[lab]||(B[lab]={ label:lab, n:0, hit:0, up:0, dn:0, mfe:0, mae:0, mn:0, skipped:0 });
-        var vote=(r.rec&&typeof r.rec.vote==='number')?r.rec.vote
-                : ((r.out&&typeof r.out.vote==='number')?r.out.vote:0);
-        if(vote>0) b.up++; else if(vote<0) b.dn++;
-        if(r.mfe!=null){ b.mfe+=r.mfe; b.mae+=(r.mae||0); b.mn++; }
-        if(r.hit==null){ b.skipped++; return; }     // flat/na imply nothing: never a miss
-        b.n++; if(r.hit) b.hit++;
-      });
-    });
-    if(out.base.n>0){
-      out.base.upPct=Math.round(100*out.base.up/out.base.n);
-      out.base.dnPct=Math.round(100*out.base.dn/out.base.n);
-    }
-    groups.forEach(function(g){
-      var rows=[];
-      var seen=Object.keys(buckets[g.key]||{});
-      var order=g.order.slice();
-      seen.forEach(function(l){ if(order.indexOf(l)<0) order.push(l); });
-      order.forEach(function(lab){
-        var b=(buckets[g.key]||{})[lab]; if(!b) return;
-        b.rate=_fpct(b.hit,b.n);
-        b.avgMfe=b.mn?+(b.mfe/b.mn).toFixed(2):null;
-        b.avgMae=b.mn?+(b.mae/b.mn).toFixed(2):null;
-        // A coin that voted the SAME MIX would have scored this. Anything a factor
-        // earns ABOVE it is the only part that can be called edge.
-        var vn=b.up+b.dn;
-        b.expected=(vn>0 && out.base.upPct!=null)
-          ? Math.round((b.up*out.base.upPct + b.dn*out.base.dnPct)/vn) : null;
-        b.lift=(b.rate!=null && b.expected!=null)?(b.rate-b.expected):null;
-        b.oneSided=(vn>=10 && (b.up===0 || b.dn===0));
-        rows.push(b);
-      });
-      out.groups.push({ key:g.key, title:g.title, tip:g.tip, rows:rows });
-    });
-  }catch(e){}
-  return out;
-}
-function dirFactorsHtml(sym){
-  sym=sym||'SPY';
-  var st=dirFactorStats(sym);
-  var base=st.base;
-  var baseTxt=(base.upPct==null)?'● recording'
-    :('up '+base.upPct+'% · dn '+base.dnPct+'% (n'+base.n+')');
-  var h='<div style="padding:6px 8px;background:'+PAL.card+';border:1px solid '+PAL.line+';border-radius:8px;margin:4px 0">';
-  h+='<div title="Which direction inputs actually predict? Weights and the hierarchy stay hand-set until these rows mature (n≥'+RULE_UNLOCK_N+'). Read LIFT, not rate: rate alone rewards a factor that simply voted with a one-way day." '+
-     'style="color:'+PAL.gold+';font-size:9px;font-weight:800;letter-spacing:.5px;margin-bottom:3px">🧭 DIRECTION FACTORS '+
-     '<span style="color:'+PAL.sub+';font-weight:400">('+st.days+'d · baseline '+baseTxt+')</span></div>';
-  h+='<div title="The period BASELINE is what the tape did on its own: the share of recorded bars that travelled ±'+DIR_PTS+' within the forward window. Expected = that baseline weighted by the row’s own UP/DOWN vote mix." '+
-     'style="font-size:8px;color:'+PAL.sub+';margin-bottom:3px">baseline (period drift): '+baseTxt+' · every row shows its vote split so a one-directional factor on a trending day cannot masquerade as edge</div>';
-  st.groups.forEach(function(g){
-    h+='<div title="'+(g.tip||'').replace(/"/g,'')+'" style="margin-top:5px;font-size:9px;font-weight:700;color:'+PAL.gold+'">'+g.title+'</div>';
-    h+='<table style="width:100%;border-collapse:collapse;font-size:8.5px;margin-top:1px">'+
-       '<tr style="color:'+PAL.sub+'"><td>value</td><td style="text-align:right">n</td><td style="text-align:right">rate</td>'+
-       '<td style="text-align:right">votes ↑/↓</td><td style="text-align:right">exp.</td><td style="text-align:right">lift</td>'+
-       '<td style="text-align:right">MFE/MAE</td></tr>';
-    if(!g.rows.length){
-      h+='<tr><td colspan="7" style="color:'+PAL.sub+'">● recording n=0/'+RULE_UNLOCK_N+'</td></tr>';
-    }
-    g.rows.forEach(function(r){
-      var unlocked=(r.n>=RULE_UNLOCK_N);
-      var lc=(r.lift==null||!unlocked)?PAL.sub:(r.lift>=7?PAL.longAccent:(r.lift<=-7?PAL.shortAccent:PAL.ink));
-      var warn=r.oneSided?'<span title="Every vote in this row pointed the same way. Its rate is telling you about the PERIOD, not about the factor." style="color:'+PAL.amber+'"> ⚠1-way</span>':'';
-      h+='<tr style="border-top:1px solid rgba(255,255,255,.04)">'+
-        '<td style="color:'+PAL.ink+'">'+r.label+warn+'</td>'+
-        '<td style="text-align:right;color:'+PAL.sub+'">'+r.n+(r.skipped?('+'+r.skipped+'s'):'')+'</td>'+
-        '<td style="text-align:right;color:'+PAL.ink+'">'+(unlocked?(r.rate+'% 📊'):('<span style="color:'+PAL.sub+'">● '+r.n+'/'+RULE_UNLOCK_N+'</span>'))+'</td>'+
-        '<td style="text-align:right;color:'+PAL.sub+'">'+r.up+'/'+r.dn+'</td>'+
-        '<td style="text-align:right;color:'+PAL.sub+'">'+(r.expected==null?'–':r.expected+'%')+'</td>'+
-        '<td style="text-align:right;font-weight:700;color:'+lc+'">'+(r.lift==null?'–':((r.lift>0?'+':'')+r.lift))+'</td>'+
-        '<td style="text-align:right;color:'+PAL.sub+'">'+(r.avgMfe==null?'–':(r.avgMfe.toFixed(2)+'/'+r.avgMae.toFixed(2)))+'</td>'+
-      '</tr>';
-    });
-    h+='</table>';
-  });
-  h+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:4px;opacity:.85">which factors actually predict — the hierarchy and its weights stay hand-set ⚖ until these rows mature · "s" = samples the state implied nothing (flat/na), skipped rather than counted as misses</div>';
-  h+='</div>';
-  return h;
-}
-
 // ---- (v10.44) READ ▸ block — the Dashboard's directional read, built ONLY from
 // measured (📊) or hand-set (⚖) magnet-frame claims. No legacy verdicts (King
 // bull/bear 42%, confluence 38%, Break-through 8% all ran contrarian on 4 days).
@@ -8735,62 +8304,30 @@ function dirFactorsHtml(sym){
 // head line, no readWhy block, no legacy BULLISH/BEARISH body, no regime chip, no
 // "King behind" line — all superseded by this block and the zone/hover layers.
 // read3Beat is PURE (primitives in, sentence out) so the voice is unit-testable.
-// (v10.51) `relation` (from directionGrade) selects the sentence VARIANT so the voice
-// says out loud which of the four situations we are in:
-//   'confirmed'  — trend and drift agree             → "...uptrend confirmed by GEX and VEX leaning up."
-//   'divergence' — trend one way, drift the other    → "...but GEX and VEX lean down — divergence, lower confidence."
-//   'tentative'  — no confirmed trend, drift leans   → "No trend; GEX and VEX lean up — tentative only."
-//   'trend-only' — trend with nothing confirming it  → the v10.50 3-beat sentence, drift clause dropped.
-// relation is OPTIONAL: omitted (null) the function emits the exact v10.50 voice, so
-// the pure sentence tests keep pinning the legacy beats.
-function read3Beat(dirWord, L, px, flr, ceil, dr, tgtK, tgtRole, relation){
-  var out={ verdict:'SIDEWAYS', dir:dirWord||'SIDE', arrow:'→', kind:'split', sentence:'', relation:relation||null };
+function read3Beat(dirWord, L, px, flr, ceil, dr, tgtK, tgtRole){
+  var out={ verdict:'SIDEWAYS', dir:dirWord||'SIDE', arrow:'→', kind:'split', sentence:'' };
   var dirNum = dirWord==='UP'?1:(dirWord==='DN'?-1:0);
   var leanWord = (dr&&dr.dir>0)?'leaning up':((dr&&dr.dir<0)?'leaning down':'split');
-  var leanVerb = (dr&&dr.dir>0)?'lean up':((dr&&dr.dir<0)?'lean down':'split');
   var holdDir = L ? ((L.k<px)?1:(L.k>px?-1:0)) : 0;
   var role = L ? zoneRole(L) : '';
-  var rngTxt = (flr&&ceil)?(fmtNum(flr.k)+'–'+fmtNum(ceil.k)):'';
   var kind;
-  if(relation==='tentative') kind='split';
-  else if(dirNum===0 || (!relation && dr && dr.verdict==='SPLIT')) kind='split';
+  if(dirNum===0 || (dr && dr.verdict==='SPLIT')) kind='split';
   else if(L && (L.isGatekeeper || dirNum===-holdDir)) kind='cont';
   else if(dirNum>0) kind='bounce';
   else kind='reject';
   out.kind=kind;
   function bstate(N){ if(!N) return 'holding'; if(_nmIsAcc(N)) return 'building'; if(_nmIsDec(N)) return 'fading'; return 'holding'; }
-  var trendWord = dirNum>0?'uptrend':'downtrend';
-  var TrendWord = dirNum>0?'Uptrend':'Downtrend';
-  if(relation==='tentative'){
-    // No confirmed trend. Drift may only offer a provisional lean, and the sentence says so.
-    var tHead = rngTxt ? ('Mid-range '+rngTxt+'.') : (L?('At '+role+' '+fmtNum(L.k)+'.'):'');
-    var tBody = (dr && dr.dir) ? ('No trend; GEX and VEX '+leanVerb+' — tentative only.')
-                               : 'No trend; GEX and VEX split — no clean lean, rotation likely.';
-    out.sentence=[tHead, tBody].filter(Boolean).join(' ');
-  } else if(relation==='divergence' && dirNum!==0){
-    // (dirNum can still be 0 here when the chop cap forced SIDE — then the split
-    // sentence below is the honest one, and naming a trend would contradict it.)
-    // The trend still owns the direction; the drift disagreeing is the headline caution.
-    var dHead = L ? ('At '+role+' '+fmtNum(L.k)+'.') : (rngTxt?('Mid-range '+rngTxt+'.'):'');
-    var dWatch = (tgtK!=null)?('Watch '+fmtNum(tgtK)+'.'):'';
-    out.sentence=[dHead, TrendWord+', but GEX and VEX '+leanVerb+' — divergence, lower confidence.', dWatch].filter(Boolean).join(' ');
-  } else if(kind==='split'){
-    out.sentence='Mid-range'+(rngTxt?(' '+rngTxt):'')+'. GEX and VEX split — no clean lean, rotation likely.';
+  if(kind==='split'){
+    var rng=(flr&&ceil)?(fmtNum(flr.k)+'–'+fmtNum(ceil.k)):'';
+    out.sentence='Mid-range'+(rng?(' '+rng):'')+'. GEX and VEX split — no clean lean, rotation likely.';
   } else if(kind==='cont'){
     var b3=(tgtK!=null)?('Potential run to '+(tgtRole?(tgtRole+' '):'')+fmtNum(tgtK)+'.'):'';
-    var cMid = (relation==='trend-only') ? '' :
-               (relation==='confirmed' ? (TrendWord+' confirmed by GEX and VEX '+leanWord+'.')
-                                       : ('GEX and VEX '+leanWord+'.'));
-    out.sentence=['Through '+role+' '+fmtNum(L.k)+'.', cMid, b3].filter(Boolean).join(' ');
+    out.sentence=['Through '+role+' '+fmtNum(L.k)+'.', 'GEX and VEX '+leanWord+'.', b3].filter(Boolean).join(' ');
   } else {
     var srNode = (kind==='bounce') ? (flr||L) : (ceil||L);
     var srWord = (kind==='bounce') ? 'Support' : 'Resistance';
     var pb=(tgtK!=null)?('Potential '+(kind==='bounce'?'bounce':'drop')+' to '+fmtNum(tgtK)+'.'):'';
-    var bMid;
-    if(relation==='trend-only')      bMid = srWord+' '+bstate(srNode)+'.';
-    else if(relation==='confirmed')  bMid = srWord+' '+bstate(srNode)+', '+trendWord+' confirmed by GEX and VEX '+leanWord+'.';
-    else                             bMid = srWord+' '+bstate(srNode)+' with GEX and VEX '+leanWord+'.';
-    out.sentence=['At '+role+' '+fmtNum(L.k)+'.', bMid, pb].filter(Boolean).join(' ');
+    out.sentence=['At '+role+' '+fmtNum(L.k)+'.', srWord+' '+bstate(srNode)+' with GEX and VEX '+leanWord+'.', pb].filter(Boolean).join(' ');
   }
   out.verdict = dirWord==='UP'?'BULLISH':(dirWord==='DN'?'BEARISH':'SIDEWAYS');
   out.arrow   = dirWord==='UP'?'↑':(dirWord==='DN'?'↓':'→');
@@ -8813,22 +8350,18 @@ function readBlock44(sym){
       if(fr && fr.tgt!=null){ tgtK=fr.tgt;
         var tl=(m.levels||[]).filter(function(x){return Math.abs(x.k-tgtK)<0.001;})[0]; if(tl) tgtRole=zoneRole(tl); } }
   }catch(eFr){}
-  var v=read3Beat(dirWord, L, px, m.flr, m.ceil, dr, tgtK, tgtRole, d.relation||null);
+  var v=read3Beat(dirWord, L, px, m.flr, m.ceil, dr, tgtK, tgtRole);
   var vcol={BULLISH:PAL.longAccent,BEARISH:PAL.shortAccent,SIDEWAYS:PAL.sub}[v.verdict]||PAL.sub;
   // Direction grade chip — letter only, NO ⚖ (the tier + regime live in the hover).
   var g=d.grade||'C', gdisp=d.disp||g;
   var gcol=g==='A'?PAL.longAccent:(g==='B'?PAL.blue:PAL.amber);
   var gbg =g==='A'?'rgba(46,194,126,.15)':(g==='B'?'rgba(74,144,217,.15)':'rgba(242,180,90,.15)');
   var di=d.inputs||{};
-  // (v10.51) QUESTION-FIRST direction hover: the hierarchy, stated in one breath, then
-  // this bar's actual values. The grade is a confidence read on the TREND, not a blend.
-  var dTip=('Which way, and how sure? SMA-50 sets the trend (15/20 closes); GEX/VEX drift confirms it or diverges from it. '+
-    'Trend UP + drift UP = confirmed. Trend UP + drift DOWN = divergence, caution. No trend = drift gives a tentative lean, never better than C. '+
-    'Now: trend '+(d.trendState||'?')+' ('+((di.trend&&di.trend.up)||0)+' up / '+((di.trend&&di.trend.dn)||0)+' dn of '+((di.trend&&di.trend.win)||0)+') '+
-    '· drift '+((di.drift&&di.drift.verdict)||'?')+' → '+(d.relation||'?')+' → '+(dirWord==='UP'?'Up':(dirWord==='DN'?'Down':'Sideways'))+' '+gdisp+
+  var dTip=('How trustworthy is the direction? '+(dirWord==='UP'?'Up':(dirWord==='DN'?'Down':'Sideways'))+' grade '+gdisp+
+    ' — drift '+((di.drift&&di.drift.verdict)||'?')+' · structure '+((di.structAsym&&di.structAsym.bias)||'?')+
+    ' · range '+((di.rangePos&&di.rangePos.zone)||'?')+' · regime '+((di.regime&&di.regime.tag)||'?')+
     '. Score '+(d.score!=null?d.score:'?')+' (A≥5, B≥3, else C)'+(d.capped?('; hard-capped to C by '+d.capped):'')+
-    '. Structure '+((di.structAsym&&di.structAsym.bias)||'?')+' and King roll are RECORDED, not voted, until measured. '+
-    ((d.tier==='⚖')?'Hand-set until n≥20 measured.':'Measured.')).replace(/"/g,'');
+    '. '+((d.tier==='⚖')?'Hand-set until n≥20 measured.':'Measured.')).replace(/"/g,'');
   // Session badge — dim normally; HIGHLIGHT only power hour / OPEX.
   var sb=sessionBucket();
   var hot=(sb.bucket==='power'||sb.opex);
@@ -9348,7 +8881,7 @@ function feedStatusHtml(){
     '<span>'+dot(vexLive)+'vex</span>'+
     '<span>'+dot(recOn)+'rec</span>'+
     ctrls+
-    '<span style="margin-left:auto">v10.51</span>'+
+    '<span style="margin-left:auto">v10.50.1</span>'+
   '</div>';
 }
 
@@ -9997,9 +9530,6 @@ function analysisBlock(){
   var h='';
   // (v10.49 K) FEATURE SCORECARDS first — the enrollment contract's Analysis consumer.
   try{ h+=featureScorecardsHtml(sym); }catch(eFS){}
-  // (v10.51) DIRECTION FACTORS — per five-state / per drift verdict / per relation,
-  // each with its vote split and the period baseline beside it.
-  try{ h+=dirFactorsHtml(sym); }catch(eDF){}
   // (v10.42) 🎯 Projection Scorecard + auto recommendations — the sharpening loop.
   try{ h+=projScorecardHtml(); }catch(ePS){}
   // ---- header + day grade ----
@@ -10617,11 +10147,6 @@ function tick(){
   // DATA layer: once-per-closed-bar node snapshots (throttled internally).
   recordNodeSnapshot('SPY');
   recordNodeSnapshot('QQQ');
-  // (v10.51) sample the Flr/Ceil strikes into FCHIST. SAMPLING ONLY — no rolling value
-  // is computed and nothing votes on it: rolling is a DAY-OVER-DAY measurement (Academy:
-  // 2 consecutive sessions = signal, 3 = confirmation), so a single session cannot produce one.
-  fcHistSample('SPY');
-  fcHistSample('QQQ');
   resolveFeatureOutcomes('SPY');   // (v10.49 B) forward-only, idempotent feature scoring
   recordDeflections('SPY');   // (v10.36) record confirmed deflections + score forward outcomes
   recordDeflections('QQQ');

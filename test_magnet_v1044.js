@@ -59,6 +59,6 @@ ok(/function studyRun\(/.test(src) && /STUDY_BASELINE/.test(src), 'study module 
 ok(/function repoUpsertSnaps\(/.test(src) && /indexedDB\.open\(REPO_DB_NAME/.test(src), 'IndexedDB repository');
 ok(/function readTrinityHeaders\(/.test(src) && /xm:\(function/.test(src), 'cross-market headers recorded');
 ok(/gpts_kd_open_v1/.test(src), '%KCH baseline persisted');
-ok(/@version\s+10\.4[0-9]/.test(src), 'version 10.4x');
+ok(/@version\s+10\.(4[0-9]|5[0-9])/.test(src), 'version 10.4x-5x');
 ok((src.match(/^function render\(\)/gm)||[]).length===1 && /\}\)\(\);\s*$/.test(src), 'file shape rule 2.4');
 console.log('test_magnet_v1044: '+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);

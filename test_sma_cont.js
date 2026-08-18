@@ -6,7 +6,7 @@ const src = fs.readFileSync('./v10.js','utf8');
 
 // ---- minimal globals the extracted fns reference ----
 global.CFG = { trendMA:{SPY:'50',QQQ:'50'}, trendOn:true };
-global.TREND_WINDOW = 20; global.TREND_DOM = 16; global.TREND_BANDX = 0.25;
+global.TREND_WINDOW = 20; global.TREND_DOM = 15; global.TREND_BANDX = 0.25;
 global.TREND_LAST = { SPY:null }; global.SMA_CONT_FLAG = { SPY:false };
 function mul(a,b){ return a/(1/b); }
 global.mul = mul;

@@ -1,3 +1,44 @@
+# RESUME NOTE — 2026-08-18 — v10.51 BUILT (candidate): trend-primary direction · NEXT = accumulate sessions
+
+**Baseline v10.51** (footer v10.51). Direction is now HIERARCHICAL: SMA-50 five-state = the trend (primary);
+GEX/VEX drift = confirmation or divergence only. Divergence hard-caps at C; no-trend = tentative lean capped
+at C. TREND_DOM is 15/20 (v10.50.1). Specs: design/spec-v10.51-trend-primary.md.
+
+**THE POINT NOW IS DATA.** Everything is recording (dir.trend5 five-state, dir.drift, dir.relation, plus
+non-voting dir.struct / dir.kingRoll / netGamma / dir.trendFast 10+20, and FCHIST flr/ceil per bar). Weights
+and vote-mappings stay hand-set (⚖) until measured. Need ~10-20 sessions INCLUDING BOTH up and down days
+before any weight is trustworthy — the 2026-08-11 single-day test produced ~6.7 independent observations and
+a false 71% on structure (voted DOWN 46/49 on a down day), which is why every Analysis row now shows its
+vote split.
+
+**Open questions the data must answer:** (1) what should up-broken / dn-broken vote — continuation or
+reversal? (2) is SMA 10 or 20 better than 50 for the intraday panel (recorded, not switched)? (3) does the
+relation hierarchy actually beat trend alone? (4) once FCHIST has several sessions, add multi-session rolling
+floors/ceilings as a factor (Academy rule: 2 consecutive migrations = signal, 3 = confirmation; a rolling
+floor leaves air pockets behind; rolling floor + negative gamma below = supported dips but fast failure).
+
+**Still pending:** VEX capture never yet confirmed during LIVE market hours (auth self-fetch shipped after
+close each time) — verify at the open. Full Phase C Analysis tab + Phase D nightly runner. SPXW S-confluence
+is display-only.
+
+---
+
+# RESUME NOTE — 2026-08-17 (late) — v10.50 BUILT (candidate): full dashboard redesign · NEXT = live-verify
+
+**Baseline v10.50 candidate** (footer feed v10.50). Full element-by-element dashboard review implemented
+(spec design/spec-v10.50-redesign.md, mockup mockups/gex-v10.50-full-redesign-mockup.html). Display-only —
+all enrollment intact. Suite green except the 5 known-stale. **Verify next open:** 3-beat READ voice, drift
+bar w/ white price line, single Deflection-Zones ladder (decision folded into in-play row 3 + gated
+take/pass), ✓/✗ reaction on a tap, yellow/purple g polarity, S/Q/V confluence, Acm 15m/session, footer 3
+health dots, and (still) VEX capture live via the auth self-fetch (never yet confirmed during market hours).
+
+**Open follow-ups:** SPXW S-confluence is display-only from the trinity header (not scored) — wire a real
+SPXW wall map later to score it. Full Phase C Analysis tab + Phase D nightly runner still pending. Grades
+earn 📊 at n≥20. Standing rules in skills/gex/SKILL.md (git source of truth, runnable files not
+instructions, feature enrollment, question-first hovers).
+
+---
+
 # RESUME NOTE — 2026-08-17 (late) — v10.49 BUILT (candidate): mental-model dashboard · NEXT = live-verify, then Phase C/D full
 
 **Baseline: v10.49 candidate** (`@version 10.49`, footer "feed v10.49"). Built on v10.48. Delivered as installer .bat.
