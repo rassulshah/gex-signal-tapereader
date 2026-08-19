@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.1.3
+// @version    11.3
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -375,7 +375,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.1.3';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.3';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -941,7 +941,7 @@ function livePctAt(sym, k){
 // We read ONLY the nearest-expiry column (the first data column), which is the
 // %King strength you read when trading. Keyed off the data pattern + the
 // "Strike" header, not CSS classes, so it survives Skylit markup changes.
-var TAPE_CACHE = { SPY:{t:0, data:null}, QQQ:{t:0, data:null} };
+var TAPE_CACHE = { SPY:{t:0, data:null}, QQQ:{t:0, data:null}, SPXW:{t:0, data:null}, VIX:{t:0, data:null} };   // (v11.2) all Trinity panes
 // (v10.48) STRUCTURAL SOURCE = the pure-gamma feed, mode-independent. Returns a
 // kingResolve-shaped object built straight from extractWalls(LASTFEED[sym].j), so
 // tag/tapemax/feed all derive from the SAME gamma data and tapeSync reconciles
@@ -1085,10 +1085,128 @@ function tapeCells(table){
   })(table);
   return out;
 }
+// ============================================================================
+// (v11.2) $K-ANCHORED LADDER READER — the user's principle (2026-08-19): "locate the King first by its
+// dollar amount; with that you can read the tape no matter what the UI does, because the King dollar
+// is the one consistent thing." Every Skylit ladder — the main table AND each Trinity pane (SPY, QQQ,
+// SPXW, VIX) — prints exactly one $K figure, on the King row. So: find the $K leaf, walk up to its ROW,
+// walk up to the CONTAINER that holds ≥15 strike rows, learn the column shape FROM THAT ROW, read every
+// sibling row the same way. No dependence on <table>, headers, class names or colour — those become
+// hints. Also reads the Trinity panes, which are NOT tables (deferred item 6, pulled forward).
+//   Cell grammar (observed 2026-08-19): "+8%$92,931K" (King: velocity + dollars) · "-1%65%" (velocity,
+//   then %King) · "59%" / "−3%" (a lone %King) · "24%-7%" (main table: value, then velocity). Rule: the
+//   %King is the token that is NOT a signed velocity chip; when two % tokens exist and one carries an
+//   explicit +/− and the other does not, the unsigned one is the value; if both are unsigned the FIRST is
+//   the value (main-table order). Sign/polarity falls back to the cell colour (Skylit paints −γ purple/
+//   blue: b>g; +γ green/yellow: g>b) when the value token itself carries no sign.
+// ============================================================================
+var LADDER_SYM_RE=/^\s*(SPY|QQQ|SPXW|SPX|VIX|IWM|DIA)\s*\$/;
+function ladderStrikeOf(el){ var t=(el&&el.textContent||'').trim(); var m=t.match(/^(\d{2,5}(?:\.\d+)?)$/); if(!m) return null; var v=parseFloat(m[1]); return (isFinite(v)&&v>=5&&!/^(19|20)\d{2}$/.test(t))?v:null; }
+function ladderCellParse(td){
+  // -> {pct, kd, vel, neg} for one value cell; pct null if unreadable
+  var raw=(td&&td.textContent||'').replace(/\s+/g,''); if(!raw) return null;
+  var kd=null, kdm=raw.match(/([+\-−]?)\$([\d,]+)K/); if(kdm){ kd=Math.abs(parseInt(kdm[2].replace(/,/g,''),10)); }
+  var toks=[]; var re=/([+\-−]?)(\d{1,3})%/g, m; while((m=re.exec(raw))){ toks.push({sign:m[1], v:parseInt(m[2],10), signed:!!m[1]}); }
+  var val=null, vel=null;
+  if(kd!=null){ val={sign:'', v:100, signed:false}; if(toks.length) vel=toks[0]; }
+  else if(toks.length===1){ val=toks[0]; }
+  else if(toks.length>=2){
+    var a=toks[0], b=toks[1];
+    if(a.signed && !b.signed){ vel=a; val=b; }           // "-1%65%"  (Trinity pane)
+    else if(!a.signed && b.signed){ val=a; vel=b; }      // "24%-7%"  (main table)
+    else { val=a; vel=b; }                               // ambiguous: main-table order
+  }
+  if(!val) return null;
+  var neg=(val.sign==='-'||val.sign==='−');
+  if(!val.signed){ // polarity from colour: Skylit paints −γ purple/blue (b>g), +γ green/yellow (g>b)
+    try{ var bg=(td.style&&td.style.backgroundColor)||''; var cm=bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/); if(cm){ var g=+cm[2], b2=+cm[3]; if(b2>g+20 && val.v>0) neg=true; } }catch(eC){}
+  }
+  return { pct:neg?-val.v:val.v, kd:kd, vel:vel?((vel.sign==='-'||vel.sign==='−')?-vel.v:vel.v):null, neg:neg,
+           hi:/rgb\(\s*253,\s*231,\s*37\s*\)/.test((td.style&&td.style.backgroundColor)||'') };
+}
+function ladderRowsFromDollar(dollarEl){
+  // walk up: row = first ancestor with ≥2 children one of which is a bare strike; container = row's parent with ≥15 such rows
+  var row=dollarEl, depth=0;
+  while(row && depth<8){ var kids=row.children||[]; var sIdx=-1; for(var i=0;i<kids.length;i++){ if(ladderStrikeOf(kids[i])!=null){ sIdx=i; break; } }
+    if(kids.length>=2 && sIdx>=0) break; row=row.parentElement; depth++; }
+  if(!row||!row.parentElement) return null;
+  var cont=row.parentElement; var rows=[], strikeIdx=-1;
+  var kids0=row.children; for(var j=0;j<kids0.length;j++){ if(ladderStrikeOf(kids0[j])!=null){ strikeIdx=j; break; } }
+  if(strikeIdx<0) return null;
+  var sib=cont.children;
+  for(var r=0;r<sib.length;r++){ var rk=sib[r].children; if(!rk||rk.length<=strikeIdx) continue; var k=ladderStrikeOf(rk[strikeIdx]); if(k==null) continue; rows.push({k:k, cells:rk, el:sib[r]}); }
+  if(rows.length<15) return null;
+  return { cont:cont, row:row, rows:rows, strikeIdx:strikeIdx };
+}
+function ladderSymbolOf(el){
+  var n=el, d=0; while(n && d<14){ var t=(n.textContent||'').trim(); var m=t.match(LADDER_SYM_RE); if(m) return m[1]; n=n.parentElement; d++; }
+  return null;
+}
+function readLaddersByDollar(){
+  // -> { SPY:{...}, QQQ:{...}, SPXW:{...}, VIX:{...}, main:{...} } each {pct:{k:%}, king, kingKd, count, kingSrc:'dollar', src:'trinity'|'main', vel:{k:%}}
+  var out={}; var seenCont=[];
+  var leaves=document.querySelectorAll('span,div,td,b,strong');
+  for(var i=0;i<leaves.length;i++){
+    var el=leaves[i];
+    var t=(el.textContent||'').replace(/\s+/g,''); if(!TAPE_KING_DOLLAR_IN.test(t)) continue;
+    // INNERMOST element carrying the $K (the King cell is often "<span>+8%</span>$92,931K" — a text node beside a chip)
+    var inner=false; for(var ci=0;ci<el.children.length;ci++){ if(TAPE_KING_DOLLAR_IN.test((el.children[ci].textContent||'').replace(/\s+/g,''))){ inner=true; break; } }
+    if(inner) continue;
+    if(TAPE_REJECT_RE.test((el.parentElement&&el.parentElement.parentElement&&el.parentElement.parentElement.textContent)||'')) continue;
+    var L=ladderRowsFromDollar(el); if(!L) continue;
+    if(seenCont.indexOf(L.cont)>=0) continue; seenCont.push(L.cont);
+    var sym=ladderSymbolOf(L.cont); var isMain=(L.cont.tagName==='TBODY'||L.cont.tagName==='TABLE'||!!L.cont.closest&&!!L.cont.closest('table'));
+    var key=isMain?'main':sym; if(!key) continue;     // the main table is 'main' (it shows whichever symbol the chart is on); Trinity panes by symbol
+    var pct={}, vel={}, king=null, kingKd=null, count=0, hiK=null, rival=null;
+    // which value column? the one that holds the $K in the King row (Trinity: the only value cell; main table: column 1 = nearest expiry)
+    var kingRow=L.rows.filter(function(rw){ return rw.el===L.row || rw.el.contains(el); })[0] || null;
+    var valIdx=-1; if(kingRow){ for(var c=0;c<kingRow.cells.length;c++){ if(c===L.strikeIdx) continue; if(TAPE_KING_DOLLAR_IN.test((kingRow.cells[c].textContent||'').replace(/\s+/g,''))){ valIdx=c; break; } } }
+    if(valIdx<0) valIdx=(L.strikeIdx===0)?1:0;
+    // main table + EXPIRATIONS view: the $K may sit in a later expiry column (the BOOK King). Read column 1 for %King,
+    // keep the $ cell as bookKing — the yellow cell (or max) is the nearest-expiry King.
+    var bookKing=null;
+    if(isMain && valIdx!==L.strikeIdx+1){ var bkCell=kingRow&&kingRow.cells[valIdx]; var bkp=bkCell?ladderCellParse(bkCell):null; bookKing={k:kingRow?kingRow.k:null, col:valIdx, kd:bkp?bkp.kd:null, neg:/^[\-−]/.test((bkCell&&bkCell.textContent||'').replace(/\s+/g,''))}; valIdx=L.strikeIdx+1; }
+    for(var r=0;r<L.rows.length;r++){ var rw=L.rows[r]; var cell=rw.cells[valIdx]; if(!cell) continue; var pc=ladderCellParse(cell); if(!pc||pc.pct==null) continue;
+      var kk=rw.k.toFixed(2); pct[kk]=pc.pct; if(pc.vel!=null) vel[kk]=pc.vel; count++;
+      if(pc.kd!=null && (!isMain || valIdx===L.strikeIdx+1)){ if(king==null){ king=rw.k; kingKd=pc.kd; } else if(king!==rw.k) rival=rw.k; }
+      if(pc.hi){ if(hiK==null) hiK=rw.k; else if(hiK!==rw.k) hiK=-1; } }
+    if(count<5) continue;
+    var kingSrc='dollar';
+    if(king==null){ // no $K in the value column (main table, expirations view) → rescale, yellow cell = King
+      var mx=0; for(var q in pct){ if(Math.abs(pct[q])>mx) mx=Math.abs(pct[q]); }
+      if(mx>0 && mx<100){ for(var q2 in pct){ pct[q2]=Math.round(pct[q2]*100/mx); } }
+      if(hiK!=null && hiK>0 && Math.abs(pct[hiK.toFixed(2)]||0)===100){ king=hiK; kingSrc='highlight'; }
+      else { var bk=null, bv=-1; for(var q3 in pct){ if(Math.abs(pct[q3])>bv){ bv=Math.abs(pct[q3]); bk=parseFloat(q3); } } king=bk; kingSrc='maxpct'; }
+    }
+    var res={ pct:pct, vel:vel, king:king, kingKd:kingKd, count:count, kingSrc:kingSrc, kingTagged:(kingSrc==='dollar'||kingSrc==='highlight')?king:null,
+              kingConflict:false, src:isMain?'main':'trinity', sym:key, bookKing:bookKing, rows:L.rows.length };
+    if(rival!=null){ res.kingConflict=true; res.parseSuspect='two-dollar-cells'; res.kingRival=rival; }
+    out[key]=res;
+  }
+  return out;
+}
+var LADDER_CACHE={t:0, data:null};
+function laddersByDollar(){ var now=Date.now(); if(LADDER_CACHE.data && (now-LADDER_CACHE.t)<1000) return LADDER_CACHE.data; var d=null; try{ d=readLaddersByDollar(); }catch(e){ d=null; } LADDER_CACHE={t:now, data:d||{}}; return LADDER_CACHE.data; }
+// the per-symbol ladder the panel should trust: the Trinity pane for that symbol (true %King, King by $K) first,
+// then the main table (SPY only — it shows whichever symbol the chart is on).
+function ladderFor(sym){ var all=laddersByDollar()||{}; if(all[sym]) return all[sym]; if(sym==='SPY' && all.main) return all.main; return null; }
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.ladders=function(){ var a=laddersByDollar()||{}; var o={}; Object.keys(a).forEach(function(k){ var L=a[k]; o[k]={king:L.king,kingKd:L.kingKd,kingSrc:L.kingSrc,src:L.src,count:L.count,rows:L.rows,bookKing:L.bookKing,top:Object.keys(L.pct).sort(function(x,y){ return Math.abs(L.pct[y])-Math.abs(L.pct[x]); }).slice(0,6).map(function(k2){ return [parseFloat(k2),L.pct[k2]]; })}; }); return o; };
 function readTapeFromDOM(sym){
+  // (v11.2) THE $K-ANCHORED LADDER FIRST. Trinity pane for this symbol (true %King) → main table → legacy finders.
+  try{ var LD=ladderFor(sym); if(LD && LD.count>=5 && LD.king!=null){ var rL=kingResolve(LD.pct, (LD.kingSrc==='dollar')?LD.king:null, LD.count);
+      if(LD.kingSrc!=='dollar'){ rL.king=LD.king; rL.kingSrc=LD.kingSrc; if(LD.kingSrc==='highlight') rL.kingTagged=LD.king; }
+      rL.kingKd=LD.kingKd; rL.bookKing=LD.bookKing; rL.vel=LD.vel; rL.ladderSrc=LD.src; if(LD.kingConflict){ rL.kingConflict=true; rL.parseSuspect=LD.parseSuspect; }
+      return rL; } }catch(eLD){}
   var table=findTapeTable();
   if(!table) return null;
   var pct={}, kingK=null, count=0, kingKd=null, hiK=null;
+  // (v11.1.3.1, live 2026-08-19 10:40) THE $K CELL STILL EXISTS — it marks the largest ABSOLUTE cell of the
+  // WHOLE displayed book, which in the EXPIRATIONS view can sit in a LATER expiry column (775 on 2026-08-21,
+  // −$341M, dark-purple cell) while the yellow cell is the nearest-expiry King (774). Capture it wherever it
+  // is as `bookKing` {k, col, expiry, kd, neg}; when it sits in column 1 it is the legacy King tag.
+  var expiries=[]; try{ var th=table.querySelector('thead'); if(th){ var hm=(th.textContent||'').match(/20\d{2}-\d{2}-\d{2}/g); if(hm) expiries=hm; } }catch(eEx){}
+  var bookKing=null;
   // ---- Path A: a real <tr>/<td> table (legacy / forward-compatible). ----
   var trs=table.querySelectorAll('tr');
   if(trs.length){
@@ -1097,6 +1215,9 @@ function readTapeFromDOM(sym){
       if(!cells || cells.length<2) continue;
       var strike=parseFloat((cells[0].textContent||'').replace(/[^0-9.]/g,''));
       if(!isFinite(strike) || strike<50) continue;
+      try{ for(var cj=1;cj<cells.length;cj++){ var ct=(cells[cj].textContent||'').replace(/\s+/g,''); if(TAPE_KING_DOLLAR_IN.test(ct)){
+        var kdj=parseKingDollarsK(ct); if(kdj!=null && (bookKing==null || kdj>bookKing.kd)){
+          bookKing={ k:strike, col:cj, expiry:expiries[cj-1]||null, kd:kdj, neg:/^[\-\u2212]/.test(ct) }; } } } }catch(eBK){}
       // (v10.38 TAPE-SYNC FIX) Read ONLY the nearest-expiry cell (cells[1]).
       // The old code fell back to cells[2] when cells[1] failed to parse -- but
       // cells[2] is a DIFFERENT EXPIRATION column, so the King row (which prints
@@ -1127,6 +1248,7 @@ function readTapeFromDOM(sym){
         if(hiK!=null && hiK>0 && Math.abs(pct[hiK.toFixed(2)]||0)===100) kingK=hiK;
       }
       var rA=kingResolve(pct, kingK, count); rA.kingKd=kingKd; if(kingK!=null && kingK===hiK) rA.kingSrc='highlight';
+      rA.expiries=expiries; rA.bookKing=bookKing;
       return rA;
     }
   }
@@ -1367,7 +1489,8 @@ function syncBannerHtml(r){
             'single-source':'only one King source is available',
             'parse-invariant':'the tape parse failed an internal invariant' }[r.reason] || r.reason;
   var v=r.votes||{};
-  var tip=('Tape out of sync \u2014 '+why+'. tape $K tag '+(v.tag!=null?v.tag:'\u2014')+' \u00b7 raw feed '+(v.feed!=null?v.feed:'\u2014')+' \u00b7 tape max %King '+(v.tapemax!=null?v.tapemax:'\u2014')+
+  var health=''; try{ var a=laddersByDollar()||{}; var ks=Object.keys(a); health=' Ladders found by $K: '+(ks.length?ks.map(function(k){ return k+'→'+a[k].king+(a[k].kingKd?('($'+a[k].kingKd+'K)'):''); }).join(', '):'NONE')+'.'; }catch(eH){}
+  var tip=('Tape out of sync \u2014 '+why+'.'+health+' tape $K tag '+(v.tag!=null?v.tag:'\u2014')+' \u00b7 raw feed '+(v.feed!=null?v.feed:'\u2014')+' \u00b7 tape max %King '+(v.tapemax!=null?v.tapemax:'\u2014')+
     (r.recurring?(' \u00b7 RECURRING ('+r.streak+' consecutive)'):'')+
     '. Closed market or parse issue; the structure shown below is LAST-KNOWN and may be stale. Diagnose: __gptsDebug.syncReport()').replace(/"/g,'');
   return '<div title="'+tip+'" style="border:1px solid '+PAL.shortAccent+';background:rgba(240,97,109,.08);border-radius:6px;padding:1px 8px;margin:2px 0 4px;font-size:9.5px;font-weight:800;color:'+PAL.shortAccent+';letter-spacing:.3px;line-height:1.3">\u26A0 Out of sync</div>';
@@ -2265,11 +2388,16 @@ function recordNodeSnapshot(sym){
       // (v10.39) King dollar magnitude this bar (tape $K, in $K units). null when
       // the tape is unreadable. Enables K$-momentum backtests + real-vs-hedge.
       kd:(function(){ try{ var tK=tapeMap(sym); return (tK&&typeof tK.kingKd==='number')?tK.kingKd:null; }catch(eKD){ return null; } })(),
+      // (v11.1.3.1) the book King — the $K cell wherever it sits in the expirations view {k,expiry,kd,neg}
+      bk:(function(){ try{ var tB=tapeMap(sym); var b=tB&&tB.bookKing; return b?{k:b.k,exp:b.expiry,kd:b.kd,neg:!!b.neg}:null; }catch(eBK){ return null; } })(),
       // (v10.42) what the Dashboard PROJECTED at this bar — scored nightly (🎯).
       proj:projSnapshotRecord(sym),
       // (v10.44) CROSS-MARKET headers scraped from the Skylit sidebar (SPY/QQQ/SPXW/VIX:
       // price, %chg, King distance %, side). Confluence was UNTESTABLE before (0 QQQ bars).
       xm:(function(){ try{ return readTrinityHeaders(); }catch(eX){ return null; } })(),
+      // (v11.2) the Trinity LADDERS read by their $K anchor: per pane King, King $K and the 8 strongest strikes (signed %King)
+      tri:(function(){ try{ var a=laddersByDollar()||{}; var o={}; Object.keys(a).forEach(function(k){ if(k==='main') return; var L=a[k];
+        o[k]={king:L.king, kd:L.kingKd, n:L.count, top:Object.keys(L.pct).sort(function(x,y){ return Math.abs(L.pct[y])-Math.abs(L.pct[x]); }).slice(0,8).map(function(k2){ return [parseFloat(k2),L.pct[k2]]; })}; }); return Object.keys(o).length?o:null; }catch(eTr){ return null; } })(),
       // (v10.44) per-node EPISODE states this bar (magnet frame): zone/toward-share/state.
       ep:(function(){ try{ var csE=closedCandles(sym)||[]; var pxE=S.price; var arr=[];
             (fs.above||[]).concat(fs.below||[]).forEach(function(r){ var e=nodeEpisode(csE,r.k,pxE,Date.now()); if(e.zone!=='OUT') arr.push({k:r.k,z:e.zone,tw:e.tw,st:e.state,tg:e.tagged,x:e.crosses}); });
@@ -10362,6 +10490,50 @@ function registerCoreFeatures(){
     rule:{ id:'nextStop.60', tier:'hand', condition:'same pick, 60-minute window',
            mechanism:'Separates a wrong level from a slow one.' } });
 
+  // ---- (v11.3) PB ENTRY, RECORDED at two horizons. Outcome is SEQUENCED on the bar path: (1) did price
+  // TOUCH the level (within DEFLECT_ZONE) inside the window; (2) after the first touch, did it move DIR_PTS in
+  // the deflection direction BEFORE closing through the level by more than DEFLECT_ZONE. hit = touched && held.
+  // touched-but-broke and never-touched are kept apart (approach / touched fields) so the nightly can tell a
+  // wrong level from a slow one from a level that failed.
+  function _pbEntryRecord(sym, ctx){
+    var pe=null; try{ pe=pbEntryPick(sym); }catch(e){ pe=null; }
+    var px=(STATE[sym]||{}).price;
+    if(!pe || !pe.ok) return { level:null, rule:null, dir:0, dirNum:0, grade:null, state:null, pol:null, dist:null, px:(typeof px==='number')?px:null, voting:false };
+    return { level:pe.level, zoneLo:pe.zoneLo, zoneHi:pe.zoneHi, rule:pe.rule, dir:pe.dir, dirNum:pe.dir, grade:pe.grade, state:pe.state, pol:pe.pol,
+             dist:pe.dist, px:pe.px, nextStop:pe.nextStop, latched:pe.latched||'', k:pe.level, tgt:pe.nextStop, inval:(pe.dir<0)?(pe.level+DEFLECT_ZONE):(pe.level-DEFLECT_ZONE), voting:false };
+  }
+  function _pbEntryOutcome(rec, fwd){
+    if(!rec || rec.level==null || !fwd || typeof rec.px!=='number') return { hit:null, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
+    var zone=(typeof DEFLECT_ZONE==='number')?DEFLECT_ZONE:0.5, pts=(typeof DIR_PTS==='number')?DIR_PTS:0.5;
+    var L=rec.level, dir=rec.dir||0, path=fwd.path||[];
+    var touched=false, touchBar=-1, held=false, broke=false, ext=0;
+    for(var i=0;i<path.length;i++){ var b=path[i]; if(b.h==null||b.l==null) continue;
+      var closedThrough=(dir<0)?(b.c!=null && b.c>L+zone):(b.c!=null && b.c<L-zone);
+      if(!touched){ if(b.h>=L-zone && b.l<=L+zone){ touched=true; touchBar=i; if(closedThrough){ broke=true; break; } } continue; }
+      // AFTER the touch bar (the touch bar's own range is the approach, not the deflection): break = a CLOSE through by
+      // more than the zone; deflection = DIR_PTS away from the level in the deflection direction
+      if(closedThrough){ broke=true; break; }
+      var away=(dir<0)?(L-b.l):(b.h-L); if(away>ext) ext=away;
+      if(ext>=pts){ held=true; break; }
+    }
+    var need=L-rec.px; var got=(need>=0)?fwd.mfe:fwd.mae;
+    var approach=(Math.abs(need)>0.001)?Math.max(0,Math.min(1,got/need)):1;
+    return { hit:(touched?(held?1:0):null), touched:touched, broke:broke, deflectedPts:+ext.toFixed(2), touchBar:touchBar,
+             approach:+approach.toFixed(2), mfe:fwd.mfe, mae:fwd.mae, rule:rec.rule, grade:rec.grade, state:rec.state, pol:rec.pol, dist:rec.dist };
+  }
+  registerFeature({ key:'pbEntry', label:'PB Entry · touched and deflected within 30m', phase:'dashboard', fwd:FEAT_FWD,
+    record:_pbEntryRecord, outcome:_pbEntryOutcome,
+    questions:[ { id:'pbentry_30',      when:[{f:'grade',v:'B'}],     outcome:'pbHold', note:'did price pull back to the PB Entry level and deflect DIR_PTS before closing through — by rule (leg.pb / leg.pbZone / leg.lastPB / map.pb / wall.opp) and by grade?' },
+                { id:'pbentry_acm',     when:[{f:'state',v:'acm'}],   outcome:'pbHold', note:'does an ACCUMULATING pullback node deflect more reliably than a Dec/hold one? (the acm/dec chip earns or loses its job here)' },
+                { id:'pbentry_pol',     when:[{f:'pol',v:'-'}],       outcome:'pbHold', note:'−γ pullback nodes: wickier, overshoot-and-reverse — does the touch-then-deflect rule need a wider zone for them?' },
+                { id:'pbentry_touched', when:[{f:'rule',v:'leg.pbZone'}], outcome:'pbTouched', note:'does a PREDICTED zone (no node yet) get touched at all within the window?' } ],
+    rule:{ id:'pbEntry', tier:'hand', condition:'rule-based pick: leg PB (not ✗) → predicted PB zone → last PB → Map pullback candidate → opposite wall; B = leg + Acm + SMA agree + within reach',
+           mechanism:'The level to watch for the deflection that sends price to the Next Stop. Never touched = wrong or slow; touched-and-broke = the node failed; touched-and-deflected = the call. Graded nightly by rule/state/polarity; A by promotion only.' } });
+  registerFeature({ key:'pbEntry.60', label:'PB Entry · touched and deflected within 60m', phase:'dashboard', fwd:FEAT_FWD*2,
+    record:_pbEntryRecord, outcome:_pbEntryOutcome,
+    questions:[ { id:'pbentry_60', when:[{f:'grade',v:'B'}], outcome:'pbHold', note:'the same call with 60 minutes: how much of a 30-minute miss is just time?' } ],
+    rule:{ id:'pbEntry.60', tier:'hand', condition:'same pick, 60-minute window', mechanism:'Separates a wrong level from a slow one.' } });
+
   // ---- (v11.0) THE LEDGER, RECORDED. The one question the ledger exists to settle as a
   // feature: at the moment price touches a node, does an ACCUMULATING node deflect it more
   // reliably than a DISSIPATING one? Recorded on the in-play node each bar with its ledger
@@ -10709,9 +10881,11 @@ function resolveFeatureOutcomes(sym){
         if(first==null){ if(b.h!=null && (b.h-px0)>=DIR_PTS) first='up'; else if(b.l!=null && (b.l-px0)<=-DIR_PTS) first='dn'; }
         if(kingK!=null && b.h!=null && b.l!=null && b.l<=kingK+0.25 && b.h>=kingK-0.25) kingReached=true;
       }
+      // (v11.3) the bar PATH itself, so an outcome can SEQUENCE events (touch first, then deflect)
+      var path=[]; try{ for(var pi=startIdx;pi<endIdx;pi++){ var pb=cs[pi]; if(pb) path.push({h:pb.h,l:pb.l,c:pb.c,o:pb.o}); } }catch(ePth){}
       var fwd={ px0:px0, pxEnd:pxEnd, mfe:+mfe.toFixed(2), mae:+mae.toFixed(2),
                 net:+(pxEnd-px0).toFixed(2), n:endIdx-startIdx, first:first, kingReached:kingReached,
-                partial:partial,
+                partial:partial, path:path,
                 frame:frameOutcome(r.rec, cs, startIdx, endIdx) };
       var res=null;
       try{ res=f.outcome(r.rec, fwd); }catch(eO){ res=null; }
@@ -11468,6 +11642,116 @@ function nextStopHtml(sym){
 }
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.nextStop=function(s){ try{ return nextStopPick(s||'SPY'); }catch(e){ return String(e); } };
+// ============================================================================
+// (v11.3, user-directed 2026-08-19) PB ENTRY — "under Next Stop I want a PB Entry section: where to look for a
+// pullback entry… it gives me the trade location for a potential reversal (deflection)". The level price is expected
+// to PULL BACK TO and DEFLECT FROM, toward the Next Stop. Same contract as Next Stop: rule-based pick, hand-set grade
+// (A by promotion only), recorded at two horizons, scored hard, never flattered. Descriptive — it names a level and the
+// expected deflection direction; it never sizes, never stops, never says buy/sell.
+//   Picker (until data says otherwise): ① the leg's DETECTED pullback node (✓ latched = deflection under way; ✗ = broken,
+//   skip) → ② the leg's predicted PB ZONE (RLY phase, empty zone between price and the last PB) → ③ the leg's LAST PB
+//   (rolled) → ④ no leg: the accumulating node on the OPPOSITE side of price from the Next Stop, nearest price (the Map's
+//   pullback candidate) → ⑤ the nearer wall/gate on that side. Grade B = leg active AND node Acm AND SMA-50 agrees AND
+//   within PB_REACH; C otherwise; chop/mid-range caps to C.
+// ============================================================================
+var PBENTRY_RULES={
+  'leg.pb':     'the pullback node the leg engine detected (price is expected to pull back to it and deflect)',
+  'leg.pbZone': 'the zone where the leg engine predicts the pullback node will form (RLY phase, empty zone) — no node yet',
+  'leg.lastPB': 'the last pullback node of the leg (rolled); a retest is the pullback',
+  'map.pb':     'the accumulating node on the far side of price from the Next Stop — the structure’s pullback candidate',
+  'wall.opp':   'the nearer wall/gate on the far side of price from the Next Stop (no leg, no lean)'
+};
+function pbEntryPick(sym){
+  sym=sym||'SPY';
+  var out={ ok:false, level:null, zoneLo:null, zoneHi:null, rule:null, why:'', dir:0, state:null, pol:null, grade:'C', dist:null, px:null, nextStop:null, latched:'', horizon:'30–60m' };
+  try{
+    var S=STATE[sym]||{}; var px=(typeof S.price==='number')?S.price:null; if(px==null) return out; out.px=px;
+    var leg=null; try{ leg=legEngine(sym); }catch(e0){}
+    var d=null; try{ d=directionGrade(sym); }catch(e1){}
+    var m=null; try{ m=nodeMapModel(sym); }catch(e2){}
+    var f=null; try{ f=nodeFlow(sym); }catch(e3){}
+    var ns=null; try{ ns=nextStopPick(sym); }catch(e4){}
+    out.nextStop=(ns&&ns.ok)?ns.level:null;
+    var trendOk=!!(d && (d.trendState==='up'||d.trendState==='dn'));
+    var reach=(typeof PB_REACH==='number')?PB_REACH:5;
+    function stateOf(k){ try{ var n=(f&&f.nodes||[]).filter(function(x){ return Math.abs(x.k-k)<0.001; })[0]; return n?n.state:null; }catch(e){ return null; } }
+    function polOf(k){ try{ var L=((m&&m.levels)||[]).filter(function(x){ return Math.abs(x.k-k)<0.001; })[0]; return L?((L.pos===false)?'-':'+'):null; }catch(e){ return null; } }
+    function set(level, lo, hi, rule, dirNum, base){
+      out.ok=true; out.level=+level.toFixed(2); out.zoneLo=(lo!=null)?+lo.toFixed(2):null; out.zoneHi=(hi!=null)?+hi.toFixed(2):null;
+      out.rule=rule; out.dir=dirNum; out.why=PBENTRY_RULES[rule]||rule; out.dist=+Math.abs(level-px).toFixed(2);
+      out.state=stateOf(level); out.pol=polOf(level);
+      var g='C';
+      if(base==='leg' && trendOk && out.state==='acm' && out.dist<=reach) g='B';
+      if(d && d.capped && /chop/.test(d.capped)) g='C';
+      if(typeof killActive==='function' && killActive('kill.midrange') && d && d.inputs && d.inputs.rangePos && d.inputs.rangePos.zone==='mid') g='C';
+      out.grade=g;
+    }
+    // the deflection direction = the leg direction (dn leg: price pulls UP to the PB and deflects DOWN)
+    if(leg && leg.dir!=='none'){
+      var dn=(leg.dir==='dn'); var dirNum=dn?-1:1;
+      var brokenK=null;
+      if(leg.pbDetected && leg.pbDetected.k!=null){
+        var st=''; try{ st=deflTriggerState(sym, leg.pbDetected.k, leg.legId)||''; }catch(e5){}
+        out.latched=st;
+        if(st.indexOf('✗')!==0){ set(leg.pbDetected.k, null, null, 'leg.pb', dirNum, 'leg'); return out; }
+        brokenK=leg.pbDetected.k;                 // ✗ = price closed through it; it is not the pullback any more
+      }
+      if(leg.predictedPB && leg.pbZone && leg.pbZone.lo!=null && leg.pbZone.hi!=null){
+        var mid=dn?leg.pbZone.hi:leg.pbZone.lo;          // the far edge of the empty zone is where the node would sit
+        set(mid, leg.pbZone.lo, leg.pbZone.hi, 'leg.pbZone', dirNum, 'leg'); return out;
+      }
+      if(leg.lastPB && leg.lastPB.k!=null && (brokenK==null || Math.abs(leg.lastPB.k-brokenK)>0.001) && ((dn && leg.lastPB.k>px) || (!dn && leg.lastPB.k<px))){
+        set(leg.lastPB.k, null, null, 'leg.lastPB', dirNum, 'leg'); return out;
+      }
+    }
+    // no leg: the side OPPOSITE the Next Stop is where a pullback would go
+    var want=0; if(ns && ns.ok && ns.dir) want=-ns.dir; else if(f && f.ok && (f.lean==='dn'||f.lean==='up')) want=(f.lean==='dn')?1:-1;
+    if(want){
+      var cand=(f&&f.nodes||[]).filter(function(n){ return n.state==='acm' && n.pct>=PB_MIN_PCT && (want<0?(n.k<px):(n.k>px)) && Math.abs(n.k-px)<=reach; })
+                                 .sort(function(x,y){ return Math.abs(x.k-px)-Math.abs(y.k-px); })[0];
+      if(cand){ set(cand.k, null, null, 'map.pb', -want, 'map'); return out; }
+      var lv=(m&&m.levels)||[];
+      var walls=lv.filter(function(L){ return L && (L.isKing||L.isFlr||L.isCeil||L.isGatekeeper||L.isStrongMag) && (want<0?(L.k<px):(L.k>px)) && Math.abs(L.k-px)<=reach; })
+                  .sort(function(x,y){ return Math.abs(x.k-px)-Math.abs(y.k-px); });
+      if(walls[0]){ set(walls[0].k, null, null, 'wall.opp', -want, 'wall'); return out; }
+    }
+  }catch(e){}
+  return out;
+}
+function pbEntryHtml(sym){
+  try{
+    var pe=pbEntryPick(sym); if(!pe.ok || pe.level==null) return '';
+    var st=null; try{ st=featStatsCached(sym); }catch(e){}
+    var b30=(st&&st.byKey&&st.byKey['pbEntry'])||{n:0,hit:0}, b60=(st&&st.byKey&&st.byKey['pbEntry.60'])||{n:0,hit:0};
+    var r30=b30.n?Math.round(100*b30.hit/b30.n):null, r60=b60.n?Math.round(100*b60.hit/b60.n):null;
+    var e30=effN(b30.n), e60=effN(b60.n);
+    var gcol=pe.grade==='A'?PAL.longAccent:(pe.grade==='B'?PAL.blue:PAL.amber);
+    var gbg=pe.grade==='A'?'rgba(46,194,126,.15)':(pe.grade==='B'?'rgba(74,144,217,.15)':'rgba(242,180,90,.15)');
+    var above=(pe.level>pe.px);
+    var lvlCol=above?PAL.longAccent:PAL.shortAccent;
+    var ptsTxt=(above?'+':'−')+fmtSpan(pe.dist)+' pts';
+    var stTxt=pe.state==='acm'?'<span style="color:'+PAL.longAccent+'">Acm</span>':(pe.state==='dec'?'<span style="color:'+PAL.shortAccent+'">Dec</span>':(pe.state==='gone'?'<span style="color:'+PAL.sub+'">gone</span>':''));
+    var deflTxt=(pe.dir<0?'defl ↓':'defl ↑')+(pe.nextStop!=null?(' → '+fmtLvl(pe.nextStop)):'');
+    var zoneTxt=(pe.zoneLo!=null&&pe.zoneHi!=null&&pe.rule==='leg.pbZone')?(' <span style="color:'+PAL.sub+';font-weight:600;font-size:9px">(zone '+fmtLvl(pe.zoneLo)+'–'+fmtLvl(pe.zoneHi)+', forming)</span>'):'';
+    var latch=pe.latched?(' <span style="font-size:9.5px">'+pe.latched+'</span>'):'';
+    var tip=('PB Entry — where to look for the pullback. '+pe.why+' — '+fmtSpan(pe.dist)+' '+(above?'above':'below')+' price; the expected move off it is '+(pe.dir<0?'DOWN':'UP')+(pe.nextStop!=null?(' toward the Next Stop '+fmtLvl(pe.nextStop)):'')+'. Node state '+(pe.state||'—')+(pe.pol?(', polarity '+pe.pol+'γ'):'')+'. '+
+      'Confidence '+pe.grade+' (B = leg active, node accumulating, SMA-50 agrees, within reach; C = structure-only / chop / mid-range; A only after promotion). '+
+      'Measured here: touched-and-deflected within 30m '+(r30!=null&&e30>=RULE_UNLOCK_N?(r30+'% (eff n '+e30+')'):('— (eff n '+e30+', need '+RULE_UNLOCK_N+')'))+
+      ' · within 60m '+(r60!=null&&e60>=RULE_UNLOCK_N?(r60+'% (eff n '+e60+')'):('— (eff n '+e60+')'))+
+      '. Scored as: price touched the level (contact zone) and then moved '+DIR_PTS+' in the deflection direction before closing through it. Rule-based until measured; graded nightly by rule, state and polarity. Descriptive — a level to watch, never an instruction.').replace(/"/g,'');
+    return '<div title="'+tip+'" style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:'+PAL.ink+';padding:1px 7px;margin:0 0 1px;white-space:nowrap">'+
+      '<span style="color:'+PAL.sub+'">PB Entry:</span>'+
+      '<span style="font-size:12px;color:'+lvlCol+'">'+(above?'↑ ':'↓ ')+fmtLvl(pe.level)+'</span>'+
+      '<span style="color:'+lvlCol+';font-weight:700;font-size:9.5px">'+ptsTxt+'</span>'+
+      (stTxt?('<span style="font-weight:700;font-size:9.5px">· '+stTxt+'</span>'):'')+
+      '<span style="color:'+PAL.sub+';font-weight:600;font-size:9px">· '+deflTxt+'</span>'+zoneTxt+latch+
+      (r30!=null&&e30>=RULE_UNLOCK_N?('<span style="color:'+PAL.sub+';font-weight:600;font-size:9px">· '+r30+'% @30m</span>'):'')+
+      '<span style="margin-left:auto;color:'+gcol+';background:'+gbg+';padding:0 5px;border-radius:3px;font-size:10px">'+pe.grade+'</span>'+
+    '</div>';
+  }catch(e){ return ''; }
+}
+window.__gptsDebug.pbEntry=function(s){ try{ return pbEntryPick(s||'SPY'); }catch(e){ return String(e); } };
+
 var LAST_READ={};   // (v11.0 G8) the last rendered READ per sym — recorded on the dir feature
 var READ_SYM='SPY';  // (v11.0.1) the sym read3Beat is speaking for (it has no sym parameter)
 function readBlock44(sym){
@@ -12984,6 +13268,11 @@ function analysisBlock(){
       'Did price reach the Next Stop level (within the contact zone) inside 30 minutes? By rule and grade in the ⊕ scorecard.')+
     tabTile('Next Stop 60m', _fpct(((fs&&fs.byKey&&fs.byKey['nextStop.60'])||{}).hit,((fs&&fs.byKey&&fs.byKey['nextStop.60'])||{}).n), ((fs&&fs.byKey&&fs.byKey['nextStop.60'])||{}).n||0,
       'The same call with 60 minutes: how much of a 30-minute miss is just time?')+
+    // (v11.3) PB Entry — touched AND deflected, both horizons (never-touched records are null, not misses)
+    tabTile('PB Entry 30m', _fpct(((fs&&fs.byKey&&fs.byKey['pbEntry'])||{}).hit,((fs&&fs.byKey&&fs.byKey['pbEntry'])||{}).n), ((fs&&fs.byKey&&fs.byKey['pbEntry'])||{}).n||0,
+      'Of the bars where price reached the PB Entry level within 30 minutes, how often did it deflect '+DIR_PTS+' before closing through? (Never-touched bars are not counted either way — see the ⊕ scorecard for touch rate.)')+
+    tabTile('PB Entry 60m', _fpct(((fs&&fs.byKey&&fs.byKey['pbEntry.60'])||{}).hit,((fs&&fs.byKey&&fs.byKey['pbEntry.60'])||{}).n), ((fs&&fs.byKey&&fs.byKey['pbEntry.60'])||{}).n||0,
+      'The same call with 60 minutes.')+
   '</div>'+
   '<div style="font-size:8px;color:'+(mono.ok===false?PAL.shortAccent:PAL.sub)+';margin-top:4px;white-space:normal">'+
     (mono.ok===false ? '⚠ node grades are NOT monotone (A '+(mono.a==null?'–':mono.a+'%')+' · B '+(mono.b==null?'–':mono.b+'%')+' · C '+(mono.c==null?'–':mono.c+'%')+') — the fusion is wrong, not the tape.'
@@ -13616,6 +13905,7 @@ function render(){
   try{ html+=briefBlockHtml(__asym); }catch(eBr){}    // (v10.49 J) pre-open brief (collapsible)
   if(DRIFT_LIVE){ try{ html+=driftLineHtml(__asym); }catch(eD49){} }   // (v10.57) shadow mode: off the face until proven
   try{ html+=nextStopHtml(__asym); }catch(eNS){}   // (v11.1) NEXT STOP — the one forward call, above the read
+  try{ html+=pbEntryHtml(__asym); }catch(ePE){}    // (v11.3) PB ENTRY — where to look for the pullback / deflection, under Next Stop
   try{ html+=readBlock44(__asym); }catch(eR){}
   // (v10.37) standalone gatekeeperBlock() REMOVED - gatekeeper strike + distance now in King badge.
   // (v10.27) Standalone BO / SPY Signals section REMOVED. The breakout-pullback

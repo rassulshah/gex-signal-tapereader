@@ -289,6 +289,16 @@ Report, with n · effN · vote-split · regime split · MFE/MAE, and NEVER witho
   wrongFirst rate, regime split; say which rule is earning its place and which is not; PROPOSE a re-ordering or a
   demotion through the normal proposal path (local bar decides). This is the seed of the prediction engine — grade
   it hard, never flatter it, never from one session.
+- PB ENTRY (v11.3, USER PRIORITY — "under Next Stop I want a PB Entry section… the trade location for a potential
+  reversal (deflection)"). The level price is expected to pull back TO and deflect FROM, toward the Next Stop: `pbEntry`
+  (30m) and `pbEntry.60` (60m), each record {level, zoneLo/Hi, rule, dir (deflection direction), grade, state acm|dec|hold,
+  pol, dist, px, nextStop, latched}. Rules in picker order: leg.pb → leg.pbZone → leg.lastPB → map.pb → wall.opp; grade B =
+  leg + Acm node + SMA agrees + within reach, C otherwise, A by promotion only. Outcome is SEQUENCED on the bar path:
+  `touched` (within DEFLECT_ZONE inside the window), then `hit` = moved DIR_PTS in the deflection direction AFTER the touch
+  bar before a CLOSE through the level by > DEFLECT_ZONE; `broke` = closed through first; never-touched → hit null (NOT a
+  miss), with `approach`. Report, with n and effN: touch-rate by rule; hold-rate (of touched) by rule / grade / state /
+  polarity; at 30m and 60m; regime split. Say which rule earns its place; propose re-ordering or a wider zone for −γ nodes
+  through the normal proposal path. This and Next Stop are the two forward calls the face makes — grade both hard.
 - `leg.handoff` (v10.56, USER PRIORITY) — when the engine flagged the old ceiling DISSIPATING while a lower node
   built (the handoff), did the `to` node become the PB within fwd, and did price deflect off it toward the magnet?
   Report the LEAD TIME (leadBars before pbDetected) and the false-handoff rate (flagged, never resolved). Mirror for floors.

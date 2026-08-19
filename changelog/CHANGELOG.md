@@ -1,3 +1,50 @@
+## v11.3 — 2026-08-19 (live, 12:30 CT) — PB ENTRY under Next Stop (user-directed): where to look for the pullback / deflection — enrolled from day one
+
+User: "under Next Stop I want a PB Entry section… it tells me where to look for a pullback entry… trade location for a potential
+reversal (deflection) — track this over time for improvement analysis and testing." Face: one line under Next Stop —
+`PB Entry: ↑ 7716.25 · +2.9 pts · Acm · defl ↓ → 7710 · B` (level green above price / red below like Next Stop; node state chip;
+deflection arrow + the Next Stop it points to; "(zone lo–hi, forming)" when only a predicted zone exists; the ✓/✗ latch when one
+is on; grade right-justified). Hover = why this level, how it is scored, measured rate with n only once n≥20, descriptive.
+Picker: ① the leg's detected PB (✗-latched = broken → skipped, and not re-offered as the last PB) → ② the predicted PB zone (far
+edge, zone carried) → ③ the leg's last PB on the pullback side → ④ no leg: the accumulating node on the far side of price from
+the Next Stop within PB_REACH → ⑤ the nearer wall/gate on that side; nothing qualifying = no line. Grade B = leg + Acm + SMA
+agrees + within reach; chop / mid-range / Dec node → C; A by promotion only. ENROLLED: FEATURES `pbEntry` (30m) + `pbEntry.60`
+(60m); outcome SEQUENCED on the new `fwd.path` (touch first, then DIR_PTS away before a close through by > DEFLECT_ZONE;
+never-touched = null, not a miss); questions pbentry_30/60, pbentry_acm, pbentry_pol, pbentry_touched; rules.json 58 ids;
+Analysis ① tiles "PB Entry 30m/60m"; LLM brief paragraph. `__gptsDebug.pbEntry()`. Tests: test_pb_entry (21); suite green
+except the 4 known-stale. Label "PB Entry" is the user's word; the hover and the record speak of the deflection only — no
+size/stop/side anywhere.
+
+## v11.2 — 2026-08-19 (live, 11:30 CT) — THE $K-ANCHORED LADDER READER: find the King by its dollar first, then read the tape · Trinity SPY/QQQ/SPXW/VIX read for the first time
+
+**The user's principle (2026-08-19):** "locate the King first by its dollar amount; with that you can read the tape no matter what
+the UI does, because the King dollar is the one consistent thing." Built exactly that way. `readLaddersByDollar()` finds every
+innermost element carrying a `$K` figure, walks up to its ROW (first ancestor with ≥2 children one of which is a bare strike), up
+to the CONTAINER holding ≥15 such rows, learns the column shape FROM THAT ROW (which cell is the strike, which holds the $K), and
+reads every sibling row the same way. No dependence on `<table>`, headers, class names or colour — those are hints. Cell grammar
+learned from the live page: "+8%$92,931K" (King: velocity + dollars), "-1%65%" (velocity, then %King), "59%"/"−3%" (lone %King),
+"24%-7%" (main table: value, then velocity); the %King is the token that is NOT a signed velocity chip; polarity falls back to the
+cell colour (Skylit paints −γ purple/blue) when the value carries no sign. Symbol = nearest ancestor whose text starts "SPY$"/"QQQ$"/
+"SPXW$"/"VIX$"; a ladder inside a `<table>` is the main table ('main', shows whichever symbol the chart is on).
+**Result on the live page 11:20 CT:** Trinity SPY King 769 ($89,164K) · QQQ King 717 (−$247,657K, a NEGATIVE King, read −100) ·
+SPXW King 7725 ($72,781K) · VIX 15.5 · main table King 769 (yellow) with bookKing 775/08-21 −$320M — all from their $K cells.
+`readTapeFromDOM(sym)` now tries the Trinity pane for that symbol first (true %King, King by $K), then the main table, then the
+legacy finders; `tapeMap('QQQ')` works for the first time (deferred item 6 pulled forward by the user's request). Recorded per bar:
+`tri:{SYM:{king,kd,n,top8}}` for every pane. The out-of-sync banner hover now lists the ladders found by $K with their Kings.
+`__gptsDebug.ladders()`. Tests: test_ladder_dollar (14) — Trinity div rows, main table, `<ul>/<li>` with the strike in the 2nd
+cell, hover $K → flagged. Version pins → 11.2. Suite green except the 4 known-stale. LOCKDOWN: this is Layer-0 reading, no
+face change; the SPXW/QQQ ladders are DATA from today (enrollment of a cross-index feature is a separate, later decision).
+
+## v11.1.3.1 — 2026-08-19 (live, 10:45 CT) — the $K cell is back in the data: BOOK KING captured wherever it sits
+
+User: "adapt to the UI changes by identifying the King with its dollar value." Probing the live ladder for 15 s showed the $K
+cell IS permanent — it marks the largest ABSOLUTE cell of the whole displayed book and in the EXPIRATIONS view sits in a
+LATER expiry column (775 on 2026-08-21, −$341,276K, the dark-purple cell) while the yellow cell is the nearest-expiry King
+(774 = the feed's book = the Trinity badge). The reader now captures `bookKing {k, col, expiry, kd, neg}` wherever the $K
+cell is, plus the expiry headers; in column 1 it is the legacy King tag exactly as before. Recorded per bar as `bk` next to
+`kd` (the King-dollar trend — "the strongest leading signal on the board" in v10.39 — had gone dark when the layout changed;
+it is data again, under its true name). Test 6a–6d in test_tape_v1113 (17). Version pins → 11.1.3.1.
+
 ## v11.1.3 — 2026-08-19 (live, 10:20 CT) — HOTFIX: tape sync red all morning — three faults in the King reconciliation
 
 **What the user saw:** "⚠ Out of sync" from the open with EXPIRATIONS on (the view the user trades from — turning it off hides the

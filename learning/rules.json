@@ -1,6 +1,6 @@
 {
   "schema": "gex-rules/v2",
-  "asOf": "2026-08-18",
+  "asOf": "2026-08-19",
   "version": "10.53",
   "note": "THE MENTAL MODEL IN DATA FORM, MACHINE-APPLICABLE. weights.dir are the LIVE direction-scoring constants the panel reads at boot. The WEEKLY learning run writes rules/proposals/challengers/killList and NEVER touches weights; only the panel applyProposals() moves a weight, and only after RE-CHECKING the promotion bar in code (n>=20 AND walkForward.held over >=3 NEW sessions AND no regime flip). clearsBar asserted by the reviewer is advisory. The NIGHTLY run writes learning/log/YYYY-MM-DD.json only. Sparse data never nudges a weight: it is reported as insufficient and the hand-set value stands.",
   "unlockN": 20,
@@ -1735,6 +1735,68 @@
     },
     "nextStop.60": {
       "id": "nextStop.60",
+      "tier": "hand",
+      "condition": "same pick, 60-minute window",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "Separates a wrong level from a slow one.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "pbEntry": {
+      "id": "pbEntry",
+      "tier": "hand",
+      "condition": "rule-based pick: leg PB (not ✗) → predicted PB zone → last PB → Map pullback candidate → opposite wall; B = leg + Acm + SMA agree + within reach",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "The level to watch for the deflection that sends price to the Next Stop. Never touched = wrong or slow; touched-and-broke = the node failed; touched-and-deflected = the call. Graded nightly by rule/state/polarity; A by promotion only.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "pbEntry.60": {
+      "id": "pbEntry.60",
       "tier": "hand",
       "condition": "same pick, 60-minute window",
       "rate": null,

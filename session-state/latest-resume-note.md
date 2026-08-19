@@ -27,10 +27,10 @@ artefact per exam domain built on this repo outside the locked panel; next step 
 partner-only today; the user will go through a partner-network organisation (assumption). The nightly/MCP/Claude-Code artefacts
 from that track are allowed during lockdown because they do not touch the panel.
 
-**v11.1.3 HOTFIX SHIPPED 2026-08-19 ~10:20 CT (live):** tape sync red all morning with EXPIRATIONS on → three Layer-0 faults fixed
+**v11.3 SHIPPED 2026-08-19 12:30 CT — PB ENTRY line under Next Stop (user-directed, enrolled: pbEntry/pbEntry.60, sequenced touch-then-deflect outcome, rules 58). v11.2 SHIPPED 11:30 CT — $K-ANCHORED LADDER READER (user's principle) + Trinity SPY/QQQ/SPXW/VIX ladders read and recorded (`tri`); see CHANGELOG. v11.1.3 + 11.1.3.1 HOTFIXES earlier the same morning (live, 10:20 / 10:45 CT; 11.1.3.1 adds `bookKing` = the $K cell wherever it sits, recorded as snap `bk`):** tape sync red all morning with EXPIRATIONS on → three Layer-0 faults fixed
 (feed vote used levels[0]; ladder has no permanent $K cell + share-of-book scale; derived lanes polluted tapemax) — see CHANGELOG.
-Trinity QQQ/SPXW tape panes are NOT <table> elements — cross-index tape reading (deferred item 6) still needs its own spec; the
-user wants it ("you are supposed to read the trinity tape spy and qqq and spxw") — propose pulling it forward at the next design slot.
+Trinity QQQ/SPXW/VIX panes are now READ (v11.2, by $K) and recorded per bar as `tri`; what remains for item 6 is the cross-index
+AGREEMENT read (READ sentence, Trinity 3/3 · 2/3 · divergent) — a feature, needs spec + enrollment after lockdown or by user call.
 
 **PARKED (user-approved, ONE AT A TIME; write a one-page spec first) — now v11.1.4 candidate:**
 1. **Review dot** (`pipeStages`, footer): turn GREEN when the NIGHTLY log for the last session is loaded (`P.nightly==='yes'`),
