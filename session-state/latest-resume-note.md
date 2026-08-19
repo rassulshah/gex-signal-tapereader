@@ -11,6 +11,24 @@ repo → panel. Claude-app scheduled tasks: "GEX nightly review (contract 1)" we
 decoded by one PowerShell call — the ~20k-echo-line design failed on 08-18) + Tampermonkey click. v11.1.2 is INSTALLED and
 live in Tampermonkey (user confirmed).
 
+**PARKED FOR 08-19 (user-approved, do AFTER the live verification; ONE AT A TIME; write a one-page spec first) — v11.1.3 candidate:**
+1. **Review dot** (`pipeStages`, footer): turn GREEN when the NIGHTLY log for the last session is loaded (`P.nightly==='yes'`),
+   not only the weekly `review/<day>.json`; hover reports nightly and weekly separately. Today it sits amber every weekday.
+2. **Weekly file naming**: the Saturday run must write `review_<FRIDAY-date>.json` (last trading day), because the panel looks the
+   review up by trading-day date (`lastTradingDay(0/1)`). Change the "GEX weekly review (contract 2)" scheduled-task prompt
+   (Claude app, trig_01T8kd4kS3nBR7TuQMSSXNX6) — no code. Must be done BEFORE Saturday 08-22.
+3. **Ledger fix, widened (user's key scenarios, 2026-08-18 night)**: (a) `infl` counters are NOT per node (every SPY node
+   acmN=0 / decN=125, every SPXW lane decN=250) — fix so toward-while-acm / away-while-dec are computed per node; (b) add to
+   every `ledger` touch record `age` (minutes since the node's `first`), `pol` (+/− at the touch), `rolled` (the node had just
+   become the ceiling/floor via a map transfer); (c) four scenario questions in the queue + rules.json, each split by polarity:
+   fresh-node-deflects (a node that only just crossed the display threshold stops the pullback), acm-attracts (an existing
+   node accumulating becomes more magnetic), dec-releases, rolled-holds (a node that rolled into place acts as S/R). Also
+   decide whether a touch on a ledger-'gone' node should count at all (11 such deflections on 08-18). Forward-only data:
+   these fields cannot be back-filled, so this ships before the 20 sessions accumulate. No face change.
+User's words: "Existing nodes rolling, increasing in accumulation, decreasing. New nodes coming into the picture by becoming
+relevant enough to display. Their polarity may play a part too. Bottom line: those are the key scenarios."
+Also open: `leg.pbPredict` outcome is trivially true (pbDetect.k present most bars); SIDE hit-rule question.
+
 **Verify at the 08-19 open / close:** footer v11.1.2; `days[today].feat.SPY` grows all session; resolved records ~30 min in;
 at 15:45 the nightly fires on its own → 16:05 pull → review dot green without touching anything. If the pull log
 (`tools/review-pull.log`) says "inbox not found", Google Drive for desktop is not running.
