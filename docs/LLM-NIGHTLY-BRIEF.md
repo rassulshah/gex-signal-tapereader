@@ -299,6 +299,11 @@ Report, with n · effN · vote-split · regime split · MFE/MAE, and NEVER witho
   miss), with `approach`. Report, with n and effN: touch-rate by rule; hold-rate (of touched) by rule / grade / state /
   polarity; at 30m and 60m; regime split. Say which rule earns its place; propose re-ordering or a wider zone for −γ nodes
   through the normal proposal path. This and Next Stop are the two forward calls the face makes — grade both hard.
+  (v11.3.1) Each record also carries the PULLBACK CONTEXT — `pb{depth,paceAtr,counterShare,fading}`, `sma{dAtr,levelDAtr,
+  nodeSide}`, `nodeCtx{age,fresh,m15,fromPeak,rolledFrom,step}`, `stack{n,members,strongest,deepest,chosenRank}` — slice the
+  hold-rate by these once pooled n allows: shallow vs deep, grind vs impulse, at-SMA vs stretched, fresh vs old, and in a
+  stack whether the STRONGEST or the DEEPEST node turns price (chosenRank says if the picker already agrees). Never from
+  one session; buckets with n<20 are named as insufficient.
 - `leg.handoff` (v10.56, USER PRIORITY) — when the engine flagged the old ceiling DISSIPATING while a lower node
   built (the handoff), did the `to` node become the PB within fwd, and did price deflect off it toward the magnet?
   Report the LEAD TIME (leadBars before pbDetected) and the false-handoff rate (flagged, never resolved). Mirror for floors.

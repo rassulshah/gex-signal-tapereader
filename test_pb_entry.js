@@ -65,5 +65,31 @@ const recUp={level:7710,dir:1,px:7712,rule:'leg.pb',grade:'B'};
 o=_pbEntryOutcome(recUp, fwd([{h:7712,l:7710.3,c:7711},{h:7711.5,l:7710.2,c:7711.2},{h:7712.4,l:7711,c:7712.2}]));
 ok(o.hit===1 && o.touched, '4e mirror: up-deflection off a floor at 7710 → HIT', o);
 
+// ---- 5. (v11.3.1) pullback context on the record: depth, SMA-50 frame, node life
+eval(['_pbCtx'].map(ex).join('\n'));
+global.ledgerNode=(sym,k)=>({ firstT: Math.floor(Date.now()/1000)-20*60, m15: 9, fromPeak: 4 });
+// dn leg pulled back up: 30 candles — down from 7720 to 7708 (low at bar 20), then a slow grind up to 7712
+let cs=[]; for(let i=0;i<=20;i++){ const c=7720-0.6*i; cs.push({o:c+0.3,h:c+0.5,l:c-0.3,c:c}); }
+for(let i=1;i<=9;i++){ const c=7708+0.45*i; cs.push({o:c-0.35,h:c+0.2,l:c-0.5,c:c}); }
+global.closedCandles=()=>cs; global.atr=()=>0.6; STATE.SPY.price=7712;
+reset(); LEG={dir:'dn',legId:3,pbDetected:{k:7716,step:2,rolledFrom:7718}};
+const rc=_pbEntryRecord('SPY',{});
+ok(rc.pb && Math.abs(rc.pb.depth-0.35)<0.06 && rc.pb.bars===9 && rc.pb.paceAtr<1, '5a depth ≈ retrace/leg (≈0.35, shallow), 9 pullback bars, slow pace in ATRs', rc.pb);
+ok(rc.pb && rc.pb.counterShare>=0.9, '5b the pullback bars close WITH the pullback (grind up, counterShare ~1)', rc.pb&&rc.pb.counterShare);
+ok(rc.sma && rc.sma.nodeSide && typeof rc.sma.d==='number' && typeof rc.sma.dAtr==='number' && rc.sma.levelD>rc.sma.d, '5c SMA-50 frame: price-to-SMA and level-to-SMA (signed, ATR units), node side named', rc.sma);
+ok(rc.nodeCtx && rc.nodeCtx.age===20 && rc.nodeCtx.fresh===true && rc.nodeCtx.m15===9 && rc.nodeCtx.rolledFrom===7718 && rc.nodeCtx.step===2, '5d node life: fresh (20m old — dealers stepping in), building (m15 +9), rolled from 7718, step 2', rc.nodeCtx);
+global.ledgerNode=()=>({ firstT: Math.floor(Date.now()/1000)-300*60, m15:-12, fromPeak:30 });
+const rc2=_pbEntryRecord('SPY',{});
+ok(rc2.nodeCtx && rc2.nodeCtx.fresh===false && rc2.nodeCtx.m15===-12, '5e an old, bleeding node reads fresh:false, m15 −12', rc2.nodeCtx);
+// ---- 6. (v11.3.1) STACKED pullback nodes recorded: strongest / deepest / chosen rank / span
+reset(); LEG={dir:'dn',legId:3,pbDetected:{k:7716,step:2,rolledFrom:7718}};
+FLOW={ok:true,lean:'dn',nodes:[{k:7716,state:'acm',pct:60,m15:9},{k:7716.5,state:'acm',pct:85,m15:4},{k:7717.5,state:'hold',pct:35,m15:0},{k:7710,state:'hold',pct:80}]};
+const rc3=_pbEntryRecord('SPY',{});
+ok(rc3.stack && rc3.stack.n===3 && rc3.stack.strongest===7716.5 && rc3.stack.chosenRank===2, '6a a 3-node stack around the pick: strongest named (7716.5 at 85%), picked node ranked', rc3.stack);
+ok(rc3.stack && rc3.stack.deepest===7717.5 && rc3.stack.span===1.5, '6b deepest (most retracement, 7717.5) and the stack span named', rc3.stack&&[rc3.stack.deepest,rc3.stack.span]);
+ok(rc3.stack.members.length===3 && rc3.stack.members[0].pct===85 && typeof rc3.stack.members[0].depth==='number', '6c members carry pct/state/m15/depth, strongest first', rc3.stack.members[0]);
+FLOW={ok:true,lean:'dn',nodes:[{k:7716,state:'acm',pct:60}]};
+const rc4=_pbEntryRecord('SPY',{});
+ok(rc4.stack==null, '6d a lone node records no stack');
 console.log('test_pb_entry: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.3
+// @version    11.3.1
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -375,7 +375,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.3';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.3.1';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -10499,8 +10499,11 @@ function registerCoreFeatures(){
     var pe=null; try{ pe=pbEntryPick(sym); }catch(e){ pe=null; }
     var px=(STATE[sym]||{}).price;
     if(!pe || !pe.ok) return { level:null, rule:null, dir:0, dirNum:0, grade:null, state:null, pol:null, dist:null, px:(typeof px==='number')?px:null, voting:false };
+    var cx=null; try{ cx=_pbCtx(sym, pe); }catch(eCx){ cx=null; }
     return { level:pe.level, zoneLo:pe.zoneLo, zoneHi:pe.zoneHi, rule:pe.rule, dir:pe.dir, dirNum:pe.dir, grade:pe.grade, state:pe.state, pol:pe.pol,
-             dist:pe.dist, px:pe.px, nextStop:pe.nextStop, latched:pe.latched||'', k:pe.level, tgt:pe.nextStop, inval:(pe.dir<0)?(pe.level+DEFLECT_ZONE):(pe.level-DEFLECT_ZONE), voting:false };
+             dist:pe.dist, px:pe.px, nextStop:pe.nextStop, latched:pe.latched||'',
+             pb:(cx&&cx.pb)||null, sma:(cx&&cx.sma)||null, nodeCtx:(cx&&cx.nodeCtx)||null, stack:(cx&&cx.stack)||null,
+             k:pe.level, tgt:pe.nextStop, inval:(pe.dir<0)?(pe.level+DEFLECT_ZONE):(pe.level-DEFLECT_ZONE), voting:false };
   }
   function _pbEntryOutcome(rec, fwd){
     if(!rec || rec.level==null || !fwd || typeof rec.px!=='number') return { hit:null, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
@@ -10526,7 +10529,12 @@ function registerCoreFeatures(){
     questions:[ { id:'pbentry_30',      when:[{f:'grade',v:'B'}],     outcome:'pbHold', note:'did price pull back to the PB Entry level and deflect DIR_PTS before closing through — by rule (leg.pb / leg.pbZone / leg.lastPB / map.pb / wall.opp) and by grade?' },
                 { id:'pbentry_acm',     when:[{f:'state',v:'acm'}],   outcome:'pbHold', note:'does an ACCUMULATING pullback node deflect more reliably than a Dec/hold one? (the acm/dec chip earns or loses its job here)' },
                 { id:'pbentry_pol',     when:[{f:'pol',v:'-'}],       outcome:'pbHold', note:'−γ pullback nodes: wickier, overshoot-and-reverse — does the touch-then-deflect rule need a wider zone for them?' },
-                { id:'pbentry_touched', when:[{f:'rule',v:'leg.pbZone'}], outcome:'pbTouched', note:'does a PREDICTED zone (no node yet) get touched at all within the window?' } ],
+                { id:'pbentry_touched', when:[{f:'rule',v:'leg.pbZone'}], outcome:'pbTouched', note:'does a PREDICTED zone (no node yet) get touched at all within the window?' },
+                { id:'pbentry_depth',   when:[{f:'pb.depth',v:'<=0.5'}],  outcome:'pbHold', note:'do SHALLOW pullbacks (≤50% of the leg) deflect more reliably than deep ones? (a pullback that eats the leg is a reversal dressed as a pullback)' },
+                { id:'pbentry_pace',    when:[{f:'pb.paceAtr',v:'<=0.3'}],outcome:'pbHold', note:'does a slow, grinding pullback (low pace, small counterShare, fading last bar) deflect better than a fast impulsive drive into the node?' },
+                { id:'pbentry_smaside', when:[{f:'sma.nodeSide',v:'at'}], outcome:'pbHold', note:'does a PB node sitting AT the 50-SMA (±0.2 ATR) deflect better than one far above/below it? and does distance-from-SMA in ATRs grade the stretch?' },
+                { id:'pbentry_fresh',   when:[{f:'nodeCtx.fresh',v:true}],outcome:'pbHold', note:'does a FRESH node (born ≤45m ago — dealers stepping in to stop THIS pullback) deflect better than an old level? crossed with rolledFrom/step and m15 (building vs bleeding at the touch)' },
+                { id:'pbentry_stack',   when:[{f:'stack.n',v:'>=2'}],     outcome:'pbHold', note:'2-3 pullback nodes stacked close together: which one actually turns price — the STRONGEST (highest %King), the DEEPEST (more retracement), or the stack read as one zone? chosenRank tells whether the picker agreed with the answer' } ],
     rule:{ id:'pbEntry', tier:'hand', condition:'rule-based pick: leg PB (not ✗) → predicted PB zone → last PB → Map pullback candidate → opposite wall; B = leg + Acm + SMA agree + within reach',
            mechanism:'The level to watch for the deflection that sends price to the Next Stop. Never touched = wrong or slow; touched-and-broke = the node failed; touched-and-deflected = the call. Graded nightly by rule/state/polarity; A by promotion only.' } });
   registerFeature({ key:'pbEntry.60', label:'PB Entry · touched and deflected within 60m', phase:'dashboard', fwd:FEAT_FWD*2,
@@ -11733,6 +11741,9 @@ function pbEntryHtml(sym){
     var stTxt=pe.state==='acm'?'<span style="color:'+PAL.longAccent+'">Acm</span>':(pe.state==='dec'?'<span style="color:'+PAL.shortAccent+'">Dec</span>':(pe.state==='gone'?'<span style="color:'+PAL.sub+'">gone</span>':''));
     var deflTxt=(pe.dir<0?'defl ↓':'defl ↑')+(pe.nextStop!=null?(' → '+fmtLvl(pe.nextStop)):'');
     var zoneTxt=(pe.zoneLo!=null&&pe.zoneHi!=null&&pe.rule==='leg.pbZone')?(' <span style="color:'+PAL.sub+';font-weight:600;font-size:9px">(zone '+fmtLvl(pe.zoneLo)+'–'+fmtLvl(pe.zoneHi)+', forming)</span>'):'';
+    // (v11.3.1) stacked pullback nodes: name the zone across the stack so the level is read as an AREA
+    try{ var cxS=_pbCtx(sym,pe); if(cxS&&cxS.stack&&cxS.stack.n>=2){ var mks=cxS.stack.members.map(function(mm){return mm.k;});
+      zoneTxt+=' <span style="color:'+PAL.sub+';font-weight:600;font-size:9px">(stack of '+cxS.stack.n+': '+fmtLvl(Math.min.apply(null,mks))+'–'+fmtLvl(Math.max.apply(null,mks))+')</span>'; } }catch(eZs){}
     var latch=pe.latched?(' <span style="font-size:9.5px">'+pe.latched+'</span>'):'';
     var tip=('PB Entry — where to look for the pullback. '+pe.why+' — '+fmtSpan(pe.dist)+' '+(above?'above':'below')+' price; the expected move off it is '+(pe.dir<0?'DOWN':'UP')+(pe.nextStop!=null?(' toward the Next Stop '+fmtLvl(pe.nextStop)):'')+'. Node state '+(pe.state||'—')+(pe.pol?(', polarity '+pe.pol+'γ'):'')+'. '+
       'Confidence '+pe.grade+' (B = leg active, node accumulating, SMA-50 agrees, within reach; C = structure-only / chop / mid-range; A only after promotion). '+
@@ -11749,6 +11760,76 @@ function pbEntryHtml(sym){
       '<span style="margin-left:auto;color:'+gcol+';background:'+gbg+';padding:0 5px;border-radius:3px;font-size:10px">'+pe.grade+'</span>'+
     '</div>';
   }catch(e){ return ''; }
+}
+
+// (v11.3.1, user-directed) PULLBACK CONTEXT — recorded on every pbEntry record so the hit rate can be sliced by the
+// STRENGTH/WEAKNESS OF THE PULLBACK and the QUALITY OF THE NODE. The user's frame: how deep is the pullback, how far
+// from the 50-SMA, is the node above/below the 50-SMA, does the pullback have speed/momentum, and is the node rolled /
+// accumulating / decreasing / FRESH (a new node = dealers stepping in to stop the pullback). Non-voting, no face
+// change; forward-only fields — they cannot be back-filled, which is why they ship now.
+function _pbCtx(sym, pe){
+  var out={ pb:null, sma:null, nodeCtx:null, stack:null };
+  try{
+    var cs=closedCandles(sym)||[]; var n=cs.length; if(!n||!pe||pe.level==null) return out;
+    var px=(STATE[sym]||{}).price; if(px==null) return out;
+    var a=0.5; try{ a=atr(sym)||0.5; }catch(eA){}
+    // ---- the 50-SMA frame: where price is, where the LEVEL is, which side the node sits on
+    var m=Math.min(50,n), sum=0; for(var i=n-m;i<n;i++){ sum+=cs[i].c; }
+    var sma=sum/m; var dPx=px-sma, dLv=pe.level-sma;
+    out.sma={ sma:+sma.toFixed(2), d:+dPx.toFixed(2), dAtr:+(dPx/Math.max(a,0.01)).toFixed(1),
+              levelD:+dLv.toFixed(2), levelDAtr:+(dLv/Math.max(a,0.01)).toFixed(1),
+              nodeSide:(Math.abs(dLv)<=0.2*a)?'at':(dLv>0?'above':'below'), win:m };
+    // ---- pullback geometry, oriented by the DEFLECTION direction (dir<0 = dn leg, pullback UP into the level)
+    var W=cs.slice(Math.max(0,n-30)); var dn=(pe.dir<0);
+    var lo=Infinity, hi=-Infinity, loI=-1, hiI=-1;
+    for(var j=0;j<W.length;j++){ if(W[j].l!=null&&W[j].l<lo){lo=W[j].l; loI=j;} if(W[j].h!=null&&W[j].h>hi){hi=W[j].h; hiI=j;} }
+    var swing=hi-lo;
+    if(isFinite(swing) && swing>0.01){
+      var anchorI=dn?loI:hiI;                       // the leg extreme the pullback started from
+      var retrace=dn?(px-lo):(hi-px);               // how far price has pulled back against the leg
+      var bars=(W.length-1)-anchorI;                // pullback duration so far
+      var withBars=0, tot=0, lastBody=null, prevBody=null;
+      for(var q=anchorI+1;q<W.length;q++){ var B=W[q]; if(B.c==null||B.o==null) continue; tot++;
+        var upC=B.c>B.o; if(dn?upC:!upC) withBars++;
+        prevBody=lastBody; lastBody=Math.abs(B.c-B.o); }
+      out.pb={ depth:+(Math.max(0,Math.min(1.5,retrace/swing))).toFixed(2),   // 0.3 shallow · 0.8 deep · >1 = past the leg origin
+               swing:+swing.toFixed(2), retrace:+retrace.toFixed(2), bars:bars,
+               paceAtr:(bars>0)?+((retrace/bars)/Math.max(a,0.01)).toFixed(2):null,   // pts/bar in ATR units: fast drive vs slow grind
+               counterShare:tot?+(withBars/tot).toFixed(2):null,                      // share of bars closing WITH the pullback
+               fading:(lastBody!=null&&prevBody!=null)?(lastBody<prevBody):null };    // the bar into the level shrank
+    }
+    // ---- the node's own life: fresh / rolled / building or bleeding (dealers' intent, in the user's words)
+    var nc={ age:null, fresh:null, m15:null, fromPeak:null, rolledFrom:null, step:null };
+    try{ var Ln=ledgerNode(sym, pe.level);
+      if(Ln){ var ft=Ln.firstT||Ln.first||null;
+        if(ft!=null){ var ageMin=Math.round((Date.now()/1000-ft)/60); if(isFinite(ageMin)&&ageMin>=0){ nc.age=ageMin; nc.fresh=(ageMin<=45); } }
+        if(Ln.m15!=null) nc.m15=Ln.m15; if(Ln.fromPeak!=null) nc.fromPeak=Ln.fromPeak; } }catch(eL){}
+    try{ var lg=legEngine(sym); if(lg&&lg.pbDetected&&Math.abs(lg.pbDetected.k-pe.level)<0.001){ nc.rolledFrom=lg.pbDetected.rolledFrom||null; nc.step=lg.pbDetected.step||null; } }catch(eG){}
+    out.nodeCtx=nc;
+    // ---- (v11.3.1, user) STACKED PULLBACK NODES: "many times there are 2-3 pullback nodes stacked close to each
+    // other — judge which one is stronger, or the one with more retracement." Every meaningful node on the pullback
+    // side within STACK_SPAN of the picked level is recorded {k, pct, state, m15, depth (its own retracement of the
+    // leg)}, strongest first; `strongest` and `deepest` are named, `chosenRank` says where the picked level sits.
+    try{
+      var STACK_SPAN=1.5; var dnS=(pe.dir<0);
+      var fl=null; try{ fl=nodeFlow(sym); }catch(eF){}
+      var pool=((fl&&fl.nodes)||[]).filter(function(nn){ return nn.pct!=null && nn.pct>=PB_MIN_PCT
+        && (dnS?(nn.k>px):(nn.k<px)) && Math.abs(nn.k-pe.level)<=STACK_SPAN && nn.state!=='gone'; });
+      if(pool.length>=2 && out.pb && out.pb.swing>0.01){
+        var lo2=dnS?(px-out.pb.retrace):null;
+        var members=pool.map(function(nn){
+          var ret=dnS?(nn.k-(px-out.pb.retrace)):((px+out.pb.retrace)-nn.k);   // retracement of the leg AT that node
+          return { k:nn.k, pct:nn.pct, state:nn.state, m15:(nn.m15!=null?nn.m15:null),
+                   depth:+(Math.max(0,Math.min(1.5,ret/out.pb.swing))).toFixed(2) };
+        }).sort(function(a,b){ return b.pct-a.pct; });
+        var deepest=members.slice().sort(function(a,b){ return b.depth-a.depth; })[0];
+        var rank=1+members.findIndex(function(mm){ return Math.abs(mm.k-pe.level)<0.001; });
+        out.stack={ n:members.length, members:members.slice(0,3), strongest:members[0].k, deepest:deepest.k,
+                    chosenRank:(rank>0?rank:null), span:+(Math.max.apply(null,members.map(function(mm){return mm.k;}))-Math.min.apply(null,members.map(function(mm){return mm.k;}))).toFixed(2) };
+      }
+    }catch(eSk){}
+  }catch(e){}
+  return out;
 }
 window.__gptsDebug.pbEntry=function(s){ try{ return pbEntryPick(s||'SPY'); }catch(e){ return String(e); } };
 

@@ -1,3 +1,17 @@
+## v11.3.1 — 2026-08-19 — PULLBACK CONTEXT on every PB Entry record (user-directed): depth · SMA-50 frame · pullback speed · node freshness/roll · STACKED nodes
+
+User: judge "the amount of pullback, the distance from the 50-SMA, whether the node is above or below it, the quality of the
+pullback — speed/momentum or not," and the node's own story — "rolled, increasing or decreasing in accumulation, fairly new
+where dealers had intentions of stopping the pullback"; plus "many times there are 2-3 pullback nodes stacked close together —
+judge which is stronger, or the one with more retracement." All recorded per bar on the pbEntry record (non-voting, no face
+change except the stack zone note): `pb{depth (retrace/leg swing), swing, retrace, bars, paceAtr (pts/bar in ATRs), counterShare,
+fading}` · `sma{sma, d, dAtr, levelD, levelDAtr, nodeSide above|below|at (±0.2 ATR)}` · `nodeCtx{age, fresh (≤45m — dealers
+stepping in), m15, fromPeak, rolledFrom, step}` · `stack{n, members[{k,pct,state,m15,depth}] strongest-first, strongest, deepest,
+chosenRank, span}` when ≥2 qualifying nodes sit within 1.5 strikes on the pullback side. Face: "(stack of 3: 7716–7717.5)" names
+the area. Five new questions: pbentry_depth (shallow ≤0.5 vs deep), pbentry_pace (grind vs impulse), pbentry_smaside (node AT the
+50-SMA), pbentry_fresh, pbentry_stack (strongest vs deepest vs the zone — chosenRank grades the picker). Forward-only fields —
+shipped before more sessions accumulate. Tests: test_pb_entry (30). Suite green except the 4 known-stale.
+
 ## v11.3 — 2026-08-19 (live, 12:30 CT) — PB ENTRY under Next Stop (user-directed): where to look for the pullback / deflection — enrolled from day one
 
 User: "under Next Stop I want a PB Entry section… it tells me where to look for a pullback entry… trade location for a potential

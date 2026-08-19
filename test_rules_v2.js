@@ -62,7 +62,7 @@ const RJ=JSON.parse(fs.readFileSync('./learning/rules.json','utf8'));
 ok(RJ.schema==='gex-rules/v2', '1a learning/rules.json declares schema gex-rules/v2', RJ.schema);
 ok(typeof RJ.asOf==='string' && /^\d{4}-\d{2}-\d{2}$/.test(RJ.asOf), '1b it carries an asOf date', RJ.asOf);
 ok(RJ.weights && RJ.weights.dir && typeof RJ.weights.dir.trend==='number', '1c weights.dir exists and is numeric');
-ok(Object.keys(RJ.rules).length===56, '1d all 56 rule ids carried over (54 + nextStop, nextStop.60)', Object.keys(RJ.rules).length);
+ok(Object.keys(RJ.rules).length===58, '1d all 58 rule ids carried over (56 + pbEntry, pbEntry.60)', Object.keys(RJ.rules).length);
 ok(Object.keys(RJ.rules).every(id=>RJ.rules[id].tier==='hand' && RJ.rules[id].promoted===false),
    '1e every carried rule is tier "hand" — nothing ships pre-promoted');
 ok(Object.keys(RJ.rules).every(id=>RJ.rules[id].regime && RJ.rules[id].regime.trend && RJ.rules[id].regime.chop),
