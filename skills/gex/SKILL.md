@@ -66,6 +66,9 @@ load instruction. Then read, in order:
    - `skylit-docs/learn/intro-to-gamma.md` — Pika/Barney polarity, absolute-value rule.
    - `skylit-docs/learn/node-lifecycle.md` — Fresh/Tested/Delivered/Decaying, real-vs-hedge.
    - `SOURCE-OF-TRUTH.md` — the Academy (`skylit-docs/learn/`) wins all doctrine conflicts.
+   - `skylit-docs/api/API-REFERENCE.md` — the Skylit Public API (live/historical/SSE heatmaps, MCP server, credits, response
+     shape) + what it means for the project (historical backfill budget, what the API gives vs what the panel scrapes). If the
+     capture is older than ~30 days, re-check https://docs.skylit.ai/api-reference/introduction and update the file.
 6. DATA (from v10.44): `data/YYYY-MM-DD.json` — one file per session day. Read the coverage
    summary first (days · bars · symbols · fields-since); never run a study on missing fields.
 

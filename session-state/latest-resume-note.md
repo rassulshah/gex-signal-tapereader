@@ -11,6 +11,17 @@ repo → panel. Claude-app scheduled tasks: "GEX nightly review (contract 1)" we
 decoded by one PowerShell call — the ~20k-echo-line design failed on 08-18) + Tampermonkey click. v11.1.2 is INSTALLED and
 live in Tampermonkey (user confirmed).
 
+**SKYLIT API (captured 2026-08-18 night → `skylit-docs/api/API-REFERENCE.md`, now in the load list):** REST + MCP, limited beta,
+key from the Skylit app Developer tab, 5,000 seed credits. `/v1/heatmap` (1 cr, live, velocityPct) · `/v1/historical?at=` (5 cr,
+nearest 1-min snapshot, 365 days back, no velocity) · `/v1/stream` SSE. Node classes king/gatekeeper/pika/barney/significant/normal.
+A 3-minute-cadence replay of one session ≈ 650 credits. Open decisions (ask, one at a time): API key + credit budget; connect
+the Skylit MCP connector to Claude Desktop (then reviews can pull history) vs a local script writing `data/hist/`; which questions
+history answers first (the four node scenarios). USER'S GOAL (2026-08-18 night): at least 30 days of history for SPY, QQQ and SPX(W), RTH ONLY (08:30–15:00 CT, never
+overnight), at our 3-minute cadence → 130 snapshots/day × 5 cr = 650/day ≈ 19,500 credits for 30 days (one call covers all three
+symbols; 15-min cadence ≈ 3,900; 10 days at 3 m ≈ 6,500). The API key is NOT released yet (expected within days) — return to
+this when the user has a key; never ask for the key itself. Then: spec the ingestion (`data/hist/`, same schema as day files minus
+velocity/candles), agree the credit budget, and let the four node scenarios be the first questions history answers.
+
 **PARKED FOR 08-19 (user-approved, do AFTER the live verification; ONE AT A TIME; write a one-page spec first) — v11.1.3 candidate:**
 1. **Review dot** (`pipeStages`, footer): turn GREEN when the NIGHTLY log for the last session is loaded (`P.nightly==='yes'`),
    not only the weekly `review/<day>.json`; hover reports nightly and weekly separately. Today it sits amber every weekday.

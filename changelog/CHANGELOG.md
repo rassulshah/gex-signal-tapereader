@@ -1,3 +1,9 @@
+## 2026-08-18 (night) — DOCS: Skylit Public API reference captured (`skylit-docs/api/API-REFERENCE.md`), added to the load protocol
+
+REST (`api.skylit.ai/v1/heatmap` · `/v1/historical` · `/v1/stream`) + MCP (`mcp.skylit.ai/mcp`, `heat_*` tools), auth/credits/
+rate limits, full response shape, and a project-impact section (backfill budget ≈ 650 credits per session at 3 m, what the API gives
+vs what Layer 0 scrapes, MCP-connector option, open decisions). `.gex-config.json` and the skill load list now include it.
+
 ## 2026-08-18 (night) — REVIEW LOOP AUTOMATED (no code): Drive inbox · scheduled nightly + weekly · local pull task
 
 Drive folder `GEX-review-inbox` created; Google Drive for desktop installed on the trading PC; `tools/review-pull.bat`
