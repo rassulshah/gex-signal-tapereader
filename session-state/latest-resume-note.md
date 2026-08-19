@@ -22,7 +22,17 @@ symbols; 15-min cadence ≈ 3,900; 10 days at 3 m ≈ 6,500). The API key is NOT
 this when the user has a key; never ask for the key itself. Then: spec the ingestion (`data/hist/`, same schema as day files minus
 velocity/candles), agree the credit budget, and let the four node scenarios be the first questions history answers.
 
-**PARKED FOR 08-19 (user-approved, do AFTER the live verification; ONE AT A TIME; write a one-page spec first) — v11.1.3 candidate:**
+**NEW TRACK (2026-08-18 night): CCAR-F certification — see `ccarp/PLAN.md` (say "load ccarp").** Four-week schedule, one
+artefact per exam domain built on this repo outside the locked panel; next step = STEP 1 baseline practice test. Registration is
+partner-only today; the user will go through a partner-network organisation (assumption). The nightly/MCP/Claude-Code artefacts
+from that track are allowed during lockdown because they do not touch the panel.
+
+**v11.1.3 HOTFIX SHIPPED 2026-08-19 ~10:20 CT (live):** tape sync red all morning with EXPIRATIONS on → three Layer-0 faults fixed
+(feed vote used levels[0]; ladder has no permanent $K cell + share-of-book scale; derived lanes polluted tapemax) — see CHANGELOG.
+Trinity QQQ/SPXW tape panes are NOT <table> elements — cross-index tape reading (deferred item 6) still needs its own spec; the
+user wants it ("you are supposed to read the trinity tape spy and qqq and spxw") — propose pulling it forward at the next design slot.
+
+**PARKED (user-approved, ONE AT A TIME; write a one-page spec first) — now v11.1.4 candidate:**
 1. **Review dot** (`pipeStages`, footer): turn GREEN when the NIGHTLY log for the last session is loaded (`P.nightly==='yes'`),
    not only the weekly `review/<day>.json`; hover reports nightly and weekly separately. Today it sits amber every weekday.
 2. **Weekly file naming**: the Saturday run must write `review_<FRIDAY-date>.json` (last trading day), because the panel looks the

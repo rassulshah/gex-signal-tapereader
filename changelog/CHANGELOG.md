@@ -1,3 +1,22 @@
+## v11.1.3 — 2026-08-19 (live, 10:20 CT) — HOTFIX: tape sync red all morning — three faults in the King reconciliation
+
+**What the user saw:** "⚠ Out of sync" from the open with EXPIRATIONS on (the view the user trades from — turning it off hides the
+nodes on the chart). Recording continued; only the structural read was suppressed.
+**Faults (all in Layer 0, found live from the DOM):** (1) `kingFromFeed` read `levels[0]` — the OPEN minute of a whole-session
+payload — so the feed vote was frozen on the 09:30 King (772) while the live King had moved to 774; (2) Skylit's ladder no
+longer prints a permanent `$K` King cell (the King cell shows a % with the yellow highlight; the $ figure appears only under the
+mouse) and, in the EXPIRATIONS view, the column values are each strike's SHARE of the book (sum ≈ 100), not %King — so
+`findTapeTable` rejected the table (no $K) and the panel fell back to `feedStructMap`; (3) `feedStructMap` included the
+SPXW-derived lanes, which v10.58 normalises to their OWN King, so a lane at 770.5 = 100% out-voted the real King in
+`kingFromTapeMax`. Three votes, three answers, permanent no-consensus.
+**Fixes:** feed vote = latest minute (max t); a real `<table>` with a Strike header + ISO expiry headers + ≥15 strike rows is
+the ladder even without a $K cell; column 1 (nearest expiry = the feed's book) is read as before, rescaled so max|v| = 100
+(= value/King, the %King the panel has always meant), the yellow cell is the King tag (`kingSrc:'highlight'`), and a $K cell
+that is not the yellow cell is treated as a hover read-out (unknown for that tick) instead of crowning a strike; the tape
+stand-in from the feed carries native strikes only. Verified against the live 10:05 CT DOM: King 774 · 769 50% · 768 40% ·
+771 −30% — matching the feed ($113M / $56M / $45M). Tests: test_tape_v1113 (13) new; version pins → 11.1.3. Suite green
+except the 4 known-stale. LOCKDOWN unchanged (fix). The planned dot / ledger / scenario items move to v11.1.4.
+
 ## 2026-08-18 (night) — DOCS: Skylit Public API reference captured (`skylit-docs/api/API-REFERENCE.md`), added to the load protocol
 
 REST (`api.skylit.ai/v1/heatmap` · `/v1/historical` · `/v1/stream`) + MCP (`mcp.skylit.ai/mcp`, `heat_*` tools), auth/credits/

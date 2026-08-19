@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.1.2
+// @version    11.1.3
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -375,7 +375,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.1.2';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.1.3';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -951,9 +951,12 @@ function feedStructMap(sym){
     var lf=LASTFEED[sym]; if(!lf || !lf.j || !lf.j.levels || !lf.j.levels.length) return null;
     var ew=extractWalls(lf.j);
     if(!ew || ew.king==null) return null;
-    var pct={};
-    ew.walls.forEach(function(w){ pct[w.k.toFixed(2)] = (w.k===ew.king) ? 100 : (w.pos ? w.pct : -w.pct); });
-    return { pct:pct, king:ew.king, count:ew.walls.length, kingSrc:'feed', kingTagged:ew.king,
+    var pct={}, cnt=0;
+    // (v11.1.3 FIX) NATIVE strikes only: the SPXW-derived lanes are normalised to their own King
+    // (v10.58), so a lane at 100% (770.5 on 2026-08-19) out-voted the real King in kingFromTapeMax.
+    ew.walls.forEach(function(w){ if(w.src==='SPXW' || w.derived) return; cnt++;
+      pct[w.k.toFixed(2)] = (w.k===ew.king) ? 100 : (w.pos ? w.pct : -w.pct); });
+    return { pct:pct, king:ew.king, count:cnt, kingSrc:'feed', kingTagged:ew.king,
              kingConflict:false, kingKd:null, fromFeed:true };
   }catch(e){ return null; }
 }
@@ -1037,6 +1040,13 @@ function findTapeTable(){
   for(var i=0;i<tables.length;i++){
     var head=(tables[i].textContent||'');
     if(ok(head) && validKingRow(tables[i])){ var r=tapeStrikeRowCount(head); if(r>bestRows){ bestRows=r; best=tables[i]; } }
+    // (v11.1.3 FIX, live 2026-08-19) Skylit's ladder no longer prints a permanent $K King cell — the
+    // King cell shows a % with the yellow highlight and the $ figure only on hover. A real <table>
+    // with a "Strike" header + ISO expiry column headers + a deep strike list IS the ladder.
+    else if(!TAPE_REJECT_RE.test(head) && head.indexOf('Strike')!==-1 && ISO_DATE_RE.test(head)){
+      var thead=tables[i].querySelector('thead'); var ht=thead?thead.textContent:'';
+      if(ISO_DATE_RE.test(ht)){ var r1=tapeStrikeRowCount(head); if(r1>=15 && r1>bestRows){ bestRows=r1; best=tables[i]; } }
+    }
   }
   if(best) return best;
   var all=document.querySelectorAll('div,section');
@@ -1078,7 +1088,7 @@ function tapeCells(table){
 function readTapeFromDOM(sym){
   var table=findTapeTable();
   if(!table) return null;
-  var pct={}, kingK=null, count=0, kingKd=null;
+  var pct={}, kingK=null, count=0, kingKd=null, hiK=null;
   // ---- Path A: a real <tr>/<td> table (legacy / forward-compatible). ----
   var trs=table.querySelectorAll('tr');
   if(trs.length){
@@ -1098,9 +1108,27 @@ function readTapeFromDOM(sym){
       var v=tapeCellPct(c1);
       if(isKingCell){ pct[strike.toFixed(2)]=100; kingK=strike; count++;
         var kd0=parseKingDollarsK(c1); if(kd0!=null) kingKd=kd0; }
-      else if(v!=null){ pct[strike.toFixed(2)]=v; count++; }
+      else if(v!=null){ pct[strike.toFixed(2)]=v; count++;
+        // (v11.1.3) the King cell is the yellow-highlighted one (top of Skylit's colour scale)
+        try{ var bgc=(cells[1].style&&cells[1].style.backgroundColor)||''; if(/rgb\(\s*253,\s*231,\s*37\s*\)/.test(bgc)){ if(hiK==null) hiK=strike; else if(hiK!==strike) hiK=-1; } }catch(eBg){}
+      }
     }
-    if(count>=5){ var rA=kingResolve(pct, kingK, count); rA.kingKd=kingKd; return rA; }
+    if(count>=5){
+      // (v11.1.3 FIX) NEW LADDER SCALE. With the EXPIRATIONS view the column values are the strike's
+      // SHARE of the book (they sum to ~100), not %King, and no row prints 100 — so the King read 24-31
+      // and every downstream %King was a third of its true size. Rescale so max|v| = 100 (= value/King,
+      // the %King the panel has always meant) and take the yellow cell as the tag when it is unique.
+      // a $K cell that is NOT the yellow cell is the HOVER read-out of some other strike (the $ figure
+      // appears under the mouse) — drop it as unknown rather than crown it.
+      if(kingK!=null && hiK!=null && hiK>0 && hiK!==kingK){ delete pct[kingK.toFixed(2)]; count--; kingK=null; kingKd=null; }
+      if(kingK==null){
+        var mx=0; for(var kk in pct){ if(pct.hasOwnProperty(kk) && Math.abs(pct[kk])>mx) mx=Math.abs(pct[kk]); }
+        if(mx>0 && mx<100){ for(var kk2 in pct){ if(pct.hasOwnProperty(kk2)) pct[kk2]=Math.round(pct[kk2]*100/mx); } }
+        if(hiK!=null && hiK>0 && Math.abs(pct[hiK.toFixed(2)]||0)===100) kingK=hiK;
+      }
+      var rA=kingResolve(pct, kingK, count); rA.kingKd=kingKd; if(kingK!=null && kingK===hiK) rA.kingSrc='highlight';
+      return rA;
+    }
   }
   // ---- Path B: div/grid table (current Skylit). Grid cells arrive in
   // document order as strike-then-values; each value cell is collapsed to its
@@ -1242,7 +1270,12 @@ function reconcileVotes(votes){
 function kingFromFeed(sym){
   try{
     var lf=LASTFEED[sym]; if(!lf||!lf.j||!lf.j.levels||!lf.j.levels.length) return null;
-    var arr=lf.j.levels[0] && lf.j.levels[0].l; if(!arr||!arr.length) return null;
+    // (v11.1.3 FIX, live 2026-08-19 09:38) the payload is the WHOLE SESSION's per-minute levels;
+    // levels[0] is the OPEN, so this vote was frozen on the 09:30 King (772) all morning while the
+    // live King had moved to 774 → permanent no-consensus. Use the LATEST minute (max t).
+    var lv=lf.j.levels, best=null;
+    for(var q=0;q<lv.length;q++){ var L=lv[q]; if(L && L.l && L.l.length && (best==null || (L.t||0)>=(best.t||0))) best=L; }
+    var arr=best && best.l; if(!arr||!arr.length) return null;
     var bk=null, bv=-1;
     for(var i=0;i<arr.length;i++){
       var a=Math.abs(arr[i].v);
