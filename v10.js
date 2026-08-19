@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.1.1
+// @version    11.1.2
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -375,7 +375,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.1.1';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.1.2';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -2080,8 +2080,19 @@ function recorderSave(db){
     while(dates.length>RECORDER_DAYS){ delete db.days[dates.shift()]; }
     localStorage.setItem(RECORDER_KEY, JSON.stringify(db));
   }catch(e){
-    // On quota, drop the oldest day and retry once; never throw into render.
-    try{ var d2=Object.keys(db.days).sort(); if(d2.length){ delete db.days[d2[0]]; localStorage.setItem(RECORDER_KEY, JSON.stringify(db)); } }catch(e2){}
+    // On quota: drop the oldest day that is NOT today and retry; if today is the only day,
+    // shed the oldest half of today's feature queue instead. Never delete today — that
+    // wiped the whole session's snaps and queue from localStorage in one call. (v11.1.2)
+    try{
+      var d2=Object.keys(db.days).sort();
+      var victim=null; for(var i2=0;i2<d2.length;i2++){ if(d2[i2]!==TODAY){ victim=d2[i2]; break; } }
+      if(victim){ delete db.days[victim]; }
+      else if(db.days[TODAY] && db.days[TODAY].feat){
+        var F=db.days[TODAY].feat;
+        Object.keys(F).forEach(function(sy){ var a=F[sy]||[]; if(a.length>1) F[sy]=a.slice(Math.floor(a.length/2)); });
+      }
+      localStorage.setItem(RECORDER_KEY, JSON.stringify(db));
+    }catch(e2){}
   }
 }
 function recorderDay(db){
@@ -10567,12 +10578,18 @@ function featEnqueue(sym, snapFeat, ctx){
     // flat 1200-record cap was ~66 bars: on any normal session the panel silently threw
     // away the whole MORNING, and every "since the open" statistic was computed on an
     // afternoon-only sample. Keep the last FEAT_KEEP_BARS bars — for every feature.
+    // (v11.1.2 FIX) `bar` is the candle's MILLISECOND timestamp, not an index. The v10.54
+    // cutoff (maxBar minus FEAT_KEEP_BARS) was therefore maxBar minus 160 ms — every enqueue deleted
+    // every record except the bar that had just landed, so nothing ever lived long enough to
+    // resolve (the 08-18 export carried 27 records, all from the 15:00 bar, none resolved).
+    // Cut at the FEAT_KEEP_BARS-th most recent DISTINCT bar value instead.
     if(arr.length){
-      var maxBar=0;
-      for(var q=0;q<arr.length;q++){ if(arr[q] && typeof arr[q].bar==='number' && arr[q].bar>maxBar) maxBar=arr[q].bar; }
-      var cutoff=maxBar-FEAT_KEEP_BARS;
-      if(cutoff>0){
-        var kept=arr.filter(function(r){ return !r || typeof r.bar!=='number' || r.bar>cutoff; });
+      var seenBar={}, barList=[];
+      for(var q=0;q<arr.length;q++){ var rb=arr[q]&&arr[q].bar; if(typeof rb==='number' && !seenBar[rb]){ seenBar[rb]=1; barList.push(rb); } }
+      if(barList.length>FEAT_KEEP_BARS){
+        barList.sort(function(a,b){ return a-b; });
+        var cutoff=barList[barList.length-FEAT_KEEP_BARS];        // oldest bar that stays
+        var kept=arr.filter(function(r){ return !r || typeof r.bar!=='number' || r.bar>=cutoff; });
         if(kept.length!==arr.length){ day.feat[sym]=kept; changed=true; }
       }
     }

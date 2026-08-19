@@ -1,3 +1,33 @@
+# RESUME NOTE — 2026-08-18 (night) — v11.1.2 FIX shipped: feature queue no longer wipes itself · first nightly log written · NEXT = verify live 08-19
+
+**Baseline v11.1.2** (one `GPTS_VERSION`; header/footer/export). Built on v11.1.1 (Next Stop styling). Delivered as installer .bat
+(userscript + v10.js + tests + changelog + this note; commit+push).
+
+**This session:** (1) LOAD, verified pipeline dots (rec amber after close, saved/pushed green, review amber = no log yet).
+(2) Ran the NIGHTLY (contract 1) on data/2026-08-18.json → `learning/log/2026-08-18.json` (pushed by the user via .bat, commit
+2027a88). Delivery path used: chat/.bat (no desktop bridge in the cloud session; no `GEX-review-inbox` Drive folder exists —
+only the stale mirror folders — so Drive was skipped). Findings: chop day 767.4–769.5, no direction factor beat the tape
+(trend 34%, leg 34%, magnet reached 1 in 3), node grade INVERTED (A 11% / B 38% / C 47%, one day), shadow drift 53%, 3rd-roll
+PBs 53% vs ~30% (n 19/36/33), two ✓↑ latches at 768 reached nothing. Data-health: four panel versions ran in one session
+(installs 09:18, 12:05, gap 14:09–14:31, v11.0 at 14:51); ledger `infl` block identical across nodes (acmN=0, decN=125 for
+every SPY node — NOT per node; open fix candidate); leg.pbPredict resolves trivially true (pbDetect.k present most bars —
+question not falsifiable yet); "gone" nodes credited with deflections (11) — check whether a touch on a gone node should count.
+(3) Dug into the empty resolved queue → root cause = `featEnqueue` ms-vs-index cutoff (see CHANGELOG v11.1.2) → FIXED, plus the
+quota fallback that could delete today. test_feat_keep (13) new.
+
+**Verify at the 08-19 open (live):** `__gptsDebug.dumpRecorder()` → `days[today].feat.SPY` grows ~30 records per bar all
+session; ~30 min after the open records show `resolved:true`; Analysis ① tiles start counting eff n; footer dots; version
+11.1.2 in header/footer/export. Then at 15:01 the export must carry a full `feat` queue and a many-row `matrix`.
+
+**Open (fix candidates, lockdown-eligible, ONE AT A TIME):** ledger `infl` not per node · gone-node touches · pbPredict
+outcome definition · SIDE hit-rule question (stayed inside ±0.5 true only 26% on a chop day). Weekly (Saturday) is the first
+learning run; nightlies until then are logbook only.
+
+**Standing:** LOCKDOWN — no features until ≥20 sessions; fixes only. Ask before code and before creating files; mockup first;
+descriptive-only; git = truth (Drive is a stale mirror); every feature auto-enrolls; no % without n; always send the TM URL.
+
+---
+
 # RESUME NOTE — 2026-08-18 (late) — v11.0 LOCKDOWN BUILT: the stack · node ledger · learning path fixed · dead code out · NEXT = collect ≥20 sessions
 
 **Baseline v11.0** (footer v11.0 via the one `GPTS_VERSION`). Audit design/ARCHITECTURE-AUDIT.md §0–3 → four

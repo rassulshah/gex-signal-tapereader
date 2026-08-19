@@ -1,3 +1,17 @@
+## v11.1.2 — 2026-08-18 (evening) — FIX: the feature queue deleted itself every bar (nothing ever resolved since v10.54)
+
+**Found by the first nightly (learning/log/2026-08-18.json):** the 08-18 export's resolved-outcome queue held 27 records —
+one per feature, all from the 15:00 bar, none resolved. Root cause in `featEnqueue`: the v10.54 "cap by bars" cutoff was
+`maxBar - FEAT_KEEP_BARS`, but `bar` is the candle's MILLISECOND timestamp, so the cutoff was maxBar minus 160 ms and every
+enqueue deleted every record but the bar that had just landed. Consequences: `resolveFeatureOutcomes` never had a record old
+enough to score, the IDB `FEAT_ARCHIVE` stayed empty, every Analysis/Testing scorecard sat at n=0, and the promotion bar could
+never see local n. Fix: cut at the FEAT_KEEP_BARS-th most recent DISTINCT bar value. Coupled fix in `recorderSave`'s quota
+fallback: it deleted the oldest day even when today was the only day (i.e. it deleted today — snaps and queue in one call);
+now it drops the oldest NON-today day, or sheds the oldest half of today's feature queue, never today. Tests: test_feat_keep
+(13) new — 200 bars enqueued → 160 distinct bars kept, resolution works once the window closes, quota never deletes today;
+test_export_full 5b/5d re-pinned; version pins → 11.1.2. Suite green except the 4 known-stale. Nightly log dir now has its
+first entry (08-18); rates in it were recomputed from snaps because of this bug. LOCKDOWN unchanged — this is a fix.
+
 ## v11.1.1 — 2026-08-18 — Next Stop styling: green above / red below, signed points, grades right-justified
 
 User-directed: the Next Stop level is green (↑) when above price and red (↓) when below, with the signed distance in points beside it; its grade and the read's grade sit at the right edge, level with each other; the "Why this level?" hover unchanged.

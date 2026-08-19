@@ -111,9 +111,9 @@ ok(/code:\(pend\?'pending':'failed'\)/.test(SS),
 // statistic in the export was computed on an afternoon-only sample.
 const FE=ex('featEnqueue');
 ok(!/arr\.length>1200/.test(FE), '5a the flat 1200-record cap is gone');
-ok(/FEAT_KEEP_BARS/.test(FE) && /maxBar-FEAT_KEEP_BARS/.test(FE), '5b the cap is by BARS now');
+ok(/FEAT_KEEP_BARS/.test(FE) && /barList\.length-FEAT_KEEP_BARS/.test(FE) && !/maxBar-FEAT_KEEP_BARS/.test(FE), '5b the cap is by DISTINCT BAR VALUES (v11.1.2: bar is a ms timestamp, so maxBar-160 was 160 ms)');
 ok(/var FEAT_KEEP_BARS = 160/.test(src), '5c ...160 bars, which is a full session for EVERY feature');
-ok(/typeof r\.bar!=='number' \|\| r\.bar>cutoff/.test(FE), '5d ...and records with no bar index are kept, not silently dropped');
+ok(/typeof r\.bar!=='number' \|\| r\.bar>=cutoff/.test(FE), '5d ...and records with no bar index are kept, not silently dropped');
 
 // ================= 6. TREND_LAST SURVIVES A RELOAD ==========================
 // (audit 15) TREND_LAST is the ONLY memory the five-state trend machine has, and it lived
