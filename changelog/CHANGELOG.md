@@ -1,3 +1,15 @@
+## v11.3.3 — 2026-08-19 (live, ~14:40 CT) — FEED FRESHNESS GUARD: a historical payload can no longer poison the live book
+
+Found live: a 389-snapshot gex/levels payload ending 2026-08-13 (Skylit fetches history through the same endpoint for higher
+timeframes / panning / Replay) replaced the live feed mid-session — STATE.price jumped to a 6-day-old 777.66 while the tape read
+769, the sync gate went "unanimous" on the replayed King (all three votes drink from LASTFEED on non-GEX display), and poisoned
+bars were RECORDED into today's file. Fix in `onFeed`: a payload may never replace a fresher one — its newest snapshot must be
+≥ the held payload's newest minus 90 s (out-of-order minute jitter allowed); at boot with nothing held, anything is accepted as
+the last-known view and the live feed takes over on arrival. Same guard on the vanna capture. Rejections are counted and
+surfaced (`__gptsDebug.feedRejects()`, one console line per 20). NIGHTLY NOTE for 2026-08-19: bars recorded roughly 13:40–14:40 CT
+carry px≈777.66 from the stale payload — the review must quarantine snaps whose px deviates >2% from neighbours (dataHealth).
+Tests: test_feed_guard (8); test_mode_king harness updated. Suite green except the 4 known-stale.
+
 ## v11.3.2 — 2026-08-19 — PB Entry line wraps: gray context moved to a smaller second line (user-directed)
 
 The deflection/zone/stack text ran off the panel. Line 1 = level · pts · state · grade (tight); line 2 = 8.5px gray,

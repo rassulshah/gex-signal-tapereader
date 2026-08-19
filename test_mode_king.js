@@ -29,7 +29,8 @@ global.document={ visibilityState:'visible' };
 // mocked DOM tape that crowns a DIFFERENT King (999) than the gamma feed (775):
 global.readTapeFromDOM=function(sym){ return { pct:{'999.00':100,'998.00':50,'997.00':40,'996.00':30,'995.00':25,'994.00':22}, king:999, count:6, kingSrc:'dollar', kingConflict:false }; };
 
-eval(['extractWalls','synthDerived','feedStructMap','onFeed','ensureFeeds','tapeMap'].map(ex).join('\n'));
+eval(src.match(/var FEED_REJECTS=[\s\S]*?;\n/)[0]);
+eval(['feedNewestT','extractWalls','synthDerived','feedStructMap','onFeed','ensureFeeds','tapeMap'].map(ex).join('\n'));
 
 // ---- synthetic RAW GAMMA payload: King 775 (|v| largest), 770 is -gamma, 780 +gamma ----
 function gammaPayload(){

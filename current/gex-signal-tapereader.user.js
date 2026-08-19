@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.3.2
+// @version    11.3.3
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -327,15 +327,40 @@ function installFeedObserver(){
 // (v10.48) onFeed gains a 4th param `viaSelf`. Skylit only sends the DISPLAYED
 // data_type; `combined` display must NOT contaminate the pure-gamma cache. The
 // missing mode(s) are supplied out-of-band by selfFetch(...,true).
+// (v11.3.3 FIX, live 2026-08-19 ~14:30 CT) FRESHNESS GUARD. Skylit fetches HISTORICAL gex/levels
+// payloads too (higher chart timeframe, panning back, Replay) through the same endpoint. One such
+// payload (389 snapshots ending 2026-08-13) replaced the live feed mid-session: STATE.price jumped
+// to a 6-day-old 777.66 while the tape read 769, and poisoned bars were recorded. Rule: a payload may
+// NEVER replace a fresher one (its newest snapshot must be >= the held payload's newest, minus 90s of
+// jitter). A rejected payload is counted and surfaced (__gptsDebug.feedRejects), never recorded.
+var FEED_REJECTS={ SPY:{n:0,lastAge:null,t:0}, QQQ:{n:0,lastAge:null,t:0} };
+function feedNewestT(j){ try{ var lv=j&&j.levels; if(!lv||!lv.length) return null; var m=0;
+  for(var i=0;i<lv.length;i++){ var t=lv[i]&&lv[i].t; if(typeof t==='number'&&t>m) m=t; } return m||null; }catch(e){ return null; } }
 function onFeed(sym, feed, j, viaSelf){
   if(sym!=='SPY' && sym!=='QQQ') return;
   if(!j || !j.levels || !j.levels.length) return;
   if(!viaSelf) LASTDISP[sym] = feed;
-  if(feed==='vanna'){ LASTVEX[sym] = { j:j, ts:Date.now() }; return; }
-  if(feed==='gamma'){ var _ts=Date.now(); LASTFEED[sym] = { j:j, feed:'gamma', ts:_ts }; observeFeedCadence(sym, _ts); return; }
+  var newT=feedNewestT(j);
+  if(feed==='vanna'){
+    var heldV=LASTVEX[sym]; var heldVT=heldV?feedNewestT(heldV.j):null;
+    if(heldVT!=null && newT!=null && newT < heldVT-90) return;          // stale vanna: keep the fresher one
+    LASTVEX[sym] = { j:j, ts:Date.now() }; return;
+  }
+  if(feed==='gamma'){
+    var held=LASTFEED[sym]; var heldT=held?feedNewestT(held.j):null;
+    if(heldT!=null && newT!=null && newT < heldT-90){
+      var R=FEED_REJECTS[sym]||(FEED_REJECTS[sym]={n:0});
+      R.n++; R.lastAge=Math.round((heldT-newT)/60); R.t=Date.now();
+      if(R.n===1||R.n%20===0) try{ console.log('[GPTS] historical/replay payload IGNORED for '+sym+' (newest snapshot '+R.lastAge+'m older than the live feed; seen '+R.n+'x)'); }catch(eL){}
+      return;                                                            // NEVER let history overwrite the live book
+    }
+    var _ts=Date.now(); LASTFEED[sym] = { j:j, feed:'gamma', ts:_ts }; observeFeedCadence(sym, _ts); return;
+  }
   // combined (or anything else): do NOT write LASTFEED — self-fetch supplies gamma.
   return;
 }
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.feedRejects=function(){ return FEED_REJECTS; };
 // (v10.48) SELF-FETCH the non-displayed mode(s). Builds its URL by swapping
 // symbol=, data_type= and v= on the last-seen real request URL, so it carries the
 // same auth/query shape. Errors (esp. 503) are swallowed. Throttled per (sym,type).
@@ -375,7 +400,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.3.2';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.3.3';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){

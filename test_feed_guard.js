@@ -1,0 +1,30 @@
+// (v11.3.3) FRESHNESS GUARD — a historical/replay gex/levels payload may never replace the live feed.
+const fs=require('fs'); const src=fs.readFileSync('./v10.js','utf8');
+let pass=0, fail=0; const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+JSON.stringify(g):''));} };
+function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.exec(src);let i=src.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}return src.slice(m.index,e+1);}
+global.window={__gptsDebug:{}}; global.LASTDISP={SPY:null,QQQ:null}; global.LASTFEED={SPY:null,QQQ:null}; global.LASTVEX={SPY:null,QQQ:null};
+global.observeFeedCadence=()=>{}; 
+eval(src.match(/var FEED_REJECTS=[\s\S]*?;\n/)[0]);
+eval(['feedNewestT','onFeed'].map(ex).join('\n'));
+const NOW=1787173000;
+const live={levels:[{t:NOW-300,s:769,l:[{k:769,v:9e7}]},{t:NOW-120,s:769.2,l:[{k:769,v:9e7}]}]};
+const hist={levels:[{t:NOW-6*86400,s:777.6,l:[{k:778,v:9e8}]},{t:NOW-6*86400+60,s:777.7,l:[{k:778,v:9e8}]}]};
+onFeed('SPY','gamma',live,false);
+ok(LASTFEED.SPY && feedNewestT(LASTFEED.SPY.j)===NOW-120, '1a live payload accepted');
+onFeed('SPY','gamma',hist,false);
+ok(feedNewestT(LASTFEED.SPY.j)===NOW-120, '1b a 6-day-old historical payload does NOT replace the live feed', feedNewestT(LASTFEED.SPY.j));
+ok(FEED_REJECTS.SPY.n===1 && FEED_REJECTS.SPY.lastAge>8000, '1c the rejection is counted with its age in minutes', FEED_REJECTS.SPY);
+const fresher={levels:[{t:NOW-60,s:769.3,l:[{k:769,v:9e7}]}]};
+onFeed('SPY','gamma',fresher,false);
+ok(feedNewestT(LASTFEED.SPY.j)===NOW-60, '1d a FRESHER payload still replaces normally');
+const jitter={levels:[{t:NOW-100,s:769.25,l:[{k:769,v:9e7}]}]};
+onFeed('SPY','gamma',jitter,false);
+ok(feedNewestT(LASTFEED.SPY.j)===NOW-100, '1e ≤90s-older within jitter is accepted (out-of-order minute updates)');
+LASTFEED.SPY=null; onFeed('SPY','gamma',hist,false);
+ok(LASTFEED.SPY && feedNewestT(LASTFEED.SPY.j)===NOW-6*86400+60, '1f at boot with nothing held, any payload is accepted (last-known view)');
+onFeed('SPY','gamma',live,false);
+ok(feedNewestT(LASTFEED.SPY.j)===NOW-120, '1g ...and the live one takes over the moment it arrives');
+onFeed('SPY','vanna',live,false); onFeed('SPY','vanna',hist,false);
+ok(feedNewestT(LASTVEX.SPY.j)===NOW-120, '1h the same guard covers the vanna capture');
+console.log('test_feed_guard: '+pass+' passed, '+fail+' failed');
+process.exit(fail?1:0);
