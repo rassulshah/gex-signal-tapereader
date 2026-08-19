@@ -175,9 +175,15 @@ three planted properties — the true edge, the 1-way trap, the regime split. An
 1. **Device bridge** (`mcp__remote-devices__*`, needs the Claude desktop app running): write the file
    directly into `C:\Dev\gex-signal-tapereader\learning\log\` (nightly) or `...\learning\` + `...\review\`
    (weekly). The user's local "GEX data push" task then commits it.
-2. **Google Drive** (connector, always available): create the file in Drive folder `GEX-review-inbox`.
-   The user's local task moves it into the repo. Drive is a TRANSPORT ONLY here — the repo remains the
-   single source of truth (see the git-first rule above).
+2. **Google Drive** (connector, always available) — THE STANDING PATH since 2026-08-18: create the file in
+   Drive folder `GEX-review-inbox` (id `1_tPmmd9xUiBLAmMtIlTzU-TAEmjT0VO5`, `disableConversionToGoogleType`
+   true). Titles: nightly `YYYY-MM-DD.json` → repo `learning/log/`; weekly `rules.json` → `learning/rules.json`
+   and `review_YYYY-MM-DD.json` → `review/`. Google Drive for desktop syncs the folder to the user's PC and the
+   local scheduled task "GEX review pull" (`tools/review-pull.bat`, daily 16:05 CT + Sat 10:30) copies, commits,
+   pushes; it NEVER overwrites an existing log/review file (append-only) and moves processed files to `_done/`.
+   Two scheduled tasks in the Claude app run the reviews unattended: "GEX nightly review (contract 1)" weekdays
+   15:45 CT (`45 20 * * 1-5` UTC) and "GEX weekly review (contract 2)" Saturdays 10:00 CT (`0 15 * * 6`).
+   Drive is a TRANSPORT ONLY here — the repo remains the single source of truth (see the git-first rule above).
 3. **Chat**: SendUserFile the JSON.
 
 Always report WHICH path was used, so the panel's `review` pipeline stage can be interpreted.

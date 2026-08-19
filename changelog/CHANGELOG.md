@@ -1,3 +1,13 @@
+## 2026-08-18 (night) — REVIEW LOOP AUTOMATED (no code): Drive inbox · scheduled nightly + weekly · local pull task
+
+Drive folder `GEX-review-inbox` created; Google Drive for desktop installed on the trading PC; `tools/review-pull.bat`
++ scheduled tasks "GEX review pull" (daily 16:05 CT, Sat 10:30) copy inbox files into `learning/log/` · `learning/rules.json`
+· `review/` (append-only for logs/reviews) and push. Two scheduled tasks in the Claude app run the LLM reviews unattended:
+nightly weekdays 15:45 CT (contract 1 → `learning/log/<date>.json`), weekly Saturday 10:00 CT (contract 2 → `rules.json` +
+`review_<date>.json`). Verified end to end with the 08-18 log (skipped as already-in-repo = path resolves). Daily chain is now
+15:01 export → 15:30 push → 15:45 review → 16:05 pull → panel ⑥ REVIEW by ~16:15, with no manual step. Code changes still
+ship by installer .bat + Tampermonkey click, by design. Skill DELIVERY CASCADE updated.
+
 ## v11.1.2 — 2026-08-18 (evening) — FIX: the feature queue deleted itself every bar (nothing ever resolved since v10.54)
 
 **Found by the first nightly (learning/log/2026-08-18.json):** the 08-18 export's resolved-outcome queue held 27 records —

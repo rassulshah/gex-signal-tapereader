@@ -1,7 +1,19 @@
-# RESUME NOTE — 2026-08-18 (night) — v11.1.2 FIX shipped: feature queue no longer wipes itself · first nightly log written · NEXT = verify live 08-19
+# RESUME NOTE — 2026-08-18 (night) — v11.1.2 FIX shipped + REVIEW LOOP AUTOMATED (Drive inbox, scheduled nightly/weekly, local pull) · NEXT = verify live 08-19
 
 **Baseline v11.1.2** (one `GPTS_VERSION`; header/footer/export). Built on v11.1.1 (Next Stop styling). Delivered as installer .bat
 (userscript + v10.js + tests + changelog + this note; commit+push).
+
+**REVIEW LOOP NOW AUTOMATED (2026-08-18 night, verified):** Drive inbox `GEX-review-inbox` → Google Drive for desktop on the
+trading PC → local task "GEX review pull" (`tools/review-pull.bat`, daily 16:05 CT + Sat 10:30; append-only, `_done/`) →
+repo → panel. Claude-app scheduled tasks: "GEX nightly review (contract 1)" weekdays 15:45 CT, "GEX weekly review
+(contract 2)" Sat 10:00 CT (UTC-pinned; shift 1h after the November clock change). Daily chain: 15:01 export → 15:30 push →
+15:45 review → 16:05 pull → ⑥ REVIEW ~16:15. Nothing manual. Code still ships by installer .bat (payload after `exit /b`,
+decoded by one PowerShell call — the ~20k-echo-line design failed on 08-18) + Tampermonkey click. v11.1.2 is INSTALLED and
+live in Tampermonkey (user confirmed).
+
+**Verify at the 08-19 open / close:** footer v11.1.2; `days[today].feat.SPY` grows all session; resolved records ~30 min in;
+at 15:45 the nightly fires on its own → 16:05 pull → review dot green without touching anything. If the pull log
+(`tools/review-pull.log`) says "inbox not found", Google Drive for desktop is not running.
 
 **This session:** (1) LOAD, verified pipeline dots (rec amber after close, saved/pushed green, review amber = no log yet).
 (2) Ran the NIGHTLY (contract 1) on data/2026-08-18.json → `learning/log/2026-08-18.json` (pushed by the user via .bat, commit
