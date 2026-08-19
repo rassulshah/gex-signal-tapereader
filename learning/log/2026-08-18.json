@@ -1,0 +1,85 @@
+{
+  "schema": "gex-log/v1",
+  "date": "2026-08-18",
+  "writtenBy": "nightly (contract 1) · Claude · 2026-08-18 18:05 CT",
+  "panelVersionAtExport": "11.0",
+  "bars": 127,
+  "fullWindowBars": 113,
+  "effectiveN": 11.3,
+  "regime": { "tag": "chop", "opex": false, "event": false, "tags": { "chop": 92, "mixed": 18, "na": 14, "trend": 3 } },
+  "tape": { "chart": "ES", "underlying": "SPY", "ratio": 10.05, "open": 769.01, "high": 769.47, "low": 767.39, "close": 767.39, "range": 2.08 },
+  "baseline": { "up": 41, "dn": 50, "n": 113, "note": "share of 30m windows that travelled ±0.5: up 36% · dn 44% · both/neither remainder. A slow-drift-down chop day inside a 2-point range." },
+
+  "dataHealth": {
+    "arrived": true,
+    "exportedAt": "15:01 CT (auto), pushed to main by 17:27 CT",
+    "problems": [
+      "RESOLVED-OUTCOME QUEUE EMPTY: feat.SPY holds 27 records, all from the 15:00 bar, all unresolved; matrix has 1 row. The recorder's feat queue was reset between 14:57 and 15:00 CT (snaps survived — they live in IndexedDB; the feat queue lives in localStorage). Every rate below was recomputed by the review from snaps[].feat + snaps[].out10 using the panel's own hit rule (UP: mfe>=0.5, DN: mae<=-0.5, SIDE: stayed inside ±0.5, candle high/low). Verify tomorrow that feat[SYM] grows all day and that the export carries resolved:true records.",
+      "FOUR PANEL VERSIONS IN ONE SESSION: base features from 08:39; leg engine (leg.*, predictors) from 09:18 (v10.55/56 install); leg.handoff + defl.trigger from 12:05 (v10.56); a 22-minute recording gap 14:09–14:31 (rebuild/reload); ledger.touch, map.transfer, map.lean and dir.read from 14:51 (v11.0). Layers 1–2 (ledger, Map, handoff, trigger) therefore have a few bars each — nothing about them can be said tonight.",
+      "LEDGER infl BLOCK IS NOT PER NODE: every SPY node reports acmN=0, decN=125 and every SPXW lane acmN=0, decN=250 (identical across nodes; a node currently in state acm still shows acmN=0). The toward/away influence counters look like a per-book bar count, not per-node windows. Touch/reaction counts look per node and plausible. Fix candidate — a lockdown fix, not a feature.",
+      "leg.pbPredict resolves 42/42 'formed' — the check is trivially satisfied because leg.pbDetect.k is present on 88 of 113 leg bars (a PB is nearly always 'detected'); the prediction question is not yet asking anything falsifiable.",
+      "act log empty (no take/pass taps today). QQQ recorded 0 snaps.",
+      "The nightly log dir was empty before this file: no logbook exists for 08-17 (that day file is v10.51-shaped, 124 snaps, no feat layer)."
+    ]
+  },
+
+  "features": {
+    "dir":            { "n": 113, "hits": 28, "up": 12, "dn": 9, "side": 92, "mfe": 0.43, "mae": -0.50, "rate": 0.25, "byRegime": { "chop": {"n":83,"hits":24}, "mixed": {"n":18,"hits":3}, "na": {"n":9,"hits":1}, "trend": {"n":3,"hits":0} }, "byGrade": { "C": {"n":113,"hits":28} }, "note": "grade C on all 127 bars — no A/B today, calibration unmeasurable. SIDE (92 bars) 'held inside ±0.5' only 26%: on a chop day 30m windows still travel half a point 3 times in 4, so SIDE-as-range-claim is mostly wrong; UP/DN bars 4/21." },
+    "dir.trend5":     { "n": 101, "hits": 34, "up": 27, "dn": 74, "mfe": 0.43, "mae": -0.47, "rate": 0.34, "byVote": { "dn": {"n":74,"hits":28,"rate":0.38}, "up": {"n":27,"hits":6,"rate":0.22} }, "byState": { "dn": {"n":58,"hits":24}, "dn-broken": {"n":16,"hits":4}, "up": {"n":15,"hits":0}, "up-broken": {"n":12,"hits":6} }, "byRegime": { "chop": {"n":78,"hits":26}, "mixed": {"n":18,"hits":6}, "trend": {"n":3,"hits":2} }, "note": "dn votes 38% vs baseline dn 44% — no lift; the 15 'up' bars went 0/15. Both broken states are 1-way today (as they must be)." },
+    "dir.drift":      { "n": 74, "hits": 39, "up": 62, "dn": 12, "mfe": 0.50, "mae": -0.43, "rate": 0.53, "byVote": { "up": {"n":62,"hits":33,"rate":0.53}, "dn": {"n":12,"hits":6,"rate":0.50} }, "byRegime": { "chop": {"n":41,"hits":19}, "mixed": {"n":17,"hits":13}, "na": {"n":13,"hits":5}, "trend": {"n":3,"hits":2} }, "shadow": true, "note": "SHADOW (not voting). 84% of its votes were UP on a day whose up-baseline was 36%, yet up-votes hit 53% — a real-looking lift on ONE day, ~7 independent obs. Keep recording; nothing to conclude." },
+    "dir.relation":   { "n": 50, "hits": 18, "up": 22, "dn": 28, "rate": 0.36, "shadow": true, "byRelation(trendVote)": { "trend-only": {"n":30,"hits":15,"rate":0.50}, "tentative": {"n":28,"hits":10}, "divergence": {"n":33,"hits":8,"rate":0.24,"oneWay":true}, "confirmed": {"n":8,"hits":1} }, "note": "shadow relation. Interesting shape: bars where drift DIVERGED from the dn trend, the trend vote hit only 24% (8/33) vs 50% when trend-only — i.e. drift-divergence flagged the bars where the trend failed. One day, 1-way, chop; record only." },
+    "dir.struct":     { "n": 113, "hits": 33, "up": 73, "dn": 40, "rate": 0.29, "byVote": { "up": {"n":73,"hits":19}, "dn": {"n":40,"hits":14} }, "voting": false, "note": "support-heavy vote UP most of a down-drift day — 26% on up votes. Not evidence for anything." },
+    "netGamma":       { "n": 113, "hits": 35, "up": 102, "dn": 11, "rate": 0.31, "oneWay": true, "voting": false, "note": "1-way (posGamma → up 90%), not evidence." },
+    "dir.kingRoll":   { "n": 9, "hits": 4, "up": 0, "dn": 9, "rate": 0.44, "oneWay": true, "voting": false },
+    "dir.trendFast":  { "sma10": {"n":7,"hits":0,"up":0,"dn":7}, "sma20": {"n":41,"hits":11,"up":13,"dn":28,"rate":0.27}, "voting": false, "note": "challenger vs SMA-50: on the same day 27% vs 34% — worse, tiny n." },
+    "leg.dir":        { "n": 99, "hits": 34, "up": 27, "dn": 72, "rate": 0.34, "byVote": { "dn": {"n":72,"hits":28,"rate":0.39}, "up": {"n":27,"hits":6,"rate":0.22} }, "voting": false, "note": "the leg engine's direction tracks the SMA-50 almost bar for bar today (same numbers)." },
+    "leg.magnet":     { "n": 97, "hits": 31, "up": 27, "dn": 70, "rate": 0.32, "definition": "magnet reached (price travelled its recorded dist) within 30m", "note": "magnet reached in ~1 of 3 windows; the rest stalled at an intermediate node or the range edge." },
+    "leg.pbDetect":   { "n": 88, "hits": 31, "up": 24, "dn": 64, "rate": 0.35, "definition": "PB present → price moved 0.5 toward the magnet within 30m", "byStep": { "1": {"n":36,"hits":12,"rate":0.33}, "2": {"n":33,"hits":9,"rate":0.27}, "3": {"n":19,"hits":10,"rate":0.53} }, "distinctPBs": 15, "note": "doctrine says 3rd roll = confirmation; today step-3 53% vs step-1/2 ~30% — 15 distinct PB nodes, ~9 independent windows, chop day. Record, do not believe yet. Only 2 of 15 PBs were 'up' legs." },
+    "leg.pbPredict":  { "n": 42, "hits": 42, "rate": 1.00, "flag": "not evidence — see dataHealth: the outcome is trivially true while pbDetect.k is present on most bars" },
+    "leg.roll":       { "bars": { "count0": 16, "count1": 38, "count2(signal)": 34, "count3(confirmed)": 25 }, "weakeningFlagBars": 21, "note": "continuation after signal/confirmed not scored tonight (queue reset) — the by-step PB numbers above are the nearest proxy." },
+    "leg.handoff":    { "n": 56, "active": 0, "resolved": 2, "note": "recorded from 12:05 only; no handoff was flagged live in that window; two 'resolved' records — insufficient." },
+    "defl.trigger":   { "bars": 56, "latched": { "✓↑": 11, "✗": 3 }, "episodes": [ { "t": "12:18", "k": 768, "state": "✓↑", "tgt": 769, "inval": 767, "out30m": { "mfe": 0.17, "mae": -0.36 }, "verdict": "neither tgt nor inval in 30m" }, { "t": "12:48", "k": 768, "state": "✓↑", "tgt": 770, "inval": 767, "out30m": { "mfe": 0.19, "mae": -0.58 }, "verdict": "neither; came within 0.05 of inval" }, { "t": "14:45", "k": 768, "state": "✗", "dir": "dn" }, { "t": "14:54", "k": 768, "state": "✓↑", "dir": "dn", "tgt": 767.5, "inval": 769, "verdict": "window not closed" } ], "note": "2 latched ✓ with a full window: 0 reached target. n=2." },
+    "node":           { "definition": "in-play node held (price moved 0.5 in holdDir within 30m)", "byGrade": { "A": {"n":27,"hits":3,"rate":0.11,"mfe":0.32,"mae":-0.53}, "B": {"n":52,"hits":20,"rate":0.38,"mfe":0.56,"mae":-0.39}, "C": {"n":32,"hits":15,"rate":0.47,"mfe":0.31,"mae":-0.62} }, "monotone": false, "note": "INVERTED today: A 11% < B 38% < C 47%. One day (~11 independent obs, mostly the 768 King in play all afternoon) — a calibration flag for the weekly, not a verdict." },
+    "decision":       { "cells": { "C×A scalp only": {"bars":37,"holdHit":"2/31"}, "C×B skip": {"bars":52,"holdHit":"21/49"}, "C×C stand aside": {"bars":38,"holdHit":"15/33"} }, "note": "the only 'act' cell today (C×A scalp only) held 2/31 — same inversion as the node grade it is built on." },
+    "ledger.touch":   { "n": 4, "note": "recorded from 14:51 only — insufficient." },
+    "map.transfer":   { "n": 4, "note": "one transfer seen (floor 766.5 → 767 rolling up at 14:51–15:00); insufficient." },
+    "map.lean":       { "n": 4, "lean": "up", "smaAgrees": 0, "note": "insufficient." }
+  },
+
+  "ledger": {
+    "nodes": 29, "bySrc": { "SPY": 11, "SPXW": 18 }, "bars": 130,
+    "touchesKept": 72, "touchCountersTotal": { "deflect": 54, "through": 48, "stall": 260 },
+    "reactByStateAtTouch (last-12-touch lists)": { "acm": {"deflect":6,"stall":17,"through":2}, "dec": {"deflect":3,"stall":18,"through":3}, "gone": {"deflect":11,"stall":8,"through":4} },
+    "reactBySrc": { "SPY": {"deflect":10,"stall":22,"through":4}, "SPXW": {"deflect":10,"stall":21,"through":5} },
+    "deflectRate": { "acm": "6/25 = 24%", "dec+gone": "14/47 = 30%", "verdict": "insufficient — pooled n<20 per state and one session; and 'gone' nodes deflecting 11× is suspicious (a node the feed dropped is still being credited with a reaction — check that a touch on a gone node is a real level or a stale one)" },
+    "influence": "NOT USABLE — infl block identical across nodes (see dataHealth)",
+    "note": "the ledger covers the whole session (built from the feed series), so it is the one v11.0 layer with a full day behind it; the SPXW lanes touched about as often as native strikes and reacted about the same — 1 day."
+  },
+
+  "contradictions": [
+    { "bar": "14:54–15:00 (3 bars, dir.read only exists from 14:51)", "claim": "READ 'Rallied down to 7710.9. On watch for a pullback.' (legDir dn, phase PB) while dir.verdict = SIDE, capped chop, trend dn", "evidence": "the voice is led by the leg (dn) while the direction spine is capped SIDE by chop — the 09:19 pattern again; measurable per bar only from tomorrow" },
+    { "bar": "33 bars (shadow)", "claim": "drift relation = divergence on a confirmed dn trend", "evidence": "shadow only, drift does not vote (DRIFT_LIVE=false); on those bars the trend vote hit 24% vs 50% trend-only — worth watching, not conclusive" },
+    { "bar": "afternoon", "claim": "node grade A (in-play, mostly 768) held 11% vs C 47%", "evidence": "grade ladder inverted on the day; feeds decision cell C×A 'scalp only' 2/31" },
+    { "bar": "12:18, 12:48", "claim": "✓↑ latched at 768 twice", "evidence": "neither reached its target within 30m (mfe 0.17 / 0.19); the second came within 0.05 of invalidation" }
+  ],
+
+  "factors": [
+    { "key": "dir.trend5", "n": 101, "rate": 0.34, "up": 27, "dn": 74, "note": "no lift vs baseline (dn 38% vs 44%)" },
+    { "key": "dir.drift (shadow)", "n": 74, "rate": 0.53, "up": 62, "dn": 12, "note": "one-day lift, ~7 obs" },
+    { "key": "leg.pbDetect", "n": 88, "rate": 0.35, "up": 24, "dn": 64, "note": "step3 53% vs step1/2 ~30%, ~9 obs" },
+    { "key": "leg.magnet", "n": 97, "rate": 0.32, "up": 27, "dn": 70, "note": "magnet reached 1 in 3" },
+    { "key": "node grade", "n": 111, "rate": 0.34, "note": "A<B<C inverted today" },
+    { "key": "netGamma", "n": 113, "rate": 0.31, "up": 102, "dn": 11, "note": "1-way, not evidence" }
+  ],
+  "questions": [
+    { "id": "pb_step3_confirms", "q": "does the 3rd roll deflect more reliably than the 1st/2nd? (today 53% vs ~30%, n 19/36/33)", "status": "recording" },
+    { "id": "node_grade_inverted", "q": "why did node grade A hold 11% vs C 47%? which input (Acm/pol/tap/confluence) is upside-down on a chop day?", "status": "for the weekly" },
+    { "id": "drift_div_flags_failure", "q": "does drift-divergence on a confirmed trend mark the bars where the trend fails? (24% vs 50% today, shadow)", "status": "recording" },
+    { "id": "side_claim", "q": "what does SIDE actually claim? 'inside ±0.5 for 30m' was true 26% of the time on a chop day — either the claim or the hit rule is wrong", "status": "for the weekly" },
+    { "id": "gone_node_touch", "q": "should a touch on a ledger-'gone' node count as a reaction at all?", "status": "fix candidate" }
+  ],
+
+  "headline": "Chop day, 2-pt range, slow drift down: no direction factor beat the tape (trend 34%, leg 34%, magnet reached 1 in 3); node grade A held 11% vs C 47% (inverted); shadow drift 53%; 3rd-roll PBs 53% vs ~30% — all one day, ~11 obs, record only.",
+  "brief": "Yesterday was chop inside 767.4–769.5 with the 768 King in play most of the afternoon; every grade was C and nothing measured beat the baseline — treat today's grades as unproven and watch whether the feat queue records all day.",
+  "notes": "one day = ~11 independent observations (113 full windows / 10-bar window); no weight conclusions can be drawn from a single day. All rates recomputed from snaps because the export's resolved queue was empty."
+}
