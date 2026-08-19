@@ -1,3 +1,8 @@
+## v11.3.2 — 2026-08-19 — PB Entry line wraps: gray context moved to a smaller second line (user-directed)
+
+The deflection/zone/stack text ran off the panel. Line 1 = level · pts · state · grade (tight); line 2 = 8.5px gray,
+wrapping: "· defl ↓ → 7710 (stack of 3: 7716–7717.5) ✓↓ · 54% @30m".
+
 ## v11.3.1 — 2026-08-19 — PULLBACK CONTEXT on every PB Entry record (user-directed): depth · SMA-50 frame · pullback speed · node freshness/roll · STACKED nodes
 
 User: judge "the amount of pullback, the distance from the 50-SMA, whether the node is above or below it, the quality of the

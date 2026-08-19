@@ -42,7 +42,7 @@ ok(p.grade==='C' && p.state==='dec', '1l a Dec pullback node is never B', [p.gra
 // ---- 2. face line
 reset(); LEG={dir:'dn',legId:3,pbDetected:{k:7716,step:2}};
 const h=pbEntryHtml('SPY');
-ok(/PB Entry:/.test(h) && /↑ 7716/.test(h) && /\+4 pts/.test(h) && /Acm/.test(h) && /defl ↓ → 7710/.test(h) && />B</.test(h), '2a line: "PB Entry: ↑ 7716 +4 pts · Acm · defl ↓ → 7710 · B"', h.replace(/<[^>]+>/g,' ').replace(/\s+/g,' '));
+ok(/PB Entry:/.test(h) && /↑ 7716/.test(h) && /\+4 pts/.test(h) && /Acm/.test(h) && /defl ↓ → 7710/.test(h) && />B</.test(h) && /white-space:normal/.test(h), '2a two lines: level line tight, gray context on a wrapping second line', null);
 ok(/title="PB Entry — where to look for the pullback/.test(h) && /never an instruction/.test(h) && /eff n 0, need 20/.test(h), '2b hover: why this level, how it is scored, no % without n, descriptive', null);
 ok(!/\bbuy\b|\bsell\b|stop loss|position|\bR:R\b/i.test(h), '2c no trade language on the face or hover');
 
