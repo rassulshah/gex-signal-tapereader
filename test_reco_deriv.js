@@ -9,8 +9,18 @@ const nodes=[{k:780,pct:30,pos:true},{k:777,pct:72,pos:false},{k:775,pct:100,pos
 let d=deriveFactors(nodes,776,775);
 ok(d && d.ns===-1, 'net-GEX sign negative when -γ mass dominates');
 ok(d.ag===262, 'abs gamma strength = Σ|mass| (262)');
-ok(d.cw===780, 'call wall = largest +γ above spot');
+// (v11.7) THE WALL RULE CHANGED, deliberately. It used to read "largest +γ above spot", which required
+// pos===true on the call side while the put side accepted any sign. On this very fixture that asymmetry
+// picks 780 (+30) over 777 (-72) — it skips a ceiling more than twice as heavy purely because the gamma
+// there is negative. A negative-gamma ceiling is still a ceiling; it just behaves differently when broken.
+// So both sides are now chosen the same way — heaviest mass on that side of spot — and polarity is
+// RECORDED (cwPos/pwPos) rather than used as a filter.
+ok(d.cw===777, 'call wall = heaviest mass above spot, sign not required');
+ok(d.cwPos===false, 'and its negative polarity is reported, not used to disqualify it');
 ok(d.pw===775, 'put wall = largest mass below spot');
+ok(d.pwPos===false, 'put wall polarity recorded too');
+ok(d.basis==='pct', 'this fixture carries no abs series, so the %King basis is used');
+ok(d.nNat===5 && d.nSkipped===0, 'all five nodes are native');
 ok(d.ranks[0].k===775 && d.ranks.length<=6, 'GEX ranks: King first, capped');
 ok(d.reg==='negGamma', 'regime label from sign/zero-gamma');
 ok(typeof d.hhi==='number' && d.hhi>0 && d.hhi<=1, 'HHI concentration in (0,1]');

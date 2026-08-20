@@ -1,3 +1,62 @@
+## v11.8 — 2026-08-20 — THE LEVEL SET: CR0/CR · PS0/PS · HVL · Mag, computed from our own tape
+
+User asked for the InsiderFinance "Signals" data, the MenthorQ 0DTE-vs-weekly split, an answer on the trigger
+level, and a price chart with all of it drawn on. Three things came out of checking before building.
+
+**1. The Signals section carries no numbers of its own.** Live pull of /gamma-exposure/SPY at spot 767.44 returned
+four signals: volatility@767.44 (= spot, the regime read), resistance@769.53 (= Zero Gamma exactly — this is the
+HVL), magnet@765.00 (= Put Wall), volatility@765.00 (= Put Wall again). Every value is spot, zero gamma, call wall
+or put wall — all four already in the header block. "Get the Signals data" is three numbers plus wording we can
+generate ourselves.
+
+**2. The trigger level and the volatility level are different families, not two versions of one thing.** MenthorQ's
+gamma set is CR, PS, HVL, CR0, PS0, HVL0, Gamma Wall 0DTE, GEX 1–10, 1D Max/Min, Blind Spots. There is no trigger
+level in it. Their **Risk Trigger** belongs to the swing model — an upper boundary over the next five days used as a
+profit target. The **HVL is the volatility level**: where cumulative GEX flips slope, positive to negative gamma.
+Only the HVL belongs on a gamma chart, so only the HVL is drawn.
+
+**3. Their expiration filter is the CR0/CR split — but it is client-side state.** URL parameters do not drive it;
+the page ships the whole chain and filters in the browser. A scraper cannot ask for one bucket. Our own feed,
+however, has carried the expiry columns since v11.6 — so the split is computable natively, and that is how it is built.
+
+**What it does.** `gLevels(sym)` returns the MenthorQ vocabulary from our tape: **CR0/PS0** from the front expiry
+column alone, **CR/PS** from the longest-dated bucket present, **HVL** = zero gamma on the native node set (absolute
+dollar basis when the tape carries it), **Mag** = the heaviest strike. A LEVELS card renders them in price order with
+distance and percent, over an inline SVG chart where the 0DTE pair draws dashed so today-only walls never read as
+structure. Collapse and chart state persist.
+
+**The honesty rule, on the card's face.** Our chain reaches about a week; MenthorQ and InsiderFinance aggregate
+years. So every read carries `reach` (0dte / week / month / chain) and the card states in its tooltip that our CR/PS
+is "the structural wall we can see, not an all-expiration wall". A one-week wall is never quoted as a full-chain one.
+
+**Enrolled, non-voting.** `levels` registers with seven questions, and they are written so they can fail: does
+realised 30m range actually contract above the HVL (if not, the regime line is decoration); do CR and PS reject on
+touch; **when CR0 and CR disagree, which one does price respect**; does the magnet close half its distance more often
+than chance. Nothing here touches direction, the grade or any setup until the scorecard earns it.
+
+**InsiderFinance adapter: built, tested, deliberately dormant.** A cross-origin fetch needs `@grant
+GM_xmlhttpRequest`. But this script hooks `window.fetch` and `XMLHttpRequest.prototype` to capture Skylit's feed, and
+that only works under `@grant none`, which runs us in page context. Any grant moves us into Tampermonkey's sandbox
+where those hooks patch a wrapper instead of the page — **the tape would go dark**. Trading a working tape for a
+cross-check we score at zero weight is a bad trade, so the grant change ships on its own with unsafeWindow
+re-targeting and its own test. The parser is finished and tested against real captured page text (33 assertions,
+including comma-grouped SPX figures and sign preservation on Put GEX) so it is ready the day that lands.
+
+Also in this build: **v11.7 deriveFactors, re-applied** (it was built, delivered as an installer, and never pushed —
+the container that held it was reclaimed). Three defects: SPXW-derived lanes were pooled with native nodes on a
+%King basis though each lane is normalised to its own King; every factor ran on %King, a ratio to a *moving*
+denominator, rather than absolute dollars; and the call wall required `pos===true` while the put wall required
+nothing, so a negative-gamma ceiling was unreportable and `cw` came back null for whole sessions. Walls are now
+chosen symmetrically with polarity recorded rather than required. `test_reco_deriv`'s old expectation was updated
+with the reasoning, not silently deleted — on its own fixture the old rule picks 780 (+30) over 777 (−72).
+
+Two smaller things the tests found: a `var atr` local would have shadowed the `atr()` function for its whole scope
+(hoisting), silently freezing the level tolerance at its default; and the IF parser's 500-character minimum
+rejected perfectly readable short responses as "empty" — length is the wrong guard for validity, the label check is.
+
+New: `test_levels.js` (50), `test_derive_factors.js` (24), `test_if_parse.js` (33, fixtures from real page text).
+Full suite: no new failures against the v11.6 baseline.
+
 ## v11.6 — 2026-08-20 — THE EXPIRATION PROFILE: read every expiry column, not just the front one
 
 User-directed after reviewing a competitor's GEX page ("consider how it can be incorporated"). Their Call Wall /

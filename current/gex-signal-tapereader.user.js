@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.6
+// @version    11.8
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -419,7 +419,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.6';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.8';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -1328,6 +1328,311 @@ function expiryProfile(sym){
 }
 // how many expirations carry this strike (null when the ladder is single-column)
 function nodeBreadth(sym, k){ try{ var p=expiryProfile(sym); if(!p) return null; var b=p.breadth[(+k).toFixed(2)]; return (b==null)?0:b; }catch(e){ return null; } }
+// ============================ (v11.8) THE LEVEL SET ============================
+// MenthorQ's vocabulary, computed from OUR OWN tape rather than scraped:
+//   CR0 / PS0  call resistance / put support, 0DTE only  — the front expiry column
+//   CR  / PS   the same, structural                      — the longest-dated bucket we can see
+//   HVL        high vol level = zero gamma = the gamma flip. Above it dealers dampen, below they amplify.
+//   Mag        magnet = the heaviest strike in the bucket (the King, per bucket)
+//
+// TWO HONESTY RULES, both load-bearing:
+//  1. NEVER pool percentages across expiry columns. Each column is normalised to its OWN King, so a front
+//     node at 100 always outranks a monthly node at 58 even when the monthly one is far bigger in dollars.
+//     Every level below is read INSIDE one column or one bucket, never across the ruler change.
+//  2. Our chain is not MenthorQ's chain. Skylit gives us roughly one week of expirations; MenthorQ and
+//     InsiderFinance aggregate years. Our CR/PS is therefore "the structural wall WE CAN SEE", and the
+//     reach is reported with the level so a one-week wall is never mistaken for an all-expiration wall.
+var GLEV_CACHE={t:0, sym:null, data:null};
+var GLEV_TTL=1500;
+
+// zero gamma from a signed strike->value map: cumulative signed mass ascending, interpolated at the crossing.
+function glevZeroGamma(map){
+  try{
+    var pts=[];
+    Object.keys(map||{}).forEach(function(kk){ var k=parseFloat(kk), v=map[kk];
+      if(isFinite(k) && typeof v==='number' && isFinite(v)) pts.push({k:k, v:v}); });
+    if(pts.length<2) return null;
+    pts.sort(function(a,b){ return a.k-b.k; });
+    var cum=0;
+    for(var i=0;i<pts.length;i++){
+      var pc=cum; cum+=pts[i].v;
+      if(i>0 && ((pc<=0&&cum>0)||(pc>=0&&cum<0))){
+        var kA=pts[i-1].k, kB=pts[i].k, t=(0-pc)/((cum-pc)||1);
+        return +(kA+(kB-kA)*Math.max(0,Math.min(1,t))).toFixed(2);
+      }
+    }
+    return null;
+  }catch(e){ return null; }
+}
+// heaviest strike in a signed map (the bucket's magnet)
+function glevMagnet(map){
+  try{
+    var best=null;
+    Object.keys(map||{}).forEach(function(kk){ var k=parseFloat(kk), v=Math.abs(map[kk]);
+      if(!isFinite(k)) return; if(!best || v>best.m){ best={k:k, m:v, pos:(map[kk]>0)}; } });
+    return best;
+  }catch(e){ return null; }
+}
+function glevLvl(k, m, pos, src, px){
+  if(k==null) return null;
+  return { k:+(+k).toFixed(2), m:(m==null?null:Math.round(m)), pos:(pos==null?null:!!pos), src:src||null,
+           dist:(px==null?null:+(k-px).toFixed(2)),
+           distPct:(px==null||!px?null:+(((k-px)/px)*100).toFixed(2)) };
+}
+
+// The level set for one symbol. Returns null when the tape is unreadable — never a fabricated level.
+function gLevels(sym){
+  sym=sym||'SPY';
+  var now=Date.now();
+  if(GLEV_CACHE.data && GLEV_CACHE.sym===sym && (now-GLEV_CACHE.t)<GLEV_TTL) return GLEV_CACHE.data;
+  var out=null;
+  try{
+    var S=STATE[sym]||{}; var px=(typeof S.price==='number')?S.price:null;
+    if(px==null) return null;
+    var prof=null; try{ prof=expiryProfile(sym); }catch(e0){}
+    var LD=null; try{ LD=(sym==='SPY')?((laddersByDollar()||{}).main||ladderFor(sym)):ladderFor(sym); }catch(e1){}
+
+    // ---- 0DTE bucket: the FRONT expiry column, read alone (one column = one King = one ruler) ----
+    var cr0=null, ps0=null, hvl0=null, mag0=null, front=null, dte0Src=null;
+    var frontMap=null;
+    if(LD && LD.cols && LD.cols.length){ frontMap=LD.cols[0].pct; front=LD.cols[0].exp||null; dte0Src='col0'; }
+    else if(LD && LD.pct){ frontMap=LD.pct; front=null; dte0Src='ladder'; }   // single-column ladder: it IS the front
+    if(frontMap){
+      var e0=null;
+      if(prof && prof.buckets && prof.buckets.dte0 && prof.buckets.dte0.walls) e0=prof.buckets.dte0.walls;
+      if(e0){
+        cr0=glevLvl(e0.ceil?e0.ceil.k:null, e0.ceil?e0.ceil.pct:null, null, dte0Src, px);
+        ps0=glevLvl(e0.flr?e0.flr.k:null, e0.flr?e0.flr.pct:null, null, dte0Src, px);
+      } else {
+        var up0=null, dn0=null;
+        Object.keys(frontMap).forEach(function(kk){ var k=parseFloat(kk), v=Math.abs(frontMap[kk]);
+          if(!isFinite(k) || v<EXP_BREADTH_MIN) return;
+          if(k>px){ if(!up0||v>up0.m) up0={k:k,m:v}; } else if(k<px){ if(!dn0||v>dn0.m) dn0={k:k,m:v}; } });
+        cr0=glevLvl(up0?up0.k:null, up0?up0.m:null, null, dte0Src, px);
+        ps0=glevLvl(dn0?dn0.k:null, dn0?dn0.m:null, null, dte0Src, px);
+      }
+      hvl0=glevLvl(glevZeroGamma(frontMap), null, null, dte0Src, px);
+      var mg0=glevMagnet(frontMap);
+      mag0=mg0?glevLvl(mg0.k, mg0.m, mg0.pos, dte0Src, px):null;
+    }
+
+    // ---- structural bucket: the longest-dated bucket the tape actually carries ----
+    var cr=null, ps=null, hvl=null, mag=null, structFrom=null, reachDays=null, nCols=null, exps=null;
+    if(prof){
+      structFrom=prof.structuralFrom||null; nCols=prof.nCols||null; exps=prof.exps||null;
+      var w=prof.all&&prof.all.walls?prof.all.walls:null;
+      if(w){
+        cr=glevLvl(w.ceil?w.ceil.k:null, w.ceil?w.ceil.pct:null, null, structFrom, px);
+        ps=glevLvl(w.flr?w.flr.k:null, w.flr?w.flr.pct:null, null, structFrom, px);
+      }
+      if(structFrom && prof.buckets[structFrom] && prof.buckets[structFrom].pct){
+        var sMap=prof.buckets[structFrom].pct;
+        var mgS=glevMagnet(sMap); if(mgS) mag=glevLvl(mgS.k, mgS.m, mgS.pos, structFrom, px);
+      }
+      // how far forward can we actually see? (calendar days, front expiry -> last expiry)
+      try{
+        function dn(d){ var p=String(d).split('-'); return Date.UTC(+p[0],+p[1]-1,+p[2])/86400000; }
+        var valid=(exps||[]).filter(function(x){ return x; });
+        if(valid.length>=2) reachDays=Math.round(dn(valid[valid.length-1])-dn(valid[0]));
+        else if(valid.length===1) reachDays=0;
+      }catch(eR){}
+    }
+
+    // HVL and Mag on the panel's own aggregate: absolute-dollar basis when the tape carries it, which is a
+    // fixed ruler rather than a ratio to a moving King. This is the zero gamma the rest of the panel uses.
+    var deriv=null;
+    try{
+      var fsum=futureStructureSummary(sym);
+      if(fsum){
+        var nds=[];
+        (fsum.above||[]).forEach(function(r){ nds.push(recNode(r)); });
+        (fsum.below||[]).forEach(function(r){ nds.push(recNode(r)); });
+        deriv=deriveFactors(nds, px, (typeof S.king==='number')?S.king:null);
+      }
+    }catch(e2){ deriv=null; }
+    if(deriv){
+      if(deriv.zg!=null) hvl=glevLvl(deriv.zg, null, null, 'native:'+deriv.basis, px);
+      if(!mag && deriv.ranks && deriv.ranks.length) mag=glevLvl(deriv.ranks[0].k, deriv.ranks[0].m, null, 'native:'+deriv.basis, px);
+      // fall back to the native walls only when the expiry view gave us nothing structural
+      if(!cr && deriv.cw!=null) cr=glevLvl(deriv.cw, deriv.cwM, deriv.cwPos, 'native:'+deriv.basis, px);
+      if(!ps && deriv.pw!=null) ps=glevLvl(deriv.pw, deriv.pwM, deriv.pwPos, 'native:'+deriv.basis, px);
+    }
+    if(!hvl0 && hvl) hvl0=null;   // never copy the structural flip into the 0DTE slot; absent is absent.
+
+    // reach label — what our CR/PS is entitled to claim
+    var reach='unknown';
+    if(reachDays!=null){ reach=(reachDays<=1)?'0dte':(reachDays<=8?'week':(reachDays<=45?'month':'chain')); }
+    else if(nCols===1 || (LD&&LD.cols&&LD.cols.length===1)) reach='0dte';
+
+    // regime: which side of the flip is price on, and therefore how do dealers hedge
+    var regime=null, regimeSrc=null;
+    if(hvl && hvl.k!=null){ regime=(px>=hvl.k)?'posGamma':'negGamma'; regimeSrc='hvl'; }
+    else if(deriv && deriv.reg){ regime=deriv.reg; regimeSrc='netGamma'; }
+
+    out={ sym:sym, px:px, t:now,
+          cr0:cr0, ps0:ps0, hvl0:hvl0, mag0:mag0,
+          cr:cr, ps:ps, hvl:hvl, mag:mag,
+          front:front, exps:exps, nCols:nCols, structFrom:structFrom,
+          reach:reach, reachDays:reachDays,
+          regime:regime, regimeSrc:regimeSrc,
+          basis:(deriv?deriv.basis:null), nNat:(deriv?deriv.nNat:null), nSkipped:(deriv?deriv.nSkipped:null),
+          ext:(typeof ifLevels==='function')?ifLevels(sym):null };
+  }catch(e){ out=null; }
+  GLEV_CACHE={t:now, sym:sym, data:out};
+  return out;
+}
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.levels=function(s){ try{ return gLevels(s||'SPY'); }catch(e){ return String(e); } };
+// ======================= (v11.8) INSIDERFINANCE CROSS-CHECK =======================
+// What this is FOR: our chain reaches about one week (Skylit gives 5 expiry columns). InsiderFinance
+// aggregates the whole chain out to 2028 and splits call GEX from put GEX, which our feed never carries.
+// Those two things — the all-expiration wall and the call/put split — are the only things we genuinely
+// cannot compute. Everything else on their page we already have.
+//
+// What this is NOT: a source of truth. Their all-expiration Call Wall was observed at 775 on one pull and
+// 800 minutes later on the same session; far-dated OI makes that number jump. So an IF level NEVER
+// overrides a native level, never feeds direction, and never draws as a primary line. It rides in its own
+// lane, is scored like every other factor, and earns weight only if the scorecard says it deserves any.
+//
+// Their "Signals" section, decoded from live pulls: it contains no numbers of its own. Every signal
+// resolves to spot, zero gamma, call wall or put wall — the header values with a side and a strength word
+// attached. So we parse the header block and generate the signal wording ourselves.
+//
+// *** DORMANT IN v11.8 — AND THAT IS A DELIBERATE SAFETY CALL, NOT AN OVERSIGHT ***
+// A cross-origin fetch needs @grant GM_xmlhttpRequest. But this script hooks window.fetch and
+// XMLHttpRequest.prototype to capture Skylit's gex/levels feed, and that ONLY works under @grant none,
+// which runs us in PAGE context. Any @grant moves the script into Tampermonkey's sandbox, where `window`
+// is a wrapper and our hooks would patch the wrapper instead of the page — the tape would go dark.
+// Trading a working tape for a cross-check we score at zero weight is a bad trade, so the grant change
+// ships on its own, with unsafeWindow re-targeting and its own test, not bundled into a feature build.
+// Everything below is live, tested and ready; ifFetch() self-reports when the grant is absent.
+var IF_LS='gpts_if_cfg_v1', IF_DATA_LS='gpts_if_last_v1';
+var IF_CFG=(function(){ try{ var o=JSON.parse(localStorage.getItem(IF_LS)||'null'); if(o&&typeof o==='object') return o; }catch(e){}
+  return { on:false, everyMin:5 }; })();
+function ifSave(){ try{ localStorage.setItem(IF_LS, JSON.stringify(IF_CFG)); }catch(e){} }
+var IF_STATE={ t:0, inflight:false, bySym:{}, err:null, lastTry:0, fails:0 };
+try{ var _ifL=JSON.parse(localStorage.getItem(IF_DATA_LS)||'null'); if(_ifL&&_ifL.bySym){ IF_STATE.bySym=_ifL.bySym; IF_STATE.t=_ifL.t||0; } }catch(e){}
+var IF_STALE_MS=20*60*1000;      // beyond this the numbers are labelled stale rather than shown as live
+var IF_MAX_FAILS=4;              // after this many consecutive failures we stop asking until the toggle is cycled
+
+// Parse a labelled dollar/point figure out of text: "Call Wall $7,900 (+2.49%)" -> 7900
+function ifNum(txt, label){
+  try{
+    var i=txt.indexOf(label); if(i<0) return null;
+    var win=txt.slice(i+label.length, i+label.length+80);
+    var m=win.match(/-?\$?\s?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?)/);
+    if(!m) return null;
+    var v=parseFloat(m[1].replace(/,/g,''));
+    return isFinite(v)?v:null;
+  }catch(e){ return null; }
+}
+// "$304.3B" / "-$275.3B" / "$29.0B" -> billions as a number, sign preserved
+function ifBn(txt, label){
+  try{
+    var i=txt.indexOf(label); if(i<0) return null;
+    var win=txt.slice(i+label.length, i+label.length+60);
+    var m=win.match(/(-?)\s?\$?\s?([0-9]+(?:\.[0-9]+)?)\s?([BMK])/i);
+    if(!m) return null;
+    var v=parseFloat(m[2]); if(!isFinite(v)) return null;
+    var mult=({B:1,M:0.001,K:0.000001})[m[3].toUpperCase()]||1;
+    return +((m[1]==='-'?-1:1)*v*mult).toFixed(3);
+  }catch(e){ return null; }
+}
+// Strip tags to text once, then read by label. Deliberately markup-agnostic: we anchor on the LABELS the
+// page prints, not on class names or DOM shape, because class names are exactly what churns.
+function ifParse(html, sym){
+  try{
+    // Only reject a body that is obviously not a response at all. A LENGTH threshold is the wrong guard
+    // for validity — a lean render or a partial response can be perfectly readable, and the label check
+    // below is the real test. A 500-char floor silently reported "empty response" for pages that parsed fine.
+    if(!html || String(html).length<60) return { ok:false, why:'empty response' };
+    var out={ ok:false, sym:sym, t:Date.now() };
+    // 1) preferred: an embedded JSON payload. Next.js ships one; if the whole chain is in it we can compute
+    //    0DTE and full-chain walls ourselves instead of trusting their rendered aggregate.
+    try{
+      var nd=html.match(/<script[^>]+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+      if(nd && nd[1]){ var j=JSON.parse(nd[1]); out.payload=true;
+        var props=(j&&j.props&&j.props.pageProps)?j.props.pageProps:null;
+        if(props){ out.raw=props; } }
+    }catch(eJ){ out.payload=false; }
+    // 2) always also read the rendered header, which is what we verified against live pulls
+    var txt=String(html).replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ')
+                        .replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ');
+    out.cw   = ifNum(txt,'Call Wall');
+    out.pw   = ifNum(txt,'Put Wall');
+    out.zg   = ifNum(txt,'Zero Gamma');
+    out.spot = ifNum(txt,'Spot Price');
+    out.netGex  = ifBn(txt,'Net GEX');
+    out.callGex = ifBn(txt,'Call GEX');
+    out.putGex  = ifBn(txt,'Put GEX');
+    out.totGex  = ifBn(txt,'Total GEX');
+    out.ratio   = ifNum(txt,'Ratio');
+    var have=['cw','pw','zg','spot'].filter(function(k){ return out[k]!=null; }).length;
+    out.ok = have>=3;
+    if(!out.ok) out.why='header labels not found ('+have+'/4) — page markup changed';
+    // sanity: walls must straddle spot, or we read the wrong numbers off the page
+    if(out.ok && out.spot!=null){
+      if(out.cw!=null && out.cw<out.spot){ out.suspect='call wall below spot'; }
+      if(out.pw!=null && out.pw>out.spot){ out.suspect=(out.suspect?out.suspect+'; ':'')+'put wall above spot'; }
+    }
+    return out;
+  }catch(e){ return { ok:false, why:'parse threw: '+e }; }
+}
+function ifFetch(sym, cb){
+  sym=sym||'SPY';
+  if(IF_STATE.inflight) return;
+  if(IF_STATE.fails>=IF_MAX_FAILS){ IF_STATE.err='stopped after '+IF_STATE.fails+' failures — toggle off/on to retry'; return; }
+  if(typeof GM_xmlhttpRequest!=='function'){ IF_STATE.err='GM_xmlhttpRequest unavailable — reinstall the script to grant it'; return; }
+  IF_STATE.inflight=true; IF_STATE.lastTry=Date.now();
+  try{
+    GM_xmlhttpRequest({
+      method:'GET',
+      url:'https://www.insiderfinance.io/gamma-exposure/'+encodeURIComponent(sym),
+      timeout:15000,
+      headers:{ 'Accept':'text/html' },
+      onload:function(r){
+        IF_STATE.inflight=false;
+        try{
+          if(!r || r.status<200 || r.status>=300){ IF_STATE.fails++; IF_STATE.err='HTTP '+(r&&r.status); return; }
+          var p=ifParse(r.responseText, sym);
+          if(!p.ok){ IF_STATE.fails++; IF_STATE.err=p.why||'parse failed'; return; }
+          IF_STATE.fails=0; IF_STATE.err=null; IF_STATE.t=Date.now();
+          IF_STATE.bySym[sym]=p;
+          try{ localStorage.setItem(IF_DATA_LS, JSON.stringify({t:IF_STATE.t, bySym:IF_STATE.bySym})); }catch(eS){}
+          if(cb) cb(p);
+        }catch(e){ IF_STATE.fails++; IF_STATE.err=String(e); }
+      },
+      onerror:function(){ IF_STATE.inflight=false; IF_STATE.fails++; IF_STATE.err='network error'; },
+      ontimeout:function(){ IF_STATE.inflight=false; IF_STATE.fails++; IF_STATE.err='timeout'; }
+    });
+  }catch(e){ IF_STATE.inflight=false; IF_STATE.fails++; IF_STATE.err=String(e); }
+}
+// The read the panel uses. Always labelled with its age; never silently fresh.
+function ifLevels(sym){
+  try{
+    var d=IF_STATE.bySym[sym||'SPY']; if(!d||!d.ok) return (IF_CFG.on?{ on:true, err:IF_STATE.err||'no data yet' }:null);
+    var age=Date.now()-(d.t||0);
+    return { on:!!IF_CFG.on, cw:d.cw, pw:d.pw, zg:d.zg, spot:d.spot,
+             callGex:d.callGex, putGex:d.putGex, netGex:d.netGex, ratio:d.ratio,
+             ageMs:age, stale:(age>IF_STALE_MS), suspect:d.suspect||null, err:IF_STATE.err||null };
+  }catch(e){ return null; }
+}
+function ifTick(){
+  try{
+    if(!IF_CFG.on) return;
+    var every=Math.max(1,+IF_CFG.everyMin||5)*60000;
+    if(Date.now()-IF_STATE.lastTry < every) return;
+    var sym=(typeof activeSym==='function')?activeSym():'SPY';
+    if(sym!=='SPY' && sym!=='QQQ') sym='SPY';
+    ifFetch(sym);
+  }catch(e){}
+}
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.if=function(s){ return { cfg:IF_CFG, state:{t:IF_STATE.t,err:IF_STATE.err,fails:IF_STATE.fails}, read:ifLevels(s||'SPY') }; };
+window.__gptsDebug.ifFetch=function(s){ IF_STATE.fails=0; ifFetch(s||'SPY', function(p){ console.log('IF',p); }); return 'fetching'; };
+window.__gptsDebug.ifParse=function(h,s){ return ifParse(h,s||'SPY'); };
+
+
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.expiry=function(s){ try{ return expiryProfile(s||'SPY'); }catch(e){ return String(e); } };
 var LADDER_CACHE={t:0, data:null};
@@ -2440,9 +2745,24 @@ function recNode(r){
 function deriveFactors(nodes, px, king){
   try{
     if(!nodes || !nodes.length || px==null) return null;
+    // (v11.7) NATIVE NODES ONLY. SPXW-derived lanes are normalised to the SPXW King, not ours, so
+    // pooling their %King with ours compares two different rulers. Every factor below is a ratio or a
+    // ranking over the node set — one foreign lane at 100% outranks a real native wall at 60% and the
+    // wall vanishes. Derived lanes are counted (nSkipped) so a mostly-derived tape is visible, never mixed.
+    var nat=[], skipped=0;
+    nodes.forEach(function(n){ if(n.pct==null) return; if(n.derived || n.src){ skipped++; return; } nat.push(n); });
+    if(!nat.length) return null;
+    // Prefer the absolute dollar series when the tape carries it: %King is a ratio to a moving
+    // denominator, so a King that grows shrinks every other node's percentage even when their real
+    // exposure is flat. Absolute is a fixed ruler. Fall back to %King only when abs is absent.
+    var useAbs=false;
+    for(var ai=0; ai<nat.length; ai++){ if(typeof nat[ai].abs==='number' && nat[ai].abs>0){ useAbs=true; break; } }
+    if(useAbs){ for(var aj=0; aj<nat.length; aj++){ if(!(typeof nat[aj].abs==='number' && nat[aj].abs>0)){ useAbs=false; break; } } }
     var sm=[], sumAbs=0, upM=0, dnM=0;
-    nodes.forEach(function(n){ if(n.pct==null) return; var mag=Math.abs(n.pct);
-      var sign=(n.pos===true)?1:(n.pos===false?-1:0); sm.push({k:n.k, s:sign*mag, m:mag, pos:n.pos});
+    nat.forEach(function(n){
+      var mag=useAbs?Math.abs(n.abs):Math.abs(n.pct);
+      var sign=(n.pos===true)?1:(n.pos===false?-1:0);
+      sm.push({k:n.k, s:sign*mag, m:mag, pos:n.pos});
       sumAbs+=mag; if(n.k>px) upM+=mag; else dnM+=mag; });
     if(!sm.length) return null;
     var netMag=sm.reduce(function(a,x){return a+x.s;},0);
@@ -2453,14 +2773,20 @@ function deriveFactors(nodes, px, king){
     for(var i=0;i<srt.length;i++){ var pc=cum; cum+=srt[i].s;
       if(prev!=null && ((pc<=0&&cum>0)||(pc>=0&&cum<0))){ var kA=srt[i-1].k, kB=srt[i].k; var t=(0-pc)/(cum-pc||1); zg=+(kA+(kB-kA)*Math.max(0,Math.min(1,t))).toFixed(2); }
       prev=srt[i]; }
-    // call wall = largest +γ mass above spot; put wall = largest mass below spot.
-    var cw=null,cwm=-1,pw=null,pwm=-1;
-    sm.forEach(function(x){ if(x.k>px && x.pos===true && x.m>cwm){cwm=x.m;cw=x.k;} if(x.k<px && x.m>pwm){pwm=x.m;pw=x.k;} });
+    // (v11.7) Walls are chosen SYMMETRICALLY: heaviest mass on each side of spot, polarity recorded
+    // rather than required. The old call side demanded pos===true while the put side took any sign —
+    // so a negative-gamma ceiling was silently unreportable and cw came back null all day.
+    var cw=null,cwm=-1,cwPos=null,pw=null,pwm=-1,pwPos=null;
+    sm.forEach(function(x){
+      if(x.k>px && x.m>cwm){ cwm=x.m; cw=x.k; cwPos=x.pos; }
+      if(x.k<px && x.m>pwm){ pwm=x.m; pw=x.k; pwPos=x.pos; } });
     // GEX ranks 2-N: strikes by |mass| (King is rank 1)
     var ranks=sm.slice().sort(function(a,b){return b.m-a.m;}).slice(0,6).map(function(x){return {k:x.k,m:Math.round(x.m)};});
     return { ns:(netMag>0?1:(netMag<0?-1:0)), nm:Math.round(netMag), ag:Math.round(sumAbs),
       hhi:hhi!=null?+hhi.toFixed(3):null, imb:imb!=null?+imb.toFixed(2):null, zg:zg,
-      cw:cw, pw:pw, ranks:ranks, reg:(zg!=null?(px>=zg?'posGamma':'negGamma'):(netMag>0?'posGamma':'negGamma')) };
+      cw:cw, pw:pw, cwPos:cwPos, pwPos:pwPos, cwM:(cwm<0?null:Math.round(cwm)), pwM:(pwm<0?null:Math.round(pwm)),
+      basis:(useAbs?'abs':'pct'), nNat:nat.length, nSkipped:skipped,
+      ranks:ranks, reg:(zg!=null?(px>=zg?'posGamma':'negGamma'):(netMag>0?'posGamma':'negGamma')) };
   }catch(e){ return null; }
 }
 
@@ -2544,6 +2870,14 @@ function recordNodeSnapshot(sym){
       // (v10.44) CROSS-MARKET headers scraped from the Skylit sidebar (SPY/QQQ/SPXW/VIX:
       // price, %chg, King distance %, side). Confluence was UNTESTABLE before (0 QQQ bars).
       xm:(function(){ try{ return readTrinityHeaders(); }catch(eX){ return null; } })(),
+      // (v11.8) THE LEVEL SET as the panel showed it this bar — CR0/CR, PS0/PS, HVL, Mag, with the reach
+      // our chain actually had. Recorded so the nightly can score the levels against the tape rather than
+      // against a story, and so a later chain change is visible as a change in `reach`, not a mystery.
+      lev:(function(){ try{ var Lv=gLevels(sym); if(!Lv) return null;
+        function kk(o){ return (o&&o.k!=null)?o.k:null; }
+        return { cr:kk(Lv.cr), cr0:kk(Lv.cr0), ps:kk(Lv.ps), ps0:kk(Lv.ps0), hvl:kk(Lv.hvl), mag:kk(Lv.mag),
+                 reach:Lv.reach, reachDays:Lv.reachDays, nCols:Lv.nCols, structFrom:Lv.structFrom,
+                 regime:Lv.regime, basis:Lv.basis, nNat:Lv.nNat, nSkipped:Lv.nSkipped }; }catch(eLv){ return null; } })(),
       // (v11.6) THE EXPIRATION PROFILE — 0DTE vs near vs far walls, and per-strike breadth. Forward-only.
       exp:(function(){ try{ var p2=expiryProfile(sym); if(!p2) return null;
         return { exps:p2.exps, front:p2.front, nCols:p2.nCols, structuralDiffers:p2.structuralDiffers,
@@ -10932,6 +11266,92 @@ function registerCoreFeatures(){
     rule:{ id:'exp.breadth', tier:'hand', condition:'strike present at >= EXP_BREADTH_MIN in n expiry columns; structural = n >= 2',
            mechanism:'The front expiry pins price today; the later expirations are the walls that survive the close. If breadth separates the two, it belongs in the node grade — by promotion, not by opinion.' } });
 
+  // ---- (v11.8) THE LEVEL SET, RECORDED. Four claims are on trial here, and none of them is assumed:
+  //   1. HVL is a REGIME line. Above it dealers dampen, below they amplify — so realised range in the
+  //      forward window should be measurably SMALLER above the flip. If it is not, the HVL is decoration.
+  //   2. CR / PS are WALLS. A touch should reject. Measured as touched-then-deflected, same rule as PB Entry.
+  //   3. CR0 vs CR disagreement is the interesting case: when today's wall and the structural wall sit at
+  //      different strikes, which one does price actually respect? That question cannot be answered from
+  //      one column, which is why the expiry reader had to come first.
+  //   4. Mag is a MAGNET. Price should close the distance to it more often than chance over the window.
+  // Non-voting. Nothing here touches direction, the grade, or any setup until the scorecard earns it.
+  registerFeature({ key:'levels', label:'Levels · CR0/CR · PS0/PS · HVL · Mag', phase:'structure', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var L=null; try{ L=gLevels(sym); }catch(e){}
+      var px=(STATE[sym]||{}).price;
+      if(!L || typeof px!=='number') return { ok:false, voting:false, px:(typeof px==='number')?px:null };
+      function k(o){ return (o&&o.k!=null)?o.k:null; }
+      var hvl=k(L.hvl), cr=k(L.cr), ps=k(L.ps), cr0=k(L.cr0), ps0=k(L.ps0), mag=k(L.mag);
+      // NB: local must not be named `atr` — a `var atr` shadows the atr() function for the whole
+      // scope (hoisting), so atr(sym) would call null and the tolerance would silently freeze at 0.35.
+      var atrV=null; try{ atrV=atr(sym); }catch(e1){}
+      var near=(atrV&&atrV>0)?Math.max(0.15, atrV*0.25):0.35;   // "at the level" tolerance
+      return { ok:true, voting:false, px:px,
+               hvl:hvl, cr:cr, ps:ps, cr0:cr0, ps0:ps0, mag:mag,
+               reach:L.reach, nCols:L.nCols, basis:L.basis, structFrom:L.structFrom,
+               // the regime claim
+               regime:L.regime, aboveHvl:(hvl!=null)?(px>=hvl):null,
+               hvlDist:(hvl!=null)?+(px-hvl).toFixed(2):null,
+               // the wall claims — is price AT one right now, and which way should it deflect
+               atCR:(cr!=null)?(Math.abs(px-cr)<=near):null,
+               atPS:(ps!=null)?(Math.abs(px-ps)<=near):null,
+               atCR0:(cr0!=null)?(Math.abs(px-cr0)<=near):null,
+               atPS0:(ps0!=null)?(Math.abs(px-ps0)<=near):null,
+               // 0DTE vs structural: the disagreement case is the one worth measuring
+               crSplit:(cr!=null&&cr0!=null)?+(cr0-cr).toFixed(2):null,
+               psSplit:(ps!=null&&ps0!=null)?+(ps0-ps).toFixed(2):null,
+               crAgree:(cr!=null&&cr0!=null)?(Math.abs(cr0-cr)<=near):null,
+               psAgree:(ps!=null&&ps0!=null)?(Math.abs(ps0-ps)<=near):null,
+               // the magnet claim
+               magDist:(mag!=null)?+(mag-px).toFixed(2):null,
+               magDir:(mag!=null)?((mag>px)?1:((mag<px)?-1:0)):0,
+               // is price inside the structural cage at all
+               inCage:(cr!=null&&ps!=null)?(px>ps&&px<cr):null,
+               atr:(atrV!=null)?+atrV.toFixed(2):null, near:+near.toFixed(2) };
+    },
+    outcome:function(rec, fwd){
+      // MFE/MAE ride on EVERY outcome, including the refusal path — the miner joins on them, and an
+      // outcome that omits them is invisible to the scorecard rather than merely unscored.
+      if(!rec || !rec.ok || !fwd) return { hit:null, mfe:(fwd?fwd.mfe:null), mae:(fwd?fwd.mae:null), n:(fwd?fwd.n:0) };
+      var o={ mfe:fwd.mfe, mae:fwd.mae, net:fwd.net, n:fwd.n };
+      // realised range in the window — the number that decides whether HVL means anything
+      o.range=(fwd.mfe!=null&&fwd.mae!=null)?+(fwd.mfe-fwd.mae).toFixed(2):null;
+      o.rangeAtr=(o.range!=null&&rec.atr)?+(o.range/rec.atr).toFixed(2):null;
+      // wall deflection: at CR price should fall away; at PS it should lift
+      o.crDefl=(rec.atCR===true)?((fwd.mae<=-DIR_PTS)?1:0):null;
+      o.psDefl=(rec.atPS===true)?((fwd.mfe>=DIR_PTS)?1:0):null;
+      o.cr0Defl=(rec.atCR0===true)?((fwd.mae<=-DIR_PTS)?1:0):null;
+      o.ps0Defl=(rec.atPS0===true)?((fwd.mfe>=DIR_PTS)?1:0):null;
+      // magnet: did the window close at least half the distance to it
+      if(rec.magDist!=null && Math.abs(rec.magDist)>=0.10){
+        var moved=(rec.magDir>0)?fwd.mfe:-fwd.mae;
+        o.magPull=(moved>=Math.abs(rec.magDist)*0.5)?1:0;
+        o.magTag =(moved>=Math.abs(rec.magDist))?1:0;
+      } else { o.magPull=null; o.magTag=null; }
+      // the headline hit: the wall in play, else the magnet, else nothing (never a fabricated 0)
+      o.hit=(o.crDefl!=null)?o.crDefl:((o.psDefl!=null)?o.psDefl:((o.magPull!=null)?o.magPull:null));
+      return o;
+    },
+    questions:[
+      { id:'lev_hvl_regime', when:[{f:'aboveHvl',v:true}], outcome:'range',
+        note:'THE volatility-level claim: is realised 30m range genuinely smaller ABOVE the HVL (dealers dampening) than below it (dealers amplifying)? Compare rangeAtr above vs below. If the two are the same, the HVL is a line we draw for no reason.' },
+      { id:'lev_cr_rejects', when:[{f:'atCR',v:true}], outcome:'crDefl',
+        note:'does price touching Call Resistance actually get rejected DIR_PTS within 30m, or does it walk through? A wall that does not reject is a strike, not a wall.' },
+      { id:'lev_ps_holds', when:[{f:'atPS',v:true}], outcome:'psDefl',
+        note:'the same for Put Support on the downside.' },
+      { id:'lev_0dte_vs_struct', when:[{f:'crAgree',v:false}], outcome:'cr0Defl',
+        note:'when TODAY\'S wall and the STRUCTURAL wall disagree, which one does price respect? crSplit carries the gap in points; compare cr0Defl on disagreement bars against crDefl on the same bars. This is the CR0-vs-CR question and it is the reason the expiry columns get read.' },
+      { id:'lev_mag_pull', when:[{f:'magDir',v:'!=0'}], outcome:'magPull',
+        note:'does price close at least half the distance to the magnet within 30m more often than chance? Split by magDist so "the magnet is 4 points away" is not scored the same as "it is 0.3 away".' },
+      { id:'lev_cage', when:[{f:'inCage',v:false}], outcome:'range',
+        note:'price OUTSIDE the structural cage (above CR or below PS): does range expand? This is the trend-day tell if it holds.' },
+      { id:'lev_reach', when:[{f:'reach',v:'week'}], outcome:'crDefl',
+        note:'honesty check on our own chain: our CR/PS reaches about a week, not the full chain. Does the one-week wall reject at a rate worth quoting, or is a real all-expiration wall the thing that matters? If this reads at chance, the InsiderFinance lane is worth the grant change; if it reads well, it is not.' }
+    ],
+    rule:{ id:'levels', tier:'hand',
+      condition:'CR0/PS0 read inside the front expiry column; CR/PS inside the longest-dated bucket present; HVL = zero gamma on the native node set (absolute basis when the tape carries it); Mag = heaviest strike. Never pooled across expiry columns.',
+      mechanism:'MenthorQ\'s vocabulary computed from our own tape. HVL is the regime line (dampening above, amplifying below); CR/PS are the walls; Mag is the pin. All non-voting until the scorecard says otherwise — and CR/PS are explicitly labelled with the reach our chain actually has, so a one-week wall is never quoted as an all-expiration wall.' } });
+
   // ---- (v11.0) THE LEDGER, RECORDED. The one question the ledger exists to settle as a
   // feature: at the moment price touches a node, does an ACCUMULATING node deflect it more
   // reliably than a DISSIPATING one? Recorded on the in-play node each bar with its ledger
@@ -12169,6 +12589,124 @@ function pbEntryPick(sym){
   }catch(e){}
   return out;
 }
+// ---- (v11.8) THE LEVELS CARD + CHART ----------------------------------------
+// Six lines, in price order, each with what it is and how far away. The 0DTE pair is drawn dashed and
+// dimmer than the structural pair so today-only walls are never mistaken for structure at a glance.
+var LVL_UI_LS='gpts_levels_ui_v1';
+var LVL_UI=(function(){ try{ var o=JSON.parse(localStorage.getItem(LVL_UI_LS)||'null'); if(o&&typeof o==='object') return o; }catch(e){}
+  return { open:true, chart:true }; })();
+function lvlUiSave(){ try{ localStorage.setItem(LVL_UI_LS, JSON.stringify(LVL_UI)); }catch(e){} }
+var LVL_COL={ cr:'#f0616d', cr0:'#f0616d', ps:'#2ec27e', ps0:'#2ec27e', hvl:'#f2b45a', mag:'#e3c341' };
+var LVL_NAME={ cr:'CR', cr0:'CR0', ps:'PS', ps0:'PS0', hvl:'HVL', mag:'Mag' };
+var LVL_WHAT={
+  cr:'Call Resistance — heaviest strike above price across the expirations we can see. Dealers long gamma here sell rallies into it.',
+  cr0:'Call Resistance 0DTE — the same wall in TODAY\'S expiry only. It can sit nowhere near the structural one, and it evaporates at the close.',
+  ps:'Put Support — heaviest strike below price across the expirations we can see.',
+  ps0:'Put Support 0DTE — today\'s floor only.',
+  hvl:'High Vol Level — the gamma flip (zero gamma). ABOVE it dealers hedge against the move and dampen volatility; BELOW it they hedge with it and amplify. This is the volatility level, and it is a REGIME line, not a target.',
+  mag:'Magnet — the heaviest strike in the book. Price tends to gravitate toward it into expiry.'
+};
+// price-ordered level rows for a level set
+function lvlRows(L){
+  if(!L) return [];
+  var rows=[];
+  ['cr','cr0','hvl','mag','ps0','ps'].forEach(function(id){ var v=L[id]; if(v && v.k!=null) rows.push({id:id, k:v.k, dist:v.dist, distPct:v.distPct, src:v.src}); });
+  rows.sort(function(a,b){ return b.k-a.k; });
+  return rows;
+}
+function levelsChartSvg(sym, L){
+  try{
+    var cs=[]; try{ cs=(closedCandles(sym)||[]).slice(-90); }catch(e){}
+    var px=L.px;
+    var rows=lvlRows(L); if(!rows.length) return '';
+    var lo=null, hi=null;
+    cs.forEach(function(c){ var a=(c.l!=null?c.l:c.c), b=(c.h!=null?c.h:c.c);
+      if(a!=null){ lo=(lo==null||a<lo)?a:lo; } if(b!=null){ hi=(hi==null||b>hi)?b:hi; } });
+    if(px!=null){ lo=(lo==null||px<lo)?px:lo; hi=(hi==null||px>hi)?px:hi; }
+    rows.forEach(function(r){ lo=(lo==null||r.k<lo)?r.k:lo; hi=(hi==null||r.k>hi)?r.k:hi; });
+    if(lo==null||hi==null||!(hi>lo)) return '';
+    var pad=(hi-lo)*0.06; lo-=pad; hi+=pad;
+    var W=320, H=132, R=34, T=4, B=4;           // R = right gutter for the labels
+    function y(v){ return T+(H-T-B)*(1-(v-lo)/(hi-lo)); }
+    function x(i,n){ return (n<2)?0:((W-R)*i/(n-1)); }
+    var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" preserveAspectRatio="none">';
+    svg+='<rect x="0" y="0" width="'+W+'" height="'+H+'" fill="'+PAL.card+'"/>';
+    // level lines first, so price draws over them
+    rows.forEach(function(r){
+      var yy=y(r.k).toFixed(1), c=LVL_COL[r.id]||PAL.sub, z=(r.id==='cr0'||r.id==='ps0');
+      svg+='<line x1="0" y1="'+yy+'" x2="'+(W-R)+'" y2="'+yy+'" stroke="'+c+'" stroke-width="'+(z?0.7:1.1)+'"'+(z?' stroke-dasharray="3,3"':'')+' opacity="'+(z?0.55:0.9)+'"/>';
+      svg+='<text x="'+(W-R+2)+'" y="'+(y(r.k)+2.6).toFixed(1)+'" fill="'+c+'" font-size="7" font-family="ui-monospace,monospace" opacity="'+(z?0.75:1)+'">'+LVL_NAME[r.id]+'</text>';
+    });
+    // price
+    if(cs.length>1){
+      var pts=[]; cs.forEach(function(c,i){ if(c.c!=null) pts.push(x(i,cs.length).toFixed(1)+','+y(c.c).toFixed(1)); });
+      if(pts.length>1) svg+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="'+PAL.ink+'" stroke-width="1.2" opacity="0.95"/>';
+    }
+    if(px!=null){
+      var yp=y(px).toFixed(1);
+      svg+='<circle cx="'+(W-R-1)+'" cy="'+yp+'" r="1.8" fill="'+PAL.time+'"/>';
+      svg+='<line x1="0" y1="'+yp+'" x2="'+(W-R)+'" y2="'+yp+'" stroke="'+PAL.time+'" stroke-width="0.5" stroke-dasharray="1,3" opacity="0.5"/>';
+    }
+    svg+='</svg>';
+    return svg;
+  }catch(e){ return ''; }
+}
+function levelsHtml(sym){
+  try{
+    var L=null; try{ L=gLevels(sym); }catch(e){}
+    if(!L) return '';
+    var rows=lvlRows(L); if(!rows.length) return '';
+    var reachTxt=({ '0dte':'today only', week:'≤1 week', month:'≤1 month', chain:'full chain', unknown:'reach unknown' })[L.reach]||L.reach;
+    var regTxt=L.regime==='posGamma'?'<span style="color:'+PAL.longAccent+'">+γ</span> dampening'
+             :(L.regime==='negGamma'?'<span style="color:'+PAL.shortAccent+'">−γ</span> amplifying':'');
+    // The honesty line. Our chain is not MenthorQ's chain and the card says so on its face.
+    var caveat=('These are computed from OUR tape, not scraped. CR/PS reach '+reachTxt+' ('+(L.nCols||1)+' expiry column'+((L.nCols||1)===1?'':'s')+
+      (L.exps&&L.exps.length?(', '+L.exps[0]+'→'+L.exps[L.exps.length-1]):'')+') — MenthorQ and InsiderFinance aggregate the whole chain out years, so our CR/PS is the structural wall WE CAN SEE, not an all-expiration wall. '+
+      'The 0DTE pair (dashed) is today\'s expiry alone. Basis '+(L.basis||'?')+(L.nSkipped?(', '+L.nSkipped+' derived lane'+(L.nSkipped===1?'':'s')+' excluded'):'')+'. '+
+      'Descriptive only — every level here is scored nightly like any other factor and carries no weight until it earns one.').replace(/"/g,'');
+    var h='<div style="padding:2px 7px 3px;margin:0 0 1px">';
+    h+='<div title="'+caveat+'" style="display:flex;align-items:center;gap:6px;font-size:10px;font-weight:800;color:'+PAL.sub+';white-space:nowrap">'+
+       '<span data-glvl="open" style="cursor:pointer;color:'+PAL.ink+'">'+(LVL_UI.open?'▾':'▸')+' LEVELS</span>'+
+       '<span style="font-weight:600;color:'+PAL.sub+'">'+reachTxt+'</span>'+
+       (regTxt?('<span style="font-weight:700">'+regTxt+'</span>'):'')+
+       '<span data-glvl="chart" style="margin-left:auto;cursor:pointer;color:'+(LVL_UI.chart?PAL.blue:PAL.sub)+';font-size:9px">chart</span>'+
+       '</div>';
+    if(LVL_UI.open){
+      h+='<div style="margin-top:2px">';
+      rows.forEach(function(r){
+        var c=LVL_COL[r.id]||PAL.sub, z=(r.id==='cr0'||r.id==='ps0');
+        var dcol=(r.dist>0)?PAL.longAccent:((r.dist<0)?PAL.shortAccent:PAL.sub);
+        var dtxt=(r.dist==null)?'':((r.dist>0?'+':'')+fmtSpan(r.dist));
+        h+='<div title="'+(LVL_WHAT[r.id]||'').replace(/"/g,'')+' Source: '+(r.src||'—')+'." '+
+           'style="display:flex;align-items:center;gap:6px;font-size:10.5px;line-height:1.45;white-space:nowrap">'+
+           '<span style="display:inline-block;width:26px;color:'+c+';font-weight:800;opacity:'+(z?0.72:1)+'">'+LVL_NAME[r.id]+'</span>'+
+           '<span style="color:'+PAL.ink+';font-weight:700;font-variant-numeric:tabular-nums">'+fmtLvl(r.k)+'</span>'+
+           '<span style="margin-left:auto;color:'+dcol+';font-weight:700;font-size:9.5px;font-variant-numeric:tabular-nums">'+dtxt+'</span>'+
+           '<span style="color:'+PAL.sub+';font-size:9px;width:36px;text-align:right">'+(r.distPct!=null?((r.distPct>0?'+':'')+r.distPct+'%'):'')+'</span>'+
+           '</div>';
+      });
+      h+='</div>';
+      if(LVL_UI.chart){ var sv=levelsChartSvg(sym,L); if(sv) h+='<div style="margin-top:3px;border:1px solid '+PAL.line+';border-radius:3px;overflow:hidden">'+sv+'</div>'; }
+      // the cross-check lane, only when it has something to say
+      try{
+        var X=L.ext;
+        if(X && X.on){
+          if(X.err){ h+='<div style="font-size:9px;color:'+PAL.sub+';margin-top:2px">IF cross-check: '+X.err+'</div>'; }
+          else {
+            var agTxt=X.ageMs!=null?(Math.round(X.ageMs/60000)+'m'):'';
+            h+='<div title="InsiderFinance, all expirations. Cross-check only — it never overrides a native level." style="font-size:9px;color:'+(X.stale?PAL.sub:PAL.blue)+';margin-top:2px;white-space:nowrap">'+
+               'IF chain: CR '+(X.cw!=null?X.cw:'–')+' · PS '+(X.pw!=null?X.pw:'–')+' · HVL '+(X.zg!=null?X.zg:'–')+
+               (X.callGex!=null&&X.putGex!=null?(' · C/P '+X.callGex+'B/'+X.putGex+'B'):'')+
+               (agTxt?(' · '+agTxt+' old'):'')+(X.stale?' (stale)':'')+(X.suspect?(' ⚠ '+X.suspect):'')+'</div>';
+          }
+        }
+      }catch(eX2){}
+    }
+    h+='</div>';
+    return h;
+  }catch(e){ return ''; }
+}
+
 function pbEntryHtml(sym){
   try{
     var pe=pbEntryPick(sym); if(!pe.ok || pe.level==null) return '';
@@ -14343,6 +14881,13 @@ function wireBodyDelegation(){
           if(t.getAttribute && t.getAttribute('data-gbrief')){
             ev.stopPropagation(); BRIEF_OPEN=!BRIEF_OPEN; try{ render(); }catch(eRb){} return;
           }
+          // (v11.8) LEVELS card: collapse the list, or hide the chart
+          if(t.getAttribute && t.getAttribute('data-glvl')){
+            ev.stopPropagation();
+            var lw=t.getAttribute('data-glvl');
+            if(lw==='open') LVL_UI.open=!LVL_UI.open; else if(lw==='chart') LVL_UI.chart=!LVL_UI.chart;
+            lvlUiSave(); try{ render(); }catch(eLv){} return;
+          }
           // (v10.54 GROUP 5) the Analysis / Testing tabs: collapsible sections, the "?"
           // guide, the self-test button and the async coverage refresh.
           if(t.getAttribute && t.getAttribute('data-gsec')){
@@ -14434,6 +14979,7 @@ function render(){
   try{ html+=briefBlockHtml(__asym); }catch(eBr){}    // (v10.49 J) pre-open brief (collapsible)
   if(DRIFT_LIVE){ try{ html+=driftLineHtml(__asym); }catch(eD49){} }   // (v10.57) shadow mode: off the face until proven
   try{ html+=nextStopHtml(__asym); }catch(eNS){}   // (v11.1) NEXT STOP — the one forward call, above the read
+  try{ html+=levelsHtml(__asym); }catch(eLV){}     // (v11.8) LEVELS — CR0/CR · PS0/PS · HVL · Mag, with the chart
   try{ html+=pbEntryHtml(__asym); }catch(ePE){}    // (v11.3) PB ENTRY — where to look for the pullback / deflection, under Next Stop
   try{ html+=readBlock44(__asym); }catch(eR){}
   // (v10.37) standalone gatekeeperBlock() REMOVED - gatekeeper strike + distance now in King badge.
