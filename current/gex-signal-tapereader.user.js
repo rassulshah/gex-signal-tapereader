@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.4.2
+// @version    11.4.4
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -419,7 +419,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.4.2';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.4.4';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -1146,25 +1146,38 @@ function tapeCells(table){
 // ============================================================================
 var LADDER_SYM_RE=/^\s*(SPY|QQQ|SPXW|SPX|VIX|IWM|DIA)\s*\$/;
 function ladderStrikeOf(el){ var t=(el&&el.textContent||'').trim(); var m=t.match(/^(\d{2,5}(?:\.\d+)?)$/); if(!m) return null; var v=parseFloat(m[1]); return (isFinite(v)&&v>=5&&!/^(19|20)\d{2}$/.test(t))?v:null; }
-function ladderCellParse(td){
-  // -> {pct, kd, vel, neg} for one value cell; pct null if unreadable
+function ladderCellParse(td, valueFirst){
+  // -> {pct, kd, vel, neg} for one value cell; pct null if unreadable.
+  // (v11.4.4 FIX, live 2026-08-20) THE ORDER IS KNOWN FROM THE SOURCE, NEVER GUESSED. The Trinity pane
+  // writes VELOCITY first then %King ("+15%62%", "-76%−3%"); the main table writes %King first then
+  // velocity ("31%-7%"). The old heuristic — "a signed token followed by an unsigned one means velocity
+  // first" — broke on the pane's NEGATIVE-gamma rows, because Skylit prints those values with a UNICODE
+  // minus (−3%) so BOTH tokens looked signed and the fallback took the VELOCITY as the value. Live proof
+  // 2026-08-20 10:18 CT: 767 read 117% (a velocity chip) against a $K-tagged King at 100%, which tripped
+  // the parse invariant and put the panel out of sync. Callers now state the order.
   var raw=(td&&td.textContent||'').replace(/\s+/g,''); if(!raw) return null;
-  var kd=null, kdm=raw.match(/([+\-−]?)\$([\d,]+)K/); if(kdm){ kd=Math.abs(parseInt(kdm[2].replace(/,/g,''),10)); }
+  var kd=null, kdNeg=false, kdm=raw.match(/([+\-−]?)\$([\d,]+)K/);
+  if(kdm){ kd=Math.abs(parseInt(kdm[2].replace(/,/g,''),10)); kdNeg=(kdm[1]==='-'||kdm[1]==='−'); }
   var toks=[]; var re=/([+\-−]?)(\d{1,3})%/g, m; while((m=re.exec(raw))){ toks.push({sign:m[1], v:parseInt(m[2],10), signed:!!m[1]}); }
   var val=null, vel=null;
-  if(kd!=null){ val={sign:'', v:100, signed:false}; if(toks.length) vel=toks[0]; }
+  // the King row's polarity is carried by the sign on its OWN dollar figure ("−$247,657K" = a −γ King)
+  if(kd!=null){ val={sign:(kdNeg?'−':''), v:100, signed:kdNeg}; if(toks.length) vel=toks[0]; }
   else if(toks.length===1){ val=toks[0]; }
   else if(toks.length>=2){
     var a=toks[0], b=toks[1];
-    if(a.signed && !b.signed){ vel=a; val=b; }           // "-1%65%"  (Trinity pane)
-    else if(!a.signed && b.signed){ val=a; vel=b; }      // "24%-7%"  (main table)
-    else { val=a; vel=b; }                               // ambiguous: main-table order
+    if(valueFirst===true){ val=a; vel=b; }               // main table: "31%-7%"
+    else if(valueFirst===false){ vel=a; val=b; }         // trinity pane: "+15%62%" / "-76%−3%"
+    else if(a.signed && !b.signed){ vel=a; val=b; }      // unknown source: old heuristic
+    else if(!a.signed && b.signed){ val=a; vel=b; }
+    else { val=a; vel=b; }
   }
   if(!val) return null;
+  // (v11.4.4) POLARITY COMES FROM THE TEXT, NEVER THE COLOUR. v11.2 inferred −γ from a blue-ish cell, but
+  // Skylit's ramp is a viridis scale over the VALUE (deep purple = most negative … blue/teal = small …
+  // yellow = the King), so a small POSITIVE strike is blue and was being flipped negative (live 2026-08-20:
+  // 770 at +19% read −19%). The rendered number already carries its sign — ASCII '-' or Unicode '−'; no
+  // sign means positive. This also drops a hidden dependency on a palette Skylit can restyle at will.
   var neg=(val.sign==='-'||val.sign==='−');
-  if(!val.signed){ // polarity from colour: Skylit paints −γ purple/blue (b>g), +γ green/yellow (g>b)
-    try{ var bg=(td.style&&td.style.backgroundColor)||''; var cm=bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/); if(cm){ var g=+cm[2], b2=+cm[3]; if(b2>g+20 && val.v>0) neg=true; } }catch(eC){}
-  }
   return { pct:neg?-val.v:val.v, kd:kd, vel:vel?((vel.sign==='-'||vel.sign==='−')?-vel.v:vel.v):null, neg:neg,
            hi:/rgb\(\s*253,\s*231,\s*37\s*\)/.test((td.style&&td.style.backgroundColor)||'') };
 }
@@ -1209,8 +1222,8 @@ function readLaddersByDollar(){
     // main table + EXPIRATIONS view: the $K may sit in a later expiry column (the BOOK King). Read column 1 for %King,
     // keep the $ cell as bookKing — the yellow cell (or max) is the nearest-expiry King.
     var bookKing=null;
-    if(isMain && valIdx!==L.strikeIdx+1){ var bkCell=kingRow&&kingRow.cells[valIdx]; var bkp=bkCell?ladderCellParse(bkCell):null; bookKing={k:kingRow?kingRow.k:null, col:valIdx, kd:bkp?bkp.kd:null, neg:/^[\-−]/.test((bkCell&&bkCell.textContent||'').replace(/\s+/g,''))}; valIdx=L.strikeIdx+1; }
-    for(var r=0;r<L.rows.length;r++){ var rw=L.rows[r]; var cell=rw.cells[valIdx]; if(!cell) continue; var pc=ladderCellParse(cell); if(!pc||pc.pct==null) continue;
+    if(isMain && valIdx!==L.strikeIdx+1){ var bkCell=kingRow&&kingRow.cells[valIdx]; var bkp=bkCell?ladderCellParse(bkCell, true):null; bookKing={k:kingRow?kingRow.k:null, col:valIdx, kd:bkp?bkp.kd:null, neg:/^[\-−]/.test((bkCell&&bkCell.textContent||'').replace(/\s+/g,''))}; valIdx=L.strikeIdx+1; }
+    for(var r=0;r<L.rows.length;r++){ var rw=L.rows[r]; var cell=rw.cells[valIdx]; if(!cell) continue; var pc=ladderCellParse(cell, !!isMain); if(!pc||pc.pct==null) continue;
       var kk=rw.k.toFixed(2); pct[kk]=pc.pct; if(pc.vel!=null) vel[kk]=pc.vel; count++;
       if(pc.kd!=null && (!isMain || valIdx===L.strikeIdx+1)){ if(king==null){ king=rw.k; kingKd=pc.kd; } else if(king!==rw.k) rival=rw.k; }
       if(pc.hi){ if(hiK==null) hiK=rw.k; else if(hiK!==rw.k) hiK=-1; } }
@@ -2626,7 +2639,8 @@ var IRT_COLORS={
   mag:   irtColor(139,152,169),  // gray
   neg:   irtColor(163,113,247),  // purple (−γ personality)
   ns:    irtColor(74,144,217),   // blue — Next Stop
-  pb:    irtColor(255,128,0)     // orange — PB Entry (matches the sample's 33023)
+  pb:    irtColor(255,128,0),    // orange — PB Entry (matches the sample's 33023)
+  deriv: irtColor(90,110,130)    // slate — SPXW-derived lane (its own book's scale, dotted)
 };
 function irtRound(v, tick){ if(!tick) return +v.toFixed(2); return +(Math.round(v/tick)*tick).toFixed(2); }
 function irtCsvRow(sym, price, label, color, width, style){
@@ -2672,6 +2686,15 @@ function irtBuildCsv(){
     var role=L.isKing?'king':(L.isGatekeeper?'gate':(L.isCeil?'ceil':(L.isFlr?'flr':((L.isStrongMag||Math.abs(L.pct)>=thr)?'mag':null))));
     if(!role) return;
     var neg=(L.pos===false);
+    // (v11.4.3 FIX, live 2026-08-20) SPXW-DERIVED LANES ARE NOT ON THE SPY SCALE. v10.58 normalises each
+    // derived book to its OWN King, so a lane can read 100% while the real SPY King also reads 100% — the
+    // first export drew "Ceil 100%" beside "K 100%" and they meant different things. A derived lane never
+    // wears a SPY role word: it is labelled SPXW with its own %, in its own colour, thin.
+    if(L.derived){
+      if(Math.abs(L.pct)<thr) return;
+      rows.push({ k:L.k, lbl:(L.src||'SPXW')+' '+Math.abs(L.pct)+'%'+(neg?' -g':''), col:IRT_COLORS.deriv, w:1, style:1 });
+      return;
+    }
     var col=neg&&role==='mag'?IRT_COLORS.neg:IRT_COLORS[role];
     var w=L.isKing?3:(L.isGatekeeper||L.isCeil||L.isFlr?2:1);
     var lbl=(L.isKing?'K':(L.isGatekeeper?'GK':(L.isCeil?'Ceil':(L.isFlr?'Flr':'Mag'))))+' '+Math.abs(L.pct)+'%'+(neg?' -g':'');

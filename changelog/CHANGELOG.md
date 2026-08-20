@@ -1,3 +1,31 @@
+## v11.4.4 — 2026-08-20 (live, 10:20 CT) — TWO REAL MISREADS IN THE TRINITY PANE: velocity read as %King, and colour used for polarity
+
+Found live while checking an ES chart. The panel went out of sync with 767 reading **117%** against a $K-tagged King at 100% —
+impossible by definition, and the parse invariant (INVARIANT 2, "no other strike may meet or exceed the King") caught it.
+**Cause 1 — cell order guessed instead of known.** The Trinity pane writes VELOCITY first then %King ("+15%62%"); the main table
+writes %King first then velocity ("31%-7%"). v11.2 guessed by "signed then unsigned = velocity first", which works until the
+value itself is NEGATIVE — Skylit prints those with a UNICODE minus ("-76%−3%"), so both tokens looked signed and the fallback
+took the VELOCITY as the value. Every −γ strike in the pane has been carrying its velocity as its %King since Tuesday. The
+caller now STATES the order (`ladderCellParse(cell, valueFirst)`); nothing is inferred.
+**Cause 2 — polarity inferred from the cell colour.** v11.2 read blue-ish cells as −γ, but Skylit's ramp is a viridis scale over
+the VALUE (deep purple = most negative … blue/teal = small … yellow = the King), so a small POSITIVE strike is blue: 770 at
++19% was being recorded as −19%. Polarity now comes only from the rendered sign (ASCII '-' or Unicode '−'; absent = positive),
+and the King row takes its sign from its own dollar figure ("−$247,657K" = a −γ King). This also removes a hidden dependency on
+a palette Skylit can restyle at will.
+Fixtures in test_ladder_dollar (23) are the live 10:18 CT SPY pane verbatim. NIGHTLY NOTE: `tri[SYM].top` percentages recorded
+2026-08-18 → 2026-08-20 10:20 CT are unreliable for NEGATIVE strikes (velocity-as-value) and for small positives (colour flip);
+`pct` on the native SPY/QQQ books (feed-derived) is unaffected, as are the ledger, Map, leg engine and every scored feature —
+they read the FEED, not the pane. Suite green except the known-stale.
+
+## v11.4.3 — 2026-08-20 (live, 09:35 CT) — IRT export: an SPXW-derived lane no longer poses as a SPY wall
+
+First live look at the generated CSV (after v11.4.1 made it produce rows) showed "Ceil 100%" sitting two strikes from
+"K 100%". Cause: v10.58 normalises each derived book to its OWN King, so an SPXW lane can read 100% on a scale that is not
+the SPY scale — and the exporter was giving it a SPY role word and a wall's weight. Derived lanes are now labelled by their
+book with their own percentage ("SPXW 100%"), drawn thin, dotted and slate, and are never called K/GK/Ceil/Flr; native SPY
+strikes are unchanged. Verified against the live 09:31 CT board: King 767 ($77,015K), lanes at 767.5/768.5 tagged SPXW,
+ratio source named in the gear. Tests: test_irt_export (22).
+
 ## v11.4.2 — 2026-08-20 — SYMBOL SCOPE: another instrument's book can no longer be recorded as SPY
 
 Found while answering "does this work for USO / GLD?". `symFromUrl` returned `'SPY'` for ANYTHING that was not QQQ, so

@@ -18,6 +18,7 @@ global.nodeMapModel=()=>({ ok:true, levels:[
   {k:775, pct:59, isCeil:true, pos:true},
   {k:770.5, pct:71, isFlr:true, pos:true},
   {k:777, pct:31, isStrongMag:true, pos:false},
+  {k:768.5, pct:100, isCeil:true, pos:true, derived:true, src:'SPXW'},   // a derived lane at ITS OWN 100%
   {k:780, pct:12, pos:true},                       // below thresh, no role → dropped
 ]});
 global.nextStopPick=()=>({ok:true, level:776, grade:'C'});
@@ -27,9 +28,9 @@ const b=irtBuildCsv();
 ok(!!b, '0 builds');
 const lines=b.csv.trim().split('\r\n');
 ok(lines[0]==='SYMBOL,PRICE,LABEL,PENCOLOR,PENWIDTH,PENSTYLE,bDRAWTEXT,bDRAWPRICE,LABELPOS,bCUSTPOS,CUSTPOSALLMARGIN,CUSTPOSLEFTRIGHT,CUSTPOSUNITS,CUSTPOSWIDTH,bBANDS,BANDPENCOLOR,BANDPENWIDTH,BANDPENSTYLE,BANDABOVEBEL,BANDUNITS,BANDPRICE,bBANDS2,BAND2PENCOLOR,BAND2ABOVEBEL,BAND2UNITS,BAND2PRICE,bBANDLABELS,bTRANSLUCENT', '1a header verbatim from the sample');
-ok(b.n===7 && lines.length===1+7*2, '1b 7 levels (King, GK, Ceil, Flr, −γ Mag, NextStop, PBentry; 12% node dropped) × 2 symbols', [b.n,lines.length]);
+ok(b.n===8 && lines.length===1+8*2, '1b 8 levels (King, GK, Ceil, Flr, −γ Mag, SPXW lane, NextStop, PBentry; 12% node dropped) × 2 symbols', [b.n,lines.length]);
 const eRows=lines.filter(l=>l.startsWith('EPU26,')); const sRows=lines.filter(l=>l.startsWith('SPY,'));
-ok(eRows.length===7 && sRows.length===7, '1c both symbols written');
+ok(eRows.length===8 && sRows.length===8, '1c both symbols written', [eRows.length,sRows.length]);
 const king=eRows.find(l=>/K 100%/.test(l));
 ok(king && /^EPU26,7781\.750000,/.test(king), '1d King 774 × 10.0538 = 7781.66 → rounded to the 0.25 tick = 7781.75, six decimals', king);
 const kingSpy=sRows.find(l=>/K 100%/.test(l));
@@ -67,5 +68,13 @@ ok(b5 && b5.ratio.src==='spxw-derived' && Math.abs(b5.ratio.r-10.0256)<0.01, '3d
 global.LASTFEED={SPY:null};
 const b6=irtBuildCsv();
 ok(b6 && b6.ratio.src==='const' && b6.ratio.r===10.05, '3e last resort: the ES constant', b6&&b6.ratio);
+// ---- 4. (v11.4.3) an SPXW-derived lane never wears a SPY role word or the King's weight
+global.CFG.irt.futSym='EPU26'; global.CFG.irt.etfSym='SPY'; global.FUTMODE={ fam:'ES', r:10.0538, live:true };
+const b7=irtBuildCsv();
+const dRow=b7.csv.split('\r\n').filter(l=>l.startsWith('SPY,')&&/768\.500000/.test(l))[0];
+ok(!!dRow && /SPXW 100%/.test(dRow), '4a the derived lane is labelled "SPXW 100%" — not "Ceil 100%" beside the real King', dRow&&dRow.split(',')[2]);
+ok(dRow.split(',')[4]==='1' && dRow.split(',')[5]==='1', '4b ...thin and dotted, so it cannot be mistaken for a SPY wall', dRow&&[dRow.split(',')[4],dRow.split(',')[5]]);
+ok(dRow.split(',')[3]===String((130<<16)+(110<<8)+90), '4c ...in its own slate colour');
+ok(/K 100%/.test(b7.csv) && b7.csv.split('\r\n').filter(l=>/,K 100%/.test(l)).length===2, '4d exactly one real King per symbol');
 console.log('test_irt_export: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
