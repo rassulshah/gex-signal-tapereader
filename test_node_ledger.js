@@ -9,7 +9,7 @@ function mul(a,b){return a/(1/b);} global.mul=mul;
 global.FEED_SERIES_CACHE={}; global.LEDGER_CACHE={}; global.MIN_STRENGTH=20; global.PB_MIN_PCT=20; global.PB_REACH=5; global.MAP_ACM=8; global.MAP_DEC=-8; global.MAP_DROP=25; global.FEED_M15_SAMPLES=15; global.FEED_GONE_N=3; global.DEFLECT_ZONE=0.5; global.LEDGER_INFL_BARS=5;
 global.PAL={longAccent:'#2ec27e',shortAccent:'#f0616d',sub:'#8b98a9',ink:'#e6edf3',line:'#21262d'};
 global.dispIsFut=()=>false; global.futMark=()=>''; global.dispR=()=>1; global.fmtFut=String; global.window={};
-eval(['fmtNum','fmtLvl','feedSeriesAll','feedSeries','feedSampleAt','feedGoneAt','mapNodeState','ledgerStateAt','ledgerBuild','ledgerLifeText','ledgerNode','nodeLedger','ledgerExport'].map(ex).join('\n'));
+eval(['fmtNum','fmtLvl','feedSeriesAll','feedSeries','feedSampleAt','feedGoneAt','mapNodeState','ledgerStateAt','ledgerStateAtAbs','ledgerBuild','ledgerLifeText','ledgerNode','nodeLedger','ledgerExport'].map(ex).join('\n'));
 
 // ---- a synthetic session: 40 one-minute samples, t = 100..2440; candles every 3 samples
 function snap(t,l){ return {t:t,s:768.3,l:l}; }

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.4.4
+// @version    11.5
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -419,7 +419,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.4.4';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.5';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -7801,11 +7801,16 @@ function feedSeriesAll(sym){
     var lv=lf.j.levels, N=lv.length, out={ t:[], k:{} , n:N };
     var tIdx={};                                   // snapshot time → native index (the derived
     lv.forEach(function(snap,i){ if(snap && snap.t!=null) tIdx[snap.t]=i; });   // book can skip a minute)
-    function put(key, i, pct){ var a=out.k[key]; if(!a){ a=out.k[key]={ v:new Array(N), first:i, src:null }; for(var q=0;q<N;q++) a.v[q]=null; } if(a.v[i]==null || pct>a.v[i]) a.v[i]=pct; if(a.first==null||i<a.first) a.first=i; }
+    // (v11.5) `v` = %King (a ratio to a MOVING denominator), `a` = the raw ABSOLUTE exposure. The
+    // dollar series is what makes the King readable and kills phantom dissipation — see design/spec-v11.5.
+    function put(key, i, pct, abs){ var a=out.k[key]; if(!a){ a=out.k[key]={ v:new Array(N), a:new Array(N), first:i, src:null }; for(var q=0;q<N;q++){ a.v[q]=null; a.a[q]=null; } }
+      if(a.v[i]==null || pct>a.v[i]){ a.v[i]=pct; a.a[i]=(typeof abs==='number')?abs:a.a[i]; }
+      if(a.a[i]==null && typeof abs==='number') a.a[i]=abs;
+      if(a.first==null||i<a.first) a.first=i; }
     lv.forEach(function(snap,i){
       out.t.push(snap.t||null);
       var mag=0; (snap.l||[]).forEach(function(n){ var a=Math.abs(n.v); if(a>mag) mag=a; });
-      if(mag>0) (snap.l||[]).forEach(function(n){ put(n.k.toFixed(2), i, Math.round(mul(100, Math.abs(n.v)/mag))); });
+      if(mag>0) (snap.l||[]).forEach(function(n){ put(n.k.toFixed(2), i, Math.round(mul(100, Math.abs(n.v)/mag)), Math.abs(n.v)); });
     });
     (lf.j.derived||[]).forEach(function(dd){
       (dd.levels||[]).forEach(function(snap,di){
@@ -7819,13 +7824,13 @@ function feedSeriesAll(sym){
           var kk=Math.round(mul(n.k,2))/2; var key=kk.toFixed(2);
           var isInt=Math.abs(kk-Math.round(kk))<0.001;
           if(isInt && out.k[key] && out.k[key].src==null) return;     // native owns integer strikes
-          put(key, i, Math.round(mul(100, Math.abs(n.v)/mag)));
+          put(key, i, Math.round(mul(100, Math.abs(n.v)/mag)), Math.abs(n.v));
           out.k[key].src=dd.source||'SPXW';
         });
       });
     });
     // absent AFTER first presence = 0 (dropped out of the book), never null
-    Object.keys(out.k).forEach(function(key){ var a=out.k[key]; for(var i=(a.first||0);i<N;i++){ if(a.v[i]==null) a.v[i]=0; } });
+    Object.keys(out.k).forEach(function(key){ var a=out.k[key]; for(var i=(a.first||0);i<N;i++){ if(a.v[i]==null){ a.v[i]=0; a.a[i]=0; } else if(a.a[i]==null) a.a[i]=0; } });
     FEED_SERIES_CACHE[sym]={ src:lf.j, val:out };
     return out;
   }catch(e){ return null; }
@@ -9521,7 +9526,22 @@ function ledgerStateAt(v, i){
   var fp=(pk>0 && typeof cur==='number')?Math.round(100*(pk-cur)/pk):null;
   return { st:mapNodeState({ m15:{pct:m15}, session:{fromPeak:fp} }), cur:cur, m15:m15, fromPeak:fp, peak:pk };
 }
-// PURE: the ledger from a feed-series map {t[], k:{key:{v[],src}}} + closed candles [{t,o,h,l,c}]
+// (v11.5) THE SAME STATE MACHINE ON THE DOLLAR SERIES. Identical thresholds (ACM_UP / ACM_DN / ACM_DROP
+// via mapNodeState); the only difference is the basis. A node whose dollars are flat while the King grows
+// reads `hold` here and `dec` on %King — that gap is the phantom dissipation the spec set out to separate.
+// SHADOW: nothing on the face reads this until the review promotes it.
+function ledgerStateAtAbs(a, i){
+  if(!a) return { st:'hold', cur:null, m15:null, fromPeak:null, peak:null };
+  var cur=feedSampleAt(a,i), from=feedSampleAt(a,Math.max(0,i-FEED_M15_SAMPLES));
+  var pk=0; for(var q=0;q<=i;q++){ if(typeof a[q]==='number' && a[q]>pk) pk=a[q]; }
+  if(feedGoneAt(a,i,true)) return { st:'gone', cur:cur, m15:-100, fromPeak:100, peak:pk };
+  var m15=null;
+  if(typeof cur==='number' && typeof from==='number' && from>0) m15=Math.round(100*(cur-from)/from);
+  else if(typeof cur==='number' && cur>0 && (from===0 || from==null)) m15=100;
+  var fp=(pk>0 && typeof cur==='number')?Math.round(100*(pk-cur)/pk):null;
+  return { st:mapNodeState({ m15:{pct:m15}, session:{fromPeak:fp} }), cur:cur, m15:m15, fromPeak:fp, peak:pk };
+}
+// PURE: the ledger from a feed-series map {t[], k:{key:{v[],a[],src}}} + closed candles [{t,o,h,l,c}]
 function ledgerBuild(all, candles, opts){
   opts=opts||{};
   var zone=(typeof opts.zone==='number')?opts.zone:((typeof DEFLECT_ZONE==='number')?DEFLECT_ZONE:0.5);
@@ -9538,8 +9558,14 @@ function ledgerBuild(all, candles, opts){
     for(var i=0;i<N;i++){ var x=v[i]; if(typeof x==='number'){ if(first==null && x>0) first=i; if(x>0) last=i; if(x>pk){ pk=x; pkAt=i; } } }
     if(pk<minPct) return;                                   // never meaningful: not a node
     var now=ledgerStateAt(v, N-1);
+    var A=all.k[key].a||null;                      // (v11.5) the ABS dollar series for this strike
+    var nowA=A?ledgerStateAtAbs(A, N-1):null;
     var node={ k:k, src:all.k[key].src||null, derived:!!all.k[key].src,
-               first:first, firstT:(first!=null?T[first]:null), peak:pk, peakAt:pkAt, peakT:(pkAt!=null?T[pkAt]:null),
+               // (v11.5 SHADOW) the same reading on dollars — recorded, non-voting, off the face
+               absCur:nowA?nowA.cur:null, absPeak:nowA?nowA.peak:null, absState:nowA?nowA.st:null,
+               absM15:nowA?nowA.m15:null, absFromPeak:nowA?nowA.fromPeak:null,
+               // (v11.5) a 0 / missing stamp is UNKNOWN, never 1970 — `born: 0` made PB Entry's `fresh` flag meaningless
+               first:first, firstT:(first!=null && T[first])?T[first]:null, peak:pk, peakAt:pkAt, peakT:(pkAt!=null && T[pkAt])?T[pkAt]:null,
                last:last, cur:now.cur, state:now.st, m15:now.m15, fromPeak:now.fromPeak, gone:now.st==='gone',
                // life phases in samples: build (first→peak), hold/decay (peak→last), gone (last→N)
                life:{ build:(first!=null&&pkAt!=null)?(pkAt-first):null, after:(pkAt!=null&&last!=null)?(last-pkAt):null, goneFor:(last!=null)?(N-1-last):null },
@@ -9600,6 +9626,7 @@ function ledgerExport(sym){
   try{ var L=nodeLedger(sym); var o={ n:L.n, bars:L.bars, nodes:{} };
     Object.keys(L.nodes||{}).forEach(function(kk){ var n=L.nodes[kk];
       o.nodes[kk]={ k:n.k, src:n.src, first:n.firstT, peak:n.peak, peakT:n.peakT, cur:n.cur, state:n.state, m15:n.m15, fromPeak:n.fromPeak, gone:n.gone,
+                    absState:n.absState, absM15:n.absM15, absFromPeak:n.absFromPeak, absCur:n.absCur, absPeak:n.absPeak,
                     life:n.life, deflect:n.deflect, through:n.through, stall:n.stall, touches:n.touches.slice(-12), infl:n.infl }; });
     return o; }catch(e){ return null; }
 }
@@ -9652,9 +9679,11 @@ function ledgerSectionHtml(sym){
   return h;
 }
 var MAP_CACHE={};
+var MAP_STEP={ SPY:null, QQQ:null };   // (v11.5) the roll step currently active per symbol — one record per step, not per bar
 function nodeFlow(sym){
   sym=sym||'SPY';
-  var out={ ok:false, nodes:[], transfers:[], widening:null, lean:'none', leanWhy:'', px:null };
+  var out={ ok:false, nodes:[], transfers:[], widening:null, lean:'none', leanWhy:'', px:null,
+            transfersAbs:[], leanAbs:'none', leanAbsWhy:'' };
   try{
     var S=STATE[sym]||{}; var px=(typeof S.price==='number')?S.price:null; if(px==null) return out;
     var key=null; try{ key=legBarKey(sym); }catch(e0){}
@@ -9669,8 +9698,12 @@ function nodeFlow(sym){
       var a=null; try{ a=accumCanon(sym,L.k); }catch(e3){ a=null; }
       var st=mapNodeState(a);
       seen[L.k.toFixed(2)]=true;
+      // (v11.5 SHADOW) the same node read on DOLLARS, straight off the feed series
+      var absSt=null, absM=null;
+      try{ if(all && all.k){ var ent=all.k[L.k.toFixed(2)]; if(ent && ent.a){ var sa=ledgerStateAtAbs(ent.a, ent.a.length-1); absSt=sa.st; absM=sa.m15; } } }catch(eA){}
       out.nodes.push({ k:L.k, pct:L.pct, side:(L.k>px)?'above':'below', state:st, src:L.src||null, derived:!!L.derived,
-                       m15:(a&&a.m15)?a.m15.pct:null, fromPeak:(a&&a.session)?a.session.fromPeak:null, isKing:!!L.isKing });
+                       m15:(a&&a.m15)?a.m15.pct:null, fromPeak:(a&&a.session)?a.session.fromPeak:null, isKing:!!L.isKing,
+                       absState:absSt, absM15:absM });
     });
     // nodes that have DROPPED OUT of the board but were meaningful earlier this session:
     // they are the "dissipated" half of a transfer and must still be seen
@@ -9684,6 +9717,14 @@ function nodeFlow(sym){
     }
     var tr=mapTransfersOf(out.nodes, px);
     out.transfers=tr.transfers; out.widening=tr.widening; out.lean=tr.lean; out.leanWhy=tr.leanWhy; out.px=px; out.ok=true;
+    // (v11.5 SHADOW) the SAME transfer logic on the dollar states — what the Map WOULD have seen. On
+    // 2026-08-20 the %King basis produced 44 ceiling rolls to 1 floor roll because the King (765) grew
+    // 26% in dollars and pinned every floor node's percentage; this set is the control.
+    try{
+      var absNodes=out.nodes.map(function(n){ return { k:n.k, side:n.side, state:n.absState||'hold', src:n.src, isKing:n.isKing }; });
+      var trA=mapTransfersOf(absNodes, px);
+      out.transfersAbs=trA.transfers; out.leanAbs=trA.lean; out.leanAbsWhy=trA.leanWhy;
+    }catch(eTA){ out.transfersAbs=[]; out.leanAbs='none'; }
     MAP_CACHE[sym]={ key:key, val:out };
   }catch(e){}
   return out;
@@ -10793,23 +10834,76 @@ function registerCoreFeatures(){
   // ---- (v10.58) THE MAP, RECORDED. Two claims: (1) a TRANSFER (old node dec, neighbour
   // acm on the same side) is followed by price respecting the new node / moving the roll's
   // way; (2) the structural LEAN (both sides rolling the same way) predicts the next move.
+  // (v11.5) THE EDGE PATH. A roll is a TRAJECTORY (763 → 764 → 765 over half an hour), not a pair of
+  // nodes at one instant. `fcHistSample` has been recording the floor/ceiling strike every bar since v10.51
+  // and nothing has ever read it. Collapse that series to its CHANGES and a roll becomes the thing you can
+  // see on the chart — and it survives a node flickering out of the feed's top-N list for a bar.
+  function edgePath(sym){
+    try{
+      var rows=fcHistOf(sym)||[]; if(!rows.length) return null;
+      var day=null; try{ day=TODAY; }catch(eD){}
+      var today=rows.filter(function(r){ return r && (!day || r.d===day); });
+      if(!today.length) return null;
+      function steps(field){
+        var out=[], last=null;
+        today.forEach(function(r){ var k=r[field]; if(typeof k!=='number') return;
+          if(last==null || Math.abs(k-last)>0.001){ out.push({k:k, t:r.t||null}); last=k; } });
+        return out;
+      }
+      var f=steps('flr'), c=steps('ceil');
+      function dirOf(a){ if(a.length<2) return 'flat'; var d=a[a.length-1].k-a[0].k; return (d>0.001)?'up':((d<-0.001)?'dn':'flat'); }
+      var fd=dirOf(f), cd=dirOf(c);
+      var read='none';
+      if(fd==='up' && cd==='dn') read='compression';
+      else if(fd==='dn' && cd==='up') read='expansion';
+      else if(fd==='up' && cd==='up') read='drift-up';
+      else if(fd==='dn' && cd==='dn') read='drift-dn';
+      return { flr:f.slice(-6), ceil:c.slice(-6), flrSteps:Math.max(0,f.length-1), ceilSteps:Math.max(0,c.length-1),
+               flrDir:fd, ceilDir:cd, read:read, bars:today.length };
+    }catch(e){ return null; }
+  }
   registerFeature({ key:'map.transfer', label:'Map · node transfer (dec → acm on one side)', phase:'structure', fwd:FEAT_FWD,
     record:function(sym, ctx){
       var f=null; try{ f=nodeFlow(sym); }catch(e){}
       var t=(f&&f.transfers&&f.transfers[0])||null;
       var px=(STATE[sym]||{}).price;
+      // (v11.5) ONE RECORD PER STEP. This used to fire every bar a roll stayed active: on 2026-08-20,
+      // 19 distinct steps became 45 records (`ceil 767→768` counted 8 times), inflating n and making the
+      // observations dependent. `stepNew` marks the bar the step actually changed; `barsActive` counts how
+      // long it has held. The nightly scores stepNew records only.
+      var stepKey=t?(t.side+'|'+t.from+'|'+t.to):null;
+      // the store is the module-level MAP_STEP in the panel; test harnesses eval this body in isolation,
+      // so fall back to a window-backed object rather than throwing out of the recorder
+      var MS=(typeof MAP_STEP!=='undefined' && MAP_STEP) ? MAP_STEP : (window.__gptsMapStep=window.__gptsMapStep||{});
+      var prev=MS[sym]||null;
+      var isNew=!!(stepKey && (!prev || prev.key!==stepKey));
+      if(stepKey){ if(isNew) MS[sym]={ key:stepKey, t:(ctx&&ctx.t)||Date.now(), bars:1 };
+                   else MS[sym].bars++; }
+      else if(prev) MS[sym]=null;
+      var st=MS[sym]||null;
+      // the SHADOW dollar reading of the same moment — same shape, so the review can compare like for like
+      var ta=(f&&f.transfersAbs&&f.transfersAbs[0])||null;
       return { sym:sym, t:(ctx&&ctx.t)||Date.now(), active:!!t, n:(f&&f.transfers)?f.transfers.length:0,
+               stepNew:isNew, stepT:st?st.t:null, barsActive:st?st.bars:0,
                side:t?t.side:null, from:t?t.from:null, to:t?t.to:null, rollDir:t?t.dir:null,
                dirNum:t?((t.dir==='dn')?-1:1):0, k:t?t.to:null, px:(typeof px==='number')?px:null,
-               widening:!!(f&&f.widening), lean:f?f.lean:'none', voting:false };
+               widening:!!(f&&f.widening), lean:f?f.lean:'none',
+               abs:{ active:!!ta, n:(f&&f.transfersAbs)?f.transfersAbs.length:0, side:ta?ta.side:null,
+                     from:ta?ta.from:null, to:ta?ta.to:null, rollDir:ta?ta.dir:null,
+                     dirNum:ta?((ta.dir==='dn')?-1:1):0, lean:(f&&f.leanAbs)||'none',
+                     agrees:!!(t&&ta&&t.side===ta.side&&Math.abs(t.to-ta.to)<0.001) },
+               edge:(function(){ try{ return edgePath(sym); }catch(eE){ return null; } })(),
+               voting:false };
     },
     outcome:function(rec, fwd){
       // did price move the roll's way (DIR_PTS) within fwd? + MFE/MAE
       var h=null; try{ if(rec&&rec.active&&rec.dirNum) h=_fwdHitNum(fwd, rec.dirNum, DIR_PTS); }catch(e){}
       return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null, side:rec?rec.side:null, rollDir:rec?rec.rollDir:null };
     },
-    questions:[ { id:'transfer_moves_price', when:[{f:'active',v:true}], outcome:'dirMove',
-                  note:'when a ceiling/floor hands its strength to a neighbour, does price then move the way the roll points?' } ],
+    questions:[ { id:'transfer_moves_price', when:[{f:'stepNew',v:true}], outcome:'dirMove',
+                  note:'when a ceiling/floor hands its strength to a neighbour, does price then move the way the roll points? SCORED ON STEPS ONLY (stepNew) — a roll held for 8 bars is ONE observation, not eight.' },
+                { id:'transfer_basis',      when:[{f:'abs.agrees',v:false}], outcome:'dirMove',
+                  note:'%King vs DOLLARS: on the bars where the two bases disagree, which one called the roll that price actually followed? (2026-08-20: %King saw 44 ceiling rolls and 1 floor roll because the King grew 26% and pinned every floor percentage)' } ],
     rule:{ id:'map.transfer', tier:'hand', condition:'a dec/gone node with an acm node on the same side within PB_REACH',
            mechanism:'The rolling ceiling/floor IS the strength transfer. If transfers predict the next move, the Map line earns a vote; if not, it stays descriptive.' } });
   registerFeature({ key:'map.lean', label:'Map · structural lean (both sides rolling the same way)', phase:'direction', fwd:FEAT_FWD,

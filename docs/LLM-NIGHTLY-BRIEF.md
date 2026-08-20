@@ -272,6 +272,18 @@ Report, with n · effN · vote-split · regime split · MFE/MAE, and NEVER witho
   more reliable than 2-step signal on THIS tape? (the doctrine claims so — measure it)
 - `leg.magnet` — was the magnet reached? how often does price make it vs stall at an intermediate node?
 
+## LAYER 2 — STRUCTURE · THE MAP · THE DOLLAR BASIS (v11.5, USER PRIORITY)
+Every `map.transfer` record now carries `stepNew` / `stepT` / `barsActive`, a shadow `abs{...}` block (the same roll
+logic run on ABSOLUTE dollars instead of %King) and `edge` (the floor/ceiling strike trajectory for the day).
+**Score STEPS, never bars:** filter on `stepNew:true`. A roll held 8 bars is ONE observation — the pre-v11.5 records
+counted it 8 times, which is why any pooled n before 2026-08-20 must be treated as inflated and dependent.
+Report, with n and effN: (1) transfer count by side on EACH basis — the %King basis produced 44 ceiling to 1 floor on
+2026-08-20 because the King grew 26% in dollars and pinned every floor percentage; (2) hit-rate per step per basis;
+(3) on the bars where the two bases disagree (`abs.agrees:false`), which one called the roll price actually followed;
+(4) whether `edge.read` (compression / expansion / drift) precedes the move. The dollar basis is SHADOW — it votes on
+nothing and shows nothing until it clears the promotion bar (eff n ≥ 20, 3 walk-forward sessions, no regime flip), at
+which point `mapNodeState` switches basis through `applyProposals`. Say plainly if the pool is too thin.
+
 ## LAYER 2 — STRUCTURE · THE MAP
 - THE MAP (v10.58, USER PRIORITY — "as nodes dissipate, other nodes accumulate and start influencing price").
   `map.transfer` = a dec/gone node with an acm neighbour on the same side (the ceiling/floor rolling; SPY strikes

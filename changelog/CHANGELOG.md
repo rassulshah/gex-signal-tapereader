@@ -1,3 +1,35 @@
+## v11.5 — 2026-08-20 — ACCUMULATION IN DOLLARS (shadow) · one record per roll STEP · the edge path
+
+Spec: design/spec-v11.5-dollar-accumulation.md. User-directed after the live session: "see support and resistance
+rolling up and down knowing their impact on price." **No face change** — this build only adds recording.
+
+**Why.** %King is a ratio to a MOVING denominator. Live 2026-08-20: the King (765) grew **112,611 → 142,214 in
+dollars (+26%)** between 10:18 and 10:54 while the Map printed `765 hold, m15 0` — the King's percentage is 100 by
+definition, so it can never accumulate and a roll INTO it can never fire a transfer. Worse, while the King grows every
+other node's percentage shrinks even at flat dollars: the Map read `766 dec −14 · 764 dec −19 · 763 dec −12` during a
+session in which the floor was rolling UP into 765. Net effect for the day: **44 ceiling transfers to 1 floor transfer**.
+
+**(a) The dollar basis, in shadow.** `feedSeriesAll` now carries the raw absolute exposure (`a[]`) beside the %King
+series (`v[]`). `ledgerStateAtAbs` runs the SAME state machine (ACM_UP/ACM_DN/ACM_DROP via `mapNodeState`) on dollars.
+Per node the ledger records `absState / absM15 / absFromPeak / absCur / absPeak`; `nodeFlow` adds `absState`/`absM15`
+per node plus `transfersAbs` / `leanAbs` — the transfers the Map WOULD have seen. Nothing on the face reads any of it.
+
+**(b) One record per STEP.** `map.transfer` fired every bar a roll stayed active — 19 distinct steps became 45 records
+on 2026-08-20 (`ceil 767→768` counted 8 times), inflating n and making the observations dependent. Records now carry
+`stepNew` / `stepT` / `barsActive`, the question is scored on `stepNew` only, and a second question (`transfer_basis`)
+asks which basis called the roll price actually followed on the bars where the two disagree.
+
+**(c) The edge path.** `fcHistSample` has recorded the floor/ceiling STRIKE every bar since v10.51 and nothing ever read
+it. `edgePath()` collapses today's series to its changes — 763 → 764 → 765 with timestamps — plus step counts,
+directions and a read (compression / expansion / drift-up / drift-dn). Rides on the `map.transfer` record as `edge`.
+
+**Also:** the ledger's `firstT` returned 0 (epoch) for native strikes, which made PB Entry's `fresh` flag meaningless
+for them — a missing stamp is now null (unknown), never 1970.
+
+Tests: test_dollar_accum (15) — the King reading `hold` on %King and `acm` on dollars, phantom dissipation reproduced
+and separated, real decay still `dec` on both, the floor roll the %King basis missed, 8 bars = 1 step, and the
+763→764→765 collapse. test_node_ledger harness updated. Suite green except the known-stale.
+
 ## v11.4.4 — 2026-08-20 (live, 10:20 CT) — TWO REAL MISREADS IN THE TRINITY PANE: velocity read as %King, and colour used for polarity
 
 Found live while checking an ES chart. The panel went out of sync with 767 reading **117%** against a $K-tagged King at 100% —
