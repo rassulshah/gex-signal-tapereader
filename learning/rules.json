@@ -1,6 +1,6 @@
 {
   "schema": "gex-rules/v2",
-  "asOf": "2026-08-19",
+  "asOf": "2026-08-20",
   "version": "10.53",
   "note": "THE MENTAL MODEL IN DATA FORM, MACHINE-APPLICABLE. weights.dir are the LIVE direction-scoring constants the panel reads at boot. The WEEKLY learning run writes rules/proposals/challengers/killList and NEVER touches weights; only the panel applyProposals() moves a weight, and only after RE-CHECKING the promotion bar in code (n>=20 AND walkForward.held over >=3 NEW sessions AND no regime flip). clearsBar asserted by the reviewer is advisory. The NIGHTLY run writes learning/log/YYYY-MM-DD.json only. Sparse data never nudges a weight: it is reported as insufficient and the hand-set value stands.",
   "unlockN": 20,
@@ -1818,6 +1818,37 @@
         }
       },
       "mechanism": "Separates a wrong level from a slow one.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "exp.breadth": {
+      "id": "exp.breadth",
+      "tier": "hand",
+      "condition": "strike present at >= EXP_BREADTH_MIN in n expiry columns; structural = n >= 2",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "The front expiry pins price today; the later expirations are the walls that survive the close. If breadth separates the two, it belongs in the node grade — by promotion, not by opinion.",
       "promoted": false,
       "promotedOn": null,
       "lastVerified": null,

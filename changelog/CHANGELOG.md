@@ -1,3 +1,30 @@
+## v11.6 — 2026-08-20 — THE EXPIRATION PROFILE: read every expiry column, not just the front one
+
+User-directed after reviewing a competitor's GEX page ("consider how it can be incorporated"). Their Call Wall /
+Put Wall cannot be reproduced from Skylit's feed — the payload carries NET exposure per strike with no call/put
+decomposition — and the behaviour those walls proxy for (how dealers hedge at a strike) we already read directly as
+polarity. What IS genuinely missing is the part their walls get from spanning ALL expirations: the outer structural
+boundaries. That data has been on screen since 2026-08-19 and the reader used column 1 only.
+
+**What it does.** The main-ladder reader now parses EVERY expiry column (each rescaled to its own King, since each
+column is its own book) and keeps them as `cols[{exp,pct,n}]`. `expiryProfile(sym)` buckets them — `dte0` (front),
+`near` (within EXP_NEAR_DAYS=7), `far` (beyond) — gives each bucket its own walls (strongest strike each side of
+price at ≥ EXP_BREADTH_MIN=25), and computes `breadth[strike]` = how many columns carry that strike with real weight.
+A node with breadth ≥ 2 is STRUCTURE; breadth 1 is a today-level that dies at the close.
+
+**One thing the tests caught in the first cut:** pooling percentages across columns to find "the" walls is invalid —
+each column is normalised to its OWN King, so a front node at 100 always outranks a monthly node at 58 even when the
+monthly one is far larger in dollars, and the feed gives no per-column absolute scale to correct it. The structural
+walls are therefore read INSIDE one bucket (far, else near), which is internally consistent; the pooled map is used
+only for breadth, never for ranking. `structuralFrom` names which bucket answered.
+
+**Enrolled** as `exp.breadth` (rules.json 59): per bar it records the in-play node's breadth, whether it is
+structural, today's walls, the structural walls, whether they differ, and whether price sits inside the structural
+cage. Two questions: does a node carried by 2+ expirations hold better than a front-only node, and does price respect
+the structural walls. Non-voting, nothing on the face — forward-only data, so it ships before the sessions accumulate.
+`__gptsDebug.expiry()`. Tests: test_expiry_profile (18), including a single-column ladder degrading to null rather
+than inventing a structural wall. Suite green except the known-stale.
+
 ## v11.5 — 2026-08-20 — ACCUMULATION IN DOLLARS (shadow) · one record per roll STEP · the edge path
 
 Spec: design/spec-v11.5-dollar-accumulation.md. User-directed after the live session: "see support and resistance

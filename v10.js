@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.5
+// @version    11.6
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -419,7 +419,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.5';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.6';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -1215,6 +1215,9 @@ function readLaddersByDollar(){
     var sym=ladderSymbolOf(L.cont); var isMain=(L.cont.tagName==='TBODY'||L.cont.tagName==='TABLE'||!!L.cont.closest&&!!L.cont.closest('table'));
     var key=isMain?'main':sym; if(!key) continue;     // the main table is 'main' (it shows whichever symbol the chart is on); Trinity panes by symbol
     var pct={}, vel={}, king=null, kingKd=null, count=0, hiK=null, rival=null;
+    // ISO expiry headers of this ladder, in column order (main table only; the Trinity panes have none)
+    var expiries=[]; try{ var tb=L.cont.closest?L.cont.closest('table'):null; var th=tb?tb.querySelector('thead'):null;
+      if(th){ var hm=(th.textContent||'').match(/20\d{2}-\d{2}-\d{2}/g); if(hm) expiries=hm; } }catch(eEx){}
     // which value column? the one that holds the $K in the King row (Trinity: the only value cell; main table: column 1 = nearest expiry)
     var kingRow=L.rows.filter(function(rw){ return rw.el===L.row || rw.el.contains(el); })[0] || null;
     var valIdx=-1; if(kingRow){ for(var c=0;c<kingRow.cells.length;c++){ if(c===L.strikeIdx) continue; if(TAPE_KING_DOLLAR_IN.test((kingRow.cells[c].textContent||'').replace(/\s+/g,''))){ valIdx=c; break; } } }
@@ -1227,6 +1230,24 @@ function readLaddersByDollar(){
       var kk=rw.k.toFixed(2); pct[kk]=pc.pct; if(pc.vel!=null) vel[kk]=pc.vel; count++;
       if(pc.kd!=null && (!isMain || valIdx===L.strikeIdx+1)){ if(king==null){ king=rw.k; kingKd=pc.kd; } else if(king!==rw.k) rival=rw.k; }
       if(pc.hi){ if(hiK==null) hiK=rw.k; else if(hiK!==rw.k) hiK=-1; } }
+    // (v11.6) EVERY EXPIRATION COLUMN, not just the nearest. The ladder has carried 5 expiry columns since
+    // 2026-08-19 and the reader used column 1 only, so the panel saw 0DTE gamma and threw the rest away. The
+    // full stack is what says whether a node is TODAY-ONLY or STRUCTURAL — and its outer edges are the
+    // equivalent of the "call wall / put wall" other tools quote (on an absolute-gamma basis, not call/put).
+    var cols=null;
+    if(isMain && expiries.length>1){
+      cols=[];
+      for(var ci2=0;ci2<expiries.length;ci2++){
+        var colIdx=L.strikeIdx+1+ci2; var cp={}, cn=0, cmx=0;
+        for(var r2=0;r2<L.rows.length;r2++){ var rw2=L.rows[r2]; var cel=rw2.cells[colIdx]; if(!cel) continue;
+          var pc2=ladderCellParse(cel, true); if(!pc2||pc2.pct==null) continue;
+          cp[rw2.k.toFixed(2)]=pc2.pct; cn++; if(Math.abs(pc2.pct)>cmx) cmx=Math.abs(pc2.pct); }
+        // each column is its own book: rescale so its strongest strike reads 100 (same convention as column 1)
+        if(cmx>0 && cmx<100){ for(var q4 in cp){ cp[q4]=Math.round(cp[q4]*100/cmx); } }
+        if(cn>=5) cols.push({ exp:expiries[ci2]||null, col:colIdx, pct:cp, n:cn });
+      }
+      if(!cols.length) cols=null;
+    }
     if(count<5) continue;
     var kingSrc='dollar';
     if(king==null){ // no $K in the value column (main table, expirations view) → rescale, yellow cell = King
@@ -1236,12 +1257,79 @@ function readLaddersByDollar(){
       else { var bk=null, bv=-1; for(var q3 in pct){ if(Math.abs(pct[q3])>bv){ bv=Math.abs(pct[q3]); bk=parseFloat(q3); } } king=bk; kingSrc='maxpct'; }
     }
     var res={ pct:pct, vel:vel, king:king, kingKd:kingKd, count:count, kingSrc:kingSrc, kingTagged:(kingSrc==='dollar'||kingSrc==='highlight')?king:null,
-              kingConflict:false, src:isMain?'main':'trinity', sym:key, bookKing:bookKing, rows:L.rows.length };
+              kingConflict:false, src:isMain?'main':'trinity', sym:key, bookKing:bookKing, rows:L.rows.length,
+              expiries:expiries, cols:cols };
     if(rival!=null){ res.kingConflict=true; res.parseSuspect='two-dollar-cells'; res.kingRival=rival; }
     out[key]=res;
   }
   return out;
 }
+// ============================================================================
+// (v11.6) THE EXPIRATION PROFILE — today's map vs the structural map.
+// The nearest-expiry column is what pins price INTRADAY; the later columns are the walls that were there
+// yesterday and will be there tomorrow. A node heavy in 0DTE only is a today-level that dies at the close;
+// a node heavy across the stack is structure. That distinction is the "quality of the node" question, and
+// the outer edges of the full stack are this project's equivalent of a call/put wall — computed from
+// absolute gamma we already receive, not inherited from anyone else's site.
+//   buckets: dte0 = the nearest expiry · near = expiries within NEAR_DAYS · far = the rest · all = pooled
+//   breadth[k] = how many expiry columns carry that strike at >= BREADTH_MIN
+// SHADOW: recorded and exposed on __gptsDebug; nothing on the face reads it yet.
+// ============================================================================
+var EXP_NEAR_DAYS=7;        // an expiry within a week of the front one is "near"
+var EXP_BREADTH_MIN=25;     // a strike counts as present in a column at >= this % of that column's own King
+function expiryProfile(sym){
+  try{
+    var LD=null; try{ LD=(laddersByDollar()||{}).main; }catch(e0){}
+    if(!LD || !LD.cols || LD.cols.length<2) return null;
+    var px=(STATE[sym||'SPY']||{}).price; if(px==null) return null;
+    var front=LD.cols[0].exp||null;
+    function dayNum(d){ try{ var p=String(d).split('-'); return Date.UTC(+p[0], +p[1]-1, +p[2])/86400000; }catch(e){ return null; } }
+    var f0=front?dayNum(front):null;
+    var buckets={ dte0:{cols:[]}, near:{cols:[]}, far:{cols:[]} };
+    LD.cols.forEach(function(c,i){
+      var dn=c.exp?dayNum(c.exp):null;
+      var age=(dn!=null && f0!=null)?(dn-f0):i;
+      if(i===0) buckets.dte0.cols.push(c);
+      else if(age<=EXP_NEAR_DAYS) buckets.near.cols.push(c);
+      else buckets.far.cols.push(c);
+    });
+    // pooled magnitude per strike across a bucket's columns (max, not mean: a wall in ONE later expiry is
+    // still a wall — averaging would hide it behind the columns where it is absent)
+    function pool(cols){
+      var out={};
+      cols.forEach(function(c){ Object.keys(c.pct).forEach(function(k){ var v=c.pct[k];
+        if(out[k]==null || Math.abs(v)>Math.abs(out[k])) out[k]=v; }); });
+      return out;
+    }
+    function edges(m){
+      var up=null, dn=null;
+      Object.keys(m).forEach(function(k){ var kk=parseFloat(k), v=Math.abs(m[k]); if(v<EXP_BREADTH_MIN) return;
+        if(kk>px){ if(!up || v>up.pct){ up={k:kk, pct:v}; } }
+        else if(kk<px){ if(!dn || v>dn.pct){ dn={k:kk, pct:v}; } } });
+      return { ceil:up, flr:dn };
+    }
+    ['dte0','near','far'].forEach(function(b){ var m=pool(buckets[b].cols); buckets[b].pct=m; buckets[b].walls=edges(m); buckets[b].n=buckets[b].cols.length;
+      delete buckets[b].cols; });
+    // (v11.6) NO CROSS-COLUMN POOLING FOR THE WALLS. Each column is normalised to its OWN King, so a front
+    // node at 100 would always outrank a monthly node at 58 even when the monthly one is far bigger in
+    // dollars — the percentages are not comparable across columns and the feed gives no per-column absolute
+    // scale to fix that. The STRUCTURAL walls are therefore read INSIDE one bucket (far, else near), which is
+    // internally consistent; the pooled map is kept only for breadth, never for ranking.
+    var structB=(buckets.far.n?'far':(buckets.near.n?'near':null));
+    var allW=structB?buckets[structB].walls:{ ceil:null, flr:null };
+    // breadth: in how many columns does this strike carry real weight?
+    var breadth={};
+    LD.cols.forEach(function(c){ Object.keys(c.pct).forEach(function(k){ if(Math.abs(c.pct[k])>=EXP_BREADTH_MIN) breadth[k]=(breadth[k]||0)+1; }); });
+    return { exps:LD.cols.map(function(c){ return c.exp; }), nCols:LD.cols.length, front:front, px:px,
+             buckets:buckets, structuralFrom:structB, all:{ walls:allW }, breadth:breadth,
+             structuralDiffers:!!(allW.ceil && buckets.dte0.walls.ceil && Math.abs(allW.ceil.k-buckets.dte0.walls.ceil.k)>0.001) ||
+                               !!(allW.flr && buckets.dte0.walls.flr && Math.abs(allW.flr.k-buckets.dte0.walls.flr.k)>0.001) };
+  }catch(e){ return null; }
+}
+// how many expirations carry this strike (null when the ladder is single-column)
+function nodeBreadth(sym, k){ try{ var p=expiryProfile(sym); if(!p) return null; var b=p.breadth[(+k).toFixed(2)]; return (b==null)?0:b; }catch(e){ return null; } }
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.expiry=function(s){ try{ return expiryProfile(s||'SPY'); }catch(e){ return String(e); } };
 var LADDER_CACHE={t:0, data:null};
 function laddersByDollar(){ var now=Date.now(); if(LADDER_CACHE.data && (now-LADDER_CACHE.t)<1000) return LADDER_CACHE.data; var d=null; try{ d=readLaddersByDollar(); }catch(e){ d=null; } LADDER_CACHE={t:now, data:d||{}}; return LADDER_CACHE.data; }
 // the per-symbol ladder the panel should trust: the Trinity pane for that symbol (true %King, King by $K) first,
@@ -2456,6 +2544,12 @@ function recordNodeSnapshot(sym){
       // (v10.44) CROSS-MARKET headers scraped from the Skylit sidebar (SPY/QQQ/SPXW/VIX:
       // price, %chg, King distance %, side). Confluence was UNTESTABLE before (0 QQQ bars).
       xm:(function(){ try{ return readTrinityHeaders(); }catch(eX){ return null; } })(),
+      // (v11.6) THE EXPIRATION PROFILE — 0DTE vs near vs far walls, and per-strike breadth. Forward-only.
+      exp:(function(){ try{ var p2=expiryProfile(sym); if(!p2) return null;
+        return { exps:p2.exps, front:p2.front, nCols:p2.nCols, structuralDiffers:p2.structuralDiffers,
+                 dte0:p2.buckets.dte0.walls, near:p2.buckets.near.walls, far:p2.buckets.far.walls,
+                 struct:p2.all.walls, structFrom:p2.structuralFrom,
+                 breadth:p2.breadth }; }catch(eXp){ return null; } })(),
       // (v11.2) the Trinity LADDERS read by their $K anchor: per pane King, King $K and the 8 strongest strikes (signed %King)
       tri:(function(){ try{ var a=laddersByDollar()||{}; var o={}; Object.keys(a).forEach(function(k){ if(k==='main') return; var L=a[k];
         o[k]={king:L.king, kd:L.kingKd, n:L.count, top:Object.keys(L.pct).sort(function(x,y){ return Math.abs(L.pct[y])-Math.abs(L.pct[x]); }).slice(0,8).map(function(k2){ return [parseFloat(k2),L.pct[k2]]; })}; }); return Object.keys(o).length?o:null; }catch(eTr){ return null; } })(),
@@ -10805,6 +10899,38 @@ function registerCoreFeatures(){
     record:_pbEntryRecord, outcome:_pbEntryOutcome,
     questions:[ { id:'pbentry_60', when:[{f:'grade',v:'B'}], outcome:'pbHold', note:'the same call with 60 minutes: how much of a 30-minute miss is just time?' } ],
     rule:{ id:'pbEntry.60', tier:'hand', condition:'same pick, 60-minute window', mechanism:'Separates a wrong level from a slow one.' } });
+
+  // ---- (v11.6) EXPIRATION BREADTH, RECORDED. The question it exists to settle: does a node that carries
+  // weight ACROSS EXPIRATIONS (structure) hold better than one that is heavy only in the front expiry
+  // (a today-level that dies at the close)? Also carries the structural walls — the outer edges of the whole
+  // stack — so "is price inside the structural cage" becomes measurable. Non-voting, nothing on the face.
+  registerFeature({ key:'exp.breadth', label:'Expirations · node breadth + structural walls', phase:'structure', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var L=(ctx&&ctx.spine&&ctx.spine.inPlay)||null; if(!L){ try{ L=inPlayZone(sym); }catch(e){ L=null; } }
+      var p2=null; try{ p2=expiryProfile(sym); }catch(e2){}
+      var px=(STATE[sym]||{}).price;
+      if(!p2) return { ok:false, k:L?L.k:null, breadth:null, px:(typeof px==='number')?px:null, voting:false };
+      var k=L?L.k:null;
+      var br=(k!=null)?(p2.breadth[k.toFixed(2)]||0):null;
+      var aw=p2.all.walls||{}, d0=p2.buckets.dte0.walls||{};
+      var inCage=(typeof px==='number' && aw.flr && aw.ceil)?(px>aw.flr.k && px<aw.ceil.k):null;
+      return { ok:true, k:k, breadth:br, structural:(br!=null)?(br>=2):null, nCols:p2.nCols,
+               dte0Ceil:d0.ceil?d0.ceil.k:null, dte0Flr:d0.flr?d0.flr.k:null,
+               structCeil:aw.ceil?aw.ceil.k:null, structFlr:aw.flr?aw.flr.k:null, structFrom:p2.structuralFrom,
+               structuralDiffers:p2.structuralDiffers, inCage:inCage,
+               holdDir:(function(){ try{ return L?nodeHoldDir(L,px):0; }catch(e3){ return 0; } })(),
+               px:(typeof px==='number')?px:null, voting:false };
+    },
+    outcome:function(rec, fwd){
+      var h=null; try{ if(rec&&rec.ok&&rec.holdDir) h=_fwdHitNum(fwd, rec.holdDir, DIR_PTS); }catch(e){}
+      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null, breadth:rec?rec.breadth:null, structural:rec?rec.structural:null, inCage:rec?rec.inCage:null };
+    },
+    questions:[ { id:'breadth_holds',  when:[{f:'structural',v:true}], outcome:'nodeHold',
+                  note:'does a node carried by 2+ expirations hold better than a front-expiry-only node? (structure vs a today-level that dies at the close)' },
+                { id:'cage_holds',     when:[{f:'inCage',v:true}],     outcome:'nodeHold',
+                  note:'the structural walls are the outer edges of the WHOLE expiry stack — the equivalent of a call/put wall. Does price respect them, and do setups inside the cage behave differently from setups at its edge?' } ],
+    rule:{ id:'exp.breadth', tier:'hand', condition:'strike present at >= EXP_BREADTH_MIN in n expiry columns; structural = n >= 2',
+           mechanism:'The front expiry pins price today; the later expirations are the walls that survive the close. If breadth separates the two, it belongs in the node grade — by promotion, not by opinion.' } });
 
   // ---- (v11.0) THE LEDGER, RECORDED. The one question the ledger exists to settle as a
   // feature: at the moment price touches a node, does an ACCUMULATING node deflect it more
