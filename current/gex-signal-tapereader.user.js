@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.4
+// @version    11.4.2
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -224,7 +224,18 @@ function feedTypeFromUrl(u){
   if(u.indexOf('data_type=vanna')!==-1) return 'vanna';
   return 'other';
 }
-function symFromUrl(u){ return (u.indexOf('symbol=QQQ')!==-1) ? 'QQQ' : 'SPY'; }
+// (v11.4.2 FIX, 2026-08-20) READ THE REAL SYMBOL. This used to return 'SPY' for anything that was not
+// QQQ — so charting ANY other optionable instrument (USO, GLD, IWM, TSLA…) fed that instrument's book
+// into LASTFEED.SPY, and `recordNodeSnapshot('SPY')` (which runs every tick regardless of what is
+// charted) wrote those levels into the SPY day file under the SPY name. The face was honest — futMode
+// showed "No options tape" — but the RECORDING was silently corrupted. Now the true symbol is returned
+// and onFeed's existing SPY/QQQ guard drops everything else. Unsupported symbols are counted so the
+// panel can say so out loud instead of pretending.
+var SYM_SEEN={};                                  // {SYM:{n,t}} — non-SPY/QQQ books the app fetched
+function symFromUrl(u){
+  try{ var m=String(u).match(/[?&]symbol=([A-Za-z0-9._:-]+)/); if(m && m[1]) return decodeURIComponent(m[1]).toUpperCase(); }catch(e){}
+  return 'SPY';
+}
 
 // (v10.49 A) AUTH CAPTURE. Skylit's gex/levels calls carry a bearer token. The
 // v10.48 self-fetch sent cookies only and 401'd, so VEX never refreshed when the
@@ -340,7 +351,11 @@ var FEED_REJECTS={ SPY:{n:0,lastAge:null,t:0}, QQQ:{n:0,lastAge:null,t:0} };
 function feedNewestT(j){ try{ var lv=j&&j.levels; if(!lv||!lv.length) return null; var m=0;
   for(var i=0;i<lv.length;i++){ var t=lv[i]&&lv[i].t; if(typeof t==='number'&&t>m) m=t; } return m||null; }catch(e){ return null; } }
 function onFeed(sym, feed, j, viaSelf){
-  if(sym!=='SPY' && sym!=='QQQ') return;
+  if(sym!=='SPY' && sym!=='QQQ'){
+    try{ var R=SYM_SEEN[sym]||(SYM_SEEN[sym]={n:0,t:0}); R.n++; R.t=Date.now();
+      if(R.n===1) console.log('[GPTS] '+sym+' has an options tape on Skylit but this panel is mapped to SPY/QQQ only — its levels are NOT read and NOT recorded.'); }catch(eS){}
+    return;
+  }
   if(!j || !j.levels || !j.levels.length) return;
   if(!viaSelf) LASTDISP[sym] = feed;
   var newT=feedNewestT(j);
@@ -364,6 +379,7 @@ function onFeed(sym, feed, j, viaSelf){
 }
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.feedRejects=function(){ return FEED_REJECTS; };
+window.__gptsDebug.symbolsSeen=function(){ return SYM_SEEN; };
 // (v10.48) SELF-FETCH the non-displayed mode(s). Builds its URL by swapping
 // symbol=, data_type= and v= on the last-seen real request URL, so it carries the
 // same auth/query shape. Errors (esp. 503) are swallowed. Throttled per (sym,type).
@@ -403,7 +419,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.4';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.4.2';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -1224,7 +1240,11 @@ function readTapeFromDOM(sym){
   // (v11.2) THE $K-ANCHORED LADDER FIRST. Trinity pane for this symbol (true %King) → main table → legacy finders.
   try{ var LD=ladderFor(sym); if(LD && LD.count>=5 && LD.king!=null){ var rL=kingResolve(LD.pct, (LD.kingSrc==='dollar')?LD.king:null, LD.count);
       if(LD.kingSrc!=='dollar'){ rL.king=LD.king; rL.kingSrc=LD.kingSrc; if(LD.kingSrc==='highlight') rL.kingTagged=LD.king; }
-      rL.kingKd=LD.kingKd; rL.bookKing=LD.bookKing; rL.vel=LD.vel; rL.ladderSrc=LD.src; if(LD.kingConflict){ rL.kingConflict=true; rL.parseSuspect=LD.parseSuspect; }
+      rL.kingKd=LD.kingKd; rL.vel=LD.vel; rL.ladderSrc=LD.src;
+      // (v11.4.1) the BOOK King ($K in a later expiry column) only exists on the main table — carry it
+      // across when the Trinity pane is the one being read, so `bk` keeps recording the King-dollar trend.
+      rL.bookKing=LD.bookKing; if(!rL.bookKing && LD.src==='trinity'){ try{ var MN=(laddersByDollar()||{}).main; if(MN && MN.bookKing) rL.bookKing=MN.bookKing;
+        else if(LD.kingKd!=null) rL.bookKing={ k:LD.king, col:null, kd:LD.kingKd, neg:false, src:'trinity' }; }catch(eBK2){} } if(LD.kingConflict){ rL.kingConflict=true; rL.parseSuspect=LD.parseSuspect; }
       return rL; } }catch(eLD){}
   var table=findTapeTable();
   if(!table) return null;
@@ -2613,6 +2633,24 @@ function irtCsvRow(sym, price, label, color, width, style){
   return sym+','+price.toFixed(6)+','+String(label).replace(/[,\n"]/g,' ')+','+color+','+(width||1)+','+(style||0)+
          ',1,1,1,0,0,1,0,50,0,255,1,0,2,1,4.000000,0,16711680,2,1,8.000000,0,0';
 }
+// (v11.4.1 FIX, live 2026-08-20) THE RATIO MUST NOT DEPEND ON WHAT IS CHARTED. FUTMODE.r is 1 while a
+// CASH chart is up (correct for the panel, useless for the export), so with the user on SPY nothing was
+// written. Ratio, in order: the live futures EMA when a future is charted (persisted so it survives) →
+// the last persisted ES/SPY ratio → the feed's own SPXW→SPY ratio (SPX cash, a hair off ES) → the ES
+// constant. Anything but 'live' marks the futures labels with '~'.
+var IRT_RATIO_KEY='gpts_irt_ratio_v1';
+function irtRatio(){
+  try{ if(FUTMODE && FUTMODE.fam==='ES' && FUTMODE.r>1 && FUTMODE.live){
+    try{ localStorage.setItem(IRT_RATIO_KEY, JSON.stringify({r:FUTMODE.r, t:Date.now()})); }catch(e0){}
+    return { r:FUTMODE.r, live:true, src:'live' }; } }catch(e){}
+  try{ var o=JSON.parse(localStorage.getItem(IRT_RATIO_KEY)||'null');
+    if(o && o.r>1 && (Date.now()-o.t) < 14*86400000) return { r:o.r, live:false, src:'last-good' }; }catch(e1){}
+  try{ var f=LASTFEED.SPY, dv=f&&f.j&&f.j.derived;
+    if(dv && dv.length){ for(var i=0;i<dv.length;i++){ if(dv[i] && dv[i].source==='SPXW' && dv[i].ratio>0){
+      return { r:1/dv[i].ratio, live:false, src:'spxw-derived' }; } } } }catch(e2){}
+  try{ if(typeof ES_RATIO==='number' && ES_RATIO>1) return { r:ES_RATIO, live:false, src:'const' }; }catch(e3){}
+  return { r:null, live:false, src:'none' };
+}
 function irtBuildCsv(){
   var sym='SPY';
   var out=[IRT_HEADER];
@@ -2622,10 +2660,9 @@ function irtBuildCsv(){
   // conversion: SPY strike -> the IRT symbol's price
   var futSym=(cfgI.futSym||'').trim();
   var etfSym=(cfgI.etfSym||'').trim();
-  var r=1, approx=true, tick=0;
-  try{ if(FUTMODE && FUTMODE.r>1){ r=FUTMODE.r; approx=!FUTMODE.live; } }catch(e){}
+  var R=irtRatio();
   var targets=[];
-  if(futSym && r>1) targets.push({sym:futSym, mul:r, tick:0.25, tag:approx?' ~':''});
+  if(futSym && R.r>1) targets.push({sym:futSym, mul:R.r, tick:0.25, tag:R.live?'':' ~'});
   if(etfSym) targets.push({sym:etfSym, mul:1, tick:0, tag:''});
   if(!targets.length) return null;
   var rows=[];
@@ -2646,7 +2683,7 @@ function irtBuildCsv(){
   targets.forEach(function(T){
     rows.forEach(function(R){ out.push(irtCsvRow(T.sym, irtRound(R.k*T.mul, T.tick), R.lbl+T.tag, R.col, R.w, R.style)); });
   });
-  return { csv:out.join('\r\n')+'\r\n', n:rows.length, targets:targets.map(function(t){return t.sym;}) };
+  return { csv:out.join('\r\n')+'\r\n', n:rows.length, targets:targets.map(function(t){return t.sym;}), ratio:R };
 }
 function irtPickFolder(){
   if(!window.showDirectoryPicker){ alert('This browser lacks the File System Access API.'); return; }
@@ -2661,7 +2698,7 @@ function irtExportNow(force){
     repoKvGet('irtDir', function(h){
       if(h && h.getFileHandle){
         var name=(cfgI.file||'FlexLevelsExport.csv');
-        var doWrite=function(){ h.getFileHandle(name,{create:true}).then(function(fh){ return fh.createWritable(); }).then(function(w){ return w.write(built.csv).then(function(){ return w.close(); }); }).then(function(){ IRT_LAST={t:Date.now(),rows:built.n,how:'file',err:null}; }).catch(function(eW){ IRT_LAST={t:Date.now(),rows:0,how:null,err:''+eW}; }); };
+        var doWrite=function(){ h.getFileHandle(name,{create:true}).then(function(fh){ return fh.createWritable(); }).then(function(w){ return w.write(built.csv).then(function(){ return w.close(); }); }).then(function(){ IRT_LAST={t:Date.now(),rows:built.n,how:'file',err:null,ratio:built.ratio&&built.ratio.src}; }).catch(function(eW){ IRT_LAST={t:Date.now(),rows:0,how:null,err:''+eW}; }); };
         if(h.queryPermission){ h.queryPermission({mode:'readwrite'}).then(function(st){ if(st==='granted') doWrite(); else h.requestPermission({mode:'readwrite'}).then(function(st2){ if(st2==='granted') doWrite(); else IRT_LAST={t:Date.now(),rows:0,how:null,err:'folder permission denied'}; }); }).catch(doWrite); }
         else doWrite();
       } else {
@@ -3987,6 +4024,10 @@ function futRatioText(){
 }
 function futUnavailableHtml(){
   var msg=(FUTMODE&&FUTMODE.msg)||'No options tape — levels unavailable';
+  // (v11.4.2) if Skylit IS serving a book for this instrument, say the honest thing: the tape exists,
+  // this panel is mapped to SPY/QQQ only, and nothing about it is being read or recorded.
+  try{ var cs=(FUTMODE&&FUTMODE.chart)||null;
+    if(cs && SYM_SEEN[cs] && SYM_SEEN[cs].n>0) msg=cs+' has a Skylit options tape, but this panel is mapped to SPY/QQQ only — nothing here is read or recorded for '+cs+'.'; }catch(e){}
   return '<div title="The options dealer-exposure tape only exists for SPY and QQQ (and the ES/NQ futures that track them). For any other instrument this panel has no map, and it will not invent one." '+
     'style="border-left:2px solid '+PAL.amber+';background:'+PAL.card+';border-radius:0 8px 8px 0;padding:6px 9px;margin:3px 0;font-size:10px;color:'+PAL.amber+';font-weight:700">'+
     msg+'</div>';
@@ -4135,7 +4176,7 @@ function cfgHtml(){
     '<span class="gpts-irt-dir" style="cursor:pointer;font-size:10px;color:'+PAL.blue+';font-weight:700" title="Pick the folder ONCE (e.g. InvestorRT\\rtx\\lsFlexLevels, or a Google-Drive-synced folder). The handle persists; every export writes silently.">📁 folder</span>'+
     '<span class="gpts-irt-now" style="cursor:pointer;font-size:10px;color:'+PAL.blue+';font-weight:700" title="Write the file right now.">⟳ now</span></div>';
   html+='<div style="padding:0 4px 4px;font-size:9px;color:'+PAL.sub+'">'+
-    (IRT_LAST.t?('last: '+(IRT_LAST.err?('<span style="color:'+PAL.shortAccent+'">'+IRT_LAST.err+'</span>'):(IRT_LAST.rows+' levels ('+(IRT_LAST.how||'')+') '+new Date(IRT_LAST.t).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})))):'no export yet — pick the folder, set the symbol, toggle on')+'</div>';
+    (IRT_LAST.t?('last: '+(IRT_LAST.err?('<span style="color:'+PAL.shortAccent+'">'+IRT_LAST.err+'</span>'):(IRT_LAST.rows+' levels ('+(IRT_LAST.how||'')+(IRT_LAST.ratio?(', ratio '+IRT_LAST.ratio):'')+') '+new Date(IRT_LAST.t).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})))):'no export yet — pick the folder, set the symbol, toggle on')+'</div>';
   html+='<div style="border-bottom:1px solid '+PAL.line+';margin:2px 0 4px"></div>';
   var boChk = CFG.boPb ? 'checked' : '';
   html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 4px" '+

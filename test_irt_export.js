@@ -6,9 +6,12 @@ function v(n){ return src.match(new RegExp('var '+n+'=[\\s\\S]*?;\\n'))[0]; }
 global.window={__gptsDebug:{}};
 eval(v('IRT_HEADER')); eval(v('IRT_LAST'));
 eval(['irtColor'].map(ex).join('\n')); eval(v('IRT_COLORS'));
-eval(['irtRound','irtCsvRow','irtBuildCsv'].map(ex).join('\n'));
+eval(v('IRT_RATIO_KEY'));
+eval(['irtRound','irtCsvRow','irtRatio','irtBuildCsv'].map(ex).join('\n'));
+global.ES_RATIO=10.05; global.LASTFEED={SPY:null};
+var LS={}; global.localStorage={ getItem:k=>(k in LS?LS[k]:null), setItem:(k,val)=>{LS[k]=String(val);} };
 global.CFG={ nodeThresh:20, irt:{ on:true, secs:180, futSym:'EPU26', etfSym:'SPY', file:'FlexLevelsExport.csv' } };
-global.FUTMODE={ r:10.0538, live:true };
+global.FUTMODE={ fam:'ES', r:10.0538, live:true };
 global.nodeMapModel=()=>({ ok:true, levels:[
   {k:774, pct:100, isKing:true, pos:true},
   {k:771.5, pct:44, isGatekeeper:true, pos:true},
@@ -37,7 +40,7 @@ ok(neg && neg.split(',')[3]===String((247<<16)+(113<<8)+163), '1g −γ magnet c
 ok(/NextStop C/.test(b.csv) && /PBentry B acm/.test(b.csv), '1h the two forward calls ride along, dashed (style 2)');
 const nsRow=eRows.find(l=>/NextStop/.test(l)); ok(nsRow.split(',')[5]==='2', '1i dashed pen style on NextStop');
 // live=false → approx tag
-global.FUTMODE={ r:10.0538, live:false };
+global.FUTMODE={ fam:'ES', r:10.0538, live:false };
 const b2=irtBuildCsv();
 ok(/K 100% ~/.test(b2.csv.split('\r\n').filter(l=>l.startsWith('EPU26'))[0]||'') || /~/.test(b2.csv), '2a last-known ratio marks futures labels with ~');
 // no symbols configured → null
@@ -48,5 +51,21 @@ global.CFG.irt.etfSym='SPY';
 global.nextStopPick=()=>({ok:true, level:776, grade:'C,evil'});
 const b3=irtBuildCsv();
 ok(b3.csv.split('\r\n').every(l=>l==='' || l.split(',').length===28 || l===lines[0]), '2c commas in labels are stripped — every row keeps 28 columns');
+// ---- 3. (v11.4.1) the ratio must not depend on what is charted
+global.CFG.irt.futSym='EPU26'; global.CFG.irt.etfSym='';
+global.FUTMODE={ fam:'ES', r:10.0538, live:true };
+irtBuildCsv();                                              // charting ES: persists the live ratio
+global.FUTMODE={ chart:'SPY', fam:null, r:1, live:true };   // user switches back to the SPY cash chart
+const b4=irtBuildCsv();
+ok(!!b4 && b4.ratio.src==='last-good' && Math.abs(b4.ratio.r-10.0538)<0.001, '3a on a CASH chart the export still writes, using the persisted ES ratio', b4&&b4.ratio);
+ok(/^EPU26,7781\.750000,/.test(b4.csv.split('\r\n')[1]), '3b ...same converted price as when ES was charted');
+ok(/ ~/.test(b4.csv), '3c ...marked ~ because the ratio is not live');
+LS={};                                                       // nothing persisted
+global.LASTFEED={ SPY:{ j:{ derived:[{source:'SPXW', ratio:0.09974500868055555}] } } };
+const b5=irtBuildCsv();
+ok(b5 && b5.ratio.src==='spxw-derived' && Math.abs(b5.ratio.r-10.0256)<0.01, '3d no persisted ratio → the feed’s own SPXW→SPY ratio is used', b5&&b5.ratio);
+global.LASTFEED={SPY:null};
+const b6=irtBuildCsv();
+ok(b6 && b6.ratio.src==='const' && b6.ratio.r===10.05, '3e last resort: the ES constant', b6&&b6.ratio);
 console.log('test_irt_export: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

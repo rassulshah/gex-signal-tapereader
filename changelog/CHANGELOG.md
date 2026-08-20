@@ -1,3 +1,31 @@
+## v11.4.2 — 2026-08-20 — SYMBOL SCOPE: another instrument's book can no longer be recorded as SPY
+
+Found while answering "does this work for USO / GLD?". `symFromUrl` returned `'SPY'` for ANYTHING that was not QQQ, so
+charting any other optionable instrument fed that instrument's `gex/levels` book into `LASTFEED.SPY` — and
+`recordNodeSnapshot('SPY')`, which runs every tick regardless of what is charted, wrote those levels into the SPY day file
+under the SPY name. The face was honest (futMode showed "No options tape"); the RECORDING was not. Now the true symbol is
+parsed from the URL and `onFeed`'s existing SPY/QQQ guard drops everything else; sightings are counted
+(`__gptsDebug.symbolsSeen()`) and the unmapped-instrument banner says the honest thing: "<SYM> has a Skylit options tape,
+but this panel is mapped to SPY/QQQ only — nothing here is read or recorded for <SYM>." Nothing is invented for the
+unsupported symbol. Tests: test_symbol_scope (12). ANSWER TO THE QUESTION: no, the panel does not support USO/GLD today —
+`RECORDER_SYMS`, `STATE`, `LASTFEED/LASTVEX/LASTDISP`, `TAPE_CACHE`, `RECON_STATE`, `FUT_UNDERLYING`, the ledger, the leg
+engine and the day-file schema are all keyed to SPY/QQQ. Generalising them is a real build (a symbol registry + per-symbol
+tick/ATR/session assumptions), NOT a config change, and it is a FEATURE — it waits for the lockdown or an explicit call.
+
+## v11.4.1 — 2026-08-20 (live, 09:20 CT) — IRT export works on a CASH chart; the King-dollar keeps recording
+
+Live check at the open found two gaps. (1) `irtBuildCsv` took its conversion from `FUTMODE.r`, which is 1 while a CASH
+chart is up — so with the user on the SPY chart (the normal case) the export produced nothing. The ratio is now
+independent of what is charted: live ES EMA when a future is charted (and persisted to `gpts_irt_ratio_v1`) → the last
+persisted ratio (≤14 days) → the feed's own SPXW→SPY ratio → the ES constant; anything but live marks futures labels '~',
+and the gear status line names the source. (2) Since v11.2 the Trinity pane wins the tape read, and only the main table
+carries the `$K` in a later expiry column, so `snap.bk` (the King-dollar trend, v10.39's "strongest leading signal on the
+board") had gone null again — the Trinity read now carries the main table's `bookKing` across, or falls back to its own
+King $K. Live at 09:13 CT: sync unanimous 767 (tag/feed/tapemax), all four ladders read by their $K (SPY 767 $70,499K ·
+QQQ 714 · SPXW 7705 · VIX 16), 0 feed rejects, 186 feature records over 6 bars with 58 already resolved, `tri` on every
+snap, PB Entry 764 map.pb Acm with a 4-node stack, Next Stop 766.5. No panel errors in the console. Tests: test_irt_export
+(18). Suite green except the known-stale.
+
 ## v11.4 — 2026-08-19 (evening) — IRT FLEXLEVELS EXPORT (user-directed): the gamma levels drawn on Linnsoft Investor/RT charts
 
 User: "build a feature that exports the gamma levels so I can import them on Linnsoft IRT charts… flex levels… consider
