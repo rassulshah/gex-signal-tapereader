@@ -1,3 +1,224 @@
+## v11.16 — 2026-08-20 — THE CALL WALL IS COMPUTABLE. I was wrong.
+
+The user asked me to double-check the claim that we cannot compute a call wall. I checked against the live
+payload, and the claim was wrong.
+
+**What the feed actually sends.** A strike row is `{k, v, d, net}` — and I had only ever used `v` and `d`,
+treating `net` as decoration. Captured live off the wire, 2026-08-20:
+
+    {k:760, v:283651666.375,  d:1,  net:278399177.125}
+    {k:765, v:174886547.5078, d:-1, net:-174886547.5078}
+    {k:766, v:61620230.75,    d:-1, net:-51428766.25}
+
+`v` is TOTAL gamma; `net` is NET gamma. Across the live 60-strike book: **49 strikes had |net| < v, 11 had
+|net| == v (a strike that is entirely put or entirely call), and ZERO had |net| > v.** That is precisely the
+signature of total-and-net, and it makes the split algebra:
+
+    call = (v + net) / 2            put = (v - net) / 2
+
+A call/put split never required a call/put feed. Two aggregates determine it — which is why a third-party GEX
+page's own header satisfies the same identity (Call 8.3 + Put 51.7 = Total 60.0; Call 8.3 − Put 51.7 = Net
+−43.4). They are deriving it the same way, from data we also have. **No scraping, no `@grant`, no hand entry.**
+
+`cpRows()` / `cpLevels()` decompose every strike and place **Call Resistance on CALL gamma** and **Put Support
+on PUT gamma** — their definitions, from our own feed. A new **CALL/PUT · derived** block on the card shows
+them with the SPX equivalent, the gamma at each wall, and the summed Call/Put totals with their ratio.
+
+**Why 765 makes the point.** It carries 175M of gamma — the second-heaviest strike in the sample — and
+decomposes to **zero call**. A net-based "call wall" could pick it; a real one never can. That is the gap this
+build closes, and it is asserted in the tests.
+
+**One caveat kept on the card's face.** The app requests `nodes=60`, a RANKED TOP-60 subset of the chain, not
+the whole book. The walls found inside it are real, but the TOTALS are subset totals and will not equal a
+full-chain page's Call GEX / Put GEX. The ratio is displayed precisely so that gap stays visible instead of
+being assumed away. Also learned from the wire: the API takes `exp_mode` / `exp_count` (`current&1` = 0DTE,
+`next_n&4` = the front four) and returns `expirations` and `strike_interval` — so a true CR0-vs-CR split is
+available at the source, which is the obvious next build.
+
+`test_call_put.js` grows to 45, with fixtures taken verbatim from the captured payload rather than invented.
+No new suite failures.
+
+## v11.15 — 2026-08-20 — Double-checking the call-wall claim: the `net` field I ignored
+
+User: *"can you double check why we cant get call wall values."* Good instinct — my claim had a hole in it.
+
+I had been saying the call wall is unreachable because the feed carries no call/put split. That skipped
+something the strike rows already carry: alongside `v` they carry **`net`**. And a call/put split does not
+require a call/put feed — **total and net fully determine it:**
+
+    call = (total + net) / 2        |put| = (total - net) / 2
+
+Their own page header satisfies exactly this identity: Call 8.3 + |Put| 51.7 = Total 60.0, and
+Call 8.3 − |Put| 51.7 = Net −43.4. So they are almost certainly deriving call and put the same way, from two
+aggregates — not from privileged data. If Skylit's `v` is a TOTAL and `net` is a NET, the split is pure algebra
+and the call wall is computable from the feed we already have, with no scraping and no `@grant`.
+
+`__gptsDebug.callPut()` settles it against the live payload. Per strike it classifies:
+
+| observation | meaning | consequence |
+|---|---|---|
+| `\|net\| < v` | v is total, net is net | **decomposable — call wall computable** |
+| `\|net\| == v` | net is just the signed magnitude | no extra information; the split really is absent |
+| `\|net\| > v` | the fields mean something else | report and stop; do not guess |
+
+In the good case it derives call and put per strike, places the call wall on **call gamma** (their definition,
+not our net proxy), and reports the summed call/put totals and their ratio — which is the cross-check that
+proves the decomposition rather than assuming it: those totals should line up with their header.
+
+The tests pin all three branches deliberately. A probe that only recognises the convenient outcome is worse
+than no probe, so the "genuinely absent" and "means something else" paths are asserted to emit **no wall at
+all** rather than a fabricated one.
+
+New `test_call_put.js` (24). No new suite failures.
+
+## v11.14 — 2026-08-20 — Levels computed natively on the SPXW lane, in SPX points
+
+User: *"can you compute the same?"* — with clean labelled screenshots of their SPX page at three expiry
+filters. This is the build that makes that comparison honest, by taking the conversion out of it.
+
+Skylit's `derived` SPXW lane carries SPX-scale strikes with absolute dollar values and a sign. So CR/PS/HVL/Mag
+can be computed **in SPX points directly** and placed beside an SPX gamma page with nothing in the middle —
+previously any disagreement could be blamed on the ratio. `spxLevels()` does that; a new **OURS · SPX** block on
+the card shows them, with the lane's spot, strike count and range on its face.
+
+**Their page, 2026-08-20, spot 7642.21:**
+
+| view | Call Wall | Put Wall | Zero Gamma | call/put ratio |
+|---|---|---|---|---|
+| 0DTE | 7760 | **7640** | 7695.17 | 0.16 |
+| next week | 7775 | **7640** | 7672.98 | 0.44 |
+| all expirations | 7900 | **7640** | 7660.22 | 0.82 |
+
+**The put wall is 7640 in all three.** It does not move because it is driven by near-dated, near-money puts —
+exactly the part of the book Skylit gives us in full. That is the number we should match, and the card now lets
+you check it at a glance.
+
+**The call wall is a different story, and the tests made the point better than the prose did.** Our column is
+labelled **CR(net)**, never "Call Resistance". Building the fixture, a put strike above spot outweighed the call
+strike above it — which is not a contrivance: at a 0.16 ratio, puts outweigh calls better than 6 to 1, and put
+strikes above spot routinely carry more gamma than call strikes. So the heaviest *net* strike above spot came out
+100 points away from the heaviest *call* strike. Ours is not a rough version of theirs; it is a different strike,
+and it will stay that way until something decomposes calls from puts.
+
+**Reach is reported too**, because it is the first thing that decides whether their number is computable at all:
+`kMin`/`kMax` and the same as a percentage of spot. If the lane tops out below 7900, their full-chain call wall
+is not in our data and no amount of computation recovers it. `__gptsDebug.spxDump()` prints the whole lane
+compactly so the arithmetic can be checked by hand.
+
+New `test_spx_levels.js` (25). No new suite failures.
+
+## v11.13 — 2026-08-20 — Feed shape probe: can we compute their levels from the SPXW lane?
+
+User: *"are you able to calculate from the spxw tape and match what they have?"* The honest answer is that it
+depends on three facts about the payload that nobody has actually looked at, so this build adds the probe
+instead of another argument.
+
+`__gptsDebug.feedShape('SPY')` reports the SHAPE of the captured feed — never its contents. Per lane (native
+and every `derived` lane, each on its own scale, unconverted): snapshot count, strike count, strike range,
+strike step, the row's key names, and exactly two sample rows. Plus a key scan for anything matching
+`call|put|cGex|pGex|cOi|pOi` and anything matching `exp|dte|maturity`, each with the full path to where it was
+found.
+
+**The decisive line is `verdict`.** InsiderFinance's Call Wall is defined on *call* gamma specifically. If the
+payload never splits call from put, their Call Wall is not reproducible from our data at any effort — and if it
+does, it becomes computable directly, with no scraping, no `@grant`, and no vendor dependency. The probe answers
+that in one line rather than by inference.
+
+**One defect the tests caught in the probe itself:** the key scan recursed into `array[0]` only. The feed's
+`levels` array is a *time series* whose first snapshot is routinely empty — so a payload that carried call/put
+fields in its latest snapshot would have been reported as having none, which is precisely the wrong answer to
+get wrong here. It now scans the first *and last* element and names the index in the path.
+
+New `test_feed_shape.js` (21). No new suite failures.
+
+## v11.12 — 2026-08-20 — InsiderFinance levels ON the card (entered by hand, because a fetch is impossible)
+
+**The question was settled empirically, in the live console on app.skylit.ai:**
+
+    await fetch('https://www.insiderfinance.io/gamma-exposure/SPX')...  ->  "BLOCKED Failed to fetch"
+
+Their server sends no `Access-Control-Allow-Origin`, so a script running on Skylit cannot read their page. The
+standard fix — `@grant GM_xmlhttpRequest` — moves this script into Tampermonkey's sandbox, where our
+`window.fetch` / `XMLHttpRequest` hooks would patch a wrapper instead of the page and the tape would go dark.
+Both routes are therefore closed, and no amount of further argument was going to open one.
+
+So the levels are typed in, once. That is less painful than it sounds: **their walls barely move.** On 2026-08-20
+the SPX call wall read 7900 from early afternoon through the close while SPX fell 66 points. A number that static
+does not need a five-minute refresh — it needs to be on the chart.
+
+**What shipped.** An `IF` control in the LEVELS header opens a paste box; `ifManParse` takes what a person
+actually pastes (`7900 7640 7660.22 7645`, dollar signs, commas, stray labels) and **detects the scale** — SPX
+prints in thousands, SPY in hundreds — instead of asking which tab it came from. `ifManLevels()` converts onto
+our cash scale using Skylit's own SPXW ratio, and if that ratio is not in the feed yet it says so rather than
+mis-scaling SPX numbers as SPY. Their levels render as a separate block under ours, italic, dimmer, headed
+INSIDERFINANCE with the source scale and an age stamp, and on the chart as fine dotted lines labelled `IF·CR`
+etc. The chart SCALE stays ours — their walls sit far out by nature (SPX 7900 against 7642 spot) and including
+them would squash a whole session into a few pixels, so an out-of-range level simply is not drawn while the row
+list still carries the number and its distance.
+
+**They never merge with ours.** Every row says whose number it is, they feed no direction, and they are not
+scored as ours. This is a reference map drawn beside our read, which is the only honest way to show a number we
+cannot reproduce: their Call Wall uses call gamma specifically, and neither Skylit's feed nor InsiderFinance's own
+published per-strike table decomposes calls from puts.
+
+**A correction to v11.11's note:** it claimed they do not publish call/put per strike. Their page has a
+**Call/Put** toggle beside Net GEX that I never opened — I had only ever looked at the default Net view. The
+split may well be available there; worth checking before assuming their call wall is unreachable.
+
+22 new assertions in `test_levels.js` (107 total). No new suite failures.
+
+## v11.11 — 2026-08-20 — The SPX scale was already in the feed
+
+User, on the question of how to reach InsiderFinance's SPX numbers: *"you already get it when you do the initial
+conversion."* Correct, and it makes the whole external-fetch question moot for scale. Skylit's payload ships a
+`derived` array whose SPXW lane carries the SPX→SPY ratio it used — `irtRatio()` has been falling back to
+`1/dd.ratio` for its ES estimate since v11.4. The same number gives the SPX equivalent of every level for free:
+no `@grant`, no scraping, no relay, no risk to the feed hooks.
+
+`spxRatio()` / `lvlSpx()` add the SPX figure to each level's tooltip, so a level can be put straight beside an
+SPX gamma page without arithmetic. **It converts SCALE ONLY**, and the tooltip says so: "our 765 is SPX 7683" is
+not "their SPX book has a wall at 7683". Their walls come from a different chain, a full expiry span and a
+call/put split we do not have. Absent an SPXW lane there is no SPX figure at all rather than a guessed one.
+
+Eight new assertions in `test_levels.js` (85 total). No new suite failures.
+
+## v11.10 — 2026-08-20 — Both scales on every level · the HVL's absence is now information
+
+**Both scales, always.** The user trades ES but thinks in SPY strikes — *"so I can quickly see what key wall it
+is near."* Whichever instrument the chart is on is the primary number; the other sits beside it, dimmed and
+labelled (`SPY 765` on an ES chart, `ES 7690` on a SPY chart). Cash mode gets the ES figure from `irtRatio()`'s
+fallback chain, and a non-live ratio is marked `≈` rather than presented as exact. No ratio at all means no
+second figure — never a guessed one.
+
+**The HVL row no longer disappears.** It was absent from the live card and that read as "we forgot to compute
+it". It is the opposite: the cumulative gamma curve in that book never crosses zero, so there is no flip to
+place. The row now always renders, showing `—` plus the reason, and the tooltip states plainly that the HVL *is*
+the zero-gamma / gamma-flip level — the same thing MenthorQ calls the High Vol Level and InsiderFinance labels
+Support/Resistance with "dynamics change if breached".
+
+**The regime says what answered it.** "+γ dampening" is a claim about where price sits relative to the flip. With
+no flip, the regime fell back to the net-gamma *sign* — a weaker, different statement — and the card presented
+both identically. It now appends `(net)` when the sign answered, and omits it when a real flip did.
+
+21 new assertions in `test_levels.js` (77 total). No new suite failures.
+
+## v11.9 — 2026-08-20 — Levels chart legibility + no invented precision on converted levels
+
+Both user-reported off the live v11.8 card.
+
+**Labels on the line, centred, legible.** The 7px tag in a right-hand gutter was unreadable and the gutter cost
+chart width. Labels now sit ON their line at 10px bold, centred, on a card-coloured plate so they stay readable
+where the price line crosses. Coincident levels stagger horizontally instead of stacking — CR and CR0 landing on
+the same strike is a normal case, not a rare one, and the old layout hid one behind the other completely.
+
+**"Just round it."** In futures mode every level is a CASH level multiplied by a live EMA ratio, so `7689.75` was
+arithmetic residue, not a futures price anyone quotes — and the ratio itself is only good to a point or two, so the
+decimals claimed precision the number never had. `lvlFmt` / `lvlSpanFmt` round to whole points on the futures
+scale; the cash strike and the ratio used ride in the tooltip so the level stays traceable to what was actually read.
+Cash mode is untouched.
+
+Six new assertions in `test_levels.js` (56 total). No new suite failures.
+
 ## v11.8 — 2026-08-20 — THE LEVEL SET: CR0/CR · PS0/PS · HVL · Mag, computed from our own tape
 
 User asked for the InsiderFinance "Signals" data, the MenthorQ 0DTE-vs-weekly split, an answer on the trigger

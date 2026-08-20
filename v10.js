@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.8
+// @version    11.16
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -379,6 +379,124 @@ function onFeed(sym, feed, j, viaSelf){
 }
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.feedRejects=function(){ return FEED_REJECTS; };
+// ---- (v11.13) FEED SHAPE PROBE -------------------------------------------------------------
+// The question it exists to answer: can we compute InsiderFinance's levels from the SPXW lane we
+// already receive? That turns entirely on three facts about the payload, none of which should be
+// guessed at: how many strikes the lane carries and over what range, whether it has an EXPIRY
+// dimension or is one aggregate book, and whether gamma is ever split into CALL and PUT. The last
+// one is decisive — their Call Wall is defined on call gamma specifically, so without a split it is
+// not reproducible from any amount of our data.
+// Reports SHAPE, not contents: key names, counts, ranges and two sample rows. Never dumps the payload.
+function feedKeyScan(o, want, depth, path, hits){
+  depth=depth||0; path=path||''; hits=hits||[];
+  if(!o || typeof o!=='object' || depth>4 || hits.length>=12) return hits;
+  var ks=Object.keys(o);
+  for(var i=0;i<ks.length && hits.length<12;i++){
+    var k=ks[i], p=path?(path+'.'+k):k;
+    if(want.test(k)) hits.push({ path:p, type:typeof o[k], sample:(typeof o[k]==='object'?'[obj]':o[k]) });
+    var v=o[k];
+    if(!v || typeof v!=='object') continue;
+    if(Array.isArray(v)){
+      // FIRST AND LAST, not just [0]. The feed's `levels` array is a time series whose first snapshot is
+      // routinely empty — scanning index 0 alone reported "no call/put fields" off a payload that had them.
+      if(!v.length) continue;
+      var idxs=(v.length>1)?[0, v.length-1]:[0];
+      for(var z=0;z<idxs.length;z++) feedKeyScan(v[idxs[z]], want, depth+1, p+'['+idxs[z]+']', hits);
+    } else {
+      feedKeyScan(v, want, depth+1, p, hits);
+    }
+  }
+  return hits;
+}
+function feedShape(sym){
+  try{
+    var f=LASTFEED[sym||'SPY']; if(!f || !f.j) return { err:'no feed captured yet for '+(sym||'SPY') };
+    var j=f.j;
+    function laneShape(lane){
+      try{
+        var snaps=lane.levels||[]; var last=snaps[snaps.length-1]; var l=(last&&last.l)||[];
+        var ks=l.map(function(x){ return x.k; }).filter(function(x){ return typeof x==='number'; });
+        return { snapshots:snaps.length, strikes:l.length,
+                 kMin:ks.length?Math.min.apply(null,ks):null, kMax:ks.length?Math.max.apply(null,ks):null,
+                 strikeStep:(ks.length>2)?+(Math.abs(ks[1]-ks[0])).toFixed(2):null,
+                 rowKeys:l.length?Object.keys(l[0]):null,
+                 sample:l.slice(0,2),
+                 snapKeys:last?Object.keys(last):null };
+      }catch(e){ return { err:String(e) }; }
+    }
+    var out={
+      topKeys:Object.keys(j),
+      url:LASTFEEDURL||null,
+      native:laneShape(j),
+      derivedLanes:(j.derived||[]).map(function(d){
+        return { source:d.source, ratio:d.ratio, keys:Object.keys(d), shape:laneShape(d) }; }),
+      // THE decisive question: is gamma ever split call vs put anywhere in this payload?
+      callPutKeys:feedKeyScan(j, /call|put|cGex|pGex|cOi|pOi/i),
+      expiryKeys:feedKeyScan(j, /exp|dte|maturity/i)
+    };
+    out.verdict = out.callPutKeys.length
+      ? 'call/put fields PRESENT — check whether they are per-strike or totals'
+      : 'NO call/put fields anywhere in the payload — their Call Wall is not reproducible from this feed';
+    return out;
+  }catch(e){ return { err:String(e) }; }
+}
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.feedShape=function(s){ return feedShape(s||'SPY'); };
+// ---- (v11.15) THE CALL/PUT DECOMPOSITION PROBE --------------------------------------------------
+// I claimed the call wall was unreachable because the feed carries no call/put split. That claim skipped
+// something: the feed's strike rows carry BOTH `v` and `net`. If `v` is TOTAL gamma (call + |put|) and
+// `net` is NET gamma (call - |put|), the split is pure algebra and nothing needs to be scraped:
+//        call  = (total + net) / 2          |put| = (total - net) / 2
+// This is exactly the identity an SPX gamma page's own header satisfies — Call 8.3 + |Put| 51.7 = Total 60.0,
+// and Call 8.3 - |Put| 51.7 = Net -43.4 — so they are almost certainly deriving it the same way.
+//
+// The test that settles it, per strike:
+//        |net| <  v   -> v is TOTAL and net is NET      -> DECOMPOSABLE, call wall computable
+//        |net| == v   -> net is just the signed v       -> no extra information, not decomposable
+//        |net| >  v   -> the fields mean something else -> do not guess, report and stop
+// Reports what it finds; it never assumes the good case.
+function callPutProbe(sym){
+  try{
+    var f=LASTFEED[sym||'SPY']; if(!f||!f.j) return { err:'no feed captured yet' };
+    var snaps=f.j.levels||[]; var last=snaps[snaps.length-1]; var l=(last&&last.l)||[];
+    if(!l.length) return { err:'no strike rows in the latest snapshot' };
+    var lt=0, eq=0, gt=0, noNet=0, rows=[];
+    for(var i=0;i<l.length;i++){
+      var n=l[i];
+      if(typeof n.v!=='number' || typeof n.net!=='number'){ noNet++; continue; }
+      var v=Math.abs(n.v), nt=n.net, an=Math.abs(nt);
+      var tol=Math.max(1e-6, v*1e-6);
+      if(an < v-tol) lt++; else if(an <= v+tol) eq++; else gt++;
+      rows.push({ k:n.k, v:v, net:nt, call:+(((v+nt)/2)).toFixed(2), put:+(((v-nt)/2)).toFixed(2) });
+    }
+    var n=rows.length;
+    var decomposable = (n>0 && lt >= Math.max(3, Math.round(n*0.2)) && gt===0);
+    var out={ strikes:l.length, withNet:n, noNet:noNet,
+              absNetLessThanV:lt, absNetEqualsV:eq, absNetGreaterThanV:gt,
+              decomposable:decomposable, sample:rows.slice(0,6) };
+    if(gt>0){ out.verdict='|net| EXCEEDS v on '+gt+' strikes — v is not a total, so do NOT decompose. The fields mean something else.'; return out; }
+    if(!decomposable){ out.verdict='|net| equals v on every strike — net is just the signed magnitude, carrying no extra information. The call/put split is genuinely absent and the call wall is not computable.'; return out; }
+    // The good case: derive call and put per strike and place the walls their way.
+    var px=(STATE[sym||'SPY']||{}).price;
+    var cw=null,cwm=-1, pw=null,pwm=-1, sumC=0, sumP=0;
+    rows.forEach(function(r){
+      sumC+=r.call; sumP+=r.put;
+      if(px!=null && r.k>px && r.call>cwm){ cwm=r.call; cw=r.k; }
+      if(px!=null && r.k<px && r.put>pwm){ pwm=r.put; pw=r.k; } });
+    out.callWall=cw; out.callWallGex=(cwm<0?null:Math.round(cwm));
+    out.putWall=pw;  out.putWallGex=(pwm<0?null:Math.round(pwm));
+    out.totalCall=Math.round(sumC); out.totalPut=Math.round(sumP);
+    out.ratio=(sumP>0)?+(sumC/sumP).toFixed(2):null;
+    out.px=px;
+    out.verdict='DECOMPOSABLE — v is total, net is net. call=(v+net)/2, put=(v-net)/2. The CALL WALL is computable from this feed, and the call/put ratio can be cross-checked against their header.';
+    return out;
+  }catch(e){ return { err:String(e) }; }
+}
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.callPut=function(s){ return callPutProbe(s||'SPY'); };
+
+window.__gptsDebug.feedShapeJSON=function(s){ try{ return JSON.stringify(feedShape(s||'SPY')); }catch(e){ return String(e); } };
+
 window.__gptsDebug.symbolsSeen=function(){ return SYM_SEEN; };
 // (v10.48) SELF-FETCH the non-displayed mode(s). Builds its URL by swapping
 // symbol=, data_type= and v= on the last-seen real request URL, so it carries the
@@ -419,7 +537,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.8';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.16';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -12607,12 +12725,275 @@ var LVL_WHAT={
   mag:'Magnet — the heaviest strike in the book. Price tends to gravitate toward it into expiry.'
 };
 // price-ordered level rows for a level set
+// (v11.9, user: "just round it") In futures mode every level is a CASH level multiplied by a live EMA
+// ratio, so "7689.75" is arithmetic residue, not a futures price anyone quotes. The ratio itself is only
+// good to a point or two, so the decimals claim precision the number does not have. Round to whole points
+// on the futures scale; the cash strike it came from rides in the tooltip so the level stays traceable.
+function lvlFmt(x){
+  if(x==null) return '–';
+  try{ if(typeof dispIsFut==='function' && dispIsFut()) return (typeof futMark==='function'?futMark():'')+String(Math.round(mul(x, dispR()))); }catch(e){}
+  return fmtLvl(x);
+}
+function lvlSpanFmt(x){
+  if(x==null) return '–';
+  try{ if(typeof dispIsFut==='function' && dispIsFut()) return (typeof futMark==='function'?futMark():'')+String(Math.round(mul(x, dispR()))); }catch(e){}
+  return fmtSpan(x);
+}
+// (v11.10, user) BOTH SCALES ON EVERY LEVEL. The user trades ES but thinks in SPY strikes — "so I can
+// quickly see what key wall it is near". Whichever instrument the chart is on is the PRIMARY number; the
+// other rides beside it, dimmed and labelled. Cash mode uses irtRatio()'s fallback chain (live ES EMA ->
+// persisted -> SPXW-derived -> const) so the ES figure is available even when the chart is on SPY, and it
+// is marked with the same ~ that the rest of the panel uses when the ratio is not live.
+// (v11.11, user: "you already get it when you do the initial conversion") — correct, and it makes the
+// whole external-fetch question moot for SCALE. Skylit's own payload ships a `derived` array whose SPXW
+// lane carries the SPX->SPY ratio it used (irtRatio() already falls back to 1/dd.ratio for exactly this).
+// So the SPX equivalent of every level is available from data we ALREADY RECEIVE — no @grant, no scraping,
+// no relay. That is what makes a like-for-like comparison against an SPX page a glance instead of arithmetic.
+// NOTE this converts SCALE only. It says "our level 765 is SPX 7683"; it does NOT say their SPX book has a
+// wall there. Their walls come from a different chain, a full expiry span and a call/put split we do not have.
+function spxRatio(){
+  try{ var f=LASTFEED&&LASTFEED.SPY, dv=f&&f.j&&f.j.derived;
+    if(dv&&dv.length){ for(var i=0;i<dv.length;i++){ var d=dv[i];
+      if(d && (d.source==='SPXW'||d.source==='SPX') && d.ratio>0) return { r:1/d.ratio, src:d.source }; } } }catch(e){}
+  return { r:null, src:null };
+}
+// ================= (v11.12) INSIDERFINANCE LEVELS, ENTERED BY HAND =================
+// Verified 2026-08-20 in the live console on app.skylit.ai:
+//   fetch('https://www.insiderfinance.io/gamma-exposure/SPX') -> "BLOCKED Failed to fetch"
+// Their server sends no Access-Control-Allow-Origin, so a script on Skylit cannot read their page.
+// The usual fix, @grant GM_xmlhttpRequest, moves this script into Tampermonkey's sandbox — where our
+// window.fetch / XMLHttpRequest hooks would patch a wrapper instead of the page and the tape would go dark.
+// So the levels come in by hand. That is not as bad as it sounds: their walls barely move. On 2026-08-20 the
+// SPX call wall read 7900 from early afternoon through the close while SPX fell 66 points. A number that
+// static does not need a 5-minute refresh — it needs to be on the chart, which is what this does.
+//
+// Everything here is THEIRS and is labelled as theirs. It never merges with our levels, never feeds
+// direction, never votes. It is a reference map drawn beside our read.
+var IFMAN_LS='gpts_if_manual_v1';
+var IFMAN=(function(){ try{ var o=JSON.parse(localStorage.getItem(IFMAN_LS)||'null'); if(o&&typeof o==='object') return o; }catch(e){}
+  return null; })();
+function ifManSave(o){ IFMAN=o; try{ localStorage.setItem(IFMAN_LS, JSON.stringify(o)); }catch(e){} }
+
+// Accepts what a person actually pastes: "7900 7640 7660.22 7645", commas, $ signs, stray labels.
+// Order is Call Wall · Put Wall · Zero Gamma · Magnet; Magnet is optional.
+// ============== (v11.14) LEVELS COMPUTED NATIVELY ON THE SPXW LANE ==============
+// Skylit's payload carries a `derived` SPXW lane: strike rows on the SPX scale with an ABSOLUTE dollar
+// value and a sign. That is the same kind of data an SPX gamma page publishes, so we can compute CR/PS/HVL/
+// Mag directly in SPX points and set them beside a third party's SPX numbers with NO conversion in between.
+// Conversion was never the interesting part; this removes it from the comparison entirely.
+//
+// WHAT THIS CAN AND CANNOT MATCH — stated up front so the card is never read as a claim it does not make.
+// Observed on their SPX page, 2026-08-20, spot 7642.21:
+//        view        Call Wall   Put Wall   Zero Gamma   call/put ratio
+//        0DTE          7760        7640       7695.17        0.16
+//        next week     7775        7640       7672.98        0.44
+//        all exps      7900        7640       7660.22        0.82
+// The PUT WALL is 7640 in all three. It does not move because it is driven by near-dated, near-money puts —
+// exactly the part of the book Skylit gives us in full. That is the number we should match.
+// The CALL WALL moves 7760 -> 7900 as expirations are added, and it is defined on CALL gamma specifically.
+// With a 0.16 ratio (puts outweighing calls better than 6:1) the heaviest NET strike above spot is still
+// put-driven, so a net-based call wall is not an approximation of theirs — it is a different strike.
+// We therefore report ours as CR(net) and never as "Call Resistance".
+// ================= (v11.16) CALL / PUT DECOMPOSITION — THE CALL WALL IS COMPUTABLE =================
+// I told the user for several builds that the call wall could not be computed because the feed carries no
+// call/put split. That was WRONG, and the live payload settles it. Skylit's strike rows are:
+//        {k: 760, v: 283651666.375, d: 1, net: 278399177.125}
+// `v` is TOTAL gamma and `net` is NET gamma — verified on the live SPY book 2026-08-20, where across 60
+// strikes 49 had |net| < v, 11 had |net| == v (a strike that is all put or all call), and ZERO had |net| > v.
+// That is exactly the signature of total-and-net, and it makes the split pure algebra:
+//        call = (v + net) / 2            put = (v - net) / 2
+// Their own page header satisfies the same identity — Call 8.3 + Put 51.7 = Total 60.0, Call 8.3 - Put 51.7
+// = Net -43.4 — so a third-party GEX page is deriving it the same way, from two aggregates, not from data
+// we lack. Nothing needs to be scraped, no @grant is needed, and no number has to be typed in by hand.
+//
+// A CAVEAT THAT MUST STAY ON THE FACE: the app requests `nodes=60`, which is a RANKED TOP-60 subset of the
+// chain, not the whole book. Walls found inside it are real, but the TOTALS are totals of a subset and will
+// not equal a full-chain page's Call GEX / Put GEX. The ratio is reported precisely so that discrepancy is
+// visible rather than assumed away.
+function cpRows(sym){
+  try{
+    var f=LASTFEED[sym||'SPY']; if(!f||!f.j) return null;
+    var snaps=f.j.levels||[]; var last=snaps[snaps.length-1]; var l=(last&&last.l)||[];
+    if(!l.length) return null;
+    var lt=0, eq=0, gt=0, noNet=0, rows=[];
+    for(var i=0;i<l.length;i++){
+      var n=l[i];
+      if(typeof n.k!=='number' || typeof n.v!=='number'){ continue; }
+      if(typeof n.net!=='number'){ noNet++; continue; }
+      var v=Math.abs(n.v), nt=n.net, an=Math.abs(nt), tol=Math.max(1e-6, v*1e-9);
+      if(an < v-tol) lt++; else if(an <= v+tol) eq++; else gt++;
+      rows.push({ k:n.k, v:v, net:nt, call:(v+nt)/2, put:(v-nt)/2 });
+    }
+    if(!rows.length) return null;
+    rows.sort(function(a,b){ return a.k-b.k; });
+    // gt>0 would mean v is not a total. Refuse rather than emit a decomposition we cannot justify.
+    return { rows:rows, lt:lt, eq:eq, gt:gt, noNet:noNet, ok:(gt===0 && lt>0),
+             exps:(f.j.expirations||null), step:(f.j.strike_interval!=null?f.j.strike_interval:null),
+             t:(last&&last.t)||null };
+  }catch(e){ return null; }
+}
+// The walls THEIR way: call wall on CALL gamma, put wall on PUT gamma. Not a net proxy.
+function cpLevels(sym){
+  sym=sym||'SPY';
+  try{
+    var D=cpRows(sym); if(!D) return null;
+    if(!D.ok) return { err:(D.gt>0
+        ? '|net| exceeds v on '+D.gt+' strikes — v is not a total here, so calls and puts cannot be separated'
+        : 'net equals v on every strike — no call/put information in this payload'), lt:D.lt, eq:D.eq, gt:D.gt };
+    var px=(STATE[sym]||{}).price; if(typeof px!=='number') return { err:'no price yet' };
+    var cw=null,cwm=-1, pw=null,pwm=-1, sc=0, sp=0;
+    D.rows.forEach(function(r){
+      sc+=r.call; sp+=r.put;
+      if(r.k>px && r.call>cwm){ cwm=r.call; cw=r.k; }
+      if(r.k<px && r.put>pwm){ pwm=r.put; pw=r.k; } });
+    var cum=0, zg=null;
+    for(var i=0;i<D.rows.length;i++){ var pc=cum; cum+=D.rows[i].net;
+      if(i>0 && ((pc<=0&&cum>0)||(pc>=0&&cum<0))){
+        var a=D.rows[i-1].k, b=D.rows[i].k, t=(0-pc)/((cum-pc)||1);
+        zg=+(a+(b-a)*Math.max(0,Math.min(1,t))).toFixed(2); break; } }
+    return { px:px, callWall:cw, callWallGex:(cwm<0?null:cwm), putWall:pw, putWallGex:(pwm<0?null:pwm),
+             zg:zg, totalCall:sc, totalPut:sp, ratio:(sp>0?+(sc/sp).toFixed(2):null),
+             n:D.rows.length, kMin:D.rows[0].k, kMax:D.rows[D.rows.length-1].k, step:D.step,
+             exps:D.exps, lt:D.lt, eq:D.eq, subset:true };
+  }catch(e){ return null; }
+}
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.callPutLevels=function(s){ return cpLevels(s||'SPY'); };
+window.__gptsDebug.callPutRows=function(s){ var D=cpRows(s||'SPY'); if(!D) return 'no rows';
+  return { ok:D.ok, lt:D.lt, eq:D.eq, gt:D.gt, exps:D.exps,
+           rows:D.rows.map(function(r){ return [r.k, Math.round(r.call/1e6), Math.round(r.put/1e6)]; }) }; };
+
+function spxwLane(){
+  try{
+    var f=LASTFEED&&LASTFEED.SPY, dv=f&&f.j&&f.j.derived;
+    if(!dv||!dv.length) return null;
+    for(var i=0;i<dv.length;i++){
+      var d=dv[i]; if(!d || (d.source!=='SPXW' && d.source!=='SPX')) continue;
+      var snaps=d.levels||[]; var last=snaps[snaps.length-1]; var l=(last&&last.l)||[];
+      if(!l.length) continue;
+      var rows=[];
+      for(var q=0;q<l.length;q++){
+        var n=l[q];
+        if(typeof n.k!=='number' || typeof n.v!=='number') continue;
+        var mag=Math.abs(n.v); if(!(mag>0)) continue;
+        rows.push({ k:n.k, m:mag, s:((n.d>0)?1:-1)*mag });
+      }
+      if(rows.length<4) continue;
+      rows.sort(function(a,b){ return a.k-b.k; });
+      return { rows:rows, n:rows.length, kMin:rows[0].k, kMax:rows[rows.length-1].k,
+               ratio:d.ratio, src:d.source, snaps:snaps.length };
+    }
+    return null;
+  }catch(e){ return null; }
+}
+// CR(net) / PS / HVL / Mag in SPX POINTS, from the SPXW lane alone.
+function spxLevels(){
+  try{
+    var L=spxwLane(); if(!L) return null;
+    var spy=(STATE.SPY||{}).price; if(typeof spy!=='number') return null;
+    if(!(L.ratio>0)) return null;
+    var px=+(spy/L.ratio).toFixed(2);                     // our spot, expressed in SPX points
+    var cw=null,cwm=-1, pw=null,pwm=-1, mag=null,magm=-1;
+    L.rows.forEach(function(r){
+      if(r.m>magm){ magm=r.m; mag=r.k; }
+      if(r.k>px && r.m>cwm){ cwm=r.m; cw=r.k; }
+      if(r.k<px && r.m>pwm){ pwm=r.m; pw=r.k; } });
+    var cum=0, hvl=null;
+    for(var i=0;i<L.rows.length;i++){
+      var pc=cum; cum+=L.rows[i].s;
+      if(i>0 && ((pc<=0&&cum>0)||(pc>=0&&cum<0))){
+        var kA=L.rows[i-1].k, kB=L.rows[i].k, t=(0-pc)/((cum-pc)||1);
+        hvl=+(kA+(kB-kA)*Math.max(0,Math.min(1,t))).toFixed(2); break; } }
+    var net=L.rows.reduce(function(a,r){ return a+r.s; },0);
+    // Does the lane even REACH the strikes a full-chain call wall lives at? If kMax is below their wall,
+    // no amount of computation recovers it — the exposure is simply not in our data.
+    return { px:px, crNet:cw, ps:pw, hvl:hvl, mag:mag,
+             crNetM:(cwm<0?null:Math.round(cwm)), psM:(pwm<0?null:Math.round(pwm)), magM:Math.round(magm),
+             net:Math.round(net), n:L.n, kMin:L.kMin, kMax:L.kMax, step:+(L.rows[1].k-L.rows[0].k).toFixed(2),
+             reachAbovePct:+(((L.kMax-px)/px)*100).toFixed(2),
+             reachBelowPct:+(((L.kMin-px)/px)*100).toFixed(2),
+             ratio:L.ratio, src:L.src };
+  }catch(e){ return null; }
+}
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.spx=function(){ return spxLevels(); };
+// Compact dump so the whole lane can be pasted somewhere and the arithmetic checked by hand.
+window.__gptsDebug.spxDump=function(){ var L=spxwLane(); if(!L) return 'no SPXW lane in the feed';
+  return { n:L.n, ratio:L.ratio, kMin:L.kMin, kMax:L.kMax,
+           rows:L.rows.map(function(r){ return [r.k, Math.round(r.s)]; }) }; };
+
+function ifManParse(txt){
+  try{
+    if(!txt) return null;
+    var nums=String(txt).replace(/,/g,'').match(/-?\d+(?:\.\d+)?/g);
+    if(!nums || nums.length<3) return null;
+    var v=nums.map(parseFloat).filter(function(x){ return isFinite(x) && x>0; });
+    if(v.length<3) return null;
+    var cw=v[0], pw=v[1], zg=v[2], mag=(v.length>3?v[3]:null);
+    // Which book did these come from? SPX prints in thousands, SPY in hundreds. Detecting it beats asking,
+    // and beats trusting the user to remember which tab they were on.
+    var scale=(cw>3000)?'SPX':'SPY';
+    return { cw:cw, pw:pw, zg:zg, mag:mag, scale:scale, t:Date.now() };
+  }catch(e){ return null; }
+}
+// Their numbers on OUR cash scale (SPY dollars), so the rest of the panel can format them like any level.
+function ifManLevels(){
+  try{
+    if(!IFMAN) return null;
+    var r=1;
+    if(IFMAN.scale==='SPX'){ var R=spxRatio(); if(!R.r) return { err:'no SPXW ratio in the feed yet — cannot put SPX levels on our scale' }; r=R.r; }
+    function toSpy(x){ return (x==null)?null:+(x/r).toFixed(2); }
+    return { cw:toSpy(IFMAN.cw), pw:toSpy(IFMAN.pw), zg:toSpy(IFMAN.zg), mag:toSpy(IFMAN.mag),
+             scale:IFMAN.scale, t:IFMAN.t, ageMin:Math.round((Date.now()-IFMAN.t)/60000), raw:IFMAN };
+  }catch(e){ return null; }
+}
+function ifManPrompt(){
+  try{
+    var cur=IFMAN?[IFMAN.cw,IFMAN.pw,IFMAN.zg,IFMAN.mag].filter(function(x){return x!=null;}).join(' '):'';
+    var t=window.prompt(
+      'InsiderFinance levels — paste four numbers in this order:\n\n'+
+      '   Call Wall   Put Wall   Zero Gamma   Magnet\n\n'+
+      '(Magnet optional. SPX or SPY both fine — the scale is detected.\n'+
+      ' Blank the box and press OK to clear.)', cur);
+    if(t===null) return;                       // cancelled: leave what is stored alone
+    if(!t.trim()){ IFMAN=null; try{ localStorage.removeItem(IFMAN_LS); }catch(e0){} try{ render(); }catch(e1){} return; }
+    var p=ifManParse(t);
+    if(!p){ window.alert('Could not read at least three numbers out of that. Expected something like:\n\n7900 7640 7660.22 7645'); return; }
+    ifManSave(p);
+    try{ render(); }catch(e2){}
+  }catch(e){}
+}
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.ifMan=function(){ return { stored:IFMAN, onOurScale:ifManLevels() }; };
+window.__gptsDebug.ifManSet=function(txt){ var p=ifManParse(txt); if(p){ ifManSave(p); try{ render(); }catch(e){} } return p; };
+
+function lvlSpx(x){
+  if(x==null) return null;
+  try{ var R=spxRatio(); if(!R.r) return null; return Math.round(x*R.r); }catch(e){ return null; }
+}
+function lvlAlt(x){
+  if(x==null) return null;
+  try{
+    var fut=(typeof dispIsFut==='function') && dispIsFut();
+    if(fut) return { label:'SPY', txt:(+x).toFixed(2).replace(/\.?0+$/,''), approx:false };
+    var R=irtRatio(); if(!R || !R.r) return null;
+    return { label:'ES', txt:String(Math.round(mul(x, R.r))), approx:!R.live };
+  }catch(e){ return null; }
+}
 function lvlRows(L){
   if(!L) return [];
   var rows=[];
   ['cr','cr0','hvl','mag','ps0','ps'].forEach(function(id){ var v=L[id]; if(v && v.k!=null) rows.push({id:id, k:v.k, dist:v.dist, distPct:v.distPct, src:v.src}); });
   rows.sort(function(a,b){ return b.k-a.k; });
   return rows;
+}
+// (v11.10) The HVL is the one level whose ABSENCE is information. When the cumulative gamma curve never
+// changes sign there is no flip to find — and silently dropping the row reads as "we forgot to compute it"
+// rather than "this book has no flip". Returns the reason so the card can say which it is.
+function lvlHvlMissing(L){
+  if(!L || (L.hvl && L.hvl.k!=null)) return null;
+  if(L.nNat==null || L.nNat===0) return 'no native nodes read';
+  return 'no flip in this book — cumulative γ never changes sign'+(L.regime==='posGamma'?' (net +γ throughout)':(L.regime==='negGamma'?' (net −γ throughout)':''));
 }
 function levelsChartSvg(sym, L){
   try{
@@ -12624,19 +13005,50 @@ function levelsChartSvg(sym, L){
       if(a!=null){ lo=(lo==null||a<lo)?a:lo; } if(b!=null){ hi=(hi==null||b>hi)?b:hi; } });
     if(px!=null){ lo=(lo==null||px<lo)?px:lo; hi=(hi==null||px>hi)?px:hi; }
     rows.forEach(function(r){ lo=(lo==null||r.k<lo)?r.k:lo; hi=(hi==null||r.k>hi)?r.k:hi; });
+    // Their walls sit far out by nature (SPX 7900 against 7642 spot). Including them in the range would
+    // squash the whole session's price action into a few pixels, so the SCALE stays ours and any of their
+    // levels outside it simply is not drawn — the row list still carries the number and its distance.
+
     if(lo==null||hi==null||!(hi>lo)) return '';
     var pad=(hi-lo)*0.06; lo-=pad; hi+=pad;
-    var W=320, H=132, R=34, T=4, B=4;           // R = right gutter for the labels
+    // (v11.9, user) Labels sit ON the line, centred, at a legible size — a 7px tag in a right-hand gutter
+    // was unreadable and the gutter cost chart width. Levels that coincide get their labels staggered
+    // horizontally so one never hides another (CR and CR0 on the same strike is a normal case, not a rare one).
+    var W=320, H=132, R=2, T=8, B=6;
     function y(v){ return T+(H-T-B)*(1-(v-lo)/(hi-lo)); }
     function x(i,n){ return (n<2)?0:((W-R)*i/(n-1)); }
-    var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" preserveAspectRatio="none">';
+    var placed=[];
+    var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">';
     svg+='<rect x="0" y="0" width="'+W+'" height="'+H+'" fill="'+PAL.card+'"/>';
     // level lines first, so price draws over them
     rows.forEach(function(r){
-      var yy=y(r.k).toFixed(1), c=LVL_COL[r.id]||PAL.sub, z=(r.id==='cr0'||r.id==='ps0');
-      svg+='<line x1="0" y1="'+yy+'" x2="'+(W-R)+'" y2="'+yy+'" stroke="'+c+'" stroke-width="'+(z?0.7:1.1)+'"'+(z?' stroke-dasharray="3,3"':'')+' opacity="'+(z?0.55:0.9)+'"/>';
-      svg+='<text x="'+(W-R+2)+'" y="'+(y(r.k)+2.6).toFixed(1)+'" fill="'+c+'" font-size="7" font-family="ui-monospace,monospace" opacity="'+(z?0.75:1)+'">'+LVL_NAME[r.id]+'</text>';
+      var yy=y(r.k), c=LVL_COL[r.id]||PAL.sub, z=(r.id==='cr0'||r.id==='ps0');
+      svg+='<line x1="0" y1="'+yy.toFixed(1)+'" x2="'+(W-R)+'" y2="'+yy.toFixed(1)+'" stroke="'+c+'" stroke-width="'+(z?0.8:1.3)+'"'+(z?' stroke-dasharray="4,3"':'')+' opacity="'+(z?0.6:0.95)+'"/>';
+      // stagger when this label would land on top of one already drawn
+      var slot=0; for(var q=0;q<placed.length;q++){ if(Math.abs(placed[q].y-yy)<9) slot=Math.max(slot, placed[q].slot+1); }
+      var lx=(W*0.5)+(slot%3)*46-46, nm=LVL_NAME[r.id];
+      placed.push({y:yy, slot:slot});
+      var wBox=nm.length*6.2+6;
+      svg+='<rect x="'+(lx-wBox/2).toFixed(1)+'" y="'+(yy-6.2).toFixed(1)+'" width="'+wBox.toFixed(1)+'" height="12" rx="2" fill="'+PAL.card+'" opacity="0.88"/>';
+      svg+='<text x="'+lx.toFixed(1)+'" y="'+(yy+3.4).toFixed(1)+'" fill="'+c+'" font-size="10" font-weight="700" text-anchor="middle" font-family="ui-monospace,monospace" opacity="'+(z?0.85:1)+'">'+nm+'</text>';
     });
+    // (v11.12) THEIR levels, dotted and dimmer than anything of ours, label prefixed so the two can never
+    // be read as one set. Drawn under the price line like ours.
+    try{
+      var IFC=ifManLevels();
+      if(IFC && !IFC.err){
+        [['CR',IFC.cw,LVL_COL.cr],['HVL',IFC.zg,LVL_COL.hvl],['Mag',IFC.mag,LVL_COL.mag],['PS',IFC.pw,LVL_COL.ps]]
+          .filter(function(r){ return r[1]!=null && r[1]>=lo && r[1]<=hi; })
+          .forEach(function(r){
+            var yy=y(r[1]);
+            svg+='<line x1="0" y1="'+yy.toFixed(1)+'" x2="'+(W-R)+'" y2="'+yy.toFixed(1)+'" stroke="'+r[2]+'" stroke-width="0.7" stroke-dasharray="1,4" opacity="0.5"/>';
+            var slot2=0; for(var q2=0;q2<placed.length;q2++){ if(Math.abs(placed[q2].y-yy)<9) slot2=Math.max(slot2, placed[q2].slot+1); }
+            var lx2=(W*0.5)+(slot2%3)*46-46, nm2='IF·'+r[0];
+            placed.push({y:yy, slot:slot2});
+            svg+='<text x="'+lx2.toFixed(1)+'" y="'+(yy+3.2).toFixed(1)+'" fill="'+r[2]+'" font-size="8" font-style="italic" text-anchor="middle" font-family="ui-monospace,monospace" opacity="0.72">'+nm2+'</text>';
+          });
+      }
+    }catch(eIFC){}
     // price
     if(cs.length>1){
       var pts=[]; cs.forEach(function(c,i){ if(c.c!=null) pts.push(x(i,cs.length).toFixed(1)+','+y(c.c).toFixed(1)); });
@@ -12657,8 +13069,12 @@ function levelsHtml(sym){
     if(!L) return '';
     var rows=lvlRows(L); if(!rows.length) return '';
     var reachTxt=({ '0dte':'today only', week:'≤1 week', month:'≤1 month', chain:'full chain', unknown:'reach unknown' })[L.reach]||L.reach;
-    var regTxt=L.regime==='posGamma'?'<span style="color:'+PAL.longAccent+'">+γ</span> dampening'
-             :(L.regime==='negGamma'?'<span style="color:'+PAL.shortAccent+'">−γ</span> amplifying':'');
+    // (v11.10) "+γ dampening" is a claim about WHERE PRICE SITS relative to the flip. When there is no flip
+    // the regime came from the net-gamma SIGN instead, which is a different (weaker) statement — so the card
+    // now says which one answered rather than presenting both as the same read.
+    var regSrcTxt=(L.regimeSrc==='hvl')?'':' <span style="font-weight:600;opacity:.75">(net)</span>';
+    var regTxt=L.regime==='posGamma'?('<span style="color:'+PAL.longAccent+'">+γ</span> dampening'+regSrcTxt)
+             :(L.regime==='negGamma'?('<span style="color:'+PAL.shortAccent+'">−γ</span> amplifying'+regSrcTxt):'');
     // The honesty line. Our chain is not MenthorQ's chain and the card says so on its face.
     var caveat=('These are computed from OUR tape, not scraped. CR/PS reach '+reachTxt+' ('+(L.nCols||1)+' expiry column'+((L.nCols||1)===1?'':'s')+
       (L.exps&&L.exps.length?(', '+L.exps[0]+'→'+L.exps[L.exps.length-1]):'')+') — MenthorQ and InsiderFinance aggregate the whole chain out years, so our CR/PS is the structural wall WE CAN SEE, not an all-expiration wall. '+
@@ -12669,22 +13085,129 @@ function levelsHtml(sym){
        '<span data-glvl="open" style="cursor:pointer;color:'+PAL.ink+'">'+(LVL_UI.open?'▾':'▸')+' LEVELS</span>'+
        '<span style="font-weight:600;color:'+PAL.sub+'">'+reachTxt+'</span>'+
        (regTxt?('<span style="font-weight:700">'+regTxt+'</span>'):'')+
-       '<span data-glvl="chart" style="margin-left:auto;cursor:pointer;color:'+(LVL_UI.chart?PAL.blue:PAL.sub)+';font-size:9px">chart</span>'+
+       '<span data-glvl="ifman" title="InsiderFinance levels, entered by hand. Their server blocks cross-origin reads (verified in the console: BLOCKED Failed to fetch), and the @grant that would work sandboxes this script and kills the tape reader. Their walls barely move — the SPX call wall held 7900 all afternoon on 2026-08-20 while SPX fell 66 points — so hand entry costs little. Click to set or clear. SPX or SPY both work; the scale is detected." '+
+         'style="margin-left:auto;cursor:pointer;color:'+(IFMAN?PAL.blue:PAL.sub)+';font-size:9px">IF</span>'+
+       '<span data-glvl="chart" style="cursor:pointer;color:'+(LVL_UI.chart?PAL.blue:PAL.sub)+';font-size:9px">chart</span>'+
        '</div>';
     if(LVL_UI.open){
       h+='<div style="margin-top:2px">';
       rows.forEach(function(r){
         var c=LVL_COL[r.id]||PAL.sub, z=(r.id==='cr0'||r.id==='ps0');
         var dcol=(r.dist>0)?PAL.longAccent:((r.dist<0)?PAL.shortAccent:PAL.sub);
-        var dtxt=(r.dist==null)?'':((r.dist>0?'+':'')+fmtSpan(r.dist));
-        h+='<div title="'+(LVL_WHAT[r.id]||'').replace(/"/g,'')+' Source: '+(r.src||'—')+'." '+
-           'style="display:flex;align-items:center;gap:6px;font-size:10.5px;line-height:1.45;white-space:nowrap">'+
+        var dtxt=(r.dist==null)?'':((r.dist>0?'+':'')+lvlSpanFmt(r.dist));
+        var cashTip=''; try{ if(dispIsFut()) cashTip=' Cash level actually read: '+(+r.k).toFixed(2)+' (shown converted at ratio '+(+dispR()).toFixed(3)+', rounded).'; }catch(eCt){}
+        // (v11.11) the SPX equivalent, from Skylit's own SPXW ratio — so this level can be put straight
+        // beside an SPX gamma page without arithmetic. Scale only; see spxRatio() on why that is not the
+        // same as claiming their SPX book has a wall here.
+        try{ var sx=lvlSpx(r.k); if(sx!=null) cashTip+=' On the SPX scale: '+sx+' (via Skylit\'s own '+(spxRatio().src||'SPXW')+' ratio, scale conversion only — an SPX gamma page reads a different chain).'; }catch(eSx){}
+        var alt=lvlAlt(r.k);
+        var altTxt=alt?('<span style="color:'+PAL.sub+';font-size:9px;font-variant-numeric:tabular-nums">'+alt.label+' '+(alt.approx?'≈':'')+alt.txt+'</span>'):'';
+        h+='<div title="'+(LVL_WHAT[r.id]||'').replace(/"/g,'')+' Source: '+(r.src||'—')+'.'+cashTip+'" '+
+           'style="display:flex;align-items:center;gap:5px;font-size:10.5px;line-height:1.45;white-space:nowrap">'+
            '<span style="display:inline-block;width:26px;color:'+c+';font-weight:800;opacity:'+(z?0.72:1)+'">'+LVL_NAME[r.id]+'</span>'+
-           '<span style="color:'+PAL.ink+';font-weight:700;font-variant-numeric:tabular-nums">'+fmtLvl(r.k)+'</span>'+
+           '<span style="color:'+PAL.ink+';font-weight:700;font-variant-numeric:tabular-nums">'+lvlFmt(r.k)+'</span>'+
+           altTxt+
            '<span style="margin-left:auto;color:'+dcol+';font-weight:700;font-size:9.5px;font-variant-numeric:tabular-nums">'+dtxt+'</span>'+
            '<span style="color:'+PAL.sub+';font-size:9px;width:36px;text-align:right">'+(r.distPct!=null?((r.distPct>0?'+':'')+r.distPct+'%'):'')+'</span>'+
            '</div>';
       });
+      var hm=lvlHvlMissing(L);
+      if(hm){
+        h+='<div title="The HVL is the gamma flip — the zero-gamma strike, where dealers stop dampening and start amplifying. It is the same thing MenthorQ calls the High Vol Level and InsiderFinance labels Support/Resistance with the note that dynamics change if breached. It is absent here because the cumulative gamma curve in this book never crosses zero, so there is no flip to place. That is a fact about the book, not a gap in the read." '+
+             'style="display:flex;align-items:center;gap:5px;font-size:10.5px;line-height:1.45;white-space:nowrap">'+
+             '<span style="display:inline-block;width:26px;color:'+LVL_COL.hvl+';font-weight:800;opacity:0.55">HVL</span>'+
+             '<span style="color:'+PAL.sub+';font-weight:700">—</span>'+
+             '<span style="color:'+PAL.sub+';font-size:9px;overflow:hidden;text-overflow:ellipsis">'+hm+'</span>'+
+             '</div>';
+      }
+      // ---- (v11.16) THE REAL WALLS, from the call/put decomposition. This is the block that answers
+      //      "can we compute what they show" — CR here is Call Resistance on CALL gamma, their definition.
+      try{
+        var CP=cpLevels(sym);
+        if(CP && CP.err){ h+='<div style="font-size:9px;color:'+PAL.sub+';margin-top:3px">call/put: '+CP.err+'</div>'; }
+        else if(CP){
+          var sxr=null; try{ sxr=spxRatio().r; }catch(eR2){}
+          h+='<div style="border-top:1px dotted '+PAL.line+';margin:3px 0 1px"></div>';
+          h+='<div title="Calls and puts separated from the feed itself: v is TOTAL gamma and net is NET gamma, so call=(v+net)/2 and put=(v-net)/2. Verified on the live book — |net| was never greater than v across the whole strike set. These are the walls on CALL and PUT gamma specifically, the same definitions a third-party GEX page uses. CAVEAT: the app requests the top '+CP.n+' nodes, a RANKED SUBSET of the chain, so the walls are real but the TOTALS are subset totals and will not equal a full-chain page. The ratio is shown so that gap stays visible." '+
+             'style="display:flex;align-items:center;gap:6px;font-size:9px;color:'+PAL.sub+';white-space:nowrap">'+
+             '<span style="font-weight:800;color:'+PAL.longAccent+'">CALL/PUT · derived</span>'+
+             '<span>C '+(CP.totalCall/1e9).toFixed(1)+'B · P '+(CP.totalPut/1e9).toFixed(1)+'B · ratio '+CP.ratio+'</span>'+
+             '<span style="margin-left:auto">top '+CP.n+' nodes</span></div>';
+          [['CR',CP.callWall,LVL_COL.cr,CP.callWallGex],['HVL',CP.zg,LVL_COL.hvl,null],['PS',CP.putWall,LVL_COL.ps,CP.putWallGex]]
+            .filter(function(r){ return r[1]!=null; })
+            .sort(function(a,b){ return b[1]-a[1]; })
+            .forEach(function(r){
+              var d=+(r[1]-CP.px).toFixed(2);
+              var dc=(d>0)?PAL.longAccent:((d<0)?PAL.shortAccent:PAL.sub);
+              var sx=(sxr?Math.round(r[1]*sxr):null);
+              h+='<div title="'+(r[0]==='CR'?'Call Resistance — the strike carrying the most CALL gamma above spot. Their definition, computed from our own feed.':(r[0]==='PS'?'Put Support — the strike carrying the most PUT gamma below spot.':'Zero gamma from the net series.'))+'" '+
+                 'style="display:flex;align-items:center;gap:5px;font-size:10.5px;line-height:1.45;white-space:nowrap">'+
+                 '<span style="display:inline-block;width:26px;color:'+r[2]+';font-weight:800">'+r[0]+'</span>'+
+                 '<span style="color:'+PAL.ink+';font-weight:700;font-variant-numeric:tabular-nums">'+lvlFmt(r[1])+'</span>'+
+                 (sx?('<span style="color:'+PAL.sub+';font-size:9px">SPX '+sx+'</span>'):'')+
+                 (r[3]?('<span style="color:'+PAL.sub+';font-size:9px">'+Math.round(r[3]/1e6)+'M</span>'):'')+
+                 '<span style="margin-left:auto;color:'+dc+';font-weight:700;font-size:9.5px;font-variant-numeric:tabular-nums">'+((d>0?'+':'')+lvlSpanFmt(d))+'</span>'+
+                 '</div>';
+            });
+        }
+      }catch(eCP){}
+      // ---- (v11.14) OURS, COMPUTED IN SPX POINTS on the SPXW lane, so it sits beside an SPX page
+      //      with no conversion in the middle. CR is labelled CR(net) because it is not their definition.
+      try{
+        var SX=spxLevels();
+        if(SX){
+          var reachOk=(SX.kMax!=null);
+          h+='<div style="border-top:1px dotted '+PAL.line+';margin:3px 0 1px"></div>';
+          h+='<div title="Our own levels computed directly on Skylit\'s SPXW lane, in SPX points — no conversion. Spot here is '+SX.px+' SPX. The lane carries '+SX.n+' strikes from '+SX.kMin+' to '+SX.kMax+' ('+SX.reachBelowPct+'% to +'+SX.reachAbovePct+'% around spot), step '+SX.step+'. Anything outside that range is not in our data at all, so it cannot be computed at any effort." '+
+             'style="display:flex;align-items:center;gap:6px;font-size:9px;color:'+PAL.sub+';white-space:nowrap">'+
+             '<span style="font-weight:800;color:'+PAL.gold+'">OURS · SPX</span>'+
+             '<span>spot '+Math.round(SX.px)+' · '+SX.n+' strikes '+Math.round(SX.kMin)+'–'+Math.round(SX.kMax)+'</span></div>';
+          [['CR(net)',SX.crNet,LVL_COL.cr],['HVL',SX.hvl,LVL_COL.hvl],['Mag',SX.mag,LVL_COL.mag],['PS',SX.ps,LVL_COL.ps]]
+            .filter(function(r){ return r[1]!=null; })
+            .sort(function(a,b){ return b[1]-a[1]; })
+            .forEach(function(r){
+              var d=+(r[1]-SX.px).toFixed(2);
+              var dc=(d>0)?PAL.longAccent:((d<0)?PAL.shortAccent:PAL.sub);
+              h+='<div title="'+(r[0]==='CR(net)'
+                    ?'The heaviest NET strike above spot on the SPXW lane. This is deliberately NOT called Call Resistance: their Call Wall is defined on CALL gamma specifically, and in a book where puts outweigh calls better than 6 to 1 the heaviest net strike above spot is still put-driven. Different strike, not a rough version of the same one.'
+                    :'Computed on the SPXW lane in SPX points, directly comparable to an SPX gamma page.')+'" '+
+                 'style="display:flex;align-items:center;gap:5px;font-size:10px;line-height:1.4;white-space:nowrap">'+
+                 '<span style="display:inline-block;width:46px;color:'+r[2]+';font-weight:700">'+r[0]+'</span>'+
+                 '<span style="color:'+PAL.ink+';font-weight:700;font-variant-numeric:tabular-nums">'+Math.round(r[1])+'</span>'+
+                 '<span style="margin-left:auto;color:'+dc+';font-weight:700;font-size:9px;font-variant-numeric:tabular-nums">'+((d>0?'+':'')+Math.round(d))+'</span>'+
+                 '</div>';
+            });
+        }
+      }catch(eSX){}
+      // ---- (v11.12) THEIR levels, kept visibly separate from ours ----
+      try{
+        var IFL=ifManLevels();
+        if(IFL && IFL.err){ h+='<div style="font-size:9px;color:'+PAL.sub+';margin-top:3px">IF: '+IFL.err+'</div>'; }
+        else if(IFL){
+          var agTx=(IFL.ageMin<60)?(IFL.ageMin+'m'):(Math.round(IFL.ageMin/60)+'h');
+          var stale=IFL.ageMin>180;
+          h+='<div style="border-top:1px dotted '+PAL.line+';margin:3px 0 1px"></div>';
+          h+='<div style="display:flex;align-items:center;gap:6px;font-size:9px;color:'+PAL.sub+';white-space:nowrap">'+
+             '<span style="font-weight:800;color:'+(stale?PAL.sub:PAL.blue)+'">INSIDERFINANCE</span>'+
+             '<span>'+IFL.scale+' · '+agTx+' old'+(stale?' ⚠':'')+'</span>'+
+             '<span style="margin-left:auto;cursor:pointer;color:'+PAL.sub+'" data-glvl="ifman">edit</span></div>';
+          [['CR',IFL.cw,LVL_COL.cr],['HVL',IFL.zg,LVL_COL.hvl],['Mag',IFL.mag,LVL_COL.mag],['PS',IFL.pw,LVL_COL.ps]]
+            .filter(function(r){ return r[1]!=null; })
+            .sort(function(a,b){ return b[1]-a[1]; })
+            .forEach(function(r){
+              var d=(L.px!=null)?+(r[1]-L.px).toFixed(2):null;
+              var dc=(d>0)?PAL.longAccent:((d<0)?PAL.shortAccent:PAL.sub);
+              var al=lvlAlt(r[1]);
+              h+='<div title="InsiderFinance '+r[0]+' — THEIR number, not ours. Full option chain, and their Call Wall uses call gamma specifically, which our feed does not decompose. Shown converted from '+IFL.scale+' to this chart\'s scale. Reference only: it never feeds direction and is not scored as ours." '+
+                 'style="display:flex;align-items:center;gap:5px;font-size:10px;line-height:1.4;white-space:nowrap;opacity:.82">'+
+                 '<span style="display:inline-block;width:26px;color:'+r[2]+';font-weight:700;font-style:italic">'+r[0]+'</span>'+
+                 '<span style="color:'+PAL.ink+';font-weight:600;font-variant-numeric:tabular-nums">'+lvlFmt(r[1])+'</span>'+
+                 (al?('<span style="color:'+PAL.sub+';font-size:9px">'+al.label+' '+(al.approx?'≈':'')+al.txt+'</span>'):'')+
+                 '<span style="margin-left:auto;color:'+dc+';font-weight:700;font-size:9px;font-variant-numeric:tabular-nums">'+(d==null?'':((d>0?'+':'')+lvlSpanFmt(d)))+'</span>'+
+                 '</div>';
+            });
+        }
+      }catch(eIF){}
       h+='</div>';
       if(LVL_UI.chart){ var sv=levelsChartSvg(sym,L); if(sv) h+='<div style="margin-top:3px;border:1px solid '+PAL.line+';border-radius:3px;overflow:hidden">'+sv+'</div>'; }
       // the cross-check lane, only when it has something to say
@@ -14885,6 +15408,7 @@ function wireBodyDelegation(){
           if(t.getAttribute && t.getAttribute('data-glvl')){
             ev.stopPropagation();
             var lw=t.getAttribute('data-glvl');
+            if(lw==='ifman'){ try{ ifManPrompt(); }catch(eIm){} return; }
             if(lw==='open') LVL_UI.open=!LVL_UI.open; else if(lw==='chart') LVL_UI.chart=!LVL_UI.chart;
             lvlUiSave(); try{ render(); }catch(eLv){} return;
           }
