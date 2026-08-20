@@ -1,3 +1,21 @@
+## v11.4 — 2026-08-19 (evening) — IRT FLEXLEVELS EXPORT (user-directed): the gamma levels drawn on Linnsoft Investor/RT charts
+
+User: "build a feature that exports the gamma levels so I can import them on Linnsoft IRT charts… flex levels… consider
+exporting to my Google Drive desktop and Linnsoft FlexLevels picking it up from there… toggle in the settings gear…
+and the timing 1m 3m 5m." Format pinned verbatim to the user's own FlexLevelsExport.csv sample (28 columns; PENCOLOR =
+Windows COLORREF 0x00BBGGRR). Levels written: King (gold, w3) · Gatekeeper (white) · Ceil (red) / Flr (green) · strong
+magnets and every node ≥ nodeThresh (gray; −γ purple, label "-g") · Next Stop (blue, dashed) · PB Entry (orange, dashed,
+state carried). Symbols: a FUTURES symbol as IRT charts it (user-edited, rolls quarterly, e.g. EPU26) converted with the
+live ES/SPY ratio (0.25-tick rounding; "~" marks a last-known ratio when the Skylit chart is not on the future) and an
+optional ETF symbol at raw strikes; FlexLevels' "Auto" symbol matching picks the right rows per chart. Delivery: the
+panel writes `FlexLevelsExport.csv` into a folder picked ONCE (File System Access API handle persisted in IDB `irtDir` —
+same mechanism as the repo data folder). Best target: `C:\Users\<you>\InvestorRT\rtx\lsFlexLevels\` (IRT reads local
+FlexLevels files from there, per linnsoft.com/techind/flexlevels-rtx); a Google-Drive-synced folder works for a second
+machine; the documented alternative ("the other way") is FlexLevels' REMOTE PATH — a URL the indicator polls. Gear block:
+Export levels toggle · cadence 1m/3m/5m/15m · Fut/ETF symbol fields · 📁 folder · ⟳ now · last-export status line.
+`__gptsDebug.irt()` / `.irtExport()`. Export utility only — draws lines, makes no claim, nothing to enroll. Tests:
+test_irt_export (13). Suite green except the 4 known-stale.
+
 ## v11.3.3 — 2026-08-19 (live, ~14:40 CT) — FEED FRESHNESS GUARD: a historical payload can no longer poison the live book
 
 Found live: a 389-snapshot gex/levels payload ending 2026-08-13 (Skylit fetches history through the same endpoint for higher

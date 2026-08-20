@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.3.3
+// @version    11.4
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -124,6 +124,9 @@ var CFG = {
   trendOn: true, trendMA: { SPY:50, QQQ:50 },
   smaShort: { SPY:9, QQQ:9 }, smaLong: { SPY:21, QQQ:21 },
   hideGO: true, cfgOpen: true, showSPY: true, showQQQ: true,
+  // (v11.4) IRT FlexLevels export: off by default; secs = export cadence; futSym = the IRT futures
+  // symbol (contract rolls quarterly — user-edited, e.g. EPU26); etfSym optional (e.g. SPY); file name fixed-ish.
+  irt: { on:false, secs:180, futSym:'EPU26', etfSym:'', file:'FlexLevelsExport.csv' },
   // --- Display (#5) ---
   compact: false,          // compact node cells (single line) vs expanded
   stripLen: 8,             // growth-strip points (3m closes) shown, 4..12
@@ -400,7 +403,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.3.3';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.4';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -2579,6 +2582,108 @@ function repoPickFolder(){
   if(!window.showDirectoryPicker){ alert('This browser lacks the File System Access API \u2014 the export will download instead.'); return; }
   window.showDirectoryPicker({mode:'readwrite'}).then(function(h){ repoKvSet('dataDir', h); REPO_LAST_SAVE={t:Date.now(),how:'folder set'}; render(); }).catch(function(){});
 }
+// ============================================================================
+// (v11.4, user-directed 2026-08-19) IRT FLEXLEVELS EXPORT — write the live gamma levels as a
+// Linnsoft Investor/RT FlexLevels CSV so IRT charts draw them. Two documented pickup paths
+// (linnsoft.com/techind/flexlevels-rtx): a LOCAL file (best: write straight into
+// C:\Users\<you>\InvestorRT\rtx\lsFlexLevels\ — IRT resolves relative paths there; or a Google
+// Drive-synced folder for a second machine) or a REMOTE URL the indicator polls. This feature
+// writes the local file on a timer via the File System Access API (same mechanism as the repo
+// data folder; the folder is picked ONCE and the handle persists in IndexedDB under 'irtDir').
+// Format = the user's own FlexLevelsExport.csv sample (header verbatim). Colors are Windows
+// COLORREF decimals (0x00BBGGRR). Levels: King, Gatekeeper, Flr/Ceil, strong magnets and every
+// node >= nodeThresh, plus the two forward calls (Next Stop, PB Entry). Futures conversion uses
+// the LIVE ES/SPY ratio when the Skylit chart is on a future; otherwise the last persisted ratio
+// (marked approx). Export utility only — draws lines in IRT, makes no claim, nothing to enroll.
+var IRT_HEADER='SYMBOL,PRICE,LABEL,PENCOLOR,PENWIDTH,PENSTYLE,bDRAWTEXT,bDRAWPRICE,LABELPOS,bCUSTPOS,CUSTPOSALLMARGIN,CUSTPOSLEFTRIGHT,CUSTPOSUNITS,CUSTPOSWIDTH,bBANDS,BANDPENCOLOR,BANDPENWIDTH,BANDPENSTYLE,BANDABOVEBEL,BANDUNITS,BANDPRICE,bBANDS2,BAND2PENCOLOR,BAND2ABOVEBEL,BAND2UNITS,BAND2PRICE,bBANDLABELS,bTRANSLUCENT';
+var IRT_LAST={t:0, rows:0, how:null, err:null};
+function irtColor(r,g,b){ return (b<<16)+(g<<8)+r; }   // COLORREF 0x00BBGGRR
+var IRT_COLORS={
+  king:  irtColor(242,204,96),   // gold
+  gate:  irtColor(255,255,255),  // white
+  ceil:  irtColor(240,97,109),   // red (resistance)
+  flr:   irtColor(46,194,126),   // green (support)
+  mag:   irtColor(139,152,169),  // gray
+  neg:   irtColor(163,113,247),  // purple (−γ personality)
+  ns:    irtColor(74,144,217),   // blue — Next Stop
+  pb:    irtColor(255,128,0)     // orange — PB Entry (matches the sample's 33023)
+};
+function irtRound(v, tick){ if(!tick) return +v.toFixed(2); return +(Math.round(v/tick)*tick).toFixed(2); }
+function irtCsvRow(sym, price, label, color, width, style){
+  return sym+','+price.toFixed(6)+','+String(label).replace(/[,\n"]/g,' ')+','+color+','+(width||1)+','+(style||0)+
+         ',1,1,1,0,0,1,0,50,0,255,1,0,2,1,4.000000,0,16711680,2,1,8.000000,0,0';
+}
+function irtBuildCsv(){
+  var sym='SPY';
+  var out=[IRT_HEADER];
+  var m=null; try{ m=nodeMapModel(sym); }catch(e){}
+  if(!m||!m.ok) return null;
+  var cfgI=CFG.irt||{};
+  // conversion: SPY strike -> the IRT symbol's price
+  var futSym=(cfgI.futSym||'').trim();
+  var etfSym=(cfgI.etfSym||'').trim();
+  var r=1, approx=true, tick=0;
+  try{ if(FUTMODE && FUTMODE.r>1){ r=FUTMODE.r; approx=!FUTMODE.live; } }catch(e){}
+  var targets=[];
+  if(futSym && r>1) targets.push({sym:futSym, mul:r, tick:0.25, tag:approx?' ~':''});
+  if(etfSym) targets.push({sym:etfSym, mul:1, tick:0, tag:''});
+  if(!targets.length) return null;
+  var rows=[];
+  var thr=(CFG.nodeThresh!=null)?CFG.nodeThresh:20;
+  (m.levels||[]).forEach(function(L){
+    if(L.k==null || L.pct==null) return;
+    var role=L.isKing?'king':(L.isGatekeeper?'gate':(L.isCeil?'ceil':(L.isFlr?'flr':((L.isStrongMag||Math.abs(L.pct)>=thr)?'mag':null))));
+    if(!role) return;
+    var neg=(L.pos===false);
+    var col=neg&&role==='mag'?IRT_COLORS.neg:IRT_COLORS[role];
+    var w=L.isKing?3:(L.isGatekeeper||L.isCeil||L.isFlr?2:1);
+    var lbl=(L.isKing?'K':(L.isGatekeeper?'GK':(L.isCeil?'Ceil':(L.isFlr?'Flr':'Mag'))))+' '+Math.abs(L.pct)+'%'+(neg?' -g':'');
+    rows.push({k:L.k,lbl:lbl,col:col,w:w,style:0});
+  });
+  try{ var ns=nextStopPick(sym); if(ns&&ns.ok&&ns.level!=null) rows.push({k:ns.level,lbl:'NextStop '+ns.grade,col:IRT_COLORS.ns,w:2,style:2}); }catch(e){}
+  try{ var pe=pbEntryPick(sym); if(pe&&pe.ok&&pe.level!=null) rows.push({k:pe.level,lbl:'PBentry '+pe.grade+(pe.state?(' '+pe.state):''),col:IRT_COLORS.pb,w:2,style:2}); }catch(e){}
+  if(!rows.length) return null;
+  targets.forEach(function(T){
+    rows.forEach(function(R){ out.push(irtCsvRow(T.sym, irtRound(R.k*T.mul, T.tick), R.lbl+T.tag, R.col, R.w, R.style)); });
+  });
+  return { csv:out.join('\r\n')+'\r\n', n:rows.length, targets:targets.map(function(t){return t.sym;}) };
+}
+function irtPickFolder(){
+  if(!window.showDirectoryPicker){ alert('This browser lacks the File System Access API.'); return; }
+  window.showDirectoryPicker({mode:'readwrite'}).then(function(h){ repoKvSet('irtDir', h); IRT_LAST={t:Date.now(),rows:0,how:'folder set',err:null}; renderCfg(); }).catch(function(){});
+}
+function irtExportNow(force){
+  try{
+    var cfgI=CFG.irt||{};
+    if(!force && !cfgI.on) return;
+    var built=irtBuildCsv();
+    if(!built){ IRT_LAST={t:Date.now(),rows:0,how:null,err:'no levels / no symbol set'}; return; }
+    repoKvGet('irtDir', function(h){
+      if(h && h.getFileHandle){
+        var name=(cfgI.file||'FlexLevelsExport.csv');
+        var doWrite=function(){ h.getFileHandle(name,{create:true}).then(function(fh){ return fh.createWritable(); }).then(function(w){ return w.write(built.csv).then(function(){ return w.close(); }); }).then(function(){ IRT_LAST={t:Date.now(),rows:built.n,how:'file',err:null}; }).catch(function(eW){ IRT_LAST={t:Date.now(),rows:0,how:null,err:''+eW}; }); };
+        if(h.queryPermission){ h.queryPermission({mode:'readwrite'}).then(function(st){ if(st==='granted') doWrite(); else h.requestPermission({mode:'readwrite'}).then(function(st2){ if(st2==='granted') doWrite(); else IRT_LAST={t:Date.now(),rows:0,how:null,err:'folder permission denied'}; }); }).catch(doWrite); }
+        else doWrite();
+      } else {
+        IRT_LAST={t:Date.now(),rows:0,how:null,err:'no folder picked'};
+      }
+    });
+  }catch(e){ IRT_LAST={t:Date.now(),rows:0,how:null,err:''+e}; }
+}
+var IRT_TICK_LAST=0;
+function irtTick(){
+  try{
+    var cfgI=CFG.irt||{};
+    if(!cfgI.on) return;
+    var secs=cfgI.secs||180;
+    var now=Date.now();
+    if(now-IRT_TICK_LAST < secs*1000) return;
+    IRT_TICK_LAST=now;
+    irtExportNow(false);
+  }catch(e){}
+}
+window.__gptsDebug.irt=function(){ var b=null; try{ b=irtBuildCsv(); }catch(e){ b=String(e); } return { cfg:CFG.irt||null, last:IRT_LAST, preview:(b&&b.csv)?b.csv.split('\r\n').slice(0,8):b }; };
+window.__gptsDebug.irtExport=function(){ irtExportNow(true); return IRT_LAST; };
 var REPO_LAST_SAVE=null;
 function repoExportDay(date, silent){
   date=date||TODAY;
@@ -4016,6 +4121,22 @@ function segBtn(val, label, tip){
 function cfgHtml(){
   var html='';
   html+='<div style="color:'+PAL.ink+';font-size:12px;font-weight:700;padding:1px 2px 5px 2px;border-bottom:1px solid '+PAL.line+';margin-bottom:4px">BO Pullback Config</div>';
+  // (v11.4) IRT FlexLevels export block — first in the gear so it is easy to reach
+  var I=CFG.irt||{};
+  html+='<div style="color:'+PAL.ink+';font-size:11px;font-weight:800;padding:3px 2px 3px 2px;border-bottom:1px solid '+PAL.line+';margin-bottom:3px" '+
+    'title="Writes the live gamma levels as a Linnsoft FlexLevels CSV on a timer. In Investor/RT add the FlexLevels indicator and point its File preference at the exported file. Best folder: C:\\Users\\<you>\\InvestorRT\\rtx\\lsFlexLevels (IRT reads it directly); a Google-Drive-synced folder also works for a second machine.">IRT FlexLevels export</div>';
+  html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 4px" title="Master switch: export the levels file on the timer below.">'+
+    '<span style="font-weight:600">Export levels</span><input type="checkbox" class="gpts-irt-on" '+(I.on?'checked':'')+' style="cursor:pointer"></div>';
+  html+='<div style="padding:2px 4px" title="How often the CSV is rewritten."><div style="margin-bottom:2px">Every</div><div style="display:flex;gap:3px">'+
+    [60,180,300,900].map(function(sc){ var on=(I.secs||180)===sc; return '<span class="gpts-irt-secs" data-secs="'+sc+'" style="cursor:pointer;padding:1px 8px;border-radius:4px;border:1px solid '+(on?PAL.blue:PAL.line)+';color:'+(on?PAL.blue:PAL.sub)+';font-size:10px;font-weight:700">'+(sc/60)+'m</span>'; }).join('')+'</div></div>';
+  html+='<div style="display:flex;gap:6px;align-items:center;padding:2px 4px">'+
+    '<label style="font-size:10px;color:'+PAL.sub+'" title="The FUTURES symbol as IRT charts it (contract rolls quarterly — update it each roll, e.g. EPU26 = ES Sep 2026). Levels are converted with the live ES/SPY ratio; ~ marks a last-known ratio.">Fut <input type="text" class="gpts-irt-fut" value="'+(I.futSym||'')+'" style="width:58px;background:#0f131b;border:1px solid '+PAL.line+';color:'+PAL.ink+';border-radius:3px;font-size:10px;padding:1px 3px"></label>'+
+    '<label style="font-size:10px;color:'+PAL.sub+'" title="Optional second symbol at SPY prices (e.g. SPY). Blank = off.">ETF <input type="text" class="gpts-irt-etf" value="'+(I.etfSym||'')+'" style="width:44px;background:#0f131b;border:1px solid '+PAL.line+';color:'+PAL.ink+';border-radius:3px;font-size:10px;padding:1px 3px"></label>'+
+    '<span class="gpts-irt-dir" style="cursor:pointer;font-size:10px;color:'+PAL.blue+';font-weight:700" title="Pick the folder ONCE (e.g. InvestorRT\\rtx\\lsFlexLevels, or a Google-Drive-synced folder). The handle persists; every export writes silently.">📁 folder</span>'+
+    '<span class="gpts-irt-now" style="cursor:pointer;font-size:10px;color:'+PAL.blue+';font-weight:700" title="Write the file right now.">⟳ now</span></div>';
+  html+='<div style="padding:0 4px 4px;font-size:9px;color:'+PAL.sub+'">'+
+    (IRT_LAST.t?('last: '+(IRT_LAST.err?('<span style="color:'+PAL.shortAccent+'">'+IRT_LAST.err+'</span>'):(IRT_LAST.rows+' levels ('+(IRT_LAST.how||'')+') '+new Date(IRT_LAST.t).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})))):'no export yet — pick the folder, set the symbol, toggle on')+'</div>';
+  html+='<div style="border-bottom:1px solid '+PAL.line+';margin:2px 0 4px"></div>';
   var boChk = CFG.boPb ? 'checked' : '';
   html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 4px" '+
     'title="BO Pullback: show the breakout-pullback signal type.">'+
@@ -4162,6 +4283,19 @@ function wireConfig(){
   }
   var evI=elCfg.querySelector('.gpts-event');
   if(evI) evI.addEventListener('change', function(){ try{ eventTagSet(evI.value); }catch(e){} render(); });
+  // (v11.4) IRT export controls
+  var irtOn=elCfg.querySelector('.gpts-irt-on');
+  if(irtOn) irtOn.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.on=irtOn.checked; saveCfg(); if(irtOn.checked){ IRT_TICK_LAST=0; irtExportNow(false); } renderCfg(); });
+  var irtS=elCfg.querySelectorAll('.gpts-irt-secs');
+  for(var si=0;si<irtS.length;si++){ (function(el){ el.addEventListener('click', function(){ CFG.irt=CFG.irt||{}; CFG.irt.secs=parseInt(el.getAttribute('data-secs'),10)||180; saveCfg(); IRT_TICK_LAST=0; renderCfg(); }); })(irtS[si]); }
+  var irtF=elCfg.querySelector('.gpts-irt-fut');
+  if(irtF) irtF.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.futSym=(irtF.value||'').trim().toUpperCase(); saveCfg(); });
+  var irtE=elCfg.querySelector('.gpts-irt-etf');
+  if(irtE) irtE.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.etfSym=(irtE.value||'').trim().toUpperCase(); saveCfg(); });
+  var irtD=elCfg.querySelector('.gpts-irt-dir');
+  if(irtD) irtD.addEventListener('click', function(){ irtPickFolder(); });
+  var irtN=elCfg.querySelector('.gpts-irt-now');
+  if(irtN) irtN.addEventListener('click', function(){ irtExportNow(true); setTimeout(renderCfg, 600); });
   var bo=elCfg.querySelector('.gpts-bopb');
   if(bo) bo.addEventListener('change', function(){ CFG.boPb=bo.checked; saveCfg(); render(); });
   var ft=elCfg.querySelector('.gpts-ftreq');
@@ -14172,6 +14306,7 @@ function tick(){
   recordDeflections('SPY');   // (v10.36) record confirmed deflections + score forward outcomes
   recordDeflections('QQQ');
   repoAutoExportTick();        // (v10.44) write data/YYYY-MM-DD.json at the close
+  try{ irtTick(); }catch(eIrt){}   // (v11.4) IRT FlexLevels export on its own cadence
   // (v10.54, audit 6) AFTER THE CLOSE is the other moment the model may move. Anything
   // a mid-session fetch deferred is applied here, once, when no more bars are recorded.
   try{ if(RULES_APPLIED_AT!=null && rulesApplyAllowed() && ctNowSecOfDay()>=15*3600+60 && RULES_APPLIED_DAY!==TODAY){ RULES_APPLIED_DAY=TODAY; rulesApply(true); } }catch(eRA){}
