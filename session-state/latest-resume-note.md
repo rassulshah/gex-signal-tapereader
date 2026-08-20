@@ -1,3 +1,179 @@
+# RESUME NOTE — 2026-08-20 — v11.8 THE LEVEL SET built (CR0/CR · PS0/PS · HVL · Mag + chart) + v11.7 re-applied · ⚠️ NEITHER IS PUSHED
+
+## ⚠️ READ THIS FIRST — THE REPO IS BEHIND THE BUILDS
+
+`origin/main` is at **170b5d5 = v11.6**. **v11.7 and v11.8 exist ONLY as installer .bat files delivered to the user in chat.**
+The 2026-08-20 session ran in a cloud container that was NOT authorized to push to `rassulshah/gex-signal-tapereader`
+(`git push` → 403, "not in this session's authorized repository set"). Two consequences a new session MUST handle before
+believing anything it reads:
+
+1. **v11.7 was built, delivered as `gex-v11.7-install.bat`, and lost.** The container holding it was reclaimed before it was
+   pushed. It was RE-DONE from scratch inside v11.8. If you clone and see `deriveFactors` without a `basis` field, the user
+   never ran the installer — v11.7 + v11.8 are both missing from the repo, not merely unpushed.
+2. **ASK THE USER whether they ran `gex-v11.8-install.bat` and pushed.** Do not assume. If they did, `git pull` and you are
+   current. If they did not, the code below is described accurately here but is not in git, and it must be rebuilt or
+   re-delivered. The v11.8 installer payload contained: `current/gex-signal-tapereader.user.js`, `v10.js`,
+   `changelog/CHANGELOG.md`, `learning/rules.json`, and tests `test_levels.js`, `test_derive_factors.js`, `test_if_parse.js`,
+   `test_reco_deriv.js`, `test_rules_v2.js`, `test_node_ledger.js`, `test_direction_grade.js`, `test_pipeline_indicator.js`,
+   `test_read_v1047.js`.
+
+**Version string:** `GPTS_VERSION='11.8'`, `@version 11.8`. Metadata block otherwise UNCHANGED (still `@grant none`), so
+Tampermonkey offers an UPDATE, not a reinstall. The reinstall prompt that alarmed the user on an earlier build was a metadata
+change; this build has none.
+
+---
+
+## ⛔ THE ARCHITECTURAL CONSTRAINT THAT MUST NEVER BE FORGOTTEN: `@grant none` IS LOAD-BEARING
+
+`installFeedObserver()` monkey-patches `window.fetch` and `XMLHttpRequest.prototype` to capture Skylit's `gex/levels` feed.
+**That only works because `@grant none` runs the script in PAGE context.** Adding ANY `@grant` moves the script into
+Tampermonkey's sandbox, where `window` is a wrapper — the hooks would patch the wrapper and never see the page's own
+requests. **The entire tape would go dark.** This is why the InsiderFinance fetch is dormant (below). If a future build needs
+a grant, it must re-target the hooks at `unsafeWindow`, ship ALONE, and carry its own test. Never bundle a grant change with
+a feature build.
+
+---
+
+## WHAT v11.8 BUILT
+
+**The user's request:** get the InsiderFinance "Signals" data; handle 0DTE vs weekly the way MenthorQ does (CR0/CR, PS0/PS);
+build a price chart with gamma levels and S/R lines for CR0, CR, PS0, PS, HVL, Mag; and settle the difference between
+MenthorQ's "trigger level" and the volatility level. *"I want you to check all the levels and build this."*
+
+**Three findings from checking BEFORE building — all verified against live pulls on 2026-08-20:**
+
+1. **The Signals section carries no numbers of its own.** Live `/gamma-exposure/SPY` at spot 767.44 returned four signals:
+   volatility@767.44 (= spot; the regime read, Net GEX −$5.4B) · resistance@769.53 (**= Zero Gamma exactly — this is the HVL**)
+   · magnet@765.00 (= Put Wall) · volatility@765.00 (= Put Wall again). Every value is spot, zero gamma, call wall or put
+   wall — all four already in the header block. "Get the Signals data" is three numbers plus wording we generate ourselves.
+   Header block for reference (SPY, same pull): Spot 767.44 · Net GEX −$5.4B · Ratio 0.82 · Call GEX $24.6B · Put GEX −$30.0B
+   · Total GEX $54.7B · Call Wall $775 · Put Wall $765 · Zero Gamma $769.53.
+2. **The trigger level and the volatility level are DIFFERENT FAMILIES, not two versions of one thing.** MenthorQ's gamma set
+   is CR, PS, HVL, CR0, PS0, HVL0, Gamma Wall 0DTE, GEX 1–10, 1D Max/Min, Blind Spots. **There is no trigger level in it.**
+   Their **Risk Trigger** belongs to the SWING model — an upper boundary over the next five days used as a profit target. The
+   **HVL is the volatility level**: where the cumulative GEX curve flips slope, positive to negative gamma. Above it dealers
+   hedge against the move and dampen; below they hedge with it and amplify. Only the HVL belongs on a gamma chart, so only the
+   HVL is drawn. This answered the user's explicit question.
+3. **Their 0DTE / Weekly / Monthly / All filter is CLIENT-SIDE STATE.** URL parameters do not drive it (two different
+   parameterised fetches returned identical numbers). The page ships the whole chain and filters in the browser, so a scraper
+   cannot request one bucket. **But our own feed has carried the expiry columns since v11.6** — so the CR0-vs-CR split is
+   computable natively, and that is how it was built.
+
+**Data-quality flag on their numbers:** InsiderFinance's all-expiration Call Wall read **775 on one pull and 800 minutes
+later** on the same session while spot moved 4 points. Far-dated OI (they aggregate to Dec 2028) makes that number jump.
+Never treat their levels as ground truth; score them.
+
+**`gLevels(sym)` — the level set, computed from OUR tape** (defined just after `nodeBreadth`, with `glevZeroGamma`,
+`glevMagnet`, `glevLvl`, cached 1.5s in `GLEV_CACHE`):
+* **CR0 / PS0** — heaviest strike each side of spot INSIDE the front expiry column alone (via `expiryProfile().buckets.dte0`).
+* **CR / PS** — same, inside the longest-dated bucket present (`prof.all.walls`, `structuralFrom` names which bucket answered).
+* **HVL** — zero gamma on the NATIVE node set via `deriveFactors`, absolute-dollar basis when the tape carries it.
+* **Mag** — heaviest strike (per bucket for `mag0`, native ranks for `mag`).
+* **NEVER pooled across expiry columns.** Each column is normalised to its OWN King, so 100 in the front column and 100 in the
+  monthly column are not the same amount of money. This is the v11.6 lesson and it holds here.
+* Returns `reach` (`0dte` / `week` / `month` / `chain`), `reachDays`, `nCols`, `exps`, `regime`, `regimeSrc`, `basis`,
+  `nNat`, `nSkipped`, `ext` (the IF lane). Returns `null` on no price — never a fabricated level.
+* Debug: `__gptsDebug.levels('SPY')`.
+
+**The LEVELS card** (`levelsHtml`, `levelsChartSvg`, `lvlRows`; rendered between `nextStopHtml` and `pbEntryHtml`): six lines
+in price order with signed distance and percent, over an inline SVG chart. **The 0DTE pair draws dashed and dimmer** so
+today-only walls never read as structure. Collapse + chart toggles via `data-glvl` in the delegated click handler, persisted
+to `gpts_levels_ui_v1`.
+
+**THE HONESTY RULE, on the card's face.** Our chain reaches ~1 week (Skylit gives ~5 expiry columns); MenthorQ and
+InsiderFinance aggregate years. So every read carries `reach`, and the tooltip states our CR/PS is *"the structural wall WE
+CAN SEE, not an all-expiration wall."* **A one-week wall must never be quoted as a full-chain wall.** If this rule is ever
+softened, the level becomes a lie.
+
+**Recorded + enrolled.** Snapshot gains `lev` (all six strikes + reach/reachDays/nCols/structFrom/regime/basis/nNat/nSkipped)
+beside `exp`. Feature `levels` registers non-voting with seven questions written so they can FAIL:
+`lev_hvl_regime` (does realised 30m range actually CONTRACT above the HVL — if not the regime line is decoration) ·
+`lev_cr_rejects` · `lev_ps_holds` · **`lev_0dte_vs_struct` (when CR0 and CR disagree, which one does price respect — the
+question the expiry reader exists for)** · `lev_mag_pull` · `lev_cage` · `lev_reach` (does our one-week wall reject at a rate
+worth quoting — **if this reads at chance, the InsiderFinance lane is worth the grant change; if it reads well, it is not**).
+`learning/rules.json` 59 → **60 ids** (`levels`; version bumped to 11.8). Rule ids come from `FEATURES` via `rulesSeed()` —
+**do not hand-add sub-rule ids to rules.json**, `test_feature_enrollment` 10b compares the file to the seed exactly. Three
+hand-added ids (`levels.hvl/.wall/.mag`) were removed for exactly this reason; sub-claims belong in the feature's `questions`.
+
+**InsiderFinance adapter — BUILT, TESTED, DELIBERATELY DORMANT.** `ifParse` / `ifNum` / `ifBn` / `ifFetch` / `ifLevels` /
+`ifTick`, `IF_CFG` (default `{on:false, everyMin:5}`, `gpts_if_cfg_v1`), `IF_STATE`, `IF_MAX_FAILS=4`, `IF_STALE_MS=20min`.
+Parser is **LABEL-anchored, not DOM-anchored** (class names churn; "Call Wall" has to stay printed or the page stops being
+useful to humans too), strips `<script>`/`<style>` first, tries `__NEXT_DATA__` before the rendered header, requires ≥3 of
+{cw,pw,zg,spot} for `ok`, and flags `suspect` when the walls do not straddle spot. It never overrides a native level and never
+feeds direction — a cross-check lane only. **It is off because of the `@grant` constraint above, not because it is unfinished.**
+Debug: `__gptsDebug.if()`, `__gptsDebug.ifFetch()`, `__gptsDebug.ifParse(html)`.
+
+**v11.7 re-applied inside v11.8 — `deriveFactors`, three defects:**
+1. SPXW-derived lanes were pooled with native nodes on a %King basis, though each lane is normalised to its OWN King — one
+   foreign lane at 100% outranked a real native wall and the wall vanished. Now native-only, with `nSkipped` counting the rest.
+2. Every factor ran on %King — a ratio to a **moving** denominator, so a King that grows shrinks every other node even when
+   their dollar exposure never changed. Now prefers the absolute series (`basis:'abs'`), and a PARTIAL abs series is not
+   half-used — one missing node forces `pct`.
+3. The call wall required `pos===true` while the put wall required nothing, so a negative-gamma ceiling was unreportable and
+   `cw` came back null for whole sessions. **Both walls are now chosen symmetrically — heaviest mass on that side of spot —
+   with polarity RECORDED (`cwPos`/`pwPos`/`cwM`/`pwM`) rather than used as a filter.**
+   `test_reco_deriv`'s old expectation was UPDATED WITH THE REASONING, not deleted: on its own fixture the old rule picks
+   780 (+30) over 777 (−72).
+
+**Two bugs the tests caught in the new code — both the silent kind:** a local `var atr` would have shadowed the `atr()`
+function for its whole scope (hoisting), freezing the level tolerance at its 0.35 default forever — renamed `atrV`. And the IF
+parser's 500-character minimum rejected perfectly readable short responses as "empty response" — **length is the wrong guard
+for validity, the label check is** — lowered to 60.
+
+**Tests:** `test_levels.js` (50, incl. render smoke), `test_derive_factors.js` (24), `test_if_parse.js` (33, fixtures are REAL
+captured page text incl. comma-grouped SPX figures and sign preservation on Put GEX). Suite: **64 OK / 19 not-OK, and the 19
+are exactly the v11.6 baseline failures — zero new.** Known-stale: test_accum_canon, test_analytics, test_bo_14bar,
+test_bo_tag_labels, test_gatekeeper, test_gexregime, test_kingpath, test_node_flicker, test_node_identity,
+test_node_role_badge, test_nodemap, test_read_voice_leg, test_render, test_rug, test_sma_cont, test_sr_imbalance,
+test_tape_sync, test_tapeking, test_trendbadge.
+
+**Test-harness note:** suites read `./v10.js` (the mirror), NOT `current/…`. **Always `cp current/gex-signal-tapereader.user.js
+v10.js` before running the suite** or you will test the previous build. `v()` grabs a one-line `var`; multi-line object
+literals (e.g. `PAL`) need a brace-matching grabber — `test_levels.js` defines `vo()` for this.
+
+---
+
+## STILL OPEN (carried forward, ONE AT A TIME, spec first)
+
+* **`pickEdge` has the SAME mixed-scale defect `deriveFactors` had** — it chooses ★SUP/★RES on %King across native + SPXW-derived
+  lanes. Offered to the user twice; never answered. This is the highest-value remaining fix and it is the same bug class.
+* **Review dot** (`pipeStages`, footer): green on the NIGHTLY log (`P.nightly==='yes'`), not only the weekly file. Sits amber
+  every weekday today.
+* **Weekly file naming**: the Saturday run must write `review_<FRIDAY-date>.json` — the panel looks reviews up by trading-day
+  date (`lastTradingDay(0/1)`). Fix the scheduled-task prompt (Claude app, trigger `trig_01T8kd4kS3nBR7TuQMSSXNX6`), no code.
+  **This was due before Saturday 2026-08-22 and may now be overdue — CHECK IT.**
+* **Ledger fix, widened** (user's key scenarios): (a) `infl` counters are NOT per node (every SPY node acmN=0/decN=125); (b) add
+  `age`, `pol`, `rolled` to every ledger touch record; (c) four scenario questions split by polarity — fresh-node-deflects,
+  acm-attracts, dec-releases, rolled-holds; (d) decide whether a touch on a 'gone' node counts at all (11 on 08-18).
+  Forward-only — cannot be back-filled, so it ships before the 20 sessions accumulate.
+* **`leg.pbPredict` outcome is trivially true** (pbDetect.k present most bars — not falsifiable as written).
+* **SIDE hit-rule question** (stayed inside ±0.5 true only 26% on a chop day).
+* **Skylit API historical backfill** — 30 days SPY/QQQ/SPX(W), RTH only (08:30–15:00 CT), 3m cadence ≈ 19,500 credits. Key was
+  **not released yet** as of 08-18; return when the user has one. Never ask for the key itself. Reference:
+  `skylit-docs/api/API-REFERENCE.md`.
+* **CCAR-F certification track** (`ccarp/PLAN.md`, say "load ccarp") — STEP 1 baseline practice test still not taken. Allowed
+  during lockdown because it does not touch the panel.
+* **IRT FlexLevels (v11.4)** — user setup still pending on their side: pick the export folder and add the FlexLevels indicator
+  in Investor/RT. **The LEVELS set is an obvious candidate to export next** (CR/CR0/PS/PS0/HVL/Mag as FlexLevels rows).
+
+## VERIFY AT THE NEXT OPEN
+
+Footer reads `feed v11.8`. A **LEVELS** card sits under PB Entry with CR / CR0 / HVL / Mag / PS0 / PS, each with distance and
+percent, over a small chart with the 0DTE pair dashed. `__gptsDebug.levels('SPY')` returns a set with `basis:'abs'`,
+`nSkipped` counting SPXW lanes, and a `reach` that matches how many expiry columns Skylit is showing. `deriv` records now
+carry `basis`, `cwPos`, `pwPos`, `cwM`, `pwM` and **`cw` is no longer null**. `days[today].feat.SPY` gains `levels` records.
+
+## STANDING RULES (unchanged)
+
+LOCKDOWN — no new features until ≥20 sessions; fixes only (the user overrode this for the level set by explicit request).
+Ask before code AND before creating files · mockup first · descriptive-only, never an instruction · **git = truth (Drive is a
+STALE MIRROR)** · every feature auto-enrolls into DATA/ANALYSIS/TESTING · no % without n · promotion bar = eff n ≥ 20 AND 3
+walk-forward sessions AND no regime flip, re-checked in code by `applyProposals()` — the LLM proposes, the panel decides ·
+**always send the Tampermonkey URL:**
+`https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js`
+
+---
+
 # RESUME NOTE — 2026-08-18 (night) — v11.1.2 FIX shipped + REVIEW LOOP AUTOMATED (Drive inbox, scheduled nightly/weekly, local pull) · NEXT = verify live 08-19
 
 **Baseline v11.1.2** (one `GPTS_VERSION`; header/footer/export). Built on v11.1.1 (Next Stop styling). Delivered as installer .bat
