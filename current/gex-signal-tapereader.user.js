@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.26
+// @version    11.27
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -540,7 +540,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.26';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.27';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -16231,24 +16231,35 @@ function wireBodyDelegation(){
 function sessionPhase(now){
   try{
     var d=now||new Date();
-    // CT wall clock without pulling in a tz library
     var ct=new Date(d.toLocaleString('en-US',{timeZone:'America/Chicago'}));
     var mins=ct.getHours()*60+ct.getMinutes();
     var dow=ct.getDay();
     var open=8*60+30, close=15*60;
-    var isFri=(dow===5);
-    var out={ ct:ct, mins:mins, dow:dow, isFri:isFri, open:open, close:close,
+    var out={ ct:ct, mins:mins, dow:dow, isFri:(dow===5), expiry:(dow===5), open:open, close:close,
               rth:(dow>=1&&dow<=5&&mins>=open&&mins<close) };
     out.leftMin = out.rth ? (close-mins) : null;
     out.pct = out.rth ? Math.round(((mins-open)/(close-open))*100) : (mins>=close?100:0);
-    if(!out.rth){ out.label='CLOSED'; out.sub=(dow===0||dow===6)?'weekend — structure is last Friday’s':'outside RTH'; return out; }
-    if(mins < open+60){ out.label='OPEN · CHARM'; out.sub='overnight charm unwinds — dealers could not hedge; expect the first move to overshoot'; }
-    else if(mins < open+150){ out.label='MORNING'; out.sub='pins hold best here — gamma is at full strength'; }
-    else if(mins < close-90){ out.label='MIDDAY'; out.sub='lowest energy — fades work, breaks usually fail'; }
-    else if(isFri){ out.label='EXPIRY FRI · CHARM PHASE'; out.sub='gamma erodes into the close — expect expansion, pins weaken'; }
-    else { out.label='POWER HOUR'; out.sub='hedging flows dominate — moves extend'; }
+    if(!out.rth){
+      out.expiry=false;
+      out.label='CLOSED';
+      out.sub=(dow===0||dow===6)?'weekend — this structure is last Friday’s':'outside RTH';
+      return out;
+    }
+    // (v11.27) The phase describes CONDITIONS, never tactics. Fade-versus-break belongs to the
+    // regime line and nowhere else — the two sat next to each other giving opposite instructions.
+    if(mins < open+60){        out.label='OPEN · CHARM';  out.sub='overnight charm unwinds — dealers could not hedge; the first move tends to overshoot'; }
+    else if(mins < open+150){  out.label='MORNING';       out.sub='gamma at full strength — this is where pins bind hardest'; }
+    else if(mins < close-90){  out.label='MIDDAY';        out.sub='lowest energy of the session — ranges compress'; }
+    else {                     out.label='POWER HOUR';    out.sub='hedging flows dominate — ranges expand into the close'; }
+    // An expiry day is an expiry day from the OPEN, not from 13:30. Gamma is decaying all session.
+    if(out.expiry){
+      out.label='EXPIRY · '+out.label;
+      out.sub += (mins>=close-90)
+        ? ' · charm is accelerating now — pins are failing'
+        : ' · gamma decays to zero at the close, so pins weaken through the day';
+    }
     return out;
-  }catch(e){ return { rth:false, label:'—', sub:'', pct:0, leftMin:null }; }
+  }catch(e){ return { rth:false, label:'—', sub:'', pct:0, leftMin:null, expiry:false }; }
 }
 function phaseClock(P){
   try{
@@ -16338,10 +16349,7 @@ function paRead(sym, n){
     out.ok=true;
     out.clv=+(s/k).toFixed(2);
     out.upBars=up; out.dnBars=dn;
-    if(out.clv>=0.60){ out.dir=1;  out.label='buying pressure'; }
-    else if(out.clv<=0.40){ out.dir=-1; out.label='selling pressure'; }
-    else { out.dir=0; out.label='balanced'; }
-    // structure over the same window
+    // structure over the same window, computed FIRST so it can break a tie
     var his=w.map(function(x){return x.h!=null?x.h:x.high;}), los=w.map(function(x){return x.l!=null?x.l:x.low;});
     var half=Math.floor(w.length/2);
     var h1=Math.max.apply(null,his.slice(0,half)), h2=Math.max.apply(null,his.slice(half));
@@ -16349,6 +16357,16 @@ function paRead(sym, n){
     if(h2>h1 && l2>l1) out.struct='HH/HL';
     else if(h2<h1 && l2<l1) out.struct='LH/LL';
     else out.struct='inside';
+    if(out.clv>=0.60){ out.dir=1;  out.label='buying pressure'; }
+    else if(out.clv<=0.40){ out.dir=-1; out.label='selling pressure'; }
+    else {
+      // (v11.27) Close location alone called LH/LL with a 0.42 mean 'balanced'. When the closes
+      // are genuinely mid-range, STRUCTURE is the tiebreak — stepping highs and lows are a
+      // direction even when no single bar finishes at an extreme.
+      if(out.struct==='HH/HL'){ out.dir=1; out.label='balanced, structure up'; out.tie=true; }
+      else if(out.struct==='LH/LL'){ out.dir=-1; out.label='balanced, structure down'; out.tie=true; }
+      else { out.dir=0; out.label='balanced'; }
+    }
     out.why=out.bars+' bars · mean close location '+out.clv+' ('+up+' upper third, '+dn+' lower third) · '+out.struct;
   }catch(e){}
   return out;
@@ -16453,7 +16471,7 @@ function biasVotes(sym){
   push('MASS', gr?(gr.dir||0):null, 'Is node mass skewed above or below price? A heavy side is where dealers have the most to hedge.');
   // ACCUM — which side of the book is GROWING, in absolute dollars
   var ac=null; try{ ac=accumAsym(sym); }catch(e){}
-  push('ACCUM', ac?ac.dir:null, 'Which side of the book grew in the last hour, measured in dollars? A moving percentage denominator cannot answer this — dollars can.');
+  push('ACCUM', ac?ac.dir:null, 'Which side of the book grew, measured in dollars? A moving percentage denominator cannot answer this — dollars can. When the feed is thin enough that only %King survives, this abstains rather than guessing.');
   // PA — close location, standing in for the internals we do not have
   var pa=null; try{ pa=paRead(sym); }catch(e){}
   push('PA', pa&&pa.ok?pa.dir:null, 'Where inside their own range are recent bars closing? Sustained upper-third closes are buying pressure — the honest OHLC stand-in for a sustained positive TICK.');
@@ -16577,7 +16595,15 @@ function secFrame(sym){
   var ifc=null; try{ ifc=ifChain?ifChain(sym):null; }catch(e){}
   h+='<div class="g3frow">';
   h+='<span class="g3fk"'+g3tip('Where is the structure pulling? This is the dominant gamma strike, not a momentum projection — it is where dealer hedging concentrates.')+'>TGT</span><span class="g3fv">'+((gp&&gp.mag!=null)?fmtLvl(gp.mag):'—')+'</span>';
-  var mp=null; try{ mp=(ifc&&!ifc.err&&ifc.week&&ifc.week.maxPain!=null)?ifc.week.maxPain:null; }catch(e){}
+  // (v11.27) The companion's shape is {dte0:{exps,lv}, toFri:{exps,lv}, all:{...}} — the previous
+  // read looked for a 'week' key that never existed, so PAIN rendered blank while the number was there.
+  var mp=null;
+  try{
+    if(ifc && !ifc.err){
+      var w=(ifc.toFri&&ifc.toFri.lv)?ifc.toFri.lv:((ifc.dte0&&ifc.dte0.lv)?ifc.dte0.lv:null);
+      if(w && typeof w.maxPain==='number') mp=w.maxPain;
+    }
+  }catch(e){}
   h+='<span class="g3fk"'+g3tip('Max pain from the option chain: the strike where the most contracts expire worthless. A slow pull, not a trade trigger — and it only matters near expiry.')+'>PAIN</span><span class="g3fv">'+(mp!=null?fmtLvl(mp):'—')+'</span>';
   var a=null; try{ a=atr(sym); }catch(e){}
   h+='<span class="g3fk"'+g3tip('Average true range per bar, in the displayed instrument. Expected move from the ATM straddle is not computed yet — this is the honest substitute for sizing a stop.')+'>ATR</span><span class="g3fv">'+(a!=null?fmtSpan(a):'—')+'</span>';
@@ -16603,13 +16629,21 @@ function secBias(sym){
   });
   h+='</div>';
   // DRIFT stays a gate, not a vote
-  var dr=null; try{ dr=driftRead?driftRead(sym):null; }catch(e){}
-  var agree=(dr&&dr.verdict)?/agree/i.test(dr.verdict):null;
+  // (v11.27) driftRead returns {verdict:'AGREE-UP'|'LEAN-DN'|'SPLIT'|'NONE', label, overlap} — there is no
+  // .line field, so the tick and the sentence next to it disagreed: a ✓ beside "both books not in yet".
+  var dr=null; try{ dr=driftRead(sym); }catch(e){}
+  var vd=(dr&&dr.verdict)?dr.verdict:'NONE';
+  var agree = /^AGREE/.test(vd) ? true : (vd==='SPLIT' ? false : null);
+  var mark  = /^AGREE/.test(vd) ? '✓' : (/^LEAN/.test(vd) ? '~' : (vd==='SPLIT' ? '✗' : '·'));
+  var gtxt;
+  if(vd==='NONE') gtxt='both books not in yet';
+  else if(vd==='SPLIT') gtxt='gamma and vanna lean opposite ways — nothing is confirming';
+  else gtxt=(dr.label||vd)+' · '+(dr.overlap?'bands overlap':'bands apart');
   var gcol=(agree===true)?'rgba(46,194,126,.1)':((agree===false)?'rgba(240,97,109,.1)':'rgba(139,152,169,.1)');
   var gink=(agree===true)?'#2ec27e':((agree===false)?'#f0616d':'#8b98a9');
   h+='<div class="g3gate" style="background:'+gcol+'"'+g3tip('Do the gamma book and the vanna book lean the same way relative to price? Drift is a GATE, not a seventh vote: when the two books split, nothing is confirming and the tally above is worth less.')+'>'+
-     '<b style="color:'+gink+';font-weight:800">DRIFT '+(agree===true?'✓':(agree===false?'✗':'·'))+'</b>'+
-     '<span>'+g3esc(dr&&dr.line?dr.line:'both books not in yet')+'</span>'+
+     '<b style="color:'+gink+';font-weight:800">DRIFT '+mark+'</b>'+
+     '<span>'+g3esc(gtxt)+'</span>'+
      '<span class="n">'+B.up+'↑ / '+B.dn+'↓ of '+B.live+'</span></div>';
   // supporting evidence — directional factors only
   var bits=[];
@@ -16653,6 +16687,8 @@ function secLoc(sym){
   });
   if(!placed) h+='<div class="g3prow"><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+fmtLvl(px)+'</span></div>';
   var rn=rollNote(sym);
+  // the companion carries the same roll on its own window; say so when it does
+  try{ var _c=ifChain(sym); if(_c && !_c.err && _c.rolled) rn=(rn?rn+' · IF too':'IF rolled to next Fri'); }catch(eRC2){}
   h+='<div class="g3rx" style="margin-top:3px"><em>SET</em><span>'+
      g3esc((U.src==='week'?'to Fri':(U.src==='0dte'?'0DTE':'passive feed'))+(rn?(' · '+rn):'')+
      (U.nExps?(' · '+U.nExps+' exps'):'')+(U.n?(' · '+U.n+' strikes'):''))+'</span></div>';
@@ -16669,9 +16705,18 @@ function secReact(sym){
   var lvl=L?L.k:null;
   // node growth in dollars
   var ac=null; try{ ac=accumAsym(sym); }catch(e){}
+  // (v11.27) A bare '—' read as broken. When every wall is tape-derived we have %King and nothing
+  // else, and summing dollar mass off a moving percentage denominator is the exact error we ruled
+  // out — so it abstains ON PURPOSE and now says so.
   var nodeTxt='—';
   try{
-    if(ac) nodeTxt=g3esc(ac.txt)+(ac.ratio!=null?'':'');
+    if(ac) nodeTxt=g3esc(ac.txt);
+    else {
+      var W=((STATE[sym]||{}).walls)||[];
+      var dollars=0; for(var wi=0;wi<W.length;wi++){ if(typeof W[wi].abs==='number'||typeof W[wi].net==='number') dollars++; }
+      nodeTxt = W.length ? ('tape-only book — %King without dollars, so growth is not measurable')
+                         : 'no book yet';
+    }
   }catch(e){}
   h+='<div class="g3rx"'+g3tip('Is the book at this level GROWING or bleeding, measured in dollars? Growth into a test is dealers adding — the level is being defended. Shrinkage is the level being abandoned.')+'><em>NODE</em><span>'+nodeTxt+'</span></div>';
   // price action at the level

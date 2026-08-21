@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.0
+// @version      1.1
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
@@ -78,8 +78,14 @@ function windows(payloadTs){
   var dow = et.getUTCDay();                 // 0 Sun .. 6 Sat
   var toFriday = (dow===0) ? 5 : (dow===6 ? 6 : (5-dow));
   if(toFriday<0) toFriday=0;
+  // (v1.1) THE FRIDAY COLLAPSE, same bug the Tapereader carried. On a Friday "through Friday of
+  // this week" IS today, so the through-Friday window becomes a second copy of the 0DTE window and
+  // the two level sets print identical numbers. Roll to NEXT Friday so the second window is
+  // actually a second window. Disclosed via `rolled` so the panel never shows it silently.
+  var rolled=false;
+  if(dow===5){ toFriday=7; rolled=true; }
   var fri = new Date(et.getTime() + toFriday*86400000);
-  return { today:today, friday:ymdNum(fri) };
+  return { today:today, friday:ymdNum(fri), rolled:rolled };
 }
 
 // ---- the maths ----------------------------------------------------------------------------
@@ -146,7 +152,7 @@ function computeAll(ch){
   if(!inFri.length) inFri=[front];
   return {
     spot:ch.spot, ticker:ch.ticker, payloadT:ch.t, stale:ch.stale,
-    asOf:Date.now(), today:W.today, friday:W.friday,
+    asOf:Date.now(), today:W.today, friday:W.friday, rolled:!!W.rolled,
     dte0:{ exps:[front], lv:levelsFor(ch.options, ch.spot, function(o){ return ymdOf(o)===front; }) },
     toFri:{ exps:inFri, lv:levelsFor(ch.options, ch.spot, function(o){ return ymdOf(o)>=W.today && ymdOf(o)<=W.friday; }) },
     all:{ exps:[all[0],all[all.length-1]], nExps:all.length, lv:levelsFor(ch.options, ch.spot, function(){ return true; }) }

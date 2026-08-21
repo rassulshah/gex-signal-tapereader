@@ -36,8 +36,17 @@ const at=(h,m,dow)=>new Date(Date.UTC(2026,7,17+(dow-1),h+5,m,0));
   ok(o.pct>=0&&o.pct<=100,'session progress is a percentage',o.pct);
 }
 eq(sessionPhase(at(12,0,3)).label,'MIDDAY','midday on a Wednesday is named as the low-energy stretch');
-ok(/EXPIRY FRI/.test(sessionPhase(at(14,15,5)).label),'the last 90 minutes of a FRIDAY is the expiry charm phase');
 eq(sessionPhase(at(14,15,3)).label,'POWER HOUR','the same clock midweek is the power hour, not expiry');
+// (v11.27) an expiry day is an expiry day from the OPEN, not from 13:30
+ok(/^EXPIRY/.test(sessionPhase(at(9,0,5)).label),'a Friday is flagged EXPIRY in the MORNING, not only in the last 90 minutes',sessionPhase(at(9,0,5)).label);
+ok(/^EXPIRY/.test(sessionPhase(at(12,0,5)).label),'and at midday too',sessionPhase(at(12,0,5)).label);
+ok(/charm is accelerating/.test(sessionPhase(at(14,15,5)).sub),'the final stretch of an expiry day says charm is accelerating');
+ok(!/EXPIRY/.test(sessionPhase(at(12,0,3)).label),'a Wednesday is never labelled EXPIRY');
+// (v11.27) the phase describes CONDITIONS; tactics belong to the regime line alone
+[[8,45,5],[10,0,3],[12,0,3],[14,15,3],[14,15,5]].forEach(function(t){
+  var o=sessionPhase(at(t[0],t[1],t[2]));
+  ok(!/\bfade|\bbreaks? (?:work|usually)/i.test(o.sub||''),'phase text at '+t[0]+':'+t[1]+' gives no fade-vs-break advice — that contradicted the regime playbook',o.sub);
+});
 {
   const o=sessionPhase(at(17,0,3));
   ok(o.rth===false&&o.label==='CLOSED','after 15:00 CT it says CLOSED rather than reading structure as live');
@@ -64,7 +73,25 @@ eq(clv({h:5,l:5,c:5}),0.5,'a zero-range bar is neutral, not a divide-by-zero');
 }
 {
   STATE.SPY.candles=[{h:10,l:0,c:5},{h:10,l:0,c:5},{h:10,l:0,c:5},{h:10,l:0,c:5}];
-  eq(paRead('SPY').dir,0,'mid-range closes are balanced — no vote either way');
+  const o=paRead('SPY');
+  eq(o.dir,0,'mid-range closes with flat structure stay balanced — no vote either way');
+  eq(o.struct,'inside','and the structure is inside');
+}
+// (v11.27) STRUCTURE BREAKS THE TIE. Live on 2026-08-21 the tape was LH/LL with a 0.42 mean close
+// location and PA voted NEUTRAL — stepping lows are a direction even when no bar closes at an extreme.
+{
+  STATE.SPY.candles=[]; for(let i=0;i<10;i++) STATE.SPY.candles.push({h:101-i,l:99-i,c:100-i});
+  const o=paRead('SPY');
+  eq(o.struct,'LH/LL','falling highs and lows with mid-range closes');
+  ok(o.clv>0.40&&o.clv<0.60,'close location alone is in the neutral band',o.clv);
+  eq(o.dir,-1,'so STRUCTURE breaks the tie and PA votes down');
+  ok(o.tie===true,'and the read is marked as decided on the tiebreak, not on close location');
+}
+{
+  STATE.SPY.candles=[]; for(let i=0;i<10;i++) STATE.SPY.candles.push({h:101+i,l:99+i,c:100+i});
+  const o=paRead('SPY');
+  eq(o.struct,'HH/HL','rising highs and lows with mid-range closes');
+  eq(o.dir,1,'structure breaks that tie upward');
 }
 ok((STATE.SPY.candles=[{h:1,l:0,c:1}],paRead('SPY').ok===false),'one bar is not a read, and it says so instead of guessing');
 {

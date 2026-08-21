@@ -1,3 +1,39 @@
+## v11.27 — six defects the first live check found
+
+Everything in v11.26 rendered, and the Friday roll fired for real: the week window went from
+one expiration and 284 strikes to six expirations through 8/28 and 288 strikes, decomposition
+went from 0 mixed strikes to 146, and HVL computed where it had been blank. Then the live face
+showed six things wrong.
+
+**PAIN was blank while the number was sitting right there.** The companion stores its levels at
+`toFri.lv` and `dte0.lv`; the FRAME section read a `week` key that never existed. Max pain was
+755 the whole time.
+
+**The face contradicted itself.** `playbook: momentum — breaks over fades` sat directly above
+`MIDDAY — fades work, breaks usually fail`. The phase line now describes CONDITIONS only —
+energy, compression, expansion, pin strength — and fade-versus-break belongs to the regime line
+and nowhere else. There is a test that greps every phase string for tactical language.
+
+**An expiry day is an expiry day from the open.** The expiry phase only triggered in the last
+90 minutes, so 0DTE Friday read as an ordinary MIDDAY. Expiry is now flagged all session, with
+the final stretch saying charm is accelerating.
+
+**`DRIFT ✓` next to "both books not in yet".** driftRead returns `verdict`/`label`/`overlap`
+and no `line` field, so the tick and the sentence beside it were reporting different things.
+AGREE now shows ✓, LEAN shows ~, SPLIT shows ✗ and says the books disagree, NONE shows ·.
+
+**The companion carried the identical Friday collapse.** Its payload reported
+`friday: 20260821, today: 20260821` — the same bug in the second script. It rolls forward too,
+and sets a `rolled` flag the panel discloses.
+
+**ACCUM abstained silently.** With a thin feed every wall is tape-derived and carries %King but
+no dollars, and summing dollar mass off a moving percentage denominator is the exact error the
+project already ruled out. So abstaining is correct — it now says why instead of printing a
+bare dash that reads as broken.
+
+Also: PA voted neutral on an LH/LL tape because close location alone was 0.42, mid-band.
+Structure now breaks the tie when close location is inconclusive.
+
 ## v11.26 — the panel becomes the process
 
 The five-step face we locked in design finally ships. The panel now renders

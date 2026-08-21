@@ -13,6 +13,7 @@
 const fs=require('fs'); const src=fs.readFileSync('./current/gex-if-levels.user.js','utf8');
 let pass=0, fail=0; const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+JSON.stringify(g):''));} };
 function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.exec(src);let i=src.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}return src.slice(m.index,e+1);}
+eval(ex('ymdNum')); eval(ex('windows'));
 global.SIDE_MIN=0.05;
 eval(['ymdOf','ymdNum','windows','levelsFor','extractChain','computeAll'].map(ex).join('\n'));
 
@@ -47,7 +48,9 @@ eval(['ymdOf','ymdNum','windows','levelsFor','extractChain','computeAll'].map(ex
   ok(windows('2026-08-17T14:00:00Z').friday===20260821,'from a Monday, Friday is still the 21st',windows('2026-08-17T14:00:00Z').friday);
   // ON a Friday the window collapses to that day — the known degeneracy, recorded not hidden
   const F=windows('2026-08-21T14:00:00Z');
-  ok(F.today===20260821 && F.friday===20260821,'on a Friday the window is that day alone — CR would equal CR0',F);
+  // (v1.1) this used to assert friday===today, which WAS the collapse: the through-Friday window
+  // became a copy of the 0DTE window and CR equalled CR0. It now rolls forward instead.
+  ok(F.today===20260821 && F.friday===20260828 && F.rolled===true,'on a Friday the window rolls forward rather than collapsing onto 0DTE',F);
   // a late-UTC timestamp must not roll the trading date forward
   ok(windows('2026-08-20T23:30:00Z').today===20260820,'a 23:30 UTC stamp is still the 20th in US hours',windows('2026-08-20T23:30:00Z').today);
 }
@@ -107,3 +110,28 @@ eval(['ymdOf','ymdNum','windows','levelsFor','extractChain','computeAll'].map(ex
 }
 console.log('\n'+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
+
+// ---- (v1.1) THE COMPANION CARRIED THE SAME FRIDAY COLLAPSE -------------------------------
+// Seen live on 2026-08-21: the stored payload reported friday:20260821 and today:20260821, so its
+// "through Friday" window was a second copy of the 0DTE window and both level sets printed the
+// same numbers — exactly the bug the Tapereader had in exp_mode=week.
+{
+  const ts=(iso)=>Date.parse(iso+'T18:00:00Z');     // midday ET, so the -4h shift stays on the same date
+  const W=windows(ts('2026-08-21'));                // a Friday
+  ok(W.today===20260821,'the payload date is read as the trading day',W.today);
+  ok(W.friday===20260828,'on a FRIDAY the through-Friday window rolls to NEXT Friday',W.friday);
+  ok(W.rolled===true,'and the roll is flagged so the panel can disclose it');
+  ok(W.friday!==W.today,'the second window is genuinely a second window');
+}
+{
+  const ts=(iso)=>Date.parse(iso+'T18:00:00Z');
+  const W=windows(ts('2026-08-19'));                // a Wednesday
+  ok(W.friday===20260821,'midweek the window still runs to THIS Friday',W.friday);
+  ok(!W.rolled,'and nothing is rolled');
+}
+{
+  const ts=(iso)=>Date.parse(iso+'T18:00:00Z');
+  const W=windows(ts('2026-08-24'));                // a Monday
+  ok(W.friday===20260828,'Monday runs to that same week Friday',W.friday);
+  ok(!W.rolled,'no roll on a Monday');
+}
