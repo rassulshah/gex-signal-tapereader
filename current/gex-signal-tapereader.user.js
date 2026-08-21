@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.30
+// @version    11.34
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -85,7 +85,10 @@ var ACC_RAPID_ROC = 0.20;   // >=20% abs growth over the last 2 samples = Rapid 
 // (8 closes = ~24 min, covering a full pullback). The RAPID flag still reads
 // the LIVE %King between closes so a fast load can fire mid-bar.
 var HIST_SAMPLE_MS = 180000; // one strip sample per 3m bar close
-var HIST_MAX = 12;           // STORE up to 12 closes; display length = CFG.stripLen
+var HIST_MAX = 130;          // (v11.32) STORE ~6.5h of 3m closes so the node chart can draw a band
+                             // across the session. Display length is still CFG.stripLen — the strips
+                             // elsewhere slice what they need, so storing more changes nothing on them.
+                             // HIST is in-memory only, so this refills from empty after a reload.
 var HIST_STEADY_BAND = 6;    // <= this net %-pt move over the window = Steady
 var HIST_RAPID_STEP = 10;    // >= this jump over the last 2 samples = Rapid
 var HIST_SHARP_STEP = 8;     // a sample-over-sample %King change >= this is SHARP, colored
@@ -530,7 +533,10 @@ function selfFetch(sym, type){
 // ≤1 extra request per cycle in a pure GEX or VEX display.
 function ensureFeeds(){
   try{
-    if(document.visibilityState!=='visible' || !LASTFEEDURL) return;
+    // (v11.34) popped out counts as visible, or both books go stale while the panel shows stale values.
+    // Guarded so a harness that extracts this function alone still evaluates the gate.
+    var _vis; try{ _vis=(typeof panelVisible==='function')?panelVisible():(document.visibilityState==='visible'); }catch(eV){ _vis=true; }
+    if(!_vis || !LASTFEEDURL) return;
     var syms=['SPY','QQQ'], now=Date.now();
     for(var i=0;i<syms.length;i++){
       var s=syms[i];
@@ -540,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.30';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.34';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3484,7 +3490,15 @@ function pipeReviewLine(j){
 function pipeCheck(force){
   var P=pipeLoad();
   // A hidden tab is not worth a network round trip — nobody is reading the footer.
-  try{ if(!force && typeof document!=='undefined' && document.visibilityState && document.visibilityState!=='visible') return P; }catch(e){}
+  // (v11.34) popped out counts as visible. When panelVisible is absent — an isolated harness — this must
+  // FALL BACK to the visibility check, not skip the gate: skipping it silently reverses the behaviour.
+  try{
+    if(!force){
+      var _v3=(typeof panelVisible==='function') ? panelVisible()
+             : (typeof document!=='undefined' && document.visibilityState ? document.visibilityState==='visible' : true);
+      if(!_v3) return P;
+    }
+  }catch(e){}
   var now=Date.now();
   if(!force && P.t && (now-P.t)<PIPE_TTL_MS) return P;   // cached: no refetch inside 10 min
   P.t=now; pipeSave(P);        // stamp BEFORE fetching: a failing network must not retry every tick
@@ -4235,6 +4249,85 @@ function stageEpoch(s, tok){
   return null;
 }
 
+
+// ---- (v11.34) POP OUT — Document Picture-in-Picture ----
+// A real always-on-top window that can be dragged to any monitor, rather than a second tab. It is a
+// PAGE api, so `@grant none` survives — which matters, because the feed hooks patch window.fetch in page
+// context and any @grant would sandbox them and take the tape dark.
+//
+// THE TRAP: the Atlas tab remains the only thing that captures the feed; the popped-out window is just a
+// view of it. Our own code returns early when `document.visibilityState !== 'visible'` (expSetTick), so
+// backgrounding Atlas — the entire point of popping out — would silently stop the ladder refreshing while
+// the panel kept displaying its last values. `panelVisible()` therefore treats an open PiP window as
+// visible, and every visibility check goes through it.
+var PIPWIN=null, PIPHOST=null;
+function pipOpen(){ return !!(PIPWIN && !PIPWIN.closed); }
+function panelVisible(){
+  try{ if(pipOpen()) return true; }catch(e){}
+  try{ return document.visibilityState==='visible'; }catch(e2){ return true; }
+}
+function pipSupported(){
+  try{ return !!(window.documentPictureInPicture && window.documentPictureInPicture.requestWindow); }catch(e){ return false; }
+}
+function pipCopyStyles(doc){
+  try{
+    // the PiP window is a separate document with no stylesheets of its own
+    var sheets=document.styleSheets;
+    for(var i=0;i<sheets.length;i++){
+      var sh=sheets[i], txt='';
+      try{ var rules=sh.cssRules||[]; for(var r=0;r<rules.length;r++) txt+=rules[r].cssText; }
+      catch(eX){ continue; }               // cross-origin sheet: skip, never throw
+      if(!txt) continue;
+      var st=doc.createElement('style'); st.textContent=txt; doc.head.appendChild(st);
+    }
+    var base=doc.createElement('style');
+    base.textContent='html,body{margin:0;padding:0;background:'+PAL.bg+';color:'+PAL.ink+';'+
+      'font:12px/1.4 Inter,Arial,sans-serif;overflow:auto}'+
+      '#gpts-panel{position:static !important;top:auto !important;left:auto !important;right:auto !important;'+
+      'width:100% !important;height:auto !important;border:0 !important;border-radius:0 !important;'+
+      'box-shadow:none !important;z-index:auto !important}'+
+      '#gpts-grip{display:none !important}';
+    doc.head.appendChild(base);
+  }catch(e){}
+}
+function pipToggle(){
+  try{
+    if(pipOpen()){ try{ PIPWIN.close(); }catch(e){} return; }
+    if(!pipSupported()){
+      alert('This Chrome does not expose Document Picture-in-Picture.\n\nUse Chrome 116+ , or drag the tab out into its own window.');
+      return;
+    }
+    var r=PANEL?PANEL.getBoundingClientRect():{width:440,height:700};
+    window.documentPictureInPicture.requestWindow({
+      width:Math.round(Math.max(360,Math.min(720,r.width||440))),
+      height:Math.round(Math.max(420,Math.min(1200,r.height||700)))
+    }).then(function(w){
+      PIPWIN=w;
+      pipCopyStyles(w.document);
+      // remember where the panel came from so it goes back to exactly that spot
+      PIPHOST={ parent:PANEL.parentNode, next:PANEL.nextSibling };
+      w.document.body.appendChild(PANEL);
+      w.addEventListener('pagehide', pipRestore);
+      try{ render(); }catch(e2){}
+    }).catch(function(err){
+      // requestWindow rejects without a user gesture, and that is the usual cause
+      try{ console.warn('[GPTS] pop-out refused:', err && err.message); }catch(e3){}
+    });
+  }catch(e){}
+}
+function pipRestore(){
+  try{
+    if(PANEL && PIPHOST && PIPHOST.parent){
+      if(PIPHOST.next && PIPHOST.next.parentNode===PIPHOST.parent) PIPHOST.parent.insertBefore(PANEL, PIPHOST.next);
+      else PIPHOST.parent.appendChild(PANEL);
+      // the inline geometry the panel had before it was moved is restored by restorePos/restoreSize
+      PANEL.style.position='fixed';
+      try{ restorePos(); restoreSize(); }catch(e1){}
+    }
+  }catch(e){}
+  PIPWIN=null; PIPHOST=null;
+  try{ render(); }catch(e2){}
+}
 function buildPanel(){
   if(document.getElementById('gpts-panel')) return;
   PANEL=document.createElement('div');
@@ -4271,6 +4364,14 @@ function buildPanel(){
   handle.title='Drag to move (you can also drag from any empty area of the panel).';
   css(handle,{cursor:'grab', color:PAL.sub, fontSize:'14px', lineHeight:'1', padding:'0 2px'});
   right.appendChild(handle);
+  var pip=document.createElement('span');
+  pip.id='gpts-pip';
+  pip.innerHTML='&#8599;';
+  pip.title='Pop the panel out into its own always-on-top window, which you can drag to another monitor. The Atlas tab must stay open — it is what captures the feed — but it no longer has to be the tab you are looking at.';
+  css(pip,{cursor:'pointer', color:PAL.sub, fontSize:'14px', lineHeight:'1', padding:'0 2px'});
+  pip.addEventListener('mousedown', function(e){ e.stopPropagation(); });
+  pip.addEventListener('click', function(e){ e.stopPropagation(); pipToggle(); });
+  right.appendChild(pip);
   var gear=document.createElement('span');
   gear.id='gpts-gear';
   gear.innerHTML='&#9881;';
@@ -12993,7 +13094,8 @@ function expSetFetch(sym, setName){
 }
 function expSetTick(){
   try{
-    if(document.visibilityState!=='visible') return;
+    var _v2; try{ _v2=(typeof panelVisible==='function')?panelVisible():(document.visibilityState==='visible'); }catch(eV2){ _v2=true; }
+    if(!_v2) return;
     // Only the symbol actually on screen, so this stays at two extra requests per cycle regardless of
     // how many books the panel tracks. Switching charts switches which symbol is kept fresh.
     var sym='SPY'; try{ sym=activeSym(); }catch(e0){}
@@ -16608,23 +16710,47 @@ function dcls(d){ return d>0?'g3up':(d<0?'g3dn':''); }
 // so and shows nothing. A source swap you cannot see is how you end up reading one book while
 // believing you are reading the other.
 var IF_STALE_MIN=25;
+// Values that are already on the chart's scale. fmtLvl/fmtSpan convert FROM the underlying, so
+// feeding them an already-converted number would apply the ratio twice.
+function ifNum(x){ if(x==null) return '–'; return (Math.round(x*100)/100).toString(); }
 function ifLadder(sym){
   sym=sym||'SPY';
   try{
-    var px=(STATE[sym]||{}).price; if(typeof px!=='number') return { err:'no price' };
-    var c=null; try{ c=ifChain(sym); }catch(e0){ return { err:'companion not installed' }; }
-    if(!c) return { err:'companion not installed' };
+    // (v11.31) THE LADDER READS SPX AND CONVERTS BY THE LIVE BASIS.
+    // SPY levels reached ES through a ~10.05 multiplier, so every half-point of disagreement with
+    // their page arrived on the chart as five ES points. ES is a future on SPX, so SPX is the book
+    // that governs it and the conversion is a basis near 1.003. Their payload carries their own spot,
+    // which is what makes the ratio live and self-correcting rather than a constant we maintain.
+    // Note this converts a PRICE SCALE, not a strike grid: we never restate an SPX strike as a SPY
+    // strike, because SPY's open interest sits on its own 1-point grid and would not be there.
+    var IFSYM={ SPY:'SPX', QQQ:'QQQ' };
+    var src=IFSYM[sym]||sym;
+    var c=null; try{ c=ifChain(src); }catch(e0){ return { err:'companion not installed' }; }
+    if(!c) return { err:'companion not installed (or not yet fetching '+src+')' };
     if(c.err) return { err:c.err };
     var age=(typeof c.ageMin==='number')?c.ageMin:null;
     if(age!=null && age>IF_STALE_MIN) return { err:'their chain is '+age+'m old', stale:true, ageMin:age };
+    var theirSpot=(typeof c.spot==='number' && c.spot>0)?c.spot:null;
+    if(!theirSpot) return { err:'their payload carries no spot — nothing to scale from' };
+    var undPx=(STATE[sym]||{}).price;                      // our underlying (SPY/QQQ) price
+    if(typeof undPx!=='number') return { err:'no underlying price' };
+    // scale from THEIR book to the instrument on the chart, and to our underlying for the
+    // candle-based reads, which run on the underlying scale.
+    var dispPx=undPx, dispScale=(undPx/theirSpot);
+    try{
+      if(dispIsFut() && FUTMODE.futPx!=null && FUTMODE.futPx>0){
+        dispPx=FUTMODE.futPx; dispScale=FUTMODE.futPx/theirSpot;   // ES / SPX — the live basis
+      }
+    }catch(e1){}
+    var undScale=undPx/theirSpot;
     var W=(c.toFri&&c.toFri.lv)?c.toFri.lv:null;
     var D0=(c.dte0&&c.dte0.lv)?c.dte0.lv:null;
     if(!W && !D0) return { err:'no levels in their chain' };
-    var out={ px:px, rows:[], src:'IF', ageMin:age, rolled:!!c.rolled,
+    var out={ px:dispPx, undPx:undPx, theirSpot:theirSpot, srcSym:src,
+              dispScale:+dispScale.toFixed(6), undScale:+undScale.toFixed(6),
+              rows:[], src:'IF', ageMin:age, rolled:!!c.rolled,
               nExps:(c.toFri&&c.toFri.exps)?c.toFri.exps.length:null,
-              n:W?W.strikes:null, maxPain:W?W.maxPain:(D0?D0.maxPain:null),
-              spot:c.spot, pub:(c.pub||null), err:null };
-    // Merge labels that land on the same strike, wall first — same rule the Skylit ladder used.
+              n:W?W.strikes:null, maxPain:W?W.maxPain:(D0?D0.maxPain:null), err:null };
     function add(id, k){
       if(k==null) return;
       for(var i=0;i<out.rows.length;i++){
@@ -16638,12 +16764,9 @@ function ifLadder(sym){
           return;
         }
       }
-      out.rows.push({ id:id, k:k });
+      out.rows.push({ id:id, k:k, disp:+(k*dispScale).toFixed(2), und:+(k*undScale).toFixed(4) });
     }
     if(W){ add('CR', W.cr); add('PS', W.ps); add('Mag', W.mag); add('MP', W.maxPain); }
-    // HVL is THEIR published Zero Gamma, read off their page — not a number of ours wearing their
-    // name. It belongs to the expiration filter their page itself defaults to, which is not
-    // necessarily either of our two windows, so it is tagged separately below.
     try{ if(c.pub && typeof c.pub.zeroGamma==='number') add('HVL', c.pub.zeroGamma); }catch(e2){}
     if(D0){ add('CR0', D0.cr); add('PS0', D0.ps); }
     if(!out.rows.length) return { err:'their chain named no walls' };
@@ -16651,7 +16774,7 @@ function ifLadder(sym){
     try{
       if(W&&W.crSuppressed) out.suppressed.push('CR at '+W.crSuppressed.k+' withheld — calls are only '+W.crSuppressed.share+'% of the book');
       if(W&&W.psSuppressed) out.suppressed.push('PS at '+W.psSuppressed.k+' withheld — puts are only '+W.psSuppressed.share+'% of the book');
-    }catch(e1){}
+    }catch(e3){}
     return out;
   }catch(e){ return { err:String(e&&e.message||e) }; }
 }
@@ -16670,18 +16793,18 @@ function secFrame(sym){
   h+='<div class="g3frow">';
   // (v11.29) TGT reads the same book as the ladder. Pulling the target from Skylit while the levels
   // came from IF put two different books' numbers side by side as if they were one reading.
-  h+='<span class="g3fk"'+g3tip('Where is the structure pulling? The heaviest strike in InsiderFinance\'s book — the same book the ladder below reads, so the target and the levels cannot come from two different sources.')+'>TGT</span><span class="g3fv">'+(ifMag!=null?fmtLvl(ifMag):'—')+'</span>';
+  h+='<span class="g3fk"'+g3tip('Where is the structure pulling? The heaviest strike in InsiderFinance\'s book — the same book the ladder below reads, so the target and the levels cannot come from two different sources.')+'>TGT</span><span class="g3fv">'+(ifMag!=null?ifNum(ifMag):'—')+'</span>';
   // (v11.27) The companion's shape is {dte0:{exps,lv}, toFri:{exps,lv}, all:{...}} — the previous
   // read looked for a 'week' key that never existed, so PAIN rendered blank while the number was there.
   var mp=null, ifMag=null;
   try{
     var IL=ifLadder(sym);
     if(IL && !IL.err){
-      if(typeof IL.maxPain==='number') mp=IL.maxPain;
-      for(var mi=0;mi<IL.rows.length;mi++){ if(/Mag/.test(IL.rows[mi].id)){ ifMag=IL.rows[mi].k; break; } }
+      if(typeof IL.maxPain==='number') mp=IL.maxPain*(IL.dispScale||1);
+      for(var mi=0;mi<IL.rows.length;mi++){ if(/Mag/.test(IL.rows[mi].id)){ ifMag=IL.rows[mi].disp; break; } }
     }
   }catch(e){}
-  h+='<span class="g3fk"'+g3tip('Max pain from the option chain: the strike where the most contracts expire worthless. A slow pull, not a trade trigger — and it only matters near expiry.')+'>PAIN</span><span class="g3fv">'+(mp!=null?fmtLvl(mp):'—')+'</span>';
+  h+='<span class="g3fk"'+g3tip('Max pain from the option chain: the strike where the most contracts expire worthless. A slow pull, not a trade trigger — and it only matters near expiry.')+'>PAIN</span><span class="g3fv">'+(mp!=null?ifNum(mp):'—')+'</span>';
   var a=null; try{ a=atr(sym); }catch(e){}
   h+='<span class="g3fk"'+g3tip('Average true range per bar, in the displayed instrument. Expected move from the ATM straddle is not computed yet — this is the honest substitute for sizing a stop.')+'>ATR</span><span class="g3fv">'+(a!=null?fmtSpan(a):'—')+'</span>';
   if(gp&&gp.cage) h+='<span class="g3fk"'+g3tip('The gamma cage: the put wall below and the call wall above, and where inside it price currently sits. At the edges, structure matters most.')+'>CAGE</span><span class="g3fv">'+gp.cage.pos+'%</span>';
@@ -16733,13 +16856,271 @@ function secBias(sym){
 }
 
 // ---- ③ TRADE LOCATION: the ladder, with price in it ----
+
+// ---- (v11.32) THE NODE CHART ----
+// Atlas draws dealer-exposure nodes as horizontal rows of markers at their strikes, and reading a
+// pullback off that picture is very different from reading a list of numbers. This is that picture,
+// scaled to the panel.
+//
+// COLOUR: purple = put-dominant, yellow = call-dominant. %King as captured from Skylit's King cell is
+// SIGNED, so polarity is already in the data and is not inferred from where price happens to be.
+// Purple has meant negative gamma everywhere else in this panel, and a put-dominant node is exactly
+// where dealers are short gamma, so the two readings agree rather than competing.
+//
+// SOURCE: these bands are SKYLIT (flow). The ladder above them is INSIDER FINANCE (open-interest
+// stock). Two different books in one panel, so the bands are markers and the IF levels are labelled
+// lines, and the legend names both. Never let them read as one picture.
+//
+// SCALE: nodes and candles are both on the UNDERLYING scale, so the chart is computed there and only
+// the axis labels are converted to the chart instrument.
+var NCHART_MIN=90;                 // minutes of session in view
+var NCHART_H=132;                  // px
+
+// ---- (v11.34) ROLL DETECTION — MASS MOVING BETWEEN STRIKES ----
+// The user's definition, and it is the right one: a roll is one node DISSIPATING while another on the
+// same side ACCUMULATES. Not "the nearest node above price stepped" — that is a symptom, this is the
+// cause. Their examples: ceiling 7716 -> 7705, floor 7674 -> 7685.
+//
+// MEASURED IN DOLLARS, NOT %King. If the King strike changes, every node's percentage rebases at once
+// and a whole cluster reads as dissipating together — the most convincing possible false positive.
+// The feed's own `levels` array is a ~390-entry time series of {k,v,net} in DOLLARS at ~1min cadence,
+// covering the whole session. It arrives with every fetch, so nothing needs recording and nothing is
+// lost on reload.
+//
+// CALIBRATED ON REAL DATA (2026-08-21, 390 snapshots x 209 strikes), not guessed:
+//   window 30m   - 15/20/45 all behaved worse
+//   threshold 50% RELATIVE TO THE SESSION MEDIAN - 35% gave 37 events/session (noise), 70% gave 2
+//                  (silence), 50% gave 9. The median near-money strike GROWS 10-15% per 30m as the book
+//                  builds, so an absolute threshold reports accumulation all morning and dissipation
+//                  into every close - and on expiry day strikes lost 75-94% to decay alone.
+//   floor $40M   - archive median node is $81M, p25 $31M
+//   reach +-5 strikes
+var ROLL_WIN_MIN=30, ROLL_TH=0.50, ROLL_MIN_V=40e6, ROLL_REACH=5;
+function rollMedian(a){ if(!a.length) return 0; var b=a.slice().sort(function(x,y){return x-y;}); return b[Math.floor(b.length/2)]; }
+function rollDetect(sym){
+  sym=sym||'SPY';
+  try{
+    var f=LASTFEED[sym]; if(!f||!f.j) return null;
+    var snaps=f.j.levels||[]; if(snaps.length<12) return null;
+    var last=snaps.length-1, tL=snaps[last].t;
+    if(typeof tL!=='number') return null;
+    // `t` is SECONDS in this payload. Walk back by time, not by index, so a cadence change cannot
+    // silently turn a 30-minute window into a 5-minute one.
+    var target=tL-ROLL_WIN_MIN*60, a=-1;
+    for(var i=last;i>=0;i--){ if(typeof snaps[i].t==='number' && snaps[i].t<=target){ a=i; break; } }
+    if(a<0 || last-a<5) return { err:'not enough session yet' };
+    function mapOf(ix){ var m={}, l=(snaps[ix]&&snaps[ix].l)||[];
+      for(var q=0;q<l.length;q++){ var r=l[q]; if(typeof r.v==='number') m[r.k]=Math.abs(r.v); } return m; }
+    var m0=mapOf(a), m1=mapOf(last);
+    var px=(STATE[sym]||{}).price;
+    if(typeof px!=='number'){ px=(typeof snaps[last].s==='number')?snaps[last].s:null; }
+    if(px==null) return { err:'no price' };
+    var cand=[], pcs=[];
+    for(var k in m1){
+      var kk=parseFloat(k); if(!isFinite(kk)) continue;
+      if(Math.abs(kk-px)>ROLL_REACH) continue;
+      var v0=m0[k], v1=m1[k];
+      if(v0==null||v1==null||v0<ROLL_MIN_V) continue;
+      var pc=(v1-v0)/v0;
+      cand.push({k:kk, pc:pc, v0:v0, v1:v1}); pcs.push(pc);
+    }
+    if(cand.length<4) return { err:'book too thin to compare' };
+    var base=rollMedian(pcs);
+    var out={ base:+(base*100).toFixed(0), n:cand.length, winMin:ROLL_WIN_MIN, ceil:null, flr:null, err:null };
+    ['ceil','flr'].forEach(function(side){
+      var up=(side==='ceil');
+      var pool=cand.filter(function(c){ return up ? c.k>px : c.k<px; });
+      var diss=null, acc=null;
+      pool.forEach(function(c){
+        var rel=c.pc-base;
+        if(rel<=-ROLL_TH && (!diss||rel<diss.rel)) diss={k:c.k, rel:rel, v0:c.v0, v1:c.v1};
+        if(rel>= ROLL_TH && c.v1>=ROLL_MIN_V && (!acc||rel>acc.rel)) acc={k:c.k, rel:rel, v0:c.v0, v1:c.v1};
+      });
+      // A node dying with nothing growing is a wall EVAPORATING, not a roll. It gets no arrow —
+      // an arrow to nowhere is a claim we cannot support.
+      if(!diss || !acc || Math.abs(diss.k-acc.k)<0.5) return;
+      out[side]={ from:diss.k, to:acc.k,
+                  fromPct:Math.round(diss.rel*100), toPct:Math.round(acc.rel*100),
+                  toward: up ? (acc.k<diss.k) : (acc.k>diss.k) };
+    });
+    return out;
+  }catch(e){ return { err:String(e&&e.message||e) }; }
+}
+function nodeChartHtml(sym){
+  try{
+    sym=sym||'SPY';
+    var cs=closedCandles(sym)||[];
+    if(cs.length<4) return '';
+    var now=Date.now();
+    var t1=cs[cs.length-1].t||now, t0=t1-NCHART_MIN*60000;
+    var bars=cs.filter(function(c){ return (c.t||0)>=t0; });
+    if(bars.length<3) bars=cs.slice(-30);
+    if(bars.length<3) return '';
+    t0=bars[0].t; t1=bars[bars.length-1].t;
+    if(!(t1>t0)) return '';
+    var lo=Infinity, hi=-Infinity;
+    bars.forEach(function(c){ if(c.l<lo) lo=c.l; if(c.h>hi) hi=c.h; });
+    var H=(HIST[sym]||{}), keys=[];
+    for(var k in H){
+      var kk=parseFloat(k); if(!isFinite(kk)) continue;
+      var seq=(H[k]&&H[k].seq)||[]; if(!seq.length) continue;
+      if(kk < lo-(hi-lo)*0.9 || kk > hi+(hi-lo)*0.9) continue;
+      var peak=0;
+      for(var q=0;q<seq.length;q++){ var vv=seq[q]&&seq[q].v; if(typeof vv==='number' && Math.abs(vv)>peak) peak=Math.abs(vv); }
+      keys.push({k:kk, seq:seq, peak:peak});
+    }
+    keys.forEach(function(o){ if(o.k<lo) lo=o.k; if(o.k>hi) hi=o.k; });
+    var pad=(hi-lo)*0.06 || 0.2; lo-=pad; hi+=pad;
+    if(!(hi>lo)) return '';
+    // (v11.33) the right gutter now carries a PRICE for every labelled row, so a band is a level you
+    // can read rather than a height you have to eyeball against the axis.
+    var W=416, HGT=NCHART_H, L=4, R=62, TOP=6, BOT=12;
+    var iw=W-L-R, ih=HGT-TOP-BOT;
+    function X(t){ return L + ((t-t0)/(t1-t0))*iw; }
+    function Y(p){ return TOP + (1-((p-lo)/(hi-lo)))*ih; }
+    var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(e9){}
+    function lab(p){ return ifNum(p*rr); }
+    var g='';
+    // ---- node bands ----
+    var drawn=0;
+    keys.forEach(function(o){
+      var y=Y(o.k);
+      o.shown=0;
+      o.seq.forEach(function(pt){
+        if(pt==null || typeof pt.v!=='number') return;
+        if(pt.t<t0-90000 || pt.t>t1+90000) return;
+        var x=X(Math.max(t0,Math.min(t1,pt.t)));
+        var av=Math.abs(pt.v);
+        if(av<3) return;
+        var op=Math.max(0.16, Math.min(0.95, av/100));
+        var put=(pt.v>0);
+        var col=put?'#a371f7':'#e3c341';
+        var w=2.6, hh=2.2;
+        g+= put
+          ? '<path d="M'+(x-w)+' '+(y-hh)+' L'+(x+w)+' '+(y-hh)+' L'+x+' '+(y+hh)+' Z" fill="'+col+'" opacity="'+op.toFixed(2)+'"/>'
+          : '<path d="M'+(x-w)+' '+(y+hh)+' L'+(x+w)+' '+(y+hh)+' L'+x+' '+(y-hh)+' Z" fill="'+col+'" opacity="'+op.toFixed(2)+'"/>';
+        drawn++; o.shown++;
+      });
+    });
+    // ---- rolls: the arrow is the transfer, the LABEL is two lines so the curve cannot cross it ----
+    // Destination bold and full-strength, origin faded — the same reading in both directions: a ceiling
+    // rolling down emphasises the LOWER line, a floor rolling up emphasises the UPPER one.
+    var RL=null; try{ RL=rollDetect(sym); }catch(eR){}
+    var rollLines=[];
+    if(RL && !RL.err){
+      [['ceil','#f0616d','g3ad'],['flr','#2ec27e','g3au']].forEach(function(cfg){
+        var e=RL[cfg[0]]; if(!e || !e.toward) return;
+        if(e.from<lo||e.from>hi||e.to<lo||e.to>hi) return;
+        var yF=Y(e.from), yT=Y(e.to);
+        if(Math.abs(yT-yF)<6) return;
+        var xa=L+iw*0.30, xb=L+iw*0.62;
+        var dirDown=(yT>yF);
+        g+='<path d="M'+xa.toFixed(1)+' '+(yF+(dirDown?3:-3)).toFixed(1)+
+           ' C'+(xa+8).toFixed(1)+' '+((yF+yT)/2).toFixed(1)+
+           ' '+(xb-8).toFixed(1)+' '+((yF+yT)/2).toFixed(1)+
+           ' '+xb.toFixed(1)+' '+(yT+(dirDown?-4:4)).toFixed(1)+'" fill="none" stroke="'+cfg[1]+
+           '" stroke-width="1.5" opacity="0.9" marker-end="url(#'+cfg[2]+')"/>';
+        // TWO LINES, placed clear of the curve: origin beside its own row, destination beside its own.
+        // Never one string across the middle, which the curve ran straight through.
+        var tx=(xb+6);
+        g+='<text x="'+tx.toFixed(1)+'" y="'+(yF+2.2).toFixed(1)+'" font-size="7" fill="'+cfg[1]+
+           '" font-weight="500" opacity="0.45">'+ifNum(e.from*rr)+'</text>';
+        g+='<text x="'+tx.toFixed(1)+'" y="'+(yT+2.2).toFixed(1)+'" font-size="8" fill="'+cfg[1]+
+           '" font-weight="800" opacity="1">'+ifNum(e.to*rr)+'</text>';
+        rollLines.push({ side:cfg[0], col:cfg[1], from:e.from, to:e.to, fromPct:e.fromPct, toPct:e.toPct });
+      });
+    }
+    // ---- ONE right-gutter pass, so labels cannot overprint each other ----
+    // Priority: current price, then the IF ladder levels, then the strongest nodes. A label that would
+    // collide with one already placed is dropped — its marker row stays, so nothing is hidden, but a
+    // stack of unreadable overlapping numbers is worse than a clean chart with fewer of them.
+    var taken=[], GAP=7.6;
+    function place(y){
+      for(var i=0;i<taken.length;i++){ if(Math.abs(taken[i]-y)<GAP) return false; }
+      taken.push(y); return true;
+    }
+    function gtxt(y, txt, col, weight, size){
+      g+='<text x="'+(L+iw+3)+'" y="'+(y+2.4).toFixed(1)+'" font-size="'+(size||7)+'" fill="'+col+'" font-weight="'+(weight||700)+'">'+g3esc(txt)+'</text>';
+    }
+    // candles first so labels sit on top
+    var bw=Math.max(1.2, Math.min(5, (iw/bars.length)*0.62));
+    bars.forEach(function(c){
+      var x=X(c.t), up=(c.c>=c.o);
+      var col=up?'#2ec27e':'#f0616d';
+      g+='<line x1="'+x.toFixed(1)+'" y1="'+Y(c.h).toFixed(1)+'" x2="'+x.toFixed(1)+'" y2="'+Y(c.l).toFixed(1)+'" stroke="'+col+'" stroke-width="0.7" opacity="0.75"/>';
+      var yo=Y(c.o), yc=Y(c.c), yt=Math.min(yo,yc), hb=Math.max(0.8,Math.abs(yc-yo));
+      g+='<rect x="'+(x-bw/2).toFixed(1)+'" y="'+yt.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+hb.toFixed(1)+'" fill="'+col+'" opacity="0.8"/>';
+    });
+    // 1. current price
+    var px=(STATE[sym]||{}).price;
+    if(typeof px==='number' && px>=lo && px<=hi){
+      var yp=Y(px);
+      g+='<line x1="'+L+'" y1="'+yp.toFixed(1)+'" x2="'+(L+iw)+'" y2="'+yp.toFixed(1)+'" stroke="#f3f6fa" stroke-width="0.8" opacity="0.85"/>';
+      place(yp); gtxt(yp, lab(px), '#f3f6fa', 800, 7.5);
+    }
+    // 2. IF ladder levels — dashed, labelled with name AND price
+    var IL=null; try{ IL=ifLadder(sym); }catch(e0){}
+    if(IL && !IL.err && IL.rows){
+      IL.rows.slice().sort(function(a,b){ return Math.abs(a.und-(px||0))-Math.abs(b.und-(px||0)); })
+      .forEach(function(r){
+        if(r.und==null || r.und<lo || r.und>hi) return;
+        var y=Y(r.und);
+        var isC=/CR/.test(r.id), isP=/PS/.test(r.id);
+        var col=isC?'#f0616d':(isP?'#2ec27e':'#8b98a9');
+        g+='<line x1="'+L+'" y1="'+y.toFixed(1)+'" x2="'+(L+iw)+'" y2="'+y.toFixed(1)+'" stroke="'+col+'" stroke-width="0.7" stroke-dasharray="5,4" opacity="0.55"/>';
+        if(place(y)) gtxt(y, r.id.split('·')[0]+' '+ifNum(r.disp), col, 700, 7);
+      });
+    }
+    // 3. nodes, strongest first so the weak ones are the labels that get dropped
+    var labelled=0;
+    keys.slice().sort(function(a,b){ return b.peak-a.peak; }).forEach(function(o){
+      if(o.peak<15) return;
+      // a row whose samples all fall outside this window drew nothing — labelling it would put a
+      // price in the gutter with no markers beside it, which reads as a level that is not there.
+      if(!o.shown) return;
+      var last=null;
+      for(var q=o.seq.length-1;q>=0;q--){ if(o.seq[q] && typeof o.seq[q].v==='number'){ last=o.seq[q].v; break; } }
+      if(last==null) return;
+      var y=Y(o.k);
+      if(!place(y)) return;
+      gtxt(y, lab(o.k), (last>0?'#a371f7':'#e3c341'), 700, 7);
+      labelled++;
+    });
+    var tip='The horizontal marker rows are Skylit dealer-exposure NODES at their strikes, the way Atlas draws them. '+
+            'Purple points down and is put-dominant; yellow points up and is call-dominant — the sign comes from the King cell, not from where price sits. '+
+            'Brightness is %King, so a faint row is a weak node and a bright one is a real level. A row that runs the full width has held all session; a short row just appeared. '+
+            'Prices on the right are the level itself. Where two rows are too close to label without overprinting, the weaker one keeps its markers and loses its number. '+
+            'The dashed lines are the InsiderFinance levels from the ladder above — a different book, drawn differently on purpose.';
+    var out='<div class="g3b" style="padding-top:2px">';
+    var defs='<defs>'+
+      '<marker id="g3ad" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#f0616d"/></marker>'+
+      '<marker id="g3au" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#2ec27e"/></marker>'+
+      '</defs>';
+    out+='<svg viewBox="0 0 '+W+' '+HGT+'" width="100%" height="'+HGT+'" preserveAspectRatio="none"'+g3tip(tip)+'>'+defs+g+'</svg>';
+    out+='<div style="display:flex;gap:8px;justify-content:center;font-size:7px;color:#8b98a9;margin-top:1px">'+
+         '<span><b style="color:#e3c341">▲</b> call-dominant</span>'+
+         '<span><b style="color:#a371f7">▼</b> put-dominant</span>'+
+         '<span>bands: Skylit flow · dashed: IF levels</span>'+
+         '<span>'+NCHART_MIN+'m</span></div>';
+    rollLines.forEach(function(r){
+      var down=(r.side==='ceil');
+      out+='<div style="display:flex;align-items:center;gap:6px;font-size:8.5px;color:#8b98a9;margin-top:3px;padding:2px 5px;border-radius:3px;background:'+
+           (down?'rgba(240,97,109,.09)':'rgba(46,194,126,.09)')+'"'+
+           g3tip('A roll is MASS MOVING between strikes: one node dissipating while another on the same side accumulates. Measured in dollars over '+ROLL_WIN_MIN+' minutes and relative to the session median, because the typical strike grows 10-15% every 30 minutes on its own and an absolute threshold would call that accumulation. Direction is NOT yet a vote — on the days measured it had no proven edge, and every archived day was a down day, so nothing could be settled either way.')+
+           '><b style="color:'+r.col+';font-weight:800">'+(down?'CEIL ROLL ↓ ':'FLOOR ROLL ↑ ')+ifNum(r.from*rr)+' → '+ifNum(r.to*rr)+'</b>'+
+           '<span>'+r.fromPct+'% / +'+r.toPct+'%</span>'+
+           '<span style="margin-left:auto;color:#8b98a9">shadow · not voting</span></div>';
+    });
+    if(!drawn) out+='<div style="text-align:center;font-size:7.5px;color:#8b98a9;margin-top:1px">node history still filling — it rebuilds from empty after a reload</div>';
+    out+='</div>';
+    return out;
+  }catch(e){ return ''; }
+}
+
 function secLoc(sym){
   var L=null; try{ L=ifLadder(sym); }catch(e){ L={err:String(e&&e.message||e)}; }
   var h='<div class="g3b">';
   if(!L || L.err){
-    // NO SILENT FALLBACK. Skylit's own levels exist and are one function call away, and that is exactly
-    // why they are not shown here: a ladder that quietly changes which book it is reading is worse than
-    // no ladder. Say what is missing and show nothing.
     h+='<div class="g3blk" style="border-color:rgba(242,180,90,.45);background:rgba(242,180,90,.08)"'+
        g3tip('The ladder reads InsiderFinance and only InsiderFinance. Skylit measures flow and IF measures open-interest stock — they are different quantities, so substituting one for the other would change what the numbers mean without changing how they look.')+
        '><b style="color:#f2b45a">LEVELS UNAVAILABLE</b><span>'+g3esc((L&&L.err)||'no source')+
@@ -16747,42 +17128,45 @@ function secLoc(sym){
     G3_AT_LEVEL=null;
     h+='</div>'; return h;
   }
-  var px=L.px;
-  var rows=L.rows.slice().sort(function(a,b){ return b.k-a.k; });
-  var zone=null; try{ var av=atr(sym); zone=(av>0)?Math.max(av*0.6, 0.05):null; }catch(e){}
+  var px=L.px;                                  // already on the chart's scale
+  var rows=L.rows.slice().sort(function(a,b){ return b.disp-a.disp; });
+  // the zone is an ATR band; ATR is measured on the UNDERLYING, so scale it the same way the levels were
+  var zone=null;
+  try{ var av=atr(sym); if(av>0) zone=Math.max(av*0.6,0.05)*(L.undScale>0?(L.dispScale/L.undScale):1); }catch(e){}
   var placed=false, atLevel=null;
   rows.forEach(function(r){
-    if(!placed && r.k<px){
-      h+='<div class="g3prow"><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+fmtLvl(px)+'</span></div>';
+    if(!placed && r.disp<px){
+      h+='<div class="g3prow"><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+ifNum(px)+'</span></div>';
       placed=true;
     }
-    var d=r.k-px;
+    var d=r.disp-px;
     var near=(zone!=null && Math.abs(d)<=zone);
     if(near && !atLevel) atLevel=r;
-    var isMag=/Mag/.test(r.id), isCR=/CR/.test(r.id), isPS=/PS/.test(r.id), isMP=/MP/.test(r.id);
+    var isMag=/Mag/.test(r.id), isCR=/CR/.test(r.id), isPS=/PS/.test(r.id), isMP=/MP/.test(r.id), isHVL=/HVL/.test(r.id);
     var col=isCR?'#f0616d':(isPS?'#2ec27e':(isMag?'#e3c341':(isMP?'#a371f7':'#f2b45a')));
     var far=(zone!=null && Math.abs(d)>zone*14)?' g3far':'';
     var band=isMag?' g3band':'';
     var pulse=near?' g3pulse':'';
     h+='<div class="g3r'+far+band+'">'+
        '<span class="g3nm'+pulse+'" style="color:'+col+'">'+g3esc(r.id)+'</span>'+
-       '<span class="g3v'+pulse+'">'+fmtLvl(r.k)+'</span>'+
-       (zone!=null?'<span class="g3zn"'+g3tip('A level is a zone, not a line. This band is scaled from ATR — price can trade through it and the level still holds.')+'>±'+fmtSpan(zone)+'</span>':'')+
-       '<span class="g3sr"'+g3tip(/HVL/.test(r.id)
-         ? 'Their PUBLISHED Zero Gamma, taken straight off their page rather than recomputed. It belongs to the expiration filter their page defaults to, which is not necessarily this ladder\'s window — so treat it as a structural reference rather than a window-matched level.'
-         : 'Source: InsiderFinance, computed from the option chain embedded in their own page. Their open interest refreshes once a day, so these levels are structural rather than intraday.')+'>'+(/HVL/.test(r.id)?'IF·pub':'IF')+'</span>'+
-       '<span class="g3d '+dcls(d)+'">'+(d>0?'+':'')+fmtSpan(+d.toFixed(2))+'</span></div>';
+       '<span class="g3v'+pulse+'"'+g3tip('Their strike is '+r.k+' on '+L.srcSym+'; shown here at '+r.disp+' using the live basis '+L.dispScale+'.')+'>'+ifNum(r.disp)+'</span>'+
+       (zone!=null?'<span class="g3zn"'+g3tip('A level is a zone, not a line. This band is scaled from ATR — price can trade through it and the level still holds.')+'>±'+ifNum(zone)+'</span>':'')+
+       '<span class="g3sr"'+g3tip(isHVL
+         ? 'Their PUBLISHED Zero Gamma, taken off their page rather than recomputed. It belongs to the expiration filter their page defaults to, which is not necessarily this ladder\'s window.'
+         : 'InsiderFinance, computed from the '+L.srcSym+' option chain embedded in their own page. Their open interest refreshes once a day, so these are structural levels rather than intraday ones.')+'>'+(isHVL?'IF·pub':'IF')+'</span>'+
+       '<span class="g3d '+dcls(d)+'">'+(d>0?'+':'')+ifNum(+d.toFixed(2))+'</span></div>';
   });
-  if(!placed) h+='<div class="g3prow"><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+fmtLvl(px)+'</span></div>';
-  var bits=[];
+  if(!placed) h+='<div class="g3prow"><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+ifNum(px)+'</span></div>';
+  var bits=[L.srcSym];
   bits.push(L.rolled?'to next Fri (rolled)':'to Fri');
   if(L.nExps) bits.push(L.nExps+' exps');
   if(L.n) bits.push(L.n+' strikes');
   if(L.ageMin!=null) bits.push(L.ageMin+'m old');
-  h+='<div class="g3rx" style="margin-top:3px"><em>SET</em><span>'+g3esc(bits.join(' · '))+'</span></div>';
+  h+='<div class="g3rx" style="margin-top:3px"><em>SET</em><span'+g3tip('Which book, which window, how many strikes, and how old. The basis used to put their '+L.srcSym+' levels on this chart is '+L.dispScale+', computed from their own spot against the live futures price.')+'>'+g3esc(bits.join(' · '))+'</span></div>';
   (L.suppressed||[]).forEach(function(t){
     h+='<div class="g3rx"><em></em><span style="color:#f2b45a">'+g3esc(t)+'</span></div>'; });
   h+='</div>';
+  try{ h+=nodeChartHtml(sym); }catch(eNC){}
   G3_AT_LEVEL=atLevel;
   return h;
 }
@@ -16793,7 +17177,7 @@ var G3_AT_LEVEL=null;
 function secReact(sym){
   var h='<div class="g3b">';
   var L=G3_AT_LEVEL;
-  var lvl=L?L.k:null;
+  var lvl=L?(L.und!=null?L.und:L.k):null;   // candles are underlying-scale
   // node growth in dollars
   var ac=null; try{ ac=accumAsym(sym); }catch(e){}
   // (v11.27) A bare '—' read as broken. When every wall is tape-derived we have %King and nothing
@@ -16815,7 +17199,7 @@ function secReact(sym){
   var pa=null; try{ pa=paRead(sym); }catch(e){}
   var ptxt;
   if(rj) ptxt=g3esc(rj.txt)+' — <span class="g3ok">rejected</span>';
-  else if(lvl!=null) ptxt='at '+fmtLvl(lvl)+', no rejection bar yet';
+  else if(L!=null) ptxt='at '+ifNum(L.disp)+', no rejection bar yet';
   else ptxt=(pa&&pa.ok)?('no level in range · '+g3esc(pa.label)+' ('+pa.clv+')'):'no level in range';
   h+='<div class="g3rx"'+g3tip('Did price trade THROUGH the level and close back on the original side? Without order flow this rejection bar is the confirmation we have — a close beyond the zone is the opposite signal.')+'><em>PRICE</em><span>'+ptxt+'</span></div>';
   // structure / pressure line, the internals stand-in
@@ -16903,6 +17287,10 @@ window.__gptsDebug.steps   = function(s){ return stepState(s||activeSym()); };
 window.__gptsDebug.roll    = function(s){ s=s||activeSym(); try{ expSetRollCheck(s); }catch(e){} return { roll:EXPSET_ROLL[s]||null, note:rollNote(s) }; };
 window.__gptsDebug.face    = function(s){ return panelV3(s||activeSym()).length; };
 window.__gptsDebug.ifLadder= function(s){ return ifLadder(s||activeSym()); };
+window.__gptsDebug.rolls    = function(s){ return rollDetect(s||activeSym()); };
+window.__gptsDebug.nodeChart= function(s){ var sy=s||activeSym(); var H=HIST[sy]||{}; var n=0,pts=0;
+  for(var k in H){ var q=(H[k].seq||[]).length; if(q){ n++; pts+=q; } }
+  return { strikes:n, points:pts, svgChars:nodeChartHtml(sy).length, histMax:HIST_MAX, windowMin:NCHART_MIN }; };
 var STEP_NAMES=['① FRAME','② BIAS','③ TRADE LOCATION','④ REACTION','⑤ EXECUTE'];
 var STEP_SHORT=['① FRAME','② BIAS','③ LOCATION','④ REACTION','⑤ EXECUTE'];
 var STEP_TIPS=[

@@ -1,3 +1,100 @@
+## v11.34 — rolls on the chart, and the panel pops out
+
+**Roll detection.** A roll is mass moving between strikes: one node dissipating while another on the
+same side accumulates. Measured in DOLLARS from the feed's own `levels` time series — ~390 snapshots at
+one-minute cadence, already arriving with every fetch, so nothing needs recording and nothing is lost on
+reload. %King could not be used: if the King strike changes every node rebases at once and a whole
+cluster reads as dissipating together, which is the most convincing possible false positive.
+
+Thresholds were measured on 2026-08-21 (390 snapshots x 209 strikes), not guessed. 30-minute window,
+50% **relative to the session median**, $40M floor, within 5 strikes — nine events across the session.
+35% gave 37 (noise), 70% gave 2 (silence). The median near-money strike grows 10-15% every 30 minutes as
+the book builds, so an absolute threshold reports accumulation all morning and dissipation into every
+close, worst of all on an expiry day where strikes lost 75-94% to decay alone. The window is walked by
+TIMESTAMP, not by index, so a cadence change cannot quietly turn 30 minutes into five.
+
+A node dissipating with nothing growing is a wall evaporating, not a roll — it draws no arrow, because an
+arrow to nowhere is a claim we cannot support.
+
+The label is two lines, placed beside their own rows rather than one string across the middle that the
+curve ran through. **Destination bold, origin faded** — a ceiling rolling down emphasises the lower line,
+a floor rolling up the upper one. Arrow colour is the implication, red down and green up, deliberately
+unlike the purple/yellow of the bands, which mean put and call.
+
+Marked **`shadow · not voting`** on the face. On the four archived sessions this pattern had no
+measurable edge, and every one of those days was a down day with a 66% base rate, so nothing could be
+settled either way. It draws and records; it does not push the BIAS call until it earns it.
+
+**Pop out.** A ⇗ button in the header opens the panel in a Document Picture-in-Picture window — a real
+always-on-top window that can be dragged to any monitor. It is a page API, so `@grant none` survives,
+which matters because the feed hooks patch window.fetch in page context. Styles are copied into the PiP
+document, cross-origin sheets are skipped rather than thrown on, and closing it puts the panel back
+exactly where it came from.
+
+The trap this had to avoid: the Atlas tab stays the only thing capturing the feed, and our own code
+returned early whenever `document.visibilityState !== 'visible'`. Backgrounding Atlas — the entire point
+of popping out — would have silently stopped both books refreshing while the panel went on displaying
+its last values. Every visibility gate now runs through `panelVisible()`, which counts an open pop-out as
+visible. Each call site falls back to the raw visibility check when the helper is absent rather than
+skipping the gate, which would reverse the behaviour instead of preserving it.
+
+## v11.33 — a band is a level you can read
+
+Prices in the chart's right gutter, converted to the chart instrument. Price, the IF ladder levels and
+the node rows are placed in ONE pass in that priority order, because three independent passes overprint
+each other into an unreadable stack. A label that would collide with one already placed is dropped, but
+its MARKERS STAY — nothing is hidden, only a duplicate number.
+
+A node under 15% of King keeps its markers and loses its label: the gutter is for levels, not noise. And
+a row whose samples all fall outside the window now gets no label either — a price in the gutter with no
+markers beside it reads as a level that is not there.
+
+## v11.32 — the node chart
+
+Atlas draws dealer-exposure nodes as horizontal rows of markers at their strikes, and reading a
+pullback off that picture is a different act from reading a list of numbers. The panel now draws the
+same thing under the ladder in step ③.
+
+**Colour is polarity, not position.** Purple points down and is put-dominant; yellow points up and is
+call-dominant. %King as captured from Skylit's King cell is SIGNED, so the polarity comes from the
+data rather than from where price happens to be sitting — a node keeps its colour when price crosses
+it. Purple has meant negative gamma everywhere else in the panel and a put-dominant node is exactly
+where dealers are short gamma, so the two readings agree instead of competing.
+
+Brightness is %King, with a 3% noise floor so a faint node is not dressed as a level. Row length is
+lifecycle: a row spanning the chart has held all session, a short one just appeared.
+
+**Two books, two visual languages.** The bands are SKYLIT flow. The dashed labelled lines are the
+INSIDER FINANCE levels from the ladder above. They are drawn differently and the legend names both,
+because a chart where you have to remember which book a line came from is the same failure this
+project spent the day fixing.
+
+`HIST_MAX` 12 → 130, so the bands can span a session rather than 36 minutes. HIST is in-memory, so
+after a reload the chart refills from empty and says so on the face instead of implying there are no
+nodes.
+
+Nodes and candles are both on the underlying scale, so the chart computes there and only the labels
+are converted to the chart instrument.
+
+## v11.31 — the ladder reads SPX, converted by the live basis
+
+We were fetching SPY while the page being checked against was SPX. Two different chains on two
+different underlyings, so "are we consistent with InsiderFinance" could not be answered by looking
+at the screen. Worse, SPY levels reached ES through a ~10.05 multiplier, so half a point of
+disagreement arrived on the chart as five ES points.
+
+ES is a future ON SPX, so SPX is the book that governs it. The companion now fetches SPX and the
+conversion is a basis near 1.003, taken live from THEIR spot against the futures print rather than
+from a constant we maintain. A rounding difference stays a rounding difference.
+
+This converts a PRICE SCALE, never a strike grid. An SPX wall is not restated as a SPY strike:
+SPX strikes sit on a 5-point grid and SPY on a 1-point grid, and dividing 7700 by ten invents a SPY
+level that has no open interest behind it. Each row keeps its original strike, plus a chart-scale
+value for display and an underlying-scale value for the candle reads, which run on the underlying.
+
+Not done here, and deliberately: QQQ still fetches QQQ. By the same argument NQ wants NDX, but that
+is its own change.
+
 ## v11.30 — HVL is their published Zero Gamma
 
 Their page prints Zero Gamma in its header — 766.48 on SPY, 7679.88 on SPX. v11.29 computed a

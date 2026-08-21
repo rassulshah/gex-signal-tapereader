@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.2
+// @version      1.3
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
@@ -41,7 +41,13 @@
 
 var LS_KEY   = 'gpts_if_chain_v1';
 var POLL_MS  = 5*60*1000;        // their walls move slowly; 5 minutes is plenty and stays polite
-var SYMS     = ['SPY','QQQ'];
+// (v1.3) SPX, NOT SPY, FOR THE ES LADDER. A gamma level is a STRIKE where open interest concentrates,
+// not a price you can rescale: SPX strikes sit on a 5-point grid and SPY on a 1-point grid, and the two
+// are separate chains with separate positioning. Dividing an SPX wall by ~10 invents a SPY level that
+// does not exist in SPY's book. ES is a future ON SPX, so SPX is the book that actually governs it —
+// and converting SPX to ES is a ~1.003 basis rather than a ~10.05 multiplier, so a rounding difference
+// stays a rounding difference instead of becoming five ES points.
+var SYMS     = ['SPX','QQQ'];
 var SIDE_MIN = 0.05;             // a side under 5% of the book names no wall (they print N/A at ~2%)
 var FAILCAP  = 4;
 var fails    = {};

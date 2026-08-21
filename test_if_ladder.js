@@ -14,29 +14,36 @@ const eq=(a,b,m)=>ok(JSON.stringify(a)===JSON.stringify(b),m,{got:a,want:b});
 function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.exec(src);let i=src.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}return src.slice(m.index,e+1);}
 
 global.window={};
-global.STATE={ SPY:{price:765.28} };
+global.STATE={ SPY:{price:766.28}, QQQ:{price:500} };
 global.IF_STALE_MIN=25;
-let CHAIN=null; global.ifChain=()=>CHAIN;
+global.FUTMODE={ ok:true, fam:'ES', chart:'ES', underlying:'SPY', r:10.05, futPx:7697, approx:false };
+global.dispIsFut=()=>!!(FUTMODE&&FUTMODE.fam&&FUTMODE.ok);
+let CHAIN=null, ASKED=null;
+global.ifChain=(s)=>{ ASKED=s; return CHAIN; };
 eval(ex('ifLadder'));
 
-const lv=(o)=>Object.assign({cr:770,ps:765,mag:765,maxPain:765,crSuppressed:null,psSuppressed:null,strikes:209},o||{});
-const chain=(o)=>Object.assign({ spot:765.215, ageMin:3, rolled:true, err:null,
-  pub:{zeroGamma:766.48, callWall:800, putWall:760},
-  toFri:{exps:[1,2,3,4,5,6], lv:lv()}, dte0:{exps:[1], lv:lv({cr:768,ps:760,maxPain:762})} }, o||{});
-const at=(L,id)=>{ const r=L.rows.find(r=>r.id.split('·').includes(id)); return r?r.k:null; };
+// SPX-scale levels now, because that is the book ES is a future on
+const lv=(o)=>Object.assign({cr:7700,ps:7650,mag:7650,maxPain:7620,crSuppressed:null,psSuppressed:null,strikes:209},o||{});
+const chain=(o)=>Object.assign({ spot:7676.56, ageMin:3, rolled:true, err:null,
+  pub:{zeroGamma:7679.88, callWall:7700, putWall:7665},
+  toFri:{exps:[1,2,3,4,5,6], lv:lv()}, dte0:{exps:[1], lv:lv({cr:7680,ps:7600,maxPain:7610})} }, o||{});
+const row=(L,id)=>L.rows.find(r=>r.id.split('·').includes(id));
+const at=(L,id)=>{ const r=row(L,id); return r?r.k:null; };
 
 // ---- the levels on the face are THEIRS ----
 {
   CHAIN=chain(); const L=ifLadder('SPY');
   ok(!L.err,'their chain produces a ladder',L.err);
   eq(L.src,'IF','tagged as their book');
-  eq(at(L,'CR'),770,'CR is THEIR call wall — 770, not the 766 Skylit computed');
-  eq(at(L,'PS'),765,'PS is their put wall');
-  eq(at(L,'Mag'),765,'Mag is their magnet');
-  eq(at(L,'MP'),765,'max pain comes across — it needs open interest, which only they have');
-  eq(at(L,'CR0'),768,'CR0 is their 0DTE call wall');
-  eq(at(L,'PS0'),760,'PS0 is their 0DTE put wall');
+  eq(at(L,'CR'),7700,'CR is THEIR call wall, on THEIR strike grid');
+  eq(at(L,'PS'),7650,'PS is their put wall');
+  eq(at(L,'Mag'),7650,'Mag is their magnet');
+  eq(at(L,'MP'),7620,'max pain comes across — it needs open interest, which only they have');
+  eq(at(L,'CR0'),7680,'CR0 is their 0DTE call wall');
+  eq(at(L,'PS0'),7600,'PS0 is their 0DTE put wall');
   eq(L.n,209,'the strike count is theirs');
+  eq(L.srcSym,'SPX','and SPX is the book we asked for, because ES is a future on SPX');
+  eq(ASKED,'SPX','the companion is asked for SPX even though the panel symbol is SPY');
   ok(L.rolled===true,'the Friday roll rides along so the panel discloses it');
 }
 // ---- HVL is THEIR published Zero Gamma, not a number of ours ----
@@ -44,7 +51,7 @@ const at=(L,id)=>{ const r=L.rows.find(r=>r.id.split('·').includes(id)); return
 // crossing instead and was about to label it IF — the same mislabeling one layer down.
 {
   CHAIN=chain(); const L=ifLadder('SPY');
-  eq(at(L,'HVL'),766.48,'HVL is their PUBLISHED zero gamma, taken as-is');
+  eq(at(L,'HVL'),7679.88,'HVL is their PUBLISHED zero gamma, taken as-is');
   const ids=L.rows.map(r=>r.id).join('·').split('·');
   ok(ids.every(i=>['CR','CR0','PS','PS0','Mag','MP','HVL'].includes(i)),'every row is a level they actually give us',ids);
 }
@@ -57,12 +64,41 @@ const at=(L,id)=>{ const r=L.rows.find(r=>r.id.split('·').includes(id)); return
   ok(!L.rows.some(r=>/HVL/.test(r.id)),'a null zero gamma is absent, not zero');
 }
 {
-  CHAIN=chain({ dte0:{exps:[1], lv:lv({cr:770,ps:765})} });
+  CHAIN=chain({ dte0:{exps:[1], lv:lv({cr:7700,ps:7650})} });
   const L=ifLadder('SPY');
-  const row=L.rows.find(r=>r.k===770);
-  ok(row.id.includes('CR')&&row.id.includes('CR0'),'labels landing on one strike MERGE onto one row',row.id);
-  ok(row.id.indexOf('CR')<row.id.indexOf('CR0'),'wall first, then the 0DTE qualifier');
+  const r=L.rows.find(x=>x.k===7700);
+  ok(r.id.includes('CR')&&r.id.includes('CR0'),'labels landing on one strike MERGE onto one row',r.id);
+  ok(r.id.indexOf('CR')<r.id.indexOf('CR0'),'wall first, then the 0DTE qualifier');
 }
+// ---- THE LIVE BASIS: SPX -> ES, not a maintained constant ----
+// SPY reached ES through a ~10.05 multiplier, so half a point of disagreement with their page landed
+// on the chart as five ES points. ES is a future on SPX; the conversion is a basis near 1.003, taken
+// live from THEIR spot against the futures print.
+{
+  CHAIN=chain(); const L=ifLadder('SPY');
+  const basis=7697/7676.56;
+  ok(Math.abs(L.dispScale-basis)<1e-5,'the basis is the live futures print over THEIR spot',L.dispScale);
+  ok(L.dispScale>1.0 && L.dispScale<1.01,'which is near 1, not near 10 — no error amplification',L.dispScale);
+  eq(L.px,7697,'the price row shows the chart instrument, not the underlying');
+  const cr=row(L,'CR');
+  ok(Math.abs(cr.disp-(7700*basis))<0.01,'their strike is converted to the chart by that basis',cr.disp);
+  ok(Math.abs(cr.und-(7700*(766.28/7676.56)))<0.001,'and separately to the UNDERLYING scale, which is what the candle reads use',cr.und);
+  ok(cr.k===7700,'the original strike is preserved — we never restate it as a SPY strike, because SPY OI sits on its own 1-point grid');
+}
+{
+  // a cash chart: no futures print, so the scale falls back to our underlying over theirs
+  const keep=global.FUTMODE;
+  global.FUTMODE={ ok:true, fam:null, chart:'SPY', underlying:'SPY', r:1, futPx:null };
+  CHAIN=chain(); const L=ifLadder('SPY');
+  ok(Math.abs(L.dispScale-(766.28/7676.56))<1e-6,'on a cash chart the scale is SPY over SPX',L.dispScale);
+  eq(L.px,766.28,'and the price row is the cash price');
+  global.FUTMODE=keep;
+}
+{
+  CHAIN=chain({spot:null}); const L=ifLadder('SPY');
+  ok(!!L.err && /spot/.test(L.err),'without THEIR spot there is no basis, so there is no ladder',L.err);
+}
+
 // ---- no fallback ----
 {
   CHAIN=null; const L=ifLadder('SPY');
