@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.17
+// @version    11.18
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -540,7 +540,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.17';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.18';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -12880,20 +12880,32 @@ function cpFromPayload(j, px){
       if(an<v-tol) lt++;
       rows.push({ k:n.k, v:v, net:nt, call:(v-nt)/2, put:(v+nt)/2 });
     }
-    if(gt>0 || !rows.length || !lt) return null;
+    // (v11.17.1) Requiring at least one MIXED strike was too strict and it is why the 0DTE set came back
+    // null: on an expiry-day book most strikes are purely call or purely put, so |net| == v on nearly all
+    // of them. The total-and-net convention is already established from the wider books (49 of 60 mixed),
+    // so a set that happens to be all-pure decomposes fine — call is v or 0. Only |net| > v still refuses,
+    // because that would mean v is not a total. `mixed`/`pure` are reported so an all-pure set is visible.
+    if(gt>0 || !rows.length) return null;
     rows.sort(function(a,b){ return a.k-b.k; });
     var cw=null,cwm=-1, pw=null,pwm=-1, mag=null,magm=-1, sc=0, sp=0;
     rows.forEach(function(r){ sc+=r.call; sp+=r.put;
       if(r.v>magm){ magm=r.v; mag=r.k; }
       if(r.k>px && r.call>cwm){ cwm=r.call; cw=r.k; }
       if(r.k<px && r.put>pwm){ pwm=r.put; pw=r.k; } });
-    var cum=0, zg=null;
+    // (v11.17.1) THE CROSSING NEAREST SPOT, not the first one from the bottom. Over a real chain — 241
+    // strikes from 345 to 1180 — the cumulative crosses zero several times, and the first crossing walking
+    // up from the deep OTM puts came out at 479.7 against a spot of 762.57. That is not a gamma flip, it is
+    // a tail artefact. The flip that means anything is the one price is actually near.
+    var cum=0, crossings=[];
     for(var q=0;q<rows.length;q++){ var pc=cum; cum+=rows[q].net;
       if(q>0 && ((pc<=0&&cum>0)||(pc>=0&&cum<0))){
         var a=rows[q-1].k, b=rows[q].k, t=(0-pc)/((cum-pc)||1);
-        zg=+(a+(b-a)*Math.max(0,Math.min(1,t))).toFixed(2); break; } }
+        crossings.push(+(a+(b-a)*Math.max(0,Math.min(1,t))).toFixed(2)); } }
+    var zg=null;
+    for(var z=0;z<crossings.length;z++){ if(zg==null || Math.abs(crossings[z]-px)<Math.abs(zg-px)) zg=crossings[z]; }
     return { cr:cw, crGex:(cwm<0?null:cwm), ps:pw, psGex:(pwm<0?null:pwm), mag:mag, hvl:zg,
              totalCall:sc, totalPut:sp, ratio:(sp>0?+(sc/sp).toFixed(2):null),
+             nCross:crossings.length, crossings:crossings.slice(0,6), mixed:lt, pure:rows.length-lt,
              n:rows.length, kMin:rows[0].k, kMax:rows[rows.length-1].k, exps:(j.expirations||null) };
   }catch(e){ return null; }
 }
@@ -13141,9 +13153,19 @@ function lvlUnified(sym){
     if(!P) return null;
     // Mag: the heaviest strike overall. The passive path does not compute it, so fall back to the King.
     var mag=P.mag; if(mag==null){ try{ var kg=(STATE[sym]||{}).king; if(typeof kg==='number') mag=kg; }catch(e1){} }
+    // (v11.17.1) When two levels land on the SAME strike the row MERGES its labels — it does not silently
+    // drop one. The live card showed "CR / Mag / HVL" with no PS at all, because the put wall and the
+    // magnet were both 760 and PS was added last. "PS·Mag 760" is the true reading and it is more
+    // informative than either label alone: the heaviest strike in the book is also the floor.
     function add(id, k, gex, tag){
       if(k==null) return;
-      for(var i=0;i<out.rows.length;i++){ if(Math.abs(out.rows[i].k-k)<0.005) return; }  // never twice
+      for(var i=0;i<out.rows.length;i++){
+        if(Math.abs(out.rows[i].k-k)<0.005){
+          if(out.rows[i].id.indexOf(id)<0) out.rows[i].id += '·'+id;
+          if(out.rows[i].gex==null && gex!=null) out.rows[i].gex=gex;
+          return;
+        }
+      }
       out.rows.push({ id:id, k:k, gex:(gex==null?null:gex), tag:tag||null,
                       dist:+(k-px).toFixed(2), distPct:+(((k-px)/px)*100).toFixed(2) });
     }
@@ -13192,13 +13214,13 @@ function levelsHtmlV2(sym){
     if(LVL_UI.open){
       h+='<div style="margin-top:2px">';
       U.rows.forEach(function(r){
-        var base=r.id.replace('0','');
-        var c=LVL_COL[base.toLowerCase()]||LVL_COL[r.id.toLowerCase()]||PAL.sub;
+        var base=r.id.split('·')[0].replace('0','');
+        var c=(r.id.indexOf('·')>0)?PAL.gold:(LVL_COL[base.toLowerCase()]||LVL_COL[r.id.toLowerCase()]||PAL.sub);
         var z=!!r.tag;
         var dc=(r.dist>0)?PAL.longAccent:((r.dist<0)?PAL.shortAccent:PAL.sub);
         h+='<div title="'+((LVL_WHAT[base.toLowerCase()]||'')+(r.gex?(' Gamma here: '+Math.round(r.gex/1e6)+'M.'):'')).replace(/"/g,'')+'" '+
            'style="display:flex;align-items:center;gap:6px;font-size:10.5px;line-height:1.5;white-space:nowrap">'+
-           '<span style="display:inline-block;width:30px;color:'+c+';font-weight:800;opacity:'+(z?0.75:1)+'">'+r.id+'</span>'+
+           '<span style="display:inline-block;min-width:30px;color:'+c+';font-weight:800;opacity:'+(z?0.75:1)+'">'+r.id+'</span>'+
            '<span style="color:'+PAL.ink+';font-weight:700;font-size:11.5px;font-variant-numeric:tabular-nums">'+lvlFmt(r.k)+'</span>'+
            (r.gex?('<span style="color:'+PAL.sub+';font-size:9px">'+Math.round(r.gex/1e6)+'M</span>'):'')+
            '<span style="margin-left:auto;color:'+dc+';font-weight:700;font-size:9.5px;font-variant-numeric:tabular-nums">'+((r.dist>0?'+':'')+lvlSpanFmt(r.dist))+'</span>'+
@@ -13254,8 +13276,8 @@ function levelsChartV2(sym, U){
     var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">';
     svg+='<rect width="'+W+'" height="'+H+'" fill="'+PAL.card+'"/>';
     U.rows.forEach(function(r){
-      var base=r.id.replace('0','').toLowerCase();
-      var c=LVL_COL[base]||PAL.sub, z=!!r.tag, yy=y(r.k);
+      var base=r.id.split('·')[0].replace('0','').toLowerCase();
+      var c=(r.id.indexOf('·')>0)?PAL.gold:(LVL_COL[base]||PAL.sub), z=!!r.tag, yy=y(r.k);
       svg+='<line x1="0" y1="'+yy.toFixed(1)+'" x2="'+(W-R)+'" y2="'+yy.toFixed(1)+'" stroke="'+c+'" stroke-width="'+(z?0.8:1.3)+'"'+(z?' stroke-dasharray="4,3"':'')+' opacity="'+(z?0.6:0.95)+'"/>';
       var slot=0; for(var q=0;q<placed.length;q++){ if(Math.abs(placed[q].y-yy)<9) slot=Math.max(slot, placed[q].slot+1); }
       var lx=(W*0.5)+(slot%3)*48-48; placed.push({y:yy, slot:slot});

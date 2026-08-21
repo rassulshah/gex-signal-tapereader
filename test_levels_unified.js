@@ -45,8 +45,14 @@ global.STATE={SPY:{price:762.57, king:760}};
   ok(cpFromPayload({levels:[]},762)===null,'no rows, no levels');
   // |net| > v anywhere means the fields are not total-and-net; refuse rather than invent a split
   ok(cpFromPayload({levels:[{l:[{k:760,v:10,net:-900,d:1}]}]},762)===null,'|net| > v refuses');
-  // net == v on every strike carries no information
-  ok(cpFromPayload({levels:[{l:[{k:760,v:10,net:10,d:1},{k:765,v:20,net:20,d:1}]}]},762)===null,'net==v everywhere refuses');
+  // (v11.17.1) An ALL-PURE set is valid, not a refusal. On expiry day most strikes are entirely call or
+  // entirely put, so |net| == v on nearly all of them — and requiring a mixed strike is exactly why the
+  // 0DTE set came back null on the live panel. The convention is already established from the wider books.
+  const pure=cpFromPayload({levels:[{l:[{k:760,v:10,net:10,d:1},{k:765,v:20,net:-20,d:1}]}]},762);
+  ok(pure!==null,'an all-pure book decomposes rather than refusing',pure);
+  ok(pure.mixed===0 && pure.pure===2,'and reports that NO strike was mixed, so the caller can see it',[pure&&pure.mixed,pure&&pure.pure]);
+  ok(pure.ps===760,'760 has net=+v so it is all put -> the put wall',pure.ps);
+  ok(pure.cr===765,'765 has net=-v so it is all call -> the call wall',pure.cr);
 }
 // ---------- lvlUnified: source precedence ----------
 {
@@ -65,7 +71,9 @@ global.STATE={SPY:{price:762.57, king:760}};
   const U=lvlUnified('SPY');
   ok(U.src==='feed','falls back to the passive feed when no set has been fetched',U.src);
   ok(U.hvlMissing===true,'and reports the missing flip rather than dropping the row silently');
-  ok(U.rows.some(r=>r.id==='Mag' && r.k===760),'Mag falls back to the King when the feed cannot supply it',U.rows);
+  // the King (760) is also the put wall here, so the row MERGES rather than one label vanishing
+  ok(U.rows.some(r=>r.k===760 && r.id.indexOf('Mag')>=0 && r.id.indexOf('PS')>=0),
+     'Mag falls back to the King, and merges with PS when they share a strike',U.rows.map(r=>r.id+':'+r.k));
 }
 {
   FULL=null; DTE0=null; PASSIVE=null;
@@ -125,6 +133,38 @@ global.STATE={SPY:{price:762.57, king:760}};
   ok(h.indexOf('font-style:italic')>0,'and is styled apart from ours');
   global.IFMAN=null;
   ok(levelsHtmlV2('SPY').indexOf('INSIDERFINANCE')<0,'and vanishes when cleared');
+}
+// ---------- (v11.17.1) the two bugs the live card exposed ----------
+{
+  // ZERO GAMMA must be the crossing NEAREST SPOT. Over the real 241-strike / 345-1180 chain the cumulative
+  // crosses several times, and the first crossing walking up from the deep OTM puts came out at 479.7
+  // against a spot of 762.57 — a tail artefact presented as the gamma flip.
+  const R=[];
+  R.push({k:400, v:100, net:100});    // deep puts: cum +100
+  R.push({k:450, v:300, net:-300});   // cum -200   <- crossing near 4xx
+  R.push({k:700, v:100, net:100});    // cum -100
+  R.push({k:760, v:400, net:400});    // cum +300   <- crossing near spot
+  R.push({k:800, v:50,  net:-50});    // cum +250
+  const j={ levels:[{l:R.map(r=>({k:r.k, v:r.v, net:r.net, d:1}))}] };
+  const L=cpFromPayload(j, 762.57);
+  ok(L.nCross>=2,'the chain genuinely crosses zero more than once',L.nCross);
+  ok(L.hvl>700,'the HVL chosen is the crossing NEAREST SPOT, not the first from the bottom',L.hvl);
+  ok(Math.abs(L.hvl-762.57) < Math.abs(L.crossings[0]-762.57),'and it beats the first crossing on distance to spot',[L.hvl,L.crossings]);
+}
+{
+  // LABEL MERGE: two levels on one strike print as one row carrying both names, never one silently dropped.
+  // The live card showed CR / Mag / HVL with NO put support at all, because PS and Mag were both 760.
+  FULL={ cr:765, crGex:1.7e8, ps:760, psGex:2.8e8, hvl:766, mag:760, n:241, nExps:34 };
+  DTE0=null; PASSIVE=null;
+  const U=lvlUnified('SPY');
+  const merged=U.rows.filter(r=>r.k===760)[0];
+  ok(!!merged,'the shared strike still has a row',U.rows.map(r=>r.id+':'+r.k));
+  ok(merged.id.indexOf('Mag')>=0 && merged.id.indexOf('PS')>=0,'and it carries BOTH labels',merged.id);
+  ok(U.rows.filter(r=>r.k===760).length===1,'exactly one row for that strike',U.rows.length);
+  ok(U.rows.some(r=>r.id==='CR'),'the other levels are untouched');
+  ok(merged.gex===2.8e8,'the merged row keeps the gamma it was given',merged.gex);
+  const h=levelsHtmlV2('SPY');
+  ok(h.indexOf('Mag·PS')>0 || h.indexOf('PS·Mag')>0,'and the merged label reaches the card',h.indexOf('·'));
 }
 console.log('\n'+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

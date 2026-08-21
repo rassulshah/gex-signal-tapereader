@@ -1,3 +1,30 @@
+## v11.18 — 2026-08-21 — Three bugs the live v11.17 card exposed
+
+Checked v11.17 against the running panel. **The self-fetch works** — the full-chain set came back with
+**34 expirations and 241 strikes spanning 345–1180**, against the passive feed's 4 expirations and 60
+strikes, with the captured auth accepted and zero failures. And the put wall reads **760**, their number.
+But the card showed `CR:765 · Mag:760 · HVL:479.7`, which exposed three faults.
+
+**1. Zero gamma was a tail artefact.** Over a real chain the cumulative crosses zero several times, and the
+scan took the FIRST crossing walking up from the deep OTM puts — **479.7 against a spot of 762.57**. The
+flip that means anything is the one price is near, so all crossings are now collected and the nearest to
+spot wins. `nCross` and `crossings` ride with the read so a multi-crossing book is visible.
+
+**2. The put support row had vanished.** PS and Mag were both 760, and the de-duplication dropped whichever
+was added second — so a card meant to show four levels showed three, missing the floor entirely. Coincident
+levels now **merge their labels** (`Mag·PS 760`) instead of one disappearing. That reading is also better
+than either label alone: the heaviest strike in the book is also the floor.
+
+**3. The 0DTE set never populated.** `cpFromPayload` refused any set without at least one MIXED strike. On
+an expiry-day book most strikes are entirely call or entirely put, so `|net| == v` on nearly all of them and
+the guard rejected the whole thing — silently, since a refusal is not a failure. The total-and-net
+convention is already established from the wider books (49 of 60 mixed there), so an all-pure set
+decomposes fine. Only `|net| > v` still refuses, because that would mean `v` is not a total. `mixed` and
+`pure` counts are now reported so an all-pure set is visible rather than assumed.
+
+`test_levels_unified.js` grows to 51, with the 479.7 case and the merged-label case pinned as fixtures. No
+new suite failures.
+
 ## v11.17 — 2026-08-20 — One block, one scale, correct signs, real expiry sets
 
 Three things the user asked for, plus a sign error of mine that made the call/put work wrong in a way that
