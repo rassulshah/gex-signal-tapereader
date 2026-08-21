@@ -22,7 +22,7 @@ global.fmtLvl=x=>x==null?'–':String(x); global.fmtSpan=x=>x==null?'–':String
 global.dispIsFut=()=>false; global.dispR=()=>1; global.mul=(a,b)=>a/(1/b); global.futMark=()=>'';
 global.closedCandles=()=>[]; global.spxRatio=()=>({r:null});
 let FULL=null, DTE0=null, PASSIVE=null;
-global.SIDE_MIN_SHARE=0.05;
+global.SIDE_MIN_SHARE=0.05; global.HVL_MAX_DIST=0.03;
 // (v11.19) expSetLevels is now (sym, setName) — the v11.17/11.18 signature was (setName) with SPY
 // hardcoded inside, which is exactly the defect this release fixes.
 global.expSetLevels=(sym,n)=> n==='full'?FULL:DTE0;
@@ -143,16 +143,13 @@ global.STATE={SPY:{price:762.57, king:760}};
   // ZERO GAMMA must be the crossing NEAREST SPOT. Over the real 241-strike / 345-1180 chain the cumulative
   // crosses several times, and the first crossing walking up from the deep OTM puts came out at 479.7
   // against a spot of 762.57 — a tail artefact presented as the gamma flip.
-  const R=[];
-  R.push({k:400, v:100, net:100});    // deep puts: cum +100
-  R.push({k:450, v:300, net:-300});   // cum -200   <- crossing near 4xx
-  R.push({k:700, v:100, net:100});    // cum -100
-  R.push({k:760, v:400, net:400});    // cum +300   <- crossing near spot
-  R.push({k:800, v:50,  net:-50});    // cum +250
+  const R=[ {k:400,v:200,net:100}, {k:450,v:400,net:-300}, {k:700,v:150,net:50},
+            {k:758,v:200,net:100}, {k:765,v:250,net:100}, {k:800,v:60,net:-20} ];
+  // cumulative: +100, -200, -150, -50, +50, +30  -> crossings near 4xx and between 758 and 765
   const j={ levels:[{l:R.map(r=>({k:r.k, v:r.v, net:r.net, d:1}))}] };
   const L=cpFromPayload(j, 762.57);
   ok(L.nCross>=2,'the chain genuinely crosses zero more than once',L.nCross);
-  ok(L.hvl>700,'the HVL chosen is the crossing NEAREST SPOT, not the first from the bottom',L.hvl);
+  ok(L.hvl>755 && L.hvl<766,'the HVL chosen is the crossing NEAREST SPOT, not the first from the bottom',L.hvl);
   ok(Math.abs(L.hvl-762.57) < Math.abs(L.crossings[0]-762.57),'and it beats the first crossing on distance to spot',[L.hvl,L.crossings]);
 }
 {
@@ -233,6 +230,40 @@ global.STATE={SPY:{price:762.57, king:760}};
   ok(ys.length>=2,'several level lines are drawn',ys);
   ok(Math.max.apply(null,ys)-Math.min.apply(null,ys) > 20,'and they are spread apart, not collapsed',ys);
   global.closedCandles=()=>[];
+}
+// ---------- (v11.20) AN HVL NOWHERE NEAR PRICE IS NOT A FLIP ----------
+{
+  // The live 0DTE set is essentially all put, so its cumulative only crosses out in the tail — 687.09
+  // against a spot of 762.57, ten percent away. A gamma flip is a statement about where price IS.
+  const R=[ {k:500,v:100,net:100}, {k:700,v:300,net:-300}, {k:900,v:50,net:50} ];
+  const L=cpFromPayload({levels:[{l:R.map(r=>({k:r.k,v:r.v,net:r.net,d:1}))}]}, 762.57);
+  ok(L.hvl===null,'a crossing far from price is NOT reported as the flip',L.hvl);
+  ok(L.hvlFar && L.hvlFar.k>500 && L.hvlFar.k<700,'the strike it would have named is kept for the explanation',L.hvlFar);
+  ok(L.hvlFar.pct>3,'along with how far away it was',L.hvlFar&&L.hvlFar.pct);
+  FULL={ cr:765, crGex:1, ps:760, psGex:1, hvl:null, hvlFar:{k:687.09,pct:9.9}, mag:760, n:169, nExps:1 };
+  DTE0=null; PASSIVE=null;
+  const h=levelsHtmlV2('SPY');
+  ok(h.indexOf('tail, not a flip')>0,'and the card says so rather than just omitting the row',h.indexOf('tail'));
+}
+// ---------- (v11.20) THE 0DTE SET CAN CARRY THE CARD ALONE ----------
+{
+  // Right after a reload the full-chain set is still in flight and the passive feed has not arrived. The
+  // 0DTE set had already landed — and the card rendered BLANK, because dte0 was only ever an extra row.
+  FULL=null; PASSIVE=null;
+  DTE0={ cr:768, crGex:1, ps:760, psGex:1, hvl:763, mag:762, n:169, nExps:1, ratio:0.4 };
+  const U=lvlUnified('SPY');
+  ok(U!==null,'the card is NOT blank when only the 0DTE set has arrived',U);
+  ok(U.src==='0dte','and it names 0DTE as the source',U.src);
+  ok(U.rows.length===4,'all four levels come from it',U.rows.map(r=>r.id));
+  const ks=U.rows.map(r=>r.k);
+  ok(new Set(ks).size===ks.length,'and nothing is added to itself',ks);
+  const h=levelsHtmlV2('SPY');
+  ok(h.indexOf('0DTE only')>0,'the face says the read is today-only, never passing it off as structural',h.indexOf('0DTE only'));
+  // and the full chain still wins the moment it lands
+  FULL={ cr:775, crGex:1, ps:755, psGex:1, hvl:766, mag:760, n:241, nExps:34 };
+  const U2=lvlUnified('SPY');
+  ok(U2.src==='chain','the full chain takes precedence as soon as it exists',U2.src);
+  ok(U2.rows.some(r=>r.id.indexOf('CR0')>=0),'and the 0DTE walls come back as their own rows',U2.rows.map(r=>r.id));
 }
 console.log('\n'+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

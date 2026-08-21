@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.19
+// @version    11.20
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -540,7 +540,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.19';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.20';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -12827,6 +12827,10 @@ function ifManSave(o){ IFMAN=o; try{ localStorage.setItem(IFMAN_LS, JSON.stringi
 // reported N/A on a 0DTE book whose call/put ratio was 0.02, i.e. a ~2% call share, so 5% is comfortably
 // inside the territory they already treat as "no wall here".
 var SIDE_MIN_SHARE=0.05;
+// A gamma flip is a statement about where price is. On a one-sided book the cumulative only crosses out in
+// the tail — the live 0DTE set put it at 687 against a spot of 762.57, ten percent away. That is not a
+// flip, it is the far end of an all-put book. Beyond this distance the level is withheld with a reason.
+var HVL_MAX_DIST=0.03;
 var EXPSET_MIN_MS=90000;             // one request per set per 90s; these levels move slowly
 // (v11.19) KEYED BY SYMBOL. v11.17-11.18 held ONE global set and hardcoded `symbol=SPY` into the request
 // and `STATE.SPY.price` into the read — so selecting QQQ or NQ produced SPY levels priced against QQQ:
@@ -12916,6 +12920,8 @@ function cpFromPayload(j, px){
         crossings.push(+(a+(b-a)*Math.max(0,Math.min(1,t))).toFixed(2)); } }
     var zg=null;
     for(var z=0;z<crossings.length;z++){ if(zg==null || Math.abs(crossings[z]-px)<Math.abs(zg-px)) zg=crossings[z]; }
+    var zgFar=null;
+    if(zg!=null && px>0 && Math.abs(zg-px)/px > HVL_MAX_DIST){ zgFar={ k:zg, pct:+((Math.abs(zg-px)/px)*100).toFixed(1) }; zg=null; }
     // (v11.19) A WALL WITH NOTHING BEHIND IT IS NOT A WALL. On the live 0DTE book the call side came to a
     // 0.00 call/put ratio — there is essentially no call gamma on expiry day — yet we still named a "call
     // wall" at 792, which then sorted ABOVE the full-chain CR at 765. A 0DTE wall further out than the
@@ -12931,7 +12937,7 @@ function cpFromPayload(j, px){
              crSuppressed:crSuppressed, psSuppressed:psSuppressed,
              callShare:+(callShare*100).toFixed(2), putShare:+(putShare*100).toFixed(2),
              totalCall:sc, totalPut:sp, ratio:(sp>0?+(sc/sp).toFixed(2):null),
-             nCross:crossings.length, crossings:crossings.slice(0,6), mixed:lt, pure:rows.length-lt,
+             nCross:crossings.length, crossings:crossings.slice(0,6), mixed:lt, pure:rows.length-lt, hvlFar:zgFar,
              n:rows.length, kMin:rows[0].k, kMax:rows[rows.length-1].k, exps:(j.expirations||null) };
   }catch(e){ return null; }
 }
@@ -12986,24 +12992,19 @@ function cpLevels(sym){
   sym=sym||'SPY';
   try{
     var D=cpRows(sym); if(!D) return null;
-    if(!D.ok) return { err:(D.gt>0
-        ? '|net| exceeds v on '+D.gt+' strikes — v is not a total here, so calls and puts cannot be separated'
-        : 'net equals v on every strike — no call/put information in this payload'), lt:D.lt, eq:D.eq, gt:D.gt };
+    if(!D.ok && D.gt>0) return { err:'|net| exceeds v on '+D.gt+' strikes — v is not a total here, so calls and puts cannot be separated', lt:D.lt, eq:D.eq, gt:D.gt };
     var px=(STATE[sym]||{}).price; if(typeof px!=='number') return { err:'no price yet' };
-    var cw=null,cwm=-1, pw=null,pwm=-1, sc=0, sp=0;
-    D.rows.forEach(function(r){
-      sc+=r.call; sp+=r.put;
-      if(r.k>px && r.call>cwm){ cwm=r.call; cw=r.k; }
-      if(r.k<px && r.put>pwm){ pwm=r.put; pw=r.k; } });
-    var cum=0, zg=null;
-    for(var i=0;i<D.rows.length;i++){ var pc=cum; cum+=D.rows[i].net;
-      if(i>0 && ((pc<=0&&cum>0)||(pc>=0&&cum<0))){
-        var a=D.rows[i-1].k, b=D.rows[i].k, t=(0-pc)/((cum-pc)||1);
-        zg=+(a+(b-a)*Math.max(0,Math.min(1,t))).toFixed(2); break; } }
-    return { px:px, callWall:cw, callWallGex:(cwm<0?null:cwm), putWall:pw, putWallGex:(pwm<0?null:pwm),
-             zg:zg, totalCall:sc, totalPut:sp, ratio:(sp>0?+(sc/sp).toFixed(2):null),
-             n:D.rows.length, kMin:D.rows[0].k, kMax:D.rows[D.rows.length-1].k, step:D.step,
-             exps:D.exps, lt:D.lt, eq:D.eq, subset:true };
+    // (v11.20) DELEGATE. This function used to carry its OWN copy of the wall/crossing logic, so when
+    // v11.18 fixed zero gamma to take the crossing NEAREST SPOT, this path kept the old first-crossing
+    // behaviour and went on returning 479.7 against a spot of 762.57. Two implementations of one rule is
+    // how a fix half-lands. There is now one: cpFromPayload.
+    var f=LASTFEED[sym];
+    var L=cpFromPayload(f&&f.j, px); if(!L) return null;
+    return { px:px, callWall:L.cr, callWallGex:L.crGex, putWall:L.ps, putWallGex:L.psGex,
+             zg:L.hvl, mag:L.mag, totalCall:L.totalCall, totalPut:L.totalPut, ratio:L.ratio,
+             crSuppressed:L.crSuppressed, psSuppressed:L.psSuppressed,
+             callShare:L.callShare, putShare:L.putShare, nCross:L.nCross,
+             n:L.n, kMin:L.kMin, kMax:L.kMax, step:D.step, exps:D.exps, lt:D.lt, eq:D.eq, subset:true };
   }catch(e){ return null; }
 }
 window.__gptsDebug=window.__gptsDebug||{};
@@ -13176,11 +13177,19 @@ function lvlUnified(sym){
     var passive=null; try{ passive=cpLevels(sym); }catch(e0){}
     if(passive && passive.err) passive=null;
     var out={ px:px, rows:[], src:null, note:null, ratio:null, nExps:null, n:null, ageMin:null };
-    var P = full || null;
-    if(P){ out.src='chain'; out.nExps=P.nExps; out.n=P.n; out.ratio=P.ratio; out.ageMin=P.ageMin; }
+    // (v11.20) THE 0DTE SET CAN CARRY THE CARD ON ITS OWN. Right after a reload the full-chain set is
+    // still in flight and the passive feed has not arrived, but the 0DTE set often has — and the card
+    // rendered BLANK because dte0 was only ever treated as an extra row, never as a source. Precedence is
+    // full chain, then 0DTE, then the passive feed; whichever answers is named on the face so a today-only
+    // read is never mistaken for a structural one.
+    var P=null, dte0IsPrimary=false;
+    if(full){ P=full; out.src='chain'; out.nExps=full.nExps; out.n=full.n; out.ratio=full.ratio; out.ageMin=full.ageMin; }
+    else if(dte0){ P=dte0; dte0IsPrimary=true; out.src='0dte'; out.nExps=dte0.nExps; out.n=dte0.n; out.ratio=dte0.ratio; out.ageMin=dte0.ageMin; }
     else if(passive){ out.src='feed'; out.n=passive.n; out.ratio=passive.ratio;
       P={ cr:passive.callWall, crGex:passive.callWallGex, ps:passive.putWall, psGex:passive.putWallGex,
-          hvl:passive.zg, mag:null, kMin:passive.kMin, kMax:passive.kMax }; }
+          hvl:passive.zg, mag:passive.mag, kMin:passive.kMin, kMax:passive.kMax,
+          crSuppressed:passive.crSuppressed, psSuppressed:passive.psSuppressed,
+          callShare:passive.callShare, putShare:passive.putShare, hvlFar:passive.hvlFar }; }
     if(!P) return null;
     // Mag: the heaviest strike overall. The passive path does not compute it, so fall back to the King.
     var mag=P.mag; if(mag==null){ try{ var kg=(STATE[sym]||{}).king; if(typeof kg==='number') mag=kg; }catch(e1){} }
@@ -13206,14 +13215,16 @@ function lvlUnified(sym){
     add('HVL', P.hvl, null);
     add('Mag', mag,   null);
     add('PS',  P.ps,  P.psGex);
-    // 0DTE rows: only when they say something the structural rows did not
-    if(dte0){
+    // 0DTE rows: only when they say something the structural rows did not — and never when the 0DTE set
+    // IS the structural read, or every row would be added to itself.
+    if(dte0 && !dte0IsPrimary){
       add('CR0', dte0.cr, dte0.crGex, '0DTE');
       add('PS0', dte0.ps, dte0.psGex, '0DTE');
       out.dte0Exps=dte0.nExps; out.dte0N=dte0.n;
     }
     out.rows.sort(function(a,b){ return b.k-a.k; });
     out.hvlMissing = (P.hvl==null);
+    out.hvlFar = P.hvlFar||null;
     out.regime = (P.hvl!=null) ? ((px>=P.hvl)?'posGamma':'negGamma') : null;
     out.kMin=P.kMin; out.kMax=P.kMax;
     return out;
@@ -13223,9 +13234,9 @@ function lvlUnified(sym){
 function levelsHtmlV2(sym){
   try{
     var U=lvlUnified(sym); if(!U || !U.rows.length) return '';
-    var srcTxt = (U.src==='chain')
-      ? ((U.nExps||'?')+' exps · '+(U.n||'?')+' strikes')
-      : ('feed only · '+(U.n||'?')+' strikes · top-60');
+    var srcTxt = (U.src==='chain') ? ((U.nExps||'?')+' exps · '+(U.n||'?')+' strikes')
+               : (U.src==='0dte')  ? ('0DTE only · '+(U.n||'?')+' strikes')
+               : ('feed only · '+(U.n||'?')+' strikes · top-60');
     var regTxt = U.regime==='posGamma'?'<span style="color:'+PAL.longAccent+'">+γ</span> damp'
                :(U.regime==='negGamma'?'<span style="color:'+PAL.shortAccent+'">−γ</span> amp':'');
     var tip=('Levels computed from our own feed, calls and puts separated: the payload carries v (TOTAL gamma) '+
@@ -13273,7 +13284,8 @@ function levelsHtmlV2(sym){
            'style="display:flex;align-items:center;gap:6px;font-size:10px;line-height:1.45;white-space:nowrap">'+
            '<span style="display:inline-block;width:30px;color:'+LVL_COL.hvl+';font-weight:800;opacity:.55">HVL</span>'+
            '<span style="color:'+PAL.sub+'">—</span>'+
-           '<span style="color:'+PAL.sub+';font-size:9px;overflow:hidden;text-overflow:ellipsis">no flip in these strikes</span></div>';
+           '<span style="color:'+PAL.sub+';font-size:9px;overflow:hidden;text-overflow:ellipsis">'+
+           (U.hvlFar?('nearest flip '+U.hvlFar.pct+'% away — tail, not a flip'):'no flip in these strikes')+'</span></div>';
       }
       h+='</div>';
       if(LVL_UI.chart){ var sv=null; try{ sv=levelsChartV2(sym,U); }catch(eC){} if(sv) h+='<div style="margin-top:3px;border:1px solid '+PAL.line+';border-radius:3px;overflow:hidden">'+sv+'</div>'; }

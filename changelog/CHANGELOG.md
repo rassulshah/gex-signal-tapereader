@@ -1,3 +1,34 @@
+## v11.20 — 2026-08-21 — Three faults found checking v11.19 on the live panel
+
+v11.19's own fix worked: the live 0DTE book came back with a **0.2% call share** and the phantom call wall
+at 792 was correctly withheld — matching the N/A a third-party page shows on the same book. But checking it
+turned up three more.
+
+**1. The card rendered BLANK right after a reload.** The full-chain set was still in flight and the passive
+feed had not arrived, but the 0DTE set *had* landed — and `lvlUnified` only ever treated `dte0` as a source
+of extra rows, never as a source of levels. So it returned null and the whole card disappeared. Precedence
+is now full chain → 0DTE → passive feed, the face says **`0DTE only`** when the today-only set is carrying
+the read, and the full chain takes over the moment it lands.
+
+**2. The nearest-spot zero-gamma fix had only half-landed.** `cpLevels` carried its OWN copy of the
+wall-and-crossing logic, so the v11.18 fix reached `cpFromPayload` and left the passive path still
+returning the first crossing from the bottom — **479.7 against a spot of 762.57**, live, in this build.
+`cpLevels` now delegates to `cpFromPayload`. One implementation of a rule, not two; two is how a fix
+half-lands and nobody notices.
+
+**3. An HVL nowhere near price is not a flip.** The live 0DTE set put its nearest crossing at **687.09,
+ten percent below spot**, because an all-put book only crosses out in the tail. A gamma flip is a statement
+about where price *is*. Beyond `HVL_MAX_DIST` (3%) the level is withheld and the card says *"nearest flip
+9.9% away — tail, not a flip"*, keeping the strike for the explanation rather than dropping the row.
+
+**Still open and NOT fixed here — our zero gamma may not be their zero gamma.** On the same 0DTE book their
+page reports a flip at 762.42, essentially at spot, where our method finds nothing nearer than 687. Summing
+gamma across strikes and re-evaluating net exposure at hypothetical spot prices are different calculations,
+and the second is the one that yields a level at spot. Worth settling before the HVL is trusted, and not
+something to paper over with a threshold.
+
+`test_levels_unified.js` 83, `test_call_put.js` 48. No new suite failures.
+
 ## v11.19 — 2026-08-21 — Levels correct for every symbol, no invented walls, a readable chart
 
 The user asked whether multi-symbol support had actually been confirmed. It had not, and it was not true.

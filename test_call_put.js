@@ -91,7 +91,10 @@ function feed(rows){ global.LASTFEED={ SPY:{ j:{ levels:[{t:1,l:[]},{t:2,l:rows}
 //   {k:761, v:56723968.15625, d:1,  net:55396191.53125}
 //   {k:756, v:53983356.5,     d:-1, net:-29581118.5}     -> mixed
 {
-  eval(ex('cpRows')); eval(ex('cpLevels'));
+  // (v11.20) cpLevels now DELEGATES to cpFromPayload — one implementation of the wall/crossing rules
+  // instead of two, which is why the nearest-spot zero-gamma fix only half-landed in v11.18.
+  global.SIDE_MIN_SHARE=0.05; global.HVL_MAX_DIST=0.03;
+  eval(ex('cpRows')); eval(ex('cpFromPayload')); eval(ex('cpLevels'));
   const REAL=[ {k:760,v:283651666.375,d:1,net:278399177.125},
                {k:765,v:174886547.5078125,d:-1,net:-174886547.5078125},
                {k:766,v:61620230.75,d:-1,net:-51428766.25},
@@ -133,8 +136,15 @@ function feed(rows){ global.LASTFEED={ SPY:{ j:{ levels:[{t:1,l:[]},{t:2,l:rows}
   global.LASTFEED={ SPY:{ j:{ levels:[{t:1,l:[{k:760,v:100,d:1,net:-900}]}] } } };
   global.STATE={ SPY:{ price:762 } };
   ok(/not a total/.test(cpLevels('SPY').err||''),'|net| > v refuses at the levels layer too',cpLevels('SPY'));
+  // (v11.18) An all-pure book is NO LONGER refused — on expiry day |net| == v nearly everywhere and that
+  // guard is what left the 0DTE set null. (v11.19) But a book with gamma on one side only names no wall on
+  // the other: here everything is call, so the PUT wall is suppressed with a 0% share rather than invented.
   global.LASTFEED={ SPY:{ j:{ levels:[{t:1,l:[{k:760,v:100,d:-1,net:-100},{k:765,v:50,d:-1,net:-50}]}] } } };
-  ok(/no call\/put information/.test(cpLevels('SPY').err||''),'and |net| == v everywhere refuses',cpLevels('SPY'));
+  const allCall=cpLevels('SPY');
+  ok(!allCall.err,'an all-pure book decomposes instead of refusing',allCall.err);
+  ok(allCall.callWall===765,'the call side still gets its wall',allCall.callWall);
+  ok(allCall.putWall===null,'the empty put side gets none',allCall.putWall);
+  ok(allCall.psSuppressed && allCall.psSuppressed.share===0,'and records the 0% share that disqualified it',allCall.psSuppressed);
   global.LASTFEED={};
   ok(cpLevels('SPY')===null,'no feed, no levels');
 }
