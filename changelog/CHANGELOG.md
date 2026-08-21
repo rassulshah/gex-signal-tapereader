@@ -1,3 +1,66 @@
+## v11.21 — 2026-08-21 — The verified level rules, two day-trading windows, and a directional read
+
+The build the user asked for: 0DTE and through-Friday, correct levels, a sanity check, a readable chart,
+and — the part that matters — the levels folded into a claim about **where price is going**.
+
+**THE RULES, VERIFIED — not inferred from prose.** I extracted InsiderFinance's own 585-strike SPX table
+and tested every candidate definition against the rows *they* tag:
+
+| rule | strike | their tag |
+|---|---|---|
+| most POSITIVE net GEX above spot | 7775 | **CALL WALL** ✓ |
+| most NEGATIVE net GEX below spot | 7640 | **PUT WALL** ✓ |
+| largest \|net GEX\| anywhere | 7645 | **Peak GEX** ✓ |
+| max CALL gamma above spot | 7650 | — ✗ |
+| max call OPEN INTEREST above spot | 8800 | — ✗ |
+
+So the walls run on **signed net**, which our feed has carried from the start — the call/put decomposition
+was aimed at the wrong target. Their own description mentions open interest; the tagged row does not follow
+it. **The table is ground truth, the prose is not.**
+
+**⚠ Our net is the opposite sign from theirs.** Their net is call−put (negative on a put-heavy strike);
+ours is put−call. Every rule mirrors. Get it backwards and both walls swap sides while still looking like
+plausible levels — which is why `gexSanity` checks that CR sits above spot and PS below, the one failure
+nothing else would catch.
+
+**Two windows, both near-dated** (user's call): `dte0` = today; `week` = every expiry through this Friday,
+which is Skylit's native `exp_mode=week`. Deliberately NOT their "Next week", which is a rolling 7 days —
+their 1W preset checked 0DTE plus 1/4/5/6/7DTE and excluded 8DTE. Ours shrinks as the week runs down;
+theirs does not. Mid-week the two differ, so a CR gap is a definition difference and the sanity check does
+not flag it. The rolling-7 window is still fetched slowly as **`wk7`, never displayed** — the control that
+lets the scorecard eventually say which window price actually respected. Forward-only data, so it starts now.
+
+Their expiry breakdown is what settled the windows: **0DTE alone was −$43.44B of a −$62.50B whole-chain
+total.** About 70% of dealer gamma expires today.
+
+**PATH — where price is going.** `gexPath` reads the structure as a direction rather than a list: Mag is the
+destination (heaviest hedging, so price is drawn to it), PS and CR are the two edges where a deflection is
+most likely, and the cage bar shows how much room is left before the next reversal zone. It states when the
+recent tape *disagrees* with the pull, and when the magnet lies BEYOND the near wall — the case where a
+floor to lean on and a magnet pulling through it conflict. Descriptive, non-voting, and it sits directly
+under Next Stop because it is the same claim.
+
+**Enrolled with six questions, all written so they can fail** — including `path_pinned_stays`, which scores
+a pinned read on price *staying put* so the feature cannot win by calling everything pinned on a quiet tape,
+and `path_roll_age` as the explicit control for the migration claim. **Wall migration is recorded per bar**
+(`crRolled`/`psRolled`, from-strike, delta, how long the old one stood), which is the question the user
+raised weeks ago and nobody has ever measured: does a floor that just rolled up beat one sitting still?
+
+**The periodic third-party check the user asked for cannot run in the panel, and the reason is settled.**
+Their server sends no CORS header — verified live in the console, `fetch(...)` returns "BLOCKED Failed to
+fetch" — and the `@grant` that would bypass it sandboxes this script and kills the `window.fetch` hook the
+entire tape depends on. So `gexSanity()` checks what can be checked without anyone else's data: walls
+straddle spot, levels inside the strike range actually read, no duplicate strikes, nothing more than 10%
+from price, the set is fresh, a magnet exists. **Every one of those fired at least once during this build.**
+Where their numbers are hand-entered, the put-wall delta *is* enforced — it held at the same strike across
+every one of their expiry filters, so a gap there has no window excuse.
+
+**UI changes cannot break any of this.** The levels come from the network payload, not the DOM — unlike the
+ladder scraper that has broken repeatedly. A Skylit redesign does not touch it.
+
+New `test_gex_levels.js` (36) pins the verified rules against their real numbers and every sanity assertion.
+`test_expset_symbol` and `test_levels_unified` updated for the new windows. No new suite failures.
+
 ## v11.20 — 2026-08-21 — Three faults found checking v11.19 on the live panel
 
 v11.19's own fix worked: the live 0DTE book came back with a **0.2% call share** and the phantom call wall

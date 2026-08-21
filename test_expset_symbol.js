@@ -8,18 +8,19 @@ let pass=0, fail=0; const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} el
 function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.exec(src);let i=src.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}return src.slice(m.index,e+1);}
 global.window={__gptsDebug:{}};
 global.SIDE_MIN_SHARE=0.05;
-eval(['cpFromPayload','expSetLevels','expSetFetch','expSetTick'].map(ex).join('\n'));
+eval(['gexLevels','cpFromPayload','expSetLevels','expSetFetch','expSetTick'].map(ex).join('\n'));
 
 const mk=(k,call,put)=>({k:k, v:call+put, net:put-call, d:1});
 function book(base){ return { levels:[{l:[mk(base-5,10,400), mk(base,20,900), mk(base+3,600,30), mk(base+8,300,20)]}],
                               expirations:['2026-08-21','2026-08-24'] }; }
-global.EXPSET={ SPY:{ dte0:null, full:{ j:book(760), ts:Date.now(), exps:['2026-08-21','2026-08-24'], n:4 } },
-                QQQ:{ dte0:null, full:{ j:book(705), ts:Date.now(), exps:['2026-08-21'], n:4 } } };
+global.SIDE_MIN_SHARE=0.05; global.HVL_MAX_DIST=0.03;
+global.EXPSET={ SPY:{ dte0:null, week:{ j:book(760), ts:Date.now(), exps:['2026-08-21','2026-08-24'], n:4 } },
+                QQQ:{ dte0:null, week:{ j:book(705), ts:Date.now(), exps:['2026-08-21'], n:4 } } };
 global.STATE={ SPY:{price:762.5}, QQQ:{price:707.5} };
 
 // ---------- the read must use the RIGHT book against the RIGHT price ----------
 {
-  const S=expSetLevels('SPY','full'), Q=expSetLevels('QQQ','full');
+  const S=expSetLevels('SPY','week'), Q=expSetLevels('QQQ','week');
   // book(base): base-5 has 400 put, base has 900 put -> the heaviest PUT below spot is `base` itself
   ok(S.ps===760,'SPY reads the SPY book',S.ps);
   ok(Q.ps===705,'QQQ reads the QQQ book — NOT the SPY one',Q.ps);
@@ -34,9 +35,9 @@ global.STATE={ SPY:{price:762.5}, QQQ:{price:707.5} };
 // ---------- a symbol with no set yet returns nothing, not another symbol's ----------
 {
   ok(expSetLevels('QQQ','dte0')===null,'an unfetched set is null, never a fallback to a different symbol');
-  ok(expSetLevels('IWM','full')===null,'an unknown symbol is null rather than defaulting to SPY');
+  ok(expSetLevels('IWM','week')===null,'an unknown symbol is null rather than defaulting to SPY');
   global.STATE={ SPY:{price:762.5}, QQQ:{price:null} };
-  ok(expSetLevels('QQQ','full')===null,'no price for that symbol means no levels for that symbol');
+  ok(expSetLevels('QQQ','week')===null,'no price for that symbol means no levels for that symbol');
   global.STATE={ SPY:{price:762.5}, QQQ:{price:707.5} };
 }
 // ---------- the request must ask for the symbol it was given ----------
@@ -45,8 +46,10 @@ global.STATE={ SPY:{price:762.5}, QQQ:{price:707.5} };
   global.LASTFEEDURL='https://x/api/gex/levels?symbol=SPY&data_type=vanna&nodes=60&exp_mode=next_n&exp_count=4&v=1';
   global.LASTAUTH='Bearer t';
   global.EXPSET_MIN_MS=0; global.EXPSET_TRY={}; global.EXPSET_FAIL={};
+  global.EXPSET_SLOW={wk7:1}; global.EXPSET_SLOW_MS=300000;
   global.EXPSET_SPEC={ dte0:{exp_mode:'current', exp_count:'1', nodes:'250'},
-                       full:{exp_mode:'next_n',  exp_count:'50', nodes:'250'} };
+                       week:{exp_mode:'week',    exp_count:'1', nodes:'250'},
+                       wk7: {exp_mode:'next_n',  exp_count:'6', nodes:'250'} };
   global.fetch=(u)=>{ calls.push(u); return { then(){ return { catch(){} }; } }; };
   expSetFetch('QQQ','dte0');
   ok(calls.length===1,'a request went out',calls.length);
@@ -54,8 +57,8 @@ global.STATE={ SPY:{price:762.5}, QQQ:{price:707.5} };
   ok(/data_type=gamma/.test(calls[0]),'always gamma, whatever the template carried');
   ok(/exp_mode=current/.test(calls[0]) && /exp_count=1/.test(calls[0]),'with the 0DTE parameters');
   ok(/nodes=250/.test(calls[0]),'and a widened node count');
-  expSetFetch('SPY','full');
-  ok(/symbol=SPY/.test(calls[1]) && /exp_count=50/.test(calls[1]),'and the SPY full-chain request is separate',calls[1]);
+  expSetFetch('SPY','week');
+  ok(/symbol=SPY/.test(calls[1]) && /exp_mode=week/.test(calls[1]),'and the SPY weekly request is separate',calls[1]);
   // throttling and back-off must be per symbol+set, or one symbol starves the other
   global.EXPSET_MIN_MS=90000;
   const before=calls.length;
@@ -63,10 +66,10 @@ global.STATE={ SPY:{price:762.5}, QQQ:{price:707.5} };
   ok(calls.length===before,'the same symbol+set is throttled');
   expSetFetch('SPY','dte0');
   ok(calls.length===before+1,'but a DIFFERENT symbol is not blocked by it',calls.length);
-  global.EXPSET_FAIL['QQQ|full']=3; global.EXPSET_TRY['SPY|full']=0; const b2=calls.length;
-  expSetFetch('QQQ','full');
+  global.EXPSET_FAIL['QQQ|week']=3; global.EXPSET_TRY['SPY|week']=0; const b2=calls.length;
+  expSetFetch('QQQ','week');
   ok(calls.length===b2,'a set that has failed three times stops asking');
-  expSetFetch('SPY','full');
+  expSetFetch('SPY','week');
   ok(calls.length===b2+1,'and that back-off does not silence the other symbol',calls.length-b2);
 }
 // ---------- the tick follows the chart ----------
@@ -80,11 +83,12 @@ global.STATE={ SPY:{price:762.5}, QQQ:{price:707.5} };
   global.document={visibilityState:'visible'};
   global.activeSym=()=>'QQQ';
   expSetTick();
-  ok(urls.length===2,'the tick asks for two sets',urls.length);
+  ok(urls.length===3,'the tick asks for both live sets plus the slow control',urls.length);
   ok(urls.every(u=>/symbol=QQQ/.test(u)),'for the symbol on the chart, not a fixed one',urls.map(u=>(u.match(/symbol=\w+/)||[])[0]));
-  ok(urls.some(u=>/exp_mode=current/.test(u)) && urls.some(u=>/exp_count=50/.test(u)),'one 0DTE and one full chain');
+  ok(urls.some(u=>/exp_mode=current/.test(u)) && urls.some(u=>/exp_mode=week/.test(u)),'one 0DTE and one through-Friday');
+  ok(urls.some(u=>/exp_mode=next_n/.test(u)),'plus the rolling-7 control that is never displayed');
   urls.length=0; global.EXPSET_TRY={}; global.activeSym=()=>'SPY'; expSetTick();
-  ok(urls.length===2 && urls.every(u=>/symbol=SPY/.test(u)),'switching charts switches which book is kept fresh',urls.length);
+  ok(urls.length===3 && urls.every(u=>/symbol=SPY/.test(u)),'switching charts switches which book is kept fresh',urls.length);
   urls.length=0; global.EXPSET_TRY={}; global.document={visibilityState:'hidden'}; expSetTick();
   ok(urls.length===0,'a hidden tab asks for nothing');
 }

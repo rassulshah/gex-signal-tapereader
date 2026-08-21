@@ -16,7 +16,7 @@ function vo(n){ const i=src.search(new RegExp('^var '+n+'\\s*=\\s*\\{','m')); le
 global.window={__gptsDebug:{}};
 global.localStorage={_d:{},getItem(k){return this._d[k]===undefined?null:this._d[k];},setItem(k,v){this._d[k]=v;},removeItem(k){delete this._d[k];}};
 eval([vo('LVL_COL'),vo('LVL_NAME'),vo('LVL_WHAT'),vo('PAL')].join('\n'));
-eval(['cpFromPayload','lvlUnified','levelsHtmlV2','levelsChartV2','lvlFmt','lvlSpanFmt','ifManLevels'].map(ex).join('\n'));
+eval(['gexLevels','gexLevels','cpFromPayload','lvlUnified','levelsHtmlV2','levelsChartV2','lvlFmt','lvlSpanFmt','ifManLevels'].map(ex).join('\n'));
 global.LVL_UI={open:true,chart:false}; global.IFMAN=null; global.LASTFEED={};
 global.fmtLvl=x=>x==null?'–':String(x); global.fmtSpan=x=>x==null?'–':String(x);
 global.dispIsFut=()=>false; global.dispR=()=>1; global.mul=(a,b)=>a/(1/b); global.futMark=()=>'';
@@ -25,7 +25,8 @@ let FULL=null, DTE0=null, PASSIVE=null;
 global.SIDE_MIN_SHARE=0.05; global.HVL_MAX_DIST=0.03;
 // (v11.19) expSetLevels is now (sym, setName) — the v11.17/11.18 signature was (setName) with SPY
 // hardcoded inside, which is exactly the defect this release fixes.
-global.expSetLevels=(sym,n)=> n==='full'?FULL:DTE0;
+// (v11.21) the structural set is now 'week' — every expiry through this Friday — not the full chain.
+global.expSetLevels=(sym,n)=> n==='week'?FULL:(n==='dte0'?DTE0:null);
 global.activeSym=()=>'SPY';
 global.cpLevels=()=>PASSIVE;
 global.STATE={SPY:{price:762.57, king:760}};
@@ -63,7 +64,7 @@ global.STATE={SPY:{price:762.57, king:760}};
   FULL={ cr:775, crGex:9e8, ps:755, psGex:8e8, hvl:766, mag:760, ratio:0.36, n:250, nExps:12, ageMin:3, kMin:600, kMax:900 };
   DTE0=null; PASSIVE=null;
   const U=lvlUnified('SPY');
-  ok(U.src==='chain','the self-fetched full-chain set wins when present',U.src);
+  ok(U.src==='week','the self-fetched weekly set wins when present',U.src);
   ok(U.rows.length===4,'four levels, once each',U.rows.map(r=>r.id));
   ok(U.rows[0].k===775 && U.rows[U.rows.length-1].k===755,'rows are ordered by price, high to low',U.rows.map(r=>r.k));
   ok(U.regime==='negGamma','spot 762.57 below the flip at 766 is the amplifying side',U.regime);
@@ -262,7 +263,7 @@ global.STATE={SPY:{price:762.57, king:760}};
   // and the full chain still wins the moment it lands
   FULL={ cr:775, crGex:1, ps:755, psGex:1, hvl:766, mag:760, n:241, nExps:34 };
   const U2=lvlUnified('SPY');
-  ok(U2.src==='chain','the full chain takes precedence as soon as it exists',U2.src);
+  ok(U2.src==='week','the weekly set takes precedence as soon as it exists',U2.src);
   ok(U2.rows.some(r=>r.id.indexOf('CR0')>=0),'and the 0DTE walls come back as their own rows',U2.rows.map(r=>r.id));
 }
 console.log('\n'+pass+' passed, '+fail+' failed');

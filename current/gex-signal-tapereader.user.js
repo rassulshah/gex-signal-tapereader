@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.20
+// @version    11.21
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -540,7 +540,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.20';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.21';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -11473,6 +11473,75 @@ function registerCoreFeatures(){
       condition:'CR0/PS0 read inside the front expiry column; CR/PS inside the longest-dated bucket present; HVL = zero gamma on the native node set (absolute basis when the tape carries it); Mag = heaviest strike. Never pooled across expiry columns.',
       mechanism:'MenthorQ\'s vocabulary computed from our own tape. HVL is the regime line (dampening above, amplifying below); CR/PS are the walls; Mag is the pin. All non-voting until the scorecard says otherwise — and CR/PS are explicitly labelled with the reach our chain actually has, so a one-week wall is never quoted as an all-expiration wall.' } });
 
+  // ---- (v11.21) THE GAMMA PATH + WALL MIGRATION -----------------------------------------------
+  // Two questions this exists to settle, both written so they can FAIL.
+  // (1) DIRECTION: when the structure says price is being drawn toward the magnet, does price actually
+  //     travel that way over the forward window? This is the user's stated need — "I need to know where
+  //     price is going" — and it is the first thing that must be proven rather than asserted.
+  // (2) MIGRATION: when a wall ROLLS — the floor moves up, the ceiling moves down — does that predict
+  //     the next move better than the wall's static location does? A floor that just rolled up is dealers
+  //     defending higher, which is the deflection setup this whole panel was built to catch. Nobody has
+  //     measured whether it works. Forward-only data, so it starts collecting the day this ships.
+  registerFeature({ key:'gex.path', label:'Gamma path · magnet pull, cage position, wall migration', phase:'structure', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var P=null; try{ P=gexPath(sym); }catch(e){}
+      var px=(STATE[sym]||{}).price;
+      if(!P || typeof px!=='number') return { ok:false, voting:false, px:(typeof px==='number')?px:null };
+      if(!WALL_HIST[sym]) WALL_HIST[sym]={ cr:null, ps:null, mag:null, crAt:null, psAt:null, magAt:null };
+      var W=WALL_HIST[sym], now=Date.now();
+      function step(id, k){
+        var prev=W[id], prevAt=W[id+'At'];
+        var moved=(prev!=null && k!=null && Math.abs(k-prev)>0.005);
+        var res={ from:(moved?prev:null), delta:(moved?+(k-prev).toFixed(2):0),
+                  heldMin:(prevAt&&!moved)?Math.round((now-prevAt)/60000):0 };
+        if(k!=null && (prev==null || moved)){ W[id]=k; W[id+'At']=now; }
+        return res;
+      }
+      var mCR=step('cr', P.cr), mPS=step('ps', P.ps), mMag=step('mag', P.mag);
+      return { ok:true, voting:false, px:px,
+               // the directional claim
+               state:P.state, dir:(P.dir==null?0:P.dir), mag:P.mag, magDist:P.magDist, magAtr:P.magAtr,
+               tapeAgrees:(P.agree==null?null:P.agree),
+               // the cage and the live reversal zone
+               cr:P.cr, ps:P.ps,
+               cagePos:(P.cage?P.cage.pos:null), cageSpan:(P.cage?P.cage.span:null),
+               reversalAt:(P.reversalAt||null), reversalK:(P.reversalK==null?null:P.reversalK),
+               reversalDist:(P.reversalDist==null?null:P.reversalDist),
+               magBeyond:(P.through||null),
+               // migration: did a wall roll this bar, and how long had the old one stood
+               crRolled:(mCR.from!=null), crFrom:mCR.from, crDelta:mCR.delta, crHeldMin:mCR.heldMin,
+               psRolled:(mPS.from!=null), psFrom:mPS.from, psDelta:mPS.delta, psHeldMin:mPS.heldMin,
+               magRolled:(mMag.from!=null), magFrom:mMag.from, magDelta:mMag.delta };
+    },
+    outcome:function(rec, fwd){
+      // DIR_PTS in the direction the structure pointed. A pinned read is scored on STAYING put, so the
+      // feature cannot win by calling everything pinned on a quiet tape. MFE/MAE ride on every outcome,
+      // resolved or not, because the nightly needs the excursion even when the hit is undecidable.
+      var mfe=(fwd&&fwd.mfe!=null)?fwd.mfe:null, mae=(fwd&&fwd.mae!=null)?fwd.mae:null;
+      if(!rec || !rec.ok || !fwd || fwd.n<FEAT_FWD) return { hit:null, mfe:mfe, mae:mae };
+      var D=0.5; try{ D=DIR_PTS; }catch(e){}
+      if(rec.state==='pinned') return { hit:((fwd.mfe<D && fwd.mae>-D)?1:0), mfe:mfe, mae:mae };
+      if(!rec.dir) return { hit:null, mfe:mfe, mae:mae };
+      return { hit:(rec.dir>0 ? (fwd.mfe>=D?1:0) : (fwd.mae<=-D?1:0)), mfe:mfe, mae:mae };
+    },
+    questions:[
+      { id:'path_magnet_pull', when:[{f:'state',v:'toward'}], outcome:'dir',
+        note:'THE user-facing claim — "where price is going". When the structure points at the magnet, does price actually travel DIR_PTS that way within the window? Compare against the tape\'s own trend hit-rate on the same bars: if it does not beat the tape, the path line is decoration and should be pulled off the face.' },
+      { id:'path_tape_disagrees', when:[{f:'tapeAgrees',v:false}], outcome:'dir',
+        note:'when recent bars move AWAY from the magnet, does the pull still hold? If the disagreeing-tape subset hits at chance while the agreeing subset hits well, the tape is the filter and the magnet only adds a target.' },
+      { id:'path_pinned_stays', when:[{f:'state',v:'pinned'}], outcome:'dir',
+        note:'a pinned read is scored on price STAYING inside +/-DIR_PTS. This exists so the feature cannot win by calling everything pinned on a quiet tape — if pinned resolves true no more often than the base rate of a flat window, it is saying nothing.' },
+      { id:'path_wall_roll', when:[{f:'psRolled',v:true}], outcome:'dir',
+        note:'MIGRATION, the live part: when the floor ROLLS UP mid-session, does price follow it? A rolling floor is dealers defending higher. Split by the sign of psDelta — a floor rolling DOWN is the opposite claim and must not be pooled with it.' },
+      { id:'path_roll_age', when:[{f:'psRolled',v:false}], outcome:'dir',
+        note:'the control for path_wall_roll: a wall that has STOOD (psHeldMin large) versus one that just moved. If the standing wall scores as well, migration adds nothing and the extra recording can be dropped.' },
+      { id:'path_mag_beyond', when:[{f:'magBeyond',v:'PS'}], outcome:'dir',
+        note:'when the magnet lies BEYOND the near wall, does that wall break more often than it holds? This is the case where the two readings conflict — a floor to lean on, and a magnet pulling straight through it — and it is the one worth knowing.' }
+    ],
+    rule:{ id:'gex.path', tier:'hand',
+      condition:'Mag = largest |net gamma| in the window; CR = most call-dominant strike above spot; PS = most put-dominant strike below spot. Verified against a published GEX table: those three rules reproduce its tagged Call Wall, Put Wall and Peak GEX strike exactly, while max call gamma and max call open interest do not.',
+      mechanism:'The magnet is where dealer hedging is heaviest, so price is drawn to it; the walls are the two edges where a deflection is most likely. Migration is the live part — a floor that rolls up is dealers defending higher. Non-voting until the scorecard earns it; descriptive on the face, never an instruction.' } });
+
   // ---- (v11.0) THE LEDGER, RECORDED. The one question the ledger exists to settle as a
   // feature: at the moment price touches a node, does an ACCUMULATING node deflect it more
   // reliably than a DISSIPATING one? Recorded on the in-play node each bar with its ledger
@@ -12835,21 +12904,37 @@ var EXPSET_MIN_MS=90000;             // one request per set per 90s; these level
 // (v11.19) KEYED BY SYMBOL. v11.17-11.18 held ONE global set and hardcoded `symbol=SPY` into the request
 // and `STATE.SPY.price` into the read — so selecting QQQ or NQ produced SPY levels priced against QQQ:
 // confidently wrong numbers, which is worse than a blank card. Every entry point now carries the symbol.
-var EXPSET={ SPY:{dte0:null, full:null}, QQQ:{dte0:null, full:null} };
+var EXPSET={ SPY:{dte0:null, week:null, wk7:null}, QQQ:{dte0:null, week:null, wk7:null} };
 var EXPSET_TRY={}, EXPSET_FAIL={};
+// (v11.21, user's call) TWO LIVE WINDOWS, both near-dated, because that is where the gamma a day trader
+// is exposed to actually lives. Their own expiry breakdown made the case: 0DTE alone was -$43.44B of a
+// -$62.50B whole-chain total — about 70% of all dealer gamma expires today.
+//   dte0 = today only.                       Skylit: exp_mode=current, exp_count=1
+//   week = every expiry through this Friday. Skylit: exp_mode=week (its tooltip is literally
+//          "every expiration through this week's Friday"), which is the user's definition exactly.
+// NOTE this is deliberately NOT InsiderFinance's "Next week", which is a ROLLING 7 DAYS (their 1W preset
+// checked 0DTE + 1/4/5/6/7DTE and excluded 8DTE). Ours shrinks as the week runs down; theirs does not. So
+// mid-week the two windows differ and our CR is not expected to equal theirs — that is a definition
+// difference, not an error, and the sanity check must not flag it as one.
+// `wk7` is the rolling-7 window, fetched slowly and NEVER displayed: it is the control that lets the
+// scorecard eventually say which window price actually respected. Forward-only data, so it starts now.
 var EXPSET_SPEC={
-  dte0:{ exp_mode:'current', exp_count:'1',  nodes:'250' },
-  full:{ exp_mode:'next_n',  exp_count:'50', nodes:'250' }
+  dte0:{ exp_mode:'current', exp_count:'1', nodes:'250' },
+  week:{ exp_mode:'week',    exp_count:'1', nodes:'250' },
+  wk7: { exp_mode:'next_n',  exp_count:'6', nodes:'250' }
 };
+var EXPSET_SLOW={ wk7:1 };           // control set: one request per 5 minutes, never on the face
+var EXPSET_SLOW_MS=300000;
 function expSetFetch(sym, setName){
   try{
     sym=sym||'SPY';
     if(!LASTFEEDURL || !LASTAUTH) return;
-    if(!EXPSET[sym]) EXPSET[sym]={dte0:null, full:null};
+    if(!EXPSET[sym]) EXPSET[sym]={dte0:null, week:null, wk7:null};
     var fk=sym+'|'+setName;
     if((EXPSET_FAIL[fk]||0) >= 3) return;              // stop asking after three refusals
     var now=Date.now();
-    if(EXPSET_TRY[fk] && (now-EXPSET_TRY[fk])<EXPSET_MIN_MS) return;
+    var minMs=EXPSET_SLOW[setName]?EXPSET_SLOW_MS:EXPSET_MIN_MS;
+    if(EXPSET_TRY[fk] && (now-EXPSET_TRY[fk])<minMs) return;
     EXPSET_TRY[fk]=now;
     var spec=EXPSET_SPEC[setName]; if(!spec) return;
     var url=LASTFEEDURL;
@@ -12880,10 +12965,55 @@ function expSetTick(){
     // Only the symbol actually on screen, so this stays at two extra requests per cycle regardless of
     // how many books the panel tracks. Switching charts switches which symbol is kept fresh.
     var sym='SPY'; try{ sym=activeSym(); }catch(e0){}
-    expSetFetch(sym,'dte0'); expSetFetch(sym,'full');
+    expSetFetch(sym,'dte0'); expSetFetch(sym,'week');
+    expSetFetch(sym,'wk7');     // control, throttled to 5 minutes, never displayed
   }catch(e){}
 }
 // Decompose an arbitrary payload the same way cpRows does, so a self-fetched set gets identical treatment.
+// ================= (v11.21) THE VERIFIED LEVEL RULES =================
+// Established 2026-08-20 by extracting InsiderFinance's own 585-strike table and testing every candidate
+// definition against the rows THEY tag. Not inferred from prose — matched against their tagged output:
+//
+//   Call Wall  = the strike with the MOST POSITIVE net GEX above spot   -> their 7775  (exact)
+//   Put Wall   = the strike with the MOST NEGATIVE net GEX below spot   -> their 7640  (exact)
+//   Peak GEX   = the strike with the LARGEST |net GEX| anywhere         -> their 7645  (exact)
+//
+// And the rules that do NOT reproduce them, so nobody re-derives them later: max CALL gamma above spot
+// gives 7650, max call OPEN INTEREST gives 8800. Neither is their call wall. Their own description
+// mentions open interest, but the tagged row does not follow it — the table is the ground truth.
+//
+// ⚠ OUR NET IS THE OPPOSITE SIGN FROM THEIRS. On a put-dominated strike their net is NEGATIVE (their 7640
+// reads -14,600M) while ours is POSITIVE (our 760 reads +278M). Their net is call-put; ours is put-call.
+// So every rule flips: their "most positive above" is our MOST NEGATIVE above. Get this backwards and the
+// walls swap sides, which is the kind of error that looks plausible on the card and is wrong all day.
+function gexLevels(rows, px){
+  try{
+    if(!rows || !rows.length || typeof px!=='number') return null;
+    var cr=null, crN=null, ps=null, psN=null, mag=null, magA=-1;
+    var sc=0, sp=0, net=0;
+    for(var i=0;i<rows.length;i++){
+      var r=rows[i]; if(typeof r.k!=='number' || typeof r.net!=='number') continue;
+      var v=(typeof r.v==='number')?Math.abs(r.v):Math.abs(r.net);
+      sc += (v-r.net)/2; sp += (v+r.net)/2; net += r.net;
+      var a=Math.abs(r.net);
+      if(a>magA){ magA=a; mag=r.k; }
+      if(r.k>px && (crN===null || r.net<crN)){ crN=r.net; cr=r.k; }   // most CALL-dominant above spot
+      if(r.k<px && (psN===null || r.net>psN)){ psN=r.net; ps=r.k; }   // most PUT-dominant below spot
+    }
+    // A wall must actually LEAN the right way. If the most call-dominant strike above spot is still
+    // put-dominant (crN>0 in our sign), there is no call wall up there — only puts. Naming one anyway is
+    // how the phantom 792 appeared on an expiry-day book with a 0.2% call share.
+    var crWeak=null, psWeak=null;
+    if(cr!=null && crN!=null && crN>=0){ crWeak={k:cr, net:crN}; cr=null; }
+    if(ps!=null && psN!=null && psN<=0){ psWeak={k:ps, net:psN}; ps=null; }
+    return { cr:cr, crNet:crN, ps:ps, psNet:psN, mag:mag, magNet:(magA<0?null:magA),
+             crWeak:crWeak, psWeak:psWeak,
+             totalCall:sc, totalPut:sp, netTotal:net,
+             ratio:(sp>0?+(sc/sp).toFixed(2):null),
+             n:rows.length, kMin:rows[0].k, kMax:rows[rows.length-1].k };
+  }catch(e){ return null; }
+}
+
 function cpFromPayload(j, px){
   try{
     var snaps=j&&j.levels||[]; var last=snaps[snaps.length-1]; var l=(last&&last.l)||[];
@@ -12904,11 +13034,11 @@ function cpFromPayload(j, px){
     // because that would mean v is not a total. `mixed`/`pure` are reported so an all-pure set is visible.
     if(gt>0 || !rows.length) return null;
     rows.sort(function(a,b){ return a.k-b.k; });
-    var cw=null,cwm=-1, pw=null,pwm=-1, mag=null,magm=-1, sc=0, sp=0;
-    rows.forEach(function(r){ sc+=r.call; sp+=r.put;
-      if(r.v>magm){ magm=r.v; mag=r.k; }
-      if(r.k>px && r.call>cwm){ cwm=r.call; cw=r.k; }
-      if(r.k<px && r.put>pwm){ pwm=r.put; pw=r.k; } });
+    // (v11.21) The walls come from SIGNED NET, not from the call/put split. Verified against their
+    // published table: max positive net above spot IS their call wall; max call gamma is not.
+    var G=gexLevels(rows, px); if(!G) return null;
+    var cw=G.cr, pw=G.ps, mag=G.mag, sc=G.totalCall, sp=G.totalPut;
+    var cwm=(G.cr!=null?Math.abs(G.crNet):-1), pwm=(G.ps!=null?Math.abs(G.psNet):-1);
     // (v11.17.1) THE CROSSING NEAREST SPOT, not the first one from the bottom. Over a real chain — 241
     // strikes from 345 to 1180 — the cumulative crosses zero several times, and the first crossing walking
     // up from the deep OTM puts came out at 479.7 against a spot of 762.57. That is not a gamma flip, it is
@@ -12930,9 +13060,13 @@ function cpFromPayload(j, px){
     // SIDE_MIN_SHARE of the book's total gamma before its wall is allowed to have a name.
     var tot=sc+sp;
     var callShare=(tot>0)?(sc/tot):0, putShare=(tot>0)?(sp/tot):0;
-    var crSuppressed=null, psSuppressed=null;
-    if(tot>0 && callShare<SIDE_MIN_SHARE){ crSuppressed={ k:cw, share:+(callShare*100).toFixed(2) }; cw=null; cwm=-1; }
-    if(tot>0 && putShare <SIDE_MIN_SHARE){ psSuppressed={ k:pw, share:+(putShare*100).toFixed(2) }; pw=null; pwm=-1; }
+    // (v11.21) The LEAN test in gexLevels already refuses a wall on a side that does not lean that way,
+    // which is stricter and better founded than a share threshold. The share is still reported, and still
+    // suppresses, because a side holding almost none of the book cannot support a level either way.
+    var crSuppressed=G.crWeak?{ k:G.crWeak.k, share:+(callShare*100).toFixed(2), reason:'no call-dominant strike above spot' }:null;
+    var psSuppressed=G.psWeak?{ k:G.psWeak.k, share:+(putShare*100).toFixed(2), reason:'no put-dominant strike below spot' }:null;
+    if(tot>0 && cw!=null && callShare<SIDE_MIN_SHARE){ crSuppressed={ k:cw, share:+(callShare*100).toFixed(2), reason:'call side only '+(callShare*100).toFixed(1)+'% of book' }; cw=null; cwm=-1; }
+    if(tot>0 && pw!=null && putShare <SIDE_MIN_SHARE){ psSuppressed={ k:pw, share:+(putShare*100).toFixed(2), reason:'put side only '+(putShare*100).toFixed(1)+'% of book' }; pw=null; pwm=-1; }
     return { cr:cw, crGex:(cwm<0?null:cwm), ps:pw, psGex:(pwm<0?null:pwm), mag:mag, hvl:zg,
              crSuppressed:crSuppressed, psSuppressed:psSuppressed,
              callShare:+(callShare*100).toFixed(2), putShare:+(putShare*100).toFixed(2),
@@ -12955,7 +13089,7 @@ function expSetLevels(sym, setName){
 }
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.expSets=function(sy){ var sym=sy||(function(){ try{ return activeSym(); }catch(e){ return 'SPY'; } })();
-  return { sym:sym, dte0:expSetLevels(sym,'dte0'), full:expSetLevels(sym,'full'),
+  return { sym:sym, dte0:expSetLevels(sym,'dte0'), week:expSetLevels(sym,'week'), wk7:expSetLevels(sym,'wk7'),
            fails:EXPSET_FAIL, haveAuth:!!LASTAUTH, haveUrl:!!LASTFEEDURL }; };
 window.__gptsDebug.expSetFetch=function(n,sy){ var sym=sy||(function(){ try{ return activeSym(); }catch(e){ return 'SPY'; } })();
   EXPSET_FAIL[sym+'|'+n]=0; EXPSET_TRY[sym+'|'+n]=0; expSetFetch(sym, n||'dte0'); return 'fetching '+sym+' '+n; };
@@ -13173,7 +13307,7 @@ function lvlUnified(sym){
   sym=sym||'SPY';
   try{
     var px=(STATE[sym]||{}).price; if(typeof px!=='number') return null;
-    var full=expSetLevels(sym,'full'), dte0=expSetLevels(sym,'dte0');
+    var full=expSetLevels(sym,'week'), dte0=expSetLevels(sym,'dte0');
     var passive=null; try{ passive=cpLevels(sym); }catch(e0){}
     if(passive && passive.err) passive=null;
     var out={ px:px, rows:[], src:null, note:null, ratio:null, nExps:null, n:null, ageMin:null };
@@ -13183,7 +13317,7 @@ function lvlUnified(sym){
     // full chain, then 0DTE, then the passive feed; whichever answers is named on the face so a today-only
     // read is never mistaken for a structural one.
     var P=null, dte0IsPrimary=false;
-    if(full){ P=full; out.src='chain'; out.nExps=full.nExps; out.n=full.n; out.ratio=full.ratio; out.ageMin=full.ageMin; }
+    if(full){ P=full; out.src='week'; out.nExps=full.nExps; out.n=full.n; out.ratio=full.ratio; out.ageMin=full.ageMin; }
     else if(dte0){ P=dte0; dte0IsPrimary=true; out.src='0dte'; out.nExps=dte0.nExps; out.n=dte0.n; out.ratio=dte0.ratio; out.ageMin=dte0.ageMin; }
     else if(passive){ out.src='feed'; out.n=passive.n; out.ratio=passive.ratio;
       P={ cr:passive.callWall, crGex:passive.callWallGex, ps:passive.putWall, psGex:passive.putWallGex,
@@ -13231,10 +13365,161 @@ function lvlUnified(sym){
   }catch(e){ return null; }
 }
 // The card. Values are shown in the CHART's instrument only — no second scale, no "SPY 765" tail.
+// ============ (v11.21) WHERE PRICE IS GOING — the gamma structure as a directional read ============
+// The user's brief: "today price was going down to strong gamma levels. I need to know this so I am
+// prepared for trading to know where price is going." Levels on their own are trivia; what matters is the
+// PATH they imply and the two places a reversal is most likely.
+//
+// The frame, in the vocabulary the rest of the panel already uses:
+//   Mag (peak |gamma|) is the DESTINATION — the strike dealers hedge around hardest, so price is drawn to it.
+//   PS is the FLOOR and CR the CEILING — the two edges of the cage, where a deflection is most likely.
+//   Position inside that cage says how much room is left before the next reversal zone.
+// DESCRIPTIVE ONLY. It says where the structure points, never what to do about it, and it carries no
+// weight in the direction vote until the scorecard has earned it (eff n >= 20, three walk-forward sessions).
+var WALL_HIST={};              // per symbol: the last CR/PS/Mag and when each was first seen there
+var GEXPATH_PIN_ATR=0.35;      // within this fraction of ATR of the magnet counts as pinned, not travelling
+function gexPath(sym){
+  sym=sym||'SPY';
+  try{
+    var U=lvlUnified(sym); if(!U) return null;
+    var px=U.px; if(typeof px!=='number') return null;
+    var byId={}; (U.rows||[]).forEach(function(r){
+      r.id.split('·').forEach(function(id){ if(!byId[id]) byId[id]=r.k; }); });
+    var mag=byId['Mag'], cr=(byId['CR']!=null?byId['CR']:byId['CR0']), ps=(byId['PS']!=null?byId['PS']:byId['PS0']);
+    var a=0.35; try{ var av=atr(sym); if(typeof av==='number' && av>0) a=av; }catch(e0){}
+    var out={ px:px, mag:(mag==null?null:mag), cr:(cr==null?null:cr), ps:(ps==null?null:ps), atr:+a.toFixed(2) };
+    // the cage and where price sits inside it
+    if(cr!=null && ps!=null && cr>ps){
+      out.cage={ lo:ps, hi:cr, span:+(cr-ps).toFixed(2),
+                 pos:Math.max(0, Math.min(100, Math.round(((px-ps)/(cr-ps))*100))) };
+      out.toCeil=+(cr-px).toFixed(2); out.toFloor=+(px-ps).toFixed(2);
+    }
+    if(mag==null){ out.state='no-magnet'; out.line='no dominant gamma strike'; return out; }
+    var d=+(mag-px).toFixed(2);
+    out.magDist=d; out.magAtr=+(Math.abs(d)/(a||1)).toFixed(2);
+    if(Math.abs(d) <= a*GEXPATH_PIN_ATR){
+      out.state='pinned'; out.dir=0;
+      out.line='pinned at '+fmtLvl(mag);
+    } else {
+      out.state='toward'; out.dir=(d>0?1:-1);
+      out.line=(d>0?'↑ toward ':'↓ toward ')+fmtLvl(mag);
+    }
+    // is price actually travelling that way, or is the magnet behind it?
+    try{
+      var cs=(closedCandles(sym)||[]).slice(-6);
+      if(cs.length>=3 && cs[0].c!=null){
+        var mv=px-cs[0].c;
+        out.mv=+mv.toFixed(2);
+        out.agree=(out.dir===0)?null:((mv>0?1:(mv<0?-1:0))===out.dir);
+      }
+    }catch(e1){}
+    // which edge is the live reversal zone: the one price is heading at
+    if(out.dir>0 && cr!=null){ out.reversalAt='CR'; out.reversalK=cr; out.reversalDist=+(cr-px).toFixed(2); }
+    else if(out.dir<0 && ps!=null){ out.reversalAt='PS'; out.reversalK=ps; out.reversalDist=+(px-ps).toFixed(2); }
+    else if(out.cage){ out.reversalAt=(out.cage.pos>=50?'CR':'PS'); out.reversalK=(out.cage.pos>=50?cr:ps); }
+    // does the magnet sit BEYOND the near edge? then the edge is the thing that gets tested first
+    if(out.dir<0 && ps!=null && mag<ps){ out.through='PS'; }
+    if(out.dir>0 && cr!=null && mag>cr){ out.through='CR'; }
+    return out;
+  }catch(e){ return null; }
+}
+// One line for the face. Short, and it never tells anyone what to do.
+// ---- (v11.21) SANITY CHECK ------------------------------------------------------------------------
+// The user asked for a periodic automated check against a third-party page. That is NOT possible from
+// inside the panel and the reason is settled, not a guess: their server sends no CORS header, verified in
+// the live console — `fetch(...)` returns "BLOCKED Failed to fetch" — and the @grant that would bypass it
+// sandboxes this script, which would kill the window.fetch hook the whole tape depends on.
+//
+// So the check is INTERNAL: assertions that would catch a wrong level without needing anyone else's data.
+// Every one of these fired at least once during development, which is why they are here rather than in a
+// comment. `__gptsDebug.sanity()` runs them on demand and `sanityBadge()` surfaces a failing count.
+//
+// The one comparison that DOES need their numbers is manual: paste them via the IF button and
+// __gptsDebug.sanity() reports the deltas. Note our week window ("through this Friday") is NOT their "Next
+// week" (a rolling 7 days), so a CR difference mid-week is a definition difference and is NOT flagged.
+function gexSanity(sym){
+  sym=sym||'SPY';
+  var out={ sym:sym, checks:[], failed:0 };
+  function chk(id, pass, detail){ out.checks.push({ id:id, pass:!!pass, detail:(detail==null?null:detail) }); if(!pass) out.failed++; }
+  try{
+    var U=null; try{ U=lvlUnified(sym); }catch(e){}
+    if(!U){ chk('haveLevels', false, 'no level set at all'); return out; }
+    chk('haveLevels', true);
+    var px=U.px, byId={};
+    (U.rows||[]).forEach(function(r){ r.id.split('·').forEach(function(id){ if(byId[id]==null) byId[id]=r.k; }); });
+    var cr=byId['CR'], ps=byId['PS'], mag=byId['Mag'];
+    // 1. the walls must straddle spot. If they do not, the sign convention has flipped — the single
+    //    most dangerous failure here, because both numbers still look like plausible levels.
+    chk('crAboveSpot', cr==null || cr>px, cr!=null?('CR '+cr+' vs px '+px.toFixed(2)):'no CR');
+    chk('psBelowSpot', ps==null || ps<px, ps!=null?('PS '+ps+' vs px '+px.toFixed(2)):'no PS');
+    // 2. every displayed level must lie inside the strike range we actually read
+    var inRange=true, bad=null;
+    (U.rows||[]).forEach(function(r){ if(U.kMin!=null && U.kMax!=null && (r.k<U.kMin || r.k>U.kMax)){ inRange=false; bad=r.id+':'+r.k; } });
+    chk('levelsInRange', inRange, bad);
+    // 3. no two rows may share a strike — that was the duplicate-row bug
+    var ks=(U.rows||[]).map(function(r){ return r.k; });
+    chk('noDuplicateStrikes', ks.length===ks.filter(function(v,i){ return ks.indexOf(v)===i; }).length, ks.join(','));
+    // 4. the levels must be near price. A wall 20% away is a tail artefact, not a level.
+    var far=null;
+    (U.rows||[]).forEach(function(r){ if(px>0 && Math.abs(r.k-px)/px > 0.10) far=r.id+':'+r.k; });
+    chk('levelsNearPrice', far===null, far);
+    // 5. the set must be fresh; a stale set silently showing yesterday's walls is worse than none
+    chk('setFresh', U.ageMin==null || U.ageMin<20, U.ageMin!=null?(U.ageMin+'m old'):'no age');
+    // 6. magnet must be a real strike we hold
+    chk('magnetPresent', mag!=null, mag);
+    // 7. THEIR numbers, if entered by hand — reported, and only flagged where the windows agree
+    try{
+      var IF=ifManLevels();
+      if(IF && !IF.err){
+        out.theirs={ cr:IF.cw, ps:IF.pw, hvl:IF.zg, mag:IF.mag, ageMin:IF.ageMin, scale:IF.scale };
+        if(IF.pw!=null && ps!=null) out.psDelta=+(ps-IF.pw).toFixed(2);
+        if(IF.cw!=null && cr!=null) out.crDelta=+(cr-IF.cw).toFixed(2);
+        // the PUT wall is the one that should agree: it held at the same strike across every one of their
+        // expiry filters, so a window difference does not explain a gap here.
+        if(out.psDelta!=null) chk('putWallMatchesTheirs', Math.abs(out.psDelta)<=1.01, 'delta '+out.psDelta);
+        out.note='CR is NOT expected to match theirs: our window is "through this Friday", theirs is a rolling 7 days.';
+      }
+    }catch(eIF){}
+  }catch(e){ chk('threw', false, String(e)); }
+  return out;
+}
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.sanity=function(s){ return gexSanity(s||'SPY'); };
+
+function gexPathHtml(sym){
+  try{
+    var P=gexPath(sym); if(!P || !P.mag) return '';
+    var col=(P.state==='pinned')?PAL.gold:((P.dir>0)?PAL.longAccent:PAL.shortAccent);
+    var tip=('Where the gamma structure points. Mag is the strike with the largest absolute gamma — the one dealers hedge around hardest, so price tends to be drawn to it. PS is the floor and CR the ceiling: the two places a deflection is most likely. '+
+      (P.cage?('Price sits '+P.cage.pos+'% of the way up a '+P.cage.span+'-wide cage from '+fmtLvl(P.cage.lo)+' to '+fmtLvl(P.cage.hi)+'. '):'')+
+      (P.through?('The magnet lies BEYOND '+P.through+', so that edge gets tested on the way. '):'')+
+      (P.agree===false?'Recent bars are moving AWAY from the magnet, so the pull is not confirmed by the tape. ':'')+
+      (P.agree===true?'Recent bars agree with the direction. ':'')+
+      'Descriptive only, never an instruction, and it carries no weight in the direction vote until it has earned one.').replace(/"/g,'');
+    var h='<div title="'+tip+'" style="display:flex;align-items:center;gap:6px;font-size:10.5px;line-height:1.5;padding:1px 7px 2px;white-space:nowrap">'+
+      '<span style="color:'+PAL.sub+';font-weight:800;font-size:9px">PATH</span>'+
+      '<span style="color:'+col+';font-weight:800">'+P.line+'</span>'+
+      (P.magDist!=null&&P.state!=='pinned'?('<span style="color:'+PAL.sub+';font-size:9px">'+(P.magDist>0?'+':'')+fmtSpan(P.magDist)+'</span>'):'')+
+      (P.agree===false?('<span style="color:'+PAL.gold+';font-size:9px">tape disagrees</span>'):'')+
+      (P.reversalAt?('<span style="margin-left:auto;color:'+PAL.sub+';font-size:9px">'+P.reversalAt+' '+fmtLvl(P.reversalK)+(P.reversalDist!=null?(' · '+fmtSpan(Math.abs(P.reversalDist))):'')+'</span>'):'')+
+      '</div>';
+    if(P.cage){
+      var pos=P.cage.pos;
+      h+='<div title="The cage: PS below, CR above, price where the marker sits." style="padding:0 7px 3px">'+
+         '<div style="position:relative;height:4px;border-radius:2px;background:linear-gradient(90deg,'+LVL_COL.ps+'55,'+PAL.line+','+LVL_COL.cr+'55)">'+
+         '<div style="position:absolute;left:'+pos+'%;top:-2px;width:2px;height:8px;background:'+PAL.time+';border-radius:1px;transform:translateX(-1px)"></div>'+
+         '</div></div>';
+    }
+    return h;
+  }catch(e){ return ''; }
+}
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.path=function(s){ return gexPath(s||'SPY'); };
+
 function levelsHtmlV2(sym){
   try{
     var U=lvlUnified(sym); if(!U || !U.rows.length) return '';
-    var srcTxt = (U.src==='chain') ? ((U.nExps||'?')+' exps · '+(U.n||'?')+' strikes')
+    var srcTxt = (U.src==='week') ? ('to Fri · '+(U.nExps||'?')+' exps · '+(U.n||'?')+' strikes')
                : (U.src==='0dte')  ? ('0DTE only · '+(U.n||'?')+' strikes')
                : ('feed only · '+(U.n||'?')+' strikes · top-60');
     var regTxt = U.regime==='posGamma'?'<span style="color:'+PAL.longAccent+'">+γ</span> damp'
@@ -15790,6 +16075,7 @@ function render(){
   try{ html+=briefBlockHtml(__asym); }catch(eBr){}    // (v10.49 J) pre-open brief (collapsible)
   if(DRIFT_LIVE){ try{ html+=driftLineHtml(__asym); }catch(eD49){} }   // (v10.57) shadow mode: off the face until proven
   try{ html+=nextStopHtml(__asym); }catch(eNS){}   // (v11.1) NEXT STOP — the one forward call, above the read
+  try{ html+=gexPathHtml(__asym); }catch(ePA){}   // (v11.21) PATH — where the gamma structure points
   try{ html+=levelsHtmlV2(__asym); }catch(eLV){}   // (v11.17) LEVELS — ONE block, the chart's instrument only
   try{ html+=pbEntryHtml(__asym); }catch(ePE){}    // (v11.3) PB ENTRY — where to look for the pullback / deflection, under Next Stop
   try{ html+=readBlock44(__asym); }catch(eR){}

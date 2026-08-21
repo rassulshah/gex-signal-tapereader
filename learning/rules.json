@@ -1,7 +1,7 @@
 {
  "schema": "gex-rules/v2",
  "asOf": "2026-08-20",
- "version": "11.20",
+ "version": "11.21",
  "note": "THE MENTAL MODEL IN DATA FORM, MACHINE-APPLICABLE. weights.dir are the LIVE direction-scoring constants the panel reads at boot. The WEEKLY learning run writes rules/proposals/challengers/killList and NEVER touches weights; only the panel applyProposals() moves a weight, and only after RE-CHECKING the promotion bar in code (n>=20 AND walkForward.held over >=3 NEW sessions AND no regime flip). clearsBar asserted by the reviewer is advisory. The NIGHTLY run writes learning/log/YYYY-MM-DD.json only. Sparse data never nudges a weight: it is reported as insufficient and the hand-set value stands.",
  "unlockN": 20,
  "walkForwardSessions": 3,
@@ -1880,6 +1880,37 @@
     }
    },
    "mechanism": "MenthorQ's vocabulary computed from our own tape. HVL is the regime line (dampening above, amplifying below); CR/PS are the walls; Mag is the pin. Non-voting until the scorecard says otherwise, and CR/PS carry the reach our chain actually has so a one-week wall is never quoted as an all-expiration wall.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "gex.path": {
+   "id": "gex.path",
+   "tier": "hand",
+   "condition": "Mag = largest |net gamma| in the window; CR = most call-dominant strike above spot; PS = most put-dominant strike below spot. Verified against a published GEX table: those three rules reproduce its tagged Call Wall, Put Wall and Peak GEX strike exactly, while max call gamma and max call open interest do not.",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "The magnet is where dealer hedging is heaviest, so price is drawn to it; the walls are the two edges where a deflection is most likely. Migration is the live part — a floor that rolls up is dealers defending higher. Non-voting until the scorecard earns it.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,

@@ -94,7 +94,7 @@ function feed(rows){ global.LASTFEED={ SPY:{ j:{ levels:[{t:1,l:[]},{t:2,l:rows}
   // (v11.20) cpLevels now DELEGATES to cpFromPayload — one implementation of the wall/crossing rules
   // instead of two, which is why the nearest-spot zero-gamma fix only half-landed in v11.18.
   global.SIDE_MIN_SHARE=0.05; global.HVL_MAX_DIST=0.03;
-  eval(ex('cpRows')); eval(ex('cpFromPayload')); eval(ex('cpLevels'));
+  eval(ex('gexLevels')); eval(ex('cpRows')); eval(ex('cpFromPayload')); eval(ex('cpLevels'));
   const REAL=[ {k:760,v:283651666.375,d:1,net:278399177.125},
                {k:765,v:174886547.5078125,d:-1,net:-174886547.5078125},
                {k:766,v:61620230.75,d:-1,net:-51428766.25},

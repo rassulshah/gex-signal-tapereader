@@ -51,7 +51,10 @@ ok('6a the header reads "Next Stop: ↓ <level> −pts · 30–60m" + grade at t
 ok('6a2 the level is RED when below price (green when above)', /color:#f0616d">↓ 766/.test(h));
 ok('6b the hover shows the measured hit-rate only with n (dashes before)', /— \(eff n 0, need 20\)/.test(h));
 ok('6c descriptive, never an instruction', /never an instruction/.test(h) && !/\b(buy|sell|enter|go long|go short)\b/i.test(h.replace(/title="[^"]*"/,'')));
-ok('6d rendered ABOVE the read', /nextStopHtml\(__asym\)[\s\S]{0,400}readBlock44\(__asym\)/.test(src));
+// (v11.21) PATH and LEVELS now render between Next Stop and the read, so the gap is wider — but the
+// ORDER is what this pins, not the byte distance. Next Stop must still come first.
+ok('6d rendered ABOVE the read', /nextStopHtml\(__asym\)[\s\S]{0,900}readBlock44\(__asym\)/.test(src));
+ok('6d2 PATH sits directly under Next Stop — same claim, same place', /nextStopHtml\(__asym\)[\s\S]{0,120}gexPathHtml\(__asym\)/.test(src));
 // 7. features + outcome
 ok('7a nextStop (30m) and nextStop.60 (60m) are registered, the 60m one with a 20-bar window', /registerFeature\(\{ key:'nextStop', label:[^}]*fwd:FEAT_FWD,/.test(src) && /registerFeature\(\{ key:'nextStop\.60'[^}]*fwd:FEAT_FWD\*2,/.test(src));
 eval(src.slice(src.indexOf('  function _nextStopOutcome(rec, fwd){'), src.indexOf('  registerFeature({ key:\'nextStop\', label')));
