@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.28
+// @version    11.30
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -540,7 +540,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.28';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.30';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -16591,6 +16591,71 @@ function g3tip(t){ return t?(' title="'+g3esc(t)+'"'):''; }
 function arrow(d){ return d>0?'↑':(d<0?'↓':'→'); }
 function dcls(d){ return d>0?'g3up':(d<0?'g3dn':''); }
 
+
+// ---- (v11.29) THE LADDER READS INSIDER FINANCE, NOT US ----
+// This is what was asked for from the beginning, and what the companion was built to deliver: their
+// levels, converted to the chart's instrument, displayed. v11.26 wired the ladder to lvlUnified —
+// the SKYLIT sets — so the companion fetched their chain and the panel showed our own numbers. On
+// 2026-08-21 that put CR 766 on the face while their book said 770.
+//
+// Skylit and InsiderFinance do not measure the same thing. Skylit is FLOW: live dealer positioning
+// that builds and decays through the session. IF is STOCK: open interest x gamma, refreshed once a
+// day. Those are different quantities and they will not agree, so the panel does not get to average
+// them or quietly substitute one for the other. The ladder is theirs. Skylit keeps the jobs their
+// once-daily chain genuinely cannot do — growth, accumulation, node lifecycle.
+//
+// NO SILENT FALLBACK (user-directed, 2026-08-21). If their chain is missing or stale the ladder says
+// so and shows nothing. A source swap you cannot see is how you end up reading one book while
+// believing you are reading the other.
+var IF_STALE_MIN=25;
+function ifLadder(sym){
+  sym=sym||'SPY';
+  try{
+    var px=(STATE[sym]||{}).price; if(typeof px!=='number') return { err:'no price' };
+    var c=null; try{ c=ifChain(sym); }catch(e0){ return { err:'companion not installed' }; }
+    if(!c) return { err:'companion not installed' };
+    if(c.err) return { err:c.err };
+    var age=(typeof c.ageMin==='number')?c.ageMin:null;
+    if(age!=null && age>IF_STALE_MIN) return { err:'their chain is '+age+'m old', stale:true, ageMin:age };
+    var W=(c.toFri&&c.toFri.lv)?c.toFri.lv:null;
+    var D0=(c.dte0&&c.dte0.lv)?c.dte0.lv:null;
+    if(!W && !D0) return { err:'no levels in their chain' };
+    var out={ px:px, rows:[], src:'IF', ageMin:age, rolled:!!c.rolled,
+              nExps:(c.toFri&&c.toFri.exps)?c.toFri.exps.length:null,
+              n:W?W.strikes:null, maxPain:W?W.maxPain:(D0?D0.maxPain:null),
+              spot:c.spot, pub:(c.pub||null), err:null };
+    // Merge labels that land on the same strike, wall first — same rule the Skylit ladder used.
+    function add(id, k){
+      if(k==null) return;
+      for(var i=0;i<out.rows.length;i++){
+        if(Math.abs(out.rows[i].k-k)<0.005){
+          if(out.rows[i].id.indexOf(id)<0){
+            var ids=out.rows[i].id.split('·'); ids.push(id);
+            var rank={CR:0, CR0:1, PS:0, PS0:1, HVL:2, Mag:3, MP:4};
+            ids.sort(function(a,b){ return (rank[a]==null?9:rank[a])-(rank[b]==null?9:rank[b]); });
+            out.rows[i].id=ids.join('·');
+          }
+          return;
+        }
+      }
+      out.rows.push({ id:id, k:k });
+    }
+    if(W){ add('CR', W.cr); add('PS', W.ps); add('Mag', W.mag); add('MP', W.maxPain); }
+    // HVL is THEIR published Zero Gamma, read off their page — not a number of ours wearing their
+    // name. It belongs to the expiration filter their page itself defaults to, which is not
+    // necessarily either of our two windows, so it is tagged separately below.
+    try{ if(c.pub && typeof c.pub.zeroGamma==='number') add('HVL', c.pub.zeroGamma); }catch(e2){}
+    if(D0){ add('CR0', D0.cr); add('PS0', D0.ps); }
+    if(!out.rows.length) return { err:'their chain named no walls' };
+    out.suppressed=[];
+    try{
+      if(W&&W.crSuppressed) out.suppressed.push('CR at '+W.crSuppressed.k+' withheld — calls are only '+W.crSuppressed.share+'% of the book');
+      if(W&&W.psSuppressed) out.suppressed.push('PS at '+W.psSuppressed.k+' withheld — puts are only '+W.psSuppressed.share+'% of the book');
+    }catch(e1){}
+    return out;
+  }catch(e){ return { err:String(e&&e.message||e) }; }
+}
+
 // ---- ① FRAME: what kind of day is this, and where is the day trying to go ----
 function secFrame(sym){
   var R=regime2D(sym), P=sessionPhase();
@@ -16603,14 +16668,17 @@ function secFrame(sym){
   var U=null;  try{ U=lvlUnified(sym); }catch(e){}
   var ifc=null; try{ ifc=ifChain?ifChain(sym):null; }catch(e){}
   h+='<div class="g3frow">';
-  h+='<span class="g3fk"'+g3tip('Where is the structure pulling? This is the dominant gamma strike, not a momentum projection — it is where dealer hedging concentrates.')+'>TGT</span><span class="g3fv">'+((gp&&gp.mag!=null)?fmtLvl(gp.mag):'—')+'</span>';
+  // (v11.29) TGT reads the same book as the ladder. Pulling the target from Skylit while the levels
+  // came from IF put two different books' numbers side by side as if they were one reading.
+  h+='<span class="g3fk"'+g3tip('Where is the structure pulling? The heaviest strike in InsiderFinance\'s book — the same book the ladder below reads, so the target and the levels cannot come from two different sources.')+'>TGT</span><span class="g3fv">'+(ifMag!=null?fmtLvl(ifMag):'—')+'</span>';
   // (v11.27) The companion's shape is {dte0:{exps,lv}, toFri:{exps,lv}, all:{...}} — the previous
   // read looked for a 'week' key that never existed, so PAIN rendered blank while the number was there.
-  var mp=null;
+  var mp=null, ifMag=null;
   try{
-    if(ifc && !ifc.err){
-      var w=(ifc.toFri&&ifc.toFri.lv)?ifc.toFri.lv:((ifc.dte0&&ifc.dte0.lv)?ifc.dte0.lv:null);
-      if(w && typeof w.maxPain==='number') mp=w.maxPain;
+    var IL=ifLadder(sym);
+    if(IL && !IL.err){
+      if(typeof IL.maxPain==='number') mp=IL.maxPain;
+      for(var mi=0;mi<IL.rows.length;mi++){ if(/Mag/.test(IL.rows[mi].id)){ ifMag=IL.rows[mi].k; break; } }
     }
   }catch(e){}
   h+='<span class="g3fk"'+g3tip('Max pain from the option chain: the strike where the most contracts expire worthless. A slow pull, not a trade trigger — and it only matters near expiry.')+'>PAIN</span><span class="g3fv">'+(mp!=null?fmtLvl(mp):'—')+'</span>';
@@ -16666,24 +16734,33 @@ function secBias(sym){
 
 // ---- ③ TRADE LOCATION: the ladder, with price in it ----
 function secLoc(sym){
-  var U=null; try{ U=lvlUnified(sym); }catch(e){}
+  var L=null; try{ L=ifLadder(sym); }catch(e){ L={err:String(e&&e.message||e)}; }
   var h='<div class="g3b">';
-  if(!U||!U.rows||!U.rows.length){ h+='<div class="g3rx"><span>no level set yet — waiting on the chain fetch</span></div></div>'; return h; }
-  var px=U.px;
-  var rows=U.rows.slice().sort(function(a,b){ return b.k-a.k; });
+  if(!L || L.err){
+    // NO SILENT FALLBACK. Skylit's own levels exist and are one function call away, and that is exactly
+    // why they are not shown here: a ladder that quietly changes which book it is reading is worse than
+    // no ladder. Say what is missing and show nothing.
+    h+='<div class="g3blk" style="border-color:rgba(242,180,90,.45);background:rgba(242,180,90,.08)"'+
+       g3tip('The ladder reads InsiderFinance and only InsiderFinance. Skylit measures flow and IF measures open-interest stock — they are different quantities, so substituting one for the other would change what the numbers mean without changing how they look.')+
+       '><b style="color:#f2b45a">LEVELS UNAVAILABLE</b><span>'+g3esc((L&&L.err)||'no source')+
+       ' · no Skylit substitute — they measure a different thing</span></div>';
+    G3_AT_LEVEL=null;
+    h+='</div>'; return h;
+  }
+  var px=L.px;
+  var rows=L.rows.slice().sort(function(a,b){ return b.k-a.k; });
   var zone=null; try{ var av=atr(sym); zone=(av>0)?Math.max(av*0.6, 0.05):null; }catch(e){}
-  var placed=false;
-  var atLevel=null;
+  var placed=false, atLevel=null;
   rows.forEach(function(r){
     if(!placed && r.k<px){
-      h+='<div class="g3prow"><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+fmtLvl(px)+'</span><span class="g3d g3sub"></span></div>';
+      h+='<div class="g3prow"><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+fmtLvl(px)+'</span></div>';
       placed=true;
     }
     var d=r.k-px;
     var near=(zone!=null && Math.abs(d)<=zone);
     if(near && !atLevel) atLevel=r;
-    var isMag=/Mag/.test(r.id), isCR=/CR/.test(r.id), isPS=/PS/.test(r.id);
-    var col=isCR?'#f0616d':(isPS?'#2ec27e':(isMag?'#e3c341':'#f2b45a'));
+    var isMag=/Mag/.test(r.id), isCR=/CR/.test(r.id), isPS=/PS/.test(r.id), isMP=/MP/.test(r.id);
+    var col=isCR?'#f0616d':(isPS?'#2ec27e':(isMag?'#e3c341':(isMP?'#a371f7':'#f2b45a')));
     var far=(zone!=null && Math.abs(d)>zone*14)?' g3far':'';
     var band=isMag?' g3band':'';
     var pulse=near?' g3pulse':'';
@@ -16691,20 +16768,25 @@ function secLoc(sym){
        '<span class="g3nm'+pulse+'" style="color:'+col+'">'+g3esc(r.id)+'</span>'+
        '<span class="g3v'+pulse+'">'+fmtLvl(r.k)+'</span>'+
        (zone!=null?'<span class="g3zn"'+g3tip('A level is a zone, not a line. This band is scaled from ATR — price can trade through it and the level still holds.')+'>±'+fmtSpan(zone)+'</span>':'')+
-       '<span class="g3sr"'+g3tip('Which source produced this level: the self-fetched option chain, the passive Skylit tape, or both agreeing.')+'>'+g3esc(U.src||'?')+'</span>'+
+       '<span class="g3sr"'+g3tip(/HVL/.test(r.id)
+         ? 'Their PUBLISHED Zero Gamma, taken straight off their page rather than recomputed. It belongs to the expiration filter their page defaults to, which is not necessarily this ladder\'s window — so treat it as a structural reference rather than a window-matched level.'
+         : 'Source: InsiderFinance, computed from the option chain embedded in their own page. Their open interest refreshes once a day, so these levels are structural rather than intraday.')+'>'+(/HVL/.test(r.id)?'IF·pub':'IF')+'</span>'+
        '<span class="g3d '+dcls(d)+'">'+(d>0?'+':'')+fmtSpan(+d.toFixed(2))+'</span></div>';
   });
   if(!placed) h+='<div class="g3prow"><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+fmtLvl(px)+'</span></div>';
-  var rn=rollNote(sym);
-  // the companion carries the same roll on its own window; say so when it does
-  try{ var _c=ifChain(sym); if(_c && !_c.err && _c.rolled) rn=(rn?rn+' · IF too':'IF rolled to next Fri'); }catch(eRC2){}
-  h+='<div class="g3rx" style="margin-top:3px"><em>SET</em><span>'+
-     g3esc((U.src==='week'?'to Fri':(U.src==='0dte'?'0DTE':'passive feed'))+(rn?(' · '+rn):'')+
-     (U.nExps?(' · '+U.nExps+' exps'):'')+(U.n?(' · '+U.n+' strikes'):''))+'</span></div>';
+  var bits=[];
+  bits.push(L.rolled?'to next Fri (rolled)':'to Fri');
+  if(L.nExps) bits.push(L.nExps+' exps');
+  if(L.n) bits.push(L.n+' strikes');
+  if(L.ageMin!=null) bits.push(L.ageMin+'m old');
+  h+='<div class="g3rx" style="margin-top:3px"><em>SET</em><span>'+g3esc(bits.join(' · '))+'</span></div>';
+  (L.suppressed||[]).forEach(function(t){
+    h+='<div class="g3rx"><em></em><span style="color:#f2b45a">'+g3esc(t)+'</span></div>'; });
   h+='</div>';
   G3_AT_LEVEL=atLevel;
   return h;
 }
+
 var G3_AT_LEVEL=null;
 
 // ---- ④ REACTION: is the level actually defending itself ----
@@ -16820,6 +16902,7 @@ window.__gptsDebug.bias    = function(s){ return biasVotes(s||activeSym()); };
 window.__gptsDebug.steps   = function(s){ return stepState(s||activeSym()); };
 window.__gptsDebug.roll    = function(s){ s=s||activeSym(); try{ expSetRollCheck(s); }catch(e){} return { roll:EXPSET_ROLL[s]||null, note:rollNote(s) }; };
 window.__gptsDebug.face    = function(s){ return panelV3(s||activeSym()).length; };
+window.__gptsDebug.ifLadder= function(s){ return ifLadder(s||activeSym()); };
 var STEP_NAMES=['① FRAME','② BIAS','③ TRADE LOCATION','④ REACTION','⑤ EXECUTE'];
 var STEP_SHORT=['① FRAME','② BIAS','③ LOCATION','④ REACTION','⑤ EXECUTE'];
 var STEP_TIPS=[

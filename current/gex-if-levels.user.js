@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.1
+// @version      1.2
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
@@ -59,7 +59,21 @@ function extractChain(html){
     if(!d) return { err:'__NEXT_DATA__ present but initialData missing' };
     if(!d.options || !d.options.length) return { err:'initialData carries no options array' };
     if(typeof d.spot!=='number' || !(d.spot>0)) return { err:'no spot price in the payload' };
-    return { spot:d.spot, options:d.options, t:d.timestamp||null, stale:!!d.isStale, ticker:d.ticker||null };
+    // (v1.2) THEIR PUBLISHED NUMBERS, TAKEN AS-IS. Their page prints Zero Gamma, Call Wall and Put
+    // Wall in its header; computing our own versions of numbers they already publish is how a value
+    // ends up on our face with their name on it and a different figure underneath.
+    // Key names are tried directly, then found by pattern, so a rename on their side self-heals.
+    function pick(re){
+      for(var k in d){ if(re.test(k) && typeof d[k]==='number' && isFinite(d[k])) return d[k]; }
+      return null;
+    }
+    var pub={
+      zeroGamma:(typeof d.zeroGamma==='number')?d.zeroGamma:pick(/zero.?gamma|gamma.?flip|flip.?point/i),
+      callWall :(typeof d.callWall ==='number')?d.callWall :pick(/call.?wall/i),
+      putWall  :(typeof d.putWall  ==='number')?d.putWall  :pick(/put.?wall/i)
+    };
+    return { spot:d.spot, options:d.options, t:d.timestamp||null, stale:!!d.isStale,
+             ticker:d.ticker||null, pub:pub };
   }catch(e){ return { err:'parse failed: '+e.message }; }
 }
 
@@ -152,7 +166,7 @@ function computeAll(ch){
   if(!inFri.length) inFri=[front];
   return {
     spot:ch.spot, ticker:ch.ticker, payloadT:ch.t, stale:ch.stale,
-    asOf:Date.now(), today:W.today, friday:W.friday, rolled:!!W.rolled,
+    asOf:Date.now(), today:W.today, friday:W.friday, rolled:!!W.rolled, pub:(ch.pub||null),
     dte0:{ exps:[front], lv:levelsFor(ch.options, ch.spot, function(o){ return ymdOf(o)===front; }) },
     toFri:{ exps:inFri, lv:levelsFor(ch.options, ch.spot, function(o){ return ymdOf(o)>=W.today && ymdOf(o)<=W.friday; }) },
     all:{ exps:[all[0],all[all.length-1]], nExps:all.length, lv:levelsFor(ch.options, ch.spot, function(){ return true; }) }

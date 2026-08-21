@@ -1,3 +1,40 @@
+## v11.30 — HVL is their published Zero Gamma
+
+Their page prints Zero Gamma in its header — 766.48 on SPY, 7679.88 on SPX. v11.29 computed a
+cumulative net-GEX crossing instead and was one step from putting it on the face labelled IF. That
+is the same mislabeling as showing Skylit numbers in an IF ladder, one layer down.
+
+The companion now takes their published Zero Gamma, Call Wall and Put Wall straight off the page.
+Key names are read directly and then found by pattern, so a rename on their side self-heals rather
+than silently dropping to null. When they publish nothing the field is null and the HVL row simply
+does not appear — nothing is substituted.
+
+Their header values belong to the expiration filter their page defaults to, which is not necessarily
+either of this ladder's windows, so the HVL row is tagged `IF·pub` rather than `IF` and its hover
+says to read it as a structural reference rather than a window-matched level.
+
+## v11.29 — the ladder shows InsiderFinance's levels
+
+The requirement from the first session, finally on the face. The companion has been fetching and
+computing their levels correctly for two builds; v11.26 wired the ladder to lvlUnified — the SKYLIT
+sets — so the panel displayed our own numbers while their chain sat unused in storage. Live on
+2026-08-21 the face read CR 766 while their book said 770.
+
+③ TRADE LOCATION now reads their chain and nothing else: CR, CR0, PS, PS0, Mag and Max Pain,
+converted to the chart's instrument. The FRAME target reads the same book, so the target and the
+levels can no longer come from two different sources.
+
+**No fallback (user-directed).** If their chain is missing or older than 25 minutes the ladder says
+so and shows nothing. Skylit's levels are one call away and that is exactly why they are not
+substituted: Skylit measures flow, IF measures open-interest stock, and swapping one for the other
+changes what the numbers mean without changing how they look.
+
+Nothing is invented. There is no HVL row, because they do not hand us a zero-gamma level and a
+homemade approximation labelled with their name would be the same mislabeling in a different place.
+Every row on the ladder is a level they actually give us.
+
+Skylit keeps the work their once-daily chain cannot do: growth, accumulation and node lifecycle.
+
 ## v11.28 — the roll was oscillating
 
 The v11.27 roll worked once and then fought itself. `expSetRollCheck` re-tested the HELD week set

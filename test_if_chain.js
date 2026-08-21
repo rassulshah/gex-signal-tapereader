@@ -13,7 +13,7 @@
 const fs=require('fs'); const src=fs.readFileSync('./current/gex-if-levels.user.js','utf8');
 let pass=0, fail=0; const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+JSON.stringify(g):''));} };
 function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.exec(src);let i=src.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}return src.slice(m.index,e+1);}
-eval(ex('ymdNum')); eval(ex('windows'));
+eval(ex('ymdNum')); eval(ex('windows')); eval(ex('extractChain'));
 global.SIDE_MIN=0.05;
 eval(['ymdOf','ymdNum','windows','levelsFor','extractChain','computeAll'].map(ex).join('\n'));
 
@@ -108,8 +108,6 @@ eval(['ymdOf','ymdNum','windows','levelsFor','extractChain','computeAll'].map(ex
   ok(R.spot===761.14 && R.ticker==='SPY','spot and ticker ride along');
   ok(typeof R.asOf==='number','and a capture time, so staleness is checkable');
 }
-console.log('\n'+pass+' passed, '+fail+' failed');
-process.exit(fail?1:0);
 
 // ---- (v1.1) THE COMPANION CARRIED THE SAME FRIDAY COLLAPSE -------------------------------
 // Seen live on 2026-08-21: the stored payload reported friday:20260821 and today:20260821, so its
@@ -135,3 +133,28 @@ process.exit(fail?1:0);
   ok(W.friday===20260828,'Monday runs to that same week Friday',W.friday);
   ok(!W.rolled,'no roll on a Monday');
 }
+
+// ---- (v1.2) THEIR PUBLISHED NUMBERS ARE TAKEN, NOT RECOMPUTED ----------------------------
+// Their page header prints Zero Gamma, Call Wall and Put Wall (SPY 766.48 / 800 / 760 on
+// 2026-08-21). v11.29 computed its own gamma flip instead and was one step from labelling it IF.
+{
+  const mk=(d)=>'<script id="__NEXT_DATA__" type="application/json">'+JSON.stringify(
+    {props:{pageProps:{initialData:Object.assign({spot:765.2,options:[{strike:765,cp:'C',gamma:0.01,openInterest:10,expireYear:2026,expireMonth:8,expireDay:21}]},d)}}})+'</script>';
+  let ch=extractChain(mk({zeroGamma:766.48, callWall:800, putWall:760}));
+  ok(!ch.err,'a payload with published levels parses',ch.err);
+  ok(ch.pub.zeroGamma===766.48,'their zero gamma is taken verbatim',ch.pub);
+  ok(ch.pub.callWall===800 && ch.pub.putWall===760,'so are their walls');
+
+  ch=extractChain(mk({zeroGammaLevel:7679.88, callWallPrice:7700}));
+  ok(ch.pub.zeroGamma===7679.88,'a renamed zero-gamma key is found by pattern rather than lost',ch.pub);
+  ok(ch.pub.callWall===7700,'and so is a renamed call wall');
+
+  ch=extractChain(mk({}));
+  ok(ch.pub.zeroGamma===null && ch.pub.callWall===null,'when they publish nothing the fields are null — never invented',ch.pub);
+
+  ch=extractChain(mk({zeroGamma:'n/a'}));
+  ok(ch.pub.zeroGamma===null,'a non-numeric zero gamma is treated as absent');
+}
+
+console.log('\n'+pass+' passed, '+fail+' failed');
+process.exit(fail?1:0);
