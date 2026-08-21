@@ -1,0 +1,151 @@
+<title>Entry Section</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --page-bg:#f2f4f7; --page-ink:#1a1f28; --page-sub:#5b6675; --page-card:#ffffff;
+    --page-rule:#dfe4ea; --page-accent:#2f6fb0; --tag-new:#1f8f5c; --tag-q:#c0394a;
+    --p-bg:#0b0e14; --p-card:#12161f; --p-line:#1e2530;
+    --p-ink:#e6edf3; --p-sub:#8b98a9; --p-time:#f3f6fa;
+    --cr:#f0616d; --ps:#2ec27e; --hvl:#f2b45a; --mag:#e3c341; --blue:#4a90d9; --purple:#a371f7;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }}
+  :root[data-theme="dark"]{
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page-bg);color:var(--page-ink);
+       font-family:'IBM Plex Sans',system-ui,-apple-system,sans-serif;line-height:1.5}
+  .wrap{max-width:1060px;margin:0 auto;padding:30px 20px 60px}
+  h1{font-size:21px;font-weight:600;margin:0 0 4px;letter-spacing:-0.01em}
+  .lede{color:var(--page-sub);font-size:14px;margin:0 0 24px;max-width:64ch}
+  h2{font-size:14px;font-weight:600;margin:28px 0 10px;padding-top:18px;border-top:1px solid var(--page-rule)}
+  .cols{display:grid;grid-template-columns:352px 1fr;gap:26px;align-items:start}
+  @media (max-width:820px){ .cols{grid-template-columns:1fr} }
+  .panel{width:352px;background:var(--p-bg);border:1px solid var(--p-line);border-radius:6px;
+         overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+         font-variant-numeric:tabular-nums}
+  .sect{padding:7px 9px;border-bottom:1px solid var(--p-line)}
+  .sect:last-child{border-bottom:none}
+  .shdr{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+  .stitle{color:var(--p-ink);font-size:11px;font-weight:800;letter-spacing:.06em}
+  .ssub{color:var(--p-sub);font-size:9.5px;font-weight:600}
+  .bias{margin-left:auto;font-size:9.5px;font-weight:800}
+  .muted{color:var(--p-sub);font-size:9.5px}
+
+  .cand{border:1px solid var(--p-line);border-radius:4px;padding:5px 7px;margin-bottom:5px;
+        background:rgba(255,255,255,.015)}
+  .cand.primary{border-color:rgba(240,97,109,.45);background:rgba(240,97,109,.06)}
+  .cand.dim{opacity:.55}
+  .ctop{display:flex;align-items:center;gap:7px;white-space:nowrap}
+  .cname{font-weight:800;font-size:11px}
+  .cval{color:var(--p-ink);font-weight:700;font-size:14px}
+  .cqual{font-size:9px;color:var(--p-sub)}
+  .cgrade{margin-left:auto;font-size:10px;font-weight:800;padding:1px 6px;border-radius:3px;
+          background:rgba(139,152,169,.18);color:var(--p-sub)}
+  .cgrade.b{background:rgba(46,194,126,.18);color:var(--ps)}
+  .cframe{display:flex;align-items:center;gap:8px;margin-top:4px;font-size:9.5px;white-space:nowrap}
+  .cframe .t{color:var(--ps);font-weight:700}
+  .cframe .x{color:var(--cr);font-weight:700}
+  .cframe .r{margin-left:auto;color:var(--p-ink);font-weight:800;font-size:10.5px}
+  .none{border:1px dashed var(--p-line);border-radius:4px;padding:9px 8px;text-align:center}
+  .none b{display:block;color:var(--hvl);font-size:12px;font-weight:800;margin-bottom:3px}
+  .none span{font-size:9.5px;color:var(--p-sub);line-height:1.45}
+  .watch{margin-top:5px;font-size:9px;color:var(--p-sub);line-height:1.5}
+  .watch b{color:var(--p-ink);font-weight:700}
+
+  .notes{display:flex;flex-direction:column;gap:13px}
+  .note{background:var(--page-card);border:1px solid var(--page-rule);border-radius:6px;padding:12px 14px}
+  .note h3{margin:0 0 5px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .note p{margin:0 0 7px;font-size:13px;color:var(--page-sub)} .note p:last-child{margin-bottom:0}
+  .tag{font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px;
+       background:rgba(47,111,176,.12);color:var(--page-accent)}
+  .tag.new{background:rgba(46,194,126,.14);color:var(--tag-new)}
+  .tag.q{background:rgba(240,97,109,.14);color:var(--tag-q)}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12px;
+       background:rgba(127,140,158,.14);padding:1px 4px;border-radius:3px}
+</style>
+
+<div class="wrap">
+  <h1>Entry — where you act</h1>
+  <p class="lede">Candidate pullback nodes in the direction of the bias, each with the level it leans on,
+  what it's made of, and the structural frame around it. Live numbers, ES1 at 7693.</p>
+
+  <h2>Right now — the state that matters most</h2>
+  <div class="cols">
+    <div class="panel"><div class="sect">
+      <div class="shdr"><span class="stitle">ENTRY</span><span class="ssub">pullback nodes</span>
+        <span class="bias muted">no lean</span></div>
+      <div class="none"><b>NO SETUP</b>
+        <span>Price is sitting on the magnet at <b style="color:#e6edf3">7693</b> with no directional lean.
+        Nearest structure is 20 points below, 90 above.</span></div>
+      <div class="watch">Watch: a break of <b>7673</b> opens the lower void · reclaim of <b>7703</b>
+        turns Next Stop up</div>
+    </div></div>
+    <div class="notes">
+      <div class="note"><h3><span class="tag new">the point</span> It must be able to say nothing</h3>
+        <p>A section that always produces a candidate will produce a bad one on days like this. Price
+        pinned on the magnet with no lean is a genuine no-trade state, and saying so is more valuable than
+        manufacturing a C-grade entry.</p>
+        <p>The <b>Watch:</b> line keeps it useful without inventing a setup — the two prices that would
+        create one.</p></div>
+    </div>
+  </div>
+
+  <h2>With a setup — the bearish case from earlier</h2>
+  <div class="cols">
+    <div class="panel"><div class="sect">
+      <div class="shdr"><span class="stitle">ENTRY</span><span class="ssub">pullback nodes</span>
+        <span class="bias" style="color:var(--cr)">↓ short</span></div>
+
+      <div class="cand primary">
+        <div class="ctop"><span class="cname" style="color:var(--cr)">CEIL</span>
+          <span class="cval">7689.75</span><span class="cqual">acm · 3rd roll · 2 tests</span>
+          <span class="cgrade b">B</span></div>
+        <div class="cframe"><span class="t">→ 7639.5 (50)</span><span class="x">✗ 7699.75 (10)</span>
+          <span class="r">5.0R</span></div>
+      </div>
+
+      <div class="cand">
+        <div class="ctop"><span class="cname" style="color:var(--mag)">MAG</span>
+          <span class="cval">7699.75</span><span class="cqual">next wall · untested</span>
+          <span class="cgrade">C</span></div>
+        <div class="cframe"><span class="t">→ 7639.5 (60)</span><span class="x">✗ 7712 (12)</span>
+          <span class="r">5.0R</span></div>
+      </div>
+
+      <div class="cand dim">
+        <div class="ctop"><span class="cname" style="color:var(--ps)">PS</span>
+          <span class="cval">7639.5</span><span class="cqual">3 tests, held · if bias flips</span>
+          <span class="cgrade">—</span></div>
+      </div>
+
+      <div class="watch">Stacked: <b>7689.75</b> and <b>7699.75</b> are 10 apart — the deeper node has
+        held twice, the upper one is untested</div>
+    </div></div>
+
+    <div class="notes">
+      <div class="note"><h3><span class="tag new">new</span> Candidates, not one answer</h3>
+        <p>You asked for pullback <em>nodes</em>, plural. Two or three in the bias direction, ranked, with
+        the opposite-side node dimmed underneath as <code>if bias flips</code> — so a reversal doesn't
+        leave you hunting.</p></div>
+
+      <div class="note"><h3><span class="tag new">new</span> The structural frame, as arithmetic</h3>
+        <p><code>→ 7639.5 (50) · ✗ 7699.75 (10) · 5.0R</code>. The target is the section's own TARGET; the
+        invalidation is the <b>next level beyond the entry</b> — structural, not an arbitrary stop
+        distance. The ratio is just those two numbers divided.</p>
+        <p>Descriptive throughout: it states what the structure implies, not what to do about it.</p></div>
+
+      <div class="note"><h3><span class="tag new">new</span> The stack line</h3>
+        <p>Your point from weeks ago — two or three pullback nodes clustered together. The line names the
+        spacing and which has been tested, so you can tell a first touch from a retest.</p></div>
+
+      <div class="note"><h3><span class="tag q">decide</span> Three things</h3>
+        <p>Is <b>R</b> welcome, or too close to a recommendation for your taste? Should the
+        <b>opposite-side node</b> show at all, or is it clutter? And how many candidates — two, or three?</p></div>
+    </div>
+  </div>
+</div>

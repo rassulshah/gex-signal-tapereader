@@ -1,0 +1,264 @@
+<title>Complete Panel</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --page-bg:#f2f4f7; --page-ink:#1a1f28; --page-sub:#5b6675; --page-card:#ffffff;
+    --page-rule:#dfe4ea; --page-accent:#2f6fb0; --tag-new:#1f8f5c; --tag-q:#c0394a;
+    --p-bg:#0b0e14; --p-card:#12161f; --p-line:#1e2530;
+    --p-ink:#e6edf3; --p-sub:#8b98a9; --p-time:#f3f6fa;
+    --cr:#f0616d; --ps:#2ec27e; --hvl:#f2b45a; --mag:#e3c341; --blue:#4a90d9; --purple:#a371f7;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }}
+  :root[data-theme="dark"]{
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page-bg);color:var(--page-ink);
+       font-family:'IBM Plex Sans',system-ui,-apple-system,sans-serif;line-height:1.55}
+  .wrap{max-width:1060px;margin:0 auto;padding:30px 20px 60px}
+  h1{font-size:21px;font-weight:600;margin:0 0 4px;letter-spacing:-0.01em}
+  .lede{color:var(--page-sub);font-size:14px;margin:0 0 24px;max-width:66ch}
+  .cols{display:grid;grid-template-columns:352px 1fr;gap:26px;align-items:start}
+  @media (max-width:820px){ .cols{grid-template-columns:1fr} }
+  .panel{width:352px;background:var(--p-bg);border:1px solid var(--p-line);border-radius:6px;
+         overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+         font-variant-numeric:tabular-nums}
+  .phdr{display:flex;align-items:center;gap:8px;padding:6px 9px;border-bottom:1px solid var(--p-line);
+        background:var(--p-card)}
+  .phdr b{color:var(--p-ink);font-size:12px;font-weight:600}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--ps)}
+  .muted{color:var(--p-sub);font-size:9.5px}
+  .sect{padding:7px 9px;border-bottom:1px solid var(--p-line)}
+  .sect:last-child{border-bottom:none}
+  .shdr{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
+  .stitle{color:var(--p-ink);font-size:10.5px;font-weight:800;letter-spacing:.07em}
+  .ssub{color:var(--p-sub);font-size:9px;font-weight:600}
+
+  /* step bar */
+  .steps{display:flex;gap:3px;padding:6px 9px;border-bottom:1px solid var(--p-line);background:var(--p-card)}
+  .steps span{flex:1;text-align:center;font-size:7.5px;font-weight:800;letter-spacing:.03em;
+              padding:3px 1px;border-radius:3px;background:rgba(139,152,169,.09);color:var(--p-sub)}
+  .steps span.on{background:rgba(242,180,90,.22);color:var(--hvl)}
+  .steps span.done{color:var(--ps);background:rgba(46,194,126,.12)}
+
+  /* direction */
+  .dir{padding:8px 9px;background:linear-gradient(180deg,rgba(242,180,90,.1),transparent 74%);
+       border-bottom:1px solid var(--p-line)}
+  .dtop{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:6px}
+  .verdict{font-size:19px;font-weight:800;line-height:1.05;color:var(--hvl)}
+  .reg{justify-self:center;font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:3px;
+       background:rgba(163,113,247,.16);color:var(--purple);border:1px solid rgba(163,113,247,.35)}
+  .tgt{text-align:right;line-height:1.08}
+  .tgt .k{display:block;font-size:7px;color:var(--p-sub);font-weight:700;letter-spacing:.07em}
+  .tgt .v{display:block;font-size:14px;font-weight:800;color:var(--mag)}
+  .tgt .h{display:block;font-size:7px;color:var(--p-sub);font-weight:600}
+  .inval{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:9px;color:var(--p-sub)}
+  .inval b{color:var(--cr);font-weight:800}
+  .inval .em{margin-left:auto}
+  .inputs{display:flex;gap:4px;margin-top:7px}
+  .inp{flex:1;text-align:center;border:1px solid var(--p-line);border-radius:3px;padding:2px 0 3px}
+  .inp .k{display:block;font-size:6.5px;color:var(--p-sub);font-weight:700;letter-spacing:.04em}
+  .inp .v{display:block;font-size:11.5px;font-weight:800;line-height:1.15}
+  .inp.pend{opacity:.38;border-style:dashed}
+  .inp.flag{border-color:var(--hvl);background:rgba(242,180,90,.1)}
+  .tally{display:flex;gap:6px;margin-top:5px;font-size:9px;color:var(--p-sub)}
+  .tally b{color:var(--hvl);font-weight:800}
+  .ev{margin-top:6px;padding-top:5px;border-top:1px solid var(--p-line);
+      display:flex;flex-direction:column;gap:2px}
+  .ev div{font-size:9px;color:var(--p-sub);line-height:1.4}
+  .ev em{font-style:normal;color:var(--p-ink);font-weight:700;letter-spacing:.03em;font-size:8px}
+  .ev b{color:var(--p-ink);font-weight:700}
+
+  .pathline{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700}
+  .arw{color:var(--p-sub);font-size:10px}
+
+  .r{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:10.5px;line-height:1.62}
+  .nm{display:inline-block;width:74px;font-weight:800;font-size:10px;overflow:hidden;text-overflow:ellipsis}
+  .v{color:var(--p-ink);font-weight:700;font-size:12px;min-width:44px}
+  .sr{font-size:7px;font-weight:700;padding:0 3px;border-radius:2px;
+      background:rgba(139,152,169,.16);color:var(--p-sub)}
+  .st{font-size:8px;color:var(--p-sub);min-width:24px}
+  .ent{font-size:7.5px;font-weight:800;padding:0 3px;border-radius:2px;
+       background:rgba(240,97,109,.2);color:var(--cr)}
+  .ent.no{background:rgba(139,152,169,.14);color:var(--p-sub)}
+  .tg{font-size:7.5px;font-weight:800;padding:0 3px;border-radius:2px;
+      background:rgba(227,195,65,.22);color:var(--mag)}
+  .d{margin-left:auto;font-weight:700;font-size:9.5px}
+  .up{color:var(--ps)} .dn{color:var(--cr)}
+  .far{opacity:.5}
+  .void{margin:1px -9px;padding:0 9px;
+        background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(139,152,169,.06) 4px,rgba(139,152,169,.06) 8px)}
+  .void span{font-size:7.5px;color:var(--p-sub);font-style:italic}
+  .prow{display:flex;align-items:center;gap:5px;background:rgba(243,246,250,.08);
+        margin:2px -9px;padding:2px 9px;border-top:1px solid rgba(243,246,250,.22);
+        border-bottom:1px solid rgba(243,246,250,.22)}
+  .prow .nm,.prow .v{color:var(--p-time)} .prow .v{font-size:13px}
+  @keyframes soft{0%,100%{opacity:.5}50%{opacity:1}}
+  @keyframes ring{0%{r:3;opacity:.9}70%{r:9;opacity:0}100%{r:9;opacity:0}}
+  .pulse{animation:soft 2s ease-in-out infinite}
+  .pring{animation:ring 2s ease-out infinite}
+  @media (prefers-reduced-motion: reduce){ .pulse{animation:none;opacity:1} .pring{animation:none;opacity:.3} }
+  .none{border:1px dashed var(--p-line);border-radius:4px;padding:7px;text-align:center}
+  .none b{display:block;color:var(--hvl);font-size:11px;font-weight:800;margin-bottom:2px}
+  .none span{font-size:8.5px;color:var(--p-sub);line-height:1.4}
+  .watch{margin-top:4px;font-size:8.5px;color:var(--p-sub)}
+  .watch b{color:var(--p-ink);font-weight:700}
+
+  .notes{display:flex;flex-direction:column;gap:13px}
+  .note{background:var(--page-card);border:1px solid var(--page-rule);border-radius:6px;padding:12px 14px}
+  .note h3{margin:0 0 5px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .note p{margin:0 0 7px;font-size:13px;color:var(--page-sub)} .note p:last-child{margin-bottom:0}
+  .tag{font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px;
+       background:rgba(47,111,176,.12);color:var(--page-accent)}
+  .tag.new{background:rgba(46,194,126,.14);color:var(--tag-new)}
+  .tag.q{background:rgba(240,97,109,.14);color:var(--tag-q)}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12px;
+       background:rgba(127,140,158,.14);padding:1px 4px;border-radius:3px}
+</style>
+
+<div class="wrap">
+  <h1>The complete panel</h1>
+  <p class="lede">Every section in the agreed order, with the five-step indicator on top. Live values,
+  ES1 7707.00 — and today the structure and the tape are fighting, so the gating actually gets exercised.</p>
+
+  <div class="cols">
+    <div class="panel">
+      <div class="phdr"><span class="dot"></span><b>Tapereader</b><span class="muted">10s</span>
+        <span style="margin-left:auto" class="muted">4h 30m to close</span></div>
+
+      <div class="steps" title="Where am I in the process right now?">
+        <span class="done">01 FRAME</span><span class="on">02 BIAS</span><span>03 LOCATION</span>
+        <span>04 REACTION</span><span>05 EXECUTE</span></div>
+
+      <div class="dir" title="Which way, and how much should I trust it?">
+        <div class="dtop"><span class="verdict">↕ MIXED</span>
+          <span class="reg">REG: −G</span>
+          <span class="tgt"><span class="k">TARGET</span><span class="v">7695</span><span class="h">EOD</span></span></div>
+        <div class="inval">invalid <b>above 7715</b>
+          <span class="em">EM ±22 · used 18 · <b style="color:var(--hvl)">4 left</b></span></div>
+        <div class="inputs">
+          <span class="inp flag"><span class="k">TREND</span><span class="v up">↑</span></span>
+          <span class="inp"><span class="k">DRIFT</span><span class="v dn">↓</span></span>
+          <span class="inp"><span class="k">TRINITY</span><span class="v dn">2/3</span></span>
+          <span class="inp pend"><span class="k">DEX</span><span class="v">·</span></span>
+        </div>
+        <div class="tally"><b>no lean</b><span>· structure ↓, tape ↑ — they disagree</span></div>
+        <div class="ev">
+          <div><em>TAPE</em> price reclaimed <b>7695</b>, up 12 in 40m — against the magnet</div>
+          <div><em>AGAINST</em> cage at <b>29%</b> of a 110-pt range, magnet still <b>−12</b> below</div>
+        </div>
+      </div>
+
+      <div class="sect" title="Where is price going, and by what route?">
+        <div class="shdr"><span class="stitle">PATH</span><span class="ssub">route to target</span>
+          <span class="ssub" style="margin-left:auto">tape disagrees</span></div>
+        <div class="pathline"><span style="color:var(--p-sub)">7707</span><span class="arw">→</span>
+          <span class="pulse" style="color:var(--mag)">7695</span></div>
+      </div>
+
+      <div class="sect" style="padding:7px 9px 8px">
+        <div style="border:1px solid var(--p-line);border-radius:3px;overflow:hidden">
+          <svg viewBox="0 0 334 150" style="width:100%;height:auto;display:block">
+            <rect width="334" height="150" fill="#12161f"/>
+            <rect x="0" y="14" width="334" height="40" fill="#8b98a9" opacity=".045"/>
+            <rect x="216" y="0" width="118" height="150" fill="#0b0e14" opacity=".4"/>
+            <line x1="216" y1="0" x2="216" y2="150" stroke="#1e2530"/>
+            <rect x="238" y="2" width="92" height="11" rx="2" fill="#0b0e14" opacity=".92"/>
+            <text x="328" y="10.5" fill="#f0616d" font-size="8.5" font-weight="700" text-anchor="end"
+                  font-family="ui-monospace,monospace">▲ CR 7785</text>
+            <line x1="0" y1="60" x2="334" y2="60" stroke="#f0616d" stroke-width="1.1" opacity=".7"
+                  stroke-dasharray="4,3"/>
+            <rect x="132" y="54" width="64" height="11" rx="2" fill="#12161f" opacity=".92"/>
+            <text x="164" y="63" fill="#f0616d" font-size="9" font-weight="700" text-anchor="middle"
+                  font-family="ui-monospace,monospace">7715 · inval</text>
+            <line class="pulse" x1="0" y1="106" x2="334" y2="106" stroke="#e3c341" stroke-width="2"/>
+            <rect x="126" y="100" width="80" height="11" rx="2" fill="#12161f" opacity=".94"/>
+            <text class="pulse" x="166" y="109" fill="#e3c341" font-size="9" font-weight="800"
+                  text-anchor="middle" font-family="ui-monospace,monospace">KING 7695</text>
+            <line x1="0" y1="130" x2="334" y2="130" stroke="#2ec27e" stroke-width="1" opacity=".6"/>
+            <text x="300" y="140" fill="#2ec27e" font-size="8" font-weight="700" text-anchor="middle"
+                  font-family="ui-monospace,monospace" opacity=".85">PS 7675</text>
+            <polyline fill="none" stroke="#e6edf3" stroke-width="1.5" opacity=".96"
+              points="0,110 18,114 36,106 54,116 72,104 90,110 108,98 126,102 144,90 162,94 180,82 198,86 216,76"/>
+            <polyline fill="none" stroke="#4a90d9" stroke-width="1.5" stroke-dasharray="5,4" opacity=".85"
+              points="216,76 254,88 288,98 318,106"/>
+            <circle class="pring" cx="216" cy="76" r="3" fill="none" stroke="#f3f6fa" stroke-width="1.4"/>
+            <circle cx="216" cy="76" r="3" fill="#f3f6fa"/>
+            <rect x="156" y="60" width="56" height="12" rx="2" fill="#0b0e14" opacity=".94"/>
+            <text x="208" y="69" fill="#f3f6fa" font-size="9.5" font-weight="800" text-anchor="end"
+                  font-family="ui-monospace,monospace">7707.00</text>
+          </svg>
+        </div>
+      </div>
+
+      <div class="sect" title="Where can price reverse, and how strong is each spot?">
+        <div class="shdr"><span class="stitle">LEVELS</span><span class="ssub">0DTE+Fri · 6 nodes</span>
+          <span class="ssub" style="margin-left:auto">HVL — no flip</span></div>
+
+        <div class="r far"><span class="nm" style="color:var(--cr)">CR</span><span class="v">7785</span>
+          <span class="sr">both</span><span class="st">43%</span><span class="d up">+78</span></div>
+        <div class="void"><span>— 70 pt void —</span></div>
+        <div class="r"><span class="nm" style="color:var(--cr)">CEIL</span><span class="v">7715</span>
+          <span class="sr">tape</span><span class="st">90%</span>
+          <span class="ent no">far · EM</span><span class="d up">+8</span></div>
+        <div class="r"><span class="nm">·</span><span class="v">7705</span>
+          <span class="sr">tape</span><span class="st">56%</span><span class="d dn">−2</span></div>
+        <div class="prow"><span class="nm">► ES1</span><span class="v">7707.00</span>
+          <span class="d muted">+0.19%</span></div>
+        <div class="r"><span class="nm pulse" style="color:var(--mag)">KING·MAG</span>
+          <span class="v pulse">7695</span><span class="sr">both</span><span class="st">100%</span>
+          <span class="tg pulse">TARGET</span><span class="d dn">−12</span></div>
+        <div class="r"><span class="nm" style="color:var(--ps)">FLR·PS</span><span class="v">7675</span>
+          <span class="sr">both</span><span class="st">74%</span><span class="st">2 held</span>
+          <span class="d dn">−32</span></div>
+        <div class="r far"><span class="nm" style="color:var(--ps)">GATE</span><span class="v">7635</span>
+          <span class="sr">tape</span><span class="st">57%</span><span class="d dn">−72</span></div>
+      </div>
+
+      <div class="sect" title="Where do I get in, and where am I wrong?">
+        <div class="shdr"><span class="stitle">ENTRY</span><span class="ssub">step 02 — held</span></div>
+        <div class="none"><b>NO SETUP</b>
+          <span>Structure and tape disagree, so there is no lean to trade with.<br>
+          Only <b style="color:#e6edf3">4 pts</b> of expected move left — <b style="color:#e6edf3">7715</b>
+          is out of reach today.</span></div>
+        <div class="watch">Advance if: price rejects <b>7705</b> back down, or holds <b>7715</b> on a
+          retest</div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note"><h3><span class="tag new">new</span> The step bar is doing real work</h3>
+        <p><code>01 FRAME</code> is done — we have the box, the regime and the expected move.
+        <code>02 BIAS</code> is <b>lit and holding</b>, because structure says down and the tape says up.
+        Steps 3, 4 and 5 are unreachable until that resolves.</p>
+        <p>That's the gate working. The old <code>Steps 1 2 3 4 5</code> described Skylit's method; this
+        one tells you that today, right now, you are waiting.</p></div>
+
+      <div class="note"><h3><span class="tag new">new</span> Expected move kills an entry</h3>
+        <p><code>EM ±22 · used 18 · 4 left</code>. The 7715 node is 8 points away with 4 points of range
+        priced for the rest of the session — so it's tagged <code>far · EM</code> and greyed. That entry
+        looked perfectly reasonable an hour ago and isn't any more.</p>
+        <p>This is the gap I flagged as the biggest hole. It's now doing exactly the job it should.</p></div>
+
+      <div class="note"><h3><span class="tag new">new</span> Read-level invalidation</h3>
+        <p><code>invalid above 7715</code> sits beside the target. One number that says when to stop
+        believing the whole read — and it's drawn on the chart as the dashed red line, so the picture and
+        the text agree.</p></div>
+
+      <div class="note"><h3><span class="tag">restored</span> Question-first hovers</h3>
+        <p>Every section header answers a question rather than describing itself — <em>"Where can price
+        reverse, and how strong is each spot?"</em> on LEVELS, <em>"Where do I get in, and where am I
+        wrong?"</em> on ENTRY. Hover any of them.</p></div>
+
+      <div class="note"><h3><span class="tag q">honest</span> Today's read is "don't"</h3>
+        <p>Price reclaimed the magnet and is running up while the structure still points down. The panel's
+        answer is <b>no lean, no setup, wait</b> — and the <code>Advance if:</code> line names the two
+        things that would change it.</p>
+        <p>A panel that produced a trade here would be worse than one that says nothing.</p></div>
+    </div>
+  </div>
+</div>

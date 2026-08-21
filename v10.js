@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.23
+// @version    11.25
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -540,7 +540,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.23';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.25';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3251,6 +3251,27 @@ function irtBuildCsv(){
   });
   try{ var ns=nextStopPick(sym); if(ns&&ns.ok&&ns.level!=null) rows.push({k:ns.level,lbl:'NextStop '+ns.grade,col:IRT_COLORS.ns,w:2,style:2}); }catch(e){}
   try{ var pe=pbEntryPick(sym); if(pe&&pe.ok&&pe.level!=null) rows.push({k:pe.level,lbl:'PBentry '+pe.grade+(pe.state?(' '+pe.state):''),col:IRT_COLORS.pb,w:2,style:2}); }catch(e){}
+  // (v11.25) OUR gamma level set — CR/CR0/PS/PS0/HVL/Mag — so the chart carries the same reads as the card.
+  try{
+    var U=lvlUnified(sym);
+    if(U && U.rows){
+      U.rows.forEach(function(r){
+        var isZ=!!r.tag, first=r.id.split('·')[0];
+        var colr=(first.indexOf('CR')===0)?IRT_COLORS.ceil:((first.indexOf('PS')===0)?IRT_COLORS.flr:((first==='HVL')?IRT_COLORS.gate:IRT_COLORS.king));
+        rows.push({ k:r.k, lbl:r.id, col:colr, w:(isZ?1:2), style:(isZ?1:0) });
+      });
+    }
+  }catch(eLv){}
+  // (v11.25) THEIR chain levels, tagged IF so nothing on the chart is ambiguous about where a line came from.
+  try{
+    var CHi=ifChainRows(sym,'toFri');
+    if(CHi && CHi.rows){
+      CHi.rows.forEach(function(r){
+        var colr2=(r.id==='CR')?IRT_COLORS.ceil:((r.id==='PS')?IRT_COLORS.flr:IRT_COLORS.deriv);
+        rows.push({ k:r.k, lbl:'IF '+r.id, col:colr2, w:1, style:1 });
+      });
+    }
+  }catch(eCi){}
   if(!rows.length) return null;
   targets.forEach(function(T){
     rows.forEach(function(R){ out.push(irtCsvRow(T.sym, irtRound(R.k*T.mul, T.tick), R.lbl+T.tag, R.col, R.w, R.style)); });
@@ -12992,6 +13013,48 @@ function expSetTick(){
 // reads -14,600M) while ours is POSITIVE (our 760 reads +278M). Their net is call-put; ours is put-call.
 // So every rule flips: their "most positive above" is our MOST NEGATIVE above. Get this backwards and the
 // walls swap sides, which is the kind of error that looks plausible on the card and is wrong all day.
+// ---- (v11.24) SNAPSHOT SELECTION — the bug that invalidated every level -------------------------
+// `levels` is a ~390-entry time series and the LAST entry is the CURRENT, STILL-FORMING bar. During RTH
+// it is populated properly; after the close it degenerates to net = ±v on every strike, carrying no
+// call/put information at all. Measured on the live feed 2026-08-20:
+//
+//     snapshot   0 -> 84 strikes with |net| < v      (real decomposition)
+//              195 -> 78
+//              388 -> 82
+//              389 ->  0                              <- the one we were reading
+//
+// Reading that frame made every strike look 100% call or 100% put, which is why our call wall picked 765
+// (a strike a published book shows as heavily PUT-dominant) and why values appeared to swing 20x between
+// fetches — I was comparing a degenerate frame against a complete one.
+//
+// So: walk back to the most recent snapshot that actually carries decomposition. Bounded, because a frame
+// far in the past is stale data wearing a current timestamp — better to report nothing than to quote a
+// level from twenty minutes ago as if it were live.
+var SNAP_MAX_STEPBACK=8;
+function pickSnapshot(snaps){
+  try{
+    if(!snaps || !snaps.length) return null;
+    var lastIdx=snaps.length-1, floor=Math.max(0, lastIdx-SNAP_MAX_STEPBACK);
+    var fallback=null;
+    for(var i=lastIdx;i>=floor;i--){
+      var S=snaps[i]; var l=(S&&S.l)||[];
+      if(!l.length) continue;
+      if(!fallback) fallback={ snap:S, idx:i, mixed:0, steppedBack:lastIdx-i, degenerate:true };
+      var mixed=0;
+      for(var q=0;q<l.length;q++){
+        var r=l[q];
+        if(typeof r.v!=='number' || typeof r.net!=='number') continue;
+        var v=Math.abs(r.v);
+        if(Math.abs(Math.abs(r.net)-v) > v*1e-6) mixed++;
+      }
+      if(mixed>0) return { snap:S, idx:i, mixed:mixed, steppedBack:lastIdx-i, degenerate:false };
+    }
+    // Nothing in reach carries a decomposition. Hand back the newest frame FLAGGED, so the caller can
+    // still read magnitudes (the magnet survives, it only needs |net|) but must not claim a call/put split.
+    return fallback;
+  }catch(e){ return null; }
+}
+
 function gexLevels(rows, px){
   try{
     if(!rows || !rows.length || typeof px!=='number') return null;
@@ -13022,7 +13085,9 @@ function gexLevels(rows, px){
 
 function cpFromPayload(j, px){
   try{
-    var snaps=j&&j.levels||[]; var last=snaps[snaps.length-1]; var l=(last&&last.l)||[];
+    var snaps=j&&j.levels||[];
+    var PICK=pickSnapshot(snaps); if(!PICK) return null;
+    var last=PICK.snap; var l=(last&&last.l)||[];
     if(!l.length || typeof px!=='number') return null;
     var rows=[], gt=0, lt=0;
     for(var i=0;i<l.length;i++){
@@ -13078,7 +13143,9 @@ function cpFromPayload(j, px){
              callShare:+(callShare*100).toFixed(2), putShare:+(putShare*100).toFixed(2),
              totalCall:sc, totalPut:sp, ratio:(sp>0?+(sc/sp).toFixed(2):null),
              nCross:crossings.length, crossings:crossings.slice(0,6), mixed:lt, pure:rows.length-lt, hvlFar:zgFar,
-             n:rows.length, kMin:rows[0].k, kMax:rows[rows.length-1].k, exps:(j.expirations||null) };
+             n:rows.length, kMin:rows[0].k, kMax:rows[rows.length-1].k, exps:(j.expirations||null),
+             snapIdx:PICK.idx, snapBack:PICK.steppedBack, snapMixed:PICK.mixed, degenerate:PICK.degenerate,
+             snapT:(last&&last.t)||null };
   }catch(e){ return null; }
 }
 function expSetLevels(sym, setName){
@@ -13103,7 +13170,9 @@ window.__gptsDebug.expSetFetch=function(n,sy){ var sym=sy||(function(){ try{ ret
 function cpRows(sym){
   try{
     var f=LASTFEED[sym||'SPY']; if(!f||!f.j) return null;
-    var snaps=f.j.levels||[]; var last=snaps[snaps.length-1]; var l=(last&&last.l)||[];
+    var snaps=f.j.levels||[];
+    var PK=pickSnapshot(snaps); if(!PK) return null;
+    var last=PK.snap; var l=(last&&last.l)||[];
     if(!l.length) return null;
     var lt=0, eq=0, gt=0, noNet=0, rows=[];
     for(var i=0;i<l.length;i++){
@@ -13123,6 +13192,7 @@ function cpRows(sym){
     rows.sort(function(a,b){ return a.k-b.k; });
     // gt>0 would mean v is not a total. Refuse rather than emit a decomposition we cannot justify.
     return { rows:rows, lt:lt, eq:eq, gt:gt, noNet:noNet, ok:(gt===0 && lt>0),
+             snapIdx:PK.idx, snapBack:PK.steppedBack, degenerate:PK.degenerate,
              exps:(f.j.expirations||null), step:(f.j.strike_interval!=null?f.j.strike_interval:null),
              t:(last&&last.t)||null };
   }catch(e){ return null; }
@@ -13155,6 +13225,55 @@ window.__gptsDebug.callPutRows=function(s){ var D=cpRows(s||'SPY'); if(!D) retur
 
 // CR(net) / PS / HVL / Mag in SPX POINTS, from the SPXW lane alone.
 window.__gptsDebug=window.__gptsDebug||{};
+
+// ============ (v11.25) INSIDERFINANCE CHAIN LEVELS — read from the companion script ============
+// The Tapereader keeps @grant none (page context, feed hooks intact). The companion userscript
+// "GEX · InsiderFinance levels" takes the grant, fetches their page, pulls the FULL option chain out of
+// its embedded __NEXT_DATA__ (13,210 contracts with gamma, open interest, cp, expiry and IV), computes
+// the levels, and writes the result to localStorage on this same origin. We only read.
+//
+// VERIFIED against their published figures 2026-08-20, spot 761.14 — every value exact:
+//   0DTE      : PS 760 · Mag 760 · ratio 0.02 · CR suppressed at a 2.18% call share (they print N/A)
+//   to Friday : CR 775 · PS 760 · Mag 760 · ratio 0.40
+//   All       : CR 800 · PS 760 · Call 17.8B · Put -32.18B · ratio 0.55
+// Formula: GEX = gamma * OI * 100 * spot^2 * 0.01, puts negative.
+//
+// THIS IS A DIFFERENT MEASUREMENT FROM OURS AND THAT IS THE POINT. Skylit's node values are live dealer
+// positioning that accumulates and dissipates intraday — their own docs say so, and our session data shows
+// strike 763 growing 18M -> 600M in a day. This is open interest x gamma: where exposure SITS. A stock
+// beside a flow. Neither is a check on the other, and the card must never present them as one.
+var IFC_KEY='gpts_if_chain_v1';
+var IFC_STALE_MIN=20;
+function ifChain(sym){
+  try{
+    var raw=localStorage.getItem(IFC_KEY); if(!raw) return null;
+    var all=JSON.parse(raw); if(!all) return null;
+    var d=all[sym||'SPY']; if(!d) return null;
+    if(d.err) return { err:d.err, ageMin:Math.round((Date.now()-(d.asOf||0))/60000) };
+    d.ageMin=Math.round((Date.now()-(d.asOf||0))/60000);
+    d.stale=(d.ageMin>IFC_STALE_MIN);
+    return d;
+  }catch(e){ return null; }
+}
+// Their levels are on the CASH scale of the symbol they were fetched for (SPY dollars). fmtLvl/lvlFmt
+// convert to whatever the chart is showing, so nothing else has to know.
+function ifChainRows(sym, which){
+  try{
+    var d=ifChain(sym); if(!d || d.err) return null;
+    var w=d[which||'toFri']; if(!w || !w.lv) return null;
+    var L=w.lv, out=[];
+    if(L.cr!=null)  out.push({ id:'CR',  k:L.cr,  gex:null });
+    if(L.mag!=null) out.push({ id:'Mag', k:L.mag, gex:null });
+    if(L.ps!=null)  out.push({ id:'PS',  k:L.ps,  gex:null });
+    if(L.maxPain!=null) out.push({ id:'MP', k:L.maxPain, gex:null });
+    out.sort(function(a,b){ return b.k-a.k; });
+    return { rows:out, lv:L, exps:w.exps, which:(which||'toFri'),
+             ageMin:d.ageMin, stale:d.stale, spot:d.spot };
+  }catch(e){ return null; }
+}
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.ifChain=function(s){ return ifChain(s||'SPY'); };
+window.__gptsDebug.ifChainRows=function(s,w){ return ifChainRows(s||'SPY', w); };
 
 function ifManParse(txt){
   try{
@@ -13385,6 +13504,8 @@ function lvlUnified(sym){
     miss('Mag', 'no dominant strike');
     out.hvlMissing = (P.hvl==null);
     out.hvlFar = P.hvlFar||null;
+    out.degenerate = !!P.degenerate; out.snapBack = (P.snapBack==null?null:P.snapBack);
+    out.snapMixed = (P.snapMixed==null?null:P.snapMixed);
     out.regime = (P.hvl!=null) ? ((px>=P.hvl)?'posGamma':'negGamma') : null;
     out.kMin=P.kMin; out.kMax=P.kMax;
     return out;
@@ -13491,6 +13612,10 @@ function gexSanity(sym){
     chk('levelsNearPrice', far===null, far);
     // 5. the set must be fresh; a stale set silently showing yesterday's walls is worse than none
     chk('setFresh', U.ageMin==null || U.ageMin<20, U.ageMin!=null?(U.ageMin+'m old'):'no age');
+    // (v11.24) THE ONE THAT MATTERS MOST OUTSIDE RTH. The newest frame of the feed is the still-forming
+    // bar; after the close it degenerates to net=+/-v on every strike, so a call/put split read from it is
+    // fabricated. Levels built on that frame must never be presented as if they were measured.
+    chk('snapshotHasDecomposition', !U.degenerate, U.degenerate?('newest frames carry no call/put split'+(U.snapBack?(' — stepped back '+U.snapBack):'')):'ok');
     // 6. magnet must be a real strike we hold
     chk('magnetPresent', mag!=null, mag);
     // 7. THEIR numbers, if entered by hand — reported, and only flagged where the windows agree
@@ -13562,6 +13687,8 @@ function levelsHtmlV2(sym){
     h+='<div title="'+tip+'" style="display:flex;align-items:center;gap:6px;font-size:10px;font-weight:800;color:'+PAL.sub+';white-space:nowrap">'+
        '<span data-glvl="open" style="cursor:pointer;color:'+PAL.ink+'">'+(LVL_UI.open?'▾':'▸')+' LEVELS</span>'+
        '<span style="font-weight:600">'+srcTxt+'</span>'+
+       (U.degenerate?('<span title="The newest feed frames carry no call/put decomposition — every strike reads net = +/-v. That happens outside regular hours, when the latest bar is still forming. The walls below are read from magnitude only and the call/put split is NOT measured. Treat them as provisional." style="color:'+PAL.gold+';font-weight:800">⚠ no split</span>'):'')+
+       (U.snapBack?('<span title="Stepped back '+U.snapBack+' frame(s) to the most recent snapshot that carries a real decomposition." style="color:'+PAL.sub+'">−'+U.snapBack+'f</span>'):'')+
        (regTxt?('<span style="font-weight:700">'+regTxt+'</span>'):'')+
        '<span data-glvl="ifman" title="InsiderFinance levels, entered by hand — their page blocks cross-origin reads." style="margin-left:auto;cursor:pointer;color:'+(IFMAN?PAL.blue:PAL.sub)+';font-size:9px">IF</span>'+
        '<span data-glvl="chart" style="cursor:pointer;color:'+(LVL_UI.chart?PAL.blue:PAL.sub)+';font-size:9px">chart</span>'+
@@ -13609,8 +13736,34 @@ function levelsHtmlV2(sym){
       h+='</div>';
       if(LVL_UI.chart){ var sv=null; try{ sv=levelsChartV2(sym,U); }catch(eC){} if(sv) h+='<div style="margin-top:3px;border:1px solid '+PAL.line+';border-radius:3px;overflow:hidden">'+sv+'</div>'; }
       // their numbers, when entered, kept visibly separate
+      // (v11.25) THEIR levels, computed from their own chain by the companion script. Auto when present;
+      // the hand-entered lane below is the fallback for when the companion is not installed.
       try{
-        var IFL=ifManLevels();
+        var CH=ifChainRows(sym,'toFri'), CH0=ifChainRows(sym,'dte0');
+        if(CH && CH.rows.length){
+          h+='<div style="border-top:1px dotted '+PAL.line+';margin:3px 0 1px"></div>';
+          h+='<div title="InsiderFinance levels, recomputed from the option chain their page embeds — gamma x open interest, not scraped from their header. Window: '+(CH.exps||[]).join(', ')+'. Call/put ratio '+(CH.lv.ratio)+', Max Pain '+(CH.lv.maxPain)+', put/call OI '+(CH.lv.pcOI)+'. THIS IS A DIFFERENT MEASUREMENT FROM OURS: theirs is where exposure SITS in the chain, ours is live dealer positioning that accumulates intraday. Neither is a check on the other." '+
+             'style="display:flex;align-items:center;gap:6px;font-size:9px;color:'+PAL.sub+';white-space:nowrap">'+
+             '<span style="font-weight:800;color:'+PAL.blue+'">CHAIN · IF</span>'+
+             '<span>to Fri · r '+(CH.lv.ratio==null?'–':CH.lv.ratio)+'</span>'+
+             '<span style="margin-left:auto">'+(CH.stale?'⚠ ':'')+CH.ageMin+'m</span></div>';
+          CH.rows.forEach(function(r){
+            var base=(r.id==='MP')?'mag':r.id.toLowerCase();
+            var c=(r.id==='MP')?PAL.sub:(LVL_COL[base]||PAL.sub);
+            var d0=+(r.k-U.px).toFixed(2), dc=(d0>0)?PAL.longAccent:((d0<0)?PAL.shortAccent:PAL.sub);
+            var alt=(CH0&&CH0.rows.filter(function(x){return x.id===r.id;})[0]);
+            h+='<div title="'+(r.id==='MP'?'Max Pain — the strike minimising total payout to option holders at expiry. Needs open interest, which is why it is impossible from the Skylit feed and free here.':('InsiderFinance '+r.id+', from their chain.'))+'" '+
+               'style="display:flex;align-items:center;gap:5px;font-size:10px;line-height:1.4;white-space:nowrap;opacity:.85">'+
+               '<span style="display:inline-block;min-width:30px;color:'+c+';font-weight:700;font-style:italic">'+r.id+'</span>'+
+               '<span style="color:'+PAL.ink+';font-weight:600;font-variant-numeric:tabular-nums">'+lvlFmt(r.k)+'</span>'+
+               ((alt&&Math.abs(alt.k-r.k)>0.005)?('<span style="color:'+PAL.sub+';font-size:9px">0dte '+lvlFmt(alt.k)+'</span>'):'')+
+               '<span style="margin-left:auto;color:'+dc+';font-weight:700;font-size:9px;font-variant-numeric:tabular-nums">'+((d0>0?'+':'')+lvlSpanFmt(d0))+'</span></div>';
+          });
+          if(CH.lv.crSuppressed) h+='<div style="font-size:9px;color:'+PAL.sub+';padding-left:2px">CR — none, call side '+CH.lv.crSuppressed.share+'% of book</div>';
+        }
+      }catch(eCH){}
+      try{
+        var IFL=(ifChain(sym)?null:ifManLevels());
         if(IFL && !IFL.err){
           var agTx=(IFL.ageMin<60)?(IFL.ageMin+'m'):(Math.round(IFL.ageMin/60)+'h');
           h+='<div style="border-top:1px dotted '+PAL.line+';margin:3px 0 1px"></div>';
@@ -13684,6 +13837,23 @@ function levelsChartV2(sym, U){
       svg+='<rect x="'+(W-R-w-2).toFixed(1)+'" y="'+(yy-6).toFixed(1)+'" width="'+w.toFixed(1)+'" height="11" rx="2" fill="'+PAL.card+'" opacity="0.9"/>';
       svg+='<text x="'+(W-R-4).toFixed(1)+'" y="'+(yy+2.5).toFixed(1)+'" fill="'+c+'" font-size="8.5" font-weight="700" text-anchor="end" font-family="ui-monospace,monospace" opacity="0.85">'+lbl+'</text>';
     });
+    // (v11.25) THEIR chain levels — dotted, italic, prefixed. A different measurement, so it must be
+    // impossible to confuse with ours at a glance. Out-of-range ones join the edge markers.
+    try{
+      var CHc=ifChainRows(sym,'toFri');
+      if(CHc && CHc.rows.length){
+        CHc.rows.forEach(function(r){
+          var base=(r.id==='MP')?'mag':r.id.toLowerCase();
+          var c=(r.id==='MP')?PAL.sub:(LVL_COL[base]||PAL.sub);
+          if(r.k<lo || r.k>hi){ outside.push({ id:'IF·'+r.id, k:r.k, above:(r.k>hi) }); return; }
+          var yy=y(r.k);
+          svg+='<line x1="0" y1="'+yy.toFixed(1)+'" x2="'+(W-R)+'" y2="'+yy.toFixed(1)+'" stroke="'+c+'" stroke-width="0.8" stroke-dasharray="1,4" opacity="0.55"/>';
+          var slot3=0; for(var q3=0;q3<placed.length;q3++){ if(Math.abs(placed[q3].y-yy)<9) slot3=Math.max(slot3, placed[q3].slot+1); }
+          var lx3=(W*0.5)+(slot3%3)*48-48; placed.push({y:yy, slot:slot3});
+          svg+='<text x="'+lx3.toFixed(1)+'" y="'+(yy+3.2).toFixed(1)+'" fill="'+c+'" font-size="8.5" font-style="italic" text-anchor="middle" font-family="ui-monospace,monospace" opacity="0.8">IF·'+r.id+'</text>';
+        });
+      }
+    }catch(eCHc){}
     if(px!=null){ var yp=y(px).toFixed(1);
       svg+='<line x1="0" y1="'+yp+'" x2="'+(W-R)+'" y2="'+yp+'" stroke="'+PAL.time+'" stroke-width="0.5" stroke-dasharray="1,3" opacity="0.5"/>';
       svg+='<circle cx="'+(W-R-2)+'" cy="'+yp+'" r="1.8" fill="'+PAL.time+'"/>'; }

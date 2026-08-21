@@ -1,0 +1,246 @@
+<title>Bias, Levels, Path</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --page-bg:#f2f4f7; --page-ink:#1a1f28; --page-sub:#5b6675; --page-card:#ffffff;
+    --page-rule:#dfe4ea; --page-accent:#2f6fb0; --tag-new:#1f8f5c; --tag-q:#c0394a;
+    --p-bg:#0b0e14; --p-card:#12161f; --p-line:#1e2530;
+    --p-ink:#e6edf3; --p-sub:#8b98a9; --p-time:#f3f6fa;
+    --cr:#f0616d; --ps:#2ec27e; --hvl:#f2b45a; --mag:#e3c341; --blue:#4a90d9;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }}
+  :root[data-theme="dark"]{
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page-bg);color:var(--page-ink);
+       font-family:'IBM Plex Sans',system-ui,-apple-system,sans-serif;line-height:1.5}
+  .wrap{max-width:1060px;margin:0 auto;padding:30px 20px 60px}
+  h1{font-size:21px;font-weight:600;margin:0 0 4px;letter-spacing:-0.01em}
+  .lede{color:var(--page-sub);font-size:14px;margin:0 0 26px;max-width:64ch}
+  .cols{display:grid;grid-template-columns:352px 1fr;gap:26px;align-items:start}
+  @media (max-width:820px){ .cols{grid-template-columns:1fr} }
+  .panel{width:352px;background:var(--p-bg);border:1px solid var(--p-line);border-radius:6px;
+         overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+         font-variant-numeric:tabular-nums}
+  .phdr{display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--p-line);
+        background:var(--p-card)}
+  .phdr b{color:var(--p-ink);font-size:12px;font-weight:600}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--ps)}
+  .sect{padding:7px 9px;border-bottom:1px solid var(--p-line)}
+  .shdr{display:flex;align-items:baseline;gap:8px;white-space:nowrap;margin-bottom:5px}
+  .stitle{color:var(--p-ink);font-size:11px;font-weight:800;letter-spacing:.06em}
+  .ssub{color:var(--p-sub);font-size:9.5px;font-weight:600}
+  .spot{margin-left:auto;color:var(--p-time);font-weight:700;font-size:14px}
+  .spotlab{color:var(--p-sub);font-size:9px;font-weight:600}
+
+  /* BIAS strip */
+  .bias{padding:8px 9px;border-bottom:1px solid var(--p-line);
+        background:linear-gradient(180deg,rgba(240,97,109,.08),transparent)}
+  .biastop{display:flex;align-items:center;gap:9px}
+  .verdict{font-size:22px;font-weight:800;letter-spacing:-.01em;line-height:1}
+  .grade{font-size:10px;font-weight:800;padding:1px 6px;border-radius:3px;
+         background:rgba(139,152,169,.18);color:var(--p-sub)}
+  .regime{margin-left:auto;font-size:10px;font-weight:700}
+  .inputs{display:flex;gap:5px;margin-top:7px}
+  .inp{flex:1;text-align:center;border:1px solid var(--p-line);border-radius:3px;padding:3px 0 4px}
+  .inp .k{display:block;font-size:8px;color:var(--p-sub);font-weight:700;letter-spacing:.05em}
+  .inp .v{display:block;font-size:12px;font-weight:800;margin-top:1px}
+  .agree{margin-top:6px;font-size:9.5px;color:var(--p-sub);display:flex;align-items:center;gap:5px}
+
+  .row{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:11px;line-height:1.6}
+  .lbl{display:inline-block;width:36px;font-weight:800;font-size:11px}
+  .val{color:var(--p-ink);font-weight:700;font-size:13px;min-width:50px}
+  .trail{width:32px;height:11px;flex:none}
+  .roll{font-size:9px;font-weight:800;padding:0 4px;border-radius:3px}
+  .rup{background:rgba(46,194,126,.18);color:var(--ps)}
+  .rdn{background:rgba(240,97,109,.18);color:var(--cr)}
+  .rhold{background:rgba(139,152,169,.14);color:var(--p-sub)}
+  .dist{margin-left:auto;font-weight:700;font-size:10.5px}
+  .up{color:var(--ps)} .dn{color:var(--cr)}
+  .absent .val{color:var(--p-sub);font-weight:600;font-size:11px}
+  .why{color:var(--p-sub);font-size:9px}
+  .zone{background:rgba(227,195,65,.08);border-left:2px solid var(--mag);margin:2px -9px;padding:1px 9px 1px 7px}
+  .src{font-size:8px;font-weight:700;padding:0 3px;border-radius:2px;background:rgba(139,152,169,.18);color:var(--p-sub)}
+  .muted{color:var(--p-sub);font-size:9.5px}
+  .pathline{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700}
+  .arw{color:var(--p-sub);font-size:11px}
+  .split{display:flex;border-top:1px solid var(--p-line)}
+  .half{flex:1;padding:6px 9px}
+  .half+.half{border-left:1px solid var(--p-line)}
+  .hlab{color:var(--p-sub);font-size:9px;font-weight:800;letter-spacing:.05em}
+  .notes{display:flex;flex-direction:column;gap:13px}
+  .note{background:var(--page-card);border:1px solid var(--page-rule);border-radius:6px;padding:12px 14px}
+  .note h3{margin:0 0 5px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .note p{margin:0 0 7px;font-size:13px;color:var(--page-sub)} .note p:last-child{margin-bottom:0}
+  .tag{font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px;
+       background:rgba(47,111,176,.12);color:var(--page-accent)}
+  .tag.new{background:rgba(46,194,126,.14);color:var(--tag-new)}
+  .tag.q{background:rgba(240,97,109,.14);color:var(--tag-q)}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12px;
+       background:rgba(127,140,158,.14);padding:1px 4px;border-radius:3px}
+</style>
+
+<div class="wrap">
+  <h1>Bias first, then how it plays out</h1>
+  <p class="lede">The bullish-or-bearish call is the headline, and every input that formed it is visible
+  beside it — including the rolls. Where they disagree, you see the disagreement rather than an averaged
+  verdict.</p>
+
+  <div class="cols">
+    <div class="panel">
+      <div class="phdr"><span class="dot"></span><b>Tapereader</b>
+        <span class="muted">10s</span><span style="margin-left:auto" class="muted">feed v11.26</span></div>
+
+      <!-- ============ BIAS ============ -->
+      <div class="bias">
+        <div class="biastop">
+          <span class="verdict dn">↓ BEARISH</span>
+          <span class="grade">C</span>
+          <span class="regime dn">−γ amplifying</span>
+        </div>
+        <div class="inputs">
+          <span class="inp"><span class="k">TREND</span><span class="v dn">↓</span></span>
+          <span class="inp"><span class="k">DRIFT</span><span class="v dn">↓</span></span>
+          <span class="inp"><span class="k">ROLLS</span><span class="v up">↑3</span></span>
+          <span class="inp"><span class="k">PATH</span><span class="v dn">↓</span></span>
+          <span class="inp"><span class="k">TRINITY</span><span class="v dn">2/3</span></span>
+        </div>
+        <div class="agree"><span style="color:var(--hvl);font-weight:800">⚠</span>
+          <span>3 of 4 down — but the floor has rolled up 3×, the one input arguing against</span></div>
+      </div>
+
+      <!-- ============ LEVELS ============ -->
+      <div class="sect">
+        <div class="shdr"><span class="stitle">LEVELS</span><span class="ssub">0DTE + to Fri</span>
+          <span class="spotlab">ES1</span><span class="spot">7665.25</span></div>
+        <div class="row"><span class="lbl" style="color:var(--cr)">CR</span>
+          <span class="val">7789</span>
+          <svg class="trail" viewBox="0 0 32 11"><polyline points="1,3 8,3 15,4 22,4 28,6 31,6"
+            fill="none" stroke="#f0616d" stroke-width="1.3" opacity=".7"/></svg>
+          <span class="roll rdn">↓2</span><span class="muted">41m</span>
+          <span class="dist up">+124</span></div>
+        <div class="row absent"><span class="lbl" style="color:var(--cr);opacity:.5">CR0</span>
+          <span class="val">—</span><span class="why">no call side today · 2.2% of book</span></div>
+        <div class="row"><span class="lbl" style="color:var(--hvl)">HVL</span>
+          <span class="val">7668</span>
+          <svg class="trail" viewBox="0 0 32 11"><polyline points="1,8 8,7 15,6 22,5 28,4 31,4"
+            fill="none" stroke="#f2b45a" stroke-width="1.3" opacity=".7"/></svg>
+          <span class="roll rup">↑3</span><span class="muted">12m</span>
+          <span class="dist up">+3</span></div>
+        <div class="zone">
+          <div class="row"><span class="lbl" style="color:var(--mag)">KING</span>
+            <span class="val">7639.5</span>
+            <svg class="trail" viewBox="0 0 32 11"><polyline points="1,9 8,8 15,6 22,6 28,3 31,3"
+              fill="none" stroke="#e3c341" stroke-width="1.5"/></svg>
+            <span class="roll rup">↑3</span><span class="muted">22m</span>
+            <span class="dist dn">−26</span></div>
+          <div class="row"><span class="lbl" style="color:var(--mag)">MAG</span>
+            <span class="val">7639</span><span class="src">chain</span>
+            <span class="roll rhold">held</span><span class="dist dn">−26</span></div>
+          <div class="row"><span class="lbl" style="color:var(--ps);opacity:.75">PS0</span>
+            <span class="val">7639</span><span class="src">chain</span>
+            <span class="roll rhold">held</span><span class="dist dn">−26</span></div>
+          <div class="row"><span class="lbl" style="color:var(--ps)">PS</span>
+            <span class="val">7639</span><span class="src">chain</span>
+            <span class="roll rhold">held</span><span class="dist dn">−26</span></div>
+          <div class="row"><span class="why" style="padding-left:36px">King rolled up 3× into a floor the
+            chain has held all day</span></div>
+        </div>
+      </div>
+
+      <!-- ============ PATH ============ -->
+      <div class="sect">
+        <div class="shdr"><span class="stitle">PATH</span><span class="ssub">route to the key level</span>
+          <span class="ssub" style="margin-left:auto">cage 51%</span></div>
+        <div class="pathline">
+          <span style="color:var(--p-sub)">7665</span><span class="arw">→</span>
+          <span style="color:var(--cr)">7690</span><span class="arw">→</span>
+          <span style="color:var(--mag)">7639</span></div>
+        <div class="row"><span class="why">3rd roll — pullbacks here ran 53% (n 33, one session)</span></div>
+      </div>
+
+      <!-- ============ CHART ============ -->
+      <div class="sect" style="padding:7px 9px 8px">
+        <div style="border:1px solid var(--p-line);border-radius:3px;overflow:hidden">
+          <svg viewBox="0 0 334 168" style="width:100%;height:auto;display:block">
+            <rect width="334" height="168" fill="#12161f"/>
+            <rect x="196" y="0" width="138" height="168" fill="#0b0e14" opacity=".45"/>
+            <line x1="196" y1="0" x2="196" y2="168" stroke="#1e2530"/>
+            <rect x="222" y="3" width="110" height="12" rx="2" fill="#0b0e14" opacity=".92"/>
+            <text x="328" y="12.5" fill="#f0616d" font-size="9" font-weight="700" text-anchor="end"
+                  font-family="ui-monospace,monospace">▲ CR 7789 · ↓2</text>
+            <line x1="0" y1="38" x2="292" y2="38" stroke="#f0616d" stroke-width="1.1" opacity=".7"
+                  stroke-dasharray="5,3"/>
+            <text x="330" y="41.5" fill="#f0616d" font-size="9.5" font-weight="700" text-anchor="end"
+                  font-family="ui-monospace,monospace">RES 7690</text>
+            <line x1="0" y1="58" x2="292" y2="58" stroke="#f2b45a" stroke-width="1.2" opacity=".9"/>
+            <text x="330" y="61.5" fill="#f2b45a" font-size="9.5" font-weight="700" text-anchor="end"
+                  font-family="ui-monospace,monospace">HVL 7668</text>
+            <line x1="0" y1="72" x2="292" y2="72" stroke="#f3f6fa" stroke-width=".6"
+                  stroke-dasharray="1,3" opacity=".5"/>
+            <polyline fill="none" stroke="#e3c341" stroke-width="2" opacity=".32" stroke-linejoin="round"
+              points="0,156 34,156 34,150 78,150 78,144 140,144 140,137 292,137"/>
+            <rect x="0" y="130" width="292" height="14" fill="#e3c341" opacity=".08"/>
+            <line x1="140" y1="137" x2="292" y2="137" stroke="#e3c341" stroke-width="2" opacity=".95"/>
+            <text x="330" y="134" fill="#e3c341" font-size="9.5" font-weight="700" text-anchor="end"
+                  font-family="ui-monospace,monospace">KING 7639 ↑3</text>
+            <text x="330" y="145" fill="#2ec27e" font-size="8.5" font-weight="700" text-anchor="end"
+                  font-family="ui-monospace,monospace" opacity=".9">PS·PS0·MAG</text>
+            <polyline fill="none" stroke="#e6edf3" stroke-width="1.5" opacity=".96"
+              points="0,42 16,38 32,48 48,41 64,55 80,49 96,62 112,57 128,70 144,64 160,78 176,70 192,65 196,72"/>
+            <polyline fill="none" stroke="#4a90d9" stroke-width="1.6" stroke-dasharray="5,4" opacity=".95"
+              points="196,72 232,50 254,38 276,70 292,114 306,137"/>
+            <circle cx="196" cy="72" r="2.6" fill="#f3f6fa"/>
+            <circle cx="254" cy="38" r="2.6" fill="#f0616d"/>
+            <circle cx="306" cy="137" r="2.6" fill="#e3c341"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="half"><div class="hlab">NEXT STOP</div>
+          <div class="row" style="margin-top:2px"><span class="val dn" style="font-size:14px">↓ 7639.5</span>
+            <span class="dist muted">C</span></div>
+          <div class="row"><span class="why">−25.75 · 30–60m</span></div></div>
+        <div class="half"><div class="hlab">PB ENTRY</div>
+          <div class="row" style="margin-top:2px"><span class="val up" style="font-size:14px">↑ 7689.75</span>
+            <span class="dist muted">B</span></div>
+          <div class="row"><span class="why">+24.5 · 3rd roll · defl ↓</span></div></div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note"><h3><span class="tag new">restored</span> The bias call is the headline</h3>
+        <p><code>↓ BEARISH</code> with its grade and the gamma regime beside it. This is what the READ block
+        was for — but as a verdict you can read in a glance rather than a paragraph you have to parse.</p></div>
+
+      <div class="note"><h3><span class="tag new">new</span> Rolls are an input, not a footnote</h3>
+        <p>Five inputs, each with its own lean: trend, drift, <b>rolls</b>, path, Trinity. Today four point
+        down and <b>rolls point up</b> — and rather than averaging that into a number, the line underneath
+        names the disagreement: <em>"the floor has rolled up 3×, the one input arguing against."</em></p>
+        <p>That's the honest read of today. Bearish tape, but dealers defending higher each time price came
+        down. Exactly the setup where knowing the disagreement matters more than the verdict.</p></div>
+
+      <div class="note"><h3><span class="tag">why this shape</span> Disagreement beats averaging</h3>
+        <p>A single blended score would have reported "weakly bearish" and hidden the tension. Showing the
+        inputs separately means a 5/5 alignment and a 3/5 split look different at a glance — which is the
+        distinction that should change your size, not just your direction.</p></div>
+
+      <div class="note"><h3><span class="tag">unchanged</span> Everything still scored</h3>
+        <p>Rolls as a bias input is a new claim and gets a question of its own: does a counter-trend roll
+        actually reduce the trend's hit rate, or is it noise? <code>path_wall_roll</code> and
+        <code>path_roll_age</code> already record what's needed; this just puts the answer where you'll see
+        it while it accumulates.</p></div>
+
+      <div class="note"><h3><span class="tag q">your call</span> Two things</h3>
+        <p>Should the roll input be able to <b>downgrade the verdict</b> — bearish C instead of B when the
+        floor is climbing — or only annotate it? And is Trinity worth a slot, or would you rather that space
+        went to something else?</p></div>
+    </div>
+  </div>
+</div>

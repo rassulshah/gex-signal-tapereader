@@ -1,0 +1,164 @@
+<title>Gamma Profile On The Chart</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --page-bg:#f2f4f7; --page-ink:#1a1f28; --page-sub:#5b6675; --page-card:#ffffff;
+    --page-rule:#dfe4ea; --page-accent:#2f6fb0; --tag-new:#1f8f5c; --tag-q:#c0394a;
+    --p-bg:#0b0e14; --p-card:#12161f; --p-line:#1e2530;
+    --p-ink:#e6edf3; --p-sub:#8b98a9; --p-time:#f3f6fa;
+    --cr:#f0616d; --ps:#2ec27e; --hvl:#f2b45a; --mag:#e3c341; --blue:#4a90d9; --purple:#a371f7;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }}
+  :root[data-theme="dark"]{
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page-bg);color:var(--page-ink);
+       font-family:'IBM Plex Sans',system-ui,-apple-system,sans-serif;line-height:1.55}
+  .wrap{max-width:1060px;margin:0 auto;padding:30px 20px 60px}
+  h1{font-size:21px;font-weight:600;margin:0 0 4px;letter-spacing:-0.01em}
+  .lede{color:var(--page-sub);font-size:14px;margin:0 0 24px;max-width:66ch}
+  .cols{display:grid;grid-template-columns:352px 1fr;gap:26px;align-items:start}
+  @media (max-width:820px){ .cols{grid-template-columns:1fr} }
+  .panel{width:352px;background:var(--p-bg);border:1px solid var(--p-line);border-radius:6px;
+         overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .sect{padding:7px 9px;border-bottom:1px solid var(--p-line)}
+  .sect:last-child{border-bottom:none}
+  .shdr{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
+  .stitle{color:var(--p-ink);font-size:10.5px;font-weight:800;letter-spacing:.07em}
+  .ssub{color:var(--p-sub);font-size:9px;font-weight:600}
+  .key{display:flex;gap:9px;margin-top:5px;font-size:8px;color:var(--p-sub)}
+  .key i{display:inline-block;width:9px;height:6px;border-radius:1px;margin-right:3px;vertical-align:middle}
+  @keyframes soft{0%,100%{opacity:.5}50%{opacity:1}}
+  @keyframes ring{0%{r:3;opacity:.9}70%{r:9;opacity:0}100%{r:9;opacity:0}}
+  .pulse{animation:soft 2s ease-in-out infinite}
+  .pring{animation:ring 2s ease-out infinite}
+  @media (prefers-reduced-motion: reduce){ .pulse{animation:none;opacity:1} .pring{animation:none;opacity:.3} }
+  .notes{display:flex;flex-direction:column;gap:13px}
+  .note{background:var(--page-card);border:1px solid var(--page-rule);border-radius:6px;padding:12px 14px}
+  .note h3{margin:0 0 5px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .note p{margin:0 0 7px;font-size:13px;color:var(--page-sub)} .note p:last-child{margin-bottom:0}
+  .tag{font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px;
+       background:rgba(47,111,176,.12);color:var(--page-accent)}
+  .tag.new{background:rgba(46,194,126,.14);color:var(--tag-new)}
+  .tag.q{background:rgba(240,97,109,.14);color:var(--tag-q)}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12px;
+       background:rgba(127,140,158,.14);padding:1px 4px;border-radius:3px}
+</style>
+
+<div class="wrap">
+  <h1>Gamma profile on the chart</h1>
+  <p class="lede">Horizontal bars at each strike's height — green where net gamma is positive, purple where
+  it's negative. Same purple as the <code>REG: −G</code> chip, so the profile and the regime read as one
+  idea. Live shape: SPY book at a 0.34 call/put ratio.</p>
+
+  <div class="cols">
+    <div class="panel">
+      <div class="sect" style="padding:7px 9px 8px">
+        <div class="shdr"><span class="stitle">CHART</span><span class="ssub">gamma profile · to Fri</span>
+          <span class="ssub" style="margin-left:auto">ES1 7710.25</span></div>
+        <div style="border:1px solid var(--p-line);border-radius:3px;overflow:hidden">
+          <svg viewBox="0 0 334 190" style="width:100%;height:auto;display:block">
+            <rect width="334" height="190" fill="#12161f"/>
+
+            <!-- GAMMA PROFILE, anchored left. green = +gamma, purple = -gamma -->
+            <g opacity=".62">
+              <rect x="0" y="12"  width="26" height="7" fill="#2ec27e"/>
+              <rect x="0" y="22"  width="14" height="7" fill="#2ec27e"/>
+              <rect x="0" y="32"  width="38" height="7" fill="#2ec27e"/>
+              <rect x="0" y="42"  width="9"  height="7" fill="#2ec27e"/>
+              <rect x="0" y="52"  width="20" height="7" fill="#a371f7"/>
+              <rect x="0" y="62"  width="46" height="7" fill="#a371f7"/>
+              <rect x="0" y="72"  width="17" height="7" fill="#a371f7"/>
+              <rect x="0" y="82"  width="31" height="7" fill="#a371f7"/>
+              <rect x="0" y="92"  width="24" height="7" fill="#a371f7"/>
+              <rect x="0" y="102" width="112" height="7" fill="#a371f7"/>
+              <rect x="0" y="112" width="29" height="7" fill="#a371f7"/>
+              <rect x="0" y="122" width="41" height="7" fill="#a371f7"/>
+              <rect x="0" y="132" width="86" height="7" fill="#a371f7"/>
+              <rect x="0" y="142" width="22" height="7" fill="#a371f7"/>
+              <rect x="0" y="152" width="35" height="7" fill="#a371f7"/>
+              <rect x="0" y="162" width="58" height="7" fill="#a371f7"/>
+              <rect x="0" y="172" width="19" height="7" fill="#a371f7"/>
+            </g>
+
+            <rect x="216" y="0" width="118" height="190" fill="#0b0e14" opacity=".38"/>
+            <line x1="216" y1="0" x2="216" y2="190" stroke="#1e2530"/>
+
+            <!-- levels -->
+            <line x1="0" y1="36" x2="334" y2="36" stroke="#f0616d" stroke-width="1.1" opacity=".65"
+                  stroke-dasharray="4,3"/>
+            <rect x="132" y="30" width="66" height="11" rx="2" fill="#12161f" opacity=".9"/>
+            <text x="165" y="39" fill="#f0616d" font-size="9" font-weight="700" text-anchor="middle"
+                  font-family="ui-monospace,monospace">7745 · inval</text>
+
+            <line class="pulse" x1="0" y1="105" x2="334" y2="105" stroke="#e3c341" stroke-width="2"/>
+            <rect x="126" y="99" width="80" height="11" rx="2" fill="#12161f" opacity=".94"/>
+            <text class="pulse" x="166" y="108" fill="#e3c341" font-size="9" font-weight="800"
+                  text-anchor="middle" font-family="ui-monospace,monospace">KING 7695</text>
+
+            <line x1="0" y1="135" x2="334" y2="135" stroke="#2ec27e" stroke-width="1" opacity=".6"/>
+            <rect x="140" y="129" width="56" height="11" rx="2" fill="#12161f" opacity=".9"/>
+            <text x="168" y="138" fill="#2ec27e" font-size="9" font-weight="700" text-anchor="middle"
+                  font-family="ui-monospace,monospace">PS 7675</text>
+
+            <!-- flip line: where the profile changes sign -->
+            <line x1="0" y1="49" x2="120" y2="49" stroke="#f2b45a" stroke-width="1" opacity=".8"
+                  stroke-dasharray="2,2"/>
+            <text x="124" y="52" fill="#f2b45a" font-size="8" font-weight="700"
+                  font-family="ui-monospace,monospace" opacity=".9">γ flip</text>
+
+            <!-- price -->
+            <polyline fill="none" stroke="#e6edf3" stroke-width="1.5" opacity=".97"
+              points="0,112 18,116 36,108 54,118 72,106 90,112 108,100 126,104 144,92 162,96 180,84 198,88 216,74"/>
+            <polyline fill="none" stroke="#4a90d9" stroke-width="1.5" stroke-dasharray="5,4" opacity=".85"
+              points="216,74 254,86 288,96 318,105"/>
+            <circle class="pring" cx="216" cy="74" r="3" fill="none" stroke="#f3f6fa" stroke-width="1.4"/>
+            <circle cx="216" cy="74" r="3" fill="#f3f6fa"/>
+            <rect x="156" y="58" width="56" height="12" rx="2" fill="#0b0e14" opacity=".94"/>
+            <text x="208" y="67" fill="#f3f6fa" font-size="9.5" font-weight="800" text-anchor="end"
+                  font-family="ui-monospace,monospace">7710.25</text>
+          </svg>
+        </div>
+        <div class="key"><span><i style="background:#2ec27e"></i>+γ dampening</span>
+          <span><i style="background:#a371f7"></i>−γ amplifying</span>
+          <span style="margin-left:auto">bar = |net GEX| at strike</span></div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note"><h3><span class="tag new">the payoff</span> The regime becomes visible</h3>
+        <p>You don't read <code>REG: −G</code> and take it on trust — you <em>see</em> a wall of purple with
+        a thin green cap. At a 0.34 ratio the book is overwhelmingly put-dominated, and the picture says so
+        before any label does.</p>
+        <p>It also shows the <b>γ flip</b> — the height where the profile changes colour. That's the HVL,
+        drawn rather than computed, and today it sits well above price with everything below it purple.</p></div>
+
+      <div class="note"><h3><span class="tag new">new</span> Bar length is why a level matters</h3>
+        <p>The two long purple bars at <b>7695</b> and <b>7675</b> are the King and the put wall — you can
+        see at a glance that they dwarf everything around them. The short bars between are strikes that
+        exist but won't stop anything.</p>
+        <p>That's the thing the ladder's <code>%</code> column tries to say in text, and the profile says
+        instantly.</p></div>
+
+      <div class="note"><h3><span class="tag">design</span> Left-anchored, low opacity</h3>
+        <p>Bars grow from the left edge at 62% opacity so the price track always reads over them. The
+        projected-path zone on the right stays clear of bars, so the forecast is never confused with
+        structure.</p></div>
+
+      <div class="note"><h3><span class="tag q">decide</span> Which window feeds it?</h3>
+        <p>0DTE and through-Friday have very different shapes — 0DTE is a spike at a couple of strikes,
+        the weekly is broader. Follow the LEVELS window, or pin it to one? Following is more consistent;
+        pinning to 0DTE would make it a purer read of today's pinning pressure.</p></div>
+
+      <div class="note"><h3><span class="tag q">also</span> Tape gamma as a second series?</h3>
+        <p>This is the chain profile. Skylit's node strengths could overlay as a thin outline — where flow
+        is building versus where exposure sits. Powerful, possibly too busy. Worth trying once the chain
+        profile is in.</p></div>
+    </div>
+  </div>
+</div>

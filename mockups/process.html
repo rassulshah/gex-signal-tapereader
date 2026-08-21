@@ -1,0 +1,206 @@
+<title>The Five-Step Tape Process</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600;700&display=swap">
+<style>
+  :root{
+    --bg:#f5f6f8; --ink:#161b22; --sub:#5b6675; --card:#ffffff; --rule:#e0e4ea;
+    --accent:#2f6fb0; --chain:#4a90d9; --tape:#e3c341; --good:#1f8f5c; --bad:#c0394a;
+    --p-bg:#0b0e14; --p-line:#1e2530; --p-ink:#e6edf3; --p-sub:#8b98a9;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --bg:#0e1116; --ink:#e6edf3; --sub:#8b98a9; --card:#161a21; --rule:#242a33;
+    --accent:#6fa8dc; --good:#5fd39b; --bad:#f0838d;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#0e1116; --ink:#e6edf3; --sub:#8b98a9; --card:#161a21; --rule:#242a33;
+    --accent:#6fa8dc; --good:#5fd39b; --bad:#f0838d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:'IBM Plex Sans',system-ui,sans-serif;line-height:1.55}
+  .wrap{max-width:900px;margin:0 auto;padding:44px 22px 80px}
+  h1{font-size:30px;font-weight:700;margin:0 0 6px;letter-spacing:-0.02em;text-wrap:balance}
+  .sub{color:var(--sub);font-size:15px;margin:0 0 8px;max-width:64ch}
+  h2{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--sub);
+     margin:44px 0 14px;padding-bottom:7px;border-bottom:1px solid var(--rule)}
+  h3{font-size:16px;font-weight:600;margin:0 0 6px}
+  p{margin:0 0 11px;font-size:14.5px;color:var(--sub)} p:last-child{margin-bottom:0}
+  p.lead{color:var(--ink)}
+  code,.mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px;
+       background:rgba(127,140,158,.13);padding:1px 5px;border-radius:3px}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+  th,td{text-align:left;padding:8px 10px 8px 0;border-bottom:1px solid var(--rule);vertical-align:top}
+  th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);font-weight:600}
+  .src{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;padding:1px 6px;
+       border-radius:3px;white-space:nowrap}
+  .s-chain{background:rgba(74,144,217,.16);color:var(--chain)}
+  .s-tape{background:rgba(227,195,65,.2);color:#9a7f12}
+  :root[data-theme="dark"] .s-tape,:root:not([data-theme="light"]) .s-tape{color:var(--tape)}
+  .s-both{background:rgba(46,194,126,.16);color:var(--good)}
+  .step{background:var(--card);border:1px solid var(--rule);border-radius:9px;padding:18px 20px;
+        margin-bottom:14px;position:relative;overflow:hidden}
+  .step::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent)}
+  .stephdr{display:flex;align-items:baseline;gap:11px;margin-bottom:9px}
+  .num{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--accent);
+       letter-spacing:.06em}
+  .ask{font-size:13.5px;color:var(--sub);font-style:italic;margin-left:auto;text-align:right}
+  .grid{display:grid;grid-template-columns:88px 1fr;gap:6px 12px;margin-top:11px;font-size:13.5px}
+  .grid dt{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--sub);
+           font-weight:600;padding-top:2px}
+  .grid dd{margin:0;color:var(--ink)}
+  .gap{margin-top:11px;padding:9px 11px;border-radius:6px;background:rgba(192,57,74,.08);
+       border-left:2px solid var(--bad);font-size:13px;color:var(--sub)}
+  .gap b{color:var(--bad)}
+  .bar{display:flex;gap:4px;margin:18px 0 6px;font-family:'IBM Plex Mono',monospace}
+  .bar span{flex:1;text-align:center;font-size:10.5px;font-weight:700;padding:7px 2px;
+            border-radius:4px;background:var(--card);border:1px solid var(--rule);color:var(--sub)}
+  .bar span.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .barnote{font-size:12.5px;color:var(--sub);text-align:center;margin:0 0 4px}
+  .callout{background:var(--card);border:1px solid var(--rule);border-left:3px solid var(--accent);
+           border-radius:0 8px 8px 0;padding:15px 18px;margin:18px 0}
+  .callout p{color:var(--ink)}
+</style>
+
+<div class="wrap">
+  <h1>The five-step tape process</h1>
+  <p class="sub">A futures day-trading process built around what the panel actually knows — and a step
+  indicator that replaces Skylit's, because their five steps describe their methodology, not your trade.</p>
+
+  <h2>Why two data sources, and what each is for</h2>
+  <p class="lead">The whole argument for having both InsiderFinance and Skylit is that they answer different
+  questions, and neither supports the full process alone.</p>
+  <table>
+    <tr><th style="width:120px">Source</th><th>What it is</th><th style="width:150px">Changes</th></tr>
+    <tr><td><span class="src s-chain">chain</span></td>
+        <td><b>The terrain.</b> Open interest × gamma — where exposure <em>sits</em>. Walls, zero gamma,
+        magnet, max pain, expected move.</td>
+        <td>Set before the open. OI is fixed intraday; only greeks re-weight.</td></tr>
+    <tr><td><span class="src s-tape">tape</span></td>
+        <td><b>The flow.</b> Live dealer positioning that accumulates and dissipates. Nodes growing,
+        rolling, being defended or abandoned.</td>
+        <td>Continuously. A node grew 18M → 600M in one session.</td></tr>
+  </table>
+  <div class="callout">
+    <p><b>InsiderFinance alone cannot tell you whether a level is being defended right now.</b> It's a
+    pre-market planning tool — a map of the day's terrain. It has no view of what dealers did in the last
+    ten minutes.</p>
+    <p style="margin-top:9px"><b>Skylit alone cannot frame the day.</b> Its values are flow, so they have no
+    fixed structure to anchor to — which is exactly why our levels disagreed with theirs until we understood
+    they were measuring different things.</p>
+    <p style="margin-top:9px">The chain gives you the plan. The tape tells you when to act on it.</p>
+  </div>
+
+  <h2>The five steps</h2>
+
+  <div class="step">
+    <div class="stephdr"><span class="num">01</span><h3>FRAME</h3>
+      <span class="ask">What kind of day is this?</span></div>
+    <p>Before any trade: the box and the playbook. Regime decides the <em>style</em> — positive gamma means
+    fade the extremes, negative gamma means moves extend and you follow breaks. Expected move decides
+    whether a target is even reachable.</p>
+    <dl class="grid">
+      <dt>Panel</dt><dd>Direction header — <code>REG: −G</code>, <code>TARGET</code>, <code>EM ±28</code>;
+        the ladder's outer bounds; voids</dd>
+      <dt>Source</dt><dd><span class="src s-chain">chain</span></dd>
+      <dt>Advance</dt><dd>You know the box, the regime, and how much range the day is priced for</dd>
+    </dl>
+  </div>
+
+  <div class="step">
+    <div class="stephdr"><span class="num">02</span><h3>BIAS</h3>
+      <span class="ask">Which side of the box am I playing?</span></div>
+    <p>Not a prediction — a lean that decides which levels you're interested in. In a down bias you only
+    care about rallies into resistance; the support levels become targets, not entries.</p>
+    <dl class="grid">
+      <dt>Panel</dt><dd>Verdict, four inputs, evidence line, coiling direction</dd>
+      <dt>Source</dt><dd><span class="src s-both">both</span> — tape for trend/drift, chain for DEX/skew</dd>
+      <dt>Advance</dt><dd>A lean exists. <b>No lean is a valid answer</b> — it means step 3 never arrives</dd>
+    </dl>
+    <div class="gap"><b>Weakest link.</b> One session of data, and the direction factors scored at or below
+      base rate. Treat the bias as the least reliable thing on the panel and let structure carry more weight.</div>
+  </div>
+
+  <div class="step">
+    <div class="stephdr"><span class="num">03</span><h3>LOCATION</h3>
+      <span class="ask">Is price anywhere worth trading?</span></div>
+    <p>The discipline step, and the one that saves the most money. <b>No trades in a void.</b> Price mid-gap
+    has nothing to lean on, so there's no defined risk — you wait for it to reach a level.</p>
+    <dl class="grid">
+      <dt>Panel</dt><dd>Ladder with price in position; void shading; distance to the nearest actionable row</dd>
+      <dt>Source</dt><dd><span class="src s-both">both</span></dd>
+      <dt>Advance</dt><dd>Price is <em>at</em> a level marked <code>ENTRY</code> — not near it, at it</dd>
+    </dl>
+    <div class="gap"><b>Missing:</b> reachability. An entry 21 points away with 9 points of expected move
+      left will never trigger today, and the panel currently presents it as though it might.</div>
+  </div>
+
+  <div class="step">
+    <div class="stephdr"><span class="num">04</span><h3>REACTION</h3>
+      <span class="ask">Is this level being defended?</span></div>
+    <p><b>The step only Skylit can serve, and the reason the tape is worth having.</b> A level is just a
+    price until you see what dealers do when it's tested. Accumulating into the touch means they're
+    defending. Dissipating means they're standing aside and it will break.</p>
+    <dl class="grid">
+      <dt>Panel</dt><dd>Node state <code>acm</code>/<code>dec</code>; roll direction and count; test count
+        and whether it held</dd>
+      <dt>Source</dt><dd><span class="src s-tape">tape</span></dd>
+      <dt>Advance</dt><dd>The node is accumulating, or has rolled toward price — dealers are showing up</dd>
+    </dl>
+    <div class="gap"><b>Missing:</b> the trigger. Nothing on the panel says <em>"price just touched 7690 and
+      turned."</em> That is the moment you act, and it's currently silent.</div>
+  </div>
+
+  <div class="step">
+    <div class="stephdr"><span class="num">05</span><h3>EXECUTE</h3>
+      <span class="ask">Where's my risk, and where do I get out?</span></div>
+    <p>Entry at the level, invalidation beyond the <em>next</em> level — structural, not a fixed point stop.
+    First exit at the next ladder row; let it run through a void, take something into a cluster.</p>
+    <dl class="grid">
+      <dt>Panel</dt><dd><code>→ 7676 (19) · ✗ 7716 (21) · 0.9R</code>; the ladder as the exit map; PATH
+        waypoints as intermediate stops</dd>
+      <dt>Source</dt><dd><span class="src s-chain">chain</span> for targets, <span class="src s-tape">tape</span>
+        for the trailing structure</dd>
+      <dt>Exit early</dt><dd>The level fails, or drift diverges from the bias — the idea is dead either way</dd>
+    </dl>
+  </div>
+
+  <h2>The step indicator</h2>
+  <p class="lead">Skylit's <span class="mono">Steps 1 2 3 4 5</span> describes their methodology. Ours would
+  show <b>which step you are on right now</b>, derived from panel state — so the tool doesn't just hold data,
+  it tells you where you are in your own process.</p>
+  <div class="bar">
+    <span>01 FRAME</span><span>02 BIAS</span><span class="on">03 LOCATION</span>
+    <span>04 REACTION</span><span>05 EXECUTE</span>
+  </div>
+  <p class="barnote">Live right now: framed and biased, waiting for price to reach a level.</p>
+  <table>
+    <tr><th style="width:150px">State</th><th>Step it lights</th></tr>
+    <tr><td>No chain data yet</td><td><b>01</b> — can't frame the day</td></tr>
+    <tr><td>Framed, no lean</td><td><b>02</b> — and it stays here; no lean means no trade</td></tr>
+    <tr><td>Lean, price mid-void</td><td><b>03</b> — wait. The most common state, and the one to respect</td></tr>
+    <tr><td>Price at a marked level</td><td><b>04</b> — read the node</td></tr>
+    <tr><td>Node accumulating / rolled in</td><td><b>05</b> — the frame is live</td></tr>
+    <tr><td>Level failed, or drift diverged</td><td>back to <b>02</b> — the read is dead</td></tr>
+  </table>
+
+  <h2>What to build, in order</h2>
+  <table>
+    <tr><th style="width:44px">Step</th><th>Gap</th><th style="width:120px">Cost</th></tr>
+    <tr><td><b>04</b></td><td><b>Entry trigger state</b> — touched and turned. The single most actionable
+      thing missing.</td><td>Small — we already record touches</td></tr>
+    <tr><td><b>03</b></td><td><b>Reachability</b> — grey out entries beyond the remaining expected move</td>
+      <td>Needs EM from the chain</td></tr>
+    <tr><td><b>01</b></td><td><b>Expected move</b> — ATM straddle from the chain's bid/ask</td>
+      <td>Small, data already fetched</td></tr>
+    <tr><td><b>02</b></td><td><b>DEX and skew</b> — the only genuinely directional inputs available</td>
+      <td>Arithmetic on delta and IV</td></tr>
+    <tr><td>—</td><td><b>Question-first hovers</b> — restore <code>Why this level?</code> everywhere</td>
+      <td>Wording pass</td></tr>
+  </table>
+
+  <div class="callout">
+    <p><b>The honest summary.</b> Steps 1, 3 and 5 are well served today — framing, location and risk are
+    all structural, all objective, all checkable against the chart. Step 4 is where the panel is unique and
+    also where it's incomplete: it can tell you a node is accumulating but not that price just turned on it.
+    Step 2 is the weakest and should carry the least weight until the scorecard says otherwise.</p>
+  </div>
+</div>

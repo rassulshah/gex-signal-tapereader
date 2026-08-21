@@ -1,0 +1,181 @@
+<title>Direction Section Final</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --page-bg:#f2f4f7; --page-ink:#1a1f28; --page-sub:#5b6675; --page-card:#ffffff;
+    --page-rule:#dfe4ea; --page-accent:#2f6fb0; --tag-new:#1f8f5c; --tag-q:#c0394a;
+    --p-bg:#0b0e14; --p-card:#12161f; --p-line:#1e2530;
+    --p-ink:#e6edf3; --p-sub:#8b98a9; --p-time:#f3f6fa;
+    --cr:#f0616d; --ps:#2ec27e; --hvl:#f2b45a; --mag:#e3c341; --blue:#4a90d9; --purple:#a371f7;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }}
+  :root[data-theme="dark"]{
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page-bg);color:var(--page-ink);
+       font-family:'IBM Plex Sans',system-ui,-apple-system,sans-serif;line-height:1.5}
+  .wrap{max-width:1060px;margin:0 auto;padding:30px 20px 60px}
+  h1{font-size:21px;font-weight:600;margin:0 0 4px;letter-spacing:-0.01em}
+  .lede{color:var(--page-sub);font-size:14px;margin:0 0 24px;max-width:64ch}
+  h2{font-size:14px;font-weight:600;margin:30px 0 10px;padding-top:18px;
+     border-top:1px solid var(--page-rule)}
+  .cols{display:grid;grid-template-columns:352px 1fr;gap:26px;align-items:start}
+  @media (max-width:820px){ .cols{grid-template-columns:1fr} }
+  .panel{width:352px;background:var(--p-bg);border:1px solid var(--p-line);border-radius:6px;
+         overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+         font-variant-numeric:tabular-nums}
+  .phdr{display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--p-line);
+        background:var(--p-card)}
+  .phdr b{color:var(--p-ink);font-size:12px;font-weight:600}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--ps)}
+  .muted{color:var(--p-sub);font-size:9.5px}
+
+  .dir{padding:9px 9px 8px;background:linear-gradient(180deg,rgba(240,97,109,.09),transparent 72%)}
+  .dir.alert{background:linear-gradient(180deg,rgba(242,180,90,.13),transparent 72%)}
+  .dtop{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:6px}
+  .verdict{font-size:21px;font-weight:800;letter-spacing:-.01em;line-height:1.05}
+  .reg{justify-self:center;font-size:11px;font-weight:800;padding:2px 8px;border-radius:3px;
+       background:rgba(163,113,247,.16);color:var(--purple);border:1px solid rgba(163,113,247,.35)}
+  .tgt{text-align:right;line-height:1.08}
+  .tgt .k{display:block;font-size:7.5px;color:var(--p-sub);font-weight:700;letter-spacing:.07em}
+  .tgt .v{display:block;font-size:15px;font-weight:800;color:var(--mag)}
+  .tgt .h{display:block;font-size:7.5px;color:var(--p-sub);font-weight:600}
+  .inputs{display:flex;gap:4px;margin-top:9px}
+  .inp{flex:1;text-align:center;border:1px solid var(--p-line);border-radius:3px;padding:3px 0 4px;
+       background:rgba(255,255,255,.015)}
+  .inp .k{display:block;font-size:7px;color:var(--p-sub);font-weight:700;letter-spacing:.05em}
+  .inp .v{display:block;font-size:12px;font-weight:800;margin-top:1px;line-height:1.1}
+  .inp.pend{opacity:.4;border-style:dashed}
+  .inp.flag{border-color:var(--hvl);background:rgba(242,180,90,.1)}
+  .tally{display:flex;align-items:baseline;gap:6px;margin-top:6px;font-size:9px;color:var(--p-sub)}
+  .tally b{color:var(--p-ink);font-weight:800;font-size:10.5px}
+  .tally .warn{color:var(--hvl);font-weight:800}
+  .ev{margin-top:8px;padding-top:7px;border-top:1px solid var(--p-line);
+      display:flex;flex-direction:column;gap:3px}
+  .ev div{font-size:9.5px;color:var(--p-sub);line-height:1.4}
+  .ev b{color:var(--p-ink);font-weight:700}
+  .ev .ag{color:var(--hvl);font-weight:800}
+
+  .rest{border-top:1px solid var(--p-line);padding:6px 9px;opacity:.4}
+  .rest div{font-size:9.5px;color:var(--p-sub);line-height:1.7}
+
+  .notes{display:flex;flex-direction:column;gap:13px}
+  .note{background:var(--page-card);border:1px solid var(--page-rule);border-radius:6px;padding:12px 14px}
+  .note h3{margin:0 0 5px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .note p{margin:0 0 7px;font-size:13px;color:var(--page-sub)} .note p:last-child{margin-bottom:0}
+  .tag{font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px;
+       background:rgba(47,111,176,.12);color:var(--page-accent)}
+  .tag.new{background:rgba(46,194,126,.14);color:var(--tag-new)}
+  .tag.q{background:rgba(240,97,109,.14);color:var(--tag-q)}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12px;
+       background:rgba(127,140,158,.14);padding:1px 4px;border-radius:3px}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12px}
+  th,td{text-align:left;padding:4px 8px 4px 0;border-bottom:1px solid var(--page-rule)}
+  th{color:var(--page-sub);font-weight:600;font-size:11px}
+</style>
+
+<div class="wrap">
+  <h1>Direction — final</h1>
+  <p class="lede">Four slots on one line, two lines of evidence, and a third only when something argues
+  against. Values from tonight's read: ES1 7665.25, chain at SPY 761.14.</p>
+
+  <div class="cols">
+    <div class="panel">
+      <div class="phdr"><span class="dot"></span><b>Tapereader</b>
+        <span class="muted">10s</span><span style="margin-left:auto" class="muted">feed v11.26</span></div>
+
+      <div class="dir">
+        <div class="dtop">
+          <span class="verdict" style="color:var(--cr)">↓ BEARISH</span>
+          <span class="reg">REG: −G</span>
+          <span class="tgt"><span class="k">TARGET</span><span class="v">7639.5</span><span class="h">EOD</span></span>
+        </div>
+        <div class="inputs">
+          <span class="inp"><span class="k">TREND</span><span class="v" style="color:var(--cr)">↓</span></span>
+          <span class="inp"><span class="k">DRIFT</span><span class="v" style="color:var(--cr)">↓</span></span>
+          <span class="inp"><span class="k">TRINITY</span><span class="v" style="color:var(--cr)">2/3 ↓</span></span>
+          <span class="inp pend"><span class="k">DEX</span><span class="v">·</span></span>
+        </div>
+        <div class="tally"><b>3 of 3 agree</b><span>· drift confirms</span>
+          <span style="margin-left:auto">n 101 · 1 session</span></div>
+        <div class="ev">
+          <div>Ceiling rolled <b>7700 → 7690</b> · <b>15 of 20</b> bars below the 50-SMA</div>
+          <div>Gamma <b>−$24.8B</b> today · put side grew below spot — downside amplifies</div>
+          <div><span class="ag">Against:</span> King rolled <b>up 3×</b> into 7639.5</div>
+        </div>
+      </div>
+
+      <div class="rest">
+        <div>LEVELS · PATH · CHART · NEXT STOP | PB ENTRY</div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note"><h3><span class="tag">the four</span> One mechanism each</h3>
+        <table>
+          <tr><th>slot</th><th>mechanism</th></tr>
+          <tr><td><b>TREND</b></td><td>price vs 50-SMA — the frame</td></tr>
+          <tr><td><b>DRIFT</b></td><td>GEX/VEX centre vs price — independent of price</td></tr>
+          <tr><td><b>TRINITY</b></td><td>cross-index agreement</td></tr>
+          <tr><td><b>DEX</b></td><td>Σ delta × OI — the only true direction signal</td></tr>
+        </table>
+        <p style="margin-top:8px">DEX sits dashed until built so the layout doesn't shift when it lands.</p></div>
+
+      <div class="note"><h3><span class="tag">cut</span> What didn't make the line</h3>
+        <p><b>ΔGEX</b> — gamma describes how dealers hedge, not which way they lean. It's regime, so it
+        moved to the evidence line. <b>PATH</b> — derives from the levels below it; voting would
+        double-count. <b>Skew</b> and <b>accumulation</b> — good mechanisms, but a fifth chip doesn't fit
+        and neither beats what's already there.</p></div>
+
+      <div class="note"><h3><span class="tag new">measured</span> Drift disagreeing is the loud state</h3>
+        <p>The one validated result we have: when drift diverged from trend, the trend's hit rate went
+        <b>50% → 24%</b> (n 33). So drift isn't one arrow among four — when it disagrees the whole section
+        changes colour and the tally says so. See the second state below.</p></div>
+
+      <div class="note"><h3><span class="tag new">new</span> Two lines, three only on conflict</h3>
+        <p>Tape evidence, then chain evidence. The <b>Against:</b> line appears only when something
+        genuinely argues the other way — so its presence is itself information, and quiet days stay quiet.</p></div>
+    </div>
+  </div>
+
+  <h2>When drift diverges — the one state with measured value</h2>
+  <div class="cols">
+    <div class="panel">
+      <div class="dir alert">
+        <div class="dtop">
+          <span class="verdict" style="color:var(--hvl)">↓ BEARISH?</span>
+          <span class="reg">REG: −G</span>
+          <span class="tgt"><span class="k">TARGET</span><span class="v">7639.5</span><span class="h">EOD</span></span>
+        </div>
+        <div class="inputs">
+          <span class="inp"><span class="k">TREND</span><span class="v" style="color:var(--cr)">↓</span></span>
+          <span class="inp flag"><span class="k">DRIFT</span><span class="v" style="color:var(--ps)">↑</span></span>
+          <span class="inp"><span class="k">TRINITY</span><span class="v" style="color:var(--cr)">2/3 ↓</span></span>
+          <span class="inp pend"><span class="k">DEX</span><span class="v">·</span></span>
+        </div>
+        <div class="tally"><b>2 of 3</b><span class="warn">· DRIFT DIVERGES</span>
+          <span style="margin-left:auto">trend hit 24% here · n 33</span></div>
+        <div class="ev">
+          <div>Ceiling rolled <b>7700 → 7690</b> · <b>15 of 20</b> bars below the 50-SMA</div>
+          <div>Gamma <b>−$24.8B</b> today · put side grew below spot</div>
+          <div><span class="ag">Against:</span> GEX/VEX centre sits <b>above</b> price — the trend call has
+            historically failed here</div>
+        </div>
+      </div>
+      <div class="rest"><div>LEVELS · PATH · CHART · NEXT STOP | PB ENTRY</div></div>
+    </div>
+    <div class="notes">
+      <div class="note"><h3><span class="tag q">the point</span> A question mark, not a flip</h3>
+        <p>The verdict becomes <code>↓ BEARISH?</code> in amber rather than flipping to bullish. Drift
+        diverging doesn't mean up — it means the down call is unreliable. Halving your confidence and
+        reversing your direction are very different responses, and the panel should say which one it means.</p>
+        <p>This is the only place the panel currently has measured evidence for anything directional, so
+        it's the one state worth designing loudly.</p></div>
+    </div>
+  </div>
+</div>

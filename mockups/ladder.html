@@ -1,0 +1,165 @@
+<title>One Ladder</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --page-bg:#f2f4f7; --page-ink:#1a1f28; --page-sub:#5b6675; --page-card:#ffffff;
+    --page-rule:#dfe4ea; --page-accent:#2f6fb0; --tag-new:#1f8f5c; --tag-q:#c0394a;
+    --p-bg:#0b0e14; --p-card:#12161f; --p-line:#1e2530;
+    --p-ink:#e6edf3; --p-sub:#8b98a9; --p-time:#f3f6fa;
+    --cr:#f0616d; --ps:#2ec27e; --hvl:#f2b45a; --mag:#e3c341; --blue:#4a90d9; --purple:#a371f7;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }}
+  :root[data-theme="dark"]{
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page-bg);color:var(--page-ink);
+       font-family:'IBM Plex Sans',system-ui,-apple-system,sans-serif;line-height:1.5}
+  .wrap{max-width:1060px;margin:0 auto;padding:30px 20px 60px}
+  h1{font-size:21px;font-weight:600;margin:0 0 4px;letter-spacing:-0.01em}
+  .lede{color:var(--page-sub);font-size:14px;margin:0 0 24px;max-width:64ch}
+  .cols{display:grid;grid-template-columns:352px 1fr;gap:26px;align-items:start}
+  @media (max-width:820px){ .cols{grid-template-columns:1fr} }
+  .panel{width:352px;background:var(--p-bg);border:1px solid var(--p-line);border-radius:6px;
+         overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+         font-variant-numeric:tabular-nums}
+  .phdr{display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--p-line);
+        background:var(--p-card)}
+  .phdr b{color:var(--p-ink);font-size:12px;font-weight:600}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--ps)}
+  .muted{color:var(--p-sub);font-size:9.5px}
+  .sect{padding:7px 9px;border-bottom:1px solid var(--p-line)}
+  .sect:last-child{border-bottom:none}
+  .shdr{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
+  .stitle{color:var(--p-ink);font-size:11px;font-weight:800;letter-spacing:.06em}
+  .ssub{color:var(--p-sub);font-size:9.5px;font-weight:600}
+  .coil{margin-left:auto;font-size:8.5px;font-weight:800;padding:1px 5px;border-radius:3px;
+        background:rgba(163,113,247,.18);color:var(--purple)}
+
+  .r{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:11px;line-height:1.68}
+  .nm{display:inline-block;width:78px;font-weight:800;font-size:10.5px;overflow:hidden;text-overflow:ellipsis}
+  .v{color:var(--p-ink);font-weight:700;font-size:12.5px;min-width:46px}
+  .sr{font-size:7.5px;font-weight:700;padding:0 3px;border-radius:2px;
+      background:rgba(139,152,169,.16);color:var(--p-sub)}
+  .st{font-size:8.5px;color:var(--p-sub);min-width:26px}
+  .roll{font-size:8.5px;font-weight:800;padding:0 3px;border-radius:2px}
+  .rup{background:rgba(46,194,126,.18);color:var(--ps)}
+  .rdn{background:rgba(240,97,109,.18);color:var(--cr)}
+  .ent{font-size:8px;font-weight:800;padding:0 4px;border-radius:2px;
+       background:rgba(240,97,109,.22);color:var(--cr)}
+  .tg{font-size:8px;font-weight:800;padding:0 4px;border-radius:2px;
+      background:rgba(227,195,65,.22);color:var(--mag)}
+  .d{margin-left:auto;font-weight:700;font-size:10px}
+  .up{color:var(--ps)} .dn{color:var(--cr)}
+  .far{opacity:.5}
+  .void{margin:1px -9px;padding:0 9px;
+        background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(139,152,169,.06) 4px,rgba(139,152,169,.06) 8px)}
+  .void span{font-size:8px;color:var(--p-sub);font-style:italic}
+  .prow{display:flex;align-items:center;gap:6px;background:rgba(243,246,250,.08);
+        margin:2px -9px;padding:2px 9px;border-top:1px solid rgba(243,246,250,.22);
+        border-bottom:1px solid rgba(243,246,250,.22)}
+  .prow .nm,.prow .v{color:var(--p-time)} .prow .v{font-size:13.5px}
+  @keyframes soft{0%,100%{opacity:.5}50%{opacity:1}}
+  .pulse{animation:soft 2s ease-in-out infinite}
+  @media (prefers-reduced-motion: reduce){ .pulse{animation:none;opacity:1} }
+  .none{border:1px dashed var(--p-line);border-radius:4px;padding:8px;text-align:center}
+  .none b{display:block;color:var(--hvl);font-size:11.5px;font-weight:800;margin-bottom:2px}
+  .none span{font-size:9px;color:var(--p-sub);line-height:1.4}
+  .notes{display:flex;flex-direction:column;gap:13px}
+  .note{background:var(--page-card);border:1px solid var(--page-rule);border-radius:6px;padding:12px 14px}
+  .note h3{margin:0 0 5px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .note p{margin:0 0 7px;font-size:13px;color:var(--page-sub)} .note p:last-child{margin-bottom:0}
+  .tag{font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px;
+       background:rgba(47,111,176,.12);color:var(--page-accent)}
+  .tag.new{background:rgba(46,194,126,.14);color:var(--tag-new)}
+  .tag.q{background:rgba(240,97,109,.14);color:var(--tag-q)}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12px;
+       background:rgba(127,140,158,.14);padding:1px 4px;border-radius:3px}
+</style>
+
+<div class="wrap">
+  <h1>One ladder</h1>
+  <p class="lede">Chain levels and tape nodes in a single map, source-tagged, price in position. Entry
+  marks point into the ladder rather than repeating prices. Live: ES1 7695.25, 6 tape nodes significant.</p>
+
+  <div class="cols">
+    <div class="panel">
+      <div class="phdr"><span class="dot"></span><b>Tapereader</b>
+        <span class="muted">10s</span><span style="margin-left:auto" class="muted">feed v11.26</span></div>
+
+      <div class="sect">
+        <div class="shdr"><span class="stitle">LEVELS</span><span class="ssub">0DTE + to Fri · 6 nodes</span>
+          <span class="coil">COILING ⇅</span></div>
+
+        <div class="r far"><span class="nm" style="color:var(--cr)">CR</span>
+          <span class="v">7786</span><span class="sr">chain</span>
+          <span class="roll rdn">↓2</span><span class="d up">+91</span></div>
+
+        <div class="void"><span>— 70 pt void —</span></div>
+
+        <div class="r"><span class="nm" style="color:var(--mag)">MAG</span>
+          <span class="v">7716</span><span class="sr">tape</span><span class="st">53%</span>
+          <span class="ent">ENTRY</span><span class="d up">+21</span></div>
+
+        <div class="r"><span class="nm" style="color:var(--mag)">KING·MAG</span>
+          <span class="v">7696</span><span class="sr">both</span><span class="st">100%</span>
+          <span class="roll rup">↑3</span><span class="ent">ENTRY</span><span class="d up">+1</span></div>
+
+        <div class="prow"><span class="nm">► ES1</span><span class="v">7695.25</span>
+          <span class="d muted">+0.05%</span></div>
+
+        <div class="r"><span class="nm pulse" style="color:var(--ps)">FLR·PS</span>
+          <span class="v pulse">7676</span><span class="sr">both</span><span class="st">94%</span>
+          <span class="tg pulse">TARGET</span><span class="d dn">−19</span></div>
+
+        <div class="r"><span class="nm">·</span><span class="v">7666</span>
+          <span class="sr">tape</span><span class="st">30%</span><span class="d dn">−29</span></div>
+
+        <div class="r"><span class="nm">·</span><span class="v">7656</span>
+          <span class="sr">tape</span><span class="st">30%</span><span class="d dn">−39</span></div>
+
+        <div class="r"><span class="nm" style="color:var(--ps)">GATE</span>
+          <span class="v">7635</span><span class="sr">tape</span><span class="st">66%</span>
+          <span class="d dn">−60</span></div>
+      </div>
+
+      <div class="sect">
+        <div class="shdr"><span class="stitle">ENTRY</span><span class="ssub">marked above</span>
+          <span class="ssub" style="margin-left:auto">no lean</span></div>
+        <div class="none"><b>NO SETUP</b>
+          <span>Price on the King at 7696 with no lean. Two marks are candidates <em>if</em> a bias forms —
+          neither is live.</span></div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note"><h3><span class="tag new">merged</span> Chain and tape, one map</h3>
+        <p>Support is support regardless of which measurement found it. <code>both</code> means chain and
+        tape agree on that strike — <b>7696</b> and <b>7676</b> today, which is a stronger statement than
+        either source alone and was invisible when they lived in separate sections.</p></div>
+
+      <div class="note"><h3><span class="tag new">new</span> Entry marks point into the ladder</h3>
+        <p>No repeated prices. <code>ENTRY</code> tags a row; the section below carries only what the
+        ladder can't — the frame and the reasoning. Today it carries "no setup", because price is sitting
+        on the King with no lean.</p></div>
+
+      <div class="note"><h3><span class="tag">checked</span> Row count holds</h3>
+        <p>100 rows in the raw ladder, but only <b>6 clear the significance threshold</b> and four are
+        ≥40%. Two coincide with chain levels. That's 7 level rows plus price — at the cap, not over it.</p>
+        <p>The two 30% nodes at 7666 and 7656 are the weakest and would be first to drop if a busier book
+        pushed past eight.</p></div>
+
+      <div class="note"><h3><span class="tag q">notice</span> Today is thin above</h3>
+        <p>A <b>70-point void</b> between CR and the next node. If price clears 7716 there is nothing until
+        7786 — the kind of thing the old layout couldn't show at all.</p></div>
+
+      <div class="note"><h3><span class="tag q">one call left</span> Unnamed nodes</h3>
+        <p>7666 and 7656 have no role — they're just tape nodes at 30%. Shown as <code>·</code> here.
+        Worth a name, or is the price and strength enough?</p></div>
+    </div>
+  </div>
+</div>

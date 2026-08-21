@@ -1,0 +1,301 @@
+<title>The Panel As Process</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --page-bg:#f2f4f7; --page-ink:#1a1f28; --page-sub:#5b6675; --page-card:#ffffff;
+    --page-rule:#dfe4ea; --page-accent:#2f6fb0; --tag-new:#1f8f5c; --tag-q:#c0394a;
+    --p-bg:#0b0e14; --p-card:#12161f; --p-line:#1e2530;
+    --p-ink:#e6edf3; --p-sub:#8b98a9; --p-time:#f3f6fa;
+    --cr:#f0616d; --ps:#2ec27e; --hvl:#f2b45a; --mag:#e3c341; --blue:#4a90d9; --purple:#a371f7;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }}
+  :root[data-theme="dark"]{
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page-bg);color:var(--page-ink);
+       font-family:'IBM Plex Sans',system-ui,-apple-system,sans-serif;line-height:1.55}
+  .wrap{max-width:1060px;margin:0 auto;padding:30px 20px 60px}
+  h1{font-size:21px;font-weight:600;margin:0 0 4px;letter-spacing:-0.01em}
+  .lede{color:var(--page-sub);font-size:14px;margin:0 0 24px;max-width:66ch}
+  .cols{display:grid;grid-template-columns:352px 1fr;gap:26px;align-items:start}
+  @media (max-width:820px){ .cols{grid-template-columns:1fr} }
+  .panel{width:352px;background:var(--p-bg);border:1px solid var(--p-line);border-radius:6px;
+         overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+         font-variant-numeric:tabular-nums}
+  .phdr{display:flex;align-items:center;gap:8px;padding:6px 9px;border-bottom:1px solid var(--p-line);
+        background:var(--p-card)}
+  .phdr b{color:var(--p-ink);font-size:11.5px;font-weight:600}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--ps)}
+  .muted{color:var(--p-sub);font-size:9px}
+
+  .steps{display:flex;gap:2px;padding:5px 9px 3px;background:var(--p-card)}
+  .steps span{flex:1;text-align:center;font-size:7px;font-weight:800;letter-spacing:.02em;
+              padding:3px 1px;border-radius:3px;background:rgba(139,152,169,.09);color:var(--p-sub)}
+  .steps span.done{color:var(--ps);background:rgba(46,194,126,.13)}
+  .steps span.on{background:rgba(242,180,90,.24);color:var(--hvl);box-shadow:0 0 0 1px rgba(242,180,90,.4)}
+  .waiting{padding:2px 9px 6px;background:var(--p-card);border-bottom:1px solid var(--p-line);
+           font-size:9px;color:var(--p-sub)}
+  .waiting b{color:var(--hvl);font-weight:800}
+
+  .sect{padding:6px 9px;border-bottom:1px solid var(--p-line)}
+  .sect:last-child{border-bottom:none}
+  .shdr{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+  .no{font-size:9px;font-weight:800;width:14px;height:14px;line-height:14px;text-align:center;
+      border-radius:3px;background:rgba(139,152,169,.16);color:var(--p-sub);flex:none}
+  .no.on{background:rgba(242,180,90,.28);color:var(--hvl)}
+  .stitle{color:var(--p-ink);font-size:10px;font-weight:800;letter-spacing:.08em}
+  .ssub{color:var(--p-sub);font-size:8.5px;font-weight:600}
+
+  .frame{display:flex;align-items:center;gap:7px;font-size:10.5px}
+  .reg{font-size:10px;font-weight:800;padding:1px 6px;border-radius:3px;
+       background:rgba(163,113,247,.16);color:var(--purple);border:1px solid rgba(163,113,247,.35)}
+  .fv{color:var(--p-ink);font-weight:700}
+  .fk{color:var(--p-sub);font-size:8px;font-weight:700;letter-spacing:.05em}
+
+  .verdict{font-size:16px;font-weight:800;line-height:1.1}
+  .inputs{display:flex;gap:3px;margin-top:5px}
+  .inp{flex:1;text-align:center;border:1px solid var(--p-line);border-radius:3px;padding:2px 0 3px}
+  .inp .k{display:block;font-size:6.5px;color:var(--p-sub);font-weight:700}
+  .inp .v{display:block;font-size:11px;font-weight:800;line-height:1.15}
+  .inp.pend{opacity:.36;border-style:dashed}
+  .ev{margin-top:5px;display:flex;flex-direction:column;gap:2px}
+  .ev div{font-size:8.5px;color:var(--p-sub);line-height:1.38}
+  .ev em{font-style:normal;color:var(--p-ink);font-weight:700;font-size:7.5px;letter-spacing:.04em}
+  .ev b{color:var(--p-ink);font-weight:700}
+
+  .r{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:10px;line-height:1.56}
+  .nm{display:inline-block;width:70px;font-weight:800;font-size:9.5px;overflow:hidden;text-overflow:ellipsis}
+  .v{color:var(--p-ink);font-weight:700;font-size:11.5px;min-width:42px}
+  .sr{font-size:6.5px;font-weight:700;padding:0 3px;border-radius:2px;
+      background:rgba(139,152,169,.16);color:var(--p-sub)}
+  .st{font-size:7.5px;color:var(--p-sub);min-width:22px}
+  .d{margin-left:auto;font-weight:700;font-size:9px}
+  .up{color:var(--ps)} .dn{color:var(--cr)}
+  .far{opacity:.48}
+  .prow{display:flex;align-items:center;gap:5px;background:rgba(243,246,250,.09);
+        margin:1px -9px;padding:2px 9px;border-top:1px solid rgba(243,246,250,.24);
+        border-bottom:1px solid rgba(243,246,250,.24)}
+  .prow .nm,.prow .v{color:var(--p-time)} .prow .v{font-size:12.5px}
+  .atlvl{background:rgba(242,180,90,.11);margin:1px -9px;padding:1px 9px;
+         border-left:2px solid var(--hvl)}
+  .tg{font-size:7px;font-weight:800;padding:0 3px;border-radius:2px;
+      background:rgba(227,195,65,.22);color:var(--mag)}
+  .key{display:flex;gap:8px;margin-top:4px;font-size:7px;color:var(--p-sub);align-items:center}
+  .key i{display:inline-block;width:8px;height:5px;border-radius:1px;margin-right:2px;vertical-align:middle}
+
+  .live{border:1px solid rgba(46,194,126,.5);background:rgba(46,194,126,.08);border-radius:4px;
+        padding:6px 8px}
+  .live b{display:block;color:var(--ps);font-size:11px;font-weight:800;margin-bottom:2px}
+  .frame2{display:flex;gap:8px;margin-top:3px;font-size:9px}
+  .frame2 .t{color:var(--ps);font-weight:700} .frame2 .x{color:var(--cr);font-weight:700}
+  .frame2 .rr{margin-left:auto;color:var(--p-ink);font-weight:800;font-size:10px}
+  @keyframes soft{0%,100%{opacity:.5}50%{opacity:1}}
+  @keyframes ring{0%{r:3;opacity:.9}70%{r:8;opacity:0}100%{r:8;opacity:0}}
+  .pulse{animation:soft 2s ease-in-out infinite}
+  .pring{animation:ring 2s ease-out infinite}
+  @media (prefers-reduced-motion: reduce){ .pulse{animation:none;opacity:1} .pring{animation:none;opacity:.3} }
+
+  .notes{display:flex;flex-direction:column;gap:13px}
+  .note{background:var(--page-card);border:1px solid var(--page-rule);border-radius:6px;padding:12px 14px}
+  .note h3{margin:0 0 5px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .note p{margin:0 0 7px;font-size:13px;color:var(--page-sub)} .note p:last-child{margin-bottom:0}
+  .tag{font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px;
+       background:rgba(47,111,176,.12);color:var(--page-accent)}
+  .tag.new{background:rgba(46,194,126,.14);color:var(--tag-new)}
+  .tag.q{background:rgba(240,97,109,.14);color:var(--tag-q)}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12px;
+       background:rgba(127,140,158,.14);padding:1px 4px;border-radius:3px}
+  ol{margin:8px 0 0;padding-left:19px;font-size:13px;color:var(--page-sub)}
+  ol li{margin-bottom:5px}
+  ol b{color:var(--page-ink)}
+</style>
+
+<div class="wrap">
+  <h1>The panel as the process</h1>
+  <p class="lede">Every section carries its step number, so reading top to bottom <em>is</em> the process.
+  The bar says where you are; the line under it says what you're waiting for. Live: ES1 7696.75, price has
+  just arrived at the King.</p>
+
+  <div class="cols">
+    <div class="panel">
+      <div class="phdr"><span class="dot"></span><b>Tapereader</b><span class="muted">10s</span>
+        <span style="margin-left:auto" class="muted">4h 05m left</span></div>
+
+      <div class="steps">
+        <span class="done">① FRAME</span><span class="done">② BIAS</span><span class="done">③ LOCATION</span>
+        <span class="on">④ REACTION</span><span>⑤ EXECUTE</span></div>
+      <div class="waiting">at the King — <b>is it being defended?</b> read the right-hand bars</div>
+
+      <div class="sect" title="What kind of day is this?">
+        <div class="shdr"><span class="no">①</span><span class="stitle">FRAME</span></div>
+        <div class="frame"><span class="reg">REG: −G</span>
+          <span class="fk">TARGET</span><span class="fv">7675</span>
+          <span class="fk">EM</span><span class="fv">±22</span>
+          <span class="muted">used 15 · 7 left</span></div>
+      </div>
+
+      <div class="sect" title="Which side of the box am I playing?">
+        <div class="shdr"><span class="no">②</span><span class="stitle">BIAS</span>
+          <span class="ssub" style="margin-left:auto">invalid above 7715</span></div>
+        <div class="verdict dn">↓ BEARISH</div>
+        <div class="inputs">
+          <span class="inp"><span class="k">TREND</span><span class="v dn">↓</span></span>
+          <span class="inp"><span class="k">DRIFT</span><span class="v dn">↓</span></span>
+          <span class="inp"><span class="k">TRINITY</span><span class="v dn">2/3</span></span>
+          <span class="inp pend"><span class="k">DEX</span><span class="v">·</span></span>
+        </div>
+        <div class="ev">
+          <div><em>TAPE</em> ceiling rolled <b>7715 → 7705</b> · <b>16/20</b> bars below 50-SMA</div>
+        </div>
+      </div>
+
+      <div class="sect" style="padding:6px 9px 7px" title="Is price anywhere worth trading?">
+        <div class="shdr"><span class="no">③</span><span class="stitle">LOCATION</span>
+          <span class="ssub" style="margin-left:auto">at a level</span></div>
+        <div style="border:1px solid var(--p-line);border-radius:3px;overflow:hidden">
+          <svg viewBox="0 0 334 168" style="width:100%;height:auto;display:block">
+            <rect width="334" height="168" fill="#12161f"/>
+            <g opacity=".5">
+              <rect x="0" y="12" width="20" height="6" fill="#2ec27e"/>
+              <rect x="0" y="21" width="30" height="6" fill="#2ec27e"/>
+              <rect x="0" y="30" width="10" height="6" fill="#2ec27e"/>
+              <rect x="0" y="39" width="16" height="6" fill="#a371f7"/>
+              <rect x="0" y="48" width="38" height="6" fill="#a371f7"/>
+              <rect x="0" y="57" width="14" height="6" fill="#a371f7"/>
+              <rect x="0" y="66" width="24" height="6" fill="#a371f7"/>
+              <rect x="0" y="75" width="18" height="6" fill="#a371f7"/>
+              <rect x="0" y="84" width="88" height="6" fill="#a371f7"/>
+              <rect x="0" y="93" width="22" height="6" fill="#a371f7"/>
+              <rect x="0" y="102" width="32" height="6" fill="#a371f7"/>
+              <rect x="0" y="111" width="66" height="6" fill="#a371f7"/>
+              <rect x="0" y="120" width="17" height="6" fill="#a371f7"/>
+              <rect x="0" y="129" width="27" height="6" fill="#a371f7"/>
+              <rect x="0" y="138" width="45" height="6" fill="#a371f7"/>
+              <rect x="0" y="147" width="14" height="6" fill="#a371f7"/>
+            </g>
+            <g>
+              <rect x="318" y="12" width="16" height="6" fill="#2ec27e" opacity=".4"/>
+              <rect x="306" y="21" width="28" height="6" fill="#2ec27e" opacity=".4"/>
+              <rect x="326" y="30" width="8"  height="6" fill="#2ec27e" opacity=".4"/>
+              <rect x="320" y="39" width="14" height="6" fill="#a371f7" opacity=".4"/>
+              <rect x="300" y="48" width="34" height="6" fill="#a371f7" opacity=".45"/>
+              <rect x="322" y="57" width="12" height="6" fill="#a371f7" opacity=".4"/>
+              <rect x="310" y="66" width="24" height="6" fill="#a371f7" opacity=".4"/>
+              <rect x="318" y="75" width="16" height="6" fill="#a371f7" opacity=".4"/>
+              <!-- KING: 60m mark, 15m mark, bright new growth -->
+              <rect x="238" y="84" width="96" height="6" fill="#a371f7" opacity=".42"/>
+              <rect x="216" y="84" width="22" height="6" fill="#a371f7" opacity="1"/>
+              <line x1="238" y1="82" x2="238" y2="92" stroke="#e6edf3" stroke-width="1" opacity=".85"/>
+              <line x1="264" y1="82" x2="264" y2="92" stroke="#8b98a9" stroke-width="1" opacity=".7"/>
+              <rect x="314" y="93" width="20" height="6" fill="#a371f7" opacity=".4"/>
+              <rect x="304" y="102" width="30" height="6" fill="#a371f7" opacity=".4"/>
+              <!-- PS: draining, marks OUTSIDE the bar -->
+              <rect x="286" y="111" width="48" height="6" fill="#a371f7" opacity=".4"/>
+              <line x1="266" y1="109" x2="266" y2="119" stroke="#8b98a9" stroke-width="1" opacity=".55"/>
+              <rect x="266" y="111" width="20" height="6" fill="none" stroke="#8b98a9"
+                    stroke-width=".7" stroke-dasharray="2,2" opacity=".6"/>
+              <rect x="322" y="120" width="12" height="6" fill="#a371f7" opacity=".4"/>
+              <rect x="308" y="129" width="26" height="6" fill="#a371f7" opacity=".4"/>
+              <rect x="296" y="138" width="38" height="6" fill="#a371f7" opacity=".4"/>
+              <rect x="324" y="147" width="10" height="6" fill="#a371f7" opacity=".4"/>
+            </g>
+            <line x1="0" y1="42" x2="334" y2="42" stroke="#f0616d" stroke-width="1" opacity=".55"
+                  stroke-dasharray="4,3"/>
+            <rect x="122" y="36" width="64" height="10" rx="2" fill="#12161f" opacity=".9"/>
+            <text x="154" y="44" fill="#f0616d" font-size="8" font-weight="700" text-anchor="middle"
+                  font-family="ui-monospace,monospace">7715 · inval</text>
+            <line class="pulse" x1="0" y1="87" x2="334" y2="87" stroke="#e3c341" stroke-width="2"/>
+            <rect x="116" y="81" width="76" height="10" rx="2" fill="#12161f" opacity=".94"/>
+            <text class="pulse" x="154" y="89" fill="#e3c341" font-size="8" font-weight="800"
+                  text-anchor="middle" font-family="ui-monospace,monospace">KING 7695</text>
+            <line x1="0" y1="114" x2="334" y2="114" stroke="#2ec27e" stroke-width="1" opacity=".55"/>
+            <rect x="126" y="108" width="56" height="10" rx="2" fill="#12161f" opacity=".9"/>
+            <text x="154" y="116" fill="#2ec27e" font-size="8" font-weight="700" text-anchor="middle"
+                  font-family="ui-monospace,monospace">PS 7675</text>
+            <polyline fill="none" stroke="#e6edf3" stroke-width="1.4" opacity=".97"
+              points="0,96 18,100 36,92 54,102 72,90 90,96 108,84 126,88 144,76 162,80 180,70 196,78 208,86"/>
+            <polyline fill="none" stroke="#4a90d9" stroke-width="1.3" stroke-dasharray="5,4" opacity=".6"
+              points="208,86 230,98 248,108 262,114"/>
+            <circle class="pring" cx="208" cy="86" r="3" fill="none" stroke="#f3f6fa" stroke-width="1.3"/>
+            <circle cx="208" cy="86" r="3" fill="#f3f6fa"/>
+            <rect x="148" y="70" width="54" height="11" rx="2" fill="#0b0e14" opacity=".94"/>
+            <text x="198" y="78.5" fill="#f3f6fa" font-size="9" font-weight="800" text-anchor="end"
+                  font-family="ui-monospace,monospace">7696.75</text>
+          </svg>
+        </div>
+        <div class="key"><span><i style="background:#a371f7"></i>−γ</span>
+          <span><i style="background:#2ec27e"></i>+γ</span>
+          <span>│ 60m</span><span>│ 15m</span>
+          <span style="margin-left:auto">◄ chain $ · tape $ ►</span></div>
+
+        <div class="r far"><span class="nm" style="color:var(--cr)">CR</span><span class="v">7785</span>
+          <span class="sr">both</span><span class="d up">+88</span></div>
+        <div class="r"><span class="nm" style="color:var(--cr)">CEIL</span><span class="v">7715</span>
+          <span class="sr">tape</span><span class="st">90%</span><span class="d up">+18</span></div>
+        <div class="prow"><span class="nm">► ES1</span><span class="v">7696.75</span>
+          <span class="d muted">+0.14%</span></div>
+        <div class="r atlvl"><span class="nm pulse" style="color:var(--mag)">KING·MAG</span>
+          <span class="v pulse">7695</span><span class="sr">both</span><span class="st">100%</span>
+          <span class="d dn">−2</span></div>
+        <div class="r"><span class="nm" style="color:var(--ps)">FLR·PS</span><span class="v">7675</span>
+          <span class="sr">both</span><span class="st">74%</span><span class="tg">TARGET</span>
+          <span class="d dn">−22</span></div>
+        <div class="r far"><span class="nm" style="color:var(--ps)">GATE</span><span class="v">7635</span>
+          <span class="sr">tape</span><span class="st">57%</span><span class="d dn">−62</span></div>
+      </div>
+
+      <div class="sect" title="Is this level being defended?">
+        <div class="shdr"><span class="no on">④</span><span class="stitle">REACTION</span>
+          <span class="ssub" style="margin-left:auto">KING 7695</span></div>
+        <div class="ev">
+          <div><em>NOW</em> node <b>+$41M</b> in 15m, <b>+$118M</b> in 60m —
+            <b style="color:var(--ps)">accelerating</b></div>
+          <div><em>BELOW</em> PS 7675 draining <b>−$26M</b> in 15m — support thinning under it</div>
+        </div>
+      </div>
+
+      <div class="sect" title="Where do I get in, and where am I wrong?">
+        <div class="shdr"><span class="no">⑤</span><span class="stitle">EXECUTE</span></div>
+        <div class="live"><b>SHORT 7695 · live</b>
+          <div class="frame2"><span class="t">→ 7675 (20)</span><span class="x">✗ 7715 (20)</span>
+            <span class="rr">1.0R</span></div></div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note"><h3><span class="tag new">the answer</span> Reading down is the process</h3>
+        <ol>
+          <li><b>① FRAME</b> — regime, target, how much move is left</li>
+          <li><b>② BIAS</b> — which side, and why</li>
+          <li><b>③ LOCATION</b> — chart and ladder: are we anywhere worth trading</li>
+          <li><b>④ REACTION</b> — is the level being defended</li>
+          <li><b>⑤ EXECUTE</b> — entry, invalidation, target</li>
+        </ol>
+        <p style="margin-top:9px">The bar at the top shows where you are; the line under it says what
+        you're waiting for. Steps below the current one stay dim until reached.</p></div>
+
+      <div class="note"><h3><span class="tag new">live now</span> Step ④ is doing its job</h3>
+        <p>Price has arrived at the King. On the right, that bar's <b>bright leading edge</b> shows
+        <code>+$41M in 15m</code> past the 15-minute tick — and the 60-minute tick sits further right, so
+        growth is <b>accelerating into the touch</b>. Dealers are showing up as price gets here.</p>
+        <p>Two rows down, <b>PS 7675 is draining</b> — its marks sit outside the bar, drawn hollow. The
+        chain still calls it support; the flow says it's thinning.</p>
+        <p style="margin-top:9px">Defended above, thinning below. That's a short at the King with a target
+        that should give way — and neither half of that read exists in either data source alone.</p></div>
+
+      <div class="note"><h3><span class="tag">as agreed</span> Green and purple both sides</h3>
+        <p>Polarity colours the tape bars too, so purple means negative gamma wherever you look. Side is
+        distinguished by anchor — chain grows from the left, tape from the right — rather than by hue.</p></div>
+
+      <div class="note"><h3><span class="tag q">check</span> Does the bright edge read?</h3>
+        <p>At 6px bar height the growth segment is small. It works on the King because the move is large;
+        on a node that grew 5% it may be invisible. Might need a minimum visible width, or the marks alone
+        carry it for small changes.</p></div>
+    </div>
+  </div>
+</div>

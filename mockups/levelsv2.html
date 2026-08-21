@@ -1,0 +1,205 @@
+<title>Levels With Compression And Voids</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --page-bg:#f2f4f7; --page-ink:#1a1f28; --page-sub:#5b6675; --page-card:#ffffff;
+    --page-rule:#dfe4ea; --page-accent:#2f6fb0; --tag-new:#1f8f5c; --tag-q:#c0394a;
+    --p-bg:#0b0e14; --p-card:#12161f; --p-line:#1e2530;
+    --p-ink:#e6edf3; --p-sub:#8b98a9; --p-time:#f3f6fa;
+    --cr:#f0616d; --ps:#2ec27e; --hvl:#f2b45a; --mag:#e3c341; --blue:#4a90d9; --purple:#a371f7;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }}
+  :root[data-theme="dark"]{
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page-bg);color:var(--page-ink);
+       font-family:'IBM Plex Sans',system-ui,-apple-system,sans-serif;line-height:1.5}
+  .wrap{max-width:1060px;margin:0 auto;padding:30px 20px 60px}
+  h1{font-size:21px;font-weight:600;margin:0 0 4px;letter-spacing:-0.01em}
+  .lede{color:var(--page-sub);font-size:14px;margin:0 0 24px;max-width:64ch}
+  .cols{display:grid;grid-template-columns:352px 1fr;gap:26px;align-items:start}
+  @media (max-width:820px){ .cols{grid-template-columns:1fr} }
+  .panel{width:352px;background:var(--p-bg);border:1px solid var(--p-line);border-radius:6px;
+         overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+         font-variant-numeric:tabular-nums}
+  .phdr{display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--p-line);
+        background:var(--p-card)}
+  .phdr b{color:var(--p-ink);font-size:12px;font-weight:600}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--ps)}
+  .muted{color:var(--p-sub);font-size:9.5px}
+  .sect{padding:7px 9px;border-bottom:1px solid var(--p-line)}
+  .shdr{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
+  .stitle{color:var(--p-ink);font-size:11px;font-weight:800;letter-spacing:.06em}
+  .ssub{color:var(--p-sub);font-size:9.5px;font-weight:600}
+  .coil{margin-left:auto;font-size:9px;font-weight:800;padding:1px 6px;border-radius:3px;
+        background:rgba(163,113,247,.18);color:var(--purple)}
+
+  .lrow{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:11px;line-height:1.7}
+  .lname{display:inline-block;width:92px;font-weight:800;font-size:11px;overflow:hidden;text-overflow:ellipsis}
+  .lval{color:var(--p-ink);font-weight:700;font-size:13px;min-width:52px}
+  .roll{font-size:9px;font-weight:800;padding:0 4px;border-radius:3px}
+  .rup{background:rgba(46,194,126,.18);color:var(--ps)}
+  .rdn{background:rgba(240,97,109,.18);color:var(--cr)}
+  .tests{font-size:8.5px;color:var(--p-sub)}
+  .ldist{margin-left:auto;font-weight:700;font-size:10.5px}
+  .lt{color:var(--p-sub);font-size:8.5px;width:34px;text-align:right}
+  .up{color:var(--ps)} .dn{color:var(--cr)}
+  .why{color:var(--p-sub);font-size:9px}
+  .far{opacity:.5}
+  .void{display:flex;align-items:center;gap:6px;margin:1px -9px;padding:0 9px;
+        background:repeating-linear-gradient(135deg,transparent,transparent 4px,rgba(139,152,169,.07) 4px,rgba(139,152,169,.07) 8px)}
+  .void span{font-size:8.5px;color:var(--p-sub);font-style:italic}
+  .prow{display:flex;align-items:center;gap:6px;background:rgba(243,246,250,.08);
+        margin:2px -9px;padding:2px 9px;border-top:1px solid rgba(243,246,250,.2);
+        border-bottom:1px solid rgba(243,246,250,.2)}
+  .prow .lname,.prow .lval{color:var(--p-time)}
+  .prow .lval{font-size:14px}
+  .tgtchip{font-size:8.5px;font-weight:800;padding:1px 5px;border-radius:3px;
+           background:rgba(227,195,65,.22);color:var(--mag)}
+  .pathline{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700}
+  .arw{color:var(--p-sub);font-size:11px}
+  .spent{color:var(--p-sub);text-decoration:line-through;opacity:.6}
+
+  @keyframes soft{0%,100%{opacity:.5}50%{opacity:1}}
+  @keyframes ring{0%{r:3;opacity:.9}70%{r:9;opacity:0}100%{r:9;opacity:0}}
+  .pulse{animation:soft 2s ease-in-out infinite}
+  .pulsering{animation:ring 2s ease-out infinite}
+  @media (prefers-reduced-motion: reduce){
+    .pulse{animation:none;opacity:1}
+    .pulsering{animation:none;opacity:.3}
+  }
+
+  .notes{display:flex;flex-direction:column;gap:13px}
+  .note{background:var(--page-card);border:1px solid var(--page-rule);border-radius:6px;padding:12px 14px}
+  .note h3{margin:0 0 5px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .note p{margin:0 0 7px;font-size:13px;color:var(--page-sub)} .note p:last-child{margin-bottom:0}
+  .tag{font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px;
+       background:rgba(47,111,176,.12);color:var(--page-accent)}
+  .tag.new{background:rgba(46,194,126,.14);color:var(--tag-new)}
+  .tag.q{background:rgba(240,97,109,.14);color:var(--tag-q)}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12px;
+       background:rgba(127,140,158,.14);padding:1px 4px;border-radius:3px}
+</style>
+
+<div class="wrap">
+  <h1>Compression, voids, and tested levels</h1>
+  <p class="lede">Three additions that serve the section's job: the cage is coiling, the gaps show where
+  price travels fast, and each level says how often it's been tested. ES1 at 7687.75.</p>
+
+  <div class="cols">
+    <div class="panel">
+      <div class="phdr"><span class="dot"></span><b>Tapereader</b>
+        <span class="muted">10s</span><span style="margin-left:auto" class="muted">feed v11.26</span></div>
+
+      <div class="sect">
+        <div class="shdr"><span class="stitle">LEVELS</span><span class="ssub">0DTE + to Fri</span>
+          <span class="coil">COILING ⇅ 150→110</span></div>
+
+        <div class="lrow far"><span class="lname" style="color:var(--cr)">CR</span>
+          <span class="lval">7789</span><span class="roll rdn">↓2</span>
+          <span class="ldist up">+101</span><span class="lt">~2h</span></div>
+
+        <div class="void"><span>— 101 pts void, no structure —</span></div>
+
+        <div class="prow"><span class="lname">► ES1</span><span class="lval">7687.75</span>
+          <span class="ldist muted">−0.77%</span></div>
+
+        <div class="lrow"><span class="lname" style="color:var(--hvl)">HVL</span>
+          <span class="lval">7668</span><span class="roll rup">↑3</span>
+          <span class="tests">2 tests</span>
+          <span class="ldist dn">−20</span><span class="lt">~18m</span></div>
+
+        <div class="void"><span>— 28 pts void, fast travel —</span></div>
+
+        <div class="lrow"><span class="lname pulse" style="color:var(--mag)">KING</span>
+          <span class="lval pulse">7639.5</span><span class="roll rup">↑3</span>
+          <span class="tgtchip pulse">TARGET</span>
+          <span class="ldist dn">−48</span><span class="lt">~40m</span></div>
+
+        <div class="lrow"><span class="lname" style="color:var(--ps)">MAG·PS0·PS</span>
+          <span class="lval">7639</span><span class="tests">3 tests, held</span>
+          <span class="ldist dn">−49</span></div>
+      </div>
+
+      <div class="sect">
+        <div class="shdr"><span class="stitle">PATH</span><span class="ssub">route to target</span></div>
+        <div class="pathline"><span style="color:var(--p-sub)">7688</span><span class="arw">→</span>
+          <span class="spent">7690</span><span class="arw">→</span>
+          <span class="pulse" style="color:var(--mag)">7639</span></div>
+      </div>
+
+      <div class="sect" style="padding:7px 9px 8px;border-bottom:none">
+        <div style="border:1px solid var(--p-line);border-radius:3px;overflow:hidden">
+          <svg viewBox="0 0 334 168" style="width:100%;height:auto;display:block">
+            <rect width="334" height="168" fill="#12161f"/>
+            <!-- void shading -->
+            <rect x="0" y="16" width="334" height="46" fill="#8b98a9" opacity=".045"/>
+            <rect x="0" y="80" width="334" height="52" fill="#8b98a9" opacity=".045"/>
+            <text x="6" y="106" fill="#8b98a9" font-size="8" font-style="italic" opacity=".7"
+                  font-family="ui-monospace,monospace">28 pts void</text>
+            <rect x="210" y="0" width="124" height="168" fill="#0b0e14" opacity=".38"/>
+            <line x1="210" y1="0" x2="210" y2="168" stroke="#1e2530"/>
+            <rect x="234" y="3" width="96" height="12" rx="2" fill="#0b0e14" opacity=".92"/>
+            <text x="328" y="12.5" fill="#f0616d" font-size="9" font-weight="700" text-anchor="end"
+                  font-family="ui-monospace,monospace">▲ CR 7789 ↓2</text>
+            <line x1="0" y1="76" x2="334" y2="76" stroke="#f2b45a" stroke-width="1.2" opacity=".85"/>
+            <rect x="138" y="70" width="58" height="12" rx="2" fill="#12161f" opacity=".92"/>
+            <text x="167" y="80" fill="#f2b45a" font-size="10" font-weight="700" text-anchor="middle"
+                  font-family="ui-monospace,monospace">HVL 7668</text>
+            <line class="pulse" x1="0" y1="140" x2="334" y2="140" stroke="#e3c341" stroke-width="2.2"/>
+            <rect x="124" y="134" width="88" height="12" rx="2" fill="#12161f" opacity=".94"/>
+            <text class="pulse" x="168" y="144" fill="#e3c341" font-size="10" font-weight="800"
+                  text-anchor="middle" font-family="ui-monospace,monospace">KING 7639.5</text>
+            <line x1="0" y1="147" x2="334" y2="147" stroke="#2ec27e" stroke-width=".9" opacity=".5"/>
+            <text x="298" y="158" fill="#2ec27e" font-size="8.5" font-weight="700" text-anchor="middle"
+                  font-family="ui-monospace,monospace" opacity=".8">MAG·PS0·PS · 3 held</text>
+            <polyline fill="none" stroke="#e6edf3" stroke-width="1.5" opacity=".96"
+              points="0,44 16,40 32,50 48,42 64,56 80,50 96,63 112,58 128,70 144,64 160,52 176,40 192,44 210,38"/>
+            <polyline fill="none" stroke="#4a90d9" stroke-width="1.6" stroke-dasharray="5,4" opacity=".9"
+              points="210,38 244,70 272,104 300,130 318,140"/>
+            <circle class="pulsering" cx="210" cy="38" r="3" fill="none" stroke="#f3f6fa" stroke-width="1.4"/>
+            <circle cx="210" cy="38" r="3" fill="#f3f6fa"/>
+            <rect x="148" y="20" width="58" height="13" rx="2" fill="#0b0e14" opacity=".94"/>
+            <text x="202" y="30" fill="#f3f6fa" font-size="10" font-weight="800" text-anchor="end"
+                  font-family="ui-monospace,monospace">7687.75</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note"><h3><span class="tag new">new</span> COILING ⇅ 150 → 110</h3>
+        <p>The ceiling has rolled <b>down 2</b> and the floor <b>up 3</b> — the cage has narrowed from 150
+        points to 110 this session. A range compressing from both ends is the setup that resolves, and
+        neither roll says that on its own.</p>
+        <p>It also gives direction a structural input nothing else provides: <em>which</em> side is
+        compressing harder. The floor has moved further than the ceiling, which argues the break is up
+        even while the tape reads down.</p></div>
+
+      <div class="note"><h3><span class="tag new">new</span> Voids — where price travels fast</h3>
+        <p><code>— 28 pts void, fast travel —</code> between HVL and KING. Nothing to lean on in there, so
+        the trip is quick. The 101-point gap above price says the same about any rally.</p>
+        <p>This is what turns a list of lines into a map: clusters are where price stalls, voids are where
+        it runs. Shaded on the chart too, so the shape reads without labels.</p></div>
+
+      <div class="note"><h3><span class="tag new">new</span> Tests, and whether it held</h3>
+        <p><code>MAG·PS0·PS 7639 · 3 tests, held</code>. A level touched three times and held is a
+        different proposition from an untested one at the same price. We already record ledger touches, so
+        this costs nothing new.</p></div>
+
+      <div class="note"><h3><span class="tag">as asked</span> Pulse on label and path</h3>
+        <p>Target line, its label, the <code>TARGET</code> chip, the ladder row and the final path waypoint
+        all pulse together — one heartbeat across the section so your eye connects them. Spent waypoints
+        stay struck through (<code>7690</code>) so you can see the route was right.</p></div>
+
+      <div class="note"><h3><span class="tag q">also worth it</span> Time to target</h3>
+        <p><code>~40m</code> beside the distance, from current pace. Whether the target is reachable this
+        session changes what you do with it far more than the point count does.</p></div>
+    </div>
+  </div>
+</div>

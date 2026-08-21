@@ -14,10 +14,12 @@ function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.ex
 function vo(n){ const i=src.search(new RegExp('^var '+n+'\\s*=\\s*\\{','m')); let j=src.indexOf('{',i), d=0;
   for(let k=j;k<src.length;k++){ if(src[k]==='{')d++; else if(src[k]==='}'){ d--; if(!d) return src.slice(i,k+1)+';'; } } return ''; }
 global.window={__gptsDebug:{}};
+global.SNAP_MAX_STEPBACK=8;
 global.localStorage={_d:{},getItem(k){return this._d[k]===undefined?null:this._d[k];},setItem(k,v){this._d[k]=v;},removeItem(k){delete this._d[k];}};
 eval([vo('LVL_COL'),vo('LVL_NAME'),vo('LVL_WHAT'),vo('PAL')].join('\n'));
-eval(['gexLevels','gexLevels','cpFromPayload','lvlUnified','levelsHtmlV2','levelsChartV2','lvlFmt','lvlSpanFmt','ifManLevels'].map(ex).join('\n'));
+eval(['pickSnapshot','gexLevels','cpFromPayload','lvlUnified','levelsHtmlV2','levelsChartV2','lvlFmt','lvlSpanFmt','ifManLevels','ifChain','ifChainRows'].map(ex).join('\n'));
 global.LVL_UI={open:true,chart:false}; global.IFMAN=null; global.LASTFEED={};
+global.IFC_KEY='gpts_if_chain_v1'; global.IFC_STALE_MIN=20;
 global.fmtLvl=x=>x==null?'–':String(x); global.fmtSpan=x=>x==null?'–':String(x);
 global.dispIsFut=()=>false; global.dispR=()=>1; global.mul=(a,b)=>a/(1/b); global.futMark=()=>'';
 global.closedCandles=()=>[]; global.spxRatio=()=>({r:null});
@@ -306,6 +308,85 @@ global.STATE={SPY:{price:762.57, king:760}};
   DTE0=null;
   const U=lvlUnified('SPY');
   ok(U.absent.some(a=>a.id==='CR0' && /not loaded/.test(a.why)),'"not loaded" is distinguished from "none today"',U.absent);
+}
+// ---------- (v11.24) A DEGENERATE PAYLOAD MUST NOT LOOK AUTHORITATIVE ----------
+{
+  // After the close every frame reads net = +/-v, so there is no call/put split to read. The magnet still
+  // works (it only needs |net|), but the walls are magnitude-only and must be flagged as provisional.
+  const pure=(k,v)=>({k:k, v:v, d:1, net:v});
+  const j={ levels:[{t:1,s:762,l:[pure(755,1e8),pure(760,4e8),pure(765,2e8),pure(775,3e8)]}], expirations:['2026-08-20'] };
+  const L=cpFromPayload(j, 762.57);
+  ok(L!==null,'a degenerate payload still yields something — the magnet survives',!!L);
+  ok(L.degenerate===true,'but it is FLAGGED',L.degenerate);
+  ok(L.mag===760,'and the magnet is still the largest |net|',L.mag);
+  FULL=Object.assign({}, L, {nExps:1, n:4});
+  DTE0=null; PASSIVE=null;
+  const U=lvlUnified('SPY');
+  ok(U.degenerate===true,'the flag reaches the unified read',U.degenerate);
+  const h=levelsHtmlV2('SPY');
+  ok(h.indexOf('no split')>0,'and the CARD says so — a provisional level must never look measured',h.indexOf('no split'));
+}
+{
+  // a healthy payload carries no warning
+  const mixed=(k,v,n)=>({k:k, v:v, d:1, net:n});
+  const j={ levels:[{t:1,s:762,l:[mixed(755,1e8,6e7),mixed(760,4e8,3e8),mixed(765,2e8,-1e8),mixed(775,3e8,-2e8)]}], expirations:['2026-08-20'] };
+  const L=cpFromPayload(j, 762.57);
+  ok(L.degenerate===false,'a payload with real decomposition is not flagged',L.degenerate);
+  FULL=Object.assign({}, L, {nExps:1, n:4});
+  ok(levelsHtmlV2('SPY').indexOf('no split')<0,'and the card carries no warning');
+}
+// ---------- (v11.25) THEIR CHAIN LEVELS, from the companion script ----------
+// The companion userscript writes finished levels to localStorage on this origin; we only read. Values
+// below are the REAL ones it produced against their live page on 2026-08-20, spot 761.14 — verified
+// against their published figures: to-Friday CR 775 / PS 760 / Mag 760 / ratio 0.40, and 0DTE CR
+// suppressed at a 2.18% call share, which is exactly the case their page prints as N/A.
+{
+  const chain={ SPY:{ spot:761.14, asOf:Date.now(), today:20260820, friday:20260821,
+    dte0:{ exps:[20260820], lv:{cr:null, ps:760, mag:760, maxPain:763, ratio:0.02, pcOI:55.49,
+                                crSuppressed:{k:763, share:2.18}} },
+    toFri:{ exps:[20260820,20260821], lv:{cr:775, ps:760, mag:760, maxPain:758, ratio:0.4, pcOI:5.18,
+                                          crSuppressed:null} } } };
+  global.localStorage.setItem('gpts_if_chain_v1', JSON.stringify(chain));
+  const C=ifChainRows('SPY','toFri');
+  ok(C!==null,'the panel reads the companion script\'s output',!!C);
+  ok(C.rows.length===4,'CR, Mag, PS and Max Pain',C.rows.map(r=>r.id));
+  ok(C.rows[0].id==='CR' && C.rows[0].k===775,'their call wall, ordered by price',C.rows[0]);
+  ok(C.rows.some(r=>r.id==='MP' && r.k===758),'Max Pain rides along — impossible from the Skylit feed',C.rows);
+  ok(C.lv.pcOI===5.18,'as does the put/call OI ratio',C.lv.pcOI);
+  const C0=ifChainRows('SPY','dte0');
+  ok(C0.rows.every(r=>r.id!=='CR'),'the 0DTE window names no call wall',C0.rows.map(r=>r.id));
+  ok(C0.lv.crSuppressed.share===2.18,'and reports the share that disqualified it',C0.lv.crSuppressed);
+
+  FULL={ cr:765, crGex:1, ps:760, psGex:1, hvl:766, mag:760, n:208, nExps:2, ratio:0.52 };
+  DTE0=null; PASSIVE=null;
+  const h=levelsHtmlV2('SPY');
+  ok(h.indexOf('CHAIN · IF')>0,'the card shows their lane',h.indexOf('CHAIN'));
+  ok(h.indexOf('font-style:italic')>0,'styled apart from ours — a DIFFERENT measurement, never a check on ours');
+  // freshness must be visible: a stale lane silently showing yesterday's walls is the worst case
+  const old=JSON.parse(JSON.stringify(chain)); old.SPY.asOf=Date.now()-45*60000;
+  global.localStorage.setItem('gpts_if_chain_v1', JSON.stringify(old));
+  ok(ifChainRows('SPY','toFri').stale===true,'a lane older than 20 minutes is flagged stale');
+  ok(levelsHtmlV2('SPY').indexOf('⚠')>0,'and the card warns',levelsHtmlV2('SPY').indexOf('⚠'));
+  // an error from the companion is surfaced, not silently treated as "no data"
+  global.localStorage.setItem('gpts_if_chain_v1', JSON.stringify({SPY:{err:'no __NEXT_DATA__ block', asOf:Date.now()}}));
+  ok(ifChain('SPY').err!=null,'a companion error is readable',ifChain('SPY').err);
+  ok(ifChainRows('SPY','toFri')===null,'and yields no rows rather than stale ones');
+  global.localStorage.removeItem('gpts_if_chain_v1');
+  ok(ifChain('SPY')===null,'no companion installed, no lane');
+}
+{
+  // AUTO WINS, HAND ENTRY IS THE FALLBACK — never both, or the card shows their levels twice
+  global.IFMAN={ cw:800, pw:760, zg:766, mag:null, scale:'SPY', t:Date.now() };
+  FULL={ cr:765, crGex:1, ps:760, psGex:1, hvl:766, mag:760, n:208, nExps:2 };
+  let h=levelsHtmlV2('SPY');
+  ok(h.indexOf('INSIDERFINANCE')>0,'with no companion, the hand-entered lane renders');
+  const chain2={ SPY:{ spot:761.14, asOf:Date.now(),
+    toFri:{ exps:[20260820], lv:{cr:775, ps:760, mag:760, maxPain:758, ratio:0.4, crSuppressed:null} } } };
+  global.localStorage.setItem('gpts_if_chain_v1', JSON.stringify(chain2));
+  h=levelsHtmlV2('SPY');
+  ok(h.indexOf('CHAIN · IF')>0,'with a companion, the AUTO lane renders');
+  ok(h.indexOf('INSIDERFINANCE')<0,'and the hand-entered lane steps aside — never both');
+  global.localStorage.removeItem('gpts_if_chain_v1'); global.IFMAN=null;
 }
 console.log('\n'+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

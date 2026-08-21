@@ -1,0 +1,242 @@
+<title>LEVELS Panel Review</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --page-bg:#f2f4f7; --page-ink:#1a1f28; --page-sub:#5b6675; --page-card:#ffffff;
+    --page-rule:#dfe4ea; --page-accent:#2f6fb0;
+    --tag-new:#1f8f5c; --tag-q:#c0394a;
+    /* panel tokens — copied verbatim from the script's PAL, not re-chosen */
+    --p-bg:#0b0e14; --p-card:#12161f; --p-line:#1e2530;
+    --p-ink:#e6edf3; --p-sub:#8b98a9; --p-time:#f3f6fa;
+    --cr:#f0616d; --ps:#2ec27e; --hvl:#f2b45a; --mag:#e3c341; --blue:#4a90d9;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc;
+    --tag-new:#5fd39b; --tag-q:#f0838d;
+  }}
+  :root[data-theme="dark"]{
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc;
+    --tag-new:#5fd39b; --tag-q:#f0838d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page-bg);color:var(--page-ink);
+       font-family:'IBM Plex Sans',system-ui,-apple-system,sans-serif;line-height:1.5}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 20px 64px}
+  h1{font-size:22px;font-weight:600;margin:0 0 4px;letter-spacing:-0.01em}
+  .lede{color:var(--page-sub);font-size:14px;margin:0 0 28px;max-width:62ch}
+  .cols{display:grid;grid-template-columns:352px 1fr;gap:28px;align-items:start}
+  @media (max-width:820px){ .cols{grid-template-columns:1fr} }
+
+  /* ---- the panel, reproduced at true width ---- */
+  .panel{width:352px;background:var(--p-bg);border:1px solid var(--p-line);border-radius:6px;
+         overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+         font-variant-numeric:tabular-nums}
+  .phdr{display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--p-line);
+        background:var(--p-card)}
+  .phdr b{color:var(--p-ink);font-size:12px;font-weight:600}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--ps)}
+  .sect{padding:5px 9px;border-bottom:1px solid var(--p-line)}
+  .row{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:11px;line-height:1.5}
+  .lbl{display:inline-block;min-width:32px;font-weight:800}
+  .val{color:var(--p-ink);font-weight:700;font-size:12px}
+  .alt{color:var(--p-sub);font-size:9.5px}
+  .dist{margin-left:auto;font-weight:700;font-size:10px}
+  .pct{color:var(--p-sub);font-size:9.5px;width:40px;text-align:right}
+  .up{color:var(--ps)} .dn{color:var(--cr)}
+  .cap{font-size:9.5px;color:var(--p-sub);font-weight:800;letter-spacing:.04em}
+  .chip{font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px}
+  .warn{background:rgba(242,180,90,.16);color:var(--hvl)}
+  .muted{color:var(--p-sub);font-size:9.5px}
+  .cage{height:5px;border-radius:3px;margin-top:4px;position:relative;
+        background:linear-gradient(90deg,rgba(46,194,126,.45),var(--p-line),rgba(240,97,109,.45))}
+  .cage i{position:absolute;top:-2px;width:2px;height:9px;background:var(--p-time);border-radius:1px}
+  .ifrow{opacity:.85;font-style:italic}
+  .divider{border-top:1px dotted var(--p-line);margin:5px 0 3px}
+
+  /* ---- annotations ---- */
+  .notes{display:flex;flex-direction:column;gap:14px}
+  .note{background:var(--page-card);border:1px solid var(--page-rule);border-radius:6px;padding:12px 14px}
+  .note h3{margin:0 0 5px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .note p{margin:0;font-size:13px;color:var(--page-sub)}
+  .tag{font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px;letter-spacing:.03em;
+       background:rgba(47,111,176,.12);color:var(--page-accent)}
+  .tag.new{background:rgba(46,194,126,.14);color:var(--tag-new)}
+  .tag.q{background:rgba(240,97,109,.14);color:var(--tag-q)}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12px;
+       background:rgba(127,140,158,.14);padding:1px 4px;border-radius:3px}
+  h2{font-size:15px;font-weight:600;margin:38px 0 12px;padding-top:20px;border-top:1px solid var(--page-rule)}
+</style>
+
+<div class="wrap">
+  <h1>LEVELS panel — review before install</h1>
+  <p class="lede">Reproduced at true width with today's real values. Chart on ES1 at 7665.25; SPY levels
+  converted at the live ratio 10.0509. Nothing here is invented — every figure came off the live feed and
+  their live page this evening.</p>
+
+  <div class="cols">
+    <!-- ============ THE PANEL ============ -->
+    <div class="panel">
+      <div class="phdr"><span class="dot"></span><b>Tapereader</b>
+        <span class="muted">10s</span><span style="margin-left:auto" class="muted">feed v11.25</span></div>
+
+      <!-- NEXT STOP (existing) -->
+      <div class="sect">
+        <div class="row"><span class="muted" style="font-weight:800">Next Stop:</span>
+          <span class="val dn">↓ 7639.5</span><span class="alt">−25.75 pts</span>
+          <span class="alt">30–60m</span><span class="dist muted">C</span></div>
+      </div>
+
+      <!-- PATH (new) -->
+      <div class="sect">
+        <div class="row"><span class="cap">PATH</span>
+          <span style="color:var(--cr);font-weight:800;font-size:12px">↓ toward 7639.5</span>
+          <span class="alt">−25.75</span>
+          <span class="dist muted">PS 7639 · 25.75</span></div>
+        <div class="cage"><i style="left:51%"></i></div>
+        <div class="row" style="margin-top:3px"><span class="muted">tape agrees · cage 51%</span></div>
+      </div>
+
+      <!-- LEVELS (new) -->
+      <div class="sect">
+        <div class="row"><span style="color:var(--p-ink);font-weight:800;font-size:11px">▾ LEVELS</span>
+          <span class="muted" style="font-weight:600">to Fri · 2 exps · 208 strikes</span>
+          <span class="dist muted">IF</span><span class="muted">chart</span></div>
+
+        <div style="margin-top:3px">
+          <div class="row"><span class="lbl" style="color:var(--cr)">CR</span>
+            <span class="val">7689</span><span class="alt">SPY 765</span>
+            <span class="dist up">+24</span><span class="pct">+0.32%</span></div>
+          <div class="row"><span class="lbl" style="color:var(--ps);opacity:.75">PS0</span>
+            <span class="val">7659</span><span class="alt">SPY 762</span>
+            <span class="dist dn">−6</span><span class="pct">−0.07%</span></div>
+          <div class="row"><span class="lbl" style="color:var(--mag)">PS·Mag</span>
+            <span class="val">7639</span><span class="alt">SPY 760</span>
+            <span class="dist dn">−26</span><span class="pct">−0.34%</span></div>
+          <div class="row"><span class="lbl" style="color:var(--hvl);opacity:.55">HVL</span>
+            <span class="muted">—</span><span class="muted">no flip in these strikes</span></div>
+          <div class="row"><span style="font-weight:800;color:var(--p-sub)">—</span>
+            <span class="muted"><span style="color:var(--cr);font-weight:700">CR0</span>
+              none today — 0DTE book is all put</span></div>
+        </div>
+
+        <!-- chart -->
+        <div style="margin-top:5px;border:1px solid var(--p-line);border-radius:3px;overflow:hidden">
+          <svg viewBox="0 0 320 128" style="width:100%;height:auto;display:block">
+            <rect width="320" height="128" fill="#12161f"/>
+            <line x1="0" y1="26" x2="318" y2="26" stroke="#f0616d" stroke-width="1.3" opacity=".95"/>
+            <rect x="140" y="20" width="30" height="12" rx="2" fill="#12161f" opacity=".9"/>
+            <text x="155" y="30" fill="#f0616d" font-size="10" font-weight="700" text-anchor="middle"
+                  font-family="ui-monospace,monospace">CR</text>
+            <line x1="0" y1="62" x2="318" y2="62" stroke="#2ec27e" stroke-width=".8"
+                  stroke-dasharray="4,3" opacity=".6"/>
+            <rect x="94" y="56" width="34" height="12" rx="2" fill="#12161f" opacity=".9"/>
+            <text x="111" y="66" fill="#2ec27e" font-size="10" font-weight="700" text-anchor="middle"
+                  font-family="ui-monospace,monospace" opacity=".85">PS0</text>
+            <line x1="0" y1="96" x2="318" y2="96" stroke="#e3c341" stroke-width="1.3" opacity=".95"/>
+            <rect x="134" y="90" width="52" height="12" rx="2" fill="#12161f" opacity=".9"/>
+            <text x="160" y="100" fill="#e3c341" font-size="10" font-weight="700" text-anchor="middle"
+                  font-family="ui-monospace,monospace">PS·Mag</text>
+            <line x1="0" y1="96" x2="318" y2="96" stroke="#4a90d9" stroke-width=".8"
+                  stroke-dasharray="1,4" opacity=".55"/>
+            <text x="240" y="93" fill="#4a90d9" font-size="8.5" font-style="italic" text-anchor="middle"
+                  font-family="ui-monospace,monospace" opacity=".8">IF·PS</text>
+            <line x1="0" y1="112" x2="318" y2="112" stroke="#8b98a9" stroke-width=".8"
+                  stroke-dasharray="1,4" opacity=".5"/>
+            <text x="240" y="109" fill="#8b98a9" font-size="8.5" font-style="italic" text-anchor="middle"
+                  font-family="ui-monospace,monospace" opacity=".8">IF·MP</text>
+            <rect x="196" y="4" width="98" height="11" rx="2" fill="#12161f" opacity=".9"/>
+            <text x="292" y="12.5" fill="#f0616d" font-size="8.5" font-weight="700" text-anchor="end"
+                  font-family="ui-monospace,monospace" opacity=".85">▲ IF·CR 7789</text>
+            <polyline fill="none" stroke="#e6edf3" stroke-width="1.2" opacity=".95"
+              points="0,40 22,36 44,44 66,38 88,50 110,46 132,58 154,54 176,66 198,62 220,74 242,70 264,82 286,78 306,86"/>
+            <line x1="0" y1="86" x2="318" y2="86" stroke="#f3f6fa" stroke-width=".5"
+                  stroke-dasharray="1,3" opacity=".5"/>
+            <circle cx="314" cy="86" r="1.8" fill="#f3f6fa"/>
+          </svg>
+        </div>
+
+        <!-- their chain lane -->
+        <div class="divider"></div>
+        <div class="row"><span class="cap" style="color:var(--blue)">CHAIN · IF</span>
+          <span class="muted">to Fri · r 0.40</span><span class="dist muted">3m</span></div>
+        <div class="row ifrow"><span class="lbl" style="color:var(--cr)">CR</span>
+          <span class="val" style="font-weight:600">7789</span>
+          <span class="dist up">+124</span></div>
+        <div class="row ifrow"><span class="lbl" style="color:var(--mag)">Mag</span>
+          <span class="val" style="font-weight:600">7639</span>
+          <span class="dist dn">−26</span></div>
+        <div class="row ifrow"><span class="lbl" style="color:var(--ps)">PS</span>
+          <span class="val" style="font-weight:600">7639</span>
+          <span class="dist dn">−26</span></div>
+        <div class="row ifrow"><span class="lbl" style="color:var(--p-sub)">MP</span>
+          <span class="val" style="font-weight:600">7619</span>
+          <span class="dist dn">−46</span></div>
+        <div class="row"><span class="muted" style="padding-left:2px">CR — none, call side 2.18% of book
+          <span style="opacity:.7">(0DTE)</span></span></div>
+      </div>
+
+      <!-- PB ENTRY (existing) -->
+      <div class="sect" style="border-bottom:none">
+        <div class="row"><span class="muted" style="font-weight:800">PB Entry:</span>
+          <span class="val up">↑ 7689.75</span><span class="alt">+24.5 pts · Acm</span>
+          <span class="dist muted">C</span></div>
+      </div>
+    </div>
+
+    <!-- ============ NOTES ============ -->
+    <div class="notes">
+      <div class="note"><h3><span class="tag new">new</span> PATH — where price is going</h3>
+        <p>Mag is the destination, PS and CR the two reversal edges, and the bar shows how much room is
+        left before the next one. It sits directly under Next Stop because it is the same claim. Today it
+        reads <code>↓ toward 7639.5</code> with the tape agreeing — price being drawn down to the floor.</p></div>
+
+      <div class="note"><h3><span class="tag new">new</span> Every level accounted for</h3>
+        <p>Nothing vanishes silently. <code>HVL —</code> and <code>CR0 none today</code> are findings, not
+        gaps: the 0DTE book genuinely has no call side, which is the same case their page prints as N/A.</p></div>
+
+      <div class="note"><h3><span class="tag">changed</span> Merged labels lead with the wall</h3>
+        <p><code>PS·Mag</code>, not <code>Mag·PS</code> — the magnet and put wall share strike 760, and the
+        label you scan for comes first.</p></div>
+
+      <div class="note"><h3><span class="tag new">new</span> CHAIN · IF — a different measurement</h3>
+        <p>Their levels, recomputed from the option chain their page embeds. Italic and dotted throughout,
+        because it is <em>not</em> a check on ours: theirs is where exposure sits, ours is live positioning
+        that accumulates intraday. <code>MP</code> is Max Pain, newly possible.</p></div>
+
+      <div class="note"><h3><span class="tag">changed</span> One far level can't flatten the chart</h3>
+        <p>Their CR at 7789 is 124 points away. Instead of stretching the axis, it renders as the edge
+        marker <code>▲ IF·CR 7789</code> — still visible, still labelled, but the price action keeps the scale.</p></div>
+
+      <div class="note"><h3><span class="tag q">your call</span> Their Mag and PS both read 7639</h3>
+        <p>Two rows, one price. Ours merges in that case (<code>PS·Mag</code>) but their lane doesn't yet.
+        Merge it the same way, or leave both rows visible?</p></div>
+    </div>
+  </div>
+
+  <h2>After hours — the guard state</h2>
+  <div class="cols">
+    <div class="panel">
+      <div class="sect" style="border-bottom:none">
+        <div class="row"><span style="color:var(--p-ink);font-weight:800;font-size:11px">▾ LEVELS</span>
+          <span class="muted" style="font-weight:600">to Fri · 2 exps</span>
+          <span class="chip warn">⚠ no split</span><span class="muted">−1f</span>
+          <span class="dist muted">IF</span></div>
+        <div style="margin-top:3px">
+          <div class="row"><span class="lbl" style="color:var(--cr)">CR</span>
+            <span class="val">7689</span><span class="dist up">+24</span><span class="pct">+0.32%</span></div>
+          <div class="row"><span class="lbl" style="color:var(--mag)">PS·Mag</span>
+            <span class="val">7639</span><span class="dist dn">−26</span><span class="pct">−0.34%</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="note"><h3><span class="tag new">new</span> The bug that broke everything, made visible</h3>
+        <p>The feed's newest frame is the still-forming bar. After the close it carries no call/put split at
+        all — which is what made our call wall land on a strike their book shows as heavily put-dominant.
+        The panel now steps back to the last complete frame (<code>−1f</code>) and warns
+        <code>⚠ no split</code> when even that has none. A provisional level can never look measured again.</p></div>
+    </div>
+  </div>
+</div>

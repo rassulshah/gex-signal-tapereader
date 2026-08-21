@@ -1,0 +1,296 @@
+<title>Tapereader Trading Panel</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --page-bg:#f2f4f7; --page-ink:#1a1f28; --page-sub:#5b6675; --page-card:#ffffff;
+    --page-rule:#dfe4ea; --page-accent:#2f6fb0; --tag-new:#1f8f5c; --tag-q:#c0394a;
+    --p-bg:#0b0e14; --p-card:#12161f; --p-line:#1e2530;
+    --p-ink:#e6edf3; --p-sub:#8b98a9; --p-time:#f3f6fa;
+    --cr:#f0616d; --ps:#2ec27e; --hvl:#f2b45a; --mag:#e3c341; --blue:#4a90d9; --purple:#a371f7;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }}
+  :root[data-theme="dark"]{
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page-bg);color:var(--page-ink);
+       font-family:'IBM Plex Sans',system-ui,-apple-system,sans-serif;line-height:1.55}
+  .wrap{max-width:1060px;margin:0 auto;padding:30px 20px 60px}
+  h1{font-size:21px;font-weight:600;margin:0 0 4px;letter-spacing:-0.01em}
+  .lede{color:var(--page-sub);font-size:14px;margin:0 0 24px;max-width:66ch}
+  .cols{display:grid;grid-template-columns:352px 1fr;gap:26px;align-items:start}
+  @media (max-width:820px){ .cols{grid-template-columns:1fr} }
+  .panel{width:352px;background:var(--p-bg);border:1px solid var(--p-line);border-radius:6px;
+         overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+         font-variant-numeric:tabular-nums}
+  .phdr{display:flex;align-items:center;gap:8px;padding:6px 9px;border-bottom:1px solid var(--p-line);
+        background:var(--p-card)}
+  .phdr b{color:var(--p-ink);font-size:11.5px;font-weight:600}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--ps)}
+  .muted{color:var(--p-sub);font-size:9px}
+  .steps{display:flex;gap:2px;padding:5px 9px 3px;background:var(--p-card)}
+  .steps span{flex:1;text-align:center;font-size:7px;font-weight:800;padding:3px 1px;border-radius:3px;
+              background:rgba(139,152,169,.09);color:var(--p-sub)}
+  .steps span.done{color:var(--ps);background:rgba(46,194,126,.13)}
+  .steps span.on{background:rgba(242,180,90,.24);color:var(--hvl);box-shadow:0 0 0 1px rgba(242,180,90,.4)}
+  .waiting{padding:2px 9px 6px;background:var(--p-card);border-bottom:1px solid var(--p-line);
+           font-size:9px;color:var(--p-sub);text-align:center}
+  .waiting b{color:var(--hvl);font-weight:800}
+  .sh{display:block;text-align:center;font-size:8.5px;font-weight:800;letter-spacing:.14em;
+      padding:3px 0;background:rgba(139,152,169,.11);color:var(--p-sub);border-top:1px solid var(--p-line)}
+  .sh.on{background:rgba(242,180,90,.2);color:var(--hvl)}
+  .sh.done{background:rgba(46,194,126,.11);color:var(--ps)}
+  .body{padding:6px 9px}
+  .frame{display:flex;align-items:center;justify-content:center;gap:6px;font-size:10px;flex-wrap:wrap}
+  .reg{font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:3px;
+       background:rgba(163,113,247,.16);color:var(--purple);border:1px solid rgba(163,113,247,.35)}
+  .fv{color:var(--p-ink);font-weight:700}
+  .fk{color:var(--p-sub);font-size:7.5px;font-weight:700;letter-spacing:.05em}
+  .play{margin-top:3px;text-align:center;font-size:8.5px;color:var(--p-sub)}
+  .play b{color:var(--purple);font-weight:800}
+  .opex{margin-top:3px;text-align:center;font-size:8px;color:var(--hvl)}
+  .verdict{font-size:16px;font-weight:800;text-align:center}
+  .votes{display:flex;gap:2px;margin-top:5px}
+  .vt{flex:1;text-align:center;border:1px solid var(--p-line);border-radius:3px;padding:2px 0 3px}
+  .vt .k{display:block;font-size:6px;color:var(--p-sub);font-weight:700;letter-spacing:.02em}
+  .vt .v{display:block;font-size:10.5px;font-weight:800;line-height:1.1}
+  .gate{display:flex;align-items:center;gap:6px;margin-top:4px;padding:2px 5px;border-radius:3px;
+        background:rgba(46,194,126,.1);font-size:8.5px}
+  .gate b{color:var(--ps);font-weight:800}
+  .gate .n{margin-left:auto;color:var(--p-sub)}
+  .ev{margin-top:4px;font-size:8.5px;color:var(--p-sub);line-height:1.4}
+  .ev em{font-style:normal;color:var(--p-ink);font-weight:700;font-size:7.5px;letter-spacing:.04em}
+  .ev b{color:var(--p-ink);font-weight:700}
+  .r{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:10px;line-height:1.58}
+  .nm{display:inline-block;width:64px;font-weight:800;font-size:9.5px}
+  .v{color:var(--p-ink);font-weight:700;font-size:11.5px;min-width:40px}
+  .zn{font-size:7px;color:var(--p-sub)}
+  .sr{font-size:6.5px;font-weight:700;padding:0 3px;border-radius:2px;
+      background:rgba(139,152,169,.16);color:var(--p-sub)}
+  .hist{font-size:6.5px;font-weight:700;padding:0 3px;border-radius:2px;
+        background:rgba(46,194,126,.16);color:var(--ps)}
+  .d{margin-left:auto;font-weight:700;font-size:9px}
+  .up{color:var(--ps)} .dn{color:var(--cr)}
+  .far{opacity:.46}
+  .prow{display:flex;align-items:center;gap:5px;background:rgba(243,246,250,.09);
+        margin:1px -9px;padding:2px 9px;border-top:1px solid rgba(243,246,250,.24);
+        border-bottom:1px solid rgba(243,246,250,.24)}
+  .prow .nm,.prow .v{color:var(--p-time)}
+  .band{background:rgba(227,195,65,.1);margin:1px -9px;padding:1px 9px;border-left:2px solid var(--mag)}
+  .rx{display:flex;gap:6px;font-size:8.5px;color:var(--p-sub);line-height:1.5}
+  .rx em{font-style:normal;color:var(--p-ink);font-weight:700;font-size:7px;letter-spacing:.04em;
+         width:38px;flex:none}
+  .rx b{color:var(--p-ink);font-weight:700}
+  .ok{color:var(--ps);font-weight:800}
+  .blocked{border:1px solid rgba(240,97,109,.45);background:rgba(240,97,109,.08);border-radius:4px;
+           padding:5px 7px;text-align:center}
+  .blocked b{display:block;color:var(--cr);font-size:10.5px;font-weight:800}
+  .blocked span{font-size:8px;color:var(--p-sub);line-height:1.35}
+  .alt{margin-top:4px;font-size:8.5px;color:var(--p-sub);text-align:center}
+  .alt b{color:var(--p-ink);font-weight:700}
+  .key{display:flex;gap:7px;margin-top:3px;font-size:6.5px;color:var(--p-sub);align-items:center}
+  .key i{display:inline-block;width:7px;height:5px;border-radius:1px;margin-right:2px;vertical-align:middle}
+  @keyframes soft{0%,100%{opacity:.5}50%{opacity:1}}
+  .pulse{animation:soft 2s ease-in-out infinite}
+  @media (prefers-reduced-motion: reduce){ .pulse{animation:none;opacity:1} }
+  .notes{display:flex;flex-direction:column;gap:13px}
+  .note{background:var(--page-card);border:1px solid var(--page-rule);border-radius:6px;padding:12px 14px}
+  .note h3{margin:0 0 5px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .note p{margin:0 0 7px;font-size:13px;color:var(--page-sub)} .note p:last-child{margin-bottom:0}
+  .tag{font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px;
+       background:rgba(47,111,176,.12);color:var(--page-accent)}
+  .tag.new{background:rgba(46,194,126,.14);color:var(--tag-new)}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12px;
+       background:rgba(127,140,158,.14);padding:1px 4px;border-radius:3px}
+</style>
+
+<div class="wrap">
+  <h1>Tapereader — the whole thing</h1>
+  <p class="lede">All five additions in place: session history, VEX overlap, accumulation asymmetry,
+  price-action confirmation, DEX and skew. Plus regime-split scoring. ES1 7697.25.</p>
+
+  <div class="cols">
+    <div class="panel">
+      <div class="phdr"><span class="dot"></span><b>Tapereader</b><span class="muted">10s</span>
+        <span style="margin-left:auto" class="muted">3h 55m left</span></div>
+      <div class="steps">
+        <span class="done">① FRAME</span><span class="done">② BIAS</span><span class="done">③ LOCATION</span>
+        <span class="done">④ REACTION</span><span class="on">⑤ EXECUTE</span></div>
+      <div class="waiting">confirmed at the King — <b>−γ blocks the fade, break setup armed</b></div>
+
+      <span class="sh done">① FRAME</span>
+      <div class="body">
+        <div class="frame"><span class="reg">REG: −γ</span>
+          <span class="fk">TGT</span><span class="fv">7675</span>
+          <span class="fk">MAXPAIN</span><span class="fv">7658</span>
+          <span class="fk">EM</span><span class="fv">±22</span><span class="muted">7 left</span></div>
+        <div class="play">playbook: <b>momentum — trade breaks, not fades</b></div>
+        <div class="opex">⚠ expiry Friday — magnet stronger, nodes roll off abruptly</div>
+      </div>
+
+      <span class="sh done">② BIAS</span>
+      <div class="body">
+        <div class="verdict dn">↓ BEARISH</div>
+        <div class="votes">
+          <span class="vt"><span class="k">TREND</span><span class="v dn">↓</span></span>
+          <span class="vt"><span class="k">DEX</span><span class="v dn">↓</span></span>
+          <span class="vt"><span class="k">SKEW</span><span class="v dn">↓</span></span>
+          <span class="vt"><span class="k">ACCUM</span><span class="v dn">↓</span></span>
+          <span class="vt"><span class="k">TRIN</span><span class="v dn">2/3</span></span>
+        </div>
+        <div class="gate"><b>DRIFT ✓ confirms</b><span>GEX/VEX both below price</span>
+          <span class="n">5/5 · n 42 in −γ</span></div>
+        <div class="ev"><em>TAPE</em> ceiling rolled <b>7715→7705</b> · <b>16/20</b> below 50-SMA ·
+          downside accumulation <b>3.1×</b> upside</div>
+      </div>
+
+      <span class="sh done">③ LOCATION</span>
+      <div class="body" style="padding:6px 9px 7px">
+        <div style="border:1px solid var(--p-line);border-radius:3px;overflow:hidden">
+          <svg viewBox="0 0 334 156" style="width:100%;height:auto;display:block">
+            <rect width="334" height="156" fill="#12161f"/>
+            <rect x="0" y="76" width="334" height="18" fill="#4a90d9" opacity=".1"/>
+            <text x="4" y="88" fill="#4a90d9" font-size="6.5" font-weight="700" opacity=".85"
+                  font-family="ui-monospace,monospace">GEX∩VEX</text>
+            <g opacity=".5">
+              <rect x="0" y="10" width="18" height="6" fill="#2ec27e"/>
+              <rect x="0" y="19" width="28" height="6" fill="#2ec27e"/>
+              <rect x="0" y="28" width="9"  height="6" fill="#2ec27e"/>
+              <rect x="0" y="37" width="15" height="6" fill="#a371f7"/>
+              <rect x="0" y="46" width="34" height="6" fill="#a371f7"/>
+              <rect x="0" y="55" width="13" height="6" fill="#a371f7"/>
+              <rect x="0" y="64" width="22" height="6" fill="#a371f7"/>
+              <rect x="0" y="73" width="17" height="6" fill="#a371f7"/>
+              <rect x="0" y="82" width="82" height="6" fill="#a371f7"/>
+              <rect x="0" y="91" width="20" height="6" fill="#a371f7"/>
+              <rect x="0" y="100" width="30" height="6" fill="#a371f7"/>
+              <rect x="0" y="109" width="62" height="6" fill="#a371f7"/>
+              <rect x="0" y="118" width="16" height="6" fill="#a371f7"/>
+              <rect x="0" y="127" width="25" height="6" fill="#a371f7"/>
+              <rect x="0" y="136" width="42" height="6" fill="#a371f7"/>
+            </g>
+            <g>
+              <polyline fill="none" stroke="#4a90d9" stroke-width="1" opacity=".8"
+                points="6,13 12,22 5,31 9,40 20,49 8,58 14,67 12,76 56,85 14,94 22,103 44,112 11,121 17,130 26,139"/>
+            </g>
+            <g>
+              <rect x="318" y="10" width="16" height="6" fill="#2ec27e" opacity=".4"/>
+              <rect x="308" y="19" width="26" height="6" fill="#2ec27e" opacity=".4"/>
+              <rect x="322" y="37" width="12" height="6" fill="#a371f7" opacity=".4"/>
+              <rect x="302" y="46" width="32" height="6" fill="#a371f7" opacity=".45"/>
+              <rect x="320" y="55" width="14" height="6" fill="#a371f7" opacity=".4"/>
+              <rect x="310" y="64" width="24" height="6" fill="#a371f7" opacity=".4"/>
+              <rect x="318" y="73" width="16" height="6" fill="#a371f7" opacity=".4"/>
+              <rect x="246" y="82" width="88" height="6" fill="#a371f7" opacity=".42"/>
+              <rect x="224" y="82" width="22" height="6" fill="#a371f7" opacity="1"/>
+              <line x1="246" y1="80" x2="246" y2="90" stroke="#e6edf3" stroke-width="1" opacity=".85"/>
+              <line x1="270" y1="80" x2="270" y2="90" stroke="#8b98a9" stroke-width="1" opacity=".65"/>
+              <rect x="312" y="91" width="22" height="6" fill="#a371f7" opacity=".4"/>
+              <rect x="292" y="109" width="42" height="6" fill="#a371f7" opacity=".4"/>
+              <line x1="274" y1="107" x2="274" y2="117" stroke="#8b98a9" stroke-width="1" opacity=".5"/>
+              <rect x="274" y="109" width="18" height="6" fill="none" stroke="#8b98a9"
+                    stroke-width=".7" stroke-dasharray="2,2" opacity=".55"/>
+              <rect x="304" y="127" width="30" height="6" fill="#a371f7" opacity=".4"/>
+              <rect x="296" y="136" width="38" height="6" fill="#a371f7" opacity=".4"/>
+            </g>
+            <line x1="0" y1="40" x2="334" y2="40" stroke="#f0616d" stroke-width="1" opacity=".5"
+                  stroke-dasharray="4,3"/>
+            <text x="164" y="38" fill="#f0616d" font-size="7.5" font-weight="700" text-anchor="middle"
+                  font-family="ui-monospace,monospace">7715 inval</text>
+            <line class="pulse" x1="0" y1="85" x2="334" y2="85" stroke="#e3c341" stroke-width="2"/>
+            <rect x="112" y="79" width="76" height="10" rx="2" fill="#12161f" opacity=".94"/>
+            <text class="pulse" x="150" y="87" fill="#e3c341" font-size="8" font-weight="800"
+                  text-anchor="middle" font-family="ui-monospace,monospace">KING 7695</text>
+            <line x1="0" y1="112" x2="334" y2="112" stroke="#2ec27e" stroke-width="1" opacity=".55"/>
+            <text x="160" y="110" fill="#2ec27e" font-size="7.5" font-weight="700" text-anchor="middle"
+                  font-family="ui-monospace,monospace">PS 7675</text>
+            <polyline fill="none" stroke="#e6edf3" stroke-width="1.4" opacity=".97"
+              points="0,92 16,96 32,88 48,98 64,86 80,92 96,80 112,84 128,72 144,76 160,66 176,74 190,80 200,86"/>
+            <polyline fill="none" stroke="#4a90d9" stroke-width="1.3" stroke-dasharray="5,4" opacity=".6"
+              points="200,86 222,98 240,106 254,112"/>
+            <circle cx="200" cy="86" r="3" fill="#f3f6fa"/>
+            <rect x="142" y="70" width="52" height="11" rx="2" fill="#0b0e14" opacity=".94"/>
+            <text x="190" y="78.5" fill="#f3f6fa" font-size="8.5" font-weight="800" text-anchor="end"
+                  font-family="ui-monospace,monospace">7697.25</text>
+          </svg>
+        </div>
+        <div class="key"><span><i style="background:#a371f7"></i>−γ</span>
+          <span><i style="background:#2ec27e"></i>+γ</span>
+          <span style="color:var(--blue)">— VEX</span><span>│60m │15m</span>
+          <span style="margin-left:auto">◄ chain $ · tape $ ►</span></div>
+        <div class="r far"><span class="nm" style="color:var(--cr)">CEIL</span><span class="v">7715</span>
+          <span class="zn">±5</span><span class="sr">tape</span><span class="d up">+18</span></div>
+        <div class="prow"><span class="nm">► ES1</span><span class="v">7697.25</span>
+          <span class="d muted">+0.14%</span></div>
+        <div class="r band"><span class="nm pulse" style="color:var(--mag)">KING·MAG</span>
+          <span class="v pulse">7695</span><span class="zn">±6</span><span class="sr">both</span>
+          <span class="hist">2 held</span><span class="d dn">−2</span></div>
+        <div class="r"><span class="nm" style="color:var(--ps)">FLR·PS</span><span class="v">7675</span>
+          <span class="zn">±5</span><span class="sr">both</span><span class="d dn">−22</span></div>
+      </div>
+
+      <span class="sh done">④ REACTION</span>
+      <div class="body">
+        <div class="rx"><em>NODE</em><span><b>+$41M</b> in 15m, <b>+$118M</b> in 60m —
+          <span class="ok">accelerating</span></span></div>
+        <div class="rx"><em>PRICE</em><span>wick to <b>7702</b>, closed back under —
+          <span class="ok">rejected</span></span></div>
+        <div class="rx"><em>PRIOR</em><span><b>2 tests</b> today at this zone, node grew both times,
+          <span class="ok">both held</span></span></div>
+      </div>
+
+      <span class="sh on">⑤ EXECUTE</span>
+      <div class="body">
+        <div class="blocked"><b>FADE BLOCKED — −γ</b>
+          <span>regime says momentum, not mean reversion · R would be 1.0</span></div>
+        <div class="alt">armed: <b>break of 7675</b> → short, target <b>7635</b>,
+          invalid <b>7695</b> · <b>2.0R</b></div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note"><h3><span class="tag new">1</span> Session history — the free win</h3>
+        <p><code>2 held</code> on the King row, and <code>PRIOR: 2 tests today, node grew both times</code>
+        in step ④. That comes from the 390 snapshots already in every payload — we were reading one frame
+        and discarding the session.</p>
+        <p>It's the strongest reversal input available: not "the node is growing now" but "this level has
+        been tested twice today and defended both times."</p></div>
+
+      <div class="note"><h3><span class="tag new">2</span> VEX as a profile, not a binary</h3>
+        <p>The blue outline traces vanna exposure over the gamma bars, and the shaded band marks where they
+        overlap. Skylit calls GEX/VEX confluence their strongest reversal signal — this shows the
+        <em>zone</em> instead of compressing it to one arrow.</p></div>
+
+      <div class="note"><h3><span class="tag new">3</span> Accumulation asymmetry</h3>
+        <p>New <code>ACCUM</code> vote, and the evidence line reads <code>downside accumulation 3.1×
+        upside</code>. That's Skylit's own way of calling tops and bottoms, which we recorded and never
+        used.</p></div>
+
+      <div class="note"><h3><span class="tag new">4</span> Price action, finally</h3>
+        <p><code>PRICE: wick to 7702, closed back under — rejected</code>. Both playbooks call price action
+        the primary confirmation, and step ④ now has it alongside positioning. Three independent
+        confirmations at one level: node, price, history.</p></div>
+
+      <div class="note"><h3><span class="tag new">5</span> DEX and skew, and drift as a gate</h3>
+        <p>Five votes on one row — TREND, DEX, SKEW, ACCUM, TRINITY. <b>DRIFT sits separately as a
+        gate</b>, because that's what the measurement said it is: when it diverges, the trend's hit rate
+        halves. It confirms or it warns; it doesn't vote.</p></div>
+
+      <div class="note"><h3><span class="tag new">6</span> The differentiator: <code>n 42 in −γ</code></h3>
+        <p>Scoring split by regime. A mean-reversion signal that works in +γ and fails in −γ averages to
+        nothing when pooled — which may be exactly why the direction factors scored at base rate. Now each
+        regime keeps its own book.</p>
+        <p>This is the part nobody else can copy. InsiderFinance and MenthorQ publish levels; neither knows
+        whether those levels worked <em>for you</em>.</p></div>
+
+      <div class="note"><h3><span class="tag">honest</span> Everything confirms, and it still says no</h3>
+        <p>Node accelerating, price rejected, level held twice before, five votes aligned, drift
+        confirming. And the panel <b>still blocks the fade</b>, because the regime forbids it and R is 1.0.</p>
+        <p>A panel that overrides its own rules when the evidence looks good is a panel with no rules.</p></div>
+    </div>
+  </div>
+</div>

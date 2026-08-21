@@ -76,5 +76,40 @@ ok(!!dRow && /SPXW 100%/.test(dRow), '4a the derived lane is labelled "SPXW 100%
 ok(dRow.split(',')[4]==='1' && dRow.split(',')[5]==='1', '4b ...thin and dotted, so it cannot be mistaken for a SPY wall', dRow&&[dRow.split(',')[4],dRow.split(',')[5]]);
 ok(dRow.split(',')[3]===String((130<<16)+(110<<8)+90), '4c ...in its own slate colour');
 ok(/K 100%/.test(b7.csv) && b7.csv.split('\r\n').filter(l=>/,K 100%/.test(l)).length===2, '4d exactly one real King per symbol');
+// (v11.25) the gamma level set and their chain lane both reach the chart now
+global.lvlUnified=()=>({ px:762.5, rows:[{id:'CR',k:765},{id:'HVL',k:766},{id:'PS·Mag',k:760},{id:'PS0',k:762,tag:'0DTE'}] });
+global.ifChainRows=()=>({ rows:[{id:'CR',k:775},{id:'Mag',k:760},{id:'PS',k:760},{id:'MP',k:758}] });
+
+// ---------- (v11.25) THE LEVELS REACH INVESTOR/RT ----------
+// The user's brief: the chart must carry the same reads as the card. Both lanes export, and every one of
+// THEIR lines is tagged IF so nothing on the chart is ambiguous about which measurement drew it.
+{
+  const B=irtBuildCsv();
+  const csv=B&&B.csv||'';
+  ok(/CR/.test(csv), '5a our CR reaches the file');
+  ok(/HVL/.test(csv), '5b our HVL reaches the file');
+  ok(/PS0/.test(csv), '5c and the 0DTE variant');
+  ok(/PS.Mag/.test(csv), '5d including a merged label');
+  ok(/IF CR/.test(csv), '5e THEIR call wall, tagged IF');
+  ok(/IF MP/.test(csv), '5f and Max Pain — impossible from the Skylit feed, free from their chain');
+  ok(/IF PS/.test(csv), '5g and their put support');
+  const lines=csv.split('\r\n').filter(Boolean);
+  ok(lines.filter(l=>/IF /.test(l)).length>=4, '5h every one of their levels is tagged, never bare');
+}
+{
+  global.ifChainRows=()=>null;
+  const B=irtBuildCsv();
+  ok(B!==null, '5i no companion installed → the export still builds');
+  ok(!/IF /.test(B.csv), '5j and carries none of their lines');
+  ok(/HVL/.test(B.csv), '5k while ours are unaffected');
+  global.ifChainRows=()=>({ rows:[{id:'CR',k:775},{id:'Mag',k:760},{id:'PS',k:760},{id:'MP',k:758}] });
+}
+{
+  global.lvlUnified=()=>null;
+  const B=irtBuildCsv();
+  ok(B!==null, '5l no level set → the export still builds rather than throwing');
+  ok(/IF CR/.test(B.csv), '5m their lane survives independently');
+  global.lvlUnified=()=>({ px:762.5, rows:[{id:'CR',k:765},{id:'HVL',k:766},{id:'PS·Mag',k:760},{id:'PS0',k:762,tag:'0DTE'}] });
+}
 console.log('test_irt_export: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

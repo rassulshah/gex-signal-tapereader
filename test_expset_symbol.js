@@ -7,8 +7,9 @@ const fs=require('fs'); const src=fs.readFileSync('./v10.js','utf8');
 let pass=0, fail=0; const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+JSON.stringify(g):''));} };
 function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.exec(src);let i=src.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}return src.slice(m.index,e+1);}
 global.window={__gptsDebug:{}};
+global.SNAP_MAX_STEPBACK=8;
 global.SIDE_MIN_SHARE=0.05;
-eval(['gexLevels','cpFromPayload','expSetLevels','expSetFetch','expSetTick'].map(ex).join('\n'));
+eval(['pickSnapshot','gexLevels','cpFromPayload','expSetLevels','expSetFetch','expSetTick'].map(ex).join('\n'));
 
 const mk=(k,call,put)=>({k:k, v:call+put, net:put-call, d:1});
 function book(base){ return { levels:[{l:[mk(base-5,10,400), mk(base,20,900), mk(base+3,600,30), mk(base+8,300,20)]}],

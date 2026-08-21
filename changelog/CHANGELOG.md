@@ -1,3 +1,81 @@
+## v11.25 — 2026-08-21 — Their levels, computed from their own chain (companion script)
+
+The user's original instinct, which I talked them out of three times: **get the levels from InsiderFinance
+instead of deriving them.** It turns out to be better than either of us thought.
+
+**Their page embeds the FULL option chain.** `__NEXT_DATA__` carries 13,210 contracts for SPY, each with
+`{strike, expireYear, expireMonth, expireDay, cp, gamma, delta, openInterest, impliedVol, bid, ask}`. So we
+do not scrape their rendered header at all — we recompute from source. Their CSS, layout and wording can
+change freely; it breaks only if they stop embedding the chain.
+
+**Verified live against their published figures, spot 761.14 — every value exact:**
+
+| window | ours (computed) | theirs (published) |
+|---|---|---|
+| 0DTE | CR suppressed @ 2.18% call share · PS 760 · Mag 760 · r 0.02 | CR **N/A** · PS 760 · r 0.02 |
+| **to Friday** | **CR 775 · PS 760 · Mag 760 · r 0.40** | **CR 775 · PS 760 · r 0.40** |
+| All | CR 800 · Call 17.8B · Put −32.18B · r 0.55 | CR 800 · 17.8B · −32.2B · 0.55 |
+
+Formula: `GEX = gamma × OI × 100 × spot² × 0.01`, puts negative. And because we compute rather than read,
+the window is **ours** — through *this* Friday, not their rolling-7 preset.
+
+**Everything previously ruled out is now free**, because the chain carries open interest and implied vol:
+**Max Pain** (0DTE 763 · to-Friday 758 · all 753) and the **put/call OI ratio** (55.5 · 5.18 · 2.85).
+
+**A SEPARATE userscript, and that is the whole design.** `current/gex-if-levels.user.js` takes
+`@grant GM_xmlhttpRequest` + `@connect insiderfinance.io` — it needs the grant to get past CORS (their
+server sends no `Access-Control-Allow-Origin`; verified live, `BLOCKED Failed to fetch`). The Tapereader
+**keeps `@grant none`**, page context, feed hooks untouched, and only reads localStorage. Same origin, so
+they share it. If the companion dies, the tape does not notice.
+
+**They are a DIFFERENT MEASUREMENT and the card says so.** Skylit's node values are live dealer positioning
+that accumulates intraday — their docs say it, and our own session data shows strike 763 growing 18M → 600M
+in a day. This is open interest × gamma: where exposure *sits*. A stock beside a flow. Their lane renders
+italic and dotted, never as a check on ours.
+
+**Both lanes reach the chart and Investor/RT.** The gamma set (CR/CR0/PS/PS0/HVL/Mag) exports with the
+0DTE variants thinner; their levels export tagged `IF` so nothing on the chart is ambiguous about which
+measurement drew a line. Either lane can be absent without breaking the export.
+
+New `test_if_chain.js` (38) and `test_irt_export.js` grows to 35; `test_levels_unified.js` 122. No new
+suite failures.
+
+## v11.24 — 2026-08-21 — THE defect: we were reading the still-forming bar
+
+The user pushed back that being this far off was impossible and something was not being accounted for.
+They were right, and there is a single cause.
+
+**`levels` is a ~390-entry TIME SERIES and the last entry is the CURRENT, STILL-FORMING bar.** We read
+`levels[levels.length-1]`. Counting strikes that carry a real call/put split (`|net| < v`):
+
+| snapshot | strikes with a split |
+|---|---|
+| 0 | 84 |
+| 195 | 78 |
+| 388 | 82 |
+| **389 — the one we read** | **0** |
+
+During RTH that frame fills in properly. **After the close it degenerates to `net = ±v` on every strike.**
+Confirmed on the self-fetched sets AND the passive feed: `callPut()` returned `lt:0, eq:208, gt:0,
+decomposable:false`.
+
+Everything we misdiagnosed this week follows from it. Every strike read as 100% call or 100% put, because
+`call=(v−net)/2` collapses to `v` or `0`. Our call wall picked **765** — a strike their book shows as
+heavily PUT-dominant (put 1300M vs call 342M). And values appeared to swing **20×** between fetches; they
+never did — I was comparing a degenerate frame against a complete one and calling it instability.
+
+`pickSnapshot()` now walks back to the most recent frame carrying a decomposition, bounded by
+`SNAP_MAX_STEPBACK` (8). Past that bound it returns the newest frame **flagged** rather than reaching for
+stale data — a frame from twenty minutes ago wearing a current timestamp is worse than admitting we have
+nothing. The card shows **⚠ no split** and `gexSanity` gains `snapshotHasDecomposition`, so a provisional
+level can never again look measured.
+
+New `design/LEVELS-DERIVATION.md` records how every level is derived, the verified rules and the ones
+ruled out, the inverted sign convention, all seven guards, and — explicitly — that **CR remains unproven
+until re-checked during live hours**, because every check we ever ran on it used the bad frame.
+
+New `test_snapshot_pick.js` (17). `test_levels_unified.js` 105. No new suite failures.
+
 ## v11.23 — 2026-08-21 — Node coverage: 250 → 500
 
 The last open discrepancy from the live check. On the **rolling-7 control** — a like-for-like window against

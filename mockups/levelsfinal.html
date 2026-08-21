@@ -1,0 +1,203 @@
+<title>Levels Ladder And Chart</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --page-bg:#f2f4f7; --page-ink:#1a1f28; --page-sub:#5b6675; --page-card:#ffffff;
+    --page-rule:#dfe4ea; --page-accent:#2f6fb0; --tag-new:#1f8f5c; --tag-q:#c0394a;
+    --p-bg:#0b0e14; --p-card:#12161f; --p-line:#1e2530;
+    --p-ink:#e6edf3; --p-sub:#8b98a9; --p-time:#f3f6fa;
+    --cr:#f0616d; --ps:#2ec27e; --hvl:#f2b45a; --mag:#e3c341; --blue:#4a90d9; --purple:#a371f7;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }}
+  :root[data-theme="dark"]{
+    --page-bg:#0e1116; --page-ink:#e6edf3; --page-sub:#8b98a9; --page-card:#161a21;
+    --page-rule:#242a33; --page-accent:#6fa8dc; --tag-new:#5fd39b; --tag-q:#f0838d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page-bg);color:var(--page-ink);
+       font-family:'IBM Plex Sans',system-ui,-apple-system,sans-serif;line-height:1.5}
+  .wrap{max-width:1060px;margin:0 auto;padding:30px 20px 60px}
+  h1{font-size:21px;font-weight:600;margin:0 0 4px;letter-spacing:-0.01em}
+  .lede{color:var(--page-sub);font-size:14px;margin:0 0 24px;max-width:64ch}
+  .cols{display:grid;grid-template-columns:352px 1fr;gap:26px;align-items:start}
+  @media (max-width:820px){ .cols{grid-template-columns:1fr} }
+  .panel{width:352px;background:var(--p-bg);border:1px solid var(--p-line);border-radius:6px;
+         overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+         font-variant-numeric:tabular-nums}
+  .phdr{display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--p-line);
+        background:var(--p-card)}
+  .phdr b{color:var(--p-ink);font-size:12px;font-weight:600}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--ps)}
+  .muted{color:var(--p-sub);font-size:9.5px}
+  .sect{padding:7px 9px;border-bottom:1px solid var(--p-line)}
+  .shdr{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
+  .stitle{color:var(--p-ink);font-size:11px;font-weight:800;letter-spacing:.06em}
+  .ssub{color:var(--p-sub);font-size:9.5px;font-weight:600}
+
+  .lrow{display:flex;align-items:center;gap:7px;white-space:nowrap;font-size:11px;line-height:1.72}
+  .lname{display:inline-block;width:104px;font-weight:800;font-size:11px;overflow:hidden;
+         text-overflow:ellipsis}
+  .lval{color:var(--p-ink);font-weight:700;font-size:13px;min-width:54px}
+  .roll{font-size:9px;font-weight:800;padding:0 4px;border-radius:3px}
+  .rup{background:rgba(46,194,126,.18);color:var(--ps)}
+  .rdn{background:rgba(240,97,109,.18);color:var(--cr)}
+  .ldist{margin-left:auto;font-weight:700;font-size:10.5px}
+  .up{color:var(--ps)} .dn{color:var(--cr)}
+  .why{color:var(--p-sub);font-size:9px}
+  .far{opacity:.5}
+  /* the price row, sitting in the ladder at its own position */
+  .prow{display:flex;align-items:center;gap:7px;background:rgba(243,246,250,.07);
+        margin:2px -9px;padding:2px 9px;border-top:1px solid rgba(243,246,250,.18);
+        border-bottom:1px solid rgba(243,246,250,.18)}
+  .prow .lname{color:var(--p-time)}
+  .prow .lval{color:var(--p-time);font-size:14px}
+  .tgtchip{font-size:8.5px;font-weight:800;padding:1px 5px;border-radius:3px;
+           background:rgba(227,195,65,.2);color:var(--mag)}
+
+  .pathline{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700}
+  .arw{color:var(--p-sub);font-size:11px}
+
+  @keyframes lvlpulse{0%,100%{opacity:.45}50%{opacity:1}}
+  @keyframes dotpulse{0%{r:3;opacity:1}70%{r:8;opacity:0}100%{r:8;opacity:0}}
+  .pulseline{animation:lvlpulse 2s ease-in-out infinite}
+  .pulsering{animation:dotpulse 2s ease-out infinite}
+  @media (prefers-reduced-motion: reduce){
+    .pulseline{animation:none;opacity:1}
+    .pulsering{animation:none;opacity:.35}
+  }
+
+  .notes{display:flex;flex-direction:column;gap:13px}
+  .note{background:var(--page-card);border:1px solid var(--page-rule);border-radius:6px;padding:12px 14px}
+  .note h3{margin:0 0 5px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px}
+  .note p{margin:0 0 7px;font-size:13px;color:var(--page-sub)} .note p:last-child{margin-bottom:0}
+  .tag{font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px;
+       background:rgba(47,111,176,.12);color:var(--page-accent)}
+  .tag.new{background:rgba(46,194,126,.14);color:var(--tag-new)}
+  .tag.q{background:rgba(240,97,109,.14);color:var(--tag-q)}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12px;
+       background:rgba(127,140,158,.14);padding:1px 4px;border-radius:3px}
+</style>
+
+<div class="wrap">
+  <h1>Levels as a ladder, price inside it</h1>
+  <p class="lede">Price sits in the list at its own position, so the bracket reads itself. Sparklines gone,
+  arrows kept, nothing shown where nothing moved. Live values — ES1 at 7681.75.</p>
+
+  <div class="cols">
+    <div class="panel">
+      <div class="phdr"><span class="dot"></span><b>Tapereader</b>
+        <span class="muted">10s</span><span style="margin-left:auto" class="muted">feed v11.26</span></div>
+
+      <div class="sect">
+        <div class="shdr"><span class="stitle">LEVELS</span><span class="ssub">0DTE + to Fri</span></div>
+
+        <div class="lrow far"><span class="lname" style="color:var(--cr)">CR</span>
+          <span class="lval">7789</span><span class="roll rdn">↓2</span>
+          <span class="ldist up">+107</span></div>
+
+        <div class="lrow far"><span class="lname" style="color:var(--cr);opacity:.6">CR0</span>
+          <span class="lval">—</span><span class="why">no call side today</span></div>
+
+        <div class="prow"><span class="lname">► ES1</span><span class="lval">7681.75</span>
+          <span class="ldist muted">−0.85%</span></div>
+
+        <div class="lrow"><span class="lname" style="color:var(--hvl)">HVL</span>
+          <span class="lval">7668</span><span class="roll rup">↑3</span>
+          <span class="ldist dn">−14</span></div>
+
+        <div class="lrow"><span class="lname" style="color:var(--mag)">KING</span>
+          <span class="lval">7639.5</span><span class="roll rup">↑3</span>
+          <span class="tgtchip">TARGET</span>
+          <span class="ldist dn">−42</span></div>
+
+        <div class="lrow"><span class="lname" style="color:var(--ps)">MAG·PS0·PS</span>
+          <span class="lval">7639</span>
+          <span class="ldist dn">−43</span></div>
+      </div>
+
+      <div class="sect">
+        <div class="shdr"><span class="stitle">PATH</span><span class="ssub">route to target</span>
+          <span class="ssub" style="margin-left:auto">7690 reached, rejected</span></div>
+        <div class="pathline"><span style="color:var(--p-sub)">7682</span><span class="arw">→</span>
+          <span style="color:var(--mag)">7639</span></div>
+      </div>
+
+      <div class="sect" style="padding:7px 9px 8px;border-bottom:none">
+        <div style="border:1px solid var(--p-line);border-radius:3px;overflow:hidden">
+          <svg viewBox="0 0 334 168" style="width:100%;height:auto;display:block">
+            <rect width="334" height="168" fill="#12161f"/>
+            <rect x="210" y="0" width="124" height="168" fill="#0b0e14" opacity=".4"/>
+            <line x1="210" y1="0" x2="210" y2="168" stroke="#1e2530"/>
+
+            <!-- CR far above: edge marker -->
+            <rect x="232" y="3" width="98" height="12" rx="2" fill="#0b0e14" opacity=".92"/>
+            <text x="328" y="12.5" fill="#f0616d" font-size="9" font-weight="700" text-anchor="end"
+                  font-family="ui-monospace,monospace">▲ CR 7789</text>
+
+            <!-- HVL: centred label on the line -->
+            <line x1="0" y1="72" x2="334" y2="72" stroke="#f2b45a" stroke-width="1.2" opacity=".85"/>
+            <rect x="140" y="66" width="56" height="12" rx="2" fill="#12161f" opacity=".92"/>
+            <text x="168" y="76" fill="#f2b45a" font-size="10" font-weight="700" text-anchor="middle"
+                  font-family="ui-monospace,monospace">HVL 7668</text>
+
+            <!-- TARGET: pulsing -->
+            <line class="pulseline" x1="0" y1="140" x2="334" y2="140" stroke="#e3c341"
+                  stroke-width="2.2"/>
+            <rect x="126" y="134" width="84" height="12" rx="2" fill="#12161f" opacity=".94"/>
+            <text x="168" y="144" fill="#e3c341" font-size="10" font-weight="800" text-anchor="middle"
+                  font-family="ui-monospace,monospace">KING 7639.5</text>
+            <line x1="0" y1="146" x2="334" y2="146" stroke="#2ec27e" stroke-width=".9" opacity=".55"/>
+            <text x="300" y="156" fill="#2ec27e" font-size="8.5" font-weight="700" text-anchor="middle"
+                  font-family="ui-monospace,monospace" opacity=".85">MAG·PS0·PS</text>
+
+            <!-- price track -->
+            <polyline fill="none" stroke="#e6edf3" stroke-width="1.5" opacity=".96"
+              points="0,44 16,40 32,50 48,42 64,56 80,50 96,63 112,58 128,70 144,64 160,52 176,40 192,44 210,52"/>
+            <!-- projected path -->
+            <polyline fill="none" stroke="#4a90d9" stroke-width="1.6" stroke-dasharray="5,4" opacity=".9"
+              points="210,52 244,78 272,108 300,132 318,140"/>
+
+            <!-- current price dot: pulsing ring + label -->
+            <circle class="pulsering" cx="210" cy="52" r="3" fill="none" stroke="#f3f6fa" stroke-width="1.4"/>
+            <circle cx="210" cy="52" r="3" fill="#f3f6fa"/>
+            <rect x="150" y="34" width="58" height="13" rx="2" fill="#0b0e14" opacity=".94"/>
+            <text x="204" y="44" fill="#f3f6fa" font-size="10" font-weight="800" text-anchor="end"
+                  font-family="ui-monospace,monospace">7681.75</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note"><h3><span class="tag new">new</span> Price is a row in the ladder</h3>
+        <p><code>► ES1 7681.75</code> sits between CR0 and HVL, at its real position. You read the bracket
+        without doing arithmetic: two levels above, three below, and the distances follow.</p>
+        <p>It also makes a change visible that a header number hides — <b>price has crossed above the
+        HVL</b> since we started talking. HVL now reads <code>−14</code> instead of <code>+3</code>, which
+        flips the gamma regime from amplifying to dampening.</p></div>
+
+      <div class="note"><h3><span class="tag new">new</span> Two things pulse</h3>
+        <p>The <b>target line</b> and the <b>price dot</b>. Everything else is static, so the two things
+        you're actually watching are the two things that move. The dot carries its own label rather than
+        making you read it off an axis.</p>
+        <p>Both respect <code>prefers-reduced-motion</code> — the pulse becomes a solid state rather than
+        animating.</p></div>
+
+      <div class="note"><h3><span class="tag">as asked</span> Labels centred on their lines</h3>
+        <p>Each label sits on its line with a small plate behind it, so the price track can cross without
+        either becoming unreadable. CR at +107 stays an edge marker so it can't stretch the scale.</p></div>
+
+      <div class="note"><h3><span class="tag new">new</span> KING carries the TARGET chip</h3>
+        <p>Rather than a separate target row, the level that <em>is</em> the target says so. One number,
+        one place — and the chart's pulsing line is the same level.</p></div>
+
+      <div class="note"><h3><span class="tag q">notice</span> The path already updated</h3>
+        <p>7690 was reached and rejected while we were talking, so PATH is now just <code>7682 → 7639</code>
+        and the header notes the waypoint is spent. Worth deciding: should reached waypoints disappear, or
+        stay struck through so you can see the route was right?</p></div>
+    </div>
+  </div>
+</div>
