@@ -1,3 +1,22 @@
+## v11.28 — the roll was oscillating
+
+The v11.27 roll worked once and then fought itself. `expSetRollCheck` re-tested the HELD week set
+on every tick, so the moment the rolled window came back spanning six expirations it no longer
+looked collapsed — the roll was dropped, the next fetch went out unrolled, collapsed onto 0DTE
+again, and re-armed. Live on 2026-08-21 the panel was flipping between a healthy 288-strike set
+with 146 mixed strikes and a degenerate 284-strike one with zero, every fetch cycle. Whether the
+levels were right depended on when you happened to look.
+
+A roll is a property of the DATE, not of the set we happen to be holding. Today either is the
+week's last expiry or it is not, and no fetch result changes that. Once armed for a trading day
+the roll now stands until the date changes, and repeated checks are a no-op — which also stops
+the fetch throttle being reset in a loop.
+
+Deciding from the date has a second benefit: a Friday arms the roll before the week set has even
+arrived, saving one guaranteed-collapsed request. The control set is now the only genuinely
+required input, since it is what sizes the rolled request. A midweek collapse — a holiday-shortened
+week — is still caught by comparing the held sets.
+
 ## v11.27 — six defects the first live check found
 
 Everything in v11.26 rendered, and the Friday roll fired for real: the week window went from

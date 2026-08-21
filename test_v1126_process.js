@@ -126,10 +126,38 @@ eq(isoAddDays('2026-08-31',1),'2026-09-01','date arithmetic crosses a month boun
   ok(/8\/28/.test(rollNote('SPY')||''),'the roll is disclosed on the face rather than applied silently',rollNote('SPY'));
   ok(EXPSET_TRY['SPY|week']===0,'and the throttle is cleared so the rolled window fetches immediately');
 }
+// (v11.28) THE OSCILLATION. v11.27 re-tested the HELD week set every tick, so the moment the rolled
+// window came back spanning six expirations it no longer looked collapsed, the roll was dropped, the
+// next fetch went out unrolled and collapsed again. Live on 2026-08-21 the panel flipped between a
+// healthy 288-strike set and a degenerate 284-strike one every cycle. The roll is now a property of
+// the DATE and stands until the trading day changes.
 {
-  EXPSET.SPY.week={exps:['2026-08-21','2026-08-24','2026-08-25']};
+  const armed=JSON.parse(JSON.stringify(EXPSET_ROLL.SPY));
+  EXPSET.SPY.week={exps:['2026-08-21','2026-08-24','2026-08-25','2026-08-26','2026-08-27','2026-08-28']};
   expSetRollCheck('SPY');
-  ok(!EXPSET_ROLL.SPY,'once the week window spans real expirations again the roll is dropped');
+  ok(!!EXPSET_ROLL.SPY,'the rolled window coming back healthy does NOT cancel the roll');
+  eq(EXPSET_ROLL.SPY.to,armed.to,'and the target is unchanged — no re-arming churn');
+  expSetRollCheck('SPY'); expSetRollCheck('SPY');
+  eq(EXPSET_ROLL.SPY.at,armed.at,'repeated checks on the same day are a no-op, so the fetch throttle is never reset in a loop');
+}
+{
+  // a new trading day re-evaluates from scratch
+  EXPSET.SPY.dte0={exps:['2026-08-24']};
+  EXPSET.SPY.week={exps:['2026-08-24','2026-08-25','2026-08-26','2026-08-27','2026-08-28']};
+  EXPSET.SPY.wk7={exps:['2026-08-24','2026-08-25','2026-08-26','2026-08-27','2026-08-28','2026-08-31','2026-09-01']};
+  expSetRollCheck('SPY');
+  ok(!EXPSET_ROLL.SPY,'on the Monday the roll is dropped — the week window is real again');
+}
+{
+  // ...and Friday arms it from the DATE alone, without needing a collapsed set to prove it
+  EXPSET.SPY.dte0={exps:['2026-08-28']};
+  EXPSET.SPY.week={exps:['2026-08-28']};
+  EXPSET.SPY.wk7={exps:['2026-08-28','2026-08-31','2026-09-01','2026-09-02','2026-09-03','2026-09-04','2026-09-08']};
+  EXPSET_ROLL={}; global.EXPSET_ROLL=EXPSET_ROLL;
+  expSetRollCheck('SPY');
+  ok(!!EXPSET_ROLL.SPY,'the next Friday arms the roll again');
+  eq(EXPSET_ROLL.SPY.to,'2026-09-04','targeting the Friday after that');
+  eq(EXPSET_ROLL.SPY.count,'5','sized from the control set again');
 }
 {
   EXPSET.SPY={ dte0:{exps:['2026-08-21']}, week:{exps:['2026-08-21']}, wk7:{exps:['2026-08-21']} };
@@ -138,10 +166,27 @@ eq(isoAddDays('2026-08-31',1),'2026-09-01','date arithmetic crosses a month boun
   ok(!EXPSET_ROLL.SPY,'with no control expirations reaching next Friday it refuses to guess a count');
 }
 {
+  // (v11.28) Because the roll is decided from the DATE, a Friday arms it before the week set has
+  // even arrived — which saves one guaranteed-collapsed fetch rather than waiting to be shown the
+  // collapse. The CONTROL set is the one that is genuinely required, since it sizes the request.
   EXPSET.SPY={ dte0:{exps:['2026-08-21']}, week:null, wk7:{exps:['2026-08-21','2026-08-28']} };
   EXPSET_ROLL={}; global.EXPSET_ROLL=EXPSET_ROLL;
   expSetRollCheck('SPY');
-  ok(!EXPSET_ROLL.SPY,'a missing set is not treated as a collapse');
+  ok(!!EXPSET_ROLL.SPY,'a Friday arms the roll from the date, before the week set has landed');
+}
+{
+  EXPSET.SPY={ dte0:{exps:['2026-08-21']}, week:{exps:['2026-08-21']}, wk7:null };
+  EXPSET_ROLL={}; global.EXPSET_ROLL=EXPSET_ROLL;
+  expSetRollCheck('SPY');
+  ok(!EXPSET_ROLL.SPY,'but with no control set there is nothing to size the request from, so it waits');
+}
+{
+  // a midweek collapse (a holiday-shortened week) is still caught by comparing the held sets
+  EXPSET.SPY={ dte0:{exps:['2026-08-19']}, week:{exps:['2026-08-19']},
+               wk7:{exps:['2026-08-19','2026-08-20','2026-08-21','2026-08-24','2026-08-25','2026-08-26','2026-08-27']} };
+  EXPSET_ROLL={}; global.EXPSET_ROLL=EXPSET_ROLL;
+  expSetRollCheck('SPY');
+  ok(!!EXPSET_ROLL.SPY,'a midweek week-window that collapses is still detected from the held sets');
 }
 
 // ---------- the 2D regime ----------

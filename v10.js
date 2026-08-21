@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.27
+// @version    11.28
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -540,7 +540,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.27';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.28';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -16419,23 +16419,32 @@ function nextWeekFriday(iso){
 function expSetRollCheck(sym){
   try{
     var byS=EXPSET[sym]; if(!byS) return;
-    var w=byS.week, d=byS.dte0, c=byS.wk7;
-    if(!w||!d||!c) return;
-    var we=(w.exps||[]).slice(), de=(d.exps||[]).slice(), ce=(c.exps||[]).slice();
-    if(!we.length||!de.length||!ce.length) return;
-    var collapsed = (we.length===de.length && we.join('|')===de.join('|'));
-    if(!collapsed){
-      if(EXPSET_ROLL[sym]){ delete EXPSET_ROLL[sym]; EXPSET_TRY[sym+'|week']=0; EXPSET_FAIL[sym+'|week']=0; }
-      return;
+    var d=byS.dte0, c=byS.wk7, w=byS.week;
+    if(!d||!c) return;
+    var de=(d.exps||[]), ce=(c.exps||[]);
+    if(!de.length||!ce.length) return;
+    var today=de[0];
+    var cur=EXPSET_ROLL[sym];
+    // (v11.28) A ROLL IS A PROPERTY OF THE DATE, NOT OF THE SET WE HAPPEN TO BE HOLDING.
+    // v11.27 re-tested the held week set every tick. Once the ROLLED window came back it spanned
+    // six expirations and no longer looked collapsed, so the roll was dropped, the next fetch went
+    // out unrolled, collapsed onto 0DTE again, and re-armed — the panel flipped between a healthy
+    // 6-expiration set and a degenerate 1-expiration one every cycle. Seen live 2026-08-21.
+    // Once armed for a trading day the roll stands until the DATE changes.
+    if(cur){ if(cur.from===today) return; delete EXPSET_ROLL[sym]; }
+    // The week window collapses when today IS the week's Friday. That is decidable from the date
+    // alone and does not depend on what the last fetch returned.
+    var collapses = (isoDow(today)===5);
+    if(!collapses && w){
+      var we=(w.exps||[]);
+      collapses = (we.length===de.length && we.join('|')===de.join('|'));
     }
-    var target=nextWeekFriday(de[0]); if(!target) return;
+    if(!collapses) return;
+    var target=nextWeekFriday(today); if(!target) return;
     var keep=ce.filter(function(x){ return String(x)<=target; });
     if(keep.length<2) return;                       // control set does not reach next Friday yet
-    var cnt=String(keep.length-1);                  // next_n with count N returns N+1 expirations
-    var cur=EXPSET_ROLL[sym];
-    if(cur && cur.count===cnt && cur.to===target) return;
-    EXPSET_ROLL[sym]={ count:cnt, to:target, from:de[0], at:Date.now() };
-    EXPSET_TRY[sym+'|week']=0; EXPSET_FAIL[sym+'|week']=0;   // let the rolled window fetch immediately
+    EXPSET_ROLL[sym]={ count:String(keep.length-1), to:target, from:today, at:Date.now() };
+    EXPSET_TRY[sym+'|week']=0; EXPSET_FAIL[sym+'|week']=0;
   }catch(e){}
 }
 function expSetSpecFor(sym, setName){
