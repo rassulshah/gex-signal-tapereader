@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.25
+// @version    11.26
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -540,7 +540,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.25';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.26';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -12964,6 +12964,11 @@ function expSetFetch(sym, setName){
     if(EXPSET_TRY[fk] && (now-EXPSET_TRY[fk])<minMs) return;
     EXPSET_TRY[fk]=now;
     var spec=EXPSET_SPEC[setName]; if(!spec) return;
+    // (v11.26) On a Friday exp_mode=week resolves to TODAY, collapsing the week window onto 0DTE.
+    // expSetRollCheck spots that and parks a rolled window here. Guarded so an isolated harness
+    // that never defines the roll table still fetches normally.
+    try{ if(setName==='week' && typeof EXPSET_ROLL!=='undefined' && EXPSET_ROLL[sym]){
+      spec={ exp_mode:'next_n', exp_count:EXPSET_ROLL[sym].count, nodes:spec.nodes||'500' }; } }catch(eRoll){}
     var url=LASTFEEDURL;
     url=url.replace(/symbol=[^&]*/, 'symbol='+sym).replace(/data_type=[^&]*/, 'data_type=gamma');
     Object.keys(spec).forEach(function(k){
@@ -12994,6 +12999,8 @@ function expSetTick(){
     var sym='SPY'; try{ sym=activeSym(); }catch(e0){}
     expSetFetch(sym,'dte0'); expSetFetch(sym,'week');
     expSetFetch(sym,'wk7');     // control, throttled to 5 minutes, never displayed
+
+    try{ expSetRollCheck(sym); }catch(eRC){}   // (v11.26) roll the week window when it collapses onto 0DTE
   }catch(e){}
 }
 // Decompose an arbitrary payload the same way cpRows does, so a self-fetched set gets identical treatment.
@@ -16210,6 +16217,584 @@ function wireBodyDelegation(){
     }, true);
   }
 }
+// ============================ (v11.26) THE FIVE-STEP PANEL ============================
+// The panel now renders the process we locked: ① FRAME → ② BIAS → ③ TRADE LOCATION →
+// ④ REACTION → ⑤ EXECUTE, with a step bar that lights the step you are actually on.
+// Every number below comes from a computation that already existed; nothing here invents
+// a reading. Where an input is NOT yet computed (DEX, CHEX, expected move) the cell shows
+// '—' and the hover says why, because a blank is honest and a guess is not.
+
+// ---- session phase: the panel was completely time-blind ----
+// RTH is 08:30–15:00 CT. The phase changes what the same structure MEANS: the open is
+// charm-driven and unhedgeable overnight, the middle is where pins hold, and the last
+// hour on an expiry day is when gamma erodes and pins stop working.
+function sessionPhase(now){
+  try{
+    var d=now||new Date();
+    // CT wall clock without pulling in a tz library
+    var ct=new Date(d.toLocaleString('en-US',{timeZone:'America/Chicago'}));
+    var mins=ct.getHours()*60+ct.getMinutes();
+    var dow=ct.getDay();
+    var open=8*60+30, close=15*60;
+    var isFri=(dow===5);
+    var out={ ct:ct, mins:mins, dow:dow, isFri:isFri, open:open, close:close,
+              rth:(dow>=1&&dow<=5&&mins>=open&&mins<close) };
+    out.leftMin = out.rth ? (close-mins) : null;
+    out.pct = out.rth ? Math.round(((mins-open)/(close-open))*100) : (mins>=close?100:0);
+    if(!out.rth){ out.label='CLOSED'; out.sub=(dow===0||dow===6)?'weekend — structure is last Friday’s':'outside RTH'; return out; }
+    if(mins < open+60){ out.label='OPEN · CHARM'; out.sub='overnight charm unwinds — dealers could not hedge; expect the first move to overshoot'; }
+    else if(mins < open+150){ out.label='MORNING'; out.sub='pins hold best here — gamma is at full strength'; }
+    else if(mins < close-90){ out.label='MIDDAY'; out.sub='lowest energy — fades work, breaks usually fail'; }
+    else if(isFri){ out.label='EXPIRY FRI · CHARM PHASE'; out.sub='gamma erodes into the close — expect expansion, pins weaken'; }
+    else { out.label='POWER HOUR'; out.sub='hedging flows dominate — moves extend'; }
+    return out;
+  }catch(e){ return { rth:false, label:'—', sub:'', pct:0, leftMin:null }; }
+}
+function phaseClock(P){
+  try{
+    if(!P||!P.ct) return '';
+    var h=P.ct.getHours(), m=P.ct.getMinutes();
+    var t=(h<10?'0':'')+h+':'+(m<10?'0':'')+m;
+    if(P.leftMin==null) return t;
+    var hh=Math.floor(P.leftMin/60), mm=P.leftMin%60;
+    return t+' · '+(hh?hh+'h ':'')+(mm<10?'0':'')+mm+'m left';
+  }catch(e){ return ''; }
+}
+
+// ---- regime is two-dimensional: GEX x VEX ----
+// We were reading gamma alone. -GEX with -VEX is the self-reinforcing cell: selloffs feed
+// themselves and stops have to be wider. We already receive both books (LASTFEED / LASTVEX)
+// and were using half of what arrives.
+function bookNet(feedHolder, sym){
+  try{
+    var f=feedHolder[sym]; if(!f||!f.j) return null;
+    var snaps=f.j.levels||[]; if(!snaps.length) return null;
+    var pick=null; try{ pick=pickSnapshot(snaps); }catch(e0){}
+    var rows=(pick&&pick.snap&&pick.snap.l)||(snaps[snaps.length-1]&&snaps[snaps.length-1].l)||[];
+    if(!rows.length) return null;
+    var s=0, n=0;
+    for(var i=0;i<rows.length;i++){ var r=rows[i]; if(typeof r.net!=='number') continue; s+=r.net; n++; }
+    return n?{ net:s, n:n }:null;
+  }catch(e){ return null; }
+}
+function regime2D(sym){
+  sym=sym||'SPY';
+  var out={ g:null, v:null, label:'—', danger:false, play:null, why:'' };
+  try{
+    var G=bookNet(LASTFEED, sym), V=bookNet(LASTVEX, sym);
+    // OUR sign convention is put-minus-call (see LEVELS-DERIVATION.md), so a POSITIVE
+    // sum means put-dominant = dealers short gamma = -GEX in the conventional reading.
+    if(G) out.g = (G.net>0) ? -1 : 1;
+    if(V) out.v = (V.net>0) ? -1 : 1;
+    if(out.g==null){ out.why='no gamma book yet'; return out; }
+    var gTxt=(out.g>0?'+γ':'−γ');
+    var vTxt=(out.v==null?null:(out.v>0?'+V':'−V'));
+    out.label='REG: '+gTxt+(vTxt?(' / '+vTxt):'');
+    if(out.g<0 && out.v!=null && out.v<0){
+      out.danger=true;
+      out.play='momentum — breaks not fades · widen stops';
+      out.why='Negative gamma with negative vanna is the self-reinforcing cell: dealer hedging AMPLIFIES moves and falling spot pushes them to sell more. Fades are the wrong trade here and normal stops are too tight.';
+    } else if(out.g<0){
+      out.play='momentum — breaks over fades';
+      out.why='Dealers are short gamma, so they hedge WITH the move. Ranges expand and mean-reversion at levels is unreliable.';
+    } else if(out.v!=null && out.v<0){
+      out.play='fade edges · but vanna is against you';
+      out.why='Gamma is pinning while vanna leans the other way — pins hold until vol moves, then they give way quickly.';
+    } else {
+      out.play='fade edges · pins hold';
+      out.why='Dealers are long gamma and hedge AGAINST the move, which compresses range. Levels tend to hold and fades are the higher-probability trade.';
+    }
+  }catch(e){}
+  return out;
+}
+
+// ---- price action, standing in for market internals ----
+// We have no TICK, no advance-decline and no cumulative delta. What OHLC does give us is
+// CLOSE LOCATION: where each bar finishes inside its own range. A run of closes in the
+// upper third is buying pressure being expressed, which is the honest OHLC analogue of a
+// sustained positive TICK. Structure (higher highs / lower lows) is the second read.
+function clv(c){
+  try{
+    if(!c) return null;
+    var rng=c.h-c.l; if(!(rng>0)) return 0.5;
+    return (c.c-c.l)/rng;
+  }catch(e){ return null; }
+}
+function paRead(sym, n){
+  sym=sym||'SPY'; n=n||10;
+  var out={ ok:false, clv:null, dir:0, label:'—', struct:null, reject:null, bars:0, why:'' };
+  try{
+    var cs=closedCandles(sym)||[];
+    if(cs.length<4) { out.why='not enough closed bars yet'; return out; }
+    var w=cs.slice(-n); out.bars=w.length;
+    var s=0, k=0, up=0, dn=0;
+    for(var i=0;i<w.length;i++){
+      var x=w[i]; var c={h:x.h!=null?x.h:x.high, l:x.l!=null?x.l:x.low, c:x.c!=null?x.c:x.close};
+      var v=clv(c); if(v==null) continue;
+      s+=v; k++;
+      if(v>=0.66) up++; else if(v<=0.34) dn++;
+    }
+    if(!k){ out.why='bars carry no range'; return out; }
+    out.ok=true;
+    out.clv=+(s/k).toFixed(2);
+    out.upBars=up; out.dnBars=dn;
+    if(out.clv>=0.60){ out.dir=1;  out.label='buying pressure'; }
+    else if(out.clv<=0.40){ out.dir=-1; out.label='selling pressure'; }
+    else { out.dir=0; out.label='balanced'; }
+    // structure over the same window
+    var his=w.map(function(x){return x.h!=null?x.h:x.high;}), los=w.map(function(x){return x.l!=null?x.l:x.low;});
+    var half=Math.floor(w.length/2);
+    var h1=Math.max.apply(null,his.slice(0,half)), h2=Math.max.apply(null,his.slice(half));
+    var l1=Math.min.apply(null,los.slice(0,half)), l2=Math.min.apply(null,los.slice(half));
+    if(h2>h1 && l2>l1) out.struct='HH/HL';
+    else if(h2<h1 && l2<l1) out.struct='LH/LL';
+    else out.struct='inside';
+    out.why=out.bars+' bars · mean close location '+out.clv+' ('+up+' upper third, '+dn+' lower third) · '+out.struct;
+  }catch(e){}
+  return out;
+}
+// A rejection is the reaction read step ④ wants: price traded THROUGH a level and closed
+// back on the original side. That is the level defending itself, and it is the only
+// confirmation available to us without order flow.
+function paReject(sym, lvl, tol){
+  try{
+    if(lvl==null) return null;
+    var cs=closedCandles(sym)||[]; if(cs.length<2) return null;
+    tol=(tol==null)?0.05:tol;
+    // A rejection is directional: price has to have COME FROM the side it closes back to.
+    // Without that, one bar straddling the level satisfies both patterns and a clean break
+    // reads as a rejection — which is the opposite call. The previous bar's close is where
+    // price came from.
+    var w=cs.slice(-4);
+    for(var i=w.length-1;i>=1;i--){
+      var x=w[i], prev=w[i-1];
+      var hi=(x.h!=null?x.h:x.high), lo=(x.l!=null?x.l:x.low), cl=(x.c!=null?x.c:x.close);
+      var pc=(prev.c!=null?prev.c:prev.close);
+      if(hi==null||lo==null||cl==null||pc==null) continue;
+      if(pc < lvl-tol && hi > lvl+tol && cl < lvl-tol)
+        return { side:'above', pierced:hi, closed:cl, from:pc, txt:'wick '+fmtLvl(hi)+', closed back under' };
+      if(pc > lvl+tol && lo < lvl-tol && cl > lvl+tol)
+        return { side:'below', pierced:lo, closed:cl, from:pc, txt:'wick '+fmtLvl(lo)+', closed back over' };
+    }
+    return null;
+  }catch(e){ return null; }
+}
+
+// ---- (v11.26) THE FRIDAY ROLL-FORWARD ----
+// exp_mode=week asks for "through Friday of the current week". On a Friday that is TODAY,
+// so the week window collapses onto the 0DTE window and CR/CR0 print the same number — which
+// is exactly what the live panel showed on 2026-08-21. When we detect the collapse we roll the
+// window forward to NEXT Friday, and we size the request from the wk7 control set's own
+// expiration list rather than guessing a calendar.
+var EXPSET_ROLL={};
+function isoDow(iso){ try{ var p=String(iso).split('-'); return new Date(Date.UTC(+p[0],+p[1]-1,+p[2])).getUTCDay(); }catch(e){ return null; } }
+function isoAddDays(iso, n){
+  try{ var p=String(iso).split('-'); var d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));
+       d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }catch(e){ return null; }
+}
+// The Friday of the week AFTER the one `iso` sits in.
+function nextWeekFriday(iso){
+  var dow=isoDow(iso); if(dow==null) return null;
+  var toFri=(5-dow+7)%7;
+  return isoAddDays(iso, toFri+7);
+}
+function expSetRollCheck(sym){
+  try{
+    var byS=EXPSET[sym]; if(!byS) return;
+    var w=byS.week, d=byS.dte0, c=byS.wk7;
+    if(!w||!d||!c) return;
+    var we=(w.exps||[]).slice(), de=(d.exps||[]).slice(), ce=(c.exps||[]).slice();
+    if(!we.length||!de.length||!ce.length) return;
+    var collapsed = (we.length===de.length && we.join('|')===de.join('|'));
+    if(!collapsed){
+      if(EXPSET_ROLL[sym]){ delete EXPSET_ROLL[sym]; EXPSET_TRY[sym+'|week']=0; EXPSET_FAIL[sym+'|week']=0; }
+      return;
+    }
+    var target=nextWeekFriday(de[0]); if(!target) return;
+    var keep=ce.filter(function(x){ return String(x)<=target; });
+    if(keep.length<2) return;                       // control set does not reach next Friday yet
+    var cnt=String(keep.length-1);                  // next_n with count N returns N+1 expirations
+    var cur=EXPSET_ROLL[sym];
+    if(cur && cur.count===cnt && cur.to===target) return;
+    EXPSET_ROLL[sym]={ count:cnt, to:target, from:de[0], at:Date.now() };
+    EXPSET_TRY[sym+'|week']=0; EXPSET_FAIL[sym+'|week']=0;   // let the rolled window fetch immediately
+  }catch(e){}
+}
+function expSetSpecFor(sym, setName){
+  var spec=EXPSET_SPEC[setName];
+  try{
+    if(setName==='week' && EXPSET_ROLL[sym]){
+      return { exp_mode:'next_n', exp_count:EXPSET_ROLL[sym].count, nodes:'500' };
+    }
+  }catch(e){}
+  return spec;
+}
+function rollNote(sym){
+  try{ var R=EXPSET_ROLL[sym]; if(!R) return null;
+       return 'rolled to '+R.to.slice(5).replace('-','/'); }catch(e){ return null; }
+}
+
+// ---- ② BIAS: one transparent tally ----
+// Six inputs, each returning -1/0/+1. TREND stays: it is price-based and it is the frame.
+// DRIFT is a GATE, not a vote — it either agrees with the tally or it withholds confirmation.
+function biasVotes(sym){
+  sym=sym||'SPY';
+  var V=[];
+  function push(k,d,tip){ V.push({k:k,d:(d===null||d===undefined)?null:d,tip:tip}); }
+  // TREND — the 50-SMA frame, built on price
+  var tv=null; try{ tv=trendVerdict(sym); }catch(e){}
+  var td=0; try{ td=(tv&&tv.state)?(/up|bull/i.test(tv.state)?1:(/down|bear/i.test(tv.state)?-1:0)):0; }catch(e){}
+  push('TREND', td, 'Where is price relative to the 50-SMA, and for how many of the last bars? This is the frame every other read sits inside.');
+  // PATH — where the gamma structure points
+  var gp=null; try{ gp=gexPath(sym); }catch(e){}
+  push('PATH', gp?(gp.dir||0):null, 'Is the dominant gamma strike above or below price? The magnet is where structure pulls, not where momentum is.');
+  // REGIME — node mass skew
+  var gr=null; try{ gr=gexRegime(sym); }catch(e){}
+  push('MASS', gr?(gr.dir||0):null, 'Is node mass skewed above or below price? A heavy side is where dealers have the most to hedge.');
+  // ACCUM — which side of the book is GROWING, in absolute dollars
+  var ac=null; try{ ac=accumAsym(sym); }catch(e){}
+  push('ACCUM', ac?ac.dir:null, 'Which side of the book grew in the last hour, measured in dollars? A moving percentage denominator cannot answer this — dollars can.');
+  // PA — close location, standing in for the internals we do not have
+  var pa=null; try{ pa=paRead(sym); }catch(e){}
+  push('PA', pa&&pa.ok?pa.dir:null, 'Where inside their own range are recent bars closing? Sustained upper-third closes are buying pressure — the honest OHLC stand-in for a sustained positive TICK.');
+  // VANNA — the second book
+  var r2=null; try{ r2=regime2D(sym); }catch(e){}
+  push('VEX', r2?r2.v:null, 'Is the vanna book net positive or negative? With gamma it forms the 2x2 regime; the negative/negative cell is the self-reinforcing one.');
+  var up=0, dn=0, live=0;
+  V.forEach(function(x){ if(x.d==null) return; live++; if(x.d>0) up++; else if(x.d<0) dn++; });
+  var net=up-dn;
+  var verdict = net>=2?'BULLISH' : (net<=-2?'BEARISH' : 'NEUTRAL');
+  return { votes:V, up:up, dn:dn, live:live, net:net, verdict:verdict,
+           dir:(net>=2?1:(net<=-2?-1:0)), trend:tv, path:gp, mass:gr, accum:ac, pa:pa, reg:r2 };
+}
+// Which side of the book is GROWING, in absolute dollars. The moving-denominator rule:
+// %King is right for ranking at one instant and wrong for comparing two moments.
+function accumAsym(sym){
+  sym=sym||'SPY';
+  try{
+    var S=STATE[sym]||{}; var px=S.price; if(px==null) return null;
+    var walls=S.walls||[]; if(!walls.length) return null;
+    var above=0, below=0;
+    for(var i=0;i<walls.length;i++){
+      var w=walls[i]; if(w.k==null) continue;
+      var a=(typeof w.abs==='number')?Math.abs(w.abs):((typeof w.net==='number')?Math.abs(w.net):null);
+      if(a==null) continue;
+      if(w.k>px) above+=a; else below+=a;
+    }
+    if(!(above>0||below>0)) return null;
+    var tot=above+below;
+    var ratio=(below>0&&above>0)?+(Math.max(above,below)/Math.min(above,below)).toFixed(2):null;
+    // heavier side BELOW price is support building = up vote; above = resistance building = down vote
+    var dir=0;
+    if(tot>0){ var share=(below-above)/tot; dir=(share>0.15)?1:((share<-0.15)?-1:0); }
+    return { above:above, below:below, dir:dir, ratio:ratio,
+             txt:(below>=above?'downside':'upside')+' book '+(ratio!=null?ratio+'×':'heavier') };
+  }catch(e){ return null; }
+}
+
+// ---- (v11.26) styles for the five-step face ----
+var V3CSS_ID='gpts-v3-css';
+function ensureV3Css(){
+  try{
+    if(document.getElementById(V3CSS_ID)) return;
+    var s=document.createElement('style'); s.id=V3CSS_ID;
+    s.textContent=
+    '#gpts-body .g3{font-variant-numeric:tabular-nums}'+
+    '#gpts-body .g3steps{display:flex;gap:2px;padding:1px 0 4px}'+
+    '#gpts-body .g3steps span{flex:1;text-align:center;font-size:7px;font-weight:800;padding:3px 1px;border-radius:3px;background:rgba(139,152,169,.09);color:#8b98a9;cursor:default}'+
+    '#gpts-body .g3steps span.done{color:#2ec27e;background:rgba(46,194,126,.13)}'+
+    '#gpts-body .g3steps span.on{background:rgba(242,180,90,.24);color:#f2b45a;box-shadow:0 0 0 1px rgba(242,180,90,.4)}'+
+    '#gpts-body .g3wait{font-size:9px;color:#8b98a9;text-align:center;padding:0 0 5px}'+
+    '#gpts-body .g3wait b{color:#f2b45a;font-weight:800}'+
+    '#gpts-body .g3sh{display:block;text-align:center;font-size:8.5px;font-weight:800;letter-spacing:.14em;padding:3px 0;background:rgba(139,152,169,.11);color:#8b98a9;border-radius:3px;margin-top:4px}'+
+    '#gpts-body .g3sh.on{background:rgba(242,180,90,.2);color:#f2b45a}'+
+    '#gpts-body .g3sh.done{background:rgba(46,194,126,.11);color:#2ec27e}'+
+    '#gpts-body .g3b{padding:5px 2px 2px}'+
+    '#gpts-body .g3reg{display:flex;align-items:center;justify-content:center;gap:6px}'+
+    '#gpts-body .g3rg{font-size:10px;font-weight:800;padding:1px 7px;border-radius:3px;background:rgba(163,113,247,.18);color:#a371f7;border:1px solid rgba(163,113,247,.4)}'+
+    '#gpts-body .g3dg{font-size:8.5px;font-weight:800;color:#f0616d}'+
+    '#gpts-body .g3frow{display:flex;align-items:center;justify-content:center;gap:6px;font-size:9.5px;margin-top:3px;flex-wrap:wrap}'+
+    '#gpts-body .g3fk{color:#8b98a9;font-size:7.5px;font-weight:700;letter-spacing:.05em}'+
+    '#gpts-body .g3fv{color:#e6edf3;font-weight:700}'+
+    '#gpts-body .g3play{margin-top:3px;text-align:center;font-size:8.5px;color:#8b98a9}'+
+    '#gpts-body .g3play b{color:#a371f7;font-weight:800}'+
+    '#gpts-body .g3ph{margin-top:4px;padding:3px 5px;border-radius:3px;background:rgba(242,180,90,.11);text-align:center;font-size:8px;color:#f2b45a;line-height:1.35}'+
+    '#gpts-body .g3bar{height:3px;border-radius:2px;background:#1e2530;margin-top:3px;position:relative}'+
+    '#gpts-body .g3bar i{position:absolute;left:0;top:0;bottom:0;background:#f2b45a;border-radius:2px;opacity:.65}'+
+    '#gpts-body .g3vd{font-size:15.5px;font-weight:800;text-align:center}'+
+    '#gpts-body .g3votes{display:flex;gap:2px;margin-top:5px}'+
+    '#gpts-body .g3vt{flex:1;text-align:center;border:1px solid #1e2530;border-radius:3px;padding:2px 0 3px}'+
+    '#gpts-body .g3vt .k{display:block;font-size:6px;color:#8b98a9;font-weight:700}'+
+    '#gpts-body .g3vt .v{display:block;font-size:10.5px;font-weight:800;line-height:1.1}'+
+    '#gpts-body .g3gate{display:flex;align-items:center;gap:5px;margin-top:4px;padding:2px 5px;border-radius:3px;font-size:8px}'+
+    '#gpts-body .g3gate .n{margin-left:auto;color:#8b98a9}'+
+    '#gpts-body .g3ev{margin-top:4px;font-size:8.5px;color:#8b98a9;line-height:1.4}'+
+    '#gpts-body .g3ev em{font-style:normal;color:#e6edf3;font-weight:700;font-size:7px;letter-spacing:.04em}'+
+    '#gpts-body .g3ev b{color:#e6edf3;font-weight:700}'+
+    '#gpts-body .g3r{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:10px;line-height:1.6}'+
+    '#gpts-body .g3nm{display:inline-block;width:66px;font-weight:800;font-size:9.5px}'+
+    '#gpts-body .g3v{color:#e6edf3;font-weight:700;font-size:11.5px;min-width:44px}'+
+    '#gpts-body .g3zn{font-size:7px;color:#8b98a9}'+
+    '#gpts-body .g3sr{font-size:6.5px;font-weight:700;padding:0 3px;border-radius:2px;background:rgba(139,152,169,.16);color:#8b98a9}'+
+    '#gpts-body .g3d{margin-left:auto;font-weight:700;font-size:9px}'+
+    '#gpts-body .g3up{color:#2ec27e}#gpts-body .g3dn{color:#f0616d}#gpts-body .g3far{opacity:.46}'+
+    '#gpts-body .g3prow{display:flex;align-items:center;gap:5px;background:rgba(243,246,250,.09);margin:1px -4px;padding:2px 4px;border-top:1px solid rgba(243,246,250,.24);border-bottom:1px solid rgba(243,246,250,.24)}'+
+    '#gpts-body .g3prow .g3nm,#gpts-body .g3prow .g3v{color:#f3f6fa}'+
+    '#gpts-body .g3band{background:rgba(227,195,65,.1);margin:1px -4px;padding:1px 4px;border-left:2px solid #e3c341}'+
+    '#gpts-body .g3rx{display:flex;gap:5px;font-size:8.5px;color:#8b98a9;line-height:1.5}'+
+    '#gpts-body .g3rx em{font-style:normal;color:#e6edf3;font-weight:700;font-size:7px;width:38px;flex:none}'+
+    '#gpts-body .g3rx b{color:#e6edf3;font-weight:700}'+
+    '#gpts-body .g3ok{color:#2ec27e;font-weight:800}'+
+    '#gpts-body .g3blk{border:1px solid rgba(240,97,109,.45);background:rgba(240,97,109,.08);border-radius:4px;padding:5px 7px;text-align:center}'+
+    '#gpts-body .g3blk b{display:block;color:#f0616d;font-size:10.5px;font-weight:800}'+
+    '#gpts-body .g3blk span{font-size:8px;color:#8b98a9;line-height:1.35}'+
+    '#gpts-body .g3arm{border:1px solid rgba(46,194,126,.45);background:rgba(46,194,126,.08);border-radius:4px;padding:5px 7px;text-align:center}'+
+    '#gpts-body .g3arm b{display:block;color:#2ec27e;font-size:10.5px;font-weight:800}'+
+    '#gpts-body .g3arm span{font-size:8px;color:#8b98a9;line-height:1.35}'+
+    '#gpts-body .g3alt{margin-top:4px;font-size:8.5px;color:#8b98a9;text-align:center}'+
+    '#gpts-body .g3alt b{color:#e6edf3;font-weight:700}'+
+    '@keyframes g3soft{0%,100%{opacity:.5}50%{opacity:1}}'+
+    '#gpts-body .g3pulse{animation:g3soft 2s ease-in-out infinite}'+
+    '@media (prefers-reduced-motion: reduce){#gpts-body .g3pulse{animation:none;opacity:1}}';
+    document.head.appendChild(s);
+  }catch(e){}
+}
+function g3esc(s){ return String(s==null?'':s).replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function g3tip(t){ return t?(' title="'+g3esc(t)+'"'):''; }
+function arrow(d){ return d>0?'↑':(d<0?'↓':'→'); }
+function dcls(d){ return d>0?'g3up':(d<0?'g3dn':''); }
+
+// ---- ① FRAME: what kind of day is this, and where is the day trying to go ----
+function secFrame(sym){
+  var R=regime2D(sym), P=sessionPhase();
+  var h='<div class="g3b">';
+  h+='<div class="g3reg"><span class="g3rg"'+g3tip('Gamma and vanna together. Which of the four cells are we in, and does that cell reward fading levels or breaking them? '+(R.why||''))+'>'+g3esc(R.label)+'</span>';
+  if(R.danger) h+='<span class="g3dg"'+g3tip('Negative gamma AND negative vanna: dealer hedging amplifies the move instead of damping it. This is the cell the literature calls the most dangerous one. Widen stops or stand aside.')+'>⚠ self-reinforcing</span>';
+  h+='</div>';
+  // target / magnet / cage
+  var gp=null; try{ gp=gexPath(sym); }catch(e){}
+  var U=null;  try{ U=lvlUnified(sym); }catch(e){}
+  var ifc=null; try{ ifc=ifChain?ifChain(sym):null; }catch(e){}
+  h+='<div class="g3frow">';
+  h+='<span class="g3fk"'+g3tip('Where is the structure pulling? This is the dominant gamma strike, not a momentum projection — it is where dealer hedging concentrates.')+'>TGT</span><span class="g3fv">'+((gp&&gp.mag!=null)?fmtLvl(gp.mag):'—')+'</span>';
+  var mp=null; try{ mp=(ifc&&!ifc.err&&ifc.week&&ifc.week.maxPain!=null)?ifc.week.maxPain:null; }catch(e){}
+  h+='<span class="g3fk"'+g3tip('Max pain from the option chain: the strike where the most contracts expire worthless. A slow pull, not a trade trigger — and it only matters near expiry.')+'>PAIN</span><span class="g3fv">'+(mp!=null?fmtLvl(mp):'—')+'</span>';
+  var a=null; try{ a=atr(sym); }catch(e){}
+  h+='<span class="g3fk"'+g3tip('Average true range per bar, in the displayed instrument. Expected move from the ATM straddle is not computed yet — this is the honest substitute for sizing a stop.')+'>ATR</span><span class="g3fv">'+(a!=null?fmtSpan(a):'—')+'</span>';
+  if(gp&&gp.cage) h+='<span class="g3fk"'+g3tip('The gamma cage: the put wall below and the call wall above, and where inside it price currently sits. At the edges, structure matters most.')+'>CAGE</span><span class="g3fv">'+gp.cage.pos+'%</span>';
+  h+='</div>';
+  if(R.play) h+='<div class="g3play"'+g3tip('What does this regime reward? In negative gamma dealers hedge WITH the move, so fades are the losing side; in positive gamma they hedge against it and levels hold.')+'>playbook: <b>'+g3esc(R.play)+'</b></div>';
+  h+='<div class="g3ph"'+g3tip('What time of day is it, and what does that do to the structure above? Charm is strongest at the open and into an expiry close; the middle of the day is when pins hold best.')+'><b>'+g3esc(P.label)+'</b><br>'+g3esc(P.sub)+'</div>';
+  h+='<div class="g3bar"><i style="width:'+Math.max(0,Math.min(100,P.pct))+'%"></i></div>';
+  h+='</div>';
+  return h;
+}
+
+// ---- ② BIAS: the direction call and what is behind it ----
+function secBias(sym){
+  var B=biasVotes(sym);
+  var col=B.dir>0?'g3up':(B.dir<0?'g3dn':'');
+  var h='<div class="g3b">';
+  h+='<div class="g3vd '+col+'"'+g3tip('Six independent inputs, each voting up, down or flat. Two clear votes of margin is what turns this from NEUTRAL. It is a tally, not a forecast — read the cells, not just the word.')+'>'+arrow(B.dir)+' '+B.verdict+'</div>';
+  h+='<div class="g3votes">';
+  B.votes.forEach(function(v){
+    var val=(v.d==null)?'—':arrow(v.d);
+    h+='<span class="g3vt"'+g3tip(v.tip)+'><span class="k">'+v.k+'</span><span class="v '+dcls(v.d||0)+'">'+val+'</span></span>';
+  });
+  h+='</div>';
+  // DRIFT stays a gate, not a vote
+  var dr=null; try{ dr=driftRead?driftRead(sym):null; }catch(e){}
+  var agree=(dr&&dr.verdict)?/agree/i.test(dr.verdict):null;
+  var gcol=(agree===true)?'rgba(46,194,126,.1)':((agree===false)?'rgba(240,97,109,.1)':'rgba(139,152,169,.1)');
+  var gink=(agree===true)?'#2ec27e':((agree===false)?'#f0616d':'#8b98a9');
+  h+='<div class="g3gate" style="background:'+gcol+'"'+g3tip('Do the gamma book and the vanna book lean the same way relative to price? Drift is a GATE, not a seventh vote: when the two books split, nothing is confirming and the tally above is worth less.')+'>'+
+     '<b style="color:'+gink+';font-weight:800">DRIFT '+(agree===true?'✓':(agree===false?'✗':'·'))+'</b>'+
+     '<span>'+g3esc(dr&&dr.line?dr.line:'both books not in yet')+'</span>'+
+     '<span class="n">'+B.up+'↑ / '+B.dn+'↓ of '+B.live+'</span></div>';
+  // supporting evidence — directional factors only
+  var bits=[];
+  try{ if(B.trend&&B.trend.line) bits.push(g3esc(B.trend.line)); }catch(e){}
+  try{ if(B.pa&&B.pa.ok) bits.push('closes <b>'+B.pa.clv+'</b> in range ('+B.pa.struct+')'); }catch(e){}
+  try{ if(B.accum&&B.accum.txt) bits.push(g3esc(B.accum.txt)); }catch(e){}
+  if(bits.length) h+='<div class="g3ev"><em>READ</em> '+bits.join(' · ')+'</div>';
+  h+='</div>';
+  return h;
+}
+
+// ---- ③ TRADE LOCATION: the ladder, with price in it ----
+function secLoc(sym){
+  var U=null; try{ U=lvlUnified(sym); }catch(e){}
+  var h='<div class="g3b">';
+  if(!U||!U.rows||!U.rows.length){ h+='<div class="g3rx"><span>no level set yet — waiting on the chain fetch</span></div></div>'; return h; }
+  var px=U.px;
+  var rows=U.rows.slice().sort(function(a,b){ return b.k-a.k; });
+  var zone=null; try{ var av=atr(sym); zone=(av>0)?Math.max(av*0.6, 0.05):null; }catch(e){}
+  var placed=false;
+  var atLevel=null;
+  rows.forEach(function(r){
+    if(!placed && r.k<px){
+      h+='<div class="g3prow"><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+fmtLvl(px)+'</span><span class="g3d g3sub"></span></div>';
+      placed=true;
+    }
+    var d=r.k-px;
+    var near=(zone!=null && Math.abs(d)<=zone);
+    if(near && !atLevel) atLevel=r;
+    var isMag=/Mag/.test(r.id), isCR=/CR/.test(r.id), isPS=/PS/.test(r.id);
+    var col=isCR?'#f0616d':(isPS?'#2ec27e':(isMag?'#e3c341':'#f2b45a'));
+    var far=(zone!=null && Math.abs(d)>zone*14)?' g3far':'';
+    var band=isMag?' g3band':'';
+    var pulse=near?' g3pulse':'';
+    h+='<div class="g3r'+far+band+'">'+
+       '<span class="g3nm'+pulse+'" style="color:'+col+'">'+g3esc(r.id)+'</span>'+
+       '<span class="g3v'+pulse+'">'+fmtLvl(r.k)+'</span>'+
+       (zone!=null?'<span class="g3zn"'+g3tip('A level is a zone, not a line. This band is scaled from ATR — price can trade through it and the level still holds.')+'>±'+fmtSpan(zone)+'</span>':'')+
+       '<span class="g3sr"'+g3tip('Which source produced this level: the self-fetched option chain, the passive Skylit tape, or both agreeing.')+'>'+g3esc(U.src||'?')+'</span>'+
+       '<span class="g3d '+dcls(d)+'">'+(d>0?'+':'')+fmtSpan(+d.toFixed(2))+'</span></div>';
+  });
+  if(!placed) h+='<div class="g3prow"><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+fmtLvl(px)+'</span></div>';
+  var rn=rollNote(sym);
+  h+='<div class="g3rx" style="margin-top:3px"><em>SET</em><span>'+
+     g3esc((U.src==='week'?'to Fri':(U.src==='0dte'?'0DTE':'passive feed'))+(rn?(' · '+rn):'')+
+     (U.nExps?(' · '+U.nExps+' exps'):'')+(U.n?(' · '+U.n+' strikes'):''))+'</span></div>';
+  h+='</div>';
+  G3_AT_LEVEL=atLevel;
+  return h;
+}
+var G3_AT_LEVEL=null;
+
+// ---- ④ REACTION: is the level actually defending itself ----
+function secReact(sym){
+  var h='<div class="g3b">';
+  var L=G3_AT_LEVEL;
+  var lvl=L?L.k:null;
+  // node growth in dollars
+  var ac=null; try{ ac=accumAsym(sym); }catch(e){}
+  var nodeTxt='—';
+  try{
+    if(ac) nodeTxt=g3esc(ac.txt)+(ac.ratio!=null?'':'');
+  }catch(e){}
+  h+='<div class="g3rx"'+g3tip('Is the book at this level GROWING or bleeding, measured in dollars? Growth into a test is dealers adding — the level is being defended. Shrinkage is the level being abandoned.')+'><em>NODE</em><span>'+nodeTxt+'</span></div>';
+  // price action at the level
+  var rj=null; try{ rj=paReject(sym, lvl); }catch(e){}
+  var pa=null; try{ pa=paRead(sym); }catch(e){}
+  var ptxt;
+  if(rj) ptxt=g3esc(rj.txt)+' — <span class="g3ok">rejected</span>';
+  else if(lvl!=null) ptxt='at '+fmtLvl(lvl)+', no rejection bar yet';
+  else ptxt=(pa&&pa.ok)?('no level in range · '+g3esc(pa.label)+' ('+pa.clv+')'):'no level in range';
+  h+='<div class="g3rx"'+g3tip('Did price trade THROUGH the level and close back on the original side? Without order flow this rejection bar is the confirmation we have — a close beyond the zone is the opposite signal.')+'><em>PRICE</em><span>'+ptxt+'</span></div>';
+  // structure / pressure line, the internals stand-in
+  if(pa&&pa.ok){
+    h+='<div class="g3rx"'+g3tip('Close location over the recent window, standing in for the TICK we do not have. Upper-third closes are buyers finishing each bar in control; the structure tag says whether highs and lows are stepping up or down.')+
+       '><em>PRESSURE</em><span><b>'+pa.upBars+'</b> upper / <b>'+pa.dnBars+'</b> lower of '+pa.bars+' · '+g3esc(pa.struct)+'</span></div>';
+  }
+  h+='</div>';
+  return h;
+}
+
+// ---- ⑤ EXECUTE: the trade, or the honest refusal ----
+function secExec(sym){
+  var h='<div class="g3b">';
+  var R=regime2D(sym), B=biasVotes(sym);
+  var pb=null; try{ pb=pbEntryPick(sym); }catch(e){}
+  var L=G3_AT_LEVEL;
+  // regime gate: a fade in negative gamma is the trade the regime punishes
+  var blocked=null;
+  if(R.g!=null && R.g<0 && L){
+    blocked={ why:'FADE BLOCKED — '+(R.danger?'−γ/−V':'−γ'),
+              sub:'momentum regime · dealers hedge with the move'+(R.danger?' · charm/vanna widen the stop':'') };
+  }
+  // R:R floor
+  var rr=null;
+  try{
+    if(pb && pb.entry!=null && pb.stop!=null && pb.target!=null){
+      var risk=Math.abs(pb.entry-pb.stop), rew=Math.abs(pb.target-pb.entry);
+      if(risk>0) rr=+(rew/risk).toFixed(2);
+    }
+  }catch(e){}
+  if(rr!=null && rr<2.0){
+    blocked=blocked||{ why:'R:R UNDER FLOOR', sub:'' };
+    blocked.sub=(blocked.sub?blocked.sub+' · ':'')+'R '+rr+' below the 2.0 floor';
+  }
+  if(blocked){
+    h+='<div class="g3blk"'+g3tip('Why is this trade refused? The regime, the reward-to-risk floor, or both. A refusal here is a result — the panel will not dress a losing-side trade as a setup.')+'><b>'+g3esc(blocked.why)+'</b><span>'+g3esc(blocked.sub)+'</span></div>';
+  } else if(pb && pb.entry!=null){
+    h+='<div class="g3arm"'+g3tip('What is armed, and what invalidates it? Entry, stop and target come from the pullback engine; the level below is what has to fail for the idea to be wrong.')+'><b>ARMED '+arrow(B.dir)+' '+fmtLvl(pb.entry)+'</b><span>'+
+       'stop '+(pb.stop!=null?fmtLvl(pb.stop):'—')+' · target '+(pb.target!=null?fmtLvl(pb.target):'—')+(rr!=null?(' · '+rr+'R'):'')+'</span></div>';
+  } else {
+    h+='<div class="g3blk" style="border-color:rgba(139,152,169,.35);background:rgba(139,152,169,.07)"><b style="color:#8b98a9">NO SETUP</b><span>'+
+       g3esc(B.dir===0?'bias is neutral — no side to take':'no pullback entry in range yet')+'</span></div>';
+  }
+  var alt=[];
+  try{ if(B.path&&B.path.line) alt.push(g3esc(B.path.line)); }catch(e){}
+  if(alt.length) h+='<div class="g3alt">path: <b>'+alt.join(' · ')+'</b></div>';
+  h+='</div>';
+  return h;
+}
+
+// ---- which step are we actually on ----
+function stepState(sym){
+  var st=[false,false,false,false,false], wait='';
+  try{
+    var R=regime2D(sym), B=biasVotes(sym), U=null;
+    try{ U=lvlUnified(sym); }catch(e){}
+    st[0]=(R.g!=null);
+    st[1]=(B.live>=3 && B.dir!==0);
+    st[2]=!!(U&&U.rows&&U.rows.length && G3_AT_LEVEL);
+    var rj=null; try{ rj=G3_AT_LEVEL?paReject(sym,G3_AT_LEVEL.k):null; }catch(e){}
+    st[3]=!!rj;
+    var pb=null; try{ pb=pbEntryPick(sym); }catch(e){}
+    st[4]=!!(pb&&pb.entry!=null);
+    if(!st[0]) wait='waiting on the <b>gamma book</b>';
+    else if(!st[1]) wait=(B.live<3)?'waiting on <b>more inputs</b> — '+B.live+' of 6 live':'bias is <b>neutral</b> — no side yet';
+    else if(!st[2]) wait='price is <b>between levels</b> — no trade location';
+    else if(!st[3]) wait='at <b>'+g3esc(G3_AT_LEVEL?fmtLvl(G3_AT_LEVEL.k):'the level')+'</b> — waiting on a reaction';
+    else if(!st[4]) wait='reaction confirmed — <b>waiting on an entry</b>';
+    else wait='<b>armed</b> — all five steps satisfied';
+  }catch(e){}
+  var cur=0; for(var i=0;i<5;i++){ if(st[i]) cur=i+1; else break; }
+  return { done:st, cur:cur, wait:wait };
+}
+
+// ---- the face ----
+// (v11.26) DEBUG SURFACE for the five-step face, so the live panel can be verified from the
+// console the same way the level engine is: every step's input inspected on its own.
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.phase   = function(){ return sessionPhase(); };
+window.__gptsDebug.regime2 = function(s){ return regime2D(s||activeSym()); };
+window.__gptsDebug.pa      = function(s){ return paRead(s||activeSym()); };
+window.__gptsDebug.bias    = function(s){ return biasVotes(s||activeSym()); };
+window.__gptsDebug.steps   = function(s){ return stepState(s||activeSym()); };
+window.__gptsDebug.roll    = function(s){ s=s||activeSym(); try{ expSetRollCheck(s); }catch(e){} return { roll:EXPSET_ROLL[s]||null, note:rollNote(s) }; };
+window.__gptsDebug.face    = function(s){ return panelV3(s||activeSym()).length; };
+var STEP_NAMES=['① FRAME','② BIAS','③ TRADE LOCATION','④ REACTION','⑤ EXECUTE'];
+var STEP_SHORT=['① FRAME','② BIAS','③ LOCATION','④ REACTION','⑤ EXECUTE'];
+var STEP_TIPS=[
+ 'What kind of day is this? Regime (gamma × vanna), the structural target, and where we are in the session. Everything below is read inside this frame.',
+ 'Which way? Six independent inputs vote, DRIFT gates the tally, and the evidence line shows only directional factors.',
+ 'Where would you actually trade? The ladder puts price inside the level set, as zones rather than lines.',
+ 'Is the level defending itself? Book growth in dollars, a rejection bar, and close-location pressure standing in for the internals we do not have.',
+ 'Take it or refuse it. The regime and the R:R floor can both veto — a refusal here is a result, not a gap.'];
+function panelV3(sym){
+  ensureV3Css();
+  var S=stepState(sym);
+  var h='<div class="g3">';
+  h+='<div class="g3steps">';
+  for(var i=0;i<5;i++){
+    var cls=S.done[i]?'done':((i===S.cur)?'on':'');
+    h+='<span class="'+cls+'"'+g3tip(STEP_TIPS[i])+'>'+STEP_SHORT[i]+'</span>';
+  }
+  h+='</div>';
+  if(S.wait) h+='<div class="g3wait">'+S.wait+'</div>';
+  var secs=[secFrame, secBias, secLoc, secReact, secExec];
+  for(var j=0;j<5;j++){
+    var c=S.done[j]?'done':((j===S.cur)?'on':'');
+    h+='<span class="g3sh '+c+'"'+g3tip(STEP_TIPS[j])+'>'+STEP_NAMES[j]+'</span>';
+    try{ h+=secs[j](sym); }catch(eS){ h+='<div class="g3b"><div class="g3rx"><span style="color:#f0616d">'+g3esc(String(eS&&eS.message||eS))+'</span></div></div>'; }
+  }
+  h+='</div>';
+  return h;
+}
+
 function render(){
   if(!elBody) return;
   try{ wireBodyDelegation(); }catch(eWD){}
@@ -16275,14 +16860,20 @@ function render(){
     elBody.innerHTML=html;
     return;
   }
-  try{ html+=kingHeaderBlock(); }catch(eH){}          // (v10.47) header cluster + ①②③ restored
-  try{ html+=briefBlockHtml(__asym); }catch(eBr){}    // (v10.49 J) pre-open brief (collapsible)
-  if(DRIFT_LIVE){ try{ html+=driftLineHtml(__asym); }catch(eD49){} }   // (v10.57) shadow mode: off the face until proven
-  try{ html+=nextStopHtml(__asym); }catch(eNS){}   // (v11.1) NEXT STOP — the one forward call, above the read
-  try{ html+=gexPathHtml(__asym); }catch(ePA){}   // (v11.21) PATH — where the gamma structure points
-  try{ html+=levelsHtmlV2(__asym); }catch(eLV){}   // (v11.17) LEVELS — ONE block, the chart's instrument only
-  try{ html+=pbEntryHtml(__asym); }catch(ePE){}    // (v11.3) PB ENTRY — where to look for the pullback / deflection, under Next Stop
-  try{ html+=readBlock44(__asym); }catch(eR){}
+  // (v11.26) THE FIVE-STEP FACE. The old stack of independent cards is kept behind
+  // CFG.panelV3===false so a bad build can be reverted from the gear without a reinstall.
+  if(CFG.panelV3!==false){
+    try{ html+=panelV3(__asym); }catch(eV3){ html+='<div style="color:#f0616d;padding:6px;font-size:10px">panel: '+eV3+'</div>'; }
+  } else {
+    try{ html+=kingHeaderBlock(); }catch(eH){}          // (v10.47) header cluster + ①②③ restored
+    try{ html+=briefBlockHtml(__asym); }catch(eBr){}    // (v10.49 J) pre-open brief (collapsible)
+    if(DRIFT_LIVE){ try{ html+=driftLineHtml(__asym); }catch(eD49){} }   // (v10.57) shadow mode: off the face until proven
+    try{ html+=nextStopHtml(__asym); }catch(eNS){}   // (v11.1) NEXT STOP — the one forward call, above the read
+    try{ html+=gexPathHtml(__asym); }catch(ePA){}   // (v11.21) PATH — where the gamma structure points
+    try{ html+=levelsHtmlV2(__asym); }catch(eLV){}   // (v11.17) LEVELS — ONE block, the chart's instrument only
+    try{ html+=pbEntryHtml(__asym); }catch(ePE){}    // (v11.3) PB ENTRY — where to look for the pullback / deflection, under Next Stop
+    try{ html+=readBlock44(__asym); }catch(eR){}
+  }
   // (v10.37) standalone gatekeeperBlock() REMOVED - gatekeeper strike + distance now in King badge.
   // (v10.27) Standalone BO / SPY Signals section REMOVED. The breakout-pullback
   // lifecycle is now shown as a per-node tag (BO / BO\u00b7FT\u00b7\u2026) on the Node Map row it

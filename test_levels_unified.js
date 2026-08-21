@@ -335,7 +335,7 @@ global.STATE={SPY:{price:762.57, king:760}};
   FULL=Object.assign({}, L, {nExps:1, n:4});
   ok(levelsHtmlV2('SPY').indexOf('no split')<0,'and the card carries no warning');
 }
-// ---------- (v11.25) THEIR CHAIN LEVELS, from the companion script ----------
+// ---------- (v11.26) THEIR CHAIN LEVELS, from the companion script ----------
 // The companion userscript writes finished levels to localStorage on this origin; we only read. Values
 // below are the REAL ones it produced against their live page on 2026-08-20, spot 761.14 — verified
 // against their published figures: to-Friday CR 775 / PS 760 / Mag 760 / ratio 0.40, and 0DTE CR

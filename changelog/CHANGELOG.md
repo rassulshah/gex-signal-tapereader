@@ -1,3 +1,38 @@
+## v11.26 — the panel becomes the process
+
+The five-step face we locked in design finally ships. The panel now renders
+① FRAME → ② BIAS → ③ TRADE LOCATION → ④ REACTION → ⑤ EXECUTE, with a step bar that
+lights the step you are actually on and a line saying what it is waiting for. Section
+headers are centred and highlighted to match the bar. The old stack of independent cards
+is still there behind `CFG.panelV3===false`, so a bad build reverts from the gear rather
+than a reinstall.
+
+**The Friday roll-forward.** `exp_mode=week` means "through Friday of the current week",
+which ON a Friday is today — so the week window collapsed onto the 0DTE window and CR/CR0
+printed the same number off the same 284 strikes. Seen live on 2026-08-21. When the collapse
+is detected the window rolls to NEXT Friday, and the request is sized from the wk7 control
+set's own expiration list rather than a guessed calendar. The roll is disclosed on the face.
+
+**Regime is two-dimensional.** We were reading gamma and ignoring the vanna book we already
+receive. GEX × VEX is a 2×2 and one cell — negative gamma with negative vanna — is the
+self-reinforcing one where hedging amplifies the move. That cell is flagged, and the
+playbook line switches to momentum with widened stops instead of fading edges.
+
+**Session phase.** The panel was completely time-blind. It now knows the opening charm
+window, the midday lull, the power hour, and the expiry-Friday charm phase where gamma
+erodes and pins stop working.
+
+**Price action, standing in for market internals.** We have no TICK, no advance-decline and
+no cumulative delta, and pretending otherwise would be dishonest. What OHLC does give us is
+close location — where each bar finishes inside its own range — which is the fair analogue
+of a sustained TICK reading. That is now the PA vote, alongside a structure tag and a
+rejection detector for step ④. A rejection requires price to have COME FROM the side it
+closes back to; without that rule a bar straddling the level reads as a rejection when it
+is actually a break.
+
+**Not yet built, and shown as `—` rather than guessed:** DEX, CHEX and expected move from
+the ATM straddle. Each needs chain fields we do not yet plumb through.
+
 ## v11.25 — 2026-08-21 — Their levels, computed from their own chain (companion script)
 
 The user's original instinct, which I talked them out of three times: **get the levels from InsiderFinance
