@@ -22,7 +22,11 @@ global.fmtLvl=x=>x==null?'–':String(x); global.fmtSpan=x=>x==null?'–':String
 global.dispIsFut=()=>false; global.dispR=()=>1; global.mul=(a,b)=>a/(1/b); global.futMark=()=>'';
 global.closedCandles=()=>[]; global.spxRatio=()=>({r:null});
 let FULL=null, DTE0=null, PASSIVE=null;
-global.expSetLevels=(n)=> n==='full'?FULL:DTE0;
+global.SIDE_MIN_SHARE=0.05;
+// (v11.19) expSetLevels is now (sym, setName) — the v11.17/11.18 signature was (setName) with SPY
+// hardcoded inside, which is exactly the defect this release fixes.
+global.expSetLevels=(sym,n)=> n==='full'?FULL:DTE0;
+global.activeSym=()=>'SPY';
 global.cpLevels=()=>PASSIVE;
 global.STATE={SPY:{price:762.57, king:760}};
 
@@ -165,6 +169,70 @@ global.STATE={SPY:{price:762.57, king:760}};
   ok(merged.gex===2.8e8,'the merged row keeps the gamma it was given',merged.gex);
   const h=levelsHtmlV2('SPY');
   ok(h.indexOf('Mag·PS')>0 || h.indexOf('PS·Mag')>0,'and the merged label reaches the card',h.indexOf('·'));
+}
+// ---------- (v11.19) A WALL NEEDS A SIDE WITH REAL GAMMA IN IT ----------
+{
+  // Live 0DTE book: 169 strikes, call/put ratio 0.00 — essentially no call gamma on expiry day — and we
+  // still named a call wall at 792, which then sorted ABOVE the full-chain CR at 765. A 0DTE wall further
+  // out than the all-expiration wall is backwards on its face. Their page reports N/A here.
+  const mk=(k,call,put)=>({k:k, v:call+put, net:put-call, d:1});
+  const j={ levels:[{l:[mk(755,1,900), mk(760,1,3000), mk(765,2,800), mk(792,6,10)].map(r=>r)}] };
+  const L=cpFromPayload(j, 762.57);
+  ok(L.cr===null,'no call wall is named when the call side is a rounding artefact',L.cr);
+  ok(L.crSuppressed && L.crSuppressed.k===792,'the strike it WOULD have named is kept, for the explanation',L.crSuppressed);
+  ok(L.crSuppressed.share<5,'and the share that disqualified it',L.crSuppressed.share);
+  ok(L.ps===760,'the side that DOES hold gamma still gets its wall',L.ps);
+  ok(L.psSuppressed===null,'and is not suppressed');
+  ok(L.crGex===null,'a suppressed wall carries no gamma figure either',L.crGex);
+}
+{
+  // symmetry: a call-dominated book must lose its PUT wall by the same rule, not just the put case
+  const mk=(k,call,put)=>({k:k, v:call+put, net:put-call, d:1});
+  const j={ levels:[{l:[mk(755,900,1), mk(760,3000,1), mk(765,800,2), mk(792,10,6)]}] };
+  const L=cpFromPayload(j, 762.57);
+  ok(L.ps===null,'a book with no put gamma names no put wall',L.ps);
+  ok(L.psSuppressed!==null,'and records why',L.psSuppressed);
+  ok(L.cr!==null,'while the call wall stands',L.cr);
+}
+{
+  // a balanced book keeps both — the rule must not fire on normal days
+  const mk=(k,call,put)=>({k:k, v:call+put, net:put-call, d:1});
+  const j={ levels:[{l:[mk(755,100,400), mk(760,150,600), mk(765,700,200), mk(770,500,150)]}] };
+  const L=cpFromPayload(j, 762.57);
+  ok(L.cr!==null && L.ps!==null,'a two-sided book keeps both walls',[L.cr,L.ps]);
+  ok(L.crSuppressed===null && L.psSuppressed===null,'and nothing is suppressed');
+}
+{
+  // and the card explains the gap rather than just omitting a row
+  FULL={ cr:null, crSuppressed:{k:792, share:0.4}, callShare:0.4, putShare:99.6,
+         ps:760, psGex:3e8, hvl:766, mag:760, n:169, nExps:1 };
+  DTE0=null; PASSIVE=null;
+  const U=lvlUnified('SPY');
+  ok(U.crSuppressed!==null,'the suppression reaches the unified read',U.crSuppressed);
+  ok(!U.rows.some(r=>r.id.indexOf('CR')>=0),'no CR row is printed',U.rows.map(r=>r.id));
+  const h=levelsHtmlV2('SPY');
+  ok(h.indexOf('% of book')>0,'and the card states WHY the level is absent',h.indexOf('% of book'));
+}
+// ---------- (v11.19) THE PRICE ACTION OWNS THE CHART SCALE ----------
+{
+  // The live chart had one wall 30 points above everything else; the range stretched to reach it and the
+  // price line plus every real level collapsed into the bottom fifth.
+  global.closedCandles=()=>{ const out=[]; for(let i=0;i<40;i++) out.push({c:762+Math.sin(i/5)*1.2, h:763.5, l:761}); return out; };
+  FULL={ cr:765, crGex:1, ps:760, psGex:1, hvl:766, mag:760, n:241, nExps:34 };
+  DTE0={ cr:792, crGex:1, ps:762, psGex:1, n:169, nExps:1 };
+  PASSIVE=null;
+  const U=lvlUnified('SPY');
+  ok(U.rows.some(r=>r.k===792),'the far level is still IN the read',U.rows.map(r=>r.id+':'+r.k));
+  const svg=levelsChartV2('SPY',U);
+  ok(!!svg,'the chart renders');
+  ok(svg.indexOf('▲')>0,'the far level is drawn as an EDGE MARKER, not by stretching the axis',svg.indexOf('▲'));
+  ok(svg.indexOf('CR0')>0,'and it is still labelled so it is not lost');
+  ok(svg.indexOf('polyline')>0,'the price line is still drawn');
+  // the near levels must occupy real vertical space rather than being squashed together
+  const ys=(svg.match(/<line x1="0" y1="([\d.]+)"/g)||[]).map(m=>parseFloat(m.match(/y1="([\d.]+)"/)[1]));
+  ok(ys.length>=2,'several level lines are drawn',ys);
+  ok(Math.max.apply(null,ys)-Math.min.apply(null,ys) > 20,'and they are spread apart, not collapsed',ys);
+  global.closedCandles=()=>[];
 }
 console.log('\n'+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

@@ -1,3 +1,44 @@
+## v11.19 — 2026-08-21 — Levels correct for every symbol, no invented walls, a readable chart
+
+The user asked whether multi-symbol support had actually been confirmed. It had not, and it was not true.
+Three fixes.
+
+**1. THE EXPIRY SETS ARE KEYED BY SYMBOL — QQQ/NQ was showing SPY levels.** v11.17–11.18 kept ONE global
+set and hardcoded `symbol=SPY` into the self-fetch and `STATE.SPY.price` into the read:
+
+    url.replace(/symbol=[^&]*/, 'symbol=SPY')     // expSetFetch
+    var px=(STATE.SPY||{}).price;                  // expSetLevels
+    var EXPSET={ dte0:null, full:null };           // no symbol dimension
+
+So selecting QQQ or NQ produced SPY walls priced against a QQQ spot — every level ~55 points from price,
+presented with full confidence. Worse than a blank card. `EXPSET` is now keyed by symbol, the request asks
+for the symbol it was given, throttling and back-off are per symbol+set (so one book cannot starve the
+other), and the tick follows whatever chart is on screen — still two extra requests per cycle. SPY and ES
+both resolve through `activeSym()` to the SPY book; QQQ and NQ to the QQQ book.
+
+**2. A WALL NEEDS A SIDE WITH REAL GAMMA IN IT.** The live 0DTE book came back with a call/put ratio of
+**0.00** — there is essentially no call gamma on expiry day — and we still named a call wall at **792**,
+which then sorted ABOVE the full-chain CR at 765. A 0DTE wall further out than the all-expiration wall is
+backwards on its face; it was the largest of a set of rounding artefacts. A side must now hold at least
+`SIDE_MIN_SHARE` (5%) of the book's total gamma before its wall gets a name — a third-party page reports
+N/A at a ~2% share, so 5% is comfortably inside territory they already treat as "no wall". The rule is
+symmetric: a call-dominated book loses its PUT wall the same way. The strike that *would* have been named
+is kept and shown on the card with the share that disqualified it, so the absence is explained rather than
+silent.
+
+**3. THE PRICE ACTION OWNS THE CHART SCALE.** That same 792 was 30 points above everything else, so the
+y-range stretched to reach it and the price line plus every real level collapsed into the bottom fifth —
+the "looks crazy" chart. The range is now driven by the price action, growing for a level only within a
+bounded multiple of it; anything beyond is drawn as a labelled **edge marker** (`▲ CR0 7960`). Still
+visible, still identified, unable to flatten the chart.
+
+**SPX remains out of scope, deliberately.** We do not hold an SPX book — only the SPXW *derived* lane, and
+their own SPX and SPY pages disagree by 13 points on the call wall, so a converted SPY level is not their
+SPX level. Supported markets are SPY, ES, QQQ and NQ.
+
+New `test_expset_symbol.js` (25) pins the per-symbol behaviour so the hardcoding cannot silently return;
+`test_levels_unified.js` grows to 72 with the suppression and chart-clamp cases. No new suite failures.
+
 ## v11.18 — 2026-08-21 — Three bugs the live v11.17 card exposed
 
 Checked v11.17 against the running panel. **The self-fetch works** — the full-chain set came back with

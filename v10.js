@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.18
+// @version    11.19
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -540,7 +540,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.18';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.19';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -12823,23 +12823,33 @@ function ifManSave(o){ IFMAN=o; try{ localStorage.setItem(IFMAN_LS, JSON.stringi
 // replayed LASTFEEDURL with the captured Authorization header since v10.48; this does the same with the
 // expiry and node parameters overridden, and keeps the result in its OWN cache — it never touches
 // LASTFEED, so the tape the rest of the panel reads is completely undisturbed by anything here.
+// A side must carry at least this share of the book's total gamma before its wall gets a name. Their page
+// reported N/A on a 0DTE book whose call/put ratio was 0.02, i.e. a ~2% call share, so 5% is comfortably
+// inside the territory they already treat as "no wall here".
+var SIDE_MIN_SHARE=0.05;
 var EXPSET_MIN_MS=90000;             // one request per set per 90s; these levels move slowly
-var EXPSET={ dte0:null, full:null }; // {j, ts, exps, n, params}
+// (v11.19) KEYED BY SYMBOL. v11.17-11.18 held ONE global set and hardcoded `symbol=SPY` into the request
+// and `STATE.SPY.price` into the read — so selecting QQQ or NQ produced SPY levels priced against QQQ:
+// confidently wrong numbers, which is worse than a blank card. Every entry point now carries the symbol.
+var EXPSET={ SPY:{dte0:null, full:null}, QQQ:{dte0:null, full:null} };
 var EXPSET_TRY={}, EXPSET_FAIL={};
 var EXPSET_SPEC={
   dte0:{ exp_mode:'current', exp_count:'1',  nodes:'250' },
   full:{ exp_mode:'next_n',  exp_count:'50', nodes:'250' }
 };
-function expSetFetch(setName){
+function expSetFetch(sym, setName){
   try{
+    sym=sym||'SPY';
     if(!LASTFEEDURL || !LASTAUTH) return;
-    if((EXPSET_FAIL[setName]||0) >= 3) return;         // stop asking after three refusals
+    if(!EXPSET[sym]) EXPSET[sym]={dte0:null, full:null};
+    var fk=sym+'|'+setName;
+    if((EXPSET_FAIL[fk]||0) >= 3) return;              // stop asking after three refusals
     var now=Date.now();
-    if(EXPSET_TRY[setName] && (now-EXPSET_TRY[setName])<EXPSET_MIN_MS) return;
-    EXPSET_TRY[setName]=now;
+    if(EXPSET_TRY[fk] && (now-EXPSET_TRY[fk])<EXPSET_MIN_MS) return;
+    EXPSET_TRY[fk]=now;
     var spec=EXPSET_SPEC[setName]; if(!spec) return;
     var url=LASTFEEDURL;
-    url=url.replace(/symbol=[^&]*/, 'symbol=SPY').replace(/data_type=[^&]*/, 'data_type=gamma');
+    url=url.replace(/symbol=[^&]*/, 'symbol='+sym).replace(/data_type=[^&]*/, 'data_type=gamma');
     Object.keys(spec).forEach(function(k){
       var re=new RegExp('([?&])'+k+'=[^&]*');
       url = re.test(url) ? url.replace(re, '$1'+k+'='+spec[k]) : (url+'&'+k+'='+spec[k]);
@@ -12848,22 +12858,25 @@ function expSetFetch(setName){
     fetch(url, { credentials:'include', headers:{ Authorization:LASTAUTH } }).then(function(res){
       if(!res) return;
       if(res.status===401) return;                      // token rotated; the app re-captures it shortly
-      if(!res.ok){ EXPSET_FAIL[setName]=(EXPSET_FAIL[setName]||0)+1; return; }
+      if(!res.ok){ EXPSET_FAIL[fk]=(EXPSET_FAIL[fk]||0)+1; return; }
       res.json().then(function(j){
         try{
           var snaps=j.levels||[]; var last=snaps[snaps.length-1]; var l=(last&&last.l)||[];
-          if(!l.length){ EXPSET_FAIL[setName]=(EXPSET_FAIL[setName]||0)+1; return; }
-          EXPSET_FAIL[setName]=0;
-          EXPSET[setName]={ j:j, ts:Date.now(), exps:(j.expirations||[]), n:l.length, params:spec };
+          if(!l.length){ EXPSET_FAIL[fk]=(EXPSET_FAIL[fk]||0)+1; return; }
+          EXPSET_FAIL[fk]=0;
+          EXPSET[sym][setName]={ j:j, ts:Date.now(), exps:(j.expirations||[]), n:l.length, params:spec, sym:sym };
         }catch(e){}
-      }).catch(function(){ EXPSET_FAIL[setName]=(EXPSET_FAIL[setName]||0)+1; });
-    }).catch(function(){ EXPSET_FAIL[setName]=(EXPSET_FAIL[setName]||0)+1; });
+      }).catch(function(){ EXPSET_FAIL[fk]=(EXPSET_FAIL[fk]||0)+1; });
+    }).catch(function(){ EXPSET_FAIL[fk]=(EXPSET_FAIL[fk]||0)+1; });
   }catch(e){}
 }
 function expSetTick(){
   try{
     if(document.visibilityState!=='visible') return;
-    expSetFetch('dte0'); expSetFetch('full');
+    // Only the symbol actually on screen, so this stays at two extra requests per cycle regardless of
+    // how many books the panel tracks. Switching charts switches which symbol is kept fresh.
+    var sym='SPY'; try{ sym=activeSym(); }catch(e0){}
+    expSetFetch(sym,'dte0'); expSetFetch(sym,'full');
   }catch(e){}
 }
 // Decompose an arbitrary payload the same way cpRows does, so a self-fetched set gets identical treatment.
@@ -12903,25 +12916,43 @@ function cpFromPayload(j, px){
         crossings.push(+(a+(b-a)*Math.max(0,Math.min(1,t))).toFixed(2)); } }
     var zg=null;
     for(var z=0;z<crossings.length;z++){ if(zg==null || Math.abs(crossings[z]-px)<Math.abs(zg-px)) zg=crossings[z]; }
+    // (v11.19) A WALL WITH NOTHING BEHIND IT IS NOT A WALL. On the live 0DTE book the call side came to a
+    // 0.00 call/put ratio — there is essentially no call gamma on expiry day — yet we still named a "call
+    // wall" at 792, which then sorted ABOVE the full-chain CR at 765. A 0DTE wall further out than the
+    // all-expiration wall is backwards on its face; it was the largest of a set of rounding artefacts.
+    // Their page reports N/A in exactly this case. So does this now: the side must hold at least
+    // SIDE_MIN_SHARE of the book's total gamma before its wall is allowed to have a name.
+    var tot=sc+sp;
+    var callShare=(tot>0)?(sc/tot):0, putShare=(tot>0)?(sp/tot):0;
+    var crSuppressed=null, psSuppressed=null;
+    if(tot>0 && callShare<SIDE_MIN_SHARE){ crSuppressed={ k:cw, share:+(callShare*100).toFixed(2) }; cw=null; cwm=-1; }
+    if(tot>0 && putShare <SIDE_MIN_SHARE){ psSuppressed={ k:pw, share:+(putShare*100).toFixed(2) }; pw=null; pwm=-1; }
     return { cr:cw, crGex:(cwm<0?null:cwm), ps:pw, psGex:(pwm<0?null:pwm), mag:mag, hvl:zg,
+             crSuppressed:crSuppressed, psSuppressed:psSuppressed,
+             callShare:+(callShare*100).toFixed(2), putShare:+(putShare*100).toFixed(2),
              totalCall:sc, totalPut:sp, ratio:(sp>0?+(sc/sp).toFixed(2):null),
              nCross:crossings.length, crossings:crossings.slice(0,6), mixed:lt, pure:rows.length-lt,
              n:rows.length, kMin:rows[0].k, kMax:rows[rows.length-1].k, exps:(j.expirations||null) };
   }catch(e){ return null; }
 }
-function expSetLevels(setName){
+function expSetLevels(sym, setName){
   try{
-    var E=EXPSET[setName]; if(!E) return null;
-    var px=(STATE.SPY||{}).price; if(typeof px!=='number') return null;
+    sym=sym||'SPY';
+    var byS=EXPSET[sym]; if(!byS) return null;
+    var E=byS[setName]; if(!E) return null;
+    var px=(STATE[sym]||{}).price; if(typeof px!=='number') return null;
     var L=cpFromPayload(E.j, px); if(!L) return null;
-    L.set=setName; L.ageMin=Math.round((Date.now()-E.ts)/60000); L.exps=E.exps; L.nExps=(E.exps||[]).length;
+    L.set=setName; L.sym=sym; L.ageMin=Math.round((Date.now()-E.ts)/60000);
+    L.exps=E.exps; L.nExps=(E.exps||[]).length;
     return L;
   }catch(e){ return null; }
 }
 window.__gptsDebug=window.__gptsDebug||{};
-window.__gptsDebug.expSets=function(){ return { dte0:expSetLevels('dte0'), full:expSetLevels('full'),
-  fails:EXPSET_FAIL, haveAuth:!!LASTAUTH, haveUrl:!!LASTFEEDURL }; };
-window.__gptsDebug.expSetFetch=function(n){ EXPSET_FAIL[n]=0; EXPSET_TRY[n]=0; expSetFetch(n||'dte0'); return 'fetching '+n; };
+window.__gptsDebug.expSets=function(sy){ var sym=sy||(function(){ try{ return activeSym(); }catch(e){ return 'SPY'; } })();
+  return { sym:sym, dte0:expSetLevels(sym,'dte0'), full:expSetLevels(sym,'full'),
+           fails:EXPSET_FAIL, haveAuth:!!LASTAUTH, haveUrl:!!LASTFEEDURL }; };
+window.__gptsDebug.expSetFetch=function(n,sy){ var sym=sy||(function(){ try{ return activeSym(); }catch(e){ return 'SPY'; } })();
+  EXPSET_FAIL[sym+'|'+n]=0; EXPSET_TRY[sym+'|'+n]=0; expSetFetch(sym, n||'dte0'); return 'fetching '+sym+' '+n; };
 
 function cpRows(sym){
   try{
@@ -13141,7 +13172,7 @@ function lvlUnified(sym){
   sym=sym||'SPY';
   try{
     var px=(STATE[sym]||{}).price; if(typeof px!=='number') return null;
-    var full=expSetLevels('full'), dte0=expSetLevels('dte0');
+    var full=expSetLevels(sym,'full'), dte0=expSetLevels(sym,'dte0');
     var passive=null; try{ passive=cpLevels(sym); }catch(e0){}
     if(passive && passive.err) passive=null;
     var out={ px:px, rows:[], src:null, note:null, ratio:null, nExps:null, n:null, ageMin:null };
@@ -13169,6 +13200,8 @@ function lvlUnified(sym){
       out.rows.push({ id:id, k:k, gex:(gex==null?null:gex), tag:tag||null,
                       dist:+(k-px).toFixed(2), distPct:+(((k-px)/px)*100).toFixed(2) });
     }
+    out.crSuppressed=P.crSuppressed||null; out.psSuppressed=P.psSuppressed||null;
+    out.callShare=(P.callShare==null?null:P.callShare); out.putShare=(P.putShare==null?null:P.putShare);
     add('CR',  P.cr,  P.crGex);
     add('HVL', P.hvl, null);
     add('Mag', mag,   null);
@@ -13227,6 +13260,14 @@ function levelsHtmlV2(sym){
            '<span style="color:'+PAL.sub+';font-size:9px;width:36px;text-align:right">'+((r.distPct>0?'+':'')+r.distPct+'%')+'</span>'+
            '</div>';
       });
+      if(U.crSuppressed || U.psSuppressed){
+        var sup=U.crSuppressed?'CR':'PS', shr=U.crSuppressed?U.callShare:U.putShare;
+        h+='<div title="No wall is named on this side because the side barely exists: '+(U.crSuppressed?'call':'put')+' gamma is '+shr+'% of the book. On expiry day almost all gamma is on one side, and the heaviest strike on the empty side is a rounding artefact rather than a level — the strike it would have named was '+((U.crSuppressed?U.crSuppressed.k:U.psSuppressed.k))+'. A third-party GEX page reports N/A in the same situation." '+
+           'style="display:flex;align-items:center;gap:6px;font-size:10px;line-height:1.45;white-space:nowrap">'+
+           '<span style="display:inline-block;min-width:30px;color:'+(U.crSuppressed?LVL_COL.cr:LVL_COL.ps)+';font-weight:800;opacity:.55">'+sup+'</span>'+
+           '<span style="color:'+PAL.sub+'">—</span>'+
+           '<span style="color:'+PAL.sub+';font-size:9px;overflow:hidden;text-overflow:ellipsis">'+(U.crSuppressed?'call':'put')+' side only '+shr+'% of book</span></div>';
+      }
       if(U.hvlMissing){
         h+='<div title="The HVL is the gamma flip — where cumulative gamma crosses zero and dealers stop dampening and start amplifying. It is absent because the cumulative never changes sign across the strikes we hold. That is a fact about the book, not a gap in the read." '+
            'style="display:flex;align-items:center;gap:6px;font-size:10px;line-height:1.45;white-space:nowrap">'+
@@ -13268,14 +13309,27 @@ function levelsChartV2(sym, U){
     cs.forEach(function(c){ var a=(c.l!=null?c.l:c.c), b=(c.h!=null?c.h:c.c);
       if(a!=null){ lo=(lo==null||a<lo)?a:lo; } if(b!=null){ hi=(hi==null||b>hi)?b:hi; } });
     if(px!=null){ lo=(lo==null||px<lo)?px:lo; hi=(hi==null||px>hi)?px:hi; }
-    U.rows.forEach(function(r){ lo=(lo==null||r.k<lo)?r.k:lo; hi=(hi==null||r.k>hi)?r.k:hi; });
+    // (v11.19) THE PRICE ACTION OWNS THE SCALE. Letting every level stretch the range is what flattened
+    // the live chart: a single wall 30 points above everything pulled the top out, and the price line plus
+    // every real level collapsed into the bottom fifth. The range grows for a level only up to a bounded
+    // multiple of the price range; anything beyond that is drawn as an edge marker instead, so it is still
+    // visible and still labelled, but it can never squash what actually matters.
+    var pxLo=lo, pxHi=hi;
+    if(pxLo==null||pxHi==null) return '';
+    var span=Math.max(pxHi-pxLo, (px!=null?px*0.0015:0.5));
+    var maxLo=pxLo-span*1.1, maxHi=pxHi+span*1.1;
+    var outside=[];
+    U.rows.forEach(function(r){
+      if(r.k<maxLo || r.k>maxHi){ outside.push({ id:r.id, k:r.k, above:(r.k>maxHi) }); return; }
+      lo=(lo==null||r.k<lo)?r.k:lo; hi=(hi==null||r.k>hi)?r.k:hi; });
     if(lo==null||hi==null||!(hi>lo)) return '';
-    var pad=(hi-lo)*0.07; lo-=pad; hi+=pad;
+    var pad=(hi-lo)*0.10; lo-=pad; hi+=pad;
     var W=320,H=132,R=2,T=8,B=6, placed=[];
     function y(v){ return T+(H-T-B)*(1-(v-lo)/(hi-lo)); }
     var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">';
     svg+='<rect width="'+W+'" height="'+H+'" fill="'+PAL.card+'"/>';
     U.rows.forEach(function(r){
+      if(r.k<lo || r.k>hi) return;                     // drawn as an edge marker below instead
       var base=r.id.split('·')[0].replace('0','').toLowerCase();
       var c=(r.id.indexOf('·')>0)?PAL.gold:(LVL_COL[base]||PAL.sub), z=!!r.tag, yy=y(r.k);
       svg+='<line x1="0" y1="'+yy.toFixed(1)+'" x2="'+(W-R)+'" y2="'+yy.toFixed(1)+'" stroke="'+c+'" stroke-width="'+(z?0.8:1.3)+'"'+(z?' stroke-dasharray="4,3"':'')+' opacity="'+(z?0.6:0.95)+'"/>';
@@ -13289,6 +13343,16 @@ function levelsChartV2(sym, U){
       var pts=[]; cs.forEach(function(c,i){ if(c.c!=null) pts.push(((W-R)*i/(cs.length-1)).toFixed(1)+','+y(c.c).toFixed(1)); });
       if(pts.length>1) svg+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="'+PAL.ink+'" stroke-width="1.2" opacity="0.95"/>';
     }
+    // edge markers for whatever sits outside the price-driven range
+    outside.forEach(function(o, oi){
+      var base=o.id.split('·')[0].replace('0','').toLowerCase();
+      var c=(o.id.indexOf('·')>0)?PAL.gold:(LVL_COL[base]||PAL.sub);
+      var yy=o.above?(T+3+oi*11):(H-B-3-oi*11);
+      var lbl=(o.above?'▲ ':'▼ ')+o.id+' '+lvlFmt(o.k);
+      var w=lbl.length*5.6+6;
+      svg+='<rect x="'+(W-R-w-2).toFixed(1)+'" y="'+(yy-6).toFixed(1)+'" width="'+w.toFixed(1)+'" height="11" rx="2" fill="'+PAL.card+'" opacity="0.9"/>';
+      svg+='<text x="'+(W-R-4).toFixed(1)+'" y="'+(yy+2.5).toFixed(1)+'" fill="'+c+'" font-size="8.5" font-weight="700" text-anchor="end" font-family="ui-monospace,monospace" opacity="0.85">'+lbl+'</text>';
+    });
     if(px!=null){ var yp=y(px).toFixed(1);
       svg+='<line x1="0" y1="'+yp+'" x2="'+(W-R)+'" y2="'+yp+'" stroke="'+PAL.time+'" stroke-width="0.5" stroke-dasharray="1,3" opacity="0.5"/>';
       svg+='<circle cx="'+(W-R-2)+'" cy="'+yp+'" r="1.8" fill="'+PAL.time+'"/>'; }

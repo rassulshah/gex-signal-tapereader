@@ -83,5 +83,5 @@ ok(/FLRCEIL_EDGE_PCT/.test(grab('nodeMapModel')) && /pickEdge/.test(grab('nodeMa
 ok(/isNext=true/.test(grab('nodeMapModel')) && /Mag \\u00b7 next/.test(grab('nodeRoleBadge')),'next-target class exists');
 ok(/Defl \\u00b7 '\+roleAb/.test(grab('deflectionBlock')),'defl card abbreviated name');
 // (v10.50) three version spots: @version header, part1 console.log, footer version marker.
-ok(/@version\s+11\.18/.test(src) && /v'\+GPTS_VERSION\+' part1 loaded/.test(src) && />v'\+GPTS_VERSION\+'<\/span>/.test(src),'version 10.56 in all three spots');
+ok(/@version\s+11\.19/.test(src) && /v'\+GPTS_VERSION\+' part1 loaded/.test(src) && />v'\+GPTS_VERSION\+'<\/span>/.test(src),'version 10.56 in all three spots');
 console.log('test_read_v1047: '+p+' passed, '+f+' failed'); process.exit(f?1:0);
