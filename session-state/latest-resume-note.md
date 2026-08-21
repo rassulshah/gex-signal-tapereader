@@ -1,3 +1,148 @@
+# RESUME NOTE — 2026-08-21 — v11.23 · THE VERIFIED LEVEL RULES · 0DTE + through-Friday · PATH read
+
+## ⚠ THE ONE THING TO READ FIRST: THE WALL RULES ARE VERIFIED, AND THE SIGN IS INVERTED
+
+On 2026-08-20 I extracted InsiderFinance's own **585-strike SPX table** (1W filter, spot 7642.21) and tested
+every candidate definition against the rows **they tag**. Not inferred from their prose — matched to output:
+
+| rule | strike | their tag |
+|---|---|---|
+| most **POSITIVE net GEX** above spot | 7775 | **CALL WALL** ✓ |
+| most **NEGATIVE net GEX** below spot | 7640 | **PUT WALL** ✓ |
+| largest **\|net GEX\|** anywhere | 7645 | **Peak GEX / Magnet** ✓ |
+| max CALL gamma above spot | 7650 | ✗ not their wall |
+| max call OPEN INTEREST above spot | 8800 | ✗ not their wall |
+
+**The walls run on SIGNED NET, which our feed has always carried.** The whole call/put decomposition arc
+(v11.15–v11.16) was aimed at the wrong target. Their own description credits open interest; the tagged row
+does not follow it. **The table is ground truth, the prose is not.**
+
+**⚠ OUR NET IS THE OPPOSITE SIGN FROM THEIRS.** Theirs is call−put (negative on a put-heavy strike: their
+7640 reads −14,600M). Ours is put−call (our 760 reads **+278M**). So every rule mirrors:
+* CR = most **negative** our-net above spot
+* PS = most **positive** our-net below spot
+Get this backwards and both walls swap sides **while still looking like plausible levels**. Nothing on the
+face would look wrong. `gexSanity()` exists mainly to catch this (`crAboveSpot` / `psBelowSpot`).
+
+Feed row shape: `{k, v, d, net}` where **v = TOTAL gamma ($), net = NET gamma ($)**. Verified live: of 60
+strikes, 49 had |net| < v, 11 had |net| == v, **zero** had |net| > v. So `call=(v−net)/2`, `put=(v+net)/2`
+— note that is put=(v+net), the sign correction from v11.17; the other way round gives put wall 756 and a
+call-heavy book, and 760 is the right answer.
+
+## THE TWO WINDOWS (user's decision, 2026-08-21)
+
+* **`dte0`** — today only. `exp_mode=current&exp_count=1`
+* **`week`** — every expiry **through this Friday**. `exp_mode=week&exp_count=1` (Skylit's own tooltip:
+  "every expiration through this week's Friday"). **Verified live: returned Aug 20 + Aug 21 on a Thursday.**
+* **`wk7`** — rolling 7 days, `next_n&6`, fetched every 5 min and **NEVER displayed**. It is the CONTROL
+  that will eventually say which window price actually respected. Forward-only data.
+
+**Ours ≠ their "Next week".** Theirs is the **1W preset = a ROLLING 7 DAYS** (their expiry list checked
+0DTE + 1/4/5/6/7DTE and excluded 8DTE; the button's accessible label is literally "Next week"). Ours shrinks
+as the week runs down. **A mid-week CR difference is a definition difference, not an error**, and
+`gexSanity` deliberately does not flag it. The **PUT WALL is the one that must match** — it held at 7640
+across every one of their expiry filters, so a gap there has no window excuse and IS enforced.
+
+**Friday degeneracy is unresolved.** "Through this Friday" on a Friday = today = 0DTE, so CR would equal
+CR0. Agreed plan: roll to next week once this week is exhausted. **NOT YET BUILT — verify what
+`exp_mode=week` actually returns on a Friday before coding the fallback.**
+
+## WHAT THIS BUILD SHIPS
+
+* `gexLevels(rows, px)` — the verified rules, plus a **LEAN test**: a wall is refused if the best candidate
+  on that side does not actually lean that way (crN>=0 in our sign). That is what killed the phantom
+  `CR0 792` on an expiry-day book with a 0.2% call share.
+* `gexPath(sym)` + **PATH line under Next Stop** — the user's core ask, *"I need to know where price is
+  going"*. Mag = destination, PS/CR = the two reversal edges, cage bar = room remaining. Flags when the
+  recent tape **disagrees** with the pull, and when the magnet lies **BEYOND** the near wall (floor to lean
+  on vs magnet pulling through it). Descriptive, non-voting.
+* **Feature `gex.path`** enrolled, 6 falsifiable questions incl. `path_pinned_stays` (a pinned read is
+  scored on price STAYING put, so it cannot win by calling everything pinned) and `path_roll_age` (the
+  control for the migration claim). **Wall migration recorded per bar** — crRolled/psRolled, from-strike,
+  delta, how long the old one stood. rules.json now **61 ids**.
+* `gexSanity()` — internal checks: walls straddle spot, levels inside the strike range read, no duplicate
+  strikes, nothing >10% from price, set fresh, magnet present. **Every one fired at least once in dev.**
+* Roster accounting — no level ever vanishes silently. `CR0 none today` vs `same as CR` vs `0DTE set not
+  loaded` are three distinct statements. Merged labels lead with the **wall** (`PS·Mag`, not `Mag·PS`).
+* Chart: labels centred ON the line, staggered when levels coincide, far levels as **edge markers** so one
+  distant wall can never flatten the price action.
+
+## VERIFIED LIVE ON 2026-08-21 (v11.21/11.22)
+
+`sanity failed:0` · week = **2 exps (Aug 20, Aug 21)** ✓ · wk7 = 7 exps ✓ · dte0 = 1 exp ✓ · all fetching,
+0 failures · PATH read `↓ toward 7639.5, tape agrees, PS 7639.5, cage 51%` · rows `CR 765 · PS0 762 ·
+Mag·PS 760` · **PS 760 = their published put wall exactly** · week ratio 0.52 vs their all-exp SPY 0.55.
+
+## THE ONE OPEN DISCREPANCY
+
+On the **rolling-7 control** — a like-for-like window — we read **CR 765** where they read **775**, and our
+ratio was **0.70** against their **0.36**. Suspected cause: coverage. `nodes=250` returned only **212**
+strikes against the **590** their 1W view shows, and a ranked top-N drops the many small tail strikes,
+which are disproportionately puts — biasing the book less put-heavy and moving where the most call-dominant
+strike lands. **v11.23 raises `nodes` to 500. VERIFY: if `expSets().wk7[0]` (n) is still ~212, the cap is
+the server's and coverage is NOT the explanation — which is worth knowing either way.**
+
+## HARD CONSTRAINTS (do not rediscover these)
+
+* **`@grant none` IS LOAD-BEARING.** The feed hooks patch `window.fetch`/`XMLHttpRequest` in PAGE context.
+  Any `@grant` sandboxes the script and **the tape goes dark**.
+* **InsiderFinance cannot be fetched from the panel.** No CORS header — verified live in the console:
+  `fetch('https://www.insiderfinance.io/...')` → **"BLOCKED Failed to fetch"**. So no automated periodic
+  cross-check is possible in-panel. Hand entry via the **IF** button; `gexSanity` reports the deltas.
+* **No Skylit UI setting widens the feed we read.** Tested live: the overlay EXPIRATIONS dropdown
+  (Front→Week) moved only the `combined`/`p20` requests; the Heatmap **Wide** preset (500 strikes, 50
+  expirations) moved nothing. Our `data_type=gamma` request stayed `nodes=60 & next_n & 4` throughout. That
+  is why the expiry sets must be **self-fetched**.
+* **The Heatmap `READ AS: Value` toggle DESTROYS the ladder reader.** Tested live and reverted: SPY King
+  jumped 760 → 812, `$278,444K` became `15`, every strike read ±100 across all four panes. Making it usable
+  is parser work, not a setting.
+* **The levels are immune to Skylit UI changes** — they come from the network payload, not the DOM, unlike
+  the ladder scraper that has broken repeatedly.
+* **The installer MUST commit and push** (`tools/install-template.md`). Several v11.9–v11.15 installers
+  shipped without it; files landed locally, GitHub stayed on v11.8, and Tampermonkey said "Reinstall"
+  instead of "Update" — which reads like a corrupt file and cost a round trip. `tools/push-data.bat` does
+  NOT cover this: it runs `git add data` only.
+* **Test harness**: suites read `./v10.js`, not `current/…`. **Always `cp current/… v10.js` first.**
+
+## NOT COMPUTABLE FROM THIS FEED
+
+* **Max Pain** — needs per-strike call/put **open interest**. Our rows carry none. (Their value: 7350, ~290
+  points below spot — an expiration-pin concept, low intraday value anyway.)
+* **Put/call ratio from OI** — same reason. The *gamma* ratio we do compute (their "Ratio" field).
+* **HVL / Zero Gamma — ruled out empirically, not guessed.** On their own table, cumulating net across
+  strikes from the bottom crosses zero **once, at 2200**; from the top it gives 7682.86 vs their 7674.06.
+  Theirs re-prices exposure at hypothetical spot levels, needing greeks we do not receive. Ours is an
+  approximation at best and is withheld beyond `HVL_MAX_DIST` (3% from spot).
+* **1D Max/Min** (expected move) — needs implied vol. **Blind Spots** — cross-asset.
+
+## STILL OPEN
+
+* **Friday roll-forward** for the week window (above) — before next Friday.
+* **`pickEdge` has the same mixed-scale defect `deriveFactors` had** — it chooses ★SUP/★RES on %King across
+  native + SPXW-derived lanes. Offered three times, never answered. Highest-value remaining fix.
+* **Weekly review file naming** — the Saturday run must write `review_<FRIDAY-date>.json`; the panel looks
+  reviews up by trading day. Scheduled-task prompt change (trigger `trig_01T8kd4kS3nBR7TuQMSSXNX6`), no
+  code. **Overdue.**
+* **Ledger fix, widened** — `infl` counters not per node; add `age`/`pol`/`rolled` to touch records; four
+  scenario questions; decide whether a touch on a 'gone' node counts. Forward-only.
+* **`leg.pbPredict` outcome is trivially true.** **SIDE hit-rule question.**
+* **Skylit OI endpoint** — does `data_type` accept an `oi` variant? Would unlock Max Pain and the true
+  put/call ratio. Ten-minute check.
+* **Skylit API history** — 30 days SPY/QQQ/SPX(W), RTH, 3m ≈ 19,500 credits. Key not released as of 08-18.
+* **CCAR-F track** (`ccarp/PLAN.md`) — STEP 1 baseline test not taken.
+
+## STANDING RULES
+
+**ASK BEFORE CODE** (user, 2026-08-21: *"next time ask before giving me code because i may have more
+requests"*) — bring the plan first and wait. Exception agreed: an unambiguous bug report gets fixed without
+a round trip. · Mockup first · descriptive-only, never an instruction · **git = truth (Drive is a STALE
+MIRROR)** · every feature auto-enrolls into DATA/ANALYSIS/TESTING · no % without n · promotion bar = eff
+n ≥ 20 AND 3 walk-forward sessions AND no regime flip, re-checked by `applyProposals()` — the LLM proposes,
+the panel decides · **ALWAYS SEND THE TAMPERMONKEY URL** (dropped on six consecutive builds this session):
+`https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js`
+
+---
+
 # RESUME NOTE — 2026-08-20 — v11.8 THE LEVEL SET built (CR0/CR · PS0/PS · HVL · Mag + chart) + v11.7 re-applied · ⚠️ NEITHER IS PUSHED
 
 ## ⚠️ READ THIS FIRST — THE REPO IS BEHIND THE BUILDS

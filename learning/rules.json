@@ -1,7 +1,7 @@
 {
  "schema": "gex-rules/v2",
  "asOf": "2026-08-20",
- "version": "11.21",
+ "version": "11.23",
  "note": "THE MENTAL MODEL IN DATA FORM, MACHINE-APPLICABLE. weights.dir are the LIVE direction-scoring constants the panel reads at boot. The WEEKLY learning run writes rules/proposals/challengers/killList and NEVER touches weights; only the panel applyProposals() moves a weight, and only after RE-CHECKING the promotion bar in code (n>=20 AND walkForward.held over >=3 NEW sessions AND no regime flip). clearsBar asserted by the reviewer is advisory. The NIGHTLY run writes learning/log/YYYY-MM-DD.json only. Sparse data never nudges a weight: it is reported as insufficient and the hand-set value stands.",
  "unlockN": 20,
  "walkForwardSessions": 3,

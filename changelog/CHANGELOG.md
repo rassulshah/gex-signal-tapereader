@@ -1,3 +1,48 @@
+## v11.23 — 2026-08-21 — Node coverage: 250 → 500
+
+The last open discrepancy from the live check. On the **rolling-7 control** — a like-for-like window against
+theirs — we read **CR 765** where they read **775**, and our call/put ratio was **0.70** against their
+**0.36**. Same window, so the definition difference that explains a mid-week CR gap does not apply here.
+
+Suspected cause is coverage, and the two symptoms point the same way: `nodes=250` returned only **212**
+strikes against the **590** their 1W view reports. A ranked top-N drops the many small strikes in the
+tails, which are disproportionately puts — so the book reads less put-heavy than it is, and that bias moves
+where the most call-dominant strike lands.
+
+Raised to `nodes=500` across all three sets. **This is a test, not a fix:** `__gptsDebug.expSets()` reports
+`n` per set. If 500 still returns ~212, the cap is the server's, coverage is NOT the explanation, and the
+remaining gap is in the selection — which is worth knowing either way.
+
+No new suite failures.
+
+## v11.22 — 2026-08-21 — Nothing goes missing silently
+
+User, off the live v11.21 card: *"i dont see CR0 and PS"*. Two different faults behind one complaint.
+
+**PS was there — buried.** The magnet and the put wall were on the same strike, so the row merged them,
+and the label read `Mag·PS`. The label a trader scans for was second and easy to miss. Merged labels now
+lead with the **wall** — `PS·Mag` — because the walls are the trade-location levels and the magnet is the
+destination.
+
+**CR0 was legitimately absent, and the card said nothing.** The 0DTE book had no call-dominant strike above
+spot at all (call/put ratio 0.00), which is the correct answer and matches the N/A a published GEX page
+shows on the same book. But the row was simply omitted, so it read as broken rather than as a finding.
+
+Every level on the roster is now **accounted for**. A level with no value gets a line naming it and the
+reason, and the reasons are distinguished rather than lumped together:
+
+| shown as | means |
+|---|---|
+| `CR0 none today — 0DTE book is all put` | there is genuinely no call wall in today's expiry |
+| `CR0 same as CR` | it landed on the identical strike |
+| `CR0 0DTE set not loaded` | the fetch has not landed yet — a different thing entirely |
+
+And when a 0DTE wall coincides with the weekly one, the strike carries **both labels** (`CR·CR0`) rather
+than either being dropped: one row, one price, two facts. That is strictly better than the old behaviour,
+which silently hid the second.
+
+`test_levels_unified.js` 98. No new suite failures.
+
 ## v11.21 — 2026-08-21 — The verified level rules, two day-trading windows, and a directional read
 
 The build the user asked for: 0DTE and through-Friday, correct levels, a sanity check, a readable chart,

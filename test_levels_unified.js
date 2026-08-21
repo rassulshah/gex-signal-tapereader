@@ -266,5 +266,46 @@ global.STATE={SPY:{price:762.57, king:760}};
   ok(U2.src==='week','the weekly set takes precedence as soon as it exists',U2.src);
   ok(U2.rows.some(r=>r.id.indexOf('CR0')>=0),'and the 0DTE walls come back as their own rows',U2.rows.map(r=>r.id));
 }
+// ---------- (v11.22) NOTHING GOES MISSING SILENTLY ----------
+// Live report: "i dont see CR0 and PS". PS was present but buried inside a "Mag·PS" label with the magnet
+// first; CR0 was legitimately absent (0DTE book had no call-dominant strike above spot) but the row was
+// simply omitted, so it read as broken rather than as a finding.
+{
+  FULL={ cr:765, crGex:1, ps:760, psGex:2, hvl:null, mag:760, n:208, nExps:2, ratio:0.52 };
+  DTE0={ cr:null, crSuppressed:{k:792,share:0.2}, ps:762, psGex:1, n:169, nExps:1, ratio:0 };
+  PASSIVE=null;
+  const U=lvlUnified('SPY');
+  const merged=U.rows.filter(r=>r.k===760)[0];
+  ok(merged.id==='PS·Mag','the WALL is named first — "PS·Mag", not "Mag·PS"',merged.id);
+  ok(U.rows.some(r=>r.id==='PS0' && r.k===762),'PS0 keeps its own row when it differs',U.rows.map(r=>r.id));
+  ok(Array.isArray(U.absent),'an absent roster exists');
+  ok(U.absent.some(a=>a.id==='CR0'),'CR0 is ACCOUNTED FOR rather than omitted',U.absent);
+  ok(/all put/.test(U.absent.filter(a=>a.id==='CR0')[0].why),'with the reason it is missing',U.absent);
+  ok(!U.absent.some(a=>a.id==='PS'),'PS is NOT listed absent — it is present inside the merged row',U.absent);
+  ok(!U.absent.some(a=>a.id==='CR'),'nor CR');
+  ok(!U.absent.some(a=>a.id==='Mag'),'nor Mag');
+  const h=levelsHtmlV2('SPY');
+  ok(h.indexOf('PS·Mag')>0,'the merged label reaches the card wall-first',h.indexOf('·'));
+  ok(h.indexOf('all put')>0,'and the absent CR0 is explained on the face');
+}
+{
+  // when the 0DTE wall lands on the SAME strike as the weekly one, say so rather than printing it twice
+  FULL={ cr:765, crGex:1, ps:760, psGex:1, hvl:766, mag:758, n:208, nExps:2 };
+  DTE0={ cr:765, crGex:1, ps:760, psGex:1, n:169, nExps:1 };
+  const U=lvlUnified('SPY');
+  // Better than omitting it: the strike carries BOTH labels, so the user can see the 0DTE wall agreed
+  // with the weekly one rather than wondering where CR0 went. One row, one price, two facts.
+  ok(U.rows.some(r=>r.id==='CR·CR0'),'a coinciding 0DTE wall is shown IN the label, not dropped',U.rows.map(r=>r.id));
+  ok(U.rows.some(r=>r.id==='PS·PS0'),'same on the put side',U.rows.map(r=>r.id));
+  ok(U.rows.filter(r=>r.id.indexOf('CR')>=0).length===1,'and it is still ONE row, not two at the same price');
+  ok(!U.absent.some(a=>a.id==='CR0'),'so CR0 is not listed absent — it is visible',U.absent);
+}
+{
+  // and when the 0DTE set has not loaded at all, that is a different reason and must not be conflated
+  FULL={ cr:765, crGex:1, ps:760, psGex:1, hvl:766, mag:758, n:208, nExps:2 };
+  DTE0=null;
+  const U=lvlUnified('SPY');
+  ok(U.absent.some(a=>a.id==='CR0' && /not loaded/.test(a.why)),'"not loaded" is distinguished from "none today"',U.absent);
+}
 console.log('\n'+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

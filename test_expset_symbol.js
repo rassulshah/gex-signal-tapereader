@@ -47,16 +47,16 @@ global.STATE={ SPY:{price:762.5}, QQQ:{price:707.5} };
   global.LASTAUTH='Bearer t';
   global.EXPSET_MIN_MS=0; global.EXPSET_TRY={}; global.EXPSET_FAIL={};
   global.EXPSET_SLOW={wk7:1}; global.EXPSET_SLOW_MS=300000;
-  global.EXPSET_SPEC={ dte0:{exp_mode:'current', exp_count:'1', nodes:'250'},
-                       week:{exp_mode:'week',    exp_count:'1', nodes:'250'},
-                       wk7: {exp_mode:'next_n',  exp_count:'6', nodes:'250'} };
+  global.EXPSET_SPEC={ dte0:{exp_mode:'current', exp_count:'1', nodes:'500'},
+                       week:{exp_mode:'week',    exp_count:'1', nodes:'500'},
+                       wk7: {exp_mode:'next_n',  exp_count:'6', nodes:'500'} };
   global.fetch=(u)=>{ calls.push(u); return { then(){ return { catch(){} }; } }; };
   expSetFetch('QQQ','dte0');
   ok(calls.length===1,'a request went out',calls.length);
   ok(/symbol=QQQ/.test(calls[0]),'for QQQ — not the hardcoded SPY of v11.17',calls[0]);
   ok(/data_type=gamma/.test(calls[0]),'always gamma, whatever the template carried');
   ok(/exp_mode=current/.test(calls[0]) && /exp_count=1/.test(calls[0]),'with the 0DTE parameters');
-  ok(/nodes=250/.test(calls[0]),'and a widened node count');
+  ok(/nodes=500/.test(calls[0]),'and a widened node count — 250 returned only 212 of ~590 strikes');
   expSetFetch('SPY','week');
   ok(/symbol=SPY/.test(calls[1]) && /exp_mode=week/.test(calls[1]),'and the SPY weekly request is separate',calls[1]);
   // throttling and back-off must be per symbol+set, or one symbol starves the other

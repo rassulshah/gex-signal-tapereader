@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.21
+// @version    11.23
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -540,7 +540,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.21';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.23';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -12918,10 +12918,16 @@ var EXPSET_TRY={}, EXPSET_FAIL={};
 // difference, not an error, and the sanity check must not flag it as one.
 // `wk7` is the rolling-7 window, fetched slowly and NEVER displayed: it is the control that lets the
 // scorecard eventually say which window price actually respected. Forward-only data, so it starts now.
+// (v11.23) nodes=500, up from 250. At 250 the server returned 212 strikes while a published view of the
+// same chain showed 590 — and the shortfall was not neutral: our call/put ratio read 0.70 against their
+// 0.36 on the SAME rolling-7 window, i.e. our book looked far less put-heavy than it is. A ranked top-N
+// drops the many small strikes in the tails, which are disproportionately puts, and that bias moves where
+// the most call-dominant strike lands. `__gptsDebug.expSets()` reports `n` per set: if 500 still returns
+// ~212 the cap is the server's and the remaining gap is NOT coverage — which is worth knowing either way.
 var EXPSET_SPEC={
-  dte0:{ exp_mode:'current', exp_count:'1', nodes:'250' },
-  week:{ exp_mode:'week',    exp_count:'1', nodes:'250' },
-  wk7: { exp_mode:'next_n',  exp_count:'6', nodes:'250' }
+  dte0:{ exp_mode:'current', exp_count:'1', nodes:'500' },
+  week:{ exp_mode:'week',    exp_count:'1', nodes:'500' },
+  wk7: { exp_mode:'next_n',  exp_count:'6', nodes:'500' }
 };
 var EXPSET_SLOW={ wk7:1 };           // control set: one request per 5 minutes, never on the face
 var EXPSET_SLOW_MS=300000;
@@ -13335,7 +13341,15 @@ function lvlUnified(sym){
       if(k==null) return;
       for(var i=0;i<out.rows.length;i++){
         if(Math.abs(out.rows[i].k-k)<0.005){
-          if(out.rows[i].id.indexOf(id)<0) out.rows[i].id += '·'+id;
+          if(out.rows[i].id.indexOf(id)<0){
+            // (v11.22) THE WALL LEADS. "Mag·PS" read as "PS is missing" on the live card — the label a
+            // trader is looking for was second and easy to miss. Walls are the trade-location levels;
+            // the magnet is the destination. Order them that way.
+            var ids=out.rows[i].id.split('·'); ids.push(id);
+            var rank={CR:0, CR0:1, PS:0, PS0:1, HVL:2, Mag:3};
+            ids.sort(function(a,b){ return (rank[a]==null?9:rank[a])-(rank[b]==null?9:rank[b]); });
+            out.rows[i].id=ids.join('·');
+          }
           if(out.rows[i].gex==null && gex!=null) out.rows[i].gex=gex;
           return;
         }
@@ -13357,6 +13371,18 @@ function lvlUnified(sym){
       out.dte0Exps=dte0.nExps; out.dte0N=dte0.n;
     }
     out.rows.sort(function(a,b){ return b.k-a.k; });
+    // (v11.22) NOTHING GOES MISSING SILENTLY. The user asked to see CR0/CR/PS/PS0/HVL/Mag; when one has no
+    // value the card must SAY so with the reason, not just leave a gap. An absent level is a finding — a
+    // 0DTE book with no call-dominant strike above spot is exactly what a third-party page shows as N/A.
+    var shown={};
+    out.rows.forEach(function(r){ r.id.split('·').forEach(function(id){ shown[id]=1; }); });
+    out.absent=[];
+    function miss(id, why){ if(!shown[id]) out.absent.push({ id:id, why:why }); }
+    miss('CR',  P.crSuppressed?'no call-dominant strike above spot':'not read');
+    miss('PS',  P.psSuppressed?'no put-dominant strike below spot':'not read');
+    miss('CR0', dte0?(dte0.crSuppressed?'none today — 0DTE book is all put':'same as CR'):'0DTE set not loaded');
+    miss('PS0', dte0?(dte0.psSuppressed?'none today — 0DTE book is all call':'same as PS'):'0DTE set not loaded');
+    miss('Mag', 'no dominant strike');
     out.hvlMissing = (P.hvl==null);
     out.hvlFar = P.hvlFar||null;
     out.regime = (P.hvl!=null) ? ((px>=P.hvl)?'posGamma':'negGamma') : null;
@@ -13556,6 +13582,14 @@ function levelsHtmlV2(sym){
            '<span style="color:'+PAL.sub+';font-size:9px;width:36px;text-align:right">'+((r.distPct>0?'+':'')+r.distPct+'%')+'</span>'+
            '</div>';
       });
+      if(U.absent && U.absent.length){
+        h+='<div title="Every level on the roster is accounted for. A level with no value is a FINDING, not a gap: a 0DTE book with no call-dominant strike above spot has no call wall, and a published GEX page reports N/A in exactly that case. \'same as CR\' means the 0DTE wall landed on the identical strike, so it is not printed twice." '+
+           'style="display:flex;align-items:center;gap:5px;font-size:9px;line-height:1.5;color:'+PAL.sub+';white-space:nowrap;overflow:hidden">'+
+           '<span style="font-weight:800">—</span>'+
+           '<span style="overflow:hidden;text-overflow:ellipsis">'+
+           U.absent.map(function(a){ return '<span style="color:'+(LVL_COL[a.id.replace('0','').toLowerCase()]||PAL.sub)+';font-weight:700">'+a.id+'</span> '+a.why; }).join(' · ')+
+           '</span></div>';
+      }
       if(U.crSuppressed || U.psSuppressed){
         var sup=U.crSuppressed?'CR':'PS', shr=U.crSuppressed?U.callShare:U.putShare;
         h+='<div title="No wall is named on this side because the side barely exists: '+(U.crSuppressed?'call':'put')+' gamma is '+shr+'% of the book. On expiry day almost all gamma is on one side, and the heaviest strike on the empty side is a rounding artefact rather than a level — the strike it would have named was '+((U.crSuppressed?U.crSuppressed.k:U.psSuppressed.k))+'. A third-party GEX page reports N/A in the same situation." '+
