@@ -18,7 +18,8 @@ function feed(rows){ global.LASTFEED={ SPY:{ j:{ levels:[{t:1,l:[]},{t:2,l:rows}
 // ---------- the DECOMPOSABLE case ----------
 {
   // strike: call and put both present -> v = call + put, net = call - put
-  const mk=(k,call,put)=>({k:k, v:call+put, net:call-put, d:(call>=put?1:-1)});
+  // net is POSITIVE on a put-dominated strike, so net = put - call (v11.17 sign correction)
+  const mk=(k,call,put)=>({k:k, v:call+put, net:put-call, d:(call>=put?1:-1)});
   feed([ mk(760, 100, 900), mk(765, 200, 1800), mk(770, 900, 300), mk(775, 1500, 200) ]);
   global.STATE={SPY:{price:767}};
   const p=callPutProbe('SPY');
@@ -55,7 +56,7 @@ function feed(rows){ global.LASTFEED={ SPY:{ j:{ levels:[{t:1,l:[]},{t:2,l:rows}
 }
 // ---------- mixed: some strikes carry no net at all ----------
 {
-  const mk=(k,call,put)=>({k:k, v:call+put, net:call-put, d:1});
+  const mk=(k,call,put)=>({k:k, v:call+put, net:put-call, d:1});
   feed([ mk(760,100,900), {k:765,v:2000,d:-1}, mk(770,900,300), mk(775,1500,200), mk(780,50,10) ]);
   global.STATE={SPY:{price:767}};
   const p=callPutProbe('SPY');
@@ -69,7 +70,7 @@ function feed(rows){ global.LASTFEED={ SPY:{ j:{ levels:[{t:1,l:[]},{t:2,l:rows}
   ok(/no feed/.test(callPutProbe('SPY').err||''),'no feed says so');
   feed([]);
   ok(/no strike rows/.test(callPutProbe('SPY').err||''),'an empty snapshot says so');
-  const mk=(k,call,put)=>({k:k, v:call+put, net:call-put, d:1});
+  const mk=(k,call,put)=>({k:k, v:call+put, net:put-call, d:1});
   feed([mk(760,100,900),mk(770,900,300),mk(775,1500,200),mk(780,50,10)]);
   global.STATE={SPY:{price:null}};
   const p=callPutProbe('SPY');
@@ -105,19 +106,24 @@ function feed(rows){ global.LASTFEED={ SPY:{ j:{ levels:[{t:1,l:[]},{t:2,l:rows}
   ok(D.lt===4,'the rest are genuinely mixed',D.lt);
   ok(D.exps.length===2,'the expirations list rides along',D.exps);
   ok(D.step===1,'as does the strike interval',D.step);
+  // (v11.17) net is POSITIVE on a put-dominated strike, so put=(v+net)/2. 765 has net = -v exactly,
+  // which under the CORRECT convention makes it entirely CALL, not entirely put.
   const r765=D.rows.filter(r=>r.k===765)[0];
-  ok(Math.round(r765.call)===0,'an all-put strike decomposes to zero call',r765.call);
-  ok(Math.round(r765.put)===174886548,'and its full magnitude as put',Math.round(r765.put));
+  ok(Math.round(r765.put)===0,'a strike with net = -v decomposes to zero PUT',r765.put);
+  ok(Math.round(r765.call)===174886548,'and its full magnitude as call',Math.round(r765.call));
   const r766=D.rows.filter(r=>r.k===766)[0];
-  ok(Math.round(r766.call/1e6)===5,'a mixed strike splits: 766 is ~5M call',Math.round(r766.call/1e6));
-  ok(Math.round(r766.put/1e6)===57,'...and ~57M put',Math.round(r766.put/1e6));
+  ok(Math.round(r766.put/1e6)===5,'a mixed strike splits: 766 is ~5M put',Math.round(r766.put/1e6));
+  ok(Math.round(r766.call/1e6)===57,'...and ~57M call',Math.round(r766.call/1e6));
   ok(Math.abs((r766.call+r766.put)-r766.v)<1,'call + put reconstructs the total exactly',[r766.call+r766.put,r766.v]);
-  ok(Math.abs((r766.call-r766.put)-r766.net)<1,'and call - put reconstructs the net',[r766.call-r766.put,r766.net]);
+  ok(Math.abs((r766.put-r766.call)-r766.net)<1,'and put - call reconstructs the net',[r766.put-r766.call,r766.net]);
 
   const L=cpLevels('SPY');
-  ok(L.callWall===766,'the CALL WALL is the biggest CALL strike above spot — 766, not 765',L.callWall);
-  ok(L.callWall!==765,'765 carries 175M of gamma but ZERO call, so it can never be the call wall',L.callWall);
-  ok(L.putWall===760||L.putWall===756,'the put wall is chosen on PUT gamma below spot',L.putWall);
+  // THE CROSS-CHECK THAT PROVES THE SIGN. On the live book this convention puts the put wall on 760 —
+  // exactly the number their SPY page reports, in BOTH its 0DTE and next-week views. The other sign gave
+  // 756 and a call-heavy book (ratio 1.44) against their put-heavy 0.02 / 0.36. That is how it was caught.
+  ok(L.putWall===760,'the PUT WALL lands on 760 — their published number',L.putWall);
+  ok(L.callWall===765,'the call wall is the heaviest CALL strike above spot',L.callWall);
+  ok(L.ratio<1,'and the book reads put-heavy, the same direction their header reports',L.ratio);
   ok(L.n===5 && L.kMin===756 && L.kMax===766,'range and count are reported',[L.n,L.kMin,L.kMax]);
   ok(L.subset===true,'and the read is FLAGGED as a subset — the app requests top-N nodes, not the chain',L.subset);
   ok(L.ratio!=null,'a call/put ratio is emitted as the cross-check against a full-chain page',L.ratio);

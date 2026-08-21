@@ -1,3 +1,48 @@
+## v11.17 — 2026-08-20 — One block, one scale, correct signs, real expiry sets
+
+Three things the user asked for, plus a sign error of mine that made the call/put work wrong in a way that
+mattered.
+
+**1. THE SIGN WAS BACKWARDS.** v11.16 used `call = (v+net)/2`. It is the opposite: **`put = (v+net)/2`,
+`call = (v-net)/2`**. Skylit's `net` is POSITIVE on a put-dominated strike. Tested against their published
+SPY page:
+
+| | v11.16 | corrected | their page |
+|---|---|---|---|
+| Put wall | 756 ✗ | **760** ✓ | **760** (0DTE *and* next-week) |
+| Book | call-heavy, 1.44 ✗ | put-heavy, 0.70 ✓ | put-heavy, 0.02 / 0.36 |
+
+Corrected, our put wall lands exactly on theirs. That cross-check is now asserted in `test_call_put.js`.
+
+**2. THE DERIVED LANE IS ALREADY ON THIS CHART'S SCALE.** Skylit converts it for us: on the SPY feed the
+SPXW lane's strikes read 686–808 (SPY dollars), and on the ES1 feed the SPY-derived lane reads 4422–8041
+(ES points). v11.14 treated `k` as the raw source strike and divided spot by the ratio — which is exactly
+how "Mag 762 / PS 762 / HVL 750" with −6879 distances ended up under an SPX heading. `spxwLane` and
+`spxLevels` are **deleted**, not patched: their premise was wrong and the unified block replaces them.
+
+**3. ONE BLOCK, ONE SCALE.** `levelsHtmlV2` replaces three stacked blocks with one. Values are on the
+chart's instrument only — no `SPY 765` tail on an ES chart. A level prints **once**: de-duplicated by
+value, so a 0DTE wall identical to the structural one adds no row, and CR0/PS0 appear only when they
+genuinely differ. Source precedence: self-fetched full chain → self-fetched 0DTE → passive feed → ladder,
+and the card states which one answered.
+
+**4. EXPIRY SETS BY SELF-FETCH — because no Skylit setting will do it.** Tested live: switching the overlay
+EXPIRATIONS dropdown Front→Week moved only the `combined`/`p20` requests; switching the Heatmap preset
+Normal→Wide (500 strikes, 50 expirations) moved nothing at all. The request we consume stayed
+`nodes=60 & exp_mode=next_n & exp_count=4` throughout — it is hardcoded by whichever component feeds
+Trinity. So `expSetFetch()` replays LASTFEEDURL with `exp_mode`/`exp_count`/`nodes` overridden, using the
+Authorization header the panel has captured since v10.48. Results live in their **own cache** — `LASTFEED`
+is never touched, so the tape is completely undisturbed. Backs off after three refusals; 401 is ignored
+because the app re-captures the token shortly.
+
+**Also tested and REJECTED: the Heatmap's `READ AS: Value` toggle.** It looked like a free fix for the
+dollars-vs-%King problem. It destroys the ladder reader: SPY King jumped 760 → 812, `$278,444K` became
+`15`, and every strike read ±100 across all four panes. Reverted immediately. Making that toggle usable is
+parser work, not a setting.
+
+New `test_levels_unified.js` (39). `test_spx_levels.js` deleted with the code it covered. No new suite
+failures.
+
 ## v11.16 — 2026-08-20 — THE CALL WALL IS COMPUTABLE. I was wrong.
 
 The user asked me to double-check the claim that we cannot compute a call wall. I checked against the live

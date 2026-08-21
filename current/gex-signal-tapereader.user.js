@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.16
+// @version    11.17
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -467,7 +467,10 @@ function callPutProbe(sym){
       var v=Math.abs(n.v), nt=n.net, an=Math.abs(nt);
       var tol=Math.max(1e-6, v*1e-6);
       if(an < v-tol) lt++; else if(an <= v+tol) eq++; else gt++;
-      rows.push({ k:n.k, v:v, net:nt, call:+(((v+nt)/2)).toFixed(2), put:+(((v-nt)/2)).toFixed(2) });
+      // (v11.17) same sign correction as cpRows: put=(v+net)/2. Skylit's net is POSITIVE on a
+      // put-dominated strike. Verified against a published SPY page — this convention puts the put wall
+      // on 760, exactly their number; the other one produced 756 and a call-heavy book that was not real.
+      rows.push({ k:n.k, v:v, net:nt, call:+(((v-nt)/2)).toFixed(2), put:+(((v+nt)/2)).toFixed(2) });
     }
     var n=rows.length;
     var decomposable = (n>0 && lt >= Math.max(3, Math.round(n*0.2)) && gt===0);
@@ -537,7 +540,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.16';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.17';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -12810,6 +12813,104 @@ function ifManSave(o){ IFMAN=o; try{ localStorage.setItem(IFMAN_LS, JSON.stringi
 // chain, not the whole book. Walls found inside it are real, but the TOTALS are totals of a subset and will
 // not equal a full-chain page's Call GEX / Put GEX. The ratio is reported precisely so that discrepancy is
 // visible rather than assumed away.
+// ============ (v11.17) EXPIRY SETS BY SELF-FETCH — the real CR0 vs CR ============
+// Tested live 2026-08-20: NO Skylit UI setting widens the feed we consume. Switching the overlay
+// EXPIRATIONS dropdown Front->Week moved only the `combined`/`p20` requests; switching the Heatmap preset
+// Normal->Wide (500 strikes, 50 expirations) moved nothing at all. The request the panel reads stayed
+// `nodes=60 & exp_mode=next_n & exp_count=4` throughout. It is fixed by whichever component feeds Trinity.
+//
+// So the only route to a genuine 0DTE-vs-full-chain split is to ask for it ourselves. selfFetch() has
+// replayed LASTFEEDURL with the captured Authorization header since v10.48; this does the same with the
+// expiry and node parameters overridden, and keeps the result in its OWN cache — it never touches
+// LASTFEED, so the tape the rest of the panel reads is completely undisturbed by anything here.
+var EXPSET_MIN_MS=90000;             // one request per set per 90s; these levels move slowly
+var EXPSET={ dte0:null, full:null }; // {j, ts, exps, n, params}
+var EXPSET_TRY={}, EXPSET_FAIL={};
+var EXPSET_SPEC={
+  dte0:{ exp_mode:'current', exp_count:'1',  nodes:'250' },
+  full:{ exp_mode:'next_n',  exp_count:'50', nodes:'250' }
+};
+function expSetFetch(setName){
+  try{
+    if(!LASTFEEDURL || !LASTAUTH) return;
+    if((EXPSET_FAIL[setName]||0) >= 3) return;         // stop asking after three refusals
+    var now=Date.now();
+    if(EXPSET_TRY[setName] && (now-EXPSET_TRY[setName])<EXPSET_MIN_MS) return;
+    EXPSET_TRY[setName]=now;
+    var spec=EXPSET_SPEC[setName]; if(!spec) return;
+    var url=LASTFEEDURL;
+    url=url.replace(/symbol=[^&]*/, 'symbol=SPY').replace(/data_type=[^&]*/, 'data_type=gamma');
+    Object.keys(spec).forEach(function(k){
+      var re=new RegExp('([?&])'+k+'=[^&]*');
+      url = re.test(url) ? url.replace(re, '$1'+k+'='+spec[k]) : (url+'&'+k+'='+spec[k]);
+    });
+    if(/[?&]v=/.test(url)) url=url.replace(/([?&])v=[^&]*/, '$1v='+now);
+    fetch(url, { credentials:'include', headers:{ Authorization:LASTAUTH } }).then(function(res){
+      if(!res) return;
+      if(res.status===401) return;                      // token rotated; the app re-captures it shortly
+      if(!res.ok){ EXPSET_FAIL[setName]=(EXPSET_FAIL[setName]||0)+1; return; }
+      res.json().then(function(j){
+        try{
+          var snaps=j.levels||[]; var last=snaps[snaps.length-1]; var l=(last&&last.l)||[];
+          if(!l.length){ EXPSET_FAIL[setName]=(EXPSET_FAIL[setName]||0)+1; return; }
+          EXPSET_FAIL[setName]=0;
+          EXPSET[setName]={ j:j, ts:Date.now(), exps:(j.expirations||[]), n:l.length, params:spec };
+        }catch(e){}
+      }).catch(function(){ EXPSET_FAIL[setName]=(EXPSET_FAIL[setName]||0)+1; });
+    }).catch(function(){ EXPSET_FAIL[setName]=(EXPSET_FAIL[setName]||0)+1; });
+  }catch(e){}
+}
+function expSetTick(){
+  try{
+    if(document.visibilityState!=='visible') return;
+    expSetFetch('dte0'); expSetFetch('full');
+  }catch(e){}
+}
+// Decompose an arbitrary payload the same way cpRows does, so a self-fetched set gets identical treatment.
+function cpFromPayload(j, px){
+  try{
+    var snaps=j&&j.levels||[]; var last=snaps[snaps.length-1]; var l=(last&&last.l)||[];
+    if(!l.length || typeof px!=='number') return null;
+    var rows=[], gt=0, lt=0;
+    for(var i=0;i<l.length;i++){
+      var n=l[i];
+      if(typeof n.k!=='number' || typeof n.v!=='number' || typeof n.net!=='number') continue;
+      var v=Math.abs(n.v), nt=n.net, an=Math.abs(nt), tol=Math.max(1e-6, v*1e-9);
+      if(an>v+tol){ gt++; continue; }
+      if(an<v-tol) lt++;
+      rows.push({ k:n.k, v:v, net:nt, call:(v-nt)/2, put:(v+nt)/2 });
+    }
+    if(gt>0 || !rows.length || !lt) return null;
+    rows.sort(function(a,b){ return a.k-b.k; });
+    var cw=null,cwm=-1, pw=null,pwm=-1, mag=null,magm=-1, sc=0, sp=0;
+    rows.forEach(function(r){ sc+=r.call; sp+=r.put;
+      if(r.v>magm){ magm=r.v; mag=r.k; }
+      if(r.k>px && r.call>cwm){ cwm=r.call; cw=r.k; }
+      if(r.k<px && r.put>pwm){ pwm=r.put; pw=r.k; } });
+    var cum=0, zg=null;
+    for(var q=0;q<rows.length;q++){ var pc=cum; cum+=rows[q].net;
+      if(q>0 && ((pc<=0&&cum>0)||(pc>=0&&cum<0))){
+        var a=rows[q-1].k, b=rows[q].k, t=(0-pc)/((cum-pc)||1);
+        zg=+(a+(b-a)*Math.max(0,Math.min(1,t))).toFixed(2); break; } }
+    return { cr:cw, crGex:(cwm<0?null:cwm), ps:pw, psGex:(pwm<0?null:pwm), mag:mag, hvl:zg,
+             totalCall:sc, totalPut:sp, ratio:(sp>0?+(sc/sp).toFixed(2):null),
+             n:rows.length, kMin:rows[0].k, kMax:rows[rows.length-1].k, exps:(j.expirations||null) };
+  }catch(e){ return null; }
+}
+function expSetLevels(setName){
+  try{
+    var E=EXPSET[setName]; if(!E) return null;
+    var px=(STATE.SPY||{}).price; if(typeof px!=='number') return null;
+    var L=cpFromPayload(E.j, px); if(!L) return null;
+    L.set=setName; L.ageMin=Math.round((Date.now()-E.ts)/60000); L.exps=E.exps; L.nExps=(E.exps||[]).length;
+    return L;
+  }catch(e){ return null; }
+}
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.expSets=function(){ return { dte0:expSetLevels('dte0'), full:expSetLevels('full'),
+  fails:EXPSET_FAIL, haveAuth:!!LASTAUTH, haveUrl:!!LASTFEEDURL }; };
+window.__gptsDebug.expSetFetch=function(n){ EXPSET_FAIL[n]=0; EXPSET_TRY[n]=0; expSetFetch(n||'dte0'); return 'fetching '+n; };
+
 function cpRows(sym){
   try{
     var f=LASTFEED[sym||'SPY']; if(!f||!f.j) return null;
@@ -12822,7 +12923,12 @@ function cpRows(sym){
       if(typeof n.net!=='number'){ noNet++; continue; }
       var v=Math.abs(n.v), nt=n.net, an=Math.abs(nt), tol=Math.max(1e-6, v*1e-9);
       if(an < v-tol) lt++; else if(an <= v+tol) eq++; else gt++;
-      rows.push({ k:n.k, v:v, net:nt, call:(v+nt)/2, put:(v-nt)/2 });
+      // (v11.17 SIGN FIX) put=(v+net)/2, NOT call=(v+net)/2. Verified against their published SPY page:
+      // with the old assignment our put wall came out 756 and the book read call-heavy (ratio 1.44);
+      // with this one the put wall is 760 — exactly their number in BOTH their 0DTE and next-week views —
+      // and the book reads put-heavy (0.70) like theirs (0.02 / 0.36). Skylit's `net` is positive on a
+      // put-dominated strike, which is the opposite of the call-positive convention I had assumed.
+      rows.push({ k:n.k, v:v, net:nt, call:(v-nt)/2, put:(v+nt)/2 });
     }
     if(!rows.length) return null;
     rows.sort(function(a,b){ return a.k-b.k; });
@@ -12863,64 +12969,8 @@ window.__gptsDebug.callPutRows=function(s){ var D=cpRows(s||'SPY'); if(!D) retur
   return { ok:D.ok, lt:D.lt, eq:D.eq, gt:D.gt, exps:D.exps,
            rows:D.rows.map(function(r){ return [r.k, Math.round(r.call/1e6), Math.round(r.put/1e6)]; }) }; };
 
-function spxwLane(){
-  try{
-    var f=LASTFEED&&LASTFEED.SPY, dv=f&&f.j&&f.j.derived;
-    if(!dv||!dv.length) return null;
-    for(var i=0;i<dv.length;i++){
-      var d=dv[i]; if(!d || (d.source!=='SPXW' && d.source!=='SPX')) continue;
-      var snaps=d.levels||[]; var last=snaps[snaps.length-1]; var l=(last&&last.l)||[];
-      if(!l.length) continue;
-      var rows=[];
-      for(var q=0;q<l.length;q++){
-        var n=l[q];
-        if(typeof n.k!=='number' || typeof n.v!=='number') continue;
-        var mag=Math.abs(n.v); if(!(mag>0)) continue;
-        rows.push({ k:n.k, m:mag, s:((n.d>0)?1:-1)*mag });
-      }
-      if(rows.length<4) continue;
-      rows.sort(function(a,b){ return a.k-b.k; });
-      return { rows:rows, n:rows.length, kMin:rows[0].k, kMax:rows[rows.length-1].k,
-               ratio:d.ratio, src:d.source, snaps:snaps.length };
-    }
-    return null;
-  }catch(e){ return null; }
-}
 // CR(net) / PS / HVL / Mag in SPX POINTS, from the SPXW lane alone.
-function spxLevels(){
-  try{
-    var L=spxwLane(); if(!L) return null;
-    var spy=(STATE.SPY||{}).price; if(typeof spy!=='number') return null;
-    if(!(L.ratio>0)) return null;
-    var px=+(spy/L.ratio).toFixed(2);                     // our spot, expressed in SPX points
-    var cw=null,cwm=-1, pw=null,pwm=-1, mag=null,magm=-1;
-    L.rows.forEach(function(r){
-      if(r.m>magm){ magm=r.m; mag=r.k; }
-      if(r.k>px && r.m>cwm){ cwm=r.m; cw=r.k; }
-      if(r.k<px && r.m>pwm){ pwm=r.m; pw=r.k; } });
-    var cum=0, hvl=null;
-    for(var i=0;i<L.rows.length;i++){
-      var pc=cum; cum+=L.rows[i].s;
-      if(i>0 && ((pc<=0&&cum>0)||(pc>=0&&cum<0))){
-        var kA=L.rows[i-1].k, kB=L.rows[i].k, t=(0-pc)/((cum-pc)||1);
-        hvl=+(kA+(kB-kA)*Math.max(0,Math.min(1,t))).toFixed(2); break; } }
-    var net=L.rows.reduce(function(a,r){ return a+r.s; },0);
-    // Does the lane even REACH the strikes a full-chain call wall lives at? If kMax is below their wall,
-    // no amount of computation recovers it — the exposure is simply not in our data.
-    return { px:px, crNet:cw, ps:pw, hvl:hvl, mag:mag,
-             crNetM:(cwm<0?null:Math.round(cwm)), psM:(pwm<0?null:Math.round(pwm)), magM:Math.round(magm),
-             net:Math.round(net), n:L.n, kMin:L.kMin, kMax:L.kMax, step:+(L.rows[1].k-L.rows[0].k).toFixed(2),
-             reachAbovePct:+(((L.kMax-px)/px)*100).toFixed(2),
-             reachBelowPct:+(((L.kMin-px)/px)*100).toFixed(2),
-             ratio:L.ratio, src:L.src };
-  }catch(e){ return null; }
-}
 window.__gptsDebug=window.__gptsDebug||{};
-window.__gptsDebug.spx=function(){ return spxLevels(); };
-// Compact dump so the whole lane can be pasted somewhere and the arithmetic checked by hand.
-window.__gptsDebug.spxDump=function(){ var L=spxwLane(); if(!L) return 'no SPXW lane in the feed';
-  return { n:L.n, ratio:L.ratio, kMin:L.kMin, kMax:L.kMax,
-           rows:L.rows.map(function(r){ return [r.k, Math.round(r.s)]; }) }; };
 
 function ifManParse(txt){
   try{
@@ -13063,6 +13113,173 @@ function levelsChartSvg(sym, L){
     return svg;
   }catch(e){ return ''; }
 }
+// ============ (v11.17) ONE BLOCK. ONE SCALE. NO DUPLICATES. ============
+// The v11.16 card printed the same levels three times — a %King block, a call/put block and a broken
+// SPX block — with "SPY 765" hung off every row while the chart was on ES. The user's instruction was
+// exact: one set of levels, on the instrument the chart is showing, consistent with a third-party page.
+//
+// SOURCE PRECEDENCE, best first. Each level takes the best source that can actually produce it:
+//   1. self-fetched full-chain set  (call/put decomposed, every expiration)  -> CR, PS, HVL, Mag
+//   2. self-fetched 0DTE set        (call/put decomposed, today only)        -> CR0, PS0
+//   3. the passive feed             (call/put decomposed, top-60 x 4 exps)   -> fallback for all of them
+//   4. %King ladder                 (no decomposition)                       -> last resort, tagged
+// A row is only shown ONCE. A 0DTE row appears only when its strike genuinely differs from the
+// structural one, because a 0DTE row that repeats CR tells the reader nothing.
+function lvlUnified(sym){
+  sym=sym||'SPY';
+  try{
+    var px=(STATE[sym]||{}).price; if(typeof px!=='number') return null;
+    var full=expSetLevels('full'), dte0=expSetLevels('dte0');
+    var passive=null; try{ passive=cpLevels(sym); }catch(e0){}
+    if(passive && passive.err) passive=null;
+    var out={ px:px, rows:[], src:null, note:null, ratio:null, nExps:null, n:null, ageMin:null };
+    var P = full || null;
+    if(P){ out.src='chain'; out.nExps=P.nExps; out.n=P.n; out.ratio=P.ratio; out.ageMin=P.ageMin; }
+    else if(passive){ out.src='feed'; out.n=passive.n; out.ratio=passive.ratio;
+      P={ cr:passive.callWall, crGex:passive.callWallGex, ps:passive.putWall, psGex:passive.putWallGex,
+          hvl:passive.zg, mag:null, kMin:passive.kMin, kMax:passive.kMax }; }
+    if(!P) return null;
+    // Mag: the heaviest strike overall. The passive path does not compute it, so fall back to the King.
+    var mag=P.mag; if(mag==null){ try{ var kg=(STATE[sym]||{}).king; if(typeof kg==='number') mag=kg; }catch(e1){} }
+    function add(id, k, gex, tag){
+      if(k==null) return;
+      for(var i=0;i<out.rows.length;i++){ if(Math.abs(out.rows[i].k-k)<0.005) return; }  // never twice
+      out.rows.push({ id:id, k:k, gex:(gex==null?null:gex), tag:tag||null,
+                      dist:+(k-px).toFixed(2), distPct:+(((k-px)/px)*100).toFixed(2) });
+    }
+    add('CR',  P.cr,  P.crGex);
+    add('HVL', P.hvl, null);
+    add('Mag', mag,   null);
+    add('PS',  P.ps,  P.psGex);
+    // 0DTE rows: only when they say something the structural rows did not
+    if(dte0){
+      add('CR0', dte0.cr, dte0.crGex, '0DTE');
+      add('PS0', dte0.ps, dte0.psGex, '0DTE');
+      out.dte0Exps=dte0.nExps; out.dte0N=dte0.n;
+    }
+    out.rows.sort(function(a,b){ return b.k-a.k; });
+    out.hvlMissing = (P.hvl==null);
+    out.regime = (P.hvl!=null) ? ((px>=P.hvl)?'posGamma':'negGamma') : null;
+    out.kMin=P.kMin; out.kMax=P.kMax;
+    return out;
+  }catch(e){ return null; }
+}
+// The card. Values are shown in the CHART's instrument only — no second scale, no "SPY 765" tail.
+function levelsHtmlV2(sym){
+  try{
+    var U=lvlUnified(sym); if(!U || !U.rows.length) return '';
+    var srcTxt = (U.src==='chain')
+      ? ((U.nExps||'?')+' exps · '+(U.n||'?')+' strikes')
+      : ('feed only · '+(U.n||'?')+' strikes · top-60');
+    var regTxt = U.regime==='posGamma'?'<span style="color:'+PAL.longAccent+'">+γ</span> damp'
+               :(U.regime==='negGamma'?'<span style="color:'+PAL.shortAccent+'">−γ</span> amp':'');
+    var tip=('Levels computed from our own feed, calls and puts separated: the payload carries v (TOTAL gamma) '+
+      'and net (NET gamma), so call=(v-net)/2 and put=(v+net)/2. CR is Call Resistance on CALL gamma and PS is '+
+      'Put Support on PUT gamma — the same definitions a third-party GEX page uses. '+
+      (U.src==='chain'
+        ? ('Read from a self-fetched full-chain request: '+(U.nExps||'?')+' expirations, '+(U.n||'?')+' strikes'+(U.ageMin!=null?(', '+U.ageMin+'m old'):'')+'.')
+        : 'Read from the passive feed, which is a ranked top-60 subset over four expirations — the walls are real but far levels may be outside it.')+
+      (U.ratio!=null?(' Call/put ratio '+U.ratio+' — compare against a third-party header to check the decomposition.'):'')+
+      ' Every value is on this chart\'s instrument. Descriptive only; scored nightly, no weight until earned.').replace(/"/g,'');
+    var h='<div style="padding:2px 7px 3px;margin:0 0 1px">';
+    h+='<div title="'+tip+'" style="display:flex;align-items:center;gap:6px;font-size:10px;font-weight:800;color:'+PAL.sub+';white-space:nowrap">'+
+       '<span data-glvl="open" style="cursor:pointer;color:'+PAL.ink+'">'+(LVL_UI.open?'▾':'▸')+' LEVELS</span>'+
+       '<span style="font-weight:600">'+srcTxt+'</span>'+
+       (regTxt?('<span style="font-weight:700">'+regTxt+'</span>'):'')+
+       '<span data-glvl="ifman" title="InsiderFinance levels, entered by hand — their page blocks cross-origin reads." style="margin-left:auto;cursor:pointer;color:'+(IFMAN?PAL.blue:PAL.sub)+';font-size:9px">IF</span>'+
+       '<span data-glvl="chart" style="cursor:pointer;color:'+(LVL_UI.chart?PAL.blue:PAL.sub)+';font-size:9px">chart</span>'+
+       '</div>';
+    if(LVL_UI.open){
+      h+='<div style="margin-top:2px">';
+      U.rows.forEach(function(r){
+        var base=r.id.replace('0','');
+        var c=LVL_COL[base.toLowerCase()]||LVL_COL[r.id.toLowerCase()]||PAL.sub;
+        var z=!!r.tag;
+        var dc=(r.dist>0)?PAL.longAccent:((r.dist<0)?PAL.shortAccent:PAL.sub);
+        h+='<div title="'+((LVL_WHAT[base.toLowerCase()]||'')+(r.gex?(' Gamma here: '+Math.round(r.gex/1e6)+'M.'):'')).replace(/"/g,'')+'" '+
+           'style="display:flex;align-items:center;gap:6px;font-size:10.5px;line-height:1.5;white-space:nowrap">'+
+           '<span style="display:inline-block;width:30px;color:'+c+';font-weight:800;opacity:'+(z?0.75:1)+'">'+r.id+'</span>'+
+           '<span style="color:'+PAL.ink+';font-weight:700;font-size:11.5px;font-variant-numeric:tabular-nums">'+lvlFmt(r.k)+'</span>'+
+           (r.gex?('<span style="color:'+PAL.sub+';font-size:9px">'+Math.round(r.gex/1e6)+'M</span>'):'')+
+           '<span style="margin-left:auto;color:'+dc+';font-weight:700;font-size:9.5px;font-variant-numeric:tabular-nums">'+((r.dist>0?'+':'')+lvlSpanFmt(r.dist))+'</span>'+
+           '<span style="color:'+PAL.sub+';font-size:9px;width:36px;text-align:right">'+((r.distPct>0?'+':'')+r.distPct+'%')+'</span>'+
+           '</div>';
+      });
+      if(U.hvlMissing){
+        h+='<div title="The HVL is the gamma flip — where cumulative gamma crosses zero and dealers stop dampening and start amplifying. It is absent because the cumulative never changes sign across the strikes we hold. That is a fact about the book, not a gap in the read." '+
+           'style="display:flex;align-items:center;gap:6px;font-size:10px;line-height:1.45;white-space:nowrap">'+
+           '<span style="display:inline-block;width:30px;color:'+LVL_COL.hvl+';font-weight:800;opacity:.55">HVL</span>'+
+           '<span style="color:'+PAL.sub+'">—</span>'+
+           '<span style="color:'+PAL.sub+';font-size:9px;overflow:hidden;text-overflow:ellipsis">no flip in these strikes</span></div>';
+      }
+      h+='</div>';
+      if(LVL_UI.chart){ var sv=null; try{ sv=levelsChartV2(sym,U); }catch(eC){} if(sv) h+='<div style="margin-top:3px;border:1px solid '+PAL.line+';border-radius:3px;overflow:hidden">'+sv+'</div>'; }
+      // their numbers, when entered, kept visibly separate
+      try{
+        var IFL=ifManLevels();
+        if(IFL && !IFL.err){
+          var agTx=(IFL.ageMin<60)?(IFL.ageMin+'m'):(Math.round(IFL.ageMin/60)+'h');
+          h+='<div style="border-top:1px dotted '+PAL.line+';margin:3px 0 1px"></div>';
+          h+='<div style="display:flex;align-items:center;gap:6px;font-size:9px;color:'+PAL.sub+';white-space:nowrap">'+
+             '<span style="font-weight:800;color:'+PAL.blue+'">INSIDERFINANCE</span><span>'+IFL.scale+' · '+agTx+'</span>'+
+             '<span style="margin-left:auto;cursor:pointer" data-glvl="ifman">edit</span></div>';
+          [['CR',IFL.cw,LVL_COL.cr],['HVL',IFL.zg,LVL_COL.hvl],['Mag',IFL.mag,LVL_COL.mag],['PS',IFL.pw,LVL_COL.ps]]
+            .filter(function(r){ return r[1]!=null; }).sort(function(a,b){ return b[1]-a[1]; })
+            .forEach(function(r){
+              var d=+(r[1]-U.px).toFixed(2), dc2=(d>0)?PAL.longAccent:PAL.shortAccent;
+              h+='<div style="display:flex;align-items:center;gap:6px;font-size:10px;line-height:1.4;white-space:nowrap;opacity:.8">'+
+                 '<span style="display:inline-block;width:30px;color:'+r[2]+';font-weight:700;font-style:italic">'+r[0]+'</span>'+
+                 '<span style="color:'+PAL.ink+';font-weight:600;font-variant-numeric:tabular-nums">'+lvlFmt(r[1])+'</span>'+
+                 '<span style="margin-left:auto;color:'+dc2+';font-weight:700;font-size:9px">'+((d>0?'+':'')+lvlSpanFmt(d))+'</span></div>';
+            });
+        } else if(IFL && IFL.err){ h+='<div style="font-size:9px;color:'+PAL.sub+';margin-top:2px">IF: '+IFL.err+'</div>'; }
+      }catch(eIF2){}
+    }
+    h+='</div>';
+    return h;
+  }catch(e){ return ''; }
+}
+function levelsChartV2(sym, U){
+  try{
+    var cs=[]; try{ cs=(closedCandles(sym)||[]).slice(-90); }catch(e){}
+    var px=U.px, lo=null, hi=null;
+    cs.forEach(function(c){ var a=(c.l!=null?c.l:c.c), b=(c.h!=null?c.h:c.c);
+      if(a!=null){ lo=(lo==null||a<lo)?a:lo; } if(b!=null){ hi=(hi==null||b>hi)?b:hi; } });
+    if(px!=null){ lo=(lo==null||px<lo)?px:lo; hi=(hi==null||px>hi)?px:hi; }
+    U.rows.forEach(function(r){ lo=(lo==null||r.k<lo)?r.k:lo; hi=(hi==null||r.k>hi)?r.k:hi; });
+    if(lo==null||hi==null||!(hi>lo)) return '';
+    var pad=(hi-lo)*0.07; lo-=pad; hi+=pad;
+    var W=320,H=132,R=2,T=8,B=6, placed=[];
+    function y(v){ return T+(H-T-B)*(1-(v-lo)/(hi-lo)); }
+    var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">';
+    svg+='<rect width="'+W+'" height="'+H+'" fill="'+PAL.card+'"/>';
+    U.rows.forEach(function(r){
+      var base=r.id.replace('0','').toLowerCase();
+      var c=LVL_COL[base]||PAL.sub, z=!!r.tag, yy=y(r.k);
+      svg+='<line x1="0" y1="'+yy.toFixed(1)+'" x2="'+(W-R)+'" y2="'+yy.toFixed(1)+'" stroke="'+c+'" stroke-width="'+(z?0.8:1.3)+'"'+(z?' stroke-dasharray="4,3"':'')+' opacity="'+(z?0.6:0.95)+'"/>';
+      var slot=0; for(var q=0;q<placed.length;q++){ if(Math.abs(placed[q].y-yy)<9) slot=Math.max(slot, placed[q].slot+1); }
+      var lx=(W*0.5)+(slot%3)*48-48; placed.push({y:yy, slot:slot});
+      var w=r.id.length*6.4+6;
+      svg+='<rect x="'+(lx-w/2).toFixed(1)+'" y="'+(yy-6.2).toFixed(1)+'" width="'+w.toFixed(1)+'" height="12" rx="2" fill="'+PAL.card+'" opacity="0.88"/>';
+      svg+='<text x="'+lx.toFixed(1)+'" y="'+(yy+3.4).toFixed(1)+'" fill="'+c+'" font-size="10" font-weight="700" text-anchor="middle" font-family="ui-monospace,monospace" opacity="'+(z?0.85:1)+'">'+r.id+'</text>';
+    });
+    if(cs.length>1){
+      var pts=[]; cs.forEach(function(c,i){ if(c.c!=null) pts.push(((W-R)*i/(cs.length-1)).toFixed(1)+','+y(c.c).toFixed(1)); });
+      if(pts.length>1) svg+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="'+PAL.ink+'" stroke-width="1.2" opacity="0.95"/>';
+    }
+    if(px!=null){ var yp=y(px).toFixed(1);
+      svg+='<line x1="0" y1="'+yp+'" x2="'+(W-R)+'" y2="'+yp+'" stroke="'+PAL.time+'" stroke-width="0.5" stroke-dasharray="1,3" opacity="0.5"/>';
+      svg+='<circle cx="'+(W-R-2)+'" cy="'+yp+'" r="1.8" fill="'+PAL.time+'"/>'; }
+    return svg+'</svg>';
+  }catch(e){ return ''; }
+}
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.unified=function(s){ return lvlUnified(s||'SPY'); };
+
+// (v11.17 PARKED) SUPERSEDED by levelsHtmlV2, which renders ONE block on the chart's own instrument.
+// This three-block version is what the user saw printing the same levels three times with a "SPY 765"
+// tail on an ES chart. It is no longer rendered anywhere; it stays only because test_levels.js pins the
+// helpers it shares with V2 (lvlFmt/lvlSpanFmt/lvlRows/lvlAlt/lvlHvlMissing). Do not wire it back up.
 function levelsHtml(sym){
   try{
     var L=null; try{ L=gLevels(sym); }catch(e){}
@@ -13151,34 +13368,6 @@ function levelsHtml(sym){
             });
         }
       }catch(eCP){}
-      // ---- (v11.14) OURS, COMPUTED IN SPX POINTS on the SPXW lane, so it sits beside an SPX page
-      //      with no conversion in the middle. CR is labelled CR(net) because it is not their definition.
-      try{
-        var SX=spxLevels();
-        if(SX){
-          var reachOk=(SX.kMax!=null);
-          h+='<div style="border-top:1px dotted '+PAL.line+';margin:3px 0 1px"></div>';
-          h+='<div title="Our own levels computed directly on Skylit\'s SPXW lane, in SPX points — no conversion. Spot here is '+SX.px+' SPX. The lane carries '+SX.n+' strikes from '+SX.kMin+' to '+SX.kMax+' ('+SX.reachBelowPct+'% to +'+SX.reachAbovePct+'% around spot), step '+SX.step+'. Anything outside that range is not in our data at all, so it cannot be computed at any effort." '+
-             'style="display:flex;align-items:center;gap:6px;font-size:9px;color:'+PAL.sub+';white-space:nowrap">'+
-             '<span style="font-weight:800;color:'+PAL.gold+'">OURS · SPX</span>'+
-             '<span>spot '+Math.round(SX.px)+' · '+SX.n+' strikes '+Math.round(SX.kMin)+'–'+Math.round(SX.kMax)+'</span></div>';
-          [['CR(net)',SX.crNet,LVL_COL.cr],['HVL',SX.hvl,LVL_COL.hvl],['Mag',SX.mag,LVL_COL.mag],['PS',SX.ps,LVL_COL.ps]]
-            .filter(function(r){ return r[1]!=null; })
-            .sort(function(a,b){ return b[1]-a[1]; })
-            .forEach(function(r){
-              var d=+(r[1]-SX.px).toFixed(2);
-              var dc=(d>0)?PAL.longAccent:((d<0)?PAL.shortAccent:PAL.sub);
-              h+='<div title="'+(r[0]==='CR(net)'
-                    ?'The heaviest NET strike above spot on the SPXW lane. This is deliberately NOT called Call Resistance: their Call Wall is defined on CALL gamma specifically, and in a book where puts outweigh calls better than 6 to 1 the heaviest net strike above spot is still put-driven. Different strike, not a rough version of the same one.'
-                    :'Computed on the SPXW lane in SPX points, directly comparable to an SPX gamma page.')+'" '+
-                 'style="display:flex;align-items:center;gap:5px;font-size:10px;line-height:1.4;white-space:nowrap">'+
-                 '<span style="display:inline-block;width:46px;color:'+r[2]+';font-weight:700">'+r[0]+'</span>'+
-                 '<span style="color:'+PAL.ink+';font-weight:700;font-variant-numeric:tabular-nums">'+Math.round(r[1])+'</span>'+
-                 '<span style="margin-left:auto;color:'+dc+';font-weight:700;font-size:9px;font-variant-numeric:tabular-nums">'+((d>0?'+':'')+Math.round(d))+'</span>'+
-                 '</div>';
-            });
-        }
-      }catch(eSX){}
       // ---- (v11.12) THEIR levels, kept visibly separate from ours ----
       try{
         var IFL=ifManLevels();
@@ -15503,7 +15692,7 @@ function render(){
   try{ html+=briefBlockHtml(__asym); }catch(eBr){}    // (v10.49 J) pre-open brief (collapsible)
   if(DRIFT_LIVE){ try{ html+=driftLineHtml(__asym); }catch(eD49){} }   // (v10.57) shadow mode: off the face until proven
   try{ html+=nextStopHtml(__asym); }catch(eNS){}   // (v11.1) NEXT STOP — the one forward call, above the read
-  try{ html+=levelsHtml(__asym); }catch(eLV){}     // (v11.8) LEVELS — CR0/CR · PS0/PS · HVL · Mag, with the chart
+  try{ html+=levelsHtmlV2(__asym); }catch(eLV){}   // (v11.17) LEVELS — ONE block, the chart's instrument only
   try{ html+=pbEntryHtml(__asym); }catch(ePE){}    // (v11.3) PB ENTRY — where to look for the pullback / deflection, under Next Stop
   try{ html+=readBlock44(__asym); }catch(eR){}
   // (v10.37) standalone gatekeeperBlock() REMOVED - gatekeeper strike + distance now in King badge.
@@ -15661,6 +15850,7 @@ function tick(){
   recordDeflections('QQQ');
   repoAutoExportTick();        // (v10.44) write data/YYYY-MM-DD.json at the close
   try{ irtTick(); }catch(eIrt){}   // (v11.4) IRT FlexLevels export on its own cadence
+  try{ expSetTick(); }catch(eES){}  // (v11.17) 0DTE + full-chain expiry sets, own cache, tape untouched
   // (v10.54, audit 6) AFTER THE CLOSE is the other moment the model may move. Anything
   // a mid-session fetch deferred is applied here, once, when no more bars are recorded.
   try{ if(RULES_APPLIED_AT!=null && rulesApplyAllowed() && ctNowSecOfDay()>=15*3600+60 && RULES_APPLIED_DAY!==TODAY){ RULES_APPLIED_DAY=TODAY; rulesApply(true); } }catch(eRA){}
