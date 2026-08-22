@@ -1,3 +1,60 @@
+## v11.38 — three zones, centred labels, and hovers that ask before they tell
+
+**The chart is now three zones.** LEFT is InsiderFinance STRUCTURE — net GEX, then net DEX, two narrow
+columns sharing the price axis. It refreshes once a day and tells you where the walls are: gamma for how
+price moves at them, delta for which way hedging pushes. RIGHT is Skylit FLOW — live node strength, with
+tick marks on every bar showing where that node stood **60 minutes** and **15 minutes** ago. A bar
+reaching well past both is accumulating; a bar behind them is bleeding. MIDDLE is price.
+
+Structure left, flow right, is the whole convention, and both captions are on the face.
+
+**Level labels are centred on their own lines**, and the line is drawn in two segments so it breaks
+around the text rather than running under it. That is what frees both gutters for the profiles. Strong
+node rows keep a bare price — the redesign briefly took those with it, and a band you cannot read the
+price of is a shape, not a level.
+
+**The 50-SMA is drawn**, from `contSMAAtTodayIdx` — the same continuous series `trendVerdict` reads, so
+the line and the call cannot disagree. It is the primary read and it had never been on our chart at all.
+
+**Hovers ask before they tell.** Every step header and every substantive cell now opens with the
+question it answers: *which playbook is legal today · which way and how much should you trust it · where
+would you actually trade · is the level doing something · do you take it or refuse it.* A test asserts a
+question mark in the opening line of all five, and pins fifteen more by name.
+
+**ACCUM no longer contradicts itself.** It printed `below −$553M` beside a BULLISH vote, because the
+vote is relative — the upside book was bleeding faster. Both were true and the sentence still fought the
+tick. When both sides shrink it now names the one shrinking faster.
+
+**And a double-conversion caught by its own test.** The centred label re-derived an IF level's display
+price through the SPY→ES ratio when `ifLadder` had already computed it from the live SPX→ES basis — two
+paths, disagreeing by a point or two. The line position and the printed number are now passed
+separately, and the printed one is the value the source gave.
+
+## v11.37 — DEX is real, and the skew is measured rather than borrowed
+
+`__gptsDebug.optKeys()` answered the question that had been blocking three features. Their payload
+carries per contract:
+
+    strike, expireYear, expireMonth, expireDay, cp, gamma, delta, openInterest, impliedVol, bid, ask
+
+`delta`, `impliedVol`, `bid` and `ask` are all there — while every one of their PUBLISHED metrics came
+back null, because their page computes them client-side. So the answer is not to take theirs; it is that
+we can compute the same things properly.
+
+**DEX** = `sum(delta x OI x 100 x spot)`, in FRAME as a number rather than a vote. Puts already carry
+negative delta in their payload, so no sign flip is applied — a test pins that, because flipping it
+twice would have produced a plausible number with the wrong sign. Negative DEX means dealers are short
+delta and must BUY as price rises, so rallies get chased. It maps hedging pressure; it does not point,
+which is exactly why it sits in FRAME and not in the BIAS row.
+
+**SKEW** is now the real 25-delta metric — 25-delta put IV minus 25-delta call IV, the figure their page
+prints as "25Δ Skew". Matched on nearest delta rather than interpolated, and refused entirely when
+nothing sits within 0.08 of 25 delta, so one thin far-wing quote cannot invent a number. Still read
+against its own recent range rather than as a level, because index skew is permanently put-heavy.
+
+Also emitted for the next build: a near-spot **DEX profile** (the mirror of the GEX bars, and the second
+panel in the user's screenshots) and **ATM IV** from the two 50-delta legs.
+
 ## v11.36 — the 50-SMA is the direction, and the GEX profile finally exists
 
 **BIAS is no longer a tally.** Direction is the 50-SMA; SKEW, ACCUM and PA confirm it or they do not,

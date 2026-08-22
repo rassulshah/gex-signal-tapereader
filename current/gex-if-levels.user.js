@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.4
+// @version      1.5
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
@@ -174,6 +174,65 @@ function levelsFor(opts, spot, keep){
            kMin:rows[0].k, kMax:rows[rows.length-1].k };
 }
 
+
+// ---- (v1.5) DEX AND A REAL 25-DELTA SKEW ----
+// Their payload carries per-contract `delta` and `impliedVol` (confirmed 2026-08-22 via optKeys:
+// strike,expireYear,expireMonth,expireDay,cp,gamma,delta,openInterest,impliedVol,bid,ask). Their own
+// published metrics come back NULL because their page computes them client-side, so we compute.
+//
+// DEX = sum(delta * OI * 100 * spot). Puts carry negative delta already, so no sign flip is applied.
+// Read it as a hedging map, not an arrow: dealers short delta must BUY as price rises.
+//
+// SKEW = 25-delta put IV minus 25-delta call IV, which is the metric their page prints as "25Δ Skew".
+// Nearest-delta match on each side rather than an interpolation, so one thin quote cannot invent a
+// number. Positive = puts richer = downside bid.
+function dexSkewFor(opts, spot, keep){
+  var sel=[]; for(var i=0;i<opts.length;i++){ if(keep(opts[i])) sel.push(opts[i]); }
+  if(!sel.length) return null;
+  var net=0, byK={}, n=0;
+  var bestC=null, bestP=null, atmC=null, atmP=null;
+  for(var q=0;q<sel.length;q++){
+    var o=sel[q];
+    if(typeof o.delta!=='number' || typeof o.openInterest!=='number') continue;
+    var d=o.delta*o.openInterest*100*spot;
+    net+=d; n++;
+    var b=byK[o.strike]; if(!b) b=byK[o.strike]={k:o.strike, dex:0};
+    b.dex+=d;
+    if(typeof o.impliedVol==='number' && o.impliedVol>0){
+      if(o.cp==='C'){
+        var ec=Math.abs(o.delta-0.25);
+        if(!bestC || ec<bestC.e) bestC={e:ec, iv:o.impliedVol, k:o.strike, d:o.delta};
+        var ac=Math.abs(o.delta-0.50);
+        if(!atmC || ac<atmC.e) atmC={e:ac, iv:o.impliedVol, k:o.strike};
+      } else {
+        var ep=Math.abs(o.delta+0.25);
+        if(!bestP || ep<bestP.e) bestP={e:ep, iv:o.impliedVol, k:o.strike, d:o.delta};
+        var ap=Math.abs(o.delta+0.50);
+        if(!atmP || ap<atmP.e) atmP={e:ap, iv:o.impliedVol, k:o.strike};
+      }
+    }
+  }
+  if(!n) return null;
+  var rows=[]; for(var k2 in byK) rows.push(byK[k2]);
+  rows.sort(function(a,b2){ return a.k-b2.k; });
+  // a compact near-spot profile, enough to draw and to compare against their panel
+  var prof=[];
+  for(var z=0;z<rows.length;z++){
+    var pk=rows[z].k;
+    if(Math.abs(pk-spot) <= spot*0.05) prof.push([pk, +(rows[z].dex/1e6).toFixed(1)]);
+  }
+  // only trust a 25-delta reading when the match is actually near 25 delta
+  var skew=null, skewOk=(bestC && bestP && bestC.e<=0.08 && bestP.e<=0.08);
+  if(skewOk) skew=+(((bestP.iv-bestC.iv))*100).toFixed(2);
+  var atmIV=null;
+  if(atmC && atmP) atmIV=+(((atmC.iv+atmP.iv)/2)*100).toFixed(2);
+  else if(atmC) atmIV=+(atmC.iv*100).toFixed(2);
+  return { netDex:net, dexProf:prof, strikes:rows.length,
+           skew25:skew, skewPutIV:skewOk?+(bestP.iv*100).toFixed(2):null,
+           skewCallIV:skewOk?+(bestC.iv*100).toFixed(2):null,
+           skewPutK:skewOk?bestP.k:null, skewCallK:skewOk?bestC.k:null,
+           atmIV:atmIV };
+}
 function computeAll(ch){
   var W=windows(ch.t);
   var exps={}; for(var i=0;i<ch.options.length;i++){ exps[ymdOf(ch.options[i])]=1; }
@@ -185,8 +244,10 @@ function computeAll(ch){
   return {
     spot:ch.spot, ticker:ch.ticker, payloadT:ch.t, stale:ch.stale,
     asOf:Date.now(), today:W.today, friday:W.friday, rolled:!!W.rolled, pub:(ch.pub||null), optKeys:(ch.optKeys||null),
-    dte0:{ exps:[front], lv:levelsFor(ch.options, ch.spot, function(o){ return ymdOf(o)===front; }) },
-    toFri:{ exps:inFri, lv:levelsFor(ch.options, ch.spot, function(o){ return ymdOf(o)>=W.today && ymdOf(o)<=W.friday; }) },
+    dte0:{ exps:[front], lv:levelsFor(ch.options, ch.spot, function(o){ return ymdOf(o)===front; }),
+           ds:dexSkewFor(ch.options, ch.spot, function(o){ return ymdOf(o)===front; }) },
+    toFri:{ exps:inFri, lv:levelsFor(ch.options, ch.spot, function(o){ return ymdOf(o)>=W.today && ymdOf(o)<=W.friday; }),
+            ds:dexSkewFor(ch.options, ch.spot, function(o){ return ymdOf(o)>=W.today && ymdOf(o)<=W.friday; }) },
     all:{ exps:[all[0],all[all.length-1]], nExps:all.length, lv:levelsFor(ch.options, ch.spot, function(){ return true; }) }
   };
 }
