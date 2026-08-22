@@ -195,5 +195,61 @@ eval(ex('emBand'));
   ok(/ok:false/.test(h) && /why:/.test(h), 'and on refusal it returns the reason rather than throwing');
 }
 
+
+// ---------- 10. (v11.58) THE FOUR REGIME CELLS ----------
+// The chip explained only the cell you were in, so there was no way to see what the other three meant,
+// or that the 2x2 is a 2x2. It also now states the link to the band: an extension means opposite things
+// in the two gamma halves, which is the one thing a reader must not get backwards.
+{
+  eval(ex('regimeTip'));
+  const t1=regimeTip({g:-1,v:-1}), t2=regimeTip({g:-1,v:1}),
+        t3=regimeTip({g:1,v:-1}),  t4=regimeTip({g:1,v:1}), t0=regimeTip(null);
+  [['1',t1],['2',t2],['3',t3],['4',t4]].forEach(([n,t])=>{
+    ok(/1\./.test(t)&&/2\./.test(t)&&/3\./.test(t)&&/4\./.test(t), 'cell '+n+' tip lists all FOUR cells');
+    ok(new RegExp('You are in cell '+n).test(t), '...and says you are in cell '+n);
+    ok((t.match(/▸/g)||[]).length===1, '...marking exactly ONE cell as active');
+  });
+  ok(/self-reinforcing/.test(t1),      'cell 1 names the double-amplification case');
+  ok(/pins hold|higher-probability/.test(t4), 'cell 4 names the compressing case');
+  ok(/No gamma book yet/.test(t0),     'with no book it names no cell rather than guessing');
+  ok((t0.match(/▸/g)||[]).length===0, 'and marks none active');
+  ok(/STRETCHED only in positive gamma/.test(t1),
+     'the tip states the band link: an extension is STRETCHED only in +G');
+  ok(/what a trend day does/.test(t1),
+     '...and that in −G running past the band is normal, not a fade signal');
+  ok(/CONDITION/.test(t1) && /gate/.test(t1),
+     'and that gamma and vanna CONDITION rather than point — they gate, they do not vote');
+  ok(t1.split('\n').length>=10,        'it renders as a list, not one paragraph');
+}
+
+
+
+// ---------- 11. (v11.59) THE ANCHOR MUST NOT DRIFT, AND THE WORDS MUST BE TRADER WORDS ----------
+// `rr` is a LIVE scale ratio that moves with the basis: measured 2026-08-22, undScale went
+// 0.099778 -> 0.099775 in twenty seconds and slid the whole band 0.05 with it. Friday's opening print
+// cannot change. EM was captured once; the anchor was recomputed every render. Half-anchored is not
+// anchored, and a rail that wobbles is not a reference.
+{
+  const b=ex('emBand');
+  ok(/rr:rr/.test(b),            'the scale factor is CAPTURED alongside the expected move');
+  ok(/rec\.rr/.test(b),          'and reused, so the anchor cannot drift with the basis');
+  ok(/hiFirst/.test(b),          'which extreme came FIRST is recorded — order distinguishes two different days');
+  const f=ex('secFrame');
+  ok(/HOD/.test(f) && /LOD/.test(f), 'the shape line speaks in HOD/LOD, not "up 53% down 55%"');
+  ok(/retraced/.test(f),         'and says "retraced", which is what a retracement is called');
+  ok(/\u2192/.test(f),            'the arrow carries which extreme came first');
+  ok(/pts to EXP /.test(f),      'and room left is in points to a named rail');
+  // strip // comments first: the changelog note in the source legitimately QUOTES the old wording, and a
+  // test that cannot tell code from documentation will fail on its own history.
+  const fCode=f.split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
+  ok(!/gave back/.test(fCode),   'the old engineering phrasing is gone from what is RENDERED');
+  ok(/shape:B\.shape/.test(src) && /hiWater:B\.hiWater/.test(src),
+     'the debug hook surfaces the shape fields — reading pixels is how the drift went unnoticed');
+  // hovers must be SHORT. A tooltip nobody finishes reading is a tooltip nobody reads.
+  const tips=(f.match(/g3tip\('((?:[^'\\]|\\.)*)'/g)||[]).map(x=>x.length);
+  const longest=Math.max.apply(null,tips);
+  ok(longest<620, 'every hover in FRAME is under ~600 characters (longest '+longest+')', longest);
+}
+
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.57
+// @version    11.59
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.57';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.59';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -17248,11 +17248,25 @@ function emBand(sym){
         return out;
       }
       var P=null; try{ P=sessionPhase(); }catch(eS){}
-      rec={ em:emo.em*dsc, k:emo.k, capMin:(P&&P.rth)?(P.mins-P.open):null, t:Date.now() };
+      // (v11.59) PIN THE SCALE TOO, not just the width. `rr` is a LIVE ratio between the displayed
+      // instrument and the underlying, and it drifts with the basis — measured 2026-08-22, undScale moved
+      // 0.099778 -> 0.099775 in twenty seconds and slid the whole band 0.05 with it. Friday's opening
+      // print cannot change, so a rail that moves is simply wrong. EM was captured once and held still;
+      // the anchor was recomputed every render. Half-anchored is not anchored.
+      // One captured `rr` for the session means open, now, HOD and LOD all share ONE scale factor, so the
+      // arithmetic is exact and the rails do not wobble. Cost: if the cash/futures basis moves materially
+      // intraday the displayed band drifts a hair from the chart. Basis moves are small; wobbling rails
+      // are not acceptable in a fixed reference.
+      rec={ em:emo.em*dsc, k:emo.k, capMin:(P&&P.rth)?(P.mins-P.open):null, t:Date.now(), rr:rr };
       S.sym[sym]=rec;
       try{ localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eW){}
     }
     if(!(rec.em>0)){ out.why='expected move came back zero'; return out; }
+    // every candle-derived value uses the CAPTURED scale, so nothing on the rail can drift
+    if(typeof rec.rr==='number' && rec.rr>0 && rr>0 && rec.rr!==rr){
+      var k=rec.rr/rr; open*=k; now*=k;
+      out.scalePinned=true;
+    }
 
     out.est  = !(typeof rec.capMin==='number' && rec.capMin<=EM_FRESH_MIN);
     out.open = open;  out.em=rec.em;  out.now=now;  out.k=rec.k;  out.capMin=rec.capMin;
@@ -17265,14 +17279,18 @@ function emBand(sym){
     // The band knew only the CURRENT price, so a day that ran +91% and came back through the open to
     // −92% rendered IDENTICALLY to a day that had drifted quietly down. The whole reversal was invisible.
     // High- and low-water marks since the open make the day's SHAPE readable.
-    var hiU=-Infinity, loU=Infinity;
+    var hiU=-Infinity, loU=Infinity, hiAt=-1, loAt=-1;
     for(var ci=0;ci<cs.length;ci++){
       var H=(cs[ci].h!=null?cs[ci].h:cs[ci].c), L=(cs[ci].l!=null?cs[ci].l:cs[ci].c);
-      if(typeof H==='number' && H>hiU) hiU=H;
-      if(typeof L==='number' && L<loU) loU=L;
+      if(typeof H==='number' && H>hiU){ hiU=H; hiAt=ci; }
+      if(typeof L==='number' && L<loU){ loU=L; loAt=ci; }
     }
+    // (v11.59) ORDER MATTERS. "sold off then rallied" and "rallied then sold off" are different days and
+    // rendered identically before this. The bar index of each extreme is all it takes.
+    out.hiFirst = (hiAt>=0 && loAt>=0) ? (hiAt<loAt) : null;
     if(isFinite(hiU) && isFinite(loU)){
-      out.hiWater=hiU*rr; out.loWater=loU*rr;
+      var rrUse=(typeof rec.rr==='number'&&rec.rr>0)?rec.rr:rr;
+      out.hiWater=hiU*rrUse; out.loWater=loU*rrUse;
       out.upExc=Math.max(0,(out.hiWater-open)/rec.em);      // excursion ABOVE the open, in EM
       out.dnExc=Math.max(0,(open-out.loWater)/rec.em);      // excursion BELOW it
       // "meaningful" = a quarter of the priced move. Below that a wick is noise, not a direction.
@@ -17318,6 +17336,35 @@ function emPos(B, v){
     return Math.max(0, Math.min(1, (v-B.low)/span))*100;
   }catch(e){ return 0; }
 }
+// ---- (v11.58) THE FOUR REGIME CELLS, LISTED ------------------------------------------------------
+// The chip showed one cell's verdict and the hover explained only that cell, so there was no way to see
+// what the OTHER three would have meant — or that the 2x2 is a 2x2 at all. Native title attributes render
+// \n, and g3esc only touches " and <, so a numbered list survives intact.
+// The active cell is marked. Gamma decides whether hedging damps or amplifies; vanna decides whether a
+// vol move helps or hurts. Neither POINTS — both CONDITION, which is why they gate rather than vote.
+function regimeTip(R){
+  try{
+    var g=(R&&typeof R.g==='number')?R.g:null, v=(R&&typeof R.v==='number')?R.v:null;
+    var cell = (g==null) ? 0
+             : (g<0 && v!=null && v<0) ? 1
+             : (g<0) ? 2
+             : (v!=null && v<0) ? 3
+             : 4;
+    var L=[
+      '1. \u2212G \u2212V  \u26a0 the self-reinforcing cell. Dealers are short gamma AND falling spot pushes them to sell more, so hedging AMPLIFIES the move twice over. Breaks run, fades are the losing side, and normal stops are too tight.',
+      '2. \u2212G +V  dealers are short gamma, so they hedge WITH the move. Ranges expand and mean-reversion at levels is unreliable \u2014 breaks over fades.',
+      '3. +G \u2212V  gamma is pinning while vanna leans the other way. Levels hold until vol moves, then they give way quickly \u2014 fade the edges, but not with size.',
+      '4. +G +V  dealers are long gamma and hedge AGAINST the move, which compresses range. Levels tend to hold and fades are the higher-probability trade.'
+    ];
+    var out='What kind of day is this? Gamma and vanna as a 2x2 \u2014 four cells, and you are in one of them:\n\n';
+    for(var i=0;i<4;i++) out += ((cell===i+1)?'\u25b8 ':'   ') + L[i] + '\n\n';
+    out += (cell===0) ? 'No gamma book yet, so no cell can be named.\n'
+                      : 'You are in cell '+cell+'.\n';
+    out += '\nGAMMA decides whether dealer hedging DAMPS the move or AMPLIFIES it. VANNA decides whether a change in volatility helps or hurts that. Neither one POINTS \u2014 both CONDITION, which is why they gate the call in BIAS rather than voting in it.\n';
+    out += '\nIt also decides what an extension MEANS on the band below: past 100% of the expected move reads as STRETCHED only in positive gamma (cells 3 and 4), where range compresses. In negative gamma (cells 1 and 2) ranges expand, so running past the band is what a trend day does \u2014 not a fade signal.';
+    return out;
+  }catch(e){ return 'What kind of day is this? Gamma and vanna as a 2x2.'; }
+}
 function secFrame(sym){
   var R=regime2D(sym), P=sessionPhase();
   var h='<div class="g3b">';
@@ -17333,7 +17380,7 @@ function secFrame(sym){
   try{ var ILe=ifLadder(sym);
     if(ILe && !ILe.err) for(var mi0=0;mi0<ILe.rows.length;mi0++){ if(/Mag/.test(ILe.rows[mi0].id)){ ifMagEarly=ILe.rows[mi0].disp; break; } }
   }catch(eM0){}
-  h+='<div class="g3f1"><span class="g3rg"'+g3tip('What kind of day is this? Gamma and vanna as a 2x2. '+(R.why||'')+' The warning glyph marks the one cell where dealer hedging amplifies the move instead of damping it.')+'>'+
+  h+='<div class="g3f1"><span class="g3rg"'+g3tip(regimeTip(R))+'>'+
      g3esc(gTxt.trim())+(R.danger?' ⚠':'')+'</span>';
   if(ifMagEarly!=null) h+='<span class="g3tgt"'+g3tip('Where is the day trying to go? The heaviest strike in InsiderFinance\'s book — where dealer hedging concentrates and price tends to be pulled. A destination, not a forecast, and it reads the same book as the ladder below so the two can never disagree.')+'>→ '+dispNum(ifMagEarly)+'</span>';
   if(R.play) h+='<span class="g3play"'+g3tip('What does this regime reward? In negative gamma dealers hedge WITH the move, so fades are the losing side; in positive gamma they hedge against it and levels hold.')+'>'+g3esc(R.play)+'</span>';
@@ -17363,8 +17410,8 @@ function secFrame(sym){
     var gTxt2=(EB.gamma==null)?'gamma unknown'
              :(EB.gamma>0?'positive gamma — dealers hedge AGAINST the move, so range compresses and levels tend to hold'
                          :'negative gamma — dealers hedge WITH the move, so ranges expand and the edge is where overshoot happens');
-    h+='<span class="g3emw"'+g3tip('Where can today go, where is it now, and how much is left? The rail is '+(EB.anchor==='prevClose'?'the PRIOR SESSION\'S CLOSE':'the OPEN')+' plus and minus the expected move priced by the at-the-money straddle in the next expiry, held FIXED all session — a band that recentres on price every render just follows it around and could never show overextension. The notch is the anchor, the white dot is PRICE NOW, T is the target, and the dim span behind them is where the day has already been. '+g3esc(gTxt2)+'.'+(EB.est?' ~EST: the expected move was captured '+(EB.capMin!=null?EB.capMin+' minutes after':'well after')+' the open, so the straddle had already decayed and this band is NARROWER than the open\'s truly was.':'')+' Straddle struck at '+(EB.k!=null?EB.k:'?')+'.'+(EB.anchor==='prevClose'?' ⚠ PRE-OPEN: today has not started, so this is anchored on the PRIOR CLOSE. It re-anchors to the real open the moment the first RTH bar closes.':''))+'>';
-    h+='<span class="g3emk"'+g3tip('EXPECTED LOW — how far DOWN is today priced to go? The anchor minus the expected move. A PRICED boundary, not a floor: nothing stops price trading through it, and roughly a third of sessions close outside the band. That is what the number means, not a failure of it.')+'>'+g3esc(dispNum(EB.low))+'<small>EXP LOW</small></span>';
+    h+='<span class="g3emw"'+g3tip('Where today can go, where it is, and how much is left. The rail is '+(EB.anchor==='prevClose'?'the prior close':'the open')+' plus and minus the expected move, fixed for the session. Notch = anchor, white dot = price now, T = target, dim span = where the day has been.'+(EB.est?' ~EST: captured late, so this band is narrower than the open\'s was.':'')+(EB.anchor==='prevClose'?' Pre-open: re-anchors to the real open on the first bar.':''))+'>';
+    h+='<span class="g3emk"'+g3tip('Expected low — the open minus the expected move. A priced boundary, not a floor: about one day in three closes outside the band.')+'>'+g3esc(dispNum(EB.low))+'<small>EXP LOW</small></span>';
     h+='<span class="g3emt">'+
        '<i class="g3emr"></i>'+
        ((EB.hiWater!=null&&EB.loWater!=null)?('<i class="g3emx2" style="left:'+emPos(EB,EB.loWater).toFixed(1)+'%;width:'+Math.max(0,emPos(EB,EB.hiWater)-emPos(EB,EB.loWater)).toFixed(1)+'%"></i>'+
@@ -17375,7 +17422,7 @@ function secFrame(sym){
        (ifMagEarly!=null?('<span class="g3emT'+((ifMagEarly<EB.low||ifMagEarly>EB.high)?' out':'')+'" style="left:'+emPos(EB,ifMagEarly).toFixed(1)+'%">T</span>'):'')+
        '<i class="g3emn'+(str?' g3str':'')+'" style="left:'+pNow.toFixed(1)+'%"></i>'+
        '</span>';
-    h+='<span class="g3emk"'+g3tip('EXPECTED HIGH — how far UP is today priced to go? The anchor plus the expected move. A priced boundary, not a ceiling.')+'>'+g3esc(dispNum(EB.high))+'<small>EXP HIGH</small></span>';
+    h+='<span class="g3emk"'+g3tip('Expected high — the open plus the expected move. A priced boundary, not a ceiling.')+'>'+g3esc(dispNum(EB.high))+'<small>EXP HIGH</small></span>';
     h+='<b'+(str?' class="g3str"':'')+g3tip('How far price has travelled from the anchor, against what the straddle priced. The dot\'s position on the rail and this number are the same fact, so they can never disagree. Past 100% the day has done more than was paid for.')+'>'+Math.min(999,EB.pct)+'%</b>'+
        '<span class="g3fk">OF EM'+(EB.anchor==='prevClose'?' · FROM PREV CLOSE':'')+(EB.est?' ~EST':'')+'</span>';
     h+='</span>';
@@ -17396,17 +17443,28 @@ function secFrame(sym){
   // Goal 2 is not distance travelled, it is what REMAINS. Goal 3 is whether it could turn — either
   // because it is stretched, or because it has ALREADY turned once and may rotate again.
   // ⚠ DESCRIPTIVE. "stretched" is a condition, never "reversing". Nothing here has been measured.
+  // ---- (v11.59) THE DAY IN TRADER SHORTHAND ----
+  // Was: "REVERSED · up 53% down 55% · gave back 107% of the down-move". Correct, and nobody talks that
+  // way. HOD and LOD are the words, the arrow carries the ORDER, and "retraced" is what a retracement is
+  // called. ⚠ Still descriptive — the day is reported, never forecast.
   if(EB.ok && EB.shape){
     var uE=Math.round((EB.upExc||0)*100), dE=Math.round((EB.dnExc||0)*100);
-    var gb=Math.round((EB.giveBack||0)*100);
-    var room=dispNum(EB.roomAhead);
-    var sTxt='<b'+(EB.shape==='REVERSED'?' class="warn"':'')+'>'+EB.shape+'</b>'+
-             ' · up '+uE+'% down '+dE+'%';
-    if(EB.shape==='REVERSED') sTxt+=' · gave back <b class="warn">'+Math.min(999,gb)+'%</b> of the '+(EB.domUp?'up':'down')+'-move';
-    else if(gb>=25 && EB.shape!=='INSIDE') sTxt+=' · '+Math.min(999,gb)+'% given back';
-    sTxt += ' · '+(EB.over?('<b'+(EB.stretched?' class="warn"':'')+'>'+(EB.stretched?'STRETCHED in +G':'past EM — but −G expands')+'</b>')
-                          :(room+' left to '+(EB.dir>=0?'EXP HIGH':'EXP LOW')));
-    h+='<div class="g3shape"'+g3tip('THE DAY\'S SHAPE, and what is left in it. INSIDE = neither side has moved a quarter of the expected move yet. ONE-SIDED = it has gone one way and stayed. REVERSED = it has been meaningfully BOTH sides of the anchor, so it has already turned once — the give-back says how much of the bigger move was handed back. The last field is either the room remaining toward the rail ahead, or, once past 100%, what the GAMMA REGIME says an extension means: in positive gamma dealers hedge against the move so range compresses and reversion is plausible (STRETCHED); in negative gamma they hedge with it, ranges expand, and running past the band is simply what a trend day does. ⚠ ALL DESCRIPTIVE. None of this has been measured yet — the emband scorecard scores each regime separately and votes on nothing until n≥20.')+'>'+sTxt+'</div>';
+    var gb=Math.min(999,Math.round((EB.giveBack||0)*100));
+    var hod='HOD <b>+'+uE+'%</b>', lod='LOD <b>−'+dE+'%</b>', sTxt;
+    if(EB.shape==='REVERSED'){
+      // order first, then how much of the leading drive has been handed back
+      sTxt = (EB.hiFirst===false) ? (lod+' → '+hod) : (hod+' → '+lod);
+      sTxt += ' · retraced <b class="warn">'+gb+'%</b> of the '+(EB.domUp?'HOD':'LOD')+' drive';
+    } else if(EB.shape==='INSIDE'){
+      sTxt = 'inside · '+hod+' '+lod;
+    } else {
+      sTxt = (EB.shape==='ONE-SIDED UP'?hod:lod)+' · one-sided, '+(EB.domUp?lod:hod)+' barely tested';
+      if(gb>=25) sTxt += ' · retraced '+gb+'%';
+    }
+    sTxt += ' · ' + (EB.over
+      ? ('<b'+(EB.stretched?' class="warn"':'')+'>'+(EB.stretched?'STRETCHED — +G compresses':'past EM, but −G expands')+'</b>')
+      : (dispNum(EB.roomAhead)+' pts to EXP '+(EB.dir>=0?'HIGH':'LOW')+' left'));
+    h+='<div class="g3shape"'+g3tip('The day so far. HOD and LOD are how far it got each way from the open, as a share of the expected move — not where it is now. The arrow shows which came first. "Retraced" is how much of the bigger drive has been handed back; over 100% means it went through the open and out the other side. Last field: room left to the rail ahead, or, once past the band, what the gamma regime says that means. Descriptive only — nothing here has been measured yet.')+'>'+sTxt+'</div>';
   }
   h+='</div>';
   return h;
@@ -18266,7 +18324,13 @@ window.__gptsDebug.emBand = function(sy){
       em:+B.em.toFixed(2),                   // chart scale
       pct:B.pct,                             // |now - anchor| / em
       over:(B.pct>=100),
-      est:B.est, capMin:B.capMin, struckAt:B.k
+      est:B.est, capMin:B.capMin, struckAt:B.k,
+      // (v11.59) the shape fields. Added to emBand() at v11.57 and never surfaced here, so the only way
+      // to check them was to read pixels — which is how the anchor drift went unnoticed.
+      shape:B.shape||null, hiWater:B.hiWater, loWater:B.loWater,
+      upExc:B.upExc, dnExc:B.dnExc, giveBack:B.giveBack, hiFirst:B.hiFirst,
+      roomUp:B.roomUp, roomDn:B.roomDn, roomAhead:B.roomAhead,
+      gamma:B.gamma, stretched:B.stretched, scalePinned:!!B.scalePinned
     };
     // the guard rail: show BOTH straddles so a regression to the week's move is visible at a glance
     try{

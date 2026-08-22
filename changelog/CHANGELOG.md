@@ -1,3 +1,70 @@
+## v11.59 — the anchor was drifting, and the line now speaks like a trader
+
+**THE ANCHOR WAS NOT ANCHORED.** `rr` is a LIVE ratio between the displayed instrument and the underlying,
+and it moves with the cash/futures basis. Measured on the live panel: `undScale` went 0.099778 → 0.099775
+in **twenty seconds**, and the whole band slid 0.05 with it — open, both rails, HOD and LOD.
+
+**Friday's opening print cannot change.** The expected move was captured once and held still; the anchor
+was recomputed from a live scale factor on every render. **Half-anchored is not anchored**, and a rail
+that wobbles is not a reference. `rr` is now captured alongside the EM and reused for every candle-derived
+value, so open, now, HOD and LOD all share ONE scale factor: the arithmetic is exact and the rails hold
+still. Cost, stated: if the basis moves materially intraday the displayed band drifts a hair from the
+chart. Basis moves are small; wobbling rails are not acceptable in a fixed reference.
+
+Verified against the reference implementation — SyntaxGeek's 0DTE Anchored Expected Move is explicit that
+an anchored band is "a snapshot of the EM value at open" that "remains static throughout the day". Both
+halves static, not one.
+
+**THE LINE NOW SPEAKS LIKE A TRADER.**
+
+    was:  REVERSED · up 53% down 55% · gave back 107% of the down-move · 33.48 left to EXP HIGH
+    now:  LOD −55% → HOD +53% · retraced 107% of the LOD drive · 33.48 pts to EXP HIGH left
+
+HOD and LOD are the words. **The arrow carries the ORDER** — and that is new information, not a
+restyling: "sold off then rallied" and "rallied then sold off" are different days and rendered
+identically before. It costs one bar index per extreme. "Retraced" is what a retracement is called.
+
+    one-sided:  HOD +107% · one-sided, LOD −11% barely tested · STRETCHED — +G compresses
+    inside:     inside · HOD +7% LOD −8% · 32.20 pts to EXP HIGH left
+    trend −G:   HOD +119% · one-sided, LOD −4% barely tested · past EM, but −G expands
+
+**HOVERS CUT.** Every tooltip in FRAME is now under ~600 characters, down from paragraphs. A tooltip
+nobody finishes reading is a tooltip nobody reads. A test pins the ceiling.
+
+**AND THE DEBUG HOOK NOW SURFACES THE SHAPE FIELDS.** `shape`, `hiWater`, `loWater`, `upExc`, `dnExc`,
+`giveBack`, `hiFirst`, `roomAhead`, `gamma`, `stretched` were added to `emBand()` at v11.57 and never
+exposed — so the only way to check any of them was to read pixels. **That is exactly how the anchor drift
+went unnoticed**: the numbers were never visible to compare across two moments.
+
+⚠ One test caught itself: the "old phrasing is gone" assertion failed because the source comment
+legitimately QUOTES the old wording. It strips `//` lines before checking now. A test that cannot tell
+code from documentation fails on its own history.
+
+## v11.58 — the regime chip explains all four cells, not just yours
+
+The hover named the cell you were in and described only that one, so there was no way to see what the
+other three would have meant — or that the thing is a 2x2 at all. It now lists all four, marks the active
+one with `▸`, and says which number you are in:
+
+    1. −G −V  ⚠ the self-reinforcing cell — hedging amplifies twice over
+    2. −G +V  short gamma, hedge WITH the move — breaks over fades
+    3. +G −V  pinning, but vanna leans the other way — fade, not with size
+    4. +G +V  long gamma, hedge AGAINST the move — pins hold
+
+Native `title` attributes render `\n`, and `g3esc` only touches `"` and `<`, so a numbered list survives
+into the tooltip without any new markup.
+
+It also states the thing a reader must not get backwards: **the regime decides what an extension MEANS on
+the band below.** Past 100% of the expected move reads as STRETCHED only in cells 3 and 4, where range
+compresses. In cells 1 and 2 ranges EXPAND, so running past the band is what a trend day does — not a fade
+signal. And it repeats why neither gamma nor vanna votes in BIAS: both CONDITION, so they gate.
+
+⚠ **The test for this block was appended AFTER `process.exit()` and silently never ran** — the file
+reported the same 56 passes before and after, which is exactly what a test that does not execute looks
+like. Caught by comparing the count across the change; the block now sits above the exit and the file
+reports 76. **Compare assertion COUNTS across a change, not just pass/fail** — a test that never runs is
+green.
+
 ## v11.57 — where the day has BEEN, and what an extension means in each regime
 
 Three things the band could not answer, one per stated goal.
