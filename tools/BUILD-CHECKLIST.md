@@ -53,3 +53,56 @@ undocumented. That has already happened repeatedly in this project.
 | GitHub serves the old version | the installer did not push | clone and read `@version` |
 | GitHub new, browser old | the page was already open | reload the tab |
 | raw stale for ~5 min | CDN cache | read the `cache-control` / `age` headers |
+
+---
+
+# SPEED — MEASURED 2026-08-22, NOT ASSUMED
+
+A build was taking far longer than the change deserved. The cause was NOT where it was assumed to be.
+Every number below was timed on this repo; do not re-derive them from intuition.
+
+| thing | measured |
+|---|---|
+| **whole suite, 105 files, sequential** | **4.5 s** |
+| whole suite, `xargs -P` | 2.3 s |
+| `node tools/smoke.js` | 0.078 s |
+| one targeted test | 0.047 s |
+| **one subagent, any size of task** | **3–7 min fixed overhead** |
+
+**TESTING IS FREE. SUBAGENTS ARE NOT.** The v11.49 build spent ~16 minutes inside three subagents and
+about 18 seconds running tests four times. Anyone who "saves time" by running fewer tests has the cost
+model exactly backwards.
+
+## The four rules that follow from those numbers
+
+**1. DELEGATION THRESHOLD. Delegate only when the task needs its OWN exploration, or exceeds ~15 edits
+across files you have not already opened.** A subagent costs 3–7 minutes before it does anything useful.
+The v11.49 `HVL`→`FLIP` rename — 35 mechanical line edits across 8 files — was delegated and took **7
+minutes**; two `sed` calls inline would have taken under thirty seconds. MODEL ROUTING is about
+*expensive reasoning*, not about *typing*. Renames, version bumps, packaging a file, running a suite:
+do them inline.
+
+**2. WRITE THE TEST FIRST — it is 47 milliseconds and it forces you to name the input.** v11.49 shipped a
+fix for `toFri.em` vs `dte0.em` that would have surfaced in the first two minutes, because the FIRST
+assertion anyone writes for an EM feature is "which EM does it read". Instead it was found after a mockup
+had been built on the wrong number and thrown away. A test written first is a design review that runs.
+
+**3. VERIFY THE DATA BEFORE DESIGNING ANYTHING.** One `__gptsDebug` call against the live page beats an
+hour of reasoning about what the payload probably contains. Every mockup drawn before that call is a
+mockup that may have to be discarded — and one already was.
+
+**4. BATCH TOOL CALLS.** Four greps issued one at a time cost four round-trips and answer one question.
+Combine them with `;` and read the whole answer at once.
+
+## THE RESUME NOTE IS SPLIT — DO NOT REMERGE IT
+
+`session-state/latest-resume-note.md` was ~250 lines fully rewritten every single build, and most of it —
+failure patterns, build mechanics, standing instructions — changes maybe once a month. It is now two files:
+
+- **`session-state/PROJECT-CONSTANTS.md`** — failure patterns, the user's stated rules, payload facts,
+  build mechanics, debug surface, standing instructions. **Touch it only when one of those actually
+  changes.** Most builds do not.
+- **`session-state/latest-resume-note.md`** — WHERE WE ARE ONLY: current version, what is verified vs
+  unverified live, what is at the top of the queue, open threads. Short. Rewritten every build.
+
+**A load must read BOTH.** The constants file is not optional context — it is where the landmines live.

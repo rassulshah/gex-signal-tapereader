@@ -1,3 +1,25 @@
+## v11.50 — the band was absent exactly when you were preparing
+
+**v11.49 shipped a band you could not see.** `closedCandles()` is filtered to TODAY, so on a weekend, on
+a holiday, and every morning before the first RTH bar closes at 08:33 CT, there were no bars — no open —
+and the band refused with *"no closed bars yet — no open to measure from"*. Which is precisely the window
+a trader is sitting there planning the session. The refusal was technically honest and practically useless.
+
+**The anchor now falls back to the PRIOR SESSION'S CLOSE.** Quoting an expected move from the prior close
+is the standard reference when today has not started, and it is a FIXED anchor, not a live one chasing
+spot — the whole reason the band is anchored at all. `S.contCloses` already carries prior sessions with a
+`day` field, so the last close of the last completed day is available without new plumbing.
+
+**It re-anchors to the real open the moment the first RTH bar closes**, and a test pins that transition.
+The two references can never be silently confused: the face appends **`· FROM PREV CLOSE`** beside the
+percentage, and the hover says the day has not started and that it will re-anchor.
+
+Refusal is now reserved for genuinely having nothing — no bars today AND no prior session — and it says
+which of the two is missing.
+
+Landed alongside v11.49's own reason for existing, which is worth restating: the EM on the face was
+`toFri.em`, a LATER expiry worth roughly double the day's (69.25 against 34.65), sitting under a hover
+asking "how much room does today have". `dte0` only, forever.
 ## v11.49 — the EM on the face was a WEEK's move, and FRAME stopped reporting instruments
 
 **The expected move shown under "how much room does today have" was answering about a different week.**

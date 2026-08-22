@@ -121,10 +121,35 @@ function ex(n){
   ok(/straddle/.test(B5.why||''),       'and says why in words', B5.why);
   ok(!/70/.test(String(B5.em)),         'it does NOT reach for toFri when dte0 is missing', B5.em);
 
+  // ---------- (v11.50) PRE-OPEN / WEEKEND: anchor on the PRIOR SESSION'S CLOSE ----------
+  // The band was ABSENT every weekend and every pre-open — precisely when a trader is preparing —
+  // because closedCandles() is today-only. Quoting the expected move from the prior close is the
+  // standard anchor when today has not started, and the real open replaces it the moment the first
+  // RTH bar closes. It must SAY which reference it used or it is a mislabel.
   global.__cands=[];
-  global.ctTodayStr=function(){ return '2026-08-28'; };
+  global.__chain={ err:null, dte0:{ em:{ em:20, k:7700 } }, toFri:{ em:{ em:70, k:7700 } } };
+  global.ctTodayStr=function(){ return '2026-08-29'; };
+  global.STATE={ SPY:{ price:772.00, contCloses:[
+    {c:768.00, day:'2026-08-27'}, {c:771.00, day:'2026-08-27'},
+    {c:769.50, day:'2026-08-28'}, {c:770.00, day:'2026-08-28'} ] } };
+  let B7=emBand('SPY');
+  ok(B7.ok===true,                      'with no bars today the band still draws', B7.why);
+  ok(B7.anchor==='prevClose',           'and says it is anchored on the prior close', B7.anchor);
+  ok(B7.open===7700,                    'the anchor is the LAST close of the LAST completed day', B7.open);
+  ok(B7.low===7680 && B7.high===7720,   'rails are prior close ∓ EM', [B7.low,B7.high]);
+  ok(B7.now===7720,                     'now uses the live price when there is no candle', B7.now);
+  ok(B7.pct===100,                      'displacement measured from the prior close', B7.pct);
+
+  global.__cands=[ {o:770.00,h:770.5,l:769.5,c:770.2}, {o:770.2,h:770.4,l:769.0,c:769.0} ];
+  global.ctTodayStr=function(){ return '2026-08-30'; };
+  let B8=emBand('SPY');
+  ok(B8.anchor==='open',                're-anchors to the real open as soon as a bar closes', B8.anchor);
+
+  global.__cands=[];
+  global.STATE={ SPY:{ contCloses:[] } };
+  global.ctTodayStr=function(){ return '2026-08-31'; };
   let B6=emBand('SPY');
-  ok(B6.ok===false && /open/.test(B6.why||''), 'no candles means no open to measure from', B6.why);
+  ok(B6.ok===false && /prior session/.test(B6.why||''), 'with neither, it refuses and says why', B6.why);
 }
 
 // ---------- 4. the face wires it, and the removed cells are gone ----------
@@ -137,6 +162,7 @@ function ex(n){
   ok(!/cell\('ATR'/.test(f),            'ATR is off the face (it still sets ladder zone widths)');
   ok(/g3tag/.test(f),                   'the session-phase tag stays');
   ok(/g3emx/.test(f),                   'and there is a spoken refusal when the band cannot be drawn');
+  ok(/FROM PREV CLOSE/.test(f),         'and the face SAYS when the anchor is the prior close, not the open');
 }
 
 // ---------- 5. both numbers are ENROLLED ----------

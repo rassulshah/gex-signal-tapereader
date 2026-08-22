@@ -1,1 +1,10 @@
 Sat 08/22/2026 11:50:01.83 extracting gex-drop-test.tar.gz 
+[main 09e4bd8] test: gex auto-pull loop verification drop
+ 4 files changed, 66 insertions(+)
+ create mode 100644 tools/.gex-drop-msg
+ create mode 100644 tools/AUTOPULL-TEST.txt
+ create mode 100644 tools/gex-pull.bat
+ create mode 100644 tools/gex-pull.log
+To https://github.com/rassulshah/gex-signal-tapereader.git
+   f2b8749..09e4bd8  main -> main
+Sat 08/22/2026 11:50:05.29 PUSHED - 1 drop(s): test: gex auto-pull loop verification drop 

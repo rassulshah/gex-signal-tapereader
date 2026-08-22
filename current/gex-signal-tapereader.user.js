@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.49
+// @version    11.50
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.49';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.50';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -17112,10 +17112,23 @@ function emBand(sym){
   try{
     var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(eR){}
     var cs=closedCandles(sym)||[];
-    if(!cs.length){ out.why='no closed bars yet — no open to measure from'; return out; }
-    var openU=cs[0].o;
+    var openU=null, nowU=null;
+    if(cs.length && cs[0].o>0){
+      openU=cs[0].o; nowU=cs[cs.length-1].c; out.anchor='open';
+    } else {
+      // (v11.50) PRE-OPEN / CLOSED: there is no open yet, so anchor on the PRIOR SESSION'S CLOSE.
+      // Quoting the expected move from the prior close is standard and it is the honest anchor when
+      // today has not started — it is NOT a live band chasing spot, it is a fixed reference that the
+      // real open replaces the moment the first RTH bar closes. Without this the band was simply
+      // ABSENT every weekend and every pre-open, which is exactly when a trader is preparing.
+      var S=STATE[sym]||{}, cc=S.contCloses||[], today=ctTodayStr();
+      for(var i=cc.length-1;i>=0;i--){ if(cc[i].day!==today){ openU=cc[i].c; break; } }
+      if(!(openU>0)){ out.why='no prior session close to anchor on'; return out; }
+      nowU=(typeof S.price==='number' && S.price>0)?S.price:openU;
+      out.anchor='prevClose';
+    }
     if(!(openU>0)){ out.why='the opening bar carries no price'; return out; }
-    var open=openU*rr, now=cs[cs.length-1].c*rr;
+    var open=openU*rr, now=nowU*rr;
     var dsc=1; try{ var IL=ifLadder(sym); if(IL&&!IL.err&&IL.dispScale) dsc=IL.dispScale; }catch(eL){}
 
     // one capture per symbol per day, and it is never overwritten once taken
@@ -17195,7 +17208,7 @@ function secFrame(sym){
     var over=(EB.pct>=100);
     var pOpen=emPos(EB,EB.open), pNow=emPos(EB,EB.now);
     var fa=Math.min(pOpen,pNow), fb=Math.max(pOpen,pNow);
-    h+='<span class="g3emw"'+g3tip('Where can today go, and where is it now? The rail is the OPEN plus and minus the expected move priced by TODAY\'S at-the-money straddle, held fixed all session — a band that recentres on price every render just follows it around and could never show overextension. The notch is the open everything is measured from, the dot is price now, the caret is the target. The percentage is how far price has travelled from the open against what was priced, so it and the dot are the same fact. Past 100% the day has done more than the straddle paid for.'+(EB.est?' ~EST: the expected move was captured '+(EB.capMin!=null?EB.capMin+' minutes after':'well after')+' the open, so the straddle had already decayed and this band is NARROWER than the open\'s truly was.':'')+' Straddle struck at '+(EB.k!=null?EB.k:'?')+'.')+'>';
+    h+='<span class="g3emw"'+g3tip('Where can today go, and where is it now? The rail is '+(EB.anchor==='prevClose'?'the PRIOR SESSION\'S CLOSE':'the OPEN')+' plus and minus the expected move priced by the at-the-money straddle in the next expiry, held fixed all session — a band that recentres on price every render just follows it around and could never show overextension. The notch is the open everything is measured from, the dot is price now, the caret is the target. The percentage is how far price has travelled from the open against what was priced, so it and the dot are the same fact. Past 100% the day has done more than the straddle paid for.'+(EB.est?' ~EST: the expected move was captured '+(EB.capMin!=null?EB.capMin+' minutes after':'well after')+' the open, so the straddle had already decayed and this band is NARROWER than the open\'s truly was.':'')+' Straddle struck at '+(EB.k!=null?EB.k:'?')+'.'+(EB.anchor==='prevClose'?' ⚠ PRE-OPEN: today has not started, so this is anchored on the PRIOR CLOSE and the percentage measures from there. It re-anchors to the real open the moment the first RTH bar closes.':''))+'>';
     h+='<span class="g3emk">'+g3esc(dispNum(EB.low))+'</span>';
     h+='<span class="g3emt"><i class="g3emr"></i>'+
        '<i class="g3emf'+(over?' g3over':'')+'" style="left:'+fa.toFixed(1)+'%;width:'+Math.max(0,fb-fa).toFixed(1)+'%"></i>'+
@@ -17205,7 +17218,7 @@ function secFrame(sym){
        '</span>';
     h+='<span class="g3emk">'+g3esc(dispNum(EB.high))+'</span>';
     h+='<b'+(over?' class="g3over"':'')+'>'+Math.min(999,EB.pct)+'%</b>'+
-       '<span class="g3fk">OF EM'+(EB.est?' ~EST':'')+'</span>';
+       '<span class="g3fk">OF EM'+(EB.anchor==='prevClose'?' · FROM PREV CLOSE':'')+(EB.est?' ~EST':'')+'</span>';
     h+='</span>';
   } else {
     h+='<span class="g3emx"'+g3tip('Where can today go? The band needs an opening bar and a two-sided at-the-money straddle in today\'s expiry. A one-sided straddle is not a straddle and half a band would be worse than none, so it says why instead of drawing something.')+'>'+g3esc(EB.why)+'</span>';
