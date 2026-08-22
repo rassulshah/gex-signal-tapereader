@@ -1,0 +1,184 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>EM band — excursion & regime-aware overextension</title>
+<style>
+  body{background:#0b0e14;color:#e6edf3;font:12px Inter,Arial,sans-serif;margin:0;padding:22px 26px 70px}
+  h1{font-size:12px;letter-spacing:.15em;color:#8b98a9;font-weight:800;margin:0 0 6px}
+  .sub{font-size:11px;color:#6c7889;margin:0 0 22px;line-height:1.6;max-width:700px}
+  .sub b{color:#e6edf3}
+  .v{margin:0 0 26px}
+  .cap{font-size:9px;letter-spacing:.09em;font-weight:800;margin:0 0 6px;color:#f2b45a}
+  .note{font-size:10px;color:#6c7889;margin:8px 0 0;line-height:1.6;max-width:660px}
+  .note b{color:#8b98a9}
+  .panel{width:560px;background:#0b0e14;border:1px solid #1a212c;border-radius:5px;padding:6px 8px}
+  .g3f1{display:flex;align-items:center;gap:7px;font-size:9.5px;flex-wrap:wrap;margin-bottom:5px}
+  .g3rg{font-size:10px;font-weight:800;padding:1px 7px;border-radius:3px;border:1px solid}
+  .neg{background:rgba(163,113,247,.18);color:#a371f7;border-color:rgba(163,113,247,.4)}
+  .pos{background:rgba(46,194,126,.14);color:#2ec27e;border-color:rgba(46,194,126,.4)}
+  .g3tgt{font-size:11px;font-weight:800;color:#e3c341;letter-spacing:-.2px}
+  .g3play{font-size:8.5px;color:#8b98a9}
+  .row{display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}
+  .lo,.hi{font-size:10.5px;font-weight:800;white-space:nowrap;cursor:help;line-height:1;color:#e6edf3}
+  .lo small,.hi small{display:block;font-size:6px;font-weight:800;letter-spacing:.09em;color:#6c7889;margin-top:1px}
+  .t{position:relative;flex:1;height:13px}
+  .rail{position:absolute;left:0;right:0;top:5px;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}
+  /* THE EXCURSION — where the day has BEEN, not just where it is */
+  .exc{position:absolute;top:5px;height:4px;background:rgba(139,152,169,.22);border-radius:2px;cursor:help}
+  .wm{position:absolute;top:2px;width:1px;height:10px;background:rgba(195,204,216,.65);cursor:help}
+  .fill{position:absolute;top:5px;height:4px;border-radius:2px;background:rgba(139,152,169,.6)}
+  .op{position:absolute;top:1px;width:2px;height:12px;background:#c3ccd8;transform:translateX(-1px);border-radius:1px;cursor:help}
+  .nw{position:absolute;top:2px;width:10px;height:10px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px #0b0e14;transform:translateX(-5px);cursor:help}
+  .tg{position:absolute;top:0;font-size:9px;font-weight:800;color:#e3c341;transform:translateX(-50%);line-height:13px;cursor:help;text-shadow:0 0 3px #0b0e14,0 0 3px #0b0e14}
+  .pct{font-size:10px;font-weight:800;white-space:nowrap;cursor:help;color:#e6edf3}
+  .fk{color:#8b98a9;font-size:7px;font-weight:700;letter-spacing:.05em;cursor:help}
+  .shape{font-size:8px;color:#8b98a9;margin-top:3px;cursor:help;letter-spacing:.02em}
+  .shape b{color:#e6edf3;font-weight:800}
+  /* regime-aware overextension */
+  .amber .nw{background:#f2b45a} .amber .fill{background:rgba(242,180,90,.5)} .amber .pct{color:#f2b45a}
+  .legend{margin:26px 0 0;font-size:10px;color:#6c7889;line-height:1.8;max-width:700px;border-top:1px solid #1a212c;padding-top:14px}
+  .legend b{color:#8b98a9}
+  .legend em{color:#f2b45a;font-style:normal;font-weight:700}
+</style>
+
+<h1>① FRAME — EXCURSION &amp; REGIME-AWARE OVEREXTENSION</h1>
+<p class="sub">Two changes. <b>The excursion</b> — a dim span showing where the day has BEEN, with hairlines
+at the high- and low-water marks — so a day that ran up and came back no longer renders identically to one
+that drifted quietly down. And <b>regime-aware colour</b>: past 100% is amber in <b>+G</b> where reversion
+is the plausible case, and stays neutral in <b>−G</b> where overshoot is simply what a trend day does.
+Hovers are live. <b>Nothing here is a prediction — see the bottom.</b></p>
+
+<!-- 1 -->
+<div class="v">
+  <div class="cap">1 — QUIET, PRICE ON THE OPEN (your current live state)</div>
+  <div class="panel">
+    <div class="g3f1"><span class="g3rg neg">−G −V ⚠</span><span class="g3tgt">→ 7717.71</span><span class="g3play">momentum — breaks not fades · widen stops</span></div>
+    <div class="row">
+      <span class="lo" title="EXPECTED LOW — the open minus the expected move. A priced boundary, not a floor.">7657.07<small>EXP LOW</small></span>
+      <span class="t">
+        <i class="rail"></i>
+        <i class="exc" style="left:46.06%;width:7.38%" title="WHERE THE DAY HAS BEEN — the span between the session's lowest and highest print so far. Today: 7689.10 to 7694.20, barely off the open either way."></i>
+        <i class="wm" style="left:46.06%" title="LOW-WATER — 7689.10, the lowest print of the session."></i>
+        <i class="wm" style="left:53.44%" title="HIGH-WATER — 7694.20, the highest print of the session."></i>
+        <i class="op" style="left:50%" title="THE OPEN — 7691.80. The fixed anchor for the whole session."></i>
+        <span class="tg" style="left:87.3%" title="TARGET — 7717.71, the heaviest strike in InsiderFinance's book.">T</span>
+        <i class="nw" style="left:49.28%" title="PRICE NOW — 7691.30, essentially on the open."></i>
+      </span>
+      <span class="hi" title="EXPECTED HIGH — the open plus the expected move.">7726.53<small>EXP HIGH</small></span>
+      <span class="pct" title="Displacement from the open against what the straddle priced.">1%</span>
+      <span class="fk">OF EM</span>
+    </div>
+    <div class="shape" title="THE DAY'S SHAPE, described not predicted. Both excursions are under a quarter of the expected move, so the session has not committed in either direction yet.">
+      shape <b>INSIDE</b> · up 7% · down 8% · nothing committed
+    </div>
+  </div>
+  <p class="note">The excursion span is nearly invisible because the day genuinely hasn't gone anywhere.
+  That is the honest picture, and the old band couldn't distinguish it from a day that had.</p>
+</div>
+
+<!-- 2 -->
+<div class="v">
+  <div class="cap">2 — TREND DAY IN −G · past 100%, and the colour does NOT cry reversal</div>
+  <div class="panel">
+    <div class="g3f1"><span class="g3rg neg">−G −V ⚠</span><span class="g3tgt">→ 7717.71</span><span class="g3play">momentum — breaks not fades · widen stops</span></div>
+    <div class="row">
+      <span class="lo">7657.07<small>EXP LOW</small></span>
+      <span class="t">
+        <i class="rail"></i>
+        <i class="exc" style="left:48.1%;width:51.9%" title="WHERE THE DAY HAS BEEN — 7690.50 to 7733.00. Almost all of it above the open: the day has gone one way and stayed there."></i>
+        <i class="wm" style="left:48.1%" title="LOW-WATER — 7690.50, barely below the open."></i>
+        <i class="wm" style="left:100%" title="HIGH-WATER — 7733.00, beyond the expected high."></i>
+        <i class="op" style="left:50%" title="THE OPEN — 7691.80."></i>
+        <span class="tg" style="left:87.3%" title="TARGET 7717.71 — price has run through it.">T</span>
+        <i class="nw" style="left:100%" title="PRICE NOW — 7733.00, past the expected high. In NEGATIVE gamma dealers hedge WITH the move, so ranges expand and the edge is where overshoot happens — this is what a trend day looks like, not a fade signal. The mark stays neutral; the number reports the distance."></i>
+      </span>
+      <span class="hi">7726.53<small>EXP HIGH</small></span>
+      <span class="pct" title="119% — the day has travelled further than the straddle priced.">119%</span>
+      <span class="fk">OF EM</span>
+    </div>
+    <div class="shape" title="One-sided: essentially the whole excursion is above the open and price is sitting at the high-water mark. Nothing has been given back.">
+      shape <b>ONE-SIDED UP</b> · up 119% · down 4% · at the high-water mark
+    </div>
+  </div>
+  <p class="note">Past 100% and deliberately <b>not</b> red. The regime line one row above says <b>breaks not
+  fades</b>; a red mark here would have contradicted it. The percentage still says how far past.</p>
+</div>
+
+<!-- 3 -->
+<div class="v amber">
+  <div class="cap">3 — SAME EXTENSION, BUT IN +G · this is the reversion-watch case</div>
+  <div class="panel">
+    <div class="g3f1"><span class="g3rg pos">+G +V</span><span class="g3tgt">→ 7717.71</span><span class="g3play">fade edges · pins hold</span></div>
+    <div class="row">
+      <span class="lo">7657.07<small>EXP LOW</small></span>
+      <span class="t">
+        <i class="rail"></i>
+        <i class="exc" style="left:44.5%;width:55.5%" title="WHERE THE DAY HAS BEEN — 7688.00 to 7729.00."></i>
+        <i class="wm" style="left:44.5%" title="LOW-WATER — 7688.00."></i>
+        <i class="wm" style="left:100%" title="HIGH-WATER — 7729.00."></i>
+        <i class="op" style="left:50%" title="THE OPEN — 7691.80."></i>
+        <span class="tg" style="left:87.3%" title="TARGET 7717.71 — passed.">T</span>
+        <i class="nw" style="left:100%" title="PRICE NOW 7729.00 — past the expected high in POSITIVE gamma. Dealers hedge AGAINST the move here, so range compresses and levels tend to hold. This is the condition where reversion is plausible — which is WHY it is marked, and it is a condition, not a prediction. The scorecard has not measured it yet."></i>
+      </span>
+      <span class="hi">7726.53<small>EXP HIGH</small></span>
+      <span class="pct" title="107% past the priced move, in the regime that compresses range.">107%</span>
+      <span class="fk">OF EM</span>
+    </div>
+    <div class="shape" title="One-sided up, price at the high-water mark, past the priced move, in a compressing regime. The four facts that together describe a stretched condition.">
+      shape <b>ONE-SIDED UP</b> · up 107% · down 11% · <b>stretched in +G</b>
+    </div>
+  </div>
+  <p class="note">Identical extension to case 2, opposite regime, opposite treatment. <b>This is the whole
+  point:</b> the same 100%+ reading means different things depending on who is hedging which way.</p>
+</div>
+
+<!-- 4 -->
+<div class="v">
+  <div class="cap">4 — THE REVERSAL DAY · ran up, gave it all back, now down — YOUR SECOND SCENARIO</div>
+  <div class="panel">
+    <div class="g3f1"><span class="g3rg pos">+G −V</span><span class="g3tgt">→ 7717.71</span><span class="g3play">fade edges · but vanna is against you</span></div>
+    <div class="row">
+      <span class="lo">7657.07<small>EXP LOW</small></span>
+      <span class="t">
+        <i class="rail"></i>
+        <i class="exc" style="left:0.6%;width:95%" title="WHERE THE DAY HAS BEEN — 7657.50 all the way to 7723.50. The excursion spans almost the ENTIRE band: this day has been to both ends."></i>
+        <i class="wm" style="left:0.6%" title="LOW-WATER — 7657.50, at the expected low."></i>
+        <i class="wm" style="left:95.6%" title="HIGH-WATER — 7723.50, just under the expected high. The day got here FIRST, then reversed."></i>
+        <i class="op" style="left:50%" title="THE OPEN — 7691.80. Price has crossed back through it."></i>
+        <span class="tg" style="left:87.3%" title="TARGET 7717.71 — reached earlier in the session, then abandoned.">T</span>
+        <i class="nw" style="left:4.2%" title="PRICE NOW — 7660.00. The day ran 91% of the expected move UP, then reversed through the open and is now 92% of the expected move DOWN. The entire up-move was given back and then some."></i>
+      </span>
+      <span class="hi">7726.53<small>EXP HIGH</small></span>
+      <span class="pct" title="92% below the open — after having been 91% above it.">92%</span>
+      <span class="fk">OF EM</span>
+    </div>
+    <div class="shape" title="Meaningful excursion BOTH sides of the open and price has crossed back through it: the session has already reversed once. The give-back figure is how much of the dominant excursion has been returned.">
+      shape <b>REVERSED</b> · up 91% then down 92% · gave back <b>100%</b> of the up-move
+    </div>
+  </div>
+  <p class="note">The old band drew this as a lone dot near the low — <b>indistinguishable from a day that
+  simply drifted down.</b> With the excursion, the whole story is on one rail: went there, failed, came
+  back through, kept going.</p>
+</div>
+
+<div class="legend">
+  <b>WHAT THIS DOES AND DOES NOT CLAIM.</b><br><br>
+  Everything above is <b>descriptive</b>. Where the day has been, where it is, which regime it is in. Not
+  one pixel says what happens next, and the words are chosen so none of them imply it —
+  <em>stretched</em>, not <em>reversing</em>.<br><br>
+  <b>THE HYPOTHESIS, STATED SO IT CAN BE WRONG:</b> past 100% of the expected move, price reverts toward
+  the open MORE OFTEN in positive gamma than in negative gamma.<br><br>
+  <b>I cannot tell you whether that is true, and neither can this tool yet.</b> Four archived day-files,
+  492 bars, effective n ≈ 49 independent observations — and every one of those four days is a DOWN day, so
+  a directional claim drawn from them earns its accuracy for free. Worse: the band shipped today, so there
+  are <b>zero</b> `emband` records in any of them. The hypothesis has never been tested once.<br><br>
+  <b>The scorecard must split by regime or it will measure nothing.</b> Scoring reversion across both
+  regimes together averages two opposite effects into mush and reports "no edge" — which would be the
+  wrong conclusion drawn from the right data. Two questions, scored separately, non-voting until n≥20 each:
+  <br>&nbsp;&nbsp;· past 100% <b>in +G</b> — does price come back toward the open?
+  <br>&nbsp;&nbsp;· past 100% <b>in −G</b> — does it keep going?<br><br>
+  And a third that answers your reversal question directly:
+  <br>&nbsp;&nbsp;· after a <b>REVERSED</b> shape appears, does the new direction hold, or does the day rotate again?
+  <br><br>
+  At roughly one session per weekday and only a handful of qualifying bars per session, n≥20 is <b>weeks
+  away</b>. Until then these are reads on a face, not signals — and the tool should keep saying so.
+</div>

@@ -1,0 +1,155 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>EM band v2 — bigger rails, T marker, hovers</title>
+<style>
+  body{background:#0b0e14;color:#e6edf3;font:12px Inter,Arial,sans-serif;margin:0;padding:22px 26px 70px}
+  h1{font-size:12px;letter-spacing:.15em;color:#8b98a9;font-weight:800;margin:0 0 6px}
+  .sub{font-size:11px;color:#6c7889;margin:0 0 20px;line-height:1.6;max-width:680px}
+  .sub b{color:#e6edf3}
+  .v{margin:0 0 24px}
+  .cap{font-size:9px;letter-spacing:.09em;font-weight:800;color:#f2b45a;margin:0 0 6px}
+  .cap.g{color:#2ec27e}
+  .cap.r{color:#f0616d}
+  .note{font-size:10px;color:#6c7889;margin:7px 0 0;line-height:1.6;max-width:640px}
+  .note b{color:#8b98a9}
+  .panel{width:560px;background:#0b0e14;border:1px solid #1a212c;border-radius:5px;padding:6px 8px}
+  .g3f1{display:flex;align-items:center;gap:7px;font-size:9.5px;flex-wrap:wrap;margin-bottom:5px}
+  .g3rg{font-size:10px;font-weight:800;padding:1px 7px;border-radius:3px;background:rgba(163,113,247,.18);color:#a371f7;border:1px solid rgba(163,113,247,.4)}
+  .g3tgt{font-size:11px;font-weight:800;color:#e3c341;letter-spacing:-.2px}
+  .g3play{font-size:8.5px;color:#8b98a9}
+  .row{display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}
+  .rep{font-size:7px;font-weight:800;padding:1px 5px;border-radius:2px;background:rgba(163,113,247,.22);color:#a371f7;border:1px solid rgba(163,113,247,.55);cursor:help}
+  .t{position:relative;flex:1;height:13px}
+
+  /* THE RAILS — the change asked for: expected low / high are now the loudest numbers on the row */
+  .lo,.hi{font-size:10.5px;font-weight:800;white-space:nowrap;cursor:help;line-height:1}
+  .lo{color:#f0616d} .hi{color:#2ec27e}
+  .lo small,.hi small{display:block;font-size:6px;font-weight:800;letter-spacing:.09em;color:#6c7889;margin-top:1px}
+  .neutral .lo,.neutral .hi{color:#e6edf3}
+
+  .rail{position:absolute;left:0;right:0;top:5px;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}
+  .fill{position:absolute;top:5px;height:4px;border-radius:2px;background:rgba(139,152,169,.55)}
+  .op{position:absolute;top:1px;width:2px;height:12px;background:#c3ccd8;transform:translateX(-1px);border-radius:1px;cursor:help}
+  .nw{position:absolute;top:2px;width:10px;height:10px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px #0b0e14;transform:translateX(-5px);cursor:help}
+  /* T replaces the caret */
+  .tg{position:absolute;top:0;font-size:9px;font-weight:800;color:#e3c341;transform:translateX(-50%);
+      line-height:13px;cursor:help;text-shadow:0 0 3px #0b0e14,0 0 3px #0b0e14}
+  .tg.out{color:#6c7889}
+  .pct{font-size:10px;font-weight:800;white-space:nowrap;cursor:help}
+  .fk{color:#8b98a9;font-size:7px;font-weight:700;letter-spacing:.05em;cursor:help}
+  .over .nw{background:#f0616d} .over .fill{background:rgba(240,97,109,.55)} .over .pct{color:#f0616d}
+  .legend{margin:26px 0 0;font-size:10px;color:#6c7889;line-height:1.8;max-width:680px;border-top:1px solid #1a212c;padding-top:14px}
+  .legend b{color:#8b98a9}
+  table{border-collapse:collapse;font-size:10px;margin:8px 0 0}
+  td,th{padding:3px 12px 3px 0;text-align:left;color:#8b98a9}
+  th{color:#6c7889;font-weight:700;font-size:8px;letter-spacing:.08em}
+  td.n{color:#e6edf3;font-variant-numeric:tabular-nums;font-weight:700}
+</style>
+
+<h1>① FRAME — EM BAND v2</h1>
+<p class="sub">Everything you asked for: <b>expected low and high are now the biggest numbers on the row</b>,
+the white dot is unambiguously current price, the yellow triangle is replaced by a gold <b>T</b>, and every
+element carries a hover. <b>Hover each mark and each number below — the tooltips are live in this file.</b>
+<br><br>⚠ The sanity check found a real problem with the width itself. It is at the bottom, and it changes
+which of these two is correct.</p>
+
+<!-- 1 -->
+<div class="v">
+  <div class="cap g">1 — AS REQUESTED · rails in red/green</div>
+  <div class="panel">
+    <div class="g3f1"><span class="g3rg">−G −V ⚠</span><span class="g3tgt">→ 7717.71</span><span class="g3play">momentum — breaks not fades · widen stops</span></div>
+    <div class="row">
+      <span class="lo" title="EXPECTED LOW — how far down is today priced to go? The session open minus the expected move implied by the at-the-money straddle. It is a PRICED boundary, not a floor: roughly a third of sessions close outside the band, and nothing stops price trading through it.">7657.07<small>EXP LOW</small></span>
+      <span class="t">
+        <i class="rail"></i>
+        <i class="fill" style="left:49.28%;width:0.72%"></i>
+        <i class="op" style="left:50%" title="THE OPEN — 7691.80. The anchor everything on this rail is measured from, fixed for the whole session. It does not move with price; that is the entire point, because a band that re-centres on spot can never show overextension."></i>
+        <span class="tg" style="left:87.3%" title="TARGET — 7717.71, the heaviest strike in InsiderFinance's book, where dealer hedging concentrates and price tends to be pulled. It sits at 87% of the rail: inside what today prices, but near the top of it. A destination, not a forecast.">T</span>
+        <i class="nw" style="left:49.28%" title="PRICE NOW — 7691.30, sitting almost exactly on the open. The day has spent 1% of its priced move, so there is nearly nothing between the dot and the anchor."></i>
+      </span>
+      <span class="hi" title="EXPECTED HIGH — how far up is today priced to go? The session open plus the expected move implied by the at-the-money straddle. A priced boundary, not a ceiling.">7726.53<small>EXP HIGH</small></span>
+      <span class="pct" title="How far has price travelled from the OPEN, measured against what the straddle priced? The dot's position on the rail and this number are the same fact, so they can never disagree. Past 100% the day has done more than was paid for.">1%</span>
+      <span class="fk" title="~EST: the expected move was not captured within 15 minutes of the open, so the straddle had already decayed and this band is NARROWER than the open's truly was. No reconstruction is attempted — scaling a decayed straddle back up assumes IV has not moved, and on the days that matter it has.">OF EM ~EST</span>
+      <span class="rep" title="REPLAY — the market is closed and today has no bars, so the whole panel is showing 2026-08-21 as if it were the day. Nothing here is live. It never engages during RTH, and the recorder writes nothing while it is on.">▮ 08/21 REPLAY</span>
+    </div>
+  </div>
+  <p class="note">Red low / green high reads instantly as down-side and up-side. ⚠ But red and green already
+  mean <b>disagrees</b> and <b>confirms</b> in ② BIAS one line below — the same two colours doing a second
+  job on the same face.</p>
+</div>
+
+<!-- 2 -->
+<div class="v neutral">
+  <div class="cap g">2 — AS REQUESTED · rails in plain ink <b>(recommended)</b></div>
+  <div class="panel">
+    <div class="g3f1"><span class="g3rg">−G −V ⚠</span><span class="g3tgt">→ 7717.71</span><span class="g3play">momentum — breaks not fades · widen stops</span></div>
+    <div class="row">
+      <span class="lo" title="EXPECTED LOW — how far down is today priced to go? The session open minus the expected move implied by the at-the-money straddle. A PRICED boundary, not a floor: nothing stops price trading through it.">7657.07<small>EXP LOW</small></span>
+      <span class="t">
+        <i class="rail"></i>
+        <i class="fill" style="left:49.28%;width:0.72%"></i>
+        <i class="op" style="left:50%" title="THE OPEN — 7691.80. The anchor everything on this rail is measured from, fixed for the whole session."></i>
+        <span class="tg" style="left:87.3%" title="TARGET — 7717.71, the heaviest strike in InsiderFinance's book. At 87% of the rail: inside what today prices, but near the top of it.">T</span>
+        <i class="nw" style="left:49.28%" title="PRICE NOW — 7691.30, almost exactly on the open. 1% of the priced move spent."></i>
+      </span>
+      <span class="hi" title="EXPECTED HIGH — how far up is today priced to go? The session open plus the expected move implied by the at-the-money straddle. A priced boundary, not a ceiling.">7726.53<small>EXP HIGH</small></span>
+      <span class="pct" title="How far price has travelled from the OPEN against what the straddle priced. Same fact as the dot's position.">1%</span>
+      <span class="fk" title="~EST: not captured within 15 minutes of the open, so this band is narrower than the open's truly was.">OF EM ~EST</span>
+      <span class="rep" title="REPLAY of 2026-08-21 — nothing here is live, and the recorder is off.">▮ 08/21 REPLAY</span>
+    </div>
+  </div>
+  <p class="note">Same size and weight, but the rails wear plain ink. The <b>EXP LOW / EXP HIGH</b> caption
+  carries the meaning instead of colour, so red and green stay reserved for confirm/disagree in BIAS.</p>
+</div>
+
+<!-- 3 -->
+<div class="v neutral over">
+  <div class="cap r">3 — THE SAME ROW, OVEREXTENDED (mid-session example)</div>
+  <div class="panel">
+    <div class="g3f1"><span class="g3rg">−G −V ⚠</span><span class="g3tgt">→ 7717.71</span><span class="g3play">momentum — breaks not fades · widen stops</span></div>
+    <div class="row">
+      <span class="lo" title="EXPECTED LOW — open minus the expected move.">7657.07<small>EXP LOW</small></span>
+      <span class="t">
+        <i class="rail"></i>
+        <i class="fill" style="left:50%;width:50%"></i>
+        <i class="op" style="left:50%" title="THE OPEN — 7691.80."></i>
+        <span class="tg" style="left:87.3%" title="TARGET 7717.71 — price has now passed it.">T</span>
+        <i class="nw" style="left:100%" title="PRICE NOW 7735.00 — BEYOND the expected high. The mark pins to the rail rather than escaping it; the percentage is what says how far past."></i>
+      </span>
+      <span class="hi" title="EXPECTED HIGH — open plus the expected move. Price is through it.">7726.53<small>EXP HIGH</small></span>
+      <span class="pct" title="124% — the day has travelled a quarter further than the straddle priced.">124%</span>
+      <span class="fk">OF EM</span>
+    </div>
+  </div>
+  <p class="note">Fill and dot turn red past 100%, the dot pins at the rail rather than escaping the track,
+  and price has run through both the target and the expected high.</p>
+</div>
+
+<div class="legend">
+  <b>⚠ THE SANITY CHECK — THE BAND IS 25% TOO NARROW FOR WHAT IT CALLS ITSELF</b><br><br>
+  The straddle extraction is <b>correct</b>. Our 34.65 reproduces InsiderFinance's own published ATM IV of
+  6.2% over the three calendar days to Monday's expiry, to within 0.03% — so the parsing and the strike
+  selection are sound.<br><br>
+  But <b>the ATM straddle is not one standard deviation.</b> It equals <b>0.8σ</b> — the Brenner–Subrahmanyam
+  identity — so:
+
+  <table>
+    <tr><th>&nbsp;</th><th>half-width</th><th>in σ</th><th>of sessions inside</th></tr>
+    <tr><td>what we draw now (raw straddle)</td><td class="n">34.65</td><td class="n">0.80 σ</td><td class="n">57.6%</td></tr>
+    <tr><td>what "expected move" means</td><td class="n">43.31</td><td class="n">1.00 σ</td><td class="n">68.3%</td></tr>
+  </table><br>
+
+  Every source agrees: <b>expected move (1σ) ≈ ATM straddle × 1.25</b>, and it is defined as the ~68%
+  range. Our row is labelled <b>OF EM</b> while drawing a ~58% band. That is a value under a label that
+  means something else — the same failure pattern as the week-vs-day EM, at a smaller scale.<br><br>
+  <b>Two honest fixes, and they are genuinely different products:</b><br>
+  <b>(a)</b> multiply by 1.25 — the band becomes the real 1σ expected move, matches the label and every
+  other platform, and gets 25% wider. A target at 87% of the rail today would sit at 80%.<br>
+  <b>(b)</b> keep the raw straddle and rename the row <b>STRADDLE</b> — narrower, more conservative, and
+  honest, but it is not what anyone else means by "expected move".<br><br>
+  <b>SECOND, SMALLER FINDING.</b> On a weekend <code>dte0</code> is Monday's expiry, so the straddle spans
+  <b>Friday close → Monday close</b> and contains the weekend gap. That is why 34.65 looks large for one
+  session. Captured at Monday's open the straddle covers only the remaining day and will be smaller — the
+  band is right on a live day, and slightly wide in replay. Worth knowing before reading the replay band
+  as if it were a session range.
+</div>

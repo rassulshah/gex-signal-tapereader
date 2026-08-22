@@ -174,7 +174,7 @@ eval(ex('emBand'));
   const dex=src.slice(src.indexOf("key:'dex'"), src.indexOf("key:'dex'")+2000);
   ok(/hit:null/.test(dex),              'DEX scores null — it does not vote before it is measured');
   ok(/px:/.test(dex),                   'and records the spot beside it, so the level can be compared cross-day');
-  const emb=src.slice(src.indexOf("key:'emband'"), src.indexOf("key:'emband'")+2600);
+  const emb=src.slice(src.indexOf("key:'emband'"), src.indexOf("key:'emband'")+4600);
   ok(/questions:/.test(emb) && /rule:/.test(emb), 'the band carries a question and a rule');
 }
 

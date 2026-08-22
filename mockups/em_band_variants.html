@@ -1,0 +1,229 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>EM band — variants</title>
+<style>
+  body{background:#0b0e14;color:#e6edf3;font:12px Inter,Arial,sans-serif;margin:0;padding:22px 26px 70px}
+  h1{font-size:12px;letter-spacing:.15em;color:#8b98a9;font-weight:800;margin:0 0 6px}
+  .sub{font-size:11px;color:#6c7889;margin:0 0 20px;line-height:1.55;max-width:660px}
+  .v{margin:0 0 22px}
+  .cap{font-size:9px;letter-spacing:.09em;font-weight:800;color:#f2b45a;margin:0 0 6px}
+  .cap b{color:#2ec27e}
+  .note{font-size:10px;color:#6c7889;margin:7px 0 0;line-height:1.55;max-width:600px}
+  .panel{width:560px;background:#0b0e14;border:1px solid #1a212c;border-radius:5px;padding:6px 8px}
+  .g3f1{display:flex;align-items:center;gap:7px;font-size:9.5px;flex-wrap:wrap;margin-bottom:4px}
+  .g3rg{font-size:10px;font-weight:800;padding:1px 7px;border-radius:3px;background:rgba(163,113,247,.18);color:#a371f7;border:1px solid rgba(163,113,247,.4)}
+  .g3tgt{font-size:11px;font-weight:800;color:#e3c341;letter-spacing:-.2px}
+  .g3play{font-size:8.5px;color:#8b98a9}
+  .row{display:flex;align-items:center;gap:7px;font-variant-numeric:tabular-nums}
+  .end{font-size:7.5px;font-weight:700;white-space:nowrap}
+  .pct{font-size:9px;font-weight:700;white-space:nowrap}
+  .fk{color:#8b98a9;font-size:7.5px;font-weight:700;letter-spacing:.05em}
+  .rep{font-size:7px;font-weight:800;padding:1px 5px;border-radius:2px;background:rgba(163,113,247,.22);color:#a371f7;border:1px solid rgba(163,113,247,.55)}
+  .t{position:relative;flex:1}
+
+  /* ---------- A: current ---------- */
+  .A .t{height:9px}
+  .A .rail{position:absolute;left:0;right:0;top:3px;height:3px;border-radius:2px;background:#1e2530}
+  .A .fill{position:absolute;top:3px;height:3px;border-radius:2px;background:rgba(139,152,169,.45)}
+  .A .op{position:absolute;top:0;width:1px;height:9px;background:#8b98a9;opacity:.9}
+  .A .tg{position:absolute;top:0;width:0;height:0;border-left:3px solid transparent;border-right:3px solid transparent;border-bottom:4px solid #e3c341;transform:translateX(-3px)}
+  .A .nw{position:absolute;top:1px;width:6px;height:6px;border-radius:50%;background:#e6edf3;box-shadow:0 0 0 2px #0b0e14;transform:translateX(-3px)}
+  .A .end{color:#6c7889}
+  .A .pct{color:#e6edf3}
+
+  /* ---------- B: contrast pass ---------- */
+  .B .t{height:11px}
+  .B .rail{position:absolute;left:0;right:0;top:4px;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}
+  .B .fill{position:absolute;top:4px;height:4px;border-radius:2px;background:rgba(139,152,169,.55)}
+  .B .op{position:absolute;top:0;width:2px;height:11px;background:#c3ccd8;transform:translateX(-1px);border-radius:1px}
+  .B .tg{position:absolute;top:-1px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:5px solid #e3c341;transform:translateX(-4px)}
+  .B .nw{position:absolute;top:1.5px;width:8px;height:8px;border-radius:50%;background:#e6edf3;box-shadow:0 0 0 2px #0b0e14;transform:translateX(-4px)}
+  .B .end{color:#8b98a9}
+  .B .pct{color:#e6edf3}
+
+  /* ---------- C: anchor gutter ---------- */
+  .C .t{height:13px}
+  .C .rail{position:absolute;left:0;right:0;top:5px;height:4px;border-radius:2px;background:#232c3a}
+  .C .half{position:absolute;top:5px;height:4px;background:rgba(139,152,169,.07)}
+  .C .fill{position:absolute;top:5px;height:4px;border-radius:2px;background:#8b98a9}
+  .C .op{position:absolute;top:1px;width:2px;height:12px;background:#e6edf3;transform:translateX(-1px);border-radius:1px}
+  .C .opl{position:absolute;top:-1px;font-size:6px;font-weight:800;color:#e6edf3;letter-spacing:.06em;transform:translateX(-50%)}
+  .C .tg{position:absolute;top:1px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:5px solid #e3c341;transform:translateX(-4px)}
+  .C .nw{position:absolute;top:2.5px;width:9px;height:9px;border-radius:50%;background:#e6edf3;box-shadow:0 0 0 2px #0b0e14;transform:translateX(-4.5px)}
+  .C .end{color:#8b98a9}
+  .C .pct{color:#e6edf3}
+
+  /* ---------- D: quarter ticks ---------- */
+  .D .t{height:12px}
+  .D .rail{position:absolute;left:0;right:0;top:4px;height:4px;border-radius:2px;background:#232c3a}
+  .D .tick{position:absolute;top:4px;width:1px;height:4px;background:rgba(139,152,169,.30)}
+  .D .fill{position:absolute;top:4px;height:4px;border-radius:2px;background:rgba(139,152,169,.6)}
+  .D .op{position:absolute;top:0;width:2px;height:12px;background:#e6edf3;transform:translateX(-1px);border-radius:1px}
+  .D .tg{position:absolute;top:-1px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:5px solid #e3c341;transform:translateX(-4px)}
+  .D .nw{position:absolute;top:1.5px;width:9px;height:9px;border-radius:50%;background:#e6edf3;box-shadow:0 0 0 2px #0b0e14;transform:translateX(-4.5px)}
+  .D .end{color:#8b98a9}
+  .D .pct{color:#e6edf3}
+
+  /* ---------- E: labelled marks ---------- */
+  .E .t{height:20px}
+  .E .rail{position:absolute;left:0;right:0;top:4px;height:4px;border-radius:2px;background:#232c3a}
+  .E .fill{position:absolute;top:4px;height:4px;border-radius:2px;background:rgba(139,152,169,.6)}
+  .E .op{position:absolute;top:0;width:2px;height:12px;background:#e6edf3;transform:translateX(-1px);border-radius:1px}
+  .E .tg{position:absolute;top:-1px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:5px solid #e3c341;transform:translateX(-4px)}
+  .E .nw{position:absolute;top:1.5px;width:9px;height:9px;border-radius:50%;background:#e6edf3;box-shadow:0 0 0 2px #0b0e14;transform:translateX(-4.5px)}
+  .E .lab{position:absolute;top:13px;font-size:6.5px;font-weight:800;letter-spacing:.06em;transform:translateX(-50%);white-space:nowrap}
+  .E .end{color:#8b98a9}
+  .E .pct{color:#e6edf3}
+
+  /* ---------- F: two-tone from anchor ---------- */
+  .F .t{height:12px}
+  .F .rail{position:absolute;left:0;right:0;top:4px;height:4px;border-radius:2px;background:#1a212c}
+  .F .up{position:absolute;top:4px;height:4px;background:rgba(163,113,247,.16);border-radius:0 2px 2px 0}
+  .F .dn{position:absolute;top:4px;height:4px;background:rgba(227,195,65,.10);border-radius:2px 0 0 2px}
+  .F .fill{position:absolute;top:4px;height:4px;background:#c3ccd8;border-radius:2px}
+  .F .op{position:absolute;top:0;width:2px;height:12px;background:#e6edf3;transform:translateX(-1px);border-radius:1px}
+  .F .tg{position:absolute;top:-1px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:5px solid #e3c341;transform:translateX(-4px)}
+  .F .nw{position:absolute;top:1.5px;width:9px;height:9px;border-radius:50%;background:#e6edf3;box-shadow:0 0 0 2px #0b0e14;transform:translateX(-4.5px)}
+  .F .end{color:#8b98a9}
+  .F .pct{color:#e6edf3}
+  .over{color:#f0616d !important}
+  .legend{margin:28px 0 0;font-size:10px;color:#6c7889;line-height:1.75;max-width:660px;border-top:1px solid #1a212c;padding-top:14px}
+  .legend b{color:#8b98a9}
+</style>
+
+<h1>① FRAME — EM BAND VARIANTS</h1>
+<p class="sub">Live values, 2026-08-21 replay: low <b>7657.07</b> · open <b>7691.80</b> · now <b>7691.30</b> ·
+target <b>7717.71</b> · high <b>7726.53</b>. Price is sitting almost exactly on the open, which is the
+hardest case to draw — <b>there is no fill to see</b>, so every variant has to work from the marks alone.
+Each is shown at the panel's real 560px width.</p>
+
+<!-- A -->
+<div class="v A">
+  <div class="cap">A — CURRENT</div>
+  <div class="panel">
+    <div class="g3f1"><span class="g3rg">−G −V ⚠</span><span class="g3tgt">→ 7717.71</span><span class="g3play">momentum — breaks not fades · widen stops</span></div>
+    <div class="row">
+      <span class="end">7657.07</span>
+      <span class="t"><i class="rail"></i><i class="fill" style="left:49.28%;width:0.72%"></i><i class="op" style="left:50%"></i><i class="tg" style="left:87.3%"></i><i class="nw" style="left:49.28%"></i></span>
+      <span class="end">7726.53</span>
+      <span class="pct">1%</span><span class="fk">OF EM ~EST</span><span class="rep">▮ 08/21 REPLAY</span>
+    </div>
+  </div>
+  <p class="note">The rail is nearly the page colour, the open notch is a 1px grey hairline hidden under the
+  dot, and the end labels sit at the same weight as everything else. Three marks on a dark line.</p>
+</div>
+
+<!-- B -->
+<div class="v B">
+  <div class="cap">B — CONTRAST PASS <b>(smallest change)</b></div>
+  <div class="panel">
+    <div class="g3f1"><span class="g3rg">−G −V ⚠</span><span class="g3tgt">→ 7717.71</span><span class="g3play">momentum — breaks not fades · widen stops</span></div>
+    <div class="row">
+      <span class="end">7657.07</span>
+      <span class="t"><i class="rail"></i><i class="fill" style="left:49.28%;width:0.72%"></i><i class="op" style="left:50%"></i><i class="tg" style="left:87.3%"></i><i class="nw" style="left:49.28%"></i></span>
+      <span class="end">7726.53</span>
+      <span class="pct">1%</span><span class="fk">OF EM ~EST</span><span class="rep">▮ 08/21 REPLAY</span>
+    </div>
+  </div>
+  <p class="note">Identical anatomy, better values: rail lifted to <b>#232c3a</b> with a hairline inset,
+  the open notch full-height and near-white, dot 8px, caret 5px, end labels one step brighter. Nothing
+  new to learn, ~4px taller.</p>
+</div>
+
+<!-- C -->
+<div class="v C">
+  <div class="cap">C — ANCHOR GUTTER</div>
+  <div class="panel">
+    <div class="g3f1"><span class="g3rg">−G −V ⚠</span><span class="g3tgt">→ 7717.71</span><span class="g3play">momentum — breaks not fades · widen stops</span></div>
+    <div class="row">
+      <span class="end">7657.07</span>
+      <span class="t">
+        <i class="rail"></i><i class="half" style="left:25%;width:50%"></i>
+        <i class="fill" style="left:49.28%;width:0.72%"></i>
+        <i class="op" style="left:50%"></i><span class="opl" style="left:50%">OPEN</span>
+        <i class="tg" style="left:87.3%"></i><i class="nw" style="left:49.28%"></i>
+      </span>
+      <span class="end">7726.53</span>
+      <span class="pct">1%</span><span class="fk">OF EM ~EST</span><span class="rep">▮ 08/21 REPLAY</span>
+    </div>
+  </div>
+  <p class="note">The anchor is <b>named</b>, and a faint middle-half wash marks the ±50%-of-EM zone — so
+  "has the day done much yet" is answerable without reading the number. Costs ~4px more height than B.</p>
+</div>
+
+<!-- D -->
+<div class="v D">
+  <div class="cap">D — QUARTER TICKS</div>
+  <div class="panel">
+    <div class="g3f1"><span class="g3rg">−G −V ⚠</span><span class="g3tgt">→ 7717.71</span><span class="g3play">momentum — breaks not fades · widen stops</span></div>
+    <div class="row">
+      <span class="end">7657.07</span>
+      <span class="t">
+        <i class="rail"></i>
+        <i class="tick" style="left:25%"></i><i class="tick" style="left:50%"></i><i class="tick" style="left:75%"></i>
+        <i class="fill" style="left:49.28%;width:0.72%"></i>
+        <i class="op" style="left:50%"></i><i class="tg" style="left:87.3%"></i><i class="nw" style="left:49.28%"></i>
+      </span>
+      <span class="end">7726.53</span>
+      <span class="pct">1%</span><span class="fk">OF EM ~EST</span><span class="rep">▮ 08/21 REPLAY</span>
+    </div>
+  </div>
+  <p class="note">Quarter ticks give the rail a scale, so distance is judgeable by eye. ⚠ The 50% tick and
+  the open notch collide — on an anchored band they are always the same point, so one of them is redundant
+  and the pair reads as noise.</p>
+</div>
+
+<!-- E -->
+<div class="v E">
+  <div class="cap">E — LABELLED MARKS</div>
+  <div class="panel">
+    <div class="g3f1"><span class="g3rg">−G −V ⚠</span><span class="g3tgt">→ 7717.71</span><span class="g3play">momentum — breaks not fades · widen stops</span></div>
+    <div class="row">
+      <span class="end">7657.07</span>
+      <span class="t">
+        <i class="rail"></i><i class="fill" style="left:49.28%;width:0.72%"></i>
+        <i class="op" style="left:50%"></i><i class="tg" style="left:87.3%"></i><i class="nw" style="left:49.28%"></i>
+        <span class="lab" style="left:50%;color:#8b98a9">OPEN</span>
+        <span class="lab" style="left:87.3%;color:#e3c341">TGT</span>
+      </span>
+      <span class="end">7726.53</span>
+      <span class="pct">1%</span><span class="fk">OF EM ~EST</span><span class="rep">▮ 08/21 REPLAY</span>
+    </div>
+  </div>
+  <p class="note">Every mark says what it is, so the hover stops being required to read the row. ~9px
+  taller, and the labels crowd whenever two marks come close — which happens exactly when price
+  approaches the target, the moment you most want it legible.</p>
+</div>
+
+<!-- F -->
+<div class="v F">
+  <div class="cap">F — TWO-TONE FROM THE ANCHOR</div>
+  <div class="panel">
+    <div class="g3f1"><span class="g3rg">−G −V ⚠</span><span class="g3tgt">→ 7717.71</span><span class="g3play">momentum — breaks not fades · widen stops</span></div>
+    <div class="row">
+      <span class="end">7657.07</span>
+      <span class="t">
+        <i class="rail"></i>
+        <i class="dn" style="left:0;width:50%"></i><i class="up" style="left:50%;width:50%"></i>
+        <i class="fill" style="left:49.28%;width:0.72%"></i>
+        <i class="op" style="left:50%"></i><i class="tg" style="left:87.3%"></i><i class="nw" style="left:49.28%"></i>
+      </span>
+      <span class="end">7726.53</span>
+      <span class="pct">1%</span><span class="fk">OF EM ~EST</span><span class="rep">▮ 08/21 REPLAY</span>
+    </div>
+  </div>
+  <p class="note">The half of the rail above the open is washed faintly, below it faintly the other way,
+  so which side of the anchor price sits on is readable at a glance with no marks at all. ⚠ The two washes
+  are close to purple and gold, which already mean <b>negative gamma</b> and <b>target</b> elsewhere on
+  this face — that is a real collision, not a nitpick.</p>
+</div>
+
+<div class="legend">
+  <b>THE HARD CASE, SHOWN ABOVE:</b> price on the anchor. The fill is zero-width, so whatever carries the
+  reading has to be the marks.<br><br>
+  <b>B</b> keeps the current design and fixes only what is illegible.
+  <b>C</b> adds meaning: names the anchor, shows the half-EM zone.
+  <b>D</b> adds a scale but duplicates the anchor at 50%.
+  <b>E</b> is the most self-explaining and the most fragile when marks converge.
+  <b>F</b> reads fastest for direction but borrows two colours that already mean something else here.
+</div>

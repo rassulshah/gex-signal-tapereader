@@ -1,3 +1,51 @@
+## v11.57 — where the day has BEEN, and what an extension means in each regime
+
+Three things the band could not answer, one per stated goal.
+
+**1 · THE TARGET'S REACHABILITY.** The gold triangle is now a **T**, and it GREYS when the target falls
+outside what today prices. A magnet beyond the expected high is not a place to expect price today, whatever
+the structure says — and the band was silently clamping it to the rail as if it were in range.
+**EXP LOW / EXP HIGH** are now the largest numbers on the row, captioned, because they are what gets read.
+
+**2 · HOW MUCH IS LEFT.** Distance travelled was never the question. The shape line reports the **room
+remaining toward the rail ahead**, in points, clamped at zero once price is through — a negative "room"
+would read as room.
+
+**3 · COULD THIS TURN.** Two additions.
+
+**The excursion.** The band knew only where price IS, so a day that ran +91% of the expected move, reversed
+through the open and sat at −92% rendered **identically to a day that had drifted quietly down**. The whole
+reversal was invisible. High- and low-water marks since the anchor now draw as a dim span behind the live
+marks, and a plain-words shape line reads `INSIDE` / `ONE-SIDED UP` / `ONE-SIDED DOWN` / `REVERSED`, with
+the **give-back** — how much of the dominant excursion has been handed back.
+
+**And the regime, which is the part that was actually wrong.** The band coloured red past 100% regardless.
+One row above, the regime line said `−G · momentum — breaks not fades`. **The same face was arguing with
+itself, one line apart, about the same price.** In positive gamma dealers hedge AGAINST the move: range
+compresses, the edge is where reversion is plausible. In negative gamma they hedge WITH it: ranges expand
+and the edge is where OVERSHOOT happens. Identical reading, opposite meaning. Past 100% now reads
+**STRETCHED in +G** in amber, and in −G stays neutral and says `past EM — but −G expands`.
+
+**WHAT IT DOES NOT CLAIM, AND THE SCORECARD THAT WILL DECIDE.** Every word is descriptive — *stretched*,
+never *reversing*. A test fails the build on any predictive phrasing reaching the face.
+
+The hypothesis, stated so it can be wrong: **past 100% of the expected move, price reverts toward the
+anchor MORE OFTEN in positive gamma than in negative gamma.** It has never been tested once. Four archived
+day-files, 492 bars, effective n ≈ 49 independent observations — and all four are DOWN days, so a
+directional claim from them earns its accuracy for free. The band shipped yesterday, so there are ZERO
+`emband` records anywhere.
+
+⚠ **The scorecard is SPLIT BY REGIME, and that split is the point.** Scored together, two opposite effects
+average to zero and the honest-looking conclusion "no edge" gets drawn from data that actually contained
+one. Three questions, each non-voting until n≥20 on its own: does +G past 100% come back; does −G past 100%
+keep going; and once a day has been meaningfully both sides of the anchor, does the newer direction hold or
+does it rotate again. `shape`, `gamma`, `upExc`, `dnExc` and `giveBack` are recorded per bar so those
+questions can ever be answered.
+
+Also corrected in the containment question: our band is the RAW straddle = **0.8 sigma**, so the honest
+expectation is **~58% of sessions inside**, not the ~68% that "expected move" implies. The width decision
+(multiply by 1.25, or rename the row STRADDLE) is still open and deliberately not taken here.
+
 ## v11.56 / companion v1.11 — the companion could never be updated, and nothing said so
 
 **The companion had no `@updateURL` and no `@downloadURL`.** Without those two lines Tampermonkey never
