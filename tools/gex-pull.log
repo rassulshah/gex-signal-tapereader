@@ -16,3 +16,13 @@ Applied patch to 'test_read_v1047.js' cleanly.
 Applied patch to 'test_rules_v2.js' cleanly.
 Falling back to direct application...
 Sat 08/22/2026 12:18:01.99 applied patch gex-patch-v1151.patch 
+[main 278d0e1] v11.51: __gptsDebug.emBand hook ΓÇö verify the band from the console
+ 8 files changed, 74 insertions(+), 6 deletions(-)
+ create mode 100644 tools/.gex-drop-msg
+To https://github.com/rassulshah/gex-signal-tapereader.git
+   dcc3e64..278d0e1  main -> main
+Sat 08/22/2026 12:18:05.23 PUSHED - 1 drop(s): v11.51: __gptsDebug.emBand hook — verify the band from the console 
+Applied patch to 'tools/.gex-drop-msg' cleanly.
+Applied patch to 'tools/BUILD-CHECKLIST.md' cleanly.
+Falling back to direct application...
+Sat 08/22/2026 12:28:02.07 applied patch gex-patch-v1152.patch 

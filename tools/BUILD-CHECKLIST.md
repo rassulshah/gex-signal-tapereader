@@ -30,7 +30,13 @@ undocumented. That has already happened repeatedly in this project.
 7. **Snapshot the note** as `session-state/YYYY-MM-DD_resume-vX.Y.md` and delete the previous snapshot.
 8. **Build the installer, round-trip verify it**: decode its own payload, untar, `diff` against the
    working tree, confirm `@version` in both scripts, confirm `more +N` equals the `exit /b 0` line.
-9. **Send the installer AND both Tampermonkey links.** Both, whenever the companion changed.
+9. **RUN `bash tools/release-links.sh` AND PASTE ITS OUTPUT.** Not "remember to send the link" — RUN
+   THE SCRIPT. It reads both `@version` values, marks which script actually changed against origin/main,
+   and prints the block ready to paste. Step 9 said "always send the link" from v11.9 onward and was
+   still missed at v11.51; a reminder competes with everything else at the end of a build, a step that
+   PRODUCES the message does not. If the block is absent from the delivery message, the step was skipped.
+   ⚠ There are TWO scripts — the tapereader and the companion — and linking one that did NOT change makes
+   Tampermonkey offer **Reinstall** instead of **Update**, which reads exactly like a failed push.
 10. **Say to wait FIVE minutes**, then reload the Atlas tab.
 
 ## Why each of these exists
