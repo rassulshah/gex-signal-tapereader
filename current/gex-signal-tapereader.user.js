@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.50
+// @version    11.51
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.50';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.51';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -18061,6 +18061,48 @@ window.__gptsDebug.face    = function(s){ return panelV3(s||activeSym()).length;
 window.__gptsDebug.ifLadder= function(s){ return ifLadder(s||activeSym()); };
 // (v11.36) The one question that decides whether DEX and a computed skew exist at all: what fields
 // does a single option in their payload actually carry?
+// (v11.51) THE BAND'S OWN HOOK. Every other read on the face has one — skew, accum, ifLadder,
+// nodeChart, pbEntry — and the band shipped without it, so the only way to check it was to count
+// DOM nodes and infer from pixels. It returns the anchor it used, both rails, the percentage, and
+// the two straddles side by side so the dte0-vs-toFri mislabel can never come back unnoticed.
+window.__gptsDebug.emBand = function(sy){
+  var sym=sy||'SPY';
+  try{
+    var B=emBand(sym);
+    if(!B || !B.ok) return { ok:false, why:(B&&B.why)||'no band', anchor:(B&&B.anchor)||null };
+    var out={
+      ok:true,
+      anchor:B.anchor,                       // 'open' = today's first RTH bar | 'prevClose' = pre-open fallback
+      anchoredAt:+B.open.toFixed(2),
+      low:+B.low.toFixed(2), high:+B.high.toFixed(2),
+      now:+B.now.toFixed(2),
+      em:+B.em.toFixed(2),                   // chart scale
+      pct:B.pct,                             // |now - anchor| / em
+      over:(B.pct>=100),
+      est:B.est, capMin:B.capMin, struckAt:B.k
+    };
+    // the guard rail: show BOTH straddles so a regression to the week's move is visible at a glance
+    try{
+      var c=ifChain((sym==='QQQ')?'QQQ':'SPX'), L=ifLadder(sym), ds=(L&&!L.err&&L.dispScale)?L.dispScale:1;
+      out.dte0EmSPX=(c&&c.dte0&&c.dte0.em)?c.dte0.em.em:null;
+      out.toFriEmSPX=(c&&c.toFri&&c.toFri.em)?c.toFri.em.em:null;
+      out.dispScale=ds;
+      out.check=(out.dte0EmSPX!=null)
+        ? ((Math.abs(out.dte0EmSPX*ds - out.em) < 0.02)
+            ? 'OK — band uses dte0'
+            : 'MISMATCH — band em '+out.em+' is not dte0 '+(+(out.dte0EmSPX*ds).toFixed(2))+
+              (Math.abs((out.toFriEmSPX||0)*ds - out.em) < 0.02 ? '  *** IT IS toFri — THE v11.49 BUG IS BACK ***' : ''))
+        : 'dte0 straddle unavailable — band is running on a captured value';
+      out.target=null;
+      if(L && !L.err) for(var i=0;i<L.rows.length;i++){ if(/Mag/.test(L.rows[i].id)){ out.target=L.rows[i].disp; break; } }
+      if(out.target!=null){
+        out.targetPctOfRail=+(((out.target-B.low)/(B.high-B.low))*100).toFixed(1);
+        out.targetInPlay=(out.target>=B.low && out.target<=B.high);
+      }
+    }catch(eC){ out.check='could not cross-check: '+(eC&&eC.message||eC); }
+    return out;
+  }catch(e){ return { ok:false, why:String(e&&e.message||e) }; }
+};
 window.__gptsDebug.ifShape = function(sy){ try{ var c=ifChain(sy||'SPX'); return (c&&c.shape)||'companion older than v1.7'; }catch(e){ return String(e); } };
 window.__gptsDebug.optKeys = function(sy){
   var out={};

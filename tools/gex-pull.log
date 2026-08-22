@@ -8,3 +8,11 @@ Sat 08/22/2026 11:50:01.83 extracting gex-drop-test.tar.gz
 To https://github.com/rassulshah/gex-signal-tapereader.git
    f2b8749..09e4bd8  main -> main
 Sat 08/22/2026 11:50:05.29 PUSHED - 1 drop(s): test: gex auto-pull loop verification drop 
+Applied patch to 'current/gex-signal-tapereader.user.js' cleanly.
+Applied patch to 'test_direction_grade.js' cleanly.
+Applied patch to 'test_em_band.js' cleanly.
+Applied patch to 'test_pipeline_indicator.js' cleanly.
+Applied patch to 'test_read_v1047.js' cleanly.
+Applied patch to 'test_rules_v2.js' cleanly.
+Falling back to direct application...
+Sat 08/22/2026 12:18:01.99 applied patch gex-patch-v1151.patch 

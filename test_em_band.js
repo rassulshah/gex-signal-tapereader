@@ -176,5 +176,22 @@ function ex(n){
   ok(/questions:/.test(emb) && /rule:/.test(emb), 'the band carries a question and a rule');
 }
 
+
+// ---------- 6. (v11.51) THE DEBUG HOOK ----------
+// Every other read on the face has one. Without it the only way to check the band was to count DOM
+// nodes and infer from pixel positions, which is exactly the kind of verification that stops happening.
+{
+  const h=src.slice(src.indexOf("window.__gptsDebug.emBand"), src.indexOf("window.__gptsDebug.emBand")+3000);
+  ok(/window\.__gptsDebug\.emBand\s*=/.test(src), 'the band exposes a debug hook');
+  ok(/anchor:B\.anchor/.test(h),      'it reports WHICH anchor was used — open or prevClose');
+  ok(/low:/.test(h) && /high:/.test(h) && /pct:/.test(h), 'and both rails and the percentage');
+  ok(/dte0EmSPX/.test(h) && /toFriEmSPX/.test(h),
+     'it shows BOTH straddles side by side, so a regression to the week move is visible');
+  ok(/THE v11\.49 BUG IS BACK/.test(h),
+     'and names the v11.49 bug explicitly if the band is ever found running on toFri');
+  ok(/targetInPlay/.test(h),          'it says whether the target is inside what today prices');
+  ok(/ok:false/.test(h) && /why:/.test(h), 'and on refusal it returns the reason rather than throwing');
+}
+
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
