@@ -123,4 +123,37 @@ ok((CHAIN=chain({toFri:null,dte0:null}), !!ifLadder('SPY').err),'a chain with no
   const L=ifLadder('SPY');
   ok(L.suppressed.length===1 && /790/.test(L.suppressed[0]),'a wall THEIR rule withholds is surfaced, not silently dropped',L.suppressed[0]);
 }
+
+// ---- (v11.41) THEIR ZERO GAMMA WINS; OURS IS A LABELLED FALLBACK -----------------------------
+// The shallow payload scan reported their zero gamma absent, and that conclusion drove a decision to
+// compute our own. v1.7 walks nested objects instead. Ours is used ONLY when the payload genuinely
+// carries nothing, and it is asterisked and tagged `calc` so it can never read as their number.
+{
+  CHAIN=chain();                                  // pub.zeroGamma = 7679.88
+  const L=ifLadder('SPY');
+  eq(at(L,'HVL'),7679.88,'their published zero gamma is used when the payload has one');
+  eq(L.hvlSrc,'pub','and the source is recorded as theirs');
+  ok(!L.rows.some(r=>/HVL\*/.test(r.id)),'no derived row is drawn alongside it');
+}
+{
+  CHAIN=chain({ pub:{zeroGamma:null,callWall:null,putWall:null},
+                toFri:{exps:[1,2], lv:lv(), gf:{flip:7666.4}} });
+  const L=ifLadder('SPY');
+  ok(L.rows.some(r=>/HVL\*/.test(r.id)),'with nothing published, the derived flip appears');
+  eq(L.hvlSrc,'calc','tagged as computed, not as theirs');
+  const r=L.rows.find(x=>/HVL/.test(x.id));
+  ok(/\*/.test(r.id),'and it is asterisked on the face');
+}
+{
+  CHAIN=chain({ pub:{zeroGamma:null}, toFri:{exps:[1], lv:lv()} });
+  const L=ifLadder('SPY');
+  ok(!L.rows.some(r=>/HVL/.test(r.id)),'nothing published and nothing computed means NO row — never a guess');
+  eq(L.hvlSrc,null,'and no source is claimed');
+}
+{
+  // preference is absolute: a published value wins even when a derived one is also available
+  CHAIN=chain({ pub:{zeroGamma:7679.88}, toFri:{exps:[1,2], lv:lv(), gf:{flip:7600}} });
+  const L=ifLadder('SPY');
+  eq(at(L,'HVL'),7679.88,'theirs wins over ours whenever both exist');
+}
 console.log('\n'+pass+' pass / '+fail+' fail');

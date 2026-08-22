@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.40
+// @version    11.42
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.40';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.42';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -16789,6 +16789,8 @@ function ensureV3Css(){
     '#gpts-body .g3nm{display:inline-block;width:64px;font-weight:800;font-size:9.5px}'+
     '#gpts-body .g3v{color:#e6edf3;font-weight:700;font-size:11px;min-width:44px}'+
     '#gpts-body .g3zn{font-size:7px;color:#8b98a9}'+
+    '#gpts-body .g3cf1{font-size:7px;color:#8b98a9;letter-spacing:-1px}'+
+    '#gpts-body .g3cf2{font-size:7px;color:#f2b45a;letter-spacing:-1px}'+
     '#gpts-body .g3sr{font-size:6.5px;font-weight:700;padding:0 3px;border-radius:2px;background:rgba(139,152,169,.16);color:#8b98a9}'+
     '#gpts-body .g3d{margin-left:auto;font-weight:700;font-size:9px}'+
     '#gpts-body .g3up{color:#2ec27e}#gpts-body .g3dn{color:#f0616d}#gpts-body .g3far{opacity:.46}'+
@@ -16842,6 +16844,71 @@ var IF_STALE_MIN=25;
 // so all five callers of the parser were handed this formatter, passed it a string, and got NaN.
 // The manual-entry path had been quietly broken since v11.31. Grep before naming a function.
 function dispNum(x){ if(x==null) return '–'; return (Math.round(x*100)/100).toString(); }
+
+// ---- (v11.42) LEVEL DEPTH ----
+// NAMED levelDepth, not confluence: `confluence(sym)` already exists at ~15022 and is called at ~2943.
+// test_no_dupes caught the collision on the build after the file was written to catch exactly this,
+// which is the fourth time in this project and the first that never reached the user.
+// Every ladder row has looked equally important. They are not. A strike carrying large dealer GAMMA and
+// large dealer DELTA is a materially harder place for price to pass than one carrying gamma alone —
+// gamma says how price behaves there, delta says how much hedging has to happen. Scoring the overlap is
+// the single biggest support-and-resistance improvement the DEX data makes possible.
+// Tiers, not a number: a trader needs to know which two levels matter today, not that one scored 0.63.
+function levelDepth(sym){
+  sym=sym||'SPY';
+  var out={ ok:false, byK:{}, gMax:0, dMax:0 };
+  try{
+    var f=LASTFEED[sym];
+    var snaps=(f&&f.j&&f.j.levels)||[];
+    if(snaps.length){
+      var PK=null; try{ PK=pickSnapshot(snaps); }catch(e0){}
+      var rows=(PK&&PK.snap&&PK.snap.l)||snaps[snaps.length-1].l||[];
+      for(var i=0;i<rows.length;i++){
+        var r=rows[i]; if(typeof r.k!=='number'||typeof r.net!=='number') continue;
+        var a=Math.abs(r.net); if(a>out.gMax) out.gMax=a;
+        (out.byK[r.k]||(out.byK[r.k]={g:0,d:0})).g=a;
+      }
+    }
+    var dc=ifChain((sym==='QQQ')?'QQQ':'SPX');
+    var ds=(dc&&!dc.err&&dc.toFri&&dc.toFri.ds)?dc.toFri.ds:null;
+    var sc=1; try{ var IL=ifLadder(sym); if(IL&&!IL.err&&IL.undScale) sc=IL.undScale; }catch(e1){}
+    if(ds && ds.dexProf){
+      for(var q=0;q<ds.dexProf.length;q++){
+        var ku=+(ds.dexProf[q][0]*sc).toFixed(2), dv=Math.abs(ds.dexProf[q][1]);
+        if(dv>out.dMax) out.dMax=dv;
+        (out.byK[ku]||(out.byK[ku]={g:0,d:0})).d=dv;
+      }
+    }
+    out.ok=(out.gMax>0 || out.dMax>0);
+  }catch(e){}
+  return out;
+}
+// The tier for one level. Nearest-strike match within a tolerance, because the two books sit on
+// different grids and demanding an exact key would score everything as gamma-only.
+function confTier(C, k, tol){
+  try{
+    if(!C||!C.ok||k==null) return null;
+    tol=(tol==null)?0.6:tol;
+    // AGGREGATE ACROSS THE ZONE, do not pick one key. The two books sit on different strike grids, so
+    // gamma lands at 766.00 and delta at 766.06 — taking the nearest single key read one of them and
+    // scored the other as zero, which made every level look gamma-only. A level is a zone; both books'
+    // contributions inside it count. Max rather than sum, so two adjacent strikes are not double-counted.
+    var g=0, d=0, hit=false;
+    for(var kk in C.byK){
+      if(Math.abs(parseFloat(kk)-k)>tol) continue;
+      hit=true;
+      if(C.byK[kk].g>g) g=C.byK[kk].g;
+      if(C.byK[kk].d>d) d=C.byK[kk].d;
+    }
+    if(!hit) return null;
+    var gs=(C.gMax>0)?(g/C.gMax):0, dsc=(C.dMax>0)?(d/C.dMax):0;
+    var both=(gs>=0.25 && dsc>=0.25);
+    var strong=(gs>=0.55 || dsc>=0.55);
+    if(both && strong) return { tier:2, g:gs, d:dsc };     // heavy in both books
+    if(both || strong)  return { tier:1, g:gs, d:dsc };
+    return { tier:0, g:gs, d:dsc };
+  }catch(e){ return null; }
+}
 function ifLadder(sym){
   sym=sym||'SPY';
   try{
@@ -16886,7 +16953,7 @@ function ifLadder(sym){
         if(Math.abs(out.rows[i].k-k)<0.005){
           if(out.rows[i].id.indexOf(id)<0){
             var ids=out.rows[i].id.split('·'); ids.push(id);
-            var rank={CR:0, CR0:1, PS:0, PS0:1, HVL:2, Mag:3, MP:4};
+            var rank={CR:0, CR0:1, PS:0, PS0:1, HVL:2, 'HVL*':2, Mag:3, MP:4};
             ids.sort(function(a,b){ return (rank[a]==null?9:rank[a])-(rank[b]==null?9:rank[b]); });
             out.rows[i].id=ids.join('·');
           }
@@ -16896,7 +16963,18 @@ function ifLadder(sym){
       out.rows.push({ id:id, k:k, disp:+(k*dispScale).toFixed(2), und:+(k*undScale).toFixed(4) });
     }
     if(W){ add('CR', W.cr); add('PS', W.ps); add('Mag', W.mag); add('MP', W.maxPain); }
-    try{ if(c.pub && typeof c.pub.zeroGamma==='number') add('HVL', c.pub.zeroGamma); }catch(e2){}
+    // HVL — THEIRS FIRST, ALWAYS. v1.7 made the payload scan walk nested objects; the earlier shallow
+    // scan reported their zero gamma absent and that conclusion drove us to compute our own, which is
+    // the mistake this project keeps repeating. We fall back to a derived flip only when the payload
+    // genuinely carries nothing, and the row is tagged so the two can never be confused.
+    out.hvlSrc=null;
+    try{
+      if(c.pub && typeof c.pub.zeroGamma==='number'){ add('HVL', c.pub.zeroGamma); out.hvlSrc='pub'; }
+      else {
+        var gfw=(c.toFri&&c.toFri.gf)?c.toFri.gf:((c.dte0&&c.dte0.gf)?c.dte0.gf:null);
+        if(gfw && typeof gfw.flip==='number'){ add('HVL*', gfw.flip); out.hvlSrc='calc'; }
+      }
+    }catch(e2){}
     if(D0){ add('CR0', D0.cr); add('PS0', D0.ps); }
     if(!out.rows.length) return { err:'their chain named no walls' };
     out.suppressed=[];
@@ -16948,6 +17026,30 @@ function secFrame(sym){
   }catch(eD){}
   h+='<span class="g3fk"'+g3tip('Aggregate dealer delta: sum of delta x open interest x 100 x spot. NEGATIVE means dealers are short delta and must BUY as price rises, so rallies get chased; positive means they sell into strength. Read it as a map of where hedging pressure sits, not as a direction — which is why it lives here and not in the BIAS row. In dollar terms it dwarfs gamma, because delta is order 0.5 and gamma order 0.001.')+'>DEX</span><b>'+g3esc(dexTxt)+'</b>';
   h+='<span class="g3fk"'+g3tip('Is the market pricing near-term stress? Term slope is near-dated implied vol against longer-dated. Negative means the front is richer — an event or fear priced into the next few days, the backwardation condition. It is a regime axis alongside gamma and vanna, not a direction, and unlike anything open-interest based it moves intraday because IV does.')+'>TERM</span><b>'+(term!=null?String(term):'—')+'</b>';
+  // (v11.42) EXPECTED MOVE, with how much of it the day has already spent. This is the number that
+  // makes a target honest: a level beyond what is left is not in play today, whatever the structure says.
+  var emTxt='—', emTip='How much room does today have? The at-the-money straddle is the market pricing its own expected move to expiry. Blank when both legs do not quote at one strike near spot — a one-sided straddle is not a straddle.';
+  try{
+    var ec=ifChain((sym==='QQQ')?'QQQ':'SPX');
+    var emo=(ec&&!ec.err&&ec.toFri&&ec.toFri.em)?ec.toFri.em:((ec&&ec.dte0&&ec.dte0.em)?ec.dte0.em:null);
+    if(emo && typeof emo.em==='number'){
+      var emD=emo.em*(rr/ (function(){ try{ var IL2=ifLadder(sym); return (IL2&&!IL2.err&&IL2.undScale)?(rr/IL2.dispScale):1; }catch(e){ return 1; } })() );
+      emD=emo.em*( (function(){ try{ var IL3=ifLadder(sym); return (IL3&&!IL3.err&&IL3.dispScale)?IL3.dispScale:1; }catch(e){ return 1; } })() );
+      var used=null;
+      try{
+        var cs2=closedCandles(sym)||[];
+        if(cs2.length){
+          var hiD=-Infinity, loD=Infinity;
+          for(var ci=0;ci<cs2.length;ci++){ if(cs2[ci].h>hiD) hiD=cs2[ci].h; if(cs2[ci].l<loD) loD=cs2[ci].l; }
+          var rng=(hiD-loD)*rr;
+          if(emD>0) used=Math.round((rng/emD)*100);
+        }
+      }catch(eU){}
+      emTxt=dispNum(emD)+(used!=null?(' · '+Math.min(999,used)+'%'):'');
+      emTip='How much room does today have, and how much is left? The at-the-money straddle is the market\'s own estimate of the move to expiry; the percentage is how much of it the session range has already used. Past 100% the day has done more than was priced, and a target beyond what remains is not in play whatever the structure says.';
+    }
+  }catch(eEM){}
+  h+='<span class="g3fk"'+g3tip(emTip)+'>EM</span><b>'+g3esc(emTxt)+'</b>';
   h+='<span class="g3fk"'+g3tip('How much room does this tape need? Average true range per bar in the displayed instrument. It sizes your stop, and it is what sets the ± zone widths on the ladder — a level is a band, and this is how wide.')+'>ATR</span><b>'+(a2!=null?dispNum(a2*rr):'—')+'</b>';
   if(gp&&gp.cage) h+='<span class="g3fk"'+g3tip('How much room is left before structure? Where price sits between the put wall below and the call wall above. Near 50% you are in the middle with nothing to trade against; near the edges is where the levels actually matter.')+'>CAGE</span><b>'+gp.cage.pos+'%</b>';
   var ptag=(P.label||'').replace('EXPIRY · ','EXP·').replace('OPEN · CHARM','OPEN').replace('POWER HOUR','PWR').replace('MORNING','AM').replace('MIDDAY','MID');
@@ -17174,7 +17276,7 @@ function nodeChartHtml(sym){
     // refreshed once a day, telling you where the walls are. Right is Skylit FLOW — live node strength
     // with 60m and 15m growth ticks, telling you what is happening to them now. The middle is price,
     // and level labels sit ON their own lines so neither gutter is spent on text.
-    var W=416, HGT=NCHART_H+30, TOP=8, BOT=16;
+    var W=416, HGT=NCHART_H+38, TOP=8, BOT=24;
     var GX=3, GW=26, DX=31, DW=26;              // structure, left
     var SX=350, SW=62;                           // flow, right
     var PL=64, PR=344;                           // price, centre
@@ -17381,6 +17483,37 @@ function nodeChartHtml(sym){
       g+='<rect x="'+(cx-18)+'" y="'+(yp-5).toFixed(1)+'" width="36" height="10" rx="2" fill="#0b0e14" opacity="0.9"/>';
       g+='<text x="'+cx+'" y="'+(yp+2.6).toFixed(1)+'" font-size="7.5" fill="#f3f6fa" font-weight="800" text-anchor="middle">'+dispNum(px*rr)+'</text>';
     }
+    // ---------- AXES ----------
+    // (v11.42) A chart without scales is a picture. Price ticks run down the inside of the plot's left
+    // edge and time along the bottom, both dim enough to read past. Ticks land on ROUND numbers, chosen
+    // from the range rather than by dividing it, so they stay stable as the window scrolls instead of
+    // renumbering on every bar.
+    (function(){
+      var span=hi-lo;
+      var steps=[1,2,2.5,5,10,20,25,50,100];
+      var raw=span/4, stepv=steps[steps.length-1];
+      for(var si=0;si<steps.length;si++){ if(steps[si]>=raw){ stepv=steps[si]; break; } }
+      var first=Math.ceil(lo/stepv)*stepv;
+      for(var pv=first; pv<=hi; pv+=stepv){
+        var y=Y(pv);
+        if(y<TOP+6 || y>TOP+ih-4) continue;
+        g+='<line x1="'+PL+'" y1="'+y.toFixed(1)+'" x2="'+(PL+4)+'" y2="'+y.toFixed(1)+'" stroke="#2a3140" stroke-width="0.7"/>';
+        g+='<text x="'+(PL+6)+'" y="'+(y+2.2).toFixed(1)+'" font-size="6" fill="#5b6675">'+dispNum(pv*rr)+'</text>';
+      }
+      // time: a mark every 30 minutes of the window, labelled in the chart's own clock
+      var mins=(t1-t0)/60000, stepM=(mins>75)?30:15;
+      var d0=new Date(t0);
+      var m0=d0.getMinutes(), roll=(stepM-(m0%stepM))%stepM;
+      for(var tt=t0+roll*60000; tt<=t1; tt+=stepM*60000){
+        var x=X(tt);
+        if(x<PL+10||x>PR-10) continue;
+        g+='<line x1="'+x.toFixed(1)+'" y1="'+(TOP+ih)+'" x2="'+x.toFixed(1)+'" y2="'+(TOP+ih+3)+'" stroke="#2a3140" stroke-width="0.7"/>';
+        var dt=new Date(tt), hh=dt.getHours(), mm=dt.getMinutes();
+        g+='<text x="'+x.toFixed(1)+'" y="'+(TOP+ih+9)+'" font-size="6" fill="#5b6675" text-anchor="middle">'+
+           (hh<10?'0':'')+hh+':'+(mm<10?'0':'')+mm+'</text>';
+      }
+      g+='<line x1="'+PL+'" y1="'+(TOP+ih)+'" x2="'+PR+'" y2="'+(TOP+ih)+'" stroke="#1e2530" stroke-width="0.7"/>';
+    })();
     // zone captions
     g+='<text x="'+GX+'" y="'+(HGT-5)+'" font-size="6" fill="#8b98a9" font-weight="700">GEX</text>';
     g+='<text x="'+DX+'" y="'+(HGT-5)+'" font-size="6" fill="#8b98a9" font-weight="700">DEX</text>';
@@ -17435,6 +17568,7 @@ function secLoc(sym){
   // the zone is an ATR band; ATR is measured on the UNDERLYING, so scale it the same way the levels were
   var zone=null;
   try{ var av=atr(sym); if(av>0) zone=Math.max(av*0.6,0.05)*(L.undScale>0?(L.dispScale/L.undScale):1); }catch(e){}
+  var C=null; try{ C=levelDepth(sym); }catch(eC){}
   var placed=false, atLevel=null;
   rows.forEach(function(r){
     if(!placed && r.disp<px){
@@ -17454,8 +17588,18 @@ function secLoc(sym){
        '<span class="g3v'+pulse+'"'+g3tip('Their strike is '+r.k+' on '+L.srcSym+'; shown here at '+r.disp+' using the live basis '+L.dispScale+'.')+'>'+dispNum(r.disp)+'</span>'+
        (zone!=null?'<span class="g3zn"'+g3tip('How far through a level can price go before it has failed? A level is a zone, not a line. This band is scaled from ATR, so it widens when the tape is fast. Price can trade inside it and the level still holds; a close beyond it is a break.')+'>±'+dispNum(zone)+'</span>':'')+
        '<span class="g3sr"'+g3tip(isHVL
-         ? 'Their PUBLISHED Zero Gamma, taken off their page rather than recomputed. It belongs to the expiration filter their page defaults to, which is not necessarily this ladder\'s window.'
-         : 'InsiderFinance, computed from the '+L.srcSym+' option chain embedded in their own page. Their open interest refreshes once a day, so these are structural levels rather than intraday ones.')+'>'+(isHVL?'IF·pub':'IF')+'</span>'+
+         ? (/\*/.test(r.id)
+            ? 'Where does the gamma regime flip? DERIVED, not theirs — their payload carried no zero-gamma level, so this is computed by re-pricing total gamma at candidate spots and finding where the book crosses from long to short. The asterisk is there so it is never mistaken for their number.'
+            : 'Where does the gamma regime flip? Their PUBLISHED Zero Gamma, taken from the payload rather than recomputed. Above it dealers are long gamma and levels hold; below it they are short and moves extend.')
+         : 'Which book is this from? InsiderFinance, computed from the '+L.srcSym+' chain embedded in their own page. Their open interest refreshes once a day, so these are structural levels rather than intraday ones.')+'>'+(isHVL?(/\*/.test(r.id)?'calc':'IF·pub'):'IF')+'</span>'+
+       (function(){
+         var t=confTier(C, r.und);
+         if(!t||!t.tier) return '';
+         return '<span class="g3cf'+t.tier+'"'+g3tip('How hard is this level to pass? '+
+           (t.tier>1 ? 'It carries heavy dealer GAMMA and heavy dealer DELTA — gamma decides how price behaves here, delta decides how much hedging must happen to get through. Both loaded is the strongest structure the two books can agree on.'
+                     : 'It is heavy in one book. Real, but a level carrying only gamma is easier to pass than one carrying both.'))+
+           '>'+(t.tier>1?'\u25c6\u25c6':'\u25c6')+'</span>';
+       })()+
        '<span class="g3d '+dcls(d)+'">'+(d>0?'+':'')+dispNum(+d.toFixed(2))+'</span></div>';
   });
   if(!placed) h+='<div class="g3prow"><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+dispNum(px)+'</span></div>';
@@ -17496,6 +17640,20 @@ function secReact(sym){
     }
   }catch(e){}
   h+='<div class="g3rx"'+g3tip('Is this level being defended or abandoned? Measured in dollars, because %King has a moving denominator and cannot compare two moments. Dealers ADDING into a test means the wall is being reinforced as price arrives. Bleeding while price approaches means it is being given up, and it will probably not hold.')+'><em>NODE</em><span>'+nodeTxt+'</span></div>';
+  // (v11.42) HOW MUCH DELTA SITS AT THE LEVEL BEING TESTED. Gamma says how price behaves here; delta
+  // says how much hedging must happen to get through. A level with heavy delta has more standing behind
+  // it than one with heavy gamma alone, and that is a different question from whether it is growing.
+  try{
+    if(L){
+      var Cx=levelDepth(sym), t=confTier(Cx, L.und!=null?L.und:L.k);
+      if(t){
+        var dTxt=(t.d>=0.55)?'heavy':((t.d>=0.25)?'moderate':'thin');
+        var gTxt=(t.g>=0.55)?'heavy':((t.g>=0.25)?'moderate':'thin');
+        h+='<div class="g3rx"'+g3tip('What is standing behind this level? Dealer delta at the strike being tested, against the heaviest in the book. Heavy delta means a lot of hedging has to happen for price to pass; thin delta means the level is mostly a gamma effect and cheaper to break.')+
+           '><em>DEPTH</em><span>delta <b>'+dTxt+'</b> · gamma <b>'+gTxt+'</b>'+(t.tier>1?' — <span class="g3ok">both loaded</span>':'')+'</span></div>';
+      }
+    }
+  }catch(eDp){}
   // price action at the level
   var rj=null; try{ rj=paReject(sym, lvl); }catch(e){}
   var pa=null; try{ pa=paRead(sym); }catch(e){}
@@ -17592,6 +17750,7 @@ window.__gptsDebug.face    = function(s){ return panelV3(s||activeSym()).length;
 window.__gptsDebug.ifLadder= function(s){ return ifLadder(s||activeSym()); };
 // (v11.36) The one question that decides whether DEX and a computed skew exist at all: what fields
 // does a single option in their payload actually carry?
+window.__gptsDebug.ifShape = function(sy){ try{ var c=ifChain(sy||'SPX'); return (c&&c.shape)||'companion older than v1.7'; }catch(e){ return String(e); } };
 window.__gptsDebug.optKeys = function(sy){
   var out={};
   ['SPX','SPY','QQQ'].forEach(function(s2){

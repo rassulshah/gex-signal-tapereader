@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.5
+// @version      1.7
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
@@ -69,9 +69,34 @@ function extractChain(html){
     // Wall in its header; computing our own versions of numbers they already publish is how a value
     // ends up on our face with their name on it and a different figure underneath.
     // Key names are tried directly, then found by pattern, so a rename on their side self-heals.
-    function pick(re){
-      for(var k in d){ if(re.test(k) && typeof d[k]==='number' && isFinite(d[k])) return d[k]; }
-      return null;
+    // (v1.7) THIS USED TO SCAN TOP-LEVEL FIELDS ONLY. Every published metric came back null and the
+    // conclusion drawn was "they compute client-side, so we must compute too" — which is exactly the
+    // thing this project keeps getting wrong. A nested object would have looked identical to absent.
+    // Walk the tree before concluding anything is missing.
+    function pick(re, maxDepth){
+      var found=null;
+      (function walk(o, depth){
+        if(found!==null || !o || typeof o!=='object' || depth>(maxDepth||4)) return;
+        for(var k in o){
+          if(k==='options') continue;                       // the contract array, not a metric
+          var v=o[k];
+          if(re.test(k) && typeof v==='number' && isFinite(v)){ found=v; return; }
+          if(v && typeof v==='object' && !Array.isArray(v)) walk(v, depth+1);
+        }
+      })(d, 0);
+      return found;
+    }
+    // what the payload actually contains, so "absent" is a finding rather than an assumption
+    function shapeOf(o, depth, path, out){
+      out=out||[]; if(!o||typeof o!=='object'||depth>3||out.length>60) return out;
+      for(var k in o){
+        if(k==='options'){ out.push(path+'options[]'); continue; }
+        var v=o[k], t=Object.prototype.toString.call(v);
+        if(t==='[object Object]'){ out.push(path+k+'{}'); shapeOf(v, depth+1, path+k+'.', out); }
+        else if(t==='[object Array]') out.push(path+k+'['+v.length+']');
+        else out.push(path+k+'='+String(v).slice(0,18));
+      }
+      return out;
     }
     var pub={
       zeroGamma:(typeof d.zeroGamma==='number')?d.zeroGamma:pick(/zero.?gamma|gamma.?flip|flip.?point/i),
@@ -90,8 +115,10 @@ function extractChain(html){
     // whether DEX (needs delta) and a computed SKEW (needs per-contract IV) are buildable at all.
     var optKeys=null;
     try{ if(d.options && d.options.length) optKeys=Object.keys(d.options[0]).join(','); }catch(eK){}
+    var shape=null;
+    try{ shape=shapeOf(d,0,'',[]).slice(0,60).join(' | '); }catch(eSh){}
     return { spot:d.spot, options:d.options, t:d.timestamp||null, stale:!!d.isStale,
-             ticker:d.ticker||null, pub:pub, optKeys:optKeys };
+             ticker:d.ticker||null, pub:pub, optKeys:optKeys, shape:shape };
   }catch(e){ return { err:'parse failed: '+e.message }; }
 }
 
@@ -233,6 +260,94 @@ function dexSkewFor(opts, spot, keep){
            skewPutK:skewOk?bestP.k:null, skewCallK:skewOk?bestC.k:null,
            atmIV:atmIV };
 }
+
+// ---- (v1.6) BLACK-SCHOLES DERIVED READS ----
+// Their payload gives strike, cp, delta, gamma, impliedVol, openInterest, bid and ask per contract.
+// Everything below is computed from those; nothing is taken on faith from a number they render, because
+// every published metric on their page comes back null in the payload — they compute client-side.
+// Rates and dividends are taken as zero: over the days-to-expiry horizons this panel trades, the carry
+// term moves these numbers less than the bid/ask spread does, and pretending to know r would be false
+// precision rather than accuracy.
+function npdf(x){ return Math.exp(-0.5*x*x)/Math.sqrt(2*Math.PI); }
+function yearsTo(o, todayNum){
+  try{
+    var e=o.expireYear*10000+o.expireMonth*100+o.expireDay;
+    var y1=Math.floor(todayNum/10000), m1=Math.floor(todayNum/100)%100, d1=todayNum%100;
+    var y2=Math.floor(e/10000), m2=Math.floor(e/100)%100, d2=e%100;
+    var days=(Date.UTC(y2,m2-1,d2)-Date.UTC(y1,m1-1,d1))/86400000;
+    if(days<0) return null;
+    // an expiring contract still has hours of life; treat 0DTE as a few hours rather than zero, which
+    // would divide by nothing and blow every greek to Infinity
+    return Math.max(days,0.25)/365;
+  }catch(e){ return null; }
+}
+function d1Of(S,K,sig,T){
+  if(!(S>0&&K>0&&sig>0&&T>0)) return null;
+  return (Math.log(S/K)+(sig*sig/2)*T)/(sig*Math.sqrt(T));
+}
+
+// EXPECTED MOVE — the ATM straddle, which is the market's own estimate of the move by expiry.
+// Mid prices, and only when both legs actually quote: a one-sided straddle is not a straddle.
+function expectedMove(opts, spot, keep){
+  try{
+    var bestC=null, bestP=null;
+    for(var i=0;i<opts.length;i++){
+      var o=opts[i]; if(!keep(o)) continue;
+      if(typeof o.bid!=='number' || typeof o.ask!=='number' || o.ask<=0) continue;
+      var d=Math.abs(o.strike-spot);
+      if(o.cp==='C'){ if(!bestC||d<bestC.d) bestC={d:d,o:o}; }
+      else { if(!bestP||d<bestP.d) bestP={d:d,o:o}; }
+    }
+    if(!bestC||!bestP) return null;
+    if(Math.abs(bestC.o.strike-bestP.o.strike)>0.001) return null;   // must be the SAME strike
+    if(Math.abs(bestC.o.strike-spot) > spot*0.01) return null;       // and genuinely at the money
+    var cm=(bestC.o.bid+bestC.o.ask)/2, pm=(bestP.o.bid+bestP.o.ask)/2;
+    if(!(cm>0)||!(pm>0)) return null;
+    var em=cm+pm;
+    return { em:+em.toFixed(2), pct:+((em/spot)*100).toFixed(2), k:bestC.o.strike,
+             call:+cm.toFixed(2), put:+pm.toFixed(2) };
+  }catch(e){ return null; }
+}
+
+// GAMMA FLIP — a FALLBACK ONLY. If their payload carries a zero-gamma level we take theirs; this exists
+// for when it does not, and whatever uses it must label it as derived. Total dealer gamma is
+// re-evaluated at candidate SPOTS, because gamma is spot-dependent: the level where the book crosses
+// from net long to net short is NOT the strike where a running total happens to change sign, which is
+// the cheap approximation this replaces. Scans +-4% and interpolates the crossing nearest spot.
+function gammaFlip(opts, spot, keep, todayNum){
+  try{
+    var sel=[];
+    for(var i=0;i<opts.length;i++){
+      var o=opts[i]; if(!keep(o)) continue;
+      if(typeof o.impliedVol!=='number' || typeof o.openInterest!=='number' || !(o.impliedVol>0)) continue;
+      var T=yearsTo(o, todayNum); if(!T) continue;
+      sel.push({K:o.strike, sig:o.impliedVol, T:T, oi:o.openInterest, call:(o.cp==='C')});
+    }
+    if(sel.length<20) return null;
+    function netAt(S){
+      var g=0;
+      for(var j=0;j<sel.length;j++){
+        var c=sel[j];
+        var d1=d1Of(S,c.K,c.sig,c.T); if(d1==null) continue;
+        var gam=npdf(d1)/(S*c.sig*Math.sqrt(c.T));
+        g += gam*c.oi*100*S*S*0.01*(c.call?1:-1);
+      }
+      return g;
+    }
+    var lo=spot*0.96, hi=spot*1.04, steps=48, prevS=null, prevV=null, best=null;
+    for(var k=0;k<=steps;k++){
+      var S=lo+((hi-lo)*k/steps), v=netAt(S);
+      if(prevV!=null && ((prevV<0&&v>=0)||(prevV>0&&v<=0))){
+        var span=v-prevV;
+        var x=(span!==0)?(prevS+((0-prevV)/span)*(S-prevS)):S;
+        if(best===null || Math.abs(x-spot)<Math.abs(best-spot)) best=+x.toFixed(2);
+      }
+      prevS=S; prevV=v;
+    }
+    if(best==null) return null;
+    return { flip:best, netAtSpot:netAt(spot) };
+  }catch(e){ return null; }
+}
 function computeAll(ch){
   var W=windows(ch.t);
   var exps={}; for(var i=0;i<ch.options.length;i++){ exps[ymdOf(ch.options[i])]=1; }
@@ -243,11 +358,15 @@ function computeAll(ch){
   if(!inFri.length) inFri=[front];
   return {
     spot:ch.spot, ticker:ch.ticker, payloadT:ch.t, stale:ch.stale,
-    asOf:Date.now(), today:W.today, friday:W.friday, rolled:!!W.rolled, pub:(ch.pub||null), optKeys:(ch.optKeys||null),
+    asOf:Date.now(), today:W.today, friday:W.friday, rolled:!!W.rolled, pub:(ch.pub||null), optKeys:(ch.optKeys||null), shape:(ch.shape||null),
     dte0:{ exps:[front], lv:levelsFor(ch.options, ch.spot, function(o){ return ymdOf(o)===front; }),
-           ds:dexSkewFor(ch.options, ch.spot, function(o){ return ymdOf(o)===front; }) },
+           ds:dexSkewFor(ch.options, ch.spot, function(o){ return ymdOf(o)===front; }),
+           em:expectedMove(ch.options, ch.spot, function(o){ return ymdOf(o)===front; }),
+           gf:gammaFlip(ch.options, ch.spot, function(o){ return ymdOf(o)===front; }, W.today) },
     toFri:{ exps:inFri, lv:levelsFor(ch.options, ch.spot, function(o){ return ymdOf(o)>=W.today && ymdOf(o)<=W.friday; }),
-            ds:dexSkewFor(ch.options, ch.spot, function(o){ return ymdOf(o)>=W.today && ymdOf(o)<=W.friday; }) },
+            ds:dexSkewFor(ch.options, ch.spot, function(o){ return ymdOf(o)>=W.today && ymdOf(o)<=W.friday; }),
+            em:expectedMove(ch.options, ch.spot, function(o){ return ymdOf(o)>=W.today && ymdOf(o)<=W.friday; }),
+            gf:gammaFlip(ch.options, ch.spot, function(o){ return ymdOf(o)>=W.today && ymdOf(o)<=W.friday; }, W.today) },
     all:{ exps:[all[0],all[all.length-1]], nExps:all.length, lv:levelsFor(ch.options, ch.spot, function(){ return true; }) }
   };
 }

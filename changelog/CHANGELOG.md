@@ -1,3 +1,55 @@
+## v11.42 — depth, expected move, and scales on the chart
+
+**Every ladder row looked equally important. They are not.** A strike carrying heavy dealer GAMMA and
+heavy dealer DELTA is a materially harder place for price to pass than one carrying gamma alone — gamma
+decides how price behaves there, delta decides how much hedging must happen to get through. Rows now
+carry a depth marker: ◆◆ when both books are loaded, ◆ when one is. Tiers rather than a score, because a
+trader needs to know which two levels matter today, not that one rated 0.63.
+
+The bug that made it work: the two books sit on DIFFERENT strike grids, so gamma lands at 766.00 and
+delta at 766.06. Taking the nearest single key read one book and scored the other as zero — every level
+came out gamma-only. A level is a zone, so both books' contributions inside it count, taking the max so
+adjacent strikes are not double-counted.
+
+**Expected move is on the FRAME line**, with how much of it the session has already spent. It is the
+number that makes a target honest: a level beyond what remains is not in play today whatever the
+structure says. Blank unless both straddle legs quote at one strike within 1% of spot.
+
+**REACTION gained a DEPTH row** — how much delta and gamma stand behind the level being tested. That is
+a different question from whether the node is growing, and a better one for whether a wall will hold.
+
+**The chart has scales.** Price ticks down the inside of the plot's left edge on ROUND numbers chosen
+from the range rather than the range divided by four, so they stay stable as the window scrolls. Time
+along the bottom, landing on the half hour rather than on whenever the window happens to begin, with the
+step widening on a longer window so labels cannot collide.
+
+**And test_no_dupes earned itself on the very next build.** `confluence(sym)` already existed at ~15022
+and is called at ~2943; the new function took the same name and would have silently shadowed it. Caught
+before shipping rather than nine releases later, and renamed `levelDepth`. Fourth collision in this
+project, first that never reached the user.
+
+## v11.41 — take theirs, and drop what nobody acts on
+
+Two corrections, both prompted by the right question being asked.
+
+**The payload scan was shallow.** `pick()` only looked at TOP-LEVEL fields of `initialData`, so every
+published metric read as null and that drove a decision to compute our own zero gamma. A nested object
+would have looked identical to an absent one. It now walks the tree, and the payload's own shape is
+recorded so "absent" is a finding rather than an assumption — `__gptsDebug.ifShape()`.
+
+**Their zero gamma wins, always.** The derived Black-Scholes flip is a FALLBACK, used only when the
+payload genuinely carries nothing, drawn as `HVL*` and tagged `calc` rather than `IF·pub`. When neither
+exists there is no row at all. Computing a number they publish is the mistake this project keeps
+repeating; the fix is a preference order that cannot silently invert.
+
+**Charm is gone.** It was computed and never displayed, and asked what decision a `CHEX −$1.2B/day`
+cell changes, the honest answer is none — the consequence that matters, pins weakening into an expiry
+close, is already carried by the session phase tag. Carrying an unused computation is the same
+accumulation problem as carrying unused text, so it was removed rather than left wired up for later.
+
+**Expected move** stays: the ATM straddle from their bid/ask, refused unless both legs quote at the same
+strike within 1% of spot. A one-sided straddle is not a straddle, and a far pair is not at the money.
+
 ## v11.40 — the suite is green, and it was hiding two live bugs
 
 The 23 "known stale" failures had been carried as a baseline for the whole project. They were examined
