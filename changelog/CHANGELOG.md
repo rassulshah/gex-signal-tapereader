@@ -1,3 +1,72 @@
+## v11.49 — the EM on the face was a WEEK's move, and FRAME stopped reporting instruments
+
+**The expected move shown under "how much room does today have" was answering about a different week.**
+`secFrame` read `ec.toFri.em` and only fell back to `dte0`. But `toFri.em` is not a five-day move — it is a
+SINGLE expiry's straddle picked out of the Mon..Fri set, so on any day but Friday it lands on a LATER
+expiry worth roughly double the day's. Measured 2026-08-22: **toFri 69.25 against dte0 34.65.** Every
+"% of EM used" was computed against a yardstick about twice as long as the day it described, and any
+target looked comfortably in range when it was not.
+
+**On a Friday the two coincide.** That is why it survived — the bug hides itself once a week, on the day
+someone is most likely to check. This is the same shape as the `week`/"to Fri" mislabel already in the
+note: a value under a label implying a different window, and nothing ever throws.
+
+**The band replaces the number.** `open ± dte0 EM`, captured ONCE at the open and held fixed all session.
+That is the standard anchored-EM convention, and the anchoring is the whole point: a band recentred on
+spot every render just follows price around and can never say "further than was priced" — by 3pm a live
+band would claim the day's possible range is a handful of points. The rail IS the day's priced range, so
+the dot's position and the percentage beside it are the same fact and cannot drift apart. Marks CLAMP at
+the rail; the percentage is what says how far past.
+
+**The open price was never the hard part.** `closedCandles()` is already filtered to today from 08:30 CT,
+so `cs[0].o` is the opening print even when the panel is started at noon. Only the EM's freshness varies.
+Captured late, the straddle has already decayed and the band is narrower than the open's truly was — that
+is what `~EST` says. **No reconstruction is attempted.** Scaling a decayed straddle back up by √(T) assumes
+IV has not moved since the open, and on the days that matter it has.
+
+**Line 2 stopped being four naked measurements.** Line 1 was synthesised — a regime translated into what it
+rewards. Line 2 reported instrument readings. A number there either feeds the sentence or it is not on the
+face.
+
+- **DEX removed.** Its SIGN is structurally pinned. Live SPX to-Friday netDex −$13.5B; per-strike
+  decomposition +14,732 against −34,671, negatives 2.35x, and dte0 negative too. Index chains are put-OI
+  dominant, so the sign essentially cannot flip — and a sign that never changes carries nothing. This is
+  the same disease the skew read already cures by voting the level against its OWN recent range. DEX never
+  got that treatment because **it was never recorded**, so there was no range to vote against. It is
+  recorded from this build, with the spot beside it.
+- **TERM removed** — but NOT for the reason first given. Their *payload* carries no term figure, and that
+  was mistaken for the value being unavailable. Their *page* publishes **Term Slope +1.3**, computed
+  client-side from `options[]`. It is uncomputed, not absent. It goes because term structure CONDITIONS
+  and never points — a third regime axis beside gamma and vanna that would rarely change the sentence.
+- **ATR removed from the FACE only.** It still sets the ladder's ± zone widths and still sizes the
+  rejection detector. It stopped needing to be read.
+
+**HVL is now FLIP.** HVL is SpotGamma's house term (High Volatility Level) for a related but not identical
+level. The industry-standard names are Zero Gamma and Gamma Flip, and our own source InsiderFinance calls
+it "Zero Gamma Level" — so the panel was wearing a third vendor's vocabulary for a number it takes from a
+second. Display strings and rank-map keys only; `hvlSrc`, `LVL_COL.hvl`, `P.hvl`, `isHVL` and the recorded
+field names are untouched, because renaming identifiers is churn with no reader on the other end.
+
+**Both new numbers are ENROLLED, which the originals never were.** DEX and EM sat on the face for releases
+with no per-bar record, no scorecard and no question — which is exactly how a cell nobody can check
+survives. `emband` states a claim that can be WRONG: past 100% of the priced move, price comes back toward
+the open. It scores `null` on any bar inside the band, because a feature that votes on every bar of a
+trending day earns accuracy for free — the one-directional trap the nightly rules exist to catch. `dex`
+scores `null` outright and does not vote until the level has a range behind it.
+
+**The enrolment guard caught the build mid-flight**, twice: `test_feature_enrollment` failed because the two
+new rules were not seeded into `learning/rules.json`, and `test_rules_v2` then failed because the seeds were
+missing `lastVerified` and `walkForward`. Both were real structural gaps in what was being shipped, not
+tests needing to be bent. `test_em_band.js` (41 assertions) pins the dte0 rule, the FORBIDDEN toFri
+fallback, open-from-first-candle, capture-not-overwritten, the `~EST` flag and the clamps.
+
+**A note for whoever runs the suite next: it is NOT green and has not been.** Six files fail before any of
+this build's changes. One is environmental (`jsdom` cannot install in the cloud sandbox). The other five are
+stale harness gaps — tests that `eval()` a function slice without pulling in the names it closes over, so
+they throw `ReferenceError` on `fmtLvl`, `dexSkewFor`, `nodeSessChg` and friends, all of which exist in the
+source. The new band test hit the identical trap and works around it by extracting the constants from
+source. This is precisely the camouflage the note warns about and it deserves its own pass.
+
 ## v11.48 — stop the swallow being silent
 
 The NODES block still rendered nothing at v11.47, and the cause was the same shape as the last one: it

@@ -45,7 +45,7 @@ const BOOK=[[7600,-800e6],[7620,-1200e6],[7640,-3000e6],[7660,-1500e6],[7680,-40
   ok(S.crNet!==7760,'and so it is NOT their 0DTE Call Wall of 7760',S.crNet);
   ok(S.crNetM===1500000000,'the mass behind that choice is reported, so the divergence is auditable',S.crNetM);
   // cumulative: -800,-2000,-5000,-5900,-6300,-6180,-6000,-5100,-4800 -> never crosses zero
-  ok(S.hvl===null,'a book that never flips sign has no HVL — not a nearest-strike guess',S.hvl);
+  ok(S.hvl===null,'a book that never flips sign has no FLIP — not a nearest-strike guess',S.hvl);
   ok(S.net<0,'and the net is short, as a 6:1 put book should be',S.net);
 }
 {
@@ -65,7 +65,7 @@ const BOOK=[[7600,-800e6],[7620,-1200e6],[7640,-3000e6],[7660,-1500e6],[7680,-40
   feed([[7600,-500e6],[7640,-700e6],[7700,900e6],[7760,800e6]]);
   const S=spxLevels();
   // cumulative: -500, -1200, -300, +500 -> crossing 7700 -> 7760 at 300/800
-  ok(S.hvl===7722.5,'HVL interpolates the true crossing bracket in SPX points',S.hvl);
+  ok(S.hvl===7722.5,'FLIP interpolates the true crossing bracket in SPX points',S.hvl);
   ok(S.hvl>S.px,'and sits above spot here');
 }
 {

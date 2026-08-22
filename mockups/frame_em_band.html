@@ -1,0 +1,244 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>FRAME — EM band mockup</title>
+<style>
+  body{background:#0b0e14;color:#e6edf3;font:12px Inter,Arial,sans-serif;margin:0;padding:24px 28px 60px}
+  h1{font-size:13px;letter-spacing:.14em;color:#8b98a9;font-weight:800;margin:0 0 4px}
+  .sub{font-size:11px;color:#6c7889;margin:0 0 22px;line-height:1.5;max-width:620px}
+  .case{margin:0 0 26px}
+  .cap{font-size:9px;letter-spacing:.1em;font-weight:800;color:#f2b45a;margin:0 0 5px}
+  .note{font-size:10px;color:#6c7889;margin:6px 0 0;line-height:1.5;max-width:560px}
+  .panel{width:560px;background:#0b0e14;border:1px solid #1a212c;border-radius:5px;padding:6px 8px}
+  .g3sh{display:block;text-align:center;font-size:8px;font-weight:800;letter-spacing:.13em;color:#8b98a9;
+        margin:0 0 3px;padding:2px 0;border-radius:3px;background:rgba(139,152,169,.09)}
+  .g3b{padding:2px 2px 1px;font-variant-numeric:tabular-nums}
+  .g3f1{display:flex;align-items:center;gap:7px;font-size:9.5px;flex-wrap:wrap}
+  .g3rg{font-size:10px;font-weight:800;padding:1px 7px;border-radius:3px;background:rgba(163,113,247,.18);
+        color:#a371f7;border:1px solid rgba(163,113,247,.4)}
+  .g3tgt{font-size:11px;font-weight:800;color:#e3c341;letter-spacing:-.2px}
+  .g3play{font-size:8.5px;color:#8b98a9}
+  .g3f2{display:flex;align-items:center;gap:8px;font-size:9px;margin-top:3px;color:#8b98a9;flex-wrap:wrap}
+  .g3f2 b{color:#e6edf3;font-weight:700}
+  .g3cell{display:inline-flex;align-items:baseline;gap:3px}
+  .g3fk{color:#8b98a9;font-size:7.5px;font-weight:700;letter-spacing:.05em}
+  .g3tag{font-size:7px;font-weight:800;padding:1px 4px;border-radius:2px;background:rgba(242,180,90,.16);color:#f2b45a}
+
+  /* ---- the band ---- */
+  .emrow{display:flex;align-items:center;gap:7px;margin-top:4px}
+  .emend{font-size:7.5px;font-weight:700;color:#6c7889;letter-spacing:.03em;white-space:nowrap}
+  .emtrack{position:relative;flex:1;height:11px}
+  .emrail{position:absolute;left:0;right:0;top:4px;height:4px;border-radius:2px;background:#1e2530}
+  .emfill{position:absolute;top:4px;height:4px;border-radius:2px;background:rgba(139,152,169,.42)}
+  .emfill.warn{background:rgba(242,180,90,.55)}
+  .emfill.dang{background:rgba(240,97,109,.6)}
+  /* open anchor: the reference the whole band is measured from */
+  .emopen{position:absolute;top:1px;width:1px;height:10px;background:#8b98a9;opacity:.85}
+  .emopen::after{content:'';position:absolute;left:-1.5px;top:-2px;width:4px;height:2px;background:#8b98a9;opacity:.85}
+  /* target tick */
+  .emtgt{position:absolute;top:0;width:0;height:0;border-left:3.5px solid transparent;border-right:3.5px solid transparent;
+         border-bottom:4.5px solid #e3c341;transform:translateX(-3.5px)}
+  .emtgt.out{border-bottom-color:#6c7889}
+  /* current price marker — 2px surface ring so it reads over fill or rail */
+  .emnow{position:absolute;top:2.5px;width:7px;height:7px;border-radius:50%;background:#e6edf3;
+         box-shadow:0 0 0 2px #0b0e14;transform:translateX(-3.5px)}
+  .emnow.warn{background:#f2b45a}
+  .emnow.dang{background:#f0616d}
+  .empct{font-size:9px;color:#e6edf3;font-weight:700;white-space:nowrap}
+  .empct.warn{color:#f2b45a}
+  .empct.dang{color:#f0616d}
+  .emlab{font-size:7.5px;color:#6c7889;font-weight:700;letter-spacing:.05em}
+  .emest{color:#f2b45a}
+  .emref{font-size:9px;color:#6c7889;font-style:italic}
+  .legend{margin:26px 0 0;font-size:10px;color:#6c7889;line-height:1.7;max-width:620px}
+  .legend b{color:#8b98a9;font-weight:700}
+  .k{display:inline-block;width:11px;text-align:center;color:#e6edf3}
+</style>
+
+<h1>③ FRAME — EM BAND</h1>
+<p class="sub">Anchored expected move: <b style="color:#8b98a9">open ± EM-captured-at-open</b>, static all session.
+Marker is displacement from the open. DEX, TERM and ATR removed from line 2 — the band takes their width.
+Live values are real (spot 7691.75 ES, EM 69.41, target 7717.71); <b style="color:#8b98a9">the opening price 7702.40 is illustrative</b>
+— the market is closed and there is no candle open to read.</p>
+
+<!-- ============ BEFORE ============ -->
+<div class="case">
+  <div class="cap">BEFORE — WHAT IS ON THE FACE NOW</div>
+  <div class="panel">
+    <span class="g3sh">① FRAME</span>
+    <div class="g3b">
+      <div class="g3f1">
+        <span class="g3rg">−G −V ⚠</span>
+        <span class="g3tgt">→ 7717.71</span>
+        <span class="g3play">momentum — breaks not fades · widen stops</span>
+      </div>
+      <div class="g3f2">
+        <span class="g3cell"><span class="g3fk">DEX</span><b>−$13.5B</b></span>
+        <span class="g3cell"><span class="g3fk">TERM</span><b>—</b></span>
+        <span class="g3cell"><span class="g3fk">EM</span><b>69.41</b></span>
+        <span class="g3cell"><span class="g3fk">ATR</span><b>1</b></span>
+        <span class="g3tag">CLOSED</span>
+      </div>
+    </div>
+  </div>
+  <p class="note">Line 1 is synthesised — a regime translated into what it rewards. Line 2 is four naked measurements.
+  DEX's sign is structurally pinned, TERM has never printed a value.</p>
+</div>
+
+<!-- ============ A ============ -->
+<div class="case">
+  <div class="cap">A — NORMAL: PRICE INSIDE THE BAND</div>
+  <div class="panel">
+    <span class="g3sh">① FRAME</span>
+    <div class="g3b">
+      <div class="g3f1">
+        <span class="g3rg">−G −V ⚠</span>
+        <span class="g3tgt">→ 7717.71</span>
+        <span class="g3play">momentum — breaks not fades · widen stops</span>
+      </div>
+      <div class="emrow">
+        <span class="emend">7633</span>
+        <span class="emtrack">
+          <span class="emrail"></span>
+          <span class="emfill" style="left:42.3%;width:7.7%"></span>
+          <span class="emopen" style="left:50%"></span>
+          <span class="emtgt" style="left:61.0%"></span>
+          <span class="emnow" style="left:42.3%"></span>
+        </span>
+        <span class="emend">7772</span>
+        <span class="empct">15%</span>
+        <span class="emlab">OF EM</span>
+        <span class="g3tag">CLOSED</span>
+      </div>
+    </div>
+  </div>
+  <p class="note">Open at centre, price 10.65 below it, target above and still inside what was priced.
+  The percentage and the marker are the same fact, so they can never disagree.</p>
+</div>
+
+<!-- ============ B ============ -->
+<div class="case">
+  <div class="cap">B — OVEREXTENDED: THE DAY HAS DONE MORE THAN WAS PRICED</div>
+  <div class="panel">
+    <span class="g3sh">① FRAME</span>
+    <div class="g3b">
+      <div class="g3f1">
+        <span class="g3rg">−G −V ⚠</span>
+        <span class="g3tgt">→ 7717.71</span>
+        <span class="g3play">momentum — breaks not fades · widen stops</span>
+      </div>
+      <div class="emrow">
+        <span class="emend">7633</span>
+        <span class="emtrack">
+          <span class="emrail"></span>
+          <span class="emfill dang" style="left:50%;width:50%"></span>
+          <span class="emopen" style="left:50%"></span>
+          <span class="emtgt" style="left:61.0%"></span>
+          <span class="emnow dang" style="left:100%"></span>
+        </span>
+        <span class="emend">7772</span>
+        <span class="empct dang">119%</span>
+        <span class="emlab">OF EM</span>
+        <span class="g3tag">PWR</span>
+      </div>
+    </div>
+  </div>
+  <p class="note">Marker pins at the rail edge and turns red rather than escaping the track. Past 100% the day has
+  travelled further than the straddle priced — the fill carries the severity, the number says how far past.</p>
+</div>
+
+<!-- ============ C ============ -->
+<div class="case">
+  <div class="cap">C — TARGET BEYOND THE BAND: NOT IN PLAY TODAY</div>
+  <div class="panel">
+    <span class="g3sh">① FRAME</span>
+    <div class="g3b">
+      <div class="g3f1">
+        <span class="g3rg">−G −V ⚠</span>
+        <span class="g3tgt" style="color:#6c7889">→ 7850.00</span>
+        <span class="g3play">momentum — breaks not fades · widen stops</span>
+      </div>
+      <div class="emrow">
+        <span class="emend">7633</span>
+        <span class="emtrack">
+          <span class="emrail"></span>
+          <span class="emfill" style="left:42.3%;width:7.7%"></span>
+          <span class="emopen" style="left:50%"></span>
+          <span class="emtgt out" style="left:100%"></span>
+          <span class="emnow" style="left:42.3%"></span>
+        </span>
+        <span class="emend">7772</span>
+        <span class="empct">15%</span>
+        <span class="emlab">OF EM</span>
+        <span class="emref">target outside today's range</span>
+      </div>
+    </div>
+  </div>
+  <p class="note">The magnet sits past the priced move. The tick greys and clamps to the edge and the target number
+  greys with it — a destination beyond what is left is context, not a place to expect price today. This is the case
+  the EM was worth adding for.</p>
+</div>
+
+<!-- ============ D ============ -->
+<div class="case">
+  <div class="cap">D — COLD START: PANEL LOADED MID-SESSION, EM RECONSTRUCTED</div>
+  <div class="panel">
+    <span class="g3sh">① FRAME</span>
+    <div class="g3b">
+      <div class="g3f1">
+        <span class="g3rg">−G −V ⚠</span>
+        <span class="g3tgt">→ 7717.71</span>
+        <span class="g3play">momentum — breaks not fades · widen stops</span>
+      </div>
+      <div class="emrow">
+        <span class="emend">~7636</span>
+        <span class="emtrack">
+          <span class="emrail"></span>
+          <span class="emfill" style="left:42.9%;width:7.1%"></span>
+          <span class="emopen" style="left:50%"></span>
+          <span class="emtgt" style="left:60.4%"></span>
+          <span class="emnow" style="left:42.9%"></span>
+        </span>
+        <span class="emend">~7769</span>
+        <span class="empct">16%</span>
+        <span class="emlab emest">OF EM ~EST</span>
+        <span class="g3tag">MID</span>
+      </div>
+    </div>
+  </div>
+  <p class="note">No EM was recorded at 9:30 because the panel was not running. The band is scaled back from the
+  current straddle by √(T_open/T_now) and every number carries a <b style="color:#f2b45a">~</b>. Hover says it was
+  reconstructed, not captured, and that it assumes IV has not moved since the open.</p>
+</div>
+
+<!-- ============ E ============ -->
+<div class="case">
+  <div class="cap">E — NO STRADDLE: THE BAND REFUSES</div>
+  <div class="panel">
+    <span class="g3sh">① FRAME</span>
+    <div class="g3b">
+      <div class="g3f1">
+        <span class="g3rg">−G −V ⚠</span>
+        <span class="g3tgt">→ 7717.71</span>
+        <span class="g3play">momentum — breaks not fades · widen stops</span>
+      </div>
+      <div class="emrow">
+        <span class="emref">no EM — both straddle legs do not quote at one strike near spot</span>
+        <span class="g3tag">AM</span>
+      </div>
+    </div>
+  </div>
+  <p class="note">Same refusal the EM cell already makes today, just said in words instead of a dash. A one-sided
+  straddle is not a straddle, and half a band would be worse than none.</p>
+</div>
+
+<div class="legend">
+  <b>MARKS</b> &nbsp;
+  <span class="k">┃</span> open — the anchor everything is measured from &nbsp;·&nbsp;
+  <span class="k">●</span> price now &nbsp;·&nbsp;
+  <span style="color:#e3c341" class="k">▲</span> target &nbsp;·&nbsp;
+  rail ends are open ∓ EM<br>
+  <b>SEVERITY</b> &nbsp; fill and marker stay neutral inside the band, amber approaching the edge, red past 100%.
+  Green and red keep their BIAS meanings elsewhere; here red is a state, not a direction.<br>
+  <b>WHAT WENT</b> &nbsp; DEX (sign structurally pinned), TERM (never printed a value), ATR (still sets the ladder's
+  zone widths, just not displayed).
+</div>

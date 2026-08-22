@@ -152,12 +152,12 @@ global.STATE={SPY:{price:762.57, king:760}};
   const j={ levels:[{l:R.map(r=>({k:r.k, v:r.v, net:r.net, d:1}))}] };
   const L=cpFromPayload(j, 762.57);
   ok(L.nCross>=2,'the chain genuinely crosses zero more than once',L.nCross);
-  ok(L.hvl>755 && L.hvl<766,'the HVL chosen is the crossing NEAREST SPOT, not the first from the bottom',L.hvl);
+  ok(L.hvl>755 && L.hvl<766,'the FLIP chosen is the crossing NEAREST SPOT, not the first from the bottom',L.hvl);
   ok(Math.abs(L.hvl-762.57) < Math.abs(L.crossings[0]-762.57),'and it beats the first crossing on distance to spot',[L.hvl,L.crossings]);
 }
 {
   // LABEL MERGE: two levels on one strike print as one row carrying both names, never one silently dropped.
-  // The live card showed CR / Mag / HVL with NO put support at all, because PS and Mag were both 760.
+  // The live card showed CR / Mag / FLIP with NO put support at all, because PS and Mag were both 760.
   FULL={ cr:765, crGex:1.7e8, ps:760, psGex:2.8e8, hvl:766, mag:760, n:241, nExps:34 };
   DTE0=null; PASSIVE=null;
   const U=lvlUnified('SPY');
@@ -234,7 +234,7 @@ global.STATE={SPY:{price:762.57, king:760}};
   ok(Math.max.apply(null,ys)-Math.min.apply(null,ys) > 20,'and they are spread apart, not collapsed',ys);
   global.closedCandles=()=>[];
 }
-// ---------- (v11.20) AN HVL NOWHERE NEAR PRICE IS NOT A FLIP ----------
+// ---------- (v11.20) A FLIP NOWHERE NEAR PRICE IS NOT A FLIP ----------
 {
   // The live 0DTE set is essentially all put, so its cumulative only crosses out in the tail — 687.09
   // against a spot of 762.57, ten percent away. A gamma flip is a statement about where price IS.

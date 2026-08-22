@@ -46,22 +46,22 @@ const at=(L,id)=>{ const r=row(L,id); return r?r.k:null; };
   eq(ASKED,'SPX','the companion is asked for SPX even though the panel symbol is SPY');
   ok(L.rolled===true,'the Friday roll rides along so the panel discloses it');
 }
-// ---- HVL is THEIR published Zero Gamma, not a number of ours ----
+// ---- FLIP is THEIR published Zero Gamma, not a number of ours ----
 // Their page prints it in the header (SPY 766.48, SPX 7679.88). v11.29 computed a cumulative-net-GEX
 // crossing instead and was about to label it IF — the same mislabeling one layer down.
 {
   CHAIN=chain(); const L=ifLadder('SPY');
-  eq(at(L,'HVL'),7679.88,'HVL is their PUBLISHED zero gamma, taken as-is');
+  eq(at(L,'FLIP'),7679.88,'FLIP is their PUBLISHED zero gamma, taken as-is');
   const ids=L.rows.map(r=>r.id).join('·').split('·');
-  ok(ids.every(i=>['CR','CR0','PS','PS0','Mag','MP','HVL'].includes(i)),'every row is a level they actually give us',ids);
+  ok(ids.every(i=>['CR','CR0','PS','PS0','Mag','MP','FLIP'].includes(i)),'every row is a level they actually give us',ids);
 }
 {
   CHAIN=chain({pub:null}); const L=ifLadder('SPY');
-  ok(!L.rows.some(r=>/HVL/.test(r.id)),'when they publish no zero gamma there is NO HVL row — nothing is substituted');
+  ok(!L.rows.some(r=>/FLIP/.test(r.id)),'when they publish no zero gamma there is NO FLIP row — nothing is substituted');
 }
 {
   CHAIN=chain({pub:{zeroGamma:null,callWall:800,putWall:760}}); const L=ifLadder('SPY');
-  ok(!L.rows.some(r=>/HVL/.test(r.id)),'a null zero gamma is absent, not zero');
+  ok(!L.rows.some(r=>/FLIP/.test(r.id)),'a null zero gamma is absent, not zero');
 }
 {
   CHAIN=chain({ dte0:{exps:[1], lv:lv({cr:7700,ps:7650})} });
@@ -131,29 +131,29 @@ ok((CHAIN=chain({toFri:null,dte0:null}), !!ifLadder('SPY').err),'a chain with no
 {
   CHAIN=chain();                                  // pub.zeroGamma = 7679.88
   const L=ifLadder('SPY');
-  eq(at(L,'HVL'),7679.88,'their published zero gamma is used when the payload has one');
+  eq(at(L,'FLIP'),7679.88,'their published zero gamma is used when the payload has one');
   eq(L.hvlSrc,'pub','and the source is recorded as theirs');
-  ok(!L.rows.some(r=>/HVL\*/.test(r.id)),'no derived row is drawn alongside it');
+  ok(!L.rows.some(r=>/FLIP\*/.test(r.id)),'no derived row is drawn alongside it');
 }
 {
   CHAIN=chain({ pub:{zeroGamma:null,callWall:null,putWall:null},
                 toFri:{exps:[1,2], lv:lv(), gf:{flip:7666.4}} });
   const L=ifLadder('SPY');
-  ok(L.rows.some(r=>/HVL\*/.test(r.id)),'with nothing published, the derived flip appears');
+  ok(L.rows.some(r=>/FLIP\*/.test(r.id)),'with nothing published, the derived flip appears');
   eq(L.hvlSrc,'calc','tagged as computed, not as theirs');
-  const r=L.rows.find(x=>/HVL/.test(x.id));
+  const r=L.rows.find(x=>/FLIP/.test(x.id));
   ok(/\*/.test(r.id),'and it is asterisked on the face');
 }
 {
   CHAIN=chain({ pub:{zeroGamma:null}, toFri:{exps:[1], lv:lv()} });
   const L=ifLadder('SPY');
-  ok(!L.rows.some(r=>/HVL/.test(r.id)),'nothing published and nothing computed means NO row — never a guess');
+  ok(!L.rows.some(r=>/FLIP/.test(r.id)),'nothing published and nothing computed means NO row — never a guess');
   eq(L.hvlSrc,null,'and no source is claimed');
 }
 {
   // preference is absolute: a published value wins even when a derived one is also available
   CHAIN=chain({ pub:{zeroGamma:7679.88}, toFri:{exps:[1,2], lv:lv(), gf:{flip:7600}} });
   const L=ifLadder('SPY');
-  eq(at(L,'HVL'),7679.88,'theirs wins over ours whenever both exist');
+  eq(at(L,'FLIP'),7679.88,'theirs wins over ours whenever both exist');
 }
 console.log('\n'+pass+' pass / '+fail+' fail');

@@ -109,7 +109,7 @@ const px=7642.21;
   ok(gexSanity('SPY').checks.some(c=>c.id==='noDuplicateStrikes' && !c.pass),'two rows on one strike are flagged');
 
   // the tail-artefact level (the 479.7 / 687 class of bug)
-  U={ px:762.57, kMin:400, kMax:900, ageMin:2, rows:[{id:'CR',k:770},{id:'HVL',k:480},{id:'PS',k:755}] };
+  U={ px:762.57, kMin:400, kMax:900, ageMin:2, rows:[{id:'CR',k:770},{id:'FLIP',k:480},{id:'PS',k:755}] };
   ok(gexSanity('SPY').checks.some(c=>c.id==='levelsNearPrice' && !c.pass),'a level 37% from price is flagged as a tail artefact');
 
   // a stale set showing yesterday's walls

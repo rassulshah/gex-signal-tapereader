@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.48
+// @version    11.49
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.48';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.49';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -1459,7 +1459,7 @@ function nodeBreadth(sym, k){ try{ var p=expiryProfile(sym); if(!p) return null;
 // MenthorQ's vocabulary, computed from OUR OWN tape rather than scraped:
 //   CR0 / PS0  call resistance / put support, 0DTE only  — the front expiry column
 //   CR  / PS   the same, structural                      — the longest-dated bucket we can see
-//   HVL        high vol level = zero gamma = the gamma flip. Above it dealers dampen, below they amplify.
+//   FLIP       high vol level = zero gamma = the gamma flip. Above it dealers dampen, below they amplify.
 //   Mag        magnet = the heaviest strike in the bucket (the King, per bucket)
 //
 // TWO HONESTY RULES, both load-bearing:
@@ -1565,7 +1565,7 @@ function gLevels(sym){
       }catch(eR){}
     }
 
-    // HVL and Mag on the panel's own aggregate: absolute-dollar basis when the tape carries it, which is a
+    // FLIP and Mag on the panel's own aggregate: absolute-dollar basis when the tape carries it, which is a
     // fixed ruler rather than a ratio to a moving King. This is the zero gamma the rest of the panel uses.
     var deriv=null;
     try{
@@ -2997,7 +2997,7 @@ function recordNodeSnapshot(sym){
       // (v10.44) CROSS-MARKET headers scraped from the Skylit sidebar (SPY/QQQ/SPXW/VIX:
       // price, %chg, King distance %, side). Confluence was UNTESTABLE before (0 QQQ bars).
       xm:(function(){ try{ return readTrinityHeaders(); }catch(eX){ return null; } })(),
-      // (v11.8) THE LEVEL SET as the panel showed it this bar — CR0/CR, PS0/PS, HVL, Mag, with the reach
+      // (v11.8) THE LEVEL SET as the panel showed it this bar — CR0/CR, PS0/PS, FLIP, Mag, with the reach
       // our chain actually had. Recorded so the nightly can score the levels against the tape rather than
       // against a story, and so a later chain change is visible as a change in `reach`, not a mystery.
       lev:(function(){ try{ var Lv=gLevels(sym); if(!Lv) return null;
@@ -3257,13 +3257,13 @@ function irtBuildCsv(){
   });
   try{ var ns=nextStopPick(sym); if(ns&&ns.ok&&ns.level!=null) rows.push({k:ns.level,lbl:'NextStop '+ns.grade,col:IRT_COLORS.ns,w:2,style:2}); }catch(e){}
   try{ var pe=pbEntryPick(sym); if(pe&&pe.ok&&pe.level!=null) rows.push({k:pe.level,lbl:'PBentry '+pe.grade+(pe.state?(' '+pe.state):''),col:IRT_COLORS.pb,w:2,style:2}); }catch(e){}
-  // (v11.25) OUR gamma level set — CR/CR0/PS/PS0/HVL/Mag — so the chart carries the same reads as the card.
+  // (v11.25) OUR gamma level set — CR/CR0/PS/PS0/FLIP/Mag — so the chart carries the same reads as the card.
   try{
     var U=lvlUnified(sym);
     if(U && U.rows){
       U.rows.forEach(function(r){
         var isZ=!!r.tag, first=r.id.split('·')[0];
-        var colr=(first.indexOf('CR')===0)?IRT_COLORS.ceil:((first.indexOf('PS')===0)?IRT_COLORS.flr:((first==='HVL')?IRT_COLORS.gate:IRT_COLORS.king));
+        var colr=(first.indexOf('CR')===0)?IRT_COLORS.ceil:((first.indexOf('PS')===0)?IRT_COLORS.flr:((first==='FLIP')?IRT_COLORS.gate:IRT_COLORS.king));
         rows.push({ k:r.k, lbl:r.id, col:colr, w:(isZ?1:2), style:(isZ?1:0) });
       });
     }
@@ -11103,6 +11103,79 @@ function registerCoreFeatures(){
     rule:{ id:'rshuf', tier:'hand', condition:'>50% of wall keys turned over between feeds',
            mechanism:'A wholesale board reshuffle means the old map is void; movement usually follows.' } });
 
+  // ==========================================================================
+  // (v11.49) ENROLMENT FOR THE TWO NUMBERS THAT CHANGED IN FRAME.
+  // The standing rule is that no feature ships un-enrolled, and both of these shipped that way
+  // originally — DEX and EM sat on the face for releases with no per-bar record, no scorecard and
+  // no question. That is exactly how a cell nobody can check survives.
+  // ==========================================================================
+  //
+  // THE BAND'S CLAIM, stated so it can be wrong: the day stays inside open ± EM, and past 100% the
+  // move is further than was paid for. The second half is the testable one — if overextension does
+  // NOT precede reversion then the band is a picture, not a read, and should say so.
+  registerFeature({ key:'emband', label:'Anchored EM band (open ± today\'s straddle)', phase:'structure', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var B=null; try{ B=emBand(sym); }catch(e){}
+      if(!B||!B.ok) return { ok:false, why:(B&&B.why)||'no band' };
+      return { ok:true, pct:B.pct, dispSign:(B.disp>0?1:(B.disp<0?-1:0)),
+               em:+B.em.toFixed(2), open:+B.open.toFixed(2), k:B.k,
+               est:!!B.est, capMin:(B.capMin==null?null:B.capMin),
+               out:(B.pct>=100?1:0) };
+    },
+    outcome:function(rec, fwd){
+      // Only an OVEREXTENDED bar makes a claim. Inside the band the feature asserts nothing, so it
+      // scores null rather than borrowing credit from bars where it said nothing. (This is the
+      // one-directional trap from the nightly rules: a factor that votes on every bar of a trending
+      // day earns accuracy for free.)
+      var h=null;
+      if(rec && rec.ok && rec.out===1 && rec.dispSign && fwd && typeof fwd.net==='number'){
+        h=((rec.dispSign>0) ? (fwd.net<0) : (fwd.net>0)) ? 1 : 0;
+      }
+      return { hit:h, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
+               pct:(rec&&rec.pct!=null)?rec.pct:null, est:!!(rec&&rec.est) };
+    },
+    questions:[
+      { id:'em_overext_reverts', when:[{f:'out',v:1}], outcome:'revert',
+        note:'past 100% of the day\'s priced move, does price come back toward the open? If it does not, the band describes and never reads.' },
+      { id:'em_contains_day',    when:[{f:'out',v:0}], outcome:'stayIn',
+        note:'how often does the session actually finish inside open ± EM? The straddle implies roughly a two-in-three day.' }
+    ],
+    rule:{ id:'em.anchoredBand', tier:'hand',
+           condition:'open from the first RTH candle; EM from dte0 ATM straddle captured once at the open and held fixed',
+           mechanism:'The straddle is the market pricing its own day. Anchoring at the open is what lets the band show overextension — recentred on spot it would only ever follow price. dte0 ONLY: toFri holds a later expiry worth roughly double.' } });
+  //
+  // DEX: recorded, explicitly NON-VOTING, and honest about why. Its SIGN is structurally pinned by
+  // put-OI dominance on an index chain (measured 2026-08-22: +14,732 against −34,671 per-strike), so
+  // the sign says the same thing daily and is worth nothing. The only version that could ever mean
+  // something is the LEVEL against its own range — which needs a range, which needs this record.
+  // Until then it scores null. Do NOT let it vote before the scorecard says it may.
+  registerFeature({ key:'dex', label:'Net dealer delta (level, not sign)', phase:'structure', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var nd=null, dte=null;
+      try{
+        var c=ifChain((sym==='QQQ')?'QQQ':'SPX');
+        if(c && !c.err){
+          if(c.toFri && c.toFri.ds && typeof c.toFri.ds.netDex==='number') nd=Math.round(c.toFri.ds.netDex/1e6);
+          if(c.dte0 && c.dte0.ds && typeof c.dte0.ds.netDex==='number') dte=Math.round(c.dte0.ds.netDex/1e6);
+        }
+      }catch(e){}
+      // px rides along so the level can later be normalised to a comparable spot — the tabled note is
+      // right that intraday ΔDEX is mostly greeks re-weighting, and the real signal is cross-day at
+      // a FIXED spot. Without px beside it the record could never answer that question.
+      return { dexM:nd, dex0M:dte, px:(ctx&&ctx.px!=null)?ctx.px:((STATE[sym]||{}).price) };
+    },
+    outcome:function(rec, fwd){
+      return { hit:null, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
+               dexM:(rec&&rec.dexM!=null)?rec.dexM:null };
+    },
+    questions:[
+      { id:'dex_level_vs_range', when:[], outcome:'dirMove',
+        note:'NOT the sign — the sign is pinned. Once there are enough days, does netDex at the rich or flat end of its OWN range precede a directional move, the way the skew read is scored?' }
+    ],
+    rule:{ id:'dex.levelNotSign', tier:'hand',
+           condition:'netDex recorded per bar in $M with the spot it was measured at, to-Friday and 0DTE',
+           mechanism:'Index chains are put-OI dominant so the sign essentially never flips; only the level against its own history can carry information. Non-voting until measured.' } });
+
   // (v11.0 audit MERGE) `roll` (King roll) was a duplicate of `dir.kingRoll` (same kingRoll sign,
   // same outcome). Retired; dir.kingRoll carries the claim.
   registerFeature({ key:'gateHour', label:'Gate + hour', phase:'structure', fwd:FEAT_FWD,
@@ -11581,15 +11654,15 @@ function registerCoreFeatures(){
            mechanism:'The front expiry pins price today; the later expirations are the walls that survive the close. If breadth separates the two, it belongs in the node grade — by promotion, not by opinion.' } });
 
   // ---- (v11.8) THE LEVEL SET, RECORDED. Four claims are on trial here, and none of them is assumed:
-  //   1. HVL is a REGIME line. Above it dealers dampen, below they amplify — so realised range in the
-  //      forward window should be measurably SMALLER above the flip. If it is not, the HVL is decoration.
+  //   1. FLIP is a REGIME line. Above it dealers dampen, below they amplify — so realised range in the
+  //      forward window should be measurably SMALLER above the flip. If it is not, the FLIP is decoration.
   //   2. CR / PS are WALLS. A touch should reject. Measured as touched-then-deflected, same rule as PB Entry.
   //   3. CR0 vs CR disagreement is the interesting case: when today's wall and the structural wall sit at
   //      different strikes, which one does price actually respect? That question cannot be answered from
   //      one column, which is why the expiry reader had to come first.
   //   4. Mag is a MAGNET. Price should close the distance to it more often than chance over the window.
   // Non-voting. Nothing here touches direction, the grade, or any setup until the scorecard earns it.
-  registerFeature({ key:'levels', label:'Levels · CR0/CR · PS0/PS · HVL · Mag', phase:'structure', fwd:FEAT_FWD,
+  registerFeature({ key:'levels', label:'Levels · CR0/CR · PS0/PS · FLIP · Mag', phase:'structure', fwd:FEAT_FWD,
     record:function(sym, ctx){
       var L=null; try{ L=gLevels(sym); }catch(e){}
       var px=(STATE[sym]||{}).price;
@@ -11628,7 +11701,7 @@ function registerCoreFeatures(){
       // outcome that omits them is invisible to the scorecard rather than merely unscored.
       if(!rec || !rec.ok || !fwd) return { hit:null, mfe:(fwd?fwd.mfe:null), mae:(fwd?fwd.mae:null), n:(fwd?fwd.n:0) };
       var o={ mfe:fwd.mfe, mae:fwd.mae, net:fwd.net, n:fwd.n };
-      // realised range in the window — the number that decides whether HVL means anything
+      // realised range in the window — the number that decides whether FLIP means anything
       o.range=(fwd.mfe!=null&&fwd.mae!=null)?+(fwd.mfe-fwd.mae).toFixed(2):null;
       o.rangeAtr=(o.range!=null&&rec.atr)?+(o.range/rec.atr).toFixed(2):null;
       // wall deflection: at CR price should fall away; at PS it should lift
@@ -11648,7 +11721,7 @@ function registerCoreFeatures(){
     },
     questions:[
       { id:'lev_hvl_regime', when:[{f:'aboveHvl',v:true}], outcome:'range',
-        note:'THE volatility-level claim: is realised 30m range genuinely smaller ABOVE the HVL (dealers dampening) than below it (dealers amplifying)? Compare rangeAtr above vs below. If the two are the same, the HVL is a line we draw for no reason.' },
+        note:'THE volatility-level claim: is realised 30m range genuinely smaller ABOVE the FLIP (dealers dampening) than below it (dealers amplifying)? Compare rangeAtr above vs below. If the two are the same, the FLIP is a line we draw for no reason.' },
       { id:'lev_cr_rejects', when:[{f:'atCR',v:true}], outcome:'crDefl',
         note:'does price touching Call Resistance actually get rejected DIR_PTS within 30m, or does it walk through? A wall that does not reject is a strike, not a wall.' },
       { id:'lev_ps_holds', when:[{f:'atPS',v:true}], outcome:'psDefl',
@@ -11663,8 +11736,8 @@ function registerCoreFeatures(){
         note:'honesty check on our own chain: our CR/PS reaches about a week, not the full chain. Does the one-week wall reject at a rate worth quoting, or is a real all-expiration wall the thing that matters? If this reads at chance, the InsiderFinance lane is worth the grant change; if it reads well, it is not.' }
     ],
     rule:{ id:'levels', tier:'hand',
-      condition:'CR0/PS0 read inside the front expiry column; CR/PS inside the longest-dated bucket present; HVL = zero gamma on the native node set (absolute basis when the tape carries it); Mag = heaviest strike. Never pooled across expiry columns.',
-      mechanism:'MenthorQ\'s vocabulary computed from our own tape. HVL is the regime line (dampening above, amplifying below); CR/PS are the walls; Mag is the pin. All non-voting until the scorecard says otherwise — and CR/PS are explicitly labelled with the reach our chain actually has, so a one-week wall is never quoted as an all-expiration wall.' } });
+      condition:'CR0/PS0 read inside the front expiry column; CR/PS inside the longest-dated bucket present; FLIP = zero gamma on the native node set (absolute basis when the tape carries it); Mag = heaviest strike. Never pooled across expiry columns.',
+      mechanism:'MenthorQ\'s vocabulary computed from our own tape. FLIP (zero gamma) is the regime line (dampening above, amplifying below); CR/PS are the walls; Mag is the pin. All non-voting until the scorecard says otherwise — and CR/PS are explicitly labelled with the reach our chain actually has, so a one-week wall is never quoted as an all-expiration wall.' } });
 
   // ---- (v11.21) THE GAMMA PATH + WALL MIGRATION -----------------------------------------------
   // Two questions this exists to settle, both written so they can FAIL.
@@ -12980,7 +13053,7 @@ var LVL_UI=(function(){ try{ var o=JSON.parse(localStorage.getItem(LVL_UI_LS)||'
   return { open:true, chart:true }; })();
 function lvlUiSave(){ try{ localStorage.setItem(LVL_UI_LS, JSON.stringify(LVL_UI)); }catch(e){} }
 var LVL_COL={ cr:'#f0616d', cr0:'#f0616d', ps:'#2ec27e', ps0:'#2ec27e', hvl:'#f2b45a', mag:'#e3c341' };
-var LVL_NAME={ cr:'CR', cr0:'CR0', ps:'PS', ps0:'PS0', hvl:'HVL', mag:'Mag' };
+var LVL_NAME={ cr:'CR', cr0:'CR0', ps:'PS', ps0:'PS0', hvl:'FLIP', mag:'Mag' };
 var LVL_WHAT={
   cr:'Call Resistance — heaviest strike above price across the expirations we can see. Dealers long gamma here sell rallies into it.',
   cr0:'Call Resistance 0DTE — the same wall in TODAY\'S expiry only. It can sit nowhere near the structural one, and it evaporates at the close.',
@@ -13043,7 +13116,7 @@ function ifManSave(o){ IFMAN=o; try{ localStorage.setItem(IFMAN_LS, JSON.stringi
 // Order is Call Wall · Put Wall · Zero Gamma · Magnet; Magnet is optional.
 // ============== (v11.14) LEVELS COMPUTED NATIVELY ON THE SPXW LANE ==============
 // Skylit's payload carries a `derived` SPXW lane: strike rows on the SPX scale with an ABSOLUTE dollar
-// value and a sign. That is the same kind of data an SPX gamma page publishes, so we can compute CR/PS/HVL/
+// value and a sign. That is the same kind of data an SPX gamma page publishes, so we can compute CR/PS/FLIP/
 // Mag directly in SPX points and set them beside a third party's SPX numbers with NO conversion in between.
 // Conversion was never the interesting part; this removes it from the comparison entirely.
 //
@@ -13403,7 +13476,7 @@ window.__gptsDebug.callPutRows=function(s){ var D=cpRows(s||'SPY'); if(!D) retur
   return { ok:D.ok, lt:D.lt, eq:D.eq, gt:D.gt, exps:D.exps,
            rows:D.rows.map(function(r){ return [r.k, Math.round(r.call/1e6), Math.round(r.put/1e6)]; }) }; };
 
-// CR(net) / PS / HVL / Mag in SPX POINTS, from the SPXW lane alone.
+// CR(net) / PS / FLIP / Mag in SPX POINTS, from the SPXW lane alone.
 window.__gptsDebug=window.__gptsDebug||{};
 
 // ============ (v11.25) INSIDERFINANCE CHAIN LEVELS — read from the companion script ============
@@ -13520,7 +13593,7 @@ function lvlRows(L){
   rows.sort(function(a,b){ return b.k-a.k; });
   return rows;
 }
-// (v11.10) The HVL is the one level whose ABSENCE is information. When the cumulative gamma curve never
+// (v11.10) The FLIP is the one level whose ABSENCE is information. When the cumulative gamma curve never
 // changes sign there is no flip to find — and silently dropping the row reads as "we forgot to compute it"
 // rather than "this book has no flip". Returns the reason so the card can say which it is.
 function lvlHvlMissing(L){
@@ -13570,7 +13643,7 @@ function levelsChartSvg(sym, L){
     try{
       var IFC=ifManLevels();
       if(IFC && !IFC.err){
-        [['CR',IFC.cw,LVL_COL.cr],['HVL',IFC.zg,LVL_COL.hvl],['Mag',IFC.mag,LVL_COL.mag],['PS',IFC.pw,LVL_COL.ps]]
+        [['CR',IFC.cw,LVL_COL.cr],['FLIP',IFC.zg,LVL_COL.hvl],['Mag',IFC.mag,LVL_COL.mag],['PS',IFC.pw,LVL_COL.ps]]
           .filter(function(r){ return r[1]!=null && r[1]>=lo && r[1]<=hi; })
           .forEach(function(r){
             var yy=y(r[1]);
@@ -13602,7 +13675,7 @@ function levelsChartSvg(sym, L){
 // exact: one set of levels, on the instrument the chart is showing, consistent with a third-party page.
 //
 // SOURCE PRECEDENCE, best first. Each level takes the best source that can actually produce it:
-//   1. self-fetched full-chain set  (call/put decomposed, every expiration)  -> CR, PS, HVL, Mag
+//   1. self-fetched full-chain set  (call/put decomposed, every expiration)  -> CR, PS, FLIP, Mag
 //   2. self-fetched 0DTE set        (call/put decomposed, today only)        -> CR0, PS0
 //   3. the passive feed             (call/put decomposed, top-60 x 4 exps)   -> fallback for all of them
 //   4. %King ladder                 (no decomposition)                       -> last resort, tagged
@@ -13633,7 +13706,7 @@ function lvlUnified(sym){
     // Mag: the heaviest strike overall. The passive path does not compute it, so fall back to the King.
     var mag=P.mag; if(mag==null){ try{ var kg=(STATE[sym]||{}).king; if(typeof kg==='number') mag=kg; }catch(e1){} }
     // (v11.17.1) When two levels land on the SAME strike the row MERGES its labels — it does not silently
-    // drop one. The live card showed "CR / Mag / HVL" with no PS at all, because the put wall and the
+    // drop one. The live card showed "CR / Mag / FLIP" with no PS at all, because the put wall and the
     // magnet were both 760 and PS was added last. "PS·Mag 760" is the true reading and it is more
     // informative than either label alone: the heaviest strike in the book is also the floor.
     function add(id, k, gex, tag){
@@ -13645,7 +13718,7 @@ function lvlUnified(sym){
             // trader is looking for was second and easy to miss. Walls are the trade-location levels;
             // the magnet is the destination. Order them that way.
             var ids=out.rows[i].id.split('·'); ids.push(id);
-            var rank={CR:0, CR0:1, PS:0, PS0:1, HVL:2, Mag:3};
+            var rank={CR:0, CR0:1, PS:0, PS0:1, FLIP:2, Mag:3};
             ids.sort(function(a,b){ return (rank[a]==null?9:rank[a])-(rank[b]==null?9:rank[b]); });
             out.rows[i].id=ids.join('·');
           }
@@ -13659,7 +13732,7 @@ function lvlUnified(sym){
     out.crSuppressed=P.crSuppressed||null; out.psSuppressed=P.psSuppressed||null;
     out.callShare=(P.callShare==null?null:P.callShare); out.putShare=(P.putShare==null?null:P.putShare);
     add('CR',  P.cr,  P.crGex);
-    add('HVL', P.hvl, null);
+    add('FLIP', P.hvl, null);
     add('Mag', mag,   null);
     add('PS',  P.ps,  P.psGex);
     // 0DTE rows: only when they say something the structural rows did not — and never when the 0DTE set
@@ -13670,7 +13743,7 @@ function lvlUnified(sym){
       out.dte0Exps=dte0.nExps; out.dte0N=dte0.n;
     }
     out.rows.sort(function(a,b){ return b.k-a.k; });
-    // (v11.22) NOTHING GOES MISSING SILENTLY. The user asked to see CR0/CR/PS/PS0/HVL/Mag; when one has no
+    // (v11.22) NOTHING GOES MISSING SILENTLY. The user asked to see CR0/CR/PS/PS0/FLIP/Mag; when one has no
     // value the card must SAY so with the reason, not just leave a gap. An absent level is a finding — a
     // 0DTE book with no call-dominant strike above spot is exactly what a third-party page shows as N/A.
     var shown={};
@@ -13906,9 +13979,9 @@ function levelsHtmlV2(sym){
            '<span style="color:'+PAL.sub+';font-size:9px;overflow:hidden;text-overflow:ellipsis">'+(U.crSuppressed?'call':'put')+' side only '+shr+'% of book</span></div>';
       }
       if(U.hvlMissing){
-        h+='<div title="The HVL is the gamma flip — where cumulative gamma crosses zero and dealers stop dampening and start amplifying. It is absent because the cumulative never changes sign across the strikes we hold. That is a fact about the book, not a gap in the read." '+
+        h+='<div title="The FLIP is the gamma flip — where cumulative gamma crosses zero and dealers stop dampening and start amplifying. It is absent because the cumulative never changes sign across the strikes we hold. That is a fact about the book, not a gap in the read." '+
            'style="display:flex;align-items:center;gap:6px;font-size:10px;line-height:1.45;white-space:nowrap">'+
-           '<span style="display:inline-block;width:30px;color:'+LVL_COL.hvl+';font-weight:800;opacity:.55">HVL</span>'+
+           '<span style="display:inline-block;width:30px;color:'+LVL_COL.hvl+';font-weight:800;opacity:.55">FLIP</span>'+
            '<span style="color:'+PAL.sub+'">—</span>'+
            '<span style="color:'+PAL.sub+';font-size:9px;overflow:hidden;text-overflow:ellipsis">'+
            (U.hvlFar?('nearest flip '+U.hvlFar.pct+'% away — tail, not a flip'):'no flip in these strikes')+'</span></div>';
@@ -13950,7 +14023,7 @@ function levelsHtmlV2(sym){
           h+='<div style="display:flex;align-items:center;gap:6px;font-size:9px;color:'+PAL.sub+';white-space:nowrap">'+
              '<span style="font-weight:800;color:'+PAL.blue+'">INSIDERFINANCE</span><span>'+IFL.scale+' · '+agTx+'</span>'+
              '<span style="margin-left:auto;cursor:pointer" data-glvl="ifman">edit</span></div>';
-          [['CR',IFL.cw,LVL_COL.cr],['HVL',IFL.zg,LVL_COL.hvl],['Mag',IFL.mag,LVL_COL.mag],['PS',IFL.pw,LVL_COL.ps]]
+          [['CR',IFL.cw,LVL_COL.cr],['FLIP',IFL.zg,LVL_COL.hvl],['Mag',IFL.mag,LVL_COL.mag],['PS',IFL.pw,LVL_COL.ps]]
             .filter(function(r){ return r[1]!=null; }).sort(function(a,b){ return b[1]-a[1]; })
             .forEach(function(r){
               var d=+(r[1]-U.px).toFixed(2), dc2=(d>0)?PAL.longAccent:PAL.shortAccent;
@@ -14097,9 +14170,9 @@ function levelsHtml(sym){
       });
       var hm=lvlHvlMissing(L);
       if(hm){
-        h+='<div title="The HVL is the gamma flip — the zero-gamma strike, where dealers stop dampening and start amplifying. It is the same thing MenthorQ calls the High Vol Level and InsiderFinance labels Support/Resistance with the note that dynamics change if breached. It is absent here because the cumulative gamma curve in this book never crosses zero, so there is no flip to place. That is a fact about the book, not a gap in the read." '+
+        h+='<div title="The FLIP is the gamma flip — the zero-gamma strike, where dealers stop dampening and start amplifying. It is the same thing MenthorQ calls the High Vol Level and InsiderFinance labels Support/Resistance with the note that dynamics change if breached. It is absent here because the cumulative gamma curve in this book never crosses zero, so there is no flip to place. That is a fact about the book, not a gap in the read." '+
              'style="display:flex;align-items:center;gap:5px;font-size:10.5px;line-height:1.45;white-space:nowrap">'+
-             '<span style="display:inline-block;width:26px;color:'+LVL_COL.hvl+';font-weight:800;opacity:0.55">HVL</span>'+
+             '<span style="display:inline-block;width:26px;color:'+LVL_COL.hvl+';font-weight:800;opacity:0.55">FLIP</span>'+
              '<span style="color:'+PAL.sub+';font-weight:700">—</span>'+
              '<span style="color:'+PAL.sub+';font-size:9px;overflow:hidden;text-overflow:ellipsis">'+hm+'</span>'+
              '</div>';
@@ -14117,7 +14190,7 @@ function levelsHtml(sym){
              '<span style="font-weight:800;color:'+PAL.longAccent+'">CALL/PUT · derived</span>'+
              '<span>C '+(CP.totalCall/1e9).toFixed(1)+'B · P '+(CP.totalPut/1e9).toFixed(1)+'B · ratio '+CP.ratio+'</span>'+
              '<span style="margin-left:auto">top '+CP.n+' nodes</span></div>';
-          [['CR',CP.callWall,LVL_COL.cr,CP.callWallGex],['HVL',CP.zg,LVL_COL.hvl,null],['PS',CP.putWall,LVL_COL.ps,CP.putWallGex]]
+          [['CR',CP.callWall,LVL_COL.cr,CP.callWallGex],['FLIP',CP.zg,LVL_COL.hvl,null],['PS',CP.putWall,LVL_COL.ps,CP.putWallGex]]
             .filter(function(r){ return r[1]!=null; })
             .sort(function(a,b){ return b[1]-a[1]; })
             .forEach(function(r){
@@ -14147,7 +14220,7 @@ function levelsHtml(sym){
              '<span style="font-weight:800;color:'+(stale?PAL.sub:PAL.blue)+'">INSIDERFINANCE</span>'+
              '<span>'+IFL.scale+' · '+agTx+' old'+(stale?' ⚠':'')+'</span>'+
              '<span style="margin-left:auto;cursor:pointer;color:'+PAL.sub+'" data-glvl="ifman">edit</span></div>';
-          [['CR',IFL.cw,LVL_COL.cr],['HVL',IFL.zg,LVL_COL.hvl],['Mag',IFL.mag,LVL_COL.mag],['PS',IFL.pw,LVL_COL.ps]]
+          [['CR',IFL.cw,LVL_COL.cr],['FLIP',IFL.zg,LVL_COL.hvl],['Mag',IFL.mag,LVL_COL.mag],['PS',IFL.pw,LVL_COL.ps]]
             .filter(function(r){ return r[1]!=null; })
             .sort(function(a,b){ return b[1]-a[1]; })
             .forEach(function(r){
@@ -14174,7 +14247,7 @@ function levelsHtml(sym){
           else {
             var agTxt=X.ageMs!=null?(Math.round(X.ageMs/60000)+'m'):'';
             h+='<div title="InsiderFinance, all expirations. Cross-check only — it never overrides a native level." style="font-size:9px;color:'+(X.stale?PAL.sub:PAL.blue)+';margin-top:2px;white-space:nowrap">'+
-               'IF chain: CR '+(X.cw!=null?X.cw:'–')+' · PS '+(X.pw!=null?X.pw:'–')+' · HVL '+(X.zg!=null?X.zg:'–')+
+               'IF chain: CR '+(X.cw!=null?X.cw:'–')+' · PS '+(X.pw!=null?X.pw:'–')+' · FLIP '+(X.zg!=null?X.zg:'–')+
                (X.callGex!=null&&X.putGex!=null?(' · C/P '+X.callGex+'B/'+X.putGex+'B'):'')+
                (agTxt?(' · '+agTxt+' old'):'')+(X.stale?' (stale)':'')+(X.suspect?(' ⚠ '+X.suspect):'')+'</div>';
           }
@@ -16756,6 +16829,23 @@ function ensureV3Css(){
     '#gpts-body .g3f2 b{color:#e6edf3;font-weight:700}'+
     '#gpts-body .g3cell{display:inline-flex;align-items:baseline;gap:3px}'+
     '#gpts-body .g3tag{font-size:7px;font-weight:800;padding:1px 4px;border-radius:2px;background:rgba(242,180,90,.16);color:#f2b45a}'+
+    // (v11.49) THE ANCHORED EM BAND. A meter, not a chart: one ratio against a limit. The rail IS the
+    // day's priced range, so the dot's position and the percentage beside it are the same fact and
+    // cannot drift apart. Marks clamp at the rail rather than escaping it.
+    '#gpts-body .g3emw{display:inline-flex;align-items:center;gap:6px;flex:1;min-width:210px}'+
+    '#gpts-body .g3emk{font-size:7.5px;font-weight:700;color:#6c7889;white-space:nowrap}'+
+    '#gpts-body .g3emt{position:relative;flex:1;height:9px;min-width:70px}'+
+    '#gpts-body .g3emr{position:absolute;left:0;right:0;top:3px;height:3px;border-radius:2px;background:#1e2530}'+
+    '#gpts-body .g3emf{position:absolute;top:3px;height:3px;border-radius:2px;background:rgba(139,152,169,.45)}'+
+    '#gpts-body .g3emf.g3over{background:rgba(240,97,109,.55)}'+
+    '#gpts-body .g3emo{position:absolute;top:0;width:1px;height:9px;background:#8b98a9;opacity:.9}'+
+    '#gpts-body .g3emg{position:absolute;top:0;width:0;height:0;border-left:3px solid transparent;'+
+      'border-right:3px solid transparent;border-bottom:4px solid #e3c341;transform:translateX(-3px)}'+
+    '#gpts-body .g3emn{position:absolute;top:1px;width:6px;height:6px;border-radius:50%;background:#e6edf3;'+
+      'box-shadow:0 0 0 2px #0b0e14;transform:translateX(-3px)}'+
+    '#gpts-body .g3emn.g3over{background:#f0616d}'+
+    '#gpts-body .g3f2 b.g3over{color:#f0616d}'+
+    '#gpts-body .g3emx{font-size:8.5px;color:#6c7889;font-style:italic}'+
     '#gpts-body .g3b{padding:2px 2px 1px}'+
     '#gpts-body .g3reg{display:flex;align-items:center;justify-content:center;gap:6px}'+
     '#gpts-body .g3rg{font-size:10px;font-weight:800;padding:1px 7px;border-radius:3px;background:rgba(163,113,247,.18);color:#a371f7;border:1px solid rgba(163,113,247,.4)}'+
@@ -16959,7 +17049,7 @@ function ifLadder(sym){
         if(Math.abs(out.rows[i].k-k)<0.005){
           if(out.rows[i].id.indexOf(id)<0){
             var ids=out.rows[i].id.split('·'); ids.push(id);
-            var rank={CR:0, CR0:1, PS:0, PS0:1, HVL:2, 'HVL*':2, Mag:3, MP:4};
+            var rank={CR:0, CR0:1, PS:0, PS0:1, FLIP:2, 'FLIP*':2, Mag:3, MP:4};
             ids.sort(function(a,b){ return (rank[a]==null?9:rank[a])-(rank[b]==null?9:rank[b]); });
             out.rows[i].id=ids.join('·');
           }
@@ -16969,16 +17059,16 @@ function ifLadder(sym){
       out.rows.push({ id:id, k:k, disp:+(k*dispScale).toFixed(2), und:+(k*undScale).toFixed(4) });
     }
     if(W){ add('CR', W.cr); add('PS', W.ps); add('Mag', W.mag); add('MP', W.maxPain); }
-    // HVL — THEIRS FIRST, ALWAYS. v1.7 made the payload scan walk nested objects; the earlier shallow
+    // FLIP — THEIRS FIRST, ALWAYS. v1.7 made the payload scan walk nested objects; the earlier shallow
     // scan reported their zero gamma absent and that conclusion drove us to compute our own, which is
     // the mistake this project keeps repeating. We fall back to a derived flip only when the payload
     // genuinely carries nothing, and the row is tagged so the two can never be confused.
     out.hvlSrc=null;
     try{
-      if(c.pub && typeof c.pub.zeroGamma==='number'){ add('HVL', c.pub.zeroGamma); out.hvlSrc='pub'; }
+      if(c.pub && typeof c.pub.zeroGamma==='number'){ add('FLIP', c.pub.zeroGamma); out.hvlSrc='pub'; }
       else {
         var gfw=(c.toFri&&c.toFri.gf)?c.toFri.gf:((c.dte0&&c.dte0.gf)?c.dte0.gf:null);
-        if(gfw && typeof gfw.flip==='number'){ add('HVL*', gfw.flip); out.hvlSrc='calc'; }
+        if(gfw && typeof gfw.flip==='number'){ add('FLIP*', gfw.flip); out.hvlSrc='calc'; }
       }
     }catch(e2){}
     if(D0){ add('CR0', D0.cr); add('PS0', D0.ps); }
@@ -16993,6 +17083,79 @@ function ifLadder(sym){
 }
 
 // ---- ① FRAME: what kind of day is this, and where is the day trying to go ----
+// ---- (v11.49) THE ANCHORED EXPECTED-MOVE BAND ----
+// The day's possible high and low: the OPEN, plus and minus the expected move, held STATIC all session.
+// That is the standard anchored-EM convention, and it is the only version that can show overextension —
+// a band recentred on spot every render just follows price around and can never say "further than was
+// priced". By 3pm a live band would claim the day's possible range is a handful of points.
+//
+// ⚠ dte0 ONLY, NEVER toFri. `toFri.em` is a single expiry's straddle picked out of the Mon..Fri set, so
+// on any day but Friday it is a LATER expiry worth roughly double the day's — 69.25 against 34.65 on
+// 2026-08-22. It shipped for months under a label asking "how much room does today have" while
+// answering about a different week. Same shape as the `week`/"to Fri" mislabel already in the note.
+// On a Friday the two coincide, which is exactly why this hid.
+//
+// SCALES — three of them, as everywhere in this file:
+//   em   is THEIR SPX number      -> chart scale via dispScale
+//   cands are UNDERLYING (SPY)    -> chart scale via rr
+// Both land on chart scale before anything is compared, positioned or drawn. dispNum() is then safe.
+//
+// THE OPEN PRICE IS ALWAYS AVAILABLE. closedCandles() is already filtered to today from 8:30 CT, so
+// cs[0].o is the opening print even when the panel is started at noon. Only the EM's freshness varies:
+// captured near the open it is exact, captured late the straddle has already decayed and the band is
+// narrower than the open's was — which is what ~EST says. No reconstruction is attempted; scaling a
+// decayed straddle back up assumes IV has not moved, and on the days that matter it has.
+var EMOPEN_KEY='gpts_emopen_v1';
+var EM_FRESH_MIN=15;               // minutes after the open within which a capture counts as clean
+function emBand(sym){
+  var out={ ok:false, why:'', est:false };
+  try{
+    var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(eR){}
+    var cs=closedCandles(sym)||[];
+    if(!cs.length){ out.why='no closed bars yet — no open to measure from'; return out; }
+    var openU=cs[0].o;
+    if(!(openU>0)){ out.why='the opening bar carries no price'; return out; }
+    var open=openU*rr, now=cs[cs.length-1].c*rr;
+    var dsc=1; try{ var IL=ifLadder(sym); if(IL&&!IL.err&&IL.dispScale) dsc=IL.dispScale; }catch(eL){}
+
+    // one capture per symbol per day, and it is never overwritten once taken
+    var today=ctTodayStr(), S=null;
+    try{ S=JSON.parse(localStorage.getItem(EMOPEN_KEY)||'null'); }catch(eP){}
+    if(!S || typeof S!=='object' || S.date!==today) S={ date:today, sym:{} };
+    if(!S.sym) S.sym={};
+    var rec=S.sym[sym]||null;
+
+    if(!(rec && typeof rec.em==='number')){
+      var ec=null; try{ ec=ifChain((sym==='QQQ')?'QQQ':'SPX'); }catch(eC){}
+      var emo=(ec && !ec.err && ec.dte0 && ec.dte0.em) ? ec.dte0.em : null;
+      if(!emo || typeof emo.em!=='number'){
+        out.why='no EM — both straddle legs do not quote at one strike near spot';
+        return out;
+      }
+      var P=null; try{ P=sessionPhase(); }catch(eS){}
+      rec={ em:emo.em*dsc, k:emo.k, capMin:(P&&P.rth)?(P.mins-P.open):null, t:Date.now() };
+      S.sym[sym]=rec;
+      try{ localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eW){}
+    }
+    if(!(rec.em>0)){ out.why='expected move came back zero'; return out; }
+
+    out.est  = !(typeof rec.capMin==='number' && rec.capMin<=EM_FRESH_MIN);
+    out.open = open;  out.em=rec.em;  out.now=now;  out.k=rec.k;  out.capMin=rec.capMin;
+    out.low  = open-rec.em;  out.high = open+rec.em;
+    out.disp = now-open;
+    out.pct  = Math.round((Math.abs(out.disp)/rec.em)*100);
+    out.ok   = true;
+  }catch(e){ out.why='band failed: '+(e&&e.message||e); }
+  return out;
+}
+// Position on the rail, 0..100, CLAMPED. A mark outside the band pins to the edge rather than
+// escaping the track — the percentage beside it is what says how far past.
+function emPos(B, v){
+  try{
+    var span=B.high-B.low; if(!(span>0)) return 0;
+    return Math.max(0, Math.min(1, (v-B.low)/span))*100;
+  }catch(e){ return 0; }
+}
 function secFrame(sym){
   var R=regime2D(sym), P=sessionPhase();
   var h='<div class="g3b">';
@@ -17013,63 +17176,40 @@ function secFrame(sym){
   if(ifMagEarly!=null) h+='<span class="g3tgt"'+g3tip('Where is the day trying to go? The heaviest strike in InsiderFinance\'s book — where dealer hedging concentrates and price tends to be pulled. A destination, not a forecast, and it reads the same book as the ladder below so the two can never disagree.')+'>→ '+dispNum(ifMagEarly)+'</span>';
   if(R.play) h+='<span class="g3play"'+g3tip('What does this regime reward? In negative gamma dealers hedge WITH the move, so fades are the losing side; in positive gamma they hedge against it and levels hold.')+'>'+g3esc(R.play)+'</span>';
   h+='</div>';
-  var mp=null, ifMag=null, term=null;
-  try{
-    var IL=ifLadder(sym);
-    if(IL && !IL.err){
-      if(typeof IL.maxPain==='number') mp=IL.maxPain*(IL.dispScale||1);
-      for(var mi=0;mi<IL.rows.length;mi++){ if(/Mag/.test(IL.rows[mi].id)){ ifMag=IL.rows[mi].disp; break; } }
-    }
-  }catch(e1){}
-  try{ var sk=skewRead(sym); if(sk && !sk.err && typeof sk.term==='number') term=sk.term; }catch(e2){}
-  var a2=null; try{ a2=atr(sym); }catch(e3){}
-  var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(e4){}
+  // (v11.49) LINE 2 IS THE BAND NOW. It used to be four naked measurements — DEX, TERM, EM, ATR —
+  // which reported instrumentation readings while line 1 above answered a question. A number here
+  // either feeds the regime sentence or it is not on the face.
+  //   DEX  removed: its sign is structurally pinned. Live SPX to-Friday netDex −$13.5B, per-strike
+  //        decomposition +14,732 against −34,671 — index chains carry put-OI dominance, so the sign
+  //        essentially cannot flip and a sign that never changes carries nothing. Same disease the
+  //        skew read already cures by voting the level against its OWN range; DEX never got that.
+  //        It is being RECORDED from this build so it can earn its way back with a range behind it.
+  //   TERM removed: it conditions, it never points — a third regime axis beside gamma and vanna that
+  //        would rarely change the sentence. NOT removed for being unavailable: their page publishes
+  //        Term Slope +1.3, computed client-side from options[]. It is uncomputed, not absent.
+  //   ATR  removed from the FACE only. It still sets the ladder's ± zone widths and still sizes the
+  //        rejection detector — it just stopped needing to be read.
   h+='<div class="g3f2">';
-  // (v11.45) HOVER AUDIT: 114 fields carried a tip, 41 did not — and the gap was systematic. The tiny
-  // LABEL held the explanation while the value beside it held none, so hovering the number a trader is
-  // actually looking at gave nothing. Tips now sit on a wrapper covering label AND value.
-  function cell(lab, val, tip){
-    return '<span class="g3cell"'+g3tip(tip)+'><span class="g3fk">'+lab+'</span><b>'+val+'</b></span>';
+  var EB=emBand(sym);
+  if(EB.ok){
+    var over=(EB.pct>=100);
+    var pOpen=emPos(EB,EB.open), pNow=emPos(EB,EB.now);
+    var fa=Math.min(pOpen,pNow), fb=Math.max(pOpen,pNow);
+    h+='<span class="g3emw"'+g3tip('Where can today go, and where is it now? The rail is the OPEN plus and minus the expected move priced by TODAY\'S at-the-money straddle, held fixed all session — a band that recentres on price every render just follows it around and could never show overextension. The notch is the open everything is measured from, the dot is price now, the caret is the target. The percentage is how far price has travelled from the open against what was priced, so it and the dot are the same fact. Past 100% the day has done more than the straddle paid for.'+(EB.est?' ~EST: the expected move was captured '+(EB.capMin!=null?EB.capMin+' minutes after':'well after')+' the open, so the straddle had already decayed and this band is NARROWER than the open\'s truly was.':'')+' Straddle struck at '+(EB.k!=null?EB.k:'?')+'.')+'>';
+    h+='<span class="g3emk">'+g3esc(dispNum(EB.low))+'</span>';
+    h+='<span class="g3emt"><i class="g3emr"></i>'+
+       '<i class="g3emf'+(over?' g3over':'')+'" style="left:'+fa.toFixed(1)+'%;width:'+Math.max(0,fb-fa).toFixed(1)+'%"></i>'+
+       '<i class="g3emo" style="left:'+pOpen.toFixed(1)+'%"></i>'+
+       (ifMagEarly!=null?('<i class="g3emg" style="left:'+emPos(EB,ifMagEarly).toFixed(1)+'%"></i>'):'')+
+       '<i class="g3emn'+(over?' g3over':'')+'" style="left:'+pNow.toFixed(1)+'%"></i>'+
+       '</span>';
+    h+='<span class="g3emk">'+g3esc(dispNum(EB.high))+'</span>';
+    h+='<b'+(over?' class="g3over"':'')+'>'+Math.min(999,EB.pct)+'%</b>'+
+       '<span class="g3fk">OF EM'+(EB.est?' ~EST':'')+'</span>';
+    h+='</span>';
+  } else {
+    h+='<span class="g3emx"'+g3tip('Where can today go? The band needs an opening bar and a two-sided at-the-money straddle in today\'s expiry. A one-sided straddle is not a straddle and half a band would be worse than none, so it says why instead of drawing something.')+'>'+g3esc(EB.why)+'</span>';
   }
-  // DEX is a placeholder until their payload is confirmed to carry delta — shown as a dash, never invented
-  // (v11.37) DEX is real now — their payload carries per-contract delta.
-  var dexTxt='—';
-  try{
-    var dc=ifChain((sym==='QQQ')?'QQQ':'SPX');
-    var ds=(dc&&!dc.err&&dc.toFri&&dc.toFri.ds)?dc.toFri.ds:null;
-    if(ds && typeof ds.netDex==='number'){
-      var dv=ds.netDex, sgn=(dv<0?'−':'+'), av=Math.abs(dv);
-      dexTxt=sgn+'$'+(av>=1e9?(av/1e9).toFixed(1)+'B':(av/1e6).toFixed(0)+'M');
-    }
-  }catch(eD){}
-  h+=cell('DEX',g3esc(dexTxt),'Which way does hedging push? Aggregate dealer delta: sum of delta x open interest x 100 x spot. NEGATIVE means dealers are short delta and must BUY as price rises, so rallies get chased; positive means they sell into strength. It maps where hedging pressure sits, it does not point — which is why it lives here and not in BIAS. In dollar terms it dwarfs gamma, because delta is order 0.5 and gamma order 0.001.');
-  h+=cell('TERM',(term!=null?String(term):'—'),'Is the market pricing near-term stress? Term slope is near-dated implied vol against longer-dated. Negative means the front is richer — an event or fear priced into the next few days, the backwardation condition. A regime axis alongside gamma and vanna, not a direction. Blank when their payload carries no term figure and we have not computed one.');
-  // (v11.42) EXPECTED MOVE, with how much of it the day has already spent. This is the number that
-  // makes a target honest: a level beyond what is left is not in play today, whatever the structure says.
-  var emTxt='—', emTip='How much room does today have? The at-the-money straddle is the market pricing its own expected move to expiry. Blank when both legs do not quote at one strike near spot — a one-sided straddle is not a straddle.';
-  try{
-    var ec=ifChain((sym==='QQQ')?'QQQ':'SPX');
-    var emo=(ec&&!ec.err&&ec.toFri&&ec.toFri.em)?ec.toFri.em:((ec&&ec.dte0&&ec.dte0.em)?ec.dte0.em:null);
-    if(emo && typeof emo.em==='number'){
-      var emD=emo.em*(rr/ (function(){ try{ var IL2=ifLadder(sym); return (IL2&&!IL2.err&&IL2.undScale)?(rr/IL2.dispScale):1; }catch(e){ return 1; } })() );
-      emD=emo.em*( (function(){ try{ var IL3=ifLadder(sym); return (IL3&&!IL3.err&&IL3.dispScale)?IL3.dispScale:1; }catch(e){ return 1; } })() );
-      var used=null;
-      try{
-        var cs2=closedCandles(sym)||[];
-        if(cs2.length){
-          var hiD=-Infinity, loD=Infinity;
-          for(var ci=0;ci<cs2.length;ci++){ if(cs2[ci].h>hiD) hiD=cs2[ci].h; if(cs2[ci].l<loD) loD=cs2[ci].l; }
-          var rng=(hiD-loD)*rr;
-          if(emD>0) used=Math.round((rng/emD)*100);
-        }
-      }catch(eU){}
-      emTxt=dispNum(emD)+(used!=null?(' · '+Math.min(999,used)+'%'):'');
-      emTip='How much room does today have, and how much is left? The at-the-money straddle is the market\'s own estimate of the move to expiry; the percentage is how much of it the session range has already used. Past 100% the day has done more than was priced, and a target beyond what remains is not in play whatever the structure says.';
-    }
-  }catch(eEM){}
-  h+=cell('EM',g3esc(emTxt),emTip);
-  h+=cell('ATR',(a2!=null?dispNum(a2*rr):'—'),'How much room does this tape need? Average true range per bar in the displayed instrument. It sizes your stop, and it is what sets the ± zone widths on the ladder — a level is a band, and this is how wide.');
-  // CAGE removed: a percentage nobody acts on, on a face with no space to spare.
   var ptag=(P.label||'').replace('EXPIRY · ','EXP·').replace('OPEN · CHARM','OPEN').replace('POWER HOUR','PWR').replace('MORNING','AM').replace('MIDDAY','MID');
   if(ptag && ptag!=='—') h+='<span class="g3tag"'+g3tip(g3esc(P.sub||''))+'>'+g3esc(ptag)+'</span>';
   h+='</div></div>';
@@ -17671,7 +17811,7 @@ function secLoc(sym){
     var d=r.disp-px;
     var near=(zone!=null && Math.abs(d)<=zone);
     if(near && !atLevel) atLevel=r;
-    var isMag=/Mag/.test(r.id), isCR=/CR/.test(r.id), isPS=/PS/.test(r.id), isMP=/MP/.test(r.id), isHVL=/HVL/.test(r.id);
+    var isMag=/Mag/.test(r.id), isCR=/CR/.test(r.id), isPS=/PS/.test(r.id), isMP=/MP/.test(r.id), isHVL=/FLIP/.test(r.id);
     var col=isCR?'#f0616d':(isPS?'#2ec27e':(isMag?'#e3c341':(isMP?'#a371f7':'#f2b45a')));
     var far=(zone!=null && Math.abs(d)>zone*14)?' g3far':'';
     var band=isMag?' g3band':'';

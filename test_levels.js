@@ -1,4 +1,4 @@
-// (v11.8) THE LEVEL SET — CR0/CR · PS0/PS · HVL · Mag, computed from our own tape.
+// (v11.8) THE LEVEL SET — CR0/CR · PS0/PS · FLIP · Mag, computed from our own tape.
 // The defects these tests exist to prevent, all of which produce a level that LOOKS right:
 //   * pooling %King across expiry columns (each column is normalised to its OWN King — 100 in the front
 //     column and 100 in the monthly column are not the same amount of money);
@@ -98,14 +98,14 @@ const NODES=[ {k:763,pct:70,abs:700000,pos:false,derived:false}, {k:765,pct:100,
   const L=gLevels('SPY');
   ok(L.reach==='0dte','a single expiry column claims today only',L.reach);
 }
-// ---------- HVL and regime ----------
+// ---------- FLIP and regime ----------
 {
   // NODES is put-dominated all the way up (cumulative: -700k, -1.7M, -1.1M, -650k, -350k) and never
-  // crosses zero. There is no flip in that book, so there must be no HVL — inventing one from the
+  // crosses zero. There is no flip in that book, so there must be no FLIP — inventing one from the
   // nearest strike is exactly how a regime line ends up drawn where nothing changes.
   setup(COLS, 767, NODES);
   const L=gLevels('SPY');
-  ok(L.hvl===null,'a book whose cumulative gamma never changes sign has NO HVL',L.hvl);
+  ok(L.hvl===null,'a book whose cumulative gamma never changes sign has NO FLIP',L.hvl);
   ok(L.regimeSrc==='netGamma','with no flip the regime falls back to net gamma and says so',L.regimeSrc);
   ok(L.regime==='negGamma','and a net-short book reads as amplifying',L.regime);
 }
@@ -116,9 +116,9 @@ const NODES=[ {k:763,pct:70,abs:700000,pos:false,derived:false}, {k:765,pct:100,
   setup(COLS, 767, CROSS);
   const L=gLevels('SPY');
   // cumulative: 763 -400k, 765 -900k, 770 -200k, 775 +400k -> crossing 770->775 at 200/600
-  ok(L.hvl && L.hvl.k===771.67,'HVL interpolates the true crossing bracket',L.hvl&&L.hvl.k);
+  ok(L.hvl && L.hvl.k===771.67,'FLIP interpolates the true crossing bracket',L.hvl&&L.hvl.k);
   ok(String(L.hvl.src).indexOf('native:')===0,'and is labelled with the basis it was computed on',L.hvl.src);
-  ok(L.regimeSrc==='hvl','the regime cites the HVL when there is one',L.regimeSrc);
+  ok(L.regimeSrc==='hvl','the regime cites the FLIP when there is one',L.regimeSrc);
   ok(L.regime==='negGamma','spot 767 below the flip at 771.67 is the amplifying side',L.regime);
   ok(L.basis==='abs','the native read uses the absolute dollar series when the tape carries it',L.basis);
 }
@@ -210,11 +210,11 @@ const NODES=[ {k:763,pct:70,abs:700000,pos:false,derived:false}, {k:765,pct:100,
   ok(lvlAlt(null)===null,'no level, no alternate');
   global.irtRatio=()=>({r:10.0519, live:true, src:'live'});
 }
-// ---------- (v11.10) the HVL's absence is information ----------
+// ---------- (v11.10) the FLIP's absence is information ----------
 {
   ok(lvlHvlMissing({hvl:{k:770},nNat:5})===null,'when there IS a flip there is nothing to explain');
   const m=lvlHvlMissing({hvl:null, nNat:5, regime:'posGamma'});
-  ok(/never changes sign/.test(m),'an absent HVL is explained as a property of the book',m);
+  ok(/never changes sign/.test(m),'an absent FLIP is explained as a property of the book',m);
   ok(/net \+γ/.test(m),'and names which way the book leans',m);
   ok(/no native nodes/.test(lvlHvlMissing({hvl:null, nNat:0})),'an unread tape says so instead');
 }
@@ -225,7 +225,7 @@ const NODES=[ {k:763,pct:70,abs:700000,pos:false,derived:false}, {k:765,pct:100,
   ok(L.regimeSrc==='netGamma','no flip -> the regime comes from net gamma');
   let h=levelsHtml('SPY');
   ok(h.indexOf('(net)')>0,'and the card SAYS (net) rather than implying we located a flip');
-  ok(h.indexOf('>HVL<')>0,'the HVL row is still present, showing why it is absent');
+  ok(h.indexOf('>FLIP<')>0,'the FLIP row is still present, showing why it is absent');
   ok(h.indexOf('never changes sign')>0,'with the reason on the row',h.indexOf('never changes sign'));
   const CROSS=[ {k:763,pct:40,abs:400000,pos:false,derived:false}, {k:765,pct:50,abs:500000,pos:false,derived:false},
                 {k:770,pct:70,abs:700000,pos:true,derived:false},  {k:775,pct:60,abs:600000,pos:true,derived:false} ];
@@ -233,7 +233,7 @@ const NODES=[ {k:763,pct:70,abs:700000,pos:false,derived:false}, {k:765,pct:100,
   L=gLevels('SPY'); h=levelsHtml('SPY');
   ok(L.regimeSrc==='hvl','with a flip the regime cites it');
   ok(h.indexOf('(net)')<0,'and the (net) qualifier disappears');
-  ok(h.indexOf('never changes sign')<0,'no absence line when the HVL exists');
+  ok(h.indexOf('never changes sign')<0,'no absence line when the FLIP exists');
 }
 // ---------- (v11.10) both figures reach the rendered row ----------
 {
