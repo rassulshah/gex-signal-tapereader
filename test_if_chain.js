@@ -149,9 +149,25 @@ eval(['ymdOf','ymdNum','windows','levelsFor','dexSkewFor','expectedMove','gammaF
   ok(ch.pub.zeroGamma===766.48,'their zero gamma is taken verbatim',ch.pub);
   ok(ch.pub.callWall===800 && ch.pub.putWall===760,'so are their walls');
 
-  ch=extractChain(mk({zeroGammaLevel:7679.88, callWallPrice:7700}));
-  ok(ch.pub.zeroGamma===7679.88,'a renamed zero-gamma key is found by pattern rather than lost',ch.pub);
-  ok(ch.pub.callWall===7700,'and so is a renamed call wall');
+  // (v1.10) This fixture used to pair spot 765.2 with zeroGammaLevel 7679.88 — an SPX value beside a
+  // SPY spot, which is the very scale-mixing this project keeps getting bitten by. The new sanity gate
+  // rejects it, correctly. Renamed keys are now tested with a value that is on the SAME SCALE as spot.
+  ch=extractChain(mk({zeroGammaLevel:767.99, callWallPrice:770}));
+  ok(ch.pub.zeroGamma===767.99,'a renamed zero-gamma key is found by pattern rather than lost',ch.pub);
+  ok(ch.pub.callWall===770,'and so is a renamed call wall');
+
+  // ---- (v1.10) THE SANITY GATE ----
+  // A truncation bug in v1.9 put Zero Gamma on the face as 764 beside a spot of 7674, under THEIR name.
+  // The regex was the proximate cause; the defect was that nothing checked the value against spot.
+  ch=extractChain(mk({zeroGamma:764}));                       // spot is 765.2 -> 764 is plausible here
+  ok(ch.pub.zeroGamma===764,'a level near spot is accepted',ch.pub.zeroGamma);
+  ch=extractChain(mk({zeroGamma:76.4}));                      // an order of magnitude low
+  ok(ch.pub.zeroGamma===null,'a level 10x BELOW spot is rejected, not shown under their name',ch.pub.zeroGamma);
+  ok(/^REJECTED:/.test(String(ch.pubSrc.zeroGamma)),'and the rejection is RECORDED so it can be diagnosed',ch.pubSrc.zeroGamma);
+  ch=extractChain(mk({callWall:7900}));                       // an order of magnitude high
+  ok(ch.pub.callWall===null,'a level 10x ABOVE spot is rejected too',ch.pub.callWall);
+  ch=extractChain(mk({zeroGamma:766.48, atmIV:6.2, pcRatio:1.36}));
+  ok(ch.pub.atmIV===6.2 && ch.pub.pcRatio===1.36,'ratios and IV are NOT gated — they are not prices',[ch.pub.atmIV,ch.pub.pcRatio]);
 
   ch=extractChain(mk({}));
   ok(ch.pub.zeroGamma===null && ch.pub.callWall===null,'when they publish nothing the fields are null — never invented',ch.pub);

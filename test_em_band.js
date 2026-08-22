@@ -78,7 +78,9 @@ function ex(n){
   eval(consts[0]);
   ok(typeof EM_FRESH_MIN==='number' && EM_FRESH_MIN>0, 'EM_FRESH_MIN is a positive number', EM_FRESH_MIN);
 
-  eval(ex('emBand'));
+  eval(ex('inReplay'));
+eval(ex('sessionDayStr'));
+eval(ex('emBand'));
 
   // open 770.00 (und) -> 7700 chart; EM 35 -> 35 chart; band 7665..7735
   global.__cands=[ {o:770.00,h:770.5,l:769.5,c:770.2}, {o:770.2,h:770.4,l:769.0,c:769.0} ];

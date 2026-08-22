@@ -1,3 +1,72 @@
+## v11.55 — the panel works on a weekend
+
+**The app was inert every weekend and every holiday.** `convertFiberCandles` keeps TODAY only, so with no
+bars today there was no chart, no SMA, no trend, no nodes — nothing to look at and nothing to develop
+against. Skylit's fiber feed still carries Friday; we were simply filtering it out.
+
+When today has no RTH bars, the panel now shows **the last session the feed carries, as if it were the
+day** — chart, trend, nodes, levels, all of it. The EM band anchors on that session's real open rather
+than the prior close, because in this mode that session IS the day.
+
+**This is the most dangerous thing in the panel, so it has three guards.** A whole face of stale data read
+as live is the largest possible version of failure pattern #1 — not one cell wrong, everything wrong at
+once, all of it plausible.
+
+1. **NEVER during RTH.** If `sessionPhase().rth` is true we stay on today even when today is empty. A
+   quiet pre-open feed must read *"no bars yet"*, never yesterday dressed up as now.
+2. **THE RECORDER WRITES NOTHING** — guarded at all five entry points (`recordNodeSnapshot`,
+   `recordOutcomeEvent`, `recordDeflections`, `actRecord`, `resolveFeatureOutcomes`). Replayed bars in
+   `data/*.json` would poison every base rate the learning layer computes, permanently and undetectably
+   after the fact.
+3. **THE FACE SAYS SO.** A purple `▮ 08/21 REPLAY` chip REPLACES the phase tag — deliberately not beside
+   it, because two chips would let the eye take the wrong one, and the phase of a finished day is noise.
+   `__gptsDebug.session()` reports the mode and whether recording is on.
+
+**The guard is written to fail TOWARD recording, and that is deliberate.** `inReplay()` try/catches, and
+every call site tests `typeof inReplay==='function'` first. A bare global reference inside the recorder's
+try/catch bodies is exactly the swallowed-ReferenceError shape that has bitten this project twice — and it
+bit again while building this feature: a python edit asserted, the `SESSION_DAY` declaration never landed,
+and five files were left referencing it. Had that shipped, all five write paths would have thrown, been
+swallowed, and **silently stopped recording** with nothing on the face to say so. A lost session is loud.
+A dead recorder is not. `node tools/smoke.js` calls the session hook, so a missing declaration now fails
+the build instead of going quiet.
+
+Same mechanism caught it: **check that the edit landed.** `grep -c SESSION_DAY` returned 5 references and
+0 declarations.
+
+The EM capture is keyed on the session being SHOWN rather than the wall-clock date — in replay that date
+is a weekend, and every replayed day would otherwise collide on one key.
+
+## v11.54 / companion v1.10 — I shipped their Zero Gamma as 764, and the test that should have caught it passed
+
+**v1.9 put a WRONG NUMBER on the face under THEIR name.** `zeroGamma 764` beside a spot of 7674, tagged
+`IF·pub`, rendering on the ladder as `FLIP@765.76`. Every published level was truncated to three digits:
+Call Wall 790, Put Wall 750, Max Pain 735.
+
+**The proximate cause was an ordered alternation.** The parser tried a comma-grouped branch first —
+`[0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?` — and fell back to a plain branch. On `7646.90`, which is how
+their page ACTUALLY renders it with no comma, the first branch matched `764`, succeeded, and the plain
+branch never ran. Commas are now optional INSIDE one number (`[0-9][0-9,]*(?:\.[0-9]+)?`), so there is
+no branch left to pick wrong. Verified against the exact strings their page serves: all eight values.
+
+**The real failure is that the unit test PASSED.** Its fixture wrote `$7,646.90` WITH a comma while the
+page renders `$7646.90` without one. **A fixture invented to suit the parser tests the parser against
+itself.** The fixture is now the page's own rendering, and both forms are asserted.
+
+**And the defect underneath both: nothing checked the number against reality.** 764 sat next to a spot of
+7674 and the code was content. A parser can fail in ways nobody predicted, so `levelSane()` now gates
+every price LEVEL to a band around spot (0.5x–2x); outside it the value is refused and `pubSrc` records
+`REJECTED:header=764` rather than dropping it silently. Ratios, IV and slopes are not gated — they are
+not prices. **This gate, not the regex, is what makes the next unpredicted parser failure visible.**
+
+It also caught a pre-existing bad fixture in `test_if_chain.js`, which paired spot 765.2 with
+`zeroGammaLevel 7679.88` — an SPX value beside a SPY spot, the exact scale-mixing this project keeps
+getting bitten by. Corrected, and the gate now has its own coverage both directions.
+
+**What this cost, stated plainly:** the wrong value was live on the panel for the length of one reload
+cycle, and it was found by reading the debug hook rather than by any test. The hook is why it was found
+in minutes instead of on Monday.
+
 ## v11.53 / companion v1.9 — the suite is green, and their published numbers are finally read
 
 **THE SUITE WAS NEVER GREEN.** Notes claimed "4239 pass / 0 fail" while six files failed on every run.

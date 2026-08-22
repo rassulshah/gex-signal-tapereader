@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.53
+// @version    11.55
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.53';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.55';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -576,8 +576,54 @@ function readFiberCandles(sym){
   }
   return null;
 }
+// ---- (v11.55) LAST-SESSION MODE -------------------------------------------------------------------
+// The panel was inert every weekend and every holiday: convertFiberCandles keeps TODAY only, so with no
+// bars today there is no chart, no SMA, no trend, no nodes — nothing to develop against and nothing to
+// look at. Skylit's fiber data still carries Friday; we were simply filtering it out.
+//
+// So when today has no RTH bars, show the LAST SESSION the feed carries, as if it were the day.
+//
+// TWO HARD GUARDS, because showing stale data as live is the worst possible version of failure pattern
+// #1 — the whole face wrong at once rather than one cell:
+//   1. NEVER DURING RTH. If sessionPhase().rth is true we stay on today even when today is empty. A
+//      quiet pre-open feed must read "no bars yet", never yesterday dressed up as now.
+//   2. THE RECORDER MUST NOT WRITE (guarded at all five entry points). Replayed bars in data/*.json
+//      would poison every base rate the learning layer computes — permanently and undetectably.
+// And the face SAYS which session it is showing. A mode you cannot see is a mode that lies.
+var SESSION_DAY = { day:null, fallback:false };
+// ONE point of truth for the guard, and it FAILS TOWARD RECORDING on purpose. A bare `SESSION_DAY`
+// reference inside the recorder's try/catch bodies is the swallowed-ReferenceError shape that has bitten
+// this project twice: if the declaration ever failed to land (a partial edit — which happened while
+// building this very feature), all five write paths would silently stop recording and nothing would say
+// why. A lost session is loud; a silently dead recorder is not. `node tools/smoke.js` calls the session
+// hook, so a missing declaration surfaces as a failed build rather than as a quiet data gap.
+function inReplay(){ try{ return !!(SESSION_DAY && SESSION_DAY.fallback); }catch(e){ return false; } }
+function sessionDayStr(){ try{ return (SESSION_DAY && SESSION_DAY.day) || ctTodayStr(); }catch(e){ return ctTodayStr(); } }
+function pickSessionDay(raw){
+  var today=ctTodayStr();
+  var out={ day:today, fallback:false };
+  try{
+    if(!raw || !raw.length) return out;
+    var openSec=mul(8,3600)+mul(30,60);
+    var seen={}, todayHas=false;
+    for(var i=0;i<raw.length;i++){
+      var t=raw[i].time; if(typeof t!=='number') continue;
+      if(naiveSecOfDay(t)<openSec) continue;          // RTH only — same gate the converter uses
+      var d=naiveDayStr(t); seen[d]=1;
+      if(d===today) todayHas=true;
+    }
+    if(todayHas) return out;                          // today has bars; nothing to substitute
+    var P=null; try{ P=sessionPhase(); }catch(eP){}
+    if(P && P.rth) return out;                        // GUARD 1: never during a live session
+    var days=Object.keys(seen).sort();
+    if(!days.length) return out;
+    out.day=days[days.length-1]; out.fallback=true;
+  }catch(e){}
+  return out;
+}
 function convertFiberCandles(raw){
-  var todayStr=ctTodayStr();
+  SESSION_DAY = pickSessionDay(raw);
+  var todayStr = SESSION_DAY.day;
   var openSec=mul(8,3600)+mul(30,60);
   var offMs=mul(ctOffsetSec(),1000);
   var out=[];
@@ -2921,6 +2967,10 @@ function deriveFactors(nodes, px, king){
 function recordNodeSnapshot(sym){
   try{
     if(RECORDER_SYMS.indexOf(sym)<0 || !TODAY) return;
+    // (v11.55) GUARD 2: last-session mode replays a PAST day. Writing those bars as if they were
+    // today would poison every base rate the learning layer computes — permanently, and
+    // undetectably after the fact. Nothing records while the panel is showing a replayed session.
+    if(typeof inReplay==='function' && inReplay()) return;
     var S=STATE[sym]; if(!S) return;
     var bar=S.lastClosedB||0;
     if(!bar) return;
@@ -3680,6 +3730,10 @@ function labelForwardOutcomes(sym, snaps){
 function recordOutcomeEvent(sym, s){
   try{
     if(RECORDER_SYMS.indexOf(sym)<0 || !TODAY || !s) return;
+    // (v11.55) GUARD 2: last-session mode replays a PAST day. Writing those bars as if they were
+    // today would poison every base rate the learning layer computes — permanently, and
+    // undetectably after the fact. Nothing records while the panel is showing a replayed session.
+    if(typeof inReplay==='function' && inReplay()) return;
     var fs=futureStructureSummary(sym);
     var ctx=null;
     if(fs){
@@ -6543,6 +6597,10 @@ function deflSetupKey(cls, dir){
 function recordDeflections(sym){
   try{
     if(RECORDER_SYMS.indexOf(sym)<0 || !TODAY) return;
+    // (v11.55) GUARD 2: last-session mode replays a PAST day. Writing those bars as if they were
+    // today would poison every base rate the learning layer computes — permanently, and
+    // undetectably after the fact. Nothing records while the panel is showing a replayed session.
+    if(typeof inReplay==='function' && inReplay()) return;
     var m=nodeMapModel(sym); if(!m || !m.ok || !m.levels) return;
     var S=STATE[sym]||{}; var px=S.price; if(px==null) return;
     var db=recorderLoad(); var day=recorderDay(db);
@@ -10044,6 +10102,10 @@ function deflAnticipation(sym, L){
 function actRecord(sym, action){
   try{
     if(RECORDER_SYMS.indexOf(sym)<0 || !TODAY) return null;
+    // (v11.55) GUARD 2: last-session mode replays a PAST day. Writing those bars as if they were
+    // today would poison every base rate the learning layer computes — permanently, and
+    // undetectably after the fact. Nothing records while the panel is showing a replayed session.
+    if(typeof inReplay==='function' && inReplay()) return null;
     var sp=spineOf(sym);
     var rec={ t:Date.now(), sym:sym,
               k:(sp.inPlay&&sp.inPlay.k!=null)?sp.inPlay.k:null,
@@ -12170,6 +12232,10 @@ function resolveFeatureOutcomes(sym){
   try{
     registerCoreFeatures();
     if(RECORDER_SYMS.indexOf(sym)<0 || !TODAY) return 0;
+    // (v11.55) GUARD 2: last-session mode replays a PAST day. Writing those bars as if they were
+    // today would poison every base rate the learning layer computes — permanently, and
+    // undetectably after the fact. Nothing records while the panel is showing a replayed session.
+    if(typeof inReplay==='function' && inReplay()) return 0;
     var S=STATE[sym]||{}; var cs=S.candles||[]; var n=cs.length;
     if(!n) return 0;
     var db=recorderLoad(); var day=recorderDay(db);
@@ -16846,6 +16912,10 @@ function ensureV3Css(){
     '#gpts-body .g3emn.g3over{background:#f0616d}'+
     '#gpts-body .g3f2 b.g3over{color:#f0616d}'+
     '#gpts-body .g3emx{font-size:8.5px;color:#6c7889;font-style:italic}'+
+    // (v11.55) the replay chip. Deliberately the loudest thing on the line — it is the one label whose
+    // absence would let a whole stale face read as live.
+    '#gpts-body .g3replay{font-size:7px;font-weight:800;padding:1px 5px;border-radius:2px;'+
+      'background:rgba(163,113,247,.22);color:#a371f7;border:1px solid rgba(163,113,247,.55);letter-spacing:.04em}'+
     '#gpts-body .g3b{padding:2px 2px 1px}'+
     '#gpts-body .g3reg{display:flex;align-items:center;justify-content:center;gap:6px}'+
     '#gpts-body .g3rg{font-size:10px;font-weight:800;padding:1px 7px;border-radius:3px;background:rgba(163,113,247,.18);color:#a371f7;border:1px solid rgba(163,113,247,.4)}'+
@@ -17132,7 +17202,9 @@ function emBand(sym){
     var dsc=1; try{ var IL=ifLadder(sym); if(IL&&!IL.err&&IL.dispScale) dsc=IL.dispScale; }catch(eL){}
 
     // one capture per symbol per day, and it is never overwritten once taken
-    var today=ctTodayStr(), S=null;
+    // (v11.55) key on the session being SHOWN, not the wall-clock date — in last-session mode that is a
+    // weekend and every replayed day would collide on the same key.
+    var today=sessionDayStr(), S=null;
     try{ S=JSON.parse(localStorage.getItem(EMOPEN_KEY)||'null'); }catch(eP){}
     if(!S || typeof S!=='object' || S.date!==today) S={ date:today, sym:{} };
     if(!S.sym) S.sym={};
@@ -17223,8 +17295,17 @@ function secFrame(sym){
   } else {
     h+='<span class="g3emx"'+g3tip('Where can today go? The band needs an opening bar and a two-sided at-the-money straddle in today\'s expiry. A one-sided straddle is not a straddle and half a band would be worse than none, so it says why instead of drawing something.')+'>'+g3esc(EB.why)+'</span>';
   }
-  var ptag=(P.label||'').replace('EXPIRY · ','EXP·').replace('OPEN · CHARM','OPEN').replace('POWER HOUR','PWR').replace('MORNING','AM').replace('MIDDAY','MID');
-  if(ptag && ptag!=='—') h+='<span class="g3tag"'+g3tip(g3esc(P.sub||''))+'>'+g3esc(ptag)+'</span>';
+  // (v11.55) LAST-SESSION MODE MUST BE UNMISSABLE. Every other number on this face is then a REPLAY of a
+  // past day, and a stale panel read as live is the worst failure this project can have — the whole face
+  // wrong at once. It replaces the phase tag rather than sitting beside it: the phase of a day that has
+  // already finished is noise, and two chips would let the eye take the wrong one.
+  if(inReplay()){
+    var dLab=String(SESSION_DAY.day||'').slice(5).replace('-','/');
+    h+='<span class="g3replay"'+g3tip('WHICH SESSION IS THIS? The market is closed and today has no bars, so the whole panel is showing the last session the feed carries ('+g3esc(String(SESSION_DAY.day||''))+') as if it were the day — chart, trend, nodes, levels, all of it. NOTHING here is live. It exists so the panel can be read and developed against outside market hours. It NEVER engages during RTH, and the recorder writes nothing while it is on, so no replayed bar can reach the data files.')+'>▮ '+g3esc(dLab)+' REPLAY</span>';
+  } else {
+    var ptag=(P.label||'').replace('EXPIRY · ','EXP·').replace('OPEN · CHARM','OPEN').replace('POWER HOUR','PWR').replace('MORNING','AM').replace('MIDDAY','MID');
+    if(ptag && ptag!=='—') h+='<span class="g3tag"'+g3tip(g3esc(P.sub||''))+'>'+g3esc(ptag)+'</span>';
+  }
   h+='</div></div>';
   return h;
 }
@@ -18106,6 +18187,18 @@ window.__gptsDebug.emBand = function(sy){
     }catch(eC){ out.check='could not cross-check: '+(eC&&eC.message||eC); }
     return out;
   }catch(e){ return { ok:false, why:String(e&&e.message||e) }; }
+};
+// (v11.55) which session is on screen, and is anything being recorded?
+window.__gptsDebug.session = function(){
+  var P=null; try{ P=sessionPhase(); }catch(e){}
+  return { showing:(SESSION_DAY&&SESSION_DAY.day)||null,
+           replay:!!(SESSION_DAY&&SESSION_DAY.fallback),
+           today:ctTodayStr(),
+           rth:!!(P&&P.rth),
+           recording:!(SESSION_DAY&&SESSION_DAY.fallback),
+           note:(SESSION_DAY&&SESSION_DAY.fallback)
+             ? 'REPLAY of '+SESSION_DAY.day+' — nothing on the face is live, and the recorder is OFF'
+             : 'live/today' };
 };
 window.__gptsDebug.ifShape = function(sy){ try{ var c=ifChain(sy||'SPX'); return (c&&c.shape)||'companion older than v1.7'; }catch(e){ return String(e); } };
 window.__gptsDebug.optKeys = function(sy){

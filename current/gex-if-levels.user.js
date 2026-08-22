@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.9
+// @version      1.10
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
@@ -75,7 +75,14 @@ function hdrNum(txt, label){
   try{
     var i=txt.indexOf(label); if(i<0) return null;
     var win=txt.slice(i+label.length, i+label.length+80);
-    var m=win.match(/(-?)\s?\$?\s?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)/);
+    // ⚠ ONE ALTERNATION, NOT TWO. The first version tried a comma-grouped branch FIRST
+    // (`[0-9]{1,3}(?:,[0-9]{3})*`) and fell back to a plain branch. On `7646.90` — which is how their
+    // page ACTUALLY renders it, with no comma — the first branch matched `764`, succeeded, and the
+    // plain branch never ran. Their Zero Gamma reached our face as 764 against a spot of 7674, under
+    // THEIR name, sourced IF-pub. The unit test passed because its fixture used `$7,646.90` WITH a
+    // comma: the fixture did not match the page. Commas are now optional INSIDE one number, so there
+    // is no branch to pick wrong.
+    var m=win.match(/(-?)\s?\$?\s?([0-9][0-9,]*(?:\.[0-9]+)?)/);
     if(!m) return null;
     var v=parseFloat(m[2].replace(/,/g,'')); if(!isFinite(v)) return null;
     return (m[1]==='-') ? -v : v;
@@ -127,18 +134,30 @@ function extractChain(html){
     // HEADER. The header is what finally makes these non-null — see hdrText/hdrNum above. `pubSrc` records
     // which source won for each, so a value on our face can always be traced to where it came from.
     var HT=hdrText(html), pubSrc={};
-    function three(key, direct, re, label){
-      if(typeof direct==='number' && isFinite(direct)){ pubSrc[key]='payload'; return direct; }
-      var v=pick(re);
-      if(typeof v==='number' && isFinite(v)){ pubSrc[key]='tree'; return v; }
-      v=hdrNum(HT, label);
-      if(typeof v==='number' && isFinite(v)){ pubSrc[key]='header'; return v; }
-      pubSrc[key]=null; return null;
+    // A PRICE LEVEL MUST LOOK LIKE ONE. The truncation bug above produced 764 beside a spot of 7674 and
+    // nothing objected — a parser can fail in ways nobody predicted, so the value is checked against the
+    // one fact we always have. Levels only; ratios, IV and slopes are not prices and are not gated.
+    function levelSane(v){
+      if(typeof v!=='number' || !isFinite(v)) return false;
+      if(typeof d.spot!=='number' || !(d.spot>0)) return true;   // nothing to compare against
+      return v > d.spot*0.5 && v < d.spot*2;
+    }
+    function three(key, direct, re, label, isLevel){
+      function take(v, src){
+        if(typeof v!=='number' || !isFinite(v)) return false;
+        if(isLevel && !levelSane(v)){ pubSrc[key]='REJECTED:'+src+'='+v; return false; }
+        pubSrc[key]=src; return true;
+      }
+      if(take(direct,'payload')) return direct;
+      var v=pick(re);      if(take(v,'tree'))   return v;
+      v=hdrNum(HT, label); if(take(v,'header')) return v;
+      if(!pubSrc[key]) pubSrc[key]=null;
+      return null;
     }
     var pub={
-      zeroGamma:three('zeroGamma', d.zeroGamma, /zero.?gamma|gamma.?flip|flip.?point/i, 'Zero Gamma'),
-      callWall :three('callWall',  d.callWall,  /call.?wall/i, 'Call Wall'),
-      putWall  :three('putWall',   d.putWall,   /put.?wall/i,  'Put Wall'),
+      zeroGamma:three('zeroGamma', d.zeroGamma, /zero.?gamma|gamma.?flip|flip.?point/i, 'Zero Gamma', true),
+      callWall :three('callWall',  d.callWall,  /call.?wall/i, 'Call Wall', true),
+      putWall  :three('putWall',   d.putWall,   /put.?wall/i,  'Put Wall', true),
       // (v1.4) Their page prints these; whether they are in the PAYLOAD is the open question that
       // decides whether SKEW is free or has to be computed. Zero Gamma was rendered and absent, so
       // "it is on the page" proves nothing.
@@ -147,7 +166,7 @@ function extractChain(html){
       termSlope:three('termSlope', null, /term.?slope/i, 'Term Slope'),
       atmIV    :three('atmIV',     null, /atm.?iv|iv.?atm/i, 'ATM IV'),
       pcRatio  :three('pcRatio',   null, /put.?call.?ratio|pc.?ratio/i, 'Put/Call'),
-      maxPain  :three('maxPain',   null, /max.?pain/i, 'Max Pain')
+      maxPain  :three('maxPain',   null, /max.?pain/i, 'Max Pain', true)
     };
     // ⚠ THEIR HEADER WALLS ARE ALL-EXPIRY (CW 7900 / PW 7500 on 2026-08-22) while our ladder's CR0/PS0
     // are 0DTE (7700/7665, verified reproducing their 0DTE view exactly). BOTH are "their values" and
