@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.59
+// @version    11.60
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.59';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.60';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4625,6 +4625,22 @@ function fmtNum(x){ return (Math.round(mul(x,100))/100).toString(); }
 // (v11.0.1) a futures LEVEL is spoken on the instrument's tick — ES/MES/NQ/MNQ trade in 0.25
 // points, so 7716.36 is not a price anyone can trade; 7716.25 is.
 var FUT_TICK={ ES:0.25, NQ:0.25 };
+// (v11.60) DOLLARS PER INDEX POINT. Verified against CME / NinjaTrader contract specs 2026-08-22, not
+// assumed — a wrong multiplier puts a wrong dollar figure on the face under the panel's own name:
+//   ES $50/pt (tick 0.25 = $12.50) · MES $5 · NQ $20 · MNQ $2   (micros are 1/10 of the E-mini)
+// Keyed by the CHART symbol, never the family: ES and MES share a family and differ by 10x.
+var FUT_MULT={ ES:50, MES:5, NQ:20, MNQ:2 };
+function futMult(){ try{ var c=(typeof FUTMODE!=='undefined'&&FUTMODE)?FUTMODE.chart:null; return (c&&FUT_MULT[c])||null; }catch(e){ return null; } }
+// $1,737 — whole dollars. Cents on a four-figure number are noise on a face with no space.
+function usd(v){
+  try{ if(typeof v!=='number'||!isFinite(v)) return null;
+    // ⚠ ROUND THROUGH CENTS FIRST. 34.73*50 is 1736.4999999999998 in floating point, and rounding that
+    // straight to dollars yields $1,736 for a move genuinely worth $1,736.50 — a one-dollar error on the
+    // face, from arithmetic that looks exact. Cents first, then dollars.
+    var cents=Math.round(Math.abs(v)*100)/100;
+    return '$'+Math.round(cents).toString().replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  }catch(e){ return null; }
+}
 function futTick(){ try{ var f=(typeof FUTMODE!=='undefined'&&FUTMODE)?FUTMODE.fam:null; return (f && FUT_TICK[f])||null; }catch(e){ return null; } }
 function fmtFut(x){
   var tk=futTick();
@@ -16942,6 +16958,9 @@ function ensureV3Css(){
     '#gpts-body .g3shape{font-size:8px;color:#8b98a9;margin-top:3px;letter-spacing:.02em}'+
     '#gpts-body .g3shape b{color:#e6edf3;font-weight:800}'+
     '#gpts-body .g3shape b.warn{color:#f2b45a}'+
+    '#gpts-body .g3shape .g3usd{color:#2ec27e;font-weight:800}'+
+    '#gpts-body .g3ct{font-size:7px;font-weight:800;padding:1px 5px;border-radius:2px;'+
+      'background:rgba(46,194,126,.14);color:#2ec27e;border:1px solid rgba(46,194,126,.4);white-space:nowrap}'+
     // (v11.55) the replay chip. Deliberately the loudest thing on the line — it is the one label whose
     // absence would let a whole stale face read as live.
     '#gpts-body .g3replay{font-size:7px;font-weight:800;padding:1px 5px;border-radius:2px;'+
@@ -17320,6 +17339,24 @@ function emBand(sym){
     // edge is where OVERSHOOT happens — a trend day, not a fade. Marking both the same way made the band
     // contradict the regime line one row above it.
     // ⚠ CONDITION, NOT PREDICTION. Nothing here has been measured; see the emband scorecard.
+    // ---- (v11.60) THE MOVE IN MONEY --------------------------------------------------------------
+    // A band in index points makes you do the x50 in your head every time. This is a UNIT CONVERSION of
+    // the expected MOVE — not a position, not a size, not P&L. "used" means the day has travelled that
+    // many dollars OF ITS PRICED MOVE, per contract; nobody made or lost it. The face keeps the words
+    // "per contract" and "of the expected move" so it can never be read as a trade result.
+    // ⚠ The multiplier follows the CHART. Chart ES while trading MES and every figure is 10x too big.
+    var mlt=null; try{ mlt=futMult(); }catch(eM){}
+    if(mlt){
+      out.mult=mlt;
+      try{ out.contract=FUTMODE.chart; }catch(eN){ out.contract=null; }
+      out.emUsd     = rec.em*mlt;
+      out.usedUsd   = Math.abs(out.disp)*mlt;
+      out.roomUpUsd = out.roomUp*mlt;
+      out.roomDnUsd = out.roomDn*mlt;
+      out.leftUsd   = out.roomAhead*mlt;
+      out.microUsd  = (mlt>=10) ? rec.em*(mlt/10) : null;   // the 1/10 contract, for the hover
+    }
+
     var g=null; try{ var R=regime2D(sym); g=(R&&typeof R.g==='number')?R.g:null; }catch(eG){}
     out.gamma=g;
     out.over=(out.pct>=100);
@@ -17376,6 +17413,7 @@ function secFrame(sym){
   // is this, and where is it trying to go. It was buried at the head of the second line among the
   // supporting numbers, which read as one more statistic rather than the destination.
   var gp=null; try{ gp=gexPath(sym); }catch(e){}
+  var EBc=null; try{ EBc=emBand(sym); }catch(eB){}   // (v11.60) needed by the contract chip on line 1
   var ifMagEarly=null;
   try{ var ILe=ifLadder(sym);
     if(ILe && !ILe.err) for(var mi0=0;mi0<ILe.rows.length;mi0++){ if(/Mag/.test(ILe.rows[mi0].id)){ ifMagEarly=ILe.rows[mi0].disp; break; } }
@@ -17383,6 +17421,12 @@ function secFrame(sym){
   h+='<div class="g3f1"><span class="g3rg"'+g3tip(regimeTip(R))+'>'+
      g3esc(gTxt.trim())+(R.danger?' ⚠':'')+'</span>';
   if(ifMagEarly!=null) h+='<span class="g3tgt"'+g3tip('Where is the day trying to go? The heaviest strike in InsiderFinance\'s book — where dealer hedging concentrates and price tends to be pulled. A destination, not a forecast, and it reads the same book as the ladder below so the two can never disagree.')+'>→ '+dispNum(ifMagEarly)+'</span>';
+  // (v11.60) THE CONTRACT CHIP. States, once, what a WHOLE expected move is worth on the instrument
+  // being charted — so the ×50 stops being a mental step. Futures charts only: a SPY chart has no
+  // contract and no multiplier, and inventing one would be worse than saying nothing.
+  if(EBc && EBc.ok && EBc.mult && EBc.contract){
+    h+='<span class="g3ct"'+g3tip(EBc.contract+' — '+usd(EBc.mult)+' per index point. The expected move of '+dispNum(EBc.em)+' points is worth '+usd(EBc.emUsd)+' per contract'+(EBc.microUsd?('; the micro is one tenth, '+usd(EBc.microUsd)):'')+'. This is the MOVE converted to dollars — not a position, not a size, not profit or loss. ⚠ The multiplier follows the CHART, so charting '+EBc.contract+' while trading the micro makes every figure ten times too big.')+'>'+g3esc(EBc.contract)+' · EM '+usd(EBc.emUsd)+'/ct</span>';
+  }
   if(R.play) h+='<span class="g3play"'+g3tip('What does this regime reward? In negative gamma dealers hedge WITH the move, so fades are the losing side; in positive gamma they hedge against it and levels hold.')+'>'+g3esc(R.play)+'</span>';
   h+='</div>';
   // (v11.49) LINE 2 IS THE BAND NOW. It used to be four naked measurements — DEX, TERM, EM, ATR —
@@ -17399,7 +17443,7 @@ function secFrame(sym){
   //   ATR  removed from the FACE only. It still sets the ladder's ± zone widths and still sizes the
   //        rejection detector — it just stopped needing to be read.
   h+='<div class="g3f2">';
-  var EB=emBand(sym);
+  var EB=EBc||emBand(sym);
   if(EB.ok){
     // (v11.57) THE THREE QUESTIONS THIS ROW ANSWERS, in order:
     //   1 WHERE IS THE TARGET, and is it even reachable inside what today prices?
@@ -17463,7 +17507,9 @@ function secFrame(sym){
     }
     sTxt += ' · ' + (EB.over
       ? ('<b'+(EB.stretched?' class="warn"':'')+'>'+(EB.stretched?'STRETCHED — +G compresses':'past EM, but −G expands')+'</b>')
-      : (dispNum(EB.roomAhead)+' pts to EXP '+(EB.dir>=0?'HIGH':'LOW')+' left'));
+      : (EB.mult
+          ? ('<span class="g3usd">'+usd(EB.usedUsd)+' used · '+usd(EB.leftUsd)+' left</span>')
+          : (dispNum(EB.roomAhead)+' pts to EXP '+(EB.dir>=0?'HIGH':'LOW')+' left')));
     h+='<div class="g3shape"'+g3tip('The day so far. HOD and LOD are how far it got each way from the open, as a share of the expected move — not where it is now. The arrow shows which came first. "Retraced" is how much of the bigger drive has been handed back; over 100% means it went through the open and out the other side. Last field: room left to the rail ahead, or, once past the band, what the gamma regime says that means. Descriptive only — nothing here has been measured yet.')+'>'+sTxt+'</div>';
   }
   h+='</div>';
@@ -18330,7 +18376,9 @@ window.__gptsDebug.emBand = function(sy){
       shape:B.shape||null, hiWater:B.hiWater, loWater:B.loWater,
       upExc:B.upExc, dnExc:B.dnExc, giveBack:B.giveBack, hiFirst:B.hiFirst,
       roomUp:B.roomUp, roomDn:B.roomDn, roomAhead:B.roomAhead,
-      gamma:B.gamma, stretched:B.stretched, scalePinned:!!B.scalePinned
+      gamma:B.gamma, stretched:B.stretched, scalePinned:!!B.scalePinned,
+      contract:B.contract, mult:B.mult, emUsd:B.emUsd, usedUsd:B.usedUsd, leftUsd:B.leftUsd,
+      roomUpUsd:B.roomUpUsd, roomDnUsd:B.roomDnUsd, microUsd:B.microUsd
     };
     // the guard rail: show BOTH straddles so a regression to the week's move is visible at a glance
     try{

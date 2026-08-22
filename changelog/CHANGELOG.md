@@ -1,3 +1,46 @@
+## v11.60 — the band in dollars per contract
+
+A band in index points makes you do the ×50 in your head every time you want to know what a move is
+actually worth. On an ES chart the face now says it outright.
+
+**A contract chip on line 1** — `ES · EM $1,737/ct` — states, once, what a WHOLE expected move is worth on
+the instrument being charted. **The shape line's last field switches from points to money**:
+`$200 used · $1,537 left`. Nothing else on the row moves, and it costs no extra height.
+
+    ES 34.73 pts of expected move  =  $1,737 per contract
+    travelled 4.00 pts             =  $200 used
+    30.73 pts to the rail ahead    =  $1,537 left
+
+**THE MULTIPLIERS ARE VERIFIED, NOT ASSUMED** — against CME and NinjaTrader contract specs. A wrong one
+puts a wrong dollar figure on the face under the panel's own name, which is the same class of failure as
+the truncated Zero Gamma:
+
+    ES  $50/pt  (tick 0.25 = $12.50) · MES $5 · NQ $20 · MNQ $2      micros are 1/10 of the E-mini
+
+Keyed by the CHART symbol, never the family — ES and MES share a family and differ by 10×. Futures charts
+only: a SPY chart has no contract, and inventing a multiplier would be worse than saying nothing.
+
+**A ONE-DOLLAR BUG THE TEST CAUGHT BEFORE IT SHIPPED.** `34.73 * 50` is `1736.4999999999998` in floating
+point, not `1736.5`. Rounding that straight to dollars renders **$1,736** for a move genuinely worth
+$1,736.50 — a visible error out of arithmetic that looks exact. `usd()` rounds through cents first, and
+the regression is pinned. The mockup I sent said $1,737; without the test the shipped panel would have
+said $1,736 and I would not have noticed.
+
+**WHAT THIS IS NOT, AND THE TEST THAT KEEPS IT THAT WAY.** The standing rule is that this tool is
+descriptive: never entries, stops, sizing, R:R or P&L. A dollar figure sits one step from all of them, so
+the framing is deliberate — this is **the expected MOVE converted to dollars per contract**, a unit change
+and nothing else. There is no position in it and no quantity. *"$200 used"* means the day has travelled
+$200 worth of its priced move; **nobody made or lost $200.** A test scans the VISIBLE labels for
+profit/loss/sizing language and fails the build on any of it.
+
+⚠ That test failed on itself first, twice, and both were worth fixing rather than loosening: the
+disclaimer legitimately uses the words "profit or loss" in order to DENY them, and the hover it lives in
+cannot be stripped by regex because its argument nests `usd(...)` and `dispNum(...)`. It counts parens
+now. **A test that cannot tell a denial from a claim fails on its own safeguard.**
+
+⚠ **The multiplier follows the CHART, not what you trade.** Chart ES while trading MES and every figure is
+ten times too big. The chip's hover states the micro equivalent for exactly that reason.
+
 ## v11.59 — the anchor was drifting, and the line now speaks like a trader
 
 **THE ANCHOR WAS NOT ANCHORED.** `rr` is a LIVE ratio between the displayed instrument and the underlying,

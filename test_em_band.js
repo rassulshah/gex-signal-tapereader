@@ -251,5 +251,67 @@ eval(ex('emBand'));
   ok(longest<620, 'every hover in FRAME is under ~600 characters (longest '+longest+')', longest);
 }
 
+
+// ---------- 12. (v11.60) THE MOVE IN DOLLARS PER CONTRACT ----------
+// A band in index points makes you do the x50 in your head. The multipliers are VERIFIED against CME /
+// NinjaTrader specs, not assumed — a wrong one puts a wrong dollar figure on the face under the panel's
+// own name, which is the same class of failure as the truncated Zero Gamma.
+{
+  eval(src.match(/var FUT_MULT=\{[^}]*\};/)[0]);
+  eval(ex('usd'));
+  ok(FUT_MULT.ES===50,  'ES is $50 per index point (tick 0.25 = $12.50)', FUT_MULT.ES);
+  ok(FUT_MULT.MES===5,  'MES is $5 — one tenth of ES', FUT_MULT.MES);
+  ok(FUT_MULT.NQ===20,  'NQ is $20', FUT_MULT.NQ);
+  ok(FUT_MULT.MNQ===2,  'MNQ is $2 — one tenth of NQ', FUT_MULT.MNQ);
+  ok(FUT_MULT.MES*10===FUT_MULT.ES && FUT_MULT.MNQ*10===FUT_MULT.NQ,
+     'every micro is exactly one tenth of its E-mini');
+  ok(usd(1736.5)==='$1,737',   'money is whole dollars with a thousands separator', usd(1736.5));
+  ok(usd(200)==='$200',        'and no separator below a thousand', usd(200));
+  ok(usd(0)==='$0',            'zero renders');
+  ok(usd(null)===null && usd(NaN)===null, 'and a non-number yields null rather than "$NaN"');
+
+  // the live case: EM 34.73 ES points
+  // ⚠ 34.73*50 === 1736.4999999999998 in floating point. Rounding that straight to dollars gives $1,736
+  // for a move worth $1,736.50 — a one-dollar error from arithmetic that looks exact. usd() rounds
+  // through cents, and this is the regression that proves it.
+  ok(34.73*FUT_MULT.ES !== 1736.5, 'the FP hazard is real: 34.73*50 is not exactly 1736.5', 34.73*FUT_MULT.ES);
+  ok(usd(34.73*FUT_MULT.ES)==='$1,737', 'EM 34.73 pts on ES still renders $1,737 per contract', usd(34.73*FUT_MULT.ES));
+  ok(usd(34.73*FUT_MULT.MES)==='$174',  '...and $174 on the micro', usd(34.73*FUT_MULT.MES));
+
+  const b=ex('emBand');
+  ok(/futMult\(\)/.test(b),      'emBand reads the multiplier from the CHART symbol');
+  ok(/emUsd/.test(b) && /usedUsd/.test(b) && /leftUsd/.test(b), 'and carries EM, used and left in dollars');
+  ok(/microUsd/.test(b),         'plus the micro equivalent, for the hover');
+  ok(b.indexOf('out.roomUp')<b.indexOf('leftUsd'), 'room is computed BEFORE it is converted to money');
+
+  const f=ex('secFrame');
+  ok(/g3ct/.test(f),             'the contract chip renders');
+  ok(/EM '\+usd\(EBc\.emUsd\)\+'\/ct/.test(f), 'and says what a WHOLE expected move is worth per contract');
+  ok(/EBc && EBc\.ok && EBc\.mult/.test(f), 'only when there IS a contract — a SPY chart has no multiplier');
+  ok(/used · '\+usd\(EB\.leftUsd\)\+' left/.test(f), 'the shape line reports used and left in dollars');
+  // ⚠ DESCRIPTIVE ONLY. A dollar figure is one step from sizing, R:R and P&L, all of which are banned.
+  // Check the VISIBLE labels, not the hovers: the disclaimer has to use the words "profit or loss" in
+  // order to deny them, and a test that cannot tell a denial from a claim fails on its own safeguard.
+  // A regex cannot strip g3tip(...) — its argument nests usd(...) and dispNum(...) calls, so there is no
+  // regular expression for the matching paren. Count them.
+  function stripCalls(code, fn){
+    var out='', i=0;
+    while(i<code.length){
+      var at=code.indexOf(fn+'(', i);
+      if(at<0){ out+=code.slice(i); break; }
+      out+=code.slice(i,at);
+      var d=0, k=at+fn.length;
+      for(;k<code.length;k++){ if(code[k]==='(')d++; else if(code[k]===')'){ d--; if(d===0){ k++; break; } } }
+      i=k;
+    }
+    return out;
+  }
+  const fVisible=stripCalls(f.split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n'),'g3tip');
+  ok(!/\bP&L\b|profit|\bloss\b|position size|risk per/i.test(fVisible),
+     'no VISIBLE label frames this as profit, loss, or position size');
+  ok(/per contract/.test(f) && /not a position/.test(f),
+     'and the hover says outright that it is the MOVE converted, not a position');
+}
+
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
