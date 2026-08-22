@@ -17,50 +17,53 @@ global.ifLadder=()=>({err:null, undScale:0.0998, dispScale:1.0023});
 global.pickSnapshot=(s)=>({snap:s[s.length-1]});
 eval(ex('levelDepth')); eval(ex('confTier'));
 
-const feed=(rows)=>({ j:{levels:[{t:1,s:766,l:rows}]}, ts:Date.now() });
-const R=(k,net)=>({k:k,v:Math.abs(net),d:1,net:net});
+// (v11.43) BOTH BOOKS NOW COME FROM THEIR CHAIN. Gamma used to be read from LASTFEED — Skylit flow —
+// while the LEVELS being scored came from InsiderFinance. Two different books: Skylit gamma peaks at
+// spot, IF's walls sit away from it, and every level measured gamma-thin (0.02-0.20 live). A level has
+// to be compared to the book it came from.
+const chain=(gexProf,dexProf)=>({err:null, toFri:{ds:{gexProf:gexProf, dexProf:dexProf}}});
 
 // ---- both books, and the tiers ----
 {
-  LASTFEED.SPY=feed([R(766,-500e6),R(770,-50e6)]);
-  CHAIN={err:null, toFri:{ds:{dexProf:[[7676,-2000],[7716,-100]]}}};   // 7676*0.0998 = 766.1
+  CHAIN=chain([[7676,-800],[7716,-40]], [[7676,-2000],[7716,-100]]);   // 7676*0.0998 = 766.1
   const C=levelDepth('SPY');
-  ok(C.ok,'depth reads both books');
+  ok(C.ok,'depth reads both of THEIR books');
   const t=confTier(C,766);
-  ok(!!t,'a level near heavy gamma AND heavy delta scores');
+  ok(!!t,'a level heavy in gamma AND delta scores');
   eq(t.tier,2,'and it is the top tier — both books loaded');
 }
 {
-  LASTFEED.SPY=feed([R(766,-500e6),R(770,-10e6)]);
-  CHAIN={err:null, toFri:{ds:{dexProf:[[7676,-10],[7716,-2000]]}}};
+  CHAIN=chain([[7676,-800],[7716,-40]], [[7676,-10],[7716,-2000]]);
   const C=levelDepth('SPY');
   const t=confTier(C,766);
   eq(t.tier,1,'heavy in ONE book only is the lower tier — real, but easier to pass');
 }
 {
-  LASTFEED.SPY=feed([R(766,-500e6),R(770,-20e6)]);
-  CHAIN={err:null, toFri:{ds:{dexProf:[[7676,-2000],[7716,-20]]}}};
+  CHAIN=chain([[7676,-800],[7716,-20]], [[7676,-2000],[7716,-20]]);
   const C=levelDepth('SPY');
   eq(confTier(C,770).tier,0,'a level thin in both books scores nothing and gets no marker');
 }
 {
-  LASTFEED.SPY=feed([R(766,-500e6)]);
-  CHAIN=null;
+  CHAIN=chain([[7676,-800]], null);
   const C=levelDepth('SPY');
   ok(C.ok,'gamma alone still produces a reading');
   ok(confTier(C,766).d===0,'with the delta side simply zero rather than assumed');
 }
 {
-  // the two books sit on DIFFERENT strike grids — an exact-key match would score everything gamma-only
-  LASTFEED.SPY=feed([R(766,-500e6)]);
-  CHAIN={err:null, toFri:{ds:{dexProf:[[7676,-2000]]}}};      // 766.06 after scaling
+  CHAIN=chain(null, [[7676,-2000]]);
   const C=levelDepth('SPY');
-  const t=confTier(C,766);
-  ok(t.g>0 && t.d>0,'a nearest-strike match within tolerance pairs them',t);
+  ok(C.ok,'and delta alone does too');
+  ok(confTier(C,766).g===0,'with gamma zero rather than borrowed from another book');
 }
 {
-  LASTFEED.SPY=feed([R(766,-500e6)]);
-  CHAIN={err:null, toFri:{ds:{dexProf:[[7800,-2000]]}}};
+  // gamma and delta can still land on adjacent keys after scaling; the zone must catch both
+  CHAIN=chain([[7675,-800]], [[7676,-2000]]);
+  const C=levelDepth('SPY');
+  const t=confTier(C,766);
+  ok(t.g>0 && t.d>0,'adjacent keys inside the zone are aggregated, not resolved to one',t);
+}
+{
+  CHAIN=chain([[7676,-800]], [[7800,-2000]]);
   const C=levelDepth('SPY');
   const t=confTier(C,766);
   ok(t.d===0,'but a strike far away is NOT pulled in — tolerance, not nearest-at-any-distance');
@@ -68,8 +71,12 @@ const R=(k,net)=>({k:k,v:Math.abs(net),d:1,net:net});
 eq(confTier(null,766),null,'no depth data means no tier rather than a default');
 eq(confTier({ok:false},766),null,'and an empty read is the same');
 {
-  LASTFEED.SPY=null; CHAIN=null;
-  eq(levelDepth('SPY').ok,false,'with neither book there is nothing to score');
+  CHAIN=null;
+  eq(levelDepth('SPY').ok,false,'with no chain there is nothing to score');
+}
+{
+  ok(/labelled "IF structure"; it has to BE IF/.test(src)||/BOTH BOOKS NOW COME FROM|BOTH SIDES FROM THE SAME BOOK/.test(src),
+     'and the source records why both sides must come from one book');
 }
 // ---- the axes ----
 {

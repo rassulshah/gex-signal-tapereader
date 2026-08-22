@@ -21,3 +21,23 @@ Every installer .bat must therefore end with, before `pause`:
 Payload rules (unchanged): base64 after `exit /b 0`, extracted with `more +<HDRLINES>` then
 `certutil -f -decode` then `tar -xzf`. NO PowerShell anywhere — Avast flags it (IDP.HELU.PSE88).
 `<HDRLINES>` is the header's line count and must be recomputed whenever the header changes.
+
+
+## THE RAW CDN CACHES FOR FIVE MINUTES, NOT TWO (2026-08-22)
+
+`raw.githubusercontent.com` returns `cache-control: max-age=300`. Installers have been telling the user
+to "wait about 2 minutes for the GitHub raw cache to flush" — click inside the real window and
+Tampermonkey fetches the PREVIOUS version, sees no version bump, and offers **Reinstall** instead of
+**Update**. That looks exactly like a failed push and it is not.
+
+A cache-busting query string does NOT reliably defeat it, and Tampermonkey requests the plain URL anyway.
+
+**Three install failure modes now, all identical from the user's side:**
+
+| symptom | cause | one-call check |
+|---|---|---|
+| GitHub serves the old version | the installer did not push | `git ls-remote` / clone and read `@version` |
+| GitHub new, browser old | the page was already open | reload the tab |
+| raw serves stale for ~5 min | CDN cache | read the `cache-control` / `age` headers |
+
+Installer text must say **five minutes**.

@@ -1,3 +1,29 @@
+## v11.43 — one book per question
+
+Two instances of the same error, both found by checking the live panel rather than trusting it.
+
+**The left column was drawing Skylit gamma under a caption that says "IF · structure".** Two books, one
+label — the exact mislabeling pattern this project keeps producing, one layer down. It now draws THEIR
+gamma beside THEIR delta. Skylit gamma keeps its own job on the flow side, which is what it is for.
+
+**And the depth score was comparing IF's levels to Skylit's gamma book.** Measured live, every ladder
+level scored between 0.02 and 0.20 on gamma — not because the levels were weak, but because Skylit's
+gamma peaks at spot while InsiderFinance's walls sit away from it. A level has to be compared to the
+book it came from. The companion now emits a per-strike `gexProf` alongside `dexProf`, both from their
+chain, and depth scores against those.
+
+Without this the ◆ markers would have rendered almost never, and the one time they did it would have
+been coincidence.
+
+**The payload question is settled.** `ifShape()` on the live panel returned the whole of `initialData`:
+
+    ticker · tickerDetails{...} · spot · options[] · timestamp · isStale
+
+There is no zeroGamma, no callWall, no putWall, no skew — **nothing computed at all.** Their entire page
+is rendered client-side from `options[]` and `spot`. So the derived gamma flip is not a shortcut around
+a number they publish; it is the only way to have one, and `HVL*` tagged `calc` is the honest label.
+Everything we compute uses their DATA, which is the principle intact.
+
 ## v11.42 — depth, expected move, and scales on the chart
 
 **Every ladder row looked equally important. They are not.** A strike carrying heavy dealer GAMMA and

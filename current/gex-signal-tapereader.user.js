@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.42
+// @version    11.43
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.42';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.43';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -16858,20 +16858,20 @@ function levelDepth(sym){
   sym=sym||'SPY';
   var out={ ok:false, byK:{}, gMax:0, dMax:0 };
   try{
-    var f=LASTFEED[sym];
-    var snaps=(f&&f.j&&f.j.levels)||[];
-    if(snaps.length){
-      var PK=null; try{ PK=pickSnapshot(snaps); }catch(e0){}
-      var rows=(PK&&PK.snap&&PK.snap.l)||snaps[snaps.length-1].l||[];
-      for(var i=0;i<rows.length;i++){
-        var r=rows[i]; if(typeof r.k!=='number'||typeof r.net!=='number') continue;
-        var a=Math.abs(r.net); if(a>out.gMax) out.gMax=a;
-        (out.byK[r.k]||(out.byK[r.k]={g:0,d:0})).g=a;
-      }
-    }
+    // (v11.43) BOTH SIDES FROM THE SAME BOOK. This scored IF's levels against SKYLIT's gamma, and
+    // Skylit gamma peaks at spot while IF's walls sit away from it — every level came out gamma-thin
+    // (0.02 to 0.20 measured live). Comparing a level to a book it did not come from is the same
+    // mislabeling error as everything else in this project, one layer down.
     var dc=ifChain((sym==='QQQ')?'QQQ':'SPX');
     var ds=(dc&&!dc.err&&dc.toFri&&dc.toFri.ds)?dc.toFri.ds:null;
     var sc=1; try{ var IL=ifLadder(sym); if(IL&&!IL.err&&IL.undScale) sc=IL.undScale; }catch(e1){}
+    if(ds && ds.gexProf){
+      for(var gi=0;gi<ds.gexProf.length;gi++){
+        var gk=+(ds.gexProf[gi][0]*sc).toFixed(2), gv=Math.abs(ds.gexProf[gi][1]);
+        if(gv>out.gMax) out.gMax=gv;
+        (out.byK[gk]||(out.byK[gk]={g:0,d:0})).g=gv;
+      }
+    }
     if(ds && ds.dexProf){
       for(var q=0;q<ds.dexProf.length;q++){
         var ku=+(ds.dexProf[q][0]*sc).toFixed(2), dv=Math.abs(ds.dexProf[q][1]);
@@ -17286,46 +17286,37 @@ function nodeChartHtml(sym){
     var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(e9){}
     var g='';
 
-    // ---------- LEFT: net GEX and net DEX from their chain ----------
+    // ---------- LEFT: net GEX and net DEX, BOTH from their chain ----------
+    // (v11.43) The GEX column drew SKYLIT gamma under a caption that says "IF · structure". Two books,
+    // one label. It now draws THEIR gamma beside THEIR delta, which is also what makes the depth score
+    // meaningful — a level compared to the book it came from. Skylit gamma keeps the flow side.
     var gexN=0, dexN=0;
     try{
-      var pf=LASTFEED[sym], psn=(pf&&pf.j&&pf.j.levels)||[];
-      if(psn.length){
-        var PK=null; try{ PK=pickSnapshot(psn); }catch(ePk){}
-        var prow=(PK&&PK.snap&&PK.snap.l)||psn[psn.length-1].l||[];
+      var dc0=ifChain((sym==='QQQ')?'QQQ':'SPX');
+      var ds0=(dc0&&!dc0.err&&dc0.toFri&&dc0.toFri.ds)?dc0.toFri.ds:null;
+      var sc0=1; try{ var IL0=ifLadder(sym); if(IL0&&!IL0.err&&IL0.undScale) sc0=IL0.undScale; }catch(eS0){}
+      function drawProf(list, x0, w, sign){
+        if(!list||!list.length) return 0;
         var mx=0, keep=[];
-        prow.forEach(function(r){ if(typeof r.k!=='number'||typeof r.net!=='number') return;
-          if(r.k<lo||r.k>hi) return; var an=Math.abs(r.net); if(an>mx) mx=an; keep.push(r); });
-        if(mx>0){
-          var bh=Math.max(1.8, Math.min(5, ih/Math.max(8,keep.length)*0.72));
-          keep.forEach(function(r){
-            var y=Y(r.k)-bh/2, wpx=Math.max(1.2,(Math.abs(r.net)/mx)*(GW-2));
-            g+='<rect x="'+GX+'" y="'+y.toFixed(1)+'" width="'+wpx.toFixed(1)+'" height="'+bh.toFixed(1)+
-               '" fill="'+((r.net<0)?'#2ec27e':'#a371f7')+'" opacity="0.70"/>'; gexN++;
-          });
+        for(var i=0;i<list.length;i++){
+          var ku=list[i][0]*sc0; if(ku<lo||ku>hi) continue;
+          var v=list[i][1], a2=Math.abs(v); if(a2>mx) mx=a2;
+          keep.push([ku,v]);
         }
+        if(!(mx>0)||!keep.length) return 0;
+        var bh=Math.max(1.8, Math.min(5, ih/Math.max(8,keep.length)*0.72));
+        for(var j=0;j<keep.length;j++){
+          var y=Y(keep[j][0])-bh/2, wpx=Math.max(1.2,(Math.abs(keep[j][1])/mx)*(w-2));
+          g+='<rect x="'+x0+'" y="'+y.toFixed(1)+'" width="'+wpx.toFixed(1)+'" height="'+bh.toFixed(1)+
+             '" fill="'+((keep[j][1]*sign>0)?'#2ec27e':'#a371f7')+'" opacity="0.70"/>';
+        }
+        return keep.length;
+      }
+      if(ds0){
+        gexN=drawProf(ds0.gexProf, GX, GW, 1);    // their sign is call-minus-put: positive = long gamma
+        dexN=drawProf(ds0.dexProf, DX, DW, 1);
       }
     }catch(eG){}
-    try{
-      var dc=ifChain((sym==='QQQ')?'QQQ':'SPX');
-      var ds=(dc&&!dc.err&&dc.toFri&&dc.toFri.ds)?dc.toFri.ds:null;
-      var sc=1; try{ var IL0=ifLadder(sym); if(IL0&&!IL0.err&&IL0.undScale) sc=IL0.undScale; }catch(eS){}
-      if(ds && ds.dexProf && ds.dexProf.length){
-        var dmx=0, dk=[];
-        ds.dexProf.forEach(function(pr){
-          var ku=pr[0]*sc; if(ku<lo||ku>hi) return;
-          var av=Math.abs(pr[1]); if(av>dmx) dmx=av; dk.push([ku,pr[1]]);
-        });
-        if(dmx>0){
-          var dbh=Math.max(1.8, Math.min(5, ih/Math.max(8,dk.length)*0.72));
-          dk.forEach(function(pr){
-            var y=Y(pr[0])-dbh/2, wpx=Math.max(1.2,(Math.abs(pr[1])/dmx)*(DW-2));
-            g+='<rect x="'+DX+'" y="'+y.toFixed(1)+'" width="'+wpx.toFixed(1)+'" height="'+dbh.toFixed(1)+
-               '" fill="'+((pr[1]>0)?'#2ec27e':'#a371f7')+'" opacity="0.70"/>'; dexN++;
-          });
-        }
-      }
-    }catch(eD){}
     g+='<line x1="'+GX+'" y1="'+TOP+'" x2="'+GX+'" y2="'+(TOP+ih)+'" stroke="#1e2530" stroke-width="0.7"/>';
     g+='<line x1="'+DX+'" y1="'+TOP+'" x2="'+DX+'" y2="'+(TOP+ih)+'" stroke="#1e2530" stroke-width="0.7"/>';
 

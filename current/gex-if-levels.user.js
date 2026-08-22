@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.7
+// @version      1.8
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
@@ -242,11 +242,22 @@ function dexSkewFor(opts, spot, keep){
   if(!n) return null;
   var rows=[]; for(var k2 in byK) rows.push(byK[k2]);
   rows.sort(function(a,b2){ return a.k-b2.k; });
-  // a compact near-spot profile, enough to draw and to compare against their panel
-  var prof=[];
+  // (v1.8) BOTH profiles from THEIR chain. The panel was scoring IF's levels against SKYLIT's gamma —
+  // two different books — and Skylit's gamma peaks at spot while IF's walls sit well away from it, so
+  // every level scored as gamma-thin. The left column is labelled "IF structure"; it has to BE IF.
+  // Skylit gamma keeps its own job on the flow side.
+  var prof=[], gprof=[], gByK={};
+  for(var q2=0;q2<sel.length;q2++){
+    var o2=sel[q2];
+    if(typeof o2.gamma!=='number' || typeof o2.openInterest!=='number') continue;
+    var gg = o2.gamma*o2.openInterest*100*spot*spot*0.01*(o2.cp==='C'?1:-1);
+    gByK[o2.strike]=(gByK[o2.strike]||0)+gg;
+  }
   for(var z=0;z<rows.length;z++){
     var pk=rows[z].k;
-    if(Math.abs(pk-spot) <= spot*0.05) prof.push([pk, +(rows[z].dex/1e6).toFixed(1)]);
+    if(Math.abs(pk-spot) > spot*0.05) continue;
+    prof.push([pk, +(rows[z].dex/1e6).toFixed(1)]);
+    if(gByK[pk]!=null) gprof.push([pk, +(gByK[pk]/1e6).toFixed(1)]);
   }
   // only trust a 25-delta reading when the match is actually near 25 delta
   var skew=null, skewOk=(bestC && bestP && bestC.e<=0.08 && bestP.e<=0.08);
@@ -254,7 +265,7 @@ function dexSkewFor(opts, spot, keep){
   var atmIV=null;
   if(atmC && atmP) atmIV=+(((atmC.iv+atmP.iv)/2)*100).toFixed(2);
   else if(atmC) atmIV=+(atmC.iv*100).toFixed(2);
-  return { netDex:net, dexProf:prof, strikes:rows.length,
+  return { netDex:net, dexProf:prof, gexProf:gprof, strikes:rows.length,
            skew25:skew, skewPutIV:skewOk?+(bestP.iv*100).toFixed(2):null,
            skewCallIV:skewOk?+(bestC.iv*100).toFixed(2):null,
            skewPutK:skewOk?bestP.k:null, skewCallK:skewOk?bestC.k:null,
