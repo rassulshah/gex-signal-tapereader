@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.46
+// @version    11.47
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.46';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.47';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -17593,6 +17593,40 @@ function nodeChartHtml(sym){
   }catch(e){ return ''; }
 }
 
+// ---- (v11.46) NODES ARE WHERE THE TRADE IS ----
+// THE NODE RULE says levels are context and the trade is at a node. The panel had been showing the
+// context and hiding the tradeable object: levels in the ladder, nodes only as marker rows on the chart.
+// This joins them. A node that sits AT a level is the strongest thing this panel can find — live
+// positioning on structure that matters. A node in open space is weaker. A level with no node is not a
+// trade at all.
+var NODE_MIN_PCT=20;
+function tradeNodes(sym){
+  sym=sym||'SPY';
+  var out=[];
+  try{
+    var S=STATE[sym]||{}; var px=S.price; if(typeof px!=='number') return out;
+    var tp=null; try{ tp=tapeMap(sym); }catch(e0){}
+    var pct=(tp&&tp.pct)||{};
+    var king=(tp&&typeof tp.king==='number')?tp.king:null;
+    var reach=2; try{ var av=atr(sym); if(av>0) reach=Math.max(av*4, 2); }catch(e1){}
+    for(var k in pct){
+      var kk=parseFloat(k); if(!isFinite(kk)) continue;
+      var v=pct[k]; if(typeof v!=='number') continue;
+      var a=Math.abs(v);
+      if(a<NODE_MIN_PCT) continue;                 // below this nobody defends it
+      if(Math.abs(kk-px)>reach) continue;          // out of reach is out of play
+      var st=null; try{ var ac=accumCanon(sym,kk); st=(ac&&ac.m15)?ac.m15.label:null; }catch(e2){}
+      out.push({ k:kk, pct:a, put:(v>0), side:(kk>px?'above':'below'),
+                 dist:+(kk-px).toFixed(2), state:st, isKing:(king!=null && Math.abs(kk-king)<0.001) });
+    }
+    out.sort(function(a2,b2){ return Math.abs(a2.dist)-Math.abs(b2.dist); });
+  }catch(e){}
+  return out;
+}
+// Which node is the pullback engine pointing at? That is the one the trade is off.
+function pbNodeK(sym){
+  try{ var pb=pbEntryPick(sym); return (pb&&pb.ok&&pb.level!=null)?pb.level:null; }catch(e){ return null; }
+}
 function secLoc(sym){
   var L=null; try{ L=ifLadder(sym); }catch(e){ L={err:String(e&&e.message||e)}; }
   var h='<div class="g3b">';

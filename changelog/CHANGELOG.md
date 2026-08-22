@@ -1,3 +1,24 @@
+## v11.47 — the NODES block called a function that was never added
+
+v11.46 shipped the TRADE LOCATION node block, and it never rendered. The block calls `tradeNodes()`.
+That function was never added: the edit which would have added it aborted on a failed assertion, the
+failure went unnoticed, and only the half that renders the block landed.
+
+**The block's own try/catch swallowed the ReferenceError.** No error, no console line, no broken layout
+— the NODES section simply was not there, which is indistinguishable from "there were no nodes". The
+defensive try/catch wrapped around every section is exactly what made a missing function invisible.
+
+`test_render_refs.js` is the counterweight: it walks every renderer and fails the build if any of them
+calls a function the file does not declare. Building it took three passes — the first version flagged
+`.test()` and `.trim()` (method calls), the second flagged `rgba(` (CSS), the third flagged `Fri(` and
+`RULE(` from inside comments and string literals. A check that drowns in false positives gets switched
+off, and then a real miss slips through, so it strips comments and strings and matches bare calls only.
+
+Confirmed working live at v11.46 despite the miss: node markers on the chart went from **0 to 4** — the
+live-edge fix landed. ④ REACTION now reads the node: *"WATCH node 7676.73 · leg.pb"*, *"the node is dec ·
+book upside bleeding faster · −$1.1B vs −$552M/30m"*. The target sits beside the regime, CAGE is gone,
+and the ladder carries its depth diamonds.
+
 ## v11.46 — the panel finally shows the thing you trade
 
 **The panel spoke two vocabularies that never met.** LEVELS (CR, PS, Mag, HVL) come from
