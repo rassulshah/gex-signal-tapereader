@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.3
+// @version      1.4
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
@@ -76,10 +76,22 @@ function extractChain(html){
     var pub={
       zeroGamma:(typeof d.zeroGamma==='number')?d.zeroGamma:pick(/zero.?gamma|gamma.?flip|flip.?point/i),
       callWall :(typeof d.callWall ==='number')?d.callWall :pick(/call.?wall/i),
-      putWall  :(typeof d.putWall  ==='number')?d.putWall  :pick(/put.?wall/i)
+      putWall  :(typeof d.putWall  ==='number')?d.putWall  :pick(/put.?wall/i),
+      // (v1.4) Their page prints these; whether they are in the PAYLOAD is the open question that
+      // decides whether SKEW is free or has to be computed. Zero Gamma was rendered and absent, so
+      // "it is on the page" proves nothing.
+      skew     :pick(/(^|[^a-z])skew$|delta.?skew|d25.?skew/i),
+      skewSlope:pick(/skew.?slope/i),
+      termSlope:pick(/term.?slope/i),
+      atmIV    :pick(/atm.?iv|iv.?atm/i),
+      pcRatio  :pick(/put.?call.?ratio|pc.?ratio/i)
     };
+    // (v1.4) ONE-LINE SHAPE ANSWER: which fields does a single option actually carry? This decides
+    // whether DEX (needs delta) and a computed SKEW (needs per-contract IV) are buildable at all.
+    var optKeys=null;
+    try{ if(d.options && d.options.length) optKeys=Object.keys(d.options[0]).join(','); }catch(eK){}
     return { spot:d.spot, options:d.options, t:d.timestamp||null, stale:!!d.isStale,
-             ticker:d.ticker||null, pub:pub };
+             ticker:d.ticker||null, pub:pub, optKeys:optKeys };
   }catch(e){ return { err:'parse failed: '+e.message }; }
 }
 
@@ -172,7 +184,7 @@ function computeAll(ch){
   if(!inFri.length) inFri=[front];
   return {
     spot:ch.spot, ticker:ch.ticker, payloadT:ch.t, stale:ch.stale,
-    asOf:Date.now(), today:W.today, friday:W.friday, rolled:!!W.rolled, pub:(ch.pub||null),
+    asOf:Date.now(), today:W.today, friday:W.friday, rolled:!!W.rolled, pub:(ch.pub||null), optKeys:(ch.optKeys||null),
     dte0:{ exps:[front], lv:levelsFor(ch.options, ch.spot, function(o){ return ymdOf(o)===front; }) },
     toFri:{ exps:inFri, lv:levelsFor(ch.options, ch.spot, function(o){ return ymdOf(o)>=W.today && ymdOf(o)<=W.friday; }) },
     all:{ exps:[all[0],all[all.length-1]], nExps:all.length, lv:levelsFor(ch.options, ch.spot, function(){ return true; }) }

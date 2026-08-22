@@ -1,3 +1,61 @@
+## v11.36 — the 50-SMA is the direction, and the GEX profile finally exists
+
+**BIAS is no longer a tally.** Direction is the 50-SMA; SKEW, ACCUM and PA confirm it or they do not,
+and the count is the confidence. The old six-vote tally printed NEUTRAL on a 2-2 split while the SMA was
+plainly sloped — the panel arguing with the chart — and it let PATH, MASS and VEX vote on direction when
+all three are gamma-family reads: conditional, not directional. Confirmation is the better job for the
+supplementary reads anyway, since TREND alone measured 34% and "TREND with 3 of 3 confirming" is a
+different proposition from "TREND with 0 of 3". The confirmers never outvote the SMA, and three of them
+agreeing cannot manufacture a direction the SMA does not have.
+
+**ACCUM rebuilt on dollars.** It read STATE.walls, which on a tape-derived book carry %King and a null
+`abs`, so it abstained almost every session and printed a dash that read as broken. It now reads the
+feed's own `levels` series — ~390 snapshots of dollars at one-minute cadence, the same source rollDetect
+uses. Growth in dollars is flow; growth in %King is a moving denominator.
+
+**SKEW taken from InsiderFinance**, read against its OWN recent range rather than as a level, because
+index skew is permanently put-heavy and the raw number would print the same verdict every day.
+
+**The GEX profile.** Asked for in the first session and never built — node bands shipped instead and I
+never said I had substituted one for the other. Horizontal bars on the price axis, length by dollar
+gamma, green where dealers are long gamma and purple where short: the same picture their Net GEX panel
+draws, from data that had been arriving all along.
+
+**FRAME is two lines.** `−G −V ⚠` then the playbook — "self-reinforcing" was a third description of one
+condition sitting between them, and the playbook already says widen stops, which is the part you act on.
+The second line is TGT, DEX, TERM, ATR, CAGE and a phase tag. PAIN and P/C are gone: max pain is dead
+weight four days in five, and put/call is a once-a-day number with an ambiguous sign.
+
+**Layout.** Section labels are inline and left-justified instead of five centred banner rows — about
+110px back. Deleted: the "waiting on" line, which restated in small grey type what BIAS says two rows
+below in large type, and the "NO SETUP · bias is neutral" box, which was the third time the panel said
+one sentence on one screen. An empty EXECUTE is now a single dash.
+
+**pickEdge unit mismatch, fixed after five offers.** `FLRCEIL_FAR` is documented and reasoned about in
+STRIKES; `dist` is `Math.abs(k-px)` — price points. On SPY those coincide because its strikes are 1
+point apart, which is why it never bit. On SPX they are 5 apart, so the same constant meant something
+5x different depending on the book. The spacing is now measured from the map, by median gap so one wide
+strike cannot drag it.
+
+**Companion v1.4** reports `optKeys` — the field names on a single option — which decides whether DEX
+and a computed skew are buildable at all, and extracts their published skew, skew slope, term slope,
+ATM IV and put/call if the payload carries them.
+
+## v11.35 — the pop-out is usable on a big monitor
+
+Popping out opened a 369px window on a 2032px screen, because the size was taken from the panel's current
+width. It now sizes from the available SCREEN — about a quarter of its width and most of its height, with
+a 420px floor so it can never open unusably narrow again.
+
+But a bigger window on its own only adds empty space; nothing in it grows. So there is a **scale control**
+in the header — `− 100% +`, click the percentage to reset. It uses `zoom` rather than `transform:scale`
+deliberately: zoom participates in layout, so a panel at `width:100%` still fits its container at any
+scale instead of overflowing sideways and forcing a horizontal scrollbar.
+
+The scale persists, is clamped to 70–220%, ignores a corrupt or out-of-range stored value rather than
+applying it, and clears the property entirely at 100% — an inert `zoom:1` still creates a containing
+block. It is re-applied on both legs of the pop-out, because the panel changes documents when it moves.
+
 ## v11.34 — rolls on the chart, and the panel pops out
 
 **Roll detection.** A roll is mass moving between strikes: one node dissipating while another on the
