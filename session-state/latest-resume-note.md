@@ -222,6 +222,12 @@ signal inherits unearned edge and the mirror case is untestable. The existing pe
 `__gptsDebug.` — `ifShape` `optKeys` `skew` `accum` `rolls` `ifLadder` `nodeChart` `phase` `regime2`
 `pa` `bias` `steps` `roll` `face` `expSets` `unified` `sanity` `ifChain` `callPutRows` `feedShape`
 
+## ⚠ EVERY BUILD UPDATES THIS NOTE — AUTOMATICALLY
+**`tools/BUILD-CHECKLIST.md` is the procedure and it is not optional.** A build is finished when a fresh
+context could pick it up, not when the code works. The user should never have to say "save": if a build
+shipped and this note was not updated in the SAME COMMIT, the build is incomplete. Record what was
+LEARNED — especially a wrong assumption and what corrected it — not just what changed.
+
 ## STANDING INSTRUCTIONS
 - **Ask before giving code.** Exception: unambiguous bug reports.
 - **Always send the Tampermonkey link with every build.** BOTH links when the companion changed.

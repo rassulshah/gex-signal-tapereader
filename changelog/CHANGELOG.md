@@ -1,3 +1,24 @@
+## v11.44 — drift was confirming calls it disagreed with
+
+The live face read **`↑ BULLISH`** beside **`DRIFT ✓ DN·conf`**.
+
+Both halves were doing exactly what they were told. The two books DID agree — on DOWN — and the tick
+only ever asked whether they agreed with *each other*. So a structural read pointing squarely against
+the call was displayed as confirmation, with a green tick on it.
+
+Agreement is only confirmation when it points the same way as the SMA. Books agreeing against the call
+is now **✗ · "books agree DOWN — against the call"**. A lean with the call is a soft `~`; a lean against
+it is still a cross, because softness does not excuse direction. With the SMA flat there is no call to
+confirm, so it reads `·` rather than ticking.
+
+This is the same failure as everything else this project keeps finding: a label asserting something the
+number underneath did not support, with nothing throwing. It survived because "do the books agree?" and
+"do the books agree with us?" sound like one question.
+
+The depth fix from v11.43 is confirmed working on live data — markers went from none to five, and the
+scores now discriminate: `PS·Mag g=1.00 d=0.45 → ◆◆`, `CR g=0.98 d=0.17 → ◆`, `HVL* g=0.31 d=0.10 → ·`.
+Before it, every level measured 0.02–0.20 because they were being compared to the wrong book.
+
 ## v11.43 — one book per question
 
 Two instances of the same error, both found by checking the live panel rather than trusting it.

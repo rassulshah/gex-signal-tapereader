@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.43
+// @version    11.44
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.43';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.44';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -17083,12 +17083,27 @@ function secBias(sym){
          ccol=(B.nConf>=3)?'#2ec27e':((B.nConf<=1)?'#f0616d':'#8b98a9'); }
   h+='<span class="g3cnt" style="color:'+ccol+'"'+g3tip('How much conviction is behind this call? Three of three agreeing is a day to press; one of three is a day for half size or none. TREND alone measured 34%, so the count is doing real work — it is the difference between following the SMA and following it blindly.')+'>'+cnt+'</span>';
   h+='</div>';
+  // (v11.44) DRIFT MUST GATE THE CALL, NOT ITSELF. A ✓ was shown whenever the two books agreed with
+  // EACH OTHER — so the live face read "↑ BULLISH" beside "DRIFT ✓ DN·conf": the books agreed, on DOWN,
+  // against an up call, and the tick said everything was fine. Agreement is only confirmation when it
+  // points the same way as the SMA.
   var dr=B.drift, vd=(dr&&dr.verdict)?dr.verdict:'NONE';
-  var agree=/^AGREE/.test(vd)?true:(vd==='SPLIT'?false:null);
-  var mark2=/^AGREE/.test(vd)?'✓':(/^LEAN/.test(vd)?'~':(vd==='SPLIT'?'✗':'·'));
-  var gtxt = (vd==='NONE') ? 'both books not in yet'
-           : (vd==='SPLIT') ? 'gamma and vanna lean opposite ways — nothing confirming'
-           : ((dr.label||vd)+' · '+(dr.overlap?'bands overlap':'bands apart'));
+  var dDir=(dr&&typeof dr.dir==='number')?dr.dir:0;
+  var books=/^AGREE/.test(vd)?'agree':(/^LEAN/.test(vd)?'lean':(vd==='SPLIT'?'split':'none'));
+  var withCall=(B.dir!==0 && dDir!==0) ? (dDir===B.dir) : null;
+  var agree, mark2, gtxt;
+  if(books==='none'){ agree=null; mark2='·'; gtxt='both books not in yet'; }
+  else if(books==='split'){ agree=false; mark2='✗'; gtxt='gamma and vanna lean opposite ways — nothing confirming'; }
+  else if(withCall===false){
+    agree=false; mark2='✗';
+    gtxt='books '+books+' '+(dDir>0?'UP':'DOWN')+' — against the call';
+  } else if(withCall===true){
+    agree=true; mark2=(books==='agree')?'✓':'~';
+    gtxt=(dr.label||vd)+' · '+(dr.overlap?'bands overlap':'bands apart');
+  } else {
+    agree=null; mark2='·';
+    gtxt=(dr.label||vd)+' · no side to confirm';
+  }
   var gcol=(agree===true)?'rgba(46,194,126,.1)':((agree===false)?'rgba(240,97,109,.1)':'rgba(139,152,169,.1)');
   var gink=(agree===true)?'#2ec27e':((agree===false)?'#f0616d':'#8b98a9');
   h+='<div class="g3gate" style="background:'+gcol+'"'+g3tip('Is anything structurally confirming the call? Gamma and vanna either lean the same way relative to price or they split. This is the ONLY place gamma touches direction, and it gates rather than votes, because gamma tells you how price moves rather than which way it goes. A split means nothing is confirming and the call above is worth less.')+'>'+

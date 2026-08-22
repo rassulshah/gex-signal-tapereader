@@ -55,9 +55,7 @@ load instruction. Then read, in order:
    - Layer 4 (accumulation): Building/Steady/Fading detection.
    - Layer 5 (recorder): IndexedDB store, daily `data/YYYY-MM-DD.json` export.
    - Layer 6–7 (render): one `render()`, block fns (`kingHeaderBlock`, `syncBannerHtml`,
-     the READ block, `nodeMapBlock`, the in-play card / Nodes on watch, Analysis/Testing tabs).
-   - (v11.0) The canonical layer map is now master-spec §0 (eight layers, one function per row);
-     the list above is the reading order, §0 is the truth. Layer 1 = `nodeLedger` (§27).
+     `readBlock44`, `nodeMapSentence`, `pickEdge`, `deflectionBlock`).
    - VERIFY integrity: exactly one `render()`, final line `})();`, `@version` consistent in all
      THREE spots (header ~L4, `part1 loaded` console.log, footer feed), byte count sane.
 5. **Skylit platform docs** (the framework the code implements):
@@ -66,9 +64,6 @@ load instruction. Then read, in order:
    - `skylit-docs/learn/intro-to-gamma.md` — Pika/Barney polarity, absolute-value rule.
    - `skylit-docs/learn/node-lifecycle.md` — Fresh/Tested/Delivered/Decaying, real-vs-hedge.
    - `SOURCE-OF-TRUTH.md` — the Academy (`skylit-docs/learn/`) wins all doctrine conflicts.
-   - `skylit-docs/api/API-REFERENCE.md` — the Skylit Public API (live/historical/SSE heatmaps, MCP server, credits, response
-     shape) + what it means for the project (historical backfill budget, what the API gives vs what the panel scrapes). If the
-     capture is older than ~30 days, re-check https://docs.skylit.ai/api-reference/introduction and update the file.
 6. DATA (from v10.44): `data/YYYY-MM-DD.json` — one file per session day. Read the coverage
    summary first (days · bars · symbols · fields-since); never run a study on missing fields.
 
@@ -82,7 +77,13 @@ Then report the config's 6 points:
 
 WAIT for the user's direction. Do not start building on load.
 
-## SAVE ("save" / "save gex")
+## SAVE — AUTOMATIC ON EVERY BUILD (not a command the user has to remember)
+
+⚠️ **The user must never have to say "save".** Every build runs `tools/BUILD-CHECKLIST.md`, and a build
+is NOT finished when the code works — it is finished when a fresh context could pick it up. If a build
+shipped and `session-state/latest-resume-note.md` was not updated in the SAME COMMIT, the build is
+incomplete. Record what was LEARNED this build — especially a wrong assumption and what corrected it —
+not merely what changed. "save gex" remains valid as an explicit trigger, but it should be redundant.
 
 Persist everything a fresh session needs. The cloud workspace is EPHEMERAL — saving means
 getting files to the USER (SendUserFile) and into the git repo (source of truth), NOT Drive.
@@ -93,112 +94,57 @@ getting files to the USER (SendUserFile) and into the git repo (source of truth)
    "1 by 1" style), mockups list, standing workflow agreements, any live-DOM/parser findings.
 2. Prepend a CHANGELOG entry (mark `PLANNED / NOT YET BUILT` if no code shipped).
 3. DELIVERY RULE (user-mandated 2026-08-15): ship ONE self-contained installer `.bat` — files
-   embedded as base64 inside the .bat (no separate zip). The bat decodes its own payload via
-   PowerShell, xcopies into `C:\Dev\gex-signal-tapereader`, then commit+push using a GIT-FINDER
-   probe (git is not on the user's PATH). CRLF line endings. User's only step: download, double-click.
+   embedded as base64 inside the .bat (no separate zip). ⚠️ **NO POWERSHELL ANYWHERE — Avast flags it
+   (IDP.HELU.PSE88).** Decode with `more +<HDRLINES>` then `certutil -f -decode` then `tar -xzf`;
+   `<HDRLINES>` must equal the `exit /b 0` line number and be recomputed whenever the header changes.
+   Then xcopy into `C:\Dev\gex-signal-tapereader` and commit+push using a GIT-FINDER probe (git is not
+   on the user's PATH). **The push is the only durable copy of the work — the cloud sandbox can reset
+   mid-session and has.** User's only step: download, double-click.
 4. SendUserFile the installer. Also send individually any file the user will READ (mockups render inline).
-5. If code shipped: include the Tampermonkey update step with the raw GitHub URL as a clickable link.
+5. If code shipped: send **BOTH** Tampermonkey links whenever the companion changed, and say to
+   **wait FIVE minutes** (`raw.githubusercontent.com` returns `cache-control: max-age=300`; clicking
+   sooner offers *Reinstall* instead of *Update*, which looks exactly like a failed push) and then to
+   **RELOAD the Atlas tab** — installing a userscript does not affect an already-open page.
+   THREE install failures look identical from the user's side: (a) the installer did not push — clone and
+   read `@version`; (b) the page was already open — reload; (c) the raw CDN is serving stale — check the
+   `cache-control`/`age` headers.
 6. Tell the user the resume phrase: new window, say "load gex".
 
-## REVIEW — TWO RUNS (v10.53)
+## REVIEW ("nightly review" / scheduled nightly run)
 
-The review split into two differently-sized jobs. `docs/LLM-NIGHTLY-BRIEF.md` holds both contracts in
-full; this section is the operating summary. **They are not interchangeable.**
+Runs unattended after a trading session. Produces `review/YYYY-MM-DD.json` and gets it back into the repo.
 
-Why: a session is ~67 bars on overlapping 10-bar forward windows ≈ **6.7 independent observations**. A
-nightly run has no power to conclude anything about a weight, and the old single process both over-claimed
-and closed no loop. So the nightly keeps a logbook, the weekly does the learning, and **the panel — not
-the LLM — promotes**.
-
-### REVIEW-NIGHTLY ("nightly review" / scheduled weekday run, after the close)
-
-Produces `learning/log/YYYY-MM-DD.json`. **No weight proposals. No edits to `learning/rules.json`.**
-
-**1. Read.** `git clone --depth 1 https://github.com/rassulshah/gex-signal-tapereader.git` (read works; the
-cloud CANNOT push — github.com is blocked at the network proxy, and the claude.ai "GitHub Integration" is a
-knowledge integration with NO write tools). Read `docs/LLM-NIGHTLY-BRIEF.md` (contract 1), today's
-`data/<CT-date>.json`, and `learning/rules.json`.
-
-**2. Data arrived?** `data/<CT-date>.json` present with `bars > 0`. If not: report which stage broke and
-**STOP** — no review, no log file, no speculation about a day whose data never landed.
-
-**3. Contradictions, per bar (this is the part one day CAN answer).** Bars where the READ verdict ≠ the
-direction spine; drift flipping a confirmed trend; any grade A that resolved under 30% today. Name the bar,
-the values, and the mechanism.
-
-**4. Today's regime + vote split, TODAY ONLY.** The day's regime tag / OPEX / event (every FEATURES record
-now carries `regime:{tag,opex,event}`), the baseline drift, and per factor the **vote-direction split**.
-Flag ≥90% one-directional factors as `1-way, not evidence`.
-
-**5. Write the logbook** — `learning/log/YYYY-MM-DD.json`, shape in `learning/log/README.md`. Append-only.
-
-**6. Say the power out loud:** "one day = ~N independent observations; no weight conclusions from a single
-day," with N = bars / forward-window.
-
-**7. One-line pre-open brief.** Then deliver via the cascade below.
-
-### REVIEW-WEEKLY ("weekly learning run" / scheduled Saturday run)
-
-Produces `learning/rules.json` (v2) + `review/YYYY-MM-DD.json`. This is where learning happens.
-
-**1. Read.** ALL `data/*.json`, **all** `learning/log/*.json`, `learning/rules.json` v2, and the prior
-weekly reviews.
+**1. Read.** `git clone --depth 1 https://github.com/rassulshah/gex-signal-tapereader.git` (read works;
+the cloud **cannot push** — the git proxy refuses to inject credentials for this repo. The installer .bat
+pushes from the user's machine instead). Read `docs/LLM-NIGHTLY-BRIEF.md` (the contract), the newest
+`data/*.json`, `learning/rules.json`, and up to the last 3 `review/*.json`.
 
 **2. Analyse — honesty rules that matter more than the findings:**
 - Report every factor with n, hit-rate, avg MFE/MAE **and its VOTE-DIRECTION SPLIT** (how many UP vs DOWN
-  votes) **plus the period baseline drift, re-weighted by that factor's own vote mix**. A one-directional
-  factor on a trending day earns accuracy for free — flag it `1-way, not evidence`. This already fooled us
-  once: 2026-08-11 structure voted DOWN 46/49 on a down day and looked like 71% edge.
-- **Break every factor down PER REGIME** (trend / chop / opex). A rule that works in trend and fails in
-  chop averages to "meh" and teaches nothing.
-- State effective sample size. Overlapping forward windows mean effective n ≈ bars/10, NOT bars.
+  votes) **plus the day's baseline drift**. A one-directional factor on a trending day earns accuracy for
+  free — flag it `1-way, not evidence`. This already fooled us once: 2026-08-11 structure voted DOWN 46/49
+  on a down day and looked like 71% edge.
+- State effective sample size. Overlapping forward windows mean effective n ≈ bars/10, NOT bars. 67 bars is
+  ~6.7 independent observations — say so plainly.
 - Calibration: is A > B > C monotone? If not, the fusion is wrong — surface it.
 - If there is not enough data to conclude anything, SAY THAT. Never invent findings or numbers.
-- **Walk-forward** every open proposal on the sessions since it was made; update `wf.sessions` / `wf.held`.
-- **Challengers**: score the parked factors (`dir.trendFast` 10/20 vs `dir.trend5`; `dir.struct`,
-  `dir.kingRoll`, `netGamma`; floor/ceiling rolling only once FCHIST has ≥5 sessions) against the incumbents
-  on the SAME bars. Emit `challengers`, and a `swap` proposal where the lift is real and over the bar.
+- Propose thresholds/weights; never apply them. Weights stay hand-set (⚖) until measured (📊, n>=20).
 - Propose KILL-LIST additions (conditions to avoid), not just what works.
 
-**3. Emit proposals — and never apply them.** Kinds `weight` / `swap` / `kill` / `threshold`, each with
-`clearsBar` computed against the HARD BAR: **n ≥ 20 AND walk-forward held over ≥3 NEW sessions AND no
-regime flip**. Sparse → `clearsBar:false, reason:"insufficient — n=X, need 20"` and the hand-set value
-stands; there is no provisional nudge. `clearsBar` is an assertion, not authority: `applyProposals()` in
-`v10.js` re-derives n, the walk-forward hold and the regime flip from the proposal's own numbers and
-refuses anything that does not survive. Write `rules` / `proposals` / `challengers` / `killList`; leave
-`weights` and `promoted` **untouched** — the panel owns them.
-
-**4. Self-test.** If `_selftest` is present in the data dir (`data/_selftest.json`, from
-`node tools/synth_day.js`), analyse it with the same procedure and report FIRST whether you recovered all
-three planted properties — the true edge, the 1-way trap, the regime split. Answer key and pass criteria:
-`docs/REVIEW-ACCEPTANCE.md`. Never aggregate it with real days; never emit a proposal off it.
-
-### DELIVERY CASCADE (both runs) — in order, stop at the first that succeeds
-
-1. **Device bridge** (`mcp__remote-devices__*`, needs the Claude desktop app running): write the file
-   directly into `C:\Dev\gex-signal-tapereader\learning\log\` (nightly) or `...\learning\` + `...\review\`
-   (weekly). The user's local "GEX data push" task then commits it.
-2. **Google Drive** (connector, always available) — THE STANDING PATH since 2026-08-18: create the file in
-   Drive folder `GEX-review-inbox` (id `1_tPmmd9xUiBLAmMtIlTzU-TAEmjT0VO5`, `disableConversionToGoogleType`
-   true). Titles: nightly `YYYY-MM-DD.json` → repo `learning/log/`; weekly `rules.json` → `learning/rules.json`
-   and `review_YYYY-MM-DD.json` → `review/`. Google Drive for desktop syncs the folder to the user's PC and the
-   local scheduled task "GEX review pull" (`tools/review-pull.bat`, daily 16:05 CT + Sat 10:30) copies, commits,
-   pushes; it NEVER overwrites an existing log/review file (append-only) and moves processed files to `_done/`.
-   Two scheduled tasks in the Claude app run the reviews unattended: "GEX nightly review (contract 1)" weekdays
-   15:45 CT (`45 20 * * 1-5` UTC) and "GEX weekly review (contract 2)" Saturdays 10:00 CT (`0 15 * * 6`).
-   Drive is a TRANSPORT ONLY here — the repo remains the single source of truth (see the git-first rule above).
+**3. Deliver — cascade, in order, stop at the first that succeeds:**
+1. **Device bridge** (`mcp__remote-devices__*`, needs the Claude desktop app running): write
+   `review/YYYY-MM-DD.json` directly into `C:\Dev\gex-signal-tapereader\review\`. The user's local
+   "GEX data push" task then commits it.
+2. **Google Drive** (connector, always available): create the file in Drive folder `GEX-review-inbox`.
+   The user's local task moves it into the repo. Drive is a TRANSPORT ONLY here — the repo remains the
+   single source of truth (see the git-first rule above).
 3. **Chat**: SendUserFile the JSON.
-
 Always report WHICH path was used, so the panel's `review` pipeline stage can be interpreted.
 
-**Summarise** in 5-10 plain lines: what is now measured, what got promotion candidates, what is still
-unproven, what field was missing that would have answered a question (forward-only data can never be
-back-filled). Plus a one-line "brief" the panel can show pre-open.
+**4. Summarise** in 5-10 plain lines: what actually mattered, what is still unproven. Plus a one-line
+"brief" the panel can show pre-open.
 
 Descriptive only: never entries, stops, sizing, or trade recommendations.
-
-- Both REVIEW runs MUST evaluate the LEG ENGINE section of docs/LLM-NIGHTLY-BRIEF.md (magnets /
-  pullback nodes / rolling) — it is user-critical.
 
 ## STATUS ("status" / "where are we" / "how complete is it")
 
@@ -206,6 +152,25 @@ Report completeness LAYER BY LAYER with an honest % and one sentence of what wor
 missing per layer (user-approved 2026-08-16): Sensing (L0–1) · Dashboard reader · Recording &
 self-scoring · Analysis tab · Testing pipeline · Nightly review · Multi-symbol/Trinity. Close with
 an overall one-liner. Never inflate; unverified-live code stays "candidate".
+
+## HARD-WON RULES (each of these cost a real bug)
+
+- **Ask of every number: which book, which window, which scale — and does the label say so.** Nearly every
+  defect in this project has been a value displayed under a label that implied something else, with
+  nothing throwing.
+- **%King ranks at one instant; DOLLARS compare two moments.** A moving denominator cannot measure change.
+- **Does it POINT or does it CONDITION?** Gamma, vanna and VIX term structure all condition — they belong
+  in the regime line or a gate, never in a direction tally.
+- **Walk the tree before concluding anything is missing.** A shallow scan reported their published metrics
+  as absent and drove a decision to recompute what they might already publish.
+- **Compare a level to the book it came from.** Scoring InsiderFinance levels against Skylit gamma made
+  every level read as thin.
+- **GREP BEFORE NAMING A FUNCTION.** Four collisions; `ifNum` shipped broken for nine releases because the
+  later declaration silently won. `test_no_dupes.js` fails the build on a new one.
+- **Keep the suite green.** 23 "known stale" failures once camouflaged two live bugs for months. When a
+  deliberate change breaks a test, fix the test in the same commit or it becomes camouflage.
+- **Verify against real data before proposing thresholds.** It has changed the answer more than once.
+- **Use their values when they publish them; compute only what they do not.** And say which is which.
 
 ## STANDING PROJECT RULES (apply always)
 
@@ -219,7 +184,10 @@ an overall one-liner. Never inflate; unverified-live code stays "candidate".
   iterate it. Adding a feature = one registry entry = auto-enrolled everywhere. A feature is NOT
   "done" until it is in FEATURES and the three layers consume it. See design/spec-feature-enrollment.md.
 
-- Before coding: ASK first (user may have more fixes) and show MOCKUPS for review.
+- Before coding: ASK first (user may have more fixes) and show MOCKUPS for review. Exception, agreed
+  2026-08-20: an unambiguous bug report gets fixed without a round trip.
+- **No useless text on the panel — there is no space.** If it is needed, it goes in a hover, and every
+  hover opens with the QUESTION it answers.
 - **ONE AT A TIME (user-mandated, repeated 2026-08-15): discuss exactly ONE element per message.**
   Never list all open items and their fixes in one reply. State the one item, its fix, ask, STOP.
   Everything-at-once lists are the recurring failure mode — do not do it.
@@ -227,20 +195,6 @@ an overall one-liner. Never inflate; unverified-live code stays "candidate".
   PREDICTIVE (⚖ hand-set / 📊 measured, nightly-scored, graduates at n≥20). Nothing vague between.
 - The tool is DESCRIPTIVE/observational only: never entries, stops, sizing, R:R, or P&L.
 - Hover/tooltip explanations on every element, written for a new reader.
-- v10.56 (2026-08-18): READ voice = user's 15 sentences (`legVoice`, master-spec §24.2, test_read_voice_leg);
-  HANDOFF detection (`legStep.handoff`, §24.1); latched ✓/✗ trigger (`deflTriggerStep`, §24.3, never toggles);
-  the review must evaluate `leg.handoff` (lead time) and `defl.trigger` (✓ hit-rate) with n — REVIEW-ACCEPTANCE (e).
-- **v11.0 (2026-08-18): LOCKDOWN release.** The app is one eight-layer stack — master-spec §0 (read it first: Feed+Tape ·
-  Node Ledger · Structure · Direction · Setup · Outcome+Learning · Review · Voice; every function belongs to one row).
-  New layer 1 = the node ledger (§27: `ledgerBuild`/`nodeLedger`, life · touches · influence for SPY strikes AND SPXW
-  lanes, `ledger.touch` feature, export field `ledger`, Analysis ⑦ NODES). The learning path was made trustworthy
-  (§28: LEG_PB_LOG persisted, null-not-zero outcomes, IDB FEAT_ARCHIVE, local promotion bar, READ recorded on `dir`,
-  nightly log read back into ⑥, one export path, one GPTS_VERSION, `drift`→`dir.drift`, `roll`→`dir.kingRoll`, one
-  ACM threshold set). −1,170 lines of dead code removed (PARKED markers where a test still pins). The review now reads
-  `ledger` (LAYER 1 in the brief; REVIEW-ACCEPTANCE (f)) and `dir.read` (READ vs direction per bar).
-  **LOCKDOWN rule: no new features until ≥20 sessions of data exist — only fixes ship.** Standing rules, reinforced:
-  ask before code AND before creating any file; mockup first; descriptive-only; git = truth; every feature auto-enrolls;
-  no % without n; ship runnable installers (the self-contained .bat) and ALWAYS include the Tampermonkey raw URL.
 - MODEL ROUTING (user-mandated 2026-08-15): delegate mechanical / well-specified work (code edits to
   a clear spec, running tests, packaging installers, search, scraping, formatting) to cheaper models
   via the Agent tool; reserve the main model for novel design, statistical interpretation, deciding
