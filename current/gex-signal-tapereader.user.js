@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.38
+// @version    11.40
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.38';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.40';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -9322,7 +9322,11 @@ function legVoice(leg){
            :((leg.lastPB && leg.lastPB.k!=null)?leg.lastPB.k:null);
     // 7 — the leg arrived
     if(leg.magnetReached && mag!=null){
-      out.id=pre+'7'; out.s='Rallied '+WAY+' to '+mag+'. On watch for a pullback.'; return out;
+      // (v11.40) THE VOICE IS LOCKED AND USER-AUTHORED (2026-08-18) — wording and punctuation both.
+      // The word "target" had been dropped from this line. It is not decoration: "rallied down to 768"
+      // reads as a location, "rallied down to 768 target" says the leg ARRIVED at what it was aiming at,
+      // which is why the next sentence watches for a pullback.
+      out.id=pre+'7'; out.s='Rallied '+WAY+' to '+mag+' target. On watch for a pullback.'; return out;
     }
     // 6a / 6b — a new node formed beyond the pullback node
     if(leg.stack && leg.stack.k!=null && leg.stack.from!=null){
@@ -16781,17 +16785,17 @@ function ensureV3Css(){
     '#gpts-body .g3ev{margin-top:4px;font-size:8.5px;color:#8b98a9;line-height:1.4}'+
     '#gpts-body .g3ev em{font-style:normal;color:#e6edf3;font-weight:700;font-size:7px;letter-spacing:.04em}'+
     '#gpts-body .g3ev b{color:#e6edf3;font-weight:700}'+
-    '#gpts-body .g3r{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:10px;line-height:1.6}'+
-    '#gpts-body .g3nm{display:inline-block;width:66px;font-weight:800;font-size:9.5px}'+
-    '#gpts-body .g3v{color:#e6edf3;font-weight:700;font-size:11.5px;min-width:44px}'+
+    '#gpts-body .g3r{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:10px;line-height:1.28}'+
+    '#gpts-body .g3nm{display:inline-block;width:64px;font-weight:800;font-size:9.5px}'+
+    '#gpts-body .g3v{color:#e6edf3;font-weight:700;font-size:11px;min-width:44px}'+
     '#gpts-body .g3zn{font-size:7px;color:#8b98a9}'+
     '#gpts-body .g3sr{font-size:6.5px;font-weight:700;padding:0 3px;border-radius:2px;background:rgba(139,152,169,.16);color:#8b98a9}'+
     '#gpts-body .g3d{margin-left:auto;font-weight:700;font-size:9px}'+
     '#gpts-body .g3up{color:#2ec27e}#gpts-body .g3dn{color:#f0616d}#gpts-body .g3far{opacity:.46}'+
-    '#gpts-body .g3prow{display:flex;align-items:center;gap:5px;background:rgba(243,246,250,.09);margin:1px -4px;padding:2px 4px;border-top:1px solid rgba(243,246,250,.24);border-bottom:1px solid rgba(243,246,250,.24)}'+
+    '#gpts-body .g3prow{display:flex;align-items:center;gap:5px;background:rgba(243,246,250,.09);margin:0 -4px;padding:0 4px;line-height:1.35;border-top:1px solid rgba(243,246,250,.24);border-bottom:1px solid rgba(243,246,250,.24)}'+
     '#gpts-body .g3prow .g3nm,#gpts-body .g3prow .g3v{color:#f3f6fa}'+
     '#gpts-body .g3band{background:rgba(227,195,65,.1);margin:1px -4px;padding:1px 4px;border-left:2px solid #e3c341}'+
-    '#gpts-body .g3rx{display:flex;gap:5px;font-size:8.5px;color:#8b98a9;line-height:1.5}'+
+    '#gpts-body .g3rx{display:flex;gap:5px;font-size:8.5px;color:#8b98a9;line-height:1.34}'+
     '#gpts-body .g3rx em{font-style:normal;color:#e6edf3;font-weight:700;font-size:7px;width:38px;flex:none}'+
     '#gpts-body .g3rx b{color:#e6edf3;font-weight:700}'+
     '#gpts-body .g3ok{color:#2ec27e;font-weight:800}'+
@@ -16833,7 +16837,11 @@ function dcls(d){ return d>0?'g3up':(d<0?'g3dn':''); }
 var IF_STALE_MIN=25;
 // Values that are already on the chart's scale. fmtLvl/fmtSpan convert FROM the underlying, so
 // feeding them an already-converted number would apply the ratio twice.
-function ifNum(x){ if(x==null) return '–'; return (Math.round(x*100)/100).toString(); }
+// (v11.40) RENAMED from ifNum, which ALREADY EXISTED at line ~1646 as ifNum(txt,label) — the parser
+// for the manual InsiderFinance entry panel. Two declarations, one name: the later one wins silently,
+// so all five callers of the parser were handed this formatter, passed it a string, and got NaN.
+// The manual-entry path had been quietly broken since v11.31. Grep before naming a function.
+function dispNum(x){ if(x==null) return '–'; return (Math.round(x*100)/100).toString(); }
 function ifLadder(sym){
   sym=sym||'SPY';
   try{
@@ -16926,7 +16934,7 @@ function secFrame(sym){
   var a2=null; try{ a2=atr(sym); }catch(e3){}
   var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(e4){}
   h+='<div class="g3f2">';
-  h+='<span class="g3fk"'+g3tip('Where is the day trying to go? The heaviest strike in InsiderFinance\'s book — where dealer hedging concentrates and price tends to get pulled. It is a gravity well, not a forecast, and it reads the same book as the ladder below so the two can never disagree.')+'>TGT</span><b>'+(ifMag!=null?ifNum(ifMag):'—')+'</b>';
+  h+='<span class="g3fk"'+g3tip('Where is the day trying to go? The heaviest strike in InsiderFinance\'s book — where dealer hedging concentrates and price tends to get pulled. It is a gravity well, not a forecast, and it reads the same book as the ladder below so the two can never disagree.')+'>TGT</span><b>'+(ifMag!=null?dispNum(ifMag):'—')+'</b>';
   // DEX is a placeholder until their payload is confirmed to carry delta — shown as a dash, never invented
   // (v11.37) DEX is real now — their payload carries per-contract delta.
   var dexTxt='—';
@@ -16940,7 +16948,7 @@ function secFrame(sym){
   }catch(eD){}
   h+='<span class="g3fk"'+g3tip('Aggregate dealer delta: sum of delta x open interest x 100 x spot. NEGATIVE means dealers are short delta and must BUY as price rises, so rallies get chased; positive means they sell into strength. Read it as a map of where hedging pressure sits, not as a direction — which is why it lives here and not in the BIAS row. In dollar terms it dwarfs gamma, because delta is order 0.5 and gamma order 0.001.')+'>DEX</span><b>'+g3esc(dexTxt)+'</b>';
   h+='<span class="g3fk"'+g3tip('Is the market pricing near-term stress? Term slope is near-dated implied vol against longer-dated. Negative means the front is richer — an event or fear priced into the next few days, the backwardation condition. It is a regime axis alongside gamma and vanna, not a direction, and unlike anything open-interest based it moves intraday because IV does.')+'>TERM</span><b>'+(term!=null?String(term):'—')+'</b>';
-  h+='<span class="g3fk"'+g3tip('How much room does this tape need? Average true range per bar in the displayed instrument. It sizes your stop, and it is what sets the ± zone widths on the ladder — a level is a band, and this is how wide.')+'>ATR</span><b>'+(a2!=null?ifNum(a2*rr):'—')+'</b>';
+  h+='<span class="g3fk"'+g3tip('How much room does this tape need? Average true range per bar in the displayed instrument. It sizes your stop, and it is what sets the ± zone widths on the ladder — a level is a band, and this is how wide.')+'>ATR</span><b>'+(a2!=null?dispNum(a2*rr):'—')+'</b>';
   if(gp&&gp.cage) h+='<span class="g3fk"'+g3tip('How much room is left before structure? Where price sits between the put wall below and the call wall above. Near 50% you are in the middle with nothing to trade against; near the edges is where the levels actually matter.')+'>CAGE</span><b>'+gp.cage.pos+'%</b>';
   var ptag=(P.label||'').replace('EXPIRY · ','EXP·').replace('OPEN · CHARM','OPEN').replace('POWER HOUR','PWR').replace('MORNING','AM').replace('MIDDAY','MID');
   if(ptag && ptag!=='—') h+='<span class="g3tag"'+g3tip(g3esc(P.sub||''))+'>'+g3esc(ptag)+'</span>';
@@ -17219,32 +17227,57 @@ function nodeChartHtml(sym){
     g+='<line x1="'+GX+'" y1="'+TOP+'" x2="'+GX+'" y2="'+(TOP+ih)+'" stroke="#1e2530" stroke-width="0.7"/>';
     g+='<line x1="'+DX+'" y1="'+TOP+'" x2="'+DX+'" y2="'+(TOP+ih)+'" stroke="#1e2530" stroke-width="0.7"/>';
 
-    // ---------- RIGHT: Skylit flow, with 60m and 15m growth ticks ----------
-    var flowN=0;
-    g+='<line x1="'+SX+'" y1="'+TOP+'" x2="'+SX+'" y2="'+(TOP+ih)+'" stroke="#1e2530" stroke-width="0.7"/>';
+    // ---------- RIGHT: Skylit flow, pointing INWARD, drawn as growth segments ----------
+    // (v11.39) Two corrections. The bars now grow LEFTWARD from the right edge, so both profiles point
+    // in toward price and the chart reads as a spine rather than two unrelated columns. And growth is
+    // the SEGMENTS, not a tick mark: the oldest portion is dim, 60m→15m is mid, and the last 15 minutes
+    // is bright. A node that is accumulating shows a bright leading edge; one that is bleeding shows
+    // dim length with nothing new on the front. That is the brightest-newest encoding from the design.
+    var flowN=0, SXR=SX+SW;                       // right edge — bars anchor here and grow inward
+    g+='<line x1="'+SXR+'" y1="'+TOP+'" x2="'+SXR+'" y2="'+(TOP+ih)+'" stroke="#1e2530" stroke-width="0.7"/>';
     (function(){
-      var mx=0;
-      keys.forEach(function(o){ var lastv=null;
-        for(var q=o.seq.length-1;q>=0;q--){ if(o.seq[q]&&typeof o.seq[q].v==='number'){ lastv=o.seq[q].v; break; } }
-        o.now=lastv; if(lastv!=null && Math.abs(lastv)>mx) mx=Math.abs(lastv); });
-      if(!(mx>0)) return;
       function at(seq, msBack){
         var cut=t1-msBack, best=null;
-        for(var q=0;q<seq.length;q++){ var pt=seq[q]; if(!pt||typeof pt.v!=='number') continue;
-          if(pt.t<=cut) best=pt.v; }
+        for(var q=0;q<seq.length;q++){ var pt=seq[q]; if(!pt||typeof pt.v!=='number') continue; if(pt.t<=cut) best=pt.v; }
         return best;
       }
+      // Normalise across CURRENT AND HISTORICAL values. Scaling on current alone means a node that has
+      // shrunk has a past larger than the axis, so its history clips to full width and the whole bar
+      // renders as one dim block — decay becomes invisible, which is the opposite of the point.
+      var mx=0;
+      keys.forEach(function(o){
+        var lastv=null;
+        for(var q=o.seq.length-1;q>=0;q--){ if(o.seq[q]&&typeof o.seq[q].v==='number'){ lastv=o.seq[q].v; break; } }
+        o.now=lastv;
+        o.v60=at(o.seq,60*60000); o.v15=at(o.seq,15*60000);
+        [lastv,o.v60,o.v15].forEach(function(v){ if(v!=null && Math.abs(v)>mx) mx=Math.abs(v); });
+      });
+      if(!(mx>0)) return;
+      var maxW=SW-4;
       keys.forEach(function(o){
         if(o.now==null) return;
-        var y=Y(o.k)-2.2, L=Math.max(1.2,(Math.abs(o.now)/mx)*(SW-10));
-        g+='<rect x="'+SX+'" y="'+y.toFixed(1)+'" width="'+L.toFixed(1)+'" height="4.4" fill="'+
-           ((o.now>0)?'#a371f7':'#e3c341')+'" opacity="0.72"/>';
-        [[60*60000,'#5b6675',0.8,5.2],[15*60000,'#8b98a9',0.4,4.8]].forEach(function(tk){
-          var v=at(o.seq, tk[0]); if(v==null) return;
-          var lx=SX+Math.max(0,(Math.abs(v)/mx)*(SW-10));
-          g+='<line x1="'+lx.toFixed(1)+'" y1="'+(y-tk[2]).toFixed(1)+'" x2="'+lx.toFixed(1)+'" y2="'+(y+tk[3]).toFixed(1)+
-             '" stroke="'+tk[1]+'" stroke-width="0.7"/>';
-        });
+        var av=Math.abs(o.now); if(av<3) return;
+        var y=Y(o.k)-2.2, col=(o.now>0)?'#a371f7':'#e3c341';
+        var wNow=Math.max(1.2,(av/mx)*maxW);
+        var v60=o.v60, v15=o.v15;
+        // RAW widths first. Clamping these to wNow would erase the only case the shrink marker exists
+        // for — a node that is smaller now than it was 15 minutes ago.
+        var r60=(v60==null)?0:Math.max(0,Math.min(maxW,(Math.abs(v60)/mx)*maxW));
+        var r15=(v15==null)?r60:Math.max(0,Math.min(maxW,(Math.abs(v15)/mx)*maxW));
+        var w60=Math.min(r60,wNow), w15=Math.max(w60,Math.min(r15,wNow));
+        function seg(from,to,op){
+          if(to<=from) return;
+          g+='<rect x="'+(SXR-to).toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+(to-from).toFixed(1)+
+             '" height="4.4" fill="'+col+'" opacity="'+op+'"/>';
+        }
+        seg(0,   w60, '0.30');                     // held for over an hour
+        seg(w60, w15, '0.58');                     // added between 60m and 15m ago
+        seg(w15, wNow,'0.95');                     // added in the last 15 minutes — the live edge
+        // a node that SHRANK has its lost ground marked, so decay is visible rather than merely absent
+        if(r15>wNow+0.6){
+          g+='<line x1="'+(SXR-Math.min(maxW,r15)).toFixed(1)+'" y1="'+(y+0.4).toFixed(1)+'" x2="'+(SXR-wNow).toFixed(1)+
+             '" y2="'+(y+3.8).toFixed(1)+'" stroke="'+col+'" stroke-width="0.7" opacity="0.35"/>';
+        }
         flowN++;
       });
     })();
@@ -17300,8 +17333,8 @@ function nodeChartHtml(sym){
         g+='<path d="M'+xa.toFixed(1)+' '+(yF+(dn?3:-3)).toFixed(1)+' C'+(xa+8).toFixed(1)+' '+((yF+yT)/2).toFixed(1)+
            ' '+(xb-8).toFixed(1)+' '+((yF+yT)/2).toFixed(1)+' '+xb.toFixed(1)+' '+(yT+(dn?-4:4)).toFixed(1)+
            '" fill="none" stroke="'+cfg[1]+'" stroke-width="1.5" opacity="0.9" marker-end="url(#'+cfg[2]+')"/>';
-        g+='<text x="'+(xb+4).toFixed(1)+'" y="'+(yF+2.2).toFixed(1)+'" font-size="7" fill="'+cfg[1]+'" font-weight="500" opacity="0.45">'+ifNum(e.from*rr)+'</text>';
-        g+='<text x="'+(xb+4).toFixed(1)+'" y="'+(yT+2.2).toFixed(1)+'" font-size="8" fill="'+cfg[1]+'" font-weight="800">'+ifNum(e.to*rr)+'</text>';
+        g+='<text x="'+(xb+4).toFixed(1)+'" y="'+(yF+2.2).toFixed(1)+'" font-size="7" fill="'+cfg[1]+'" font-weight="500" opacity="0.45">'+dispNum(e.from*rr)+'</text>';
+        g+='<text x="'+(xb+4).toFixed(1)+'" y="'+(yT+2.2).toFixed(1)+'" font-size="8" fill="'+cfg[1]+'" font-weight="800">'+dispNum(e.to*rr)+'</text>';
         rollLines.push({side:cfg[0], col:cfg[1], from:e.from, to:e.to, fromPct:e.fromPct, toPct:e.toPct});
       });
     }
@@ -17312,7 +17345,7 @@ function nodeChartHtml(sym){
     // disagrees by a point or two. Never recompute a number the source already gave you.
     function centreLvl(p, disp, name, col){
       if(p==null||p<lo||p>hi) return;
-      var y=Y(p), txt=(name?name+' ':'')+ifNum(disp), tw=txt.length*4.0+6, cx=(PL+PR)/2;
+      var y=Y(p), txt=(name?name+' ':'')+dispNum(disp), tw=txt.length*4.0+6, cx=(PL+PR)/2;
       g+='<line x1="'+PL+'" y1="'+y.toFixed(1)+'" x2="'+(cx-tw/2).toFixed(1)+'" y2="'+y.toFixed(1)+'" stroke="'+col+'" stroke-width="0.7" stroke-dasharray="5,4" opacity="0.5"/>';
       g+='<line x1="'+(cx+tw/2).toFixed(1)+'" y1="'+y.toFixed(1)+'" x2="'+PR+'" y2="'+y.toFixed(1)+'" stroke="'+col+'" stroke-width="0.7" stroke-dasharray="5,4" opacity="0.5"/>';
       g+='<text x="'+cx.toFixed(1)+'" y="'+(y+2.5).toFixed(1)+'" font-size="7.5" fill="'+col+'" font-weight="700" text-anchor="middle">'+g3esc(txt)+'</text>';
@@ -17346,37 +17379,37 @@ function nodeChartHtml(sym){
       var yp=Y(px), cx=(PL+PR)/2;
       g+='<line x1="'+PL+'" y1="'+yp.toFixed(1)+'" x2="'+PR+'" y2="'+yp.toFixed(1)+'" stroke="#f3f6fa" stroke-width="0.8" opacity="0.8"/>';
       g+='<rect x="'+(cx-18)+'" y="'+(yp-5).toFixed(1)+'" width="36" height="10" rx="2" fill="#0b0e14" opacity="0.9"/>';
-      g+='<text x="'+cx+'" y="'+(yp+2.6).toFixed(1)+'" font-size="7.5" fill="#f3f6fa" font-weight="800" text-anchor="middle">'+ifNum(px*rr)+'</text>';
+      g+='<text x="'+cx+'" y="'+(yp+2.6).toFixed(1)+'" font-size="7.5" fill="#f3f6fa" font-weight="800" text-anchor="middle">'+dispNum(px*rr)+'</text>';
     }
     // zone captions
     g+='<text x="'+GX+'" y="'+(HGT-5)+'" font-size="6" fill="#8b98a9" font-weight="700">GEX</text>';
     g+='<text x="'+DX+'" y="'+(HGT-5)+'" font-size="6" fill="#8b98a9" font-weight="700">DEX</text>';
     g+='<text x="'+(PL+2)+'" y="'+(HGT-5)+'" font-size="6" fill="#5b6675">◀ IF · structure</text>';
     g+='<text x="'+(PR-2)+'" y="'+(HGT-5)+'" font-size="6" fill="#5b6675" text-anchor="end">Skylit · flow ▶</text>';
-    g+='<text x="'+SX+'" y="'+(HGT-5)+'" font-size="6" fill="#8b98a9" font-weight="700">NODES</text>';
+    g+='<text x="'+(SX+SW)+'" y="'+(HGT-5)+'" font-size="6" fill="#8b98a9" font-weight="700" text-anchor="end">NODES</text>';
 
     var tip='What is this picture telling you? LEFT is InsiderFinance STRUCTURE — net gamma, then net delta, from their chain. '+
             'It refreshes once a day and it tells you WHERE THE WALLS ARE: gamma for how price moves at them, delta for which way hedging pushes. '+
             'RIGHT is Skylit FLOW — live node strength, with tick marks showing where each node stood 60 and 15 minutes ago. '+
             'A bar reaching well past both ticks is accumulating; a bar behind them is bleeding. That is the level being defended or abandoned, in real time. '+
             'MIDDLE is price. Node rows brighten as they strengthen, an arrow appears when mass transfers between strikes, and level labels sit on their own lines so neither side is spent on text. '+
-            'Read it left to right: structure tells you where, flow tells you whether it is still true.';
+            'Read it left to right: structure tells you where, flow tells you whether it is still true. '+
+            'KEY — green bars are positive gamma and purple negative; yellow node markers are call-dominant and purple put-dominant; '+
+            'the orange line is the 50-SMA; on the flow bars the dim portion is what a node has held for over an hour, the mid portion is what it added between 60 and 15 minutes ago, '+
+            'and the bright leading edge is the last 15 minutes. A bright front edge is accumulation happening now.';
     var defs='<defs>'+
       '<marker id="g3ad" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#f0616d"/></marker>'+
       '<marker id="g3au" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#2ec27e"/></marker></defs>';
     var out='<div class="g3b" style="padding-top:2px">';
     out+='<svg viewBox="0 0 '+W+' '+HGT+'" width="100%" height="'+HGT+'" preserveAspectRatio="none"'+g3tip(tip)+'>'+defs+g+'</svg>';
-    out+='<div style="display:flex;gap:8px;justify-content:center;font-size:7px;color:#8b98a9;margin-top:1px;flex-wrap:wrap">'+
-         '<span><b style="color:#2ec27e">▮</b>+γ <b style="color:#a371f7">▮</b>−γ</span>'+
-         '<span><b style="color:#e3c341">▲</b>call <b style="color:#a371f7">▼</b>put</span>'+
-         '<span style="color:#e06c4f">— 50 SMA</span>'+
-         '<span>│ 60m · 15m</span><span>'+NCHART_MIN+'m</span></div>';
+    // (v11.39) the legend row is gone — the panel has no vertical space to spend on a key.
+    // Everything it said is in the chart hover, which is where a legend belongs.
     rollLines.forEach(function(r){
       var down=(r.side==='ceil');
       out+='<div style="display:flex;align-items:center;gap:6px;font-size:8.5px;color:#8b98a9;margin-top:3px;padding:2px 5px;border-radius:3px;background:'+
            (down?'rgba(240,97,109,.09)':'rgba(46,194,126,.09)')+'"'+
            g3tip('Is mass moving between strikes? One node is dissipating while another on the same side accumulates — that is a wall relocating, not just weakening. Measured in dollars over '+ROLL_WIN_MIN+' minutes and against the session median, because the typical strike grows 10-15% every half hour on its own. Direction is NOT yet a vote: on the days measured it had no proven edge and every archived day was a down day, so nothing could be settled.')+
-           '><b style="color:'+r.col+';font-weight:800">'+(down?'CEIL ROLL ↓ ':'FLOOR ROLL ↑ ')+ifNum(r.from*rr)+' → '+ifNum(r.to*rr)+'</b>'+
+           '><b style="color:'+r.col+';font-weight:800">'+(down?'CEIL ROLL ↓ ':'FLOOR ROLL ↑ ')+dispNum(r.from*rr)+' → '+dispNum(r.to*rr)+'</b>'+
            '<span>'+r.fromPct+'% / +'+r.toPct+'%</span>'+
            '<span style="margin-left:auto;color:#8b98a9">shadow · not voting</span></div>';
     });
@@ -17405,7 +17438,7 @@ function secLoc(sym){
   var placed=false, atLevel=null;
   rows.forEach(function(r){
     if(!placed && r.disp<px){
-      h+='<div class="g3prow"><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+ifNum(px)+'</span></div>';
+      h+='<div class="g3prow"><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+dispNum(px)+'</span></div>';
       placed=true;
     }
     var d=r.disp-px;
@@ -17418,14 +17451,14 @@ function secLoc(sym){
     var pulse=near?' g3pulse':'';
     h+='<div class="g3r'+far+band+'">'+
        '<span class="g3nm'+pulse+'" style="color:'+col+'">'+g3esc(r.id)+'</span>'+
-       '<span class="g3v'+pulse+'"'+g3tip('Their strike is '+r.k+' on '+L.srcSym+'; shown here at '+r.disp+' using the live basis '+L.dispScale+'.')+'>'+ifNum(r.disp)+'</span>'+
-       (zone!=null?'<span class="g3zn"'+g3tip('How far through a level can price go before it has failed? A level is a zone, not a line. This band is scaled from ATR, so it widens when the tape is fast. Price can trade inside it and the level still holds; a close beyond it is a break.')+'>±'+ifNum(zone)+'</span>':'')+
+       '<span class="g3v'+pulse+'"'+g3tip('Their strike is '+r.k+' on '+L.srcSym+'; shown here at '+r.disp+' using the live basis '+L.dispScale+'.')+'>'+dispNum(r.disp)+'</span>'+
+       (zone!=null?'<span class="g3zn"'+g3tip('How far through a level can price go before it has failed? A level is a zone, not a line. This band is scaled from ATR, so it widens when the tape is fast. Price can trade inside it and the level still holds; a close beyond it is a break.')+'>±'+dispNum(zone)+'</span>':'')+
        '<span class="g3sr"'+g3tip(isHVL
          ? 'Their PUBLISHED Zero Gamma, taken off their page rather than recomputed. It belongs to the expiration filter their page defaults to, which is not necessarily this ladder\'s window.'
          : 'InsiderFinance, computed from the '+L.srcSym+' option chain embedded in their own page. Their open interest refreshes once a day, so these are structural levels rather than intraday ones.')+'>'+(isHVL?'IF·pub':'IF')+'</span>'+
-       '<span class="g3d '+dcls(d)+'">'+(d>0?'+':'')+ifNum(+d.toFixed(2))+'</span></div>';
+       '<span class="g3d '+dcls(d)+'">'+(d>0?'+':'')+dispNum(+d.toFixed(2))+'</span></div>';
   });
-  if(!placed) h+='<div class="g3prow"><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+ifNum(px)+'</span></div>';
+  if(!placed) h+='<div class="g3prow"><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+dispNum(px)+'</span></div>';
   var bits=[L.srcSym];
   bits.push(L.rolled?'to next Fri (rolled)':'to Fri');
   if(L.nExps) bits.push(L.nExps+' exps');
@@ -17468,7 +17501,7 @@ function secReact(sym){
   var pa=null; try{ pa=paRead(sym); }catch(e){}
   var ptxt;
   if(rj) ptxt=g3esc(rj.txt)+' — <span class="g3ok">rejected</span>';
-  else if(L!=null) ptxt='at '+ifNum(L.disp)+', no rejection bar yet';
+  else if(L!=null) ptxt='at '+dispNum(L.disp)+', no rejection bar yet';
   else ptxt=(pa&&pa.ok)?('no level in range · '+g3esc(pa.label)+' ('+pa.clv+')'):'no level in range';
   h+='<div class="g3rx"'+g3tip('Did the level push price back? A rejection is a bar that trades THROUGH the level and closes back on the side it came from. Without order flow this is the confirmation available to us, and it is the trigger — price merely arriving at a level is not a signal. A close beyond the zone is the opposite reading: the level failed.')+'><em>PRICE</em><span>'+ptxt+'</span></div>';
   // structure / pressure line, the internals stand-in

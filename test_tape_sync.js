@@ -27,7 +27,11 @@ ok(/function kingFromTapeTag/.test(src),         'GUARD: PATH 1 (tape $K tag) ex
 ok(/function kingFromTapeMax/.test(src),         'GUARD: PATH 3 (tape max %King) exists');
 ok(/function tapeSync/.test(src),                'GUARD: tapeSync gate exists');
 ok(/function outOfSyncBlock/.test(src),          'GUARD: suppression panel exists');
-ok(/if\(!__sync\.ok\)\{/.test(src),              'GUARD: render() actually gates on the verdict');
+// (v11.40) v10.47 DELIBERATELY replaced the blocking gate with a one-line banner, user-directed:
+// "the app must stay visible (weekends / parse hiccups) so it can be inspected". This assertion
+// pinned the pre-v10.47 behaviour and has been failing ever since, in the bucket everyone ignores.
+ok(/if\(syncBannerShow\(__sync\)\)\{ html\+=syncBannerHtml\(__sync\); \}/.test(src),
+   'GUARD: render() surfaces the sync banner on failure (non-blocking by design since v10.47)');
 ok(/html\+=syncBannerHtml\(__sync\)/.test(src) && /Out of sync/.test(src),  'GUARD (v10.47): one-line sync banner is rendered on failure and the app still renders');
 ok(/tapeGate:\s*true/.test(src),                 'GUARD: CFG.tapeGate defaults ON');
 ok(/syncReport/.test(src),                       'GUARD: operator diagnostic hook exposed');

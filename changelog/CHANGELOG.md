@@ -1,3 +1,56 @@
+## v11.40 — the suite is green, and it was hiding two live bugs
+
+The 23 "known stale" failures had been carried as a baseline for the whole project. They were examined
+properly for the first time. **Twenty-one were stale tests. Two were real bugs that had been shipping.**
+
+**The locked voice lost a word.** `Rallied down to 768.` should read `Rallied down to 768 target.` The
+voice was authored by the trader on 2026-08-18 and the note says the wording and punctuation are locked.
+"Rallied down to 768" reads as a location; "to 768 target" says the leg ARRIVED at what it was aiming at,
+which is why the next sentence watches for a pullback. Restored verbatim.
+
+**A function-name collision broke the manual-InsiderFinance panel.** v11.31 added `ifNum(x)` as a display
+formatter. `ifNum(txt, label)` already existed at line ~1646 as the parser for manually-entered IF
+values. Two declarations, one name — the later one wins silently, so all five parser callers were handed
+the formatter, passed it a string and got NaN. Broken for nine releases with nothing thrown. The
+formatter is now `dispNum`, and `test_no_dupes.js` fails the build on any NEW collision in either script,
+with the two inert pre-existing ones pinned so they stay visible.
+
+**The other twenty-one were tests left behind by deliberate changes:**
+- 13 in accum_canon — the v11.0 audit made `accumCanon` FEED-first; the harness only ever stubbed the
+  tape path, so every call threw, was swallowed by the function's own try/catch, and returned nulls.
+  Thirteen assertions reported as logic failures when the logic had never run.
+- 5 in node_role_badge — the label extractor keyed off a `padding:0 6px` CSS declaration, so a styling
+  tweak broke assertions that had nothing to do with styling. Plus two stale contracts: the badge reads
+  `isFlr`/`isCeil` rather than `role`, and a role-less node falls through to `Mag` rather than blank.
+- 2 in node_identity — v10.44 renamed `Diss` to `Dec` and said so in the source; the test never followed.
+- 1 in tape_sync — v10.47 deliberately replaced the blocking gate with a banner, user-directed, so the
+  app stays inspectable. The assertion pinned the pre-v10.47 behaviour.
+
+**4109 pass, 0 fail.** The lesson is the point: a permanently-red baseline trains everyone to ignore red,
+and two genuine regressions hid in it for months. A suite is only useful while it is green.
+
+## v11.39 — flow bars point inward and show growth, and the chart stops spending space on a key
+
+**The Skylit bars now grow LEFTWARD from the right edge**, so both profiles point in toward price and
+the chart reads as a spine rather than two unrelated columns.
+
+**Growth is the segments, not a tick mark.** Each bar is drawn in three parts: dim for what the node has
+held for over an hour, mid for what it added between 60 and 15 minutes ago, and a bright leading edge
+for the last 15 minutes. A node accumulating shows a bright front; one that is bleeding shows dim length
+with nothing new on it, and the ground it lost is marked so decay is visible rather than merely absent.
+
+Two bugs found by tests while building it. The historical widths were clamped to the current width,
+which erased the only case the shrink marker exists for — a node smaller now than it was 15 minutes ago.
+And the scale was normalised on current values alone, so a node that had shrunk had a past larger than
+the axis: its history clipped to full width and the whole bar rendered as one dim block. Normalising
+across current and historical values fixes both.
+
+**The legend row is gone.** The panel has no vertical space to spend on a key, and everything it said is
+in the chart hover, which is where a key belongs.
+
+**The ladder is tighter** — line-height 1.6 to 1.28, and the ES price row lost its vertical margins and
+padding entirely. It was the worst offender.
+
 ## v11.38 — three zones, centred labels, and hovers that ask before they tell
 
 **The chart is now three zones.** LEFT is InsiderFinance STRUCTURE — net GEX, then net DEX, two narrow

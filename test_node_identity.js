@@ -12,11 +12,14 @@ ok(/>Acm</.test(acm), 'Building -> Acm label');
 ok(acm.indexOf(PAL.longAccent)>=0, 'Acm colored green (strengthening)');
 
 var diss=nodeStatusTag({state:'Fading', rapid:false});
-ok(/>Diss</.test(diss), 'Fading -> Diss label');
+// (v11.40) v10.44 renamed Diss -> Dec ("STATE = Acm / Dec / Steady", stated in the source). The test
+// kept asserting the old word and then sat in the 'known stale' bucket for releases.
+ok(/>Dec</.test(diss), 'Fading -> Dec label (Diss was renamed in v10.44)');
 ok(diss.indexOf(PAL.shortAccent)>=0, 'Diss colored red (weakening)');
 
 var steady=nodeStatusTag({state:'Steady', rapid:false});
-ok(/>Hold</.test(steady), 'Steady state -> Hold label (v10.36)');
+// The label is 'Steady'; the 'Hold' rename referenced here never landed in the code.
+ok(/>Steady</.test(steady), 'Steady state -> Steady label');
 ok(steady.indexOf(PAL.sub)>=0, 'Steady colored grey');
 
 // ---- RESHUFFLE (rapid) = fire (strengthening) / snow (weakening) ----

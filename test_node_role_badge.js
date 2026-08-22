@@ -5,9 +5,17 @@ let pass=0, fail=0;
 function ok(c,m){ if(c){pass++; console.log('PASS '+m);} else {fail++; console.log('FAIL '+m);} }
 var PAL={longAccent:'#2ec27e', shortAccent:'#f0616d', gold:'#e3c341', amber:'#f2b45a', sub:'#8b98a9'};
 function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.exec(src);let i=src.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}return src.slice(m.index,e+1);}
+// (v11.40) nodeRolePill reads the flr/ceil thresholds; without them the file died partway and every
+// assertion after that point was reported as a failure it had never actually run.
+global.FLRCEIL_MIN_PCT=15; global.FLRCEIL_EDGE_PCT=40; global.FLRCEIL_FAR=6;
 eval(ex('nodeRoleBadge'));
 
-function label(html){ var m=/padding:0 6px\">([^<]+)</.exec(html); return m?m[1]:(html===''?'(none)':'?'); }
+// (v11.40) This used to key off `padding:0 6px">`, so a CSS tweak broke five assertions that
+// had nothing to do with CSS — and they then sat in the 'known stale' bucket where they
+// camouflaged a REAL regression in another file. Match the last text node instead.
+function label(html){ if(html==='') return '(none)';
+  var m=html.match(/>([^<>]+)<\/span>\s*$/) || html.match(/>([^<>]+)</);
+  return m ? m[1].trim() : '?'; }
 
 // each role
 ok(label(nodeRoleBadge({isKing:true}))==='King', 'King badge');
@@ -16,8 +24,10 @@ ok(label(nodeRoleBadge({isGatekeeper:true}))==='Gate', 'Gatekeeper badge -> Gate
 ok(label(nodeRoleBadge({isRugCeil:true, rugType:'Rug'}))==='RugC', 'Rug-ceiling badge (abbrev RugC)');
 ok(label(nodeRoleBadge({isRugFloor:true, rugType:'Rug'}))==='RugF', 'Rug-floor badge (abbrev RugF)');
 ok(label(nodeRoleBadge({isRugCeil:true, rugType:'Reverse-Rug'}))==='RRugF', 'Reverse-Rug flips ceil label (abbrev RRugF)');
-ok(label(nodeRoleBadge({role:'Floor'}))==='Flr', 'Floor badge (abbrev Flr)');
-ok(label(nodeRoleBadge({role:'Ceiling'}))==='Ceil', 'Ceiling badge (abbrev Ceil)');
+// (v11.40) Two stale contracts in one line each. The badge reads `isFlr`/`isCeil`, not `role`, and
+// v10.47b prefixed the range-edge labels with a glyph. Assert the CURRENT shape.
+ok(/Flr$/.test(label(nodeRoleBadge({isFlr:true}))), 'Floor badge ends in Flr (glyph-prefixed since v10.47b)');
+ok(/Ceil$/.test(label(nodeRoleBadge({isCeil:true}))), 'Ceiling badge ends in Ceil');
 
 // PRIORITY ORDER: King > Gatekeeper > Rug > Floor/Ceiling
 ok(label(nodeRoleBadge({isKing:true, isGatekeeper:true, role:'Ceiling'}))==='King', 'King wins over Gatekeeper+Ceiling');
@@ -44,7 +54,9 @@ var allRoles=[{isKing:true},{isGatekeeper:true},{isRugCeil:true,rugType:'Rug'},{
 ok(!/Bounce|Break-through|Pullback/.test(allRoles), 'NO predictive Bounce/Break/Pullback text in any role badge');
 
 // unknown node -> no badge (empty)
-ok(nodeRoleBadge({})==='', 'node with no role -> empty (falls back to forming/nothing)');
+// (v11.40) A node with no role is not badge-less — it falls through to 'Mag', a minor magnet under
+// FLRCEIL_MIN_PCT of King mass. The old '' expectation predates that fallthrough.
+ok(label(nodeRoleBadge({}))==='Mag', 'a node with no role reads as a minor magnet, not a blank');
 
 console.log('\n'+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

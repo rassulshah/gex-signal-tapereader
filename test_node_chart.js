@@ -21,7 +21,7 @@ global.dispIsFut=()=>true; global.dispR=()=>10.05;
 global.ifLadder=()=>({err:'off for this test'});
 global.g3esc=(x)=>String(x==null?'':x);
 global.g3tip=()=>'';
-global.ifNum=(x)=>x==null?'–':String(Math.round(x*100)/100);
+global.dispNum=(x)=>x==null?'–':String(Math.round(x*100)/100);
 global.NCHART_MIN=90; global.NCHART_H=132; global.HIST_MAX=130;
 eval(ex('closedCandles')); eval(ex('nodeChartHtml'));
 // The legend always carries both colour swatches, so a naive indexOf on the whole block would
@@ -132,7 +132,7 @@ function node(k,v,n){ const seq=[]; for(let i=0;i<n;i++) seq.push({t:T-(n-1-i)*1
 {
   HIST.SPY={}; STATE.SPY.candles=bars(30); node(766.5,+70,20);
   const h=nodeChartHtml('SPY');
-  ok(/call/.test(h)&&/put/.test(h)&&/\+γ/.test(h),'the colour legend is on the face, not only in a hover');
+  ok(!/▲call/.test(h),'no legend row on the face — the panel has no vertical space for a key');
 }
 
 // ---- (v11.33) A BAND IS A LEVEL YOU CAN READ ------------------------------------------------
@@ -176,5 +176,40 @@ function node(k,v,n){ const seq=[]; for(let i=0;i<n;i++) seq.push({t:T-(n-1-i)*1
   const g=plot();
   ok(/PS 7688/.test(g),'the IF level is labelled with its NAME and its price',(g.match(/<text[^>]*>[^<]*<\/text>/g)||[]).slice(0,2));
   global.ifLadder=()=>({err:'off'});
+}
+
+// ---- (v11.39) FLOW BARS POINT INWARD AND SHOW GROWTH AS SEGMENTS ------------------------------
+// Two corrections. Bars grow LEFTWARD from the right edge so both profiles point in toward price.
+// And growth is the SEGMENTS, not a tick mark: dim = held over an hour, mid = added 60m..15m ago,
+// bright = the last 15 minutes. A node accumulating shows a bright leading edge.
+{
+  HIST.SPY={}; STATE.SPY.candles=bars(30);
+  // a node that has grown steadily: small an hour ago, larger 15m ago, largest now
+  const seq=[]; for(let i=0;i<30;i++) seq.push({t:T-(29-i)*180000, v:20+i*2.5});
+  HIST.SPY['766.50']={last:T,seq:seq};
+  const g=plot();
+  const rects=(g.match(/<rect[^>]*height="4\.4"[^>]*\/>/g)||[]);
+  ok(rects.length>=3,'a growing node draws three growth segments, not one bar',rects.length);
+  const ops=rects.map(r=>parseFloat((r.match(/opacity="([\d.]+)"/)||[])[1]));
+  ok(ops.includes(0.3)&&ops.includes(0.58)&&ops.includes(0.95),'dim / mid / bright — oldest to newest',ops);
+  // inward: the widest segment must START further left than the narrowest
+  const xs=rects.map(r=>parseFloat((r.match(/x="([\d.]+)"/)||[])[1]));
+  ok(Math.min(...xs)<Math.max(...xs),'segments stack leftward from a common right edge',xs);
+  const rightEdges=rects.map(r=>parseFloat((r.match(/x="([\d.]+)"/)||[])[1])+parseFloat((r.match(/width="([\d.]+)"/)||[])[1]));
+  ok(Math.max(...rightEdges)<=412.1,'and nothing spills past the right edge of the panel',Math.max(...rightEdges));
+}
+{
+  // a node that shrank gets its lost ground marked, so decay is visible rather than merely absent
+  HIST.SPY={}; STATE.SPY.candles=bars(30);
+  const seq=[]; for(let i=0;i<30;i++) seq.push({t:T-(29-i)*180000, v:90-i*2.2});
+  HIST.SPY['766.50']={last:T,seq:seq};
+  const g=plot();
+  ok(/<line[^>]*opacity="0\.35"/.test(g),'a bleeding node shows the ground it lost');
+}
+{
+  HIST.SPY={}; STATE.SPY.candles=bars(30); node(766.5,+70,20);
+  const h=nodeChartHtml('SPY');
+  ok(!/call-dominant/.test(h.replace(/title="[^"]*"/g,'')),'the legend ROW is gone from the face — there is no vertical space for a key');
+  ok(/KEY — green bars are positive gamma/.test(src),'and the key lives in the chart hover instead');
 }
 console.log('\n'+pass+' pass / '+fail+' fail');

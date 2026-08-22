@@ -19,6 +19,15 @@ global.nodeHistory=function(){ return HIST; };
 global.feedStructMap=function(){ return FEEDPCT?{pct:FEEDPCT}:null; };
 global.livePctAt=function(){ return LIVEPCT; };
 
+// (v11.40) The v11.0 audit made accumCanon FEED-FIRST. It calls feedSeries/feedSampleAt/feedGoneAt,
+// none of which this harness stubbed — so every call threw, was swallowed by the function's own
+// try/catch, and returned nulls. Thirteen assertions then reported as failures of the LOGIC when the
+// logic had never run. Stub the feed as absent so the tape fallback these fixtures describe is what
+// actually gets exercised.
+global.FEED_M15_SAMPLES=5;
+global.feedSeries=function(){ return null; };
+global.feedSampleAt=function(){ return null; };
+global.feedGoneAt=function(){ return false; };
 eval(['acmDayLoad','acmDaySave','acmLabel','accumCanon'].map(ex).join('\n'));
 
 // ================= 1. acmLabel bands =================
