@@ -65,7 +65,24 @@ renderers.forEach(function(r){
 missing=[...new Set(missing)];
 ok(missing.length===0,'no renderer calls a function that does not exist — a swallowed ReferenceError renders as a MISSING SECTION, not an error',missing.slice(0,12));
 
+// ---- THE SWALLOW MUST BE RECORDED ----
+// A regex scan for undeclared IDENTIFIERS was tried and abandoned: it flagged keywords, regex-literal
+// contents and inner-function parameters, and a check that drowns in false positives gets switched off,
+// which is worse than not having it. JavaScript needs a parser, not a pattern. So instrument the catch
+// instead — record what was eaten and let the smoke test fail on it. That catches this whole class,
+// including the cases nobody predicted.
+{
+  ok(/function swallow\(tag, e\)/.test(src),'a recorder exists for swallowed render errors');
+  ok(/__gptsDebug\.renderErrors/.test(src),'and it is exposed so the smoke test and the live panel can read it');
+  ['secLoc.nodes','nodeChart','nodeChartHtml'].forEach(function(tag){
+    ok(src.indexOf('swallow("'+tag+'"')>=0 || src.indexOf("swallow('"+tag+"'")>=0,
+       'the '+tag+' catch reports rather than eats');
+  });
+  ok(/swallow\('section'\+\(j\+1\), eS\)/.test(src),'and every section wrapper does too');
+}
+
 // and the specific regression
 ok(declared.has('tradeNodes'),'tradeNodes exists (the v11.46 miss)');
+ok(/var rr=1; try\{ rr=dispIsFut\(\)\?dispR\(\):1; \}/.test(bodyOf('secLoc')),'secLoc declares its own rr (the v11.48 miss)');
 ok(/tradeNodes\(sym\)/.test(bodyOf('secLoc')),'and TRADE LOCATION calls it');
 console.log('\n'+pass+' pass / '+fail+' fail');

@@ -1,3 +1,27 @@
+## v11.48 — stop the swallow being silent
+
+The NODES block still rendered nothing at v11.47, and the cause was the same shape as the last one: it
+used **`rr`**, the chart-scale multiplier, which is declared in `nodeChartHtml` and nowhere near
+`secLoc`. ReferenceError on the first row. The block's own try/catch ate it, the header had already been
+emitted, and the face showed a heading with nothing under it — which reads as "there were no nodes",
+not as "this is broken".
+
+**Twice in two builds, from the same mechanism.** A missing function first, a variable from another
+scope second. Both invisible for the same reason: defensive try/catch is what makes a ReferenceError
+look like an empty result.
+
+A regex scan for undeclared identifiers was tried and abandoned. It flagged keywords, regex-literal
+contents and inner-function parameters, and a check that drowns in false positives gets switched off —
+which is worse than not having it. JavaScript needs a parser, not a pattern.
+
+So the catch is instrumented instead. **`swallow(tag, e)` records what was eaten**, `__gptsDebug.renderErrors()`
+exposes it, and the smoke test FAILS on a non-empty list. That catches the whole class, including the
+cases nobody thought to predict — which is the point, since both of these were exactly that.
+
+The smoke test also moved **into the repo** at `tools/smoke.js`. It had been living in `/tmp` and the
+sandbox container has now reset twice mid-session; a check that only exists in scratch space is one you
+rewrite from memory at the worst possible moment.
+
 ## v11.47 — the NODES block called a function that was never added
 
 v11.46 shipped the TRADE LOCATION node block, and it never rendered. The block calls `tradeNodes()`.

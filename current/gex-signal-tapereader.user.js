@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.47
+// @version    11.48
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.47';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.48';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -17590,7 +17590,7 @@ function nodeChartHtml(sym){
     if(!drawn) out+='<div style="text-align:center;font-size:7.5px;color:#8b98a9;margin-top:1px">node history still filling — it rebuilds from empty after a reload</div>';
     out+='</div>';
     return out;
-  }catch(e){ return ''; }
+  }catch(e){ swallow('nodeChartHtml', e); return ''; }
 }
 
 // ---- (v11.46) NODES ARE WHERE THE TRADE IS ----
@@ -17600,6 +17600,24 @@ function nodeChartHtml(sym){
 // positioning on structure that matters. A node in open space is weaker. A level with no node is not a
 // trade at all.
 var NODE_MIN_PCT=20;
+// ---- (v11.48) THE SWALLOW MUST NOT BE SILENT ----
+// Twice in two builds a section rendered empty because an inner try/catch ate a ReferenceError: once a
+// function that was never defined (tradeNodes), once a variable from another scope (rr). Both times the
+// header had already been emitted, so the face showed a heading with nothing under it — which reads as
+// "there was nothing to show" rather than "this broke". Static analysis could not catch either without
+// drowning in false positives, so instrument the catch instead: record what was swallowed and let the
+// smoke test and the panel itself report it.
+var RENDER_ERRS=[];
+function swallow(tag, e){
+  try{
+    var msg=String((e&&e.message)||e);
+    for(var i=0;i<RENDER_ERRS.length;i++){ if(RENDER_ERRS[i].tag===tag && RENDER_ERRS[i].msg===msg){ RENDER_ERRS[i].n++; return; } }
+    RENDER_ERRS.push({tag:tag, msg:msg, n:1, at:Date.now()});
+    if(RENDER_ERRS.length>40) RENDER_ERRS.shift();
+  }catch(e2){}
+}
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.renderErrors=function(){ return RENDER_ERRS.slice(); };
 function tradeNodes(sym){
   sym=sym||'SPY';
   var out=[];
@@ -17685,6 +17703,10 @@ function secLoc(sym){
   if(L.ageMin!=null) bits.push(L.ageMin+'m old');
   // ---- NODES: the tradeable objects, and where they coincide with structure ----
   try{
+    // `rr` is the chart-scale multiplier. It lives in nodeChartHtml, NOT here — using it in this block
+    // threw a ReferenceError on the first row, and because the block has its own try/catch the header
+    // had already been emitted while every row vanished. Declare what you use in the scope you use it.
+    var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(eR){}
     var TN=tradeNodes(sym), pbK=pbNodeK(sym);
     if(TN.length){
       h+='<div class="g3nodehd"'+g3tip('Where can a trade actually happen? The rows above are LEVELS — context, telling you where structure sits. These are NODES, and per the rule the trade is off a node, preferably a pullback node. A node sitting AT a level is the strongest thing this panel finds: structure the market is actively defending. A node in open space is tradeable but has less behind it, and a level with no node is not a trade at all.')+'>NODES</div>';
@@ -17711,12 +17733,12 @@ function secLoc(sym){
     } else {
       h+='<div class="g3rx"'+g3tip('No node is within reach and above the strength floor, so there is nothing to trade off yet — whatever the levels above are doing. Levels are context; the trade is at a node.')+'><em>NODES</em><span>none in range — levels are context only</span></div>';
     }
-  }catch(eTN){}
+  }catch(eTN){ swallow("secLoc.nodes", eTN); }
   h+='<div class="g3rx" style="margin-top:3px"'+g3tip('Which book, which window, and how old? The expiration set these levels were computed from, the strike count behind them, and the age of the fetch. A stale set is refused outright rather than shown.')+'><em>SET</em><span'+g3tip('Which book, which window, how many strikes, and how old. The basis used to put their '+L.srcSym+' levels on this chart is '+L.dispScale+', computed from their own spot against the live futures price.')+'>'+g3esc(bits.join(' · '))+'</span></div>';
   (L.suppressed||[]).forEach(function(t){
     h+='<div class="g3rx"><em></em><span style="color:#f2b45a">'+g3esc(t)+'</span></div>'; });
   h+='</div>';
-  try{ h+=nodeChartHtml(sym); }catch(eNC){}
+  try{ h+=nodeChartHtml(sym); }catch(eNC){ swallow("nodeChart", eNC); }
   G3_AT_LEVEL=atLevel;
   return h;
 }
@@ -17925,7 +17947,7 @@ function panelV3(sym){
   for(var j=0;j<5;j++){
     var c=S.done[j]?'done':((j===S.cur)?'on':'');
     h+='<span class="g3sh '+c+'"'+g3tip(STEP_TIPS[j])+'>'+STEP_NAMES[j]+'</span>';
-    try{ h+=secs[j](sym); }catch(eS){ h+='<div class="g3b"><div class="g3rx"><span style="color:#f0616d">'+g3esc(String(eS&&eS.message||eS))+'</span></div></div>'; }
+    try{ h+=secs[j](sym); }catch(eS){ swallow('section'+(j+1), eS); h+='<div class="g3b"><div class="g3rx"><span style="color:#f0616d">'+g3esc(String(eS&&eS.message||eS))+'</span></div></div>'; }
   }
   h+='</div>';
   return h;

@@ -13,8 +13,10 @@ undocumented. That has already happened repeatedly in this project.
    camouflaged two live bugs for months.
 2. **Full suite green.** `cp current/gex-signal-tapereader.user.js v10.js` first — the harness reads
    `v10.js`, not `current/`.
-3. **Smoke test.** Loads the whole script in a DOM stub and calls every debug hook. The empty-book case
-   is what throws.
+3. **Smoke test** — `node tools/smoke.js`. Loads the whole script in a DOM stub, calls every debug hook,
+   AND fails on anything a render catch swallowed. A section that renders empty because its own
+   try/catch ate a ReferenceError looks exactly like a section with nothing to show; this is the only
+   thing that tells them apart. It has caught a missing function and an out-of-scope variable already.
 4. **Bump `@version` AND `GPTS_VERSION`**, plus the version pins in `test_direction_grade.js`,
    `test_pipeline_indicator.js`, `test_rules_v2.js`, `test_read_v1047.js`.
 5. **Prepend a CHANGELOG entry.** Not what changed — *why it was wrong before*. The reasoning is the part
