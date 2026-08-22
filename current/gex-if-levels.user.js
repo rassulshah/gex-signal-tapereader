@@ -1,12 +1,18 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.10
+// @version      1.11
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
 // @connect      insiderfinance.io
 // @run-at       document-idle
+// (v1.11) WITHOUT THESE TWO LINES TAMPERMONKEY WILL NEVER OFFER AN UPDATE FOR THIS SCRIPT — EVER.
+// The tapereader has carried them for releases; the companion never did, so it sat silently at an
+// old version while the tapereader moved on. That is how v1.9's truncated Zero Gamma survived a
+// reload: the repo was fixed, the browser was not, and nothing on either side said so.
+// @updateURL    https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js
+// @downloadURL  https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js
 // ==/UserScript==
 (function(){
 'use strict';

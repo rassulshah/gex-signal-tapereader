@@ -83,7 +83,23 @@ ok(/REJECTED:/.test(src),                    'and a rejected value is RECORDED, 
   ok(/spot\*0\.5/.test(g) && /spot\*2/.test(g), 'the gate is a band around spot', g.slice(0,160));
   ok(/isLevel/.test(src),                    'ratios, IV and slopes are NOT gated — they are not prices');
 }
-ok(/@version\s+1\.10/.test(src),             'companion pinned to 1.10');
+ok(/@version\s+1\.11/.test(src),             'companion pinned to 1.11');
 
 console.log((fail?'FAIL ':'')+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
+
+// ---------- (v1.11) THE SCRIPT MUST BE UPDATABLE ----------
+// Without @updateURL/@downloadURL Tampermonkey never offers an update for a script — not on a schedule,
+// not on a page reload, not ever. The tapereader has carried them for releases; the companion did not,
+// so it sat silently at v1.9 while the repo moved to v1.10 and the truncated Zero Gamma stayed on the
+// face through a reload. The repo was right, the browser was wrong, and NOTHING on either side said so.
+{
+  const hdr = src.slice(0, src.indexOf('==/UserScript=='));
+  ok(/@updateURL\s+https:\/\/raw\.githubusercontent\.com\S+gex-if-levels\.user\.js/.test(hdr),
+     'the companion declares @updateURL, so Tampermonkey can see a new version');
+  ok(/@downloadURL\s+https:\/\/raw\.githubusercontent\.com\S+gex-if-levels\.user\.js/.test(hdr),
+     'and @downloadURL, so it can fetch one');
+  ok(/@grant\s+GM_xmlhttpRequest/.test(hdr), 'it still holds the grant the tapereader must not have');
+  ok(/@connect\s+insiderfinance\.io/.test(hdr), 'and still declares the host it reaches');
+}
+console.log('  (update-header block: +4)');

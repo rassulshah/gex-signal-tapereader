@@ -1,3 +1,22 @@
+## v11.56 / companion v1.11 — the companion could never be updated, and nothing said so
+
+**The companion had no `@updateURL` and no `@downloadURL`.** Without those two lines Tampermonkey never
+offers an update for a script — not on its schedule, not on a page reload, not ever. The tapereader has
+carried them for releases; the companion never did.
+
+**This is why the truncated Zero Gamma survived.** The repo went to v1.10, the browser stayed on v1.9, and
+`zeroGamma: 764` kept rendering under THEIR name through a reload. The repo was right, the browser was
+wrong, and **neither side said anything** — the panel reports the tapereader's version in its footer and
+has never reported the companion's at all, so there was no visible symptom to chase.
+
+Both headers added, and both scripts now have the pin asserted in tests (`test_if_published.js` for the
+companion, `test_rules_v2.js` for the tapereader) so a future script cannot ship un-updatable.
+
+**Worth separating two things that look identical from the user's side:** reloading the Atlas tab reloads
+the PAGE, not the SCRIPT. Tampermonkey serves its own stored copy until it is told to update. A reload can
+therefore look like a failed deploy when the deploy was fine — which is a fourth entry for the
+install-failure table, and the one that just cost a round trip.
+
 ## v11.55 — the panel works on a weekend
 
 **The app was inert every weekend and every holiday.** `convertFiberCandles` keeps TODAY only, so with no
