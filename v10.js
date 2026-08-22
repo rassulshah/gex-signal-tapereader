@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.44
+// @version    11.46
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.44';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.46';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -16748,12 +16748,13 @@ function ensureV3Css(){
     '#gpts-body .g3steps span.on{background:rgba(242,180,90,.24);color:#f2b45a;box-shadow:0 0 0 1px rgba(242,180,90,.4)}'+
     '#gpts-body .g3wait{font-size:9px;color:#8b98a9;text-align:center;padding:0 0 5px}'+
     '#gpts-body .g3wait b{color:#f2b45a;font-weight:800}'+
-    '#gpts-body .g3sh{display:block;text-align:left;font-size:8px;font-weight:800;letter-spacing:.13em;color:#8b98a9;margin-top:7px;margin-bottom:1px}'+
-    '#gpts-body .g3sh.on{color:#f2b45a}'+
-    '#gpts-body .g3sh.done{color:#2ec27e}'+
+    '#gpts-body .g3sh{display:block;text-align:center;font-size:8px;font-weight:800;letter-spacing:.13em;color:#8b98a9;margin-top:6px;margin-bottom:2px;padding:2px 0;border-radius:3px;background:rgba(139,152,169,.09)}'+
+    '#gpts-body .g3sh.on{color:#f2b45a;background:rgba(242,180,90,.20);box-shadow:0 0 0 1px rgba(242,180,90,.35)}'+
+    '#gpts-body .g3sh.done{color:#2ec27e;background:rgba(46,194,126,.11)}'+
     '#gpts-body .g3f1{display:flex;align-items:center;gap:7px;font-size:9.5px;flex-wrap:wrap}'+
     '#gpts-body .g3f2{display:flex;align-items:center;gap:8px;font-size:9px;margin-top:3px;color:#8b98a9;flex-wrap:wrap}'+
     '#gpts-body .g3f2 b{color:#e6edf3;font-weight:700}'+
+    '#gpts-body .g3cell{display:inline-flex;align-items:baseline;gap:3px}'+
     '#gpts-body .g3tag{font-size:7px;font-weight:800;padding:1px 4px;border-radius:2px;background:rgba(242,180,90,.16);color:#f2b45a}'+
     '#gpts-body .g3b{padding:2px 2px 1px}'+
     '#gpts-body .g3reg{display:flex;align-items:center;justify-content:center;gap:6px}'+
@@ -16763,6 +16764,7 @@ function ensureV3Css(){
     '#gpts-body .g3fk{color:#8b98a9;font-size:7.5px;font-weight:700;letter-spacing:.05em}'+
     '#gpts-body .g3fv{color:#e6edf3;font-weight:700}'+
     '#gpts-body .g3play{margin-top:3px;text-align:center;font-size:8.5px;color:#8b98a9}'+
+    '#gpts-body .g3tgt{font-size:11px;font-weight:800;color:#e3c341;letter-spacing:-.2px}'+
     '#gpts-body .g3play b{color:#a371f7;font-weight:800}'+
     '#gpts-body .g3ph{margin-top:4px;padding:3px 5px;border-radius:3px;background:rgba(242,180,90,.11);text-align:center;font-size:8px;color:#f2b45a;line-height:1.35}'+
     '#gpts-body .g3bar{height:3px;border-radius:2px;background:#1e2530;margin-top:3px;position:relative}'+
@@ -16789,6 +16791,10 @@ function ensureV3Css(){
     '#gpts-body .g3nm{display:inline-block;width:64px;font-weight:800;font-size:9.5px}'+
     '#gpts-body .g3v{color:#e6edf3;font-weight:700;font-size:11px;min-width:44px}'+
     '#gpts-body .g3zn{font-size:7px;color:#8b98a9}'+
+    '#gpts-body .g3nodehd{font-size:7px;font-weight:800;letter-spacing:.12em;color:#8b98a9;margin:3px 0 1px}'+
+    '#gpts-body .g3node{background:rgba(139,152,169,.05)}'+
+    '#gpts-body .g3pb{background:rgba(242,180,90,.10);border-left:2px solid #f2b45a}'+
+    '#gpts-body .g3atlvl{font-size:6.5px;font-weight:800;padding:0 3px;border-radius:2px;background:rgba(242,180,90,.2);color:#f2b45a}'+
     '#gpts-body .g3cf1{font-size:7px;color:#8b98a9;letter-spacing:-1px}'+
     '#gpts-body .g3cf2{font-size:7px;color:#f2b45a;letter-spacing:-1px}'+
     '#gpts-body .g3sr{font-size:6.5px;font-weight:700;padding:0 3px;border-radius:2px;background:rgba(139,152,169,.16);color:#8b98a9}'+
@@ -16994,12 +17000,19 @@ function secFrame(sym){
   // of the same condition sitting between them — the playbook already says widen stops, which is the
   // part you act on. The mechanism lives in the hover.
   var gTxt=(R.g==null)?'—':((R.g>0?'+G':'−G')+' '+(R.v==null?'':(R.v>0?'+V':'−V')));
-  h+='<div class="g3f1"><span class="g3rg"'+g3tip('Gamma and vanna as a 2x2. '+(R.why||'')+' The warning glyph marks the one cell where dealer hedging amplifies the move instead of damping it.')+'>'+
-     g3esc(gTxt.trim())+(R.danger?' ⚠':'')+'</span>';
-  if(R.play) h+='<span class="g3play"'+g3tip('What this regime rewards. In negative gamma dealers hedge WITH the move, so fades are the losing side; in positive gamma they hedge against it and levels hold.')+'>'+g3esc(R.play)+'</span>';
-  h+='</div>';
-  // line two: the numbers that either point somewhere, size a stop, or name the regime
+  // (v11.46) THE TARGET BELONGS BESIDE THE REGIME. Together they answer one question — what kind of day
+  // is this, and where is it trying to go. It was buried at the head of the second line among the
+  // supporting numbers, which read as one more statistic rather than the destination.
   var gp=null; try{ gp=gexPath(sym); }catch(e){}
+  var ifMagEarly=null;
+  try{ var ILe=ifLadder(sym);
+    if(ILe && !ILe.err) for(var mi0=0;mi0<ILe.rows.length;mi0++){ if(/Mag/.test(ILe.rows[mi0].id)){ ifMagEarly=ILe.rows[mi0].disp; break; } }
+  }catch(eM0){}
+  h+='<div class="g3f1"><span class="g3rg"'+g3tip('What kind of day is this? Gamma and vanna as a 2x2. '+(R.why||'')+' The warning glyph marks the one cell where dealer hedging amplifies the move instead of damping it.')+'>'+
+     g3esc(gTxt.trim())+(R.danger?' ⚠':'')+'</span>';
+  if(ifMagEarly!=null) h+='<span class="g3tgt"'+g3tip('Where is the day trying to go? The heaviest strike in InsiderFinance\'s book — where dealer hedging concentrates and price tends to be pulled. A destination, not a forecast, and it reads the same book as the ladder below so the two can never disagree.')+'>→ '+dispNum(ifMagEarly)+'</span>';
+  if(R.play) h+='<span class="g3play"'+g3tip('What does this regime reward? In negative gamma dealers hedge WITH the move, so fades are the losing side; in positive gamma they hedge against it and levels hold.')+'>'+g3esc(R.play)+'</span>';
+  h+='</div>';
   var mp=null, ifMag=null, term=null;
   try{
     var IL=ifLadder(sym);
@@ -17012,7 +17025,12 @@ function secFrame(sym){
   var a2=null; try{ a2=atr(sym); }catch(e3){}
   var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(e4){}
   h+='<div class="g3f2">';
-  h+='<span class="g3fk"'+g3tip('Where is the day trying to go? The heaviest strike in InsiderFinance\'s book — where dealer hedging concentrates and price tends to get pulled. It is a gravity well, not a forecast, and it reads the same book as the ladder below so the two can never disagree.')+'>TGT</span><b>'+(ifMag!=null?dispNum(ifMag):'—')+'</b>';
+  // (v11.45) HOVER AUDIT: 114 fields carried a tip, 41 did not — and the gap was systematic. The tiny
+  // LABEL held the explanation while the value beside it held none, so hovering the number a trader is
+  // actually looking at gave nothing. Tips now sit on a wrapper covering label AND value.
+  function cell(lab, val, tip){
+    return '<span class="g3cell"'+g3tip(tip)+'><span class="g3fk">'+lab+'</span><b>'+val+'</b></span>';
+  }
   // DEX is a placeholder until their payload is confirmed to carry delta — shown as a dash, never invented
   // (v11.37) DEX is real now — their payload carries per-contract delta.
   var dexTxt='—';
@@ -17024,8 +17042,8 @@ function secFrame(sym){
       dexTxt=sgn+'$'+(av>=1e9?(av/1e9).toFixed(1)+'B':(av/1e6).toFixed(0)+'M');
     }
   }catch(eD){}
-  h+='<span class="g3fk"'+g3tip('Aggregate dealer delta: sum of delta x open interest x 100 x spot. NEGATIVE means dealers are short delta and must BUY as price rises, so rallies get chased; positive means they sell into strength. Read it as a map of where hedging pressure sits, not as a direction — which is why it lives here and not in the BIAS row. In dollar terms it dwarfs gamma, because delta is order 0.5 and gamma order 0.001.')+'>DEX</span><b>'+g3esc(dexTxt)+'</b>';
-  h+='<span class="g3fk"'+g3tip('Is the market pricing near-term stress? Term slope is near-dated implied vol against longer-dated. Negative means the front is richer — an event or fear priced into the next few days, the backwardation condition. It is a regime axis alongside gamma and vanna, not a direction, and unlike anything open-interest based it moves intraday because IV does.')+'>TERM</span><b>'+(term!=null?String(term):'—')+'</b>';
+  h+=cell('DEX',g3esc(dexTxt),'Which way does hedging push? Aggregate dealer delta: sum of delta x open interest x 100 x spot. NEGATIVE means dealers are short delta and must BUY as price rises, so rallies get chased; positive means they sell into strength. It maps where hedging pressure sits, it does not point — which is why it lives here and not in BIAS. In dollar terms it dwarfs gamma, because delta is order 0.5 and gamma order 0.001.');
+  h+=cell('TERM',(term!=null?String(term):'—'),'Is the market pricing near-term stress? Term slope is near-dated implied vol against longer-dated. Negative means the front is richer — an event or fear priced into the next few days, the backwardation condition. A regime axis alongside gamma and vanna, not a direction. Blank when their payload carries no term figure and we have not computed one.');
   // (v11.42) EXPECTED MOVE, with how much of it the day has already spent. This is the number that
   // makes a target honest: a level beyond what is left is not in play today, whatever the structure says.
   var emTxt='—', emTip='How much room does today have? The at-the-money straddle is the market pricing its own expected move to expiry. Blank when both legs do not quote at one strike near spot — a one-sided straddle is not a straddle.';
@@ -17049,9 +17067,9 @@ function secFrame(sym){
       emTip='How much room does today have, and how much is left? The at-the-money straddle is the market\'s own estimate of the move to expiry; the percentage is how much of it the session range has already used. Past 100% the day has done more than was priced, and a target beyond what remains is not in play whatever the structure says.';
     }
   }catch(eEM){}
-  h+='<span class="g3fk"'+g3tip(emTip)+'>EM</span><b>'+g3esc(emTxt)+'</b>';
-  h+='<span class="g3fk"'+g3tip('How much room does this tape need? Average true range per bar in the displayed instrument. It sizes your stop, and it is what sets the ± zone widths on the ladder — a level is a band, and this is how wide.')+'>ATR</span><b>'+(a2!=null?dispNum(a2*rr):'—')+'</b>';
-  if(gp&&gp.cage) h+='<span class="g3fk"'+g3tip('How much room is left before structure? Where price sits between the put wall below and the call wall above. Near 50% you are in the middle with nothing to trade against; near the edges is where the levels actually matter.')+'>CAGE</span><b>'+gp.cage.pos+'%</b>';
+  h+=cell('EM',g3esc(emTxt),emTip);
+  h+=cell('ATR',(a2!=null?dispNum(a2*rr):'—'),'How much room does this tape need? Average true range per bar in the displayed instrument. It sizes your stop, and it is what sets the ± zone widths on the ladder — a level is a band, and this is how wide.');
+  // CAGE removed: a percentage nobody acts on, on a face with no space to spare.
   var ptag=(P.label||'').replace('EXPIRY · ','EXP·').replace('OPEN · CHARM','OPEN').replace('POWER HOUR','PWR').replace('MORNING','AM').replace('MIDDAY','MID');
   if(ptag && ptag!=='—') h+='<span class="g3tag"'+g3tip(g3esc(P.sub||''))+'>'+g3esc(ptag)+'</span>';
   h+='</div></div>';
@@ -17063,7 +17081,7 @@ function secBias(sym){
   var B=biasVotes(sym);
   var col=B.dir>0?'g3up':(B.dir<0?'g3dn':'');
   var h='<div class="g3b">';
-  h+='<div class="g3vd2">'+
+  h+='<div class="g3vd2"'+g3tip('Which way, and on whose authority? The 50-SMA decides and nothing below can overrule it; the reason beside the call is the SMA\'s own evidence. When the SMA has no side this reads FLAT rather than assembling a direction out of three secondary inputs.')+'>'+
      '<b class="'+col+'"'+g3tip('Which way, and on whose authority? The 50-SMA decides, and nothing below can overrule it. The supplementary reads confirm or they do not. When the SMA has no side this says FLAT rather than assembling a direction out of three secondary inputs — which is what the old tally did, printing NEUTRAL on a 2-2 split while the trend was plainly on the chart.')+'>'+
      arrow(B.dir)+' '+B.verdict+'</b>'+
      '<span class="g3why">'+g3esc(B.why)+'</span></div>';
@@ -17391,6 +17409,12 @@ function nodeChartHtml(sym){
     })();
 
     // ---------- CENTRE: node bands, candles, rolls, centred level labels ----------
+    // (v11.46) A NODE MUST BE VISIBLE WITH ONE SAMPLE. This drew a marker only where a history sample
+    // fell inside the CANDLE window — so after any reload you saw a growing sliver, and with the market
+    // closed (candles stop at the last close while sampleTapeHistory keeps writing "now") every sample
+    // fell outside and NOTHING drew at all. Absence of history was rendering as absence of node, which
+    // is the opposite of the truth. History still draws the lifecycle; the node's CURRENT state now
+    // always draws at the right edge regardless.
     var drawn=0;
     keys.forEach(function(o){
       var y=Y(o.k); o.shown=0;
@@ -17405,6 +17429,17 @@ function nodeChartHtml(sym){
           : '<path d="M'+(x-w)+' '+(y+hh)+' L'+(x+w)+' '+(y+hh)+' L'+x+' '+(y-hh)+' Z" fill="'+col+'" opacity="'+op.toFixed(2)+'"/>';
         drawn++; o.shown++;
       });
+      // the live edge: whatever the node reads NOW, drawn at the right of the plot
+      var nowv=null;
+      for(var q=o.seq.length-1;q>=0;q--){ if(o.seq[q]&&typeof o.seq[q].v==='number'){ nowv=o.seq[q].v; break; } }
+      if(nowv!=null && Math.abs(nowv)>=3){
+        var av2=Math.abs(nowv), op2=Math.max(0.20,Math.min(0.95,av2/100));
+        var put2=(nowv>0), col2=put2?'#a371f7':'#e3c341', xE=PR-3, w2=2.9, h2=2.4;
+        g+= put2
+          ? '<path d="M'+(xE-w2)+' '+(y-h2)+' L'+(xE+w2)+' '+(y-h2)+' L'+xE+' '+(y+h2)+' Z" fill="'+col2+'" opacity="'+op2.toFixed(2)+'"/>'
+          : '<path d="M'+(xE-w2)+' '+(y+h2)+' L'+(xE+w2)+' '+(y+h2)+' L'+xE+' '+(y-h2)+' Z" fill="'+col2+'" opacity="'+op2.toFixed(2)+'"/>';
+        drawn++; o.shown++;
+      }
     });
     var bw=Math.max(1.2, Math.min(5, (iw/bars.length)*0.62));
     bars.forEach(function(c){
@@ -17578,7 +17613,7 @@ function secLoc(sym){
   var placed=false, atLevel=null;
   rows.forEach(function(r){
     if(!placed && r.disp<px){
-      h+='<div class="g3prow"><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+dispNum(px)+'</span></div>';
+      h+='<div class="g3prow"'+g3tip('Where is price sitting in the level set? Everything above this row is overhead structure, everything below is support. Between two levels there is no trade location yet — this whole step stays unlit until price reaches one.')+'><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+dispNum(px)+'</span></div>';
       placed=true;
     }
     var d=r.disp-px;
@@ -17589,7 +17624,7 @@ function secLoc(sym){
     var far=(zone!=null && Math.abs(d)>zone*14)?' g3far':'';
     var band=isMag?' g3band':'';
     var pulse=near?' g3pulse':'';
-    h+='<div class="g3r'+far+band+'">'+
+    h+='<div class="g3r'+far+band+'"'+g3tip('What is this level and how far away? '+g3esc(r.id)+' from InsiderFinance\'s chain, shown on this chart\'s scale, with the distance from price on the right. The band is a zone, not a line. A diamond means the strike is heavy in their gamma book, their delta book, or both — and both is the hardest kind of level to pass.')+'>'+
        '<span class="g3nm'+pulse+'" style="color:'+col+'">'+g3esc(r.id)+'</span>'+
        '<span class="g3v'+pulse+'"'+g3tip('Their strike is '+r.k+' on '+L.srcSym+'; shown here at '+r.disp+' using the live basis '+L.dispScale+'.')+'>'+dispNum(r.disp)+'</span>'+
        (zone!=null?'<span class="g3zn"'+g3tip('How far through a level can price go before it has failed? A level is a zone, not a line. This band is scaled from ATR, so it widens when the tape is fast. Price can trade inside it and the level still holds; a close beyond it is a break.')+'>±'+dispNum(zone)+'</span>':'')+
@@ -17608,13 +17643,42 @@ function secLoc(sym){
        })()+
        '<span class="g3d '+dcls(d)+'">'+(d>0?'+':'')+dispNum(+d.toFixed(2))+'</span></div>';
   });
-  if(!placed) h+='<div class="g3prow"><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+dispNum(px)+'</span></div>';
+  if(!placed) h+='<div class="g3prow"'+g3tip('Where is price sitting in the level set? Below every level shown, so all of this structure is overhead.')+'><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+dispNum(px)+'</span></div>';
   var bits=[L.srcSym];
   bits.push(L.rolled?'to next Fri (rolled)':'to Fri');
   if(L.nExps) bits.push(L.nExps+' exps');
   if(L.n) bits.push(L.n+' strikes');
   if(L.ageMin!=null) bits.push(L.ageMin+'m old');
-  h+='<div class="g3rx" style="margin-top:3px"><em>SET</em><span'+g3tip('Which book, which window, how many strikes, and how old. The basis used to put their '+L.srcSym+' levels on this chart is '+L.dispScale+', computed from their own spot against the live futures price.')+'>'+g3esc(bits.join(' · '))+'</span></div>';
+  // ---- NODES: the tradeable objects, and where they coincide with structure ----
+  try{
+    var TN=tradeNodes(sym), pbK=pbNodeK(sym);
+    if(TN.length){
+      h+='<div class="g3nodehd"'+g3tip('Where can a trade actually happen? The rows above are LEVELS — context, telling you where structure sits. These are NODES, and per the rule the trade is off a node, preferably a pullback node. A node sitting AT a level is the strongest thing this panel finds: structure the market is actively defending. A node in open space is tradeable but has less behind it, and a level with no node is not a trade at all.')+'>NODES</div>';
+      TN.slice(0,4).forEach(function(n){
+        var atLvl=null;
+        (L.rows||[]).forEach(function(r){
+          if(r.und==null) return;
+          if(Math.abs(r.und-n.k)<=(zone!=null?zone:0.5)){ if(!atLvl) atLvl=r.id.split('·')[0]; }
+        });
+        var isPB=(pbK!=null && Math.abs(pbK-n.k)<0.005);
+        var col=n.put?'#a371f7':'#e3c341';
+        var dd=n.dist;
+        h+='<div class="g3r g3node'+(isPB?' g3pb':'')+'"'+g3tip(
+             'Is this a place to trade? '+Math.round(n.pct)+'% of the King node'+
+             (n.state?(', currently '+String(n.state).toLowerCase()):'')+
+             (atLvl?('. It sits AT '+atLvl+' — live positioning on top of structure that matters, which is the strongest combination this panel can show you.'):'. It sits in open space, away from the levels above — tradeable, but with less behind it.')+
+             (isPB?' The pullback engine has selected this one, so it is what EXECUTE is armed against.':''))+'>'+
+           '<span class="g3nm" style="color:'+col+'">'+(isPB?'▸':'')+(n.put?'▼':'▲')+' '+Math.round(n.pct)+'%</span>'+
+           '<span class="g3v">'+dispNum(n.k*rr)+'</span>'+
+           (atLvl?('<span class="g3atlvl">@'+g3esc(atLvl)+'</span>'):'')+
+           (n.state?('<span class="g3sr">'+g3esc(n.state)+'</span>'):'')+
+           '<span class="g3d '+dcls(dd)+'">'+(dd>0?'+':'')+dispNum(+(dd*rr).toFixed(2))+'</span></div>';
+      });
+    } else {
+      h+='<div class="g3rx"'+g3tip('No node is within reach and above the strength floor, so there is nothing to trade off yet — whatever the levels above are doing. Levels are context; the trade is at a node.')+'><em>NODES</em><span>none in range — levels are context only</span></div>';
+    }
+  }catch(eTN){}
+  h+='<div class="g3rx" style="margin-top:3px"'+g3tip('Which book, which window, and how old? The expiration set these levels were computed from, the strike count behind them, and the age of the fetch. A stale set is refused outright rather than shown.')+'><em>SET</em><span'+g3tip('Which book, which window, how many strikes, and how old. The basis used to put their '+L.srcSym+' levels on this chart is '+L.dispScale+', computed from their own spot against the live futures price.')+'>'+g3esc(bits.join(' · '))+'</span></div>';
   (L.suppressed||[]).forEach(function(t){
     h+='<div class="g3rx"><em></em><span style="color:#f2b45a">'+g3esc(t)+'</span></div>'; });
   h+='</div>';
@@ -17628,49 +17692,55 @@ var G3_AT_LEVEL=null;
 // ---- ④ REACTION: is the level actually defending itself ----
 function secReact(sym){
   var h='<div class="g3b">';
+  // (v11.46) REACTION READS THE NODE, NOT THE LEVEL. Under the node rule the trade is at a node, so
+  // "is it holding?" has to be asked of the node being traded. Asking it of the nearest LEVEL answered
+  // a question nobody was about to act on.
+  var pb=null; try{ pb=pbEntryPick(sym); }catch(e0){}
+  var nodeK=(pb&&pb.ok&&pb.level!=null)?pb.level:null;
   var L=G3_AT_LEVEL;
-  var lvl=L?(L.und!=null?L.und:L.k):null;   // candles are underlying-scale
-  // node growth in dollars
-  var ac=null; try{ ac=accumAsym(sym); }catch(e){}
-  // (v11.27) A bare '—' read as broken. When every wall is tape-derived we have %King and nothing
-  // else, and summing dollar mass off a moving percentage denominator is the exact error we ruled
-  // out — so it abstains ON PURPOSE and now says so.
-  var nodeTxt='—';
+  var subj=(nodeK!=null)?nodeK:(L?(L.und!=null?L.und:L.k):null);
+  var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(e1){}
+  var isNode=(nodeK!=null);
+
+  h+='<div class="g3rx"'+g3tip('What is being watched, and why that? Under the node rule the trade is at a NODE, so the reaction that matters is the node\'s. When there is no node in play this falls back to the nearest level and says so — but a level reacting is context, not a trigger.')+
+     '><em>WATCH</em><span>'+(subj!=null
+        ? ((isNode?'node ':'level ')+'<b>'+dispNum(subj*rr)+'</b>'+(isNode&&pb.rule?(' · '+g3esc(pb.rule)):'')+(isNode?'':' — context only, not a trigger'))
+        : 'nothing in range')+'</span></div>';
+
+  // is the thing being watched growing or bleeding, in dollars
+  var ac=null; try{ ac=accumAsym(sym); }catch(e2){}
+  var nodeState=null;
+  try{ if(nodeK!=null){ var acn=accumCanon(sym,nodeK); nodeState=(acn&&acn.m15)?acn.m15.label:null; } }catch(e3){}
+  var nodeTxt;
+  if(isNode && nodeState) nodeTxt='the node is <b>'+g3esc(String(nodeState).toLowerCase())+'</b>'+(ac&&ac.txt?(' · book '+g3esc(ac.txt)):'');
+  else if(ac) nodeTxt=g3esc(ac.txt);
+  else nodeTxt='%King only — no dollars';
+  h+='<div class="g3rx"'+g3tip('Is it being defended or abandoned? A node ACCUMULATING as price arrives is dealers adding — the level is being reinforced exactly when it is tested, and that is the setup this whole process exists to find. One bleeding as price approaches is being walked away from and will probably not hold.')+
+     '><em>NODE</em><span>'+nodeTxt+'</span></div>';
+
+  var rj=null; try{ rj=paReject(sym, subj); }catch(e4){}
+  var pa=null; try{ pa=paRead(sym); }catch(e5){}
+  var ptxt;
+  if(rj) ptxt=g3esc(rj.txt)+' — <span class="g3ok">rejected</span>';
+  else if(subj!=null) ptxt='at '+dispNum(subj*rr)+', no rejection bar yet';
+  else ptxt=(pa&&pa.ok)?('nothing in range · '+g3esc(pa.label)+' ('+pa.clv+')'):'nothing in range';
+  h+='<div class="g3rx"'+g3tip('Did it push price back? A rejection is a bar that trades THROUGH and closes back on the side it came from. Without order flow this is the confirmation available, and it is the trigger — price merely arriving is not a signal. A close beyond the zone is the opposite reading.')+
+     '><em>PRICE</em><span>'+ptxt+'</span></div>';
+
   try{
-    if(ac) nodeTxt=g3esc(ac.txt);
-    else {
-      var W=((STATE[sym]||{}).walls)||[];
-      var dollars=0; for(var wi=0;wi<W.length;wi++){ if(typeof W[wi].abs==='number'||typeof W[wi].net==='number') dollars++; }
-      nodeTxt = W.length ? ('tape-only book — %King without dollars, so growth is not measurable')
-                         : 'no book yet';
-    }
-  }catch(e){}
-  h+='<div class="g3rx"'+g3tip('Is this level being defended or abandoned? Measured in dollars, because %King has a moving denominator and cannot compare two moments. Dealers ADDING into a test means the wall is being reinforced as price arrives. Bleeding while price approaches means it is being given up, and it will probably not hold.')+'><em>NODE</em><span>'+nodeTxt+'</span></div>';
-  // (v11.42) HOW MUCH DELTA SITS AT THE LEVEL BEING TESTED. Gamma says how price behaves here; delta
-  // says how much hedging must happen to get through. A level with heavy delta has more standing behind
-  // it than one with heavy gamma alone, and that is a different question from whether it is growing.
-  try{
-    if(L){
-      var Cx=levelDepth(sym), t=confTier(Cx, L.und!=null?L.und:L.k);
+    if(subj!=null){
+      var Cx=levelDepth(sym), t=confTier(Cx, subj);
       if(t){
         var dTxt=(t.d>=0.55)?'heavy':((t.d>=0.25)?'moderate':'thin');
         var gTxt=(t.g>=0.55)?'heavy':((t.g>=0.25)?'moderate':'thin');
-        h+='<div class="g3rx"'+g3tip('What is standing behind this level? Dealer delta at the strike being tested, against the heaviest in the book. Heavy delta means a lot of hedging has to happen for price to pass; thin delta means the level is mostly a gamma effect and cheaper to break.')+
+        h+='<div class="g3rx"'+g3tip('What is standing behind it? Dealer delta and gamma at this strike, against the heaviest in their book. Heavy delta means a lot of hedging has to happen for price to pass; thin means it is mostly a gamma effect and cheaper to break.')+
            '><em>DEPTH</em><span>delta <b>'+dTxt+'</b> · gamma <b>'+gTxt+'</b>'+(t.tier>1?' — <span class="g3ok">both loaded</span>':'')+'</span></div>';
       }
     }
-  }catch(eDp){}
-  // price action at the level
-  var rj=null; try{ rj=paReject(sym, lvl); }catch(e){}
-  var pa=null; try{ pa=paRead(sym); }catch(e){}
-  var ptxt;
-  if(rj) ptxt=g3esc(rj.txt)+' — <span class="g3ok">rejected</span>';
-  else if(L!=null) ptxt='at '+dispNum(L.disp)+', no rejection bar yet';
-  else ptxt=(pa&&pa.ok)?('no level in range · '+g3esc(pa.label)+' ('+pa.clv+')'):'no level in range';
-  h+='<div class="g3rx"'+g3tip('Did the level push price back? A rejection is a bar that trades THROUGH the level and closes back on the side it came from. Without order flow this is the confirmation available to us, and it is the trigger — price merely arriving at a level is not a signal. A close beyond the zone is the opposite reading: the level failed.')+'><em>PRICE</em><span>'+ptxt+'</span></div>';
-  // structure / pressure line, the internals stand-in
+  }catch(e6){}
+
   if(pa&&pa.ok){
-    h+='<div class="g3rx"'+g3tip('Who is winning the bars right now? Where each bar CLOSES inside its own range, which is the closest honest stand-in for a TICK reading. A run of upper-third closes is buyers finishing each bar in control. The structure tag says whether highs and lows are stepping up or down, and it breaks the tie when the closes are mid-range.')+
+    h+='<div class="g3rx"'+g3tip('Who is winning the bars right now? Where each bar CLOSES inside its own range, the closest honest stand-in for a TICK reading. A run of upper-third closes is buyers finishing each bar in control; the structure tag breaks the tie when closes are mid-range.')+
        '><em>PRESSURE</em><span><b>'+pa.upBars+'</b> upper / <b>'+pa.dnBars+'</b> lower of '+pa.bars+' · '+g3esc(pa.struct)+'</span></div>';
   }
   h+='</div>';
@@ -17683,37 +17753,63 @@ function secExec(sym){
   var R=regime2D(sym), B=biasVotes(sym);
   var pb=null; try{ pb=pbEntryPick(sym); }catch(e){}
   var L=G3_AT_LEVEL;
-  // regime gate: a fade in negative gamma is the trade the regime punishes
-  var blocked=null;
-  if(R.g!=null && R.g<0 && L){
-    blocked={ why:'FADE BLOCKED — '+(R.danger?'−γ/−V':'−γ'),
-              sub:'momentum regime · dealers hedge with the move'+(R.danger?' · charm/vanna widen the stop':'') };
-  }
-  // R:R floor
-  var rr=null;
+  // ================= THE NODE RULE (user-mandated 2026-08-22) =================
+  // A TRADE IS OFF A NODE. Levels give CONTEXT — they tell you where structure sits and what the day
+  // is shaped like — but the entry itself has to be at a node, preferably a PULLBACK node. Price sitting
+  // at a level with no node behind it is information, not a setup.
+  // This section previously read `pb.entry`, a field pbEntryPick has never returned (it returns `level`),
+  // so EXECUTE could not arm at ALL: a valid node-based entry sat in the object while the face showed
+  // "no setup". Dead since v11.26 and silent, because reading an absent property is not an error.
+  var hasNode=!!(pb && pb.ok && pb.level!=null);
+  var isPB=!!(pb && /pb/i.test(pb.rule||''));
+  var entry=hasNode?pb.level:null;
+  // stop sits beyond the far edge of the node's own zone; target is the next structural stop
+  var stop=null, target=null, rr=null;
   try{
-    if(pb && pb.entry!=null && pb.stop!=null && pb.target!=null){
-      var risk=Math.abs(pb.entry-pb.stop), rew=Math.abs(pb.target-pb.entry);
-      if(risk>0) rr=+(rew/risk).toFixed(2);
+    if(hasNode){
+      var pad=0.1; try{ var av=atr(sym); if(av>0) pad=Math.max(av*0.35,0.05); }catch(e0){}
+      stop = (pb.dir>0) ? ((pb.zoneLo!=null?pb.zoneLo:entry)-pad) : ((pb.zoneHi!=null?pb.zoneHi:entry)+pad);
+      target = (pb.nextStop!=null)?pb.nextStop:null;
+      if(target!=null && stop!=null){
+        var risk=Math.abs(entry-stop), rew=Math.abs(target-entry);
+        if(risk>0) rr=+(rew/risk).toFixed(2);
+      }
     }
-  }catch(e){}
-  if(rr!=null && rr<2.0){
-    blocked=blocked||{ why:'R:R UNDER FLOOR', sub:'' };
-    blocked.sub=(blocked.sub?blocked.sub+' · ':'')+'R '+rr+' below the 2.0 floor';
+  }catch(e1){}
+  var rr2=1; try{ rr2=dispIsFut()?dispR():1; }catch(e2){}
+  var blocked=null;
+  if(!hasNode){
+    blocked={ why:'NO NODE — NO TRADE',
+              sub:(L? 'price is at '+dispNum((L.und!=null?L.und:L.k)*rr2)+', which is a level, not a node — context only'
+                    : 'no pullback node in range') };
+  } else if(R.g!=null && R.g<0 && !isPB){
+    blocked={ why:'FADE BLOCKED — '+(R.danger?'−G/−V':'−G'),
+              sub:'momentum regime · dealers hedge with the move' };
+  } else if(rr!=null && rr<2.0){
+    blocked={ why:'R:R UNDER FLOOR', sub:'R '+rr+' below the 2.0 floor'+(target==null?' · no target':'') };
+  } else if(B.dir!==0 && pb.dir!==0 && pb.dir!==B.dir){
+    blocked={ why:'AGAINST THE CALL', sub:'the node sets up '+(pb.dir>0?'long':'short')+' while the SMA reads '+B.verdict.toLowerCase() };
   }
   if(blocked){
-    h+='<div class="g3blk"'+g3tip('Why is this trade refused? Either the regime forbids it — fading in negative gamma is the losing side — or the reward-to-risk falls under the floor. A refusal is a result, not a gap. The panel will not dress a bad trade as a setup to fill the space.')+'><b>'+g3esc(blocked.why)+'</b><span>'+g3esc(blocked.sub)+'</span></div>';
-  } else if(pb && pb.entry!=null){
-    h+='<div class="g3arm"'+g3tip('What is armed, and what proves it wrong? Entry, stop and target from the pullback engine, with the R-multiple. The stop is the level that has to fail for the idea to be dead — decide now whether you would actually take that loss, before price is moving.')+'><b>ARMED '+arrow(B.dir)+' '+fmtLvl(pb.entry)+'</b><span>'+
-       'stop '+(pb.stop!=null?fmtLvl(pb.stop):'—')+' · target '+(pb.target!=null?fmtLvl(pb.target):'—')+(rr!=null?(' · '+rr+'R'):'')+'</span></div>';
+    h+='<div class="g3blk"'+g3tip('Why is this refused? A trade has to be off a NODE — levels are context, the node is where the trade lives. Beyond that the regime can veto a fade, the reward-to-risk floor can veto a thin one, and a node setting up against the SMA is not a trade. A refusal is a result: the panel will not dress a bad setup as a good one to fill the space.')+
+       '><b>'+g3esc(blocked.why)+'</b><span>'+g3esc(blocked.sub)+'</span></div>';
   } else {
-    // (v11.36) An empty EXECUTE is the message. The old box said "bias is neutral - no side to take",
-    // which was the third time the panel said the same sentence on one screen.
-    h+='<div style="text-align:center;font-size:8.5px;color:#5b6675;padding:2px 0">\u2014</div>';
+    h+='<div class="g3arm"'+g3tip('What is armed, and what proves it wrong? The entry is a NODE — the '+(isPB?'pullback node the leg engine picked':'node in range')+' — with the stop beyond its own zone and the target at the next structural stop. Decide now whether you would actually take that stop, before price is moving.')+
+       '><b>ARMED '+arrow(pb.dir)+' '+dispNum(entry*rr2)+'</b><span>'+
+       (isPB?'pullback node':'node')+(pb.state?(' · '+pb.state):'')+(pb.grade?(' · '+pb.grade):'')+
+       ' · stop '+(stop!=null?dispNum(stop*rr2):'—')+
+       ' · target '+(target!=null?dispNum(target*rr2):'—')+
+       (rr!=null?(' · '+rr+'R'):'')+'</span></div>';
+  }
+  // what the node is doing, always — armed or not
+  if(hasNode){
+    h+='<div class="g3alt"'+g3tip('Which node, and is it building or bleeding? A pullback node that is accumulating as price comes back to it is the setup this whole process exists to find. One that is decaying is a node the market is walking away from.')+
+       '>node <b>'+dispNum(pb.level*rr2)+'</b>'+(pb.rule?(' · '+g3esc(pb.rule)):'')+
+       (pb.dist!=null?(' · '+dispNum(pb.dist*rr2)+' away'):'')+'</div>';
   }
   var alt=[];
-  try{ if(B.path&&B.path.line) alt.push(g3esc(B.path.line)); }catch(e){}
-  if(alt.length) h+='<div class="g3alt">path: <b>'+alt.join(' · ')+'</b></div>';
+  try{ if(B.path&&B.path.line) alt.push(g3esc(B.path.line)); }catch(e3){}
+  if(alt.length) h+='<div class="g3alt"'+g3tip('Where is the gamma structure pointing? Context for the trade above, not a signal on its own.')+'>path: <b>'+alt.join(' · ')+'</b></div>';
   h+='</div>';
   return h;
 }
@@ -17730,12 +17826,12 @@ function stepState(sym){
     var rj=null; try{ rj=G3_AT_LEVEL?paReject(sym,G3_AT_LEVEL.k):null; }catch(e){}
     st[3]=!!rj;
     var pb=null; try{ pb=pbEntryPick(sym); }catch(e){}
-    st[4]=!!(pb&&pb.entry!=null);
+    st[4]=!!(pb && pb.ok && pb.level!=null);   // (v11.45) a trade is off a NODE — `entry` never existed
     if(!st[0]) wait='waiting on the <b>gamma book</b>';
     else if(!st[1]) wait=(B.live<3)?'waiting on <b>more inputs</b> — '+B.live+' of 6 live':'bias is <b>neutral</b> — no side yet';
     else if(!st[2]) wait='price is <b>between levels</b> — no trade location';
     else if(!st[3]) wait='at <b>'+g3esc(G3_AT_LEVEL?fmtLvl(G3_AT_LEVEL.k):'the level')+'</b> — waiting on a reaction';
-    else if(!st[4]) wait='reaction confirmed — <b>waiting on an entry</b>';
+    else if(!st[4]) wait='reaction confirmed — <b>waiting on a node</b>';
     else wait='<b>armed</b> — all five steps satisfied';
   }catch(e){}
   var cur=0; for(var i=0;i<5;i++){ if(st[i]) cur=i+1; else break; }

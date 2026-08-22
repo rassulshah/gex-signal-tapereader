@@ -114,8 +114,15 @@ function node(k,v,n){ const seq=[]; for(let i=0;i<n;i++) seq.push({t:T-(n-1-i)*1
   // history older than the window is clipped, not smeared across it
   HIST.SPY={}; STATE.SPY.candles=bars(30);
   HIST.SPY['766.50']={last:T, seq:[{t:T-8*3600000, v:80}]};
-  ok(marks().indexOf('#a371f7')<0,'a sample from outside the window is dropped');
-  ok(!/<text[^>]*a371f7/.test(plot()),'and the row is not labelled either — a price with no markers beside it reads as a level that is not there');
+  // (v11.46) A stale sample no longer draws a HISTORY marker across the plot — that would smear old
+  // data over a window it does not belong to. But the node's CURRENT reading now always draws at the
+  // right edge: rendering nothing made absence of history look like absence of node, and with the
+  // market closed (candles stop at the last close while sampling continues) that meant NO nodes at all.
+  const g=plot();
+  const hist=(g.match(/<path d="M[\d.]+ [\d.]+ L[^"]*Z" fill="#a371f7"[^>]*\/>/g)||[]);
+  ok(hist.length===1,'exactly one marker — the live edge, not a smear of stale history across the window',hist.length);
+  const xs=hist.map(m=>parseFloat((m.match(/M([\d.]+)/)||[])[1]));
+  ok(Math.min(...xs)>300,'and it sits at the RIGHT edge of the plot, where "now" is',xs);
 }
 // ---- the two books stay distinguishable ----
 {

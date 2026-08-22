@@ -1,3 +1,57 @@
+## v11.46 — the panel finally shows the thing you trade
+
+**The panel spoke two vocabularies that never met.** LEVELS (CR, PS, Mag, HVL) come from
+InsiderFinance — structure, context, daily. NODES come from Skylit — live, and per the node rule, where
+the trade actually is. ③ TRADE LOCATION showed the levels and hid the tradeable object; ⑤ EXECUTE traded
+a node nothing else on the face mentioned. The join lived in the trader's head.
+
+**Nodes are now rows in the ladder, beside the levels**, carrying strength, polarity, state and distance
+— and marked **@CR / @PS** when a node sits AT a level. That is the strongest thing this panel can find:
+live positioning on top of structure that matters. A node in open space is tradeable with less behind
+it; a level with no node is not a trade at all, and says so. The node the pullback engine has selected —
+the one EXECUTE is armed against — is marked ▸ and highlighted, so the chain from location to execution
+is visible rather than inferred.
+
+**And the reason no nodes ever appeared on the chart.** Markers drew only where a history sample fell
+inside the CANDLE window. After any reload that is a growing sliver; with the market closed it is
+NOTHING, because candles stop at the last close while `sampleTapeHistory` keeps writing timestamps for
+now. **Absence of history was rendering as absence of node** — the opposite of the truth, with 100
+strikes and 317 samples sitting in memory. History still draws the lifecycle; the node's current
+reading now always draws at the right edge.
+
+**④ REACTION reads the NODE**, not the nearest level. Under the node rule "is it holding?" has to be
+asked of the thing being traded; asked of a level it answered a question nobody was about to act on.
+When there is no node it falls back to the level and labels it *context only, not a trigger*.
+
+**The target sits beside the regime.** Together they answer one question — what kind of day is this, and
+where is it trying to go. It was buried among the supporting numbers, reading as one more statistic
+rather than the destination. **CAGE is gone**: a percentage nobody acts on, on a face with no space.
+
+**Step headers are centred and highlighted** to match the step bar.
+
+## v11.45 — the node rule, and EXECUTE could never arm
+
+**THE NODE RULE (user-mandated 2026-08-22): a trade is off a NODE.** Levels give context — where
+structure sits, what shape the day has — but the entry itself has to be at a node, preferably a
+PULLBACK node. Price sitting at a level with no node behind it is information, not a setup. ⑤ EXECUTE
+now refuses outright with **NO NODE — NO TRADE**, and names the level as context rather than implying
+a trade might be there.
+
+**And wiring that up exposed why EXECUTE has never armed.** It tested `pb.entry`. `pbEntryPick` has
+never returned an `entry` — it returns `level`. So a valid node-based pullback entry sat in the object
+while the face showed "no setup", from v11.26 until now. Reading an absent property is not an error in
+JavaScript, so nothing ever threw. Measured live at the moment of the fix: `{ok: true, level: 764,
+rule: 'leg.pb', state: 'dec'}` — a real entry the panel was hiding from itself.
+
+The stop now sits beyond the node's OWN zone rather than a fixed pad, the target is the next structural
+stop, and a node setting up against the SMA is refused as **AGAINST THE CALL**.
+
+**Hover audit, measured rather than assumed.** 114 fields carried a tip and **41 did not**, and the gap
+was systematic: the tiny LABEL held the explanation while the value beside it held none — so hovering
+the number a trader is actually looking at gave nothing. FRAME cells now wrap label and value in one
+tipped element, ladder ROWS carry their tip so name, price, distance and depth marker are all covered,
+and the price row, verdict block and SET line gained the questions they answer.
+
 ## v11.44 — drift was confirming calls it disagreed with
 
 The live face read **`↑ BULLISH`** beside **`DRIFT ✓ DN·conf`**.

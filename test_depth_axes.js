@@ -90,14 +90,15 @@ eq(confTier({ok:false},766),null,'and an empty read is the same');
 }
 // ---- expected move ----
 {
-  ok(/>EM<\/span>/.test(src),'expected move is on the FRAME line');
+  // v11.45 routes FRAME cells through cell(label,value,tip) so the VALUE is hoverable too
+  ok(/cell\('EM'/.test(src),'expected move is on the FRAME line');
   ok(/how much of it the session range has already used/.test(src),'and the hover explains the percentage');
   ok(/a one-sided straddle is not a straddle/i.test(src),'the blank case is explained rather than left mysterious');
 }
 // ---- depth reaches REACTION ----
 {
   ok(/>DEPTH<\/em>/.test(src),'REACTION carries a DEPTH row');
-  ok(/What is standing behind this level\?/.test(src),'asking its question first');
+  ok(/What is standing behind it\?/.test(src),'asking its question first');
   ok(/both loaded/.test(src),'and it calls out when both books are heavy');
 }
 console.log('\n'+pass+' pass / '+fail+' fail');
