@@ -26,3 +26,9 @@ Applied patch to 'tools/.gex-drop-msg' cleanly.
 Applied patch to 'tools/BUILD-CHECKLIST.md' cleanly.
 Falling back to direct application...
 Sat 08/22/2026 12:28:02.07 applied patch gex-patch-v1152.patch 
+[main cc7024d] v11.52: release-links.sh generates the Tampermonkey block so step 9 cannot be skipped
+ 4 files changed, 54 insertions(+), 2 deletions(-)
+ create mode 100755 tools/release-links.sh
+To https://github.com/rassulshah/gex-signal-tapereader.git
+   278d0e1..cc7024d  main -> main
+Sat 08/22/2026 12:28:05.15 PUSHED - 1 drop(s): v11.52: release-links.sh generates the Tampermonkey block so step 9 cannot be skipped 

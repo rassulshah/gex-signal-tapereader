@@ -15,7 +15,11 @@ let pass=0, fail=0; const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} el
 function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.exec(src);let i=src.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}return src.slice(m.index,e+1);}
 eval(ex('ymdNum')); eval(ex('windows')); eval(ex('extractChain'));
 global.SIDE_MIN=0.05;
-eval(['ymdOf','ymdNum','windows','levelsFor','extractChain','computeAll'].map(ex).join('\n'));
+// (v11.53) dexSkewFor, expectedMove and gammaFlip are CALLED BY computeAll and exist in the
+// companion — ex() extracts one body, so every callee must be evalled too or the whole block
+// throws ReferenceError and the file scores zero. hdrText/hdrNum are the v1.9 header scraper.
+eval(['ymdOf','ymdNum','windows','levelsFor','dexSkewFor','expectedMove','gammaFlip',
+      'hdrText','hdrNum','extractChain','computeAll'].map(ex).join('\n'));
 
 // ---------- metadata: the grant split is the whole point ----------
 {

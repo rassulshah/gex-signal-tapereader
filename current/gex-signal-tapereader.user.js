@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.51
+// @version    11.53
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.51';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.53';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -17386,7 +17386,11 @@ function rollDetect(sym){
   sym=sym||'SPY';
   try{
     var f=LASTFEED[sym]; if(!f||!f.j) return null;
-    var snaps=f.j.levels||[]; if(snaps.length<12) return null;
+    // (v11.53) A feed that EXISTS but is too short must SAY SO. Returning bare null made it
+    // indistinguishable from "no feed at all", which is the one case null is reserved for — and
+    // saying why is the refusal doctrine everywhere else in this file. accumAsym keeps its own
+    // null: it is a value, not a read, and has no refusal channel to speak through.
+    var snaps=f.j.levels||[]; if(snaps.length<12) return { err:'not enough session yet' };
     var last=snaps.length-1, tL=snaps[last].t;
     if(typeof tL!=='number') return null;
     // `t` is SECONDS in this payload. Walk back by time, not by index, so a cadence change cannot

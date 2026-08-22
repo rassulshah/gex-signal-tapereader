@@ -1,3 +1,72 @@
+## v11.53 / companion v1.9 — the suite is green, and their published numbers are finally read
+
+**THE SUITE WAS NEVER GREEN.** Notes claimed "4239 pass / 0 fail" while six files failed on every run.
+Five were **one bug in the shared `ex()` test harness, repeated five times**: `ex()` extracts a single
+function BODY and `eval`s it, so any name that body closes over — a callee, a module-level constant —
+throws `ReferenceError` inside the eval and the whole file scores zero. It reads exactly like a real
+failure, which is why nobody could tell them apart. Fixed by pulling in what each extracted function
+actually calls, and by extracting constants FROM SOURCE (`EP_*`, `FLRCEIL_*`, `NM_*`, `NODE_OPEN`) so a
+retune moves the tests with the code instead of leaving them asserting a stale threshold.
+
+⚠ While fixing them I walked straight into the landmine this project already documented: **`eval()`
+inside a `forEach` callback declares into the CALLBACK's scope**, so eleven constants vanished the moment
+it returned. Join and eval once. It is in the notes because it has now cost time twice.
+
+**`rollDetect` returned bare `null` for a feed that EXISTS but is too short** — indistinguishable from
+"no feed at all", which is the one case null is reserved for. It now says `not enough session yet`, which
+is the refusal doctrine used everywhere else in this file. (`accumAsym` keeps its null deliberately: it
+returns a value, not a read, and has no refusal channel.)
+
+**`test_spx_levels.js` is RETIRED, not deleted.** `spxwLane()` and `spxLevels()` are absent from the
+source; the file had been throwing from its own `ex()` helper for an unknown number of releases. SPX
+levels no longer come from Skylit's SPXW lane at all — they come from the InsiderFinance chain via
+`ifLadder`, a different source with a different shape, so its 25 assertions could not be retargeted.
+Coverage lives in `test_if_ladder.js` (45), `test_levels_unified.js` (122) and `test_spxw_confluence.js`
+(26). The file keeps its ground-truth table and now carries a **live guard**: if those two functions ever
+return to source, it FAILS and tells you to un-retire it from git history.
+
+**`test_tapeking.js` fails in the cloud sandbox ONLY** — `jsdom` cannot install there (npm 403). It
+passes on the user's machine. That is environmental, not a defect, and it is the only red left.
+
+---
+
+**COMPANION v1.9 — THE PAYLOAD IS NOT THE PAGE, AND THAT MISTAKE HAS NOW BEEN MADE THREE TIMES.**
+
+`pick()` walked `initialData`, every published metric came back null, and the conclusion drawn was
+*"their page computes client-side, so we must compute too."* That conclusion drove real decisions: we
+computed our own zero gamma, and TERM was called "structurally dead — their payload does not carry it."
+
+**Verified 2026-08-22 by fetching their raw HTML with NO JavaScript running:**
+
+    Zero Gamma 7646.90 · Call Wall 7900 · Put Wall 7500 · ATM IV 6.2 · Put/Call 1.36 · Term Slope 1.3
+
+The numbers are in the server-rendered MARKUP, outside `__NEXT_DATA__`. The payload was never the whole
+page. `pub` now resolves through **three sources in order — payload field, tree walk, then rendered
+header** — and `pubSrc` records which one won for each value, so anything on our face can be traced to
+where it came from. Anchored on the LABELS their page prints, never class names: class names are exactly
+what churns, and a moved label yields null while the computed path still runs.
+
+**What this changes on the face, for free:** `ifLadder` already preferred `c.pub.zeroGamma` and fell
+through to a computed flip tagged `FLIP*`/`calc` because it was always null. It will now get their
+published 7646.90 and render as **`FLIP`** sourced `IF·pub`. Their value, their name, no substitution.
+
+⚠ **Their header walls are ALL-EXPIRY** (CW 7900 / PW 7500) while our ladder's CR0/PS0 are **0DTE**
+(7700/7665, verified reproducing their 0DTE view exactly). Both are "their values" and they answer
+DIFFERENT questions. `pub.wallsAreAllExpiry` travels with them so the caveat cannot get separated from
+the data. Substituting one for the other would be failure pattern #1 wearing a "use their numbers" badge.
+
+**AND THE CORRECTION I OWE ON THE FETCH PATH.** Earlier this session I recommended turning the
+tapereader's dormant `ifFetch` on. **That was wrong and it would have killed the tape.** The source says
+so explicitly: the tapereader runs `@grant none`, which is load-bearing — it keeps the script in PAGE
+context so its `window.fetch` / `XMLHttpRequest` hooks capture Skylit's feed. Any `@grant` moves it into
+Tampermonkey's sandbox where `window` is a wrapper and the hooks patch the wrapper instead of the page.
+The companion exists precisely to hold that grant. The published values belong there, and now they are.
+
+**Housekeeping:** `install.bat` (10,382 lines of base64), `v10.js` and `tools/gex-pull.log` are untracked
+and gitignored — the installer bloated every single diff and is superseded by the Drive pipeline.
+`tools/AUTOPULL-TEST.txt` removed. Drop messages must stay ASCII: cmd reads `.gex-drop-msg` as ANSI, so
+an em-dash arrives as mojibake in the commit subject.
+
 ## v11.50 — the band was absent exactly when you were preparing
 
 **v11.49 shipped a band you could not see.** `closedCandles()` is filtered to TODAY, so on a weekend, on

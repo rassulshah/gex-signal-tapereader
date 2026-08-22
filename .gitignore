@@ -4,3 +4,9 @@ _tmp
 *.zip
 .DS_Store
 Thumbs.dbtools/review-pull.log
+
+# the self-extracting installer: 10k lines of base64 that bloated every diff.
+# Superseded by the Drive auto-pull pipeline (tools/gex-pull.bat). Built on demand, not tracked.
+install.bat
+v10.js
+tools/gex-pull.log

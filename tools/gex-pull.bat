@@ -77,6 +77,8 @@ cd /d "%REPO%"
 set MSG=
 if exist "%REPO%\tools\.gex-drop-msg" set /p MSG=<"%REPO%\tools\.gex-drop-msg"
 if not defined MSG set MSG=gex: auto-pull from Drive inbox
+REM (v11.53) KEEP DROP MESSAGES ASCII. cmd reads this file as ANSI, so an em-dash arrives as "ÃÃ¶"
+REM in the commit subject. Cosmetic, but it makes git log unreadable. Write plain ASCII upstream.
 "!GIT!" commit -m "!MSG!" >> "%LOGF%" 2>&1
 if errorlevel 1 ( echo %DATE% %TIME% COMMIT FAILED >> "%LOGF%" & exit /b 1 )
 "!GIT!" push >> "%LOGF%" 2>&1

@@ -8,6 +8,7 @@ function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.ex
   return src.slice(m.index,e+1);}
 
 // ---- kingPathSigMoves (pure) ----
+eval(ex('dispIsFut'));
 eval(ex('kingPathSigMoves'));
 var M=60000, t0=0;
 var pts=[
@@ -35,6 +36,10 @@ global.STATE={SPY:{setups:{
   dead:    {strike:776, dir:'long', stage:'GO', outcome:'FAILED', voided:false, ts:150, updated:250},
   live_ft: {strike:776, dir:'long', stage:'FT', outcome:null,  voided:false, ts:900, updated:950}
 }}};
+// (v11.53) fmtLvl is called by setupTagForNode and EXISTS in source — ex() extracts ONE function
+// body, so a name declared outside it throws ReferenceError inside the eval. This single harness
+// gap silently emptied four tests in this suite; pull in what the extracted function calls.
+eval(ex('fmtLvl'));
 eval(ex('setupTagForNode'));
 var tag=setupTagForNode(776);
 ok(/BO·FT/.test(tag),                       'live BO·FT setup renders BO·FT');

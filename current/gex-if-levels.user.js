@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.8
+// @version      1.9
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
@@ -56,6 +56,31 @@ function log(){ try{ if(window.__GEXIF_DEBUG) console.log.apply(console,['[GEXIF
 
 // ---- extract the embedded chain -----------------------------------------------------------
 // Anchored on the __NEXT_DATA__ script tag by id, not by position or class.
+// ---- (v1.9) THEIR RENDERED HEADER -------------------------------------------------------------
+// `pick()` walks initialData and every published metric came back NULL, and the conclusion drawn from
+// that was "their page computes client-side, so we must compute too". That conclusion was WRONG, and it
+// is failure pattern #4 for the third time: the payload is not the page. Their numbers are in the
+// server-rendered MARKUP, outside __NEXT_DATA__ — verified 2026-08-22 by fetching the raw HTML with no
+// JavaScript running at all:
+//     Zero Gamma 7646.90 · Call Wall 7900 · Put Wall 7500 · ATM IV 6.2 · Put/Call 1.36 · Term Slope 1.3
+// So we read the LABELS the page prints, not class names or DOM shape — class names are exactly what
+// churns. Every value stays null-safe: a label that moves yields null and the computed path still runs.
+function hdrText(html){
+  try{
+    return String(html).replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ')
+                       .replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ');
+  }catch(e){ return ''; }
+}
+function hdrNum(txt, label){
+  try{
+    var i=txt.indexOf(label); if(i<0) return null;
+    var win=txt.slice(i+label.length, i+label.length+80);
+    var m=win.match(/(-?)\s?\$?\s?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)/);
+    if(!m) return null;
+    var v=parseFloat(m[2].replace(/,/g,'')); if(!isFinite(v)) return null;
+    return (m[1]==='-') ? -v : v;
+  }catch(e){ return null; }
+}
 function extractChain(html){
   try{
     var m = html.match(/<script[^>]+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
@@ -98,19 +123,37 @@ function extractChain(html){
       }
       return out;
     }
+    // (v1.9) THREE SOURCES, IN ORDER: the payload field, a walk of the payload tree, then THEIR RENDERED
+    // HEADER. The header is what finally makes these non-null — see hdrText/hdrNum above. `pubSrc` records
+    // which source won for each, so a value on our face can always be traced to where it came from.
+    var HT=hdrText(html), pubSrc={};
+    function three(key, direct, re, label){
+      if(typeof direct==='number' && isFinite(direct)){ pubSrc[key]='payload'; return direct; }
+      var v=pick(re);
+      if(typeof v==='number' && isFinite(v)){ pubSrc[key]='tree'; return v; }
+      v=hdrNum(HT, label);
+      if(typeof v==='number' && isFinite(v)){ pubSrc[key]='header'; return v; }
+      pubSrc[key]=null; return null;
+    }
     var pub={
-      zeroGamma:(typeof d.zeroGamma==='number')?d.zeroGamma:pick(/zero.?gamma|gamma.?flip|flip.?point/i),
-      callWall :(typeof d.callWall ==='number')?d.callWall :pick(/call.?wall/i),
-      putWall  :(typeof d.putWall  ==='number')?d.putWall  :pick(/put.?wall/i),
+      zeroGamma:three('zeroGamma', d.zeroGamma, /zero.?gamma|gamma.?flip|flip.?point/i, 'Zero Gamma'),
+      callWall :three('callWall',  d.callWall,  /call.?wall/i, 'Call Wall'),
+      putWall  :three('putWall',   d.putWall,   /put.?wall/i,  'Put Wall'),
       // (v1.4) Their page prints these; whether they are in the PAYLOAD is the open question that
       // decides whether SKEW is free or has to be computed. Zero Gamma was rendered and absent, so
       // "it is on the page" proves nothing.
-      skew     :pick(/(^|[^a-z])skew$|delta.?skew|d25.?skew/i),
-      skewSlope:pick(/skew.?slope/i),
-      termSlope:pick(/term.?slope/i),
-      atmIV    :pick(/atm.?iv|iv.?atm/i),
-      pcRatio  :pick(/put.?call.?ratio|pc.?ratio/i)
+      skew     :three('skew',      null, /(^|[^a-z])skew$|delta.?skew|d25.?skew/i, '25' + String.fromCharCode(916) + ' Skew'),
+      skewSlope:three('skewSlope', null, /skew.?slope/i, 'Skew Slope'),
+      termSlope:three('termSlope', null, /term.?slope/i, 'Term Slope'),
+      atmIV    :three('atmIV',     null, /atm.?iv|iv.?atm/i, 'ATM IV'),
+      pcRatio  :three('pcRatio',   null, /put.?call.?ratio|pc.?ratio/i, 'Put/Call'),
+      maxPain  :three('maxPain',   null, /max.?pain/i, 'Max Pain')
     };
+    // ⚠ THEIR HEADER WALLS ARE ALL-EXPIRY (CW 7900 / PW 7500 on 2026-08-22) while our ladder's CR0/PS0
+    // are 0DTE (7700/7665, verified reproducing their 0DTE view exactly). BOTH are "their values" and
+    // they answer DIFFERENT questions. Never substitute one for the other — that is failure pattern #1
+    // wearing a "use their published numbers" badge.
+    pub.wallsAreAllExpiry = true;
     // (v1.4) ONE-LINE SHAPE ANSWER: which fields does a single option actually carry? This decides
     // whether DEX (needs delta) and a computed SKEW (needs per-contract IV) are buildable at all.
     var optKeys=null;
@@ -118,7 +161,7 @@ function extractChain(html){
     var shape=null;
     try{ shape=shapeOf(d,0,'',[]).slice(0,60).join(' | '); }catch(eSh){}
     return { spot:d.spot, options:d.options, t:d.timestamp||null, stale:!!d.isStale,
-             ticker:d.ticker||null, pub:pub, optKeys:optKeys, shape:shape };
+             ticker:d.ticker||null, pub:pub, pubSrc:pubSrc, optKeys:optKeys, shape:shape };
   }catch(e){ return { err:'parse failed: '+e.message }; }
 }
 
@@ -369,7 +412,7 @@ function computeAll(ch){
   if(!inFri.length) inFri=[front];
   return {
     spot:ch.spot, ticker:ch.ticker, payloadT:ch.t, stale:ch.stale,
-    asOf:Date.now(), today:W.today, friday:W.friday, rolled:!!W.rolled, pub:(ch.pub||null), optKeys:(ch.optKeys||null), shape:(ch.shape||null),
+    asOf:Date.now(), today:W.today, friday:W.friday, rolled:!!W.rolled, pub:(ch.pub||null), pubSrc:(ch.pubSrc||null), optKeys:(ch.optKeys||null), shape:(ch.shape||null),
     dte0:{ exps:[front], lv:levelsFor(ch.options, ch.spot, function(o){ return ymdOf(o)===front; }),
            ds:dexSkewFor(ch.options, ch.spot, function(o){ return ymdOf(o)===front; }),
            em:expectedMove(ch.options, ch.spot, function(o){ return ymdOf(o)===front; }),

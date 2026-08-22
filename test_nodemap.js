@@ -25,7 +25,19 @@ global.nodeLifecycle=function(){return {stage:'Fresh',taps:0,prob:80};}; // (v10
 global.deflectionAt=function(){return null;}; // (v10.34)
 
 function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.exec(src);let i=src.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}return src.slice(m.index,e+1);}
-eval(['nmStrength','nmVerdict','nodeMapModel'].map(ex).join('\n'));
+// (v11.53) nodeSessChg EXISTS in source; ex() extracts a body only, so it must be evalled too —
+// along with what IT calls, and the module-level vars those close over. Pulled from source rather
+// than hardcoded so a rename in the script moves this test with it instead of leaving it stale.
+eval(src.match(/var NODE_OPEN_KEY\s*=[^\n]*\n\s*var NODE_OPEN\s*=[^;]*;/)[0]);
+global.localStorage = global.localStorage || { getItem:()=>null, setItem:()=>{} };
+global.TODAY = '2026-08-22';   // nodeOpenLoad keys its store by day
+// nodeEpisode's tuning constants, pulled from source so they cannot drift out of sync with it
+// ⚠ JOIN AND EVAL ONCE. eval() inside a forEach callback declares into the CALLBACK's scope, so the
+// constants vanish the moment it returns — a landmine already recorded in the project notes.
+// All the module-level tuning constants nodeMapModel and its callees close over. Pulled from SOURCE
+// so a retune moves this test with the code instead of leaving it asserting a stale threshold.
+eval(src.match(/^var (?:EP|FLRCEIL|NM)_[A-Z0-9_]+\s*=\s*[^;]+;/gm).join('\n'));
+eval(['strikeStep','nodeEpisode','nodeOpenSave','nodeOpenLoad','nmStrength','nmVerdict','nodeSessChg','nodeMapModel'].map(ex).join('\n'));
 
 let p=0,f=0;const ok=(n,c,g)=>{if(c){p++;console.log('PASS '+n+(g!==undefined?' -> '+g:''));}else{f++;console.log('FAIL '+n+(g!==undefined?' -> '+g:''));}};
 
