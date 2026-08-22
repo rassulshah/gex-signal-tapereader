@@ -1,278 +1,217 @@
 # RESUME NOTE — 2026-08-22 — v11.48 / companion v1.8
 
-## ⚠ FOUR FAILURE PATTERNS THAT EXPLAIN NEARLY EVERY BUG IN THIS PROJECT
+## ⏱ START HERE — THE FIRST THING TO DO
 
-**1. Mislabeling.** A number shown under a label implying a different source, window or scale than it
-has. The ladder said `IF` and rendered Skylit numbers. `week` said "to Fri" holding one expiration.
-`DRIFT ✓` sat beside "both books not in yet". `FLRCEIL_FAR` was documented in STRIKES and tested in
-PRICE POINTS. **Nothing ever throws.** Ask of every number: which book, which window, which scale, and
-does the label say so.
+**v11.48 is built, committed and pushed. The user was on v11.47 when the session ended.**
 
-**2. Moving denominators.** %King is right for ranking at one instant and WRONG for comparing two
-moments — if the King strike changes, every node rebases at once. Anything measuring change over time
-uses DOLLARS. This bit three separate features.
-
-**3. Does it POINT, or does it CONDITION?** A direction vote answers "which way next". A conditional
-quantity answers "what happens IF it moves". Gamma, vanna and VIX term structure all condition. Putting
-them in a direction tally was the single biggest design error and it survived several rounds, because
-each one *feels* directional.
-
-**5. Defensive try/catch makes a missing REFERENCE invisible.** Twice in two builds a section rendered
-empty because its own try/catch ate a ReferenceError — once a function never defined (`tradeNodes`),
-once a variable from another scope (`rr`, which lives in `nodeChartHtml`). Header emitted, rows gone,
-looks exactly like "nothing to show". **`swallow(tag,e)` now records it, `__gptsDebug.renderErrors()`
-exposes it, and `node tools/smoke.js` FAILS on a non-empty list.** A regex scan for undeclared
-identifiers was tried and abandoned — it flagged keywords and regex contents, and a noisy check gets
-switched off. Instrument the catch; do not try to out-parse JavaScript.
-**Also: when an edit script asserts, CHECK IT LANDED.**
-
-Original note: v11.46 shipped a section calling
-`tradeNodes()` that was never defined — the edit adding it aborted unnoticed. The section's own
-try/catch swallowed the ReferenceError, so it simply did not render, which is indistinguishable from
-"there was nothing to show". **`test_render_refs.js` now fails the build if any renderer calls a
-function the file does not declare.** When an edit script asserts, CHECK IT LANDED.
-
-**4. Concluding "absent" from a shallow look.** `pick()` scanned only TOP-LEVEL payload fields, every
-published metric read null, and that drove a decision to compute our own zero gamma — the exact thing
-the user had twice said not to do. A nested object looks identical to an absent one. **Walk the tree
-before concluding anything is missing**, and record the shape so "absent" is a finding, not an assumption.
+1. Check what is actually running:
+   `__gptsDebug.renderErrors` — if the hook is ABSENT, v11.48 is not loaded yet.
+   ⚠ If the panel is popped out, `#gpts-panel` is NOT in the Atlas document — read it from
+   `documentPictureInPicture.window.document`.
+2. **THE ONE UNVERIFIED THING: the NODES rows in ③ TRADE LOCATION have never been seen rendering.**
+   Shipped three times — v11.46 (called a function that was never added), v11.47 (used `rr`, a variable
+   from another scope), v11.48 (the fix, unconfirmed). Check `p.querySelectorAll('.g3node').length > 0`
+   and `__gptsDebug.renderErrors()` returns `[]`. **Do not call this feature done until rows appear.**
+3. Then: nothing is urgent. The user's own words — *"the next useful thing is watching v11.48 during an
+   actual session rather than adding more surface to it."* Eight builds shipped on 2026-08-22 and the
+   last three were fixing my own misses.
 
 ---
 
-## ⚠ THE NODE RULE (user-mandated 2026-08-22)
+## ⚠ SIX FAILURE PATTERNS — THESE EXPLAIN NEARLY EVERY BUG IN THIS PROJECT
+
+**1. Mislabeling.** A value shown under a label implying a different source, window or scale. The ladder
+said `IF` and rendered Skylit numbers. `week` said "to Fri" holding one expiration. `DRIFT ✓` sat beside
+"both books not in yet", and later beside a call it *disagreed with*. `FLRCEIL_FAR` was documented in
+STRIKES and tested in PRICE POINTS. **Nothing ever throws.** Ask of every number: which book, which
+window, which scale — and does the label say so.
+
+**2. Moving denominators.** %King ranks at one instant; **DOLLARS** compare two moments. If the King
+strike changes, every node rebases at once. Bit three separate features.
+
+**3. Does it POINT or does it CONDITION?** Gamma, vanna and VIX term structure all condition — regime
+line or gate, never a direction vote. This survived several rounds because each *feels* directional.
+
+**4. Concluding "absent" from a shallow look.** `pick()` scanned only TOP-LEVEL payload fields, every
+published metric read null, and that drove a decision to compute our own zero gamma. Walk the tree first.
+
+**5. Defensive try/catch makes a missing reference INVISIBLE.** Twice in two builds a section rendered
+empty because its own catch ate a ReferenceError — once a function never defined (`tradeNodes`), once a
+variable from another scope (`rr`). Header emitted, rows gone, looks exactly like "nothing to show".
+→ **`swallow(tag,e)` now records it, `__gptsDebug.renderErrors()` exposes it, `node tools/smoke.js`
+FAILS on a non-empty list.** A regex scan for undeclared identifiers was tried and ABANDONED — it flagged
+keywords and regex-literal contents, and a noisy check gets switched off. Instrument the catch; do not
+try to out-parse JavaScript.
+
+**6. When an edit script asserts, CHECK IT LANDED.** v11.46 shipped half a feature because a python edit
+aborted on a failed assertion and the failure went unnoticed.
+
+---
+
+## THE TWO RULES THE USER HAS STATED
+
+> **"I am big on 50 sma, everything else is supplementary."**
+
+② BIAS is **not a tally**. The 50-SMA gives direction and explains itself; SKEW / ACCUM / PA **confirm or
+they do not**, and the count is the confidence. Confirmers never outvote the SMA; three agreeing cannot
+manufacture a direction when the SMA is flat. Both pinned by tests. DRIFT gates — and it gates **the
+call**, not itself: books agreeing with each other *against* the SMA is ✗, not ✓.
 
 > **"any time a trade occurs, it must be off a node. The levels give context but the trade is off a
 > node, preferably a pullback node."**
 
-Levels = CONTEXT (where structure sits, what shape the day has). **The trade is at a NODE.**
-**v11.46 made nodes first-class rows in ③ beside the levels**, tagged `@CR`/`@PS` when a node sits AT a
-level (the strongest combination: live positioning on structure), and `▸`-marked for the node the
-pullback engine selected. Before this the panel showed context and hid the tradeable object — ⑤ traded a
-node nothing else on the face mentioned.
-⚠ **Node markers never appeared on the chart** because they drew only where a HISTORY sample fell inside
-the CANDLE window: after a reload that is a sliver, and with the market closed it is nothing at all
-(candles stop at the last close while sampling keeps writing "now"). **Absence of history rendered as
-absence of node.** The live reading now always draws at the right edge. ⑤ EXECUTE
-refuses with `NO NODE — NO TRADE` and names the level as context. The stop sits beyond the NODE'S OWN
-zone; the target is the next structural stop; a node setting up against the SMA is `AGAINST THE CALL`.
-
-⚠ This exposed that **EXECUTE could never arm**: it read `pb.entry`, and `pbEntryPick` has always
-returned `level`. Dead from v11.26 to v11.45 with a valid entry sitting in the object. Reading an absent
-property is not an error — **this is the same class as every other bug here, and the only defence is
-checking the returned SHAPE, not the name you expected.**
-
-## THE DESIGN PHILOSOPHY (user's own words)
-
-> **"I am big on 50 sma, everything else is supplementary."**
-
-BIAS is **not a tally**. The 50-SMA gives the direction and explains itself. SKEW, ACCUM and PA
-**confirm or they do not**, and the count is the confidence. Confirmers never outvote the SMA; three
-agreeing cannot manufacture a direction when the SMA is flat. Both pinned by tests.
-
-The old six-vote tally printed NEUTRAL on a 2–2 split while the SMA was plainly sloped — the panel
-arguing with the chart. TREND alone measured **34%**, so "TREND with 3 of 3 confirming" versus "0 of 3"
-is the more useful thing for supplementary reads to say. Testable via `dirFactorStats` (lift vs base
-rate, regime split).
+⑤ EXECUTE refuses with `NO NODE — NO TRADE` and names the level as context. Stop sits beyond the NODE'S
+OWN zone; target is the next structural stop; a node setting up against the SMA is `AGAINST THE CALL`.
+③ shows nodes as rows beside the levels, tagged `@CR`/`@PS` where a node sits AT a level (the strongest
+combination), `▸` for the one the pullback engine selected.
 
 ---
 
-## ⚠ KEEP THE SUITE GREEN — 4161 pass / 0 fail
+## WHAT THE PANEL IS NOW
 
-The 23 "known stale" failures were carried as a baseline for the whole project and examined properly for
-the first time on 2026-08-22. **Twenty-one were stale tests. Two were live bugs that had been shipping.**
+**① FRAME** — `−G −V ⚠ → 7617` (regime AND target on one line) then `DEX · EM · TERM · ATR · phase`.
+**② BIAS** — SMA verdict + confirmation chips + count; DRIFT gate.
+**③ TRADE LOCATION** — IF ladder with depth diamonds ◆◆/◆, then NODES rows, then the three-zone chart.
+**④ REACTION** — WATCH (the node) · NODE (defended or abandoned) · PRICE · DEPTH · PRESSURE.
+**⑤ EXECUTE** — armed on a node, or a refusal that says why. Empty EXECUTE is a single dash.
 
-- The **locked voice line** had lost a word: `Rallied down to 768.` should be `...to 768 target.` The
-  voice is user-authored (2026-08-18) and locked, wording and punctuation both.
-- An **`ifNum` collision** had broken the manual-InsiderFinance panel for **nine releases**. v11.31 added
-  `ifNum(x)` as a display formatter; `ifNum(txt,label)` already existed as the parser. Later declaration
-  wins silently, so all five parser callers got the formatter, passed it a string, and received NaN.
+**Deleted for space and kept deleted:** the "waiting on" line, the "NO SETUP" box, the phase box and
+progress bar, the chart legend row, PAIN, P/C, CAGE. **Every hover opens with the QUESTION it answers**
+— a test asserts this for all five step headers and pins ~20 more cells by name.
 
-A permanently-red baseline trains everyone to ignore red. **When a deliberate change breaks a test, fix
-the test in the same commit** or it becomes camouflage.
+**The chart, three zones:** LEFT = InsiderFinance STRUCTURE (net GEX column, net DEX column — BOTH from
+their chain). RIGHT = Skylit FLOW, bars growing INWARD from the right edge as growth segments (dim =
+held over an hour, mid = added 60m→15m ago, **bright leading edge = last 15 minutes**), with lost ground
+marked when a node bleeds. MIDDLE = price, candles, node markers, roll arrows, the 50-SMA, centred level
+labels, price and time axes.
 
-**`test_no_dupes.js` fails the build on any NEW function-name collision** in either script. It earned
-itself on the build *after* it was written, catching `confluence` (renamed `levelDepth`).
-Four collisions to date: `trendBadgeHtml`, `nodeBreadth` (both inert), `ifNum` (live-broken for nine
-releases), `confluence` (caught pre-ship). **Grep before naming a function.**
+**Ladder = InsiderFinance, SPX, NO fallback.** Basis ~1.0023 live from THEIR spot vs the futures print.
+⚠ **NEVER restate an SPX strike as a SPY strike** — 5-point vs 1-point grids, separate chains.
+⚠ **THREE SCALES per row**: `k` (their SPX strike), `disp` (chart/ES), `und` (underlying/SPY, **for the
+candle reads** — `closedCandles` divides futures candles back down). ATR, zone width and the rejection
+detector all run on `und`.
+⚠ `dispNum()` formats values ALREADY on chart scale — never pass them to `fmtLvl`/`fmtSpan`.
+(`ifNum` is the unrelated manual-entry PARSER. Do not confuse them again — that collision shipped broken
+for nine releases.)
 
----
-
-## WHERE THINGS STAND
-
-⚠ **INSTALLING A USERSCRIPT DOES NOT AFFECT ALREADY-OPEN PAGES.** v11.36 read as "not installed" across
-several exchanges purely because the Atlas tab had been open the whole time. **Reload the tab**, then
-verify. If the panel is popped out, `#gpts-panel` is NOT in the Atlas document — read it from
-`documentPictureInPicture.window.document`.
-
-### The panel — five steps, inline left-justified labels
-**① FRAME** — `−G −V ⚠` + playbook on one line; then `TGT · DEX · EM · TERM · ATR · CAGE · phase-tag`.
-Use **G, not γ**. "self-reinforcing" was deleted as a third description of one condition.
-**② BIAS** — SMA verdict + `SKEW / ACCUM / PA` confirmation chips + count; DRIFT gates (the only place
-gamma touches direction).
-**③ TRADE LOCATION** — IF ladder with depth markers (◆◆ / ◆), then the three-zone chart.
-**④ REACTION** — NODE · PRICE · DEPTH · PRESSURE.
-**⑤ EXECUTE** — armed or blocked; **an empty EXECUTE is a single dash**, never a "no setup" box.
-
-**Deleted for space and kept deleted:** the "waiting on" line, the "NO SETUP · bias is neutral" box, the
-phase box + progress bar, the chart legend row, PAIN and P/C from FRAME. **Hovers carry everything**, and
-every hover opens with the question it answers.
-
-### The chart — three zones
-**LEFT = InsiderFinance STRUCTURE** (net GEX column, then net DEX column). Refreshes daily; where the
-walls are. **RIGHT = Skylit FLOW** — node bars growing INWARD from the right edge, drawn as growth
-segments: dim = held over an hour, mid = added 60m→15m ago, **bright leading edge = last 15 minutes**.
-A bleeding node shows the ground it lost. **MIDDLE = price** with candles, node marker rows, roll arrows,
-the 50-SMA, and centred level labels (the line breaks around the text, freeing both gutters).
-**Axes**: price ticks on round numbers chosen from the range; time on the half hour.
-
-### The ladder = InsiderFinance, SPX, no fallback
-- Companion fetches **SPX** (`SYMS=['SPX','QQQ']`). **ES is a future ON SPX.** Basis ~1.0023 live from
-  THEIR spot vs the futures print — not a ~10.05 SPY multiplier.
-- **NEVER restate an SPX strike as a SPY strike.** SPX is a 5-point grid, SPY 1-point: separate chains,
-  separate OI. Rescaling a PRICE is fine; rescaling a STRIKE invents a level.
-- **THREE SCALES per row**: `k` (their SPX strike), `disp` (chart/ES, for display), `und`
-  (underlying/SPY, **for candle reads** — `closedCandles` divides futures candles back down). ATR, zone
-  width and the rejection detector all run on `und`.
-- `dispNum()` formats values ALREADY on chart scale. **Never pass them to `fmtLvl`/`fmtSpan`** — double
-  conversion. (`ifNum` is the unrelated manual-entry parser. Do not confuse them again.)
-- **NO SILENT FALLBACK**: missing or >25min stale → say so, show nothing.
-
-### Verified against IF
-Our SPX **CR0 7700 / PS0 7665 reproduced their published 0DTE Call Wall 7700 / Put Wall 7665 exactly.**
+**Verified against IF:** our SPX CR0 7700 / PS0 7665 reproduced their published 0DTE Call Wall 7700 /
+Put Wall 7665 exactly.
 
 ---
 
-## WHAT THEIR PAYLOAD ACTUALLY CONTAINS
+## THEIR PAYLOAD — SETTLED, DO NOT RE-DERIVE
 
-`__gptsDebug.optKeys()` returned, for SPX and QQQ:
+`__gptsDebug.ifShape()` returned the WHOLE of `initialData`:
+
+    ticker · tickerDetails{...} · spot · options[] · timestamp · isStale
+
+**No zeroGamma, no walls, no skew — nothing computed at all.** Their entire page renders client-side
+from `options[]` and `spot`. So computing is not a shortcut around something they publish; it is the
+only route. Each contract carries:
 
     strike, expireYear, expireMonth, expireDay, cp, gamma, delta, openInterest, impliedVol, bid, ask
 
-**delta, impliedVol, bid and ask are all there.** Every *published* metric (`pub`) came back null — their
-page computes them client-side. **v1.7's `pick()` now walks nested objects**; `__gptsDebug.ifShape()`
-prints the payload's structure. ✅ **SETTLED 2026-08-22.** `ifShape()` on the live panel returned the whole of `initialData`:
-`ticker · tickerDetails{...} · spot · options[] · timestamp · isStale`. **No zeroGamma, no callWall, no
-putWall, no skew — nothing computed at all.** Their entire page is rendered client-side from `options[]`
-and `spot`. The derived flip is therefore the ONLY way to have one; `HVL*` tagged `calc` is honest, and
-everything we compute uses their DATA, which keeps the principle intact.
-
-**Their page also publishes** (rendered, may or may not be in the payload): Put/Call 1.46 · Δ Skew +3.3
-"puts rich, downside bid" · 25Δ Skew +5.7 · Skew Slope −4.0 · Term Slope −2.3 · ATM IV 12.3% ·
-Net GEX −$19.1B · Gamma Squeeze bull 50 / bear 55.
-⚠ **Their header changes with the expiration dropdown** — cold fetch gave SPX CW 7900 / PW 7500 /
-ZG 7654.94; 0DTE selected gave 7700 / 7665 / 7679.88. Any published value belongs to the page DEFAULT
-window. **They publish NO per-expiration price levels** — CR0/PS0 exist only by computing on their chain.
-
-### What we compute from it
-- **DEX** = Σ delta × OI × 100 × spot. ⚠ **Puts already carry NEGATIVE delta — do not flip the sign.**
-- **25Δ SKEW** = 25d put IV − 25d call IV, nearest-delta match, refused when nothing is within 0.08 of
-  25 delta. Voted against its OWN recent range — index skew is permanently put-heavy.
-- **Expected move** = ATM straddle mid, refused unless both legs quote at ONE strike within 1% of spot.
-- **Gamma flip** = FALLBACK ONLY, re-pricing total gamma at candidate spots. Drawn `HVL*`, tagged `calc`.
-- **Level depth** = GEX ∩ DEX overlap, tiered ◆◆ / ◆. TWO traps, both hit:
-  (a) the books sit on DIFFERENT strike grids, so depth aggregates across a ZONE (max, not sum) —
-      the nearest single key read one book and scored the other zero;
-  (b) v11.42 scored IF's levels against SKYLIT's gamma. Measured live, every level came out 0.02–0.20
-      on gamma, because Skylit gamma peaks at spot while IF's walls sit away from it. **A level must be
-      compared to the book it came from.** The companion emits `gexProf` alongside `dexProf` for this.
-
-### GEX vs DEX vs VEX — the conceptual frame
-- **GEX = the CHARACTER of movement** (pin vs expand). How price travels.
-- **DEX = which way HEDGING PUSHES.** Dealers short delta must BUY as price rises. ~**100× larger than
-  gamma in dollars** (delta ~0.5, gamma ~0.001). A supply/demand map, **not an arrow** → FRAME, not BIAS.
-- **VEX = how both change when vol moves.** Conditional → regime line and DRIFT gate, never a vote.
-- **Charm** = how both change as time passes. **REMOVED** — computed, never displayed, and no decision
-  changed by a `CHEX −$1.2B/day` cell. The consequence that matters is already in the phase tag.
-- ⚠ Chain OI refreshes **once daily**, so intraday ΔDEX is mostly greeks re-weighting as spot moves — it
-  would agree with price after the fact and look like a good vote while adding nothing.
-
-## VIX — RESEARCHED, FAILS THE DIRECTION TEST
-- **Term structure**: *"primarily a regime filter, not a directional price signal."* `VIX9D > VIX` is the
-  first reliable stress signal. → FRAME. IF gives it as **Term Slope**, so we do not compute it.
-- **VIX change**: inverse of SPX by construction → tautological. **Reject.**
-- **VIX/price divergence**: *"a reversal warning… not a standalone directional signal"* — price at new
-  highs while VIX ticks up = exhaustion. → **④ REACTION as a warning. NOT YET BUILT.** VIX is already
-  captured per bar (`xm` in the day exports).
-Sources: flashalpha.com/concepts/vix-term-structure · tradegex.pro/academy/vix-overlay-trading
-
-## ROLL DETECTION — built, SHADOW MODE, direction unproven
-`rollDetect` reads `LASTFEED[sym].j.levels` — ~390 snapshots of `{k,v,net}` in DOLLARS at ~1min, whole
-session, arriving every fetch. **`t` is in SECONDS.** Window walked by TIMESTAMP, not index.
-**Calibrated on real data**: **30m · 50% RELATIVE TO THE SESSION MEDIAN · $40M · ±5 strikes** → 9
-events/session. 35% gave 37 (noise), 70% gave 2. The median near-money strike **grows 10–15% per 30m**;
-on expiry day strikes lost **75–94%** to decay alone. Without the median subtraction the detector screams
-at both ends of every session.
-⚠ **Do NOT make it a vote.** Ceiling-down 4 events/1 correct/mean **+0.39**; floor-up 4/1/**−0.22** —
-both OPPOSITE to doctrine. The archive cannot settle it: exports keep only ~5 nodes/bar with `abs` often
-null and `hist` in %King, and **all four archived days are DOWN days** (66% base rate), so any bearish
-signal inherits unearned edge and the mirror case is untestable. The existing per-node `roll` flag
-**never once fires as ceiling-rolled-down** in four sessions.
+**What we compute from it:** DEX (⚠ **puts already carry NEGATIVE delta — do not flip the sign**),
+25Δ SKEW (put IV − call IV, nearest-delta match, refused when nothing is within 0.08 of 25 delta, voted
+against its OWN recent range because index skew is permanently put-heavy), expected move (ATM straddle,
+refused unless both legs quote at ONE strike within 1% of spot), gamma flip (FALLBACK ONLY → `HVL*`
+tagged `calc`), level depth (GEX ∩ DEX, ◆◆/◆).
+⚠ **Level depth aggregates across a ZONE (max, not sum)** — the two books sit on different strike grids,
+and v11.42 scored IF levels against SKYLIT gamma, making every level read 0.02–0.20. **Compare a level
+to the book it came from.**
+**Charm was REMOVED** — computed, never displayed, and no decision changed by a `CHEX −$1.2B/day` cell.
 
 ---
 
-## STILL NOT BUILT
-- **VIX/price divergence** warning in ④ (data is already captured)
-- **Daily DEX snapshot** — cheap to start, useless without history, so start it now; positioning change
-  at a FIXED spot across days is a real signal where intraday ΔDEX is not
-- **Session-history reads** from the 390 snapshots (prior reaction at a level, node lifecycle)
-- **Coiling** (cage compression) · **read-level invalidation** · **map-reshuffle detection**
-- **Opening range · prior-day levels** (PDH/PDC/PDL — on their chart, absent from ours)
-- **Regime-conditional scoring** (scorecard split by +γ/−γ)
-- **PATH as a waypoint series**; **entry reachability** now that EM exists; **test counts**; **voids**
+## 📋 TABLED — THE BACKLOG, NOTHING STARTED
+
+- **VIX/price divergence** in ④ — price at new highs while VIX ticks up = exhaustion. Research says VIX
+  in every form FAILS the direction test (term structure is a regime filter, VIX change is tautological,
+  divergence is a warning). VIX is already captured per bar in `xm`.
+- **Daily DEX snapshot** — positioning change at a FIXED spot across days is a real signal; intraday
+  ΔDEX is mostly greeks re-weighting. Cheap to start, useless without history, **so start it early.**
+- **Term slope** — `TERM —` is permanently blank; their published value is null. Near-dated ATM IV
+  against longer-dated is the same shape of calculation as the skew we already compute.
+- **Prior-day levels + opening range** — PDH/PDC/PDL are on the user's Atlas chart and absent from ours.
+- **Session-history reads** from the 390 snapshots — prior reaction at a level, node lifecycle.
+- **NDX for NQ** — same argument that moved SPY→SPX.
 - **Value area / POC / VAH / VAL** — canvas-painted (9 canvases, 0 SVG text). Only route is the React
   **fiber walk** `readFiberCandles` already uses. The one truly independent data source we lack.
-- **NDX for NQ** (same argument that moved SPY→SPX)
-- **Per-strike dollars in the DAILY EXPORT** — prerequisite for multi-day roll validation
-- **Debug hook for an expSet's per-strike rows** — `callPutRows` reads LASTFEED only
-- **PiP background throttling** — never verified with the feed running
-- **Weekly review file naming** (`review_<FRIDAY>.json`), trigger `trig_01T8kd4kS3nBR7TuQMSSXNX6` — overdue
-- **Ledger `infl` counters not per node**
+- **Per-strike dollars in the DAILY EXPORT** — prerequisite for multi-day roll validation.
+- **Debug hook for an expSet's per-strike rows** — `callPutRows` reads LASTFEED only.
+- **PiP background throttling** — never verified with the feed running.
+- **Coiling · read-level invalidation · map-reshuffle · regime-split scorecard · PATH waypoints ·
+  entry reachability (EM exists now) · test counts · voids.**
+- **Weekly review file naming** (`review_<FRIDAY>.json`), trigger `trig_01T8kd4kS3nBR7TuQMSSXNX6` — overdue.
+- **Ledger `infl` counters not per node.**
+
+## ROLL DETECTION — built, SHADOW MODE, NEVER SEEN FIRING
+`rollDetect` reads `LASTFEED[sym].j.levels` — ~390 snapshots of `{k,v,net}` in DOLLARS at ~1min. **`t` is
+in SECONDS.** Window walked by TIMESTAMP, not index.
+**Calibrated on real data: 30m · 50% RELATIVE TO THE SESSION MEDIAN · $40M · ±5 strikes** → 9
+events/session. 35% gave 37 (noise), 70% gave 2. The median near-money strike **grows 10–15% per 30m**;
+on expiry day strikes lost **75–94%** to decay alone — without the median subtraction it screams at both
+ends of every session.
+⚠ **Direction unproven — do NOT make it a vote.** Ceiling-down 4 events/1 correct/mean **+0.39**;
+floor-up 4/1/**−0.22** — both OPPOSITE to doctrine. The archive cannot settle it: exports keep only ~5
+nodes/bar with `abs` often null and `hist` in %King, and **all four archived days are DOWN days** (66%
+base rate). The existing per-node `roll` flag **never once fires as ceiling-rolled-down** in four sessions.
+**It has never been watched working** — it correctly refuses on a weekend where everything decays
+together. Needs a live session, not a fix.
 
 ---
 
 ## BUILD/TEST MECHANICS
-- Repo **`/tmp/gexwork`**. Other `/tmp/gexchk*` clones are stale.
-- **Cannot push from the sandbox** — the git proxy refuses. The installer .bat pushes from the user's machine.
-- Harness reads **`./v10.js`** — `cp current/gex-signal-tapereader.user.js v10.js` first.
+
+**`tools/BUILD-CHECKLIST.md` runs on EVERY build. The user should never have to say "save".**
+A build is finished when a fresh context could pick it up — not when the code works.
+
+- Repo **`/tmp/gexwork`**. ⚠ **THE SANDBOX CONTAINER RESET TWICE ON 2026-08-22** and reverted to v11.25
+  both times. Nothing was lost only because everything had been pushed. Recover with
+  `git clone https://github.com/rassulshah/gex-signal-tapereader.git`. **The installer's push is the
+  only durable copy of the work.**
+- **Cannot push from the sandbox** — the git proxy refuses credentials for this repo. The .bat pushes
+  from the user's machine.
+- Harness reads **`./v10.js`** — `cp current/gex-signal-tapereader.user.js v10.js` FIRST.
+- **Suite 4239 pass / 0 fail. KEEP IT GREEN.** 23 "known stale" failures once camouflaged two live bugs
+  for months (the locked voice line lost the word "target"; the `ifNum` collision). When a deliberate
+  change breaks a test, fix the test IN THE SAME COMMIT or it becomes camouflage.
+- **`node tools/smoke.js`** — loads the script in a DOM stub, calls every debug hook, and **fails on
+  anything a render catch swallowed.**
+- **`test_no_dupes.js`** fails the build on any NEW function-name collision. Four to date:
+  `trendBadgeHtml`, `nodeBreadth` (both inert), `ifNum` (live-broken nine releases), `confluence`
+  (caught pre-ship, renamed `levelDepth`). **GREP BEFORE NAMING A FUNCTION.**
 - **Version pins** in `test_direction_grade.js`, `test_pipeline_indicator.js`, `test_rules_v2.js`,
-  `test_read_v1047.js` regex `@version 11.xx`. Bump every release, and bump `GPTS_VERSION` too.
-- Smoke: **`/tmp/smoke2.js`** — loads the whole script in a DOM stub and calls every debug hook. The
-  empty-book case is what throws. Run before shipping.
-- Installer: header + base64; `more +<HDRLINES>` must equal the `exit /b 0` line. **NO PowerShell**
-  (Avast IDP.HELU.PSE88). Must end with git add/commit/push — `tools/install-template.md`.
+  `test_read_v1047.js`. Bump every release, and bump `GPTS_VERSION`.
+- Installer: header + base64; `more +<HDRLINES>` must equal the `exit /b 0` line. **NO POWERSHELL**
+  (Avast IDP.HELU.PSE88) — `certutil` + `tar`.
 - **`eval()` inside a forEach callback declares into the CALLBACK's scope.** Join and eval once.
-- **THREE install failures look identical from the user's side:**
-  (a) GitHub serves the old version → the installer did not push. Clone and read `@version`.
-  (b) GitHub new, browser old → **the page was already open. Installing a userscript does not affect
-      open pages. Reload the tab.**
-  (c) **raw.githubusercontent.com serves stale for ~5 minutes** (`cache-control: max-age=300`). Click
-      inside that window and Tampermonkey offers **Reinstall** instead of Update — which looks exactly
-      like a failed push. A cachebusting query string does NOT reliably defeat it. Wait and retry.
-- ⚠ **THE SANDBOX CONTAINER CAN RESET MID-SESSION.** It did on 2026-08-22 and `/tmp/gexwork` reverted to
-  v11.25 — seventeen builds vanished locally. Nothing was lost because every build had been PUSHED.
-  Recover with `git clone https://github.com/rassulshah/gex-signal-tapereader.git`. **The installer's
-  push step is the only durable copy of the work.**
-- **If the user cannot find a control, check `getBoundingClientRect()`** — the panel once drifted to
-  `y = −61`, putting every header button above the viewport.
+
+### THREE INSTALL FAILURES, IDENTICAL FROM THE USER'S SIDE
+| symptom | cause | one-call check |
+|---|---|---|
+| GitHub serves the old version | the installer did not push | clone and read `@version` |
+| GitHub new, browser old | **the page was already open — installing does not affect it. RELOAD.** | reload the tab |
+| raw stale ~5 min | CDN cache, `max-age=300` | read `cache-control`/`age` |
+
+⚠ **CHECK THE RAW URL YOURSELF BEFORE TELLING THE USER TO CLICK.** This cost four cycles on 2026-08-22.
+A cachebusting query string does NOT reliably defeat it.
 
 ## DEBUG SURFACE
-`__gptsDebug.` — `ifShape` `optKeys` `skew` `accum` `rolls` `ifLadder` `nodeChart` `phase` `regime2`
-`pa` `bias` `steps` `roll` `face` `expSets` `unified` `sanity` `ifChain` `callPutRows` `feedShape`
-
-## ⚠ EVERY BUILD UPDATES THIS NOTE — AUTOMATICALLY
-**`tools/BUILD-CHECKLIST.md` is the procedure and it is not optional.** A build is finished when a fresh
-context could pick it up, not when the code works. The user should never have to say "save": if a build
-shipped and this note was not updated in the SAME COMMIT, the build is incomplete. Record what was
-LEARNED — especially a wrong assumption and what corrected it — not just what changed.
+`__gptsDebug.` — `renderErrors` `ifShape` `optKeys` `skew` `accum` `rolls` `ifLadder` `nodeChart` `phase`
+`regime2` `pa` `bias` `steps` `roll` `face` `expSets` `unified` `sanity` `ifChain` `callPutRows`
+`feedShape` `pbEntry`
 
 ## STANDING INSTRUCTIONS
-- **Ask before giving code.** Exception: unambiguous bug reports.
-- **Always send the Tampermonkey link with every build.** BOTH links when the companion changed.
+- **Ask before giving code** — the user may have more requests. Exception: unambiguous bug reports.
+- **ALWAYS send the Tampermonkey link with every build** — and ONLY for the script that actually
+  changed. Sending both when one is unchanged manufactures a "Reinstall" that looks like a failure.
+  (This was forgotten repeatedly; it is in the checklist as step 9 and still got missed.)
 - **Do not over-build.** *"The requirement is just to display the levels from IF. why are you making
   things more complicated"*.
 - **Use their values when they publish them.** *"stop writing your own stuff when it is already there."*
-- **No useless text — there is no space.** If it is needed, it goes in a hover.
-- **Every hover opens with the question it answers.** A test asserts this for all five step headers.
-- **Verify against real data before proposing thresholds.** Asked for explicitly; it changed the answer twice.
+- **No useless text — there is no space.** If it is needed it goes in a hover.
+- **Verify against real data before proposing thresholds.** It changed the answer twice.
 - **Flag substitutions.** Node bands shipped where a gamma profile was asked for and it was never said
   out loud. If the design says X and X is not built, say so at the time.
+- **ONE AT A TIME** when discussing open items — state one, ask, stop.
