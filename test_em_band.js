@@ -535,5 +535,78 @@ eval(ex('emBand'));
      'because a 1% cut removes ~5% of a live 780-strike chain — small, but it is not the whole book');
 }
 
+// ---------- 18. (v11.66) THE RAIL GETS THE WHOLE ROW ----------
+// The band row was rendering the low, the rail, the high, THEN a percentage, THEN a session chip — so the
+// one element on the face that is a measurement was laid out into whatever width was left after two
+// labels. Worse, the percentage is the SAME FACT the dot already draws, so the rail was being squeezed by
+// its own restatement. Both moved to line 3.
+{
+  const f=ex('secFrame');
+  const band=f.slice(f.indexOf('g3emk'), f.indexOf('var l3='));
+  ok(band.length>0,                    'the band row and line 3 are separable in the source');
+  ok(!/OF EM/.test(band),              'the band row no longer prints the percentage');
+  ok(!/g3replay/.test(band) || /sessBadge\+=/.test(band),
+                                       'and it does not append the session chip to the row either');
+  ok(/var sessBadge=''/.test(f),       'the session chip is HELD, not emitted inline');
+  const badgeWrites=(f.match(/sessBadge\+=/g)||[]).length;
+  ok(badgeWrites===2,                  'both branches (replay chip / phase tag) write to it', badgeWrites);
+
+  const l3=f.slice(f.indexOf('var l3='));
+  ok(/OF EM/.test(l3),                 'line 3 carries the percentage now');
+  ok(/g3pct/.test(l3),                 'as its own chip, sized to be read as a caption');
+  ok(/EB\.stretched/.test(l3),         'and it keeps the stretched flag, which used to ride on `str`');
+  ok(!/\bstr\b\s*\?/.test(l3),        'without reaching for `str`, which is scoped to the band block');
+  ok(/l3\+='<span class="g3pth"/.test(l3), 'the path text is a SPAN on the same row, not its own div');
+  ok(/if\(l3 \|\| sessBadge\)/.test(l3), 'line 3 renders when it has anything to say');
+  ok(/g3sbg/.test(l3),                 'and the session chip is pushed to the far right');
+}
+
+// ---------- 19. (v11.66) THE FLOW CHIP BREATHES ----------
+// "$214M/pt" is nine glyphs with no gap in them; at 8px it reads as one token.
+{
+  const u=ex('usdBigSp');
+  ok(/usdBig\(v\)/.test(u),            'the spaced form DELEGATES — one rounding rule, not two');
+  ok(/\$1 \$2/.test(u),                'and only inserts a space before the unit');
+  const f=ex('secFrame');
+  ok(/usdBigSp\(HF\.perPt\)/.test(f), 'the flow chip uses it');
+  ok(/ \/ PT</.test(f),                'and prints the unit spaced and capitalised');
+  ok(!/\+'\/pt'/.test(f),              'the tight form is gone from the chip');
+  // the hovers keep the tight form — a space before the unit inside a sentence looks like a typo
+  ok(/usdBig\(HF\.perPt\)\+\n?/.test(f) || /usdBig\(HF\.perPt\)/.test(f),
+                                       'while the hover sentence still uses the tight form');
+  // BEHAVIOUR, not spelling. The previous round of this suite broke on a reformat that changed nothing,
+  // so the formatter is EXERCISED rather than pattern-matched.
+  {
+    const sandbox={};
+    // eslint-disable-next-line no-new-func
+    new Function('S', ex('usdBig')+'\n'+ex('usd')+'\n'+ex('usdBigSp')+'\nS.f=usdBigSp; S.t=usdBig;')(sandbox);
+    ok(sandbox.f(213827434)==='$214 M', 'a 214-million flow prints as "$214 M"', sandbox.f(213827434));
+    ok(sandbox.f(8.3e9)==='$8.3 B',     'and billions keep one decimal', sandbox.f(8.3e9));
+    ok(sandbox.f(45000)==='$45 K',      'and thousands are spaced too', sandbox.f(45000));
+    ok(sandbox.f(1736.5)==='$1,737',    'while a contract-sized figure stays exact and unspaced', sandbox.f(1736.5));
+    ok(sandbox.t(213827434)==='$214M',  'and the tight form is genuinely unchanged', sandbox.t(213827434));
+  }
+}
+
+// ---------- 20. (v11.66) THE PILES HAVE A HOOK ----------
+// v11.51 wrote the rule down and the piles shipped without one anyway, so verifying them meant
+// rebuilding emPiles() by hand in the console. That reconstruction is the thing the rule prevents.
+{
+  ok(/__gptsDebug\.piles\s*=/.test(src), 'the piles are readable without counting DOM nodes');
+  const hStart=src.indexOf('__gptsDebug.piles');
+  // ⚠ do NOT end this slice at '__gptsDebug.session' — it matches `sessionRoll`, declared ~9,000
+  // lines EARLIER, so the slice comes back empty and every assertion below fails on a hook that is
+  // present and correct. End at the function's own closing marker instead.
+  const hEnd=src.indexOf('__gptsDebug.session = function', hStart);
+  ok(hEnd>hStart, 'the hook body is locatable', hStart+'..'+hEnd);
+  const h=src.slice(hStart, hEnd);
+  ok(/gross:P\.gexM/.test(h) && /net:P\.netM/.test(h),
+     'and it returns BOTH legs — gross sizes the pile, net is the residual');
+  ok(/netFrac/.test(h),               'with the fraction that survives the cancellation');
+  ok(/coverage/.test(h),              'and the profile coverage, so the trim is never mistaken for a gap');
+  ok(/pathIncludesTarget/.test(h),    'it states whether the target is counted as on the path to itself');
+  ok(/pathStrictly/.test(h),          'and lists what lies STRICTLY between price and the target');
+}
+
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

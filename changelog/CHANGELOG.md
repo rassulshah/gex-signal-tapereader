@@ -1,3 +1,39 @@
+## v11.66 — the rail was being squeezed by its own restatement
+
+**THE BAND ROW WAS RENDERING FIVE THINGS AND ONLY THREE OF THEM BELONGED THERE.** Low, rail, high — then
+the percentage, then the session chip. So the one element on this face that is a MEASUREMENT was laid out
+into whatever width was left over after two labels, and the piles, the ticks and the dot all had to fit
+in it. **The percentage was the worst of the two, because it is the SAME FACT the dot already draws** —
+the rail was giving up space to a restatement of itself.
+
+Both moved to line 3. The band row now holds the low, the rail and the high, and nothing else. Line 3
+reads left to right as measurement -> path -> which session, with the session chip pushed to the far
+right so it can never reflow the two that carry numbers.
+
+**THE FLOW CHIP BREATHES.** `$214M/pt` is nine glyphs with no gap in them; on a chip at 8px the eye has to
+parse it as one token instead of taking three facts at a glance. Now `$214 M / PT`. `usdBigSp` DELEGATES
+to `usdBig` and only inserts the space, so there is one rounding rule rather than two — and the hover
+sentences keep the tight form, because a space before the unit reads as a typo mid-sentence.
+
+**THE PILES FINALLY HAVE A HOOK.** v11.51 wrote the rule down — every read on the face has one, because
+the alternative is counting DOM nodes and inferring from pixels — and the piles shipped at v11.61 without
+one anyway. Verifying them this session meant rebuilding `emPiles()` by hand in the console against
+`ifChain` + `ifLadder`. `__gptsDebug.piles()` returns the raw legs beside the derived figures: `gross` is
+what sizes the pile, `net` is the dealer's actual residual, `netFrac` is how much survives the
+cancellation, and `pathStrictly` lists what lies between price and the target WITHOUT counting the target
+itself.
+
+⚠ **Those last three fields exist because the hook answers a question the face currently gets wrong** —
+see the two open items in the resume note. `perPt` is computed from GROSS gamma while ACCELERATOR/BRAKE
+is decided by NET sign, so strike 7650 (call +$2,243M, put −$2,297M, net −$53.8M on $4,540M gross) is
+drawn as a decisive accelerator carrying $59M/pt when the net requirement is $0.70M/pt. **Not fixed in
+this build — it is a design decision, not a defect to patch quietly.**
+
+⚠ **Two test lessons.** `sed 's/11\.65/...'` silently matched nothing, because the pins are written
+`11\.65` WITH the backslash — the suite caught four stale pins that a "successful" sed had left behind.
+And a slice ending at `__gptsDebug.session` matched `sessionRoll` ~9,000 lines earlier, came back empty,
+and failed five assertions on a hook that was present and correct.
+
 ## v11.65 / companion v1.13 — my own two fixes were fighting, and the symptom looked identical to the bug
 
 **THE ANCHOR WAS BEING SCALED TWICE.** v11.59 corrected `open`/`now` from live `rr` back to the captured

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.65
+// @version    11.66
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.65';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.66';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4660,6 +4660,13 @@ function usdBig(v){
     if(a>=1e4) return '$'+Math.round(a/1e3)+'K';
     return usd(v);
   }catch(e){ return null; }
+}
+// (v11.66) THE SAME NUMBER, BREATHING. "$214M/pt" is nine glyphs with no gap in them, and on a chip at
+// 8px it reads as one long token the eye has to parse rather than three facts it can take at a glance.
+// The value is identical — only the spacing changes, and only on the chip. `usdBig` stays tight because
+// it is also used inside sentences, where a space before the unit would look like a typo.
+function usdBigSp(v){
+  try{ var t=usdBig(v); if(!t) return t; return t.replace(/([0-9])([KMB])$/, '$1 $2'); }catch(e){ return usdBig(v); }
 }
 // $1,737 — whole dollars. Cents on a four-figure number are noise on a face with no space.
 function usd(v){
@@ -17016,7 +17023,13 @@ function ensureV3Css(){
     '#gpts-body .g3emn.g3str{background:#f2b45a}'+
     '#gpts-body .g3emf.g3str{background:rgba(242,180,90,.5)}'+
     '#gpts-body .g3f2 b.g3str{color:#f2b45a}'+
-    '#gpts-body .g3shape{font-size:8px;color:#8b98a9;margin-top:3px;letter-spacing:.02em}'+
+    '#gpts-body .g3shape{display:flex;align-items:center;flex-wrap:wrap;gap:5px;font-size:8px;color:#8b98a9;margin-top:3px;letter-spacing:.02em}'+
+    '#gpts-body .g3pct{font-size:9.5px;font-weight:800;color:#e6edf3;letter-spacing:-.2px}'+
+    '#gpts-body .g3shape b.g3str{color:#f0616d}'+
+    '#gpts-body .g3pth{white-space:nowrap}'+
+    // the session badge is pushed to the far right so line 3 reads left-to-right as
+    // measurement -> path -> which session, and never reflows the two that carry numbers.
+    '#gpts-body .g3sbg{margin-left:auto;display:inline-flex;align-items:center;gap:4px}'+
     '#gpts-body .g3shape b{color:#e6edf3;font-weight:800}'+
     '#gpts-body .g3shape b.warn{color:#f2b45a}'+
     '#gpts-body .g3shape .g3usd{color:#2ec27e;font-weight:800}'+
@@ -17700,7 +17713,7 @@ function secFrame(sym){
        g3tip((HF.feeds?'Hedging FEEDS the move here':'Hedging FIGHTS the move here')+': dealers must trade about '+usdBig(HF.perPt)+
              ' of underlying per point to stay neutral, '+(HF.feeds?'in the SAME direction price is going':'AGAINST the direction price is going')+
              '. From the '+gexWindowNote(HF.window)+' The near book is used because that is where gamma concentrates and where dealers actually re-hedge. This is the SIZE of the mechanical flow, not a forecast that price will travel.')+
-       '>'+(HF.feeds?'FEEDS ':'FIGHTS ')+usdBig(HF.perPt)+'/pt</span>';
+       '>'+(HF.feeds?'FEEDS ':'FIGHTS ')+usdBigSp(HF.perPt)+' / PT</span>';
   }
   if(EBc && EBc.ok && EBc.mult && EBc.contract){
     h+='<span class="g3ct"'+g3tip(EBc.contract+' — '+usd(EBc.mult)+' per index point. The expected move of '+dispNum(EBc.em)+' points is worth '+usd(EBc.emUsd)+' per contract'+(EBc.microUsd?('; the micro is one tenth, '+usd(EBc.microUsd)):'')+'. This is the MOVE converted to dollars — not a position, not a size, not profit or loss. ⚠ The multiplier follows the CHART, so charting '+EBc.contract+' while trading the micro makes every figure ten times too big.')+'>'+g3esc(EBc.contract)+' · EM '+usd(EBc.emUsd)+'/ct</span>';
@@ -17782,20 +17795,22 @@ function secFrame(sym){
        })()+
        '</span>';
     h+='<span class="g3emk"'+g3tip('Expected high — the open plus the expected move. A priced boundary, not a ceiling.')+'>'+g3esc(dispNum(EB.high))+'<small>EXP HIGH</small></span>';
-    h+='<b'+(str?' class="g3str"':'')+g3tip('How far price has travelled from the anchor, against what the straddle priced. The dot\'s position on the rail and this number are the same fact, so they can never disagree. Past 100% the day has done more than was paid for.')+'>'+Math.min(999,EB.pct)+'%</b>'+
-       '<span class="g3fk">OF EM'+(EB.anchor==='prevClose'?' · FROM PREV CLOSE':'')+(EB.est?' ~EST':'')+'</span>';
     h+='</span>';
   } else {
     h+='<span class="g3emx"'+g3tip('Where can today go? The band needs an opening bar and a two-sided at-the-money straddle in today\'s expiry. A one-sided straddle is not a straddle and half a band would be worse than none, so it says why instead of drawing something.')+'>'+g3esc(EB.why)+'</span>';
   }
   // (v11.55) LAST-SESSION MODE MUST BE UNMISSABLE — it replaces the phase tag rather than sitting beside
   // it, because the phase of a finished day is noise and two chips would let the eye take the wrong one.
+  // (v11.66) THE BADGE COMES OFF THE RAIL. It sat to the RIGHT of the band, so the rail — the one
+  // element on this face that is a MEASUREMENT and needs every pixel of width it can get — was rendering
+  // into whatever was left after a chip. Held here and emitted on line 3 instead.
+  var sessBadge='';
   if(inReplay()){
     var dLab=String((SESSION_DAY&&SESSION_DAY.day)||'').slice(5).replace('-','/');
-    h+='<span class="g3replay"'+g3tip('WHICH SESSION IS THIS? The market is closed and today has no bars, so the whole panel is showing the last session the feed carries ('+g3esc(String((SESSION_DAY&&SESSION_DAY.day)||''))+') as if it were the day — chart, trend, nodes, levels, all of it. NOTHING here is live. It never engages during RTH, and the recorder writes nothing while it is on.')+'>▮ '+g3esc(dLab)+' REPLAY</span>';
+    sessBadge+='<span class="g3replay"'+g3tip('WHICH SESSION IS THIS? The market is closed and today has no bars, so the whole panel is showing the last session the feed carries ('+g3esc(String((SESSION_DAY&&SESSION_DAY.day)||''))+') as if it were the day — chart, trend, nodes, levels, all of it. NOTHING here is live. It never engages during RTH, and the recorder writes nothing while it is on.')+'>▮ '+g3esc(dLab)+' REPLAY</span>';
   } else {
     var ptag=(P.label||'').replace('EXPIRY · ','EXP·').replace('OPEN · CHARM','OPEN').replace('POWER HOUR','PWR').replace('MORNING','AM').replace('MIDDAY','MID');
-    if(ptag && ptag!=='—') h+='<span class="g3tag"'+g3tip(g3esc(P.sub||''))+'>'+g3esc(ptag)+'</span>';
+    if(ptag && ptag!=='—') sessBadge+='<span class="g3tag"'+g3tip(g3esc(P.sub||''))+'>'+g3esc(ptag)+'</span>';
   }
   h+='</div>';
   // ---- (v11.57) THE SHAPE LINE: has this day already turned, and is anything left in it? ----
@@ -17809,6 +17824,16 @@ function secFrame(sym){
   // ---- (v11.64) THE PATH TO THE TARGET ----
   // Replaces the shape sentence, which narrated what the rail already draws. This says the thing the rail
   // cannot: what stands BETWEEN price and the target, and which way it pushes.
+  // ---- (v11.66) LINE 3 CARRIES EVERYTHING THAT WAS CROWDING THE RAIL --------------------------------
+  // The band row now holds ONE thing: the low, the rail, the high. The percentage and the session badge
+  // both sat to the right of the rail and both were spending width the measurement needed — and the
+  // percentage least defensibly of all, because it is the SAME FACT the dot already draws. Down here it
+  // is a caption on the picture above it rather than a competitor for its space.
+  var l3='';
+  if(EB.ok){
+    l3+='<b class="g3pct'+(EB.stretched?' g3str':'')+'"'+g3tip('How far price has travelled from the anchor, against what the straddle priced. The dot\'s position on the rail and this number are the same fact, so they can never disagree. Past 100% the day has done more than was paid for.')+'>'+Math.min(999,EB.pct)+'%</b>'+
+        '<span class="g3fk">OF EM'+(EB.anchor==='prevClose'?' \u00b7 FROM PREV CLOSE':'')+(EB.est?' ~EST':'')+'</span>';
+  }
   if(EB.ok && ifMagEarly!=null){
     var PA=null; try{ PA=emPath(EB, sym, ifMagEarly); }catch(ePa){}
     if(PA && PA.ok){
@@ -17821,9 +17846,10 @@ function secFrame(sym){
             '<b class="g3brk">'+usdBig(PA.brkPerPt)+'</b> brake \u00b7 '+
             '<b'+(PA.verdict==='braked'?' class="g3brk"':' class="g3acc"')+'>'+PA.verdict.toUpperCase()+'</b>';
       }
-      h+='<div class="g3shape"'+g3tip('What stands between price and the target. Every pile between the two is summed by polarity: FUEL is negative-gamma hedging that trades WITH the move through those strikes, BRAKE is positive-gamma hedging that trades against it. Both in dollars of hedging per point, from the '+gexWindowNote((PA.nAcc+PA.nBrk)?'toFri':'toFri')+' \u26a0 It is the SIZE of the flow on the path, never a promise price arrives \u2014 converting dollars into points needs a market-impact figure the chain does not carry.')+'>'+txt+'</div>';
+      l3+='<span class="g3pth"'+g3tip('What stands between price and the target. Every pile between the two is summed by polarity: FUEL is negative-gamma hedging that trades WITH the move through those strikes, BRAKE is positive-gamma hedging that trades against it. Both in dollars of hedging per point, from the '+gexWindowNote((PA.nAcc+PA.nBrk)?'toFri':'toFri')+' \u26a0 It is the SIZE of the flow on the path, never a promise price arrives \u2014 converting dollars into points needs a market-impact figure the chain does not carry.')+'>'+txt+'</span>';
     }
   }
+  if(l3 || sessBadge) h+='<div class="g3shape">'+l3+(sessBadge?'<span class="g3sbg">'+sessBadge+'</span>':'')+'</div>';
   h+='</div>';
   return h;
 }
@@ -18711,6 +18737,48 @@ window.__gptsDebug.emBand = function(sy){
         out.targetInPlay=(out.target>=B.low && out.target<=B.high);
       }
     }catch(eC){ out.check='could not cross-check: '+(eC&&eC.message||eC); }
+    return out;
+  }catch(e){ return { ok:false, why:String(e&&e.message||e) }; }
+};
+// (v11.66) THE PILES AND THE PATH GET A HOOK. v11.51 wrote down the rule — every read on the face has
+// one, because the alternative is counting DOM nodes and inferring from pixels — and the piles shipped
+// at v11.61 without one anyway. Verifying them meant rebuilding emPiles() by hand in the console against
+// ifChain + ifLadder, which is exactly the reconstruction the rule exists to prevent.
+// It returns the raw legs beside the derived figures, so the gross-vs-net question is answerable from
+// the hook rather than from a re-derivation: `gross` is what sizes the pile, `net` is the dealer's
+// actual residual, and `netFrac` says how much of the gross survives the cancellation.
+window.__gptsDebug.piles = function(sy){
+  var sym=sy||activeSym();
+  try{
+    var B=emBand(sym); if(!B||!B.ok) return { ok:false, why:(B&&B.why)||'no band' };
+    var ps=emPiles(B, sym)||[];
+    var thr=(typeof CFG!=='undefined' && CFG && typeof CFG.nodeThresh==='number') ? CFG.nodeThresh : 20;
+    var c=null; try{ c=ifChain((sym==='QQQ')?'QQQ':'SPX'); }catch(e){}
+    var lv=(c&&c.toFri&&c.toFri.lv)?c.toFri.lv:null;
+    var out={ ok:true, thresh:thr, window:(ps[0]&&ps[0].window)||null,
+              band:{low:+B.low.toFixed(2), high:+B.high.toFixed(2), now:+B.now.toFixed(2)},
+              coverage:lv?lv.gexProfCoverage:null, profN:(lv&&lv.gexProf)?lv.gexProf.length:0,
+              n:ps.length, nAccel:0, nBrake:0, piles:[] };
+    for(var i=0;i<ps.length;i++){
+      var P=ps[i]; if(P.accel) out.nAccel++; else out.nBrake++;
+      out.piles.push({ k:P.k, disp:+P.disp.toFixed(2), pct:P.pct, pos:+P.pos.toFixed(1),
+                       gross:P.gexM, net:P.netM,
+                       netFrac:P.gexM?+(100*Math.abs(P.netM)/P.gexM).toFixed(1):null,
+                       perPt:Math.round(P.perPt), shown:usdBig(P.perPt), accel:P.accel });
+    }
+    var tgt=null; try{ var L=ifLadder(sym); if(L&&!L.err) for(var j=0;j<L.rows.length;j++){ if(/Mag/.test(L.rows[j].id)){ tgt=L.rows[j].disp; break; } } }catch(eT){}
+    out.target=tgt;
+    if(tgt!=null){
+      var PA=emPath(B, sym, tgt);
+      out.path=PA;
+      // the boundary the verdict actually turns on: is the target counted as being ON the path to itself?
+      out.pathIncludesTarget = ps.some(function(P){ return Math.abs(P.disp-tgt)<0.01; }) &&
+                               (tgt>=Math.min(B.now,tgt) && tgt<=Math.max(B.now,tgt));
+      out.pathStrictly = ps.filter(function(P){
+        var lo=Math.min(B.now,tgt), hi=Math.max(B.now,tgt);
+        return P.disp>lo && P.disp<hi;
+      }).map(function(P){ return P.k; });
+    }
     return out;
   }catch(e){ return { ok:false, why:String(e&&e.message||e) }; }
 };

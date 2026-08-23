@@ -1,0 +1,658 @@
+diff --git a/changelog/CHANGELOG.md b/changelog/CHANGELOG.md
+index d28fdc0..c657618 100644
+--- a/changelog/CHANGELOG.md
++++ b/changelog/CHANGELOG.md
+@@ -1,3 +1,33 @@
++## v11.65 / companion v1.13 — my own two fixes were fighting, and the symptom looked identical to the bug
++
++**THE ANCHOR WAS BEING SCALED TWICE.** v11.59 corrected `open`/`now` from live `rr` back to the captured
++`rr`. v11.63 then set `open` **from the record** — already at the captured scale — and left v11.59's
++correction running immediately after it. So the pinned anchor was multiplied by `rec.rr/rr` a SECOND time,
++and drifted with live `rr` all over again.
++
++    stored   openU 764.4076 x rr 10.0676  =  7695.6   correct
++    rendered 7709.4 -> 7710.7 -> 7711.43            drifting, again
++
++**The symptom was indistinguishable from the bug the fixes were for**, which is exactly why it survived
++two rounds of being called fixed. Three diagnoses of "the moving dot" and the third fix introduced a
++fourth cause.
++
++**ONE SCALE, CHOSEN ONCE, APPLIED ONCE.** `useRr` is picked up front; the anchor, `now`, and both water
++marks are all built from it. **There is no correction step any more, because there is nothing to correct.**
++The pre-scaling line that computed `open=openU*rr` with LIVE rr — immediately overwritten — is gone too:
++it was the surface that made double-multiplication possible. A test now counts the multiplications and
++fails if `openU` is scaled anywhere but the two branches.
++
++**THE PROFILE TRIM NOW DECLARES WHAT IT COSTS.** The 1% tail cut removes ~5% of a live 780-strike chain's
++gross gamma — small, but the changelog said the legs sum "EXACTLY", and on live data they do not. That was
++true only for the small fixture the test used. `gexProfCoverage` now reports the kept fraction, so anyone
++summing the profile against `callGEX`/`putGEX` can see the gap is the trim rather than a bug.
++
++⚠ **Two lessons, both about my own work.** When a fix does not resolve a symptom, the next fix must be
++checked against the previous one — I stacked a correction on top of a pin without asking whether the pin
++made the correction wrong. And a test that asserts an exact spelling (`rec.openU * (`) breaks on a
++reformat that changes nothing; it now asserts the behaviour and counts the operations instead.
++
+ ## v11.64 / companion v1.12 — the band answers the trader's three questions, from ONE book
+ 
+ **Where are we going · what gets us there · what stops us.** The rail now answers all three, and the
+diff --git a/current/gex-if-levels.user.js b/current/gex-if-levels.user.js
+index 52d618a..6081d59 100644
+--- a/current/gex-if-levels.user.js
++++ b/current/gex-if-levels.user.js
+@@ -1,7 +1,7 @@
+ // ==UserScript==
+ // @name         GEX · InsiderFinance levels
+ // @namespace    gpts
+-// @version      1.12
++// @version      1.13
+ // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
+ // @match        https://app.skylit.ai/atlas*
+ // @grant        GM_xmlhttpRequest
+@@ -252,15 +252,20 @@ function levelsFor(opts, spot, keep){
+   // (v1.12) THE PROFILE, exported. Same units as callGEX/putGEX above: dollars of dealer delta per 1%
+   // move, puts NEGATIVE (their convention, verified against their published page to the decimal).
+   // Trimmed to strikes carrying real weight so a 780-strike chain does not bloat every payload.
+-  var gexProf=[];
++  var gexProf=[], gexProfCoverage=null;
+   try{
+-    var mx=0, rr2;
++    var mx=0, rr2, kept=0, dropped=0;
+     for(rr2=0;rr2<rows.length;rr2++){ var am=Math.abs(rows[rr2].call||0)+Math.abs(rows[rr2].put||0); if(am>mx) mx=am; }
+     if(mx>0) for(rr2=0;rr2<rows.length;rr2++){
+       var RW=rows[rr2], gm=Math.abs(RW.call||0)+Math.abs(RW.put||0);
+-      if(gm/mx < 0.01) continue;                       // drop the long tail of near-zero strikes
++      if(gm/mx < 0.01){ dropped+=gm; continue; }        // drop the long tail of near-zero strikes
++      kept+=gm;
+       gexProf.push([RW.k, +( (RW.call||0)/1e6 ).toFixed(1), +( (RW.put||0)/1e6 ).toFixed(1)]);
+     }
++    // ⚠ SAY WHAT THE TRIM COST. On a 780-strike chain the 1% cut removes ~5% of the book's gross gamma —
++    // small, but the profile must never be presented as if it were the whole. A consumer summing the
++    // profile and comparing it to callGEX/putGEX has to know the gap is the trim, not a bug.
++    gexProfCoverage = (kept+dropped)>0 ? +(100*kept/(kept+dropped)).toFixed(1) : null;
+   }catch(eP){ gexProf=null; }
+ 
+   var tot=Math.abs(sc)+Math.abs(sp);
+@@ -282,7 +287,7 @@ function levelsFor(opts, spot, keep){
+   }
+   return { cr:cr, ps:ps, mag:mag, maxPain:mp,
+            crSuppressed:crSup, psSuppressed:psSup,
+-           callGEX:sc, putGEX:sp, netGEX:sc+sp, gexProf:gexProf,
++           callGEX:sc, putGEX:sp, netGEX:sc+sp, gexProf:gexProf, gexProfCoverage:gexProfCoverage,
+            ratio:(sp!==0 ? +(sc/Math.abs(sp)).toFixed(3) : null),
+            callShare:+(callShare*100).toFixed(2),
+            pcOI:(cOI>0 ? +(pOI/cOI).toFixed(2) : null),
+diff --git a/current/gex-signal-tapereader.user.js b/current/gex-signal-tapereader.user.js
+index 3b82287..df70f31 100644
+--- a/current/gex-signal-tapereader.user.js
++++ b/current/gex-signal-tapereader.user.js
+@@ -1,7 +1,7 @@
+ // ==UserScript==
+ // @name         Gex Signal Tapereader
+ // @namespace    gpts
+-// @version    11.64
++// @version    11.65
+ // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
+ // @match        https://app.skylit.ai/atlas*
+ // @grant        none
+@@ -546,7 +546,7 @@ function ensureFeeds(){
+   }catch(e){}
+ }
+ 
+-var GPTS_VERSION='11.64';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
++var GPTS_VERSION='11.65';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+ console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
+ 
+ function fiberKeyOf(el){
+@@ -17348,7 +17348,9 @@ function emBand(sym){
+       out.anchor='prevClose';
+     }
+     if(!(openU>0)){ out.why='the opening bar carries no price'; return out; }
+-    var open=openU*rr, now=nowU*rr;
++    // DECLARED ONLY. Scaling happens once, below, with the CAPTURED factor — computing it here with live
++    // rr and overwriting it later is how two fixes ended up multiplying the same value twice.
++    var open=0, now=0;
+     var dsc=1; try{ var IL=ifLadder(sym); if(IL&&!IL.err&&IL.dispScale) dsc=IL.dispScale; }catch(eL){}
+ 
+     // one capture per symbol per day, and it is never overwritten once taken
+@@ -17402,23 +17404,26 @@ function emBand(sym){
+     }
+     if(!(rec.em>0)){ out.why='expected move came back zero'; return out; }
+ 
+-    // (v11.63) THE ANCHOR COMES FROM THE RECORD, NOT FROM THE LIVE ARRAY — that is what "anchored" means.
+-    // SELF-HEAL: if a later render surfaces an EARLIER bar than the one captured (the window slid the other
+-    // way, or the panel started mid-session and the chart then back-filled), take the earlier one. It can
+-    // only ever move BACKWARD toward the true open, never forward with the sliding window.
++    // (v11.65) ONE SCALE, APPLIED ONCE. v11.59 corrected `open`/`now` from live rr back to the captured
++    // rr; v11.63 then set `open` from the record — ALREADY at the captured scale — and left the v11.59
++    // correction running after it, so the anchor was multiplied by rec.rr/rr a SECOND time and drifted
++    // with live rr all over again. Measured: pinned 7695.6 rendered as 7709.4 -> 7711.43. My own two
++    // fixes were fighting each other, and the symptom was identical to the bug they were fixing.
++    // There is no correction step now because there is nothing to correct: every candle-derived value is
++    // built from the captured scale in the first place.
++    var useRr=(typeof rec.rr==='number' && rec.rr>0) ? rec.rr : rr;
++
++    // SELF-HEAL, BACKWARD ONLY: an EARLIER bar than the captured one replaces it (the window slid the
++    // other way, or the chart back-filled). It can move toward the true open, never forward with the slide.
+     if(cs.length && typeof cs[0].so==='number' && typeof rec.openSo==='number' && cs[0].so<rec.openSo && cs[0].o>0){
+       rec.openU=cs[0].o; rec.openSo=cs[0].so;
+       try{ S.sym[sym]=rec; localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eU){}
+       out.openHealed=true;
+     }
+-    if(typeof rec.openU==='number' && rec.openU>0 && out.anchor==='open'){
+-      open = rec.openU * (typeof rec.rr==='number'&&rec.rr>0 ? rec.rr : rr);
+-    }
+-    // every candle-derived value uses the CAPTURED scale, so nothing on the rail can drift
+-    if(typeof rec.rr==='number' && rec.rr>0 && rr>0 && rec.rr!==rr){
+-      var k=rec.rr/rr; open*=k; now*=k;
+-      out.scalePinned=true;
+-    }
++    // the anchor comes from the RECORD; `now` is live price on the SAME scale so the two can be subtracted
++    open = (out.anchor==='open' && typeof rec.openU==='number' && rec.openU>0) ? (rec.openU*useRr) : (openU*useRr);
++    now  = nowU*useRr;
++    out.scaleUsed=useRr;
+ 
+     out.est  = !(typeof rec.capMin==='number' && rec.capMin<=EM_FRESH_MIN);
+     out.open = open;  out.em=rec.em;  out.now=now;  out.k=rec.k;  out.capMin=rec.capMin;
+@@ -17441,8 +17446,7 @@ function emBand(sym){
+     // rendered identically before this. The bar index of each extreme is all it takes.
+     out.hiFirst = (hiAt>=0 && loAt>=0) ? (hiAt<loAt) : null;
+     if(isFinite(hiU) && isFinite(loU)){
+-      var rrUse=(typeof rec.rr==='number'&&rec.rr>0)?rec.rr:rr;
+-      out.hiWater=hiU*rrUse; out.loWater=loU*rrUse;
++      out.hiWater=hiU*useRr; out.loWater=loU*useRr;
+       out.upExc=Math.max(0,(out.hiWater-open)/rec.em);      // excursion ABOVE the open, in EM
+       out.dnExc=Math.max(0,(open-out.loWater)/rec.em);      // excursion BELOW it
+       // "meaningful" = a quarter of the priced move. Below that a wick is noise, not a direction.
+@@ -18684,7 +18688,7 @@ window.__gptsDebug.emBand = function(sy){
+       shape:B.shape||null, hiWater:B.hiWater, loWater:B.loWater,
+       upExc:B.upExc, dnExc:B.dnExc, giveBack:B.giveBack, hiFirst:B.hiFirst,
+       roomUp:B.roomUp, roomDn:B.roomDn, roomAhead:B.roomAhead,
+-      gamma:B.gamma, stretched:B.stretched, scalePinned:!!B.scalePinned,
++      gamma:B.gamma, stretched:B.stretched, scaleUsed:B.scaleUsed, openHealed:!!B.openHealed,
+       contract:B.contract, mult:B.mult, emUsd:B.emUsd, usedUsd:B.usedUsd, leftUsd:B.leftUsd,
+       roomUpUsd:B.roomUpUsd, roomDnUsd:B.roomDnUsd, microUsd:B.microUsd
+     };
+diff --git a/session-state/2026-08-22_resume-v11.65.md b/session-state/2026-08-22_resume-v11.65.md
+new file mode 100644
+index 0000000..0be7de9
+--- /dev/null
++++ b/session-state/2026-08-22_resume-v11.65.md
+@@ -0,0 +1,330 @@
++# RESUME NOTE — 2026-08-22 — v11.65 / companion v1.13
++
++> **Read `session-state/PROJECT-CONSTANTS.md` too.** Failure patterns, the user's stated rules, payload
++> facts, build mechanics and standing instructions live there. This file is WHERE WE ARE, nothing else.
++
++---
++
++## ⏱ START HERE — THE FIRST THING TO DO
++
++### ⚠ FOUR INSTALL FAILURE MODES NOW — ALL IDENTICAL FROM THE USER'S SIDE
++| symptom | cause | one-call check |
++|---|---|---|
++| GitHub serves the old version | the installer did not push | clone and read `@version` |
++| GitHub new, browser old | **the page was already open — RELOAD** | reload the tab |
++| raw stale ~5 min | CDN `max-age=300` | read `cache-control`/`age` |
++| **reloaded and STILL old** | **a reload reloads the PAGE, not the SCRIPT.** Tampermonkey serves its stored copy until told to update — and a script with no `@updateURL` is never offered one at all | check `@updateURL` in the header; update the script in Tampermonkey, not the tab |
++
++⚠ **The companion shipped for releases with NO `@updateURL`/`@downloadURL`** (fixed v1.11). That is why
++v1.9's truncated Zero Gamma survived a reload — repo right, browser wrong, nothing said so. **The panel
++footer reports the TAPEREADER version only; the companion's version is invisible on the face.** When a
++value sourced from the companion looks wrong, check `__gptsDebug.ifChain('SPX').pub` against the repo
++before assuming the code is broken.
++
++
++**DELIVERY CHANGED: there is no installer any more.** `setup-gex-autopull.bat` installed
++`tools/gex-pull.bat` + a 2-minute scheduled task. Claude drops `gex-drop-*.tar.gz` into the Google Drive
++folder `GEX-inbox`; the machine extracts into the repo, commits (message from `tools/.gex-drop-msg`) and
++pushes. Verified end-to-end 2026-08-22: drop at 16:49:14Z -> commit 09e4bd8 at 16:50:02Z, **70 seconds**.
++Log: `tools/gex-pull.log`. ⚠ **It cannot deliver DELETIONS or RENAMES** — a tarball only adds/overwrites,
++so a rename leaves the old file behind. Use git directly for those, or add a `.gex-drop-rm` list.
++⚠ `tools/AUTOPULL-TEST.txt` is the leftover verification artifact; delete it with git when convenient.
++
++**v11.50 adds the prior-close anchor.** v11.49's band was invisible on weekends and pre-open** (the cloud container cannot reach
++GitHub). It reached the user as an installer `.bat`. **Verify what actually shipped before anything else:**
++
++1. `git clone --depth 1 https://github.com/rassulshah/gex-signal-tapereader.git` and read `@version`.
++   If it says 11.48, the installer never ran and **this build exists nowhere** — the working copy is gone
++   with the container.
++2. In the browser: `__gptsDebug.renderErrors()` must return `[]`, and FRAME's second line must be the
++   **band**, not `DEX · TERM · EM · ATR`. ⚠ If the panel is popped out, `#gpts-panel` is NOT in the Atlas
++   document — read it from `documentPictureInPicture.window.document`.
++3. **THE UNVERIFIED THING: the EM band has never been seen with a live market.** Pre-open it should read
++   `· FROM PREV CLOSE`; it must switch to the open anchor once the first RTH bar closes at 08:33 CT. It was built on a
++   Saturday. Every number in it was reasoned from a closed-market chain and a stubbed test. On Monday
++   check: does the band draw, is the open right, and does the ~EST flag stay OFF when the panel is
++   running before 08:30 CT.
++4. Also still unconfirmed from v11.48: the NODES rows in ③. `.g3node` counted **2** on the live tab on
++   2026-08-22, so they finally render — but that was a closed market. Watch them with a live feed.
++
++---
++
++## ✅ DONE — THEIR PUBLISHED NUMBERS ARE READ (companion v1.9)
++
++**The payload is not the page.** `pick()` walked `initialData`, every metric read null, and the conclusion
++drawn was "they compute client-side, so we must compute too". WRONG — the numbers are in the
++server-rendered MARKUP outside `__NEXT_DATA__`. Verified with NO JavaScript running:
++`Zero Gamma 7646.90 · Call Wall 7900 · Put Wall 7500 · ATM IV 6.2 · P/C 1.36 · Term Slope 1.3`.
++
++`pub` now resolves **payload field -> tree walk -> rendered header**, and **`pubSrc` records which source
++won** for each value.
++
++⚠ **v1.9 SHIPPED THIS BROKEN AND THE TEST PASSED.** An ordered alternation truncated every level to three
++digits — Zero Gamma reached the face as **764 beside a spot of 7674**, under THEIR name, sourced `IF·pub`.
++The test's fixture used `$7,646.90` WITH a comma; the page renders `$7646.90` without one. **A fixture
++invented to suit the parser tests the parser against itself — always take the fixture from the real
++artefact.** Fixed in v1.10, verified against the exact strings their page serves.
++**`levelSane()` is the durable guard**: every price LEVEL must sit within 0.5x–2x of spot or it is refused
++and `pubSrc` records `REJECTED:header=764`. Ratios/IV/slopes are not gated. The gate, not the regex, is
++what makes the NEXT unpredicted parser failure visible. `ifLadder` already preferred `c.pub.zeroGamma`, so FLIP should now render from
++`IF·pub` instead of the computed `FLIP*`/`calc` fallback. **UNVERIFIED LIVE — confirm on Monday.**
++
++⚠ **Their header walls are ALL-EXPIRY; our CR0/PS0 are 0DTE.** Both are "their values", answering
++different questions. `pub.wallsAreAllExpiry` travels with the data. Never substitute one for the other.
++
++### ⛔ THE TAPEREADER'S `ifFetch` MUST STAY OFF — I RECOMMENDED FLIPPING IT ON AND I WAS WRONG
++A cross-origin fetch needs `@grant GM_xmlhttpRequest`. The tapereader runs **`@grant none`, and that is
++LOAD-BEARING**: it keeps the script in PAGE context so its `window.fetch` / `XMLHttpRequest` hooks capture
++Skylit's `gex/levels` feed. Any `@grant` moves it into Tampermonkey's sandbox where `window` is a wrapper
++and the hooks patch the wrapper — **the tape goes dark.** This is stated in the source at the `IF_LS`
++declaration and it is why `IF_CFG` defaults `{on:false}`. The tapereader's `ifFetch`/`ifParse`/`ifLevels`
++are DEAD CODE kept for reference. **The companion holds the grant; anything cross-origin belongs there.**
++
++---
++
++## ✅ THE SUITE IS GREEN (v11.53) — ONE ENVIRONMENTAL RED REMAINS
++
++`test_tapeking.js` fails in the CLOUD SANDBOX ONLY — `jsdom` cannot install there (npm 403). It passes on
++the user's machine. Everything else passes.
++
++**Five failures were ONE bug in the shared `ex()` harness, repeated five times.** `ex()` extracts a single
++function BODY and `eval`s it, so any name that body closes over throws `ReferenceError` inside the eval
++and the file scores zero — indistinguishable from a real failure. If a test in this suite ever goes red
++with a `ReferenceError` for a name that clearly EXISTS in source, this is why: add the callee to the eval
++list, and pull module-level constants FROM SOURCE with a regex rather than hardcoding them.
++
++⚠ **A TEST APPENDED AFTER `process.exit()` NEVER RUNS, AND REPORTS GREEN.** v11.58's regime block was
++appended to the end of `test_em_band.js`, below the exit line, and the file reported the same 56 passes
++before and after the change. **Compare assertion COUNTS across a change, not just pass/fail.** It now
++reports 76.
++
++⚠ **`eval()` inside a `forEach` callback declares into the CALLBACK's scope.** Join and eval once. Already
++in the notes, and it cost time again during this very fix.
++
++**`test_spx_levels.js` is RETIRED, not deleted** — `spxwLane`/`spxLevels` are gone from source; SPX levels
++come from `ifLadder` now. It carries a LIVE GUARD that FAILS if those functions ever return. Coverage sits
++in `test_if_ladder.js` / `test_levels_unified.js` / `test_spxw_confluence.js`.
++
++⚠ Never turn a suite green by deleting assertions. 23 stale failures once camouflaged two live bugs for
++months. A retirement WITH a stated reason and a guard is the opposite of that.
++
++---
++
++## 🔁 LAST-SESSION MODE (v11.55) — THE PANEL WORKS ON A WEEKEND
++
++When today has no RTH bars, the whole panel replays **the last session in the feed** as if it were the day.
++The face shows a purple `▮ MM/DD REPLAY` chip IN PLACE OF the phase tag. `__gptsDebug.session()` reports
++`{showing, replay, today, rth, recording}`.
++
++**Three guards, and they are the point of the feature — do not weaken them:**
++1. **NEVER during RTH.** An empty today during a live session stays empty. Yesterday must never read as now.
++2. **THE RECORDER WRITES NOTHING** in replay — all five entry points. Replayed bars would poison every
++   base rate in `data/*.json` permanently and undetectably.
++3. **THE FACE SAYS SO.** A mode you cannot see is a mode that lies.
++
++⚠ **`inReplay()` fails TOWARD recording, deliberately**, and every call site uses
++`typeof inReplay==='function' && inReplay()`. A bare global inside those try/catch bodies is the
++swallowed-ReferenceError shape that has bitten this project three times now — and it bit again DURING this
++build (an edit asserted, `SESSION_DAY` was referenced 5x and declared 0x). Had it shipped, the recorder
++would have died silently. A lost session is loud; a dead recorder is not.
++
++---
++
++## 🎯 THE BAND ANSWERS THREE QUESTIONS (v11.57) — AND ONE OPEN DECISION
++
++User's stated goals: **1** see targets · **2** know if we are overextended with little room left · **3**
++spot a possible reversal, from overextension OR from the go-one-way-then-turn pattern.
++
++- **T** replaces the caret and **GREYS when the target is outside the band** — a magnet beyond the expected
++  high is not in play today. EXP LOW / EXP HIGH are the biggest numbers on the row.
++- **Room remaining** toward the rail ahead, in points, clamped at zero.
++- ⚠ **`rr` IS A LIVE SCALE RATIO AND IT DRIFTS** (undScale 0.099778→0.099775 in 20s, sliding the band
++  0.05). It is now CAPTURED with the EM and reused, so the anchor cannot move. **Anything derived from
++  candles for a fixed reference must use the captured `rec.rr`, never live `rr`.**
++- The shape line is trader shorthand: `LOD −55% → HOD +53% · retraced 107% of the LOD drive · 33.48 pts
++  to EXP HIGH left`. The **arrow carries which extreme came first** — that is information, not styling.
++- Hovers capped at ~600 chars, pinned by a test.
++- **DOLLARS PER CONTRACT (v11.60).** Chip on line 1 `ES · EM $1,737/ct`; the shape line's last field reads
++  `$200 used · $1,537 left`. `FUT_MULT={ES:50,MES:5,NQ:20,MNQ:2}` — **verified against CME/NinjaTrader,
++  keyed by CHART symbol** (ES and MES share a family and differ 10x). User trades **ES**.
++  ⚠ `usd()` MUST round through cents: `34.73*50` is `1736.4999999999998`, and rounding straight to dollars
++  renders $1,736 for a $1,736.50 move. Pinned.
++  ⚠ **This is a UNIT CONVERSION of the MOVE — never P&L, sizing or R:R.** "$200 used" = the day travelled
++  $200 worth of its priced move, not a trade result. A test scans VISIBLE labels (hovers stripped by paren
++  counting, since the disclaimer must say "profit or loss" to deny it) and fails the build on that language.
++- **Excursion**: high/low-water since the anchor, drawn as a dim span. Shape reads `INSIDE` /
++  `ONE-SIDED UP` / `ONE-SIDED DOWN` / `REVERSED`, plus **give-back**.
++- **The regime chip lists ALL FOUR cells** (v11.58), marks the active one, and states that an extension
++  means opposite things in the two gamma halves. `regimeTip()` — native `title` renders `\n`.
++- **Regime-aware overextension.** Past 100% is amber **STRETCHED in +G** only. In −G it stays neutral —
++  ranges EXPAND there, and a red mark contradicted the `breaks not fades` line one row above. That
++  contradiction was live on the face before v11.57.
++
++⚠ **THE HYPOTHESIS IS UNTESTED.** *Past 100%, price reverts toward the anchor more often in +G than in −G.*
++Zero `emband` records exist; 4 archived days, all DOWN. **The scorecard SPLITS BY REGIME** —
++`em_overext_revert_posG`, `em_overext_extend_negG`, `em_reversed_holds` — because pooling two opposite
++effects averages them to "no edge" and would be the wrong conclusion from the right data. n≥20 each,
++non-voting. Weeks away.
++
++### ⬜ OPEN DECISION — THE BAND IS 0.8 SIGMA, LABELLED "EM"
++The ATM straddle is **0.8σ** (Brenner–Subrahmanyam), so our band contains **~58%** of sessions, not the
++**~68%** that "expected move" means industry-wide. Extraction is CORRECT — 34.65 reproduces their published
++ATM IV of 6.2% over 3 calendar days to within 0.03%. The label is what is wrong.
++**(a)** multiply by 1.25 → true 1σ EM, matches the label and every other platform, band 25% wider; or
++**(b)** keep the raw straddle and rename the row **STRADDLE**. Not taken yet — it changes the width 25%.
++
++⚠ On a weekend `dte0` is Monday's expiry, so the straddle spans Fri close → Mon close and CONTAINS THE
++WEEKEND GAP. Captured at Monday's open it covers only the remaining day and will be smaller.
++
++---
++
++## 🎨 FRAME IS FINISHED (v11.61) — COLOUR GRAMMAR AND THE PILES
++
++**purple accelerates · yellow brakes · cyan is the target · white is price · red is a warning**
++
++- **Gamma piles** hang BELOW the rail: Skylit's book via `cpRows` (same source as `regime2D`, so they can
++  never contradict the regime chip). Cut = **`CFG.nodeThresh`**, the existing ⚙ slider, default 20%.
++  Height = √magnitude. ⚠ nodeThresh is HAND-SET (⚖) — never measured.
++- **Skylit polarity**: purple = put-dominant = −gamma = ACCELERATOR; yellow = call-dominant = +gamma =
++  BRAKE. That forced the **target to CYAN `#4fd1e0`** and **STRETCHED to RED**.
++- **Three tiers**: money above · rail+ticks+dot on · piles below. They cannot collide by construction.
++
++### ⚠ THE DRIFTING-DOT FIX WAS INERT — SCHEMA STAMPS NOW
++v11.59 pinned the scale; a capture written BEFORE it had no `rr`, matched on date, and was reused, so the
++pin never fired (open 7695.86→7695.29 in minutes). **`EMOPEN_SCHEMA`** now versions the record and a
++stale/incomplete one is RE-TAKEN. **General rule: persisted state written by an older version can silently
++disable a newer guard. Every persisted store here should carry a stamp.**
++
++### 📦 THE RAW 60-STRIKE BOOK IS NOW RECORDED (`snap.book`)
++The feed sends **60** strikes (`nodes=60` — Skylit's `P20` control only changes THEIR canvas; no UI
++setting widens our feed). The export kept ~6, so **any threshold sweep measured our own filter, not the
++market.** `snap.book` = `[strike, callGEX $M, putGEX $M]` × 60. ⚠ **FORWARD-ONLY**, no back-fill.
++**This is what makes calibrating `nodeThresh` possible — weeks of it, then sweep.**
++
++### ⚓ THE MOVING DOT — FOUR CAUSES, FIXED AT v11.65
++1. v11.59 `rr` drift (real, 0.05pt) · 2. v11.61 stale capture disabled that pin · 3. v11.63 the ANCHOR was
++recomputed from the SLIDING `closedCandles()` window (18pt) · 4. **v11.65 — v11.63's pin and v11.59's
++correction BOTH ran, so the anchor was scaled TWICE and drifted again** (7695.6 rendered 7709→7711).
++**ONE `useRr`, chosen once, applied once. No correction step exists any more.** The pre-scaling
++`open=openU*rr` line is deleted — it was the surface that allowed double-multiplication. A test counts the
++multiplications.
++⚠ **When a fix does not resolve a symptom, check it against the PREVIOUS fix before adding another.** Three
++of these four were introduced or left live by an earlier attempt at the same bug.
++⚠ **A single snapshot of a live face is not evidence** — read it twice.
++⚠ `gexProfCoverage` reports what the 1% profile trim costs (~5% of a live 780-strike chain). The profile is
++NOT the whole book; do not diff it against callGEX/putGEX and call the gap a bug.
++`closedCandles()` is a SLIDING WINDOW. The anchor was recomputed from `cs[0].o` every render, so as the
++window slid the open walked forward: **7695.75 → 7713.71 in minutes (~18 pts)** while `em` sat still
++because it was captured. v11.59 pinned the SCALE (0.05 of drift) and v11.61 made that pin actually fire —
++**neither touched the real problem.**
++**The open is now CAPTURED (`openU`,`openSo`) and read from the record.** Self-heal is BACKWARD-ONLY: an
++earlier bar replaces the stored one, a later bar never can. Schema = 3.
++⚠ **Anything that must not move cannot be derived from `closedCandles()` at render time.**
++⚠ **A single snapshot of a live face is not evidence** — read it twice. Two elements looked broken in one
++check (regime `—`, piles 0) and both were mid-refresh frames; the real bug was the band bounds moving 16pts
++between reads.
++
++### ✅ RESOLVED — THERE WAS NEVER A netGEX SIGN BUG
++**Verified to the decimal against their published all-expiry header:** ours call +263.83B / put −250.49B /
++net **+13.34B** / ratio 1.053 vs theirs +263.8B / −250.5B / **+13.3B** / 1.05. Our GEX is CORRECT.
++
++**The sign flips with the WINDOW**, and that is real:
++`dte0 −6.86B · toFri −16.41B · all +13.34B` — near book negative, full chain positive, both true.
++Comparing across windows caused **two false alarms in one session** (the "sign bug", and "regime
++contradicts FLIP" — regime reads NEAR, FLIP is their ALL-EXPIRY zero gamma). **ALWAYS NAME THE WINDOW.**
++`GEX_WINDOW_LABEL` / `gexWindowNote()` exist for this; the FLIP hover says it outright.
++
++### 🔥 FUEL CHIP LIVE (v11.62)
++`FEEDS $214M/pt` / `FIGHTS $214M/pt` from `hedgeFlow()` — NEAR book only (LEAPS do not hedge intraday).
++netGEX is per 1% move, so ÷(spot×0.01). Negative gamma → FEEDS (purple, accelerator); positive → FIGHTS
++(yellow, brake). Enrolled as `flow.perPoint`, **regime-split**, `hit:null` until n≥20.
++`__gptsDebug.flow()` reports it with its window.
++
++---
++
++## 🎯 THE BAND ANSWERS THREE QUESTIONS (v11.64) — AND IT IS ALL ONE BOOK
++
++**where are we going** (target + rails) · **what gets us there** (fuel on the path) · **what stops us** (brakes)
++
++⚠ **THE PILES USED TO READ SKYLIT WHILE THE FLOW CHIP READ IF.** Same nominal window: Skylit gross $0.58B
++with both legs positive, IF $65.8B with puts negative — **~113x apart, opposite sign convention.** Nothing
++on the rail composed. **EVERY number on this band is now InsiderFinance's, same near window.** Skylit's
++node map stays in ③ where it belongs.
++**RULE: never put two books on one rail.** If a number sits beside another, they must share a source AND a
++window, or say plainly that they do not.
++
++- **companion v1.12** exports `gexProf` = `[strike, call $M, put $M]`, puts negative. **Legs sum EXACTLY to
++  callGEX/putGEX** (tested); tail trimmed below 1% of max, and a test proves the trim preserves the sum.
++- **path line**: `path ↑ to 7717.71 · $1.4M fuel · $2.0M brake · BRAKED` — piles between price and target,
++  summed by polarity. Replaces the shape sentence.
++- **four money segments ON the rail** — used/remaining both sides, from the day's EXTREMES so they hold still.
++- **pile hovers**: strike gamma, $/pt of hedging, direction.
++
++### ⛔ NEVER SHIP "THIS NODE CAN MOVE PRICE X POINTS"
++Dollars of hedging → points needs a **market-impact coefficient no option chain contains** (it depends on
++book depth). Any figure would be invented AND look quantitative. `flow.perPoint` records flow vs realised
++range so it can one day be MEASURED. The hovers and the source both say this outright.
++
++---
++
++## WHAT THE PANEL IS NOW
++
++**① FRAME** — line 1: `−G −V ⚠ → 7717.71  momentum — breaks not fades · widen stops`.
++Line 2 is **THE ANCHORED EM BAND** — `7665 ├──◆──┼──▲──┤ 7735   29% OF EM` plus the phase tag.
++**② BIAS** — SMA verdict + confirmation chips + count; DRIFT gate.
++**③ TRADE LOCATION** — IF ladder with depth diamonds ◆◆/◆, then NODES rows, then the three-zone chart.
++**④ REACTION** — WATCH (the node) · NODE · PRICE · DEPTH · PRESSURE.
++**⑤ EXECUTE** — armed on a node, or a refusal that says why.
++
++**Deleted and kept deleted:** the "waiting on" line, the "NO SETUP" box, the phase box and progress bar,
++the chart legend row, PAIN, P/C, CAGE, and now **DEX · TERM · ATR**. Every hover opens with the QUESTION
++it answers.
++
++### THE EM BAND (v11.49) — read this before touching it
++- **`dte0.em` ONLY. A fallback to `toFri.em` is FORBIDDEN** and `test_em_band.js` fails the build on one.
++  `toFri.em` is a single LATER expiry, not a five-day move.
++- **Captured ONCE per day per symbol** into `gpts_emopen_v1`, keyed by `ctTodayStr()`, **never overwritten**.
++  Overwrite it and the anchored band silently becomes a live one that follows price — the exact thing it
++  exists not to be. A test pins this.
++- **The open is `closedCandles(sym)[0].o`** — already filtered to today from 08:30 CT, so a noon start still
++  measures from the real open.
++- **`~EST`** = the EM was first captured more than `EM_FRESH_MIN` (15) minutes after the open, so the
++  straddle had decayed and the band is NARROWER than the open's was. **No √T reconstruction** — it assumes
++  IV has not moved, and on the days that matter it has.
++- **SCALES:** `em` is SPX → chart via `dispScale`; candles are UNDERLYING → chart via `rr`. Both land on
++  chart scale before anything is compared or drawn, and only then is `dispNum()` safe.
++- **`emPos()` CLAMPS.** A mark outside the band pins to the rail; the percentage says how far past.
++- The percentage is **displacement from the open ÷ EM** — user's choice over range-travelled, so the dot
++  and the number are the same fact and cannot disagree.
++
++**FLIP (was HVL).** HVL is SpotGamma's house term; the standard names are Zero Gamma / Gamma Flip and IF
++itself says "Zero Gamma Level". Display strings and rank-map keys renamed; **`hvlSrc`, `LVL_COL.hvl`,
++`P.hvl`, `isHVL`, `HVL_MAX_DIST` and recorded field names are deliberately UNCHANGED.**
++
++---
++
++## 📋 TABLED — THE BACKLOG
++
++- **Daily DEX snapshot** — now UNBLOCKED: `dex` records `dexM`, `dex0M` and `px` per bar from v11.49. The
++  question is cross-day at a FIXED spot; intraday ΔDEX is mostly greeks re-weighting. Needs weeks.
++- **Term slope** — their page publishes +1.3. Computable from `options[]` exactly like skew. Deliberately
++  NOT on the face: it conditions, it never points.
++- **Prior-day levels + opening range** — PDH/PDC/PDL are on the user's Atlas chart and absent from ours.
++  Now cheap: the band already establishes the session-open anchor.
++- **VIX/price divergence** in ④ — VIX in every form FAILS the direction test. Already captured per bar in `xm`.
++- **Session-history reads** from the 390 snapshots — prior reaction at a level, node lifecycle.
++- **NDX for NQ** — same argument that moved SPY→SPX.
++- **Value area / POC / VAH / VAL** — canvas-painted; only route is the React fiber walk.
++- **Per-strike dollars in the DAILY EXPORT** — prerequisite for multi-day roll validation.
++- **PiP background throttling** — never verified with the feed running.
++- **Weekly review file naming** (`review_<FRIDAY>.json`), trigger `trig_01T8kd4kS3nBR7TuQMSSXNX6` — overdue.
++- **Coiling · read-level invalidation · map-reshuffle · regime-split scorecard · PATH waypoints · voids.**
++
++## ROLL DETECTION — built, SHADOW MODE, NEVER SEEN FIRING
++`rollDetect` reads `LASTFEED[sym].j.levels`. **`t` is in SECONDS**; window walked by TIMESTAMP, not index.
++Calibrated: 30m · 50% RELATIVE TO THE SESSION MEDIAN · $40M · ±5 strikes → 9 events/session.
++⚠ **Direction unproven — do NOT make it a vote.** All four archived days are DOWN days (66% base rate).
++It has never been watched working. Needs a live session, not a fix.
++
++---
++
+diff --git a/session-state/latest-resume-note.md b/session-state/latest-resume-note.md
+index a92f9d2..0be7de9 100644
+--- a/session-state/latest-resume-note.md
++++ b/session-state/latest-resume-note.md
+@@ -1,4 +1,4 @@
+-# RESUME NOTE — 2026-08-22 — v11.64 / companion v1.12
++# RESUME NOTE — 2026-08-22 — v11.65 / companion v1.13
+ 
+ > **Read `session-state/PROJECT-CONSTANTS.md` too.** Failure patterns, the user's stated rules, payload
+ > facts, build mechanics and standing instructions live there. This file is WHERE WE ARE, nothing else.
+@@ -201,7 +201,18 @@ setting widens our feed). The export kept ~6, so **any threshold sweep measured
+ market.** `snap.book` = `[strike, callGEX $M, putGEX $M]` × 60. ⚠ **FORWARD-ONLY**, no back-fill.
+ **This is what makes calibrating `nodeThresh` possible — weeks of it, then sweep.**
+ 
+-### ⚓ THE MOVING DOT — FIXED AT v11.63, AFTER TWO WRONG DIAGNOSES
++### ⚓ THE MOVING DOT — FOUR CAUSES, FIXED AT v11.65
++1. v11.59 `rr` drift (real, 0.05pt) · 2. v11.61 stale capture disabled that pin · 3. v11.63 the ANCHOR was
++recomputed from the SLIDING `closedCandles()` window (18pt) · 4. **v11.65 — v11.63's pin and v11.59's
++correction BOTH ran, so the anchor was scaled TWICE and drifted again** (7695.6 rendered 7709→7711).
++**ONE `useRr`, chosen once, applied once. No correction step exists any more.** The pre-scaling
++`open=openU*rr` line is deleted — it was the surface that allowed double-multiplication. A test counts the
++multiplications.
++⚠ **When a fix does not resolve a symptom, check it against the PREVIOUS fix before adding another.** Three
++of these four were introduced or left live by an earlier attempt at the same bug.
++⚠ **A single snapshot of a live face is not evidence** — read it twice.
++⚠ `gexProfCoverage` reports what the 1% profile trim costs (~5% of a live 780-strike chain). The profile is
++NOT the whole book; do not diff it against callGEX/putGEX and call the gap a bug.
+ `closedCandles()` is a SLIDING WINDOW. The anchor was recomputed from `cs[0].o` every render, so as the
+ window slid the open walked forward: **7695.75 → 7713.71 in minutes (~18 pts)** while `em` sat still
+ because it was captured. v11.59 pinned the SCALE (0.05 of drift) and v11.61 made that pin actually fire —
+diff --git a/test_direction_grade.js b/test_direction_grade.js
+index f505d0b..4c2438a 100644
+--- a/test_direction_grade.js
++++ b/test_direction_grade.js
+@@ -161,6 +161,6 @@ ok(/HARD-CAP|HARD-CAPS/.test(src), '10a the mid-range cap is documented in sourc
+ ok(/DECISION_MATRIX/.test(src),    '10b the matrix exists');
+ ok(!/directionGrade[^]{0,3000}(buy|sell|long side entry)/i.test(src.slice(src.indexOf('function directionGrade'), src.indexOf('function directionGrade')+2000)), '10c no trade words inside directionGrade');
+ ok(/drift NEVER overrides the direction/i.test(src), '10d the hierarchy rule is stated in source');
+-ok(/@version\s+11\.64/.test(src), '10e version pinned to 10.56');
++ok(/@version\s+11\.65/.test(src), '10e version pinned to 10.56');
+ 
+ console.log('\n'+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);
+diff --git a/test_em_band.js b/test_em_band.js
+index ada678f..5dafba3 100644
+--- a/test_em_band.js
++++ b/test_em_band.js
+@@ -424,7 +424,7 @@ eval(ex('emBand'));
+   const b=ex('emBand');
+   ok(/openU:openU/.test(b),        'the OPEN is captured into the record, like the expected move');
+   ok(/openSo:/.test(b),            'with the opening bar\'s seconds-of-day');
+-  ok(/rec\.openU \* \(/.test(b),   'and the anchor is read FROM the record, not the live array');
++  ok(/rec\.openU\*useRr/.test(b),   'and the anchor is read FROM the record, not the live array');
+   ok(/cs\[0\]\.so<rec\.openSo/.test(b),
+      'self-heal: an EARLIER bar replaces the captured one, so it can only move backward toward the true open');
+   ok(!/cs\[0\]\.so>rec\.openSo/.test(b),
+@@ -507,5 +507,33 @@ eval(ex('emBand'));
+      '...and refuse to imply a distance, which is the one number nobody can honestly give');
+ }
+ 
++
++// ---------- 17. (v11.65) ONE SCALE, APPLIED ONCE ----------
++// TWO OF MY OWN FIXES WERE FIGHTING. v11.59 corrected open/now from live rr back to the captured rr.
++// v11.63 then set `open` FROM THE RECORD — already at the captured scale — and left v11.59's correction
++// running after it, so the anchor got multiplied by rec.rr/rr a SECOND time and drifted with live rr all
++// over again. Pinned 7695.6 rendered as 7709.4 -> 7711.43. The symptom was identical to the bug the fixes
++// were for, which is exactly why it survived two rounds of "fixed".
++{
++  const b=ex('emBand');
++  ok(/var useRr=/.test(b),          'ONE scale factor is chosen up front');
++  ok(!/scalePinned/.test(b),        'and the old correction block is GONE — nothing to correct twice');
++  ok(!/open\*=k/.test(b),           'nothing multiplies the anchor after it is set');
++  ok(/rec\.openU\*useRr/.test(b),   'the anchor is the RECORD times the captured scale');
++  ok(/now  = nowU\*useRr/.test(b),  'and `now` uses the SAME scale, so the two can be subtracted');
++  ok(/out\.hiWater=hiU\*useRr/.test(b), 'the water marks share it too');
++  // exactly one multiplication of openU anywhere in the function
++  const mults=(b.match(/openU\s*\*/g)||[]).length;
++  ok(mults===2, 'openU is scaled in exactly TWO places (record branch / fallback) and never chained', mults);
++  ok(/var open=0, now=0;/.test(b),
++     'and it is not pre-scaled with live rr first — that double-multiplication was the whole bug');
++
++  // --- the trim must declare what it costs ---
++  const s2=fs.readFileSync('./current/gex-if-levels.user.js','utf8');
++  ok(/gexProfCoverage/.test(s2),    'the profile reports what fraction of the book it covers');
++  ok(/never be presented as if it were the whole/.test(s2),
++     'because a 1% cut removes ~5% of a live 780-strike chain — small, but it is not the whole book');
++}
++
+ console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');
+ process.exit(fail?1:0);
+diff --git a/test_if_published.js b/test_if_published.js
+index 810a5e0..74c3350 100644
+--- a/test_if_published.js
++++ b/test_if_published.js
+@@ -83,7 +83,7 @@ ok(/REJECTED:/.test(src),                    'and a rejected value is RECORDED,
+   ok(/spot\*0\.5/.test(g) && /spot\*2/.test(g), 'the gate is a band around spot', g.slice(0,160));
+   ok(/isLevel/.test(src),                    'ratios, IV and slopes are NOT gated — they are not prices');
+ }
+-ok(/@version\s+1\.12/.test(src),             'companion pinned to 1.12');
++ok(/@version\s+1\.13/.test(src),             'companion pinned to 1.13');
+ 
+ console.log((fail?'FAIL ':'')+pass+' passed, '+fail+' failed');
+ process.exit(fail?1:0);
+diff --git a/test_pipeline_indicator.js b/test_pipeline_indicator.js
+index d4f12d8..9ab206f 100644
+--- a/test_pipeline_indicator.js
++++ b/test_pipeline_indicator.js
+@@ -376,7 +376,7 @@ ok(lastTradingDay(1)==='2026-08-18', '3d Wednesday -> Tuesday', lastTradingDay(1
+   ok(/PIPE_TTL_MS=600000/.test(src), '8f the remote check is throttled to 10 minutes');
+   ok(/visibilityState/.test(ex('pipeCheck')), '8g pipeCheck skips a hidden tab');
+   ok(/pipeCheck\(\);/.test(ex('tick')), '8h the render loop drives pipeCheck');
+-  ok(/@version\s+11\.64/.test(src) && /v'\+GPTS_VERSION\+' part1 loaded/.test(src) && />v'\+GPTS_VERSION\+'<\/span>/.test(src),
++  ok(/@version\s+11\.65/.test(src) && /v'\+GPTS_VERSION\+' part1 loaded/.test(src) && />v'\+GPTS_VERSION\+'<\/span>/.test(src),
+      '8i version 10.56 in all three spots');
+   ok(/pipeReviewLine\(RV\)/.test(ex('briefLine')), '8j the pre-open brief may cite one review line');
+ 
+diff --git a/test_read_v1047.js b/test_read_v1047.js
+index 89114ad..c9b8275 100644
+--- a/test_read_v1047.js
++++ b/test_read_v1047.js
+@@ -83,5 +83,5 @@ ok(/FLRCEIL_EDGE_PCT/.test(grab('nodeMapModel')) && /pickEdge/.test(grab('nodeMa
+ ok(/isNext=true/.test(grab('nodeMapModel')) && /Mag \\u00b7 next/.test(grab('nodeRoleBadge')),'next-target class exists');
+ ok(/Defl \\u00b7 '\+roleAb/.test(grab('deflectionBlock')),'defl card abbreviated name');
+ // (v10.50) three version spots: @version header, part1 console.log, footer version marker.
+-ok(/@version\s+11\.64/.test(src) && /v'\+GPTS_VERSION\+' part1 loaded/.test(src) && />v'\+GPTS_VERSION\+'<\/span>/.test(src),'version 10.56 in all three spots');
++ok(/@version\s+11\.65/.test(src) && /v'\+GPTS_VERSION\+' part1 loaded/.test(src) && />v'\+GPTS_VERSION\+'<\/span>/.test(src),'version 10.56 in all three spots');
+ console.log('test_read_v1047: '+p+' passed, '+f+' failed'); process.exit(f?1:0);
+diff --git a/test_rules_v2.js b/test_rules_v2.js
+index 880a5b4..d85db59 100644
+--- a/test_rules_v2.js
++++ b/test_rules_v2.js
+@@ -183,7 +183,7 @@ ok(/learning\/rules\.json/.test(ex('pipeRulesTry')), '6e pipeCheck fetches learn
+ ok(/PIPE_RAW_BASE/.test(ex('pipeRulesTry')), '6f ...via the same PIPE_RAW_BASE as the review');
+ ok(/pipeRulesTry\(P\);/.test(ex('pipeCheck')), '6g ...and it is wired into pipeCheck alongside the review');
+ ok(/rulesIngest/.test(ex('pipeRulesTry')), '6h ...a fresh document re-runs the promotion pass');
+-ok(/@version\s+11\.64/.test(src) && /v'\+GPTS_VERSION\+' part1 loaded/.test(src) && />v'\+GPTS_VERSION\+'<\/span>/.test(src),
++ok(/@version\s+11\.65/.test(src) && /v'\+GPTS_VERSION\+' part1 loaded/.test(src) && />v'\+GPTS_VERSION\+'<\/span>/.test(src),
+    '6i version 10.56 in all three spots');
+ // (v11.56) An unreachable update URL means Tampermonkey never offers a new version. The companion shipped
+ // for releases without one and silently sat at an old version while the repo moved on.
+diff --git a/tools/.gex-drop-msg b/tools/.gex-drop-msg
+new file mode 100644
+index 0000000..d88c66b
+--- /dev/null
++++ b/tools/.gex-drop-msg
+@@ -0,0 +1 @@
++v11.65 + companion v1.13: one scale applied once (anchor was double-scaled), profile coverage reported
+\ No newline at end of file
