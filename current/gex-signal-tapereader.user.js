@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.69
+// @version    11.70
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.69';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.70';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -11333,6 +11333,36 @@ function registerCoreFeatures(){
            condition:'pct of the straddle travelled divided by \u221a(elapsed fraction of the cash session); not reported below 4% elapsed',
            mechanism:'Price diffuses with the square root of time, so half the clock means about 71% of the move is due, not 50%. Without the correction the same percentage means opposite things at 10:00 and 14:30. DESCRIPTIVE: it says the day is running hot or cold against its own pricing, never which way.' } });
   //
+  // (v11.70) THE READ. It measures nothing new — it composes band, pace, piles and flow, all already
+  // enrolled — so what is recorded is WHICH BRANCH fired. That is the only thing that could ever validate
+  // the composition: if "air to the rail" and "brake ahead" precede the same forward distribution, the
+  // sentence is decoration however well it reads.
+  registerFeature({ key:'emread', label:'The read (mechanism sentence)', phase:'structure', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var B=null; try{ B=emBand(sym); }catch(e){}
+      if(!B || !B.ok) return { ok:false };
+      var R=null; try{ R=emRead(B, sym); }catch(e2){}
+      if(!R || !R.ok) return { ok:false };
+      return { ok:true, branch:R.branch, dir:B.dir, pct:B.pct,
+               pace:(B.pace==null?null:B.pace), gamma:(B.gamma==null?null:B.gamma),
+               roomAhead:+(B.roomAhead||0).toFixed(2), words:R.txt.split(/\s+/).length };
+    },
+    outcome:function(rec, fwd){
+      return { hit:null, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
+               branch:(rec&&rec.branch)||null };
+    },
+    questions:[
+      { id:'read_air_reaches_rail', when:[{f:'branch',v:'air'}], outcome:'reachEM',
+        note:'when the line says AIR \u2014 nothing sizeable between price and the rail \u2014 does price actually get there more often than when something is in the way? If not, "air" is a description of the chain rather than a fact about price.' },
+      { id:'read_brake_contains',   when:[{f:'branch',v:'brake'}], outcome:'stayIn',
+        note:'when a BRAKE is the next thing ahead, does the day stay inside the band? The mirror, and it must be scored separately or the two cancel.' },
+      { id:'read_flip_changes_it',  when:[{f:'branch',v:'flip'}], outcome:'extend',
+        note:'when the FLIP is the nearest thing, does the forward excursion behave differently from every other branch? This is the strongest claim the sentence makes \u2014 that one level inverts the mechanism \u2014 and the easiest to falsify.' }
+    ],
+    rule:{ id:'em.read', tier:'hand',
+           condition:'two clauses: where the day is, then the nearest level that changes the hedging mechanism and what it changes to; FLIP outranks piles within 12 points',
+           mechanism:'The section already carries every fact; what it lacked was the causal chain between them. The line states a MECHANISM and never a probability - no likely, no will, no trade - because gamma says HOW price moves and never WHICH WAY, and converting hedging dollars into points needs a market-impact figure the chain does not contain. Which BRANCH fires is recorded so the composition itself can be scored.' } });
+  //
   // (v11.68) THE PILES, after the two faults that composed into one wrong number. They read toFri while
   // the band read dte0 — on a Friday roll that is today plus a whole extra week, and only 29.2% of it
   // expired that day — and their DOLLARS came from gross while their DIRECTION came from net, so a strike
@@ -12357,7 +12387,18 @@ function featEnqueue(sym, snapFeat, ctx){
     for(var k in snapFeat){
       if(!snapFeat.hasOwnProperty(k)) continue;
       var dup=false;
-      for(var i=arr.length-1;i>=0 && i>arr.length-40;i--){ if(arr[i].key===k && arr[i].bar===bar){ dup=true; break; } }
+      // (v11.70) ⚠ THIS SCANNED BACK A HARDCODED 40 RECORDS. One bar writes ONE RECORD PER ENROLLED
+      // FEATURE, so the moment the registry reached 40 the look-back could no longer span a single bar
+      // and re-enqueueing the same bar duplicated EVERY record. featEnqueue runs repeatedly per bar, so
+      // live this would have doubled and re-doubled the exact data every scorecard is computed from —
+      // silently, and worse the more features were enrolled. Caught by test_feature_enrollment 9d on the
+      // build that added the 40th feature; it had been one feature away for a long time.
+      // Records for one bar are contiguous at the tail, so walk back WHILE the bar matches and stop at
+      // the first record from an earlier one. That is correct for any number of features, forever.
+      for(var i=arr.length-1;i>=0;i--){
+        if(arr[i].bar!==bar) break;                       // reached the previous bar: nothing else to check
+        if(arr[i].key===k){ dup=true; break; }
+      }
       if(dup) continue;
       arr.push({ key:k, t:t, bar:bar, n:n,
                  px:(ctx&&ctx.px!=null)?ctx.px:null,
@@ -17169,6 +17210,11 @@ function ensureV3Css(){
     '#gpts-body .g3pile.bal{background:transparent;box-shadow:inset 0 0 0 1px rgba(139,152,169,.6)}'+
     // (v11.68) the pace chip. Grey ON PACE, cyan COILED, red STRETCHED — cyan and red already mean
     // "quiet" and "against you" elsewhere on this face, so no new vocabulary is introduced.
+    // (v11.70) the read. Deliberately quieter than everything above it — it is a sentence, not a
+    // reading, and it must not compete with the numbers it is describing. The rule above it is what
+    // separates 'what the panel measured' from 'what that composes into'.
+    '#gpts-body .g3read{font-size:8.5px;line-height:1.5;color:#8b98a9;margin-top:3px;border-top:1px solid #1a212c;padding-top:3px;cursor:help}'+
+    '#gpts-body .g3read b{color:#e6edf3;font-weight:800}'+
     '#gpts-body .g3pace{font-size:7.5px;font-weight:800;padding:0 4px;border-radius:2px;line-height:12px;white-space:nowrap;cursor:help}'+
     '#gpts-body .g3pace.ok{background:rgba(139,152,169,.16);color:#8b98a9;border:1px solid rgba(139,152,169,.32)}'+
     '#gpts-body .g3pace.slow{background:rgba(79,209,224,.14);color:#4fd1e0;border:1px solid rgba(79,209,224,.35)}'+
@@ -17799,6 +17845,95 @@ function emPiles(B, sym){
 // market-impact coefficient that no option chain contains — it depends on book depth at that moment.
 // `flow.perPoint` has started recording flow against realised range so it can one day be MEASURED; until
 // then a "this can move price N points" figure would be invented, and would look quantitative doing it.
+// (v11.70) How close the gamma flip has to be before it outranks every other thing ahead. It is the one
+// level where the mechanism INVERTS rather than strengthening or weakening, so it earns the sentence.
+// ⚖ HAND-SET. Enrolled with em.read.
+var FLIP_NEAR_PTS=12;
+// ---- (v11.70) THE READ — one line that composes the section into a mechanism ----------------------
+// The user's ask: "as a directional analyst, explain what can happen given regime, expected move and
+// more — if price is moving and sees fuel, what could potentially occur."
+//
+// GRAMMAR: two clauses. [WHERE THE DAY IS] then [THE NEXT THING THAT CHANGES THE MECHANISM, AND WHAT IT
+// CHANGES TO]. Every sentence names a LEVEL and says what happens on the other side of it.
+//
+// ⚠ IT IS A MECHANISM, NEVER A FORECAST. No "likely", no "will", no "should", no probability, no trade.
+// That is not caution for its own sake — it is the only version that can be TRUE today. Every scorecard
+// on this panel is still at zero records, and SpotGamma's own documentation is explicit that GEX answers
+// "how sensitive is the market to hedging here" and cannot answer "which way". A sentence reading
+// "likely to reach 7730" would be inventing the market-impact coefficient no option chain contains, and
+// would look quantitative doing it. `test_em_band.js` fails the build on any of those words appearing.
+//
+// It composes ALREADY-ENROLLED reads (band, pace, piles, flow) and adds no new measurement of its own —
+// but WHICH BRANCH fires is itself recordable, which is the only thing that could ever validate the
+// composition. Enrolled as `em.read`.
+function emRead(B, sym){
+  var out={ ok:false, txt:'', branch:null };
+  try{
+    if(!B || !B.ok) return out;
+    var up=(B.dir>=0), rail=up?B.high:B.low, shortG=(B.gamma!=null && B.gamma<0);
+    var moved=Math.abs(B.now-B.open);
+    var ps=[]; try{ ps=emPiles(B, sym)||[]; }catch(eP){}
+    var ahead=ps.filter(function(x){ return up ? x.disp>B.now : x.disp<B.now; })
+                .sort(function(x,y){ return up ? x.disp-y.disp : y.disp-x.disp; });
+    var live=ahead.filter(function(x){ return !x.balanced; });
+    var bal =ahead.filter(function(x){ return  x.balanced; });
+    var next=live[0]||null;
+    var pastRail=(up ? B.now>=B.high : B.now<=B.low);
+    function beyond(x){ return x && (up ? x.disp>B.high : x.disp<B.low); }
+
+    // FLIP outranks everything when it is close: it is the ONE level where the mechanism inverts rather
+    // than merely strengthens or weakens. Read from InsiderFinance's published Zero Gamma via the ladder.
+    var flip=null;
+    try{ var L=ifLadder(sym);
+      if(L && !L.err) for(var i=0;i<L.rows.length;i++){ if(L.rows[i].id==='FLIP'){ flip=L.rows[i].disp; break; } }
+    }catch(eF){}
+    var toFlip=(flip!=null)?(up?flip-B.now:B.now-flip):null;
+    var flipNear=(toFlip!=null && toFlip>0 && toFlip<Math.abs(rail-B.now) && toFlip<FLIP_NEAR_PTS);
+
+    // ---- clause 1: where the day is. ONE modifier only — pace, the reversal and the room clause can
+    // all fire at once and the line runs past two rows. The reversal outranks: it is the rarer fact.
+    var a;
+    if(B.shape==='REVERSED' && B.giveBack>0.5){
+      a=(up?'Up ':'Down ')+dispNum(moved)+', turned once and '+Math.round(B.giveBack*100)+'% back';
+    } else {
+      a=(up?'Up ':'Down ')+dispNum(moved)+', '+Math.min(999,B.pct)+'% of the straddle';
+      if(B.paceOk && typeof B.pace==='number' && B.pace>1.2)      a+=' at '+B.pace.toFixed(2)+'× pace';
+      else if(B.paceOk && typeof B.pace==='number' && B.pace<0.8) a+=' but slow for the hour';
+      else if(B.roomAhead!=null && B.roomAhead>0 && B.roomAhead < 0.15*(B.high-B.low))
+        a+=', '+dispNum(B.roomAhead)+' to the rail';
+    }
+
+    // ---- clause 2: what is next, and what crossing it does ----
+    var b;
+    if(flipNear){
+      out.branch='flip';
+      b='flip '+dispNum(toFlip)+' away at '+dispNum(flip)+' — through it hedging '+
+        (shortG?'stops amplifying and starts damping':'stops damping and starts amplifying')+
+        ', so the character changes there, not the direction';
+    } else if(next){
+      out.branch=next.accel?'accel':'brake';
+      b=usdBig(next.perPt)+' '+(next.accel?'accelerator':'brake')+' at '+dispNum(next.disp)+
+        (beyond(next)?', past the rail':'')+' — '+
+        (next.accel ? 'short gamma there, so a push through is hedged WITH it'
+                    : 'long gamma there, so they sell strength and buy weakness into it')+
+        ((live[1]||pastRail||beyond(next))?'':'; nothing behind it before '+dispNum(rail));
+    } else if(bal[0]){
+      out.branch='balanced';
+      b='the only thing '+(up?'above':'below')+' is '+dispNum(bal[0].disp)+
+        ', and it is BALANCED — real size, no side to lean on';
+    } else if(pastRail){
+      out.branch='past';
+      b='already through the priced boundary with nothing '+(up?'above':'below')+' the cut — '+
+        (shortG?'out here the book stops resisting':'and dealers out here still hedge against it');
+    } else {
+      out.branch='air';
+      b='air to '+dispNum(rail)+' — nothing between here and it has a dealer behind it';
+    }
+    out.txt=a+'. '+b.charAt(0).toUpperCase()+b.slice(1)+'.';
+    out.ok=true;
+  }catch(e){ out.why=String(e&&e.message||e); }
+  return out;
+}
 function emPath(B, sym, target){
   var out={ ok:false };
   try{
@@ -18089,6 +18224,18 @@ function secFrame(sym){
     }
   }
   if(l3 || sessBadge) h+='<div class="g3shape">'+l3+(sessBadge?'<span class="g3sbg">'+sessBadge+'</span>':'')+'</div>';
+  // (v11.70) THE READ. Last row of the section, because it is the only element that needs everything
+  // above it to exist first. It speaks on quiet states too — a flat tape is information, and a line that
+  // goes blank reads as a line that broke.
+  if(EB.ok){
+    var RD=null; try{ RD=emRead(EB, sym); }catch(eR){}
+    if(RD && RD.ok && RD.txt){
+      h+='<div class="g3read"'+g3tip('What can happen from here, and WHY \u2014 the section composed into one mechanism: where the day is, then the next level that changes how hedging behaves and what it changes to. '+
+            '\u26a0 IT IS A MECHANISM, NOT A FORECAST. It will never say likely, will, or should, it gives no probability and it names no trade \u2014 because every scorecard on this panel is still empty and gamma tells you HOW price moves, never WHICH WAY. '+
+            'Turning dollars of hedging into points of movement needs a market-impact figure no option chain carries, so the line states what the book DOES at a level and leaves the arrival to you.')+
+            '>'+g3esc(RD.txt)+'</div>';
+    }
+  }
   h+='</div>';
   return h;
 }

@@ -1,3 +1,48 @@
+## v11.70 — the read, and a duplicate-record bug that had been one feature away for months
+
+**THE READ.** One line under the band that composes the section into a mechanism. Two clauses: where the
+day is, then the next level that changes how hedging behaves and what it changes to.
+
+    Up 19.4, 56% of the straddle. $17M accelerator at 7717.71 — short gamma there,
+    so a push through is hedged WITH it; nothing behind it before 7730.48.
+
+    Down 21.55, 62% of the straddle. Flip 8.6 away at 7665.56 — through it hedging
+    stops amplifying and starts damping, so the character changes there, not the direction.
+
+**FLIP OUTRANKS EVERYTHING WITHIN 12 POINTS**, because it is the one level where the mechanism INVERTS
+rather than strengthening or weakening. Branches: `flip` · `accel` · `brake` · `balanced` · `past` · `air`.
+It speaks on quiet tape too — a blank line reads as a broken one.
+
+⚠ **IT IS A MECHANISM, NEVER A FORECAST.** No *likely*, no *will*, no *should*, no probability, no trade.
+Not caution for its own sake: every scorecard here is still at zero, gamma says HOW price moves and never
+WHICH WAY, and "likely to reach 7730" would be inventing the market-impact coefficient no option chain
+contains — while looking quantitative doing it. The ban is TESTED, and the test bans forecast and
+instruction, NOT vocabulary: *"they sell strength and buy weakness into it"* stays, because that is what
+dealers do at a long-gamma strike and deleting the verb would delete the explanation.
+
+⚠ **THE BAN TEST DID NOT WORK, AND MUTATION TESTING IS THE ONLY REASON I KNOW.** It read the source and
+pulled quoted strings with `/'[^']*'/`. That desynchronises on the first apostrophe inside a COMMENT —
+"InsiderFinance's published Zero Gamma" — after which every captured string is mis-paired and the joined
+text is garbage. **Inserting "so it will likely continue" passed all eleven assertions.** The check now
+EXECUTES `emRead` against seven stub states and reads the sentences it actually emits. Same for flip
+precedence: the old assertion compared source positions and passed even with the whole branch disabled by
+`if(false && flipNear)`.
+
+---
+
+**AND A REAL BUG IN LIVE CODE, FOUND BY AN EXISTING TEST.** `featEnqueue` scanned back a hardcoded **40
+records** looking for a duplicate. One bar writes **one record per enrolled feature** — so the moment the
+registry reached 40, the look-back could no longer span a single bar and re-enqueueing the same bar
+duplicated **every record**. featEnqueue runs repeatedly per bar, so live this would have doubled and
+re-doubled the exact data every scorecard is computed from, silently, and worse the more features existed.
+
+    39 features   look-back 40   spans the bar    fine
+    40 features   look-back 40   does NOT span it  every record duplicates
+
+**This build added the 40th feature.** `test_feature_enrollment` 9d caught it on the first run. Records for
+one bar are contiguous at the tail, so the scan now walks back WHILE the bar matches and stops at the first
+record from an earlier one — correct for any number of features, forever. Verified behaviourally at 60.
+
 ## v11.69 — the row said the same thing three times
 
 **"momentum — breaks not fades · widen stops".** Forty-three characters of prose on the busiest row of the

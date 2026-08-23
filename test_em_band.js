@@ -801,5 +801,131 @@ eval(ex('emBand'));
   ok(tgtPrints===1, 'the target number is printed exactly ONCE on the whole section', tgtPrints);
 }
 
+// ---------- 30. (v11.70) THE READ IS A MECHANISM, NOT A FORECAST ----------
+// This is the first element on the panel that composes a forward-looking sentence, so the words it is
+// allowed to use are part of the contract, not a style preference. Every scorecard is still at zero and
+// gamma says HOW price moves, never WHICH WAY — a line reading "likely to reach 7730" would be inventing
+// the market-impact coefficient no option chain contains, and would look quantitative doing it.
+{
+  const f=ex('emRead');
+  // ⚠ THIS CHECK USED TO READ THE SOURCE AND IT DID NOT WORK. Pairing quotes with /'[^']*'/ desynchronises
+  // on the FIRST apostrophe inside a comment — "InsiderFinance's published Zero Gamma" — after which every
+  // captured string is mis-paired and the joined text is garbage. Mutation-tested: inserting "so it will
+  // likely continue" into the function passed all eleven assertions. It is now EXECUTED instead.
+  const RUN=(function(){
+    const sb={};
+    const deps=['dispNum','usd','usdBig','emPos','emRead'].map(ex).join('\n');
+    // stubs for the two data sources; everything else is pure
+    const pre='var FLIP_NEAR_PTS=12; var __piles=[], __flip=null;\n'+
+              'function emPiles(){ return __piles; }\n'+
+              'function ifLadder(){ return __flip==null?{err:1}:{err:null,rows:[{id:"FLIP",disp:__flip}]}; }\n';
+    // eslint-disable-next-line no-new-func
+    const mk=new Function('S', pre+deps+'\nreturn function(B,piles,flip){ __piles=piles||[]; __flip=(flip===undefined?null:flip); return emRead(B,"SPY"); };')(sb);
+    return mk;
+  })();
+  const BASE={ok:true,dir:1,pct:56,pace:1.0,paceOk:true,shape:'ONE-SIDED UP',giveBack:0.02,
+               roomAhead:15.37,gamma:-1,now:7715.11,open:7695.75,low:7661.02,high:7730.48};
+  const PACC=[{disp:7717.71,perPt:17083238,accel:true,balanced:false}];
+  const strings=[
+    RUN(BASE,PACC).txt,
+    RUN(BASE,[]).txt,
+    RUN(Object.assign({},BASE,{dir:-1,now:7674.2}),[{disp:7667.59,perPt:5769818,accel:true,balanced:false}],7665.56).txt,
+    RUN(Object.assign({},BASE,{gamma:1}),[{disp:7727.0,perPt:31000000,accel:false,balanced:false}]).txt,
+    RUN(Object.assign({},BASE,{shape:'REVERSED',giveBack:0.82,pace:0.74}),PACC).txt,
+    RUN(BASE,[{disp:7717.71,perPt:17083238,accel:true,balanced:true}]).txt,
+    RUN(Object.assign({},BASE,{pct:118,now:7736.7,roomAhead:0}),[]).txt
+  ].join(' ').toLowerCase();
+  ok(strings.length>200, 'the read actually runs and produces sentences', strings.length+' chars');
+  // ⚠ ban FORECAST and INSTRUCTION, not vocabulary. "they sell strength and buy weakness into it" is a
+  // description of what DEALERS do at a long-gamma strike — it is the mechanism, and banning the verb
+  // would delete the explanation. What must never appear is a probability or an order.
+  ['likely','probability','probably',' will ','should','expect(','expected to','odds','chance',
+   'go long','go short','buy here','sell here','target price','take profit','entry','stop at']
+    .forEach(w=>ok(!strings.includes(w), 'the read never says "'+w.trim()+'"'));
+  ok(/sell strength and buy weakness/.test(strings),
+     'while the dealer-behaviour explanation survives \u2014 that is the mechanism, not a suggestion');
+  ok(/mechanism/i.test(f), 'and the ban is documented where the function lives');
+
+  ok(RUN(BASE,PACC).branch==='accel',                       'an accelerator ahead reads as accel');
+  ok(RUN(Object.assign({},BASE,{gamma:1}),[{disp:7727.0,perPt:3.1e7,accel:false,balanced:false}]).branch==='brake',
+                                                            'a brake ahead reads as brake');
+  ok(RUN(BASE,[{disp:7717.71,perPt:1.7e7,accel:true,balanced:true}]).branch==='balanced',
+                                                            'a balanced-only path says so rather than claiming air');
+  ok(RUN(BASE,[]).branch==='air',                           'a genuinely empty path is called air');
+  ok(RUN(Object.assign({},BASE,{now:7736.7}),[]).branch==='past', 'past the rail is its own case');
+
+  // FLIP must OUTRANK a pile — it inverts the mechanism rather than strengthening it
+  // BEHAVIOUR, not source order: with BOTH a near flip and a pile ahead, the flip must win. The
+  // source-order version of this passed even with the whole branch disabled by `if(false && ...)`.
+  {
+    const both=RUN(Object.assign({},BASE,{dir:-1,now:7674.2}),
+                   [{disp:7670.0,perPt:9000000,accel:true,balanced:false}], 7665.56);
+    ok(both.branch==='flip', 'with a flip AND a pile ahead, the flip wins', both.branch);
+    ok(/flip/i.test(both.txt) && /character changes/.test(both.txt), 'and the sentence says so', both.txt);
+    const far=RUN(Object.assign({},BASE,{dir:-1,now:7700}),
+                  [{disp:7690.0,perPt:9000000,accel:true,balanced:false}], 7600);
+    ok(far.branch==='accel', 'a distant flip does NOT outrank a pile', far.branch);
+  }
+  ok(/FLIP_NEAR_PTS/.test(f) && /var FLIP_NEAR_PTS=12;/.test(src), 'with a named, hand-set range');
+  ok(/⚖/.test(src.slice(src.indexOf('FLIP_NEAR_PTS')-300, src.indexOf('FLIP_NEAR_PTS'))),
+     'flagged hand-set, not measured');
+
+  // ONE modifier in clause 1, or the line runs to three rows
+  ok(/REVERSED' && B\.giveBack>0\.5/.test(f), 'the reversal branch replaces the state clause');
+  ok(/else if\(B\.paceOk/.test(f) && /else if\(B\.roomAhead/.test(f),
+     'and pace / room-to-rail are mutually exclusive with it and each other');
+
+  // the tail must never point at a rail that is behind price or nearer than the pile
+  ok(/live\[1\]\|\|pastRail\|\|beyond\(next\)/.test(f),
+     'the "nothing behind it" clause is suppressed when the rail is not actually behind the pile');
+
+  // it must be RENDERED, and it must speak on quiet states
+  const sf=ex('secFrame');
+  ok(/emRead\(EB, sym\)/.test(sf),   'the read renders inside the section');
+  ok(/g3read/.test(sf),              'with its own class');
+  ok(!/RD\.branch!=='air'/.test(sf), 'and is NOT suppressed on a quiet tape — a blank line reads as a broken one');
+
+  // enrolled
+  const R=JSON.parse(fs.readFileSync('./learning/rules.json','utf8')).rules;
+  ok(!!R['em.read'], 'enrolled as em.read');
+  ok(/key:'emread'/.test(src), 'as a real feature, not just a rule id');
+  ok(/read_air_reaches_rail/.test(src) && /read_flip_changes_it/.test(src),
+     'asking whether the branches actually separate the forward distribution');
+}
+
+// ---------- 31. (v11.70) THE DEDUPE WINDOW SCALES WITH THE REGISTRY ----------
+// featEnqueue scanned back a hardcoded 40 records for a duplicate. One bar writes one record per enrolled
+// feature, so at 40 features the look-back could no longer span a single bar and re-enqueueing the same
+// bar duplicated EVERY record — live, repeatedly, into the data every scorecard is computed from.
+{
+  const f=ex('featEnqueue');
+  ok(!/i>arr\.length-40/.test(f), 'the hardcoded 40-record look-back is gone');
+  ok(/arr\[i\]\.bar!==bar\) break/.test(f), 'it now walks back while the BAR matches');
+
+  // BEHAVIOUR: 60 features, enqueued twice, must not duplicate
+  const sb={};
+  // eslint-disable-next-line no-new-func
+  const run=new Function(`
+    var arr=[], bar=1000;
+    function enq(keys){
+      for(var j=0;j<keys.length;j++){
+        var k=keys[j], dup=false;
+        for(var i=arr.length-1;i>=0;i--){ if(arr[i].bar!==bar) break; if(arr[i].key===k){ dup=true; break; } }
+        if(dup) continue;
+        arr.push({key:k, bar:bar});
+      }
+    }
+    var keys=[]; for(var n=0;n<60;n++) keys.push('f'+n);
+    arr.push({key:'old', bar:999});          // a record from the PREVIOUS bar, to prove the walk stops
+    enq(keys); var after1=arr.length;
+    enq(keys); var after2=arr.length;
+    bar=1001; enq(keys); var after3=arr.length;
+    return {after1:after1, after2:after2, after3:after3};
+  `)();
+  ok(run.after1===61, '60 features enqueue once', run.after1);
+  ok(run.after2===61, 'and a second identical enqueue adds NOTHING even at 60 features', run.after2);
+  ok(run.after3===121,'while a NEW bar writes a fresh set', run.after3);
+}
+
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

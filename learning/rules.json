@@ -896,6 +896,37 @@
         "held": false
       }
     },
+    "em.read": {
+      "id": "em.read",
+      "condition": "two clauses: where the day is, then the nearest level that changes the hedging mechanism and what it changes to; FLIP outranks piles within 12 points",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "The section already carries every fact; what it lacked was the causal chain between them. The line states a MECHANISM and never a probability - no likely, no will, no trade - because gamma says HOW price moves and never WHICH WAY, and converting hedging dollars into points needs a market-impact figure the chain does not contain. Which BRANCH fires is recorded so the composition itself can be scored.",
+      "tier": "hand",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
     "exp.breadth": {
       "id": "exp.breadth",
       "tier": "hand",
