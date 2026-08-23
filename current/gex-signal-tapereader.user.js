@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.73
+// @version    11.74
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.73';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.74';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -17910,7 +17910,7 @@ function emRead(B, sym){
     var b;
     if(flipNear){
       out.branch='flip';
-      b='flip '+dispNum(toFlip)+' '+(up?'above':'below')+' at '+dispNum(flip)+' — through it hedging '+
+      b='flip '+dispNum(toFlip)+' '+(up?'above':'below')+' at '+dispNum(flip)+'. Through it hedging '+
         (shortG?'flips from amplifying to damping':'flips from damping to amplifying');
     } else if(next){
       // (v11.72) SAY WHAT THE HEDGE DOES TO PRICE, not what the hedging IS. "a push through is hedged
@@ -17919,21 +17919,27 @@ function emRead(B, sym){
       // the consequence has a direction and there is no reason to make the reader supply it.
       // ⚠ STILL CONDITIONAL. "can", never "will" — it says what the book DOES if price gets there, not
       // that price gets there. That distinction is the whole licence for this line to exist.
+      // (v11.74) THE POLARITY IS AN ADJECTIVE, NOT A FOLLOW-UP CLAUSE. It read
+      //   "$17M accelerator at 7717.71 — short gamma there, so a hedge can push price higher"
+      // which classifies the level, then doubles back to say what KIND of level it was, then explains.
+      // Front-loading it — "$17M short gamma accelerator at 7717.71" — classifies once, and the
+      // consequence becomes its own short sentence instead of a subordinate clause hanging off a dash.
+      // Two words shorter and it stops asking the reader to hold a comma-clause open. The user's wording.
       out.branch=next.accel?'accel':'brake';
-      b=usdBig(next.perPt)+' '+(next.accel?'accelerator':'brake')+' at '+dispNum(next.disp)+
-        (beyond(next)?', past the rail':'')+' — '+
-        (next.accel ? ('short gamma there, so a hedge can '+(up?'push price higher':'take price lower'))
-                    : ('long gamma there, so a hedge can '+(up?'cap it':'lift it')));
+      b=usdBig(next.perPt)+' '+(next.accel?'short gamma accelerator':'long gamma brake')+
+        ' at '+dispNum(next.disp)+(beyond(next)?', past the rail':'')+'. A hedge there can '+
+        (next.accel ? (up?'push price higher':'take price lower')
+                    : (up?'cap it':'lift it'));
     } else if(bal[0]){
       out.branch='balanced';
-      b='only '+dispNum(bal[0].disp)+' '+(up?'above':'below')+', and it is BALANCED — size with no side';
+      b=dispNum(bal[0].disp)+' '+(up?'above':'below')+' is BALANCED. Size with no side to lean on';
     } else if(pastRail){
       out.branch='past';
-      b='through the band with nothing '+(up?'above':'below')+' — '+
-        (shortG?'out here the book stops resisting':'and a hedge out here still leans against it');
+      b='through the band with nothing '+(up?'above':'below')+'. '+
+        (shortG?'Out here the book stops resisting':'A hedge out here still leans against it');
     } else {
       out.branch='air';
-      b='air to '+dispNum(rail)+' — nothing in between to lean on';
+      b='air to '+dispNum(rail)+'. Nothing in between to lean on';
     }
     out.txt=a+'. '+b.charAt(0).toUpperCase()+b.slice(1)+'.';
     out.ok=true;

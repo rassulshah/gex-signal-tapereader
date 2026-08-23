@@ -1,3 +1,32 @@
+## v11.74 — the polarity is an adjective, not a follow-up clause
+
+**The user's wording again, and again it is better.**
+
+    was   $17M accelerator at 7717.71 — short gamma there, so a hedge can push price higher.
+    now   $17M short gamma accelerator at 7717.71. A hedge there can push price higher.
+
+The old line classifies the level, then **doubles back** to say what kind of level it was, then explains —
+three moves where one would do, with the reader holding a comma-clause open across a dash the whole way.
+Front-loading the polarity classifies **once**, and the consequence becomes its own short sentence instead
+of a subordinate clause. Two words shorter, and it reads at a glance instead of in sequence.
+
+Applied to every branch, so the section has one grammar rather than one per case:
+
+    $17M short gamma accelerator at 7717.71.  A hedge there can push price higher.
+    $6M short gamma accelerator at 7667.59.   A hedge there can take price lower.
+    $31M long gamma brake at 7727.            A hedge there can cap it.
+    $31M long gamma brake at 7670.            A hedge there can lift it.
+    Flip 8.64 below at 7665.56.               Through it hedging flips from amplifying to damping.
+    Air to 7730.48.                           Nothing in between to lean on.
+    7717.71 above is BALANCED.                Size with no side to lean on.
+    Through the band with nothing above.      Out here the book stops resisting.
+
+Longest sentence 26 words → **24**.
+
+⚠ **"CAN" IS STILL THE ONLY THING HOLDING THE LINE.** Mutation-tested again after the rewrite: replacing
+`A hedge there can` with `Price will go there` fires four assertions; dropping the polarity adjective
+fires two. The wording changed, the contract did not.
+
 ## v11.73 — the row showed what was spent and never what was left
 
 **BOTH OF THE USER'S POINTS WERE RIGHT, AND THE SECOND ONE BROKE A RULE I WROTE MYSELF.**

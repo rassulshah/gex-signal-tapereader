@@ -857,7 +857,13 @@ eval(ex('emBand'));
   // (v11.72) the mechanic phrasing was replaced by its CONSEQUENCE — "a hedge can cap it" rather than
   // "they sell strength and buy weakness into it". Still mechanism, one clause shorter, and it names a
   // direction so the reader does not have to finish the thought.
-  ok(/a hedge can /.test(strings), 'the consequence is stated, not just the mechanic');
+  // (v11.74) the polarity became an ADJECTIVE on the level and the consequence its own sentence:
+  //   "$17M short gamma accelerator at 7717.71. A hedge there can push price higher."
+  ok(/a hedge there can /.test(strings), 'the consequence is its own sentence');
+  ok(/short gamma accelerator/.test(strings) && /long gamma brake/.test(strings),
+     'and the polarity is stated once, as an adjective on the level');
+  ok(!/ \u2014 short gamma there/.test(strings),
+     'not doubled back to in a clause after the dash');
   ok(/push price higher/.test(strings) && /take price lower/.test(strings),
      'and it is DIRECTIONAL \u2014 the pile ahead is in the direction of travel, so the sentence can say which way');
   ok(/cap it/.test(strings) && /lift it/.test(strings), 'both ways for a brake too');
