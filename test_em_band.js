@@ -292,7 +292,10 @@ eval(ex('emBand'));
 
   const f=ex('secFrame');
   ok(/g3ct/.test(f),             'the contract chip renders');
-  ok(/EM '\+usd\(EBc\.emUsd\)\+'\/ct/.test(f), 'and says what a WHOLE expected move is worth per contract');
+  // (v11.69) the chip dropped the word EM when the row was renamed STRADDLE — it would have been the one
+  // place on the face still calling a 0.80-sigma band an expected move. It is now `ES $1,736/ct`.
+  ok(/usd\(EBc\.emUsd\)\+'\/ct/.test(f), 'the contract chip still prices a whole straddle per contract');
+  ok(!/' \u00b7 EM '/.test(f),            'and no longer calls it an expected move');
   ok(/EBc && EBc\.ok && EBc\.mult/.test(f), 'only when there IS a contract — a SPY chart has no multiplier');
   ok(/EB\.open-EB\.loWater/.test(f) && /EB\.high-EB\.hiWater/.test(f),
      'the segments are used-and-remaining on BOTH sides, measured from the day\'s extremes');
@@ -488,7 +491,9 @@ eval(ex('emBand'));
 
   // --- the path ---
   const pa=ex('emPath');
-  ok(/P\.disp<lo \|\| P\.disp>hi/.test(pa), 'the path sums only piles BETWEEN price and the target');
+  // (v11.68) tightened from `< lo || > hi` to `<= lo || >= hi`, plus an explicit skip for a pile sitting
+  // exactly ON the target — which the King always does, since target = Mag = the heaviest strike.
+  ok(/P\.disp<=lo \|\| P\.disp>=hi/.test(pa), 'the path sums only piles STRICTLY between price and the target');
   ok(/acc\+=P\.perPt/.test(pa) && /brk\+=P\.perPt/.test(pa), 'splitting them by polarity into fuel and brake');
   ok(/verdict/.test(pa),         'and returning a plain-word verdict');
   // the caveat lives in the block comment ABOVE the function, which ex() does not return — check source.
@@ -502,7 +507,10 @@ eval(ex('emBand'));
   const fNoComments=f.split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
   ok(!/retraced/.test(fNoComments),
      'the old shape sentence is gone from what RENDERS — the rail draws what it used to narrate');
-  ok(/of hedging per point/.test(f), 'pile hovers state the flow');
+  // (v11.68) reworded when the dollars moved from gross to net — the hover now says what fraction of the
+  // gross survives as net, then gives the net figure, so the old phrase no longer appears.
+  ok(/survives as net dealer exposure/.test(f), 'pile hovers state the NET flow');
+  ok(/\/ PT to hedge/.test(f),                   'in per-point terms');
   ok(/needs a market-impact figure no option chain contains/.test(f),
      '...and refuse to imply a distance, which is the one number nobody can honestly give');
 }
@@ -552,7 +560,7 @@ eval(ex('emBand'));
   ok(badgeWrites===2,                  'both branches (replay chip / phase tag) write to it', badgeWrites);
 
   const l3=f.slice(f.indexOf('var l3='));
-  ok(/OF EM/.test(l3),                 'line 3 carries the percentage now');
+  ok(/OF STRAD/.test(l3),              'line 3 carries the percentage now, named for the straddle');
   ok(/g3pct/.test(l3),                 'as its own chip, sized to be read as a caption');
   ok(/EB\.stretched/.test(l3),         'and it keeps the stretched flag, which used to ride on `str`');
   ok(!/\bstr\b\s*\?/.test(l3),        'without reaching for `str`, which is scoped to the band block');
@@ -640,6 +648,157 @@ eval(ex('emBand'));
   ok(dotTop === railTop - 3,   'the dot stays centred on the rail', dotTop+' vs '+(railTop-3));
   ok(px('g3emo','top') === railTop - 4, 'the anchor notch stays centred too', px('g3emo','top'));
   ok(boxH >= railTop + 4 + 12, 'the box still leaves a lane under the rail for the piles', boxH);
+}
+
+// ---------- 22. (v11.68) THE PILES READ THE BAND'S OWN WINDOW ----------
+// They read toFri. On a FRIDAY the roll makes that today plus a whole extra week, and measured live on
+// 2026-08-21 only 29.2% of the toFri gross gamma expired that day. Seven tenths of the obstacles drawn on
+// today's band belonged to other days.
+{
+  const f=ex('emPiles');
+  ok(/var w='dte0'/.test(f),          'the piles start from dte0, the same window as the band');
+  ok(!/var w='toFri'/.test(f),        'and toFri is no longer the first choice');
+  ok(/w='toFri'/.test(f),             'it survives only as a fallback when dte0 has no profile');
+  // the fallback must come AFTER the primary, or it is not a fallback
+  ok(f.indexOf("var w='dte0'") < f.indexOf("w='toFri'"),
+     'and the fallback is genuinely second', f.indexOf("var w='dte0'")+' < '+f.indexOf("w='toFri'"));
+  ok(/29\.2%/.test(f),                'the measurement that forced it is recorded beside the code');
+  // the band and the piles must not be able to drift apart again
+  const b=ex('emBand');
+  ok(/dte0/.test(b) && /var w='dte0'/.test(f), 'band and piles now name the same window');
+}
+
+// ---------- 23. (v11.68) GROSS SIZES IT, NET PRICES IT ----------
+// perPt used GROSS while accel used NET SIGN, so a strike could carry the dollar weight of its whole book
+// and the direction of a rounding error. Live: 7650 overstated 84x, its net being 1.2% of its gross.
+{
+  const f=ex('emPiles');
+  ok(/perPt:\(Math\.abs\(net\)\*1e6\)\/onePct/.test(f), 'dollars come from |net|');
+  ok(/grossPerPt:\(mag\*1e6\)\/onePct/.test(f),         'gross is kept, but under its own name');
+  ok(/pct=Math\.round\(100\*mag\/maxMag\)/.test(f),     'height and the threshold still use GROSS');
+  ok(/netFrac/.test(f),                                 'the surviving fraction is computed');
+  ok(/var bal = \(netFrac < PILE_BAL_MIN\)/.test(f),    'and a thin one is BALANCED');
+  ok(/accel:\(!bal && net<0\)/.test(f),                 'a balanced strike is not an accelerator');
+  ok(/brake:\(!bal && net>0\)/.test(f),                 'nor a brake');
+  ok(/\bPILE_BAL_MIN\s*=\s*15\b/.test(src),             'the cut is named and hand-set at 15%');
+  ok(/⚖/.test(src.slice(src.indexOf('PILE_BAL_MIN')-400, src.indexOf('PILE_BAL_MIN'))),
+     'and flagged as hand-set, not measured');
+
+  // BEHAVIOUR: reproduce the live 7650 case and check both halves of the fix
+  const legs={ call:2243.3, put:-2297.1 };                 // toFri, the blended book
+  const gross=Math.abs(legs.call)+Math.abs(legs.put), net=legs.call+legs.put;
+  const netFrac=100*Math.abs(net)/gross;
+  ok(netFrac < 15, 'the live 7650 case is BALANCED under the cut', netFrac.toFixed(1)+'%');
+  const onePct=76.9;
+  ok(Math.round((gross*1e6)/onePct/1e6) === 59, 'gross would have printed $59M', Math.round((gross*1e6)/onePct/1e6));
+  ok(Math.round((Math.abs(net)*1e6)/onePct/1e5)/10 === 0.7, 'net is $0.7M', Math.round((Math.abs(net)*1e6)/onePct/1e5)/10);
+}
+
+// ---------- 24. (v11.68) ONE PERCENT IS IN CHART POINTS ----------
+{
+  const f=ex('emPiles');
+  ok(/var onePct=c\.spot\*0\.01\*L\.dispScale/.test(f),
+     'the per-point denominator converts to the scale the rail is drawn in');
+  // and L must exist before it is used
+  ok(f.indexOf('L=ifLadder') < f.indexOf('var onePct='), 'the ladder is fetched first', 'ok');
+}
+
+// ---------- 25. (v11.68) THE TARGET IS NOT ON THE PATH TO ITSELF ----------
+{
+  const f=ex('emPath');
+  ok(/Math\.abs\(P\.disp-target\)<1e-9/.test(f), 'a pile sitting ON the target is separated out');
+  ok(/atTargetPerPt/.test(f),                    'and reported under its own name');
+  ok(/P\.disp<=lo \|\| P\.disp>=hi/.test(f),      'the remaining window is STRICT, matching its comment');
+  ok(!/P\.disp<lo \|\| P\.disp>hi/.test(f),       'the old inclusive test is gone');
+  ok(/if\(P\.balanced\)\{ nBal\+\+; continue; \}/.test(f), 'balanced piles are counted, never summed');
+  ok(/82%/.test(f),                              'the measurement that forced it is recorded beside the code');
+}
+
+// ---------- 26. (v11.68) PACE ----------
+{
+  const b=ex('emBand');
+  ok(/out\.pace\s*=/.test(b),            'the band computes a pace ratio');
+  ok(/Math\.sqrt\(elapsed\)/.test(b),    'against the SQUARE ROOT of elapsed time, not the clock');
+  ok(/PACE_MIN_ELAPSED/.test(b),         'with a floor, because sqrt(elapsed) explodes at the open');
+  ok(/SESS_OPEN_SEC/.test(b) && /SESS_CLOSE_SEC/.test(b), 'using the shared session clock');
+  ok(/var OPEN=SESS_OPEN_SEC, CLOSE=SESS_CLOSE_SEC;/.test(src),
+     'and sessPhaseCT uses THE SAME two numbers — no private second copy');
+
+  // the arithmetic, exercised
+  const due = e => Math.sqrt(e);
+  ok(Math.round(due(0.5)*100)===71,  'half the clock means 71% of the move is due', Math.round(due(0.5)*100));
+  ok(Math.round(due(30/390)*100)===28,'at 10:00 only 28% is due',                   Math.round(due(30/390)*100));
+  ok(Math.round(due(300/390)*100)===88,'by 14:30 it is 88%',                        Math.round(due(300/390)*100));
+  const pace=(pct,e)=>+((pct/100)/Math.sqrt(e)).toFixed(2);
+  ok(pace(40,30/390) > 1.2, 'so 40% at 10:00 reads STRETCHED', pace(40,30/390));
+  ok(pace(40,300/390) < 0.8,'and the same 40% at 14:30 reads COILED', pace(40,300/390));
+}
+
+// ---------- 27. (v11.68) THE LABEL STOPS CLAIMING A SIGMA IT DOES NOT HAVE ----------
+{
+  const f=ex('secFrame');
+  ok(/STRAD LOW/.test(f) && /STRAD HIGH/.test(f), 'the rails are named for the straddle');
+  ok(!/EXP LOW/.test(f) && !/EXP HIGH/.test(f),   'and no longer for an "expected move"');
+  ok(/OF STRAD/.test(f),                          'line 3 agrees with them');
+  ok(/0\.80 sigma/.test(f),                       'the hover states what it actually is');
+  ok(/58% of closes/.test(f),                     'and what that contains');
+  ok(/1\.25/.test(f),                             'and how to get a real one-sigma boundary');
+  // MP must not impersonate their published figure
+  ok(/'MP\*'/.test(src),                          'our recomputed max pain is starred');
+  ok(/NOT the max pain InsiderFinance publish/.test(src), 'and the hover says whose it is not');
+}
+
+// ---------- 28. (v11.68) EVERY NEW READ IS ENROLLED ----------
+{
+  const R=JSON.parse(fs.readFileSync('./learning/rules.json','utf8')).rules;
+  ['em.pace','piles.netPolarity'].forEach(k=>{
+    ok(!!R[k], 'enrolled: '+k);
+    // the QUESTIONS live in the feature's questions[] array, which is where the analysis iterator reads
+    // them — asserting on a string inside `mechanism` was checking the wrong artefact.
+    ok(R[k] && (R[k].mechanism||'').length>80, k+' carries a real mechanism, not a label');
+    ok(R[k] && R[k].n===0 && R[k].rate===null, k+' claims nothing yet');
+  });
+  // DATA leg: the band's per-bar record must carry what the questions need
+  ok(/elapsed:\(B\.elapsed==null/.test(src), 'the recorder writes elapsed');
+  ok(/pace:\(B\.pace==null/.test(src),       'and pace');
+  ok(/grossPerPtM/.test(src) && /netPerPtM/.test(src),
+     'and BOTH dollar figures, so gross-vs-net is answerable from the same bars');
+  // the features themselves must be registered, with questions the nightly loop can iterate
+  ok(/key:'empace'/.test(src), 'pace is a registered FEATURE, not just a rule id');
+  ok(/key:'piles'/.test(src),  'and so are the piles');
+  ok(/pace_hot_extends_negG/.test(src) && /pace_cold_stays_in/.test(src),
+     'pace asks its questions split by regime, so opposite effects cannot cancel');
+  ok(/piles_net_beats_gross/.test(src),
+     'and the piles ask whether the v11.68 fix itself was real or cosmetic');
+}
+
+// ---------- 29. (v11.69) THE ROW SAYS THE THING ONCE ----------
+// "momentum — breaks not fades · widen stops" was three restatements of one fact on the busiest row of
+// the panel, beside a chip that already said −G −V ⚠. And line 3 printed "path ↑ to 7717.71" directly
+// under a chip reading "→ 7717.71".
+{
+  const r=ex('regime2D');
+  ok(/out\.play='BREAKS'/.test(r) && /out\.play='FADES'/.test(r), 'the playbook is one word');
+  // ⚠ check the PLAY lines only. `out.why` in the same function still carries the full sentences and
+  // must — those are the hover text. A blanket search over the function fails on its own explanation.
+  const playText=(r.match(/out\.play='[^']*'/g)||[]).join(' ');
+  ok(!/breaks not fades/.test(playText) && !/widen stops/.test(playText) && !/pins hold/.test(playText),
+     'and the sentences are gone from the PLAY line', playText);
+  ok(/pins hold|levels tend to hold/.test(r), 'while the why-text keeps them');
+  const plays=(r.match(/out\.play='[^']*'/g)||[]);
+  ok(plays.length===4, 'all four regime cells still set one', plays.length);
+  ok(plays.every(p=>p.replace(/out\.play='|'/g,'').split(/\s+/).length===1),
+     'and every one of them is a single token', plays.join(' '));
+  // the explanation must still EXIST — trimmed, not deleted
+  const f=ex('secFrame');
+  ok(/widen stops|more room than usual/.test(f), 'the widen-stops advice survives in the hover');
+  ok(/HOW price moves, never WHICH WAY/.test(f), 'along with the standing caveat');
+
+  // line 3 must not restate row 1's target
+  ok(!/path '\+arrow\+' to/.test(f), 'line 3 no longer repeats the destination');
+  ok(/txt=arrow\+/.test(f),          'it keeps only the direction');
+  const tgtPrints=(f.match(/dispNum\(ifMagEarly\)/g)||[]).length;
+  ok(tgtPrints===1, 'the target number is printed exactly ONCE on the whole section', tgtPrints);
 }
 
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');

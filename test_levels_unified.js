@@ -351,7 +351,7 @@ global.STATE={SPY:{price:762.57, king:760}};
   ok(C!==null,'the panel reads the companion script\'s output',!!C);
   ok(C.rows.length===4,'CR, Mag, PS and Max Pain',C.rows.map(r=>r.id));
   ok(C.rows[0].id==='CR' && C.rows[0].k===775,'their call wall, ordered by price',C.rows[0]);
-  ok(C.rows.some(r=>r.id==='MP' && r.k===758),'Max Pain rides along — impossible from the Skylit feed',C.rows);
+  ok(C.rows.some(r=>r.id==='MP*' && r.k===758),'Max Pain rides along, starred because it is OURS not their published figure',C.rows);
   ok(C.lv.pcOI===5.18,'as does the put/call OI ratio',C.lv.pcOI);
   const C0=ifChainRows('SPY','dte0');
   ok(C0.rows.every(r=>r.id!=='CR'),'the 0DTE window names no call wall',C0.rows.map(r=>r.id));

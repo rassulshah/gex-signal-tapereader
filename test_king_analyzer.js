@@ -8,6 +8,12 @@ function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.ex
   let i=src.indexOf('{',m.index),d=0,e=-1;
   for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}
   return src.slice(m.index,e+1);}
+// (v11.68) sessPhaseCT now reads the SHARED session clock instead of holding a private copy of it, so
+// the extracted function needs those constants in scope. EXTRACT them from the source rather than
+// restating them here — a hardcoded 30600 in this file is exactly the second copy the change removed.
+const SESSC=(src.match(/var SESS_OPEN_SEC=\d+, SESS_CLOSE_SEC=\d+;/)||[])[0];
+if(!SESSC) { console.log('FAIL session clock constants not found in source'); process.exit(1); }
+eval(SESSC);
 eval(['evaBandFromPct','successionFromPct','kingTapsCross','sessPhaseCT','kingApproach'].map(ex).join('\n'));
 
 // ---- eVA ----

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.67
+// @version    11.69
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.67';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.69';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -7398,9 +7398,20 @@ function kingTapsCross(bars, k, zone){
   }
   return {taps:taps, cross:cross, dwell:dwell};
 }
+// (v11.68) THE CASH SESSION, IN ONE PLACE. Declared HERE, immediately above its first user, rather than
+// beside the band 10,000 lines below — `var` hoists the binding but not the value, so a caller that ran
+// before the assignment would have computed with `undefined` and produced NaN silently. Caught because
+// test_king_analyzer extracts sessPhaseCT on its own and it stopped resolving.
+var SESS_OPEN_SEC=30600, SESS_CLOSE_SEC=54000;
+// Below this much of the session elapsed the pace ratio is not reported at all — sqrt(elapsed) in the
+// denominator makes the first bars explode. 0.04 is roughly the first 15 minutes.
+// ⚖ HAND-SET. Enrolled with em.pace.
+var PACE_MIN_ELAPSED=0.04;
 // pure: CT seconds-of-day -> session phase (cash 8:30-15:00 CT; power = last 30m)
 function sessPhaseCT(sec){
-  var OPEN=30600, CLOSE=54000;
+  // (v11.68) the SAME two numbers the band's pace ratio divides by. Two private copies of the session
+  // clock is how the phase tag and the pace chip would one day disagree about when the day started.
+  var OPEN=SESS_OPEN_SEC, CLOSE=SESS_CLOSE_SEC;
   if(sec<OPEN || sec>=CLOSE) return {ph:'CLOSED', toClose:0};
   var toClose=Math.round((CLOSE-sec)/60);
   if(sec<OPEN+3600)  return {ph:'OPEN',   toClose:toClose};
@@ -11240,7 +11251,24 @@ function registerCoreFeatures(){
                // hypothesis is regime-conditional: the same extension plausibly means opposite things.
                shape:B.shape||null, upExc:+(B.upExc||0).toFixed(2), dnExc:+(B.dnExc||0).toFixed(2),
                giveBack:+(B.giveBack||0).toFixed(2), gamma:(B.gamma==null?null:B.gamma),
-               stretched:!!B.stretched, roomAhead:+(B.roomAhead||0).toFixed(2) };
+               stretched:!!B.stretched, roomAhead:+(B.roomAhead||0).toFixed(2),
+               // (v11.68) THE DATA LEG FOR em.pace AND THE PILE CHANGES. A feature that ships without its
+               // record is a feature that can never be scored, and this project has shipped several.
+               // elapsed + pace make the "is 40% a lot" question answerable; nAcc/nBrk/nBal and the two
+               // dollar figures make the gross-vs-net question answerable from the SAME bars rather than
+               // from a re-derivation months later.
+               elapsed:(B.elapsed==null?null:B.elapsed), pace:(B.pace==null?null:B.pace),
+               piles:(function(){
+                 var ps=[]; try{ ps=emPiles(B, sym)||[]; }catch(eP){ return null; }
+                 var a=0,b2=0,bal=0,gA=0;
+                 for(var i=0;i<ps.length;i++){
+                   if(ps[i].balanced){ bal++; } else if(ps[i].accel){ a++; } else { b2++; }
+                   gA+=ps[i].grossPerPt||0;
+                 }
+                 return { n:ps.length, nAcc:a, nBrk:b2, nBal:bal, window:(ps[0]&&ps[0].window)||null,
+                          netPerPtM:Math.round(ps.reduce(function(t,x){return t+(x.perPt||0);},0)/1e6),
+                          grossPerPtM:Math.round(gA/1e6) };
+               })() };
     },
     outcome:function(rec, fwd){
       // Only an OVEREXTENDED bar makes a claim. Inside the band the feature asserts nothing, so it
@@ -11272,6 +11300,77 @@ function registerCoreFeatures(){
     rule:{ id:'em.anchoredBand', tier:'hand',
            condition:'open from the first RTH candle; EM from dte0 ATM straddle captured once at the open and held fixed',
            mechanism:'The straddle is the market pricing its own day. Anchoring at the open is what lets the band show overextension — recentred on spot it would only ever follow price. dte0 ONLY: toFri holds a later expiry worth roughly double.' } });
+  //
+  // (v11.68) PACE. The band said HOW FAR; nothing said whether that was a lot FOR THIS HOUR. Price
+  // diffuses with sqrt(time), so 40% at 10:00 and 40% at 14:30 are opposite conditions and the face
+  // printed them identically. The chip states the ratio; this records it so the ratio can be scored.
+  // ⚠ REGIME-SPLIT for the same reason the band is: running hot plausibly means continuation in negative
+  // gamma and exhaustion in positive. Pooled, the two would cancel and report "no edge" from data that
+  // contained one.
+  registerFeature({ key:'empace', label:'Pace against the clock (pct / \u221aelapsed)', phase:'structure', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var B=null; try{ B=emBand(sym); }catch(e){}
+      if(!B || !B.ok || !B.paceOk || typeof B.pace!=='number') return { ok:false, why:'too early to pace' };
+      return { ok:true, pace:B.pace, pct:B.pct, elapsed:B.elapsed, dueFrac:B.dueFrac,
+               band:(B.pace>1.2?'hot':(B.pace<0.8?'cold':'on')),
+               gamma:(B.gamma==null?null:B.gamma), dispSign:(B.disp>0?1:(B.disp<0?-1:0)) };
+    },
+    outcome:function(rec, fwd){
+      // No claim. The chip is DESCRIPTIVE on the face and it scores null here until these records say
+      // otherwise — the whole point of the enrolment rule.
+      return { hit:null, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
+               pace:(rec&&rec.pace!=null)?rec.pace:null, band:(rec&&rec.band)||null };
+    },
+    questions:[
+      { id:'pace_hot_extends_negG', when:[{f:'band',v:'hot'},{f:'gamma',v:-1}], outcome:'extend',
+        note:'running HOT for the hour in negative gamma: does the day keep going? If pace above 1.2 preceded continuation, a hot reading is a trend tell rather than a warning.' },
+      { id:'pace_hot_reverts_posG', when:[{f:'band',v:'hot'},{f:'gamma',v:1}], outcome:'revert',
+        note:'running HOT in POSITIVE gamma, where dealers damp: does it come back? The mirror claim, scored separately so the two cannot cancel.' },
+      { id:'pace_cold_stays_in',    when:[{f:'band',v:'cold'}], outcome:'stayIn',
+        note:'running COLD for the hour: does the session finish inside the band? A coiled day should contain more often than a hot one, and if it does not the chip is decoration.' }
+    ],
+    rule:{ id:'em.pace', tier:'hand',
+           condition:'pct of the straddle travelled divided by \u221a(elapsed fraction of the cash session); not reported below 4% elapsed',
+           mechanism:'Price diffuses with the square root of time, so half the clock means about 71% of the move is due, not 50%. Without the correction the same percentage means opposite things at 10:00 and 14:30. DESCRIPTIVE: it says the day is running hot or cold against its own pricing, never which way.' } });
+  //
+  // (v11.68) THE PILES, after the two faults that composed into one wrong number. They read toFri while
+  // the band read dte0 — on a Friday roll that is today plus a whole extra week, and only 29.2% of it
+  // expired that day — and their DOLLARS came from gross while their DIRECTION came from net, so a strike
+  // could carry the weight of its whole book and the sign of a rounding error. Both are fixed; this
+  // records both dollar figures on the same bars so the fix itself can be checked rather than believed.
+  registerFeature({ key:'piles', label:'Gamma piles on the band (net-polarised, dte0)', phase:'structure', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var B=null; try{ B=emBand(sym); }catch(e){}
+      if(!B || !B.ok) return { ok:false };
+      var ps=[]; try{ ps=emPiles(B, sym)||[]; }catch(e2){ return { ok:false }; }
+      if(!ps.length) return { ok:false, why:'no pile clears the threshold' };
+      var a=0,b=0,bal=0,netSum=0,grossSum=0,i;
+      for(i=0;i<ps.length;i++){
+        if(ps[i].balanced) bal++; else if(ps[i].accel) a++; else b++;
+        netSum+=ps[i].perPt||0; grossSum+=ps[i].grossPerPt||0;
+      }
+      var PA=null; try{ PA=emPath(B, sym, B.now); }catch(e3){}
+      return { ok:true, window:ps[0].window, n:ps.length, nAcc:a, nBrk:b, nBal:bal,
+               netPerPtM:Math.round(netSum/1e6), grossPerPtM:Math.round(grossSum/1e6),
+               overstate:grossSum>0?+(grossSum/Math.max(1,netSum)).toFixed(2):null,
+               lean:(a>b?1:(b>a?-1:0)), gamma:(B.gamma==null?null:B.gamma) };
+    },
+    outcome:function(rec, fwd){
+      return { hit:null, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
+               nAcc:(rec&&rec.nAcc!=null)?rec.nAcc:null, nBal:(rec&&rec.nBal!=null)?rec.nBal:null,
+               netPerPtM:(rec&&rec.netPerPtM!=null)?rec.netPerPtM:null };
+    },
+    questions:[
+      { id:'piles_accel_lean_extends', when:[{f:'lean',v:1}], outcome:'extend',
+        note:'more ACCELERATORS than brakes in the band: does the forward excursion get larger? This is the claim the purple markers make visually, asked numerically.' },
+      { id:'piles_brake_lean_contains', when:[{f:'lean',v:-1}], outcome:'stayIn',
+        note:'more BRAKES than accelerators: does the day stay contained? The mirror.' },
+      { id:'piles_net_beats_gross',     when:[], outcome:'extend',
+        note:'both dollar figures are on every bar. Does the NET total track forward range better than the GROSS one did? If it does not, the v11.68 fix was cosmetic and should be said so out loud.' }
+    ],
+    rule:{ id:'piles.netPolarity', tier:'hand',
+           condition:'piles from the dte0 book, the band\'s own window; size and the 20% cut from GROSS gamma; dollars, path sums and the accel/brake label from NET; netFrac below 15% renders BALANCED and votes in neither sum',
+           mechanism:'Gross says how much option gamma SITS at a strike; net says what the dealer actually has to hedge. Sizing with gross while signing with net let a 1.2% residual print as a $59M accelerator - measured 84x overstatement. And obstacles drawn on a band that frames TODAY must expire today, or a blend can manufacture neutrality where the two expiries simply disagree.' } });
   //
   // DEX: recorded, explicitly NON-VOTING, and honest about why. Its SIGN is structurally pinned by
   // put-OI dominance on an index chain (measured 2026-08-22: +14,732 against −34,671 per-strike), so
@@ -13682,7 +13781,7 @@ function ifChainRows(sym, which){
     if(L.cr!=null)  out.push({ id:'CR',  k:L.cr,  gex:null });
     if(L.mag!=null) out.push({ id:'Mag', k:L.mag, gex:null });
     if(L.ps!=null)  out.push({ id:'PS',  k:L.ps,  gex:null });
-    if(L.maxPain!=null) out.push({ id:'MP', k:L.maxPain, gex:null });
+    if(L.maxPain!=null) out.push({ id:'MP*', k:L.maxPain, gex:null });
     out.sort(function(a,b){ return b.k-a.k; });
     return { rows:out, lv:L, exps:w.exps, which:(which||'toFri'),
              ageMin:d.ageMin, stale:d.stale, spot:d.spot };
@@ -14165,11 +14264,11 @@ function levelsHtmlV2(sym){
              '<span>to Fri · r '+(CH.lv.ratio==null?'–':CH.lv.ratio)+'</span>'+
              '<span style="margin-left:auto">'+(CH.stale?'⚠ ':'')+CH.ageMin+'m</span></div>';
           CH.rows.forEach(function(r){
-            var base=(r.id==='MP')?'mag':r.id.toLowerCase();
-            var c=(r.id==='MP')?PAL.sub:(LVL_COL[base]||PAL.sub);
+            var base=(r.id==='MP'||r.id==='MP*')?'mag':r.id.toLowerCase();
+            var c=(r.id==='MP'||r.id==='MP*')?PAL.sub:(LVL_COL[base]||PAL.sub);
             var d0=+(r.k-U.px).toFixed(2), dc=(d0>0)?PAL.longAccent:((d0<0)?PAL.shortAccent:PAL.sub);
             var alt=(CH0&&CH0.rows.filter(function(x){return x.id===r.id;})[0]);
-            h+='<div title="'+(r.id==='MP'?'Max Pain — the strike minimising total payout to option holders at expiry. Needs open interest, which is why it is impossible from the Skylit feed and free here.':('InsiderFinance '+r.id+', from their chain.'))+'" '+
+            h+='<div title="'+(r.id==='MP*'?'Max Pain, RECOMPUTED BY US from their chain over our expiry window — NOT the max pain InsiderFinance publish, which covers all expiries and is a different number (7350 on 2026-08-21). The strike minimising total payout to option holders at expiry. Needs open interest, which is why it is impossible from the Skylit feed and free here.':('InsiderFinance '+r.id+', from their chain.'))+'" '+
                'style="display:flex;align-items:center;gap:5px;font-size:10px;line-height:1.4;white-space:nowrap;opacity:.85">'+
                '<span style="display:inline-block;min-width:30px;color:'+c+';font-weight:700;font-style:italic">'+r.id+'</span>'+
                '<span style="color:'+PAL.ink+';font-weight:600;font-variant-numeric:tabular-nums">'+lvlFmt(r.k)+'</span>'+
@@ -14260,8 +14359,8 @@ function levelsChartV2(sym, U){
       var CHc=ifChainRows(sym,'toFri');
       if(CHc && CHc.rows.length){
         CHc.rows.forEach(function(r){
-          var base=(r.id==='MP')?'mag':r.id.toLowerCase();
-          var c=(r.id==='MP')?PAL.sub:(LVL_COL[base]||PAL.sub);
+          var base=(r.id==='MP'||r.id==='MP*')?'mag':r.id.toLowerCase();
+          var c=(r.id==='MP'||r.id==='MP*')?PAL.sub:(LVL_COL[base]||PAL.sub);
           if(r.k<lo || r.k>hi){ outside.push({ id:'IF·'+r.id, k:r.k, above:(r.k>hi) }); return; }
           var yy=y(r.k);
           svg+='<line x1="0" y1="'+yy.toFixed(1)+'" x2="'+(W-R)+'" y2="'+yy.toFixed(1)+'" stroke="'+c+'" stroke-width="0.8" stroke-dasharray="1,4" opacity="0.55"/>';
@@ -16711,18 +16810,21 @@ function regime2D(sym){
     var gTxt=(out.g>0?'+γ':'−γ');
     var vTxt=(out.v==null?null:(out.v>0?'+V':'−V'));
     out.label='REG: '+gTxt+(vTxt?(' / '+vTxt):'');
+    // (v11.69) ONE WORD. It read 'momentum — breaks not fades · widen stops' — three restatements of the
+    // same fact, sitting on the busiest row of the panel, next to a chip that already says −G −V ⚠. The
+    // playbook is BREAKS or FADES; everything else about it is a sentence, and sentences live in hovers.
     if(out.g<0 && out.v!=null && out.v<0){
       out.danger=true;
-      out.play='momentum — breaks not fades · widen stops';
+      out.play='BREAKS';
       out.why='Negative gamma with negative vanna is the self-reinforcing cell: dealer hedging AMPLIFIES moves and falling spot pushes them to sell more. Fades are the wrong trade here and normal stops are too tight.';
     } else if(out.g<0){
-      out.play='momentum — breaks over fades';
+      out.play='BREAKS';
       out.why='Dealers are short gamma, so they hedge WITH the move. Ranges expand and mean-reversion at levels is unreliable.';
     } else if(out.v!=null && out.v<0){
-      out.play='fade edges · but vanna is against you';
+      out.play='FADES';
       out.why='Gamma is pinning while vanna leans the other way — pins hold until vol moves, then they give way quickly.';
     } else {
-      out.play='fade edges · pins hold';
+      out.play='FADES';
       out.why='Dealers are long gamma and hedge AGAINST the move, which compresses range. Levels tend to hold and fades are the higher-probability trade.';
     }
   }catch(e){}
@@ -17062,6 +17164,15 @@ function ensureV3Css(){
     '#gpts-body .g3pile{position:absolute;bottom:2px;transform:translateX(-50%);border-radius:1px}'+
     '#gpts-body .g3pile.acc{background:#a371f7}'+
     '#gpts-body .g3pile.brk{background:#e3c341}'+
+    // (v11.68) BALANCED: drawn, because the gamma is really there, but hollow — the legs cancel so
+    // there is no side, and filling it with either colour would assert one.
+    '#gpts-body .g3pile.bal{background:transparent;box-shadow:inset 0 0 0 1px rgba(139,152,169,.6)}'+
+    // (v11.68) the pace chip. Grey ON PACE, cyan COILED, red STRETCHED — cyan and red already mean
+    // "quiet" and "against you" elsewhere on this face, so no new vocabulary is introduced.
+    '#gpts-body .g3pace{font-size:7.5px;font-weight:800;padding:0 4px;border-radius:2px;line-height:12px;white-space:nowrap;cursor:help}'+
+    '#gpts-body .g3pace.ok{background:rgba(139,152,169,.16);color:#8b98a9;border:1px solid rgba(139,152,169,.32)}'+
+    '#gpts-body .g3pace.slow{background:rgba(79,209,224,.14);color:#4fd1e0;border:1px solid rgba(79,209,224,.35)}'+
+    '#gpts-body .g3pace.hot{background:rgba(240,97,109,.14);color:#f0616d;border:1px solid rgba(240,97,109,.4)}'+
     // STRETCHED becomes RED. Amber sat next to the brake yellow and they meant different things; red
     // already means "this is against you" in BIAS, which is what STRETCHED is saying.
     '#gpts-body .g3emn.g3str{background:#f0616d}'+
@@ -17091,7 +17202,8 @@ function ensureV3Css(){
     '#gpts-body .g3frow{display:flex;align-items:center;justify-content:center;gap:6px;font-size:9.5px;margin-top:3px;flex-wrap:wrap}'+
     '#gpts-body .g3fk{color:#8b98a9;font-size:7.5px;font-weight:700;letter-spacing:.05em}'+
     '#gpts-body .g3fv{color:#e6edf3;font-weight:700}'+
-    '#gpts-body .g3play{margin-top:3px;text-align:center;font-size:8.5px;color:#8b98a9}'+
+    '#gpts-body .g3play{font-size:8px;font-weight:800;letter-spacing:.06em;color:#8b98a9;cursor:help}'+
+    '#gpts-body .g3play.g3dgr{color:#f0616d}'+
     '#gpts-body .g3tgt{font-size:11px;font-weight:800;color:#e3c341;letter-spacing:-.2px}'+
     '#gpts-body .g3play b{color:#a371f7;font-weight:800}'+
     '#gpts-body .g3ph{margin-top:4px;padding:3px 5px;border-radius:3px;background:rgba(242,180,90,.11);text-align:center;font-size:8px;color:#f2b45a;line-height:1.35}'+
@@ -17296,7 +17408,10 @@ function ifLadder(sym){
       }
       out.rows.push({ id:id, k:k, disp:+(k*dispScale).toFixed(2), und:+(k*undScale).toFixed(4) });
     }
-    if(W){ add('CR', W.cr); add('PS', W.ps); add('Mag', W.mag); add('MP', W.maxPain); }
+    // (v11.68) MP* — the asterisk is load-bearing. This is max pain recomputed from their chain over OUR
+    // window; InsiderFinance PUBLISH a max pain of their own (7350 on 2026-08-21, all expiries) and it is
+    // a different number entirely. Printing "MP" beside their other published levels implied theirs.
+    if(W){ add('CR', W.cr); add('PS', W.ps); add('Mag', W.mag); add('MP*', W.maxPain); }
     // FLIP — THEIRS FIRST, ALWAYS. v1.7 made the payload scan walk nested objects; the earlier shallow
     // scan reported their zero gamma absent and that conclusion drove us to compute our own, which is
     // the mistake this project keeps repeating. We fall back to a derived flip only when the payload
@@ -17453,6 +17568,31 @@ function emBand(sym){
     out.pct  = Math.round((Math.abs(out.disp)/rec.em)*100);
     out.dir  = (out.disp>0?1:(out.disp<0?-1:0));
 
+    // ---- (v11.68) PACE: IS THAT PERCENTAGE A LOT *FOR THIS HOUR*? --------------------------------
+    // A diffusion travels with the SQUARE ROOT of elapsed time, not with the clock. Half the session gone
+    // is not half the move due — it is 71% of it. So the same "40% OF EM" means opposite things:
+    //     10:00   8% of the clock elapsed ->  28% due  -> 40% used is a STRETCHED market
+    //     12:45  50% of the clock elapsed ->  71% due  -> 40% used is a COILED one
+    //     14:30  77% of the clock elapsed ->  88% due  -> 40% used is a dead one
+    // The band printed all three identically, which made its headline number close to uninterpretable
+    // without the reader silently doing this correction in their head. Nothing new is fetched: the
+    // session clock is already on every candle.
+    // ⚠ DESCRIPTIVE. It says the day is running hot or cold against its own pricing. It does not say
+    //   which way, and it does not say the day will finish anywhere. Enrolled as `em.pace`.
+    var nowSo = (cs.length && typeof cs[cs.length-1].so==='number') ? cs[cs.length-1].so : null;
+    out.nowSo = nowSo;
+    if(nowSo!=null){
+      var elapsed = (nowSo - SESS_OPEN_SEC) / (SESS_CLOSE_SEC - SESS_OPEN_SEC);
+      // clamp: pre-open and post-close both mean "the whole session's variance is on the table"
+      elapsed = Math.max(0, Math.min(1, elapsed));
+      out.elapsed = +elapsed.toFixed(4);
+      // ⚠ FLOOR THE DENOMINATOR. In the first minutes sqrt(elapsed) -> 0 and the ratio explodes; a
+      // 500x pace chip in the first bar is noise wearing a number. Below the floor we say nothing.
+      out.paceOk = (elapsed >= PACE_MIN_ELAPSED);
+      out.pace   = out.paceOk ? +((out.pct/100) / Math.sqrt(elapsed)).toFixed(2) : null;
+      out.dueFrac= +Math.sqrt(elapsed).toFixed(4);
+    }
+
     // ---- (v11.57) WHERE THE DAY HAS BEEN, not just where it is -------------------------------------
     // The band knew only the CURRENT price, so a day that ran +91% and came back through the open to
     // −92% rendered IDENTICALLY to a day that had drifted quietly down. The whole reversal was invisible.
@@ -17586,20 +17726,35 @@ function hedgeFlow(sym){
 // sweep has ever been possible. Widening the export is what makes calibrating it real.
 //
 // SIZE: sqrt of magnitude. Linear lets a 100% King flatten a 30% pile into near-invisibility.
+// (v11.68) THE BALANCED CUT. Below this share of gross surviving as net, a strike has no side.
+// ⚖ HAND-SET, NOT MEASURED — same standing as CFG.nodeThresh. 15% is chosen to be comfortably above the
+// 1.2% case that exposed the bug and comfortably below the 29-68% band the real accelerators occupied on
+// the live book. It is enrolled so it can be swept once there are records.
+var PILE_BAL_MIN = 15;
 function emPiles(B, sym){
   var out=[];
   try{
     if(!B || !B.ok) return out;
     var c=null; try{ c=ifChain((sym==='QQQ')?'QQQ':'SPX'); }catch(e){}
     if(!c || c.err || !(c.spot>0)) return out;
-    // SAME WINDOW AS THE FLOW CHIP. Near book: that is where gamma concentrates and where dealers
-    // actually re-hedge, and it is the window every other number on this band already uses.
-    var w='toFri', lv=(c.toFri&&c.toFri.lv)?c.toFri.lv:null;
-    if(!lv || !lv.gexProf){ w='dte0'; lv=(c.dte0&&c.dte0.lv)?c.dte0.lv:null; }
+    // (v11.68) SAME WINDOW AS THE BAND — dte0. It was toFri, and that was wrong.
+    // The band asks "how much room does TODAY have" and reads the 0DTE straddle. The piles then answered
+    // "what is in the way" from a book running through Friday — and on a FRIDAY the roll makes that window
+    // today PLUS AN ENTIRE EXTRA WEEK. Measured live 2026-08-21: only 29.2% of the toFri gross gamma
+    // expired that day. Seven tenths of the obstacles drawn on today's band belonged to other days.
+    // ⚠ IT ALSO MANUFACTURED FALSE NEUTRALITY. At strike 7650, today's book was decisively short gamma
+    // (net -$443.8M on $1,240M gross, 35.8%) while next week's was long; blended, they cancelled to a
+    // 1.2% residual — and the face reported that residual as a $59M ACCELERATOR, because the SIZE came
+    // from gross while the DIRECTION came from net. Two faults composing into one confident wrong number.
+    var w='dte0', lv=(c.dte0&&c.dte0.lv)?c.dte0.lv:null;
+    if(!lv || !lv.gexProf || !lv.gexProf.length){ w='toFri'; lv=(c.toFri&&c.toFri.lv)?c.toFri.lv:null; }
     if(!lv || !lv.gexProf || !lv.gexProf.length) return out;
     var L=null; try{ L=ifLadder(sym); }catch(e2){}
     if(!L || L.err || !(L.dispScale>0)) return out;
-    var onePct=c.spot*0.01;                        // gexProf is $ per 1% move -> per POINT
+    // (v11.68) ONE PERCENT IN **CHART** POINTS. gexProf is dollars per 1% move; 1% of SPX spot is a
+    // number of SPX points, and the rail is drawn in ES points. Dividing by the SPX figure reported every
+    // flow 0.23% low. Small, but it is a scale error inside a scale-conversion function.
+    var onePct=c.spot*0.01*L.dispScale;
     var prof=lv.gexProf, i, maxMag=0;
     for(i=0;i<prof.length;i++){ var m=Math.abs(prof[i][1])+Math.abs(prof[i][2]); if(m>maxMag) maxMag=m; }
     if(!(maxMag>0)) return out;
@@ -17611,10 +17766,25 @@ function emPiles(B, sym){
       var mag=Math.abs(cal)+Math.abs(put), pct=Math.round(100*mag/maxMag);
       if(pct<thr) continue;
       var net=cal+put;                                       // NEGATIVE net = dealers short gamma there
+      // (v11.68) GROSS SIZES IT, NET PRICES IT, AND A THIN NET MEANS NEITHER.
+      // `perPt` used GROSS while `accel` used NET SIGN, so a strike could carry the dollar weight of its
+      // whole book and the direction of a rounding error. Measured live: 7700 overstated 3.4x, 7690 1.5x,
+      // 7675 3.0x, and 7650 by EIGHTY-FOUR TIMES ($59M claimed against a $0.70M net requirement).
+      //   GROSS  = how much option gamma SITS here -> pile HEIGHT and the nodeThresh cut. This is Skylit's
+      //            own node convention, so the rail keeps agreeing with their heatmap.
+      //   |NET|  = what the dealer actually has to hedge -> the DOLLARS and the path sums.
+      // netFrac is how much of the gross survives the cancellation. Below BAL_MIN the two legs have very
+      // nearly offset and there is no side to lean on: it is drawn, because the size is real, but it is
+      // drawn as BALANCED and it votes in neither path sum. Calling that an accelerator was reading noise.
+      var netFrac = mag>0 ? (100*Math.abs(net)/mag) : 0;
+      var bal = (netFrac < PILE_BAL_MIN);
       out.push({ k:k, disp:disp, pct:pct,
-                 gexM:+mag.toFixed(1), netM:+net.toFixed(1),
-                 perPt:(mag*1e6)/onePct,                     // dollars of hedging per ONE point
-                 accel:(net<0),                              // short gamma -> hedging FEEDS the move
+                 gexM:+mag.toFixed(1), netM:+net.toFixed(1), netFrac:+netFrac.toFixed(1),
+                 perPt:(Math.abs(net)*1e6)/onePct,           // NET dollars of hedging per ONE chart point
+                 grossPerPt:(mag*1e6)/onePct,                // kept for the hover, never for a sum
+                 balanced:bal,
+                 accel:(!bal && net<0),                      // short gamma -> hedging FEEDS the move
+                 brake:(!bal && net>0),
                  pos:emPos(B, disp), window:w });
     }
     out.sort(function(a,b){ return b.pct-a.pct; });
@@ -17635,14 +17805,23 @@ function emPath(B, sym, target){
     if(!B || !B.ok || typeof target!=='number') return out;
     var ps=emPiles(B, sym)||[];
     var lo=Math.min(B.now, target), hi=Math.max(B.now, target);
-    var acc=0, brk=0, nAcc=0, nBrk=0, i;
+    var acc=0, brk=0, nAcc=0, nBrk=0, nBal=0, atTarget=0, i;
     for(i=0;i<ps.length;i++){
       var P=ps[i];
-      if(P.disp<lo || P.disp>hi) continue;        // strictly between price and the target
+      // (v11.68) STRICTLY BETWEEN. The comment said "strictly" and the code used <= / >=, which is not
+      // the same thing — and it mattered more than a boundary usually does, because the TARGET IS THE
+      // HEAVIEST STRIKE BY CONSTRUCTION (target = Mag = the biggest pile in the book). So the largest
+      // pile was on the path to itself every single time the target sat in band, and `clear` was very
+      // nearly unreachable. Measured live: of $131M of "fuel", $107M was the pile sitting ON the target
+      // and $23M was actually in the way. 82% of the verdict was the destination.
+      if(Math.abs(P.disp-target)<1e-9){ atTarget+=P.perPt; continue; }   // AT the target, not on the way
+      if(P.disp<=lo || P.disp>=hi) continue;
+      if(P.balanced){ nBal++; continue; }         // no side to lean on: counted, never summed
       if(P.accel){ acc+=P.perPt; nAcc++; } else { brk+=P.perPt; nBrk++; }
     }
     out.ok=true; out.up=(target>B.now);
-    out.accPerPt=acc; out.brkPerPt=brk; out.nAcc=nAcc; out.nBrk=nBrk;
+    out.accPerPt=acc; out.brkPerPt=brk; out.nAcc=nAcc; out.nBrk=nBrk; out.nBal=nBal;
+    out.atTargetPerPt=atTarget;                   // what waits AT the destination, reported separately
     out.netPerPt=acc-brk;
     out.verdict=(nAcc+nBrk===0) ? 'clear' : (acc>brk ? 'fuelled' : 'braked');
     out.distance=Math.abs(target-B.now);
@@ -17724,9 +17903,17 @@ function secFrame(sym){
        '>'+(HF.feeds?'FEEDS ':'FIGHTS ')+usdBigSp(HF.perPt)+' / PT</span>';
   }
   if(EBc && EBc.ok && EBc.mult && EBc.contract){
-    h+='<span class="g3ct"'+g3tip(EBc.contract+' — '+usd(EBc.mult)+' per index point. The expected move of '+dispNum(EBc.em)+' points is worth '+usd(EBc.emUsd)+' per contract'+(EBc.microUsd?('; the micro is one tenth, '+usd(EBc.microUsd)):'')+'. This is the MOVE converted to dollars — not a position, not a size, not profit or loss. ⚠ The multiplier follows the CHART, so charting '+EBc.contract+' while trading the micro makes every figure ten times too big.')+'>'+g3esc(EBc.contract)+' · EM '+usd(EBc.emUsd)+'/ct</span>';
+    h+='<span class="g3ct"'+g3tip(EBc.contract+' — '+usd(EBc.mult)+' per index point. The expected move of '+dispNum(EBc.em)+' points is worth '+usd(EBc.emUsd)+' per contract'+(EBc.microUsd?('; the micro is one tenth, '+usd(EBc.microUsd)):'')+'. This is the MOVE converted to dollars — not a position, not a size, not profit or loss. ⚠ The multiplier follows the CHART, so charting '+EBc.contract+' while trading the micro makes every figure ten times too big.')+'>'+g3esc(EBc.contract)+' '+usd(EBc.emUsd)+'/ct</span>';
   }
-  if(R.play) h+='<span class="g3play"'+g3tip('What does this regime reward? In negative gamma dealers hedge WITH the move, so fades are the losing side; in positive gamma they hedge against it and levels hold.')+'>'+g3esc(R.play)+'</span>';
+  // (v11.69) it is one word now, so it is styled as a verdict rather than a trailing sentence — and the
+  // whole explanation, including the widen-stops part that used to be printed, moved into the hover.
+  if(R.play) h+='<span class="g3play'+(R.danger?' g3dgr':'')+'"'+
+    g3tip('What does this regime reward? '+
+          (R.g!=null && R.g<0
+            ? 'Dealers are SHORT gamma and hedge WITH the move, so ranges expand: breakouts follow through and fades get run over. Give stops more room than usual \u2014 normal ones sit inside the noise here.'
+            : 'Dealers are LONG gamma and hedge AGAINST the move, so range compresses: levels tend to hold and fading the edges is the higher-probability trade.')+
+          (R.danger?' \u26a0 Negative vanna as well: falling spot pushes dealers to sell MORE, so the amplification compounds. This is the cell where fades are not a worse trade, they are the wrong trade.':'')+
+          ' \u26a0 It says HOW price moves, never WHICH WAY.')+'>'+g3esc(R.play)+'</span>';
   h+='</div>';
   // (v11.49) LINE 2 IS THE BAND NOW. It used to be four naked measurements — DEX, TERM, EM, ATR —
   // which reported instrumentation readings while line 1 above answered a question. A number here
@@ -17754,7 +17941,11 @@ function secFrame(sym){
              :(EB.gamma>0?'positive gamma — dealers hedge AGAINST the move, so range compresses and levels tend to hold'
                          :'negative gamma — dealers hedge WITH the move, so ranges expand and the edge is where overshoot happens');
     h+='<span class="g3emw"'+g3tip('Where today can go, where it is, and how much is left. The rail is '+(EB.anchor==='prevClose'?'the prior close':'the open')+' plus and minus the expected move, fixed for the session. Notch = anchor, white dot = price now, T = target, dim span = where the day has been.'+(EB.est?' ~EST: captured late, so this band is narrower than the open\'s was.':'')+(EB.anchor==='prevClose'?' Pre-open: re-anchors to the real open on the first bar.':''))+'>';
-    h+='<span class="g3emk"'+g3tip('Expected low — the open minus the expected move. A priced boundary, not a floor: about one day in three closes outside the band.')+'>'+g3esc(dispNum(EB.low))+'<small>EXP LOW</small></span>';
+    // (v11.68) THE ROW IS NAMED FOR WHAT IT IS. The ATM straddle is ~0.80 sigma, not 1.00 — Brenner and
+    // Subrahmanyam, and every vendor guide that bothers to say so puts the conversion at x1.25. A row
+    // labelled EM implies ~68% containment; this band delivers ~58%. The WIDTH IS UNCHANGED and every
+    // level sits exactly where it did — only the claim has been corrected.
+    h+='<span class="g3emk"'+g3tip('Straddle low — the open minus the at-the-money straddle. \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(dispNum(EB.low))+'<small>STRAD LOW</small></span>';
     h+='<span class="g3emt">'+
        '<i class="g3emr"></i>'+
        ((EB.hiWater!=null&&EB.loWater!=null)?('<i class="g3emx2" style="left:'+emPos(EB,EB.loWater).toFixed(1)+'%;width:'+Math.max(0,emPos(EB,EB.hiWater)-emPos(EB,EB.loWater)).toFixed(1)+'%"></i>'+
@@ -17791,18 +17982,23 @@ function secFrame(sym){
            // sqrt so a 100% King does not flatten a 30% pile into invisibility
            var hgt=Math.max(3, Math.round(Math.sqrt(P.pct/100)*10));
            var w=(P.pct>=60?5:4);
-           h2+='<i class="g3pile '+(P.accel?'acc':'brk')+'" style="left:'+P.pos.toFixed(1)+'%;width:'+w+'px;height:'+hgt+'px"'+
-               g3tip(P.k+' \u2014 '+usdBig(P.gexM*1e6)+' of gamma, '+usdBig(P.perPt)+' of hedging per point. '+
-                     (P.accel
-                       ? 'NEGATIVE gamma: dealers are short here, so crossing it they must trade WITH the move \u2014 an ACCELERATOR.'
-                       : 'POSITIVE gamma: dealers are long here, so crossing it they trade AGAINST the move \u2014 a BRAKE.')+
+           // (v11.68) three states, not two. BALANCED is drawn — the gamma is really there — but hollow,
+           // because a strike whose legs cancel has no side and colouring it would assert one.
+           var pcls = P.balanced ? 'bal' : (P.accel ? 'acc' : 'brk');
+           h2+='<i class="g3pile '+pcls+'" style="left:'+P.pos.toFixed(1)+'%;width:'+w+'px;height:'+hgt+'px"'+
+               g3tip(P.k+' \u2014 '+usdBig(P.gexM*1e6)+' of gamma sits here, of which '+P.netFrac+'% survives as net dealer exposure: '+usdBigSp(P.perPt)+' / PT to hedge. '+
+                     (P.balanced
+                       ? 'BALANCED \u2014 the call and put legs very nearly cancel, so there is no side to lean on and it votes in neither path sum. The SIZE is real; the DIRECTION is not.'
+                       : (P.accel
+                         ? 'NEGATIVE net gamma: dealers are short here, so crossing it they must trade WITH the move \u2014 an ACCELERATOR.'
+                         : 'POSITIVE net gamma: dealers are long here, so crossing it they trade AGAINST the move \u2014 a BRAKE.'))+
                      ' From the '+gexWindowNote(P.window)+
                      ' \u26a0 This is the SIZE of the flow, not a distance: turning dollars of hedging into points of movement needs a market-impact figure no option chain contains.')+'></i>';
          }
          return h2;
        })()+
        '</span>';
-    h+='<span class="g3emk"'+g3tip('Expected high — the open plus the expected move. A priced boundary, not a ceiling.')+'>'+g3esc(dispNum(EB.high))+'<small>EXP HIGH</small></span>';
+    h+='<span class="g3emk"'+g3tip('Straddle high — the open plus the at-the-money straddle. \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a ceiling.')+'>'+g3esc(dispNum(EB.high))+'<small>STRAD HIGH</small></span>';
     h+='</span>';
   } else {
     h+='<span class="g3emx"'+g3tip('Where can today go? The band needs an opening bar and a two-sided at-the-money straddle in today\'s expiry. A one-sided straddle is not a straddle and half a band would be worse than none, so it says why instead of drawing something.')+'>'+g3esc(EB.why)+'</span>';
@@ -17840,21 +18036,56 @@ function secFrame(sym){
   var l3='';
   if(EB.ok){
     l3+='<b class="g3pct'+(EB.stretched?' g3str':'')+'"'+g3tip('How far price has travelled from the anchor, against what the straddle priced. The dot\'s position on the rail and this number are the same fact, so they can never disagree. Past 100% the day has done more than was paid for.')+'>'+Math.min(999,EB.pct)+'%</b>'+
-        '<span class="g3fk">OF EM'+(EB.anchor==='prevClose'?' \u00b7 FROM PREV CLOSE':'')+(EB.est?' ~EST':'')+'</span>';
+        '<span class="g3fk">OF STRAD'+(EB.anchor==='prevClose'?' \u00b7 FROM PREV CLOSE':'')+(EB.est?' ~EST':'')+'</span>';
+    // (v11.68) THE PACE CHIP. The percentage above says how far; this says whether that is a lot FOR THIS
+    // HOUR. Without it the headline number cannot be read at all without the viewer silently dividing by
+    // sqrt(elapsed) in their head — 40% at 10:00 and 40% at 14:30 are opposite conditions and the face
+    // printed them identically.
+    if(EB.paceOk && typeof EB.pace==='number'){
+      var pw = (EB.pace<0.8) ? 'COILED' : (EB.pace>1.2 ? 'STRETCHED' : 'ON PACE');
+      var pc = (EB.pace<0.8) ? 'slow'   : (EB.pace>1.2 ? 'hot'       : 'ok');
+      l3+='<span class="g3pace '+pc+'"'+
+          g3tip('Is that percentage a lot for this hour? Price diffuses with the SQUARE ROOT of elapsed time, not the clock, so half the session gone means about 71% of the move is due \u2014 not 50%. '+
+                'By now '+Math.round(EB.dueFrac*100)+'% of the straddle would be spent on a perfectly average day, and '+EB.pct+'% has been. '+
+                '1.00x is exactly on schedule; above 1.20x the day is running hot, below 0.80x it is coiled. '+
+                '\u26a0 DESCRIPTIVE. It says the day is running fast or slow against its own pricing \u2014 never which way, and never where it finishes.')+
+          '>'+EB.pace.toFixed(2)+'\u00d7 '+pw+'</span>';
+    }
   }
   if(EB.ok && ifMagEarly!=null){
     var PA=null; try{ PA=emPath(EB, sym, ifMagEarly); }catch(ePa){}
     if(PA && PA.ok){
       var arrow=PA.up?'\u2191':'\u2193', txt;
+      // (v11.68) what waits AT the destination is reported apart from what is ON THE WAY, because the
+      // target IS the heaviest strike and folding it into the path made the verdict a near-constant.
+      // (v11.68) THE LINE CARRIES THE VERDICT; THE DETAIL LIVES IN THE HOVER. Rendered at 550px with every
+      // optional clause present at once, line 3 WRAPPED to a second row — 31px against 14 — which is the
+      // vertical space the last two builds were spent reclaiming. So `at target` prints only in the CLEAR
+      // case, where it IS the story (nothing on the way, everything at the destination), and the balanced
+      // count moved into the tooltip. Both numbers still exist; only one competes for the row.
+      var atT=(PA.atTargetPerPt>0) ? (' \u00b7 <b>'+usdBig(PA.atTargetPerPt)+'</b> at target') : '';
       if(PA.verdict==='clear'){
-        txt='path '+arrow+' to <b>'+dispNum(ifMagEarly)+'</b> \u00b7 <b>clear</b> \u2014 nothing sizeable in the way';
+        // (v11.69) THE TARGET IS ALREADY ON ROW 1. Printing "path ↑ to 7717.71" underneath the chip that
+        // says "→ 7717.71" spent a third of the row restating it. The arrow keeps the direction; the
+        // destination does not need saying twice.
+        txt=arrow+' <b>clear</b>'+(PA.distance>0?(' \u2014 '+PA.distance.toFixed(1)+' pts'):'')+atT;
       } else {
-        txt='path '+arrow+' to <b>'+dispNum(ifMagEarly)+'</b> \u00b7 '+
+        txt=arrow+' '+
             '<b class="g3acc">'+usdBig(PA.accPerPt)+'</b> fuel \u00b7 '+
             '<b class="g3brk">'+usdBig(PA.brkPerPt)+'</b> brake \u00b7 '+
             '<b'+(PA.verdict==='braked'?' class="g3brk"':' class="g3acc"')+'>'+PA.verdict.toUpperCase()+'</b>';
       }
-      l3+='<span class="g3pth"'+g3tip('What stands between price and the target. Every pile between the two is summed by polarity: FUEL is negative-gamma hedging that trades WITH the move through those strikes, BRAKE is positive-gamma hedging that trades against it. Both in dollars of hedging per point, from the '+gexWindowNote((PA.nAcc+PA.nBrk)?'toFri':'toFri')+' \u26a0 It is the SIZE of the flow on the path, never a promise price arrives \u2014 converting dollars into points needs a market-impact figure the chain does not carry.')+'>'+txt+'</span>';
+      // (v11.68) ⚠ THE WINDOW IN THIS SENTENCE WAS HARDCODED — `(PA.nAcc+PA.nBrk)?'toFri':'toFri'`, a
+      // ternary with the same value on both sides, so the hover named toFri no matter what the piles read.
+      // It would have gone on saying toFri after the piles moved to dte0. It now reads the window BACK OFF
+      // THE PILES, which is the only way it can never be stale again.
+      var pw2=null; try{ var ps2=emPiles(EB, sym)||[]; pw2=ps2.length?ps2[0].window:null; }catch(eW){}
+      var pathTip='What stands between price and the target. Every pile STRICTLY between the two is summed by polarity: FUEL is negative-gamma hedging that trades WITH the move through those strikes, BRAKE is positive-gamma hedging that trades against it. Both in dollars of NET hedging per point'+
+        (pw2?(', from the '+gexWindowNote(pw2)):'')+
+        (PA.atTargetPerPt>0 ? (' \u26a0 A further '+usdBig(PA.atTargetPerPt)+' per point sits EXACTLY ON the target and is deliberately NOT counted as being on the way \u2014 the target IS the heaviest strike in the book, so folding it in made this verdict a near-constant.') : '')+
+        (PA.nBal>0 ? (' '+PA.nBal+' pile'+(PA.nBal>1?'s':'')+' in between '+(PA.nBal>1?'are':'is')+' BALANCED \u2014 real size, no side \u2014 and vote'+(PA.nBal>1?'':'s')+' in neither sum.') : '')+
+        ' \u26a0 It is the SIZE of the flow on the path, never a promise price arrives \u2014 converting dollars into points needs a market-impact figure the chain does not carry.';
+      l3+='<span class="g3pth"'+g3tip(pathTip)+'>'+txt+'</span>';
     }
   }
   if(l3 || sessBadge) h+='<div class="g3shape">'+l3+(sessBadge?'<span class="g3sbg">'+sessBadge+'</span>':'')+'</div>';

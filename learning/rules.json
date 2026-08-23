@@ -28,99 +28,6 @@
     }
   },
   "rules": {
-    "dir": {
-      "id": "dir",
-      "tier": "hand",
-      "condition": "directionGrade: SMA-50 trend sets direction, drift confirms or diverges, hard caps override",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "One direction verdict per bar; the hierarchy beats any single input only if A outranks B outranks C.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "node.grade": {
-      "id": "node.grade",
-      "tier": "hand",
-      "condition": "polarity + tap + ROC + confluence",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "Fresh clean +gamma nodes still growing are where dealer hedging actually defends.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "decision": {
-      "id": "decision",
-      "tier": "hand",
-      "condition": "Direction grade × in-play Node grade",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "The matrix earns or loses its cell labels; a cell measured under 45% gets re-worded to skip.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
     "acm.realVsHedge": {
       "id": "acm.realVsHedge",
       "tier": "hand",
@@ -144,68 +51,6 @@
         }
       },
       "mechanism": "Growth measured since the session open separates real accumulation from intraday hedging.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "defl_ant": {
-      "id": "defl_ant",
-      "tier": "hand",
-      "condition": "px within 0.6 of a grade>=B node and approaching",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "Anticipation is geometry, not prophecy — it must still be scored like everything else.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "reaction": {
-      "id": "reaction",
-      "tier": "hand",
-      "condition": "wick rejection at the node while it is not fading",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "A rejection wick on a node that is still building is the tape confirming the level in real time.",
       "promoted": false,
       "promotedOn": null,
       "lastVerified": null,
@@ -245,10 +90,10 @@
         "held": false
       }
     },
-    "rshuf": {
-      "id": "rshuf",
+    "decision": {
+      "id": "decision",
       "tier": "hand",
-      "condition": ">50% of wall keys turned over between feeds",
+      "condition": "Direction grade × in-play Node grade",
       "rate": null,
       "n": 0,
       "mfe": null,
@@ -267,689 +112,7 @@
           "n": 0
         }
       },
-      "mechanism": "A wholesale board reshuffle means the old map is void; movement usually follows.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "gateHour": {
-      "id": "gateHour",
-      "tier": "hand",
-      "condition": "gatekeeper strike + session bucket",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "The blocker on the path to the King behaves differently by time of day.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "dir.trend5": {
-      "id": "dir.trend5",
-      "tier": "hand",
-      "condition": "trendVerdict five-state, recorded uncollapsed",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "The SMA-50 five-state is the direction; up-broken/dn-broken must earn their own rates before either is allowed to vote.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "dir.drift": {
-      "id": "dir.drift",
-      "tier": "hand",
-      "condition": "driftRead dir + verdict, scored on its own",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "Drift is only allowed to CONFIRM or DIVERGE, so its stand-alone rate is the honest test of that role.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "dir.relation": {
-      "id": "dir.relation",
-      "tier": "hand",
-      "condition": "confirmed | divergence | tentative | trend-only",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "The hierarchy only earns its keep if the relation separates outcomes better than the trend on its own.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "dir.struct": {
-      "id": "dir.struct",
-      "tier": "hand",
-      "condition": "netPositioning bias, RECORDED not voted",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "A one-directional factor on a trending day looks like edge; only vote-split vs baseline can tell them apart.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "dir.kingRoll": {
-      "id": "dir.kingRoll",
-      "tier": "hand",
-      "condition": "kingRoll sign, RECORDED not voted",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "The settlement magnet moving is the board repositioning; whether it LEADS price is an open measurement.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "netGamma": {
-      "id": "netGamma",
-      "tier": "hand",
-      "condition": "signed gamma mass sign from deriveFactors, RECORDED not voted",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "Net gamma sign describes how moves TRAVEL; whether it also predicts WHICH WAY is unmeasured.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "dir.trendFast": {
-      "id": "dir.trendFast",
-      "tier": "hand",
-      "condition": "SMA 10 and 20 with the same 15/20 dominance rule, RECORDED not voted",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "The 50-period window is an inherited assumption; 10/20 must be measured against it before anything changes.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "dir.A": {
-      "id": "dir.A",
-      "tier": "hand",
-      "condition": "dirGrade=A",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "Direction A = drift agrees + structure aligned + trending regime; the fusion should follow through.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "dir.B": {
-      "id": "dir.B",
-      "tier": "hand",
-      "condition": "dirGrade=B",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "Direction B = one leg of the fusion missing or mid-range capped.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "dir.C": {
-      "id": "dir.C",
-      "tier": "hand",
-      "condition": "dirGrade=C",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "Direction C = chop, mid-range, or opposed structure. No directional claim.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "drift.conf": {
-      "id": "drift.conf",
-      "tier": "hand",
-      "condition": "driftVerdict=AGREE",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "GEX centre and VEX centre on the same side of price with overlapping bands = a real lean.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "node.grade.A": {
-      "id": "node.grade.A",
-      "tier": "hand",
-      "condition": "nodeGrade=A",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "Fresh clean +gamma node building into the tap.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "node.grade.B": {
-      "id": "node.grade.B",
-      "tier": "hand",
-      "condition": "nodeGrade=B",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "Node good on most inputs but one is stale or opposed.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "node.grade.C": {
-      "id": "node.grade.C",
-      "tier": "hand",
-      "condition": "nodeGrade=C",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "Spent or bleeding node; reactions are unreliable.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "node.tap.1": {
-      "id": "node.tap.1",
-      "tier": "hand",
-      "condition": "tap=0",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "1st tap of an untested node (Academy ~80%).",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "node.tap.2": {
-      "id": "node.tap.2",
-      "tier": "hand",
-      "condition": "tap=1",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "2nd tap (Academy ~66%).",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "node.tap.3": {
-      "id": "node.tap.3",
-      "tier": "hand",
-      "condition": "tap>=2",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "3rd+ tap = graveyard (Academy ~33%).",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "node.pol.pos": {
-      "id": "node.pol.pos",
-      "tier": "hand",
-      "condition": "pol=+",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "+gamma nodes deflect cleanly (dealers sell into strength).",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "node.pol.neg": {
-      "id": "node.pol.neg",
-      "tier": "hand",
-      "condition": "pol=-",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "-gamma nodes accelerate; a deflection there is counter-character.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "node.rocDay.up": {
-      "id": "node.rocDay.up",
-      "tier": "hand",
-      "condition": "rocDay=Acm",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "Since-open growers are real positioning, not intraday hedge noise.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "node.rocDay.dn": {
-      "id": "node.rocDay.dn",
-      "tier": "hand",
-      "condition": "rocDay=Dec",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "Since-open faders are being unwound; the level is leaving.",
+      "mechanism": "The matrix earns or loses its cell labels; a cell measured under 45% gets re-worded to skip.",
       "promoted": false,
       "promotedOn": null,
       "lastVerified": null,
@@ -1237,10 +400,10 @@
         "held": false
       }
     },
-    "kill.tap3": {
-      "id": "kill.tap3",
+    "defl.trigger": {
+      "id": "defl.trigger",
       "tier": "hand",
-      "condition": "tap>=2",
+      "condition": "closed bar tags the node zone and closes back away from it (✓), or closes through it (✗)",
       "rate": null,
       "n": 0,
       "mfe": null,
@@ -1259,7 +422,596 @@
           "n": 0
         }
       },
-      "mechanism": "3rd+ tap of a node: the zone is spent, reactions stop paying.",
+      "mechanism": "reactionQuality judged the wick every poll and flickered. A latch decided on bar close is the only version of this claim that can be scored the way it was shown.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "defl_ant": {
+      "id": "defl_ant",
+      "tier": "hand",
+      "condition": "px within 0.6 of a grade>=B node and approaching",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "Anticipation is geometry, not prophecy — it must still be scored like everything else.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "dex.levelNotSign": {
+      "id": "dex.levelNotSign",
+      "tier": "hand",
+      "condition": "netDex recorded per bar in $M with the spot it was measured at, to-Friday and 0DTE",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "Index chains are put-OI dominant so the sign essentially never flips; only the level against its own history can carry information. Non-voting until measured.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "dir": {
+      "id": "dir",
+      "tier": "hand",
+      "condition": "directionGrade: SMA-50 trend sets direction, drift confirms or diverges, hard caps override",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "One direction verdict per bar; the hierarchy beats any single input only if A outranks B outranks C.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "dir.A": {
+      "id": "dir.A",
+      "tier": "hand",
+      "condition": "dirGrade=A",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "Direction A = drift agrees + structure aligned + trending regime; the fusion should follow through.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "dir.B": {
+      "id": "dir.B",
+      "tier": "hand",
+      "condition": "dirGrade=B",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "Direction B = one leg of the fusion missing or mid-range capped.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "dir.C": {
+      "id": "dir.C",
+      "tier": "hand",
+      "condition": "dirGrade=C",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "Direction C = chop, mid-range, or opposed structure. No directional claim.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "dir.drift": {
+      "id": "dir.drift",
+      "tier": "hand",
+      "condition": "driftRead dir + verdict, scored on its own",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "Drift is only allowed to CONFIRM or DIVERGE, so its stand-alone rate is the honest test of that role.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "dir.kingRoll": {
+      "id": "dir.kingRoll",
+      "tier": "hand",
+      "condition": "kingRoll sign, RECORDED not voted",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "The settlement magnet moving is the board repositioning; whether it LEADS price is an open measurement.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "dir.relation": {
+      "id": "dir.relation",
+      "tier": "hand",
+      "condition": "confirmed | divergence | tentative | trend-only",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "The hierarchy only earns its keep if the relation separates outcomes better than the trend on its own.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "dir.struct": {
+      "id": "dir.struct",
+      "tier": "hand",
+      "condition": "netPositioning bias, RECORDED not voted",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "A one-directional factor on a trending day looks like edge; only vote-split vs baseline can tell them apart.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "dir.trend5": {
+      "id": "dir.trend5",
+      "tier": "hand",
+      "condition": "trendVerdict five-state, recorded uncollapsed",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "The SMA-50 five-state is the direction; up-broken/dn-broken must earn their own rates before either is allowed to vote.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "dir.trendFast": {
+      "id": "dir.trendFast",
+      "tier": "hand",
+      "condition": "SMA 10 and 20 with the same 15/20 dominance rule, RECORDED not voted",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "The 50-period window is an inherited assumption; 10/20 must be measured against it before anything changes.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "drift.conf": {
+      "id": "drift.conf",
+      "tier": "hand",
+      "condition": "driftVerdict=AGREE",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "GEX centre and VEX centre on the same side of price with overlapping bands = a real lean.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "em.anchoredBand": {
+      "id": "em.anchoredBand",
+      "tier": "hand",
+      "condition": "open from the first RTH candle; EM from dte0 ATM straddle captured once at the open and held fixed",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "The straddle is the market pricing its own day. Anchoring at the open is what lets the band show overextension - recentred on spot it would only ever follow price. dte0 ONLY: toFri holds a later expiry worth roughly double.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "em.pace": {
+      "id": "em.pace",
+      "condition": "pct of the straddle travelled divided by √(elapsed fraction of the cash session); not reported below 4% elapsed",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "Price diffuses with the square root of time, so half the clock means about 71% of the move is due, not 50%. Without the correction the same percentage means opposite things at 10:00 and 14:30. DESCRIPTIVE: it says the day is running hot or cold against its own pricing, never which way.",
+      "tier": "hand",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "exp.breadth": {
+      "id": "exp.breadth",
+      "tier": "hand",
+      "condition": "strike present at >= EXP_BREADTH_MIN in n expiry columns; structural = n >= 2",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "The front expiry pins price today; the later expirations are the walls that survive the close. If breadth separates the two, it belongs in the node grade — by promotion, not by opinion.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "flow.perPoint": {
+      "id": "flow.perPoint",
+      "tier": "hand",
+      "condition": "net GEX of the NEAR-DATED book divided by one point of spot; the expiry window is recorded with the value",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "Gamma forces dealers to re-hedge as price moves, and the near book is where that flow lives. Negative gamma trades with the move (feeds it), positive against it (fights it). The size is measurable; whether price arrives is not, so it votes on nothing until scored.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "gateHour": {
+      "id": "gateHour",
+      "tier": "hand",
+      "condition": "gatekeeper strike + session bucket",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "The blocker on the path to the King behaves differently by time of day.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "gex.path": {
+      "id": "gex.path",
+      "tier": "hand",
+      "condition": "Mag = largest |net gamma| in the window; CR = most call-dominant strike above spot; PS = most put-dominant strike below spot. Verified against a published GEX table: those three rules reproduce its tagged Call Wall, Put Wall and Peak GEX strike exactly, while max call gamma and max call open interest do not.",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "The magnet is where dealer hedging is heaviest, so price is drawn to it; the walls are the two edges where a deflection is most likely. Migration is the live part — a floor that rolls up is dealers defending higher. Non-voting until the scorecard earns it.",
       "promoted": false,
       "promotedOn": null,
       "lastVerified": null,
@@ -1299,6 +1051,37 @@
         "held": false
       }
     },
+    "kill.negGammaWide": {
+      "id": "kill.negGammaWide",
+      "tier": "hand",
+      "condition": "pol=- & path=air",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "-gamma node inside a wide/low-exposure pathway: moves accelerate through, they do not deflect.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
     "kill.noConf": {
       "id": "kill.noConf",
       "tier": "hand",
@@ -1330,10 +1113,10 @@
         "held": false
       }
     },
-    "kill.negGammaWide": {
-      "id": "kill.negGammaWide",
+    "kill.tap3": {
+      "id": "kill.tap3",
       "tier": "hand",
-      "condition": "pol=- & path=air",
+      "condition": "tap>=2",
       "rate": null,
       "n": 0,
       "mfe": null,
@@ -1352,7 +1135,38 @@
           "n": 0
         }
       },
-      "mechanism": "-gamma node inside a wide/low-exposure pathway: moves accelerate through, they do not deflect.",
+      "mechanism": "3rd+ tap of a node: the zone is spent, reactions stop paying.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "ledger.touch": {
+      "id": "ledger.touch",
+      "tier": "hand",
+      "condition": "in-play node touched; ledger state acm | dec | gone | hold at the touch",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "A node is respected while dealers are adding to it and abandoned while they unwind. If true, the acm/dec chip is a deflection filter; if not, it is decoration.",
       "promoted": false,
       "promotedOn": null,
       "lastVerified": null,
@@ -1392,10 +1206,10 @@
         "held": false
       }
     },
-    "leg.pbPredict": {
-      "id": "leg.pbPredict",
+    "leg.handoff": {
+      "id": "leg.handoff",
       "tier": "hand",
-      "condition": "RLY phase + an empty zone between price and the last pullback node",
+      "condition": "old pullback node/ceiling Dec (m15 ≤ −8% or ≥25% off its session peak) AND a lower node above price building (m15 ≥ +8% or ≥ PB_MIN_PCT)",
       "rate": null,
       "n": 0,
       "mfe": null,
@@ -1414,69 +1228,7 @@
           "n": 0
         }
       },
-      "mechanism": "Pullback nodes appear AFTER the move, so the only honest forecast is the ZONE — and it must be scored as one.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "leg.pbDetect": {
-      "id": "leg.pbDetect",
-      "tier": "hand",
-      "condition": "a meaningful node APPEARS or GROWS in the pullback zone after a leg",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "The pullback node is the level the user actually trades from; its deflection rate is the whole claim.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "leg.roll": {
-      "id": "leg.roll",
-      "tier": "hand",
-      "condition": "2 consecutive pullback nodes rolling with the trend = signal, 3 = confirmed",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "Academy doctrine says a rolling ceiling is strong presumptive evidence. This is the local test of that claim.",
+      "mechanism": "The roll is a STRENGTH transfer before it is a strike change. If the transfer is visible early, the pullback node can be named before it qualifies; if it is not, this is a story and the count rule is all we have.",
       "promoted": false,
       "promotedOn": null,
       "lastVerified": null,
@@ -1516,10 +1268,10 @@
         "held": false
       }
     },
-    "predictors": {
-      "id": "predictors",
+    "leg.pbDetect": {
+      "id": "leg.pbDetect",
       "tier": "hand",
-      "condition": "time-to-close, bar of day, distances, session range position, PDC relation, event tag",
+      "condition": "a meaningful node APPEARS or GROWS in the pullback zone after a leg",
       "rate": null,
       "n": 0,
       "mfe": null,
@@ -1538,7 +1290,7 @@
           "n": 0
         }
       },
-      "mechanism": "A model cannot find what was never written down; these are recorded from the start and vote on nothing.",
+      "mechanism": "The pullback node is the level the user actually trades from; its deflection rate is the whole claim.",
       "promoted": false,
       "promotedOn": null,
       "lastVerified": null,
@@ -1547,10 +1299,10 @@
         "held": false
       }
     },
-    "leg.handoff": {
-      "id": "leg.handoff",
+    "leg.pbPredict": {
+      "id": "leg.pbPredict",
       "tier": "hand",
-      "condition": "old pullback node/ceiling Dec (m15 ≤ −8% or ≥25% off its session peak) AND a lower node above price building (m15 ≥ +8% or ≥ PB_MIN_PCT)",
+      "condition": "RLY phase + an empty zone between price and the last pullback node",
       "rate": null,
       "n": 0,
       "mfe": null,
@@ -1569,7 +1321,7 @@
           "n": 0
         }
       },
-      "mechanism": "The roll is a STRENGTH transfer before it is a strike change. If the transfer is visible early, the pullback node can be named before it qualifies; if it is not, this is a story and the count rule is all we have.",
+      "mechanism": "Pullback nodes appear AFTER the move, so the only honest forecast is the ZONE — and it must be scored as one.",
       "promoted": false,
       "promotedOn": null,
       "lastVerified": null,
@@ -1578,10 +1330,10 @@
         "held": false
       }
     },
-    "defl.trigger": {
-      "id": "defl.trigger",
+    "leg.roll": {
+      "id": "leg.roll",
       "tier": "hand",
-      "condition": "closed bar tags the node zone and closes back away from it (✓), or closes through it (✗)",
+      "condition": "2 consecutive pullback nodes rolling with the trend = signal, 3 = confirmed",
       "rate": null,
       "n": 0,
       "mfe": null,
@@ -1600,7 +1352,7 @@
           "n": 0
         }
       },
-      "mechanism": "reactionQuality judged the wick every poll and flickered. A latch decided on bar close is the only version of this claim that can be scored the way it was shown.",
+      "mechanism": "Academy doctrine says a rolling ceiling is strong presumptive evidence. This is the local test of that claim.",
       "promoted": false,
       "promotedOn": null,
       "lastVerified": null,
@@ -1609,10 +1361,10 @@
         "held": false
       }
     },
-    "map.transfer": {
-      "id": "map.transfer",
+    "levels": {
+      "id": "levels",
       "tier": "hand",
-      "condition": "a dec/gone node with an acm node on the same side within PB_REACH",
+      "condition": "CR0/PS0 read inside the front expiry column; CR/PS inside the longest-dated bucket present; FLIP = zero gamma on the native node set (absolute basis when the tape carries it); Mag = heaviest strike. Never pooled across expiry columns.",
       "rate": null,
       "n": 0,
       "mfe": null,
@@ -1631,7 +1383,7 @@
           "n": 0
         }
       },
-      "mechanism": "The rolling ceiling/floor IS the strength transfer. If transfers predict the next move, the Map line earns a vote; if not, it stays descriptive.",
+      "mechanism": "MenthorQ's vocabulary computed from our own tape. FLIP (zero gamma) is the regime line (dampening above, amplifying below); CR/PS are the walls; Mag is the pin. Non-voting until the scorecard says otherwise, and CR/PS carry the reach our chain actually has so a one-week wall is never quoted as an all-expiration wall.",
       "promoted": false,
       "promotedOn": null,
       "lastVerified": null,
@@ -1671,10 +1423,10 @@
         "held": false
       }
     },
-    "ledger.touch": {
-      "id": "ledger.touch",
+    "map.transfer": {
+      "id": "map.transfer",
       "tier": "hand",
-      "condition": "in-play node touched; ledger state acm | dec | gone | hold at the touch",
+      "condition": "a dec/gone node with an acm node on the same side within PB_REACH",
       "rate": null,
       "n": 0,
       "mfe": null,
@@ -1693,7 +1445,38 @@
           "n": 0
         }
       },
-      "mechanism": "A node is respected while dealers are adding to it and abandoned while they unwind. If true, the acm/dec chip is a deflection filter; if not, it is decoration.",
+      "mechanism": "The rolling ceiling/floor IS the strength transfer. If transfers predict the next move, the Map line earns a vote; if not, it stays descriptive.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "netGamma": {
+      "id": "netGamma",
+      "tier": "hand",
+      "condition": "signed gamma mass sign from deriveFactors, RECORDED not voted",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "Net gamma sign describes how moves TRAVEL; whether it also predicts WHICH WAY is unmeasured.",
       "promoted": false,
       "promotedOn": null,
       "lastVerified": null,
@@ -1764,6 +1547,347 @@
         "held": false
       }
     },
+    "node.grade": {
+      "id": "node.grade",
+      "tier": "hand",
+      "condition": "polarity + tap + ROC + confluence",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "Fresh clean +gamma nodes still growing are where dealer hedging actually defends.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "node.grade.A": {
+      "id": "node.grade.A",
+      "tier": "hand",
+      "condition": "nodeGrade=A",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "Fresh clean +gamma node building into the tap.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "node.grade.B": {
+      "id": "node.grade.B",
+      "tier": "hand",
+      "condition": "nodeGrade=B",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "Node good on most inputs but one is stale or opposed.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "node.grade.C": {
+      "id": "node.grade.C",
+      "tier": "hand",
+      "condition": "nodeGrade=C",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "Spent or bleeding node; reactions are unreliable.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "node.pol.neg": {
+      "id": "node.pol.neg",
+      "tier": "hand",
+      "condition": "pol=-",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "-gamma nodes accelerate; a deflection there is counter-character.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "node.pol.pos": {
+      "id": "node.pol.pos",
+      "tier": "hand",
+      "condition": "pol=+",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "+gamma nodes deflect cleanly (dealers sell into strength).",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "node.rocDay.dn": {
+      "id": "node.rocDay.dn",
+      "tier": "hand",
+      "condition": "rocDay=Dec",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "Since-open faders are being unwound; the level is leaving.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "node.rocDay.up": {
+      "id": "node.rocDay.up",
+      "tier": "hand",
+      "condition": "rocDay=Acm",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "Since-open growers are real positioning, not intraday hedge noise.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "node.tap.1": {
+      "id": "node.tap.1",
+      "tier": "hand",
+      "condition": "tap=0",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "1st tap of an untested node (Academy ~80%).",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "node.tap.2": {
+      "id": "node.tap.2",
+      "tier": "hand",
+      "condition": "tap=1",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "2nd tap (Academy ~66%).",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
+    "node.tap.3": {
+      "id": "node.tap.3",
+      "tier": "hand",
+      "condition": "tap>=2",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "3rd+ tap = graveyard (Academy ~33%).",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
+    },
     "pbEntry": {
       "id": "pbEntry",
       "tier": "hand",
@@ -1826,10 +1950,9 @@
         "held": false
       }
     },
-    "exp.breadth": {
-      "id": "exp.breadth",
-      "tier": "hand",
-      "condition": "strike present at >= EXP_BREADTH_MIN in n expiry columns; structural = n >= 2",
+    "piles.netPolarity": {
+      "id": "piles.netPolarity",
+      "condition": "piles from the dte0 book, the band's own window; size and the 20% cut from GROSS gamma; dollars, path sums and the accel/brake label from NET; netFrac below 15% renders BALANCED and votes in neither sum",
       "rate": null,
       "n": 0,
       "mfe": null,
@@ -1848,7 +1971,8 @@
           "n": 0
         }
       },
-      "mechanism": "The front expiry pins price today; the later expirations are the walls that survive the close. If breadth separates the two, it belongs in the node grade — by promotion, not by opinion.",
+      "mechanism": "Gross says how much option gamma SITS at a strike; net says what the dealer actually has to hedge. Sizing with gross while signing with net let a 1.2% residual print as a $59M accelerator - measured 84x overstatement. And obstacles drawn on a band that frames TODAY must expire today, or a blend can manufacture neutrality where the two expiries simply disagree.",
+      "tier": "hand",
       "promoted": false,
       "promotedOn": null,
       "lastVerified": null,
@@ -1857,10 +1981,10 @@
         "held": false
       }
     },
-    "levels": {
-      "id": "levels",
+    "predictors": {
+      "id": "predictors",
       "tier": "hand",
-      "condition": "CR0/PS0 read inside the front expiry column; CR/PS inside the longest-dated bucket present; FLIP = zero gamma on the native node set (absolute basis when the tape carries it); Mag = heaviest strike. Never pooled across expiry columns.",
+      "condition": "time-to-close, bar of day, distances, session range position, PDC relation, event tag",
       "rate": null,
       "n": 0,
       "mfe": null,
@@ -1879,7 +2003,7 @@
           "n": 0
         }
       },
-      "mechanism": "MenthorQ's vocabulary computed from our own tape. FLIP (zero gamma) is the regime line (dampening above, amplifying below); CR/PS are the walls; Mag is the pin. Non-voting until the scorecard says otherwise, and CR/PS carry the reach our chain actually has so a one-week wall is never quoted as an all-expiration wall.",
+      "mechanism": "A model cannot find what was never written down; these are recorded from the start and vote on nothing.",
       "promoted": false,
       "promotedOn": null,
       "lastVerified": null,
@@ -1888,10 +2012,10 @@
         "held": false
       }
     },
-    "gex.path": {
-      "id": "gex.path",
+    "reaction": {
+      "id": "reaction",
       "tier": "hand",
-      "condition": "Mag = largest |net gamma| in the window; CR = most call-dominant strike above spot; PS = most put-dominant strike below spot. Verified against a published GEX table: those three rules reproduce its tagged Call Wall, Put Wall and Peak GEX strike exactly, while max call gamma and max call open interest do not.",
+      "condition": "wick rejection at the node while it is not fading",
       "rate": null,
       "n": 0,
       "mfe": null,
@@ -1910,7 +2034,7 @@
           "n": 0
         }
       },
-      "mechanism": "The magnet is where dealer hedging is heaviest, so price is drawn to it; the walls are the two edges where a deflection is most likely. Migration is the live part — a floor that rolls up is dealers defending higher. Non-voting until the scorecard earns it.",
+      "mechanism": "A rejection wick on a node that is still building is the tape confirming the level in real time.",
       "promoted": false,
       "promotedOn": null,
       "lastVerified": null,
@@ -1919,10 +2043,10 @@
         "held": false
       }
     },
-    "em.anchoredBand": {
-      "id": "em.anchoredBand",
+    "rshuf": {
+      "id": "rshuf",
       "tier": "hand",
-      "condition": "open from the first RTH candle; EM from dte0 ATM straddle captured once at the open and held fixed",
+      "condition": ">50% of wall keys turned over between feeds",
       "rate": null,
       "n": 0,
       "mfe": null,
@@ -1941,69 +2065,7 @@
           "n": 0
         }
       },
-      "mechanism": "The straddle is the market pricing its own day. Anchoring at the open is what lets the band show overextension - recentred on spot it would only ever follow price. dte0 ONLY: toFri holds a later expiry worth roughly double.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "dex.levelNotSign": {
-      "id": "dex.levelNotSign",
-      "tier": "hand",
-      "condition": "netDex recorded per bar in $M with the spot it was measured at, to-Friday and 0DTE",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "Index chains are put-OI dominant so the sign essentially never flips; only the level against its own history can carry information. Non-voting until measured.",
-      "promoted": false,
-      "promotedOn": null,
-      "lastVerified": null,
-      "walkForward": {
-        "sessions": 0,
-        "held": false
-      }
-    },
-    "flow.perPoint": {
-      "id": "flow.perPoint",
-      "tier": "hand",
-      "condition": "net GEX of the NEAR-DATED book divided by one point of spot; the expiry window is recorded with the value",
-      "rate": null,
-      "n": 0,
-      "mfe": null,
-      "mae": null,
-      "regime": {
-        "trend": {
-          "rate": null,
-          "n": 0
-        },
-        "chop": {
-          "rate": null,
-          "n": 0
-        },
-        "opex": {
-          "rate": null,
-          "n": 0
-        }
-      },
-      "mechanism": "Gamma forces dealers to re-hedge as price moves, and the near book is where that flow lives. Negative gamma trades with the move (feeds it), positive against it (fights it). The size is measurable; whether price arrives is not, so it votes on nothing until scored.",
+      "mechanism": "A wholesale board reshuffle means the old map is void; movement usually follows.",
       "promoted": false,
       "promotedOn": null,
       "lastVerified": null,

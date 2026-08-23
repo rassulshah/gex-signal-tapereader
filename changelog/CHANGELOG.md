@@ -1,3 +1,94 @@
+## v11.69 — the row said the same thing three times
+
+**"momentum — breaks not fades · widen stops".** Forty-three characters of prose on the busiest row of the
+panel, sitting next to a chip that already read **−G −V ⚠**. Three restatements of one fact: *momentum* and
+*breaks not fades* are the same claim, and *widen stops* is its consequence. **The playbook is BREAKS or
+FADES. Everything else about it is a sentence, and sentences live in hovers** — where the widen-stops
+advice now is, along with the compounding-vanna warning and the standing "HOW price moves, never WHICH WAY".
+
+**Line 3 was printing the destination that line 1 already showed.** `path ↑ to 7717.71` directly beneath a
+chip reading `→ 7717.71`. The arrow carries the direction; the number did not need saying twice. A test now
+counts `dispNum(ifMagEarly)` and fails if the target renders more than **once** in the whole section.
+
+**And the contract chip still said EM.** After v11.68 renamed the row STRADDLE it was the one place left on
+the face calling a 0.80σ band an expected move. Now `ES $1,736/ct` — the symbol and the money, nothing else.
+
+    before   −G −V ⚠   → 7717.71   FEEDS $214 M / PT   ES · EM $1,736/ct   momentum — breaks not fades · widen stops
+    after    −G −V ⚠   → 7717.71   FEEDS $214 M / PT   ES $1,736/ct        BREAKS
+
+⚠ **A GUARD THAT SEARCHED ITS OWN EXPLANATION.** The first version asserted `pins hold` had gone from
+`regime2D` — and it fails, because `out.why` in that same function still carries the full sentences and
+MUST: those are the hover text. The assertion now extracts the `out.play=` lines and checks only those,
+and a companion assertion checks the why-text still HAS them. **Trimmed, not deleted, is the whole point
+of this build, so the test has to be able to tell the difference.**
+
+## v11.68 — the piles were reading a different book than the band they were drawn on
+
+**TWO FAULTS COMPOSING INTO ONE CONFIDENT WRONG NUMBER.** The band asks *how much room does TODAY have*
+and correctly reads the 0DTE straddle. The piles then answered *what is in the way* from `toFri` — and on
+a **Friday** the roll makes that window today PLUS AN ENTIRE EXTRA WEEK. Measured live on 2026-08-21:
+**only 29.2% of the toFri gross gamma expired that day.** Seven tenths of the obstacles drawn on today's
+band belonged to other days.
+
+Separately, `perPt` was computed from **gross** (|call| + |put|) while ACCELERATOR/BRAKE was decided by
+**net** sign — so a strike could carry the dollar weight of its whole book and the direction of a rounding
+error. Overstatement measured at every in-band strike: 7700 **3.4×**, 7675 **3.0×**, 7690 **1.5×**, and
+7650 by **EIGHTY-FOUR TIMES**.
+
+**The two faults hid inside each other.** At 7650, today's book was decisively short gamma (net −$443.8M
+on $1,240M gross, 35.8% surviving) and next week's was long. Blended, they cancelled to a **1.2% residual**
+— and the face reported that residual as a **$59M ACCELERATOR**. Fixing either one alone still leaves it
+wrong; the window fix makes the strike honest, the net fix makes its size honest.
+
+    GROSS  -> pile HEIGHT and the 20% cut. Skylit's own node convention, so the rail keeps agreeing
+              with their heatmap.
+    |NET|  -> the DOLLARS and the path sums. What the dealer actually has to hedge.
+    thin net -> BALANCED. Drawn hollow, votes in neither sum. It has size but no side.
+
+**PACE.** The band said HOW FAR and nothing said whether that was a lot FOR THIS HOUR. Price diffuses with
+√T, so half the clock elapsed means **71%** of the move is due, not 50%:
+
+    10:00   8% of the clock ->  28% due  ->  40% used reads STRETCHED
+    12:45  50% of the clock ->  71% due  ->  40% used reads COILED
+    14:30  77% of the clock ->  88% due  ->  40% used reads dead
+
+The face printed all three identically, which made its headline number close to uninterpretable unless the
+reader silently did the division. `pct ÷ √elapsed`, no new data, floored below 4% elapsed because √elapsed
+explodes in the first bars.
+
+**THE ROW IS NOW NAMED FOR WHAT IT IS.** The ATM straddle is ~0.80σ, not 1.00 — a row labelled EM implies
+~68% containment and this band delivers ~58%. **The width is unchanged and every level sits exactly where
+it did**; only the claim was corrected. STRAD LOW / STRAD HIGH / OF STRADDLE, with the ×1.25 conversion in
+the hover for anyone who wants the real one-sigma boundary.
+
+**Also:** the target no longer sits inside its own path sum (it IS the heaviest strike, so `clear` was
+nearly unreachable — measured, 82% of one verdict was the destination); `$/pt` divides by 1% in CHART
+points rather than SPX points; and our recomputed max pain is now **MP\*** because InsiderFinance publish
+one of their own and it is a different number (7350 against our 7712.70).
+
+⚠ **A TERNARY WITH THE SAME VALUE ON BOTH SIDES.** The path hover named its window via
+`(PA.nAcc+PA.nBrk)?'toFri':'toFri'` — it said toFri unconditionally and would have gone on saying toFri
+after the piles moved to dte0. It now reads the window back off the piles themselves.
+
+⚠ **`var` HOISTS THE BINDING, NOT THE VALUE.** `SESS_OPEN_SEC` was declared beside the band, ten thousand
+lines below `sessPhaseCT`, which now uses it. Any caller running before that assignment would have got
+`undefined` and produced NaN silently. Caught because `test_king_analyzer` extracts `sessPhaseCT` alone —
+an "artificial" test surfacing a real ordering hazard. Constants moved above their first use.
+
+⚠ **THE SEED IS THE SOURCE OF TRUTH FOR RULES, NOT THE JSON.** I added three rules to `learning/rules.json`
+by hand; `test_feature_enrollment` correctly refused them, because `rulesSeed()` is built from
+`FEATURES[].rule` and the file must match it exactly. Registered `empace` and `piles` as real features —
+record, outcome, regime-split questions, rule — and regenerated the file from the seed. **Two rules, not
+three: the window and the gross/net halves are one defect and are enrolled as one.**
+
+⚠ **LINE 3 WRAPPED AT FULL WIDTH.** Rendered offline with every optional clause present at once it went to
+two rows (31px against 14) — the exact vertical space the last two builds reclaimed. `at target` now prints
+only in the CLEAR case where it IS the story, and the balanced count moved to the hover.
+
+⚠ **A TEST THAT COULD NOT FAIL.** One assertion I wrote read `X === false || true`. Removed. Every one of
+the four substantive fixes was instead **mutation-tested** — reverted in `v10.js`, the suite run, between
+2 and 4 assertions confirmed to fire, then restored.
+
 ## v11.67 — the dot's ring was cutting through the money labels, and only sometimes
 
 **FOUND BY RENDERING THE SECTION, NOT BY READING IT.** With the Chrome bridge down I could not check the
