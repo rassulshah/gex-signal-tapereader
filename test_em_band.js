@@ -615,8 +615,8 @@ eval(ex('emBand'));
   const hEnd=src.indexOf('__gptsDebug.session = function', hStart);
   ok(hEnd>hStart, 'the hook body is locatable', hStart+'..'+hEnd);
   const h=src.slice(hStart, hEnd);
-  ok(/gross:P\.gexM/.test(h) && /net:P\.netM/.test(h),
-     'and it returns BOTH legs — gross sizes the pile, net is the residual');
+  ok(/gross:\(isSk\?null:P\.gexM\)/.test(h) && /net:\(isSk\?null:P\.netM\)/.test(h),
+     'it returns BOTH legs for an IF node — gross sizes the pile, net is the residual — and null for Skylit');
   ok(/netFrac/.test(h),               'with the fraction that survives the cancellation');
   ok(/coverage/.test(h),              'and the profile coverage, so the trim is never mistaken for a gap');
   ok(/pathIncludesTarget/.test(h),    'it states whether the target is counted as on the path to itself');
@@ -1029,6 +1029,24 @@ eval(ex('emBand'));
   // and the ones this build was about, named explicitly so the intent survives a refactor
   ['pace','paceOk','elapsed','dueFrac','nowSo'].forEach(k=>
     ok(surfaced.has(k), 'the hook surfaces '+k));
+
+  // (v11.82) ⚠ THE SAME GUARD, FOR THE PILES HOOK. v11.71 wrote this rule for emBand and one build later
+  // the piles hook shipped IF-shaped fields for SKYLIT data — reporting `gross`/`net`/`perPt` (which a
+  // Skylit node has none of) and omitting `role`, which the FACE renders. The rail said "7710 KING" while
+  // the hook said "ACC". A guard that covers one hook is a guard that teaches you the wrong lesson.
+  const ps=ex('skPiles');
+  const produced=new Set([...ps.matchAll(/^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:/gm)].map(m=>m[1]));
+  const ph0=src.indexOf('__gptsDebug.piles');
+  const ph1=src.indexOf('__gptsDebug.session = function', ph0);
+  ok(ph1>ph0, 'the piles hook is locatable');
+  const phook=src.slice(ph0, ph1);
+  ['role','src','gkRatio','gkVerdict','signed','usdK'].forEach(k=>
+    ok(phook.indexOf(k+':')>=0, 'the piles hook surfaces '+k));
+  // and it must not report IF-only fields for a Skylit node
+  ok(/var isSk=\(P\.src==='skylit'\)/.test(phook),
+     'and it branches on the SOURCE rather than reporting fields the node does not have');
+  ok(/gross:\(isSk\?null:/.test(phook), 'gross is null for a Skylit node');
+  ok(/perPt:\(isSk\?null:/.test(phook),  'and so is perPt, which is IF\'s unit');
 }
 
 // ---------- 34. (v11.76) THE COMMENT MUST NAME THE BOOK THE CODE ACTUALLY READS ----------

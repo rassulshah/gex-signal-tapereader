@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.81
+// @version    11.82
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.81';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.82';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -19474,10 +19474,20 @@ window.__gptsDebug.piles = function(sy){
               n:ps.length, nAccel:0, nBrake:0, piles:[] };
     for(var i=0;i<ps.length;i++){
       var P=ps[i]; if(P.accel) out.nAccel++; else out.nBrake++;
+      // (v11.82) ⚠ THIS HOOK WAS STILL IF-SHAPED. It reported `gross`/`net`/`netFrac`/`perPt` — fields a
+      // SKYLIT node does not have — and omitted `role`, which the FACE renders. So the rail showed
+      // "7710 KING" while the hook said "ACC", and a live check of the roles was impossible.
+      // Exactly the v11.71 failure (face reads a field, hook does not return it), one build after I wrote
+      // a guard for it — because that guard only covered `emBand`. It now covers this hook too.
+      var isSk=(P.src==='skylit');
       out.piles.push({ k:P.k, disp:+P.disp.toFixed(2), pct:P.pct, pos:+P.pos.toFixed(1),
-                       gross:P.gexM, net:P.netM,
-                       netFrac:P.gexM?+(100*Math.abs(P.netM)/P.gexM).toFixed(1):null,
-                       perPt:Math.round(P.perPt), shown:usdBig(P.perPt), accel:P.accel });
+                       src:P.src||null, role:P.role||null,
+                       gkRatio:(P.gkRatio!=null?P.gkRatio:null), gkVerdict:P.gkVerdict||null,
+                       signed:(P.signed!=null?P.signed:null), usdK:(P.usdK!=null?P.usdK:null),
+                       gross:(isSk?null:P.gexM), net:(isSk?null:P.netM),
+                       netFrac:(isSk?null:(P.gexM?+(100*Math.abs(P.netM)/P.gexM).toFixed(1):null)),
+                       perPt:(isSk?null:Math.round(P.perPt)), shown:(isSk?null:usdBig(P.perPt)),
+                       accel:P.accel, brake:!!P.brake, balanced:!!P.balanced });
     }
     var tgt=null; try{ var L=ifLadder(sym); if(L&&!L.err) for(var j=0;j<L.rows.length;j++){ if(/Mag/.test(L.rows[j].id)){ tgt=L.rows[j].disp; break; } } }catch(eT){}
     out.target=tgt;

@@ -1,3 +1,26 @@
+## v11.82 — the piles hook was still IF-shaped, one build after I wrote a guard for exactly this
+
+**THE FACE SAID `7710 KING`. THE HOOK SAID `ACC`.** The piles hook reported `gross` / `net` / `netFrac` /
+`perPt` — fields a SKYLIT node does not have — and omitted `role`, which the face renders. So a live check
+of the roles was impossible, and the two disagreed about the same node.
+
+⚠ **THIS IS THE v11.71 FAILURE, REPEATED ELEVEN BUILDS LATER.** v11.71 found the face reading `pace` while
+the hook did not return it, and shipped a self-deriving guard so it could not happen again. **That guard
+only covered `emBand`.** A guard that covers one hook teaches the wrong lesson: it feels like the class of
+bug is closed when only one instance is. The guard now covers the piles hook too, and asserts the hook
+BRANCHES on `P.src` rather than reporting fields the node does not have — IF-only figures come back `null`
+for a Skylit node instead of silently absent.
+
+**VERIFIED LIVE ON v11.81 BEFORE THE FIX**, which is how it was found:
+
+    labels on the face   7728/7710 KING   7718/7700 GK   7668/7650 BRK
+    roles.byK            {7700:"GK", 7710:"KING"}     gkRatio 0.79  passable
+    hook per-node keys   k, disp, pct, pos, gross, net, netFrac, perPt, shown, accel
+                         ^ no `role`, and five IF-only fields on Skylit data
+
+⚠ **The regime chip read `—` in a raw innerText grab and `−G −V ⚠` across five sampled reads. Third time
+this session.** A single snapshot of a live face is not evidence — and the rule keeps earning its place.
+
 ## v11.81 — the node ROLES, which v11.79 shipped as polarity and called done
 
 **The user asked for KING / GATE / RUG / REVERSE-RUG. v11.79 shipped ACC / BRK / BAL.** That is POLARITY —
