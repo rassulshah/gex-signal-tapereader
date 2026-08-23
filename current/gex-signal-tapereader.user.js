@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.66
+// @version    11.67
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.66';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.67';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -17035,17 +17035,25 @@ function ensureV3Css(){
     '#gpts-body .g3shape .g3usd{color:#2ec27e;font-weight:800}'+
     // (v11.61) THREE TIERS THAT CANNOT COLLIDE: money above the rail, ticks and price on it, gamma piles
     // hanging below. A pile can never overlap a dollar label because they occupy different bands.
-    '#gpts-body .g3emt{position:relative;flex:1;height:26px;min-width:80px}'+
-    '#gpts-body .g3emr{position:absolute;left:0;right:0;top:9px;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}'+
-    '#gpts-body .g3emf{position:absolute;top:9px;height:4px;border-radius:2px;background:rgba(139,152,169,.6)}'+
-    '#gpts-body .g3emx2{position:absolute;top:9px;height:4px;border-radius:2px;background:rgba(139,152,169,.22)}'+
+    // (v11.66) THE RAIL BAND DROPS 5px SO THE MONEY LABELS GET A LANE OF THEIR OWN.
+    // GEOMETRY CONTRACT — labels occupy rows 0-9 (top:0, 9px line box). The dot is 10px with a 2px ring,
+    // so its PAINTED top is (rail top - 5); that must be >= 9, which pins the rail at top:14 and nothing
+    // higher. Everything else hangs off it: dot top = rail-3, notch/T top = rail-4, piles stay bottom:2.
+    // Labels sit at top:0 with a 9px line box; the dot sat at top:6 and is 10px tall, so they shared
+    // rows 6-9. Whenever price happened to sit near the middle of a spent span the dot's dark ring cut
+    // straight through that span's figure — '$1,394' rendered as '$1̶,394'. Value-dependent, which is why
+    // it survived: it is invisible in any single screenshot where the dot is not on a label.
+    '#gpts-body .g3emt{position:relative;flex:1;height:31px;min-width:80px}'+
+    '#gpts-body .g3emr{position:absolute;left:0;right:0;top:14px;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}'+
+    '#gpts-body .g3emf{position:absolute;top:14px;height:4px;border-radius:2px;background:rgba(139,152,169,.6)}'+
+    '#gpts-body .g3emx2{position:absolute;top:14px;height:4px;border-radius:2px;background:rgba(139,152,169,.22)}'+
     '#gpts-body .g3emw2{position:absolute;top:7px;width:1px;height:8px;background:rgba(195,204,216,.6)}'+
-    '#gpts-body .g3emo{position:absolute;top:5px;width:2px;height:12px;background:#e6edf3;border-radius:1px;transform:translateX(-1px)}'+
-    '#gpts-body .g3emn{position:absolute;top:6px;width:10px;height:10px;border-radius:50%;background:#fff;'+
+    '#gpts-body .g3emo{position:absolute;top:10px;width:2px;height:12px;background:#e6edf3;border-radius:1px;transform:translateX(-1px)}'+
+    '#gpts-body .g3emn{position:absolute;top:11px;width:10px;height:10px;border-radius:50%;background:#fff;'+
       'box-shadow:0 0 0 2px #0b0e14;transform:translateX(-5px)}'+
     // TARGET moves to CYAN. Yellow now means POSITIVE GAMMA (Skylit's Pika), so the target cannot keep it.
     // Cyan is the one hue the palette had not spent, and the T glyph carries identity without colour.
-    '#gpts-body .g3emT{position:absolute;top:5px;font-size:9px;font-weight:800;color:#4fd1e0;'+
+    '#gpts-body .g3emT{position:absolute;top:10px;font-size:9px;font-weight:800;color:#4fd1e0;'+
       'transform:translateX(-50%);line-height:12px;text-shadow:0 0 3px #0b0e14,0 0 3px #0b0e14}'+
     '#gpts-body .g3emT.out{color:#6c7889}'+
     '#gpts-body .g3tgt{font-size:11px;font-weight:800;color:#4fd1e0;letter-spacing:-.2px}'+

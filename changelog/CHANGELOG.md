@@ -1,3 +1,40 @@
+## v11.67 — the dot's ring was cutting through the money labels, and only sometimes
+
+**FOUND BY RENDERING THE SECTION, NOT BY READING IT.** With the Chrome bridge down I could not check the
+live face, so I extracted the panel's REAL stylesheet out of the script, rebuilt the FRAME markup with the
+live values measured earlier, and rendered it in headless Chromium at true panel width. The layout change
+was fine. Something else was not.
+
+    money labels   top:0, 9px line box        -> rows 0..9
+    price dot      top:6, 10px + 2px ring     -> PAINTED rows 4..18
+                                                  ^^^^ five rows inside the label band
+
+Whenever price happened to sit near the middle of a spent span, the dot's dark ring cut straight through
+that span's figure — **`$1,394` rendered as `$1̶,394`**. It is value-dependent: invisible in any screenshot
+where the dot is not on a label, which is why it shipped with the segments at v11.64 and survived every
+look since.
+
+**GEOMETRY CONTRACT, WRITTEN DOWN AND TESTED.** The rail moves to `top:14` — the lowest value that puts the
+dot's PAINTED top at or below row 9 — and everything hangs off it: dot `rail-3`, notch and T `rail-4`,
+piles stay `bottom:2`, box grows 26 -> 31px. `test_em_band.js` §21 parses those numbers back out of the
+stylesheet and does the arithmetic, so the next person to nudge the rail gets told.
+
+⚠ **The guard was MUTATION-TESTED** — the old geometry put back, the suite run, the two assertions
+confirmed to fire. A guard nobody has seen fail is a guard nobody knows works.
+
+⚠ **`top:0` CARRIES NO UNIT.** The first version of that test matched `(\d+)px`, read `top:0` as absent,
+and did its arithmetic on `null` — every assertion passed by not running. Caught only because the same run
+also reported a stale `v10.js`.
+
+⚠ **THE TEST HARNESS READS `v10.js`, NOT `current/`.** Two assertions failed on values that were already
+correct in the source, because the CSS had been edited after the last `cp`. Step 2 of the checklist exists
+for exactly this and I skipped it mid-session. **`cp current/... v10.js` before EVERY test run, not once
+per build.**
+
+⚠ Pre-existing and harmless: `.g3emw2` and `.g3shape b.warn` are each defined twice in the stylesheet.
+Later wins, both later definitions are the intended ones. Not touched — noting it so the duplicates are not
+mistaken for the bug next time.
+
 ## v11.66 — the rail was being squeezed by its own restatement
 
 **THE BAND ROW WAS RENDERING FIVE THINGS AND ONLY THREE OF THEM BELONGED THERE.** Low, rail, high — then

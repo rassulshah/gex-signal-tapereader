@@ -608,5 +608,39 @@ eval(ex('emBand'));
   ok(/pathStrictly/.test(h),          'and lists what lies STRICTLY between price and the target');
 }
 
+// ---------- 21. (v11.66) THE RAIL GEOMETRY CONTRACT ----------
+// Found by RENDERING the section offline in Chromium with the real CSS and real live values, not by
+// reading it: the money labels sit at top:0 in a 9px line box, and the price dot is 10px with a 2px ring,
+// so its PAINTED top was inside the label band. Whenever price happened to sit near the middle of a spent
+// span, the dot's dark ring cut straight through that span's figure — "$1,394" rendered as "$1̶,394".
+// Value-dependent, so it is invisible in any single screenshot where the dot is not on a label, and it had
+// been shipping since the segments landed at v11.64.
+{
+  // take the LAST definition of each rule — the stylesheet has earlier ones that are overridden
+  function px(cls, prop){
+    // ⚠ `top:0` carries NO UNIT. A px-only pattern reads it as absent, segTop comes back null, and the
+    // arithmetic below silently becomes NaN — the check passes by not running. Accept a bare 0.
+    const re=new RegExp('\\.'+cls+'\\{[^}]*'+prop+':(-?\\d+(?:\\.\\d+)?)(?:px)?[;}]','g');
+    let m, v=null; while((m=re.exec(src))) v=parseFloat(m[1]);
+    return v;
+  }
+  const segTop=px('g3seg','top'), segLine=px('g3seg','line-height');
+  const railTop=px('g3emr','top'), dotTop=px('g3emn','top'), dotH=px('g3emn','height');
+  const boxH=px('g3emt','height');
+  ok([segTop,segLine,railTop,dotTop,dotH,boxH].every(v=>typeof v==='number' && isFinite(v)),
+     'the rail geometry is readable from the stylesheet', [segTop,segLine,railTop,dotTop,dotH,boxH].join(','));
+
+  const labelBottom = segTop + segLine;          // money labels own rows 0..9
+  const RING = 2;                                 // .g3emn box-shadow 0 0 0 2px
+  const paintedDotTop = dotTop - RING;
+  ok(paintedDotTop >= labelBottom,
+     'the dot INCLUDING its ring clears the money-label band',
+     'painted dot top '+paintedDotTop+' vs label bottom '+labelBottom);
+
+  ok(dotTop === railTop - 3,   'the dot stays centred on the rail', dotTop+' vs '+(railTop-3));
+  ok(px('g3emo','top') === railTop - 4, 'the anchor notch stays centred too', px('g3emo','top'));
+  ok(boxH >= railTop + 4 + 12, 'the box still leaves a lane under the rail for the piles', boxH);
+}
+
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

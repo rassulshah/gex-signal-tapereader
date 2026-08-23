@@ -12,7 +12,11 @@ vm.createContext(sb);
 try{ vm.runInContext(src, sb, {filename:'v10.js'}); }catch(e){ console.log('LOAD ERROR: '+e.message); process.exit(1); }
 const D=sb.window.__gptsDebug||{};
 let bad=0;
-for(const n of ['phase','regime2','pa','bias','steps','roll','face','ifLadder','nodeChart','skew','accum','rolls','optKeys','ifShape']){
+// (v11.66) `piles` and `emBand` added. The piles hook shipped this build and had never been EXECUTED
+// anywhere — it calls emBand, emPiles, ifChain, ifLadder and usdBig, any of which can come back empty
+// on a book this stub does not have. An unexercised debug hook is a hook you find out is broken while
+// you are using it to diagnose something else.
+for(const n of ['phase','regime2','pa','bias','steps','roll','face','ifLadder','nodeChart','skew','accum','rolls','optKeys','ifShape','emBand','piles','session']){
   try{ const r=D[n]?D[n]('SPY'):'(absent)'; console.log('ok  '+n.padEnd(10)+' -> '+String(typeof r==='string'?r:JSON.stringify(r)).replace(/\s+/g,' ').slice(0,80)); }
   catch(e){ console.log('THREW '+n+' :: '+e.message); bad++; }
 }
