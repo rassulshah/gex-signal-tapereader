@@ -1,3 +1,53 @@
+## v11.79 — the labels I was asked for twice, mocked twice, and did not build
+
+**Owning this one: the user asked for ES-over-SPXW labels two sessions running. I produced two mockups and
+shipped neither.** They are built now.
+
+    7661            ▮              ▮      ▮          7730
+    ~EXP LOW      7668           7718   7728       ~EXP HIGH
+                7650 BRK      7700 ACC 7710 ACC
+
+**ES price on top — the number that is traded — SPXW strike and the node's role beneath it.** Labelled only
+above `PLAB_MIN_PCT` (⚖ 20, the same cut as the node itself) so a busy expiry cannot smear the tier.
+
+**THE HOVER SPEAKS THE VOCABULARY OF WHICHEVER BOOK PRODUCED THE NODE.** Skylit nodes read `%King` with the
+dollar figure stated as a VALUE; the InsiderFinance fallback keeps `$/PT`, and says it is the fallback.
+⚠ Printing Skylit's node value with "/PT" would silently swap units, so a test forbids it.
+
+**THE RAILS QUOTE THEIR INDEX EQUIVALENT.** The band has always been in ES — 7661 and 7730 are chart
+prices — but nothing said so, and the strikes behind them are SPX. Both hovers now add *"This is an ES
+price; the index equivalent is SPX 7643.4"*, via a named `ifDispScale()` inverse.
+
+**AND THE TARGET CARRIES ITS DISTANCE.** `T: 7718 +6`. "Is it close" needs the GAP, not two prices the
+reader subtracts — and the gap is the number that moves.
+
+⚠ **GEOMETRY CONTRACT EXTENDED TO FOUR TIERS, AND MEASURED RATHER THAN GUESSED.** At 42px the piles
+occupied rows 22-32 and the two-line labels 28-43 — **four rows of overlap.** The labels did not move; the
+piles were LIFTED and the box grew to 48. Verified in a real render: 0 pile-over-label, 0 label-over-label.
+
+    0-9    money labels     14-18  the rail
+    19-29  the gamma piles  34-48  the node labels
+
+⚠ **THREE WORDINGS FOR ONE CAVEAT.** "no option chain contains" / "no option chain carries" / "the chain
+does not contain" were all live at once for the same standing rule. **A rule with three phrasings is on its
+way to becoming a suggestion.** Normalised, and a test now requires it to read identically on every branch.
+
+⚠ **A TEST THAT COULD NOT MATCH.** The geometry checks built their pattern through python → JS → regex and
+the nested escaping produced a regex that never matched — `px()` returned `null` and every geometry
+assertion passed vacuously. Same family as the `/'[^']*'/` failure of v11.70. **Build patterns from pieces,
+and assert the extractor found something before asserting on what it found.**
+
+---
+
+⚠⚠ **AND A PROCESS FAILURE THAT COST THE USER TIME.** They reported 7710 still missing from the rail. It
+was not the code: **they were running v11.76**, and the Skylit switch shipped in v11.77. I had shipped
+three installers in a row without once confirming any of them reached the browser, and two earlier builds
+(11.68, 11.72) never got their own commits either. The tape was being read perfectly the whole time —
+`count 100, king 7710, kingKd 17241, kingSrc "dollar"`, and 7710 → ES 7727.73, inside the band.
+
+**FROM NOW: verify the RUNNING version on the live tab before reporting any build as done.** A build that
+is not installed is not shipped, and only the browser can say which it is.
+
 ## v11.78 — prove the King before trusting anything measured against it
 
 **THE USER'S REQUIREMENT: survive Skylit changing their markup.** The right place to defend that is the

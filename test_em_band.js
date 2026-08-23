@@ -1129,5 +1129,56 @@ eval(ex('emBand'));
   ['kingSrc','kingKd','degraded'].forEach(k=>ok(h.indexOf(k)>=0, 'the piles hook reports '+k));
 }
 
+// ---------- 36. (v11.79) THE LABELS, THE HOVERS AND THE TWO SCALES ----------
+// Asked for twice, mocked twice, and not built until now. ES on top (the number traded), SPXW strike and
+// the node's role beneath it, and the index equivalent of the rails in their hover.
+{
+  const f=ex('secFrame');
+  ok(/g3plab/.test(f),                       'every prominent node carries a label');
+  ok(/frameNum\(P\.disp\)\+'<i>'\+P\.k/.test(f),
+     'ES price on top, SPXW strike underneath', 'ok');
+  ok(/var role = P\.balanced \? 'BAL'/.test(f), 'with the node role on the same line as the strike');
+  ok(/PLAB_MIN_PCT/.test(f) && /var PLAB_MIN_PCT = 20;/.test(src),
+     'labelled only above a named threshold, so a busy day cannot smear the tier');
+  ok(/⚖ HAND-SET/.test(src.slice(src.indexOf('var PLAB_MIN_PCT')-320, src.indexOf('var PLAB_MIN_PCT'))),
+     'flagged hand-set');
+
+  // the hover speaks the right vocabulary for whichever book produced the node
+  ok(/var isSk = \(P\.src==='skylit'\)/.test(f), 'the hover branches on the SOURCE of the node');
+  ok(/P\.pct\+'% of King'/.test(f),             'Skylit nodes are sized in %King');
+  ok(/of dealer exposure at this strike/.test(f), 'with the dollar value stated as a VALUE');
+  ok(!/usdBigSp\(P\.usdK\)[^]{0,40}PT/.test(f),  'and never with a per-point unit, which is IF\'s');
+  ok(/A DIFFERENT MEASUREMENT from InsiderFinance/.test(f),
+     'and it says which measurement it is, so the two are never read as one');
+  ok(/InsiderFinance FALLBACK/.test(f),         'while the fallback hover says it is the fallback');
+  // the standing caveat is identical on both branches — it is doctrine, not prose
+  const caveats=(f.match(/needs a market-impact figure no option chain contains/g)||[]).length;
+  ok(caveats>=2, 'the no-distance caveat appears on BOTH branches, worded identically', caveats);
+
+  // SPX equivalent in the rail hovers
+  ok(/index equivalent is SPX/.test(f),   'the rails quote their index equivalent');
+  const both=(f.match(/index equivalent is SPX/g)||[]).length;
+  ok(both===2, 'on the low AND the high', both);
+  ok(/function ifDispScale\(\)/.test(src), 'via a named inverse of the chart scale');
+
+  // the target chip carries its distance
+  ok(/g3dist/.test(f),                    'the target chip carries a distance');
+  ok(/Math\.abs\(ifMagEarly-EBc\.now\)/.test(f), 'computed from price, not restated as a second price');
+  ok(/'\+':'\\u2212'/.test(f),             'signed, so direction reads without arithmetic');
+
+  // the rail grew a tier, and the v11.67 geometry contract above the rail must still hold
+  // ⚠ build the pattern from pieces — nested escaping through python -> js -> regex silently produced a
+  // never-matching pattern the first time, and a px() that returns null makes every geometry check vacuous.
+  const px=(cls,prop)=>{ const re=new RegExp('\\.'+cls+'\\{[^}]*'+prop+':(-?[0-9.]+)','g');
+    let m,v=null; while((m=re.exec(src))) v=parseFloat(m[1]); return v; };
+  ok(px('g3emt','height')===48, 'the rail box grew to fit the label tier', px('g3emt','height'));
+  // ⚠ px() takes the LAST match and the generic '#gpts-body .g3pile{bottom:2px}' comes after the scoped
+  // rule, so ask for the SCOPED one by name — the specific selector is what actually applies here.
+  const scoped=(src.match(/g3emt \.g3pile\{bottom:(\d+)px\}/)||[])[1];
+  ok(scoped==='19', 'and the piles were LIFTED clear of it rather than the labels squeezed under them', scoped);
+  ok(px('g3emr','top')===14,    'and the rail itself did NOT move — v11.67 contract intact', px('g3emr','top'));
+  ok(px('g3emn','top')===11,    'nor the dot', px('g3emn','top'));
+}
+
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.78
+// @version    11.79
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.78';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.79';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4813,6 +4813,10 @@ function activeSym(){
 // user's call: round to the nearest whole point and keep it simple, rather than snapping to the 0.25 tick.
 // ⚠ SCOPED TO THIS SECTION ONLY, and only when the chart IS a future. `dispNum` stays exactly as it was
 // everywhere else, and on a SPY chart (~764) whole points would be far too coarse to mean anything.
+// (v11.79) the ES->SPX inverse, so a hover can quote the index level beside the futures one. The band is
+// computed in CHART (ES) space; the strikes behind it are SPX. Both are useful and they are not the same
+// number — the basis was +17.65 points on 2026-08-23.
+function ifDispScale(){ try{ var L=ifLadder(activeSym()); return (L && !L.err && L.dispScale>0) ? L.dispScale : 0; }catch(e){ return 0; } }
 function frameNum(x){
   if(x==null) return '\u2013';
   try{ if(dispIsFut()) return String(Math.round(x)); }catch(e){}
@@ -11371,7 +11375,7 @@ function registerCoreFeatures(){
     ],
     rule:{ id:'em.read', tier:'hand',
            condition:'two clauses: where the day is, then the nearest level that changes the hedging mechanism and what it changes to; FLIP outranks piles within 12 points',
-           mechanism:'The section already carries every fact; what it lacked was the causal chain between them. The line states a MECHANISM and never a probability - no likely, no will, no trade - because gamma says HOW price moves and never WHICH WAY, and converting hedging dollars into points needs a market-impact figure the chain does not contain. Which BRANCH fires is recorded so the composition itself can be scored.' } });
+           mechanism:'The section already carries every fact; what it lacked was the causal chain between them. The line states a MECHANISM and never a probability - no likely, no will, no trade - because gamma says HOW price moves and never WHICH WAY, and converting hedging dollars into points needs a market-impact figure no option chain contains. Which BRANCH fires is recorded so the composition itself can be scored.' } });
   //
   // (v11.68) THE PILES, after the two faults that composed into one wrong number. They read toFri while
   // the band read dte0 — on a Friday roll that is today plus a whole extra week, and only 29.2% of it
@@ -17196,7 +17200,24 @@ function ensureV3Css(){
     // rows 6-9. Whenever price happened to sit near the middle of a spent span the dot's dark ring cut
     // straight through that span's figure — '$1,394' rendered as '$1̶,394'. Value-dependent, which is why
     // it survived: it is invisible in any single screenshot where the dot is not on a label.
-    '#gpts-body .g3emt{position:relative;flex:1;height:31px;min-width:80px}'+
+    // (v11.79) 42px, not 31: the node labels get their own tier under the piles. Geometry contract from
+    // v11.67 still holds above the rail — money labels 0-9, rail at 14 — and the piles were lifted clear
+    // of the new tier rather than the labels being squeezed under them.
+    // GEOMETRY CONTRACT, extended v11.79. Four tiers, none of which may touch:
+    //   0-9    money labels        (v11.67, top:0 + 9px line box)
+    //   14-18  the rail            (v11.67 pinned it here; the dot's painted top must clear row 9)
+    //   19-29  the gamma piles     lifted to sit under the rail, above the new tier
+    //   34-48  the node labels     TWO lines: ES price, then SPXW strike + role
+    // Measured, not guessed: at 42px the piles occupied 22-32 and the two-line labels 28-43, so they
+    // overlapped by four rows. The labels did not move — the piles were lifted and the box grew.
+    '#gpts-body .g3emt{position:relative;flex:1;height:48px;min-width:80px}'+
+    '#gpts-body .g3emt .g3pile{bottom:19px}'+
+    '#gpts-body .g3plab{position:absolute;bottom:-1px;transform:translateX(-50%);font-size:6.5px;'+
+      'font-weight:800;white-space:nowrap;cursor:help;line-height:7.5px;text-align:center}'+
+    '#gpts-body .g3plab.acc{color:#a371f7}'+
+    '#gpts-body .g3plab.brk{color:#e3c341}'+
+    '#gpts-body .g3plab.bal{color:#8b98a9}'+
+    '#gpts-body .g3plab i{display:block;font-style:normal;font-size:5.5px;color:#8b98a9;letter-spacing:.04em}'+
     '#gpts-body .g3emr{position:absolute;left:0;right:0;top:14px;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}'+
     '#gpts-body .g3emf{position:absolute;top:14px;height:4px;border-radius:2px;background:rgba(139,152,169,.6)}'+
     '#gpts-body .g3emx2{position:absolute;top:14px;height:4px;border-radius:2px;background:rgba(139,152,169,.22)}'+
@@ -17265,6 +17286,7 @@ function ensureV3Css(){
     '#gpts-body .g3tgt{font-size:11px;font-weight:800;color:#8b98a9;letter-spacing:-.2px;margin-left:auto;cursor:help}'+
     '#gpts-body .g3tgt.up{color:#2ec27e}'+
     '#gpts-body .g3tgt.dn{color:#f0616d}'+
+    '#gpts-body .g3dist{font-size:8px;font-weight:800;color:#8b98a9;margin-left:3px}'+
     '#gpts-body .g3emT.up{color:#2ec27e}'+
     '#gpts-body .g3emT.dn{color:#f0616d}'+
     '#gpts-body .g3play b{color:#a371f7;font-weight:800}'+
@@ -17838,6 +17860,11 @@ var PILE_BAL_MIN = 15;
 // ⚠⚠ FAILURE MUST NEVER LOOK LIKE AN EMPTY BAND. Every refusal below returns an explicit reason, and
 // the read sentence prints it. "Nothing in the way" and "I cannot see the book" are opposite claims and
 // the old code rendered them identically — see DECISIONS.md D-6.
+// (v11.79) Only label a node this prominent. Every qualifying node gets a MARK; only the ones worth
+// reading get a two-line LABEL, or a busy expiry day turns the tier into a smear.
+// ⚖ HAND-SET at the same 20 as the node cut, so today every drawn node is labelled. Raise it if a live
+// session ever renders more than ~5 and they collide — the renderer measures nothing.
+var PLAB_MIN_PCT = 20;
 var SK_MIN_STRIKES = 20;   // ⚖ hand-set. A healthy SPXW ladder reads 100; below 20 the DOM changed.
 function skPiles(B, sym){
   var out={ ok:false, why:'', piles:[], src:'skylit', count:0 };
@@ -18252,9 +18279,11 @@ function secFrame(sym){
   // magnet sits ABOVE price and red when below — where the pull is. The rail's T marker takes the SAME
   // colour from the SAME test, so the chip and the mark can never disagree; they were cyan and gold
   // before, which said nothing about direction and did not match each other.
+  // (v11.79) IT CARRIES ITS DISTANCE. "Is the target close" needs the GAP, not two prices the reader then
+  // subtracts — and the gap is the number that changes as price moves, which is the one worth watching.
   var tgtUp=null;
   try{ if(ifMagEarly!=null && EBc && EBc.ok && typeof EBc.now==='number') tgtUp=(ifMagEarly>EBc.now); }catch(eTU){}
-  if(ifMagEarly!=null) h+='<span class="g3tgt'+(tgtUp===true?' up':(tgtUp===false?' dn':''))+'"'+g3tip('Where is the day trying to go? The heaviest strike in InsiderFinance\'s book — where dealer hedging concentrates and price tends to be pulled. '+(tgtUp===true?'GREEN: it sits ABOVE price. ':(tgtUp===false?'RED: it sits BELOW price. ':''))+'A destination, not a forecast, and it reads the same book as the ladder below so the two can never disagree. The T on the rail is this same level.')+'>T: '+frameNum(ifMagEarly)+'</span>';
+  if(ifMagEarly!=null) h+='<span class="g3tgt'+(tgtUp===true?' up':(tgtUp===false?' dn':''))+'"'+g3tip('Where is the day trying to go? The heaviest strike in InsiderFinance\'s book — where dealer hedging concentrates and price tends to be pulled. '+(tgtUp===true?'GREEN: it sits ABOVE price. ':(tgtUp===false?'RED: it sits BELOW price. ':''))+'A destination, not a forecast, and it reads the same book as the ladder below so the two can never disagree. The T on the rail is this same level.')+'>T: '+frameNum(ifMagEarly)+((EBc&&EBc.ok&&typeof EBc.now==='number')?('<span class="g3dist">'+((ifMagEarly>=EBc.now)?'+':'\u2212')+dispNum(Math.abs(ifMagEarly-EBc.now))+'</span>'):'')+'</span>';
   h+='</div>';
   // (v11.49) LINE 2 IS THE BAND NOW. It used to be four naked measurements — DEX, TERM, EM, ATR —
   // which reported instrumentation readings while line 1 above answered a question. A number here
@@ -18286,7 +18315,7 @@ function secFrame(sym){
     // Subrahmanyam, and every vendor guide that bothers to say so puts the conversion at x1.25. A row
     // labelled EM implies ~68% containment; this band delivers ~58%. The WIDTH IS UNCHANGED and every
     // level sits exactly where it did — only the claim has been corrected.
-    h+='<span class="g3emk"'+g3tip('Expected low — the open minus the at-the-money straddle. \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(EB.low))+'<small>'+(EB.est?'~':'')+'EXP LOW</small></span>';
+    h+='<span class="g3emk"'+g3tip('Expected low — the open minus the at-the-money straddle.' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.low/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(EB.low))+'<small>'+(EB.est?'~':'')+'EXP LOW</small></span>';
     h+='<span class="g3emt">'+
        '<i class="g3emr"></i>'+
        ((EB.hiWater!=null&&EB.loWater!=null)?('<i class="g3emx2" style="left:'+emPos(EB,EB.loWater).toFixed(1)+'%;width:'+Math.max(0,emPos(EB,EB.hiWater)-emPos(EB,EB.loWater)).toFixed(1)+'%"></i>'+
@@ -18328,20 +18357,43 @@ function secFrame(sym){
            // (v11.68) three states, not two. BALANCED is drawn — the gamma is really there — but hollow,
            // because a strike whose legs cancel has no side and colouring it would assert one.
            var pcls = P.balanced ? 'bal' : (P.accel ? 'acc' : 'brk');
-           h2+='<i class="g3pile '+pcls+'" style="left:'+P.pos.toFixed(1)+'%;width:'+w+'px;height:'+hgt+'px"'+
-               g3tip(P.k+' \u2014 '+usdBig(P.gexM*1e6)+' of gamma sits here, of which '+P.netFrac+'% survives as net dealer exposure: '+usdBigSp(P.perPt)+' / PT to hedge. '+
-                     (P.balanced
-                       ? 'BALANCED \u2014 the call and put legs very nearly cancel, so there is no side to lean on and it votes in neither path sum. The SIZE is real; the DIRECTION is not.'
-                       : (P.accel
-                         ? 'NEGATIVE net gamma: dealers are short here, so crossing it they must trade WITH the move \u2014 an ACCELERATOR.'
-                         : 'POSITIVE net gamma: dealers are long here, so crossing it they trade AGAINST the move \u2014 a BRAKE.'))+
-                     ' From the '+gexWindowNote(P.window)+
-                     ' \u26a0 This is the SIZE of the flow, not a distance: turning dollars of hedging into points of movement needs a market-impact figure no option chain contains.')+'></i>';
+           // (v11.79) SKYLIT-SHAPED NODES carry `pct` (%King) and `usdK`; the InsiderFinance fallback
+           // carries `gexM`/`netFrac`/`perPt`. One render, two vocabularies — and the hover must never
+           // print Skylit's node VALUE with "/PT", which is IF's per-point unit.
+           var isSk = (P.src==='skylit');
+           var sizeTxt = isSk ? (P.pct+'% of King') : (usdBig(P.gexM*1e6)+' of gamma');
+           var tip = frameNum(P.disp)+' (SPXW '+P.k+') \u2014 '+sizeTxt+'. ';
+           if(isSk){
+             tip += (P.usdK!=null ? ('About '+usdBig(P.usdK*1000)+' of dealer exposure at this strike. ') : '')+
+                    (P.accel
+                      ? 'NEGATIVE gamma: dealers are short here, so crossing it a hedge trades WITH the move \u2014 an ACCELERATOR.'
+                      : 'POSITIVE gamma: dealers are long here, so a hedge leans against price \u2014 a BRAKE.')+
+                    ' From SKYLIT\'s live SPXW ladder: accumulated dealer positioning, which builds and drains intraday.'+
+                    ' \u26a0 A DIFFERENT MEASUREMENT from InsiderFinance\'s open-interest gamma \u2014 a flow, not a stock.'+
+                    ' \u26a0 The SIZE of the pressure, never a distance: turning it into points needs a market-impact figure no option chain contains.';
+           } else {
+             tip += 'of which '+P.netFrac+'% survives as net dealer exposure: '+usdBigSp(P.perPt)+' / PT to hedge. '+
+                    (P.balanced
+                      ? 'BALANCED \u2014 the call and put legs very nearly cancel, so there is no side to lean on. The SIZE is real; the DIRECTION is not.'
+                      : (P.accel
+                        ? 'NEGATIVE net gamma: dealers are short here, so crossing it they must trade WITH the move \u2014 an ACCELERATOR.'
+                        : 'POSITIVE net gamma: dealers are long here, so they trade AGAINST the move \u2014 a BRAKE.'))+
+                    ' From the '+gexWindowNote(P.window)+
+                    ' \u26a0 InsiderFinance FALLBACK \u2014 the Skylit tape could not be read.';
+           }
+           h2+='<i class="g3pile '+pcls+'" style="left:'+P.pos.toFixed(1)+'%;width:'+w+'px;height:'+hgt+'px"'+g3tip(tip)+'></i>';
+           // (v11.79) THE LABEL THE USER ASKED FOR, TWICE, AND I MOCKED TWICE WITHOUT BUILDING:
+           // ES price on top (the number they trade), SPXW strike and the node's role beneath it.
+           var role = P.balanced ? 'BAL' : (P.accel ? 'ACC' : 'BRK');
+           if(P.pct>=PLAB_MIN_PCT){
+             h2+='<span class="g3plab '+pcls+'" style="left:'+P.pos.toFixed(1)+'%"'+g3tip(tip)+'>'+
+                 frameNum(P.disp)+'<i>'+P.k+' '+role+'</i></span>';
+           }
          }
          return h2;
        })()+
        '</span>';
-    h+='<span class="g3emk"'+g3tip('Expected high — the open plus the at-the-money straddle. \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a ceiling.')+'>'+g3esc(frameNum(EB.high))+'<small>'+(EB.est?'~':'')+'EXP HIGH</small></span>';
+    h+='<span class="g3emk"'+g3tip('Expected high — the open plus the at-the-money straddle.' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.high/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a ceiling.')+'>'+g3esc(frameNum(EB.high))+'<small>'+(EB.est?'~':'')+'EXP HIGH</small></span>';
     h+='</span>';
   } else {
     h+='<span class="g3emx"'+g3tip('Where can today go? The band needs an opening bar and a two-sided at-the-money straddle in today\'s expiry. A one-sided straddle is not a straddle and half a band would be worse than none, so it says why instead of drawing something.')+'>'+g3esc(EB.why)+'</span>';
@@ -18388,7 +18440,7 @@ function secFrame(sym){
     if(RD && RD.ok && RD.txt){
       h+='<div class="g3read"'+g3tip('What can happen from here, and WHY \u2014 the section composed into one mechanism: where the day is, then the next level that changes how hedging behaves and what it changes to. '+
             '\u26a0 IT IS A MECHANISM, NOT A FORECAST. It will never say likely, will, or should, it gives no probability and it names no trade \u2014 because every scorecard on this panel is still empty and gamma tells you HOW price moves, never WHICH WAY. '+
-            'Turning dollars of hedging into points of movement needs a market-impact figure no option chain carries, so the line states what the book DOES at a level and leaves the arrival to you.')+
+            'Turning dollars of hedging into points of movement needs a market-impact figure no option chain contains, so the line states what the book DOES at a level and leaves the arrival to you.')+
             '>'+g3esc(RD.txt)+'</div>';
     }
   }
