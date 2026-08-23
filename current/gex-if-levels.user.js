@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.12
+// @version      1.13
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
@@ -252,15 +252,20 @@ function levelsFor(opts, spot, keep){
   // (v1.12) THE PROFILE, exported. Same units as callGEX/putGEX above: dollars of dealer delta per 1%
   // move, puts NEGATIVE (their convention, verified against their published page to the decimal).
   // Trimmed to strikes carrying real weight so a 780-strike chain does not bloat every payload.
-  var gexProf=[];
+  var gexProf=[], gexProfCoverage=null;
   try{
-    var mx=0, rr2;
+    var mx=0, rr2, kept=0, dropped=0;
     for(rr2=0;rr2<rows.length;rr2++){ var am=Math.abs(rows[rr2].call||0)+Math.abs(rows[rr2].put||0); if(am>mx) mx=am; }
     if(mx>0) for(rr2=0;rr2<rows.length;rr2++){
       var RW=rows[rr2], gm=Math.abs(RW.call||0)+Math.abs(RW.put||0);
-      if(gm/mx < 0.01) continue;                       // drop the long tail of near-zero strikes
+      if(gm/mx < 0.01){ dropped+=gm; continue; }        // drop the long tail of near-zero strikes
+      kept+=gm;
       gexProf.push([RW.k, +( (RW.call||0)/1e6 ).toFixed(1), +( (RW.put||0)/1e6 ).toFixed(1)]);
     }
+    // ⚠ SAY WHAT THE TRIM COST. On a 780-strike chain the 1% cut removes ~5% of the book's gross gamma —
+    // small, but the profile must never be presented as if it were the whole. A consumer summing the
+    // profile and comparing it to callGEX/putGEX has to know the gap is the trim, not a bug.
+    gexProfCoverage = (kept+dropped)>0 ? +(100*kept/(kept+dropped)).toFixed(1) : null;
   }catch(eP){ gexProf=null; }
 
   var tot=Math.abs(sc)+Math.abs(sp);
@@ -282,7 +287,7 @@ function levelsFor(opts, spot, keep){
   }
   return { cr:cr, ps:ps, mag:mag, maxPain:mp,
            crSuppressed:crSup, psSuppressed:psSup,
-           callGEX:sc, putGEX:sp, netGEX:sc+sp, gexProf:gexProf,
+           callGEX:sc, putGEX:sp, netGEX:sc+sp, gexProf:gexProf, gexProfCoverage:gexProfCoverage,
            ratio:(sp!==0 ? +(sc/Math.abs(sp)).toFixed(3) : null),
            callShare:+(callShare*100).toFixed(2),
            pcOI:(cOI>0 ? +(pOI/cOI).toFixed(2) : null),

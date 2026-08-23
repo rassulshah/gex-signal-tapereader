@@ -424,7 +424,7 @@ eval(ex('emBand'));
   const b=ex('emBand');
   ok(/openU:openU/.test(b),        'the OPEN is captured into the record, like the expected move');
   ok(/openSo:/.test(b),            'with the opening bar\'s seconds-of-day');
-  ok(/rec\.openU \* \(/.test(b),   'and the anchor is read FROM the record, not the live array');
+  ok(/rec\.openU\*useRr/.test(b),   'and the anchor is read FROM the record, not the live array');
   ok(/cs\[0\]\.so<rec\.openSo/.test(b),
      'self-heal: an EARLIER bar replaces the captured one, so it can only move backward toward the true open');
   ok(!/cs\[0\]\.so>rec\.openSo/.test(b),
@@ -505,6 +505,34 @@ eval(ex('emBand'));
   ok(/of hedging per point/.test(f), 'pile hovers state the flow');
   ok(/needs a market-impact figure no option chain contains/.test(f),
      '...and refuse to imply a distance, which is the one number nobody can honestly give');
+}
+
+
+// ---------- 17. (v11.65) ONE SCALE, APPLIED ONCE ----------
+// TWO OF MY OWN FIXES WERE FIGHTING. v11.59 corrected open/now from live rr back to the captured rr.
+// v11.63 then set `open` FROM THE RECORD — already at the captured scale — and left v11.59's correction
+// running after it, so the anchor got multiplied by rec.rr/rr a SECOND time and drifted with live rr all
+// over again. Pinned 7695.6 rendered as 7709.4 -> 7711.43. The symptom was identical to the bug the fixes
+// were for, which is exactly why it survived two rounds of "fixed".
+{
+  const b=ex('emBand');
+  ok(/var useRr=/.test(b),          'ONE scale factor is chosen up front');
+  ok(!/scalePinned/.test(b),        'and the old correction block is GONE — nothing to correct twice');
+  ok(!/open\*=k/.test(b),           'nothing multiplies the anchor after it is set');
+  ok(/rec\.openU\*useRr/.test(b),   'the anchor is the RECORD times the captured scale');
+  ok(/now  = nowU\*useRr/.test(b),  'and `now` uses the SAME scale, so the two can be subtracted');
+  ok(/out\.hiWater=hiU\*useRr/.test(b), 'the water marks share it too');
+  // exactly one multiplication of openU anywhere in the function
+  const mults=(b.match(/openU\s*\*/g)||[]).length;
+  ok(mults===2, 'openU is scaled in exactly TWO places (record branch / fallback) and never chained', mults);
+  ok(/var open=0, now=0;/.test(b),
+     'and it is not pre-scaled with live rr first — that double-multiplication was the whole bug');
+
+  // --- the trim must declare what it costs ---
+  const s2=fs.readFileSync('./current/gex-if-levels.user.js','utf8');
+  ok(/gexProfCoverage/.test(s2),    'the profile reports what fraction of the book it covers');
+  ok(/never be presented as if it were the whole/.test(s2),
+     'because a 1% cut removes ~5% of a live 780-strike chain — small, but it is not the whole book');
 }
 
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');

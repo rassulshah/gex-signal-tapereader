@@ -1,3 +1,33 @@
+## v11.65 / companion v1.13 — my own two fixes were fighting, and the symptom looked identical to the bug
+
+**THE ANCHOR WAS BEING SCALED TWICE.** v11.59 corrected `open`/`now` from live `rr` back to the captured
+`rr`. v11.63 then set `open` **from the record** — already at the captured scale — and left v11.59's
+correction running immediately after it. So the pinned anchor was multiplied by `rec.rr/rr` a SECOND time,
+and drifted with live `rr` all over again.
+
+    stored   openU 764.4076 x rr 10.0676  =  7695.6   correct
+    rendered 7709.4 -> 7710.7 -> 7711.43            drifting, again
+
+**The symptom was indistinguishable from the bug the fixes were for**, which is exactly why it survived
+two rounds of being called fixed. Three diagnoses of "the moving dot" and the third fix introduced a
+fourth cause.
+
+**ONE SCALE, CHOSEN ONCE, APPLIED ONCE.** `useRr` is picked up front; the anchor, `now`, and both water
+marks are all built from it. **There is no correction step any more, because there is nothing to correct.**
+The pre-scaling line that computed `open=openU*rr` with LIVE rr — immediately overwritten — is gone too:
+it was the surface that made double-multiplication possible. A test now counts the multiplications and
+fails if `openU` is scaled anywhere but the two branches.
+
+**THE PROFILE TRIM NOW DECLARES WHAT IT COSTS.** The 1% tail cut removes ~5% of a live 780-strike chain's
+gross gamma — small, but the changelog said the legs sum "EXACTLY", and on live data they do not. That was
+true only for the small fixture the test used. `gexProfCoverage` now reports the kept fraction, so anyone
+summing the profile against `callGEX`/`putGEX` can see the gap is the trim rather than a bug.
+
+⚠ **Two lessons, both about my own work.** When a fix does not resolve a symptom, the next fix must be
+checked against the previous one — I stacked a correction on top of a pin without asking whether the pin
+made the correction wrong. And a test that asserts an exact spelling (`rec.openU * (`) breaks on a
+reformat that changes nothing; it now asserts the behaviour and counts the operations instead.
+
 ## v11.64 / companion v1.12 — the band answers the trader's three questions, from ONE book
 
 **Where are we going · what gets us there · what stops us.** The rail now answers all three, and the

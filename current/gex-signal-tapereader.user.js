@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.64
+// @version    11.65
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.64';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.65';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -17348,7 +17348,9 @@ function emBand(sym){
       out.anchor='prevClose';
     }
     if(!(openU>0)){ out.why='the opening bar carries no price'; return out; }
-    var open=openU*rr, now=nowU*rr;
+    // DECLARED ONLY. Scaling happens once, below, with the CAPTURED factor — computing it here with live
+    // rr and overwriting it later is how two fixes ended up multiplying the same value twice.
+    var open=0, now=0;
     var dsc=1; try{ var IL=ifLadder(sym); if(IL&&!IL.err&&IL.dispScale) dsc=IL.dispScale; }catch(eL){}
 
     // one capture per symbol per day, and it is never overwritten once taken
@@ -17402,23 +17404,26 @@ function emBand(sym){
     }
     if(!(rec.em>0)){ out.why='expected move came back zero'; return out; }
 
-    // (v11.63) THE ANCHOR COMES FROM THE RECORD, NOT FROM THE LIVE ARRAY — that is what "anchored" means.
-    // SELF-HEAL: if a later render surfaces an EARLIER bar than the one captured (the window slid the other
-    // way, or the panel started mid-session and the chart then back-filled), take the earlier one. It can
-    // only ever move BACKWARD toward the true open, never forward with the sliding window.
+    // (v11.65) ONE SCALE, APPLIED ONCE. v11.59 corrected `open`/`now` from live rr back to the captured
+    // rr; v11.63 then set `open` from the record — ALREADY at the captured scale — and left the v11.59
+    // correction running after it, so the anchor was multiplied by rec.rr/rr a SECOND time and drifted
+    // with live rr all over again. Measured: pinned 7695.6 rendered as 7709.4 -> 7711.43. My own two
+    // fixes were fighting each other, and the symptom was identical to the bug they were fixing.
+    // There is no correction step now because there is nothing to correct: every candle-derived value is
+    // built from the captured scale in the first place.
+    var useRr=(typeof rec.rr==='number' && rec.rr>0) ? rec.rr : rr;
+
+    // SELF-HEAL, BACKWARD ONLY: an EARLIER bar than the captured one replaces it (the window slid the
+    // other way, or the chart back-filled). It can move toward the true open, never forward with the slide.
     if(cs.length && typeof cs[0].so==='number' && typeof rec.openSo==='number' && cs[0].so<rec.openSo && cs[0].o>0){
       rec.openU=cs[0].o; rec.openSo=cs[0].so;
       try{ S.sym[sym]=rec; localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eU){}
       out.openHealed=true;
     }
-    if(typeof rec.openU==='number' && rec.openU>0 && out.anchor==='open'){
-      open = rec.openU * (typeof rec.rr==='number'&&rec.rr>0 ? rec.rr : rr);
-    }
-    // every candle-derived value uses the CAPTURED scale, so nothing on the rail can drift
-    if(typeof rec.rr==='number' && rec.rr>0 && rr>0 && rec.rr!==rr){
-      var k=rec.rr/rr; open*=k; now*=k;
-      out.scalePinned=true;
-    }
+    // the anchor comes from the RECORD; `now` is live price on the SAME scale so the two can be subtracted
+    open = (out.anchor==='open' && typeof rec.openU==='number' && rec.openU>0) ? (rec.openU*useRr) : (openU*useRr);
+    now  = nowU*useRr;
+    out.scaleUsed=useRr;
 
     out.est  = !(typeof rec.capMin==='number' && rec.capMin<=EM_FRESH_MIN);
     out.open = open;  out.em=rec.em;  out.now=now;  out.k=rec.k;  out.capMin=rec.capMin;
@@ -17441,8 +17446,7 @@ function emBand(sym){
     // rendered identically before this. The bar index of each extreme is all it takes.
     out.hiFirst = (hiAt>=0 && loAt>=0) ? (hiAt<loAt) : null;
     if(isFinite(hiU) && isFinite(loU)){
-      var rrUse=(typeof rec.rr==='number'&&rec.rr>0)?rec.rr:rr;
-      out.hiWater=hiU*rrUse; out.loWater=loU*rrUse;
+      out.hiWater=hiU*useRr; out.loWater=loU*useRr;
       out.upExc=Math.max(0,(out.hiWater-open)/rec.em);      // excursion ABOVE the open, in EM
       out.dnExc=Math.max(0,(open-out.loWater)/rec.em);      // excursion BELOW it
       // "meaningful" = a quarter of the priced move. Below that a wick is noise, not a direction.
@@ -18684,7 +18688,7 @@ window.__gptsDebug.emBand = function(sy){
       shape:B.shape||null, hiWater:B.hiWater, loWater:B.loWater,
       upExc:B.upExc, dnExc:B.dnExc, giveBack:B.giveBack, hiFirst:B.hiFirst,
       roomUp:B.roomUp, roomDn:B.roomDn, roomAhead:B.roomAhead,
-      gamma:B.gamma, stretched:B.stretched, scalePinned:!!B.scalePinned,
+      gamma:B.gamma, stretched:B.stretched, scaleUsed:B.scaleUsed, openHealed:!!B.openHealed,
       contract:B.contract, mult:B.mult, emUsd:B.emUsd, usedUsd:B.usedUsd, leftUsd:B.leftUsd,
       roomUpUsd:B.roomUpUsd, roomDnUsd:B.roomDnUsd, microUsd:B.microUsd
     };
