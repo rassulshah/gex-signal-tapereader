@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.74
+// @version    11.75
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.74';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.75';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4807,6 +4807,16 @@ function futMode(){ return FUTMODE; }
 // The symbol whose tape everything is computed from RIGHT NOW (PART G: QQQ parity).
 function activeSym(){
   try{ return (FUTMODE && FUTMODE.underlying==='QQQ') ? 'QQQ' : 'SPY'; }catch(e){ return 'SPY'; }
+}
+// (v11.75) ① FRAME PRICES ARE WHOLE POINTS ON A FUTURES CHART. `7730.48` and `7661.02` are not prices
+// anyone can trade — ES moves in quarter points, so those two decimals are noise wearing precision. The
+// user's call: round to the nearest whole point and keep it simple, rather than snapping to the 0.25 tick.
+// ⚠ SCOPED TO THIS SECTION ONLY, and only when the chart IS a future. `dispNum` stays exactly as it was
+// everywhere else, and on a SPY chart (~764) whole points would be far too coarse to mean anything.
+function frameNum(x){
+  if(x==null) return '\u2013';
+  try{ if(dispIsFut()) return String(Math.round(x)); }catch(e){}
+  return dispNum(x);
 }
 function dispIsFut(){ try{ return !!(FUTMODE && FUTMODE.fam && FUTMODE.ok); }catch(e){ return false; } }
 function dispR(){ try{ return (dispIsFut() && FUTMODE.r>0) ? FUTMODE.r : 1; }catch(e){ return 1; } }
@@ -17234,7 +17244,8 @@ function ensureV3Css(){
     // Same grammar as the piles below, so the chip and the rail agree without a legend.
     '#gpts-body .g3flow.g3feeds{background:rgba(163,113,247,.18);color:#a371f7;border:1px solid rgba(163,113,247,.45)}'+
     '#gpts-body .g3flow.g3fights{background:rgba(227,195,65,.14);color:#e3c341;border:1px solid rgba(227,195,65,.4)}'+
-    '#gpts-body .g3ct{font-size:7px;font-weight:800;padding:1px 5px;border-radius:2px;'+
+    // (v11.75) 7px sat a full step below every other chip on the row and read as a footnote. 8px matches g3flow.
+    '#gpts-body .g3ct{font-size:8px;font-weight:800;padding:1px 5px;border-radius:2px;'+
       'background:rgba(46,194,126,.14);color:#2ec27e;border:1px solid rgba(46,194,126,.4);white-space:nowrap}'+
     // (v11.55) the replay chip. Deliberately the loudest thing on the line — it is the one label whose
     // absence would let a whole stale face read as live.
@@ -17249,7 +17260,13 @@ function ensureV3Css(){
     '#gpts-body .g3fv{color:#e6edf3;font-weight:700}'+
     '#gpts-body .g3play{font-size:8px;font-weight:800;letter-spacing:.06em;color:#8b98a9;cursor:help}'+
     '#gpts-body .g3play.g3dgr{color:#f0616d}'+
-    '#gpts-body .g3tgt{font-size:11px;font-weight:800;color:#e3c341;letter-spacing:-.2px}'+
+    // (v11.75) the target is pushed to the right-hand end of the row and coloured by WHERE THE PULL IS:
+    // green when the magnet sits above price, red when below. The rail's T mark reads the same test.
+    '#gpts-body .g3tgt{font-size:11px;font-weight:800;color:#8b98a9;letter-spacing:-.2px;margin-left:auto;cursor:help}'+
+    '#gpts-body .g3tgt.up{color:#2ec27e}'+
+    '#gpts-body .g3tgt.dn{color:#f0616d}'+
+    '#gpts-body .g3emT.up{color:#2ec27e}'+
+    '#gpts-body .g3emT.dn{color:#f0616d}'+
     '#gpts-body .g3play b{color:#a371f7;font-weight:800}'+
     '#gpts-body .g3ph{margin-top:4px;padding:3px 5px;border-radius:3px;background:rgba(242,180,90,.11);text-align:center;font-size:8px;color:#f2b45a;line-height:1.35}'+
     '#gpts-body .g3bar{height:3px;border-radius:2px;background:#1e2530;margin-top:3px;position:relative}'+
@@ -17870,18 +17887,16 @@ function emRead(B, sym){
   try{
     if(!B || !B.ok) return out;
     var up=(B.dir>=0), rail=up?B.high:B.low, shortG=(B.gamma!=null && B.gamma<0);
-    var moved=Math.abs(B.now-B.open);
     var ps=[]; try{ ps=emPiles(B, sym)||[]; }catch(eP){}
     var ahead=ps.filter(function(x){ return up ? x.disp>B.now : x.disp<B.now; })
                 .sort(function(x,y){ return up ? x.disp-y.disp : y.disp-x.disp; });
     var live=ahead.filter(function(x){ return !x.balanced; });
     var bal =ahead.filter(function(x){ return  x.balanced; });
-    var next=live[0]||null;
+    var next=live[0]||null, after=live[1]||null;
     var pastRail=(up ? B.now>=B.high : B.now<=B.low);
     function beyond(x){ return x && (up ? x.disp>B.high : x.disp<B.low); }
+    function pol(x){ return x.accel ? 'negative gamma' : 'positive gamma'; }
 
-    // FLIP outranks everything when it is close: it is the ONE level where the mechanism inverts rather
-    // than merely strengthens or weakens. Read from InsiderFinance's published Zero Gamma via the ladder.
     var flip=null;
     try{ var L=ifLadder(sym);
       if(L && !L.err) for(var i=0;i<L.rows.length;i++){ if(L.rows[i].id==='FLIP'){ flip=L.rows[i].disp; break; } }
@@ -17889,59 +17904,44 @@ function emRead(B, sym){
     var toFlip=(flip!=null)?(up?flip-B.now:B.now-flip):null;
     var flipNear=(toFlip!=null && toFlip>0 && toFlip<Math.abs(rail-B.now) && toFlip<FLIP_NEAR_PTS);
 
-    // ---- clause 1: where the day is. ONE modifier only — pace, the reversal and the room clause can
-    // all fire at once and the line runs past two rows. The reversal outranks: it is the rarer fact.
-    var a;
-    if(B.shape==='REVERSED' && B.giveBack>0.5){
-      // (v11.72) past 100% the number takes a beat to parse — it means the whole excursion came back and
-      // then some. Say that instead of printing "109% back".
-      a=(up?'Up ':'Down ')+dispNum(moved)+', turned once and '+
-        (B.giveBack>=1 ? 'fully retraced' : (Math.round(B.giveBack*100)+'% back'));
-    } else {
-      a=(up?'Up ':'Down ')+dispNum(moved)+', '+Math.min(999,B.pct)+'% of the straddle';
-      if(B.paceOk && typeof B.pace==='number' && B.pace>1.2)      a+=' at '+B.pace.toFixed(2)+'× pace';
-      else if(B.paceOk && typeof B.pace==='number' && B.pace<0.8) a+=' but slow for the hour';
-      // (v11.73) the room clause is GONE from the sentence — line 3 now prints LEFT ↑ as its own figure,
-      // and this said the same thing three words later. Nothing is printed twice on the section.
-
-    }
-
-    // ---- clause 2: what is next, and what crossing it does ----
+    // (v11.75) THE SENTENCE STARTS AT THE LEVEL AND ENDS AT WHERE PRICE CAN GET TO.
+    // It used to open with "Up 16.38, 47% of the straddle but slow for the hour." — the user's word for
+    // that was nonsense, and they were right: the rail above draws every one of those facts as a picture,
+    // so the sentence was spending its first eight words re-reading the graph out loud.
+    // It now answers ONE question — where can price go, and what carries or stops it getting there — by
+    // naming the level ahead and then the NEXT node beyond it, which is the thing that ends the move.
+    //   "$6M negative gamma accelerator at 7668 can take price lower to the $6M positive gamma node at 7665."
+    // ⚠ "CAN", NEVER "WILL", and the polarity is an adjective, not a clause doubling back after a dash.
     var b;
     if(flipNear){
       out.branch='flip';
-      b='flip '+dispNum(toFlip)+' '+(up?'above':'below')+' at '+dispNum(flip)+'. Through it hedging '+
-        (shortG?'flips from amplifying to damping':'flips from damping to amplifying');
+      b='Flip at '+frameNum(flip)+', '+(Math.round(toFlip*10)/10)+' '+(up?'above':'below')+'. Through it hedging '+
+        (shortG?'flips from amplifying to damping':'flips from damping to amplifying')+'.';
     } else if(next){
-      // (v11.72) SAY WHAT THE HEDGE DOES TO PRICE, not what the hedging IS. "a push through is hedged
-      // WITH it" describes the mechanic and leaves the reader to finish the thought; "a hedge can take
-      // price lower" IS the thought. The pile ahead is by construction in the direction of travel, so
-      // the consequence has a direction and there is no reason to make the reader supply it.
-      // ⚠ STILL CONDITIONAL. "can", never "will" — it says what the book DOES if price gets there, not
-      // that price gets there. That distinction is the whole licence for this line to exist.
-      // (v11.74) THE POLARITY IS AN ADJECTIVE, NOT A FOLLOW-UP CLAUSE. It read
-      //   "$17M accelerator at 7717.71 — short gamma there, so a hedge can push price higher"
-      // which classifies the level, then doubles back to say what KIND of level it was, then explains.
-      // Front-loading it — "$17M short gamma accelerator at 7717.71" — classifies once, and the
-      // consequence becomes its own short sentence instead of a subordinate clause hanging off a dash.
-      // Two words shorter and it stops asking the reader to hold a comma-clause open. The user's wording.
       out.branch=next.accel?'accel':'brake';
-      b=usdBig(next.perPt)+' '+(next.accel?'short gamma accelerator':'long gamma brake')+
-        ' at '+dispNum(next.disp)+(beyond(next)?', past the rail':'')+'. A hedge there can '+
-        (next.accel ? (up?'push price higher':'take price lower')
-                    : (up?'cap it':'lift it'));
+      var head=usdBig(next.perPt)+' '+pol(next)+' '+(next.accel?'accelerator':'brake')+' at '+frameNum(next.disp)+
+               (beyond(next)?', past the rail':'');
+      if(next.accel){
+        // WHERE IT LEADS: the next node beyond it, or the rail when there is nothing else.
+        var dest = after
+          ? ('the '+usdBig(after.perPt)+' '+pol(after)+' node at '+frameNum(after.disp))
+          : (frameNum(rail)+', with nothing else in the way');
+        b=head+' can take price '+(up?'higher':'lower')+' to '+dest+'.';
+      } else {
+        b=head+' can stop price there.';
+      }
     } else if(bal[0]){
       out.branch='balanced';
-      b=dispNum(bal[0].disp)+' '+(up?'above':'below')+' is BALANCED. Size with no side to lean on';
+      b=frameNum(bal[0].disp)+' '+(up?'above':'below')+' is BALANCED. Size with no side to lean on.';
     } else if(pastRail){
       out.branch='past';
-      b='through the band with nothing '+(up?'above':'below')+'. '+
-        (shortG?'Out here the book stops resisting':'A hedge out here still leans against it');
+      b='Through the band with nothing '+(up?'above':'below')+'. '+
+        (shortG?'Out here the book stops resisting.':'A hedge out here still leans against it.');
     } else {
       out.branch='air';
-      b='air to '+dispNum(rail)+'. Nothing in between to lean on';
+      b='Nothing sizeable between '+frameNum(B.now)+' and '+frameNum(rail)+'.';
     }
-    out.txt=a+'. '+b.charAt(0).toUpperCase()+b.slice(1)+'.';
+    out.txt=b;
     out.ok=true;
   }catch(e){ out.why=String(e&&e.message||e); }
   return out;
@@ -18034,7 +18034,17 @@ function secFrame(sym){
   }catch(eM0){}
   h+='<div class="g3f1"><span class="g3rg"'+g3tip(regimeTip(R))+'>'+
      g3esc(gTxt.trim())+(R.danger?' ⚠':'')+'</span>';
-  if(ifMagEarly!=null) h+='<span class="g3tgt"'+g3tip('Where is the day trying to go? The heaviest strike in InsiderFinance\'s book — where dealer hedging concentrates and price tends to be pulled. A destination, not a forecast, and it reads the same book as the ladder below so the two can never disagree.')+'>→ '+dispNum(ifMagEarly)+'</span>';
+  // (v11.75) THE PLAYBOOK WORD BELONGS TO THE REGIME CHIP. BREAKS/FADES is a restatement of the gamma
+  // sign in the one word you act on, so it reads as a unit with `−G −V ⚠` and was sitting four chips away
+  // at the far end of the row. Moved here; the target takes the right-hand end instead.
+  if(R.play) h+='<span class="g3play'+(R.danger?' g3dgr':'')+'"'+
+    g3tip('What does this regime reward? '+
+          (R.g!=null && R.g<0
+            ? 'Dealers are SHORT gamma and hedge WITH the move, so ranges expand: breakouts follow through and fades get run over. Give stops more room than usual \u2014 normal ones sit inside the noise here.'
+            : 'Dealers are LONG gamma and hedge AGAINST the move, so range compresses: levels tend to hold and fading the edges is the higher-probability trade.')+
+          (R.danger?' \u26a0 Negative vanna as well: falling spot pushes dealers to sell MORE, so the amplification compounds. This is the cell where fades are not a worse trade, they are the wrong trade.':'')+
+          ' \u26a0 It says HOW price moves, never WHICH WAY.')+'>'+g3esc(R.play)+'</span>';
+
   // (v11.60) THE CONTRACT CHIP. States, once, what a WHOLE expected move is worth on the instrument
   // being charted — so the ×50 stops being a mental step. Futures charts only: a SPY chart has no
   // contract and no multiplier, and inventing one would be worse than saying nothing.
@@ -18054,13 +18064,18 @@ function secFrame(sym){
   }
   // (v11.69) it is one word now, so it is styled as a verdict rather than a trailing sentence — and the
   // whole explanation, including the widen-stops part that used to be printed, moved into the hover.
-  if(R.play) h+='<span class="g3play'+(R.danger?' g3dgr':'')+'"'+
-    g3tip('What does this regime reward? '+
-          (R.g!=null && R.g<0
-            ? 'Dealers are SHORT gamma and hedge WITH the move, so ranges expand: breakouts follow through and fades get run over. Give stops more room than usual \u2014 normal ones sit inside the noise here.'
-            : 'Dealers are LONG gamma and hedge AGAINST the move, so range compresses: levels tend to hold and fading the edges is the higher-probability trade.')+
-          (R.danger?' \u26a0 Negative vanna as well: falling spot pushes dealers to sell MORE, so the amplification compounds. This is the cell where fades are not a worse trade, they are the wrong trade.':'')+
-          ' \u26a0 It says HOW price moves, never WHICH WAY.')+'>'+g3esc(R.play)+'</span>';
+  // (v11.75) the phase tag ends the row (live sessions only); the target sits after it, pushed right.
+  if(!inReplay()){
+    var ptag1=(P.label||'').replace('EXPIRY · ','EXP·').replace('OPEN · CHARM','OPEN').replace('POWER HOUR','PWR').replace('MORNING','AM').replace('MIDDAY','MID');
+    if(ptag1 && ptag1!=='—') h+='<span class="g3tag"'+g3tip(g3esc(P.sub||''))+'>'+g3esc(ptag1)+'</span>';
+  }
+  // (v11.75) THE TARGET MOVES RIGHT, GETS A LABEL AND A DIRECTION COLOUR. `T: 7718` in green when the
+  // magnet sits ABOVE price and red when below — where the pull is. The rail's T marker takes the SAME
+  // colour from the SAME test, so the chip and the mark can never disagree; they were cyan and gold
+  // before, which said nothing about direction and did not match each other.
+  var tgtUp=null;
+  try{ if(ifMagEarly!=null && EBc && EBc.ok && typeof EBc.now==='number') tgtUp=(ifMagEarly>EBc.now); }catch(eTU){}
+  if(ifMagEarly!=null) h+='<span class="g3tgt'+(tgtUp===true?' up':(tgtUp===false?' dn':''))+'"'+g3tip('Where is the day trying to go? The heaviest strike in InsiderFinance\'s book — where dealer hedging concentrates and price tends to be pulled. '+(tgtUp===true?'GREEN: it sits ABOVE price. ':(tgtUp===false?'RED: it sits BELOW price. ':''))+'A destination, not a forecast, and it reads the same book as the ladder below so the two can never disagree. The T on the rail is this same level.')+'>T: '+frameNum(ifMagEarly)+'</span>';
   h+='</div>';
   // (v11.49) LINE 2 IS THE BAND NOW. It used to be four naked measurements — DEX, TERM, EM, ATR —
   // which reported instrumentation readings while line 1 above answered a question. A number here
@@ -18092,7 +18107,7 @@ function secFrame(sym){
     // Subrahmanyam, and every vendor guide that bothers to say so puts the conversion at x1.25. A row
     // labelled EM implies ~68% containment; this band delivers ~58%. The WIDTH IS UNCHANGED and every
     // level sits exactly where it did — only the claim has been corrected.
-    h+='<span class="g3emk"'+g3tip('Straddle low — the open minus the at-the-money straddle. \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(dispNum(EB.low))+'<small>STRAD LOW</small></span>';
+    h+='<span class="g3emk"'+g3tip('Expected low — the open minus the at-the-money straddle. \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(EB.low))+'<small>'+(EB.est?'~':'')+'EXP LOW</small></span>';
     h+='<span class="g3emt">'+
        '<i class="g3emr"></i>'+
        ((EB.hiWater!=null&&EB.loWater!=null)?('<i class="g3emx2" style="left:'+emPos(EB,EB.loWater).toFixed(1)+'%;width:'+Math.max(0,emPos(EB,EB.hiWater)-emPos(EB,EB.loWater)).toFixed(1)+'%"></i>'+
@@ -18118,7 +18133,9 @@ function secFrame(sym){
          return t;
        })()+
        '<i class="g3emo" style="left:'+pOpen.toFixed(1)+'%"></i>'+
-       (ifMagEarly!=null?('<span class="g3emT'+((ifMagEarly<EB.low||ifMagEarly>EB.high)?' out':'')+'" style="left:'+emPos(EB,ifMagEarly).toFixed(1)+'%">T</span>'):'')+
+       // (v11.75) SAME COLOUR TEST AS THE CHIP ON ROW 1. Two marks for one level that disagreed about
+       // its colour was worse than either colour alone.
+       (ifMagEarly!=null?('<span class="g3emT'+((ifMagEarly<EB.low||ifMagEarly>EB.high)?' out':'')+((ifMagEarly>EB.now)?' up':' dn')+'" style="left:'+emPos(EB,ifMagEarly).toFixed(1)+'%">T</span>'):'')+
        '<i class="g3emn'+(str?' g3str':'')+'" style="left:'+pNow.toFixed(1)+'%"></i>'+
        // (v11.61) gamma piles hang BELOW the rail — the fuel and the friction between price and the rails
        (function(){
@@ -18145,24 +18162,22 @@ function secFrame(sym){
          return h2;
        })()+
        '</span>';
-    h+='<span class="g3emk"'+g3tip('Straddle high — the open plus the at-the-money straddle. \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a ceiling.')+'>'+g3esc(dispNum(EB.high))+'<small>STRAD HIGH</small></span>';
+    h+='<span class="g3emk"'+g3tip('Expected high — the open plus the at-the-money straddle. \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a ceiling.')+'>'+g3esc(frameNum(EB.high))+'<small>'+(EB.est?'~':'')+'EXP HIGH</small></span>';
     h+='</span>';
   } else {
     h+='<span class="g3emx"'+g3tip('Where can today go? The band needs an opening bar and a two-sided at-the-money straddle in today\'s expiry. A one-sided straddle is not a straddle and half a band would be worse than none, so it says why instead of drawing something.')+'>'+g3esc(EB.why)+'</span>';
   }
   // (v11.55) LAST-SESSION MODE MUST BE UNMISSABLE — it replaces the phase tag rather than sitting beside
   // it, because the phase of a finished day is noise and two chips would let the eye take the wrong one.
-  // (v11.66) THE BADGE COMES OFF THE RAIL. It sat to the RIGHT of the band, so the rail — the one
-  // element on this face that is a MEASUREMENT and needs every pixel of width it can get — was rendering
-  // into whatever was left after a chip. Held here and emitted on line 3 instead.
-  var sessBadge='';
-  if(inReplay()){
-    var dLab=String((SESSION_DAY&&SESSION_DAY.day)||'').slice(5).replace('-','/');
-    sessBadge+='<span class="g3replay"'+g3tip('WHICH SESSION IS THIS? The market is closed and today has no bars, so the whole panel is showing the last session the feed carries ('+g3esc(String((SESSION_DAY&&SESSION_DAY.day)||''))+') as if it were the day — chart, trend, nodes, levels, all of it. NOTHING here is live. It never engages during RTH, and the recorder writes nothing while it is on.')+'>▮ '+g3esc(dLab)+' REPLAY</span>';
-  } else {
-    var ptag=(P.label||'').replace('EXPIRY · ','EXP·').replace('OPEN · CHARM','OPEN').replace('POWER HOUR','PWR').replace('MORNING','AM').replace('MIDDAY','MID');
-    if(ptag && ptag!=='—') sessBadge+='<span class="g3tag"'+g3tip(g3esc(P.sub||''))+'>'+g3esc(ptag)+'</span>';
-  }
+  // (v11.75) THE REPLAY BADGE IS REMOVED, at the user's explicit instruction: "i know its sunday so i
+  // know that i will see friday already". Nothing is built for it any more — building a chip and then
+  // discarding it is how dead code survives a refactor by looking intentional.
+  // ⚠ THE RISK THIS ACCEPTS IS NOT SUNDAY, IT IS MONDAY 08:00. Pre-open, replay is on, the whole face
+  // shows Friday, and now nothing says so. v11.55 called this "the one label whose absence would let a
+  // whole stale face read as live" and that reasoning has not changed — only the decision has. If it is
+  // ever wanted back, the least intrusive home is the section header: `① FRAME · 08/21`.
+  // The PHASE tag survives and moved to row 1: 2-3 characters, and the only thing that says POWER HOUR
+  // during a live session.
   h+='</div>';
   // ---- (v11.57) THE SHAPE LINE: has this day already turned, and is anything left in it? ----
   // Goal 2 is not distance travelled, it is what REMAINS. Goal 3 is whether it could turn — either
@@ -18175,73 +18190,17 @@ function secFrame(sym){
   // ---- (v11.64) THE PATH TO THE TARGET ----
   // Replaces the shape sentence, which narrated what the rail already draws. This says the thing the rail
   // cannot: what stands BETWEEN price and the target, and which way it pushes.
-  // ---- (v11.66) LINE 3 CARRIES EVERYTHING THAT WAS CROWDING THE RAIL --------------------------------
-  // The band row now holds ONE thing: the low, the rail, the high. The percentage and the session badge
-  // both sat to the right of the rail and both were spending width the measurement needed — and the
-  // percentage least defensibly of all, because it is the SAME FACT the dot already draws. Down here it
-  // is a caption on the picture above it rather than a competitor for its space.
-  var l3='';
-  if(EB.ok){
-    // (v11.73) USED **AND** REMAINING. The row printed one number — how much of the straddle had been
-    // SPENT — and never what was LEFT, which is the half a trader is actually deciding on. The four
-    // dollar segments on the rail were carrying it, except a segment narrower than 9% of the rail is
-    // suppressed, so on a day that has run to one side only two of the four render and "remaining"
-    // silently disappears from the whole section. Measured live 2026-08-23: 53% used, 16.49 points and
-    // $825 still ahead, and not one element on the face said so.
-    // Room is reported in the DIRECTION OF TRAVEL, because that is the side the question is about; both
-    // sides stay in the hover.
-    l3+='<b class="g3pct'+(EB.stretched?' g3str':'')+'"'+g3tip('How far price has travelled from the anchor against what the straddle priced, and how much of that pricing is still ahead. The dot\'s position on the rail and this number are the same fact, so they can never disagree. Past 100% the day has done more than was paid for.'+
-          ((EB.roomUp!=null&&EB.roomDn!=null)?(' Room to the upper rail '+dispNum(EB.roomUp)+(EB.roomUpUsd!=null?(' ('+usd(EB.roomUpUsd)+'/ct)'):'')+', to the lower '+dispNum(EB.roomDn)+(EB.roomDnUsd!=null?(' ('+usd(EB.roomDnUsd)+'/ct)'):'')+'.'):''))+
-        '>'+Math.min(999,EB.pct)+'%</b>'+
-        '<span class="g3fk">USED'+(EB.anchor==='prevClose'?' \u00b7 FROM PREV CLOSE':'')+(EB.est?' ~EST':'')+'</span>';
-    if(EB.roomAhead!=null && EB.roomAhead>0){
-      l3+='<b class="g3left"'+g3tip('What is still ahead in the direction the day is travelling: '+dispNum(EB.roomAhead)+' points to the '+((EB.dir>=0)?'upper':'lower')+' rail'+(EB.leftUsd!=null?(', '+usd(EB.leftUsd)+' per contract'):'')+'. The band is a priced boundary, not a floor or ceiling \u2014 this is what the straddle still has in it on this side, not a limit.')+
-          '>'+dispNum(EB.roomAhead)+'</b>'+
-          '<span class="g3fk">LEFT '+((EB.dir>=0)?'\u2191':'\u2193')+'</span>';
-    }
-    // (v11.73) THE PACE CHIP IS GONE, AND IT WAS MY OWN DOCTRINE THAT KILLED IT. v11.69 wrote down
-    // "nothing is printed twice on the section" — and the chip said `0.77x COILED` while the read line
-    // two rows below said "but slow for the hour" about the same number, in better words, for free.
-    // The pace is NOT lost: it still gates that clause, and the arithmetic behind it is in the % hover.
-    // ⚠ Do not re-add it. If pace ever needs more prominence, promote it inside the read sentence.
-  }
-  if(EB.ok && ifMagEarly!=null){
-    var PA=null; try{ PA=emPath(EB, sym, ifMagEarly); }catch(ePa){}
-    if(PA && PA.ok){
-      var arrow=PA.up?'\u2191':'\u2193', txt;
-      // (v11.68) what waits AT the destination is reported apart from what is ON THE WAY, because the
-      // target IS the heaviest strike and folding it into the path made the verdict a near-constant.
-      // (v11.68) THE LINE CARRIES THE VERDICT; THE DETAIL LIVES IN THE HOVER. Rendered at 550px with every
-      // optional clause present at once, line 3 WRAPPED to a second row — 31px against 14 — which is the
-      // vertical space the last two builds were spent reclaiming. So `at target` prints only in the CLEAR
-      // case, where it IS the story (nothing on the way, everything at the destination), and the balanced
-      // count moved into the tooltip. Both numbers still exist; only one competes for the row.
-      var atT=(PA.atTargetPerPt>0) ? (' \u00b7 <b>'+usdBig(PA.atTargetPerPt)+'</b> at target') : '';
-      if(PA.verdict==='clear'){
-        // (v11.69) THE TARGET IS ALREADY ON ROW 1. Printing "path ↑ to 7717.71" underneath the chip that
-        // says "→ 7717.71" spent a third of the row restating it. The arrow keeps the direction; the
-        // destination does not need saying twice.
-        txt=arrow+' <b>clear</b>'+(PA.distance>0?(' \u2014 '+PA.distance.toFixed(1)+' pts'):'')+atT;
-      } else {
-        txt=arrow+' '+
-            '<b class="g3acc">'+usdBig(PA.accPerPt)+'</b> fuel \u00b7 '+
-            '<b class="g3brk">'+usdBig(PA.brkPerPt)+'</b> brake \u00b7 '+
-            '<b'+(PA.verdict==='braked'?' class="g3brk"':' class="g3acc"')+'>'+PA.verdict.toUpperCase()+'</b>';
-      }
-      // (v11.68) ⚠ THE WINDOW IN THIS SENTENCE WAS HARDCODED — `(PA.nAcc+PA.nBrk)?'toFri':'toFri'`, a
-      // ternary with the same value on both sides, so the hover named toFri no matter what the piles read.
-      // It would have gone on saying toFri after the piles moved to dte0. It now reads the window BACK OFF
-      // THE PILES, which is the only way it can never be stale again.
-      var pw2=null; try{ var ps2=emPiles(EB, sym)||[]; pw2=ps2.length?ps2[0].window:null; }catch(eW){}
-      var pathTip='What stands between price and the target. Every pile STRICTLY between the two is summed by polarity: FUEL is negative-gamma hedging that trades WITH the move through those strikes, BRAKE is positive-gamma hedging that trades against it. Both in dollars of NET hedging per point'+
-        (pw2?(', from the '+gexWindowNote(pw2)):'')+
-        (PA.atTargetPerPt>0 ? (' \u26a0 A further '+usdBig(PA.atTargetPerPt)+' per point sits EXACTLY ON the target and is deliberately NOT counted as being on the way \u2014 the target IS the heaviest strike in the book, so folding it in made this verdict a near-constant.') : '')+
-        (PA.nBal>0 ? (' '+PA.nBal+' pile'+(PA.nBal>1?'s':'')+' in between '+(PA.nBal>1?'are':'is')+' BALANCED \u2014 real size, no side \u2014 and vote'+(PA.nBal>1?'':'s')+' in neither sum.') : '')+
-        ' \u26a0 It is the SIZE of the flow on the path, never a promise price arrives \u2014 converting dollars into points needs a market-impact figure the chain does not carry.';
-      l3+='<span class="g3pth"'+g3tip(pathTip)+'>'+txt+'</span>';
-    }
-  }
-  if(l3 || sessBadge) h+='<div class="g3shape">'+l3+(sessBadge?'<span class="g3sbg">'+sessBadge+'</span>':'')+'</div>';
+  // ---- (v11.75) LINE 3 IS GONE ----------------------------------------------------------------------
+  // It carried `47% USED · 18.35 LEFT ↑ · ↑ clear — 5.6 pts · $17M at target · ▮ REPLAY`, and every part
+  // of it was already said better somewhere else on the section:
+  //   the percentage and the room  -> the RAIL draws both, as a dot between two water marks
+  //   the path verdict             -> the sentence below now names the level AND where it leads
+  //   the replay badge             -> removed at the user's instruction; see the ⚠ below
+  // Four rows became three. `emPath` stays — the piles hook and the recorder both read it — it simply
+  // stopped having a row of its own.
+  // ⚠ THE ONE THING THAT LEFT WITH IT AND MATTERED: `~EST`, which flags a band captured late in the
+  // session and therefore narrower than the open's would have been. It moved onto the rail labels as a
+  // leading tilde, because a caveat that only lives in a hover is a caveat nobody reads.
   // (v11.70) THE READ. Last row of the section, because it is the only element that needs everything
   // above it to exist first. It speaks on quiet states too — a flat tape is information, and a line that
   // goes blank reads as a line that broke.

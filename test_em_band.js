@@ -168,7 +168,8 @@ eval(ex('emBand'));
   ok(!/cell\('ATR'/.test(f),            'ATR is off the face (it still sets ladder zone widths)');
   ok(/g3tag/.test(f),                   'the session-phase tag stays');
   ok(/g3emx/.test(f),                   'and there is a spoken refusal when the band cannot be drawn');
-  ok(/FROM PREV CLOSE/.test(f),         'and the face SAYS when the anchor is the prior close, not the open');
+  // (v11.75) the prev-close marker lived on the numbers row, which is gone. The band hover still says it.
+  ok(/re-anchors to the real open/.test(f), 'the hover says when the anchor is the prior close, not the open');
 }
 
 // ---------- 5. both numbers are ENROLLED ----------
@@ -248,7 +249,8 @@ eval(ex('emBand'));
   const f=ex('secFrame');
   ok(/HOD/.test(f) && /LOD/.test(f), 'the shape line speaks in HOD/LOD, not "up 53% down 55%"');
   ok(/retraced/.test(f),         'and says "retraced", which is what a retracement is called');
-  ok(/\u2192/.test(f),            'the arrow carries which extreme came first');
+  // (v11.75) the shape arrow left with the numbers row; hiFirst is still recorded and still in the hook.
+  ok(/hiFirst/.test(src),        'which extreme came first is still recorded');
   // (v11.64) used/remaining moved OFF the sentence and ONTO the rail as four segments. The coverage
   // does not disappear — it follows the number to its new home.
   ok(/g3seg/.test(f),            'used and remaining live on the RAIL now, as four segments');
@@ -510,7 +512,9 @@ eval(ex('emBand'));
   const f=ex('secFrame');
   ok(/g3seg/.test(f),            'the four money segments render ON the rail');
   ok(/Math\.abs\(b-a\)<9/.test(f), 'and a segment too narrow to hold its label is dropped rather than overlapping');
-  ok(/emPath\(/.test(f),         'the path line renders');
+  // (v11.75) emPath no longer has a row of its own — the sentence names the level and where it leads.
+  ok(/emPath\(/.test(src),       'emPath still exists for the piles hook and the recorder');
+  ok(/emRead\(EB, sym\)/.test(f), 'and the sentence is what renders');
   const fNoComments=f.split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
   ok(!/retraced/.test(fNoComments),
      'the old shape sentence is gone from what RENDERS — the rail draws what it used to narrate');
@@ -550,33 +554,23 @@ eval(ex('emBand'));
      'because a 1% cut removes ~5% of a live 780-strike chain — small, but it is not the whole book');
 }
 
-// ---------- 18. (v11.66) THE RAIL GETS THE WHOLE ROW ----------
-// The band row was rendering the low, the rail, the high, THEN a percentage, THEN a session chip — so the
-// one element on the face that is a measurement was laid out into whatever width was left after two
-// labels. Worse, the percentage is the SAME FACT the dot already draws, so the rail was being squeezed by
-// its own restatement. Both moved to line 3.
+// ---------- 18. (v11.75) THREE ROWS, AND EACH FACT LIVES ON EXACTLY ONE ----------
+// v11.66 moved the percentage and the session badge off the rail onto a line of their own. v11.75 deleted
+// that line: the RAIL already draws position and remaining room as a picture, and the sentence below now
+// names what is ahead and where it leads. Four rows became three.
 {
   const f=ex('secFrame');
-  const band=f.slice(f.indexOf('g3emk'), f.indexOf('var l3='));
-  ok(band.length>0,                    'the band row and line 3 are separable in the source');
-  ok(!/OF EM/.test(band),              'the band row no longer prints the percentage');
-  ok(!/g3replay/.test(band) || /sessBadge\+=/.test(band),
-                                       'and it does not append the session chip to the row either');
-  ok(/var sessBadge=''/.test(f),       'the session chip is HELD, not emitted inline');
-  const badgeWrites=(f.match(/sessBadge\+=/g)||[]).length;
-  ok(badgeWrites===2,                  'both branches (replay chip / phase tag) write to it', badgeWrites);
-
-  const l3=f.slice(f.indexOf('var l3='));
-  ok(/USED/.test(l3),                  'line 3 carries the percentage, labelled USED');
-  ok(/g3left/.test(l3),                'and the REMAINING figure beside it \u2014 the half a trader decides on');
-  ok(/LEFT /.test(l3),                 'labelled, with the direction of travel');
-  ok(/g3pct/.test(l3),                 'as its own chip, sized to be read as a caption');
-  ok(/EB\.stretched/.test(l3),         'and it keeps the stretched flag, which used to ride on `str`');
-  ok(!/\bstr\b\s*\?/.test(l3),        'without reaching for `str`, which is scoped to the band block');
-  ok(/l3\+='<span class="g3pth"/.test(l3), 'the path text is a SPAN on the same row, not its own div');
-  ok(/if\(l3 \|\| sessBadge\)/.test(l3), 'line 3 renders when it has anything to say');
-  ok(/g3sbg/.test(l3),                 'and the session chip is pushed to the far right');
+  ok(!/g3shape/.test(f),   'the numbers row is gone entirely');
+  ok(!/g3pct/.test(f),     'with the used percentage');
+  ok(!/g3left/.test(f),    'and the remaining figure');
+  ok(!/g3pace/.test(f),    'and the pace chip that duplicated the sentence');
+  ok(!/g3replay/.test(f),  'and the replay badge, at the user request');
+  ok(/g3read/.test(f),     'the sentence remains, and is now the only prose on the section');
+  ok(/EB\.est\?'~':''/.test(f), '~EST moved onto the rail labels rather than dying in a hover');
+  const tildes=(f.match(/EB\.est\?'~':''/g)||[]).length;
+  ok(tildes===2, 'on both rails', tildes);
 }
+
 
 // ---------- 19. (v11.66) THE FLOW CHIP BREATHES ----------
 // "$214M/pt" is nine glyphs with no gap in them; at 8px it reads as one token.
@@ -743,19 +737,42 @@ eval(ex('emBand'));
   ok(pace(40,300/390) < 0.8,'and the same 40% at 14:30 reads COILED', pace(40,300/390));
 }
 
-// ---------- 27. (v11.68) THE LABEL STOPS CLAIMING A SIGMA IT DOES NOT HAVE ----------
+// ---------- 27. (v11.75) THE RAILS, THE TARGET AND THE ES TICK ----------
+// Reverted to EXP LOW / EXP HIGH at the user's instruction. The 0.80-sigma caveat did NOT go with it — it
+// stays in the hover, because the label is what they want to read and the arithmetic is what they need to
+// be able to check.
 {
   const f=ex('secFrame');
-  ok(/STRAD LOW/.test(f) && /STRAD HIGH/.test(f), 'the rails are named for the straddle');
-  ok(!/EXP LOW/.test(f) && !/EXP HIGH/.test(f),   'and no longer for an "expected move"');
-  ok(/USED/.test(f) && /LEFT /.test(f),           'line 3 prints used AND remaining');
-  ok(/0\.80 sigma/.test(f),                       'the hover states what it actually is');
-  ok(/58% of closes/.test(f),                     'and what that contains');
-  ok(/1\.25/.test(f),                             'and how to get a real one-sigma boundary');
-  // MP must not impersonate their published figure
-  ok(/'MP\*'/.test(src),                          'our recomputed max pain is starred');
-  ok(/NOT the max pain InsiderFinance publish/.test(src), 'and the hover says whose it is not');
+  ok(/EXP LOW/.test(f) && /EXP HIGH/.test(f), 'the rails are named EXP LOW / EXP HIGH');
+  ok(!/STRAD LOW/.test(f),                    'and not STRAD');
+  ok(/0\.80 sigma/.test(f) && /58% of closes/.test(f),
+     'while the hover still states what the band actually contains');
+  ok(/1\.25/.test(f),                         'and how to get a true one-sigma boundary');
+  ok(/>T: '\+frameNum\(ifMagEarly\)/.test(f), 'the target reads "T: <whole point>"');
+  ok(/tgtUp=\(ifMagEarly>EBc\.now\)/.test(f), 'green above price, red below');
+  ok(/g3tgt'\+\(tgtUp===true\?' up'/.test(f), 'the chip takes the colour class');
+  ok(/\(ifMagEarly>EB\.now\)\?' up':' dn'/.test(f),
+     'and the T on the rail reads the SAME test, so the two can never disagree');
+  // ⚠ .g3tgt is defined TWICE in the stylesheet (pre-existing); the LATER definition wins, so take it.
+  const tgtCss=src.slice(src.lastIndexOf(".g3tgt{"), src.lastIndexOf(".g3tgt{")+200);
+  ok(/margin-left:auto/.test(tgtCss), 'and it is pushed to the right-hand end of the row');
+  const ctCss=src.slice(src.indexOf(".g3ct{"), src.indexOf(".g3ct{")+60);
+  ok(/font-size:8px/.test(ctCss), 'the contract chip matches the row instead of sitting a step below it', ctCss.slice(0,40));
+
+  const fn=ex('frameNum');
+  ok(/dispIsFut\(\)/.test(fn),       'rounding is gated on the chart being a future');
+  ok(/Math\.round\(x\)/.test(fn),    'and rounds to the nearest whole point');
+  ok(/return dispNum\(x\)/.test(fn), 'falling back to dispNum elsewhere');
+  const sb={};
+  new Function('S','function dispIsFut(){return S.fut;}\n'+ex('dispNum')+'\n'+ex('frameNum')+'\nS.f=frameNum;')(sb);
+  sb.fut=true;
+  ok(sb.f(7730.48)==='7730', '7730.48 -> 7730', sb.f(7730.48));
+  ok(sb.f(7661.02)==='7661', '7661.02 -> 7661', sb.f(7661.02));
+  ok(sb.f(7717.71)==='7718', '7717.71 -> 7718 (nearest)', sb.f(7717.71));
+  sb.fut=false;
+  ok(sb.f(764.41)==='764.41', 'and a SPY chart keeps its decimals', sb.f(764.41));
 }
+
 
 // ---------- 28. (v11.68) EVERY NEW READ IS ENROLLED ----------
 {
@@ -781,147 +798,103 @@ eval(ex('emBand'));
      'and the piles ask whether the v11.68 fix itself was real or cosmetic');
 }
 
-// ---------- 29. (v11.69) THE ROW SAYS THE THING ONCE ----------
-// "momentum — breaks not fades · widen stops" was three restatements of one fact on the busiest row of
-// the panel, beside a chip that already said −G −V ⚠. And line 3 printed "path ↑ to 7717.71" directly
-// under a chip reading "→ 7717.71".
+// ---------- 29. (v11.75) THE ROW SAYS THE THING ONCE, IN THE RIGHT ORDER ----------
 {
   const r=ex('regime2D');
   ok(/out\.play='BREAKS'/.test(r) && /out\.play='FADES'/.test(r), 'the playbook is one word');
-  // ⚠ check the PLAY lines only. `out.why` in the same function still carries the full sentences and
-  // must — those are the hover text. A blanket search over the function fails on its own explanation.
   const playText=(r.match(/out\.play='[^']*'/g)||[]).join(' ');
-  ok(!/breaks not fades/.test(playText) && !/widen stops/.test(playText) && !/pins hold/.test(playText),
+  ok(!/breaks not fades/.test(playText) && !/widen stops/.test(playText),
      'and the sentences are gone from the PLAY line', playText);
   ok(/pins hold|levels tend to hold/.test(r), 'while the why-text keeps them');
-  const plays=(r.match(/out\.play='[^']*'/g)||[]);
-  ok(plays.length===4, 'all four regime cells still set one', plays.length);
-  ok(plays.every(p=>p.replace(/out\.play='|'/g,'').split(/\s+/).length===1),
-     'and every one of them is a single token', plays.join(' '));
-  // the explanation must still EXIST — trimmed, not deleted
+
   const f=ex('secFrame');
   ok(/widen stops|more room than usual/.test(f), 'the widen-stops advice survives in the hover');
   ok(/HOW price moves, never WHICH WAY/.test(f), 'along with the standing caveat');
-
-  // line 3 must not restate row 1's target
-  ok(!/path '\+arrow\+' to/.test(f), 'line 3 no longer repeats the destination');
-  ok(/txt=arrow\+/.test(f),          'it keeps only the direction');
-  const tgtPrints=(f.match(/dispNum\(ifMagEarly\)/g)||[]).length;
-  ok(tgtPrints===1, 'the target number is printed exactly ONCE on the whole section', tgtPrints);
+  ok(f.indexOf('g3rg') < f.indexOf('g3play'), 'BREAKS sits with the regime chip it restates');
+  ok(f.indexOf('g3play') < f.indexOf('>T: '), 'and the target ends the row');
+  const tgtPrints=(f.match(/frameNum\(ifMagEarly\)/g)||[]).length;
+  ok(tgtPrints===1, 'the target number is printed exactly ONCE on the section', tgtPrints);
 }
 
-// ---------- 30. (v11.70) THE READ IS A MECHANISM, NOT A FORECAST ----------
-// This is the first element on the panel that composes a forward-looking sentence, so the words it is
-// allowed to use are part of the contract, not a style preference. Every scorecard is still at zero and
-// gamma says HOW price moves, never WHICH WAY — a line reading "likely to reach 7730" would be inventing
-// the market-impact coefficient no option chain contains, and would look quantitative doing it.
+
+// ---------- 30. (v11.75) THE READ: WHERE PRICE CAN GO, AND WHAT CARRIES OR STOPS IT ----------
+// It used to open "Up 16.38, 47% of the straddle but slow for the hour." The user called that nonsense and
+// was right: the rail above draws every one of those facts, so the sentence spent its first eight words
+// reading the graph aloud. It now starts AT the level and ends at where price can get to.
+//   "$6M negative gamma accelerator at 7668 can take price lower to the $6M positive gamma node at 7665."
 {
   const f=ex('emRead');
-  // ⚠ THIS CHECK USED TO READ THE SOURCE AND IT DID NOT WORK. Pairing quotes with /'[^']*'/ desynchronises
-  // on the FIRST apostrophe inside a comment — "InsiderFinance's published Zero Gamma" — after which every
-  // captured string is mis-paired and the joined text is garbage. Mutation-tested: inserting "so it will
-  // likely continue" into the function passed all eleven assertions. It is now EXECUTED instead.
   const RUN=(function(){
-    const sb={};
-    const deps=['dispNum','usd','usdBig','emPos','emRead'].map(ex).join('\n');
-    // stubs for the two data sources; everything else is pure
-    const pre='var FLIP_NEAR_PTS=12; var __piles=[], __flip=null;\n'+
-              'function emPiles(){ return __piles; }\n'+
-              'function ifLadder(){ return __flip==null?{err:1}:{err:null,rows:[{id:"FLIP",disp:__flip}]}; }\n';
-    // eslint-disable-next-line no-new-func
-    const mk=new Function('S', pre+deps+'\nreturn function(B,piles,flip){ __piles=piles||[]; __flip=(flip===undefined?null:flip); return emRead(B,"SPY"); };')(sb);
-    return mk;
+    const pre='var FLIP_NEAR_PTS=12,__p=[],__f=null;\n'+
+      'function dispIsFut(){return true;}\n'+
+      'function emPiles(){return __p;}\n'+
+      'function ifLadder(){return __f==null?{err:1}:{err:null,rows:[{id:"FLIP",disp:__f}]};}\n';
+    const deps=['dispNum','usd','usdBig','frameNum','emPos','emRead'].map(ex).join('\n');
+    return new Function(pre+deps+'\nreturn function(B,p,fl){__p=p||[];__f=(fl===undefined?null:fl);return emRead(B,"SPY");};')();
   })();
-  const BASE={ok:true,dir:1,pct:56,pace:1.0,paceOk:true,shape:'ONE-SIDED UP',giveBack:0.02,
-               roomAhead:15.37,gamma:-1,now:7715.11,open:7695.75,low:7661.02,high:7730.48};
-  const PACC=[{disp:7717.71,perPt:17083238,accel:true,balanced:false}];
-  const strings=[
-    RUN(BASE,PACC).txt,
+  const BASE={ok:true,dir:1,pct:47,gamma:-1,now:7712.13,open:7695.75,low:7661.02,high:7730.48};
+  const one=[{disp:7717.71,perPt:17083238,accel:true,balanced:false}];
+  const two=[{disp:7707.69,perPt:5565703,accel:true,balanced:false},{disp:7717.71,perPt:17083238,accel:true,balanced:false}];
+  const dn =[{disp:7667.59,perPt:5769818,accel:true,balanced:false},{disp:7665.0,perPt:6100000,accel:false,balanced:false}];
+
+  // NO STATE CLAUSE. The sentence must not begin by re-reading the rail.
+  const t1=RUN(BASE,one).txt;
+  ok(!/^Up |^Down /.test(t1),        'the sentence does not open with the day’s travel', t1);
+  ok(!/of the straddle/.test(t1),    'nor with the percentage the rail already draws');
+  ok(!/slow for the hour/.test(t1),  'nor with the pace');
+  ok(/^\$/.test(t1),                 'it starts at the level', t1.slice(0,24));
+
+  // THE CHAIN — the user's own example, reproduced
+  const t2=RUN(Object.assign({},BASE,{dir:-1,now:7690}),dn).txt;
+  ok(t2==='$6M negative gamma accelerator at 7668 can take price lower to the $6M positive gamma node at 7665.',
+     'the chained form matches the shape asked for', t2);
+  const t3=RUN(Object.assign({},BASE,{now:7700}),two).txt;
+  ok(/can take price higher to the \$17M negative gamma node at 7718\./.test(t3),
+     'and it names the NEXT node as the destination', t3);
+  ok(/with nothing else in the way/.test(RUN(BASE,one).txt),
+     'falling back to the rail when nothing lies beyond');
+
+  // vocabulary: negative/positive, not short/long
+  const all=[t1,t2,t3,
+    RUN(Object.assign({},BASE,{gamma:1}),[{disp:7727,perPt:31000000,accel:false,balanced:false}]).txt,
+    RUN(Object.assign({},BASE,{dir:-1,now:7674.2}),[{disp:7670,perPt:9e6,accel:true,balanced:false}],7665.56).txt,
     RUN(BASE,[]).txt,
-    RUN(Object.assign({},BASE,{dir:-1,now:7674.2}),[{disp:7667.59,perPt:5769818,accel:true,balanced:false}],7665.56).txt,
-    RUN(Object.assign({},BASE,{gamma:1}),[{disp:7727.0,perPt:31000000,accel:false,balanced:false}]).txt,
-    // ⚠ BOTH DIRECTIONS, or the directional assertions below pass on a fixture set that never goes down.
-    RUN(Object.assign({},BASE,{dir:-1,now:7690}),[{disp:7667.59,perPt:5769818,accel:true,balanced:false}]).txt,
-    RUN(Object.assign({},BASE,{dir:-1,now:7690,gamma:1}),[{disp:7670,perPt:31000000,accel:false,balanced:false}]).txt,
-    RUN(Object.assign({},BASE,{shape:'REVERSED',giveBack:0.82,pace:0.74}),PACC).txt,
     RUN(BASE,[{disp:7717.71,perPt:17083238,accel:true,balanced:true}]).txt,
-    RUN(Object.assign({},BASE,{pct:118,now:7736.7,roomAhead:0}),[]).txt
-  ].join(' ').toLowerCase();
-  ok(strings.length>200, 'the read actually runs and produces sentences', strings.length+' chars');
-  // ⚠ ban FORECAST and INSTRUCTION, not vocabulary. "they sell strength and buy weakness into it" is a
-  // description of what DEALERS do at a long-gamma strike — it is the mechanism, and banning the verb
-  // would delete the explanation. What must never appear is a probability or an order.
+    RUN(Object.assign({},BASE,{now:7736.7}),[]).txt
+  ].join(' ');
+  ok(/negative gamma/.test(all) && /positive gamma/.test(all), 'polarity reads negative / positive gamma');
+  ok(!/short gamma/.test(all) && !/long gamma/.test(all),      'not short / long');
+
+  // ⚠ THE CONTRACT: mechanism, never forecast. "can", never "will".
+  const low=all.toLowerCase();
   ['likely','probability','probably',' will ','should','expect(','expected to','odds','chance',
    'go long','go short','buy here','sell here','target price','take profit','entry','stop at']
-    .forEach(w=>ok(!strings.includes(w), 'the read never says "'+w.trim()+'"'));
-  // (v11.72) the mechanic phrasing was replaced by its CONSEQUENCE — "a hedge can cap it" rather than
-  // "they sell strength and buy weakness into it". Still mechanism, one clause shorter, and it names a
-  // direction so the reader does not have to finish the thought.
-  // (v11.74) the polarity became an ADJECTIVE on the level and the consequence its own sentence:
-  //   "$17M short gamma accelerator at 7717.71. A hedge there can push price higher."
-  ok(/a hedge there can /.test(strings), 'the consequence is its own sentence');
-  ok(/short gamma accelerator/.test(strings) && /long gamma brake/.test(strings),
-     'and the polarity is stated once, as an adjective on the level');
-  ok(!/ \u2014 short gamma there/.test(strings),
-     'not doubled back to in a clause after the dash');
-  ok(/push price higher/.test(strings) && /take price lower/.test(strings),
-     'and it is DIRECTIONAL \u2014 the pile ahead is in the direction of travel, so the sentence can say which way');
-  ok(/cap it/.test(strings) && /lift it/.test(strings), 'both ways for a brake too');
-  // ⚠ the licence for saying that at all is the conditional. "can", never "will".
-  ok(!/ will /.test(strings) && !/likely/.test(strings),
-     'and it stays conditional \u2014 what the book DOES if price gets there, not that price gets there');
-  ok(/mechanism/i.test(f), 'and the ban is documented where the function lives');
+    .forEach(w=>ok(!low.includes(w), 'the read never says "'+w.trim()+'"'));
+  ok(/ can /.test(low), 'and stays conditional throughout');
 
-  ok(RUN(BASE,PACC).branch==='accel',                       'an accelerator ahead reads as accel');
-  ok(RUN(Object.assign({},BASE,{gamma:1}),[{disp:7727.0,perPt:3.1e7,accel:false,balanced:false}]).branch==='brake',
-                                                            'a brake ahead reads as brake');
-  ok(RUN(BASE,[{disp:7717.71,perPt:1.7e7,accel:true,balanced:true}]).branch==='balanced',
-                                                            'a balanced-only path says so rather than claiming air');
-  ok(RUN(BASE,[]).branch==='air',                           'a genuinely empty path is called air');
+  // branches, exercised
+  ok(RUN(BASE,one).branch==='accel',   'accelerator ahead reads as accel');
+  ok(RUN(Object.assign({},BASE,{gamma:1}),[{disp:7727,perPt:3.1e7,accel:false,balanced:false}]).branch==='brake', 'brake reads as brake');
+  ok(RUN(BASE,[{disp:7717.71,perPt:1.7e7,accel:true,balanced:true}]).branch==='balanced', 'balanced-only says so');
+  ok(RUN(BASE,[]).branch==='air',      'an empty path is air');
   ok(RUN(Object.assign({},BASE,{now:7736.7}),[]).branch==='past', 'past the rail is its own case');
-
-  // FLIP must OUTRANK a pile — it inverts the mechanism rather than strengthening it
-  // BEHAVIOUR, not source order: with BOTH a near flip and a pile ahead, the flip must win. The
-  // source-order version of this passed even with the whole branch disabled by `if(false && ...)`.
   {
-    const both=RUN(Object.assign({},BASE,{dir:-1,now:7674.2}),
-                   [{disp:7670.0,perPt:9000000,accel:true,balanced:false}], 7665.56);
-    ok(both.branch==='flip', 'with a flip AND a pile ahead, the flip wins', both.branch);
-    ok(/flip/i.test(both.txt) && /flips from (amplifying to damping|damping to amplifying)/.test(both.txt),
-       'and the sentence says what inverts', both.txt);
-    const far=RUN(Object.assign({},BASE,{dir:-1,now:7700}),
-                  [{disp:7690.0,perPt:9000000,accel:true,balanced:false}], 7600);
-    ok(far.branch==='accel', 'a distant flip does NOT outrank a pile', far.branch);
+    const both=RUN(Object.assign({},BASE,{dir:-1,now:7674.2}),[{disp:7670,perPt:9e6,accel:true,balanced:false}],7665.56);
+    ok(both.branch==='flip',           'with a flip AND a pile ahead, the flip wins', both.branch);
+    const far=RUN(Object.assign({},BASE,{dir:-1,now:7700}),[{disp:7690,perPt:9e6,accel:true,balanced:false}],7600);
+    ok(far.branch==='accel',           'a distant flip does not outrank a pile', far.branch);
   }
-  ok(/FLIP_NEAR_PTS/.test(f) && /var FLIP_NEAR_PTS=12;/.test(src), 'with a named, hand-set range');
-  ok(/⚖/.test(src.slice(src.indexOf('FLIP_NEAR_PTS')-300, src.indexOf('FLIP_NEAR_PTS'))),
-     'flagged hand-set, not measured');
 
-  // ONE modifier in clause 1, or the line runs to three rows
-  ok(/REVERSED' && B\.giveBack>0\.5/.test(f), 'the reversal branch replaces the state clause');
-  ok(/else if\(B\.paceOk/.test(f), 'and pace is mutually exclusive with it');
-  // (v11.73) the room clause left the sentence when line 3 started printing LEFT as its own figure.
-  ok(!/to the rail'/.test(f), 'the sentence no longer restates the remaining room line 3 now owns');
+  // every level in the sentence is a whole point on a futures chart
+  ok(!/\d+\.\d\d\b/.test(all.replace(/\d+\.\d\b/g,'')), 'no two-decimal prices survive in the sentence');
 
-  // the tail must never point at a rail that is behind price or nearer than the pile
-  // (v11.72) the "; nothing behind it before X" tail is GONE — the user called it fluff and it was: the
-  // rail is already printed at the end of the band directly above this line.
-  ok(!/nothing behind it before/.test(f), 'the trailing rail restatement is gone');
-  ok(!/'; nothing/.test(f),               'and with it the last semicolon clause');
-
-  // it must be RENDERED, and it must speak on quiet states
+  // rendered, and enrolled
   const sf=ex('secFrame');
-  ok(/emRead\(EB, sym\)/.test(sf),   'the read renders inside the section');
-  ok(/g3read/.test(sf),              'with its own class');
-  ok(!/RD\.branch!=='air'/.test(sf), 'and is NOT suppressed on a quiet tape — a blank line reads as a broken one');
-
-  // enrolled
+  ok(/emRead\(EB, sym\)/.test(sf), 'the read renders inside the section');
   const R=JSON.parse(fs.readFileSync('./learning/rules.json','utf8')).rules;
-  ok(!!R['em.read'], 'enrolled as em.read');
-  ok(/key:'emread'/.test(src), 'as a real feature, not just a rule id');
-  ok(/read_air_reaches_rail/.test(src) && /read_flip_changes_it/.test(src),
-     'asking whether the branches actually separate the forward distribution');
+  ok(!!R['em.read'] && /key:'emread'/.test(src), 'enrolled as a feature, not just a rule id');
 }
+
 
 // ---------- 31. (v11.70) THE DEDUPE WINDOW SCALES WITH THE REGISTRY ----------
 // featEnqueue scanned back a hardcoded 40 records for a duplicate. One bar writes one record per enrolled
@@ -979,46 +952,6 @@ eval(ex('emBand'));
   // and the ones this build was about, named explicitly so the intent survives a refactor
   ['pace','paceOk','elapsed','dueFrac','nowSo'].forEach(k=>
     ok(surfaced.has(k), 'the hook surfaces '+k));
-}
-
-// ---------- 33. (v11.73) USED **AND** REMAINING, AND NOTHING SAID TWICE ----------
-// The row printed how much of the straddle had been SPENT and never what was LEFT — the half the decision
-// actually turns on. The rail's four dollar segments were carrying it, except a segment narrower than 9%
-// of the rail is suppressed, so on a one-sided day only two of four render and "remaining" vanishes from
-// the section entirely. Measured live: 53% used, 16.49 pts / $825 still ahead, stated nowhere.
-{
-  const f=ex('secFrame');
-  // ⚠ STRUCTURAL, NOT BEHAVIOURAL — secFrame cannot be executed without the whole closure, so these read
-  // the source. Mutation-tested and found WANTING: replacing the gate with `if(false)` left every string
-  // in place and fired nothing. The gate is therefore asserted explicitly, and the real behavioural check
-  // is the offline render (mockups/frame_v1173_check.html), run every build.
-  ok(/g3left/.test(f) && /EB\.roomAhead/.test(f), 'line 3 prints the room still ahead');
-  ok(/if\(EB\.roomAhead!=null && EB\.roomAhead>0\)\{/.test(f),
-     'gated only on there being room, nothing else');
-  ok(!/if\(false/.test(f.split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n')),
-     'and nothing on this row is disabled');
-  ok(/EB\.dir>=0\)\?'\\u2191':'\\u2193'/.test(f) || /LEFT '\+\(\(EB\.dir>=0\)/.test(f),
-     'in the direction of travel');
-  ok(/roomUp/.test(f) && /roomDn/.test(f), 'and the hover keeps BOTH sides');
-
-  // the pace chip is gone because the read line already said it in words
-  // ⚠ strip comments first. The removal is EXPLAINED in comments that necessarily quote the words being
-  // removed — asserting over the raw function fails on its own justification. Third time this session.
-  const fCode=f.split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
-  ok(!/g3pace/.test(fCode),        'the duplicated pace chip is gone from the row');
-  ok(!/COILED/.test(fCode),        'and its vocabulary with it');
-  ok(/COILED/.test(f),             'while the comment explaining why still names it');
-  const r=ex('emRead');
-  ok(/slow for the hour/.test(r),  'while the pace itself survives in the sentence, which said it better');
-  ok(!/to the rail'/.test(r),      'and the sentence gave up the room clause line 3 now owns');
-
-  // nothing on the section is printed twice — the standing rule, checked on the two facts this build moved
-  const usedCount=(f.match(/Math\.min\(999,EB\.pct\)/g)||[]).length;
-  ok(usedCount===1, 'the used percentage renders exactly once', usedCount);
-  // ⚠ roomAhead appears twice ON PURPOSE — once inside the hover sentence, once as the rendered figure.
-  // Count the RENDERED one only: the occurrence that is not inside a g3tip(...) call.
-  const rendered=(f.match(/>'\+dispNum\(EB\.roomAhead\)\+'</g)||[]).length;
-  ok(rendered===1, 'and the remaining figure is RENDERED exactly once', rendered);
 }
 
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');

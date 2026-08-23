@@ -74,15 +74,29 @@ ok(pickSessionDay([{time:'x'},{}]).fallback===false, 'junk timestamps are skippe
      'the mode is decided in ONE place, where the candles are built');
 }
 
-// ---- GUARD 3: the face says so ----
+// ---- GUARD 3: (v11.75) THE FACE NO LONGER SAYS SO, BY INSTRUCTION ----
+// The replay chip was removed at the user's explicit request: "regarding replay badge, remove it. i know
+// its sunday so i know that i will see friday already." v11.55 called it "the one label whose absence
+// would let a whole stale face read as live" and that reasoning has NOT changed — only the decision has.
+// ⚠ THE RISK THIS ACCEPTS IS MONDAY 08:00, NOT SUNDAY. Pre-open, replay engages, the whole panel shows
+// Friday, and nothing on the face says so. The guards below are what remain: the MODE is still correct,
+// the recorder is still silenced, and `__gptsDebug.session()` still states it in one call.
 {
   const f=ex('secFrame');
-  ok(/g3replay/.test(f),                    'GUARD 3: the face carries a replay chip');
-  ok(/REPLAY/.test(f),                      'and it says REPLAY in words, not a symbol alone');
-  ok(/SESSION_DAY\.day/.test(f),            'and names WHICH session is on screen');
-  ok(/g3replay[\s\S]{0,600}\} else \{[\s\S]{0,400}g3tag/.test(f),
-     'it REPLACES the phase tag rather than sitting beside it — two chips would let the eye take the wrong one');
-  ok(/#gpts-body \.g3replay\{/.test(src),   'the chip has its own style');
+  ok(!/g3replay/.test(f),        'GUARD 3: the replay chip is deliberately absent from the face');
+  ok(/inReplay\(\)/.test(f),     'but the section still branches on replay mode');
+  ok(!/g3tag/.test(f.slice(f.indexOf('inReplay()'), f.indexOf('inReplay()')+400)) ||
+     /if\(!inReplay\(\)\)/.test(f),
+                                 'and the phase tag renders ONLY when the session is live');
+  // ⚠ NOT indexOf('__gptsDebug.session') — that matches `sessionRoll`, declared ~9,000 lines earlier,
+  // and the slice comes back as unrelated code. Fourth time this trap has fired; it is in the note.
+  const sI=src.indexOf('__gptsDebug.session = function');
+  const s2=src.slice(sI, sI+700);
+  ok(sI>0, 'the session hook is locatable by its full marker');
+  ok(/replay/.test(s2) && /showing/.test(s2),
+     'the state is still one hook call away, which is now the only way to check it');
+  ok(/nothing on the face is live/.test(s2),
+     'and the hook still says so in words');
 }
 ok(/__gptsDebug\.session\s*=/.test(src),    'and a debug hook reports the mode and whether recording is on');
 {

@@ -1,3 +1,62 @@
+## v11.75 — the section is three rows, and it answers one question
+
+**LINE 3 IS DELETED.** It carried `47% USED · 18.35 LEFT ↑ · ↑ clear — 5.6 pts · $17M at target · ▮ REPLAY`
+and every part of it was said better somewhere else: the rail DRAWS position and remaining room as a
+picture, and the sentence below now names what is ahead and where it leads. Four rows became three.
+⚠ The one thing that mattered and left with it — `~EST`, which flags a band captured late and therefore
+narrower than the open's would have been — moved onto the rail labels as a leading tilde. **A caveat that
+only lives in a hover is a caveat nobody reads.**
+
+**THE SENTENCE STARTS AT THE LEVEL AND ENDS AT WHERE PRICE CAN GET TO.** It used to open "Up 16.38, 47% of
+the straddle but slow for the hour." The user's word for that was nonsense and they were right: the rail
+above draws every one of those facts, so the sentence spent its first eight words reading the graph aloud.
+
+    $6M negative gamma accelerator at 7668 can take price lower to the $6M positive gamma node at 7665.
+    $17M negative gamma accelerator at 7718 can take price higher to 7730, with nothing else in the way.
+    $31M positive gamma brake at 7727 can stop price there.
+    Flip at 7666, 8.6 below. Through it hedging flips from amplifying to damping.
+
+Polarity reads **negative / positive gamma**, not short / long. The destination is the NEXT node beyond the
+level, falling back to the rail when nothing lies past it. ⚠ Still "can", never "will".
+
+**ES PRICES ARE WHOLE POINTS.** `7730.48` and `7661.02` are not prices anyone can trade — ES moves in
+quarter points, so those decimals were noise wearing precision. `frameNum()` rounds to the nearest whole
+point **only on a futures chart**; `dispNum` is untouched everywhere else, and on a SPY chart (~764) whole
+points would be far too coarse.
+
+**Row 1 reordered.** BREAKS moved next to the regime chip it restates — it was sitting four chips away at
+the far end. The target took that end instead: **`T: 7718`, right-aligned, GREEN above price and RED below**,
+and the T on the rail reads the SAME test, so the chip and the mark can never disagree. They were cyan and
+gold before, which said nothing about direction and did not match each other. The contract chip went 7px →
+8px; it was a full step below every other chip and read as a footnote.
+
+**Rails reverted to EXP LOW / EXP HIGH** at the user's instruction. The 0.80σ caveat did not go with the
+label — it stays in the hover, because the label is what they want to read and the arithmetic is what they
+need to be able to check.
+
+**THE REPLAY BADGE IS REMOVED**, at the user's instruction: *"i know its sunday so i know that i will see
+friday already."*
+⚠ **THE RISK THIS ACCEPTS IS MONDAY 08:00, NOT SUNDAY.** Pre-open, replay engages, the whole panel shows
+Friday, and nothing on the face says so. v11.55 called this "the one label whose absence would let a whole
+stale face read as live" and that reasoning has NOT changed — only the decision has. `test_last_session`
+GUARD 3 now asserts the ABSENCE and documents why, and the mode is still one `__gptsDebug.session()` call
+away. If it is ever wanted back, the least intrusive home is the section header: `① FRAME · 08/21`.
+
+---
+
+⚠ **I INSERTED THE TARGET BLOCK INTO THE WRONG FUNCTION.** The anchor I matched on was `h+='</div>';` and
+the scorecard renderer ends with the same line, so the chip landed there — syntactically valid, silently
+absent from the face. **`node --check` passing is not evidence that code went where you meant.** Caught
+because the test asserted the target renders inside `secFrame`, not merely that it exists.
+
+⚠ **DELETING THE LAST TEST SECTION TOOK THE SUMMARY LINE WITH IT.** The section-bounds helper returns
+end-of-file for the final section, so removing §33 removed `console.log(pass/fail)` — and the suite then
+reported nothing at all rather than reporting failure. **A test file that prints no verdict must be treated
+as a failing one.**
+
+⚠ **`indexOf('__gptsDebug.session')` MATCHED `sessionRoll` AGAIN** — fourth time. It is in the resume note
+and I still wrote it. Use the full marker `__gptsDebug.session = function`.
+
 ## v11.74 — the polarity is an adjective, not a follow-up clause
 
 **The user's wording again, and again it is better.**
