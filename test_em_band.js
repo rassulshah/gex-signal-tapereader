@@ -361,5 +361,50 @@ eval(ex('emBand'));
   ok(!/DAMPS the move or AMPLIFIES/.test(rt),   'the old abstract wording is gone');
 }
 
+
+// ---------- 14. (v11.62) THE WINDOW, AND THE FLOW ----------
+// VERIFIED against InsiderFinance's published header, all expiries, to the decimal:
+//   ours call +263.83B / put -250.49B / net +13.34B / ratio 1.053
+//   them call +263.8B  / put -250.5B  / net +13.3B  / ratio 1.05
+// There was never a sign bug. The sign FLIPS with the window — near book negative, full chain positive —
+// and comparing across windows produced two false alarms in one session. Hence: name the window, always.
+{
+  ok(/GEX_WINDOW_LABEL/.test(src),          'expiry windows have names');
+  const wn=ex('gexWindowNote');
+  ok(/sign DIFFERS by window/i.test(wn),    'and the note SAYS the sign differs by window');
+  ok(/Never compare a number from one window against another/i.test(wn),
+     'and warns against comparing across them — the exact mistake that cost two false alarms');
+
+  const hf=ex('hedgeFlow');
+  ok(/toFri/.test(hf) && /dte0/.test(hf),   'flow uses the NEAR book, falling back from toFri to dte0');
+  ok(!/c\.all/.test(hf),                    'and deliberately NOT the all-expiry total, where LEAPS drown the live flow');
+  ok(/spot\*0\.01/.test(hf),                'netGEX is per 1% move, so it divides by one percent of spot');
+  ok(/netGEX<0/.test(hf),                   'negative net gamma means the flow FEEDS the move');
+  ok(/out\.window=w/.test(hf),              'and the window travels WITH the number');
+
+  const f=ex('secFrame');
+  ok(/g3flow/.test(f),                      'the fuel chip renders');
+  ok(/FEEDS /.test(f) && /FIGHTS /.test(f), 'and says which, in words');
+  ok(/gexWindowNote\(HF\.window\)/.test(f), 'its hover names the window it came from');
+  ok(/g3flow\.g3feeds\{[^}]*#a371f7/.test(src),
+     'FEEDS wears the ACCELERATOR purple — same grammar as the piles, so chip and rail agree');
+  ok(/g3flow\.g3fights\{[^}]*#e3c341/.test(src),
+     'and FIGHTS wears the BRAKE yellow');
+  // FLIP is a LADDER row, so its hover lives in secLoc, not secFrame. Checking the whole source is the
+  // honest assertion here: what matters is that the note exists and is attached to the FLIP row.
+  ok(/FLIP is their ALL-EXPIRY zero gamma/.test(src),
+     'FLIP states it is the ALL-EXPIRY book — the phantom "contradiction" with the regime chip');
+  ok(/isHVL\?' \\u26a0 FLIP is their ALL-EXPIRY/.test(src) || /isHVL\?'[^']*ALL-EXPIRY/.test(src),
+     '...and only on the FLIP row, not on every ladder level');
+
+  // enrolled, regime-split, voting on nothing
+  const fl=src.slice(src.indexOf("key:'flow'"), src.indexOf("key:'flow'")+3000);
+  ok(/flow_reaches_em_feeds/.test(fl),      'the "can hedging carry it to the expected move" question is ASKED');
+  ok(/flow_caps_move_fights/.test(fl),      'and its mirror in positive gamma is scored SEPARATELY');
+  ok(/hit:null/.test(fl),                   'it votes on nothing until measured');
+  ok(/toRailBn/.test(fl),                   'and records the flow the remaining distance would require');
+  ok(/window:f\.window/.test(fl),           'with the window recorded alongside');
+}
+
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

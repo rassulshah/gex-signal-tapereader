@@ -1980,6 +1980,37 @@
         "sessions": 0,
         "held": false
       }
+    },
+    "flow.perPoint": {
+      "id": "flow.perPoint",
+      "tier": "hand",
+      "condition": "net GEX of the NEAR-DATED book divided by one point of spot; the expiry window is recorded with the value",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "Gamma forces dealers to re-hedge as price moves, and the near book is where that flow lives. Negative gamma trades with the move (feeds it), positive against it (fights it). The size is measurable; whether price arrives is not, so it votes on nothing until scored.",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
     }
   },
   "proposals": [],

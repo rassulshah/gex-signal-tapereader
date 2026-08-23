@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.61
+// @version    11.62
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.61';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.62';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -11258,6 +11258,37 @@ function registerCoreFeatures(){
   // the sign says the same thing daily and is worth nothing. The only version that could ever mean
   // something is the LEVEL against its own range — which needs a range, which needs this record.
   // Until then it scores null. Do NOT let it vote before the scorecard says it may.
+  // (v11.62) HEDGING FLOW PER POINT. The user's own question: can dealer hedging carry price to its
+  // expected move? The flow is measurable; whether it ARRIVES is not, yet. Enrolled so it can be.
+  // ⚠ REGIME-SPLIT, same reason as the band: a big flow FEEDS the move in negative gamma and FIGHTS it in
+  // positive gamma. Pooled, two opposite effects average to "no edge" from data that contained one.
+  registerFeature({ key:'flow', label:'Hedging flow per point (near book)', phase:'structure', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var f=null; try{ f=hedgeFlow(sym); }catch(e){}
+      if(!f || !f.ok) return { ok:false };
+      var b=null; try{ b=emBand(sym); }catch(e2){}
+      return { ok:true, window:f.window, perPtM:Math.round(f.perPt/1e6), feeds:!!f.feeds,
+               netGEXbn:+(f.netGEX/1e9).toFixed(2),
+               // how much flow the REMAINING distance to the rail would require — the user's framing
+               toRailBn:(b&&b.ok&&typeof b.roomAhead==='number')?+((f.perPt*b.roomAhead)/1e9).toFixed(2):null,
+               pct:(b&&b.ok)?b.pct:null };
+    },
+    outcome:function(rec, fwd){
+      // No claim yet. Recording the flow and the forward range so the question CAN be answered; a hit
+      // rate invented before the data exists is the thing this project keeps having to undo.
+      return { hit:null, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
+               perPtM:(rec&&rec.perPtM!=null)?rec.perPtM:null, feeds:!!(rec&&rec.feeds) };
+    },
+    questions:[
+      { id:'flow_reaches_em_feeds', when:[{f:'feeds',v:true}], outcome:'reachEM',
+        note:'NEGATIVE gamma, flow feeding the move: does a LARGER flow-per-point precede price actually reaching the expected move? This is the "can hedging carry it there" question, asked rather than assumed.' },
+      { id:'flow_caps_move_fights', when:[{f:'feeds',v:false}], outcome:'stayIn',
+        note:'POSITIVE gamma, flow fighting the move: does a larger flow-per-point precede the day staying INSIDE the band? The mirror claim, and it must be scored separately or the two cancel.' }
+    ],
+    rule:{ id:'flow.perPoint', tier:'hand',
+           condition:'net GEX of the NEAR-DATED book divided by one point of spot; window recorded with the value',
+           mechanism:'Gamma forces dealers to re-hedge as price moves; the near book is where that flow lives. Negative gamma trades with the move (feeds), positive against it (fights). Size is measurable, arrival is not — non-voting until measured.' } });
+
   registerFeature({ key:'dex', label:'Net dealer delta (level, not sign)', phase:'structure', fwd:FEAT_FWD,
     record:function(sym, ctx){
       var nd=null, dte=null;
@@ -17003,6 +17034,11 @@ function ensureV3Css(){
     '#gpts-body .g3emf.g3str{background:rgba(240,97,109,.5)}'+
     '#gpts-body .g3f2 b.g3str{color:#f0616d}'+
     '#gpts-body .g3shape b.warn{color:#f0616d}'+
+    '#gpts-body .g3flow{font-size:8px;font-weight:800;padding:0 5px;border-radius:2px;line-height:13px;white-space:nowrap}'+
+    // FEEDS is the amplifying case, so it wears the accelerator colour; FIGHTS wears the brake colour.
+    // Same grammar as the piles below, so the chip and the rail agree without a legend.
+    '#gpts-body .g3flow.g3feeds{background:rgba(163,113,247,.18);color:#a371f7;border:1px solid rgba(163,113,247,.45)}'+
+    '#gpts-body .g3flow.g3fights{background:rgba(227,195,65,.14);color:#e3c341;border:1px solid rgba(227,195,65,.4)}'+
     '#gpts-body .g3ct{font-size:7px;font-weight:800;padding:1px 5px;border-radius:2px;'+
       'background:rgba(46,194,126,.14);color:#2ec27e;border:1px solid rgba(46,194,126,.4);white-space:nowrap}'+
     // (v11.55) the replay chip. Deliberately the loudest thing on the line — it is the one label whose
@@ -17424,6 +17460,51 @@ function emBand(sym){
 }
 // Position on the rail, 0..100, CLAMPED. A mark outside the band pins to the edge rather than
 // escaping the track — the percentage beside it is what says how far past.
+// ---- (v11.62) EVERY GEX NUMBER MUST NAME ITS EXPIRY WINDOW ------------------------------------------
+// VERIFIED 2026-08-22 against InsiderFinance's own published header, all expiries, to the decimal:
+//     ours  call +263.83B  put -250.49B  net +13.34B  ratio 1.053
+//     THEIR call +263.8B   put -250.5B   net +13.3B   ratio 1.05
+// Our GEX computation is CORRECT. There was never a bug and never a sign-convention difference.
+//
+// What there IS: the sign genuinely FLIPS with the window, because the near book and the full book are
+// different markets.
+//     dte0   1 expiry   211 strikes   net  -6.86B   NEGATIVE gamma
+//     toFri  5 expiries 309 strikes   net -16.41B   NEGATIVE gamma
+//     all   55 expiries 780 strikes   net +13.34B   POSITIVE gamma
+//
+// Both are true. Comparing across windows without saying so produced TWO false alarms in one session —
+// a phantom "sign bug", and a phantom "the regime chip contradicts FLIP" (regime reads the near book,
+// FLIP is their ALL-expiry zero gamma; neither was wrong). That is failure pattern #1 committed in
+// analysis rather than in code, and the cure is the same: SAY WHICH WINDOW, every time.
+var GEX_WINDOW_LABEL={ dte0:'0DTE', toFri:'to Fri', all:'all exps' };
+function gexWindowNote(w){
+  var L=GEX_WINDOW_LABEL[w]||w;
+  return L+' book. Gamma sign DIFFERS by window: the near-dated book is negative while the full chain is '
+       + 'positive, and both are correct. Never compare a number from one window against another.';
+}
+// Dealer hedging flow per ONE point of movement, from the near-dated book — where gamma concentrates and
+// where dealers actually re-hedge. A 2031 LEAP contributes almost nothing to today's flow, which is why
+// this deliberately does NOT use the all-expiry total even though that is the headline number.
+// netGEX is denominated in dollars per 1% move, so one point is netGEX/(spot*0.01).
+// ⚠ DESCRIPTIVE. It is the size of the mechanical flow, not a forecast that price will travel.
+function hedgeFlow(sym){
+  var out={ ok:false, why:'' };
+  try{
+    var c=ifChain((sym==='QQQ')?'QQQ':'SPX');
+    if(!c || c.err){ out.why='no chain'; return out; }
+    var w='toFri', lv=(c.toFri&&c.toFri.lv)?c.toFri.lv:null;
+    if(!lv || typeof lv.netGEX!=='number'){ w='dte0'; lv=(c.dte0&&c.dte0.lv)?c.dte0.lv:null; }
+    if(!lv || typeof lv.netGEX!=='number' || !(c.spot>0)){ out.why='no net gamma in the near book'; return out; }
+    var onePct=c.spot*0.01;
+    out.window=w; out.label=GEX_WINDOW_LABEL[w]||w;
+    out.netGEX=lv.netGEX;
+    out.perPt=Math.abs(lv.netGEX)/onePct;
+    // NEGATIVE net gamma: dealers hedge WITH the move -> the flow FEEDS it. Positive: it FIGHTS it.
+    out.feeds=(lv.netGEX<0);
+    out.ok=true;
+  }catch(e){ out.why='flow failed: '+(e&&e.message||e); }
+  return out;
+}
 // ---- (v11.61) GAMMA PILES INSIDE THE BAND — the fuel and the friction ------------------------------
 // What stands between price and the expected move. Read from SKYLIT's book (cpRows), which is the SAME
 // source regime2D reads — so a pile can never contradict the regime chip above it. InsiderFinance's FLIP
@@ -17535,6 +17616,17 @@ function secFrame(sym){
   // (v11.60) THE CONTRACT CHIP. States, once, what a WHOLE expected move is worth on the instrument
   // being charted — so the ×50 stops being a mental step. Futures charts only: a SPY chart has no
   // contract and no multiplier, and inventing one would be worse than saying nothing.
+  // (v11.62) THE FUEL CHIP. Unblocked once the "sign gap" turned out to be a window mismatch, not a bug.
+  // In negative gamma the flow is traded WITH the move, so it feeds it; in positive gamma it fights it.
+  // Identical dollar figure, opposite meaning — which is why the regime, not the size, decides the word.
+  var HF=null; try{ HF=hedgeFlow(sym); }catch(eH){}
+  if(HF && HF.ok){
+    h+='<span class="g3flow '+(HF.feeds?'g3feeds':'g3fights')+'"'+
+       g3tip((HF.feeds?'Hedging FEEDS the move here':'Hedging FIGHTS the move here')+': dealers must trade about '+usd(HF.perPt)+
+             ' of underlying per point to stay neutral, '+(HF.feeds?'in the SAME direction price is going':'AGAINST the direction price is going')+
+             '. From the '+gexWindowNote(HF.window)+' The near book is used because that is where gamma concentrates and where dealers actually re-hedge. This is the SIZE of the mechanical flow, not a forecast that price will travel.')+
+       '>'+(HF.feeds?'FEEDS ':'FIGHTS ')+usd(HF.perPt)+'/pt</span>';
+  }
   if(EBc && EBc.ok && EBc.mult && EBc.contract){
     h+='<span class="g3ct"'+g3tip(EBc.contract+' — '+usd(EBc.mult)+' per index point. The expected move of '+dispNum(EBc.em)+' points is worth '+usd(EBc.emUsd)+' per contract'+(EBc.microUsd?('; the micro is one tenth, '+usd(EBc.microUsd)):'')+'. This is the MOVE converted to dollars — not a position, not a size, not profit or loss. ⚠ The multiplier follows the CHART, so charting '+EBc.contract+' while trading the micro makes every figure ten times too big.')+'>'+g3esc(EBc.contract)+' · EM '+usd(EBc.emUsd)+'/ct</span>';
   }
@@ -18254,7 +18346,7 @@ function secLoc(sym){
          ? (/\*/.test(r.id)
             ? 'Where does the gamma regime flip? DERIVED, not theirs — their payload carried no zero-gamma level, so this is computed by re-pricing total gamma at candidate spots and finding where the book crosses from long to short. The asterisk is there so it is never mistaken for their number.'
             : 'Where does the gamma regime flip? Their PUBLISHED Zero Gamma, taken from the payload rather than recomputed. Above it dealers are long gamma and levels hold; below it they are short and moves extend.')
-         : 'Which book is this from? InsiderFinance, computed from the '+L.srcSym+' chain embedded in their own page. Their open interest refreshes once a day, so these are structural levels rather than intraday ones.')+'>'+(isHVL?(/\*/.test(r.id)?'calc':'IF·pub'):'IF')+'</span>'+
+         : 'Which book is this from? InsiderFinance, computed from the '+L.srcSym+' chain embedded in their own page. Their open interest refreshes once a day, so these are structural levels rather than intraday ones.'+(isHVL?' \u26a0 FLIP is their ALL-EXPIRY zero gamma, while the regime chip reads the NEAR-DATED book. The two can disagree about which side of the flip price is on and BOTH be right \u2014 the near book is negative gamma while the full chain is positive.':''))+'>'+(isHVL?(/\*/.test(r.id)?'calc':'IF·pub'):'IF')+'</span>'+
        (function(){
          var t=confTier(C, r.und);
          if(!t||!t.tier) return '';
@@ -18540,6 +18632,10 @@ window.__gptsDebug.session = function(){
              ? 'REPLAY of '+SESSION_DAY.day+' — nothing on the face is live, and the recorder is OFF'
              : 'live/today' };
 };
+// (v11.62) hedging flow per point, with the window it came from
+window.__gptsDebug.flow = function(sy){ try{ var f=hedgeFlow(sy||activeSym());
+  return f.ok?{window:f.window,label:f.label,netGEXbn:+(f.netGEX/1e9).toFixed(2),perPtM:+(f.perPt/1e6).toFixed(1),
+               feeds:f.feeds,means:(f.feeds?'FEEDS the move':'FIGHTS the move')}:f; }catch(e){ return String(e); } };
 window.__gptsDebug.ifShape = function(sy){ try{ var c=ifChain(sy||'SPX'); return (c&&c.shape)||'companion older than v1.7'; }catch(e){ return String(e); } };
 window.__gptsDebug.optKeys = function(sy){
   var out={};

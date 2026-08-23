@@ -1,3 +1,49 @@
+## v11.62 — there was never a sign bug, and the fuel chip is on
+
+**VERIFIED AGAINST THEIR PUBLISHED HEADER, ALL EXPIRIES, TO THE DECIMAL:**
+
+    ours   call +263.83B   put -250.49B   net +13.34B   ratio 1.053
+    THEIR  call +263.8B    put -250.5B    net +13.3B    ratio 1.05
+
+**Our GEX computation is correct.** No bug, no sign-convention difference. The "sign gap" I raised was me
+comparing our to-Friday slice against their all-expiry total — a mistake in analysis, not in code.
+
+**What is real is that the sign FLIPS with the window**, because the near book and the full book are
+different markets:
+
+    dte0    1 expiry    211 strikes   net  -6.86B   NEGATIVE gamma
+    toFri   5 expiries  309 strikes   net -16.41B   NEGATIVE gamma
+    all    55 expiries  780 strikes   net +13.34B   POSITIVE gamma
+
+Both true. Comparing across windows without saying so produced **two false alarms in one session** — the
+phantom sign bug, and a phantom "the regime chip contradicts FLIP". The regime reads the NEAR book; FLIP
+is their ALL-EXPIRY zero gamma. Neither was wrong. That is failure pattern #1 committed in analysis
+rather than in code, and the cure is identical: **name the window, every time.**
+
+`GEX_WINDOW_LABEL` + `gexWindowNote()` now travel with any GEX-derived figure, and the FLIP row's hover
+says outright that it is the all-expiry book and may legitimately disagree with the regime chip.
+
+**THE FUEL CHIP IS ON** — the thing the user asked for two sessions ago. `FEEDS $214M/pt` or
+`FIGHTS $214M/pt`: how much underlying dealers must trade per point to stay neutral, from the NEAR book,
+because that is where gamma concentrates and where re-hedging actually happens. A 2031 LEAP contributes
+almost nothing to today's flow, which is why it deliberately does not use the all-expiry headline.
+
+Negative net gamma means the flow is traded WITH the move, so it feeds it; positive means it fights it.
+**Identical dollar figure, opposite meaning — the regime decides the word, not the size.** FEEDS wears the
+accelerator purple and FIGHTS the brake yellow, the same grammar as the piles below, so chip and rail
+agree without a legend.
+
+**ENROLLED, REGIME-SPLIT, VOTING ON NOTHING.** `flow.perPoint` records the flow, the window it came from,
+and how much flow the remaining distance to the rail would require. Two questions scored SEPARATELY:
+does a larger flow-per-point precede price actually reaching the expected move when hedging FEEDS, and
+does it precede the day staying inside the band when hedging FIGHTS. Pooled, two opposite effects average
+to "no edge" from data that contained one. `hit:null` until measured.
+
+The enrolment guard caught the build again — the new rule was not seeded into `learning/rules.json`. It is
+now, with full shape parity copied from an established rule rather than hand-written.
+
+Housekeeping: `tools/AUTOPULL-TEST.txt` removed.
+
 ## v11.61 — FRAME finished: gamma piles, Skylit's colours, and the real fix for the drifting dot
 
 **THE MOVING DOT — THE ACTUAL CAUSE.** v11.59 pinned the scale so the anchor would stop drifting. It never
