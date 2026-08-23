@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.84
+// @version    11.86
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.84';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.86';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -2658,6 +2658,15 @@ function spxwCandlesFromSPY(){
 function trackSpxwNodes(){
   var out={ ok:false, why:'' };
   try{
+    // ⚠⚠ (v11.85) NEVER RECORD A REPLAY AS IF IT WERE TODAY. `sampleTapeHistory` keys its samples by
+    // `todayKey()` — the WALL-CLOCK date — and is not replay-guarded. On a Sunday showing Friday's tape
+    // that writes FRIDAY'S node values under SUNDAY'S key: data that is not wrong so much as mislabelled,
+    // which is worse, because nothing downstream can tell. The whole point of tracking these nodes is to
+    // feed analysis and the end-of-day review, and a contaminated history is worse than no history.
+    // ⚠ THE SAME HOLE EXISTS ON THE SPY PATH and is NOT fixed here — it has been running for many
+    // versions and silently changing its keying without evidence is its own risk. Recorded in
+    // DECISIONS.md D-7 instead. THIS path refuses.
+    if(typeof inReplay==='function' && inReplay()){ out.why='replay \u2014 not recording'; return out; }
     var tp=tapeMap('SPXW');
     if(!tp || !tp.pct || !Object.keys(tp.pct).length){ out.why='SPXW tape unreadable'; return out; }
     if(!(tp.count>=SK_MIN_STRIKES)){ out.why='SPXW tape thin ('+tp.count+' strikes)'; return out; }
@@ -3304,6 +3313,10 @@ function repoPickFolder(){
 var IRT_HEADER='SYMBOL,PRICE,LABEL,PENCOLOR,PENWIDTH,PENSTYLE,bDRAWTEXT,bDRAWPRICE,LABELPOS,bCUSTPOS,CUSTPOSALLMARGIN,CUSTPOSLEFTRIGHT,CUSTPOSUNITS,CUSTPOSWIDTH,bBANDS,BANDPENCOLOR,BANDPENWIDTH,BANDPENSTYLE,BANDABOVEBEL,BANDUNITS,BANDPRICE,bBANDS2,BAND2PENCOLOR,BAND2ABOVEBEL,BAND2UNITS,BAND2PRICE,bBANDLABELS,bTRANSLUCENT';
 var IRT_LAST={t:0, rows:0, how:null, err:null};
 function irtColor(r,g,b){ return (b<<16)+(g<<8)+r; }   // COLORREF 0x00BBGGRR
+// (v11.86) only draw a successor on the chart once it is prominent enough to mean something. The
+// project's SPY backtest used 60% as the threshold where the crown rolls 76% of the time; the same cut is
+// reused here so the chart and the doctrine agree. ⚖ HAND-SET, and the 76% is a SPY number.
+var SUCC_CHART_PCT = 60;
 var IRT_COLORS={
   king:  irtColor(242,204,96),   // gold
   gate:  irtColor(255,255,255),  // white
@@ -3396,6 +3409,57 @@ function irtBuildCsv(){
       });
     }
   }catch(eCi){}
+  // ---- (v11.86) THE SPX NODES THE RAIL DRAWS, ONTO THE CHART -------------------------------------
+  // The rail has shown Skylit's SPXW nodes since v11.77 and the chart has never carried them. These are
+  // the levels actually being traded off, so they belong on the chart more than anything else here.
+  //
+  // ⚠ SCALE: rows are collected in SPY strike space and the export multiplies by `R.r` (SPY -> ES) and
+  // snaps to the 0.25 tick, which already exists. So an SPX strike must arrive here as
+  //     kSpy = (spxStrike * dispScale) / R.r
+  // and NOT as `spxStrike * undScale`. Both are "correct" conversions and they differ by ~0.9 points —
+  // the two-path slack measured at v11.82 (7691.75 via SPX, 7691.67 via SPY). Going through dispScale
+  // guarantees the chart line lands on the SAME price the rail shows. **A chart that disagrees with the
+  // panel by a point is worse than a chart with fewer lines on it.**
+  // ⚠ ES trades in 0.25 increments, so `irtRound(k*mul, 0.25)` is what makes these tradeable prices
+  // rather than the whole points the FRAME row displays. Display rounding and chart rounding are
+  // DIFFERENT jobs and must not be unified.
+  try{
+    var Br=null; try{ Br=emBand(sym); }catch(eB2){}
+    var Lx=null; try{ Lx=ifLadder(sym); }catch(eL2){}
+    if(Br && Br.ok && Lx && !Lx.err && Lx.dispScale>0 && R && R.r>1){
+      var toSpy=function(spxK){ return (spxK*Lx.dispScale)/R.r; };
+      var ps=[]; try{ ps=emPiles(Br, sym)||[]; }catch(eP2){}
+      if(emPiles.lastSrc==='skylit'){
+        ps.forEach(function(P){
+          var role=P.role||(P.accel?'ACC':'BRK');
+          var col=(P.role==='KING')?IRT_COLORS.king
+                 :(P.role==='GK')?IRT_COLORS.gate
+                 :(P.role==='RUG'||P.role==='RRUG')?IRT_COLORS.ceil
+                 :(P.accel?IRT_COLORS.neg:IRT_COLORS.flr);
+          rows.push({ k:toSpy(P.k), lbl:'SPX '+P.k+' '+role+' '+P.pct+'%',
+                      col:col, w:(P.role==='KING'?3:2), style:0 });
+        });
+        // SUCCESSION — the strongest non-King strike. The project's own backtest calls this the #1
+        // leading indicator of a King roll (>=60% -> 76% within 20 bars, n=148 ON SPY).
+        // ⚠ THAT NUMBER IS SPY'S. It is labelled on the chart, never asserted as an SPX probability.
+        try{
+          var tp2=tapeMap('SPXW');
+          if(tp2 && tp2.pct && tp2.king!=null){
+            var arr=[]; for(var kk2 in tp2.pct){ if(!tp2.pct.hasOwnProperty(kk2)) continue;
+              var kf=parseFloat(kk2); if(!isFinite(kf)) continue;
+              arr.push({k:kf, a:Math.abs(tp2.pct[kk2])}); }
+            arr.sort(function(x,y){ return y.a-x.a; });
+            var suc=null;
+            for(var z=0;z<arr.length;z++){ if(Math.abs(arr[z].k-tp2.king)>0.01){ suc=arr[z]; break; } }
+            if(suc && suc.a>=SUCC_CHART_PCT){
+              rows.push({ k:toSpy(suc.k), lbl:'SPX SUCC '+suc.k+' '+Math.round(suc.a)+'%',
+                          col:IRT_COLORS.pb, w:2, style:2 });
+            }
+          }
+        }catch(eS2){}
+      }
+    }
+  }catch(eSPX){}
   if(!rows.length) return null;
   targets.forEach(function(T){
     rows.forEach(function(R){ out.push(irtCsvRow(T.sym, irtRound(R.k*T.mul, T.tick), R.lbl+T.tag, R.col, R.w, R.style)); });
@@ -19588,6 +19652,24 @@ window.__gptsDebug.emBand = function(sy){
 // It returns the raw legs beside the derived figures, so the gross-vs-net question is answerable from
 // the hook rather than from a re-derivation: `gross` is what sizes the pile, `net` is the dealer's
 // actual residual, and `netFrac` says how much of the gross survives the cancellation.
+// (v11.85) THE TRACKER GETS A HOOK. I built SPX node tracking with no way to ask whether it was running
+// and had to infer it from `nodeChart('SPXW')` returning a strike count. Third time this session that a
+// new read shipped without an instrument. `__gptsDebug.spxNodes()` answers it in one call.
+window.__gptsDebug.spxNodes = function(){
+  var out={};
+  try{ out.track=trackSpxwNodes(); }catch(e){ out.track={ok:false,why:String(e&&e.message||e)}; }
+  try{ var H=HIST.SPXW||{}; var ks=Object.keys(H);
+       out.histStrikes=ks.length;
+       out.histPoints=ks.length?(H[ks[0]].seq||[]).length:0;
+       out.sampleStrike=ks.length?ks[0]:null; }catch(e2){ out.histErr=String(e2&&e2.message||e2); }
+  try{ var T=TAPS.SPXW||{}; var tk=Object.keys(T);
+       out.tapStrikes=tk.length;
+       out.tapped=tk.filter(function(k){ return T[k] && T[k].taps>0; }).map(function(k){ return k+'x'+T[k].taps; }).slice(0,8);
+     }catch(e3){ out.tapErr=String(e3&&e3.message||e3); }
+  try{ out.replay=(typeof inReplay==='function')?inReplay():null; }catch(e4){}
+  try{ var t=tapeMap('SPXW'); out.tape={count:t?t.count:null, king:t?t.king:null, kingSrc:t?t.kingSrc:null}; }catch(e5){}
+  return out;
+};
 window.__gptsDebug.piles = function(sy){
   var sym=sy||activeSym();
   try{

@@ -1317,6 +1317,22 @@ eval(ex('emBand'));
   ok(/sampleTapeHistory\('SPXW'\)/.test(t),'and feeds the SAME history sampler SPY uses');
   ok(/SK_MIN_STRIKES/.test(t),             'gated on the same thin-tape floor as the rail');
   ok(/out\.why=/.test(t),                  'and a failure names itself rather than recording silence');
+  // ⚠ (v11.85) REPLAY MUST NOT BE RECORDED AS TODAY. sampleTapeHistory keys by todayKey() and is NOT
+  // replay-guarded, so a Sunday replay of Friday writes Friday's nodes under Sunday's date — mislabelled,
+  // which is worse than missing, because nothing downstream can tell.
+  ok(/inReplay\(\)\)\{ out\.why='replay/.test(t), 'replay refuses to record');
+  {
+    const code=t.split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
+    ok(code.indexOf('inReplay')<code.indexOf('sampleTapeHistory'),
+       'and refuses BEFORE it samples', code.indexOf('inReplay')+' < '+code.indexOf('sampleTapeHistory'));
+  }
+  ok(/THE SAME HOLE EXISTS ON THE SPY PATH/.test(src),
+     'and the unfixed SPY instance is recorded rather than silently left');
+  // the tracker has an instrument
+  ok(/__gptsDebug\.spxNodes/.test(src),   'the tracker can be checked in one hook call');
+  const sh=src.slice(src.indexOf('__gptsDebug.spxNodes'), src.indexOf('__gptsDebug.piles'));
+  ['histStrikes','histPoints','tapStrikes','tapped','replay'].forEach(k=>
+    ok(sh.indexOf(k)>=0, 'the hook reports '+k));
   const h=ex('sampleTapeHistory');
   ok(/HIST\[sym\] \|\| \(HIST\[sym\]=\{\}\)/.test(h),
      'the history store auto-creates, which is why SPXW needed no new plumbing');
@@ -1341,6 +1357,43 @@ eval(ex('emBand'));
   ok(/Borrowing that number without checking/.test(src),
      'and says plainly that assuming they do is the mistake being avoided');
   ok(/hit:null/.test(rec),                 'non-voting until the scorecard says otherwise');
+}
+
+// ---------- 40. (v11.86) THE SPX LEVELS REACH THE CHART, IN ES, ON THE TICK ----------
+// The rail has drawn Skylit's SPXW nodes since v11.77 and the chart never carried them — the levels
+// actually being traded off were the ones missing from the chart.
+{
+  const b=ex('irtBuildCsv');
+  ok(/emPiles\(Br, sym\)/.test(b),          'the export reads the same nodes the rail draws');
+  ok(/emPiles\.lastSrc==='skylit'/.test(b), 'and only when they came from the Skylit book');
+  ok(/'SPX '\+P\.k\+' '\+role/.test(b),      'each line is labelled with its SPX strike and role');
+
+  // ⚠ SCALE: rows are collected in SPY space; the export multiplies by R.r and snaps to the tick.
+  ok(/\(spxK\*Lx\.dispScale\)\/R\.r/.test(b),
+     'SPX converts via dispScale then back through the SPY ratio, so the chart lands where the rail says');
+  ok(!/spxK\*Lx\.undScale/.test(b),
+     'NOT via undScale — the two paths differ by ~0.9pt and the chart must match the panel');
+  ok(/irtRound\(R\.k\*T\.mul, T\.tick\)/.test(b), 'and every price is snapped to the target tick');
+  ok(/tick:0\.25/.test(b),                        'which for ES is 0.25');
+
+  // display rounding and chart rounding are different jobs
+  const f=ex('secFrame');
+  ok(/frameNum/.test(f) && !/frameNum/.test(b),
+     'the FRAME row rounds to whole points; the chart does NOT borrow that rounding');
+
+  // succession, gated and labelled honestly
+  ok(/SPX SUCC /.test(b),                   'a prominent successor is drawn');
+  ok(/suc\.a>=SUCC_CHART_PCT/.test(b),      'gated at a named threshold');
+  ok(/var SUCC_CHART_PCT = 60;/.test(src),  'which is the 60% the doctrine uses');
+  ok(/⚖ HAND-SET/.test(src.slice(src.indexOf('var SUCC_CHART_PCT')-320, src.indexOf('var SUCC_CHART_PCT'))),
+     'flagged hand-set');
+  ok(/THAT NUMBER IS SPY'S/.test(b),
+     'and the 76% backtest is marked as a SPY number, not asserted as an SPX probability');
+
+  // colours carry the role
+  ok(/P\.role==='KING'\)\?IRT_COLORS\.king/.test(b), 'the King gets the King colour');
+  ok(/P\.role==='GK'\)\?IRT_COLORS\.gate/.test(b),   'the gatekeeper gets the gate colour');
+  ok(/IRT_COLORS\.neg:IRT_COLORS\.flr/.test(b),      'and polarity decides the rest');
 }
 
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');

@@ -1,3 +1,70 @@
+## v11.86 — the SPX levels reach the chart, in ES, on the tick
+
+**The rail has drawn Skylit's SPXW nodes since v11.77 and the chart has never carried them.** The levels
+actually being traded off were the ones missing from the chart.
+
+Every node now exports with its role and colour — King gold, Gatekeeper white, Rug red, accelerators
+purple, brakes green — labelled `SPX 7710 KING 100%` so nothing on the chart is ambiguous about where a
+line came from.
+
+⚠ **THE SCALE MATTERS MORE THAN IT LOOKS.** Rows are collected in SPY strike space and the export already
+multiplies by the SPY→ES ratio and snaps to the tick. So an SPX strike has to arrive as
+
+    kSpy = (spxStrike * dispScale) / R.r        NOT   spxStrike * undScale
+
+Both are legitimate conversions and **they differ by about 0.9 points** — the two-path slack measured at
+v11.82 (7691.75 via SPX, 7691.67 via SPY). Going through `dispScale` guarantees the chart line lands on the
+SAME price the rail shows. **A chart that disagrees with the panel by a point is worse than a chart with
+fewer lines on it**, because you would trust it and it would be quietly wrong.
+
+⚠ **ES TRADES IN 0.25 INCREMENTS, AND DISPLAY ROUNDING IS NOT CHART ROUNDING.** `irtRound(k*mul, 0.25)`
+already existed and does the right thing — these are tradeable prices. The FRAME row rounds to WHOLE
+points because v11.75 asked it to; the chart must not borrow that. **Two different jobs, and a test now
+asserts `frameNum` never appears in the export builder.**
+
+**SUCCESSION IS DRAWN, AND ITS PROVENANCE IS LABELLED.** The strongest non-King strike goes on the chart
+once it clears **60%** — the same cut the project's own backtest uses, where the crown rolls to it 76% of
+the time within 20 bars (n=148).
+⚠⚠ **THAT 76% WAS MEASURED ON SPY.** It is a label on a line, never asserted as an SPX probability, and
+`spx.nodes` exists precisely to find out whether it transfers. Live on the SPX book right now: King 7710
+at 100%, successor **7630 at 85%** — well past the threshold, and previously invisible.
+
+⚠ Nodes are exported ONLY when they came from the Skylit book. If the rail fell back to InsiderFinance,
+the chart draws nothing rather than drawing levels from a different measurement under the same labels.
+
+All three guards mutation-tested: converting via `undScale` fires 3, dropping the succession threshold
+fires 2, exporting on the fallback book fires 2.
+
+## v11.85 — the tracking was recording a REPLAY as if it were today
+
+**v11.84 shipped SPX node tracking and I verified it was running. It was — and it was recording the wrong
+day.** `sampleTapeHistory` keys its samples by `todayKey()`, the WALL-CLOCK date, and is **not**
+replay-guarded. On a Sunday showing Friday's tape that writes **Friday's node values under Sunday's key**.
+
+⚠ **THAT IS NOT WRONG DATA, IT IS MISLABELLED DATA, WHICH IS WORSE** — nothing downstream can tell. The
+entire point of tracking these nodes is to feed the scorecards and the end-of-day review, and a history
+seeded with replayed sessions presented as live ones would poison exactly the loop it exists to serve.
+Caught only because "check" prompted a look at whether tracking ran, and it ran on a weekend.
+
+`trackSpxwNodes` now refuses in replay and records why. **The check happens BEFORE the sample, not after.**
+
+⚠ **THE SAME HOLE EXISTS ON THE SPY PATH AND IS NOT FIXED HERE.** `sampleTapeHistory` has been unguarded
+for many versions, and there is a plausible reason — the node chart needs history to draw at all, so
+sampling during replay may have been deliberate. **Silently changing the keying of a long-running path
+without evidence is its own risk**, so it is recorded as D-7 rather than patched on a hunch. The fix, when
+taken, is probably to key by the session BEING SHOWN rather than the wall clock, which keeps the chart
+drawing and labels the data correctly.
+
+**AND THE TRACKER GOT AN INSTRUMENT.** I built it with no way to ask whether it was running and had to
+infer from `nodeChart('SPXW')` returning a strike count. **Third time this session a new read shipped
+without a hook.** `__gptsDebug.spxNodes()` now answers in one call: the tracker's own verdict, history
+strike and point counts, tap counts, replay state, and the tape's King and source.
+
+⚠ **A COMMENT-POSITION TRAP, AGAIN.** The test asserted the replay check comes BEFORE the sampling call by
+comparing `indexOf`. The comment ABOVE the guard mentions `sampleTapeHistory`, so `indexOf` found the
+comment first and the assertion failed on correct code. Comments stripped before comparing — the same trap
+as v11.69 and v11.76, now three times.
+
 ## v11.84 — the SPX nodes are tracked now, not just drawn
 
 **The rail has drawn Skylit's SPXW nodes since v11.77 and thrown every reading away.** No history, no

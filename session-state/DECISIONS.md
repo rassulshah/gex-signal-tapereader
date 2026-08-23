@@ -191,3 +191,24 @@ replay engages, the whole face shows Friday, and nothing says so. If it comes ba
 **v11.75.** `7730.48` is not a tradeable price — ES moves in quarter points. `frameNum()` rounds to the
 nearest whole point **on futures charts only**; `dispNum` is untouched everywhere else, and on a SPY chart
 (~764) whole points would be far too coarse. Nearest, not toward-price — the user's choice.
+
+---
+
+## D-7 · `sampleTapeHistory` RECORDS A REPLAY AS IF IT WERE TODAY — SPX FIXED, **SPY OPEN**
+**Found 2026-08-23 while verifying v11.84.**
+
+`sampleTapeHistory` keys every sample by `todayKey()` — the wall-clock date — and is **not** replay-guarded.
+On a Sunday showing Friday's tape it writes **Friday's node values under Sunday's key.** Not wrong data;
+**mislabelled** data, which is worse, because nothing downstream can distinguish it.
+
+**v11.85 fixed the SPX path** — `trackSpxwNodes` refuses in replay and records why, before sampling.
+
+⚠ **THE SPY PATH IS STILL UNGUARDED, DELIBERATELY.** It has run this way for many versions and there is a
+plausible reason: the node chart needs history to draw, so sampling during replay may be intentional.
+Silently changing the keying of a long-running path on a hunch is its own risk.
+
+**The likely correct fix, when someone takes it:** key by the session BEING SHOWN (`sessionDayStr()`)
+rather than the wall clock. The chart keeps drawing in replay AND the data is labelled with the day it
+actually came from. **Verify against the node chart before shipping it** — an empty chart in replay is the
+symptom of getting this wrong.
+
