@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.11
+// @version      1.12
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
@@ -227,8 +227,15 @@ function levelsFor(opts, spot, keep){
     if(typeof o.gamma!=='number' || typeof o.openInterest!=='number') continue;
     var g = o.gamma*o.openInterest*100*spot*spot*0.01*(o.cp==='C'?1:-1);
     if(o.cp==='C'){ sc+=g; cOI+=o.openInterest; } else { sp+=g; pOI+=o.openInterest; }
-    var b=byK[o.strike]; if(!b) b=byK[o.strike]={k:o.strike, net:0};
+    // (v1.12) keep the CALL and PUT legs separately, not just their net. The per-strike PROFILE is what
+    // says which strikes are brakes and which are accelerators, and it was being summed away here. The
+    // Tapereader was drawing its gamma piles from SKYLIT's book instead — a different source with a
+    // different sign convention and a ~113x magnitude difference (Skylit gross $0.58B vs this book's
+    // $65.8B on the same nominal window). Two books on one rail cannot be summed, compared, or trusted
+    // to compose; every other number on that band comes from HERE, so the piles must too.
+    var b=byK[o.strike]; if(!b) b=byK[o.strike]={k:o.strike, net:0, call:0, put:0};
     b.net+=g;
+    if(o.cp==='C') b.call+=g; else b.put+=g;
   }
   var rows=[]; for(var k in byK) rows.push(byK[k]);
   if(!rows.length) return null;
@@ -242,6 +249,20 @@ function levelsFor(opts, spot, keep){
   }
   // A side holding almost none of the book names no wall — their page prints N/A in exactly this case
   // (0DTE call GEX was 0.05B against 2.42B of put, and they showed N/A).
+  // (v1.12) THE PROFILE, exported. Same units as callGEX/putGEX above: dollars of dealer delta per 1%
+  // move, puts NEGATIVE (their convention, verified against their published page to the decimal).
+  // Trimmed to strikes carrying real weight so a 780-strike chain does not bloat every payload.
+  var gexProf=[];
+  try{
+    var mx=0, rr2;
+    for(rr2=0;rr2<rows.length;rr2++){ var am=Math.abs(rows[rr2].call||0)+Math.abs(rows[rr2].put||0); if(am>mx) mx=am; }
+    if(mx>0) for(rr2=0;rr2<rows.length;rr2++){
+      var RW=rows[rr2], gm=Math.abs(RW.call||0)+Math.abs(RW.put||0);
+      if(gm/mx < 0.01) continue;                       // drop the long tail of near-zero strikes
+      gexProf.push([RW.k, +( (RW.call||0)/1e6 ).toFixed(1), +( (RW.put||0)/1e6 ).toFixed(1)]);
+    }
+  }catch(eP){ gexProf=null; }
+
   var tot=Math.abs(sc)+Math.abs(sp);
   var callShare = tot>0 ? Math.abs(sc)/tot : 0;
   var putShare  = tot>0 ? Math.abs(sp)/tot : 0;
@@ -261,7 +282,7 @@ function levelsFor(opts, spot, keep){
   }
   return { cr:cr, ps:ps, mag:mag, maxPain:mp,
            crSuppressed:crSup, psSuppressed:psSup,
-           callGEX:sc, putGEX:sp, netGEX:sc+sp,
+           callGEX:sc, putGEX:sp, netGEX:sc+sp, gexProf:gexProf,
            ratio:(sp!==0 ? +(sc/Math.abs(sp)).toFixed(3) : null),
            callShare:+(callShare*100).toFixed(2),
            pcOI:(cOI>0 ? +(pOI/cOI).toFixed(2) : null),

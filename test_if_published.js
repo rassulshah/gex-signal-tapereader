@@ -83,7 +83,7 @@ ok(/REJECTED:/.test(src),                    'and a rejected value is RECORDED, 
   ok(/spot\*0\.5/.test(g) && /spot\*2/.test(g), 'the gate is a band around spot', g.slice(0,160));
   ok(/isLevel/.test(src),                    'ratios, IV and slopes are NOT gated — they are not prices');
 }
-ok(/@version\s+1\.11/.test(src),             'companion pinned to 1.11');
+ok(/@version\s+1\.12/.test(src),             'companion pinned to 1.12');
 
 console.log((fail?'FAIL ':'')+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
@@ -103,3 +103,31 @@ process.exit(fail?1:0);
   ok(/@connect\s+insiderfinance\.io/.test(hdr), 'and still declares the host it reaches');
 }
 console.log('  (update-header block: +4)');
+
+// ---------- (v1.12) THE PER-STRIKE GAMMA PROFILE ----------
+// Added because the Tapereader was drawing its gamma piles from SKYLIT's book while every other number on
+// that band came from HERE. Measured on the same nominal window the two differ ~113x (Skylit gross $0.58B
+// vs this book's $65.8B) and carry OPPOSITE sign conventions. Two books on one rail cannot compose.
+{
+  eval(src.match(/var SIDE_MIN\s*=\s*[^;]+;/)[0]);
+  eval(ex('levelsFor'));
+  const spot=100, gg=(gam,oi)=>gam*oi*100*spot*spot*0.01;
+  const R=levelsFor([{strike:100,cp:'C',gamma:0.05,openInterest:1000},
+                     {strike:105,cp:'C',gamma:0.02,openInterest:500},
+                     {strike:100,cp:'P',gamma:0.04,openInterest:2000},
+                     {strike:95, cp:'P',gamma:0.03,openInterest:800}], spot, ()=>true);
+  ok(Array.isArray(R.gexProf) && R.gexProf.length===3, 'a profile row per strike carrying weight', R.gexProf);
+  const sc=R.gexProf.reduce((a,r)=>a+r[1],0), sp=R.gexProf.reduce((a,r)=>a+r[2],0);
+  ok(Math.abs(sc-R.callGEX/1e6)<0.05, 'the CALL legs sum EXACTLY to the book callGEX', [sc,R.callGEX/1e6]);
+  ok(Math.abs(sp-R.putGEX/1e6)<0.05,  'the PUT legs sum EXACTLY to the book putGEX',  [sp,R.putGEX/1e6]);
+  ok(R.gexProf.every(r=>r[2]<=0),     'puts are NEGATIVE — their convention, verified against their page');
+  ok(Math.abs(R.gexProf.find(r=>r[0]===100)[1]-gg(.05,1000)/1e6)<0.05,
+     'one strike equals gamma x OI x 100 x spot^2 x 0.01');
+  // the tail trim must not break the sum
+  const many=[]; for(let k=50;k<150;k++) many.push({strike:k,cp:'C',gamma:(k===100?0.05:0.000001),openInterest:100});
+  const R2=levelsFor(many, spot, ()=>true);
+  ok(R2.gexProf.length < many.length, 'the near-zero tail is trimmed rather than shipped', R2.gexProf.length);
+  ok(Math.abs(R2.gexProf.reduce((a,r)=>a+r[1],0) - R2.callGEX/1e6) < 0.05,
+     '...and what survives still sums to the book, so the piles never lie about the whole');
+}
+console.log('  (gexProf block: +7)');

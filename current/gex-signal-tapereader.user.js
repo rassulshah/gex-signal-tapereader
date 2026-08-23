@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.62
+// @version    11.64
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.62';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.64';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4648,6 +4648,19 @@ var FUT_TICK={ ES:0.25, NQ:0.25 };
 // Keyed by the CHART symbol, never the family: ES and MES share a family and differ by 10x.
 var FUT_MULT={ ES:50, MES:5, NQ:20, MNQ:2 };
 function futMult(){ try{ var c=(typeof FUTMODE!=='undefined'&&FUTMODE)?FUTMODE.chart:null; return (c&&FUT_MULT[c])||null; }catch(e){ return null; } }
+// (v11.63) BIG DOLLARS GET ABBREVIATED. `usd()` printed the hedging flow as "$213,827,434/pt" — seventeen
+// characters of false precision that blew line 1 apart. Nobody reads a flow figure to the dollar; they read
+// its ORDER. Contract sizes stay exact ($1,736 is meaningful to the dollar), flows do not.
+function usdBig(v){
+  try{
+    if(typeof v!=='number'||!isFinite(v)) return null;
+    var a=Math.abs(v);
+    if(a>=1e9) return '$'+(a/1e9).toFixed(a>=1e10?0:1)+'B';
+    if(a>=1e6) return '$'+Math.round(a/1e6)+'M';
+    if(a>=1e4) return '$'+Math.round(a/1e3)+'K';
+    return usd(v);
+  }catch(e){ return null; }
+}
 // $1,737 — whole dollars. Cents on a four-figure number are noise on a face with no space.
 function usd(v){
   try{ if(typeof v!=='number'||!isFinite(v)) return null;
@@ -17034,6 +17047,11 @@ function ensureV3Css(){
     '#gpts-body .g3emf.g3str{background:rgba(240,97,109,.5)}'+
     '#gpts-body .g3f2 b.g3str{color:#f0616d}'+
     '#gpts-body .g3shape b.warn{color:#f0616d}'+
+    '#gpts-body .g3shape b.g3acc{color:#a371f7}'+
+    '#gpts-body .g3shape b.g3brk{color:#e3c341}'+
+    '#gpts-body .g3seg{position:absolute;top:0;font-size:8px;font-weight:800;transform:translateX(-50%);white-space:nowrap;line-height:9px}'+
+    '#gpts-body .g3seg.g3lft{color:#2ec27e}'+
+    '#gpts-body .g3seg.g3used{color:#6c7889}'+
     '#gpts-body .g3flow{font-size:8px;font-weight:800;padding:0 5px;border-radius:2px;line-height:13px;white-space:nowrap}'+
     // FEEDS is the amplifying case, so it wears the accelerator colour; FIGHTS wears the brake colour.
     // Same grammar as the piles below, so the chip and the rail agree without a legend.
@@ -17307,7 +17325,7 @@ function ifLadder(sym){
 var EMOPEN_KEY='gpts_emopen_v1';
 // ⚠ BUMP THIS whenever the captured record gains a field the band RELIES on. A stored record from an
 // older schema is discarded and re-taken, never partially trusted — see the v11.61 note in emBand().
-var EMOPEN_SCHEMA=2;
+var EMOPEN_SCHEMA=3;
 var EM_FRESH_MIN=15;               // minutes after the open within which a capture counts as clean
 function emBand(sym){
   var out={ ok:false, why:'', est:false };
@@ -17369,11 +17387,33 @@ function emBand(sym){
       // arithmetic is exact and the rails do not wobble. Cost: if the cash/futures basis moves materially
       // intraday the displayed band drifts a hair from the chart. Basis moves are small; wobbling rails
       // are not acceptable in a fixed reference.
-      rec={ em:emo.em*dsc, k:emo.k, capMin:(P&&P.rth)?(P.mins-P.open):null, t:Date.now(), rr:rr };
+      // (v11.63) CAPTURE THE OPEN ITSELF. v11.59 pinned the SCALE but left the anchor being recomputed
+      // from closedCandles()[0].o every render — and that array is a SLIDING WINDOW of whatever bars the
+      // chart currently holds. As it slides, cs[0] becomes a LATER bar and the anchor walks forward.
+      // Measured on the live panel: open 7695.75 -> 7711.66 -> 7713.26 -> 7713.71 in minutes, ~18 points,
+      // while `em` sat perfectly still because IT was captured. That is the real cause of the moving dot,
+      // all three times it was reported. Pinning the scale fixed 0.05 of an 18-point problem.
+      // `openSo` is the opening bar's seconds-of-day, so a LATER-starting window can never overwrite an
+      // earlier one — see the self-heal below.
+      rec={ em:emo.em*dsc, k:emo.k, capMin:(P&&P.rth)?(P.mins-P.open):null, t:Date.now(), rr:rr,
+            openU:openU, openSo:(cs.length&&typeof cs[0].so==='number')?cs[0].so:null };
       S.sym[sym]=rec;
       try{ localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eW){}
     }
     if(!(rec.em>0)){ out.why='expected move came back zero'; return out; }
+
+    // (v11.63) THE ANCHOR COMES FROM THE RECORD, NOT FROM THE LIVE ARRAY — that is what "anchored" means.
+    // SELF-HEAL: if a later render surfaces an EARLIER bar than the one captured (the window slid the other
+    // way, or the panel started mid-session and the chart then back-filled), take the earlier one. It can
+    // only ever move BACKWARD toward the true open, never forward with the sliding window.
+    if(cs.length && typeof cs[0].so==='number' && typeof rec.openSo==='number' && cs[0].so<rec.openSo && cs[0].o>0){
+      rec.openU=cs[0].o; rec.openSo=cs[0].so;
+      try{ S.sym[sym]=rec; localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eU){}
+      out.openHealed=true;
+    }
+    if(typeof rec.openU==='number' && rec.openU>0 && out.anchor==='open'){
+      open = rec.openU * (typeof rec.rr==='number'&&rec.rr>0 ? rec.rr : rr);
+    }
     // every candle-derived value uses the CAPTURED scale, so nothing on the rail can drift
     if(typeof rec.rr==='number' && rec.rr>0 && rr>0 && rec.rr!==rr){
       var k=rec.rr/rr; open*=k; now*=k;
@@ -17525,33 +17565,64 @@ function emPiles(B, sym){
   var out=[];
   try{
     if(!B || !B.ok) return out;
-    var L=null; try{ L=ifLadder(sym); }catch(e){}
-    if(!L || L.err || !(L.undScale>0) || !(L.dispScale>0)) return out;
-    var toChart = L.dispScale/L.undScale;              // SPY strike -> chart scale
-    var R=null; try{ R=cpRows(sym); }catch(e2){}
-    var rows=(R && R.rows) ? R.rows : [];
-    if(!rows.length) return out;
-    var maxMag=0, i;
-    for(i=0;i<rows.length;i++){
-      var m=Math.abs(rows[i].call||0)+Math.abs(rows[i].put||0);
-      if(m>maxMag) maxMag=m;
-    }
+    var c=null; try{ c=ifChain((sym==='QQQ')?'QQQ':'SPX'); }catch(e){}
+    if(!c || c.err || !(c.spot>0)) return out;
+    // SAME WINDOW AS THE FLOW CHIP. Near book: that is where gamma concentrates and where dealers
+    // actually re-hedge, and it is the window every other number on this band already uses.
+    var w='toFri', lv=(c.toFri&&c.toFri.lv)?c.toFri.lv:null;
+    if(!lv || !lv.gexProf){ w='dte0'; lv=(c.dte0&&c.dte0.lv)?c.dte0.lv:null; }
+    if(!lv || !lv.gexProf || !lv.gexProf.length) return out;
+    var L=null; try{ L=ifLadder(sym); }catch(e2){}
+    if(!L || L.err || !(L.dispScale>0)) return out;
+    var onePct=c.spot*0.01;                        // gexProf is $ per 1% move -> per POINT
+    var prof=lv.gexProf, i, maxMag=0;
+    for(i=0;i<prof.length;i++){ var m=Math.abs(prof[i][1])+Math.abs(prof[i][2]); if(m>maxMag) maxMag=m; }
     if(!(maxMag>0)) return out;
     var thr=(typeof CFG!=='undefined' && CFG && typeof CFG.nodeThresh==='number') ? CFG.nodeThresh : 20;
-    for(i=0;i<rows.length;i++){
-      var r=rows[i], k=r.k;
-      if(typeof k!=='number') continue;
-      var disp=k*toChart;
-      if(disp<B.low || disp>B.high) continue;          // only what is IN the band
-      var cal=Math.abs(r.call||0), put=Math.abs(r.put||0), mag=cal+put;
-      var pct=Math.round(100*mag/maxMag);
+    for(i=0;i<prof.length;i++){
+      var k=prof[i][0], cal=prof[i][1], put=prof[i][2];     // $M, puts NEGATIVE (their convention)
+      var disp=k*L.dispScale;                                // SPX strike -> chart scale
+      if(disp<B.low || disp>B.high) continue;
+      var mag=Math.abs(cal)+Math.abs(put), pct=Math.round(100*mag/maxMag);
       if(pct<thr) continue;
+      var net=cal+put;                                       // NEGATIVE net = dealers short gamma there
       out.push({ k:k, disp:disp, pct:pct,
-                 accel:(put>cal),                      // put-dominant => negative gamma => accelerator
-                 pos:emPos(B, disp) });
+                 gexM:+mag.toFixed(1), netM:+net.toFixed(1),
+                 perPt:(mag*1e6)/onePct,                     // dollars of hedging per ONE point
+                 accel:(net<0),                              // short gamma -> hedging FEEDS the move
+                 pos:emPos(B, disp), window:w });
     }
     out.sort(function(a,b){ return b.pct-a.pct; });
   }catch(e){}
+  return out;
+}
+// ---- (v11.64) WHAT IS ON THE PATH TO THE TARGET ----------------------------------------------------
+// The trader's question, in order: where are we going (target), what gets us there (accelerating gamma
+// on the way), and what stops us (braking gamma on the way). Summing the piles BETWEEN price and target
+// answers all three from one book, in one window, in dollars that actually compose.
+// ⚠ It reports FLOW, never a distance. Converting dollars of hedging into points of movement needs a
+// market-impact coefficient that no option chain contains — it depends on book depth at that moment.
+// `flow.perPoint` has started recording flow against realised range so it can one day be MEASURED; until
+// then a "this can move price N points" figure would be invented, and would look quantitative doing it.
+function emPath(B, sym, target){
+  var out={ ok:false };
+  try{
+    if(!B || !B.ok || typeof target!=='number') return out;
+    var ps=emPiles(B, sym)||[];
+    var lo=Math.min(B.now, target), hi=Math.max(B.now, target);
+    var acc=0, brk=0, nAcc=0, nBrk=0, i;
+    for(i=0;i<ps.length;i++){
+      var P=ps[i];
+      if(P.disp<lo || P.disp>hi) continue;        // strictly between price and the target
+      if(P.accel){ acc+=P.perPt; nAcc++; } else { brk+=P.perPt; nBrk++; }
+    }
+    out.ok=true; out.up=(target>B.now);
+    out.accPerPt=acc; out.brkPerPt=brk; out.nAcc=nAcc; out.nBrk=nBrk;
+    out.netPerPt=acc-brk;
+    out.verdict=(nAcc+nBrk===0) ? 'clear' : (acc>brk ? 'fuelled' : 'braked');
+    out.distance=Math.abs(target-B.now);
+    return out;
+  }catch(e){ out.why=String(e&&e.message||e); }
   return out;
 }
 function emPos(B, v){
@@ -17622,10 +17693,10 @@ function secFrame(sym){
   var HF=null; try{ HF=hedgeFlow(sym); }catch(eH){}
   if(HF && HF.ok){
     h+='<span class="g3flow '+(HF.feeds?'g3feeds':'g3fights')+'"'+
-       g3tip((HF.feeds?'Hedging FEEDS the move here':'Hedging FIGHTS the move here')+': dealers must trade about '+usd(HF.perPt)+
+       g3tip((HF.feeds?'Hedging FEEDS the move here':'Hedging FIGHTS the move here')+': dealers must trade about '+usdBig(HF.perPt)+
              ' of underlying per point to stay neutral, '+(HF.feeds?'in the SAME direction price is going':'AGAINST the direction price is going')+
              '. From the '+gexWindowNote(HF.window)+' The near book is used because that is where gamma concentrates and where dealers actually re-hedge. This is the SIZE of the mechanical flow, not a forecast that price will travel.')+
-       '>'+(HF.feeds?'FEEDS ':'FIGHTS ')+usd(HF.perPt)+'/pt</span>';
+       '>'+(HF.feeds?'FEEDS ':'FIGHTS ')+usdBig(HF.perPt)+'/pt</span>';
   }
   if(EBc && EBc.ok && EBc.mult && EBc.contract){
     h+='<span class="g3ct"'+g3tip(EBc.contract+' — '+usd(EBc.mult)+' per index point. The expected move of '+dispNum(EBc.em)+' points is worth '+usd(EBc.emUsd)+' per contract'+(EBc.microUsd?('; the micro is one tenth, '+usd(EBc.microUsd)):'')+'. This is the MOVE converted to dollars — not a position, not a size, not profit or loss. ⚠ The multiplier follows the CHART, so charting '+EBc.contract+' while trading the micro makes every figure ten times too big.')+'>'+g3esc(EBc.contract)+' · EM '+usd(EBc.emUsd)+'/ct</span>';
@@ -17665,6 +17736,24 @@ function secFrame(sym){
          '<i class="g3emw2" style="left:'+emPos(EB,EB.loWater).toFixed(1)+'%"></i>'+
          '<i class="g3emw2" style="left:'+emPos(EB,EB.hiWater).toFixed(1)+'%"></i>'):'')+
        '<i class="g3emf'+(str?' g3str':'')+'" style="left:'+fa.toFixed(1)+'%;width:'+Math.max(0,fb-fa).toFixed(1)+'%"></i>'+
+       // (v11.64) USED AND REMAINING, BOTH SIDES, ON THE RAIL. Each side of the anchor holds one full
+       // expected move of budget, split by how far the day actually got that way. Defined by the
+       // EXTREMES, not the dot, so the four figures sit still and only change when a new high or low
+       // prints — a retrace does not hand budget back, because the day has already spent that range.
+       (function(){
+         if(!EB.mult || EB.hiWater==null || EB.loWater==null) return '';
+         var pLo=emPos(EB,EB.loWater), pHi=emPos(EB,EB.hiWater), pOp=emPos(EB,EB.open), t='';
+         function seg(a,b,val,cls,tip){
+           if(val==null || Math.abs(b-a)<9) return '';        // too narrow to hold a label
+           return '<span class="g3seg '+cls+'" style="left:'+((a+b)/2).toFixed(1)+'%"'+g3tip(tip)+'>'+usd(val)+'</span>';
+         }
+         var M=EB.mult;
+         t+=seg(0,pLo,(EB.loWater-EB.low)*M,'g3lft','Downside still available: from the low of day to the expected low.');
+         t+=seg(pLo,pOp,(EB.open-EB.loWater)*M,'g3used','Downside already used: the open to the low of day.');
+         t+=seg(pOp,pHi,(EB.hiWater-EB.open)*M,'g3used','Upside already used: the open to the high of day.');
+         t+=seg(pHi,100,(EB.high-EB.hiWater)*M,'g3lft','Upside still available: from the high of day to the expected high.');
+         return t;
+       })()+
        '<i class="g3emo" style="left:'+pOpen.toFixed(1)+'%"></i>'+
        (ifMagEarly!=null?('<span class="g3emT'+((ifMagEarly<EB.low||ifMagEarly>EB.high)?' out':'')+'" style="left:'+emPos(EB,ifMagEarly).toFixed(1)+'%">T</span>'):'')+
        '<i class="g3emn'+(str?' g3str':'')+'" style="left:'+pNow.toFixed(1)+'%"></i>'+
@@ -17678,8 +17767,12 @@ function secFrame(sym){
            var hgt=Math.max(3, Math.round(Math.sqrt(P.pct/100)*10));
            var w=(P.pct>=60?5:4);
            h2+='<i class="g3pile '+(P.accel?'acc':'brk')+'" style="left:'+P.pos.toFixed(1)+'%;width:'+w+'px;height:'+hgt+'px"'+
-               g3tip(P.k+' — '+P.pct+'% of King, '+(P.accel?'NEGATIVE gamma. An ACCELERATOR: through here dealer hedging feeds the move.'
-                                                          :'POSITIVE gamma. A BRAKE: hedging leans against price here.'))+'></i>';
+               g3tip(P.k+' \u2014 '+usdBig(P.gexM*1e6)+' of gamma, '+usdBig(P.perPt)+' of hedging per point. '+
+                     (P.accel
+                       ? 'NEGATIVE gamma: dealers are short here, so crossing it they must trade WITH the move \u2014 an ACCELERATOR.'
+                       : 'POSITIVE gamma: dealers are long here, so crossing it they trade AGAINST the move \u2014 a BRAKE.')+
+                     ' From the '+gexWindowNote(P.window)+
+                     ' \u26a0 This is the SIZE of the flow, not a distance: turning dollars of hedging into points of movement needs a market-impact figure no option chain contains.')+'></i>';
          }
          return h2;
        })()+
@@ -17709,26 +17802,23 @@ function secFrame(sym){
   // Was: "REVERSED · up 53% down 55% · gave back 107% of the down-move". Correct, and nobody talks that
   // way. HOD and LOD are the words, the arrow carries the ORDER, and "retraced" is what a retracement is
   // called. ⚠ Still descriptive — the day is reported, never forecast.
-  if(EB.ok && EB.shape){
-    var uE=Math.round((EB.upExc||0)*100), dE=Math.round((EB.dnExc||0)*100);
-    var gb=Math.min(999,Math.round((EB.giveBack||0)*100));
-    var hod='HOD <b>+'+uE+'%</b>', lod='LOD <b>−'+dE+'%</b>', sTxt;
-    if(EB.shape==='REVERSED'){
-      // order first, then how much of the leading drive has been handed back
-      sTxt = (EB.hiFirst===false) ? (lod+' → '+hod) : (hod+' → '+lod);
-      sTxt += ' · retraced <b class="warn">'+gb+'%</b> of the '+(EB.domUp?'HOD':'LOD')+' drive';
-    } else if(EB.shape==='INSIDE'){
-      sTxt = 'inside · '+hod+' '+lod;
-    } else {
-      sTxt = (EB.shape==='ONE-SIDED UP'?hod:lod)+' · one-sided, '+(EB.domUp?lod:hod)+' barely tested';
-      if(gb>=25) sTxt += ' · retraced '+gb+'%';
+  // ---- (v11.64) THE PATH TO THE TARGET ----
+  // Replaces the shape sentence, which narrated what the rail already draws. This says the thing the rail
+  // cannot: what stands BETWEEN price and the target, and which way it pushes.
+  if(EB.ok && ifMagEarly!=null){
+    var PA=null; try{ PA=emPath(EB, sym, ifMagEarly); }catch(ePa){}
+    if(PA && PA.ok){
+      var arrow=PA.up?'\u2191':'\u2193', txt;
+      if(PA.verdict==='clear'){
+        txt='path '+arrow+' to <b>'+dispNum(ifMagEarly)+'</b> \u00b7 <b>clear</b> \u2014 nothing sizeable in the way';
+      } else {
+        txt='path '+arrow+' to <b>'+dispNum(ifMagEarly)+'</b> \u00b7 '+
+            '<b class="g3acc">'+usdBig(PA.accPerPt)+'</b> fuel \u00b7 '+
+            '<b class="g3brk">'+usdBig(PA.brkPerPt)+'</b> brake \u00b7 '+
+            '<b'+(PA.verdict==='braked'?' class="g3brk"':' class="g3acc"')+'>'+PA.verdict.toUpperCase()+'</b>';
+      }
+      h+='<div class="g3shape"'+g3tip('What stands between price and the target. Every pile between the two is summed by polarity: FUEL is negative-gamma hedging that trades WITH the move through those strikes, BRAKE is positive-gamma hedging that trades against it. Both in dollars of hedging per point, from the '+gexWindowNote((PA.nAcc+PA.nBrk)?'toFri':'toFri')+' \u26a0 It is the SIZE of the flow on the path, never a promise price arrives \u2014 converting dollars into points needs a market-impact figure the chain does not carry.')+'>'+txt+'</div>';
     }
-    sTxt += ' · ' + (EB.over
-      ? ('<b'+(EB.stretched?' class="warn"':'')+'>'+(EB.stretched?'STRETCHED — +G compresses':'past EM, but −G expands')+'</b>')
-      : (EB.mult
-          ? ('<span class="g3usd">'+usd(EB.usedUsd)+' used · '+usd(EB.leftUsd)+' left</span>')
-          : (dispNum(EB.roomAhead)+' pts to EXP '+(EB.dir>=0?'HIGH':'LOW')+' left')));
-    h+='<div class="g3shape"'+g3tip('The day so far. HOD and LOD are how far it got each way from the open, as a share of the expected move — not where it is now. The arrow shows which came first. "Retraced" is how much of the bigger drive has been handed back; over 100% means it went through the open and out the other side. Last field: room left to the rail ahead, or, once past the band, what the gamma regime says that means. Descriptive only — nothing here has been measured yet.')+'>'+sTxt+'</div>';
   }
   h+='</div>';
   return h;

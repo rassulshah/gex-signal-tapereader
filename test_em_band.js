@@ -242,7 +242,9 @@ eval(ex('emBand'));
   ok(/HOD/.test(f) && /LOD/.test(f), 'the shape line speaks in HOD/LOD, not "up 53% down 55%"');
   ok(/retraced/.test(f),         'and says "retraced", which is what a retracement is called');
   ok(/\u2192/.test(f),            'the arrow carries which extreme came first');
-  ok(/pts to EXP /.test(f),      'and room left is in points to a named rail');
+  // (v11.64) used/remaining moved OFF the sentence and ONTO the rail as four segments. The coverage
+  // does not disappear — it follows the number to its new home.
+  ok(/g3seg/.test(f),            'used and remaining live on the RAIL now, as four segments');
   // strip // comments first: the changelog note in the source legitimately QUOTES the old wording, and a
   // test that cannot tell code from documentation will fail on its own history.
   const fCode=f.split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
@@ -292,7 +294,8 @@ eval(ex('emBand'));
   ok(/g3ct/.test(f),             'the contract chip renders');
   ok(/EM '\+usd\(EBc\.emUsd\)\+'\/ct/.test(f), 'and says what a WHOLE expected move is worth per contract');
   ok(/EBc && EBc\.ok && EBc\.mult/.test(f), 'only when there IS a contract — a SPY chart has no multiplier');
-  ok(/used · '\+usd\(EB\.leftUsd\)\+' left/.test(f), 'the shape line reports used and left in dollars');
+  ok(/EB\.open-EB\.loWater/.test(f) && /EB\.high-EB\.hiWater/.test(f),
+     'the segments are used-and-remaining on BOTH sides, measured from the day\'s extremes');
   // ⚠ DESCRIPTIVE ONLY. A dollar figure is one step from sizing, R:R and P&L, all of which are banned.
   // Check the VISIBLE labels, not the hovers: the disclaimer has to use the words "profit or loss" in
   // order to deny them, and a test that cannot tell a denial from a claim fails on its own safeguard.
@@ -332,9 +335,13 @@ eval(ex('emBand'));
 
   // --- the piles ---
   const pf=ex('emPiles');
-  ok(/cpRows/.test(pf),          'piles read SKYLIT\'s book — the same source regime2D uses, so they cannot contradict the regime chip');
+  // (v11.64) REVERSED DELIBERATELY. Skylit and IF differ ~113x in magnitude on the same nominal window
+  // AND carry opposite sign conventions. Every other number on this band is IF's, so the piles must be too
+  // or nothing on the rail composes. Skylit's node map keeps its home in (3) TRADE LOCATION.
+  ok(/ifChain/.test(pf) && !/cpRows/.test(pf),
+     'piles read INSIDERFINANCE, the same book as the band, the rails, the target and the flow chip');
   ok(/CFG\.nodeThresh/.test(pf), 'the cut is the EXISTING nodeThresh slider, not a second invented threshold');
-  ok(/put>cal/.test(pf),         'put-dominant means negative gamma means ACCELERATOR');
+  ok(/net<0/.test(pf),           'NEGATIVE net gamma at a strike means dealers are short it -> ACCELERATOR');
   ok(/B\.low \|\| disp>B\.high/.test(pf) || /disp<B\.low/.test(pf), 'only strikes INSIDE the band are marked');
 
   const f=ex('secFrame');
@@ -404,6 +411,100 @@ eval(ex('emBand'));
   ok(/hit:null/.test(fl),                   'it votes on nothing until measured');
   ok(/toRailBn/.test(fl),                   'and records the flow the remaining distance would require');
   ok(/window:f\.window/.test(fl),           'with the window recorded alongside');
+}
+
+
+// ---------- 15. (v11.63) THE ANCHOR IS CAPTURED, AND BIG DOLLARS ARE ABBREVIATED ----------
+// THE REAL CAUSE OF THE MOVING DOT, third diagnosis and the correct one. v11.59 pinned the SCALE, v11.61
+// added a schema stamp so the pin actually fired — but the anchor was still recomputed from
+// closedCandles()[0].o every render, and that array is a SLIDING WINDOW. As it slid, cs[0] became a LATER
+// bar and the anchor walked forward: 7695.75 -> 7711.66 -> 7713.26 -> 7713.71 in minutes, ~18 points,
+// while `em` sat perfectly still because IT was captured. Pinning the scale fixed 0.05 of an 18-pt problem.
+{
+  const b=ex('emBand');
+  ok(/openU:openU/.test(b),        'the OPEN is captured into the record, like the expected move');
+  ok(/openSo:/.test(b),            'with the opening bar\'s seconds-of-day');
+  ok(/rec\.openU \* \(/.test(b),   'and the anchor is read FROM the record, not the live array');
+  ok(/cs\[0\]\.so<rec\.openSo/.test(b),
+     'self-heal: an EARLIER bar replaces the captured one, so it can only move backward toward the true open');
+  ok(!/cs\[0\]\.so>rec\.openSo/.test(b),
+     '...and never forward, which is what let the sliding window drag it');
+  ok(/EMOPEN_SCHEMA=3/.test(src),  'the schema bumped, so records without the open are re-taken');
+
+  // big dollars
+  eval(ex('usd')); eval(ex('usdBig'));
+  ok(usdBig(213827434)==='$214M',  'a hedging flow reads $214M, not $213,827,434', usdBig(213827434));
+  ok(usdBig(8280000000)==='$8.3B', 'billions keep one decimal', usdBig(8280000000));
+  ok(usdBig(16409331084)==='$16B', 'and drop it past ten billion', usdBig(16409331084));
+  ok(usdBig(1736.5)==='$1,737',    'contract-sized figures stay EXACT — $1,736 is meaningful to the dollar', usdBig(1736.5));
+  ok(usdBig(950)==='$950',         'small values pass through unchanged');
+  ok(usdBig(null)===null && usdBig(NaN)===null, 'and a non-number yields null, never "$NaN"');
+  const f=ex('secFrame');
+  ok(/usdBig\(HF\.perPt\)/.test(f), 'the flow chip uses the abbreviated form');
+  ok(/usd\(EBc\.emUsd\)/.test(f),   'while the contract chip keeps the exact one');
+}
+
+
+// ---------- 16. (v11.64) ONE BOOK, ONE WINDOW — THE SANITY PASS ----------
+// The bug this exists to prevent: the piles were drawn from SKYLIT's book while the flow chip came from
+// INSIDERFINANCE. Measured on the same nominal window they differ by ~113x (Skylit gross $0.58B vs IF
+// $65.8B) AND carry opposite sign conventions (Skylit's decomposition puts both legs positive, IF's puts
+// are negative). Two books on one rail cannot be summed, compared, or trusted to compose — and every
+// other number on this band already comes from IF.
+{
+  const pf=ex('emPiles');
+  ok(/ifChain/.test(pf),        'piles read the INSIDERFINANCE chain');
+  ok(!/cpRows/.test(pf),        'and NOT Skylit\'s book — different units, opposite sign convention');
+  ok(/gexProf/.test(pf),        'via the per-strike gamma profile');
+  ok(/toFri/.test(pf) && /dte0/.test(pf), 'in the NEAR window, the same one the flow chip uses');
+  ok(/spot\*0\.01/.test(pf),    'converting $-per-1% to $-per-point with the SAME spot the book was built on');
+  ok(/net<0/.test(pf),          'NEGATIVE net gamma at a strike means dealers are short there -> ACCELERATOR');
+  ok(/CFG\.nodeThresh/.test(pf),'and the cut is still the existing slider');
+
+  // the profile must SUM to the book, or the piles are lying about the whole
+  const lf=(function(){ const s2=fs.readFileSync('./current/gex-if-levels.user.js','utf8');
+    const re=/function\s+levelsFor\s*\(/g, m=re.exec(s2); let i=s2.indexOf('{',m.index),d=0,e=-1;
+    for(let k=i;k<s2.length;k++){ if(s2[k]==='{')d++; else if(s2[k]==='}'){ d--; if(d===0){e=k;break;} } }
+    return s2.slice(m.index,e+1); })();
+  ok(/b\.call\+=g/.test(lf) && /b\.put\+=g/.test(lf), 'the companion keeps the call and put legs PER STRIKE');
+  ok(/gexProf\.push/.test(lf),  'and exports them as a profile');
+  ok(/gm\/mx < 0\.01/.test(lf), 'trimming only the near-zero tail, so the profile still sums to the book');
+
+  // --- the arithmetic, run for real against the companion ---
+  const s2=fs.readFileSync('./current/gex-if-levels.user.js','utf8');
+  eval(s2.match(/var SIDE_MIN\s*=\s*[^;]+;/)[0]);
+  eval(lf);
+  const spot=100, gg=(gam,oi)=>gam*oi*100*spot*spot*0.01;
+  const R=levelsFor([{strike:100,cp:'C',gamma:0.05,openInterest:1000},
+                     {strike:105,cp:'C',gamma:0.02,openInterest:500},
+                     {strike:100,cp:'P',gamma:0.04,openInterest:2000},
+                     {strike:95, cp:'P',gamma:0.03,openInterest:800}], spot, ()=>true);
+  const sc=R.gexProf.reduce((a,r)=>a+r[1],0), sp=R.gexProf.reduce((a,r)=>a+r[2],0);
+  ok(Math.abs(sc-R.callGEX/1e6)<0.05, 'profile CALL legs sum to the book callGEX', [sc, R.callGEX/1e6]);
+  ok(Math.abs(sp-R.putGEX/1e6)<0.05,  'profile PUT legs sum to the book putGEX',  [sp, R.putGEX/1e6]);
+  ok(R.gexProf.every(r=>r[2]<=0),     'puts are NEGATIVE — their convention, verified against their page');
+  ok(Math.abs(R.gexProf.find(r=>r[0]===100)[1]-gg(.05,1000)/1e6)<0.05,
+     'a single strike matches gamma x OI x 100 x spot^2 x 0.01 exactly');
+
+  // --- the path ---
+  const pa=ex('emPath');
+  ok(/P\.disp<lo \|\| P\.disp>hi/.test(pa), 'the path sums only piles BETWEEN price and the target');
+  ok(/acc\+=P\.perPt/.test(pa) && /brk\+=P\.perPt/.test(pa), 'splitting them by polarity into fuel and brake');
+  ok(/verdict/.test(pa),         'and returning a plain-word verdict');
+  // the caveat lives in the block comment ABOVE the function, which ex() does not return — check source.
+  ok(/market-impact coefficient that no option chain contains/.test(src),
+     'and the source states the limit: dollars of hedging cannot be converted to points without an impact figure');
+
+  const f=ex('secFrame');
+  ok(/g3seg/.test(f),            'the four money segments render ON the rail');
+  ok(/Math\.abs\(b-a\)<9/.test(f), 'and a segment too narrow to hold its label is dropped rather than overlapping');
+  ok(/emPath\(/.test(f),         'the path line renders');
+  const fNoComments=f.split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
+  ok(!/retraced/.test(fNoComments),
+     'the old shape sentence is gone from what RENDERS — the rail draws what it used to narrate');
+  ok(/of hedging per point/.test(f), 'pile hovers state the flow');
+  ok(/needs a market-impact figure no option chain contains/.test(f),
+     '...and refuse to imply a distance, which is the one number nobody can honestly give');
 }
 
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');

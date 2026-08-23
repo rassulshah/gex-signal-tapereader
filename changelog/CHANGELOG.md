@@ -1,3 +1,90 @@
+## v11.64 / companion v1.12 — the band answers the trader's three questions, from ONE book
+
+**Where are we going · what gets us there · what stops us.** The rail now answers all three, and the
+sanity pass caught a bug that would have made two of the answers meaningless.
+
+**⚠ THE PILES AND THE FLOW CHIP WERE READING DIFFERENT BOOKS.** `emPiles` read `cpRows` — **Skylit's**
+feed. `hedgeFlow` read `ifChain` — **InsiderFinance's**. On the same nominal window:
+
+    SKYLIT   60 strikes   call +$0.24B   put +$0.35B   gross  $0.58B   (both legs POSITIVE)
+    IF      309 strikes   call +$24.71B  put -$41.12B  gross $65.80B   (puts NEGATIVE)
+
+**~113x apart in magnitude and opposite in sign convention.** The per-strike figures quoted in
+conversation ($2,007K/pt at 765) divided Skylit's gamma by IF's spot — two sources in one number. Nothing
+on that rail composed, and it would have shipped looking perfectly quantitative.
+
+**The band is already an InsiderFinance construct end to end** — the expected move is their straddle, the
+rails follow from it, the target is their heaviest strike, the flow is their book. The piles were the lone
+import. They now come from IF too, in the SAME near window as the flow chip, so every number on the rail
+sums. Skylit's node map keeps its home in ③ TRADE LOCATION, where it belongs.
+
+**COMPANION v1.12 — the per-strike gamma profile.** `levelsFor()` was already accumulating per-strike
+gamma in `byK` and then summing it away. It now keeps the call and put legs separately and exports
+`gexProf` — `[strike, call $M, put $M]`, puts negative, their convention. **Verified: the legs sum EXACTLY
+to the book's `callGEX`/`putGEX`, and one strike equals `gamma x OI x 100 x spot^2 x 0.01` to the decimal.**
+The near-zero tail is trimmed so a 780-strike chain does not bloat every payload, and a test proves what
+survives still sums to the whole — so the piles can never lie about the book they came from.
+
+**THE PATH LINE replaces the shape sentence**, which narrated what the rail already draws. It says the
+thing the rail cannot: what stands BETWEEN price and the target.
+
+    path ↑ to 7717.71 · $1.4M fuel · $2.0M brake · BRAKED
+
+Every pile between price and target, summed by polarity, in dollars of hedging per point. That is the
+breakout read the user asked for — is the way to the target fuelled or defended.
+
+**USED AND REMAINING ARE ON THE RAIL** as four segments, both sides, defined by the day's EXTREMES so they
+sit still and only move when a new high or low prints. A retrace does not hand budget back. A segment too
+narrow to hold its label is dropped rather than overlapping.
+
+**PILE HOVERS** give the strike's own gamma, its hedging per point, and which way it pushes:
+*"767 — $46M of gamma, $599K of hedging per point. NEGATIVE gamma: dealers are short here, so crossing it
+they must trade WITH the move — an ACCELERATOR."*
+
+**⛔ WHAT I WILL NOT PUT ON THE FACE: "this node can accelerate us X points."** Converting dollars of
+hedging into points of movement needs a market-impact coefficient — how far $1 of forced buying pushes ES —
+and **no option chain contains it.** It depends on book depth at that moment. Any number would be invented
+and would look quantitative while being so, which is the most dangerous kind of wrong on a trading face.
+It IS measurable empirically: `flow.perPoint` records flow against realised range from now on, and once
+there is enough the coefficient becomes observed rather than guessed. Both the hovers and the source say
+this outright.
+
+⚠ Four tests asserted behaviour deliberately changed here and were UPDATED, not deleted — each replaced by
+an assertion of the new intent, so coverage follows the number to its new home rather than evaporating.
+One more failed on a comment that legitimately quotes the retired wording; it strips comments now.
+
+## v11.63 — the moving dot, third diagnosis and the correct one
+
+**THE ANCHOR WAS BEING RECOMPUTED FROM A SLIDING WINDOW.** `closedCandles()` returns whatever bars the
+chart currently holds, and that array SLIDES. As it slid, `cs[0]` became a LATER bar and the anchor walked
+forward with it. Measured live:
+
+    open  7695.75 -> 7711.66 -> 7713.26 -> 7713.71   in minutes, ~18 points
+    em    34.73                                       perfectly still — because IT was captured
+
+**The expected move never moved because it was captured once. The open moved because it was not.** The
+first two fixes were both real and both minor: v11.59 pinned the SCALE (0.05 of drift), v11.61 added a
+schema stamp so that pin actually fired on an existing session. **Neither touched the 18-point problem.**
+Pinning the scale fixed 0.05 of an 18-point bug, and I called it done twice.
+
+The open is now captured into the record alongside the expected move, and read FROM the record. That is
+what "anchored" means, and it is what should have happened at v11.49.
+
+**SELF-HEAL, ONE DIRECTION ONLY.** `openSo` stores the opening bar's seconds-of-day. If a later render
+surfaces an EARLIER bar — the window slid the other way, or the panel started mid-session and the chart
+back-filled — the earlier one wins. It can move BACKWARD toward the true open and never forward, which is
+exactly the motion that caused the bug. Schema bumped to 3 so records without the open are re-taken.
+
+**AND THE FLOW CHIP READ `$213,827,434/pt`.** Seventeen characters of false precision that blew line 1
+apart. Nobody reads a hedging flow to the dollar; they read its ORDER. `usdBig()` gives `$214M`, `$8.3B`,
+`$16B` — while contract sizes keep the exact form, because $1,736 per contract IS meaningful to the dollar.
+
+**Two false alarms in the same check, worth recording.** I first read the regime chip as empty (`—`) and
+the gamma piles as absent (0), and started diagnosing both. Re-reading showed `−G −V ⚠` and five piles
+rendering correctly — the first read had caught a mid-refresh frame. **A single snapshot of a live face is
+not evidence; read it twice before calling it a bug.** The genuine bug in that same check was the one I
+nearly missed: the band bounds had moved 16 points between two reads seconds apart.
+
 ## v11.62 — there was never a sign bug, and the fuel chip is on
 
 **VERIFIED AGAINST THEIR PUBLISHED HEADER, ALL EXPIRIES, TO THE DECIMAL:**
