@@ -1,3 +1,63 @@
+## v11.81 — the node ROLES, which v11.79 shipped as polarity and called done
+
+**The user asked for KING / GATE / RUG / REVERSE-RUG. v11.79 shipped ACC / BRK / BAL.** That is POLARITY —
+how hedging behaves at a node — not ROLE, which is what shape the book has built around it. Both matter,
+they are not the same label, and I mocked the roles twice without building them. Same failure as the
+labels one build earlier.
+
+**They run on Skylit's own doctrine, with the existing constants reused verbatim rather than re-invented:**
+
+    RUG_ANCHOR_PCT 40    the yellow ceiling and the purple node must each be genuinely strong
+    RUG_ADJ 3            and sit within this many LADDER STEPS of each other — index, not points, so a
+                         5-point SPXW grid and a 1-point SPY grid mean the same thing
+    RUG_SIG_PCT 20       what counts as a significant floor at all
+    GK_RATIO_STRONG 1.8  |gatekeeper| / |King| at or above this = expect a STALL
+
+**On the user's live ladder** (2026-08-23, 5-point SPXW strikes):
+
+    KING  7710   -100%
+    GK    7700    -79%   ratio 0.79 vs the King -> PASSABLE, below the 1.8x that says stall
+    RUG   none
+    RRUG  none
+
+⚠ **AND THE NEAR-MISS IS THE INTERESTING PART.** 7650 (+41) sits over 7630 (−85) — a textbook rug pair,
+both well past the 40% anchor, with no significant positive floor beneath. It does not fire because they
+are **FOUR ladder steps apart and RUG_ADJ is 3.** A detector that fired there would be loosening the
+doctrine to manufacture a hit. It stays at 3, and the near-miss is recorded here instead.
+
+**ROLE BEATS POLARITY ON THE LABEL.** A King is still an accelerator; "KING" is the word that changes what
+you do and "ACC" is not. The hover keeps both, and explains the role: what a gatekeeper's ratio means,
+what a rug does when the cap unwinds.
+
+⚠ **A REAL BUG THE TESTS CAUGHT: the reverse-rug pass OVERWROTE the rug tag.** A purple-yellow-purple stack
+satisfies BOTH shapes — the middle node is a rug's ceiling AND a reverse rug's floor — and the second pass
+silently relabelled it, **asserting the opposite direction on the same level.** Tags are no longer
+overwritten, and a stack that is both is flagged `contested`, because two opposing shapes around one node
+is itself a reading and hiding one of them would be the dishonest option.
+
+⚠ Also removed: an empty `for(){}` loop left in the reverse-rug scan from drafting. It did nothing, and
+dead code that looks deliberate is how a real loop goes missing later.
+
+## v11.80 — the target distance was the one price still carrying decimals
+
+`T: 7718+16.37` — two decimals on a DISTANCE, in a section where v11.75 made every other price a whole ES
+point, and no space before it. False precision on top of an inconsistency. Now `T: 7718 +16`.
+
+**VERIFIED LIVE FIRST, WHICH IS THE WHOLE POINT.** v11.79 was confirmed running on the tab before anything
+was reported. Piles `src:"skylit"`, King **7710** via `kingSrc:"dollar"`, `kingKd` 17241, and the three
+nodes on the rail:
+
+    7710 -> 7727.7   100%  ACC     the King the user could see on the tape
+    7700 -> 7717.7    79%  ACC
+    7650 -> 7667.6    41%  BRK     yellow
+
+Labels rendering ES-over-SPXW. Sentence: *"79% negative gamma accelerator at 7718 can take price higher to
+the 100% negative gamma node at 7728."* The chain names the King as the destination.
+
+⚠ **The regime chip read `—` on the FIRST sample and `−G −V ⚠` on the next five.** A single snapshot of a
+live face is not evidence — the rule held, and re-reading before reporting avoided a second false alarm in
+one session.
+
 ## v11.79 — the labels I was asked for twice, mocked twice, and did not build
 
 **Owning this one: the user asked for ES-over-SPXW labels two sessions running. I produced two mockups and

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.79
+// @version    11.81
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.79';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.81';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -17866,6 +17866,99 @@ var PILE_BAL_MIN = 15;
 // session ever renders more than ~5 and they collide — the renderer measures nothing.
 var PLAB_MIN_PCT = 20;
 var SK_MIN_STRIKES = 20;   // ⚖ hand-set. A healthy SPXW ladder reads 100; below 20 the DOM changed.
+// ---- (v11.81) NODE ROLES, ON SKYLIT'S OWN LADDER AND SKYLIT'S OWN CONSTANTS --------------------
+// The user asked for KING / GATE / RUG / REVERSE-RUG on the rail. v11.79 shipped ACC/BRK/BAL, which is
+// POLARITY, not ROLE — a node's polarity says how hedging behaves there; its role says what SHAPE the
+// book has made around it. Both matter and they are not the same label.
+//
+// These detectors already exist in this file for the SPY tape (`gatekeeper()`, the RUG block at ~5885)
+// and they were built on Skylit's doctrine. Now that the rail reads Skylit's SPXW ladder, the SAME
+// geometry can be computed on the SAME kind of data — which is the whole reason the switch was worth
+// making. Constants are reused verbatim, NOT re-invented:
+//   RUG_ANCHOR_PCT 40   the yellow ceiling and the purple node must each be genuinely strong
+//   RUG_ADJ 3           and sit within this many LADDER STEPS of each other (index, not points, so a
+//                       5-point SPXW grid and a 1-point SPY grid mean the same thing)
+//   RUG_SIG_PCT 20      what counts as a significant floor at all
+//   GK_RATIO_STRONG 1.8 |gatekeeper| / |next major beyond| at or above this = expect a STALL
+//
+// ⚠ ROLE IS NOT POLARITY AND THE LABEL SHOWS ROLE WHEN THERE IS ONE. A King is still an accelerator or a
+// brake; the hover keeps both. Precedence KING > RUG/RRUG > GK > polarity, because that is the order in
+// which they change what a trader does.
+function skRoles(pct, kingK){
+  var out={ king:kingK, gk:null, gkRatio:null, gkVerdict:null, rug:null, rrug:null, contested:false, byK:{} };
+  try{
+    var rows=[], k;
+    for(k in pct){ if(!pct.hasOwnProperty(k)) continue;
+      var kk=parseFloat(k), v=pct[k];
+      if(isFinite(kk) && typeof v==='number' && isFinite(v)) rows.push({k:kk, p:v}); }
+    if(rows.length<5) return out;
+    rows.sort(function(a,b){ return a.k-b.k; });                    // ascending strike
+    var i, j;
+    if(kingK!=null) out.byK[kingK]='KING';
+
+    // ---- RUG (bearish nosedive): a strong POSITIVE ceiling sitting DIRECTLY OVER a strong NEGATIVE
+    // node, with no significant positive floor beneath it to catch the fall. The yellow cap unwinds, the
+    // purple node below accelerates the drop.
+    for(i=0;i<rows.length;i++){
+      var ceil=rows[i]; if(!(ceil.p>=RUG_ANCHOR_PCT)) continue;      // positive, genuinely strong
+      for(j=Math.max(0,i-RUG_ADJ); j<i; j++){
+        var flr=rows[j]; if(!(flr.p<=-RUG_ANCHOR_PCT)) continue;     // negative, genuinely strong, BELOW
+        // and nothing significant holding it up under that
+        var propped=false;
+        for(var q=0;q<j;q++){ if(rows[q].p>=RUG_SIG_PCT){ propped=true; break; } }
+        if(propped) continue;
+        out.rug={ ceil:ceil.k, floor:flr.k, ceilPct:ceil.p, floorPct:flr.p };
+        out.byK[ceil.k]='RUG'; out.byK[flr.k]='RUG';
+        break;
+      }
+      if(out.rug) break;
+    }
+    // ---- REVERSE-RUG (bullish squeeze): the mirror — purple ceiling over a yellow floor, nothing
+    // significant above to cap it.
+    for(i=rows.length-1;i>=0;i--){
+      var rc=rows[i]; if(!(rc.p<=-RUG_ANCHOR_PCT)) continue;          // negative ceiling
+      for(j=Math.max(0,i-RUG_ADJ); j<i; j++){
+        var rf=rows[j]; if(!(rf.p>=RUG_ANCHOR_PCT)) continue;         // positive floor below it
+        var capped=false;
+        for(var q2=i+1;q2<rows.length;q2++){ if(rows[q2].p<=-RUG_SIG_PCT){ capped=true; break; } }
+        if(capped) continue;
+        out.rrug={ ceil:rc.k, floor:rf.k, ceilPct:rc.p, floorPct:rf.p };
+        // ⚠ NEVER OVERWRITE AN EXISTING TAG. A purple-yellow-purple stack satisfies BOTH shapes: the
+        // middle node is a rug's ceiling AND a reverse rug's floor. Silently relabelling it as RRUG
+        // erased a real RUG and asserted the opposite direction on the same level.
+        if(!out.byK[rc.k]) out.byK[rc.k]='RRUG';
+        if(!out.byK[rf.k]) out.byK[rf.k]='RRUG';
+        break;
+      }
+      if(out.rrug) break;
+    }
+    // ⚠ BOTH SHAPES AT ONCE IS ITSELF A READING, not a bug to hide. A stack that is simultaneously a rug
+    // and a reverse rug is a CONTESTED level — the book has built the geometry for a drop and a squeeze
+    // around the same node — and pretending one of them won would be the dishonest option.
+    if(out.rug && out.rrug) out.contested=true;
+
+    // ---- GATEKEEPER: the nearest significant node standing between price and the King beyond it. Its
+    // strength RELATIVE to that King is what decides whether price stalls at it or walks through.
+    if(kingK!=null){
+      var kidx=-1; for(i=0;i<rows.length;i++){ if(Math.abs(rows[i].k-kingK)<0.01){ kidx=i; break; } }
+      if(kidx>=0){
+        var kingAbs=Math.abs(rows[kidx].p)||100, best=null;
+        // walk from the King back toward price on BOTH sides; the gatekeeper is the last significant
+        // node before the King, whichever side the King sits on relative to the book's centre of mass.
+        for(i=kidx-1;i>=0 && i>=kidx-6;i--){ if(Math.abs(rows[i].p)>=RUG_SIG_PCT){ best=rows[i]; break; } }
+        var up=null;
+        for(i=kidx+1;i<rows.length && i<=kidx+6;i++){ if(Math.abs(rows[i].p)>=RUG_SIG_PCT){ up=rows[i]; break; } }
+        if(up && (!best || Math.abs(up.p)>Math.abs(best.p))) best=up;
+        if(best && best.k!==kingK){
+          out.gk=best.k; out.gkRatio=+(Math.abs(best.p)/kingAbs).toFixed(2);
+          out.gkVerdict=(out.gkRatio>=GK_RATIO_STRONG) ? 'stall' : 'passable';
+          if(!out.byK[best.k]) out.byK[best.k]='GK';
+        }
+      }
+    }
+  }catch(e){}
+  return out;
+}
 function skPiles(B, sym){
   var out={ ok:false, why:'', piles:[], src:'skylit', count:0 };
   try{
@@ -17897,6 +17990,9 @@ function skPiles(B, sym){
     //   3. the reader is not already flagging a conflict between its own two methods
     var kd=(typeof T.kingKd==='number' && isFinite(T.kingKd) && T.kingKd!==0) ? T.kingKd : null;
     out.kingSrc=T.kingSrc||null; out.king=T.king; out.kingKd=kd;
+    // (v11.81) roles are computed over the WHOLE ladder, not just the in-band slice — a rug's floor or a
+    // gatekeeper's King can easily sit outside the expected-move band while still defining the shape.
+    var RL=skRoles(T.pct, T.king); out.roles=RL;
 
     // (2) recompute the King from the ratios and compare. Independent of how the King was found.
     var topK=null, topV=0, kk;
@@ -17926,6 +18022,8 @@ function skPiles(B, sym){
       if(disp<B.low || disp>B.high) continue;
       var mag=Math.abs(pct); if(mag<thr) continue;
       out.piles.push({ k:k, disp:disp, pct:Math.round(mag),
+                       role:(RL.byK[k]||null),
+                       gkRatio:(RL.gk===k?RL.gkRatio:null), gkVerdict:(RL.gk===k?RL.gkVerdict:null),
                        signed:pct,
                        usdK:(kd!=null)?Math.round(mag/100*Math.abs(kd)):null,
                        accel:(pct<0),                          // negative = short gamma = accelerator
@@ -17944,13 +18042,13 @@ function skPiles(B, sym){
 // an array cannot carry a reason, and inventing an object return here would have touched six callers.
 emPiles.lastWhy='';
 emPiles.lastSrc='';
-emPiles.lastKing=null; emPiles.lastKingSrc=''; emPiles.lastKingKd=null; emPiles.lastDegraded='';
+emPiles.lastKing=null; emPiles.lastKingSrc=''; emPiles.lastKingKd=null; emPiles.lastDegraded=''; emPiles.lastRoles=null;
 function emPiles(B, sym){
   // SKYLIT FIRST — the nodes are theirs. IF is a NAMED fallback, not a silent one.
   var sk=skPiles(B, sym);
   emPiles.lastSrc='skylit';
   emPiles.lastKing=sk.king; emPiles.lastKingSrc=sk.kingSrc; emPiles.lastKingKd=sk.kingKd;
-  emPiles.lastDegraded=sk.degraded||'';
+  emPiles.lastDegraded=sk.degraded||''; emPiles.lastRoles=sk.roles||null;
   if(sk.ok){ emPiles.lastWhy=sk.why||''; return sk.piles; }
   emPiles.lastWhy=sk.why||'skylit unavailable';
   // ⚠ THE FALLBACK IS DELIBERATE AND IT IS DISCLOSED. If the SPXW tape cannot be read we would rather
@@ -18281,9 +18379,10 @@ function secFrame(sym){
   // before, which said nothing about direction and did not match each other.
   // (v11.79) IT CARRIES ITS DISTANCE. "Is the target close" needs the GAP, not two prices the reader then
   // subtracts — and the gap is the number that changes as price moves, which is the one worth watching.
+  // (v11.80) WHOLE POINTS, like every other price here. dispNum printed "+16.37".
   var tgtUp=null;
   try{ if(ifMagEarly!=null && EBc && EBc.ok && typeof EBc.now==='number') tgtUp=(ifMagEarly>EBc.now); }catch(eTU){}
-  if(ifMagEarly!=null) h+='<span class="g3tgt'+(tgtUp===true?' up':(tgtUp===false?' dn':''))+'"'+g3tip('Where is the day trying to go? The heaviest strike in InsiderFinance\'s book — where dealer hedging concentrates and price tends to be pulled. '+(tgtUp===true?'GREEN: it sits ABOVE price. ':(tgtUp===false?'RED: it sits BELOW price. ':''))+'A destination, not a forecast, and it reads the same book as the ladder below so the two can never disagree. The T on the rail is this same level.')+'>T: '+frameNum(ifMagEarly)+((EBc&&EBc.ok&&typeof EBc.now==='number')?('<span class="g3dist">'+((ifMagEarly>=EBc.now)?'+':'\u2212')+dispNum(Math.abs(ifMagEarly-EBc.now))+'</span>'):'')+'</span>';
+  if(ifMagEarly!=null) h+='<span class="g3tgt'+(tgtUp===true?' up':(tgtUp===false?' dn':''))+'"'+g3tip('Where is the day trying to go? The heaviest strike in InsiderFinance\'s book — where dealer hedging concentrates and price tends to be pulled. '+(tgtUp===true?'GREEN: it sits ABOVE price. ':(tgtUp===false?'RED: it sits BELOW price. ':''))+'A destination, not a forecast, and it reads the same book as the ladder below so the two can never disagree. The T on the rail is this same level.')+'>T: '+frameNum(ifMagEarly)+((EBc&&EBc.ok&&typeof EBc.now==='number')?(' <span class="g3dist">'+((ifMagEarly>=EBc.now)?'+':'\u2212')+frameNum(Math.abs(ifMagEarly-EBc.now))+'</span>'):'')+'</span>';
   h+='</div>';
   // (v11.49) LINE 2 IS THE BAND NOW. It used to be four naked measurements — DEX, TERM, EM, ATR —
   // which reported instrumentation readings while line 1 above answered a question. A number here
@@ -18369,6 +18468,11 @@ function secFrame(sym){
                       ? 'NEGATIVE gamma: dealers are short here, so crossing it a hedge trades WITH the move \u2014 an ACCELERATOR.'
                       : 'POSITIVE gamma: dealers are long here, so a hedge leans against price \u2014 a BRAKE.')+
                     ' From SKYLIT\'s live SPXW ladder: accumulated dealer positioning, which builds and drains intraday.'+
+                    (P.role==='KING' ? ' KING \u2014 the heaviest node on the ladder; every other %King on this rail is a ratio to it.' : '')+
+                    (P.role==='GK' ? (' GATEKEEPER \u2014 the last significant node between price and the King beyond it. Strength vs that King '+(P.gkRatio!=null?P.gkRatio:'?')+'x'+
+                       (P.gkVerdict==='stall' ? ' \u2014 at or above 1.8x, which is where price tends to STALL rather than pass.' : ' \u2014 below the 1.8x that would say stall, so this one is passable.')) : '')+
+                    (P.role==='RUG' ? ' RUG \u2014 a strong POSITIVE ceiling sitting directly over a strong NEGATIVE node with no significant floor beneath. If the cap unwinds, the node below accelerates the drop.' : '')+
+                    (P.role==='RRUG' ? ' REVERSE RUG \u2014 a strong NEGATIVE ceiling over a strong POSITIVE floor with nothing significant capping it above. The squeeze mirror of a rug.' : '')+
                     ' \u26a0 A DIFFERENT MEASUREMENT from InsiderFinance\'s open-interest gamma \u2014 a flow, not a stock.'+
                     ' \u26a0 The SIZE of the pressure, never a distance: turning it into points needs a market-impact figure no option chain contains.';
            } else {
@@ -18384,7 +18488,9 @@ function secFrame(sym){
            h2+='<i class="g3pile '+pcls+'" style="left:'+P.pos.toFixed(1)+'%;width:'+w+'px;height:'+hgt+'px"'+g3tip(tip)+'></i>';
            // (v11.79) THE LABEL THE USER ASKED FOR, TWICE, AND I MOCKED TWICE WITHOUT BUILDING:
            // ES price on top (the number they trade), SPXW strike and the node's role beneath it.
-           var role = P.balanced ? 'BAL' : (P.accel ? 'ACC' : 'BRK');
+           // (v11.81) ROLE beats polarity on the label. A King is still an accelerator; the hover keeps
+           // both, but "KING" is the word that changes what you do and "ACC" is not.
+           var role = P.role || (P.balanced ? 'BAL' : (P.accel ? 'ACC' : 'BRK'));
            if(P.pct>=PLAB_MIN_PCT){
              h2+='<span class="g3plab '+pcls+'" style="left:'+P.pos.toFixed(1)+'%"'+g3tip(tip)+'>'+
                  frameNum(P.disp)+'<i>'+P.k+' '+role+'</i></span>';
@@ -19362,6 +19468,7 @@ window.__gptsDebug.piles = function(sy){
               // gone and the next markup change is the one that breaks the levels silently.
               src:emPiles.lastSrc||null, why:emPiles.lastWhy||null, degraded:emPiles.lastDegraded||null,
               king:emPiles.lastKing, kingSrc:emPiles.lastKingSrc||null, kingKd:emPiles.lastKingKd,
+              roles:emPiles.lastRoles||null,
               band:{low:+B.low.toFixed(2), high:+B.high.toFixed(2), now:+B.now.toFixed(2)},
               coverage:lv?lv.gexProfCoverage:null, profN:(lv&&lv.gexProf)?lv.gexProf.length:0,
               n:ps.length, nAccel:0, nBrake:0, piles:[] };

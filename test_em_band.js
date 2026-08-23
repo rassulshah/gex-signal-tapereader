@@ -1091,9 +1091,10 @@ eval(ex('emBand'));
 
   // BEHAVIOUR — simulated tape shapes, which is the only way to test "what if the markup changes"
   const RUN=(function(){
-    const pre='var CFG={nodeThresh:20}, SK_MIN_STRIKES=20, __tape=null, __lad={err:null,dispScale:1.0023};'+
+    const pre='var CFG={nodeThresh:20}, SK_MIN_STRIKES=20, __tape=null, __lad={err:null,dispScale:1.0023},'+
+      'RUG_ANCHOR_PCT=40, RUG_ADJ=3, RUG_SIG_PCT=20, GK_RATIO_STRONG=1.8;'+
       'function tapeMap(){return __tape;} function ifLadder(){return __lad;}';
-    return new Function(pre+['emPos','skPiles'].map(ex).join('\n')+
+    return new Function(pre+['emPos','skRoles','skPiles'].map(ex).join('\n')+
       '\nreturn function(t){__tape=t; return skPiles({ok:true,low:7661,high:7730.5,now:7705},"SPY");};')();
   })();
   const good={count:100,king:7710,kingKd:17241,kingSrc:'dollar',kingConflict:false,
@@ -1137,7 +1138,7 @@ eval(ex('emBand'));
   ok(/g3plab/.test(f),                       'every prominent node carries a label');
   ok(/frameNum\(P\.disp\)\+'<i>'\+P\.k/.test(f),
      'ES price on top, SPXW strike underneath', 'ok');
-  ok(/var role = P\.balanced \? 'BAL'/.test(f), 'with the node role on the same line as the strike');
+  ok(/var role = P\.role \|\| \(P\.balanced/.test(f), 'with the node ROLE on the same line as the strike');
   ok(/PLAB_MIN_PCT/.test(f) && /var PLAB_MIN_PCT = 20;/.test(src),
      'labelled only above a named threshold, so a busy day cannot smear the tier');
   ok(/⚖ HAND-SET/.test(src.slice(src.indexOf('var PLAB_MIN_PCT')-320, src.indexOf('var PLAB_MIN_PCT'))),
@@ -1164,6 +1165,9 @@ eval(ex('emBand'));
   // the target chip carries its distance
   ok(/g3dist/.test(f),                    'the target chip carries a distance');
   ok(/Math\.abs\(ifMagEarly-EBc\.now\)/.test(f), 'computed from price, not restated as a second price');
+  ok(/frameNum\(Math\.abs\(ifMagEarly-EBc\.now\)\)/.test(f),
+     'and rounded to whole points like every other price in the section');
+  ok(!/dispNum\(Math\.abs\(ifMagEarly/.test(f), 'never with two decimals on a distance');
   ok(/'\+':'\\u2212'/.test(f),             'signed, so direction reads without arithmetic');
 
   // the rail grew a tier, and the v11.67 geometry contract above the rail must still hold
@@ -1178,6 +1182,64 @@ eval(ex('emBand'));
   ok(scoped==='19', 'and the piles were LIFTED clear of it rather than the labels squeezed under them', scoped);
   ok(px('g3emr','top')===14,    'and the rail itself did NOT move — v11.67 contract intact', px('g3emr','top'));
   ok(px('g3emn','top')===11,    'nor the dot', px('g3emn','top'));
+}
+
+// ---------- 37. (v11.81) NODE ROLES: KING / GK / RUG / REVERSE-RUG ----------
+// v11.79 shipped ACC/BRK/BAL, which is POLARITY, not ROLE. Polarity says how hedging behaves at a node;
+// role says what SHAPE the book has built around it. The user asked for roles and got polarity.
+// These detectors already existed for the SPY tape and were built on Skylit's doctrine — now that the
+// rail reads Skylit's SPXW ladder, the same geometry runs on the same kind of data.
+{
+  const F=(function(){
+    const pre='var RUG_ANCHOR_PCT=40,RUG_ADJ=3,RUG_SIG_PCT=20,GK_RATIO_STRONG=1.8;';
+    return new Function(pre+ex('skRoles')+'\nreturn skRoles;')();
+  })();
+  const r=ex('skRoles');
+  ok(/RUG_ANCHOR_PCT/.test(r) && /RUG_ADJ/.test(r) && /RUG_SIG_PCT/.test(r) && /GK_RATIO_STRONG/.test(r),
+     'the constants are REUSED from the existing doctrine, not re-invented');
+  ok(!/for\(j=i\+1;j<Math\.min\(rows\.length,i\+1\+RUG_ADJ\);j\+\+\)\{\}/.test(r),
+     'and the empty loop left over from drafting is gone');
+
+  // THE USER'S LIVE LADDER, 2026-08-23 — 5-point SPXW strikes
+  const live={7605:-1,7610:-20,7615:3,7620:1,7625:13,7630:-85,7635:6,7640:9,7645:2,7650:41,7655:3,
+              7660:-10,7665:3,7670:12,7675:-7,7680:13,7685:-7,7690:-17,7695:-10,7700:-79,7705:-10,
+              7710:-100,7715:3,7720:3,7725:3,7730:-2,7735:0,7740:10,7745:3,7750:5,7755:11};
+  const L=F(live,7710);
+  ok(L.king===7710,          'the King is tagged', L.king);
+  ok(L.byK[7710]==='KING',   'and carries the KING role');
+  ok(L.gk===7700,            'the gatekeeper is the last significant node before it', L.gk);
+  ok(L.gkRatio===0.79,       'with its strength stated RELATIVE to the King', L.gkRatio);
+  ok(L.gkVerdict==='passable','and a verdict from GK_RATIO_STRONG, not a guess', L.gkVerdict);
+  ok(L.byK[7700]==='GK',     'tagged GK');
+  // ⚠ no rug TODAY, and the near-miss is the interesting part: 7650(+41) over 7630(−85) is FOUR ladder
+  // steps apart, and RUG_ADJ is 3. A detector that fired here would be loosening the doctrine to get a hit.
+  ok(L.rug===null,           'no RUG today — the +41/−85 pair is 4 steps apart and RUG_ADJ is 3');
+  ok(L.rrug===null,          'and no reverse rug');
+
+  // SYNTHETIC SHAPES — the geometry must actually fire when it is present
+  const rug=F({7690:-15,7695:5,7700:-80,7705:60,7710:-100,7715:2},7710);
+  ok(rug.rug && rug.rug.ceil===7705 && rug.rug.floor===7700,
+     'a positive ceiling directly over a strong negative node IS a rug', JSON.stringify(rug.rug));
+  ok(rug.byK[7705]==='RUG' && rug.byK[7700]==='RUG', 'and both anchors are tagged', JSON.stringify(rug.byK));
+  // ⚠ that ladder is ALSO a reverse rug (purple-yellow-purple), and the second pass used to overwrite
+  // the first — asserting the opposite direction on the same level. Both are kept; the clash is reported.
+  ok(rug.contested===true, 'a stack that is both shapes at once is flagged CONTESTED, not silently one');
+  const rr=F({7690:2,7695:55,7700:-70,7705:3,7710:-100},7710);
+  ok(rr.rrug && rr.rrug.ceil===7710 && rr.rrug.floor===7695,
+     'and the mirror is a reverse rug', JSON.stringify(rr.rrug));
+
+  // a propped floor disqualifies a rug — that is the "no obvious floor" half of the doctrine
+  const propped=F({7680:45,7690:-15,7695:5,7700:-80,7705:60,7710:-100},7710);
+  ok(propped.rug===null, 'a significant positive floor beneath disqualifies the rug', JSON.stringify(propped.rug));
+
+  // ROLE beats polarity on the label, and the hover keeps both
+  const f=ex('secFrame');
+  ok(/var role = P\.role \|\| \(P\.balanced/.test(f), 'the label shows ROLE when there is one');
+  ok(/KING \\u2014 the heaviest node/.test(f),  'the hover explains KING');
+  ok(/GATEKEEPER \\u2014 the last significant/.test(f), 'and GATEKEEPER, with its ratio');
+  ok(/RUG \\u2014 a strong POSITIVE ceiling/.test(f), 'and RUG');
+  ok(/REVERSE RUG \\u2014 a strong NEGATIVE ceiling/.test(f), 'and REVERSE RUG');
+  ok(/roles:emPiles\.lastRoles/.test(src), 'and the hook reports the whole role map');
 }
 
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');
