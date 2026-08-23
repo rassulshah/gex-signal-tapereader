@@ -1,3 +1,55 @@
+## v11.76 — documentation, because the code has been lying to its own author
+
+**A COMMENT ASSERTING A SAFETY GUARANTEE IT NO LONGER PROVIDES IS WORSE THAN NO COMMENT.** The block above
+`emPiles` said:
+
+    Read from SKYLIT's book (cpRows), which is the SAME source regime2D reads
+    — so a pile can never contradict the regime chip above it.
+
+**Both halves have been false since v11.64.** The piles read InsiderFinance. The guarantee does not exist.
+It sat there for **eleven versions** and misled two separate contexts — including me, twice, in one
+session. Corrected, and `test_em_band.js` §34 now reads what `emPiles` ACTUALLY calls and fails the build
+if the comment names a different book. Mutation-tested: restoring the old claim fires three assertions.
+
+**`session-state/INSIDERFINANCE.md` — THE SECOND BOOK, WRITTEN DOWN.** Verified against the live page:
+the Next.js payload shape, the eleven fields on an option row, all 55 expiries, the one GEX formula and
+the reconciliation that licenses recomputing it (`ours call +263.83B / put −250.49B` against their
+published `$263.8B / −$250.5B`), the three windows and the Friday roll, what we scrape from their header
+versus what we recompute, the companion's `gexProf` and its ~5% trim, the full source-by-source map of
+every element on ① FRAME, and the failure modes with how to confirm each.
+
+⚠ **AND A FINDING FROM WRITING IT: `dte0` IS NOT ALWAYS TODAY.** InsiderFinance drops an expiry from the
+payload once it has expired. Captured after the Friday close, the chain's earliest expiry is **Monday**:
+
+    payload ts   2026-08-21T20:04:55Z   (after the 16:00 ET close)
+    today        20260821
+    earliest     20260824               <- Friday's chain already gone
+    dte0 selects 20260824               dte0_isToday = FALSE
+
+So on a weekend replay of Friday, the band's "today's expected move" is **Monday's** straddle over Friday's
+price action. The arithmetic is right; the label over-promises. Recorded as D-5, not yet on the face.
+
+**`session-state/DECISIONS.md` — NINE DECISIONS, INCLUDING THE ONES I GOT WRONG.** The wrong versions are
+the valuable entries, because the wrong version is the one that looks reasonable:
+- **D-3** the two reasons I moved the piles off Skylit at v11.64 were BOTH flawed. The "113× magnitude
+  difference" is **spot² scaling — (7674/765)² = 100.6×** — plus a wider window, never incompatibility.
+  And "Skylit carries no polarity" was me reading the unsigned magnitude fields while a signed `net` sat
+  right there. A third claim, made in a mockup this session, compared Skylit's **SPY** ladder against IF's
+  **SPX** book and announced a 16-point disagreement; Skylit's **SPXW** King is 7710, one strike from IF's
+  7700.
+- **D-4** one chip from one book and everything else from the other, unresolved, with the three ways out.
+- **D-6** the false all-clear, still open.
+
+**The skill's LOAD now names both books first.** New steps 1b and 1c put DECISIONS and INSIDERFINANCE
+ahead of the code, and the companion script is now a full-file read rather than an afterthought.
+`.gex-config.json` carries an `insiderFinance` block — payload path, row fields, formula, windows — so a
+context that reads only the config still learns the second book exists.
+
+⚠ **THE SINGLE MOST REPEATED ERROR IN THIS PROJECT, now stated at the top of LOAD:** comparing a number
+from one book, window or scale against a number from another and declaring a discrepancy. It has produced
+a phantom netGEX sign bug, a phantom regime-contradicts-FLIP, a wrong incompatibility verdict, and a wrong
+King disagreement. **Establish book, window and scale BEFORE comparing.**
+
 ## v11.75 — the section is three rows, and it answers one question
 
 **LINE 3 IS DELETED.** It carried `47% USED · 18.35 LEFT ↑ · ↑ clear — 5.6 pts · $17M at target · ▮ REPLAY`

@@ -43,9 +43,28 @@ load instruction. Then read, in order:
 
 1. `session-state/latest-resume-note.md` — the single source of "where we are": locked scope for
    the next version, phase status, open threads, standing workflow agreements.
+1b. **`session-state/DECISIONS.md` — WHY the panel is the way it is.** Every entry is a decision a
+   later context would otherwise re-litigate or silently undo, INCLUDING several I got wrong and
+   corrected. Read it before proposing any change to the FRAME section, the band, or the pile
+   sources — at least three "improvements" in this project's history were re-treads of a decision
+   already made and recorded.
+1c. **`session-state/INSIDERFINANCE.md` — THE SECOND BOOK.** ⚠ **The panel stands on TWO data
+   sources and confusing them has caused four separate bugs.** Skylit (the Atlas page this
+   userscript runs on) and InsiderFinance (a second site, read by a SECOND userscript,
+   `current/gex-if-levels.user.js`). If you only understand Skylit you will make a fifth.
+   The single most repeated error in this codebase is **comparing a number from one book, window
+   or scale against a number from another** and declaring a discrepancy — it has produced a
+   phantom "netGEX sign bug", a phantom "regime contradicts FLIP", a wrong 113x
+   "incompatibility" verdict, and a wrong "the books disagree on the King" claim. **Establish
+   which book, which expiry window and which scale a number is in BEFORE comparing it to
+   anything.**
 2. `changelog/CHANGELOG.md` — head only (latest 2–3 entries).
 3. `master-spec.md` + `teaching-spec.md` — rules (file-shape rule 2.4 etc.).
-4. **`current/gex-signal-tapereader.user.js` — FULL FILE** (not summary). Understand:
+4. **`current/gex-if-levels.user.js` — the InsiderFinance companion, FULL FILE.** It is short.
+   `windows()` (dte0 / toFri / all, and the Friday roll), `levelsFor()`, `gexProf`,
+   `gexProfCoverage`, `hdrText`/`hdrNum` and the `levelSane()` gate. Every number on ① FRAME
+   except the regime chip originates here.
+5. **`current/gex-signal-tapereader.user.js` — FULL FILE** (not summary). Understand:
    - Layer 0 (feed intake): `installFeedObserver()`, `extractWalls()`, fiber candles, the tape
      `<table>` reader (`findTapeTable`/`validKingRow` — validate per row: strike in td[0], King $K
      in a later td).
@@ -58,6 +77,10 @@ load instruction. Then read, in order:
      `readBlock44`, `nodeMapSentence`, `pickEdge`, `deflectionBlock`).
    - VERIFY integrity: exactly one `render()`, final line `})();`, `@version` consistent in all
      THREE spots (header ~L4, `part1 loaded` console.log, footer feed), byte count sane.
+   - **① FRAME specifically:** `emBand` / `emPiles` / `emPath` / `emRead` / `secFrame`. The
+     comment block above `emPiles` states its source in bold — believe the code, and if a
+     comment and the code disagree, FIX THE COMMENT IN THE SAME BUILD. One that claimed the
+     wrong source survived eleven versions and misled two separate contexts.
 5. **Skylit platform docs** (the framework the code implements):
    - `skylit-docs/core-concepts/core-concepts.md` — nodes as magnets, King, Gatekeeper, retest decay.
    - `skylit-docs/read-the-heatmap/how-to-read-and-use-heatseeker.md` — the 5-step framework.

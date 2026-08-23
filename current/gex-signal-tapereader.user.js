@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.75
+// @version    11.76
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.75';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.76';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -17773,13 +17773,28 @@ function hedgeFlow(sym){
   return out;
 }
 // ---- (v11.61) GAMMA PILES INSIDE THE BAND — the fuel and the friction ------------------------------
-// What stands between price and the expected move. Read from SKYLIT's book (cpRows), which is the SAME
-// source regime2D reads — so a pile can never contradict the regime chip above it. InsiderFinance's FLIP
-// is a SECOND opinion from a different book and stays labelled as theirs; the two are allowed to differ.
+// What stands between price and the expected move.
 //
-// POLARITY IS SKYLIT'S OWN CONVENTION, already documented in this file: purple = put-dominant = negative
-// gamma = ACCELERATOR (hedging feeds the move through it); yellow = call-dominant = positive gamma =
-// BRAKE (hedging leans against price there).
+// ⚠⚠ SOURCE: **INSIDERFINANCE**, `ifChain(...).dte0.lv.gexProf`. NOT Skylit.
+// This comment used to say "Read from SKYLIT's book (cpRows), which is the SAME source regime2D reads —
+// so a pile can never contradict the regime chip above it." BOTH HALVES WERE FALSE from v11.64 onward and
+// the lie sat here for eleven versions, telling every reader — including the author, twice — that the
+// piles were Skylit's. **A comment that asserts a SAFETY GUARANTEE it no longer provides is worse than no
+// comment at all.** Corrected v11.76.
+//
+// ⚠ THE GUARANTEE IT PROMISED IS GENUINELY GONE, and nothing has replaced it yet:
+//     regime chip (−G −V) + BREAKS ...... SKYLIT        (LASTFEED / LASTVEX, SPY tape)
+//     piles, flow chip, FLIP, target ..... INSIDERFINANCE
+// They agree today (both negative gamma) by coincidence, not by construction. On a day where Skylit's SPY
+// tape reads +gamma while IF's 0DTE SPX book reads −gamma, the chip would say FADES over a rail of purple
+// accelerators and NOTHING would flag it. See session-state/DECISIONS.md D-4 for why this stands and what
+// would resolve it.
+//
+// POLARITY, in IF's convention: gexProf rows are [strike, callGEX $M, putGEX $M] with PUTS NEGATIVE, so
+// net = call + put. NEGATIVE net = dealers short gamma = ACCELERATOR (purple, hedging feeds the move);
+// POSITIVE net = dealers long gamma = BRAKE (yellow, hedging leans against price). The COLOURS are
+// Skylit's convention and are kept deliberately, so the rail reads the same way as their heatmap even
+// though the numbers behind it are InsiderFinance's.
 //
 // THRESHOLD: reuse CFG.nodeThresh — the existing ⚙ slider, default 20% of King, floor 20. Inventing a
 // second cut would put markers on the band that ③ refuses to call nodes at all, and a 10% cut admits
@@ -17832,8 +17847,10 @@ function emPiles(B, sym){
       // `perPt` used GROSS while `accel` used NET SIGN, so a strike could carry the dollar weight of its
       // whole book and the direction of a rounding error. Measured live: 7700 overstated 3.4x, 7690 1.5x,
       // 7675 3.0x, and 7650 by EIGHTY-FOUR TIMES ($59M claimed against a $0.70M net requirement).
-      //   GROSS  = how much option gamma SITS here -> pile HEIGHT and the nodeThresh cut. This is Skylit's
-      //            own node convention, so the rail keeps agreeing with their heatmap.
+      //   GROSS  = how much option gamma SITS here -> pile HEIGHT and the nodeThresh cut. The CONVENTION
+      //            is Skylit's (their %King sizing), the NUMBERS are InsiderFinance's. Borrowing the
+      //            convention keeps the rail readable next to their heatmap; borrowing their numbers is
+      //            what this function stopped doing at v11.64.
       //   |NET|  = what the dealer actually has to hedge -> the DOLLARS and the path sums.
       // netFrac is how much of the gross survives the cancellation. Below BAL_MIN the two legs have very
       // nearly offset and there is no side to lean on: it is drawn, because the size is real, but it is

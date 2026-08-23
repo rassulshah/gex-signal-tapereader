@@ -954,5 +954,46 @@ eval(ex('emBand'));
     ok(surfaced.has(k), 'the hook surfaces '+k));
 }
 
+// ---------- 34. (v11.76) THE COMMENT MUST NAME THE BOOK THE CODE ACTUALLY READS ----------
+// The block above emPiles said "Read from SKYLIT's book (cpRows), which is the SAME source regime2D
+// reads — so a pile can never contradict the regime chip above it." Both halves were false from v11.64,
+// and the lie sat there for ELEVEN VERSIONS, misleading two separate contexts into believing the piles
+// were Skylit's. A comment asserting a SAFETY GUARANTEE it no longer provides is worse than none.
+{
+  const i=src.indexOf('function emPiles');
+  const head=src.slice(Math.max(0,i-3000), i);          // the comment block immediately above it
+  const body=ex('emPiles');
+  // what does the CODE read?
+  const readsIF=/ifChain\(/.test(body), readsSkylit=/cpRows|LASTFEED/.test(body);
+  ok(readsIF && !readsSkylit, 'emPiles reads InsiderFinance, not Skylit', readsIF+'/'+readsSkylit);
+  // does the COMMENT say so?
+  ok(/SOURCE: \*\*INSIDERFINANCE\*\*/.test(head), 'and the comment above it says INSIDERFINANCE in bold');
+  // ⚠ the corrected block QUOTES the old claim in order to retract it, so a naive absence check fails on
+  // the retraction itself. Fourth time this session. Assert it is only ever present AS a retraction.
+  const claimLines=head.split('\n').filter(l=>/Read from SKYLIT's book/.test(l));
+  ok(claimLines.length<=1, 'the old claim appears at most once', claimLines.length);
+  ok(claimLines.length===0 || /used to say/.test(head),
+     'and only ever inside an explicit retraction, never as a statement');
+  ok(!/can never contradict the regime chip/.test(head) || /GUARANTEE IT PROMISED IS GENUINELY GONE/.test(head),
+     'and the guarantee it used to promise is either provided or explicitly retracted');
+  ok(/DECISIONS\.md/.test(head), 'with a pointer to where the decision is recorded');
+
+  // the two documents a fresh context needs must exist and be reachable from the config
+  const cfg=JSON.parse(fs.readFileSync('./.gex-config.json','utf8'));
+  const pf=cfg.canonicalFiles.projectFiles;
+  ['session-state/INSIDERFINANCE.md','session-state/DECISIONS.md','current/gex-if-levels.user.js']
+    .forEach(f=>{ ok(pf.indexOf(f)>=0, 'canonical: '+f);
+                  ok(fs.existsSync('./'+f), 'exists: '+f); });
+  ok(!!cfg.canonicalFiles.insiderFinance, 'the config carries an insiderFinance block');
+  ok(/gamma \* openInterest \* 100 \* spot\^2/.test(cfg.canonicalFiles.insiderFinance.formula),
+     'including the one formula everything is recomputed from');
+  const doc=fs.readFileSync('./session-state/INSIDERFINANCE.md','utf8');
+  ok(/dte0_isToday = FALSE|dte0 IS NOT ALWAYS TODAY/.test(doc), 'the doc records that dte0 is not always today');
+  ok(/263\.8/.test(doc),        'and the reconciliation that licenses recomputing');
+  const dec=fs.readFileSync('./session-state/DECISIONS.md','utf8');
+  ['D-1','D-3','D-4','D-6','D-7'].forEach(k=>ok(dec.indexOf(k)>=0, 'decision recorded: '+k));
+  ok(/100\.6/.test(dec), 'including that the 113x was the spot-squared scaling, not incompatibility');
+}
+
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
