@@ -346,7 +346,9 @@ eval(ex('emBand'));
      'and a record missing `rr` is re-captured even if the stamp matches');
 
   // --- the piles ---
-  const pf=ex('emPiles');
+  // (v11.77) the IF logic moved to emPilesIF when Skylit became the primary node source; these
+  // assertions still describe it and still matter — it is the disclosed fallback, not dead code.
+  const pf=ex('emPilesIF');
   // (v11.64) REVERSED DELIBERATELY. Skylit and IF differ ~113x in magnitude on the same nominal window
   // AND carry opposite sign conventions. Every other number on this band is IF's, so the piles must be too
   // or nothing on the rail composes. Skylit's node map keeps its home in (3) TRADE LOCATION.
@@ -464,7 +466,9 @@ eval(ex('emBand'));
 // are negative). Two books on one rail cannot be summed, compared, or trusted to compose — and every
 // other number on this band already comes from IF.
 {
-  const pf=ex('emPiles');
+  // (v11.77) the IF logic moved to emPilesIF when Skylit became the primary node source; these
+  // assertions still describe it and still matter — it is the disclosed fallback, not dead code.
+  const pf=ex('emPilesIF');
   ok(/ifChain/.test(pf),        'piles read the INSIDERFINANCE chain');
   ok(!/cpRows/.test(pf),        'and NOT Skylit\'s book — different units, opposite sign convention');
   ok(/gexProf/.test(pf),        'via the per-strike gamma profile');
@@ -653,29 +657,48 @@ eval(ex('emBand'));
   ok(boxH >= railTop + 4 + 12, 'the box still leaves a lane under the rail for the piles', boxH);
 }
 
-// ---------- 22. (v11.68) THE PILES READ THE BAND'S OWN WINDOW ----------
-// They read toFri. On a FRIDAY the roll makes that today plus a whole extra week, and measured live on
-// 2026-08-21 only 29.2% of the toFri gross gamma expired that day. Seven tenths of the obstacles drawn on
-// today's band belonged to other days.
+// ---------- 22. (v11.77) THE NODES COME FROM SKYLIT, AND FAILURE IS NEVER SILENT ----------
+// The user's architecture: InsiderFinance prices the DAY, Skylit marks the LEVELS. A King plainly visible
+// on the SPXW tape at 7710 was missing from the rail because IF's book calls that strike POSITIVE and
+// small in all three windows (dte0 +$88M/9%, toFri +$219M/11%, all +$270M/4%) while Skylit calls it the
+// King at −100%. Not a window artefact — all three checked. They measure different things: live
+// accumulated positioning vs open-interest gamma. A stock beside a flow.
 {
-  const f=ex('emPiles');
-  ok(/var w='dte0'/.test(f),          'the piles start from dte0, the same window as the band');
-  ok(!/var w='toFri'/.test(f),        'and toFri is no longer the first choice');
-  ok(/w='toFri'/.test(f),             'it survives only as a fallback when dte0 has no profile');
-  // the fallback must come AFTER the primary, or it is not a fallback
-  ok(f.indexOf("var w='dte0'") < f.indexOf("w='toFri'"),
-     'and the fallback is genuinely second', f.indexOf("var w='dte0'")+' < '+f.indexOf("w='toFri'"));
-  ok(/29\.2%/.test(f),                'the measurement that forced it is recorded beside the code');
-  // the band and the piles must not be able to drift apart again
-  const b=ex('emBand');
-  ok(/dte0/.test(b) && /var w='dte0'/.test(f), 'band and piles now name the same window');
+  const sk=ex('skPiles');
+  ok(/tapeMap\('SPXW'\)/.test(sk),      'the nodes are read from the SPXW tape');
+  ok(/L\.dispScale/.test(sk),           'and converted SPXW strike -> chart with the ladder scale');
+  ok(/accel:\(pct<0\)/.test(sk),        'negative %King is an accelerator');
+  ok(/brake:\(pct>0\)/.test(sk),        'positive is a brake');
+  ok(/balanced:false/.test(sk),         'and BALANCED cannot occur — one signed number has no legs to cancel');
+  ok(/usdK:/.test(sk) && /kingKd/.test(sk), 'dollars are DERIVED from the King value');
+
+  // every refusal carries a reason — this is what kills the false all-clear
+  const whys=(sk.match(/out\.why=/g)||[]).length;
+  ok(whys>=6, 'every distinct failure sets an explicit reason', whys);
+  ['no band','no scale','tape unreadable','no strike map','tape thin','no King'].forEach(w=>
+    ok(sk.indexOf(w)>=0, 'reason present: '+w));
+  ok(/SK_MIN_STRIKES/.test(sk) && /var SK_MIN_STRIKES = 20;/.test(src),
+     'a thin tape is caught by a named floor, not by luck');
+  ok(/⚖ hand-set/.test(src.slice(src.indexOf('var SK_MIN_STRIKES'), src.indexOf('var SK_MIN_STRIKES')+160)),
+     'flagged hand-set on the same line it is declared');
+
+  // the router: Skylit first, IF as a NAMED fallback
+  const rt=ex('emPiles');
+  ok(/skPiles\(B, sym\)/.test(rt),      'Skylit is tried first');
+  ok(/emPilesIF\(B, sym\)/.test(rt),    'InsiderFinance is the fallback');
+  ok(/emPiles\.lastSrc/.test(rt) && /emPiles\.lastWhy/.test(rt),
+     'and which one ran, plus why, is recoverable by the caller');
+  ok(ex('emPilesIF').indexOf('ifChain(')>=0, 'the fallback still reads IF');
 }
+
 
 // ---------- 23. (v11.68) GROSS SIZES IT, NET PRICES IT ----------
 // perPt used GROSS while accel used NET SIGN, so a strike could carry the dollar weight of its whole book
 // and the direction of a rounding error. Live: 7650 overstated 84x, its net being 1.2% of its gross.
 {
-  const f=ex('emPiles');
+  // (v11.77) the IF logic moved to emPilesIF when Skylit became the primary node source; these
+  // assertions still describe it and still matter — it is the disclosed fallback, not dead code.
+  const f=ex('emPilesIF');
   ok(/perPt:\(Math\.abs\(net\)\*1e6\)\/onePct/.test(f), 'dollars come from |net|');
   ok(/grossPerPt:\(mag\*1e6\)\/onePct/.test(f),         'gross is kept, but under its own name');
   ok(/pct=Math\.round\(100\*mag\/maxMag\)/.test(f),     'height and the threshold still use GROSS');
@@ -697,14 +720,62 @@ eval(ex('emBand'));
   ok(Math.round((Math.abs(net)*1e6)/onePct/1e5)/10 === 0.7, 'net is $0.7M', Math.round((Math.abs(net)*1e6)/onePct/1e5)/10);
 }
 
-// ---------- 24. (v11.68) ONE PERCENT IS IN CHART POINTS ----------
+// ---------- 24. (v11.77) THE READ REFUSES RATHER THAN INVENTS ----------
+// "Nothing sizeable between X and Y" is a claim about the MARKET. It was being made from a failure to
+// read the DATA — six distinct failures produced an empty array and an empty array rendered as a clear
+// path. DECISIONS.md D-6. Exercised, not pattern-matched.
 {
-  const f=ex('emPiles');
-  ok(/var onePct=c\.spot\*0\.01\*L\.dispScale/.test(f),
-     'the per-point denominator converts to the scale the rail is drawn in');
-  // and L must exist before it is used
-  ok(f.indexOf('L=ifLadder') < f.indexOf('var onePct='), 'the ladder is fetched first', 'ok');
+  const RUN=(function(){
+    const pre='var FLIP_NEAR_PTS=12,__p=[],__f=null,__why="",__src="skylit";'+
+      'function dispIsFut(){return true;}'+
+      'function emPiles(){emPiles.lastWhy=__why;emPiles.lastSrc=__src;return __p;}'+
+      'function ifLadder(){return __f==null?{err:1}:{err:null,rows:[{id:"FLIP",disp:__f}]};}';
+    const deps=['dispNum','usd','usdBig','frameNum','emPos','emRead'].map(ex).join('\n');
+    return new Function(pre+deps+'\nreturn function(B,p,f,why,sv){__p=p||[];__f=(f===undefined?null:f);__why=why||"";__src=sv||"skylit";return emRead(B,"SPY");};')();
+  })();
+  const B={ok:true,dir:1,pct:47,gamma:-1,now:7705.5,open:7695.75,low:7661,high:7730.5};
+  const N=(d,pc,acc)=>({disp:d,pct:pc,usdK:1,accel:acc,brake:!acc,balanced:false});
+
+  // TAPE FAILURE -> says so. This is the whole point.
+  const dead=RUN(B,[],undefined,'SPXW tape unreadable','none');
+  ok(dead.branch==='noBook',                 'an unreadable tape reads as noBook', dead.branch);
+  ok(/No node book right now/.test(dead.txt),'and says so in words');
+  ok(/SPXW tape unreadable/.test(dead.txt),  'naming the actual reason');
+  ok(/not a clear path, it is no reading/.test(dead.txt),
+     'and explicitly denies the reading a blank rail used to imply');
+  ok(!/Nothing sizeable/.test(dead.txt),     'never the false all-clear');
+
+  // a MARKUP CHANGE looks like a thin tape, and must land in the same place
+  const thin=RUN(B,[],undefined,'SPXW tape thin (3 strikes)','none');
+  ok(thin.branch==='noBook' && /thin \(3 strikes\)/.test(thin.txt),
+     'a Skylit markup change reports as a thin tape, not as an empty market', thin.txt);
+
+  // SKYLIT HEALTHY but nothing clears the cut -> that IS a market claim and is allowed
+  const quiet=RUN(B,[],undefined,'no node clears 20% of King inside the band','skylit');
+  ok(quiet.branch==='air', 'a healthy tape with no qualifying node is still "air"', quiet.branch);
+  ok(/Nothing sizeable/.test(quiet.txt), 'which is a claim we are entitled to make');
+
+  // the fallback must announce itself — units and meaning both change with it
+  const fb=RUN(B,[{disp:7717.71,perPt:17083238,accel:true,balanced:false}],undefined,'SPXW tape unreadable','if-fallback');
+  ok(/InsiderFinance open-interest levels/.test(fb.txt), 'the IF fallback discloses itself', fb.txt.slice(-70));
+  ok(/not live positioning/.test(fb.txt),                'and says what it is NOT');
+
+  // non-finite price refuses instead of printing NaN
+  const nan=RUN(Object.assign({},B,{now:NaN}),[N(7727,100,true)]);
+  ok(nan.branch==='badPrice',   'a non-finite price refuses', nan.branch);
+  ok(!/NaN/.test(nan.txt),      'and NaN never reaches the face', nan.txt);
+
+  // two nodes rounding to the same whole point must not become their own destination
+  const dup=RUN(B,[N(7717.71,60,true),N(7717.9,40,false),N(7727.73,30,true)]);
+  ok(/at 7718 can take price higher to the 30% negative gamma node at 7728/.test(dup.txt),
+     'a same-rounded node is skipped as a destination', dup.txt);
+
+  // the vocabulary is Skylit's
+  const sky=RUN(B,[N(7727.73,100,true),N(7667.59,41,false)]);
+  ok(/100% negative gamma accelerator/.test(sky.txt), '%King is the size, not dollars', sky.txt);
+  ok(!/\$/.test(sky.txt), 'and no dollar figure is printed for a Skylit node');
 }
+
 
 // ---------- 25. (v11.68) THE TARGET IS NOT ON THE PATH TO ITSELF ----------
 {
@@ -825,12 +896,14 @@ eval(ex('emBand'));
 {
   const f=ex('emRead');
   const RUN=(function(){
-    const pre='var FLIP_NEAR_PTS=12,__p=[],__f=null;\n'+
+    // (v11.77) the stub must expose lastWhy / lastSrc — emRead now branches on WHY an array is empty,
+    // which is the difference between "nothing is in the way" and "I cannot see the book".
+    const pre='var FLIP_NEAR_PTS=12,__p=[],__f=null,__why="",__src="skylit";\n'+
       'function dispIsFut(){return true;}\n'+
-      'function emPiles(){return __p;}\n'+
+      'function emPiles(){emPiles.lastWhy=__why;emPiles.lastSrc=__src;return __p;}\n'+
       'function ifLadder(){return __f==null?{err:1}:{err:null,rows:[{id:"FLIP",disp:__f}]};}\n';
     const deps=['dispNum','usd','usdBig','frameNum','emPos','emRead'].map(ex).join('\n');
-    return new Function(pre+deps+'\nreturn function(B,p,fl){__p=p||[];__f=(fl===undefined?null:fl);return emRead(B,"SPY");};')();
+    return new Function(pre+deps+'\nreturn function(B,p,fl,why,sv){__p=p||[];__f=(fl===undefined?null:fl);__why=why||"";__src=sv||"skylit";return emRead(B,"SPY");};')();
   })();
   const BASE={ok:true,dir:1,pct:47,gamma:-1,now:7712.13,open:7695.75,low:7661.02,high:7730.48};
   const one=[{disp:7717.71,perPt:17083238,accel:true,balanced:false}];
@@ -876,8 +949,12 @@ eval(ex('emBand'));
   ok(RUN(BASE,one).branch==='accel',   'accelerator ahead reads as accel');
   ok(RUN(Object.assign({},BASE,{gamma:1}),[{disp:7727,perPt:3.1e7,accel:false,balanced:false}]).branch==='brake', 'brake reads as brake');
   ok(RUN(BASE,[{disp:7717.71,perPt:1.7e7,accel:true,balanced:true}]).branch==='balanced', 'balanced-only says so');
-  ok(RUN(BASE,[]).branch==='air',      'an empty path is air');
-  ok(RUN(Object.assign({},BASE,{now:7736.7}),[]).branch==='past', 'past the rail is its own case');
+  // (v11.77) an empty array now means noBook UNLESS the source says Skylit read fine — that split is
+  // the whole D-6 fix, so the fixture has to state which case it is.
+  ok(RUN(BASE,[],undefined,'no node clears the cut','skylit').branch==='air', 'a healthy but empty path is air');
+  ok(RUN(BASE,[],undefined,'SPXW tape unreadable','none').branch==='noBook',  'an unreadable one is noBook');
+  ok(RUN(Object.assign({},BASE,{now:7736.7}),[],undefined,'no node clears the cut','skylit').branch==='past',
+     'past the rail is its own case');
   {
     const both=RUN(Object.assign({},BASE,{dir:-1,now:7674.2}),[{disp:7670,perPt:9e6,accel:true,balanced:false}],7665.56);
     ok(both.branch==='flip',           'with a flip AND a pile ahead, the flip wins', both.branch);
@@ -960,9 +1037,11 @@ eval(ex('emBand'));
 // and the lie sat there for ELEVEN VERSIONS, misleading two separate contexts into believing the piles
 // were Skylit's. A comment asserting a SAFETY GUARANTEE it no longer provides is worse than none.
 {
-  const i=src.indexOf('function emPiles');
+  const i=src.indexOf('function emPilesIF');
   const head=src.slice(Math.max(0,i-3000), i);          // the comment block immediately above it
-  const body=ex('emPiles');
+  // (v11.77) the IF logic moved to emPilesIF when Skylit became the primary node source; these
+  // assertions still describe it and still matter — it is the disclosed fallback, not dead code.
+  const body=ex('emPilesIF');
   // what does the CODE read?
   const readsIF=/ifChain\(/.test(body), readsSkylit=/cpRows|LASTFEED/.test(body);
   ok(readsIF && !readsSkylit, 'emPiles reads InsiderFinance, not Skylit', readsIF+'/'+readsSkylit);
@@ -993,6 +1072,61 @@ eval(ex('emBand'));
   const dec=fs.readFileSync('./session-state/DECISIONS.md','utf8');
   ['D-1','D-3','D-4','D-6','D-7'].forEach(k=>ok(dec.indexOf(k)>=0, 'decision recorded: '+k));
   ok(/100\.6/.test(dec), 'including that the 113x was the spot-squared scaling, not incompatibility');
+}
+
+// ---------- 35. (v11.78) THE KING IS THE ANCHOR, SO IT IS PROVEN BEFORE THE LADDER IS TRUSTED ----------
+// The user's requirement: survive Skylit changing their markup. Every %King on the SPXW tape is a RATIO
+// to the King — get the King wrong and all 100 strikes are wrong TOGETHER, in the same direction, and the
+// rail still looks entirely plausible. That is the worst failure available here, because nothing about it
+// reads as broken. Skylit's signed $K cell is the strongest fingerprint they publish (it is DATA, not
+// markup, so it survives restyling); the reader already prefers it. v11.78 CHECKS it.
+{
+  const sk=ex('skPiles');
+  ok(/T\.kingKd/.test(sk),                'the dollar anchor is read');
+  ok(/Math\.abs\(topK-T\.king\)>0\.01/.test(sk),
+     'and the percent ladder must independently crown the SAME strike');
+  ok(/T\.kingConflict/.test(sk),          'the reader\'s own conflict flag is honoured');
+  ok(/topV<99/.test(sk),                  'and a ladder where nothing reaches 100% is refused');
+  ok(/out\.degraded=/.test(sk),           'a missing dollar anchor DEGRADES rather than fails');
+
+  // BEHAVIOUR — simulated tape shapes, which is the only way to test "what if the markup changes"
+  const RUN=(function(){
+    const pre='var CFG={nodeThresh:20}, SK_MIN_STRIKES=20, __tape=null, __lad={err:null,dispScale:1.0023};'+
+      'function tapeMap(){return __tape;} function ifLadder(){return __lad;}';
+    return new Function(pre+['emPos','skPiles'].map(ex).join('\n')+
+      '\nreturn function(t){__tape=t; return skPiles({ok:true,low:7661,high:7730.5,now:7705},"SPY");};')();
+  })();
+  const good={count:100,king:7710,kingKd:17241,kingSrc:'dollar',kingConflict:false,
+              pct:{'7710.00':-100,'7700.00':-79,'7650.00':41,'7690.00':-17}};
+
+  ok(RUN(good).ok && RUN(good).piles.length===3, 'a healthy tape yields nodes', RUN(good).piles.length);
+  ok(!RUN(good).degraded, 'and reports no degradation');
+
+  // ⚠ THE SILENT CATASTROPHE: dollar King and ratio King disagree. Everything would render normally.
+  const split=RUN({count:100,king:7710,kingKd:17241,kingSrc:'dollar',pct:{'7700.00':-100,'7710.00':-50}});
+  ok(!split.ok, 'a King the two methods disagree about is REFUSED, not drawn');
+  ok(/King disagrees/.test(split.why), 'and the reason names both answers', split.why);
+
+  // each distinct markup failure names itself
+  [[null,'tape unreadable'],
+   [{count:4,king:7710,kingKd:1,kingSrc:'dollar',pct:{'7710.00':-100}},'thin'],
+   [{count:100,king:null,kingKd:1,pct:good.pct},'no King'],
+   [{count:100,king:7710,kingKd:1,kingSrc:'dollar',pct:{'7710.00':-64}},'reaches 100%'],
+   [Object.assign({},good,{kingConflict:true}),'conflict'],
+   [{count:100,king:7710,kingKd:1,pct:{}},'no strike map']
+  ].forEach(([t,frag])=>{ const r=RUN(t);
+    ok(!r.ok, 'refused: '+frag);
+    ok((r.why||'').indexOf(frag)>=0, 'and says so: '+frag, r.why); });
+
+  // GRACEFUL DEGRADATION: the ratios still size the nodes, but the early warning is printed
+  const noDollar=RUN({count:100,king:7710,kingKd:null,kingSrc:'highlight',kingConflict:false,pct:good.pct});
+  ok(noDollar.ok, 'a lost dollar anchor still renders — the ratios are self-consistent');
+  ok(/dollar anchor lost/.test(noDollar.degraded||''), 'but it is DISCLOSED, not swallowed', noDollar.degraded);
+  ok(noDollar.piles.length===3, 'with the same nodes', noDollar.piles.length);
+
+  // and the provenance reaches the hook, so a live check is one call
+  const h=src.slice(src.indexOf('__gptsDebug.piles'), src.indexOf('__gptsDebug.session = function'));
+  ['kingSrc','kingKd','degraded'].forEach(k=>ok(h.indexOf(k)>=0, 'the piles hook reports '+k));
 }
 
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');

@@ -1,3 +1,112 @@
+## v11.78 — prove the King before trusting anything measured against it
+
+**THE USER'S REQUIREMENT: survive Skylit changing their markup.** The right place to defend that is the
+King, and the reason is worth stating precisely.
+
+**Every %King on the SPXW tape is a RATIO to the King.** Get the King wrong and all 100 strikes are wrong
+TOGETHER, in the same direction, by the same factor — and the rail still looks entirely plausible. Nothing
+about it reads as broken. That is the worst failure available on this path, and it is exactly the one a
+markup change produces.
+
+**Skylit's signed `$K` cell is the strongest fingerprint they publish**, because it is DATA rather than
+markup: it survives restyling, class renames, container swaps and table-to-div rewrites. `readTapeFromDOM`
+has preferred it since v11.2 (`kingSrc:'dollar'`). **What was missing was checking it.** Now, three gates:
+
+    1. the dollar anchor exists at all
+    2. the percent ladder INDEPENDENTLY crowns the same strike  (|pct| == 100)
+    3. the reader is not already flagging a conflict between its own two methods
+
+⚠ **GATE 2 IS THE ONE THAT MATTERS.** Two methods, one answer required. If the $-anchor says 7710 and the
+ratios say 7700, the ladder is being misread and **every level drawn from it would be wrong by the same
+ratio while looking completely normal.** It now refuses and names both answers.
+
+**A LOST DOLLAR ANCHOR DEGRADES, IT DOES NOT FAIL.** If the $K cell disappears but the ratios stay
+self-consistent, the nodes still render — the ratios are what sizes them — and the sentence prints
+*"⚠ no King $ value on the tape — ratios only, dollar anchor lost."* That is the early warning that the
+strongest fingerprint has gone and the NEXT markup change may not be survivable.
+
+**Nine simulated tape shapes, each naming itself:**
+
+    healthy tape                        3 nodes
+    tape gone (markup change)           SPXW tape unreadable
+    thin tape (partial parse)           SPXW tape thin (4 strikes)
+    no King                             no King on the SPXW tape
+    $ says 7710, ratios say 7700        King disagrees: $-anchor says 7710, ratios say 7700
+    nothing reaches 100%                no strike reaches 100% of King (top 64%)
+    reader flags a conflict             the tape reader flags a King conflict
+    dollar anchor lost                  3 nodes  ⚠ ratios only, dollar anchor lost
+    no strike map                       SPXW tape has no strike map
+
+**And the provenance is one hook call away.** `__gptsDebug.piles()` now returns `king`, `kingSrc`,
+`kingKd` and `degraded`. ⚠ **If `kingSrc` ever stops saying `'dollar'`, the strongest fingerprint is gone**
+— that is the thing to check first when levels look wrong.
+
+⚠ **Every gate mutation-tested.** Removing the cross-check fires 3 assertions (including the silent
+catastrophe itself), ignoring the conflict flag fires 4, making a lost anchor fatal fires 5, dropping the
+100% requirement fires 4.
+
+## v11.77 — the nodes come from Skylit, and a failure to read can no longer look like a clear path
+
+**THE USER'S ARCHITECTURE, AND IT WAS RIGHT: InsiderFinance prices the DAY, Skylit marks the LEVELS.**
+Both were coming from IF, which is why a King the user could plainly see on the SPXW tape at 7710 was
+missing from the rail entirely.
+
+⚠ **NOT A SCALING FIX AND NOT A BUG.** SPX 7710 in ALL THREE IF windows: `dte0` +$88M (9% of King),
+`toFri` +$219M (11%), `all` +$270M (4%) — **positive and small in every one.** Skylit calls the same
+strike its **King at −100%**. I ruled out a window artefact by checking all three. They measure different
+things, and this file already said so above `ifChain`: *"live dealer positioning that accumulates and
+dissipates intraday ... This is open interest x gamma: where exposure SITS. A stock beside a flow."*
+**The trader watches the flow. The rail now draws the flow.**
+
+**AND IT PUT THE BRAKES BACK.** Under IF every in-band node was negative — four purple piles, no yellow,
+nothing structural leaning against a move in either direction. Skylit's book shows **+41% at 7650** and
+three more above the noise. The "hurdles" half of the question was missing because the wrong book was
+answering it.
+
+    7710  −100%  $17.2M     the King the user saw
+    7700   −79%  $13.6M
+    7650   +41%   $7.1M     a BRAKE
+    7690   −17%      7680  +13%      7670  +12%      7640  +9%
+
+**THE GROSS-VS-NET TRAP IS NOW STRUCTURALLY IMPOSSIBLE.** Skylit gives ONE signed number per strike, so
+there is no second magnitude to size by. The 84x overstatement of v11.68 cannot recur on this path.
+
+⚠ **UNITS CHANGED AND THE SENTENCE CHANGED WITH THEM.** IF's figure was hedging per POINT; Skylit's is the
+node's VALUE. Same-looking number, different meaning. **%King is now the size** — what the tape shows —
+and the dollar value is derived (`pct/100 x kingKd`) and lives in the hover. Printing Skylit dollars with
+"/PT" would have been the worst kind of wrong, so a test forbids a `$` in a Skylit node sentence.
+
+---
+
+**⚠⚠ FAILURE CAN NO LONGER LOOK LIKE AN EMPTY BAND — DECISIONS.md D-6 IS CLOSED.**
+
+`"Nothing sizeable between 7708 and 7730"` is a claim about the MARKET. It was being made from a failure
+to read the DATA: six distinct failures returned an empty array and an empty array rendered as a clear
+path. Now every refusal carries its reason and the sentence prints it:
+
+    No node book right now — SPXW tape unreadable. This is not a clear path, it is no reading.
+    No node book right now — SPXW tape thin (3 strikes). This is not a clear path, it is no reading.
+
+**A Skylit markup change lands in exactly that second message.** `SK_MIN_STRIKES` (⚖ 20; a healthy ladder
+reads 100) catches a degraded read before it can masquerade as a quiet market.
+
+**AND THE FALLBACK ANNOUNCES ITSELF.** If the SPXW tape cannot be read at all we would rather draw IF's
+static book than draw nothing — but the units and the meaning both change, so the sentence says so:
+*"⚠ Skylit tape unreadable — these are InsiderFinance open-interest levels, not live positioning."*
+**A rail that silently changes what it measures is worse than one that admits it.**
+
+Also closed from the same audit: a non-finite price now refuses (`"Price or band not readable right now"`)
+instead of rendering `"between NaN and 7730"`, and two nodes rounding to one whole point can no longer
+become each other's destination.
+
+⚠ **WHAT THIS COSTS, STATED PLAINLY.** SPXW has **no JSON feed** — `feedShape('SPXW')` returns *"no feed
+captured yet"*. The nodes are read from the rendered tape table. That reader has already adapted to four
+Skylit markup changes (v10.44, v10.47, v11.1.3), validates per ROW, rejects the flow popup and the heatmap
+by fingerprint, and falls back through the gamma feed and a stale cache before giving up — but it IS the
+fragile edge, and it is now load-bearing for the levels. **Every guard above was mutation-tested:**
+removing the thin-tape floor fires 3, collapsing the noBook branch fires 4, dropping the fallback
+disclosure fires 3, pointing the reader at SPY fires 2, letting NaN through fires 3.
+
 ## v11.76 — documentation, because the code has been lying to its own author
 
 **A COMMENT ASSERTING A SAFETY GUARANTEE IT NO LONGER PROVIDES IS WORSE THAN NO COMMENT.** The block above

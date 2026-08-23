@@ -39,7 +39,7 @@ for weeks. The open question is whether the recorder eventually shows containmen
 
 ---
 
-## D-3 · THE PILES COME FROM INSIDERFINANCE, NOT SKYLIT — AND MY REASONS WERE HALF WRONG
+## D-3 · THE NODES COME FROM SKYLIT (v11.77). THE ROUTE HERE WAS WRONG TWICE.
 **v11.61 built them on Skylit; v11.64 moved to IF; v11.68 narrowed to `dte0`.**
 
 Two justifications were recorded at v11.64 and **both were flawed**:
@@ -55,10 +55,20 @@ A third claim, made in a mockup on 2026-08-23 and also wrong: *"the two books di
 points."* That compared **Skylit's SPY ladder** (765 → ~7702 chart) against **IF's SPX book**. Skylit also
 publishes an **SPXW** ladder whose King is **7710**, one strike from IF's 7700. Apples to oranges again.
 
-**The piles stay on IF for now** because that path is verified end to end — right window, net-vs-gross,
-96.3% coverage — not because Skylit was proven unusable. **Skylit's SPY `dte0` set is a legitimate
-alternative**: 197 strikes, exps `["2026-08-21"]`, decomposable into call/put/net, and it is the same book
-the regime chip reads.
+**RESOLVED v11.77 — the nodes moved to Skylit's SPXW tape**, on the user's instruction and the evidence
+above. What forced it: SPX 7710 is **positive and small in all three IF windows** (+$88M/9%, +$219M/11%,
++$270M/4%) while Skylit calls it the **King at −100%**. Not a window artefact — all three checked. They
+measure different things, as this codebase already said above `ifChain`: live accumulated positioning
+versus open-interest gamma. **A stock beside a flow.**
+
+Side effect that mattered more than expected: **the brakes came back.** Under IF every in-band node was
+negative. Skylit shows +41% at 7650 and three more — the "hurdles" half of the feature was missing because
+the wrong book was answering it.
+
+⚠ Skylit gives ONE signed number per strike, so **the gross-vs-net trap is structurally impossible** on
+this path. But per-strike dollars are DERIVED (`pct/100 × kingKd`), so **%King is the size** and the
+dollar figure is secondary. IF's number was $/POINT; Skylit's is a node VALUE — never print Skylit
+dollars with "/PT".
 
 ⚠ **Skylit's SPXW ladder has NO call/put legs** (`callPut('SPXW')` returns empty), so the SPXW route
 cannot do the gross-vs-net split that removed an 84× overstatement at v11.68. Only the SPY route can.
@@ -68,7 +78,7 @@ cannot do the gross-vs-net split that removed an 84× overstatement at v11.68. O
 ---
 
 ## D-4 · ONE CHIP FROM ONE BOOK, EVERYTHING ELSE FROM THE OTHER — UNRESOLVED
-**Standing since v11.64.**
+**Standing v11.64 → v11.77. LARGELY RESOLVED.**
 
     regime chip (−G −V) + BREAKS ...... SKYLIT
     everything else on ① FRAME ........ INSIDERFINANCE
@@ -80,7 +90,13 @@ They agree today (both negative gamma) **by coincidence, not by construction**. 
 tape reads +gamma while IF's 0DTE SPX book reads −gamma, the chip would read **FADES** above a rail of
 purple accelerators and nothing would flag it.
 
-**Three ways out, in order of preference:**
+**v11.77 took route 2.** The regime chip and the nodes now both read Skylit, so the guarantee is restored
+by construction for the two elements that most needed it. The band, target, EM and FLIP stay on
+InsiderFinance — which is the user's intended split: **IF prices the day, Skylit marks the levels.**
+⚠ Still unresolved: the flow chip (`FEEDS $x/PT`) remains on IF while the nodes beside it are Skylit's.
+Same disease, smaller blast radius.
+
+**The three routes, kept for the record:**
 1. **Flag the disagreement** — keep both opinions, mark the chip when the signs conflict. Cheap, and the
    conflict itself becomes information.
 2. **Move the piles to Skylit SPY dte0** — the user's intended architecture (IF for the expected move,
@@ -108,8 +124,8 @@ The arithmetic is right; the wording over-promises. **Open** — not yet reflect
 
 ---
 
-## D-6 · ABSENCE OF DATA CURRENTLY READS AS ABSENCE OF OBSTACLES — OPEN DEFECT
-**Found in the hardening audit, 2026-08-23. NOT YET FIXED.**
+## D-6 · ABSENCE OF DATA READ AS ABSENCE OF OBSTACLES — ✅ CLOSED v11.77
+**Found in the hardening audit 2026-08-23, fixed the same day.**
 
 `emPiles` returns `[]` on **six** distinct failures — no chain, chain error, `spot<=0`, no `gexProf`, no
 ladder/`dispScale`, `maxMag<=0` — and `[]` renders as:
@@ -119,11 +135,18 @@ ladder/`dispScale`, `maxMag<=0` — and `[]` renders as:
 A **false all-clear**. Nothing on the face or in `__gptsDebug.piles()` (which returns `{ok:true, n:0}`
 either way) distinguishes "the path is clear" from "we cannot see the book".
 
-Same disease as a render `try/catch` swallowing an error, which this project already has a rule about.
-**Fix: a distinct "no gamma book" state that says so.**
+**FIXED.** Every refusal in `skPiles` now carries a reason, and the sentence prints it:
 
-Two smaller ones found in the same pass, also open: a non-finite `now` renders *"between NaN and 7730"*,
-and two piles on one strike produce *"accelerator at 7718 … to the node at 7718"*.
+    No node book right now — SPXW tape unreadable. This is not a clear path, it is no reading.
+    No node book right now — SPXW tape thin (3 strikes). This is not a clear path, it is no reading.
+
+⚠ **A Skylit markup change lands in that second message** — `SK_MIN_STRIKES` (⚖ 20; a healthy ladder reads
+100) catches a degraded read before it can pass as a quiet market. And when the tape is unreadable
+entirely, the IF fallback **announces itself** in the sentence, because the units and the meaning both
+change with it.
+
+The two smaller ones are closed too: a non-finite price refuses outright, and two nodes rounding to one
+whole point can no longer become each other's destination. **All five guards mutation-tested.**
 
 ---
 

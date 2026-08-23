@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.76
+// @version    11.78
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.76';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.78';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -17808,7 +17808,138 @@ function hedgeFlow(sym){
 // 1.2% case that exposed the bug and comfortably below the 29-68% band the real accelerators occupied on
 // the live book. It is enrolled so it can be swept once there are records.
 var PILE_BAL_MIN = 15;
+// ---- (v11.77) THE NODES COME FROM SKYLIT ---------------------------------------------------------
+// The user's architecture, and it is the right one: **InsiderFinance prices the DAY (the straddle);
+// SKYLIT marks the LEVELS (the nodes).** They were both coming from IF, which is why a King the user
+// could plainly see on the SPXW tape at 7710 was missing from the rail.
+//
+// ⚠ THIS IS NOT A SCALING FIX AND IT WAS NOT A BUG. Measured 2026-08-23, SPX 7710 in ALL THREE IF
+// windows: dte0 net +$88M (9% of King), toFri +$219M (11%), all +$270M (4%) — POSITIVE and small in
+// every one. Skylit's SPXW ladder calls the same strike its KING at −100%. Not a window artefact; I
+// ruled that out by checking all three. **They measure different things**, and this file already said so
+// above `ifChain`: "Skylit's node values are live dealer positioning that accumulates and dissipates
+// intraday ... This is open interest x gamma: where exposure SITS. A stock beside a flow."
+// The trader watches the flow. The rail now draws the flow.
+//
+// WHAT THIS BUYS, beyond matching the tape:
+//   · BRAKES EXIST AGAIN. Under IF every in-band node was negative — four purple piles, no yellow,
+//     nothing structural leaning against a move. Skylit's book shows +41% at 7650 and three more.
+//   · ONE BOOK for the regime chip AND the nodes, so the v11.61 guarantee that v11.64 silently dropped
+//     is restored BY CONSTRUCTION rather than by luck. See DECISIONS.md D-4.
+//   · The gross-vs-net trap becomes IMPOSSIBLE: Skylit gives ONE signed number per strike, so there is
+//     no second magnitude to size by. The 84x overstatement of v11.68 cannot recur here.
+//
+// WHAT IT COSTS, stated plainly:
+//   · SPXW has NO JSON feed (`feedShape('SPXW')` -> "no feed captured yet"). It is read from the
+//     rendered tape table, so a Skylit markup change can break it. That reader has already adapted to
+//     four such changes (v10.44, v10.47, v11.1.3) and validates per ROW, but it IS the fragile edge.
+//   · Per-strike dollars are DERIVED (pct/100 x kingKd), not measured. %King is the primary size.
+//
+// ⚠⚠ FAILURE MUST NEVER LOOK LIKE AN EMPTY BAND. Every refusal below returns an explicit reason, and
+// the read sentence prints it. "Nothing in the way" and "I cannot see the book" are opposite claims and
+// the old code rendered them identically — see DECISIONS.md D-6.
+var SK_MIN_STRIKES = 20;   // ⚖ hand-set. A healthy SPXW ladder reads 100; below 20 the DOM changed.
+function skPiles(B, sym){
+  var out={ ok:false, why:'', piles:[], src:'skylit', count:0 };
+  try{
+    if(!B || !B.ok){ out.why='no band'; return out; }
+    var L=null; try{ L=ifLadder(sym); }catch(e2){}
+    if(!L || L.err || !(L.dispScale>0)){ out.why='no scale'; return out; }
+
+    var T=null; try{ T=tapeMap('SPXW'); }catch(eT){}
+    // tapeMap already: caches 1s, checks the display is gamma, needs count>=5, falls back to the
+    // gamma feed, then to a stale cache, and returns NULL when all of that fails.
+    if(!T){ out.why='SPXW tape unreadable'; return out; }
+    if(!T.pct || !Object.keys(T.pct).length){ out.why='SPXW tape has no strike map'; return out; }
+    out.count=T.count||Object.keys(T.pct).length;
+    if(!(out.count>=SK_MIN_STRIKES)){ out.why='SPXW tape thin ('+out.count+' strikes)'; return out; }
+    if(T.king==null){ out.why='no King on the SPXW tape'; return out; }
+
+    // ---- (v11.78) THE KING IS THE ANCHOR, SO PROVE IT BEFORE TRUSTING THE LADDER --------------------
+    // The user's point, and it is the right one: **every %King on this tape is a ratio to the King.** Get
+    // the King wrong and all 100 strikes are wrong TOGETHER, in the same direction, and the rail still
+    // looks completely plausible — the worst possible failure, because nothing about it reads as broken.
+    //
+    // Skylit's own $K cell is the strongest fingerprint they publish: a signed dollar figure in a strike
+    // row. It survives restyling, class renames and container changes, because it is DATA, not markup.
+    // `readTapeFromDOM` already prefers it (`kingSrc:'dollar'`, v11.2). What was missing was CHECKING IT.
+    //
+    // Three gates, each with its own reason so a failure names itself:
+    //   1. the dollar anchor exists at all
+    //   2. the percent ladder independently crowns the SAME strike (|pct| == 100)
+    //   3. the reader is not already flagging a conflict between its own two methods
+    var kd=(typeof T.kingKd==='number' && isFinite(T.kingKd) && T.kingKd!==0) ? T.kingKd : null;
+    out.kingSrc=T.kingSrc||null; out.king=T.king; out.kingKd=kd;
+
+    // (2) recompute the King from the ratios and compare. Independent of how the King was found.
+    var topK=null, topV=0, kk;
+    for(kk in T.pct){ if(!T.pct.hasOwnProperty(kk)) continue;
+      var av=Math.abs(T.pct[kk]); if(av>topV){ topV=av; topK=parseFloat(kk); } }
+    out.pctKing=topK; out.pctKingVal=Math.round(topV);
+    if(topK==null){ out.why='no strike carries a %King'; return out; }
+    if(Math.abs(topK-T.king)>0.01){
+      // ⚠ REFUSE. A ladder whose dollar King and percent King disagree is a ladder we are misreading, and
+      // every level drawn from it would be wrong by the same ratio while looking entirely normal.
+      out.why='King disagrees: $-anchor says '+T.king+', ratios say '+topK; return out;
+    }
+    if(topV<99){ out.why='no strike reaches 100% of King (top '+Math.round(topV)+'%)'; return out; }
+    if(T.kingConflict){ out.why='the tape reader flags a King conflict'; return out; }
+    if(kd==null){
+      // NOT fatal — the ratios are self-consistent and that is what sizes the nodes. But the dollar
+      // anchor is the thing that survives a markup change, so its absence is the early warning that the
+      // next change may not be survivable. Disclosed, not swallowed.
+      out.degraded='no King $ value on the tape — ratios only, dollar anchor lost';
+    }
+    var thr=(typeof CFG!=='undefined' && CFG && typeof CFG.nodeThresh==='number') ? CFG.nodeThresh : 20;
+    var ks=Object.keys(T.pct), i;
+    for(i=0;i<ks.length;i++){
+      var k=parseFloat(ks[i]); if(!isFinite(k)) continue;
+      var pct=T.pct[ks[i]]; if(typeof pct!=='number' || !isFinite(pct)) continue;
+      var disp=k*L.dispScale;                                  // SPXW strike -> chart (ES)
+      if(disp<B.low || disp>B.high) continue;
+      var mag=Math.abs(pct); if(mag<thr) continue;
+      out.piles.push({ k:k, disp:disp, pct:Math.round(mag),
+                       signed:pct,
+                       usdK:(kd!=null)?Math.round(mag/100*Math.abs(kd)):null,
+                       accel:(pct<0),                          // negative = short gamma = accelerator
+                       brake:(pct>0),
+                       balanced:false,                          // one signed number: no legs to cancel
+                       pos:emPos(B, disp), window:'skylit', src:'skylit' });
+    }
+    out.piles.sort(function(a,b){ return b.pct-a.pct; });
+    out.ok=true;
+    if(!out.piles.length) out.why='no node clears '+thr+'% of King inside the band';
+  }catch(e){ out.why='skylit piles failed: '+(e&&e.message||e); }
+  return out;
+}
+// (v11.77) emPiles is now a ROUTER and it returns an ARRAY as before, so every existing caller is
+// unchanged. The reason a call came back empty is stashed on `emPiles.lastWhy` and read by emRead —
+// an array cannot carry a reason, and inventing an object return here would have touched six callers.
+emPiles.lastWhy='';
+emPiles.lastSrc='';
+emPiles.lastKing=null; emPiles.lastKingSrc=''; emPiles.lastKingKd=null; emPiles.lastDegraded='';
 function emPiles(B, sym){
+  // SKYLIT FIRST — the nodes are theirs. IF is a NAMED fallback, not a silent one.
+  var sk=skPiles(B, sym);
+  emPiles.lastSrc='skylit';
+  emPiles.lastKing=sk.king; emPiles.lastKingSrc=sk.kingSrc; emPiles.lastKingKd=sk.kingKd;
+  emPiles.lastDegraded=sk.degraded||'';
+  if(sk.ok){ emPiles.lastWhy=sk.why||''; return sk.piles; }
+  emPiles.lastWhy=sk.why||'skylit unavailable';
+  // ⚠ THE FALLBACK IS DELIBERATE AND IT IS DISCLOSED. If the SPXW tape cannot be read we would rather
+  // draw InsiderFinance's static book than draw nothing — but the sentence SAYS which book it is on,
+  // because a rail that silently changes what it is measuring is worse than a rail that admits it.
+  var ifp=emPilesIF(B, sym);
+  emPiles.lastSrc = ifp.length ? 'if-fallback' : 'none';
+  return ifp;
+}
+// ⚠⚠ SOURCE: **INSIDERFINANCE**, `ifChain(...).dte0.lv.gexProf`. This is the FALLBACK reader, used only
+// when the Skylit SPXW tape cannot be read. It is a DIFFERENT MEASUREMENT from the Skylit nodes above —
+// open interest x gamma (where exposure SITS) rather than live accumulated positioning (what is moving) —
+// so the units differ ($/pt vs %King) and the read sentence discloses which one produced it.
+// The comment that used to sit here claimed the piles were SKYLIT's and promised they could never
+// contradict the regime chip. Both halves were false for eleven versions. See DECISIONS.md D-3 and D-4.
+function emPilesIF(B, sym){
   var out=[];
   try{
     if(!B || !B.ok) return out;
@@ -17905,6 +18036,21 @@ function emRead(B, sym){
     if(!B || !B.ok) return out;
     var up=(B.dir>=0), rail=up?B.high:B.low, shortG=(B.gamma!=null && B.gamma<0);
     var ps=[]; try{ ps=emPiles(B, sym)||[]; }catch(eP){}
+    // (v11.77) ⚠ THE FALSE ALL-CLEAR IS DEAD. `[]` used to render as "Nothing sizeable between X and Y",
+    // which is a claim about the MARKET made from a failure to read the DATA. Six distinct failures
+    // produced it. Now the reason comes back with the array and is printed instead.
+    var srcNow=emPiles.lastSrc||'', whyNow=emPiles.lastWhy||'';
+    if(!ps.length && srcNow!=='skylit'){
+      out.branch='noBook'; out.ok=true;
+      out.txt='No node book right now \u2014 '+(whyNow||'both sources unavailable')+'. This is not a clear path, it is no reading.';
+      return out;
+    }
+    // non-finite inputs must refuse, not render NaN into a sentence
+    if(!isFinite(B.now) || !isFinite(rail)){
+      out.branch='badPrice'; out.ok=true;
+      out.txt='Price or band not readable right now \u2014 no level read.';
+      return out;
+    }
     var ahead=ps.filter(function(x){ return up ? x.disp>B.now : x.disp<B.now; })
                 .sort(function(x,y){ return up ? x.disp-y.disp : y.disp-x.disp; });
     var live=ahead.filter(function(x){ return !x.balanced; });
@@ -17912,7 +18058,12 @@ function emRead(B, sym){
     var next=live[0]||null, after=live[1]||null;
     var pastRail=(up ? B.now>=B.high : B.now<=B.low);
     function beyond(x){ return x && (up ? x.disp>B.high : x.disp<B.low); }
+    // (v11.77) SKYLIT'S OWN VOCABULARY, because it is what the tape shows. %King is the size the user
+    // reads; the dollar value is derived and lives in the hover. ⚠ Do NOT print Skylit's dollars with
+    // "/PT" — IF's figure was hedging per POINT, Skylit's is the node's VALUE. Same shape, different
+    // unit, and silently swapping them would be the worst kind of wrong.
     function pol(x){ return x.accel ? 'negative gamma' : 'positive gamma'; }
+    function sz(x){ return (x.pct!=null) ? (x.pct+'%') : usdBig(x.perPt); }
 
     var flip=null;
     try{ var L=ifLadder(sym);
@@ -17936,12 +18087,15 @@ function emRead(B, sym){
         (shortG?'flips from amplifying to damping':'flips from damping to amplifying')+'.';
     } else if(next){
       out.branch=next.accel?'accel':'brake';
-      var head=usdBig(next.perPt)+' '+pol(next)+' '+(next.accel?'accelerator':'brake')+' at '+frameNum(next.disp)+
+      var head=sz(next)+' '+pol(next)+' '+(next.accel?'accelerator':'brake')+' at '+frameNum(next.disp)+
                (beyond(next)?', past the rail':'');
       if(next.accel){
         // WHERE IT LEADS: the next node beyond it, or the rail when there is nothing else.
-        var dest = after
-          ? ('the '+usdBig(after.perPt)+' '+pol(after)+' node at '+frameNum(after.disp))
+        // ⚠ the destination must not be the SAME level — two nodes can round to one whole point.
+        var after2 = (after && frameNum(after.disp)!==frameNum(next.disp)) ? after : (live[2]||null);
+        if(after2 && frameNum(after2.disp)===frameNum(next.disp)) after2=null;
+        var dest = after2
+          ? ('the '+sz(after2)+' '+pol(after2)+' node at '+frameNum(after2.disp))
           : (frameNum(rail)+', with nothing else in the way');
         b=head+' can take price '+(up?'higher':'lower')+' to '+dest+'.';
       } else {
@@ -17958,7 +18112,15 @@ function emRead(B, sym){
       out.branch='air';
       b='Nothing sizeable between '+frameNum(B.now)+' and '+frameNum(rail)+'.';
     }
-    out.txt=b;
+    // (v11.77) A RAIL THAT SILENTLY CHANGES WHAT IT MEASURES IS WORSE THAN ONE THAT ADMITS IT.
+    // When the SPXW tape is unreadable we fall back to InsiderFinance's static book rather than draw
+    // nothing — but the units and the meaning change with it (%King becomes $/pt, live positioning
+    // becomes open interest), so the sentence says which book it is on.
+    out.src=srcNow;
+    var degNow=emPiles.lastDegraded||'';
+    out.degraded=degNow;
+    out.txt = b + ((srcNow==='if-fallback') ? ' \u26a0 Skylit tape unreadable \u2014 these are InsiderFinance open-interest levels, not live positioning.' : '')
+                + ((srcNow==='skylit' && degNow) ? ' \u26a0 '+degNow+'.' : '');
     out.ok=true;
   }catch(e){ out.why=String(e&&e.message||e); }
   return out;
@@ -19143,6 +19305,11 @@ window.__gptsDebug.piles = function(sy){
     var c=null; try{ c=ifChain((sym==='QQQ')?'QQQ':'SPX'); }catch(e){}
     var lv=(c&&c.toFri&&c.toFri.lv)?c.toFri.lv:null;
     var out={ ok:true, thresh:thr, window:(ps[0]&&ps[0].window)||null,
+              // (v11.78) THE KING'S PROVENANCE, because every %King on the rail is a ratio to it. If
+              // `kingSrc` ever stops saying 'dollar', the strongest fingerprint Skylit publishes has
+              // gone and the next markup change is the one that breaks the levels silently.
+              src:emPiles.lastSrc||null, why:emPiles.lastWhy||null, degraded:emPiles.lastDegraded||null,
+              king:emPiles.lastKing, kingSrc:emPiles.lastKingSrc||null, kingKd:emPiles.lastKingKd,
               band:{low:+B.low.toFixed(2), high:+B.high.toFixed(2), now:+B.now.toFixed(2)},
               coverage:lv?lv.gexProfCoverage:null, profN:(lv&&lv.gexProf)?lv.gexProf.length:0,
               n:ps.length, nAccel:0, nBrake:0, piles:[] };
