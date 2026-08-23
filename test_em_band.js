@@ -187,7 +187,14 @@ eval(ex('emBand'));
 // Every other read on the face has one. Without it the only way to check the band was to count DOM
 // nodes and infer from pixel positions, which is exactly the kind of verification that stops happening.
 {
-  const h=src.slice(src.indexOf("window.__gptsDebug.emBand"), src.indexOf("window.__gptsDebug.emBand")+3000);
+  // ⚠ THIS WAS A FIXED +3000 CHARACTER SLICE and v11.73 grew the hook past it, so `targetInPlay` fell off
+  // the end and an assertion failed on a field that was present and correct. Same disease as the
+  // 40-record dedupe scan and the `session`/`sessionRoll` marker: a magic-number window that silently
+  // stops covering what it is meant to cover. Bound it by the NEXT hook instead, which cannot drift.
+  const hStart0=src.indexOf("window.__gptsDebug.emBand");
+  const hEnd0=src.indexOf("window.__gptsDebug.", hStart0+30);
+  const h=src.slice(hStart0, hEnd0>hStart0?hEnd0:undefined);
+  ok(hEnd0>hStart0, 'the emBand hook is bounded by the next hook, not by a character count');
   ok(/window\.__gptsDebug\.emBand\s*=/.test(src), 'the band exposes a debug hook');
   ok(/anchor:B\.anchor/.test(h),      'it reports WHICH anchor was used — open or prevClose');
   ok(/low:/.test(h) && /high:/.test(h) && /pct:/.test(h), 'and both rails and the percentage');
@@ -560,7 +567,9 @@ eval(ex('emBand'));
   ok(badgeWrites===2,                  'both branches (replay chip / phase tag) write to it', badgeWrites);
 
   const l3=f.slice(f.indexOf('var l3='));
-  ok(/OF STRAD/.test(l3),              'line 3 carries the percentage now, named for the straddle');
+  ok(/USED/.test(l3),                  'line 3 carries the percentage, labelled USED');
+  ok(/g3left/.test(l3),                'and the REMAINING figure beside it \u2014 the half a trader decides on');
+  ok(/LEFT /.test(l3),                 'labelled, with the direction of travel');
   ok(/g3pct/.test(l3),                 'as its own chip, sized to be read as a caption');
   ok(/EB\.stretched/.test(l3),         'and it keeps the stretched flag, which used to ride on `str`');
   ok(!/\bstr\b\s*\?/.test(l3),        'without reaching for `str`, which is scoped to the band block');
@@ -739,7 +748,7 @@ eval(ex('emBand'));
   const f=ex('secFrame');
   ok(/STRAD LOW/.test(f) && /STRAD HIGH/.test(f), 'the rails are named for the straddle');
   ok(!/EXP LOW/.test(f) && !/EXP HIGH/.test(f),   'and no longer for an "expected move"');
-  ok(/OF STRAD/.test(f),                          'line 3 agrees with them');
+  ok(/USED/.test(f) && /LEFT /.test(f),           'line 3 prints used AND remaining');
   ok(/0\.80 sigma/.test(f),                       'the hover states what it actually is');
   ok(/58% of closes/.test(f),                     'and what that contains');
   ok(/1\.25/.test(f),                             'and how to get a real one-sigma boundary');
@@ -831,6 +840,9 @@ eval(ex('emBand'));
     RUN(BASE,[]).txt,
     RUN(Object.assign({},BASE,{dir:-1,now:7674.2}),[{disp:7667.59,perPt:5769818,accel:true,balanced:false}],7665.56).txt,
     RUN(Object.assign({},BASE,{gamma:1}),[{disp:7727.0,perPt:31000000,accel:false,balanced:false}]).txt,
+    // ⚠ BOTH DIRECTIONS, or the directional assertions below pass on a fixture set that never goes down.
+    RUN(Object.assign({},BASE,{dir:-1,now:7690}),[{disp:7667.59,perPt:5769818,accel:true,balanced:false}]).txt,
+    RUN(Object.assign({},BASE,{dir:-1,now:7690,gamma:1}),[{disp:7670,perPt:31000000,accel:false,balanced:false}]).txt,
     RUN(Object.assign({},BASE,{shape:'REVERSED',giveBack:0.82,pace:0.74}),PACC).txt,
     RUN(BASE,[{disp:7717.71,perPt:17083238,accel:true,balanced:true}]).txt,
     RUN(Object.assign({},BASE,{pct:118,now:7736.7,roomAhead:0}),[]).txt
@@ -842,8 +854,16 @@ eval(ex('emBand'));
   ['likely','probability','probably',' will ','should','expect(','expected to','odds','chance',
    'go long','go short','buy here','sell here','target price','take profit','entry','stop at']
     .forEach(w=>ok(!strings.includes(w), 'the read never says "'+w.trim()+'"'));
-  ok(/sell strength and buy weakness/.test(strings),
-     'while the dealer-behaviour explanation survives \u2014 that is the mechanism, not a suggestion');
+  // (v11.72) the mechanic phrasing was replaced by its CONSEQUENCE — "a hedge can cap it" rather than
+  // "they sell strength and buy weakness into it". Still mechanism, one clause shorter, and it names a
+  // direction so the reader does not have to finish the thought.
+  ok(/a hedge can /.test(strings), 'the consequence is stated, not just the mechanic');
+  ok(/push price higher/.test(strings) && /take price lower/.test(strings),
+     'and it is DIRECTIONAL \u2014 the pile ahead is in the direction of travel, so the sentence can say which way');
+  ok(/cap it/.test(strings) && /lift it/.test(strings), 'both ways for a brake too');
+  // ⚠ the licence for saying that at all is the conditional. "can", never "will".
+  ok(!/ will /.test(strings) && !/likely/.test(strings),
+     'and it stays conditional \u2014 what the book DOES if price gets there, not that price gets there');
   ok(/mechanism/i.test(f), 'and the ban is documented where the function lives');
 
   ok(RUN(BASE,PACC).branch==='accel',                       'an accelerator ahead reads as accel');
@@ -861,7 +881,8 @@ eval(ex('emBand'));
     const both=RUN(Object.assign({},BASE,{dir:-1,now:7674.2}),
                    [{disp:7670.0,perPt:9000000,accel:true,balanced:false}], 7665.56);
     ok(both.branch==='flip', 'with a flip AND a pile ahead, the flip wins', both.branch);
-    ok(/flip/i.test(both.txt) && /character changes/.test(both.txt), 'and the sentence says so', both.txt);
+    ok(/flip/i.test(both.txt) && /flips from (amplifying to damping|damping to amplifying)/.test(both.txt),
+       'and the sentence says what inverts', both.txt);
     const far=RUN(Object.assign({},BASE,{dir:-1,now:7700}),
                   [{disp:7690.0,perPt:9000000,accel:true,balanced:false}], 7600);
     ok(far.branch==='accel', 'a distant flip does NOT outrank a pile', far.branch);
@@ -872,12 +893,15 @@ eval(ex('emBand'));
 
   // ONE modifier in clause 1, or the line runs to three rows
   ok(/REVERSED' && B\.giveBack>0\.5/.test(f), 'the reversal branch replaces the state clause');
-  ok(/else if\(B\.paceOk/.test(f) && /else if\(B\.roomAhead/.test(f),
-     'and pace / room-to-rail are mutually exclusive with it and each other');
+  ok(/else if\(B\.paceOk/.test(f), 'and pace is mutually exclusive with it');
+  // (v11.73) the room clause left the sentence when line 3 started printing LEFT as its own figure.
+  ok(!/to the rail'/.test(f), 'the sentence no longer restates the remaining room line 3 now owns');
 
   // the tail must never point at a rail that is behind price or nearer than the pile
-  ok(/live\[1\]\|\|pastRail\|\|beyond\(next\)/.test(f),
-     'the "nothing behind it" clause is suppressed when the rail is not actually behind the pile');
+  // (v11.72) the "; nothing behind it before X" tail is GONE — the user called it fluff and it was: the
+  // rail is already printed at the end of the band directly above this line.
+  ok(!/nothing behind it before/.test(f), 'the trailing rail restatement is gone');
+  ok(!/'; nothing/.test(f),               'and with it the last semicolon clause');
 
   // it must be RENDERED, and it must speak on quiet states
   const sf=ex('secFrame');
@@ -949,6 +973,46 @@ eval(ex('emBand'));
   // and the ones this build was about, named explicitly so the intent survives a refactor
   ['pace','paceOk','elapsed','dueFrac','nowSo'].forEach(k=>
     ok(surfaced.has(k), 'the hook surfaces '+k));
+}
+
+// ---------- 33. (v11.73) USED **AND** REMAINING, AND NOTHING SAID TWICE ----------
+// The row printed how much of the straddle had been SPENT and never what was LEFT — the half the decision
+// actually turns on. The rail's four dollar segments were carrying it, except a segment narrower than 9%
+// of the rail is suppressed, so on a one-sided day only two of four render and "remaining" vanishes from
+// the section entirely. Measured live: 53% used, 16.49 pts / $825 still ahead, stated nowhere.
+{
+  const f=ex('secFrame');
+  // ⚠ STRUCTURAL, NOT BEHAVIOURAL — secFrame cannot be executed without the whole closure, so these read
+  // the source. Mutation-tested and found WANTING: replacing the gate with `if(false)` left every string
+  // in place and fired nothing. The gate is therefore asserted explicitly, and the real behavioural check
+  // is the offline render (mockups/frame_v1173_check.html), run every build.
+  ok(/g3left/.test(f) && /EB\.roomAhead/.test(f), 'line 3 prints the room still ahead');
+  ok(/if\(EB\.roomAhead!=null && EB\.roomAhead>0\)\{/.test(f),
+     'gated only on there being room, nothing else');
+  ok(!/if\(false/.test(f.split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n')),
+     'and nothing on this row is disabled');
+  ok(/EB\.dir>=0\)\?'\\u2191':'\\u2193'/.test(f) || /LEFT '\+\(\(EB\.dir>=0\)/.test(f),
+     'in the direction of travel');
+  ok(/roomUp/.test(f) && /roomDn/.test(f), 'and the hover keeps BOTH sides');
+
+  // the pace chip is gone because the read line already said it in words
+  // ⚠ strip comments first. The removal is EXPLAINED in comments that necessarily quote the words being
+  // removed — asserting over the raw function fails on its own justification. Third time this session.
+  const fCode=f.split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
+  ok(!/g3pace/.test(fCode),        'the duplicated pace chip is gone from the row');
+  ok(!/COILED/.test(fCode),        'and its vocabulary with it');
+  ok(/COILED/.test(f),             'while the comment explaining why still names it');
+  const r=ex('emRead');
+  ok(/slow for the hour/.test(r),  'while the pace itself survives in the sentence, which said it better');
+  ok(!/to the rail'/.test(r),      'and the sentence gave up the room clause line 3 now owns');
+
+  // nothing on the section is printed twice — the standing rule, checked on the two facts this build moved
+  const usedCount=(f.match(/Math\.min\(999,EB\.pct\)/g)||[]).length;
+  ok(usedCount===1, 'the used percentage renders exactly once', usedCount);
+  // ⚠ roomAhead appears twice ON PURPOSE — once inside the hover sentence, once as the rendered figure.
+  // Count the RENDERED one only: the occurrence that is not inside a g3tip(...) call.
+  const rendered=(f.match(/>'\+dispNum\(EB\.roomAhead\)\+'</g)||[]).length;
+  ok(rendered===1, 'and the remaining figure is RENDERED exactly once', rendered);
 }
 
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');

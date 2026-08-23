@@ -1,3 +1,83 @@
+## v11.73 — the row showed what was spent and never what was left
+
+**BOTH OF THE USER'S POINTS WERE RIGHT, AND THE SECOND ONE BROKE A RULE I WROTE MYSELF.**
+
+**1. REMAINING WAS MISSING.** Line 3 printed `53% OF STRAD` — how much of the straddle had been SPENT —
+and nothing anywhere said what was LEFT, which is the half the decision actually turns on. The rail's four
+dollar segments were supposed to carry it, except **a segment narrower than 9% of the rail is suppressed**,
+so on a day that has run to one side only two of the four render and "remaining" disappears from the
+section entirely. Measured live 2026-08-23: **53% used, 16.49 points and $825 still ahead, and not one
+element on the face said so.**
+
+    was   53%  OF STRAD ~EST   0.77x COILED   ↑ clear — 3.7 pts · $17M at target
+    now   53%  USED ~EST   16.49  LEFT ↑      ↑ clear — 3.7 pts · $17M at target
+
+Room is reported in the DIRECTION OF TRAVEL because that is the side the question is about; both sides
+stay in the hover, in points and in dollars per contract.
+
+**2. THE PACE CHIP WAS THE SAME FACT TWICE.** v11.69 wrote down *nothing is printed twice on the section* —
+and then v11.68's chip said `0.77x COILED` while the read line two rows below said **"but slow for the
+hour"** about the same number, in better words, for free. The chip is gone and the space went to
+`LEFT`. **The pace is not lost:** it still gates that clause of the sentence, and the arithmetic behind it
+(what fraction of the move is due by this hour) is in the percentage hover. The read line also gave up its
+own `, X to the rail` clause for the same reason — line 3 owns remaining now.
+
+---
+
+⚠ **A FIXED +3000 CHARACTER SLICE, AND IT IS THE THIRD OF THESE IN TWO DAYS.** The v11.51 hook test read
+`src.slice(indexOf(hook), indexOf(hook)+3000)`. This build grew the hook past 3000 characters, so
+`targetInPlay` fell off the end and an assertion failed on a field that was present and correct. Same
+disease as the 40-record dedupe scan and the `session`/`sessionRoll` marker: **a magic-number window that
+silently stops covering what it is meant to cover.** Now bounded by the NEXT hook, which cannot drift.
+
+⚠ **THE SELF-DERIVING HOOK GUARD EARNED ITSELF ON THE VERY NEXT BUILD.** §32 shipped in v11.71 and caught
+`dir` here — a field the face started reading and the hook did not return — before it cost anything.
+
+⚠ **A COMMENT EXPLAINING A REMOVAL CONTAINS THE THING REMOVED.** Asserting `!/COILED/` over `secFrame`
+failed on the comment that explains why COILED went away. Strip comments before asserting an absence.
+**Third time this session** — it is now in the resume note as a standing rule rather than a lesson.
+
+⚠ **A MUTATION TEST THAT FOUND MY TEST WANTING.** Replacing the LEFT figure's gate with `if(false)` left
+every string in place and fired **nothing** — the assertions were checking source presence, not behaviour,
+and `secFrame` cannot be executed without the whole closure. The gate is now asserted explicitly and the
+real check is the offline render, which is run every build and is in the repo as
+`mockups/frame_v1173_check.html`. **Structural assertions must say so out loud.**
+
+## v11.72 — say what the hedge DOES to price, not what the hedging IS
+
+**The user's own wording, and it is better than mine:**
+
+    was   $6M accelerator at 7707.69 — short gamma there, so a push through is hedged WITH it;
+                                        nothing behind it before 7730.48.
+    now   $6M accelerator at 7707.69 — short gamma there, so a hedge can take price lower.
+
+"A push through is hedged WITH it" describes the **mechanic** and leaves the reader to finish the thought.
+"A hedge can take price lower" **is** the thought. The pile ahead is by construction in the direction of
+travel, so the consequence has a direction and there was never a reason to make the reader supply it.
+
+    accelerator, moving up     short gamma there, so a hedge can push price higher
+    accelerator, moving down   short gamma there, so a hedge can take price lower
+    brake, moving up           long gamma there, so a hedge can cap it
+    brake, moving down         long gamma there, so a hedge can lift it
+
+⚠ **"CAN", NEVER "WILL" — that word is the entire licence for the line to exist.** It says what the book
+DOES if price reaches the level, not that price reaches it. Mutation-tested: swapping in "so price will
+push higher" fires four assertions; deleting the direction fires two.
+
+**The trailing clause is gone.** `; nothing behind it before 7730.48` restated the rail that is printed at
+the end of the band one row above. Fluff, correctly called.
+
+**And a give-back past 100% now reads as English.** "turned once and 109% back" is arithmetically right and
+takes a beat to parse; it means the whole excursion came back and then some, so it says
+**"turned once and fully retraced"**.
+
+Every branch re-voiced and shortened — longest sentence 30 words → **26**.
+
+⚠ **A FIXTURE SET THAT NEVER WENT DOWN.** The new assertions check both directional forms, and the seven
+stub states they run against were all `dir:1` — so "take price lower" and "lift it" could never appear and
+two assertions failed on code that was correct. Fixtures must span the axis the assertion is about, or the
+test is checking the fixture rather than the function.
+
 ## v11.71 — I broke the v11.51 rule again, so the guard now derives itself
 
 **THE PACE FIELDS WERE ON THE FACE AND NOT IN THE HOOK.** v11.68 added `pace`, `elapsed`, `dueFrac`,

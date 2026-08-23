@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.71
+// @version    11.73
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.71';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.73';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -17215,10 +17215,9 @@ function ensureV3Css(){
     // separates 'what the panel measured' from 'what that composes into'.
     '#gpts-body .g3read{font-size:8.5px;line-height:1.5;color:#8b98a9;margin-top:3px;border-top:1px solid #1a212c;padding-top:3px;cursor:help}'+
     '#gpts-body .g3read b{color:#e6edf3;font-weight:800}'+
-    '#gpts-body .g3pace{font-size:7.5px;font-weight:800;padding:0 4px;border-radius:2px;line-height:12px;white-space:nowrap;cursor:help}'+
-    '#gpts-body .g3pace.ok{background:rgba(139,152,169,.16);color:#8b98a9;border:1px solid rgba(139,152,169,.32)}'+
-    '#gpts-body .g3pace.slow{background:rgba(79,209,224,.14);color:#4fd1e0;border:1px solid rgba(79,209,224,.35)}'+
-    '#gpts-body .g3pace.hot{background:rgba(240,97,109,.14);color:#f0616d;border:1px solid rgba(240,97,109,.4)}'+
+    // (v11.73) the LEFT figure — what is still ahead on the side the day is travelling. Green, because it
+    // is the same "still available" idea the rail's remaining segments already wear.
+    '#gpts-body .g3left{font-size:9.5px;font-weight:800;color:#2ec27e;letter-spacing:-.2px;cursor:help}'+
     // STRETCHED becomes RED. Amber sat next to the brake yellow and they meant different things; red
     // already means "this is against you" in BIAS, which is what STRETCHED is saying.
     '#gpts-body .g3emn.g3str{background:#f0616d}'+
@@ -17894,40 +17893,47 @@ function emRead(B, sym){
     // all fire at once and the line runs past two rows. The reversal outranks: it is the rarer fact.
     var a;
     if(B.shape==='REVERSED' && B.giveBack>0.5){
-      a=(up?'Up ':'Down ')+dispNum(moved)+', turned once and '+Math.round(B.giveBack*100)+'% back';
+      // (v11.72) past 100% the number takes a beat to parse — it means the whole excursion came back and
+      // then some. Say that instead of printing "109% back".
+      a=(up?'Up ':'Down ')+dispNum(moved)+', turned once and '+
+        (B.giveBack>=1 ? 'fully retraced' : (Math.round(B.giveBack*100)+'% back'));
     } else {
       a=(up?'Up ':'Down ')+dispNum(moved)+', '+Math.min(999,B.pct)+'% of the straddle';
       if(B.paceOk && typeof B.pace==='number' && B.pace>1.2)      a+=' at '+B.pace.toFixed(2)+'× pace';
       else if(B.paceOk && typeof B.pace==='number' && B.pace<0.8) a+=' but slow for the hour';
-      else if(B.roomAhead!=null && B.roomAhead>0 && B.roomAhead < 0.15*(B.high-B.low))
-        a+=', '+dispNum(B.roomAhead)+' to the rail';
+      // (v11.73) the room clause is GONE from the sentence — line 3 now prints LEFT ↑ as its own figure,
+      // and this said the same thing three words later. Nothing is printed twice on the section.
+
     }
 
     // ---- clause 2: what is next, and what crossing it does ----
     var b;
     if(flipNear){
       out.branch='flip';
-      b='flip '+dispNum(toFlip)+' away at '+dispNum(flip)+' — through it hedging '+
-        (shortG?'stops amplifying and starts damping':'stops damping and starts amplifying')+
-        ', so the character changes there, not the direction';
+      b='flip '+dispNum(toFlip)+' '+(up?'above':'below')+' at '+dispNum(flip)+' — through it hedging '+
+        (shortG?'flips from amplifying to damping':'flips from damping to amplifying');
     } else if(next){
+      // (v11.72) SAY WHAT THE HEDGE DOES TO PRICE, not what the hedging IS. "a push through is hedged
+      // WITH it" describes the mechanic and leaves the reader to finish the thought; "a hedge can take
+      // price lower" IS the thought. The pile ahead is by construction in the direction of travel, so
+      // the consequence has a direction and there is no reason to make the reader supply it.
+      // ⚠ STILL CONDITIONAL. "can", never "will" — it says what the book DOES if price gets there, not
+      // that price gets there. That distinction is the whole licence for this line to exist.
       out.branch=next.accel?'accel':'brake';
       b=usdBig(next.perPt)+' '+(next.accel?'accelerator':'brake')+' at '+dispNum(next.disp)+
         (beyond(next)?', past the rail':'')+' — '+
-        (next.accel ? 'short gamma there, so a push through is hedged WITH it'
-                    : 'long gamma there, so they sell strength and buy weakness into it')+
-        ((live[1]||pastRail||beyond(next))?'':'; nothing behind it before '+dispNum(rail));
+        (next.accel ? ('short gamma there, so a hedge can '+(up?'push price higher':'take price lower'))
+                    : ('long gamma there, so a hedge can '+(up?'cap it':'lift it')));
     } else if(bal[0]){
       out.branch='balanced';
-      b='the only thing '+(up?'above':'below')+' is '+dispNum(bal[0].disp)+
-        ', and it is BALANCED — real size, no side to lean on';
+      b='only '+dispNum(bal[0].disp)+' '+(up?'above':'below')+', and it is BALANCED — size with no side';
     } else if(pastRail){
       out.branch='past';
-      b='already through the priced boundary with nothing '+(up?'above':'below')+' the cut — '+
-        (shortG?'out here the book stops resisting':'and dealers out here still hedge against it');
+      b='through the band with nothing '+(up?'above':'below')+' — '+
+        (shortG?'out here the book stops resisting':'and a hedge out here still leans against it');
     } else {
       out.branch='air';
-      b='air to '+dispNum(rail)+' — nothing between here and it has a dealer behind it';
+      b='air to '+dispNum(rail)+' — nothing in between to lean on';
     }
     out.txt=a+'. '+b.charAt(0).toUpperCase()+b.slice(1)+'.';
     out.ok=true;
@@ -18170,22 +18176,28 @@ function secFrame(sym){
   // is a caption on the picture above it rather than a competitor for its space.
   var l3='';
   if(EB.ok){
-    l3+='<b class="g3pct'+(EB.stretched?' g3str':'')+'"'+g3tip('How far price has travelled from the anchor, against what the straddle priced. The dot\'s position on the rail and this number are the same fact, so they can never disagree. Past 100% the day has done more than was paid for.')+'>'+Math.min(999,EB.pct)+'%</b>'+
-        '<span class="g3fk">OF STRAD'+(EB.anchor==='prevClose'?' \u00b7 FROM PREV CLOSE':'')+(EB.est?' ~EST':'')+'</span>';
-    // (v11.68) THE PACE CHIP. The percentage above says how far; this says whether that is a lot FOR THIS
-    // HOUR. Without it the headline number cannot be read at all without the viewer silently dividing by
-    // sqrt(elapsed) in their head — 40% at 10:00 and 40% at 14:30 are opposite conditions and the face
-    // printed them identically.
-    if(EB.paceOk && typeof EB.pace==='number'){
-      var pw = (EB.pace<0.8) ? 'COILED' : (EB.pace>1.2 ? 'STRETCHED' : 'ON PACE');
-      var pc = (EB.pace<0.8) ? 'slow'   : (EB.pace>1.2 ? 'hot'       : 'ok');
-      l3+='<span class="g3pace '+pc+'"'+
-          g3tip('Is that percentage a lot for this hour? Price diffuses with the SQUARE ROOT of elapsed time, not the clock, so half the session gone means about 71% of the move is due \u2014 not 50%. '+
-                'By now '+Math.round(EB.dueFrac*100)+'% of the straddle would be spent on a perfectly average day, and '+EB.pct+'% has been. '+
-                '1.00x is exactly on schedule; above 1.20x the day is running hot, below 0.80x it is coiled. '+
-                '\u26a0 DESCRIPTIVE. It says the day is running fast or slow against its own pricing \u2014 never which way, and never where it finishes.')+
-          '>'+EB.pace.toFixed(2)+'\u00d7 '+pw+'</span>';
+    // (v11.73) USED **AND** REMAINING. The row printed one number — how much of the straddle had been
+    // SPENT — and never what was LEFT, which is the half a trader is actually deciding on. The four
+    // dollar segments on the rail were carrying it, except a segment narrower than 9% of the rail is
+    // suppressed, so on a day that has run to one side only two of the four render and "remaining"
+    // silently disappears from the whole section. Measured live 2026-08-23: 53% used, 16.49 points and
+    // $825 still ahead, and not one element on the face said so.
+    // Room is reported in the DIRECTION OF TRAVEL, because that is the side the question is about; both
+    // sides stay in the hover.
+    l3+='<b class="g3pct'+(EB.stretched?' g3str':'')+'"'+g3tip('How far price has travelled from the anchor against what the straddle priced, and how much of that pricing is still ahead. The dot\'s position on the rail and this number are the same fact, so they can never disagree. Past 100% the day has done more than was paid for.'+
+          ((EB.roomUp!=null&&EB.roomDn!=null)?(' Room to the upper rail '+dispNum(EB.roomUp)+(EB.roomUpUsd!=null?(' ('+usd(EB.roomUpUsd)+'/ct)'):'')+', to the lower '+dispNum(EB.roomDn)+(EB.roomDnUsd!=null?(' ('+usd(EB.roomDnUsd)+'/ct)'):'')+'.'):''))+
+        '>'+Math.min(999,EB.pct)+'%</b>'+
+        '<span class="g3fk">USED'+(EB.anchor==='prevClose'?' \u00b7 FROM PREV CLOSE':'')+(EB.est?' ~EST':'')+'</span>';
+    if(EB.roomAhead!=null && EB.roomAhead>0){
+      l3+='<b class="g3left"'+g3tip('What is still ahead in the direction the day is travelling: '+dispNum(EB.roomAhead)+' points to the '+((EB.dir>=0)?'upper':'lower')+' rail'+(EB.leftUsd!=null?(', '+usd(EB.leftUsd)+' per contract'):'')+'. The band is a priced boundary, not a floor or ceiling \u2014 this is what the straddle still has in it on this side, not a limit.')+
+          '>'+dispNum(EB.roomAhead)+'</b>'+
+          '<span class="g3fk">LEFT '+((EB.dir>=0)?'\u2191':'\u2193')+'</span>';
     }
+    // (v11.73) THE PACE CHIP IS GONE, AND IT WAS MY OWN DOCTRINE THAT KILLED IT. v11.69 wrote down
+    // "nothing is printed twice on the section" — and the chip said `0.77x COILED` while the read line
+    // two rows below said "but slow for the hour" about the same number, in better words, for free.
+    // The pace is NOT lost: it still gates that clause, and the arithmetic behind it is in the % hover.
+    // ⚠ Do not re-add it. If pace ever needs more prominence, promote it inside the read sentence.
   }
   if(EB.ok && ifMagEarly!=null){
     var PA=null; try{ PA=emPath(EB, sym, ifMagEarly); }catch(ePa){}
@@ -19107,6 +19119,7 @@ window.__gptsDebug.emBand = function(sy){
       // `test_em_band.js` §32 now derives the required key set from secFrame itself, so the next field
       // added to the face and forgotten here fails the build instead of costing an afternoon.
       nowSo:B.nowSo, elapsed:B.elapsed, pace:B.pace, paceOk:!!B.paceOk, dueFrac:B.dueFrac,
+      dir:B.dir, roomUpUsd:B.roomUpUsd, roomDnUsd:B.roomDnUsd, leftUsd:B.leftUsd,
       contract:B.contract, mult:B.mult, emUsd:B.emUsd, usedUsd:B.usedUsd, leftUsd:B.leftUsd,
       roomUpUsd:B.roomUpUsd, roomDnUsd:B.roomDnUsd, microUsd:B.microUsd
     };
