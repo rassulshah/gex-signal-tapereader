@@ -73,9 +73,13 @@ function ex(n){
   // a threshold the code no longer uses. (ex() extracts a function body only — a name declared
   // outside it throws ReferenceError inside the eval, which is what silently emptied several other
   // tests in this suite and is worth not repeating here.)
-  const consts=src.match(/var EMOPEN_KEY=[^\n]*\n\s*var EM_FRESH_MIN=[^;]*;/);
-  ok(!!consts, 'EMOPEN_KEY and EM_FRESH_MIN are declared together at module scope');
-  eval(consts[0]);
+  // Pull each constant INDEPENDENTLY. The first version matched them as one adjacent block and broke the
+  // moment v11.61 inserted EMOPEN_SCHEMA between them — a test that depends on the ORDER of unrelated
+  // declarations fails on a change that is none of its business.
+  const grabConst=(name)=>{ const m=src.match(new RegExp('var '+name+'\\s*=\\s*[^;]+;')); return m?m[0]:null; };
+  const cK=grabConst('EMOPEN_KEY'), cF=grabConst('EM_FRESH_MIN'), cS=grabConst('EMOPEN_SCHEMA');
+  ok(!!cK && !!cF && !!cS, 'EMOPEN_KEY, EM_FRESH_MIN and EMOPEN_SCHEMA are all declared at module scope');
+  eval([cK,cF,cS].filter(Boolean).join('\n'));
   ok(typeof EM_FRESH_MIN==='number' && EM_FRESH_MIN>0, 'EM_FRESH_MIN is a positive number', EM_FRESH_MIN);
 
   eval(ex('inReplay'));
@@ -213,12 +217,12 @@ eval(ex('emBand'));
   ok(/pins hold|higher-probability/.test(t4), 'cell 4 names the compressing case');
   ok(/No gamma book yet/.test(t0),     'with no book it names no cell rather than guessing');
   ok((t0.match(/▸/g)||[]).length===0, 'and marks none active');
-  ok(/STRETCHED only in positive gamma/.test(t1),
-     'the tip states the band link: an extension is STRETCHED only in +G');
+  ok(/STRETCHED\s+only in cells 3 and 4/.test(t1),
+     'the tip states the band link: an extension is STRETCHED only in the +G cells');
   ok(/what a trend day does/.test(t1),
      '...and that in −G running past the band is normal, not a fade signal');
-  ok(/CONDITION/.test(t1) && /gate/.test(t1),
-     'and that gamma and vanna CONDITION rather than point — they gate, they do not vote');
+  ok(/Neither points anywhere/.test(t1) && /gate the call/.test(t1),
+     'and that neither points — they gate the call rather than voting in it');
   ok(t1.split('\n').length>=10,        'it renders as a list, not one paragraph');
 }
 
@@ -311,6 +315,50 @@ eval(ex('emBand'));
      'no VISIBLE label frames this as profit, loss, or position size');
   ok(/per contract/.test(f) && /not a position/.test(f),
      'and the hover says outright that it is the MOVE converted, not a position');
+}
+
+
+// ---------- 13. (v11.61) SCHEMA STAMP, GAMMA PILES, SKYLIT COLOURS ----------
+{
+  // --- the schema stamp: the ACTUAL fix for the drifting dot ---
+  // v11.59 pinned the scale, but a record written BEFORE it has no `rr`, the date key still matches, and
+  // the pin silently never fires. Measured live: open 7695.86 -> 7695.29 in minutes. Persisted state from
+  // an older version must be RE-TAKEN, never half-trusted.
+  ok(/EMOPEN_SCHEMA/.test(src),                 'the capture carries a schema version');
+  const eb=ex('emBand');
+  ok(/S\.v!==EMOPEN_SCHEMA/.test(eb),           'a record from an older schema is discarded, not reused');
+  ok(/rec\.rr==='number'[\s\S]{0,60}rec=null/.test(eb) || /rec=null; out\.recaptured=true/.test(eb),
+     'and a record missing `rr` is re-captured even if the stamp matches');
+
+  // --- the piles ---
+  const pf=ex('emPiles');
+  ok(/cpRows/.test(pf),          'piles read SKYLIT\'s book — the same source regime2D uses, so they cannot contradict the regime chip');
+  ok(/CFG\.nodeThresh/.test(pf), 'the cut is the EXISTING nodeThresh slider, not a second invented threshold');
+  ok(/put>cal/.test(pf),         'put-dominant means negative gamma means ACCELERATOR');
+  ok(/B\.low \|\| disp>B\.high/.test(pf) || /disp<B\.low/.test(pf), 'only strikes INSIDE the band are marked');
+
+  const f=ex('secFrame');
+  ok(/emPiles\(/.test(f),        'the face draws them');
+  ok(/Math\.sqrt/.test(f),       'height is sqrt-compressed so a 100% King does not flatten a 30% pile');
+  ok(/g3pile/.test(f),           'piles have their own class, below the rail');
+
+  // --- SKYLIT'S COLOUR CONVENTION, which the mockup originally got wrong ---
+  ok(/g3pile\.acc\{background:#a371f7\}/.test(src), 'accelerator = PURPLE (put-dominant) — Skylit\'s convention');
+  ok(/g3pile\.brk\{background:#e3c341\}/.test(src), 'brake = YELLOW (call-dominant) — Skylit\'s convention');
+  ok(/g3emT\{[^}]*#4fd1e0/.test(src),                'the target moved to CYAN, since yellow now means positive gamma');
+  ok(/g3tgt\{[^}]*#4fd1e0/.test(src),                '...on line 1 too, so the two target marks agree');
+  ok(/g3emn\.g3str\{background:#f0616d\}/.test(src),'STRETCHED is RED — amber sat beside the brake yellow meaning something else');
+
+  // --- the raw book in the export ---
+  ok(/book:\(function\(\)/.test(src),          'the export carries the RAW 60-strike book');
+  ok(/`nodes` is the MODEL/.test(src) || /nodes` above is what the node model/.test(src),
+     'and says why: `nodes` is the model\'s ~6, `book` is everything the feed sent');
+
+  // --- the hover the user asked for ---
+  const rt=ex('regimeTip');
+  ok(/fight the move or feed it/.test(rt),      'the gamma line is the plain one');
+  ok(/HOW price moves, not/.test(rt),           'and carries "how, not which way" — the project\'s own phrasing');
+  ok(!/DAMPS the move or AMPLIFIES/.test(rt),   'the old abstract wording is gone');
 }
 
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');

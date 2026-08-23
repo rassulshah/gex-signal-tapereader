@@ -1,0 +1,172 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>FRAME — used and remaining, both sides</title>
+<style>
+  body{background:#0b0e14;color:#e6edf3;font:12px Inter,Arial,sans-serif;margin:0;padding:20px 24px 70px}
+  h1{font-size:12px;letter-spacing:.15em;color:#8b98a9;font-weight:800;margin:0 0 6px}
+  .sub{font-size:11px;color:#6c7889;margin:0 0 22px;line-height:1.6;max-width:700px}
+  .sub b{color:#e6edf3}
+  .v{margin:0 0 26px}
+  .cap{font-size:9px;letter-spacing:.08em;font-weight:800;color:#f2b45a;margin:0 0 5px}
+  .cap.g{color:#2ec27e}
+  .note{font-size:10px;color:#6c7889;margin:8px 0 0;line-height:1.6;max-width:650px}
+  .note b{color:#8b98a9}
+  .panel{width:560px;background:#0b0e14;border:1px solid #1a212c;border-radius:5px;padding:5px 7px}
+  .sh{display:block;text-align:center;font-size:8px;font-weight:800;letter-spacing:.13em;color:#8b98a9;
+      margin:0 0 3px;padding:2px 0;border-radius:3px;background:rgba(139,152,169,.09)}
+  .r{display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+  .rg{font-size:9.5px;font-weight:800;padding:0 5px;border-radius:3px;background:rgba(163,113,247,.18);
+      color:#a371f7;border:1px solid rgba(163,113,247,.4);cursor:help;line-height:14px;white-space:nowrap}
+  .play{font-size:8.5px;color:#8b98a9;cursor:help}
+  .tgt{font-size:11px;font-weight:800;color:#e3c341;margin-left:auto;cursor:help;letter-spacing:-.2px}
+  .rep{font-size:7px;font-weight:800;padding:0 4px;border-radius:2px;background:rgba(163,113,247,.22);
+       color:#a371f7;border:1px solid rgba(163,113,247,.5);line-height:12px;cursor:help}
+  .k{font-size:10.5px;font-weight:800;color:#e6edf3;line-height:1;white-space:nowrap;cursor:help}
+  .k small{display:block;font-size:6px;font-weight:800;letter-spacing:.08em;color:#6c7889;margin-top:1px}
+
+  .band{display:flex;align-items:center;gap:7px;margin-top:4px}
+  .t{position:relative;flex:1;height:20px;min-width:90px}
+  .rail{position:absolute;left:0;right:0;top:12px;height:4px;border-radius:2px;background:#232c3a;
+        box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}
+  .seg{position:absolute;top:0;font-size:8.5px;font-weight:800;transform:translateX(-50%);
+       white-space:nowrap;cursor:help;line-height:11px}
+  .left{color:#2ec27e}          /* still available */
+  .used{color:#6c7889}          /* already spent */
+  .tick{position:absolute;top:9px;width:1px;height:10px;background:#8b98a9}
+  .tick.op{background:#e6edf3;width:2px;transform:translateX(-1px);height:14px;top:7px}
+  .nw{position:absolute;top:9px;width:10px;height:10px;border-radius:50%;background:#fff;
+      box-shadow:0 0 0 2px #0b0e14;transform:translateX(-5px);cursor:help}
+  .tg{position:absolute;top:7px;font-size:9px;font-weight:800;color:#e3c341;transform:translateX(-50%);
+      line-height:14px;text-shadow:0 0 3px #0b0e14,0 0 3px #0b0e14;cursor:help}
+  .legend{margin:24px 0 0;font-size:10px;color:#6c7889;line-height:1.75;max-width:700px;
+          border-top:1px solid #1a212c;padding-top:13px}
+  .legend b{color:#8b98a9}
+  code{color:#8b98a9}
+  table{border-collapse:collapse;font-size:10px;margin:6px 0}
+  td,th{padding:2px 16px 2px 0;text-align:left;color:#8b98a9}
+  th{color:#6c7889;font-size:8px;letter-spacing:.08em}
+  td.n{color:#e6edf3;font-variant-numeric:tabular-nums;font-weight:700}
+</style>
+
+<h1>① FRAME — USED AND REMAINING, BOTH SIDES</h1>
+<p class="sub">Four numbers, four gaps, nothing below the rail. Each side of the open carries one full
+expected move of budget, split by how far the day actually got that way:
+<b>down $955 used + $782 left</b>, <b>up $920 used + $816 left</b>. Both pairs sum to $1,736 — one EM.
+<br><br>Used is defined by the <b>extremes</b>, not the dot, so the four figures sit in fixed places all
+session and only change when a new high or low prints. The dot just says where price is now.</p>
+
+<!-- A -->
+<div class="v">
+  <div class="cap g">A — DIM = SPENT, GREEN = STILL THERE <b>(recommended)</b></div>
+  <div class="panel">
+    <span class="sh">① FRAME</span>
+    <div class="r">
+      <span class="rg" title="Negative gamma and negative vanna — hedging amplifies the move twice over. Breaks run, fades lose.">−G −V ⚠</span>
+      <span class="play" title="What this regime rewards.">breaks not fades · widen stops</span>
+      <span class="rep" title="Replay of 2026-08-21 — nothing is live, recorder off.">▮08/21</span>
+      <span class="tgt" title="Target 7717.71 — the heaviest strike in their book.">→ 7717.71</span>
+    </div>
+    <div class="band">
+      <span class="k" title="Expected low — the open minus the expected move.">7660.6<small>EXP LOW</small></span>
+      <span class="t">
+        <i class="rail"></i>
+        <span class="seg left" style="left:11.2%" title="Still available downside: $782 from the low of day to the expected low.">$782</span>
+        <span class="seg used" style="left:36.2%" title="Downside already used: $955 from the open to the low of day.">$955</span>
+        <span class="seg used" style="left:63.2%" title="Upside already used: $920 from the open to the high of day.">$920</span>
+        <span class="seg left" style="left:88.2%" title="Still available upside: $816 from the high of day to the expected high.">$816</span>
+        <i class="tick" style="left:22.5%"></i>
+        <i class="tick op" style="left:50%"></i>
+        <i class="tick" style="left:76.5%"></i>
+        <span class="tg" style="left:82.3%">T</span>
+        <i class="nw" style="left:44.2%" title="Price now — 7691.29, $200 below the open."></i>
+      </span>
+      <span class="k" title="Expected high — the open plus the expected move.">7730.0<small>EXP HIGH</small></span>
+    </div>
+  </div>
+  <p class="note">Colour does the labelling, so no words are needed: <b>green is what is still there,
+  grey is what has gone.</b> The tall bright tick is the open; the two short ticks are the day's low and
+  high. Two rows, ~34px.</p>
+</div>
+
+<!-- B -->
+<div class="v">
+  <div class="cap">B — ARROWS INSTEAD OF COLOUR</div>
+  <div class="panel">
+    <span class="sh">① FRAME</span>
+    <div class="r">
+      <span class="rg">−G −V ⚠</span><span class="play">breaks not fades · widen stops</span>
+      <span class="rep">▮08/21</span><span class="tgt">→ 7717.71</span>
+    </div>
+    <div class="band">
+      <span class="k">7660.6<small>EXP LOW</small></span>
+      <span class="t">
+        <i class="rail"></i>
+        <span class="seg left" style="left:11.2%" title="Still available downside.">←$782</span>
+        <span class="seg used" style="left:36.2%" title="Downside used.">$955</span>
+        <span class="seg used" style="left:63.2%" title="Upside used.">$920</span>
+        <span class="seg left" style="left:88.2%" title="Still available upside.">$816→</span>
+        <i class="tick" style="left:22.5%"></i><i class="tick op" style="left:50%"></i><i class="tick" style="left:76.5%"></i>
+        <span class="tg" style="left:82.3%">T</span>
+        <i class="nw" style="left:44.2%"></i>
+      </span>
+      <span class="k">7730.0<small>EXP HIGH</small></span>
+    </div>
+  </div>
+  <p class="note">The outer arrows point at the rail the money is still available toward. Survives
+  colourblindness and greyscale screenshots; costs one character each side.</p>
+</div>
+
+<!-- C -->
+<div class="v">
+  <div class="cap">C — PRICE AT THE HIGH OF DAY (your original sketch's case)</div>
+  <div class="panel">
+    <span class="sh">① FRAME</span>
+    <div class="r">
+      <span class="rg">−G −V ⚠</span><span class="play">breaks not fades · widen stops</span>
+      <span class="rep">▮08/21</span><span class="tgt">→ 7717.71</span>
+    </div>
+    <div class="band">
+      <span class="k">7660.6<small>EXP LOW</small></span>
+      <span class="t">
+        <i class="rail"></i>
+        <span class="seg left" style="left:11.2%">$782</span>
+        <span class="seg used" style="left:36.2%">$955</span>
+        <span class="seg used" style="left:63.2%">$920</span>
+        <span class="seg left" style="left:88.2%">$816</span>
+        <i class="tick" style="left:22.5%"></i><i class="tick op" style="left:50%"></i>
+        <span class="tg" style="left:82.3%">T</span>
+        <i class="nw" style="left:76.5%" title="Price now — sitting on the high of day. $920 used, $816 left."></i>
+      </span>
+      <span class="k">7730.0<small>EXP HIGH</small></span>
+    </div>
+  </div>
+  <p class="note">When price IS the high of day, the dot lands on that tick and swallows it — exactly your
+  drawing. <b>Nothing about the layout changes</b>, which is the point: the four numbers do not move when
+  the dot does.</p>
+</div>
+
+<div class="legend">
+  <b>THE MODEL, CHECKED AGAINST THE LIVE BAND.</b>
+  <code>open 7695.29 · LOD 7676.19 · HOD 7713.70 · rails 7660.56 / 7730.01 · ES $50/pt</code>
+  <table>
+    <tr><th>side</th><th>used</th><th>remaining</th><th>sum</th></tr>
+    <tr><td>down (open → LOD → exp low)</td><td class="n">$955</td><td class="n">$782</td><td class="n">$1,737</td></tr>
+    <tr><td>up   (open → HOD → exp high)</td><td class="n">$920</td><td class="n">$816</td><td class="n">$1,736</td></tr>
+  </table>
+  Each side is one full expected move; the sums differ by a dollar only from rounding.<br><br>
+
+  <b>WHY THE FOUR NUMBERS DO NOT MOVE WITH PRICE.</b> "Used" is the distance from the open to the day's
+  extreme that way — so it only changes when a NEW high or low prints. A retrace does not give budget
+  back, which is right: the day has already spent that range. The dot moves; the figures hold. That also
+  makes the row easy to read at a glance, because the numbers stay where you last saw them.<br><br>
+
+  <b>WHAT IS GONE:</b> the LOD/HOD/retraced sentence, the contract chip, <code>OF EM</code>, the standalone
+  percentage, the <code>~EST</code> text, and every label under the rail. The open is the tall bright tick
+  in the middle; the two short ticks are the extremes. Position alone identifies them.<br><br>
+
+  <b>⚠ STILL UNFIXED — THE MOVING DOT.</b> The stored capture is <code>{em, k, capMin, t}</code> with
+  <b>no <code>rr</code></b>: written before v11.59, date key still matches, so the pin never fires and the
+  whole band rides the live scale. Measured drift: open <b>7695.86 → 7695.29</b> in minutes. Needs a
+  schema stamp so a record missing expected fields is re-taken rather than trusted — and that check
+  belongs on every persisted store here, not just this one.
+</div>

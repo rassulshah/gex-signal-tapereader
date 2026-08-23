@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.60
+// @version    11.61
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.60';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.61';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3079,6 +3079,23 @@ function recordNodeSnapshot(sym){
       inplay:(fs.inPlay?{k:fs.inPlay.k, role:fs.inPlay.role, side:fs.inPlay.side,
               st:(fs.inPlay.state&&fs.inPlay.state.label)||null}:null),
       nodes:nodes,
+      // (v11.61) THE RAW BOOK, not the model's selection. `nodes` above is what the node model chose to
+      // CALL a node — roughly 6 strikes. The feed delivers 60 (`nodes=60`, confirmed live), and throwing
+      // 90% of them away made every threshold question unanswerable: a sweep over the surviving 6 measures
+      // our own filter, not the market. Compact [strike, callGEX $M, putGEX $M] tuples so a day file grows
+      // by a few tens of KB, not megabytes.
+      // ⚠ FORWARD-ONLY. Days recorded before this can never be back-filled, which is exactly why it goes in
+      // now rather than when the calibration is wanted.
+      book:(function(){ try{
+        var R=cpRows(sym); if(!R||!R.rows) return null;
+        var b=[];
+        for(var bi=0;bi<R.rows.length;bi++){
+          var r=R.rows[bi];
+          if(typeof r.k!=='number') continue;
+          b.push([r.k, Math.round((r.call||0)/1e6), Math.round((r.put||0)/1e6)]);
+        }
+        return b.length?b:null;
+      }catch(eB){ return null; } })(),
       sig:sig,
       // Forward-outcome slots, back-filled by labelForwardOutcomes() once N bars
       // elapse. null = not yet resolved. Stored for BOTH horizons (#3).
@@ -16959,6 +16976,33 @@ function ensureV3Css(){
     '#gpts-body .g3shape b{color:#e6edf3;font-weight:800}'+
     '#gpts-body .g3shape b.warn{color:#f2b45a}'+
     '#gpts-body .g3shape .g3usd{color:#2ec27e;font-weight:800}'+
+    // (v11.61) THREE TIERS THAT CANNOT COLLIDE: money above the rail, ticks and price on it, gamma piles
+    // hanging below. A pile can never overlap a dollar label because they occupy different bands.
+    '#gpts-body .g3emt{position:relative;flex:1;height:26px;min-width:80px}'+
+    '#gpts-body .g3emr{position:absolute;left:0;right:0;top:9px;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}'+
+    '#gpts-body .g3emf{position:absolute;top:9px;height:4px;border-radius:2px;background:rgba(139,152,169,.6)}'+
+    '#gpts-body .g3emx2{position:absolute;top:9px;height:4px;border-radius:2px;background:rgba(139,152,169,.22)}'+
+    '#gpts-body .g3emw2{position:absolute;top:7px;width:1px;height:8px;background:rgba(195,204,216,.6)}'+
+    '#gpts-body .g3emo{position:absolute;top:5px;width:2px;height:12px;background:#e6edf3;border-radius:1px;transform:translateX(-1px)}'+
+    '#gpts-body .g3emn{position:absolute;top:6px;width:10px;height:10px;border-radius:50%;background:#fff;'+
+      'box-shadow:0 0 0 2px #0b0e14;transform:translateX(-5px)}'+
+    // TARGET moves to CYAN. Yellow now means POSITIVE GAMMA (Skylit's Pika), so the target cannot keep it.
+    // Cyan is the one hue the palette had not spent, and the T glyph carries identity without colour.
+    '#gpts-body .g3emT{position:absolute;top:5px;font-size:9px;font-weight:800;color:#4fd1e0;'+
+      'transform:translateX(-50%);line-height:12px;text-shadow:0 0 3px #0b0e14,0 0 3px #0b0e14}'+
+    '#gpts-body .g3emT.out{color:#6c7889}'+
+    '#gpts-body .g3tgt{font-size:11px;font-weight:800;color:#4fd1e0;letter-spacing:-.2px}'+
+    // SKYLIT POLARITY: purple = put-dominant = negative gamma = accelerator. Yellow = call-dominant =
+    // positive gamma = brake. Same convention as their heatmap, so the two never read as different things.
+    '#gpts-body .g3pile{position:absolute;bottom:2px;transform:translateX(-50%);border-radius:1px}'+
+    '#gpts-body .g3pile.acc{background:#a371f7}'+
+    '#gpts-body .g3pile.brk{background:#e3c341}'+
+    // STRETCHED becomes RED. Amber sat next to the brake yellow and they meant different things; red
+    // already means "this is against you" in BIAS, which is what STRETCHED is saying.
+    '#gpts-body .g3emn.g3str{background:#f0616d}'+
+    '#gpts-body .g3emf.g3str{background:rgba(240,97,109,.5)}'+
+    '#gpts-body .g3f2 b.g3str{color:#f0616d}'+
+    '#gpts-body .g3shape b.warn{color:#f0616d}'+
     '#gpts-body .g3ct{font-size:7px;font-weight:800;padding:1px 5px;border-radius:2px;'+
       'background:rgba(46,194,126,.14);color:#2ec27e;border:1px solid rgba(46,194,126,.4);white-space:nowrap}'+
     // (v11.55) the replay chip. Deliberately the loudest thing on the line — it is the one label whose
@@ -17225,6 +17269,9 @@ function ifLadder(sym){
 // narrower than the open's was — which is what ~EST says. No reconstruction is attempted; scaling a
 // decayed straddle back up assumes IV has not moved, and on the days that matter it has.
 var EMOPEN_KEY='gpts_emopen_v1';
+// ⚠ BUMP THIS whenever the captured record gains a field the band RELIES on. A stored record from an
+// older schema is discarded and re-taken, never partially trusted — see the v11.61 note in emBand().
+var EMOPEN_SCHEMA=2;
 var EM_FRESH_MIN=15;               // minutes after the open within which a capture counts as clean
 function emBand(sym){
   var out={ ok:false, why:'', est:false };
@@ -17253,11 +17300,21 @@ function emBand(sym){
     // one capture per symbol per day, and it is never overwritten once taken
     // (v11.55) key on the session being SHOWN, not the wall-clock date — in last-session mode that is a
     // weekend and every replayed day would collide on the same key.
+    // (v11.61) SCHEMA STAMP. v11.59 added `rr` to the capture so the anchor could stop drifting — but a
+    // record written BEFORE that has no `rr`, the date key still matches, and the new code happily reuses
+    // it. The pin never fires and the band silently rides the live scale again. Measured on the live
+    // panel: open 7695.86 -> 7695.29 in minutes, both rails with it.
+    // The failure is general, not specific to this store: PERSISTED STATE WRITTEN BY AN OLDER VERSION CAN
+    // SILENTLY DISABLE A NEWER GUARD. No error, no log line, nothing on the face. So the record carries a
+    // version, and a capture that does not match — or is missing a field this version requires — is
+    // discarded and re-taken rather than half-used.
     var today=sessionDayStr(), S=null;
     try{ S=JSON.parse(localStorage.getItem(EMOPEN_KEY)||'null'); }catch(eP){}
-    if(!S || typeof S!=='object' || S.date!==today) S={ date:today, sym:{} };
+    if(!S || typeof S!=='object' || S.date!==today || S.v!==EMOPEN_SCHEMA) S={ v:EMOPEN_SCHEMA, date:today, sym:{} };
     if(!S.sym) S.sym={};
     var rec=S.sym[sym]||null;
+    // belt and braces: even a stamped record is refused if the field the pin depends on is absent
+    if(rec && !(typeof rec.rr==='number' && rec.rr>0)){ rec=null; out.recaptured=true; }
 
     if(!(rec && typeof rec.em==='number')){
       var ec=null; try{ ec=ifChain((sym==='QQQ')?'QQQ':'SPX'); }catch(eC){}
@@ -17367,6 +17424,55 @@ function emBand(sym){
 }
 // Position on the rail, 0..100, CLAMPED. A mark outside the band pins to the edge rather than
 // escaping the track — the percentage beside it is what says how far past.
+// ---- (v11.61) GAMMA PILES INSIDE THE BAND — the fuel and the friction ------------------------------
+// What stands between price and the expected move. Read from SKYLIT's book (cpRows), which is the SAME
+// source regime2D reads — so a pile can never contradict the regime chip above it. InsiderFinance's FLIP
+// is a SECOND opinion from a different book and stays labelled as theirs; the two are allowed to differ.
+//
+// POLARITY IS SKYLIT'S OWN CONVENTION, already documented in this file: purple = put-dominant = negative
+// gamma = ACCELERATOR (hedging feeds the move through it); yellow = call-dominant = positive gamma =
+// BRAKE (hedging leans against price there).
+//
+// THRESHOLD: reuse CFG.nodeThresh — the existing ⚙ slider, default 20% of King, floor 20. Inventing a
+// second cut would put markers on the band that ③ refuses to call nodes at all, and a 10% cut admits
+// everything (measured live: the seven in-band strikes were 100/30/19/18/14/13/10).
+// ⚠ nodeThresh is HAND-SET (⚖), not measured. The feed carries 60 strikes; the export kept ~6, so no
+// sweep has ever been possible. Widening the export is what makes calibrating it real.
+//
+// SIZE: sqrt of magnitude. Linear lets a 100% King flatten a 30% pile into near-invisibility.
+function emPiles(B, sym){
+  var out=[];
+  try{
+    if(!B || !B.ok) return out;
+    var L=null; try{ L=ifLadder(sym); }catch(e){}
+    if(!L || L.err || !(L.undScale>0) || !(L.dispScale>0)) return out;
+    var toChart = L.dispScale/L.undScale;              // SPY strike -> chart scale
+    var R=null; try{ R=cpRows(sym); }catch(e2){}
+    var rows=(R && R.rows) ? R.rows : [];
+    if(!rows.length) return out;
+    var maxMag=0, i;
+    for(i=0;i<rows.length;i++){
+      var m=Math.abs(rows[i].call||0)+Math.abs(rows[i].put||0);
+      if(m>maxMag) maxMag=m;
+    }
+    if(!(maxMag>0)) return out;
+    var thr=(typeof CFG!=='undefined' && CFG && typeof CFG.nodeThresh==='number') ? CFG.nodeThresh : 20;
+    for(i=0;i<rows.length;i++){
+      var r=rows[i], k=r.k;
+      if(typeof k!=='number') continue;
+      var disp=k*toChart;
+      if(disp<B.low || disp>B.high) continue;          // only what is IN the band
+      var cal=Math.abs(r.call||0), put=Math.abs(r.put||0), mag=cal+put;
+      var pct=Math.round(100*mag/maxMag);
+      if(pct<thr) continue;
+      out.push({ k:k, disp:disp, pct:pct,
+                 accel:(put>cal),                      // put-dominant => negative gamma => accelerator
+                 pos:emPos(B, disp) });
+    }
+    out.sort(function(a,b){ return b.pct-a.pct; });
+  }catch(e){}
+  return out;
+}
 function emPos(B, v){
   try{
     var span=B.high-B.low; if(!(span>0)) return 0;
@@ -17397,8 +17503,13 @@ function regimeTip(R){
     for(var i=0;i<4;i++) out += ((cell===i+1)?'\u25b8 ':'   ') + L[i] + '\n\n';
     out += (cell===0) ? 'No gamma book yet, so no cell can be named.\n'
                       : 'You are in cell '+cell+'.\n';
-    out += '\nGAMMA decides whether dealer hedging DAMPS the move or AMPLIFIES it. VANNA decides whether a change in volatility helps or hurts that. Neither one POINTS \u2014 both CONDITION, which is why they gate the call in BIAS rather than voting in it.\n';
-    out += '\nIt also decides what an extension MEANS on the band below: past 100% of the expected move reads as STRETCHED only in positive gamma (cells 3 and 4), where range compresses. In negative gamma (cells 1 and 2) ranges expand, so running past the band is what a trend day does \u2014 not a fade signal.';
+    // (v11.61) the user's own wording — short, concrete, no Greek-letter lecture.
+    out += '\nGAMMA = does dealer hedging fight the move or feed it. VANNA = does a change in vol add to '
+        +  'that or work against it. Neither points anywhere \u2014 gamma tells you HOW price moves, not '
+        +  'WHICH WAY \u2014 which is why they gate the call in \u2461 BIAS rather than voting in it.\n';
+    out += '\nIt also sets what an extension means below: past 100% of the expected move reads STRETCHED '
+        +  'only in cells 3 and 4, where range compresses. In cells 1 and 2 ranges expand, so running past '
+        +  'the band is what a trend day does.';
     return out;
   }catch(e){ return 'What kind of day is this? Gamma and vanna as a 2x2.'; }
 }
@@ -17465,6 +17576,21 @@ function secFrame(sym){
        '<i class="g3emo" style="left:'+pOpen.toFixed(1)+'%"></i>'+
        (ifMagEarly!=null?('<span class="g3emT'+((ifMagEarly<EB.low||ifMagEarly>EB.high)?' out':'')+'" style="left:'+emPos(EB,ifMagEarly).toFixed(1)+'%">T</span>'):'')+
        '<i class="g3emn'+(str?' g3str':'')+'" style="left:'+pNow.toFixed(1)+'%"></i>'+
+       // (v11.61) gamma piles hang BELOW the rail — the fuel and the friction between price and the rails
+       (function(){
+         var ps=[]; try{ ps=emPiles(EB, sym)||[]; }catch(eP){ return ''; }
+         var h2='';
+         for(var pi=0;pi<ps.length;pi++){
+           var P=ps[pi];
+           // sqrt so a 100% King does not flatten a 30% pile into invisibility
+           var hgt=Math.max(3, Math.round(Math.sqrt(P.pct/100)*10));
+           var w=(P.pct>=60?5:4);
+           h2+='<i class="g3pile '+(P.accel?'acc':'brk')+'" style="left:'+P.pos.toFixed(1)+'%;width:'+w+'px;height:'+hgt+'px"'+
+               g3tip(P.k+' — '+P.pct+'% of King, '+(P.accel?'NEGATIVE gamma. An ACCELERATOR: through here dealer hedging feeds the move.'
+                                                          :'POSITIVE gamma. A BRAKE: hedging leans against price here.'))+'></i>';
+         }
+         return h2;
+       })()+
        '</span>';
     h+='<span class="g3emk"'+g3tip('Expected high — the open plus the expected move. A priced boundary, not a ceiling.')+'>'+g3esc(dispNum(EB.high))+'<small>EXP HIGH</small></span>';
     h+='<b'+(str?' class="g3str"':'')+g3tip('How far price has travelled from the anchor, against what the straddle priced. The dot\'s position on the rail and this number are the same fact, so they can never disagree. Past 100% the day has done more than was paid for.')+'>'+Math.min(999,EB.pct)+'%</b>'+

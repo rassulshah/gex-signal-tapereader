@@ -1,1 +1,6 @@
-{"note":"daily exports land here as YYYY-MM-DD.json (written by the userscript at 15:01 CT, pushed by the GEX-data-push scheduled task at 15:30)"}
+{
+  "note": "daily exports land here as YYYY-MM-DD.json (written by the userscript at 15:01 CT, pushed by the GEX-data-push scheduled task at 15:30)",
+  "fields": {
+    "book": "(v11.61) RAW per-bar strike book from the Skylit feed: [strike, callGEX $M, putGEX $M] x ~60. `nodes` is the MODEL's selection (~6); `book` is everything the feed sent. Forward-only from 2026-08-22 - earlier days cannot be back-filled."
+  }
+}

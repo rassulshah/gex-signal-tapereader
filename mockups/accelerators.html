@@ -1,0 +1,137 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Accelerators and brakes on the band</title>
+<style>
+  body{background:#0b0e14;color:#e6edf3;font:12px Inter,Arial,sans-serif;margin:0;padding:20px 24px 70px}
+  h1{font-size:12px;letter-spacing:.15em;color:#8b98a9;font-weight:800;margin:0 0 6px}
+  h2{font-size:9px;letter-spacing:.09em;font-weight:800;color:#f2b45a;margin:24px 0 8px}
+  .sub{font-size:11px;color:#6c7889;margin:0 0 16px;line-height:1.6;max-width:710px}
+  .sub b{color:#e6edf3}
+  .note{font-size:10px;color:#6c7889;margin:8px 0 0;line-height:1.6;max-width:660px}
+  .note b{color:#8b98a9}
+  .panel{width:560px;background:#0b0e14;border:1px solid #1a212c;border-radius:5px;padding:5px 7px;margin-top:6px}
+  .sh{display:block;text-align:center;font-size:8px;font-weight:800;letter-spacing:.13em;color:#8b98a9;
+      margin:0 0 3px;padding:2px 0;border-radius:3px;background:rgba(139,152,169,.09)}
+  .r{display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+  .rg{font-size:9.5px;font-weight:800;padding:0 5px;border-radius:3px;line-height:14px;white-space:nowrap;
+      background:rgba(163,113,247,.18);color:#a371f7;border:1px solid rgba(163,113,247,.4);cursor:help}
+  .play{font-size:8.5px;color:#8b98a9}
+  .tgt{font-size:11px;font-weight:800;color:#e3c341;margin-left:auto;letter-spacing:-.2px}
+  .k{font-size:10.5px;font-weight:800;color:#e6edf3;line-height:1;white-space:nowrap}
+  .k small{display:block;font-size:6px;font-weight:800;letter-spacing:.08em;color:#6c7889;margin-top:1px}
+  .band{display:flex;align-items:center;gap:7px;margin-top:4px}
+  .t{position:relative;flex:1;min-width:90px}
+  .t.h1{height:20px}.t.h2{height:27px}
+  .rail{position:absolute;left:0;right:0;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}
+  .h1 .rail{top:12px}.h2 .rail{top:12px}
+  /* zone tint: which side of the flip */
+  .zone{position:absolute;height:4px;top:12px}
+  .zAcc{background:rgba(163,113,247,.30)}   /* below flip — hedging amplifies */
+  .zBrk{background:rgba(46,194,126,.16)}    /* above flip — hedging damps */
+  .seg{position:absolute;top:0;font-size:8.5px;font-weight:800;transform:translateX(-50%);white-space:nowrap;line-height:11px;cursor:help}
+  .lft{color:#2ec27e}.usd{color:#6c7889}
+  .tick{position:absolute;top:9px;width:1px;height:10px;background:#8b98a9}
+  .tick.op{background:#e6edf3;width:2px;transform:translateX(-1px);height:14px;top:7px}
+  .nw{position:absolute;top:9px;width:10px;height:10px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px #0b0e14;transform:translateX(-5px);cursor:help}
+  .tg{position:absolute;top:7px;font-size:9px;font-weight:800;color:#e3c341;transform:translateX(-50%);line-height:14px;text-shadow:0 0 3px #0b0e14,0 0 3px #0b0e14;cursor:help}
+  /* level glyphs */
+  .brk{position:absolute;top:8px;width:3px;height:12px;background:#2ec27e;border-radius:1px;transform:translateX(-1.5px);cursor:help}
+  .acc{position:absolute;top:8px;font-size:10px;line-height:12px;color:#a371f7;transform:translateX(-50%);cursor:help;font-weight:800}
+  .lv{position:absolute;top:20px;font-size:6px;font-weight:800;transform:translateX(-50%);letter-spacing:.05em;white-space:nowrap}
+  .lvB{color:#2ec27e}.lvA{color:#a371f7}
+  table{border-collapse:collapse;font-size:10px;margin:6px 0}
+  td,th{padding:3px 16px 3px 0;text-align:left;color:#8b98a9}
+  th{color:#6c7889;font-size:8px;letter-spacing:.08em}
+  td.n{color:#e6edf3;font-variant-numeric:tabular-nums;font-weight:700}
+  .warn{margin:22px 0 0;border:1px solid rgba(240,97,109,.35);background:rgba(240,97,109,.06);
+        border-radius:5px;padding:11px 13px;font-size:10px;color:#8b98a9;line-height:1.65;max-width:710px}
+  .warn b{color:#f0616d}
+  code{color:#8b98a9}
+</style>
+
+<h1>ACCELERATORS &amp; BRAKES ON THE BAND</h1>
+<p class="sub">The tool already knows this — your Skylit doctrine calls it <b>Pika (friction)</b> and
+<b>Barney (fuel)</b>, and <b>FLIP</b> is the one boundary where the whole book changes sign. What is
+missing is putting them <b>on the rail</b>, so you can see what stands between price and the expected
+move.<br><br>
+Live right now, three levels fall inside the band and four do not:
+<b>FLIP 7664.89</b> (5.6% of the rail), <b>MP 7712.70</b> (74.4%), <b>Mag 7717.71</b> (81.6%).
+CR, PS, CR0 and PS0 are all outside it.</p>
+
+<h2>A — FLIP SPLITS THE RAIL INTO TWO ZONES</h2>
+<div class="panel">
+  <span class="sh">① FRAME</span>
+  <div class="r"><span class="rg">−G −V ⚠</span><span class="play">breaks not fades · widen stops</span>
+    <span class="tgt">→ 7717.71</span></div>
+  <div class="band">
+    <span class="k">7661.0<small>EXP LOW</small></span>
+    <span class="t h2">
+      <i class="rail"></i>
+      <i class="zone zAcc" style="left:0;width:5.6%"></i>
+      <i class="zone zBrk" style="left:5.6%;width:94.4%"></i>
+      <span class="seg lft" style="left:11.2%">$782</span><span class="seg usd" style="left:36.2%">$955</span>
+      <span class="seg usd" style="left:63.2%">$920</span><span class="seg lft" style="left:88.2%">$816</span>
+      <span class="acc" style="left:5.6%" title="FLIP 7664.89 — the gamma flip. BELOW it dealers hedge with the move and it accelerates; ABOVE it they hedge against it and it brakes.">◂</span>
+      <span class="lv lvA" style="left:5.6%">FLIP</span>
+      <i class="brk" style="left:74.4%" title="MAX PAIN 7712.70 — a brake."></i><span class="lv lvB" style="left:74.4%">MP</span>
+      <i class="tick" style="left:22.5%"></i><i class="tick op" style="left:50%"></i><i class="tick" style="left:76.5%"></i>
+      <span class="tg" style="left:81.6%">T</span>
+      <i class="nw" style="left:44.2%"></i>
+    </span>
+    <span class="k">7730.5<small>EXP HIGH</small></span>
+  </div>
+</div>
+<p class="note">The rail is tinted by <b>which side of FLIP</b> it is: purple below (hedging amplifies —
+accelerator territory), green above (hedging damps — braked). Almost the entire band is above FLIP today,
+so the structure says a move up is fighting friction the whole way. <b>That is the read you asked for:
+cross a boundary, and the character of the move changes.</b></p>
+
+<h2>B — GLYPHS ONLY, NO TINT</h2>
+<div class="panel">
+  <span class="sh">① FRAME</span>
+  <div class="r"><span class="rg">−G −V ⚠</span><span class="play">breaks not fades · widen stops</span>
+    <span class="tgt">→ 7717.71</span></div>
+  <div class="band">
+    <span class="k">7661.0<small>EXP LOW</small></span>
+    <span class="t h2">
+      <i class="rail"></i>
+      <span class="seg lft" style="left:11.2%">$782</span><span class="seg usd" style="left:36.2%">$955</span>
+      <span class="seg usd" style="left:63.2%">$920</span><span class="seg lft" style="left:88.2%">$816</span>
+      <span class="acc" style="left:5.6%" title="FLIP — below it, moves accelerate.">◂</span><span class="lv lvA" style="left:5.6%">FLIP</span>
+      <i class="brk" style="left:74.4%" title="Max pain — a brake."></i><span class="lv lvB" style="left:74.4%">MP</span>
+      <i class="brk" style="left:81.6%" title="Magnet 7717.71 — the heaviest strike, a brake and the target."></i><span class="lv lvB" style="left:81.6%">MAG</span>
+      <i class="tick" style="left:22.5%"></i><i class="tick op" style="left:50%"></i><i class="tick" style="left:76.5%"></i>
+      <i class="nw" style="left:44.2%"></i>
+    </span>
+    <span class="k">7730.5<small>EXP HIGH</small></span>
+  </div>
+</div>
+<p class="note"><b>Green bar = brake</b> (heavy positive gamma, hedging leans against price).
+<b>Purple chevron = accelerator</b>, pointing the way things speed up. ⚠ MP at 74.4% and Mag at 81.6% are
+seven points apart on the rail and their labels already touch — <b>and that is only three levels.</b>
+A busy day puts CR0/PS0 in range too.</p>
+
+<h2>WHAT IS IN RANGE, AND WHAT IS NOT</h2>
+<table>
+  <tr><th>level</th><th>price</th><th>rail position</th><th>role</th></tr>
+  <tr><td>FLIP (zero gamma)</td><td class="n">7664.89</td><td class="n">5.6%</td><td>boundary — accelerator below, brake above</td></tr>
+  <tr><td>MP (max pain)</td><td class="n">7712.70</td><td class="n">74.4%</td><td>brake</td></tr>
+  <tr><td>Mag (heaviest strike)</td><td class="n">7717.71</td><td class="n">81.6%</td><td>brake — and the target</td></tr>
+  <tr><td>CR0 / CR</td><td class="n">7742.77 / 7817.94</td><td class="n">118% / 226%</td><td>outside the band</td></tr>
+  <tr><td>PS0 / PS</td><td class="n">7647.55 / 7617.48</td><td class="n">−19% / −63%</td><td>outside the band</td></tr>
+</table>
+
+<div class="warn">
+  <b>⚠ BEFORE ANY OF THIS SHIPS — THE TWO BOOKS DISAGREE ABOUT POLARITY, RIGHT NOW.</b><br><br>
+  The regime chip reads <b>−G</b> (negative gamma, hedging amplifies). But <b>FLIP is 7664.89 and price is
+  7691.75</b> — price is <b>ABOVE</b> the gamma flip, which by definition is <b>positive</b> gamma
+  territory. <b>The face is asserting both at once.</b><br><br>
+  It is not necessarily a bug: <code>regime2D</code> reads <b>Skylit's</b> gamma book on the SPY tape,
+  while FLIP is <b>InsiderFinance's</b> published Zero Gamma from the SPX chain. Two different books, two
+  underlyings, two expiry sets — they are allowed to differ. But when they disagree about <b>which side of
+  the flip you are on</b>, marking accelerators and brakes becomes a coin toss: <b>the same level is a
+  brake under one book and an accelerator under the other.</b><br><br>
+  This has to be settled first, and it is the same open question as the netGEX sign gap
+  (ours −$16.41B, theirs +$13.30B). <b>One reconciliation answers both.</b> Until then this is a good
+  design sitting on an unreliable polarity, and polarity is the entire point of it.
+</div>

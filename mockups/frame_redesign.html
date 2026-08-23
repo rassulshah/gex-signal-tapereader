@@ -1,0 +1,183 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>FRAME — compact redesign</title>
+<style>
+  body{background:#0b0e14;color:#e6edf3;font:12px Inter,Arial,sans-serif;margin:0;padding:20px 24px 70px}
+  h1{font-size:12px;letter-spacing:.15em;color:#8b98a9;font-weight:800;margin:0 0 6px}
+  .sub{font-size:11px;color:#6c7889;margin:0 0 20px;line-height:1.6;max-width:700px}
+  .sub b{color:#e6edf3}
+  .v{margin:0 0 22px}
+  .cap{font-size:9px;letter-spacing:.08em;font-weight:800;color:#f2b45a;margin:0 0 5px}
+  .cap.g{color:#2ec27e}
+  .h{font-size:8px;color:#6c7889;margin:0 0 4px}
+  .note{font-size:10px;color:#6c7889;margin:7px 0 0;line-height:1.6;max-width:640px}
+  .note b{color:#8b98a9}
+  .panel{width:560px;background:#0b0e14;border:1px solid #1a212c;border-radius:5px;padding:5px 7px}
+  .sh{display:block;text-align:center;font-size:8px;font-weight:800;letter-spacing:.13em;color:#8b98a9;
+      margin:0 0 3px;padding:2px 0;border-radius:3px;background:rgba(139,152,169,.09)}
+  .r{display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+  .r+.r{margin-top:3px}
+  .rg{font-size:9.5px;font-weight:800;padding:0 5px;border-radius:3px;background:rgba(163,113,247,.18);
+      color:#a371f7;border:1px solid rgba(163,113,247,.4);cursor:help;white-space:nowrap;line-height:14px}
+  .play{font-size:8.5px;color:#8b98a9;cursor:help}
+  .tgt{font-size:11px;font-weight:800;color:#e3c341;letter-spacing:-.2px;margin-left:auto;cursor:help}
+  .k{font-size:10.5px;font-weight:800;color:#e6edf3;line-height:1;white-space:nowrap;cursor:help}
+  .k small{display:block;font-size:6px;font-weight:800;letter-spacing:.08em;color:#6c7889;margin-top:1px}
+  .t{position:relative;flex:1;height:13px;min-width:80px}
+  .rail{position:absolute;left:0;right:0;top:5px;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}
+  .exc{position:absolute;top:5px;height:4px;border-radius:2px;background:rgba(139,152,169,.22)}
+  .wm{position:absolute;top:2px;width:1px;height:10px;background:rgba(195,204,216,.6);cursor:help}
+  .fill{position:absolute;top:5px;height:4px;border-radius:2px;background:rgba(139,152,169,.6)}
+  .op{position:absolute;top:1px;width:2px;height:12px;background:#c3ccd8;border-radius:1px;transform:translateX(-1px);cursor:help}
+  .nw{position:absolute;top:2px;width:10px;height:10px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px #0b0e14;transform:translateX(-5px);cursor:help}
+  .tg{position:absolute;top:0;font-size:9px;font-weight:800;color:#e3c341;transform:translateX(-50%);line-height:13px;text-shadow:0 0 3px #0b0e14,0 0 3px #0b0e14;cursor:help}
+  .pct{font-size:10px;font-weight:800;color:#e6edf3;white-space:nowrap;cursor:help}
+  .mon{font-size:9px;font-weight:800;color:#2ec27e;white-space:nowrap;cursor:help}
+  .dim{color:#6c7889;font-weight:700}
+  .sm{font-size:8px;color:#8b98a9;cursor:help}
+  .sm b{color:#e6edf3;font-weight:800}
+  .rep{font-size:7px;font-weight:800;padding:0 4px;border-radius:2px;background:rgba(163,113,247,.22);color:#a371f7;border:1px solid rgba(163,113,247,.5);line-height:12px;cursor:help}
+  .lab{position:absolute;top:13px;font-size:6px;font-weight:800;color:#6c7889;transform:translateX(-50%);letter-spacing:.05em}
+  .legend{margin:24px 0 0;font-size:10px;color:#6c7889;line-height:1.75;max-width:700px;border-top:1px solid #1a212c;padding-top:13px}
+  .legend b{color:#8b98a9}
+  code{color:#8b98a9}
+</style>
+
+<h1>① FRAME — COMPACT REDESIGN</h1>
+<p class="sub">Same live values throughout: open <b>7695.29</b>, price <b>7691.29</b>, rails
+<b>7660.6 / 7730.0</b>, target <b>7717.71</b>, EM 34.73 pts = <b>$1,736</b> on ES, 12% travelled,
+LOD −55% then HOD +53%, 79% retraced, <b>$200</b> used, <b>$1,536</b> left.
+<br><br><b>What I cut, and why:</b> the <code>ES · EM $1,736/ct</code> chip (a box round two words),
+<code>OF EM</code> (the rails already say EXP LOW/HIGH — what else would the % be of), and the phrase
+<i>"of the LOD drive"</i> (the arrow already said which drive). <b>Hovers are one sentence.</b></p>
+
+<!-- CURRENT -->
+<div class="v">
+  <div class="cap">TODAY — 3 rows, and the chip boxes two words</div>
+  <div class="panel">
+    <span class="sh">① FRAME</span>
+    <div class="r"><span class="rg">−G −V ⚠</span><span class="tgt" style="margin-left:0">→ 7717.71</span>
+      <span class="rg" style="background:rgba(46,194,126,.14);color:#2ec27e;border-color:rgba(46,194,126,.4)">ES · EM $1,736/ct</span>
+      <span class="play">momentum — breaks not fades · widen stops</span></div>
+    <div class="r"><span class="k">7660.56<small>EXP LOW</small></span>
+      <span class="t"><i class="rail"></i><i class="exc" style="left:22.5%;width:54%"></i><i class="wm" style="left:22.5%"></i><i class="wm" style="left:76.5%"></i>
+        <i class="fill" style="left:44.2%;width:5.8%"></i><i class="op" style="left:50%"></i><span class="tg" style="left:82.3%">T</span><i class="nw" style="left:44.2%"></i></span>
+      <span class="k">7730.01<small>EXP HIGH</small></span>
+      <span class="pct">12%</span><span class="dim" style="font-size:7px">OF EM ~EST</span><span class="rep">▮ 08/21 REPLAY</span></div>
+    <div class="r"><span class="sm">LOD <b>−55%</b> → HOD <b>+53%</b> · retraced <b>79%</b> of the LOD drive · <span style="color:#2ec27e">$200 used · $1,536 left</span></span></div>
+  </div>
+</div>
+
+<!-- A -->
+<div class="v">
+  <div class="cap g">A — TWO ROWS <b>(recommended)</b></div>
+  <div class="h">the day's story moves onto the rail as labels; the third row disappears</div>
+  <div class="panel">
+    <span class="sh">① FRAME</span>
+    <div class="r">
+      <span class="rg" title="Negative gamma and negative vanna — dealer hedging amplifies the move twice over. The one cell where breaks run and fades lose.">−G −V ⚠</span>
+      <span class="play" title="What this regime rewards. Hover the regime chip for all four cells.">breaks not fades · widen stops</span>
+      <span class="tgt" title="Target 7717.71 — the heaviest strike in InsiderFinance's book, at 82% of the rail. Inside today's range.">→ 7717.71</span>
+    </div>
+    <div class="r">
+      <span class="k" title="Expected low — the open minus the expected move. A priced boundary, not a floor.">7660.6<small>EXP LOW</small></span>
+      <span class="t">
+        <i class="rail"></i><i class="exc" style="left:22.5%;width:54%"></i>
+        <i class="wm" style="left:22.5%" title="Low of day — 55% of the expected move below the open."></i>
+        <i class="wm" style="left:76.5%" title="High of day — 53% of the expected move above the open."></i>
+        <i class="fill" style="left:44.2%;width:5.8%"></i>
+        <i class="op" style="left:50%" title="The open — 7695.29. Fixed for the session; everything is measured from it."></i>
+        <span class="tg" style="left:82.3%" title="Target — 7717.71.">T</span>
+        <i class="nw" style="left:44.2%" title="Price now — 7691.29."></i>
+        <span class="lab" style="left:22.5%">LOD</span><span class="lab" style="left:76.5%">HOD</span>
+      </span>
+      <span class="k" title="Expected high — the open plus the expected move. A priced boundary, not a ceiling.">7730.0<small>EXP HIGH</small></span>
+      <span class="pct" title="12% of the expected move travelled from the open; 79% of the LOD drive retraced.">12% <span class="dim">·79%↩</span></span>
+      <span class="mon" title="ES, $50 a point. $200 of the $1,736 expected move travelled; $1,536 to the rail ahead. The move in dollars — not a position.">$200<span class="dim">/1,736</span></span>
+      <span class="rep" title="Replay of 2026-08-21 — nothing is live and the recorder is off.">▮08/21</span>
+    </div>
+  </div>
+  <p class="note">HOD and LOD become <b>labels under the marks they describe</b>, so the sentence that
+  explained them is unnecessary. <code>12% ·79%↩</code> is travelled-and-retraced. <code>$200/1,736</code>
+  is used-of-total, with the contract in the hover. <b>Two rows, no boxes, ~26px.</b></p>
+</div>
+
+<!-- B -->
+<div class="v">
+  <div class="cap">B — TWO ROWS, MONEY-FIRST</div>
+  <div class="h">for when dollars are the unit you actually think in</div>
+  <div class="panel">
+    <span class="sh">① FRAME</span>
+    <div class="r">
+      <span class="rg" title="Negative gamma and negative vanna — hedging amplifies the move. Breaks run, fades lose.">−G −V ⚠</span>
+      <span class="play">breaks not fades · widen stops</span>
+      <span class="tgt" title="Target 7717.71 — $1,121 from here.">→ 7717.71 <span class="dim" style="font-size:8px">$1,321</span></span>
+    </div>
+    <div class="r">
+      <span class="k" title="Expected low.">7660.6<small>−$1,536</small></span>
+      <span class="t">
+        <i class="rail"></i><i class="exc" style="left:22.5%;width:54%"></i>
+        <i class="wm" style="left:22.5%"></i><i class="wm" style="left:76.5%"></i>
+        <i class="fill" style="left:44.2%;width:5.8%"></i><i class="op" style="left:50%"></i>
+        <span class="tg" style="left:82.3%">T</span><i class="nw" style="left:44.2%"></i>
+        <span class="lab" style="left:22.5%">LOD</span><span class="lab" style="left:76.5%">HOD</span>
+      </span>
+      <span class="k" title="Expected high.">7730.0<small>+$1,936</small></span>
+      <span class="mon" title="ES $50/pt · $200 of $1,736 used.">$200<span class="dim">/1,736</span></span>
+      <span class="rep">▮08/21</span>
+    </div>
+  </div>
+  <p class="note">Each rail says what it is worth <b>from here</b>, and the target carries its dollar
+  distance. ⚠ It spends the EXP LOW / EXP HIGH captions to do it — the labels you asked for two changes
+  back — and three dollar figures on one row start to compete.</p>
+</div>
+
+<!-- C -->
+<div class="v">
+  <div class="cap">C — ONE ROW</div>
+  <div class="h">the absolute floor: everything on a single line</div>
+  <div class="panel">
+    <span class="sh">① FRAME</span>
+    <div class="r">
+      <span class="rg" title="Negative gamma, negative vanna.">−G−V⚠</span>
+      <span class="k" style="font-size:9px">7660.6</span>
+      <span class="t">
+        <i class="rail"></i><i class="exc" style="left:22.5%;width:54%"></i>
+        <i class="wm" style="left:22.5%"></i><i class="wm" style="left:76.5%"></i>
+        <i class="fill" style="left:44.2%;width:5.8%"></i><i class="op" style="left:50%"></i>
+        <span class="tg" style="left:82.3%">T</span><i class="nw" style="left:44.2%"></i>
+      </span>
+      <span class="k" style="font-size:9px">7730.0</span>
+      <span class="pct">12%</span>
+      <span class="mon">$200<span class="dim">/1,736</span></span>
+    </div>
+  </div>
+  <p class="note">~13px. But the playbook line is gone, HOD/LOD are unlabelled hairlines, the rails lose
+  their captions, and the target number is only on the rail. <b>This is what the section costs at its
+  minimum — shown so the trade-off is visible, not because I would ship it.</b></p>
+</div>
+
+<div class="legend">
+  <b>THE HOVERS, REWRITTEN.</b> Every one is a single sentence. The old ones ran to paragraphs, and a
+  tooltip nobody finishes is a tooltip nobody reads:<br><br>
+  <code>EXP LOW</code> — "The open minus the expected move. A priced boundary, not a floor."<br>
+  <code>open notch</code> — "The open — 7695.29. Fixed for the session; everything is measured from it."<br>
+  <code>white dot</code> — "Price now — 7691.29."<br>
+  <code>LOD / HOD</code> — "Low of day — 55% of the expected move below the open."<br>
+  <code>T</code> — "Target — 7717.71."<br>
+  <code>12% ·79%↩</code> — "12% of the expected move travelled; 79% of the LOD drive retraced."<br>
+  <code>$200/1,736</code> — "ES, $50 a point. $200 of the $1,736 expected move travelled. The move in
+  dollars — not a position."<br>
+  <b>The four-cell regime list stays as-is</b> — it is the one hover that is genuinely reference material,
+  and it is on the one element that is a code rather than words.<br><br>
+
+  <b>⚠ AND THE BUG, WHICH IS NOT COSMETIC.</b> The stored capture is
+  <code>{em, k, capMin, t}</code> — <b>no <code>rr</code></b>. It was written before v11.59, the date key
+  still matches, so the new code reuses it, the pin never fires, and the band rides the live scale.
+  Measured drift in minutes: open <b>7695.86 → 7695.29</b>, both rails with it.<br><br>
+  The v11.59 fix is correct and <b>inert on any already-captured session</b>. The real lesson is broader
+  than this feature: <b>persisted state written by an older version can silently disable a newer guard</b>
+  — no error, no log line, nothing on the face. It needs a schema stamp so a record missing expected
+  fields is RE-TAKEN rather than trusted. That check belongs on every persisted store here, not just
+  this one.
+</div>

@@ -1,0 +1,134 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>FRAME — combined</title>
+<style>
+  body{background:#0b0e14;color:#e6edf3;font:12px Inter,Arial,sans-serif;margin:0;padding:20px 24px 60px}
+  h1{font-size:12px;letter-spacing:.15em;color:#8b98a9;font-weight:800;margin:0 0 6px}
+  .sub{font-size:11px;color:#6c7889;margin:0 0 20px;line-height:1.6;max-width:700px}
+  .sub b{color:#e6edf3}
+  .v{margin:0 0 24px}
+  .cap{font-size:9px;letter-spacing:.08em;font-weight:800;color:#f2b45a;margin:0 0 5px}
+  .cap.g{color:#2ec27e}
+  .note{font-size:10px;color:#6c7889;margin:8px 0 0;line-height:1.6;max-width:650px}
+  .note b{color:#8b98a9}
+  .panel{width:560px;background:#0b0e14;border:1px solid #1a212c;border-radius:5px;padding:5px 7px}
+  .sh{display:block;text-align:center;font-size:8px;font-weight:800;letter-spacing:.13em;color:#8b98a9;
+      margin:0 0 3px;padding:2px 0;border-radius:3px;background:rgba(139,152,169,.09)}
+  .r{display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+  .rg{font-size:9.5px;font-weight:800;padding:0 5px;border-radius:3px;background:rgba(163,113,247,.18);
+      color:#a371f7;border:1px solid rgba(163,113,247,.4);cursor:help;line-height:14px;white-space:nowrap}
+  .play{font-size:8.5px;color:#8b98a9;cursor:help}
+  .tgt{font-size:11px;font-weight:800;color:#e3c341;margin-left:auto;letter-spacing:-.2px;cursor:help}
+  .rep{font-size:7px;font-weight:800;padding:0 4px;border-radius:2px;background:rgba(163,113,247,.22);
+       color:#a371f7;border:1px solid rgba(163,113,247,.5);line-height:12px}
+  .k{font-size:10.5px;font-weight:800;color:#e6edf3;line-height:1;white-space:nowrap;cursor:help}
+  .k small{display:block;font-size:6px;font-weight:800;letter-spacing:.08em;color:#6c7889;margin-top:1px}
+  .band{display:flex;align-items:center;gap:7px;margin-top:4px}
+  .t{position:relative;flex:1;min-width:90px;height:22px}
+  .rail{position:absolute;left:0;right:0;top:13px;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}
+  .seg{position:absolute;top:0;font-size:8.5px;font-weight:800;transform:translateX(-50%);white-space:nowrap;line-height:11px;cursor:help}
+  .lft{color:#2ec27e}.usdim{color:#6c7889}
+  /* node piles — brake vs accelerator, height by magnitude (sqrt-compressed) */
+  .pile{position:absolute;bottom:5px;transform:translateX(-50%);border-radius:1px;cursor:help}
+  .brake{background:#2ec27e}.accel{background:#a371f7}
+  .tick{position:absolute;top:11px;width:1px;height:8px;background:#8b98a9}
+  .tick.op{background:#e6edf3;width:2px;transform:translateX(-1px);height:12px;top:9px}
+  .nw{position:absolute;top:10px;width:10px;height:10px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px #0b0e14;transform:translateX(-5px);cursor:help}
+  .tg{position:absolute;top:9px;font-size:9px;font-weight:800;color:#e3c341;transform:translateX(-50%);line-height:12px;text-shadow:0 0 3px #0b0e14,0 0 3px #0b0e14;cursor:help}
+  .legend{margin:22px 0 0;font-size:10px;color:#6c7889;line-height:1.75;max-width:700px;border-top:1px solid #1a212c;padding-top:12px}
+  .legend b{color:#8b98a9}
+  code{color:#8b98a9}
+</style>
+
+<h1>① FRAME — SEGMENTS + NODE PILES ON ONE RAIL</h1>
+<p class="sub">Live values. Two strikes clear <code>CFG.nodeThresh</code> (20% King) inside the band:
+<b>765 at 100% — positive gamma, a BRAKE, sitting just under price</b>, and <b>767 at 30% — negative
+gamma, an ACCELERATOR</b>. Height is magnitude, square-root compressed so the King does not flatten
+everything else. The question this file answers is whether seven marks fit on one line.</p>
+
+<!-- A -->
+<div class="v">
+  <div class="cap g">A — EVERYTHING <b>(what we agreed, drawn together)</b></div>
+  <div class="panel">
+    <span class="sh">① FRAME</span>
+    <div class="r">
+      <span class="rg" title="Negative gamma, negative vanna — hedging amplifies twice over.">−G −V ⚠</span>
+      <span class="play">breaks not fades · widen stops</span>
+      <span class="rep">▮08/21</span>
+      <span class="tgt" title="Target 7717.71.">→ 7717.71</span>
+    </div>
+    <div class="band">
+      <span class="k" title="Expected low — the open minus the expected move.">7661.0<small>EXP LOW</small></span>
+      <span class="t">
+        <i class="rail"></i>
+        <span class="seg lft" style="left:11.2%" title="Still available downside.">$782</span>
+        <span class="seg usdim" style="left:36.2%" title="Downside already used.">$955</span>
+        <span class="seg usdim" style="left:63.2%" title="Upside already used.">$920</span>
+        <span class="seg lft" style="left:88.2%" title="Still available upside.">$816</span>
+        <i class="pile brake" style="left:33.7%;width:5px;height:9px" title="765 — 100% of King, POSITIVE gamma. A brake: hedging leans against price here. Price is just above it."></i>
+        <i class="pile accel" style="left:62.6%;width:4px;height:5px" title="767 — 30% of King, NEGATIVE gamma. An accelerator: through here hedging feeds the move."></i>
+        <i class="tick" style="left:22.5%"></i><i class="tick op" style="left:50%"></i><i class="tick" style="left:76.5%"></i>
+        <span class="tg" style="left:81.6%">T</span>
+        <i class="nw" style="left:44.2%" title="Price now — 7691.75."></i>
+      </span>
+      <span class="k" title="Expected high — the open plus the expected move.">7730.5<small>EXP HIGH</small></span>
+    </div>
+  </div>
+  <p class="note">It fits, but only because today is quiet. <b>The accelerator at 62.6% sits four points
+  from the $920 label and two from the HOD tick.</b> An expiry day with four qualifying piles would
+  collide with the segment labels outright.</p>
+</div>
+
+<!-- B -->
+<div class="v">
+  <div class="cap g">B — PILES BELOW THE RAIL, MONEY ABOVE <b>(recommended)</b></div>
+  <div class="panel">
+    <span class="sh">① FRAME</span>
+    <div class="r">
+      <span class="rg">−G −V ⚠</span><span class="play">breaks not fades · widen stops</span>
+      <span class="rep">▮08/21</span><span class="tgt">→ 7717.71</span>
+    </div>
+    <div class="band">
+      <span class="k">7661.0<small>EXP LOW</small></span>
+      <span class="t" style="height:26px">
+        <i class="rail" style="top:9px"></i>
+        <span class="seg lft" style="left:11.2%;top:0">$782</span>
+        <span class="seg usdim" style="left:36.2%;top:0">$955</span>
+        <span class="seg usdim" style="left:63.2%;top:0">$920</span>
+        <span class="seg lft" style="left:88.2%;top:0">$816</span>
+        <i class="pile brake" style="left:33.7%;width:5px;height:10px;bottom:0" title="765 — 100% King, positive gamma. A brake."></i>
+        <i class="pile accel" style="left:62.6%;width:4px;height:6px;bottom:0" title="767 — 30% King, negative gamma. An accelerator."></i>
+        <i class="tick" style="left:22.5%;top:7px;height:8px"></i>
+        <i class="tick op" style="left:50%;top:5px;height:12px"></i>
+        <i class="tick" style="left:76.5%;top:7px;height:8px"></i>
+        <span class="tg" style="left:81.6%;top:5px">T</span>
+        <i class="nw" style="left:44.2%;top:6px"></i>
+      </span>
+      <span class="k">7730.5<small>EXP HIGH</small></span>
+    </div>
+  </div>
+  <p class="note"><b>Three tiers that never collide:</b> money above the rail, the rail with its ticks and
+  the dot, gamma piles hanging below. A pile can never overlap a dollar label because they live in
+  different bands. Costs 4px of height and scales to a busy day. <b>This is the one I would build.</b></p>
+</div>
+
+<div class="legend">
+  <b>WHAT I AM READY TO BUILD</b><br>
+  · the four money segments — used and remaining, both sides, colour-coded (green left, grey spent)<br>
+  · node piles at <code>CFG.nodeThresh</code> (your existing 20% slider), height = √magnitude, green
+  brake / purple accelerator<br>
+  · every hover cut to one sentence; the four-cell regime list kept, with your
+  <i>"GAMMA = fight or feed, VANNA = adds or works against"</i> ending plus <i>"gamma tells you how, not
+  which way"</i><br>
+  · <b>the <code>rr</code> schema stamp</b> — the fix for your moving dot: a stored capture missing
+  expected fields gets RE-TAKEN instead of silently disabling the pin<br>
+  · widen the export from ~5.8 to all <b>60</b> strikes, so the threshold can finally be swept against
+  outcomes instead of guessed<br><br>
+
+  <b>WHAT I AM NOT BUILDING, AND WHY</b><br>
+  The <b>FEEDS / FIGHTS $214M per point</b> chip — the literal "fuel" number. Our <code>toFri</code>
+  netGEX is <b>−$16.41B</b>, their page publishes <b>+$13.30B</b>, and aggregation differences do not
+  explain a sign flip. A chip that says FEEDS while hedging is braking is a wrong number with a DIRECTION
+  attached. <b>The node piles give you the fuel read from Skylit's book — same source as the regime chip,
+  so no contradiction</b> — and the aggregate dollar figure waits for the reconciliation.
+</div>

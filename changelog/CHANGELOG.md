@@ -1,3 +1,69 @@
+## v11.61 — FRAME finished: gamma piles, Skylit's colours, and the real fix for the drifting dot
+
+**THE MOVING DOT — THE ACTUAL CAUSE.** v11.59 pinned the scale so the anchor would stop drifting. It never
+fired. A capture written BEFORE v11.59 has no `rr`, the date key still matched, and the new code reused it
+happily — so the band went straight back to riding the live scale. Measured on the live panel: open
+**7695.86 → 7695.29 in minutes**, both rails with it.
+
+The failure is general and worth stating as a rule: **persisted state written by an older version can
+silently disable a newer guard.** No error, no log line, nothing on the face — the only symptom was a dot
+that moved, which the user spotted before any test did. The record now carries `EMOPEN_SCHEMA`, and a
+capture whose stamp does not match — or which lacks a field this version depends on — is **discarded and
+re-taken**, never half-used.
+
+**GAMMA PILES — the fuel and the friction, inside the band.** What actually stands between price and the
+expected move. Read from **Skylit's** book via `cpRows`, the same source `regime2D` reads, so a pile can
+never contradict the regime chip above it. InsiderFinance's FLIP stays a second opinion from a different
+book, labelled as theirs.
+
+**Threshold: `CFG.nodeThresh`** — the ⚙ slider that already exists, default 20% of King. No second cut
+enters the codebase. I nearly shipped 10%, which on the live sample admitted **all seven** in-band strikes
+(100/30/19/18/14/13/10) — a formality, not a filter, and it would have marked strikes that ③ refuses to
+call nodes at all. ⚠ nodeThresh is hand-set (⚖), never measured.
+
+Height is **√magnitude**: linear lets a 100% King flatten a 30% pile into invisibility.
+
+**SKYLIT'S COLOUR CONVENTION, which my own mockup got wrong.** Their doctrine — already documented in this
+file — is **purple = put-dominant = negative gamma = ACCELERATOR**, **yellow = call-dominant = positive
+gamma = BRAKE**. I had drawn brakes in green. Fixed, and that forced two more moves:
+
+- **The target is now CYAN** (`#4fd1e0`). Yellow means positive gamma now, so the target could not keep
+  it. Cyan was the one hue the palette had not spent, and the **T** glyph carries identity without colour.
+- **STRETCHED is now RED.** Amber sat beside the brake yellow meaning something different; red already
+  means "this is against you" in BIAS, which is what STRETCHED says.
+
+The grammar is now: **purple accelerates · yellow brakes · cyan is where it is trying to go · white is
+where it is · red is a warning.**
+
+**THREE TIERS THAT CANNOT COLLIDE.** Money above the rail, ticks and price on it, piles hanging below. The
+combined mockup showed the alternative crowding badly — an accelerator four points from a dollar label on
+a QUIET day with only two piles. Separated by tier, they can never overlap regardless of how busy the book
+gets.
+
+**THE RAW BOOK IS NOW EXPORTED.** `nodes` is what the model chose to call a node — about 6 strikes. The
+feed delivers **60** (`nodes=60`, confirmed live; the Skylit `P20` control only changes what THEIR canvas
+draws, and no UI setting widens our feed). Throwing 90% away made every threshold question unanswerable:
+**a sweep over the surviving 6 measures our own filter, not the market.** `snap.book` now carries
+`[strike, callGEX $M, putGEX $M]` for all 60, compactly. ⚠ **Forward-only** — earlier days cannot be
+back-filled, which is exactly why it goes in now rather than when the calibration is wanted.
+
+**THE GAMMA/VANNA HOVER, in the user's own words:** *"GAMMA = does dealer hedging fight the move or feed
+it. VANNA = does a change in vol add to that or work against it."* Plus the project's own phrasing —
+gamma tells you HOW price moves, not WHICH WAY — which is why both gate rather than vote.
+⚠ There is no industry aphorism pairing gamma and vanna; the line the user half-remembered was this
+codebase's own, and the real pairing is **gamma = how, delta = which way**.
+
+**NOT BUILT, DELIBERATELY:** the `FEEDS/FIGHTS $214M per point` chip. Our `toFri` netGEX is **−$16.41B**
+against their published **+$13.30B**, and aggregation differences do not explain a sign flip. A chip
+reading FEEDS while hedging is braking is a wrong number with a DIRECTION attached. The piles deliver the
+fuel read from a book we trust; the aggregate dollar figure waits for the reconciliation.
+
+⚠ Two tests failed on their own history during this build and both were fixed properly rather than
+loosened: one matched `EMOPEN_KEY` and `EM_FRESH_MIN` as an ADJACENT block and broke when the schema
+constant landed between them — **a test that depends on the order of unrelated declarations fails on a
+change that is none of its business** — and two pinned the old abstract hover wording that was
+deliberately replaced.
+
 ## v11.60 — the band in dollars per contract
 
 A band in index points makes you do the ×50 in your head every time you want to know what a move is

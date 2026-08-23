@@ -1,0 +1,172 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>FRAME — money as distance on the rail</title>
+<style>
+  body{background:#0b0e14;color:#e6edf3;font:12px Inter,Arial,sans-serif;margin:0;padding:20px 24px 70px}
+  h1{font-size:12px;letter-spacing:.15em;color:#8b98a9;font-weight:800;margin:0 0 6px}
+  .sub{font-size:11px;color:#6c7889;margin:0 0 22px;line-height:1.6;max-width:700px}
+  .sub b{color:#e6edf3}
+  .v{margin:0 0 26px}
+  .cap{font-size:9px;letter-spacing:.08em;font-weight:800;color:#f2b45a;margin:0 0 5px}
+  .cap.g{color:#2ec27e}
+  .note{font-size:10px;color:#6c7889;margin:8px 0 0;line-height:1.6;max-width:650px}
+  .note b{color:#8b98a9}
+  .panel{width:560px;background:#0b0e14;border:1px solid #1a212c;border-radius:5px;padding:5px 7px}
+  .sh{display:block;text-align:center;font-size:8px;font-weight:800;letter-spacing:.13em;color:#8b98a9;
+      margin:0 0 3px;padding:2px 0;border-radius:3px;background:rgba(139,152,169,.09)}
+  .r{display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+  .rg{font-size:9.5px;font-weight:800;padding:0 5px;border-radius:3px;background:rgba(163,113,247,.18);
+      color:#a371f7;border:1px solid rgba(163,113,247,.4);cursor:help;line-height:14px;white-space:nowrap}
+  .play{font-size:8.5px;color:#8b98a9;cursor:help}
+  .tgt{font-size:11px;font-weight:800;color:#e3c341;margin-left:auto;cursor:help;letter-spacing:-.2px}
+  .rep{font-size:7px;font-weight:800;padding:0 4px;border-radius:2px;background:rgba(163,113,247,.22);
+       color:#a371f7;border:1px solid rgba(163,113,247,.5);line-height:12px;cursor:help}
+  .k{font-size:10.5px;font-weight:800;color:#e6edf3;line-height:1;white-space:nowrap;cursor:help}
+  .k small{display:block;font-size:6px;font-weight:800;letter-spacing:.08em;color:#6c7889;margin-top:1px}
+
+  /* the rail, with a label tier above and a name tier below */
+  .band{display:flex;align-items:center;gap:7px;margin-top:5px}
+  .t{position:relative;flex:1;height:30px;min-width:90px}
+  .rail{position:absolute;left:0;right:0;top:13px;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}
+  .seg{position:absolute;top:0;font-size:8.5px;font-weight:800;color:#2ec27e;transform:translateX(-50%);
+       white-space:nowrap;cursor:help;line-height:11px}
+  .seg.dim{color:#6c7889;font-weight:700}
+  .tick{position:absolute;top:9px;width:1px;height:12px;background:#8b98a9}
+  .tick.op{background:#e6edf3;width:2px;transform:translateX(-1px);height:14px;top:8px}
+  .nm{position:absolute;top:22px;font-size:6.5px;font-weight:800;color:#6c7889;transform:translateX(-50%);
+      letter-spacing:.06em;white-space:nowrap}
+  .nm.op{color:#e6edf3}
+  .nw{position:absolute;top:10px;width:10px;height:10px;border-radius:50%;background:#fff;
+      box-shadow:0 0 0 2px #0b0e14;transform:translateX(-5px);cursor:help}
+  .tg{position:absolute;top:8px;font-size:9px;font-weight:800;color:#e3c341;transform:translateX(-50%);
+      line-height:14px;text-shadow:0 0 3px #0b0e14,0 0 3px #0b0e14;cursor:help}
+  .legend{margin:24px 0 0;font-size:10px;color:#6c7889;line-height:1.75;max-width:700px;border-top:1px solid #1a212c;padding-top:13px}
+  .legend b{color:#8b98a9}
+  code{color:#8b98a9}
+  .gone{color:#6c7889;text-decoration:line-through}
+</style>
+
+<h1>① FRAME — MONEY AS DISTANCE ON THE RAIL</h1>
+<p class="sub">Your sketch, checked against the live numbers. <b>Used + remaining = one full expected
+move</b>, exactly as you had it: <code>$920 + $816 = $1,736</code> where yours was <code>1000 + 500 =
+1500</code>. The dollars stop being a sentence and become gaps you read off the rail.<br><br>
+<b>Removed:</b> <span class="gone">the whole LOD/HOD/retraced sentence</span> (the rail draws it now),
+<span class="gone">ES · EM $1,736/ct</span>, <span class="gone">OF EM</span>,
+<span class="gone">12%</span>, <span class="gone">~EST</span> as text.</p>
+
+<!-- 1 -->
+<div class="v">
+  <div class="cap g">1 — YOUR SKETCH, LIVE NUMBERS · price sitting at the high of day</div>
+  <div class="panel">
+    <span class="sh">① FRAME</span>
+    <div class="r">
+      <span class="rg" title="Negative gamma and negative vanna — hedging amplifies the move twice over. Breaks run, fades lose.">−G −V ⚠</span>
+      <span class="play" title="What this regime rewards.">breaks not fades · widen stops</span>
+      <span class="rep" title="Replay of 2026-08-21 — nothing is live, recorder off.">▮08/21</span>
+      <span class="tgt" title="Target 7717.71 — the heaviest strike in their book.">→ 7717.71</span>
+    </div>
+    <div class="band">
+      <span class="k" title="Expected low — the open minus the expected move.">7660.6<small>EXP LOW</small></span>
+      <span class="t">
+        <i class="rail"></i>
+        <span class="seg dim" style="left:11.2%" title="From the expected low up to the low of day — the downside the day never used.">$782</span>
+        <span class="seg" style="left:36.2%" title="The down drive: low of day to the open, $955.">$955</span>
+        <span class="seg" style="left:63.2%" title="USED — the open to price now, $920 of the $1,736 upside.">$920</span>
+        <span class="seg" style="left:88.2%" title="REMAINING — price now to the expected high, $816.">$816</span>
+        <i class="tick" style="left:22.5%"></i><span class="nm" style="left:22.5%">LOD</span>
+        <i class="tick op" style="left:50%"></i><span class="nm op" style="left:50%">OPEN</span>
+        <span class="tg" style="left:82.3%">T</span>
+        <i class="nw" style="left:76.5%" title="Price now — at the high of day. $920 used, $816 left.">·</i>
+        <span class="nm" style="left:76.5%">HOD</span>
+      </span>
+      <span class="k" title="Expected high — the open plus the expected move.">7730.0<small>EXP HIGH</small></span>
+    </div>
+  </div>
+  <p class="note">Four gaps, four numbers, no sentence. <b>$920 used + $816 left = $1,736</b>, the whole
+  upside budget. The greyed <b>$782</b> is the downside the day never reached — dim because it is context,
+  not a live read.</p>
+</div>
+
+<!-- 2 -->
+<div class="v">
+  <div class="cap">2 — WHERE PRICE ACTUALLY IS · the dot is NOT at the high of day</div>
+  <div class="panel">
+    <span class="sh">① FRAME</span>
+    <div class="r">
+      <span class="rg">−G −V ⚠</span><span class="play">breaks not fades · widen stops</span>
+      <span class="rep">▮08/21</span><span class="tgt">→ 7717.71</span>
+    </div>
+    <div class="band">
+      <span class="k">7660.6<small>EXP LOW</small></span>
+      <span class="t">
+        <i class="rail"></i>
+        <span class="seg" style="left:22.1%" title="REMAINING downward — price now to the expected low, $1,536.">$1,536</span>
+        <span class="seg dim" style="left:63.2%" title="The up drive so far: open to high of day, $920.">$920</span>
+        <i class="tick" style="left:22.5%"></i><span class="nm" style="left:22.5%">LOD</span>
+        <i class="tick op" style="left:50%"></i><span class="nm op" style="left:50%">OPEN</span>
+        <i class="tick" style="left:76.5%"></i><span class="nm" style="left:76.5%">HOD</span>
+        <span class="tg" style="left:82.3%">T</span>
+        <i class="nw" style="left:44.2%" title="Price now — $200 below the open, $1,536 from the expected low."></i>
+        <span class="nm" style="left:44.2%;color:#e6edf3">−$200</span>
+      </span>
+      <span class="k">7730.0<small>EXP HIGH</small></span>
+    </div>
+  </div>
+  <p class="note">⚠ <b>This is the case your sketch does not cover, and it is the common one.</b> With the
+  dot near the open, the used segment is 6% of the rail — far too narrow to hold <code>$200</code>. So the
+  used figure rides <b>under the dot</b> instead, and only the two gaps wide enough to hold a label keep
+  one. Every segment still has its value in the hover.</p>
+</div>
+
+<!-- 3 -->
+<div class="v">
+  <div class="cap">3 — SAME, WITH ONLY THE TWO NUMBERS THAT MATTER</div>
+  <div class="panel">
+    <span class="sh">① FRAME</span>
+    <div class="r">
+      <span class="rg">−G −V ⚠</span><span class="play">breaks not fades · widen stops</span>
+      <span class="rep">▮08/21</span><span class="tgt">→ 7717.71</span>
+    </div>
+    <div class="band">
+      <span class="k">7660.6<small>EXP LOW</small></span>
+      <span class="t">
+        <i class="rail"></i>
+        <span class="seg" style="left:22.1%" title="Remaining to the expected low.">$1,536 left</span>
+        <span class="seg dim" style="left:73%" title="Used so far — the open to price now.">$200 used</span>
+        <i class="tick" style="left:22.5%"></i><span class="nm" style="left:22.5%">LOD</span>
+        <i class="tick op" style="left:50%"></i><span class="nm op" style="left:50%">OPEN</span>
+        <i class="tick" style="left:76.5%"></i><span class="nm" style="left:76.5%">HOD</span>
+        <span class="tg" style="left:82.3%">T</span>
+        <i class="nw" style="left:44.2%"></i>
+      </span>
+      <span class="k">7730.0<small>EXP HIGH</small></span>
+    </div>
+  </div>
+  <p class="note">Two labels, never more, always in the same two places — so the eye learns where to look
+  instead of hunting. LOD, OPEN and HOD stay as named ticks; their dollar values live in the hovers.
+  <b>Least clutter, and it never breaks when the marks crowd.</b></p>
+</div>
+
+<div class="legend">
+  <b>THE ARITHMETIC, VERIFIED AGAINST THE LIVE BAND.</b><br>
+  <code>open 7695.29 · LOD 7676.19 · HOD 7713.70 · rails 7660.56 / 7730.01 · ES $50/pt</code><br>
+  LOD→OPEN <b>$955</b> · OPEN→HOD <b>$920</b> · HOD→EXP HIGH <b>$816</b> · EXP LOW→LOD <b>$782</b><br>
+  <b>$920 + $816 = $1,736</b> — used plus remaining is exactly one expected move, which is the identity
+  your sketch is built on.<br><br>
+
+  <b>THE ONE THING THE SKETCH ASSUMES.</b> In your drawing <code>cp</code> and <code>hod</code> are the
+  same mark, which makes it read beautifully. Most of the session they are not — price retraces off the
+  high, and then "used" is <b>open→price</b>, not open→HOD, while HOD becomes a separate tick showing
+  where it got to. Case 2 shows that, and it is why the used label cannot always live in its own
+  segment.<br><br>
+
+  <b>ALSO WORTH DECIDING:</b> when price is below the open, "remaining" naturally means <b>down to the
+  expected low</b> — that is what cases 2 and 3 show. If you would rather always see the upside number,
+  or both, say so; it changes which gap gets the label.<br><br>
+
+  <b>⚠ AND THE MOVING DOT IS STILL A REAL BUG, UNFIXED.</b> The stored capture is
+  <code>{em, k, capMin, t}</code> with <b>no <code>rr</code></b> — written before v11.59, and the date key
+  still matches, so the new pin never fires and the band rides the live scale. Measured: open
+  <b>7695.86 → 7695.29</b> in minutes. It needs a schema stamp so a record missing expected fields is
+  re-taken rather than trusted.
+</div>

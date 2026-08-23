@@ -1,0 +1,160 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Hedging flow — fuel or brake</title>
+<style>
+  body{background:#0b0e14;color:#e6edf3;font:12px Inter,Arial,sans-serif;margin:0;padding:20px 24px 70px}
+  h1{font-size:12px;letter-spacing:.15em;color:#8b98a9;font-weight:800;margin:0 0 6px}
+  h2{font-size:9px;letter-spacing:.09em;font-weight:800;color:#f2b45a;margin:22px 0 8px}
+  .sub{font-size:11px;color:#6c7889;margin:0 0 18px;line-height:1.6;max-width:700px}
+  .sub b{color:#e6edf3}
+  .note{font-size:10px;color:#6c7889;margin:8px 0 0;line-height:1.6;max-width:660px}
+  .note b{color:#8b98a9}
+  /* the mechanism diagram */
+  .loop{display:flex;gap:26px;margin:10px 0 0;flex-wrap:wrap}
+  .box{width:262px;border:1px solid #1a212c;border-radius:5px;padding:10px 12px;background:#0d111a}
+  .box h3{margin:0 0 8px;font-size:9px;letter-spacing:.08em;font-weight:800}
+  .neg h3{color:#a371f7} .pos h3{color:#2ec27e}
+  .step{font-size:10.5px;color:#e6edf3;line-height:1.9}
+  .step span{color:#6c7889}
+  .step b.up{color:#2ec27e} .step b.dn{color:#f0616d}
+  .verdict{margin-top:9px;padding-top:8px;border-top:1px solid #1a212c;font-size:10px;line-height:1.5}
+  .neg .verdict{color:#a371f7} .pos .verdict{color:#2ec27e}
+  /* panel */
+  .panel{width:560px;background:#0b0e14;border:1px solid #1a212c;border-radius:5px;padding:5px 7px;margin-top:8px}
+  .sh{display:block;text-align:center;font-size:8px;font-weight:800;letter-spacing:.13em;color:#8b98a9;
+      margin:0 0 3px;padding:2px 0;border-radius:3px;background:rgba(139,152,169,.09)}
+  .r{display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+  .rg{font-size:9.5px;font-weight:800;padding:0 5px;border-radius:3px;cursor:help;line-height:14px;white-space:nowrap}
+  .rgn{background:rgba(163,113,247,.18);color:#a371f7;border:1px solid rgba(163,113,247,.4)}
+  .rgp{background:rgba(46,194,126,.14);color:#2ec27e;border:1px solid rgba(46,194,126,.4)}
+  .flow{font-size:9px;font-weight:800;padding:0 5px;border-radius:3px;line-height:14px;cursor:help;white-space:nowrap}
+  .feeds{background:rgba(240,97,109,.14);color:#f0616d;border:1px solid rgba(240,97,109,.4)}
+  .fights{background:rgba(139,152,169,.14);color:#8b98a9;border:1px solid rgba(139,152,169,.35)}
+  .play{font-size:8.5px;color:#8b98a9}
+  .tgt{font-size:11px;font-weight:800;color:#e3c341;margin-left:auto;letter-spacing:-.2px}
+  .k{font-size:10.5px;font-weight:800;color:#e6edf3;line-height:1;white-space:nowrap}
+  .k small{display:block;font-size:6px;font-weight:800;letter-spacing:.08em;color:#6c7889;margin-top:1px}
+  .band{display:flex;align-items:center;gap:7px;margin-top:4px}
+  .t{position:relative;flex:1;height:20px;min-width:90px}
+  .rail{position:absolute;left:0;right:0;top:12px;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}
+  .seg{position:absolute;top:0;font-size:8.5px;font-weight:800;transform:translateX(-50%);white-space:nowrap;cursor:help;line-height:11px}
+  .lft{color:#2ec27e} .usd{color:#6c7889}
+  .tick{position:absolute;top:9px;width:1px;height:10px;background:#8b98a9}
+  .tick.op{background:#e6edf3;width:2px;transform:translateX(-1px);height:14px;top:7px}
+  .nw{position:absolute;top:9px;width:10px;height:10px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px #0b0e14;transform:translateX(-5px);cursor:help}
+  .tg{position:absolute;top:7px;font-size:9px;font-weight:800;color:#e3c341;transform:translateX(-50%);line-height:14px;text-shadow:0 0 3px #0b0e14,0 0 3px #0b0e14}
+  table{border-collapse:collapse;font-size:10px;margin:8px 0}
+  td,th{padding:3px 18px 3px 0;text-align:left;color:#8b98a9}
+  th{color:#6c7889;font-size:8px;letter-spacing:.08em}
+  td.n{color:#e6edf3;font-variant-numeric:tabular-nums;font-weight:700}
+  .warn{margin:22px 0 0;border:1px solid rgba(240,97,109,.35);background:rgba(240,97,109,.06);
+        border-radius:5px;padding:11px 13px;font-size:10px;color:#8b98a9;line-height:1.65;max-width:700px}
+  .warn b{color:#f0616d}
+  code{color:#8b98a9}
+</style>
+
+<h1>HEDGING FLOW — CAN IT CARRY PRICE TO THE EXPECTED MOVE?</h1>
+<p class="sub">Your idea, made concrete. Net GEX is already denominated in <b>dollars per 1% move</b>, and
+1% of 7674 is 76.74 points — so dealers must trade <b>$214M for every single point</b> to stay neutral.
+That is the flow. Whether it <b>helps or fights</b> the move is decided entirely by the gamma regime.</p>
+
+<h2>THE MECHANISM</h2>
+<div class="loop">
+  <div class="box neg">
+    <h3>NEGATIVE GAMMA — the flow FEEDS the move</h3>
+    <div class="step">price ticks <b class="up">up</b> <span>→</span> dealers get short delta<br>
+      <span>→</span> they must <b class="up">BUY</b> to re-hedge<br>
+      <span>→</span> that buying lifts price <b class="up">further</b><br>
+      <span>→</span> <span>and it starts again</span></div>
+    <div class="verdict">Self-feeding. Reaching the expected high needs <b>$8.3B</b> of hedging — and the
+      hedging is pushing that way. This is what a trend day is made of.</div>
+  </div>
+  <div class="box pos">
+    <h3>POSITIVE GAMMA — the flow FIGHTS it</h3>
+    <div class="step">price ticks <b class="up">up</b> <span>→</span> dealers get long delta<br>
+      <span>→</span> they must <b class="dn">SELL</b> to re-hedge<br>
+      <span>→</span> that selling <b class="dn">caps</b> price<br>
+      <span>→</span> <span>and the move stalls</span></div>
+    <div class="verdict">Self-damping. That same <b>$8.3B</b> is now resistance to overcome, not a
+      tailwind. This is why levels hold and fades work here.</div>
+  </div>
+</div>
+
+<h2>THE NUMBERS, FROM THE LIVE CHAIN</h2>
+<table>
+  <tr><th>&nbsp;</th><th>points</th><th>hedging required</th></tr>
+  <tr><td>per 1 point</td><td class="n">1</td><td class="n">$214M</td></tr>
+  <tr><td>to reach EXP HIGH</td><td class="n">38.73</td><td class="n">$8.3B</td></tr>
+  <tr><td>to reach EXP LOW</td><td class="n">30.73</td><td class="n">$6.6B</td></tr>
+  <tr><td>one whole expected move</td><td class="n">34.73</td><td class="n">$7.4B</td></tr>
+</table>
+
+<h2>ON THE FACE — NEGATIVE GAMMA (today)</h2>
+<div class="panel">
+  <span class="sh">① FRAME</span>
+  <div class="r">
+    <span class="rg rgn" title="Negative gamma and negative vanna.">−G −V ⚠</span>
+    <span class="flow feeds" title="Dealer hedging FEEDS the move here: $214M must be traded per point, in the SAME direction price is going. Reaching the expected high would take $8.3B of it; the expected low, $6.6B. This is the mechanism, not a forecast — nothing here says it will get there.">FEEDS $214M/pt</span>
+    <span class="play">breaks not fades · widen stops</span>
+    <span class="tgt">→ 7717.71</span>
+  </div>
+  <div class="band">
+    <span class="k">7660.6<small>EXP LOW</small></span>
+    <span class="t">
+      <i class="rail"></i>
+      <span class="seg lft" style="left:11.2%" title="$782 still available downside — $6.6B of hedging to get there.">$782</span>
+      <span class="seg usd" style="left:36.2%">$955</span>
+      <span class="seg usd" style="left:63.2%">$920</span>
+      <span class="seg lft" style="left:88.2%" title="$816 still available upside — $8.3B of hedging to get there.">$816</span>
+      <i class="tick" style="left:22.5%"></i><i class="tick op" style="left:50%"></i><i class="tick" style="left:76.5%"></i>
+      <span class="tg" style="left:82.3%">T</span><i class="nw" style="left:44.2%"></i>
+    </span>
+    <span class="k">7730.0<small>EXP HIGH</small></span>
+  </div>
+</div>
+<p class="note">One chip, six characters plus a number. <b>FEEDS</b> is the same word the gamma hover uses
+— <i>"does dealer hedging fight the move or feed it"</i> — so the face and the explanation share a
+vocabulary. The dollars-to-each-rail live in the segment hovers, where the distances already are.</p>
+
+<h2>ON THE FACE — THE SAME NUMBER IN POSITIVE GAMMA</h2>
+<div class="panel">
+  <span class="sh">① FRAME</span>
+  <div class="r">
+    <span class="rg rgp" title="Positive gamma and positive vanna.">+G +V</span>
+    <span class="flow fights" title="Dealer hedging FIGHTS the move here: $214M per point traded AGAINST the direction price is going. Reaching the expected high means overcoming $8.3B of it, not being carried by it.">FIGHTS $214M/pt</span>
+    <span class="play">fade edges · pins hold</span>
+    <span class="tgt">→ 7717.71</span>
+  </div>
+  <div class="band">
+    <span class="k">7660.6<small>EXP LOW</small></span>
+    <span class="t">
+      <i class="rail"></i>
+      <span class="seg lft" style="left:11.2%">$782</span><span class="seg usd" style="left:36.2%">$955</span>
+      <span class="seg usd" style="left:63.2%">$920</span><span class="seg lft" style="left:88.2%">$816</span>
+      <i class="tick" style="left:22.5%"></i><i class="tick op" style="left:50%"></i><i class="tick" style="left:76.5%"></i>
+      <span class="tg" style="left:82.3%">T</span><i class="nw" style="left:44.2%"></i>
+    </span>
+    <span class="k">7730.0<small>EXP HIGH</small></span>
+  </div>
+</div>
+<p class="note"><b>Identical $214M, opposite meaning</b> — and the chip is the only thing that changes.
+That is the whole argument for showing it: the size of the flow is meaningless until you know which way
+it points, and the regime is what decides.</p>
+
+<div class="warn">
+  <b>⚠ THIS CANNOT SHIP UNTIL THE SIGN IS RECONCILED.</b> Our <code>toFri</code> netGEX is
+  <b>−$16.41B</b> (call +24.71B, put −41.12B) while InsiderFinance's page publishes Net GEX
+  <b>+$13.30B</b>. Different aggregation windows explain part of the gap — ours is to-Friday, theirs is
+  all-expiry — <b>but not a sign flip.</b><br><br>
+  A chip that says FEEDS when hedging is actually braking is worse than no chip at all: it is a wrong
+  number with a DIRECTION attached, on the face, under our own name. Same class as the truncated Zero
+  Gamma, with more consequence. The reconciliation is its own small piece of work — compare our
+  per-expiry netGEX against their published figure on matched aggregation and find where the convention
+  diverges.<br><br>
+  <b>Two further limits, stated up front.</b> Notional is not impact: $8.3B of hedging spread across a
+  session is not obviously decisive, and I have no measurement of how much range it actually explains.
+  And GEX is a snapshot — the per-point figure drifts as price moves through strikes, so it describes
+  the move it is currently in, not the one ahead.<br><br>
+  <b>It would be enrolled, not trusted:</b> <i>"does a high hedging-flow-per-point precede reaching the
+  expected move — split by regime?"</i> Non-voting until n≥20, like everything else.
+</div>
