@@ -1,3 +1,45 @@
+## v11.71 — I broke the v11.51 rule again, so the guard now derives itself
+
+**THE PACE FIELDS WERE ON THE FACE AND NOT IN THE HOOK.** v11.68 added `pace`, `elapsed`, `dueFrac`,
+`paceOk` and `nowSo` to `emBand()` and to the rendered chip — and not to `__gptsDebug.emBand`, whose
+return object is a hand-maintained field list. So verifying the chip live meant reading two DOM strings
+and inverting the arithmetic to recover elapsed:
+
+    chip 0.59x, pct 39%  ->  elapsed = (0.39/0.59)^2 = 0.437  ->  11:20 CT
+
+That is exactly the reconstruction the v11.51 rule exists to prevent, and I did it **twice in one session**
+before noticing the hook was the problem rather than my patience.
+
+**THE GUARD NO LONGER TRUSTS ANYONE TO UPDATE A LIST.** `test_em_band.js` §32 extracts every `EB.<field>`
+that `secFrame` actually reads, extracts every `B.<field>` the hook actually returns, and fails on the
+difference. It found three; it will find the next one without anyone remembering it exists.
+
+⚠ **The same shape of bug is available anywhere a debug hook enumerates fields by hand.** `piles`, `flow`
+and `session` all do. If one of them drifts, the symptom is not an error — it is a field that reads
+`undefined` in the console while rendering perfectly on the face, which looks like the FEATURE is broken
+rather than the instrument.
+
+---
+
+**VERIFIED LIVE ON v11.70 BEFORE THIS FIX** (replay of 2026-08-21, clock at 11:20 CT):
+
+    piles window          dte0                          the band's own book
+    7700  net -$1,314M    netFrac 39.5%   ->  $17M      was $107M gross under 11.67
+    7650  net   -$444M    netFrac 35.8%   ->   $6M      was $59M on a 1.2% residual
+    path                  clear - 8.6 pts, $17M at target
+    read                  "Up 13.35, turned once and 52% back. $17M accelerator at 7717.71 -
+                           short gamma there, so a push through is hedged WITH it; nothing
+                           behind it before 7730.48."
+
+The window fix, the net fix, the strict path, the pace chip and the read line are all doing exactly what
+they were built to do, on live InsiderFinance data, with `renderErrors: []`.
+
+⚠ **The Tampermonkey update showed RE-INSTALL rather than UPDATE.** The push and the CDN were both fine —
+GitHub and raw.githubusercontent were serving 11.70 while the tab ran 11.67 — so the userscript manager
+simply had not taken the new version. Re-installing fixed it. Worth watching: if it recurs, the script's
+`@version` line uses irregular whitespace (`// @version    11.71`) compared with the other metadata keys,
+which is legal but is the first thing to normalise if TM's update check keeps missing.
+
 ## v11.70 — the read, and a duplicate-record bug that had been one feature away for months
 
 **THE READ.** One line under the band that composes the section into a mechanism. Two clauses: where the

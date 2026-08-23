@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.70
+// @version    11.71
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.70';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.71';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -19101,6 +19101,12 @@ window.__gptsDebug.emBand = function(sy){
       upExc:B.upExc, dnExc:B.dnExc, giveBack:B.giveBack, hiFirst:B.hiFirst,
       roomUp:B.roomUp, roomDn:B.roomDn, roomAhead:B.roomAhead,
       gamma:B.gamma, stretched:B.stretched, scaleUsed:B.scaleUsed, openHealed:!!B.openHealed,
+      // (v11.71) THE PACE FIELDS. Added to emBand() at v11.68 and NOT to this hook, so the chip on the
+      // face could only be verified by reading two DOM strings and inverting the arithmetic — the exact
+      // reconstruction the v11.51 rule exists to prevent, done twice in one session before it was noticed.
+      // `test_em_band.js` §32 now derives the required key set from secFrame itself, so the next field
+      // added to the face and forgotten here fails the build instead of costing an afternoon.
+      nowSo:B.nowSo, elapsed:B.elapsed, pace:B.pace, paceOk:!!B.paceOk, dueFrac:B.dueFrac,
       contract:B.contract, mult:B.mult, emUsd:B.emUsd, usedUsd:B.usedUsd, leftUsd:B.leftUsd,
       roomUpUsd:B.roomUpUsd, roomDnUsd:B.roomDnUsd, microUsd:B.microUsd
     };

@@ -927,5 +927,29 @@ eval(ex('emBand'));
   ok(run.after3===121,'while a NEW bar writes a fresh set', run.after3);
 }
 
+// ---------- 32. (v11.71) THE HOOK MUST SURFACE EVERYTHING THE FACE READS ----------
+// v11.51 wrote the rule: every read on the face has a hook, because the alternative is counting DOM nodes
+// and inferring from pixels. v11.68 then added pace/elapsed/dueFrac to emBand() and NOT to its hook, so
+// verifying the pace chip meant reading two DOM strings and inverting the arithmetic to recover elapsed.
+// The rule was right and I broke it anyway — so this derives the required set from secFrame rather than
+// listing it, and it will catch the NEXT one without anyone remembering to update a list.
+{
+  const sf=ex('secFrame');
+  const used=[...new Set([...sf.matchAll(/\bEB[c]?\.([A-Za-z_][A-Za-z0-9_]*)/g)].map(m=>m[1]))];
+  const hs=src.indexOf('__gptsDebug.emBand');
+  const he=src.indexOf('__gptsDebug.session = function', hs);
+  ok(he>hs, 'the emBand hook is locatable');
+  const hook=src.slice(hs, he);
+  const surfaced=new Set([...hook.matchAll(/\bB\.([A-Za-z_][A-Za-z0-9_]*)/g)].map(m=>m[1]));
+  // `ok` and `why` are control flow, not readings — the hook handles them by its own contract
+  const missing=used.filter(k=>!surfaced.has(k) && k!=='ok' && k!=='why');
+  ok(missing.length===0,
+     'every band field the FACE reads is also returned by the debug hook',
+     missing.length?('missing: '+missing.join(', ')):'all '+used.length+' surfaced');
+  // and the ones this build was about, named explicitly so the intent survives a refactor
+  ['pace','paceOk','elapsed','dueFrac','nowSo'].forEach(k=>
+    ok(surfaced.has(k), 'the hook surfaces '+k));
+}
+
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
