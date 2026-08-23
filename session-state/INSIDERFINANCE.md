@@ -81,6 +81,19 @@ RTH on a weekday the row exists and `dte0` really is today. **The label says dte
 expiry", which is not the same claim.** Nothing is wrong with the arithmetic; the wording over-promises.
 Open item — see DECISIONS.md D-5.
 
+**THEIR OWN PAGE CONFIRMS THIS INDEPENDENTLY.** On the same payload the site prints its expiry mix as
+
+    0DTE Exp 0.0%    Weekly Exp 3.2%    Monthly Exp 5.5%
+
+— zero percent 0DTE, because Friday's chain has expired — and the Skew panel labels the nearest expiry
+**"Aug 24 · 1DTE"**, not 0DTE. If you ever need to check whether `dte0` is really today, that mix line is
+the fastest confirmation available and it needs no code.
+
+**Also on the page, unused by us:** `Day Low $7659.26 / Day High $7697.05` — the session RANGE for the
+underlying. We do not consume it, but the FRAME review (`FRAME-APPROACH-REVIEW.md`) argues the panel needs
+a **range** statistic beside its displacement statistic, and this is one place a real one is already sitting
+in the payload's page.
+
 ### The sign flips by window, and all three are correct
 
     dte0   −$6.86B      toFri  −$16.41B      all  +$13.34B
