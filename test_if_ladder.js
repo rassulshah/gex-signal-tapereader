@@ -38,7 +38,12 @@ const at=(L,id)=>{ const r=row(L,id); return r?r.k:null; };
   eq(at(L,'CR'),7700,'CR is THEIR call wall, on THEIR strike grid');
   eq(at(L,'PS'),7650,'PS is their put wall');
   eq(at(L,'Mag'),7650,'Mag is their magnet');
-  eq(at(L,'MP'),7620,'max pain comes across — it needs open interest, which only they have');
+  // ⚠ v11.75 renamed this row MP* — the asterisk says OURS-over-OUR-WINDOW, not their all-expiry
+  // Max Pain (7350 on 2026-08-23 against our 7712.70). The old id was a claim we could not support.
+  eq(at(L,'MP*'),7620,'max pain comes across — it needs open interest, which only they have');
+  ok(!L.rows.some(r=>r.id.split('·').includes('MP')),
+     'and the un-asterisked id is gone, because it read as THEIR published Max Pain',
+     L.rows.map(r=>r.id));
   eq(at(L,'CR0'),7680,'CR0 is their 0DTE call wall');
   eq(at(L,'PS0'),7600,'PS0 is their 0DTE put wall');
   eq(L.n,209,'the strike count is theirs');
@@ -53,7 +58,7 @@ const at=(L,id)=>{ const r=row(L,id); return r?r.k:null; };
   CHAIN=chain(); const L=ifLadder('SPY');
   eq(at(L,'FLIP'),7679.88,'FLIP is their PUBLISHED zero gamma, taken as-is');
   const ids=L.rows.map(r=>r.id).join('·').split('·');
-  ok(ids.every(i=>['CR','CR0','PS','PS0','Mag','MP','FLIP'].includes(i)),'every row is a level they actually give us',ids);
+  ok(ids.every(i=>['CR','CR0','PS','PS0','Mag','MP*','FLIP'].includes(i)),'every row is a level they actually give us',ids);
 }
 {
   CHAIN=chain({pub:null}); const L=ifLadder('SPY');

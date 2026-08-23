@@ -6,7 +6,7 @@ Touch this file only when one of these things actually changes.
 
 ---
 
-## ⚠ SEVEN FAILURE PATTERNS — THESE EXPLAIN NEARLY EVERY BUG IN THIS PROJECT
+## ⚠ EIGHT FAILURE PATTERNS — THESE EXPLAIN NEARLY EVERY BUG IN THIS PROJECT
 
 **1. Mislabeling.** A value shown under a label implying a different source, window or scale. The ladder
 said `IF` and rendered Skylit numbers. `week` said "to Fri" holding one expiration. **And v11.49: `EM`
@@ -36,6 +36,30 @@ regex-literal contents, and a noisy check gets switched off.
 
 **6. When an edit script asserts, CHECK IT LANDED.** v11.46 shipped half a feature because a python edit
 aborted on a failed assertion and the failure went unnoticed.
+
+**8. A TEST THAT GREPS THE SOURCE INSTEAD OF RUNNING IT. Three occurrences, and the worst one was
+mine.** v11.70's forecast ban pulled quoted strings with a regex and desynchronised on an apostrophe —
+"so it will likely continue" passed eleven assertions. **v11.86 shipped fourteen assertions guarding the
+SPX chart export and not one could catch a wrong PRICE**: swap `toSpy(P.k)` for `P.disp`, change the tick
+from 0.25 to 1.0, all fourteen still green. A grep cannot tell `!==` from `===`, and that operator was the
+entire failure mode of the v11.83 conflict comparison.
+**THE RULE: if a test can pass on a build that emits the wrong number, it is documentation, not a test.**
+`eval(ex('fn'))` with stubs costs 47ms — then MUTATE the source and confirm the assertions actually fire.
+⚠ Two sub-traps, both re-confirmed 2026-08-23:
+  - **A comment explaining a removal contains the removed thing** — `DEX`/`TERM`/`ATR` left FRAME at
+    v11.49 and a test still found them in the comment saying so. **FOURTH occurrence.** Strip comments.
+  - **Hardcoded global counts** — `Object.keys(rules).length===61` broke at 68 and never checked its own
+    claim. Assert the thing the message names.
+⚠ **A stale-but-green suite is the dangerous state, not a red one.** Seven suites here were green over
+code that had moved under them; twelve more assertions were failing for renames while the code was right.
+A permanently-red baseline trains everyone to ignore red — **23 stale failures once camouflaged two live
+bugs for months.**
+
+**9. A GENERATED ARTEFACT THAT IS HAND-EDITED WILL DRIFT, AND ITS CORRECT PAYLOAD WILL HIDE IT.**
+`install.bat` announced **v11.49** while carrying v11.86, committed as **v11.79**, and called a v1.13
+companion **v1.8** — four stale strings from three builds in the file the user actually runs. The payload
+was byte-correct every time, which is exactly why nobody looked at the header.
+→ `python3 tools/build-installer.py "vX.Y: message"`. **Never hand-edit install.bat.**
 
 **7. A ONE-DIRECTIONAL FACTOR EARNS ACCURACY FOR FREE.** A read that fires the same way on every bar
 scores well on a trending day and means nothing. DEX's sign is pinned by put-OI dominance; index skew is

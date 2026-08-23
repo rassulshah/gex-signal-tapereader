@@ -28,6 +28,13 @@ function ex(n){
   return src.slice(m.index,e+1);
 }
 
+// Extract a top-level `var NAME = ...;` so a constant under test comes from the SOURCE, not the test.
+function ex_var(n){
+  const m=new RegExp('var\\s+'+n+'\\s*=\\s*[^;]+;').exec(src);
+  if(!m) throw new Error('var not found: '+n);
+  return m[0];
+}
+
 // ---------- 1. THE SOURCE RULE, read off the text ----------
 {
   const body=ex('emBand');
@@ -1290,12 +1297,37 @@ eval(ex('emBand'));
   ok(marks===2, 'on both rails', marks);
   ok(/THIS EXPIRY IS NOT TODAY/.test(f), 'and the hover explains why');
 
-  // D-4: the flow chip declares a conflict rather than switching source
+  // D-4: the flow chip declares a conflict rather than switching source.
+  // ⚠ (v11.87) These were greps for the LINE that computes the conflict. Run the function instead:
+  // a grep cannot tell `!==` from `===`, and inverting that operator is the whole failure mode.
   const hf=ex('hedgeFlow');
-  ok(/regime2D\(sym\)/.test(hf),          'the flow chip now reads the regime chip beside it');
-  ok(/out\.conflict = \(\(R2\.g<0\) !== out\.feeds\)/.test(hf),
-     'and compares gamma SIGN, which is the claim both of them make');
+  ok(/regime2D\(sym\)/.test(hf),          'the flow chip reads the regime chip beside it');
   ok(!/lv\.netGEX=.*regime/.test(hf),     'it does NOT recompute its number from the other book');
+
+  function flowFixture(netGEX, regimeG){
+    var GEX_WINDOW_LABEL={toFri:'to Fri', dte0:'today'};
+    var ifChain=function(){ return { spot:7674.1, toFri:{ lv:{ netGEX:netGEX } } }; };
+    var regime2D=function(){ return (regimeG===null)?null:{ g:regimeG }; };
+    eval(ex('hedgeFlow'));
+    return hedgeFlow('SPY');
+  }
+  // OUR sign convention: negative net gamma -> dealers hedge WITH the move -> the flow FEEDS it.
+  // regime2D's g is -1 for short gamma. So agreement is (g<0) === feeds.
+  const agreeShort = flowFixture(-16.41e9, -1);
+  const agreeLong  = flowFixture(+16.41e9, +1);
+  const fightA     = flowFixture(-16.41e9, +1);   // IF says short, Skylit says long
+  const fightB     = flowFixture(+16.41e9, -1);   // IF says long,  Skylit says short
+  ok(agreeShort.ok && agreeShort.feeds===true && agreeShort.conflict===false,
+     'both books short gamma: FEEDS, and no conflict', [agreeShort.feeds, agreeShort.conflict]);
+  ok(agreeLong.ok && agreeLong.feeds===false && agreeLong.conflict===false,
+     'both books long gamma: FIGHTS, and no conflict', [agreeLong.feeds, agreeLong.conflict]);
+  ok(fightA.conflict===true,'IF short vs Skylit long IS a conflict', fightA.conflict);
+  ok(fightB.conflict===true,'and so is the mirror — the test spans BOTH directions, because a fixture set that only ever runs one way passes on an inverted comparison', fightB.conflict);
+  ok(flowFixture(-16.41e9,null).conflict===undefined,
+     'an unreadable regime leaves conflict UNSET rather than false — "cannot compare" is not "they agree"',
+     flowFixture(-16.41e9,null).conflict);
+  ok(agreeShort.perPt>0 && agreeShort.netGEX===-16.41e9,
+     'and the chip keeps InsiderFinance\'s own number throughout — it declares, it does not switch source');
   ok(/HF\.conflict\?' g3conf'/.test(f),   'a conflicted chip is marked');
   ok(/THE TWO BOOKS DISAGREE/.test(f),    'and the hover names both answers');
   ok(/a stock beside a flow/.test(f),     'restating the doctrine that neither checks the other');
@@ -1359,41 +1391,155 @@ eval(ex('emBand'));
   ok(/hit:null/.test(rec),                 'non-voting until the scorecard says otherwise');
 }
 
+// ---------- 41. (v11.87) THE CONFLICT IS RECORDED, NOT ONLY DECLARED ----------
+// v11.83 taught the flow chip to say "the two books disagree" and the face has said it since. Nothing
+// wrote it down. A panel can declare a disagreement every session for a month and the scorecard still
+// cannot answer WHICH BOOK WAS RIGHT — which is the only reason the disagreement is worth showing.
+// The project's own FEATURE ENROLLMENT rule is DATA + ANALYSIS + TESTING; this had none of the three.
+{
+  const src2=src;
+  const feat=src2.slice(src2.indexOf("registerFeature({ key:'flow'"),
+                        src2.indexOf("registerFeature({ key:'dex'"));
+  ok(feat.length>500,'the flow feature is where the conflict belongs — same reading, one condition on it', feat.length);
+
+  // DATA
+  ok(/conflict:\(typeof f\.conflict==='boolean'\)\?f\.conflict:null/.test(feat),
+     'the per-bar record carries the conflict, as a real tri-state and not a coerced boolean');
+  ok(/regimeG:\(typeof f\.regimeG==='number'\)\?f\.regimeG:null/.test(feat),
+     'and the other book\'s gamma sign beside it, so a later context can re-derive the comparison');
+  ok(/conflict:\(rec&&typeof rec\.conflict==='boolean'\)\?rec\.conflict:null/.test(feat),
+     'and it survives into the scored outcome, or the questions below could never see it');
+
+  // ANALYSIS — and the control arm, which is the part that makes it mean anything
+  ok(/id:'flow_decays_when_books_fight'/.test(feat),'the conflicted arm is asked');
+  ok(/id:'flow_holds_when_books_agree'/.test(feat),'and the AGREED arm is asked too — without a control the conflicted rate is a number with nothing to beat');
+  ok(/NEVER against a pooled rate/.test(feat),'with the pooling trap named where the question lives');
+  const qs=[...feat.matchAll(/\{f:'conflict',v:(true|false)\}/g)].map(m=>m[1]);
+  ok(qs.includes('true') && qs.includes('false'),'the two arms split on OPPOSITE values of the same field', qs);
+
+  // TESTING — the rule that governs it says what the segmentation is for
+  const RJ=JSON.parse(fs.readFileSync('./learning/rules.json','utf8')).rules;
+  ok(!!RJ['flow.perPoint'],'the rule exists');
+  ok(/scored SEPARATELY/.test(RJ['flow.perPoint'].mechanism),
+     'and its mechanism records that a conflicted reading is scored separately');
+  ok(/conflict|agreed on the gamma sign/i.test(RJ['flow.perPoint'].condition),
+     'and its condition says the agreement state is part of what was measured');
+
+  // the debug hook is a RESHAPE and drops anything not listed — that is how this stayed invisible
+  const dbg=src2.slice(src2.indexOf('__gptsDebug.flow ='), src2.indexOf('__gptsDebug.flow =')+1400);
+  ok(/conflict:/.test(dbg) && /regimeG:/.test(dbg),
+     'the debug view reports the conflict — it is a reshape, not a passthrough, and shipped four builds without it');
+  ok(/DISAGREE/.test(dbg),'in words, so the answer does not depend on reading a boolean the right way round');
+}
+
 // ---------- 40. (v11.86) THE SPX LEVELS REACH THE CHART, IN ES, ON THE TICK ----------
 // The rail has drawn Skylit's SPXW nodes since v11.77 and the chart never carried them — the levels
 // actually being traded off were the ones missing from the chart.
+//
+// ⚠⚠ THIS SECTION SHIPPED AS FOURTEEN SOURCE-GREPS AND WAS REWRITTEN TO EXECUTE (v11.87).
+// Every assertion here used to be `/pattern/.test(sourceText)`. Not one of them could have caught a
+// wrong PRICE: swap `toSpy(P.k)` for `P.disp`, or the tick for 1.0, and all fourteen still passed.
+// This is the SAME trap as the v11.70 forecast-ban test — the third time in this project a test has
+// asserted that source code CONTAINS a thing rather than that the code DOES the thing.
+// **If a test can pass on a build that emits the wrong number, it is documentation, not a test.**
 {
-  const b=ex('irtBuildCsv');
-  ok(/emPiles\(Br, sym\)/.test(b),          'the export reads the same nodes the rail draws');
-  ok(/emPiles\.lastSrc==='skylit'/.test(b), 'and only when they came from the Skylit book');
-  ok(/'SPX '\+P\.k\+' '\+role/.test(b),      'each line is labelled with its SPX strike and role');
+  // A real build, with every dependency stubbed and the two that matter carrying live-shaped values.
+  function irtFixture(r, opt){
+    opt = opt || {};
+    var IRT_HEADER='HDR';
+    var IRT_COLORS={king:1,gate:2,ceil:3,flr:4,neg:5,deriv:6,ns:7,pb:8,mag:9};
+    var SUCC_CHART_PCT=60; eval(ex_var('SUCC_CHART_PCT'));
+    var CFG={ irt:{futSym:'EPU26', etfSym:''}, nodeThresh:20 };
+    var nodeMapModel=function(){ return {ok:true, levels:[]}; };   // isolate: no SPY rows
+    var irtRatio=function(){ return {r:r, live:true, src:'live'}; };
+    var nextStopPick=function(){ return null; };
+    var pbEntryPick=function(){ return null; };
+    var lvlUnified=function(){ return null; };
+    var ifChainRows=function(){ return null; };
+    var emBand=function(){ return {ok:true}; };
+    var ifLadder=function(){ return {dispScale:1.0023, undScale:0.099773}; };
+    var emPiles=function(){ return opt.piles || [
+      {k:7710, pct:100, role:'KING', accel:true,  disp:7727.73},
+      {k:7700, pct:79,  role:'GK',   accel:true,  disp:7717.71},
+      {k:7650, pct:41,  role:null,   accel:false, disp:7667.59}
+    ]; };
+    emPiles.lastSrc = (opt.src===undefined) ? 'skylit' : opt.src;
+    var tapeMap=function(){ return opt.tape || {pct:{7710:-100, 7630:-85, 7650:41}, king:7710}; };
+    eval(ex('irtRound')); eval(ex('irtCsvRow')); eval(ex('irtBuildCsv'));
+    var b=irtBuildCsv();
+    if(!b) return { rows:[], byLabel:{} };
+    var rows=b.csv.trim().split('\r\n').slice(1).map(function(l){
+      var p=l.split(','); return { sym:p[0], price:parseFloat(p[1]), lbl:p[2], col:p[3], w:p[4], style:p[5] };
+    });
+    var byLabel={}; rows.forEach(function(x){ byLabel[x.lbl]=x; });
+    return { rows:rows, byLabel:byLabel };
+  }
 
-  // ⚠ SCALE: rows are collected in SPY space; the export multiplies by R.r and snaps to the tick.
-  ok(/\(spxK\*Lx\.dispScale\)\/R\.r/.test(b),
-     'SPX converts via dispScale then back through the SPY ratio, so the chart lands where the rail says');
-  ok(!/spxK\*Lx\.undScale/.test(b),
-     'NOT via undScale — the two paths differ by ~0.9pt and the chart must match the panel');
-  ok(/irtRound\(R\.k\*T\.mul, T\.tick\)/.test(b), 'and every price is snapped to the target tick');
-  ok(/tick:0\.25/.test(b),                        'which for ES is 0.25');
+  const F=irtFixture(10.0458);   // r = dispScale/undScale, the ladder-implied ratio
+  const L=F.byLabel;
 
-  // display rounding and chart rounding are different jobs
-  const f=ex('secFrame');
-  ok(/frameNum/.test(f) && !/frameNum/.test(b),
-     'the FRAME row rounds to whole points; the chart does NOT borrow that rounding');
+  // --- the nodes arrive at all, labelled with their SPX strike and role -------------------------
+  ok(F.rows.length===4,                    'the three rail nodes and the successor all reach the chart', F.rows.length);
+  ok(!!L['SPX 7710 KING 100%'],            'the King is labelled with its SPX strike, role and %King');
+  ok(!!L['SPX 7700 GK 79%'],               'so is the gatekeeper');
+  ok(!!L['SPX 7650 BRK 41%'],              'and a node with no role falls back to its polarity');
 
-  // succession, gated and labelled honestly
-  ok(/SPX SUCC /.test(b),                   'a prominent successor is drawn');
-  ok(/suc\.a>=SUCC_CHART_PCT/.test(b),      'gated at a named threshold');
-  ok(/var SUCC_CHART_PCT = 60;/.test(src),  'which is the 60% the doctrine uses');
+  // --- THE PRICES. This is the part fourteen greps could not see. ------------------------------
+  // The rail shows SPX 7710 at 7727.73. The chart must land on the SAME price, snapped to the tick.
+  ok(L['SPX 7710 KING 100%'].price===7727.75, 'SPX 7710 lands at ES 7727.75 — the rail\'s 7727.73 on the 0.25 tick', L['SPX 7710 KING 100%'].price);
+  ok(L['SPX 7700 GK 79%'].price===7717.75,    'SPX 7700 lands at ES 7717.75 (rail 7717.71)', L['SPX 7700 GK 79%'].price);
+  ok(L['SPX 7650 BRK 41%'].price===7667.50,   'SPX 7650 lands at ES 7667.50 (rail 7667.59)', L['SPX 7650 BRK 41%'].price);
+  F.rows.forEach(function(x){
+    ok(Math.abs(x.price/0.25 - Math.round(x.price/0.25)) < 1e-9,
+       'every emitted price is a tradeable ES price: '+x.lbl+' = '+x.price, x.price);
+  });
+
+  // --- THE SCALE PROPERTY, and it is what discriminates the two conversions --------------------
+  // Going SPX -> SPY via dispScale and back via R.r makes R.r CANCEL: the emitted price is
+  // irtRound(spxK * dispScale, tick) for ANY ratio. Going via undScale does not cancel and the
+  // answer moves with the futures basis. Build twice at different ratios and demand the same prices.
+  const F2=irtFixture(10.6000);
+  ok(JSON.stringify(F.rows.map(x=>x.lbl+'='+x.price))===JSON.stringify(F2.rows.map(x=>x.lbl+'='+x.price)),
+     'the emitted prices do NOT move when the futures ratio moves — R.r cancels, which is the whole point of routing through dispScale',
+     F2.rows.map(x=>x.lbl+'='+x.price));
+  ok(L['SPX 7710 KING 100%'].price === Math.round(7710*1.0023/0.25)*0.25,
+     'and the price is exactly irtRound(spxStrike x dispScale, 0.25), independent of the ratio');
+  // the undScale route, computed here, is the number this must NOT be at a drifted ratio
+  ok(Math.round((7710*0.099773)*10.6/0.25)*0.25 !== 7727.75,
+     'the undScale route gives a DIFFERENT price once the ratio drifts — so the choice is load-bearing, not cosmetic');
+
+  // --- display rounding and chart rounding are different jobs ----------------------------------
+  ok(L['SPX 7710 KING 100%'].price !== Math.round(L['SPX 7710 KING 100%'].price),
+     'the chart price is NOT the whole point the FRAME row shows — .75 survives to the chart');
+  const f=ex('secFrame'), bsrc=ex('irtBuildCsv');
+  ok(/frameNum/.test(f) && !/frameNum/.test(bsrc),
+     'the FRAME row rounds to whole points; the chart does not borrow that rounding');
+
+  // --- succession, gated and honest ------------------------------------------------------------
+  ok(!!L['SPX SUCC 7630 85%'],             'a successor above the threshold is drawn');
+  ok(L['SPX SUCC 7630 85%'].price===7647.50,'on the same scale as everything else', L['SPX SUCC 7630 85%'].price);
+  ok(L['SPX SUCC 7630 85%'].style==='2',   'and dashed, so it never reads as a live level');
+  const Fw=irtFixture(10.0458, {tape:{pct:{7710:-100, 7630:-55}, king:7710}});
+  ok(!Fw.byLabel['SPX SUCC 7630 55%'],     'a successor BELOW the threshold is not drawn', Object.keys(Fw.byLabel));
+  ok(/var SUCC_CHART_PCT = 60;/.test(src), 'the threshold is the 60% the doctrine uses');
   ok(/⚖ HAND-SET/.test(src.slice(src.indexOf('var SUCC_CHART_PCT')-320, src.indexOf('var SUCC_CHART_PCT'))),
      'flagged hand-set');
-  ok(/THAT NUMBER IS SPY'S/.test(b),
+  ok(/THAT NUMBER IS SPY'S/.test(bsrc),
      'and the 76% backtest is marked as a SPY number, not asserted as an SPX probability');
 
-  // colours carry the role
-  ok(/P\.role==='KING'\)\?IRT_COLORS\.king/.test(b), 'the King gets the King colour');
-  ok(/P\.role==='GK'\)\?IRT_COLORS\.gate/.test(b),   'the gatekeeper gets the gate colour');
-  ok(/IRT_COLORS\.neg:IRT_COLORS\.flr/.test(b),      'and polarity decides the rest');
+  // --- the other book must not be exported as if it were this one ------------------------------
+  const Fif=irtFixture(10.0458, {src:'if-fallback'});
+  ok(Fif.rows.length===0,
+     'when the rail fell back to InsiderFinance NOTHING is exported — an IF node is a different quantity and would land on the chart wearing a Skylit label',
+     Fif.rows.map(x=>x.lbl));
+  const Fnone=irtFixture(10.0458, {src:'none', piles:[]});
+  ok(Fnone.rows.length===0,               'and no book at all exports nothing rather than an empty confident chart');
+
+  // --- colours carry the role ------------------------------------------------------------------
+  ok(L['SPX 7710 KING 100%'].col==='1',   'the King gets the King colour');
+  ok(L['SPX 7700 GK 79%'].col==='2',      'the gatekeeper gets the gate colour');
+  ok(L['SPX 7650 BRK 41%'].col==='4',     'and a positive-gamma brake gets the floor colour, not the accelerator colour');
+  ok(L['SPX 7710 KING 100%'].w==='3',     'the King is drawn heaviest');
 }
 
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');

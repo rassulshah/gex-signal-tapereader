@@ -1,3 +1,72 @@
+## v11.87 — the disagreement was declared but never written down
+
+**v11.83 taught the flow chip to say "the two books disagree." Nothing recorded it.** The face could
+carry that warning every session for a month and the scorecard would still be unable to answer the only
+question that makes a disagreement worth showing: **which book was right.** `conflict:` appeared exactly
+zero times in any recorder. The project's own FEATURE ENROLLMENT rule is DATA + ANALYSIS + TESTING; this
+had none of the three, and it went four builds that way.
+
+Now the per-bar `flow` record carries `conflict` and `regimeG`, and the feature asks the question on
+**both** sides of it:
+
+    flow_holds_when_books_agree   conflict=false -> reachEM     the control arm
+    flow_decays_when_books_fight  conflict=true  -> reachEM     the claim
+
+⚠ **The conflicted arm means nothing without the control arm.** A hit rate under conflict compared
+against a POOLED rate is comparing a slice to a mixture that contains it. If the agreed reading scores
+and the conflicted one does not, the conflict flag is a filter worth trading on; if they score the same,
+it stays a disclosure and nothing more. `flow.perPoint`'s rule now says so where it will be read.
+
+⚠ **`conflict` is a TRI-STATE and is stored as one.** `null` means the regime was unreadable, which is
+not "the books agree" — collapsing unknown into fine is the same mistake D-5 fixed on the expiry.
+
+**`__gptsDebug.flow` is a RESHAPE, not a passthrough**, and it silently dropped every field `hedgeFlow`
+gained after v11.62. The one place you would go to check whether the books disagree could not tell you.
+It now reports `conflict`, `regimeG`, and a `books:` sentence in words, so the answer does not depend on
+reading a boolean the right way round.
+
+### THE TESTS GUARDING v11.86 WERE NOT TESTING ANYTHING
+
+Section 40 of `test_em_band.js` shipped as **fourteen source-greps** — every assertion asked whether the
+file CONTAINED a string. Swap `toSpy(P.k)` for `P.disp`, or the tick from 0.25 to 1.0, and all fourteen
+still passed. **This is the same trap as the v11.70 forecast-ban test, the third time in this project.**
+It now builds the CSV and reads the prices out:
+
+    SPX 7710 KING -> ES 7727.75      SPX 7700 GK -> ES 7717.75
+    SPX 7650 BRK  -> ES 7667.50      SPX SUCC 7630 -> ES 7647.50
+
+and proves the scale property by building **twice at different futures ratios** and demanding identical
+prices — `R.r` cancels through the `dispScale` route and does not through `undScale`, which is what makes
+the choice load-bearing rather than cosmetic. Mutation-tested: forgetting the SPY-space division fires 6
+assertions, no scale at all 7, wrong tick 7, dropping the Skylit-source guard 3.
+
+The same rot was found in **six more suites** — 12 assertions failing against code that was correct,
+each grepping for a name that had changed (`cell('EM'`, `/momentum/` where the chip now says `BREAKS`,
+`MP` where v11.75 added the load-bearing asterisk). One of them believed `DEX`/`TERM`/`ATR` were still on
+FRAME **because they appear inside the comment explaining their removal** — the fourth time that specific
+trap has bitten this project. The repair strips comments before looking. `test_node_ledger` asserted
+`Object.keys(rules).length === 61`, a count of every rule in the project, which broke at 68 and never once
+checked what its own message claimed.
+
+⚠ **A test that can pass on a build emitting the wrong number is documentation, not a test.**
+
+### `install.bat` IS GENERATED NOW, NOT HAND-EDITED
+
+The v11.86 installer announced **"GEX Tapereader installer - v11.49"**, named its temp files
+`gex-v1149-payload`, committed with the message **"v11.79 ..."**, and told the user the companion was
+"@version 1.8, unchanged" when it was **1.13**. Four stale strings from three different builds, in the one
+artefact the user actually runs. **The payload was correct every time, which is exactly why nobody
+noticed.** `tools/build-installer.py` now reads every version from the files, computes `HDRLINES` to a
+fixed point rather than guessing it, round-trips its own payload against the working tree before writing,
+and refuses to emit a file containing a stale `v11.x` in the header or the word PowerShell.
+
+### also
+
+`DECISIONS.md` had **two D-7 entries**. The replay-keying one is now **D-10**, and `trackSpxwNodes`'
+comment points at it.
+
+---
+
 ## v11.86 — the SPX levels reach the chart, in ES, on the tick
 
 **The rail has drawn Skylit's SPXW nodes since v11.77 and the chart has never carried them.** The levels

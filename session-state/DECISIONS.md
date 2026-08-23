@@ -194,7 +194,11 @@ nearest whole point **on futures charts only**; `dispNum` is untouched everywher
 
 ---
 
-## D-7 · `sampleTapeHistory` RECORDS A REPLAY AS IF IT WERE TODAY — SPX FIXED, **SPY OPEN**
+## D-10 · `sampleTapeHistory` RECORDS A REPLAY AS IF IT WERE TODAY — SPX FIXED, **SPY OPEN**
+⚠ **This entry shipped mis-numbered as a SECOND D-7** (the first D-7 is the mechanism-not-forecast rule
+above) and was renumbered on 2026-08-23. `trackSpxwNodes` in the userscript still carries the comment
+*"Recorded in DECISIONS.md D-7 instead"* — that pointer now lands on the wrong entry and should read
+D-10 at the next build. Nothing else references it.
 **Found 2026-08-23 while verifying v11.84.**
 
 `sampleTapeHistory` keys every sample by `todayKey()` — the wall-clock date — and is **not** replay-guarded.

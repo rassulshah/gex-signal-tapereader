@@ -68,5 +68,14 @@ ok('8a Analysis ⑦ NODES section renders the ledger', /tabSection\('a7','⑦','
 ok('8b the ledger section answers the two questions with n', /Does accumulation pull price\?/.test(src) && /Do accumulating nodes deflect more than dissipating ones\?/.test(src));
 ok('8c the node hovers carry the life line', (src.match(/ledgerLifeText\(sym,L\.k\)/g)||[]).length>=2);
 ok('8d ledger.touch is a registered FEATURE with the acm-vs-dec question', /registerFeature\(\{ key:'ledger\.touch'/.test(src) && /acm_deflects_more/.test(src));
-ok('8e rules.json seeds ledger.touch (61 ids)', (function(){ var RJ=JSON.parse(fs.readFileSync('./learning/rules.json','utf8')); return !!RJ.rules['ledger.touch'] && Object.keys(RJ.rules).length===61; })());
+// ⚠ This asserted `Object.keys(RJ.rules).length===61` — a hardcoded count of EVERY rule in the file,
+// which fails whenever an unrelated feature is enrolled (it broke at 68) and never once checked what
+// its own message claimed. Assert the seeding of ledger.touch itself.
+ok('8e rules.json seeds ledger.touch with real questions', (function(){
+  var RJ=JSON.parse(fs.readFileSync('./learning/rules.json','utf8'));
+  var r=RJ.rules['ledger.touch'];
+  return !!r && r.id==='ledger.touch' && !!r.condition && !!r.mechanism &&
+         r.n===0 && r.rate===null && r.promoted===false &&
+         !!r.regime && !!r.regime.trend && !!r.walkForward;
+})());
 console.log('test_node_ledger: '+p+' passed, '+f+' failed');

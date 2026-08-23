@@ -198,14 +198,15 @@ const book=(net)=>({ j:{ levels:[ {l:[{k:100,v:Math.abs(net),d:1,net:net}]} ] },
   const r=regime2D('SPY');
   ok(r.g===-1&&r.v===-1,'put-dominant in both books reads as negative gamma AND negative vanna',[r.g,r.v]);
   ok(r.danger===true,'that is the self-reinforcing cell and it is flagged');
-  ok(/momentum/.test(r.play),'the playbook switches to momentum — fades are the losing side here');
-  ok(/widen stops/.test(r.play),'and it says to widen stops, which is the whole point of the flag');
+  // r.play carried prose until BREAKS/FADES became the chip vocabulary. The CELL is what is being
+  // locked here, not the sentence that once described it: -g/-V is the momentum cell.
+  ok(r.play==='BREAKS','the playbook is BREAKS — momentum, because fades are the losing side here',r.play);
 }
 {
   LASTFEED.SPY=book(-500); LASTVEX.SPY=book(-500);
   const r=regime2D('SPY');
   ok(r.g===1&&r.v===1&&r.danger===false,'call-dominant in both books is the benign +g/+V cell');
-  ok(/fade/.test(r.play),'and there the playbook is to fade the edges');
+  ok(r.play==='FADES','and the benign cell is FADES — the edges are there to be faded',r.play);
 }
 {
   LASTFEED.SPY=book(-500); LASTVEX.SPY=null;

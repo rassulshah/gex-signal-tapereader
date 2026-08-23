@@ -13,6 +13,10 @@ undocumented. That has already happened repeatedly in this project.
    camouflaged two live bugs for months.
 2. **Full suite green.** `cp current/gex-signal-tapereader.user.js v10.js` first — the harness reads
    `v10.js`, not `current/`.
+   ⚠ **AND THE TEST MUST RUN THE CODE, NOT GREP IT.** v11.86 shipped fourteen assertions that could not
+   catch a wrong price; v11.70 shipped a forecast ban that passed on inserted forecast text. Third
+   occurrence. `eval(ex('fn'))` with stubs costs 47ms. **Then mutate the source and confirm the
+   assertions fire** — an assertion that never fails buys false confidence, which is worse than none.
 3. **Smoke test** — `node tools/smoke.js`. Loads the whole script in a DOM stub, calls every debug hook,
    AND fails on anything a render catch swallowed. A section that renders empty because its own
    try/catch ate a ReferenceError looks exactly like a section with nothing to show; this is the only
@@ -28,8 +32,11 @@ undocumented. That has already happened repeatedly in this project.
    - open threads, stated precisely enough to resume without re-deriving
    - any new landmine, with the symptom that would reveal it
 7. **Snapshot the note** as `session-state/YYYY-MM-DD_resume-vX.Y.md` and delete the previous snapshot.
-8. **Build the installer, round-trip verify it**: decode its own payload, untar, `diff` against the
-   working tree, confirm `@version` in both scripts, confirm `more +N` equals the `exit /b 0` line.
+8. **Build the installer with `python3 tools/build-installer.py "vX.Y: one-line commit message"`.**
+   It reads every version from the files, solves `HDRLINES` to a fixed point, round-trips its own payload
+   against the working tree, and refuses to emit a stale `v11.x` header or the word PowerShell.
+   ⚠ **NEVER HAND-EDIT `install.bat`.** The v11.86 one said v11.49 in its banner, v11.79 in its commit
+   message, and 1.8 for a 1.13 companion. Its payload was correct, which is why it survived four builds.
 9. **RUN `bash tools/release-links.sh` AND PASTE ITS OUTPUT.** Not "remember to send the link" — RUN
    THE SCRIPT. It reads both `@version` values, marks which script actually changed against origin/main,
    and prints the block ready to paste. Step 9 said "always send the link" from v11.9 onward and was

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.86
+// @version    11.87
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.86';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.87';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -2665,7 +2665,7 @@ function trackSpxwNodes(){
     // feed analysis and the end-of-day review, and a contaminated history is worse than no history.
     // ⚠ THE SAME HOLE EXISTS ON THE SPY PATH and is NOT fixed here — it has been running for many
     // versions and silently changing its keying without evidence is its own risk. Recorded in
-    // DECISIONS.md D-7 instead. THIS path refuses.
+    // DECISIONS.md D-10 instead. THIS path refuses.
     if(typeof inReplay==='function' && inReplay()){ out.why='replay \u2014 not recording'; return out; }
     var tp=tapeMap('SPXW');
     if(!tp || !tp.pct || !Object.keys(tp.pct).length){ out.why='SPXW tape unreadable'; return out; }
@@ -11596,23 +11596,40 @@ function registerCoreFeatures(){
                netGEXbn:+(f.netGEX/1e9).toFixed(2),
                // how much flow the REMAINING distance to the rail would require — the user's framing
                toRailBn:(b&&b.ok&&typeof b.roomAhead==='number')?+((f.perPt*b.roomAhead)/1e9).toFixed(2):null,
-               pct:(b&&b.ok)?b.pct:null };
+               pct:(b&&b.ok)?b.pct:null,
+               // ---- (v11.87) THE CONFLICT TRAVELS WITH THE READING ------------------------------
+               // v11.83 taught this chip to DECLARE when Skylit and InsiderFinance disagree about the
+               // gamma sign, and the face has shown it since. Nothing recorded it. So the panel could
+               // say "the books disagree" every day for a month and the scorecard would still have no
+               // way to answer WHICH ONE WAS RIGHT — the only question that makes the disagreement
+               // worth showing. A flow-per-point taken while the books agree and one taken while they
+               // fight are not the same measurement, and pooling them averages a real effect away.
+               conflict:(typeof f.conflict==='boolean')?f.conflict:null,
+               regimeG:(typeof f.regimeG==='number')?f.regimeG:null };
     },
     outcome:function(rec, fwd){
       // No claim yet. Recording the flow and the forward range so the question CAN be answered; a hit
       // rate invented before the data exists is the thing this project keeps having to undo.
       return { hit:null, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
-               perPtM:(rec&&rec.perPtM!=null)?rec.perPtM:null, feeds:!!(rec&&rec.feeds) };
+               perPtM:(rec&&rec.perPtM!=null)?rec.perPtM:null, feeds:!!(rec&&rec.feeds),
+               conflict:(rec&&typeof rec.conflict==='boolean')?rec.conflict:null };
     },
     questions:[
       { id:'flow_reaches_em_feeds', when:[{f:'feeds',v:true}], outcome:'reachEM',
         note:'NEGATIVE gamma, flow feeding the move: does a LARGER flow-per-point precede price actually reaching the expected move? This is the "can hedging carry it there" question, asked rather than assumed.' },
       { id:'flow_caps_move_fights', when:[{f:'feeds',v:false}], outcome:'stayIn',
-        note:'POSITIVE gamma, flow fighting the move: does a larger flow-per-point precede the day staying INSIDE the band? The mirror claim, and it must be scored separately or the two cancel.' }
+        note:'POSITIVE gamma, flow fighting the move: does a larger flow-per-point precede the day staying INSIDE the band? The mirror claim, and it must be scored separately or the two cancel.' },
+      // (v11.87) The two books disagreeing is the CONDITION, not the claim. Ask the same question on
+      // both sides of it: if the agreed reading scores and the conflicted one does not, the conflict
+      // flag is a filter worth trading on. If they score the same, it is a caveat and nothing more.
+      { id:'flow_holds_when_books_agree', when:[{f:'conflict',v:false}], outcome:'reachEM',
+        note:'BOOKS AGREE on the gamma sign: does the flow reading still precede price reaching the expected move? This is the control arm — without it the conflicted arm below means nothing.' },
+      { id:'flow_decays_when_books_fight', when:[{f:'conflict',v:true}], outcome:'reachEM',
+        note:'BOOKS DISAGREE — Skylit live positioning says one gamma sign, InsiderFinance open-interest gamma says the other. Does the flow reading lose its edge here? If it does, the conflict chip earns a vote; if it does not, it stays a disclosure and nothing more. ⚠ Compare against flow_holds_when_books_agree, NEVER against a pooled rate.' }
     ],
     rule:{ id:'flow.perPoint', tier:'hand',
-           condition:'net GEX of the NEAR-DATED book divided by one point of spot; window recorded with the value',
-           mechanism:'Gamma forces dealers to re-hedge as price moves; the near book is where that flow lives. Negative gamma trades with the move (feeds), positive against it (fights). Size is measurable, arrival is not — non-voting until measured.' } });
+           condition:'net GEX of the NEAR-DATED book divided by one point of spot; window recorded with the value, and (v11.87) whether Skylit and InsiderFinance agreed on the gamma sign when it was taken',
+           mechanism:'Gamma forces dealers to re-hedge as price moves; the near book is where that flow lives. Negative gamma trades with the move (feeds), positive against it (fights). Size is measurable, arrival is not — non-voting until measured. This figure is InsiderFinance open-interest gamma while the regime chip and the nodes are Skylit live positioning; when the two disagree the reading is scored SEPARATELY, because a pooled rate would average a real conflict effect away.' } });
 
   registerFeature({ key:'dex', label:'Net dealer delta (level, not sign)', phase:'structure', fwd:FEAT_FWD,
     record:function(sym, ctx){
@@ -19735,8 +19752,16 @@ window.__gptsDebug.session = function(){
 };
 // (v11.62) hedging flow per point, with the window it came from
 window.__gptsDebug.flow = function(sy){ try{ var f=hedgeFlow(sy||activeSym());
+  // ⚠ (v11.87) This hook is a RESHAPE, not a passthrough, so every field hedgeFlow gains has to be added
+  // here too or it becomes invisible. `conflict` shipped at v11.83 and was missing from this view for
+  // four builds — the one place you would go to check whether the books disagree could not tell you.
   return f.ok?{window:f.window,label:f.label,netGEXbn:+(f.netGEX/1e9).toFixed(2),perPtM:+(f.perPt/1e6).toFixed(1),
-               feeds:f.feeds,means:(f.feeds?'FEEDS the move':'FIGHTS the move')}:f; }catch(e){ return String(e); } };
+               feeds:f.feeds,means:(f.feeds?'FEEDS the move':'FIGHTS the move'),
+               regimeG:(typeof f.regimeG==='number')?f.regimeG:null,
+               conflict:(typeof f.conflict==='boolean')?f.conflict:null,
+               books:(typeof f.conflict!=='boolean')?'regime unreadable — cannot compare'
+                     :(f.conflict?'⚠ DISAGREE — Skylit says '+((f.regimeG<0)?'short':'long')+' gamma, InsiderFinance says '+(f.feeds?'short':'long')
+                                 :'agree — both read '+(f.feeds?'short':'long')+' gamma')}:f; }catch(e){ return String(e); } };
 window.__gptsDebug.ifShape = function(sy){ try{ var c=ifChain(sy||'SPX'); return (c&&c.shape)||'companion older than v1.7'; }catch(e){ return String(e); } };
 window.__gptsDebug.optKeys = function(sy){
   var out={};

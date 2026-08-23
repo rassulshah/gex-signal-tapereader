@@ -90,9 +90,20 @@ eq(confTier({ok:false},766),null,'and an empty read is the same');
 }
 // ---- expected move ----
 {
-  // v11.45 routes FRAME cells through cell(label,value,tip) so the VALUE is hoverable too
-  ok(/cell\('EM'/.test(src),'expected move is on the FRAME line');
-  ok(/how much of it the session range has already used/.test(src),'and the hover explains the percentage');
+  // v11.45 routed FRAME cells through cell(label,value,tip). v11.66-v11.86 rewrote the section into
+  // three rows and the cells became g3tip'd <span class="g3emk"> — label AND value inside ONE tipped
+  // element, which is the property that mattered. The old greps kept passing on the NAME of the old
+  // helper, so when the helper went they failed while the property was intact. Assert the PROPERTY.
+  const FR=ex('secFrame');
+  const emk=FR.split('<span class="g3emk"').slice(1);
+  ok(emk.length>=2, 'the FRAME band cells are on the line', emk.length);
+  ok(emk.every(x=>x.startsWith("'+g3tip(")),
+     'and every one of them opens with its tip, so the VALUE is hoverable and not just the label',
+     emk.map(x=>x.slice(0,24)));
+  ok(/EXP LOW/.test(FR) && /EXP HIGH/.test(FR),
+     'the rails are named EXP LOW / EXP HIGH (v11.75, the user\'s wording)');
+  ok(/0\.80 sigma/.test(FR) && /58%/.test(FR) && /1\.25/.test(FR),
+     'and the hover carries the caveat the label does not: 0.80 sigma, ~58% containment, x1.25 to a true one-sigma');
   ok(/a one-sided straddle is not a straddle/i.test(src),'the blank case is explained rather than left mysterious');
 }
 // ---- depth reaches REACTION ----
