@@ -77,7 +77,7 @@ cannot do the gross-vs-net split that removed an 84× overstatement at v11.68. O
 
 ---
 
-## D-4 · ONE CHIP FROM ONE BOOK, EVERYTHING ELSE FROM THE OTHER — UNRESOLVED
+## D-4 · TWO BOOKS ON ONE ROW — ✅ CLOSED v11.83
 **Standing v11.64 → v11.77. LARGELY RESOLVED.**
 
     regime chip (−G −V) + BREAKS ...... SKYLIT
@@ -93,8 +93,12 @@ purple accelerators and nothing would flag it.
 **v11.77 took route 2.** The regime chip and the nodes now both read Skylit, so the guarantee is restored
 by construction for the two elements that most needed it. The band, target, EM and FLIP stay on
 InsiderFinance — which is the user's intended split: **IF prices the day, Skylit marks the levels.**
-⚠ Still unresolved: the flow chip (`FEEDS $x/PT`) remains on IF while the nodes beside it are Skylit's.
-Same disease, smaller blast radius.
+**v11.83 closed the last instance.** The flow chip stays on InsiderFinance — its per-point figure has no
+Skylit equivalent, and recomputing it quietly would swap a disclosed mismatch for a hidden one — but it now
+compares its own gamma sign against the regime chip's and **DECLARES a conflict**: red border, ⚠ prefix,
+and a hover naming both answers. It hands the judgement back rather than pretending to settle it.
+⚠ The rule this leaves behind: **when two books make the same claim, compare them and show the
+disagreement. Never average them, never silently pick one.**
 
 **The three routes, kept for the record:**
 1. **Flag the disagreement** — keep both opinions, mark the chip when the signs conflict. Cheap, and the
@@ -111,7 +115,7 @@ NOT been confirmed, and it is exactly the check option 2 depends on.
 
 ---
 
-## D-5 · `dte0` MEANS "NEAREST LIVE EXPIRY", NOT "TODAY"
+## D-5 · `dte0` MEANS "NEAREST LIVE EXPIRY", NOT "TODAY" — ✅ CLOSED v11.83
 **Discovered 2026-08-23.** IF drops an expiry from the payload once it has expired. Captured after the
 Friday close, the chain's earliest expiry is Monday, so `dte0` selects **20260824** while `today` is
 20260821 — `dte0_isToday = false`.
@@ -120,7 +124,9 @@ During live RTH on a weekday the row exists and `dte0` really is today. After th
 is the next session's book, and the band's "today's expected move" is then **Monday's** straddle laid over
 Friday's price action.
 
-The arithmetic is right; the wording over-promises. **Open** — not yet reflected on the face.
+**CLOSED v11.83.** The rails carry **`≠TODAY`** beside the label, and the hover names the expiry actually
+being priced. ⚠ Three states, not two: `false` = today, a date = that expiry, **`null` = cannot tell** —
+collapsing unknown into "fine" is how a silent wrong day gets drawn.
 
 ---
 

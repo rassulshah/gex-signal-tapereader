@@ -82,6 +82,10 @@ function ex(n){
   eval([cK,cF,cS].filter(Boolean).join('\n'));
   ok(typeof EM_FRESH_MIN==='number' && EM_FRESH_MIN>0, 'EM_FRESH_MIN is a positive number', EM_FRESH_MIN);
 
+  // (v11.83) emBand now calls dte0NotToday(), which reaches into ifChain. Stub it here: this block tests
+  // the BAND, and the detector gets its own coverage in §38. A missing dependency inside an eval throws
+  // ReferenceError and empties the whole block, which is how several assertions have silently died before.
+  function dte0NotToday(){ return false; }
   eval(ex('inReplay'));
 eval(ex('sessionDayStr'));
 eval(ex('emBand'));
@@ -729,6 +733,7 @@ eval(ex('emBand'));
     const pre='var FLIP_NEAR_PTS=12,__p=[],__f=null,__why="",__src="skylit";'+
       'function dispIsFut(){return true;}'+
       'function emPiles(){emPiles.lastWhy=__why;emPiles.lastSrc=__src;return __p;}'+
+      'function dte0NotToday(){return false;}\n'+
       'function ifLadder(){return __f==null?{err:1}:{err:null,rows:[{id:"FLIP",disp:__f}]};}';
     const deps=['dispNum','usd','usdBig','frameNum','emPos','emRead'].map(ex).join('\n');
     return new Function(pre+deps+'\nreturn function(B,p,f,why,sv){__p=p||[];__f=(f===undefined?null:f);__why=why||"";__src=sv||"skylit";return emRead(B,"SPY");};')();
@@ -901,6 +906,7 @@ eval(ex('emBand'));
     const pre='var FLIP_NEAR_PTS=12,__p=[],__f=null,__why="",__src="skylit";\n'+
       'function dispIsFut(){return true;}\n'+
       'function emPiles(){emPiles.lastWhy=__why;emPiles.lastSrc=__src;return __p;}\n'+
+      'function dte0NotToday(){return false;}\n'+
       'function ifLadder(){return __f==null?{err:1}:{err:null,rows:[{id:"FLIP",disp:__f}]};}\n';
     const deps=['dispNum','usd','usdBig','frameNum','emPos','emRead'].map(ex).join('\n');
     return new Function(pre+deps+'\nreturn function(B,p,fl,why,sv){__p=p||[];__f=(fl===undefined?null:fl);__why=why||"";__src=sv||"skylit";return emRead(B,"SPY");};')();
@@ -1258,6 +1264,83 @@ eval(ex('emBand'));
   ok(/RUG \\u2014 a strong POSITIVE ceiling/.test(f), 'and RUG');
   ok(/REVERSE RUG \\u2014 a strong NEGATIVE ceiling/.test(f), 'and REVERSE RUG');
   ok(/roles:emPiles\.lastRoles/.test(src), 'and the hook reports the whole role map');
+}
+
+// ---------- 38. (v11.83) THE LAST TWO OPEN ITEMS: D-5 AND D-4 ----------
+// D-5: `dte0` means "nearest LIVE expiry", not "today". InsiderFinance drop an expiry the moment it
+// expires, so a chain captured after the close prices the NEXT session while the chart shows this one.
+// D-4: the flow chip was the last element reading a different book from the regime chip beside it.
+{
+  const d=ex('dte0NotToday');
+  ok(/c\.dte0\.exps\[0\]/.test(d),        'the front expiry is read from the chain');
+  ok(/String\(front\)!==String\(c\.today\)/.test(d), 'and compared against the payload\'s own today');
+  ok(/return null/.test(d),               'unknown returns null, which is not the same as "it is today"');
+  // three-state, because "cannot tell" must never render as "fine"
+  const F=new Function('var __c=null; function ifChain(){return __c;}'+d+
+    '\nreturn function(c){__c=c; return dte0NotToday("SPY");};')();
+  ok(F({dte0:{exps:['20260824']},today:'20260821'})==='20260824', 'a later expiry comes back as the DATE');
+  ok(F({dte0:{exps:['20260821']},today:'20260821'})===false,      'a matching one comes back false');
+  ok(F(null)===null,                                             'no chain comes back null');
+  ok(F({dte0:{exps:[]},today:'20260821'})===null,                'and an empty window too');
+
+  const f=ex('secFrame');
+  ok(/EB\.notToday\?' \\u2260TODAY':''/.test(f),
+     'the rails carry a VISIBLE marker, not only a hover — a caveat in a hover is a caveat nobody reads');
+  const marks=(f.match(/u2260TODAY/g)||[]).length;
+  ok(marks===2, 'on both rails', marks);
+  ok(/THIS EXPIRY IS NOT TODAY/.test(f), 'and the hover explains why');
+
+  // D-4: the flow chip declares a conflict rather than switching source
+  const hf=ex('hedgeFlow');
+  ok(/regime2D\(sym\)/.test(hf),          'the flow chip now reads the regime chip beside it');
+  ok(/out\.conflict = \(\(R2\.g<0\) !== out\.feeds\)/.test(hf),
+     'and compares gamma SIGN, which is the claim both of them make');
+  ok(!/lv\.netGEX=.*regime/.test(hf),     'it does NOT recompute its number from the other book');
+  ok(/HF\.conflict\?' g3conf'/.test(f),   'a conflicted chip is marked');
+  ok(/THE TWO BOOKS DISAGREE/.test(f),    'and the hover names both answers');
+  ok(/a stock beside a flow/.test(f),     'restating the doctrine that neither checks the other');
+  // ⚠ the point is disclosure, not resolution — quietly picking one would hide the thing worth seeing
+  ok(/trust the one whose window matches your horizon/.test(f),
+     'and it hands the judgement back rather than pretending to settle it');
+}
+
+// ---------- 39. (v11.84) SPX NODES ARE TRACKED, NOT JUST DRAWN ----------
+// The rail has drawn Skylit's SPXW nodes since v11.77 and thrown every reading away — no history, no
+// accumulation, no taps, nothing in the export, nothing the end-of-day review could read. You cannot
+// build a mental model from data that is not kept.
+// ⚠ AND THE GAP WAS SMALLER THAN I MADE IT LOOK. `sampleTapeHistory` needs only `tapeMap(sym)`, which
+// already worked for SPXW, and every store it touches auto-creates. The history side was ONE CALL; I
+// spent a round theorising about feed lanes before checking that.
+{
+  const t=ex('trackSpxwNodes');
+  ok(/tapeMap\('SPXW'\)/.test(t),          'it reads the SPXW tape');
+  ok(/sampleTapeHistory\('SPXW'\)/.test(t),'and feeds the SAME history sampler SPY uses');
+  ok(/SK_MIN_STRIKES/.test(t),             'gated on the same thin-tape floor as the rail');
+  ok(/out\.why=/.test(t),                  'and a failure names itself rather than recording silence');
+  const h=ex('sampleTapeHistory');
+  ok(/HIST\[sym\] \|\| \(HIST\[sym\]=\{\}\)/.test(h),
+     'the history store auto-creates, which is why SPXW needed no new plumbing');
+
+  // TAPS need a price series in SPX space — synthesised, or SKIPPED, never guessed
+  const c=ex('spxwCandlesFromSPY');
+  ok(/L\.undScale/.test(c),                'taps convert SPY candles with the ladder undScale');
+  ok(/return null/.test(c),                'and return null when the scale is unavailable');
+  ok(/if\(sc\)\{/.test(t),                 'so taps are SKIPPED rather than counted against a wrong strike');
+  ok(/no scale for taps/.test(t),          'and the reason is recorded');
+
+  // enrolled, and recording the LEVEL rather than a count of levels
+  const R=JSON.parse(fs.readFileSync('./learning/rules.json','utf8')).rules;
+  ok(!!R['spx.nodes'],                     'enrolled as spx.nodes');
+  ok(/key:'spxnodes'/.test(src),           'as a real feature');
+  const rec=src.slice(src.indexOf("key:'spxnodes'"), src.indexOf("key:'spxnodes'")+3000);
+  ['nextK','nextPct','nextRole','nextTaps','distPts','king'].forEach(f=>
+    ok(rec.indexOf(f+':')>=0, 'records '+f));
+  ok(/emPiles\.lastSrc!=='skylit'/.test(rec),
+     'and refuses to record when the rail fell back to the other book');
+  ok(/spx_first_tap_holds/.test(src),      'it asks whether the SPY tap rates transfer');
+  ok(/Borrowing that number without checking/.test(src),
+     'and says plainly that assuming they do is the mistake being avoided');
+  ok(/hit:null/.test(rec),                 'non-voting until the scorecard says otherwise');
 }
 
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');

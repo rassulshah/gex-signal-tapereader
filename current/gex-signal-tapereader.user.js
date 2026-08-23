@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.82
+// @version    11.84
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.82';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.84';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -2626,6 +2626,57 @@ var TAP_PROB = { 0:80, 1:66, 2:33 }; // 3rd+ tap (index 2) = spent zone
 var TAPS = { SPY:{}, QQQ:{} };
 // Advance each tracked node's tap counter from the latest closed candles. Called
 // from the feed handler alongside the other per-node history updates.
+// ---- (v11.84) TRACK THE SPX NODES THE WAY WE TRACK SPY -------------------------------------------
+// The rail has drawn Skylit's SPXW nodes since v11.77 and then THROWN THE READING AWAY. No history, no
+// accumulation, no peak, no tap counts, nothing in the daily export, nothing the end-of-day review can
+// read. You cannot build a mental model from data that is not kept.
+//
+// ⚠ THE GAP WAS SMALLER THAN IT LOOKED, AND I MADE IT LOOK BIGGER. `sampleTapeHistory(sym)` needs only
+// `tapeMap(sym)`, which already works for SPXW (100 strikes, King dollar-anchored), and every store it
+// touches auto-creates: `HIST[sym] || (HIST[sym]={})`. So the history side is ONE CALL. I spent a round
+// theorising about feed lanes and DOM timers before checking that.
+//
+// The one real piece of work is TAPS. `updateTaps` reads `STATE[sym].candles` to ask "did price touch
+// this strike", and there is no SPXW price series — the chart is ES and the feed is SPY. So the candles
+// are SYNTHESISED by converting SPY's into SPX space with the ladder's own `undScale`, the same number
+// the rail already uses to place the nodes. One scale, taken from one place.
+// ⚠ If `undScale` is unavailable the taps are SKIPPED, not guessed. A tap counted against the wrong
+// strike is worse than no tap count: the lifecycle read (1st tap ~80%, 2nd ~66%, 3rd ~33%) would be
+// grading the wrong level and would look perfectly normal doing it.
+function spxwCandlesFromSPY(){
+  try{
+    var L=ifLadder(activeSym()); if(!L || L.err || !(L.undScale>0)) return null;
+    var inv=1/L.undScale;                       // SPY -> SPX
+    var S=STATE[activeSym()]||{}, cs=S.candles||[];
+    if(!cs.length) return null;
+    var last=cs[cs.length-1];
+    if(!last || last.h==null || last.l==null) return null;
+    return [{ o:(last.o!=null?last.o*inv:null), h:last.h*inv, l:last.l*inv,
+              c:(last.c!=null?last.c*inv:null), so:last.so }];
+  }catch(e){ return null; }
+}
+function trackSpxwNodes(){
+  var out={ ok:false, why:'' };
+  try{
+    var tp=tapeMap('SPXW');
+    if(!tp || !tp.pct || !Object.keys(tp.pct).length){ out.why='SPXW tape unreadable'; return out; }
+    if(!(tp.count>=SK_MIN_STRIKES)){ out.why='SPXW tape thin ('+tp.count+' strikes)'; return out; }
+    // HISTORY — the stores auto-create, so this is the whole of it
+    sampleTapeHistory('SPXW');
+    out.hist=true;
+    // TAPS — needs a price series in SPX space, synthesised or skipped
+    var sc=spxwCandlesFromSPY();
+    if(sc){
+      var prev=STATE.SPXW;
+      STATE.SPXW = STATE.SPXW || {};
+      STATE.SPXW.candles = sc;
+      updateTaps('SPXW');
+      out.taps=true;
+    } else { out.taps=false; out.why='no scale for taps'; }
+    out.ok=true; out.count=tp.count; out.king=tp.king;
+  }catch(e){ out.why='spxw tracking failed: '+(e&&e.message||e); }
+  return out;
+}
 function updateTaps(sym){
   var S=STATE[sym]||{}; var cs=S.candles||[]; if(cs.length<1) return;
   var tp=tapeMap(sym); if(!tp || !tp.pct) return;
@@ -11377,6 +11428,53 @@ function registerCoreFeatures(){
            condition:'two clauses: where the day is, then the nearest level that changes the hedging mechanism and what it changes to; FLIP outranks piles within 12 points',
            mechanism:'The section already carries every fact; what it lacked was the causal chain between them. The line states a MECHANISM and never a probability - no likely, no will, no trade - because gamma says HOW price moves and never WHICH WAY, and converting hedging dollars into points needs a market-impact figure no option chain contains. Which BRANCH fires is recorded so the composition itself can be scored.' } });
   //
+  // (v11.84) SPX NODES, RECORDED SO THEY CAN BE LEARNED FROM. The rail has drawn them since v11.77 and
+  // kept nothing. This records the node the trader is actually looking at — WHICH strike, at what %King,
+  // in what role, how far away, and whether it had been tapped — so the end-of-day review sees levels
+  // rather than counts, and so the lifecycle claims can eventually be graded on SPX instead of borrowed
+  // from SPY's backtest.
+  // ⚠ NON-VOTING and it will stay that way until the scorecard says otherwise. The Academy tap rates
+  // (1st ~80%, 2nd ~66%, 3rd ~33%) were measured on a DIFFERENT book; assuming they transfer is exactly
+  // the borrowed-number mistake this project keeps having to undo.
+  registerFeature({ key:'spxnodes', label:'SPX nodes on the rail (Skylit SPXW)', phase:'structure', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var B=null; try{ B=emBand(sym); }catch(e){}
+      if(!B || !B.ok) return { ok:false };
+      var ps=[]; try{ ps=emPiles(B, sym)||[]; }catch(e2){}
+      if(emPiles.lastSrc!=='skylit') return { ok:false, why:'not on the skylit book' };
+      if(!ps.length) return { ok:false, why:emPiles.lastWhy||'no node' };
+      // the node that MATTERS is the next one in the direction of travel — the one the read line names
+      var up=(B.dir>=0);
+      var ahead=ps.filter(function(x){ return up ? x.disp>B.now : x.disp<B.now; })
+                  .sort(function(a,b){ return up ? a.disp-b.disp : b.disp-a.disp; });
+      var nx=ahead[0]||null;
+      var taps=null; try{ var T=TAPS.SPXW||{}; if(nx){ var st=T[nx.k.toFixed(2)]||T[String(nx.k)]; taps=st?st.taps:null; } }catch(eT){}
+      return { ok:true,
+               king:emPiles.lastKing, kingSrc:emPiles.lastKingSrc||null,
+               n:ps.length,
+               nextK:nx?nx.k:null, nextPct:nx?nx.pct:null, nextRole:nx?(nx.role||null):null,
+               nextAccel:nx?!!nx.accel:null, nextTaps:taps,
+               distPts:(nx?+Math.abs(nx.disp-B.now).toFixed(2):null),
+               dir:B.dir, gamma:(B.gamma==null?null:B.gamma) };
+    },
+    outcome:function(rec, fwd){
+      // No claim. Recording WHICH level and what happened after it, so the question can be asked later.
+      return { hit:null, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
+               nextRole:(rec&&rec.nextRole)||null, nextPct:(rec&&rec.nextPct!=null)?rec.nextPct:null,
+               nextTaps:(rec&&rec.nextTaps!=null)?rec.nextTaps:null };
+    },
+    questions:[
+      { id:'spx_king_ahead_reaches', when:[{f:'nextRole',v:'KING'}], outcome:'reachEM',
+        note:'when the KING is the next node ahead, does price get there? The rail calls it the destination; this asks whether it behaves like one.' },
+      { id:'spx_gk_stalls',          when:[{f:'nextRole',v:'GK'}], outcome:'stayIn',
+        note:'a GATEKEEPER is supposed to be where price STALLS when it is strong relative to the King. Does the day stay contained when one is next?' },
+      { id:'spx_first_tap_holds',    when:[{f:'nextTaps',v:0}], outcome:'revert',
+        note:'the FIRST tap of an untested SPX node. Skylit Academy measured ~80% on THEIR book \u2014 does it hold on this one? Borrowing that number without checking is the mistake this feature exists to avoid.' }
+    ],
+    rule:{ id:'spx.nodes', tier:'hand',
+           condition:'the next Skylit SPXW node in the direction of travel: strike, %King, role, distance and tap count, recorded per bar',
+           mechanism:'The rail names a level and says what hedging does there. Whether that level actually holds, stalls or accelerates has never been measured on the SPX book - the tap-rate numbers in this project came from Skylit\'s SPY backtest. Recording the level itself, not a count of levels, is what makes the question answerable.' } });
+  //
   // (v11.68) THE PILES, after the two faults that composed into one wrong number. They read toFri while
   // the band read dte0 — on a Friday roll that is today plus a whole extra week, and only 29.2% of it
   // expired that day — and their DOLLARS came from gross while their DIRECTION came from net, so a strike
@@ -17265,6 +17363,9 @@ function ensureV3Css(){
     // Same grammar as the piles below, so the chip and the rail agree without a legend.
     '#gpts-body .g3flow.g3feeds{background:rgba(163,113,247,.18);color:#a371f7;border:1px solid rgba(163,113,247,.45)}'+
     '#gpts-body .g3flow.g3fights{background:rgba(227,195,65,.14);color:#e3c341;border:1px solid rgba(227,195,65,.4)}'+
+    // (v11.83) a conflicted chip wears the warning colour, because the number is still true and the
+    // DISAGREEMENT is the thing that changed.
+    '#gpts-body .g3flow.g3conf{border-color:#f0616d;box-shadow:0 0 0 1px rgba(240,97,109,.35)}'+
     // (v11.75) 7px sat a full step below every other chip on the row and read as a footnote. 8px matches g3flow.
     '#gpts-body .g3ct{font-size:8px;font-weight:800;padding:1px 5px;border-radius:2px;'+
       'background:rgba(46,194,126,.14);color:#2ec27e;border:1px solid rgba(46,194,126,.4);white-space:nowrap}'+
@@ -17547,6 +17648,21 @@ var EMOPEN_KEY='gpts_emopen_v1';
 // older schema is discarded and re-taken, never partially trusted — see the v11.61 note in emBand().
 var EMOPEN_SCHEMA=3;
 var EM_FRESH_MIN=15;               // minutes after the open within which a capture counts as clean
+// (v11.83) ⚠ IS `dte0` ACTUALLY TODAY? InsiderFinance DROPS an expiry from the payload the moment it
+// expires, so a chain captured after the close has the NEXT session as its earliest row. `dte0` means
+// "nearest live expiry", which is not the same claim as "today" — and the band built on it is then
+// pricing a DIFFERENT DAY than the one on the chart. Measured 2026-08-21 20:04Z: today 20260821,
+// earliest expiry 20260824, and their own page printed "0DTE Exp 0.0%". DECISIONS.md D-5.
+// Returns null when it cannot tell, the expiry when it is NOT today, and false when it is.
+function dte0NotToday(sym){
+  try{
+    var c=ifChain((sym==='QQQ')?'QQQ':'SPX');
+    if(!c || c.err || !c.dte0 || !c.dte0.exps || !c.dte0.exps.length) return null;
+    var front=c.dte0.exps[0];
+    if(front==null || c.today==null) return null;
+    return (String(front)!==String(c.today)) ? String(front) : false;
+  }catch(e){ return null; }
+}
 function emBand(sym){
   var out={ ok:false, why:'', est:false };
   try{
@@ -17741,6 +17857,7 @@ function emBand(sym){
 
     var g=null; try{ var R=regime2D(sym); g=(R&&typeof R.g==='number')?R.g:null; }catch(eG){}
     out.gamma=g;
+    out.notToday=dte0NotToday(sym);      // false = really today, a date = that expiry, null = unknown
     out.over=(out.pct>=100);
     out.stretched = !!(out.over && g!==null && g>0);   // past the priced move in the COMPRESSING regime
     out.ok   = true;
@@ -17790,6 +17907,21 @@ function hedgeFlow(sym){
     out.perPt=Math.abs(lv.netGEX)/onePct;
     // NEGATIVE net gamma: dealers hedge WITH the move -> the flow FEEDS it. Positive: it FIGHTS it.
     out.feeds=(lv.netGEX<0);
+    // ---- (v11.83) THE LAST PLACE TWO BOOKS SAT SIDE BY SIDE WITHOUT CHECKING EACH OTHER ------------
+    // This chip is InsiderFinance. The regime chip beside it, and now the nodes below it, are SKYLIT.
+    // The chip's WORD (FEEDS / FIGHTS) is a gamma-sign claim, and so is the regime chip's (−G / +G).
+    // If they ever disagree, the row reads "FIGHTS" next to "−G ⚠" over a rail of purple accelerators
+    // and nothing says which to believe. DECISIONS.md D-4 called this the last instance; here it is.
+    // ⚠ THE CHIP DOES NOT SWITCH SOURCE. IF's number is the only per-point figure available, and quietly
+    // recomputing it from Skylit would replace a disclosed mismatch with a hidden one. It DECLARES the
+    // conflict instead, because two books disagreeing about gamma sign is information, not noise.
+    try{
+      var R2=regime2D(sym);
+      if(R2 && typeof R2.g==='number'){
+        out.regimeG=R2.g;
+        out.conflict = ((R2.g<0) !== out.feeds);   // Skylit says short gamma, IF says long, or vice versa
+      }
+    }catch(eR){}
     out.ok=true;
   }catch(e){ out.why='flow failed: '+(e&&e.message||e); }
   return out;
@@ -18357,11 +18489,12 @@ function secFrame(sym){
   // Identical dollar figure, opposite meaning — which is why the regime, not the size, decides the word.
   var HF=null; try{ HF=hedgeFlow(sym); }catch(eH){}
   if(HF && HF.ok){
-    h+='<span class="g3flow '+(HF.feeds?'g3feeds':'g3fights')+'"'+
+    h+='<span class="g3flow '+(HF.feeds?'g3feeds':'g3fights')+(HF.conflict?' g3conf':'')+'"'+
        g3tip((HF.feeds?'Hedging FEEDS the move here':'Hedging FIGHTS the move here')+': dealers must trade about '+usdBig(HF.perPt)+
              ' of underlying per point to stay neutral, '+(HF.feeds?'in the SAME direction price is going':'AGAINST the direction price is going')+
-             '. From the '+gexWindowNote(HF.window)+' The near book is used because that is where gamma concentrates and where dealers actually re-hedge. This is the SIZE of the mechanical flow, not a forecast that price will travel.')+
-       '>'+(HF.feeds?'FEEDS ':'FIGHTS ')+usdBigSp(HF.perPt)+' / PT</span>';
+             '. From the '+gexWindowNote(HF.window)+' The near book is used because that is where gamma concentrates and where dealers actually re-hedge. This is the SIZE of the mechanical flow, not a forecast that price will travel.'+
+             (HF.conflict ? (' \u26a0\u26a0 THE TWO BOOKS DISAGREE. This figure is InsiderFinance open-interest gamma and says '+(HF.feeds?'FEEDS':'FIGHTS')+'; the regime chip and the nodes read SKYLIT live positioning and say '+((HF.regimeG<0)?'SHORT gamma (feeds)':'LONG gamma (fights)')+'. Neither is a check on the other \u2014 a stock beside a flow \u2014 but when they conflict, trust the one whose window matches your horizon and treat the level structure as contested.') : ''))+
+       '>'+(HF.conflict?'\u26a0 ':'')+(HF.feeds?'FEEDS ':'FIGHTS ')+usdBigSp(HF.perPt)+' / PT</span>';
   }
   if(EBc && EBc.ok && EBc.mult && EBc.contract){
     h+='<span class="g3ct"'+g3tip(EBc.contract+' — '+usd(EBc.mult)+' per index point. The expected move of '+dispNum(EBc.em)+' points is worth '+usd(EBc.emUsd)+' per contract'+(EBc.microUsd?('; the micro is one tenth, '+usd(EBc.microUsd)):'')+'. This is the MOVE converted to dollars — not a position, not a size, not profit or loss. ⚠ The multiplier follows the CHART, so charting '+EBc.contract+' while trading the micro makes every figure ten times too big.')+'>'+g3esc(EBc.contract)+' '+usd(EBc.emUsd)+'/ct</span>';
@@ -18414,7 +18547,7 @@ function secFrame(sym){
     // Subrahmanyam, and every vendor guide that bothers to say so puts the conversion at x1.25. A row
     // labelled EM implies ~68% containment; this band delivers ~58%. The WIDTH IS UNCHANGED and every
     // level sits exactly where it did — only the claim has been corrected.
-    h+='<span class="g3emk"'+g3tip('Expected low — the open minus the at-the-money straddle.' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.low/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(EB.low))+'<small>'+(EB.est?'~':'')+'EXP LOW</small></span>';
+    h+='<span class="g3emk"'+g3tip('Expected low — the open minus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.low/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(EB.low))+'<small>'+(EB.est?'~':'')+'EXP LOW'+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
     h+='<span class="g3emt">'+
        '<i class="g3emr"></i>'+
        ((EB.hiWater!=null&&EB.loWater!=null)?('<i class="g3emx2" style="left:'+emPos(EB,EB.loWater).toFixed(1)+'%;width:'+Math.max(0,emPos(EB,EB.hiWater)-emPos(EB,EB.loWater)).toFixed(1)+'%"></i>'+
@@ -18499,7 +18632,7 @@ function secFrame(sym){
          return h2;
        })()+
        '</span>';
-    h+='<span class="g3emk"'+g3tip('Expected high — the open plus the at-the-money straddle.' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.high/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a ceiling.')+'>'+g3esc(frameNum(EB.high))+'<small>'+(EB.est?'~':'')+'EXP HIGH</small></span>';
+    h+='<span class="g3emk"'+g3tip('Expected high — the open plus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.high/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a ceiling.')+'>'+g3esc(frameNum(EB.high))+'<small>'+(EB.est?'~':'')+'EXP HIGH'+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
     h+='</span>';
   } else {
     h+='<span class="g3emx"'+g3tip('Where can today go? The band needs an opening bar and a two-sided at-the-money straddle in today\'s expiry. A one-sided straddle is not a straddle and half a band would be worse than none, so it says why instead of drawing something.')+'>'+g3esc(EB.why)+'</span>';
@@ -19422,6 +19555,7 @@ window.__gptsDebug.emBand = function(sy){
       // added to the face and forgotten here fails the build instead of costing an afternoon.
       nowSo:B.nowSo, elapsed:B.elapsed, pace:B.pace, paceOk:!!B.paceOk, dueFrac:B.dueFrac,
       dir:B.dir, roomUpUsd:B.roomUpUsd, roomDnUsd:B.roomDnUsd, leftUsd:B.leftUsd,
+      notToday:(B.notToday===undefined?null:B.notToday),
       contract:B.contract, mult:B.mult, emUsd:B.emUsd, usedUsd:B.usedUsd, leftUsd:B.leftUsd,
       roomUpUsd:B.roomUpUsd, roomDnUsd:B.roomDnUsd, microUsd:B.microUsd
     };
@@ -19748,6 +19882,7 @@ function refreshSym(sym){
       stashSlice(sym, j);
       sampleTapeHistory(sym);
       updateTaps(sym);   // (v10.33) advance per-node tap counters for lifecycle
+      if(sym===activeSym()) try{ trackSpxwNodes(); }catch(eSX){}   // (v11.84) SPX nodes ride the same cadence
       LAST_OK[sym]=Date.now();
       runMachine(sym);
       return;
@@ -19760,6 +19895,7 @@ function refreshSym(sym){
       captureGuards(sym, tw.walls, tw.king);
       sampleTapeHistory(sym);
       updateTaps(sym);   // (v10.33) advance per-node tap counters for lifecycle
+      if(sym===activeSym()) try{ trackSpxwNodes(); }catch(eSX2){}   // (v11.84)
       LAST_OK[sym]=Date.now();
       runMachine(sym);
     }

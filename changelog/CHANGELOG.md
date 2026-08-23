@@ -1,3 +1,85 @@
+## v11.84 — the SPX nodes are tracked now, not just drawn
+
+**The rail has drawn Skylit's SPXW nodes since v11.77 and thrown every reading away.** No history, no
+accumulation, no peak, no tap counts, nothing in the daily export, nothing the end-of-day review could
+read. **You cannot build a mental model from data that is not kept**, and the LLM cannot suggest anything
+about levels it never sees.
+
+⚠ **THE GAP WAS SMALLER THAN I MADE IT LOOK, AND THE USER HAD TO SAY SO.** I answered "SPXW is DOM-scraped,
+there is no feed, this needs a timer and new plumbing" — then went further and turned a side discovery
+about feed lanes into a blocker. The user's reply was simply *"we clearly have a spxw tape"*, and they
+were right. `sampleTapeHistory(sym)` needs only `tapeMap(sym)`, which already worked for SPXW (100
+strikes, King dollar-anchored), and every store it touches auto-creates:
+
+    var store = HIST[sym] || (HIST[sym]={});
+
+**The history side was ONE CALL.** I spent a round theorising before checking that. The lesson is the same
+one this project keeps re-learning: **check what the code already does before describing what it would
+take to make it do that.**
+
+**WHAT IS NOW KEPT, on the same cadence as SPY:**
+- per-strike %King history (`HIST.SPXW`) — accumulation, Building / Steady / Fading, session peak
+- King history, so a migrating King is visible rather than inferred
+- **tap counters** — the 1st / 2nd / 3rd-tap lifecycle, now available on the SPX book
+
+⚠ **TAPS WERE THE ONLY REAL WORK, AND THEY ARE SKIPPED RATHER THAN GUESSED.** `updateTaps` asks "did price
+touch this strike" from `STATE[sym].candles`, and there is no SPXW price series — the chart is ES, the feed
+is SPY. The candles are synthesised by converting SPY's with the ladder's own `undScale`, the same number
+the rail already uses to place the nodes. **If that scale is unavailable the taps are skipped and the
+reason recorded.** A tap counted against the wrong strike is worse than no tap count: the lifecycle read
+would be grading the wrong level and would look perfectly normal doing it.
+
+**ENROLLED AS `spx.nodes`, AND IT RECORDS THE LEVEL, NOT A COUNT OF LEVELS.** Per bar: which strike is next
+in the direction of travel, its %King, its role, how far away, how many times it has been tapped, and the
+King it is measured against. The existing `piles` feature recorded *counts* — how many accelerators, how
+many brakes — which can never answer "did 7710 hold".
+
+⚠ **NON-VOTING, AND THE QUESTIONS SAY WHY.** The tap rates this project quotes (1st ~80%, 2nd ~66%,
+3rd ~33%) were measured on **Skylit's SPY backtest**. `spx_first_tap_holds` asks whether they transfer.
+**Assuming they do is precisely the borrowed-number mistake this feature exists to avoid.**
+
+⚠ It refuses to record when the rail fell back to InsiderFinance — a record whose source silently changed
+mid-session is worse than a gap, because the gap is visible.
+
+All three guards mutation-tested: removing the thin-tape gate fires 2, counting taps without a scale
+fires 2, recording on the fallback book fires 2.
+
+## v11.83 — the last two open items, closed
+
+**D-5 · `dte0` MEANS "NEAREST LIVE EXPIRY", NOT "TODAY".** InsiderFinance drop an expiry from the payload
+the moment it expires, so a chain captured after the close prices the NEXT session while the chart still
+shows this one. Measured 2026-08-21 20:04Z: today 20260821, earliest expiry 20260824, and their own page
+printed `0DTE Exp 0.0%`.
+
+The rails now carry **`≠TODAY`** beside the label when that happens, and the hover names the expiry the
+band is actually pricing. ⚠ **A visible marker, not only a hover** — a caveat that lives only in a tooltip
+is a caveat nobody reads, which is the same reasoning that put `~EST` on the rails at v11.75.
+
+⚠ **THREE STATES, NOT TWO.** `false` = genuinely today · a date = that expiry · **`null` = cannot tell**.
+Collapsing "unknown" into "fine" is how a silent wrong day would get drawn, so the detector returns null
+and the marker stays off rather than asserting either way.
+
+**D-4 · THE FLOW CHIP WAS THE LAST ELEMENT READING A DIFFERENT BOOK FROM THE CHIP BESIDE IT.**
+`FEEDS $214 M / PT` is InsiderFinance; the regime chip and now the nodes are Skylit. Both make the SAME
+claim — the sign of gamma — and nothing compared them. On a day where Skylit reads short gamma and IF
+reads long, the row would say `FIGHTS` next to `−G ⚠` over a rail of purple accelerators, and nothing
+would say which to believe.
+
+**IT DOES NOT SWITCH SOURCE.** IF's number is the only per-point figure available, and quietly recomputing
+it from Skylit would replace a disclosed mismatch with a hidden one. The chip **declares** the conflict:
+a red border, a ⚠ prefix, and a hover naming both answers and what each is measuring.
+
+⚠ **AND IT HANDS THE JUDGEMENT BACK.** *"Neither is a check on the other — a stock beside a flow — but
+when they conflict, trust the one whose window matches your horizon and treat the level structure as
+contested."* Picking a winner would hide the one thing worth seeing.
+
+⚠ **THE SELF-DERIVING HOOK GUARD CAUGHT `notToday` ON THE SAME BUILD IT WAS INTRODUCED** — the face read a
+field the hook did not return, and the test said so before it could cost anything. That is the second time
+that guard has paid for itself since v11.71.
+
+All three mutation-tested: making `null` return `false` fires 3, removing the visible marker fires 3,
+dropping the regime comparison fires 2.
+
 ## v11.82 — the piles hook was still IF-shaped, one build after I wrote a guard for exactly this
 
 **THE FACE SAID `7710 KING`. THE HOOK SAID `ACC`.** The piles hook reported `gross` / `net` / `netFrac` /

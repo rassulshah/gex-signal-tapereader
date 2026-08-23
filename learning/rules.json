@@ -2104,6 +2104,37 @@
         "sessions": 0,
         "held": false
       }
+    },
+    "spx.nodes": {
+      "id": "spx.nodes",
+      "condition": "the next Skylit SPXW node in the direction of travel: strike, %King, role, distance and tap count, recorded per bar",
+      "rate": null,
+      "n": 0,
+      "mfe": null,
+      "mae": null,
+      "regime": {
+        "trend": {
+          "rate": null,
+          "n": 0
+        },
+        "chop": {
+          "rate": null,
+          "n": 0
+        },
+        "opex": {
+          "rate": null,
+          "n": 0
+        }
+      },
+      "mechanism": "The rail names a level and says what hedging does there. Whether that level actually holds, stalls or accelerates has never been measured on the SPX book - the tap-rate numbers in this project came from Skylit's SPY backtest. Recording the level itself, not a count of levels, is what makes the question answerable.",
+      "tier": "hand",
+      "promoted": false,
+      "promotedOn": null,
+      "lastVerified": null,
+      "walkForward": {
+        "sessions": 0,
+        "held": false
+      }
     }
   },
   "proposals": [],
