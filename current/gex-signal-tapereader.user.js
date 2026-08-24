@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    12.3
+// @version    12.4
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='12.3';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='12.4';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4783,59 +4783,77 @@ function makeDraggable(dragEls){
 // Bind move/up to whichever document owns the panel AT THE TIME OF THE PRESS, and unbind on release.
 // ⚠ WIDTH IS VERTICAL-ONLY IN PiP. There the panel's width IS the window's width (pinned 100% by
 // pipCopyStyles), so a narrower panel would just leave a dead strip beside itself.
+// ⚠⚠ (v12.4) "I CAN DRAG IT SMALLER BUT NOT BIGGER" — AND THAT ASYMMETRY IS THE WHOLE DIAGNOSIS.
+// The grip is pinned `position:fixed; bottom:22px` in the pop-out, so it sits just above the window's
+// bottom edge. Drag UP and the pointer stays inside the window: mousemove keeps firing, the window
+// shrinks, everything works. Drag DOWN and the pointer crosses the window edge within a few pixels —
+// and a plain `mousemove` listener on the document STOPS RECEIVING EVENTS the moment the pointer
+// leaves that window. The drag dies instantly, so the window can never grow.
+// ⚠ Measured first: the clamp was NOT the cause. Live, the window had 127px of headroom to
+// screen.availHeight and pipResize's own formula computed a larger target — growth was permitted and
+// simply never got a second event to act on.
+// THE FIX IS POINTER CAPTURE. `setPointerCapture` routes every subsequent pointer event to the grip
+// no matter where the pointer goes, including outside the window entirely. Mouse events cannot do
+// this, which is why three previous attempts at this bug all missed it.
 function makeResizable(grip){
-  var rz=false, sx=0, sy=0, ow=0, oh=0, doc=null, inPip=false, pendingH=null;
-  // ⚠⚠ (v12.3) IN THE POP-OUT THE GRIP RESIZES THE WINDOW, NOT THE PANEL.
-  // Since v12.2 the popped-out panel is `height:100% !important` — it fills its window and scrolls
-  // internally, which is what finally made it contain its content (panel box 524 vs content 1068).
-  // But that also means setting PANEL.style.height out there does NOTHING: !important beats an inline
-  // style, so the grip moved and the panel did not. The thing with slack in a pop-out is the WINDOW.
-  // ⚠ MEASURED, not assumed. `resizeTo()` on a Document PiP window throws
-  //     "resizeTo() requires user activation in document picture-in-picture"
-  // from an injected script — but a grip DRAG is a user gesture, so from inside these handlers it is
-  // permitted. That is exactly why the grip is the right home for it.
-  // ⚠ Transient activation can lapse mid-drag, so a throw is not a failure: remember the target and
-  // apply it once on mouseup, which is part of the same gesture.
+  var rz=false, sx=0, sy=0, ow=0, oh=0, doc=null, inPip=false, pendingH=null, capId=null;
   function pipResize(target){
     try{
       var win=doc&&doc.defaultView; if(!win) return false;
       var avail=(win.screen&&win.screen.availHeight)||1400;
       var chromeH=Math.max(0, win.outerHeight-win.innerHeight);   // title bar and borders
-      var outer=Math.max(200, Math.min(avail, target+chromeH));
+      var top=(typeof win.screenY==='number')?win.screenY:0;
+      var availTop=(win.screen&&win.screen.availTop)||0;
+      // never taller than the room actually left on screen BELOW the window's own top edge
+      var maxOuter=Math.max(200, availTop+avail-top);
+      var outer=Math.max(200, Math.min(maxOuter, target+chromeH));
       win.resizeTo(win.outerWidth, outer);
       pendingH=null; return true;
     }catch(e){ pendingH=target; return false; }
   }
-  function onMove(e){
-    if(!rz) return;
-    var nh=oh+(e.clientY-sy);
+  function apply(clientY, clientX){
+    var nh=oh+(clientY-sy);
     if(nh<160) nh=160; if(nh>4000) nh=4000;
     if(inPip){ pipResize(nh); return; }          // the WINDOW is what grows out here
-    var nw=ow+(e.clientX-sx);
+    var nw=ow+(clientX-sx);
     if(nw<240) nw=240; if(nw>560) nw=560;
     if(nh>2000) nh=2000;                          // nothing scrolls behind the in-page panel
     PANEL.style.width=nw+'px';
     PANEL.style.height=nh+'px';
     try{ render(); }catch(e2){}
   }
-  function onUp(){
+  function onMove(e){ if(rz) apply(e.clientY, e.clientX); }
+  function onUp(e){
     if(!rz) return; rz=false;
-    // a resize refused mid-drag for lack of activation lands here — mouseup is the same gesture
-    if(inPip && pendingH!=null) pipResize(pendingH);
-    if(doc){ doc.removeEventListener('mousemove', onMove); doc.removeEventListener('mouseup', onUp); doc=null; }
-    // ⚠ a PiP size belongs to that WINDOW and must never overwrite the in-page one
-    if(inPip) return;
+    if(inPip && pendingH!=null) pipResize(pendingH);   // a resize refused for lapsed activation
+    try{ if(capId!=null && grip.releasePointerCapture) grip.releasePointerCapture(capId); }catch(e1){}
+    capId=null;
+    if(doc){
+      doc.removeEventListener('pointermove', onMove); doc.removeEventListener('pointerup', onUp);
+      doc.removeEventListener('mousemove', onMove);   doc.removeEventListener('mouseup', onUp);
+      doc=null;
+    }
+    if(inPip) return;   // ⚠ a pop-out size belongs to that WINDOW, never to the saved in-page one
     try{ localStorage.setItem(SIZE_KEY, JSON.stringify({w:PANEL.style.width, h:PANEL.style.height})); }catch(e){}
   }
-  grip.addEventListener('mousedown', function(e){
+  function begin(e, pointerId){
     rz=true; sx=e.clientX; sy=e.clientY; pendingH=null;
     var r=PANEL.getBoundingClientRect(); ow=r.width; oh=r.height;
     doc=(PANEL.ownerDocument||document);
     inPip=(doc!==document);
-    doc.addEventListener('mousemove', onMove);
-    doc.addEventListener('mouseup', onUp);
+    if(pointerId!=null && grip.setPointerCapture){
+      try{ grip.setPointerCapture(pointerId); capId=pointerId; }catch(e1){ capId=null; }
+      doc.addEventListener('pointermove', onMove); doc.addEventListener('pointerup', onUp);
+    } else {
+      doc.addEventListener('mousemove', onMove); doc.addEventListener('mouseup', onUp);
+    }
     e.preventDefault(); e.stopPropagation();
-  });
+  }
+  if(typeof window.PointerEvent==='function'){
+    grip.addEventListener('pointerdown', function(e){ if(e.button===0) begin(e, e.pointerId); });
+  } else {
+    grip.addEventListener('mousedown', function(e){ if(e.button===0) begin(e, null); });
+  }
 }
 function restorePos(){
   try{ var p=JSON.parse(localStorage.getItem(POS_KEY)||'null');

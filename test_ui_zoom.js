@@ -82,8 +82,8 @@ ok(/width:22px !important;height:22px !important/.test(src),
 // available height is the real ceiling out there, and it is applied inside pipResize().
 ok(/if\(nh>4000\) nh=4000;/.test(src),
    'the drag distance is bounded sanely for both modes');
-ok(/Math\.min\(avail,/.test(src),
-   'and the pop-out ceiling is the SCREEN, applied where the window is actually resized');
+ok(/Math\.min\(maxOuter, target\+chromeH\)/.test(src),
+   'the pop-out ceiling is the room actually left on screen below the window top');
 ok(/PANEL\.ownerDocument\|\|document/.test(src),
    'and resize binds to whichever document owns the panel, so the drag works in the pop-out too');
 ok(/inPip=\(doc!==document\)/.test(src),
@@ -186,14 +186,37 @@ ok(/if\(inPip\) return;/.test(src),
      'and never sets PANEL.style.height there, which height:100% !important would ignore anyway');
   ok(/win\.outerHeight-win\.innerHeight/.test(mr),
      'the window chrome is accounted for, so the CONTENT reaches the dragged height');
-  ok(/Math\.min\(avail,/.test(mr),
-     'and it never grows past the screen');
+  ok(/maxOuter=Math\.max\(200, availTop\+avail-top\)/.test(mr),
+     'and it never grows past the room left on screen below the window top');
   ok(/pendingH=target; return false;/.test(mr) && /if\(inPip && pendingH!=null\) pipResize\(pendingH\);/.test(mr),
      'a resize refused for lapsed activation is retried on mouseup — part of the same gesture');
-  ok(/if\(inPip\) return;\n\s*try\{ localStorage\.setItem\(SIZE_KEY/.test(mr),
+  ok(/if\(inPip\) return;   \/\/ \u26a0 a pop-out size belongs to that WINDOW/.test(mr),
      'and a pop-out size never overwrites the saved in-page one');
   ok(/if\(nh>2000\) nh=2000;/.test(mr),
      'the in-page panel still clamps, because nothing scrolls behind it');
+}
+
+
+// ---------- (v12.4) POINTER CAPTURE — why the pop-out could shrink but never grow ----------
+// The user could drag the grip UP (smaller) but not DOWN (bigger). That asymmetry IS the diagnosis:
+// the grip is pinned just above the pop-out window's bottom edge, so dragging DOWN puts the pointer
+// outside that window within a few pixels — and a plain `mousemove` listener stops receiving events
+// the moment the pointer leaves the window. Dragging UP keeps the pointer inside, so it worked.
+// ⚠ Measured first, and the obvious suspect was WRONG: the window had 127px of headroom to
+// screen.availHeight and pipResize computed a larger target. Growth was permitted; it simply never
+// got a second event to act on. Three earlier attempts at this bug all missed it for that reason.
+{
+  const mr=ex('makeResizable');
+  ok(/grip\.setPointerCapture\(pointerId\)/.test(mr),
+     'the grip CAPTURES the pointer, so events keep arriving once it leaves the window');
+  ok(/addEventListener\('pointermove', onMove\)/.test(mr) && /addEventListener\('pointerup', onUp\)/.test(mr),
+     'and the drag runs on pointer events, which mouse events cannot do across a window boundary');
+  ok(/releasePointerCapture\(capId\)/.test(mr),
+     'capture is released on mouseup, never leaked');
+  ok(/typeof window\.PointerEvent==='function'/.test(mr) && /addEventListener\('mousedown', function\(e\)\{ if\(e\.button===0\) begin\(e, null\); \}\)/.test(mr),
+     'with a mouse-event fallback where PointerEvent is unavailable');
+  ok(/'pointerdown', function\(e\)\{ if\(e\.button===0\) begin\(e, e\.pointerId\); \}/.test(mr),
+     'left button only — a right-click on the grip must not start a resize');
 }
 
 console.log('\n'+pass+' pass / '+fail+' fail');
