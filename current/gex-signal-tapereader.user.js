@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    12.5
+// @version    12.6
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='12.5';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='12.6';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4461,7 +4461,9 @@ function zoomApply(){
   try{
     if(!PANEL) return;
     PANEL.style.zoom = (UIZOOM===1) ? '' : String(UIZOOM);
-    var lbl=document.getElementById('gpts-zoomlbl') || (pipOpen() && PIPWIN.document.getElementById('gpts-zoomlbl'));
+    var lbl=document.getElementById('gpts-zoomlbl')
+      || (pipOpen() && PIPWIN.document.getElementById('gpts-zoomlbl'))
+      || (winOpen() && WINWIN.document.getElementById('gpts-zoomlbl'));
     if(lbl) lbl.textContent=Math.round(UIZOOM*100)+'%';
   }catch(e){}
 }
@@ -4483,8 +4485,80 @@ function zoomReset(){ UIZOOM=1; zoomSave(); zoomApply(); }
 // visible, and every visibility check goes through it.
 var PIPWIN=null, PIPHOST=null;
 function pipOpen(){ return !!(PIPWIN && !PIPWIN.closed); }
+
+// ---- (v12.6) OPEN IN A NORMAL WINDOW — because Chrome will NOT let a PiP window grow taller ----
+// Measured live 2026-08-24 on the user's machine: `resizeTo()` on a Document PiP window needs user
+// activation, CONSUMES it (one gesture buys exactly one resize), and any height beyond the browser's
+// own cap is silently REVERTED. Five identical trials: `asked=713 -> settled=693 (reverted)`. Width
+// resized freely the whole time; height never moved. The pop-out opens AT the cap, so there is no
+// headroom for any handle to use.
+// ⚠ v11.93/95/96/97, v12.3 and v12.4 all built handles for an operation the platform forbids.
+// A plain popup window has no such cap: any width, any height, any monitor. What it does NOT have is
+// always-on-top, which is the only reason PiP exists here — so BOTH are offered and the user picks.
+var WINWIN=null, WINHOST=null;
+var WINBOX_KEY='gpts_winbox_v1';
+function winOpen(){ return !!(WINWIN && !WINWIN.closed); }
+function winBoxLoad(){
+  var av=(screen&&screen.availHeight)||900, aw=(screen&&screen.availWidth)||1440;
+  var d={w:520, h:Math.max(600, Math.min(1100, av-60)), x:Math.max(0,Math.round(aw*0.55)), y:40};
+  try{
+    var b=JSON.parse(localStorage.getItem(WINBOX_KEY)||'null');
+    if(b && b.w>200 && b.h>200) return {w:b.w, h:b.h, x:(b.x|0), y:(b.y|0)};
+  }catch(e){}
+  return d;
+}
+function winBoxSave(){
+  try{
+    if(!winOpen()) return;
+    var w=WINWIN;
+    localStorage.setItem(WINBOX_KEY, JSON.stringify({
+      w:Math.max(240, w.outerWidth||520), h:Math.max(240, w.outerHeight||700),
+      x:(typeof w.screenX==='number')?w.screenX:0, y:(typeof w.screenY==='number')?w.screenY:0 }));
+  }catch(e){}
+}
+function winToggle(){
+  try{
+    if(winOpen()){ try{ WINWIN.close(); }catch(e){} return; }
+    // ⚠ ONE PANEL, ONE HOME. PANEL is a single DOM node; it cannot be in two windows at once.
+    if(pipOpen()){ try{ PIPWIN.close(); }catch(e){} }
+    var box=winBoxLoad();
+    var w=window.open('', 'gptsPanelWin',
+      'popup=yes,width='+box.w+',height='+box.h+',left='+box.x+',top='+box.y);
+    if(!w){ alert('The panel window was blocked.\n\nAllow pop-ups for app.skylit.ai and try again.'); return; }
+    WINWIN=w;
+    var d=w.document;
+    try{ d.title='Tapereader'; }catch(eT){}
+    try{ if(d.body) d.body.innerHTML=''; }catch(eB){}
+    pipCopyStyles(d);
+    WINHOST={ parent:PANEL.parentNode, next:PANEL.nextSibling,
+              h:PANEL.style.height, w:PANEL.style.width };
+    d.body.appendChild(PANEL);
+    // the in-page inline size means nothing in a window of its own
+    try{ PANEL.style.height=''; PANEL.style.width=''; }catch(eSz){}
+    w.addEventListener('pagehide', winRestore);
+    w.addEventListener('beforeunload', winBoxSave);
+    w.addEventListener('resize', winBoxSave);
+    try{ zoomApply(); }catch(eZ){}
+    try{ render(); }catch(e2){}
+  }catch(e){}
+}
+function winRestore(){
+  try{
+    if(PANEL && WINHOST && WINHOST.parent){
+      if(WINHOST.next && WINHOST.next.parentNode===WINHOST.parent) WINHOST.parent.insertBefore(PANEL, WINHOST.next);
+      else WINHOST.parent.appendChild(PANEL);
+      PANEL.style.position='fixed';
+      try{ if(WINHOST.h) PANEL.style.height=WINHOST.h; if(WINHOST.w) PANEL.style.width=WINHOST.w; }catch(eR){}
+      try{ restorePos(); restoreSize(); zoomApply(); }catch(e1){}
+    }
+  }catch(e){}
+  WINWIN=null; WINHOST=null;
+  try{ render(); }catch(e2){}
+}
 function panelVisible(){
-  try{ if(pipOpen()) return true; }catch(e){}
+  // ⚠ (v12.6) THE WINDOW COUNTS TOO. Our own code returns early when Atlas is hidden, so a panel
+  // living in a pop-out would keep PAINTING while the ladder silently stopped refreshing behind it.
+  try{ if(pipOpen() || winOpen()) return true; }catch(e){}
   try{ return document.visibilityState==='visible'; }catch(e2){ return true; }
 }
 function pipSupported(){
@@ -4551,16 +4625,20 @@ function pipCopyStyles(doc){
       // simply never reached it.
       // ⚠ Inset from BOTH edges, and make it bigger. A handle you cannot hit is the same as no handle,
       // and this is the third attempt at this one bug — v11.93 unhid it, v11.95 pinned it here.
-      '#gpts-grip{display:block !important;cursor:ns-resize !important;position:fixed !important;'+
-      'right:6px !important;bottom:22px !important;width:22px !important;height:22px !important;'+
-      'border-radius:4px !important;background:rgba(139,152,169,.22) !important;'+
-      'box-shadow:0 0 0 1px rgba(139,152,169,.35) !important;z-index:20 !important}';
+      // ⚠⚠ (v12.6) THE GRIP IS GONE FROM EVERY POP-OUT, and this is the honest end of a long chase.
+      // In a PiP window Chrome reverts every height change, so the handle CANNOT work - five trials,
+      // `asked=713 -> settled=693 (reverted)`. In a normal window the OS window edge already does the
+      // job, so a handle would be redundant. Either way the panel fills its window (v12.5) and scrolls
+      // inside, which is what the grip was standing in for. A control that cannot act is worse than no
+      // control: it invites the drag that fails. The grip stays IN-PAGE, where it works.
+      '#gpts-grip{display:none !important}';
     doc.head.appendChild(base);
   }catch(e){}
 }
 function pipToggle(){
   try{
     if(pipOpen()){ try{ PIPWIN.close(); }catch(e){} return; }
+    if(winOpen()){ try{ WINWIN.close(); }catch(e){} }   // one panel, one home
     if(!pipSupported()){
       alert('This Chrome does not expose Document Picture-in-Picture.\n\nUse Chrome 116+ , or drag the tab out into its own window.');
       return;
@@ -4681,6 +4759,14 @@ function buildPanel(){
   pip.addEventListener('mousedown', function(e){ e.stopPropagation(); });
   pip.addEventListener('click', function(e){ e.stopPropagation(); pipToggle(); });
   right.appendChild(pip);
+  var win=document.createElement('span');
+  win.id='gpts-win';
+  win.innerHTML='&#10697;';
+  win.title='Open the panel in a normal window you can size freely \u2014 any width AND height, on any monitor. Not always-on-top; use \u2197 for that. Chrome caps the height of the \u2197 pop-out and will not let it grow.';
+  css(win,{cursor:'pointer', color:PAL.sub, fontSize:'13px', lineHeight:'1', padding:'0 2px'});
+  win.addEventListener('mousedown', function(e){ e.stopPropagation(); });
+  win.addEventListener('click', function(e){ e.stopPropagation(); winToggle(); });
+  right.appendChild(win);
   var gear=document.createElement('span');
   gear.id='gpts-gear';
   gear.innerHTML='&#9881;';
@@ -4753,7 +4839,7 @@ function isInteractiveTarget(t){
   while(t && t!==PANEL){
     var tag=(t.tagName||'').toLowerCase();
     if(tag==='input'||tag==='select'||tag==='textarea'||tag==='button'||tag==='a') return true;
-    if(t.id==='gpts-gear'||t.id==='gpts-clear'||t.id==='gpts-cfg'||t.id==='gpts-grip') return true;
+    if(t.id==='gpts-gear'||t.id==='gpts-clear'||t.id==='gpts-cfg'||t.id==='gpts-grip'||t.id==='gpts-win') return true;
     if(t.classList && (t.classList.contains('gpts-clr-sym'))) return true;
     if(t.classList && (t.classList.contains('gpts-act') || t.classList.contains('gpts-brief'))) return true;   // (v10.49 H) one-tap controls, never a drag
     t=t.parentNode;
@@ -4810,28 +4896,19 @@ function makeDraggable(dragEls){
 // no matter where the pointer goes, including outside the window entirely. Mouse events cannot do
 // this, which is why three previous attempts at this bug all missed it.
 function makeResizable(grip){
-  var rz=false, sx=0, sy=0, ow=0, oh=0, doc=null, inPip=false, pendingH=null, capId=null;
-  function pipResize(target){
-    try{
-      var win=doc&&doc.defaultView; if(!win) return false;
-      var avail=(win.screen&&win.screen.availHeight)||1400;
-      var chromeH=Math.max(0, win.outerHeight-win.innerHeight);   // title bar and borders
-      var top=(typeof win.screenY==='number')?win.screenY:0;
-      var availTop=(win.screen&&win.screen.availTop)||0;
-      // never taller than the room actually left on screen BELOW the window's own top edge
-      var maxOuter=Math.max(200, availTop+avail-top);
-      var outer=Math.max(200, Math.min(maxOuter, target+chromeH));
-      win.resizeTo(win.outerWidth, outer);
-      pendingH=null; return true;
-    }catch(e){ pendingH=target; return false; }
-  }
+  // ⚠⚠ (v12.6) IN-PAGE ONLY, and that is a CONCLUSION, not a limitation I settled for.
+  // v11.93 -> v12.4 kept rebuilding this handler so it could resize a POP-OUT window. It cannot.
+  // Measured on the user's machine: `resizeTo()` on a Document PiP window requires user activation,
+  // CONSUMES it (so one gesture = one resize), and any height past Chrome's cap is reverted anyway
+  // - five trials, `asked=713 -> settled=693 (reverted)`, while width moved freely.
+  // The grip is now `display:none` in every pop-out, so this only ever runs in the Atlas page.
+  // A pop-out is resized by its own window edge, and the panel fills it (v12.5).
+  var rz=false, sx=0, sy=0, ow=0, oh=0, doc=null, capId=null;
   function apply(clientY, clientX){
     var nh=oh+(clientY-sy);
-    if(nh<160) nh=160; if(nh>4000) nh=4000;
-    if(inPip){ pipResize(nh); return; }          // the WINDOW is what grows out here
+    if(nh<160) nh=160; if(nh>2000) nh=2000;      // nothing scrolls behind the in-page panel
     var nw=ow+(clientX-sx);
     if(nw<240) nw=240; if(nw>560) nw=560;
-    if(nh>2000) nh=2000;                          // nothing scrolls behind the in-page panel
     PANEL.style.width=nw+'px';
     PANEL.style.height=nh+'px';
     try{ render(); }catch(e2){}
@@ -4839,7 +4916,8 @@ function makeResizable(grip){
   function onMove(e){ if(rz) apply(e.clientY, e.clientX); }
   function onUp(e){
     if(!rz) return; rz=false;
-    if(inPip && pendingH!=null) pipResize(pendingH);   // a resize refused for lapsed activation
+    // ⚠ (v12.4) pointer capture is kept: a drag that leaves the browser window keeps delivering
+    // events to the grip. Plain `mousemove` stops the moment the pointer crosses the window edge.
     try{ if(capId!=null && grip.releasePointerCapture) grip.releasePointerCapture(capId); }catch(e1){}
     capId=null;
     if(doc){
@@ -4847,14 +4925,14 @@ function makeResizable(grip){
       doc.removeEventListener('mousemove', onMove);   doc.removeEventListener('mouseup', onUp);
       doc=null;
     }
-    if(inPip) return;   // ⚠ a pop-out size belongs to that WINDOW, never to the saved in-page one
     try{ localStorage.setItem(SIZE_KEY, JSON.stringify({w:PANEL.style.width, h:PANEL.style.height})); }catch(e){}
   }
   function begin(e, pointerId){
-    rz=true; sx=e.clientX; sy=e.clientY; pendingH=null;
+    // ⚠ the panel is somewhere else (popped out): the grip is hidden there and owns nothing.
+    if((PANEL.ownerDocument||document)!==document) return;
+    rz=true; sx=e.clientX; sy=e.clientY;
     var r=PANEL.getBoundingClientRect(); ow=r.width; oh=r.height;
-    doc=(PANEL.ownerDocument||document);
-    inPip=(doc!==document);
+    doc=document;
     if(pointerId!=null && grip.setPointerCapture){
       try{ grip.setPointerCapture(pointerId); capId=pointerId; }catch(e1){ capId=null; }
       doc.addEventListener('pointermove', onMove); doc.addEventListener('pointerup', onUp);

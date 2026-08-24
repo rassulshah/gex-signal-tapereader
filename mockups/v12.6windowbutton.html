@@ -1,0 +1,77 @@
+<!doctype html><html><head><meta charset="utf-8"><title>v12.6 mockup</title>
+<style>
+ body{background:#0b0e14;color:#e6edf3;font:13px/1.5 Inter,Arial,sans-serif;margin:0;padding:22px}
+ h2{font-size:12px;letter-spacing:.6px;text-transform:uppercase;color:#8b98a9;margin:26px 0 8px;font-weight:800}
+ h2:first-child{margin-top:0}
+ .panel{width:392px;background:#0f131b;border:1px solid #232a36;border-radius:8px;overflow:hidden}
+ .hdr{display:flex;align-items:center;justify-content:space-between;padding:7px 9px;background:#121722;border-bottom:1px solid #232a36}
+ .brand{font-weight:800;font-size:12.5px}.brand i{font-style:normal;color:#8b98a9;font-size:8px;font-weight:600}
+ .right{display:flex;align-items:center;gap:2px}
+ .c{color:#8b98a9;padding:0 3px;cursor:pointer;line-height:1}
+ .z{font-size:13px;font-weight:800}.lbl{font-size:8.5px;font-weight:700;min-width:26px;text-align:center}
+ .g{font-size:14px}.gear{font-size:15px}
+ .clear{color:#e3c341;font-weight:600;font-size:10px;padding:1px 7px;border:1px solid #232a36;border-radius:20px;margin-left:3px}
+ .new{position:relative}
+ .new .c{color:#5ec2a8;text-shadow:0 0 8px rgba(94,194,168,.6)}
+ .ring{position:absolute;inset:-4px -2px;border:1px dashed #5ec2a8;border-radius:5px;pointer-events:none}
+ .note{color:#8b98a9;font-size:11.5px;margin:8px 0 0;max-width:640px}
+ table{border-collapse:collapse;margin-top:10px;font-size:11.5px}
+ td,th{border:1px solid #232a36;padding:5px 10px;text-align:left}
+ th{color:#8b98a9;font-size:10px;text-transform:uppercase;letter-spacing:.4px}
+ .y{color:#5ec2a8;font-weight:700}.n{color:#e0645f;font-weight:700}
+ code{background:#161c27;padding:1px 5px;border-radius:3px;font-size:11px;color:#c9d4e2}
+ .win{margin-top:10px;display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+ .frame{border:1px solid #232a36;border-radius:6px;padding:8px;background:#0f131b}
+ .cap{color:#8b98a9;font-size:10px;margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px;font-weight:800}
+ .box{background:#121722;border:1px solid #2a3342;border-radius:4px}
+ .a{width:150px;height:126px}.b{width:250px;height:186px;position:relative}
+ .b:after{content:'↘';position:absolute;right:3px;bottom:1px;color:#5ec2a8;font-size:14px}
+ .capped{position:relative}.capped:after{content:'✕ height locked';position:absolute;right:4px;bottom:3px;color:#e0645f;font-size:9px;font-weight:700}
+</style></head><body>
+
+<h2>Header — one new control, placed right of ↗</h2>
+<div class="panel"><div class="hdr">
+  <div class="brand">Tapereader <i>˙idle</i></div>
+  <div class="right">
+    <span class="c">⠿</span>
+    <span class="c z">−</span><span class="c lbl">100%</span><span class="c z">+</span>
+    <span class="c g">↗</span>
+    <span class="new"><span class="c g">⧉</span><span class="ring"></span></span>
+    <span class="c gear">⚙</span>
+    <span class="clear">Clear</span>
+  </div>
+</div></div>
+<p class="note"><b>⧉</b> = open in a normal window. <b>↗</b> keeps its current job (always-on-top PiP).
+Hovering ⧉ reads: <i>“Open the panel in a normal window you can size freely — any width AND height, on any
+monitor. Not always-on-top; use ↗ for that.”</i></p>
+
+<h2>What each one gives you</h2>
+<table>
+<tr><th></th><th>Width</th><th>Height</th><th>Always-on-top</th></tr>
+<tr><td>↗ &nbsp;PiP (today)</td><td class="y">free</td><td class="n">locked 598px</td><td class="y">yes</td></tr>
+<tr><td>⧉ &nbsp;Window (new)</td><td class="y">free</td><td class="y">free</td><td class="n">no</td></tr>
+</table>
+
+<div class="win">
+  <div class="frame"><div class="cap">↗ PiP — capped</div><div class="box a capped"></div></div>
+  <div class="frame"><div class="cap">⧉ Window — drag any edge</div><div class="box b"></div></div>
+</div>
+
+<h2>Behaviour</h2>
+<p class="note">
+• Only one can hold the panel at a time — opening ⧉ closes an open PiP, and vice versa. The panel is a single
+DOM node, so it lives in exactly one place.<br>
+• The window remembers its size and position in <code>localStorage</code> and reopens there.<br>
+• The grip disappears in <i>both</i> pop-outs: the panel fills its window and the OS window edge does the
+resizing. The grip stays for the in-page panel, where it works.<br>
+• Atlas must stay open either way — it is what captures the feed — but it no longer has to be the visible tab.
+<code>panelVisible()</code> gets extended to count an open ⧉ window, or the ladder would silently stop
+refreshing whenever you looked away from Atlas.
+</p>
+
+<h2>Also removed</h2>
+<p class="note">The grey pop-out grip. Chrome reverts every height change to a PiP window — measured five
+times, <code>asked=713 → settled=693 (reverted)</code> — so it is a handle that cannot work. Leaving it there
+is a button that lies.</p>
+
+</body></html>

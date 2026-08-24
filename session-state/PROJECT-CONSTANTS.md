@@ -231,3 +231,27 @@ height, something above it must set a height too.
 COROLLARY: an asymmetry IS a clue, but read it correctly. "Shrinks but won't grow" pointed me at the
 pointer leaving the window (v12.4). The real cause was a starting value on the wrong side of the
 clamp. Both explain the asymmetry; only measurement distinguishes them.
+
+### HARD PLATFORM LIMIT: a Document PiP window has a MAXIMUM HEIGHT that cannot be exceeded
+
+Measured live 2026-08-24 on the user's machine (secondary monitor, `screen.availHeight` 820,
+`screen.height` 858, `availWidth` 3049):
+
+- `resizeTo()` on a Document PiP window throws `NotAllowedError: requires user activation`.
+- User activation is CONSUMED by the call, so ONE gesture buys exactly ONE resize.
+  Logged: `DOWN act=true` -> `move1 res=ok` -> `move2 THREW NotAllowedError`.
+- Even a resize that returns `ok` is REVERTED by the browser if it exceeds the cap.
+  `resizeTo(w, 800)` reported `immediate=800`, then Chrome snapped it back to 693 within 600ms.
+- FIVE consecutive `+20px` attempts, each with fresh activation, ALL reverted:
+  `was=693 asked=713 res=ok settled=693 (reverted)` x5.
+- WIDTH is freely resizable (`outerW` moved 321 -> 341 -> 353 during testing). HEIGHT is not.
+
+The ceiling on this machine is **693 outer / 598 inner** against an 820px work area. The pop-out
+opens AT the cap, so there is no headroom to grow into, by grip or by window edge.
+
+⚠ EVERY VERSION FROM v11.93 TO v12.5 WAS TRYING TO BUILD A HANDLE THE BROWSER WOULD NEVER HONOUR.
+v12.5's `height:100%` fix is real and worth keeping — the panel now genuinely fills its window and
+scrolls internally instead of overflowing. But vertical GROWTH of a PiP window is not available.
+
+RULE: before building a control for a platform API, verify the platform PERMITS the operation —
+one call and one measurement. Nine versions of handler work went into a capability that does not exist.

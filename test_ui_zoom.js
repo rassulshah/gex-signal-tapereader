@@ -6,6 +6,7 @@ const fs=require('fs'); const src=fs.readFileSync('./v10.js','utf8');
 let pass=0, fail=0;
 const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+JSON.stringify(g):''));} };
 const eq=(a,b,m)=>ok(JSON.stringify(a)===JSON.stringify(b),m,{got:a,want:b});
+function noc(s){ return String(s).replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,''); }
 function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.exec(src);let i=src.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}return src.slice(m.index,e+1);}
 
 let STORE={};
@@ -57,22 +58,25 @@ eq(zoomLoad(),1,'no stored value means 100%');
 // there: mousemove/mouseup were bound to the ATLAS document while the panel lives in the PiP one, so
 // the press armed and nothing ever moved. Unhiding alone would have shipped a handle that visibly
 // does nothing. Both halves are asserted.
-ok(/#gpts-grip\{display:block !important;cursor:ns-resize !important/.test(src),
-   'the pop-out shows the grip, as a VERTICAL resizer');
+// ⚠ INVERTED at v12.6. The pop-out grip is GONE. Chrome reverts every height change to a PiP window
+// (five trials, asked=713 -> settled=693), and a normal window is resized by its own edge. A handle
+// that cannot act is worse than none: it invites the drag that fails.
+ok(/#gpts-grip\{display:none !important\}/.test(src),
+   'the pop-out HIDES the grip, because no handle can resize a PiP window');
 // (v11.95) and it is pinned to the WINDOW. Measured live: panel 581px in a 598px PiP window — the grip
 // sits at the panel's bottom-right, so as soon as the panel grew past the window the HANDLE left the
 // viewport and the drag simply stopped with no message. Unhiding it was not enough; it has to stay
 // reachable, and the ceiling has to be the window rather than an arbitrary 2000.
-ok(/position:fixed !important;'\+\s*'right:6px !important;bottom:22px !important/.test(src),
-   'the pop-out grip is pinned to the window AND INSET from the corner');
+ok(!/right:6px !important;bottom:22px !important/.test(noc(src)),
+   'and nothing pins a pop-out grip any more \u2014 inset or otherwise (INVERTED v12.6)');
 // ⚠ (v11.97) THE INSET IS THE WHOLE FIX. At right:0/bottom:0 the 16px grip sat exactly on the OS
 // window-resize corner, so the operating system took the press and the page never saw a mousedown —
 // while a synthetic drag dispatched into the document resized the panel perfectly. A handle the
 // pointer cannot reach is the same as no handle.
 ok(!/right:0 !important;bottom:0 !important/.test(src),
    'and is NOT flush to the corner, where the OS resize handle lives');
-ok(/width:22px !important;height:22px !important/.test(src),
-   'and is big enough to hit');
+ok(!/#gpts-grip\{[^}]*width:22px !important/.test(noc(src)),
+   'and it is not sized for hitting, because it is not shown (INVERTED v12.6)');
 // (v11.96) THE CEILING IS NOT THE WINDOW. Capping the panel at the window height is exactly what
 // "I still cannot increase the height" was: the pop-out body already scrolls, so a panel TALLER than
 // its window is the normal case. v11.95 capped it at innerHeight-8 = 590 against a panel already at
@@ -80,16 +84,16 @@ ok(/width:22px !important;height:22px !important/.test(src),
 // (v12.3) SUPERSEDED. There is no pop-out PANEL ceiling any more, because the pop-out grip resizes
 // the WINDOW rather than the panel — the panel simply fills whatever window it is given. The screen's
 // available height is the real ceiling out there, and it is applied inside pipResize().
-ok(/if\(nh>4000\) nh=4000;/.test(src),
-   'the drag distance is bounded sanely for both modes');
-ok(/Math\.min\(maxOuter, target\+chromeH\)/.test(src),
-   'the pop-out ceiling is the room actually left on screen below the window top');
+ok(/if\(nh<160\) nh=160; if\(nh>2000\) nh=2000;/.test(noc(src)),
+   'the in-page drag is bounded; there is no second mode to bound (v12.6)');
+ok(!/Math\.min\(maxOuter, target\+chromeH\)/.test(noc(src)),
+   'there is no pop-out ceiling to compute, because nothing resizes a pop-out (INVERTED v12.6)');
 ok(/PANEL\.ownerDocument\|\|document/.test(src),
    'and resize binds to whichever document owns the panel, so the drag works in the pop-out too');
-ok(/inPip=\(doc!==document\)/.test(src),
-   'it knows which one it is in');
-ok(/if\(inPip\) return;/.test(src),
-   'and a pop-out height never overwrites the in-page size — that window has its own height');
+ok(!/inPip=\(doc!==document\)/.test(noc(src)),
+   'the handler no longer branches on pop-out vs page \u2014 it REFUSES pop-outs (INVERTED v12.6)');
+ok(/\(PANEL\.ownerDocument\|\|document\)!==document\) return/.test(noc(src)),
+   'a grip press while the panel is popped out is refused outright, so it can overwrite nothing');
 // ⚠ STRIP COMMENTS FIRST. The comment explaining the removal CONTAINS `min-height:100vh`, so a raw
 // grep finds the very string it is checking is gone — the same trap that has now bitten this project
 // five times. Look at the code, not at the prose about the code.
@@ -180,31 +184,36 @@ ok(/if\(inPip\) return;/.test(src),
 // is a user gesture. That measurement is the whole reason this approach is viable.
 {
   const mr=ex('makeResizable');
-  ok(/win\.resizeTo\(win\.outerWidth, outer\)/.test(mr),
-     'the pop-out grip resizes the WINDOW');
-  ok(/if\(inPip\)\{ pipResize\(nh\); return; \}/.test(mr),
-     'and never sets PANEL.style.height there, which height:100% !important would ignore anyway');
-  ok(/win\.outerHeight-win\.innerHeight/.test(mr),
-     'the window chrome is accounted for, so the CONTENT reaches the dragged height');
-  ok(/maxOuter=Math\.max\(200, availTop\+avail-top\)/.test(mr),
-     'and it never grows past the room left on screen below the window top');
-  ok(/pendingH=target; return false;/.test(mr) && /if\(inPip && pendingH!=null\) pipResize\(pendingH\);/.test(mr),
-     'a resize refused for lapsed activation is retried on mouseup — part of the same gesture');
-  ok(/if\(inPip\) return;   \/\/ \u26a0 a pop-out size belongs to that WINDOW/.test(mr),
-     'and a pop-out size never overwrites the saved in-page one');
+  // ⚠⚠ THE COMMENT ABOVE THIS BLOCK WAS WRONG, AND IT SHIPPED AS IF IT WERE MEASURED.
+  // It claimed resizeTo "IS permitted inside a drag handler, because a drag is a user gesture".
+  // Only the FIRST call is: activation is CONSUMED, so every later move throws, and Chrome reverts
+  // any height past its cap regardless. What was measured was the console refusal; the drag case was
+  // ASSUMED. An assumption written in the voice of a measurement cost six versions.
+  ok(!/resizeTo/.test(noc(mr)),
+     'the grip does NOT resize a window \u2014 Chrome forbids and reverts it (INVERTED v12.6)');
+  ok(!/pipResize/.test(noc(mr)),
+     'and the pop-out resize path is gone, not merely unused (INVERTED v12.6)');
+  ok(!/win\.outerHeight-win\.innerHeight/.test(noc(mr)),
+     'no window chrome maths remains, since no window is measured (INVERTED v12.6)');
+  ok(!/maxOuter/.test(noc(mr)),
+     'and no screen ceiling is computed here any more (INVERTED v12.6)');
+  ok(!/pendingH/.test(noc(mr)),
+     'the retry-on-mouseup workaround is gone; it could never have worked (INVERTED v12.6)');
+  ok(/localStorage\.setItem\(SIZE_KEY/.test(noc(mr)) && !/inPip/.test(noc(mr)),
+     'the in-page size is saved unconditionally, there being only one mode now (v12.6)');
   ok(/if\(nh>2000\) nh=2000;/.test(mr),
      'the in-page panel still clamps, because nothing scrolls behind it');
 }
 
 
-// ---------- (v12.4) POINTER CAPTURE — why the pop-out could shrink but never grow ----------
-// The user could drag the grip UP (smaller) but not DOWN (bigger). That asymmetry IS the diagnosis:
-// the grip is pinned just above the pop-out window's bottom edge, so dragging DOWN puts the pointer
-// outside that window within a few pixels — and a plain `mousemove` listener stops receiving events
-// the moment the pointer leaves the window. Dragging UP keeps the pointer inside, so it worked.
-// ⚠ Measured first, and the obvious suspect was WRONG: the window had 127px of headroom to
-// screen.availHeight and pipResize computed a larger target. Growth was permitted; it simply never
-// got a second event to act on. Three earlier attempts at this bug all missed it for that reason.
+// ---------- (v12.4 -> v12.6) POINTER CAPTURE KEPT; THE POP-OUT RESIZE RETIRED ----------
+// v12.4 added pointer capture so a drag that leaves the browser window keeps delivering events.
+// That is real and stays: it is what makes the IN-PAGE grip survive a drag past the window edge.
+// What is RETIRED is everything that tried to resize a POP-OUT window from this handler.
+// ⚠ Measured on the user's machine: `resizeTo()` on a Document PiP window requires user activation,
+// CONSUMES it (one gesture buys exactly ONE resize), and any height beyond Chrome's cap is reverted.
+// Five trials: `asked=713 -> settled=693 (reverted)`, while width resized freely throughout.
+// These assertions are INVERTED, not deleted, so the retired behaviour can never quietly return.
 {
   const mr=ex('makeResizable');
   ok(/grip\.setPointerCapture\(pointerId\)/.test(mr),
@@ -216,9 +225,17 @@ ok(/if\(inPip\) return;/.test(src),
   ok(/typeof window\.PointerEvent==='function'/.test(mr) && /addEventListener\('mousedown', function\(e\)\{ if\(e\.button===0\) begin\(e, null\); \}\)/.test(mr),
      'with a mouse-event fallback where PointerEvent is unavailable');
   ok(/'pointerdown', function\(e\)\{ if\(e\.button===0\) begin\(e, e\.pointerId\); \}/.test(mr),
-     'left button only — a right-click on the grip must not start a resize');
+     'left button only \u2014 a right-click on the grip must not start a resize');
+  // --- INVERTED ---
+  ok(!/resizeTo/.test(noc(mr)),
+     'the grip NEVER resizes a window \u2014 Chrome forbids it and reverts it (v12.6)');
+  ok(!/pipResize/.test(noc(mr)),
+     'and the pop-out resize path is gone, not merely unused');
+  ok(/\(PANEL\.ownerDocument\|\|document\)!==document\) return/.test(mr),
+     'a grip press while the panel lives in a pop-out is refused outright');
+  ok(/asked=713 -> settled=693 \(reverted\)/.test(mr),
+     'and the measurement that retired it is recorded in the code');
 }
-
 
 // ---------- (v12.5) A PERCENTAGE HEIGHT NEEDS A PARENT WITH A HEIGHT ----------
 // The pop-out stylesheet told the panel `height:100% !important` while html/body had no height at all,
@@ -233,6 +250,33 @@ ok(/if\(inPip\) return;/.test(src),
      'and html,body are GIVEN a height, or that 100% silently computes to auto');
   ok(/window innerHeight 598, panel box 1104/.test(pcs),
      'the measurement that proved it is recorded, not just the fix');
+}
+
+
+// ---------- (v12.6) OPEN IN A NORMAL WINDOW ----------
+// A Document PiP window cannot grow taller; a plain popup can. Both are offered because only PiP is
+// always-on-top. ⚠ PANEL is ONE DOM node — it cannot live in two windows, so each closes the other.
+{
+  const wt=ex('winToggle'), pt=ex('pipToggle'), pv=ex('panelVisible');
+  ok(/window\.open\('', 'gptsPanelWin'/.test(wt), 'the window pop-out uses a real popup, which has no height cap');
+  ok(/if\(pipOpen\(\)\)\{ try\{ PIPWIN\.close\(\); \}catch\(e\)\{\} \}/.test(wt),
+     'opening the window closes an open PiP — one panel, one home');
+  ok(/if\(winOpen\(\)\)\{ try\{ WINWIN\.close\(\); \}catch\(e\)\{\} \}/.test(pt),
+     'and opening the PiP closes an open window, the same rule both ways');
+  ok(/pipOpen\(\) \|\| winOpen\(\)/.test(pv),
+     'an open window counts as VISIBLE, or the ladder stops refreshing behind a painted panel');
+  ok(/d\.body\.appendChild\(PANEL\)/.test(wt) && /pipCopyStyles\(d\)/.test(wt),
+     'the popup gets the panel and the stylesheet it needs to render');
+  ok(/'pagehide', winRestore/.test(wt), 'closing the window puts the panel back in the page');
+  ok(/localStorage\.setItem\(WINBOX_KEY/.test(ex('winBoxSave')), 'the window remembers its own size and position');
+  ok(/PANEL\.style\.height=''/.test(wt), 'and the in-page inline size is cleared, since it means nothing there');
+}
+
+// The grip must be HIDDEN in any pop-out — it cannot work in PiP and is redundant in a window.
+{
+  const pcs=ex('pipCopyStyles');
+  ok(/#gpts-grip\{display:none !important\}/.test(pcs), 'the grip is hidden in every pop-out');
+  ok(!/#gpts-grip\{display:block/.test(noc(pcs)), 'and is never re-shown there');
 }
 
 console.log('\n'+pass+' pass / '+fail+' fail');
