@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.95
+// @version    11.96
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.95';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.96';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4564,8 +4564,17 @@ function pipCopyStyles(doc){
       // get under, the panel keeps whatever height the grip sets, and the grip comes back.
       // ⚠ WIDTH STAYS PINNED TO 100%. In a PiP window the width IS the window's width; a panel
       // narrower than its own window just leaves a dead strip, so the grip is vertical-only here.
+      // ⚠⚠ (v11.96) THE HEIGHT REGRESSION I CAUSED AT v11.93.
+      // The original rule was `height:auto !important; min-height:100vh` — the panel took its CONTENT
+      // height and the window scrolled. v11.93 replaced that whole rule to un-pin it for the grip and
+      // DROPPED `height:auto`, so the inline height `restoreSize()` writes from the IN-PAGE size
+      // (580.977px) applied in the pop-out and clamped it there.
+      // Measured live 2026-08-24: window 598px, panel stuck at 581px, #gpts-body content 1021px.
+      // Nearly half the panel was cut, and dragging could only reach the 590px ceiling I had set.
+      // ⚠ NO `!important` ON HEIGHT. The stylesheet supplies the default (auto = fit the content) and an
+      // inline height from a grip drag has to be able to WIN, or the grip stops working again.
       '#gpts-panel{position:static !important;top:auto !important;left:auto !important;right:auto !important;'+
-      'width:100% !important;max-width:100% !important;min-height:120px;'+
+      'width:100% !important;max-width:100% !important;height:auto;min-height:100%;'+
       'border:0 !important;border-radius:0 !important;box-shadow:none !important;z-index:auto !important}'+
       '#gpts-body{cursor:default !important}'+
       // pinned to the WINDOW, not the panel, so it never scrolls out of reach as the panel grows
@@ -4591,8 +4600,14 @@ function pipToggle(){
       PIPWIN=w;
       pipCopyStyles(w.document);
       // remember where the panel came from so it goes back to exactly that spot
-      PIPHOST={ parent:PANEL.parentNode, next:PANEL.nextSibling };
+      PIPHOST={ parent:PANEL.parentNode, next:PANEL.nextSibling,
+                 h:PANEL.style.height, w:PANEL.style.width };   // (v11.96) remember the in-page size
       w.document.body.appendChild(PANEL);
+      // (v11.96) CLEAR THE IN-PAGE INLINE SIZE. restoreSize() writes an explicit height for the
+      // in-page panel; carried into the pop-out it overrides the stylesheet and pins the panel to the
+      // old height inside a window that has nothing to do with it. The pop-out starts at content
+      // height and the grip can then set its own.
+      try{ PANEL.style.height=''; PANEL.style.width=''; }catch(eSz){}
       w.addEventListener('pagehide', pipRestore);
       try{ zoomApply(); }catch(eZ){}
       try{ render(); }catch(e2){}
@@ -4609,6 +4624,8 @@ function pipRestore(){
       else PIPHOST.parent.appendChild(PANEL);
       // the inline geometry the panel had before it was moved is restored by restorePos/restoreSize
       PANEL.style.position='fixed';
+      // (v11.96) the in-page size the pop-out cleared
+      try{ if(PIPHOST.h) PANEL.style.height=PIPHOST.h; if(PIPHOST.w) PANEL.style.width=PIPHOST.w; }catch(eR){}
       try{ restorePos(); restoreSize(); zoomApply(); }catch(e1){}
     }
   }catch(e){}
@@ -4802,7 +4819,10 @@ function makeResizable(grip){
     // so the moment the panel grows past the window the handle itself leaves the viewport and the drag
     // cannot continue — the panel "stops" with no message. In the pop-out the ceiling should be the
     // WINDOW, and the grip has to stay on screen to reach it.
-    var ceil = inPip ? Math.max(240, (doc.defaultView ? doc.defaultView.innerHeight : 900) - 8) : 2000;
+    // (v11.96) NOT the window height. Capping the panel at the window is what "it stops me" WAS: the
+    // pop-out body already scrolls (overflow:auto), so a panel taller than its window is the normal
+    // case, not an error. The in-page panel still clamps at 2000 because nothing scrolls behind it.
+    var ceil = inPip ? 6000 : 2000;
     if(nh<160) nh=160; if(nh>ceil) nh=ceil;
     if(!inPip){
       var nw=ow+(e.clientX-sx);

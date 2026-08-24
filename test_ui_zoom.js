@@ -65,8 +65,12 @@ ok(/#gpts-grip\{display:block !important;cursor:ns-resize !important/.test(src),
 // reachable, and the ceiling has to be the window rather than an arbitrary 2000.
 ok(/position:fixed !important;'\+\s*'right:0 !important;bottom:0 !important/.test(src),
    'the pop-out grip is pinned to the window so it never scrolls out of reach');
-ok(/inPip \? Math\.max\(240, \(doc\.defaultView \? doc\.defaultView\.innerHeight : 900\) - 8\) : 2000/.test(src),
-   'and the pop-out height ceiling is the WINDOW, not the in-page 2000px clamp');
+// (v11.96) THE CEILING IS NOT THE WINDOW. Capping the panel at the window height is exactly what
+// "I still cannot increase the height" was: the pop-out body already scrolls, so a panel TALLER than
+// its window is the normal case. v11.95 capped it at innerHeight-8 = 590 against a panel already at
+// 581, which is why it moved a few pixels and stopped.
+ok(/var ceil = inPip \? 6000 : 2000;/.test(src),
+   'the pop-out ceiling is generous because the window scrolls; only the in-page panel clamps at 2000');
 ok(/PANEL\.ownerDocument\|\|document/.test(src),
    'and resize binds to whichever document owns the panel, so the drag works in the pop-out too');
 ok(/inPip=\(doc!==document\)/.test(src),
@@ -80,8 +84,18 @@ ok(/if\(inPip\) return;/.test(src),
   const code=src.replace(/\/\*[\s\S]*?\*\//g,'').split('\n').map(l=>l.replace(/^\s*\/\/.*$/,'')).join('\n');
   ok(!/min-height:100vh/.test(code),
      'the panel is no longer forced to fill the pop-out window, or the grip would have nothing to act on');
-  ok(/min-height:120px/.test(code),
-     'it has a small floor instead, so the grip can drag under the content');
+  ok(/height:auto;min-height:100%/.test(code),
+     'the pop-out panel takes its CONTENT height and fills at least the window');
+  // ⚠ THE REGRESSION THIS PINS. The original rule was `height:auto !important; min-height:100vh`.
+  // v11.93 rewrote it for the grip and dropped `height:auto`, so the inline height restoreSize()
+  // writes for the IN-PAGE panel applied in the pop-out and froze it there — measured live at 581px
+  // in a 598px window with 1021px of content.
+  ok(!/height:auto !important/.test(code),
+     'and height carries NO !important, so a grip drag can still override it');
+  ok(/PANEL\.style\.height=''; PANEL\.style\.width='';/.test(code),
+     'entering the pop-out CLEARS the in-page inline size, or the stylesheet default can never apply');
+  ok(/if\(PIPHOST\.h\) PANEL\.style\.height=PIPHOST\.h/.test(code),
+     'and restoring puts the in-page size back');
 }
 }
 // ---- zoom is re-applied across the document move ----

@@ -1,3 +1,31 @@
+## v11.96 — the pop-out height, and it was a regression I caused at v11.93
+
+Measured live rather than guessed: **PiP window 598px, panel frozen at 581px, `#gpts-body` content
+1021px.** Nearly half the panel was cut off and dragging moved it a few pixels before stopping.
+
+**Two causes, both mine.**
+
+The original pop-out rule was `height:auto !important; min-height:100vh` — the panel took its CONTENT
+height and the window scrolled. v11.93 rewrote that whole rule to un-pin the panel for the grip and
+**dropped `height:auto`**. So the inline height `restoreSize()` writes for the IN-PAGE panel (580.977px)
+applied inside the pop-out and froze it at a height that has nothing to do with that window.
+
+And v11.95's ceiling was **the window height** — `innerHeight − 8 = 590` against a panel already at 581.
+That is the "it stops me": six pixels of travel. **The pop-out body already scrolls, so a panel taller
+than its window is the normal case, not an error.** Ceiling is generous now; only the in-page panel
+clamps at 2000, because nothing scrolls behind it.
+
+Entering the pop-out now clears the in-page inline size so the stylesheet default can apply, and
+restoring puts it back. ⚠ **`height` carries NO `!important`** — the stylesheet supplies the default and
+an inline height from a grip drag has to be able to win, or the grip stops working again, which is the
+loop this has been going round.
+
+⚠ **Three attempts on one bug.** v11.93 unhid the grip; v11.95 pinned it to the window and capped the
+height at the window; only v11.96 measured the actual numbers first. The panel/window/content heights
+were available from the live PiP document the whole time.
+
+---
+
 ## v11.95 — charting SPXW blanked the panel, and the gatekeeper never knew where price was
 
 **SPXW blanked the whole dashboard, and the banner it showed was FALSE.** SPXW was absent from
