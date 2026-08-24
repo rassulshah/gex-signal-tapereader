@@ -2135,6 +2135,37 @@
     "sessions": 0,
     "held": false
    }
+  },
+  "bias.confirm": {
+   "id": "bias.confirm",
+   "tier": "hand",
+   "condition": "the \u2461 BIAS confirm tally: which supplementary reads agree with the 50-SMA that owns the direction, how many are live, and PA recorded in shadow after being removed from the vote at v11.88",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "The 50-SMA owns the call and the supplementary reads confirm it or they do not; TREND alone measured 34%, so the count is meant to separate a call worth pressing from one worth halving. That claim has never been measured because the tally was never recorded. \u26a0 The confirms are not independent of each other \u2014 SKEW, ACCUM and ROLL all read the same option book, which is why CROSS (a different instrument) was added and PA (the same price series as the SMA) was dropped.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
   }
  },
  "proposals": [],

@@ -300,3 +300,41 @@ every reply and each redesign had to be walked back. **Four revisions burned.** 
 session with "we need to stop . you are making a mess."
 
 **Would change it:** the user asking for more. Not inference that more would be better.
+
+---
+
+## D-14 · ② BIAS — PA SHADOWED, CROSS AND ROLL VOTE, AND THE TALLY IS RECORDED
+**v11.88, 2026-08-24.**
+
+**PA out.** It reads the same price series the 50-SMA reads, so in a trend it agreed close to
+mechanically — a confirm correlated with what it confirms inflates the count without adding evidence
+(Pattern 7). ⚠ **Shadowed, not deleted:** still computed (④ REACTION's PRICE row needs `paRead`), now
+recorded with `paWouldConfirm`, and `bias_pa_shadow` is the question that gives it its seat back if the
+argument was wrong. **A removal you cannot measure is a preference, not a decision.**
+
+**CROSS in.** SKEW, ACCUM and ROLL all read the SAME option book; two instruments agreeing is the only
+independent evidence available. ⚠ **It is not `trendVerdict`** — QQQ has no candles at all, so both
+sides are measured by one rule on one field (`j.levels[i].s`, ~390 points/389 min per feed) at horizons
+matched to the SMA: 150-minute average, 60-minute window, 45-of-60 dominance = TREND_DOM's 15-of-20.
+Comparing a candle trend against a snapshot trend would be the apples-to-oranges error again.
+
+**ROLL in, overriding a prior decision.** `dir.kingRoll` has said `RECORDED not voted` since v11.0
+because whether the King migrating LEADS price was an open measurement. It votes from v11.88 **at the
+user's instruction**; `kingroll_leads_dir` still settles it.
+⚠ Exposed a real bug: `kingRoll()` returns **0 for both "has not moved" and "no history"**. Fine for a
+recorder, wrong for a vote — 0 counted as live-and-neutral. `kingRollRead()` separates them.
+
+**The tally is recorded for the first time.** It never was: 224 bars, no `nConf`, no confirm directions,
+while every NON-voting candidate carried an explicit `vote` field. The v11.36 premise this section was
+rebuilt on was therefore untestable. Enrolled as `bias.confirm`.
+
+⚠ **The denominator changed (3 → 4), so pre-v11.88 sessions cannot be pooled with later ones on the
+confirm count.** Nothing was pooled before because nothing was recorded, which is why the change was
+made now rather than after the data started.
+
+⚠ **`confColour(nConf, nLive)` judges a FRACTION.** The old rule was `nConf>=3` for green — a hardcoded
+denominator inside a renderer, which would have made green unreachable the moment the list changed
+length. Extracted so it can be tested.
+
+**Would change it:** `bias_pa_shadow` showing PA carried information after all, or `bias_cross_agrees`
+showing CROSS adds nothing the symbol's own book did not already say.

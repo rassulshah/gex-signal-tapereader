@@ -1,3 +1,63 @@
+## v11.88 — ② BIAS: PA out, CROSS and ROLL in, and the tally finally recorded
+
+**PA no longer votes.** It reads where recent bars close inside their own range — the *same price
+series* the 50-SMA above it reads. In an uptrend bars close near their highs more or less mechanically,
+so PA agreed for free: a confirm CORRELATED with the thing it confirms inflates the count without
+adding evidence. That is Pattern 7, a one-directional factor earning accuracy for free.
+⚠ **It is still computed and now RECORDED.** `paRead` also feeds ④ REACTION's PRICE row, and shadowing
+rather than deleting is what makes *"was removing it right?"* answerable — `bias_pa_shadow` asks exactly
+that, and PA earns its seat back on evidence if bars where it would have confirmed score better.
+
+**CROSS — the only confirm that is not another reading of SPY's own book.** SKEW, ACCUM and ROLL all
+come off the same option chain; two INSTRUMENTS agreeing is the only independent evidence available.
+Both feeds already carry a 390-point spot series at `j.levels[i].s` — 389 minutes of coverage, measured
+live. ⚠ **Not `trendVerdict`:** QQQ has NO candles (`STATE.QQQ.candles` is 0 — the chart only builds
+them for the symbol it is on), so a candle-vs-snapshot comparison would be the apples-to-oranges error
+this project keeps making. Both sides are measured by the SAME rule on the SAME field, at horizons
+matched to the SMA that owns the call: 150 minutes of average, a 60-minute window, and TREND_DOM's
+15-of-20 becoming 45-of-60.
+
+**ROLL votes** — the settlement magnet migrating. ⚠ It was deliberately `RECORDED not voted` since
+v11.0 because whether it LEADS price was an open measurement; it votes now at the user's instruction
+and `kingroll_leads_dir` remains the question that settles it.
+
+### A real bug the change exposed
+
+`kingRoll()` returns **0 for two different things** — "the King has not moved" and "there is not enough
+King history to say." Harmless while it only fed a recorder; **not harmless once it votes**, because 0
+counts as a live-but-neutral confirm and inflates `nLive` while an absent read must abstain.
+`kingRollRead()` separates them. Same rule as everywhere else here: absence of data is not a reading.
+
+### THE TALLY WAS NEVER RECORDED
+
+`biasVotes` computed SKEW / ACCUM / PA and `nConf`, the face printed "1 of 3 confirm", and **none of it
+reached the recorder — not one of 224 recorded bars carried it.** Meanwhile every candidate that does
+NOT vote is richly recorded (`dir.drift.vote`, `dir.kingRoll.vote`, `dir.struct.vote`, `dir.trend5.vote`,
+`dir.trendFast.vote10/20`). **The three factors that actually voted were the only ones with no data**,
+so the v11.36 premise this section was rebuilt on — *"TREND with 3 of 3 confirming is a different
+proposition from TREND with 0 of 3"* — has never been testable, while its own hover claims the count is
+doing real work. Now enrolled as `bias.confirm` with four questions and a rule.
+
+### The colour rule had a hardcoded denominator
+
+`nConf>=3` for green, `<=1` for red. The moment the list stopped being three long, green became
+unreachable and every 1-of-4 would have read red. Extracted to `confColour(nConf, nLive)` and judged as
+a FRACTION of what is live. **A hardcoded denominator in a renderer is a silent bug the first time the
+list changes length.**
+
+### Testing
+
+`confColour` and `biasConfirmRecord` were extracted from a renderer and an anonymous registry callback
+specifically so tests could EXECUTE them — three mutations (cross comparing a symbol against itself,
+the colour rule reverting to `>=3`, the tally dropping PA) each fired **zero** assertions before that.
+Eight mutations now fire 11 / 2 / 3 / 2 / 2 / 1 / 1 / 1.
+⚠ Two traps hit while writing them, both recorded in the test file: `eval(ex('crossRead'))` creates a
+LOCAL binding that **silently shadows** the stub every other test depends on — that block must run last;
+and the first dominance fixture was monotonic, so 60-of-60 satisfied both the 75% rule and a plain
+`up>dn` and the threshold could have been deleted undetected. The fixture now sits at 58%.
+
+---
+
 ## v11.88 — PLANNED / NOT YET BUILT
 
 **Approved scope is ONE change:** put the current price inside the white circle on the band rail

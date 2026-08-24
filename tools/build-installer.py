@@ -33,7 +33,19 @@ COMPAN = 'current/gex-if-levels.user.js'
 V   = ver(SCRIPT)
 VC  = ver(COMPAN)
 TAG = 'v' + V.replace('.', '')          # v11.87 -> v1187, used for temp filenames
-MSG = sys.argv[1] if len(sys.argv) > 1 else ('v' + V)
+_MSG_RAW = sys.argv[1] if len(sys.argv) > 1 else ('v' + V)
+# A .bat is written as ASCII (certutil + CRLF). An em dash in a commit message used to blow up at the
+# final write with a UnicodeEncodeError 200 lines after the mistake was made. Fold to ASCII here, where
+# the message is read, and say what was changed rather than failing or silently mangling it.
+_SUBS = {'\u2014': ' - ', '\u2013': '-', '\u2018': "'", '\u2019': "'",
+         '\u201c': '"', '\u201d': '"', '\u2026': '...', '\u00a0': ' ',
+         '\u2212': '-', '\u26a0': '(!)', '\u2713': 'v', '\u2717': 'x'}
+for _k, _v in _SUBS.items():
+    _MSG_RAW = _MSG_RAW.replace(_k, _v)
+MSG = _MSG_RAW.encode('ascii', 'replace').decode('ascii')
+if MSG != _MSG_RAW:
+    print('note: commit message folded to ASCII')
+MSG = MSG.replace('"', "'")          # the message sits inside "..." in the .bat
 
 # --- did the companion actually change against origin/main? -------------------------------------
 # Linking a script that did NOT change makes Tampermonkey offer "Reinstall" instead of "Update",

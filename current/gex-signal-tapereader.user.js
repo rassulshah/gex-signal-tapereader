@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.87
+// @version    11.88
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -546,7 +546,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.87';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.88';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -2251,6 +2251,17 @@ var KINGHIST = { SPY:{last:0,seq:[]}, QQQ:{last:0,seq:[]} };
 // Direction the King has ROLLED over the recent window: +1 up (bullish), -1
 // down (bearish), 0 none. A floor rolling to a higher strike is bullish; a
 // ceiling rolling to a lower strike is bearish (Skylit).
+// (v11.88) kingRoll() returns 0 for TWO different things — "the King has not moved" and "there is not
+// enough King history to say". Fine while it only ever fed a recorder; NOT fine now that it votes,
+// because 0 counts as a LIVE-but-neutral confirm and an absent read must abstain instead. Same rule as
+// everywhere else in this file: absence of data is not a reading. `ok:false` -> the tally sees null.
+function kingRollRead(sym){
+  try{
+    var kh=KINGHIST[sym||'SPY'];
+    if(!kh || !kh.seq || kh.seq.length<3) return { ok:false, dir:null, why:'need 3 King samples, have '+((kh&&kh.seq)?kh.seq.length:0) };
+    return { ok:true, dir:kingRoll(sym)||0 };
+  }catch(e){ return { ok:false, dir:null, why:'King history unreadable' }; }
+}
 function kingRoll(sym){
   var kh=KINGHIST[sym]; if(!kh || kh.seq.length<3) return 0;
   var first=kh.seq[0].k, last=kh.seq[kh.seq.length-1].k;
@@ -11788,6 +11799,62 @@ function registerCoreFeatures(){
     rule:{ id:'dir.struct', tier:'hand', condition:'netPositioning bias, RECORDED not voted',
            mechanism:'A one-directional factor on a trending day looks like edge; only vote-split vs baseline can tell them apart.' } });
 
+// (v11.88) Extracted from the feature's record() so a test can EXECUTE it. An anonymous function
+// inside a registry object cannot be reached by the harness, and a record that cannot be executed is a
+// record nobody checks — which is exactly how the confirm tally went 224 bars without being written.
+function biasConfirmRecord(sym){
+  var B=null; try{ B=biasVotes(sym); }catch(e){ return { ok:false }; }
+  if(!B) return { ok:false };
+      var d={};
+      (B.confirms||[]).forEach(function(c){ d[c.k]=(c.d==null?null:c.d); });
+      // discrete so a `when` clause can match it — nConf is a count and counts do not match cleanly
+      var tier = (B.nLive<=0) ? 'none-live'
+               : (B.nConf===B.nLive) ? 'all'
+               : (B.nConf===0) ? 'none' : 'partial';
+      return { ok:true, dir:B.dir, verdict:B.verdict,
+               nConf:B.nConf, nLive:B.nLive, nTotal:(B.confirms||[]).length, tier:tier,
+               skew:(d.SKEW===undefined?null:d.SKEW),
+               accum:(d.ACCUM===undefined?null:d.ACCUM),
+               cross:(d.CROSS===undefined?null:d.CROSS),
+               roll:(d.ROLL===undefined?null:d.ROLL),
+               // shadowed: computed, recorded, NOT counted in nConf
+               pa:(B.pa&&B.pa.ok)?B.pa.dir:null,
+               paWouldConfirm:(B.pa&&B.pa.ok&&B.dir!==0)?(B.pa.dir===B.dir?1:0):null,
+               crossSelf:(B.cross&&B.cross.ok)?B.cross.self:null,
+               crossSame:(B.cross&&B.cross.ok)?B.cross.same:null,
+               crossWhy:(B.cross&&!B.cross.ok)?(B.cross.why||null):null };
+}
+  // ---- (v11.88) THE TALLY ITSELF, RECORDED ------------------------------------------------------
+  // Found 2026-08-24: `biasVotes` computes SKEW / ACCUM / PA and `nConf`, the face prints "1 of 3
+  // confirm", and NONE of it reached the recorder — not one of 224 recorded bars carried it. Every
+  // direction candidate that does NOT vote is richly recorded (dir.drift.vote, dir.kingRoll.vote,
+  // dir.struct.vote, dir.trend5.vote, dir.trendFast.vote10/20); the three that DID vote had no data
+  // at all. So the v11.36 premise this section was rebuilt on — "TREND with 3 of 3 confirming is a
+  // different proposition from TREND with 0 of 3" — has never been testable, while its own hover
+  // claims the count is doing real work.
+  // ⚠ PA IS RECORDED THOUGH IT NO LONGER VOTES. That is the whole point: a removal you cannot measure
+  // is a preference, not a decision.
+  registerFeature({ key:'bias.confirm', label:'BIAS confirm tally', phase:'dashboard', fwd:FEAT_FWD,
+    record:function(sym, ctx){ return biasConfirmRecord(sym); },
+    outcome:function(rec, fwd){
+      var v=(rec&&rec.dir)||0;
+      return { hit:(v?_fwdHitNum(fwd, v, DIR_PTS):null), mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
+               tier:(rec&&rec.tier)||null, nConf:(rec&&rec.nConf!=null)?rec.nConf:null };
+    },
+    questions:[
+      { id:'bias_all_confirm_follows', when:[{f:'tier',v:'all'}], outcome:'dirMove',
+        note:'EVERY live confirm agreeing with the 50-SMA: does the call actually travel DIR_PTS more often than the trend alone? This is the v11.36 premise, asked for the first time — the section was rebuilt around it and it has never had a single recorded bar behind it.' },
+      { id:'bias_zero_confirm_fails', when:[{f:'tier',v:'none'}], outcome:'dirMove',
+        note:'NOTHING confirming: does the call fail more than the trend alone? The mirror, and it must be scored separately or the two average out. If a zero-confirm call performs the same, the count is decoration.' },
+      { id:'bias_cross_agrees', when:[{f:'cross',v:1}], outcome:'dirMove',
+        note:'The OTHER index trending up by the same measure: does that add anything the symbol\'s own book did not already say? CROSS is the only confirm here that is not a second reading of the same option chain, so this is the question that justifies its seat.' },
+      { id:'bias_pa_shadow', when:[{f:'paWouldConfirm',v:1}], outcome:'dirMove',
+        note:'PA WAS REMOVED FROM THE TALLY at v11.88 on the argument that it is correlated with the 50-SMA it confirms and so agrees for free. It is still recorded. If bars where PA WOULD have confirmed score no better than the rest, the removal was right; if they score better, it was wrong and PA earns its seat back on evidence.' }
+    ],
+    rule:{ id:'bias.confirm', tier:'hand',
+           condition:'the ② BIAS confirm tally: which supplementary reads agree with the 50-SMA that owns the direction, how many are live, and PA recorded in shadow after being removed from the vote at v11.88',
+           mechanism:'The 50-SMA owns the call and the supplementary reads confirm it or they do not; TREND alone measured 34%, so the count is meant to separate a call worth pressing from one worth halving. That claim has never been measured because the tally was never recorded. ⚠ The confirms are not independent of each other — SKEW, ACCUM and ROLL all read the same option book, which is why CROSS (a different instrument) was added and PA (the same price series as the SMA) was dropped.' } });
+
   registerFeature({ key:'dir.kingRoll', label:'Direction candidate · King roll', phase:'dashboard', fwd:FEAT_FWD,
     record:function(sym){
       var r=0; try{ r=kingRoll(sym)||0; }catch(e){}
@@ -17207,6 +17274,68 @@ function rollNote(sym){
        return 'rolled to '+R.to.slice(5).replace('-','/'); }catch(e){ return null; }
 }
 
+// ---- (v11.88) CROSS-SYMBOL AGREEMENT ------------------------------------------------------------
+// The panel has read SPY and QQQ side by side for months and never once compared them. Every other
+// confirm in ② BIAS is a second reading of the SAME book — skew, accumulation and the King roll all
+// come off SPY's own option chain. Two INSTRUMENTS on the same macro driver agreeing is the only
+// genuinely independent evidence available here, and it costs nothing: both feeds already carry a
+// 390-point spot series at `j.levels[i].s` (measured live 2026-08-24, 389 minutes of coverage each).
+//
+// ⚠ THIS IS NOT `trendVerdict`. That runs on 3-minute candles with an ATR band; this runs on the
+// 1-minute snapshot series with no band, because QQQ has NO candles (`STATE.QQQ.candles` is 0 — the
+// chart only builds candles for the symbol it is on). Comparing a candle trend against a snapshot
+// trend would be the apples-to-oranges error this project keeps making, so BOTH sides are computed
+// here by the SAME formula off the SAME field, and the hover says so.
+//
+// ⚠ The horizons are matched to the SMA that owns the call: 50 bars x 3 min = 150 minutes of average,
+// 20 bars x 3 min = 60 minutes of window, and TREND_DOM's 15-of-20 becomes 45-of-60. Same question,
+// finer sampling — NOT a different question.
+var CROSS_PAIR   = { SPY:'QQQ', QQQ:'SPY' };
+var CROSS_MA_MIN = 150;   // = 50 x 3-min bars, the period of the SMA that owns ② BIAS
+var CROSS_WIN_MIN= 60;    // = 20 x 3-min bars, TREND_WINDOW
+var CROSS_DOM    = 0.75;  // = TREND_DOM 15/20 ⚖ inherited, not independently set
+function spotSeries(sym){
+  try{
+    var f=LASTFEED[sym]; if(!f||!f.j) return null;
+    var lv=f.j.levels||[], out=[];
+    for(var i=0;i<lv.length;i++){ if(typeof lv[i].s==='number' && isFinite(lv[i].s)) out.push(lv[i].s); }
+    return out.length?out:null;
+  }catch(e){ return null; }
+}
+// -1 / 0 / +1 from the snapshot series, by the same dominance rule trendVerdict uses.
+function snapTrend(sym){
+  var out={ ok:false, dir:0, up:0, dn:0, win:0, why:'' };
+  var ser=spotSeries(sym);
+  if(!ser){ out.why='no spot series for '+sym; return out; }
+  if(ser.length < CROSS_MA_MIN+CROSS_WIN_MIN){
+    out.why=sym+' series too short ('+ser.length+' of '+(CROSS_MA_MIN+CROSS_WIN_MIN)+' min)'; return out; }
+  var up=0, dn=0, n=ser.length;
+  for(var i=n-CROSS_WIN_MIN;i<n;i++){
+    var sum=0; for(var j=i-CROSS_MA_MIN+1;j<=i;j++) sum+=ser[j];
+    var ma=sum/CROSS_MA_MIN;
+    if(ser[i]>ma) up++; else if(ser[i]<ma) dn++;
+  }
+  out.ok=true; out.up=up; out.dn=dn; out.win=CROSS_WIN_MIN;
+  if(up/CROSS_WIN_MIN>=CROSS_DOM) out.dir=1;
+  else if(dn/CROSS_WIN_MIN>=CROSS_DOM) out.dir=-1;
+  else out.dir=0;
+  return out;
+}
+// The OTHER instrument's own trend, plus this one's by the same measure so the pair can be compared.
+function crossRead(sym){
+  var out={ ok:false, dir:0, other:null, why:'' };
+  var other=CROSS_PAIR[sym||'SPY'];
+  if(!other){ out.why='no paired symbol for '+sym; return out; }
+  out.other=other;
+  var O=snapTrend(other), S=snapTrend(sym);
+  out.otherTrend=O; out.selfTrend=S;
+  if(!O.ok){ out.why=O.why; return out; }
+  out.ok=true;
+  out.dir=O.dir;                                  // what the OTHER instrument says, on its own
+  out.self=S.ok?S.dir:null;                       // and what THIS one says by the identical measure
+  out.same=(S.ok && O.dir!==0 && S.dir!==0) ? (S.dir===O.dir) : null;
+  return out;
+}
 // ---- ② BIAS: one transparent tally ----
 // Six inputs, each returning -1/0/+1. TREND stays: it is price-based and it is the frame.
 // DRIFT is a GATE, not a vote — it either agrees with the tally or it withholds confirmation.
@@ -17246,10 +17375,25 @@ function biasVotes(sym){
     var ac=null; try{ ac=accumAsym(sym); }catch(e3){}
     conf('ACCUM', ac?ac.dir:null,
       'Which side of the book ADDED dollars over the last half hour. Growth is flow, and flow has a direction. Measured in dollars because %King has a moving denominator and cannot compare two moments.');
+    // ---- (v11.88) PA NO LONGER VOTES ------------------------------------------------------------
+    // PA reads where recent bars close inside their own range — the same price series the 50-SMA
+    // above it reads. In an uptrend bars close near their highs more or less mechanically, so PA
+    // agreed for free: a confirm CORRELATED with the thing it confirms inflates the count without
+    // adding evidence. That is Pattern 7 — a one-directional factor earning accuracy for free.
+    // ⚠ IT IS STILL COMPUTED AND NOW RECORDED. `paRead` is also used by (4) REACTION's PRICE row, and
+    // shadowing rather than deleting is what makes "was removing it right?" answerable instead of
+    // assumed — the same treatment drift and the King roll already get.
     var pa=null; try{ pa=paRead(sym); }catch(e4){}
-    conf('PA', (pa&&pa.ok)?pa.dir:null,
-      'Where recent bars close inside their own range, with structure breaking a tie. The nearest thing to a TICK reading we can build without order flow.');
-    out.skew=sk; out.accum=ac; out.pa=pa;
+    // ---- (v11.88) CROSS — the only confirm that is not another reading of SPY's own book ---------
+    var cx=null; try{ cx=crossRead(sym); }catch(e6){}
+    conf('CROSS', (cx&&cx.ok)?cx.dir:null,
+      'Does the OTHER index agree? Every other confirm here is a second reading of this symbol\'s own option book; this one is a different instrument on the same macro driver, which is the only independent evidence available. Both sides are measured by the SAME rule on the SAME field — the 1-minute spot series each feed carries — over 150 minutes of average and a 60-minute window, matching the 3-minute SMA-50 that owns the call above. \u26a0 NOT the candle trend: QQQ has no candles, so a candle-vs-snapshot comparison would be measuring two different things.');
+    // ---- (v11.88) ROLL — the settlement magnet migrating -----------------------------------------
+    var krR=null; try{ krR=kingRollRead(sym); }catch(e7){}
+    var kr=(krR&&krR.ok)?krR.dir:null;
+    conf('ROLL', kr,
+      'Is the settlement magnet moving, and which way? The King strike migrating up or down over the window is the board repositioning rather than price doing something. \u26a0 Recorded since v11.0 as `dir.kingRoll` and DELIBERATELY non-voting until now, because whether it LEADS price was an open measurement; it votes from v11.88 at the user\'s instruction and `kingroll_leads_dir` is still the question that settles it.');
+    out.skew=sk; out.accum=ac; out.pa=pa; out.cross=cx; out.kingRoll=kr; out.rollRead=krR;
 
     var dr=null; try{ dr=driftRead(sym); }catch(e5){}
     out.drift=dr;
@@ -18768,6 +18912,17 @@ function secFrame(sym){
   return h;
 }
 
+// (v11.88) THE CONFIRM COUNT'S COLOUR, AND IT MUST NOT KNOW HOW MANY CONFIRMS THERE ARE.
+// It was `nConf>=3` for green and `nConf<=1` for red — hardcoded to a three-confirm tally. The moment
+// PA came out and CROSS/ROLL went in, green would have been unreachable and every 1-of-4 would have
+// read red. Judge the FRACTION of what is actually live; a hardcoded denominator in a renderer is a
+// silent bug the first time the list changes length.
+function confColour(nConf, nLive){
+  if(!(nLive>0)) return '#8b98a9';          // nothing live: no verdict to colour
+  if(nConf===nLive) return '#2ec27e';       // everything that could confirm, did
+  if(nConf===0)     return '#f0616d';       // nothing confirming
+  return '#8b98a9';
+}
 // ---- ② BIAS: the direction call and what is behind it ----
 function secBias(sym){
   var B=biasVotes(sym);
@@ -18789,8 +18944,7 @@ function secBias(sym){
   });
   var cnt, ccol;
   if(B.dir===0){ cnt='no side to confirm'; ccol='#8b98a9'; }
-  else { cnt=B.nConf+' of '+B.confirms.length+' confirm';
-         ccol=(B.nConf>=3)?'#2ec27e':((B.nConf<=1)?'#f0616d':'#8b98a9'); }
+  else { cnt=B.nConf+' of '+B.confirms.length+' confirm'; ccol=confColour(B.nConf, B.nLive); }
   h+='<span class="g3cnt" style="color:'+ccol+'"'+g3tip('How much conviction is behind this call? Three of three agreeing is a day to press; one of three is a day for half size or none. TREND alone measured 34%, so the count is doing real work — it is the difference between following the SMA and following it blindly.')+'>'+cnt+'</span>';
   h+='</div>';
   // (v11.44) DRIFT MUST GATE THE CALL, NOT ITSELF. A ✓ was shown whenever the two books agreed with
@@ -19598,6 +19752,9 @@ window.__gptsDebug.phase   = function(){ return sessionPhase(); };
 window.__gptsDebug.regime2 = function(s){ return regime2D(s||activeSym()); };
 window.__gptsDebug.pa      = function(s){ return paRead(s||activeSym()); };
 window.__gptsDebug.bias    = function(s){ return biasVotes(s||activeSym()); };
+// (v11.88) cross-symbol agreement, and the raw snapshot trend both sides are measured with
+window.__gptsDebug.cross   = function(s){ return crossRead(s||activeSym()); };
+window.__gptsDebug.snapTrend = function(s){ return snapTrend(s||activeSym()); };
 window.__gptsDebug.steps   = function(s){ return stepState(s||activeSym()); };
 window.__gptsDebug.roll    = function(s){ s=s||activeSym(); try{ expSetRollCheck(s); }catch(e){} return { roll:EXPSET_ROLL[s]||null, note:rollNote(s) }; };
 window.__gptsDebug.face    = function(s){ return panelV3(s||activeSym()).length; };

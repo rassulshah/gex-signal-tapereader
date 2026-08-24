@@ -1,0 +1,73 @@
+<meta charset="utf-8"><title>BIAS — remove PA</title>
+<style>
+:root{--bg:#0d1117;--pnl:#10151d;--tx:#e6edf3;--sub:#8b98a9;--dim:#6c7889;--line:#1a212c;
+--gn:#2ec27e;--rd:#f0616d;--gold:#f2b45a}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--tx);font:13px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:26px}
+h1{font-size:15px;margin:0 0 14px}
+h2{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--sub);margin:0 0 8px;font-weight:800}
+.panel{background:var(--pnl);border:1px solid var(--line);border-radius:6px;padding:9px 10px;width:392px}
+.sh{display:block;text-align:center;font-size:8px;font-weight:800;letter-spacing:.13em;color:var(--sub);
+  margin-bottom:6px;padding:2px 0;border-radius:3px;background:rgba(139,152,169,.09)}
+.vd2{display:flex;align-items:baseline;gap:7px;margin-bottom:5px}
+.vd2 b{font-size:13px;font-weight:800;color:var(--gn)}
+.why{font-size:9px;color:var(--sub)}
+.cf{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.chip{font-size:8.5px;font-weight:800;padding:1px 6px;border-radius:2px;background:rgba(139,152,169,.13);color:var(--sub)}
+.chip.y{background:rgba(46,194,126,.15);color:var(--gn)}
+.chip.n{background:rgba(240,97,109,.15);color:var(--rd)}
+.cnt{font-size:8.5px;font-weight:800;margin-left:auto}
+.gate{display:flex;align-items:center;gap:7px;margin-top:5px;padding:3px 6px;border-radius:3px;
+  background:rgba(240,97,109,.1);font-size:9px}
+.gate b{font-size:9px;color:var(--rd)}
+.gate span{color:var(--sub)}
+.cap{font-size:11px;color:var(--dim);margin:9px 0 0;max-width:392px;line-height:1.55}
+.row{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start}
+.warn{background:rgba(242,180,90,.09);border-left:2px solid var(--gold);padding:10px 13px;max-width:860px;
+  color:#d9c9a8;font-size:12.5px;line-height:1.65;margin:20px 0 0;border-radius:0 4px 4px 0}
+.warn b{color:var(--gold)}
+code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#cdd6e0}
+</style>
+<h1>② BIAS — remove PA</h1>
+<div class="row">
+
+<div><h2>Now</h2>
+<div class="panel">
+  <span class="sh">② BIAS</span>
+  <div class="vd2"><b>↑ BULLISH</b><span class="why">50-SMA · 19 of 20 bars above</span></div>
+  <div class="cf">
+    <span class="chip">SKEW ·</span><span class="chip y">ACCUM ✓</span><span class="chip">PA ·</span>
+    <span class="cnt" style="color:#f0616d">1 of 3 confirm</span>
+  </div>
+  <div class="gate"><b>DRIFT ✗</b><span>books agree DOWN — against the call</span></div>
+</div></div>
+
+<div><h2>After</h2>
+<div class="panel">
+  <span class="sh">② BIAS</span>
+  <div class="vd2"><b>↑ BULLISH</b><span class="why">50-SMA · 19 of 20 bars above</span></div>
+  <div class="cf">
+    <span class="chip">SKEW ·</span><span class="chip y">ACCUM ✓</span>
+    <span class="cnt" style="color:#8b98a9">1 of 2 confirm</span>
+  </div>
+  <div class="gate"><b>DRIFT ✗</b><span>books agree DOWN — against the call</span></div>
+</div>
+<p class="cap">PA chip gone. Denominator 3 → 2. The count's colour rule also has to move: green is currently <code>nConf&gt;=3</code>, which can never be reached with two confirms.</p>
+</div>
+</div>
+
+<div class="warn"><b>Found while checking, and it decides whether this removal is checkable.</b><br><br>
+<b>The confirm tally is not recorded anywhere.</b> <code>biasVotes</code> computes SKEW / ACCUM / PA and
+<code>nConf</code>, the face prints "1 of 3 confirm", and none of it reaches the recorder. Not one of the
+224 recorded bars carries it.<br><br>
+Meanwhile every candidate that does NOT vote is richly recorded, each with its own explicit vote field:<br>
+<code>dir.drift.vote · dir.kingRoll.vote · dir.struct.vote · dir.trend5.vote · dir.trendFast.vote10/20</code>
+<br><br>
+<b>So the three factors that actually vote are the only ones with no data, and the v11.36 premise —
+"TREND with 3 of 3 confirming is a different proposition from TREND with 0 of 3" — has never been
+testable.</b><br><br>
+It also means removing PA has no before/after: the number whose denominator changes is not in the data.<br><br>
+<b>Suggested with the removal:</b> stop PA voting, but record <code>skew.dir</code>, <code>accum.dir</code>,
+<code>pa.dir</code>, <code>nConf</code> and <code>nLive</code> per bar. <code>paRead</code> stays either way —
+④ REACTION's PRICE row calls it. That is the same treatment drift and roll already get, and it makes the
+correlation question answerable instead of assumed.</div>
