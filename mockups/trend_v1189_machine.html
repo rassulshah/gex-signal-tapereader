@@ -1,0 +1,107 @@
+<meta charset="utf-8"><title>Trend machine v11.89</title>
+<style>
+:root{--bg:#0d1117;--pnl:#10151d;--tx:#e6edf3;--sub:#8b98a9;--dim:#6c7889;--line:#1a212c;
+--gn:#2ec27e;--rd:#f0616d;--gold:#f2b45a;--acc:#a371f7;--bl:#5aa9f2}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--tx);font:13px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:26px;max-width:1000px}
+h1{font-size:16px;margin:0 0 4px}
+h2{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--sub);margin:26px 0 8px;font-weight:800}
+.note{color:var(--sub);font-size:12.5px;margin:0 0 12px}
+table{border-collapse:collapse;font-size:12px;width:100%;max-width:860px}
+td,th{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+th{color:var(--sub);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;background:rgba(139,152,169,.05)}
+code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
+.up{color:var(--gn);font-weight:700} .dn{color:var(--rd);font-weight:700}
+.brk{color:var(--gold);font-weight:700} .flat{color:var(--dim);font-weight:700}
+.new{background:rgba(90,169,242,.10)}
+.risk{background:rgba(240,97,109,.09);border-left:2px solid var(--rd);padding:11px 14px;
+  color:#e4c2c6;font-size:12.5px;line-height:1.65;margin:14px 0;border-radius:0 4px 4px 0}
+.risk b{color:var(--rd)}
+.box{background:#161b24;border:1px solid var(--line);border-radius:5px;padding:11px 13px;
+  font-family:ui-monospace,Menlo,monospace;font-size:11.5px;line-height:1.85;color:#cdd6e0}
+.box b{color:var(--gold)}
+.tl{display:flex;gap:2px;flex-wrap:wrap;margin:8px 0 4px}
+.tl i{width:26px;height:26px;border-radius:3px;display:flex;align-items:center;justify-content:center;
+  font-style:normal;font-size:9px;font-weight:800;font-family:ui-monospace,Menlo,monospace}
+.tl i.a{background:rgba(46,194,126,.2);color:var(--gn)}
+.tl i.b{background:rgba(240,97,109,.2);color:var(--rd)}
+.mk{display:flex;gap:2px;flex-wrap:wrap;font-size:9px;font-family:ui-monospace,Menlo,monospace;color:var(--dim)}
+.mk i{width:26px;text-align:center;font-style:normal}
+.mk i.hit{color:var(--bl);font-weight:800}
+</style>
+
+<h1>② BIAS · the trend machine — proposed v11.89</h1>
+<p class="note">Same five states. One new transition, and every threshold given a name instead of being the number 15 in three places.</p>
+
+<h2>The constants</h2>
+<table>
+<tr><th>name</th><th>value</th><th>what it gates</th></tr>
+<tr><td><code>TREND_DOM</code></td><td>15</td><td>confirm a <b>new</b> trend — from flat, or reclaim the one you just left</td></tr>
+<tr class="new"><td><code>TREND_DOM_REV</code></td><td><b>11</b></td><td><b>NEW</b> — confirm a <b>reversal</b>, and only out of a broken state</td></tr>
+<tr><td><code>TREND_BANDX</code></td><td>0.25 ATR</td><td>unchanged. Bars inside the band count as <b>neither</b>, so <code>up + dn ≤ 20</code></td></tr>
+</table>
+
+<h2>Transitions — evaluated top to bottom, first match wins</h2>
+<table>
+<tr><th>#</th><th>condition</th><th>→ state</th><th>note</th></tr>
+<tr><td>1</td><td><code>up ≥ 15</code></td><td class="up">up</td><td>confirm / reclaim. Unchanged.</td></tr>
+<tr><td>2</td><td><code>dn ≥ 15</code></td><td class="dn">dn</td><td>confirm / reclaim. Unchanged.</td></tr>
+<tr class="new"><td>3</td><td><code>prior = up</code> and <code>dn ≥ 11</code></td><td class="dn">dn</td><td><b>NEW.</b> The reversal. Raw — no slope gate.</td></tr>
+<tr class="new"><td>4</td><td><code>prior = dn</code> and <code>up ≥ 11</code></td><td class="up">up</td><td><b>NEW.</b> The mirror.</td></tr>
+<tr><td>5</td><td><code>prior = up</code></td><td class="brk">up-broken</td><td>lost 15, has not reached 11 the other way</td></tr>
+<tr><td>6</td><td><code>prior = dn</code></td><td class="brk">dn-broken</td><td>&nbsp;</td></tr>
+<tr><td>7</td><td>otherwise</td><td class="flat">flat</td><td>no prior confirmed trend to break</td></tr>
+</table>
+<p class="note">Rules 1–2 and 3–4 can never both fire: <code>up ≥ 15 → dn ≤ 5</code>, so the strict and loose paths are mutually exclusive by arithmetic, not by ordering. <b>Reclaim needs 15 and falls out of rule 1 — no separate rule.</b></p>
+
+<h2>Worked: a 20/20 uptrend rolls over, every new bar closing below</h2>
+<div class="tl">
+<i class="a">▲</i><i class="a">▲</i><i class="a">▲</i><i class="a">▲</i><i class="a">▲</i>
+<i class="b">▼</i><i class="b">▼</i><i class="b">▼</i><i class="b">▼</i><i class="b">▼</i>
+<i class="b">▼</i><i class="b">▼</i><i class="b">▼</i><i class="b">▼</i><i class="b">▼</i>
+<i class="b">▼</i><i class="b">▼</i><i class="b">▼</i><i class="b">▼</i><i class="b">▼</i>
+</div>
+<div class="mk">
+<i>1</i><i>2</i><i>3</i><i>4</i><i>5</i><i class="hit">6</i><i>7</i><i>8</i><i>9</i><i>10</i>
+<i class="hit">11</i><i>12</i><i>13</i><i>14</i><i class="hit">15</i><i>16</i><i>17</i><i>18</i><i>19</i><i>20</i>
+</div>
+<div class="box">
+ bar  6 &nbsp; up 14 / dn 6 &nbsp;&nbsp;→ <b>up-broken</b> &nbsp;&nbsp; 18 min &nbsp; (already the case today)<br>
+ bar 11 &nbsp; up  9 / dn 11 &nbsp;→ <b>dn</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 33 min &nbsp; <b>NEW — the reversal</b><br>
+ bar 15 &nbsp; up  5 / dn 15 &nbsp;→ &nbsp;dn &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 45 min &nbsp; where it flips today<br><br>
+ <b>net: the DOWN call arrives 4 bars / 12 minutes earlier</b>
+</div>
+
+<div class="risk"><b>The cost, stated as a number rather than a worry.</b><br><br>
+Once a trend has been confirmed once, <b>both</b> directions flip at 11 — because after reversing to
+<code>dn</code> the prior becomes <code>dn</code>, and rule 4 then reverses back at <code>up ≥ 11</code>.
+<br><br>
+So the minimum distance between two opposite flips is:<br><br>
+<code>&nbsp;strict 15/15 &nbsp; dn=15,up=5 &nbsp;→&nbsp; up=15 &nbsp; needs 10 new bars &nbsp; <b>30 min</b></code><br>
+<code>&nbsp;loose&nbsp; 15/11 &nbsp; dn=11,up=9 &nbsp;→&nbsp; up=11 &nbsp; needs&nbsp; 2 new bars &nbsp; <b>6 min</b></code>
+<br><br>
+<b>In the worst composition the machine can flip direction every two bars.</b> That is the price of the
+12 minutes, and it lands in chop — exactly where a trend call does the most damage. Typical cases will
+be slower than the minimum, but the floor is 2 bars and it was 10.<br><br>
+If the recording shows this happening, the fix is a <b>dwell time</b> — a minimum number of bars in a
+state before a reversal may fire — not a return to 15. Not proposing it now; naming it so it is not
+rediscovered as a surprise.</div>
+
+<h2>What gets recorded, so none of this has to be argued again</h2>
+<p class="note">Precedent in your own code: <code>trendWindowRead</code> already computes 10- and 20-period MAs
+<i>"RECORDED, NEVER VOTED — so the optimizer can compare EMPIRICALLY instead of by assertion."</i> Same here.
+One machine ships; <b>three are recorded</b>.</p>
+<div class="box">
+ <b>state</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; what ships — loose 15/11, raw<br>
+ <b>stateStrict</b> &nbsp; what the current 15/15 machine would have said<br>
+ <b>stateGated</b> &nbsp;&nbsp; what 15/11 WITH the slope gate would have said<br>
+ <b>differs</b> &nbsp;&nbsp;&nbsp; loose ≠ strict on this bar<br>
+ <b>flip / sinceFlip</b> &nbsp; did the state change, and how many bars since the last change<br>
+ up · dn · win · slope · prior<br><br>
+ questions:<br>
+ &nbsp; <b>trend_loose_reversal_leads</b> — when loose flips and strict has not, does price actually travel?<br>
+ &nbsp; <b>trend_loose_whipsaw</b> — flips with a small <code>sinceFlip</code>: do they reverse again?<br>
+ &nbsp; <b>trend_gate_would_have_helped</b> — on bars where gated ≠ raw, which one was right?
+</div>
+<p class="note">You chose raw. The gated variant costs nothing to record alongside, and in ~20 sessions
+the data says whether the gate was worth having — without another build to guess at.</p>

@@ -147,7 +147,19 @@ LS['gpts_trendlast_v1']='{not json';
 TREND_LAST={ SPY:null, QQQ:null };
 ok(trendLastLoad()===false && TREND_LAST.SPY===null, '6h ...and a corrupt store fails soft, it never throws');
 // it is written when the state CONFIRMS, and rehydrated at boot
-ok(/TREND_LAST\[sym\]='up'; trendLastSave\(\)/.test(src), '6i trendVerdict persists a newly confirmed trend');
+// (v11.89) This grepped for the literal line `TREND_LAST[sym]='up'; trendLastSave()`, so the v11.89
+// refactor to a single resolver broke it while the BEHAVIOUR was intact — Pattern 8. Assert the two
+// things that must be true of any implementation instead of one spelling of one of them.
+// ⚠ The behavioural proof (memory advances on confirm, and the shadows keep their own) is in
+// test_trend_machine.js §6 and §7c, which EXECUTE trendVerdict. This file owns the save/load contract.
+{
+  const tv=(function(){ const m=/function\s+trendVerdict\s*\(/.exec(src); let i=src.indexOf('{',m.index),d=0;
+    for(let k=i;k<src.length;k++){ if(src[k]==='{')d++; else if(src[k]==='}'){ d--; if(d===0) return src.slice(m.index,k+1); } } })();
+  ok(/TREND_LAST\[sym\]\s*=/.test(tv) && /trendLastSave\(\)/.test(tv),
+     '6i trendVerdict advances the confirmed-trend memory and persists it');
+  ok(/TREND_LAST\[sym\]!==/.test(tv),
+     '6i2 ...and only writes when it actually CHANGED, so a confirmed trend does not re-save every bar');
+}
 ok(/trendLastLoad\(\);\s*\/\/ \(v10\.54\)/.test(src), '6j boot() rehydrates it');
 
 console.log('\n'+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);

@@ -1,3 +1,64 @@
+## v11.90 — the trend machine loosens, DRIFT becomes a badge, every hover leads with a question
+
+### THE TREND MACHINE — a reversal now needs 11, not 15
+
+A NEW trend still confirms at 15 of 20. A **reversal out of a broken state** confirms at **11**, on the
+user's reasoning that the break is itself evidence and waiting the full 15 costs 4 bars after the turn
+is already visible. From a 20/20 uptrend rolling over: `up-broken` at bar 6 (unchanged), DOWN at bar 11
+instead of bar 15 — **12 minutes earlier**.
+
+⚠ **RAW, no slope gate — the user's explicit choice.** The 50-SMA spans 150 minutes, so 11 bars below a
+still-RISING average is a pullback rather than a downtrend, and raw calls DOWN there. A slope-gated
+variant is computed and recorded on every bar so the choice is measurable instead of arguable.
+
+⚠⚠ **THE COST, MEASURED, NOT FEARED.** Once a trend has confirmed once, **both** directions flip at 11 —
+after reversing, the prior becomes the new direction and the mirror rule reverses back at 11. The
+minimum gap between two OPPOSITE flips falls from 10 new bars (30 min) to **2 (6 min)**. There is a test
+asserting exactly that, so nobody "fixes" it by accident. **If the recording shows whipsaw the answer is
+a DWELL TIME — a minimum number of bars in a state before a reversal may fire — not a retreat to 15,
+which would simply undo what this was for.**
+
+**One machine ships, three are recorded**: `state` (loose), `stateStrict` (the old 15/15), `stateGated`
+(11 with the slope gate), plus `flip`/`sinceFlip` for the whipsaw question. Each shadow keeps its OWN
+`prior` — a shadow sharing `TREND_LAST` is an echo, not a shadow, and there is a test for that too.
+Precedent: `trendWindowRead` has recorded 10- and 20-period MAs unvoted since v10.51 for this reason.
+
+### DRIFT IS A BADGE, AND IT STILL DOES NOT VOTE
+
+It moves onto the confirm row and the full-width gate row is gone — but **outlined, never filled, behind
+a divider, and excluded from `nConf`**. Two decisions had to survive that:
+
+- **v11.44** pulled drift out of the confirm row because its tick meant *the two books agree with EACH
+  OTHER* — the face read `↑ BULLISH` beside `DRIFT ✓ DN·conf`: they agreed on DOWN, against an up call.
+  The `withCall` test that fixed it is untouched.
+- **The user shadowed drift on 2026-08-18** — *"remove it until it is tested and proven"* — and
+  `DRIFT_LIVE` is still false. Measured 2026-08-24: **AGREE-UP 25% on effN 10 against a 21% baseline,
+  2 sessions.** It has not earned promotion.
+
+Drawn identically to the confirms it sits beside, it would read as a fifth one and inflate the very
+count that only started being recorded at v11.88.
+
+### SEVEN HOVERS REWRITTEN
+
+Question first, one plain sentence, then only the caveats that change what you would do. The count
+hover still said *"three of three agreeing"* with four confirms on the row, and still claimed the count
+was "doing real work" — a claim with no recorded bar behind it until v11.88. Both corrected.
+
+### Test rot, three more instances
+
+- `test_export_full.js` grepped for the literal line `TREND_LAST[sym]='up'; trendLastSave()` — the v11.89
+  refactor to one resolver broke it while the behaviour was intact.
+- `test_drift_gate.js` grepped for a comment HEADING that moved.
+- Its replacement then failed because **prose in a comment WRAPS** and a wrapped phrase does not match a
+  one-line regex. It now strips comment markers and collapses whitespace before looking.
+
+⚠ Three of the first eight trend mutations fired ZERO assertions: a reversal firing straight out of
+FLAT, the strict shadow writing the live memory, and the neutral band being deleted. The band one is
+instructive — a "bar sitting on the average" fixture was not sitting on the average, because a mixed
+series makes the SMA drift. **Only a flat series can prove that band exists.** All eight fire now.
+
+---
+
 ## v11.88 — ② BIAS: PA out, CROSS and ROLL in, and the tally finally recorded
 
 **PA no longer votes.** It reads where recent bars close inside their own range — the *same price

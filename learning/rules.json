@@ -2166,6 +2166,37 @@
     "sessions": 0,
     "held": false
    }
+  },
+  "trend.machine": {
+   "id": "trend.machine",
+   "tier": "hand",
+   "condition": "five-state SMA-50 machine, 20-bar window, 0.25-ATR neutral band; a NEW trend confirms at 15 of 20, a REVERSAL out of a broken state at 11, raw and ungated",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "A break of a confirmed trend is itself evidence, so demanding the full 15 the other way costs 4 bars after the turn is already visible. \u26a0 The cost is symmetric and measured: once a trend has confirmed once, both directions flip at 11, and the minimum gap between opposite flips falls from 10 new bars to 2. Whether 12 minutes of lead is worth that is the open question, which is why the strict and slope-gated machines are recorded on every bar beside the one that ships.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
   }
  },
  "proposals": [],

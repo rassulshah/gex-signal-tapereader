@@ -338,3 +338,37 @@ length. Extracted so it can be tested.
 
 **Would change it:** `bias_pa_shadow` showing PA carried information after all, or `bias_cross_agrees`
 showing CROSS adds nothing the symbol's own book did not already say.
+
+---
+
+## D-15 · THE TREND REVERSAL THRESHOLD IS 11, RAW
+**v11.89/11.90, 2026-08-24, user-specified.**
+
+A NEW trend confirms at 15 of 20; a REVERSAL out of a broken state confirms at 11. The break is itself
+evidence and the extra 4 bars are lag. ⚠ **RAW — the user declined the slope gate.** The 50-SMA spans
+150 minutes, so 11 bars below a still-rising average is a pullback, and raw calls DOWN there.
+
+⚠⚠ **The cost is symmetric and was quantified before shipping:** once a trend has confirmed once, both
+directions flip at 11, and the minimum gap between opposite flips falls from **10 new bars to 2**.
+A test pins it so it is never "fixed" by accident. **If the data shows whipsaw the fix is a DWELL TIME,
+not a retreat to 15.**
+
+**Three machines are recorded, one ships** — loose, strict 15/15, and slope-gated — each with its own
+`prior`. A shadow that shares `TREND_LAST` is an echo. `trend.machine` asks all three questions.
+
+**Would change it:** `trend_loose_whipsaw` showing fast flips fail, or `trend_gate_would_have_helped`
+showing the gate was right.
+
+---
+
+## D-16 · DRIFT IS A BADGE THAT DOES NOT VOTE
+**v11.90.** It joins the confirm row for consistency and to save a row, drawn **outlined behind a
+divider** and excluded from `nConf`.
+
+⚠ **Two prior decisions must not be undone by this cosmetic change.** v11.44 made drift a gate because a
+tick meant "the books agree with EACH OTHER" while they agreed on the wrong side; the `withCall` guard
+is untouched. And the user shadowed drift on 2026-08-18 pending proof — measured 2026-08-24 at 25% on
+effN 10 against a 21% baseline over 2 sessions, it has not earned promotion.
+
+**Would change it:** drift clearing the promotion path it has always had — n≥20 effN, 3 sessions, both
+up and down days.

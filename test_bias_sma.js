@@ -121,6 +121,51 @@ eval(ex('biasVotes'));
   eq(biasConfirmRecord('SPY').pa,null,'null when PA itself is unavailable');
 }
 
+
+// ---------- (v11.90) DRIFT IS A BADGE NOW, AND IT STILL DOES NOT VOTE ----------
+// Two decisions have to survive this: v11.44 made drift a GATE because its tick meant "the books agree
+// with EACH OTHER" and the face read BULLISH beside DRIFT ✓ on a DOWN agreement; and the user shadowed
+// drift on 2026-08-18 pending proof. Moving it onto the row is cosmetic — if it ever starts counting,
+// these fail.
+{
+  const sb=ex('secBias');
+  ok(!/class="g3gate"/.test(sb),      'the full-width gate row is gone');
+  ok(/class="g3chip gate/.test(sb),   'DRIFT is a badge on the confirm row');
+  ok(/g3sepv/.test(sb),               'behind a divider, so it does not read as one of the confirms');
+  ok(/background:transparent!important/.test(src),
+     'and the gate badge is OUTLINED, never filled — a filled one would look like a fifth confirm');
+
+  // the count must still exclude it
+  TV={state:'dn'}; SK={dir:-1,err:null}; AC={dir:-1}; CX={ok:true,dir:-1}; KR={ok:true,dir:-1};
+  DR={verdict:'AGREE-DN',label:'DN·conf',overlap:true,dir:-1};
+  const B=biasVotes('SPY');
+  eq(B.confirms.length,4,'four confirms');
+  eq(B.nConf,4,'all four agree');
+  ok(!B.confirms.some(c=>c.k==='DRIFT'),'and DRIFT is NOT among them — it is a gate, not a vote', B.confirms.map(c=>c.k));
+
+  // v11.44's actual bug: books agreeing with EACH OTHER on the wrong side must not show a tick
+  ok(/withCall===false/.test(sb) && /against the call/.test(sb),
+     'a DOWN agreement under an UP call is still marked against the call, which is the v11.44 fix');
+  ok(/withCall===true/.test(sb),'and a tick needs agreement WITH the call, not merely between the books');
+}
+// ---------- (v11.90) EVERY BADGE HOVER LEADS WITH A QUESTION ----------
+{
+  const sb=ex('secBias'), bv=ex('biasVotes');
+  const musts=[
+    [bv,'Is protection being bought or sold?','SKEW'],
+    [bv,'Which side of the book is growing?','ACCUM'],
+    [bv,'Does the other index agree?','CROSS'],
+    [bv,'Is the settlement magnet moving?','ROLL'],
+    [sb,'Is anything structurally confirming the call?','DRIFT'],
+    [sb,'How much conviction is behind this call?','the count'],
+    [sb,'Which way, and on whose authority?','the verdict'],
+  ];
+  musts.forEach(m=>ok(m[0].indexOf(m[1])>=0, m[2]+' asks a question before it explains'));
+  // and none of them still carries the stale three-confirm claim
+  ok(!/Three of three/.test(sb),'the count hover no longer says "three of three" — there are four confirms now');
+  ok(!/out of three secondary inputs/.test(sb),'nor does the verdict hover');
+}
+
 // ⚠ THIS BLOCK RUNS LAST, DELIBERATELY. `eval(ex('crossRead'))` creates a LOCAL binding that shadows
 // the `global.crossRead` stub every biasVotes test above depends on — and a shadowed stub fails
 // SILENTLY, as a null read that looks like an unavailable feed. Anything that eval's the real

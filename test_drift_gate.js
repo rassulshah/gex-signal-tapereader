@@ -77,7 +77,21 @@ function gate(biasDir, verdict, driftDir, overlap, label){
   eq(r.mark,'·','a verdict with no direction cannot be scored against the call');
 }
 // ---- the shipped code carries this logic, not just the test ----
-ok(/DRIFT MUST GATE THE CALL, NOT ITSELF/.test(src),'the reasoning is recorded at the fix');
+// (v11.90) This grepped for the v11.44 comment HEADING, which moved when DRIFT became a badge — the
+// reasoning was intact and the test failed anyway. Third comment-pinned grep to break this session.
+// Assert the REASON and the GUARD, not one spelling of a heading.
+// ⚠ prose in a comment WRAPS, and a wrapped phrase does not match a one-line regex — that is exactly
+// how the previous version of this assertion broke. Strip the comment markers and collapse whitespace
+// before looking, so the test survives reflowing the paragraph it is checking.
+const prose=src.replace(/^\s*\/\/ ?/gm,' ').replace(/\s+/g,' ');
+ok(prose.indexOf('Agreement is only confirmation when it points the SAME WAY as the SMA')>=0,
+   'the reasoning is recorded at the fix — a tick meant the books agreed with EACH OTHER, on the wrong side');
+ok(/withCall===false/.test(src) && /withCall===true/.test(src),
+   'and the guard itself is in the shipped code: a tick requires agreement WITH the call, not merely between the books');
+ok(!/class="g3gate"/.test(src),
+   'the gate is a badge on the confirm row now, not its own row');
+ok(/class="g3chip gate/.test(src) && /background:transparent!important/.test(src),
+   'drawn OUTLINED so it never reads as one of the confirms it sits beside');
 ok(/withCall=\(B\.dir!==0 && dDir!==0\)/.test(src),'and the shipped gate compares drift direction to the call');
 ok(/against the call/.test(src),'with the contradicting case spelled out on the face');
 console.log('\n'+pass+' pass / '+fail+' fail');

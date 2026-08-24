@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.88
+// @version    11.90
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -36,6 +36,21 @@ var RECORDER_KEY = 'gpts_recorder_v7';   // DATA layer: node snapshots + outcome
 
 var TREND_WINDOW = 20;
 var TREND_DOM = 15;   // (v10.50.1, user) 15 of 20 bars = 75% dominance = confirmed directional trend (was 16 = 80%)
+// (v11.89, user) THE REVERSAL THRESHOLD. Confirming a trend from FLAT still needs 15 of 20; confirming
+// the OPPOSITE trend out of a broken state needs only 11. The break itself is evidence, and waiting the
+// full 15 costs 4 bars — 12 minutes on a 3-min chart — after the turn is already visible.
+// ⚠ USER CHOSE RAW: no slope gate. A slope-gated variant is RECORDED alongside so the choice can be
+// measured rather than re-argued; see `stateGated` in trendVerdict and `trend.machine` in the registry.
+// ⚠⚠ THE COST, MEASURED: once a trend has been confirmed once, BOTH directions flip at 11, because
+// after reversing the prior becomes the new direction and the mirror rule reverses back at 11. Minimum
+// distance between two opposite flips falls from 10 new bars (30 min) to 2 (6 min). If the recording
+// shows whipsaw, the fix is a DWELL TIME — a minimum number of bars in a state before a reversal may
+// fire — NOT a retreat to 15, which would simply undo what this was for.
+var TREND_DOM_REV = 11;   // ⚖ HAND-SET by the user 2026-08-24. Unmeasured.
+// Shadow memories. The strict and gated machines MUST keep their own `prior`, or they inherit the live
+// machine's TREND_LAST and stop being independent reads — a shadow that shares state is not a shadow.
+var TREND_LAST_STRICT = { SPY:null, QQQ:null };
+var TREND_LAST_GATED  = { SPY:null, QQQ:null };
 // (v10.27) BREAKOUT QUALITY GATE: a BO only fires if the breakout bar also prints a
 // new N-bar EXTREME \u2014 a 14-bar HIGH for upside breakouts / 14-bar LOW for downside
 // breakdowns (window INCLUDES the breakout bar). Filters weak/noise pokes through a
@@ -546,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.88';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.90';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -937,14 +952,42 @@ function trendVerdict(sym){
   var confUp = up>=TREND_DOM;
   var confDn = dn>=TREND_DOM;
   var prior = TREND_LAST[sym];   // 'up' | 'dn' | null
-  var state;
-  if(confUp){ state='up'; if(TREND_LAST[sym]!=='up'){ TREND_LAST[sym]='up'; trendLastSave(); } }
-  else if(confDn){ state='dn'; if(TREND_LAST[sym]!=='dn'){ TREND_LAST[sym]='dn'; trendLastSave(); } }
-  else if(prior==='up'){ state='up-broken'; }   // was up, lost 15/20, dn not yet 15 -> broken
-  else if(prior==='dn'){ state='dn-broken'; }
-  else { state='flat'; }
+  // (v11.89) ONE resolver, three memories. The live machine reverses at TREND_DOM_REV; `strict` is the
+  // old 15/15 rule; `gated` is 15/11 but only reverses when the SMA has stopped moving the old way.
+  // Each carries its OWN prior — see TREND_LAST_STRICT / TREND_LAST_GATED.
+  function resolve(revThresh, priorIn, gateOk){
+    if(up>=TREND_DOM) return { st:'up', last:'up' };
+    if(dn>=TREND_DOM) return { st:'dn', last:'dn' };
+    if(priorIn==='up' && dn>=revThresh && gateOk!==false) return { st:'dn', last:'dn' };
+    if(priorIn==='dn' && up>=revThresh && gateOk!==false) return { st:'up', last:'up' };
+    if(priorIn==='up') return { st:'up-broken', last:priorIn };
+    if(priorIn==='dn') return { st:'dn-broken', last:priorIn };
+    return { st:'flat', last:priorIn||null };
+  }
+  var R=resolve(TREND_DOM_REV, prior, true);
+  var state=R.st;
+  if((state==='up'||state==='dn') && TREND_LAST[sym]!==R.last){ TREND_LAST[sym]=R.last; trendLastSave(); }
+
+  // ---- the two shadows: recorded, never rendered, never voted -----------------------------------
+  var stateStrict=null, stateGated=null;
+  try{
+    var pS=TREND_LAST_STRICT[sym];
+    var RS=resolve(TREND_DOM, pS, true);          // reversal threshold == confirm threshold = the old rule
+    stateStrict=RS.st;
+    if(RS.st==='up'||RS.st==='dn') TREND_LAST_STRICT[sym]=RS.last;
+    var pG=TREND_LAST_GATED[sym];
+    // the gate: a reversal only counts when the average has stopped moving the way it was.
+    var gOk = (pG==='up') ? (slope<=0) : ((pG==='dn') ? (slope>=0) : true);
+    var RG=resolve(TREND_DOM_REV, pG, gOk);
+    stateGated=RG.st;
+    if(RG.st==='up'||RG.st==='dn') TREND_LAST_GATED[sym]=RG.last;
+  }catch(eSh){}
+
   var dom = (state==='dn'||state==='dn-broken') ? dn : up;
-  return { state:state, up:up, dn:dn, dom:dom, win:win, ma:lastMa, slope:slope };
+  return { state:state, up:up, dn:dn, dom:dom, win:win, ma:lastMa, slope:slope,
+           prior:prior||null, stateStrict:stateStrict, stateGated:stateGated,
+           differs:(stateStrict!=null && stateStrict!==state),
+           revThresh:TREND_DOM_REV, domThresh:TREND_DOM };
 }
 // (v10.51) FASTER SMA WINDOWS — RECORDED, NEVER VOTED. Same 15/20-style dominance rule
 // as trendVerdict but over shorter MA periods (10 and 20), so the optimizer can later
@@ -11799,6 +11842,26 @@ function registerCoreFeatures(){
     rule:{ id:'dir.struct', tier:'hand', condition:'netPositioning bias, RECORDED not voted',
            mechanism:'A one-directional factor on a trending day looks like edge; only vote-split vs baseline can tell them apart.' } });
 
+// (v11.89) Named for the same reason as biasConfirmRecord: a record inside an anonymous registry
+// callback cannot be executed by the harness, and a record nobody can execute is a record nobody checks.
+var TREND_FLIP = {};   // sym -> { state, bar } — for sinceFlip / flipFast
+function trendMachineRecord(sym){
+  var tv=null; try{ tv=trendVerdict(sym); }catch(e){ return { ok:false }; }
+  if(!tv || tv.state==='na') return { ok:false };
+  var bar=0; try{ bar=(closedCandles(sym)||[]).length; }catch(e2){}
+  var prev=TREND_FLIP[sym];
+  var flip=!!(prev && prev.state!==tv.state);
+  var since=(prev && prev.bar!=null) ? (bar-prev.bar) : null;
+  if(!prev || flip) TREND_FLIP[sym]={ state:tv.state, bar:bar };
+  var vote=(tv.state==='up')?1:((tv.state==='dn')?-1:0);
+  return { ok:true, state:tv.state, stateStrict:tv.stateStrict, stateGated:tv.stateGated,
+           differs:!!tv.differs,
+           gateDiffers:(tv.stateGated!=null && tv.stateGated!==tv.state),
+           vote:vote, up:tv.up, dn:tv.dn, win:tv.win, slope:tv.slope, prior:tv.prior,
+           flip:flip, sinceFlip:since,
+           flipFast:!!(flip && since!=null && since<=4),
+           revThresh:tv.revThresh, domThresh:tv.domThresh };
+}
 // (v11.88) Extracted from the feature's record() so a test can EXECUTE it. An anonymous function
 // inside a registry object cannot be reached by the harness, and a record that cannot be executed is a
 // record nobody checks — which is exactly how the confirm tally went 224 bars without being written.
@@ -11854,6 +11917,33 @@ function biasConfirmRecord(sym){
     rule:{ id:'bias.confirm', tier:'hand',
            condition:'the ② BIAS confirm tally: which supplementary reads agree with the 50-SMA that owns the direction, how many are live, and PA recorded in shadow after being removed from the vote at v11.88',
            mechanism:'The 50-SMA owns the call and the supplementary reads confirm it or they do not; TREND alone measured 34%, so the count is meant to separate a call worth pressing from one worth halving. That claim has never been measured because the tally was never recorded. ⚠ The confirms are not independent of each other — SKEW, ACCUM and ROLL all read the same option book, which is why CROSS (a different instrument) was added and PA (the same price series as the SMA) was dropped.' } });
+
+  // ---- (v11.89) THE TREND MACHINE, WITH ITS TWO ALTERNATIVES RECORDED ---------------------------
+  // The reversal threshold dropped from 15 to 11 at the user's instruction and RAW — no slope gate.
+  // Rather than argue the choice, ship one machine and record three: what shipped, what the old 15/15
+  // rule would have said, and what a slope-gated 15/11 would have said. Precedent is `trendWindowRead`,
+  // which has recorded 10- and 20-period MAs unvoted since v10.51 for exactly this reason.
+  // ⚠ `sinceFlip` is the whipsaw measure. The loose rule's minimum distance between two OPPOSITE flips
+  // is 2 bars against the old rule's 10 — a small `sinceFlip` on a flip that reverses again is the
+  // symptom that would justify a dwell time.
+  registerFeature({ key:'trend.machine', label:'Trend machine · loose vs strict vs gated', phase:'dashboard', fwd:FEAT_FWD,
+    record:function(sym, ctx){ return trendMachineRecord(sym); },
+    outcome:function(rec, fwd){
+      var v=(rec&&rec.vote)||0;
+      return { hit:(v?_fwdHitNum(fwd, v, DIR_PTS):null), mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
+               differs:!!(rec&&rec.differs), sinceFlip:(rec&&rec.sinceFlip!=null)?rec.sinceFlip:null };
+    },
+    questions:[
+      { id:'trend_loose_reversal_leads', when:[{f:'differs',v:true}], outcome:'dirMove',
+        note:'the LOOSE machine has flipped and the strict one has not yet: does price actually travel DIR_PTS in the new direction? This is the entire claim behind dropping 15 to 11 — that the extra 4 bars were lag rather than evidence.' },
+      { id:'trend_loose_whipsaw', when:[{f:'flipFast',v:true}], outcome:'dirMove',
+        note:'a flip that arrived within 4 bars of the previous flip. If these fail more than flips that had room, the loose rule is buying its 12 minutes with whipsaw and a DWELL TIME is the fix — not a retreat to 15.' },
+      { id:'trend_gate_would_have_helped', when:[{f:'gateDiffers',v:true}], outcome:'dirMove',
+        note:'bars where a SLOPE-GATED reversal disagrees with the raw one the user chose. Raw calls DOWN while the 50-SMA may still be RISING, which is a pullback rather than a downtrend; this is the question that says whether the gate was worth having.' }
+    ],
+    rule:{ id:'trend.machine', tier:'hand',
+           condition:'five-state SMA-50 machine, 20-bar window, 0.25-ATR neutral band; a NEW trend confirms at 15 of 20, a REVERSAL out of a broken state at 11, raw and ungated',
+           mechanism:'A break of a confirmed trend is itself evidence, so demanding the full 15 the other way costs 4 bars after the turn is already visible. ⚠ The cost is symmetric and measured: once a trend has confirmed once, both directions flip at 11, and the minimum gap between opposite flips falls from 10 new bars to 2. Whether 12 minutes of lead is worth that is the open question, which is why the strict and slope-gated machines are recorded on every bar beside the one that ships.' } });
 
   registerFeature({ key:'dir.kingRoll', label:'Direction candidate · King roll', phase:'dashboard', fwd:FEAT_FWD,
     record:function(sym){
@@ -17371,10 +17461,10 @@ function biasVotes(sym){
     }
     var sk=null; try{ sk=skewRead(sym); }catch(e2){}
     conf('SKEW', (sk&&!sk.err)?sk.dir:null,
-      'Their published Δ Skew, read against its OWN recent range rather than as a level — index skew is permanently put-heavy, so the raw number would say the same thing every day. Skew at the rich end means protection is being bought.');
+      'Is protection being bought or sold?\nTheir published Δ Skew, read against its own recent range rather than as a level.\n⚠ Index skew is permanently put-heavy, so the raw number would say the same thing every day.');
     var ac=null; try{ ac=accumAsym(sym); }catch(e3){}
     conf('ACCUM', ac?ac.dir:null,
-      'Which side of the book ADDED dollars over the last half hour. Growth is flow, and flow has a direction. Measured in dollars because %King has a moving denominator and cannot compare two moments.');
+      'Which side of the book is growing?\nDollars added to calls vs puts over the last half hour. Growth is flow, and flow has a direction.\n⚠ Measured in dollars, not %King — a percentage has a moving denominator and cannot compare two moments.');
     // ---- (v11.88) PA NO LONGER VOTES ------------------------------------------------------------
     // PA reads where recent bars close inside their own range — the same price series the 50-SMA
     // above it reads. In an uptrend bars close near their highs more or less mechanically, so PA
@@ -17387,12 +17477,12 @@ function biasVotes(sym){
     // ---- (v11.88) CROSS — the only confirm that is not another reading of SPY's own book ---------
     var cx=null; try{ cx=crossRead(sym); }catch(e6){}
     conf('CROSS', (cx&&cx.ok)?cx.dir:null,
-      'Does the OTHER index agree? Every other confirm here is a second reading of this symbol\'s own option book; this one is a different instrument on the same macro driver, which is the only independent evidence available. Both sides are measured by the SAME rule on the SAME field — the 1-minute spot series each feed carries — over 150 minutes of average and a 60-minute window, matching the 3-minute SMA-50 that owns the call above. \u26a0 NOT the candle trend: QQQ has no candles, so a candle-vs-snapshot comparison would be measuring two different things.');
+      'Does the other index agree?\nThe QQQ trend, by the same rule on the same field as SPY — 150 minutes of average, a 60-minute window.\n⚠ The only confirm here that is not a second reading of the same option book.\n⚠ Built from the 1-minute spot series, not candles: QQQ has no candles at all.');
     // ---- (v11.88) ROLL — the settlement magnet migrating -----------------------------------------
     var krR=null; try{ krR=kingRollRead(sym); }catch(e7){}
     var kr=(krR&&krR.ok)?krR.dir:null;
     conf('ROLL', kr,
-      'Is the settlement magnet moving, and which way? The King strike migrating up or down over the window is the board repositioning rather than price doing something. \u26a0 Recorded since v11.0 as `dir.kingRoll` and DELIBERATELY non-voting until now, because whether it LEADS price was an open measurement; it votes from v11.88 at the user\'s instruction and `kingroll_leads_dir` is still the question that settles it.');
+      'Is the settlement magnet moving?\nThe King strike migrating up or down over the window — the board repositioning, not price.\n⚠ Recorded since v11.0 and non-voting until v11.89. Whether it LEADS price is still the open question.');
     out.skew=sk; out.accum=ac; out.pa=pa; out.cross=cx; out.kingRoll=kr; out.rollRead=krR;
 
     var dr=null; try{ dr=driftRead(sym); }catch(e5){}
@@ -17628,6 +17718,12 @@ function ensureV3Css(){
     '#gpts-body .g3chip.y{color:#2ec27e;border-color:rgba(46,194,126,.4);background:rgba(46,194,126,.08)}'+
     '#gpts-body .g3chip.n{color:#f0616d;border-color:rgba(240,97,109,.35);background:rgba(240,97,109,.07)}'+
     '#gpts-body .g3cnt{margin-left:auto;font-size:8.5px;font-weight:800}'+
+  // (v11.90) THE GATE BADGE. DRIFT joins the confirm row but must NOT look like a confirm: outlined
+  // only, never filled, behind a divider. Drawn identically it would read as a fifth confirm and
+  // inflate the very count that only started being recorded at v11.88.
+  '#gpts-body .g3chip.gate{background:transparent!important;border-style:dashed}'+
+  '#gpts-body .g3sepv{width:1px;height:11px;background:#1e2530;flex:0 0 1px}'+
+  '#gpts-body .g3cf{flex-wrap:wrap;row-gap:3px}'+
     '#gpts-body .g3votes{display:flex;gap:2px;margin-top:5px}'+
     '#gpts-body .g3vt{flex:1;text-align:center;border:1px solid #1e2530;border-radius:3px;padding:2px 0 3px}'+
     '#gpts-body .g3vt .k{display:block;font-size:6px;color:#8b98a9;font-weight:700}'+
@@ -18928,8 +19024,8 @@ function secBias(sym){
   var B=biasVotes(sym);
   var col=B.dir>0?'g3up':(B.dir<0?'g3dn':'');
   var h='<div class="g3b">';
-  h+='<div class="g3vd2"'+g3tip('Which way, and on whose authority? The 50-SMA decides and nothing below can overrule it; the reason beside the call is the SMA\'s own evidence. When the SMA has no side this reads FLAT rather than assembling a direction out of three secondary inputs.')+'>'+
-     '<b class="'+col+'"'+g3tip('Which way, and on whose authority? The 50-SMA decides, and nothing below can overrule it. The supplementary reads confirm or they do not. When the SMA has no side this says FLAT rather than assembling a direction out of three secondary inputs — which is what the old tally did, printing NEUTRAL on a 2-2 split while the trend was plainly on the chart.')+'>'+
+  h+='<div class="g3vd2"'+g3tip('Which way, and on whose authority?\nThe 50-SMA decides. Nothing below can overrule it.\n⚠ A new trend needs 15 of 20 bars; a reversal out of a broken trend needs 11.\n⚠ FLAT means the SMA has no side — it is never assembled out of the confirms.')+'>'+
+     '<b class="'+col+'"'+g3tip('Which way, and on whose authority?\nThe 50-SMA decides. The reads below confirm it or they do not.\n⚠ The old tally let them outvote it and printed NEUTRAL on a 2-2 split while the trend was plainly on the chart.')+'>'+
      arrow(B.dir)+' '+B.verdict+'</b>'+
      '<span class="g3why">'+g3esc(B.why)+'</span></div>';
   h+='<div class="g3cf">';
@@ -18942,15 +19038,18 @@ function secBias(sym){
     else { cls=' n'; mark='✗'; }
     h+='<span class="g3chip'+cls+'"'+g3tip(c.tip)+'>'+c.k+' '+mark+'</span>';
   });
-  var cnt, ccol;
-  if(B.dir===0){ cnt='no side to confirm'; ccol='#8b98a9'; }
-  else { cnt=B.nConf+' of '+B.confirms.length+' confirm'; ccol=confColour(B.nConf, B.nLive); }
-  h+='<span class="g3cnt" style="color:'+ccol+'"'+g3tip('How much conviction is behind this call? Three of three agreeing is a day to press; one of three is a day for half size or none. TREND alone measured 34%, so the count is doing real work — it is the difference between following the SMA and following it blindly.')+'>'+cnt+'</span>';
-  h+='</div>';
-  // (v11.44) DRIFT MUST GATE THE CALL, NOT ITSELF. A ✓ was shown whenever the two books agreed with
-  // EACH OTHER — so the live face read "↑ BULLISH" beside "DRIFT ✓ DN·conf": the books agreed, on DOWN,
-  // against an up call, and the tick said everything was fine. Agreement is only confirmation when it
-  // points the same way as the SMA.
+  // (v11.90) DRIFT MOVES ONTO THE CONFIRM ROW AS A BADGE — BUT IT STILL DOES NOT VOTE.
+  // Two things are true at once and both have to survive this change:
+  //  1. v11.44 pulled drift OUT of the confirm row because its tick meant "the two books agree with
+  //     EACH OTHER" — and the live face read "↑ BULLISH" beside "DRIFT ✓ DN·conf": they agreed on DOWN,
+  //     against an up call, and the tick said everything was fine. Agreement is only confirmation when
+  //     it points the SAME WAY as the SMA, and that test is still applied below.
+  //  2. The user shadowed drift on 2026-08-18 — "remove it until it is tested and proven" — and
+  //     DRIFT_LIVE is still false. Measured 2026-08-24: AGREE-UP 25% on effN 10 against a 21% baseline
+  //     over 2 sessions. It has NOT earned promotion.
+  // So it is drawn as a badge for consistency and to save a row, but OUTLINED rather than filled and
+  // behind a divider, and it is NOT in `nConf`. Drawn identically it would read as a fifth confirm and
+  // inflate the very count that only started being recorded at v11.88.
   var dr=B.drift, vd=(dr&&dr.verdict)?dr.verdict:'NONE';
   var dDir=(dr&&typeof dr.dir==='number')?dr.dir:0;
   var books=/^AGREE/.test(vd)?'agree':(/^LEAN/.test(vd)?'lean':(vd==='SPLIT'?'split':'none'));
@@ -18958,20 +19057,18 @@ function secBias(sym){
   var agree, mark2, gtxt;
   if(books==='none'){ agree=null; mark2='·'; gtxt='both books not in yet'; }
   else if(books==='split'){ agree=false; mark2='✗'; gtxt='gamma and vanna lean opposite ways — nothing confirming'; }
-  else if(withCall===false){
-    agree=false; mark2='✗';
-    gtxt='books '+books+' '+(dDir>0?'UP':'DOWN')+' — against the call';
-  } else if(withCall===true){
-    agree=true; mark2=(books==='agree')?'✓':'~';
-    gtxt=(dr.label||vd)+' · '+(dr.overlap?'bands overlap':'bands apart');
-  } else {
-    agree=null; mark2='·';
-    gtxt=(dr.label||vd)+' · no side to confirm';
-  }
-  var gcol=(agree===true)?'rgba(46,194,126,.1)':((agree===false)?'rgba(240,97,109,.1)':'rgba(139,152,169,.1)');
-  var gink=(agree===true)?'#2ec27e':((agree===false)?'#f0616d':'#8b98a9');
-  h+='<div class="g3gate" style="background:'+gcol+'"'+g3tip('Is anything structurally confirming the call? Gamma and vanna either lean the same way relative to price or they split. This is the ONLY place gamma touches direction, and it gates rather than votes, because gamma tells you how price moves rather than which way it goes. A split means nothing is confirming and the call above is worth less.')+'>'+
-     '<b style="color:'+gink+';font-weight:800">DRIFT '+mark2+'</b><span>'+g3esc(gtxt)+'</span></div>';
+  else if(withCall===false){ agree=false; mark2='✗'; gtxt='books '+books+' '+(dDir>0?'UP':'DOWN')+' — against the call'; }
+  else if(withCall===true){ agree=true; mark2=(books==='agree')?'✓':'~'; gtxt=(dr.label||vd)+' · '+(dr.overlap?'bands overlap':'bands apart'); }
+  else { agree=null; mark2='·'; gtxt=(dr.label||vd)+' · no side to confirm'; }
+  var dcls=(agree===true)?' y':((agree===false)?' n':'');
+  h+='<i class="g3sepv"></i>';
+  h+='<span class="g3chip gate'+dcls+'"'+g3tip('Is anything structurally confirming the call?\nGamma and vanna either lean the same way relative to price, or they split. '+g3esc(gtxt)+'.\n⚠ A GATE, not a vote — it is not in the count. Gamma says HOW price moves, never which way.\n⚠ A tick means the books agree AND point with the call. Agreeing with each other on the wrong side is a cross.')+'>DRIFT '+mark2+'</span>';
+
+  var cnt, ccol;
+  if(B.dir===0){ cnt='no side to confirm'; ccol='#8b98a9'; }
+  else { cnt=B.nConf+' of '+B.confirms.length+' confirm'; ccol=confColour(B.nConf, B.nLive); }
+  h+='<span class="g3cnt" style="color:'+ccol+'"'+g3tip('How much conviction is behind this call?\nHow many live confirms agree with the 50-SMA that owns the direction.\n⚠ Green only when EVERY live one agrees. A dash means that read had nothing to give, which is not the same as disagreeing.\n⚠ TREND alone measured 34%. Whether the count improves on that has never been tested — it only started being recorded at v11.88.')+'>'+cnt+'</span>';
+  h+='</div>';
   h+='</div>';
   return h;
 }
@@ -19752,6 +19849,8 @@ window.__gptsDebug.phase   = function(){ return sessionPhase(); };
 window.__gptsDebug.regime2 = function(s){ return regime2D(s||activeSym()); };
 window.__gptsDebug.pa      = function(s){ return paRead(s||activeSym()); };
 window.__gptsDebug.bias    = function(s){ return biasVotes(s||activeSym()); };
+window.__gptsDebug.trend   = function(s){ return trendVerdict(s||activeSym()); };
+window.__gptsDebug.trendRec= function(s){ return trendMachineRecord(s||activeSym()); };
 // (v11.88) cross-symbol agreement, and the raw snapshot trend both sides are measured with
 window.__gptsDebug.cross   = function(s){ return crossRead(s||activeSym()); };
 window.__gptsDebug.snapTrend = function(s){ return snapTrend(s||activeSym()); };
