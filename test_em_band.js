@@ -954,6 +954,14 @@ eval(ex('emBand'));
      'the level named by the mechanism clause appears exactly ONCE — v11.99 printed it again under "Next down"', {times:named, txt:t2});
   ok(!/down 7668/.test(t2),
      'and the side it already spoke for is dropped, not repeated');
+  // ⚠ (v12.1) BUT ONLY THE BRANCHES THAT ACTUALLY NAME IT. The FLIP branch names the flip level, not
+  // `next` — v12.0 suppressed a side on the grounds that a sentence which never mentioned it had
+  // already covered it, and a live gatekeeper between price and the King went unnamed:
+  //   "Flip at 7663, 8.3 below. ... Then up 7672 (97% brake, 1 away)."   <- no down side at all
+  ok(/namesNext = \(out\.branch==='accel' \|\| out\.branch==='brake'\)/.test(ex('emRead')),
+     'the dedupe applies ONLY to the branches whose clause names the node');
+  ok(/var named = \(namesNext &&/.test(ex('emRead')),
+     'and `named` is null on flip / air / past / balanced, so both sides still get stated');
   {
     // both sides present and NEITHER is the named node -> both are listed
     const t3=RUN(Object.assign({},BASE,{dir:-1,now:7680}),dn).txt;

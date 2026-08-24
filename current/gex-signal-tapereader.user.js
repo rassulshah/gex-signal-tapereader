@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    12.0
+// @version    12.1
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='12.0';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='12.1';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -18881,7 +18881,15 @@ function emRead(B, sym){
       //   "...brake at 7669 can stop price there. Next up: 7674 ... Next down: 7669 (75% brake)."
       // 7669 stated twice in one sentence. D-8: before adding anything to this section, check whether
       // another element already says it. The side already spoken for is dropped, not repeated.
-      var named = (typeof next==='object' && next) ? frameNum(next.disp) : null;
+      // ⚠ (v12.1) ONLY SUPPRESS A SIDE THE CLAUSE ACTUALLY NAMED.
+      // v12.0 keyed the dedupe off `next` regardless of which branch ran — but the FLIP branch names
+      // the flip level, not `next`, so a real node was being hidden on the grounds that a sentence
+      // which never mentioned it had already covered it. Seen live:
+      //   "Flip at 7663, 8.3 below. ... Then up 7672 (97% brake, 1 away)."
+      // with a 7667 gatekeeper sitting between price and the King and never named at all.
+      // The `air`, `past` and `balanced` branches do not name `next` either.
+      var namesNext = (out.branch==='accel' || out.branch==='brake');
+      var named = (namesNext && typeof next==='object' && next) ? frameNum(next.disp) : null;
       var upSame = !!(up1 && named!=null && frameNum(up1.disp)===named);
       var dnSame = !!(dn1 && named!=null && frameNum(dn1.disp)===named);
       var parts=[];
