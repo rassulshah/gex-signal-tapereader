@@ -21,7 +21,16 @@ ok(/function testingBlock\(\)/.test(src), 'testingBlock exists');
 });
 ok(/PATTERN MINER/.test(src) && /Hypothesis builder|hypothesis/i.test(src), 'the v10.45 exploration tools survive in DETAIL');
 ok(/gpts_mine_v1/.test(src), 'miner result cached');
-ok(/@version\s+(10\.(4[0-9]|5[0-9])|11\.\d+)/.test(src), 'version 10.4x-5x or 11.x');
+// (v12.0) VERSION PINS ARE NUMERIC NOW. These were regex alternations listing every allowed major
+// ('10.4x|10.5x|11.x'), so every major bump broke three unrelated suites at once — 11 -> 12 did it
+// again. Parse the version and compare; a floor is what the assertion actually means.
+function verAtLeast(src, min){
+  var m=/@version\s+([0-9]+)\.([0-9]+)/.exec(src); if(!m) return false;
+  var a=parseInt(m[1],10), b=parseInt(m[2],10);
+  var p=String(min).split('.'), A=parseInt(p[0],10), B=parseInt(p[1]||'0',10);
+  return (a>A) || (a===A && b>=B);
+}
+ok(verAtLeast(src,'10.40'), 'version is at least 10.40', (/@version\s+\S+/.exec(src)||[])[0]);
 ok((src.match(/^function render\(\)/gm)||[]).length===1 && /\}\)\(\);\s*$/.test(src), 'file shape rule 2.4 (one render, closes cleanly)');
 
 // --- pure logic: stub repoAll + localStorage, run miner/hypothesis on synthetic rows ---

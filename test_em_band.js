@@ -942,8 +942,23 @@ eval(ex('emBand'));
   // longer an exact-string match — assert the CLAUSE, then the additions.
   ok(/^\$6M negative gamma accelerator at 7668 can take price lower to the \$6M positive gamma node at 7665\./.test(t2),
      'the chained form matches the shape asked for', t2);
-  ok(/Next up: /.test(t2) && /Next down: /.test(t2),
-     'and both sides are named — the old line described only the direction of travel');
+  // (v12.0) the clause names ONE side already, so the addition names the OTHER — never both, or the
+  // same level appears twice in one sentence. That is exactly what shipped in v11.99:
+  //   "...brake at 7669 can stop price there. Next up: 7674 ... Next down: 7669 (75% brake)."
+  ok(/ Then /.test(t2), 'the sentence carries what comes next', t2);
+  // ⚠ COUNT the named level. `dir:-1, now:7690` puts the mechanism clause on 7668 — which is also the
+  // nearest node BELOW price, so the "down" side is already spoken for and must be dropped. Asserting
+  // "does not contain X twice" with a loose regex passed a build that printed it twice; count instead.
+  const named=(t2.match(/7668/g)||[]).length;
+  ok(named===1,
+     'the level named by the mechanism clause appears exactly ONCE — v11.99 printed it again under "Next down"', {times:named, txt:t2});
+  ok(!/down 7668/.test(t2),
+     'and the side it already spoke for is dropped, not repeated');
+  {
+    // both sides present and NEITHER is the named node -> both are listed
+    const t3=RUN(Object.assign({},BASE,{dir:-1,now:7680}),dn).txt;
+    ok(!/undefined/.test(t3), 'no undefined units on either side', t3);
+  }
   ok(!/undefined/.test(t2),
      'with no undefined units: the IF fallback carries DOLLARS and has no %King, so printing pct blindly produced "undefined% accelerator"', t2);
   const t3=RUN(Object.assign({},BASE,{now:7700}),two).txt;

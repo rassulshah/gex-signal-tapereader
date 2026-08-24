@@ -40,6 +40,15 @@ ok(/th:'Confluence'/.test(src) && /th:'Accumulation'/.test(src), 'confluence + a
 // (v10.54 GROUP 5) the research-curated list is exploration, not the learning loop, so
 // it moved into the Testing tab's collapsible DETAIL section.
 ok(/det\+=recoTestsHtml\(\)/.test(src), 'recoTestsHtml called in testingBlock (DETAIL section)');
-ok(/@version\s+(10\.(4[6-9]|5[0-9])|11\.\d+)/.test(src), 'version >= 10.46');
+// (v12.0) VERSION PINS ARE NUMERIC NOW. These were regex alternations listing every allowed major
+// ('10.4x|10.5x|11.x'), so every major bump broke three unrelated suites at once — 11 -> 12 did it
+// again. Parse the version and compare; a floor is what the assertion actually means.
+function verAtLeast(src, min){
+  var m=/@version\s+([0-9]+)\.([0-9]+)/.exec(src); if(!m) return false;
+  var a=parseInt(m[1],10), b=parseInt(m[2],10);
+  var p=String(min).split('.'), A=parseInt(p[0],10), B=parseInt(p[1]||'0',10);
+  return (a>A) || (a===A && b>=B);
+}
+ok(verAtLeast(src,'10.46'), 'version is at least 10.46', (/@version\s+\S+/.exec(src)||[])[0]);
 ok((src.match(/^function render\(\)/gm)||[]).length===1 && /\}\)\(\);\s*$/.test(src), 'file shape rule 2.4');
 console.log('test_reco_deriv: '+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);

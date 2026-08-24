@@ -1,3 +1,43 @@
+## v12.0 — the read line was naming the same level twice
+
+Caught on the live face within minutes of v11.99 going in:
+
+    "75% positive gamma brake at 7669 can stop price there.
+     Next up: 7674 (32% brake, 4 away). Next down: 7669 (75% brake, 1 away)."
+
+**7669 stated twice in one sentence.** The mechanism clause already names the node in the direction of
+travel, and that node IS one of the two sides — so v11.99 printed it again. D-8 exists for exactly this:
+*before adding anything to this section, check whether another element already says it.* The side the
+clause has spoken for is now dropped, and the wording shortens to `Then up …, down …`.
+⚠ An absent side still says **"nothing above" / "nothing below"** rather than being silently omitted —
+an unmentioned side reads as a claim that nothing is there.
+
+⚠ **My first test for this passed a build that still printed the duplicate.** It asserted "does not
+match X…X" with a loose regex; the fix was to COUNT occurrences of the named level and require exactly
+one. Restating a bug as a regex is not the same as measuring it.
+
+### version pins are numeric now
+
+Bumping to 12.0 broke three unrelated suites at once — `test_magnet_v1044`, `test_reco_deriv` and
+`test_testing_tab` each pinned the version with a regex alternation listing every allowed major
+(`10.4x|10.5x|11.x`). That is a tax charged on every major bump for no benefit. They compare numerically
+against a floor now, which is what the assertion always meant.
+
+### verified live on v11.99 before this fix
+
+`renderErrors []` · sanity 0 failed · regime `−G +V` / BREAKS · badges `SKEW → · ACCUM ↑ · CROSS → ·
+ROLL —` with `DRIFT ✗` · BIAS `↓ DNTREND BRK · 11 of 20 bars below the 50-SMA — lost 15, reversal needs
+11` · **the rail rescale live**: price had run below the expected low, the rail read `7639 RAIL` against
+`7730 EH` with the gold boundary marker drawn · SPXW ledger `n:8, bars:87` · every debug hook returning.
+**ACCUM is answering again at n=7**, up from the starved n=4 that made it flip.
+
+⚠ **I nearly reported a bug that was my own measurement artifact.** A first DOM read showed the regime
+chip and three badges as dashes while the debug hooks returned healthy data. Reading the face and the
+data in ONE synchronous pass showed them agreeing exactly — the first capture had simply landed between
+renders. **When the face and the data disagree, suspect the sampling before the code.**
+
+---
+
 ## v11.99 — the rail grows past a boundary, and the read line names both sides
 
 **THE RAIL RESCALES WHEN PRICE RUNS PAST THE EXPECTED MOVE.** Until now a price beyond the expected

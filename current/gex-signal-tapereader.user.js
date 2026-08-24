@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.99
+// @version    12.0
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.99';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='12.0';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -18876,9 +18876,22 @@ function emRead(B, sym){
       }
       out.next={ up:up1?{k:up1.k, disp:up1.disp, pct:up1.pct, accel:!!up1.accel}:null,
                  dn:dn1?{k:dn1.k, disp:dn1.disp, pct:dn1.pct, accel:!!dn1.accel}:null };
-      if(up1 || dn1){
-        out.nextTxt=' Next up: '+sideTxt(up1,'above')+'. Next down: '+sideTxt(dn1,'below')+'.';
-      } else out.nextTxt='';
+      // ⚠ (v12.0) NEVER NAME THE SAME LEVEL TWICE. The mechanism clause above already names the node
+      // in the direction of travel, and it IS one of these two — so the first version printed
+      //   "...brake at 7669 can stop price there. Next up: 7674 ... Next down: 7669 (75% brake)."
+      // 7669 stated twice in one sentence. D-8: before adding anything to this section, check whether
+      // another element already says it. The side already spoken for is dropped, not repeated.
+      var named = (typeof next==='object' && next) ? frameNum(next.disp) : null;
+      var upSame = !!(up1 && named!=null && frameNum(up1.disp)===named);
+      var dnSame = !!(dn1 && named!=null && frameNum(dn1.disp)===named);
+      var parts=[];
+      if(up1 && !upSame) parts.push('up '+sideTxt(up1,'above'));
+      if(dn1 && !dnSame) parts.push('down '+sideTxt(dn1,'below'));
+      // if the clause above named one side, say plainly that the OTHER side is empty rather than
+      // silently dropping it — an unmentioned side reads as "nothing there", which is a claim.
+      if(!up1 && !upSame) parts.push('nothing above');
+      if(!dn1 && !dnSame) parts.push('nothing below');
+      out.nextTxt = parts.length ? (' Then '+parts.join(', ')+'.') : '';
     }catch(eNx){ out.nextTxt=''; }
     out.src=srcNow;
     var degNow=emPiles.lastDegraded||'';
