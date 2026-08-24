@@ -1,0 +1,231 @@
+<meta charset="utf-8"><title>FRAME v11.88 UI</title>
+<style>
+:root{--bg:#0d1117;--pnl:#10151d;--tx:#e6edf3;--sub:#8b98a9;--dim:#6c7889;--rail:#232c3a;
+--acc:#a371f7;--brk:#e3c341;--cy:#4fd1e0;--gn:#2ec27e;--rd:#f0616d;--gold:#f2b45a;--line:#1a212c}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--tx);font:13px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:26px}
+h1{font-size:15px;letter-spacing:.02em;margin:0 0 4px}
+h2{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--sub);margin:30px 0 10px;font-weight:800}
+.note{color:var(--sub);font-size:12px;max-width:900px;margin:0 0 6px}
+.cols{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+.col{flex:1;min-width:400px}
+.tag{font-size:9px;font-weight:800;letter-spacing:.12em;padding:2px 7px;border-radius:3px;display:inline-block;margin-bottom:7px}
+.before{background:rgba(240,97,109,.14);color:var(--rd)}
+.after{background:rgba(46,194,126,.14);color:var(--gn)}
+.panel{background:var(--pnl);border:1px solid var(--line);border-radius:6px;padding:9px 10px;width:372px;
+  font-variant-numeric:tabular-nums;font-family:-apple-system,Segoe UI,Roboto,sans-serif}
+.sh{display:block;text-align:center;font-size:8px;font-weight:800;letter-spacing:.13em;color:var(--sub);
+  margin-bottom:4px;padding:2px 0;border-radius:3px;background:rgba(139,152,169,.09)}
+.f1{display:flex;align-items:center;gap:7px;font-size:9.5px;flex-wrap:wrap}
+.rg{font-size:10px;font-weight:800;padding:1px 7px;border-radius:3px;background:rgba(163,113,247,.18);
+  color:var(--acc);border:1px solid rgba(163,113,247,.4)}
+.play{font-size:8px;font-weight:800;letter-spacing:.06em;color:var(--sub)}
+.play b{color:var(--acc);font-weight:800}
+.flow{font-size:8px;font-weight:800;padding:0 5px;border-radius:2px;line-height:13px;
+  background:rgba(163,113,247,.14);color:var(--acc)}
+.ct{font-size:8px;font-weight:800;padding:1px 5px;border-radius:2px;background:rgba(139,152,169,.13);color:var(--sub)}
+.tgt{font-size:11px;font-weight:800;color:var(--gn);letter-spacing:-.2px;margin-left:auto}
+/* ---- the rail ---- */
+.emw{display:flex;align-items:center;gap:6px;margin-top:7px}
+.emk{font-size:10.5px;font-weight:800;color:var(--tx);line-height:1;white-space:nowrap;text-align:center}
+.emk small{display:block;font-size:7.5px;font-weight:700;color:var(--dim);letter-spacing:.03em;margin-top:1px}
+.emt{position:relative;flex:1;min-width:80px}
+.emr{position:absolute;left:0;right:0;height:4px;border-radius:2px;background:var(--rail);
+  box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}
+.emf{position:absolute;height:4px;border-radius:2px;background:rgba(139,152,169,.55)}
+.emo{position:absolute;width:1px;background:rgba(195,204,216,.6)}
+.pile{position:absolute;transform:translateX(-50%);border-radius:1px}
+.pile.acc{background:var(--acc)} .pile.brk{background:var(--brk)}
+.emn{position:absolute;border-radius:50%;background:#fff;box-shadow:0 0 0 2px rgba(13,17,23,.9)}
+.seg{position:absolute;top:0;font-size:8px;font-weight:800;transform:translateX(-50%);white-space:nowrap;line-height:9px}
+.tmark{position:absolute;font-size:8px;font-weight:800;color:var(--gn);transform:translateX(-50%)}
+.read{font-size:8.5px;line-height:1.5;color:var(--sub);margin-top:5px;border-top:1px solid var(--line);padding-top:4px}
+/* BEFORE label sizes */
+.b .plab{position:absolute;transform:translateX(-50%);font-size:6.5px;font-weight:800;white-space:nowrap;text-align:center;line-height:7px}
+.b .plab i{display:block;font-style:normal;font-size:5.5px;color:var(--sub);letter-spacing:.04em}
+/* AFTER label sizes  +50% */
+.a .plab{position:absolute;transform:translateX(-50%);font-size:9.75px;font-weight:800;white-space:nowrap;text-align:center;line-height:10px}
+.a .plab i{display:block;font-style:normal;font-size:8.25px;color:var(--sub);letter-spacing:.04em;line-height:9px}
+.plab.acc{color:var(--acc)} .plab.brk{color:var(--brk)}
+/* geometry */
+.b .emt{height:48px} .b .emr,.b .emf{top:14px} .b .emo{top:7px;height:8px}
+.b .pile{bottom:19px} .b .emn{top:11px;width:10px;height:10px} .b .plab{bottom:-1px}
+.a .emt{height:56px} .a .emr,.a .emf{top:14px} .a .emo{top:7px;height:8px}
+.a .pile{bottom:23px} .a .plab{bottom:-1px}
+/* the dot becomes a pill carrying the price */
+.a .emn{top:8px;height:16px;width:auto;border-radius:8px;background:#fff;color:#0d1117;
+  font-size:9.5px;font-weight:800;line-height:16px;padding:0 5px;transform:translateX(-50%);
+  box-shadow:0 0 0 2px rgba(13,17,23,.92)}
+/* hovers */
+.hv{background:#161b24;border:1px solid var(--line);border-radius:5px;padding:9px 11px;font-size:11.5px;
+  line-height:1.55;color:#cdd6e0;white-space:pre-wrap;margin-bottom:8px}
+.hv .q{color:var(--tx);font-weight:700;display:block;margin-bottom:5px}
+.hv.old{border-color:rgba(240,97,109,.3)}
+.hv.new{border-color:rgba(46,194,126,.3)}
+.wc{font-size:10px;color:var(--dim);margin:-4px 0 12px}
+.geo{background:#161b24;border:1px solid var(--line);border-radius:5px;padding:10px 12px;font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:1.7;color:#cdd6e0}
+.geo b{color:var(--gold)}
+mark{background:rgba(242,180,90,.2);color:var(--gold);padding:0 3px;border-radius:2px}
+</style>
+
+<h1>① FRAME — proposed UI changes</h1>
+<p class="note">Rendered with your live numbers: ES 7709, King SPX 7710 → ES 7728, gate SPX 7700 → ES 7718, brake SPX 7650 → ES 7668, band 7661–7730, target 7718.</p>
+
+<h2>1 · The rail</h2>
+<div class="cols">
+  <div class="col"><span class="tag before">BEFORE</span>
+    <div class="panel b">
+      <span class="sh">① FRAME · 08/21</span>
+      <div class="f1">
+        <span class="rg">−G −V ⚠</span><span class="play"><b>BREAKS</b></span>
+        <span class="flow">FEEDS $214 M / PT</span><span class="ct">ES $1,736/ct</span>
+        <span class="tgt">T: 7718 +9</span>
+      </div>
+      <div class="emw">
+        <span class="emk">7661<small>~EXP LOW ≠TODAY</small></span>
+        <div class="emt">
+          <span class="seg" style="left:22%;color:#8b98a9">$1,616</span>
+          <span class="seg" style="left:78%;color:#8b98a9">$1,746</span>
+          <span class="tmark" style="left:81.6%;top:0">T</span>
+          <i class="emr"></i><i class="emf" style="left:49%;width:20%"></i>
+          <i class="emo" style="left:50%"></i>
+          <i class="pile brk" style="left:9.5%;width:5px;height:8px"></i>
+          <i class="pile acc" style="left:81.6%;width:5px;height:16px"></i>
+          <i class="pile acc" style="left:96%;width:5px;height:20px"></i>
+          <i class="emn" style="left:69%"></i>
+          <span class="plab brk" style="left:9.5%">7668<i>7650 BRK</i></span>
+          <span class="plab acc" style="left:81.6%">7718<i>7700 GK</i></span>
+          <span class="plab acc" style="left:96%">7728<i>7710 KING</i></span>
+        </div>
+        <span class="emk">7730<small>~EXP HIGH ≠TODAY</small></span>
+      </div>
+      <div class="read">79% negative gamma accelerator at 7718 can take price higher to the 100% negative gamma node at 7728.</div>
+    </div>
+    <p class="wc">The dot is unlabelled — you read position, not price. Node labels 6.5px / 5.5px.</p>
+  </div>
+
+  <div class="col"><span class="tag after">AFTER</span>
+    <div class="panel a">
+      <span class="sh">① FRAME · 08/21</span>
+      <div class="f1">
+        <span class="rg">−G −V ⚠</span><span class="play"><b>BREAKS</b> · TREND</span>
+        <span class="flow">FEEDS $214 M / PT</span><span class="ct">ES $1,736/ct</span>
+        <span class="tgt">T: 7718 +9</span>
+      </div>
+      <div class="emw">
+        <span class="emk">7661<small>~EXP LOW ≠TODAY</small></span>
+        <div class="emt">
+          <span class="seg" style="left:22%;color:#8b98a9">$1,616</span>
+          <span class="seg" style="left:78%;color:#8b98a9">$1,746</span>
+          <span class="tmark" style="left:81.6%;top:0">T</span>
+          <i class="emr"></i><i class="emf" style="left:49%;width:20%"></i>
+          <i class="emo" style="left:50%"></i>
+          <i class="pile brk" style="left:9.5%;width:5px;height:8px"></i>
+          <i class="pile acc" style="left:81.6%;width:5px;height:16px"></i>
+          <i class="pile acc" style="left:96%;width:5px;height:20px"></i>
+          <i class="emn" style="left:69%">7709</i>
+          <span class="plab brk" style="left:9.5%">7668<i>7650 BRK</i></span>
+          <span class="plab acc" style="left:81.6%">7718<i>7700 GK</i></span>
+          <span class="plab acc" style="left:96%">7728<i>7710 KING</i></span>
+        </div>
+        <span class="emk">7730<small>~EXP HIGH ≠TODAY</small></span>
+      </div>
+      <div class="read">79% negative gamma accelerator at 7718 can take price higher to the 100% negative gamma node at 7728.</div>
+    </div>
+    <p class="wc">Dot becomes a white pill carrying the live price. Labels 9.75px / 8.25px (+50%). <mark>TREND</mark> beside BREAKS.</p>
+  </div>
+</div>
+
+<h2>2 · Geometry consequence</h2>
+<p class="note">The CSS geometry contract has four tiers. Growing the labels 50% pushes the bottom tier down, so the track has to grow with it — otherwise the SPX line clips.</p>
+<div class="geo">
+ 0–9    money labels ($1,616 / $1,746 / T)      unchanged<br>
+ 14–18  the rail                                 unchanged<br>
+ <b>23–33  the gamma piles         was 19–29     +4px, to clear the taller labels</b><br>
+ <b>34–52  node labels             was 34–48     ES 9.75px over SPX 8.25px</b><br>
+ <b>.g3emt height: 56px            was 48px</b><br>
+ <b>.g3emn  10px circle  →  16px pill, price inside, transform:translateX(-50%)</b>
+</div>
+
+<h2>3 · Regime badge hover</h2>
+<div class="cols">
+  <div class="col"><span class="tag before">BEFORE</span>
+<div class="hv old">What kind of day is this? Gamma and vanna as a 2x2 — four cells, and you are in one of them:
+
+▸ 1. −G −V  the self-reinforcing cell. Dealers are short gamma AND falling spot pushes them to sell more, so hedging AMPLIFIES the move twice over. Breaks run, fades are the losing side, and normal stops are too tight.
+
+   2. −G +V  dealers are short gamma, so they hedge WITH the move. Ranges expand and mean-reversion at levels is unreliable — breaks over fades.
+
+   3. +G −V  gamma is pinning while vanna leans the other way. Levels hold until vol moves, then they give way quickly — fade the edges, but not with size.
+
+   4. +G +V  dealers are long gamma and hedge AGAINST the move, which compresses range. Levels tend to hold and fades are the higher-probability trade.
+
+You are in cell 1.
+
+GAMMA = does dealer hedging fight the move or feed it. VANNA = does a change in vol add to that or work against it. Neither points anywhere — gamma tells you HOW price moves, not WHICH WAY — which is why they gate the call in ② BIAS rather than voting in it.
+
+It also sets what an extension means below: past 100% of the expected move reads STRETCHED only in cells 3 and 4, where range compresses. In cells 1 and 2 ranges expand, so running past the band is what a trend day does.</div>
+    <p class="wc">~1,180 characters. Four cells listed when only one applies.</p>
+  </div>
+  <div class="col"><span class="tag after">AFTER</span>
+<div class="hv new"><span class="q">What kind of day is this?</span>−G −V — the self-reinforcing cell. Dealers are short gamma and falling spot pushes them to sell more, so hedging amplifies the move twice over.
+
+TREND day. Breaks run, fades are the losing side, normal stops sit inside the noise.
+
+The other three cells: −G +V expands range, +G −V pins until vol moves, +G +V compresses and rewards fades.
+
+⚠ Says HOW price moves, never WHICH WAY — which is why it gates ② BIAS instead of voting in it.
+⚠ Past 100% of the band reads STRETCHED only in +G cells. Here, running past it is what a trend day does.</div>
+    <p class="wc">~500 characters. Your cell first, the other three compressed to one line.</p>
+  </div>
+</div>
+
+<h2>4 · FEEDS hover</h2>
+<div class="cols">
+  <div class="col"><span class="tag before">BEFORE</span>
+<div class="hv old">Hedging FEEDS the move here: dealers must trade about $214M of underlying per point to stay neutral, in the SAME direction price is going. From the to-Friday book (Mon–Fri expiries, InsiderFinance open interest). The near book is used because that is where gamma concentrates and where dealers actually re-hedge. This is the SIZE of the mechanical flow, not a forecast that price will travel.</div>
+    <p class="wc">~390 chars, no leading question.</p>
+  </div>
+  <div class="col"><span class="tag after">AFTER</span>
+<div class="hv new"><span class="q">How hard does hedging push, and which way?</span>$214M per point, traded WITH the move — so it feeds it. In positive gamma the same figure would fight it.
+
+From the to-Friday book (InsiderFinance open interest).
+⚠ A size, not a distance. Turning it into points needs an impact figure no chain contains.</div>
+    <p class="wc">~250 chars. Leading question, then the number and its direction.</p>
+  </div>
+</div>
+
+<h2>5 · ES per-contract hover</h2>
+<div class="cols">
+  <div class="col"><span class="tag before">BEFORE</span>
+<div class="hv old">ES — $50 per index point. The expected move of 34.73 points is worth $1,736 per contract; the micro is one tenth, $174. This is the MOVE converted to dollars — not a position, not a size, not profit or loss. ⚠ The multiplier follows the CHART, so charting ES while trading the micro makes every figure ten times too big.</div>
+    <p class="wc">~320 chars, no leading question.</p>
+  </div>
+  <div class="col"><span class="tag after">AFTER</span>
+<div class="hv new"><span class="q">What is one expected move worth?</span>$1,736 per ES contract — 34.73 points at $50. The micro is $174.
+
+⚠ The move in dollars, not a position or a P&L.
+⚠ The multiplier follows the CHART. Charting ES while trading MES makes this 10× too big.</div>
+    <p class="wc">~200 chars.</p>
+  </div>
+</div>
+
+<h2>6 · Purple / yellow node chip hover</h2>
+<div class="cols">
+  <div class="col"><span class="tag before">BEFORE</span>
+<div class="hv old">7728 (SPXW 7710) — 100% of King. About $17.2M of dealer exposure at this strike. NEGATIVE gamma: dealers are short here, so crossing it a hedge trades WITH the move — an ACCELERATOR. From SKYLIT's live SPXW ladder: accumulated dealer positioning, which builds and drains intraday. KING — the heaviest node on the ladder; every other %King on this rail is a ratio to it. ⚠ A DIFFERENT MEASUREMENT from InsiderFinance's open-interest gamma — a flow, not a stock. ⚠ The SIZE of the pressure, never a distance: turning it into points needs a market-impact figure no option chain contains.</div>
+    <p class="wc">~580 chars on every chip.</p>
+  </div>
+  <div class="col"><span class="tag after">AFTER</span>
+<div class="hv new"><span class="q">What is standing at 7728?</span>KING — the heaviest node on the ladder. 100% of King, about $17.2M of dealer exposure. SPXW 7710.
+
+NEGATIVE gamma: dealers are short here, so a hedge crossing it trades WITH the move — an ACCELERATOR.
+
+Skylit live positioning; builds and drains intraday.
+⚠ A size, never a distance.</div>
+    <p class="wc">~280 chars. Role first — it is what changes what you do.</p>
+  </div>
+</div>
+
+<h2>Open question</h2>
+<p class="note">The white pill is ~34px wide. Near the rail's edge it would overhang the EXP LOW / EXP HIGH labels. Options: clamp it inside the track, flip the text to the inner side near the edges, or drop back to the bare dot in the outer 8%. I lean toward clamping — the dot's position is the truth and the number is the annotation.</p>

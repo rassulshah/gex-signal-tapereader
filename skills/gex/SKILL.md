@@ -43,6 +43,13 @@ load instruction. Then read, in order:
 
 1. `session-state/latest-resume-note.md` — the single source of "where we are": locked scope for
    the next version, phase status, open threads, standing workflow agreements.
+1a. **`session-state/PROJECT-CONSTANTS.md` — THE LANDMINES AND THE USER'S STANDING RULES.** Nine
+   failure patterns that explain nearly every bug here, plus the process failure that ended the
+   2026-08-24 session. ⚠ **The single most-violated rule in this project is ONE AT A TIME: discuss
+   exactly ONE element per message, state its fix, ask, STOP.** Not optional, and not a style note —
+   breaking it has cost more rework than any bug. Also standing: never build without asking, always
+   show mockups first, never volunteer adjacent work.
+
 1b. **`session-state/DECISIONS.md` — WHY the panel is the way it is.** Every entry is a decision a
    later context would otherwise re-litigate or silently undo, INCLUDING several I got wrong and
    corrected. Read it before proposing any change to the FRAME section, the band, or the pile

@@ -1,3 +1,44 @@
+## v11.88 — PLANNED / NOT YET BUILT
+
+**Approved scope is ONE change:** put the current price inside the white circle on the band rail
+(`.g3emn`), small — 7.5px text, 11px tall, one pixel taller than the 10px dot it replaces, so it stays
+inside the existing geometry tier. Mockup: `mockups/frame_v1188_dot.html`.
+
+⚠ **Six other mockup revisions were produced and REJECTED** — +50% then +33% level type, a node-role
+tier above the rail, staggered label shelves, a PACE chip, a SUCC chip, four rewritten hovers, and
+used/remaining figures beside the price box. Do not resurrect them. See DECISIONS.md D-13.
+
+### Found this session, real, NOT fixed
+
+**Two of the four used/remaining figures silently disappear.** `secFrame`'s money tier draws used and
+remaining on each side of the open; `seg()` returns '' when its segment is under 9% of rail width.
+Measured live 2026-08-24: down-remaining $1,684 and up-used $1,814 render, while down-used $53 (1.5%
+wide) and up-remaining −$77 (0% wide, and NEGATIVE because the high of day exceeded the expected high)
+both vanish. **A figure that disappears exactly when the day has run past its own rail is the case you
+most want to see, and it renders identically to "nothing to report."** Same disease as D-6.
+
+**Two dead computations.** `gp = gexPath(sym)` in `secFrame` is assigned and never read.
+`PA = emPath(B, sym, B.now)` in the `piles` recorder is computed and never returned — that one reads
+as though the path is being recorded every bar, and it is not.
+
+### Corrected: a flaw I reported that was already fixed
+
+**`pathStrictly` / "the target is inside its own path sum" is NOT open — v11.68 closed it.** `emPath`
+explicitly skips the target and reports it separately as `atTargetPerPt`; the 82% / $107M / $23M
+figures are inside that function as the fix's rationale. I read `FRAME-APPROACH-REVIEW.md`'s fix list
+instead of the code. **The review is a snapshot of 2026-08-23 and later builds closed items without
+updating it — verify every review item against the code before calling it open.**
+
+### The LLM layer
+
+Discussed at length, nothing built. For PREDICTION a live LLM is the weakest option available and
+will not beat `directionGrade` on the same inputs; its real value is comprehension, anomaly flagging
+and hypothesis generation. The only plausible live edge is data the panel does not have, or retrieval
+over the user's own recorded history. Measured: a day export is 5.9 MB, the live tape state is 6 KB.
+`@grant none` means a 127.0.0.1 relay, never a grant change. See DECISIONS.md D-11 and D-12.
+
+---
+
 ## v11.87 — the disagreement was declared but never written down
 
 **v11.83 taught the flow chip to say "the two books disagree." Nothing recorded it.** The face could

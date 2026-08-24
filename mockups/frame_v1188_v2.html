@@ -1,0 +1,147 @@
+<meta charset="utf-8"><title>FRAME v11.88 rev2</title>
+<style>
+:root{--bg:#0d1117;--pnl:#10151d;--tx:#e6edf3;--sub:#8b98a9;--dim:#6c7889;--rail:#232c3a;
+--acc:#a371f7;--brk:#e3c341;--gn:#2ec27e;--rd:#f0616d;--gold:#f2b45a;--line:#1a212c;--bl:#5aa9f2}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--tx);font:13px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:26px}
+h1{font-size:15px;margin:0 0 3px}
+h2{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--sub);margin:26px 0 6px;font-weight:800}
+.note{color:var(--sub);font-size:12px;max-width:900px;margin:0 0 12px}
+.bug{background:rgba(240,97,109,.09);border-left:2px solid var(--rd);padding:10px 13px;max-width:900px;
+  color:#e4c2c6;font-size:12.5px;line-height:1.6;margin:0 0 14px;border-radius:0 4px 4px 0}
+.bug b{color:var(--rd)}
+.mine{background:rgba(242,180,90,.09);border-left:2px solid var(--gold);padding:10px 13px;max-width:900px;
+  color:#d9c9a8;font-size:12.5px;line-height:1.6;margin:0 0 14px;border-radius:0 4px 4px 0}
+.mine b{color:var(--gold)}
+.panel{background:var(--pnl);border:1px solid var(--line);border-radius:6px;padding:9px 10px;width:392px;font-variant-numeric:tabular-nums}
+.sh{display:block;text-align:center;font-size:8px;font-weight:800;letter-spacing:.13em;color:var(--sub);
+  margin-bottom:5px;padding:2px 0;border-radius:3px;background:rgba(139,152,169,.09)}
+.f1{display:flex;align-items:center;gap:6px;font-size:9.5px;flex-wrap:wrap;row-gap:4px}
+.rg{font-size:10px;font-weight:800;padding:1px 7px;border-radius:3px;background:rgba(163,113,247,.18);color:var(--acc);border:1px solid rgba(163,113,247,.4)}
+.play{font-size:8px;font-weight:800;letter-spacing:.06em;color:var(--sub)}.play b{color:var(--acc)}
+.chip{font-size:8px;font-weight:800;padding:0 5px;border-radius:2px;line-height:13px;white-space:nowrap}
+.flow{background:rgba(163,113,247,.14);color:var(--acc)}
+.ct{background:rgba(139,152,169,.13);color:var(--sub)}
+.pace{background:rgba(90,169,242,.14);color:var(--bl)}
+.succ{background:rgba(242,180,90,.16);color:var(--gold)}
+.tgt{font-size:11px;font-weight:800;color:var(--gn);margin-left:auto}
+.emw{display:flex;align-items:center;gap:6px;margin-top:7px}
+.emk{font-size:10.5px;font-weight:800;color:var(--tx);line-height:1;white-space:nowrap;text-align:center}
+.emk small{display:block;font-size:7.5px;font-weight:700;color:var(--dim);margin-top:1px}
+.emt{position:relative;flex:1;min-width:80px;height:73px}
+.emr{position:absolute;top:20px;left:0;right:0;height:4px;border-radius:2px;background:var(--rail);box-shadow:inset 0 0 0 1px rgba(139,152,169,.1)}
+.emx2{position:absolute;top:20px;height:4px;border-radius:2px;background:rgba(139,152,169,.22)}
+.emw2{position:absolute;top:13px;height:8px;width:1px;background:rgba(195,204,216,.6)}
+.emo{position:absolute;top:13px;height:8px;width:1px;background:#c3ccd8}
+/* money tier: used = grey, remaining = green. ALWAYS rendered. */
+.seg{position:absolute;top:0;font-size:8px;font-weight:800;transform:translateX(-50%);line-height:9px;white-space:nowrap}
+.seg.used{color:var(--dim)} .seg.lft{color:var(--gn)} .seg.past{color:var(--rd)}
+.tmark{position:absolute;top:0;font-size:8px;font-weight:800;color:var(--gn);transform:translateX(-50%)}
+/* role tier — NOT enlarged, stays 5.5px */
+.role{position:absolute;top:11px;transform:translateX(-50%);font-size:5.5px;font-weight:800;letter-spacing:.05em;line-height:6px;white-space:nowrap}
+.role.acc{color:var(--acc)} .role.brk{color:var(--brk)}
+/* piles — NOT enlarged. 4–5px wide, max 10px tall, exactly as today */
+.pile{position:absolute;bottom:38px;transform:translateX(-50%);border-radius:1px}
+.pile.acc{background:var(--acc)} .pile.brk{background:var(--brk)}
+.emn{position:absolute;top:14px;border-radius:8px;background:#fff;color:#0d1117;font-size:9px;font-weight:800;
+  line-height:15px;height:15px;padding:0 4px;transform:translateX(-50%);box-shadow:0 0 0 2px rgba(13,17,23,.92)}
+/* level text below the chips — +33% only */
+.plab{position:absolute;transform:translateX(-50%);font-size:8.65px;font-weight:800;white-space:nowrap;text-align:center;line-height:9px}
+.plab i{display:block;font-style:normal;font-size:7.3px;color:var(--sub);line-height:8px}
+.plab.acc{color:var(--acc)} .plab.brk{color:var(--brk)}
+.up{bottom:19px} .lo{bottom:-1px}
+.read{font-size:8.5px;line-height:1.5;color:var(--sub);margin-top:6px;border-top:1px solid var(--line);padding-top:4px}
+.cap{font-size:10.5px;color:var(--dim);margin:8px 0 0;max-width:392px}
+.row{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
+.szt{border-collapse:collapse;font-size:12px;max-width:560px}
+.szt td,.szt th{border:1px solid var(--line);padding:5px 10px;text-align:left}
+.szt th{color:var(--sub);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+.szt .no{color:var(--dim)} .szt .yes{color:var(--gn);font-weight:700}
+.geo{background:#161b24;border:1px solid var(--line);border-radius:5px;padding:10px 12px;
+  font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:1.75;color:#cdd6e0;max-width:660px}
+.geo b{color:var(--gold)}
+</style>
+
+<h1>① FRAME v11.88 — rev 2</h1>
+
+<div class="mine"><b>My mockup error.</b> I drew both money figures in the same grey. The live panel colours them — <b style="color:#2ec27e">green = remaining</b>, <b style="color:#6c7889">grey = used</b> — and flattening that is why used and remaining stopped being distinguishable. Restored below.</div>
+
+<div class="bug"><b>And a real defect, on your screen right now.</b> The rail is built to draw <b>four</b> figures — used and remaining, on each side of the open. Only <b>two</b> are rendering:
+<br><br>
+<code>↓ remaining&nbsp; $1,684</code> &nbsp;shown &nbsp;·&nbsp; <code>↑ used&nbsp; $1,814</code> &nbsp;shown<br>
+<code>↓ used&nbsp; $53</code> &nbsp;<b>dropped</b> &nbsp;·&nbsp; <code>↑ remaining&nbsp; −$77</code> &nbsp;<b>dropped</b>
+<br><br>
+<code>seg()</code> refuses to draw when its segment is under 9% of the rail width. The low of day sits 1.5% from the open, so downside-used is too narrow. And the high of day <b>exceeded the expected high</b> — so upside-remaining is <b>negative</b>, its segment has zero width, and it vanishes.
+<br><br>
+<b>A figure that disappears when the day runs past its own rail is the exact case you most want to see.</b> It reads identically to "nothing to report." Same disease as D-6: absence of data rendering as absence of a condition.</div>
+
+<h2>Sizes — only one thing grows</h2>
+<table class="szt">
+<tr><th>element</th><th>now</th><th>rev 2</th></tr>
+<tr><td>level text below the chips — ES price</td><td>6.5px</td><td class="yes">8.65px &nbsp;+33%</td></tr>
+<tr><td>level text below the chips — SPX strike</td><td>5.5px</td><td class="yes">7.3px &nbsp;+33%</td></tr>
+<tr><td>node type above the rail (KING / GK / BRK)</td><td>—</td><td class="no">5.5px &nbsp;unchanged</td></tr>
+<tr><td>the chips themselves (pile bars)</td><td>4–5px × ≤10px</td><td class="no">unchanged</td></tr>
+<tr><td>row-1 chips (FEEDS, ES/ct, …)</td><td>8px</td><td class="no">unchanged</td></tr>
+</table>
+
+<h2>The section</h2>
+<div class="row"><div>
+<div class="panel">
+  <span class="sh">① FRAME · 08/21</span>
+  <div class="f1">
+    <span class="rg">−G −V ⚠</span><span class="play"><b>BREAKS</b> · TREND</span>
+    <span class="chip flow">FEEDS $214 M / PT</span><span class="chip ct">ES $1,736/ct</span>
+    <span class="chip pace">SLOW 0.4×</span><span class="chip succ">SUCC 7648 · 85%</span>
+    <span class="tgt">T: 7718 +9</span>
+  </div>
+  <div class="emw">
+    <span class="emk">7661<small>~EXP LOW ≠TODAY</small></span>
+    <div class="emt">
+      <i class="emr"></i>
+      <i class="emx2" style="left:48.5%;width:51.5%"></i>
+      <i class="emw2" style="left:48.5%"></i><i class="emw2" style="left:100%"></i>
+      <span class="seg lft" style="left:24.2%">$1,684</span>
+      <span class="seg used" style="left:49.3%">$53</span>
+      <span class="seg used" style="left:75%">$1,814</span>
+      <span class="seg past" style="left:99%">PAST</span>
+      <span class="tmark" style="left:81.6%">T</span>
+      <span class="role brk" style="left:9.5%">BRK</span>
+      <span class="role acc" style="left:81.6%">GK</span>
+      <span class="role acc" style="left:93%">KING</span>
+      <i class="emo" style="left:50%"></i>
+      <i class="pile brk" style="left:9.5%;width:4px;height:6px"></i>
+      <i class="pile acc" style="left:81.6%;width:5px;height:9px"></i>
+      <i class="pile acc" style="left:96%;width:5px;height:10px"></i>
+      <i class="emn" style="left:69.5%">7710</i>
+      <span class="plab brk up" style="left:9.5%">7668<i>7650</i></span>
+      <span class="plab acc up" style="left:81.6%">7718<i>7700</i></span>
+      <span class="plab acc lo" style="left:93%">7728<i>7710</i></span>
+    </div>
+    <span class="emk">7730<small>~EXP HIGH ≠TODAY</small></span>
+  </div>
+  <div class="read">79% negative gamma accelerator at 7718 can take price higher to the 100% negative gamma node at 7728.</div>
+</div>
+<p class="cap">All four money figures present. <span style="color:#2ec27e">Green = remaining</span>, <span style="color:#6c7889">grey = used</span>, <span style="color:#f0616d">PAST</span> where the day has already run through its own rail. Roles above the rail at their original size; only the level text below the chips grew.</p>
+</div></div>
+
+<h2>How the four figures stay honest</h2>
+<div class="geo">
+ <b>a segment narrower than 9% keeps its number — it is pushed to the nearer edge of its</b><br>
+ <b>own span instead of being centred, and dropped ONLY if it would overlap a neighbour</b><br>
+ <b>already drawn. A dropped figure is then named in the hover, never silently gone.</b><br><br>
+ <b>a NEGATIVE remaining renders the word PAST in red, not a minus sign — the day has</b><br>
+ <b>spent the whole side and gone through it, which is a state, not a quantity.</b><br><br>
+ hover on any of the four: "How much of this side is spent?"
+</div>
+
+<h2>Geometry</h2>
+<div class="geo">
+ 0–9    money tier — four figures, used + remaining, both sides<br>
+ <b>11–17  ROLE tier — 5.5px, unchanged size                    (new tier)</b><br>
+ 20–24  the rail<br>
+ <b>38–48  the chips — 4–5px wide, ≤10px tall, unchanged</b><br>
+ <b>19–36  level text, UPPER shelf — 8.65px over 7.3px</b><br>
+ <b>-1–17  level text, LOWER shelf — within 18% of neighbour</b><br>
+ <b>.g3emt height 73px                                          was 48px</b>
+</div>
