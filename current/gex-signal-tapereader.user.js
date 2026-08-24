@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.90
+// @version    11.91
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.90';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.91';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -11212,6 +11212,57 @@ function _frameRecOf(sym, ctx){
   }catch(e){}
   return out;
 }
+// ⚠⚠ (v11.90) THESE TWO LIVE AT TOP LEVEL ON PURPOSE. Both were first written INSIDE
+// registerCoreFeatures(). The feature closures could still see them, so the recording worked and the
+// tests passed — but `__gptsDebug.trendRec()` threw `trendMachineRecord is not defined`, because the
+// debug hooks are declared at top level and could not reach a nested declaration. Caught only by
+// calling the hook on the live page. A test that extracts a function from source text and eval's it
+// CANNOT see this: the harness gives it a scope the real file never gives it.
+// (v11.89) Named for the same reason as biasConfirmRecord: a record inside an anonymous registry
+// callback cannot be executed by the harness, and a record nobody can execute is a record nobody checks.
+var TREND_FLIP = {};   // sym -> { state, bar } — for sinceFlip / flipFast
+function trendMachineRecord(sym){
+  var tv=null; try{ tv=trendVerdict(sym); }catch(e){ return { ok:false }; }
+  if(!tv || tv.state==='na') return { ok:false };
+  var bar=0; try{ bar=(closedCandles(sym)||[]).length; }catch(e2){}
+  var prev=TREND_FLIP[sym];
+  var flip=!!(prev && prev.state!==tv.state);
+  var since=(prev && prev.bar!=null) ? (bar-prev.bar) : null;
+  if(!prev || flip) TREND_FLIP[sym]={ state:tv.state, bar:bar };
+  var vote=(tv.state==='up')?1:((tv.state==='dn')?-1:0);
+  return { ok:true, state:tv.state, stateStrict:tv.stateStrict, stateGated:tv.stateGated,
+           differs:!!tv.differs,
+           gateDiffers:(tv.stateGated!=null && tv.stateGated!==tv.state),
+           vote:vote, up:tv.up, dn:tv.dn, win:tv.win, slope:tv.slope, prior:tv.prior,
+           flip:flip, sinceFlip:since,
+           flipFast:!!(flip && since!=null && since<=4),
+           revThresh:tv.revThresh, domThresh:tv.domThresh };
+}
+// (v11.88) Extracted from the feature's record() so a test can EXECUTE it. An anonymous function
+// inside a registry object cannot be reached by the harness, and a record that cannot be executed is a
+// record nobody checks — which is exactly how the confirm tally went 224 bars without being written.
+function biasConfirmRecord(sym){
+  var B=null; try{ B=biasVotes(sym); }catch(e){ return { ok:false }; }
+  if(!B) return { ok:false };
+      var d={};
+      (B.confirms||[]).forEach(function(c){ d[c.k]=(c.d==null?null:c.d); });
+      // discrete so a `when` clause can match it — nConf is a count and counts do not match cleanly
+      var tier = (B.nLive<=0) ? 'none-live'
+               : (B.nConf===B.nLive) ? 'all'
+               : (B.nConf===0) ? 'none' : 'partial';
+      return { ok:true, dir:B.dir, verdict:B.verdict,
+               nConf:B.nConf, nLive:B.nLive, nTotal:(B.confirms||[]).length, tier:tier,
+               skew:(d.SKEW===undefined?null:d.SKEW),
+               accum:(d.ACCUM===undefined?null:d.ACCUM),
+               cross:(d.CROSS===undefined?null:d.CROSS),
+               roll:(d.ROLL===undefined?null:d.ROLL),
+               // shadowed: computed, recorded, NOT counted in nConf
+               pa:(B.pa&&B.pa.ok)?B.pa.dir:null,
+               paWouldConfirm:(B.pa&&B.pa.ok&&B.dir!==0)?(B.pa.dir===B.dir?1:0):null,
+               crossSelf:(B.cross&&B.cross.ok)?B.cross.self:null,
+               crossSame:(B.cross&&B.cross.ok)?B.cross.same:null,
+               crossWhy:(B.cross&&!B.cross.ok)?(B.cross.why||null):null };
+}
 function registerCoreFeatures(){
   if(FEATURES.length) return FEATURES;
 
@@ -11842,51 +11893,6 @@ function registerCoreFeatures(){
     rule:{ id:'dir.struct', tier:'hand', condition:'netPositioning bias, RECORDED not voted',
            mechanism:'A one-directional factor on a trending day looks like edge; only vote-split vs baseline can tell them apart.' } });
 
-// (v11.89) Named for the same reason as biasConfirmRecord: a record inside an anonymous registry
-// callback cannot be executed by the harness, and a record nobody can execute is a record nobody checks.
-var TREND_FLIP = {};   // sym -> { state, bar } — for sinceFlip / flipFast
-function trendMachineRecord(sym){
-  var tv=null; try{ tv=trendVerdict(sym); }catch(e){ return { ok:false }; }
-  if(!tv || tv.state==='na') return { ok:false };
-  var bar=0; try{ bar=(closedCandles(sym)||[]).length; }catch(e2){}
-  var prev=TREND_FLIP[sym];
-  var flip=!!(prev && prev.state!==tv.state);
-  var since=(prev && prev.bar!=null) ? (bar-prev.bar) : null;
-  if(!prev || flip) TREND_FLIP[sym]={ state:tv.state, bar:bar };
-  var vote=(tv.state==='up')?1:((tv.state==='dn')?-1:0);
-  return { ok:true, state:tv.state, stateStrict:tv.stateStrict, stateGated:tv.stateGated,
-           differs:!!tv.differs,
-           gateDiffers:(tv.stateGated!=null && tv.stateGated!==tv.state),
-           vote:vote, up:tv.up, dn:tv.dn, win:tv.win, slope:tv.slope, prior:tv.prior,
-           flip:flip, sinceFlip:since,
-           flipFast:!!(flip && since!=null && since<=4),
-           revThresh:tv.revThresh, domThresh:tv.domThresh };
-}
-// (v11.88) Extracted from the feature's record() so a test can EXECUTE it. An anonymous function
-// inside a registry object cannot be reached by the harness, and a record that cannot be executed is a
-// record nobody checks — which is exactly how the confirm tally went 224 bars without being written.
-function biasConfirmRecord(sym){
-  var B=null; try{ B=biasVotes(sym); }catch(e){ return { ok:false }; }
-  if(!B) return { ok:false };
-      var d={};
-      (B.confirms||[]).forEach(function(c){ d[c.k]=(c.d==null?null:c.d); });
-      // discrete so a `when` clause can match it — nConf is a count and counts do not match cleanly
-      var tier = (B.nLive<=0) ? 'none-live'
-               : (B.nConf===B.nLive) ? 'all'
-               : (B.nConf===0) ? 'none' : 'partial';
-      return { ok:true, dir:B.dir, verdict:B.verdict,
-               nConf:B.nConf, nLive:B.nLive, nTotal:(B.confirms||[]).length, tier:tier,
-               skew:(d.SKEW===undefined?null:d.SKEW),
-               accum:(d.ACCUM===undefined?null:d.ACCUM),
-               cross:(d.CROSS===undefined?null:d.CROSS),
-               roll:(d.ROLL===undefined?null:d.ROLL),
-               // shadowed: computed, recorded, NOT counted in nConf
-               pa:(B.pa&&B.pa.ok)?B.pa.dir:null,
-               paWouldConfirm:(B.pa&&B.pa.ok&&B.dir!==0)?(B.pa.dir===B.dir?1:0):null,
-               crossSelf:(B.cross&&B.cross.ok)?B.cross.self:null,
-               crossSame:(B.cross&&B.cross.ok)?B.cross.same:null,
-               crossWhy:(B.cross&&!B.cross.ok)?(B.cross.why||null):null };
-}
   // ---- (v11.88) THE TALLY ITSELF, RECORDED ------------------------------------------------------
   // Found 2026-08-24: `biasVotes` computes SKEW / ACCUM / PA and `nConf`, the face prints "1 of 3
   // confirm", and NONE of it reached the recorder — not one of 224 recorded bars carried it. Every

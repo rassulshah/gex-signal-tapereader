@@ -63,7 +63,10 @@ eval([ 'ruleSeed','rulesSeed','rulesNormalize','rulesLoad','rulesSave','ruleGet'
        'registerFeature','featureByKey','_fwdHitDir','_fwdHitNum','registerCoreFeatures','seedQuestions',
        'isOpexDay','sessionBucket','eventTagNow','featRegime','featureCtx','featRecordAll','featEnqueue',
        'recorderLoad','recorderSave','recorderDay','_fpct','effN','nTxt','frameRR','_frameRecOf',
-       'weightsHash','modelStamp' ].map(ex).join('\n'));
+       'weightsHash','modelStamp',
+       // (v11.91) lifted to top level so __gptsDebug can reach them — the harness must eval them too,
+       // or every record() that calls one throws and featRecordAll silently stores null.
+       'trendMachineRecord','biasConfirmRecord' ].map(ex).join('\n'));
 
 var F=registerCoreFeatures();
 

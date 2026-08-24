@@ -162,5 +162,40 @@ const TREND_DOM=global.TREND_DOM, TREND_DOM_REV=global.TREND_DOM_REV;
   setWindow(15,0); const t=TV('SPY');
   eq(t.domThresh,15,'the machine reports the threshold it used'); eq(t.revThresh,11,'and the reversal threshold');
 }
+
+// ---------- 10. SCOPE — the thing eval(ex(...)) structurally cannot see ----------
+// ⚠ THIS IS THE BUG THAT SHIPPED IN v11.90 AND EVERY OTHER TEST PASSED THROUGH IT.
+// `trendMachineRecord` was declared INSIDE registerCoreFeatures(). The feature closure could still
+// reach it, so recording worked; but `__gptsDebug.trendRec()` is declared at top level and threw
+// `trendMachineRecord is not defined` on the live page.
+// A harness that extracts a function from source text and eval's it gives that function a scope the
+// real file never gives it — so no amount of executing it would have caught this. The only thing that
+// can is asking WHERE it is declared.
+{
+  function spanOf(name){
+    const m=new RegExp('function\\s+'+name+'\\s*\\(').exec(src);
+    if(!m) throw new Error('not found: '+name);
+    let i=src.indexOf('{',m.index), d=0;
+    for(let k=i;k<src.length;k++){ if(src[k]==='{')d++; else if(src[k]==='}'){ d--; if(d===0) return [m.index,k]; } }
+    throw new Error('unbalanced: '+name);
+  }
+  const [rcStart,rcEnd]=spanOf('registerCoreFeatures');
+  // every function a __gptsDebug hook calls by name must be reachable from top level
+  const hooks=[...src.matchAll(/__gptsDebug\.\w+\s*=\s*function\s*\([^)]*\)\s*\{\s*return\s+(\w+)\(/g)]
+                .map(m=>m[1]);
+  ok(hooks.length>5,'found the debug hooks to check', hooks.length);
+  const nested=hooks.filter(fn=>{
+    const at=src.indexOf('function '+fn+'(');
+    return at>rcStart && at<rcEnd;
+  });
+  ok(nested.length===0,
+     'no debug hook calls a function declared INSIDE registerCoreFeatures — a nested declaration is invisible to the hook and throws only on the live page',
+     nested);
+  const at1=src.indexOf('function trendMachineRecord(');
+  ok(!(at1>rcStart && at1<rcEnd),'trendMachineRecord specifically is at top level');
+  const at2=src.indexOf('function biasConfirmRecord(');
+  ok(!(at2>rcStart && at2<rcEnd),'and so is biasConfirmRecord');
+}
+
 console.log('\n'+pass+' pass / '+fail+' fail');
 process.exit(fail?1:0);

@@ -1,3 +1,32 @@
+## v11.91 — a debug hook that threw on the live page, and the test that could never have caught it
+
+`__gptsDebug.trendRec('SPY')` threw **`trendMachineRecord is not defined`** on the tab, minutes after
+v11.90 shipped with a full green suite.
+
+`trendMachineRecord` and `biasConfirmRecord` were declared **inside `registerCoreFeatures()`**. The
+feature closures are created in that same scope, so recording worked perfectly — but the `__gptsDebug`
+hooks are declared at top level and cannot see a nested declaration.
+
+⚠ **No amount of executing the function would have found this.** `eval(ex('trendMachineRecord'))` gives
+the function a scope the real file never gives it — the harness hands it exactly the visibility it is
+missing. Extraction-based tests verify BEHAVIOUR and are structurally blind to PLACEMENT.
+
+Both lifted to top level, and `test_trend_machine.js` §10 now parses the span of
+`registerCoreFeatures()` and asserts that **no function called by name from a `__gptsDebug` hook is
+declared inside it**. Re-nesting `trendMachineRecord` fires 2 assertions.
+
+**The lesson to carry:** the harness is not the runtime. Executing a function proves what it computes;
+it proves nothing about whether the caller can reach it. Only the live page, or a check on where the
+declaration sits, can say that.
+
+### verified live on v11.90 before this fix
+`renderErrors: []` · DRIFT renders as an outlined badge, the old gate row is gone · `CROSS` reads QQQ
+up 54 of 60 against SPY up 59 of 60, `same: true` · `ROLL` correctly abstains as `null` (fewer than 3
+King samples) so `nLive` is 3 and not 4 — the v11.88 null-vs-zero split working as intended ·
+`revThresh: 11`, `domThresh: 15`, all three trend machines agreeing at `up`.
+
+---
+
 ## v11.90 — the trend machine loosens, DRIFT becomes a badge, every hover leads with a question
 
 ### THE TREND MACHINE — a reversal now needs 11, not 15

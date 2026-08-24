@@ -49,7 +49,10 @@ global.render=function(){};
 eval([ 'ruleSeed','rulesSeed','rulesNormalize','rulesLoad','rulesSave','ruleGet','effN','nTxt',
        'featStatsCached','featStatsInvalidate','ruleLocalRate','rulePromotedApplied','promoLoad','ruleTier','rulePromoted',
        'registerFeature','featureByKey','_fwdHitDir','_fwdHitNum','frameRR','_frameRecOf',
-       'registerCoreFeatures','seedQuestions' ].map(ex).join('\n'));
+       'registerCoreFeatures','seedQuestions',
+       // (v11.91) lifted to top level so __gptsDebug can reach them — the harness must eval them too,
+       // or every record() that calls one throws and featRecordAll silently stores null.
+       'trendMachineRecord','biasConfirmRecord' ].map(ex).join('\n'));
 
 var F=registerCoreFeatures();
 
