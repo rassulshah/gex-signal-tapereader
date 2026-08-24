@@ -1,0 +1,158 @@
+<meta charset="utf-8"><title>FRAME + BIAS v11.95</title>
+<style>
+:root{--bg:#0d1117;--pnl:#10151d;--tx:#e6edf3;--sub:#8b98a9;--dim:#6c7889;--rail:#232c3a;
+--acc:#a371f7;--brk:#e3c341;--gn:#2ec27e;--rd:#f0616d;--gold:#f2b45a;--line:#1a212c;--spx:#c9d1da}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--tx);font:13px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:24px;max-width:1080px}
+h1{font-size:15px;margin:0 0 4px}
+h2{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--sub);margin:24px 0 8px;font-weight:800}
+.note{color:var(--sub);font-size:12.5px;margin:0 0 12px;max-width:900px}
+.panel{background:var(--pnl);border:1px solid var(--line);border-radius:6px;padding:9px 10px;width:400px;font-variant-numeric:tabular-nums}
+.sh{display:block;text-align:center;font-size:8px;font-weight:800;letter-spacing:.13em;color:var(--sub);margin-bottom:5px;padding:2px 0;border-radius:3px;background:rgba(139,152,169,.09)}
+.f1{display:flex;align-items:center;gap:6px;font-size:9.5px;flex-wrap:wrap}
+.rg{font-size:10px;font-weight:800;padding:1px 7px;border-radius:3px;background:rgba(163,113,247,.18);color:var(--acc);border:1px solid rgba(163,113,247,.4)}
+.play{font-size:8px;font-weight:800;letter-spacing:.06em;color:var(--sub)}.play b{color:var(--acc)}
+.tgt{font-size:11px;font-weight:800;color:var(--gn);margin-left:auto}
+.emw{display:flex;align-items:center;gap:6px;margin-top:7px}
+.emk{font-size:10.5px;font-weight:800;color:var(--tx);line-height:1;white-space:nowrap;text-align:center}
+.emk small{display:block;font-size:7.5px;font-weight:700;color:var(--dim);margin-top:1px}
+.emt{position:relative;flex:1;min-width:80px;height:66px}
+.emr{position:absolute;left:0;right:0;top:25px;height:4px;border-radius:2px;background:var(--rail);box-shadow:inset 0 0 0 1px rgba(139,152,169,.1)}
+.emx2{position:absolute;top:25px;height:4px;border-radius:2px;background:rgba(139,152,169,.22)}
+.emo{position:absolute;top:18px;height:8px;width:1px;background:#c3ccd8}
+.seg{position:absolute;top:0;font-size:8px;font-weight:800;line-height:9px;white-space:nowrap;transform:translateX(-50%)}
+.seg.used{color:var(--dim)} .seg.lft{color:var(--gn)}
+.role{position:absolute;top:17px;transform:translateX(-50%);font-size:5.5px;font-weight:800;letter-spacing:.05em;line-height:6px;white-space:nowrap}
+.role.acc{color:var(--acc)} .role.brk{color:var(--brk)}
+.pile{position:absolute;bottom:26px;transform:translateX(-50%);border-radius:1px}
+.pile.acc{background:var(--acc)} .pile.brk{background:var(--brk)}
+.emn{position:absolute;top:22px;border-radius:7px;background:#fff;color:#0d1117;font-size:9px;font-weight:800;line-height:14px;height:14px;padding:0 4px;transform:translateX(-50%);box-shadow:0 0 0 2px rgba(13,17,23,.92)}
+.plab{position:absolute;bottom:-1px;transform:translateX(-50%);font-size:8.65px;font-weight:800;white-space:nowrap;text-align:center;line-height:9px}
+.plab i{display:block;font-style:normal;font-size:8.65px;color:var(--spx);font-weight:800;line-height:10px}
+.plab.acc{color:var(--acc)} .plab.brk{color:var(--brk)}
+.read{font-size:8.5px;line-height:1.5;color:var(--sub);margin-top:7px;border-top:1px solid var(--line);padding-top:5px}
+.vd2{display:flex;align-items:baseline;gap:7px;margin-bottom:5px}
+.vd2 b{font-size:13px;font-weight:800}
+.why{font-size:9px;color:var(--sub)}
+.cf{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.chip{font-size:8.5px;font-weight:700;padding:1px 5px;border-radius:3px;border:1px solid #1e2530;color:var(--sub)}
+.chip.y{color:var(--gn);border-color:rgba(46,194,126,.4);background:rgba(46,194,126,.08)}
+.chip.n{color:var(--rd);border-color:rgba(240,97,109,.35);background:rgba(240,97,109,.07)}
+.chip.gate{background:transparent;border-style:dashed}
+.sep{width:1px;height:11px;background:var(--line)}
+.cnt{margin-left:auto;font-size:8.5px;font-weight:800;color:var(--sub)}
+.cap{font-size:11px;color:var(--dim);margin:9px 0 0;max-width:400px;line-height:1.55}
+.row{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
+.bug{background:rgba(240,97,109,.09);border-left:2px solid var(--rd);padding:10px 13px;max-width:900px;color:#e4c2c6;font-size:12.5px;line-height:1.65;margin:12px 0;border-radius:0 4px 4px 0}
+.bug b{color:var(--rd)}
+.okbox{background:rgba(46,194,126,.07);border-left:2px solid var(--gn);padding:10px 13px;max-width:900px;color:#bfd9c9;font-size:12.5px;line-height:1.65;margin:12px 0;border-radius:0 4px 4px 0}
+.okbox b{color:var(--gn)}
+code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
+</style>
+<h1>FRAME + BIAS — proposed v11.95</h1>
+
+<h2>① FRAME</h2>
+<div class="row"><div>
+<div class="panel">
+  <span class="sh">① FRAME · 08/24</span>
+  <div class="f1"><span class="rg">−G −V ⚠</span><span class="play"><b>BREAKS</b> · TREND</span>
+    <span class="tgt">T: 7686 +4</span></div>
+  <div class="emw">
+    <span class="emk">7661<small>EXP LOW</small></span>
+    <div class="emt">
+      <span class="seg lft" style="left:20%">$1,043</span>
+      <span class="seg used" style="left:64%">$1,318</span>
+      <span class="role brk" style="left:14.4%">BRK</span>
+      <span class="role acc" style="left:36%">KING</span>
+      <span class="role brk" style="left:79%">GK</span>
+      <i class="emr"></i><i class="emx2" style="left:14%;width:53%"></i>
+      <i class="emo" style="left:30%"></i>
+      <i class="pile brk" style="left:14.4%;width:4px;height:6px"></i>
+      <i class="pile acc" style="left:36%;width:5px;height:10px"></i>
+      <i class="pile brk" style="left:57%;width:5px;height:8px"></i>
+      <i class="pile brk" style="left:79%;width:5px;height:9px"></i>
+      <span class="emn" style="left:30%">7682</span>
+      <span class="plab brk" style="left:14.4%">7661<i>7650</i></span>
+      <span class="plab acc" style="left:36%">7681<i>7670</i></span>
+      <span class="plab brk" style="left:57%">7686<i>7675</i></span>
+      <span class="plab brk" style="left:79%">7691<i>7680</i></span>
+    </div>
+    <span class="emk">7730<small>EXP HIGH</small></span>
+  </div>
+  <div class="read">Above price: 7686 (63% brake) then 7691 (67%). Below: 7681 KING (100%) then 7661 (30%). Nearest resistance 4 points up, nearest support 1 point down.</div>
+</div>
+<p class="cap">FEEDS, ES/ct and the pace badge removed. SPX values are now the same size as the ES price and rendered gray-white. Vertical space added below the amounts. The read line names the next node each way.</p>
+</div>
+
+<div>
+<div class="panel">
+  <span class="sh">① FRAME · price BEYOND the expected high</span>
+  <div class="f1"><span class="rg">−G −V ⚠</span><span class="play"><b>BREAKS</b> · TREND</span>
+    <span class="tgt">T: 7742 +9</span></div>
+  <div class="emw">
+    <span class="emk">7661<small>EXP LOW</small></span>
+    <div class="emt">
+      <span class="seg lft" style="left:16%">$1,043</span>
+      <span class="seg used" style="left:55%">$3,470</span>
+      <span class="role acc" style="left:29%">KING</span>
+      <span class="role brk" style="left:63%">GK</span>
+      <i class="emr"></i><i class="emx2" style="left:11%;width:75%"></i>
+      <i class="emo" style="left:24%"></i>
+      <i style="position:absolute;top:21px;height:12px;width:1px;background:var(--gold);left:79%"></i>
+      <span style="position:absolute;top:8px;left:79%;transform:translateX(-50%);font-size:6.5px;font-weight:800;color:var(--gold);white-space:nowrap">EXP HIGH 7730</span>
+      <i class="pile acc" style="left:29%;width:5px;height:10px"></i>
+      <i class="pile brk" style="left:63%;width:5px;height:8px"></i>
+      <span class="emn" style="left:88%">7745</span>
+      <span class="plab acc" style="left:29%">7681<i>7670</i></span>
+      <span class="plab brk" style="left:63%">7716<i>7705</i></span>
+    </div>
+    <span class="emk">7760<small>RAIL HIGH</small></span>
+  </div>
+  <div class="read">Price is 15 points BEYOND the expected high. The rail extended to hold it; the gold mark is where the expected move ended.</div>
+</div>
+<p class="cap">When price exceeds a rail the track rescales to <code>price ± 25%</code> of the band and the original EM boundary becomes a gold marker — so "how far past" stays readable instead of the dot pinning silently at 100%.</p>
+</div></div>
+
+<h2>② BIAS</h2>
+<div class="row"><div>
+<div class="panel">
+  <span class="sh">② BIAS</span>
+  <div class="vd2"><b style="color:var(--gn)">UPTREND</b><span class="why">17 of 20 bars above the 50-SMA</span></div>
+  <div class="cf">
+    <span class="chip y">SKEW ↑</span><span class="chip n">ACCUM ↓</span>
+    <span class="chip y">CROSS ↑</span><span class="chip">ROLL →</span>
+    <i class="sep"></i><span class="chip gate n">DRIFT ↓</span>
+    <span class="cnt">2 of 4 confirm</span>
+  </div>
+</div>
+<p class="cap">Four states: <b>UPTREND · DNTREND · UPTREND BRK · DNTREND BRK</b>. The grey line is now the bar count that produced it. Badges read ↑ / ↓ / → instead of ✓ / ✗ / ·.</p>
+</div>
+
+<div>
+<div class="panel">
+  <span class="sh">② BIAS · broken trend</span>
+  <div class="vd2"><b style="color:var(--gold)">UPTREND BRK</b><span class="why">13 of 20 above — lost 15, reversal needs 11 below</span></div>
+  <div class="cf">
+    <span class="chip">SKEW →</span><span class="chip n">ACCUM ↓</span>
+    <span class="chip n">CROSS ↓</span><span class="chip">ROLL →</span>
+    <i class="sep"></i><span class="chip gate n">DRIFT ↓</span>
+    <span class="cnt" style="color:var(--rd)">0 of 4 confirm</span>
+  </div>
+</div>
+<p class="cap">A broken trend says what it lost and what the reversal now needs — the v11.89 thresholds made visible.</p>
+</div></div>
+
+<div class="bug"><b>Two real bugs, and you spotted one of them.</b><br><br>
+<b>1 · GK above the King — you are right, it is mislabeled.</b> <code>skRoles(pct, kingK)</code> is <b>never given price</b>, so it cannot know which side of the King price is on. It picks the strongest significant node within 6 strikes on <i>either</i> side:<br>
+<code>&nbsp;King 7670 · neighbours 7665 (25%) below, 7675 (63%) above → picks 7675 because it is stronger</code><br>
+Price is at SPX 7665, so the King is <i>below</i> price and the "gatekeeper" is above both. It gatekeeps nothing. The comment says <i>"the nearest significant node standing between price and the King"</i> — the code never implemented that. Fix: pass price in, consider only nodes strictly between price and the King, and when there are none say <b>clear path</b> rather than naming one.<br><br>
+<b>2 · SKEW is grayed out because its range is dead.</b> Live: <code>v=0.11</code>, <code>lo=2.2</code>, <code>hi=2.2</code>, n=240. The direction test is gated on <code>if(hi&gt;lo)</code>, and with a degenerate band it silently never fires.<br>
+⚠ <b>The deeper fault: the current value and the history are different metrics.</b> <code>v</code> is now <code>skew25</code> (25-delta put IV − call IV, ≈0.11) while the 240 stored samples are the old published header skew (≈2.2). It is being compared against a range built from a different quantity — Pattern 1. The history has to be versioned by source and reset when the source changes, and a dead range must SAY it is dead rather than reading as neutral.</div>
+
+<div class="okbox"><b>Two that are not bugs.</b><br><br>
+<b>ROLL is correct.</b> <code>{ok:true, dir:0}</code> — the King genuinely has not moved a full strike. It only <i>looked</i> broken because a neutral renders as a grey dash, identical to unavailable. The ↑/↓/→ change fixes exactly that: it will read <b>→</b>, not a dash.<br><br>
+<b>ACCUM's direction is right; its sample is too thin.</b> Live: <code>dUp +$90M</code>, <code>dDn +$5M</code>, <code>dir −1</code>, text "upside building faster". That is coherent — building <i>above</i> price is resistance stacking, which is bearish. The doctrine and the sentence agree.<br>
+⚠ <b>The flipping is <code>n=4</code>, and the minimum is 4.</b> Only four strikes sit within <code>ACCUM_REACH=5</code> of price, so one strike moving flips the share. The window (30 min) is fine; the strike reach is what starves it. I would widen the reach and show <code>n</code> on the badge so a thin read is visible rather than merely unstable.</div>
+
+<h2>Panel</h2>
+<p class="note">The pop-out vertical limit is my own clamp — <code>if(nh&gt;2000) nh=2000</code> in <code>makeResizable</code>, plus the panel cannot exceed the PiP window's own height without the window growing. I would drop the clamp to the window height and let the PiP window itself be the limit.</p>

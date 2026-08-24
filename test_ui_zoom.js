@@ -57,8 +57,16 @@ eq(zoomLoad(),1,'no stored value means 100%');
 // there: mousemove/mouseup were bound to the ATLAS document while the panel lives in the PiP one, so
 // the press armed and nothing ever moved. Unhiding alone would have shipped a handle that visibly
 // does nothing. Both halves are asserted.
-ok(/#gpts-grip\{display:block !important;cursor:ns-resize !important\}/.test(src),
+ok(/#gpts-grip\{display:block !important;cursor:ns-resize !important/.test(src),
    'the pop-out shows the grip, as a VERTICAL resizer');
+// (v11.95) and it is pinned to the WINDOW. Measured live: panel 581px in a 598px PiP window — the grip
+// sits at the panel's bottom-right, so as soon as the panel grew past the window the HANDLE left the
+// viewport and the drag simply stopped with no message. Unhiding it was not enough; it has to stay
+// reachable, and the ceiling has to be the window rather than an arbitrary 2000.
+ok(/position:fixed !important;'\+\s*'right:0 !important;bottom:0 !important/.test(src),
+   'the pop-out grip is pinned to the window so it never scrolls out of reach');
+ok(/inPip \? Math\.max\(240, \(doc\.defaultView \? doc\.defaultView\.innerHeight : 900\) - 8\) : 2000/.test(src),
+   'and the pop-out height ceiling is the WINDOW, not the in-page 2000px clamp');
 ok(/PANEL\.ownerDocument\|\|document/.test(src),
    'and resize binds to whichever document owns the panel, so the drag works in the pop-out too');
 ok(/inPip=\(doc!==document\)/.test(src),

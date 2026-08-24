@@ -84,7 +84,15 @@ ok(pickSessionDay([{time:'x'},{}]).fallback===false, 'junk timestamps are skippe
 {
   const f=ex('secFrame');
   ok(!/g3replay/.test(f),        'GUARD 3: the replay chip is deliberately absent from the face');
-  ok(/inReplay\(\)/.test(f),     'but the section still branches on replay mode');
+  // (v11.95) secFrame no longer branches on replay AT ALL — the session-phase tag was the only
+  // replay-conditional element and it was removed from row 1 with FEEDS and ES/ct.
+  // ⚠ D-8 named the risk this leaves: "Monday 08:00, pre-open, replay engages, the whole face shows
+  // Friday, and nothing says so", and named the fix — the section header, which carries the session
+  // DATE and costs no row. That is where replay stays visible, so assert it there rather than here.
+  ok(!/inReplay\(\)/.test(f),
+     'secFrame no longer branches on replay — the phase tag was its only replay-conditional element');
+  ok(/function sessionDayStr\(\)/.test(src),
+     'and the session DATE is still derived from SESSION_DAY, which is what makes a replay visible in the header');
   ok(!/g3tag/.test(f.slice(f.indexOf('inReplay()'), f.indexOf('inReplay()')+400)) ||
      /if\(!inReplay\(\)\)/.test(f),
                                  'and the phase tag renders ONLY when the session is live');

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.93
+// @version    11.95
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.93';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.95';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4568,7 +4568,9 @@ function pipCopyStyles(doc){
       'width:100% !important;max-width:100% !important;min-height:120px;'+
       'border:0 !important;border-radius:0 !important;box-shadow:none !important;z-index:auto !important}'+
       '#gpts-body{cursor:default !important}'+
-      '#gpts-grip{display:block !important;cursor:ns-resize !important}';
+      // pinned to the WINDOW, not the panel, so it never scrolls out of reach as the panel grows
+      '#gpts-grip{display:block !important;cursor:ns-resize !important;position:fixed !important;'+
+      'right:0 !important;bottom:0 !important;z-index:10 !important}';
     doc.head.appendChild(base);
   }catch(e){}
 }
@@ -4795,7 +4797,13 @@ function makeResizable(grip){
   function onMove(e){
     if(!rz) return;
     var nh=oh+(e.clientY-sy);
-    if(nh<160) nh=160; if(nh>2000) nh=2000;
+    // (v11.95) THE POP-OUT LIMIT THE USER HIT WAS THIS CLAMP PLUS AN UNREACHABLE GRIP.
+    // Measured live: panel 581px inside a 598px PiP window. The grip sits at the panel's bottom-right,
+    // so the moment the panel grows past the window the handle itself leaves the viewport and the drag
+    // cannot continue — the panel "stops" with no message. In the pop-out the ceiling should be the
+    // WINDOW, and the grip has to stay on screen to reach it.
+    var ceil = inPip ? Math.max(240, (doc.defaultView ? doc.defaultView.innerHeight : 900) - 8) : 2000;
+    if(nh<160) nh=160; if(nh>ceil) nh=ceil;
     if(!inPip){
       var nw=ow+(e.clientX-sx);
       if(nw<240) nw=240; if(nw>560) nw=560;
@@ -4916,11 +4924,26 @@ function futCfgLoad(){
 }
 function futCfgSave(){ try{ localStorage.setItem(FUTCFG_KEY, JSON.stringify(FUTCFG)); }catch(e){} }
 var NQ_RATIO = 41.36;                          // last-known QQQ→NQ constant (fallback only)
-var FUT_FAMILY={ ES:'ES', MES:'ES', NQ:'NQ', MNQ:'NQ' };
-var FUT_UNDERLYING={ ES:'SPY', MES:'SPY', SPY:'SPY', NQ:'QQQ', MNQ:'QQQ', QQQ:'QQQ' };
-var FUT_CONST={ ES:ES_RATIO, NQ:NQ_RATIO };
+// ⚠⚠ (v11.95) CHARTING SPXW BLANKED THE WHOLE PANEL, AND THE BANNER IT SHOWED WAS FALSE.
+// SPXW was absent from FUT_UNDERLYING, so futModeCompute took the `!und` branch, set ok:false, and
+// render() replaced the entire dashboard with:
+//     "SPXW has a Skylit options tape, but this panel is mapped to SPY/QQQ only —
+//      nothing here is read or recorded for SPXW."
+// That sentence was written at v11.4.2 and has been WRONG since v11.77, when the FRAME rail moved onto
+// Skylit's SPXW ladder. The SPXW tape is exactly what the rail is built from.
+// ⚠ SPXW is CASH, not a future, but it still needs a ratio: the panel's book lives on SPY (~765) and
+// the chart is the index (~7662). Treating it as its own family with underlying SPY reuses the same
+// live-EMA ratio path the ES chart already uses, instead of inventing a second conversion.
+// ⚠ DATA CAPTURE WAS NEVER AFFECTED. recordNodeSnapshot('SPY') and ('QQQ') are called with hardcoded
+// symbols every tick and activeSym() only ever returns SPY or QQQ — so the recorder kept running
+// throughout. This was a display outage, not a data gap.
+var SPX_RATIO = 10.0226;                       // last-known SPY->SPX constant (fallback only)
+var FUT_FAMILY={ ES:'ES', MES:'ES', NQ:'NQ', MNQ:'NQ', SPX:'SPX', SPXW:'SPX' };
+var FUT_UNDERLYING={ ES:'SPY', MES:'SPY', SPY:'SPY', NQ:'QQQ', MNQ:'QQQ', QQQ:'QQQ',
+                     SPX:'SPY', SPXW:'SPY' };
+var FUT_CONST={ ES:ES_RATIO, NQ:NQ_RATIO, SPX:SPX_RATIO };
 var FUT_EMA_A=0.25;                            // ratio smoothing
-var FUTR={ ES:{ ema:null, last:null, t:0 }, NQ:{ ema:null, last:null, t:0 } };
+var FUTR={ ES:{ ema:null, last:null, t:0 }, NQ:{ ema:null, last:null, t:0 }, SPX:{ ema:null, last:null, t:0 } };
 var FUTMODE={ chart:'SPY', fam:null, underlying:'SPY', r:1, live:false, approx:false,
               ok:true, msg:null, futPx:null, undPx:null, source:'default', forced:false };
 // PURE: pull a chart symbol out of a title / header string. 'ES1 $7768.75' -> 'ES'.
@@ -5006,7 +5029,18 @@ function futModeCompute(){
     var step=futRatioStep(FUTR[fam], out.futPx, undPx, fam);
     FUTR[fam]=FUTR[fam]||{ema:null,last:null,t:0};
     out.r=step.r; out.live=step.live; out.approx=step.approx; out.ratioSrc=step.src;
-  }catch(e){}
+    out.built=true;
+  }catch(e){ out.err=String((e&&e.message)||e); }
+  // ---- (v11.94) A HALF-BUILT FUTURES MODE IS THE MOST EXPENSIVE FAILURE IN THIS FILE ------------
+  // The defaults are `ok:true, r:1`, and `out.fam` is assigned BEFORE the ratio is. A throw in
+  // between left {fam:'ES', ok:true, r:1} — so dispIsFut() was true, dispR() returned 1, futMark()
+  // was empty, and EVERY level rendered as a SPY-scale number wearing an ES label. Off by ~10x, with
+  // no approximation marker. Found in the v11.94 audit.
+  // ⚠ A conversion that did not complete is NOT a conversion. Fall back to honest cash mode.
+  if(!out.built && out.fam){
+    out.ok=false; out.fam=null; out.r=1; out.live=false; out.approx=false;
+    out.msg='futures scale unavailable'+(out.err?(' — '+out.err):'')+' — showing index levels';
+  }
   return out;
 }
 function futModeRefresh(){ try{ FUTMODE=futModeCompute(); }catch(e){} return FUTMODE; }
@@ -5098,7 +5132,10 @@ function futUnavailableHtml(){
   // (v11.4.2) if Skylit IS serving a book for this instrument, say the honest thing: the tape exists,
   // this panel is mapped to SPY/QQQ only, and nothing about it is being read or recorded.
   try{ var cs=(FUTMODE&&FUTMODE.chart)||null;
-    if(cs && SYM_SEEN[cs] && SYM_SEEN[cs].n>0) msg=cs+' has a Skylit options tape, but this panel is mapped to SPY/QQQ only — nothing here is read or recorded for '+cs+'.'; }catch(e){}
+    // (v11.95) only say this about a symbol we genuinely do NOT map. SPXW is mapped now, and claiming
+    // its tape is unread was false from v11.77 onward — the FRAME rail is built from that very ladder.
+    if(cs && !FUT_UNDERLYING[cs] && SYM_SEEN[cs] && SYM_SEEN[cs].n>0)
+      msg=cs+' has a Skylit options tape, but this panel is mapped to SPY/QQQ only — nothing here is read or recorded for '+cs+'.'; }catch(e){}
   return '<div title="The options dealer-exposure tape only exists for SPY and QQQ (and the ES/NQ futures that track them). For any other instrument this panel has no map, and it will not invent one." '+
     'style="border-left:2px solid '+PAL.amber+';background:'+PAL.card+';border-radius:0 8px 8px 0;padding:6px 9px;margin:3px 0;font-size:10px;color:'+PAL.amber+';font-weight:700">'+
     msg+'</div>';
@@ -5829,7 +5866,10 @@ function futureStructureSummary(sym){
     var role=classifyNodeRole(sym, w, px, meta);
     // Rolling: tag the King node with the King's roll direction over the window
     // (King up = bullish, King down = bearish).
-    var roll = (role==='King') ? kingRoll(sym) : 0;
+    // (v11.94) kingRollRead, not kingRoll — the raw one returns 0 for "has not moved" AND for "no
+    // King history". v11.88 fixed the vote path and MISSED this one and the recorder below.
+    var rollR=(role==='King') ? kingRollRead(sym) : null;
+    var roll = (rollR && rollR.ok) ? rollR.dir : 0;
     var row={
       k:w.k,
       // (v10.54, audit 2) MAGNITUDE AT THE BOUNDARY. A −gamma node arrived here with a
@@ -6035,11 +6075,12 @@ function gatekeeper(sym){
   var S=STATE[sym]||{};
   var px=S.price, walls=S.walls||[];
   var out={ ok:false, k:null, side:null, ratio:null, verdict:null, kingK:null, decoyDiscount:0 };
-  if(px==null || !walls.length) return out;
+  if(px==null || !walls.length){ out.why='no price or no wall set'; return out; }
   var tp=tapeMap(sym);
   var kingK=(tp && typeof tp.king==='number')?tp.king:(S.king!=null?S.king:null);
   out.kingK=kingK;
-  if(kingK==null || Math.abs(kingK-px)<0.001) return out;   // no target to gatekeep toward
+  if(kingK==null){ out.why='no King to gatekeep toward'; return out; }
+  if(Math.abs(kingK-px)<0.001){ out.why='price is AT the King'; return out; }
   var toward = (kingK>px)?'above':'below';
   // candidate intervening nodes: strictly between price and King, on the path.
   var between=[];
@@ -6051,7 +6092,10 @@ function gatekeeper(sym){
                                     : (w.k<px-0.001 && w.k>kingK+0.001);
     if(onPath) between.push({k:w.k, v:av, pos:w.pos, dist:Math.abs(w.k-px)});
   });
-  if(!between.length) return out;                          // clear path to the King, no gatekeeper
+  // (v11.94) THE ONLY BRANCH THAT MEANS 'CLEAR'. Every other early return above is a REFUSAL, and
+  // both callers collapsed all of them to gkK=null and rendered "No gatekeeper - clear path to the
+  // King." Absence of data read as absence of obstacles - the D-6 disease, still live here.
+  if(!between.length){ out.clear=true; out.why='no significant node between price and the King'; return out; }
   // (v10.27) GATEKEEPER = the DOMINANT blocker on the path \u2014 the doc's "second-
   // highest node between price and the King" / "compare vs the 2nd highest-value
   // node" / "far in excess of the nodes beyond it". So rank by MAGNITUDE (|%King|),
@@ -10896,15 +10940,30 @@ function mapWord(state){
   return '<span style="color:'+col+';font-weight:800">'+w+'</span>';
 }
 function mapChipHtml(state){
-  if(!state || state==='hold') return '<span title="Is this node building or bleeding? holding — no 15m change beyond ±'+MAP_ACM+'% and near its session peak." style="font-size:8px;font-weight:700;color:'+PAL.sub+';background:rgba(139,152,169,.12);border-radius:3px;padding:0 3px">holding</span>';
+  // (v11.94) `!state` AND 'hold' RENDERED THE SAME CHIP, so an unreadable node claimed "no 15m change
+  // beyond ±X% and near its session peak" - a measurement sentence with no measurement behind it.
+  // mapStateOf now returns null for unknown; this is the other half of that fix and neither works alone.
+  if(!state) return '<span title="Is this node building or bleeding? UNKNOWN - the node-flow read is unavailable for this strike right now, so there is no accumulation reading. This is not the same as holding." style="font-size:8px;font-weight:700;color:'+PAL.sub+';background:rgba(139,152,169,.06);border-radius:3px;padding:0 3px">&mdash;</span>';
+  if(state==='hold') return '<span title="Is this node building or bleeding? holding — no 15m change beyond ±'+MAP_ACM+'% and near its session peak." style="font-size:8px;font-weight:700;color:'+PAL.sub+';background:rgba(139,152,169,.12);border-radius:3px;padding:0 3px">holding</span>';
   var col=state==='acm'?PAL.longAccent:PAL.shortAccent, bg=state==='acm'?'rgba(46,194,126,.12)':'rgba(240,97,109,.12)';
   var tip=state==='acm'?('Is this node building or bleeding? ACCUMULATING — %King up ≥'+MAP_ACM+'% over 15m.')
          :(state==='gone'?'Is this node building or bleeding? GONE — it dropped out of the book within the last 15m (that is dissipation, not missing data).'
                          :('Is this node building or bleeding? DISSIPATING — %King down ≥'+(-MAP_DEC)+'% over 15m or ≥'+MAP_DROP+'% off its session peak.'));
   return '<span title="'+tip+'" style="font-size:8px;font-weight:700;color:'+col+';background:'+bg+';border-radius:3px;padding:0 3px">'+(state==='acm'?'acm':(state==='gone'?'gone':'dec'))+'</span>';
 }
+// (v11.94) 'hold' IS A MEASUREMENT, AND THIS RETURNED IT WITHOUT ONE.
+// It answered 'hold' for: no nodeFlow, a THROWN error, and a strike simply absent from the set - and
+// the chip then printed "holding" with the tooltip "no 15m change beyond +/-X% and near its session
+// peak." A fabricated claim about a measurement that never happened, on a node the trader is deciding
+// at. Worst instance found in the v11.94 audit.
+// WARNING: null means UNKNOWN and the caller must render a dash, never a state word.
 function mapStateOf(sym, L){
-  try{ var f=nodeFlow(sym); if(!f||!f.ok||!L) return 'hold'; var n=null; f.nodes.forEach(function(x){ if(Math.abs(x.k-L.k)<0.001) n=x; }); return n?n.state:'hold'; }catch(e){ return 'hold'; }
+  try{
+    var f=nodeFlow(sym);
+    if(!f || !f.ok || !L) return null;
+    var n=null; f.nodes.forEach(function(x){ if(Math.abs(x.k-L.k)<0.001) n=x; });
+    return n ? n.state : null;
+  }catch(e){ return null; }
 }
 function mapSrcHtml(L){
   if(!L || !L.derived) return '';
@@ -12065,8 +12124,11 @@ function registerCoreFeatures(){
 
   registerFeature({ key:'dir.kingRoll', label:'Direction candidate · King roll', phase:'dashboard', fwd:FEAT_FWD,
     record:function(sym){
-      var r=0; try{ r=kingRoll(sym)||0; }catch(e){}
-      return { vote:r, king:(STATE[sym]||{}).king!=null?STATE[sym].king:null, voting:false };
+      // (v11.94) an ABSENT King history must record null, not a neutral vote of 0 — pooling those
+      // two makes "the King did not move" and "we could not tell" the same observation.
+      var rr=null; try{ rr=kingRollRead(sym); }catch(e){}
+      return { vote:(rr&&rr.ok)?rr.dir:null, ok:!!(rr&&rr.ok), why:(rr&&!rr.ok)?(rr.why||null):null,
+               king:(STATE[sym]||{}).king!=null?STATE[sym].king:null, voting:false };
     },
     outcome:function(rec, fwd){
       var v=(rec&&rec.vote)||0;
@@ -17580,19 +17642,50 @@ function biasVotes(sym){
   // direction, and gamma is conditional, not directional.
   // Confirmation is the more useful job for the supplementary reads: TREND on its own measured 34%,
   // and "TREND with 3 of 3 confirming" is a different proposition from "TREND with 0 of 3".
-  var out={ dir:0, verdict:'FLAT', why:'', confirms:[], nConf:0, nLive:0, trend:null, drift:null };
+  // (v11.94) `errs` — WHICH READS THREW, as opposed to which had nothing to say.
+  // Every read below already has its own try/catch and degrades to null, and that IS correct: one
+  // broken input should not take the tally down with it. But a read that THREW and a read that
+  // abstained both rendered as the same grey dash, so a permanently-crashing confirm looked exactly
+  // like a quiet one and could sit there for weeks. The dash now knows the difference.
+  var out={ dir:0, verdict:'FLAT', why:'', confirms:[], nConf:0, nLive:0, trend:null, drift:null, errs:{} };
   try{
     var tv=null; try{ tv=trendVerdict(sym); }catch(e0){}
     out.trend=tv;
     var st=(tv&&tv.state)?String(tv.state):'';
-    if(/up|bull/i.test(st)) out.dir=1;
-    else if(/down|bear|dn/i.test(st)) out.dir=-1;
+    // ⚠ 'up-broken' matches /up/ and 'dn-broken' matches /dn/, so a BROKEN trend still carries the
+    // side it broke FROM — which is what the confirms should be agreeing or disagreeing with.
+    if(/^up/.test(st)) out.dir=1;
+    else if(/^dn|^down|bear/.test(st)) out.dir=-1;
     else out.dir=0;
-    out.verdict=(out.dir>0)?'BULLISH':((out.dir<0)?'BEARISH':'FLAT');
+    // (v11.95) THE WORDS NAME THE MACHINE'S STATE, not a mood. BULLISH/BEARISH described a feeling;
+    // the 50-SMA machine has five states and the face was collapsing four of them into two.
+    //   up -> UPTREND      up-broken -> UPTREND BRK
+    //   dn -> DNTREND      dn-broken -> DNTREND BRK      anything else -> FLAT
+    var tvSt=(tv&&tv.state)?String(tv.state):'';
+    out.state=tvSt;
+    out.verdict = (tvSt==='up') ? 'UPTREND'
+                : (tvSt==='dn') ? 'DNTREND'
+                : (tvSt==='up-broken') ? 'UPTREND BRK'
+                : (tvSt==='dn-broken') ? 'DNTREND BRK'
+                : 'FLAT';
+    out.broken = (tvSt==='up-broken' || tvSt==='dn-broken');
     // say WHY, from the SMA itself
+    // (v11.95) THE GREY LINE IS THE COUNT THAT PRODUCED THE STATE, and it counts the side the state is
+    // ON — a DNTREND reading "17 of 20 above" was the old line's failure mode, because it always read
+    // `w.up` and only flipped the WORD.
     try{
-      var w=trendWindowRead ? trendWindowRead(sym) : null;
-      if(w && w.win) out.why='50-SMA · '+w.up+' of '+w.win+' bars '+(out.dir>=0?'above':'below');
+      var nUp=(tv&&typeof tv.up==='number')?tv.up:null;
+      var nDn=(tv&&typeof tv.dn==='number')?tv.dn:null;
+      var nWin=(tv&&tv.win)||null;
+      if(nWin && nUp!=null && nDn!=null){
+        var onSide=(out.dir<0)?nDn:nUp, word=(out.dir<0)?'below':'above';
+        out.why=onSide+' of '+nWin+' bars '+word+' the 50-SMA';
+        // a broken trend also says what it lost and what a reversal now needs — the v11.89 thresholds
+        if(out.broken){
+          var need=(typeof TREND_DOM_REV==='number')?TREND_DOM_REV:11;
+          out.why+=' — lost '+((typeof TREND_DOM==='number')?TREND_DOM:15)+', reversal needs '+need+' the other way';
+        }
+      }
       else if(tv && tv.line) out.why=String(tv.line);
       else out.why='50-SMA · '+(st||'forming');
     }catch(e1){ out.why='50-SMA · '+(st||'forming'); }
@@ -17602,10 +17695,10 @@ function biasVotes(sym){
       if(d!=null) out.nLive++;
       if(d!=null && out.dir!==0 && d===out.dir) out.nConf++;
     }
-    var sk=null; try{ sk=skewRead(sym); }catch(e2){}
+    var sk=null; try{ sk=skewRead(sym); }catch(e2){ out.errs['SKEW']=String((e2&&e2.message)||e2); }
     conf('SKEW', (sk&&!sk.err)?sk.dir:null,
       'Is protection being bought or sold?\nTheir published Δ Skew, read against its own recent range rather than as a level.\n⚠ Index skew is permanently put-heavy, so the raw number would say the same thing every day.');
-    var ac=null; try{ ac=accumAsym(sym); }catch(e3){}
+    var ac=null; try{ ac=accumAsym(sym); }catch(e3){ out.errs['ACCUM']=String((e3&&e3.message)||e3); }
     conf('ACCUM', ac?ac.dir:null,
       'Which side of the book is growing?\nDollars added to calls vs puts over the last half hour. Growth is flow, and flow has a direction.\n⚠ Measured in dollars, not %King — a percentage has a moving denominator and cannot compare two moments.');
     // ---- (v11.88) PA NO LONGER VOTES ------------------------------------------------------------
@@ -17618,19 +17711,28 @@ function biasVotes(sym){
     // assumed — the same treatment drift and the King roll already get.
     var pa=null; try{ pa=paRead(sym); }catch(e4){}
     // ---- (v11.88) CROSS — the only confirm that is not another reading of SPY's own book ---------
-    var cx=null; try{ cx=crossRead(sym); }catch(e6){}
+    var cx=null; try{ cx=crossRead(sym); }catch(e6){ out.errs['CROSS']=String((e6&&e6.message)||e6); }
     conf('CROSS', (cx&&cx.ok)?cx.dir:null,
       'Does the other index agree?\nThe QQQ trend, by the same rule on the same field as SPY — 150 minutes of average, a 60-minute window.\n⚠ The only confirm here that is not a second reading of the same option book.\n⚠ Built from the 1-minute spot series, not candles: QQQ has no candles at all.');
     // ---- (v11.88) ROLL — the settlement magnet migrating -----------------------------------------
-    var krR=null; try{ krR=kingRollRead(sym); }catch(e7){}
+    var krR=null; try{ krR=kingRollRead(sym); }catch(e7){ out.errs['ROLL']=String((e7&&e7.message)||e7); }
     var kr=(krR&&krR.ok)?krR.dir:null;
     conf('ROLL', kr,
       'Is the settlement magnet moving?\nThe King strike migrating up or down over the window — the board repositioning, not price.\n⚠ Recorded since v11.0 and non-voting until v11.89. Whether it LEADS price is still the open question.');
     out.skew=sk; out.accum=ac; out.pa=pa; out.cross=cx; out.kingRoll=kr; out.rollRead=krR;
 
-    var dr=null; try{ dr=driftRead(sym); }catch(e5){}
+    var dr=null; try{ dr=driftRead(sym); }catch(e5){ out.errs['DRIFT']=String((e5&&e5.message)||e5); }
     out.drift=dr;
-  }catch(e){}
+    out.complete=true;                 // every confirm was attempted
+  }catch(e){ out.broke=String((e&&e.message)||e); }
+  // ---- (v11.94) A TRUNCATED TALLY MUST NOT RENDER AS A FULL ONE --------------------------------
+  // The catch above wrapped the WHOLE confirm assembly and `out` was returned regardless. A throw
+  // after SKEW and ACCUM left confirms.length === 2, and confColour paints green when
+  // nConf === nLive — so the face could read "2 of 2 confirm" IN GREEN off half the evidence, with
+  // maximum displayed conviction and a silently truncated input. Found in the v11.94 audit; this is
+  // v11.88 code and the bug is mine.
+  // ⚠ The denominator was the ARRAY'S OWN LENGTH, which is exactly what a partial assembly shrinks.
+  if(!out.complete){ out.nConf=0; out.nLive=0; out.confirms=[]; }
   return out;
 }
 // Which side of the book is GROWING, in absolute dollars. The moving-denominator rule:
@@ -17766,31 +17868,34 @@ function ensureV3Css(){
     //   34-48  the node labels     TWO lines: ES price, then SPXW strike + role
     // Measured, not guessed: at 42px the piles occupied 22-32 and the two-line labels 28-43, so they
     // overlapped by four rows. The labels did not move — the piles were lifted and the box grew.
-    '#gpts-body .g3emt{position:relative;flex:1;height:53px;min-width:80px}'+
+    // (v11.95) 53 -> 66px: clear air under the amounts, and a full-size SPX line below the rail.
+  '#gpts-body .g3emt{position:relative;flex:1;height:66px;min-width:80px}'+
   // (v11.93) THE ROLE TIER. Money amounts keep 0-9 and nothing else may enter it; the role owns
   // 11-17; the rail moves 14 -> 19. Five extra pixels of track is the whole cost.
-  '#gpts-body .g3prole{position:absolute;top:11px;transform:translateX(-50%);font-size:5.5px;'+
+  '#gpts-body .g3prole{position:absolute;top:17px;transform:translateX(-50%);font-size:5.5px;'+
   'font-weight:800;letter-spacing:.05em;line-height:6px;white-space:nowrap;cursor:help}'+
   '#gpts-body .g3prole.acc{color:#a371f7}'+
   '#gpts-body .g3prole.brk{color:#e3c341}'+
   '#gpts-body .g3prole.bal{color:#8b98a9}'+
-    '#gpts-body .g3emt .g3pile{bottom:19px}'+
+    '#gpts-body .g3emt .g3pile{bottom:26px}'+
     '#gpts-body .g3plab{position:absolute;bottom:-1px;transform:translateX(-50%);font-size:6.5px;'+
       'font-weight:800;white-space:nowrap;cursor:help;line-height:7.5px;text-align:center}'+
     '#gpts-body .g3plab.acc{color:#a371f7}'+
     '#gpts-body .g3plab.brk{color:#e3c341}'+
     '#gpts-body .g3plab.bal{color:#8b98a9}'+
-    '#gpts-body .g3plab i{display:block;font-style:normal;font-size:5.5px;color:#8b98a9;letter-spacing:.04em}'+
-    '#gpts-body .g3emr{position:absolute;left:0;right:0;top:19px;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}'+
-    '#gpts-body .g3emf{position:absolute;top:19px;height:4px;border-radius:2px;background:rgba(139,152,169,.6)}'+
-    '#gpts-body .g3emx2{position:absolute;top:19px;height:4px;border-radius:2px;background:rgba(139,152,169,.22)}'+
-    '#gpts-body .g3emw2{position:absolute;top:12px;width:1px;height:8px;background:rgba(195,204,216,.6)}'+
-    '#gpts-body .g3emo{position:absolute;top:15px;width:2px;height:12px;background:#e6edf3;border-radius:1px;transform:translateX(-1px)}'+
-    '#gpts-body .g3emn{position:absolute;top:16px;width:10px;height:10px;border-radius:50%;background:#fff;'+
+    // (v11.95) the SPX strike now matches the ES price in size and reads gray-white. At 5.5px against
+  // an 8.65px ES price it read as a footnote to the number rather than the key the ladder is on.
+  '#gpts-body .g3plab i{display:block;font-style:normal;font-size:8.65px;font-weight:800;color:#c9d1da;letter-spacing:.02em;line-height:10px}'+
+    '#gpts-body .g3emr{position:absolute;left:0;right:0;top:25px;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}'+
+    '#gpts-body .g3emf{position:absolute;top:25px;height:4px;border-radius:2px;background:rgba(139,152,169,.6)}'+
+    '#gpts-body .g3emx2{position:absolute;top:25px;height:4px;border-radius:2px;background:rgba(139,152,169,.22)}'+
+    '#gpts-body .g3emw2{position:absolute;top:18px;width:1px;height:8px;background:rgba(195,204,216,.6)}'+
+    '#gpts-body .g3emo{position:absolute;top:21px;width:2px;height:12px;background:#e6edf3;border-radius:1px;transform:translateX(-1px)}'+
+    '#gpts-body .g3emn{position:absolute;top:22px;width:10px;height:10px;border-radius:50%;background:#fff;'+
       'box-shadow:0 0 0 2px #0b0e14;transform:translateX(-5px)}'+
     // TARGET moves to CYAN. Yellow now means POSITIVE GAMMA (Skylit's Pika), so the target cannot keep it.
     // Cyan is the one hue the palette had not spent, and the T glyph carries identity without colour.
-    '#gpts-body .g3emT{position:absolute;top:15px;font-size:9px;font-weight:800;color:#4fd1e0;'+
+    '#gpts-body .g3emT{position:absolute;top:21px;font-size:9px;font-weight:800;color:#4fd1e0;'+
       'transform:translateX(-50%);line-height:12px;text-shadow:0 0 3px #0b0e14,0 0 3px #0b0e14}'+
     '#gpts-body .g3emT.out{color:#6c7889}'+
     '#gpts-body .g3tgt{font-size:11px;font-weight:800;color:#4fd1e0;letter-spacing:-.2px}'+
@@ -18487,7 +18592,16 @@ var SK_MIN_STRIKES = 20;   // ⚖ hand-set. A healthy SPXW ladder reads 100; bel
 // ⚠ ROLE IS NOT POLARITY AND THE LABEL SHOWS ROLE WHEN THERE IS ONE. A King is still an accelerator or a
 // brake; the hover keeps both. Precedence KING > RUG/RRUG > GK > polarity, because that is the order in
 // which they change what a trader does.
-function skRoles(pct, kingK){
+// ⚠⚠ (v11.95) THE GATEKEEPER NEEDS PRICE, AND FOR FOUR VERSIONS IT WAS NEVER GIVEN IT.
+// A gatekeeper is by definition "the last significant node BETWEEN price and the King" — the comment
+// below said exactly that and the code never implemented the BETWEEN clause. Without `px` it simply
+// took the strongest significant neighbour within 6 strikes on EITHER side of the King:
+//     King 7670 · 7665 below at 25% · 7675 above at 63%  ->  picked 7675, because it was stronger
+// With price at SPX 7665 the King was BELOW price and the "gatekeeper" was above both. It gatekept
+// nothing, and the face labelled it GK anyway. Reported by the user 2026-08-24.
+// ⚠ When nothing lies between, that is a READING — a clear path — not a reason to name the nearest
+// node anyway. Same rule as D-6: absence of an obstacle must be stated, never faked.
+function skRoles(pct, kingK, px){
   var out={ king:kingK, gk:null, gkRatio:null, gkVerdict:null, rug:null, rrug:null, contested:false, byK:{} };
   try{
     var rows=[], k;
@@ -18546,12 +18660,22 @@ function skRoles(pct, kingK){
       var kidx=-1; for(i=0;i<rows.length;i++){ if(Math.abs(rows[i].k-kingK)<0.01){ kidx=i; break; } }
       if(kidx>=0){
         var kingAbs=Math.abs(rows[kidx].p)||100, best=null;
-        // walk from the King back toward price on BOTH sides; the gatekeeper is the last significant
-        // node before the King, whichever side the King sits on relative to the book's centre of mass.
-        for(i=kidx-1;i>=0 && i>=kidx-6;i--){ if(Math.abs(rows[i].p)>=RUG_SIG_PCT){ best=rows[i]; break; } }
-        var up=null;
-        for(i=kidx+1;i<rows.length && i<=kidx+6;i++){ if(Math.abs(rows[i].p)>=RUG_SIG_PCT){ up=rows[i]; break; } }
-        if(up && (!best || Math.abs(up.p)>Math.abs(best.p))) best=up;
+        // (v11.95) ONLY nodes strictly BETWEEN price and the King are candidates. Which side to walk
+        // is decided by where price actually is, not by which neighbour happens to be the strongest.
+        if(typeof px==='number' && isFinite(px)){
+          var lo=Math.min(px,kingK), hi=Math.max(px,kingK);
+          for(i=0;i<rows.length;i++){
+            var r0=rows[i];
+            if(!(r0.k>lo+0.01 && r0.k<hi-0.01)) continue;      // strictly between, never the ends
+            if(Math.abs(r0.p)<RUG_SIG_PCT) continue;           // must be significant
+            if(!best || Math.abs(r0.p)>Math.abs(best.p)) best=r0;
+          }
+          if(!best) out.gkClear=true;                          // a genuine clear path to the King
+        } else {
+          // no price available: refuse rather than guess a side. A GK named without price is the bug
+          // this rewrite exists to remove.
+          out.gkWhy='no price — cannot tell which side of the King it must stand on';
+        }
         if(best && best.k!==kingK){
           out.gk=best.k; out.gkRatio=+(Math.abs(best.p)/kingAbs).toFixed(2);
           out.gkVerdict=(out.gkRatio>=GK_RATIO_STRONG) ? 'stall' : 'passable';
@@ -18595,7 +18719,9 @@ function skPiles(B, sym){
     out.kingSrc=T.kingSrc||null; out.king=T.king; out.kingKd=kd;
     // (v11.81) roles are computed over the WHOLE ladder, not just the in-band slice — a rug's floor or a
     // gatekeeper's King can easily sit outside the expected-move band while still defining the shape.
-    var RL=skRoles(T.pct, T.king); out.roles=RL;
+    // (v11.95) price, in SPX terms, so the gatekeeper can be the node BETWEEN price and the King
+    var pxSpx=null; try{ if(B && typeof B.now==='number' && L && L.dispScale>0) pxSpx=B.now/L.dispScale; }catch(ePx){}
+    var RL=skRoles(T.pct, T.king, pxSpx); out.roles=RL;
 
     // (2) recompute the King from the ratios and compare. Independent of how the King was found.
     var topK=null, topV=0, kk;
@@ -18958,25 +19084,14 @@ function secFrame(sym){
   // (v11.62) THE FUEL CHIP. Unblocked once the "sign gap" turned out to be a window mismatch, not a bug.
   // In negative gamma the flow is traded WITH the move, so it feeds it; in positive gamma it fights it.
   // Identical dollar figure, opposite meaning — which is why the regime, not the size, decides the word.
+  // ---- (v11.95) THREE BADGES REMOVED FROM ROW 1, at the user's request ------------------------
+  //   FEEDS $x M / PT   hedging-flow size    -> the regime chip already says which way it cuts
+  //   ES $x/ct          one expected move    -> effectively constant all session
+  //   MID / AM / PWR    the session phase    -> the "energy" tag
+  // ⚠ hedgeFlow() IS STILL CALLED AND STILL RECORDED as the `flow` feature, including the two-book
+  // conflict flag from v11.83. Removing a BADGE must never remove the MEASUREMENT behind it: the
+  // question `flow_decays_when_books_fight` reads that record and would have gone silently empty.
   var HF=null; try{ HF=hedgeFlow(sym); }catch(eH){}
-  if(HF && HF.ok){
-    h+='<span class="g3flow '+(HF.feeds?'g3feeds':'g3fights')+(HF.conflict?' g3conf':'')+'"'+
-       g3tip((HF.feeds?'Hedging FEEDS the move here':'Hedging FIGHTS the move here')+': dealers must trade about '+usdBig(HF.perPt)+
-             ' of underlying per point to stay neutral, '+(HF.feeds?'in the SAME direction price is going':'AGAINST the direction price is going')+
-             '. From the '+gexWindowNote(HF.window)+' The near book is used because that is where gamma concentrates and where dealers actually re-hedge. This is the SIZE of the mechanical flow, not a forecast that price will travel.'+
-             (HF.conflict ? (' \u26a0\u26a0 THE TWO BOOKS DISAGREE. This figure is InsiderFinance open-interest gamma and says '+(HF.feeds?'FEEDS':'FIGHTS')+'; the regime chip and the nodes read SKYLIT live positioning and say '+((HF.regimeG<0)?'SHORT gamma (feeds)':'LONG gamma (fights)')+'. Neither is a check on the other \u2014 a stock beside a flow \u2014 but when they conflict, trust the one whose window matches your horizon and treat the level structure as contested.') : ''))+
-       '>'+(HF.conflict?'\u26a0 ':'')+(HF.feeds?'FEEDS ':'FIGHTS ')+usdBigSp(HF.perPt)+' / PT</span>';
-  }
-  if(EBc && EBc.ok && EBc.mult && EBc.contract){
-    h+='<span class="g3ct"'+g3tip(EBc.contract+' — '+usd(EBc.mult)+' per index point. The expected move of '+dispNum(EBc.em)+' points is worth '+usd(EBc.emUsd)+' per contract'+(EBc.microUsd?('; the micro is one tenth, '+usd(EBc.microUsd)):'')+'. This is the MOVE converted to dollars — not a position, not a size, not profit or loss. ⚠ The multiplier follows the CHART, so charting '+EBc.contract+' while trading the micro makes every figure ten times too big.')+'>'+g3esc(EBc.contract)+' '+usd(EBc.emUsd)+'/ct</span>';
-  }
-  // (v11.69) it is one word now, so it is styled as a verdict rather than a trailing sentence — and the
-  // whole explanation, including the widen-stops part that used to be printed, moved into the hover.
-  // (v11.75) the phase tag ends the row (live sessions only); the target sits after it, pushed right.
-  if(!inReplay()){
-    var ptag1=(P.label||'').replace('EXPIRY · ','EXP·').replace('OPEN · CHARM','OPEN').replace('POWER HOUR','PWR').replace('MORNING','AM').replace('MIDDAY','MID');
-    if(ptag1 && ptag1!=='—') h+='<span class="g3tag"'+g3tip(g3esc(P.sub||''))+'>'+g3esc(ptag1)+'</span>';
-  }
   // (v11.75) THE TARGET MOVES RIGHT, GETS A LABEL AND A DIRECTION COLOUR. `T: 7718` in green when the
   // magnet sits ABOVE price and red when below — where the pull is. The rail's T marker takes the SAME
   // colour from the SAME test, so the chip and the mark can never disagree; they were cyan and gold
@@ -19018,7 +19133,7 @@ function secFrame(sym){
     // Subrahmanyam, and every vendor guide that bothers to say so puts the conversion at x1.25. A row
     // labelled EM implies ~68% containment; this band delivers ~58%. The WIDTH IS UNCHANGED and every
     // level sits exactly where it did — only the claim has been corrected.
-    h+='<span class="g3emk"'+g3tip('Expected low — the open minus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.low/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(EB.low))+'<small>'+(EB.est?'~':'')+'EXP LOW'+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
+    h+='<span class="g3emk"'+g3tip('Expected low — the open minus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.low/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(EB.low))+'<small>'+(EB.est?'~':'')+'EL'+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
     h+='<span class="g3emt">'+
        '<i class="g3emr"></i>'+
        ((EB.hiWater!=null&&EB.loWater!=null)?('<i class="g3emx2" style="left:'+emPos(EB,EB.loWater).toFixed(1)+'%;width:'+Math.max(0,emPos(EB,EB.hiWater)-emPos(EB,EB.loWater)).toFixed(1)+'%"></i>'+
@@ -19113,7 +19228,7 @@ function secFrame(sym){
          return h2;
        })()+
        '</span>';
-    h+='<span class="g3emk"'+g3tip('Expected high — the open plus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.high/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a ceiling.')+'>'+g3esc(frameNum(EB.high))+'<small>'+(EB.est?'~':'')+'EXP HIGH'+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
+    h+='<span class="g3emk"'+g3tip('Expected high — the open plus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.high/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a ceiling.')+'>'+g3esc(frameNum(EB.high))+'<small>'+(EB.est?'~':'')+'EH'+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
     h+='</span>';
   } else {
     h+='<span class="g3emx"'+g3tip('Where can today go? The band needs an opening bar and a two-sided at-the-money straddle in today\'s expiry. A one-sided straddle is not a straddle and half a band would be worse than none, so it says why instead of drawing something.')+'>'+g3esc(EB.why)+'</span>';
@@ -19191,12 +19306,18 @@ function secBias(sym){
   h+='<div class="g3cf">';
   B.confirms.forEach(function(c){
     var cls='', mark='—';
-    if(c.d==null){ cls=''; mark='—'; }
-    else if(B.dir===0){ cls=''; mark=(c.d>0?'↑':(c.d<0?'↓':'·')); }
-    else if(c.d===B.dir){ cls=' y'; mark='✓'; }
-    else if(c.d===0){ cls=''; mark='·'; }
-    else { cls=' n'; mark='✗'; }
-    h+='<span class="g3chip'+cls+'"'+g3tip(c.tip)+'>'+c.k+' '+mark+'</span>';
+    // (v11.94) a read that THREW is not a read that abstained
+    var err=(B.errs&&B.errs[c.k])||null;
+    // (v11.95) EVERY BADGE READS ITS OWN DIRECTION — up, down or sideways — instead of agreement with
+    // the call. A tick said "this agrees with the SMA" and hid WHAT the read actually said; two reads
+    // could both show ✓ while pointing opposite ways on a flat call. The COLOUR still carries
+    // agreement, so the count is unchanged: green agrees, red disagrees, grey has no side.
+    if(err){ cls=' n'; mark='!'; }
+    else if(c.d==null){ cls=''; mark='—'; }                       // no reading at all
+    else if(c.d>0){ mark='↑'; cls=(B.dir>0)?' y':((B.dir<0)?' n':''); }
+    else if(c.d<0){ mark='↓'; cls=(B.dir<0)?' y':((B.dir>0)?' n':''); }
+    else { mark='→'; cls=''; }                                    // sideways: a real reading, no side
+    h+='<span class="g3chip'+cls+'"'+g3tip(err?('This read FAILED — '+g3esc(err)+'.\nIt is not abstaining, it is broken, and a dash would have hidden that.\n\n'+c.tip):c.tip)+'>'+c.k+' '+mark+'</span>';
   });
   // (v11.90) DRIFT MOVES ONTO THE CONFIRM ROW AS A BADGE — BUT IT STILL DOES NOT VOTE.
   // Two things are true at once and both have to survive this change:
@@ -19225,7 +19346,8 @@ function secBias(sym){
   h+='<span class="g3chip gate'+dcls+'"'+g3tip('Is anything structurally confirming the call?\nGamma and vanna either lean the same way relative to price, or they split. '+g3esc(gtxt)+'.\n⚠ A GATE, not a vote — it is not in the count. Gamma says HOW price moves, never which way.\n⚠ A tick means the books agree AND point with the call. Agreeing with each other on the wrong side is a cross.')+'>DRIFT '+mark2+'</span>';
 
   var cnt, ccol;
-  if(B.dir===0){ cnt='no side to confirm'; ccol='#8b98a9'; }
+  if(B.broke){ cnt='confirms unavailable'; ccol='#f0616d'; }   // (v11.94) never a tally off a partial assembly
+  else if(B.dir===0){ cnt='no side to confirm'; ccol='#8b98a9'; }
   else { cnt=B.nConf+' of '+B.confirms.length+' confirm'; ccol=confColour(B.nConf, B.nLive); }
   h+='<span class="g3cnt" style="color:'+ccol+'"'+g3tip('How much conviction is behind this call?\nHow many live confirms agree with the 50-SMA that owns the direction.\n⚠ Green only when EVERY live one agrees. A dash means that read had nothing to give, which is not the same as disagreeing.\n⚠ TREND alone measured 34%. Whether the count improves on that has never been tested — it only started being recorded at v11.88.')+'>'+cnt+'</span>';
   h+='</div>';
@@ -19260,7 +19382,18 @@ var NCHART_H=132;                  // px
 // directional and, unlike anything open-interest based, it moves intraday because IV does.
 // Index skew is PERSISTENTLY negative-ish — puts are always bid — so the raw level would print the
 // same verdict every day. The vote is the level against its own recent range.
-var SKEW_HIST_KEY='gpts_skew_hist_v1', SKEW_HIST_MAX=400, SKEW_BAND=0.25;
+// ⚠⚠ (v11.95) THE SKEW BADGE WAS PERMANENTLY GREY, AND THE CAUSE WAS TWO FAULTS STACKED.
+// Live 2026-08-24: v=0.11, lo=2.2, hi=2.2, n=240.
+//  1. THE HISTORY AND THE VALUE ARE DIFFERENT METRICS. v11.37 switched the reading from their
+//     published header skew (~2.2) to a computed 25-delta put-call IV spread (~0.11) — and kept
+//     appending to the SAME store. The current value was being ranked against a range built from a
+//     quantity it is not. Pattern 1, mislabeling, in its purest form.
+//  2. THE DIRECTION TEST IS GATED ON `if(hi>lo)`, so a degenerate range silently yields dir 0 for
+//     ever. A dead range read exactly like a neutral market.
+// The key is versioned by SOURCE. A history recorded against a different metric is not history, it is
+// noise wearing history's name, so changing the source starts a new range and SAYS it is rebuilding.
+var SKEW_SRC='skew25';                       // bump this string whenever the metric changes
+var SKEW_HIST_KEY='gpts_skew_hist_v2_'+SKEW_SRC, SKEW_HIST_MAX=400, SKEW_BAND=0.25;
 var SKEWH=null;
 function skewHistLoad(){ if(SKEWH) return SKEWH;
   try{ SKEWH=JSON.parse(localStorage.getItem(SKEW_HIST_KEY)||'null'); }catch(e){ SKEWH=null; }
@@ -19297,12 +19430,19 @@ function skewRead(sym){
     var vals=a.map(function(x){return x.v;}).slice().sort(function(x,y){return x-y;});
     var lo=vals[Math.floor(vals.length*0.2)], hi=vals[Math.floor(vals.length*0.8)];
     // Puts richening = downside bid = bearish. Richening means MORE positive on their sign.
-    var dir=0;
+    var dir=0, dead=false;
+    // (v11.95) A RANGE WITH NO WIDTH IS NOT A NEUTRAL READING, IT IS NO READING.
+    // `if(hi>lo)` alone let a collapsed band report dir 0 for ever, indistinguishable from a market
+    // sitting mid-range. Say which it is.
     if(hi>lo){
       if(v>=hi) dir=-1;            // skew at the rich end of its own range -> protection being bought
       else if(v<=lo) dir=1;        // skew unusually flat -> downside demand fading
+    } else {
+      dead=true;
     }
-    return { v:v, dir:dir, lo:+lo.toFixed(2), hi:+hi.toFixed(2), n:a.length, err:null,
+    return { v:v, dir:dir, lo:+lo.toFixed(2), hi:+hi.toFixed(2), n:a.length,
+             err: dead ? ('range has no width yet ('+(+lo.toFixed(2))+') — cannot rank '+(+v.toFixed(2))+' against it') : null,
+             dead:dead, src:SKEW_SRC,
              putIV:W2?W2.skewPutIV:null, callIV:W2?W2.skewCallIV:null,
              putK:W2?W2.skewPutK:null, callK:W2?W2.skewCallK:null,
              atmIV:W2?W2.atmIV:null,
@@ -19329,7 +19469,13 @@ function skewRead(sym){
 //                  into every close - and on expiry day strikes lost 75-94% to decay alone.
 //   floor $40M   - archive median node is $81M, p25 $31M
 //   reach +-5 strikes
-var ACCUM_WIN_MIN=30, ACCUM_REACH=5, ACCUM_MIN_SHARE=0.20;
+// (v11.95) ACCUM_REACH 5 -> 12. The badge flipped side every few minutes and the cause was not the
+// window and not the sign — measured live 2026-08-24: dUp +$90M, dDn +$5M, dir -1, "upside building
+// faster", all coherent (building ABOVE price is resistance stacking, which is bearish). The fault was
+// n=4 against a hard minimum of 4: only four strikes fell within 5 points of price, so ONE strike
+// moving flipped the share. A reach of 12 spans the same ladder the rail draws.
+// ⚠ `n` is now reported and shown, because a thin read should look thin rather than merely unstable.
+var ACCUM_WIN_MIN=30, ACCUM_REACH=12, ACCUM_MIN_SHARE=0.20;
 var ROLL_WIN_MIN=30, ROLL_TH=0.50, ROLL_MIN_V=40e6, ROLL_REACH=5;
 function rollMedian(a){ if(!a.length) return 0; var b=a.slice().sort(function(x,y){return x-y;}); return b[Math.floor(b.length/2)]; }
 function rollDetect(sym){

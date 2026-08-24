@@ -100,8 +100,8 @@ eq(confTier({ok:false},766),null,'and an empty read is the same');
   ok(emk.every(x=>x.startsWith("'+g3tip(")),
      'and every one of them opens with its tip, so the VALUE is hoverable and not just the label',
      emk.map(x=>x.slice(0,24)));
-  ok(/EXP LOW/.test(FR) && /EXP HIGH/.test(FR),
-     'the rails are named EXP LOW / EXP HIGH (v11.75, the user\'s wording)');
+  ok(/'EL'/.test(FR) && /'EH'/.test(FR),
+     'the rails are abbreviated EL / EH (v11.95 — spelled out they ate the rail width)');
   ok(/0\.80 sigma/.test(FR) && /58%/.test(FR) && /1\.25/.test(FR),
      'and the hover carries the caveat the label does not: 0.80 sigma, ~58% containment, x1.25 to a true one-sigma');
   ok(/a one-sided straddle is not a straddle/i.test(src),'the blank case is explained rather than left mysterious');

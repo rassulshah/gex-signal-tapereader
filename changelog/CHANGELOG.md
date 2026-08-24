@@ -1,3 +1,121 @@
+## v11.95 — charting SPXW blanked the panel, and the gatekeeper never knew where price was
+
+**SPXW blanked the whole dashboard, and the banner it showed was FALSE.** SPXW was absent from
+`FUT_UNDERLYING`, so `futModeCompute` took the `!und` branch, set `ok:false`, and `render()` replaced
+everything with *"SPXW has a Skylit options tape, but this panel is mapped to SPY/QQQ only — nothing
+here is read or recorded for SPXW."* That sentence was written at v11.4.2 and **has been wrong since
+v11.77**, when the FRAME rail moved onto Skylit's SPXW ladder. The SPXW tape is what the rail is
+built from.
+⚠ **DATA CAPTURE WAS NEVER AFFECTED.** `recordNodeSnapshot('SPY')` and `('QQQ')` are called with
+hardcoded symbols every tick and `activeSym()` only ever returns SPY or QQQ. A display outage, not a
+data gap. SPXW now maps to underlying SPY with its own ratio family, and the banner only fires for a
+symbol genuinely unmapped.
+
+**THE GATEKEEPER NEVER KNEW WHERE PRICE WAS.** `skRoles(pct, kingK)` was never given price, so it could
+not apply the one clause that defines a gatekeeper. It took the strongest significant neighbour within
+6 strikes on EITHER side of the King:
+
+    King 7670 · 7665 below at 25% · 7675 above at 63%  ->  picked 7675, because it was stronger
+
+With price at SPX 7665 the King was BELOW price and the "gatekeeper" was above both — it gatekept
+nothing, and the rail labelled it GK anyway. **Reported by the user from the live face.** Only nodes
+strictly between price and the King are candidates now, and with no price it refuses rather than
+guessing a side.
+
+**SKEW WAS PERMANENTLY GREY, FROM TWO FAULTS STACKED.** Live: `v=0.11`, `lo=2.2`, `hi=2.2`, n=240.
+v11.37 switched the reading from their published header skew (~2.2) to a computed 25-delta IV spread
+(~0.11) and **kept appending to the same store** — the current value was being ranked against a range
+built from a quantity it is not. And the direction test is gated on `if(hi>lo)`, so a collapsed range
+silently returned neutral for ever. The key is versioned by source now, and a dead range says so.
+
+**ACCUM's direction was right; its sample was starved.** `dUp +$90M`, `dDn +$5M`, `dir −1`, "upside
+building faster" — all coherent, because building ABOVE price is resistance stacking. The flipping was
+`n=4` against a hard minimum of 4: only four strikes fell within `ACCUM_REACH=5` of price, so one
+strike moving flipped the share. Reach 5 → 12.
+**ROLL was never broken** — `{ok:true, dir:0}`, the King genuinely had not moved. It only looked broken
+because a neutral rendered as a dash, identical to unavailable.
+
+### FRAME and BIAS
+
+FEEDS, ES/ct and the session-phase tag are off row 1 — ⚠ **the measurements behind them are not**, and
+section 4z asserts that, because a removed badge that also removed its feature would empty
+`flow_decays_when_books_fight` silently. Rails read **EL / EH**. The SPX strike now matches the ES price
+in size and reads gray-white. Track 53 → 66px for air under the amounts.
+
+BIAS names the machine's five states — **UPTREND · DNTREND · UPTREND BRK · DNTREND BRK · FLAT** — and
+the grey line is the bar count **on the side the state is on** (the old line always read `w.up` and only
+flipped the word, so a DNTREND could read "17 of 20 above"). A broken trend also states what it lost and
+what a reversal needs. Badges read **↑ / ↓ / →** for their own direction; the COLOUR still carries
+agreement, so the confirm count is unchanged.
+
+### the pop-out limit was an unreachable handle
+
+Measured live: panel **581px inside a 598px window**. The grip sits at the panel's bottom-right, so the
+moment the panel grew past the window the HANDLE left the viewport and the drag stopped with no message.
+Unhiding it at v11.93 was not enough. It is pinned to the window now and the ceiling is the window's own
+height rather than an arbitrary 2000.
+
+⚠ **I deleted ~400 assertions from `test_em_band.js` with a careless span edit and recovered them from
+the v11.94 installer payload.** That is the second time the installer's round-trip has been the backup
+that mattered. Assertions are now retired by INVERTING them in place, never by deleting lines.
+
+---
+
+## v11.94 — five refusals that rendered as readings, found by audit
+
+Two agents swept the file for dead code and for silent failures. **Four of the findings were live and
+one was mine from v11.88.** Every one has the same shape: a function returns its NEUTRAL value for
+"no data", "not applicable" and "it threw", and a renderer turns that neutral into a confident
+sentence. The project already fixed this at `emPiles` (D-6) and `kingRoll` (v11.88); these survived.
+
+**1 · `mapStateOf` fabricated a measurement.** It answered `'hold'` for no nodeFlow, for a THROWN
+error, and for a strike simply absent from the set — and the chip then printed **"holding"** with the
+tooltip *"no 15m change beyond ±8% and near its session peak."* A measurement sentence with no
+measurement behind it, on a node the trader is deciding at.
+⚠ **The fix needed BOTH halves.** `mapChipHtml` rendered `!state` and `'hold'` identically, so
+returning null alone would have changed nothing — and with the chip guard removed the label reads
+**`dec`**, claiming DISSIPATING. A *stronger* false claim than the one being fixed.
+
+**2 · `futModeCompute` could ship a half-built futures scale.** Defaults are `ok:true, r:1`, and
+`out.fam` is assigned BEFORE the ratio. A throw in between left `{fam:'ES', ok:true, r:1}` — so
+`dispIsFut()` was true, `dispR()` returned 1, `futMark()` was empty, and **every level rendered as a
+SPY-scale number wearing an ES label. Off by ~10× with no approximation marker.** A failed conversion
+is not a conversion; it now falls back to honest cash mode and says so.
+
+**3 · `gatekeeper()` had five refusals and one all-clear, rendered identically.** No price, no walls,
+no King, price AT the King, and a genuine clear path all returned `ok:false`, and both callers printed
+**"No gatekeeper — clear path to the King."** Only the branch that actually walked the path now sets
+`clear:true`; every other exit carries its own `why`.
+
+**4 · A confirm that CRASHED looked exactly like one that abstained.** Each read in `biasVotes` has its
+own try/catch and degrades to null — which is correct, one broken input must not take the tally down.
+But both rendered as the same grey dash, so a permanently-crashing confirm could sit there for weeks.
+`errs` records which threw; the chip marks it `!` and the hover says it is broken rather than quiet.
+The structural backstop stays: a genuinely truncated assembly is zeroed rather than rendered short,
+because `confColour` paints green on `nConf===nLive` and the denominator is the array's own length.
+
+**5 · `kingRoll` raw call sites.** v11.88 fixed the vote path; the audit flagged two more. ⚠ **The
+audit was wrong and my own test proved it** — stripping comments first shows the only raw call is
+inside `kingRollRead`. The v11.88 fix was complete; the "finding" was prose counted as code, which is
+now the sixth time that has fooled something in this project.
+
+### the mutation harness itself had a hole
+
+Four safety fixes fired **zero** assertions on the first sweep. Writing real tests exposed that the
+`mapChipHtml` mutant **crashed** on an unstubbed `MAP_DROP` — and `grep -c '^FAIL'` counts a crash as
+**zero failures**, so a mutation that killed the process read as "caught nothing".
+⚠ **A mutation runner must treat a crash as a failure, not a pass.** It now checks for
+ReferenceError / SyntaxError / TypeError before counting.
+
+### also found, not yet fixed
+
+`nodeBreadth` is declared twice (L1546 shadowed by L15846 — the `ifNum` failure mode, and the dead one
+is unreachable), `feedStatusHtml` computes `txt`/`col`/`vexTxt` and returns none of them, 14 CSS rules
+are silently overridden by a later duplicate, and ~710 lines across 24 functions have no caller.
+Catalogued for the next pass rather than deleted mid-session.
+
+---
+
 ## v11.93 — the node role moves above the rail, and resize follows the panel into the pop-out
 
 **THE ROLE TIER.** `KING / GK / ACC / BRK / RUG` moves out of the label under the rail and into its own

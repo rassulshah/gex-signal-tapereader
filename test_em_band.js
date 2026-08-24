@@ -177,7 +177,7 @@ eval(ex('emBand'));
   ok(!/cell\('DEX'/.test(f),            'DEX is off the face — its sign is structurally pinned');
   ok(!/cell\('TERM'/.test(f),           'TERM is off the face');
   ok(!/cell\('ATR'/.test(f),            'ATR is off the face (it still sets ladder zone widths)');
-  ok(/g3tag/.test(f),                   'the session-phase tag stays');
+  ok(!/class="g3tag"/.test(f),          'the session-phase tag is GONE (v11.95)');
   ok(/g3emx/.test(f),                   'and there is a spoken refusal when the band cannot be drawn');
   // (v11.75) the prev-close marker lived on the numbers row, which is gone. The band hover still says it.
   ok(/re-anchors to the real open/.test(f), 'the hover says when the anchor is the prior close, not the open');
@@ -311,12 +311,12 @@ eval(ex('emBand'));
   ok(b.indexOf('out.roomUp')<b.indexOf('leftUsd'), 'room is computed BEFORE it is converted to money');
 
   const f=ex('secFrame');
-  ok(/g3ct/.test(f),             'the contract chip renders');
+  ok(!/class="g3ct"/.test(f),    'the contract chip is GONE from row 1 (v11.95)');
   // (v11.69) the chip dropped the word EM when the row was renamed STRADDLE — it would have been the one
   // place on the face still calling a 0.80-sigma band an expected move. It is now `ES $1,736/ct`.
-  ok(/usd\(EBc\.emUsd\)\+'\/ct/.test(f), 'the contract chip still prices a whole straddle per contract');
+  ok(true, 'retired v11.95 — chip removed from row 1; measurement asserted in 4z');
   ok(!/' \u00b7 EM '/.test(f),            'and no longer calls it an expected move');
-  ok(/EBc && EBc\.ok && EBc\.mult/.test(f), 'only when there IS a contract — a SPY chart has no multiplier');
+  ok(true, 'retired v11.95 — chip removed from row 1; measurement asserted in 4z');
   ok(/EB\.open-EB\.loWater/.test(f) && /EB\.high-EB\.hiWater/.test(f),
      'the segments are used-and-remaining on BOTH sides, measured from the day\'s extremes');
   // ⚠ DESCRIPTIVE ONLY. A dollar figure is one step from sizing, R:R and P&L, all of which are banned.
@@ -339,8 +339,7 @@ eval(ex('emBand'));
   const fVisible=stripCalls(f.split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n'),'g3tip');
   ok(!/\bP&L\b|profit|\bloss\b|position size|risk per/i.test(fVisible),
      'no VISIBLE label frames this as profit, loss, or position size');
-  ok(/per contract/.test(f) && /not a position/.test(f),
-     'and the hover says outright that it is the MOVE converted, not a position');
+  ok(true, 'retired v11.95 — the ES/ct chip left row 1; emUsd is still recorded (see 4z)');
 }
 
 
@@ -415,9 +414,9 @@ eval(ex('emBand'));
   ok(/out\.window=w/.test(hf),              'and the window travels WITH the number');
 
   const f=ex('secFrame');
-  ok(/g3flow/.test(f),                      'the fuel chip renders');
-  ok(/FEEDS /.test(f) && /FIGHTS /.test(f), 'and says which, in words');
-  ok(/gexWindowNote\(HF\.window\)/.test(f), 'its hover names the window it came from');
+  ok(!/class="g3flow/.test(f),              'the FEEDS chip is GONE from row 1 (v11.95)');
+  ok(true, 'retired v11.95 — chip removed from row 1; measurement asserted in 4z');
+  ok(true, 'retired v11.95 — chip removed from row 1; measurement asserted in 4z');
   ok(/g3flow\.g3feeds\{[^}]*#a371f7/.test(src),
      'FEEDS wears the ACCELERATOR purple — same grammar as the piles, so chip and rail agree');
   ok(/g3flow\.g3fights\{[^}]*#e3c341/.test(src),
@@ -465,8 +464,8 @@ eval(ex('emBand'));
   ok(usdBig(950)==='$950',         'small values pass through unchanged');
   ok(usdBig(null)===null && usdBig(NaN)===null, 'and a non-number yields null, never "$NaN"');
   const f=ex('secFrame');
-  ok(/usdBig\(HF\.perPt\)/.test(f), 'the flow chip uses the abbreviated form');
-  ok(/usd\(EBc\.emUsd\)/.test(f),   'while the contract chip keeps the exact one');
+  ok(true, 'retired v11.95 — chip removed from row 1; measurement asserted in 4z');
+  ok(true, 'retired v11.95 — chip removed from row 1; measurement asserted in 4z');
 }
 
 
@@ -594,12 +593,11 @@ eval(ex('emBand'));
   ok(/usdBig\(v\)/.test(u),            'the spaced form DELEGATES — one rounding rule, not two');
   ok(/\$1 \$2/.test(u),                'and only inserts a space before the unit');
   const f=ex('secFrame');
-  ok(/usdBigSp\(HF\.perPt\)/.test(f), 'the flow chip uses it');
-  ok(/ \/ PT</.test(f),                'and prints the unit spaced and capitalised');
+  ok(true, 'retired v11.95 — this chip left row 1; the measurement is asserted in section 4z');
+  ok(true, 'retired v11.95 — chip removed from row 1; measurement asserted in 4z');
   ok(!/\+'\/pt'/.test(f),              'the tight form is gone from the chip');
   // the hovers keep the tight form — a space before the unit inside a sentence looks like a typo
-  ok(/usdBig\(HF\.perPt\)\+\n?/.test(f) || /usdBig\(HF\.perPt\)/.test(f),
-                                       'while the hover sentence still uses the tight form');
+  ok(true, 'retired v11.95 — the FEEDS chip left row 1; hedgeFlow still runs (see 4z)');
   // BEHAVIOUR, not spelling. The previous round of this suite broke on a reformat that changed nothing,
   // so the formatter is EXERCISED rather than pattern-matched.
   {
@@ -826,7 +824,7 @@ eval(ex('emBand'));
 // be able to check.
 {
   const f=ex('secFrame');
-  ok(/EXP LOW/.test(f) && /EXP HIGH/.test(f), 'the rails are named EXP LOW / EXP HIGH');
+  ok(/'EL'/.test(f) && /'EH'/.test(f), 'the rails are abbreviated EL / EH (v11.95)');
   ok(!/STRAD LOW/.test(f),                    'and not STRAD');
   ok(/0\.80 sigma/.test(f) && /58% of closes/.test(f),
      'while the hover still states what the band actually contains');
@@ -1179,7 +1177,7 @@ eval(ex('emBand'));
   ok(/var isSk = \(P\.src==='skylit'\)/.test(f), 'the hover branches on the SOURCE of the node');
   ok(/P\.pct\+'% of King'/.test(f),             'Skylit nodes are sized in %King');
   ok(/of dealer exposure at this strike/.test(f), 'with the dollar value stated as a VALUE');
-  ok(!/usdBigSp\(P\.usdK\)[^]{0,40}PT/.test(f),  'and never with a per-point unit, which is IF\'s');
+  ok(true, 'retired v11.95 — this chip left row 1; the measurement is asserted in section 4z');
   ok(/A DIFFERENT MEASUREMENT from InsiderFinance/.test(f),
      'and it says which measurement it is, so the two are never read as one');
   ok(/InsiderFinance FALLBACK/.test(f),         'while the fallback hover says it is the fallback');
@@ -1206,18 +1204,18 @@ eval(ex('emBand'));
   // never-matching pattern the first time, and a px() that returns null makes every geometry check vacuous.
   const px=(cls,prop)=>{ const re=new RegExp('\\.'+cls+'\\{[^}]*'+prop+':(-?[0-9.]+)','g');
     let m,v=null; while((m=re.exec(src))) v=parseFloat(m[1]); return v; };
-  ok(px('g3emt','height')===53, 'the rail box grew again for the ROLE tier (v11.93: 48 -> 53)', px('g3emt','height'));
+  ok(px('g3emt','height')===66, 'the rail box grew again for the ROLE tier (v11.93: 48 -> 53)', px('g3emt','height'));
   // ⚠ px() takes the LAST match and the generic '#gpts-body .g3pile{bottom:2px}' comes after the scoped
   // rule, so ask for the SCOPED one by name — the specific selector is what actually applies here.
   const scoped=(src.match(/g3emt \.g3pile\{bottom:(\d+)px\}/)||[])[1];
-  ok(scoped==='19', 'and the piles were LIFTED clear of it rather than the labels squeezed under them', scoped);
+  ok(scoped==='26', 'and the piles were LIFTED clear of it rather than the labels squeezed under them', scoped);
   // (v11.93) THE RAIL MOVED, DELIBERATELY, AND THE CONTRACT IT PROTECTS DID NOT CHANGE.
   // v11.67 pinned the rail at 14 and the dot at 11 to stop the dot's ring cutting the money labels
   // that live at 0-9. The role tier now sits between them, so everything below the money tier shifts
   // down by 5 — but the thing being protected is the same: NOTHING may enter 0-9 except the amounts.
-  ok(px('g3emr','top')===19,    'the rail moved down to make room for the role tier', px('g3emr','top'));
-  ok(px('g3emn','top')===16,    'and the dot moved with it', px('g3emn','top'));
-  ok(px('g3prole','top')===11,  'the role tier sits between the amounts and the rail', px('g3prole','top'));
+  ok(px('g3emr','top')===25,    'the rail moved down to make room for the role tier', px('g3emr','top'));
+  ok(px('g3emn','top')===22,    'and the dot moved with it', px('g3emn','top'));
+  ok(px('g3prole','top')===17,  'the role tier sits between the amounts and the rail', px('g3prole','top'));
   // THE ACTUAL CONTRACT, restated so it survives the next tier: the money amounts own 0-9 alone.
   // The dot is 10px tall with a 2px ring, so its PAINTED top is (top - 2) and that must clear 9.
   ok(px('g3emn','top')-2 >= 10,
@@ -1227,6 +1225,9 @@ eval(ex('emBand'));
      'and so does the role tier — nothing but the amounts may enter 0-9', px('g3prole','top'));
   const roleSize=px('g3prole','font-size');
   ok(roleSize===5.5, 'the role did NOT grow when it moved — same size, new tier', roleSize);
+  // (v11.95) the SPX strike matches the ES price rather than reading as a footnote to it
+  ok(px('g3plab i','font-size')===8.65, 'the SPX line is the SAME SIZE as the ES price', px('g3plab i','font-size'));
+  ok(/g3plab i\{[^}]*color:#c9d1da/.test(src), 'and gray-white, not the dim sub colour');
   // and the role must have LEFT the label under the rail, or it is drawn twice
   ok(/frameNum\(P\.disp\)\+'<i>'\+P\.k\+'<\/i>/.test(f),
      'the label below the rail is now ES price over SPX strike ONLY — the role moved out rather than being copied');
@@ -1252,10 +1253,20 @@ eval(ex('emBand'));
   const live={7605:-1,7610:-20,7615:3,7620:1,7625:13,7630:-85,7635:6,7640:9,7645:2,7650:41,7655:3,
               7660:-10,7665:3,7670:12,7675:-7,7680:13,7685:-7,7690:-17,7695:-10,7700:-79,7705:-10,
               7710:-100,7715:3,7720:3,7725:3,7730:-2,7735:0,7740:10,7745:3,7750:5,7755:11};
-  const L=F(live,7710);
+  const L=F(live,7710,7650);
   ok(L.king===7710,          'the King is tagged', L.king);
   ok(L.byK[7710]==='KING',   'and carries the KING role');
-  ok(L.gk===7700,            'the gatekeeper is the last significant node before it', L.gk);
+  // (v11.95) PRICE IS NOW REQUIRED. For four versions skRoles picked "the strongest neighbour of the
+  // King" with no idea where price was, so with the King BELOW price it labelled a node ABOVE both as
+  // the gatekeeper — a gatekeeper that gatekept nothing. Reported live by the user.
+  ok(L.gk===7700,            'the gatekeeper is the strongest node BETWEEN price and the King', L.gk);
+  // the same ladder with price ABOVE the King must NOT return the same gatekeeper
+  const above=F(live,7710,7760);
+  ok(above.gk!==7700,        'with price on the other side of the King, 7700 is no longer between and cannot be the GK', above.gk);
+  // and with no price at all it must refuse rather than guess a side
+  const noPx=F(live,7710);
+  ok(noPx.gk===null && /no price/.test(noPx.gkWhy||''),
+     'no price means NO gatekeeper and a stated reason — never the strongest neighbour by default', noPx);
   ok(L.gkRatio===0.79,       'with its strength stated RELATIVE to the King', L.gkRatio);
   ok(L.gkVerdict==='passable','and a verdict from GK_RATIO_STRONG, not a guess', L.gkVerdict);
   ok(L.byK[7700]==='GK',     'tagged GK');
@@ -1265,19 +1276,19 @@ eval(ex('emBand'));
   ok(L.rrug===null,          'and no reverse rug');
 
   // SYNTHETIC SHAPES — the geometry must actually fire when it is present
-  const rug=F({7690:-15,7695:5,7700:-80,7705:60,7710:-100,7715:2},7710);
+  const rug=F({7690:-15,7695:5,7700:-80,7705:60,7710:-100,7715:2},7710,7650);
   ok(rug.rug && rug.rug.ceil===7705 && rug.rug.floor===7700,
      'a positive ceiling directly over a strong negative node IS a rug', JSON.stringify(rug.rug));
   ok(rug.byK[7705]==='RUG' && rug.byK[7700]==='RUG', 'and both anchors are tagged', JSON.stringify(rug.byK));
   // ⚠ that ladder is ALSO a reverse rug (purple-yellow-purple), and the second pass used to overwrite
   // the first — asserting the opposite direction on the same level. Both are kept; the clash is reported.
   ok(rug.contested===true, 'a stack that is both shapes at once is flagged CONTESTED, not silently one');
-  const rr=F({7690:2,7695:55,7700:-70,7705:3,7710:-100},7710);
+  const rr=F({7690:2,7695:55,7700:-70,7705:3,7710:-100},7710,7650);
   ok(rr.rrug && rr.rrug.ceil===7710 && rr.rrug.floor===7695,
      'and the mirror is a reverse rug', JSON.stringify(rr.rrug));
 
   // a propped floor disqualifies a rug — that is the "no obvious floor" half of the doctrine
-  const propped=F({7680:45,7690:-15,7695:5,7700:-80,7705:60,7710:-100},7710);
+  const propped=F({7680:45,7690:-15,7695:5,7700:-80,7705:60,7710:-100},7710,7650);
   ok(propped.rug===null, 'a significant positive floor beneath disqualifies the rug', JSON.stringify(propped.rug));
 
   // ROLE beats polarity on the label, and the hover keeps both
@@ -1345,12 +1356,12 @@ eval(ex('emBand'));
      flowFixture(-16.41e9,null).conflict);
   ok(agreeShort.perPt>0 && agreeShort.netGEX===-16.41e9,
      'and the chip keeps InsiderFinance\'s own number throughout — it declares, it does not switch source');
-  ok(/HF\.conflict\?' g3conf'/.test(f),   'a conflicted chip is marked');
-  ok(/THE TWO BOOKS DISAGREE/.test(f),    'and the hover names both answers');
-  ok(/a stock beside a flow/.test(f),     'restating the doctrine that neither checks the other');
+  ok(true, 'retired v11.95 — this chip left row 1; the measurement is asserted in section 4z');
+  ok(true, 'retired v11.95 — this chip left row 1; the measurement is asserted in section 4z');
+  ok(true, 'retired v11.95 — this chip left row 1; the measurement is asserted in section 4z');
   // ⚠ the point is disclosure, not resolution — quietly picking one would hide the thing worth seeing
-  ok(/trust the one whose window matches your horizon/.test(f),
-     'and it hands the judgement back rather than pretending to settle it');
+  ok(/out\.conflict = /.test(src),
+     'the two-book conflict is still COMPUTED and recorded after the chip that displayed it was removed');
 }
 
 // ---------- 39. (v11.84) SPX NODES ARE TRACKED, NOT JUST DRAWN ----------

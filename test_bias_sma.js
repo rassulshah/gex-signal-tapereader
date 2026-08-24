@@ -22,17 +22,50 @@ eval(ex('biasVotes'));
 
 // ---- the SMA decides, always ----
 { TV={state:'dn'}; const B=biasVotes('SPY');
-  eq(B.dir,-1,'a down SMA is a BEARISH call'); eq(B.verdict,'BEARISH','named'); }
+  eq(B.dir,-1,'a down SMA is a BEARISH call'); eq(B.verdict,'DNTREND','named — v11.95 names the MACHINE STATE, not a mood'); }
 { TV={state:'up'}; const B=biasVotes('SPY');
   eq(B.dir,1,'an up SMA is BULLISH'); }
 { TV={state:'flat'}; const B=biasVotes('SPY');
   eq(B.dir,0,'a flat SMA has no side'); eq(B.verdict,'FLAT','and says FLAT rather than inventing one'); }
 
+// (v11.95) FOUR STATES, NOT TWO. The 50-SMA machine has five and the face collapsed four into two.
+{
+  TV={state:'up',up:17,dn:1,win:20};        eq(biasVotes('SPY').verdict,'UPTREND','up is UPTREND');
+  TV={state:'dn',up:1,dn:18,win:20};        eq(biasVotes('SPY').verdict,'DNTREND','dn is DNTREND');
+  TV={state:'up-broken',up:13,dn:5,win:20}; eq(biasVotes('SPY').verdict,'UPTREND BRK','a broken uptrend says so');
+  TV={state:'dn-broken',up:6,dn:12,win:20}; eq(biasVotes('SPY').verdict,'DNTREND BRK','and a broken downtrend');
+  TV={state:'flat',up:6,dn:6,win:20};       eq(biasVotes('SPY').verdict,'FLAT','no side is FLAT');
+  // a BROKEN trend still carries the side it broke FROM, or the confirms have nothing to agree with
+  TV={state:'up-broken',up:13,dn:5,win:20}; eq(biasVotes('SPY').dir,1,'up-broken still leans up');
+  TV={state:'dn-broken',up:6,dn:12,win:20}; eq(biasVotes('SPY').dir,-1,'dn-broken still leans down');
+}
+// (v11.95) THE GREY LINE COUNTS THE SIDE THE STATE IS ON. The old line always read `w.up` and only
+// flipped the WORD, so a DNTREND could read "17 of 20 above".
+{
+  TV={state:'dn',up:2,dn:18,win:20};
+  const B=biasVotes('SPY');
+  ok(/18 of 20 bars below the 50-SMA/.test(B.why), 'a downtrend counts the bars BELOW', B.why);
+  TV={state:'up',up:17,dn:2,win:20};
+  ok(/17 of 20 bars above the 50-SMA/.test(biasVotes('SPY').why), 'an uptrend counts the bars ABOVE');
+  TV={state:'up-broken',up:13,dn:5,win:20};
+  const Bb=biasVotes('SPY');
+  ok(/13 of 20 bars above/.test(Bb.why), 'a broken trend still counts its own side', Bb.why);
+  ok(/lost 15, reversal needs 11/.test(Bb.why), 'and states what it lost and what a reversal now needs', Bb.why);
+}
+// (v11.95) BADGES READ THEIR OWN DIRECTION — up / down / sideways — not agreement with the call.
+{
+  const sb=ex('secBias');
+  ok(/mark='↑'/.test(sb) && /mark='↓'/.test(sb) && /mark='→'/.test(sb),
+     'the marks are arrows, not ticks and crosses');
+  ok(!/mark='✓'/.test(sb) && !/mark='✗'/.test(sb), 'and the tick/cross marks are gone');
+  ok(/cls=\(B\.dir>0\)\?' y'/.test(sb),
+     'the COLOUR still carries agreement, so the confirm COUNT is unchanged — only the glyph moved');
+}
 // ---- the confirmers NEVER outvote it ----
 {
   TV={state:'up'}; SK={dir:-1,err:null}; AC={dir:-1}; CX={ok:true,dir:-1}; KR={ok:true,dir:-1};
   const B=biasVotes('SPY');
-  eq(B.verdict,'BULLISH','every confirmer disagreeing does NOT flip the call — that was the old tally\'s failure');
+  eq(B.verdict,'UPTREND','every confirmer disagreeing does NOT flip the call — that was the old tally\'s failure');
   eq(B.nConf,0,'they are simply recorded as not confirming');
 }
 {
@@ -72,9 +105,11 @@ eval(ex('biasVotes'));
 }
 // ---- the call explains itself from the SMA ----
 {
-  TV={state:'dn'}; const B=biasVotes('SPY');
+  // (v11.95) the line is built from tv.up / tv.dn / tv.win now, so the fixture must supply them —
+  // it used to fall through to trendWindowRead and always report the UP count regardless of state.
+  TV={state:'dn',up:4,dn:16,win:20}; const B=biasVotes('SPY');
   ok(/50-SMA/.test(B.why),'the reason names the 50-SMA',B.why);
-  ok(/4 of 20/.test(B.why),'and how many bars are on which side',B.why);
+  ok(/16 of 20 bars below/.test(B.why),'and how many bars are on the side the state is ON',B.why);
 }
 // ---- drift is carried, and it is a gate not a fourth confirmer ----
 {
