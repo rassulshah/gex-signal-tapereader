@@ -1,3 +1,24 @@
+## v12.5 — the pop-out grow bug was a BOX bug, not a DRAG bug
+
+`pipCopyStyles` told `#gpts-panel` to be `height:100% !important` while `html,body` had no height at
+all. A percentage height against an auto-height parent computes to `auto`, so the panel silently took
+its CONTENT height and the `100%` did nothing.
+
+Measured live in the user's own pop-out: window `innerHeight` **598**, panel box **1104**.
+
+`makeResizable` captures `oh` from the panel's rect at pointerdown, so every drag began from 1104:
+
+- drag DOWN 1px -> target 1105 -> `min(maxOuter, 1105+95)` -> hits the 820 screen clamp on pixel one
+- drag UP 500px -> target 604 -> 699 outer -> shrinks proportionally, fine
+
+Shrink worked, grow was dead on the first pixel. That is the exact symptom reported for five versions.
+
+Fix: `height:100%` on `html,body`. Verified live in the same window — panel measured **597** against a
+598px window, and the drag then maps 1:1 in both directions.
+
+⚠ Five versions (v11.93/95/96/97, v12.3, v12.4) attacked the DRAG HANDLER for a bug that lived in the
+BOX. v12.4's pointer capture is a genuine fix for a genuine edge case and stays, but it was never this.
+
 ## v12.0 — the read line was naming the same level twice
 
 Caught on the live face within minutes of v11.99 going in:

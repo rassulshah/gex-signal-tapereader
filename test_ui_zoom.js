@@ -219,4 +219,20 @@ ok(/if\(inPip\) return;/.test(src),
      'left button only — a right-click on the grip must not start a resize');
 }
 
+
+// ---------- (v12.5) A PERCENTAGE HEIGHT NEEDS A PARENT WITH A HEIGHT ----------
+// The pop-out stylesheet told the panel `height:100% !important` while html/body had no height at all,
+// so it computed to `auto` and the panel took its CONTENT height: 1104px inside a 598px window.
+// makeResizable reads `oh` off that rect, so every downward drag began 500px past the window and hit
+// the screen clamp on pixel one. Grow was dead; shrink worked. Five versions blamed the drag handler.
+{
+  const pcs=ex('pipCopyStyles');
+  const wantsPct=/#gpts-panel\{[^}]*height:100%/.test(pcs);
+  ok(wantsPct, 'the pop-out panel is told to fill its window');
+  ok(!wantsPct || /html,body\{[^}]*height:100%/.test(pcs),
+     'and html,body are GIVEN a height, or that 100% silently computes to auto');
+  ok(/window innerHeight 598, panel box 1104/.test(pcs),
+     'the measurement that proved it is recorded, not just the fix');
+}
+
 console.log('\n'+pass+' pass / '+fail+' fail');

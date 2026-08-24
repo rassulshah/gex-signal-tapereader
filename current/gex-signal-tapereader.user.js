@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    12.4
+// @version    12.5
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='12.4';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='12.5';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4502,7 +4502,21 @@ function pipCopyStyles(doc){
       var st=doc.createElement('style'); st.textContent=txt; doc.head.appendChild(st);
     }
     var base=doc.createElement('style');
-    base.textContent='html,body{margin:0;padding:0;background:'+PAL.bg+';color:'+PAL.ink+';'+
+    // ⚠⚠ (v12.5) THE REAL REASON THE POP-OUT COULD SHRINK BUT NEVER GROW — AND IT WAS HERE,
+    // not in the drag handler. `#gpts-panel` below asks for `height:100% !important`. A PERCENTAGE
+    // HEIGHT AGAINST AN AUTO-HEIGHT PARENT COMPUTES TO `auto`. html and body had no height, so the
+    // panel silently fell back to its CONTENT height and the `100%` did nothing at all.
+    // Measured live 2026-08-24 in the user's own pop-out: window innerHeight 598, panel box 1104.
+    // That number is the whole bug. makeResizable captures `oh` from the panel's rect at pointerdown,
+    // so every drag started from 1104 instead of 598:
+    //   drag DOWN  1px → target 1105 → min(maxOuter, 1105+95) → slams the 820 screen clamp instantly
+    //   drag UP  500px → target  604 → 699 outer                → shrinks, proportionally, fine
+    // Shrink worked, grow was dead on the first pixel. Adding `height:100%` here made the panel
+    // measure 597 against a 598 window in the same live test, and the drag maps 1:1 both ways.
+    // ⚠ FIVE versions (v11.93/95/96/97, v12.3/12.4) went at the DRAG for a bug that lived in the BOX.
+    // v12.4's pointer capture is a real fix for a real edge case and stays — but it was never this.
+    // The lesson is the v12.2 lesson repeated: MEASURE THE BOX BEFORE BLAMING THE HANDLER.
+    base.textContent='html,body{margin:0;padding:0;height:100%;background:'+PAL.bg+';color:'+PAL.ink+';'+
       'font:12px/1.4 Inter,Arial,sans-serif;overflow:hidden}'+
       // (v11.93) THE POPPED-OUT PANEL CAN BE RESIZED VERTICALLY AGAIN.
       // It was pinned `height:auto; min-height:100vh` and the grip was hidden outright, so the panel

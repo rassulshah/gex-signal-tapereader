@@ -209,3 +209,25 @@ of spot), gamma flip (FALLBACK ONLY → `FLIP*` tagged `calc`), level depth (GEX
 - **MODEL ROUTING (2026-08-15):** delegate mechanical work (renames, packaging, search) to cheaper models
   via the Agent tool; reserve the main model for design, statistical interpretation and review.
 - **ONE AT A TIME** when discussing open items — state one, ask, stop.
+
+### Failure pattern: blaming the handler for a bug in the box (SECOND OCCURRENCE)
+
+v12.2: the panel "wouldn't resize" — the panel box was 524px while its content was 1068px and
+`overflow` was `visible`. The panel never contained its content. Four attempts had gone at the drag.
+
+v12.5: the pop-out "could shrink but not grow" — the panel box was 1104px inside a 598px window,
+because `height:100%` was set on a parent that had no height. `makeResizable` reads `oh` off that
+rect, so the drag arithmetic was fed a number nearly double the window and hit the clamp instantly.
+Five more versions had gone at the drag.
+
+RULE: when a drag, resize, or hit-test misbehaves, MEASURE THE BOX FIRST —
+`getBoundingClientRect()` on the element AND on the thing that is supposed to contain it, plus
+`innerHeight`. Compare them. Only after those three numbers agree is the handler a suspect.
+
+COROLLARY: a percentage height needs a parent WITH a height. `height:100%` against an auto-height
+parent computes to `auto` — silently, with no error and no warning. If a rule sets a percentage
+height, something above it must set a height too.
+
+COROLLARY: an asymmetry IS a clue, but read it correctly. "Shrinks but won't grow" pointed me at the
+pointer leaving the window (v12.4). The real cause was a starting value on the wrong side of the
+clamp. Both explain the asymmetry; only measurement distinguishes them.
