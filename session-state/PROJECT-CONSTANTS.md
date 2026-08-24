@@ -255,3 +255,26 @@ scrolls internally instead of overflowing. But vertical GROWTH of a PiP window i
 
 RULE: before building a control for a platform API, verify the platform PERMITS the operation —
 one call and one measurement. Nine versions of handler work went into a capability that does not exist.
+
+### Failure pattern: a popup window is QUIRKS MODE, and this stylesheet cannot survive it
+
+`window.open('')` returns an about:blank document with NO doctype, so `compatMode` is `BackCompat`.
+In quirks mode **CSS class selectors are case-insensitive**. This stylesheet contains classes that
+differ only by case — `.g3emt` (FRAME rail container) and `.g3emT` (centred label carrying
+`transform:translateX(-50%)`) — so the container matched the label's rule and slid 40px off the left
+edge, wrecking the whole rail. Everything inline-styled looked perfect, which is what made it read
+like a layout bug rather than a mode bug.
+
+Measured live 2026-08-24: popup `BackCompat` / Atlas `CSS1Compat`; `el.matches('.g3emT')` returned
+TRUE for a `.g3emt` element; computed transform `matrix(1,0,0,1,-39.9988,0)`.
+
+FIX: `d.open(); d.write('<!doctype html>...'); d.close();` BEFORE copying styles.
+A Document PiP window never showed this — `requestWindow()` creates a standards-mode document.
+
+RULE: any window this code writes into must be given a doctype explicitly. And treat
+case-only-distinct class names as a latent hazard — they are a silent collision waiting for any
+quirks-mode context.
+
+DIAGNOSTIC NOTE: the tell was that inline styles rendered correctly while class-based rules did not.
+That split says "selector matching", not "missing stylesheet" — and the stylesheet was in fact present
+(18 tags, 1.38MB). Checking `compatMode` and `el.matches()` took one call.

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    12.6
+// @version    12.7
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='12.6';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='12.7';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4527,6 +4527,21 @@ function winToggle(){
     if(!w){ alert('The panel window was blocked.\n\nAllow pop-ups for app.skylit.ai and try again.'); return; }
     WINWIN=w;
     var d=w.document;
+    // ⚠⚠ (v12.7) WRITE A DOCTYPE, OR THE POPUP RENDERS IN QUIRKS MODE.
+    // `window.open('')` yields an about:blank document with NO doctype -> `compatMode:'BackCompat'`.
+    // In quirks mode CSS CLASS SELECTORS ARE CASE-INSENSITIVE, and this stylesheet has classes that
+    // differ only by case: `.g3emt` is the rail CONTAINER, `.g3emT` is a centred LABEL carrying
+    // `transform:translateX(-50%)`. In the popup the container matched the label's rule and slid
+    // 40px off the left edge, taking the whole FRAME rail with it.
+    // Measured live: popup `BackCompat` vs Atlas `CSS1Compat`; `el.matches('.g3emT')` returned TRUE
+    // for a `.g3emt` element; computed transform `matrix(1,0,0,1,-39.9988,0)`.
+    // A PiP window never showed this because requestWindow() creates a STANDARDS-mode document.
+    try{
+      d.open();
+      d.write('<!doctype html><html><head><meta charset="utf-8"><title>Tapereader</title></head><body></body></html>');
+      d.close();
+      d=w.document;
+    }catch(eW){}
     try{ d.title='Tapereader'; }catch(eT){}
     try{ if(d.body) d.body.innerHTML=''; }catch(eB){}
     pipCopyStyles(d);

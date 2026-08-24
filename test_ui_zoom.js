@@ -279,4 +279,24 @@ ok(/\(PANEL\.ownerDocument\|\|document\)!==document\) return/.test(noc(src)),
   ok(!/#gpts-grip\{display:block/.test(noc(pcs)), 'and is never re-shown there');
 }
 
+
+// ---------- (v12.7) THE POPUP MUST BE STANDARDS MODE ----------
+// window.open('') gives an about:blank document with no doctype -> quirks mode -> CSS class selectors
+// become CASE-INSENSITIVE. This stylesheet has `.g3emt` (rail container) and `.g3emT` (centred label,
+// transform:translateX(-50%)). In quirks mode the container matched the label rule and slid 40px off
+// the left edge. Measured: popup BackCompat vs Atlas CSS1Compat, matches('.g3emT')===true on .g3emt.
+{
+  const wt=ex('winToggle');
+  ok(/d\.write\('<!doctype html>/.test(wt),
+     'the popup document is given a doctype, so it renders in standards mode');
+  ok(/d\.open\(\);/.test(wt) && /d\.close\(\);/.test(wt),
+     'written through open/close, which is what actually replaces an about:blank document');
+  ok(wt.indexOf("d.write('<!doctype") < wt.indexOf('pipCopyStyles(d)'),
+     'and the doctype lands BEFORE the stylesheet, or the first layout is still quirks');
+  // the hazard itself: classes differing only by case exist, so mode is not a cosmetic detail
+  const css=src;
+  ok(/\.g3emt\b/.test(css) && /\.g3emT\b/.test(css),
+     'classes differing only in case DO exist here — quirks mode would collide them');
+}
+
 console.log('\n'+pass+' pass / '+fail+' fail');
