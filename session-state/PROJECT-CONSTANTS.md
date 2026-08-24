@@ -68,6 +68,20 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ---
 
+## 📦 THE INSTALLER FILENAME CARRIES THE VERSION — user-mandated 2026-08-24
+
+**Deliver `install-v<VER>.bat`, never a bare `install.bat`.** `tools/build-installer.py` writes both;
+the versioned copy is the one to send and is gitignored so it never enters the payload.
+
+⚠ **Why:** eight installers went out in a single session all named `install.bat`. The user ran an
+older one and reported bugs that had been fixed three builds earlier — and I spent a live-market turn
+diagnosing a panel that was simply not the panel I had shipped. **A file whose name cannot be told
+apart from seven others is a file that gets run out of order.**
+⚠ Always confirm the RUNNING version from the panel footer before diagnosing anything: the first
+`v11.x` in the markup can be stale hover text, so read the footer stamp specifically.
+
+---
+
 ## 📎 ALWAYS SEND THE TAMPERMONKEY LINK — user-mandated, restated 2026-08-24
 
 **Every message that ships a build ends with the output of `bash tools/release-links.sh`, pasted.**

@@ -10,3 +10,5 @@ Thumbs.dbtools/review-pull.log
 install.bat
 v10.js
 tools/gex-pull.log
+# versioned delivery copies of the installer — install.bat is the canonical one
+install-v*.bat

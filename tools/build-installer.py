@@ -247,6 +247,18 @@ assert txt.count('v' + V) >= 2, 'version banner missing'
 assert not re.search(r'v11\.(?!' + re.escape(V.split('.', 1)[1]) + r')\d+', txt.split('exit /b 0')[0]), \
     'a STALE version string survived in the header'
 
+# ---- ALSO EMIT A VERSIONED COPY, and deliver THAT ------------------------------------------------
+# User instruction 2026-08-24: every installer handed over must say its version IN THE FILENAME.
+# Reason it exists: eight installers were delivered in one session all named `install.bat`, and the
+# user ran an older one and reported bugs that had already been fixed three builds earlier. A file
+# whose name cannot be told apart from seven others is a file that gets run out of order.
+# `install.bat` stays as the canonical repo path (the scheduled task and the docs reference it);
+# `install-v<VER>.bat` is the copy that gets sent. It is gitignored so it never enters the payload.
+import shutil
+_versioned = 'install-v%s.bat' % V
+shutil.copyfile('install.bat', _versioned)
+
 print('install.bat  %d bytes  HDRLINES=%d  %d files  script v%s  companion v%s'
       % (os.path.getsize('install.bat'), n, len(names), V, VC))
+print('DELIVER THIS FILE: %s' % _versioned)
 print('round-trip: every file byte-identical to the working tree')
