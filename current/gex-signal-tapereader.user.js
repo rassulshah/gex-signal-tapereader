@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    12.2
+// @version    12.3
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='12.2';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='12.3';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4784,37 +4784,51 @@ function makeDraggable(dragEls){
 // ⚠ WIDTH IS VERTICAL-ONLY IN PiP. There the panel's width IS the window's width (pinned 100% by
 // pipCopyStyles), so a narrower panel would just leave a dead strip beside itself.
 function makeResizable(grip){
-  var rz=false, sx=0, sy=0, ow=0, oh=0, doc=null, inPip=false;
+  var rz=false, sx=0, sy=0, ow=0, oh=0, doc=null, inPip=false, pendingH=null;
+  // ⚠⚠ (v12.3) IN THE POP-OUT THE GRIP RESIZES THE WINDOW, NOT THE PANEL.
+  // Since v12.2 the popped-out panel is `height:100% !important` — it fills its window and scrolls
+  // internally, which is what finally made it contain its content (panel box 524 vs content 1068).
+  // But that also means setting PANEL.style.height out there does NOTHING: !important beats an inline
+  // style, so the grip moved and the panel did not. The thing with slack in a pop-out is the WINDOW.
+  // ⚠ MEASURED, not assumed. `resizeTo()` on a Document PiP window throws
+  //     "resizeTo() requires user activation in document picture-in-picture"
+  // from an injected script — but a grip DRAG is a user gesture, so from inside these handlers it is
+  // permitted. That is exactly why the grip is the right home for it.
+  // ⚠ Transient activation can lapse mid-drag, so a throw is not a failure: remember the target and
+  // apply it once on mouseup, which is part of the same gesture.
+  function pipResize(target){
+    try{
+      var win=doc&&doc.defaultView; if(!win) return false;
+      var avail=(win.screen&&win.screen.availHeight)||1400;
+      var chromeH=Math.max(0, win.outerHeight-win.innerHeight);   // title bar and borders
+      var outer=Math.max(200, Math.min(avail, target+chromeH));
+      win.resizeTo(win.outerWidth, outer);
+      pendingH=null; return true;
+    }catch(e){ pendingH=target; return false; }
+  }
   function onMove(e){
     if(!rz) return;
     var nh=oh+(e.clientY-sy);
-    // (v11.95) THE POP-OUT LIMIT THE USER HIT WAS THIS CLAMP PLUS AN UNREACHABLE GRIP.
-    // Measured live: panel 581px inside a 598px PiP window. The grip sits at the panel's bottom-right,
-    // so the moment the panel grows past the window the handle itself leaves the viewport and the drag
-    // cannot continue — the panel "stops" with no message. In the pop-out the ceiling should be the
-    // WINDOW, and the grip has to stay on screen to reach it.
-    // (v11.96) NOT the window height. Capping the panel at the window is what "it stops me" WAS: the
-    // pop-out body already scrolls (overflow:auto), so a panel taller than its window is the normal
-    // case, not an error. The in-page panel still clamps at 2000 because nothing scrolls behind it.
-    var ceil = inPip ? 6000 : 2000;
-    if(nh<160) nh=160; if(nh>ceil) nh=ceil;
-    if(!inPip){
-      var nw=ow+(e.clientX-sx);
-      if(nw<240) nw=240; if(nw>560) nw=560;
-      PANEL.style.width=nw+'px';
-    }
+    if(nh<160) nh=160; if(nh>4000) nh=4000;
+    if(inPip){ pipResize(nh); return; }          // the WINDOW is what grows out here
+    var nw=ow+(e.clientX-sx);
+    if(nw<240) nw=240; if(nw>560) nw=560;
+    if(nh>2000) nh=2000;                          // nothing scrolls behind the in-page panel
+    PANEL.style.width=nw+'px';
     PANEL.style.height=nh+'px';
     try{ render(); }catch(e2){}
   }
   function onUp(){
     if(!rz) return; rz=false;
+    // a resize refused mid-drag for lack of activation lands here — mouseup is the same gesture
+    if(inPip && pendingH!=null) pipResize(pendingH);
     if(doc){ doc.removeEventListener('mousemove', onMove); doc.removeEventListener('mouseup', onUp); doc=null; }
-    // ⚠ a PiP height is that WINDOW's height and must not overwrite the in-page one
+    // ⚠ a PiP size belongs to that WINDOW and must never overwrite the in-page one
     if(inPip) return;
     try{ localStorage.setItem(SIZE_KEY, JSON.stringify({w:PANEL.style.width, h:PANEL.style.height})); }catch(e){}
   }
   grip.addEventListener('mousedown', function(e){
-    rz=true; sx=e.clientX; sy=e.clientY;
+    rz=true; sx=e.clientX; sy=e.clientY; pendingH=null;
     var r=PANEL.getBoundingClientRect(); ow=r.width; oh=r.height;
     doc=(PANEL.ownerDocument||document);
     inPip=(doc!==document);

@@ -77,8 +77,13 @@ ok(/width:22px !important;height:22px !important/.test(src),
 // "I still cannot increase the height" was: the pop-out body already scrolls, so a panel TALLER than
 // its window is the normal case. v11.95 capped it at innerHeight-8 = 590 against a panel already at
 // 581, which is why it moved a few pixels and stopped.
-ok(/var ceil = inPip \? 6000 : 2000;/.test(src),
-   'the pop-out ceiling is generous because the window scrolls; only the in-page panel clamps at 2000');
+// (v12.3) SUPERSEDED. There is no pop-out PANEL ceiling any more, because the pop-out grip resizes
+// the WINDOW rather than the panel — the panel simply fills whatever window it is given. The screen's
+// available height is the real ceiling out there, and it is applied inside pipResize().
+ok(/if\(nh>4000\) nh=4000;/.test(src),
+   'the drag distance is bounded sanely for both modes');
+ok(/Math\.min\(avail,/.test(src),
+   'and the pop-out ceiling is the SCREEN, applied where the window is actually resized');
 ok(/PANEL\.ownerDocument\|\|document/.test(src),
    'and resize binds to whichever document owns the panel, so the drag works in the pop-out too');
 ok(/inPip=\(doc!==document\)/.test(src),
@@ -164,6 +169,31 @@ ok(/if\(inPip\) return;/.test(src),
      'and a position past the bottom or right edge is pulled back too');
   ok(/minVisible=40/.test(rp),
      'keeping enough of the HEADER reachable, since dragging is how a stranded panel is rescued');
+}
+
+
+// ---------- (v12.3) THE POP-OUT GRIP RESIZES THE WINDOW ----------
+// v12.2 made the popped-out panel `height:100% !important` so it would contain its content — which
+// also made the grip inert out there, because !important beats the inline height the grip sets.
+// ⚠ MEASURED: resizeTo() on a Document PiP window throws "requires user activation in document
+// picture-in-picture" from an injected script, but IS permitted inside a drag handler, because a drag
+// is a user gesture. That measurement is the whole reason this approach is viable.
+{
+  const mr=ex('makeResizable');
+  ok(/win\.resizeTo\(win\.outerWidth, outer\)/.test(mr),
+     'the pop-out grip resizes the WINDOW');
+  ok(/if\(inPip\)\{ pipResize\(nh\); return; \}/.test(mr),
+     'and never sets PANEL.style.height there, which height:100% !important would ignore anyway');
+  ok(/win\.outerHeight-win\.innerHeight/.test(mr),
+     'the window chrome is accounted for, so the CONTENT reaches the dragged height');
+  ok(/Math\.min\(avail,/.test(mr),
+     'and it never grows past the screen');
+  ok(/pendingH=target; return false;/.test(mr) && /if\(inPip && pendingH!=null\) pipResize\(pendingH\);/.test(mr),
+     'a resize refused for lapsed activation is retried on mouseup — part of the same gesture');
+  ok(/if\(inPip\) return;\n\s*try\{ localStorage\.setItem\(SIZE_KEY/.test(mr),
+     'and a pop-out size never overwrites the saved in-page one');
+  ok(/if\(nh>2000\) nh=2000;/.test(mr),
+     'the in-page panel still clamps, because nothing scrolls behind it');
 }
 
 console.log('\n'+pass+' pass / '+fail+' fail');
