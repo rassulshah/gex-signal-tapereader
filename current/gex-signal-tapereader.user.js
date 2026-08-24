@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    12.1
+// @version    12.2
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='12.1';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='12.2';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4503,7 +4503,7 @@ function pipCopyStyles(doc){
     }
     var base=doc.createElement('style');
     base.textContent='html,body{margin:0;padding:0;background:'+PAL.bg+';color:'+PAL.ink+';'+
-      'font:12px/1.4 Inter,Arial,sans-serif;overflow:auto}'+
+      'font:12px/1.4 Inter,Arial,sans-serif;overflow:hidden}'+
       // (v11.93) THE POPPED-OUT PANEL CAN BE RESIZED VERTICALLY AGAIN.
       // It was pinned `height:auto; min-height:100vh` and the grip was hidden outright, so the panel
       // was forced to fill the PiP window and there was nothing to drag — the user had a resize in
@@ -4521,7 +4521,11 @@ function pipCopyStyles(doc){
       // ⚠ NO `!important` ON HEIGHT. The stylesheet supplies the default (auto = fit the content) and an
       // inline height from a grip drag has to be able to WIN, or the grip stops working again.
       '#gpts-panel{position:static !important;top:auto !important;left:auto !important;right:auto !important;'+
-      'width:100% !important;max-width:100% !important;height:auto;min-height:100%;'+
+      // (v12.2) FILL the window and scroll INSIDE. v11.96 made the panel content-height and let the
+      // window scroll, which left the grip at the true bottom of a 1000px panel inside a 600px window
+      // — unreachable. A panel that fills its window and scrolls internally has its grip on screen
+      // always, and the window edge becomes the honest way to make it bigger.
+      'width:100% !important;max-width:100% !important;height:100% !important;'+
       'border:0 !important;border-radius:0 !important;box-shadow:none !important;z-index:auto !important}'+
       '#gpts-body{cursor:default !important}'+
       // pinned to the WINDOW, not the panel, so it never scrolls out of reach as the panel grows
@@ -4593,10 +4597,19 @@ function buildPanel(){
   if(document.getElementById('gpts-panel')) return;
   PANEL=document.createElement('div');
   PANEL.id='gpts-panel';
+  // ⚠⚠ (v12.2) THE PANEL WAS NOT CONTAINING ITS OWN CONTENT.
+  // Measured live: panel box 524px, content 1068px, `overflow:visible` — so 544px of dashboard painted
+  // OUTSIDE the box, over the page, with no panel background behind it. The user saw the lower half of
+  // the panel "transparent", and the resize grip apparently "in the middle": the grip WAS correctly at
+  // the panel's bottom-right, but the panel's bottom sat 47% of the way down the visible stack.
+  // Every pop-out complaint traces back here too — a box that does not contain its content cannot be
+  // resized meaningfully, in a window or out of one.
+  // The panel is now a flex column that CLIPS, and the body scrolls inside it.
   css(PANEL,{position:'fixed', top:'60px', left:'', right:'12px', width:'440px',
     background:PAL.bg, color:PAL.ink, font:'12px/1.4 Inter,Arial,sans-serif',
     border:'1px solid '+PAL.line, borderRadius:'10px', zIndex:'999999',
-    boxShadow:'0 8px 28px rgba(0,0,0,0.6)', userSelect:'none', overflow:'visible'});
+    boxShadow:'0 8px 28px rgba(0,0,0,0.6)', userSelect:'none', overflow:'hidden',
+    display:'flex', flexDirection:'column'});
   var hdr=document.createElement('div');
   hdr.id='gpts-hdr';
   css(hdr,{padding:'5px 11px', background:'#0f131b', borderBottom:'1px solid '+PAL.line,
@@ -4683,7 +4696,11 @@ function buildPanel(){
 
   elBody=document.createElement('div');
   elBody.id='gpts-body';
-  css(elBody,{padding:'9px 10px', cursor:'move', position:'relative'});
+  // (v12.2) the body is the ONLY scrolling region. `flex:1` takes the space the header leaves and
+  // `minHeight:0` is what actually lets a flex child shrink below its content — without it the child
+  // refuses to shrink and the overflow reappears exactly as before.
+  css(elBody,{padding:'9px 10px', cursor:'move', position:'relative',
+    flex:'1 1 auto', minHeight:'0', overflowY:'auto', overflowX:'hidden'});
   PANEL.appendChild(elBody);
 
   // (v10.25) 5-step methodology popover (created once, positioned near the clicked icon)
@@ -4810,6 +4827,24 @@ function restorePos(){
   try{ var p=JSON.parse(localStorage.getItem(POS_KEY)||'null');
     if(p&&p.left){ PANEL.style.right=''; PANEL.style.left=p.left; PANEL.style.top=p.top; }
   }catch(e){}
+  // (v12.2) CLAMP INTO THE VIEWPORT. Measured live: the panel's top was at y = -33, so its header —
+  // the drag handle — was off-screen and the panel could not be moved back. A saved position outlives
+  // the window size it was saved in; a monitor change or a resized browser is enough to strand it.
+  // ⚠ Keep the HEADER reachable, not merely some pixel of the panel: dragging is how it gets rescued.
+  try{
+    var r=PANEL.getBoundingClientRect();
+    var minVisible=40;                                  // enough of the header to grab
+    var top=parseFloat(PANEL.style.top);
+    if(isFinite(top)){
+      if(top<0) PANEL.style.top='0px';
+      else if(top>window.innerHeight-minVisible) PANEL.style.top=Math.max(0,window.innerHeight-minVisible)+'px';
+    }
+    var left=parseFloat(PANEL.style.left);
+    if(isFinite(left)){
+      if(left<-(r.width-minVisible)) PANEL.style.left=(-(r.width-minVisible))+'px';
+      else if(left>window.innerWidth-minVisible) PANEL.style.left=(window.innerWidth-minVisible)+'px';
+    }
+  }catch(e2){}
 }
 function restoreSize(){
   try{ var s=JSON.parse(localStorage.getItem(SIZE_KEY)||'null');

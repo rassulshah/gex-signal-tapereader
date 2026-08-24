@@ -92,8 +92,11 @@ ok(/if\(inPip\) return;/.test(src),
   const code=src.replace(/\/\*[\s\S]*?\*\//g,'').split('\n').map(l=>l.replace(/^\s*\/\/.*$/,'')).join('\n');
   ok(!/min-height:100vh/.test(code),
      'the panel is no longer forced to fill the pop-out window, or the grip would have nothing to act on');
-  ok(/height:auto;min-height:100%/.test(code),
-     'the pop-out panel takes its CONTENT height and fills at least the window');
+  // (v12.2) SUPERSEDED. v11.96 made the pop-out panel content-height with the WINDOW scrolling; that
+  // put the grip at the true bottom of a 1000px panel inside a 600px window, permanently unreachable.
+  // The panel fills the window and scrolls internally instead.
+  ok(/height:100% !important/.test(code),
+     'the pop-out panel FILLS its window rather than growing past it');
   // ⚠ THE REGRESSION THIS PINS. The original rule was `height:auto !important; min-height:100vh`.
   // v11.93 rewrote it for the grip and dropped `height:auto`, so the inline height restoreSize()
   // writes for the IN-PAGE panel applied in the pop-out and froze it there — measured live at 581px
@@ -129,4 +132,38 @@ ok(/if\(inPip\) return;/.test(src),
   eq(strikeStep([{k:760},{k:760},{k:760}]),1,'identical strikes cannot produce a zero step');
   ok(/FLRCEIL_FAR\s*\*\s*_step/.test(src),'and the threshold is now multiplied by the measured spacing');
 }
+
+// ---------- (v12.2) THE PANEL MUST CONTAIN ITS OWN CONTENT ----------
+// Measured live: panel box 524px, content 1068px, overflow:visible — 544px of dashboard painted
+// OUTSIDE the box with no panel background behind it. The user reported "the bottom of the pane is
+// transparent" and "the drag button is in the middle": the grip WAS at the panel's bottom-right, but
+// the panel's bottom sat 47% of the way down the visible stack.
+// ⚠ A box that does not contain its content cannot be resized meaningfully — which is why every
+// pop-out sizing complaint in this session traced back to here rather than to the grip.
+{
+  const code=src.replace(/\/\*[\s\S]*?\*\//g,'').split('\n').map(l=>l.replace(/^\s*\/\/.*$/,'')).join('\n');
+  ok(/overflow:'hidden'[\s\S]{0,80}display:'flex'[\s\S]{0,40}flexDirection:'column'/.test(code),
+     'the panel CLIPS and lays out as a column');
+  ok(!/userSelect:'none', overflow:'visible'/.test(code),
+     'and no longer lets its content paint outside the box');
+  ok(/flex:'1 1 auto', minHeight:'0', overflowY:'auto'/.test(code),
+     'the body is the scrolling region');
+  ok(/minHeight:'0'/.test(code),
+     'with minHeight:0 — without it a flex child refuses to shrink below its content and the overflow returns');
+  ok(/height:100% !important/.test(code),
+     'and the pop-out panel FILLS its window rather than growing past it');
+  ok(/font:12px\/1\.4 Inter,Arial,sans-serif;overflow:hidden/.test(code),
+     'so the pop-out window itself does not scroll — the panel does');
+}
+// ---------- (v12.2) A SAVED POSITION MUST NOT STRAND THE PANEL ----------
+{
+  const rp=ex('restorePos');
+  ok(/if\(top<0\) PANEL\.style\.top='0px';/.test(rp),
+     'a restored top above the viewport is clamped back — measured live at y = -33, header off-screen');
+  ok(/window\.innerHeight-minVisible/.test(rp) && /window\.innerWidth-minVisible/.test(rp),
+     'and a position past the bottom or right edge is pulled back too');
+  ok(/minVisible=40/.test(rp),
+     'keeping enough of the HEADER reachable, since dragging is how a stranded panel is rescued');
+}
+
 console.log('\n'+pass+' pass / '+fail+' fail');
