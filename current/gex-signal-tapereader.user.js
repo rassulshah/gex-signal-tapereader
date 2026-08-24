@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.91
+// @version    11.92
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.91';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.92';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -809,7 +809,7 @@ function synthDerived(native, king, byK){
 
 console.log('[GPTS] v'+GPTS_VERSION+' part2 loaded');
 
-function closedCandles(sym){ return STATE[sym].candles; }
+function closedCandles(sym){ var S=STATE[sym]; return (S&&S.candles)?S.candles:[]; }
 function atr(sym){
   var c=closedCandles(sym); if(c.length<2) return 0.1;
   var n=Math.min(14,c.length-1); var sum=0;
@@ -2703,10 +2703,21 @@ function spxwCandlesFromSPY(){
     var inv=1/L.undScale;                       // SPY -> SPX
     var S=STATE[activeSym()]||{}, cs=S.candles||[];
     if(!cs.length) return null;
-    var last=cs[cs.length-1];
-    if(!last || last.h==null || last.l==null) return null;
-    return [{ o:(last.o!=null?last.o*inv:null), h:last.h*inv, l:last.l*inv,
-              c:(last.c!=null?last.c*inv:null), so:last.so }];
+    // (v11.92) THE WHOLE SERIES, NOT JUST THE LAST BAR. This returned a ONE-element array because the
+    // only consumer was updateTaps(), which reads cs[cs.length-1]. But the node LEDGER needs a bar
+    // history to see a touch and what followed it — with one candle, `ledger('SPXW')` returned
+    // n:0/bars:1 all session while SPY had 33 bars and a full touch record. The levels actually being
+    // traded were the ones with no deflection data at all.
+    // ⚠ `t` and `b` MUST be carried across. ledgerBuild matches samples to bars by time, and a candle
+    // with no clock cannot be placed against the tape history at all.
+    var out=[];
+    for(var i=0;i<cs.length;i++){
+      var c=cs[i];
+      if(!c || c.h==null || c.l==null) continue;
+      out.push({ o:(c.o!=null?c.o*inv:null), h:c.h*inv, l:c.l*inv,
+                 c:(c.c!=null?c.c*inv:null), so:c.so, t:c.t, b:c.b });
+    }
+    return out.length?out:null;
   }catch(e){ return null; }
 }
 function trackSpxwNodes(){
@@ -10601,8 +10612,48 @@ function ledgerBuild(all, candles, opts){
   if(!all || !all.k) return out;
   var N=all.n||all.t.length;
   var T=all.t||[];
-  // candle index by time: the sample i belongs to the last closed bar with t <= T[i]
+  // ---- (v11.92) THE SAMPLE CLOCK AND THE CANDLE CLOCK WERE IN DIFFERENT UNITS ------------------
+  // The feed stamps snapshots in SECONDS (1787578200); candles are in MILLISECONDS (1787578200000).
+  // The touch-state lookup below is `T[q] <= c.t`, so EVERY sample compared true and `si` landed on
+  // the LAST index every time — every touch was stamped with the node's CURRENT state instead of its
+  // state at the touch. Measured live 2026-08-24: 763.00 had 32 touches all reading `acm`, 763.50 had
+  // 33 all reading `dec`, 764.00 had 20 all reading `gone` — each simply that node's state right now.
+  // ⚠ THIS SILENTLY EMPTIED `ledger.touch`, whose whole question is whether a node ACCUMULATING as
+  // price arrives deflects better than one bleeding. It was comparing a constant against itself.
+  // Detect the unit rather than assuming: anything under 1e11 is seconds.
+  // ⚠ DETECT BY COMPARING THE TWO CLOCKS, never by the magnitude of one. The first version of this
+  // read `T[0] < 1e11 -> seconds`, which is true of real feed stamps AND of any synthetic fixture
+  // using small integers — so it multiplied a test's t=940 by 1000 and broke it. The only thing that
+  // actually matters is the RATIO between the sample clock and the candle clock.
+  var tScale = (function(){
+    try{
+      var tRef=null, cRef=null, q;
+      for(q=0;q<T.length;q++){ if(typeof T[q]==='number' && T[q]>0){ tRef=T[q]; break; } }
+      var cc=candles||[];
+      for(q=0;q<cc.length;q++){ var ct=cc[q]&&(cc[q].t!=null?cc[q].t:cc[q].b);
+        if(typeof ct==='number' && ct>0){ cRef=ct; break; } }
+      if(!tRef || !cRef) return 1;
+      return (cRef/tRef > 500) ? 1000 : 1;      // candle ms against sample seconds
+    }catch(e){ return 1; }
+  })();
+  out.tScale=tScale;
+  // ---- (v11.92) A BAR THAT HAS NOT CLOSED HAS NOT REACTED YET ----------------------------------
+  // `closedCandles()` returns STATE[sym].candles, which includes the bar still forming. Its o/h/l/c
+  // keep moving, so its reaction is provisional and flips: a touch counted `deflect` becomes `through`
+  // when the bar finally closes the other side. That is why 764's deflect count was seen to go 4 -> 3,
+  // which a count of completed events must never do. The forming bar is excluded from the counters and
+  // reported separately as `pending`.
+  var nowMs=(typeof opts.nowMs==='number')?opts.nowMs:Date.now();
+  var barMs=(typeof CANDLE_MS==='number')?CANDLE_MS:180000;
   var cs=(candles||[]).filter(function(c){ return c && typeof c.c==='number'; });
+  var pending=null;
+  if(cs.length){
+    var lastC=cs[cs.length-1];
+    var bStart=(lastC.b!=null)?lastC.b:lastC.t;
+    if(bStart!=null && (nowMs-bStart) < barMs){ pending=cs.pop(); }
+  }
+  out.pendingBar=pending?{ b:(pending.b!=null?pending.b:pending.t), c:pending.c }:null;
+  out.bars=cs.length;
   Object.keys(all.k).forEach(function(key){
     var v=all.k[key].v, k=+key; if(!v || !v.length) return;
     var pk=0, pkAt=null, first=null, last=null;
@@ -10638,7 +10689,7 @@ function ledgerBuild(all, candles, opts){
       else { react=(Math.abs(c.c-k)<=zone)?'stall':'through'; }
       var above=fromBelow, below=fromAbove;
       // node state at the touch: sample whose time is the last <= bar time
-      var si=-1; for(var q=T.length-1;q>=0;q--){ if(T[q]!=null && T[q]<=(c.t||0)){ si=q; break; } }
+      var si=-1; for(var q=T.length-1;q>=0;q--){ if(T[q]!=null && (T[q]*tScale)<=(c.t||0)){ si=q; break; } }
       var stAt=(si>=0)?ledgerStateAt(v,si).st:'hold';
       node.touches.push({ t:c.t||null, bar:b, react:react, side:above?'above':(below?'below':'at'), state:stAt });
       if(react==='deflect') node.deflect++; else if(react==='through') node.through++; else node.stall++;
@@ -10648,7 +10699,7 @@ function ledgerBuild(all, candles, opts){
     // grow (away) over the next LEDGER_INFL_BARS closed bars?
     for(var b2=0;b2+LEDGER_INFL_BARS<cs.length;b2++){
       var c0=cs[b2], c1=cs[b2+LEDGER_INFL_BARS];
-      var sj=-1; for(var q2=T.length-1;q2>=0;q2--){ if(T[q2]!=null && T[q2]<=(c0.t||0)){ sj=q2; break; } }
+      var sj=-1; for(var q2=T.length-1;q2>=0;q2--){ if(T[q2]!=null && (T[q2]*tScale)<=(c0.t||0)){ sj=q2; break; } }
       if(sj<0) continue;
       var st0=ledgerStateAt(v,sj).st;
       var d0=Math.abs(c0.c-k), d1=Math.abs(c1.c-k);
@@ -10659,12 +10710,43 @@ function ledgerBuild(all, candles, opts){
   });
   return out;
 }
+// (v11.92) A SERIES SOURCE FOR SYMBOLS WITH NO TOP-LEVEL FEED.
+// `feedSeriesAll` reads LASTFEED[sym], and only SPY and QQQ have an entry — so nodeLedger('SPXW')
+// returned an empty ledger every session. SPXW does have history: sampleTapeHistory has been filling
+// HIST['SPXW'] since v11.84 (103 strikes, one sample per 3-minute close). Shape it the way ledgerBuild
+// expects and the SPXW book gets the same touch/deflect record SPY has.
+// ⚠ Samples are appended in LOCKSTEP across strikes in one loop, so a strike that appeared later has a
+// SHORTER seq and must be RIGHT-aligned — padding the front, never the back. Left-aligning would slide
+// every reading of a late-arriving strike backwards in time against the candles.
+// ⚠ HIST carries %King only, no dollar series, so `a` is null throughout. ledgerBuild already treats
+// the absolute track as optional (absCur/absState come back null) — it is a shadow, not a requirement.
+function tapeSeriesAll(sym){
+  try{
+    var store=HIST[sym]; if(!store) return null;
+    var keys=Object.keys(store); if(!keys.length) return null;
+    var N=0, tRef=null;
+    keys.forEach(function(k){ var q=store[k]&&store[k].seq; if(q && q.length>N){ N=q.length; tRef=q; } });
+    if(!N || !tRef) return null;
+    var out={ t:tRef.map(function(p){ return p.t; }), k:{}, n:N };
+    keys.forEach(function(key){
+      var q=(store[key]&&store[key].seq)||[]; if(!q.length) return;
+      var v=new Array(N), a=new Array(N), i;
+      for(i=0;i<N;i++){ v[i]=null; a[i]=null; }
+      var off=N-q.length;                       // right-align, see the lockstep note above
+      for(i=0;i<q.length;i++){ v[off+i]=q[i].v; }
+      out.k[key]={ v:v, a:a, first:off, src:sym };
+    });
+    return out;
+  }catch(e){ return null; }
+}
 function nodeLedger(sym){
   sym=sym||'SPY';
   try{
     var key=null; try{ key=legBarKey(sym); }catch(e0){}
     var c=LEDGER_CACHE[sym]; if(c && key && c.key===key) return c.val;
-    var all=feedSeriesAll(sym); var cs=[]; try{ cs=closedCandles(sym)||[]; }catch(e1){}
+    // (v11.92) fall back to the tape history for symbols with no top-level feed entry (SPXW, VIX)
+    var all=feedSeriesAll(sym); if(!all) all=tapeSeriesAll(sym);
+    var cs=[]; try{ cs=closedCandles(sym)||[]; }catch(e1){}
     var led=ledgerBuild(all, cs, {});
     led.sym=sym; led.t=Date.now();
     LEDGER_CACHE[sym]={ key:key, val:led };
@@ -11259,6 +11341,7 @@ function biasConfirmRecord(sym){
                // shadowed: computed, recorded, NOT counted in nConf
                pa:(B.pa&&B.pa.ok)?B.pa.dir:null,
                paWouldConfirm:(B.pa&&B.pa.ok&&B.dir!==0)?(B.pa.dir===B.dir?1:0):null,
+               crossHorizon:(B.cross&&B.cross.horizon)?B.cross.horizon:null,
                crossSelf:(B.cross&&B.cross.ok)?B.cross.self:null,
                crossSame:(B.cross&&B.cross.ok)?B.cross.same:null,
                crossWhy:(B.cross&&!B.cross.ok)?(B.cross.why||null):null };
@@ -11917,6 +12000,8 @@ function registerCoreFeatures(){
         note:'NOTHING confirming: does the call fail more than the trend alone? The mirror, and it must be scored separately or the two average out. If a zero-confirm call performs the same, the count is decoration.' },
       { id:'bias_cross_agrees', when:[{f:'cross',v:1}], outcome:'dirMove',
         note:'The OTHER index trending up by the same measure: does that add anything the symbol\'s own book did not already say? CROSS is the only confirm here that is not a second reading of the same option chain, so this is the question that justifies its seat.' },
+      { id:'cross_short_horizon_holds', when:[{f:'crossHorizon',v:'short'}], outcome:'dirMove',
+        note:'CROSS read on the SHORT horizon (50-minute average, 20-minute window) because the spot series had not reached the full 210 minutes yet. Does it carry the same weight as the full-horizon reading, or is the early-session version noise wearing the same badge? The two are recorded separately and never blended precisely so this can be answered.' },
       { id:'bias_pa_shadow', when:[{f:'paWouldConfirm',v:1}], outcome:'dirMove',
         note:'PA WAS REMOVED FROM THE TALLY at v11.88 on the argument that it is correlated with the 50-SMA it confirms and so agrees for free. It is still recorded. If bars where PA WOULD have confirmed score no better than the rest, the removal was right; if they score better, it was wrong and PA earns its seat back on evidence.' }
     ],
@@ -17390,6 +17475,18 @@ var CROSS_PAIR   = { SPY:'QQQ', QQQ:'SPY' };
 var CROSS_MA_MIN = 150;   // = 50 x 3-min bars, the period of the SMA that owns ② BIAS
 var CROSS_WIN_MIN= 60;    // = 20 x 3-min bars, TREND_WINDOW
 var CROSS_DOM    = 0.75;  // = TREND_DOM 15/20 ⚖ inherited, not independently set
+// (v11.92) THE WARM-UP, found on the first live session. The horizons above were matched to the SMA
+// that owns the call, which is right — but `trendVerdict` gets `contCloses`, a CONTINUOUS series that
+// reaches back days, while the spot series behind CROSS is rebuilt from the feed and STARTS EMPTY AT
+// THE OPEN. Measured 2026-08-24: "SPY series too short (27 of 210 min)" at 09:56, and 210 minutes puts
+// the first reading near 13:00 ET. A confirm that is absent for the first three and a half hours of
+// every session is not a confirm.
+// So: try the full horizon, and fall back to a SHORT one that is live about 70 minutes in.
+// ⚠ THE TWO ARE NOT THE SAME MEASUREMENT and are never blended. Every reading carries `horizon`
+// ('full' | 'short'), the record carries it, and `cross_short_horizon_holds` asks whether the short
+// one is worth the same as the long one instead of assuming it.
+var CROSS_MA_SHORT  = 50;
+var CROSS_WIN_SHORT = 20;
 function spotSeries(sym){
   try{
     var f=LASTFEED[sym]; if(!f||!f.j) return null;
@@ -17400,20 +17497,26 @@ function spotSeries(sym){
 }
 // -1 / 0 / +1 from the snapshot series, by the same dominance rule trendVerdict uses.
 function snapTrend(sym){
-  var out={ ok:false, dir:0, up:0, dn:0, win:0, why:'' };
+  var out={ ok:false, dir:0, up:0, dn:0, win:0, why:'', horizon:null };
   var ser=spotSeries(sym);
   if(!ser){ out.why='no spot series for '+sym; return out; }
-  if(ser.length < CROSS_MA_MIN+CROSS_WIN_MIN){
-    out.why=sym+' series too short ('+ser.length+' of '+(CROSS_MA_MIN+CROSS_WIN_MIN)+' min)'; return out; }
-  var up=0, dn=0, n=ser.length;
-  for(var i=n-CROSS_WIN_MIN;i<n;i++){
-    var sum=0; for(var j=i-CROSS_MA_MIN+1;j<=i;j++) sum+=ser[j];
-    var ma=sum/CROSS_MA_MIN;
-    if(ser[i]>ma) up++; else if(ser[i]<ma) dn++;
+  var ma=CROSS_MA_MIN, win=CROSS_WIN_MIN, horizon='full';
+  if(ser.length < ma+win){
+    ma=CROSS_MA_SHORT; win=CROSS_WIN_SHORT; horizon='short';
+    if(ser.length < ma+win){
+      out.why=sym+' series too short ('+ser.length+' of '+(ma+win)+' min, even on the short horizon)';
+      return out; }
   }
-  out.ok=true; out.up=up; out.dn=dn; out.win=CROSS_WIN_MIN;
-  if(up/CROSS_WIN_MIN>=CROSS_DOM) out.dir=1;
-  else if(dn/CROSS_WIN_MIN>=CROSS_DOM) out.dir=-1;
+  var up=0, dn=0, n=ser.length;
+  for(var i=n-win;i<n;i++){
+    var sum=0; for(var j=i-ma+1;j<=i;j++) sum+=ser[j];
+    var av=sum/ma;
+    if(ser[i]>av) up++; else if(ser[i]<av) dn++;
+  }
+  out.ok=true; out.up=up; out.dn=dn; out.win=win; out.ma=ma; out.horizon=horizon;
+  // the dominance FRACTION is what carries across horizons — a raw count would not
+  if(up/win>=CROSS_DOM) out.dir=1;
+  else if(dn/win>=CROSS_DOM) out.dir=-1;
   else out.dir=0;
   return out;
 }
@@ -17430,6 +17533,13 @@ function crossRead(sym){
   out.dir=O.dir;                                  // what the OTHER instrument says, on its own
   out.self=S.ok?S.dir:null;                       // and what THIS one says by the identical measure
   out.same=(S.ok && O.dir!==0 && S.dir!==0) ? (S.dir===O.dir) : null;
+  // (v11.92) which horizon produced this. NEVER blend the two: if the pair disagree about which
+  // horizon they could reach, the comparison is not like-for-like and the read abstains.
+  out.horizon=O.horizon;
+  if(S.ok && S.horizon!==O.horizon){
+    out.ok=false; out.dir=0;
+    out.why='horizon mismatch — '+sym+' on '+S.horizon+', '+other+' on '+O.horizon;
+  }
   return out;
 }
 // ---- ② BIAS: one transparent tally ----
@@ -19856,6 +19966,11 @@ window.__gptsDebug.regime2 = function(s){ return regime2D(s||activeSym()); };
 window.__gptsDebug.pa      = function(s){ return paRead(s||activeSym()); };
 window.__gptsDebug.bias    = function(s){ return biasVotes(s||activeSym()); };
 window.__gptsDebug.trend   = function(s){ return trendVerdict(s||activeSym()); };
+// (v11.92) the series ledgerBuild actually consumed, so an empty ledger can be diagnosed in one call
+window.__gptsDebug.series  = function(s){ var a=feedSeriesAll(s||'SPY'); var src='feed';
+  if(!a){ a=tapeSeriesAll(s||'SPY'); src='tape-history'; }
+  return a?{ src:src, n:a.n, strikes:Object.keys(a.k).length, tFirst:a.t[0], tLast:a.t[a.t.length-1] }
+          :{ src:'none', n:0, strikes:0 }; };
 window.__gptsDebug.trendRec= function(s){ return trendMachineRecord(s||activeSym()); };
 // (v11.88) cross-symbol agreement, and the raw snapshot trend both sides are measured with
 window.__gptsDebug.cross   = function(s){ return crossRead(s||activeSym()); };

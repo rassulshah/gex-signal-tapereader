@@ -1178,7 +1178,7 @@
   "ledger.touch": {
    "id": "ledger.touch",
    "tier": "hand",
-   "condition": "in-play node touched; ledger state acm | dec | gone | hold at the touch",
+   "condition": "in-play node touched; ledger state acm | dec | gone | hold AT THE TOUCH (v11.92 \u2014 it was the node\u2019s CURRENT state on every touch until then, a seconds-vs-milliseconds clock mismatch)",
    "rate": null,
    "n": 0,
    "mfe": null,
@@ -1197,7 +1197,7 @@
      "n": 0
     }
    },
-   "mechanism": "A node is respected while dealers are adding to it and abandoned while they unwind. If true, the acm/dec chip is a deflection filter; if not, it is decoration.",
+   "mechanism": "A node is respected while dealers are adding to it and abandoned while they unwind. If true, the acm/dec chip is a deflection filter; if not, it is decoration. \u26a0 EVERY RECORD BEFORE v11.92 IS VOID for this question: the touch state was stamped from the last sample rather than the sample at the touch, so all touches on a node carried one identical label. Measured live 2026-08-24: 763.00 had 32 touches all reading acm, 763.50 had 33 all dec, 764.00 had 20 all gone.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,

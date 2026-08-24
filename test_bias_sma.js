@@ -187,6 +187,30 @@ eval(ex('biasVotes'));
   eq(CR.dir,-1,                      'and reports the OTHER instrument\'s direction, not its own — comparing a symbol against itself would always agree');
   eq(CR.self,1,                      'while still measuring THIS symbol by the identical rule, so the pair is comparable');
   eq(CR.same,false,                  'and says plainly that they disagree');
+
+  // --- (v11.92) THE WARM-UP HORIZON ---
+  // Live 2026-08-24: "SPY series too short (27 of 210 min)" at 09:56 — the full horizon needs 210
+  // minutes and the spot series starts EMPTY at the open, so CROSS was silent until roughly 13:00 ET.
+  global.CROSS_MA_SHORT=50; global.CROSS_WIN_SHORT=20;
+  function ser(n, rising){ var a=[]; for(var i=0;i<n;i++) a.push(rising?100+i:100-i); return a; }
+  function feed(spyN, qqqN){
+    global.LASTFEED={ SPY:{j:{levels:ser(spyN,true).map(v=>({s:v,t:1}))}},
+                      QQQ:{j:{levels:ser(qqqN,true).map(v=>({s:v,t:1}))}} };
+  }
+  feed(210+5, 210+5); eq(snapTrend('SPY').horizon,'full','210 minutes reaches the FULL horizon');
+  feed(80, 80);       eq(snapTrend('SPY').horizon,'short','70 minutes falls back to the SHORT one, live about an hour into the session instead of three and a half');
+  feed(60, 60);       ok(snapTrend('SPY').ok===false,'and below even that it abstains with a reason', snapTrend('SPY').why);
+  feed(80,80);
+  ok(snapTrend('SPY').dir===1,'the short horizon still produces a direction'); 
+  ok(snapTrend('SPY').win===20 && snapTrend('SPY').ma===50,'and reports the window and average it actually used', [snapTrend('SPY').win, snapTrend('SPY').ma]);
+  // ⚠ the two horizons are NOT the same measurement and must never be blended
+  feed(215, 80);
+  var MM=crossRead('SPY');
+  ok(MM.ok===false && /horizon mismatch/.test(MM.why||''),
+     'when the pair cannot reach the SAME horizon the read ABSTAINS — one side on 210 minutes and the other on 70 is not a like-for-like comparison',
+     MM.why);
+  feed(215,215); eq(crossRead('SPY').horizon,'full','matched horizons read normally');
+
   // --- THE DOMINANCE THRESHOLD, on a fixture that can tell it from a simple majority ---
   // ⚠ The rising/falling series above CANNOT: 60 of 60 above the mean satisfies both `up>dn` and the
   // 75% rule, so dropping the threshold entirely would pass. This one sits between the two: 35 of 60

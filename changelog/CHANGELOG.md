@@ -1,3 +1,58 @@
+## v11.92 — four things the first live session found that no test could
+
+### 1. THE TOUCH STATE WAS ALWAYS THE CURRENT STATE
+
+The feed stamps snapshots in **seconds** (`1787578200`); candles are in **milliseconds**
+(`1787578200000`). The touch-state lookup is `T[q] <= c.t`, so every sample compared true and `si`
+landed on the **last index every time**. Every touch was labelled with the node’s state *now*.
+
+    763.00   32 touches   ALL "acm"     (current: acm)
+    763.50   33 touches   ALL "dec"     (current: dec)
+    764.00   20 touches   ALL "gone"    (current: gone)
+
+⚠⚠ **This silently emptied `ledger.touch`**, whose entire question is whether a node ACCUMULATING as
+price arrives deflects better than one bleeding. It was comparing a constant against itself.
+**Every record written before v11.92 is void for that question** and the rule now says so.
+
+Detection compares the TWO clocks, never the magnitude of one — the first attempt read
+`T[0] < 1e11 -> seconds`, which is also true of any synthetic fixture using small integers, and
+`test_node_ledger` caught it immediately by breaking on `t=940`.
+
+### 2. THE FORMING BAR WAS COUNTED AS IF IT HAD REACTED
+
+`closedCandles()` returns `STATE[sym].candles`, which includes the bar still forming. Its o/h/l/c keep
+moving, so a touch counted `deflect` becomes `through` when the bar finally closes the other side.
+**That is why 764’s deflect count was observed going 4 → 3 — a count of completed events must never
+decrease.** The forming bar is excluded and reported as `pendingBar`.
+
+### 3. SPXW HAD NO LEDGER AT ALL — ON THE LEVELS ACTUALLY BEING TRADED
+
+    ledger('SPY')    bars 33   n 24     full touch/deflect/stall/through
+    ledger('SPXW')   bars  1   n  0     EMPTY, all session
+
+Two causes. `feedSeriesAll` reads `LASTFEED[sym]` and only SPY and QQQ have an entry — so `all` was
+null. And `spxwCandlesFromSPY()` returned a **one-element array**, because its only consumer was
+`updateTaps()`, which reads `cs[cs.length-1]`.
+
+Fixed both: the candle builder converts the whole series (carrying `t` and `b`, without which nothing
+can be matched to the tape history), and `tapeSeriesAll()` shapes `HIST[sym]` — which
+`sampleTapeHistory` has been filling since v11.84 — into what `ledgerBuild` expects.
+⚠ Samples are appended in LOCKSTEP across strikes, so a strike that appeared later has a shorter seq
+and is **RIGHT-aligned**. Left-aligning would slide every reading of a late strike backwards in time.
+
+### 4. CROSS WAS SILENT UNTIL 13:00 EVERY DAY
+
+The horizons were matched to the SMA that owns the call — correct — but `trendVerdict` gets
+`contCloses`, which reaches back days, while the spot series behind CROSS **starts empty at the open**.
+Live at 09:56: *"SPY series too short (27 of 210 min)"*. 210 minutes puts the first reading near 13:00.
+
+A short horizon (50-minute average, 20-minute window) now takes over, live about an hour in.
+⚠ **The two are never blended.** Every reading carries `horizon`, the record carries it, and if the
+pair cannot reach the SAME horizon the read ABSTAINS — one side on 210 minutes against the other on 70
+is not like-for-like. `cross_short_horizon_holds` asks whether the short read is worth the same.
+
+---
+
 ## v11.91 — a debug hook that threw on the live page, and the test that could never have caught it
 
 `__gptsDebug.trendRec('SPY')` threw **`trendMachineRecord is not defined`** on the tab, minutes after

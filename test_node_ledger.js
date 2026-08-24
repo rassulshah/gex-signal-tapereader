@@ -78,4 +78,79 @@ ok('8e rules.json seeds ledger.touch with real questions', (function(){
          r.n===0 && r.rate===null && r.promoted===false &&
          !!r.regime && !!r.regime.trend && !!r.walkForward;
 })());
+
+// ---------- (v11.92) THE CLOCKS, THE FORMING BAR, AND A SERIES FOR SPXW ----------
+// All three found on the first live session; all three invisible to every test that existed.
+{
+  var mkClock=function(scale){
+    var all={ n:3, t:[100*scale, 200*scale, 300*scale],
+              k:{ '50.00':{ v:[30,90,20], a:[null,null,null], src:null } } };
+    var cs=[ {o:48,h:50.2,l:47.9,c:48.1,t:100000,b:100000},
+             {o:48,h:50.2,l:47.9,c:48.1,t:200000,b:200000},
+             {o:48,h:50.2,l:47.9,c:48.1,t:300000,b:300000} ];
+    return ledgerBuild(all, cs, { nowMs:10000000, minPct:10, zone:0.5 });
+  };
+  var secs=mkClock(1), ms=mkClock(1000);
+  ok('9a a SECONDS sample clock against MILLISECOND candles is detected', secs.tScale===1000, secs.tScale);
+  ok('9b a matching clock is left alone — the RATIO decides, never the magnitude of one side', ms.tScale===1, ms.tScale);
+  var tsA=(secs.nodes['50.00']||{}).touches||[], tsB=(ms.nodes['50.00']||{}).touches||[];
+  ok('9c both find three touches', tsA.length===3 && tsB.length===3, [tsA.length,tsB.length]);
+  var stA=tsA.map(function(x){return x.state;});
+  ok('9d the touches carry DIFFERENT states — ONE state repeated across every touch is the bug this replaces (live: 763.00 had 32 touches all "acm")',
+     Object.keys(stA.reduce(function(m,x){m[x]=1;return m;},{})).length>1, stA);
+  ok('9e and both clock conventions give the SAME answer',
+     JSON.stringify(stA)===JSON.stringify(tsB.map(function(x){return x.state;})), tsB.map(function(x){return x.state;}));
+
+  var allF={ n:2, t:[100,200], k:{ '50.00':{ v:[80,80], a:[null,null], src:null } } };
+  var csF=[ {o:48,h:50.2,l:47.9,c:48.1,t:100000,b:100000},
+            {o:48,h:50.2,l:47.9,c:48.1,t:600000,b:600000} ];
+  var closed =ledgerBuild(allF, csF, { nowMs:600000+180000+1, minPct:10 });
+  var forming=ledgerBuild(allF, csF, { nowMs:600000+1000,     minPct:10 });
+  ok('9f both bars count once the newest has CLOSED', closed.nodes['50.00'].deflect===2, closed.nodes['50.00'].deflect);
+  ok('9g the still-FORMING bar is not counted — its o/h/l/c still move, so a deflect can become a through and a completed-event count must never decrease (live: 764 went 4 -> 3)',
+     forming.nodes['50.00'].deflect===1, forming.nodes['50.00'].deflect);
+  ok('9h it is reported separately as pendingBar', !!forming.pendingBar && forming.pendingBar.b===600000, forming.pendingBar);
+  ok('9i and there is no pending bar when everything has closed', closed.pendingBar===null, closed.pendingBar);
+  ok('9j `bars` counts what was actually scored', forming.bars===1 && closed.bars===2, [forming.bars,closed.bars]);
+
+  global.HIST={ SPXW:{
+    '7650.00':{ last:0, seq:[{t:1,v:40},{t:2,v:60},{t:3,v:80}] },
+    '7670.00':{ last:0, seq:[            {t:2,v:50},{t:3,v:70}] }
+  } };
+  eval(ex('tapeSeriesAll'));
+  var TS=tapeSeriesAll('SPXW');
+  ok('9k the tape history yields a series for a symbol with no top-level feed', !!TS);
+  ok('9l length is the longest strike seq', TS.n===3, TS.n);
+  ok('9m a strike present throughout fills the axis', JSON.stringify(TS.k['7650.00'].v)==='[40,60,80]', TS.k['7650.00'].v);
+  ok('9n a LATE strike is RIGHT-aligned, padding the FRONT — left-aligning would slide every one of its readings backwards in time against the candles',
+     JSON.stringify(TS.k['7670.00'].v)==='[null,50,70]', TS.k['7670.00'].v);
+  ok('9o the dollar track is null because HIST carries %King only, and ledgerBuild treats it as optional',
+     TS.k['7670.00'].a.every(function(x){return x===null;}));
+  ok('9p an unknown symbol yields nothing rather than an empty shell', tapeSeriesAll('NOPE')===null);
+}
+
+
+// ---------- (v11.92) nodeLedger MUST FALL BACK, not just be able to ----------
+// tapeSeriesAll existing is worth nothing if nodeLedger never calls it — removing the fallback fired
+// ZERO assertions until this block. Drive the real nodeLedger with a symbol that has no feed entry.
+{
+  global.LASTFEED={ SPY:{ j:{ levels:[] } } };          // SPXW absent, exactly as it is live
+  global.STATE={ SPXW:{ candles:[
+    {o:7648,h:7651,l:7647,c:7648.2,t:100000,b:100000},
+    {o:7648,h:7651,l:7647,c:7648.2,t:200000,b:200000}
+  ] } };
+  global.HIST={ SPXW:{ '7650.00':{ last:0, seq:[{t:100,v:70},{t:200,v:70}] } } };
+  global.legBarKey=function(){ return 'k1'; };
+  // ⚠ closedCandles is NOT in this harness's eval list, and nodeLedger calls it inside a try/catch —
+  // so without this stub it threw, `cs` stayed [], and the node came back with ZERO touches while
+  // still reporting n:1. A silent empty is exactly what this whole block exists to catch.
+  global.closedCandles=function(sy){ var S=global.STATE[sy]; return (S&&S.candles)?S.candles:[]; };
+  global.LEDGER_CACHE={};
+  var LX=nodeLedger("SPXW");
+  ok('9q nodeLedger falls back to the tape history when there is no feed entry — SPXW returned n:0/bars:1 all session without this',
+     LX.n===1, {n:LX.n, bars:LX.bars});
+  ok('9r and it produces real touch data on the levels actually being traded',
+     (LX.nodes["7650.00"]||{}).touches.length>0, (LX.nodes["7650.00"]||{}).touches);
+}
+
 console.log('test_node_ledger: '+p+' passed, '+f+' failed');
