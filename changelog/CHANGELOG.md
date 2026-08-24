@@ -1,3 +1,36 @@
+## v11.93 — the node role moves above the rail, and resize follows the panel into the pop-out
+
+**THE ROLE TIER.** `KING / GK / ACC / BRK / RUG` moves out of the label under the rail and into its own
+tier at **11–17px**, between the money amounts and the track. Below the rail is now ES price over SPX
+strike only. Sharing one line with the strike meant that on a crowded ladder `7645 ACC` and `7665 KING`
+competed for width against their neighbours, and the role — the word that changes what you do — was the
+half that got clipped.
+
+Rail 14 → 19, dot 11 → 16, track 48 → 53px. ⚠ **The v11.67 contract it protects is unchanged**: the
+money amounts own 0–9 alone. That bug was the dot's *ring* cutting the amounts, and
+`getBoundingClientRect` does not include `box-shadow` — so the test asserts the dot's PAINTED top
+(`top − 2`) clears 9, not merely that the numbers differ. The role tier is held to the same line.
+
+**RESIZE IN THE POP-OUT.** ⚠ **The hidden grip was only half the reason it was dead there.**
+`mousemove`/`mouseup` were bound to the **Atlas** document, but once the panel is appended into the PiP
+window it lives in a *different* document and the pointer events happen there. The grip's own mousedown
+still fired — an element listener travels with the element — so the drag ARMED and then nothing ever
+moved. **Unhiding the grip alone would have shipped a handle that visibly does nothing**, which is worse
+than no handle.
+
+Now: the press binds move/up to `PANEL.ownerDocument`, whichever that is, and unbinds on release.
+Vertical-only in the pop-out, because there the panel's width IS the window's width and a narrower
+panel just leaves a dead strip. A pop-out height never overwrites the in-page size — that window has
+its own.
+
+### the removal comment trap, fifth occurrence
+
+The test for `min-height:100vh` being gone failed **because the comment explaining its removal contains
+the string**. Same trap as `DEX`/`TERM`/`ATR` at v11.90. The assertion strips comments first now, like
+the others learned to.
+
+---
+
 ## v11.92 — four things the first live session found that no test could
 
 ### 1. THE TOUCH STATE WAS ALWAYS THE CURRENT STATE

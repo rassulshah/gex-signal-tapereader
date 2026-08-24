@@ -53,7 +53,28 @@ eq(zoomLoad(),1,'no stored value means 100%');
 {
   ok(/max-width:100% !important/.test(src),'the panel is capped at the window width so a zoomed panel cannot scroll sideways');
   ok(/min-height:100vh/.test(src),'and fills the window vertically rather than floating in a short block');
-  ok(/#gpts-grip\{display:none !important\}/.test(src),'the in-page resize grip is hidden in the pop-out — the WINDOW is the resizer there');
+  // (v11.93) THE GRIP IS BACK IN THE POP-OUT, and hiding it was only half the reason resize was dead
+// there: mousemove/mouseup were bound to the ATLAS document while the panel lives in the PiP one, so
+// the press armed and nothing ever moved. Unhiding alone would have shipped a handle that visibly
+// does nothing. Both halves are asserted.
+ok(/#gpts-grip\{display:block !important;cursor:ns-resize !important\}/.test(src),
+   'the pop-out shows the grip, as a VERTICAL resizer');
+ok(/PANEL\.ownerDocument\|\|document/.test(src),
+   'and resize binds to whichever document owns the panel, so the drag works in the pop-out too');
+ok(/inPip=\(doc!==document\)/.test(src),
+   'it knows which one it is in');
+ok(/if\(inPip\) return;/.test(src),
+   'and a pop-out height never overwrites the in-page size — that window has its own height');
+// ⚠ STRIP COMMENTS FIRST. The comment explaining the removal CONTAINS `min-height:100vh`, so a raw
+// grep finds the very string it is checking is gone — the same trap that has now bitten this project
+// five times. Look at the code, not at the prose about the code.
+{
+  const code=src.replace(/\/\*[\s\S]*?\*\//g,'').split('\n').map(l=>l.replace(/^\s*\/\/.*$/,'')).join('\n');
+  ok(!/min-height:100vh/.test(code),
+     'the panel is no longer forced to fill the pop-out window, or the grip would have nothing to act on');
+  ok(/min-height:120px/.test(code),
+     'it has a small floor instead, so the grip can drag under the content');
+}
 }
 // ---- zoom is re-applied across the document move ----
 {

@@ -1206,13 +1206,30 @@ eval(ex('emBand'));
   // never-matching pattern the first time, and a px() that returns null makes every geometry check vacuous.
   const px=(cls,prop)=>{ const re=new RegExp('\\.'+cls+'\\{[^}]*'+prop+':(-?[0-9.]+)','g');
     let m,v=null; while((m=re.exec(src))) v=parseFloat(m[1]); return v; };
-  ok(px('g3emt','height')===48, 'the rail box grew to fit the label tier', px('g3emt','height'));
+  ok(px('g3emt','height')===53, 'the rail box grew again for the ROLE tier (v11.93: 48 -> 53)', px('g3emt','height'));
   // ⚠ px() takes the LAST match and the generic '#gpts-body .g3pile{bottom:2px}' comes after the scoped
   // rule, so ask for the SCOPED one by name — the specific selector is what actually applies here.
   const scoped=(src.match(/g3emt \.g3pile\{bottom:(\d+)px\}/)||[])[1];
   ok(scoped==='19', 'and the piles were LIFTED clear of it rather than the labels squeezed under them', scoped);
-  ok(px('g3emr','top')===14,    'and the rail itself did NOT move — v11.67 contract intact', px('g3emr','top'));
-  ok(px('g3emn','top')===11,    'nor the dot', px('g3emn','top'));
+  // (v11.93) THE RAIL MOVED, DELIBERATELY, AND THE CONTRACT IT PROTECTS DID NOT CHANGE.
+  // v11.67 pinned the rail at 14 and the dot at 11 to stop the dot's ring cutting the money labels
+  // that live at 0-9. The role tier now sits between them, so everything below the money tier shifts
+  // down by 5 — but the thing being protected is the same: NOTHING may enter 0-9 except the amounts.
+  ok(px('g3emr','top')===19,    'the rail moved down to make room for the role tier', px('g3emr','top'));
+  ok(px('g3emn','top')===16,    'and the dot moved with it', px('g3emn','top'));
+  ok(px('g3prole','top')===11,  'the role tier sits between the amounts and the rail', px('g3prole','top'));
+  // THE ACTUAL CONTRACT, restated so it survives the next tier: the money amounts own 0-9 alone.
+  // The dot is 10px tall with a 2px ring, so its PAINTED top is (top - 2) and that must clear 9.
+  ok(px('g3emn','top')-2 >= 10,
+     'the dot\'s painted top still clears the money tier — the v11.67 bug was its RING cutting the amounts, and getBoundingClientRect does not include box-shadow',
+     px('g3emn','top')-2);
+  ok(px('g3prole','top') >= 10,
+     'and so does the role tier — nothing but the amounts may enter 0-9', px('g3prole','top'));
+  const roleSize=px('g3prole','font-size');
+  ok(roleSize===5.5, 'the role did NOT grow when it moved — same size, new tier', roleSize);
+  // and the role must have LEFT the label under the rail, or it is drawn twice
+  ok(/frameNum\(P\.disp\)\+'<i>'\+P\.k\+'<\/i>/.test(f),
+     'the label below the rail is now ES price over SPX strike ONLY — the role moved out rather than being copied');
 }
 
 // ---------- 37. (v11.81) NODE ROLES: KING / GK / RUG / REVERSE-RUG ----------

@@ -68,6 +68,18 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ---
 
+## 📎 ALWAYS SEND THE TAMPERMONKEY LINK — user-mandated, restated 2026-08-24
+
+**Every message that ships a build ends with the output of `bash tools/release-links.sh`, pasted.**
+Not a link typed from memory, not "the installer is attached" — the script's block, because it reads
+both `@version` values and marks which script actually CHANGED against origin/main.
+
+⚠ Linking a script that did NOT change makes Tampermonkey offer **Reinstall** instead of **Update**,
+which reads exactly like a failed push. That is why the script exists and why its output is what gets
+pasted. BUILD-CHECKLIST step 9 has said this since v11.9 and it has still been missed.
+
+---
+
 ## ⛔ THE PROCESS FAILURE THAT ENDED THE 2026-08-24 SESSION
 
 **The user stopped work with "we need to stop . you are making a mess." No bug caused it. Scope did.**

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.92
+// @version    11.93
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.92';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.93';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4557,11 +4557,18 @@ function pipCopyStyles(doc){
     var base=doc.createElement('style');
     base.textContent='html,body{margin:0;padding:0;background:'+PAL.bg+';color:'+PAL.ink+';'+
       'font:12px/1.4 Inter,Arial,sans-serif;overflow:auto}'+
+      // (v11.93) THE POPPED-OUT PANEL CAN BE RESIZED VERTICALLY AGAIN.
+      // It was pinned `height:auto; min-height:100vh` and the grip was hidden outright, so the panel
+      // was forced to fill the PiP window and there was nothing to drag — the user had a resize in
+      // Skylit and lost it the moment they popped out. `min-height` becomes a floor small enough to
+      // get under, the panel keeps whatever height the grip sets, and the grip comes back.
+      // ⚠ WIDTH STAYS PINNED TO 100%. In a PiP window the width IS the window's width; a panel
+      // narrower than its own window just leaves a dead strip, so the grip is vertical-only here.
       '#gpts-panel{position:static !important;top:auto !important;left:auto !important;right:auto !important;'+
-      'width:100% !important;max-width:100% !important;height:auto !important;min-height:100vh;'+
+      'width:100% !important;max-width:100% !important;min-height:120px;'+
       'border:0 !important;border-radius:0 !important;box-shadow:none !important;z-index:auto !important}'+
       '#gpts-body{cursor:default !important}'+
-      '#gpts-grip{display:none !important}';
+      '#gpts-grip{display:block !important;cursor:ns-resize !important}';
     doc.head.appendChild(base);
   }catch(e){}
 }
@@ -4774,24 +4781,44 @@ function makeDraggable(dragEls){
     try{ localStorage.setItem(POS_KEY, JSON.stringify({left:PANEL.style.left, top:PANEL.style.top})); }catch(e){}
   });
 }
+// (v11.93) RESIZE FOLLOWS THE PANEL INTO THE POP-OUT.
+// ⚠ THE HIDDEN GRIP WAS ONLY HALF THE REASON RESIZE DIED IN PiP. `mousemove`/`mouseup` were bound to
+// the ATLAS document — but once the panel is appended into the PiP window it lives in a DIFFERENT
+// document, and the pointer events happen there. The grip's own mousedown still fired (an element
+// listener travels with the element), so the drag ARMED and then nothing ever moved it. Unhiding the
+// grip alone would have produced a handle that visibly does nothing, which is worse than no handle.
+// Bind move/up to whichever document owns the panel AT THE TIME OF THE PRESS, and unbind on release.
+// ⚠ WIDTH IS VERTICAL-ONLY IN PiP. There the panel's width IS the window's width (pinned 100% by
+// pipCopyStyles), so a narrower panel would just leave a dead strip beside itself.
 function makeResizable(grip){
-  var rz=false, sx=0, sy=0, ow=0, oh=0;
+  var rz=false, sx=0, sy=0, ow=0, oh=0, doc=null, inPip=false;
+  function onMove(e){
+    if(!rz) return;
+    var nh=oh+(e.clientY-sy);
+    if(nh<160) nh=160; if(nh>2000) nh=2000;
+    if(!inPip){
+      var nw=ow+(e.clientX-sx);
+      if(nw<240) nw=240; if(nw>560) nw=560;
+      PANEL.style.width=nw+'px';
+    }
+    PANEL.style.height=nh+'px';
+    try{ render(); }catch(e2){}
+  }
+  function onUp(){
+    if(!rz) return; rz=false;
+    if(doc){ doc.removeEventListener('mousemove', onMove); doc.removeEventListener('mouseup', onUp); doc=null; }
+    // ⚠ a PiP height is that WINDOW's height and must not overwrite the in-page one
+    if(inPip) return;
+    try{ localStorage.setItem(SIZE_KEY, JSON.stringify({w:PANEL.style.width, h:PANEL.style.height})); }catch(e){}
+  }
   grip.addEventListener('mousedown', function(e){
     rz=true; sx=e.clientX; sy=e.clientY;
     var r=PANEL.getBoundingClientRect(); ow=r.width; oh=r.height;
+    doc=(PANEL.ownerDocument||document);
+    inPip=(doc!==document);
+    doc.addEventListener('mousemove', onMove);
+    doc.addEventListener('mouseup', onUp);
     e.preventDefault(); e.stopPropagation();
-  });
-  document.addEventListener('mousemove', function(e){
-    if(!rz) return;
-    var nw=ow+(e.clientX-sx), nh=oh+(e.clientY-sy);
-    if(nw<240) nw=240; if(nw>560) nw=560;
-    if(nh<160) nh=160; if(nh>900) nh=900;
-    PANEL.style.width=nw+'px'; PANEL.style.height=nh+'px';
-    render();
-  });
-  document.addEventListener('mouseup', function(){
-    if(!rz) return; rz=false;
-    try{ localStorage.setItem(SIZE_KEY, JSON.stringify({w:PANEL.style.width, h:PANEL.style.height})); }catch(e){}
   });
 }
 function restorePos(){
@@ -17739,7 +17766,14 @@ function ensureV3Css(){
     //   34-48  the node labels     TWO lines: ES price, then SPXW strike + role
     // Measured, not guessed: at 42px the piles occupied 22-32 and the two-line labels 28-43, so they
     // overlapped by four rows. The labels did not move — the piles were lifted and the box grew.
-    '#gpts-body .g3emt{position:relative;flex:1;height:48px;min-width:80px}'+
+    '#gpts-body .g3emt{position:relative;flex:1;height:53px;min-width:80px}'+
+  // (v11.93) THE ROLE TIER. Money amounts keep 0-9 and nothing else may enter it; the role owns
+  // 11-17; the rail moves 14 -> 19. Five extra pixels of track is the whole cost.
+  '#gpts-body .g3prole{position:absolute;top:11px;transform:translateX(-50%);font-size:5.5px;'+
+  'font-weight:800;letter-spacing:.05em;line-height:6px;white-space:nowrap;cursor:help}'+
+  '#gpts-body .g3prole.acc{color:#a371f7}'+
+  '#gpts-body .g3prole.brk{color:#e3c341}'+
+  '#gpts-body .g3prole.bal{color:#8b98a9}'+
     '#gpts-body .g3emt .g3pile{bottom:19px}'+
     '#gpts-body .g3plab{position:absolute;bottom:-1px;transform:translateX(-50%);font-size:6.5px;'+
       'font-weight:800;white-space:nowrap;cursor:help;line-height:7.5px;text-align:center}'+
@@ -17747,16 +17781,16 @@ function ensureV3Css(){
     '#gpts-body .g3plab.brk{color:#e3c341}'+
     '#gpts-body .g3plab.bal{color:#8b98a9}'+
     '#gpts-body .g3plab i{display:block;font-style:normal;font-size:5.5px;color:#8b98a9;letter-spacing:.04em}'+
-    '#gpts-body .g3emr{position:absolute;left:0;right:0;top:14px;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}'+
-    '#gpts-body .g3emf{position:absolute;top:14px;height:4px;border-radius:2px;background:rgba(139,152,169,.6)}'+
-    '#gpts-body .g3emx2{position:absolute;top:14px;height:4px;border-radius:2px;background:rgba(139,152,169,.22)}'+
-    '#gpts-body .g3emw2{position:absolute;top:7px;width:1px;height:8px;background:rgba(195,204,216,.6)}'+
-    '#gpts-body .g3emo{position:absolute;top:10px;width:2px;height:12px;background:#e6edf3;border-radius:1px;transform:translateX(-1px)}'+
-    '#gpts-body .g3emn{position:absolute;top:11px;width:10px;height:10px;border-radius:50%;background:#fff;'+
+    '#gpts-body .g3emr{position:absolute;left:0;right:0;top:19px;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}'+
+    '#gpts-body .g3emf{position:absolute;top:19px;height:4px;border-radius:2px;background:rgba(139,152,169,.6)}'+
+    '#gpts-body .g3emx2{position:absolute;top:19px;height:4px;border-radius:2px;background:rgba(139,152,169,.22)}'+
+    '#gpts-body .g3emw2{position:absolute;top:12px;width:1px;height:8px;background:rgba(195,204,216,.6)}'+
+    '#gpts-body .g3emo{position:absolute;top:15px;width:2px;height:12px;background:#e6edf3;border-radius:1px;transform:translateX(-1px)}'+
+    '#gpts-body .g3emn{position:absolute;top:16px;width:10px;height:10px;border-radius:50%;background:#fff;'+
       'box-shadow:0 0 0 2px #0b0e14;transform:translateX(-5px)}'+
     // TARGET moves to CYAN. Yellow now means POSITIVE GAMMA (Skylit's Pika), so the target cannot keep it.
     // Cyan is the one hue the palette had not spent, and the T glyph carries identity without colour.
-    '#gpts-body .g3emT{position:absolute;top:10px;font-size:9px;font-weight:800;color:#4fd1e0;'+
+    '#gpts-body .g3emT{position:absolute;top:15px;font-size:9px;font-weight:800;color:#4fd1e0;'+
       'transform:translateX(-50%);line-height:12px;text-shadow:0 0 3px #0b0e14,0 0 3px #0b0e14}'+
     '#gpts-body .g3emT.out{color:#6c7889}'+
     '#gpts-body .g3tgt{font-size:11px;font-weight:800;color:#4fd1e0;letter-spacing:-.2px}'+
@@ -19062,8 +19096,18 @@ function secFrame(sym){
            // both, but "KING" is the word that changes what you do and "ACC" is not.
            var role = P.role || (P.balanced ? 'BAL' : (P.accel ? 'ACC' : 'BRK'));
            if(P.pct>=PLAB_MIN_PCT){
+             // (v11.93) THE ROLE MOVES ABOVE THE RAIL, into its own tier between the money amounts and
+             // the track. Below the rail it was sharing one line with the SPX strike, so on a crowded
+             // ladder "7645 ACC" and "7665 KING" competed for width against their neighbours and the
+             // role — the word that actually changes what you do — was the half that got clipped.
+             // ⚠ The money tier is 0-9 and the rail is at 19; the role sits at 11-17 and NEVER enters
+             // either. A role within ~6% of an end right-aligns inward, the same rule the labels use,
+             // so it stays over its own node instead of being pulled off it.
+             var rEdge = (P.pos>94) ? ';transform:translateX(-100%)' : ((P.pos<6) ? ';transform:translateX(0)' : '');
+             h2+='<span class="g3prole '+pcls+'" style="left:'+P.pos.toFixed(1)+'%'+rEdge+'"'+g3tip(tip)+'>'+
+                 g3esc(role)+'</span>';
              h2+='<span class="g3plab '+pcls+'" style="left:'+P.pos.toFixed(1)+'%"'+g3tip(tip)+'>'+
-                 frameNum(P.disp)+'<i>'+P.k+' '+role+'</i></span>';
+                 frameNum(P.disp)+'<i>'+P.k+'</i></span>';
            }
          }
          return h2;
