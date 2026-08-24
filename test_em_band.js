@@ -377,7 +377,15 @@ eval(ex('emBand'));
   ok(/g3pile\.acc\{background:#a371f7\}/.test(src), 'accelerator = PURPLE (put-dominant) — Skylit\'s convention');
   ok(/g3pile\.brk\{background:#e3c341\}/.test(src), 'brake = YELLOW (call-dominant) — Skylit\'s convention');
   ok(/g3emT\{[^}]*#4fd1e0/.test(src),                'the target moved to CYAN, since yellow now means positive gamma');
-  ok(/g3tgt\{[^}]*#4fd1e0/.test(src),                '...on line 1 too, so the two target marks agree');
+  // ⚠ (v11.98) THIS ASSERTION WAS ONLY PASSING BECAUSE OF A DEAD CSS RULE.
+  // v11.75 gave the target chip a DIRECTION colour — green when the magnet is above price, red when
+  // below — so `.g3tgt` stopped being cyan. An older cyan `.g3tgt` rule was still sitting earlier in
+  // the stylesheet, fully overridden and invisible, and this grep found THAT one. Removing the dead
+  // rule is what exposed it. Assert the rule that actually applies.
+  ok(/g3tgt\.up\{color:#2ec27e\}/.test(src) && /g3tgt\.dn\{color:#f0616d\}/.test(src),
+     '...and on line 1 the target chip takes its colour from DIRECTION (v11.75), green above / red below');
+  ok(/g3tgt'\+\(tgtUp===true\?' up':\(tgtUp===false\?' dn':''\)\)/.test(f),
+     'from the SAME test the rail marker uses, so the chip and the mark can never disagree');
   ok(/g3emn\.g3str\{background:#f0616d\}/.test(src),'STRETCHED is RED — amber sat beside the brake yellow meaning something else');
 
   // --- the raw book in the export ---
@@ -930,8 +938,14 @@ eval(ex('emBand'));
 
   // THE CHAIN — the user's own example, reproduced
   const t2=RUN(Object.assign({},BASE,{dir:-1,now:7690}),dn).txt;
-  ok(t2==='$6M negative gamma accelerator at 7668 can take price lower to the $6M positive gamma node at 7665.',
+  // (v11.99) the sentence now carries what is coming EACH WAY after the mechanism clause, so it is no
+  // longer an exact-string match — assert the CLAUSE, then the additions.
+  ok(/^\$6M negative gamma accelerator at 7668 can take price lower to the \$6M positive gamma node at 7665\./.test(t2),
      'the chained form matches the shape asked for', t2);
+  ok(/Next up: /.test(t2) && /Next down: /.test(t2),
+     'and both sides are named — the old line described only the direction of travel');
+  ok(!/undefined/.test(t2),
+     'with no undefined units: the IF fallback carries DOLLARS and has no %King, so printing pct blindly produced "undefined% accelerator"', t2);
   const t3=RUN(Object.assign({},BASE,{now:7700}),two).txt;
   ok(/can take price higher to the \$17M negative gamma node at 7718\./.test(t3),
      'and it names the NEXT node as the destination', t3);
@@ -1568,6 +1582,73 @@ eval(ex('emBand'));
   ok(L['SPX 7700 GK 79%'].col==='2',      'the gatekeeper gets the gate colour');
   ok(L['SPX 7650 BRK 41%'].col==='4',     'and a positive-gamma brake gets the floor colour, not the accelerator colour');
   ok(L['SPX 7710 KING 100%'].w==='3',     'the King is drawn heaviest');
+}
+
+
+// ---------- 42. (v11.99) THE RAIL GROWS WHEN PRICE RUNS PAST A BOUNDARY ----------
+// A price beyond the expected high used to pin the dot at 100% and sit there. The band is a PRICED
+// level, not a barrier — running past it is frequent, and "how far past" is exactly what an
+// overextension read is for. Pinned at the rail it showed nothing.
+{
+  eval(ex('emPos')); eval(ex('emRailBounds')); eval(ex('emPosRail'));
+  // ⚠ read the pad OUT OF THE SOURCE rather than restating it — a test that hardcodes a hand-set
+  // constant stops testing the moment someone tunes it, and this one is explicitly ⚖ hand-set.
+  const EM_RAIL_PAD=parseFloat(/var EM_RAIL_PAD\s*=\s*([0-9.]+)/.exec(src)[1]);
+  global.EM_RAIL_PAD=EM_RAIL_PAD;
+  ok(EM_RAIL_PAD>0 && EM_RAIL_PAD<1, '42_pad the rail pad is a fraction of the band', EM_RAIL_PAD);
+  const B={ low:7660, high:7730, now:7700, hiWater:7705, loWater:7670 };
+
+  // --- inside the band, the two spaces are IDENTICAL ---
+  const RB=emRailBounds(B);
+  ok(RB.lo === 7660, '42a inside the band the rail is the band, low', RB.lo);
+  ok(RB.hi === 7730, '42b and high', RB.hi);
+  ok(RB.over===false && RB.under===false,'42c and neither boundary is marked as run');
+  ok(emPosRail(B,7700,RB) === emPos(B,7700), '42d so a drawn position equals the measured one', emPosRail(B,7700,RB));
+
+  // --- price ABOVE the expected high ---
+  const Bo=Object.assign({},B,{now:7760,hiWater:7760});
+  const RO=emRailBounds(Bo);
+  ok(RO.over===true,'42e running past the high is marked');
+  ok(RO.hi>7760,'42f and the rail extends BEYOND price, not to it', RO.hi);
+  ok(RO.hi === 7760+ (7730-7660)*EM_RAIL_PAD, '42g by a fixed share of the band width', RO.hi);
+  const pinned=emPos(Bo,7760), drawn=emPosRail(Bo,7760,RO);
+  ok(pinned === 100, '42h the MEASUREMENT still pins at 100 — pct is recorded and must not change meaning', pinned);
+  ok(drawn<100,'42i but the DRAWN dot is off the end, so "how far past" is visible', drawn);
+  ok(emPosRail(Bo,7730,RO)<drawn,'42j and the expected high now sits INSIDE the rail, below price');
+
+  // --- price BELOW the expected low ---
+  const Bu=Object.assign({},B,{now:7600,loWater:7600});
+  const RU=emRailBounds(Bu);
+  ok(RU.under===true,'42k running past the low is marked');
+  ok(RU.lo<7600,'42l and the rail extends below price', RU.lo);
+  ok(emPosRail(Bu,7600,RU)>0,'42m the dot is off the low end rather than pinned at 0');
+
+  // --- THE EVIDENCE STAYS once a boundary has been run ---
+  // a rescale that reverted the moment price stepped back inside would flicker the day's extreme away
+  const Bback=Object.assign({},B,{now:7700,hiWater:7755});
+  const RBk=emRailBounds(Bback);
+  ok(RBk.over===true,'42n price back inside but the HIGH OF DAY ran past — the rail stays wide');
+  ok(RBk.hi>7755,'42o holding the extreme, not the current price', RBk.hi);
+
+  // --- and the original boundary is DRAWN, or the rail silently redefines the expected move ---
+  const f2=ex('secFrame');
+  ok(/RB\.over \? \('<i class="g3embx"/.test(f2),
+     '42p the expected HIGH is marked once the rail has grown past it');
+  ok(/RB\.under \? \('<i class="g3embx"/.test(f2),
+     '42q and the expected LOW');
+  ok(/where the expected move ended, not where the rail does/.test(f2),
+     '42r and the hover says which line is which — otherwise the rail END reads as the expected move');
+  ok(/RB\.over\?RB\.hi:EB\.high/.test(f2) && /RB\.over\?'RAIL':'EH'/.test(f2),
+     '42s the rail END relabels itself RAIL, so EH never names a number that is not the expected high');
+  // ⚠ EVERY drawn position, not just one. A partial migration is the dangerous state: some marks in
+  // rail space and some still in band space means the rail disagrees with itself the moment a
+  // boundary is run, and each mark looks individually correct.
+  ok(!/left:'\+P\.pos\.toFixed/.test(f2),
+     '42t NOTHING is still positioned by the band-space P.pos — a partial migration would put some marks in one space and some in the other');
+  const nRail=(f2.match(/emPosRail\(EB,/g)||[]).length;
+  ok(nRail>=6, '42t2 and every mark on the track is placed in rail space', nRail);
+  ok(/pNow=emPosRail/.test(f2) && /pOpen=emPosRail/.test(f2),
+     '42u as do the price dot and the open marker');
 }
 
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');

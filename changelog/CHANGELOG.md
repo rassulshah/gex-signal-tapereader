@@ -1,3 +1,77 @@
+## v11.99 — the rail grows past a boundary, and the read line names both sides
+
+**THE RAIL RESCALES WHEN PRICE RUNS PAST THE EXPECTED MOVE.** Until now a price beyond the expected
+high pinned the dot at 100% and sat there. The band is a **priced level, not a barrier** — running past
+it is frequent, and *how far past* is precisely what an overextension read exists to show. Pinned at
+the rail it showed nothing at all.
+
+The track now extends to hold price plus a quarter of the band's width, and the ORIGINAL boundary
+becomes a marked gold line labelled `EH 7730` / `EL 7661`, while the rail END relabels itself **RAIL**.
+⚠ **Otherwise the rescale would quietly redefine the rail end AS the expected move**, which is the one
+thing that band must never be allowed to become.
+
+⚠ **`emPos` STAYS CLAMPED, DELIBERATELY.** It is the MEASUREMENT — `pct` is recorded every bar as "how
+much of the expected move is used", and letting it exceed 100 would silently change what months of
+recorded data mean. Drawing moved to a separate coordinate space (`emRailBounds` / `emPosRail`) instead.
+Two spaces on purpose: one is a number, the other is a pixel.
+
+⚠ **The extreme is what widens the rail, not the current price.** A rescale that reverted the moment
+price stepped back inside would flicker the day's high away exactly when it mattered most.
+
+**THE READ LINE NAMES WHAT IS COMING EACH WAY.** It described only the direction of travel; a trader at
+a level wants both — the next thing overhead and the next beneath, with distances, because that is the
+shape of the decision. It names polarity, never a call: which of a brake or an accelerator helps you
+depends on which way you are going, and the line does not decide that. D-7 stands.
+
+⚠ **A real bug the first test caught: `undefined% accelerator`.** Skylit piles carry %King; the
+InsiderFinance fallback carries DOLLARS and has no `pct` at all. Printing it blindly produced a number
+that did not exist. Same split the pile hover already makes — one vocabulary never covered both books.
+
+### the tests
+
+Seven mutations on the rail fire 8/4/2/5/3/2/2. The one that fired ZERO first is worth keeping in mind:
+`42t` originally asserted that *a* pile drew in rail space, and a mutation reverting a different mark
+passed it. **A partial migration is the dangerous state** — some marks in rail space and some in band
+space means the rail disagrees with itself the moment a boundary is run, and each mark looks
+individually correct. It now asserts that NOTHING is still positioned by `P.pos`.
+
+---
+
+## v11.98 — the dead-code sweep, and two tests that only passed because of it
+
+**`nodeBreadth` was declared twice.** The later one-argument version won for the whole file; the earlier
+two-argument one was unreachable while reading like live code. **That is the exact shape of the `ifNum`
+collision that shipped broken for nine releases.** Gone. `trendBadgeHtml` was declared twice with no
+caller on either copy — also gone, and `test_no_dupes` now demands the collision list stay **empty**.
+
+**21 uncalled functions removed, ~188 lines.** ⚠ Callers were counted with strings and comments MASKED
+OUT. Counting prose as a call site has fooled six assertions in this project; here it would have fooled
+a *deletion*, where the cost is a live function removed rather than a test left red.
+⚠ The 17 functions carrying an explicit `(v11.0 audit) PARKED` marker were **left alone** — equally
+uncalled, but someone deliberately kept them and that is not mine to reverse.
+
+**13 CSS rules retired** — each fully overridden by a later duplicate. The check required the later rule
+to be a property SUPERSET, which correctly spared `.g3cf`, where the second rule is additive.
+
+### two tests were passing on the dead code
+
+**`.g3tgt` cyan.** v11.75 gave the target chip a DIRECTION colour — green above price, red below — so
+`.g3tgt` stopped being cyan. An older cyan rule sat earlier in the stylesheet, fully overridden and
+invisible, and the assertion had been finding **that** one for 23 versions. Removing the dead rule
+exposed it. It now asserts the rule that applies, and that the chip and the rail marker share one test.
+
+**And I broke `feedStatusHtml` doing this.** The audit reported `txt`, `col` and `vexTxt` as computed
+and never returned. `txt` and `col` were; **`vexTxt` was not** — it carries the dim `vex ⏳` marker that
+exists so the footer never pretends VEX is live. My heuristic only checked the final `return` string and
+missed the concatenation feeding it. `test_auth_capture` caught it immediately and the function was
+restored whole from the v11.97 installer payload — **the third time that round-trip has been the backup
+that mattered.**
+
+⚠ **The lesson: an audit finding is a lead, not a licence.** Two of the twelve dead-code findings I
+acted on were wrong, and both were caught only by tests that already existed.
+
+---
+
 ## v11.96 — the pop-out height, and it was a regression I caused at v11.93
 
 Measured live rather than guessed: **PiP window 598px, panel frozen at 581px, `#gpts-body` content

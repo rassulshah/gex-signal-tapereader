@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    11.96
+// @version    11.99
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='11.96';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='11.99';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -1056,43 +1056,7 @@ function trendCodeOf(state){
 // to the RIGHT of the stack, vertically centered (parallel to the King node's offset
 // arrow), colored by slope DIRECTION (green rising / red falling / grey flat).
 // (v11.0 audit) PARKED — no live caller; kept because test_trendbadge.js pins it.
-function trendBadgeHtml(sym){
-  var tv = trendVerdict(sym);
-  var st = tv.state;
-  var col = trendColorOf(st);
-  var period = (function(){ var mp=parseInt(CFG.trendMA[sym],10); return (isNaN(mp)||mp<1)?50:mp; })();
-  var code = trendCodeOf(st);
-  // dominant-side count + arrow (\u2191 = bars ABOVE SMA, \u2193 = below). Arrow colored by state.
-  var upish = (st==='up'||st==='up-broken');
-  var dnish = (st==='dn'||st==='dn-broken');
-  var cntArrow = upish?'\u2191':(dnish?'\u2193':'');
-  var cnt = upish?(tv.up+'/'+tv.win):(dnish?(tv.dn+'/'+tv.win):'\u2013');
-  // slope tick: \u2197 rising / \u2198 falling / \u2192 flat, colored by direction
-  var slopeGlyph = tv.slope>0?'\u2197':(tv.slope<0?'\u2198':'\u2192');
-  var slopeCol = tv.slope>0?PAL.longAccent:(tv.slope<0?PAL.shortAccent:PAL.sub);
-  var bottom;
-  if(st==='na'){
-    // warming up: no numbers (should be rare once continuous SMA / Issue C lands)
-    code='warming up'; col=PAL.sub;
-    bottom='<span style="font-size:11px;font-weight:700;color:'+PAL.sub+'">\u2013</span>';
-    slopeGlyph=''; 
-  } else {
-    bottom='<span style="font-weight:800;color:'+col+'">'+cntArrow+'</span>'+
-           '<span style="color:'+PAL.sub+';font-weight:700;font-variant-numeric:tabular-nums">'+cnt+'</span>';
-  }
-  var tip=('Trend: '+ (st==='na'?'warming up (need continuous SMA).':
-           (tv.up>=tv.dn?tv.up:tv.dn)+'/'+tv.win+' bars '+(upish?'above':(dnish?'below':'around'))+' SMA'+period+' (\u00b10.25 ATR band); '+
-           'SMA '+(tv.slope>0?'rising':(tv.slope<0?'falling':'flat'))+' (slope '+(tv.slope||0).toFixed(3)+'). '+
-           'Broken = dominance lost, opposite not yet confirmed.')).replace(/"/g,'');
-  var slopeHtml = slopeGlyph ? ('<span style="font-size:14px;font-weight:800;line-height:1;color:'+slopeCol+'">'+slopeGlyph+'</span>') : '';
-  return '<span title="'+tip+'" style="display:inline-flex;align-items:center;gap:7px;padding:3px 12px;height:34px;box-sizing:border-box;border:1.5px solid '+col+';border-radius:16px;background:'+PAL.card+'">'+
-    '<span style="display:inline-flex;flex-direction:column;align-items:center;line-height:1.05">'+
-      '<span style="font-weight:800;font-size:13px;letter-spacing:.3px;color:'+col+'">'+code+'</span>'+
-      '<span style="width:100%;height:1px;background:'+PAL.line+';margin:1px 0"></span>'+
-      '<span style="font-size:11px;display:inline-flex;gap:3px;align-items:center">'+bottom+'</span>'+
-    '</span>'+ slopeHtml +
-  '</span>';
-}
+
 
 
 function stashSlice(sym, j){
@@ -1543,7 +1507,11 @@ function expiryProfile(sym){
   }catch(e){ return null; }
 }
 // how many expirations carry this strike (null when the ladder is single-column)
-function nodeBreadth(sym, k){ try{ var p=expiryProfile(sym); if(!p) return null; var b=p.breadth[(+k).toFixed(2)]; return (b==null)?0:b; }catch(e){ return null; } }
+// (v11.98) A SECOND `nodeBreadth(sym, k)` USED TO LIVE HERE and it was DEAD — the later one-argument
+// declaration at ~L15938 wins for the whole file, and both call sites pass one argument. This is the
+// exact shape of the `ifNum` collision that shipped broken for nine releases: two declarations, the
+// later silently winning, the earlier reading like live code. `test_no_dupes.js` fails the build on a
+// new one; this was the last survivor.
 // ============================ (v11.8) THE LEVEL SET ============================
 // MenthorQ's vocabulary, computed from OUR OWN tape rather than scraped:
 //   CR0 / PS0  call resistance / put support, 0DTE only  — the front expiry column
@@ -1725,7 +1693,7 @@ window.__gptsDebug.levels=function(s){ try{ return gLevels(s||'SPY'); }catch(e){
 var IF_LS='gpts_if_cfg_v1', IF_DATA_LS='gpts_if_last_v1';
 var IF_CFG=(function(){ try{ var o=JSON.parse(localStorage.getItem(IF_LS)||'null'); if(o&&typeof o==='object') return o; }catch(e){}
   return { on:false, everyMin:5 }; })();
-function ifSave(){ try{ localStorage.setItem(IF_LS, JSON.stringify(IF_CFG)); }catch(e){} }
+
 var IF_STATE={ t:0, inflight:false, bySym:{}, err:null, lastTry:0, fails:0 };
 try{ var _ifL=JSON.parse(localStorage.getItem(IF_DATA_LS)||'null'); if(_ifL&&_ifL.bySym){ IF_STATE.bySym=_ifL.bySym; IF_STATE.t=_ifL.t||0; } }catch(e){}
 var IF_STALE_MS=20*60*1000;      // beyond this the numbers are labelled stale rather than shown as live
@@ -1833,16 +1801,7 @@ function ifLevels(sym){
              ageMs:age, stale:(age>IF_STALE_MS), suspect:d.suspect||null, err:IF_STATE.err||null };
   }catch(e){ return null; }
 }
-function ifTick(){
-  try{
-    if(!IF_CFG.on) return;
-    var every=Math.max(1,+IF_CFG.everyMin||5)*60000;
-    if(Date.now()-IF_STATE.lastTry < every) return;
-    var sym=(typeof activeSym==='function')?activeSym():'SPY';
-    if(sym!=='SPY' && sym!=='QQQ') sym='SPY';
-    ifFetch(sym);
-  }catch(e){}
-}
+
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.if=function(s){ return { cfg:IF_CFG, state:{t:IF_STATE.t,err:IF_STATE.err,fails:IF_STATE.fails}, read:ifLevels(s||'SPY') }; };
 window.__gptsDebug.ifFetch=function(s){ IF_STATE.fails=0; ifFetch(s||'SPY', function(p){ console.log('IF',p); }); return 'fetching'; };
@@ -4485,20 +4444,8 @@ var PAL={
   ink:'#e6edf3', sub:'#8b98a9', time:'#f3f6fa', amber:'#f2b45a', gold:'#e3c341', blue:'#4a90d9'
 };
 
-function tokenLabel(tok, dir){
-  if(tok==='TST') return 'PB';
-  if(tok==='CONF') return (dir==='long') ? 'Long' : 'Short';
-  return tok;
-}
-function stageEpoch(s, tok){
-  if(tok==='BO') return s.ts || s.boBar || null;
-  if(tok==='FT') return s.ftBar || null;
-  if(tok==='TST') return s.testBar || null;
-  if(tok==='CONF') return s.confBar || null;
-  if(tok==='GO') return s.goBar || null;
-  if(tok==='VOID') return s.voidBar || s.updated || null;
-  return null;
-}
+
+
 
 
 
@@ -4578,8 +4525,18 @@ function pipCopyStyles(doc){
       'border:0 !important;border-radius:0 !important;box-shadow:none !important;z-index:auto !important}'+
       '#gpts-body{cursor:default !important}'+
       // pinned to the WINDOW, not the panel, so it never scrolls out of reach as the panel grows
+      // ⚠⚠ (v11.97) THE GRIP WAS SITTING ON THE OS WINDOW-RESIZE CORNER.
+      // Measured live: grip at y=582 in a 598px window — a 16px box in the exact bottom-right corner.
+      // That is where the operating system's own window-resize handle lives, so the OS took the press
+      // and the page never saw a mousedown. A synthetic drag dispatched INTO the document worked
+      // perfectly (997 -> 1117px), which is what proves the handler was never the problem: the pointer
+      // simply never reached it.
+      // ⚠ Inset from BOTH edges, and make it bigger. A handle you cannot hit is the same as no handle,
+      // and this is the third attempt at this one bug — v11.93 unhid it, v11.95 pinned it here.
       '#gpts-grip{display:block !important;cursor:ns-resize !important;position:fixed !important;'+
-      'right:0 !important;bottom:0 !important;z-index:10 !important}';
+      'right:6px !important;bottom:22px !important;width:22px !important;height:22px !important;'+
+      'border-radius:4px !important;background:rgba(139,152,169,.22) !important;'+
+      'box-shadow:0 0 0 1px rgba(139,152,169,.35) !important;z-index:20 !important}';
     doc.head.appendChild(base);
   }catch(e){}
 }
@@ -5246,36 +5203,12 @@ function wireStepIcons(){
   }
 }
 
-function sectionHdr(text){
-  return '<div style="background:'+PAL.card+';color:'+PAL.ink+';font-size:9px;font-weight:800;'+
-    'letter-spacing:0.5px;padding:3px 9px;margin:4px 0 2px 0;border-left:3px solid '+PAL.blue+';'+
-    'border-radius:6px">'+text+'</div>';
-}
+
 // Section header with a right-aligned add-on (badges/pills) on the SAME row.
 // Optional `tip` adds a hover description for the whole section.
-function sectionHdrRight(text, rightHtml, tip){
-  var t = tip ? (' title="'+(''+tip).replace(/"/g,'')+'"') : '';
-  return '<div'+t+' style="background:'+PAL.card+';color:'+PAL.ink+';font-size:9px;font-weight:800;'+
-    'letter-spacing:0.5px;padding:3px 9px;margin:4px 0 2px 0;border-left:3px solid '+PAL.blue+';'+
-    'border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:6px">'+
-    '<span>'+text+'</span>'+
-    '<span style="display:flex;gap:5px;align-items:center;font-weight:700">'+(rightHtml||'')+'</span>'+
-  '</div>';
-}
-function symSignalsHdr(sym){
-  var tip='SIGNALS: breakout-pullback setups tracked per node. Columns are individual attempts (L=long/green, S=short/red), rows trace the lifecycle: BO (first close beyond the node) \u2192 FT (a later bar holds fully beyond it) \u2192 Void (time it failed, if it did). Newest setup is left-most.';
-  return '<div title="'+tip.replace(/"/g,'')+'" style="background:'+PAL.card+';color:'+PAL.ink+';font-size:9px;font-weight:800;'+
-    'letter-spacing:0.5px;padding:3px 9px;margin:4px 0 2px 0;border-left:3px solid '+PAL.blue+';'+
-    'border-radius:6px;display:flex;justify-content:space-between;align-items:center">'+
-    '<span title="BO = breakout-pullback setup tracker for '+sym+'.">BO</span>'+
-    '<span class="gpts-clr-sym" data-sym="'+sym+'" title="Erase tracked setups for '+sym+' only." '+
-    'style="cursor:pointer;color:'+PAL.amber+';font-weight:600;font-size:10px;padding:0 6px;border:1px solid '+PAL.line+';border-radius:20px">Clear</span>'+
-    '</div>';
-}
-function typeHdr(text){
-  return '<div style="color:'+PAL.sub+';font-size:10px;font-weight:700;letter-spacing:0.3px;'+
-    'padding:3px 4px;margin:2px 0 1px 0">'+text+'</div>';
-}
+
+
+
 function sep(){ return '<div style="border-top:1px solid '+PAL.line+';margin:6px 0"></div>'; }
 
 function segBtn(val, label, tip){
@@ -5520,41 +5453,12 @@ function wireConfig(){
 console.log('[GPTS] v'+GPTS_VERSION+' part4 loaded');
 
 
-function passesFilters(s){
-  if(CFG.boPb!==true) return false;
-  if(CFG.dir==='longs' && s.dir!=='long') return false;
-  if(CFG.dir==='shorts' && s.dir!=='short') return false;
-  if(CFG.ftReq){
-    var reached = s.tokens.indexOf('FT')>=0 || s.stage==='FT' || s.stage==='TST' || s.stage==='CONF' || s.stage==='GO';
-    if(!reached) return false;
-  }
-  return true;
-}
 
-function stageCellTip(stageName, dir, strike){
-  var m={
-    'BO':'BO (Breakout): first 3m close beyond '+fmtNum(strike)+' in the '+(dir==='long'?'long':'short')+' direction. Start of the setup.',
-    'FT':'FT (Follow-through): a later bar holds entirely beyond '+fmtNum(strike)+', OR two consecutive closes beyond it in the break direction with the 2nd close progressing past the 1st. Confirms the break stuck.',
-    'PB':'PB (Pullback): price wicked back to retest '+fmtNum(strike)+' after follow-through.',
-    'LONG':'Long confirm: a bullish bar closed in-direction off the retest of '+fmtNum(strike)+'.',
-    'SHORT':'Short confirm: a bearish bar closed in-direction off the retest of '+fmtNum(strike)+'.',
-    'GO':'Go: price broke the confirmation bar’s extreme in-direction — the structural trigger completed.',
-    'VOID':'Void: the setup failed — price closed back through '+fmtNum(strike)+' too many times, or a stage aged out. Time shown is when it voided.'
-  };
-  return (m[stageName]||stageName).replace(/"/g,'');
-}
-function kingCellTip(strike){
-  return ('%King for node '+fmtNum(strike)+': its GEX strength as a percent of the day’s King node. Range shows strength at breakout to current. NA means the node is off the current live map or had no reading.').replace(/"/g,'');
-}
-function strikeCellTip(dir, strike){
-  return ((dir==='long'?'Long':'Short')+' setup anchored at node '+fmtNum(strike)+'. Each column is one attempt; rows below trace its lifecycle in Central time.').replace(/"/g,'');
-}
-function setupStageEpochs(s){
-  var confRow = s.dir==='long' ? 'LONG' : 'SHORT';
-  var o={ BO:(s.ts||s.boBar||null), FT:(s.ftBar||null), PB:(s.testBar||null), GO:(s.goBar||null), VOID:(s.voidBar||null) };
-  o[confRow]=(s.confBar||null);
-  return o;
-}
+
+
+
+
+
 
 function trendStateInfo(){
   var v=trendVerdict('SPY');
@@ -7013,14 +6917,7 @@ function deflGrade(rate){
   return {g:'D', col:PAL.shortAccent};
 }
 
-function _deflChipHtml(t){
-  var map={amber:PAL.amber, blue:PAL.blue, teal:'#39c5cf', green:PAL.longAccent,
-           red:PAL.shortAccent, purple:'#bc8cff'};
-  var col=map[({ 'King':'amber','Gate':'blue','RRug':'teal','Rug':'teal','Pika':'purple',
-    'Barn':'purple','Flr':'green','Ceil':'red','BO\u00b7FT':'green','pullback':'amber',
-    'FBO':'red','deflect':'purple' })[t]] || PAL.sub;
-  return '<span style="font-size:9px;font-weight:700;padding:0 5px;border-radius:999px;border:1px solid '+col+';color:'+col+'">'+t+'</span>';
-}
+
 
 // The Deflection Signals section (rendered above the Node Map).
 // (v10.37) DEFLECTIONS strip: ONE-line header ("Deflections") + a horizontally
@@ -9851,24 +9748,7 @@ function legTagHtml(t, leg){
     ';opacity:'+(t.dim?'.55':'1')+';border:1px solid '+col+';border-radius:8px;padding:0 4px;white-space:nowrap">'+t.lab+'</span>';
 }
 // ⚑ the one-line banner for the bar a pullback node lands on.
-function legBannerHtml(sym){
-  // (v11.0.1) RETIRED from the face: the read carries the event (⚑ style + "rolled down from X")
-  // on the bar a pullback node lands. Kept returning '' for any caller.
-  return '';
-  try{
-    var leg=legEngine(sym||'SPY');
-    if(!leg || leg.event!=='pbDetected' || !leg.pbDetected) return '';
-    var dn=(leg.dir==='dn');
-    var col=dn?PAL.shortAccent:PAL.longAccent;
-    var pb=leg.pbDetected;
-    var txt='⚑ Pullback node formed '+fmtLvl(pb.k)+
-      (pb.rolledFrom!=null?(' — rolled '+(dn?'lower':'higher')+' from '+fmtLvl(pb.rolledFrom)):'')+
-      (leg.roll&&leg.roll.count>=2?(' · '+legStepWord(leg.roll.count)+' step'+(leg.roll.confirmed?' — confirmed':', signal')):'');
-    try{ fireAlert('pbNode', String(pb.k), col); }catch(eA){}
-    return '<div title="A meaningful node just APPEARED or GREW on the counter-move side inside the predicted pullback zone. Descriptive: this names the level, never an action." '+
-      'style="border-left:2px solid '+col+';background:rgba(240,97,109,.07);border-radius:0 6px 6px 0;padding:2px 7px;margin:0 0 4px;font-size:9.5px;font-weight:700;color:'+col+'">'+txt+'</div>';
-  }catch(e){ return ''; }
-}
+
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.leg=function(s){ return legEngine(s||activeSym()); };
 window.__gptsDebug.sessionRoll=function(s){ return sessionRoll(s||activeSym()); };
@@ -10954,11 +10834,7 @@ function nodeFlow(sym){
   return out;
 }
 // The words. Green "acm" / red "dec" (user-chosen), never arrows.
-function mapWord(state){
-  var col=state==='acm'?PAL.longAccent:((state==='dec'||state==='gone')?PAL.shortAccent:PAL.sub);
-  var w=state==='acm'?'acm':(state==='dec'?'dec':(state==='gone'?'gone':'holding'));
-  return '<span style="color:'+col+';font-weight:800">'+w+'</span>';
-}
+
 function mapChipHtml(state){
   // (v11.94) `!state` AND 'hold' RENDERED THE SAME CHIP, so an unreadable node claimed "no 15m change
   // beyond ±X% and near its session peak" - a measurement sentence with no measurement behind it.
@@ -10985,10 +10861,7 @@ function mapStateOf(sym, L){
     return n ? n.state : null;
   }catch(e){ return null; }
 }
-function mapSrcHtml(L){
-  if(!L || !L.derived) return '';
-  return '<span title="Which book is this from? '+(L.src||'SPXW')+' — the SPX weekly book converted at today\u2019s ratio; the diamond lanes on the chart. %King is relative to that book\u2019s own King." style="font-size:7.5px;font-weight:800;color:#a371f7;letter-spacing:.3px">'+(L.src||'SPXW')+'</span>';
-}
+
 // The Map line under the READ. Descriptive: what is bleeding, what is building, what it means.
 // (v11.0.1) THE STRUCTURE SENTENCE — one sentence per situation, in the user's words (2026-08-18):
 // "Ceiling rolling down from 7735 to 7730: 7735 Dec, 7730 Acm. Pullback node likely at 7730."
@@ -11076,16 +10949,7 @@ function mapSentence(sym, legR, trendConfirmed, opts){
 function mapLineText(sym, legR, trendConfirmed){
   try{ var m=mapSentence(sym, legR, trendConfirmed, {}); return { s:m.s, html:m.html, lean:m.lean, id:m.id }; }catch(e){ return { s:'', html:'', lean:'none' }; }
 }
-function mapLineHtml(sym, legR, trendConfirmed){
-  // (v11.0.1) the structure sentence is part of the ONE read now (readBlock44); this separate
-  // line is retired. Kept returning '' so nothing that still calls it can break.
-  return '';
-  try{
-    var m=mapLineText(sym, legR, trendConfirmed); if(!m.html) return '';
-    var tip=('What is the structure doing? Every meaningful node within '+PB_REACH+' strikes (SPY strikes and the SPXW-derived lanes) is read for accumulation: acm = %King up ≥'+MAP_ACM+'% over 15m; dec = down ≥'+(-MAP_DEC)+'% or ≥'+MAP_DROP+'% off its session peak; a node that drops out of the book counts as dissipated. A dec node with an acm neighbour on the same side = the ceiling/floor rolling; a dec node between acm nodes on both sides = the range widening; both sides rolling the same way = a structural lean. Always on, both sides, independent of the SMA — the SMA confirms, it does not gate. Descriptive, never an instruction.').replace(/"/g,'');
-    return '<div title="'+tip+'" style="font-size:9.5px;line-height:1.35;color:'+PAL.ink+';margin-top:3px;padding-top:3px;border-top:1px dashed '+PAL.line+';display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden"><b style="color:'+PAL.sub+'">Map:</b> '+m.html+'</div>';
-  }catch(e){ return ''; }
-}
+
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.map=function(s){ try{ return nodeFlow(s||'SPY'); }catch(e){ return String(e); } };
 var WATCH_N=4;   // rows under the in-play card
@@ -11452,6 +11316,14 @@ function biasConfirmRecord(sym){
                crossSame:(B.cross&&B.cross.ok)?B.cross.same:null,
                crossWhy:(B.cross&&!B.cross.ok)?(B.cross.why||null):null };
 }
+// ---- (v11.98) DEAD FUNCTIONS REMOVED ----------------------------------------------------------
+// 21 functions with no caller anywhere in the file, ~188 lines:
+//   _deflChipHtml, expSetSpecFor, ifSave, ifTick, kingCellTip, legBannerHtml, mapLineHtml, mapSrcHtml, mapWord, passesFilters, phaseClock, sectionHdr, sectionHdrRight, setupStageEpochs, stageCellTip, stageEpoch, strikeCellTip, symSignalsHdr, tokenLabel, trendBadgeHtml, typeHdr
+// ⚠ Callers were counted with strings and comments MASKED OUT. Counting prose as a call site has
+// fooled six assertions in this project, and it would fool a deletion just as easily — in the
+// other direction, where the cost is a live function removed rather than a test left red.
+// ⚠ The 17 functions carrying an explicit '(v11.0 audit) PARKED' marker were LEFT ALONE. They are
+// equally uncalled, but someone deliberately kept them and that decision is not mine to reverse.
 function registerCoreFeatures(){
   if(FEATURES.length) return FEATURES;
 
@@ -17361,16 +17233,7 @@ function sessionPhase(now){
     return out;
   }catch(e){ return { rth:false, label:'—', sub:'', pct:0, leftMin:null, expiry:false }; }
 }
-function phaseClock(P){
-  try{
-    if(!P||!P.ct) return '';
-    var h=P.ct.getHours(), m=P.ct.getMinutes();
-    var t=(h<10?'0':'')+h+':'+(m<10?'0':'')+m;
-    if(P.leftMin==null) return t;
-    var hh=Math.floor(P.leftMin/60), mm=P.leftMin%60;
-    return t+' · '+(hh?hh+'h ':'')+(mm<10?'0':'')+mm+'m left';
-  }catch(e){ return ''; }
-}
+
 
 // ---- regime is two-dimensional: GEX x VEX ----
 // We were reading gamma alone. -GEX with -VEX is the self-reinforcing cell: selloffs feed
@@ -17550,15 +17413,7 @@ function expSetRollCheck(sym){
     EXPSET_TRY[sym+'|week']=0; EXPSET_FAIL[sym+'|week']=0;
   }catch(e){}
 }
-function expSetSpecFor(sym, setName){
-  var spec=EXPSET_SPEC[setName];
-  try{
-    if(setName==='week' && EXPSET_ROLL[sym]){
-      return { exp_mode:'next_n', exp_count:EXPSET_ROLL[sym].count, nodes:'500' };
-    }
-  }catch(e){}
-  return spec;
-}
+
 function rollNote(sym){
   try{ var R=EXPSET_ROLL[sym]; if(!R) return null;
        return 'rolled to '+R.to.slice(5).replace('-','/'); }catch(e){ return null; }
@@ -17832,12 +17687,12 @@ function ensureV3Css(){
     // day's priced range, so the dot's position and the percentage beside it are the same fact and
     // cannot drift apart. Marks clamp at the rail rather than escaping it.
     '#gpts-body .g3emw{display:inline-flex;align-items:center;gap:6px;flex:1;min-width:210px}'+
-    '#gpts-body .g3emk{font-size:7.5px;font-weight:700;color:#6c7889;white-space:nowrap}'+
-    '#gpts-body .g3emt{position:relative;flex:1;height:13px;min-width:70px}'+
-    '#gpts-body .g3emr{position:absolute;left:0;right:0;top:5px;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}'+
-    '#gpts-body .g3emf{position:absolute;top:5px;height:4px;border-radius:2px;background:rgba(139,152,169,.6)}'+
+    ''/*dead:.g3emk*/+
+    ''/*dead:.g3emt*/+
+    ''/*dead:.g3emr*/+
+    ''/*dead:.g3emf*/+
     '#gpts-body .g3emf.g3over{background:rgba(240,97,109,.55)}'+
-    '#gpts-body .g3emo{position:absolute;top:1px;width:2px;height:12px;background:#c3ccd8;border-radius:1px;transform:translateX(-1px)}'+
+    ''/*dead:.g3emo*/+
     '#gpts-body .g3emg{position:absolute;top:0;width:0;height:0;border-left:3px solid transparent;'+
       'border-right:3px solid transparent;border-bottom:4px solid #e3c341;transform:translateX(-3px)}'+
     '#gpts-body .g3emn{position:absolute;top:2px;width:10px;height:10px;border-radius:50%;background:#fff;'+
@@ -17849,15 +17704,15 @@ function ensureV3Css(){
     '#gpts-body .g3emk{font-size:10.5px;font-weight:800;color:#e6edf3;line-height:1;white-space:nowrap}'+
     '#gpts-body .g3emk small{display:block;font-size:6px;font-weight:800;letter-spacing:.09em;color:#6c7889;margin-top:1px}'+
     // WHERE THE DAY HAS BEEN. Dim on purpose: it is context behind the live marks, never competing with them.
-    '#gpts-body .g3emx2{position:absolute;top:5px;height:4px;border-radius:2px;background:rgba(139,152,169,.22)}'+
-    '#gpts-body .g3emw2{position:absolute;top:2px;width:1px;height:10px;background:rgba(195,204,216,.65)}'+
+    ''/*dead:.g3emx2*/+
+    ''/*dead:.g3emw2*/+
     // T beats a triangle: it says what it is without a legend.
     '#gpts-body .g3emT{position:absolute;top:0;font-size:9px;font-weight:800;color:#e3c341;transform:translateX(-50%);'+
       'line-height:13px;text-shadow:0 0 3px #0b0e14,0 0 3px #0b0e14}'+
-    '#gpts-body .g3emT.out{color:#6c7889}'+
-    '#gpts-body .g3emn.g3str{background:#f2b45a}'+
-    '#gpts-body .g3emf.g3str{background:rgba(242,180,90,.5)}'+
-    '#gpts-body .g3f2 b.g3str{color:#f2b45a}'+
+    ''/*dead:.g3emT.out*/+
+    ''/*dead:.g3emn.g3str*/+
+    ''/*dead:.g3emf.g3str*/+
+    ''/*dead:.g3f2 b.g3str*/+
     '#gpts-body .g3shape{display:flex;align-items:center;flex-wrap:wrap;gap:5px;font-size:8px;color:#8b98a9;margin-top:3px;letter-spacing:.02em}'+
     '#gpts-body .g3pct{font-size:9.5px;font-weight:800;color:#e6edf3;letter-spacing:-.2px}'+
     '#gpts-body .g3shape b.g3str{color:#f0616d}'+
@@ -17866,7 +17721,7 @@ function ensureV3Css(){
     // measurement -> path -> which session, and never reflows the two that carry numbers.
     '#gpts-body .g3sbg{margin-left:auto;display:inline-flex;align-items:center;gap:4px}'+
     '#gpts-body .g3shape b{color:#e6edf3;font-weight:800}'+
-    '#gpts-body .g3shape b.warn{color:#f2b45a}'+
+    ''/*dead:.g3shape b.warn*/+
     '#gpts-body .g3shape .g3usd{color:#2ec27e;font-weight:800}'+
     // (v11.61) THREE TIERS THAT CANNOT COLLIDE: money above the rail, ticks and price on it, gamma piles
     // hanging below. A pile can never overlap a dollar label because they occupy different bands.
@@ -17897,6 +17752,10 @@ function ensureV3Css(){
   '#gpts-body .g3prole.acc{color:#a371f7}'+
   '#gpts-body .g3prole.brk{color:#e3c341}'+
   '#gpts-body .g3prole.bal{color:#8b98a9}'+
+  // (v11.99) where the expected move ended, when the rail has grown past it
+  '#gpts-body .g3embx{position:absolute;top:19px;width:1px;height:16px;background:#f2b45a;opacity:.85}'+
+  '#gpts-body .g3embl{position:absolute;top:8px;transform:translateX(-50%);font-size:6px;font-weight:800;'+
+  'color:#f2b45a;white-space:nowrap;letter-spacing:.04em}'+
     '#gpts-body .g3emt .g3pile{bottom:26px}'+
     '#gpts-body .g3plab{position:absolute;bottom:-1px;transform:translateX(-50%);font-size:6.5px;'+
       'font-weight:800;white-space:nowrap;cursor:help;line-height:7.5px;text-align:center}'+
@@ -17918,7 +17777,7 @@ function ensureV3Css(){
     '#gpts-body .g3emT{position:absolute;top:21px;font-size:9px;font-weight:800;color:#4fd1e0;'+
       'transform:translateX(-50%);line-height:12px;text-shadow:0 0 3px #0b0e14,0 0 3px #0b0e14}'+
     '#gpts-body .g3emT.out{color:#6c7889}'+
-    '#gpts-body .g3tgt{font-size:11px;font-weight:800;color:#4fd1e0;letter-spacing:-.2px}'+
+    ''/*dead:.g3tgt*/+
     // SKYLIT POLARITY: purple = put-dominant = negative gamma = accelerator. Yellow = call-dominant =
     // positive gamma = brake. Same convention as their heatmap, so the two never read as different things.
     '#gpts-body .g3pile{position:absolute;bottom:2px;transform:translateX(-50%);border-radius:1px}'+
@@ -18990,10 +18849,41 @@ function emRead(B, sym){
     // When the SPXW tape is unreadable we fall back to InsiderFinance's static book rather than draw
     // nothing — but the units and the meaning change with it (%King becomes $/pt, live positioning
     // becomes open interest), so the sentence says which book it is on.
+    // ---- (v11.99) WHAT IS COMING, EACH WAY ------------------------------------------------------
+    // The sentence named the ONE node in the direction of travel and said nothing about the other
+    // side. A trader at a level wants both: the next thing overhead and the next thing beneath, with
+    // the distance, because that is the shape of the decision — how much room to the first obstacle
+    // up, and how far the floor is if it goes the other way.
+    // ⚠ NAMES POLARITY, NOT A FORECAST. A positive-gamma node is a brake and a negative one is an
+    // accelerator; which of those helps you depends on which way you are going, and the line does not
+    // decide that for you. D-7 stands: mechanism, never a call.
+    try{
+      var up1=null, dn1=null;
+      for(var q=0;q<ps.length;q++){
+        var Q=ps[q]; if(typeof Q.disp!=='number') continue;
+        if(Q.disp>B.now+0.01){ if(!up1 || Q.disp<up1.disp) up1=Q; }
+        else if(Q.disp<B.now-0.01){ if(!dn1 || Q.disp>dn1.disp) dn1=Q; }
+      }
+      function sideTxt(P, word){
+        if(!P) return 'nothing '+word;
+        var kind=P.balanced ? 'balanced' : (P.accel ? 'accelerator' : 'brake');
+        // ⚠ THE TWO BOOKS SPEAK DIFFERENT UNITS. Skylit piles carry %King; the InsiderFinance fallback
+        // carries dollars of gamma and has NO `pct` — printing it produced "undefined% accelerator".
+        // Same split the pile hover already makes; never assume one vocabulary covers both.
+        var size = (typeof P.pct==='number') ? (P.pct+'% ')
+                 : ((typeof P.gexM==='number') ? (usdBig(P.gexM*1e6)+' ') : '');
+        return frameNum(P.disp)+' ('+size+kind+', '+frameNum(Math.abs(P.disp-B.now))+' away)';
+      }
+      out.next={ up:up1?{k:up1.k, disp:up1.disp, pct:up1.pct, accel:!!up1.accel}:null,
+                 dn:dn1?{k:dn1.k, disp:dn1.disp, pct:dn1.pct, accel:!!dn1.accel}:null };
+      if(up1 || dn1){
+        out.nextTxt=' Next up: '+sideTxt(up1,'above')+'. Next down: '+sideTxt(dn1,'below')+'.';
+      } else out.nextTxt='';
+    }catch(eNx){ out.nextTxt=''; }
     out.src=srcNow;
     var degNow=emPiles.lastDegraded||'';
     out.degraded=degNow;
-    out.txt = b + ((srcNow==='if-fallback') ? ' \u26a0 Skylit tape unreadable \u2014 these are InsiderFinance open-interest levels, not live positioning.' : '')
+    out.txt = b + (out.nextTxt||'') + ((srcNow==='if-fallback') ? ' \u26a0 Skylit tape unreadable \u2014 these are InsiderFinance open-interest levels, not live positioning.' : '')
                 + ((srcNow==='skylit' && degNow) ? ' \u26a0 '+degNow+'.' : '');
     out.ok=true;
   }catch(e){ out.why=String(e&&e.message||e); }
@@ -19029,10 +18919,45 @@ function emPath(B, sym, target){
   }catch(e){ out.why=String(e&&e.message||e); }
   return out;
 }
+// ⚠ emPos IS A MEASUREMENT AND IT STAYS CLAMPED. `pct` is recorded every bar as "how much of the
+// expected move is used", and a value that can exceed 100 would silently change what months of
+// recorded data mean. Do not "fix" the clamp here — the DRAWING problem is solved by emRailBounds
+// below, which is a separate coordinate space on purpose.
 function emPos(B, v){
   try{
     var span=B.high-B.low; if(!(span>0)) return 0;
     return Math.max(0, Math.min(1, (v-B.low)/span))*100;
+  }catch(e){ return 0; }
+}
+// ---- (v11.99) THE RAIL GROWS WHEN PRICE RUNS PAST A BOUNDARY ------------------------------------
+// Until now a price beyond the expected high pinned the dot at 100% and sat there. The band is a
+// PRICED level, not a barrier — running past it is a real and frequent event, and "how far past" is
+// exactly the thing an overextension read exists to show. Pinned at the rail it showed nothing.
+// The track rescales to hold price with a margin, and the ORIGINAL boundary becomes a marked line, so
+// the expected move stays visible as a level rather than being quietly redefined as the edge.
+var EM_RAIL_PAD = 0.25;    // ⚖ hand-set: a quarter of the band's own width beyond price
+function emRailBounds(B){
+  var out={ lo:B.low, hi:B.high, over:false, under:false, span:(B.high-B.low) };
+  try{
+    var span=B.high-B.low; if(!(span>0)) return out;
+    var pad=span*EM_RAIL_PAD;
+    // the EXTREMES matter, not just the dot: a day that ran past and came back should keep the
+    // evidence on the rail, or the rescale would flicker away the moment price stepped back inside.
+    var hiRef=Math.max(B.now, (B.hiWater!=null?B.hiWater:B.now));
+    var loRef=Math.min(B.now, (B.loWater!=null?B.loWater:B.now));
+    if(hiRef>B.high){ out.hi=hiRef+pad; out.over=true; }
+    if(loRef<B.low){  out.lo=loRef-pad; out.under=true; }
+    out.span=out.hi-out.lo;
+  }catch(e){}
+  return out;
+}
+// Position on the DRAWN rail. Identical to emPos while price is inside the band; only differs once a
+// boundary has been run, which is the whole point.
+function emPosRail(B, v, RB){
+  try{
+    RB=RB||emRailBounds(B);
+    var span=RB.hi-RB.lo; if(!(span>0)) return 0;
+    return Math.max(0, Math.min(1, (v-RB.lo)/span))*100;
   }catch(e){ return 0; }
 }
 // ---- (v11.58) THE FOUR REGIME CELLS, LISTED ------------------------------------------------------
@@ -19143,7 +19068,10 @@ function secFrame(sym){
     //   1 WHERE IS THE TARGET, and is it even reachable inside what today prices?
     //   2 HOW MUCH ROOM IS LEFT — not distance travelled, what REMAINS toward the rail ahead.
     //   3 COULD THIS TURN — because it is stretched, or because it has ALREADY turned once.
-    var str=!!EB.stretched, pOpen=emPos(EB,EB.open), pNow=emPos(EB,EB.now);
+    // (v11.99) RAIL SPACE FOR DRAWING. emPos stays the MEASUREMENT (clamped, recorded as `pct`);
+    // RB is the drawn track, which grows once a boundary has been run so "how far past" is visible.
+    var RB=emRailBounds(EB);
+    var str=!!EB.stretched, pOpen=emPosRail(EB,EB.open,RB), pNow=emPosRail(EB,EB.now,RB);
     var fa=Math.min(pOpen,pNow), fb=Math.max(pOpen,pNow);
     var gTxt2=(EB.gamma==null)?'gamma unknown'
              :(EB.gamma>0?'positive gamma — dealers hedge AGAINST the move, so range compresses and levels tend to hold'
@@ -19153,12 +19081,12 @@ function secFrame(sym){
     // Subrahmanyam, and every vendor guide that bothers to say so puts the conversion at x1.25. A row
     // labelled EM implies ~68% containment; this band delivers ~58%. The WIDTH IS UNCHANGED and every
     // level sits exactly where it did — only the claim has been corrected.
-    h+='<span class="g3emk"'+g3tip('Expected low — the open minus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.low/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(EB.low))+'<small>'+(EB.est?'~':'')+'EL'+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
+    h+='<span class="g3emk"'+g3tip('Expected low — the open minus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.low/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(RB.under?RB.lo:EB.low))+'<small>'+(EB.est?'~':'')+(RB.under?'RAIL':'EL')+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
     h+='<span class="g3emt">'+
        '<i class="g3emr"></i>'+
-       ((EB.hiWater!=null&&EB.loWater!=null)?('<i class="g3emx2" style="left:'+emPos(EB,EB.loWater).toFixed(1)+'%;width:'+Math.max(0,emPos(EB,EB.hiWater)-emPos(EB,EB.loWater)).toFixed(1)+'%"></i>'+
-         '<i class="g3emw2" style="left:'+emPos(EB,EB.loWater).toFixed(1)+'%"></i>'+
-         '<i class="g3emw2" style="left:'+emPos(EB,EB.hiWater).toFixed(1)+'%"></i>'):'')+
+       ((EB.hiWater!=null&&EB.loWater!=null)?('<i class="g3emx2" style="left:'+emPosRail(EB,EB.loWater,RB).toFixed(1)+'%;width:'+Math.max(0,emPosRail(EB,EB.hiWater,RB)-emPosRail(EB,EB.loWater,RB)).toFixed(1)+'%"></i>'+
+         '<i class="g3emw2" style="left:'+emPosRail(EB,EB.loWater,RB).toFixed(1)+'%"></i>'+
+         '<i class="g3emw2" style="left:'+emPosRail(EB,EB.hiWater,RB).toFixed(1)+'%"></i>'):'')+
        '<i class="g3emf'+(str?' g3str':'')+'" style="left:'+fa.toFixed(1)+'%;width:'+Math.max(0,fb-fa).toFixed(1)+'%"></i>'+
        // (v11.64) USED AND REMAINING, BOTH SIDES, ON THE RAIL. Each side of the anchor holds one full
        // expected move of budget, split by how far the day actually got that way. Defined by the
@@ -19166,7 +19094,7 @@ function secFrame(sym){
        // prints — a retrace does not hand budget back, because the day has already spent that range.
        (function(){
          if(!EB.mult || EB.hiWater==null || EB.loWater==null) return '';
-         var pLo=emPos(EB,EB.loWater), pHi=emPos(EB,EB.hiWater), pOp=emPos(EB,EB.open), t='';
+         var pLo=emPosRail(EB,EB.loWater,RB), pHi=emPosRail(EB,EB.hiWater,RB), pOp=emPosRail(EB,EB.open,RB), t='';
          function seg(a,b,val,cls,tip){
            if(val==null || Math.abs(b-a)<9) return '';        // too narrow to hold a label
            return '<span class="g3seg '+cls+'" style="left:'+((a+b)/2).toFixed(1)+'%"'+g3tip(tip)+'>'+usd(val)+'</span>';
@@ -19179,9 +19107,16 @@ function secFrame(sym){
          return t;
        })()+
        '<i class="g3emo" style="left:'+pOpen.toFixed(1)+'%"></i>'+
+       // (v11.99) where the expected move ACTUALLY ended, once the rail has grown beyond it. Without
+       // this the rescale would quietly redefine the rail END as the expected move, which is the one
+       // thing the band must never be allowed to become.
+       (RB.over ? ('<i class="g3embx" style="left:'+emPosRail(EB,EB.high,RB).toFixed(1)+'%"'+g3tip('The expected high. Price has run PAST it — the rail was widened to hold price, so this line is where the expected move ended, not where the rail does.')+'></i>'+
+                   '<span class="g3embl" style="left:'+emPosRail(EB,EB.high,RB).toFixed(1)+'%">EH '+g3esc(frameNum(EB.high))+'</span>') : '')+
+       (RB.under ? ('<i class="g3embx" style="left:'+emPosRail(EB,EB.low,RB).toFixed(1)+'%"'+g3tip('The expected low. Price has run PAST it — the rail was widened to hold price, so this line is where the expected move ended, not where the rail does.')+'></i>'+
+                   '<span class="g3embl" style="left:'+emPosRail(EB,EB.low,RB).toFixed(1)+'%">EL '+g3esc(frameNum(EB.low))+'</span>') : '')+
        // (v11.75) SAME COLOUR TEST AS THE CHIP ON ROW 1. Two marks for one level that disagreed about
        // its colour was worse than either colour alone.
-       (ifMagEarly!=null?('<span class="g3emT'+((ifMagEarly<EB.low||ifMagEarly>EB.high)?' out':'')+((ifMagEarly>EB.now)?' up':' dn')+'" style="left:'+emPos(EB,ifMagEarly).toFixed(1)+'%">T</span>'):'')+
+       (ifMagEarly!=null?('<span class="g3emT'+((ifMagEarly<EB.low||ifMagEarly>EB.high)?' out':'')+((ifMagEarly>EB.now)?' up':' dn')+'" style="left:'+emPosRail(EB,ifMagEarly,RB).toFixed(1)+'%">T</span>'):'')+
        '<i class="g3emn'+(str?' g3str':'')+'" style="left:'+pNow.toFixed(1)+'%"></i>'+
        // (v11.61) gamma piles hang BELOW the rail — the fuel and the friction between price and the rails
        (function(){
@@ -19224,7 +19159,7 @@ function secFrame(sym){
                     ' From the '+gexWindowNote(P.window)+
                     ' \u26a0 InsiderFinance FALLBACK \u2014 the Skylit tape could not be read.';
            }
-           h2+='<i class="g3pile '+pcls+'" style="left:'+P.pos.toFixed(1)+'%;width:'+w+'px;height:'+hgt+'px"'+g3tip(tip)+'></i>';
+           h2+='<i class="g3pile '+pcls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%;width:'+w+'px;height:'+hgt+'px"'+g3tip(tip)+'></i>';
            // (v11.79) THE LABEL THE USER ASKED FOR, TWICE, AND I MOCKED TWICE WITHOUT BUILDING:
            // ES price on top (the number they trade), SPXW strike and the node's role beneath it.
            // (v11.81) ROLE beats polarity on the label. A King is still an accelerator; the hover keeps
@@ -19239,16 +19174,16 @@ function secFrame(sym){
              // either. A role within ~6% of an end right-aligns inward, the same rule the labels use,
              // so it stays over its own node instead of being pulled off it.
              var rEdge = (P.pos>94) ? ';transform:translateX(-100%)' : ((P.pos<6) ? ';transform:translateX(0)' : '');
-             h2+='<span class="g3prole '+pcls+'" style="left:'+P.pos.toFixed(1)+'%'+rEdge+'"'+g3tip(tip)+'>'+
+             h2+='<span class="g3prole '+pcls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%'+rEdge+'"'+g3tip(tip)+'>'+
                  g3esc(role)+'</span>';
-             h2+='<span class="g3plab '+pcls+'" style="left:'+P.pos.toFixed(1)+'%"'+g3tip(tip)+'>'+
+             h2+='<span class="g3plab '+pcls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%"'+g3tip(tip)+'>'+
                  frameNum(P.disp)+'<i>'+P.k+'</i></span>';
            }
          }
          return h2;
        })()+
        '</span>';
-    h+='<span class="g3emk"'+g3tip('Expected high — the open plus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.high/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a ceiling.')+'>'+g3esc(frameNum(EB.high))+'<small>'+(EB.est?'~':'')+'EH'+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
+    h+='<span class="g3emk"'+g3tip('Expected high — the open plus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.high/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a ceiling.')+'>'+g3esc(frameNum(RB.over?RB.hi:EB.high))+'<small>'+(EB.est?'~':'')+(RB.over?'RAIL':'EH')+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
     h+='</span>';
   } else {
     h+='<span class="g3emx"'+g3tip('Where can today go? The band needs an opening bar and a two-sided at-the-money straddle in today\'s expiry. A one-sided straddle is not a straddle and half a band would be worse than none, so it says why instead of drawing something.')+'>'+g3esc(EB.why)+'</span>';

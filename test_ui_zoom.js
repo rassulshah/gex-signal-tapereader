@@ -63,8 +63,16 @@ ok(/#gpts-grip\{display:block !important;cursor:ns-resize !important/.test(src),
 // sits at the panel's bottom-right, so as soon as the panel grew past the window the HANDLE left the
 // viewport and the drag simply stopped with no message. Unhiding it was not enough; it has to stay
 // reachable, and the ceiling has to be the window rather than an arbitrary 2000.
-ok(/position:fixed !important;'\+\s*'right:0 !important;bottom:0 !important/.test(src),
-   'the pop-out grip is pinned to the window so it never scrolls out of reach');
+ok(/position:fixed !important;'\+\s*'right:6px !important;bottom:22px !important/.test(src),
+   'the pop-out grip is pinned to the window AND INSET from the corner');
+// ⚠ (v11.97) THE INSET IS THE WHOLE FIX. At right:0/bottom:0 the 16px grip sat exactly on the OS
+// window-resize corner, so the operating system took the press and the page never saw a mousedown —
+// while a synthetic drag dispatched into the document resized the panel perfectly. A handle the
+// pointer cannot reach is the same as no handle.
+ok(!/right:0 !important;bottom:0 !important/.test(src),
+   'and is NOT flush to the corner, where the OS resize handle lives');
+ok(/width:22px !important;height:22px !important/.test(src),
+   'and is big enough to hit');
 // (v11.96) THE CEILING IS NOT THE WINDOW. Capping the panel at the window height is exactly what
 // "I still cannot increase the height" was: the pop-out body already scrolls, so a panel TALLER than
 // its window is the normal case. v11.95 capped it at innerHeight-8 = 590 against a panel already at

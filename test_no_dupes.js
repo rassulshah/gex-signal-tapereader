@@ -20,7 +20,13 @@ const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.l
   const names={}; const re=/^function\s+([A-Za-z_$][\w$]*)\s*\(/gm; let m;
   while((m=re.exec(src))!==null){ names[m[1]]=(names[m[1]]||0)+1; }
   const dupes=Object.keys(names).filter(n=>names[n]>1).sort();
-  const known = (f[0]==='./v10.js') ? ['nodeBreadth','trendBadgeHtml'] : [];
+  // (v11.98) THE LIST IS EMPTY NOW, AND IT SHOULD STAY EMPTY.
+  // `nodeBreadth` was declared twice — the later one-argument version won for the whole file and the
+  // earlier two-argument one was unreachable. That is the exact shape of the `ifNum` collision that
+  // shipped broken for nine releases. `trendBadgeHtml` was declared twice with no caller on either.
+  // ⚠ A name appearing here is not a style problem: it is a function that looks live, reads live, and
+  // never runs — while its twin silently answers every call.
+  const known = [];
   const fresh = dupes.filter(n=>known.indexOf(n)<0);
   ok(fresh.length===0, 'no NEW duplicate function name in '+f[1], fresh);
   ok(JSON.stringify(dupes)===JSON.stringify(known),
