@@ -23,6 +23,35 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
   ok(!/d5\s*[:=]\s*[^,]*[-+]\s*prev/.test(noc(vh)) && !/computeDelta|deriveDelta/.test(noc(vh)),
      'and computes NO delta of its own');
 }
+// ---------- THE HARVEST OWES THE FEED NOTHING ----------
+// ⚠⚠ v13.1 called velHarvest() inside `if(haveFeed){` — the network-feed branch — directly beneath a
+// comment saying it must run regardless. It reads the DOM. With the market closed it never ran ONCE:
+// VEL_META sat at ts:0 while Skylit's ladder was on screen. The comment made the mistake look considered.
+{
+  ok(/function velStart\(/.test(src), 'the harvest has its own starter');
+  ok(/setInterval\(function\(\)\{ try\{ velHarvest\(\); \}catch\(e\)\{\} \}, VEL_MS\)/.test(src),
+     'driven by its own timer, not by a feed tick');
+  ok(/velStart\(\); \}catch\(eVS\)/.test(ex('buildPanel')), 'started when the panel is built');
+  // --- INVERTED: it must NEVER be reachable only through the feed path again ---
+  // ⚠ STRIP COMMENTS FIRST. The comment explaining this very removal contains both `if(haveFeed){`
+  // and `velHarvest()`, so a raw slice finds the string it is checking is gone — the removal-comment
+  // trap, which has now bitten this project seven times.
+  const code=noc(src);
+  const fi=code.indexOf('if(haveFeed){');
+  const feedPath=(fi>-1)?code.slice(fi, fi+2200):'';
+  ok(fi>-1 && !/velHarvest\(\)/.test(feedPath),
+     'and is NOT called from inside the haveFeed branch (INVERTED v13.3)');
+  ok(/try\{ velHarvest\(\); \}catch\(e2\)\{\}/.test(src),
+     'plus one immediate call, so the first render is not blank for a whole interval');
+}
+// ---------- AN EMPTY LIST SAYS WHICH EMPTY IT IS ----------
+{
+  const sl=ex('secLoc');
+  ok(/no expected-move anchor/.test(sl),
+     'an unanchored band is reported as OUR limitation, not as "no nodes in range"');
+  ok(/rate of change is unreadable/.test(sl), 'and an unreadable velocity is its own message');
+  ok(/none in range/.test(sl), 'while a genuinely empty market still says so');
+}
 // ---------- STALENESS IS REPORTED, NEVER HIDDEN ----------
 {
   const va=ex('velAt');

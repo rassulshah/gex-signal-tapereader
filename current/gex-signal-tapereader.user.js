@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    13.2
+// @version    13.3
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='13.2';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='13.3';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -2805,6 +2805,22 @@ function velAt(k){
 }
 function velOk(){ return !!(VEL_META && VEL_META.ok && VEL_META.n>0); }
 
+// ⚠⚠ (v13.3) THE HARVEST RUNS ON ITS OWN CLOCK, AND v13.1 GOT THIS WRONG.
+// v13.1 called velHarvest() inside `if(haveFeed){ ... }` — the NETWORK FEED branch — directly beneath
+// a comment of mine saying it "must run whether or not the panel renders". It reads the DOM. It has no
+// dependency on our feed at all. With the market closed and no feed arriving, it never ran once:
+// VEL_META sat at `ts:0, why:'not yet harvested'` while Skylit's ladder was on screen the whole time.
+// Writing the right requirement in a comment and then wiring the call to the wrong place is its own
+// failure mode — the comment made it LOOK considered.
+var VEL_MS = 3000;
+function velStart(){
+  try{
+    if(window.__gptsVelTimer) return;
+    window.__gptsVelTimer = setInterval(function(){ try{ velHarvest(); }catch(e){} }, VEL_MS);
+    try{ velHarvest(); }catch(e2){}          // and once immediately, so the first render has data
+  }catch(e){}
+}
+
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.vel      = function(k){ return (k==null)?VEL_META:velAt(+k); };
 window.__gptsDebug.velAll   = function(){ return VEL; };
@@ -5015,6 +5031,7 @@ function buildPanel(){
   PANEL.appendChild(grip);
 
   document.body.appendChild(PANEL);
+  try{ velStart(); }catch(eVS){}   // (v13.3) independent of the feed, by design
   restorePos();
   restoreSize();
   zoomLoad(); zoomApply();
@@ -20521,7 +20538,16 @@ function secLoc(sym){
       var vd=null; try{ vd=nodesVerdict(TN, ROLLS, BIAS); }catch(eV){}
       if(vd) h+='<div class="g3ndverd">'+vd+'</div>';
     } else {
-      h+='<div class="g3rx"'+g3tip('No node is within reach and above the strength floor, so there is nothing to trade off yet — whatever the levels above are doing. Levels are context; the trade is at a node.')+'><em>NODES</em><span>none in range — levels are context only</span></div>';
+      // ⚠ SAY WHICH EMPTY THIS IS. "none in range" is a claim about the market; an unanchored band is a
+      // claim about US. Printing the first when the second is true sends the trader looking for nodes
+      // that were never computed.
+      var whyEmpty='none in range \u2014 levels are context only';
+      try{
+        var EBc=emBand(sym);
+        if(!EBc || !EBc.ok) whyEmpty='no expected-move anchor \u2014 the rail and this list both need it';
+        else if(!velOk()) whyEmpty='nodes drawn, but Skylit\'s rate of change is unreadable';
+      }catch(eWE){}
+      h+='<div class="g3rx"'+g3tip('Why is there nothing here? Either no node is within reach and above the strength floor — in which case levels are context only and there is no trade — or the expected-move band has no anchor yet, which happens before the first session data arrives. Those are different situations and this says which one it is.')+'><em>NODES</em><span>'+g3esc(whyEmpty)+'</span></div>';
     }
   }catch(eTN){ swallow("secLoc.nodes", eTN); }
   h+='<div class="g3rx" style="margin-top:3px"'+g3tip('Which book, which window, and how old? The expiration set these levels were computed from, the strike count behind them, and the age of the fetch. A stale set is refused outright rather than shown.')+'><em>SET</em><span'+g3tip('Which book, which window, how many strikes, and how old. The basis used to put their '+L.srcSym+' levels on this chart is '+L.dispScale+', computed from their own spot against the live futures price.')+'>'+g3esc(bits.join(' · '))+'</span></div>';
@@ -21119,10 +21145,6 @@ function refreshSym(sym){
       sampleTapeHistory(sym);
       updateTaps(sym);   // (v10.33) advance per-node tap counters for lifecycle
       if(sym===activeSym()) try{ trackSpxwNodes(); }catch(eSX){}   // (v11.84) SPX nodes ride the same cadence
-      // (v13.1) harvest Skylit's own velocity props on the same cadence. Cheap, and it must run
-      // whether or not the panel renders, because a node that scrolls out of their ladder unmounts
-      // and we want the last value we ever saw, timestamped.
-      if(sym===activeSym()) try{ velHarvest(); }catch(eVH){}
       LAST_OK[sym]=Date.now();
       runMachine(sym);
       return;
