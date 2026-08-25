@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    13.7
+// @version    13.8
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -564,7 +564,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='13.7';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='13.8';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -18578,12 +18578,20 @@ function ensureV3Css(){
     // ⚠ (v13.6) THE SUB-LINE IS WHITE, matching the rail where the strike beneath each node is white
     // against the coloured price. Grey read as disabled text for the one row carrying the strike, the
     // role and the size.
-    '#gpts-body .g3ndr2{display:flex;align-items:center;gap:5px;margin-top:1px;padding-left:14px;flex-wrap:wrap}'+
+    // ⚠ (v13.8) r2 SHARES r1's GRID so the roll badge lands under the 5m column it explains.
+    // As a flex row it drifted with the width of the text beside it and lined up with nothing.
+    '#gpts-body .g3ndr2{display:grid;grid-template-columns:11px 1fr 40px 44px 44px 44px 50px;gap:3px;'+
+      'align-items:center;margin-top:1px}'+
+    '#gpts-body .g3ndsub .g3ndchip{margin-left:3px}'+
+    '#gpts-body .g3ndrc{text-align:right}'+
     '#gpts-body .g3ndsub{font-size:7.5px;color:#c9d4e2;font-weight:700;letter-spacing:.02em}'+
     '#gpts-body .g3ndsub i{font-style:normal;color:#f2b45a}'+
     '#gpts-body .g3ndage{color:#f2b45a}'+
     // badges share the sub-line rather than owning a third row — one line saved per node
     '#gpts-body .g3ndchips{display:flex;gap:3px;flex-wrap:wrap;margin-left:auto}'+
+    // the roll connector: each row draws its own segment, so rows of different heights still join
+    '#gpts-body .g3ndrow{position:relative}'+
+    '#gpts-body .g3ndgut{position:absolute;width:0;pointer-events:none}'+
     // roll direction, at the LEFT of the values where the eye starts
     '#gpts-body .g3ndmkc{text-align:center}'+
     '#gpts-body .g3ndarr{font-size:10px;font-weight:800;line-height:1}'+
@@ -20926,6 +20934,38 @@ function secLoc(sym){
       // A cap here silently reintroduces it; if the list ever needs limiting, the RAIL must limit too.
       var pxNow=null; try{ var Bp=emBand(sym); pxNow=(Bp&&Bp.ok)?Bp.now:null; }catch(ePx){}
       var esShown=false;
+      // ⚠ (v13.8) THE CONNECTOR IS DRAWN PER ROW, NOT AS ONE ABSOLUTE SHAPE.
+      // Rows are different heights — badges wrap, some carry an age marker — so a single absolutely
+      // positioned arrow computed from row indices would drift the moment a row grew. Each row draws
+      // its own segment of the line instead, and the pieces join because they are neighbours.
+      var idxOf={}; TN.forEach(function(n,i){ idxOf[n.k]=i; });
+      var gut={};                       // row index -> {piece, col, dir}
+      (ROLLS||[]).slice(0,3).forEach(function(r, ri){
+        var a=idxOf[r.from], b=idxOf[r.to];
+        if(a==null || b==null || a===b) return;
+        var col=(r.dir==='up')?'#7cc7ff':'#e0645f';
+        var lo=Math.min(a,b), hi=Math.max(a,b);
+        var goingDown=(b>a);            // destination is FURTHER DOWN the list (a lower price)
+        for(var i=lo;i<=hi;i++){
+          if(gut[i]) continue;          // one connector per row keeps the gutter readable
+          var piece = (i===a) ? 'tail' : ((i===b) ? 'head' : 'mid');
+          gut[i]={ piece:piece, col:col, down:goingDown, lane:ri };
+        }
+      });
+      function gutHtml(i){
+        var g=gut[i]; if(!g) return '';
+        var c=g.col, left=(2+g.lane*3)+'px';
+        // tail starts at the row centre and runs toward the destination; head arrives at the centre
+        var box, tri='';
+        if(g.piece==='mid') box='top:0;bottom:0';
+        else if(g.piece==='tail') box = g.down ? 'top:50%;bottom:0' : 'top:0;bottom:50%';
+        else { box = g.down ? 'top:0;height:50%' : 'top:50%;bottom:0';
+               tri='<i style="position:absolute;left:'+left+';'+(g.down?'top:50%':'bottom:50%')+
+                   ';transform:translate(-50%,'+(g.down?'-100%':'100%')+');width:0;height:0;'+
+                   'border-left:3px solid transparent;border-right:3px solid transparent;'+
+                   (g.down?('border-top:4px solid '+c):('border-bottom:4px solid '+c))+'"></i>'; }
+        return '<i class="g3ndgut" style="left:'+left+';'+box+';border-left:1.5px solid '+c+'"></i>'+tri;
+      }
       TN.forEach(function(n){
         // (v13.6) THE ES PRICE SITS IN THE LADDER WHERE IT BELONGS, between the nodes above and below.
         if(!esShown && pxNow!=null && n.es<pxNow){
@@ -20943,12 +20983,14 @@ function secLoc(sym){
         var rf=rollFrom(n.k), ri=rollInto(n.k);
         var arrow = rf ? ('<span class="g3ndarr '+(rf.dir==='up'?'g3up':'g3dn')+'">'+(rf.dir==='up'?'\u2191':'\u2193')+'</span>')
                        : (ri ? '<span class="g3ndarr g3recvArr">\u21e2</span>' : (isPB?'<span class="g3ndmk">\u25b6</span>':''));
+        var rowIdx=idxOf[n.k];
         h+='<div class="g3ndrow'+(isPB?' g3ndwatch':'')+'"'+g3tip(
              'Is this a place to trade? '+Math.round(n.pct)+'% of the King node. The same list the rail draws \u2014 Skylit\'s SPXW nodes at ES prices, coloured by role. '+
              'SPXW strike '+n.k+' shown at '+esTick(n.es)+'. Percentages are Skylit\'s own published rate of change; in dollars: '+
              '5m '+velD(v.d5).txt+' \u00b7 15m '+velD(v.d15).txt+' \u00b7 60m '+velD(v.d60).txt+' \u00b7 day '+velD(v.d1d).txt+
              (n.velStale?' \u2014 AGED: this node is not currently rendered in their ladder, so these are the last values seen':'')+
              (isPB?'. The pullback engine has selected this one, so it is what EXECUTE is armed against.':'')) + '>';
+        h+= gutHtml(rowIdx);
         h+= '<div class="g3ndr1">'+
               '<span class="g3ndmkc">'+arrow+'</span>'+
               '<span class="g3ndpx" style="color:'+col+'">'+esTick(n.es)+'</span>'+
@@ -20961,14 +21003,23 @@ function secLoc(sym){
         var sizeTxt=(typeof v.cur==='number')?usdBig(Math.abs(v.cur)):null;
         // ⚠ (v13.6) BADGES SHARE THE SUB-LINE instead of owning a third row, and the sub-line is WHITE
         // to match the rail, where the strike beneath each node is white against the coloured price.
-        var chipsHtml='';
-        if(chip) chipsHtml+='<span class="g3ndchip '+chip.cls+'">'+chip.txt+'</span>';
-        if(rf)   chipsHtml+='<span class="g3ndchip g3cRoll">\u2192 '+(rf.dir==='up'?'up':'dn')+' '+esTick(rf.to*(ifDispScale()||1))+'</span>';
-        if(ri)   chipsHtml+='<span class="g3ndchip g3cRoll">receives'+(ri>1?(' \u00d7'+ri):'')+'</span>';
-        h+= '<div class="g3ndr2"><span class="g3ndsub">'+n.k+(n.role?(' \u00b7 '+g3esc(n.role)):'')+(n.isKing?' \u00b7 King':'')+
-            (sizeTxt?(' \u00b7 '+sizeTxt):'')+' \u00b7 '+((n.dist>0?'+':'')+esTick(n.dist))+
-            (n.velStale?' \u00b7 <i class="g3ndage">aged '+Math.round((n.velAge||0)/1000)+'s</i>':'')+
-            '</span>'+(chipsHtml?('<span class="g3ndchips">'+chipsHtml+'</span>'):'')+'</div>';
+        // ⚠ (v13.8) THE ROLL BADGE SITS UNDER THE 5m COLUMN, DELIBERATELY. A roll is the most likely
+        // EXPLANATION for a sharp recent change, so it belongs directly beneath the number it explains
+        // — not pushed to the right margin where the eye has to travel back to connect them.
+        var rollChip='';
+        if(rf) rollChip='<span class="g3ndchip g3cRoll">\u2192 '+(rf.dir==='up'?'up':'dn')+' '+esTick(rf.to*(ifDispScale()||1))+'</span>';
+        else if(ri) rollChip='<span class="g3ndchip g3cRoll">\u21e2 in'+(ri>1?(' \u00d7'+ri):'')+'</span>';
+        h+= '<div class="g3ndr2">'+
+              '<span></span>'+
+              '<span class="g3ndsub">'+n.k+(n.role?(' \u00b7 '+g3esc(n.role)):'')+(n.isKing?' \u00b7 King':'')+
+                (sizeTxt?(' \u00b7 '+sizeTxt):'')+' \u00b7 '+((n.dist>0?'+':'')+esTick(n.dist))+
+                (n.velStale?' \u00b7 <i class="g3ndage">aged '+Math.round((n.velAge||0)/1000)+'s</i>':'')+
+                (chip?(' <span class="g3ndchip '+chip.cls+'">'+chip.txt+'</span>'):'')+
+              '</span>'+
+              '<span></span>'+
+              '<span class="g3ndrc">'+rollChip+'</span>'+
+              '<span></span><span></span><span></span>'+
+            '</div>';
         h+='</div>';
       });
       if(!esShown && pxNow!=null){

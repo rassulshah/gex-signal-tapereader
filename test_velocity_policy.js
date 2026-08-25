@@ -225,4 +225,30 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
   ok(/g3ndbiasTop\{[^}]*color:#e0645f/.test(src), 'and rendered red');
 }
 
+
+
+// ---------- (v13.8) THE ROLL IS SHOWN AS A CAUSE, NOT A LABEL ----------
+{
+  const sl=ex('secLoc');
+  // a connector from the source ROW to the destination ROW
+  ok(/var gut=\{\}/.test(sl) && /function gutHtml/.test(sl), 'a row-to-row connector is built');
+  ok(/piece = \(i===a\) \? 'tail' : \(\(i===b\) \? 'head' : 'mid'\)/.test(sl),
+     'source draws the tail, destination the head, rows between the line');
+  // ⚠ per-row segments, NOT one absolute shape computed from indices
+  ok(/Rows are different heights/.test(sl),
+     'and the reason it is per-row is recorded — badges wrap, so index maths would drift');
+  ok(/h\+= gutHtml\(rowIdx\);/.test(sl), 'every row emits its own segment');
+  ok(/border-top:4px solid '\+c|border-bottom:4px solid '\+c/.test(sl), 'the destination gets an arrowhead');
+  ok(/g3ndrow\{position:relative\}/.test(src), 'rows are the positioning context for it');
+
+  // the badge sits under the number it explains
+  ok(/g3ndr2\{display:grid;grid-template-columns:11px 1fr 40px 44px 44px 44px 50px/.test(src),
+     'r2 shares r1’s grid, so a badge can align to a column');
+  ok(/'<span class="g3ndrc">'\+rollChip\+'<\/span>'/.test(sl), 'the roll badge occupies the 5m cell');
+  ok(/belongs directly beneath the number it explains/.test(sl),
+     'and the reason is recorded — a roll EXPLAINS a sharp recent change');
+  // ⚠ INVERTED: it must not drift back to the right margin
+  ok(!/if\(rf\)\s+chipsHtml\+=/.test(noc(sl)), 'the roll badge is no longer pushed to the right margin');
+}
+
 console.log('\n'+pass+' pass / '+fail+' fail');
