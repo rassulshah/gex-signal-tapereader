@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.0
+// @version    14.2
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -564,7 +564,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.0';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.2';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -2972,22 +2972,28 @@ function rollLatched(sym){
 // rows are [k, cur, d5, d15, d60, d1d], biggest-first, top 40) — so an install mid-session still
 // knows the morning's high-water marks for every strike that ever mattered.
 var PEAK_KEY='gpts_peak_v1';
-var PEAK={ day:null, bar:0, m:{} };
+var PEAK_SCHEMA=2;   // v1 stores predate the expiry filter and are POLLUTED — discarded, re-seeded
+var PEAK={ v:PEAK_SCHEMA, day:null, bar:0, m:{} };
 function peakSave(){ try{ localStorage.setItem(PEAK_KEY, JSON.stringify(PEAK)); }catch(e){} }
 function peakLoad(){
   var today=null; try{ today=ctTodayStr(); }catch(e0){}
   try{ var s=JSON.parse(localStorage.getItem(PEAK_KEY)||'null');
-       if(s && s.m && s.day===today) PEAK=s; }catch(e){}
-  if(PEAK.day!==today) PEAK={ day:today, bar:0, m:{} };
-  // seed from today's recorded bars — max wins, whichever store saw more of the day
+       if(s && s.m && s.day===today && s.v===PEAK_SCHEMA) PEAK=s; }catch(e){}
+  if(PEAK.day!==today || PEAK.v!==PEAK_SCHEMA) PEAK={ v:PEAK_SCHEMA, day:today, bar:0, m:{} };
+  // seed from today's recorded bars — max wins, whichever store saw more of the day.
+  // ⚠ vend rows carry no expiry field, and recorded days may hold cross-book rows (SPY 765 at
+  // $900M beside SPXW 7665). The books sit a DECADE apart, so keep only strikes in the top one:
+  // >= half the largest strike recorded. Self-scaling — no hard-coded index level.
   try{
     var db=recorderLoad(); var d=db&&db.days&&db.days[today];
     var snaps=(d&&d.snaps&&d.snaps.SPY)||[];
-    for(var i=0;i<snaps.length;i++){
-      var vd=snaps[i]&&snaps[i].vend; var rows=(vd&&vd.rows)||[];
-      for(var j=0;j<rows.length;j++){
+    var kMax=0, i, j, rows, vd;
+    for(i=0;i<snaps.length;i++){ vd=snaps[i]&&snaps[i].vend; rows=(vd&&vd.rows)||[];
+      for(j=0;j<rows.length;j++){ if(rows[j][0]>kMax) kMax=rows[j][0]; } }
+    for(i=0;i<snaps.length;i++){ vd=snaps[i]&&snaps[i].vend; rows=(vd&&vd.rows)||[];
+      for(j=0;j<rows.length;j++){
         var k=rows[j][0], cur=Math.abs(rows[j][1]||0);
-        if(k>0 && cur>(PEAK.m[k]||0)) PEAK.m[k]=cur;
+        if(k>0 && k>=kMax/2 && cur>(PEAK.m[k]||0)) PEAK.m[k]=cur;
       }
     }
   }catch(e2){}
@@ -2997,10 +3003,16 @@ function peakTick(sym){
     if(typeof inReplay==='function' && inReplay()) return;   // a replay must never write today's peaks
     if(!velOk()) return;
     var today=ctTodayStr();
-    if(PEAK.day!==today){ PEAK={ day:today, bar:0, m:{} }; }
+    // ⚠ the reset must carry the schema stamp, or every save after a day roll is discarded at the
+    // next load as "unversioned = polluted" — caught by test_peak_profile before it shipped
+    if(PEAK.day!==today || PEAK.v!==PEAK_SCHEMA){ PEAK={ v:PEAK_SCHEMA, day:today, bar:0, m:{} }; }
     // the max updates on every tick (a spike between bars is still a real peak) …
+    // ⚠ (v14.2) TODAY'S EXPIRY ONLY. The harvest holds every ladder the user ever opened — SPY,
+    // QQQ, even September rows (measured: 225 of 315 peak keys were off-book). Each harvested row
+    // carries its expiry; only today's SPXW rows may write peaks.
     for(var k in VEL){ var v=VEL[k];
-      if(v && typeof v.cur==='number'){ var a=Math.abs(v.cur); if(a>(PEAK.m[v.k]||0)) PEAK.m[v.k]=a; } }
+      if(v && typeof v.cur==='number' && v.exp===today){
+        var a=Math.abs(v.cur); if(a>(PEAK.m[v.k]||0)) PEAK.m[v.k]=a; } }
     // … but the localStorage write is bar-gated, like the latch
     var S=STATE[sym||'SPY']||{}; var bar=S.lastClosedB||0;
     if(bar && PEAK.bar!==bar){ PEAK.bar=bar; peakSave(); }
@@ -3509,9 +3521,15 @@ function recordNodeSnapshot(sym){
       vend:(function(){ try{
         if(!velOk()) return null;
         var ks=Object.keys(VEL), rows=[];
+        // ⚠ (v14.2) TODAY'S EXPIRY ONLY. The harvest holds every ladder ever opened this session;
+        // recording SPY/QQQ/far-expiry rows beside SPXW poisoned the vendor-verbatim record (and
+        // anything seeded from it). Rows recorded before this carry the pollution — the nightly
+        // must range-filter them (see the resume note).
+        var vToday=null; try{ vToday=ctTodayStr(); }catch(eVT){}
         for(var vi=0; vi<ks.length; vi++){
           var v=VEL[ks[vi]];
           if(!v || typeof v.cur!=='number') continue;
+          if(vToday && v.exp!==vToday) continue;
           rows.push([v.k, Math.round(v.cur), Math.round(v.d5||0), Math.round(v.d15||0),
                      Math.round(v.d60||0), Math.round(v.d1d||0)]);
         }
@@ -18590,14 +18608,25 @@ function ensureV3Css(){
     // the role tier or the money tier — which is exactly how a glyph-above-the-block would have.
     '#gpts-body .g3pile.g3grow{box-shadow:inset 0 2px 0 0 #2ec27e}'+
     '#gpts-body .g3pile.g3bleed{box-shadow:inset 0 -2px 0 0 #e0645f}'+
-    // ---- (v14.0) THE GAMMA PROFILE under the rail: outline = day peak, fill = held now ----
-    '#gpts-body .g3gp{position:relative;height:48px;margin-top:12px;border-bottom:1px solid #2f3846;overflow:visible}'+
+    // ---- (v14.2) THE GAMMA PROFILE under the rail: outline = day peak, fill = held now ----
+    // the profile rows are FLEX CLONES of the rail row: hidden EL/EH labels flank the track, so the
+    // drawing area's x-space is pixel-identical to the rail's (gap must stay 6px, matching .g3emw)
+    '#gpts-body .g3gprow{display:flex;align-items:stretch;gap:6px}'+
+    '#gpts-body .g3gpt{flex:1;position:relative;min-width:80px;display:block}'+
+    '#gpts-body .g3gphd{font-size:7px;font-weight:800;letter-spacing:.12em;color:#8b98a9;'+
+      'margin:8px 0 12px;display:flex;align-items:center;gap:4px}'+
+    '#gpts-body .g3gphd small{font-weight:700;letter-spacing:.02em;color:#5b6675;text-transform:none}'+
+    '#gpts-body .g3inf{width:9px;height:9px;border-radius:50%;border:1px solid #4a5568;color:#8b98a9;'+
+      'font-size:6.5px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;'+
+      'cursor:help;font-style:normal;flex:none;line-height:1}'+
+    '#gpts-body .g3inf:hover{border-color:#7cc7ff;color:#7cc7ff}'+
+    '#gpts-body .g3gp{position:relative;height:48px;border-bottom:1px solid #2f3846;overflow:visible}'+
     '#gpts-body .g3gpb{position:absolute;bottom:0;transform:translateX(-50%);border:1px solid;border-bottom:none;'+
       'border-radius:2px 2px 0 0;cursor:help}'+
     '#gpts-body .g3gpb b{position:absolute;bottom:0;left:1px;right:1px;border-radius:1px 1px 0 0;pointer-events:none}'+
     '#gpts-body .g3gppct{position:absolute;transform:translateX(-50%);font-size:6.5px;font-weight:800;'+
       'white-space:nowrap;pointer-events:none}'+
-    '#gpts-body .g3gpwall{position:absolute;top:-10px;transform:translateX(-50%);font-size:6.5px;font-weight:800;'+
+    '#gpts-body .g3gpwall{position:absolute;top:-13px;transform:translateX(-50%);font-size:6.5px;font-weight:800;'+
       'padding:0 3px;border-radius:2px;letter-spacing:.03em;cursor:help}'+
     '#gpts-body .g3gpwall.cw{color:#e0645f;background:rgba(224,100,95,.14);border:1px solid rgba(224,100,95,.45)}'+
     '#gpts-body .g3gpwall.pw{color:#2ec27e;background:rgba(46,194,126,.14);border:1px solid rgba(46,194,126,.45)}'+
@@ -19678,29 +19707,43 @@ function railRollLane(EB, RB, rolls){
     return '<div class="g3rl"><svg viewBox="0 0 1000 22" preserveAspectRatio="none">'+svg+'</svg>'+h+'</div>';
   }catch(e){ return ''; }
 }
-// ---- (v14.0) THE GAMMA PROFILE — a volume-profile of the flow book, under the rail --------------
-// Approved mockup 2026-08-25. Outline = the strike's DAY PEAK; fill = held NOW; the hollow part is
-// the position that CLOSED, live from Skylit — the thing IF's once-daily open interest cannot show.
-// Bars sit on the rail's own x-scale (SPX strike × live basis → ES), directly beneath their dots.
-// Rail strikes wear their role colours; every other harvested strike inside the rail is GREY —
-// present, but visibly less important (user-directed). CW/PW flags come from the IF ladder's CR/PS —
-// the ONLY book with a call/put split (measured live: Skylit's feed is not decomposable, |net|≡v on
-// every strike). The two books are never averaged; each states its own claim.
-function gammaProfileHtml(EB, RB, sym){
+// ---- (v14.2) THE GAMMA PROFILE — a volume-profile of the flow book, under the rail --------------
+// Outline = the strike's DAY PEAK; fill = held NOW (LINEAR within the outline — v14.1 applied the
+// cross-strike sqrt to the fill too, so a 63% bar drew 79% full: the number was right and the
+// picture lied); the hollow part is the position that CLOSED intraday, which once-daily OI cannot
+// show. ⚠ TODAY'S SPXW EXPIRY ONLY: the harvest holds every ladder the user has ever opened, and
+// 225 of 315 peak-store keys were SPY/QQQ/September rows — one $900M SPY strike drawn mid-rail
+// would have dwarfed the real book (caught live 2026-08-25 pulling the table by hand).
+// ⚠ THE FRAME IS THE RAIL'S OWN: hidden clones of the EL/EH labels flank the drawing area, so its
+// x-space is pixel-identical to the track's. v14.0 hung the profile on the full row width — same
+// percentages, different frame — and the bars drifted up to ~20px right of their dots.
+// The % ABOVE each bar is %KING (user-directed) — the same ruler as the NODES column and the rail;
+// the %-of-own-peak story stays visual (fill vs outline) and lives in the hover.
+// CW/PW flags: InsiderFinance 0DTE call/put walls — the only book with the split; never averaged in.
+function gammaProfileHtml(EB, RB, sym, elLab, ehLab){
   try{
     if(!EB || !EB.ok || !velOk()) return '';
+    // a replayed rail is FRIDAY; today's peaks under it would be a cross-window lie
+    if(typeof inReplay==='function' && inReplay()) return '';
+    var today=null; try{ today=ctTodayStr(); }catch(eT){}
     var dsc=1; try{ dsc=ifDispScale()||1; }catch(e0){}
     if(!(dsc>0)) dsc=1;
-    var ps=[]; try{ ps=emPiles(EB, sym)||[]; }catch(e1){}
-    var railBy={}; ps.forEach(function(p){ railBy[p.k]=p; });
+    var TNp=[]; try{ TNp=tradeNodes(sym)||[]; }catch(e1){}
+    var railBy={}; TNp.forEach(function(n){ railBy[n.k]=n; });
     var rows=[];
     for(var kk in PEAK.m){
       var k=parseFloat(kk); if(!(k>0)) continue;
       var pk=PEAK.m[kk]; if(!(pk>0)) continue;
-      var es=k*dsc, x=emPosRail(EB, es, RB);
+      var rn=railBy[k]||null;
+      // today's SPXW expiry only — a rail node is trusted (it IS the tape); anything else must
+      // show its expiry in the live harvest and match today's
+      if(!rn){ var vh=null; try{ vh=(typeof VEL==='object'&&VEL)?VEL[kk]:null; }catch(eVH){}
+               if(!vh || !today || vh.exp!==today) continue; }
+      var es=rn?rn.es:(k*dsc);
+      var x=emPosRail(EB, es, RB);
       if(!isFinite(x) || x<1.5 || x>98.5) continue;
       var ve=velAt(k), cur=(ve&&ve.v&&typeof ve.v.cur==='number')?Math.abs(ve.v.cur):null;
-      rows.push({ k:k, es:es, x:x, peak:pk, cur:cur, rail:railBy[k]||null });
+      rows.push({ k:k, es:es, x:x, peak:pk, cur:cur, rail:rn });
     }
     if(!rows.length) return '';
     rows.sort(function(a,b){ return b.peak-a.peak; });
@@ -19710,71 +19753,88 @@ function gammaProfileHtml(EB, RB, sym){
     rows.forEach(function(r){
       var isRail=!!r.rail;
       var col=isRail?(NODE_COL[r.rail.cls]||'#8b98a9'):'#5b6675';
-      // sqrt, the piles' own rule: a 100% King must not flatten a 30% strike into invisibility
+      // sqrt ACROSS strikes (a 100% King must not flatten a 30% strike)…
       var hPk=Math.max(3, Math.round(Math.sqrt(r.peak/mx)*H));
-      var hCur=Math.round(Math.sqrt(Math.min(r.cur||0, r.peak)/mx)*H);
+      // …but LINEAR within the bar: 56% of peak fills 56% of the outline
+      var frac=(r.cur!=null && r.peak>0)?Math.max(0, Math.min(1, r.cur/r.peak)):0;
+      var hCur=Math.round(hPk*frac);
       if(r.cur!=null && r.cur>0 && hCur<1) hCur=1;
-      var pct=(r.cur!=null && r.peak>0)?Math.round(100*Math.min(1, r.cur/r.peak)):null;
-      var pcol=(pct==null)?'#8b98a9':(pct>=90?'#2ec27e':(pct<50?'#f0616d':'#e6edf3'));
-      var tip=esTick(r.es)+' (SPXW '+r.k+') — holds '+(r.cur!=null?usdBig(r.cur):'?')+' now against a day peak of '+usdBig(r.peak)+
-              (pct!=null?(' — '+pct+'% of its own peak'+
-                (pct>=95?': at its high, still building.':(pct<50?': mostly CLOSED — what defended this strike has left, and a vacated strike is a door, not a wall.':'.'))):'.')+
-              ' Outline = the most this strike held today (Skylit flow); fill = now; the hollow part is the position that closed intraday.'+
+      var pkPct=(r.cur!=null && r.peak>0)?Math.round(100*frac):null;
+      var kingPct=(isRail && typeof r.rail.pct==='number')?Math.round(r.rail.pct):null;
+      var tip=frameNum(r.es)+' (SPXW '+r.k+') — holds '+(r.cur!=null?usdBig(r.cur):'?')+' now against a day peak of '+usdBig(r.peak)+
+              (pkPct!=null?(' — '+pkPct+'% of its own peak'+
+                (pkPct>=95?': at its high, still building.':(pkPct<50?': mostly CLOSED — what defended this strike has left, and a vacated strike is a door, not a wall.':'.'))):'.')+
+              (kingPct!=null?(' '+kingPct+'% of the King.'):'')+
+              ' Outline = the most this strike held today (Skylit flow, today\'s SPXW expiry only); fill = now; the hollow part is the position that closed intraday.'+
               (isRail?'':' GREY: below the rail\'s strength floor — context, not a trade location.');
       h2+='<i class="g3gpb" style="left:'+r.x.toFixed(1)+'%;width:'+(isRail?11:5)+'px;height:'+hPk+'px;border-color:'+col+(isRail?'':';opacity:.45')+'"'+g3tip(tip)+'>'+
             (hCur>0?('<b style="height:'+Math.min(hCur,hPk-1)+'px;background:'+col+';opacity:'+(isRail?'.55':'.4')+'"></b>'):'')+
           '</i>';
-      if(isRail && pct!=null)
-        h2+='<span class="g3gppct" style="left:'+r.x.toFixed(1)+'%;bottom:'+(hPk+2)+'px;color:'+pcol+'">'+pct+'%</span>';
+      // the label is %KING — the face's one size ruler; peak-% lives in the fill and the hover
+      if(isRail && kingPct!=null)
+        h2+='<span class="g3gppct" style="left:'+r.x.toFixed(1)+'%;bottom:'+(hPk+2)+'px;color:'+((r.rail.isKing||r.rail.role==='KING')?'#e3c341':'#e6edf3')+'">'+kingPct+'%</span>';
     });
-    // CW / PW — the IF ladder's CR and PS on the same x-scale, with the flow's verdict beneath them
+    // CW / PW — InsiderFinance's 0DTE call/put walls on the same x-scale
     var walls=[];
     try{
-      var L=ifLadder(sym);
-      if(L && !L.err){
-        var seen={};
-        (L.rows||[]).forEach(function(rr){
-          var tag=(rr.id==='CR')?'CW':((rr.id==='PS')?'PW':null);
-          if(!tag || seen[tag]) return;
-          var wx=emPosRail(EB, rr.disp, RB);
+      var IFW={ SPY:'SPX', QQQ:'QQQ' };
+      var c0=null; try{ c0=ifChain(IFW[sym]||sym); }catch(eC0){}
+      var lv0=(c0 && !c0.err && c0.dte0 && c0.dte0.lv)?c0.dte0.lv:null;
+      if(lv0){
+        [{tag:'CW', k:lv0.cr}, {tag:'PW', k:lv0.ps}].forEach(function(w0){
+          if(w0.k==null) return;
+          var disp=w0.k*dsc;
+          var wx=emPosRail(EB, disp, RB);
           if(!isFinite(wx) || wx<1.5 || wx>98.5) return;
-          seen[tag]=1;
           var near=null;
-          rows.forEach(function(r){ if(Math.abs(r.es-rr.disp)<=3 && (near==null||Math.abs(r.es-rr.disp)<Math.abs(near.es-rr.disp))) near=r; });
+          rows.forEach(function(r){ if(Math.abs(r.es-disp)<=3 && (near==null||Math.abs(r.es-disp)<Math.abs(near.es-disp))) near=r; });
           var np=(near && near.cur!=null && near.peak>0)?Math.round(100*Math.min(1,near.cur/near.peak)):null;
-          walls.push({ tag:tag, disp:rr.disp, pct:np });
-          h2+='<span class="g3gpwall '+(tag==='CW'?'cw':'pw')+'" style="left:'+wx.toFixed(1)+'%"'+
-              g3tip((tag==='CW'
-                 ?'CALL WALL — InsiderFinance\'s Call Resistance: the most call-dominant strike above spot in their open-interest book (the rule that reproduced a published GEX table\'s tagged Call Wall exactly).'
-                 :'PUT WALL — InsiderFinance\'s Put Support: the most put-dominant strike below spot in their open-interest book.')+
+          walls.push({ tag:w0.tag, disp:disp, pct:np });
+          h2+='<span class="g3gpwall '+(w0.tag==='CW'?'cw':'pw')+'" style="left:'+wx.toFixed(1)+'%"'+
+              g3tip((w0.tag==='CW'
+                 ?'CALL WALL (0DTE) — InsiderFinance\'s Call Resistance in TODAY\'S expiry only: the most call-dominant strike above spot in their open-interest book (SPX '+w0.k+', shown at '+frameNum(disp)+').'
+                 :'PUT WALL (0DTE) — InsiderFinance\'s Put Support in TODAY\'S expiry only: the most put-dominant strike below spot in their open-interest book (SPX '+w0.k+', shown at '+frameNum(disp)+').')+
                 ' Structure from once-daily OI. The bar beneath says whether the FLOW still defends it'+
-                (np!=null?(' — currently '+np+'% of its day peak.'):'.'))+
-              '>'+tag+'</span>';
+                (np!=null?(' — currently '+np+'% of its day peak.'):'.')+
+                ' When a side holds almost none of the 0DTE book its wall is suppressed, exactly as their page prints N/A.')+
+              '>'+w0.tag+'</span>';
         });
       }
     }catch(e2){}
-    // x-axis: rail strikes labelled at their ES price (trim rule applies), grey strikes tick-only
+    // x-axis in the rail's own number format, so the axis and the label above the dot cannot differ
     var ax='';
     rows.forEach(function(r){
-      ax+='<i class="g3gptick" style="left:'+r.x.toFixed(1)+'%"></i>';
-      if(r.rail) ax+='<span class="g3gpaxl'+((r.rail.role==='KING')?' k':'')+'" style="left:'+r.x.toFixed(1)+'%">'+esTick(r.es)+'</span>';
+      ax+='<i class="g3gptick" style="left:'+r.x.toFixed(1)+'%"'+'></i>';
+      if(r.rail) ax+='<span class="g3gpaxl'+((r.rail.isKing||r.rail.role==='KING')?' k':'')+'" style="left:'+r.x.toFixed(1)+'%">'+frameNum(r.es)+'</span>';
     });
     var pxX=emPosRail(EB, EB.now, RB);
     if(isFinite(pxX)) ax+='<span class="g3gpaxl px" style="left:'+pxX.toFixed(1)+'%;top:-5px">▾</span>';
-    // one descriptive WALLS line: structure (IF) + whether the flow still defends it (Skylit)
-    var vh='';
+    // one descriptive WALLS line: structure (IF) beside whether the flow still defends it (Skylit)
+    var vh2='';
     if(walls.length){
       var bits=walls.map(function(w){
         var st=(w.pct==null)?'' : (w.pct>=70?' — defended ('+w.pct+'% of peak)':' — being dismantled ('+w.pct+'% of peak)');
-        return '<b>'+w.tag+' '+esTick(w.disp)+'</b>'+st;
+        return '<b>'+w.tag+' '+frameNum(w.disp)+'</b>'+st;
       });
       var heavy=null; rows.forEach(function(r){ if(r.cur!=null && (heavy==null||r.cur>heavy.cur)) heavy=r; });
-      if(heavy) bits.push('heaviest now '+esTick(heavy.es)+' ('+usdBig(heavy.cur)+')');
-      vh='<div class="g3ndverd" style="margin-top:5px">'+bits.join(' · ')+'</div>';
+      if(heavy) bits.push('heaviest now '+frameNum(heavy.es)+' ('+usdBig(heavy.cur)+')');
+      vh2='<div class="g3ndverd" style="margin-top:5px;display:flex;gap:5px;align-items:baseline"><span style="flex:1">'+bits.join(' · ')+'</span>'+
+          gpInfo('WALLS — structure vs defence. CW/PW are InsiderFinance\'s 0DTE call/put walls (open interest — the only book with the split). "Defended" or "dismantled" is Skylit\'s FLOW at that strike: how much of its own day peak it still holds. The two books are stated side by side, never averaged. "Heaviest now" is the largest current holder on the flow book — the standing magnet. ⚠ Descriptive only, and F6 stands: where size sits or went is a story, not independent evidence it will hold.')+'</div>';
     }
-    return '<div class="g3gp">'+h2+'</div><div class="g3gpax">'+ax+'</div>'+vh;
+    // the header, with the ⓘ the user asked for — the whole explanation lives on it
+    var hdr='<div class="g3gphd">GAMMA PROFILE '+
+      gpInfo('THE GAMMA PROFILE — each bar is one SPXW strike in TODAY\'S expiry, from Skylit\'s live flow (their numbers, verbatim). The OUTLINE is the most that strike held at any point today; the FILL is what it holds right now — filled 56% means the number is 56%. The hollow part is the position that CLOSED intraday — the thing open-interest data cannot show until tomorrow. The % above each bar is %KING, the same ruler as the NODES list; the %-of-own-peak is in each bar\'s hover. Coloured bars are the rail\'s nodes (gold = brake, purple = accelerator); grey bars are strikes below the strength floor — context only. CW/PW are InsiderFinance\'s 0DTE call/put walls — a different book (open interest), shown as flags, never mixed into the bars. Bars sit on the rail\'s own x-scale, exactly beneath their dots. Blank during replay: the peaks are today\'s and would lie under Friday\'s rail.')+
+      '<small>outline = day peak · fill = now · % = of King</small></div>';
+    // ---- the rail's own frame: hidden EL/EH clones make the drawing area pixel-identical ----
+    function spc(l){ return (l||'').replace('<span class="g3emk"','<span class="g3emk" style="visibility:hidden"'); }
+    return hdr+
+      '<div class="g3gprow">'+spc(elLab)+'<span class="g3gpt g3gp">'+h2+'</span>'+spc(ehLab)+'</div>'+
+      '<div class="g3gprow">'+spc(elLab)+'<span class="g3gpt g3gpax">'+ax+'</span>'+spc(ehLab)+'</div>'+
+      vh2;
   }catch(e){ return ''; }
 }
+// the little info icon: a hover target whose title carries the whole explainer
+function gpInfo(txt){ return '<i class="g3inf"'+g3tip(txt)+'>i</i>'; }
 
 function emPiles(B, sym){
   // SKYLIT FIRST — the nodes are theirs. IF is a NAMED fallback, not a silent one.
@@ -20239,7 +20299,8 @@ function secFrame(sym){
     // Subrahmanyam, and every vendor guide that bothers to say so puts the conversion at x1.25. A row
     // labelled EM implies ~68% containment; this band delivers ~58%. The WIDTH IS UNCHANGED and every
     // level sits exactly where it did — only the claim has been corrected.
-    h+='<span class="g3emk"'+g3tip('Expected low — the open minus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.low/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(RB.under?RB.lo:EB.low))+'<small>'+(EB.est?'~':'')+(RB.under?'RAIL':'EL')+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
+    var EL_LAB='<span class="g3emk"'+g3tip('Expected low — the open minus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.low/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(RB.under?RB.lo:EB.low))+'<small>'+(EB.est?'~':'')+(RB.under?'RAIL':'EL')+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
+    h+=EL_LAB;
     var laneHtml=railRollLane(EB, RB, RAILROLLS);
     h+='<span class="g3emt'+(laneHtml?' g3haslane':'')+'">'+laneHtml+
        '<i class="g3emr"></i>'+
@@ -20384,7 +20445,8 @@ function secFrame(sym){
          return h2;
        })()+
        '</span>';
-    h+='<span class="g3emk"'+g3tip('Expected high — the open plus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.high/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a ceiling.')+'>'+g3esc(frameNum(RB.over?RB.hi:EB.high))+'<small>'+(EB.est?'~':'')+(RB.over?'RAIL':'EH')+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
+    var EH_LAB='<span class="g3emk"'+g3tip('Expected high — the open plus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.high/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a ceiling.')+'>'+g3esc(frameNum(RB.over?RB.hi:EB.high))+'<small>'+(EB.est?'~':'')+(RB.over?'RAIL':'EH')+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
+    h+=EH_LAB;
     h+='</span>';
   } else {
     h+='<span class="g3emx"'+g3tip('Where can today go? The band needs an opening bar and a two-sided at-the-money straddle in today\'s expiry. A one-sided straddle is not a straddle and half a band would be worse than none, so it says why instead of drawing something.')+'>'+g3esc(EB.why)+'</span>';
@@ -20402,7 +20464,7 @@ function secFrame(sym){
   // during a live session.
   h+='</div>';
   // (v14.0) the gamma profile hangs directly under the rail, on the SAME x-scale — see gammaProfileHtml
-  if(EB && EB.ok){ try{ h+=gammaProfileHtml(EB, RB, sym); }catch(eGP){ swallow('gammaProfile', eGP); } }
+  if(EB && EB.ok){ try{ h+=gammaProfileHtml(EB, RB, sym, EL_LAB, EH_LAB); }catch(eGP){ swallow('gammaProfile', eGP); } }
   // ---- (v11.57) THE SHAPE LINE: has this day already turned, and is anything left in it? ----
   // Goal 2 is not distance travelled, it is what REMAINS. Goal 3 is whether it could turn — either
   // because it is stretched, or because it has ALREADY turned once and may rotate again.
@@ -21260,7 +21322,8 @@ function secLoc(sym){
     var ROLLS=[], BIAS=null;
     try{ ROLLS=rollLatched(sym); BIAS=rollBias(ROLLS.filter(function(r0){ return !r0.gone; })); }catch(eRS){}
     if(TN.length){
-      h+='<div class="g3nodehd"'+g3tip('Where can a trade actually happen? Per the rule the trade is off a NODE. These are Skylit\'s SPXW nodes shown at ES prices, with their strike beneath. The four columns are Skylit\'s OWN published rate-of-change — the same numbers their strike popup shows — so this panel can be checked against their ladder directly.')+'>NODES</div>';
+      h+='<div class="g3nodehd" style="display:flex;align-items:center;gap:4px"'+g3tip('Where can a trade actually happen? Per the rule the trade is off a NODE. These are Skylit\'s SPXW nodes shown at ES prices, with their strike beneath. The four columns are Skylit\'s OWN published rate-of-change — the same numbers their strike popup shows — so this panel can be checked against their ladder directly.')+'>NODES '+
+         gpInfo('NODES — how to read a node, the three-axis model. SIZE (the $ value, %King) is magnet strength: how hard it pulls. POLARITY is its character ON CONTACT: +gamma is a brake/wall, -gamma is an accelerator/fuel. RATE OF CHANGE (5m/15m/60m/Day) is the arbiter between wall and door: a node being DEFENDED (growing into a test) tends to hold; a node being ABANDONED (draining) is a door — price passes through what nobody defends, and the vacated strike leaves air. Rolls are S/R relocating: the arrow shows where size went; a destination UNDER price is candidate support whichever way it rolled. Chip colours say what it means for PRICE, not what the node is.')+'</div>';
       if(!velOk()){
         h+='<div class="g3rx"><em></em><span style="color:#f2b45a">rate of change unavailable \u2014 '+
            g3esc((VEL_META&&VEL_META.why)||'no velocity')+'</span></div>';

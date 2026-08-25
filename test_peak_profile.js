@@ -31,19 +31,23 @@ global.velAt=(k)=>{ const e=VEL[k]; return e?{v:{k:k,cur:e.cur},stale:false}:nul
 global.recorderLoad=()=>REC;
 let REC={days:{}};
 global.PEAK_KEY='gpts_peak_v1';
-global.PEAK={ day:null, bar:0, m:{} };
+function exNum(n){ const m=src.match(new RegExp('var '+n+'\\s*=\\s*([0-9.]+)')); if(!m) throw new Error('const '+n+' not found'); return parseFloat(m[1]); }
+global.PEAK_SCHEMA=exNum('PEAK_SCHEMA');
+global.PEAK={ v:PEAK_SCHEMA, day:null, bar:0, m:{} };
 eval(ex('peakSave')); eval(ex('peakLoad')); eval(ex('peakTick')); eval(ex('peakOf'));
 
 // max accumulates across ticks, spike between bars included
-VEL={ 7665:{k:7665,cur:80e6}, 7690:{k:7690,cur:30e6} };
+VEL={ 7665:{k:7665,cur:80e6,exp:'2026-08-25'}, 7690:{k:7690,cur:30e6,exp:'2026-08-25'}, 765:{k:765,cur:900e6,exp:'2026-08-25'}, 7300:{k:7300,cur:50e6,exp:'2026-09-16'} };
 STATE.SPY.lastClosedB=1; peakTick('SPY');
-VEL={ 7665:{k:7665,cur:92e6}, 7690:{k:7690,cur:-49e6} };   // spike, and a negative node
+VEL={ 7665:{k:7665,cur:92e6,exp:'2026-08-25'}, 7690:{k:7690,cur:-49e6,exp:'2026-08-25'} };   // spike, and a negative node
 peakTick('SPY');                                            // same bar — max still updates
-VEL={ 7665:{k:7665,cur:88e6}, 7690:{k:7690,cur:20e6} };
+VEL={ 7665:{k:7665,cur:88e6,exp:'2026-08-25'}, 7690:{k:7690,cur:20e6,exp:'2026-08-25'} };
 STATE.SPY.lastClosedB=2; peakTick('SPY');
 eq(peakOf(7665), 92e6, 'the peak is the day max, not the last value');
 eq(peakOf(7690), 49e6, 'peaks are |absolute| — a -gamma node has a real size');
 eq(peakOf(7000), null, 'unseen strike -> null');
+eq(peakOf(7300), null, 'a September-expiry row never writes a peak (expiry filter)');
+ok(peakOf(765)===900e6||peakOf(765)===null, 'note: same-day other-book rows are caught at seed/draw, not here', peakOf(765));
 
 // persisted per bar, rehydrated on load
 { const saved=JSON.parse(localStorage.getItem('gpts_peak_v1'));
@@ -55,21 +59,23 @@ eq(peakOf(7000), null, 'unseen strike -> null');
 // seeding from the recorder: vend rows [k, cur, ...] — max wins across stores
 { PEAK={ day:null, bar:0, m:{} };
   localStorage._s={};
-  REC={ days:{ '2026-08-25':{ snaps:{ SPY:[ {vend:{rows:[[7665,95e6,0,0,0,0],[7650,12e6,0,0,0,0]]}},
+  REC={ days:{ '2026-08-25':{ snaps:{ SPY:[ {vend:{rows:[[7665,95e6,0,0,0,0],[7650,12e6,0,0,0,0],[765,923e6,0,0,0,0],[711,553e6,0,0,0,0]]}},
                                             {vend:{rows:[[7665,60e6,0,0,0,0]]}} ] } } } };
   peakLoad();
   eq(peakOf(7665), 95e6, 'boot seeds the morning high-water from recorded bars');
-  eq(peakOf(7650), 12e6, 'every recorded strike is seeded'); }
+  eq(peakOf(7650), 12e6, 'every recorded strike is seeded');
+  eq(peakOf(765), null, 'a SPY-book row in the recorded vend is dropped by the decade filter');
+  eq(peakOf(711), null, 'a QQQ-book row too'); }
 
 // a new day starts clean
 { TODAY_STR='2026-08-26'; REC={days:{}};
-  VEL={ 7700:{k:7700,cur:5e6} }; STATE.SPY.lastClosedB=3; peakTick('SPY');
+  VEL={ 7700:{k:7700,cur:5e6,exp:'2026-08-26'} }; STATE.SPY.lastClosedB=3; peakTick('SPY');
   eq(peakOf(7665), null, 'yesterday\'s peaks do not leak into today');
   eq(peakOf(7700), 5e6,  'today accumulates fresh'); }
 
 // replay never writes
 { global.inReplay=()=>true;
-  VEL={ 7700:{k:7700,cur:99e6} }; STATE.SPY.lastClosedB=4; peakTick('SPY');
+  VEL={ 7700:{k:7700,cur:99e6,exp:'2026-08-26'} }; STATE.SPY.lastClosedB=4; peakTick('SPY');
   eq(peakOf(7700), 5e6, 'replay writes nothing');
   global.inReplay=()=>false; }
 

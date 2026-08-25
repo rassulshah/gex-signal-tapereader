@@ -1,3 +1,67 @@
+## v14.2 — the profile earns the rail's frame, %King on top, and clean books underneath
+
+The operator approved the corrected mockup ("lets go with the skylit version") with one change of
+meaning: **the % above each bar is %KING**, not %-of-own-peak — one size ruler across the whole
+face, same as the NODES column and the rail. The peak story stays VISUAL (fill vs outline) and the
+exact peak-% lives in the hover. The optional IF OI-structure row was declined.
+
+**1. The frame.** v14.0/14.1 hung the profile on the full row width while the rail's percentages
+live inside the track, which is flanked by the EL/EH labels — same numbers, different coordinate
+frame, bars drifting up to ~20px right of their dots (measured on a screenshot). The profile and
+axis rows are now flex clones of the rail row: hidden copies of the EL/EH label spans flank the
+drawing area, so its x-space is pixel-identical to the track's. The gap is 6px because .g3emw's is.
+
+**2. Linear fill.** The cross-strike sqrt (correct — the King must not flatten a 30% strike) had
+been applied to the fill too, so a 63% bar drew 79% full. Fill is now hPk × (cur/peak): 56% means
+the bar is 56% full.
+
+**3. Today's SPXW expiry only — at every layer.** Pulling the peak table by hand found 225 of 315
+peak-store keys were OFF-BOOK: SPY 765 at $900M, QQQ 711, a September row — the harvest holds every
+ladder ever opened, and the tracker swept it all. Now: peakTick writes only rows whose harvested
+`exp` equals today; the PROFILE draws non-rail strikes only with today's exp; `snap.vend` RECORDS
+only today's exp (so future day files are clean); recorder SEEDING drops strikes below half the
+largest recorded (the books sit a decade apart — self-scaling, no hard-coded index level); and the
+peak store is schema-stamped v2 so every polluted v1 store is discarded, not trusted.
+⚠ DATA CAVEAT: vend rows recorded BEFORE v14.2 may carry cross-book rows — the nightly must
+range-filter them the same way.
+
+**4. Axis in the rail's format.** frameNum, so the axis and the label above the dot cannot differ
+("7664" both places; the NODES list keeps its tick precision).
+
+**5. ⓘ info icons** (user-directed): on the GAMMA PROFILE header (the full how-to-read explainer),
+the WALLS line (structure-vs-defence, the no-averaging rule, the F6 caveat), and the NODES header
+(the three-axis node model: size = magnet, polarity = character on contact, rate-of-change = the
+arbiter; rolls relocate S/R to the destination's side of price).
+
+**6. Replay blank.** Today's peaks under Friday's rail would be a cross-window lie; the profile now
+returns nothing in replay.
+
+test_peak_profile grew to 20 assertions and caught a real bug before ship: the day-roll reset
+dropped the schema stamp, so every post-roll save would have been discarded at the next load.
+
+## v14.1 — the profile drew everything grey, off the rail's grid, from the wrong window
+
+Three operator-caught defects in v14.0's profile, one build after it shipped.
+
+**1. Every bar was grey.** The colour read `rail.cls` off emPiles rows — which do not CARRY `cls` —
+so `NODE_COL[undefined]` fell back to grey for every strike, King included, and the deliberate
+grey-means-minor distinction was invisible because everything wore it. Colours (and `role`/`isKing`)
+now come from tradeNodes, the rail's own list. Minor strikes stay grey BY DESIGN; the rest wear
+their role colours as the approved mockup showed.
+
+**2. Bars could sit off the rail's grid.** v14.0 positioned every bar at `k × ifDispScale()` while
+the dots above use the pile's own `disp`. Same intended number, two derivations — the exact
+two-derivations-drift failure PROJECT-CONSTANTS documents. Rail strikes now take `es` straight from
+tradeNodes (identical to the dot AND to the NODES list, to the tick); only off-rail grey strikes
+still convert for themselves.
+
+**3. CW/PW read the WEEK, not the day.** The flags took CR/PS from ifLadder — the to-Friday
+structural set — when the operator wants the 0DTE walls. They now read `ifChain(...).dte0.lv.cr/.ps`:
+InsiderFinance's call/put split in TODAY'S expiry only, with the companion's own suppression rule
+(a side holding almost none of the book names no wall — their page prints N/A in that case, and a
+missing flag is honest, never back-filled from a wider window). Hover names the window, the SPX
+strike, and the ES conversion.
+
 ## v14.0 — the gamma profile under the rail, day peaks, and a quieter rail
 
 **1. THE GAMMA PROFILE** (approved mockup, operator-directed). A volume-profile of the FLOW book
