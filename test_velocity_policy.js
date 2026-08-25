@@ -172,4 +172,57 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
   // ⚠ the sampling behind it must NOT have been switched off with the picture
   ok(/sampleTapeHistory\(sym\);/.test(src), 'node-history sampling still runs \u2014 hiding is presentation only');
 }
+
+
+// ---------- (v13.6) UNITS, COMPLETENESS, AND THE THINGS THAT MUST MATCH ----------
+// ⚠⚠ THE CLASSIFIER SHIPPED WITH SPY-DOLLAR THRESHOLDS APPLIED TO ES-POINT PRICES.
+// Measured live: BREAK 81 / PIN 13 — an 85% break rate against 3-13% offline. ES moves in quarter
+// points across twenty-point ranges, so TOL 0.50 is nothing and everything "broke".
+{
+  ok(/function nevScaleOpts/.test(src), 'outcome thresholds are scaled to the instrument');
+  ok(/TOL:0\.50\*rr, THRU:0\.40\*rr, AWAY:0\.30\*rr, PIN:0\.35\*rr/.test(src),
+     'by the display ratio — which is exactly doctrine’s ±5 SPX vs ±0.50 SPY');
+  ok(/nevClassify\(lvl, side, bars\.slice\(start, start\+H\[0\]\), nevScaleOpts\(\)\)/.test(src),
+     'and the backfill passes them (INVERTED: v13.4 used the SPY defaults on ES prices)');
+  ok(/BREAK 81 \/ PIN 13/.test(src), 'the measurement that caught it is recorded');
+}
+// ---------- the list shows EVERY node the rail draws ----------
+{
+  const sl=ex('secLoc');
+  ok(!/TN\.slice\(0,\s*\d+\)/.test(noc(sl)),
+     'no cap on the node list — v13.5 sliced to 6 while the rail drew 7 (INVERTED v13.6)');
+  ok(/TN\.forEach\(function\(n\)\{/.test(sl), 'every node is rendered');
+  ok(/if the list ever needs limiting, the RAIL must limit too/.test(sl),
+     'and the reason a cap here is dangerous is written down');
+}
+// ---------- units on the face ----------
+{
+  ok(/function esTick/.test(src) && /Math\.round\(x\*4\)\/4/.test(ex('esTick')),
+     'ES prices are rounded to the quarter point the contract actually moves in');
+  ok(/function velP/.test(src), 'percent formatter exists');
+  const sl=ex('secLoc');
+  ok(/velP\(v\.p5\)/.test(sl) && /velP\(v\.p15\)/.test(sl) && /velP\(v\.p60\)/.test(sl) && /velP\(v\.p1d\)/.test(sl),
+     'the four columns show Skylit’s PERCENTS, which are comparable across nodes');
+  ok(/cls:\(v>0\)\?'g3up':'g3dn'/.test(ex('velP')), 'and they are green or red by sign');
+  ok(/in dollars: /.test(sl), 'with the dollar figures kept in the hover, not lost');
+  ok(/esTick\(n\.es\)/.test(sl) && /esTick\(pxNow\)/.test(sl), 'every ES price on the face is tick-rounded');
+}
+// ---------- price belongs in the ladder ----------
+{
+  const sl=ex('secLoc');
+  // ⚠ the class name existing proves nothing — a mutation that wrapped the emission in `if(false)`
+  // left every string in place and this suite passed it. Assert the emission is reached.
+  ok(/if\(!esShown && pxNow!=null && n\.es<pxNow\)\{\s*\n\s*h\+='<div class="g3ndes"/.test(sl),
+     'the ES price row is emitted directly under its condition, ungated');
+  ok(/n\.es<pxNow/.test(sl), 'inserted where it belongs — between the nodes above and below it');
+  ok(/below every node/.test(sl), 'and it still appears when price is under everything');
+}
+// ---------- bias at the top, in red ----------
+{
+  const sl=ex('secLoc');
+  const iBias=sl.indexOf('g3ndbiasTop'), iHead=sl.indexOf('g3ndhd');
+  ok(iBias>-1 && iHead>-1 && iBias<iHead, 'ROLL BIAS is emitted ABOVE the table header');
+  ok(/g3ndbiasTop\{[^}]*color:#e0645f/.test(src), 'and rendered red');
+}
+
 console.log('\n'+pass+' pass / '+fail+' fail');

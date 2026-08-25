@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    13.5
+// @version    13.7
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -564,7 +564,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='13.5';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='13.7';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -2876,9 +2876,18 @@ function rollBias(rolls){
   if(up===dn) return { dir:'mixed', up:up, dn:dn, n:rolls.length };
   return { dir:(up>dn)?'up':'dn', up:up, dn:dn, n:rolls.length };
 }
-window.__gptsDebug.rolls = function(){
-  try{ var tp=tapeMap('SPXW'); var ks=Object.keys((tp&&tp.pct)||{}).map(parseFloat).filter(isFinite);
-       var r=rollScan(ks); return { rolls:r, bias:rollBias(r) }; }catch(e){ return String(e); }
+// ⚠ (v13.6) READ THE SAME ARRAY THE RAIL DOES. This used tapeMap('SPXW') keys while the rail scans
+// emPiles, so it reported 0 rolls while three arrows were drawn — a debug hook that disagrees with the
+// face is worse than none, because it is trusted when diagnosing exactly this kind of problem.
+window.__gptsDebug.rolls = function(sym){
+  try{
+    sym=sym||activeSym();
+    var B=emBand(sym); if(!B||!B.ok) return { rolls:[], bias:null, why:'no expected-move anchor' };
+    var ps=emPiles(B, sym)||[], ks=[];
+    for(var i=0;i<ps.length;i++){ var v=velAt(ps[i].k); if(v&&v.v&&!v.stale) ks.push(ps[i].k); }
+    var r=rollScan(ks);
+    return { rolls:r, bias:rollBias(r), scanned:ks.length, src:'emPiles (same as the rail)' };
+  }catch(e){ return String(e); }
 };
 
 function updateTaps(sym){
@@ -4244,6 +4253,21 @@ function nevScan(sym){
 // ---- BACKFILL: what price actually did about the event ----
 // ⚠ THE EVENT WITHOUT ITS OUTCOME IS USELESS. Three horizons because a level's behaviour is
 // time-bounded — measured: hold rates fall from ~80% at 5 bars to ~60% at 12 (FINDINGS F5).
+// ⚠⚠ (v13.6) THE THRESHOLDS ARE IN THE UNITS OF THE PRICE, AND v13.4 SHIPPED THEM IN THE WRONG ONES.
+// The classifier's defaults (TOL 0.50, THRU 0.40) are SPY DOLLARS — the deflection zone doctrine gives
+// for SPY/QQQ. The levels handed to it are ES POINTS. ES moves in quarter-points across twenty-point
+// ranges, so a 0.50 tolerance is nothing and virtually every touch scored as BREAK.
+// MEASURED LIVE 2026-08-25: BREAK 81 / PIN 13 — an 85% break rate, against 3-13% in the offline study
+// on SPY-scale data. The study was right and the live labels were wrong.
+// Doctrine gives both numbers: +-5 SPX and +-0.50 SPY/QQQ (`learn/execution-doctrine.md`), which is
+// the same zone expressed in two instruments — a ratio of ~10, exactly `dispR()`.
+function nevScaleOpts(){
+  try{
+    var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(e0){}
+    if(!(rr>0)) rr=1;
+    return { TOL:0.50*rr, THRU:0.40*rr, AWAY:0.30*rr, PIN:0.35*rr, PINF:0.60 };
+  }catch(e){ return {}; }
+}
 function nevBackfill(sym){
   try{
     if(!TODAY) return;
@@ -4272,7 +4296,7 @@ function nevBackfill(sym){
       [[5,'o5'],[10,'o10'],[20,'o20']].forEach(function(H){
         if(e[H[1]]!=null) return;
         if(bars.length-start < H[0]) return;
-        var c=nevClassify(lvl, side, bars.slice(start, start+H[0]));
+        var c=nevClassify(lvl, side, bars.slice(start, start+H[0]), nevScaleOpts());
         e[H[1]] = c ? { k:c.kind, beyond:c.beyond, away:c.away, os:!!c.overshoot } : { k:'NOTOUCH' };
         wrote++;
       });
@@ -18429,7 +18453,12 @@ function ensureV3Css(){
     '#gpts-body .g3fade{opacity:.34;box-shadow:none !important}'+
     '#gpts-body .g3fade::after{border-color:#e0645f;border-style:dashed;opacity:.55}'+
     // the roll lane sits ABOVE the rail in its own band, so nothing can collide with the name tier
-    '#gpts-body .g3rl{position:relative;height:22px;margin:0 0 1px}'+
+    // ⚠ (v13.6) THE LANE IS AN OVERLAY INSIDE THE TRACK, NOT A SIBLING OF IT. v13.5 emitted a <div>
+    // inside the rail's flex row; it collapsed to WIDTH 0 and every arrow drew into nothing. Measured:
+    // lane w=0, h=22. Anchoring left:0/right:0 inside .g3emt makes it span exactly the track it
+    // annotates, and .g3haslane buys the space above so it can never overlap the name tier.
+    '#gpts-body .g3rl{position:absolute;left:0;right:0;top:-24px;height:22px}'+
+    '#gpts-body .g3emt.g3haslane{margin-top:24px}'+
     '#gpts-body .g3rl svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}'+
     '#gpts-body .g3rl .g3rlab{position:absolute;top:-1px;transform:translateX(-50%);font-size:6.5px;'+
       'font-weight:800;white-space:nowrap;letter-spacing:.02em}'+
@@ -18546,10 +18575,29 @@ function ensureV3Css(){
     '#gpts-body .g3ndpx{font-size:12.5px;font-weight:800;letter-spacing:-.02em}'+
     '#gpts-body .g3ndpct{font-size:9.5px;font-weight:800}'+
     '#gpts-body .g3ndd{font-size:9px;font-weight:700}'+
-    '#gpts-body .g3ndr2{font-size:7.5px;color:#5b6675;font-weight:700;margin-top:1px;padding-left:14px}'+
-    '#gpts-body .g3ndr2 b{color:#c9d4e2;font-weight:800;font-size:8.5px}'+
+    // ⚠ (v13.6) THE SUB-LINE IS WHITE, matching the rail where the strike beneath each node is white
+    // against the coloured price. Grey read as disabled text for the one row carrying the strike, the
+    // role and the size.
+    '#gpts-body .g3ndr2{display:flex;align-items:center;gap:5px;margin-top:1px;padding-left:14px;flex-wrap:wrap}'+
+    '#gpts-body .g3ndsub{font-size:7.5px;color:#c9d4e2;font-weight:700;letter-spacing:.02em}'+
+    '#gpts-body .g3ndsub i{font-style:normal;color:#f2b45a}'+
     '#gpts-body .g3ndage{color:#f2b45a}'+
-    '#gpts-body .g3ndchips{display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;padding-left:14px}'+
+    // badges share the sub-line rather than owning a third row — one line saved per node
+    '#gpts-body .g3ndchips{display:flex;gap:3px;flex-wrap:wrap;margin-left:auto}'+
+    // roll direction, at the LEFT of the values where the eye starts
+    '#gpts-body .g3ndmkc{text-align:center}'+
+    '#gpts-body .g3ndarr{font-size:10px;font-weight:800;line-height:1}'+
+    '#gpts-body .g3recvArr{color:#7cc7ff}'+
+    // where price sits in the ladder
+    '#gpts-body .g3ndes{display:grid;grid-template-columns:11px 1fr auto;gap:4px;align-items:baseline;'+
+      'padding:3px 1px;border-top:1px solid #2f3846;border-bottom:1px solid #2f3846;'+
+      'background:rgba(230,237,243,.05);margin:1px 0}'+
+    '#gpts-body .g3ndes span:nth-child(1){color:#e6edf3;font-size:8px}'+
+    '#gpts-body .g3ndes span:nth-child(2){color:#e6edf3;font-size:12px;font-weight:800;letter-spacing:-.02em}'+
+    '#gpts-body .g3ndes span:nth-child(3){color:#8b98a9;font-size:7px;font-weight:800;letter-spacing:.08em}'+
+    // the bias line, now at the TOP and red — it describes the whole book, not one node
+    '#gpts-body .g3ndbiasTop{margin:4px 0 2px;color:#e0645f;background:rgba(224,100,95,.10);'+
+      'border:1px solid rgba(224,100,95,.42)}'+
     '#gpts-body .g3ndchip{font-size:7px;font-weight:800;padding:1px 4px;border-radius:3px;letter-spacing:.03em;white-space:nowrap}'+
     // ⚠ CHIP COLOUR = WHAT IT MEANS FOR PRICE, never what the node is. A call node dissolving is BULL.
     '#gpts-body .g3cBull{color:#2ec27e;background:rgba(46,194,126,.13);border:1px solid rgba(46,194,126,.38)}'+
@@ -19366,7 +19414,15 @@ function railRollLane(EB, RB, rolls){
            '<path class="fl" d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.6" stroke-linecap="round" '+
              'stroke-dasharray="5 27" vector-effect="non-scaling-stroke"/>';
       var amt=''; try{ amt=usdBig(Math.abs(r.amt))||''; }catch(e1){}
-      h+='<span class="g3rlab" style="left:'+((xFrom+xTo)/2).toFixed(1)+'%;top:'+(yTop-8)+'px;color:'+col+'"'+
+      // ⚠⚠ (v13.7) CLAMP AT THE EDGES, OR THE LABEL LANDS ON THE EL/EH PRICE.
+      // The label is centred on the midpoint of the arrow with translateX(-50%). When that midpoint is
+      // near either end, half the text hangs outside the track and collides with the rail's own end
+      // prices — reported live as blue text sitting on top of "7664 EL". The rail's NODE labels have
+      // solved this since v11.93 with exactly this rule (`rEdge`); the roll labels were written without
+      // it. ⚠ THE FIX EXISTED TEN LINES AWAY AND I DID NOT REUSE IT.
+      var mid=(xFrom+xTo)/2;
+      var lEdge=(mid>88) ? 'transform:translateX(-100%);' : ((mid<12) ? 'transform:translateX(0);' : '');
+      h+='<span class="g3rlab" style="left:'+mid.toFixed(1)+'%;top:'+(yTop-8)+'px;color:'+col+';'+lEdge+'"'+
          g3tip('Size is moving between strikes. '+r.from+' shed '+(usdBig(Math.abs(r.lost))||'')+' over 15 minutes while '+
                r.to+' took '+(usdBig(Math.abs(r.got))||'')+'. \u26a0 Measured on our own data, a roll destination holds no better than a node that is simply GROWING \u2014 the pairing tells you WHERE size went, which is a story, not independent evidence. See FINDINGS F6.')+
          '>ROLL '+(r.dir==='up'?'\u2191':'\u2193')+' '+frameNum(r.to*dsc)+(amt?(' \u00b7 '+amt):'')+'</span>'+
@@ -19841,8 +19897,8 @@ function secFrame(sym){
     // labelled EM implies ~68% containment; this band delivers ~58%. The WIDTH IS UNCHANGED and every
     // level sits exactly where it did — only the claim has been corrected.
     h+='<span class="g3emk"'+g3tip('Expected low — the open minus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.low/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(RB.under?RB.lo:EB.low))+'<small>'+(EB.est?'~':'')+(RB.under?'RAIL':'EL')+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
-    h+=railRollLane(EB, RB, RAILROLLS)+
-       '<span class="g3emt">'+
+    var laneHtml=railRollLane(EB, RB, RAILROLLS);
+    h+='<span class="g3emt'+(laneHtml?' g3haslane':'')+'">'+laneHtml+
        '<i class="g3emr"></i>'+
        ((EB.hiWater!=null&&EB.loWater!=null)?('<i class="g3emx2" style="left:'+emPosRail(EB,EB.loWater,RB).toFixed(1)+'%;width:'+Math.max(0,emPosRail(EB,EB.hiWater,RB)-emPosRail(EB,EB.loWater,RB)).toFixed(1)+'%"></i>'+
          '<i class="g3emw2" style="left:'+emPosRail(EB,EB.loWater,RB).toFixed(1)+'%"></i>'+
@@ -20745,6 +20801,21 @@ function nodesVerdict(TN, ROLLS, BIAS){
     return parts.join(' ');
   }catch(e){ return null; }
 }
+// (v13.6) ES TRADES IN QUARTER POINTS. Printing 7672.69 implies a precision the instrument does not
+// have and cannot be compared to a DOM. Round to the tick the contract actually moves in.
+function esTick(x){
+  if(typeof x!=='number' || !isFinite(x)) return null;
+  var q=Math.round(x*4)/4;
+  return q.toFixed(2);
+}
+// (v13.6) PERCENT IS THE COMPARABLE UNIT. +140K means nothing without knowing the node is $50M;
+// +0.3% is instantly readable and is what Skylit's own popup leads with. Dollars move to the hover.
+function velP(v){
+  if(typeof v!=='number' || !isFinite(v)) return { txt:'\u2014', cls:'' };
+  if(v===0) return { txt:'0%', cls:'g3flat' };
+  var a=Math.abs(v), t=(a>=100)?Math.round(a)+'':(a>=10?a.toFixed(0):a.toFixed(1));
+  return { txt:((v>0)?'+':'\u2212')+t+'%', cls:(v>0)?'g3up':'g3dn' };
+}
 // signed, compact, and it never hides the sign — a delta whose sign you cannot see is not a delta
 function velD(v){
   if(typeof v!=='number' || !isFinite(v)) return { txt:'\u2014', cls:'' };
@@ -20840,25 +20911,47 @@ function secLoc(sym){
         h+='<div class="g3rx"><em></em><span style="color:#f2b45a">rate of change unavailable \u2014 '+
            g3esc((VEL_META&&VEL_META.why)||'no velocity')+'</span></div>';
       }
+      // ⚠ (v13.6) ROLL BIAS MOVED TO THE TOP AND TURNED RED. At the bottom it was the last thing read
+      // and the first thing missed; it is the one line that describes the WHOLE book rather than one
+      // node, so it belongs where the eye lands first.
+      if(BIAS && BIAS.n>1 && BIAS.dir!=='mixed'){
+        h+='<div class="g3ndbias g3ndbiasTop"'+g3tip('Which way is the whole book moving? Each roll is one node handing size to another. When they all point the same way the entire structure is migrating, which matters more than any single level. \u26a0 Measured on our own data a roll destination holds no better than a node that is simply GROWING \u2014 this tells you WHERE size is going, not that it will hold.')+
+           '>ROLL BIAS '+(BIAS.dir==='up'?'\u2191':'\u2193')+' \u00b7 '+
+           (BIAS.dir==='up'?BIAS.up:BIAS.dn)+' of '+BIAS.n+' rolls '+(BIAS.dir==='up'?'upward':'downward')+
+           ' \u00b7 the book is migrating '+(BIAS.dir==='up'?'higher':'lower')+'</div>';
+      }
       h+='<div class="g3ndhd"><span></span><span>Node</span><span>%K</span><span>5m</span><span>15m</span><span>60m</span><span>Day</span></div>';
-      TN.slice(0,6).forEach(function(n){
+      // ⚠ EVERY NODE THE RAIL DRAWS. v13.5 sliced to 6 and the rail drew 7, so a node was visible on
+      // the rail and absent from the list — the exact inconsistency the shared-array fix existed to end.
+      // A cap here silently reintroduces it; if the list ever needs limiting, the RAIL must limit too.
+      var pxNow=null; try{ var Bp=emBand(sym); pxNow=(Bp&&Bp.ok)?Bp.now:null; }catch(ePx){}
+      var esShown=false;
+      TN.forEach(function(n){
+        // (v13.6) THE ES PRICE SITS IN THE LADDER WHERE IT BELONGS, between the nodes above and below.
+        if(!esShown && pxNow!=null && n.es<pxNow){
+          h+='<div class="g3ndes"'+g3tip('Where price is sitting in the node ladder. Everything above this row is overhead, everything below is underfoot.')+
+             '><span>\u25b6</span><span>'+esTick(pxNow)+'</span><span>ES</span></div>';
+          esShown=true;
+        }
         var isPB=(pbES!=null && Math.abs(pbES-n.es)<=1.5);
-        // ⚠ the rail's own role colour, from the shared map — never recomputed from polarity
         var col=NODE_COL[n.cls]||'#8b98a9';
         var v=n.vel||{};
-        var d5=velD(v.d5), d15=velD(v.d15), d60=velD(v.d60), d1d=velD(v.d1d);
+        // ⚠ PERCENT, NOT DOLLARS. +140K is unreadable without knowing the node is $50M; the percent is
+        // comparable across nodes and is what Skylit's own popup leads with. Dollars live in the hover.
+        var d5=velP(v.p5), d15=velP(v.p15), d60=velP(v.p60), d1d=velP(v.p1d);
         var chip=nodeChip(n);
         var rf=rollFrom(n.k), ri=rollInto(n.k);
+        var arrow = rf ? ('<span class="g3ndarr '+(rf.dir==='up'?'g3up':'g3dn')+'">'+(rf.dir==='up'?'\u2191':'\u2193')+'</span>')
+                       : (ri ? '<span class="g3ndarr g3recvArr">\u21e2</span>' : (isPB?'<span class="g3ndmk">\u25b6</span>':''));
         h+='<div class="g3ndrow'+(isPB?' g3ndwatch':'')+'"'+g3tip(
-             'Is this a place to trade? '+Math.round(n.pct)+'% of the King node. This is the SAME list the rail draws \u2014 Skylit\'s SPXW nodes, with their role (accelerator / brake / balanced) and their colour taken from the rail so the two can never disagree. SPXW strike '+n.k+
-             ' shown at '+n.es+' on the ES scale. The four numbers are Skylit\'s own published deltas for this strike'+
-             (n.velStale?' \u2014 AGED, this node is not currently rendered in their ladder so the values are the last ones seen':'')+
+             'Is this a place to trade? '+Math.round(n.pct)+'% of the King node. The same list the rail draws \u2014 Skylit\'s SPXW nodes at ES prices, coloured by role. '+
+             'SPXW strike '+n.k+' shown at '+esTick(n.es)+'. Percentages are Skylit\'s own published rate of change; in dollars: '+
+             '5m '+velD(v.d5).txt+' \u00b7 15m '+velD(v.d15).txt+' \u00b7 60m '+velD(v.d60).txt+' \u00b7 day '+velD(v.d1d).txt+
+             (n.velStale?' \u2014 AGED: this node is not currently rendered in their ladder, so these are the last values seen':'')+
              (isPB?'. The pullback engine has selected this one, so it is what EXECUTE is armed against.':'')) + '>';
         h+= '<div class="g3ndr1">'+
-              '<span class="g3ndmk">'+(isPB?'\u25b6':'')+'</span>'+
-              '<span class="g3ndpx" style="color:'+col+'">'+dispNum(n.es)+'</span>'+
-              // ▲/▼ is the node's SIDE relative to price, not its polarity. Polarity is not a
-              // thing the trader acts on here; which side of price it sits on is.
+              '<span class="g3ndmkc">'+arrow+'</span>'+
+              '<span class="g3ndpx" style="color:'+col+'">'+esTick(n.es)+'</span>'+
               '<span class="g3ndpct" style="color:'+col+'">'+Math.round(n.pct)+'%'+(n.side==='above'?'\u25b2':'\u25bc')+'</span>'+
               '<span class="g3ndd '+d5.cls+'">'+d5.txt+'</span>'+
               '<span class="g3ndd '+d15.cls+'">'+d15.txt+'</span>'+
@@ -20866,26 +20959,20 @@ function secLoc(sym){
               '<span class="g3ndd '+d1d.cls+'">'+d1d.txt+'</span>'+
             '</div>';
         var sizeTxt=(typeof v.cur==='number')?usdBig(Math.abs(v.cur)):null;
-        h+= '<div class="g3ndr2">'+n.k+(n.role?(' \u00b7 '+g3esc(n.role)):'')+(n.isKing?' \u00b7 King':'')+
-            (sizeTxt?(' \u00b7 <b>'+sizeTxt+'</b>'):'')+
-            ' \u00b7 '+((n.dist>0?'+':'')+dispNum(n.dist))+
-            (n.velStale?' \u00b7 <span class="g3ndage">aged '+Math.round((n.velAge||0)/1000)+'s</span>':'')+
-            '</div>';
+        // ⚠ (v13.6) BADGES SHARE THE SUB-LINE instead of owning a third row, and the sub-line is WHITE
+        // to match the rail, where the strike beneath each node is white against the coloured price.
         var chipsHtml='';
         if(chip) chipsHtml+='<span class="g3ndchip '+chip.cls+'">'+chip.txt+'</span>';
-        if(isPB) chipsHtml+='<span class="g3ndchip g3cWatch">\u25b6 WATCH \u00b7 testing now</span>';
-        if(rf)   chipsHtml+='<span class="g3ndchip g3cRoll">\u2192 rolls '+(rf.dir==='up'?'up':'dn')+' '+(+(rf.to*(ifDispScale()||1)).toFixed(0))+'</span>';
-        if(ri)   chipsHtml+='<span class="g3ndchip g3cRoll">receives'+(ri>1?(' \u00d7'+ri):' roll')+'</span>';
-        if(chipsHtml) h+='<div class="g3ndchips">'+chipsHtml+'</div>';
+        if(rf)   chipsHtml+='<span class="g3ndchip g3cRoll">\u2192 '+(rf.dir==='up'?'up':'dn')+' '+esTick(rf.to*(ifDispScale()||1))+'</span>';
+        if(ri)   chipsHtml+='<span class="g3ndchip g3cRoll">receives'+(ri>1?(' \u00d7'+ri):'')+'</span>';
+        h+= '<div class="g3ndr2"><span class="g3ndsub">'+n.k+(n.role?(' \u00b7 '+g3esc(n.role)):'')+(n.isKing?' \u00b7 King':'')+
+            (sizeTxt?(' \u00b7 '+sizeTxt):'')+' \u00b7 '+((n.dist>0?'+':'')+esTick(n.dist))+
+            (n.velStale?' \u00b7 <i class="g3ndage">aged '+Math.round((n.velAge||0)/1000)+'s</i>':'')+
+            '</span>'+(chipsHtml?('<span class="g3ndchips">'+chipsHtml+'</span>'):'')+'</div>';
         h+='</div>';
       });
-      // ⚠ THE AGGREGATE IS ITS OWN SIGNAL. Five separate roll badges do not add up to "the book is
-      // migrating lower" in a trader's head at a glance. One line does.
-      if(BIAS && BIAS.n>1 && BIAS.dir!=='mixed'){
-        h+='<div class="g3ndbias '+(BIAS.dir==='up'?'g3up':'g3dn')+'"'+g3tip('Which way is the whole book moving? Each roll is one node handing size to another. When they all point the same way the entire structure is migrating, which matters more than any single level.')+
-           '>ROLL BIAS '+(BIAS.dir==='up'?'\u2191':'\u2193')+' \u00b7 '+
-           (BIAS.dir==='up'?BIAS.up:BIAS.dn)+' of '+BIAS.n+' rolls '+(BIAS.dir==='up'?'upward':'downward')+
-           ' \u00b7 the book is migrating '+(BIAS.dir==='up'?'higher':'lower')+'</div>';
+      if(!esShown && pxNow!=null){
+        h+='<div class="g3ndes"><span>\u25b6</span><span>'+esTick(pxNow)+'</span><span>ES \u00b7 below every node</span></div>';
       }
       var vd=null; try{ vd=nodesVerdict(TN, ROLLS, BIAS); }catch(eV){}
       if(vd) h+='<div class="g3ndverd">'+vd+'</div>';

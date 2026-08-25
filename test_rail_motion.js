@@ -54,8 +54,25 @@ ok(/@keyframes g3sonar\{0%\{transform:scale\(1\)/.test(src) && /@keyframes g3inw
   ok(/if\(!rolls \|\| !rolls\.length\) return '';/.test(rl), 'no rolls means no lane and no wasted height');
   ok(/vector-effect="non-scaling-stroke"/.test(rl), 'strokes survive the stretched viewBox');
   ok(/border-top:4px solid/.test(rl), 'and the arrowhead is an HTML triangle, so it never distorts');
-  ok(/g3rl\{position:relative;height:22px/.test(src), 'the lane sits in a band of its own');
+  // ⚠ (v13.6) INVERTED. v13.5 made the lane a relatively-positioned sibling inside the rail's flex
+  // row; it collapsed to WIDTH 0 and every arrow drew into nothing (measured live: w=0, h=22).
+  // It is now an overlay anchored to the track it annotates, with .g3haslane buying the space above.
+  ok(!/g3rl\{position:relative/.test(src), 'the lane is NOT a relative sibling that can collapse');
+  ok(/g3rl\{position:absolute;left:0;right:0;top:-24px;height:22px\}/.test(src),
+     'it is anchored to the track, so it spans exactly what it annotates');
+  ok(/g3emt\.g3haslane\{margin-top:24px\}/.test(src),
+     'and the space above is bought only when a lane exists');
+  ok(/g3emt'\+\(laneHtml\?' g3haslane':''\)/.test(src), 'the class is applied only when there are rolls');
   ok(/FINDINGS F6/.test(rl), 'the hover states what a roll is and is NOT evidence of');
+  // ⚠ (v13.7) reported live: blue roll text sitting on top of the rail's "7664 EL" price. A label
+  // centred with translateX(-50%) near an end hangs half outside the track. The NODE labels on this
+  // same rail have clamped since v11.93 — the roll labels were written without reusing that rule.
+  ok(/mid>88\) \? 'transform:translateX\(-100%\);'/.test(rl), 'a label near the right edge right-aligns inward');
+  ok(/mid<12\) \? 'transform:translateX\(0\);'/.test(rl), 'and one near the left edge left-aligns inward');
+  // ⚠ asserting the token `lEdge` exists passes even when its USE is deleted and only the declaration
+  // remains — a mutation proved it. Assert it reaches the emitted style attribute.
+  ok(/color:'\+col\+';'\+lEdge\+'"/.test(rl),
+     'the clamp is concatenated into the style attribute, not merely computed');
 }
 // ---------- every viewer gets an off switch ----------
 // ⚠ a reduced-motion block ALREADY existed for .g3pulse, so asserting the at-rule exists passes on
