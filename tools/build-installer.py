@@ -71,9 +71,25 @@ for pat in ['current/gex-signal-tapereader.user.js', 'current/gex-if-levels.user
 for d in ['session-state', 'tools', 'mockups']:
     for f in sorted(os.listdir(d)):
         p = os.path.join(d, f)
-        if os.path.isfile(p) and not f.endswith('.log'):
+        # (v13.9) NO .bat, NO .log. The v13.8 push swept ~20 OLD DOWNLOADED INSTALLERS (~28MB) into
+        # mockups/, and this loop then packaged them all: a 30MB installer whose `more +HDRLINES`
+        # extraction ground through 390K lines and read as a HANG on the user's machine. An
+        # installer must never contain installers.
+        if os.path.isfile(p) and not f.endswith('.log') and not f.lower().endswith('.bat'):
             FILES.append(p)
 FILES += sorted(f for f in os.listdir('.') if f.startswith('test_') and f.endswith('.js'))
+
+# --- size guard: fail LOUDLY before shipping a payload cmd.exe cannot digest --------------------
+# `more +n` walks the whole file line by line; past a few MB of base64 it is minutes, not seconds,
+# and the user reads that as a hang. 6MB of payload ≈ 80K lines ≈ the v13.x sizes that worked.
+_PAYLOAD_CAP = 6 * 1024 * 1024
+_total = sum(os.path.getsize(p) for p in FILES)
+if _total > _PAYLOAD_CAP:
+    _big = sorted(((os.path.getsize(p), p) for p in FILES), reverse=True)[:10]
+    print('PAYLOAD TOO BIG: %.1f MB raw against a %.0f MB cap. Largest members:' % (_total/1e6, _PAYLOAD_CAP/1e6))
+    for _s, _p in _big:
+        print('  %8.2f MB  %s' % (_s/1e6, _p))
+    raise SystemExit('refusing to build an installer that will hang on extraction — trim the manifest')
 
 buf = io.BytesIO()
 # mtime=0 so an unchanged tree produces an identical payload - a diffable installer
@@ -161,6 +177,11 @@ if not defined GIT (
 )
 
 pushd "%REPO%"
+rem (v13.9) purge the old downloaded installers that the v13.8 push swept into mockups/ -
+rem ~28MB of dead weight that ballooned this installer to 30MB and hung its own extraction.
+rem They remain recoverable from git history; this removes them from the tree and the push
+rem records the deletion so the repo shrinks back.
+del /q "%REPO%\\mockups\\install*.bat" >nul 2>&1
 "!GIT!" add -A
 "!GIT!" diff --cached --quiet
 if errorlevel 1 (

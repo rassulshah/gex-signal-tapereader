@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    13.8
+// @version    13.9
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -564,7 +564,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='13.8';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='13.9';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -2876,17 +2876,108 @@ function rollBias(rolls){
   if(up===dn) return { dir:'mixed', up:up, dn:dn, n:rolls.length };
   return { dir:(up>dn)?'up':'dn', up:up, dn:dn, n:rolls.length };
 }
+// ---- (v13.9) THE ROLL LATCH — a roll that happened and STUCK stays on the face ----
+// rollScan re-derives from Skylit's sliding velocity window, so a roll is visible only while mass is
+// mid-flight INSIDE that window. Live case, 2026-08-25: between 10:00 and 10:23 four nodes shed into
+// 7665 ($14M/$21M/$16M/$14M received on consecutive bars) and built the shelf price later bounced
+// from — and by the time price used it, the window had slid past and the face showed NOTHING. The
+// operator's requirement, verbatim in intent: "I need to see a genuine roll … something that is
+// legitimate and sticks." The latch applies the doctrine counting rule (rolling-floors-ceilings.md:
+// 1 = noise, 2 = signal, 3 = confirmation — the rule the face had never actually enforced) and keeps
+// a confirmed roll visible WHILE IT STICKS, with its age.
+// ⚠ COUNTS ARE PER CLOSED BAR, never per render. rollLatchTick is bar-gated exactly like nevScan, so
+// "2 consecutive sightings" means two consecutive 3-minute bars and the render loop cannot inflate it.
+// ⚠ STICKING IS A CLAIM ABOUT THE DESTINATION. The reference is the destination's |cur| at the moment
+// the roll confirmed; while it keeps >= ROLL_HOLD_FRAC of that, the roll is STUCK. When it drops
+// below, the chip says GAVE BACK for a few bars and the entry retires — a support that returned its
+// mass is not support, and silently deleting it would hide exactly the reversal worth seeing.
+var ROLL_SIG_N     = 2;    // sightings before a roll is drawn at all (one sighting = noise, never shown)
+var ROLL_CONF_N    = 3;    // sightings before it LATCHES and outlives the sliding window
+var ROLL_MISS_DROP = 2;    // unshown sighting: bars absent from the scan before it is forgotten
+var ROLL_GONE_BARS = 3;    // how long GAVE BACK stays on the face before the entry retires
+var ROLL_HOLD_FRAC = 0.60; // destination must keep this share of its at-confirmation mass to stay STUCK
+var ROLL_LATCH_KEY = 'gpts_rolllatch_v1';
+var ROLL_LATCH = { day:null, per:{} };
+function rollLatchKey(r){ return r.from+'>'+r.to; }
+function rollLatchSave(){ try{ localStorage.setItem(ROLL_LATCH_KEY, JSON.stringify(ROLL_LATCH)); }catch(e){} }
+// today's latched rolls survive a reload — an install mid-session must not erase the morning's story
+function rollLatchLoad(){ try{ var s=JSON.parse(localStorage.getItem(ROLL_LATCH_KEY)||'null');
+  if(s && s.per && s.day===ctTodayStr()) ROLL_LATCH=s; }catch(e){} }
+function rollLatchTick(sym){
+  try{
+    if(typeof inReplay==='function' && inReplay()) return;      // a replay must never write the latch
+    if(!velOk()) return;
+    var S=STATE[sym]||{}; var bar=S.lastClosedB||0; if(!bar) return;
+    var today=ctTodayStr();
+    if(ROLL_LATCH.day!==today){ ROLL_LATCH={ day:today, per:{} }; }
+    var P=ROLL_LATCH.per[sym]||(ROLL_LATCH.per[sym]={ bar:0, m:{} });
+    if(P.bar===bar) return;                                     // one count per closed bar
+    P.bar=bar;
+    var TN=[]; try{ TN=tradeNodes(sym)||[]; }catch(e0){}
+    var ks=[]; for(var i=0;i<TN.length;i++){ var ve=velAt(TN[i].k); if(ve&&ve.v&&!ve.stale) ks.push(TN[i].k); }
+    var raw=rollScan(ks)||[], seen={};
+    raw.forEach(function(r){
+      var key=rollLatchKey(r); seen[key]=1;
+      var e=P.m[key];
+      if(!e){
+        P.m[key]=e={ from:r.from, to:r.to, dir:r.dir, firstT:Date.now(), lastT:Date.now(),
+                     count:1, miss:0, amt:r.amt, got:r.got, lost:r.lost, destRef:null, gone:0 };
+      } else {
+        e.count++; e.miss=0; e.lastT=Date.now(); e.gone=0;      // re-sighted: it is rolling AGAIN
+        if(r.amt>e.amt) e.amt=r.amt;
+        e.got=r.got; e.lost=r.lost;
+      }
+      if(e.count>=ROLL_CONF_N && e.destRef==null){
+        var dv=velAt(r.to);
+        if(dv && dv.v && typeof dv.v.cur==='number') e.destRef=Math.abs(dv.v.cur);
+      }
+    });
+    for(var key2 in P.m){
+      var e2=P.m[key2];
+      if(seen[key2]) continue;
+      e2.miss++;
+      // one sighting is noise and a two-count that never confirmed was a flicker; both are forgotten
+      if(e2.count<ROLL_SIG_N  && e2.miss>=ROLL_MISS_DROP){ delete P.m[key2]; continue; }
+      if(e2.count<ROLL_CONF_N && e2.miss>=ROLL_MISS_DROP+1){ delete P.m[key2]; continue; }
+      // latched: it stays while the DESTINATION still holds what it received
+      if(e2.gone){ e2.gone++; if(e2.gone>ROLL_GONE_BARS) delete P.m[key2]; continue; }
+      var dv2=velAt(e2.to);
+      var cur=(dv2 && dv2.v && typeof dv2.v.cur==='number')?Math.abs(dv2.v.cur):null;
+      if(e2.destRef!=null && cur!=null && cur < e2.destRef*ROLL_HOLD_FRAC) e2.gone=1;
+    }
+    rollLatchSave();
+  }catch(e){}
+}
+// the display list: what the NODES section and the rail both draw. NEVER a raw rollScan.
+function rollLatched(sym){
+  var out=[];
+  try{
+    var P=(ROLL_LATCH.per||{})[sym||'SPY']; if(!P) return out;
+    for(var key in P.m){
+      var e=P.m[key];
+      if(e.count<ROLL_SIG_N) continue;                          // noise is never drawn
+      out.push({ from:e.from, to:e.to, dir:e.dir, amt:e.amt, got:e.got, lost:e.lost,
+                 count:e.count, conf:(e.count>=ROLL_CONF_N), live:(e.miss===0),
+                 gone:!!e.gone, ageMin:Math.round((Date.now()-e.firstT)/60000), lastT:e.lastT });
+    }
+    out.sort(function(a,b){ return (b.live?1:0)-(a.live?1:0) || b.lastT-a.lastT; });
+  }catch(e){}
+  return out;
+}
 // ⚠ (v13.6) READ THE SAME ARRAY THE RAIL DOES. This used tapeMap('SPXW') keys while the rail scans
 // emPiles, so it reported 0 rolls while three arrows were drawn — a debug hook that disagrees with the
 // face is worse than none, because it is trusted when diagnosing exactly this kind of problem.
+// (v13.9) The face now draws the LATCH, so the hook leads with the latch and carries the raw scan
+// beside it — `rolls` must keep matching what is drawn.
 window.__gptsDebug.rolls = function(sym){
   try{
     sym=sym||activeSym();
     var B=emBand(sym); if(!B||!B.ok) return { rolls:[], bias:null, why:'no expected-move anchor' };
     var ps=emPiles(B, sym)||[], ks=[];
     for(var i=0;i<ps.length;i++){ var v=velAt(ps[i].k); if(v&&v.v&&!v.stale) ks.push(ps[i].k); }
-    var r=rollScan(ks);
-    return { rolls:r, bias:rollBias(r), scanned:ks.length, src:'emPiles (same as the rail)' };
+    var raw=rollScan(ks), latched=rollLatched(sym);
+    return { rolls:latched, raw:raw, bias:rollBias(latched.filter(function(r){ return !r.gone; })),
+             scanned:ks.length, src:'roll latch (what the face draws); raw = this instant’s one-scan rollScan' };
   }catch(e){ return String(e); }
 };
 
@@ -11996,6 +12087,28 @@ function registerCoreFeatures(){
 
   // (v11.0 audit MERGE) the `drift` feature was a duplicate of `dir.drift` (same driftRead, same
   // outcome). Its bands and the SPLIT question now ride on dir.drift; the id is retired.
+
+  // (v13.9) ROLL LATCH — RECORDED, NOT VOTED, the kingRoll precedent. F6 measured the roll pairing
+  // adding nothing over plain growth, so the latch must not gate or vote anything until the nightly
+  // review shows STUCK destinations behaving differently from GAVE BACK ones — and THIS record is
+  // the data that test needs: one row per bar carrying the whole latch state, with the standard
+  // forward window beside it.
+  registerFeature({ key:'rolllatch', label:'Roll latch (1 noise / 2 signal / 3 confirm)', phase:'dashboard', fwd:FEAT_FWD,
+    record:function(sym){
+      var rl=[]; try{ rl=rollLatched(sym)||[]; }catch(e){}
+      return { n:rl.length,
+               rolls:rl.map(function(r){ return { f:r.from, t:r.to, dir:r.dir, c:r.count,
+                 live:r.live?1:0, conf:r.conf?1:0, gone:r.gone?1:0, age:r.ageMin,
+                 amt:Math.round(r.amt||0), got:Math.round(r.got||0) }; }) };
+    },
+    outcome:function(rec, fwd){ return { hit:null, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null }; },
+    questions:[
+      { id:'rolllatch_stuck_vs_gone', when:[{f:'conf',v:1}], outcome:'hold',
+        note:'does a STUCK destination deflect price better than one that GAVE BACK — and better than plain growth, the F6 control?' }
+    ],
+    rule:{ id:'rolllatch', tier:'hand', condition:'display-side counting of rollScan sightings per closed bar',
+           mechanism:'Two consecutive sightings draw, three latch; a latched roll persists while its destination holds >=60% of its at-confirmation mass, then GAVE BACK retires it. Recorded so the review can test STUCK vs GAVE BACK destinations against plain growth.' } });
+
   registerFeature({ key:'node', label:'Node grade', phase:'dashboard', fwd:FEAT_FWD,
     record:function(sym, ctx){
       var m=(ctx&&ctx.m)||nodeMapModel(sym);
@@ -18565,9 +18678,13 @@ function ensureV3Css(){
     // (v13.1) NODES: two lines per node. Identity and momentum together on top, reference underneath.
     // ⚠ ONE GRID SHARED BY THE HEADER AND EVERY ROW, or the columns drift apart the moment a value
     // changes width. `tabular-nums` on .g3 keeps the digits from shifting as they tick.
-    '#gpts-body .g3ndhd,#gpts-body .g3ndr1{display:grid;grid-template-columns:11px 1fr 40px 44px 44px 44px 50px;gap:3px;align-items:baseline}'+
+    // ⚠ (v13.9) COLUMN ONE IS THE CONNECTOR GUTTER, sized by --g3gut on the wrapper: 26px when rolls
+    // are on the face, 0 when the tape is quiet — a quiet day pays no width for an empty lane. The
+    // v13.8 connector hugged left:2px, where it collided with the watch row's inset bar and the
+    // marker glyphs; a column of its own can never touch text.
+    '#gpts-body .g3ndhd,#gpts-body .g3ndr1{display:grid;grid-template-columns:var(--g3gut,0px) 11px 1fr 40px 44px 44px 44px 50px;gap:3px;align-items:baseline}'+
     '#gpts-body .g3ndhd{font-size:6.5px;font-weight:800;letter-spacing:.06em;color:#5b6675;text-transform:uppercase;padding:3px 1px 3px}'+
-    '#gpts-body .g3ndhd span:nth-child(n+3),#gpts-body .g3ndr1 span:nth-child(n+3){text-align:right}'+
+    '#gpts-body .g3ndhd span:nth-child(n+4),#gpts-body .g3ndr1 span:nth-child(n+4){text-align:right}'+
     // a real rule between nodes, so rows read as discrete objects rather than one block of numbers
     '#gpts-body .g3ndrow{padding:5px 1px 4px;border-top:1px solid #232a36}'+
     '#gpts-body .g3ndwatch{background:rgba(124,199,255,.055);border-top-color:#2f4a5e;box-shadow:inset 2px 0 0 #7cc7ff;border-radius:2px}'+
@@ -18578,31 +18695,44 @@ function ensureV3Css(){
     // ⚠ (v13.6) THE SUB-LINE IS WHITE, matching the rail where the strike beneath each node is white
     // against the coloured price. Grey read as disabled text for the one row carrying the strike, the
     // role and the size.
-    // ⚠ (v13.8) r2 SHARES r1's GRID so the roll badge lands under the 5m column it explains.
-    // As a flex row it drifted with the width of the text beside it and lined up with nothing.
-    '#gpts-body .g3ndr2{display:grid;grid-template-columns:11px 1fr 40px 44px 44px 44px 50px;gap:3px;'+
+    // ⚠ r2 SHARES r1's GRID (v13.8) — as a flex row it drifted with the width of the text beside it.
+    // (v13.9) the roll badge moved INTO the sub-line: the connector arrow now says where the roll
+    // went, so the badge only has to NAME it, beside the node's other chips.
+    '#gpts-body .g3ndr2{display:grid;grid-template-columns:var(--g3gut,0px) 11px 1fr 40px 44px 44px 44px 50px;gap:3px;'+
       'align-items:center;margin-top:1px}'+
     '#gpts-body .g3ndsub .g3ndchip{margin-left:3px}'+
-    '#gpts-body .g3ndrc{text-align:right}'+
     '#gpts-body .g3ndsub{font-size:7.5px;color:#c9d4e2;font-weight:700;letter-spacing:.02em}'+
     '#gpts-body .g3ndsub i{font-style:normal;color:#f2b45a}'+
     '#gpts-body .g3ndage{color:#f2b45a}'+
     // badges share the sub-line rather than owning a third row — one line saved per node
     '#gpts-body .g3ndchips{display:flex;gap:3px;flex-wrap:wrap;margin-left:auto}'+
-    // the roll connector: each row draws its own segment, so rows of different heights still join
+    // ---- (v13.9) THE ROLL CONNECTOR, REDRAWN AS THE RAIL'S ARROW TURNED VERTICAL ----
+    // Each row still draws its own segment (rows are different heights — one absolute shape would
+    // drift, the v13.8 lesson that survives). What changed: a dot marks the SOURCE, the line travels
+    // the gutter — THROUGH the ES price row, which now draws a pass-through segment instead of
+    // breaking the line — and an elbow drives INTO the destination row, arrowhead landing at the
+    // gutter's right edge pointing at the node it fed. Lanes 6px apart; three rolls stay separate.
     '#gpts-body .g3ndrow{position:relative}'+
     '#gpts-body .g3ndgut{position:absolute;width:0;pointer-events:none}'+
-    // roll direction, at the LEFT of the values where the eye starts
+    // the moving dashes say IN FLIGHT; a latched roll that stuck is a solid, calm line
+    '#gpts-body .g3ndflow{position:absolute;width:2px;margin-left:-1px;pointer-events:none;opacity:.9;'+
+      'background:repeating-linear-gradient(to bottom,currentColor 0 4px,transparent 4px 14px);'+
+      'background-size:100% 28px;animation:g3flowY 1.6s linear infinite}'+
+    '@keyframes g3flowY{from{background-position-y:0}to{background-position-y:-28px}}'+
+    '@media (prefers-reduced-motion: reduce){#gpts-body .g3ndflow{animation:none}}'+
+    '#gpts-body .g3nddot{position:absolute;width:5px;height:5px;border-radius:50%;'+
+      'transform:translate(-50%,-50%);pointer-events:none}'+
+    '#gpts-body .g3ndstub{position:absolute;height:0;pointer-events:none;transform:translateY(-50%)}'+
+    '#gpts-body .g3ndhead{position:absolute;transform:translateY(-50%);width:0;height:0;pointer-events:none;'+
+      'border-top:4px solid transparent;border-bottom:4px solid transparent}'+
     '#gpts-body .g3ndmkc{text-align:center}'+
-    '#gpts-body .g3ndarr{font-size:10px;font-weight:800;line-height:1}'+
-    '#gpts-body .g3recvArr{color:#7cc7ff}'+
-    // where price sits in the ladder
-    '#gpts-body .g3ndes{display:grid;grid-template-columns:11px 1fr auto;gap:4px;align-items:baseline;'+
+    // where price sits in the ladder — position:relative so pass-through segments can ride it
+    '#gpts-body .g3ndes{display:grid;grid-template-columns:var(--g3gut,0px) 11px 1fr auto;gap:4px;align-items:baseline;'+
       'padding:3px 1px;border-top:1px solid #2f3846;border-bottom:1px solid #2f3846;'+
-      'background:rgba(230,237,243,.05);margin:1px 0}'+
-    '#gpts-body .g3ndes span:nth-child(1){color:#e6edf3;font-size:8px}'+
-    '#gpts-body .g3ndes span:nth-child(2){color:#e6edf3;font-size:12px;font-weight:800;letter-spacing:-.02em}'+
-    '#gpts-body .g3ndes span:nth-child(3){color:#8b98a9;font-size:7px;font-weight:800;letter-spacing:.08em}'+
+      'background:rgba(230,237,243,.05);margin:1px 0;position:relative}'+
+    '#gpts-body .g3ndes span:nth-child(2){color:#e6edf3;font-size:8px}'+
+    '#gpts-body .g3ndes span:nth-child(3){color:#e6edf3;font-size:12px;font-weight:800;letter-spacing:-.02em}'+
+    '#gpts-body .g3ndes span:nth-child(4){color:#8b98a9;font-size:7px;font-weight:800;letter-spacing:.08em}'+
     // the bias line, now at the TOP and red — it describes the whole book, not one node
     '#gpts-body .g3ndbiasTop{margin:4px 0 2px;color:#e0645f;background:rgba(224,100,95,.10);'+
       'border:1px solid rgba(224,100,95,.42)}'+
@@ -18613,6 +18743,10 @@ function ensureV3Css(){
     '#gpts-body .g3cTurn{color:#f2b45a;background:rgba(242,180,90,.13);border:1px solid rgba(242,180,90,.45)}'+
     '#gpts-body .g3cNeut{color:#7d8794;background:rgba(125,135,148,.10);border:1px solid rgba(125,135,148,.30)}'+
     '#gpts-body .g3cRoll{color:#7cc7ff;background:rgba(124,199,255,.12);border:1px solid rgba(124,199,255,.40)}'+
+    // (v13.9) a DOWNWARD roll wears the down colour — the chip and the connector must agree
+    '#gpts-body .g3cRollDn{color:#e0645f;background:rgba(224,100,95,.12);border:1px solid rgba(224,100,95,.40)}'+
+    // a destination that returned its mass: grey, because the claim it carried is withdrawn
+    '#gpts-body .g3cGone{color:#7d8794;background:rgba(125,135,148,.10);border:1px solid rgba(125,135,148,.30)}'+
     '#gpts-body .g3cWatch{color:#7cc7ff;background:rgba(124,199,255,.18);border:1px solid #7cc7ff}'+
     '#gpts-body .g3ndbias{margin-top:7px;padding:3px 6px;border-radius:3px;font-size:9px;font-weight:800;'+
       'background:rgba(139,152,169,.08);border:1px solid rgba(139,152,169,.25)}'+
@@ -18865,6 +18999,8 @@ function dte0NotToday(sym){
     return (String(front)!==String(c.today)) ? String(front) : false;
   }catch(e){ return null; }
 }
+// (v13.9) per-symbol first-disagreement timestamps for the scale-pin self-heal below
+var EMBAND_RRBAD={};
 function emBand(sym){
   var out={ ok:false, why:'', est:false };
   try{
@@ -18958,6 +19094,28 @@ function emBand(sym){
       try{ S.sym[sym]=rec; localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eU){}
       out.openHealed=true;
     }
+    // (v13.9) SCALE-PIN SELF-HEAL. The rr pin exists so the rails do not wobble (v11.59) — but on
+    // 2026-08-25 the pin itself was POISONED: captured 11 minutes in with a stale SPY leg (10.0676
+    // against a true 10.0436), so every rr-scaled value — the dot, the band edges — sat +18 ES points
+    // ALL MORNING while the nodes, scaled by a different path, were right. The operator caught it as
+    // "price is above the 7707 node but not on the chart". A pin to a bad number is worse than a
+    // wobble. A real basis move is a hair (measured 2026-08-22: 0.003% in 20s); a poisoned capture is
+    // a permanent 0.1%+ offset. So: live ratio disagreeing with the pin by >0.1%, SUSTAINED for five
+    // minutes, from a live-trusted source, re-pins — once, loudly (`rrHealed`), never per-render.
+    try{
+      if(dispIsFut() && rr>0 && typeof rec.rr==='number' && rec.rr>0 &&
+         (typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.live && FUTMODE.ratioSrc==='live')){
+        if(Math.abs(rr/rec.rr-1)>0.001){
+          if(!EMBAND_RRBAD[sym]) EMBAND_RRBAD[sym]=Date.now();
+          else if(Date.now()-EMBAND_RRBAD[sym] > 5*60000){
+            rec.rr=rr; S.sym[sym]=rec;
+            try{ localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eH){}
+            delete EMBAND_RRBAD[sym];
+            out.rrHealed=true;
+          }
+        } else if(EMBAND_RRBAD[sym]){ delete EMBAND_RRBAD[sym]; }
+      }
+    }catch(eRH){}
     // the anchor comes from the RECORD; `now` is live price on the SAME scale so the two can be subtracted
     open = (out.anchor==='open' && typeof rec.openU==='number' && rec.openU>0) ? (rec.openU*useRr) : (openU*useRr);
     now  = nowU*useRr;
@@ -19415,13 +19573,17 @@ function railRollLane(EB, RB, rolls){
       var xFrom=emPosRail(EB, r.from*dsc, RB), xTo=emPosRail(EB, r.to*dsc, RB);
       if(!isFinite(xFrom)||!isFinite(xTo)) continue;
       var col=(r.dir==='up')?'#7cc7ff':'#e0645f';
+      // (v13.9) IN FLIGHT vs STUCK, the same grammar as the node list: a live roll moves (dashes), a
+      // latched roll that stuck is a solid calm line with its age on the label.
+      var stuck=(r.conf && !r.live);
       var yTop=16-i*5;                                   // each roll gets its own lane height
       var x1=xFrom*10, x2=xTo*10;                        // viewBox is 0..1000 so percent maps directly
       var d='M'+x1.toFixed(1)+' 22 L'+x1.toFixed(1)+' '+yTop+' L'+x2.toFixed(1)+' '+yTop+' L'+x2.toFixed(1)+' 20';
-      svg+='<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1" opacity=".38" vector-effect="non-scaling-stroke"/>'+
-           '<path class="fl" d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.6" stroke-linecap="round" '+
-             'stroke-dasharray="5 27" vector-effect="non-scaling-stroke"/>';
+      svg+='<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="'+(stuck?'1.4':'1')+'" opacity="'+(stuck?'.75':'.38')+'" vector-effect="non-scaling-stroke"/>'+
+           (stuck?'':('<path class="fl" d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.6" stroke-linecap="round" '+
+             'stroke-dasharray="5 27" vector-effect="non-scaling-stroke"/>'));
       var amt=''; try{ amt=usdBig(Math.abs(r.amt))||''; }catch(e1){}
+      var ageL=(stuck && typeof r.ageMin==='number')?(' · '+(r.ageMin<60?(r.ageMin+'m'):(Math.floor(r.ageMin/60)+'h'+(r.ageMin%60)+'m'))):'';
       // ⚠⚠ (v13.7) CLAMP AT THE EDGES, OR THE LABEL LANDS ON THE EL/EH PRICE.
       // The label is centred on the midpoint of the arrow with translateX(-50%). When that midpoint is
       // near either end, half the text hangs outside the track and collides with the rail's own end
@@ -19431,9 +19593,11 @@ function railRollLane(EB, RB, rolls){
       var mid=(xFrom+xTo)/2;
       var lEdge=(mid>88) ? 'transform:translateX(-100%);' : ((mid<12) ? 'transform:translateX(0);' : '');
       h+='<span class="g3rlab" style="left:'+mid.toFixed(1)+'%;top:'+(yTop-8)+'px;color:'+col+';'+lEdge+'"'+
-         g3tip('Size is moving between strikes. '+r.from+' shed '+(usdBig(Math.abs(r.lost))||'')+' over 15 minutes while '+
-               r.to+' took '+(usdBig(Math.abs(r.got))||'')+'. \u26a0 Measured on our own data, a roll destination holds no better than a node that is simply GROWING \u2014 the pairing tells you WHERE size went, which is a story, not independent evidence. See FINDINGS F6.')+
-         '>ROLL '+(r.dir==='up'?'\u2191':'\u2193')+' '+frameNum(r.to*dsc)+(amt?(' \u00b7 '+amt):'')+'</span>'+
+         g3tip('Size moved between strikes. '+r.from+' shed '+(usdBig(Math.abs(r.lost))||'')+' while '+
+               r.to+' took '+(usdBig(Math.abs(r.got))||'')+', seen on '+(r.count||'?')+' bars'+
+               (stuck?' \u2014 the window has slid past but the destination still holds what it received: the roll STUCK.':(r.live?' \u2014 still in flight.':'.'))+
+               ' \u26a0 Measured on our own data, a roll destination holds no better than a node that is simply GROWING \u2014 the pairing tells you WHERE size went, which is a story, not independent evidence. See FINDINGS F6.')+
+         '>ROLL '+(r.dir==='up'?'\u2191':'\u2193')+' '+frameNum(r.to*dsc)+(amt?(' \u00b7 '+amt):'')+ageL+'</span>'+
          '<span style="position:absolute;left:'+xTo.toFixed(1)+'%;top:19px;transform:translateX(-50%);'+
            'width:0;height:0;border-left:3px solid transparent;border-right:3px solid transparent;'+
            'border-top:4px solid '+col+'"></span>';
@@ -19888,12 +20052,13 @@ function secFrame(sym){
     // PROJECT-CONSTANTS: two derivations of one thing drift, and here they would drift WITHIN a
     // single render — an arrow pointing at a node that is not animating.
     var RAILPS=[]; try{ RAILPS=emPiles(EB, sym)||[]; }catch(eRP){}
+    // (v13.9) THE RAIL DRAWS THE LATCH TOO — the same list the NODES section draws, or the two
+    // surfaces disagree about which rolls exist, which is the exact drift the shared-array rule
+    // forbids. GAVE BACK entries are excluded here: an arrow on the rail claims structure, and a
+    // destination that returned its mass no longer supports that claim (the node list still shows
+    // its grey chip while it retires).
     var RAILROLLS=[];
-    try{
-      var rk=[]; for(var rq=0;rq<RAILPS.length;rq++){ var rv=velAt(RAILPS[rq].k);
-        if(rv && rv.v && !rv.stale) rk.push(RAILPS[rq].k); }
-      RAILROLLS=rollScan(rk)||[];
-    }catch(eRR){}
+    try{ RAILROLLS=(rollLatched(sym)||[]).filter(function(rF){ return !rF.gone; }); }catch(eRR){}
     var str=!!EB.stretched, pOpen=emPosRail(EB,EB.open,RB), pNow=emPosRail(EB,EB.now,RB);
     var fa=Math.min(pOpen,pNow), fb=Math.max(pOpen,pNow);
     var gTxt2=(EB.gamma==null)?'gamma unknown'
@@ -19960,7 +20125,9 @@ function secFrame(sym){
              if(ve && ve.v && !ve.stale && typeof ve.v.d15==='number') mv.push({k:mk, d15:ve.v.d15, d60:ve.v.d60});
            }
            rollsNow = RAILROLLS;   // ⚠ shared, never recomputed — see the note beside RAILROLLS
-           var recvSet={}; rollsNow.forEach(function(r){ recvSet[r.to]=1; });
+           // (v13.9) only LIVE rolls animate the receiver — a latched roll that stuck weeks of bars
+           // ago is structure, not motion, and animating it would claim size is arriving NOW
+           var recvSet={}; rollsNow.forEach(function(r){ if(r.live) recvSet[r.to]=1; });
            // rank by how decisive the 15m move is — the rarest, largest changes earn the attention
            mv.sort(function(a,b){ return Math.abs(b.d15)-Math.abs(a.d15); });
            var used=0;
@@ -20909,10 +21076,14 @@ function secLoc(sym){
     var TN=tradeNodes(sym), pbK=pbNodeK(sym);
     var rrN=1; try{ rrN=dispIsFut()?dispR():1; }catch(eR){}
     var pbES=(pbK!=null)?pbK*rrN:null;   // pbEntryPick works in underlying space; the list is in ES
+    // (v13.9) THE FACE DRAWS THE LATCH, NOT THE SCAN. rollScan is one look through a sliding window:
+    // it shows a roll only while mass is mid-flight, and the 10:00–10:23 migration that built the
+    // 7665 shelf had vanished from the face by the time price bounced off it — the operator's report.
+    // rollLatched() applies the doctrine count (1 noise / 2 signal / 3 confirmation) and keeps a
+    // confirmed roll while its destination holds. BIAS reads the same list minus GAVE BACK entries —
+    // a withdrawn roll is not evidence the book is migrating.
     var ROLLS=[], BIAS=null;
-    try{ ROLLS=rollScan(TN.map(function(n){ return n.k; })); BIAS=rollBias(ROLLS); }catch(eRS){}
-    function rollFrom(k){ for(var i2=0;i2<ROLLS.length;i2++){ if(ROLLS[i2].from===k) return ROLLS[i2]; } return null; }
-    function rollInto(k){ var c=0; for(var i3=0;i3<ROLLS.length;i3++){ if(ROLLS[i3].to===k) c++; } return c; }
+    try{ ROLLS=rollLatched(sym); BIAS=rollBias(ROLLS.filter(function(r0){ return !r0.gone; })); }catch(eRS){}
     if(TN.length){
       h+='<div class="g3nodehd"'+g3tip('Where can a trade actually happen? Per the rule the trade is off a NODE. These are Skylit\'s SPXW nodes shown at ES prices, with their strike beneath. The four columns are Skylit\'s OWN published rate-of-change — the same numbers their strike popup shows — so this panel can be checked against their ladder directly.')+'>NODES</div>';
       if(!velOk()){
@@ -20928,51 +21099,88 @@ function secLoc(sym){
            (BIAS.dir==='up'?BIAS.up:BIAS.dn)+' of '+BIAS.n+' rolls '+(BIAS.dir==='up'?'upward':'downward')+
            ' \u00b7 the book is migrating '+(BIAS.dir==='up'?'higher':'lower')+'</div>';
       }
-      h+='<div class="g3ndhd"><span></span><span>Node</span><span>%K</span><span>5m</span><span>15m</span><span>60m</span><span>Day</span></div>';
       // ⚠ EVERY NODE THE RAIL DRAWS. v13.5 sliced to 6 and the rail drew 7, so a node was visible on
       // the rail and absent from the list — the exact inconsistency the shared-array fix existed to end.
       // A cap here silently reintroduces it; if the list ever needs limiting, the RAIL must limit too.
       var pxNow=null; try{ var Bp=emBand(sym); pxNow=(Bp&&Bp.ok)?Bp.now:null; }catch(ePx){}
-      var esShown=false;
-      // ⚠ (v13.8) THE CONNECTOR IS DRAWN PER ROW, NOT AS ONE ABSOLUTE SHAPE.
-      // Rows are different heights — badges wrap, some carry an age marker — so a single absolutely
-      // positioned arrow computed from row indices would drift the moment a row grew. Each row draws
-      // its own segment of the line instead, and the pieces join because they are neighbours.
-      var idxOf={}; TN.forEach(function(n,i){ idxOf[n.k]=i; });
-      var gut={};                       // row index -> {piece, col, dir}
-      (ROLLS||[]).slice(0,3).forEach(function(r, ri){
-        var a=idxOf[r.from], b=idxOf[r.to];
-        if(a==null || b==null || a===b) return;
-        var col=(r.dir==='up')?'#7cc7ff':'#e0645f';
-        var lo=Math.min(a,b), hi=Math.max(a,b);
-        var goingDown=(b>a);            // destination is FURTHER DOWN the list (a lower price)
-        for(var i=lo;i<=hi;i++){
-          if(gut[i]) continue;          // one connector per row keeps the gutter readable
-          var piece = (i===a) ? 'tail' : ((i===b) ? 'head' : 'mid');
-          gut[i]={ piece:piece, col:col, down:goingDown, lane:ri };
-        }
+      // ---- (v13.9) ONE DISPLAY LADDER: the nodes plus the ES price row, in one index space ----
+      // The ES row is part of the ladder now, so a connector passing it draws THROUGH it — the v13.8
+      // line broke at exactly that row because only node rows drew segments.
+      var dispRows=[], esAt=-1;
+      TN.forEach(function(n0){
+        if(esAt<0 && pxNow!=null && n0.es<pxNow){ esAt=dispRows.length; dispRows.push({ es:1 }); }
+        dispRows.push({ n:n0 });
       });
-      function gutHtml(i){
-        var g=gut[i]; if(!g) return '';
-        var c=g.col, left=(2+g.lane*3)+'px';
-        // tail starts at the row centre and runs toward the destination; head arrives at the centre
-        var box, tri='';
-        if(g.piece==='mid') box='top:0;bottom:0';
-        else if(g.piece==='tail') box = g.down ? 'top:50%;bottom:0' : 'top:0;bottom:50%';
-        else { box = g.down ? 'top:0;height:50%' : 'top:50%;bottom:0';
-               tri='<i style="position:absolute;left:'+left+';'+(g.down?'top:50%':'bottom:50%')+
-                   ';transform:translate(-50%,'+(g.down?'-100%':'100%')+');width:0;height:0;'+
-                   'border-left:3px solid transparent;border-right:3px solid transparent;'+
-                   (g.down?('border-top:4px solid '+c):('border-bottom:4px solid '+c))+'"></i>'; }
-        return '<i class="g3ndgut" style="left:'+left+';'+box+';border-left:1.5px solid '+c+'"></i>'+tri;
-      }
-      TN.forEach(function(n){
-        // (v13.6) THE ES PRICE SITS IN THE LADDER WHERE IT BELONGS, between the nodes above and below.
-        if(!esShown && pxNow!=null && n.es<pxNow){
-          h+='<div class="g3ndes"'+g3tip('Where price is sitting in the node ladder. Everything above this row is overhead, everything below is underfoot.')+
-             '><span>\u25b6</span><span>'+esTick(pxNow)+'</span><span>ES</span></div>';
-          esShown=true;
+      if(esAt<0 && pxNow!=null){ esAt=dispRows.length; dispRows.push({ es:1, below:1 }); }
+      var idxOf={}; dispRows.forEach(function(r1,i1){ if(r1.n) idxOf[r1.n.k]=i1; });
+      // ---- the connector: the rail's roll arrow, turned vertical. At most three lanes, 6px apart.
+      // Per-row segments (rows are different heights — one absolute shape would drift, the v13.8
+      // lesson that survives). Dot = source; the line travels the gutter; an elbow drives INTO the
+      // destination row with the arrowhead landing at the gutter's right edge, pointing at the node
+      // it fed. In-flight rolls carry the rail's moving dashes; a latched STUCK roll is solid and
+      // calm; GAVE BACK is grey. When two rolls land on one row, the one arriving from above lands
+      // high and the one from below lands low, so the heads never touch.
+      var SHOW=(ROLLS||[]).slice(0,3);
+      var segs={}, chipAt={};
+      function addSeg(i,s){ if(i!=null) (segs[i]=segs[i]||[]).push(s); }
+      var srcAt={}, headN={};
+      SHOW.forEach(function(r2){ var b0=idxOf[r2.to]; if(b0!=null) headN[b0]=(headN[b0]||0)+1;
+                                 var a0=idxOf[r2.from]; if(a0!=null) srcAt[a0]=1; });
+      var dscC=1; try{ dscC=ifDispScale()||1; }catch(eDC){}
+      SHOW.forEach(function(r,ri){
+        var b=idxOf[r.to]; var a=idxOf[r.from];
+        if(a!=null && a===b) a=null;
+        var lane=6+ri*6;
+        var col=r.gone?'#7d8794':(r.dir==='up'?'#7cc7ff':'#e0645f');
+        var op=r.live?0.35:(r.gone?0.5:(r.conf?0.85:0.45));
+        var flow=(r.live&&!r.gone);
+        // the chip that NAMES the roll — on the source row, or on the destination when the source has
+        // already vacated the list, which is precisely the dissipated-node case worth labelling
+        var at=(a!=null)?a:b;
+        if(at!=null){
+          var arr=(r.dir==='up')?'↑':'↓';
+          var amt=''; try{ amt=usdBig(Math.abs(r.amt))||''; }catch(eA){}
+          var age=(r.conf&&!r.live&&!r.gone)?(' · '+(r.ageMin<60?(r.ageMin+'m'):(Math.floor(r.ageMin/60)+'h'+(r.ageMin%60)+'m'))):'';
+          var txt='ROLL '+arr+' '+((a!=null)?esTick(r.to*dscC):('from '+esTick(r.from*dscC)))+
+                  (amt?(' · '+amt):'')+age+(r.gone?' · GAVE BACK':'');
+          var cls=r.gone?'g3cGone':(r.dir==='up'?'g3cRoll':'g3cRollDn');
+          var tip='Size moved between strikes: '+r.from+' shed into '+r.to+', seen on '+r.count+' bars ('+
+                  (r.conf?'CONFIRMED — three sightings latch it':'SIGNAL — two sightings; one sighting is noise and is never drawn')+').'+
+                  (r.gone?' The destination has since GIVEN BACK what it received — the claim is withdrawn and this retires in a few bars.'
+                         :(r.live?' Still in flight this bar.'
+                                 :' The velocity window has slid past, but the destination still holds ≥'+Math.round(ROLL_HOLD_FRAC*100)+'% of what it received — the roll STUCK, which is what makes it structure.'))+
+                  ' ⚠ F6: a roll destination holds no better than a node that is simply growing — this says WHERE size went, not that it will hold.';
+          (chipAt[at]=chipAt[at]||[]).push('<span class="g3ndchip '+cls+'"'+g3tip(tip)+'>'+txt+'</span>');
         }
+        if(b==null) return;                 // no destination row on the face — the chip alone carries it
+        var fromAbove=(a!=null)?(a<b):(r.dir==='dn');
+        var land=((headN[b]>1)||srcAt[b])?(fromAbove?35:65):50;
+        function vseg(i,box){
+          addSeg(i,'<i class="g3ndgut" style="left:'+lane+'px;'+box+';border-left:1.5px solid '+col+';opacity:'+op+'"></i>'+
+                   (flow?'<i class="g3ndflow" style="left:'+lane+'px;'+box+';color:'+col+'"></i>':''));
+        }
+        if(a!=null){
+          vseg(a,(b>a)?'top:50%;bottom:0':'top:0;bottom:50%');
+          addSeg(a,'<i class="g3nddot" style="left:'+lane+'px;top:50%;background:'+col+'"></i>');
+          for(var mi=Math.min(a,b)+1; mi<Math.max(a,b); mi++) vseg(mi,'top:0;bottom:0');
+        }
+        vseg(b, fromAbove?('top:0;height:'+land+'%'):('top:'+land+'%;bottom:0'));
+        if(lane<18) addSeg(b,'<i class="g3ndstub" style="left:'+lane+'px;top:'+land+'%;width:'+(18-lane)+
+                             'px;border-top:1.5px solid '+col+';opacity:'+(r.live?0.9:op)+'"></i>');
+        addSeg(b,'<i class="g3ndhead" style="left:18px;top:'+land+'%;border-left:6px solid '+col+'"></i>');
+      });
+      // the gutter collapses to nothing on a quiet tape — no rolls, no reserved width
+      h+='<div style="--g3gut:'+(SHOW.length?26:0)+'px">';
+      h+='<div class="g3ndhd"><span></span><span></span><span>Node</span><span>%K</span><span>5m</span><span>15m</span><span>60m</span><span>Day</span></div>';
+      dispRows.forEach(function(row, rowIdx){
+        var segHtml=(segs[rowIdx]||[]).join('');
+        if(row.es){
+          // (v13.6) THE ES PRICE SITS IN THE LADDER WHERE IT BELONGS, between the nodes above and below.
+          h+='<div class="g3ndes"'+g3tip('Where price is sitting in the node ladder. Everything above this row is overhead, everything below is underfoot.')+'>'+segHtml+
+             '<span></span><span>▶</span><span>'+esTick(pxNow)+'</span><span>ES'+(row.below?' · below every node':'')+'</span></div>';
+          return;
+        }
+        var n=row.n;
         var isPB=(pbES!=null && Math.abs(pbES-n.es)<=1.5);
         var col=NODE_COL[n.cls]||'#8b98a9';
         var v=n.vel||{};
@@ -20980,21 +21188,18 @@ function secLoc(sym){
         // comparable across nodes and is what Skylit's own popup leads with. Dollars live in the hover.
         var d5=velP(v.p5), d15=velP(v.p15), d60=velP(v.p60), d1d=velP(v.p1d);
         var chip=nodeChip(n);
-        var rf=rollFrom(n.k), ri=rollInto(n.k);
-        var arrow = rf ? ('<span class="g3ndarr '+(rf.dir==='up'?'g3up':'g3dn')+'">'+(rf.dir==='up'?'\u2191':'\u2193')+'</span>')
-                       : (ri ? '<span class="g3ndarr g3recvArr">\u21e2</span>' : (isPB?'<span class="g3ndmk">\u25b6</span>':''));
-        var rowIdx=idxOf[n.k];
         h+='<div class="g3ndrow'+(isPB?' g3ndwatch':'')+'"'+g3tip(
-             'Is this a place to trade? '+Math.round(n.pct)+'% of the King node. The same list the rail draws \u2014 Skylit\'s SPXW nodes at ES prices, coloured by role. '+
+             'Is this a place to trade? '+Math.round(n.pct)+'% of the King node. The same list the rail draws — Skylit\'s SPXW nodes at ES prices, coloured by role. '+
              'SPXW strike '+n.k+' shown at '+esTick(n.es)+'. Percentages are Skylit\'s own published rate of change; in dollars: '+
-             '5m '+velD(v.d5).txt+' \u00b7 15m '+velD(v.d15).txt+' \u00b7 60m '+velD(v.d60).txt+' \u00b7 day '+velD(v.d1d).txt+
-             (n.velStale?' \u2014 AGED: this node is not currently rendered in their ladder, so these are the last values seen':'')+
+             '5m '+velD(v.d5).txt+' · 15m '+velD(v.d15).txt+' · 60m '+velD(v.d60).txt+' · day '+velD(v.d1d).txt+
+             (n.velStale?' — AGED: this node is not currently rendered in their ladder, so these are the last values seen':'')+
              (isPB?'. The pullback engine has selected this one, so it is what EXECUTE is armed against.':'')) + '>';
-        h+= gutHtml(rowIdx);
+        h+= segHtml;
         h+= '<div class="g3ndr1">'+
-              '<span class="g3ndmkc">'+arrow+'</span>'+
+              '<span></span>'+
+              '<span class="g3ndmkc">'+(isPB?'<span class="g3ndmk">▶</span>':'')+'</span>'+
               '<span class="g3ndpx" style="color:'+col+'">'+esTick(n.es)+'</span>'+
-              '<span class="g3ndpct" style="color:'+col+'">'+Math.round(n.pct)+'%'+(n.side==='above'?'\u25b2':'\u25bc')+'</span>'+
+              '<span class="g3ndpct" style="color:'+col+'">'+Math.round(n.pct)+'%'+(n.side==='above'?'▲':'▼')+'</span>'+
               '<span class="g3ndd '+d5.cls+'">'+d5.txt+'</span>'+
               '<span class="g3ndd '+d15.cls+'">'+d15.txt+'</span>'+
               '<span class="g3ndd '+d60.cls+'">'+d60.txt+'</span>'+
@@ -21003,29 +21208,23 @@ function secLoc(sym){
         var sizeTxt=(typeof v.cur==='number')?usdBig(Math.abs(v.cur)):null;
         // ⚠ (v13.6) BADGES SHARE THE SUB-LINE instead of owning a third row, and the sub-line is WHITE
         // to match the rail, where the strike beneath each node is white against the coloured price.
-        // ⚠ (v13.8) THE ROLL BADGE SITS UNDER THE 5m COLUMN, DELIBERATELY. A roll is the most likely
-        // EXPLANATION for a sharp recent change, so it belongs directly beneath the number it explains
-        // — not pushed to the right margin where the eye has to travel back to connect them.
-        var rollChip='';
-        if(rf) rollChip='<span class="g3ndchip g3cRoll">\u2192 '+(rf.dir==='up'?'up':'dn')+' '+esTick(rf.to*(ifDispScale()||1))+'</span>';
-        else if(ri) rollChip='<span class="g3ndchip g3cRoll">\u21e2 in'+(ri>1?(' \u00d7'+ri):'')+'</span>';
+        // (v13.9) the roll chip rides the sub-line too — the CONNECTOR says where the roll went, so
+        // the chip only has to name it, beside the node's other chips. The v13.8 badge-under-the-5m
+        // placement and the ⇢-in receiver badge are retired: the arrowhead marks the receiver.
         h+= '<div class="g3ndr2">'+
-              '<span></span>'+
-              '<span class="g3ndsub">'+n.k+(n.role?(' \u00b7 '+g3esc(n.role)):'')+(n.isKing?' \u00b7 King':'')+
-                (sizeTxt?(' \u00b7 '+sizeTxt):'')+' \u00b7 '+((n.dist>0?'+':'')+esTick(n.dist))+
-                (n.velStale?' \u00b7 <i class="g3ndage">aged '+Math.round((n.velAge||0)/1000)+'s</i>':'')+
+              '<span></span><span></span>'+
+              '<span class="g3ndsub">'+n.k+(n.role?(' · '+g3esc(n.role)):'')+(n.isKing?' · King':'')+
+                (sizeTxt?(' · '+sizeTxt):'')+' · '+((n.dist>0?'+':'')+esTick(n.dist))+
+                (n.velStale?' · <i class="g3ndage">aged '+Math.round((n.velAge||0)/1000)+'s</i>':'')+
                 (chip?(' <span class="g3ndchip '+chip.cls+'">'+chip.txt+'</span>'):'')+
+                ((chipAt[rowIdx]||[]).length?(' '+chipAt[rowIdx].join(' ')):'')+
               '</span>'+
-              '<span></span>'+
-              '<span class="g3ndrc">'+rollChip+'</span>'+
-              '<span></span><span></span><span></span>'+
             '</div>';
         h+='</div>';
       });
-      if(!esShown && pxNow!=null){
-        h+='<div class="g3ndes"><span>\u25b6</span><span>'+esTick(pxNow)+'</span><span>ES \u00b7 below every node</span></div>';
-      }
-      var vd=null; try{ vd=nodesVerdict(TN, ROLLS, BIAS); }catch(eV){}
+      h+='</div>';
+      // (v13.9) the verdict must not say "draining into" about a roll whose destination GAVE BACK
+      var vd=null; try{ vd=nodesVerdict(TN, ROLLS.filter(function(rV){ return !rV.gone; }), BIAS); }catch(eV){}
       if(vd) h+='<div class="g3ndverd">'+vd+'</div>';
     } else {
       // ⚠ SAY WHICH EMPTY THIS IS. "none in range" is a claim about the market; an unanchored band is a
@@ -21676,6 +21875,8 @@ function tick(){
   // the bar snapshot, which is the older and more important capture.
   try{ nevScan(activeSym()); }catch(eNS){}
   try{ nevBackfill(activeSym()); }catch(eNB){}
+  // (v13.9) the roll latch counts sightings on the same closed-bar cadence (gated internally)
+  try{ rollLatchTick(activeSym()); }catch(eRLt){}
   // (v10.55 PART A) the per-bar node-cluster memory the leg engine reads, then the
   // engine itself — evaluated once per closed bar and cached beside the spine.
   nodeHistSample('SPY');
@@ -21720,6 +21921,7 @@ function boot(){
   studyLoad();                 // (v10.44) cached measured rates for READ ▸ / hovers
   registerCoreFeatures();      // (v10.49 B) enroll every feature in DATA/ANALYSIS/TESTING/LEARNING
   trendLastLoad();             // (v10.54) rehydrate today's confirmed-trend memory (gpts_trendlast_v1)
+  rollLatchLoad();             // (v13.9) today's latched rolls survive a reload (gpts_rolllatch_v1)
   rulesLoad();                 // (v10.49 K) the mental model: localStorage + learning/rules.json
   rulesApply(true);            // (v10.54) BOOT is one of the only two moments the model may move
   render();

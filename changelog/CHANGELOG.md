@@ -1,3 +1,61 @@
+## v13.9 — rolls that STICK, a connector with its own gutter, and a poisoned scale-pin
+
+Three fixes, all caught live on 2026-08-25 by the operator.
+
+**1. The face showed rolls only while mid-flight — the doctrine count was never enforced.**
+`rollScan` re-derives from Skylit's sliding velocity window every look. Between 10:00 and 10:23 four
+nodes shed into 7665 ($14M/$21M/$16M/$14M on consecutive bars) and built the shelf price later
+bounced from — and by the time price used it, the window had slid past and the face showed NOTHING.
+Meanwhile one-scan flickers DID draw. That is backwards, and the counting rule that fixes it has been
+in doctrine all along (rolling-floors-ceilings.md): 1 = noise, 2 = signal, 3 = confirmation — the
+known open defect that the detector ignored it.
+
+New: the ROLL LATCH (`rollLatchTick`/`rollLatched`, bar-gated like nevScan). One sighting never
+draws; two consecutive bars draw it as SIGNAL (dashed, in flight); three LATCH it — it then outlives
+the window, carries its age, and stays while the destination holds ≥60% of its at-confirmation mass.
+When the destination bleeds below that, the chip says GAVE BACK for three bars and retires — a
+support that returned its mass is not support, and deleting it silently would hide the reversal.
+The NODES list, the rail lane, roll bias and the verdict all read the LATCH now — never the raw scan
+(shared-array rule). Latch state survives reload via `gpts_rolllatch_v1`, today-keyed. Enrolled as
+feature `rolllatch` (recorded, not voted — F6 stands until STUCK vs GAVE BACK is measured; rules.json
+is at 71 ids, test pin updated).
+
+**2. The v13.8 connector was drawn where it could not live.**
+Its segments hugged `left:2px` — inside the watch row's inset bar and the marker glyphs — and only
+node rows drew segments, so the line BROKE at the ES price row sitting mid-span. The badges
+(`→ up 7684.00`, `⇢ in`) then re-said what the arrow failed to say.
+
+New: the connector owns a gutter COLUMN (`--g3gut`, 26px with rolls, 0 on a quiet tape), part of the
+shared grid, so it can never touch text. Dot = source; the line travels the gutter THROUGH the ES row
+(which now draws pass-through segments); an elbow drives into the destination row and the arrowhead
+lands at the gutter's right edge, pointing at the node it fed. In-flight = the rail's moving dashes;
+STUCK = solid and calm; GAVE BACK = grey. Two arrivals on one row land high/low and never touch. One
+chip on the source row names the roll in the rail's words — `ROLL ↑ 7684 · $1M · 47m` — and when the
+SOURCE has vacated the list (the dissipated-node case) the chip moves to the destination and says
+`from`. The receiver badge is retired: the arrowhead marks the receiver.
+
+**3. The session scale-pin rode a poisoned capture for two hours.**
+The v11.59 pin (one rr for the session, so the rails do not wobble) captured 10.0676 eleven minutes
+in — a stale SPY leg against a live ES title — while the true ratio was 10.0436. Every rr-scaled
+value sat +0.24% ≈ +18 ES points ALL MORNING: the dot rendered above the 7709 node while the chart
+printed 7690, and the nodes themselves (scaled by dispScale, a different path) were correct, which is
+exactly how the operator caught it. Patched live at ~11:35 CT by re-pinning from the live ratio.
+
+New: SCALE-PIN SELF-HEAL in `emBand` — live ratio disagreeing with the pin by >0.1% SUSTAINED for
+five minutes, from a live-trusted futMode, re-pins once and flags `rrHealed`. A real basis move is a
+hair (0.003% measured 2026-08-22); only a poisoned capture holds a 0.1% offset for five minutes.
+⚠ DATA CAVEAT for the nightly review: 2026-08-25 records BEFORE ~11:35 CT carry band-relative fields
+(emPct, band edges) and node-distance fields (`w.dist`, from `B.now`) skewed ≈ +18 ES points. Node
+velocities, sizes and the roll ledger are UNAFFECTED (vendor-verbatim, different path).
+
+**4. The v13.9 installer itself hung — the v13.8 push had swept ~20 old downloaded installers
+(~28MB) into `mockups/`, and the builder packaged all of `mockups/` blindly: a 30MB .bat whose
+`more +HDRLINES` extraction ground through 390K lines and read as a hang.** The builder now excludes
+`.bat` from every payload directory (an installer must never contain installers), refuses any payload
+over 6MB with the offender list printed, and the emitted installer deletes `mockups/install*.bat`
+from the repo before committing, so the push shrinks the repo back. They stay recoverable from git
+history.
+
 ## v12.5 — the pop-out grow bug was a BOX bug, not a DRAG bug
 
 `pipCopyStyles` told `#gpts-panel` to be `height:100% !important` while `html,body` had no height at
