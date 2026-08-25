@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.3
+// @version    14.4
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -564,7 +564,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.3';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.4';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -18616,6 +18616,9 @@ function ensureV3Css(){
     '#gpts-body .g3gphd{font-size:7px;font-weight:800;letter-spacing:.12em;color:#8b98a9;'+
       'margin:8px 0 12px;display:flex;align-items:center;gap:4px}'+
     '#gpts-body .g3gphd small{font-weight:700;letter-spacing:.02em;color:#5b6675;text-transform:none}'+
+    '#gpts-body .g3gpbias{margin-left:auto;font-size:7px;font-weight:800;letter-spacing:.03em;padding:1px 5px;'+
+      'border-radius:3px;color:#e0645f;background:rgba(224,100,95,.10);border:1px solid rgba(224,100,95,.42);'+
+      'white-space:nowrap;cursor:help}'+
     '#gpts-body .g3inf{width:9px;height:9px;border-radius:50%;border:1px solid #4a5568;color:#8b98a9;'+
       'font-size:6.5px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;'+
       'cursor:help;font-style:normal;flex:none;line-height:1}'+
@@ -18634,6 +18637,8 @@ function ensureV3Css(){
       'color:#fff;font-weight:800;pointer-events:none}'+
     '#gpts-body .g3gpb{position:absolute;bottom:0;transform:translateX(-50%);border:1px solid;border-bottom:none;'+
       'border-radius:2px 2px 0 0;cursor:help}'+
+    '#gpts-body .g3gppct{position:absolute;transform:translateX(-50%);font-size:6.5px;font-weight:800;'+
+      'white-space:nowrap;pointer-events:none}'+
     '#gpts-body .g3gpb b{position:absolute;bottom:0;left:1px;right:1px;border-radius:1px 1px 0 0;pointer-events:none}'+
     '#gpts-body .g3gpwatch{box-shadow:0 0 0 1.5px rgba(124,199,255,.55)}'+
     // the in-bar badge stack: dark pills so they read over fill and hollow alike
@@ -18657,7 +18662,7 @@ function ensureV3Css(){
     '#gpts-body .g3gpwmk{font-size:7px;color:#7cc7ff;font-weight:800;font-style:normal}'+
     '#gpts-body .g3gpadot{width:4px;height:4px;border-radius:50%;background:#f2b45a}'+
     // the floating wall flag survives ONLY for a wall with no qualifying bar to live in
-    '#gpts-body .g3gpwall{position:absolute;top:-13px;transform:translateX(-50%);font-size:6.5px;font-weight:800;'+
+    '#gpts-body .g3gpwall{position:absolute;top:2px;transform:translateX(-50%);font-size:6.5px;font-weight:800;'+
       'padding:0 3px;border-radius:2px;letter-spacing:.03em;cursor:help}'+
     '#gpts-body .g3gpwall.cw{color:#e0645f;background:rgba(224,100,95,.14);border:1px solid rgba(224,100,95,.45)}'+
     '#gpts-body .g3gpwall.pw{color:#2ec27e;background:rgba(46,194,126,.14);border:1px solid rgba(46,194,126,.45)}'+
@@ -18676,8 +18681,13 @@ function ensureV3Css(){
     '#gpts-body .g3emx2{position:absolute;top:25px;height:4px;border-radius:2px;background:rgba(139,152,169,.22)}'+
     '#gpts-body .g3emw2{position:absolute;top:18px;width:1px;height:8px;background:rgba(195,204,216,.6)}'+
     '#gpts-body .g3emo{position:absolute;top:21px;width:2px;height:12px;background:#e6edf3;border-radius:1px;transform:translateX(-1px)}'+
-    '#gpts-body .g3emn{position:absolute;top:22px;width:10px;height:10px;border-radius:50%;background:#fff;'+
-      'box-shadow:0 0 0 2px #0b0e14;transform:translateX(-5px)}'+
+    // (v14.4) the dot became a PILL: rounded ES price + last-bar arrow, still white, same top so
+    // the money-label contract (painted top must clear rows 0-9) holds. height:12 read by the tests.
+    '#gpts-body .g3emn{position:absolute;top:22px;height:12px;border-radius:6px;background:#fff;'+
+      'box-shadow:0 0 0 2px #0b0e14;transform:translateX(-50%);color:#0d1117;font-size:8px;'+
+      'font-weight:800;padding:0 4px;display:inline-flex;align-items:center;gap:1px;line-height:1;'+
+      'white-space:nowrap;z-index:3;cursor:help}'+
+    '#gpts-body .g3emn i{font-style:normal;font-size:7px}'+
     // TARGET moves to CYAN. Yellow now means POSITIVE GAMMA (Skylit's Pika), so the target cannot keep it.
     // Cyan is the one hue the palette had not spent, and the T glyph carries identity without colour.
     '#gpts-body .g3emT{position:absolute;top:21px;font-size:9px;font-weight:800;color:#4fd1e0;'+
@@ -20455,7 +20465,19 @@ function secFrame(sym){
        // (v11.75) SAME COLOUR TEST AS THE CHIP ON ROW 1. Two marks for one level that disagreed about
        // its colour was worse than either colour alone.
        (ifMagEarly!=null?('<span class="g3emT'+((ifMagEarly<EB.low||ifMagEarly>EB.high)?' out':'')+((ifMagEarly>EB.now)?' up':' dn')+'" style="left:'+emPosRail(EB,ifMagEarly,RB).toFixed(1)+'%">T</span>'):'')+
-       '<i class="g3emn'+(str?' g3str':'')+'" style="left:'+pNow.toFixed(1)+'%"></i>'+
+       // (v14.4, operator-directed) THE DOT IS NOW A PILL: the rounded ES price with an arrowhead
+       // for which way the last bar closed. Direction from the last two CLOSED candles — a per-tick
+       // wiggle would make the arrow flicker; a bar is a decision. Edge-clamped like every label.
+       (function(){
+         var d0=0; try{ var csP=closedCandles(sym)||[];
+           if(csP.length>=2 && typeof csP[csP.length-1].c==='number' && typeof csP[csP.length-2].c==='number')
+             d0=csP[csP.length-1].c-csP[csP.length-2].c; }catch(ePd){}
+         var arr=(d0>0)?'<i style="color:#1a7f4e">▲</i>':(d0<0?'<i style="color:#c0392b">▼</i>':'');
+         var pEdge=(pNow>92)?';transform:translateX(-100%)':((pNow<8)?';transform:translateX(0)':'');
+         return '<span class="g3emn'+(str?' g3str':'')+'" style="left:'+pNow.toFixed(1)+'%'+pEdge+'"'+
+                g3tip('Price now: '+frameNum(EB.now)+' on the chart\'s scale, rounded to save space. The arrow is the LAST CLOSED BAR\'s direction — up green, down red, absent when flat.'+(str?' RED PILL: price is beyond the expected move — STRETCHED.':''))+
+                '>'+g3esc(frameNum(EB.now))+arr+'</span>';
+       })()+
        // (v11.61) gamma piles hang BELOW the rail — the fuel and the friction between price and the rails
        (function(){
          var ps=[]; try{ ps=emPiles(EB, sym)||[]; }catch(eP){ return ''; }
@@ -21446,15 +21468,8 @@ function secLoc(sym){
         h+='<div class="g3rx"><em></em><span style="color:#f2b45a">rate of change unavailable \u2014 '+
            g3esc((VEL_META&&VEL_META.why)||'no velocity')+'</span></div>';
       }
-      // ⚠ (v13.6) ROLL BIAS MOVED TO THE TOP AND TURNED RED. At the bottom it was the last thing read
-      // and the first thing missed; it is the one line that describes the WHOLE book rather than one
-      // node, so it belongs where the eye lands first.
-      if(BIAS && BIAS.n>1 && BIAS.dir!=='mixed'){
-        h+='<div class="g3ndbias g3ndbiasTop"'+g3tip('Which way is the whole book moving? Each roll is one node handing size to another. When they all point the same way the entire structure is migrating, which matters more than any single level. \u26a0 Measured on our own data a roll destination holds no better than a node that is simply GROWING \u2014 this tells you WHERE size is going, not that it will hold.')+
-           '>ROLL BIAS '+(BIAS.dir==='up'?'\u2191':'\u2193')+' \u00b7 '+
-           (BIAS.dir==='up'?BIAS.up:BIAS.dn)+' of '+BIAS.n+' rolls '+(BIAS.dir==='up'?'upward':'downward')+
-           ' \u00b7 the book is migrating '+(BIAS.dir==='up'?'higher':'lower')+'</div>';
-      }
+      // (v14.4) ROLL BIAS moved again — to the GAMMA PROFILE header (operator-directed): the
+      // profile is becoming the primary read, and the one whole-book line belongs on it. One home.
       // ⚠ EVERY NODE THE RAIL DRAWS. v13.5 sliced to 6 and the rail drew 7, so a node was visible on
       // the rail and absent from the list — the exact inconsistency the shared-array fix existed to end.
       // A cap here silently reintroduces it; if the list ever needs limiting, the RAIL must limit too.

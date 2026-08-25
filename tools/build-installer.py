@@ -375,8 +375,12 @@ if errorlevel 1 (
   )
   echo.
   echo ============================================================
-  echo   PUSHED v{V}. Wait 5 minutes, update the Tampermonkey
-  echo   script, then RELOAD the Atlas tab. Footer must say v{V}.
+  echo   PUSHED v{V}. Wait 5 minutes, then update Tampermonkey:
+  echo.
+  echo   https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+  echo.
+  echo   (companion UNCHANGED unless this says otherwise: {COMPAN_NOTE})
+  echo   Then RELOAD the Atlas tab. Footer must say v{V}.
   echo ============================================================
 ) else (
   echo Nothing to commit - repo already at v{V}.
@@ -384,7 +388,7 @@ if errorlevel 1 (
 popd
 echo.
 pause
-""".replace('{V}', V).replace('{ZIP}', ZIPNAME).replace('{MSG}', _MSGBAT)
+""".replace('{V}', V).replace('{ZIP}', ZIPNAME).replace('{MSG}', _MSGBAT).replace('{COMPAN_NOTE}', COMPAN_NOTE)
 with open(BATNAME, 'wb') as _fh:
     _fh.write(_APPLY.replace('\r\n', '\n').replace('\n', '\r\n').encode('ascii'))
 _atxt = open(BATNAME, 'r', encoding='ascii').read()
@@ -397,3 +401,12 @@ print('install.bat  %d bytes  HDRLINES=%d  %d files  script v%s  companion v%s'
 print('DELIVER THESE TWO FILES (primary): %s + %s' % (ZIPNAME, BATNAME))
 print('  (install-v%s.bat still exists as the self-extracting fallback)' % V)
 print('round-trip: tar payload AND zip both byte-identical to the working tree')
+# (v14.3, user-directed: "you must give me the tampermonkey link every time you give me an install
+# file") — the block prints HERE, last, so the delivery message is written with it in view, and the
+# applier itself now echoes the URL on success. Two places; forgetting requires ignoring both.
+print('')
+print('==== PASTE THIS WITH THE INSTALL FILE — EVERY TIME ====')
+print('**Tampermonkey — update ONLY what changed:**')
+print('- **Tapereader v%s** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js' % V)
+print('- Companion v%s%s' % (VC, ' — UNCHANGED, do not reinstall' if 'UNCHANGED' in COMPAN_NOTE else ' — CHANGED, update it too'))
+print('Then wait ~5 min (raw CDN cache) and RELOAD the Atlas tab — footer must say v%s.' % V)

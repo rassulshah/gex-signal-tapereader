@@ -1,3 +1,31 @@
+## v14.4 — five operator-caught refinements on the live v14.3 face
+
+**1. The grey minors had vanished.** After the close Skylit rolls the front expiry, so the minors'
+`exp === today` filter went false for every non-rail strike and the grey bars silently disappeared —
+while the rail bars, exempt from the check, stayed. Minors now bind to THE RAIL'S OWN EXPIRY (read
+from the rail strikes' harvested rows): one book on the face, one reference, whatever the ladder is
+actually showing.
+
+**2. %K moved back ON TOP of the bar.** v14.3 put it inside with the badges; the operator wants the
+number above (King gold). The in-bar stack now holds only true badges — which also buys short bars
+one more badge slot.
+
+**3. ROLL BIAS moved to the GAMMA PROFILE header** (right-aligned chip, same red treatment, same
+hover). The NODES copy is retired — the profile is becoming the primary read, and the one whole-book
+line belongs on it. One home, not two.
+
+**4. THE PRICE PILL.** The white dot on the rail is now a pill carrying the rounded ES price with an
+arrowhead for direction — ▲ green / ▼ red from the LAST CLOSED BAR (a per-tick wiggle would flicker;
+a bar is a decision). Stretched still turns it red (g3str). Same top row, so the money-label
+geometry contract in test_em_band holds unchanged; edge-clamped like every label.
+
+**5. The floating wall flag** (a CW/PW with no qualifying bar to live in) now draws INSIDE the band
+at its strike instead of floating up beside the header.
+
+NOT changed, by design: on the rail's roll lane one arrow animates and one sits still — that is the
+grammar, not a bug: MOVING DASHES = the roll is in flight this bar; SOLID = latched and STUCK (the
+window slid past but the destination holds). The profile bars use the same distinction.
+
 ## v14.3 — badges move INSIDE the bars, the ROC matrix, and a $ axis
 
 The operator approved the mockups and supplied the letter codes; this build is that design.
