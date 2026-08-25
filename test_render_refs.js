@@ -83,6 +83,14 @@ ok(missing.length===0,'no renderer calls a function that does not exist — a sw
 
 // and the specific regression
 ok(declared.has('tradeNodes'),'tradeNodes exists (the v11.46 miss)');
-ok(/var rr=1; try\{ rr=dispIsFut\(\)\?dispR\(\):1; \}/.test(bodyOf('secLoc')),'secLoc declares its own rr (the v11.48 miss)');
+// (v13.1) the variable is now `rrN` — the LESSON is unchanged and is what this asserts: secLoc must
+// declare its OWN display-scale local. v11.48 used `rr` from nodeChartHtml's scope, threw a
+// ReferenceError on the first row, and because the block has its own try/catch the header had already
+// been emitted while every row vanished. Declare what you use in the scope you use it.
+ok(/var rrN=1; try\{ rrN=dispIsFut\(\)\?dispR\(\):1; \}/.test(bodyOf('secLoc')),
+   'secLoc declares its own display-scale local (the v11.48 miss)');
+// ⚠ and it must never reach for a bare `rr` that it did not declare
+ok(!/[^a-zA-Z]rr[^a-zA-Z0-9]/.test(bodyOf('secLoc').replace(/rrN/g,'')),
+   'and never references an undeclared rr from another scope');
 ok(/tradeNodes\(sym\)/.test(bodyOf('secLoc')),'and TRADE LOCATION calls it');
 console.log('\n'+pass+' pass / '+fail+' fail');

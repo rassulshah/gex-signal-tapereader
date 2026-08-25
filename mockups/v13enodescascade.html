@@ -1,0 +1,191 @@
+<!doctype html><html><head><meta charset="utf-8"><title>NODES + cascade mockup</title>
+<style>
+body{background:#0b0e14;color:#e6edf3;font:12px/1.45 Inter,Arial,sans-serif;margin:0;padding:20px}
+.wrap{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+.panel{width:392px;background:#0f131b;border:1px solid #232a36;border-radius:8px;padding:9px 10px}
+.sec{border:1px solid #232a36;border-radius:5px;overflow:hidden}
+.sechd{background:#161c27;padding:3px 8px;font-size:9px;font-weight:800;letter-spacing:.7px;text-align:center;color:#e3c341;text-transform:uppercase}
+.secbody{padding:8px}
+.locbar{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.pill{font-size:8.5px;font-weight:800;padding:2px 6px;border-radius:3px;border:1px solid #2a3342;color:#c9d4e2}
+.tgt{margin-left:auto;color:#e0645f;font-size:12px;font-weight:800}
+.read{color:#8b98a9;font-size:10.5px;margin:4px 0 2px}
+.bias{margin-top:7px;padding:4px 7px;border-radius:3px;background:rgba(224,100,95,.10);
+  border:1px solid rgba(224,100,95,.3);font-size:9.5px;font-weight:800;color:#e0645f;letter-spacing:.2px}
+.verdict{margin-top:6px;padding:6px 7px;border-left:2px solid #e3c341;background:rgba(227,195,65,.06);
+  font-size:10.5px;color:#d7dde6;border-radius:0 3px 3px 0}
+.verdict b{color:#e3c341}
+.hd1{display:grid;grid-template-columns:96px 46px 1fr;gap:4px;font-size:7px;font-weight:800;
+  letter-spacing:.4px;color:#5b6675;text-transform:uppercase;padding:7px 2px 2px}
+.hd2{display:grid;grid-template-columns:1fr 46px 46px 46px 52px;gap:4px;font-size:6.5px;font-weight:800;
+  letter-spacing:.4px;color:#5b6675;text-transform:uppercase;padding:0 2px 3px;border-bottom:1px solid #1c222d}
+.hd2 span{text-align:right}
+.nrow{padding:5px 2px 3px;border-bottom:1px solid #141a24}
+.r1{display:grid;grid-template-columns:96px 46px 1fr;gap:4px;align-items:baseline}
+.r2{display:grid;grid-template-columns:1fr 46px 46px 46px 52px;gap:4px;align-items:center;margin-top:2px}
+.r2 span{text-align:right;font-size:9.5px;font-weight:700}
+.px{font-size:12.5px;font-weight:800;letter-spacing:-.2px}
+.sub{font-size:7.5px;color:#5b6675;font-weight:700}
+.pct{font-size:10px;font-weight:800;text-align:right}
+.size{font-size:10px;font-weight:800;color:#c9d4e2;text-align:right}
+.up{color:#2ec27e}.dn{color:#e0645f}.flat{color:#5b6675}
+.call{color:#e3c341}.put{color:#a371f7}
+.chips{display:flex;gap:4px;align-items:center;margin-top:3px;flex-wrap:wrap}
+.chip{font-size:7.5px;font-weight:800;padding:1px 5px;border-radius:3px;letter-spacing:.3px;white-space:nowrap}
+.bull{color:#2ec27e;background:rgba(46,194,126,.13);border:1px solid rgba(46,194,126,.38)}
+.bear{color:#e0645f;background:rgba(224,100,95,.13);border:1px solid rgba(224,100,95,.38)}
+.neut{color:#7d8794;background:rgba(125,135,148,.10);border:1px solid rgba(125,135,148,.30)}
+.turn{color:#f2b45a;background:rgba(242,180,90,.13);border:1px solid rgba(242,180,90,.45)}
+.rollc{color:#7cc7ff;background:rgba(124,199,255,.12);border:1px solid rgba(124,199,255,.40)}
+.note{width:420px;color:#8b98a9;font-size:11.5px}
+.note h4{color:#e3c341;font-size:10px;letter-spacing:.5px;text-transform:uppercase;margin:15px 0 5px}
+.note h4:first-child{margin-top:0}
+.note code{background:#161c27;padding:1px 5px;border-radius:3px;color:#c9d4e2;font-size:10.5px}
+.fix{border-left:2px solid #f2b45a;padding:5px 8px;margin:5px 0;background:rgba(242,180,90,.05);font-size:11px}
+table{border-collapse:collapse;font-size:10px;margin-top:6px}
+td,th{border:1px solid #232a36;padding:3px 6px;text-align:right}
+th{color:#5b6675;font-size:8.5px;text-transform:uppercase}
+td:first-child,th:first-child{text-align:left}
+</style></head><body>
+<div class="wrap">
+
+<div class="panel">
+ <div class="sec">
+  <div class="sechd">② Location</div>
+  <div class="secbody">
+    <div class="locbar"><span class="pill">−G +V</span><span class="pill">BREAKS</span>
+      <span class="tgt">T: 7650 <span style="font-size:9px">−55</span></span></div>
+
+    <svg viewBox="0 0 360 104" width="360" height="104" style="display:block">
+      <defs><marker id="ad" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5.5" markerHeight="5.5" orient="auto">
+        <path d="M0 0 L8 4 L0 8 z" fill="#e0645f"/></marker></defs>
+      <!-- both live rolls point DOWN; separate lanes so they never touch -->
+      <path d="M286 52 L286 30 L172 30 L172 46" fill="none" stroke="#e0645f" stroke-width="1.3" marker-end="url(#ad)"/>
+      <text x="229" y="26" font-size="7" fill="#e0645f" font-weight="800" text-anchor="middle">ROLL ↓ 7682 · $541K</text>
+      <path d="M214 52 L214 12 L118 12 L118 46" fill="none" stroke="#e0645f" stroke-width="1.3" marker-end="url(#ad)"/>
+      <text x="166" y="8" font-size="7" fill="#e0645f" font-weight="800" text-anchor="middle">ROLL ↓ 7667 · $802K</text>
+
+      <!-- name band: nothing else is ever drawn on this row -->
+      <text x="60"  y="60" font-size="7" fill="#8b98a9" text-anchor="middle" font-weight="800">PS</text>
+      <text x="118" y="60" font-size="7" fill="#e3c341" text-anchor="middle" font-weight="800">GK</text>
+      <text x="172" y="60" font-size="7" fill="#8b98a9" text-anchor="middle" font-weight="800">BRK</text>
+      <text x="286" y="60" font-size="7" fill="#8b98a9" text-anchor="middle" font-weight="800">BRK</text>
+
+      <line x1="10" y1="78" x2="350" y2="78" stroke="#2a3342" stroke-width="7"/>
+      <rect x="57"  y="70" width="7" height="16" fill="#a371f7" opacity=".70"/><rect x="57"  y="68" width="7" height="2.8" fill="#2ec27e"/>
+      <rect x="115" y="66" width="7" height="24" fill="#a371f7" opacity=".90"/><rect x="115" y="64" width="7" height="2.8" fill="#2ec27e"/>
+      <rect x="169" y="69" width="7" height="18" fill="#e3c341" opacity=".80"/><rect x="169" y="67" width="7" height="2.8" fill="#2ec27e"/>
+      <rect x="211" y="72" width="7" height="12" fill="#e3c341" opacity=".45"/><rect x="211" y="82" width="7" height="2.4" fill="#e0645f"/>
+      <rect x="283" y="68" width="7" height="20" fill="#e3c341" opacity=".55"/><rect x="283" y="86" width="7" height="2.4" fill="#e0645f"/>
+
+      <text x="60"  y="98" font-size="7" fill="#a371f7" text-anchor="middle" font-weight="800">7642</text>
+      <text x="118" y="98" font-size="7" fill="#a371f7" text-anchor="middle" font-weight="800">7667</text>
+      <text x="172" y="98" font-size="7" fill="#e3c341" text-anchor="middle" font-weight="800">7682</text>
+      <text x="214" y="98" font-size="7" fill="#e3c341" text-anchor="middle" font-weight="800">7687</text>
+      <text x="286" y="98" font-size="7" fill="#e3c341" text-anchor="middle" font-weight="800">7707</text>
+      <text x="10"  y="98" font-size="7" fill="#e6edf3" font-weight="800">7639</text>
+      <text x="10"  y="70" font-size="7" fill="#8b98a9" font-weight="800">EL</text>
+      <text x="350" y="98" font-size="7" fill="#e6edf3" font-weight="800" text-anchor="end">7730</text>
+      <text x="350" y="70" font-size="7" fill="#8b98a9" font-weight="800" text-anchor="end">EH</text>
+      <polygon points="96,86 92,94 100,94" fill="#e0645f"/>
+      <text x="96" y="60" font-size="7" fill="#e0645f" text-anchor="middle" font-weight="800">T</text>
+      <circle cx="140" cy="78" r="5.5" fill="#e6edf3" stroke="#0b0e14" stroke-width="2"/>
+    </svg>
+
+    <div class="read">Nothing sizeable between 7705 and 7730. Then down 7700 (44% brake, 5 away), nothing above.</div>
+
+    <div class="hd1"><span>Node · SPXW</span><span style="text-align:right">%King</span><span style="text-align:right">Size</span></div>
+    <div class="hd2"><span style="text-align:left"></span><span>5m</span><span>15m</span><span>60m</span><span>Day</span></div>
+
+    <div class="nrow">
+      <div class="r1"><span><span class="px call">7707.00</span> <span class="sub">7690</span></span>
+        <span class="pct call">74% ▲</span><span class="size">$15.8M</span></div>
+      <div class="r2"><span></span><span class="dn">−20K</span><span class="dn">−33K</span><span class="dn">−68K</span><span class="up">+14.4M</span></div>
+      <div class="chips"><span class="chip bull">RESISTANCE FAILING</span><span class="chip rollc">→ rolls dn 7682</span></div>
+    </div>
+
+    <div class="nrow">
+      <div class="r1"><span><span class="px call">7686.90</span> <span class="sub">7670</span></span>
+        <span class="pct call">31% ▲</span><span class="size">$4.1M</span></div>
+      <div class="r2"><span></span><span class="dn">−48K</span><span class="dn">−61K</span><span class="dn">−100K</span><span class="up">+1.3M</span></div>
+      <div class="chips"><span class="chip bull">RESISTANCE FAILING</span><span class="chip rollc">→ rolls dn 7667</span></div>
+    </div>
+
+    <div class="nrow">
+      <div class="r1"><span><span class="px call">7681.90</span> <span class="sub">7665</span></span>
+        <span class="pct call">42% ▲</span><span class="size">$10.2M</span></div>
+      <div class="r2"><span></span><span class="up">+493K</span><span class="up">+541K</span><span class="up">+1.4M</span><span class="up">+7.6M</span></div>
+      <div class="chips"><span class="chip bear">RESISTANCE BUILDING</span><span class="chip rollc">receives roll</span></div>
+    </div>
+
+    <div class="nrow">
+      <div class="r1"><span><span class="px call">7671.90</span> <span class="sub">7655</span></span>
+        <span class="pct call">17% ▲</span><span class="size">$3.2M</span></div>
+      <div class="r2"><span></span><span class="dn">−56K</span><span class="dn">−93K</span><span class="up">+646K</span><span class="dn">−3.1M</span></div>
+      <div class="chips"><span class="chip turn">TURNING ↓ · 5m then 15m</span><span class="chip rollc">→ rolls dn 7667</span></div>
+    </div>
+
+    <div class="nrow">
+      <div class="r1"><span><span class="px put">7666.90</span> <span class="sub">7650 K</span></span>
+        <span class="pct put">100% ▼</span><span class="size">$19.2M</span></div>
+      <div class="r2"><span></span><span class="up">+193K</span><span class="up">+812K</span><span class="dn">−1.4M</span><span class="up">+12.3M</span></div>
+      <div class="chips"><span class="chip turn">TURNING ↑ · 5m then 15m</span><span class="chip rollc">receives ×2</span></div>
+    </div>
+
+    <div class="nrow">
+      <div class="r1"><span><span class="px put">7641.80</span> <span class="sub">7625</span></span>
+        <span class="pct put">28% ▼</span><span class="size">$6.2M</span></div>
+      <div class="r2"><span></span><span class="up">+60K</span><span class="up">+96K</span><span class="up">+121K</span><span class="up">+5.7M</span></div>
+      <div class="chips"><span class="chip bull">SUPPORT BUILDING</span></div>
+    </div>
+
+    <div class="bias">ROLL BIAS ↓ &nbsp;5 of 5 rolls downward &nbsp;·&nbsp; the book is migrating lower</div>
+    <div class="verdict">
+      <b>Overhead is draining into 7682, and 7667 is taking two feeds at once.</b>
+      7650 has been down −1.4M on the hour but turned up in the last 15 minutes — support re-forming
+      under price. Ceiling near 7682, floor firming 7667.
+    </div>
+  </div>
+ </div>
+</div>
+
+<div class="note">
+  <h4>Your cascade idea — verified against the live book</h4>
+  It holds, and it fires in both directions. Real values, $K:
+  <table>
+    <tr><th>Strike</th><th>5m</th><th>15m</th><th>60m</th><th>Day</th><th>pairs with</th></tr>
+    <tr><td>7645</td><td class="dn">−17</td><td class="dn">−35</td><td class="up">+46</td><td class="up">+1,726</td><td>7625 +96</td></tr>
+    <tr><td>7655</td><td class="dn">−56</td><td class="dn">−93</td><td class="up">+646</td><td class="dn">−3,139</td><td>7650 +802</td></tr>
+    <tr><td>7670</td><td class="dn">−48</td><td class="dn">−61</td><td class="dn">−100</td><td class="up">+1,313</td><td>7650 +802</td></tr>
+    <tr><td>7690</td><td class="dn">−20</td><td class="dn">−33</td><td class="dn">−68</td><td class="up">+14,408</td><td>7665 +541</td></tr>
+  </table>
+  The short horizons turn first while Day is still strongly positive — exactly as you said.
+
+  <h4>New chip: TURNING</h4>
+  Amber, and it means precisely what you described — <b>5m and 15m have flipped while 60m has not</b>.
+  It is the earliest honest warning that a node is changing hands, and it is deliberately a different
+  colour from the bull/bear chips because it is not a verdict yet, it is a <i>heads-up</i>.
+  <code>TURNING ↑</code> is the same thing in reverse: 7650 is down −1.4M on the hour but has added
+  +812K in 15 minutes.
+
+  <h4>Two things the data changed in my design</h4>
+  <div class="fix"><b>Rolls are not conservation of mass.</b> Receivers gained 2.8×, 8.6×, 13× and 16×
+  what the losers lost. Several sources feed one destination. An equal-and-opposite test — which is
+  what I would have written — would have detected almost nothing. The rule is direction + proximity +
+  a magnitude floor, never a balance check.</div>
+  <div class="fix"><b>Roll bias is its own signal.</b> All five rolls point down and 7650 is receiving
+  from two strikes at once. One line at the bottom says so, because five separate badges do not add up
+  to "the book is migrating lower" in a trader's head at a glance.</div>
+
+  <h4>Layout</h4>
+  Five numeric columns would not fit at 392px, so each node is two lines: identity on top
+  (price · SPXW strike, %King, Size), the four horizons underneath on a fixed grid so they stay
+  column-aligned down the list, then chips only when there is something to say.
+
+  <h4>Still to settle</h4>
+  Roll floor. Given what I just measured, I would start at <code>$40K over 15m</code> with the
+  receiver within <code>25 SPX points</code> — 7645→7625 at −35K/+96K is a real roll and a $500K floor
+  would have missed it entirely. That is a 12× correction to the number I proposed an hour ago.
+</div>
+
+</div></body></html>

@@ -278,3 +278,43 @@ quirks-mode context.
 DIAGNOSTIC NOTE: the tell was that inline styles rendered correctly while class-based rules did not.
 That split says "selector matching", not "missing stylesheet" — and the stylesheet was in fact present
 (18 tags, 1.38MB). Checking `compatMode` and `el.matches()` took one call.
+
+## SOURCE-OF-TRUTH POLICY (v13.1, user-directed)
+
+**We capture the vendors' numbers. We do not invent our own.**
+
+1. A number the vendor publishes is captured VERBATIM and displayed as theirs.
+   Skylit is the source of truth for FLOW (nodes, node dollars, rate of change).
+   InsiderFinance is the source of truth for STRUCTURE (levels, gamma/delta profiles, tiers).
+2. We derive ONLY what the vendor does not publish.
+3. Every derived value carries a source tag and is marked on the face. The `IF·pub` vs `calc`
+   asterisk on FLIP is the pattern; it is now the rule, not a one-off.
+4. **The recorder stores vendor raw AND our derived read — never the derived alone.**
+
+### Why 4 exists — the v13.1 audit finding
+
+`recNode` stored `pct` (our %King normalisation), `st` ('Building'/'Fading', our label) and `hist`
+(our own 15-second samples). Skylit's published dollar value and their own 5m/15m/60m/1d deltas were
+stored NOWHERE. If one of our rules is wrong, every recorded day inherits the flaw, and the nightly
+LLM can neither detect it nor re-derive a better answer, because the inputs were never kept.
+**We would be training on our own opinions.** `snap.vend` now carries their numbers verbatim and
+`snap.srcs` marks which fields are ours.
+
+### Enforcement
+`test_velocity_policy.js` — the harvest computes no delta of its own, the recorder emits `vend` and
+`srcs`, derived fields are tagged 'derived', and a broken capture REFUSES rather than rendering zeroes.
+
+### The cross-check this buys
+Because the displayed deltas are Skylit's own, THEIR UI is a live oracle: click a strike in their
+ladder and the popup must match this panel. A disagreement is a real bug, visible without any
+instrumentation. That is the TESTING leg of feature enrollment, obtained for free.
+
+### Failure pattern: an assumption written in the voice of a measurement (THIRD occurrence)
+- v12.3 test comment: "resizeTo IS permitted inside a drag handler, because a drag is a user gesture."
+  Only the first call is. Six versions trusted it.
+- v11.95 CSS comment: "the SPX strike now matches the ES price in size." It did not — the strike was
+  raised to 8.65px and the ES price left at 6.5px. Eighteen versions carried the false claim.
+- v13.1 (mine): "a roll is mass moving from one strike to another" implied conservation. Measured:
+  receivers gained 2.8x-16.5x what losers shed. The floor I proposed, $500K, was 12x too high and
+  would have detected almost nothing.
+RULE: a comment stating a fact must say how it was measured, or say that it was assumed.

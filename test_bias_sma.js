@@ -44,13 +44,19 @@ eval(ex('biasVotes'));
 {
   TV={state:'dn',up:2,dn:18,win:20};
   const B=biasVotes('SPY');
-  ok(/18 of 20 bars below the 50-SMA/.test(B.why), 'a downtrend counts the bars BELOW', B.why);
+  // (v13.1) the line is terser — "18 out of 20 below 50 SMA". The LESSON is untouched and is what
+  // these assert: it counts the side the STATE IS ON. A DNTREND reading "17 above" was the old bug.
+  ok(/18 out of 20 below 50 SMA/.test(B.why), 'a downtrend counts the bars BELOW', B.why);
   TV={state:'up',up:17,dn:2,win:20};
-  ok(/17 of 20 bars above the 50-SMA/.test(biasVotes('SPY').why), 'an uptrend counts the bars ABOVE');
+  ok(/17 out of 20 above 50 SMA/.test(biasVotes('SPY').why), 'an uptrend counts the bars ABOVE');
   TV={state:'up-broken',up:13,dn:5,win:20};
   const Bb=biasVotes('SPY');
-  ok(/13 of 20 bars above/.test(Bb.why), 'a broken trend still counts its own side', Bb.why);
-  ok(/lost 15, reversal needs 11/.test(Bb.why), 'and states what it lost and what a reversal now needs', Bb.why);
+  ok(/13 out of 20 above/.test(Bb.why), 'a broken trend still counts its own side', Bb.why);
+  // ⚠ the thresholds MOVED to `whyLong`, which the hover renders — they are not deleted. A broken
+  // trend that stopped saying what a reversal needs would be a real loss of information.
+  ok(/lost 15, reversal needs 11/.test(Bb.whyLong||''),
+     'and still states what it lost and what a reversal needs, now in the hover', Bb.whyLong);
+  ok(!/lost 15/.test(Bb.why), 'but the face line stays terse');
 }
 // (v11.95) BADGES READ THEIR OWN DIRECTION — up / down / sideways — not agreement with the call.
 {
@@ -108,8 +114,8 @@ eval(ex('biasVotes'));
   // (v11.95) the line is built from tv.up / tv.dn / tv.win now, so the fixture must supply them —
   // it used to fall through to trendWindowRead and always report the UP count regardless of state.
   TV={state:'dn',up:4,dn:16,win:20}; const B=biasVotes('SPY');
-  ok(/50-SMA/.test(B.why),'the reason names the 50-SMA',B.why);
-  ok(/16 of 20 bars below/.test(B.why),'and how many bars are on the side the state is ON',B.why);
+  ok(/50 SMA/.test(B.why),'the reason names the 50-SMA',B.why);
+  ok(/16 out of 20 below/.test(B.why),'and how many bars are on the side the state is ON',B.why);
 }
 // ---- drift is carried, and it is a gate not a fourth confirmer ----
 {

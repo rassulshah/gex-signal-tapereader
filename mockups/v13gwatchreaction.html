@@ -1,0 +1,175 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Watch marker + REACTION on velocity</title>
+<style>
+body{background:#0b0e14;color:#e6edf3;font:12px/1.45 Inter,Arial,sans-serif;margin:0;padding:20px}
+.wrap{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+.panel{width:392px;background:#0f131b;border:1px solid #232a36;border-radius:8px;padding:9px 10px}
+.sec{border:1px solid #232a36;border-radius:5px;overflow:hidden;margin-bottom:9px}
+.sechd{background:#161c27;padding:3px 8px;font-size:9px;font-weight:800;letter-spacing:.7px;text-align:center;color:#e3c341;text-transform:uppercase}
+.secbody{padding:8px}
+.nodehd{display:grid;grid-template-columns:12px 62px 38px 44px 44px 44px 52px;gap:3px;
+  font-size:6.5px;font-weight:800;letter-spacing:.4px;color:#5b6675;text-transform:uppercase;padding:2px 2px 4px}
+.nodehd span:nth-child(n+3){text-align:right}
+.nrow{padding:6px 2px 5px;border-top:1px solid #232a36}
+.nrow.watch{background:rgba(124,199,255,.055);border-top-color:#2f4a5e;
+  box-shadow:inset 2px 0 0 #7cc7ff;border-radius:2px}
+.r1{display:grid;grid-template-columns:12px 62px 38px 44px 44px 44px 52px;gap:3px;align-items:baseline}
+.r1 span:nth-child(n+3){text-align:right}
+.mk{font-size:9px;color:#7cc7ff;font-weight:800}
+.px{font-size:12.5px;font-weight:800;letter-spacing:-.3px}
+.pct{font-size:9.5px;font-weight:800}
+.d{font-size:9px;font-weight:700}
+.r2{font-size:8px;color:#5b6675;font-weight:700;margin-top:1px;padding-left:15px}
+.r2 b{color:#c9d4e2;font-weight:800;font-size:9px}
+.up{color:#2ec27e}.dn{color:#e0645f}.flat{color:#5b6675}
+.call{color:#e3c341}.put{color:#a371f7}.wat{color:#7cc7ff}
+.chips{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;padding-left:15px}
+.chip{font-size:7.5px;font-weight:800;padding:1px 5px;border-radius:3px;letter-spacing:.3px;white-space:nowrap}
+.bull{color:#2ec27e;background:rgba(46,194,126,.13);border:1px solid rgba(46,194,126,.38)}
+.bear{color:#e0645f;background:rgba(224,100,95,.13);border:1px solid rgba(224,100,95,.38)}
+.turn{color:#f2b45a;background:rgba(242,180,90,.13);border:1px solid rgba(242,180,90,.45)}
+.rollc{color:#7cc7ff;background:rgba(124,199,255,.12);border:1px solid rgba(124,199,255,.40)}
+.watchc{color:#7cc7ff;background:rgba(124,199,255,.18);border:1px solid #7cc7ff}
+/* REACTION */
+.testing{display:flex;align-items:baseline;gap:6px;font-size:10px;color:#8b98a9}
+.testing b{font-size:13px;color:#e6edf3;font-weight:800}
+.defend{display:flex;align-items:center;gap:8px;margin-top:7px}
+.dverd{font-size:17px;font-weight:800;letter-spacing:-.3px;line-height:1}
+.dbars{flex:1}
+.brow{display:flex;align-items:center;gap:5px;font-size:9px;font-weight:700;color:#8b98a9;margin:2px 0}
+.bar{flex:1;height:5px;background:#1c222d;border-radius:2px;position:relative;max-width:120px}
+.bar i{position:absolute;top:0;bottom:0;border-radius:2px}
+.sup{margin-top:6px;font-size:9.5px;color:#8b98a9;display:flex;gap:5px;flex-wrap:wrap}
+.tick{color:#2ec27e;font-weight:800}.cross{color:#e0645f;font-weight:800}
+.warn{margin-top:6px;padding:4px 7px;border-radius:3px;background:rgba(242,180,90,.10);
+  border:1px solid rgba(242,180,90,.32);font-size:9.5px;color:#f2b45a;font-weight:700}
+/* EXECUTE */
+.armed{display:flex;align-items:center;gap:7px}
+.armw{font-size:16px;font-weight:800;color:#2ec27e;letter-spacing:-.2px}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;margin-top:7px}
+.cell{border:1px solid #232a36;border-radius:4px;padding:4px 5px}
+.cell b{display:block;font-size:6.5px;letter-spacing:.4px;text-transform:uppercase;color:#5b6675;margin-bottom:1px}
+.cell span{font-size:11.5px;font-weight:800}
+.conflict{margin-top:7px;padding:5px 7px;border-left:2px solid #e0645f;background:rgba(224,100,95,.07);
+  font-size:10px;color:#d7dde6;border-radius:0 3px 3px 0}
+.conflict b{color:#e0645f}
+.note{width:400px;color:#8b98a9;font-size:11.5px}
+.note h4{color:#e3c341;font-size:10px;letter-spacing:.5px;text-transform:uppercase;margin:15px 0 5px}
+.note h4:first-child{margin-top:0}
+.note code{background:#161c27;padding:1px 5px;border-radius:3px;color:#c9d4e2;font-size:10.5px}
+</style></head><body>
+<div class="wrap">
+
+<div class="panel">
+  <div class="sec">
+    <div class="sechd">② Location &nbsp;·&nbsp; nodes</div>
+    <div class="secbody" style="padding-top:2px">
+      <div class="nodehd"><span></span><span>Node</span><span>%K</span><span>5m</span><span>15m</span><span>60m</span><span>Day</span></div>
+
+      <div class="nrow">
+        <div class="r1"><span></span><span class="px call">7707.00</span><span class="pct call">74%▲</span>
+          <span class="d dn">−20K</span><span class="d dn">−33K</span><span class="d dn">−68K</span><span class="d up">+14.4M</span></div>
+        <div class="r2">7690 · <b>$15.8M</b></div>
+        <div class="chips"><span class="chip bull">RESISTANCE FAILING</span><span class="chip rollc">→ rolls dn 7682</span></div>
+      </div>
+
+      <div class="nrow">
+        <div class="r1"><span></span><span class="px call">7681.90</span><span class="pct call">42%▲</span>
+          <span class="d up">+493K</span><span class="d up">+541K</span><span class="d up">+1.4M</span><span class="d up">+7.6M</span></div>
+        <div class="r2">7665 · <b>$10.2M</b></div>
+        <div class="chips"><span class="chip bear">RESISTANCE BUILDING</span><span class="chip rollc">receives roll</span></div>
+      </div>
+
+      <!-- ▶ the node price is about to test — the whole "watch list", one marker -->
+      <div class="nrow watch">
+        <div class="r1"><span class="mk">▶</span><span class="px put">7666.90</span><span class="pct put">100%▼</span>
+          <span class="d up">+193K</span><span class="d up">+812K</span><span class="d dn">−1.4M</span><span class="d up">+12.3M</span></div>
+        <div class="r2">7650 · King · <b>$19.2M</b> &nbsp;·&nbsp; <span class="wat">2.9 below price</span></div>
+        <div class="chips"><span class="chip watchc">▶ WATCH · testing now</span>
+          <span class="chip turn">TURNING ↑</span><span class="chip rollc">receives ×2</span></div>
+      </div>
+
+      <div class="nrow">
+        <div class="r1"><span></span><span class="px put">7641.80</span><span class="pct put">28%▼</span>
+          <span class="d up">+60K</span><span class="d up">+96K</span><span class="d up">+121K</span><span class="d up">+5.7M</span></div>
+        <div class="r2">7625 · <b>$6.2M</b></div>
+        <div class="chips"><span class="chip bull">SUPPORT BUILDING</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sechd">③ Reaction</div>
+    <div class="secbody">
+      <div class="testing">Testing <b class="put">7666.90</b> <span class="sub">7650 · King</span>
+        <span style="margin-left:auto;color:#5b6675">2.9 below · 4 min in test</span></div>
+
+      <div class="defend">
+        <div class="dverd up">DEFENDING</div>
+        <div class="dbars">
+          <div class="brow"><span style="width:20px">5m</span>
+            <span class="bar"><i style="left:50%;width:14%;background:#2ec27e"></i></span>
+            <span class="up" style="width:44px;text-align:right">+193K</span></div>
+          <div class="brow"><span style="width:20px">15m</span>
+            <span class="bar"><i style="left:50%;width:41%;background:#2ec27e"></i></span>
+            <span class="up" style="width:44px;text-align:right">+812K</span></div>
+        </div>
+      </div>
+
+      <div class="sup">
+        <span class="tick">✓</span> node added <b style="color:#e6edf3">$812K while price sat on it</b>
+        <span class="tick">✓</span> rejection wick, closed back inside
+        <span class="cross">✗</span> VIX flat
+      </div>
+
+      <div class="warn">⚠ 60m still −1.4M — the defence is 15 minutes old, not an hour old.</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sechd">④ Execute</div>
+    <div class="secbody">
+      <div class="armed"><span class="armw">ARMED · LONG</span>
+        <span class="chip bull" style="margin-left:auto">half size</span></div>
+      <div class="grid">
+        <div class="cell"><b>Entry</b><span>7667.5</span></div>
+        <div class="cell"><b>Stop</b><span class="dn">7660.0</span></div>
+        <div class="cell"><b>Target</b><span class="up">7681.9</span></div>
+        <div class="cell"><b>R</b><span>1.9</span></div>
+      </div>
+      <div class="conflict"><b>Halved:</b> the node is defending, but ROLL BIAS is ↓ and 5 of 5 rolls
+        point lower. Target is the next node up, not the EM high.</div>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  <h4>Nodes on watch — one marker, no section</h4>
+  <code>▶</code> plus a tinted row and a left rule marks the node price is actually testing, taken from
+  the pullback engine's own pick (<code>pbNodeK</code> / <code>G3_AT_LEVEL</code>) rather than a second
+  computation. A separate section would have restated these rows and could disagree with them after a
+  refresh — the failure mode where the face and the data drift apart.
+
+  <h4>Reaction rebuilt on velocity — this is the real gain</h4>
+  It used to answer "is the level defending itself?" with wicks and VIX. Now the answer is
+  <b>in dollars</b>: the node added <code>+812K in 15 minutes while price sat on it</code>. That is the
+  level defending itself, measured, not inferred.
+  <br><br>The verdict has three states, and they come from the tested node's own deltas:
+  <br>· <span class="up"><b>DEFENDING</b></span> — adding while price tests it
+  <br>· <span class="dn"><b>ABANDONING</b></span> — bleeding while price tests it, which is the break tell
+  <br>· <span class="flat"><b>NO REACTION</b></span> — flat, and flat means no trade however good the location
+  <br><br>The old signals stay as corroboration, ticked or crossed, so you can see that the wick agreed
+  and VIX did not.
+
+  <h4>The honesty line</h4>
+  <code>⚠ 60m still −1.4M — the defence is 15 minutes old, not an hour old.</code> A node can be
+  <code>TURNING ↑</code> and still be down badly on the hour. Showing DEFENDING without that caveat
+  would be the panel sounding more certain than the data.
+
+  <h4>Execute stays separate, and earns it here</h4>
+  REACTION says defending. ROLL BIAS says the book is migrating lower. Those genuinely conflict, and
+  EXECUTE is where that gets resolved — <b>half size, target the next node up rather than the EM high</b>.
+  Merged into one section, that conflict would have been a footnote under a green verdict instead of
+  the thing that sized the trade.
+</div>
+
+</div></body></html>

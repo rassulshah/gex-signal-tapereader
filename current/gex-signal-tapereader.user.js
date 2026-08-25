@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    13.0
+// @version    13.1
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='13.0';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='13.1';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -2710,6 +2710,158 @@ function trackSpxwNodes(){
   }catch(e){ out.why='spxw tracking failed: '+(e&&e.message||e); }
   return out;
 }
+
+// ================= (v13.1) SKYLIT VELOCITY CAPTURE =================
+// ⚠⚠ POLICY: WE STORE THEIR NUMBERS, WE DO NOT INVENT OUR OWN.
+// Skylit hands every rendered ladder row a `velocity` object carrying the exact rate-of-change its
+// own strike popup displays: 1m / 5m / 10m / 15m / 1h / 4h / 1d, in dollars and percent. Measured
+// live 2026-08-25: clicking a strike fires NO network request, so those numbers are already in the
+// client. Harvesting them means our columns EQUAL their popup by construction, which turns their UI
+// into a free test oracle — a disagreement is a real bug, visible without instrumentation.
+// ⚠ THIS REPLACES DERIVING RATE-OF-CHANGE FROM OUR OWN 15-SECOND SAMPLING. That derivation was an
+// invention layered on top of a published fact, and it could never agree with them exactly.
+// ⚠ TWO FAILURE MODES, BOTH HANDLED, NEITHER SILENT:
+//   1. VIRTUALISATION — only RENDERED rows carry props. A node scrolled out of their ladder unmounts
+//      and its velocity vanishes. We keep the last value WITH ITS TIMESTAMP and report age; a stale
+//      number must never read as a live one.
+//   2. FIBER COUPLING — `__reactFiber$` and the prop name `velocity` are Skylit internals. A React
+//      upgrade or a rename breaks this SILENTLY, which is the dangerous part. velOk() reports health
+//      and the face renders an explicit refusal rather than blanks that look like zeroes.
+var VEL = {};                       // strike -> {cur,d1,d5,d10,d15,d60,d4h,d1d,p5,p15,p60,p1d,ts}
+var VEL_META = { ok:false, n:0, ts:0, why:'not yet harvested', scanned:0 };
+var VEL_STALE_MS = 120000;          // beyond this a captured row is reported as aged, not fresh
+
+function velFiberKey(el){
+  try{ for(var k in el){ if(k.indexOf('__reactFiber$')===0) return k; } }catch(e){}
+  return null;
+}
+// Pull every `velocity` object currently mounted. Cheap enough for a 3-second cadence: it walks at
+// most 4 fiber parents per element and stops at the first bad access.
+function velHarvest(){
+  var now=Date.now(), n=0, scanned=0;
+  try{
+    var els=document.querySelectorAll('div,span,td,tr,li');
+    for(var i=0;i<els.length;i++){
+      var el=els[i], fk=velFiberKey(el); if(!fk) continue;
+      scanned++;
+      var node=el[fk], depth=0;
+      while(node && depth<4){
+        var pr=node.memoizedProps;
+        if(pr && typeof pr==='object'){
+          var cands=null;
+          if(pr.velocity) { cands=[pr.velocity]; }
+          else {
+            for(var key in pr){
+              var o=pr[key];
+              if(o && typeof o==='object' && o.velocity && typeof o.velocity==='object'){
+                (cands=cands||[]).push(o.velocity);
+              }
+            }
+          }
+          if(cands){
+            for(var c=0;c<cands.length;c++){
+              var v=cands[c];
+              if(!v || typeof v!=='object') continue;
+              if(typeof v.strike!=='number' || !('delta1Day' in v)) continue;
+              VEL[v.strike]={
+                k:v.strike, exp:v.expiration||null,
+                cur:num(v.currentValue), d1:num(v.delta1Min), d5:num(v.delta5Min),
+                d10:num(v.delta10Min), d15:num(v.delta15Min), d60:num(v.delta1Hour),
+                d4h:num(v.delta4Hour), d1d:num(v.delta1Day),
+                p5:num(v.percent5Min), p15:num(v.percent15Min),
+                p60:num(v.percent1Hour), p1d:num(v.percent1Day),
+                trend:v.trend||null, ts:now
+              };
+              n++;
+            }
+          }
+        }
+        node=node.return; depth++;
+      }
+    }
+  }catch(e){
+    VEL_META={ ok:false, n:0, ts:now, why:'harvest threw: '+(e&&e.message||e), scanned:scanned };
+    return VEL_META;
+  }
+  function num(x){ return (typeof x==='number' && isFinite(x))?x:null; }
+  VEL_META = n>0
+    ? { ok:true, n:n, ts:now, why:'', scanned:scanned }
+    : { ok:false, n:0, ts:now, scanned:scanned,
+        why: scanned ? 'no velocity props found \u2014 Skylit may have renamed them' : 'no react fiber on the page' };
+  return VEL_META;
+}
+// ⚠ `num` above is declared AFTER the loop that uses it and scoped INSIDE velHarvest. Both are
+// deliberate: hoisting makes it legal, and keeping it local avoids planting a name as generic as
+// `num` at module scope in a file this size. If it is ever rewritten as `var num = function`, the
+// harvest silently breaks — hoisting is doing real work here.
+
+// Read one strike. Never lies about freshness.
+function velAt(k){
+  try{
+    var v=VEL[k]; if(!v) return null;
+    var age=Date.now()-(v.ts||0);
+    return { v:v, age:age, stale:(age>VEL_STALE_MS) };
+  }catch(e){ return null; }
+}
+function velOk(){ return !!(VEL_META && VEL_META.ok && VEL_META.n>0); }
+
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.vel      = function(k){ return (k==null)?VEL_META:velAt(+k); };
+window.__gptsDebug.velAll   = function(){ return VEL; };
+window.__gptsDebug.velCount = function(){ return Object.keys(VEL).length; };
+
+// ---- ROLLS ----
+// ⚠⚠ A ROLL IS NOT CONSERVATION OF MASS, AND ASSUMING IT WAS WOULD HAVE FOUND ALMOST NOTHING.
+// Measured on the live book: receivers gained 2.8x, 8.6x, 13.1x and 16.5x what the losers lost —
+// several strikes feed one destination, and fresh positioning arrives at the same time. An
+// equal-and-opposite test is therefore WRONG. The rule is direction + proximity + a magnitude floor.
+// ⚠ THE FLOOR IS $40K, NOT $500K. My first guess was $500K; the live tape carried a real roll at
+// 7645 -> 7625 of -35K into +96K, which a $500K floor would have discarded entirely. Measure first.
+var ROLL_MIN_ABS   = 40000;    // dollars moved over 15m before a change counts at all
+var ROLL_MAX_DIST  = 25;       // SPX points between source and destination
+var ROLL_MIN_RATIO = 0.40;     // receiver must take at least this share of what the loser shed
+
+function rollScan(strikes){
+  var out=[];
+  try{
+    if(!velOk() || !strikes || !strikes.length) return out;
+    var rows=[];
+    for(var i=0;i<strikes.length;i++){
+      var e=velAt(strikes[i]);
+      if(e && e.v && typeof e.v.d15==='number') rows.push(e.v);
+    }
+    for(var a=0;a<rows.length;a++){
+      var src=rows[a];
+      if(!(src.d15 < -ROLL_MIN_ABS)) continue;          // must be SHEDDING, materially
+      var best=null;
+      for(var b=0;b<rows.length;b++){
+        var dst=rows[b];
+        if(dst.k===src.k) continue;
+        if(Math.abs(dst.k-src.k)>ROLL_MAX_DIST) continue;
+        if(!(dst.d15 > ROLL_MIN_ABS)) continue;          // must be RECEIVING, materially
+        var ratio=dst.d15/Math.abs(src.d15);
+        if(ratio<ROLL_MIN_RATIO) continue;
+        if(!best || dst.d15>best.d15) best=dst;
+      }
+      if(best) out.push({ from:src.k, to:best.k, lost:src.d15, got:best.d15,
+                          dir:(best.k>src.k)?'up':'dn', amt:Math.abs(src.d15) });
+    }
+  }catch(e){}
+  return out;
+}
+// Aggregate: five separate badges do not add up to "the book is migrating lower" in a trader's head.
+function rollBias(rolls){
+  if(!rolls || !rolls.length) return null;
+  var up=0, dn=0;
+  rolls.forEach(function(r){ if(r.dir==='up') up++; else dn++; });
+  if(up===dn) return { dir:'mixed', up:up, dn:dn, n:rolls.length };
+  return { dir:(up>dn)?'up':'dn', up:up, dn:dn, n:rolls.length };
+}
+window.__gptsDebug.rolls = function(){
+  try{ var tp=tapeMap('SPXW'); var ks=Object.keys((tp&&tp.pct)||{}).map(parseFloat).filter(isFinite);
+       var r=rollScan(ks); return { rolls:r, bias:rollBias(r) }; }catch(e){ return String(e); }
+};
+
 function updateTaps(sym){
   var S=STATE[sym]||{}; var cs=S.candles||[]; if(cs.length<1) return;
   var tp=tapeMap(sym); if(!tp || !tp.pct) return;
@@ -3181,6 +3333,36 @@ function recordNodeSnapshot(sym){
         return b.length?b:null;
       }catch(eB){ return null; } })(),
       sig:sig,
+      // ⚠⚠ (v13.1) THE VENDOR'S OWN NUMBERS, VERBATIM — THE AUDIT FINDING THAT PROMPTED THIS.
+      // Until now this recorder stored our CONCLUSIONS and not the inputs behind them: `pct` is our
+      // %King normalisation, `st` is our Building/Steady/Fading label, `hist` is our own sampling.
+      // If one of those rules is wrong, every recorded day inherits the flaw and the nightly LLM can
+      // neither detect it nor re-derive a better answer, because what it would need was never kept.
+      // We would be training on our own opinions.
+      // `vend` fixes that: Skylit's published dollar value and their own 5m/15m/60m/1d deltas per
+      // strike, captured exactly as they publish them. With this the nightly can re-compute any
+      // reading from source and check us — and a disagreement is a finding, not a mystery.
+      // ⚠ FORWARD-ONLY, like `book` above. Days recorded before this can never be back-filled.
+      vend:(function(){ try{
+        if(!velOk()) return null;
+        var ks=Object.keys(VEL), rows=[];
+        for(var vi=0; vi<ks.length; vi++){
+          var v=VEL[ks[vi]];
+          if(!v || typeof v.cur!=='number') continue;
+          rows.push([v.k, Math.round(v.cur), Math.round(v.d5||0), Math.round(v.d15||0),
+                     Math.round(v.d60||0), Math.round(v.d1d||0)]);
+        }
+        if(!rows.length) return null;
+        // biggest first, capped — a day file should grow by tens of KB, not megabytes
+        rows.sort(function(x,y){ return Math.abs(y[1])-Math.abs(x[1]); });
+        return { src:'skylit', f:['k','cur','d5','d15','d60','d1d'],
+                 ts:VEL_META.ts||null, n:rows.length, rows:rows.slice(0,40) };
+      }catch(eV){ return null; } })(),
+      // Provenance, machine-readable, so the nightly never has to guess which fields are ours.
+      // ⚠ POLICY: a field is 'skylit'/'if' ONLY if it is the vendor's number unaltered. Anything we
+      // computed is 'derived', however well-founded — mislabelling our arithmetic as their data is
+      // the one error that would silently corrupt every conclusion drawn from this file.
+      srcs:{ vend:'skylit', book:'skylit', nodes:'derived', deriv:'derived', sig:'derived', feat:'derived' },
       // Forward-outcome slots, back-filled by labelForwardOutcomes() once N bars
       // elapse. null = not yet resolved. Stored for BOTH horizons (#3).
       out5:null,   // {mfe,mae,net,pxEnd,hitKing,revUp,revDn} over next 5 bars (15m)
@@ -17728,11 +17910,13 @@ function biasVotes(sym){
       var nWin=(tv&&tv.win)||null;
       if(nWin && nUp!=null && nDn!=null){
         var onSide=(out.dir<0)?nDn:nUp, word=(out.dir<0)?'below':'above';
-        out.why=onSide+' of '+nWin+' bars '+word+' the 50-SMA';
-        // a broken trend also says what it lost and what a reversal now needs — the v11.89 thresholds
+        // (v13.1, user-directed) TERSE. "1 out of 20 above 50 SMA" — the count that produced the
+        // state and nothing else. The thresholds it used to spell out live in the hover, where they
+        // are available without spending two lines of the face on them every render.
+        out.why=onSide+' out of '+nWin+' '+word+' 50 SMA';
         if(out.broken){
           var need=(typeof TREND_DOM_REV==='number')?TREND_DOM_REV:11;
-          out.why+=' — lost '+((typeof TREND_DOM==='number')?TREND_DOM:15)+', reversal needs '+need+' the other way';
+          out.whyLong=' \u2014 lost '+((typeof TREND_DOM==='number')?TREND_DOM:15)+', reversal needs '+need+' the other way';
         }
       }
       else if(tv && tv.line) out.why=String(tv.line);
@@ -17931,14 +18115,26 @@ function ensureV3Css(){
   '#gpts-body .g3embl{position:absolute;top:8px;transform:translateX(-50%);font-size:6px;font-weight:800;'+
   'color:#f2b45a;white-space:nowrap;letter-spacing:.04em}'+
     '#gpts-body .g3emt .g3pile{bottom:26px}'+
-    '#gpts-body .g3plab{position:absolute;bottom:-1px;transform:translateX(-50%);font-size:6.5px;'+
+    // ⚠⚠ (v13.1) ONE SIZE ON THIS ROW, AND THE v11.95 COMMENT BELOW WAS WRONG FOR 18 VERSIONS.
+    // It claims the SPX strike "now matches the ES price in size". It did not: the strike was raised
+    // to 8.65px while THIS rule — the coloured ES price, the number actually traded — stayed at
+    // 6.5px. So the smaller, quieter number was the one that mattered most. Both are 8.65px now.
+    '#gpts-body .g3plab{position:absolute;bottom:-1px;transform:translateX(-50%);font-size:8.65px;'+
       'font-weight:800;white-space:nowrap;cursor:help;line-height:7.5px;text-align:center}'+
     '#gpts-body .g3plab.acc{color:#a371f7}'+
     '#gpts-body .g3plab.brk{color:#e3c341}'+
     '#gpts-body .g3plab.bal{color:#8b98a9}'+
-    // (v11.95) the SPX strike now matches the ES price in size and reads gray-white. At 5.5px against
-  // an 8.65px ES price it read as a footnote to the number rather than the key the ladder is on.
-  '#gpts-body .g3plab i{display:block;font-style:normal;font-size:8.65px;font-weight:800;color:#c9d1da;letter-spacing:.02em;line-height:10px}'+
+    // (v11.95, corrected v13.1) the SPX strike reads gray-white at the SAME size as the ES price above
+    // it. At 5.5px it read as a footnote; the v11.95 fix raised it but left the ES price at 6.5px, so
+    // the two never actually matched until v13.1 raised the ES price to meet it.
+    '#gpts-body .g3plab i{display:block;font-style:normal;font-size:8.65px;font-weight:800;color:#c9d1da;letter-spacing:.02em;line-height:10px}'+
+    // (v13.1) ACCUMULATION ON THE RAIL, WITHOUT NEW CLUTTER. A 2px cap on the node itself: green on
+    // top when it is growing, red underneath when it is bleeding — the same brightest-is-newest
+    // language the chart's flow bars already use, so the panel keeps one visual grammar.
+    // ⚠ AN INSET SHADOW, NOT AN ELEMENT. It occupies no space of its own, so it cannot collide with
+    // the role tier or the money tier — which is exactly how a glyph-above-the-block would have.
+    '#gpts-body .g3pile.g3grow{box-shadow:inset 0 2px 0 0 #2ec27e}'+
+    '#gpts-body .g3pile.g3bleed{box-shadow:inset 0 -2px 0 0 #e0645f}'+
     '#gpts-body .g3emr{position:absolute;left:0;right:0;top:25px;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}'+
     '#gpts-body .g3emf{position:absolute;top:25px;height:4px;border-radius:2px;background:rgba(139,152,169,.6)}'+
     '#gpts-body .g3emx2{position:absolute;top:25px;height:4px;border-radius:2px;background:rgba(139,152,169,.22)}'+
@@ -18019,7 +18215,10 @@ function ensureV3Css(){
     '#gpts-body .g3bar i{position:absolute;left:0;top:0;bottom:0;background:#f2b45a;border-radius:2px;opacity:.65}'+
     '#gpts-body .g3vd{font-size:15.5px;font-weight:800;text-align:center}'+
     '#gpts-body .g3vd2{display:flex;align-items:baseline;gap:8px}'+
-    '#gpts-body .g3vd2 b{font-size:15px;font-weight:800}'+
+    // (v13.1) ONE LINE. `white-space:nowrap` is the fix; `flex-shrink:0` stops the grey why-line
+    // from squeezing the word into a wrap when the panel is narrow.
+    '#gpts-body .g3vd2 b{font-size:15px;font-weight:800;white-space:nowrap;flex-shrink:0}'+
+    '#gpts-body .g3vd2 .g3why{min-width:0}'+
     '#gpts-body .g3why{font-size:8px;color:#8b98a9}'+
     '#gpts-body .g3cf{display:flex;align-items:center;gap:5px;margin-top:4px}'+
     '#gpts-body .g3chip{font-size:8.5px;font-weight:700;padding:1px 5px;border-radius:3px;border:1px solid #1e2530;color:#8b98a9}'+
@@ -18046,6 +18245,36 @@ function ensureV3Css(){
     '#gpts-body .g3v{color:#e6edf3;font-weight:700;font-size:11px;min-width:44px}'+
     '#gpts-body .g3zn{font-size:7px;color:#8b98a9}'+
     '#gpts-body .g3nodehd{font-size:7px;font-weight:800;letter-spacing:.12em;color:#8b98a9;margin:3px 0 1px}'+
+    // (v13.1) NODES: two lines per node. Identity and momentum together on top, reference underneath.
+    // ⚠ ONE GRID SHARED BY THE HEADER AND EVERY ROW, or the columns drift apart the moment a value
+    // changes width. `tabular-nums` on .g3 keeps the digits from shifting as they tick.
+    '#gpts-body .g3ndhd,#gpts-body .g3ndr1{display:grid;grid-template-columns:11px 1fr 40px 44px 44px 44px 50px;gap:3px;align-items:baseline}'+
+    '#gpts-body .g3ndhd{font-size:6.5px;font-weight:800;letter-spacing:.06em;color:#5b6675;text-transform:uppercase;padding:3px 1px 3px}'+
+    '#gpts-body .g3ndhd span:nth-child(n+3),#gpts-body .g3ndr1 span:nth-child(n+3){text-align:right}'+
+    // a real rule between nodes, so rows read as discrete objects rather than one block of numbers
+    '#gpts-body .g3ndrow{padding:5px 1px 4px;border-top:1px solid #232a36}'+
+    '#gpts-body .g3ndwatch{background:rgba(124,199,255,.055);border-top-color:#2f4a5e;box-shadow:inset 2px 0 0 #7cc7ff;border-radius:2px}'+
+    '#gpts-body .g3ndmk{font-size:8.5px;color:#7cc7ff;font-weight:800}'+
+    '#gpts-body .g3ndpx{font-size:12.5px;font-weight:800;letter-spacing:-.02em}'+
+    '#gpts-body .g3ndpct{font-size:9.5px;font-weight:800}'+
+    '#gpts-body .g3ndd{font-size:9px;font-weight:700}'+
+    '#gpts-body .g3ndr2{font-size:7.5px;color:#5b6675;font-weight:700;margin-top:1px;padding-left:14px}'+
+    '#gpts-body .g3ndr2 b{color:#c9d4e2;font-weight:800;font-size:8.5px}'+
+    '#gpts-body .g3ndage{color:#f2b45a}'+
+    '#gpts-body .g3ndchips{display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;padding-left:14px}'+
+    '#gpts-body .g3ndchip{font-size:7px;font-weight:800;padding:1px 4px;border-radius:3px;letter-spacing:.03em;white-space:nowrap}'+
+    // ⚠ CHIP COLOUR = WHAT IT MEANS FOR PRICE, never what the node is. A call node dissolving is BULL.
+    '#gpts-body .g3cBull{color:#2ec27e;background:rgba(46,194,126,.13);border:1px solid rgba(46,194,126,.38)}'+
+    '#gpts-body .g3cBear{color:#e0645f;background:rgba(224,100,95,.13);border:1px solid rgba(224,100,95,.38)}'+
+    '#gpts-body .g3cTurn{color:#f2b45a;background:rgba(242,180,90,.13);border:1px solid rgba(242,180,90,.45)}'+
+    '#gpts-body .g3cNeut{color:#7d8794;background:rgba(125,135,148,.10);border:1px solid rgba(125,135,148,.30)}'+
+    '#gpts-body .g3cRoll{color:#7cc7ff;background:rgba(124,199,255,.12);border:1px solid rgba(124,199,255,.40)}'+
+    '#gpts-body .g3cWatch{color:#7cc7ff;background:rgba(124,199,255,.18);border:1px solid #7cc7ff}'+
+    '#gpts-body .g3ndbias{margin-top:7px;padding:3px 6px;border-radius:3px;font-size:9px;font-weight:800;'+
+      'background:rgba(139,152,169,.08);border:1px solid rgba(139,152,169,.25)}'+
+    '#gpts-body .g3ndverd{margin-top:5px;padding:5px 6px;border-left:2px solid #e3c341;'+
+      'background:rgba(227,195,65,.06);font-size:10px;color:#d7dde6;border-radius:0 3px 3px 0}'+
+    '#gpts-body .g3ndverd b{color:#e3c341}'+
     '#gpts-body .g3node{background:rgba(139,152,169,.05)}'+
     '#gpts-body .g3pb{background:rgba(242,180,90,.10);border-left:2px solid #f2b45a}'+
     '#gpts-body .g3atlvl{font-size:6.5px;font-weight:800;padding:0 3px;border-radius:2px;background:rgba(242,180,90,.2);color:#f2b45a}'+
@@ -19354,7 +19583,14 @@ function secFrame(sym){
                     ' From the '+gexWindowNote(P.window)+
                     ' \u26a0 InsiderFinance FALLBACK \u2014 the Skylit tape could not be read.';
            }
-           h2+='<i class="g3pile '+pcls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%;width:'+w+'px;height:'+hgt+'px"'+g3tip(tip)+'></i>';
+           // (v13.1) the cap comes from SKYLIT'S OWN 60m delta for this strike, never from our sampling
+           var capCls=''; try{
+             var vE=velAt(P.k);
+             if(vE && vE.v && typeof vE.v.d60==='number' && !vE.stale){
+               if(vE.v.d60>0) capCls=' g3grow'; else if(vE.v.d60<0) capCls=' g3bleed';
+             }
+           }catch(eCap){}
+           h2+='<i class="g3pile '+pcls+capCls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%;width:'+w+'px;height:'+hgt+'px"'+g3tip(tip)+'></i>';
            // (v11.79) THE LABEL THE USER ASKED FOR, TWICE, AND I MOCKED TWICE WITHOUT BUILDING:
            // ES price on top (the number they trade), SPXW strike and the node's role beneath it.
            // (v11.81) ROLE beats polarity on the label. A King is still an accelerator; the hover keeps
@@ -19449,7 +19685,11 @@ function secBias(sym){
   var B=biasVotes(sym);
   var col=B.dir>0?'g3up':(B.dir<0?'g3dn':'');
   var h='<div class="g3b">';
-  h+='<div class="g3vd2"'+g3tip('Which way, and on whose authority?\nThe 50-SMA decides. Nothing below can overrule it.\n⚠ A new trend needs 15 of 20 bars; a reversal out of a broken trend needs 11.\n⚠ FLAT means the SMA has no side — it is never assembled out of the confirms.')+'>'+
+  // (v13.1) THE TREND WORD STAYS ON ONE LINE. `UPTREND BRK` wrapping to two lines cost a whole row of
+  // vertical space and made the most important word on the panel read as two half-words.
+  h+='<div class="g3vd2"'+g3tip('Which way, and on whose authority?\nThe 50-SMA decides. Nothing below can overrule it.\n⚠ A new trend needs 15 of 20 bars; a reversal out of a broken trend needs 11.'+
+     (B.whyLong?('\n⚠ This one is BROKEN'+String(B.whyLong).replace(/^ — /,': ')+'.'):'')+
+     '\n⚠ FLAT means the SMA has no side — it is never assembled out of the confirms.')+'>'+
      '<b class="'+col+'"'+g3tip('Which way, and on whose authority?\nThe 50-SMA decides. The reads below confirm it or they do not.\n⚠ The old tally let them outvote it and printed NEUTRAL on a 2-2 split while the trend was plainly on the chart.')+'>'+
      arrow(B.dir)+' '+B.verdict+'</b>'+
      '<span class="g3why">'+g3esc(B.why)+'</span></div>';
@@ -19993,28 +20233,161 @@ function swallow(tag, e){
 }
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.renderErrors=function(){ return RENDER_ERRS.slice(); };
+// ⚠⚠ (v13.1) THE NODES LIST AND THE RAIL NOW READ THE SAME BOOK.
+// Until now the rail drew SKYLIT'S SPXW ladder while this list read `tapeMap(activeSym())` — SPY —
+// and multiplied by the ES ratio. Both printed ES dollars, so they LOOKED like one set and were not:
+// SPY strikes are $1 apart and land on a ~10-point ES grid, SPXW strikes are 5 SPX points apart. The
+// rail could show a node at 7665 this list had no concept of, and REACTION/EXECUTE armed off the
+// SPY-derived set while the read, the target and the band all reasoned off SPXW.
+// ⚠ THIS FUNCTION NOW RETURNS THE DISPLAY PRICE ITSELF (`es`). Callers must NOT rescale it. The old
+// shape returned an underlying-space strike and made every caller multiply — which is precisely how
+// two scales get mixed, and this project has paid for that mistake more than once.
 function tradeNodes(sym){
-  sym=sym||'SPY';
   var out=[];
   try{
-    var S=STATE[sym]||{}; var px=S.price; if(typeof px!=='number') return out;
-    var tp=null; try{ tp=tapeMap(sym); }catch(e0){}
-    var pct=(tp&&tp.pct)||{};
-    var king=(tp&&typeof tp.king==='number')?tp.king:null;
-    var reach=2; try{ var av=atr(sym); if(av>0) reach=Math.max(av*4, 2); }catch(e1){}
-    for(var k in pct){
-      var kk=parseFloat(k); if(!isFinite(kk)) continue;
-      var v=pct[k]; if(typeof v!=='number') continue;
-      var a=Math.abs(v);
-      if(a<NODE_MIN_PCT) continue;                 // below this nobody defends it
-      if(Math.abs(kk-px)>reach) continue;          // out of reach is out of play
-      var st=null; try{ var ac=accumCanon(sym,kk); st=(ac&&ac.m15)?ac.m15.label:null; }catch(e2){}
-      out.push({ k:kk, pct:a, put:(v>0), side:(kk>px?'above':'below'),
-                 dist:+(kk-px).toFixed(2), state:st, isKing:(king!=null && Math.abs(kk-king)<0.001) });
+    var tp=null; try{ tp=tapeMap('SPXW'); }catch(e0){}
+    if(!tp || !tp.pct) return out;
+    var dsc=0; try{ dsc=ifDispScale(); }catch(e1){}
+    if(!(dsc>0)) return out;                       // no basis = no honest ES price, so show nothing
+    var S=STATE[sym]||{}; var undPx=S.price;
+    var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(e2){}
+    var pxES=(typeof undPx==='number')?undPx*rr:null;
+    if(pxES==null) return out;
+    var king=(typeof tp.king==='number')?tp.king:null;
+    var reach=null; try{ var av=atr(sym); if(av>0) reach=Math.max(av*4*rr, 20); }catch(e3){}
+    if(reach==null) reach=40;
+    for(var key in tp.pct){
+      if(!tp.pct.hasOwnProperty(key)) continue;
+      var k=parseFloat(key); if(!isFinite(k)) continue;
+      var v=tp.pct[key]; if(typeof v!=='number' || !isFinite(v)) continue;
+      var a=Math.abs(v); if(a<NODE_MIN_PCT) continue;
+      var es=+(k*dsc).toFixed(2);
+      var dist=+(es-pxES).toFixed(2);
+      if(Math.abs(dist)>reach) continue;
+      var ve=null; try{ ve=velAt(k); }catch(e4){}
+      out.push({
+        k:k,                       // SPXW strike — THEIR number, shown beneath the level
+        es:es,                     // display price, already converted. Do not rescale.
+        pct:a, put:(v>0),
+        side:(es>pxES)?'above':'below',
+        dist:dist,
+        isKing:(king!=null && Math.abs(k-king)<0.001),
+        vel:ve?ve.v:null, velAge:ve?ve.age:null, velStale:ve?ve.stale:false
+      });
     }
-    out.sort(function(a2,b2){ return Math.abs(a2.dist)-Math.abs(b2.dist); });
+    // ⚠ DESCENDING, so the list reads in the SAME ORDER AS THE RAIL: the bottom row is the leftmost
+    // node. Sorting by distance-from-price (the old behaviour) scrambled that relationship.
+    out.sort(function(a2,b2){ return b2.es-a2.es; });
   }catch(e){}
   return out;
+}
+
+// ---- how a node reads: SIDE x DIRECTION OF CHANGE, and nothing else ----
+// That pair IS the support/resistance question. Everything the face shows about a node is this.
+// ⚠ TURNING is checked FIRST and deliberately: 5m and 15m flipping while 60m has not is the earliest
+// honest warning that a node is changing hands, and it is a HEADS-UP, not a verdict — which is why it
+// gets its own colour rather than being folded into building/failing.
+function nodeChip(nd){
+  var v=nd&&nd.vel; if(!v) return null;
+  var d5=v.d5, d15=v.d15, d60=v.d60;
+  if(typeof d5!=='number'||typeof d15!=='number'||typeof d60!=='number') return null;
+  var above=(nd.side==='above');
+  if(d5<0 && d15<0 && d60>0) return { txt:'TURNING \u2193 \u00b7 5m then 15m', cls:'g3cTurn' };
+  if(d5>0 && d15>0 && d60<0) return { txt:'TURNING \u2191 \u00b7 5m then 15m', cls:'g3cTurn' };
+  if(d60>0) return above ? { txt:'RESISTANCE BUILDING', cls:'g3cBear' }
+                         : { txt:'SUPPORT BUILDING',    cls:'g3cBull' };
+  if(d60<0) return above ? { txt:'RESISTANCE FAILING',  cls:'g3cBull' }
+                         : { txt:'SUPPORT FAILING',     cls:'g3cBear' };
+  return { txt:(above?'CAP':'FLOOR')+' \u00b7 HOLDING', cls:'g3cNeut' };
+}
+// ⚠ CHIP COLOUR MEANS WHAT IT DOES TO PRICE, NOT WHAT THE NODE IS.
+// A yellow call node carries a GREEN chip when it is dissolving, because a dying ceiling is bullish.
+// Polarity is already told by the price colour; making the chip repeat it would spend the strongest
+// signal on the face restating something and leave nothing answering "which way does price go".
+
+// ---- REACTION, in dollars ----
+// ⚠⚠ THIS IS THE STEP VELOCITY CHANGES MOST. "Is the level defending itself?" used to be answered by
+// a rejection wick and a VIX tick — inference about intent. Skylit publishes the node's own dollar
+// change, so the answer becomes a measurement: the node added $812K in 15 minutes WHILE PRICE SAT ON
+// IT. That is the level being defended, observed rather than guessed.
+// ⚠ THE 15-MINUTE WINDOW IS THE VERDICT, THE HOUR IS THE CAVEAT. A node can be adding hard right now
+// and still be far down on the hour; reporting DEFENDING without saying so would make the panel sound
+// more certain than the data is. The caveat is rendered, not dropped.
+function reactDefence(sym, subjES){
+  try{
+    if(!velOk() || typeof subjES!=='number') return null;
+    var TN=tradeNodes(sym), best=null, bd=1e9;
+    for(var i=0;i<TN.length;i++){
+      var d=Math.abs(TN[i].es-subjES);
+      if(d<bd){ bd=d; best=TN[i]; }
+    }
+    if(!best || bd>3 || !best.vel) return null;
+    var v=best.vel;
+    if(typeof v.d15!=='number' || typeof v.d5!=='number') return null;
+    var verdict, cls;
+    if(v.d15>0 && v.d5>=0){ verdict='DEFENDING';   cls='g3up'; }
+    else if(v.d15<0){       verdict='ABANDONING';  cls='g3dn'; }
+    else {                  verdict='NO REACTION'; cls='g3flat'; }
+    var caveat=null;
+    if(typeof v.d60==='number' && v.d15!==0 && (v.d60>0)!==(v.d15>0)){
+      caveat=(v.d15>0)
+        ? '60m still '+velD(v.d60).txt+' \u2014 the defence is 15 minutes old, not an hour old.'
+        : '60m still '+velD(v.d60).txt+' \u2014 it is bleeding now but was building on the hour.';
+    }
+    return { node:best, v:v, verdict:verdict, cls:cls, caveat:caveat, stale:best.velStale, age:best.velAge };
+  }catch(e){ return null; }
+}
+
+// ---- the synthesis: which node dissolves, which receives, and where price is therefore headed ----
+// ⚠ BUILT ONLY FROM THE ROWS ABOVE IT. This is a reading of the same captured numbers, never a second
+// model with its own opinion — if the verdict and the rows ever disagree, one of them is lying and the
+// trader has no way to tell which. Same inputs, or no verdict.
+function nodesVerdict(TN, ROLLS, BIAS){
+  try{
+    if(!velOk() || !TN || !TN.length) return null;
+    function dir(n){ var v=n.vel; return (v && typeof v.d60==='number') ? v.d60 : null; }
+    var above=TN.filter(function(n){ return n.side==='above' && dir(n)!=null; });
+    var below=TN.filter(function(n){ return n.side==='below' && dir(n)!=null; });
+    // nearest first, from price outward
+    above.sort(function(a,b){ return a.es-b.es; });
+    below.sort(function(a,b){ return b.es-a.es; });
+    var capFail=null, capBuild=null, floorBuild=null, floorFail=null;
+    for(var i=0;i<above.length;i++){ var d=dir(above[i]);
+      if(d<0 && !capFail) capFail=above[i];
+      if(d>0 && !capBuild) capBuild=above[i]; }
+    for(var j=0;j<below.length;j++){ var e=dir(below[j]);
+      if(e>0 && !floorBuild) floorBuild=below[j];
+      if(e<0 && !floorFail) floorFail=below[j]; }
+    var parts=[];
+    if(ROLLS && ROLLS.length){
+      var r=ROLLS[0], dsc=ifDispScale()||1;
+      parts.push('<b>'+dispNum(+(r.from*dsc).toFixed(0))+' is draining into '+
+                 dispNum(+(r.to*dsc).toFixed(0))+'.</b>');
+    }
+    if(capFail && capBuild) parts.push('Overhead thins at '+dispNum(capFail.es)+', the wall re-forms at '+dispNum(capBuild.es)+'.');
+    else if(capFail) parts.push('Nearest ceiling '+dispNum(capFail.es)+' is failing.');
+    else if(capBuild) parts.push('Ceiling building at '+dispNum(capBuild.es)+'.');
+    if(floorBuild) parts.push('Support '+dispNum(floorBuild.es)+' building underneath.');
+    else if(floorFail) parts.push('Support '+dispNum(floorFail.es)+' is bleeding.');
+    if(!parts.length) return null;
+    // the destination, stated only when the structure actually points somewhere
+    if(capFail && capBuild) parts.push('Path of least resistance is <b>up to '+dispNum(capBuild.es)+'</b>, and that is where it stops.');
+    else if(floorFail && !floorBuild) parts.push('Nothing is being defended below \u2014 <b>the downside is open</b>.');
+    // ⚠ the honest caveat: a bias that contradicts the local read is not hidden, it is stated
+    if(BIAS && BIAS.dir==='dn' && capFail) parts.push('\u26a0 But roll bias is down \u2014 the book is migrating lower even as this ceiling thins.');
+    if(BIAS && BIAS.dir==='up' && floorFail) parts.push('\u26a0 But roll bias is up \u2014 size is moving higher even as this floor bleeds.');
+    return parts.join(' ');
+  }catch(e){ return null; }
+}
+// signed, compact, and it never hides the sign — a delta whose sign you cannot see is not a delta
+function velD(v){
+  if(typeof v!=='number' || !isFinite(v)) return { txt:'\u2014', cls:'' };
+  if(v===0) return { txt:'0', cls:'g3flat' };
+  var a=Math.abs(v), sg=(v>0)?'+':'\u2212', t;
+  if(a>=1e6) t=(a/1e6).toFixed(1)+'M';
+  else if(a>=1e3) t=Math.round(a/1e3)+'K';
+  else t=Math.round(a)+'';
+  return { txt:sg+t, cls:(v>0)?'g3up':'g3dn' };
 }
 // Which node is the pullback engine pointing at? That is the one the trade is off.
 function pbNodeK(sym){
@@ -20025,6 +20398,7 @@ function pbNodeK(sym){
 // steps ③ REACTION and ④ EXECUTE are computed from. Deleting the loop to hide the rows would have
 // silently disarmed the bottom half of the panel. Only the row HTML is suppressed.
 var LOC_SHOW_LEVELS=false;
+var LOC_SHOW_CHART=false;
 function secLoc(sym){
   var L=null; try{ L=ifLadder(sym); }catch(e){ L={err:String(e&&e.message||e)}; }
   // ① FRAME's badges, target, EL/EH rail and read line now open this section
@@ -20082,35 +20456,70 @@ function secLoc(sym){
   if(L.nExps) bits.push(L.nExps+' exps');
   if(L.n) bits.push(L.n+' strikes');
   if(L.ageMin!=null) bits.push(L.ageMin+'m old');
-  // ---- NODES: the tradeable objects, and where they coincide with structure ----
+  // ---- NODES: the tradeable objects, read off SKYLIT'S OWN NUMBERS ----
+  // ⚠ POLICY: every figure in this block is Skylit's, captured verbatim — their dollar value and their
+  // published 5m/15m/60m/1d deltas. We compute NOTHING they already publish. That is what makes their
+  // strike popup a live oracle for this panel: click 7650 in their ladder, and these numbers must match.
   try{
-    // `rr` is the chart-scale multiplier. It lives in nodeChartHtml, NOT here — using it in this block
-    // threw a ReferenceError on the first row, and because the block has its own try/catch the header
-    // had already been emitted while every row vanished. Declare what you use in the scope you use it.
-    var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(eR){}
     var TN=tradeNodes(sym), pbK=pbNodeK(sym);
+    var rrN=1; try{ rrN=dispIsFut()?dispR():1; }catch(eR){}
+    var pbES=(pbK!=null)?pbK*rrN:null;   // pbEntryPick works in underlying space; the list is in ES
+    var ROLLS=[], BIAS=null;
+    try{ ROLLS=rollScan(TN.map(function(n){ return n.k; })); BIAS=rollBias(ROLLS); }catch(eRS){}
+    function rollFrom(k){ for(var i2=0;i2<ROLLS.length;i2++){ if(ROLLS[i2].from===k) return ROLLS[i2]; } return null; }
+    function rollInto(k){ var c=0; for(var i3=0;i3<ROLLS.length;i3++){ if(ROLLS[i3].to===k) c++; } return c; }
     if(TN.length){
-      h+='<div class="g3nodehd"'+g3tip('Where can a trade actually happen? The rows above are LEVELS — context, telling you where structure sits. These are NODES, and per the rule the trade is off a node, preferably a pullback node. A node sitting AT a level is the strongest thing this panel finds: structure the market is actively defending. A node in open space is tradeable but has less behind it, and a level with no node is not a trade at all.')+'>NODES</div>';
-      TN.slice(0,4).forEach(function(n){
-        var atLvl=null;
-        (L.rows||[]).forEach(function(r){
-          if(r.und==null) return;
-          if(Math.abs(r.und-n.k)<=(zone!=null?zone:0.5)){ if(!atLvl) atLvl=r.id.split('·')[0]; }
-        });
-        var isPB=(pbK!=null && Math.abs(pbK-n.k)<0.005);
+      h+='<div class="g3nodehd"'+g3tip('Where can a trade actually happen? Per the rule the trade is off a NODE. These are Skylit\'s SPXW nodes shown at ES prices, with their strike beneath. The four columns are Skylit\'s OWN published rate-of-change — the same numbers their strike popup shows — so this panel can be checked against their ladder directly.')+'>NODES</div>';
+      if(!velOk()){
+        h+='<div class="g3rx"><em></em><span style="color:#f2b45a">rate of change unavailable \u2014 '+
+           g3esc((VEL_META&&VEL_META.why)||'no velocity')+'</span></div>';
+      }
+      h+='<div class="g3ndhd"><span></span><span>Node</span><span>%K</span><span>5m</span><span>15m</span><span>60m</span><span>Day</span></div>';
+      TN.slice(0,6).forEach(function(n){
+        var isPB=(pbES!=null && Math.abs(pbES-n.es)<=1.5);
         var col=n.put?'#a371f7':'#e3c341';
-        var dd=n.dist;
-        h+='<div class="g3r g3node'+(isPB?' g3pb':'')+'"'+g3tip(
-             'Is this a place to trade? '+Math.round(n.pct)+'% of the King node'+
-             (n.state?(', currently '+String(n.state).toLowerCase()):'')+
-             (atLvl?('. It sits AT '+atLvl+' — live positioning on top of structure that matters, which is the strongest combination this panel can show you.'):'. It sits in open space, away from the levels above — tradeable, but with less behind it.')+
-             (isPB?' The pullback engine has selected this one, so it is what EXECUTE is armed against.':''))+'>'+
-           '<span class="g3nm" style="color:'+col+'">'+(isPB?'▸':'')+(n.put?'▼':'▲')+' '+Math.round(n.pct)+'%</span>'+
-           '<span class="g3v">'+dispNum(n.k*rr)+'</span>'+
-           (atLvl?('<span class="g3atlvl">@'+g3esc(atLvl)+'</span>'):'')+
-           (n.state?('<span class="g3sr">'+g3esc(n.state)+'</span>'):'')+
-           '<span class="g3d '+dcls(dd)+'">'+(dd>0?'+':'')+dispNum(+(dd*rr).toFixed(2))+'</span></div>';
+        var v=n.vel||{};
+        var d5=velD(v.d5), d15=velD(v.d15), d60=velD(v.d60), d1d=velD(v.d1d);
+        var chip=nodeChip(n);
+        var rf=rollFrom(n.k), ri=rollInto(n.k);
+        h+='<div class="g3ndrow'+(isPB?' g3ndwatch':'')+'"'+g3tip(
+             'Is this a place to trade? '+Math.round(n.pct)+'% of the King node, SPXW strike '+n.k+
+             ' shown at '+n.es+' on the ES scale. The four numbers are Skylit\'s own published deltas for this strike'+
+             (n.velStale?' \u2014 AGED, this node is not currently rendered in their ladder so the values are the last ones seen':'')+
+             (isPB?'. The pullback engine has selected this one, so it is what EXECUTE is armed against.':'')) + '>';
+        h+= '<div class="g3ndr1">'+
+              '<span class="g3ndmk">'+(isPB?'\u25b6':'')+'</span>'+
+              '<span class="g3ndpx" style="color:'+col+'">'+dispNum(n.es)+'</span>'+
+              '<span class="g3ndpct" style="color:'+col+'">'+Math.round(n.pct)+'%'+(n.put?'\u25bc':'\u25b2')+'</span>'+
+              '<span class="g3ndd '+d5.cls+'">'+d5.txt+'</span>'+
+              '<span class="g3ndd '+d15.cls+'">'+d15.txt+'</span>'+
+              '<span class="g3ndd '+d60.cls+'">'+d60.txt+'</span>'+
+              '<span class="g3ndd '+d1d.cls+'">'+d1d.txt+'</span>'+
+            '</div>';
+        var sizeTxt=(typeof v.cur==='number')?usdBig(Math.abs(v.cur)):null;
+        h+= '<div class="g3ndr2">'+n.k+(n.isKing?' \u00b7 King':'')+
+            (sizeTxt?(' \u00b7 <b>'+sizeTxt+'</b>'):'')+
+            ' \u00b7 '+((n.dist>0?'+':'')+dispNum(n.dist))+
+            (n.velStale?' \u00b7 <span class="g3ndage">aged '+Math.round((n.velAge||0)/1000)+'s</span>':'')+
+            '</div>';
+        var chipsHtml='';
+        if(chip) chipsHtml+='<span class="g3ndchip '+chip.cls+'">'+chip.txt+'</span>';
+        if(isPB) chipsHtml+='<span class="g3ndchip g3cWatch">\u25b6 WATCH \u00b7 testing now</span>';
+        if(rf)   chipsHtml+='<span class="g3ndchip g3cRoll">\u2192 rolls '+(rf.dir==='up'?'up':'dn')+' '+(+(rf.to*(ifDispScale()||1)).toFixed(0))+'</span>';
+        if(ri)   chipsHtml+='<span class="g3ndchip g3cRoll">receives'+(ri>1?(' \u00d7'+ri):' roll')+'</span>';
+        if(chipsHtml) h+='<div class="g3ndchips">'+chipsHtml+'</div>';
+        h+='</div>';
       });
+      // ⚠ THE AGGREGATE IS ITS OWN SIGNAL. Five separate roll badges do not add up to "the book is
+      // migrating lower" in a trader's head at a glance. One line does.
+      if(BIAS && BIAS.n>1 && BIAS.dir!=='mixed'){
+        h+='<div class="g3ndbias '+(BIAS.dir==='up'?'g3up':'g3dn')+'"'+g3tip('Which way is the whole book moving? Each roll is one node handing size to another. When they all point the same way the entire structure is migrating, which matters more than any single level.')+
+           '>ROLL BIAS '+(BIAS.dir==='up'?'\u2191':'\u2193')+' \u00b7 '+
+           (BIAS.dir==='up'?BIAS.up:BIAS.dn)+' of '+BIAS.n+' rolls '+(BIAS.dir==='up'?'upward':'downward')+
+           ' \u00b7 the book is migrating '+(BIAS.dir==='up'?'higher':'lower')+'</div>';
+      }
+      var vd=null; try{ vd=nodesVerdict(TN, ROLLS, BIAS); }catch(eV){}
+      if(vd) h+='<div class="g3ndverd">'+vd+'</div>';
     } else {
       h+='<div class="g3rx"'+g3tip('No node is within reach and above the strength floor, so there is nothing to trade off yet — whatever the levels above are doing. Levels are context; the trade is at a node.')+'><em>NODES</em><span>none in range — levels are context only</span></div>';
     }
@@ -20119,7 +20528,11 @@ function secLoc(sym){
   (L.suppressed||[]).forEach(function(t){
     h+='<div class="g3rx"><em></em><span style="color:#f2b45a">'+g3esc(t)+'</span></div>'; });
   h+='</div>';
-  try{ h+=nodeChartHtml(sym); }catch(eNC){ swallow("nodeChart", eNC); }
+  // (v13.1, user-directed) THE CHART IS HIDDEN, NOT REMOVED.
+  // ⚠ nodeChartHtml() still EXISTS and the node-history sampling behind it still runs. That history
+  // feeds the causality work, and switching off collection to hide a picture would cost us data we
+  // cannot retro-fill. Hiding is presentation only.
+  if(LOC_SHOW_CHART){ try{ h+=nodeChartHtml(sym); }catch(eNC){ swallow("nodeChart", eNC); } }
   G3_AT_LEVEL=atLevel;
   return h;
 }
@@ -20148,6 +20561,20 @@ function secReact(sym){
   var ac=null; try{ ac=accumAsym(sym); }catch(e2){}
   var nodeState=null;
   try{ if(nodeK!=null){ var acn=accumCanon(sym,nodeK); nodeState=(acn&&acn.m15)?acn.m15.label:null; } }catch(e3){}
+  // (v13.1) SKYLIT'S OWN DOLLARS FIRST. The accumulation read below stays as corroboration — two
+  // independent readings agreeing is worth more than one, and when they DISAGREE that is a finding.
+  var RD=null; try{ RD=reactDefence(sym, (subj!=null)?subj*rr:null); }catch(eRD){}
+  if(RD){
+    h+='<div class="g3rx"'+g3tip('Is the level defending itself, in dollars? This is Skylit\'s own published change for the exact node price is testing. A node ADDING size while price sits on it is being defended as it is tested — the setup this whole process exists to find. One SHEDDING size as price arrives is being walked away from. Flat is not a trade, however good the location looked.')+
+       '><em>DEFENCE</em><span><b class="'+RD.cls+'" style="font-size:12px">'+RD.verdict+'</b>'+
+       ' \u00b7 5m '+velD(RD.v.d5).txt+' \u00b7 15m '+velD(RD.v.d15).txt+
+       ' <span style="color:#5b6675">on '+dispNum(RD.node.es)+'</span>'+
+       (RD.stale?' <span style="color:#f2b45a">\u00b7 aged '+Math.round((RD.age||0)/1000)+'s</span>':'')+
+       '</span></div>';
+    if(RD.caveat){
+      h+='<div class="g3rx"><em></em><span style="color:#f2b45a">\u26a0 '+g3esc(RD.caveat)+'</span></div>';
+    }
+  }
   var nodeTxt;
   if(isNode && nodeState) nodeTxt='the node is <b>'+g3esc(String(nodeState).toLowerCase())+'</b>'+(ac&&ac.txt?(' · book '+g3esc(ac.txt)):'');
   else if(ac) nodeTxt=g3esc(ac.txt);
@@ -20692,6 +21119,10 @@ function refreshSym(sym){
       sampleTapeHistory(sym);
       updateTaps(sym);   // (v10.33) advance per-node tap counters for lifecycle
       if(sym===activeSym()) try{ trackSpxwNodes(); }catch(eSX){}   // (v11.84) SPX nodes ride the same cadence
+      // (v13.1) harvest Skylit's own velocity props on the same cadence. Cheap, and it must run
+      // whether or not the panel renders, because a node that scrolls out of their ladder unmounts
+      // and we want the last value we ever saw, timestamped.
+      if(sym===activeSym()) try{ velHarvest(); }catch(eVH){}
       LAST_OK[sym]=Date.now();
       runMachine(sym);
       return;

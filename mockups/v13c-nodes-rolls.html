@@ -1,0 +1,209 @@
+<!doctype html><html><head><meta charset="utf-8"><title>NODES + rolls mockup</title>
+<style>
+body{background:#0b0e14;color:#e6edf3;font:12px/1.45 Inter,Arial,sans-serif;margin:0;padding:20px}
+.wrap{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+.panel{width:392px;background:#0f131b;border:1px solid #232a36;border-radius:8px;padding:9px 10px}
+.sechd{background:#161c27;padding:3px 8px;font-size:9px;font-weight:800;letter-spacing:.7px;text-align:center;color:#e3c341;text-transform:uppercase;border-radius:4px 4px 0 0}
+.sec{border:1px solid #232a36;border-radius:5px;margin-bottom:9px;overflow:hidden}
+.secbody{padding:8px}
+.locbar{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.pill{font-size:8.5px;font-weight:800;padding:2px 6px;border-radius:3px;border:1px solid #2a3342;color:#c9d4e2}
+.tgt{margin-left:auto;color:#e0645f;font-size:12px;font-weight:800}
+.read{color:#8b98a9;font-size:10.5px;margin:4px 0 2px}
+.verdict{margin-top:7px;padding:6px 7px;border-left:2px solid #e3c341;background:rgba(227,195,65,.06);
+  font-size:10.5px;color:#d7dde6;border-radius:0 3px 3px 0}
+.verdict b{color:#e3c341}
+.nhd{display:grid;grid-template-columns:60px 1fr 54px 50px 50px;gap:5px;font-size:7px;font-weight:800;
+  letter-spacing:.4px;color:#5b6675;text-transform:uppercase;padding:6px 2px 3px;border-bottom:1px solid #1c222d}
+.nrow{display:grid;grid-template-columns:60px 1fr 54px 50px 50px;gap:5px;align-items:center;
+  padding:5px 2px 3px;border-bottom:1px solid #141a24}
+.side{font-size:9.5px;font-weight:800}
+.px{font-size:13px;font-weight:800;letter-spacing:-.2px}
+.sub{font-size:7.5px;color:#5b6675;font-weight:700}
+.val{font-size:10.5px;font-weight:800;text-align:right}
+.d{font-size:10px;font-weight:700;text-align:right}
+.up{color:#2ec27e}.dn{color:#e0645f}.flat{color:#5b6675}
+.call{color:#e3c341}.put{color:#a371f7}
+.chips{grid-column:1/-1;display:flex;gap:4px;align-items:center;padding:3px 0 1px}
+.chip{font-size:7.5px;font-weight:800;padding:1px 5px;border-radius:3px;letter-spacing:.3px}
+.build{color:#2ec27e;background:rgba(46,194,126,.13);border:1px solid rgba(46,194,126,.35)}
+.fade{color:#e0645f;background:rgba(224,100,95,.13);border:1px solid rgba(224,100,95,.35)}
+.hold{color:#7d8794;background:rgba(125,135,148,.10);border:1px solid rgba(125,135,148,.28)}
+.roll{color:#7cc7ff;background:rgba(124,199,255,.12);border:1px solid rgba(124,199,255,.4)}
+.meter{height:3px;border-radius:2px;background:#1c222d;position:relative;overflow:hidden;flex:1;max-width:96px}
+.meter i{position:absolute;top:0;bottom:0;display:block;border-radius:2px}
+.note{width:430px;color:#8b98a9;font-size:11.5px}
+.note h4{color:#e3c341;font-size:10px;letter-spacing:.5px;text-transform:uppercase;margin:15px 0 5px}
+.note h4:first-child{margin-top:0}
+.note code{background:#161c27;padding:1px 5px;border-radius:3px;color:#c9d4e2;font-size:10.5px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
+.q{border:1px solid #232a36;border-radius:4px;padding:6px 7px;font-size:10.5px}
+.q b{display:block;font-size:9px;letter-spacing:.4px;text-transform:uppercase;margin-bottom:2px}
+</style></head><body>
+<div class="wrap">
+
+<div class="panel">
+ <div class="sec">
+  <div class="sechd">② Location</div>
+  <div class="secbody">
+    <div class="locbar"><span class="pill">−G +V</span><span class="pill">BREAKS</span>
+      <span class="tgt">T: 7650 <span style="font-size:9px">−55</span></span></div>
+
+    <!-- RAIL with a ROLL LANE above it -->
+    <svg viewBox="0 0 360 96" width="360" height="96" style="display:block">
+      <!-- roll lane: arrows rise, travel, then drop into the destination node -->
+      <defs>
+        <marker id="ar" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5.5" markerHeight="5.5" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="#7cc7ff"/></marker>
+        <marker id="ard" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5.5" markerHeight="5.5" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="#e0645f"/></marker>
+      </defs>
+      <!-- roll 1: 7682 -> 7707 (up) : leaves low lane -->
+      <path d="M150 56 L150 34 L246 34 L246 50" fill="none" stroke="#7cc7ff" stroke-width="1.3" marker-end="url(#ar)"/>
+      <text x="198" y="30" font-size="7.5" fill="#7cc7ff" font-weight="800" text-anchor="middle">ROLL ↑ 7707  ·  $1.4M</text>
+      <!-- roll 2: 7642 -> 7667 shown on a higher lane so they never overlap -->
+      <path d="M40 56 L40 14 L104 14 L104 50" fill="none" stroke="#e0645f" stroke-width="1.3" marker-end="url(#ard)"/>
+      <text x="72" y="10" font-size="7.5" fill="#e0645f" font-weight="800" text-anchor="middle">ROLL ↓ 7667 · $0.9M</text>
+
+      <!-- the rail itself, unchanged in form -->
+      <line x1="10" y1="70" x2="350" y2="70" stroke="#2a3342" stroke-width="7"/>
+      <text x="10" y="90" font-size="8.5" fill="#e6edf3" font-weight="800">7639</text>
+      <text x="10" y="62" font-size="7" fill="#8b98a9" font-weight="800">EL</text>
+      <text x="350" y="90" font-size="8.5" fill="#e6edf3" font-weight="800" text-anchor="end">7730</text>
+      <text x="350" y="62" font-size="7" fill="#8b98a9" font-weight="800" text-anchor="end">EH</text>
+
+      <!-- nodes: block height = %King (as today). NEW: a bright cap on the growing side, hollow when fading -->
+      <!-- 7642 fading -->
+      <rect x="37" y="64" width="7" height="12" fill="#a371f7" opacity=".45"/>
+      <rect x="37" y="74" width="7" height="2.4" fill="#e0645f"/>
+      <text x="40" y="88" font-size="6.5" fill="#8b98a9" text-anchor="middle" font-weight="700">7642</text>
+      <!-- 7667 KING building -->
+      <rect x="101" y="58" width="7" height="24" fill="#a371f7" opacity=".85"/>
+      <rect x="101" y="56" width="7" height="2.8" fill="#2ec27e"/>
+      <text x="104" y="52" font-size="6.5" fill="#2ec27e" text-anchor="middle" font-weight="800">▲</text>
+      <text x="104" y="94" font-size="6.5" fill="#e6edf3" text-anchor="middle" font-weight="800">7667</text>
+      <!-- 7682 fading -->
+      <rect x="147" y="63" width="7" height="14" fill="#e3c341" opacity=".40"/>
+      <rect x="147" y="75" width="7" height="2.4" fill="#e0645f"/>
+      <text x="150" y="52" font-size="6.5" fill="#e0645f" text-anchor="middle" font-weight="800">▼</text>
+      <text x="150" y="88" font-size="6.5" fill="#8b98a9" text-anchor="middle" font-weight="700">7682</text>
+      <!-- 7707 building -->
+      <rect x="243" y="60" width="7" height="20" fill="#e3c341" opacity=".85"/>
+      <rect x="243" y="58" width="7" height="2.8" fill="#2ec27e"/>
+      <text x="246" y="52" font-size="6.5" fill="#2ec27e" text-anchor="middle" font-weight="800">▲</text>
+      <text x="246" y="88" font-size="6.5" fill="#8b98a9" text-anchor="middle" font-weight="700">7707</text>
+      <!-- 7717 -->
+      <rect x="281" y="65" width="7" height="10" fill="#e3c341" opacity=".55"/>
+      <text x="284" y="88" font-size="6.5" fill="#8b98a9" text-anchor="middle" font-weight="700">7717</text>
+
+      <!-- target + price -->
+      <polygon points="76,78 72,86 80,86" fill="#e0645f"/>
+      <text x="76" y="52" font-size="6.5" fill="#e0645f" text-anchor="middle" font-weight="800">T</text>
+      <circle cx="122" cy="70" r="5.5" fill="#e6edf3" stroke="#0b0e14" stroke-width="2"/>
+    </svg>
+
+    <div class="read">Nothing sizeable between 7705 and 7730. Then down 7700 (44% brake, 5 away), nothing above.</div>
+
+    <!-- NODES -->
+    <div class="nhd"><span>Node</span><span>ES · SPXW</span><span>Size</span><span>60m</span><span>Day</span></div>
+
+    <div class="nrow">
+      <span class="side put">▼ 100%</span>
+      <span><span class="px">7666.90</span> <span class="sub">7650 K</span></span>
+      <span class="val">$21.4M</span><span class="d up">+180K</span><span class="d up">+8.2M</span>
+      <div class="chips">
+        <span class="chip build">SUPPORT BUILDING</span>
+        <span class="meter"><i style="left:50%;width:26%;background:#2ec27e"></i></span>
+        <span class="sub">5m +49K</span>
+      </div>
+    </div>
+
+    <div class="nrow">
+      <span class="side call">▲ 42%</span>
+      <span><span class="px">7682.00</span> <span class="sub">7665</span></span>
+      <span class="val">$9.1M</span><span class="d dn">−412K</span><span class="d dn">−1.9M</span>
+      <div class="chips">
+        <span class="chip fade">RESISTANCE FAILING</span>
+        <span class="chip roll">→ rolls up 7707</span>
+        <span class="meter"><i style="right:50%;width:31%;background:#e0645f"></i></span>
+      </div>
+    </div>
+
+    <div class="nrow">
+      <span class="side call">▲ 74%</span>
+      <span><span class="px">7707.10</span> <span class="sub">7690</span></span>
+      <span class="val">$15.8M</span><span class="d up">+640K</span><span class="d up">+3.1M</span>
+      <div class="chips">
+        <span class="chip fade" style="color:#e3c341;background:rgba(227,195,65,.12);border-color:rgba(227,195,65,.4)">RESISTANCE BUILDING</span>
+        <span class="meter"><i style="left:50%;width:44%;background:#e3c341"></i></span>
+        <span class="sub">receiving the roll</span>
+      </div>
+    </div>
+
+    <div class="nrow">
+      <span class="side put">▼ 28%</span>
+      <span><span class="px">7641.80</span> <span class="sub">7625</span></span>
+      <span class="val">$5.9M</span><span class="d dn">−61K</span><span class="d up">+5.5M</span>
+      <div class="chips">
+        <span class="chip hold">SUPPORT · STALLING</span>
+        <span class="chip roll">→ rolls dn 7667</span>
+        <span class="sub">day-strong, hour-weak</span>
+      </div>
+    </div>
+
+    <div class="verdict">
+      <b>7682 is dissolving into 7707.</b> Near overhead thins, the wall re-forms 25 higher.
+      Support 7667 building underneath. Path of least resistance is <b>up to 7707</b>, and that is
+      where it stops.
+    </div>
+  </div>
+ </div>
+</div>
+
+<div class="note">
+  <h4>The one idea behind every choice</h4>
+  Support or resistance is <b>side × direction of change</b>. Everything below encodes that pair and
+  nothing else, so the answer is readable without arithmetic.
+  <div class="grid2">
+    <div class="q" style="border-color:rgba(46,194,126,.35)"><b class="up">Below · growing</b>Support building — it holds</div>
+    <div class="q" style="border-color:rgba(224,100,95,.35)"><b class="dn">Below · shrinking</b>Support failing — it gives</div>
+    <div class="q" style="border-color:rgba(227,195,65,.4)"><b class="call">Above · growing</b>Resistance thickening — it caps</div>
+    <div class="q" style="border-color:rgba(224,100,95,.35)"><b class="dn">Above · shrinking</b>Path opening — it lets price through</div>
+  </div>
+
+  <h4>Rail — roll lane above it</h4>
+  Arrows rise out of the source node, travel sideways, and drop into the destination with the head, as
+  you described. Each roll gets <b>its own lane height</b> so two never overlap. Blue = rolling up,
+  red = rolling down. The lane <b>collapses to zero height when there is no roll</b>, so it costs
+  nothing on a quiet tape.
+
+  <h4>Rail — accumulation without new clutter</h4>
+  Node block height stays %King. What is new is a <b>2.4px cap</b>: green on top when the node is
+  growing, red on the bottom when it is bleeding — the same brightest-is-newest language the chart's
+  flow bars already use, so the panel keeps one visual grammar. A ▲/▼ above the block marks only the
+  nodes whose 60m change is decisive, so the eye lands on those first.
+
+  <h4>NODES — two lines per node</h4>
+  Line one is the facts: side and %King, ES price with the <b>SPXW strike beside it in grey</b>,
+  Skylit's own dollar value, then <code>60m</code> and <code>Day</code>.
+  Line two is the interpretation: the state chip, a signed meter growing from centre so direction reads
+  pre-attentively, the roll badge, and <code>5m</code> as small text — it is the noisiest number and
+  does not deserve a column.
+
+  <h4>Why these three timeframes, in this order</h4>
+  <code>60m</code> gets the prominent column because it is what decides whether a level holds in the
+  next hour. <code>Day</code> gives conviction. <code>5m</code> is demoted to a footnote — it flickers,
+  and a flickering number in a column invites over-trading.
+
+  <h4>The verdict line</h4>
+  The synthesis you actually asked for: which node dissolves, which receives, and where price is
+  therefore headed. Built from the same numbers above it, never from a separate model.
+
+  <h4>Two honest failure states</h4>
+  Values come from Skylit's own <code>velocity</code> props, so they equal their popup by construction.
+  If a node scrolls out of their ladder its props unmount — that row shows the last value with an
+  <b>age marker</b>, never a silent stale number. If their prop shape ever changes, the columns show
+  <code>—</code> and a <code>velocity unavailable</code> notice rather than blanks that read as zero.
+</div>
+
+</div></body></html>

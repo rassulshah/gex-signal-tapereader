@@ -1,0 +1,187 @@
+<!doctype html><html><head><meta charset="utf-8"><title>NODES + rolls mockup v2</title>
+<style>
+body{background:#0b0e14;color:#e6edf3;font:12px/1.45 Inter,Arial,sans-serif;margin:0;padding:20px}
+.wrap{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+.panel{width:392px;background:#0f131b;border:1px solid #232a36;border-radius:8px;padding:9px 10px}
+.sec{border:1px solid #232a36;border-radius:5px;overflow:hidden}
+.sechd{background:#161c27;padding:3px 8px;font-size:9px;font-weight:800;letter-spacing:.7px;text-align:center;color:#e3c341;text-transform:uppercase}
+.secbody{padding:8px}
+.locbar{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.pill{font-size:8.5px;font-weight:800;padding:2px 6px;border-radius:3px;border:1px solid #2a3342;color:#c9d4e2}
+.tgt{margin-left:auto;color:#e0645f;font-size:12px;font-weight:800}
+.read{color:#8b98a9;font-size:10.5px;margin:4px 0 2px}
+.verdict{margin-top:8px;padding:6px 7px;border-left:2px solid #e3c341;background:rgba(227,195,65,.06);
+  font-size:10.5px;color:#d7dde6;border-radius:0 3px 3px 0}
+.verdict b{color:#e3c341}
+.nhd,.nrow{display:grid;grid-template-columns:92px 42px 52px 44px 44px 48px;gap:4px;align-items:center}
+.nhd{font-size:7px;font-weight:800;letter-spacing:.4px;color:#5b6675;text-transform:uppercase;
+  padding:7px 2px 3px;border-bottom:1px solid #1c222d}
+.nhd span:nth-child(n+3){text-align:right}
+.nrow{padding:5px 2px 2px;border-bottom:1px solid #141a24}
+.px{font-size:12.5px;font-weight:800;letter-spacing:-.2px}
+.sub{font-size:7.5px;color:#5b6675;font-weight:700}
+.pct{font-size:10px;font-weight:800;text-align:right}
+.val,.d{font-size:10px;font-weight:700;text-align:right}
+.val{color:#c9d4e2}
+.up{color:#2ec27e}.dn{color:#e0645f}.flat{color:#5b6675}
+.call{color:#e3c341}.put{color:#a371f7}
+.chips{grid-column:1/-1;display:flex;gap:4px;align-items:center;padding:3px 0 1px}
+.chip{font-size:7.5px;font-weight:800;padding:1px 5px;border-radius:3px;letter-spacing:.3px;white-space:nowrap}
+.bull{color:#2ec27e;background:rgba(46,194,126,.13);border:1px solid rgba(46,194,126,.38)}
+.bear{color:#e0645f;background:rgba(224,100,95,.13);border:1px solid rgba(224,100,95,.38)}
+.neut{color:#7d8794;background:rgba(125,135,148,.10);border:1px solid rgba(125,135,148,.30)}
+.rollc{color:#7cc7ff;background:rgba(124,199,255,.12);border:1px solid rgba(124,199,255,.40)}
+.meter{height:3px;border-radius:2px;background:#1c222d;position:relative;flex:1;max-width:70px}
+.meter i{position:absolute;top:0;bottom:0;border-radius:2px}
+.note{width:420px;color:#8b98a9;font-size:11.5px}
+.note h4{color:#e3c341;font-size:10px;letter-spacing:.5px;text-transform:uppercase;margin:15px 0 5px}
+.note h4:first-child{margin-top:0}
+.note code{background:#161c27;padding:1px 5px;border-radius:3px;color:#c9d4e2;font-size:10.5px}
+.fix{border-left:2px solid #2ec27e;padding:5px 8px;margin:5px 0;background:rgba(46,194,126,.05);font-size:11px}
+</style></head><body>
+<div class="wrap">
+
+<div class="panel">
+ <div class="sec">
+  <div class="sechd">② Location</div>
+  <div class="secbody">
+    <div class="locbar"><span class="pill">−G +V</span><span class="pill">BREAKS</span>
+      <span class="tgt">T: 7650 <span style="font-size:9px">−55</span></span></div>
+
+    <svg viewBox="0 0 360 104" width="360" height="104" style="display:block">
+      <defs>
+        <marker id="au" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5.5" markerHeight="5.5" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="#7cc7ff"/></marker>
+        <marker id="ad" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5.5" markerHeight="5.5" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="#e0645f"/></marker>
+      </defs>
+
+      <!-- ROLL LANES (own band, above everything; collapses when there is no roll) -->
+      <path d="M150 52 L150 30 L246 30 L246 46" fill="none" stroke="#7cc7ff" stroke-width="1.3" marker-end="url(#au)"/>
+      <text x="198" y="26" font-size="7" fill="#7cc7ff" font-weight="800" text-anchor="middle">ROLL ↑ 7707 · $1.4M</text>
+      <path d="M40 52 L40 12 L104 12 L104 46" fill="none" stroke="#e0645f" stroke-width="1.3" marker-end="url(#ad)"/>
+      <text x="72" y="8" font-size="7" fill="#e0645f" font-weight="800" text-anchor="middle">ROLL ↓ 7667 · $0.9M</text>
+
+      <!-- NODE TYPE / NAME band — its own row, nothing else drawn here -->
+      <text x="40"  y="60" font-size="7" fill="#8b98a9" text-anchor="middle" font-weight="800">PS</text>
+      <text x="104" y="60" font-size="7" fill="#e3c341" text-anchor="middle" font-weight="800">GK</text>
+      <text x="150" y="60" font-size="7" fill="#8b98a9" text-anchor="middle" font-weight="800">BRK</text>
+      <text x="246" y="60" font-size="7" fill="#8b98a9" text-anchor="middle" font-weight="800">BRK</text>
+      <text x="284" y="60" font-size="7" fill="#8b98a9" text-anchor="middle" font-weight="800">MAG</text>
+
+      <!-- the rail -->
+      <line x1="10" y1="78" x2="350" y2="78" stroke="#2a3342" stroke-width="7"/>
+
+      <!-- node blocks. cap = direction (green grows / red bleeds). No glyph above: the name band owns that row. -->
+      <rect x="37"  y="72" width="7" height="12" fill="#a371f7" opacity=".45"/><rect x="37"  y="82"  width="7" height="2.4" fill="#e0645f"/>
+      <rect x="101" y="66" width="7" height="24" fill="#a371f7" opacity=".85"/><rect x="101" y="64"  width="7" height="2.8" fill="#2ec27e"/>
+      <rect x="147" y="71" width="7" height="14" fill="#e3c341" opacity=".40"/><rect x="147" y="83"  width="7" height="2.4" fill="#e0645f"/>
+      <rect x="243" y="68" width="7" height="20" fill="#e3c341" opacity=".85"/><rect x="243" y="66"  width="7" height="2.8" fill="#2ec27e"/>
+      <rect x="281" y="73" width="7" height="10" fill="#e3c341" opacity=".55"/>
+
+      <!-- price labels: ONE size (7px) for every node, yellow and purple alike -->
+      <text x="40"  y="98" font-size="7" fill="#a371f7" text-anchor="middle" font-weight="800">7642</text>
+      <text x="104" y="98" font-size="7" fill="#a371f7" text-anchor="middle" font-weight="800">7667</text>
+      <text x="150" y="98" font-size="7" fill="#e3c341" text-anchor="middle" font-weight="800">7682</text>
+      <text x="246" y="98" font-size="7" fill="#e3c341" text-anchor="middle" font-weight="800">7707</text>
+      <text x="284" y="98" font-size="7" fill="#e3c341" text-anchor="middle" font-weight="800">7717</text>
+      <!-- EL / EH also 7px, so nothing on this row is bigger than anything else -->
+      <text x="10"  y="98" font-size="7" fill="#e6edf3" font-weight="800">7639</text>
+      <text x="10"  y="70" font-size="7" fill="#8b98a9" font-weight="800">EL</text>
+      <text x="350" y="98" font-size="7" fill="#e6edf3" font-weight="800" text-anchor="end">7730</text>
+      <text x="350" y="70" font-size="7" fill="#8b98a9" font-weight="800" text-anchor="end">EH</text>
+
+      <polygon points="76,86 72,94 80,94" fill="#e0645f"/>
+      <text x="76" y="60" font-size="7" fill="#e0645f" text-anchor="middle" font-weight="800">T</text>
+      <circle cx="122" cy="78" r="5.5" fill="#e6edf3" stroke="#0b0e14" stroke-width="2"/>
+    </svg>
+
+    <div class="read">Nothing sizeable between 7705 and 7730. Then down 7700 (44% brake, 5 away), nothing above.</div>
+
+    <div class="nhd"><span>Node · SPXW</span><span style="text-align:right">%King</span><span>Size</span><span>5m</span><span>60m</span><span>Day</span></div>
+
+    <!-- ORDER: highest price at top = rightmost on the rail. Bottom row = leftmost node. -->
+    <div class="nrow">
+      <span><span class="px call">7717.10</span> <span class="sub">7700</span></span>
+      <span class="pct call">38% ▲</span>
+      <span class="val">$8.2M</span><span class="d flat">0</span><span class="d up">+81K</span><span class="d up">+2.2M</span>
+      <div class="chips"><span class="chip neut">CAP · HOLDING</span>
+        <span class="meter"><i style="left:50%;width:9%;background:#7d8794"></i></span></div>
+    </div>
+
+    <div class="nrow">
+      <span><span class="px call">7707.10</span> <span class="sub">7690</span></span>
+      <span class="pct call">74% ▲</span>
+      <span class="val">$15.8M</span><span class="d up">+120K</span><span class="d up">+640K</span><span class="d up">+3.1M</span>
+      <div class="chips"><span class="chip bear">RESISTANCE BUILDING</span>
+        <span class="chip rollc">receives roll</span>
+        <span class="meter"><i style="left:50%;width:44%;background:#e0645f"></i></span></div>
+    </div>
+
+    <div class="nrow">
+      <span><span class="px call">7682.00</span> <span class="sub">7665</span></span>
+      <span class="pct call">42% ▲</span>
+      <span class="val">$9.1M</span><span class="d dn">−37K</span><span class="d dn">−412K</span><span class="d dn">−1.9M</span>
+      <div class="chips"><span class="chip bull">RESISTANCE FAILING</span>
+        <span class="chip rollc">→ rolls up 7707</span>
+        <span class="meter"><i style="right:50%;width:31%;background:#2ec27e"></i></span></div>
+    </div>
+
+    <div class="nrow">
+      <span><span class="px put">7666.90</span> <span class="sub">7650 K</span></span>
+      <span class="pct put">100% ▼</span>
+      <span class="val">$21.4M</span><span class="d up">+49K</span><span class="d up">+180K</span><span class="d up">+8.2M</span>
+      <div class="chips"><span class="chip bull">SUPPORT BUILDING</span>
+        <span class="meter"><i style="left:50%;width:26%;background:#2ec27e"></i></span></div>
+    </div>
+
+    <div class="nrow">
+      <span><span class="px put">7641.80</span> <span class="sub">7625</span></span>
+      <span class="pct put">28% ▼</span>
+      <span class="val">$5.9M</span><span class="d up">+293K</span><span class="d dn">−61K</span><span class="d up">+5.5M</span>
+      <div class="chips"><span class="chip neut">SUPPORT · STALLING</span>
+        <span class="chip rollc">→ rolls dn 7667</span>
+        <span class="sub">day-strong, hour-weak</span></div>
+    </div>
+
+    <div class="verdict">
+      <b>7682 is dissolving into 7707.</b> Near overhead thins, the wall re-forms 25 higher.
+      Support 7667 building underneath. Path of least resistance is <b>up to 7707</b>, and that is
+      where it stops.
+    </div>
+  </div>
+ </div>
+</div>
+
+<div class="note">
+  <h4>Your six fixes</h4>
+  <div class="fix"><b>Order matches the rail.</b> Highest price on top, so the bottom row is the
+  leftmost node on the rail. Read the rail left-to-right or the list bottom-to-top — same sequence.</div>
+  <div class="fix"><b>Node colours match the rail.</b> 7642 and 7667 purple (put-dominant), 7682 / 7707 /
+  7717 yellow (call-dominant) — identical hex to the rail blocks.</div>
+  <div class="fix"><b>%King moved to the right</b> of the node price, with the direction triangle.</div>
+  <div class="fix"><b>5m is back as its own column</b>, between Size and 60m.</div>
+  <div class="fix"><b>One font size on the rail label row.</b> Every price — yellow, purple, and the
+  white EL/EH — is 7px. Nothing on that row is bigger than anything else.</div>
+  <div class="fix"><b>Nothing overlaps the node names.</b> The rail now has three separate bands: roll
+  lanes on top, then a band that only ever holds node type/name, then the rail. The ▲/▼ glyph I had
+  above each block is gone — the coloured cap already carries direction, so the name band stays clear.</div>
+
+  <h4>Badge colours — the one call I want to flag</h4>
+  Chips are coloured by <b>what it means for price</b>, not by the node's polarity:
+  <br>· <span class="up">green</span> = bullish for price — support building, or resistance failing
+  <br>· <span class="dn">red</span> = bearish for price — resistance building, or support failing
+  <br>· <span class="flat">grey</span> = no decisive change
+  <br><br>
+  So a <span class="call">yellow</span> call node can carry a <span class="up">green</span> chip when it
+  is dissolving, because a dying ceiling is bullish. Polarity is already told by the price colour; the
+  chip is free to answer the actual question, which is which way price goes. If you would rather the
+  chip match the node colour, say so — but then two elements say the same thing and nothing says where
+  price is heading.
+
+  <h4>Still to settle</h4>
+  Roll threshold. Starting point: <code>$500K</code> moved with opposite signs inside
+  <code>15 minutes</code> on strikes <code>≤25 ES</code> apart — then tuned once we see the live firing rate.
+</div>
+
+</div></body></html>
