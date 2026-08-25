@@ -12,3 +12,9 @@ v10.js
 tools/gex-pull.log
 # versioned delivery copies of the installer — install.bat is the canonical one
 install-v*.bat
+
+# delivery artifacts - must never enter history (2026-08-25)
+gexdrop*.zip
+applygex*.bat
+pushgex*.bat
+install-v*.bat

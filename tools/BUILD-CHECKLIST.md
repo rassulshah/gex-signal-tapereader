@@ -32,7 +32,14 @@ undocumented. That has already happened repeatedly in this project.
    - open threads, stated precisely enough to resume without re-deriving
    - any new landmine, with the symptom that would reveal it
 7. **Snapshot the note** as `session-state/YYYY-MM-DD_resume-vX.Y.md` and delete the previous snapshot.
-8. **Build the installer with `python3 tools/build-installer.py "vX.Y: one-line commit message"`.**
+8. **Build the delivery with `python3 tools/build-installer.py "vX.Y: one-line commit message"`.**
+   ⚠ **THE PRIMARY DELIVERY IS THE PAIR `gexdropNNN.zip` + `applygexNNN.bat`** (2026-08-25: the
+   self-extracting installer failed three different ways in one day — a 30MB payload hung `more`,
+   certutil is an Avast target, and downloads STRIP DASHES from filenames so an exact-name check
+   missed its own zip). The applier is CRLF (an LF .bat closes instantly on double-click), finds the
+   zip by wildcard in three places, and unstages every delivery artifact before committing.
+   `install-vX.Y.bat` is still emitted as the fallback.
+   **Deliver BOTH pair files in ONE message.**
    It reads every version from the files, solves `HDRLINES` to a fixed point, round-trips its own payload
    against the working tree, and refuses to emit a stale `v11.x` header or the word PowerShell.
    ⚠ **NEVER HAND-EDIT `install.bat`.** The v11.86 one said v11.49 in its banner, v11.79 in its commit

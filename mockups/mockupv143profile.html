@@ -1,0 +1,161 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>v14.3 profile — ROC rows + $ axis</title>
+<style>
+  body{background:#0d1117;color:#e6edf3;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+       font-variant-numeric:tabular-nums;margin:0;padding:26px;display:flex;gap:34px;flex-wrap:wrap;align-items:flex-start}
+  .panel{width:460px;background:#0d1117;border:1px solid #232a36;border-radius:6px;padding:10px 12px}
+  .cap{font-size:11px;font-weight:800;letter-spacing:.08em;color:#8b98a9;margin:0 0 6px;text-transform:uppercase}
+  .cap b{color:#7cc7ff}
+  .note{font-size:10px;color:#8b98a9;line-height:1.5;margin-top:10px;width:460px}
+  .note b{color:#e6edf3}
+  .hd{font-size:7px;font-weight:800;letter-spacing:.12em;color:#8b98a9;margin:6px 0 12px;display:flex;align-items:center;gap:4px}
+  .hd small{font-weight:700;letter-spacing:.02em;color:#5b6675;text-transform:none}
+  .inf{width:9px;height:9px;border-radius:50%;border:1px solid #4a5568;color:#8b98a9;font-size:6.5px;
+       display:inline-flex;align-items:center;justify-content:center;font-weight:800;cursor:help;font-style:normal;flex:none}
+
+  .frow{display:flex;align-items:stretch;gap:6px}
+  .fspace{width:38px;flex:none;font-size:9px;font-weight:800;color:#8b98a9;position:relative}
+  .fspace b{color:#e6edf3}
+  .ftrack{flex:1;position:relative}
+
+  .rail{height:16px}
+  .track{position:absolute;top:7px;left:0;right:0;height:3px;background:#2a3340;border-radius:2px}
+  .used{position:absolute;top:7px;height:3px;background:#3d4a5c}
+  .nd{position:absolute;top:2px;width:12px;height:12px;border-radius:50%;transform:translateX(-50%);border:2px solid #0d1117}
+  .king{width:16px;height:16px;top:0;box-shadow:0 0 0 2px rgba(227,195,65,.35)}
+  .now{position:absolute;top:3px;width:10px;height:10px;border-radius:50%;background:#fff;transform:translateX(-50%);box-shadow:0 0 5px rgba(255,255,255,.6)}
+  .plab{position:absolute;top:17px;transform:translateX(-50%);text-align:center;font-size:9px;font-weight:800;line-height:1.15}
+  .plab i{display:block;font-style:normal;font-size:8px;color:#c9d1da}
+  .labrow{height:38px}
+  .elh{position:absolute;top:2px;font-size:9px}
+
+  /* profile + vertical $ axis */
+  .prof{height:56px}
+  .profrow .ftrack{border-bottom:1px solid #2f3846}
+  .bar{position:absolute;bottom:0;transform:translateX(-50%);border:1px solid;border-bottom:none;border-radius:2px 2px 0 0}
+  .bar b{position:absolute;bottom:0;left:1px;right:1px;border-radius:1px 1px 0 0}
+  .bpct{position:absolute;transform:translate(-50%,-115%);font-size:6.5px;font-weight:800;white-space:nowrap}
+  .wall{position:absolute;top:-11px;transform:translateX(-50%);font-size:6.5px;font-weight:800;padding:0 3px;border-radius:2px}
+  .cw{color:#e0645f;background:rgba(224,100,95,.14);border:1px solid rgba(224,100,95,.45)}
+  .pw{color:#2ec27e;background:rgba(46,194,126,.14);border:1px solid rgba(46,194,126,.45)}
+  .grid{position:absolute;left:0;right:0;height:0;border-top:1px dashed rgba(139,152,169,.14);pointer-events:none}
+  .ylab{position:absolute;right:4px;transform:translateY(-50%);font-size:6.5px;color:#5b6675;font-weight:700}
+  .pxline{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.35);transform:translateX(-50%)}
+  .pxcarat{position:absolute;top:-6px;transform:translateX(-50%);font-size:7px;color:#fff;font-weight:800}
+
+  /* the ROC matrix under the bars: rows = windows, columns = strikes */
+  .rocrow{height:12px}
+  .roccap{position:absolute;right:4px;top:1px;font-size:6px;color:#5b6675;font-weight:800;letter-spacing:.06em}
+  .roc{position:absolute;transform:translateX(-50%);font-size:7.5px;font-weight:800;top:1px;white-space:nowrap}
+  .up{color:#2ec27e}.dn{color:#f0616d}.flat{color:#8b98a9}
+  .rocrow .ftrack{border-bottom:1px solid rgba(47,56,70,.5)}
+  .rocrow:last-of-type .ftrack{border-bottom:none}
+</style>
+</head>
+<body>
+
+<div>
+<div class="cap">v14.3 · GAMMA PROFILE <b>with ROC rows + $ axis, no duplicate strike labels</b></div>
+<div class="panel">
+
+  <!-- rail -->
+  <div class="frow rail">
+    <span class="fspace"><span class="elh"><b>7630</b> EL</span></span>
+    <div class="ftrack">
+      <div class="track"></div><div class="used" style="left:40%;width:32%"></div>
+      <span class="nd king" style="left:55.2%;background:#e3c341"></span>
+      <span class="nd" style="left:63.3%;background:#a371f7"></span>
+      <span class="nd" style="left:71.4%;background:#a371f7"></span>
+      <span class="nd" style="left:79.4%;background:#e3c341"></span>
+      <span class="nd" style="left:87.5%;background:#a371f7"></span>
+      <span class="now" style="left:69.4%"></span>
+    </div>
+    <span class="fspace" style="text-align:right"><span class="elh" style="right:0">EH <b>7692</b></span></span></div>
+
+  <!-- rail labels tier (unchanged — this is where the prices already live) -->
+  <div class="frow labrow"><span class="fspace"></span>
+    <div class="ftrack">
+      <span class="plab" style="left:55.2%;color:#e3c341">7664<i>7665</i></span>
+      <span class="plab" style="left:63.3%;color:#a371f7">7669<i>7670</i></span>
+      <span class="plab" style="left:79.4%;color:#e3c341">7679<i>7680</i></span>
+    </div><span class="fspace"></span></div>
+
+  <div class="hd">GAMMA PROFILE <i class="inf">i</i><small>&nbsp;outline = day peak · fill = now · % = of King · $ axis is sqrt-spaced</small></div>
+
+  <!-- profile: $ axis lives in the LEFT SPACER; gridlines cross the track at the same heights -->
+  <div class="frow prof profrow">
+    <span class="fspace">
+      <span class="ylab" style="top:6px">$300M</span>
+      <span class="ylab" style="top:26px">$100M</span>
+      <span class="ylab" style="top:41px">$25M</span>
+    </span>
+    <div class="ftrack">
+      <span class="grid" style="top:6px"></span><span class="grid" style="top:26px"></span><span class="grid" style="top:41px"></span>
+      <span class="pxline" style="left:69.4%"></span><span class="pxcarat" style="left:69.4%">▾</span>
+      <span class="wall pw" style="left:55.2%">PW</span>
+      <span class="wall cw" style="left:79.4%">CW</span>
+      <!-- peaks: 327/101/115/109/66/64 → sqrt heights 56/31/33/32/25/25 · fills linear -->
+      <span class="bar" style="left:55.2%;width:11px;height:56px;border-color:#e3c341"><i class="bpct" style="left:50%;top:-2px;color:#e3c341;position:absolute">100%</i><b style="height:31px;background:rgba(227,195,65,.7)"></b></span>
+      <span class="bar" style="left:63.3%;width:11px;height:31px;border-color:#a371f7"><i class="bpct" style="left:50%;top:-2px;color:#e6edf3;position:absolute">55%</i><b style="height:31px;background:rgba(163,113,247,.75)"></b></span>
+      <span class="bar" style="left:71.4%;width:11px;height:33px;border-color:#a371f7"><i class="bpct" style="left:50%;top:-2px;color:#e6edf3;position:absolute">49%</i><b style="height:26px;background:rgba(163,113,247,.7)"></b></span>
+      <span class="bar" style="left:79.4%;width:11px;height:32px;border-color:#e3c341"><i class="bpct" style="left:50%;top:-2px;color:#e6edf3;position:absolute">49%</i><b style="height:27px;background:rgba(227,195,65,.7)"></b></span>
+      <span class="bar" style="left:87.5%;width:11px;height:25px;border-color:#a371f7"><i class="bpct" style="left:50%;top:-2px;color:#e6edf3;position:absolute">23%</i><b style="height:16px;background:rgba(163,113,247,.7)"></b></span>
+      <span class="bar" style="left:95.6%;width:11px;height:25px;border-color:#e3c341"><i class="bpct" style="left:50%;top:-2px;color:#f0616d;position:absolute">10%</i><b style="height:8px;background:rgba(227,195,65,.7)"></b></span>
+      <!-- grey minors, no labels, no ROC -->
+      <span class="bar" style="left:31.0%;width:5px;height:14px;border-color:#5b6675;opacity:.5"><b style="height:10px;background:#5b6675"></b></span>
+      <span class="bar" style="left:39.1%;width:5px;height:10px;border-color:#5b6675;opacity:.5"><b style="height:6px;background:#5b6675"></b></span>
+      <span class="bar" style="left:47.2%;width:5px;height:13px;border-color:#5b6675;opacity:.5"><b style="height:3px;background:#5b6675"></b></span>
+    </div>
+    <span class="fspace"></span></div>
+
+  <!-- THE ROC MATRIX: rows = Skylit's own 5m/15m/60m, columns = the strikes above them -->
+  <div class="frow rocrow"><span class="fspace"><span class="roccap">5M</span></span>
+    <div class="ftrack">
+      <span class="roc dn" style="left:55.2%">−2.1%</span>
+      <span class="roc up" style="left:63.3%">+4.2%</span>
+      <span class="roc up" style="left:71.4%">+1.1%</span>
+      <span class="roc up" style="left:79.4%">+0.8%</span>
+      <span class="roc dn" style="left:87.5%">−1.9%</span>
+      <span class="roc dn" style="left:95.6%">−5.0%</span>
+    </div><span class="fspace"></span></div>
+  <div class="frow rocrow"><span class="fspace"><span class="roccap">15M</span></span>
+    <div class="ftrack">
+      <span class="roc dn" style="left:55.2%">−8%</span>
+      <span class="roc up" style="left:63.3%">+12%</span>
+      <span class="roc dn" style="left:71.4%">−3.4%</span>
+      <span class="roc up" style="left:79.4%">+6.2%</span>
+      <span class="roc dn" style="left:87.5%">−12%</span>
+      <span class="roc dn" style="left:95.6%">−22%</span>
+    </div><span class="fspace"></span></div>
+  <div class="frow rocrow"><span class="fspace"><span class="roccap">60M</span></span>
+    <div class="ftrack">
+      <span class="roc dn" style="left:55.2%">−24%</span>
+      <span class="roc up" style="left:63.3%">+88%</span>
+      <span class="roc up" style="left:71.4%">+41%</span>
+      <span class="roc up" style="left:79.4%">+3.9%</span>
+      <span class="roc dn" style="left:87.5%">−31%</span>
+      <span class="roc dn" style="left:95.6%">−64%</span>
+    </div><span class="fspace"></span></div>
+
+  <div class="verd" style="margin-top:8px;padding:4px 7px;border-left:2px solid #e3c341;background:rgba(227,195,65,.06);font-size:9.5px;color:#d7dde6;border-radius:0 3px 3px 0">
+    <b style="color:#e3c341">WALLS</b> · PW 7664 — defended (56% of peak) · CW 7679 defended (83%) · heaviest now 7664 ($184M)</div>
+</div>
+<div class="note">
+  <b>What changed:</b> ① the strike labels under the bars are GONE — the rail above already names them,
+  and each bar sits exactly under its dot. ② In their place, the <b>ROC matrix</b>: Skylit's own 5m /
+  15m / 60m per strike, the same numbers as the NODES columns, green/red, one column per bar with the
+  row captions in the left margin. Reading a column top-to-bottom is reading that node's momentum —
+  7669 here reads +4.2 / +12 / +88: defended and building. Grey minors carry no ROC (below the floor).
+  ③ The <b>$ axis</b> sits in the left margin with dashed gridlines — spaced by the same sqrt scale the
+  bars use (so it's honest about the heights), labelled at round dollar values, and the ⓘ says so.
+  ④ Price is now a thin vertical line through the profile with ▾ on top, replacing the old bottom marker.
+  This layout is deliberately self-sufficient — %K, size, momentum, and walls per strike — so the NODES
+  section can eventually retire without losing anything except the roll chips (which would move here).
+</div>
+</div>
+
+</body>
+</html>

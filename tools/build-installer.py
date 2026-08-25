@@ -68,15 +68,28 @@ for pat in ['current/gex-signal-tapereader.user.js', 'current/gex-if-levels.user
             'setup-gex-autopull.bat']:
     if os.path.exists(pat):
         FILES.append(pat)
-for d in ['session-state', 'tools', 'mockups']:
-    for f in sorted(os.listdir(d)):
-        p = os.path.join(d, f)
-        # (v13.9) NO .bat, NO .log. The v13.8 push swept ~20 OLD DOWNLOADED INSTALLERS (~28MB) into
-        # mockups/, and this loop then packaged them all: a 30MB installer whose `more +HDRLINES`
-        # extraction ground through 390K lines and read as a HANG on the user's machine. An
-        # installer must never contain installers.
-        if os.path.isfile(p) and not f.endswith('.log') and not f.lower().endswith('.bat'):
-            FILES.append(p)
+# (v14.3) session-state ships the LIVING documents plus ONLY the newest dated snapshot — 39 stale
+# v10/v11-era snapshots were re-shipped in every payload (~1.5MB) purely because nobody had ever
+# deleted them, and they tripped the size guard. They stay in git history; they stop riding along.
+_SNAP=re.compile(r'^\d{4}-\d{2}-\d{2}_resume-')
+_snaps=sorted(f for f in os.listdir('session-state') if _SNAP.match(f))
+_keep_snap=_snaps[-1] if _snaps else None
+for f in sorted(os.listdir('session-state')):
+    p=os.path.join('session-state', f)
+    if not os.path.isfile(p) or f.endswith('.log'): continue
+    if _SNAP.match(f) and f!=_keep_snap: continue
+    FILES.append(p)
+for f in sorted(os.listdir('tools')):
+    p=os.path.join('tools', f)
+    # (v13.9) NO .bat, NO .log — an installer must never contain installers.
+    if os.path.isfile(p) and not f.endswith('.log') and not f.lower().endswith('.bat'):
+        FILES.append(p)
+# (v14.3) mockups are DESIGN documents: html/md only. A 0.64MB day-data .json and old .patch files
+# had drifted in and were shipping with every build.
+for f in sorted(os.listdir('mockups')):
+    p=os.path.join('mockups', f)
+    if os.path.isfile(p) and (f.endswith('.html') or f.endswith('.md')):
+        FILES.append(p)
 FILES += sorted(f for f in os.listdir('.') if f.startswith('test_') and f.endswith('.js'))
 
 # --- size guard: fail LOUDLY before shipping a payload cmd.exe cannot digest --------------------
@@ -279,7 +292,108 @@ import shutil
 _versioned = 'install-v%s.bat' % V
 shutil.copyfile('install.bat', _versioned)
 
+# ==== (v14.3) THE ZIP + APPLIER PAIR — THE PRIMARY DELIVERY ======================================
+# 2026-08-25: the self-extracting installer failed on the user's machine THREE ways in one day —
+# a 30MB payload hung `more`, then extraction failed for an unreported reason (certutil is a known
+# Avast target), and the download STRIPPED DASHES from filenames so an exact-name check missed.
+# What worked, first try, was: a plain zip + a tiny CRLF .bat that extracts it with Windows' own
+# tar (bsdtar reads zip natively) — no certutil, no base64, no self-parsing. So the builder now
+# emits that pair and IT is what gets delivered. Rules learned the hard way, encoded here:
+#   - filenames carry NO dashes and NO dots except the extension (downloads strip dashes)
+#   - the .bat is CRLF (a hand-made LF applier closed instantly on double-click)
+#   - the applier finds the zip by WILDCARD in three places (beside itself, mockups, Downloads)
+#   - it deletes the zip and unstages helper files before committing, so they cannot enter history
+VD = V.replace('.', '')                    # 14.3 -> 143: version digits for dash/dot-free names
+ZIPNAME = 'gexdrop%s.zip' % VD
+BATNAME = 'applygex%s.bat' % VD
+import zipfile as _zf
+with _zf.ZipFile(ZIPNAME, 'w', _zf.ZIP_DEFLATED) as _z:
+    for _p in FILES:
+        _z.write(_p, _p)
+# round-trip the zip too
+with _zf.ZipFile(ZIPNAME) as _z:
+    _zbad = [nm for nm in _z.namelist() if _z.read(nm) != open(nm, 'rb').read()]
+    assert not _zbad, 'zip differs from working tree: ' + ', '.join(_zbad)
+    assert len(_z.namelist()) == len(FILES), 'zip file count mismatch'
+_MSGBAT = MSG.replace('%', '%%')
+_APPLY = """@echo off
+setlocal EnableDelayedExpansion
+REM ============================================================
+REM   GEX v{V} APPLIER - put {ZIP} anywhere; this finds it.
+REM   Plain tools only - Windows tar reads zip natively. No certutil.
+REM ============================================================
+set REPO=C:\\Dev\\gex-signal-tapereader
+if not exist "%REPO%\\.git" (
+  echo ERROR: repo not found at %REPO%
+  pause
+  exit /b 1
+)
+set ZIP=
+for %%Z in ("%~dp0gexdrop*.zip") do if not defined ZIP set ZIP=%%~fZ
+if not defined ZIP for %%Z in ("%REPO%\\mockups\\gexdrop*.zip") do if not defined ZIP set ZIP=%%~fZ
+if not defined ZIP for %%Z in ("%USERPROFILE%\\Downloads\\gexdrop*.zip") do if not defined ZIP set ZIP=%%~fZ
+if not defined ZIP (
+  echo ERROR: no gexdrop*.zip found beside this script, in mockups, or in Downloads.
+  pause
+  exit /b 1
+)
+echo Using %ZIP%
+echo Extracting...
+tar -xf "%ZIP%" -C "%REPO%"
+if errorlevel 1 (
+  echo ERROR: tar extract failed. Report exactly this line.
+  pause
+  exit /b 1
+)
+del /q "%ZIP%" >nul 2>&1
+del /q "%REPO%\\mockups\\install*.bat" "%REPO%\\mockups\\apply*.bat" "%REPO%\\mockups\\gex*drop*.zip" >nul 2>&1
+set GIT=
+where git >nul 2>&1 && set GIT=git
+if not defined GIT if exist "C:\\Program Files\\Git\\cmd\\git.exe" set GIT=C:\\Program Files\\Git\\cmd\\git.exe
+if not defined GIT if exist "C:\\Program Files (x86)\\Git\\cmd\\git.exe" set GIT=C:\\Program Files (x86)\\Git\\cmd\\git.exe
+if not defined GIT if exist "%LOCALAPPDATA%\\Programs\\Git\\cmd\\git.exe" set GIT=%LOCALAPPDATA%\\Programs\\Git\\cmd\\git.exe
+if not defined GIT (
+  for /d %%D in ("%LOCALAPPDATA%\\GitHubDesktop\\app-*") do if exist "%%D\\resources\\app\\git\\cmd\\git.exe" set GIT=%%D\\resources\\app\\git\\cmd\\git.exe
+)
+if not defined GIT (
+  echo Files are installed at %REPO% but git was not found - push manually.
+  pause
+  exit /b 0
+)
+pushd "%REPO%"
+"!GIT!" add -A
+"!GIT!" reset -q -- "mockups/*.zip" "mockups/apply*" "gexdrop*.zip" "applygex*.bat" "pushgex*.bat" >nul 2>&1
+"!GIT!" diff --cached --quiet
+if errorlevel 1 (
+  "!GIT!" commit -m "{MSG}"
+  "!GIT!" push
+  if errorlevel 1 (
+    echo Committed locally but git push failed - push manually from %REPO%.
+    popd
+    pause
+    exit /b 1
+  )
+  echo.
+  echo ============================================================
+  echo   PUSHED v{V}. Wait 5 minutes, update the Tampermonkey
+  echo   script, then RELOAD the Atlas tab. Footer must say v{V}.
+  echo ============================================================
+) else (
+  echo Nothing to commit - repo already at v{V}.
+)
+popd
+echo.
+pause
+""".replace('{V}', V).replace('{ZIP}', ZIPNAME).replace('{MSG}', _MSGBAT)
+with open(BATNAME, 'wb') as _fh:
+    _fh.write(_APPLY.replace('\r\n', '\n').replace('\n', '\r\n').encode('ascii'))
+_atxt = open(BATNAME, 'r', encoding='ascii').read()
+assert 'powershell' not in _atxt.lower(), 'PowerShell in applier'
+assert '\r\n' in open(BATNAME, 'rb').read().decode('ascii'), 'applier is not CRLF'
+assert '-' not in ZIPNAME.replace('.zip','') and '-' not in BATNAME.replace('.bat',''), 'dashes in delivery names'
+
 print('install.bat  %d bytes  HDRLINES=%d  %d files  script v%s  companion v%s'
       % (os.path.getsize('install.bat'), n, len(names), V, VC))
-print('DELIVER THIS FILE: %s' % _versioned)
-print('round-trip: every file byte-identical to the working tree')
+print('DELIVER THESE TWO FILES (primary): %s + %s' % (ZIPNAME, BATNAME))
+print('  (install-v%s.bat still exists as the self-extracting fallback)' % V)
+print('round-trip: tar payload AND zip both byte-identical to the working tree')

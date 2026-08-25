@@ -1,3 +1,34 @@
+## v14.3 — badges move INSIDE the bars, the ROC matrix, and a $ axis
+
+The operator approved the mockups and supplied the letter codes; this build is that design.
+
+**1. THE BADGE SYSTEM, IN-BAR.** Every marker now lives inside its bar as a 1-2 letter pill, so
+nothing can overlap anything (the % labels and CW/PW flags used to share airspace above the bars).
+The codes are the operator's: **S / R** support/resistance building, **SF / RF** failing, **TU / TD**
+turning, **H** holding — colour keeps the nodeChip rule (what it means for PRICE: a failing ceiling
+is green). **RU / RD** are latched rolls (roll-lane colours, dashed border on the way down) — bare R
+is always the state, any two-letter R-code is always a roll, so the collision is structural, not
+visual. **CW / PW** (0DTE walls) badge into the nearest rail bar within 3 ES points; a wall with no
+qualifying bar keeps a floating flag, the one exception. ▶ watch (with a blue ring on the bar) and
+the amber aged dot sit at the base. **THE FIT RULE:** the stack draws top-down in priority order
+(%K, wall, state, roll) only while it fits inside the bar's height; everything is ALWAYS in the
+bar's hover, so fitting hides pixels, never information. Grey minors never carry badges. Bars
+widened 11→15px for two-letter pills; the band grew to 72px.
+
+**2. THE ROC MATRIX** replaces the strike labels under the bars (the rail above already names every
+strike). Three rows — 5M / 15M / 60M, captions in the left margin — one column per rail bar,
+Skylit's own published percentages in the NODES green/red grammar. Reading a column top-to-bottom
+is reading that node's momentum; this is the piece that lets NODES eventually retire.
+
+**3. THE $ AXIS** sits in the left margin (inside a wrapper around the hidden EL clone, so the
+frame's width still matches the rail exactly) with dashed gridlines at round dollar values —
+SQRT-SPACED, because the bar heights are, and a linear axis on sqrt bars would lie. The ⓘ says so.
+
+**4. Price** is a thin vertical white line with ▾ through the profile, replacing the bottom marker.
+
+Legend row at the section's foot; header ⓘ rewritten for the new grammar. NODES is untouched this
+build — it retires only after the operator has lived with the profile.
+
 ## v14.2 — the profile earns the rail's frame, %King on top, and clean books underneath
 
 The operator approved the corrected mockup ("lets go with the skylit version") with one change of

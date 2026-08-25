@@ -1,0 +1,258 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>v14.3 — in-bar badges</title>
+<style>
+  body{background:#0d1117;color:#e6edf3;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+       font-variant-numeric:tabular-nums;margin:0;padding:26px;display:flex;gap:34px;flex-wrap:wrap;align-items:flex-start}
+  .panel{width:460px;background:#0d1117;border:1px solid #232a36;border-radius:6px;padding:10px 12px}
+  .cap{font-size:11px;font-weight:800;letter-spacing:.08em;color:#8b98a9;margin:0 0 6px;text-transform:uppercase}
+  .cap b{color:#7cc7ff}
+  .note{font-size:10px;color:#8b98a9;line-height:1.5;margin-top:10px;width:460px}
+  .note b{color:#e6edf3}
+  .hd{font-size:7px;font-weight:800;letter-spacing:.12em;color:#8b98a9;margin:6px 0 12px;display:flex;align-items:center;gap:4px}
+  .hd small{font-weight:700;letter-spacing:.02em;color:#5b6675;text-transform:none}
+  .inf{width:9px;height:9px;border-radius:50%;border:1px solid #4a5568;color:#8b98a9;font-size:6.5px;
+       display:inline-flex;align-items:center;justify-content:center;font-weight:800;cursor:help;font-style:normal;flex:none}
+
+  .frow{display:flex;align-items:stretch;gap:6px}
+  .fspace{width:38px;flex:none;font-size:9px;font-weight:800;color:#8b98a9;position:relative}
+  .fspace b{color:#e6edf3}
+  .ftrack{flex:1;position:relative}
+  .rail{height:16px}
+  .track{position:absolute;top:7px;left:0;right:0;height:3px;background:#2a3340;border-radius:2px}
+  .used{position:absolute;top:7px;height:3px;background:#3d4a5c}
+  .nd{position:absolute;top:2px;width:12px;height:12px;border-radius:50%;transform:translateX(-50%);border:2px solid #0d1117}
+  .king{width:16px;height:16px;top:0;box-shadow:0 0 0 2px rgba(227,195,65,.35)}
+  .now{position:absolute;top:3px;width:10px;height:10px;border-radius:50%;background:#fff;transform:translateX(-50%);box-shadow:0 0 5px rgba(255,255,255,.6)}
+  .plab{position:absolute;top:17px;transform:translateX(-50%);text-align:center;font-size:9px;font-weight:800;line-height:1.15}
+  .plab i{display:block;font-style:normal;font-size:8px;color:#c9d1da}
+  .labrow{height:38px}
+  .elh{position:absolute;top:2px;font-size:9px}
+
+  .prof{height:78px}
+  .profrow .ftrack{border-bottom:1px solid #2f3846}
+  .bar{position:absolute;bottom:0;transform:translateX(-50%);border:1px solid;border-bottom:none;border-radius:2px 2px 0 0}
+  .bar b{position:absolute;bottom:0;left:1px;right:1px;border-radius:1px 1px 0 0}
+  .grid{position:absolute;left:0;right:0;height:0;border-top:1px dashed rgba(139,152,169,.14);pointer-events:none}
+  .ylab{position:absolute;right:4px;transform:translateY(-50%);font-size:6.5px;color:#5b6675;font-weight:700}
+  .pxline{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.35);transform:translateX(-50%)}
+  .pxcarat{position:absolute;top:-6px;transform:translateX(-50%);font-size:7px;color:#fff;font-weight:800}
+
+  /* ---- IN-BAR badges: a vertical stack from the bar's top, dark pills so they read over fill or hollow ---- */
+  .stk{position:absolute;top:2px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;
+       gap:2px;align-items:center;z-index:2}
+  .bg{min-width:13px;padding:0 1px;height:9px;border-radius:2px;background:rgba(13,17,23,.85);
+      font-size:6px;font-weight:800;display:flex;align-items:center;justify-content:center;
+      border:1px solid;letter-spacing:.02em;line-height:1;cursor:help}
+  .bkpct{font-size:6.5px;font-weight:800;background:none;border:none;min-width:0;height:8px}
+  .bull{color:#2ec27e;border-color:rgba(46,194,126,.55)}
+  .bear{color:#e0645f;border-color:rgba(224,100,95,.55)}
+  .turn{color:#f2b45a;border-color:rgba(242,180,90,.6)}
+  .neut{color:#7d8794;border-color:rgba(125,135,148,.45)}
+  .rollu{color:#7cc7ff;border-color:rgba(124,199,255,.6)}
+  .rolld{color:#e0645f;border-color:rgba(224,100,95,.6);border-style:dashed}
+  .wallb{color:#e0645f;border-color:rgba(224,100,95,.6)}
+  .wallg{color:#2ec27e;border-color:rgba(46,194,126,.6)}
+  .base{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);display:flex;gap:2px;align-items:center;z-index:2}
+  .wmk{font-size:7px;color:#7cc7ff;font-weight:800}
+  .adot{width:4px;height:4px;border-radius:50%;background:#f2b45a}
+  .watchbar{box-shadow:0 0 0 1.5px rgba(124,199,255,.55)}
+
+  .rocrow{height:12px}
+  .roccap{position:absolute;right:4px;top:1px;font-size:6px;color:#5b6675;font-weight:800;letter-spacing:.06em}
+  .roc{position:absolute;transform:translateX(-50%);font-size:7.5px;font-weight:800;top:1px;white-space:nowrap}
+  .up{color:#2ec27e}.dn{color:#f0616d}.flat{color:#8b98a9}
+  .rocrow .ftrack{border-bottom:1px solid rgba(47,56,70,.5)}
+  .rocrow:last-of-type .ftrack{border-bottom:none}
+
+  /* legend + anatomy */
+  .leg{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;align-items:center}
+  .leg .bg{position:static;transform:none;height:11px;min-width:16px;font-size:6.5px}
+  .leg span.t{font-size:7.5px;color:#8b98a9}
+  .an{display:flex;gap:14px;align-items:flex-end;margin-top:4px}
+  .anbar{position:relative;width:44px;height:150px;border:2px solid #e3c341;border-bottom:none;border-radius:4px 4px 0 0;background:linear-gradient(to top, rgba(227,195,65,.5) 55%, transparent 55%)}
+  .anbar .bg{min-width:26px;height:15px;font-size:9px}
+  .anbar .stk{top:6px;gap:5px}
+  .anbar .base{bottom:5px;gap:5px}
+  .anbar .wmk{font-size:12px}.anbar .adot{width:7px;height:7px}
+  .anlab{font-size:8.5px;color:#8b98a9;line-height:2.05}
+  .anlab b{color:#e6edf3}
+</style>
+</head>
+<body>
+
+<!-- ================= A: the profile wearing the full badge set ================= -->
+<div>
+<div class="cap">A · profile with IN-BAR badges <b>(nothing outside a bar, nothing overlaps)</b></div>
+<div class="panel">
+
+  <div class="frow rail">
+    <span class="fspace"><span class="elh"><b>7630</b> EL</span></span>
+    <div class="ftrack">
+      <div class="track"></div><div class="used" style="left:40%;width:32%"></div>
+      <span class="nd king" style="left:55.2%;background:#e3c341"></span>
+      <span class="nd" style="left:63.3%;background:#a371f7"></span>
+      <span class="nd" style="left:71.4%;background:#a371f7"></span>
+      <span class="nd" style="left:79.4%;background:#e3c341"></span>
+      <span class="nd" style="left:87.5%;background:#a371f7"></span>
+      <span class="nd" style="left:95.6%;background:#e3c341"></span>
+      <span class="now" style="left:69.4%"></span>
+    </div>
+    <span class="fspace" style="text-align:right"><span class="elh" style="right:0">EH <b>7692</b></span></span></div>
+
+  <div class="frow labrow"><span class="fspace"></span>
+    <div class="ftrack">
+      <span class="plab" style="left:55.2%;color:#e3c341">7664<i>7665</i></span>
+      <span class="plab" style="left:71.4%;color:#a371f7">7674<i>7675</i></span>
+      <span class="plab" style="left:79.4%;color:#e3c341">7679<i>7680</i></span>
+    </div><span class="fspace"></span></div>
+
+  <div class="hd">GAMMA PROFILE <i class="inf">i</i><small>&nbsp;outline = day peak · fill = now · badges live inside the bars</small></div>
+
+  <div class="frow prof profrow">
+    <span class="fspace">
+      <span class="ylab" style="top:9px">$300M</span>
+      <span class="ylab" style="top:37px">$100M</span>
+      <span class="ylab" style="top:58px">$25M</span>
+    </span>
+    <div class="ftrack">
+      <span class="grid" style="top:9px"></span><span class="grid" style="top:37px"></span><span class="grid" style="top:58px"></span>
+      <span class="pxline" style="left:69.4%"></span><span class="pxcarat" style="left:69.4%">▾</span>
+
+      <!-- 7664 KING · %100 · PW · S · watch -->
+      <span class="bar watchbar" style="left:55.2%;width:15px;height:76px;border-color:#e3c341">
+        <b style="height:42px;background:rgba(227,195,65,.55)"></b>
+        <span class="stk"><span class="bg bkpct" style="color:#e3c341">100</span>
+          <span class="bg wallg">PW</span><span class="bg bull">S</span></span>
+        <span class="base"><span class="wmk">▶</span></span>
+      </span>
+      <!-- 7669 · %55 · T↑ -->
+      <span class="bar" style="left:63.3%;width:15px;height:43px;border-color:#a371f7">
+        <b style="height:42px;background:rgba(163,113,247,.6)"></b>
+        <span class="stk"><span class="bg bkpct" style="color:#e6edf3">55</span>
+          <span class="bg turn">T↑</span></span>
+      </span>
+      <!-- 7674 · %49 · RF -->
+      <span class="bar" style="left:71.4%;width:15px;height:45px;border-color:#a371f7">
+        <b style="height:36px;background:rgba(163,113,247,.6)"></b>
+        <span class="stk"><span class="bg bkpct" style="color:#e6edf3">49</span>
+          <span class="bg bull">RF</span></span>
+      </span>
+      <!-- 7679 · %49 · CW · R -->
+      <span class="bar" style="left:79.4%;width:15px;height:44px;border-color:#e3c341">
+        <b style="height:37px;background:rgba(227,195,65,.55)"></b>
+        <span class="stk"><span class="bg bkpct" style="color:#e6edf3">49</span>
+          <span class="bg wallb">CW</span><span class="bg bear">R</span></span>
+      </span>
+      <!-- 7684 · %23 · H · aged -->
+      <span class="bar" style="left:87.5%;width:15px;height:34px;border-color:#a371f7">
+        <b style="height:22px;background:rgba(163,113,247,.6)"></b>
+        <span class="stk"><span class="bg bkpct" style="color:#e6edf3">23</span>
+          <span class="bg neut">H</span></span>
+        <span class="base"><span class="adot"></span></span>
+      </span>
+      <!-- 7689 · %10 · RF + roll down R↓ -->
+      <span class="bar" style="left:95.6%;width:15px;height:34px;border-color:#e3c341">
+        <b style="height:11px;background:rgba(227,195,65,.55)"></b>
+        <span class="stk"><span class="bg bkpct" style="color:#f0616d">10</span>
+          <span class="bg bull">RF</span><span class="bg rolld">R↓</span></span>
+      </span>
+      <!-- grey minors: no badges ever -->
+      <span class="bar" style="left:31.0%;width:5px;height:16px;border-color:#5b6675;opacity:.5"><b style="height:11px;background:#5b6675"></b></span>
+      <span class="bar" style="left:39.1%;width:5px;height:11px;border-color:#5b6675;opacity:.5"><b style="height:6px;background:#5b6675"></b></span>
+      <span class="bar" style="left:47.2%;width:5px;height:14px;border-color:#5b6675;opacity:.5"><b style="height:3px;background:#5b6675"></b></span>
+    </div>
+    <span class="fspace"></span></div>
+
+  <div class="frow rocrow"><span class="fspace"><span class="roccap">5M</span></span>
+    <div class="ftrack">
+      <span class="roc up" style="left:55.2%">+2.1%</span>
+      <span class="roc up" style="left:63.3%">+4.2%</span>
+      <span class="roc dn" style="left:71.4%">−1.1%</span>
+      <span class="roc up" style="left:79.4%">+0.8%</span>
+      <span class="roc flat" style="left:87.5%">0.0%</span>
+      <span class="roc dn" style="left:95.6%">−5.0%</span>
+    </div><span class="fspace"></span></div>
+  <div class="frow rocrow"><span class="fspace"><span class="roccap">15M</span></span>
+    <div class="ftrack">
+      <span class="roc up" style="left:55.2%">+5.8%</span>
+      <span class="roc up" style="left:63.3%">+12%</span>
+      <span class="roc dn" style="left:71.4%">−9%</span>
+      <span class="roc up" style="left:79.4%">+6.2%</span>
+      <span class="roc up" style="left:87.5%">+0.4%</span>
+      <span class="roc dn" style="left:95.6%">−22%</span>
+    </div><span class="fspace"></span></div>
+  <div class="frow rocrow"><span class="fspace"><span class="roccap">60M</span></span>
+    <div class="ftrack">
+      <span class="roc up" style="left:55.2%">+31%</span>
+      <span class="roc dn" style="left:63.3%">−18%</span>
+      <span class="roc dn" style="left:71.4%">−41%</span>
+      <span class="roc up" style="left:79.4%">+14%</span>
+      <span class="roc dn" style="left:87.5%">−0.6%</span>
+      <span class="roc dn" style="left:95.6%">−64%</span>
+    </div><span class="fspace"></span></div>
+
+  <!-- the legend, one line -->
+  <div class="leg">
+    <span class="bg bull">S</span><span class="t">support bld</span>
+    <span class="bg bear">R</span><span class="t">resist bld</span>
+    <span class="bg bear">SF</span><span class="t">supp failing</span>
+    <span class="bg bull">RF</span><span class="t">resist failing</span>
+    <span class="bg turn">T↑</span><span class="bg turn">T↓</span><span class="t">turning</span>
+    <span class="bg neut">H</span><span class="t">holding</span>
+    <span class="bg rollu">R↑</span><span class="bg rolld">R↓</span><span class="t">roll</span>
+    <span class="bg wallb">CW</span><span class="bg wallg">PW</span><span class="t">0DTE walls</span>
+    <span class="wmk">▶</span><span class="t">watch</span>
+    <span class="adot"></span><span class="t">aged</span>
+  </div>
+</div>
+<div class="note">
+  <b>The story panel A tells at a glance:</b> the King at 7664 is the put wall, support building, and
+  the watch node (▶, blue ring). 7669 is turning up. 7674's resistance is failing (green RF = door).
+  The call wall at 7679 is resistance building — the real ceiling. 7689 rolled down (R↓) and is
+  mostly hollow. Bars widened slightly (11→15px) so two-letter badges sit clean. <b>Fit rule:</b>
+  badges stack from the bar's top and only draw while they fit inside the bar's height — %K first,
+  wall second, state third, roll fourth; whatever doesn't fit is hover-only. Grey minors never carry
+  badges. Roll direction also keeps the connector-arrow later, when NODES retires.
+</div>
+</div>
+
+<!-- ================= B: one bar, annotated ================= -->
+<div>
+<div class="cap">B · bar anatomy <b>(the stacking order)</b></div>
+<div class="panel" style="width:300px">
+  <div class="an">
+    <div class="anbar">
+      <span class="stk">
+        <span class="bg bkpct" style="color:#e3c341;font-size:11px">100</span>
+        <span class="bg wallg">PW</span>
+        <span class="bg bull">S</span>
+        <span class="bg rollu">R↑</span>
+      </span>
+      <span class="base"><span class="wmk">▶</span><span class="adot"></span></span>
+    </div>
+    <div class="anlab">
+      <b>1 · %K</b> — size vs the King, always first<br>
+      <b>2 · wall</b> — CW / PW (0DTE, from IF)<br>
+      <b>3 · state</b> — S R SF RF T↑ T↓ H<br>
+      <b>4 · roll</b> — R↑ / R↓ (latched only)<br>
+      <b>base · ▶</b> watch &nbsp;·&nbsp; <b>●</b> aged<br><br>
+      outline = day peak<br>
+      fill = held now<br>
+      hollow = closed today
+    </div>
+  </div>
+</div>
+<div class="note">
+  <b>Disambiguation:</b> state <span style="color:#e0645f;font-weight:800">R</span> (resistance
+  building) never carries an arrow; roll <span style="color:#7cc7ff;font-weight:800">R↑</span>/<span
+  style="color:#e0645f;font-weight:800">R↓</span> always does, wears the roll-lane colours, and its
+  border is dashed on the way down. Every badge's hover gives the full sentence the NODES chip used
+  to say — including the roll's destination, size, and age.
+</div>
+</div>
+
+</body>
+</html>
