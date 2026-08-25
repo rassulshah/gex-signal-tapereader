@@ -63,13 +63,25 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
 // ---------- ONE BOOK: NODES AND THE RAIL ----------
 {
   const tn=ex('tradeNodes');
-  ok(/tapeMap\('SPXW'\)/.test(tn), 'the NODES list reads the SPXW book \u2014 the same one the rail draws');
-  ok(!/tapeMap\(sym\)/.test(noc(tn)), 'and no longer reads the active symbol\u2019s book (INVERTED v13.1)');
-  ok(/es:es/.test(tn), 'it returns the DISPLAY price itself');
-  ok(/ifDispScale\(\)/.test(tn), 'converted with the same basis the rail uses');
+  // ⚠⚠ (v13.1b) NOT "the same book" — THE SAME ARRAY. v13.1 read tapeMap('SPXW') with its own strength
+  // floor and reach window, which is a SECOND computation of "which nodes matter". It disagreed with
+  // the rail within one session: 7700 was drawn on the rail and missing from the list, and 7665 was
+  // yellow on the rail and purple in the list. Two lists that are supposed to agree eventually will not.
+  ok(/emPiles\(B, sym\)/.test(tn), 'the NODES list reads emPiles \u2014 the RAIL\u2019S OWN ARRAY');
+  ok(!/tapeMap\(/.test(noc(tn)), 'and builds no second node list of its own (INVERTED v13.1b)');
+  ok(!/NODE_MIN_PCT/.test(noc(tn)) && !/reach/.test(noc(tn)),
+     'with no independent strength floor or reach window to drift out of step');
+  ok(/es:\+P\.disp\.toFixed\(2\)/.test(tn), 'it carries the rail\u2019s own display price');
+  ok(/cls:\(P\.balanced \? 'bal' : \(P\.accel \? 'acc' : 'brk'\)\)/.test(tn),
+     'and the rail\u2019s own role classification, verbatim');
+  ok(!/n\.put\?'#a371f7'/.test(src),
+     'the list no longer colours by put/call polarity, which is a DIFFERENT question (INVERTED v13.1b)');
   ok(/return b2\.es-a2\.es/.test(tn),
      'sorted DESCENDING so the list order matches the rail left-to-right');
-  ok(/Do not rescale/.test(tn), 'and callers are told not to rescale it');
+  // the three role colours must be identical in both halves of the panel
+  ok(/NODE_COL=\{ acc:'#a371f7', brk:'#e3c341', bal:'#8b98a9' \}/.test(src), 'the role colours live in one map');
+  ok(/g3plab\.acc\{color:#a371f7\}/.test(src) && /g3plab\.brk\{color:#e3c341\}/.test(src),
+     'and the rail CSS still uses those same hexes \u2014 a colour meaning two things is worse than none');
 }
 // ---------- CHIPS: SIDE x DIRECTION, TURNING FIRST ----------
 {

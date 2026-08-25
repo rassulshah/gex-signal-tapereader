@@ -318,3 +318,13 @@ instrumentation. That is the TESTING leg of feature enrollment, obtained for fre
   receivers gained 2.8x-16.5x what losers shed. The floor I proposed, $500K, was 12x too high and
   would have detected almost nothing.
 RULE: a comment stating a fact must say how it was measured, or say that it was assumed.
+
+### Failure pattern: a second computation of the same thing (v13.2)
+
+The rail and the NODES list were both deciding "which nodes matter" and "what colour is this node",
+independently. They disagreed within one session of shipping: a node drawn on the rail was absent from
+the list, and a node yellow on the rail was purple in the list.
+
+RULE: when two parts of the face must agree, they read the SAME ARRAY — not two arrays built from the
+same source with matching rules. Matching rules drift; a shared reference cannot. If a filter is needed
+for one view, filter the shared array at the point of use and say so.

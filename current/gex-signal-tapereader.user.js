@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    13.1
+// @version    13.2
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='13.1';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='13.2';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -20233,54 +20233,51 @@ function swallow(tag, e){
 }
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.renderErrors=function(){ return RENDER_ERRS.slice(); };
-// ⚠⚠ (v13.1) THE NODES LIST AND THE RAIL NOW READ THE SAME BOOK.
-// Until now the rail drew SKYLIT'S SPXW ladder while this list read `tapeMap(activeSym())` — SPY —
-// and multiplied by the ES ratio. Both printed ES dollars, so they LOOKED like one set and were not:
-// SPY strikes are $1 apart and land on a ~10-point ES grid, SPXW strikes are 5 SPX points apart. The
-// rail could show a node at 7665 this list had no concept of, and REACTION/EXECUTE armed off the
-// SPY-derived set while the read, the target and the band all reasoned off SPXW.
-// ⚠ THIS FUNCTION NOW RETURNS THE DISPLAY PRICE ITSELF (`es`). Callers must NOT rescale it. The old
-// shape returned an underlying-space strike and made every caller multiply — which is precisely how
-// two scales get mixed, and this project has paid for that mistake more than once.
+// ⚠⚠ (v13.1b) THE NODES LIST IS NOW THE RAIL'S OWN LIST — not a second list that agrees.
+// v13.1 rebuilt this from `tapeMap('SPXW')` with its own strength floor and reach window. That was
+// still a SECOND COMPUTATION of "which nodes matter", and it promptly disagreed with the rail twice:
+//   • COLOUR — the rail colours by ROLE (accelerator purple / brake yellow / balanced grey), which is
+//     `P.balanced ? 'bal' : (P.accel ? 'acc' : 'brk')`. This list coloured by PUT/CALL polarity. Two
+//     different questions, same two colours, so 7665 was yellow on the rail and purple in the list.
+//   • MEMBERSHIP — my own reach filter (atr*4) dropped 7700 at 23 points away while the rail drew it.
+// The fix is not to re-tune the filter to match. It is to STOP HAVING A SECOND FILTER. `emPiles()` is
+// what the rail draws; this reads the same array, so the two cannot drift again.
+// ⚠ `emPiles` already falls back to InsiderFinance and DISCLOSES it when the Skylit tape is unreadable.
+// Reading it here means the NODES list inherits that disclosure instead of silently showing nothing.
 function tradeNodes(sym){
   var out=[];
   try{
-    var tp=null; try{ tp=tapeMap('SPXW'); }catch(e0){}
-    if(!tp || !tp.pct) return out;
-    var dsc=0; try{ dsc=ifDispScale(); }catch(e1){}
-    if(!(dsc>0)) return out;                       // no basis = no honest ES price, so show nothing
-    var S=STATE[sym]||{}; var undPx=S.price;
-    var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(e2){}
-    var pxES=(typeof undPx==='number')?undPx*rr:null;
-    if(pxES==null) return out;
-    var king=(typeof tp.king==='number')?tp.king:null;
-    var reach=null; try{ var av=atr(sym); if(av>0) reach=Math.max(av*4*rr, 20); }catch(e3){}
-    if(reach==null) reach=40;
-    for(var key in tp.pct){
-      if(!tp.pct.hasOwnProperty(key)) continue;
-      var k=parseFloat(key); if(!isFinite(k)) continue;
-      var v=tp.pct[key]; if(typeof v!=='number' || !isFinite(v)) continue;
-      var a=Math.abs(v); if(a<NODE_MIN_PCT) continue;
-      var es=+(k*dsc).toFixed(2);
-      var dist=+(es-pxES).toFixed(2);
-      if(Math.abs(dist)>reach) continue;
-      var ve=null; try{ ve=velAt(k); }catch(e4){}
+    var B=null; try{ B=emBand(sym); }catch(e0){}
+    if(!B || !B.ok) return out;
+    var ps=[]; try{ ps=emPiles(B, sym)||[]; }catch(e1){ return out; }
+    var pxD=(typeof B.now==='number')?B.now:null;
+    var king=null; try{ king=emPiles.lastKing; }catch(e2){}
+    for(var i2=0;i2<ps.length;i2++){
+      var P=ps[i2];
+      if(!P || typeof P.disp!=='number') continue;
+      var ve=null; try{ ve=velAt(P.k); }catch(e3){}
       out.push({
-        k:k,                       // SPXW strike — THEIR number, shown beneath the level
-        es:es,                     // display price, already converted. Do not rescale.
-        pct:a, put:(v>0),
-        side:(es>pxES)?'above':'below',
-        dist:dist,
-        isKing:(king!=null && Math.abs(k-king)<0.001),
+        k:P.k,                                  // SPXW strike — THEIR number
+        es:+P.disp.toFixed(2),                  // display price, already on the rail's scale
+        pct:(typeof P.pct==='number')?P.pct:0,
+        // ⚠ THE RAIL'S OWN CLASSIFICATION, verbatim. Do not recompute it from polarity.
+        cls:(P.balanced ? 'bal' : (P.accel ? 'acc' : 'brk')),
+        role:P.role || (P.balanced?'BAL':(P.accel?'ACC':'BRK')),
+        side:(pxD!=null && P.disp>pxD)?'above':'below',
+        dist:(pxD!=null)?+(P.disp-pxD).toFixed(2):null,
+        isKing:(king!=null && Math.abs(P.k-king)<0.001),
         vel:ve?ve.v:null, velAge:ve?ve.age:null, velStale:ve?ve.stale:false
       });
     }
-    // ⚠ DESCENDING, so the list reads in the SAME ORDER AS THE RAIL: the bottom row is the leftmost
-    // node. Sorting by distance-from-price (the old behaviour) scrambled that relationship.
+    // ⚠ DESCENDING, so the list reads in the SAME ORDER AS THE RAIL: the bottom row is the leftmost node.
     out.sort(function(a2,b2){ return b2.es-a2.es; });
   }catch(e){}
   return out;
 }
+// the rail's three role colours, in ONE place. ⚠ These hexes are duplicated in the CSS for .g3plab /
+// .g3prole / .g3pile; test_velocity_policy.js asserts they still match, because a colour that means
+// "accelerator" in one half of the panel and something else in the other is worse than no colour.
+var NODE_COL={ acc:'#a371f7', brk:'#e3c341', bal:'#8b98a9' };
 
 // ---- how a node reads: SIDE x DIRECTION OF CHANGE, and nothing else ----
 // That pair IS the support/resistance question. Everything the face shows about a node is this.
@@ -20477,27 +20474,30 @@ function secLoc(sym){
       h+='<div class="g3ndhd"><span></span><span>Node</span><span>%K</span><span>5m</span><span>15m</span><span>60m</span><span>Day</span></div>';
       TN.slice(0,6).forEach(function(n){
         var isPB=(pbES!=null && Math.abs(pbES-n.es)<=1.5);
-        var col=n.put?'#a371f7':'#e3c341';
+        // ⚠ the rail's own role colour, from the shared map — never recomputed from polarity
+        var col=NODE_COL[n.cls]||'#8b98a9';
         var v=n.vel||{};
         var d5=velD(v.d5), d15=velD(v.d15), d60=velD(v.d60), d1d=velD(v.d1d);
         var chip=nodeChip(n);
         var rf=rollFrom(n.k), ri=rollInto(n.k);
         h+='<div class="g3ndrow'+(isPB?' g3ndwatch':'')+'"'+g3tip(
-             'Is this a place to trade? '+Math.round(n.pct)+'% of the King node, SPXW strike '+n.k+
+             'Is this a place to trade? '+Math.round(n.pct)+'% of the King node. This is the SAME list the rail draws \u2014 Skylit\'s SPXW nodes, with their role (accelerator / brake / balanced) and their colour taken from the rail so the two can never disagree. SPXW strike '+n.k+
              ' shown at '+n.es+' on the ES scale. The four numbers are Skylit\'s own published deltas for this strike'+
              (n.velStale?' \u2014 AGED, this node is not currently rendered in their ladder so the values are the last ones seen':'')+
              (isPB?'. The pullback engine has selected this one, so it is what EXECUTE is armed against.':'')) + '>';
         h+= '<div class="g3ndr1">'+
               '<span class="g3ndmk">'+(isPB?'\u25b6':'')+'</span>'+
               '<span class="g3ndpx" style="color:'+col+'">'+dispNum(n.es)+'</span>'+
-              '<span class="g3ndpct" style="color:'+col+'">'+Math.round(n.pct)+'%'+(n.put?'\u25bc':'\u25b2')+'</span>'+
+              // ▲/▼ is the node's SIDE relative to price, not its polarity. Polarity is not a
+              // thing the trader acts on here; which side of price it sits on is.
+              '<span class="g3ndpct" style="color:'+col+'">'+Math.round(n.pct)+'%'+(n.side==='above'?'\u25b2':'\u25bc')+'</span>'+
               '<span class="g3ndd '+d5.cls+'">'+d5.txt+'</span>'+
               '<span class="g3ndd '+d15.cls+'">'+d15.txt+'</span>'+
               '<span class="g3ndd '+d60.cls+'">'+d60.txt+'</span>'+
               '<span class="g3ndd '+d1d.cls+'">'+d1d.txt+'</span>'+
             '</div>';
         var sizeTxt=(typeof v.cur==='number')?usdBig(Math.abs(v.cur)):null;
-        h+= '<div class="g3ndr2">'+n.k+(n.isKing?' \u00b7 King':'')+
+        h+= '<div class="g3ndr2">'+n.k+(n.role?(' \u00b7 '+g3esc(n.role)):'')+(n.isKing?' \u00b7 King':'')+
             (sizeTxt?(' \u00b7 <b>'+sizeTxt+'</b>'):'')+
             ' \u00b7 '+((n.dist>0?'+':'')+dispNum(n.dist))+
             (n.velStale?' \u00b7 <span class="g3ndage">aged '+Math.round((n.velAge||0)/1000)+'s</span>':'')+
