@@ -88,12 +88,41 @@ load instruction. Then read, in order:
      comment block above `emPiles` states its source in bold — believe the code, and if a
      comment and the code disagree, FIX THE COMMENT IN THE SAME BUILD. One that claimed the
      wrong source survived eleven versions and misled two separate contexts.
-5. **Skylit platform docs** (the framework the code implements):
-   - `skylit-docs/core-concepts/core-concepts.md` — nodes as magnets, King, Gatekeeper, retest decay.
-   - `skylit-docs/read-the-heatmap/how-to-read-and-use-heatseeker.md` — the 5-step framework.
-   - `skylit-docs/learn/intro-to-gamma.md` — Pika/Barney polarity, absolute-value rule.
-   - `skylit-docs/learn/node-lifecycle.md` — Fresh/Tested/Delivered/Decaying, real-vs-hedge.
-   - `SOURCE-OF-TRUTH.md` — the Academy (`skylit-docs/learn/`) wins all doctrine conflicts.
+5. **⚠️ THE DOCTRINE — NOT OPTIONAL, AND NOT A SKIM.** Two books, both mandatory:
+
+   **5a. `SOURCE-OF-TRUTH.md` FIRST.** User mandate, 2026-08-13: the Skylit Academy is
+   AUTHORITATIVE for all detector logic, terminology, regime rules and pattern definitions.
+   **"No detector or UI label may use a term or rule the Academy does not support. Verify against
+   `learn/` before building."** When the Academy and anything else disagree — patternpedia,
+   core-concepts, older specs, prior code, or your own reasoning — **the Academy wins**.
+
+   **5b. `skylit-docs/learn/00-INDEX.md` — READ THIS ONE PROPERLY.** It is the map of all 11
+   Academy articles AND it carries a "KEY CALIBRATION TAKEAWAYS" section written for THIS project,
+   listing which doctrine points are implemented and which are not. Its item 4 flagged REAL-vs-HEDGE
+   (growth vs decay) as **"the biggest source of false patterns"** and unimplemented — a note that
+   sat unread for twelve days while the panel shipped patterns built on single snapshots.
+
+   **5c. All 11 Academy articles in `skylit-docs/learn/`.** They are 16–38 lines each; there is no
+   excuse for summarising instead of reading:
+   `charts-first` · `intro-to-gamma` · `reading-heatseeker` · `node-lifecycle` ·
+   `rolling-floors-ceilings` · `air-pockets-velocity` · `gamma-regimes` · `heatseeker-patterns` ·
+   `execution-doctrine` · `trinity-mode` · `graduate-from-trading-alerts`
+
+   **5c-bis. `skylit-docs/FINDINGS.md` — OUR EVIDENCE, read alongside `learn/`, never merged into it.**
+   Every doctrine article carries a banner pointing here. This file records where OUR measurements
+   agree with the Academy, where they do not, and what is still unmeasured — with a status on every
+   entry: OPEN / PROVISIONAL / CONFIRMED / SUPERSEDED. ⚠ A finding marked SUPERSEDED is kept, never
+   deleted, so a later context does not rediscover a dead end. Before changing anything a finding
+   covers, read the finding — it may already say the doctrine rule was too tight for our cadence.
+
+   **5d. Supporting only** (valid where they do not contradict the Academy):
+   `skylit-docs/core-concepts/core-concepts.md` (magnets, King margin 5–10 SPX, retest decay,
+   price delivery, hedge nodes, air pockets, OPEX, Power Hour), `read-the-heatmap/`,
+   `patternpedia/` (Rug, Gatekeeper, Whipsaw, Rainbow Road, Ten Commandments), `best-practices/`.
+
+   **5e. THE SECOND BOOK — `session-state/INSIDERFINANCE.md`** (also listed at 1c). Skylit doctrine
+   governs FLOW; IF governs STRUCTURE. A session that knows one book and not the other WILL mix
+   scales and windows — that error has produced four separate phantom bugs.
 6. DATA (from v10.44): `data/YYYY-MM-DD.json` — one file per session day. Read the coverage
    summary first (days · bars · symbols · fields-since); never run a study on missing fields.
 
@@ -101,11 +130,56 @@ Then report the config's 6 points:
 - files loaded
 - code architecture understanding (layers, render flow, key algorithms)
 - platform understanding (5-step framework, magnets, node lifecycle)
+- **doctrine STATUS** — for anything you are about to touch, say whether `skylit-docs/FINDINGS.md`
+  marks it OPEN / PROVISIONAL / CONFIRMED / SUPERSEDED. "The Academy says X" is only half an answer
+  if we have already measured X.
+- **DOCTRINE CONSTANTS, RECITED FROM MEMORY** — this proves the docs were read rather than listed.
+  State all of these; if you cannot, you have not loaded:
+  · tap decay **80% / 66% / 33%** (fresh / tested / delivered) + DECAYING = quiet death
+  · the two-question node gate: **is it FRESH? is it GROWING?** both yes or find another level
+  · **REAL vs HEDGE** = grows (intent, target) vs fades (protection, fade)
+  · rolling count rule: **1 migration = NOISE, 2 = SIGNAL, 3 = CONFIRMATION**; floor rolling UP is
+    bullish, ceiling rolling DOWN is bearish; rolling ≠ breakout
+  · **absolute value rules**, sign is secondary — polarity sets the CHARACTER of the interaction
+    (+ = smooth/low-vol, − = wicky/violent/overshoot), NOT the strength of the pull
+  · deflection zones **±5 SPX / ±0.50 SPY-QQQ**; King margin of interaction **5–10 SPX points**
+  · air pocket = **PATHWAY not target** — trade through it, target the node on the far side
+  · the loaded combo: **−gamma + air pocket + high rate of change + a trigger**
+  · Trinity: **3/3 = A+ full size, 2/3 = size down, divergence = WAIT**
 - current version (with the 3-spot @version integrity check)
 - patch state (which phase is built/candidate/planned; test status)
 - next concrete step
 
 WAIT for the user's direction. Do not start building on load.
+
+## ⚠️ PRE-BUILD DOCTRINE GATE (added 2026-08-25, after it was violated)
+
+Before building or changing ANY detector, node rule, pattern, roll/lifecycle logic or UI label:
+
+**Name the Academy file that bears on it and quote the rule** — so that whatever you do next is
+deliberate rather than ignorant. Then state one of three things:
+
+- **FOLLOWING** the doctrine rule, or
+- **DEVIATING** from it, with what the data shows instead (numbers, dates) — this is LEGITIMATE, see
+  the 2026-08-25 amendment in `SOURCE-OF-TRUTH.md`, or
+- **NO DOCTRINE COVERS THIS** — say so and get the user's agreement before inventing.
+
+⚠ THE GATE IS "DID YOU CHECK", NOT "DID YOU OBEY". Doctrine is the prior; the tape is the arbiter.
+A measured event that does not fit a definition is real, and the definition is what is wrong —
+detect it, display it with an honest confidence label, and record the outcome. Suppressing a finding
+because it fails to match a document is how the system stops learning. Where there is no evidence
+yet, doctrine is the default; where there is, evidence wins.
+
+Why this gate exists: on 2026-08-25 a roll detector was designed from first principles, live-measured,
+mutation-tested and SHIPPED — while `skylit-docs/learn/rolling-floors-ceilings.md` sat in the repo
+stating the count rule (**1 = noise, 2 = signal, 3 = confirmation**) and defining rolling as the
+LARGEST FLOOR and LARGEST CEILING migrating across updates. The shipped detector fires on a single
+15-minute observation between arbitrary neighbouring strikes — i.e. it reports as signal exactly what
+the doctrine calls noise. Every other step was done well, which is the point: rigour applied to an
+unverified premise produces a confident wrong answer.
+
+The same session also invented a six-stage node lifecycle while `node-lifecycle.md` defined four
+stages on two orthogonal axes. **Check the doctrine before reasoning, not after.**
 
 ## SAVE — AUTOMATIC ON EVERY BUILD (not a command the user has to remember)
 

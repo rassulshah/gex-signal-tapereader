@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    13.3
+// @version    13.4
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='13.3';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='13.4';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3378,7 +3378,8 @@ function recordNodeSnapshot(sym){
       // ⚠ POLICY: a field is 'skylit'/'if' ONLY if it is the vendor's number unaltered. Anything we
       // computed is 'derived', however well-founded — mislabelling our arithmetic as their data is
       // the one error that would silently corrupt every conclusion drawn from this file.
-      srcs:{ vend:'skylit', book:'skylit', nodes:'derived', deriv:'derived', sig:'derived', feat:'derived' },
+      srcs:{ vend:'skylit', book:'skylit', nodes:'derived', deriv:'derived', sig:'derived', feat:'derived',
+             nev:'derived-from-skylit' },
       // Forward-outcome slots, back-filled by labelForwardOutcomes() once N bars
       // elapse. null = not yet resolved. Stored for BOTH horizons (#3).
       out5:null,   // {mfe,mae,net,pxEnd,hitKing,revUp,revDn} over next 5 bars (15m)
@@ -4065,6 +4066,231 @@ function _fwdStats(base, fwd){
   return { mfe:mfe, mae:mae, net:net, pxEnd:+last.toFixed(2),
            hitKing:hitKing, revUp:revUp, revDn:revDn, n:fwd.length };
 }
+// ============================================================================
+// (v13.4) NODE EVENT LEDGER — what happened to a node, why, and what price did next
+// ============================================================================
+// ⚠⚠ THE WHOLE POINT: the recorder stores a snapshot PER BAR. A roll is not a bar, it is an EVENT.
+// Nothing in the store said "at 10:47 size moved from 7690 to 7665, here is what the book looked like
+// at that instant, and here is what price did about it." Without that row, no descriptive or
+// predictive analysis of rolls is possible — you can only ask questions about bars.
+//
+// ⚠ EVENTS ARE FORWARD-ONLY AND PERISHABLE. A bar not captured is gone. This records permissively and
+// labels honestly rather than waiting for a definition we are confident in — the thresholds below are
+// STARTING POINTS to be refined FROM this data, not conclusions. See skylit-docs/FINDINGS.md F6:
+// restricting rolls to the largest nodes would have deleted real pullback-support cases.
+var NEV_KEY   = 'gpts_nodeevents_v1';
+var NEV_LOOK  = 5;          // bars over which a change is measured (~15m on 3m bars)
+var NEV_MAXD  = 25;         // max SPX points between roll source and destination
+var NEV_RATIO = 0.40;       // destination must take >= this share of what the source shed
+var NEV_MAX   = 4000;       // ring cap per day
+var NEV = null;
+
+function nevLoad(){
+  if(NEV) return NEV;
+  try{ NEV=JSON.parse(localStorage.getItem(NEV_KEY)||'null'); }catch(e){ NEV=null; }
+  if(!NEV || typeof NEV!=='object') NEV={ v:1, days:{} };
+  return NEV;
+}
+function nevSave(){ try{ localStorage.setItem(NEV_KEY, JSON.stringify(NEV)); }catch(e){} }
+function nevDay(){
+  var db=nevLoad(), d=TODAY||'unknown';
+  if(!db.days[d]) db.days[d]={ ev:[] };
+  return db.days[d];
+}
+
+// ---- the three-way outcome classifier, IDENTICAL to tools/outcome-classify.js ----
+// ⚠ THE BINARY "did it hold" SCORED PINNING AS FAILURE, and a King is where price SITS. That mistake
+// produced a result (small nodes beating big ones) which contradicted a better-controlled test.
+// DEFLECT = came, turned, left · PIN = came, stayed, oscillated · BREAK = came, went through.
+// BOTH deflect and pin are the level WORKING; they are different TRADES. Only BREAK is failure.
+function nevClassify(level, side, bars, o){
+  o=o||{};
+  var TOL=(o.TOL!=null)?o.TOL:0.50, THRU=(o.THRU!=null)?o.THRU:0.40,
+      AWAY=(o.AWAY!=null)?o.AWAY:0.30, PIN=(o.PIN!=null)?o.PIN:0.35, PINF=(o.PINF!=null)?o.PINF:0.60;
+  try{
+    var isFloor=(side==='below'), hit=-1, i;
+    for(i=0;i<bars.length;i++){
+      if(isFloor ? (bars[i].l<=level+TOL) : (bars[i].h>=level-TOL)){ hit=i; break; }
+    }
+    if(hit<0) return null;
+    var r=bars.slice(hit); if(!r.length) return null;
+    var maxUp=-Infinity, minDn=Infinity, inBand=0;
+    for(i=0;i<r.length;i++){
+      if(r[i].h>maxUp) maxUp=r[i].h;
+      if(r[i].l<minDn) minDn=r[i].l;
+      if(r[i].l<=level+PIN && r[i].h>=level-PIN) inBand++;
+    }
+    var beyond = isFloor ? (level-minDn) : (maxUp-level);
+    var away   = isFloor ? (maxUp-level)  : (level-minDn);
+    var last=r[r.length-1];
+    var endBeyond = isFloor ? ((last.c!=null)?(last.c<level-THRU):(minDn<level-THRU))
+                            : ((last.c!=null)?(last.c>level+THRU):(maxUp>level+THRU));
+    if(inBand/r.length >= PINF) return { kind:'PIN', hit:hit, beyond:+beyond.toFixed(2), away:+away.toFixed(2) };
+    if(beyond>THRU && endBeyond) return { kind:'BREAK', hit:hit, beyond:+beyond.toFixed(2), away:+away.toFixed(2) };
+    if(beyond<=THRU && away>=AWAY) return { kind:'DEFLECT', hit:hit, beyond:+beyond.toFixed(2), away:+away.toFixed(2) };
+    // ⚠ BEACH BALL (heatseeker-patterns.md): punched through a node, failed to follow through, reverted.
+    // Doctrine calls that the node ABSORBING, not failing, and chasing the break the common mistake.
+    if(beyond>THRU && !endBeyond && away>=AWAY)
+      return { kind:'DEFLECT', hit:hit, beyond:+beyond.toFixed(2), away:+away.toFixed(2), overshoot:true };
+    return { kind:'GRAZE', hit:hit, beyond:+beyond.toFixed(2), away:+away.toFixed(2) };
+  }catch(e){ return null; }
+}
+
+// ---- THE WHY VECTOR ----
+// Everything that could plausibly explain the event, captured AT THE INSTANT it fired. If a field is
+// not here it can never be asked about later, so this errs toward capturing too much.
+function nevWhy(sym, node, px){
+  var w={};
+  try{
+    w.k=node.k; w.side=node.side; w.pct=node.pct; w.role=node.role||null;
+    w.dist=(typeof px==='number' && typeof node.es==='number')?+(node.es-px).toFixed(2):null;
+    var v=node.vel||null;
+    if(v){ w.cur=Math.round(v.cur||0); w.d5=Math.round(v.d5||0); w.d15=Math.round(v.d15||0);
+           w.d60=Math.round(v.d60||0); w.d1d=Math.round(v.d1d||0); w.trendTag=v.trend||null; }
+    // MAGNETISM — doctrine: pull ~ |value| and strengthens as price converges (core-concepts.md).
+    // ⚠ THIS IS OUR FORMULA, NOT SKYLIT'S. They state the relationship qualitatively and give no
+    // equation. Recorded so it can be TESTED and replaced, never presented as their number.
+    if(typeof w.cur==='number' && w.dist!=null){
+      var dd=Math.max(1, Math.abs(w.dist));
+      w.pull=+((Math.abs(w.cur)/1e6)/dd).toFixed(3);
+      w.pullSign=(w.dist>0)?1:-1;                       // +1 = pulling price up
+    }
+    try{ var R=regime2D(sym); w.rg=(R&&R.g!=null)?(R.g>0?'+G':'-G'):null; }catch(e1){}
+    try{ var T=trendVerdict(sym); w.trend=T&&T.state||null; }catch(e2){}
+    try{ var B=emBand(sym); if(B&&B.ok){ w.emPct=B.pct; w.emOver=!!B.over; } }catch(e3){}
+    try{ var d=new Date(); w.hhmm=d.getHours()*100+d.getMinutes(); }catch(e4){}
+    // ⚠ TAPS ARE KEYED BY THE BOOK THE NODE CAME FROM. These are SPXW strikes, so the count lives in
+    // TAPS['SPXW'] (filled by updateTaps via trackSpxwNodes) — asking for TAPS[sym] would silently
+    // return 0 forever, and a zero that means "not tracked" is indistinguishable from "untouched".
+    try{
+      w.taps=nodeTapCount('SPXW', node.k);
+      var lc=nodeLifecycle('SPXW', node.k, (v&&typeof v.d60==='number')?(v.d60>0?'Building':(v.d60<0?'Fading':'Steady')):null);
+      if(lc){ w.stage=lc.stage; w.tapProb=lc.prob; }
+    }catch(e5){}
+  }catch(e){}
+  return w;
+}
+
+// ---- DETECT: rolls, accumulation, dissipation — across ALL nodes ----
+// ⚠ NOT ONLY THE LARGEST. `learn/rolling-floors-ceilings.md` defines rolling on the largest floor and
+// largest ceiling; FINDINGS F6 measured secondary destinations holding at 81% and small growing nodes
+// giving the cleanest deflections in the whole dataset (57% deflect / 3% break). Gating on size would
+// have thrown those away. Size is RECORDED as context, never used as a filter.
+function nevScan(sym){
+  try{
+    if(typeof inReplay==='function' && inReplay()) return null;   // never record a replay as today
+    if(!TODAY || !velOk()) return null;
+    var S=STATE[sym]||{}; var bar=S.lastClosedB||0; if(!bar) return null;
+    var day=nevDay();
+    if(day._lastBar===bar) return null;                            // one scan per closed bar
+    var TN=[]; try{ TN=tradeNodes(sym); }catch(e0){ return null; }
+    if(!TN.length) return null;
+    var px=null; try{ var B=emBand(sym); px=(B&&B.ok)?B.now:null; }catch(e1){}
+    var out=[], i, j;
+    for(i=0;i<TN.length;i++){
+      var n=TN[i], v=n.vel; if(!v) continue;
+      var why=nevWhy(sym, n, px);
+      // ACCUMULATION / DISSIPATION — the REAL vs HEDGE axis from node-lifecycle.md
+      if(typeof v.d15==='number' && Math.abs(v.d15)>0){
+        if(v.d5<0 && v.d15<0 && v.d60>0)      out.push({ ty:'TURN_DN', w:why });
+        else if(v.d5>0 && v.d15>0 && v.d60<0) out.push({ ty:'TURN_UP', w:why });
+        else if(v.d60>0)                       out.push({ ty:'ACCUM',   w:why });
+        else if(v.d60<0)                       out.push({ ty:'DISSIP',  w:why });
+      }
+      // ROLL — source shedding into a nearby destination
+      if(typeof v.d15==='number' && v.d15 < -ROLL_MIN_ABS){
+        var best=null;
+        for(j=0;j<TN.length;j++){
+          var m=TN[j]; if(!m.vel || m.k===n.k) continue;
+          if(Math.abs(m.k-n.k)>NEV_MAXD) continue;
+          if(!(m.vel.d15 > ROLL_MIN_ABS)) continue;
+          if(m.vel.d15/Math.abs(v.d15) < NEV_RATIO) continue;
+          if(!best || m.vel.d15>best.vel.d15) best=m;
+        }
+        if(best){
+          out.push({ ty:'ROLL', w:why,
+                     to:best.k, toEs:best.es, toPct:best.pct, toCur:Math.round(best.vel.cur||0),
+                     got:Math.round(best.vel.d15||0), lost:Math.round(v.d15||0),
+                     dir:(best.k>n.k)?'up':'dn',
+                     // ⚠ context only. F6: the destination being largest adds ~7 points, and the
+                     // CONTROL showed the pairing itself adds nothing over plain growth. Recorded so
+                     // that claim can be re-tested on more data, not so it can gate anything.
+                     toIsBiggest: (function(){ var mx=null;
+                        for(var q=0;q<TN.length;q++){ var t=TN[q];
+                          if(t.side!==best.side||!t.vel) continue;
+                          if(!mx||Math.abs(t.vel.cur||0)>Math.abs(mx.vel.cur||0)) mx=t; }
+                        return !!(mx && mx.k===best.k); })(),
+                     wTo: nevWhy(sym, best, px) });
+        }
+      }
+    }
+    if(!out.length){ day._lastBar=bar; return null; }
+    var now=Date.now();
+    for(i=0;i<out.length;i++){
+      out[i].t=now; out[i].bar=bar; out[i].sym=sym; out[i].px=px;
+      out[i].o5=null; out[i].o10=null; out[i].o20=null;   // outcome slots, back-filled later
+      day.ev.push(out[i]);
+    }
+    if(day.ev.length>NEV_MAX) day.ev=day.ev.slice(day.ev.length-NEV_MAX);
+    day._lastBar=bar;
+    nevSave();
+    return out.length;
+  }catch(e){ return null; }
+}
+
+// ---- BACKFILL: what price actually did about the event ----
+// ⚠ THE EVENT WITHOUT ITS OUTCOME IS USELESS. Three horizons because a level's behaviour is
+// time-bounded — measured: hold rates fall from ~80% at 5 bars to ~60% at 12 (FINDINGS F5).
+function nevBackfill(sym){
+  try{
+    if(!TODAY) return;
+    var day=nevDay(); if(!day.ev.length) return;
+    var cs=(STATE[sym]&&STATE[sym].candles)||null; if(!cs||cs.length<3) return;
+    var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(e0){}
+    var bars=[]; for(var i=0;i<cs.length;i++){
+      var c=cs[i];
+      if(typeof c.h!=='number'||typeof c.l!=='number') continue;
+      bars.push({ t:c.t, h:c.h*rr, l:c.l*rr, c:(typeof c.c==='number')?c.c*rr:null });
+    }
+    if(!bars.length) return;
+    var wrote=0;
+    for(i=0;i<day.ev.length;i++){
+      var e=day.ev[i]; if(e.sym!==sym) continue;
+      if(e.o5!=null && e.o10!=null && e.o20!=null) continue;
+      var lvl=(e.ty==='ROLL')?e.toEs:(e.w&&e.w.k!=null?null:null);
+      // for non-roll events the subject is the node itself; tradeNodes gave us es via why.dist+px
+      if(lvl==null && e.px!=null && e.w && e.w.dist!=null) lvl=e.px+e.w.dist;
+      if(lvl==null) continue;
+      var side=(e.ty==='ROLL')?((e.toEs>e.px)?'above':'below'):(e.w&&e.w.side)||null;
+      if(!side) continue;
+      var start=-1;
+      for(var q=0;q<bars.length;q++){ if(bars[q].t>e.bar){ start=q; break; } }
+      if(start<0) continue;
+      [[5,'o5'],[10,'o10'],[20,'o20']].forEach(function(H){
+        if(e[H[1]]!=null) return;
+        if(bars.length-start < H[0]) return;
+        var c=nevClassify(lvl, side, bars.slice(start, start+H[0]));
+        e[H[1]] = c ? { k:c.kind, beyond:c.beyond, away:c.away, os:!!c.overshoot } : { k:'NOTOUCH' };
+        wrote++;
+      });
+    }
+    if(wrote) nevSave();
+  }catch(e){}
+}
+
+window.__gptsDebug=window.__gptsDebug||{};
+window.__gptsDebug.nev = function(){
+  try{ var d=nevDay(); var by={};
+    d.ev.forEach(function(e){ by[e.ty]=(by[e.ty]||0)+1; });
+    var res={}; d.ev.forEach(function(e){ if(e.o10&&e.o10.k) res[e.o10.k]=(res[e.o10.k]||0)+1; });
+    return { day:TODAY, n:d.ev.length, byType:by, outcomes10:res, last:d.ev[d.ev.length-1]||null };
+  }catch(e){ return String(e); }
+};
+window.__gptsDebug.nevAll   = function(){ return nevDay().ev; };
+window.__gptsDebug.nevClear = function(){ var db=nevLoad(); db.days[TODAY]={ev:[]}; nevSave(); return 'cleared'; };
+// export rides with the day file, so the nightly LLM gets events + outcomes without extra wiring
+window.__gptsDebug.nevExport= function(){ try{ return JSON.stringify(nevDay().ev); }catch(e){ return '[]'; } };
+
 function labelForwardOutcomes(sym, snaps){
   try{
     if(!snaps || snaps.length<2) return;
@@ -4574,11 +4800,24 @@ function buildDayExport(dateKey){
     horizons:{ out5:'5 bars = 15 min forward', out10:'10 bars = 30 min forward' },
     legend:{
       sig:'per-bar derived signal read: trend{state,up,win,ma,slope}, king{cls,word,drift,score,magnet,offK}, srb{dom,cross,supF,resF,supPct,floorK,floorFade,ceilK,ceilFade}, breadth{net,dir,mag}, conf{dir,word,score,aligned,bull,bear,declared}',
-      out:'forward outcome {mfe:max up, mae:max down(<=0), net, pxEnd, hitKing, revUp, revDn, n}'
+      out:'forward outcome {mfe:max up, mae:max down(<=0), net, pxEnd, hitKing, revUp, revDn, n}',
+      nodeEvents:'one row per NODE EVENT (not per bar). ty: ROLL | ACCUM | DISSIP | TURN_UP | TURN_DN. '+
+        'w = the why-vector AT THE INSTANT it fired: k, side, pct, role, dist, cur/d5/d15/d60/d1d (Skylit verbatim), '+
+        'pull (OUR magnetism formula |value|/distance, NOT Skylit\'s - they give no equation), rg (regime), '+
+        'trend, emPct, hhmm, taps, stage (Fresh/Tested/Delivered/Decaying), tapProb. '+
+        'ROLL also carries to/toEs/toPct/got/lost/dir/toIsBiggest and wTo (the destination\'s why-vector). '+
+        'o5/o10/o20 = outcome at 5/10/20 bars: {k: DEFLECT|PIN|BREAK|GRAZE|NOTOUCH, beyond, away, os:beachball}. '+
+        'BOTH DEFLECT AND PIN ARE THE LEVEL WORKING - only BREAK is failure. A binary hold-rate scores '+
+        'pinning as failure and produced a wrong result once already (FINDINGS F7/F8).'
     },
     syms:RECORDER_SYMS,
     snaps:day.snaps||{},
     events:day.events||{},
+    // (v13.4) THE NODE EVENT LEDGER — rolls / accumulation / dissipation with their why-vector and
+    // the three-way outcome (DEFLECT / PIN / BREAK) at 5, 10 and 20 bars. This is the row that makes
+    // descriptive AND predictive analysis of rolls possible: a bar snapshot can only answer questions
+    // about bars, and a roll is an event.
+    nodeEvents:(function(){ try{ return nevDay().ev; }catch(e){ return []; } })(),
     // (v10.49 B/H) the feature-registry layer: per-bar records under snaps[].feat, the
     // resolved outcome queue here, plus the operator's take/pass log.
     feat:day.feat||{},
@@ -21179,6 +21418,11 @@ function tick(){
   // DATA layer: once-per-closed-bar node snapshots (throttled internally).
   recordNodeSnapshot('SPY');
   recordNodeSnapshot('QQQ');
+  // (v13.4) NODE EVENTS ride the same cadence as the snapshot. Scan first, then back-fill outcomes
+  // for events old enough to have them. ⚠ Both are wrapped: an event-ledger fault must never stop
+  // the bar snapshot, which is the older and more important capture.
+  try{ nevScan(activeSym()); }catch(eNS){}
+  try{ nevBackfill(activeSym()); }catch(eNB){}
   // (v10.55 PART A) the per-bar node-cluster memory the leg engine reads, then the
   // engine itself — evaluated once per closed bar and cached beside the spine.
   nodeHistSample('SPY');

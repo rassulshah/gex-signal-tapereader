@@ -328,3 +328,31 @@ the list, and a node yellow on the rail was purple in the list.
 RULE: when two parts of the face must agree, they read the SAME ARRAY — not two arrays built from the
 same source with matching rules. Matching rules drift; a shared reference cannot. If a filter is needed
 for one view, filter the shared array at the point of use and say so.
+
+### Failure pattern: rigour applied to an unverified premise (2026-08-25)
+
+A roll detector was designed from first principles, measured against the live book, corrected when the
+measurement disproved the first guess, mutation-tested and shipped. Every step was done well.
+
+`skylit-docs/learn/rolling-floors-ceilings.md` was in the repo the entire time and says:
+**ONE migration = NOISE. TWO consecutive same-direction = SIGNAL. THREE = CONFIRMATION.** It also
+defines rolling as the LARGEST FLOOR and LARGEST CEILING migrating across updates — not transfers
+between arbitrary neighbouring strikes.
+
+The shipped detector fires on a SINGLE 15-minute observation between neighbouring strikes. It reports
+as signal precisely what the doctrine calls noise. ⚠ OPEN DEFECT — ROLL BIAS is under-confirmed.
+
+The same session invented a six-stage node lifecycle while `learn/node-lifecycle.md` defined four
+stages (FRESH / TESTED / DELIVERED / DECAYING) on an axis orthogonal to REAL-vs-HEDGE.
+
+RULE: **check the doctrine BEFORE reasoning, not after.** Careful method on a wrong premise produces a
+confident wrong answer, and the care makes it harder to spot.
+
+⚠ BUT NOT "OBEY THE DOCTRINE" — see the 2026-08-25 amendment in `SOURCE-OF-TRUTH.md`. Checking first
+means the prior is known before you reason, so a deviation is a decision instead of an oversight. The
+count rule may well be too tight at our one-minute cadence; the way to find out is to detect
+permissively, label confidence honestly, score the outcomes, and let the evidence set the threshold.
+A real event that does not fit a definition is a finding, not an error.
+
+RULE: the repo is the first place to look, not the last. The Academy docs, the IF notes and a written
+`design/spec-event-causality.md` were all present and unread while their subjects were discussed at length.

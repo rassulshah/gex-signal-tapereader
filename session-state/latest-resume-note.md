@@ -1,209 +1,59 @@
-# RESUME NOTE — 2026-08-24 — v11.90 BUILT, NOT YET VERIFIED LIVE / companion v1.13
+# Resume note — end of the v13.x session
 
-## ⛔ READ THIS FIRST — HOW THE LAST SESSION WENT WRONG
+## Where the build is
+**v13.3 shipped and confirmed running live** (panel reports v13.3, harvest timer running,
+327 strikes captured, `velMeta.ok:true`).
 
-**The user ended the session with "we need to stop . you are making a mess."** Not because of a bug.
-Because of SCOPE. The pattern, in order:
+## The big change this session: SKYLIT VELOCITY CAPTURE
+Skylit hands every RENDERED ladder row a `velocity` object on its React fiber:
+`{strike, currentValue, delta1Min, delta5Min, delta10Min, delta15Min, delta1Hour, delta4Hour,
+delta1Day, percent*, trend}`. Clicking a strike fires **no network request** — it is all already in
+the client. `velHarvest()` walks `__reactFiber$` and captures it verbatim.
 
-1. User asked for a handful of small UI tweaks.
-2. I returned a **full section redesign** — new geometry tier, +50% type, restacked labels, four
-   rewritten hovers, two new chips.
-3. User narrowed it. I returned **another redesign**.
-4. User narrowed it again ("just update the current price in the white box"). I **still** added
-   used/remaining beside it.
-5. User: *"no, you idiot. just put the current price in the white circle."*
+Confirmed live sample (strike 7650): cur $18,619,834 · 5m +68,245 · 15m −1,237,568 · 60m −345,508 ·
+Day +11,750,083.
 
-**The skill has a standing rule that would have prevented every one of these: "ONE AT A TIME
-(user-mandated, repeated 2026-08-15): discuss exactly ONE element per message. Never list all open
-items and their fixes in one reply. State the one item, its fix, ask, STOP."**
+**This makes Skylit's own UI a test oracle**: click a strike in their ladder and the popup must match
+our columns to the dollar. Any disagreement is a real bug.
 
-I violated it in nearly every message. **Four mockup revisions were burned on this.** If you find
-yourself writing a reply with three headings and a table of options — stop, delete it, pick the one
-thing the user actually named, and ask.
+## Source-of-truth policy (user-directed, now in PROJECT-CONSTANTS)
+1. Vendor numbers captured verbatim — Skylit for FLOW, InsiderFinance for STRUCTURE.
+2. Derive only what they do not publish.
+3. Derived values are tagged and marked on the face.
+4. The recorder stores vendor raw AND our derived read — never derived alone.
+   `snap.vend` (their numbers) + `snap.srcs` (provenance map) added in v13.1.
+   The audit finding: we were recording conclusions without inputs — training on our own opinions.
 
-⚠ The user also said, twice: **"dont make any build without asking me"** and **"show me mockups
-first always."** Both still stand.
+## STILL TO VERIFY AT THE OPEN (nothing below has been seen with a live band)
+- Every node on the rail appears in NODES, same colour, same order.
+- Our 5m/15m/60m/Day match Skylit's strike popup exactly.
+- Roll detection fires at a sane rate ($40K over 15m, ≤25 SPX pts, ratio ≥0.40).
+- TURNING chip appears and is not noise.
+- REACTION shows DEFENDING/ABANDONING with the hour caveat.
+- The verdict line reads sensibly against the tape.
 
----
+## Known limitation, by design
+NODES reads `emPiles()` — the rail's own array. With no expected-move anchor (market closed) BOTH are
+empty. Before v13.1 the list came from the tape and would show rows regardless. This is the cost of
+the single-source rule; watch it at the open and decide if it is right.
 
-## ⚠ v11.88 → v11.90 ARE BUILT AND NOT YET INSTALLED
-Three builds shipped without a live check: **v11.88** (BIAS tally), **v11.89** (trend machine),
-**v11.90** (DRIFT badge + hovers). Run install.bat, wait five minutes, reload, THEN verify.
+## NOT built (deliberately deferred)
+- **Roll ARROWS on the rail.** Needs a vertical re-layout of the rail's tiers, which is exactly where
+  overlap regressions have come from. Rolls are visible in NODES meanwhile.
+- **The event causality system.** Still the biggest outstanding request.
 
-Verify with:
-  `__gptsDebug.trend('SPY')`   → state / stateStrict / stateGated / revThresh 11 / domThresh 15
-  `__gptsDebug.trendRec('SPY')`→ flip, sinceFlip, gateDiffers
-  `__gptsDebug.cross('SPY')`   → names QQQ, gives a direction
-  `__gptsDebug.bias('SPY')`    → confirms are SKEW / ACCUM / CROSS / ROLL, no PA, no DRIFT
-  `__gptsDebug.renderErrors()` → empty
+## Lessons recorded this session (PROJECT-CONSTANTS)
+- Chrome CAPS Document PiP height; `resizeTo` needs user activation, CONSUMES it, and reverts past the
+  cap. Six versions built a handle for an operation the platform forbids.
+- A second computation of the same thing always drifts (rail vs NODES colour + membership).
+- An assumption written in the voice of a measurement — THREE occurrences now.
+- Removal-comment-contains-removed-string — SEVEN occurrences; `noc()` strips comments in tests.
+- Writing the right requirement in a comment and wiring the call to the wrong place (v13.1 harvest
+  inside `if(haveFeed)`).
 
-## ② BIAS + TREND — v11.89 / v11.90
-Trend: a NEW trend confirms at 15 of 20, a REVERSAL out of a broken state at **11, RAW** (user declined
-the slope gate). ⚠ **Both directions flip at 11 once a trend has confirmed, so the minimum gap between
-opposite flips is 2 bars against the old 10.** A test pins that. If whipsaw shows up the fix is a DWELL
-TIME, never a retreat to 15. Three machines recorded (loose / strict / gated), each with its own prior.
-DRIFT is now a badge on the confirm row — outlined, behind a divider, **still not counted in nConf**.
-Seven hovers rewritten to question-first. See DECISIONS D-15 and D-16.
-
-## (superseded) v11.88 install note
-The tab was still serving v11.87 when the build finished (`__gptsDebug.cross` undefined, PA still in the
-confirms). **Run install.bat, wait five minutes, reload, THEN verify.** Standing rule: a build that is
-not installed is not shipped, and only the browser can say which it is.
-
-Verify with: `__gptsDebug.cross('SPY')` (should name QQQ and give a direction), `__gptsDebug.bias('SPY')`
-(confirms should read SKEW / ACCUM / CROSS / ROLL — no PA), and `__gptsDebug.renderErrors()` empty.
-
-## ② BIAS — v11.88
-PA no longer votes (correlated with the 50-SMA it confirms) but is still computed and RECORDED in shadow.
-CROSS (the other index, measured by one rule on both feeds' 1-minute spot series) and ROLL (King
-migration) now confirm. The confirm tally is recorded for the first time as `bias.confirm` — it never was,
-across 224 bars. See DECISIONS D-14.
-⚠ `kingRoll()` returned 0 for both "has not moved" and "no history"; `kingRollRead()` splits them.
-⚠ The confirm denominator changed 3 → 4. Nothing pre-v11.88 can be pooled on that count.
-
-## WHERE THE CODE IS
-
-    current/gex-signal-tapereader.user.js   v11.87   SHIPPED + VERIFIED LIVE
-    current/gex-if-levels.user.js           v1.13    unchanged
-    test suite                              all green except test_tapeking.js (needs jsdom; npm 403 in sandbox)
-
-**v11.87 confirmed running on the Atlas tab**: `renderErrors: []`, `__gptsDebug.flow('SPY').books`
-returns `"agree — both read short gamma"`. ① FRAME is HARDENED. It is NOT calibrated — see below.
-
-**NOTHING from the UI discussion is built. Mockups only.**
-
----
-
-## THE ONE APPROVED UI CHANGE — NOT BUILT
-
-> *"just put the current price in the white circle. dont make it too big"*
-
-That is the whole scope. `.g3emn` (the white dot marking current price, currently a bare 10px circle)
-becomes a small pill carrying the live price.
-
-    mockup:  mockups/frame_v1188_dot.html          <- the ONLY approved one
-    spec:    7.5px text, 11px tall, padding 0 3.5px, border-radius 5.5px,
-             background #fff, color #0d1117, transform:translateX(-50%)
-             = ONE pixel taller than the dot it replaces, so it stays inside the
-               existing tier and cannot push into the money labels or the piles
-
-**Do not add anything else to this build.** Not used/remaining, not the label sizes, not the roles,
-not the hovers. The user rejected each of those explicitly.
-
-⚠ **Ask before building it.** It was mocked and not yet approved for build.
-
----
-
-## SUPERSEDED MOCKUPS — do not resurrect these
-
-    mockups/frame_v1188_ui.html      rev 1  +50% type, role tier, 4 hovers    REJECTED (too much)
-    mockups/frame_v1188_roles.html   role-placement options                    REJECTED
-    mockups/frame_v1188_final.html   rev 1 + pace + succession chips           REJECTED
-    mockups/frame_v1188_v2.html      +33% type, 4 money figures                REJECTED
-    mockups/frame_v1188_v3.html      alignment fixes, T merge, SUCC on rail    REJECTED
-    mockups/frame_v1188_v4.html      price box + used/remaining beside it      REJECTED
-    mockups/frame_v1188_dot.html     price in the dot, nothing else            <- THE LIVE ONE
-
----
-
-## FOUND, REAL, NOT FIXED
-
-### 1. TWO OF THE FOUR USED/REMAINING FIGURES SILENTLY DISAPPEAR  ⚠ user-visible
-`secFrame`'s money tier is built to draw FOUR figures — used and remaining on each side of the open.
-Live measurement 2026-08-24:
-
-    down remaining  $1,684   SHOWN
-    up   used       $1,814   SHOWN
-    down used          $53   DROPPED  (segment 1.5% wide)
-    up   remaining    -$77   DROPPED  (segment 0% wide, AND the value is negative)
-
-`seg()` returns '' when `Math.abs(b-a) < 9` — under 9% of rail width. Two causes stack: the low of
-day sat 1.5% from the open, and the high of day **exceeded the expected high**, so `emPos` clamps
-`pHi` to 100, the segment has zero width, and upside-remaining vanishes.
-
-⚠ **A figure that disappears exactly when the day has run PAST its own rail is the case you most
-want to see, and it renders identically to "nothing to report."** Same disease as D-6.
-Suggested fix (NOT approved, NOT built): never let a number die of narrowness — push it to the edge
-of its own span instead of centring, drop only on real overlap, name any drop in the hover, and
-render a negative remaining as the word **PAST** rather than a minus sign, because that is a state
-and not a quantity.
-
-### 2. TWO DEAD COMPUTATIONS
-- `var gp = gexPath(sym)` in `secFrame` (~line 18546) — assigned, **never read**.
-- `var PA = emPath(B, sym, B.now)` in the `piles` recorder (~line 11558) — computed, **never
-  returned**. This one matters more than it looks: it reads as though the path is being recorded on
-  every bar, and it is not.
-
----
-
-## CORRECTIONS — things I asserted that were WRONG
-
-⚠ **`pathStrictly` / "the target is inside its own path sum" is NOT an open flaw. v11.68 fixed it.**
-`emPath` explicitly skips the target (`"AT the target, not on the way"`) and reports it separately
-as `atTargetPerPt`. The 82% / $107M / $23M figures live inside that function as the fix's rationale.
-**I read `FRAME-APPROACH-REVIEW.md`'s fix list instead of the code.** The review documents flaws as
-of 2026-08-23 and later builds closed some without the review being updated.
-→ **Verify every review item against the code before calling it open.**
-
-⚠ Rev-2 mockup clamped role labels inward (KING drawn at 93% over a chip at 96%). That breaks the
-only thing a role label does. Correct approach if it ever gets built: keep the anchor ON the node
-and near an edge switch `translateX(-50%)` → `translateX(-100%)` so text grows INWARD.
-
----
-
-## ① FRAME STATUS — hardened, not calibrated
-
-**Hardened (done):** every refusal names itself (D-6); King proved by its dollar anchor before any
-%King is trusted; `SK_MIN_STRIKES` catches a degraded ladder; replay refuses to record on the SPX
-path (D-10); the two books declare disagreement and now record it; tests EXECUTE (579 assertions).
-
-**Not calibrated (only sessions fix this):**
-
-    4 sessions recorded · 224 resolved `dir` records · fwd=10 → effective n ≈ 22
-    split across 4 regime cells → ~5 observations per cell
-
-Every threshold is hand-set: `nodeThresh` 20, `RUG_ANCHOR_PCT` 40, `GK_RATIO_STRONG` 1.8.
-**DATA COLLECTION IS THE REMAINING ITEM.** Nothing to build for it; it needs sessions.
-
-Still open from `FRAME-APPROACH-REVIEW.md` (verify against code before acting):
-- **`pace`** — computed (`emBand().pace`, read 0.36) and never reaches the face. Review calls it the
-  cheapest large win. 40% used at 10:00 vs 14:30 mean opposite things; the panel says the same number.
-- **Range budget (ADR / Parkinson)** — does not exist. FLAW 1, the largest: the band is a
-  DISPLACEMENT statistic used as a RANGE budget and they differ by exactly 2×.
-- **Succession** — computed for the chart export, not shown in the panel. ⚠ It is usually OUTSIDE
-  the band (live: SPX 7630 → ES 7648 against a band floor of 7661), so it has no honest rail position.
-- `rollDetect('SPXW')` returns null — reads `LASTFEED[sym]`, SPXW has no top-level feed entry.
-- `irt.cfg.on` is `false` — chart export exists, switched off.
-
----
-
-## LLM LAYER — DISCUSSED AT LENGTH, NOTHING BUILT
-
-The user asked how to add an LLM that reads the tape and calls it bullish/bearish. Conclusions
-reached (full reasoning in DECISIONS.md D-11):
-
-- **For PREDICTION a live LLM is the weakest option available** and will not beat `directionGrade`
-  on the same inputs. Weak-signal tabular problems favour fitted models; the recorder already
-  produces the dataset (`matrix`, 370 cols × ~122 rows/day, four labels).
-- **Where it genuinely wins is comprehension**, not prediction: synthesis under time pressure,
-  "this day does not match the shape your rules were tuned on", interrogation, hypothesis generation.
-- **The only plausible live edge is data the panel does not have** (econ calendar, opex, overnight,
-  VIX term, cross-asset) or **retrieval over the user's own recorded history**.
-- Recommended order: **end-of-day reviewer first**, live later, at ~20 sessions.
-- ⚠ **A day export is 5.9 MB. The live tape state is ~6 KB.** The archive needs a digest; the live
-  read does not.
-- ⚠ `@grant none` — no `GM_xmlhttpRequest`. A live call needs a **127.0.0.1 relay**, NOT a grant
-  change (any `@grant` moves the 1.3MB script into Tampermonkey's sandbox, out of page context).
-
-**The user's position: unconstrained. "An AI Tapereader that gives a read." No constraints on what
-it may say.** Horizon must be session/swing, NOT one bar.
-
----
-
-## OPEN THREADS — exactly where we stopped
-
-1. **Build the price-in-the-dot change?** Mocked, not approved for build. ASK.
-2. The used/remaining drop-out defect — found, not raised as a build item.
-3. The two dead computations — found, not removed.
-4. LLM layer — discussed, nothing agreed to build.
-5. `pace` / range budget / succession — still open, still unapproved.
+## Standing user rules
+- Never build without asking. Show mockups first, always.
+- Always paste the `release-links.sh` output — run the .bat FIRST, click the link a few minutes later
+  (raw.githubusercontent caches ~5 min; clicking early gives "Reinstall" instead of "Update").
+- Deliver `install-v<VER>.bat`, never a bare install.bat.
+- Terse. One thing at a time.

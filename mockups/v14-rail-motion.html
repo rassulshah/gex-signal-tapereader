@@ -1,0 +1,191 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Rail motion mockup</title>
+<style>
+body{background:#0b0e14;color:#e6edf3;font:12px/1.45 Inter,Arial,sans-serif;margin:0;padding:20px}
+.wrap{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+.panel{width:392px;background:#0f131b;border:1px solid #232a36;border-radius:8px;padding:9px 10px}
+.sechd{background:#161c27;padding:3px 8px;font-size:9px;font-weight:800;letter-spacing:.7px;text-align:center;color:#e3c341;text-transform:uppercase}
+.sec{border:1px solid #232a36;border-radius:5px;overflow:hidden;margin-bottom:10px}
+.secbody{padding:8px}
+.bar{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+.pill{font-size:8.5px;font-weight:800;padding:2px 6px;border-radius:3px;border:1px solid #2a3342;color:#c9d4e2}
+.tgt{margin-left:auto;color:#e0645f;font-size:12px;font-weight:800}
+.ctl{display:flex;gap:6px;align-items:center;margin:14px 0 8px}
+.ctl button{background:#161c27;border:1px solid #2a3342;color:#c9d4e2;font:700 10px Inter,Arial;padding:4px 9px;border-radius:4px;cursor:pointer}
+.ctl button.on{border-color:#7cc7ff;color:#7cc7ff}
+.note{width:420px;color:#8b98a9;font-size:11.5px}
+.note h4{color:#e3c341;font-size:10px;letter-spacing:.5px;text-transform:uppercase;margin:15px 0 5px}
+.note h4:first-child{margin-top:0}
+.note code{background:#161c27;padding:1px 5px;border-radius:3px;color:#c9d4e2;font-size:10.5px}
+.k{display:flex;gap:7px;align-items:center;margin:4px 0;font-size:11px}
+.sw{width:26px;height:26px;flex:none}
+
+/* ---------- MOTION ---------- */
+/* accumulating: a sonar ring leaves the node outward. Slow, 2.6s, one node at a time. */
+@keyframes sonar{0%{r:7;opacity:.55}70%{opacity:0}100%{r:17;opacity:0}}
+@keyframes breathe{0%,100%{opacity:.85}50%{opacity:1}}
+/* receiving a roll: rings collapse INWARD — money arriving, the opposite reading */
+@keyframes inward{0%{r:17;opacity:0}30%{opacity:.5}100%{r:7;opacity:0}}
+/* dissipating: the fill fades and the edge goes dashed-and-drifting */
+@keyframes wane{0%,100%{opacity:.30}50%{opacity:.14}}
+@keyframes drift{to{stroke-dashoffset:-24}}
+/* money flowing along a roll arrow */
+@keyframes flow{to{stroke-dashoffset:-32}}
+
+.mo .sonar{animation:sonar 2.6s ease-out infinite}
+.mo .sonar2{animation:sonar 2.6s ease-out infinite;animation-delay:1.3s}
+.mo .grow{animation:breathe 2.6s ease-in-out infinite}
+.mo .inw{animation:inward 2.2s ease-in infinite}
+.mo .inw2{animation:inward 2.2s ease-in infinite;animation-delay:1.1s}
+.mo .wane{animation:wane 3.2s ease-in-out infinite}
+.mo .dash{animation:drift 3.2s linear infinite}
+.mo .flow{animation:flow 1.6s linear infinite}
+@media (prefers-reduced-motion: reduce){ .mo *{animation:none !important} }
+</style></head><body>
+<div class="wrap">
+
+<div class="panel">
+ <div class="sec">
+  <div class="sechd">② Location</div>
+  <div class="secbody">
+    <div class="bar"><span class="pill">−G +V</span><span class="pill">BREAKS</span>
+      <span class="tgt">T: 7650 <span style="font-size:9px">−73</span></span></div>
+
+    <svg id="rail" class="mo" viewBox="0 0 360 118" width="360" height="118" style="display:block">
+      <defs>
+        <marker id="hd" viewBox="0 0 8 8" refX="6.5" refY="4" markerWidth="5" markerHeight="5" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="#e0645f"/></marker>
+        <marker id="hu" viewBox="0 0 8 8" refX="6.5" refY="4" markerWidth="5" markerHeight="5" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="#7cc7ff"/></marker>
+      </defs>
+
+      <!-- ROLL LANES. Static path + a bright dashed overlay that FLOWS toward the destination. -->
+      <path d="M286 60 L286 34 L176 34 L176 52" fill="none" stroke="#e0645f" stroke-width="1.1" opacity=".38"/>
+      <path class="flow" d="M286 60 L286 34 L176 34 L176 52" fill="none" stroke="#e0645f" stroke-width="1.6"
+            stroke-dasharray="5 27" stroke-linecap="round" marker-end="url(#hd)"/>
+      <text x="231" y="30" font-size="7" fill="#e0645f" font-weight="800" text-anchor="middle">ROLL ↓ 7682 · $541K</text>
+
+      <path d="M86 60 L86 16 L142 16 L142 52" fill="none" stroke="#7cc7ff" stroke-width="1.1" opacity=".38"/>
+      <path class="flow" d="M86 60 L86 16 L142 16 L142 52" fill="none" stroke="#7cc7ff" stroke-width="1.6"
+            stroke-dasharray="5 27" stroke-linecap="round" marker-end="url(#hu)"/>
+      <text x="114" y="12" font-size="7" fill="#7cc7ff" font-weight="800" text-anchor="middle">ROLL ↑ 7667 · $802K</text>
+
+      <!-- name tier: nothing else is ever drawn on this row -->
+      <text x="86"  y="66" font-size="7" fill="#8b98a9" text-anchor="middle" font-weight="800">PS</text>
+      <text x="142" y="66" font-size="7" fill="#e3c341" text-anchor="middle" font-weight="800">GK</text>
+      <text x="176" y="66" font-size="7" fill="#8b98a9" text-anchor="middle" font-weight="800">BRK</text>
+      <text x="286" y="66" font-size="7" fill="#8b98a9" text-anchor="middle" font-weight="800">BRK</text>
+
+      <line x1="10" y1="84" x2="350" y2="84" stroke="#2a3342" stroke-width="6"/>
+
+      <!-- 7642 · quiet, no motion: it earns none -->
+      <circle cx="86" cy="84" r="6" fill="#a371f7" opacity=".72"/>
+
+      <!-- 7667 · KING, RECEIVING a roll -> rings collapse inward -->
+      <circle class="inw"  cx="142" cy="84" r="7" fill="none" stroke="#7cc7ff" stroke-width="1.2"/>
+      <circle class="inw2" cx="142" cy="84" r="7" fill="none" stroke="#7cc7ff" stroke-width="1.2"/>
+      <circle class="grow" cx="142" cy="84" r="10" fill="#a371f7"/>
+      <circle cx="142" cy="84" r="10" fill="none" stroke="#2ec27e" stroke-width="1.6"/>
+
+      <!-- 7682 · DISSIPATING -> fill wanes, edge dashed and drifting -->
+      <circle class="wane" cx="176" cy="84" r="8" fill="#e3c341"/>
+      <circle class="dash" cx="176" cy="84" r="8" fill="none" stroke="#e0645f" stroke-width="1.2"
+              stroke-dasharray="3 3" opacity=".8"/>
+
+      <!-- 7707 · ACCUMULATING hard -> sonar rings leave outward -->
+      <circle class="sonar"  cx="286" cy="84" r="7" fill="none" stroke="#2ec27e" stroke-width="1.3"/>
+      <circle class="sonar2" cx="286" cy="84" r="7" fill="none" stroke="#2ec27e" stroke-width="1.3"/>
+      <circle class="grow" cx="286" cy="84" r="9" fill="#e3c341"/>
+      <circle cx="286" cy="84" r="9" fill="none" stroke="#2ec27e" stroke-width="1.6"/>
+
+      <!-- 7717 · balanced: hollow, no side asserted, no motion -->
+      <circle cx="318" cy="84" r="5.5" fill="none" stroke="#8b98a9" stroke-width="1.4" opacity=".7"/>
+
+      <!-- price + target + ends -->
+      <polygon points="120,92 116,100 124,100" fill="#e0645f"/>
+      <text x="120" y="66" font-size="7" fill="#e0645f" text-anchor="middle" font-weight="800">T</text>
+      <circle cx="196" cy="84" r="5.5" fill="#e6edf3" stroke="#0b0e14" stroke-width="2"/>
+      <text x="10"  y="106" font-size="7" fill="#e6edf3" font-weight="800">7661</text>
+      <text x="10"  y="76"  font-size="7" fill="#8b98a9" font-weight="800">EL</text>
+      <text x="350" y="106" font-size="7" fill="#e6edf3" font-weight="800" text-anchor="end">7758</text>
+      <text x="350" y="76"  font-size="7" fill="#8b98a9" font-weight="800" text-anchor="end">RAIL</text>
+      <text x="86"  y="106" font-size="7" fill="#a371f7" text-anchor="middle" font-weight="800">7642</text>
+      <text x="142" y="106" font-size="7" fill="#a371f7" text-anchor="middle" font-weight="800">7667</text>
+      <text x="176" y="106" font-size="7" fill="#e3c341" text-anchor="middle" font-weight="800">7682</text>
+      <text x="286" y="106" font-size="7" fill="#e3c341" text-anchor="middle" font-weight="800">7707</text>
+      <text x="318" y="106" font-size="7" fill="#8b98a9" text-anchor="middle" font-weight="800">7717</text>
+    </svg>
+  </div>
+ </div>
+
+ <div class="ctl">
+   <button id="b1" class="on">Calm — decisive only (default)</button>
+   <button id="b2">Everything animates</button>
+   <button id="b3">Motion off</button>
+ </div>
+ <div style="color:#8b98a9;font-size:10.5px">Click "Everything animates" to see why restraint is the design, not a limitation.</div>
+</div>
+
+<div class="note">
+  <h4>Circles, and what each state looks like</h4>
+  <div class="k"><svg class="sw" viewBox="0 0 26 26"><circle cx="13" cy="13" r="6" fill="#a371f7" opacity=".72"/></svg>
+    <span><b>Quiet</b> — solid, no ring, no motion. Most nodes, most of the time.</span></div>
+  <div class="k"><svg class="sw mo" viewBox="0 0 26 26"><circle class="sonar" cx="13" cy="13" r="7" fill="none" stroke="#2ec27e" stroke-width="1.3"/><circle cx="13" cy="13" r="8" fill="#e3c341"/><circle cx="13" cy="13" r="8" fill="none" stroke="#2ec27e" stroke-width="1.5"/></svg>
+    <span><b>Accumulating</b> — green rim, sonar rings leaving <i>outward</i>. Size is being added.</span></div>
+  <div class="k"><svg class="sw mo" viewBox="0 0 26 26"><circle class="wane" cx="13" cy="13" r="8" fill="#e3c341"/><circle class="dash" cx="13" cy="13" r="8" fill="none" stroke="#e0645f" stroke-width="1.2" stroke-dasharray="3 3"/></svg>
+    <span><b>Dissipating</b> — fill wanes, edge dashed and drifting. It is coming apart.</span></div>
+  <div class="k"><svg class="sw mo" viewBox="0 0 26 26"><circle class="inw" cx="13" cy="13" r="7" fill="none" stroke="#7cc7ff" stroke-width="1.2"/><circle cx="13" cy="13" r="8" fill="#a371f7"/></svg>
+    <span><b>Receiving a roll</b> — blue rings collapsing <i>inward</i>. Money arriving.</span></div>
+  <div class="k"><svg class="sw" viewBox="0 0 26 26"><circle cx="13" cy="13" r="6" fill="none" stroke="#8b98a9" stroke-width="1.4" opacity=".7"/></svg>
+    <span><b>Balanced</b> — hollow. The gamma is real but the legs cancel, so no side is asserted.</span></div>
+
+  <h4>Direction is the whole trick</h4>
+  Rings <b>leaving</b> a node mean it is growing; rings <b>arriving</b> mean it is being fed by a roll.
+  You can read which node is winning without reading a number, and the two motions are opposite so they
+  can never be confused at a glance.
+
+  <h4>Arrows: dashes flow toward the destination</h4>
+  The path is drawn twice — a dim static line for the route, and a bright dashed overlay whose offset
+  animates, so the dashes travel <b>from source to destination</b>. Blue for a roll up, red for down.
+  Speed is fixed, not scaled to size: a fast-moving dash would read as urgency and that is what the
+  <i>label</i> is for.
+
+  <h4>Restraint — the rule I would enforce in code</h4>
+  Motion is expensive attention. Only nodes whose <b>15m change is decisive</b> animate, capped at
+  <b>three at once</b>, cycles at <b>2.2–3.2s</b> so it breathes rather than flickers. Everything else
+  sits still. Press "Everything animates" — with six nodes moving, the rail becomes the busiest thing
+  on screen at exactly the moment you need to read it calmly.
+  <br><br>
+  <code>prefers-reduced-motion</code> disables all of it, and so does the third button — which I would
+  ship as a real setting, because on a second monitor during a fast tape some people will want it off.
+
+  <h4>Cost, since this runs all session</h4>
+  Every animation is CSS on an SVG element — no JS timer, no re-render. The panel already repaints on
+  its own cadence; these compose on the GPU and cost effectively nothing.
+</div>
+</div>
+<script>
+var rail=document.getElementById('rail');
+function set(mode,btn){
+  ['b1','b2','b3'].forEach(function(id){document.getElementById(id).classList.remove('on');});
+  document.getElementById(btn).classList.add('on');
+  rail.classList.toggle('mo', mode!=='off');
+  rail.querySelectorAll('circle').forEach(function(c){ c.classList.remove('xtra'); });
+  if(mode==='all'){
+    // demo only: force the quiet ones to move too, so the busyness is visible
+    rail.querySelectorAll('circle[fill="#a371f7"],circle[stroke="#8b98a9"]').forEach(function(c){
+      c.classList.add('grow');
+    });
+    rail.querySelectorAll('circle').forEach(function(c){ if(!c.getAttribute('class')) c.setAttribute('class','wane'); });
+  } else {
+    rail.querySelectorAll('circle[fill="#a371f7"]').forEach(function(c){
+      if(c.getAttribute('cx')==='86') c.classList.remove('grow');
+    });
+    rail.querySelectorAll('circle[class="wane"]').forEach(function(c){ c.removeAttribute('class'); });
+    rail.querySelectorAll('circle[stroke="#8b98a9"]').forEach(function(c){ c.classList.remove('grow'); });
+  }
+}
+document.getElementById('b1').onclick=function(){set('calm','b1');};
+document.getElementById('b2').onclick=function(){set('all','b2');};
+document.getElementById('b3').onclick=function(){set('off','b3');};
+</script>
+</body></html>
