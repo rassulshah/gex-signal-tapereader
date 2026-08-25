@@ -1,3 +1,23 @@
+## v14.5 — v14.4 shipped HALF-WRITTEN, and the operator caught it on the live face
+
+The v14.4 edit script raised an assertion on its LAST replacement and exited WITHOUT SAVING — and I
+read the traceback as "one edit failed" when it meant "every edit in that script was discarded."
+The suite stayed green because none of the lost changes had test coverage; the LIVE FACE showed the
+truth: %K still inside the bars, no grey minors, ROLL BIAS gone entirely (removed from NODES by a
+separate script that DID save, never added to the header by the one that did not), and the price
+pill clipped to a 10px circle showing "7" — the old .g3emn rule's width survived under my new rule.
+
+v14.5 re-lands the three lost fixes (minors bound to the rail's own expiry; %K above the bar; ROLL
+BIAS chip in the profile header) and adds two: `width:auto` on the pill so "7703▼" renders whole,
+and NEIGHBOUR LABEL THINNING on the rail — 7655/7660 sit 2.5% apart tonight and their labels mashed
+into "76557660"; the bigger pile keeps its label, a smaller one within 4% yields the text only.
+
+⚠ PROCESS LESSONS, permanent: (1) a multi-replace script writes NOTHING when any replace fails —
+apply-and-verify each, and grep the FILE for the new tokens after, never trust "it printed ok".
+(2) A UI build is not verified by the suite alone: after install, the live DOM gets checked for the
+specific elements the build claims (querySelector counts), the way this failure was actually found
+— by the operator, which is the wrong person to be the test.
+
 ## v14.4 — five operator-caught refinements on the live v14.3 face
 
 **1. The grey minors had vanished.** After the close Skylit rolls the front expiry, so the minors'

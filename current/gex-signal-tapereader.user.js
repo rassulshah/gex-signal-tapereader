@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.4
+// @version    14.5
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -564,7 +564,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.4';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.5';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -18683,7 +18683,7 @@ function ensureV3Css(){
     '#gpts-body .g3emo{position:absolute;top:21px;width:2px;height:12px;background:#e6edf3;border-radius:1px;transform:translateX(-1px)}'+
     // (v14.4) the dot became a PILL: rounded ES price + last-bar arrow, still white, same top so
     // the money-label contract (painted top must clear rows 0-9) holds. height:12 read by the tests.
-    '#gpts-body .g3emn{position:absolute;top:22px;height:12px;border-radius:6px;background:#fff;'+
+    '#gpts-body .g3emn{position:absolute;top:22px;height:12px;width:auto;min-width:0;border-radius:6px;background:#fff;'+
       'box-shadow:0 0 0 2px #0b0e14;transform:translateX(-50%);color:#0d1117;font-size:8px;'+
       'font-weight:800;padding:0 4px;display:inline-flex;align-items:center;gap:1px;line-height:1;'+
       'white-space:nowrap;z-index:3;cursor:help}'+
@@ -19780,13 +19780,21 @@ function gammaProfileHtml(EB, RB, sym, elLab, ehLab){
     if(!(dsc>0)) dsc=1;
     var TNp=[]; try{ TNp=tradeNodes(sym)||[]; }catch(e1){}
     var railBy={}; TNp.forEach(function(n){ railBy[n.k]=n; });
+    // (v14.5) the reference expiry = whatever book the rail is actually showing right now. The
+    // exp===today filter went false for every minor after the close (Skylit rolls the front), and
+    // the grey bars silently vanished while the exempt rail bars stayed — operator-caught.
+    var refExp=null;
+    try{ for(var ri0=0;ri0<TNp.length && !refExp;ri0++){
+           var vr0=(typeof VEL==='object'&&VEL)?VEL[String(TNp[ri0].k)]:null;
+           if(vr0 && vr0.exp) refExp=vr0.exp; } }catch(eRE){}
+    if(!refExp) refExp=today;
     var rows=[];
     for(var kk in PEAK.m){
       var k=parseFloat(kk); if(!(k>0)) continue;
       var pk=PEAK.m[kk]; if(!(pk>0)) continue;
       var rn=railBy[k]||null;
       if(!rn){ var vhh=null; try{ vhh=(typeof VEL==='object'&&VEL)?VEL[kk]:null; }catch(eVH){}
-               if(!vhh || !today || vhh.exp!==today) continue; }
+               if(!vhh || !refExp || vhh.exp!==refExp) continue; }
       var es=rn?rn.es:(k*dsc);
       var x=emPosRail(EB, es, RB);
       if(!isFinite(x) || x<1.5 || x>98.5) continue;
@@ -19890,8 +19898,7 @@ function gammaProfileHtml(EB, RB, sym, elLab, ehLab){
       // the badge stack, drawn only while it fits (priority: %K, wall, state, roll)
       var stk='', used=2;
       function fits(hh){ return (used+hh)<=(hPk-2); }
-      if(isRail && kingPct!=null && fits(8)){
-        stk+='<span class="g3gpbg g3gpk" style="color:'+(isKing?'#e3c341':'#e6edf3')+'">'+kingPct+'</span>'; used+=8; }
+      // (v14.5) %K rides ON TOP of the bar (operator-directed, lost in the v14.4 half-write)
       if(wl && fits(11)){ stk+='<span class="g3gpbg '+(wl.tag==='CW'?'g3gpWc':'g3gpWp')+'">'+wl.tag+'</span>'; used+=11; }
       if(st && fits(11)){ stk+='<span class="g3gpbg '+st.cls+'">'+st.code+'</span>'; used+=11; }
       if(ro && fits(11)){
@@ -19907,6 +19914,8 @@ function gammaProfileHtml(EB, RB, sym, elLab, ehLab){
             (hCur>0?('<b style="height:'+Math.min(hCur,hPk-1)+'px;background:'+col+';opacity:'+(isRail?'.5':'.4')+'"></b>'):'')+
             (stk?('<span class="g3gpstk">'+stk+'</span>'):'')+base+
           '</i>';
+      if(isRail && kingPct!=null)
+        h2+='<span class="g3gppct" style="left:'+r.x.toFixed(1)+'%;bottom:'+(hPk+2)+'px;color:'+(isKing?'#e3c341':'#e6edf3')+'">'+kingPct+'%</span>';
     });
     // a wall with no rail bar to live in keeps a floating flag — the only exception, and it is rare
     walls.forEach(function(w){
@@ -19951,9 +19960,16 @@ function gammaProfileHtml(EB, RB, sym, elLab, ehLab){
       '<i class="g3gpwmk" style="font-style:normal">▶</i><i>watch</i>'+
       '<i class="g3gpadot" style="display:inline-block"></i><i>aged</i></div>';
 
+    var biasChip='';
+    try{
+      var BIASp=rollBias(ROLLS.filter(function(rB){ return !rB.gone; }));
+      if(BIASp && BIASp.n>1 && BIASp.dir!=='mixed')
+        biasChip='<span class="g3gpbias"'+g3tip('Which way is the whole book moving? Each roll is one node handing size to another; when they all point the same way the structure is migrating. ⚠ Measured: a roll destination holds no better than a node that is simply GROWING — this says WHERE size is going, not that it will hold.')+
+          '>ROLL BIAS '+(BIASp.dir==='up'?'↑':'↓')+' · '+(BIASp.dir==='up'?BIASp.up:BIASp.dn)+'/'+BIASp.n+' '+(BIASp.dir==='up'?'up':'down')+'</span>';
+    }catch(eBC){}
     var hdr='<div class="g3gphd">GAMMA PROFILE '+
       gpInfo('THE GAMMA PROFILE — each bar is one SPXW strike in TODAY\'S expiry, from Skylit\'s live flow, verbatim. OUTLINE = the most it held today; FILL = now (56% full means 56%); the hollow part is the position that CLOSED intraday. BADGES live inside the bars: the number is %KING; S/R = support/resistance building, SF/RF = failing (colour = what it means for PRICE — a failing ceiling is green), TU/TD = turning, H = holding; RU/RD = a latched roll (dashed = down); CW/PW = InsiderFinance\'s 0DTE call/put walls, a different book, never mixed into the bars; ▶ = the watch node; the amber dot = aged values. Badges draw only while they fit in the bar — the hover always carries the full story. The $ axis is SQRT-SPACED because the heights are (so the King does not flatten small strikes); the dashed lines mark round dollar values. Below: Skylit\'s own 5m/15m/60m per strike. The white line is price. Blank during replay.')+
-      '<small>outline = day peak · fill = now · number = %King · $ axis sqrt-spaced</small></div>';
+      '<small>outline = day peak · fill = now · number = %King · $ axis sqrt-spaced</small>'+biasChip+'</div>';
     function spc(l){ return (l||'').replace('<span class="g3emk"','<span class="g3emk" style="visibility:hidden"'); }
     return hdr+
       '<div class="g3gprow"><span class="g3gpsp">'+spc(elLab)+yl+'</span><span class="g3gpt g3gp">'+h2+'</span>'+spc(ehLab)+'</div>'+
@@ -20509,6 +20525,21 @@ function secFrame(sym){
              if(typeof m.d60==='number' && m.d60<0) motion[m.k]='fade';   // static, costs no attention
            }
          }catch(eMo){}
+         // (v14.5) NEIGHBOUR LABEL THINNING. 7655 and 7660 are 2.5% of the rail apart tonight, and
+         // their labels rendered as one mashed string ("76557660", operator-caught). The bigger pile
+         // keeps its label; a smaller one within 4% of an already-labelled pile stays label-less —
+         // its dot, bar and hover are untouched, only the text yields.
+         var LBLOK={};
+         try{
+           var lblCand=ps.filter(function(pL){ return pL.pct>=PLAB_MIN_PCT; })
+                         .sort(function(a,b){ return b.pct-a.pct; });
+           var lblX=[];
+           lblCand.forEach(function(pL){
+             var xL=emPosRail(EB, pL.disp, RB);
+             for(var q=0;q<lblX.length;q++) if(Math.abs(lblX[q]-xL)<4) return;
+             lblX.push(xL); LBLOK[pL.k]=1;
+           });
+         }catch(eLT){ ps.forEach(function(pL){ LBLOK[pL.k]=1; }); }
          for(var pi=0;pi<ps.length;pi++){
            var P=ps[pi];
            // sqrt so a 100% King does not flatten a 30% pile into invisibility
@@ -20567,7 +20598,7 @@ function secFrame(sym){
            // (v11.81) ROLE beats polarity on the label. A King is still an accelerator; the hover keeps
            // both, but "KING" is the word that changes what you do and "ACC" is not.
            var role = P.role || (P.balanced ? 'BAL' : (P.accel ? 'ACC' : 'BRK'));
-           if(P.pct>=PLAB_MIN_PCT){
+           if(P.pct>=PLAB_MIN_PCT && LBLOK[P.k]){
              // (v11.93) THE ROLE MOVES ABOVE THE RAIL, into its own tier between the money amounts and
              // the track. Below the rail it was sharing one line with the SPX strike, so on a crowded
              // ladder "7645 ACC" and "7665 KING" competed for width against their neighbours and the
