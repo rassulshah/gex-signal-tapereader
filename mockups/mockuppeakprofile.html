@@ -1,0 +1,160 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Peak vs Now profile — mockup</title>
+<style>
+  body{background:#0d1117;color:#e6edf3;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+       font-variant-numeric:tabular-nums;margin:0;padding:26px;display:flex;gap:34px;flex-wrap:wrap;align-items:flex-start}
+  .panel{width:430px;background:#0d1117;border:1px solid #232a36;border-radius:6px;padding:8px 10px}
+  .cap{font-size:11px;font-weight:800;letter-spacing:.08em;color:#8b98a9;margin:0 0 6px;text-transform:uppercase}
+  .cap b{color:#7cc7ff}
+  .note{font-size:10px;color:#8b98a9;line-height:1.5;margin-top:10px;width:430px}
+  .note b{color:#e6edf3}
+  .hd{font-size:7px;font-weight:800;letter-spacing:.12em;color:#8b98a9;margin:3px 0 3px}
+  .hd small{font-weight:700;letter-spacing:.02em;color:#5b6675;margin-left:6px;text-transform:none}
+
+  /* ---------- A: standalone PROFILE block ---------- */
+  .prow{display:grid;grid-template-columns:52px 1fr 44px;gap:6px;align-items:center;padding:3px 1px}
+  .pk{font-size:10.5px;font-weight:800;text-align:right}
+  .psub{font-size:6.5px;color:#8b98a9;font-weight:700;text-align:right;margin-top:-1px}
+  .track{position:relative;height:11px}
+  /* the OUTLINE is the day's high-water mark; the FILL is what the node holds right now */
+  .peak{position:absolute;top:0;bottom:0;left:0;border:1px solid;border-radius:2px;opacity:.55}
+  .fill{position:absolute;top:1px;bottom:1px;left:1px;border-radius:1px}
+  .ghost{position:absolute;top:1px;bottom:1px;border-radius:1px;opacity:.16}
+  .pct{font-size:9.5px;font-weight:800;text-align:right}
+  .pctsub{font-size:6.5px;font-weight:700;text-align:right;color:#8b98a9;margin-top:-1px}
+  .esrow{display:grid;grid-template-columns:52px 1fr 44px;gap:6px;align-items:center;padding:2px 1px;
+         border-top:1px solid #2f3846;border-bottom:1px solid #2f3846;background:rgba(230,237,243,.05);margin:1px 0}
+  .esrow .a{font-size:10px;font-weight:800;text-align:right;color:#e6edf3}
+  .esrow .b{font-size:7px;color:#8b98a9;font-weight:800;letter-spacing:.08em}
+
+  /* ---------- B: %PK column inside NODES ---------- */
+  .ndhd,.r1{display:grid;grid-template-columns:11px 1fr 40px 40px 44px 44px 44px 50px;gap:3px;align-items:baseline}
+  .ndhd{font-size:6.5px;font-weight:800;letter-spacing:.06em;color:#5b6675;text-transform:uppercase;padding:3px 1px}
+  .ndhd span:nth-child(n+3),.r1 span:nth-child(n+3){text-align:right}
+  .row{padding:5px 1px 4px;border-top:1px solid #232a36}
+  .px{font-size:12.5px;font-weight:800;letter-spacing:-.02em}
+  .pcts{font-size:9.5px;font-weight:800}
+  .dd{font-size:9px;font-weight:700}
+  .up{color:#2ec27e}.dn{color:#f0616d}.flat{color:#8b98a9}
+  .sub{font-size:7.5px;color:#c9d4e2;font-weight:700;letter-spacing:.02em;margin-top:1px;padding-left:14px}
+  .chip{font-size:7px;font-weight:800;padding:1px 4px;border-radius:3px;letter-spacing:.03em;white-space:nowrap;margin-left:3px}
+  .cBull{color:#2ec27e;background:rgba(46,194,126,.13);border:1px solid rgba(46,194,126,.38)}
+  .cBear{color:#e0645f;background:rgba(224,100,95,.13);border:1px solid rgba(224,100,95,.38)}
+</style>
+</head>
+<body>
+
+<!-- ================= A: standalone PROFILE block ================= -->
+<div>
+<div class="cap">A · PROFILE block <b>(outline = day peak · fill = now)</b></div>
+<div class="panel">
+  <div class="hd">PROFILE<small>outline = today's peak · fill = held now · % = of own peak</small></div>
+
+  <!-- 7709 BRK — AT its high-water: still building -->
+  <div class="prow">
+    <div><div class="pk" style="color:#e3c341">7709</div><div class="psub">7690 · $49M</div></div>
+    <div class="track">
+      <span class="peak" style="width:56%;border-color:#e3c341"></span>
+      <span class="fill" style="width:calc(56% - 2px);background:rgba(227,195,65,.75)"></span>
+    </div>
+    <div><div class="pct" style="color:#2ec27e">100%</div><div class="pctsub">at peak</div></div>
+  </div>
+
+  <div class="esrow"><div class="a">7692</div><div></div><div class="b">ES</div></div>
+
+  <!-- 7704 GK — near peak -->
+  <div class="prow">
+    <div><div class="pk" style="color:#e3c341">7704</div><div class="psub">7685 · $35M</div></div>
+    <div class="track">
+      <span class="peak" style="width:44%;border-color:#e3c341"></span>
+      <span class="fill" style="width:calc(44% * 0.9)"  style2=""></span>
+      <span class="fill" style="width:39%;background:rgba(227,195,65,.75)"></span>
+    </div>
+    <div><div class="pct" style="color:#e6edf3">89%</div><div class="pctsub">of $39M</div></div>
+  </div>
+
+  <!-- 7694 ACC — the dissipated door: fill has drained out of the outline -->
+  <div class="prow">
+    <div><div class="pk" style="color:#a371f7">7694</div><div class="psub">7675 · $18M</div></div>
+    <div class="track">
+      <span class="peak" style="width:51%;border-color:#a371f7"></span>
+      <span class="ghost" style="left:20%;width:31%;background:#a371f7"></span>
+      <span class="fill" style="width:20%;background:rgba(163,113,247,.75)"></span>
+    </div>
+    <div><div class="pct" style="color:#f0616d">40%</div><div class="pctsub">−$27M off peak</div></div>
+  </div>
+
+  <!-- 7684 KING — biggest peak on the book, holding almost all of it -->
+  <div class="prow">
+    <div><div class="pk" style="color:#e3c341">7684</div><div class="psub">7665 · King · $88M</div></div>
+    <div class="track">
+      <span class="peak" style="width:100%;border-color:#e3c341"></span>
+      <span class="fill" style="width:95%;background:rgba(227,195,65,.8)"></span>
+    </div>
+    <div><div class="pct" style="color:#e6edf3">96%</div><div class="pctsub">of $92M</div></div>
+  </div>
+
+  <!-- 7664 BRK — mostly vacated -->
+  <div class="prow">
+    <div><div class="pk" style="color:#e3c341">7664</div><div class="psub">7645 · $19M</div></div>
+    <div class="track">
+      <span class="peak" style="width:38%;border-color:#e3c341"></span>
+      <span class="ghost" style="left:26%;width:12%;background:#e3c341"></span>
+      <span class="fill" style="width:26%;background:rgba(227,195,65,.75)"></span>
+    </div>
+    <div><div class="pct" style="color:#f2b45a">68%</div><div class="pctsub">−$9M off peak</div></div>
+  </div>
+</div>
+<div class="note">
+  <b>How to read it:</b> the outline is the most the node held at any point today (its high-water mark);
+  the solid fill is what it holds right now; the faint wash is what LEFT. Bar lengths compare strikes
+  against the biggest peak of the day (the King), so size and drain are visible in one glance.
+  <b>% = current ÷ own peak</b> — 100% green means at its high (still building), amber is bleeding,
+  red under ~50% is a door: most of what defended that strike is gone. The −$ figure says how much left.
+</div>
+</div>
+
+<!-- ================= B: a %PK column inside NODES ================= -->
+<div>
+<div class="cap">B · %PK column in the existing NODES list <b>(no new block)</b></div>
+<div class="panel">
+  <div class="hd">NODES</div>
+  <div class="ndhd"><span></span><span>Node</span><span>%K</span><span>%PK</span><span>5m</span><span>15m</span><span>60m</span><span>Day</span></div>
+
+  <div class="row">
+    <div class="r1"><span></span>
+      <span class="px" style="color:#e3c341">7709.00</span><span class="pcts" style="color:#e3c341">55%▲</span>
+      <span class="pcts up">100%</span>
+      <span class="dd dn">−19%</span><span class="dd up">+13%</span><span class="dd up">+47%</span><span class="dd up">+2877%</span></div>
+    <div class="sub">7690 · BRK · $49M · +2.50<span class="chip cBear">RESISTANCE BUILDING</span></div>
+  </div>
+
+  <div class="row">
+    <div class="r1"><span></span>
+      <span class="px" style="color:#a371f7">7694.00</span><span class="pcts" style="color:#a371f7">20%▼</span>
+      <span class="pcts dn">40%</span>
+      <span class="dd up">+1.5%</span><span class="dd dn">−21%</span><span class="dd up">+202%</span><span class="dd up">+653%</span></div>
+    <div class="sub">7675 · ACC · $18M · peak $45M<span class="chip cBear">SUPPORT FAILING</span></div>
+  </div>
+
+  <div class="row">
+    <div class="r1"><span></span>
+      <span class="px" style="color:#e3c341">7684.00</span><span class="pcts" style="color:#e3c341">100%▼</span>
+      <span class="pcts" style="color:#e6edf3">96%</span>
+      <span class="dd up">+7.4%</span><span class="dd up">+5.9%</span><span class="dd up">+74%</span><span class="dd up">+516%</span></div>
+    <div class="sub">7665 · KING · $88M · peak $92M<span class="chip cBull">SUPPORT BUILDING</span></div>
+  </div>
+</div>
+<div class="note">
+  <b>Same number, no new real estate:</b> %K stays "how big vs the King", the new <b>%PK</b> is
+  "how much of its OWN day-peak it still holds" — green at ~100% (building), red when drained.
+  The sub-line gains "peak $45M" only when the node is meaningfully off its high. No bars; two columns
+  narrow slightly to make room.
+</div>
+</div>
+
+</body>
+</html>

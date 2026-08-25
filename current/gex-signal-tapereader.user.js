@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    13.9
+// @version    14.0
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -564,7 +564,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='13.9';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.0';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -2964,6 +2964,50 @@ function rollLatched(sym){
   }catch(e){}
   return out;
 }
+// ---- (v14.0) THE DAY-PEAK TRACKER — the most each strike held at any point today ----
+// The gamma profile draws outline = day peak, fill = held now; the hollow part IS the position that
+// was closed, visible live from Skylit's flow. IF cannot show this — a position closed at 10:30 does
+// not leave their open interest until tomorrow. Peaks are a running max over harvested |cur| per
+// SPXW strike, reset daily, persisted, and SEEDED at boot from today's recorded bars (`snap.vend`
+// rows are [k, cur, d5, d15, d60, d1d], biggest-first, top 40) — so an install mid-session still
+// knows the morning's high-water marks for every strike that ever mattered.
+var PEAK_KEY='gpts_peak_v1';
+var PEAK={ day:null, bar:0, m:{} };
+function peakSave(){ try{ localStorage.setItem(PEAK_KEY, JSON.stringify(PEAK)); }catch(e){} }
+function peakLoad(){
+  var today=null; try{ today=ctTodayStr(); }catch(e0){}
+  try{ var s=JSON.parse(localStorage.getItem(PEAK_KEY)||'null');
+       if(s && s.m && s.day===today) PEAK=s; }catch(e){}
+  if(PEAK.day!==today) PEAK={ day:today, bar:0, m:{} };
+  // seed from today's recorded bars — max wins, whichever store saw more of the day
+  try{
+    var db=recorderLoad(); var d=db&&db.days&&db.days[today];
+    var snaps=(d&&d.snaps&&d.snaps.SPY)||[];
+    for(var i=0;i<snaps.length;i++){
+      var vd=snaps[i]&&snaps[i].vend; var rows=(vd&&vd.rows)||[];
+      for(var j=0;j<rows.length;j++){
+        var k=rows[j][0], cur=Math.abs(rows[j][1]||0);
+        if(k>0 && cur>(PEAK.m[k]||0)) PEAK.m[k]=cur;
+      }
+    }
+  }catch(e2){}
+}
+function peakTick(sym){
+  try{
+    if(typeof inReplay==='function' && inReplay()) return;   // a replay must never write today's peaks
+    if(!velOk()) return;
+    var today=ctTodayStr();
+    if(PEAK.day!==today){ PEAK={ day:today, bar:0, m:{} }; }
+    // the max updates on every tick (a spike between bars is still a real peak) …
+    for(var k in VEL){ var v=VEL[k];
+      if(v && typeof v.cur==='number'){ var a=Math.abs(v.cur); if(a>(PEAK.m[v.k]||0)) PEAK.m[v.k]=a; } }
+    // … but the localStorage write is bar-gated, like the latch
+    var S=STATE[sym||'SPY']||{}; var bar=S.lastClosedB||0;
+    if(bar && PEAK.bar!==bar){ PEAK.bar=bar; peakSave(); }
+  }catch(e){}
+}
+function peakOf(k){ var p=PEAK.m[k]; return (typeof p==='number'&&p>0)?p:null; }
+
 // ⚠ (v13.6) READ THE SAME ARRAY THE RAIL DOES. This used tapeMap('SPXW') keys while the rail scans
 // emPiles, so it reported 0 rolls while three arrows were drawn — a debug hook that disagrees with the
 // face is worse than none, because it is trusted when diagnosing exactly this kind of problem.
@@ -12096,15 +12140,30 @@ function registerCoreFeatures(){
   registerFeature({ key:'rolllatch', label:'Roll latch (1 noise / 2 signal / 3 confirm)', phase:'dashboard', fwd:FEAT_FWD,
     record:function(sym){
       var rl=[]; try{ rl=rollLatched(sym)||[]; }catch(e){}
-      return { n:rl.length,
-               rolls:rl.map(function(r){ return { f:r.from, t:r.to, dir:r.dir, c:r.count,
+      // (v14.0) side-of-price per destination, for the operator's hypothesis (2026-08-25, verbatim
+      // intent): "sometimes they roll up to create support and sometimes they roll down to create
+      // support, as long as they are under price and price deflects" — the DIRECTION of the roll is
+      // noise, the destination's SIDE of price is the claim. Both morning roll-downs into 7665 and
+      // the 13:33–14:00 roll-ups into 7675/7680 were this pattern, live, the day this was written.
+      var px=null, dsc=1;
+      try{ var B=emBand(sym); px=(B&&B.ok)?B.now:null; }catch(e1){}
+      try{ dsc=ifDispScale()||1; }catch(e2){}
+      var anyBelowConf=0;
+      var rows=rl.map(function(r){
+        var below=(px!=null)?((r.to*dsc<px)?1:0):null;
+        if(below===1 && r.conf && !r.gone) anyBelowConf=1;
+        return { f:r.from, t:r.to, dir:r.dir, c:r.count,
                  live:r.live?1:0, conf:r.conf?1:0, gone:r.gone?1:0, age:r.ageMin,
-                 amt:Math.round(r.amt||0), got:Math.round(r.got||0) }; }) };
+                 amt:Math.round(r.amt||0), got:Math.round(r.got||0), below:below };
+      });
+      return { n:rl.length, destBelowConf:anyBelowConf, rolls:rows };
     },
     outcome:function(rec, fwd){ return { hit:null, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null }; },
     questions:[
       { id:'rolllatch_stuck_vs_gone', when:[{f:'conf',v:1}], outcome:'hold',
-        note:'does a STUCK destination deflect price better than one that GAVE BACK — and better than plain growth, the F6 control?' }
+        note:'does a STUCK destination deflect price better than one that GAVE BACK — and better than plain growth, the F6 control?' },
+      { id:'rolllatch_dest_below', when:[{f:'destBelowConf',v:1}], outcome:'hold',
+        note:'operator hypothesis 2026-08-25: a confirmed roll destination BELOW price acts as support regardless of roll direction — on bars with a latched below-price destination, does price deflect off it rather than close through? Compare against below-price nodes that are merely growing (the F6 control).' }
     ],
     rule:{ id:'rolllatch', tier:'hand', condition:'display-side counting of rollScan sightings per closed bar',
            mechanism:'Two consecutive sightings draw, three latch; a latched roll persists while its destination holds >=60% of its at-confirmation mass, then GAVE BACK retires it. Recorded so the review can test STUCK vs GAVE BACK destinations against plain growth.' } });
@@ -18531,6 +18590,22 @@ function ensureV3Css(){
     // the role tier or the money tier — which is exactly how a glyph-above-the-block would have.
     '#gpts-body .g3pile.g3grow{box-shadow:inset 0 2px 0 0 #2ec27e}'+
     '#gpts-body .g3pile.g3bleed{box-shadow:inset 0 -2px 0 0 #e0645f}'+
+    // ---- (v14.0) THE GAMMA PROFILE under the rail: outline = day peak, fill = held now ----
+    '#gpts-body .g3gp{position:relative;height:48px;margin-top:12px;border-bottom:1px solid #2f3846;overflow:visible}'+
+    '#gpts-body .g3gpb{position:absolute;bottom:0;transform:translateX(-50%);border:1px solid;border-bottom:none;'+
+      'border-radius:2px 2px 0 0;cursor:help}'+
+    '#gpts-body .g3gpb b{position:absolute;bottom:0;left:1px;right:1px;border-radius:1px 1px 0 0;pointer-events:none}'+
+    '#gpts-body .g3gppct{position:absolute;transform:translateX(-50%);font-size:6.5px;font-weight:800;'+
+      'white-space:nowrap;pointer-events:none}'+
+    '#gpts-body .g3gpwall{position:absolute;top:-10px;transform:translateX(-50%);font-size:6.5px;font-weight:800;'+
+      'padding:0 3px;border-radius:2px;letter-spacing:.03em;cursor:help}'+
+    '#gpts-body .g3gpwall.cw{color:#e0645f;background:rgba(224,100,95,.14);border:1px solid rgba(224,100,95,.45)}'+
+    '#gpts-body .g3gpwall.pw{color:#2ec27e;background:rgba(46,194,126,.14);border:1px solid rgba(46,194,126,.45)}'+
+    '#gpts-body .g3gpax{position:relative;height:11px;margin-top:2px}'+
+    '#gpts-body .g3gpaxl{position:absolute;transform:translateX(-50%);font-size:7px;color:#8b98a9;font-weight:700;white-space:nowrap}'+
+    '#gpts-body .g3gpaxl.k{color:#e3c341;font-weight:800}'+
+    '#gpts-body .g3gpaxl.px{color:#fff;font-weight:800}'+
+    '#gpts-body .g3gptick{position:absolute;top:-3px;width:1px;height:3px;background:#3d4a5c;transform:translateX(-50%)}'+
     '#gpts-body .g3emr{position:absolute;left:0;right:0;top:25px;height:4px;border-radius:2px;background:#232c3a;box-shadow:inset 0 0 0 1px rgba(139,152,169,.10)}'+
     '#gpts-body .g3emf{position:absolute;top:25px;height:4px;border-radius:2px;background:rgba(139,152,169,.6)}'+
     '#gpts-body .g3emx2{position:absolute;top:25px;height:4px;border-radius:2px;background:rgba(139,152,169,.22)}'+
@@ -19584,28 +19659,123 @@ function railRollLane(EB, RB, rolls){
              'stroke-dasharray="5 27" vector-effect="non-scaling-stroke"/>'));
       var amt=''; try{ amt=usdBig(Math.abs(r.amt))||''; }catch(e1){}
       var ageL=(stuck && typeof r.ageMin==='number')?(' · '+(r.ageMin<60?(r.ageMin+'m'):(Math.floor(r.ageMin/60)+'h'+(r.ageMin%60)+'m'))):'';
-      // ⚠⚠ (v13.7) CLAMP AT THE EDGES, OR THE LABEL LANDS ON THE EL/EH PRICE.
-      // The label is centred on the midpoint of the arrow with translateX(-50%). When that midpoint is
-      // near either end, half the text hangs outside the track and collides with the rail's own end
-      // prices — reported live as blue text sitting on top of "7664 EL". The rail's NODE labels have
-      // solved this since v11.93 with exactly this rule (`rEdge`); the roll labels were written without
-      // it. ⚠ THE FIX EXISTED TEN LINES AWAY AND I DID NOT REUSE IT.
-      var mid=(xFrom+xTo)/2;
-      var lEdge=(mid>88) ? 'transform:translateX(-100%);' : ((mid<12) ? 'transform:translateX(0);' : '');
-      h+='<span class="g3rlab" style="left:'+mid.toFixed(1)+'%;top:'+(yTop-8)+'px;color:'+col+';'+lEdge+'"'+
-         g3tip('Size moved between strikes. '+r.from+' shed '+(usdBig(Math.abs(r.lost))||'')+' while '+
+      // (v14.0, user-directed) NO TEXT ON THE LANE. The v13.7 edge-clamp fought label collisions the
+      // user still saw ("it gets overlapped and i get the idea from just looking at the arrows"), so
+      // the label is GONE, not repositioned - direction and endpoints carry the meaning, and every
+      // number the label held lives in the arrowhead's hover, age included. The hover target is a
+      // padded 14x12px box around the head, because a 6px triangle alone is unhittable.
+      h+='<span style="position:absolute;left:'+xTo.toFixed(1)+'%;top:11px;transform:translateX(-50%);'+
+           'width:14px;height:12px;display:flex;align-items:flex-end;justify-content:center"'+
+         g3tip('ROLL '+(r.dir==='up'?'↑':'↓')+' '+frameNum(r.to*dsc)+(amt?(' · '+amt):'')+ageL+
+               ' — '+r.from+' shed '+(usdBig(Math.abs(r.lost))||'')+' while '+
                r.to+' took '+(usdBig(Math.abs(r.got))||'')+', seen on '+(r.count||'?')+' bars'+
-               (stuck?' \u2014 the window has slid past but the destination still holds what it received: the roll STUCK.':(r.live?' \u2014 still in flight.':'.'))+
-               ' \u26a0 Measured on our own data, a roll destination holds no better than a node that is simply GROWING \u2014 the pairing tells you WHERE size went, which is a story, not independent evidence. See FINDINGS F6.')+
-         '>ROLL '+(r.dir==='up'?'\u2191':'\u2193')+' '+frameNum(r.to*dsc)+(amt?(' \u00b7 '+amt):'')+ageL+'</span>'+
-         '<span style="position:absolute;left:'+xTo.toFixed(1)+'%;top:19px;transform:translateX(-50%);'+
-           'width:0;height:0;border-left:3px solid transparent;border-right:3px solid transparent;'+
-           'border-top:4px solid '+col+'"></span>';
+               (stuck?'. The window has slid past but the destination still holds what it received: the roll STUCK.':(r.live?'. Still in flight.':'.'))+
+               ' ⚠ Measured on our own data, a roll destination holds no better than a node that is simply GROWING — the pairing tells you WHERE size went, which is a story, not independent evidence. See FINDINGS F6.')+
+         '><i style="width:0;height:0;border-left:3px solid transparent;border-right:3px solid transparent;'+
+           'border-top:4px solid '+col+'"></i></span>';
     }
     if(!svg) return '';
     return '<div class="g3rl"><svg viewBox="0 0 1000 22" preserveAspectRatio="none">'+svg+'</svg>'+h+'</div>';
   }catch(e){ return ''; }
 }
+// ---- (v14.0) THE GAMMA PROFILE — a volume-profile of the flow book, under the rail --------------
+// Approved mockup 2026-08-25. Outline = the strike's DAY PEAK; fill = held NOW; the hollow part is
+// the position that CLOSED, live from Skylit — the thing IF's once-daily open interest cannot show.
+// Bars sit on the rail's own x-scale (SPX strike × live basis → ES), directly beneath their dots.
+// Rail strikes wear their role colours; every other harvested strike inside the rail is GREY —
+// present, but visibly less important (user-directed). CW/PW flags come from the IF ladder's CR/PS —
+// the ONLY book with a call/put split (measured live: Skylit's feed is not decomposable, |net|≡v on
+// every strike). The two books are never averaged; each states its own claim.
+function gammaProfileHtml(EB, RB, sym){
+  try{
+    if(!EB || !EB.ok || !velOk()) return '';
+    var dsc=1; try{ dsc=ifDispScale()||1; }catch(e0){}
+    if(!(dsc>0)) dsc=1;
+    var ps=[]; try{ ps=emPiles(EB, sym)||[]; }catch(e1){}
+    var railBy={}; ps.forEach(function(p){ railBy[p.k]=p; });
+    var rows=[];
+    for(var kk in PEAK.m){
+      var k=parseFloat(kk); if(!(k>0)) continue;
+      var pk=PEAK.m[kk]; if(!(pk>0)) continue;
+      var es=k*dsc, x=emPosRail(EB, es, RB);
+      if(!isFinite(x) || x<1.5 || x>98.5) continue;
+      var ve=velAt(k), cur=(ve&&ve.v&&typeof ve.v.cur==='number')?Math.abs(ve.v.cur):null;
+      rows.push({ k:k, es:es, x:x, peak:pk, cur:cur, rail:railBy[k]||null });
+    }
+    if(!rows.length) return '';
+    rows.sort(function(a,b){ return b.peak-a.peak; });
+    if(rows.length>28) rows=rows.slice(0,28);            // the tail would be sub-pixel anyway
+    var mx=rows[0].peak; if(!(mx>0)) return '';
+    var H=44, h2='';
+    rows.forEach(function(r){
+      var isRail=!!r.rail;
+      var col=isRail?(NODE_COL[r.rail.cls]||'#8b98a9'):'#5b6675';
+      // sqrt, the piles' own rule: a 100% King must not flatten a 30% strike into invisibility
+      var hPk=Math.max(3, Math.round(Math.sqrt(r.peak/mx)*H));
+      var hCur=Math.round(Math.sqrt(Math.min(r.cur||0, r.peak)/mx)*H);
+      if(r.cur!=null && r.cur>0 && hCur<1) hCur=1;
+      var pct=(r.cur!=null && r.peak>0)?Math.round(100*Math.min(1, r.cur/r.peak)):null;
+      var pcol=(pct==null)?'#8b98a9':(pct>=90?'#2ec27e':(pct<50?'#f0616d':'#e6edf3'));
+      var tip=esTick(r.es)+' (SPXW '+r.k+') — holds '+(r.cur!=null?usdBig(r.cur):'?')+' now against a day peak of '+usdBig(r.peak)+
+              (pct!=null?(' — '+pct+'% of its own peak'+
+                (pct>=95?': at its high, still building.':(pct<50?': mostly CLOSED — what defended this strike has left, and a vacated strike is a door, not a wall.':'.'))):'.')+
+              ' Outline = the most this strike held today (Skylit flow); fill = now; the hollow part is the position that closed intraday.'+
+              (isRail?'':' GREY: below the rail\'s strength floor — context, not a trade location.');
+      h2+='<i class="g3gpb" style="left:'+r.x.toFixed(1)+'%;width:'+(isRail?11:5)+'px;height:'+hPk+'px;border-color:'+col+(isRail?'':';opacity:.45')+'"'+g3tip(tip)+'>'+
+            (hCur>0?('<b style="height:'+Math.min(hCur,hPk-1)+'px;background:'+col+';opacity:'+(isRail?'.55':'.4')+'"></b>'):'')+
+          '</i>';
+      if(isRail && pct!=null)
+        h2+='<span class="g3gppct" style="left:'+r.x.toFixed(1)+'%;bottom:'+(hPk+2)+'px;color:'+pcol+'">'+pct+'%</span>';
+    });
+    // CW / PW — the IF ladder's CR and PS on the same x-scale, with the flow's verdict beneath them
+    var walls=[];
+    try{
+      var L=ifLadder(sym);
+      if(L && !L.err){
+        var seen={};
+        (L.rows||[]).forEach(function(rr){
+          var tag=(rr.id==='CR')?'CW':((rr.id==='PS')?'PW':null);
+          if(!tag || seen[tag]) return;
+          var wx=emPosRail(EB, rr.disp, RB);
+          if(!isFinite(wx) || wx<1.5 || wx>98.5) return;
+          seen[tag]=1;
+          var near=null;
+          rows.forEach(function(r){ if(Math.abs(r.es-rr.disp)<=3 && (near==null||Math.abs(r.es-rr.disp)<Math.abs(near.es-rr.disp))) near=r; });
+          var np=(near && near.cur!=null && near.peak>0)?Math.round(100*Math.min(1,near.cur/near.peak)):null;
+          walls.push({ tag:tag, disp:rr.disp, pct:np });
+          h2+='<span class="g3gpwall '+(tag==='CW'?'cw':'pw')+'" style="left:'+wx.toFixed(1)+'%"'+
+              g3tip((tag==='CW'
+                 ?'CALL WALL — InsiderFinance\'s Call Resistance: the most call-dominant strike above spot in their open-interest book (the rule that reproduced a published GEX table\'s tagged Call Wall exactly).'
+                 :'PUT WALL — InsiderFinance\'s Put Support: the most put-dominant strike below spot in their open-interest book.')+
+                ' Structure from once-daily OI. The bar beneath says whether the FLOW still defends it'+
+                (np!=null?(' — currently '+np+'% of its day peak.'):'.'))+
+              '>'+tag+'</span>';
+        });
+      }
+    }catch(e2){}
+    // x-axis: rail strikes labelled at their ES price (trim rule applies), grey strikes tick-only
+    var ax='';
+    rows.forEach(function(r){
+      ax+='<i class="g3gptick" style="left:'+r.x.toFixed(1)+'%"></i>';
+      if(r.rail) ax+='<span class="g3gpaxl'+((r.rail.role==='KING')?' k':'')+'" style="left:'+r.x.toFixed(1)+'%">'+esTick(r.es)+'</span>';
+    });
+    var pxX=emPosRail(EB, EB.now, RB);
+    if(isFinite(pxX)) ax+='<span class="g3gpaxl px" style="left:'+pxX.toFixed(1)+'%;top:-5px">▾</span>';
+    // one descriptive WALLS line: structure (IF) + whether the flow still defends it (Skylit)
+    var vh='';
+    if(walls.length){
+      var bits=walls.map(function(w){
+        var st=(w.pct==null)?'' : (w.pct>=70?' — defended ('+w.pct+'% of peak)':' — being dismantled ('+w.pct+'% of peak)');
+        return '<b>'+w.tag+' '+esTick(w.disp)+'</b>'+st;
+      });
+      var heavy=null; rows.forEach(function(r){ if(r.cur!=null && (heavy==null||r.cur>heavy.cur)) heavy=r; });
+      if(heavy) bits.push('heaviest now '+esTick(heavy.es)+' ('+usdBig(heavy.cur)+')');
+      vh='<div class="g3ndverd" style="margin-top:5px">'+bits.join(' · ')+'</div>';
+    }
+    return '<div class="g3gp">'+h2+'</div><div class="g3gpax">'+ax+'</div>'+vh;
+  }catch(e){ return ''; }
+}
+
 function emPiles(B, sym){
   // SKYLIT FIRST — the nodes are theirs. IF is a NAMED fallback, not a silent one.
   var sk=skPiles(B, sym);
@@ -20231,6 +20401,8 @@ function secFrame(sym){
   // The PHASE tag survives and moved to row 1: 2-3 characters, and the only thing that says POWER HOUR
   // during a live session.
   h+='</div>';
+  // (v14.0) the gamma profile hangs directly under the rail, on the SAME x-scale — see gammaProfileHtml
+  if(EB && EB.ok){ try{ h+=gammaProfileHtml(EB, RB, sym); }catch(eGP){ swallow('gammaProfile', eGP); } }
   // ---- (v11.57) THE SHAPE LINE: has this day already turned, and is anything left in it? ----
   // Goal 2 is not distance travelled, it is what REMAINS. Goal 3 is whether it could turn — either
   // because it is stretched, or because it has ALREADY turned once and may rotate again.
@@ -20981,7 +21153,10 @@ function nodesVerdict(TN, ROLLS, BIAS){
 function esTick(x){
   if(typeof x!=='number' || !isFinite(x)) return null;
   var q=Math.round(x*4)/4;
-  return q.toFixed(2);
+  // (v14.0, user-directed) a trailing .00 is noise — 7709.00 reads as 7709. A REAL tick keeps its
+  // decimals: 7706.50 stays 7706.50, distances like -22.75 are untouched.
+  var s=q.toFixed(2);
+  return (s.slice(-3)==='.00') ? s.slice(0,-3) : s;
 }
 // (v13.6) PERCENT IS THE COMPARABLE UNIT. +140K means nothing without knowing the node is $50M;
 // +0.3% is instantly readable and is what Skylit's own popup leads with. Dollars move to the hover.
@@ -21877,6 +22052,8 @@ function tick(){
   try{ nevBackfill(activeSym()); }catch(eNB){}
   // (v13.9) the roll latch counts sightings on the same closed-bar cadence (gated internally)
   try{ rollLatchTick(activeSym()); }catch(eRLt){}
+  // (v14.0) day-peak tracker for the gamma profile (max per tick, saved per bar)
+  try{ peakTick(activeSym()); }catch(ePk){}
   // (v10.55 PART A) the per-bar node-cluster memory the leg engine reads, then the
   // engine itself — evaluated once per closed bar and cached beside the spine.
   nodeHistSample('SPY');
@@ -21922,6 +22099,7 @@ function boot(){
   registerCoreFeatures();      // (v10.49 B) enroll every feature in DATA/ANALYSIS/TESTING/LEARNING
   trendLastLoad();             // (v10.54) rehydrate today's confirmed-trend memory (gpts_trendlast_v1)
   rollLatchLoad();             // (v13.9) today's latched rolls survive a reload (gpts_rolllatch_v1)
+  peakLoad();                  // (v14.0) day peaks survive a reload AND seed from today's recorded bars
   rulesLoad();                 // (v10.49 K) the mental model: localStorage + learning/rules.json
   rulesApply(true);            // (v10.54) BOOT is one of the only two moments the model may move
   render();

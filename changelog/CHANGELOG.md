@@ -1,3 +1,45 @@
+## v14.0 — the gamma profile under the rail, day peaks, and a quieter rail
+
+**1. THE GAMMA PROFILE** (approved mockup, operator-directed). A volume-profile of the FLOW book
+hanging directly under the rail, on the rail's own x-scale — every bar exactly beneath its node's
+dot, at the ES price (SPX strike × live basis). Outline = the strike's DAY PEAK; fill = held NOW;
+the hollow part is the position that CLOSED, live from Skylit — the thing IF's once-daily open
+interest cannot show intraday. Rail strikes wear their role colours with a %-of-own-peak label
+(green ≥90, red <50); every other harvested strike inside the rail draws GREY and thin — present,
+visibly less important (user-directed). X-axis of ES strikes beneath (trim rule applies), price ▾.
+
+**CW/PW flags ride the profile** at the IF ladder's CR and PS — the ONLY book with a call/put split.
+Measured live before building: Skylit's feed has |net|≡v on every strike, so a call wall is NOT
+computable from their book; IF's CR/PS rule previously reproduced a published table's tagged Call
+Wall and Put Wall exactly. One descriptive WALLS line beneath states structure (IF) beside whether
+the flow still defends it (Skylit %-of-peak at that strike) — the two books are stated side by side,
+never averaged. This is the SpotGamma decomposition: their walls = OI (here IF), their live flow =
+Skylit; the operator's question "which book is right?" had the answer "each owns half".
+
+**2. THE DAY-PEAK TRACKER** behind it: running max of harvested |cur| per SPXW strike
+(`gpts_peak_v1`, day-keyed, bar-gated writes, replay-guarded), SEEDED at boot from today's recorded
+`snap.vend` rows so an install mid-session still knows the morning's high-water marks.
+
+**3. Rail roll arrows lost their text** (operator: "it gets overlapped and i get the idea from just
+looking at the arrows"). The v13.7 edge-clamp fought label collisions; v14.0 removes the label
+rather than repositioning it again. Every number moves into the arrowhead's hover (padded to a
+14×12px target), age included.
+
+**4. Trailing .00 trimmed everywhere** esTick renders: 7709.00 → 7709; real ticks keep decimals
+(7706.50, −22.75). One rule, one function, so the NODES list and the profile axis cannot disagree.
+
+**5. The operator's support-roll hypothesis is now MEASURED**, not just believed. Stated verbatim
+intent: "sometimes they roll up to create support and sometimes they roll down to create support,
+as long as they are under price and price deflects." Both halves happened on the recording day:
+morning roll-DOWNS built 7665, afternoon roll-UPS (13:33–14:00) stair-stepped 7675/7680 under
+rising price. The `rolllatch` feature now records side-of-price per destination (`below`,
+`destBelowConf`) and carries question `rolllatch_dest_below`: do latched below-price destinations
+deflect better than below-price nodes that are merely growing (the F6 control)?
+
+Also: the "GEX auto-pull" scheduled task (every 2 minutes, legacy Drive-inbox delivery, idle since
+08-22) was identified as the cmd-window annoyance; removal is one command on the user's machine —
+`schtasks /Delete /TN "GEX auto-pull" /F`. The daily 15:30 data-push task stays.
+
 ## v13.9 — rolls that STICK, a connector with its own gutter, and a poisoned scale-pin
 
 Three fixes, all caught live on 2026-08-25 by the operator.
