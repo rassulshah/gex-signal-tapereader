@@ -133,7 +133,8 @@ function node(k,v,n){ const seq=[]; for(let i=0;i<n;i++) seq.push({t:T-(n-1-i)*1
   ok(/stroke-dasharray/.test(h),'IF levels are DASHED lines — not the same visual language as the Skylit markers');
   ok((h.match(/stroke-dasharray/g)||[]).length>=2,'and each is drawn in two segments so the centred label is never overprinted');
   ok(/>CR [\d.]+</.test(h),'and they are labelled with name AND price, so you never have to remember which book a line came from');
-  ok(/IF · structure/.test(h) && /Skylit · flow/.test(h),'the two zones are named on the face — structure left, flow right');
+  ok(/>NODES<\/text>/.test(src) && /Skylit \u00b7 flow/.test(src),
+   'the one remaining zone is named on the face \u2014 NODES flow, left (v13.0)');
   global.ifLadder=()=>({err:'off for this test'});
 }
 {
@@ -217,6 +218,7 @@ function node(k,v,n){ const seq=[]; for(let i=0;i<n;i++) seq.push({t:T-(n-1-i)*1
   HIST.SPY={}; STATE.SPY.candles=bars(30); node(766.5,+70,20);
   const h=nodeChartHtml('SPY');
   ok(!/call-dominant/.test(h.replace(/title="[^"]*"/g,'')),'the legend ROW is gone from the face — there is no vertical space for a key');
-  ok(/KEY — green bars are positive gamma/.test(src),'and the key lives in the chart hover instead');
+  ok(/KEY \u2014 yellow node markers are call-dominant/.test(src),
+   'and the key lives in the chart hover instead');
 }
 console.log('\n'+pass+' pass / '+fail+' fail');

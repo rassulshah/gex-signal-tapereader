@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    12.7
+// @version    13.0
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -561,7 +561,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='12.7';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='13.0';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -19713,48 +19713,22 @@ function nodeChartHtml(sym){
     // with 60m and 15m growth ticks, telling you what is happening to them now. The middle is price,
     // and level labels sit ON their own lines so neither gutter is spent on text.
     var W=416, HGT=NCHART_H+38, TOP=8, BOT=24;
-    var GX=3, GW=26, DX=31, DW=26;              // structure, left
-    var SX=350, SW=62;                           // flow, right
-    var PL=64, PR=344;                           // price, centre
+    // (v13.0, user-directed) TWO ZONES, not three. The InsiderFinance GEX and DEX profiles are gone;
+    // the Skylit NODE flow profile takes the left gutter they occupied, and the price plot takes back
+    // the whole right side. ⚠ THE BARS NOW GROW RIGHTWARD from the left edge, so they still point IN
+    // toward price — anchoring them at the gutter's right edge would have pointed them away from it.
+    var SX=3, SW=56;                             // flow (NODES), left — was right
+    var PL=64, PR=410;                           // price, taking the space the flow column vacated
     var ih=HGT-TOP-BOT, iw=PR-PL;
     function X(t){ return PL + ((t-t0)/(t1-t0))*iw; }
     function Y(p){ return TOP + (1-((p-lo)/(hi-lo)))*ih; }
     var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(e9){}
     var g='';
 
-    // ---------- LEFT: net GEX and net DEX, BOTH from their chain ----------
-    // (v11.43) The GEX column drew SKYLIT gamma under a caption that says "IF · structure". Two books,
-    // one label. It now draws THEIR gamma beside THEIR delta, which is also what makes the depth score
-    // meaningful — a level compared to the book it came from. Skylit gamma keeps the flow side.
-    var gexN=0, dexN=0;
-    try{
-      var dc0=ifChain((sym==='QQQ')?'QQQ':'SPX');
-      var ds0=(dc0&&!dc0.err&&dc0.toFri&&dc0.toFri.ds)?dc0.toFri.ds:null;
-      var sc0=1; try{ var IL0=ifLadder(sym); if(IL0&&!IL0.err&&IL0.undScale) sc0=IL0.undScale; }catch(eS0){}
-      function drawProf(list, x0, w, sign){
-        if(!list||!list.length) return 0;
-        var mx=0, keep=[];
-        for(var i=0;i<list.length;i++){
-          var ku=list[i][0]*sc0; if(ku<lo||ku>hi) continue;
-          var v=list[i][1], a2=Math.abs(v); if(a2>mx) mx=a2;
-          keep.push([ku,v]);
-        }
-        if(!(mx>0)||!keep.length) return 0;
-        var bh=Math.max(1.8, Math.min(5, ih/Math.max(8,keep.length)*0.72));
-        for(var j=0;j<keep.length;j++){
-          var y=Y(keep[j][0])-bh/2, wpx=Math.max(1.2,(Math.abs(keep[j][1])/mx)*(w-2));
-          g+='<rect x="'+x0+'" y="'+y.toFixed(1)+'" width="'+wpx.toFixed(1)+'" height="'+bh.toFixed(1)+
-             '" fill="'+((keep[j][1]*sign>0)?'#2ec27e':'#a371f7')+'" opacity="0.70"/>';
-        }
-        return keep.length;
-      }
-      if(ds0){
-        gexN=drawProf(ds0.gexProf, GX, GW, 1);    // their sign is call-minus-put: positive = long gamma
-        dexN=drawProf(ds0.dexProf, DX, DW, 1);
-      }
-    }catch(eG){}
-    g+='<line x1="'+GX+'" y1="'+TOP+'" x2="'+GX+'" y2="'+(TOP+ih)+'" stroke="#1e2530" stroke-width="0.7"/>';
-    g+='<line x1="'+DX+'" y1="'+TOP+'" x2="'+DX+'" y2="'+(TOP+ih)+'" stroke="#1e2530" stroke-width="0.7"/>';
+    // ---------- (v13.0) THE IF STRUCTURE PROFILES ARE REMOVED ----------
+    // Two gutter columns of once-a-day open-interest stock, competing for width with the live
+    // tape. `ifChain`/`ifLadder` still feed the LEVELS engine and the depth tiers; only these two
+    // drawn profiles are gone, so nothing that reads the chain lost its input.
 
     // ---------- RIGHT: Skylit flow, pointing INWARD, drawn as growth segments ----------
     // (v11.39) Two corrections. The bars now grow LEFTWARD from the right edge, so both profiles point
@@ -19762,8 +19736,8 @@ function nodeChartHtml(sym){
     // the SEGMENTS, not a tick mark: the oldest portion is dim, 60m→15m is mid, and the last 15 minutes
     // is bright. A node that is accumulating shows a bright leading edge; one that is bleeding shows
     // dim length with nothing new on the front. That is the brightest-newest encoding from the design.
-    var flowN=0, SXR=SX+SW;                       // right edge — bars anchor here and grow inward
-    g+='<line x1="'+SXR+'" y1="'+TOP+'" x2="'+SXR+'" y2="'+(TOP+ih)+'" stroke="#1e2530" stroke-width="0.7"/>';
+    var flowN=0, SXA=SX;                          // LEFT edge — bars anchor here and grow toward price
+    g+='<line x1="'+(SX+SW)+'" y1="'+TOP+'" x2="'+(SX+SW)+'" y2="'+(TOP+ih)+'" stroke="#1e2530" stroke-width="0.7"/>';
     (function(){
       function at(seq, msBack){
         var cut=t1-msBack, best=null;
@@ -19796,7 +19770,7 @@ function nodeChartHtml(sym){
         var w60=Math.min(r60,wNow), w15=Math.max(w60,Math.min(r15,wNow));
         function seg(from,to,op){
           if(to<=from) return;
-          g+='<rect x="'+(SXR-to).toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+(to-from).toFixed(1)+
+          g+='<rect x="'+(SXA+from).toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+(to-from).toFixed(1)+
              '" height="4.4" fill="'+col+'" opacity="'+op+'"/>';
         }
         seg(0,   w60, '0.30');                     // held for over an hour
@@ -19804,7 +19778,7 @@ function nodeChartHtml(sym){
         seg(w15, wNow,'0.95');                     // added in the last 15 minutes — the live edge
         // a node that SHRANK has its lost ground marked, so decay is visible rather than merely absent
         if(r15>wNow+0.6){
-          g+='<line x1="'+(SXR-Math.min(maxW,r15)).toFixed(1)+'" y1="'+(y+0.4).toFixed(1)+'" x2="'+(SXR-wNow).toFixed(1)+
+          g+='<line x1="'+(SXA+Math.min(maxW,r15)).toFixed(1)+'" y1="'+(y+0.4).toFixed(1)+'" x2="'+(SXA+wNow).toFixed(1)+
              '" y2="'+(y+3.8).toFixed(1)+'" stroke="'+col+'" stroke-width="0.7" opacity="0.35"/>';
         }
         flowN++;
@@ -19959,19 +19933,17 @@ function nodeChartHtml(sym){
       g+='<line x1="'+PL+'" y1="'+(TOP+ih)+'" x2="'+PR+'" y2="'+(TOP+ih)+'" stroke="#1e2530" stroke-width="0.7"/>';
     })();
     // zone captions
-    g+='<text x="'+GX+'" y="'+(HGT-5)+'" font-size="6" fill="#8b98a9" font-weight="700">GEX</text>';
-    g+='<text x="'+DX+'" y="'+(HGT-5)+'" font-size="6" fill="#8b98a9" font-weight="700">DEX</text>';
-    g+='<text x="'+(PL+2)+'" y="'+(HGT-5)+'" font-size="6" fill="#5b6675">◀ IF · structure</text>';
-    g+='<text x="'+(PR-2)+'" y="'+(HGT-5)+'" font-size="6" fill="#5b6675" text-anchor="end">Skylit · flow ▶</text>';
-    g+='<text x="'+(SX+SW)+'" y="'+(HGT-5)+'" font-size="6" fill="#8b98a9" font-weight="700" text-anchor="end">NODES</text>';
+    g+='<text x="'+SX+'" y="'+(HGT-5)+'" font-size="6" fill="#8b98a9" font-weight="700">NODES</text>';
+    g+='<text x="'+(PR-2)+'" y="'+(HGT-5)+'" font-size="6" fill="#5b6675" text-anchor="end">Skylit · flow</text>';
 
-    var tip='What is this picture telling you? LEFT is InsiderFinance STRUCTURE — net gamma, then net delta, from their chain. '+
-            'It refreshes once a day and it tells you WHERE THE WALLS ARE: gamma for how price moves at them, delta for which way hedging pushes. '+
-            'RIGHT is Skylit FLOW — live node strength, with tick marks showing where each node stood 60 and 15 minutes ago. '+
-            'A bar reaching well past both ticks is accumulating; a bar behind them is bleeding. That is the level being defended or abandoned, in real time. '+
-            'MIDDLE is price. Node rows brighten as they strengthen, an arrow appears when mass transfers between strikes, and level labels sit on their own lines so neither side is spent on text. '+
-            'Read it left to right: structure tells you where, flow tells you whether it is still true. '+
-            'KEY — green bars are positive gamma and purple negative; yellow node markers are call-dominant and purple put-dominant; '+
+    var tip='What is this picture telling you? LEFT is Skylit NODE FLOW — live node strength, drawn as growth segments. '+
+            'A bar is a level the market is holding options against, and its LENGTH is how much. Bars grow toward price, so the longest reach nearest the candles. '+
+            'The dim portion is what the node has held for over an hour, the mid portion is what it added between 60 and 15 minutes ago, and the bright leading edge is the last 15 minutes. '+
+            'A bright front edge is accumulation happening NOW; a bar with no bright edge is bleeding, and a thin diagonal marks ground it has actually lost. '+
+            'That is the level being defended or abandoned, in real time. '+
+            'RIGHT is price on the same vertical scale, so a candle meeting a bar is a test of that node. '+
+            'Node rows brighten as they strengthen and an arrow appears when mass transfers between strikes. '+
+            'KEY — yellow node markers are call-dominant and purple put-dominant; '+
             'the orange line is the 50-SMA; on the flow bars the dim portion is what a node has held for over an hour, the mid portion is what it added between 60 and 15 minutes ago, '+
             'and the bright leading edge is the last 15 minutes. A bright front edge is accumulation happening now.';
     var defs='<defs>'+
@@ -20048,9 +20020,15 @@ function tradeNodes(sym){
 function pbNodeK(sym){
   try{ var pb=pbEntryPick(sym); return (pb&&pb.ok&&pb.level!=null)?pb.level:null; }catch(e){ return null; }
 }
+// (v13.0, user-directed) THE LEVELS BLOCK IS HIDDEN, NOT DELETED — "for now".
+// ⚠ THE LOOP STILL RUNS. `atLevel` from that loop is what sets G3_AT_LEVEL, and G3_AT_LEVEL is what
+// steps ③ REACTION and ④ EXECUTE are computed from. Deleting the loop to hide the rows would have
+// silently disarmed the bottom half of the panel. Only the row HTML is suppressed.
+var LOC_SHOW_LEVELS=false;
 function secLoc(sym){
   var L=null; try{ L=ifLadder(sym); }catch(e){ L={err:String(e&&e.message||e)}; }
-  var h='<div class="g3b">';
+  // ① FRAME's badges, target, EL/EH rail and read line now open this section
+  var h=secFrame(sym)+'<div class="g3b">';
   if(!L || L.err){
     h+='<div class="g3blk" style="border-color:rgba(242,180,90,.45);background:rgba(242,180,90,.08)"'+
        g3tip('The ladder reads InsiderFinance and only InsiderFinance. Skylit measures flow and IF measures open-interest stock — they are different quantities, so substituting one for the other would change what the numbers mean without changing how they look.')+
@@ -20068,7 +20046,7 @@ function secLoc(sym){
   var placed=false, atLevel=null;
   rows.forEach(function(r){
     if(!placed && r.disp<px){
-      h+='<div class="g3prow"'+g3tip('Where is price sitting in the level set? Everything above this row is overhead structure, everything below is support. Between two levels there is no trade location yet — this whole step stays unlit until price reaches one.')+'><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+dispNum(px)+'</span></div>';
+      if(LOC_SHOW_LEVELS) h+='<div class="g3prow"'+g3tip('Where is price sitting in the level set? Everything above this row is overhead structure, everything below is support. Between two levels there is no trade location yet — this whole step stays unlit until price reaches one.')+'><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+dispNum(px)+'</span></div>';
       placed=true;
     }
     var d=r.disp-px;
@@ -20079,7 +20057,7 @@ function secLoc(sym){
     var far=(zone!=null && Math.abs(d)>zone*14)?' g3far':'';
     var band=isMag?' g3band':'';
     var pulse=near?' g3pulse':'';
-    h+='<div class="g3r'+far+band+'"'+g3tip('What is this level and how far away? '+g3esc(r.id)+' from InsiderFinance\'s chain, shown on this chart\'s scale, with the distance from price on the right. The band is a zone, not a line. A diamond means the strike is heavy in their gamma book, their delta book, or both — and both is the hardest kind of level to pass.')+'>'+
+    if(LOC_SHOW_LEVELS) h+='<div class="g3r'+far+band+'"'+g3tip('What is this level and how far away? '+g3esc(r.id)+' from InsiderFinance\'s chain, shown on this chart\'s scale, with the distance from price on the right. The band is a zone, not a line. A diamond means the strike is heavy in their gamma book, their delta book, or both — and both is the hardest kind of level to pass.')+'>'+
        '<span class="g3nm'+pulse+'" style="color:'+col+'">'+g3esc(r.id)+'</span>'+
        '<span class="g3v'+pulse+'"'+g3tip('Their strike is '+r.k+' on '+L.srcSym+'; shown here at '+r.disp+' using the live basis '+L.dispScale+'.')+'>'+dispNum(r.disp)+'</span>'+
        (zone!=null?'<span class="g3zn"'+g3tip('How far through a level can price go before it has failed? A level is a zone, not a line. This band is scaled from ATR, so it widens when the tape is fast. Price can trade inside it and the level still holds; a close beyond it is a break.')+'>±'+dispNum(zone)+'</span>':'')+
@@ -20098,7 +20076,7 @@ function secLoc(sym){
        })()+
        '<span class="g3d '+dcls(d)+'">'+(d>0?'+':'')+dispNum(+d.toFixed(2))+'</span></div>';
   });
-  if(!placed) h+='<div class="g3prow"'+g3tip('Where is price sitting in the level set? Below every level shown, so all of this structure is overhead.')+'><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+dispNum(px)+'</span></div>';
+  if(!placed && LOC_SHOW_LEVELS) h+='<div class="g3prow"'+g3tip('Where is price sitting in the level set? Below every level shown, so all of this structure is overhead.')+'><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+dispNum(px)+'</span></div>';
   var bits=[L.srcSym];
   bits.push(L.rolled?'to next Fri (rolled)':'to Fri');
   if(L.nExps) bits.push(L.nExps+' exps');
@@ -20275,25 +20253,28 @@ function secExec(sym){
 
 // ---- which step are we actually on ----
 function stepState(sym){
-  var st=[false,false,false,false,false], wait='';
+  // (v13.0) FOUR steps: TREND, LOCATION, REACTION, EXECUTE.
+  // ⚠ THE GAMMA BOOK IS STILL A PRECONDITION, it just is not a STEP. Regime decides which playbook is
+  // legal; it is not something the trader waits to complete. It gates the `wait` message and nothing
+  // else, so a missing gamma book still says so instead of silently reading as "trend not ready".
+  var st=[false,false,false,false], wait='';
   try{
     var R=regime2D(sym), B=biasVotes(sym), U=null;
     try{ U=lvlUnified(sym); }catch(e){}
-    st[0]=(R.g!=null);
-    st[1]=(B.live>=3 && B.dir!==0);
-    st[2]=!!(U&&U.rows&&U.rows.length && G3_AT_LEVEL);
+    st[0]=(B.live>=3 && B.dir!==0);
+    st[1]=!!(U&&U.rows&&U.rows.length && G3_AT_LEVEL);
     var rj=null; try{ rj=G3_AT_LEVEL?paReject(sym,G3_AT_LEVEL.k):null; }catch(e){}
-    st[3]=!!rj;
+    st[2]=!!rj;
     var pb=null; try{ pb=pbEntryPick(sym); }catch(e){}
-    st[4]=!!(pb && pb.ok && pb.level!=null);   // (v11.45) a trade is off a NODE — `entry` never existed
-    if(!st[0]) wait='waiting on the <b>gamma book</b>';
-    else if(!st[1]) wait=(B.live<3)?'waiting on <b>more inputs</b> — '+B.live+' of 6 live':'bias is <b>neutral</b> — no side yet';
-    else if(!st[2]) wait='price is <b>between levels</b> — no trade location';
-    else if(!st[3]) wait='at <b>'+g3esc(G3_AT_LEVEL?fmtLvl(G3_AT_LEVEL.k):'the level')+'</b> — waiting on a reaction';
-    else if(!st[4]) wait='reaction confirmed — <b>waiting on a node</b>';
-    else wait='<b>armed</b> — all five steps satisfied';
+    st[3]=!!(pb && pb.ok && pb.level!=null);   // (v11.45) a trade is off a NODE — `entry` never existed
+    if(R.g==null) wait='waiting on the <b>gamma book</b>';
+    else if(!st[0]) wait=(B.live<3)?'waiting on <b>more inputs</b> — '+B.live+' of 6 live':'trend is <b>neutral</b> — no side yet';
+    else if(!st[1]) wait='price is <b>between levels</b> — no trade location';
+    else if(!st[2]) wait='at <b>'+g3esc(G3_AT_LEVEL?fmtLvl(G3_AT_LEVEL.k):'the level')+'</b> — waiting on a reaction';
+    else if(!st[3]) wait='reaction confirmed — <b>waiting on a node</b>';
+    else wait='<b>armed</b> — all four steps satisfied';
   }catch(e){}
-  var cur=0; for(var i=0;i<5;i++){ if(st[i]) cur=i+1; else break; }
+  var cur=0; for(var i=0;i<st.length;i++){ if(st[i]) cur=i+1; else break; }
   return { done:st, cur:cur, wait:wait };
 }
 
@@ -20494,28 +20475,32 @@ window.__gptsDebug.rolls    = function(s){ return rollDetect(s||activeSym()); };
 window.__gptsDebug.nodeChart= function(s){ var sy=s||activeSym(); var H=HIST[sy]||{}; var n=0,pts=0;
   for(var k in H){ var q=(H[k].seq||[]).length; if(q){ n++; pts+=q; } }
   return { strikes:n, points:pts, svgChars:nodeChartHtml(sy).length, histMax:HIST_MAX, windowMin:NCHART_MIN }; };
-var STEP_NAMES=['① FRAME','② BIAS','③ TRADE LOCATION','④ REACTION','⑤ EXECUTE'];
-var STEP_SHORT=['① FRAME','② BIAS','③ LOCATION','④ REACTION','⑤ EXECUTE'];
+// (v13.0) FOUR STEPS. ① FRAME is dissolved: it was never a place you DID anything, it was context
+// for everything below it. Its badges, target and read line now sit at the top of ② LOCATION,
+// beside the chart they describe. BIAS is renamed TREND, because that is the word for what it
+// measures, and it leads — you read the trend before you look for a location in it.
+// ⚠ secFrame() SURVIVES as a renderer and is called by secLoc. It is not a section any more.
+var STEP_NAMES=['① TREND','② LOCATION','③ REACTION','④ EXECUTE'];
+var STEP_SHORT=['① TREND','② LOCATION','③ REACTION','④ EXECUTE'];
 var STEP_TIPS=[
- 'WHICH PLAYBOOK IS LEGAL TODAY? Read this before hunting for anything. Negative gamma means dealers amplify moves: breaks work, fades get run over, and stops need room. Positive gamma means they damp: levels hold, fades work, breakouts fail. Trading a fade in −γ is not a slightly worse trade, it is the wrong trade. Check it at the open and again if the regime flips.',
- 'WHICH WAY, AND HOW MUCH SHOULD YOU TRUST IT? The 50-SMA gives the direction; the three chips tell you whether to believe it. Three of three is a day to press. One of three is a day for half size or none. FLAT means the SMA has no side, and the honest answer is that there is no trend trade here.',
- 'WHERE WOULD YOU ACTUALLY TRADE? You trade AT levels, never between them. If price is mid-range there is no trade yet, and this step stays unlit. The ladder gives you the walls; the chart shows how price is behaving as it approaches and whether the node there is building or dying.',
- 'IS THE LEVEL DOING SOMETHING? This is the trigger, and it is the step most people skip. Price reaching a level is not a signal — the level defending itself is. A rejection wick that closes back inside, node dollars growing into the test, VIX ticking up while price holds highs. No reaction means no trade, however good the location looked.',
- 'DO YOU TAKE IT, OR REFUSE IT? Entry, stop, target, R-multiple — or nothing. A blank here is a result: the regime or the R:R floor vetoed it. A day with two setups and eight refusals is this working, not failing.'];
+ 'WHICH WAY, AND HOW MUCH SHOULD YOU TRUST IT? The 50-SMA gives the direction; the chips tell you whether to believe it. Four of four is a day to press. One of four is a day for half size or none. FLAT means the SMA has no side, and the honest answer is that there is no trend trade here. The regime badge now sits in \u2461 LOCATION, beside the chart it governs \u2014 negative gamma means breaks work and fades get run over, positive gamma the reverse.',
+ 'WHERE WOULD YOU ACTUALLY TRADE? You trade AT levels, never between them. If price is mid-range there is no trade yet, and this step stays unlit. The rail shows the walls and where price sits between them; the chart shows how price is behaving as it approaches and whether the node there is building or dying.',
+ 'IS THE LEVEL DOING SOMETHING? This is the trigger, and it is the step most people skip. Price reaching a level is not a signal \u2014 the level defending itself is. A rejection wick that closes back inside, node dollars growing into the test, VIX ticking up while price holds highs. No reaction means no trade, however good the location looked.',
+ 'DO YOU TAKE IT, OR REFUSE IT? Entry, stop, target, R-multiple \u2014 or nothing. A blank here is a result: the regime or the R:R floor vetoed it. A day with two setups and eight refusals is this working, not failing.'];
 function panelV3(sym){
   ensureV3Css();
   var S=stepState(sym);
   var h='<div class="g3">';
   h+='<div class="g3steps">';
-  for(var i=0;i<5;i++){
+  for(var i=0;i<STEP_SHORT.length;i++){
     var cls=S.done[i]?'done':((i===S.cur)?'on':'');
     h+='<span class="'+cls+'"'+g3tip(STEP_TIPS[i])+'>'+STEP_SHORT[i]+'</span>';
   }
   h+='</div>';
   // (v11.36) the "waiting on" line is gone — it restated in small grey type what BIAS says two rows
   // below in large type. The step bar already shows where you are.
-  var secs=[secFrame, secBias, secLoc, secReact, secExec];
-  for(var j=0;j<5;j++){
+  var secs=[secBias, secLoc, secReact, secExec];   // secFrame is rendered INSIDE secLoc now
+  for(var j=0;j<secs.length;j++){
     var c=S.done[j]?'done':((j===S.cur)?'on':'');
     h+='<span class="g3sh '+c+'"'+g3tip(STEP_TIPS[j])+'>'+STEP_NAMES[j]+'</span>';
     try{ h+=secs[j](sym); }catch(eS){ swallow('section'+(j+1), eS); h+='<div class="g3b"><div class="g3rx"><span style="color:#f0616d">'+g3esc(String(eS&&eS.message||eS))+'</span></div></div>'; }

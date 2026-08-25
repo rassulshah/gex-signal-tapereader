@@ -1,0 +1,151 @@
+<!doctype html><html><head><meta charset="utf-8"><title>v13 layout mockup</title>
+<style>
+body{background:#0b0e14;color:#e6edf3;font:12px/1.45 Inter,Arial,sans-serif;margin:0;padding:20px}
+.wrap{display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap}
+.panel{width:392px;background:#0f131b;border:1px solid #232a36;border-radius:8px;padding:9px 10px}
+h3{font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:#8b98a9;margin:0 0 7px;font-weight:800}
+.steps{display:flex;gap:4px;margin-bottom:9px}
+.step{flex:1;text-align:center;font-size:8.5px;font-weight:800;letter-spacing:.3px;padding:3px 0;border:1px solid #232a36;border-radius:4px;color:#8b98a9}
+.step.on{color:#e3c341;border-color:#4a3f1c;background:#1a1710}
+.sec{border:1px solid #232a36;border-radius:5px;margin-bottom:9px;overflow:hidden}
+.sechd{background:#161c27;padding:3px 8px;font-size:9px;font-weight:800;letter-spacing:.7px;text-align:center;color:#e3c341;text-transform:uppercase}
+.secbody{padding:8px}
+.trendrow{display:flex;gap:9px;align-items:flex-start}
+.arrow{color:#5ec2a8;font-size:19px;line-height:1}
+.tword{font-size:19px;font-weight:800;color:#5ec2a8;line-height:1.05}
+.tnote{color:#8b98a9;font-size:10.5px;flex:1}
+.badges{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
+.b{font-size:8.5px;font-weight:800;padding:2px 6px;border-radius:3px;border:1px solid #2a3342;color:#8b98a9}
+.b.up{color:#5ec2a8;border-color:#265045}.b.dn{color:#e0645f;border-color:#5a2b29}
+.b.off{color:#5b6675;border-style:dashed}
+.conf{text-align:right;color:#5ec2a8;font-size:9px;font-weight:800;margin-top:5px}
+.locbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.pill{font-size:8.5px;font-weight:800;padding:2px 6px;border-radius:3px;border:1px solid #2a3342;color:#c9d4e2}
+.tgt{margin-left:auto;color:#e0645f;font-size:12px;font-weight:800}
+.read{color:#8b98a9;font-size:10.5px;margin:2px 0 8px}
+.nodes{margin-top:8px}
+.nrow{display:grid;grid-template-columns:52px 1fr 52px 46px;gap:6px;align-items:center;padding:3px 2px;font-size:11px;border-top:1px solid #1c222d}
+.nrow b{font-weight:800}
+.pct{color:#8b98a9;font-size:10px}
+.pos{color:#5ec2a8;font-weight:700;text-align:right}
+.tag{font-size:8px;color:#8b98a9;border:1px solid #2a3342;border-radius:3px;padding:1px 4px;text-align:center}
+.gone{width:392px;color:#8b98a9;font-size:11.5px}
+.gone h4{color:#e0645f;font-size:10px;letter-spacing:.5px;text-transform:uppercase;margin:16px 0 5px}
+.gone code{background:#161c27;padding:1px 5px;border-radius:3px;color:#c9d4e2;font-size:10.5px}
+.flag{border:1px solid #4a3f1c;background:#14110a;border-radius:5px;padding:8px 10px;margin-top:14px}
+.flag b{color:#e3c341}
+</style></head><body>
+<div class="wrap">
+
+<div class="panel">
+  <div class="steps">
+    <div class="step on">① TREND</div><div class="step">② LOCATION</div>
+    <div class="step">③ REACTION</div><div class="step">④ EXECUTE</div>
+  </div>
+
+  <div class="sec">
+    <div class="sechd">① Trend</div>
+    <div class="secbody">
+      <div class="trendrow">
+        <span class="arrow">↑</span>
+        <div><div class="tword">UPTREND<br>BRK</div></div>
+        <div class="tnote">1 of 20 bars above the 50-SMA — lost 15, reversal needs 11 the other way</div>
+      </div>
+      <div class="badges">
+        <span class="b up">SKEW ↑</span><span class="b dn">ACCUM ↓</span>
+        <span class="b">CROSS →</span><span class="b off">ROLL —</span><span class="b off">DRIFT ✗</span>
+      </div>
+      <div class="conf">1 of 4 confirm</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sechd">② Location</div>
+    <div class="secbody">
+      <div class="locbar">
+        <span class="pill">−G +V</span><span class="pill">BREAKS</span>
+        <span class="tgt">T: 7650 <span style="font-size:9px">−55</span></span>
+      </div>
+      <div class="read">Nothing sizeable between 7705 and 7730. Then down 7700 (44% brake, 5 away), nothing above.</div>
+
+      <svg viewBox="0 0 360 250" width="360" height="250" style="display:block">
+        <!-- shared y scale: 7642 (bottom) .. 7730 (top) -->
+        <!-- RAIL as the y-axis -->
+        <line x1="34" y1="8" x2="34" y2="228" stroke="#2a3342" stroke-width="7"/>
+        <!-- EH -->
+        <text x="30" y="12" font-size="7" fill="#8b98a9" text-anchor="end" font-weight="700">EH 7730</text>
+        <!-- EL -->
+        <text x="30" y="232" font-size="7" fill="#8b98a9" text-anchor="end" font-weight="700">EL 7661</text>
+        <!-- nodes on the rail -->
+        <rect x="29" y="86" width="11" height="9" fill="#7d5bd6"/>
+        <text x="44" y="93" font-size="7.5" fill="#c3b0f0" font-weight="800">7700 · 44% brake</text>
+        <rect x="29" y="150" width="11" height="7" fill="#e3c341"/>
+        <text x="44" y="156" font-size="7.5" fill="#e3c341" font-weight="800">7672 · 57%</text>
+        <rect x="29" y="196" width="11" height="10" fill="#e3c341"/>
+        <text x="44" y="203" font-size="7.5" fill="#e3c341" font-weight="800">7662 · 100%</text>
+        <!-- target -->
+        <polygon points="26,214 34,209 34,219" fill="#e0645f"/>
+        <text x="24" y="217" font-size="7" fill="#e0645f" text-anchor="end" font-weight="800">T</text>
+        <!-- price dot -->
+        <circle cx="34" cy="205" r="5.5" fill="#e6edf3" stroke="#0b0e14" stroke-width="2"/>
+        <text x="44" y="222" font-size="7.5" fill="#e6edf3" font-weight="800">7652.82</text>
+
+        <!-- candles sharing that scale -->
+        <g stroke-width="1">
+          <line x1="150" y1="188" x2="150" y2="212" stroke="#5ec2a8"/><rect x="147" y="194" width="6" height="12" fill="#5ec2a8"/>
+          <line x1="164" y1="184" x2="164" y2="208" stroke="#e0645f"/><rect x="161" y="190" width="6" height="13" fill="#e0645f"/>
+          <line x1="178" y1="190" x2="178" y2="214" stroke="#5ec2a8"/><rect x="175" y="196" width="6" height="11" fill="#5ec2a8"/>
+          <line x1="192" y1="186" x2="192" y2="210" stroke="#e0645f"/><rect x="189" y="192" width="6" height="14" fill="#e0645f"/>
+          <line x1="206" y1="192" x2="206" y2="216" stroke="#5ec2a8"/><rect x="203" y="198" width="6" height="12" fill="#5ec2a8"/>
+          <line x1="220" y1="188" x2="220" y2="214" stroke="#e0645f"/><rect x="217" y="195" width="6" height="13" fill="#e0645f"/>
+          <line x1="234" y1="194" x2="234" y2="218" stroke="#5ec2a8"/><rect x="231" y="200" width="6" height="12" fill="#5ec2a8"/>
+          <line x1="248" y1="196" x2="248" y2="220" stroke="#e0645f"/><rect x="245" y="202" width="6" height="13" fill="#e0645f"/>
+        </g>
+        <!-- node price lines carried across the chart -->
+        <line x1="40" y1="90" x2="300" y2="90" stroke="#7d5bd6" stroke-dasharray="3 3" stroke-width=".8" opacity=".55"/>
+        <line x1="40" y1="153" x2="300" y2="153" stroke="#e3c341" stroke-dasharray="3 3" stroke-width=".8" opacity=".55"/>
+        <line x1="40" y1="201" x2="300" y2="201" stroke="#e3c341" stroke-dasharray="3 3" stroke-width=".8" opacity=".55"/>
+        <!-- NODES column kept on the right -->
+        <rect x="306" y="86" width="30" height="9" fill="#7d5bd6" opacity=".8"/>
+        <rect x="306" y="150" width="17" height="7" fill="#7d5bd6" opacity=".8"/>
+        <rect x="306" y="196" width="38" height="10" fill="#7d5bd6" opacity=".8"/>
+        <text x="352" y="243" font-size="6" fill="#8b98a9" text-anchor="end" font-weight="700">NODES</text>
+        <text x="150" y="243" font-size="6" fill="#8b98a9" font-weight="700">14:00</text>
+        <text x="240" y="243" font-size="6" fill="#8b98a9" font-weight="700">14:30</text>
+      </svg>
+
+      <div class="nodes">
+        <div class="nrow"><span class="pct">▼ 100%</span><b>7652.1</b><span class="tag">Acm</span><span class="pos">+0.6</span></div>
+        <div class="nrow"><span class="pct">▼ 57%</span><b>7662.08</b><span class="tag">Dec</span><span class="pos">+10.58</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="gone">
+  <h4>Renamed / moved</h4>
+  ② BIAS → <b>① TREND</b>, now the first section. Step bar drops to four steps.<br>
+  ① FRAME is <b>dissolved</b> — its badges (<code>−G +V</code>, <code>BREAKS</code>), the target
+  <code>T: 7650 −55</code>, EL/EH and the grey read line all move into ② LOCATION above the chart.
+
+  <h4>Removed</h4>
+  The whole levels block: <code>CR</code> <code>CR0</code> <code>MP*</code> <code>FLIP</code>
+  <code>SPXW</code> <code>PS-PS0-Mag</code> and their ±1.63 / IF columns.<br>
+  The <code>GEX</code> and <code>DEX</code> histogram columns. <code>NODES</code> stays on the right.
+
+  <h4>The rail is now the y-axis</h4>
+  Same rail, rotated: EL at the bottom, EH at the top, node blocks sized by strength, the white dot is
+  price, <span style="color:#e0645f">T</span> is the target. Node prices carry across the chart as
+  dashed lines, so a candle touching a node is visible as a touch rather than a number to reconcile.
+
+  <div class="flag">
+    <b>⚠ One decision I made for you — say if it's wrong.</b><br>
+    The rail spans <b>EL 7661 → EH 7730</b>. The candles span about <b>7642 → 7672</b>. They cannot
+    share a y-axis while disagreeing, so the axis here spans the <b>union, 7642 → 7730</b>.<br><br>
+    The cost: candles occupy the lower third and look compressed, because most of the EM band is empty
+    air above them. The alternative is to clip the axis to the candle range and let nodes outside it
+    sit as edge markers with an arrow — busier, but the candles keep their full height.
+  </div>
+</div>
+
+</div></body></html>

@@ -17,13 +17,16 @@ const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.l
   const m=src.match(/var STEP_TIPS=\[([\s\S]*?)\];/);
   ok(!!m,'the step tips exist');
   const tips=(m[1].match(/'(?:[^'\\]|\\.)*'/g)||[]).map(t=>t.slice(1,-1));
-  ok(tips.length===5,'one per step',tips.length);
+  // (v13.0) FOUR steps: ① FRAME dissolved into ② LOCATION, ② BIAS renamed ① TREND and moved first.
+  ok(tips.length===4,'one per step',tips.length);
   tips.forEach((t,i)=>ok(/\?/.test(t.slice(0,120)),'step '+(i+1)+' opens with a question',t.slice(0,60)));
-  ok(/PLAYBOOK IS LEGAL/i.test(tips[0]),'FRAME says which playbook is legal today');
-  ok(/HOW MUCH SHOULD YOU TRUST/i.test(tips[1]),'BIAS pairs direction with confidence');
-  ok(/AT levels, never between/i.test(tips[2]),'LOCATION says you trade at levels, not between them');
-  ok(/step most people skip/i.test(tips[3]),'REACTION names itself as the step that gets skipped');
-  ok(/blank here is a result/i.test(tips[4]),'EXECUTE says a refusal is a result');
+  ok(/HOW MUCH SHOULD YOU TRUST/i.test(tips[0]),'TREND pairs direction with confidence, and leads');
+  ok(/AT levels, never between/i.test(tips[1]),'LOCATION says you trade at levels, not between them');
+  ok(/step most people skip/i.test(tips[2]),'REACTION names itself as the step that gets skipped');
+  ok(/blank here is a result/i.test(tips[3]),'EXECUTE says a refusal is a result');
+  // ⚠ the regime lesson must SURVIVE the loss of its own step, or dissolving FRAME quietly deletes it
+  ok(/negative gamma means breaks work/i.test(tips[0]),
+     'and the regime playbook it inherited from FRAME is still taught somewhere');
 }
 // ---- the substantive hovers ask before they tell ----
 {
@@ -69,9 +72,12 @@ const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.l
 }
 // ---- the three zones ----
 {
-  ok(/IF · structure/.test(src),'the left zone is captioned as InsiderFinance structure');
+  // --- INVERTED (v13.0): the IF structure profiles are gone; the left gutter is Skylit NODE flow ---
+  ok(!/IF · structure/.test(src),'the IF structure caption is gone with its columns');
   ok(/Skylit · flow/.test(src),'the right zone is captioned as Skylit flow');
-  ok(/>GEX</.test(src) && />DEX</.test(src),'both structure columns are labelled');
+  ok(!/>GEX<\/text>/.test(src) && !/>DEX<\/text>/.test(src),
+     'and neither GEX nor DEX is drawn any more (INVERTED v13.0)');
+  ok(/>NODES<\/text>/.test(src),'the left gutter is captioned NODES');
   ok(/>NODES</.test(src),'and the flow column is labelled');
   ok(/60m and 15m/.test(src)||/60 and 15 minutes/.test(src),'the growth ticks are explained as 60m and 15m');
 }

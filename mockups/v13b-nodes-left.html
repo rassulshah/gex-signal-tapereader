@@ -1,0 +1,154 @@
+<!doctype html><html><head><meta charset="utf-8"><title>v13 layout mockup B</title>
+<style>
+body{background:#0b0e14;color:#e6edf3;font:12px/1.45 Inter,Arial,sans-serif;margin:0;padding:20px}
+.wrap{display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap}
+.panel{width:392px;background:#0f131b;border:1px solid #232a36;border-radius:8px;padding:9px 10px}
+.steps{display:flex;gap:4px;margin-bottom:9px}
+.step{flex:1;text-align:center;font-size:8.5px;font-weight:800;letter-spacing:.3px;padding:3px 0;border:1px solid #232a36;border-radius:4px;color:#8b98a9}
+.step.on{color:#e3c341;border-color:#4a3f1c;background:#1a1710}
+.sec{border:1px solid #232a36;border-radius:5px;margin-bottom:9px;overflow:hidden}
+.sechd{background:#161c27;padding:3px 8px;font-size:9px;font-weight:800;letter-spacing:.7px;text-align:center;color:#e3c341;text-transform:uppercase}
+.secbody{padding:8px}
+.trendrow{display:flex;gap:9px;align-items:flex-start}
+.arrow{color:#5ec2a8;font-size:19px;line-height:1}
+.tword{font-size:19px;font-weight:800;color:#5ec2a8;line-height:1.05}
+.tnote{color:#8b98a9;font-size:10.5px;flex:1}
+.badges{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
+.b{font-size:8.5px;font-weight:800;padding:2px 6px;border-radius:3px;border:1px solid #2a3342;color:#8b98a9}
+.b.up{color:#5ec2a8;border-color:#265045}.b.dn{color:#e0645f;border-color:#5a2b29}
+.b.off{color:#5b6675;border-style:dashed}
+.conf{text-align:right;color:#5ec2a8;font-size:9px;font-weight:800;margin-top:5px}
+.locbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.pill{font-size:8.5px;font-weight:800;padding:2px 6px;border-radius:3px;border:1px solid #2a3342;color:#c9d4e2}
+.tgt{margin-left:auto;color:#e0645f;font-size:12px;font-weight:800}
+.read{color:#8b98a9;font-size:10.5px;margin:2px 0 8px}
+.nrow{display:grid;grid-template-columns:52px 1fr 52px 46px;gap:6px;align-items:center;padding:3px 2px;font-size:11px;border-top:1px solid #1c222d}
+.nrow b{font-weight:800}
+.pct{color:#8b98a9;font-size:10px}.pos{color:#5ec2a8;font-weight:700;text-align:right}
+.tag{font-size:8px;color:#8b98a9;border:1px solid #2a3342;border-radius:3px;padding:1px 4px;text-align:center}
+.gone{width:392px;color:#8b98a9;font-size:11.5px}
+.gone h4{color:#e0645f;font-size:10px;letter-spacing:.5px;text-transform:uppercase;margin:16px 0 5px}
+.gone code{background:#161c27;padding:1px 5px;border-radius:3px;color:#c9d4e2;font-size:10.5px}
+.ok{color:#5ec2a8}
+</style></head><body>
+<div class="wrap">
+
+<div class="panel">
+  <div class="steps">
+    <div class="step on">① TREND</div><div class="step">② LOCATION</div>
+    <div class="step">③ REACTION</div><div class="step">④ EXECUTE</div>
+  </div>
+
+  <div class="sec">
+    <div class="sechd">① Trend</div>
+    <div class="secbody">
+      <div class="trendrow">
+        <span class="arrow">↑</span>
+        <div class="tword">UPTREND<br>BRK</div>
+        <div class="tnote">1 of 20 bars above the 50-SMA — lost 15, reversal needs 11 the other way</div>
+      </div>
+      <div class="badges">
+        <span class="b up">SKEW ↑</span><span class="b dn">ACCUM ↓</span>
+        <span class="b">CROSS →</span><span class="b off">ROLL —</span><span class="b off">DRIFT ✗</span>
+      </div>
+      <div class="conf">1 of 4 confirm</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sechd">② Location</div>
+    <div class="secbody">
+      <div class="locbar">
+        <span class="pill">−G +V</span><span class="pill">BREAKS</span>
+        <span class="tgt">T: 7650 <span style="font-size:9px">−55</span></span>
+      </div>
+      <div class="read">Nothing sizeable between 7705 and 7730. Then down 7700 (44% brake, 5 away), nothing above.</div>
+
+      <!-- RAIL stays horizontal, on top of the chart, unchanged -->
+      <svg viewBox="0 0 360 46" width="360" height="46" style="display:block">
+        <text x="2" y="10" font-size="7" fill="#8b98a9" font-weight="800">GK</text>
+        <text x="60" y="10" font-size="7" fill="#e3c341" font-weight="800">BRK</text>
+        <text x="196" y="10" font-size="7" fill="#e3c341" font-weight="800">BRK</text>
+        <line x1="8" y1="24" x2="352" y2="24" stroke="#2a3342" stroke-width="7"/>
+        <text x="8" y="42" font-size="8.5" fill="#e6edf3" font-weight="800">7661</text>
+        <text x="8" y="17" font-size="6" fill="#8b98a9" font-weight="700">EL</text>
+        <text x="352" y="42" font-size="8.5" fill="#e6edf3" font-weight="800" text-anchor="end">7730</text>
+        <text x="352" y="17" font-size="6" fill="#8b98a9" font-weight="700" text-anchor="end">EH</text>
+        <rect x="62" y="19" width="7" height="11" fill="#e3c341"/>
+        <rect x="198" y="20" width="6" height="9" fill="#e3c341"/>
+        <rect x="236" y="20" width="6" height="9" fill="#7d5bd6"/>
+        <text x="66" y="40" font-size="6.5" fill="#8b98a9" text-anchor="middle" font-weight="700">7665</text>
+        <text x="201" y="40" font-size="6.5" fill="#8b98a9" text-anchor="middle" font-weight="700">7690</text>
+        <text x="239" y="40" font-size="6.5" fill="#8b98a9" text-anchor="middle" font-weight="700">7700</text>
+        <polygon points="30,30 26,36 34,36" fill="#e0645f"/>
+        <text x="30" y="12" font-size="6.5" fill="#e0645f" text-anchor="middle" font-weight="800">T</text>
+        <circle cx="44" cy="24" r="5.5" fill="#e6edf3" stroke="#0b0e14" stroke-width="2"/>
+      </svg>
+
+      <!-- CHART: node histogram moved to the LEFT, where GEX/DEX used to be -->
+      <svg viewBox="0 0 360 190" width="360" height="190" style="display:block;margin-top:4px">
+        <!-- NODES histogram, now on the LEFT -->
+        <rect x="6" y="42"  width="38" height="9"  fill="#7d5bd6" opacity=".85"/>
+        <rect x="6" y="76"  width="17" height="7"  fill="#7d5bd6" opacity=".85"/>
+        <rect x="6" y="112" width="30" height="8"  fill="#7d5bd6" opacity=".85"/>
+        <rect x="6" y="138" width="44" height="10" fill="#7d5bd6" opacity=".85"/>
+        <text x="6" y="182" font-size="6" fill="#8b98a9" font-weight="700">NODES</text>
+        <line x1="58" y1="6" x2="58" y2="170" stroke="#232a36" stroke-width="1"/>
+
+        <!-- node price lines across the chart -->
+        <line x1="58" y1="46" x2="330" y2="46"  stroke="#7d5bd6" stroke-dasharray="3 3" stroke-width=".8" opacity=".5"/>
+        <line x1="58" y1="80" x2="330" y2="80"  stroke="#7d5bd6" stroke-dasharray="3 3" stroke-width=".8" opacity=".5"/>
+        <line x1="58" y1="116" x2="330" y2="116" stroke="#e3c341" stroke-dasharray="3 3" stroke-width=".8" opacity=".5"/>
+        <line x1="58" y1="143" x2="330" y2="143" stroke="#e3c341" stroke-dasharray="3 3" stroke-width=".8" opacity=".5"/>
+        <text x="332" y="48"  font-size="6.5" fill="#c3b0f0" font-weight="700">7672.06</text>
+        <text x="332" y="82"  font-size="6.5" fill="#c3b0f0" font-weight="700">7662.08</text>
+        <text x="332" y="118" font-size="6.5" fill="#e3c341" font-weight="700">7652.10</text>
+        <text x="332" y="145" font-size="6.5" fill="#e3c341" font-weight="700">7642.13</text>
+
+        <!-- candles keep the FULL height, because the chart keeps its own scale -->
+        <g stroke-width="1">
+          <line x1="90"  y1="52" x2="90"  y2="92"  stroke="#5ec2a8"/><rect x="86"  y="62" width="8" height="22" fill="#5ec2a8"/>
+          <line x1="110" y1="46" x2="110" y2="88"  stroke="#e0645f"/><rect x="106" y="56" width="8" height="24" fill="#e0645f"/>
+          <line x1="130" y1="58" x2="130" y2="100" stroke="#5ec2a8"/><rect x="126" y="68" width="8" height="21" fill="#5ec2a8"/>
+          <line x1="150" y1="64" x2="150" y2="106" stroke="#e0645f"/><rect x="146" y="74" width="8" height="24" fill="#e0645f"/>
+          <line x1="170" y1="70" x2="170" y2="112" stroke="#5ec2a8"/><rect x="166" y="80" width="8" height="22" fill="#5ec2a8"/>
+          <line x1="190" y1="76" x2="190" y2="118" stroke="#e0645f"/><rect x="186" y="86" width="8" height="23" fill="#e0645f"/>
+          <line x1="210" y1="82" x2="210" y2="122" stroke="#5ec2a8"/><rect x="206" y="92" width="8" height="21" fill="#5ec2a8"/>
+          <line x1="230" y1="88" x2="230" y2="128" stroke="#e0645f"/><rect x="226" y="98" width="8" height="22" fill="#e0645f"/>
+          <line x1="250" y1="94" x2="250" y2="132" stroke="#5ec2a8"/><rect x="246" y="104" width="8" height="20" fill="#5ec2a8"/>
+          <line x1="270" y1="98" x2="270" y2="138" stroke="#e0645f"/><rect x="266" y="108" width="8" height="23" fill="#e0645f"/>
+          <line x1="290" y1="102" x2="290" y2="142" stroke="#5ec2a8"/><rect x="286" y="112" width="8" height="21" fill="#5ec2a8"/>
+        </g>
+        <text x="120" y="182" font-size="6" fill="#8b98a9" font-weight="700">14:00</text>
+        <text x="230" y="182" font-size="6" fill="#8b98a9" font-weight="700">14:30</text>
+      </svg>
+
+      <div style="margin-top:8px">
+        <div class="nrow"><span class="pct">▼ 100%</span><b>7652.1</b><span class="tag">Acm</span><span class="pos">+0.6</span></div>
+        <div class="nrow"><span class="pct">▼ 57%</span><b>7662.08</b><span class="tag">Dec</span><span class="pos">+10.58</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="gone">
+  <h4>Changed</h4>
+  ② BIAS → <b>① TREND</b>, first section. Step bar drops to four.<br>
+  ① FRAME <b>dissolved</b> — badges <code>−G +V</code> / <code>BREAKS</code>, target
+  <code>T: 7650 −55</code> and the read line move into ② LOCATION.<br>
+  The <b>rail is unchanged</b> — horizontal, sitting on top of the chart exactly as it does today.<br>
+  <span class="ok">The NODES histogram moves from the right of the chart to the LEFT</span>, into the
+  space <code>GEX</code> and <code>DEX</code> occupied.
+
+  <h4>Removed</h4>
+  <code>GEX</code> and <code>DEX</code> columns.<br>
+  The levels block: <code>CR</code> <code>CR0</code> <code>MP*</code> <code>FLIP</code>
+  <code>SPXW</code> <code>PS-PS0-Mag</code>.
+
+  <h4>Note</h4>
+  Because the rail keeps its own horizontal scale, the earlier scale conflict disappears — the chart
+  keeps its full height and its own price range, and the candles are not compressed. That was the
+  problem with the vertical version.
+</div>
+
+</div></body></html>

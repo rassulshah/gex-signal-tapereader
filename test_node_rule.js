@@ -39,7 +39,10 @@ const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.l
 // ---- the step bar agrees ----
 {
   const fn=(function(){ const i=src.indexOf('function stepState'); const j=src.indexOf('\n}\n', i); return src.slice(i,j); })();
-  ok(/st\[4\]=!!\(pb && pb\.ok && pb\.level!=null\)/.test(fn),'step 5 lights on a node, not on the phantom field');
+  // (v13.0) FOUR steps now — EXECUTE is index 3, not 4. The RULE is unchanged: a trade is off a
+  // NODE, and `entry` never existed on the object.
+  ok(/st\[3\]=!!\(pb && pb\.ok && pb\.level!=null\)/.test(fn),'the last step lights on a node, not on the phantom field');
+  ok(!/pb\.entry/.test(fn),'and never on pb.entry, which is the field that did not exist');
   ok(/waiting on a node/.test(fn),'and the waiting line says what it is waiting for');
 }
 // ---- the rule is recorded where it will be read ----
