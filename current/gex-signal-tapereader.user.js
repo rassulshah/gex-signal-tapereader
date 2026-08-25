@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    13.4
+// @version    13.5
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -137,6 +137,9 @@ var RECORDER_SYMS = ['SPY','QQQ'];
 var READ_APPRX = 0.75;
 
 var CFG = {
+  // (v13.5) rail motion. ⚠ A REAL SETTING, not a debug flag: on a second monitor during a fast tape
+  // some people want none of it, and `prefers-reduced-motion` only covers those who set it at the OS.
+  motion: true,
   tapeGate: true,   // (v10.38) suppress structural read when app/tape disagree. false = legacy behaviour.
   ftReq: true, boPb: true, dir: 'both', nodeThresh: 20, voidBackN: 2,
   trendOn: true, trendMA: { SPY:50, QQQ:50 },
@@ -561,7 +564,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='13.4';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='13.5';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -18406,7 +18409,36 @@ function ensureV3Css(){
     ''/*dead:.g3tgt*/+
     // SKYLIT POLARITY: purple = put-dominant = negative gamma = accelerator. Yellow = call-dominant =
     // positive gamma = brake. Same convention as their heatmap, so the two never read as different things.
-    '#gpts-body .g3pile{position:absolute;bottom:2px;transform:translateX(-50%);border-radius:1px}'+
+    // (v13.5) NODES ARE CIRCLES. A bar encodes size in one dimension and reads as a chart element;
+    // a disc reads as an object with mass, which is what a node behaves like.
+    '#gpts-body .g3pile{position:absolute;bottom:2px;transform:translateX(-50%);border-radius:50%}'+
+    // ⚠⚠ MOTION IS EXPENSIVE ATTENTION. Only nodes whose 15m change is DECISIVE animate, capped at
+    // three at once (G3_MOTION_MAX), cycles 2.2-2.6s so it breathes rather than flickers. With six
+    // nodes moving the rail becomes the busiest thing on screen at exactly the moment it must be read
+    // calmly. The ring is a ::after pseudo-element — no extra DOM, no JS timer, composited on the GPU.
+    '#gpts-body .g3pile::after{content:"";position:absolute;left:50%;top:50%;width:100%;height:100%;'+
+      'margin-left:-50%;margin-top:-50%;border-radius:50%;border:1px solid transparent;opacity:0;pointer-events:none}'+
+    // DIRECTION IS THE WHOLE TRICK: rings LEAVING = growing, rings ARRIVING = being fed by a roll.
+    // Opposite motions, so they can never be confused at a glance.
+    '#gpts-body .g3grow::after{border-color:#2ec27e;animation:g3sonar 2.6s ease-out infinite}'+
+    '#gpts-body .g3recv::after{border-color:#7cc7ff;animation:g3inward 2.2s ease-in infinite}'+
+    '@keyframes g3sonar{0%{transform:scale(1);opacity:.55}70%{opacity:0}100%{transform:scale(2.6);opacity:0}}'+
+    '@keyframes g3inward{0%{transform:scale(2.6);opacity:0}35%{opacity:.5}100%{transform:scale(1);opacity:0}}'+
+    // ⚠ DISSIPATING DOES NOT MOVE. It is the node you are LEAVING; motion there would compete with the
+    // node you are entering. Dim and dashed says "coming apart" without spending any attention.
+    '#gpts-body .g3fade{opacity:.34;box-shadow:none !important}'+
+    '#gpts-body .g3fade::after{border-color:#e0645f;border-style:dashed;opacity:.55}'+
+    // the roll lane sits ABOVE the rail in its own band, so nothing can collide with the name tier
+    '#gpts-body .g3rl{position:relative;height:22px;margin:0 0 1px}'+
+    '#gpts-body .g3rl svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}'+
+    '#gpts-body .g3rl .g3rlab{position:absolute;top:-1px;transform:translateX(-50%);font-size:6.5px;'+
+      'font-weight:800;white-space:nowrap;letter-spacing:.02em}'+
+    '@keyframes g3flow{to{stroke-dashoffset:-32}}'+
+    '#gpts-body .g3rl .fl{animation:g3flow 1.6s linear infinite}'+
+    // ⚠ EVERY VIEWER GETS AN OFF SWITCH. On a second monitor during a fast tape some people want none
+    // of this, and the OS-level preference must be honoured without being asked.
+    '@media (prefers-reduced-motion: reduce){#gpts-body .g3pile::after,#gpts-body .g3rl .fl{animation:none !important}}'+
+    '#gpts-body.g3nomo .g3pile::after,#gpts-body.g3nomo .g3rl .fl{animation:none !important}'+
     '#gpts-body .g3pile.acc{background:#a371f7}'+
     '#gpts-body .g3pile.brk{background:#e3c341}'+
     // (v11.68) BALANCED: drawn, because the gamma is really there, but hollow — the legs cancel so
@@ -19310,6 +19342,42 @@ function skPiles(B, sym){
 emPiles.lastWhy='';
 emPiles.lastSrc='';
 emPiles.lastKing=null; emPiles.lastKingSrc=''; emPiles.lastKingKd=null; emPiles.lastDegraded=''; emPiles.lastRoles=null;
+// (v13.5) THE ROLL LANE — arrows rise out of the source, travel, and drop into the destination.
+// ⚠ ITS OWN BAND, ABOVE EVERYTHING. Drawing arrows into the existing tiers would collide with the
+// node names, which is the one thing the user asked twice not to do. The lane COLLAPSES TO NOTHING
+// when there are no rolls, so a quiet tape pays no vertical space for it.
+// ⚠ preserveAspectRatio="none" stretches x to the rail's width — correct for positioning, wrong for
+// strokes and arrowheads. `vector-effect="non-scaling-stroke"` fixes the line; the head is an HTML
+// triangle positioned by percent, so it never distorts.
+function railRollLane(EB, RB, rolls){
+  try{
+    if(!rolls || !rolls.length) return '';
+    var show=rolls.slice(0, 3), h='', svg='', i;
+    var dsc=1; try{ dsc=ifDispScale()||1; }catch(e0){}
+    for(i=0;i<show.length;i++){
+      var r=show[i];
+      var xFrom=emPosRail(EB, r.from*dsc, RB), xTo=emPosRail(EB, r.to*dsc, RB);
+      if(!isFinite(xFrom)||!isFinite(xTo)) continue;
+      var col=(r.dir==='up')?'#7cc7ff':'#e0645f';
+      var yTop=16-i*5;                                   // each roll gets its own lane height
+      var x1=xFrom*10, x2=xTo*10;                        // viewBox is 0..1000 so percent maps directly
+      var d='M'+x1.toFixed(1)+' 22 L'+x1.toFixed(1)+' '+yTop+' L'+x2.toFixed(1)+' '+yTop+' L'+x2.toFixed(1)+' 20';
+      svg+='<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1" opacity=".38" vector-effect="non-scaling-stroke"/>'+
+           '<path class="fl" d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.6" stroke-linecap="round" '+
+             'stroke-dasharray="5 27" vector-effect="non-scaling-stroke"/>';
+      var amt=''; try{ amt=usdBig(Math.abs(r.amt))||''; }catch(e1){}
+      h+='<span class="g3rlab" style="left:'+((xFrom+xTo)/2).toFixed(1)+'%;top:'+(yTop-8)+'px;color:'+col+'"'+
+         g3tip('Size is moving between strikes. '+r.from+' shed '+(usdBig(Math.abs(r.lost))||'')+' over 15 minutes while '+
+               r.to+' took '+(usdBig(Math.abs(r.got))||'')+'. \u26a0 Measured on our own data, a roll destination holds no better than a node that is simply GROWING \u2014 the pairing tells you WHERE size went, which is a story, not independent evidence. See FINDINGS F6.')+
+         '>ROLL '+(r.dir==='up'?'\u2191':'\u2193')+' '+frameNum(r.to*dsc)+(amt?(' \u00b7 '+amt):'')+'</span>'+
+         '<span style="position:absolute;left:'+xTo.toFixed(1)+'%;top:19px;transform:translateX(-50%);'+
+           'width:0;height:0;border-left:3px solid transparent;border-right:3px solid transparent;'+
+           'border-top:4px solid '+col+'"></span>';
+    }
+    if(!svg) return '';
+    return '<div class="g3rl"><svg viewBox="0 0 1000 22" preserveAspectRatio="none">'+svg+'</svg>'+h+'</div>';
+  }catch(e){ return ''; }
+}
 function emPiles(B, sym){
   // SKYLIT FIRST — the nodes are theirs. IF is a NAMED fallback, not a silent one.
   var sk=skPiles(B, sym);
@@ -19751,6 +19819,17 @@ function secFrame(sym){
     // (v11.99) RAIL SPACE FOR DRAWING. emPos stays the MEASUREMENT (clamped, recorded as `pct`);
     // RB is the drawn track, which grows once a boundary has been run so "how far past" is visible.
     var RB=emRailBounds(EB);
+    // ⚠ (v13.5) ONE COMPUTATION, TWO CONSUMERS. The roll lane above the rail and the motion on the
+    // circles must show the SAME rolls. Computing them twice is precisely the failure recorded in
+    // PROJECT-CONSTANTS: two derivations of one thing drift, and here they would drift WITHIN a
+    // single render — an arrow pointing at a node that is not animating.
+    var RAILPS=[]; try{ RAILPS=emPiles(EB, sym)||[]; }catch(eRP){}
+    var RAILROLLS=[];
+    try{
+      var rk=[]; for(var rq=0;rq<RAILPS.length;rq++){ var rv=velAt(RAILPS[rq].k);
+        if(rv && rv.v && !rv.stale) rk.push(RAILPS[rq].k); }
+      RAILROLLS=rollScan(rk)||[];
+    }catch(eRR){}
     var str=!!EB.stretched, pOpen=emPosRail(EB,EB.open,RB), pNow=emPosRail(EB,EB.now,RB);
     var fa=Math.min(pOpen,pNow), fb=Math.max(pOpen,pNow);
     var gTxt2=(EB.gamma==null)?'gamma unknown'
@@ -19762,7 +19841,8 @@ function secFrame(sym){
     // labelled EM implies ~68% containment; this band delivers ~58%. The WIDTH IS UNCHANGED and every
     // level sits exactly where it did — only the claim has been corrected.
     h+='<span class="g3emk"'+g3tip('Expected low — the open minus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.low/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(RB.under?RB.lo:EB.low))+'<small>'+(EB.est?'~':'')+(RB.under?'RAIL':'EL')+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
-    h+='<span class="g3emt">'+
+    h+=railRollLane(EB, RB, RAILROLLS)+
+       '<span class="g3emt">'+
        '<i class="g3emr"></i>'+
        ((EB.hiWater!=null&&EB.loWater!=null)?('<i class="g3emx2" style="left:'+emPosRail(EB,EB.loWater,RB).toFixed(1)+'%;width:'+Math.max(0,emPosRail(EB,EB.hiWater,RB)-emPosRail(EB,EB.loWater,RB)).toFixed(1)+'%"></i>'+
          '<i class="g3emw2" style="left:'+emPosRail(EB,EB.loWater,RB).toFixed(1)+'%"></i>'+
@@ -19802,6 +19882,31 @@ function secFrame(sym){
        (function(){
          var ps=[]; try{ ps=emPiles(EB, sym)||[]; }catch(eP){ return ''; }
          var h2='';
+         // ⚠⚠ (v13.5) MOTION IS RATIONED, AND THE RATIONING IS THE DESIGN. Decide ONCE, for the whole
+         // rail, which nodes may animate — never per-node inside the loop, or every node qualifies and
+         // the rail turns into a fairground. Priority: RECEIVING beats GROWING on a node doing both,
+         // because "size is arriving here" is the rarer and more actionable fact; growth is implied by
+         // it anyway. DISSIPATING never animates: it is the node you are leaving.
+         var G3_MOTION_MAX=3;
+         var motion={}, rollsNow=[];
+         try{
+           var mv=[];
+           for(var mi=0; mi<ps.length; mi++){
+             var mk=ps[mi].k, ve=velAt(mk);
+             if(ve && ve.v && !ve.stale && typeof ve.v.d15==='number') mv.push({k:mk, d15:ve.v.d15, d60:ve.v.d60});
+           }
+           rollsNow = RAILROLLS;   // ⚠ shared, never recomputed — see the note beside RAILROLLS
+           var recvSet={}; rollsNow.forEach(function(r){ recvSet[r.to]=1; });
+           // rank by how decisive the 15m move is — the rarest, largest changes earn the attention
+           mv.sort(function(a,b){ return Math.abs(b.d15)-Math.abs(a.d15); });
+           var used=0;
+           for(var mj=0; mj<mv.length; mj++){
+             var m=mv[mj];
+             if(recvSet[m.k]){ if(used<G3_MOTION_MAX){ motion[m.k]='recv'; used++; } continue; }
+             if(m.d15>0 && used<G3_MOTION_MAX){ motion[m.k]='grow'; used++; continue; }
+             if(typeof m.d60==='number' && m.d60<0) motion[m.k]='fade';   // static, costs no attention
+           }
+         }catch(eMo){}
          for(var pi=0;pi<ps.length;pi++){
            var P=ps[pi];
            // sqrt so a 100% King does not flatten a 30% pile into invisibility
@@ -19846,7 +19951,15 @@ function secFrame(sym){
                if(vE.v.d60>0) capCls=' g3grow'; else if(vE.v.d60<0) capCls=' g3bleed';
              }
            }catch(eCap){}
-           h2+='<i class="g3pile '+pcls+capCls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%;width:'+w+'px;height:'+hgt+'px"'+g3tip(tip)+'></i>';
+           // (v13.5) A DISC, NOT A BAR. Diameter from sqrt(%King) so a 100% King does not flatten a
+           // 30% node into invisibility — the same scaling the bar height used, applied to both axes.
+           var dia=Math.max(6, Math.min(18, Math.round(Math.sqrt(P.pct/100)*15)));
+           var mo=motion[P.k]||'';
+           var moCls = (mo==='recv') ? ' g3recv' : (mo==='grow' ? ' g3grow' : (mo==='fade' ? ' g3fade' : ''));
+           h2+='<i class="g3pile '+pcls+capCls+moCls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%;width:'+dia+'px;height:'+dia+'px"'+g3tip(tip
+                 +(mo==='recv'?' \u2014 SIZE IS ARRIVING HERE: another strike is shedding into it.'
+                  :(mo==='grow'?' \u2014 ACCUMULATING: adding size right now.'
+                  :(mo==='fade'?' \u2014 DISSIPATING: coming apart.':''))))+'></i>';
            // (v11.79) THE LABEL THE USER ASKED FOR, TWICE, AND I MOCKED TWICE WITHOUT BUILDING:
            // ES price on top (the number they trade), SPXW strike and the node's role beneath it.
            // (v11.81) ROLE beats polarity on the label. A King is still an accelerator; the hover keeps
@@ -21203,6 +21316,8 @@ function panelV3(sym){
 
 function render(){
   if(!elBody) return;
+  // (v13.5) one class governs all rail motion; CSS does the rest
+  try{ elBody.classList.toggle('g3nomo', CFG.motion===false); }catch(eMoC){}
   try{ wireBodyDelegation(); }catch(eWD){}
   RENDER_SEQ++;   // (v10.14) new tick: srBattle memoizes per render so its
                   // crossover state isn't corrupted by being called twice.
