@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.11
+// @version    14.12
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -147,7 +147,11 @@ var CFG = {
   hideGO: true, cfgOpen: true, showSPY: true, showQQQ: true,
   // (v11.4) IRT FlexLevels export: off by default; secs = export cadence; futSym = the IRT futures
   // symbol (contract rolls quarterly — user-edited, e.g. EPU26); etfSym optional (e.g. SPY); file name fixed-ish.
-  irt: { on:false, secs:180, futSym:'EPU26', etfSym:'', file:'FlexLevelsExport.csv' },
+  // (v14.12) CQG SYMBOLOGY (operator's platform): ES = EPU26, NQ = ENQU26 — contracts roll
+  // quarterly (H/M/U/Z), user edits them in settings each roll. nqRatio = QQQ->NQ multiplier;
+  // there is NO NQ price anywhere in Skylit so it can never self-measure — manual, '~' forever.
+  irt: { on:false, secs:180, futSym:'EPU26', etfSym:'', file:'FlexLevelsExport.csv',
+         nqOn:true, nqSym:'ENQU26', nqRatio:41.9 },
   // --- Display (#5) ---
   compact: false,          // compact node cells (single line) vs expanded
   stripLen: 8,             // growth-strip points (3m closes) shown, 4..12
@@ -200,6 +204,21 @@ function loadCfg(){
         }
       }
     }
+      // (v14.12 FIX) THE IRT BLOCK WAS NEVER MERGED BACK — so "Export levels" silently reverted
+      // to OFF on EVERY page reload since the v8 config rewrite, and the operator's export just
+      // stopped until someone noticed (caught live 2026-08-26, the night v14.11 went in). Every
+      // persisted field must be listed here; a field not merged is a field that resets.
+      if(o && o.irt && typeof o.irt==='object'){
+        CFG.irt=CFG.irt||{};
+        if(typeof o.irt.on==='boolean') CFG.irt.on=o.irt.on;
+        if(typeof o.irt.secs==='number' && o.irt.secs>=60) CFG.irt.secs=o.irt.secs;
+        if(typeof o.irt.futSym==='string') CFG.irt.futSym=o.irt.futSym;
+        if(typeof o.irt.etfSym==='string') CFG.irt.etfSym=o.irt.etfSym;
+        if(typeof o.irt.file==='string' && o.irt.file) CFG.irt.file=o.irt.file;
+        if(typeof o.irt.nqOn==='boolean') CFG.irt.nqOn=o.irt.nqOn;
+        if(typeof o.irt.nqSym==='string') CFG.irt.nqSym=o.irt.nqSym;
+        if(typeof o.irt.nqRatio==='number' && o.irt.nqRatio>0) CFG.irt.nqRatio=o.irt.nqRatio;
+      }
     MIN_STRENGTH = CFG.nodeThresh;
     saveCfg(); // persist under v8 key after any migration
   }catch(e){}
@@ -577,7 +596,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.11';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.12';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3734,7 +3753,13 @@ var IRT_COLORS={
   deriv: irtColor(90,110,130),   // slate — SPXW-derived lane (its own book's scale, dotted)
   // (v14.8, operator-directed) node lines wear the PANEL'S polarity colours on the chart too
   brk:   irtColor(227,195,65),   // yellow — +gamma brake (the rail's own hex)
-  accp:  irtColor(163,113,247)   // purple — -gamma accelerator
+  accp:  irtColor(163,113,247),  // purple — -gamma accelerator
+  // (v14.12, operator's colour scheme) SPY = the SAME polarity language, LIGHTER — "same
+  // physics, other book" at a glance. IF walls red/green; MAG/MP are NOT directional so they
+  // stay neutral grey-blue rather than lying with a wall colour.
+  sply:  irtColor(240,222,140),  // light yellow — SPY +gamma
+  splp:  irtColor(205,180,250),  // light purple — SPY -gamma
+  neut:  irtColor(120,140,160)   // grey-blue — IF MAG0 / MP0 (non-directional)
 };
 function irtRound(v, tick){ if(!tick) return +v.toFixed(2); return +(Math.round(v/tick)*tick).toFixed(2); }
 function irtCsvRow(sym, price, label, color, width, style){
@@ -3760,10 +3785,22 @@ function irtRatio(){
   return { r:null, live:false, src:'none' };
 }
 function irtBuildCsv(){
-  // (v14.9, operator-directed) THE EXPORT IS EXACTLY WHAT THE RAIL SHOWS, PLUS IF's 0DTE WALLS.
-  // Gone: the SPY-book roles, the derived lanes, our CR/PS/FLIP set, the to-Friday IF rows,
-  // NextStop and PBentry — "the ES levels from the SPXW conversion, and the 0dte IF levels.
-  // I think that should be all." The nodeMap gate went with its rows: the rail is the gate now.
+  // (v14.12, operator-locked spec 2026-08-26) ONE FILE, ALL MARKETS — FlexLevels routes rows by
+  // their SYMBOL column, so ES (EPU26) and NQ (ENQU26) rows share FlexLevelsExport.csv and IRT
+  // puts each set on the right chart. CQG symbology throughout (EP=ES, ENQ=NQ, quarterly rolls).
+  // LABEL GRAMMAR — one grammar for every line: SOURCE + ROLE + STRENGTH.
+  //   "SPXW KING 100%" · "SPXW GK 36%" · "SPXW SUCC" — the rail book (roles from OUR machine)
+  //   "SPY KING 100%"  · "SPY 51%"                   — derived diamonds (KING is arithmetic —
+  //                                                    the 100% row; other roles would be guesses)
+  //   "IF CW0" · "IF PW0" · "IF MAG0" · "IF MP0"     — 0 = the 0DTE window (leaves room for
+  //                                                    un-suffixed weekly IF rows later)
+  //   "QQQ KING 100%"  · "QQQ 34%"                   — the QQQ book, on the NQ chart
+  // Price is NEVER in the label (IRT prints it at the line); polarity is the COLOUR: SPXW/QQQ
+  // yellow(+γ)/purple(−γ), SPY the same language LIGHTER, IF CW0 red / PW0 green / MAG0+MP0
+  // neutral (a magnet is not a wall — red/green stays reserved for actual walls).
+  // ROW ORDER (operator): SPXW block, SPY block, IF block, then the NQ block.
+  // '~' = converted with a cached ratio. NQ rows wear it ALWAYS: Skylit carries no NQ price
+  // anywhere, so nqRatio is manual by construction (settings, default 41.9).
   var sym='SPY';
   var out=[IRT_HEADER];
   var cfgI=CFG.irt||{};
@@ -3774,20 +3811,7 @@ function irtBuildCsv(){
   var targets=[];
   if(futSym && R.r>1) targets.push({sym:futSym, mul:R.r, tick:0.25, tag:R.live?'':' ~'});
   if(etfSym) targets.push({sym:etfSym, mul:1, tick:0, tag:''});
-  if(!targets.length) return null;
   var rows=[];
-  // (v14.9) THEIR chain levels — the 0DTE window (operator-directed), tagged IF so nothing on the
-  // chart is ambiguous about where a line came from. A side the companion suppressed (their page
-  // prints N/A) stays absent here too.
-  try{
-    var CHi=ifChainRows(sym,'dte0');
-    if(CHi && CHi.rows){
-      CHi.rows.forEach(function(r){
-        var colr2=(r.id==='CR')?IRT_COLORS.ceil:((r.id==='PS')?IRT_COLORS.flr:IRT_COLORS.deriv);
-        rows.push({ k:r.k, lbl:'IF '+r.id, col:colr2, w:1, style:1 });
-      });
-    }
-  }catch(eCi){}
   // ---- (v11.86) THE SPX NODES THE RAIL DRAWS, ONTO THE CHART -------------------------------------
   // The rail has shown Skylit's SPXW nodes since v11.77 and the chart has never carried them. These are
   // the levels actually being traded off, so they belong on the chart more than anything else here.
@@ -3815,7 +3839,7 @@ function irtBuildCsv(){
         ps.forEach(function(P){
           var role=P.role||(P.accel?'ACC':'BRK');
           var col=P.accel?IRT_COLORS.accp:IRT_COLORS.brk;
-          rows.push({ k:toSpy(P.k), lbl:role+' '+P.pct+'%',
+          rows.push({ k:toSpy(P.k), lbl:'SPXW '+role+' '+P.pct+'%',
                       col:col, w:(P.role==='KING'?3:2), style:0 });
         });
         // SUCCESSION — the strongest non-King strike. The project's own backtest calls this the #1
@@ -3831,7 +3855,9 @@ function irtBuildCsv(){
             var suc=null;
             for(var z=0;z<arr.length;z++){ if(Math.abs(arr[z].k-tp2.king)>0.01){ suc=arr[z]; break; } }
             if(suc && suc.a>=SUCC_CHART_PCT){
-              rows.push({ k:toSpy(suc.k), lbl:'SUCC '+Math.round(suc.a)+'%',
+              // (v14.12) label is 'SPXW SUCC' with NO % (operator-approved list): its meaning is
+              // "next King", not its current size.
+              rows.push({ k:toSpy(suc.k), lbl:'SPXW SUCC',
                           col:IRT_COLORS.pb, w:2, style:2 });
             }
           }
@@ -3855,13 +3881,15 @@ function irtBuildCsv(){
       var spotSPX=null; try{ var Bd=emBand(sym); if(Bd&&Bd.ok) spotSPX=Bd.now/Lx2.dispScale; }catch(eBd){}
       var thrD=(CFG.nodeThresh!=null)?CFG.nodeThresh:20;
       LSX.j.derived.forEach(function(dvE){
+        // (v14.12) SPY SOURCE ONLY on the ES chart — the operator's spec is "SPXW and SPY";
+        // QQQ/VIX projections would be noise here (QQQ gets its own book on the NQ chart below).
         if(!dvE || !dvE.levels || !dvE.levels.length) return;
+        if(String(dvE.source||'').toUpperCase()!=='SPY') return;
         var snapD=dvE.levels[dvE.levels.length-1]; var rowsD=(snapD&&snapD.l)||[];
         if(!rowsD.length) return;
         var mxA=0; rowsD.forEach(function(r0){ var a=Math.abs(r0.v||0); if(a>mxA) mxA=a; });
         if(!(mxA>0)) return;
         var rat=(typeof dvE.ratio==='number'&&dvE.ratio>0)?dvE.ratio:1;
-        var srcTag='D-'+String(dvE.source||'?').toUpperCase();
         rowsD.forEach(function(r0){
           var a=Math.abs(r0.v||0); var pctD=Math.round(100*a/mxA);
           if(pctD<thrD) return;
@@ -3875,17 +3903,72 @@ function irtBuildCsv(){
             var altK=r0.k*rat;
             if(altK>spotSPX/2 && altK<spotSPX*2) hostK=altK; else return;
           }
-          rows.push({ k:(hostK*Lx2.dispScale)/R.r, lbl:srcTag+' '+pctD+'%',
-                      col:IRT_COLORS.deriv, w:1, style:1 });
+          // (v14.12) KING is arithmetic — the row AT the source's own max. Other roles would be
+          // guesses (the rail machine only runs on SPXW), so every other row is % only.
+          // Colour = the SAME polarity language as SPXW, LIGHTER (sign from `net`, the carrier).
+          var sgD=(r0.net!=null)?r0.net:0;
+          var isK=(a===mxA);
+          rows.push({ k:(hostK*Lx2.dispScale)/R.r,
+                      lbl:isK?'SPY KING 100%':('SPY '+pctD+'%'),
+                      col:(sgD<0)?IRT_COLORS.splp:IRT_COLORS.sply, w:isK?2:1, style:1 });
         });
       });
     }
   }catch(eDrv){}
-  if(!rows.length) return null;
+  // ---- 3) IF — the 0DTE walls (operator-directed window since v14.9) -----------------------------
+  // (v14.12) ids renamed to the panel's own vocabulary + the window suffix: CR->CW0, PS->PW0,
+  // Mag->MAG0, MP->MP0 (a trailing '*' from the companion survives). CW0 red, PW0 green, MAG0/MP0
+  // neutral. A side the companion suppressed (their page prints N/A) stays absent here too.
+  try{
+    var CHi=ifChainRows(sym,'dte0');
+    if(CHi && CHi.rows){
+      CHi.rows.forEach(function(r){
+        var idRaw=String(r.id||''); var star=/\*/.test(idRaw)?'*':'';
+        var baseU=idRaw.replace(/\*/g,'').toUpperCase();
+        var name=(baseU==='CR')?'CW0':(baseU==='PS')?'PW0':(baseU==='MAG')?'MAG0':(baseU==='MP')?'MP0':baseU;
+        var colr2=(name==='CW0')?IRT_COLORS.ceil:((name==='PW0')?IRT_COLORS.flr:IRT_COLORS.neut);
+        rows.push({ k:r.k, lbl:'IF '+name+star, col:colr2, w:1, style:1 });
+      });
+    }
+  }catch(eCi){}
+  // ---- ES/ETF target expansion (SPXW -> SPY -> IF order preserved from `rows`) -------------------
   targets.forEach(function(T){
     rows.forEach(function(R){ out.push(irtCsvRow(T.sym, irtRound(R.k*T.mul, T.tick), R.lbl+T.tag, R.col, R.w, R.style)); });
   });
-  return { csv:out.join('\r\n')+'\r\n', n:rows.length, targets:targets.map(function(t){return t.sym;}), ratio:R };
+  // ---- 4) NQ — the QQQ book, same file (v14.12, on by default) -----------------------------------
+  // Source: the panel's own self-fetched QQQ gamma feed (LASTFEED.QQQ — flowing since the early
+  // builds). Own-King %, node threshold, KING named (arithmetic), everything else % only.
+  // k(QQQ strike) x nqRatio -> NQ price, 0.25 tick. Stale feed => the block is ABSENT, never old.
+  var nqN=0;
+  try{
+    if(cfgI.nqOn!==false){
+      var nqSym=(cfgI.nqSym||'ENQU26').trim();
+      var nqR=(typeof cfgI.nqRatio==='number'&&cfgI.nqRatio>0)?cfgI.nqRatio:41.9;
+      var FQ=(typeof LASTFEED!=='undefined')?LASTFEED.QQQ:null;
+      if(nqSym && FQ && FQ.j && FQ.j.levels && FQ.j.levels.length &&
+         (Date.now()-(FQ.ts||0))<=FEED_STALE_MS*3){
+        var snapQ=FQ.j.levels[FQ.j.levels.length-1]; var rq=(snapQ&&snapQ.l)||[];
+        var mxQ=0; rq.forEach(function(r0){ var a=Math.abs(r0.v||0); if(a>mxQ) mxQ=a; });
+        if(mxQ>0){
+          var thrQ=(CFG.nodeThresh!=null)?CFG.nodeThresh:20;
+          rq.forEach(function(r0){
+            var a=Math.abs(r0.v||0); var p=Math.round(100*a/mxQ);
+            if(p<thrQ) return;
+            var sgQ=(r0.net!=null)?r0.net:0;
+            var isKQ=(a===mxQ);
+            out.push(irtCsvRow(nqSym, irtRound(r0.k*nqR, 0.25),
+                     (isKQ?'QQQ KING 100%':('QQQ '+p+'%'))+' ~',
+                     (sgQ<0)?IRT_COLORS.accp:IRT_COLORS.brk, isKQ?3:2, 0));
+            nqN++;
+          });
+        }
+      }
+    }
+  }catch(eNQ){}
+  if(out.length<=1) return null;
+  return { csv:out.join('\r\n')+'\r\n', n:rows.length+nqN,
+           targets:targets.map(function(t){return t.sym;}).concat(nqN?[(cfgI.nqSym||'ENQU26').trim()]:[]),
+           ratio:R };
 }
 function irtPickFolder(){
   if(!window.showDirectoryPicker){ alert('This browser lacks the File System Access API.'); return; }
@@ -6061,6 +6144,14 @@ function cfgHtml(){
     '<label style="font-size:10px;color:'+PAL.sub+'" title="Optional second symbol at SPY prices (e.g. SPY). Blank = off.">ETF <input type="text" class="gpts-irt-etf" value="'+(I.etfSym||'')+'" style="width:44px;background:#0f131b;border:1px solid '+PAL.line+';color:'+PAL.ink+';border-radius:3px;font-size:10px;padding:1px 3px"></label>'+
     '<span class="gpts-irt-dir" style="cursor:pointer;font-size:10px;color:'+PAL.blue+';font-weight:700" title="Pick the folder ONCE (e.g. InvestorRT\\rtx\\lsFlexLevels, or a Google-Drive-synced folder). The handle persists; every export writes silently.">📁 folder</span>'+
     '<span class="gpts-irt-now" style="cursor:pointer;font-size:10px;color:'+PAL.blue+';font-weight:700" title="Write the file right now.">⟳ now</span></div>';
+  // (v14.12) NQ block — QQQ book -> NQ rows in the SAME file (FlexLevels routes by SYMBOL).
+  // CQG symbology: ENQU26. The ratio is MANUAL (no NQ price exists anywhere in Skylit) so NQ
+  // labels always carry '~'; update the number here when it drifts (NQ price / QQQ price).
+  html+='<div style="display:flex;gap:6px;align-items:center;padding:2px 4px" title="NQ levels from the QQQ gamma book, written into the same file. Ratio = NQ price / QQQ price — manual (Skylit has no NQ price), so NQ rows always wear ~.">'+
+    '<span style="font-weight:600;font-size:10px">NQ</span>'+
+    '<input type="checkbox" class="gpts-irt-nqon" '+(I.nqOn!==false?'checked':'')+' style="cursor:pointer">'+
+    '<label style="font-size:10px;color:'+PAL.sub+'" title="The NQ FUTURES symbol as IRT charts it (CQG symbology, rolls quarterly — e.g. ENQU26 = NQ Sep 2026).">Sym <input type="text" class="gpts-irt-nqsym" value="'+(I.nqSym||'ENQU26')+'" style="width:58px;background:#0f131b;border:1px solid '+PAL.line+';color:'+PAL.ink+';border-radius:3px;font-size:10px;padding:1px 3px"></label>'+
+    '<label style="font-size:10px;color:'+PAL.sub+'" title="QQQ -> NQ multiplier (NQ price / QQQ price). Manual by construction.">Ratio <input type="text" class="gpts-irt-nqr" value="'+((typeof I.nqRatio==='number'&&I.nqRatio>0)?I.nqRatio:41.9)+'" style="width:44px;background:#0f131b;border:1px solid '+PAL.line+';color:'+PAL.ink+';border-radius:3px;font-size:10px;padding:1px 3px"></label></div>';
   html+='<div style="padding:0 4px 4px;font-size:9px;color:'+PAL.sub+'">'+
     (IRT_LAST.t?('last: '+(IRT_LAST.err?('<span style="color:'+PAL.shortAccent+'">'+IRT_LAST.err+'</span>'):(IRT_LAST.rows+' levels ('+(IRT_LAST.how||'')+(IRT_LAST.ratio?(', ratio '+IRT_LAST.ratio):'')+') '+new Date(IRT_LAST.t).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})))):'no export yet — pick the folder, set the symbol, toggle on')+'</div>';
   html+='<div style="border-bottom:1px solid '+PAL.line+';margin:2px 0 4px"></div>';
@@ -6221,6 +6312,12 @@ function wireConfig(){
   if(irtE) irtE.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.etfSym=(irtE.value||'').trim().toUpperCase(); saveCfg(); });
   var irtD=elCfg.querySelector('.gpts-irt-dir');
   if(irtD) irtD.addEventListener('click', function(){ irtPickFolder(); });
+  var irtNqOn=elCfg.querySelector('.gpts-irt-nqon');
+  if(irtNqOn) irtNqOn.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.nqOn=irtNqOn.checked; saveCfg(); });
+  var irtNqS=elCfg.querySelector('.gpts-irt-nqsym');
+  if(irtNqS) irtNqS.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.nqSym=(irtNqS.value||'').trim().toUpperCase(); saveCfg(); });
+  var irtNqR=elCfg.querySelector('.gpts-irt-nqr');
+  if(irtNqR) irtNqR.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; var v=parseFloat(irtNqR.value); if(isFinite(v)&&v>0) CFG.irt.nqRatio=v; saveCfg(); renderCfg(); });
   var irtN=elCfg.querySelector('.gpts-irt-now');
   if(irtN) irtN.addEventListener('click', function(){ irtExportNow(true); setTimeout(renderCfg, 600); });
   var bo=elCfg.querySelector('.gpts-bopb');

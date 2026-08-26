@@ -1,3 +1,31 @@
+## v14.12 — the export speaks one grammar, gains NQ, and stops forgetting it was on
+
+Operator-locked spec (2026-08-26): **one label grammar for every line — SOURCE + ROLE + STRENGTH.**
+`SPXW KING 100%` / `SPXW GK 36%` / `SPXW SUCC` (no % — its meaning is "next King", not size) ·
+`SPY KING 100%` (the 100% row is arithmetic) / `SPY 51%` (any other role would be a guess — the
+rail machine is SPXW-only) · `IF CW0 / PW0 / MAG0 / MP0` (renamed from CR/PS/Mag/MP to the panel's
+own vocabulary; the 0 = the 0DTE window, leaving room for un-suffixed weekly rows later). Row
+order: SPXW block → SPY block → IF block. Colours (operator's scheme): SPXW yellow(+γ)/purple(−γ);
+SPY the SAME language LIGHTER; IF CW0 red / PW0 green / MAG0+MP0 NEUTRAL grey-blue (a magnet is
+not a wall — red/green stays reserved for walls). Derived sources other than SPY are now ignored
+on the ES chart.
+
+**NQ, on by default, same file.** FlexLevels routes rows by SYMBOL, so ENQU26 rows ride in
+FlexLevelsExport.csv beside EPU26. Source: the panel's own self-fetched QQQ gamma book — own-King
+%, node threshold, KING named, polarity colours, stale ⇒ absent. The QQQ→NQ ratio is MANUAL by
+construction (Skylit carries no NQ price anywhere), so every NQ label wears `~` permanently;
+settings gained NQ on/off + symbol + ratio (default 41.9). **CQG symbology throughout: EPU26 = ES
+Sep-26, ENQU26 = NQ Sep-26 — quarterly rolls, user edits in settings.**
+
+**THE RELOAD BUG (why the export "turned itself off"):** `loadCfg()` never merged `o.irt` back —
+so "Export levels" silently reverted to OFF on EVERY page reload since the v8 config rewrite, not
+just across updates. Caught live the night v14.11 went in (file 5+ minutes stale, cfg.on=false,
+folder handle intact). Fixed: the irt block (incl. the new NQ fields) is merged like every other
+persisted setting, and token-asserted in test_irt_export so a future rewrite cannot drop it again.
+
+test_irt_export rewritten to the new spec (56 asserts: grammar, order, colours, NQ block, ratio
+chain, absence asserts); em_band §40 labels updated; suite back to the six known pre-v13.8 reds.
+
 ## v14.11 — the derived payload's real semantics, measured, fixed, and WRITTEN DOWN
 
 Operator: "make sure the export is done right and the percentages are accurate… and write down

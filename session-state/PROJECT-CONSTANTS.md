@@ -157,6 +157,20 @@ of spot), gamma flip (FALLBACK ONLY → `FLIP*` tagged `calc`), level depth (GEX
 
 ---
 
+## THE OPERATOR'S TRADING PLATFORM — CQG SYMBOLOGY (stated 2026-08-26)
+
+Investor/RT is fed by **CQG**, so futures symbols follow CQG's convention, NOT the exchange's:
+**ES = `EPU26`** (EP + month/year), **NQ = `ENQU26`** (ENQ + month/year). Month codes H/M/U/Z,
+quarterly rolls — the operator edits the symbols in the panel's gear settings each roll. These are
+the SYMBOL-column values FlexLevels routes rows by; a wrong symbol means IRT silently draws the
+levels on no chart. One file carries all markets (`FlexLevelsExport.csv`, folder
+`C:\Users\rassul\InvestorRT\rtx\lsFlexLevels`). The QQQ→NQ ratio is MANUAL by construction —
+Skylit carries no NQ price anywhere — so NQ rows always wear `~`; the ES ratio self-measures
+(futures chart + tape pairing) and `~` only when cached. Label grammar + colours: see the v14.12
+changelog entry — SOURCE + ROLE + STRENGTH, operator-locked; do not rename without asking.
+
+---
+
 ## BUILD/TEST MECHANICS
 
 **`tools/BUILD-CHECKLIST.md` runs on EVERY build. The user should never have to say "save".**
