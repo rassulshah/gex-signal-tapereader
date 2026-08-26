@@ -118,12 +118,16 @@ ok(/the SPXW side reads the LATCHED crown/.test(src), 'k6 Trinity reads the latc
   ok(/USD/.test(ex('evCalFetch')) && /high/.test(ex('evCalFetch')), 'c6 USD + High impact only');
 })();
 
-// ---------- (v14.39) 1b max-pain + the levels strip ----------
+// ---------- (v14.39) 1b max-pain · (v14.40) THE LEVELS LINE ----------
 ok(/expect pinning; max pain/.test(src), 'o1 an OPEX day names the pin target (operator: the simplest thing)');
-ok(/g3lstrip/.test(src) && /LEVELS/.test(src), 'o2 the levels strip renders under the read (approved mockup)');
-ok(/\u00b7 node/.test(src) || src.indexOf("' \\u00b7 node'")>=0, 'o3 confluence chips say "· node" (Garma r22)');
-ok(/session TICKS are RETIRED/.test(src) && !/g3sess" style/.test(src), 'o4 the rail ticks retired in the strip\'s favour');
-ok(/g3lvk/.test(src), 'o5 SPY K keeps its purple identity in the strip');
+ok(/function railLevelsLine/.test(src) && /g3haslvl/.test(src), 'o2 the LEVELS LINE renders as its own rail above the gamma rail (operator sketch)');
+ok(/\u00b7node/.test(src) || src.indexOf("\\u00b7node")>=0, 'o3 confluence stacks say "·node" (Garma r22)');
+ok(/session TICKS are RETIRED/.test(src) && !/g3sess" style/.test(src), 'o4 the rail ticks stay retired');
+ok(/g3llvk/.test(src), 'o5 SPY K keeps its purple identity on the line');
+ok(!/g3lstrip/.test(src), 'o6 the v14.39 chip strip is fully gone — one levels display, not two');
+ok(/IFN=\{ CR:'CW', PS:'PW'/.test(src) && /g3llvif/.test(src), 'o7 the IF levels moved onto the line, italic — THEIR numbers');
+ok(!/class="g3emT/.test(src), 'o8 the T left the main rail (operator: IF levels off the rail)');
+ok(/name, price and a small arrowhead HANG BELOW/.test(src) || /HANG BELOW it/.test(src), 'o9 the line is on top, levels hang below — the corrected layout');
 
 console.log('test_garma_p1: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

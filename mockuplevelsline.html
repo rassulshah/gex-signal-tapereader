@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>The levels line — arrowheads on a price-scaled line — v14.40 mockup</title>
+<style>
+  body{background:#0d1117;color:#e6edf3;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+       font-variant-numeric:tabular-nums;margin:0;padding:24px;display:flex;gap:30px;flex-wrap:wrap;align-items:flex-start}
+  .panel{width:560px;background:#11161f;border:1px solid #2a3340;border-radius:6px;padding:12px 14px}
+  .cap{font-size:11px;font-weight:800;letter-spacing:.08em;color:#8b98a9;margin:0 0 8px;text-transform:uppercase}
+  .note{font-size:10px;color:#8b98a9;line-height:1.55;margin-top:10px;width:560px}
+  .note b{color:#e6edf3}
+  .tread{font-size:9px;font-weight:600;color:#c9d4e2;background:rgba(124,199,255,.05);
+         border:1px solid rgba(124,199,255,.18);border-radius:4px;padding:4px 8px;line-height:1.5;margin-bottom:6px}
+  /* THE LEVELS LINE — price-scaled, same frame as the rail */
+  .lline{position:relative;height:34px;margin:0 6px 8px}
+  .lbar{position:absolute;left:0;right:0;top:26px;height:2px;background:#39424e;border-radius:1px}
+  .mk{position:absolute;top:19px;transform:translateX(-50%);width:0;height:0;cursor:help;
+      border-left:4px solid transparent;border-right:4px solid transparent;border-top:6px solid #8b98a9}
+  .mk.up{border-top-color:#e0645f}
+  .mk.dn{border-top-color:#2ec27e}
+  .mk.confl{border-top-color:#7cc7ff}
+  .mk.spyk{border-top-color:#cdb4fa}
+  .mlab{position:absolute;top:0;transform:translateX(-50%);text-align:center;font-size:6.5px;font-weight:800;
+        color:#8b98a9;line-height:8px;white-space:nowrap;cursor:help}
+  .mlab b{display:block;color:#c9d1da;font-size:7.5px}
+  .mlab.confl{color:#7cc7ff}.mlab.confl b{color:#7cc7ff}
+  .mlab.spyk{color:#cdb4fa}.mlab.spyk b{color:#cdb4fa}
+  .pxn{position:absolute;top:23px;width:1px;height:8px;background:#fff;transform:translateX(-50%)}
+  .pxl{position:absolute;top:31px;transform:translateX(-50%);font-size:6px;color:#fff;font-weight:900}
+</style>
+</head>
+<body>
+
+<div>
+<div class="cap">THE LEVELS LINE — a price-scaled line with arrowheads, under the read</div>
+<div class="panel">
+  <div class="tread">TREND UP day · Trinity 2-of-3 (QQQ dissents). KING 7685 holds, 16 below price…</div>
+
+  <div class="lline">
+    <div class="lbar"></div>
+    <!-- markers: arrowheads ON the line, label+price above; same x-scale as the rail below -->
+    <span class="mlab" style="left:8%">PDL<b>7662</b></span><i class="mk dn" style="left:8%"></i>
+    <span class="mlab" style="left:26%">IBL<b>7677</b></span><i class="mk dn" style="left:26%"></i>
+    <span class="mlab spyk" style="left:38%">SPY K<b>7682</b></span><i class="mk spyk" style="left:38%"></i>
+    <span class="mlab" style="left:52%">PDC<b>7690</b></span><i class="mk dn" style="left:52%"></i>
+    <!-- clustered levels merge into ONE marker with a joint label -->
+    <span class="mlab confl" style="left:76%">IBH·PDH<b>7700 · node</b></span><i class="mk confl" style="left:76%"></i>
+    <!-- the current price notch, for orientation -->
+    <i class="pxn" style="left:80%"></i><span class="pxl" style="left:80%">7701</span>
+  </div>
+
+  <!-- the rail would sit here, same x-scale, so levels line up vertically with the posts -->
+  <div style="height:8px;border-top:1px dashed #222a36;margin:0 6px;color:#5b6675;font-size:6px;padding-top:2px">
+    (the RAIL renders directly below, same x-scale — a level here sits exactly above its price on the rail)</div>
+</div>
+<div class="note">
+  <b>What changed from the chip strip:</b> it is now a spatial MAP, not a list — a thin line on the
+  SAME x-scale as the rail, with a small arrowhead at each level's true position (your sketch).
+  Label + price stand above each head. <b>Colours:</b> green head = below price, red = overhead,
+  <b style="color:#7cc7ff">blue = a gamma node sits on it</b> ("· node"), <b style="color:#cdb4fa">purple = SPY King</b>.
+  <b>Clusters merge</b>: IBH and PDH one point apart become one head with a joint label ("IBH·PDH 7700")
+  instead of overlapping. A small white notch marks current price for instant orientation. Because the
+  line shares the rail's frame, every arrowhead sits vertically above its price on the rail — structure
+  and gamma line up by eye, no reading required.
+</div>
+</div>
+
+</body>
+</html>

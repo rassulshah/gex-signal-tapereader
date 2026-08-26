@@ -851,8 +851,12 @@ eval(ex('emBand'));
   ok(/>T: '\+frameNum\(ifMagEarly\)/.test(f), 'the target reads "T: <whole point>"');
   ok(/tgtUp=\(ifMagEarly>EBc\.now\)/.test(f), 'green above price, red below');
   ok(/g3tgt'\+\(tgtUp===true\?' up'/.test(f), 'the chip takes the colour class');
-  ok(/\(ifMagEarly>EB\.now\)\?' up':' dn'/.test(f),
-     'and the T on the rail reads the SAME test, so the two can never disagree');
+  // (v14.40) the rail's T span is GONE — the operator moved every IF level onto the LEVELS
+  // LINE ("remove the IF levels from the main rail and put it on the levels rail"). The old
+  // assert held the chip and the rail span to the same up/dn test; the span no longer exists,
+  // so the guard is now: no rail T, and the line carries it as IF T instead.
+  ok(!/class="g3emT/.test(f), 'the T span left the main rail (v14.40)');
+  ok(/Mag:'T'/.test(src),     'and the LEVELS LINE carries it as IF T');
   // ⚠ .g3tgt is defined TWICE in the stylesheet (pre-existing); the LATER definition wins, so take it.
   const tgtCss=src.slice(src.lastIndexOf(".g3tgt{"), src.lastIndexOf(".g3tgt{")+200);
   ok(/margin-left:auto/.test(tgtCss), 'and it is pushed to the right-hand end of the row');

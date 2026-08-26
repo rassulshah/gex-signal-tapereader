@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.39
+// @version    14.40
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -18808,20 +18808,32 @@ function ensureV3Css(){
     '#gpts-body .g3lvwFORMING{color:#7cc7ff}'+
     '#gpts-body .g3lvwWEAKENING{color:#f2b45a}'+
     '#gpts-body .g3lvwTURNING{color:#cdb4fa}'+
-    // (v14.39) the levels strip — structure in its own row under the read
-    '#gpts-body .g3lstrip{display:flex;align-items:center;gap:4px;flex-wrap:wrap;background:rgba(139,152,169,.05);'+
-      'border:1px solid rgba(139,152,169,.2);border-radius:4px;padding:2px 6px;margin:0 0 4px;cursor:help}'+
-    '#gpts-body .g3lstrip em{font-style:normal;font-size:6px;font-weight:900;letter-spacing:.08em;color:#5b6675;margin-right:1px}'+
-    '#gpts-body .g3lv{display:inline-flex;align-items:center;gap:3px;font-size:7.5px;font-weight:800;color:#8b98a9;'+
-      'border:1px solid #2a3340;border-radius:3px;padding:0 4px;line-height:11px}'+
-    '#gpts-body .g3lv b{color:#c9d1da;font-weight:800}'+
-    '#gpts-body .g3lv u{text-decoration:none;color:#5b6675;font-size:6.5px;font-weight:700}'+
-    '#gpts-body .g3lvup::before{content:"\u25b2";color:#e0645f;font-size:5px;margin-right:1px}'+
-    '#gpts-body .g3lvdn::before{content:"\u25bc";color:#2ec27e;font-size:5px;margin-right:1px}'+
-    '#gpts-body .g3lv.g3lvc{border-color:rgba(124,199,255,.5)}'+
-    '#gpts-body .g3lv.g3lvc b,#gpts-body .g3lv.g3lvc u{color:#7cc7ff}'+
-    '#gpts-body .g3lv.g3lvk{border-color:#cdb4fa}'+
-    '#gpts-body .g3lv.g3lvk b{color:#cdb4fa}'+
+    // (v14.40) THE LEVELS LINE — the v14.39 chip strip's replacement, rebuilt to the operator's
+    // sketch ("the idea was to have a line with small arrowheads... a separate rail or line above
+    // the current one and the levels should be below it"). Same overlay trick as the roll lane:
+    // anchored left:0/right:0 inside .g3emt so it spans EXACTLY the track it annotates, and the
+    // g3haslvl class buys the space above. The LINE is on top; each level's name, price and a
+    // small DOWN arrowhead hang beneath it, the head pointing at the rail spot below.
+    '#gpts-body .g3ll{position:absolute;left:0;right:0;height:32px}'+
+    '#gpts-body .g3emt.g3haslvl{margin-top:34px}'+
+    '#gpts-body .g3emt.g3haslvl .g3ll{top:-34px}'+
+    '#gpts-body .g3emt.g3haslane.g3haslvl{margin-top:60px}'+
+    '#gpts-body .g3emt.g3haslane.g3haslvl .g3ll{top:-60px}'+
+    '#gpts-body .g3llbar{position:absolute;left:0;right:0;top:1px;height:2px;background:#4a5568;border-radius:1px}'+
+    '#gpts-body .g3llpx{position:absolute;top:-1px;width:1px;height:6px;background:#fff;transform:translateX(-50%)}'+
+    '#gpts-body .g3llv{position:absolute;top:5px;transform:translateX(-50%);text-align:center;font-size:5.5px;'+
+      'font-weight:800;color:#8b98a9;line-height:7px;white-space:nowrap;cursor:help}'+
+    '#gpts-body .g3llv b{display:block;color:#c9d1da;font-size:6.5px;font-weight:800}'+
+    '#gpts-body .g3llv i{display:block;margin:1px auto 0;width:0;height:0;border-left:3px solid transparent;'+
+      'border-right:3px solid transparent;border-top:5px solid #8b98a9}'+
+    '#gpts-body .g3llvup i{border-top-color:#e0645f}'+
+    '#gpts-body .g3llvdn i{border-top-color:#2ec27e}'+
+    // italics = InsiderFinance, the same voice the old panel used for THEIR numbers
+    '#gpts-body .g3llvif{font-style:italic}'+
+    '#gpts-body .g3llvc,#gpts-body .g3llvc b{color:#7cc7ff}'+
+    '#gpts-body .g3llvc i{border-top-color:#7cc7ff}'+
+    '#gpts-body .g3llvk,#gpts-body .g3llvk b{color:#cdb4fa}'+
+    '#gpts-body .g3llvk i{border-top-color:#cdb4fa}'+
     // (v14.35) session-structure ticks — the skeleton, dimmer than everything gamma
     '#gpts-body .g3sess{position:absolute;top:15px;width:0;height:10px;border-left:1px solid #46505c;'+
       'transform:translateX(-50%);z-index:0;cursor:help;opacity:.9}'+
@@ -18931,6 +18943,9 @@ function ensureV3Css(){
       'border-top:6px solid transparent;border-bottom:6px solid transparent;border-right:7px solid #f0616d}'+
     // TARGET moves to CYAN. Yellow now means POSITIVE GAMMA (Skylit's Pika), so the target cannot keep it.
     // Cyan is the one hue the palette had not spent, and the T glyph carries identity without colour.
+    // (v14.40) .g3emT is DEAD MARKUP — the rail's T span was removed (the level hangs from the
+    // LEVELS LINE as IF T). The CSS stays: test_ui_zoom's case-collision guard (.g3emt vs .g3emT,
+    // quirks-mode BackCompat) needs both selectors present to keep proving the zoom fix.
     '#gpts-body .g3emT{position:absolute;top:21px;font-size:9px;font-weight:800;color:#4fd1e0;'+
       'transform:translateX(-50%);line-height:12px;text-shadow:0 0 3px #0b0e14,0 0 3px #0b0e14}'+
     '#gpts-body .g3emT.out{color:#6c7889}'+
@@ -20338,6 +20353,90 @@ function levelDoors(rolls, dsc){
   }catch(e){}
   return out;
 }
+// (v14.40, operator sketch, mockups/mockup-levels-line.html) THE LEVELS LINE — a separate rail
+// ABOVE the gamma rail, directly under the read: the LINE runs on top, and each level's name,
+// price and a small arrowhead HANG BELOW it, the head pointing DOWN at the spot on the rail where
+// that price lives — both share the x-frame, by the roll lane's own overlay trick. Replaces the
+// v14.39 chip strip, whose form was rejected ("the idea was to have a line with small arrowheads
+// ... a separate rail or line above the current one and the levels should be below it").
+// It carries: session structure (30-min IB, prior day), the SPY King (purple, as everywhere), and
+// — moved OFF the main rail at the operator's instruction — the InsiderFinance levels (CW/PW,
+// the 0DTE walls, FLIP, and T the magnet), in italics because they are THEIR numbers, the same
+// voice the old panel gave them. A gamma node within SESS_CONFL_PTS turns a stack blue with
+// "·node" (Garma r22: structure + node stacked beats either alone). Stacks that would overlap
+// (within 4.5% of the frame) merge into one — names joined, the shown price is the member nearest
+// price, every exact price in the hover. The white notch on the line is price now.
+function railLevelsLine(EB, RB, RAILPS, SESSL, sym){
+  try{
+    if(!EB || !EB.ok) return '';
+    var frNow=(typeof EB.nowLive==='number')?EB.nowLive:EB.now;
+    var LV=[];
+    if(SESSL){
+      [['IBH',SESSL.ibSet?SESSL.ibH:null],['IBL',SESSL.ibSet?SESSL.ibL:null],
+       ['PDH',SESSL.pdh],['PDL',SESSL.pdl],['PDC',SESSL.pdc]].forEach(function(sd){
+        if(sd[1]!=null) LV.push({ n:sd[0], at:sd[1] }); });
+    }
+    try{
+      if(CFG.spyFlag!==false && typeof LASTFEED!=='undefined' && LASTFEED.SPY && LASTFEED.SPY.j &&
+         (Date.now()-(LASTFEED.SPY.ts||0))<=FEED_STALE_MS*3 && typeof EB.scaleUsed==='number'){
+        var ewL=null; try{ ewL=extractWalls(LASTFEED.SPY.j); }catch(eLa){}
+        if(ewL && ewL.king!=null) LV.push({ n:'SPY K', at:ewL.king*EB.scaleUsed, spyk:true });
+      }
+    }catch(eLb){}
+    // the IF levels, moved here off the main rail (v14.40). Chart scale via the Atlas-anchored
+    // basis (ifLadder.dispScale). MP* stays off the line — the read already names max pain on an
+    // OPEX day, and our recomputed number beside their published walls would invite confusion.
+    try{
+      var IFL=ifLadder(sym);
+      if(IFL && !IFL.err){
+        var IFN={ CR:'CW', PS:'PW', CR0:'CW0', PS0:'PW0', Mag:'T', FLIP:'FLIP', 'FLIP*':'FLIP*' };
+        IFL.rows.forEach(function(r){
+          var toks=String(r.id).split('\u00b7').map(function(t){ return IFN[t]||null; }).filter(Boolean);
+          if(!toks.length) return;
+          LV.push({ n:'IF '+toks.join('\u00b7'), at:r.disp, iff:true });
+        });
+      }
+    }catch(eLc){}
+    if(!LV.length) return '';
+    LV.forEach(function(L){
+      L.d=L.at-frNow;
+      L.x=emPosRail(EB, L.at, RB);
+      L.confl=false;
+      try{ for(var cL=0;cL<RAILPS.length;cL++){ if(Math.abs(RAILPS[cL].disp-L.at)<=SESS_CONFL_PTS){ L.confl=true; break; } } }catch(eLd){}
+    });
+    LV=LV.filter(function(L){ return isFinite(L.x); });
+    if(!LV.length) return '';
+    LV.sort(function(a,b){ return a.x-b.x; });
+    var GRP=[];
+    LV.forEach(function(L){
+      var g=GRP.length?GRP[GRP.length-1]:null;
+      if(g && (L.x-g.m[g.m.length-1].x)<=4.5) g.m.push(L);
+      else GRP.push({ m:[L] });
+    });
+    var h='<i class="g3llbar"'+g3tip('THE LEVELS LINE \u2014 session structure (30-min IB, prior day), the SPY King, and the InsiderFinance levels (italics \u2014 THEIR numbers), each hanging under the line with its arrowhead pointing at the spot on the rail below where that price lives. BLUE = a gamma node sits on it. Overlapping levels merge into one stack \u2014 hover for each exact price. The white notch is price now.')+'></i>';
+    var pN=emPosRail(EB, frNow, RB);
+    if(isFinite(pN)) h+='<i class="g3llpx" style="left:'+pN.toFixed(1)+'%"'+g3tip('Price now \u2014 '+frameNum(frNow))+'></i>';
+    GRP.forEach(function(g){
+      var pick=g.m[0];
+      g.m.forEach(function(L){ if(Math.abs(L.d)<Math.abs(pick.d)) pick=L; });
+      var x=0; g.m.forEach(function(L){ x+=L.x; }); x/=g.m.length;
+      var name=g.m.map(function(L){ return L.n; }).join('\u00b7');
+      var spyk=g.m.some(function(L){ return L.spyk; });
+      var confl=g.m.some(function(L){ return L.confl; });
+      var iff=g.m.every(function(L){ return L.iff; });
+      var cls='g3llv '+(pick.d>0?'g3llvup':'g3llvdn')+(confl?' g3llvc':'')+(spyk?' g3llvk':'')+(iff?' g3llvif':'');
+      var edge=(x>94)?';transform:translateX(-100%)':((x<6)?';transform:translateX(0)':'');
+      var tip=g.m.map(function(L){ return L.n+' '+frameNum(L.at)+' ('+(L.d>0?'+':'')+Math.round(L.d)+')'; }).join(' \u00b7 ')+
+              '. \u25b4 The head points at where this price sits on the rail below.'+
+              (confl?' A GAMMA NODE sits on this level \u2014 structure and gamma stacked (Garma r22).':'')+
+              (spyk?' The OTHER book\'s crown \u2014 price bounces off it even when every dynamic here is SPXW.':'')+
+              (iff?' InsiderFinance\'s numbers, not ours \u2014 open-interest gamma, a stock not a flow.':'');
+      h+='<span class="'+cls+'" style="left:'+x.toFixed(1)+'%'+edge+'"'+g3tip(tip)+'>'+
+         g3esc(name)+'<b>'+g3esc(frameNum(pick.at))+(confl?' \u00b7node':'')+'</b><i></i></span>';
+    });
+    return '<div class="g3ll">'+h+'</div>';
+  }catch(e){ return ''; }
+}
 function railRollLane(EB, RB, rolls, piles){
   try{
     if(!rolls || !rolls.length) return '';
@@ -21097,7 +21196,7 @@ function secFrame(sym){
   // (v11.80) WHOLE POINTS, like every other price here. dispNum printed "+16.37".
   var tgtUp=null;
   try{ if(ifMagEarly!=null && EBc && EBc.ok && typeof EBc.now==='number') tgtUp=(ifMagEarly>EBc.now); }catch(eTU){}
-  if(ifMagEarly!=null) h+='<span class="g3tgt'+(tgtUp===true?' up':(tgtUp===false?' dn':''))+'"'+g3tip('Where is the day trying to go? The heaviest strike in InsiderFinance\'s book — where dealer hedging concentrates and price tends to be pulled. '+(tgtUp===true?'GREEN: it sits ABOVE price. ':(tgtUp===false?'RED: it sits BELOW price. ':''))+'A destination, not a forecast, and it reads the same book as the ladder below so the two can never disagree. The T on the rail is this same level.')+'>T: '+frameNum(ifMagEarly)+((EBc&&EBc.ok&&typeof EBc.now==='number')?(' <span class="g3dist">'+((ifMagEarly>=EBc.now)?'+':'\u2212')+frameNum(Math.abs(ifMagEarly-EBc.now))+'</span>'):'')+'</span>';
+  if(ifMagEarly!=null) h+='<span class="g3tgt'+(tgtUp===true?' up':(tgtUp===false?' dn':''))+'"'+g3tip('Where is the day trying to go? The heaviest strike in InsiderFinance\'s book — where dealer hedging concentrates and price tends to be pulled. '+(tgtUp===true?'GREEN: it sits ABOVE price. ':(tgtUp===false?'RED: it sits BELOW price. ':''))+'A destination, not a forecast, and it reads the same book as the ladder below so the two can never disagree. The T hanging from the LEVELS LINE is this same level.')+'>T: '+frameNum(ifMagEarly)+((EBc&&EBc.ok&&typeof EBc.now==='number')?(' <span class="g3dist">'+((ifMagEarly>=EBc.now)?'+':'\u2212')+frameNum(Math.abs(ifMagEarly-EBc.now))+'</span>'):'')+'</span>';
   h+='</div>';
   // (v11.49) LINE 2 IS THE BAND NOW. It used to be four naked measurements — DEX, TERM, EM, ATR —
   // which reported instrumentation readings while line 1 above answered a question. A number here
@@ -21332,40 +21431,9 @@ function secFrame(sym){
       }catch(eF6){}
       if(FR.length){
         var frTxt=FR.map(function(fseg){ return fseg.charAt(0).toUpperCase()+fseg.slice(1); }).join('. ')+'.';
-        // (v14.39, approved mockup mockups/mockup-levels-strip.html) THE LEVELS STRIP — session
-        // structure gets its own row under the read; the rail keeps only what moves. Chips sorted
-        // nearest-first, \u25b2 = overhead, \u25bc = beneath, blue = a gamma node sits ON it
-        // (Garma r22 confluence), SPY K keeps its purple identity.
-        try{
-          var LS9=[];
-          if(SESSL){
-            [['IBH',SESSL.ibSet?SESSL.ibH:null],['IBL',SESSL.ibSet?SESSL.ibL:null],
-             ['PDH',SESSL.pdh],['PDL',SESSL.pdl],['PDC',SESSL.pdc]].forEach(function(sd){
-              if(sd[1]!=null) LS9.push({ n:sd[0], at:sd[1] }); });
-          }
-          try{
-            if(CFG.spyFlag!==false && typeof LASTFEED!=='undefined' && LASTFEED.SPY && LASTFEED.SPY.j &&
-               (Date.now()-(LASTFEED.SPY.ts||0))<=FEED_STALE_MS*3 && typeof EB.scaleUsed==='number'){
-              var ew9=null; try{ ew9=extractWalls(LASTFEED.SPY.j); }catch(e9a){}
-              if(ew9 && ew9.king!=null) LS9.push({ n:'SPY K', at:ew9.king*EB.scaleUsed, spyk:true });
-            }
-          }catch(e9b){}
-          if(LS9.length){
-            var frNow9=(typeof EB.nowLive==='number')?EB.nowLive:EB.now;
-            LS9.forEach(function(L9){ L9.d=L9.at-frNow9;
-              L9.confl=false;
-              try{ for(var c9=0;c9<RAILPS.length;c9++){ if(Math.abs(RAILPS[c9].disp-L9.at)<=SESS_CONFL_PTS){ L9.confl=true; break; } } }catch(e9c){}
-            });
-            LS9.sort(function(a9,b9){ return Math.abs(a9.d)-Math.abs(b9.d); });
-            var h9='<div class="g3lstrip"'+g3tip('THE LEVELS — session structure (30-min IB, prior day) and the SPY King, nearest first. \u25b2 overhead, \u25bc beneath, with the distance. BLUE = a gamma node sits on it (Garma r22: structure + node stacked beats either alone). The rail carries only what moves; this row is the skeleton it moves around.')+'><em>LEVELS</em>';
-            LS9.forEach(function(L9){
-              h9+='<span class="g3lv'+(L9.d>0?' g3lvup':' g3lvdn')+(L9.confl?' g3lvc':'')+(L9.spyk?' g3lvk':'')+'">'+
-                  g3esc(L9.n)+' <b>'+g3esc(frameNum(L9.at))+'</b><u>'+(L9.d>0?'+':'')+Math.round(L9.d)+(L9.confl?' \u00b7 node':'')+'</u></span>';
-            });
-            h9+='</div>';
-            h+=h9;
-          }
-        }catch(eLS9){}
+        // (v14.40) the v14.39 chip strip is GONE — its form was rejected ("the idea was to have
+        // a line with small arrowheads"). The levels now hang from THE LEVELS LINE, a separate
+        // rail above the gamma rail: railLevelsLine(), overlaid inside .g3emt below the read.
         h+='<div class="g3tread"'+g3tip('THE READ, on three things: THE KING (held or contested, which side of price), SUPPORT AND RESISTANCE (nearest level each side, live build/drain, defence verdicts \u2014 the SPY King competes as a level), THE DESTINATION (dominant magnet by pull = size/distance, 2\u00d7 dominance gate, path priced fuelled/braked/clear, feeding rolls named). All measured from the rail arrays. A destination is where the flow points, not a promise.')+'>'+
             g3esc(frTxt)+'</div>';
       }
@@ -21378,7 +21446,8 @@ function secFrame(sym){
     var EL_LAB='<span class="g3emk'+(AH?' g3ahdim':'')+'"'+g3tip('Expected low — the open minus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.low/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(RB.under?RB.lo:EB.low))+'<small>'+(EB.est?'~':'')+(RB.under?'RAIL':'EL')+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
     h+=EL_LAB;
     var laneHtml=railRollLane(EB, RB, RAILROLLS, RAILPS);
-    h+='<span class="g3emt'+(laneHtml?' g3haslane':'')+'">'+laneHtml+
+    var lvlLineHtml=''; try{ lvlLineHtml=railLevelsLine(EB, RB, RAILPS, SESSL, sym); }catch(eLL){}
+    h+='<span class="g3emt'+(laneHtml?' g3haslane':'')+(lvlLineHtml?' g3haslvl':'')+'">'+lvlLineHtml+laneHtml+
        '<i class="g3emr"></i>'+
        ((EB.hiWater!=null&&EB.loWater!=null)?('<i class="g3emx2" style="left:'+emPosRail(EB,EB.loWater,RB).toFixed(1)+'%;width:'+Math.max(0,emPosRail(EB,EB.hiWater,RB)-emPosRail(EB,EB.loWater,RB)).toFixed(1)+'%"></i>'+
          '<i class="g3emw2" style="left:'+emPosRail(EB,EB.loWater,RB).toFixed(1)+'%"></i>'+
@@ -21412,7 +21481,10 @@ function secFrame(sym){
                    '<span class="g3embl" style="left:'+emPosRail(EB,EB.low,RB).toFixed(1)+'%">EL '+g3esc(frameNum(EB.low))+'</span>') : '')+
        // (v11.75) SAME COLOUR TEST AS THE CHIP ON ROW 1. Two marks for one level that disagreed about
        // its colour was worse than either colour alone.
-       (!AH && ifMagEarly!=null?('<span class="g3emT'+((ifMagEarly<EB.low||ifMagEarly>EB.high)?' out':'')+((ifMagEarly>EB.now)?' up':' dn')+'" style="left:'+emPosRail(EB,ifMagEarly,RB).toFixed(1)+'%">T</span>'):'')+
+       // (v14.40, operator: "remove the IF levels from the main rail and put it on the levels
+       // rail") the T mark left the rail — it hangs from THE LEVELS LINE as "IF T", with every
+       // other InsiderFinance level. The row-1 chip still names it.
+
        // (v14.4, operator-directed) THE DOT IS NOW A PILL: the rounded ES price with an arrowhead
        // for which way the last bar closed. Direction from the last two CLOSED candles — a per-tick
        // wiggle would make the arrow flicker; a bar is a decision. Edge-clamped like every label.

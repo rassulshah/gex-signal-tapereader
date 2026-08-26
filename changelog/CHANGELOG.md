@@ -1,3 +1,21 @@
+## v14.40 — THE LEVELS LINE (operator sketch) + the IF levels leave the main rail
+
+The v14.39 chip strip is replaced wholesale — its FORM was rejected ("the idea was to have a
+line with small arrowheads... a separate rail or line above the current one and the levels
+should be below it"). THE LEVELS LINE is its own rail directly under the read: the LINE runs on
+top, and each level's name, price and a small arrowhead hang BELOW it, the head pointing DOWN at
+the exact spot on the gamma rail where that price lives — the two share the x-frame by the roll
+lane's own overlay trick (anchored left:0/right:0 inside .g3emt; g3haslvl buys the space above).
+Carries session structure (30-min IB, prior day), the SPY King (purple), confluence in blue with
+"·node" (Garma r22), a white price-now notch, and overlap-merged stacks (names joined, nearest
+price shown, every exact price in the hover).
+
+AND — operator-directed — the InsiderFinance levels moved OFF the main rail onto the line: CW,
+PW, the 0DTE walls, FLIP and T (the magnet), in ITALICS because they are THEIR numbers (the same
+voice the old panel gave them). The rail's floating T span is gone; the row-1 T chip stays and
+its hover now points at the line. MP* stays off the line — the read already names max pain on an
+OPEX day. Mockup: mockups/mockup-levels-line.html (v2, corrected layout).
+
 ## v14.39 — GARMA 1b (max pain on OPEX) + THE LEVELS STRIP (approved mockup)
 
 1b, the operator\'s "simplest thing that is useful": an OPEX day\'s lead clause names the pin

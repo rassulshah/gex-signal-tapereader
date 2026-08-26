@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>The levels line v2 — line on top, levels hanging below — v14.40 mockup</title>
+<style>
+  body{background:#0d1117;color:#e6edf3;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+       font-variant-numeric:tabular-nums;margin:0;padding:24px;display:flex;gap:30px;flex-wrap:wrap;align-items:flex-start}
+  .panel{width:560px;background:#11161f;border:1px solid #2a3340;border-radius:6px;padding:12px 14px}
+  .cap{font-size:11px;font-weight:800;letter-spacing:.08em;color:#8b98a9;margin:0 0 8px;text-transform:uppercase}
+  .note{font-size:10px;color:#8b98a9;line-height:1.55;margin-top:10px;width:560px}
+  .note b{color:#e6edf3}
+  .tread{font-size:9px;font-weight:600;color:#c9d4e2;background:rgba(124,199,255,.05);
+         border:1px solid rgba(124,199,255,.18);border-radius:4px;padding:4px 8px;line-height:1.5;margin-bottom:6px}
+  /* THE LEVELS LINE v2 — the LINE on top, levels HANG BELOW it, arrowheads point DOWN at the rail */
+  .lline{position:relative;height:40px;margin:0 6px 2px}
+  .lbar{position:absolute;left:0;right:0;top:2px;height:3px;background:#4a5568;border-radius:1px}
+  .stack{position:absolute;top:7px;transform:translateX(-50%);text-align:center;font-size:6.5px;font-weight:800;
+        color:#8b98a9;line-height:8px;white-space:nowrap;cursor:help}
+  .stack b{display:block;color:#c9d1da;font-size:7.5px}
+  .stack i{display:block;margin:2px auto 0;width:0;height:0;
+      border-left:4px solid transparent;border-right:4px solid transparent;border-top:6px solid #8b98a9}
+  .stack.up i{border-top-color:#e0645f}
+  .stack.dn i{border-top-color:#2ec27e}
+  .stack.confl{color:#7cc7ff}.stack.confl b{color:#7cc7ff}.stack.confl i{border-top-color:#7cc7ff}
+  .stack.spyk{color:#cdb4fa}.stack.spyk b{color:#cdb4fa}.stack.spyk i{border-top-color:#cdb4fa}
+  .pxn{position:absolute;top:0;width:1px;height:7px;background:#fff;transform:translateX(-50%)}
+  /* a sketch of the main rail beneath, to show the vertical alignment */
+  .railbox{position:relative;height:64px;background:#0f131b;border:1px solid #222a36;border-radius:4px}
+  .track{position:absolute;left:14px;right:14px;top:24px;height:3px;background:#39424e;border-radius:2px}
+  .post{position:absolute;top:24px;width:3px;background:#e3c341;border-radius:1px}
+  .post.acc{background:#a371f7}
+  .plab{position:absolute;top:48px;transform:translateX(-50%);font-size:8px;font-weight:800;color:#e3c341}
+  .pill2{position:absolute;top:20px;height:11px;background:#fff;color:#0d1117;border-radius:6px;font-size:8px;
+        font-weight:900;display:flex;align-items:center;padding:0 4px;z-index:3}
+</style>
+</head>
+<body>
+
+<div>
+<div class="cap">THE LEVELS LINE v2 — its own line ABOVE the rail; levels hang BELOW it (your sketch)</div>
+<div class="panel">
+  <div class="tread">TREND UP day · Trinity 2-of-3 (QQQ dissents). KING 7685 holds, 16 below price…</div>
+
+  <div class="lline">
+    <div class="lbar"></div>
+    <i class="pxn" style="left:80%"></i>
+    <span class="stack dn" style="left:8%">PDL<b>7662</b><i></i></span>
+    <span class="stack dn" style="left:26%">IBL<b>7677</b><i></i></span>
+    <span class="stack spyk" style="left:38%">SPY K<b>7682</b><i></i></span>
+    <span class="stack dn" style="left:52%">PDC<b>7690</b><i></i></span>
+    <span class="stack confl" style="left:76%">IBH·PDH<b>7700 · node</b><i></i></span>
+  </div>
+
+  <div class="railbox">
+    <div class="track"></div>
+    <div class="post" style="left:18%;height:26px"></div><span class="plab" style="left:18%">7685 ♛</span>
+    <div class="post acc" style="left:52%;height:18px"></div>
+    <div class="post" style="left:76%;height:20px"></div>
+    <div class="pill2" style="left:80%">7699▴</div>
+  </div>
+</div>
+<div class="note">
+  <b>Exactly your sketch, stacked:</b> the LINE runs on top · each level's NAME then PRICE hang beneath
+  it · the small ARROWHEAD sits at the bottom of the stack pointing DOWN — dropping the level onto the
+  main rail below, which shares the same x-scale, so the head points at the exact spot on the rail where
+  that price lives (see IBH·PDH's blue head sitting directly above the 7700 post). Colours: green =
+  below price, red = overhead, <b style="color:#7cc7ff">blue = node on it</b>,
+  <b style="color:#cdb4fa">purple = SPY King</b>. Clusters merge into one stack. The white notch on the
+  line is current price.
+</div>
+</div>
+
+</body>
+</html>
