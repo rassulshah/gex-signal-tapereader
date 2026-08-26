@@ -1,3 +1,29 @@
+## v14.32 — the face slims to TREND + LOCATION (operator-directed) + the consistency review
+
+Operator: "step back and review the entire feature… i don't think i need the nodes section below,
+so it can be removed along with the Reaction and Execute sections."
+
+**The review's verdict**: with the Level Engine live, the NODES list, ③ REACTION and ④ EXECUTE
+had become restatements — the rail + profile + read now carry roles, states, ROC, rolls, walls
+and the defence verdicts (the READ's reaction clauses use the SAME reactDefence the REACTION
+section displayed; one computation, no drift possible). The one thing the retired sections had
+that the face keeps needing — the in-play defence verdict — lives in the read and the effects.
+
+**The removals, done the safe way**: the NODES list is HIDDEN, NOT REMOVED (LOC_SHOW_NODES=false,
+the LOC_SHOW_CHART precedent) — every computation behind it still runs because the read, rail,
+profile and enrolled features drink from the same wells. REACTION/EXECUTE stop rendering
+(secs=[secBias,secLoc]); secReact/secExec survive as functions for recorders/debug, marked for
+proper deletion after a clean week. The step bar shows the two real steps.
+
+test_layout_v13 updated for the two-step face (32 pass). Suite at the baseline six.
+
+## v14.31 — the state row lands where it belongs (operator-caught layout)
+
+The v14.30 state row was appended at a lexical point still INSIDE the bar track's container, so
+the state words floated over the bars' tops instead of sitting under the ROC matrix. It is now a
+proper fourth matrix row (capped "ST"), built where the data is and appended after the 60M row —
+5M / 15M / 60M are the evidence, ST is the conclusion, in that order on screen.
+
 ## v14.30 — THE LEVEL ENGINE (operator's business requirement, made structural)
 
 "I need to know potential support and resistance, especially if it is weakening and new support

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.30
+// @version    14.32
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -598,7 +598,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.30';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.32';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -20394,6 +20394,10 @@ function gammaProfileHtml(EB, RB, sym, elLab, ehLab){
     // ---- (v14.30) THE STATE ROW — the conclusion the three ROC rows imply, printed ------------
     // Under each column: FORMING / WEAKENING / TURNING / (blank when HOLDING — silence is a state
     // too). The percentages above are the evidence; this word is what they mean for the trade.
+    // (v14.30b) the row is BUILT here and APPENDED after the 60M ROC row below — the first cut
+    // emitted it at this lexical point, which is still INSIDE the bar track's container, so the
+    // words floated over the bars' tops (operator: "something doesn't seem right like the layout").
+    var stateRow='';
     try{
       var stCells='';
       rows.forEach(function(r){
@@ -20401,7 +20405,9 @@ function gammaProfileHtml(EB, RB, sym, elLab, ehLab){
         if(stL && stL.st!=='HOLDING')
           stCells+='<span class="g3lvcell g3lvw'+stL.st+'" style="left:'+r.x.toFixed(1)+'%"'+g3tip('STATE: '+stL.st+' \u2014 '+stL.why+'. The rows above are the evidence; this word is the conclusion.')+'>'+stL.st.slice(0,4)+'</span>';
       });
-      if(stCells) h2+='<div class="g3gprow">'+spc(elLab)+'<span class="g3gpt" style="position:relative;height:8px">'+stCells+'</span>'+spc(ehLab)+'</div>';
+      if(stCells) stateRow='<div class="g3gprow g3gprocrow"><span class="g3gpsp">'+spc(elLab)+
+        '<span class="g3gpcap">ST</span></span>'+
+        '<span class="g3gpt g3gprocline" style="position:relative">'+stCells+'</span>'+spc(ehLab)+'</div>';
     }catch(eStR){}
     // ---- WALLS line + legend --------------------------------------------------------------------
     var vh2='';
@@ -20438,6 +20444,7 @@ function gammaProfileHtml(EB, RB, sym, elLab, ehLab){
     return hdr+
       '<div class="g3gprow"><span class="g3gpsp">'+spc(elLab)+yl+'</span><span class="g3gpt g3gp">'+h2+'</span>'+spc(ehLab)+'</div>'+
       rocRow('5M','p5')+rocRow('15M','p15')+rocRow('60M','p60')+
+      stateRow+
       vh2+legend;
   }catch(e){ return ''; }
 }
@@ -22158,6 +22165,12 @@ function pbNodeK(sym){
 // silently disarmed the bottom half of the panel. Only the row HTML is suppressed.
 var LOC_SHOW_LEVELS=false;
 var LOC_SHOW_CHART=false;
+// (v14.32, operator-directed: "i don't think i need the nodes section below") THE NODES LIST IS
+// HIDDEN, NOT REMOVED — the LOC_SHOW_CHART precedent: every computation behind it still runs
+// (tradeNodes, rolls, watch, history) because the read, the rail, the profile and the enrolled
+// features all drink from the same wells. Only the presentation is off. The rail + profile +
+// read now carry everything the list showed (roles, states, ROC, rolls, walls).
+var LOC_SHOW_NODES=false;
 function secLoc(sym){
   var L=null; try{ L=ifLadder(sym); }catch(e){ L={err:String(e&&e.message||e)}; }
   // ① FRAME's badges, target, EL/EH rail and read line now open this section
@@ -22231,7 +22244,7 @@ function secLoc(sym){
     // a withdrawn roll is not evidence the book is migrating.
     var ROLLS=[], BIAS=null;
     try{ if(rollsLive()){ ROLLS=rollLatched(sym); BIAS=rollBias(ROLLS.filter(function(r0){ return !r0.gone; })); } }catch(eRS){}
-    if(TN.length){
+    if(LOC_SHOW_NODES && TN.length){
       h+='<div class="g3nodehd" style="display:flex;align-items:center;gap:4px"'+g3tip('Where can a trade actually happen? Per the rule the trade is off a NODE. These are Skylit\'s SPXW nodes shown at ES prices, with their strike beneath. The four columns are Skylit\'s OWN published rate-of-change — the same numbers their strike popup shows — so this panel can be checked against their ladder directly.')+'>NODES '+
          gpInfo('NODES — how to read a node, the three-axis model. SIZE (the $ value, %King) is magnet strength: how hard it pulls. POLARITY is its character ON CONTACT: +gamma is a brake/wall, -gamma is an accelerator/fuel. RATE OF CHANGE (5m/15m/60m/Day) is the arbiter between wall and door: a node being DEFENDED (growing into a test) tends to hold; a node being ABANDONED (draining) is a door — price passes through what nobody defends, and the vacated strike leaves air. Rolls are S/R relocating: the arrow shows where size went; a destination UNDER price is candidate support whichever way it rolled. Chip colours say what it means for PRICE, not what the node is.')+'</div>';
       if(!velOk()){
@@ -22377,7 +22390,7 @@ function secLoc(sym){
         if(!EBc || !EBc.ok) whyEmpty='no expected-move anchor \u2014 the rail and this list both need it';
         else if(!velOk()) whyEmpty='nodes drawn, but Skylit\'s rate of change is unreadable';
       }catch(eWE){}
-      h+='<div class="g3rx"'+g3tip('Why is there nothing here? Either no node is within reach and above the strength floor — in which case levels are context only and there is no trade — or the expected-move band has no anchor yet, which happens before the first session data arrives. Those are different situations and this says which one it is.')+'><em>NODES</em><span>'+g3esc(whyEmpty)+'</span></div>';
+      if(LOC_SHOW_NODES) h+='<div class="g3rx"'+g3tip('Why is there nothing here? Either no node is within reach and above the strength floor — in which case levels are context only and there is no trade — or the expected-move band has no anchor yet, which happens before the first session data arrives. Those are different situations and this says which one it is.')+'><em>NODES</em><span>'+g3esc(whyEmpty)+'</span></div>';
     }
   }catch(eTN){ swallow("secLoc.nodes", eTN); }
   h+='<div class="g3rx" style="margin-top:3px"'+g3tip('Which book, which window, and how old? The expiration set these levels were computed from, the strike count behind them, and the age of the fetch. A stale set is refused outright rather than shown.')+'><em>SET</em><span'+g3tip('Which book, which window, how many strikes, and how old. The basis used to put their '+L.srcSym+' levels on this chart is '+L.dispScale+', computed from their own spot against the live futures price.')+'>'+g3esc(bits.join(' · '))+'</span></div>';
@@ -22764,8 +22777,13 @@ window.__gptsDebug.nodeChart= function(s){ var sy=s||activeSym(); var H=HIST[sy]
 // beside the chart they describe. BIAS is renamed TREND, because that is the word for what it
 // measures, and it leads — you read the trend before you look for a location in it.
 // ⚠ secFrame() SURVIVES as a renderer and is called by secLoc. It is not a section any more.
-var STEP_NAMES=['① TREND','② LOCATION','③ REACTION','④ EXECUTE'];
-var STEP_SHORT=['① TREND','② LOCATION','③ REACTION','④ EXECUTE'];
+// (v14.32, operator-directed) THE FACE IS TWO SECTIONS: TREND and LOCATION. REACTION and
+// EXECUTE are retired from display — the read + the level-engine states + the in-play effects
+// now carry the reaction verdicts (same reactDefence), and the operator trades the frames
+// himself. secReact/secExec survive as functions (recorders and debug read them) but are no
+// longer rendered. If they are still unreferenced after a clean week, delete them properly.
+var STEP_NAMES=['① TREND','② LOCATION'];
+var STEP_SHORT=['① TREND','② LOCATION'];
 var STEP_TIPS=[
  'WHICH WAY, AND HOW MUCH SHOULD YOU TRUST IT? The 50-SMA gives the direction; the chips tell you whether to believe it. Four of four is a day to press. One of four is a day for half size or none. FLAT means the SMA has no side, and the honest answer is that there is no trend trade here. The regime badge now sits in \u2461 LOCATION, beside the chart it governs \u2014 negative gamma means breaks work and fades get run over, positive gamma the reverse.',
  'WHERE WOULD YOU ACTUALLY TRADE? You trade AT levels, never between them. If price is mid-range there is no trade yet, and this step stays unlit. The rail shows the walls and where price sits between them; the chart shows how price is behaving as it approaches and whether the node there is building or dying.',
@@ -22783,7 +22801,7 @@ function panelV3(sym){
   h+='</div>';
   // (v11.36) the "waiting on" line is gone — it restated in small grey type what BIAS says two rows
   // below in large type. The step bar already shows where you are.
-  var secs=[secBias, secLoc, secReact, secExec];   // secFrame is rendered INSIDE secLoc now
+  var secs=[secBias, secLoc];   // (v14.32) REACTION/EXECUTE retired from the face; secFrame renders inside secLoc
   for(var j=0;j<secs.length;j++){
     var c=S.done[j]?'done':((j===S.cur)?'on':'');
     h+='<span class="g3sh '+c+'"'+g3tip(STEP_TIPS[j])+'>'+STEP_NAMES[j]+'</span>';

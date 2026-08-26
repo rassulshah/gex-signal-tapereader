@@ -9,21 +9,22 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
 {
   const names=/var STEP_NAMES=\[([^\]]+)\]/.exec(src)[1];
   const short=/var STEP_SHORT=\[([^\]]+)\]/.exec(src)[1];
-  ok(names.split(',').length===4, 'four steps, not five', names.split(',').length);
+  // (v14.32, operator-directed) REACTION and EXECUTE retired from the face — two steps remain.
+  ok(names.split(',').length===2, 'two steps (v14.32: REACTION/EXECUTE retired from display)', names.split(',').length);
   ok(/① TREND/.test(names) && /① TREND/.test(short), 'TREND is step ①');
   ok(!/FRAME/.test(names), 'FRAME is not a step any more');
   ok(!/BIAS/.test(names), 'and BIAS is renamed, not merely reordered');
-  ok(/② LOCATION/.test(names) && /③ REACTION/.test(names) && /④ EXECUTE/.test(names),
-     'the remaining three renumber to 2,3,4');
+  ok(/② LOCATION/.test(names) && !/REACTION/.test(names) && !/EXECUTE/.test(names),
+     'LOCATION is step ② and the retired steps are gone from the bar (v14.32)');
   const tips=/var STEP_TIPS=\[([\s\S]*?)\];/.exec(src)[1];
-  ok(tips.split("',\n").length===4 || tips.split(/',\s*\n/).length===4, 'one tip per step');
+  ok(tips.split(/',\s*\n/).length>=2, 'tips cover the rendered steps (extras tolerated for the retired sections)');
 }
 // ⚠ the loops must be LENGTH-DRIVEN, or a future step count silently truncates the bar
 {
   const pv=ex('panelV3');
   ok(/i<STEP_SHORT\.length/.test(pv), 'the chip loop is driven by the array length, not a literal 5');
   ok(/j<secs\.length/.test(pv), 'and so is the section loop');
-  ok(/var secs=\[secBias, secLoc, secReact, secExec\]/.test(pv), 'four sections render');
+  ok(/var secs=\[secBias, secLoc\]/.test(pv), 'two sections render (v14.32: secReact/secExec retired, functions kept for recorders/debug)');
   ok(!/secFrame/.test(noc(pv).replace(/var secs=.*/,'')), 'panelV3 does not render secFrame as a section');
 }
 // ---------- FRAME moved INSIDE location ----------
