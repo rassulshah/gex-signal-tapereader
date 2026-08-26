@@ -1,3 +1,37 @@
+## v14.41 — GARMA V2 PHASE 0: the corrections, and three refusals
+
+The V2 package (59 rules, up from 42; `garma/claude_package_v2`) says v1 underweighted the named
+patterns and never separated official doctrine from Garma shorthand. Phase 0 closes the corrections
+to what ALREADY ships — one new thing appears on the face, and one phase deliberately builds nothing.
+
+**GM-MAP-004 — the air pocket is a PATHWAY, never a destination.** Structurally we were already
+safe: the destination is picked from RAILPS by measured pull, and RAILPS holds nodes, so a gap can
+never be selected as one. That guarantee is now ASSERTED rather than assumed. And the pocket finally
+becomes visible again (its standalone line was retired at v10.50) in the place doctrine puts it —
+the PATH clause: "the path up is CLEAR, through an AIR POCKET 7692–7706 (thin exposure — a pathway,
+not a target)". `railPockets()` computes it on the rail's own display scale from the Academy's
+verbatim thresholds (2.5x median spacing = pocket, 4.0x = LIQUIDITY VACUUM, absolute floor honoured).
+
+**GM-MAP-007 — a used level is a weaker level.** `updateTaps()` has counted distinct taps per SPXW
+strike since v11.84 and the Level Engine never asked. It asks now: 1 tap and 2 taps annotate the
+state with the Academy's own odds for the NEXT test (~66%, ~33%), and a THIRD tap earns its own
+state — **USED**, the graveyard, dimmest word on the rail and the only state that fades its own post.
+Ranked BELOW the live states on purpose: a level receiving a roll reads FORMING even when tapped
+out, because fresh size arriving is the newer fact. ⚠ TAP_PROB is indexed by taps ALREADY TAKEN, not
+by which tap this is — a test pins that, because getting it backwards overstates every used level.
+
+**GM-EVENT-001 / GM-REG-002 — event mode DOWNGRADES, it never suspends.** V2 explicitly rejects the
+idea that one FOMC lotto example licenses special event logic. The clause now reads "confidence
+capped, normal rules NOT suspended", and tests assert the King / S&R / Destination clauses still
+compose on an event day and that nothing short-circuits the read.
+
+**GM-TOOL-001/002 — three features deliberately NOT built.** Dim is display provenance, Gamma VWAP
+is optional experimental confluence, Falcon is not defined in official doctrine at all. None may
+create, upgrade or invalidate a level. Recorded in the file itself, because the risk is a future
+version quietly wiring one into a verdict on the strength of a video mention.
+
+New: `test_garma_v2.js` (28 asserts). Suite green, 6 baseline reds unchanged.
+
 ## v14.40 — THE LEVELS LINE (operator sketch) + the IF levels leave the main rail
 
 The v14.39 chip strip is replaced wholesale — its FORM was rejected ("the idea was to have a

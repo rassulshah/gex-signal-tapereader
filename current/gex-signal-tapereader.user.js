@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.40
+// @version    14.41
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -18808,6 +18808,11 @@ function ensureV3Css(){
     '#gpts-body .g3lvwFORMING{color:#7cc7ff}'+
     '#gpts-body .g3lvwWEAKENING{color:#f2b45a}'+
     '#gpts-body .g3lvwTURNING{color:#cdb4fa}'+
+    // (v14.41, GM-MAP-007) USED — tapped out. Deliberately the DIMMEST word on the rail and the only
+    // state that FADES its own post: it is the one reading that says "do less here", and a loud
+    // colour would argue with its own meaning.
+    '#gpts-body .g3lvwUSED{color:#6c7889}'+
+    '#gpts-body .g3pile.g3lvUSED{opacity:.55}'+
     // (v14.40) THE LEVELS LINE — the v14.39 chip strip's replacement, rebuilt to the operator's
     // sketch ("the idea was to have a line with small arrowheads... a separate rail or line above
     // the current one and the levels should be below it"). Same overlay trick as the roll lane:
@@ -20131,10 +20136,17 @@ function dayTypeOf(sym, B){
     // (v14.38) the calendar outranks the manual tag; the manual tag remains the fallback
     try{ evCalFetch(); }catch(eF0){}
     var cal=null; try{ cal=evCalActive(); }catch(eC0){}
-    if(cal) return { t:'EVENT', why:cal.title+' '+cal.at+' — normal-rule confidence downgraded (Garma r41)' };
+    // (v14.41, GARMA V2 GM-EVENT-001 / GM-REG-002) EVENT MODE DOWNGRADES, IT NEVER SUSPENDS. V2
+    // explicitly rejects the inference that one FOMC lotto example licenses special event logic: a
+    // setup on an event day still needs its trigger, its invalidation and its target, and the day
+    // type is a CONFIDENCE CAP, not a different rulebook. Structurally that is already true here —
+    // the day type is ONE PREPENDED CLAUSE and the King / S&R / Destination clauses are composed
+    // independently below, so nothing about an EVENT day removes them. The wording now says so out
+    // loud, and test_garma_v2 asserts the other clauses still render on an event day.
+    if(cal) return { t:'EVENT', why:cal.title+' '+cal.at+' — confidence capped, normal rules NOT suspended (V2 GM-REG-002)' };
     var ev=null; try{ ev=eventTagLabel(); }catch(e0){}
     var opx=false; try{ opx=!!isOpexDay(); }catch(e1){}
-    if(ev) return { t:'EVENT', why:ev+' — normal-rule confidence downgraded (Garma r41)' };
+    if(ev) return { t:'EVENT', why:ev+' — confidence capped, normal rules NOT suspended (V2 GM-REG-002)' };
     if(opx) return { t:'OPEX', why:'monthly expiration — distortions expected' };
     var tv=null; try{ tv=trendVerdict(sym); }catch(e2){}
     var tvUp=tv&&(tv.state==='up'||tv.st==='up'), tvDn=tv&&(tv.state==='dn'||tv.st==='dn');
@@ -20320,10 +20332,74 @@ function trinityRead(){
 var LVL_WEAK_P15=-8;    // ⚖ % of own mass shed in 15m that says WEAKENING on its own
 var LVL_TURN_P15=4;     // ⚖ minimum |15m %| for TURNING to speak
 var LVL_DOOR_PEAK=0.5;  // ⚖ retention of own day peak below which a roll source is a DOOR
+// ============================================================================================
+// (v14.41) GARMA V2 TOOL HIERARCHY — THREE FEATURES WE ARE DELIBERATELY NOT BUILDING
+// GM-TOOL-001 / GM-TOOL-002, and the Falcon entry in the V2 ontology, exist to say what these
+// tools CANNOT do, and the correct implementation of a rule like that is a refusal:
+//   · DIM (the LOW NODES: Hide|Dim|Fade control) is DISPLAY/FILTER PROVENANCE ONLY. It changes
+//     which rows RENDER — which is exactly why SKYLIT-FEEDS.md forbids "Hide", since an unrendered
+//     row cannot be harvested — but it can never create, upgrade or invalidate a level.
+//   · GAMMA VWAP is OPTIONAL EXPERIMENTAL CONFLUENCE, never a standalone trigger and never a
+//     required input. It is an off-toggled Atlas indicator; we do not read it.
+//   · FALCON is not defined in the official cross-check at all — videos mention it, doctrine does
+//     not. An undefined optional annotation cannot be a signal.
+// Recorded here rather than in a design doc because the risk is a FUTURE version quietly wiring one
+// of them into a verdict on the strength of a video mention. If that is ever proposed, this comment
+// is the answer. Anything that changes a reading in this file must be measured, not merely seen.
+// ============================================================================================
+// (v14.41, GARMA V2 GM-MAP-004) THE AIR POCKET IS A PATHWAY, NEVER A DESTINATION.
+// V2's correction is aimed exactly at the misreading this project could have drifted into: "Target
+// next node/endpoint" can be misread as targeting the POCKET. It cannot be targeted, because it is
+// the ABSENCE of structure — the target is the node BOUNDING it. Our destination is picked from
+// RAILPS by measured pull, and RAILPS holds nodes only, so a pocket can never be selected as one by
+// construction; test_garma_v2 asserts that stays true. What a pocket DOES belong to is the PATH
+// verdict, and that is where v14.41 puts it: a low-friction gap between price and the destination is
+// the single most useful thing to know about how the trip will feel.
+// Thresholds are the Academy's own (air-pockets-velocity), reused verbatim from v10.32: a gap of
+// 2.5x the median node spacing is a POCKET, 4.0x is a LIQUIDITY VACUUM (an extended pocket), and
+// nothing narrower than the absolute floor is ever called either. Computed here on the rail's own
+// DISPLAY scale, because the rail is what the trader is reading.
+function railPockets(piles, dsc){
+  try{
+    if(!piles || piles.length<3) return [];
+    var xs=piles.map(function(P){ return P.disp; }).filter(function(x){ return typeof x==='number'; })
+                .sort(function(a,b){ return a-b; });
+    if(xs.length<3) return [];
+    var gaps=[], i;
+    for(i=1;i<xs.length;i++) gaps.push(xs[i]-xs[i-1]);
+    var srt=gaps.slice().sort(function(a,b){ return a-b; });
+    var med=srt[Math.floor(srt.length/2)];
+    if(!(med>0)) return [];
+    var floor=AIRPOCKET_MIN_STRIKES*(dsc||1);
+    var pTh=Math.max(floor, AIRPOCKET_GAP_MULT*med);
+    var vTh=Math.max(floor*1.6, AIRPOCKET_VACUUM_MULT*med);
+    var out=[];
+    for(i=1;i<xs.length;i++){
+      var span=xs[i]-xs[i-1];
+      if(span<pTh) continue;
+      out.push({ lo:xs[i-1], hi:xs[i], span:span, vacuum:(span>=vTh) });
+    }
+    return out;
+  }catch(e){ return []; }
+}
+// the pocket (if any) lying between price and a destination — the PATH question, never the target
+function pocketOnPath(pockets, from, to){
+  try{
+    var lo=Math.min(from,to), hi=Math.max(from,to), best=null;
+    (pockets||[]).forEach(function(pk){
+      var ovLo=Math.max(lo,pk.lo), ovHi=Math.min(hi,pk.hi);
+      var ov=ovHi-ovLo;
+      if(ov<=0) return;
+      if(!best || ov>best.ov){ best={ pk:pk, ov:ov }; }
+    });
+    return best?best.pk:null;
+  }catch(e){ return null; }
+}
 function levelStateOf(k, rollsCtx){
   try{
     var v=null; try{ v=velAt(k); }catch(e0){}
     var vv=(v&&v.v&&!v.stale)?v.v:null;
+    var tapsN=0; try{ tapsN=nodeTapCount('SPXW', k)||0; }catch(eTp){}
     var isSrc=rollsCtx&&rollsCtx.src&&rollsCtx.src[k], isDst=rollsCtx&&rollsCtx.dst&&rollsCtx.dst[k];
     var pk=null; try{ pk=peakOf(k); }catch(e1){}
     var ret=(pk&&vv&&typeof vv.cur==='number'&&pk>0)?Math.abs(vv.cur)/pk:null;
@@ -20336,7 +20412,15 @@ function levelStateOf(k, rollsCtx){
         return { st:'WEAKENING', why:(Math.round(vv.p15))+'%/15m draining'+(isSrc?', roll source':'') };
     }
     if(isSrc) return { st:'WEAKENING', why:'feeding a roll' };
-    return { st:'HOLDING', why:'steady' };
+    // (v14.41, GARMA V2 GM-MAP-007) A USED LEVEL IS A WEAKER LEVEL, and the Academy already put
+    // numbers on it: 1st tap ~80% reaction, 2nd ~66%, 3rd+ ~33% — the "graveyard". updateTaps() has
+    // counted distinct taps per SPXW strike since v11.84 (a wick within tolerance, price leaving by
+    // TAP_AWAY, then returning = the NEXT tap, so one long sit is never many taps) and the Level
+    // Engine never asked. A third tap is not a nuance, it is a regime change in the hold rate, so it
+    // earns a state. It is deliberately ranked BELOW the live states: a level actively receiving a
+    // roll is having fresh size delivered to it, and that is the newer fact.
+    if(tapsN>=3) return { st:'USED', why:tapsN+' taps today \u2014 ~33% hold historically (Academy graveyard)', taps:tapsN };
+    return { st:'HOLDING', why:'steady'+(tapsN>0?(', '+tapsN+' tap'+(tapsN>1?'s':'')+' today \u2014 next test holds ~'+(TAP_PROB[tapsN]!=null?TAP_PROB[tapsN]:33)+'% historically'):''), taps:tapsN };
   }catch(e){ return { st:'HOLDING', why:'' }; }
 }
 // the DOOR list — drained sources that are no longer piles at all (the strongest measured stat:
@@ -21406,6 +21490,16 @@ function secFrame(sym){
             var frPath=null; try{ frPath=emPath(EB, sym, frBestP.disp); }catch(ePt){}
             if(frPath && frPath.ok) frDtxt+='; the path '+(frBestP.disp>frNow?'up':'down')+' is '+
               (frPath.verdict==='clear'?'CLEAR':(frPath.verdict==='fuelled'?'FUELLED \u2014 accelerators outweigh the brakes in between':'BRAKED \u2014 brakes outweigh the fuel in between'));
+            // (v14.41, GM-MAP-004) THE AIR POCKET RIDES THE PATH CLAUSE, never the target. Doctrine:
+            // an air pocket is space and rate-of-change is fuel; low exposure between here and there
+            // is how the trip FEELS, not where it ends. Named on the path, it can never be mistaken
+            // for a destination.
+            try{
+              var frDscP=1; try{ frDscP=ifDispScale()||1; }catch(eDp){}
+              var frPk=pocketOnPath(railPockets(RAILPS, frDscP), frNow, frBestP.disp);
+              if(frPk) frDtxt+=', through '+(frPk.vacuum?'a LIQUIDITY VACUUM':'an AIR POCKET')+' '+
+                frameNum(frPk.lo)+'\u2013'+frameNum(frPk.hi)+' (thin exposure \u2014 a pathway, not a target)';
+            }catch(ePk){}
             // (v14.34, Garma r5: "do not target through a gatekeeper unless it clears") name the block
             try{
               var frRL=emPiles.lastRoles;

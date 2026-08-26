@@ -1,3 +1,18 @@
+
+## v14.40 (2026-08-26) — THE LEVELS LINE
+- Chip strip REPLACED by THE LEVELS LINE per operator sketch (2 corrections): a separate rail
+  directly under the read — LINE on top, name/price/arrowhead hang BELOW, heads point DOWN at the
+  gamma rail (shared x-frame via the roll-lane overlay trick: .g3ll inside .g3emt, g3haslvl
+  margin; -34px alone, -60px when the roll lane is also present).
+- IF levels moved OFF the main rail onto the line (operator-directed): CW/PW/CW0/PW0/FLIP/T in
+  ITALICS (=their numbers). Rail's T span deleted (o8/em-band guards assert it stays gone);
+  row-1 T chip retained, hover repointed. MP* deliberately off the line.
+- Overlap merge at 4.5% of frame; confluence blue "·node"; SPY K purple; white price notch.
+- Tests: test_garma_p1 now 41 (o2-o9 rewritten for the line), test_em_band 610 (rail-T assert
+  replaced by gone-guard), pins bumped in 4 files. Suite green, 6 baseline reds unchanged.
+- NEXT: operator verifies live (reload, footer v14.40, run __gptsDebug.audit()); then resume the
+  Garma rediscussion at 1c — the WHIPSAW 35% threshold question is still on the table.
+
 # Resume note — v14.39
 
 ## Where the build is (v14.39)

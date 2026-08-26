@@ -123,6 +123,28 @@ oracle for our numbers.
   of our defended/abandoned arbiter. Potentially harvestable as vendor-verbatim confirmation later.
 - DOCK position controls.
 
+### DARK POOL — a live Atlas indicator, and its endpoint (discovered 2026-08-26)
+The controls bar carries a **Dark Pool** toggle, ON in the operator's live config. It is a chart
+indicator like SMA 50 / Session Levels, and it is fed by its own same-origin API:
+
+    GET /fs/api/dark-pool/top-prints?ticker=SPY&top_n=3&lookback_days=45
+
+- **Skylit's own definition of a dark-pool LEVEL is therefore vendor-verbatim: the TOP N PRINTS
+  over a 45-DAY LOOKBACK** (their default: top 3). Not an intraday tape — a standing 45-day level
+  set. This is the number to reproduce; do not invent our own clustering.
+- **ticker=SPY, and that is not an accident**: dark-pool prints are CASH-EQUITY prints. SPX is an
+  index and has none, so SPY (and QQQ) are the only books that can carry them — they reach the ES
+  rail through the scale conversion we already run, exactly like the SPY King flag.
+- **Auth**: `Authorization` header, the same scheme as `/tv/api/gex/levels`. A cold re-fetch 401s
+  ("Provide a valid API key"); the page attaches the header to its own request.
+- **HARVEST PATH — passive, one line.** `installFeedObserver()` filters on
+  `url.indexOf('gex/levels')`; adding `dark-pool/top-prints` captures the response the page already
+  fetches. NO companion courier, NO CSP problem, NO credential handling — the same posture as every
+  other feed. The request fires on chart mount / symbol change (not on a timer), so a reload
+  produces one.
+- Related but DIFFERENT: the `/flow` **DARK FEED** page is the raw 500-print intraday tape. The
+  Atlas indicator above is the distilled level set and is what Garma's videos reference.
+
 ### The heat panel behind the dialog (fullscreen ladder view)
 Renders **FOUR books side by side: SPXW strikes, SPY, QQQ, VIX** — each with its own King header —
 plus the Orbs V2 %King sidebar and a bottom heat-grid strip. ⚠ THIS is why VEL held SPY (~765) and
