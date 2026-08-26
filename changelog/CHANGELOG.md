@@ -1,3 +1,46 @@
+## v14.11 — the derived payload's real semantics, measured, fixed, and WRITTEN DOWN
+
+Operator: "make sure the export is done right and the percentages are accurate… and write down
+everything you learn about derived levels so the next context knows." Both done, and the
+verification caught v14.10 half-wrong:
+
+**MEASURED on the live SPY feed's derived entry (source SPXW, 86 rows): the rows arrive
+PRE-CONVERTED to the HOST's scale** (k=768.7677 = SPXW 7705 × 0.09977 — already SPY-scale). The
+`ratio` field is informational, not an instruction. v14.10 multiplied by ratio anyway and only
+survived through its decade sanity fallback. v14.11 flips the semantics: raw k is the primary path,
+ratio-multiply is the fallback for a source-grid payload — both asserted in test_irt_export.
+
+**The percentages: accurate, with two truths to hold.** A derived % is computed against the
+payload's OWN largest strike, which equals that source book's %King — so `D-SPY 43%` = 43% of SPY's
+own King, all strikes ≥ the node threshold (CFG.nodeThresh, default 20), NOT King-only. And the
+derived window follows the PAGE's expiration selector, not 0DTE — measured: derived-of-SPXW said
+7705=100% while the 0DTE ladder said 19%, both correct, different windows. Comparing them is a
+window mismatch, not an error.
+
+**NEW: session-state/SKYLIT-FEEDS.md** — the durable write-up of everything measured about the
+feed: endpoint anatomy, auth (cookies alone 401), |net|≡v non-decomposability, snapshot series,
+the derived schema and its pre-converted-k semantics, the window caveat, the velocity-fiber capture
+and its cross-book pollution trap, and the consumers map. A load should read it beside
+PROJECT-CONSTANTS whenever feed work is on the table.
+
+## v14.10 — the Derived diamonds join the export
+
+Operator: "since i want everything on the chart, im going to need the derived levels as well." The
+diamonds on the Atlas chart are Skylit's DERIVED overlay — sibling books (SPY/SPX) projected onto
+the chart's scale — which I first misread as VEX until the operator toggled GEX-only and the
+diamonds stayed; the toolbar's Derived switch was the tell. Verified via the live network: every
+feed ships `include_derived=true`, and each derived entry carries source, ratio and its own levels
+snapshots (on the SPY feed: source SPXW, ratio 0.0998 — ratio maps SOURCE grid to HOST grid).
+
+The observer, which used to DROP non-SPY/QQQ payloads, now keeps the SPXW gamma feed solely for its
+derived array (`LASTSPXW`, freshness- and replay-guarded; the read/record pipeline still never
+touches it). The export emits each derived row at source-strike × ratio → chart → ES, normalised to
+the SOURCE's own strongest strike (the v11.4.3 lesson — never comparable to the native %King),
+floored at the node threshold, and drawn exactly as Skylit draws the diamonds: slate, thin, dotted,
+no polarity claim — labelled with its source: `D-SPY 43% ~`. A decade sanity-check falls back to
+the raw strike if a payload ever arrives pre-converted; a stale SPXW feed exports NO diamonds
+(absent, never old). test_irt_export grew the 5.5 block covering all of it.
+
 ## v14.9 — the FlexLevels file carries the rail, the 0DTE walls, and nothing else
 
 Operator-directed, verbatim: "I need the ES levels which you get from the conversion from SPXW

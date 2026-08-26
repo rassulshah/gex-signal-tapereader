@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.9
+// @version    14.11
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -213,6 +213,7 @@ var STATE = {
 };
 var LASTFEED = { SPY:null, QQQ:null };
 var LASTVEX = { SPY:null, QQQ:null };
+var LASTSPXW = null;   // (v14.10) the SPXW feed, kept ONLY for its derived (sibling-book) array
 var LASTDISP = { SPY:null, QQQ:null };   // (v10.48) mode the user is DISPLAYING (gamma/vanna/combined) — distinct from what LASTFEED holds
 var LASTFEEDURL = null;                  // (v10.48) template of the real gex/levels request URL, for dual-capture self-fetch
 var LASTAUTH = null;                     // (v10.49 A) Authorization header captured off a REAL gex/levels request; self-fetch replays it (v10.48 self-fetch 401'd without it)
@@ -375,6 +376,18 @@ function onFeed(sym, feed, j, viaSelf){
   if(sym!=='SPY' && sym!=='QQQ'){
     try{ var R=SYM_SEEN[sym]||(SYM_SEEN[sym]={n:0,t:0}); R.n++; R.t=Date.now();
       if(R.n===1) console.log('[GPTS] '+sym+' has an options tape on Skylit but this panel is mapped to SPY/QQQ only — its levels are NOT read and NOT recorded.'); }catch(eS){}
+    // (v14.10, operator-directed: "since i want everything on the chart, im going to need the
+    // derived levels as well") — the SPXW feed is now KEPT, solely for its `derived` array: the
+    // sibling books (SPY/SPX) projected onto the chart, each with its own source + ratio. The
+    // panel's read/record pipeline still never consumes it; only the FlexLevels export does.
+    try{
+      if(sym==='SPXW' && feed==='gamma' && j && j.derived && j.derived.length){
+        var heldX=(typeof LASTSPXW!=='undefined')?LASTSPXW:null;
+        var heldXT=heldX?feedNewestT(heldX.j):null, newXT=feedNewestT(j);
+        if(!(heldXT!=null && newXT!=null && newXT < heldXT-90))   // never let history overwrite live
+          LASTSPXW={ j:j, ts:Date.now() };
+      }
+    }catch(eX){}
     return;
   }
   if(!j || !j.levels || !j.levels.length) return;
@@ -564,7 +577,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.9';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.11';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3826,6 +3839,48 @@ function irtBuildCsv(){
       }
     }
   }catch(eSPX){}
+  // ---- (v14.10) THE DERIVED DIAMONDS — sibling books projected onto the chart --------------------
+  // From the SPXW feed's `derived` array (each entry: source, ratio, levels). Normalised to each
+  // source's OWN strongest strike (the v11.4.3 lesson: a derived % is never comparable to the native
+  // book's %King), floored at the node threshold, drawn slate + dotted + thin — exactly how Skylit
+  // itself renders the diamonds: presence and size, no polarity claim. Label carries the source:
+  // "D-SPY 43%". Strikes arrive on the SOURCE grid; ratio maps source -> chart scale (verified on
+  // the SPY feed: source SPXW, ratio 0.0998, spxwK x ratio = spyK). A decade sanity-check falls back
+  // to the raw strike if a payload ever arrives pre-converted.
+  try{
+    var LSX=(typeof LASTSPXW!=='undefined')?LASTSPXW:null;
+    var Lx2=null; try{ Lx2=ifLadder(sym); }catch(eLx2){}
+    if(LSX && LSX.j && LSX.j.derived && (Date.now()-LSX.ts)<=FEED_STALE_MS*3 &&
+       Lx2 && !Lx2.err && Lx2.dispScale>0 && R && R.r>1){
+      var spotSPX=null; try{ var Bd=emBand(sym); if(Bd&&Bd.ok) spotSPX=Bd.now/Lx2.dispScale; }catch(eBd){}
+      var thrD=(CFG.nodeThresh!=null)?CFG.nodeThresh:20;
+      LSX.j.derived.forEach(function(dvE){
+        if(!dvE || !dvE.levels || !dvE.levels.length) return;
+        var snapD=dvE.levels[dvE.levels.length-1]; var rowsD=(snapD&&snapD.l)||[];
+        if(!rowsD.length) return;
+        var mxA=0; rowsD.forEach(function(r0){ var a=Math.abs(r0.v||0); if(a>mxA) mxA=a; });
+        if(!(mxA>0)) return;
+        var rat=(typeof dvE.ratio==='number'&&dvE.ratio>0)?dvE.ratio:1;
+        var srcTag='D-'+String(dvE.source||'?').toUpperCase();
+        rowsD.forEach(function(r0){
+          var a=Math.abs(r0.v||0); var pctD=Math.round(100*a/mxA);
+          if(pctD<thrD) return;
+          // ⚠ (v14.11) VERIFIED ON THE LIVE PAYLOAD: derived rows arrive PRE-CONVERTED to the HOST
+          // scale (on the SPY feed, source SPXW, k=768.7677 = 7705 × 0.09977 — already SPY-scale).
+          // The `ratio` field is INFORMATIONAL. v14.10 multiplied anyway and survived only via the
+          // decade fallback. Primary path is now the raw k; ratio-multiply is the fallback for a
+          // payload that ever arrives on the source grid. See session-state/SKYLIT-FEEDS.md.
+          var hostK=r0.k;
+          if(spotSPX!=null && !(hostK>spotSPX/2 && hostK<spotSPX*2)){
+            var altK=r0.k*rat;
+            if(altK>spotSPX/2 && altK<spotSPX*2) hostK=altK; else return;
+          }
+          rows.push({ k:(hostK*Lx2.dispScale)/R.r, lbl:srcTag+' '+pctD+'%',
+                      col:IRT_COLORS.deriv, w:1, style:1 });
+        });
+      });
+    }
+  }catch(eDrv){}
   if(!rows.length) return null;
   targets.forEach(function(T){
     rows.forEach(function(R){ out.push(irtCsvRow(T.sym, irtRound(R.k*T.mul, T.tick), R.lbl+T.tag, R.col, R.w, R.style)); });

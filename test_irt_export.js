@@ -84,6 +84,37 @@ ok(!/SPXW \d+%/.test(b.csv), '4e the derived lanes are gone');
   global.ifChainRows=(s2,w2)=>({ rows:[{id:'CR',k:772},{id:'PS',k:768},{id:'Mag',k:770},{id:'MP',k:769}] });
   global.emPiles.lastSrc='skylit'; }
 
+// ---------- 5.5 the Derived diamonds (v14.10) ----------
+{
+  global.FEED_STALE_MS=12000;
+  // ⚠ VERIFIED live 2026-08-26: derived rows arrive PRE-CONVERTED to the host scale; ratio is
+  // informational. Primary stub is host-scale; the ratio-multiply fallback is asserted separately.
+  global.LASTSPXW={ ts:Date.now(), j:{ derived:[{ source:'SPY', ratio:10.02,
+    levels:[{ l:[ {k:7660.3, v:900e6, net:1}, {k:7675.3, v:400e6, net:-1}, {k:7620.0, v:50e6, net:1} ] }] }] } };
+  const B=irtBuildCsv();
+  const dRows=B.csv.split('\r\n').filter(l=>/D-SPY/.test(l)&&l.startsWith('EPU26,'));
+  ok(dRows.length===2, '5d two diamonds clear the threshold (50e6/900e6=6% is floored out)', dRows.length);
+  ok(/D-SPY 100%/.test(B.csv) && /D-SPY 44%/.test(B.csv), '5e labelled by SOURCE + own-King % — never the native %King');
+  // host 7660.3 x 1.0023 dispScale -> ES on the 0.25 tick
+  const d0=dRows.find(l=>/D-SPY 100%/.test(l));
+  ok(d0 && Math.abs(parseFloat(d0.split(',')[1]) - 7678.00) <= 0.25, '5f host-scale strike -> chart -> ES, on the tick', d0&&d0.split(',')[1]);
+  { // the fallback: a payload on the SOURCE grid still lands on the same price via ratio
+    global.LASTSPXW={ ts:Date.now(), j:{ derived:[{ source:'SPY', ratio:10.02,
+      levels:[{ l:[ {k:764.5, v:900e6, net:1} ] }] }] } };
+    const Bf=irtBuildCsv();
+    const df=Bf.csv.split('\r\n').find(l=>/D-SPY 100%/.test(l)&&l.startsWith('EPU26,'));
+    ok(df && Math.abs(parseFloat(df.split(',')[1]) - 7678.00) <= 0.5, '5f2 source-grid payload falls back through ratio to the same price', df&&df.split(',')[1]);
+    global.LASTSPXW={ ts:Date.now(), j:{ derived:[{ source:'SPY', ratio:10.02,
+      levels:[{ l:[ {k:7660.3, v:900e6, net:1}, {k:7675.3, v:400e6, net:-1}, {k:7620.0, v:50e6, net:1} ] }] }] } };
+  }
+  ok(d0.split(',')[4]==='1' && d0.split(',')[5]==='1', '5g thin and dotted, like Skylit draws the diamonds');
+  ok(d0.split(',')[3]===String((130<<16)+(110<<8)+90), '5h slate — the diamonds make no polarity claim');
+  global.LASTSPXW={ ts:Date.now()-999999, j:global.LASTSPXW.j };
+  ok(!/D-SPY/.test(irtBuildCsv().csv), '5i a stale SPXW feed exports NO diamonds — absent, never old');
+  global.LASTSPXW=null;
+  ok(!/D-SPY/.test(irtBuildCsv().csv), '5j and no store at all is fine');
+}
+
 // ---------- 6. ratio machinery (unchanged contract) ----------
 global.FUTMODE={ fam:'ES', r:10.0538, live:false };
 ok(/ ~/.test(irtBuildCsv().csv), '6a last-known ratio marks labels with ~');

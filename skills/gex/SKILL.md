@@ -65,6 +65,18 @@ load instruction. Then read, in order:
    "incompatibility" verdict, and a wrong "the books disagree on the King" claim. **Establish
    which book, which expiry window and which scale a number is in BEFORE comparing it to
    anything.**
+1d. **`session-state/SKYLIT-FEEDS.md` — THE APP ITSELF, mandatory since 2026-08-26.** Three
+   things live here and nowhere else, all MEASURED on the live page: (i) the gex/levels
+   endpoint + payload shapes + the DERIVED layer semantics (pre-converted host-scale rows,
+   own-King %, window caveat); (ii) the complete Atlas CHART SETTINGS map with the four
+   required-posture rules (**RTH · READ AS %King · VELOCITY All · LOW NODES never Hide**) —
+   the capture pipeline breaks if the operator's settings drift from these; (iii) the **FULL
+   APPLICATION MAP** — every page of app.skylit.ai toured page-by-page (Heatseeker: Atlas /
+   Heatmaps / Trinity Mode / Alerts; Flowseeker: Live Feed / Dark Feed / Flow Scanner / Flow
+   Compass / Contract Lookup / Company Events / Flow Tracker / Flow Alerts; Nexus; Academy;
+   Talon). Operator mandate: **the next context must know the entire application**, not just
+   Atlas. Key structural fact recorded there: only `/atlas*` routes run our panel — everything
+   else is safe to browse and pipeline-inert; never open a second /atlas tab.
 2. `changelog/CHANGELOG.md` — head only (latest 2–3 entries).
 3. `master-spec.md` + `teaching-spec.md` — rules (file-shape rule 2.4 etc.).
 4. **`current/gex-if-levels.user.js` — the InsiderFinance companion, FULL FILE.** It is short.
@@ -119,6 +131,16 @@ load instruction. Then read, in order:
    `skylit-docs/core-concepts/core-concepts.md` (magnets, King margin 5–10 SPX, retest decay,
    price delivery, hedge nodes, air pockets, OPEX, Power Hour), `read-the-heatmap/`,
    `patternpedia/` (Rug, Gatekeeper, Whipsaw, Rainbow Road, Ten Commandments), `best-practices/`.
+
+   **5d-bis. Know that "Academy" names TWO things.** `skylit-docs/` is the captured
+   **docs.skylit.ai** documentation (the doctrine mirror above — 2026-08-12 capture). The app
+   ALSO has an in-app **Academy page** (app.skylit.ai › Home › Academy) with certification
+   courses — "Reading The Dark Pool Prints", "Atlas", "Talon Prompt Guide" (Talon = Skylit's
+   own AI assistant), chapters on Dealer Positioning, Node Hierarchy, Gamma Regimes, Heatseeker
+   Pattern Recognition. The course CATALOG is recorded in SKYLIT-FEEDS.md's application map;
+   the course TEXT is NOT yet mirrored (overlaps the `learn/` articles but is not identical).
+   If a doctrine question isn't answered by `skylit-docs/`, the in-app course is the place to
+   look — capture it with the operator before relying on memory of it.
 
    **5e. THE SECOND BOOK — `session-state/INSIDERFINANCE.md`** (also listed at 1c). Skylit doctrine
    governs FLOW; IF governs STRUCTURE. A session that knows one book and not the other WILL mix
