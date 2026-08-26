@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.16
+// @version    14.17
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -596,7 +596,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.16';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.17';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -19284,9 +19284,28 @@ function ifLadder(sym){
     if(age!=null && age>IF_STALE_MIN) return { err:'their chain is '+age+'m old', stale:true, ageMin:age };
     var theirSpot=(typeof c.spot==='number' && c.spot>0)?c.spot:null;
     if(!theirSpot) return { err:'their payload carries no spot — nothing to scale from' };
+    // (v14.17, operator-caught 2026-08-27 ~09:55 ET) ATLAS'S OWN SPOT ANCHORS THE BASIS. The scale
+    // divided by INSIDERFINANCE's spot — a delayed, slow-refreshing quote — so in a falling tape
+    // every node on the rail sat ~6 ES pts above where Atlas drew the same strike (King: rail 7674,
+    // Atlas ~7668; measured dispScale 1.00248 vs true basis ~1.0017). Skylit's feed carries ITS OWN
+    // live spot (levels[last].s, ~5s cadence) — the same number Atlas positions its overlay with —
+    // so when that feed is fresh and roughly agrees (2% sanity), it is the denominator. IF's spot
+    // stays as the disclosed fallback. Same lesson as the QQQ-window fix: pair Skylit with Skylit.
+    var spotSrc='if';
+    try{
+      var FS=(src==='SPX') ? ((typeof LASTSPXW!=='undefined')?LASTSPXW:null)
+                           : ((typeof LASTFEED!=='undefined')?LASTFEED[sym]:null);
+      if(FS && FS.j && FS.j.levels && FS.j.levels.length &&
+         (Date.now()-(FS.ts||0))<=FEED_STALE_MS*3){
+        var sV=FS.j.levels[FS.j.levels.length-1].s;
+        if(typeof sV==='number' && sV>0 && Math.abs(sV/theirSpot-1)<0.02){
+          theirSpot=sV; spotSrc='skylit';
+        }
+      }
+    }catch(eLS){}
     var undPx=(STATE[sym]||{}).price;                      // our underlying (SPY/QQQ) price
     if(typeof undPx!=='number') return { err:'no underlying price' };
-    // scale from THEIR book to the instrument on the chart, and to our underlying for the
+    // scale from the governing book to the instrument on the chart, and to our underlying for the
     // candle-based reads, which run on the underlying scale.
     var dispPx=undPx, dispScale=(undPx/theirSpot);
     try{
@@ -19298,7 +19317,7 @@ function ifLadder(sym){
     var W=(c.toFri&&c.toFri.lv)?c.toFri.lv:null;
     var D0=(c.dte0&&c.dte0.lv)?c.dte0.lv:null;
     if(!W && !D0) return { err:'no levels in their chain' };
-    var out={ px:dispPx, undPx:undPx, theirSpot:theirSpot, srcSym:src,
+    var out={ px:dispPx, undPx:undPx, theirSpot:theirSpot, srcSym:src, spotSrc:spotSrc,
               dispScale:+dispScale.toFixed(6), undScale:+undScale.toFixed(6),
               rows:[], src:'IF', ageMin:age, rolled:!!c.rolled,
               nExps:(c.toFri&&c.toFri.exps)?c.toFri.exps.length:null,

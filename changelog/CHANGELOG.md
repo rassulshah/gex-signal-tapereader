@@ -1,3 +1,14 @@
+## v14.17 — the basis anchors on Atlas's own spot (rail was ~6 pts high vs Atlas)
+
+Operator: "compare atlas with the rails — it's different." Measured: rail King 7674, Atlas ~7668;
+dispScale 1.00248 vs true live basis ~1.0017. Cause: ifLadder's SPX->chart scale divided by
+INSIDERFINANCE's spot — a delayed, slow-refreshing quote — so in a moving tape every node placed
+from it drifted off Atlas by the lag. Fix: when the Skylit feed is fresh, its OWN spot
+(levels[last].s, ~5s cadence — the number Atlas positions its overlay with) is the denominator,
+with a 2% cross-source sanity gate; IF's spot remains the disclosed fallback (spotSrc:'skylit'|
+'if' on the ladder output). One function, so the band, taps, profile, export and rail all move
+together — no second path. Same lesson as the QQQ-window fix: pair Skylit with Skylit.
+
 ## v14.16 — the rail syncs with Atlas: EM floor + the band clip is gone (ledger issue #5)
 
 Operator, watching price fight the 7690 accelerator with an empty rail: "the heavy vol nodes
