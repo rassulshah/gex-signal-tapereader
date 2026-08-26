@@ -84,9 +84,10 @@ function ex_var(n){
   // moment v11.61 inserted EMOPEN_SCHEMA between them — a test that depends on the ORDER of unrelated
   // declarations fails on a change that is none of its business.
   const grabConst=(name)=>{ const m=src.match(new RegExp('var '+name+'\\s*=\\s*[^;]+;')); return m?m[0]:null; };
-  const cK=grabConst('EMOPEN_KEY'), cF=grabConst('EM_FRESH_MIN'), cS=grabConst('EMOPEN_SCHEMA');
-  ok(!!cK && !!cF && !!cS, 'EMOPEN_KEY, EM_FRESH_MIN and EMOPEN_SCHEMA are all declared at module scope');
-  eval([cK,cF,cS].filter(Boolean).join('\n'));
+  const cK=grabConst('EMOPEN_KEY'), cF=grabConst('EM_FRESH_MIN'), cS=grabConst('EMOPEN_SCHEMA'),
+        cM=grabConst('EM_MIN_FRAC');   // (v14.16) the EM sanity floor
+  ok(!!cK && !!cF && !!cS && !!cM, 'EMOPEN_KEY, EM_FRESH_MIN, EMOPEN_SCHEMA and EM_MIN_FRAC are all declared at module scope');
+  eval([cK,cF,cS,cM].filter(Boolean).join('\n'));
   ok(typeof EM_FRESH_MIN==='number' && EM_FRESH_MIN>0, 'EM_FRESH_MIN is a positive number', EM_FRESH_MIN);
 
   // (v11.83) emBand now calls dte0NotToday(), which reaches into ifChain. Stub it here: this block tests
@@ -366,7 +367,11 @@ eval(ex('emBand'));
      'piles read INSIDERFINANCE, the same book as the band, the rails, the target and the flow chip');
   ok(/CFG\.nodeThresh/.test(pf), 'the cut is the EXISTING nodeThresh slider, not a second invented threshold');
   ok(/net<0/.test(pf),           'NEGATIVE net gamma at a strike means dealers are short it -> ACCELERATOR');
-  ok(/B\.low \|\| disp>B\.high/.test(pf) || /disp<B\.low/.test(pf), 'only strikes INSIDE the band are marked');
+  // (v14.16, operator mandate) THE CLIP IS GONE — the band is a measuring stick, not an admission
+  // filter. A narrow (or poisoned, 2026-08-27) band was silently deleting the King from the rail,
+  // the NODES section, the ROC matrix and the export while Atlas drew it. Assert the ABSENCE.
+  ok(!/disp<B\.low/.test(pf) && !/disp>B\.high/.test(pf), 'the band clip is GONE — every node >= threshold ships regardless of band width');
+  ok(!/disp<B\.low/.test(ex('skPiles')), '...and gone from skPiles, the primary source, too');
 
   const f=ex('secFrame');
   ok(/emPiles\(/.test(f),        'the face draws them');
@@ -461,7 +466,11 @@ eval(ex('emBand'));
      'self-heal: an EARLIER bar replaces the captured one, so it can only move backward toward the true open');
   ok(!/cs\[0\]\.so>rec\.openSo/.test(b),
      '...and never forward, which is what let the sliding window drag it');
-  ok(/EMOPEN_SCHEMA=3/.test(src),  'the schema bumped, so records without the open are re-taken');
+  ok(/EMOPEN_SCHEMA=4/.test(src),  'the schema bumped (v14.16: purges any pre-floor EM pin), so stale records are re-taken');
+  // (v14.16) THE EM SANITY FLOOR — the midnight expired-straddle pin ($2.5 on a 7690 anchor)
+  const eb16=ex('emBand');
+  ok(/EM_MIN_FRAC/.test(eb16) && /emHealed/.test(eb16), 'a stored EM below the floor is DISCARDED (healed), never trusted');
+  ok(/implausibly small/.test(eb16) && /not pinning/.test(eb16), 'an implausible fresh straddle is REFUSED at capture — no band beats a 5-pt band');
 
   // big dollars
   eval(ex('usd')); eval(ex('usdBig'));

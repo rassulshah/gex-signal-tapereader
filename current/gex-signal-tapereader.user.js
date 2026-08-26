@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.15
+// @version    14.16
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -596,7 +596,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.15';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.16';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -19371,8 +19371,12 @@ function ifLadder(sym){
 var EMOPEN_KEY='gpts_emopen_v1';
 // ⚠ BUMP THIS whenever the captured record gains a field the band RELIES on. A stored record from an
 // older schema is discarded and re-taken, never partially trusted — see the v11.61 note in emBand().
-var EMOPEN_SCHEMA=3;
+var EMOPEN_SCHEMA=4;               // (v14.16) bumped: discards any record pinned before the EM floor
 var EM_FRESH_MIN=15;               // minutes after the open within which a capture counts as clean
+// (v14.16) ⚖ HAND-SET: the smallest believable expected move, as a fraction of the anchor. A real
+// index EM has never been under ~0.2% of spot; 0.1% only appears when the straddle being read is an
+// EXPIRED book's residue (measured 2026-08-27: $2.5 on a 7690 anchor = 0.03%, pinned at midnight).
+var EM_MIN_FRAC=0.001;
 // (v11.83) ⚠ IS `dte0` ACTUALLY TODAY? InsiderFinance DROPS an expiry from the payload the moment it
 // expires, so a chain captured after the close has the NEXT session as its earliest row. `dte0` means
 // "nearest live expiry", which is not the same claim as "today" — and the band built on it is then
@@ -19434,6 +19438,15 @@ function emBand(sym){
     var rec=S.sym[sym]||null;
     // belt and braces: even a stamped record is refused if the field the pin depends on is absent
     if(rec && !(typeof rec.rr==='number' && rec.rr>0)){ rec=null; out.recaptured=true; }
+    // (v14.16) EM SANITY FLOOR — the poisoned-pin lesson, again, one field over. On 2026-08-27 the
+    // once-per-session capture fired just past midnight while the IF dte0 chain still held the
+    // EXPIRED book: an ATM straddle on expired options is ~$2.5 of residue, and that was PINNED as
+    // the whole day's expected move. Result: a 5-pt band, and skPiles (which then clipped to the
+    // band) drew a rail with NO nodes on it while price fought the 7690 accelerator — operator:
+    // "the heavy vol nodes aren't even shown on the rail." An EM below 0.1% of the anchor is not a
+    // market, it is a dead straddle; discard the record (heal) and refuse to re-pin one like it.
+    var emFloor=(openU>0?openU:1)*((rr>0)?rr:1)*EM_MIN_FRAC;
+    if(rec && typeof rec.em==='number' && !(rec.em>=emFloor)){ rec=null; out.emHealed=true; }
 
     if(!(rec && typeof rec.em==='number')){
       var ec=null; try{ ec=ifChain((sym==='QQQ')?'QQQ':'SPX'); }catch(eC){}
@@ -19460,6 +19473,12 @@ function emBand(sym){
       // all three times it was reported. Pinning the scale fixed 0.05 of an 18-point problem.
       // `openSo` is the opening bar's seconds-of-day, so a LATER-starting window can never overwrite an
       // earlier one — see the self-heal below.
+      // (v14.16) refuse to PIN an implausible EM — see the sanity-floor note above. Better no band
+      // (disclosed) than a 5-pt band silently governing the whole day.
+      if(!(emo.em*dsc>=emFloor)){
+        out.why='EM implausibly small ('+(Math.round(emo.em*dsc*100)/100)+' vs floor '+(Math.round(emFloor*100)/100)+') — straddle looks expired/illiquid; not pinning';
+        return out;
+      }
       rec={ em:emo.em*dsc, k:emo.k, capMin:(P&&P.rth)?(P.mins-P.open):null, t:Date.now(), rr:rr,
             openU:openU, openSo:(cs.length&&typeof cs[0].so==='number')?cs[0].so:null };
       S.sym[sym]=rec;
@@ -19921,7 +19940,13 @@ function skPiles(B, sym){
       var k=parseFloat(ks[i]); if(!isFinite(k)) continue;
       var pct=T.pct[ks[i]]; if(typeof pct!=='number' || !isFinite(pct)) continue;
       var disp=k*L.dispScale;                                  // SPXW strike -> chart (ES)
-      if(disp<B.low || disp>B.high) continue;
+      // (v14.16, operator mandate) NO BAND CLIP. "The rail must stay in sync with the SPXW ladder
+      // — the band is a measuring stick on the rail, not an admission filter for which nodes
+      // exist." The old low/high boundary clip meant a narrow band (or the poisoned 5-pt
+      // EM of 2026-08-27) silently deleted the King and every heavy node from the rail, the NODES
+      // section, the ROC matrix AND the export — while Atlas drew all of them. Every node >= the
+      // threshold ships; the rail frame grows to hold them (emRailBounds) and emPath still range-
+      // filters for its own sums. Roles were already whole-ladder (v11.81) for exactly this reason.
       var mag=Math.abs(pct); if(mag<thr) continue;
       out.piles.push({ k:k, disp:disp, pct:Math.round(mag),
                        role:(RL.byK[k]||null),
@@ -20271,7 +20296,7 @@ function emPilesIF(B, sym){
     for(i=0;i<prof.length;i++){
       var k=prof[i][0], cal=prof[i][1], put=prof[i][2];     // $M, puts NEGATIVE (their convention)
       var disp=k*L.dispScale;                                // SPX strike -> chart scale
-      if(disp<B.low || disp>B.high) continue;
+      // (v14.16) no band clip — same mandate as skPiles; the fallback book obeys the same contract.
       var mag=Math.abs(cal)+Math.abs(put), pct=Math.round(100*mag/maxMag);
       if(pct<thr) continue;
       var net=cal+put;                                       // NEGATIVE net = dealers short gamma there
@@ -20525,7 +20550,7 @@ function emPos(B, v){
 // The track rescales to hold price with a margin, and the ORIGINAL boundary becomes a marked line, so
 // the expected move stays visible as a level rather than being quietly redefined as the edge.
 var EM_RAIL_PAD = 0.25;    // ⚖ hand-set: a quarter of the band's own width beyond price
-function emRailBounds(B){
+function emRailBounds(B, piles){
   var out={ lo:B.low, hi:B.high, over:false, under:false, span:(B.high-B.low) };
   try{
     var span=B.high-B.low; if(!(span>0)) return out;
@@ -20536,6 +20561,19 @@ function emRailBounds(B){
     var loRef=Math.min(B.now, (B.loWater!=null?B.loWater:B.now));
     if(hiRef>B.high){ out.hi=hiRef+pad; out.over=true; }
     if(loRef<B.low){  out.lo=loRef-pad; out.under=true; }
+    // (v14.16) THE RAIL HOLDS EVERY NODE ATLAS DRAWS. With the band clip gone from skPiles, a node
+    // beyond the drawn track would pin at 0%/100% and stack invisibly at the edge — so the frame
+    // widens to hold the outermost pile plus a half-pad. ⚠ over/under stay PRICE-driven: they mean
+    // "price ran past the expected move" on the face, and a far King must not fake that claim.
+    if(piles && piles.length){
+      var pad2=pad*0.5, pi;
+      for(pi=0;pi<piles.length;pi++){
+        var pd=piles[pi]&&piles[pi].disp;
+        if(typeof pd!=='number'||!isFinite(pd)) continue;
+        if(pd+pad2>out.hi) out.hi=pd+pad2;
+        if(pd-pad2<out.lo) out.lo=pd-pad2;
+      }
+    }
     out.span=out.hi-out.lo;
   }catch(e){}
   return out;
@@ -20657,9 +20695,6 @@ function secFrame(sym){
     //   1 WHERE IS THE TARGET, and is it even reachable inside what today prices?
     //   2 HOW MUCH ROOM IS LEFT — not distance travelled, what REMAINS toward the rail ahead.
     //   3 COULD THIS TURN — because it is stretched, or because it has ALREADY turned once.
-    // (v11.99) RAIL SPACE FOR DRAWING. emPos stays the MEASUREMENT (clamped, recorded as `pct`);
-    // RB is the drawn track, which grows once a boundary has been run so "how far past" is visible.
-    var RB=emRailBounds(EB);
     // (v14.6) AFTER THE CLOSE the band is YESTERDAY'S expected move — a straddle that expired at
     // 15:00 forecasts nothing. The rail says so instead of pretending: chip, dimmed struck-through
     // EL/EH, no target, no budget labels, no roll lane (gated above). Pre-open keeps its own
@@ -20670,6 +20705,11 @@ function secFrame(sym){
     // PROJECT-CONSTANTS: two derivations of one thing drift, and here they would drift WITHIN a
     // single render — an arrow pointing at a node that is not animating.
     var RAILPS=[]; try{ RAILPS=emPiles(EB, sym)||[]; }catch(eRP){}
+    // (v11.99) RAIL SPACE FOR DRAWING. emPos stays the MEASUREMENT (clamped, recorded as `pct`);
+    // RB is the drawn track, which grows once a boundary has been run so "how far past" is visible.
+    // (v14.16) ...and grows to hold every pile, so the un-clipped node set is actually drawable —
+    // RAILPS therefore computes FIRST. One RB serves the rail AND the profile beneath it.
+    var RB=emRailBounds(EB, RAILPS);
     // (v13.9) THE RAIL DRAWS THE LATCH TOO — the same list the NODES section draws, or the two
     // surfaces disagree about which rolls exist, which is the exact drift the shared-array rule
     // forbids. GAVE BACK entries are excluded here: an arrow on the rail claims structure, and a

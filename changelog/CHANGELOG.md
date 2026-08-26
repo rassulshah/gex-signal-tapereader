@@ -1,3 +1,30 @@
+## v14.16 — the rail syncs with Atlas: EM floor + the band clip is gone (ledger issue #5)
+
+Operator, watching price fight the 7690 accelerator with an empty rail: "the heavy vol nodes
+aren't even shown on the rail… the rail is not in sync… the band is a measuring stick, not an
+admission filter." Root cause, measured live: the once-per-session EM capture fired just past
+midnight while the IF dte0 chain still held the EXPIRED Aug-26 book — an ATM straddle on expired
+options is ~$2.5 of residue, and that was PINNED as the whole day's expected move (EL 7688/EH
+7693, FIVE ES points). skPiles then clipped every pile to that band: King and 8 of 9 nodes >=20%K
+deleted from the rail, the NODES section, the ROC matrix, the in-play effects AND the export,
+while Atlas drew all of them. The rr poisoned-pin lesson (v13.9), one field over.
+
+Three changes:
+1. **EM sanity floor** (EM_MIN_FRAC=0.001 of the anchor, ⚖ hand-set): a stored EM below the floor
+   is discarded (out.emHealed) and an implausible fresh straddle is REFUSED at capture — no band,
+   disclosed, beats a 5-pt band silently governing the day. EMOPEN_SCHEMA 3→4 purges any pre-floor
+   pin on install.
+2. **The band clip is GONE** from skPiles AND emPilesIF: every node >= nodeThresh ships regardless
+   of band width. Roles were already whole-ladder (v11.81); emPath still range-filters its own
+   sums; emPos stays clamped (recorded measurement, untouched).
+3. **The rail frame holds every node**: emRailBounds takes the pile list and widens to the
+   outermost pile + half-pad, so un-clipped nodes are drawable instead of stacking at 0%/100%.
+   over/under stay PRICE-driven — a far King must not fake "price ran past the band". RAILPS now
+   computes before RB; one RB serves rail + profile.
+
+test_em_band: clip asserts REVERSED (absence asserted both sources), schema/floor asserts added
+(622). Suite at the six known pre-v13.8 reds.
+
 ## v14.15 — NQ rows come from the Atlas QQQ ladder, not the weekly feed
 
 Operator, comparing his IRT NQ chart against Atlas on QQQ: "it has less levels than my nq chart —
