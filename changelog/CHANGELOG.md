@@ -1,3 +1,75 @@
+## v14.44 — GARMA V2 PHASE A2: THE DARK-POOL LIFECYCLE
+
+fresh / holding / retesting / broken / reclaimed / flipped / unknown, computed from bars we actually
+watched. Built only after the first live capture proved the payload shape — designing this against a
+guessed payload was the thing worth waiting one version for.
+
+**The axis is the operator's own** ("it sounds like it hasn't broken"): crossed or not. Not-crossed
+splits on whether price ever came to test it, because an untested level is the STRONG one (Academy
+~80% first tap) and a level defended four times is nearly spent — the same tap doctrine v14.41 wired
+into the gamma levels, applied here.
+
+- **FRESH** never touched in our window · **HOLDING** tested and rejected, never closed through
+  (tap count = wear) · **RETESTING** price is on it now, outranks everything · **BROKEN** closed
+  through and still on the far side · **RECLAIMED** closed through then closed back — the break
+  failed · **FLIPPED** broke, then tested from the NEW side and held (support became resistance).
+
+⚠ **BROKEN NEEDS A CLOSE, NOT A WICK.** One spike through a $1.8B print is not a break, and wicks
+would retire every level on its first volatile hour. A bar is a decision — the standard the price
+pill and the deflection tests already use. There is a regression test for exactly this.
+
+⚠ **THE WHOLE MACHINE RUNS IN THE UNDERLYING'S SCALE.** Prints arrive as SPY prices and
+`futRawCandles` returns SPY bars, so the comparison is like-for-like and NO RATIO ENTERS THE STATE
+MACHINE. The conversion to ES happens once, at draw time. A scale inside a state machine is a bug
+waiting for a volatile day.
+
+⚠ **WE ONLY CLAIM WHAT WE WATCHED.** Their lookback is 45 days; our raw window is the chart's. A
+print older than our earliest bar has a gap we did not see, and the hover DISCLOSES it ("judged only
+on bars we actually watched, since 2026-08-21") rather than papering over it. No bars after the
+print at all = UNKNOWN, full stop.
+
+The state rides the level's NAME on the levels line ("DP held", "DP broke"), the hover carries the
+full reasoning, and the S&R clause names it too — because "on the dark pool" and "on a dark pool
+that already broke" are opposite pieces of advice. GM-DP-003 is honoured: BROKEN is not yet
+resistance; FLIPPED is.
+
+`__gptsDebug.dp()` now returns the lifecycle. test_garma_v2.js 63 -> 81 asserts. Suite green,
+6 baseline reds unchanged.
+
+## v14.43 — WHAT THE FIRST DARK-POOL CAPTURE CAUGHT
+
+The capture worked on the operator's first reload, and the live payload immediately found two bugs
+that no amount of designing against a guessed shape would have found.
+
+**Their `ts` is in SECONDS.** The real payload is a bare array of
+`{price, notional, size, ts:1784147283}`, and that decodes to 2026-07-15 — 42 days back, exactly
+inside the 45-day lookback. Read as milliseconds it lands in 1970 and the hover would have read
+"Printed 20000d ago". Converted at the parse, so nothing downstream ever has to know which unit it
+got; a millisecond timestamp still survives untouched in case they change it.
+
+**A CLAMPED POSITION IS A FALSE POSITION.** `emPosRail` clamps to 0..100 by design — it protects the
+rail's own drawing — so a level outside the frame lands ON THE EDGE. The three captured dark pools
+sit 115-220 pts below the rail, so all three pinned at 0% and merged with the SPY King (also
+off-frame) into a single stack reading **"SPY K·DP·DP·DP 7632"**: four levels named, one price
+shown, and that price belonging to none of the dark pools. This was a latent bug in the levels line
+from v14.40 — the SPY King has been capable of pinning to the edge since it moved there — and the
+dark pools are simply what made it visible.
+
+A level drawn where it is not is worse than a level not drawn. Off-frame levels now LEAVE THE LINE
+and are DISCLOSED instead: the count and the nearest few ride the bar's hover ("3 levels OFF THIS
+FRAME, not drawn because a clamped position would be a false one: DP 7577 (-115)…"), so the
+information is kept without faking a position. An all-off-frame set still draws the bar and explains
+itself rather than vanishing.
+
+test_garma_v2.js 52 -> 63 asserts, including the verbatim live payload as a fixture. Suite green,
+6 baseline reds unchanged.
+
+⚠ PROCESS NOTE, THIRD TIME THIS PROJECT HAS PAID FOR IT: a multi-replace script that `sys.exit()`s
+on a failed assert writes NOTHING, silently discarding the edits that succeeded before it. v14.43
+was briefly in a state where the render function referenced `offTxt` that no longer existed — a
+ReferenceError that `node -c` cannot see, because it is scope, not syntax. Edits are now applied and
+VERIFIED one at a time, and a scope check runs over the render function before packaging.
+
 ## v14.42 — GARMA V2 PHASE A1: THE DARK POOLS ARRIVE
 
 The most recurrent concept in the entire corpus — **11 videos out of 11**, tied with the King node

@@ -1,4 +1,37 @@
 
+## v14.43 (2026-08-26) — FIRST LIVE DARK-POOL CAPTURE, TWO BUGS FOUND
+- PAYLOAD SHAPE CONFIRMED (verbatim, now a test fixture):
+  `[{price:754.6936, notional:1811264639.99, size:2400000, ts:1784147283}, ...]` — bare array,
+  3 rows, ts in SECONDS. A1's tolerant parser handled it on the first try; only the unit was wrong.
+- FIX 1: ts seconds -> ms at the parse (<1e11 = seconds). Was going to render "Printed 20000d ago".
+- FIX 2 (latent since v14.40, dark pools exposed it): emPosRail CLAMPS to 0..100, so off-frame
+  levels pinned to the edge and MERGED — live face showed "SPY K·DP·DP·DP 7632", four levels named,
+  one price, belonging to none of them. Off-frame levels now leave the line and are disclosed in
+  the bar's hover instead.
+- Captured SPY dark pools 2026-08-26: 754.69 / 750.83 / 743.93 (~$1.8B / $1.5B / $1.28B notional,
+  printed 2026-07-15 / 07-16 / 07-20). All 115-220 ES pts BELOW price — hence all off-frame today.
+- test_garma_v2.js 63 asserts. Suite green, 6 baseline reds.
+- PROCESS: multi-replace python scripts that sys.exit() on a failed assert SAVE NOTHING. Use
+  one-edit-at-a-time + verify (tools pattern /tmp/ed.py). Third time this has cost the project.
+- NEXT: A2 lifecycle. Shape is known now, so it is unblocked.
+
+## v14.42 (2026-08-26) — GARMA V2 PHASE A1: DARK POOLS
+- Passive capture of `/fs/api/dark-pool/top-prints` in BOTH hooks (fetch + xhr). Never self-fetched
+  (401 — page holds the auth). Store `gpts_darkpool_v1` PERSISTED (endpoint fires on mount).
+- Tolerant parser (shape still unknown) + RAW SAMPLE kept. Unknown shape -> DP_STATE.err, LOUD.
+- Levels line: DP stacks in TEAL, hover carries print size/age. dpConfluence() lets S&R say
+  "on the dark pool 7688". NO lifecycle claimed — that is A2.
+- test_garma_v2.js 52 asserts. Suite green, 6 baseline reds.
+- ⚠⚠ FIRST THING NEXT SESSION: after the operator reloads on v14.42, run
+  `__gptsDebug.dp()` and READ `raw.sample` — that is the payload shape A2 needs. If `prints` is
+  empty but `raw` is populated, the parser needs a new field name, not a redesign.
+- A2 DESIGN (agreed with operator, not yet built): lifecycle = FRESH (never tested) / HOLDING
+  (tested and rejected) / BROKEN (a CLOSED bar through, not a wick) / RETESTING / FLIPPED /
+  RECLAIMED / UNKNOWN. Operator's steer: "it sounds like it hasn't broken" — broken-vs-not is the
+  core axis, and FRESH vs HOLDING is the split that carries the tap doctrine (fresh is the strong
+  one). 45-day lookback vs our 10-day recorder window => levels older than our history start
+  UNKNOWN and EARN a state; never guessed.
+
 ## v14.41 (2026-08-26) — GARMA V2 PHASE 0
 - V2 package landed at `garma/claude_package_v2` (59 rules); audit + phases in `garma/V2-PHASE-PLAN.md`.
 - SCOUTED LIVE: Atlas has a **Dark Pool** indicator (operator has it ON) fed by

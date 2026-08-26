@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.42
+// @version    14.44
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -1968,7 +1968,12 @@ function dpParse(j){
         at:(function(){
           var t=it.time||it.timestamp||it.date||it.executed_at||it.executedAt||it.ts||null;
           if(t==null) return null;
-          if(typeof t==='number') return t;
+          // ⚠ (v14.43, caught on the FIRST live capture) THEIR ts IS IN SECONDS. The real payload
+          // is [{price, notional, size, ts:1784147283}] and 1784147283 decodes to 2026-07-15 — 42
+          // days back, exactly inside the 45-day lookback. Read as milliseconds it lands in 1970 and
+          // the hover would have said "Printed 20000d ago". Below 1e11 is seconds; the conversion
+          // lives HERE, at the parse, so nothing downstream ever has to know which unit it got.
+          if(typeof t==='number') return t<1e11 ? t*1000 : t;
           var d=Date.parse(t); return isFinite(d)?d:null;
         })()
       });
@@ -1995,6 +2000,100 @@ function onDarkPool(url, j){
     try{ localStorage.setItem(DP_KEY, JSON.stringify({ t:DP_STATE.t, bySym:DP_STATE.bySym, raw:DP_STATE.raw })); }catch(eS){}
   }catch(e){}
 }
+// ============================================================================================
+// (v14.44, GARMA V2 PHASE A2) THE DARK-POOL LIFECYCLE — fresh / holding / broken / retesting /
+// flipped / reclaimed / unknown (V2 GM-DP-003 and the dark-pool concept family).
+//
+// ⚠⚠ EVERYTHING HERE IS COMPUTED IN THE UNDERLYING'S OWN SCALE (SPY/QQQ), NEVER THE CHART'S.
+// The prints arrive as SPY prices and `futRawCandles` returns SPY bars, so the comparison is
+// like-for-like and no ratio enters the state machine at all. The conversion to ES happens ONCE,
+// at draw time, in railLevelsLine. A scale in a state machine is a bug waiting for a volatile day.
+//
+// ⚠ WE ONLY EVER CLAIM WHAT WE WATCHED. Their lookback is 45 days; the chart's raw window is a
+// handful. A print older than our earliest bar has a gap we did not see, and that gap is disclosed
+// (`obsFrom`) rather than papered over — the state describes OUR WINDOW, and says so. A print with
+// no bars after it at all is UNKNOWN, full stop. This is the same rule as every other absence in
+// this file: absence of data is not a reading.
+//
+// THE STATE MACHINE, in the operator's own framing ("it sounds like it hasn't broken"):
+//   the axis is CROSSED or NOT. Not-crossed then splits on whether price ever came to test it,
+//   because a level that has never been tested is the STRONG one (Academy: ~80% first tap) and a
+//   level that has been defended four times is nearly spent — the same tap doctrine v14.41 wired
+//   into the gamma levels, applied here.
+//     FRESH     never touched in our window                     — the strong one
+//     HOLDING   touched and rejected, never closed through      — defended (tap count = wear)
+//     RETESTING price is AT it right now                        — live, overrides the rest
+//     BROKEN    closed through and is still on the far side     — a CLOSED bar, never a wick
+//     RECLAIMED closed through, then closed back to its origin  — the break failed
+//     FLIPPED   broken, then tested from the NEW side and held  — support became resistance
+// ⚠ BROKEN NEEDS A CLOSE, NOT A WICK. One spike through a $1.8B print is not a break, and using
+// wicks would retire every level on its first volatile hour. A bar is a decision — the same
+// standard the price pill and the deflection tests already use.
+var DP_TOL_PCT=0.0004;      // 0.04% — about 0.30 SPY / 3 ES at today's prices: "at the level"
+var DP_ST_SHORT={ FRESH:'fresh', HOLDING:'held', RETESTING:'retest', BROKEN:'broke',
+                  RECLAIMED:'back', FLIPPED:'flip', UNKNOWN:'?' };
+function dpLifecycleOne(px, printedAt, bars, spot){
+  var out={ st:'UNKNOWN', why:'', touches:0, obsFrom:null, crossed:false };
+  try{
+    if(!(px>0) || !bars || !bars.length) { out.why='no price history in the window'; return out; }
+    var tol=px*DP_TOL_PCT;
+    var seq=[];
+    for(var i=0;i<bars.length;i++){
+      var b=bars[i];
+      if(!b || typeof b.time!=='number') continue;
+      if(printedAt!=null && b.time*1000 < printedAt) continue;   // only what happened AFTER the print
+      if(b.high==null || b.low==null || b.close==null) continue;
+      seq.push(b);
+    }
+    if(!seq.length){ out.why='no bars since the print'; return out; }
+    out.obsFrom=seq[0].time*1000;
+    var side0=(seq[0].close>=px)?1:-1, cur=side0, flips=0, lastFlipIdx=-1, off=true;
+    for(var j=0;j<seq.length;j++){
+      var c=seq[j];
+      var touching=(c.low<=px+tol && c.high>=px-tol);
+      if(touching){ if(off){ out.touches++; off=false; } }
+      else if(Math.abs(c.close-px)>tol*3) off=true;              // must clearly leave before a re-touch counts
+      var sd=(c.close>=px)?1:-1;
+      if(sd!==cur){ cur=sd; flips++; lastFlipIdx=j; }
+    }
+    out.crossed=(flips>0);
+    var nowSide=(spot!=null)?((spot>=px)?1:-1):cur;
+    var atNow=(spot!=null && Math.abs(spot-px)<=tol);
+    if(atNow){ out.st='RETESTING'; out.why='price is on it now'; return out; }
+    if(!out.crossed){
+      if(out.touches>0){ out.st='HOLDING';
+        out.why='tested '+out.touches+' time'+(out.touches>1?'s':'')+' and never closed through'; }
+      else { out.st='FRESH'; out.why='never tested since the print'; }
+      return out;
+    }
+    if(nowSide===side0){ out.st='RECLAIMED'; out.why='closed through, then closed back to its own side'; return out; }
+    // it is broken. Did price come back and get rejected FROM THE NEW SIDE? that is the flip.
+    var tAfter=0, offF=true;
+    for(var m=lastFlipIdx+1;m<seq.length;m++){
+      var f=seq[m];
+      if(f.low<=px+tol && f.high>=px-tol){ if(offF){ tAfter++; offF=false; } }
+      else if(Math.abs(f.close-px)>tol*3) offF=true;
+    }
+    if(tAfter>0){ out.st='FLIPPED';
+      out.why='broke, then tested '+tAfter+' time'+(tAfter>1?'s':'')+' from the other side and held \u2014 '+
+              (side0>0?'support became resistance':'resistance became support'); }
+    else { out.st='BROKEN'; out.why='closed through and has stayed on the far side'; }
+    return out;
+  }catch(e){ out.why='lifecycle unreadable'; return out; }
+}
+// every captured print for `sym`, with its lifecycle. Underlying scale throughout.
+function dpLifecycle(sym){
+  try{
+    var D=darkPoolLevels(sym); if(!D) return null;
+    var bars=null; try{ bars=futRawCandles(sym); }catch(e0){}
+    var spot=null; try{ spot=(STATE[sym]||{}).price; }catch(e1){}
+    return D.prints.map(function(pr){
+      var lc=dpLifecycleOne(pr.px, pr.at, bars, spot);
+      return { px:pr.px, size:pr.size, notional:pr.notional, at:pr.at,
+               st:lc.st, why:lc.why, touches:lc.touches, obsFrom:lc.obsFrom };
+    });
+  }catch(e){ return null; }
+}
 // the levels for one underlying, newest capture, in THAT UNDERLYING'S price scale (SPY/QQQ).
 // Conversion to the chart scale is the caller's job, because only the caller knows the frame.
 function darkPoolLevels(sym){
@@ -2005,8 +2104,11 @@ function darkPoolLevels(sym){
     return { prints:d.prints, ts:d.ts, ageMs:age, stale:(age>DP_STALE_MS) };
   }catch(e){ return null; }
 }
-window.__gptsDebug.dp=function(){ return { state:{t:DP_STATE.t, n:DP_STATE.n, err:DP_STATE.err},
-  syms:Object.keys(DP_STATE.bySym), levels:darkPoolLevels('SPY'), raw:DP_STATE.raw }; };
+window.__gptsDebug.dp=function(sy){ var s2=sy||activeSym()||'SPY'; return {
+  state:{t:DP_STATE.t, n:DP_STATE.n, err:DP_STATE.err},
+  syms:Object.keys(DP_STATE.bySym), levels:darkPoolLevels(s2),
+  lifecycle:(function(){ try{ return dpLifecycle(s2); }catch(e){ return 'ERR '+e; } })(),
+  raw:DP_STATE.raw }; };
 window.__gptsDebug.ifParse=function(h,s){ return ifParse(h,s||'SPY'); };
 
 
@@ -20419,10 +20521,16 @@ function dpConfluence(sym, disp, scale){
   try{
     var D=darkPoolLevels(sym);
     if(!D || !(scale>0) || typeof disp!=='number') return null;
+    // (v14.44) the S&R clause speaks the STATE too, because "on the dark pool" and "on a dark pool
+    // that already broke" are opposite pieces of advice. GM-DP-003: a broken level only becomes
+    // resistance after a rejection — which is exactly what FLIPPED means and BROKEN does not.
+    var LC=null; try{ LC=dpLifecycle(sym); }catch(e0){}
     var best=null, bd=SESS_CONFL_PTS;
-    D.prints.forEach(function(pr){
+    D.prints.forEach(function(pr, i){
       var at=pr.px*scale, d=Math.abs(at-disp);
-      if(d<=bd){ bd=d; best={ name:'the dark pool '+frameNum(at), at:at, d:d }; }
+      if(d<=bd){ bd=d;
+        var st=(LC&&LC[i]&&LC[i].st&&LC[i].st!=='UNKNOWN')?LC[i].st:null;
+        best={ name:'the dark pool '+frameNum(at)+(st?(' ('+st.toLowerCase()+')'):''), at:at, d:d, st:st }; }
     });
     return best;
   }catch(e){ return null; }
@@ -20629,10 +20737,16 @@ function railLevelsLine(EB, RB, RAILPS, SESSL, sym){
     // so the level is never a bare number.
     try{
       var DPL=darkPoolLevels(sym);
+      var DPLC=null; try{ DPLC=dpLifecycle(sym); }catch(eLc){}
       if(DPL && typeof EB.scaleUsed==='number' && EB.scaleUsed>0){
-        DPL.prints.forEach(function(pr){
-          LV.push({ n:'DP', at:pr.px*EB.scaleUsed, dp:true, size:pr.size, notional:pr.notional,
-                    at0:pr.px, when:pr.at, stale:DPL.stale });
+        DPL.prints.forEach(function(pr, iDp){
+          // (v14.44) the LIFECYCLE rides the name, so the level says what it has DONE, not just
+          // where it is. Underlying scale in, chart scale out — the conversion happens HERE and
+          // nowhere else.
+          var lc=(DPLC && DPLC[iDp]) ? DPLC[iDp] : null;
+          var tag=(lc && lc.st && lc.st!=='UNKNOWN') ? (' '+(DP_ST_SHORT[lc.st]||'')) : '';
+          LV.push({ n:'DP'+tag, at:pr.px*EB.scaleUsed, dp:true, size:pr.size, notional:pr.notional,
+                    at0:pr.px, when:pr.at, stale:DPL.stale, lc:lc });
         });
       }
     }catch(eDp){}
@@ -20657,8 +20771,21 @@ function railLevelsLine(EB, RB, RAILPS, SESSL, sym){
       L.confl=false;
       try{ for(var cL=0;cL<RAILPS.length;cL++){ if(Math.abs(RAILPS[cL].disp-L.at)<=SESS_CONFL_PTS){ L.confl=true; break; } } }catch(eLd){}
     });
-    LV=LV.filter(function(L){ return isFinite(L.x); });
-    if(!LV.length) return '';
+    // ⚠⚠ (v14.43) A CLAMPED POSITION IS A FALSE POSITION, AND THE DARK POOLS PROVED IT ON DAY ONE.
+    // emPosRail CLAMPS to 0..100 by design (it protects the rail's own drawing), so any level
+    // outside the frame lands ON THE EDGE. The first live capture put three dark pools 115-220 pts
+    // below the rail: all three pinned at 0% and MERGED with the SPY King (also off-frame) into one
+    // stack reading "SPY K·DP·DP·DP 7632" — four levels named, ONE price shown, and that price
+    // belonging to none of the dark pools. A level drawn where it is not is worse than a level not
+    // drawn. Off-frame levels therefore LEAVE THE LINE and are DISCLOSED instead: the count and the
+    // nearest few ride the bar's hover, which keeps the information without faking a position.
+    var OFF=[];
+    LV=LV.filter(function(L){
+      if(!isFinite(L.x)) return false;
+      if(RB && typeof RB.lo==='number' && typeof RB.hi==='number' && (L.at<RB.lo || L.at>RB.hi)){ OFF.push(L); return false; }
+      return true;
+    });
+    if(!LV.length && !OFF.length) return '';
     LV.sort(function(a,b){ return a.x-b.x; });
     var GRP=[];
     LV.forEach(function(L){
@@ -20666,7 +20793,15 @@ function railLevelsLine(EB, RB, RAILPS, SESSL, sym){
       if(g && (L.x-g.m[g.m.length-1].x)<=4.5) g.m.push(L);
       else GRP.push({ m:[L] });
     });
-    var h='<i class="g3llbar"'+g3tip('THE LEVELS LINE \u2014 session structure (30-min IB, prior day), the SPY King, and the InsiderFinance levels (italics \u2014 THEIR numbers), each hanging under the line with its arrowhead pointing at the spot on the rail below where that price lives. BLUE = a gamma node sits on it. Overlapping levels merge into one stack \u2014 hover for each exact price. The white notch is price now.')+'></i>';
+    var offTxt='';
+    if(OFF.length){
+      OFF.sort(function(a,b){ return Math.abs(a.d)-Math.abs(b.d); });
+      offTxt=' \u2014 '+OFF.length+' level'+(OFF.length>1?'s':'')+' OFF THIS FRAME, not drawn because a clamped position would be a false one: '+
+        OFF.slice(0,4).map(function(L){ return L.n+' '+frameNum(L.at)+' ('+(L.d>0?'+':'')+Math.round(L.d)+')'; }).join(', ')+
+        (OFF.length>4?(', and '+(OFF.length-4)+' more'):'')+'.';
+    }
+    if(!LV.length) return '<div class="g3ll"><i class="g3llbar"'+g3tip('THE LEVELS LINE \u2014 nothing in frame.'+offTxt)+'></i></div>';
+    var h='<i class="g3llbar"'+g3tip('THE LEVELS LINE \u2014 session structure (30-min IB, prior day), the SPY King, and the InsiderFinance levels (italics \u2014 THEIR numbers), each hanging under the line with its arrowhead pointing at the spot on the rail below where that price lives. BLUE = a gamma node sits on it. Overlapping levels merge into one stack \u2014 hover for each exact price. The white notch is price now.'+offTxt)+'></i>';
     var pN=emPosRail(EB, frNow, RB);
     if(isFinite(pN)) h+='<i class="g3llpx" style="left:'+pN.toFixed(1)+'%"'+g3tip('Price now \u2014 '+frameNum(frNow))+'></i>';
     GRP.forEach(function(g){
@@ -20691,7 +20826,13 @@ function railLevelsLine(EB, RB, RAILPS, SESSL, sym){
                          (d.notional!=null?('Print '+(usdBig(d.notional)||d.notional)+'. '):(d.size!=null?('Print '+d.size+' shares. '):''))+
                          (d.when!=null?('Printed '+Math.max(0,Math.round((Date.now()-d.when)/86400000))+'d ago. '):'')+
                          (d.stale?'\u26a0 capture is over a day old. ':''); })()+
-                'NO lifecycle state is claimed yet \u2014 whether it has held or broken is phase A2, and a guess would be worse than a silence.'):'');
+                (function(){ var d2=null; g.m.forEach(function(L){ if(L.dp&&L.lc) d2=L.lc; });
+                  if(!d2) return 'Lifecycle unavailable \u2014 no price history to judge it by.';
+                  return 'STATE: '+d2.st+' \u2014 '+d2.why+'.'+
+                    (d2.touches>0?(' Tested '+d2.touches+'x in the observed window.'):'')+
+                    (d2.obsFrom?(' \u26a0 Judged only on bars we actually watched (since '+
+                      (new Date(d2.obsFrom)).toISOString().slice(0,10)+') \u2014 their lookback is 45 days and ours is the chart window, so anything before that is unseen, not assumed.'):'')+
+                    ' BROKEN needs a CLOSE through, never a wick.'; })()):'');
       h+='<span class="'+cls+'" style="left:'+x.toFixed(1)+'%'+edge+'"'+g3tip(tip)+'>'+
          g3esc(name)+'<b>'+g3esc(frameNum(pick.at))+(confl?' \u00b7node':'')+'</b><i></i></span>';
     });
