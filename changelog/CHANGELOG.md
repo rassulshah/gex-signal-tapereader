@@ -1,3 +1,40 @@
+## v14.42 — GARMA V2 PHASE A1: THE DARK POOLS ARRIVE
+
+The most recurrent concept in the entire corpus — **11 videos out of 11**, tied with the King node
+and the rug — and the one with nothing built. Scouted live: Atlas has its own **Dark Pool**
+indicator, the operator runs it ON, and it is fed by
+`GET /fs/api/dark-pool/top-prints?ticker=SPY&top_n=3&lookback_days=45`.
+
+**Their definition, not ours.** A Skylit dark-pool level is the TOP N PRINTS OVER A 45-DAY LOOKBACK
+— a standing level set, not an intraday tape. We store their numbers verbatim and do no clustering
+of our own, the same rule that governs every Skylit-sourced figure here.
+
+**The prints are CASH-EQUITY prints, and that is why `ticker=SPY`.** SPX is an index; it has no dark
+pool prints at all. SPY and QQQ are the only books that can carry them, and they reach the ES rail
+through the same `EB.scaleUsed` the SPY King flag already uses.
+
+**Capture is passive, by necessity.** A cold re-fetch of our own returns 401 ("Provide a valid API
+key") because the page holds the auth — so we read the page's OWN response, in both the fetch and
+XHR hooks, exactly as with every other feed. No companion courier, no CSP problem, and no credential
+ever passes through our hands. The endpoint fires on chart mount rather than on a timer, so the
+store is PERSISTED — otherwise a quiet afternoon would silently empty the levels.
+
+On the face: dark pools hang from THE LEVELS LINE in their own colour (teal — SPXW yellow/purple,
+SPY lighter, IF italic red/green, confluence blue, SPY King purple, dark pools teal), with the
+print's size and age in the hover, and the S&R clause can now say "on the dark pool 7688" the way it
+says "on the IB low".
+
+⚠ **NO LIFECYCLE STATE IS CLAIMED.** fresh / holding / broken / retesting / flipped / reclaimed is
+phase A2, and it is deliberately not built yet: the payload shape is still unknown (401 on cold
+fetch, mount-driven), so the parser is tolerant BY DESIGN — it accepts the array bare, under `data`,
+`prints`, `top_prints`, `levels`, or one level nested, reads price/size/notional/time from any of
+the obvious field names, and KEEPS A RAW SAMPLE (`__gptsDebug.dp()`) so the real shape can be read
+off a live capture. An unrecognised shape fails LOUDLY into `DP_STATE.err` rather than quietly
+producing zero levels that would look exactly like "no dark pools today". Designing a lifecycle
+against a guessed payload is how you ship a state machine that silently never advances.
+
+test_garma_v2.js 28 -> 52 asserts. Suite green, 6 baseline reds unchanged.
+
 ## v14.41 — GARMA V2 PHASE 0: the corrections, and three refusals
 
 The V2 package (59 rules, up from 42; `garma/claude_package_v2`) says v1 underweighted the named

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.41
+// @version    14.42
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -320,6 +320,23 @@ function installFeedObserver(){
     window.fetch = function(input, init){
       var url = (typeof input==='string') ? input : (input && input.url) || '';
       var p = orig.apply(this, arguments);
+      // (v14.42, GARMA V2 PHASE A1) THE DARK-POOL CAPTURE IS ONE LINE, AND PASSIVE BY NECESSITY.
+      // Atlas's own Dark Pool indicator fetches /fs/api/dark-pool/top-prints (scouted live
+      // 2026-08-26; the operator runs it ON). It is SAME-ORIGIN and authenticated with the same
+      // Authorization header as gex/levels — a cold re-fetch of our own returns 401 "Provide a valid
+      // API key", which is exactly why we READ THE PAGE'S OWN RESPONSE rather than issuing our own.
+      // No companion courier, no CSP problem, and no credential ever passes through our hands.
+      // ⚠ It fires on chart mount / symbol change, NOT on a timer — so the store is PERSISTED, or a
+      // quiet afternoon would silently empty the levels.
+      if(url.indexOf('dark-pool')!==-1){
+        p.then(function(resp){
+          try{
+            if(resp && resp.status===200){
+              resp.clone().json().then(function(j){ onDarkPool(url, j); }).catch(function(){});
+            }
+          }catch(e){}
+        }).catch(function(){});
+      }
       if(url.indexOf('gex/levels')!==-1){
         LASTFEEDURL = url;
         captureAuth(input, init);          // (v10.49 A) Headers | plain object | Request
@@ -357,6 +374,11 @@ function installFeedObserver(){
       XP.send = function(){
         try{
           var xhr=this, u=xhr.__gptsUrl||'';
+          if(u.indexOf('dark-pool')!==-1){
+            xhr.addEventListener('load', function(){
+              try{ if(xhr.status===200 && xhr.responseText) onDarkPool(u, JSON.parse(xhr.responseText)); }catch(e){}
+            });
+          }
           if(u.indexOf('gex/levels')!==-1){
             LASTFEEDURL = u;
             if(xhr.__auth) LASTAUTH = xhr.__auth;   // (v10.49 A)
@@ -1872,6 +1894,119 @@ function ifLevels(sym){
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.if=function(s){ return { cfg:IF_CFG, state:{t:IF_STATE.t,err:IF_STATE.err,fails:IF_STATE.fails}, read:ifLevels(s||'SPY') }; };
 window.__gptsDebug.ifFetch=function(s){ IF_STATE.fails=0; ifFetch(s||'SPY', function(p){ console.log('IF',p); }); return 'fetching'; };
+
+// ============================================================================================
+// (v14.42, GARMA V2 PHASE A1) DARK POOLS — the most recurrent concept in the whole corpus
+// (11 videos out of 11, tied with the King node and the rug) and, until now, the one with
+// nothing built. Scouted live 2026-08-26: Atlas has its own **Dark Pool** indicator and the
+// operator runs it ON, fed by
+//     GET /fs/api/dark-pool/top-prints?ticker=SPY&top_n=3&lookback_days=45
+//
+// ⚠⚠ THEIR DEFINITION, NOT OURS. A Skylit dark-pool LEVEL is the TOP N PRINTS OVER A 45-DAY
+// LOOKBACK — a standing level set, not an intraday tape. We store their numbers verbatim and do
+// no clustering of our own, the same rule that governs every other Skylit-sourced figure here.
+//
+// ⚠ THE PRINTS ARE CASH-EQUITY PRINTS, AND THAT IS WHY ticker=SPY. SPX is an index: it has no
+// dark-pool prints at all. SPY and QQQ are the only books that can carry them, and they reach the
+// ES/NQ rail through the SAME scale the SPY King flag already uses (EB.scaleUsed).
+//
+// ⚠ THE PAYLOAD SHAPE IS NOT YET KNOWN. A cold re-fetch 401s (the page holds the auth) and the
+// endpoint fires on chart mount rather than a timer, so no sample was in hand when this shipped.
+// The parser is therefore DELIBERATELY TOLERANT — it accepts the array at the top level, under
+// `data`, `prints`, `top_prints` or `levels`, and reads price/size/notional/time from any of the
+// obvious field names — and it KEEPS A RAW SAMPLE so the shape can be read off a live capture
+// (__gptsDebug.dp()). Phase A2 (the fresh/holding/broken lifecycle) is deliberately NOT built
+// until that sample exists: designing a lifecycle against a guessed payload is how you ship a
+// state machine that silently never advances.
+var DP_KEY='gpts_darkpool_v1';
+var DP_STATE={ bySym:{}, t:0, raw:null, err:null, n:0 };
+try{ var _dpL=JSON.parse(localStorage.getItem(DP_KEY)||'null');
+     if(_dpL && _dpL.bySym){ DP_STATE.bySym=_dpL.bySym; DP_STATE.t=_dpL.t||0; DP_STATE.raw=_dpL.raw||null; } }catch(e){}
+var DP_STALE_MS=24*60*60*1000;     // a 45-day level set does not go stale in an hour; a day is generous
+function dpTickerFromUrl(u){
+  try{ var m=/[?&]ticker=([A-Za-z.:]+)/.exec(u||''); return m?m[1].toUpperCase():null; }catch(e){ return null; }
+}
+// pick the first present numeric field from a list of candidate names
+function dpNum(o, names){
+  try{
+    for(var i=0;i<names.length;i++){
+      var v=o[names[i]];
+      if(typeof v==='number' && isFinite(v)) return v;
+      if(typeof v==='string' && v && isFinite(+v)) return +v;
+    }
+  }catch(e){}
+  return null;
+}
+function dpParse(j){
+  var out={ ok:false, prints:[], why:'' };
+  try{
+    if(!j) { out.why='empty payload'; return out; }
+    var arr=null;
+    if(Object.prototype.toString.call(j)==='[object Array]') arr=j;
+    else {
+      var keys=['data','prints','top_prints','topPrints','levels','results','items'];
+      for(var i=0;i<keys.length && !arr;i++){
+        var v=j[keys[i]];
+        if(Object.prototype.toString.call(v)==='[object Array]') arr=v;
+        // one level of nesting: { success:true, data:{ prints:[...] } }
+        else if(v && typeof v==='object'){
+          for(var k2=0;k2<keys.length && !arr;k2++){
+            if(Object.prototype.toString.call(v[keys[k2]])==='[object Array]') arr=v[keys[k2]];
+          }
+        }
+      }
+    }
+    if(!arr){ out.why='no array found in payload'; return out; }
+    for(var a=0;a<arr.length;a++){
+      var it=arr[a]; if(!it || typeof it!=='object') continue;
+      var px=dpNum(it, ['price','px','level','print_price','printPrice','avg_price','avgPrice','close']);
+      if(px==null || !(px>0)) continue;
+      out.prints.push({
+        px:px,
+        size:dpNum(it, ['size','shares','volume','qty','quantity']),
+        notional:dpNum(it, ['notional','value','dollar_volume','dollarVolume','premium']),
+        at:(function(){
+          var t=it.time||it.timestamp||it.date||it.executed_at||it.executedAt||it.ts||null;
+          if(t==null) return null;
+          if(typeof t==='number') return t;
+          var d=Date.parse(t); return isFinite(d)?d:null;
+        })()
+      });
+    }
+    out.ok=out.prints.length>0;
+    if(!out.ok) out.why='array held no priced rows';
+  }catch(e){ out.why=String(e&&e.message||e); }
+  return out;
+}
+function onDarkPool(url, j){
+  try{
+    var tk=dpTickerFromUrl(url) || 'SPY';
+    var pr=dpParse(j);
+    DP_STATE.n++;
+    // ⚠ THE RAW SAMPLE IS THE POINT OF A1. Kept small and kept regardless of parse success, because
+    // a parse that fails is exactly the case where the shape needs reading.
+    try{ DP_STATE.raw={ tk:tk, url:String(url).slice(0,160), t:Date.now(), sample:JSON.stringify(j).slice(0,1200) }; }catch(eR){}
+    if(!pr.ok){ DP_STATE.err=pr.why||'unparsed'; }
+    else {
+      DP_STATE.err=null;
+      DP_STATE.t=Date.now();
+      DP_STATE.bySym[tk]={ ts:Date.now(), prints:pr.prints };
+    }
+    try{ localStorage.setItem(DP_KEY, JSON.stringify({ t:DP_STATE.t, bySym:DP_STATE.bySym, raw:DP_STATE.raw })); }catch(eS){}
+  }catch(e){}
+}
+// the levels for one underlying, newest capture, in THAT UNDERLYING'S price scale (SPY/QQQ).
+// Conversion to the chart scale is the caller's job, because only the caller knows the frame.
+function darkPoolLevels(sym){
+  try{
+    var d=DP_STATE.bySym[sym||'SPY'];
+    if(!d || !d.prints || !d.prints.length) return null;
+    var age=Date.now()-(d.ts||0);
+    return { prints:d.prints, ts:d.ts, ageMs:age, stale:(age>DP_STALE_MS) };
+  }catch(e){ return null; }
+}
+window.__gptsDebug.dp=function(){ return { state:{t:DP_STATE.t, n:DP_STATE.n, err:DP_STATE.err},
+  syms:Object.keys(DP_STATE.bySym), levels:darkPoolLevels('SPY'), raw:DP_STATE.raw }; };
 window.__gptsDebug.ifParse=function(h,s){ return ifParse(h,s||'SPY'); };
 
 
@@ -18838,6 +18973,10 @@ function ensureV3Css(){
     '#gpts-body .g3llvc,#gpts-body .g3llvc b{color:#7cc7ff}'+
     '#gpts-body .g3llvc i{border-top-color:#7cc7ff}'+
     '#gpts-body .g3llvk,#gpts-body .g3llvk b{color:#cdb4fa}'+
+    // (v14.42) DARK POOL gets its own colour, as every SOURCE on this panel does: SPXW yellow/purple,
+    // SPY lighter, IF red/green-in-italics, confluence blue, SPY King purple \u2014 dark pools teal.
+    '#gpts-body .g3llvdp,#gpts-body .g3llvdp b{color:#5fd3bc}'+
+    '#gpts-body .g3llvdp i{border-top-color:#5fd3bc}'+
     '#gpts-body .g3llvk i{border-top-color:#cdb4fa}'+
     // (v14.35) session-structure ticks — the skeleton, dimmer than everything gamma
     '#gpts-body .g3sess{position:absolute;top:15px;width:0;height:10px;border-left:1px solid #46505c;'+
@@ -20273,6 +20412,21 @@ function sessionLevels(sym, scale){
 }
 // the confluence check the read uses: the nearest session level within reach of a price
 var SESS_CONFL_PTS=2.0;   // ⚖ hand-set: "nodes are zones" (Garma r29) — 2 ES pts counts as ON it
+// (v14.42) the confluence namer also knows the dark pools, so the S&R clause can say "on the dark
+// pool" the same way it says "on the IB low". Still no lifecycle claim \u2014 only the NAME of the
+// thing price is sitting on.
+function dpConfluence(sym, disp, scale){
+  try{
+    var D=darkPoolLevels(sym);
+    if(!D || !(scale>0) || typeof disp!=='number') return null;
+    var best=null, bd=SESS_CONFL_PTS;
+    D.prints.forEach(function(pr){
+      var at=pr.px*scale, d=Math.abs(at-disp);
+      if(d<=bd){ bd=d; best={ name:'the dark pool '+frameNum(at), at:at, d:d }; }
+    });
+    return best;
+  }catch(e){ return null; }
+}
 function sessConfluence(SL, disp){
   try{
     if(!SL) return null;
@@ -20467,6 +20621,21 @@ function railLevelsLine(EB, RB, RAILPS, SESSL, sym){
         if(ewL && ewL.king!=null) LV.push({ n:'SPY K', at:ewL.king*EB.scaleUsed, spyk:true });
       }
     }catch(eLb){}
+    // (v14.42, PHASE A1) THE DARK POOLS hang here like every other structural level. Their prints
+    // are in the UNDERLYING's scale (SPY/QQQ), so they cross to the chart by EB.scaleUsed — the same
+    // multiplier the SPY King flag uses, and for the same reason: it is the only book that can carry
+    // a cash print. NO LIFECYCLE STATE IS CLAIMED YET (phase A2): a level is drawn and named, and
+    // what it has DONE is left unsaid rather than guessed. The hover carries the print's size and age
+    // so the level is never a bare number.
+    try{
+      var DPL=darkPoolLevels(sym);
+      if(DPL && typeof EB.scaleUsed==='number' && EB.scaleUsed>0){
+        DPL.prints.forEach(function(pr){
+          LV.push({ n:'DP', at:pr.px*EB.scaleUsed, dp:true, size:pr.size, notional:pr.notional,
+                    at0:pr.px, when:pr.at, stale:DPL.stale });
+        });
+      }
+    }catch(eDp){}
     // the IF levels, moved here off the main rail (v14.40). Chart scale via the Atlas-anchored
     // basis (ifLadder.dispScale). MP* stays off the line — the read already names max pain on an
     // OPEX day, and our recomputed number beside their published walls would invite confusion.
@@ -20508,13 +20677,21 @@ function railLevelsLine(EB, RB, RAILPS, SESSL, sym){
       var spyk=g.m.some(function(L){ return L.spyk; });
       var confl=g.m.some(function(L){ return L.confl; });
       var iff=g.m.every(function(L){ return L.iff; });
-      var cls='g3llv '+(pick.d>0?'g3llvup':'g3llvdn')+(confl?' g3llvc':'')+(spyk?' g3llvk':'')+(iff?' g3llvif':'');
+      var isdp=g.m.some(function(L){ return L.dp; });
+      var cls='g3llv '+(pick.d>0?'g3llvup':'g3llvdn')+(confl?' g3llvc':'')+(spyk?' g3llvk':'')+(isdp?' g3llvdp':'')+(iff?' g3llvif':'');
       var edge=(x>94)?';transform:translateX(-100%)':((x<6)?';transform:translateX(0)':'');
       var tip=g.m.map(function(L){ return L.n+' '+frameNum(L.at)+' ('+(L.d>0?'+':'')+Math.round(L.d)+')'; }).join(' \u00b7 ')+
               '. \u25b4 The head points at where this price sits on the rail below.'+
               (confl?' A GAMMA NODE sits on this level \u2014 structure and gamma stacked (Garma r22).':'')+
               (spyk?' The OTHER book\'s crown \u2014 price bounces off it even when every dynamic here is SPXW.':'')+
-              (iff?' InsiderFinance\'s numbers, not ours \u2014 open-interest gamma, a stock not a flow.':'');
+              (iff?' InsiderFinance\'s numbers, not ours \u2014 open-interest gamma, a stock not a flow.':'')+
+              (isdp?(' DARK POOL \u2014 Skylit\'s own level set: the top prints over a 45-day lookback, a CASH-EQUITY print (which is why it is quoted on '+g3esc(sym)+' and converted here). '+
+                (function(){ var d=null; g.m.forEach(function(L){ if(L.dp) d=L; }); if(!d) return '';
+                  return (d.at0!=null?(g3esc(sym)+' '+d.at0+'. '):'')+
+                         (d.notional!=null?('Print '+(usdBig(d.notional)||d.notional)+'. '):(d.size!=null?('Print '+d.size+' shares. '):''))+
+                         (d.when!=null?('Printed '+Math.max(0,Math.round((Date.now()-d.when)/86400000))+'d ago. '):'')+
+                         (d.stale?'\u26a0 capture is over a day old. ':''); })()+
+                'NO lifecycle state is claimed yet \u2014 whether it has held or broken is phase A2, and a guess would be worse than a silence.'):'');
       h+='<span class="'+cls+'" style="left:'+x.toFixed(1)+'%'+edge+'"'+g3tip(tip)+'>'+
          g3esc(name)+'<b>'+g3esc(frameNum(pick.at))+(confl?' \u00b7node':'')+'</b><i></i></span>';
     });
@@ -21422,6 +21599,8 @@ function secFrame(sym){
               t+=(fv.v.d15>0?', building':', draining'); }
           // (v14.35, Garma r22: structure + node stacked beats either alone) name the confluence
           try{ var cf=sessConfluence(SESSL, P.disp); if(cf) t+=' \u2014 on '+cf.name; }catch(eCf){}
+          try{ var dcf=dpConfluence(sym, P.disp, (EB&&typeof EB.scaleUsed==='number')?EB.scaleUsed:0);
+               if(dcf) t+=' \u2014 on '+dcf.name; }catch(eDc){}
           if(Math.abs(P.disp-frNow)<=2.6){
             var frRv=null; try{ frRv=reactDefence(sym, P.disp); }catch(eR3){}
             if(frRv && frRv.verdict==='DEFENDING') t+=', being DEFENDED';

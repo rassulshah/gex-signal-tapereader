@@ -1,4 +1,18 @@
 
+## v14.41 (2026-08-26) — GARMA V2 PHASE 0
+- V2 package landed at `garma/claude_package_v2` (59 rules); audit + phases in `garma/V2-PHASE-PLAN.md`.
+- SCOUTED LIVE: Atlas has a **Dark Pool** indicator (operator has it ON) fed by
+  `/fs/api/dark-pool/top-prints?ticker=SPY&top_n=3&lookback_days=45`. Their level = TOP N PRINTS over
+  45 DAYS. Same-origin, Authorization header, captured by ONE LINE in installFeedObserver (no
+  courier, no CSP issue, no credentials). Recorded in SKYLIT-FEEDS.md. Phase A is now cheap.
+- BUILT: railPockets()/pocketOnPath() → air pocket named in the PATH clause (never the target);
+  USED level state at 3+ taps (+ tap odds annotated at 1-2); event clause = "confidence capped,
+  normal rules NOT suspended"; tool-hierarchy refusal block (dim / Gamma VWAP / Falcon).
+- test_garma_v2.js NEW (28). Suite green, 6 baseline reds.
+- OPEN DECISION for phase A: does dark-pool "holding" mean defended TODAY, or untraded-through
+  SINCE THE PRINT? Asked, not yet answered.
+- NEXT: operator installs v14.41, reloads, runs __gptsDebug.audit(); then Phase A.
+
 ## v14.40 (2026-08-26) — THE LEVELS LINE
 - Chip strip REPLACED by THE LEVELS LINE per operator sketch (2 corrections): a separate rail
   directly under the read — LINE on top, name/price/arrowhead hang BELOW, heads point DOWN at the

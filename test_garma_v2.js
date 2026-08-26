@@ -101,5 +101,55 @@ ok(/GAMMA VWAP is OPTIONAL EXPERIMENTAL CONFLUENCE/.test(src) && /FALCON is not 
    'x2 Gamma VWAP and Falcon are named as non-triggers');
 ok(!/gammaVwap|gexVwap/i.test(src.replace(/\/\/[^\n]*/g,'')), 'x3 ...and no code reads them');
 
+
+// ================= (v14.42) PHASE A1 — DARK POOL CAPTURE =================
+// The payload shape is NOT yet known (the endpoint 401s on a cold re-fetch and fires on chart
+// mount), so the parser is tolerant BY DESIGN and these tests pin that tolerance: every shape the
+// endpoint might plausibly return must yield the same rows, and an unknown shape must FAIL LOUDLY
+// into DP_STATE.err rather than quietly producing zero levels that look like "no dark pools today".
+global.localStorage={ _d:{}, getItem(k){return this._d[k]||null;}, setItem(k,v){this._d[k]=v;} };
+eval(ex('dpTickerFromUrl')); eval(ex('dpNum')); eval(ex('dpParse'));
+ok(dpTickerFromUrl('/fs/api/dark-pool/top-prints?ticker=SPY&top_n=3&lookback_days=45')==='SPY',
+   'd1 the ticker is read off the URL — the payload is not trusted to name itself');
+ok(dpTickerFromUrl('/fs/api/dark-pool/top-prints?top_n=3')==null, 'd2 ...and absent when it is absent');
+
+const ROWS=[{price:661.5,size:1200000,notional:793800000,time:'2026-07-30T18:04:00Z'},
+            {price:648.2,size:900000,notional:583380000,time:'2026-08-11T15:22:00Z'}];
+let P1=dpParse(ROWS);
+ok(P1.ok && P1.prints.length===2 && P1.prints[0].px===661.5, 'd3 a bare array parses', P1.prints);
+ok(P1.prints[0].notional===793800000 && P1.prints[0].at>0, 'd4 ...with size, notional and a parsed timestamp');
+ok(dpParse({data:ROWS}).prints.length===2,       'd5 ...as does {data:[...]}');
+ok(dpParse({prints:ROWS}).prints.length===2,     'd6 ...and {prints:[...]}');
+ok(dpParse({top_prints:ROWS}).prints.length===2, 'd7 ...and {top_prints:[...]}');
+ok(dpParse({success:true,data:{prints:ROWS}}).prints.length===2, 'd8 ...and one level of nesting');
+// alternative field names
+ok(dpParse([{px:'661.5',shares:'1200000',dollar_volume:'793800000'}]).prints[0].px===661.5,
+   'd9 numeric strings and alternative field names both survive');
+// the honest failures
+ok(dpParse(null).ok===false && /empty/.test(dpParse(null).why), 'd10 an empty payload says so');
+ok(dpParse({weird:1}).ok===false && /no array/.test(dpParse({weird:1}).why),
+   'd11 an unrecognised shape FAILS LOUDLY — never a silent zero-level "no dark pools"');
+ok(dpParse([{foo:1}]).ok===false && /no priced rows/.test(dpParse([{foo:1}]).why),
+   'd12 ...and an array with no prices is refused too');
+ok(dpParse([{price:0}]).prints.length===0, 'd13 a zero price is not a level');
+
+// capture is PASSIVE — we read the page's own response, never issue our own authenticated request
+ok(/url\.indexOf\('dark-pool'\)!==-1/.test(src), 'd14 both hooks watch for the dark-pool response');
+ok((src.match(/indexOf\('dark-pool'\)/g)||[]).length>=2, 'd15 ...fetch AND xhr, like every other feed');
+ok(!/fetch\([^)]*dark-pool/.test(src), 'd16 we NEVER issue our own dark-pool request (the page holds the auth)');
+ok(/DP_KEY='gpts_darkpool_v1'/.test(src) && /localStorage\.setItem\(DP_KEY/.test(src),
+   'd17 the store is PERSISTED — the endpoint fires on mount, not on a timer');
+ok(/TOP N PRINTS OVER A 45-DAY/.test(src) && /THEIR DEFINITION, NOT OURS/.test(src),
+   'd18 their definition is recorded verbatim; we do no clustering of our own');
+ok(/CASH-EQUITY PRINTS, AND THAT IS WHY ticker=SPY/.test(src), 'd19 the SPY-not-SPX reason is written down');
+ok(/n:'DP', at:pr\.px\*EB\.scaleUsed/.test(src), 'd20 prints cross to the chart on the SPY King flag\'s own scale');
+ok(/g3llvdp/.test(src), 'd21 dark pools get their own colour on the levels line');
+ok(/NO lifecycle state is claimed yet/.test(src) || /NO LIFECYCLE STATE IS CLAIMED YET/.test(src),
+   'd22 A1 claims NO lifecycle — held-or-broken is A2, and a guess would be worse than silence');
+ok(/function dpConfluence/.test(src) && /'the dark pool '\+frameNum/.test(src),
+   'd23 the S&R clause can name a dark pool the way it names the IB low');
+ok(/__gptsDebug\.dp=/.test(src) && /raw:DP_STATE\.raw/.test(src),
+   'd24 a RAW SAMPLE is kept — reading the real shape is the whole point of A1');
+
 console.log('test_garma_v2: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
