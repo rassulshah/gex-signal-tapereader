@@ -1,3 +1,47 @@
+## v14.20 — the export steps back to THE THREE KINGS (operator-directed)
+
+"Too many levels — let's step back to only exporting the kings. SPY king, SPX king and QQQ king.
+SPY and SPX convert to ES levels and QQQ converts to NQ levels." The file is now three lines:
+`SPXW KING 100%` + `SPY KING 100%` on EPU26, `QQQ KING 100%` on ENQU26. The rail's node set,
+SUCC, the IF walls and every percentage row leave the FILE — the panel keeps all of them on
+screen, where density is cheap.
+
+Every hard-won mechanism rides along: the locked grammar (v14.12), RGB colours (v14.14) — SPXW
+full yellow/purple, SPY the lighter shade, QQQ full — the chart-frame-independent SPXW conversion
+(v14.14) on the Atlas-anchored basis (v14.17/18), the LATCHED crown (v14.19 — the exported SPXW
+king is the rail's, never a mid-flap blip), the SPY king from the self-fetched book (v14.19,
+always fresh), the QQQ king from the rendered 0DTE ladder with the weekly fallback still rejected
+(v14.15), and both ratio chains with honest '~' tags (v11.4.1, v14.13). Any king alone still
+writes; all dark writes nothing.
+
+test_irt_export rewritten to the three-line contract (37 asserts incl. latch-holds-through-flap,
+per-book scale behaviour, absence of every trimmed lane); em_band §40 rewritten to execute the
+kings-only build (609). Suite at the baseline six.
+
+## v14.19 — the compiled ledger lands: six operator-driven fixes in one build
+
+1. **Flag posts no longer bury the price labels** (#2, caught twice): .g3emt 66→86px — a post
+   (top 19 + up to 44 tall) now always ends above the bottom-anchored label block.
+2. **The pill is LIVE** (#4): the number and dot ride the chart's live print (futPx, else live
+   underlying × the pinned scale); EB.now stays the last CLOSED bar for every recorded
+   measurement, and the arrow keeps its bar meaning. Hover updated; hook surfaces nowLive.
+3. **Warm-up guard** (#7a): the session pin is REFUSED until the candle window's opening bar is
+   TODAY's and, on futures charts, the ratio is live — the 09:50 capture had pinned YESTERDAY's
+   8:30 bar and a contaminated early EMA (+20 pts all morning until hand-cleared).
+4. **The rr self-heal clock survives reloads** (#7c): gpts_emrrbad_v1 — it was in-memory and
+   every install reload reset the 5-minute timer, so the v13.9 heal never fired when needed.
+5. **The crown is latched** (#8a): kingLatchTick — the KING label moves only after the new top
+   strike holds 120s continuously (day-keyed, persisted); the tape's crown flapped 3× in an hour.
+   Integrity gates stay on the TAPE king; roles anchor on the latched one.
+6. **RUG/RRUG tag the anchor only** (#8b): the ceiling carries the pattern name; the floor keeps
+   its polarity role — two simultaneous RRUGs (one on a positive node) confused the read.
+7. **SPY rows persist + the SPY King is guaranteed** (#9, operator: "i must always have the spy
+   and spxw king"): derived rows ship up to 5 min old wearing ' ~' past the fresh window; when
+   the projection is dead the KING alone comes from the self-fetched SPY book (<=36s) directly.
+
+Tests: em_band 622 (hook parity incl nowLive, latch fixtures, height + anchor-only asserts
+redesigned), irt_export 71 (persistence, age tag, guaranteed-King path). Suite at baseline six.
+
 ## v14.18 — the basis chain gains a rung that actually fires
 
 v14.17's Skylit-spot override was correct and nearly useless: it required a fresh SPXW feed, and

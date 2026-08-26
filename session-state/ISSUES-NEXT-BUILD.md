@@ -73,6 +73,45 @@ approved for build until the operator picks an option. Numbered in the order rai
 - NEXT BUILD: measure emBand's EM inputs live (straddle legs, units, conversion), fix the scale,
   and DECIDE whether piles should clip to the band at all or to the rail FRAME (with off-frame
   King pinned at the edge, arrowed). Do not touch without re-reading DECISIONS.md band entries.
+## 8. Role churn: the CROWN flaps and RRUG doubles (compare-run, 10:3x ET)
+- OBSERVED: the King flipped 7655 → 7670 → 7655 within ~20 minutes (tape-true each time — the
+  ladder's top strike genuinely traded places), and the rail wore TWO "RRUG" role labels at once
+  (7670, a +90% brake, and 7685, a −75% accelerator). Doctrine: a Reverse Rug is ONE pattern — a
+  strong NEGATIVE ceiling over a strong POSITIVE floor — so either both members are being tagged
+  with the pattern name (confusing: a positive node labelled RRUG), or the role machine is
+  re-deriving the pattern per node.
+- DECISIONS NEEDED: (a) give the CROWN the same discipline the rolls got in v13.9 — a latch
+  (bar-counted, e.g. 2 bars = signal) so the KING label doesn't flap on every lead change, with
+  the live flap still visible some quieter way (SUCC already exists for exactly this); (b) RRUG/
+  RUG labelling: tag only the pattern's ANCHOR node (the ceiling), or rename members distinctly
+  (e.g. RRUG↑/RRUG↓) — pick one, per the Academy's definition.
+- Verified NOT broken in the same pass: node set (8/8 vs tape), ES placement (7655→7668, live
+  basis), polarity colours, ROC rows populated, export 14 levels ratio-live.
+
+## 4b. Pill "staleness" MEASURED (closes ledger #4's open question)
+- The pill's value is the LAST CLOSED bar's close BY DESIGN (its hover says so; the arrow is that
+  bar's direction). On a 3m chart that reads up to ~2 pts behind live — which is exactly what the
+  operator keeps noticing. DECISION: keep bar-close semantics (stable, honest to its own caption)
+  or switch the NUMBER to live futPx while the arrow stays bar-based. Operator leaning was
+  "price pill is not updated" — likely wants live.
+
+## 7. Post-reload WARM-UP POISONING — the EM/rr capture fires before the data is real
+- OBSERVED (operator: "why is the price shown much different than the atlas", 10:2x ET): pill 7709
+  vs ES 7689. The emopen record captured at 09:50 — seconds after an install reload — held
+  openU 762.72 (YESTERDAY'S 8:30 bar; the chart hadn't back-filled today yet), rr 10.0676 (EMA
+  seeded off a stale SPY price), and date "2026-08-26" (SESSION_DAY computed from the stale candle
+  window — and it did NOT flip to 08-27 later). Every rr-scaled value sat ~+20.
+- FIXED LIVE by clearing gpts_emopen_v1 → clean re-capture (rr 10.0419, openU 764.67, pill 7690 ✓)
+  — but the record's date STILL says 08-26, so SESSION_DAY is stuck on yesterday even with today's
+  RTH bars on the chart: a real latent defect (wrong day-keying for peaks/recording windows?).
+- AGGRAVATOR: the v13.9 rr self-heal needs 5 SUSTAINED minutes and its timer is in-memory — every
+  install/reload restarts it, so on a build-iteration morning it never fires.
+- NEXT BUILD (needs decisions): (a) capture warm-up guard — refuse the emopen capture until the
+  candle window contains TODAY's RTH bars (pickSessionDay day === ctTodayStr) AND FUTMODE is live
+  with a settled EMA (N fresh samples), est-tag until then; (b) find why SESSION_DAY never
+  recomputes after the chart back-fills; (c) persist the rr-heal timer (localStorage) so reloads
+  do not reset the 5-minute clock.
+
 - BLAST RADIUS (operator-observed 09:3x): the clip starves EVERY pile consumer, not just the rail
   posts — the NODES section rows, the profile's 5M/15M/60M ROC matrix, and the in-play/flag
   effects all draw from the same emPiles list, so price was visibly interacting with a node on

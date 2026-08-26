@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.18
+// @version    14.20
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -596,7 +596,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.18';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.20';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3794,6 +3794,7 @@ function irtRatio(){
 // NQ chart. Chain: live FUTMODE (persisted) → last-good ≤14d → the settings' manual number →
 // NQ_RATIO const. '~' marks anything but live — measured live 2026-08-26: r=41.191 on NQ1
 // 29270.25 / QQQ 710.505 (the guessed 41.9 default had the lines ~480 pts off-screen).
+var SPY_DERIV_MAX_MS=300000;   // (v14.19) ⚖ hand-set: how old a derived snapshot may ship (' ~' past fresh)
 var IRT_NQRATIO_KEY='gpts_irt_nqratio_v1';
 function irtNqRatio(cfgI){
   try{ if(FUTMODE && FUTMODE.fam==='NQ' && FUTMODE.r>1 && FUTMODE.live){
@@ -3806,26 +3807,21 @@ function irtNqRatio(cfgI){
   return { r:null, live:false, src:'none' };
 }
 function irtBuildCsv(){
-  // (v14.12, operator-locked spec 2026-08-26) ONE FILE, ALL MARKETS — FlexLevels routes rows by
-  // their SYMBOL column, so ES (EPU26) and NQ (ENQU26) rows share FlexLevelsExport.csv and IRT
-  // puts each set on the right chart. CQG symbology throughout (EP=ES, ENQ=NQ, quarterly rolls).
-  // LABEL GRAMMAR — one grammar for every line: SOURCE + ROLE + STRENGTH.
-  //   "SPXW KING 100%" · "SPXW GK 36%" · "SPXW SUCC" — the rail book (roles from OUR machine)
-  //   "SPY KING 100%"  · "SPY 51%"                   — derived diamonds (KING is arithmetic —
-  //                                                    the 100% row; other roles would be guesses)
-  //   "IF CW0" · "IF PW0" · "IF MAG0" · "IF MP0"     — 0 = the 0DTE window (leaves room for
-  //                                                    un-suffixed weekly IF rows later)
-  //   "QQQ KING 100%"  · "QQQ 34%"                   — the QQQ book, on the NQ chart
-  // Price is NEVER in the label (IRT prints it at the line); polarity is the COLOUR: SPXW/QQQ
-  // yellow(+γ)/purple(−γ), SPY the same language LIGHTER, IF CW0 red / PW0 green / MAG0+MP0
-  // neutral (a magnet is not a wall — red/green stays reserved for actual walls).
-  // ROW ORDER (operator): SPXW block, SPY block, IF block, then the NQ block.
-  // '~' = converted with a cached ratio. NQ rows wear it ALWAYS: Skylit carries no NQ price
-  // anywhere, so nqRatio is manual by construction (settings, default 41.9).
+  // (v14.20, operator-directed: "too many levels — step back to only exporting the kings")
+  // THE FILE IS THREE LINES: SPXW KING + SPY KING as EPU26, QQQ KING as ENQU26. Everything else
+  // the export used to carry — the rail's node set, SUCC, the IF walls, the percentage rows —
+  // stays on the PANEL, where density is cheap; the chart gets only the three crowns.
+  // Kept from the earlier builds, because each was operator-verified the hard way:
+  //   · label grammar SOURCE + ROLE (v14.12) — "SPXW KING 100%" / "SPY KING 100%" / "QQQ KING 100%"
+  //   · RGB colours (v14.14): SPXW full yellow/purple by polarity, SPY the lighter shade, QQQ full
+  //   · chart-frame-independent SPXW conversion (v14.14) and the Atlas-anchored basis (v14.17/18)
+  //   · the LATCHED crown (v14.19) — the exported SPXW King is the rail's, not a mid-flap blip
+  //   · SPY King from the SELF-FETCHED book (v14.19) — always available, never the sparse projection
+  //   · QQQ King from the rendered 0DTE ladder (v14.15) — Atlas is the source of truth, feed
+  //     fallback rejected; NQ ratio chain (v14.13) with '~' when not measured live
   var sym='SPY';
   var out=[IRT_HEADER];
   var cfgI=CFG.irt||{};
-  // conversion: SPY strike -> the IRT symbol's price
   var futSym=(cfgI.futSym||'').trim();
   var etfSym=(cfgI.etfSym||'').trim();
   var R=irtRatio();
@@ -3833,174 +3829,56 @@ function irtBuildCsv(){
   if(futSym && R.r>1) targets.push({sym:futSym, mul:R.r, tick:0.25, tag:R.live?'':' ~'});
   if(etfSym) targets.push({sym:etfSym, mul:1, tick:0, tag:''});
   var rows=[];
-  // ---- (v11.86) THE SPX NODES THE RAIL DRAWS, ONTO THE CHART -------------------------------------
-  // The rail has shown Skylit's SPXW nodes since v11.77 and the chart has never carried them. These are
-  // the levels actually being traded off, so they belong on the chart more than anything else here.
-  //
-  // ⚠ SCALE: rows are collected in SPY strike space and the export multiplies by `R.r` (SPY -> ES) and
-  // snaps to the 0.25 tick, which already exists. So an SPX strike must arrive here as
-  //     kSpy = (spxStrike * dispScale) / R.r
-  // and NOT as `spxStrike * undScale`. Both are "correct" conversions and they differ by ~0.9 points —
-  // the two-path slack measured at v11.82 (7691.75 via SPX, 7691.67 via SPY). Going through dispScale
-  // guarantees the chart line lands on the SAME price the rail shows. **A chart that disagrees with the
-  // panel by a point is worse than a chart with fewer lines on it.**
-  // ⚠ ES trades in 0.25 increments, so `irtRound(k*mul, 0.25)` is what makes these tradeable prices
-  // rather than the whole points the FRAME row displays. Display rounding and chart rounding are
-  // DIFFERENT jobs and must not be unified.
+  // ---- 1) SPXW KING (the latched crown), chart-frame independent, in SPY row-space -------------
   try{
-    var Br=null; try{ Br=emBand(sym); }catch(eB2){}
     var Lx=null; try{ Lx=ifLadder(sym); }catch(eL2){}
-    if(Br && Br.ok && Lx && !Lx.err && Lx.dispScale>0 && R && R.r>1){
-      // (v14.14 FIX) THE EXPORT PRICE MUST NOT DEPEND ON WHICH CHART ATLAS SHOWS. dispScale maps
-      // SPX strike -> the CHARTED symbol's frame: on an ES chart that is the ES price (perfect —
-      // basis included, the preferred path), but on the SPXW CASH chart it is ~1.0 — and the file
-      // wrote raw SPX prices onto EPU26, ~15 pts low ("i see spxw king at 7655 on the es — is
-      // that right?", operator, 2026-08-26, ES 7691/SPX 7677). Chart-independent fallback:
-      // spxK × undScale (SPX->SPY, chart-free) × R.r (the persisted live ES basis).
-      var toSpy=function(spxK){
-        var esChart=false; try{ esChart=(typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.fam==='ES' && FUTMODE.live); }catch(eF){}
-        if(esChart && Lx.dispScale>0.5) return (spxK*Lx.dispScale)/R.r;
-        if(Lx.undScale>0) return spxK*Lx.undScale;
-        return (spxK*Lx.dispScale)/R.r;
-      };
-      var ps=[]; try{ ps=emPiles(Br, sym)||[]; }catch(eP2){}
-      if(emPiles.lastSrc==='skylit'){
-        // (v14.8, operator-directed) NO STRIKE IN THE LABEL — IRT already prints the price on the
-        // line, so "SPX 7680 BRK 43%" said the number twice. Label = NODETYPE + %King only, and the
-        // line wears the panel's polarity colour: yellow brake, purple accelerator.
-        ps.forEach(function(P){
-          var role=P.role||(P.accel?'ACC':'BRK');
-          var col=P.accel?IRT_COLORS.accp:IRT_COLORS.brk;
-          rows.push({ k:toSpy(P.k), lbl:'SPXW '+role+' '+P.pct+'%',
-                      col:col, w:(P.role==='KING'?3:2), style:0 });
-        });
-        // SUCCESSION — the strongest non-King strike. The project's own backtest calls this the #1
-        // leading indicator of a King roll (>=60% -> 76% within 20 bars, n=148 ON SPY).
-        // ⚠ THAT NUMBER IS SPY'S. It is labelled on the chart, never asserted as an SPX probability.
-        try{
-          var tp2=tapeMap('SPXW');
-          if(tp2 && tp2.pct && tp2.king!=null){
-            var arr=[]; for(var kk2 in tp2.pct){ if(!tp2.pct.hasOwnProperty(kk2)) continue;
-              var kf=parseFloat(kk2); if(!isFinite(kf)) continue;
-              arr.push({k:kf, a:Math.abs(tp2.pct[kk2])}); }
-            arr.sort(function(x,y){ return y.a-x.a; });
-            var suc=null;
-            for(var z=0;z<arr.length;z++){ if(Math.abs(arr[z].k-tp2.king)>0.01){ suc=arr[z]; break; } }
-            if(suc && suc.a>=SUCC_CHART_PCT){
-              // (v14.12) label is 'SPXW SUCC' with NO % (operator-approved list): its meaning is
-              // "next King", not its current size.
-              rows.push({ k:toSpy(suc.k), lbl:'SPXW SUCC',
-                          col:IRT_COLORS.pb, w:2, style:2 });
-            }
-          }
-        }catch(eS2){}
-      }
+    var T=null; try{ T=tapeMap('SPXW'); }catch(eT){}
+    if(T && T.king!=null && T.pct && Lx && !Lx.err && Lx.dispScale>0 && R && R.r>1){
+      var KL=null; try{ KL=kingLatchTick(T.king); }catch(eKL){}
+      var kK=(KL&&typeof KL.k==='number')?KL.k:T.king;
+      var sgX=0; try{ var pv=T.pct[kK.toFixed(2)]; if(typeof pv!=='number') pv=T.pct[String(kK)];
+                      if(typeof pv==='number') sgX=pv; }catch(eSg){}
+      var kSpyX;
+      var esCh=false; try{ esCh=(typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.fam==='ES' && FUTMODE.live); }catch(eF){}
+      if(esCh && Lx.dispScale>0.5) kSpyX=(kK*Lx.dispScale)/R.r;
+      else if(Lx.undScale>0) kSpyX=kK*Lx.undScale;
+      else kSpyX=(kK*Lx.dispScale)/R.r;
+      rows.push({ k:kSpyX, lbl:'SPXW KING 100%',
+                  col:(sgX<0)?IRT_COLORS.accp:IRT_COLORS.brk, w:3, style:0 });
     }
   }catch(eSPX){}
-  // ---- (v14.10) THE DERIVED DIAMONDS — sibling books projected onto the chart --------------------
-  // From the SPXW feed's `derived` array (each entry: source, ratio, levels). Normalised to each
-  // source's OWN strongest strike (the v11.4.3 lesson: a derived % is never comparable to the native
-  // book's %King), floored at the node threshold, drawn slate + dotted + thin — exactly how Skylit
-  // itself renders the diamonds: presence and size, no polarity claim. Label carries the source:
-  // "D-SPY 43%". Strikes arrive on the SOURCE grid; ratio maps source -> chart scale (verified on
-  // the SPY feed: source SPXW, ratio 0.0998, spxwK x ratio = spyK). A decade sanity-check falls back
-  // to the raw strike if a payload ever arrives pre-converted.
+  // ---- 2) SPY KING — from the self-fetched book, always fresh (v14.19 guarantee) ---------------
   try{
-    var LSX=(typeof LASTSPXW!=='undefined')?LASTSPXW:null;
-    var Lx2=null; try{ Lx2=ifLadder(sym); }catch(eLx2){}
-    if(LSX && LSX.j && LSX.j.derived && (Date.now()-LSX.ts)<=FEED_STALE_MS*3 &&
-       Lx2 && !Lx2.err && Lx2.dispScale>0 && R && R.r>1){
-      var spotSPX=null; try{ var Bd=emBand(sym); if(Bd&&Bd.ok) spotSPX=Bd.now/Lx2.dispScale; }catch(eBd){}
-      var thrD=(CFG.nodeThresh!=null)?CFG.nodeThresh:20;
-      LSX.j.derived.forEach(function(dvE){
-        // (v14.12) SPY SOURCE ONLY on the ES chart — the operator's spec is "SPXW and SPY";
-        // QQQ/VIX projections would be noise here (QQQ gets its own book on the NQ chart below).
-        if(!dvE || !dvE.levels || !dvE.levels.length) return;
-        if(String(dvE.source||'').toUpperCase()!=='SPY') return;
-        var snapD=dvE.levels[dvE.levels.length-1]; var rowsD=(snapD&&snapD.l)||[];
-        if(!rowsD.length) return;
-        var mxA=0; rowsD.forEach(function(r0){ var a=Math.abs(r0.v||0); if(a>mxA) mxA=a; });
-        if(!(mxA>0)) return;
-        var rat=(typeof dvE.ratio==='number'&&dvE.ratio>0)?dvE.ratio:1;
-        rowsD.forEach(function(r0){
-          var a=Math.abs(r0.v||0); var pctD=Math.round(100*a/mxA);
-          if(pctD<thrD) return;
-          // ⚠ (v14.11) VERIFIED ON THE LIVE PAYLOAD: derived rows arrive PRE-CONVERTED to the HOST
-          // scale (on the SPY feed, source SPXW, k=768.7677 = 7705 × 0.09977 — already SPY-scale).
-          // The `ratio` field is INFORMATIONAL. v14.10 multiplied anyway and survived only via the
-          // decade fallback. Primary path is now the raw k; ratio-multiply is the fallback for a
-          // payload that ever arrives on the source grid. See session-state/SKYLIT-FEEDS.md.
-          var hostK=r0.k;
-          if(spotSPX!=null && !(hostK>spotSPX/2 && hostK<spotSPX*2)){
-            var altK=r0.k*rat;
-            if(altK>spotSPX/2 && altK<spotSPX*2) hostK=altK; else return;
-          }
-          // (v14.12) KING is arithmetic — the row AT the source's own max. Other roles would be
-          // guesses (the rail machine only runs on SPXW), so every other row is % only.
-          // Colour = the SAME polarity language as SPXW, LIGHTER (sign from `net`, the carrier).
-          var sgD=(r0.net!=null)?r0.net:0;
-          var isK=(a===mxA);
-          // (v14.14) same chart-frame independence as the rail rows (hostK is SPXW-scale here).
-          var kSpyD;
-          var esCh2=false; try{ esCh2=(typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.fam==='ES' && FUTMODE.live); }catch(eF2){}
-          if(esCh2 && Lx2.dispScale>0.5) kSpyD=(hostK*Lx2.dispScale)/R.r;
-          else if(Lx2.undScale>0) kSpyD=hostK*Lx2.undScale;
-          else kSpyD=(hostK*Lx2.dispScale)/R.r;
-          rows.push({ k:kSpyD,
-                      lbl:isK?'SPY KING 100%':('SPY '+pctD+'%'),
-                      col:(sgD<0)?IRT_COLORS.splp:IRT_COLORS.sply, w:isK?2:1, style:1 });
-        });
-      });
+    if(typeof LASTFEED!=='undefined'){
+      var FYK=LASTFEED.SPY;
+      if(FYK && FYK.j && (Date.now()-(FYK.ts||0))<=FEED_STALE_MS*3){
+        var ewK=null; try{ ewK=extractWalls(FYK.j); }catch(eEW){}
+        if(ewK && ewK.king!=null){
+          var sgK=1; try{ (ewK.walls||[]).forEach(function(wK){ if(wK.k===ewK.king && wK.pos===false) sgK=-1; }); }catch(eSg2){}
+          rows.push({ k:ewK.king, lbl:'SPY KING 100%',
+                      col:(sgK<0)?IRT_COLORS.splp:IRT_COLORS.sply, w:2, style:1 });
+        }
+      }
     }
-  }catch(eDrv){}
-  // ---- 3) IF — the 0DTE walls (operator-directed window since v14.9) -----------------------------
-  // (v14.12) ids renamed to the panel's own vocabulary + the window suffix: CR->CW0, PS->PW0,
-  // Mag->MAG0, MP->MP0 (a trailing '*' from the companion survives). CW0 red, PW0 green, MAG0/MP0
-  // neutral. A side the companion suppressed (their page prints N/A) stays absent here too.
-  try{
-    var CHi=ifChainRows(sym,'dte0');
-    if(CHi && CHi.rows){
-      CHi.rows.forEach(function(r){
-        var idRaw=String(r.id||''); var star=/\*/.test(idRaw)?'*':'';
-        var baseU=idRaw.replace(/\*/g,'').toUpperCase();
-        var name=(baseU==='CR')?'CW0':(baseU==='PS')?'PW0':(baseU==='MAG')?'MAG0':(baseU==='MP')?'MP0':baseU;
-        var colr2=(name==='CW0')?IRT_COLORS.ceil:((name==='PW0')?IRT_COLORS.flr:IRT_COLORS.neut);
-        rows.push({ k:r.k, lbl:'IF '+name+star, col:colr2, w:1, style:1 });
-      });
-    }
-  }catch(eCi){}
-  // ---- ES/ETF target expansion (SPXW -> SPY -> IF order preserved from `rows`) -------------------
-  targets.forEach(function(T){
-    rows.forEach(function(R){ out.push(irtCsvRow(T.sym, irtRound(R.k*T.mul, T.tick), R.lbl+T.tag, R.col, R.w, R.style)); });
+  }catch(eKG){}
+  // ES/ETF target expansion (SPXW King then SPY King)
+  targets.forEach(function(T2){
+    rows.forEach(function(R2){ out.push(irtCsvRow(T2.sym, irtRound(R2.k*T2.mul, T2.tick), R2.lbl+T2.tag, R2.col, R2.w, R2.style)); });
   });
-  // ---- 4) NQ — the QQQ 0DTE ladder, same file (v14.15: ATLAS IS THE SOURCE OF TRUTH) -------------
-  // (v14.12–v14.14 read LASTFEED.QQQ — the WEEKLY window — and the operator caught the mismatch on
-  // his own charts: 12+ weekly strikes in IRT vs the handful Atlas draws on QQQ. "Use atlas as the
-  // source of truth." Source is now tapeMap('QQQ') — the RENDERED QQQ ladder, front expiry, the
-  // exact strikes and %King Atlas shows — with the feed fallback REJECTED (fromFeed => absent),
-  // because that fallback is the weekly book and would silently change windows. Consequence, by
-  // design: the NQ rows expire with the 0DTE book, exactly like the SPXW rail. Absent, never weekly.
+  // ---- 3) QQQ KING — the rendered 0DTE ladder (Atlas), onto ENQU26 ------------------------------
   var nqN=0;
   try{
     if(cfgI.nqOn!==false){
       var nqSym=(cfgI.nqSym||'ENQU26').trim();
-      // (v14.13) the ratio SELF-MEASURES on an NQ chart (same chain as ES); manual is a fallback.
       var RQ=irtNqRatio(cfgI);
       var nqR=RQ.r; var nqTag=RQ.live?'':' ~';
       var tq=null; try{ tq=tapeMap('QQQ'); }catch(eTq){}
-      if(nqSym && nqR>1 && tq && tq.pct && tq.king!=null && !tq.fromFeed && tq.count>=5){
-        var thrQ=(CFG.nodeThresh!=null)?CFG.nodeThresh:20;
-        for(var kq in tq.pct){
-          if(!tq.pct.hasOwnProperty(kq)) continue;
-          var kf=parseFloat(kq); if(!isFinite(kf)) continue;
-          var pv=tq.pct[kq]; if(typeof pv!=='number' || !isFinite(pv)) continue;
-          var ap=Math.abs(pv); if(ap<thrQ) continue;
-          var isKQ=(Math.abs(kf-tq.king)<=0.01);
-          out.push(irtCsvRow(nqSym, irtRound(kf*nqR, 0.25),
-                   (isKQ?'QQQ KING 100%':('QQQ '+Math.round(ap)+'%'))+nqTag,
-                   (pv<0)?IRT_COLORS.accp:IRT_COLORS.brk, isKQ?3:2, 0));
-          nqN++;
-        }
+      if(nqSym && nqR>1 && tq && tq.king!=null && !tq.fromFeed && tq.count>=5){
+        var sgQ=0; try{ var pq=tq.pct&&(tq.pct[tq.king.toFixed(2)]!=null?tq.pct[tq.king.toFixed(2)]:tq.pct[String(tq.king)]);
+                        if(typeof pq==='number') sgQ=pq; }catch(eSq){}
+        out.push(irtCsvRow(nqSym, irtRound(tq.king*nqR, 0.25), 'QQQ KING 100%'+nqTag,
+                 (sgQ<0)?IRT_COLORS.accp:IRT_COLORS.brk, 3, 0));
+        nqN++;
       }
     }
   }catch(eNQ){}
@@ -18786,7 +18664,10 @@ function ensureV3Css(){
     // Measured, not guessed: at 42px the piles occupied 22-32 and the two-line labels 28-43, so they
     // overlapped by four rows. The labels did not move — the piles were lifted and the box grew.
     // (v11.95) 53 -> 66px: clear air under the amounts, and a full-size SPX line below the rail.
-  '#gpts-body .g3emt{position:relative;flex:1;height:66px;min-width:80px}'+
+  // (v14.19, operator-caught twice: "the yellow flags overlay the prices") 66px meant a post
+  // (top:19 + up to 44px tall) ran straight through the bottom-anchored price labels (~21px).
+  // 19 + 44 + 21 + 2 = 86: every post now ends above the label block, at every height.
+  '#gpts-body .g3emt{position:relative;flex:1;height:86px;min-width:80px}'+
   // (v11.93) THE ROLE TIER. Money amounts keep 0-9 and nothing else may enter it; the role owns
   // 11-17; the rail moves 14 -> 19. Five extra pixels of track is the whole cost.
   '#gpts-body .g3prole{position:absolute;top:17px;transform:translateX(-50%);font-size:5.5px;'+
@@ -19518,6 +19399,17 @@ function emBand(sym){
         out.why='EM implausibly small ('+(Math.round(emo.em*dsc*100)/100)+' vs floor '+(Math.round(emFloor*100)/100)+') — straddle looks expired/illiquid; not pinning';
         return out;
       }
+      // (v14.19, ledger #7) WARM-UP GUARD. The 2026-08-27 09:50 capture pinned YESTERDAY'S 8:30
+      // bar (the chart had not back-filled today yet) and a contaminated early-EMA ratio — every
+      // rr-scaled value sat +20 all morning. A pin is for the whole session: refuse it until the
+      // candle window's opening bar is TODAY'S and, on a futures chart, the ratio is live.
+      var capOK=true;
+      try{
+        if(out.anchor==='open' && cs.length && typeof cs[0].time==='number' &&
+           naiveDayStr(cs[0].time)!==ctTodayStr()) capOK=false;
+        if(dispIsFut() && !(typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.live)) capOK=false;
+      }catch(eCG){}
+      if(!capOK){ out.why='warm-up: candle window or ratio is not yet today\'s — not pinning'; return out; }
       rec={ em:emo.em*dsc, k:emo.k, capMin:(P&&P.rth)?(P.mins-P.open):null, t:Date.now(), rr:rr,
             openU:openU, openSo:(cs.length&&typeof cs[0].so==='number')?cs[0].so:null };
       S.sym[sym]=rec;
@@ -19552,15 +19444,19 @@ function emBand(sym){
     try{
       if(dispIsFut() && rr>0 && typeof rec.rr==='number' && rec.rr>0 &&
          (typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.live && FUTMODE.ratioSrc==='live')){
+        // (v14.19, ledger #7) THE 5-MINUTE CLOCK SURVIVES RELOADS. It was in-memory, and on a
+        // build-iteration morning every install reload reset it — the heal that existed since
+        // v13.9 never once fired when it was needed. localStorage-backed now.
+        var RRB={}; try{ RRB=JSON.parse(localStorage.getItem('gpts_emrrbad_v1')||'{}')||{}; }catch(eR0){ RRB={}; }
         if(Math.abs(rr/rec.rr-1)>0.001){
-          if(!EMBAND_RRBAD[sym]) EMBAND_RRBAD[sym]=Date.now();
-          else if(Date.now()-EMBAND_RRBAD[sym] > 5*60000){
+          if(!RRB[sym]){ RRB[sym]=Date.now(); try{ localStorage.setItem('gpts_emrrbad_v1', JSON.stringify(RRB)); }catch(eR2){} }
+          else if(Date.now()-RRB[sym] > 5*60000){
             rec.rr=rr; S.sym[sym]=rec;
             try{ localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eH){}
-            delete EMBAND_RRBAD[sym];
+            delete RRB[sym]; try{ localStorage.setItem('gpts_emrrbad_v1', JSON.stringify(RRB)); }catch(eR3){}
             out.rrHealed=true;
           }
-        } else if(EMBAND_RRBAD[sym]){ delete EMBAND_RRBAD[sym]; }
+        } else if(RRB[sym]){ delete RRB[sym]; try{ localStorage.setItem('gpts_emrrbad_v1', JSON.stringify(RRB)); }catch(eR4){} }
       }
     }catch(eRH){}
     // the anchor comes from the RECORD; `now` is live price on the SAME scale so the two can be subtracted
@@ -19570,6 +19466,14 @@ function emBand(sym){
 
     out.est  = !(typeof rec.capMin==='number' && rec.capMin<=EM_FRESH_MIN);
     out.open = open;  out.em=rec.em;  out.now=now;  out.k=rec.k;  out.capMin=rec.capMin;
+    // (v14.19, ledger #4) THE PILL IS LIVE. out.now stays the last CLOSED bar (it is the recorded
+    // measurement and the arrow's basis); nowLive is the number a trader checks against the tape —
+    // the chart's own live print when a future is charted, else live underlying x the pinned scale.
+    out.nowLive=now;
+    try{
+      if(dispIsFut() && typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.live && FUTMODE.futPx>0){ out.nowLive=FUTMODE.futPx; }
+      else { var lpv=(STATE[sym]||{}).price; if(typeof lpv==='number' && lpv>0) out.nowLive=lpv*useRr; }
+    }catch(eNL){}
     out.low  = open-rec.em;  out.high = open+rec.em;
     out.disp = now-open;
     out.pct  = Math.round((Math.abs(out.disp)/rec.em)*100);
@@ -19856,7 +19760,10 @@ function skRoles(pct, kingK, px){
         for(var q=0;q<j;q++){ if(rows[q].p>=RUG_SIG_PCT){ propped=true; break; } }
         if(propped) continue;
         out.rug={ ceil:ceil.k, floor:flr.k, ceilPct:ceil.p, floorPct:flr.p };
-        out.byK[ceil.k]='RUG'; out.byK[flr.k]='RUG';
+        // (v14.19, operator-caught: TWO 'RRUG' labels at once, one on a positive node) THE
+        // PATTERN NAME TAGS ITS ANCHOR ONLY — the ceiling. The floor keeps its polarity role
+        // (BRK/ACC); the pattern's full shape lives in out.rug/out.rrug and the hover.
+        out.byK[ceil.k]='RUG';
         break;
       }
       if(out.rug) break;
@@ -19874,8 +19781,7 @@ function skRoles(pct, kingK, px){
         // ⚠ NEVER OVERWRITE AN EXISTING TAG. A purple-yellow-purple stack satisfies BOTH shapes: the
         // middle node is a rug's ceiling AND a reverse rug's floor. Silently relabelling it as RRUG
         // erased a real RUG and asserted the opposite direction on the same level.
-        if(!out.byK[rc.k]) out.byK[rc.k]='RRUG';
-        if(!out.byK[rf.k]) out.byK[rf.k]='RRUG';
+        if(!out.byK[rc.k]) out.byK[rc.k]='RRUG';   // (v14.19) anchor only — see the RUG note
         break;
       }
       if(out.rrug) break;
@@ -19917,6 +19823,40 @@ function skRoles(pct, kingK, px){
   }catch(e){}
   return out;
 }
+// (v14.19, ledger #8) THE CROWN GETS THE ROLLS' DISCIPLINE. The tape's top strike traded
+// places three times in an hour on 2026-08-27 (7655->7670->7655->7675->7655) and the KING label
+// flapped with it. Doctrine (v13.9, rolls): one flip is noise. The crown moves only after the NEW
+// top holds continuously for KING_LATCH_MS; until then the incumbent keeps the label and the
+// challenger simply shows its polarity role (its 100% is still printed — nothing is hidden).
+// Day-keyed so a fresh session never waits on yesterday's crown. Persisted so reloads don't reset.
+var KING_LATCH_KEY='gpts_kinglatch_v1';
+var KING_LATCH_MS=120000;   // ⚖ hand-set: two minutes of continuous hold before the crown moves
+function kingLatchTick(tapeKing){
+  try{
+    var today=ctTodayStr(), now=Date.now(), L=null;
+    try{ L=JSON.parse(localStorage.getItem(KING_LATCH_KEY)||'null'); }catch(e0){}
+    if(!L || typeof L.k!=='number' || L.day!==today){
+      L={ day:today, k:tapeKing, cand:null, ct:0 };
+      try{ localStorage.setItem(KING_LATCH_KEY, JSON.stringify(L)); }catch(e1){}
+      return { k:tapeKing, flap:false };
+    }
+    if(tapeKing===L.k){
+      if(L.cand!=null){ L.cand=null; L.ct=0; try{ localStorage.setItem(KING_LATCH_KEY, JSON.stringify(L)); }catch(e2){} }
+      return { k:L.k, flap:false };
+    }
+    if(L.cand!==tapeKing){
+      L.cand=tapeKing; L.ct=now;
+      try{ localStorage.setItem(KING_LATCH_KEY, JSON.stringify(L)); }catch(e3){}
+      return { k:L.k, flap:true, cand:tapeKing };
+    }
+    if(now-L.ct>=KING_LATCH_MS){
+      var old=L.k; L={ day:today, k:tapeKing, cand:null, ct:0 };
+      try{ localStorage.setItem(KING_LATCH_KEY, JSON.stringify(L)); }catch(e4){}
+      return { k:tapeKing, flap:false, rolledFrom:old };
+    }
+    return { k:L.k, flap:true, cand:tapeKing };
+  }catch(e){ return { k:tapeKing, flap:false }; }
+}
 function skPiles(B, sym){
   var out={ ok:false, why:'', piles:[], src:'skylit', count:0 };
   try{
@@ -19952,7 +19892,11 @@ function skPiles(B, sym){
     // gatekeeper's King can easily sit outside the expected-move band while still defining the shape.
     // (v11.95) price, in SPX terms, so the gatekeeper can be the node BETWEEN price and the King
     var pxSpx=null; try{ if(B && typeof B.now==='number' && L && L.dispScale>0) pxSpx=B.now/L.dispScale; }catch(ePx){}
-    var RL=skRoles(T.pct, T.king, pxSpx); out.roles=RL;
+    // (v14.19) roles anchor on the LATCHED crown; the integrity gates above stay on the TAPE
+    // king (they prove the ladder is being read right, which is a different question).
+    var KL=kingLatchTick(T.king);
+    out.kingLatched=KL.k; out.kingFlap=!!KL.flap; out.kingCand=(KL.cand!=null)?KL.cand:null;
+    var RL=skRoles(T.pct, KL.k, pxSpx); out.roles=RL;
 
     // (2) recompute the King from the ratios and compare. Independent of how the King was found.
     var topK=null, topV=0, kk;
@@ -20756,7 +20700,8 @@ function secFrame(sym){
     // its grey chip while it retires).
     var RAILROLLS=[];
     try{ if(rollsLive()) RAILROLLS=(rollLatched(sym)||[]).filter(function(rF){ return !rF.gone; }); }catch(eRR){}
-    var str=!!EB.stretched, pOpen=emPosRail(EB,EB.open,RB), pNow=emPosRail(EB,EB.now,RB);
+    var str=!!EB.stretched, pOpen=emPosRail(EB,EB.open,RB),
+        pNow=emPosRail(EB,(typeof EB.nowLive==='number')?EB.nowLive:EB.now,RB);
     var fa=Math.min(pOpen,pNow), fb=Math.max(pOpen,pNow);
     var gTxt2=(EB.gamma==null)?'gamma unknown'
              :(EB.gamma>0?'positive gamma — dealers hedge AGAINST the move, so range compresses and levels tend to hold'
@@ -20817,8 +20762,8 @@ function secFrame(sym){
          var arr=(d0>0)?'<i class="g3ptipR"></i>':(d0<0?'<i class="g3ptipL"></i>':'');
          var pEdge=(pNow>92)?';transform:translateX(-100%)':((pNow<8)?';transform:translateX(0)':'');
          return '<span class="g3emn'+(str?' g3str':'')+'" style="left:'+pNow.toFixed(1)+'%'+pEdge+'"'+
-                g3tip('Price now: '+frameNum(EB.now)+' on the chart\'s scale, rounded to save space. The arrow is the LAST CLOSED BAR\'s direction — up green, down red, absent when flat.'+(str?' RED PILL: price is beyond the expected move — STRETCHED.':''))+
-                '>'+g3esc(frameNum(EB.now))+arr+'</span>';
+                g3tip('Price now: '+frameNum((typeof EB.nowLive==='number')?EB.nowLive:EB.now)+' — LIVE (v14.19), no longer the last bar\'s close. The arrow is still the LAST CLOSED BAR\'s direction — up green, down red, absent when flat.'+(str?' RED PILL: price is beyond the expected move — STRETCHED.':''))+
+                '>'+g3esc(frameNum((typeof EB.nowLive==='number')?EB.nowLive:EB.now))+arr+'</span>';
        })()+
        // (v11.61) gamma piles hang BELOW the rail — the fuel and the friction between price and the rails
        (function(){
@@ -22244,6 +22189,7 @@ window.__gptsDebug.emBand = function(sy){
       upExc:B.upExc, dnExc:B.dnExc, giveBack:B.giveBack, hiFirst:B.hiFirst,
       roomUp:B.roomUp, roomDn:B.roomDn, roomAhead:B.roomAhead,
       gamma:B.gamma, stretched:B.stretched, scaleUsed:B.scaleUsed, openHealed:!!B.openHealed,
+      nowLive:(typeof B.nowLive==='number')?+B.nowLive.toFixed(2):null,   // (v14.19) the pill's live print
       // (v11.71) THE PACE FIELDS. Added to emBand() at v11.68 and NOT to this hook, so the chip on the
       // face could only be verified by reading two DOM strings and inverting the arithmetic — the exact
       // reconstruction the v11.51 rule exists to prevent, done twice in one session before it was noticed.

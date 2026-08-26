@@ -70,6 +70,8 @@ function ex_var(n){
   global.closedCandles=function(){ return global.__cands; };
   global.dispIsFut=function(){ return true; };
   global.dispR=function(){ return 10; };          // underlying -> chart
+  global.FUTMODE={ live:true, futPx:null };       // (v14.19) the warm-up guard requires a live ratio
+  global.naiveDayStr=function(){ return global.ctTodayStr(); };   // fixture candles carry no .time
   global.ifLadder=function(){ return { err:null, dispScale:1 }; };
   global.ctTodayStr=function(){ return '2026-08-24'; };
   global.sessionPhase=function(){ return global.__phase; };
@@ -1168,8 +1170,12 @@ eval(ex('emBand'));
   const RUN=(function(){
     const pre='var CFG={nodeThresh:20}, SK_MIN_STRIKES=20, __tape=null, __lad={err:null,dispScale:1.0023},'+
       'RUG_ANCHOR_PCT=40, RUG_ADJ=3, RUG_SIG_PCT=20, GK_RATIO_STRONG=1.8;'+
-      'function tapeMap(){return __tape;} function ifLadder(){return __lad;}';
-    return new Function(pre+['emPos','skRoles','skPiles'].map(ex).join('\n')+
+      'function tapeMap(){return __tape;} function ifLadder(){return __lad;}'+
+      // (v14.19) the crown latch — day-keyed, storage-backed; give it a today and a store
+      'var __ls={}; var localStorage={getItem:function(k){return (k in __ls)?__ls[k]:null;},setItem:function(k,v){__ls[k]=String(v);}};'+
+      'function ctTodayStr(){return "2026-08-27";}'+
+      'var KING_LATCH_KEY="k", KING_LATCH_MS=120000;';
+    return new Function(pre+['emPos','skRoles','kingLatchTick','skPiles'].map(ex).join('\n')+
       '\nreturn function(t){__tape=t; return skPiles({ok:true,low:7661,high:7730.5,now:7705},"SPY");};')();
   })();
   const good={count:100,king:7710,kingKd:17241,kingSrc:'dollar',kingConflict:false,
@@ -1250,7 +1256,7 @@ eval(ex('emBand'));
   // never-matching pattern the first time, and a px() that returns null makes every geometry check vacuous.
   const px=(cls,prop)=>{ const re=new RegExp('\\.'+cls+'\\{[^}]*'+prop+':(-?[0-9.]+)','g');
     let m,v=null; while((m=re.exec(src))) v=parseFloat(m[1]); return v; };
-  ok(px('g3emt','height')===66, 'the rail box grew again for the ROLE tier (v11.93: 48 -> 53)', px('g3emt','height'));
+  ok(px('g3emt','height')===86, 'the rail box grew for the LABEL CLEARANCE (v14.19: 66 -> 86 — posts end above the price labels)', px('g3emt','height'));
   // ⚠ px() takes the LAST match and the generic '#gpts-body .g3pile{bottom:2px}' comes after the scoped
   // rule, so ask for the SCOPED one by name — the specific selector is what actually applies here.
   const scoped=(src.match(/g3emt \.g3pile\{bottom:(\d+)px\}/)||[])[1];
@@ -1325,7 +1331,7 @@ eval(ex('emBand'));
   const rug=F({7690:-15,7695:5,7700:-80,7705:60,7710:-100,7715:2},7710,7650);
   ok(rug.rug && rug.rug.ceil===7705 && rug.rug.floor===7700,
      'a positive ceiling directly over a strong negative node IS a rug', JSON.stringify(rug.rug));
-  ok(rug.byK[7705]==='RUG' && rug.byK[7700]==='RUG', 'and both anchors are tagged', JSON.stringify(rug.byK));
+  ok(rug.byK[7705]==='RUG' && rug.byK[7700]!=='RUG', 'the pattern name tags its ANCHOR (ceiling) only — the floor keeps its polarity role (v14.19, operator-caught double-RRUG)', JSON.stringify(rug.byK));
   // ⚠ that ladder is ALSO a reverse rug (purple-yellow-purple), and the second pass used to overwrite
   // the first — asserting the opposite direction on the same level. Both are kept; the clash is reported.
   ok(rug.contested===true, 'a stack that is both shapes at once is flagged CONTESTED, not silently one');
@@ -1506,41 +1512,29 @@ eval(ex('emBand'));
   ok(/DISAGREE/.test(dbg),'in words, so the answer does not depend on reading a boolean the right way round');
 }
 
-// ---------- 40. (v11.86) THE SPX LEVELS REACH THE CHART, IN ES, ON THE TICK ----------
-// The rail has drawn Skylit's SPXW nodes since v11.77 and the chart never carried them — the levels
-// actually being traded off were the ones missing from the chart.
-//
-// ⚠⚠ THIS SECTION SHIPPED AS FOURTEEN SOURCE-GREPS AND WAS REWRITTEN TO EXECUTE (v11.87).
-// Every assertion here used to be `/pattern/.test(sourceText)`. Not one of them could have caught a
-// wrong PRICE: swap `toSpy(P.k)` for `P.disp`, or the tick for 1.0, and all fourteen still passed.
-// This is the SAME trap as the v11.70 forecast-ban test — the third time in this project a test has
-// asserted that source code CONTAINS a thing rather than that the code DOES the thing.
-// **If a test can pass on a build that emits the wrong number, it is documentation, not a test.**
+// ---------- 40. (v11.86, kings-only since v14.20) THE KINGS REACH THE CHART, IN ES, ON THE TICK ----------
+// The operator stepped the export back to THREE lines (2026-08-27: "too many levels — only the
+// kings"), but the part fourteen greps could not see is unchanged: the PRICES must be right.
+// These execute the real irtBuildCsv against live-shaped stubs and check the emitted numbers.
 {
-  // A real build, with every dependency stubbed and the two that matter carrying live-shaped values.
   function irtFixture(r, opt){
     opt = opt || {};
     var IRT_HEADER='HDR';
-    var IRT_COLORS={king:1,gate:2,ceil:3,flr:4,neg:5,deriv:6,ns:7,pb:8,mag:9,brk:10,accp:11};
-    var SUCC_CHART_PCT=60; eval(ex_var('SUCC_CHART_PCT'));
-    var CFG={ irt:{futSym:'EPU26', etfSym:''}, nodeThresh:20 };
-    var FUTMODE={ fam:'ES', live:true };   // (v14.14) the fixture charts ES — the dispScale path
-    var nodeMapModel=function(){ return {ok:true, levels:[]}; };   // isolate: no SPY rows
+    var IRT_COLORS={king:1,gate:2,ceil:3,flr:4,neg:5,deriv:6,ns:7,pb:8,mag:9,brk:10,accp:11,sply:12,splp:13,neut:14};
+    var CFG={ irt:{futSym:'EPU26', etfSym:'', nqOn:false}, nodeThresh:20 };
+    var FEED_STALE_MS=12000;
+    var FUTMODE={ fam:'ES', live:true };
     var irtRatio=function(){ return {r:r, live:true, src:'live'}; };
-    var nextStopPick=function(){ return null; };
-    var pbEntryPick=function(){ return null; };
-    var lvlUnified=function(){ return null; };
-    var ifChainRows=function(){ return null; };
-    var emBand=function(){ return {ok:true}; };
+    var irtNqRatio=function(){ return {r:null, live:false, src:'none'}; };
     var ifLadder=function(){ return {dispScale:1.0023, undScale:0.099773}; };
-    var emPiles=function(){ return opt.piles || [
-      {k:7710, pct:100, role:'KING', accel:true,  disp:7727.73},
-      {k:7700, pct:79,  role:'GK',   accel:true,  disp:7717.71},
-      {k:7650, pct:41,  role:null,   accel:false, disp:7667.59}
-    ]; };
-    emPiles.lastSrc = (opt.src===undefined) ? 'skylit' : opt.src;
-    var tapeMap=function(){ return opt.tape || {pct:{7710:-100, 7630:-85, 7650:41}, king:7710}; };
-    eval(ex('irtRound')); eval(ex('irtCsvRow')); eval(ex('irtBuildCsv'));
+    var tapeMap=function(sy){ if(sy==='QQQ') return null;
+      return ('tape' in opt) ? opt.tape : {pct:{'7710.00':-100, '7630.00':-85, '7650.00':41}, king:7710, count:100}; };
+    var __ls={}; var localStorage={getItem:function(k){return (k in __ls)?__ls[k]:null;},setItem:function(k,v){__ls[k]=String(v);}};
+    var ctTodayStr=function(){ return '2026-08-27'; };
+    var KING_LATCH_KEY='k', KING_LATCH_MS=120000;
+    var LASTFEED={ SPY:{ ts:Date.now(), j:{} } };
+    var extractWalls=function(){ return opt.spyKing===null ? null : { king:765, walls:[{k:765, pct:100, pos:true}] }; };
+    eval(ex('irtRound')); eval(ex('irtCsvRow')); eval(ex('kingLatchTick')); eval(ex('irtBuildCsv'));
     var b=irtBuildCsv();
     if(!b) return { rows:[], byLabel:{} };
     var rows=b.csv.trim().split('\r\n').slice(1).map(function(l){
@@ -1550,75 +1544,46 @@ eval(ex('emBand'));
     return { rows:rows, byLabel:byLabel };
   }
 
-  const F=irtFixture(10.0458);   // r = dispScale/undScale, the ladder-implied ratio
+  const F=irtFixture(10.0458);
   const L=F.byLabel;
 
-  // --- the nodes arrive at all, labelled with their SPX strike and role -------------------------
-  ok(F.rows.length===4,                    'the three rail nodes and the successor all reach the chart', F.rows.length);
-  ok(!!L['SPXW KING 100%'],            'the King is labelled NODETYPE + %King (v14.8: no strike text — IRT prints the price)');
-  ok(!!L['SPXW GK 79%'],               'so is the gatekeeper');
-  ok(!!L['SPXW BRK 41%'],              'and a node with no role falls back to its polarity');
+  // --- exactly the two ES kings arrive ---------------------------------------------------------
+  ok(F.rows.length===2,               'kings only: the SPXW and SPY crowns, nothing else', F.rows.map(x=>x.lbl));
+  ok(!!L['SPXW KING 100%'],           'the SPXW King, in the locked grammar');
+  ok(!!L['SPY KING 100%'],            'and the SPY King — "i must always have the spy and spxw king"');
 
-  // --- THE PRICES. This is the part fourteen greps could not see. ------------------------------
-  // The rail shows SPX 7710 at 7727.73. The chart must land on the SAME price, snapped to the tick.
-  ok(L['SPXW KING 100%'].price===7727.75, 'SPX 7710 lands at ES 7727.75 — the rail\'s 7727.73 on the 0.25 tick', L['SPXW KING 100%'].price);
-  ok(L['SPXW GK 79%'].price===7717.75,    'SPX 7700 lands at ES 7717.75 (rail 7717.71)', L['SPXW GK 79%'].price);
-  ok(L['SPXW BRK 41%'].price===7667.50,   'SPX 7650 lands at ES 7667.50 (rail 7667.59)', L['SPXW BRK 41%'].price);
+  // --- THE PRICES ------------------------------------------------------------------------------
+  ok(L['SPXW KING 100%'].price===7727.75, 'SPX 7710 lands at ES 7727.75 — the rail\'s price on the 0.25 tick', L['SPXW KING 100%'].price);
+  ok(Math.abs(L['SPY KING 100%'].price - 765*10.0458) <= 0.25, 'SPY 765 lands at SPY x r, on the tick', L['SPY KING 100%'].price);
   F.rows.forEach(function(x){
     ok(Math.abs(x.price/0.25 - Math.round(x.price/0.25)) < 1e-9,
        'every emitted price is a tradeable ES price: '+x.lbl+' = '+x.price, x.price);
   });
 
-  // --- THE SCALE PROPERTY, and it is what discriminates the two conversions --------------------
-  // Going SPX -> SPY via dispScale and back via R.r makes R.r CANCEL: the emitted price is
-  // irtRound(spxK * dispScale, tick) for ANY ratio. Going via undScale does not cancel and the
-  // answer moves with the futures basis. Build twice at different ratios and demand the same prices.
+  // --- THE SCALE PROPERTY: R.r cancels on the SPXW king (dispScale path) -----------------------
   const F2=irtFixture(10.6000);
-  ok(JSON.stringify(F.rows.map(x=>x.lbl+'='+x.price))===JSON.stringify(F2.rows.map(x=>x.lbl+'='+x.price)),
-     'the emitted prices do NOT move when the futures ratio moves — R.r cancels, which is the whole point of routing through dispScale',
-     F2.rows.map(x=>x.lbl+'='+x.price));
+  ok(F2.byLabel['SPXW KING 100%'].price===7727.75,
+     'the SPXW king does NOT move when the futures ratio moves — R.r cancels through dispScale',
+     F2.byLabel['SPXW KING 100%'].price);
   ok(L['SPXW KING 100%'].price === Math.round(7710*1.0023/0.25)*0.25,
      'and the price is exactly irtRound(spxStrike x dispScale, 0.25), independent of the ratio');
-  // the undScale route, computed here, is the number this must NOT be at a drifted ratio
-  ok(Math.round((7710*0.099773)*10.6/0.25)*0.25 !== 7727.75,
-     'the undScale route gives a DIFFERENT price once the ratio drifts — so the choice is load-bearing, not cosmetic');
+  // ...while the SPY king legitimately DOES ride the ratio (it is a SPY strike x r)
+  ok(Math.abs(F2.byLabel['SPY KING 100%'].price - 765*10.6) <= 0.25,
+     'the SPY king rides the live ratio — different book, different scale, correctly so');
 
-  // --- display rounding and chart rounding are different jobs ----------------------------------
-  ok(L['SPXW KING 100%'].price !== Math.round(L['SPXW KING 100%'].price),
-     'the chart price is NOT the whole point the FRAME row shows — .75 survives to the chart');
-  const f=ex('secFrame'), bsrc=ex('irtBuildCsv');
-  ok(/frameNum/.test(f) && !/frameNum/.test(bsrc),
-     'the FRAME row rounds to whole points; the chart does not borrow that rounding');
+  // --- the latch: a mid-flap tape does not move the exported crown ------------------------------
+  const Ff=irtFixture(10.0458);                              // seeds the latch at 7710 (fresh store)
+  ok(Ff.byLabel['SPXW KING 100%'].price===7727.75, 'latch seeded on first sight of the crown');
 
-  // --- succession, gated and honest ------------------------------------------------------------
-  ok(!!L['SPXW SUCC'],             'a successor above the threshold is drawn');
-  ok(L['SPXW SUCC'].price===7647.50,'on the same scale as everything else', L['SPXW SUCC'].price);
-  ok(L['SPXW SUCC'].style==='2',   'and dashed, so it never reads as a live level');
-  const Fw=irtFixture(10.0458, {tape:{pct:{7710:-100, 7630:-55}, king:7710}});
-  ok(!Fw.byLabel['SPXW SUCC'],     'a successor BELOW the threshold is not drawn', Object.keys(Fw.byLabel));
-  ok(/var SUCC_CHART_PCT = 60;/.test(src), 'the threshold is the 60% the doctrine uses');
-  ok(/⚖ HAND-SET/.test(src.slice(src.indexOf('var SUCC_CHART_PCT')-320, src.indexOf('var SUCC_CHART_PCT'))),
-     'flagged hand-set');
-  ok(/THAT NUMBER IS SPY'S/.test(bsrc),
-     'and the 76% backtest is marked as a SPY number, not asserted as an SPX probability');
+  // --- colours carry the polarity --------------------------------------------------------------
+  ok(L['SPXW KING 100%'].col==='11',  'a -gamma SPXW crown wears the accelerator purple');
+  ok(L['SPY KING 100%'].col==='12',   'a +gamma SPY crown wears the light yellow');
+  ok(L['SPXW KING 100%'].w==='3',     'the SPXW king is drawn heaviest');
 
-  // --- the other book must not be exported as if it were this one ------------------------------
-  const Fif=irtFixture(10.0458, {src:'if-fallback'});
-  ok(Fif.rows.length===0,
-     'when the rail fell back to InsiderFinance NOTHING is exported — an IF node is a different quantity and would land on the chart wearing a Skylit label',
-     Fif.rows.map(x=>x.lbl));
-  const Fnone=irtFixture(10.0458, {src:'none', piles:[]});
-  ok(Fnone.rows.length===0,               'and no book at all exports nothing rather than an empty confident chart');
-
-  // --- colours carry the role ------------------------------------------------------------------
-  // (v14.8, operator-directed) node lines wear the PANEL'S polarity colours on the chart:
-  // yellow (+gamma brake) / purple (-gamma accelerator). Role now lives in the LABEL and the width.
-  // the stub's King and GK are accel:true (-gamma), the 7650 node accel:false (+gamma) — so the
-  // polarity colours must land purple, purple, yellow. Colour follows the GAMMA, not the role.
-  ok(L['SPXW KING 100%'].col==='11',  'a -gamma King wears the accelerator purple');
-  ok(L['SPXW GK 79%'].col==='11',     'so does a -gamma gatekeeper');
-  ok(L['SPXW BRK 41%'].col==='10',    'and a +gamma node wears the brake yellow');
-  ok(L['SPXW KING 100%'].w==='3',     'the King is drawn heaviest');
+  // --- absence: the trimmed lanes stay out -----------------------------------------------------
+  ok(!F.rows.some(x=>/GK|BRK|ACC|SUCC|IF /.test(x.lbl)), 'no roles, no SUCC, no IF walls — three-line contract', F.rows.map(x=>x.lbl));
+  const Fn=irtFixture(10.0458, {tape:null, spyKing:null});
+  ok(Fn.rows.length===0, 'no book at all exports nothing rather than an empty confident chart');
 }
 
 
