@@ -1,3 +1,47 @@
+## v14.35 — GARMA item 1: session-structure levels (30-minute IB + prior day)
+
+The context layer he maps before touching Skylit (10/11 videos). Corpus-verbatim answer to the
+operator\'s question: the IB is THIRTY MINUTES ("waits for the IB high and low to be set 30
+minutes after the open", video 10) — which is also Skylit\'s own IB30H/IB30L badge, so the chart
+verifies our numbers for free. sessionLevels() computes IB H/L (today, first-30-min bars only,
+NOT reported until the window closes — he waits, so do we) and prior-day H/L/C (from the candle
+window\'s prior-session bars; absent honestly when the window rolls past them), all in the chart
+frame. The rail wears them as dim structure TICKS (IBH/IBL/PDH/PDL/PDC — the skeleton, clearly
+not gamma, off-frame ticks skipped rather than edge-piled). The read names CONFLUENCE (his rule
+22: structure + node stacked beats either alone): "support 7678 (67% brake) FORMING — on the IB
+low" (2-pt zone, his rule 29: nodes are zones). VWAP + Asia/London/Midnight DEFERRED pending a
+volume/ETH data check; Fibonacci skipped by his own rule 21. test_garma_p1 now 20 executed.
+
+## v14.34 — GARMA PHASE 1: the day, the Trinity, and the gatekeeper block
+
+The operator supplied an evidence-based reconstruction of Garma\'s decision model (the Skylit
+analyst; garma/claude_package — 42 weighted rules from 11 videos, recurrence-audited). Reviewed
+against our doctrine: NO CONFLICTS — he teaches the system the Academy documents. ~60% was
+already built (kings, gatekeepers, rugs, node quality = our Level states, deflection triggers,
+refusal honesty). Phase 1 lands the three gaps buildable with data in hand:
+
+1. **Day classification** (his rule 2: classify BEFORE executing): dayTypeOf → EVENT / OPEX /
+   WHIPSAW (both sides ran >35% of the EM — fade edges) / TREND UP·DOWN (one-sided EM use + the
+   SMA machine agreeing) / RANGE. Leads the read.
+2. **Trinity conviction** (rules 10-12): trinityRead — which side of ITS OWN spot each book\'s
+   King sits (frame-free); 3-of-3 = aligned, 2-of-3 = "reduced conviction", <2 = "WAIT per
+   doctrine", the dissenting book NAMED ("QQQ dissents").
+3. **The gatekeeper block** (rule 5): a BRAKED path whose stalling gatekeeper (>=1.8×) sits
+   between price and the destination now says so: "target BLOCKED by uncleared gatekeeper 7684 —
+   do not target through it."
+Day type + Trinity ride the levelstate record so the nightly review conditions every state\'s
+hold-rate on them. test_garma_p1: 14 executed asserts. Phases 2-5 queued (session levels /
+dark pools / SMH-NVDA / conviction composer).
+
+## v14.33 — the "check everything" pass: two blemishes
+
+The operator's full-system check verified the two-section face, the states voice, the ST row, the
+door ghosts and the king-class arrows all correct — and caught two leftovers: (1) the "Node Map —
+waiting on node data…" line had survived the NODES retirement (accumBlock now gates on
+LOC_SHOW_NODES; nodeMapModel/recordDeflections keep running for Analysis + features), and (2) the
+rail label state words used the full word (WEAKENING) where the profile uses four letters — dense
+clusters mashed again; the rail now speaks WEAK/FORM/TURN/DOOR like its sibling.
+
 ## v14.32 — the face slims to TREND + LOCATION (operator-directed) + the consistency review
 
 Operator: "step back and review the entire feature… i don't think i need the nodes section below,

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.32
+// @version    14.35
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -598,7 +598,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.32';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.35';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -12311,6 +12311,10 @@ function registerCoreFeatures(){
         });
         var dsc=1; try{ dsc=ifDispScale()||1; }catch(e2){}
         out.doors=levelDoors(rolls, dsc).length;
+        // (v14.34, Garma phase 1) the day type and Trinity ride the record so the nightly review
+        // can condition every state's hold-rate on them (his rule: classify BEFORE executing).
+        try{ var dt=dayTypeOf(sym, B); out.day=dt.t; }catch(e3){}
+        try{ var tr=trinityRead(); out.trinity=tr.n+'/'+tr.of; out.triSide=tr.side; }catch(e4){}
       }catch(e){}
       return out;
     },
@@ -18804,6 +18808,11 @@ function ensureV3Css(){
     '#gpts-body .g3lvwFORMING{color:#7cc7ff}'+
     '#gpts-body .g3lvwWEAKENING{color:#f2b45a}'+
     '#gpts-body .g3lvwTURNING{color:#cdb4fa}'+
+    // (v14.35) session-structure ticks — the skeleton, dimmer than everything gamma
+    '#gpts-body .g3sess{position:absolute;top:15px;width:0;height:10px;border-left:1px solid #46505c;'+
+      'transform:translateX(-50%);z-index:0;cursor:help;opacity:.9}'+
+    '#gpts-body .g3sess em{position:absolute;top:-7px;left:50%;transform:translateX(-50%);font-style:normal;'+
+      'font-size:4.5px;font-weight:900;letter-spacing:.04em;color:#5b6675;white-space:nowrap}'+
     '#gpts-body .g3door{position:absolute;top:19px;width:3px;height:16px;border:1px dashed #5b6675;border-radius:1px;'+
       'transform:translateX(-50%);z-index:1;cursor:help;opacity:.8}'+
     '#gpts-body .g3door em{position:absolute;top:17px;left:50%;transform:translateX(-50%);font-style:normal;'+
@@ -20082,6 +20091,109 @@ emPiles.lastKing=null; emPiles.lastKingSrc=''; emPiles.lastKingKd=null; emPiles.
 // ⚠ preserveAspectRatio="none" stretches x to the rail's width — correct for positioning, wrong for
 // strokes and arrowheads. `vector-effect="non-scaling-stroke"` fixes the line; the head is an HTML
 // triangle positioned by percent, so it never distorts.
+// ---- (v14.34) GARMA PHASE 1 — day classification + Trinity conviction ------------------------
+// Source: the Garma decision-model package (garma/claude_package, 42 evidence-weighted rules from
+// 11 public videos; recurrence: trinity 9/11, IB 10/11). Two of his layers land here, both
+// computable from data the panel already holds. The Academy stays authoritative; these are
+// OBSERVED-PRACTICE rules, adopted where they do not conflict (reviewed 2026-08-26: no conflicts).
+// GARMA RULE 2: "classify the day as trend, range, whipsaw, event, or no-trade BEFORE executing."
+function dayTypeOf(sym, B){
+  try{
+    var ev=null; try{ ev=eventTagLabel(); }catch(e0){}
+    var opx=false; try{ opx=!!isOpexDay(); }catch(e1){}
+    if(ev) return { t:'EVENT', why:ev+' — normal-rule confidence downgraded (Garma r41)' };
+    if(opx) return { t:'OPEX', why:'monthly expiration — distortions expected' };
+    var tv=null; try{ tv=trendVerdict(sym); }catch(e2){}
+    var tvUp=tv&&(tv.state==='up'||tv.st==='up'), tvDn=tv&&(tv.state==='dn'||tv.st==='dn');
+    if(B && B.ok && typeof B.upExc==='number' && typeof B.dnExc==='number' && B.em>0){
+      var upF=B.upExc/B.em, dnF=B.dnExc/B.em;
+      // ⚖ hand-set: both sides having run >35% of the EM and given it back reads as WHIPSAW
+      if(upF>0.35 && dnF>0.35) return { t:'WHIPSAW', why:'both sides ran >'+Math.round(35)+'% of the EM — fade edges, avoid the middle' };
+      if((tvUp||tvDn) && (tvUp?upF:dnF)>0.35 && (tvUp?dnF:upF)<0.2)
+        return { t:(tvUp?'TREND UP':'TREND DOWN'), why:'one-sided EM use with the SMA machine agreeing' };
+    }
+    if(tvUp||tvDn) return { t:(tvUp?'TREND UP':'TREND DOWN'), why:'SMA machine has a side; EM use still two-sided' };
+    return { t:'RANGE', why:'no side, no whipsaw shape — trade the edges, not the middle' };
+  }catch(e){ return { t:'RANGE', why:'' }; }
+}
+// GARMA PHASE 2, item 1 (v14.35): SESSION-STRUCTURE LEVELS — his context layer (10/11 videos).
+// 30-MINUTE IB, per the corpus verbatim ("waits for the IB high and low to be set 30 minutes
+// after the open", video 10) — which is also Skylit's own IB30H/IB30L badge, so the chart is the
+// free cross-check. Prior day H/L/C come from the candle window's prior-session bars (absent,
+// honestly, when the window no longer holds them). VWAP + Asia/London/Midnight are DEFERRED:
+// VWAP needs volume the fibers may not carry, overnight needs ETH bars the panel does not record.
+// Values return in the CHART frame (× the band's pinned scale), same frame as the rail.
+var IB_MIN_S=1800;   // ⚖ the 30-minute IB window, in seconds (Garma-verbatim; Skylit IB30 agrees)
+function sessionLevels(sym, scale){
+  var out={ ibH:null, ibL:null, ibSet:false, pdh:null, pdl:null, pdc:null };
+  try{
+    var cs=closedCandles(sym)||[]; if(!cs.length) return out;
+    var sc=(typeof scale==='number'&&scale>0)?scale:1;
+    var openSec=mul(8,3600)+mul(30,60);
+    var today=ctTodayStr();
+    var ibEnd=openSec+IB_MIN_S, ibH=null, ibL=null, pdH=null, pdL=null, pdC=null, prevDay=null, i;
+    for(i=0;i<cs.length;i++){ var c=cs[i]; if(!c || c.day===today) continue;
+      if(prevDay==null || c.day>prevDay) prevDay=c.day; }
+    for(i=0;i<cs.length;i++){ var b=cs[i]; if(!b) continue;
+      if(b.day===today && typeof b.so==='number' && b.so>=openSec && b.so<ibEnd){
+        if(b.h!=null && (ibH==null||b.h>ibH)) ibH=b.h;
+        if(b.l!=null && (ibL==null||b.l<ibL)) ibL=b.l;
+      } else if(prevDay!=null && b.day===prevDay){
+        if(b.h!=null && (pdH==null||b.h>pdH)) pdH=b.h;
+        if(b.l!=null && (pdL==null||b.l<pdL)) pdL=b.l;
+        if(b.c!=null) pdC=b.c;   // last prior-day bar wins = the close
+      }
+    }
+    out.ibSet=(ctNowSecOfDay()>=ibEnd) && ibH!=null && ibL!=null;
+    if(ibH!=null) out.ibH=ibH*sc;
+    if(ibL!=null) out.ibL=ibL*sc;
+    if(pdH!=null) out.pdh=pdH*sc;
+    if(pdL!=null) out.pdl=pdL*sc;
+    if(pdC!=null) out.pdc=pdC*sc;
+  }catch(e){}
+  return out;
+}
+// the confluence check the read uses: the nearest session level within reach of a price
+var SESS_CONFL_PTS=2.0;   // ⚖ hand-set: "nodes are zones" (Garma r29) — 2 ES pts counts as ON it
+function sessConfluence(SL, disp){
+  try{
+    if(!SL) return null;
+    var cands=[['the IB high',SL.ibSet?SL.ibH:null],['the IB low',SL.ibSet?SL.ibL:null],
+               ['the prior-day high',SL.pdh],['the prior-day low',SL.pdl],['the prior-day close',SL.pdc]];
+    var best=null;
+    cands.forEach(function(cd){ if(cd[1]==null) return;
+      var d=Math.abs(cd[1]-disp);
+      if(d<=SESS_CONFL_PTS && (!best||d<best.d)) best={ name:cd[0], at:cd[1], d:d }; });
+    return best;
+  }catch(e){ return null; }
+}
+// GARMA RULES 10-12: "3-of-3 SPX/SPY/QQQ alignment for high conviction; 2-of-3 reduced; less =
+// wait." V1 alignment metric: which SIDE of its own spot each book's King sits — frame-free
+// (each tape carries its own price), and the dissenting book is NAMED.
+function trinityRead(){
+  try{
+    var out={ n:0, of:0, side:null, dissent:[] };
+    var books=[['SPXW','SPXW'],['SPY','SPY'],['QQQ','QQQ']];
+    var sides=[];
+    books.forEach(function(bk){
+      var t=null; try{ t=tapeMap(bk[1]); }catch(e0){}
+      var px=null;
+      try{ if(bk[1]==='SPXW'){ var L=ifLadder('SPY'); var Bq=emBand('SPY');
+             px=(Bq&&Bq.ok&&L&&!L.err&&L.dispScale>0)?(Bq.now/L.dispScale):null; }
+           else { px=(STATE[bk[1]]||{}).price; if(px==null && LASTFEED[bk[1]]&&LASTFEED[bk[1]].j&&LASTFEED[bk[1]].j.levels&&LASTFEED[bk[1]].j.levels.length) px=LASTFEED[bk[1]].j.levels[LASTFEED[bk[1]].j.levels.length-1].s; } }catch(e1){}
+      if(!t || t.king==null || !(px>0)) return;
+      sides.push({ b:bk[0], side:(t.king<px)?'below':'above' });
+    });
+    out.of=sides.length;
+    if(!sides.length) return out;
+    var below=sides.filter(function(x){ return x.side==='below'; });
+    var maj=(below.length>=sides.length-below.length)?'below':'above';
+    out.side=maj;
+    out.n=sides.filter(function(x){ return x.side===maj; }).length;
+    out.dissent=sides.filter(function(x){ return x.side!==maj; }).map(function(x){ return x.b; });
+    return out;
+  }catch(e){ return { n:0, of:0, side:null, dissent:[] }; }
+}
 // ---- (v14.30) THE LEVEL ENGINE — five states, computed from what is already measured --------
 // Operator's business requirement, verbatim: "i need to know potential support and resistance,
 // especially if it is weakening and new support and resistance is forming, as well as where
@@ -20929,6 +21041,8 @@ function secFrame(sym){
     // its grey chip while it retires).
     var RAILROLLS=[];
     try{ if(rollsLive()) RAILROLLS=(rollLatched(sym)||[]).filter(function(rF){ return !rF.gone; }); }catch(eRR){}
+    // (v14.35, Garma item 1) session-structure levels, once per render, in the chart frame
+    var SESSL=null; try{ SESSL=sessionLevels(sym, (EB&&typeof EB.scaleUsed==='number')?EB.scaleUsed:1); }catch(eSL){}
     // (v14.30) the level-engine context rides the SAME latched list (one computation, N consumers)
     try{
       var lvDsc=1; try{ lvDsc=ifDispScale()||1; }catch(eLd){}
@@ -20959,6 +21073,19 @@ function secFrame(sym){
       // braked / clear), and rolls that feed it are named. No dominant magnet = said plainly.
       var FR=[];
       var frNow=(typeof EB.nowLive==='number')?EB.nowLive:EB.now;
+      // ---- 0 · THE DAY AND THE TRINITY (Garma phase 1) -----------------------------------------
+      try{
+        var frDT=dayTypeOf(sym, EB);
+        var frTri=trinityRead();
+        var frLead=frDT.t+' day';
+        if(frTri.of>=2){
+          frLead+=' \u00b7 Trinity '+frTri.n+'-of-'+frTri.of+' (Kings '+frTri.side+' price'+
+                  (frTri.dissent.length?('; '+frTri.dissent.join('/')+' dissent'+(frTri.dissent.length>1?'':'s')):'')+')';
+          if(frTri.n<2 || (frTri.of===3&&frTri.n<2)) frLead+=' \u2014 WAIT per doctrine';
+          else if(frTri.of===3&&frTri.n===2) frLead+=' \u2014 reduced conviction';
+        }
+        FR.push(frLead);
+      }catch(eDT){}
       // ---- 1 · THE KING ------------------------------------------------------------------------
       var frKP=null;
       try{
@@ -21002,6 +21129,8 @@ function secFrame(sym){
           else { var fv=null; try{ fv=velAt(P.k); }catch(eV2){}
             if(fv && fv.v && !fv.stale && typeof fv.v.d15==='number' && Math.abs(fv.v.d15)>1e6)
               t+=(fv.v.d15>0?', building':', draining'); }
+          // (v14.35, Garma r22: structure + node stacked beats either alone) name the confluence
+          try{ var cf=sessConfluence(SESSL, P.disp); if(cf) t+=' \u2014 on '+cf.name; }catch(eCf){}
           if(Math.abs(P.disp-frNow)<=2.6){
             var frRv=null; try{ frRv=reactDefence(sym, P.disp); }catch(eR3){}
             if(frRv && frRv.verdict==='DEFENDING') t+=', being DEFENDED';
@@ -21070,6 +21199,16 @@ function secFrame(sym){
             var frPath=null; try{ frPath=emPath(EB, sym, frBestP.disp); }catch(ePt){}
             if(frPath && frPath.ok) frDtxt+='; the path '+(frBestP.disp>frNow?'up':'down')+' is '+
               (frPath.verdict==='clear'?'CLEAR':(frPath.verdict==='fuelled'?'FUELLED \u2014 accelerators outweigh the brakes in between':'BRAKED \u2014 brakes outweigh the fuel in between'));
+            // (v14.34, Garma r5: "do not target through a gatekeeper unless it clears") name the block
+            try{
+              var frRL=emPiles.lastRoles;
+              if(frPath && frPath.verdict==='braked' && frRL && frRL.gk!=null && frRL.gkVerdict==='stall'){
+                var frGkP=null, frGi;
+                for(frGi=0;frGi<RAILPS.length;frGi++){ if(RAILPS[frGi].k===frRL.gk){ frGkP=RAILPS[frGi]; break; } }
+                var frBetween=frGkP && ((frGkP.disp>Math.min(frNow,frBestP.disp)) && (frGkP.disp<Math.max(frNow,frBestP.disp)));
+                if(frBetween) frDtxt+=' \u2014 target BLOCKED by uncleared gatekeeper '+frameNum(frGkP.disp)+' ('+(frRL.gkRatio!=null?frRL.gkRatio+'\u00d7':'')+'; do not target through it)';
+              }
+            }catch(eGk){}
             try{
               if(RAILROLLS && RAILROLLS.length){
                 var frFeed=null, frRi2, frDsc2=1; try{ frDsc2=ifDispScale()||1; }catch(eD3){}
@@ -21313,7 +21452,7 @@ function secFrame(sym){
              var rEdge = (P.pos>94) ? ';transform:translateX(-100%)' : ((P.pos<6) ? ';transform:translateX(0)' : '');
              h2+='<span class="g3prole '+pcls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%'+rEdge+'"'+g3tip(tip)+'>'+
                  g3esc(role)+'</span>';
-             var lvWord=(lvS && lvS.st!=='HOLDING')?('<em class="g3lvw g3lvw'+lvS.st+'">'+lvS.st+'</em>'):'';
+             var lvWord=(lvS && lvS.st!=='HOLDING')?('<em class="g3lvw g3lvw'+lvS.st+'">'+lvS.st.slice(0,4)+'</em>'):'';
              h2+='<span class="g3plab '+pcls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%"'+g3tip(tip)+'>'+
                  frameNum(P.disp)+'<i>'+P.k+'</i>'+lvWord+'</span>';
            }
@@ -21329,6 +21468,25 @@ function secFrame(sym){
                  '><em>DOOR</em></i>';
            });
          }catch(eDo){}
+         // (v14.35, Garma item 1) SESSION TICKS — the price-structure skeleton, dim and thin:
+         // IB high/low (30-min, matching Skylit's own IB30 badges) + prior day H/L/C. Not gamma,
+         // no states — the frame he hangs the map on. Confluence with a node upgrades the READ.
+         try{
+           if(SESSL){
+             var sessDefs=[['IBH',SESSL.ibSet?SESSL.ibH:null,'Initial-Balance HIGH (first 30 min) \u2014 break-and-retest above supports a trend long (Garma r18); also a target.'],
+                           ['IBL',SESSL.ibSet?SESSL.ibL:null,'Initial-Balance LOW (first 30 min) \u2014 break from below supports a short if the maps resist (Garma r19).'],
+                           ['PDH',SESSL.pdh,'Prior-day HIGH \u2014 session structure; a target when structurally relevant (Garma r34).'],
+                           ['PDL',SESSL.pdl,'Prior-day LOW \u2014 session structure.'],
+                           ['PDC',SESSL.pdc,'Prior-day CLOSE \u2014 session structure.']];
+             sessDefs.forEach(function(sd){
+               if(sd[1]==null) return;
+               var xS=emPosRail(EB, sd[1], RB);
+               if(!isFinite(xS) || xS<=0.2 || xS>=99.8) return;   // off-frame: skip, never pile at the edge
+               h2+='<i class="g3sess" style="left:'+xS.toFixed(1)+'%"'+g3tip(sd[2]+' At '+frameNum(sd[1])+'.')+
+                   '><em>'+sd[0]+'</em></i>';
+             });
+           }
+         }catch(eSt){}
          // (v14.23, operator requirement: "have some line or flag show the spy king even though
          // all the dynamics are from the spxw — sometimes there are bounces based on the spy
          // king") THE SPY KING FLAG. Full-height dashed line at the SPY crown's price, in the SPY
@@ -22897,7 +23055,10 @@ function render(){
   // lifecycle is now shown as a per-node tag (BO / BO\u00b7FT\u00b7\u2026) on the Node Map row it
   // belongs to (see nodeMapBlock -> setupTagForNode). The state machine still runs
   // (runMachine/newSetup/STATE.setups) \u2014 only the grid rendering is gone. Saves space.
-  html+=accumBlock();           // Deflections + Node Map
+  // (v14.33, operator's "check everything" pass) the Node Map line was the NODES section's last
+  // survivor — same retirement, same rule: display off, nodeMapModel/recordDeflections keep
+  // running (Analysis + features read them).
+  if(LOC_SHOW_NODES) html+=accumBlock();           // Deflections + Node Map (retired display)
   html+='</div>';               // close single column
   html+='<div style="border-top:1px solid '+PAL.line+';margin:6px 0 3px 0"></div>';
   html+=feedStatusHtml();
