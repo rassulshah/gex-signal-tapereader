@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.17
+// @version    14.18
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -596,7 +596,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.17';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.18';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -19300,6 +19300,26 @@ function ifLadder(sym){
         var sV=FS.j.levels[FS.j.levels.length-1].s;
         if(typeof sV==='number' && sV>0 && Math.abs(sV/theirSpot-1)<0.02){
           theirSpot=sV; spotSrc='skylit';
+        }
+      }
+      // (v14.18) THE SPXW FEED IS TOO SPARSE TO LEAN ON — measured 2026-08-27: 4 payloads in ~10
+      // minutes, so the direct path above almost never fired and the basis silently fell back to
+      // IF's delayed spot (the rail stayed ~6 pts off Atlas; also why the export's SPY rows were
+      // absent all morning). The SPY feed, by contrast, is SELF-FETCHED fresh (<=12s) and carries
+      // Skylit's own measured SPY<->SPXW ratio in its derived[] — so SPX spot = SPYspot / ratio,
+      // both factors theirs, both live. Second rung of the chain; IF stays the disclosed fallback.
+      if(spotSrc!=='skylit' && src==='SPX' && typeof LASTFEED!=='undefined'){
+        var FY=LASTFEED.SPY;
+        if(FY && FY.j && FY.j.levels && FY.j.levels.length &&
+           (Date.now()-(FY.ts||0))<=FEED_STALE_MS*3){
+          var spy=FY.j.levels[FY.j.levels.length-1].s, ratD=null, dvA=FY.j.derived||[];
+          for(var dvI=0; dvI<dvA.length; dvI++){
+            if(dvA[dvI] && dvA[dvI].source==='SPXW' && dvA[dvI].ratio>0){ ratD=dvA[dvI].ratio; break; }
+          }
+          if(typeof spy==='number' && spy>0 && ratD){
+            var sx=spy/ratD;
+            if(Math.abs(sx/theirSpot-1)<0.02){ theirSpot=sx; spotSrc='skylit-spy'; }
+          }
         }
       }
     }catch(eLS){}

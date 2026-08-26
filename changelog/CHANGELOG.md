@@ -1,3 +1,13 @@
+## v14.18 — the basis chain gains a rung that actually fires
+
+v14.17's Skylit-spot override was correct and nearly useless: it required a fresh SPXW feed, and
+the page only fetches that book every ~2 minutes (measured: 4 payloads in 10 min) — so the basis
+fell back to IF's delayed spot almost every render and the rail stayed ~6 pts off Atlas. (The same
+sparseness is why the export's SPY diamond rows were absent all morning — their freshness gate is
+honest, the feed is just slow.) New second rung: the SELF-FETCHED SPY feed (<=12s fresh) carries
+Skylit's own measured SPY<->SPXW ratio in derived[] — SPX spot = SPYspot/ratio, both factors
+theirs, both live, 2% sanity vs IF. spotSrc: 'skylit' | 'skylit-spy' | 'if'.
+
 ## v14.17 — the basis anchors on Atlas's own spot (rail was ~6 pts high vs Atlas)
 
 Operator: "compare atlas with the rails — it's different." Measured: rail King 7674, Atlas ~7668;
