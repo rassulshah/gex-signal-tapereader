@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.13
+// @version      1.14
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
 // @connect      insiderfinance.io
+// @connect      nfs.faireconomy.media
 // @run-at       document-idle
 // (v1.11) WITHOUT THESE TWO LINES TAMPERMONKEY WILL NEVER OFFER AN UPDATE FOR THIS SCRIPT — EVER.
 // The tapereader has carried them for releases; the companion never did, so it sat silently at an
@@ -515,7 +516,44 @@ function pull(sym){
   }catch(e){ fails[sym]=(fails[sym]||0)+1; storeErr(sym,'GM_xmlhttpRequest unavailable: '+e.message); }
 }
 
-function tick(){ try{ if(document.visibilityState!=='visible') return; for(var i=0;i<SYMS.length;i++) pull(SYMS[i]); }catch(e){} }
+// ---- (v1.14, Garma 1a) THE ECONOMIC CALENDAR courier -----------------------------------------
+// The tapereader cannot fetch cross-origin (page CSP + @grant none, both load-bearing) — verified
+// live: page fetch of the feed fails. This companion CAN (GM_xmlhttpRequest is privileged past
+// CORS and CSP), so it couriers ForexFactory's free weekly feed once per day into the SAME
+// localStorage cache the tapereader's evCalLoad() reads: {day, ev:[{t,title}]}, USD High only.
+var EVCAL_KEY='gpts_evcal_v1';
+var EVCAL_URL='https://nfs.faireconomy.media/ff_calendar_thisweek.json';
+function ctToday(){ var d=new Date(Date.now()-5*3600000); return d.toISOString().slice(0,10); }
+function evCalCourier(){
+  try{
+    var cur=null; try{ cur=JSON.parse(localStorage.getItem(EVCAL_KEY)||'null'); }catch(e0){}
+    if(cur && cur.day===ctToday() && Array.isArray(cur.ev)) return;   // today's already delivered
+    GM_xmlhttpRequest({
+      method:'GET', url:EVCAL_URL, timeout:15000,
+      onload:function(res){
+        try{
+          var j=JSON.parse(res.responseText);
+          if(!Array.isArray(j)) return;
+          var today=ctToday(), ev=[];
+          j.forEach(function(e){
+            try{
+              if(!e || e.country!=='USD' || String(e.impact).toLowerCase()!=='high') return;
+              var t=Date.parse(e.date); if(!isFinite(t)) return;
+              var dayStr=new Date(t-5*3600000).toISOString().slice(0,10);
+              if(dayStr!==today) return;
+              ev.push({ t:t, title:String(e.title||'').slice(0,40) });
+            }catch(e2){}
+          });
+          localStorage.setItem(EVCAL_KEY, JSON.stringify({day:today, ev:ev}));
+          log('calendar delivered:', ev.length, 'USD-high events today');
+        }catch(e3){ log('calendar parse failed', e3.message); }
+      },
+      onerror:function(){ log('calendar fetch failed'); },
+      ontimeout:function(){ log('calendar fetch timeout'); }
+    });
+  }catch(e){ log('calendar courier threw', e.message); }
+}
+function tick(){ try{ if(document.visibilityState!=='visible') return; for(var i=0;i<SYMS.length;i++) pull(SYMS[i]); evCalCourier(); }catch(e){} }
 
 setTimeout(tick, 4000);
 setInterval(tick, POLL_MS);

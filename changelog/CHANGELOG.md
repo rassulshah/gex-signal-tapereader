@@ -1,3 +1,16 @@
+## v14.38 + companion v1.14 — GARMA 1a: the economic calendar (operator-approved)
+
+The EVENT day now stamps itself. Source: ForexFactory\'s free weekly feed (no key, impact-rated),
+filtered to USD + High. FOMC-family events stamp the WHOLE day; everything else is active ±90
+minutes around its release. The read opens "EVENT day — CPI 8:30 — normal-rule confidence
+downgraded (Garma r41)". VERIFIED LIVE FIRST: the page cannot fetch the feed (Skylit\'s CSP +
+@grant-none, both load-bearing) — so the fetch rides THE COMPANION (v1.14), which is privileged
+past CORS/CSP and already exists precisely for this pattern; it couriers the feed once per day
+into the shared localStorage cache the tapereader\'s evCalLoad() reads. Failure is disclosed in
+the companion log, and the manual event tag stays as fallback — never a silent no-events.
+⚠ THIS INSTALL UPDATES BOTH SCRIPTS — the companion changes for the first time since v1.13.
+test_garma_p1 +6 executed (window logic, FOMC whole-day, stale-cache refusal, USD/High filter).
+
 ## v14.37 — one crown, a centred flag, and THE LIVE AUDIT (operator: "do a better job at testing")
 
 The dual-crown was an INTERACTION defect — the profile crowned both the LATCHED King (role) and

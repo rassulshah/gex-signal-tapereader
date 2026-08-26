@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.37
+// @version    14.38
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -598,7 +598,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.37';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.38';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -20099,6 +20099,10 @@ emPiles.lastKing=null; emPiles.lastKingSrc=''; emPiles.lastKingKd=null; emPiles.
 // GARMA RULE 2: "classify the day as trend, range, whipsaw, event, or no-trade BEFORE executing."
 function dayTypeOf(sym, B){
   try{
+    // (v14.38) the calendar outranks the manual tag; the manual tag remains the fallback
+    try{ evCalFetch(); }catch(eF0){}
+    var cal=null; try{ cal=evCalActive(); }catch(eC0){}
+    if(cal) return { t:'EVENT', why:cal.title+' '+cal.at+' — normal-rule confidence downgraded (Garma r41)' };
     var ev=null; try{ ev=eventTagLabel(); }catch(e0){}
     var opx=false; try{ opx=!!isOpexDay(); }catch(e1){}
     if(ev) return { t:'EVENT', why:ev+' — normal-rule confidence downgraded (Garma r41)' };
@@ -20115,6 +20119,65 @@ function dayTypeOf(sym, B){
     if(tvUp||tvDn) return { t:(tvUp?'TREND UP':'TREND DOWN'), why:'SMA machine has a side; EM use still two-sided' };
     return { t:'RANGE', why:'no side, no whipsaw shape — trade the edges, not the middle' };
   }catch(e){ return { t:'RANGE', why:'' }; }
+}
+// (v14.38, Garma 1a, operator-approved) THE ECONOMIC CALENDAR — ForexFactory's free weekly feed
+// (ff_calendar_thisweek.json: no key, impact-rated, all US macro). One fetch per day, cached in
+// localStorage; USD + High-impact only. FOMC-family events stamp the WHOLE day; everything else
+// is active within ±90 minutes of its release. ⚠ Fetched with plain fetch from page context (the
+// script runs @grant-none BY NECESSITY — the fiber harvest needs page context, so GM_xmlhttpRequest
+// is unavailable). The feed is CDN-served for browser widgets and normally sends CORS; if it ever
+// refuses, the failure is DISCLOSED ("calendar unreachable") and the manual event tag remains the
+// fallback — never a silent "no events". Contingency if CORS breaks permanently: the IF companion
+// (its own userscript) can fetch it and publish via localStorage.
+var EVCAL_KEY='gpts_evcal_v1';
+var EVCAL_URL='https://nfs.faireconomy.media/ff_calendar_thisweek.json';
+var EVCAL_WIN_MIN=90;   // ⚖ hand-set: active window around a non-FOMC release
+var EVCAL_STATE={ tried:false, err:null };
+function evCalLoad(){
+  try{ var o=JSON.parse(localStorage.getItem(EVCAL_KEY)||'null');
+       if(o && o.day===ctTodayStr() && Array.isArray(o.ev)) return o.ev; }catch(e){}
+  return null;
+}
+function evCalFetch(){
+  try{
+    if(EVCAL_STATE.tried) return; EVCAL_STATE.tried=true;
+    if(evCalLoad()) return;                      // today's already cached
+    fetch(EVCAL_URL, {mode:'cors'}).then(function(r){ return r.json(); }).then(function(j){
+      if(!Array.isArray(j)) throw new Error('unexpected shape');
+      var today=ctTodayStr(), ev=[];
+      j.forEach(function(e){
+        try{
+          if(!e || e.country!=='USD' || String(e.impact).toLowerCase()!=='high') return;
+          var t=Date.parse(e.date); if(!isFinite(t)) return;
+          // the feed's ISO date carries its own offset; key by the CT calendar day
+          var d=new Date(t-(5*3600000));         // CT approximation for day-keying only
+          var dayStr=d.toISOString().slice(0,10);
+          if(dayStr!==today) return;
+          ev.push({ t:t, title:String(e.title||'').slice(0,40) });
+        }catch(e2){}
+      });
+      try{ localStorage.setItem(EVCAL_KEY, JSON.stringify({day:today, ev:ev})); }catch(e3){}
+      EVCAL_STATE.err=null;
+    }).catch(function(err){ EVCAL_STATE.err=String(err&&err.message||err); });
+  }catch(e){ EVCAL_STATE.err=String(e&&e.message||e); }
+}
+// the active event RIGHT NOW, per the approved windows (FOMC = whole day; else ±90 min)
+function evCalActive(){
+  try{
+    var ev=evCalLoad(); if(!ev || !ev.length) return null;
+    var now=Date.now(), best=null, i;
+    for(i=0;i<ev.length;i++){
+      var e=ev[i];
+      var fomc=/fomc|fed(?![a-z])|powell|federal funds/i.test(e.title);
+      var active=fomc || Math.abs(now-e.t)<=EVCAL_WIN_MIN*60000;
+      if(!active) continue;
+      if(!best || Math.abs(now-e.t)<Math.abs(now-best.t)) best=e;
+    }
+    if(!best) return null;
+    var dt=new Date(best.t);
+    var hh=dt.getHours(), mm=dt.getMinutes();   // operator-local clock for the read
+    return { title:best.title, at:hh+':'+(mm<10?'0':'')+mm };
+  }catch(e){ return null; }
 }
 // GARMA PHASE 2, item 1 (v14.35): SESSION-STRUCTURE LEVELS — his context layer (10/11 videos).
 // 30-MINUTE IB, per the corpus verbatim ("waits for the IB high and low to be set 30 minutes

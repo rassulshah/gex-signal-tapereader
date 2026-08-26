@@ -93,5 +93,30 @@ ok(/__gptsDebug\.audit = function/.test(src), 'k4 the live audit exists (__gptsD
 ok(/TWO CROWNS in the profile/.test(src), 'k5 ...and checks the exact invariant that was violated');
 ok(/the SPXW side reads the LATCHED crown/.test(src), 'k6 Trinity reads the latched crown — the wording clash is dead');
 
+// ---------- (v14.38) 1a: the economic calendar, executed ----------
+(function(){
+  global.ctTodayStr=()=>'2026-08-26';
+  let LSs={};
+  global.localStorage={ getItem:k=>(k in LSs?LSs[k]:null), setItem:(k,v)=>{LSs[k]=String(v);} };
+  eval(src.match(/var EVCAL_KEY='[^']+'/)[0]+';');
+  eval(src.match(/var EVCAL_WIN_MIN=\d+/)[0]+';');
+  eval(ex('evCalLoad')); eval(ex('evCalActive'));
+  const NOW=Date.now();
+  LSs[EVCAL_KEY]=JSON.stringify({day:'2026-08-26', ev:[
+    {t:NOW-30*60000, title:'CPI m/m'},
+    {t:NOW-5*3600000, title:'FOMC Statement'} ]});
+  let a=evCalActive();
+  ok(a && /CPI/.test(a.title), 'c1 a release 30 min ago is ACTIVE (±90-min window) and nearest wins', a);
+  LSs[EVCAL_KEY]=JSON.stringify({day:'2026-08-26', ev:[{t:NOW-4*3600000, title:'Retail Sales m/m'}]});
+  ok(evCalActive()==null, 'c2 a non-FOMC release 4h old is NOT active — the day reclassifies');
+  LSs[EVCAL_KEY]=JSON.stringify({day:'2026-08-26', ev:[{t:NOW+3*3600000, title:'FOMC Press Conference'}]});
+  a=evCalActive();
+  ok(a && /FOMC/.test(a.title), 'c3 FOMC stamps the WHOLE day, hours before the release', a);
+  LSs[EVCAL_KEY]=JSON.stringify({day:'2026-08-25', ev:[{t:NOW, title:'CPI'}]});
+  ok(evCalActive()==null, 'c4 yesterday\'s cache never speaks for today');
+  ok(/calendar unreachable|EVCAL_STATE\.err/.test(src), 'c5 a failed fetch is DISCLOSED, never a silent no-events');
+  ok(/USD/.test(ex('evCalFetch')) && /high/.test(ex('evCalFetch')), 'c6 USD + High impact only');
+})();
+
 console.log('test_garma_p1: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
