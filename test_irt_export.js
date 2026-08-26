@@ -13,9 +13,9 @@ function v(n){ return src.match(new RegExp('var '+n+'=[\\s\\S]*?;\\n'))[0]; }
 global.window={__gptsDebug:{}};
 eval(v('IRT_HEADER')); eval(v('IRT_LAST'));
 eval(['irtColor'].map(ex).join('\n')); eval(v('IRT_COLORS'));
-eval(v('IRT_RATIO_KEY'));
-eval(['irtRound','irtCsvRow','irtRatio','irtBuildCsv'].map(ex).join('\n'));
-global.ES_RATIO=10.05; global.FEED_STALE_MS=12000;
+eval(v('IRT_RATIO_KEY')); eval(v('IRT_NQRATIO_KEY'));
+eval(['irtRound','irtCsvRow','irtRatio','irtNqRatio','irtBuildCsv'].map(ex).join('\n'));
+global.ES_RATIO=10.05; global.NQ_RATIO=41.36; global.FEED_STALE_MS=12000;
 var LS={}; global.localStorage={ getItem:k=>(k in LS?LS[k]:null), setItem:(k,val)=>{LS[k]=String(val);} };
 global.CFG={ nodeThresh:20, irt:{ on:true, secs:180, futSym:'EPU26', etfSym:'SPY', file:'FlexLevelsExport.csv',
                                   nqOn:true, nqSym:'ENQU26', nqRatio:41.9 } };
@@ -116,6 +116,21 @@ ok(!/QQQ 6%/.test(b.csv), '5f the node threshold floors NQ rows too');
   const Bq=irtBuildCsv(); const k2=Bq.csv.split('\r\n').find(l=>/QQQ KING/.test(l));
   ok(k2 && /^ENQU26,27625\.000000,/.test(k2), '5i the settings ratio drives the NQ price (650×42.5)', k2);
   global.CFG.irt.nqRatio=41.9; }
+// (v14.13) the ratio SELF-MEASURES on an NQ chart — the same chain the ES side runs
+{ global.FUTMODE={ fam:'NQ', r:41.191, live:true };
+  const Bl=irtBuildCsv(); const kL=Bl.csv.split('\r\n').find(l=>/QQQ KING/.test(l));
+  ok(kL && !/ ~/.test(kL.split(',')[2]), '5j on a live NQ chart the labels drop the ~ — the ratio is MEASURED', kL&&kL.split(',')[2]);
+  ok(kL && /^ENQU26,26774\.250000/.test(kL), '5k ...and the measured basis drives the price (650×41.191)', kL);
+  global.FUTMODE={ chart:'SPY', fam:null, r:1, live:true };
+  const Bg=irtBuildCsv(); const kG=Bg.csv.split('\r\n').find(l=>/QQQ KING/.test(l));
+  ok(kG && / ~/.test(kG.split(',')[2]) && /^ENQU26,26774\.250000/.test(kG), '5l off the NQ chart the persisted last-good carries the SAME number, marked ~', kG);
+  LS={}; // clear the persisted store
+  const Bm=irtBuildCsv(); const kM=Bm.csv.split('\r\n').find(l=>/QQQ KING/.test(l));
+  ok(kM && /^ENQU26,27235\.000000,/.test(kM), '5m no measurement anywhere → the settings manual number (650×41.9)', kM);
+  global.CFG.irt.nqRatio=0;
+  const Bc=irtBuildCsv(); const kC=Bc.csv.split('\r\n').find(l=>/QQQ KING/.test(l));
+  ok(kC && /^ENQU26,26884\.000000,/.test(kC), '5n and with no manual either, the NQ_RATIO const (650×41.36)', kC);
+  global.CFG.irt.nqRatio=41.9; global.FUTMODE={ fam:'ES', r:10.0538, live:true }; }
 
 // ---------- 6. everything the operator removed stays ABSENT ----------
 ok(!/NextStop/.test(b.csv), '6a NextStop is gone');

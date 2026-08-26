@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.12
+// @version    14.13
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -596,7 +596,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.12';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.13';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3784,6 +3784,24 @@ function irtRatio(){
   try{ if(typeof ES_RATIO==='number' && ES_RATIO>1) return { r:ES_RATIO, live:false, src:'const' }; }catch(e3){}
   return { r:null, live:false, src:'none' };
 }
+// (v14.13, operator-directed: "do a proper ratio — check the conversion skylit uses and use the
+// same") THE NQ RATIO SELF-MEASURES THE SAME WAY THE ES ONE DOES. The panel's futures machinery
+// already pairs an NQ chart with the QQQ feed (FUT_FAMILY NQ->'NQ', underlying QQQ) and EMAs the
+// live basis futPx/undPx — the SAME conversion Skylit's own overlay uses to place QQQ nodes on an
+// NQ chart. Chain: live FUTMODE (persisted) → last-good ≤14d → the settings' manual number →
+// NQ_RATIO const. '~' marks anything but live — measured live 2026-08-26: r=41.191 on NQ1
+// 29270.25 / QQQ 710.505 (the guessed 41.9 default had the lines ~480 pts off-screen).
+var IRT_NQRATIO_KEY='gpts_irt_nqratio_v1';
+function irtNqRatio(cfgI){
+  try{ if(FUTMODE && FUTMODE.fam==='NQ' && FUTMODE.r>1 && FUTMODE.live){
+    try{ localStorage.setItem(IRT_NQRATIO_KEY, JSON.stringify({r:FUTMODE.r, t:Date.now()})); }catch(e0){}
+    return { r:FUTMODE.r, live:true, src:'live' }; } }catch(e){}
+  try{ var o=JSON.parse(localStorage.getItem(IRT_NQRATIO_KEY)||'null');
+    if(o && o.r>1 && (Date.now()-o.t) < 14*86400000) return { r:o.r, live:false, src:'last-good' }; }catch(e1){}
+  try{ if(cfgI && typeof cfgI.nqRatio==='number' && cfgI.nqRatio>0) return { r:cfgI.nqRatio, live:false, src:'manual' }; }catch(e2){}
+  try{ if(typeof NQ_RATIO==='number' && NQ_RATIO>1) return { r:NQ_RATIO, live:false, src:'const' }; }catch(e3){}
+  return { r:null, live:false, src:'none' };
+}
 function irtBuildCsv(){
   // (v14.12, operator-locked spec 2026-08-26) ONE FILE, ALL MARKETS — FlexLevels routes rows by
   // their SYMBOL column, so ES (EPU26) and NQ (ENQU26) rows share FlexLevelsExport.csv and IRT
@@ -3943,9 +3961,11 @@ function irtBuildCsv(){
   try{
     if(cfgI.nqOn!==false){
       var nqSym=(cfgI.nqSym||'ENQU26').trim();
-      var nqR=(typeof cfgI.nqRatio==='number'&&cfgI.nqRatio>0)?cfgI.nqRatio:41.9;
+      // (v14.13) the ratio SELF-MEASURES on an NQ chart (same chain as ES); manual is a fallback.
+      var RQ=irtNqRatio(cfgI);
+      var nqR=RQ.r; var nqTag=RQ.live?'':' ~';
       var FQ=(typeof LASTFEED!=='undefined')?LASTFEED.QQQ:null;
-      if(nqSym && FQ && FQ.j && FQ.j.levels && FQ.j.levels.length &&
+      if(nqSym && nqR>1 && FQ && FQ.j && FQ.j.levels && FQ.j.levels.length &&
          (Date.now()-(FQ.ts||0))<=FEED_STALE_MS*3){
         var snapQ=FQ.j.levels[FQ.j.levels.length-1]; var rq=(snapQ&&snapQ.l)||[];
         var mxQ=0; rq.forEach(function(r0){ var a=Math.abs(r0.v||0); if(a>mxQ) mxQ=a; });
@@ -3957,7 +3977,7 @@ function irtBuildCsv(){
             var sgQ=(r0.net!=null)?r0.net:0;
             var isKQ=(a===mxQ);
             out.push(irtCsvRow(nqSym, irtRound(r0.k*nqR, 0.25),
-                     (isKQ?'QQQ KING 100%':('QQQ '+p+'%'))+' ~',
+                     (isKQ?'QQQ KING 100%':('QQQ '+p+'%'))+nqTag,
                      (sgQ<0)?IRT_COLORS.accp:IRT_COLORS.brk, isKQ?3:2, 0));
             nqN++;
           });
@@ -6151,7 +6171,7 @@ function cfgHtml(){
     '<span style="font-weight:600;font-size:10px">NQ</span>'+
     '<input type="checkbox" class="gpts-irt-nqon" '+(I.nqOn!==false?'checked':'')+' style="cursor:pointer">'+
     '<label style="font-size:10px;color:'+PAL.sub+'" title="The NQ FUTURES symbol as IRT charts it (CQG symbology, rolls quarterly — e.g. ENQU26 = NQ Sep 2026).">Sym <input type="text" class="gpts-irt-nqsym" value="'+(I.nqSym||'ENQU26')+'" style="width:58px;background:#0f131b;border:1px solid '+PAL.line+';color:'+PAL.ink+';border-radius:3px;font-size:10px;padding:1px 3px"></label>'+
-    '<label style="font-size:10px;color:'+PAL.sub+'" title="QQQ -> NQ multiplier (NQ price / QQQ price). Manual by construction.">Ratio <input type="text" class="gpts-irt-nqr" value="'+((typeof I.nqRatio==='number'&&I.nqRatio>0)?I.nqRatio:41.9)+'" style="width:44px;background:#0f131b;border:1px solid '+PAL.line+';color:'+PAL.ink+';border-radius:3px;font-size:10px;padding:1px 3px"></label></div>';
+    '<label style="font-size:10px;color:'+PAL.sub+'" title="QQQ -> NQ multiplier — FALLBACK ONLY. The panel measures the real basis whenever the Atlas chart is on NQ (same machinery as ES) and remembers it for 14 days; this number is used only when no measured ratio exists. ~ on NQ labels = not measured live.">Ratio <input type="text" class="gpts-irt-nqr" value="'+((typeof I.nqRatio==='number'&&I.nqRatio>0)?I.nqRatio:41.9)+'" style="width:44px;background:#0f131b;border:1px solid '+PAL.line+';color:'+PAL.ink+';border-radius:3px;font-size:10px;padding:1px 3px"></label></div>';
   html+='<div style="padding:0 4px 4px;font-size:9px;color:'+PAL.sub+'">'+
     (IRT_LAST.t?('last: '+(IRT_LAST.err?('<span style="color:'+PAL.shortAccent+'">'+IRT_LAST.err+'</span>'):(IRT_LAST.rows+' levels ('+(IRT_LAST.how||'')+(IRT_LAST.ratio?(', ratio '+IRT_LAST.ratio):'')+') '+new Date(IRT_LAST.t).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})))):'no export yet — pick the folder, set the symbol, toggle on')+'</div>';
   html+='<div style="border-bottom:1px solid '+PAL.line+';margin:2px 0 4px"></div>';

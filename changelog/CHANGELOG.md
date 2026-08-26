@@ -1,3 +1,19 @@
+## v14.13 — the NQ ratio measures itself (operator: "do a proper ratio — use Skylit's conversion")
+
+The guessed 41.9 default had the NQ lines ~480 points off-screen (ENQU26 29,233 ÷ QQQ 709.19 =
+41.22, measured the moment the operator reported no levels). The real fix: the panel's futures
+machinery ALREADY pairs an NQ chart with the QQQ feed (FUT_FAMILY NQ→'NQ', underlying QQQ) and
+EMAs the live basis futPx/undPx — the same conversion Skylit's own overlay uses to place QQQ nodes
+on an NQ chart. Verified live on NQ1: FUTMODE {fam:'NQ', r:41.1911, live:true, futPx:29270.25,
+undPx:710.505}. An NQ chart is a RECOGNIZED pairing — it records into the QQQ book, so the
+chart-flip corruption risk (GLD/USO) does not apply.
+
+**`irtNqRatio()` — the ES chain, mirrored:** live FUTMODE (persisted to gpts_irt_nqratio_v1) →
+last-good ≤14 days → the settings' manual number → NQ_RATIO const. `~` on NQ labels now means
+"not measured live" (it is no longer permanent — visit the NQ chart on Atlas and the ratio
+self-captures, exactly like ES). Settings ratio field re-titled: FALLBACK ONLY. Live store seeded
+with the measured 41.196 so the fix works before the first future NQ visit. +5 asserts (61).
+
 ## v14.12 — the export speaks one grammar, gains NQ, and stops forgetting it was on
 
 Operator-locked spec (2026-08-26): **one label grammar for every line — SOURCE + ROLE + STRENGTH.**
