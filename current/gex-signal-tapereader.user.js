@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.36
+// @version    14.37
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -598,7 +598,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.36';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.37';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -18823,8 +18823,8 @@ function ensureV3Css(){
       'line-height:1.45}'+
     // (v14.23) the SPY King flag — the other book's crown on this rail, unmistakably not a post
     '#gpts-body .g3spyk{position:absolute;top:12px;bottom:20px;width:0;border-left:2px dashed #cdb4fa;z-index:2;opacity:.85;cursor:help}'+
-    '#gpts-body .g3spyk b{position:absolute;top:-9px;left:-2px;background:rgba(205,180,250,.14);border:1px solid #cdb4fa;color:#cdb4fa;border-radius:3px;font-size:6px;font-weight:900;letter-spacing:.04em;padding:0 3px;white-space:nowrap}'+
-    '#gpts-body .g3spyk u{position:absolute;bottom:-10px;left:-2px;transform:translateX(-40%);text-decoration:none;'+
+    '#gpts-body .g3spyk b{position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:rgba(205,180,250,.14);border:1px solid #cdb4fa;color:#cdb4fa;border-radius:3px;font-size:6px;font-weight:900;letter-spacing:.04em;padding:0 3px;white-space:nowrap}'+
+    '#gpts-body .g3spyk u{position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);text-decoration:none;'+
       'color:#cdb4fa;font-size:7px;font-weight:900;letter-spacing:.02em;white-space:nowrap}'+
     '#gpts-body .g3spyk.g3spykY u{color:#efe0a6}'+
     '#gpts-body .g3spyk.g3spykY{border-left-color:#efe0a6}'+
@@ -20189,8 +20189,13 @@ function trinityRead(){
     var out={ n:0, of:0, side:null, dissent:[] };
     var books=[['SPXW','SPXW'],['SPY','SPY'],['QQQ','QQQ']];
     var sides=[];
+    var latchK=null; try{ var lkT=JSON.parse(localStorage.getItem(KING_LATCH_KEY)||'null');
+      if(lkT && lkT.day===ctTodayStr() && typeof lkT.k==='number') latchK=lkT.k; }catch(eLk){}
     books.forEach(function(bk){
       var t=null; try{ t=tapeMap(bk[1]); }catch(e0){}
+      // (v14.37) the SPXW side reads the LATCHED crown — the same king the read's King clause
+      // names — so the two clauses can never appear to disagree during a contest.
+      if(bk[1]==='SPXW' && t && latchK!=null && t.pct && (t.pct[latchK.toFixed(2)]!=null||t.pct[String(latchK)]!=null)) t={ king:latchK, pct:t.pct };
       var px=null;
       try{ if(bk[1]==='SPXW'){ var L=ifLadder('SPY'); var Bq=emBand('SPY');
              px=(Bq&&Bq.ok&&L&&!L.err&&L.dispScale>0)?(Bq.now/L.dispScale):null; }
@@ -20452,7 +20457,12 @@ function gammaProfileHtml(EB, RB, sym, elLab, ehLab){
       if(r.cur!=null && r.cur>0 && hCur<1) hCur=1;
       var pkPct=(r.cur!=null && r.peak>0)?Math.round(100*frac):null;
       var kingPct=(isRail && typeof r.rail.pct==='number')?Math.round(r.rail.pct):null;
-      var isKing=isRail && (r.rail.isKing || r.rail.role==='KING');
+      // (v14.37, operator-caught: TWO crowns in the profile during a contest) ONE SOURCE for the
+      // crown: the LATCHED role. r.rail.isKing carries the tape's momentary 100% row — during a
+      // crown contest that is the CHALLENGER, and crowning both drew two kings where Skylit shows
+      // one. The challenger keeps its honest number and wears the contest mark instead.
+      var isKing=isRail && (r.rail.role==='KING');
+      var isChal=isRail && !isKing && !!r.rail.isKing;
       var isPB=(isRail && pbES!=null && Math.abs(pbES-r.es)<=1.5);
       var st=isRail?stateBadge(r.rail):null;
       var wl=isRail?wallByK[r.k]:null;
@@ -20493,7 +20503,7 @@ function gammaProfileHtml(EB, RB, sym, elLab, ehLab){
       if(isRail && kingPct!=null)
         // (v14.23, operator-directed) THE KING WEARS THE CROWN, not a percentage — its % is 100 by
         // definition, so the label carried no information. Same royal mark as the rail post's cap.
-        h2+='<span class="g3gppct" style="left:'+r.x.toFixed(1)+'%;bottom:'+(hPk+2)+'px;color:'+(isKing?'#e3c341':'#e6edf3')+(isKing?';font-size:9px':'')+'">'+(isKing?'\u265b':(kingPct+'%'))+'</span>';
+        h2+='<span class="g3gppct" style="left:'+r.x.toFixed(1)+'%;bottom:'+(hPk+2)+'px;color:'+(isKing?'#e3c341':(isChal?'#a371f7':'#e6edf3'))+(isKing?';font-size:9px':'')+'">'+(isKing?'\u265b':(kingPct+'%'+(isChal?'\u2694':'')))+'</span>';
     });
     // a wall with no rail bar to live in keeps a floating flag — the only exception, and it is rare
     walls.forEach(function(w){
@@ -22774,6 +22784,31 @@ window.__gptsDebug.ifLadder= function(s){ return ifLadder(s||activeSym()); };
 // nodeChart, pbEntry — and the band shipped without it, so the only way to check it was to count
 // DOM nodes and infer from pixels. It returns the anchor it used, both rails, the percentage, and
 // the two straddles side by side so the dte0-vs-toFri mislabel can never come back unnoticed.
+// (v14.37, operator-directed: "do a better job at testing") THE LIVE AUDIT. The dual-crown bug
+// was an INTERACTION defect — two features correct alone, wrong together, visible only in a live
+// contested state no unit fixture reproduced. This checks face INVARIANTS on the real DOM after
+// every install; violations name themselves. Run: __gptsDebug.audit().
+window.__gptsDebug.audit = function(){
+  var v=[];
+  try{
+    var crowns=document.querySelectorAll('.g3gppct');
+    var kc=0; crowns.forEach?crowns.forEach(function(e){ if(/\u265b/.test(e.textContent)) kc++; }):null;
+    if(kc>1) v.push('TWO CROWNS in the profile ('+kc+') — the latch is being double-sourced');
+    var body=document.getElementById('gpts-body');
+    var txt=body?body.innerText:'';
+    if(/undefined/.test(txt)) v.push('the face prints "undefined" somewhere');
+    if(/NaN/.test(txt)) v.push('the face prints "NaN" somewhere');
+    var tr=document.querySelector('.g3tread');
+    if(!tr) v.push('the read line is missing');
+    else if(!/day/.test(tr.innerText.split('.')[0]||'')) v.push('the read does not open with the day type');
+    var pill=document.querySelector('.g3emn');
+    if(pill && !/\d/.test(pill.innerText)) v.push('the pill carries no number');
+    if(typeof IRT_LAST==='object' && IRT_LAST && IRT_LAST.err) v.push('export error: '+IRT_LAST.err);
+    var spk=document.querySelectorAll('.g3spyk').length;
+    if(spk>1) v.push('multiple SPY K flags ('+spk+')');
+  }catch(e){ v.push('audit threw: '+String(e&&e.message||e)); }
+  return { ok:v.length===0, violations:v };
+};
 window.__gptsDebug.emBand = function(sy){
   var sym=sy||'SPY';
   try{

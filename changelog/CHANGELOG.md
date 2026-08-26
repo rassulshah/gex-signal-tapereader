@@ -1,3 +1,22 @@
+## v14.37 — one crown, a centred flag, and THE LIVE AUDIT (operator: "do a better job at testing")
+
+The dual-crown was an INTERACTION defect — the profile crowned both the LATCHED King (role) and
+the tape's momentary 100% row (isKing), two features each correct alone, wrong together, visible
+only in a live contested crown no unit fixture reproduced. Three responses:
+
+1. **One crown**: ♛ = the latched role only. A challenger that has out-massed the King shows its
+   honest 100% wearing ⚔ (purple) — the contest is visible without premature coronation. Trinity
+   now reads the LATCHED crown on the SPXW side too, killing the clause-vs-clause wording clash.
+2. **THE LIVE AUDIT** (__gptsDebug.audit): face invariants checked on the REAL DOM — exactly one
+   crown, no "undefined"/"NaN" printed, the read present and opening with the day, the pill
+   numeric, no export error, one SPY K flag. Run after every install; violations name themselves.
+   This is the standing answer to the class of bug unit tests cannot see.
+3. **SPY K flag centred** (operator-directed): name above and price below both centre on the
+   dashed line instead of hanging off its left edge into neighbouring labels.
+
+test_garma_p1 +6 (dual-crown regression, challenger mark, audit presence, Trinity-latch). The
+levels strip mockup is APPROVED-PENDING the operator's Phase-1 rediscussion — not yet built.
+
 ## v14.36 — the session ticks actually draw (data-shape fix, operator's check caught it)
 
 v14.35's sessionLevels checked a `day` field the live candles never carry, and looked for
