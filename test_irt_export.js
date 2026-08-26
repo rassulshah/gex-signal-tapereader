@@ -1,4 +1,7 @@
-// (v11.4) IRT FLEXLEVELS EXPORT — CSV format pinned to the user's own FlexLevelsExport.csv sample.
+// (v11.4, rewritten v14.9) IRT FLEXLEVELS EXPORT — format pinned to the user's own sample; CONTENT
+// pinned to the operator's brief: "the ES levels from the SPXW conversion, and the 0dte IF levels.
+// I think that should be all." Everything else (SPY-book roles, derived lanes, our CR/PS/FLIP set,
+// NextStop, PBentry) is asserted ABSENT, so it cannot creep back silently.
 const fs=require('fs'); const src=fs.readFileSync('./v10.js','utf8');
 let pass=0, fail=0; const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+JSON.stringify(g):''));} };
 function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.exec(src);let i=src.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}return src.slice(m.index,e+1);}
@@ -12,104 +15,98 @@ global.ES_RATIO=10.05; global.LASTFEED={SPY:null};
 var LS={}; global.localStorage={ getItem:k=>(k in LS?LS[k]:null), setItem:(k,val)=>{LS[k]=String(val);} };
 global.CFG={ nodeThresh:20, irt:{ on:true, secs:180, futSym:'EPU26', etfSym:'SPY', file:'FlexLevelsExport.csv' } };
 global.FUTMODE={ fam:'ES', r:10.0538, live:true };
-global.nodeMapModel=()=>({ ok:true, levels:[
-  {k:774, pct:100, isKing:true, pos:true},
-  {k:771.5, pct:44, isGatekeeper:true, pos:true},
-  {k:775, pct:59, isCeil:true, pos:true},
-  {k:770.5, pct:71, isFlr:true, pos:true},
-  {k:777, pct:31, isStrongMag:true, pos:false},
-  {k:768.5, pct:100, isCeil:true, pos:true, derived:true, src:'SPXW'},   // a derived lane at ITS OWN 100%
-  {k:780, pct:12, pos:true},                       // below thresh, no role → dropped
-]});
-global.nextStopPick=()=>({ok:true, level:776, grade:'C'});
-global.pbEntryPick=()=>({ok:true, level:771.5, grade:'B', state:'acm'});
+global.SUCC_CHART_PCT=60; (function(){ const m=src.match(/var SUCC_CHART_PCT\s*=\s*(\d+)/); if(m) global.SUCC_CHART_PCT=+m[1]; })();
 
+// ---- the two remaining sources, stubbed ----
+let IF_WHICH=null;
+global.ifChainRows=(sym,which)=>{ IF_WHICH=which;
+  return { rows:[{id:'CR',k:772},{id:'PS',k:768},{id:'Mag',k:770},{id:'MP',k:769}] }; };
+global.emBand=()=>({ ok:true, now:7690 });
+global.ifLadder=()=>({ dispScale:1.0023 });
+const PILES=[
+  {k:7710, pct:100, role:'KING', accel:false, disp:7727.73},
+  {k:7700, pct:79,  role:'GK',   accel:true,  disp:7717.71},
+  {k:7650, pct:41,  role:null,   accel:false, disp:7667.59},
+];
+global.emPiles=function(){ return PILES; };
+global.emPiles.lastSrc='skylit';
+global.tapeMap=()=>({ king:7710, pct:{ '7710':100, '7630':85, '7650':41 } });
+
+// ---------- 1. format machinery ----------
 const b=irtBuildCsv();
 ok(!!b, '0 builds');
 const lines=b.csv.trim().split('\r\n');
 ok(lines[0]==='SYMBOL,PRICE,LABEL,PENCOLOR,PENWIDTH,PENSTYLE,bDRAWTEXT,bDRAWPRICE,LABELPOS,bCUSTPOS,CUSTPOSALLMARGIN,CUSTPOSLEFTRIGHT,CUSTPOSUNITS,CUSTPOSWIDTH,bBANDS,BANDPENCOLOR,BANDPENWIDTH,BANDPENSTYLE,BANDABOVEBEL,BANDUNITS,BANDPRICE,bBANDS2,BAND2PENCOLOR,BAND2ABOVEBEL,BAND2UNITS,BAND2PRICE,bBANDLABELS,bTRANSLUCENT', '1a header verbatim from the sample');
-ok(b.n===8 && lines.length===1+8*2, '1b 8 levels (King, GK, Ceil, Flr, −γ Mag, SPXW lane, NextStop, PBentry; 12% node dropped) × 2 symbols', [b.n,lines.length]);
+ok(IF_WHICH==='dte0', '1b the IF window is 0DTE — never to-Friday (operator-directed)', IF_WHICH);
+// rows: 4 IF + 3 rail nodes + 1 successor = 8, on both configured symbols
+ok(b.n===8 && lines.length===1+8*2, '1c 8 levels (IF CR/PS/Mag/MP + KING/GK/BRK + SUCC) × 2 symbols', [b.n,lines.length]);
 const eRows=lines.filter(l=>l.startsWith('EPU26,')); const sRows=lines.filter(l=>l.startsWith('SPY,'));
-ok(eRows.length===8 && sRows.length===8, '1c both symbols written', [eRows.length,sRows.length]);
-const king=eRows.find(l=>/K 100%/.test(l));
-ok(king && /^EPU26,7781\.750000,/.test(king), '1d King 774 × 10.0538 = 7781.66 → rounded to the 0.25 tick = 7781.75, six decimals', king);
-const kingSpy=sRows.find(l=>/K 100%/.test(l));
-ok(kingSpy && /^SPY,774\.000000,/.test(kingSpy), '1e SPY rows at raw strike');
-ok(king.split(',').length===28, '1f exactly 28 columns like the sample', king.split(',').length);
-const neg=eRows.find(l=>/Mag 31% -g/.test(l));
-ok(neg && neg.split(',')[3]===String((247<<16)+(113<<8)+163), '1g −γ magnet carries the purple COLORREF (BGR)', neg&&neg.split(',')[3]);
-ok(/NextStop C/.test(b.csv) && /PBentry B acm/.test(b.csv), '1h the two forward calls ride along, dashed (style 2)');
-const nsRow=eRows.find(l=>/NextStop/.test(l)); ok(nsRow.split(',')[5]==='2', '1i dashed pen style on NextStop');
-// live=false → approx tag
+ok(eRows.length===8 && sRows.length===8, '1d both symbols written', [eRows.length,sRows.length]);
+ok(eRows.every(l=>l.split(',').length===28), '1e every row keeps exactly 28 columns');
+
+// ---------- 2. the rail nodes: labels, prices, colours ----------
+const king=eRows.find(l=>/KING 100%/.test(l));
+ok(!!king, '2a the King exports as NODETYPE + %King — no strike text');
+ok(king && /^EPU26,7727\.750000,/.test(king), '2b SPX 7710 lands at ES 7727.75 — the RAIL\'s price on the 0.25 tick', king);
+ok(king && king.split(',')[4]==='3', '2c the King is drawn heaviest');
+const gk=eRows.find(l=>/GK 79%/.test(l));
+ok(gk && gk.split(',')[3]===String((247<<16)+(113<<8)+163), '2d a -gamma GK wears the accelerator purple (COLORREF)', gk&&gk.split(',')[3]);
+const brk=eRows.find(l=>/BRK 41%/.test(l));
+ok(brk && brk.split(',')[3]===String((65<<16)+(195<<8)+227), '2e a +gamma node wears the brake yellow', brk&&brk.split(',')[3]);
+const succ=eRows.find(l=>/SUCC 85%/.test(l));
+ok(!!succ, '2f the successor (>=60% of King) rides along — the rail\'s crown-roll warning');
+ok(succ && /^EPU26,7647\.500000,/.test(succ), '2g ...at its converted tick price', succ);
+
+// ---------- 3. the IF 0DTE levels ----------
+ok(/IF CR/.test(b.csv) && /IF PS/.test(b.csv) && /IF Mag/.test(b.csv) && /IF MP/.test(b.csv),
+   '3a all four IF 0DTE levels reach the file, tagged IF, never bare');
+const ifcr=eRows.find(l=>/IF CR/.test(l));
+ok(ifcr && /^EPU26,7761\.500000,/.test(ifcr), '3b IF CR 772 × 10.0538 = 7761.53 → 7761.50 on the tick', ifcr);
+
+// ---------- 4. everything the operator removed stays ABSENT ----------
+ok(!/NextStop/.test(b.csv), '4a NextStop is gone');
+ok(!/PBentry/.test(b.csv), '4b PBentry is gone');
+ok(!/FLIP/.test(b.csv), '4c our FLIP set is gone');
+ok(!/,K 100%/.test(b.csv) && !/,Mag \d+%/.test(b.csv), '4d the SPY-book role rows are gone', null);
+ok(!/SPXW \d+%/.test(b.csv), '4e the derived lanes are gone');
+
+// ---------- 5. one source down never kills the other ----------
+{ global.ifChainRows=()=>null;
+  const B=irtBuildCsv();
+  ok(!!B && /KING 100%/.test(B.csv) && !/IF /.test(B.csv), '5a no companion → rail levels still export, none of theirs');
+  global.ifChainRows=(s2,w2)=>({ rows:[{id:'CR',k:772},{id:'PS',k:768}] }); }
+{ global.emPiles.lastSrc='if-fallback';
+  const B=irtBuildCsv();
+  ok(!!B && /IF CR/.test(B.csv) && !/KING/.test(B.csv), '5b no SKYLIT tape → the IF levels still export alone');
+  global.emPiles.lastSrc='skylit'; }
+{ global.ifChainRows=()=>null; global.emPiles.lastSrc='if-fallback';
+  ok(irtBuildCsv()==null, '5c both sources down → nothing is written, never an empty confident file');
+  global.ifChainRows=(s2,w2)=>({ rows:[{id:'CR',k:772},{id:'PS',k:768},{id:'Mag',k:770},{id:'MP',k:769}] });
+  global.emPiles.lastSrc='skylit'; }
+
+// ---------- 6. ratio machinery (unchanged contract) ----------
 global.FUTMODE={ fam:'ES', r:10.0538, live:false };
-const b2=irtBuildCsv();
-ok(/K 100% ~/.test(b2.csv.split('\r\n').filter(l=>l.startsWith('EPU26'))[0]||'') || /~/.test(b2.csv), '2a last-known ratio marks futures labels with ~');
-// no symbols configured → null
+ok(/ ~/.test(irtBuildCsv().csv), '6a last-known ratio marks labels with ~');
 global.CFG.irt.futSym=''; global.CFG.irt.etfSym='';
-ok(irtBuildCsv()==null, '2b no symbols set → nothing written (never a wrong-symbol file)');
-// label sanitation: commas can never break the CSV
-global.CFG.irt.etfSym='SPY';
-global.nextStopPick=()=>({ok:true, level:776, grade:'C,evil'});
-const b3=irtBuildCsv();
-ok(b3.csv.split('\r\n').every(l=>l==='' || l.split(',').length===28 || l===lines[0]), '2c commas in labels are stripped — every row keeps 28 columns');
-// ---- 3. (v11.4.1) the ratio must not depend on what is charted
+ok(irtBuildCsv()==null, '6b no symbols set → nothing written (never a wrong-symbol file)');
 global.CFG.irt.futSym='EPU26'; global.CFG.irt.etfSym='';
 global.FUTMODE={ fam:'ES', r:10.0538, live:true };
-irtBuildCsv();                                              // charting ES: persists the live ratio
-global.FUTMODE={ chart:'SPY', fam:null, r:1, live:true };   // user switches back to the SPY cash chart
+irtBuildCsv();                                              // persists the live ratio
+global.FUTMODE={ chart:'SPY', fam:null, r:1, live:true };   // back on the cash chart
 const b4=irtBuildCsv();
-ok(!!b4 && b4.ratio.src==='last-good' && Math.abs(b4.ratio.r-10.0538)<0.001, '3a on a CASH chart the export still writes, using the persisted ES ratio', b4&&b4.ratio);
-ok(/^EPU26,7781\.750000,/.test(b4.csv.split('\r\n')[1]), '3b ...same converted price as when ES was charted');
-ok(/ ~/.test(b4.csv), '3c ...marked ~ because the ratio is not live');
-LS={};                                                       // nothing persisted
+ok(!!b4 && b4.ratio.src==='last-good' && Math.abs(b4.ratio.r-10.0538)<0.001, '6c on a CASH chart the export still writes, using the persisted ES ratio', b4&&b4.ratio);
+ok(/ ~/.test(b4.csv), '6d ...marked ~ because the ratio is not live');
+LS={};
 global.LASTFEED={ SPY:{ j:{ derived:[{source:'SPXW', ratio:0.09974500868055555}] } } };
 const b5=irtBuildCsv();
-ok(b5 && b5.ratio.src==='spxw-derived' && Math.abs(b5.ratio.r-10.0256)<0.01, '3d no persisted ratio → the feed’s own SPXW→SPY ratio is used', b5&&b5.ratio);
+ok(b5 && b5.ratio.src==='spxw-derived' && Math.abs(b5.ratio.r-10.0256)<0.01, '6e no persisted ratio → the feed\'s own SPXW→SPY ratio', b5&&b5.ratio);
 global.LASTFEED={SPY:null};
 const b6=irtBuildCsv();
-ok(b6 && b6.ratio.src==='const' && b6.ratio.r===10.05, '3e last resort: the ES constant', b6&&b6.ratio);
-// ---- 4. (v11.4.3) an SPXW-derived lane never wears a SPY role word or the King's weight
-global.CFG.irt.futSym='EPU26'; global.CFG.irt.etfSym='SPY'; global.FUTMODE={ fam:'ES', r:10.0538, live:true };
+ok(b6 && b6.ratio.src==='const' && b6.ratio.r===10.05, '6f last resort: the ES constant', b6&&b6.ratio);
+// comma sanitation still holds on the surviving label paths
+global.FUTMODE={ fam:'ES', r:10.0538, live:true };
 const b7=irtBuildCsv();
-const dRow=b7.csv.split('\r\n').filter(l=>l.startsWith('SPY,')&&/768\.500000/.test(l))[0];
-ok(!!dRow && /SPXW 100%/.test(dRow), '4a the derived lane is labelled "SPXW 100%" — not "Ceil 100%" beside the real King', dRow&&dRow.split(',')[2]);
-ok(dRow.split(',')[4]==='1' && dRow.split(',')[5]==='1', '4b ...thin and dotted, so it cannot be mistaken for a SPY wall', dRow&&[dRow.split(',')[4],dRow.split(',')[5]]);
-ok(dRow.split(',')[3]===String((130<<16)+(110<<8)+90), '4c ...in its own slate colour');
-ok(/K 100%/.test(b7.csv) && b7.csv.split('\r\n').filter(l=>/,K 100%/.test(l)).length===2, '4d exactly one real King per symbol');
-// (v11.26) the gamma level set and their chain lane both reach the chart now
-global.lvlUnified=()=>({ px:762.5, rows:[{id:'CR',k:765},{id:'FLIP',k:766},{id:'PS·Mag',k:760},{id:'PS0',k:762,tag:'0DTE'}] });
-global.ifChainRows=()=>({ rows:[{id:'CR',k:775},{id:'Mag',k:760},{id:'PS',k:760},{id:'MP',k:758}] });
+ok(b7.csv.split('\r\n').every(l=>l==='' || l.split(',').length===28), '6g every emitted row keeps 28 columns');
 
-// ---------- (v11.26) THE LEVELS REACH INVESTOR/RT ----------
-// The user's brief: the chart must carry the same reads as the card. Both lanes export, and every one of
-// THEIR lines is tagged IF so nothing on the chart is ambiguous about which measurement drew it.
-{
-  const B=irtBuildCsv();
-  const csv=B&&B.csv||'';
-  ok(/CR/.test(csv), '5a our CR reaches the file');
-  ok(/FLIP/.test(csv), '5b our FLIP reaches the file');
-  ok(/PS0/.test(csv), '5c and the 0DTE variant');
-  ok(/PS.Mag/.test(csv), '5d including a merged label');
-  ok(/IF CR/.test(csv), '5e THEIR call wall, tagged IF');
-  ok(/IF MP/.test(csv), '5f and Max Pain — impossible from the Skylit feed, free from their chain');
-  ok(/IF PS/.test(csv), '5g and their put support');
-  const lines=csv.split('\r\n').filter(Boolean);
-  ok(lines.filter(l=>/IF /.test(l)).length>=4, '5h every one of their levels is tagged, never bare');
-}
-{
-  global.ifChainRows=()=>null;
-  const B=irtBuildCsv();
-  ok(B!==null, '5i no companion installed → the export still builds');
-  ok(!/IF /.test(B.csv), '5j and carries none of their lines');
-  ok(/FLIP/.test(B.csv), '5k while ours are unaffected');
-  global.ifChainRows=()=>({ rows:[{id:'CR',k:775},{id:'Mag',k:760},{id:'PS',k:760},{id:'MP',k:758}] });
-}
-{
-  global.lvlUnified=()=>null;
-  const B=irtBuildCsv();
-  ok(B!==null, '5l no level set → the export still builds rather than throwing');
-  ok(/IF CR/.test(B.csv), '5m their lane survives independently');
-  global.lvlUnified=()=>({ px:762.5, rows:[{id:'CR',k:765},{id:'FLIP',k:766},{id:'PS·Mag',k:760},{id:'PS0',k:762,tag:'0DTE'}] });
-}
 console.log('test_irt_export: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

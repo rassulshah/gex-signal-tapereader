@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.7
+// @version    14.9
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -564,7 +564,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.7';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.9';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3718,7 +3718,10 @@ var IRT_COLORS={
   neg:   irtColor(163,113,247),  // purple (−γ personality)
   ns:    irtColor(74,144,217),   // blue — Next Stop
   pb:    irtColor(255,128,0),    // orange — PB Entry (matches the sample's 33023)
-  deriv: irtColor(90,110,130)    // slate — SPXW-derived lane (its own book's scale, dotted)
+  deriv: irtColor(90,110,130),   // slate — SPXW-derived lane (its own book's scale, dotted)
+  // (v14.8, operator-directed) node lines wear the PANEL'S polarity colours on the chart too
+  brk:   irtColor(227,195,65),   // yellow — +gamma brake (the rail's own hex)
+  accp:  irtColor(163,113,247)   // purple — -gamma accelerator
 };
 function irtRound(v, tick){ if(!tick) return +v.toFixed(2); return +(Math.round(v/tick)*tick).toFixed(2); }
 function irtCsvRow(sym, price, label, color, width, style){
@@ -3744,10 +3747,12 @@ function irtRatio(){
   return { r:null, live:false, src:'none' };
 }
 function irtBuildCsv(){
+  // (v14.9, operator-directed) THE EXPORT IS EXACTLY WHAT THE RAIL SHOWS, PLUS IF's 0DTE WALLS.
+  // Gone: the SPY-book roles, the derived lanes, our CR/PS/FLIP set, the to-Friday IF rows,
+  // NextStop and PBentry — "the ES levels from the SPXW conversion, and the 0dte IF levels.
+  // I think that should be all." The nodeMap gate went with its rows: the rail is the gate now.
   var sym='SPY';
   var out=[IRT_HEADER];
-  var m=null; try{ m=nodeMapModel(sym); }catch(e){}
-  if(!m||!m.ok) return null;
   var cfgI=CFG.irt||{};
   // conversion: SPY strike -> the IRT symbol's price
   var futSym=(cfgI.futSym||'').trim();
@@ -3758,42 +3763,11 @@ function irtBuildCsv(){
   if(etfSym) targets.push({sym:etfSym, mul:1, tick:0, tag:''});
   if(!targets.length) return null;
   var rows=[];
-  var thr=(CFG.nodeThresh!=null)?CFG.nodeThresh:20;
-  (m.levels||[]).forEach(function(L){
-    if(L.k==null || L.pct==null) return;
-    var role=L.isKing?'king':(L.isGatekeeper?'gate':(L.isCeil?'ceil':(L.isFlr?'flr':((L.isStrongMag||Math.abs(L.pct)>=thr)?'mag':null))));
-    if(!role) return;
-    var neg=(L.pos===false);
-    // (v11.4.3 FIX, live 2026-08-20) SPXW-DERIVED LANES ARE NOT ON THE SPY SCALE. v10.58 normalises each
-    // derived book to its OWN King, so a lane can read 100% while the real SPY King also reads 100% — the
-    // first export drew "Ceil 100%" beside "K 100%" and they meant different things. A derived lane never
-    // wears a SPY role word: it is labelled SPXW with its own %, in its own colour, thin.
-    if(L.derived){
-      if(Math.abs(L.pct)<thr) return;
-      rows.push({ k:L.k, lbl:(L.src||'SPXW')+' '+Math.abs(L.pct)+'%'+(neg?' -g':''), col:IRT_COLORS.deriv, w:1, style:1 });
-      return;
-    }
-    var col=neg&&role==='mag'?IRT_COLORS.neg:IRT_COLORS[role];
-    var w=L.isKing?3:(L.isGatekeeper||L.isCeil||L.isFlr?2:1);
-    var lbl=(L.isKing?'K':(L.isGatekeeper?'GK':(L.isCeil?'Ceil':(L.isFlr?'Flr':'Mag'))))+' '+Math.abs(L.pct)+'%'+(neg?' -g':'');
-    rows.push({k:L.k,lbl:lbl,col:col,w:w,style:0});
-  });
-  try{ var ns=nextStopPick(sym); if(ns&&ns.ok&&ns.level!=null) rows.push({k:ns.level,lbl:'NextStop '+ns.grade,col:IRT_COLORS.ns,w:2,style:2}); }catch(e){}
-  try{ var pe=pbEntryPick(sym); if(pe&&pe.ok&&pe.level!=null) rows.push({k:pe.level,lbl:'PBentry '+pe.grade+(pe.state?(' '+pe.state):''),col:IRT_COLORS.pb,w:2,style:2}); }catch(e){}
-  // (v11.25) OUR gamma level set — CR/CR0/PS/PS0/FLIP/Mag — so the chart carries the same reads as the card.
+  // (v14.9) THEIR chain levels — the 0DTE window (operator-directed), tagged IF so nothing on the
+  // chart is ambiguous about where a line came from. A side the companion suppressed (their page
+  // prints N/A) stays absent here too.
   try{
-    var U=lvlUnified(sym);
-    if(U && U.rows){
-      U.rows.forEach(function(r){
-        var isZ=!!r.tag, first=r.id.split('·')[0];
-        var colr=(first.indexOf('CR')===0)?IRT_COLORS.ceil:((first.indexOf('PS')===0)?IRT_COLORS.flr:((first==='FLIP')?IRT_COLORS.gate:IRT_COLORS.king));
-        rows.push({ k:r.k, lbl:r.id, col:colr, w:(isZ?1:2), style:(isZ?1:0) });
-      });
-    }
-  }catch(eLv){}
-  // (v11.25) THEIR chain levels, tagged IF so nothing on the chart is ambiguous about where a line came from.
-  try{
-    var CHi=ifChainRows(sym,'toFri');
+    var CHi=ifChainRows(sym,'dte0');
     if(CHi && CHi.rows){
       CHi.rows.forEach(function(r){
         var colr2=(r.id==='CR')?IRT_COLORS.ceil:((r.id==='PS')?IRT_COLORS.flr:IRT_COLORS.deriv);
@@ -3822,13 +3796,13 @@ function irtBuildCsv(){
       var toSpy=function(spxK){ return (spxK*Lx.dispScale)/R.r; };
       var ps=[]; try{ ps=emPiles(Br, sym)||[]; }catch(eP2){}
       if(emPiles.lastSrc==='skylit'){
+        // (v14.8, operator-directed) NO STRIKE IN THE LABEL — IRT already prints the price on the
+        // line, so "SPX 7680 BRK 43%" said the number twice. Label = NODETYPE + %King only, and the
+        // line wears the panel's polarity colour: yellow brake, purple accelerator.
         ps.forEach(function(P){
           var role=P.role||(P.accel?'ACC':'BRK');
-          var col=(P.role==='KING')?IRT_COLORS.king
-                 :(P.role==='GK')?IRT_COLORS.gate
-                 :(P.role==='RUG'||P.role==='RRUG')?IRT_COLORS.ceil
-                 :(P.accel?IRT_COLORS.neg:IRT_COLORS.flr);
-          rows.push({ k:toSpy(P.k), lbl:'SPX '+P.k+' '+role+' '+P.pct+'%',
+          var col=P.accel?IRT_COLORS.accp:IRT_COLORS.brk;
+          rows.push({ k:toSpy(P.k), lbl:role+' '+P.pct+'%',
                       col:col, w:(P.role==='KING'?3:2), style:0 });
         });
         // SUCCESSION — the strongest non-King strike. The project's own backtest calls this the #1
@@ -3844,7 +3818,7 @@ function irtBuildCsv(){
             var suc=null;
             for(var z=0;z<arr.length;z++){ if(Math.abs(arr[z].k-tp2.king)>0.01){ suc=arr[z]; break; } }
             if(suc && suc.a>=SUCC_CHART_PCT){
-              rows.push({ k:toSpy(suc.k), lbl:'SPX SUCC '+suc.k+' '+Math.round(suc.a)+'%',
+              rows.push({ k:toSpy(suc.k), lbl:'SUCC '+Math.round(suc.a)+'%',
                           col:IRT_COLORS.pb, w:2, style:2 });
             }
           }

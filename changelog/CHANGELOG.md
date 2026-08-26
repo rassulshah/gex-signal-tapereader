@@ -1,3 +1,27 @@
+## v14.9 — the FlexLevels file carries the rail, the 0DTE walls, and nothing else
+
+Operator-directed, verbatim: "I need the ES levels which you get from the conversion from SPXW
+which is what is displayed on the rail and atlas. I want the 0dte IF levels as well. I think that
+should be all." So the export is now EXACTLY that: the rail's SPXW→ES nodes (KING/GK/BRK/ACC with
+%King, polarity colours, King triple-weight, SUCC riding along — it is part of what the rail
+displays) and InsiderFinance's 0DTE window (IF CR / IF PS / IF Mag / IF MP — switched from
+to-Friday; a companion-suppressed side stays absent). REMOVED: the SPY-book role rows, the derived
+lanes, our CR/CR0/PS/PS0/FLIP set, NextStop and PBentry. The nodeMap gate went with its rows — the
+rail is the gate now, and one source down never kills the other (either exports alone; both down
+writes nothing). test_irt_export was rewritten around the new contract, including ABSENCE asserts
+so removed groups cannot creep back silently.
+
+## v14.8 — FlexLevels lines say what they are, in the panel's colours
+
+Operator-directed, from the first live IRT chart carrying the export: the labels repeated the price
+("7680.00 | SPX 7680 BRK 43%") because IRT already prints the level on the line. Labels are now
+NODETYPE + %King only — "KING 100% ~", "BRK 43% ~", "ACC 21%" — with the ~ ratio-honesty tag intact,
+and node lines wear the PANEL'S polarity colours on the chart too: yellow = +gamma brake, purple =
+-gamma accelerator (the rail's own hexes, in COLORREF). SUCC drops its strike the same way. King
+keeps width 3 so it reads at a glance. IF/NextStop/PBentry rows unchanged — different objects,
+different colours, still unambiguous about their book. The multi-market settings page (mockup
+approved-pending) remains queued as the next build.
+
 ## v14.7 — ATTRACT: the fourth behaviour, drawn and measured
 
 The operator closed the loop on the node lifecycle: **attract → in play → deflect | break**. Attract

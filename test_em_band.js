@@ -1512,7 +1512,7 @@ eval(ex('emBand'));
   function irtFixture(r, opt){
     opt = opt || {};
     var IRT_HEADER='HDR';
-    var IRT_COLORS={king:1,gate:2,ceil:3,flr:4,neg:5,deriv:6,ns:7,pb:8,mag:9};
+    var IRT_COLORS={king:1,gate:2,ceil:3,flr:4,neg:5,deriv:6,ns:7,pb:8,mag:9,brk:10,accp:11};
     var SUCC_CHART_PCT=60; eval(ex_var('SUCC_CHART_PCT'));
     var CFG={ irt:{futSym:'EPU26', etfSym:''}, nodeThresh:20 };
     var nodeMapModel=function(){ return {ok:true, levels:[]}; };   // isolate: no SPY rows
@@ -1545,15 +1545,15 @@ eval(ex('emBand'));
 
   // --- the nodes arrive at all, labelled with their SPX strike and role -------------------------
   ok(F.rows.length===4,                    'the three rail nodes and the successor all reach the chart', F.rows.length);
-  ok(!!L['SPX 7710 KING 100%'],            'the King is labelled with its SPX strike, role and %King');
-  ok(!!L['SPX 7700 GK 79%'],               'so is the gatekeeper');
-  ok(!!L['SPX 7650 BRK 41%'],              'and a node with no role falls back to its polarity');
+  ok(!!L['KING 100%'],            'the King is labelled NODETYPE + %King (v14.8: no strike text — IRT prints the price)');
+  ok(!!L['GK 79%'],               'so is the gatekeeper');
+  ok(!!L['BRK 41%'],              'and a node with no role falls back to its polarity');
 
   // --- THE PRICES. This is the part fourteen greps could not see. ------------------------------
   // The rail shows SPX 7710 at 7727.73. The chart must land on the SAME price, snapped to the tick.
-  ok(L['SPX 7710 KING 100%'].price===7727.75, 'SPX 7710 lands at ES 7727.75 — the rail\'s 7727.73 on the 0.25 tick', L['SPX 7710 KING 100%'].price);
-  ok(L['SPX 7700 GK 79%'].price===7717.75,    'SPX 7700 lands at ES 7717.75 (rail 7717.71)', L['SPX 7700 GK 79%'].price);
-  ok(L['SPX 7650 BRK 41%'].price===7667.50,   'SPX 7650 lands at ES 7667.50 (rail 7667.59)', L['SPX 7650 BRK 41%'].price);
+  ok(L['KING 100%'].price===7727.75, 'SPX 7710 lands at ES 7727.75 — the rail\'s 7727.73 on the 0.25 tick', L['KING 100%'].price);
+  ok(L['GK 79%'].price===7717.75,    'SPX 7700 lands at ES 7717.75 (rail 7717.71)', L['GK 79%'].price);
+  ok(L['BRK 41%'].price===7667.50,   'SPX 7650 lands at ES 7667.50 (rail 7667.59)', L['BRK 41%'].price);
   F.rows.forEach(function(x){
     ok(Math.abs(x.price/0.25 - Math.round(x.price/0.25)) < 1e-9,
        'every emitted price is a tradeable ES price: '+x.lbl+' = '+x.price, x.price);
@@ -1567,25 +1567,25 @@ eval(ex('emBand'));
   ok(JSON.stringify(F.rows.map(x=>x.lbl+'='+x.price))===JSON.stringify(F2.rows.map(x=>x.lbl+'='+x.price)),
      'the emitted prices do NOT move when the futures ratio moves — R.r cancels, which is the whole point of routing through dispScale',
      F2.rows.map(x=>x.lbl+'='+x.price));
-  ok(L['SPX 7710 KING 100%'].price === Math.round(7710*1.0023/0.25)*0.25,
+  ok(L['KING 100%'].price === Math.round(7710*1.0023/0.25)*0.25,
      'and the price is exactly irtRound(spxStrike x dispScale, 0.25), independent of the ratio');
   // the undScale route, computed here, is the number this must NOT be at a drifted ratio
   ok(Math.round((7710*0.099773)*10.6/0.25)*0.25 !== 7727.75,
      'the undScale route gives a DIFFERENT price once the ratio drifts — so the choice is load-bearing, not cosmetic');
 
   // --- display rounding and chart rounding are different jobs ----------------------------------
-  ok(L['SPX 7710 KING 100%'].price !== Math.round(L['SPX 7710 KING 100%'].price),
+  ok(L['KING 100%'].price !== Math.round(L['KING 100%'].price),
      'the chart price is NOT the whole point the FRAME row shows — .75 survives to the chart');
   const f=ex('secFrame'), bsrc=ex('irtBuildCsv');
   ok(/frameNum/.test(f) && !/frameNum/.test(bsrc),
      'the FRAME row rounds to whole points; the chart does not borrow that rounding');
 
   // --- succession, gated and honest ------------------------------------------------------------
-  ok(!!L['SPX SUCC 7630 85%'],             'a successor above the threshold is drawn');
-  ok(L['SPX SUCC 7630 85%'].price===7647.50,'on the same scale as everything else', L['SPX SUCC 7630 85%'].price);
-  ok(L['SPX SUCC 7630 85%'].style==='2',   'and dashed, so it never reads as a live level');
+  ok(!!L['SUCC 85%'],             'a successor above the threshold is drawn');
+  ok(L['SUCC 85%'].price===7647.50,'on the same scale as everything else', L['SUCC 85%'].price);
+  ok(L['SUCC 85%'].style==='2',   'and dashed, so it never reads as a live level');
   const Fw=irtFixture(10.0458, {tape:{pct:{7710:-100, 7630:-55}, king:7710}});
-  ok(!Fw.byLabel['SPX SUCC 7630 55%'],     'a successor BELOW the threshold is not drawn', Object.keys(Fw.byLabel));
+  ok(!Fw.byLabel['SUCC 55%'],     'a successor BELOW the threshold is not drawn', Object.keys(Fw.byLabel));
   ok(/var SUCC_CHART_PCT = 60;/.test(src), 'the threshold is the 60% the doctrine uses');
   ok(/⚖ HAND-SET/.test(src.slice(src.indexOf('var SUCC_CHART_PCT')-320, src.indexOf('var SUCC_CHART_PCT'))),
      'flagged hand-set');
@@ -1601,10 +1601,14 @@ eval(ex('emBand'));
   ok(Fnone.rows.length===0,               'and no book at all exports nothing rather than an empty confident chart');
 
   // --- colours carry the role ------------------------------------------------------------------
-  ok(L['SPX 7710 KING 100%'].col==='1',   'the King gets the King colour');
-  ok(L['SPX 7700 GK 79%'].col==='2',      'the gatekeeper gets the gate colour');
-  ok(L['SPX 7650 BRK 41%'].col==='4',     'and a positive-gamma brake gets the floor colour, not the accelerator colour');
-  ok(L['SPX 7710 KING 100%'].w==='3',     'the King is drawn heaviest');
+  // (v14.8, operator-directed) node lines wear the PANEL'S polarity colours on the chart:
+  // yellow (+gamma brake) / purple (-gamma accelerator). Role now lives in the LABEL and the width.
+  // the stub's King and GK are accel:true (-gamma), the 7650 node accel:false (+gamma) — so the
+  // polarity colours must land purple, purple, yellow. Colour follows the GAMMA, not the role.
+  ok(L['KING 100%'].col==='11',  'a -gamma King wears the accelerator purple');
+  ok(L['GK 79%'].col==='11',     'so does a -gamma gatekeeper');
+  ok(L['BRK 41%'].col==='10',    'and a +gamma node wears the brake yellow');
+  ok(L['KING 100%'].w==='3',     'the King is drawn heaviest');
 }
 
 
