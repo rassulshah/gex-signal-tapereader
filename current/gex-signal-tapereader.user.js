@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.22
+// @version    14.25
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -152,6 +152,7 @@ var CFG = {
   // there is NO NQ price anywhere in Skylit so it can never self-measure — manual, '~' forever.
   irt: { on:false, secs:180, futSym:'EPU26', etfSym:'', file:'FlexLevelsExport.csv',
          nqOn:true, nqSym:'ENQU26', nqRatio:41.9 },
+  spyFlag: true,   // (v14.23) the SPY King flag on the rail — operator standing requirement
   // --- Display (#5) ---
   compact: false,          // compact node cells (single line) vs expanded
   stripLen: 8,             // growth-strip points (3m closes) shown, 4..12
@@ -208,6 +209,7 @@ function loadCfg(){
       // to OFF on EVERY page reload since the v8 config rewrite, and the operator's export just
       // stopped until someone noticed (caught live 2026-08-26, the night v14.11 went in). Every
       // persisted field must be listed here; a field not merged is a field that resets.
+      if(typeof o.spyFlag==='boolean') CFG.spyFlag=o.spyFlag;
       if(o && o.irt && typeof o.irt==='object'){
         CFG.irt=CFG.irt||{};
         if(typeof o.irt.on==='boolean') CFG.irt.on=o.irt.on;
@@ -596,7 +598,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.22';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.25';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -6188,6 +6190,10 @@ function cfgHtml(){
     '<input type="text" maxlength="16" class="gpts-event" value="'+String((typeof EVENT_TAG!=='undefined'&&EVENT_TAG)||'').replace(/"/g,'')+'" placeholder="none" '+
     'style="width:92px;text-align:center;background:#14161c;color:'+PAL.ink+';border:1px solid '+PAL.line+';border-radius:3px;box-sizing:border-box"></div></div>';
 
+  html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 4px" '+
+    'title="The SPY KING flag on the rail: the other book\'s crown, dashed, in the SPY shades. Price bounces off it even when every dynamic is SPXW.">'+
+    '<span style="font-weight:600">SPY King flag</span>'+
+    '<input type="checkbox" class="gpts-spyflag" '+(CFG.spyFlag!==false?'checked':'')+' style="cursor:pointer"></div>';
   html+='<div style="color:'+PAL.sub+';font-size:8.5px;padding:5px 4px 1px;line-height:1.4">Existing settings (thresholds, FT, trend, MA) carry over automatically \u2014 config migrated v7\u2192v8.</div>';
   return html;
 }
@@ -6279,6 +6285,8 @@ function wireConfig(){
   if(irtNqR) irtNqR.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; var v=parseFloat(irtNqR.value); if(isFinite(v)&&v>0) CFG.irt.nqRatio=v; saveCfg(); renderCfg(); });
   var irtN=elCfg.querySelector('.gpts-irt-now');
   if(irtN) irtN.addEventListener('click', function(){ irtExportNow(true); setTimeout(renderCfg, 600); });
+  var spyF=elCfg.querySelector('.gpts-spyflag');
+  if(spyF) spyF.addEventListener('change', function(){ CFG.spyFlag=spyF.checked; saveCfg(); render(); });
   var bo=elCfg.querySelector('.gpts-bopb');
   if(bo) bo.addEventListener('change', function(){ CFG.boPb=bo.checked; saveCfg(); render(); });
   var ft=elCfg.querySelector('.gpts-ftreq');
@@ -18740,6 +18748,15 @@ function ensureV3Css(){
     // language the chart's flow bars already use, so the panel keeps one visual grammar.
     // ⚠ AN INSET SHADOW, NOT AN ELEMENT. It occupies no space of its own, so it cannot collide with
     // the role tier or the money tier — which is exactly how a glyph-above-the-block would have.
+    // (v14.24) the flow read — the tape narrated above the arrows
+    '#gpts-body .g3tread{font-size:8.5px;font-weight:600;color:#c9d4e2;background:rgba(124,199,255,.05);'+
+      'border:1px solid rgba(124,199,255,.18);border-radius:4px;padding:3px 7px;margin:2px 0 4px;cursor:help;'+
+      'line-height:1.45}'+
+    // (v14.23) the SPY King flag — the other book's crown on this rail, unmistakably not a post
+    '#gpts-body .g3spyk{position:absolute;top:12px;bottom:20px;width:0;border-left:2px dashed #cdb4fa;z-index:2;opacity:.85;cursor:help}'+
+    '#gpts-body .g3spyk b{position:absolute;top:-9px;left:-2px;background:rgba(205,180,250,.14);border:1px solid #cdb4fa;color:#cdb4fa;border-radius:3px;font-size:6px;font-weight:900;letter-spacing:.04em;padding:0 3px;white-space:nowrap}'+
+    '#gpts-body .g3spyk.g3spykY{border-left-color:#efe0a6}'+
+    '#gpts-body .g3spyk.g3spykY b{border-color:#efe0a6;color:#efe0a6;background:rgba(239,224,166,.12)}'+
     '#gpts-body .g3pile.g3grow{box-shadow:inset 0 2px 0 0 #2ec27e}'+
     '#gpts-body .g3pile.g3bleed{box-shadow:inset 0 -2px 0 0 #e0645f}'+
     // ---- (v14.2) THE GAMMA PROFILE under the rail: outline = day peak, fill = held now ----
@@ -20002,15 +20019,27 @@ emPiles.lastKing=null; emPiles.lastKingSrc=''; emPiles.lastKingKd=null; emPiles.
 // ⚠ preserveAspectRatio="none" stretches x to the rail's width — correct for positioning, wrong for
 // strokes and arrowheads. `vector-effect="non-scaling-stroke"` fixes the line; the head is an HTML
 // triangle positioned by percent, so it never distorts.
-function railRollLane(EB, RB, rolls){
+function railRollLane(EB, RB, rolls, piles){
   try{
     if(!rolls || !rolls.length) return '';
     var show=rolls.slice(0, 3), h='', svg='', i;
     var dsc=1; try{ dsc=ifDispScale()||1; }catch(e0){}
+    // (v14.23, operator-caught: "one of the red arrows shows a blank source") a roll's SOURCE has
+    // usually drained below the node threshold — that is what a roll IS — so it has no post and no
+    // label, and the arrow rose out of blank track. The origin now names itself: a small tag at
+    // the rise, drawn ONLY when no post stands there (the v14.0 no-lane-text rule holds elsewhere).
+    var pileAt={}; try{ (piles||[]).forEach(function(pp){ pileAt[pp.k]=1; }); }catch(ePA){}
     for(i=0;i<show.length;i++){
       var r=show[i];
       var xFrom=emPosRail(EB, r.from*dsc, RB), xTo=emPosRail(EB, r.to*dsc, RB);
       if(!isFinite(xFrom)||!isFinite(xTo)) continue;
+      if(!pileAt[r.from]){
+        h+='<span style="position:absolute;left:'+xFrom.toFixed(1)+'%;top:-1px;transform:translateX(-50%);'+
+             'font-size:6px;font-weight:800;color:'+((r.dir==='up')?'#7cc7ff':'#e0645f')+';opacity:.8;white-space:nowrap"'+
+           g3tip('The roll\'s SOURCE — '+frameNum(r.from*dsc)+' (SPXW '+r.from+'). It shed '+(function(){try{return usdBig(Math.abs(r.lost))||'its mass';}catch(eU){return 'its mass';}})()+
+                 ' into '+frameNum(r.to*dsc)+' and now sits below the node threshold, which is why no post stands here: a completed roll empties its origin.')+
+           '>'+g3esc(frameNum(r.from*dsc))+'</span>';
+      }
       var col=(r.dir==='up')?'#7cc7ff':'#e0645f';
       // (v13.9) IN FLIGHT vs STUCK, the same grammar as the node list: a live roll moves (dashes), a
       // latched roll that stuck is a solid calm line with its age on the label.
@@ -20018,7 +20047,10 @@ function railRollLane(EB, RB, rolls){
       var yTop=16-i*5;                                   // each roll gets its own lane height
       var x1=xFrom*10, x2=xTo*10;                        // viewBox is 0..1000 so percent maps directly
       var d='M'+x1.toFixed(1)+' 22 L'+x1.toFixed(1)+' '+yTop+' L'+x2.toFixed(1)+' '+yTop+' L'+x2.toFixed(1)+' 20';
-      svg+='<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="'+(stuck?'1.4':'1')+'" opacity="'+(stuck?'.75':'.38')+'" vector-effect="non-scaling-stroke"/>'+
+      // (v14.24, operator-directed) the SOURCE gets a marker like the destination gets a head:
+      // a small circle at the rise, so both ends of every roll are anchored to the eye.
+      svg+='<circle cx="'+x1.toFixed(1)+'" cy="20" r="2.4" fill="'+col+'" opacity="'+(stuck?'.8':'.55')+'"/>'+
+           '<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="'+(stuck?'1.4':'1')+'" opacity="'+(stuck?'.75':'.38')+'" vector-effect="non-scaling-stroke"/>'+
            (stuck?'':('<path class="fl" d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.6" stroke-linecap="round" '+
              'stroke-dasharray="5 27" vector-effect="non-scaling-stroke"/>'));
       var amt=''; try{ amt=usdBig(Math.abs(r.amt))||''; }catch(e1){}
@@ -20204,7 +20236,9 @@ function gammaProfileHtml(EB, RB, sym, elLab, ehLab){
             (stk?('<span class="g3gpstk">'+stk+'</span>'):'')+base+
           '</i>';
       if(isRail && kingPct!=null)
-        h2+='<span class="g3gppct" style="left:'+r.x.toFixed(1)+'%;bottom:'+(hPk+2)+'px;color:'+(isKing?'#e3c341':'#e6edf3')+'">'+kingPct+'%</span>';
+        // (v14.23, operator-directed) THE KING WEARS THE CROWN, not a percentage — its % is 100 by
+        // definition, so the label carried no information. Same royal mark as the rail post's cap.
+        h2+='<span class="g3gppct" style="left:'+r.x.toFixed(1)+'%;bottom:'+(hPk+2)+'px;color:'+(isKing?'#e3c341':'#e6edf3')+(isKing?';font-size:9px':'')+'">'+(isKing?'\u265b':(kingPct+'%'))+'</span>';
     });
     // a wall with no rail bar to live in keeps a floating flag — the only exception, and it is rare
     walls.forEach(function(w){
@@ -20582,8 +20616,12 @@ function emRailBounds(B, piles){
     var pad=span*EM_RAIL_PAD;
     // the EXTREMES matter, not just the dot: a day that ran past and came back should keep the
     // evidence on the rail, or the rescale would flicker away the moment price stepped back inside.
-    var hiRef=Math.max(B.now, (B.hiWater!=null?B.hiWater:B.now));
-    var loRef=Math.min(B.now, (B.loWater!=null?B.loWater:B.now));
+    // (v14.23) ...including the LIVE print. v14.19 made the pill live but left this frame on
+    // closed-bar values, so a fast move past the rail clipped the pill in half at the edge —
+    // found in the arrow audit ("price at 7673, pill half off-frame").
+    var nl=(typeof B.nowLive==='number')?B.nowLive:B.now;
+    var hiRef=Math.max(B.now, nl, (B.hiWater!=null?B.hiWater:B.now));
+    var loRef=Math.min(B.now, nl, (B.loWater!=null?B.loWater:B.now));
     if(hiRef>B.high){ out.hi=hiRef+pad; out.over=true; }
     if(loRef<B.low){  out.lo=loRef-pad; out.under=true; }
     // (v14.16) THE RAIL HOLDS EVERY NODE ATLAS DRAWS. With the band clip gone from skPiles, a node
@@ -20749,6 +20787,81 @@ function secFrame(sym){
              :(EB.gamma>0?'positive gamma — dealers hedge AGAINST the move, so range compresses and levels tend to hold'
                          :'negative gamma — dealers hedge WITH the move, so ranges expand and the edge is where overshoot happens');
     if(AH) h+='<div class="g3ahchip"'+g3tip('The expected move was priced by TODAY\'S straddle, which expired at the close — after hours it forecasts nothing. The band is kept as "where yesterday\'s band was", dimmed and struck through; the target, budget figures and roll arrows retire with it. Everything re-anchors from the fresh straddle at the next open.')+'>AFTER HOURS · EM EXPIRED — re-anchors at the open</div>';
+    // (v14.24, operator-directed: "a read area above the arrows that is analyzing the tape —
+    // the flow as described by the arrows, rolls, king movement and more, basically all what you
+    // have learned") THE FLOW READ. One line, measured facts only, priority-ordered, each
+    // fragment present only when its fact exists. Inputs are the SAME shared arrays the rail
+    // draws from (RAILPS / RAILROLLS / velAt / reactDefence / the latch stores) — no second
+    // derivation of anything, per the one-computation rule.
+    try{
+      var FR=[];
+      var frNow=(typeof EB.nowLive==='number')?EB.nowLive:EB.now;
+      // 1 · what price is doing right now, and what the node under it is doing back
+      try{
+        var frBest=2.6, frP=null, frI;
+        for(frI=0;frI<RAILPS.length;frI++){ var frD=Math.abs(RAILPS[frI].disp-frNow);
+          if(frD<frBest){ frBest=frD; frP=RAILPS[frI]; } }
+        if(frP){ var frR=null; try{ frR=reactDefence(sym, frP.disp); }catch(eFR1){}
+          var frWho=frameNum(frP.disp)+' (a '+Math.round(frP.pct)+'% '+(frP.accel?'accelerator':'brake')+')';
+          if(frR && frR.verdict==='DEFENDING') FR.push('Price is testing '+frWho+' and the node is being DEFENDED \u2014 a deflection is forming');
+          else if(frR && frR.verdict==='ABANDONING') FR.push('Price is on '+frWho+' and the node is being ABANDONED \u2014 a break is forming');
+          else FR.push('Price is sitting on '+frWho+', still undecided');
+        }
+      }catch(eF1){}
+      // 2 · the crown: held, or under live challenge with the latch clock
+      try{
+        var frKL=null; try{ frKL=JSON.parse(localStorage.getItem('gpts_kinglatch_v1')||'null'); }catch(eKL2){}
+        if(frKL && typeof frKL.k==='number'){
+          if(frKL.cand!=null && frKL.cand!==frKL.k){
+            var frHeld=Math.min(999, Math.round((Date.now()-(frKL.ct||Date.now()))/1000));
+            FR.push('the crown is being CONTESTED \u2014 '+frKL.cand+' has out-massed King '+frKL.k+' for '+frHeld+' of the '+Math.round(KING_LATCH_MS/1000)+'s it needs');
+          } else { FR.push('the King holds '+frKL.k); }
+        }
+      }catch(eF2){}
+      // 3 · the freshest roll, WITH its intent: where the destination sits against price is what
+      //     the flow is trying to build (the 2026-08-25 lesson: a roll-down under price plants
+      //     support; over price it drags the ceiling down)
+      try{
+        if(RAILROLLS && RAILROLLS.length){
+          var frRo=RAILROLLS[0], frDsc=1; try{ frDsc=ifDispScale()||1; }catch(eDsc){}
+          var frToD=frRo.to*frDsc;
+          var frIntent=(frRo.dir==='down')
+            ? (frToD<frNow?' \u2014 planting support under price':' \u2014 dragging the ceiling down')
+            : (frToD>frNow?' \u2014 raising the ceiling overhead':' \u2014 lifting support toward price');
+          FR.push('dealers are rolling '+(frRo.dir==='up'?'UP':'DOWN')+', '+frRo.from+'\u2192'+frRo.to+
+                  (frRo.amt?(' ('+(usdBig(Math.abs(frRo.amt))||'')+(frRo.live?' in flight':'')+')'):(frRo.live?' (in flight)':''))+frIntent);
+        }
+      }catch(eF3){}
+      // 4 · where the money is moving fastest on the rail
+      try{
+        var frMv=null, frMvAbs=0, frJ;
+        for(frJ=0;frJ<RAILPS.length;frJ++){ var frV=velAt(RAILPS[frJ].k);
+          if(frV && frV.v && !frV.stale && typeof frV.v.d15==='number' && Math.abs(frV.v.d15)>frMvAbs){ frMvAbs=Math.abs(frV.v.d15); frMv={k:RAILPS[frJ].k, d:frV.v.d15, disp:RAILPS[frJ].disp}; } }
+        if(frMv && frMvAbs>1e6){
+          FR.push(frameNum(frMv.disp)+' is the fastest '+(frMv.d>0?'BUILD (+':'DRAIN (\u2212')+(usdBig(frMvAbs)||'')+'/15m)'+
+                  (frMv.d>0?(frMv.disp<frNow?' \u2014 support thickening below':' \u2014 resistance thickening above')
+                           :(frMv.disp<frNow?' \u2014 the floor is thinning':' \u2014 the ceiling is thinning')));
+        }
+      }catch(eF4){}
+      // 5 · the SPY King, when it is close enough to act
+      try{
+        if(CFG.spyFlag!==false && typeof LASTFEED!=='undefined' && LASTFEED.SPY && LASTFEED.SPY.j &&
+           (Date.now()-(LASTFEED.SPY.ts||0))<=FEED_STALE_MS*3 && typeof EB.scaleUsed==='number'){
+          var frEW=null; try{ frEW=extractWalls(LASTFEED.SPY.j); }catch(eEW2){}
+          if(frEW && frEW.king!=null){
+            var frSK=frEW.king*EB.scaleUsed, frDist=frSK-frNow;
+            if(Math.abs(frDist)<=1.5) FR.push('and price is ON the SPY King at '+frameNum(frSK)+' \u2014 the other book\'s bounce level');
+            else if(Math.abs(frDist)<=30) FR.push('the SPY King '+(frDist>0?'waits overhead at ':'backstops below at ')+frameNum(frSK));
+          }
+        }
+      }catch(eF5){}
+      if(FR.length){
+        var frTxt=FR.slice(0,4).join('. ');
+        frTxt=frTxt.charAt(0).toUpperCase()+frTxt.slice(1)+'.';
+        h+='<div class="g3tread"'+g3tip('THE TAPE, narrated from what is measured right now \u2014 the in-play node and its defence verdict, the crown and any challenger on the latch clock, the freshest latched roll and what its destination is building against price, the biggest 15-minute flow move, and the SPY King\'s position. Every clause comes from the same arrays the rail draws \u2014 nothing here is opinion.')+'>'+
+            g3esc(frTxt)+'</div>';
+      }
+    }catch(eFRD){}
     h+='<span class="g3emw"'+g3tip('Where today can go, where it is, and how much is left. The rail is '+(EB.anchor==='prevClose'?'the prior close':'the open')+' plus and minus the expected move, fixed for the session. Notch = anchor, white dot = price now, T = target, dim span = where the day has been.'+(EB.est?' ~EST: captured late, so this band is narrower than the open\'s was.':'')+(EB.anchor==='prevClose'?' Pre-open: re-anchors to the real open on the first bar.':''))+'>';
     // (v11.68) THE ROW IS NAMED FOR WHAT IT IS. The ATM straddle is ~0.80 sigma, not 1.00 — Brenner and
     // Subrahmanyam, and every vendor guide that bothers to say so puts the conversion at x1.25. A row
@@ -20756,7 +20869,7 @@ function secFrame(sym){
     // level sits exactly where it did — only the claim has been corrected.
     var EL_LAB='<span class="g3emk'+(AH?' g3ahdim':'')+'"'+g3tip('Expected low — the open minus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.low/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(RB.under?RB.lo:EB.low))+'<small>'+(EB.est?'~':'')+(RB.under?'RAIL':'EL')+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
     h+=EL_LAB;
-    var laneHtml=railRollLane(EB, RB, RAILROLLS);
+    var laneHtml=railRollLane(EB, RB, RAILROLLS, RAILPS);
     h+='<span class="g3emt'+(laneHtml?' g3haslane':'')+'">'+laneHtml+
        '<i class="g3emr"></i>'+
        ((EB.hiWater!=null&&EB.loWater!=null)?('<i class="g3emx2" style="left:'+emPosRail(EB,EB.loWater,RB).toFixed(1)+'%;width:'+Math.max(0,emPosRail(EB,EB.hiWater,RB)-emPosRail(EB,EB.loWater,RB)).toFixed(1)+'%"></i>'+
@@ -20973,6 +21086,31 @@ function secFrame(sym){
                  frameNum(P.disp)+'<i>'+P.k+'</i></span>';
            }
          }
+         // (v14.23, operator requirement: "have some line or flag show the spy king even though
+         // all the dynamics are from the spxw — sometimes there are bounces based on the spy
+         // king") THE SPY KING FLAG. Full-height dashed line at the SPY crown's price, in the SPY
+         // shades (light purple when its crown is negative, light yellow when positive), tag on
+         // top clear of the SPXW labels. Deliberately NOT a post: it is the other book's crown,
+         // not SPXW structure. Source: the self-fetched SPY feed (<=36s), so it is always live.
+         // Proven the day it was asked for: price bounced on ES 7682 = SPY 765 in an SPXW gap.
+         try{
+           if(CFG.spyFlag!==false && typeof LASTFEED!=='undefined'){
+             var FYF=LASTFEED.SPY;
+             if(FYF && FYF.j && (Date.now()-(FYF.ts||0))<=FEED_STALE_MS*3){
+               var ewF=null; try{ ewF=extractWalls(FYF.j); }catch(eEF){}
+               if(ewF && ewF.king!=null && EB && typeof EB.scaleUsed==='number' && EB.scaleUsed>0){
+                 var negF=false; try{ (ewF.walls||[]).forEach(function(wF){ if(wF.k===ewF.king && wF.pos===false) negF=true; }); }catch(eSF){}
+                 var dispF=ewF.king*EB.scaleUsed;
+                 var xF=emPosRail(EB, dispF, RB);
+                 if(isFinite(xF)){
+                   h2+='<i class="g3spyk'+(negF?'':' g3spykY')+'" style="left:'+xF.toFixed(1)+'%"'+
+                       g3tip('THE SPY KING — SPY '+ewF.king+' = '+frameNum(dispF)+' on this chart. The OTHER book\'s crown ('+(negF?'negative gamma — a reactive magnet; moves through it run':'positive gamma — dealers lean against price here')+'), drawn because price bounces off it even when every dynamic on this rail is SPXW. Not an SPXW node — the dashes and the shade say whose it is. Live from the self-fetched SPY feed; the crown is latched like every crown.')+
+                       '><b>SPY K '+g3esc(frameNum(dispF))+'</b></i>';
+                 }
+               }
+             }
+           }
+         }catch(eSPYK){}
          return h2;
        })()+
        '</span>';

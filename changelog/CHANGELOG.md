@@ -1,3 +1,53 @@
+## v14.25 — the flow read speaks in sentences (operator: "more reader friendly and coherent")
+
+The v14.24 fragments become narrated prose — what is happening AND what the flow is trying to do,
+every clause still strictly measured: "Price is on 7694 (an 80% accelerator) and the node is being
+ABANDONED — a break is forming. The crown is being CONTESTED — 7675 has out-massed King 7655 for
+80 of the 120s it needs. Dealers are rolling DOWN, 7685→7665 ($6M in flight) — planting support
+under price. 7670 is the fastest BUILD (+$12M/15m) — support thickening below. The SPY King waits
+overhead at 7682." Intent phrasing is the doctrine's, keyed to measured geometry: a roll-down whose
+destination sits UNDER price is planting support (the 2026-08-25 lesson); a build below price is
+support thickening; a drain above is the ceiling thinning. The line wraps as prose now (no
+ellipsis). Same shared inputs, no second derivation.
+
+## v14.24 — the roll's source dot and THE FLOW READ
+
+1. **Source circle** (operator-directed): every roll arrow now anchors BOTH ends — a small circle
+   at the rise to match the destination's arrowhead, in the roll's colour.
+2. **THE FLOW READ** (operator: "a read area above the arrows analyzing the tape — the flow as
+   described by the arrows, rolls, king movement and more, basically all what you have learned"):
+   one line above the rail, measured facts only, priority-ordered, fragments present only when
+   their fact exists: ⚡ the in-play node with its reactDefence verdict · the crown (held, or
+   CONTESTED with the challenger's seconds on the latch clock) · the freshest latched roll (dir,
+   from→to, in flight/stuck, $) · the strongest 15-minute flow move on the rail (>$1M) · the SPY
+   King's position when within 30 pts. Every fragment reads from the SAME shared arrays the rail
+   draws (RAILPS/RAILROLLS/velAt/reactDefence/latch stores) — no second derivation (the
+   one-computation rule). Hover explains the grammar. Class g3tread (g3flow* is a banned prefix —
+   the v11.95 FEEDS-chip guard; and the king-projection ellipsis guard forced a property reorder).
+
+## v14.23 — the SPY King flag, the crown, and two arrow-audit fixes
+
+1. **THE SPY KING FLAG** (operator standing requirement: "i must know where the spy king is even
+   on spxw — sometimes there are bounces based on the spy king"): a full-height DASHED line at the
+   SPY crown's chart price, light purple when its crown is negative / light yellow when positive,
+   tag on top clear of the SPXW labels — deliberately not a post, because it is the OTHER book's
+   crown. Live from the self-fetched SPY feed; settings toggle (SPY King flag, default on).
+   Proven the day it was asked for: price bounced on ES 7682 = SPY 765 in an SPXW gap.
+2. **The profile King wears the CROWN** (♛), not "100%" — a percentage that is 100 by definition
+   carried no information; one royal mark across the panel.
+3. **Roll arrows: the source names itself** (operator: "one of the red arrows shows a blank
+   source"): a completed roll EMPTIES its origin below the node threshold, so no post stood at the
+   rise and the arrow came from blank track. A small source tag now draws at the origin — only
+   when no post stands there, keeping the v14.0 no-lane-text rule everywhere else.
+4. **The rail frame includes the LIVE print**: v14.19 made the pill live but left emRailBounds on
+   closed-bar extremes, so a fast move past the rail clipped the pill in half at the edge (found
+   in the arrow audit). The frame now stretches for nowLive too.
+5. **Ledger #1 CLOSED, measured**: Skylit's own 5M/15M/60M velocity fields were sampled 25s apart
+   and MOVED — Skylit updates them as a rolling window (~5s refresh), not per-bar. The panel
+   displays those fields verbatim, so it is already consistent with Skylit; rolling stands.
+Also recorded: CW/PW provenance re-confirmed for the operator — InsiderFinance 0DTE only (Skylit
+carries no call/put split); IF walls update every few minutes intraday on a once-daily OI base.
+
 ## v14.22 — the cross-book candle leak (operator: "the tape reader is messed up")
 
 The v14.21 guard covered FOREIGN charts; this was one layer deeper, between two RECOGNIZED books.

@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Instrument lock + SPY King flag — v14.23 mockup</title>
+<style>
+  body{background:#0d1117;color:#e6edf3;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+       font-variant-numeric:tabular-nums;margin:0;padding:24px;display:flex;gap:30px;flex-wrap:wrap;align-items:flex-start}
+  .panel{width:440px;background:#11161f;border:1px solid #2a3340;border-radius:6px;padding:12px 14px}
+  .cap{font-size:11px;font-weight:800;letter-spacing:.08em;color:#8b98a9;margin:0 0 8px;text-transform:uppercase}
+  .cap b{color:#7cc7ff}
+  .note{font-size:10px;color:#8b98a9;line-height:1.55;margin-top:10px;width:440px}
+  .note b{color:#e6edf3}
+  /* header variants */
+  .hdr{display:flex;align-items:center;gap:8px;background:#161b26;border:1px solid #2a3340;border-radius:5px;
+       padding:6px 10px;margin-bottom:6px}
+  .hdr .t{font-size:12px;font-weight:800}
+  .hdr .inst{color:#7cc7ff}
+  .hdr .bk{color:#8b98a9;font-weight:700;font-size:10px}
+  .hdr .dot{width:6px;height:6px;border-radius:50%;background:#2ec27e;margin-left:auto}
+  /* selector */
+  .row{display:flex;align-items:center;gap:6px;font-size:9px;margin:8px 0}
+  .lbl{color:#8b98a9;font-weight:700;font-size:7.5px;letter-spacing:.06em;width:74px;flex:none}
+  .pills{display:flex;gap:4px;flex-wrap:wrap}
+  .pill{font-size:8.5px;font-weight:800;padding:3px 9px;border-radius:9px;border:1px solid #2a3340;color:#8b98a9;cursor:pointer}
+  .pill.on{background:rgba(124,199,255,.15);color:#7cc7ff;border-color:#7cc7ff}
+  .pill.dead{opacity:.45;cursor:default}
+  .sub{font-size:8px;color:#5b6675;margin-top:2px;line-height:1.5}
+  .warn{color:#f2b45a}
+  /* rail */
+  .railbox{position:relative;height:104px;background:#0f131b;border:1px solid #222a36;border-radius:4px;margin-top:8px}
+  .track{position:absolute;left:16px;right:16px;top:34px;height:3px;background:#39424e;border-radius:2px}
+  .post{position:absolute;top:34px;width:3px;background:#e3c341;border-radius:1px}
+  .post.acc{background:#a371f7}
+  .post.king{width:4px}
+  .kcap{position:absolute;top:-5px;left:50%;transform:translateX(-50%) rotate(45deg);width:6px;height:6px;background:#e3c341}
+  .plab{position:absolute;top:86px;transform:translateX(-50%);font-size:8.5px;font-weight:800;text-align:center;line-height:9px}
+  .plab i{display:block;font-style:normal;color:#c9d1da}
+  .plab.y{color:#e3c341}.plab.p{color:#a371f7}
+  .role{position:absolute;top:24px;transform:translateX(-50%);font-size:6px;font-weight:800;letter-spacing:.05em}
+  .role.y{color:#e3c341}.role.p{color:#a371f7}
+  .pill2{position:absolute;top:30px;height:12px;background:#fff;color:#0d1117;border-radius:6px;font-size:8.5px;
+        font-weight:900;display:flex;align-items:center;padding:0 5px;z-index:3}
+  /* THE SPY KING FLAG */
+  .spyk{position:absolute;top:18px;bottom:14px;width:0;border-left:2px dashed #cdb4fa;z-index:2;opacity:.9}
+  .spyk .f{position:absolute;top:-14px;left:-2px;background:rgba(205,180,250,.16);border:1px solid #cdb4fa;color:#cdb4fa;
+          border-radius:3px;font-size:6.5px;font-weight:900;letter-spacing:.04em;padding:1px 4px;white-space:nowrap}
+  .spyk.yellow{border-left-color:#efe0a6}
+  .spyk.yellow .f{border-color:#efe0a6;color:#efe0a6;background:rgba(239,224,166,.14)}
+</style>
+</head>
+<body>
+
+<div>
+<div class="cap">1 · the HEADER names the instrument <b>(lock, not chart)</b></div>
+<div class="panel">
+  <div class="hdr"><span class="t"><span class="inst">ES</span> <span class="bk">(SPXW)</span> Tapereader</span><span class="dot"></span></div>
+  <div class="hdr"><span class="t"><span class="inst">ES</span> <span class="bk">(SPY)</span> Tapereader</span><span class="dot"></span></div>
+  <div class="hdr"><span class="t"><span class="inst">NQ</span> <span class="bk">(QQQ)</span> Tapereader</span><span class="dot"></span></div>
+</div>
+<div class="note"><b>The header is the contract:</b> whatever chart Atlas shows, the face runs on the
+locked pairing. Flipping charts changes NOTHING except which basis is being measured live.</div>
+</div>
+
+<div>
+<div class="cap">2 · settings › <b>INSTRUMENT LOCK</b></div>
+<div class="panel">
+  <div class="row"><span class="lbl">TAPEREADER</span>
+    <span class="pills">
+      <span class="pill on">ES (SPXW)</span>
+      <span class="pill">ES (SPY)</span>
+      <span class="pill">NQ (QQQ)</span>
+      <span class="pill dead">GC (GLD)</span>
+      <span class="pill dead">CL (USO)</span>
+    </span></div>
+  <div class="sub">ES (SPXW) — ES frame, SPXW dynamics (today's default) · ES (SPY) — ES frame, SPY-book
+  dynamics · NQ — NQ frame, QQQ dynamics.<br>
+  <span class="warn">GC / CL greyed until GLD / USO are added to Skylit's heat-panel SYMBOLS list —
+  no book, no tapereader; the pill says why on hover.</span></div>
+  <div class="row"><span class="lbl">SPY KING FLAG</span>
+    <span class="pills"><span class="pill on">Show</span><span class="pill">Hide</span></span>
+    <span class="sub" style="margin:0">always-on marker at the SPY King's price (ES modes)</span></div>
+</div>
+<div class="note"><b>Export unchanged:</b> the three-King file keeps writing whatever the lock is —
+the lock governs the FACE, not the file.</div>
+</div>
+
+<div>
+<div class="cap">3 · the rail in ES (SPXW) mode, with the <b>SPY KING flag</b></div>
+<div class="panel">
+  <div class="railbox">
+    <div class="track"></div>
+    <!-- SPXW posts (dynamics) -->
+    <div class="post king" style="left:20%;height:44px"><i class="kcap"></i></div>
+    <div class="role y" style="left:20%">KING</div>
+    <div class="plab y" style="left:20%">7670<i>7655</i></div>
+    <div class="post" style="left:44%;height:26px"></div>
+    <div class="role y" style="left:44%">BRK</div>
+    <div class="plab y" style="left:44%">7684<i>7670</i></div>
+    <div class="post acc" style="left:58%;height:22px"></div>
+    <div class="role p" style="left:58%">ACC</div>
+    <div class="plab p" style="left:58%">7699<i>7685</i></div>
+    <!-- THE SPY KING FLAG: dashed, light-purple (its polarity), full height, never a post -->
+    <div class="spyk" style="left:36%"><span class="f">SPY K 7682</span></div>
+    <!-- price pill riding it -->
+    <div class="pill2" style="left:33%">7682▾</div>
+  </div>
+</div>
+<div class="note"><b>The flag is not a node:</b> full-height dashed line in the SPY shades (light purple
+when the SPY crown is negative, light yellow when positive), tag on top so it never collides with the
+SPXW labels, drawn UNDER the posts but OVER the track. It moves when the SPY crown moves (latched,
+like every crown) and is always live — the SPY feed never sleeps. Today's live case: price bouncing
+on ES 7682 = SPY 765, invisible on the SPXW rail until this flag.</div>
+</div>
+
+</body>
+</html>
