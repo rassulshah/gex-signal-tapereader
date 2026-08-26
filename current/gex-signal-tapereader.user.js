@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.28
+// @version    14.30
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -598,7 +598,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.28';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.30';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -12287,6 +12287,53 @@ function registerCoreFeatures(){
   // node beyond the deflection zone is recorded every bar with whether price then moved TOWARD it.
   // First reading (2026-08-25, one day): toward within 30m in 77% of samples. Recorded, not voted,
   // until the nightly walk-forward clears the bar.
+  // (v14.30, operator: "i want it tracked to see if it works and for improvement") EVERY state
+  // is scored: the record carries each rail level's state + distance from price; outcomes carry
+  // the forward window. The nightly review asks: does FORMING hold better than HOLDING? Is the
+  // DOOR break-rate staying near the measured 19/19? Does WEAKENING lead breaks? States that do
+  // not earn their names get retuned — the same discipline as every enrolled feature.
+  registerFeature({ key:'levelstate', label:'Level Engine states (FORMING/WEAKENING/TURNING/DOOR)', phase:'dashboard', fwd:FEAT_FWD,
+    record:function(sym){
+      var out={ n:0, states:{}, doors:0, nearest:null };
+      try{
+        var B=emBand(sym); if(!B||!B.ok) return out;
+        var px=(typeof B.nowLive==='number')?B.nowLive:B.now;
+        var ps=emPiles(B, sym)||[];
+        var rolls=[]; try{ if(rollsLive()) rolls=(rollLatched(sym)||[]).filter(function(r){ return !r.gone; }); }catch(e1){}
+        var ctx={src:{},dst:{}}; rolls.forEach(function(r){ ctx.src[r.from]=1; ctx.dst[r.to]=1; });
+        var bestD=1e9;
+        ps.forEach(function(P){
+          var st=levelStateOf(P.k, ctx);
+          out.states[P.k]=st.st.slice(0,4);
+          out.n++;
+          var d=Math.abs(P.disp-px);
+          if(st.st!=='HOLDING' && d<bestD){ bestD=d; out.nearest={ k:P.k, st:st.st.slice(0,4), dist:+(P.disp-px).toFixed(2) }; }
+        });
+        var dsc=1; try{ dsc=ifDispScale()||1; }catch(e2){}
+        out.doors=levelDoors(rolls, dsc).length;
+      }catch(e){}
+      return out;
+    },
+    outcome:function(rec, fwd){
+      var near=(rec&&rec.nearest)||null;
+      var held=null;
+      if(near && fwd && typeof fwd.mfe==='number' && typeof fwd.mae==='number'){
+        // did the forward window RESPECT the nearest non-holding level? (above price: mfe stops
+        // short of it; below: mae stops short) — the hold/break each state must earn.
+        held = near.dist>0 ? ((fwd.mfe||0) < Math.abs(near.dist)) : (Math.abs(fwd.mae||0) < Math.abs(near.dist));
+      }
+      return { hit:held, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
+    },
+    questions:[
+      { id:'levelstate_forming_holds', when:[{f:'nearest.st',v:'FORM'}], outcome:'hold',
+        note:'does a FORMING level (roll destination, still building) hold better than the field? The 2026-08-25 anatomy said destinations held 74% of touches — this scores it walk-forward.' },
+      { id:'levelstate_weak_leads', when:[{f:'nearest.st',v:'WEAK'}], outcome:'hold',
+        note:'does WEAKENING actually precede breaks? If a weakening level holds as often as a holding one, the state is noise and its thresholds need retuning.' },
+      { id:'levelstate_door_breaks', when:[{f:'doors',v:1}], outcome:'hold',
+        note:'the strongest measured stat: drained sources passed through 19/19. This keeps that number honest as n grows.' }
+    ],
+    rule:{ id:'levelstate', tier:'hand', condition:'five states per rail level from vel windows + roll latch + own-peak retention',
+           mechanism:'The Level Engine: FORMING (roll destination building), WEAKENING (own-mass draining or roll source), TURNING (5m+15m against the hour), DOOR (drained source <50% of own peak), HOLDING (else). Operator business requirement 2026-08-26: where to trade from, what is weakening, what is forming, where price is going.' } });
   registerFeature({ key:'attract', label:'Attract (dominant magnet: pull = size/dist)', phase:'dashboard', fwd:FEAT_FWD,
     record:function(sym){
       var TN=[]; try{ TN=tradeNodes(sym)||[]; }catch(e){}
@@ -18748,6 +18795,19 @@ function ensureV3Css(){
     // language the chart's flow bars already use, so the panel keeps one visual grammar.
     // ⚠ AN INSET SHADOW, NOT AN ELEMENT. It occupies no space of its own, so it cannot collide with
     // the role tier or the money tier — which is exactly how a glyph-above-the-block would have.
+    // (v14.30) the level engine — states on the posts, words under the labels, door ghosts
+    '#gpts-body .g3pile.g3lvFORMING{box-shadow:0 0 0 1px rgba(124,199,255,.7)}'+
+    '#gpts-body .g3pile.g3lvWEAKENING{opacity:.75;box-shadow:0 0 0 1px rgba(242,180,90,.55)}'+
+    '#gpts-body .g3pile.g3lvTURNING{box-shadow:0 0 0 1px rgba(205,180,250,.6)}'+
+    '#gpts-body .g3lvw{display:block;font-style:normal;font-size:5px;font-weight:900;letter-spacing:.05em;line-height:6px}'+
+    '#gpts-body .g3lvcell{position:absolute;transform:translateX(-50%);font-size:5px;font-weight:900;letter-spacing:.04em;cursor:help}'+
+    '#gpts-body .g3lvwFORMING{color:#7cc7ff}'+
+    '#gpts-body .g3lvwWEAKENING{color:#f2b45a}'+
+    '#gpts-body .g3lvwTURNING{color:#cdb4fa}'+
+    '#gpts-body .g3door{position:absolute;top:19px;width:3px;height:16px;border:1px dashed #5b6675;border-radius:1px;'+
+      'transform:translateX(-50%);z-index:1;cursor:help;opacity:.8}'+
+    '#gpts-body .g3door em{position:absolute;top:17px;left:50%;transform:translateX(-50%);font-style:normal;'+
+      'font-size:5px;font-weight:900;letter-spacing:.05em;color:#8b98a9;white-space:nowrap}'+
     // (v14.24) the flow read — the tape narrated above the arrows
     '#gpts-body .g3tread{font-size:8.5px;font-weight:600;color:#c9d4e2;background:rgba(124,199,255,.05);'+
       'border:1px solid rgba(124,199,255,.18);border-radius:4px;padding:3px 7px;margin:2px 0 4px;cursor:help;'+
@@ -18755,6 +18815,9 @@ function ensureV3Css(){
     // (v14.23) the SPY King flag — the other book's crown on this rail, unmistakably not a post
     '#gpts-body .g3spyk{position:absolute;top:12px;bottom:20px;width:0;border-left:2px dashed #cdb4fa;z-index:2;opacity:.85;cursor:help}'+
     '#gpts-body .g3spyk b{position:absolute;top:-9px;left:-2px;background:rgba(205,180,250,.14);border:1px solid #cdb4fa;color:#cdb4fa;border-radius:3px;font-size:6px;font-weight:900;letter-spacing:.04em;padding:0 3px;white-space:nowrap}'+
+    '#gpts-body .g3spyk u{position:absolute;bottom:-10px;left:-2px;transform:translateX(-40%);text-decoration:none;'+
+      'color:#cdb4fa;font-size:7px;font-weight:900;letter-spacing:.02em;white-space:nowrap}'+
+    '#gpts-body .g3spyk.g3spykY u{color:#efe0a6}'+
     '#gpts-body .g3spyk.g3spykY{border-left-color:#efe0a6}'+
     '#gpts-body .g3spyk.g3spykY b{border-color:#efe0a6;color:#efe0a6;background:rgba(239,224,166,.12)}'+
     '#gpts-body .g3pile.g3grow{box-shadow:inset 0 2px 0 0 #2ec27e}'+
@@ -20019,6 +20082,54 @@ emPiles.lastKing=null; emPiles.lastKingSrc=''; emPiles.lastKingKd=null; emPiles.
 // ⚠ preserveAspectRatio="none" stretches x to the rail's width — correct for positioning, wrong for
 // strokes and arrowheads. `vector-effect="non-scaling-stroke"` fixes the line; the head is an HTML
 // triangle positioned by percent, so it never distorts.
+// ---- (v14.30) THE LEVEL ENGINE — five states, computed from what is already measured --------
+// Operator's business requirement, verbatim: "i need to know potential support and resistance,
+// especially if it is weakening and new support and resistance is forming, as well as where
+// price is going." Each rail level wears ONE state; every threshold here is ⚖ hand-set and the
+// `levelstate` feature scores every state's hold/break rate nightly so the names earn their
+// meaning in data (FINDINGS gets a row per state).
+//   FORMING — destination of a latched roll, still building (the 7665-shelf pattern: built
+//             BEFORE it was obvious; destinations held 74% of touches on the measured day)
+//   WEAKENING — draining on its own 15m (or 15m+60m both bleeding), or currently a roll source
+//   TURNING — 5m and 15m agree AGAINST the 60m: the earliest honest warning of a hand-change
+//   DOOR — a drained roll source (<50% of its own day peak): 19/19 pass-throughs measured
+//   HOLDING — none of the above: steady or building structure
+var LVL_WEAK_P15=-8;    // ⚖ % of own mass shed in 15m that says WEAKENING on its own
+var LVL_TURN_P15=4;     // ⚖ minimum |15m %| for TURNING to speak
+var LVL_DOOR_PEAK=0.5;  // ⚖ retention of own day peak below which a roll source is a DOOR
+function levelStateOf(k, rollsCtx){
+  try{
+    var v=null; try{ v=velAt(k); }catch(e0){}
+    var vv=(v&&v.v&&!v.stale)?v.v:null;
+    var isSrc=rollsCtx&&rollsCtx.src&&rollsCtx.src[k], isDst=rollsCtx&&rollsCtx.dst&&rollsCtx.dst[k];
+    var pk=null; try{ pk=peakOf(k); }catch(e1){}
+    var ret=(pk&&vv&&typeof vv.cur==='number'&&pk>0)?Math.abs(vv.cur)/pk:null;
+    if(isSrc && ret!=null && ret<LVL_DOOR_PEAK) return { st:'DOOR', why:'roll source, holds '+Math.round(ret*100)+'% of its own peak' };
+    if(isDst && vv && typeof vv.d15==='number' && vv.d15>0) return { st:'FORMING', why:'roll destination, still building' };
+    if(vv && typeof vv.p5==='number' && typeof vv.p15==='number' && typeof vv.p60==='number'){
+      if(Math.abs(vv.p15)>=LVL_TURN_P15 && (vv.p5>0)===(vv.p15>0) && (vv.p15>0)!==(vv.p60>0))
+        return { st:'TURNING', why:'5m and 15m have flipped against the hour' };
+      if(vv.p15<=LVL_WEAK_P15 || (vv.p15<0 && vv.p60<0))
+        return { st:'WEAKENING', why:(Math.round(vv.p15))+'%/15m draining'+(isSrc?', roll source':'') };
+    }
+    if(isSrc) return { st:'WEAKENING', why:'feeding a roll' };
+    return { st:'HOLDING', why:'steady' };
+  }catch(e){ return { st:'HOLDING', why:'' }; }
+}
+// the DOOR list — drained sources that are no longer piles at all (the strongest measured stat:
+// 19/19 pass-throughs). Built from the latched rolls; each door carries its ES price for drawing.
+function levelDoors(rolls, dsc){
+  var out=[]; try{
+    (rolls||[]).forEach(function(r){
+      if(r.gone) return;
+      var v=null; try{ v=velAt(r.from); }catch(e0){}
+      var vv=(v&&v.v)?v.v:null; var pk=null; try{ pk=peakOf(r.from); }catch(e1){}
+      var ret=(pk&&vv&&typeof vv.cur==='number'&&pk>0)?Math.abs(vv.cur)/pk:null;
+      if(ret!=null && ret<LVL_DOOR_PEAK) out.push({ k:r.from, disp:r.from*(dsc||1), ret:ret, to:r.to });
+    });
+  }catch(e){}
+  return out;
+}
 function railRollLane(EB, RB, rolls, piles){
   try{
     if(!rolls || !rolls.length) return '';
@@ -20029,8 +20140,18 @@ function railRollLane(EB, RB, rolls, piles){
     // label, and the arrow rose out of blank track. The origin now names itself: a small tag at
     // the rise, drawn ONLY when no post stands there (the v14.0 no-lane-text rule holds elsewhere).
     var pileAt={}; try{ (piles||[]).forEach(function(pp){ pileAt[pp.k]=1; }); }catch(ePA){}
+    // (v14.30) TWO TIERS. KING-CLASS arrows (source or destination is the latched crown) draw
+    // bold — the succession chain is the one migration that moves the DESTINATION itself
+    // (successor >=60% -> 76% crown roll within 20 bars, n=148). FIELD arrows under $5M do not
+    // draw at all (latched and recorded, just not worth eyes); the rest draw dim. Pairing
+    // quality — how much of the shed mass the destination accounts for — rides every hover.
+    var latchK=null; try{ var lkJ=JSON.parse(localStorage.getItem('gpts_kinglatch_v1')||'null'); if(lkJ) latchK=lkJ.k; }catch(eLK){}
     for(i=0;i<show.length;i++){
       var r=show[i];
+      var kingClass=(latchK!=null && (r.from===latchK || r.to===latchK));
+      if(!kingClass && typeof r.amt==='number' && Math.abs(r.amt)<5e6) continue;   // ⚖ field floor
+      var pq=null; try{ if(r.got&&r.lost){ var g2=Math.abs(r.got), l2=Math.abs(r.lost);
+        if(g2>0&&l2>0) pq=Math.round(100*Math.min(g2,l2)/Math.max(g2,l2)); } }catch(ePq){}
       var xFrom=emPosRail(EB, r.from*dsc, RB), xTo=emPosRail(EB, r.to*dsc, RB);
       if(!isFinite(xFrom)||!isFinite(xTo)) continue;
       if(!pileAt[r.from]){
@@ -20043,14 +20164,20 @@ function railRollLane(EB, RB, rolls, piles){
       var col=(r.dir==='up')?'#7cc7ff':'#e0645f';
       // (v13.9) IN FLIGHT vs STUCK, the same grammar as the node list: a live roll moves (dashes), a
       // latched roll that stuck is a solid calm line with its age on the label.
-      var stuck=(r.conf && !r.live);
+      // (v14.29, operator-caught: "how is a solid arrow different from a moving arrow —
+      // something is wrong") the moving dashes CLAIM live flow, so they key STRICTLY off r.live.
+      // The old test (conf && !live) animated a signal-level roll that had already stopped —
+      // motion asserted where none was happening. Solid = latched, whatever its count.
+      var stuck=!r.live;
       var yTop=16-i*5;                                   // each roll gets its own lane height
       var x1=xFrom*10, x2=xTo*10;                        // viewBox is 0..1000 so percent maps directly
       var d='M'+x1.toFixed(1)+' 22 L'+x1.toFixed(1)+' '+yTop+' L'+x2.toFixed(1)+' '+yTop+' L'+x2.toFixed(1)+' 20';
       // (v14.24, operator-directed) the SOURCE gets a marker like the destination gets a head:
       // a small circle at the rise, so both ends of every roll are anchored to the eye.
-      svg+='<circle cx="'+x1.toFixed(1)+'" cy="20" r="2.4" fill="'+col+'" opacity="'+(stuck?'.8':'.55')+'"/>'+
-           '<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="'+(stuck?'1.4':'1')+'" opacity="'+(stuck?'.75':'.38')+'" vector-effect="non-scaling-stroke"/>'+
+      var wBase=kingClass?(stuck?2.2:1.8):(stuck?1.4:1);
+      var oBase=kingClass?(stuck?.95:.6):(stuck?.55:.28);
+      svg+='<circle cx="'+x1.toFixed(1)+'" cy="20" r="'+(kingClass?'3':'2.4')+'" fill="'+col+'" opacity="'+(stuck?'.85':'.55')+'"/>'+
+           '<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="'+wBase+'" opacity="'+oBase+'" vector-effect="non-scaling-stroke"/>'+
            (stuck?'':('<path class="fl" d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.6" stroke-linecap="round" '+
              'stroke-dasharray="5 27" vector-effect="non-scaling-stroke"/>'));
       var amt=''; try{ amt=usdBig(Math.abs(r.amt))||''; }catch(e1){}
@@ -20063,6 +20190,8 @@ function railRollLane(EB, RB, rolls, piles){
       h+='<span style="position:absolute;left:'+xTo.toFixed(1)+'%;top:11px;transform:translateX(-50%);'+
            'width:14px;height:12px;display:flex;align-items:flex-end;justify-content:center"'+
          g3tip('ROLL '+(r.dir==='up'?'↑':'↓')+' '+frameNum(r.to*dsc)+(amt?(' · '+amt):'')+ageL+
+               (kingClass?' · KING-CLASS — the crown itself is part of this migration; the succession chain is the one roll that moves the session destination.':'')+
+               (pq!=null?(' · '+pq+'% paired — the share of shed mass the destination accounts for; low pairing is evaporation in a roll costume.'):'')+
                ' — '+r.from+' shed '+(usdBig(Math.abs(r.lost))||'')+' while '+
                r.to+' took '+(usdBig(Math.abs(r.got))||'')+', seen on '+(r.count||'?')+' bars'+
                (stuck?'. The window has slid past but the destination still holds what it received: the roll STUCK.':(r.live?'. Still in flight.':'.'))+
@@ -20262,6 +20391,18 @@ function gammaProfileHtml(EB, RB, sym, elLab, ehLab){
              '<span class="g3gpt g3gprocline">'+rr+'</span>'+spc(ehLab)+'</div>';
     }
 
+    // ---- (v14.30) THE STATE ROW — the conclusion the three ROC rows imply, printed ------------
+    // Under each column: FORMING / WEAKENING / TURNING / (blank when HOLDING — silence is a state
+    // too). The percentages above are the evidence; this word is what they mean for the trade.
+    try{
+      var stCells='';
+      rows.forEach(function(r){
+        var stL=(r.rail&&LVLST_G[r.k])?LVLST_G[r.k]:null;
+        if(stL && stL.st!=='HOLDING')
+          stCells+='<span class="g3lvcell g3lvw'+stL.st+'" style="left:'+r.x.toFixed(1)+'%"'+g3tip('STATE: '+stL.st+' \u2014 '+stL.why+'. The rows above are the evidence; this word is the conclusion.')+'>'+stL.st.slice(0,4)+'</span>';
+      });
+      if(stCells) h2+='<div class="g3gprow">'+spc(elLab)+'<span class="g3gpt" style="position:relative;height:8px">'+stCells+'</span>'+spc(ehLab)+'</div>';
+    }catch(eStR){}
     // ---- WALLS line + legend --------------------------------------------------------------------
     var vh2='';
     if(walls.length){
@@ -20768,6 +20909,7 @@ function secFrame(sym){
     // PROJECT-CONSTANTS: two derivations of one thing drift, and here they would drift WITHIN a
     // single render — an arrow pointing at a node that is not animating.
     var RAILPS=[]; try{ RAILPS=emPiles(EB, sym)||[]; }catch(eRP){}
+    var LVLCTX={src:{},dst:{}}, LVLST={}, LVLDOORS=[];
     // (v11.99) RAIL SPACE FOR DRAWING. emPos stays the MEASUREMENT (clamped, recorded as `pct`);
     // RB is the drawn track, which grows once a boundary has been run so "how far past" is visible.
     // (v14.16) ...and grows to hold every pile, so the un-clipped node set is actually drawable —
@@ -20780,6 +20922,14 @@ function secFrame(sym){
     // its grey chip while it retires).
     var RAILROLLS=[];
     try{ if(rollsLive()) RAILROLLS=(rollLatched(sym)||[]).filter(function(rF){ return !rF.gone; }); }catch(eRR){}
+    // (v14.30) the level-engine context rides the SAME latched list (one computation, N consumers)
+    try{
+      var lvDsc=1; try{ lvDsc=ifDispScale()||1; }catch(eLd){}
+      RAILROLLS.forEach(function(rr){ LVLCTX.src[rr.from]=1; LVLCTX.dst[rr.to]=1; });
+      RAILPS.forEach(function(pp){ LVLST[pp.k]=levelStateOf(pp.k, LVLCTX); });
+      LVLST_G=LVLST;
+      LVLDOORS=levelDoors(RAILROLLS, lvDsc);
+    }catch(eLE){}
     var str=!!EB.stretched, pOpen=emPosRail(EB,EB.open,RB),
         pNow=emPosRail(EB,(typeof EB.nowLive==='number')?EB.nowLive:EB.now,RB);
     var fa=Math.min(pOpen,pNow), fb=Math.max(pOpen,pNow);
@@ -20811,12 +20961,16 @@ function secFrame(sym){
         if(frKL && typeof frKL.k==='number'){
           var frKD=(frKP&&typeof frKP.disp==='number')?frKP.disp:null;
           var frKdist=(frKD!=null)?(frKD-frNow):null;
+          // (v14.29, operator-directed) every number the read speaks is ES — the strike lives in
+          // the hover and the rail labels, not here.
+          var frDsc9=1; try{ frDsc9=ifDispScale()||1; }catch(eD9){}
+          var frKes=(frKD!=null)?frameNum(frKD):frameNum(frKL.k*frDsc9);
           var frKtxt;
           if(frKL.cand!=null && frKL.cand!==frKL.k){
             var frHeld=Math.min(999, Math.round((Date.now()-(frKL.ct||Date.now()))/1000));
-            frKtxt='KING '+frKL.k+' is CONTESTED \u2014 '+frKL.cand+' has out-massed it for '+frHeld+' of 120s';
+            frKtxt='KING '+frKes+' is CONTESTED \u2014 '+frameNum(frKL.cand*frDsc9)+' has out-massed it for '+frHeld+' of 120s';
           } else {
-            frKtxt='KING '+frKL.k+(frKP&&frKP.accel?' (accelerator)':' (brake)')+' holds';
+            frKtxt='KING '+frKes+(frKP&&frKP.accel?' (accelerator)':' (brake)')+' holds';
           }
           if(frKdist!=null){
             if(Math.abs(frKdist)<=1.5) frKtxt+=' \u2014 price is ON the King';
@@ -20835,9 +20989,12 @@ function secFrame(sym){
         function frLvl(P, word){
           if(!P) return null;
           var t=word+' '+frameNum(P.disp)+' ('+Math.round(P.pct)+'% '+(P.accel?'accelerator':'brake')+')';
-          var fv=null; try{ fv=velAt(P.k); }catch(eV2){}
-          if(fv && fv.v && !fv.stale && typeof fv.v.d15==='number' && Math.abs(fv.v.d15)>1e6)
-            t+=(fv.v.d15>0?', building':', draining');
+          // (v14.30) the STATE is the conclusion; build/drain becomes its evidence
+          var lvR=LVLST[P.k];
+          if(lvR && lvR.st!=='HOLDING') t+=' '+lvR.st+' \u2014 '+lvR.why;
+          else { var fv=null; try{ fv=velAt(P.k); }catch(eV2){}
+            if(fv && fv.v && !fv.stale && typeof fv.v.d15==='number' && Math.abs(fv.v.d15)>1e6)
+              t+=(fv.v.d15>0?', building':', draining'); }
           if(Math.abs(P.disp-frNow)<=2.6){
             var frRv=null; try{ frRv=reactDefence(sym, P.disp); }catch(eR3){}
             if(frRv && frRv.verdict==='DEFENDING') t+=', being DEFENDED';
@@ -20861,6 +21018,12 @@ function secFrame(sym){
         var frResT=frRes?(frRes.spyK?('resistance: the SPY KING at '+frameNum(frRes.disp)):frLvl(frRes,'resistance')):null;
         if(frSupT) frS2.push(frSupT);
         if(frResT) frS2.push(frResT);
+        // (v14.30) a DOOR in reach is worth a clause of its own — 19/19 pass-throughs
+        try{ var frDo=null, frDoD=11, frDi2;
+          for(frDi2=0;frDi2<LVLDOORS.length;frDi2++){ var frDd2=Math.abs(LVLDOORS[frDi2].disp-frNow);
+            if(frDd2<frDoD){ frDoD=frDd2; frDo=LVLDOORS[frDi2]; } }
+          if(frDo) frS2.push(frameNum(frDo.disp)+' is a DOOR \u2014 drained, expect pass-through');
+        }catch(eDo2){}
         if(frS2.length) FR.push(frS2.join('; '));
       }catch(eF3){}
       // ---- 3 · THE DESTINATION -----------------------------------------------------------------
@@ -20879,6 +21042,24 @@ function secFrame(sym){
           if(frDom>=2){
             var frDtxt='destination: '+frameNum(frBestP.disp)+(frBestP.role==='KING'?' \u2014 the King':'')+
                        ', out-pulling everything '+(frDom>=9?'outright':(Math.round(frDom*10)/10)+'\u00d7');
+            // (v14.30) DESTINATION CONCENTRATION — how much of the near book agrees
+            try{ var frTot=0, frAt=0, frCi;
+              for(frCi=0;frCi<RAILPS.length;frCi++){ var frCP=RAILPS[frCi];
+                var frW=(frCP.usdK!=null)?Math.abs(frCP.usdK):((frCP.pct||0)*10);
+                frTot+=frW; if(Math.abs(frCP.disp-frBestP.disp)<=10.5) frAt+=frW; }
+              if(frTot>0) frDtxt+=' holding '+Math.round(100*frAt/frTot)+'% of the near book';
+            }catch(eCn){}
+            // (v14.30) CROWN MARGIN — how safe the destination's crown is (successor at 60% ->
+            // 76% chance the crown moves within 20 bars, n=148: small margin = unstable target)
+            try{ var frKM=emPiles.lastRoles;
+              var frTp=tapeMap('SPXW');
+              if(frTp && frTp.pct && frTp.king!=null){
+                var frTop2=0, frKk2;
+                for(frKk2 in frTp.pct){ var frKv=Math.abs(frTp.pct[frKk2]);
+                  if(parseFloat(frKk2)!==frTp.king && frKv>frTop2) frTop2=frKv; }
+                if(frTop2>0) frDtxt+='; crown margin '+Math.max(0,100-Math.round(frTop2))+'%'+(frTop2>=60?' \u2014 UNSTABLE, succession live':'');
+              }
+            }catch(eKm){}
             var frPath=null; try{ frPath=emPath(EB, sym, frBestP.disp); }catch(ePt){}
             if(frPath && frPath.ok) frDtxt+='; the path '+(frBestP.disp>frNow?'up':'down')+' is '+
               (frPath.verdict==='clear'?'CLEAR':(frPath.verdict==='fuelled'?'FUELLED \u2014 accelerators outweigh the brakes in between':'BRAKED \u2014 brakes outweigh the fuel in between'));
@@ -21097,7 +21278,11 @@ function secFrame(sym){
            var mo=motion[P.k]||'';
            var moCls = (mo==='recv') ? ' g3recv' : (mo==='grow' ? ' g3grow' : (mo==='fade' ? ' g3fade' : ''));
            var ipCls=(IPK!=null && P.k===IPK)?(' g3ip '+IPST):'';
-           h2+='<i class="g3pile '+pcls+capCls+moCls+ipCls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%;width:'+pw+'px;height:'+ph+'px"'+g3tip(tip
+           // (v14.30) the level's STATE styles the post and rides the hover
+           var lvS=LVLST[P.k]||null;
+           var lvCls=lvS?(' g3lv'+lvS.st):'';
+           if(lvS && lvS.st!=='HOLDING') tip+=' \u25c6 STATE: '+lvS.st+' \u2014 '+lvS.why+'.';
+           h2+='<i class="g3pile '+pcls+capCls+moCls+ipCls+lvCls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%;width:'+pw+'px;height:'+ph+'px"'+g3tip(tip
                  +(mo==='recv'?' — SIZE IS ARRIVING HERE: another strike is shedding into it.'
                   :(mo==='grow'?' — ACCUMULATING: adding size right now.'
                   :(mo==='fade'?' — DISSIPATING: coming apart.':'')))
@@ -21121,10 +21306,22 @@ function secFrame(sym){
              var rEdge = (P.pos>94) ? ';transform:translateX(-100%)' : ((P.pos<6) ? ';transform:translateX(0)' : '');
              h2+='<span class="g3prole '+pcls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%'+rEdge+'"'+g3tip(tip)+'>'+
                  g3esc(role)+'</span>';
+             var lvWord=(lvS && lvS.st!=='HOLDING')?('<em class="g3lvw g3lvw'+lvS.st+'">'+lvS.st+'</em>'):'';
              h2+='<span class="g3plab '+pcls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%"'+g3tip(tip)+'>'+
-                 frameNum(P.disp)+'<i>'+P.k+'</i></span>';
+                 frameNum(P.disp)+'<i>'+P.k+'</i>'+lvWord+'</span>';
            }
          }
+         // (v14.30) THE DOORS — drained roll sources, no longer piles at all. A ghost outline
+         // where the post used to stand: 19/19 measured pass-throughs; never S/R again.
+         try{
+           LVLDOORS.forEach(function(dd){
+             var xD=emPosRail(EB, dd.disp, RB);
+             if(!isFinite(xD)) return;
+             h2+='<i class="g3door" style="left:'+xD.toFixed(1)+'%"'+
+                 g3tip('DOOR \u2014 '+frameNum(dd.disp)+' (SPXW '+dd.k+') was the SOURCE of the roll into '+dd.to+' and now holds only '+Math.round(dd.ret*100)+'% of its own day peak. A vacated strike is a door, not a wall: measured 19/19 pass-throughs when price returned to a drained source. Do not park a stop behind it; a pullback into it along the flow is an entry cue, not a reversal warning.')+
+                 '><em>DOOR</em></i>';
+           });
+         }catch(eDo){}
          // (v14.23, operator requirement: "have some line or flag show the spy king even though
          // all the dynamics are from the spxw — sometimes there are bounces based on the spy
          // king") THE SPY KING FLAG. Full-height dashed line at the SPY crown's price, in the SPY
@@ -21142,9 +21339,11 @@ function secFrame(sym){
                  var dispF=ewF.king*EB.scaleUsed;
                  var xF=emPosRail(EB, dispF, RB);
                  if(isFinite(xF)){
+                   // (v14.29, operator-directed) the PRICE sits BELOW the line, ES-mapped; the
+                   // tag on top carries only the name so neither collides with the rail labels.
                    h2+='<i class="g3spyk'+(negF?'':' g3spykY')+'" style="left:'+xF.toFixed(1)+'%"'+
                        g3tip('THE SPY KING — SPY '+ewF.king+' = '+frameNum(dispF)+' on this chart. The OTHER book\'s crown ('+(negF?'negative gamma — a reactive magnet; moves through it run':'positive gamma — dealers lean against price here')+'), drawn because price bounces off it even when every dynamic on this rail is SPXW. Not an SPXW node — the dashes and the shade say whose it is. Live from the self-fetched SPY feed; the crown is latched like every crown.')+
-                       '><b>SPY K '+g3esc(frameNum(dispF))+'</b></i>';
+                       '><b>SPY K</b><u>'+g3esc(frameNum(dispF))+'</u></i>';
                  }
                }
              }
@@ -21820,6 +22019,9 @@ function tradeNodes(sym){
 // .g3prole / .g3pile; test_velocity_policy.js asserts they still match, because a colour that means
 // "accelerator" in one half of the panel and something else in the other is worse than no colour.
 var NODE_COL={ acc:'#a371f7', brk:'#e3c341', bal:'#8b98a9' };
+// (v14.30) the level-engine state map, published by the rail render each pass so the profile's
+// state row reads the SAME states the rail wears (one computation, two consumers).
+var LVLST_G={};
 
 // ---- how a node reads: SIDE x DIRECTION OF CHANGE, and nothing else ----
 // That pair IS the support/resistance question. Everything the face shows about a node is this.

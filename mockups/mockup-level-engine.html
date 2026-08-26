@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>The Level Engine — five states + the trade read — v14.30 mockup</title>
+<style>
+  body{background:#0d1117;color:#e6edf3;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+       font-variant-numeric:tabular-nums;margin:0;padding:24px;display:flex;gap:30px;flex-wrap:wrap;align-items:flex-start}
+  .panel{width:520px;background:#11161f;border:1px solid #2a3340;border-radius:6px;padding:12px 14px}
+  .cap{font-size:11px;font-weight:800;letter-spacing:.08em;color:#8b98a9;margin:0 0 8px;text-transform:uppercase}
+  .cap b{color:#7cc7ff}
+  .note{font-size:10px;color:#8b98a9;line-height:1.55;margin-top:10px;width:520px}
+  .note b{color:#e6edf3}
+  /* the read */
+  .tread{font-size:9.5px;font-weight:600;color:#c9d4e2;background:rgba(124,199,255,.05);
+         border:1px solid rgba(124,199,255,.18);border-radius:4px;padding:5px 8px;line-height:1.55;margin-bottom:8px}
+  .tread b{color:#e6edf3}
+  .tread .w{color:#f2b45a;font-weight:800}
+  .tread .f{color:#2ec27e;font-weight:800}
+  .tread .d{color:#e0645f;font-weight:800}
+  .tread .t{color:#7cc7ff;font-weight:800}
+  /* rail */
+  .railbox{position:relative;height:120px;background:#0f131b;border:1px solid #222a36;border-radius:4px}
+  .track{position:absolute;left:14px;right:14px;top:44px;height:3px;background:#39424e;border-radius:2px}
+  .post{position:absolute;top:44px;width:3px;background:#e3c341;border-radius:1px}
+  .post.acc{background:#a371f7}
+  .kcap{position:absolute;top:-5px;left:50%;transform:translateX(-50%) rotate(45deg);width:6px;height:6px;background:#e3c341}
+  .state{position:absolute;top:30px;transform:translateX(-50%);font-size:5.5px;font-weight:900;letter-spacing:.06em;
+         padding:1px 3px;border-radius:2px}
+  .st-hold{background:rgba(46,194,126,.15);color:#2ec27e;border:1px solid rgba(46,194,126,.5)}
+  .st-weak{background:rgba(242,180,90,.15);color:#f2b45a;border:1px solid rgba(242,180,90,.5)}
+  .st-form{background:rgba(124,199,255,.15);color:#7cc7ff;border:1px solid rgba(124,199,255,.5)}
+  .st-door{background:rgba(139,152,169,.12);color:#8b98a9;border:1px dashed #5b6675}
+  .st-tgt{background:rgba(224,100,95,.15);color:#e0645f;border:1px solid rgba(224,100,95,.5)}
+  .plab{position:absolute;top:96px;transform:translateX(-50%);font-size:8.5px;font-weight:800;text-align:center;line-height:9px}
+  .plab i{display:block;font-style:normal;color:#c9d1da}
+  .plab.y{color:#e3c341}.plab.p{color:#a371f7}.plab.g{color:#5b6675}
+  /* the door ghost */
+  .ghost{position:absolute;top:44px;width:3px;height:18px;border:1px dashed #5b6675;border-radius:1px;background:transparent}
+  /* roll lane: king-class bold vs field dim */
+  .lane{position:absolute;left:14px;right:14px;top:6px;height:22px}
+  .arrK{position:absolute;top:2px;height:12px;border:2px solid #e0645f;border-bottom:none;opacity:.95}
+  .arrF{position:absolute;top:10px;height:8px;border:1px solid #e0645f;border-bottom:none;opacity:.35}
+  .src{position:absolute;bottom:-3px;width:5px;height:5px;border-radius:50%;background:#e0645f}
+  .hd{position:absolute;bottom:-5px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid #e0645f}
+  .pq{position:absolute;top:-8px;font-size:5.5px;font-weight:900;color:#e0645f}
+  .pill2{position:absolute;top:40px;height:12px;background:#fff;color:#0d1117;border-radius:6px;font-size:8.5px;
+        font-weight:900;display:flex;align-items:center;padding:0 5px;z-index:3}
+  .spyk{position:absolute;top:26px;bottom:16px;width:0;border-left:2px dashed #cdb4fa;opacity:.9}
+  .spyk .fl{position:absolute;top:-12px;left:-2px;border:1px solid #cdb4fa;color:#cdb4fa;border-radius:3px;
+            font-size:5.5px;font-weight:900;padding:0 3px;background:rgba(205,180,250,.14);white-space:nowrap}
+  .spyk .pr{position:absolute;bottom:-10px;left:-2px;color:#cdb4fa;font-size:6.5px;font-weight:900;transform:translateX(-40%)}
+</style>
+</head>
+<body>
+
+<div>
+<div class="cap">1 · THE TRADE READ — the requirement, answered in one block</div>
+<div class="panel">
+  <div class="tread">
+    <b>KING 7670 (brake) holds, 18 below.</b><br>
+    Support 7684 <span class="w">WEAKENING</span> — draining −$8M/15m, source of the roll into 7669;
+    new support <span class="f">FORMING</span> at 7669 ($20M received, still building).
+    Resistance 7699 <span class="w">WEAKENING</span> — being ABANDONED on touch.
+    7694 is a <span class="d">DOOR</span> — drained, expect pass-through.<br>
+    <b>Destination:</b> <span class="t">7669 — TARGET</span> (King + dominant pull 2.6×); the path down is FUELLED.
+    Crown chain LIVE: rolls feeding 7670's successor — destination may migrate (76% within 20 bars).
+  </div>
+</div>
+<div class="note"><b>Reading it as trades:</b> nothing WEAKENING gets faded · the FORMING level is the
+new shelf to trade from once price reaches it · DOORS are pass-throughs (never park a stop behind one;
+a pullback into one along the flow is an entry cue) · the TARGET line is where profit gets taken, not
+faded when it's an accelerator.</div>
+</div>
+
+<div>
+<div class="cap">2 · the RAIL wearing the five states</div>
+<div class="panel">
+  <div class="railbox">
+    <div class="lane">
+      <!-- KING-CLASS arrow: bold, pairing quality shown -->
+      <div class="arrK" style="left:44%;width:18%"><span class="pq" style="right:0">✓ 88% paired</span>
+        <span class="src" style="left:-3px"></span><span class="hd" style="right:-4px"></span></div>
+      <!-- field arrow: dim -->
+      <div class="arrF" style="left:20%;width:12%"><span class="src" style="left:-3px;opacity:.4"></span>
+        <span class="hd" style="right:-4px;opacity:.4"></span></div>
+    </div>
+    <div class="track"></div>
+
+    <div class="post" style="left:18%;height:40px"><i class="kcap"></i></div>
+    <div class="state st-hold" style="left:18%">HOLDING</div>
+    <div class="plab y" style="left:18%">7670<i>KING ♛</i></div>
+
+    <div class="state st-form" style="left:34%">FORMING</div>
+    <div class="post" style="left:34%;height:26px"></div>
+    <div class="plab y" style="left:34%">7669<i>+$20M in</i></div>
+
+    <div class="spyk" style="left:46%"><span class="fl">SPY K</span><span class="pr">7682</span></div>
+
+    <div class="state st-weak" style="left:58%">WEAKENING</div>
+    <div class="post" style="left:58%;height:22px"></div>
+    <div class="plab y" style="left:58%">7684<i>−$8M/15m</i></div>
+
+    <div class="ghost" style="left:70%"></div>
+    <div class="state st-door" style="left:70%">DOOR</div>
+    <div class="plab g" style="left:70%">7694<i>drained</i></div>
+
+    <div class="state st-weak" style="left:84%">WEAKENING</div>
+    <div class="post acc" style="left:84%;height:30px"></div>
+    <div class="plab p" style="left:84%">7699<i>abandoned</i></div>
+
+    <div class="pill2" style="left:52%">7688▾</div>
+  </div>
+</div>
+<div class="note"><b>State chips ride above the posts</b> (their own tier — no label collisions), the DOOR
+is a ghost outline where the post used to be, the KING-CLASS arrow is bold with its pairing quality
+(✓ 88% of shed mass accounted for at the destination); field arrows dim. TARGET colours the
+destination's chip red on the rail and in the read. Every state is scored nightly — hold-rates per
+state go into the review, so HOLDING/FORMING/DOOR keep earning their names.</div>
+</div>
+
+</body>
+</html>

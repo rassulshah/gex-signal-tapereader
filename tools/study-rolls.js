@@ -1,105 +1,48 @@
-// Do rolls into NON-LARGEST nodes provide support? Reconstructed from recorded snapshots.
-const fs=require('fs');
-const files=['data/2026-08-17.json','data/2026-08-18.json','data/2026-08-19.json','data/2026-08-20.json'];
-const LOOK=5;        // bars over which a migration is measured (~15 min)
-const NEAR=3.0;      // max strike distance source->destination (SPY dollars)
-const MINABS=2e6;    // dollars shed / gained to count as material
-const RATIO=0.40;    // destination must take >= this share of what source shed
-const TOL=0.50, K=8, HOLD=0.25, BREAK=0.30;
-
-const out={ big:{t:0,h:0}, small:{t:0,h:0} };
-const rolls=[];
-
-for(const f of files){
-  let j; try{ j=JSON.parse(fs.readFileSync(f,'utf8')); }catch(e){ continue; }
-  for(const sym of Object.keys(j.snaps||{})){
-    const A=j.snaps[sym].filter(s=>typeof s.px==='number'&&Array.isArray(s.nodes)&&s.nodes.length);
-    for(let i=LOOK;i<A.length-K;i++){
-      const now=A[i], then=A[i-LOOK];
-      const mapNow={}, mapThen={};
-      now.nodes.forEach(n=>{ if(typeof n.k==='number'&&typeof n.abs==='number') mapNow[n.k]=n; });
-      then.nodes.forEach(n=>{ if(typeof n.k==='number'&&typeof n.abs==='number') mapThen[n.k]=n; });
-      const delta={};
-      for(const k of Object.keys(mapNow)) if(mapThen[k]) delta[k]=mapNow[k].abs-mapThen[k].abs;
-      const ks=Object.keys(delta).map(Number);
-      // largest node on each side, right now
-      const below=now.nodes.filter(n=>n.side==='below'), above=now.nodes.filter(n=>n.side==='above');
-      const bigBelow=below.length?below.reduce((a,b)=>(b.abs||0)>(a.abs||0)?b:a):null;
-      const bigAbove=above.length?above.reduce((a,b)=>(b.abs||0)>(a.abs||0)?b:a):null;
-      for(const src of ks){
-        if(!(delta[src] < -MINABS)) continue;                 // shedding materially
-        let best=null;
-        for(const dst of ks){
-          if(dst===src) continue;
-          if(Math.abs(dst-src)>NEAR) continue;
-          if(!(delta[dst] > MINABS)) continue;                 // receiving materially
-          if(delta[dst]/Math.abs(delta[src]) < RATIO) continue;
-          if(!best || delta[dst]>delta[best]) best=dst;
-        }
-        if(best===null) continue;
-        const dnode=mapNow[best];
-        const isBig = (bigBelow&&Math.abs(bigBelow.k-best)<1e-9) || (bigAbove&&Math.abs(bigAbove.k-best)<1e-9);
-        // forward: did price reach the DESTINATION and hold?
-        const fwd=A.slice(i+1,i+1+K);
-        const isFloor = dnode.side==='below';
-        let hit=-1;
-        for(let q=0;q<fwd.length;q++){ if(isFloor?(fwd[q].l<=best+TOL):(fwd[q].h>=best-TOL)){hit=q;break;} }
-        if(hit<0) continue;
-        const r=fwd.slice(hit);
-        const held=isFloor?((Math.max(...r.map(x=>x.h))-best>=HOLD)&&(Math.min(...r.map(x=>x.l))>best-BREAK))
-                          :((best-Math.min(...r.map(x=>x.l))>=HOLD)&&(Math.max(...r.map(x=>x.h))<best+BREAK));
-        const bucket=isBig?'big':'small';
-        out[bucket].t++; if(held) out[bucket].h++;
-        rolls.push({f:f.slice(5,15),sym,src,dst:best,dir:best>src?'up':'dn',
-                    pctOfBiggest: dnode.pct, isBig, held, side:dnode.side});
-      }
+// Were the ARROWS (latched rolls) helpful? Measured over the pushed day files.
+// T1 DIRECTION: on bars with live rolls, does the 10-bar forward path lean the roll's way?
+//    Baseline: the same stat on ALL feature bars (netGamma key, same cadence, same days).
+// T2 DESTINATION: how often does price REACH the roll's destination within the same 10 bars,
+//    vs reaching a same-distance point on the opposite side (the honest control).
+const days=['2026-08-21','2026-08-24','2026-08-25','2026-08-26'];
+const U=0.0998;               // SPXW strike -> SPY scale (close enough for distances)
+let dirN=0, dirWin=0, base=[], reach=0, reachN=0, ctrl=0, ctrlN=0, upN=0, dnN=0;
+let perDay={};
+for(const day of days){
+  let d; try{ d=require('../data/'+day+'.json'); }catch(e){ continue; }
+  const F=(d.feat&&d.feat.SPY)||[];
+  const rolls=F.filter(r=>r.key==='rolllatch' && r.resolved && r.rec && Array.isArray(r.rec.rolls) && r.rec.rolls.length);
+  const bases=F.filter(r=>r.key==='netGamma' && r.resolved && typeof r.mfe==='number' && typeof r.mae==='number');
+  bases.forEach(b=>base.push(Math.abs(b.mfe)-Math.abs(b.mae)));   // up-lean magnitude, sign-free baseline
+  let dW=0,dN=0,dR=0,dRN=0;
+  for(const r of rolls){
+    if(typeof r.mfe!=='number'||typeof r.mae!=='number') continue;
+    // net roll direction, amt-weighted, LIVE rolls only (the moving arrows)
+    let net=0; for(const ro of r.rec.rolls){ if(!ro.live||ro.gone) continue; net+=(ro.dir==='up'?1:-1)*(Math.abs(ro.amt)||1); }
+    if(net===0) continue;
+    const up=net>0; if(up) upN++; else dnN++;
+    // T1: did the forward path lean the roll's way? (bigger excursion on the roll side)
+    const lean=Math.abs(r.mfe)-Math.abs(r.mae);        // >0 = upside excursion dominated
+    dirN++; dN++;
+    if((up&&lean>0)||(!up&&lean<0)){ dirWin++; dW++; }
+    // T2: reach the nearest live destination on the roll side vs same-distance control
+    let bestD=null;
+    for(const ro of r.rec.rolls){ if(!ro.live||ro.gone) continue;
+      const dd=ro.t*U - r.px; if((up&&dd>0.05)||(!up&&dd<-0.05)){ if(bestD==null||Math.abs(dd)<Math.abs(bestD)) bestD=dd; } }
+    if(bestD!=null && Math.abs(bestD)<=3){       // within a reachable band (~30 ES pts)
+      reachN++; dRN++;
+      const got = bestD>0 ? (r.mfe>=bestD) : (r.mae<=bestD);
+      if(got){ reach++; dR++; }
+      ctrlN++;
+      const gotC = bestD>0 ? (r.mae<=-bestD) : (r.mfe>=-bestD);   // same distance, opposite side
+      if(gotC) ctrl++;
     }
   }
+  perDay[day]={rollBars:dN, dirWin:dW, reach:dR+'/'+dRN};
 }
-const pc=o=>o.t?(o.h/o.t*100).toFixed(0)+'%  ('+o.h+'/'+o.t+')':'n=0';
-console.log('ROLL DESTINATION held when price reached it (±'+TOL+', '+K+' bars fwd)\n');
-console.log('  destination IS the largest node on its side :', pc(out.big));
-console.log('  destination is NOT the largest (secondary)  :', pc(out.small));
-console.log('\ntotal rolls detected:', rolls.length);
-const sm=rolls.filter(r=>!r.isBig);
-console.log('secondary-destination rolls:', sm.length,
-            '| median %King of destination:', sm.length? sm.map(r=>r.pctOfBiggest).sort((a,b)=>a-b)[Math.floor(sm.length/2)] : '-');
-console.log('\nsample secondary rolls that HELD:');
-sm.filter(r=>r.held).slice(0,6).forEach(r=>console.log('  ',r.f,r.sym,r.src+' -> '+r.dst,'('+r.dir+', '+r.side+', '+r.pctOfBiggest+'% of King)'));
-
-// ---- CONTROL: is "roll destination" just a proxy for "node that grew"? ----
-const ctl={ rollDst:{t:0,h:0}, grewOnly:{t:0,h:0}, flat:{t:0,h:0} };
-for(const f of files){
-  let j; try{ j=JSON.parse(fs.readFileSync(f,'utf8')); }catch(e){ continue; }
-  for(const sym of Object.keys(j.snaps||{})){
-    const A=j.snaps[sym].filter(s=>typeof s.px==='number'&&Array.isArray(s.nodes)&&s.nodes.length);
-    for(let i=LOOK;i<A.length-K;i++){
-      const now=A[i], then=A[i-LOOK];
-      const mN={}, mT={}; now.nodes.forEach(n=>mN[n.k]=n); then.nodes.forEach(n=>mT[n.k]=n);
-      const d={}; for(const k of Object.keys(mN)) if(mT[k]&&typeof mN[k].abs==='number'&&typeof mT[k].abs==='number') d[k]=mN[k].abs-mT[k].abs;
-      const ks=Object.keys(d).map(Number);
-      const isDst={};
-      for(const src of ks){ if(!(d[src]<-MINABS)) continue;
-        for(const dst of ks){ if(dst!==src&&Math.abs(dst-src)<=NEAR&&d[dst]>MINABS&&d[dst]/Math.abs(d[src])>=RATIO) isDst[dst]=1; } }
-      const fwd=A.slice(i+1,i+1+K);
-      for(const k of ks){
-        const n=mN[k]; if(!n||typeof n.side!=='string') continue;
-        const grew=d[k]>MINABS;
-        const bucket = isDst[k] ? 'rollDst' : (grew ? 'grewOnly' : 'flat');
-        if(bucket==='flat' && Math.abs(d[k])>MINABS) continue;   // keep 'flat' actually flat
-        const isFloor=n.side==='below';
-        let hit=-1;
-        for(let q=0;q<fwd.length;q++){ if(isFloor?(fwd[q].l<=k+TOL):(fwd[q].h>=k-TOL)){hit=q;break;} }
-        if(hit<0) continue;
-        const r=fwd.slice(hit);
-        const held=isFloor?((Math.max(...r.map(x=>x.h))-k>=HOLD)&&(Math.min(...r.map(x=>x.l))>k-BREAK))
-                          :((k-Math.min(...r.map(x=>x.l))>=HOLD)&&(Math.max(...r.map(x=>x.h))<k+BREAK));
-        ctl[bucket].t++; if(held) ctl[bucket].h++;
-      }
-    }
-  }
-}
-console.log('\nCONTROL — hold rate by what the node was doing');
-console.log('  roll DESTINATION (paired: something shed into it):', pc(ctl.rollDst));
-console.log('  GREW but with no shedding source nearby         :', pc(ctl.grewOnly));
-console.log('  flat (no material change)                       :', pc(ctl.flat));
+const baseUp=base.filter(x=>x>0).length, baseN=base.length;
+console.log('days:', JSON.stringify(perDay));
+console.log('T1 DIRECTION: forward path leaned the roll\'s way on '+dirWin+'/'+dirN+' bars ('+(100*dirWin/dirN).toFixed(1)+'%)  [up-roll bars '+upN+', down '+dnN+']');
+console.log('   baseline (all bars, upside-dominant): '+baseUp+'/'+baseN+' ('+(100*baseUp/baseN).toFixed(1)+'%) — a fair coin sits near 50%');
+console.log('T2 DESTINATION REACHED within 10 bars: '+reach+'/'+reachN+' ('+(100*reach/reachN).toFixed(1)+'%)');
+console.log('   same-distance OPPOSITE side reached: '+ctrl+'/'+ctrlN+' ('+(100*ctrl/ctrlN).toFixed(1)+'%) — the control');
+process.exit(0);

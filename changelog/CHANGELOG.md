@@ -1,3 +1,43 @@
+## v14.30 — THE LEVEL ENGINE (operator's business requirement, made structural)
+
+"I need to know potential support and resistance, especially if it is weakening and new support
+and resistance is forming, as well as where price is going." One build, five pieces:
+
+1. **Five states per rail level**, computed from what is already measured (levelStateOf):
+   FORMING (roll destination, still building — the 74%-held shelf pattern caught early),
+   WEAKENING (own-mass draining, or a roll source), TURNING (5m+15m against the hour — earliest
+   hand-change warning), DOOR (drained source <50% of its own day peak — 19/19 pass-throughs),
+   HOLDING (else). Thresholds ⚖ hand-set and enrolled for calibration.
+2. **The face wears them**: state-coloured post outlines, a state word under the label (silent
+   when HOLDING), DOOR ghosts drawn where vacated posts used to stand (with the stop-placement
+   warning in the hover), and a STATE ROW under the profile's ROC matrix — the three percentage
+   rows are the evidence, the word beneath is the conclusion.
+3. **The read trades in states**: support/resistance clauses lead with the state + its why; a
+   DOOR in reach gets its own clause; the destination adds CONCENTRATION (% of the near book at
+   the target) and CROWN MARGIN (100 − successor%, flagged UNSTABLE past the 60% succession
+   threshold that ran 76% within 20 bars, n=148).
+4. **Two-tier arrows**: KING-CLASS (crown involved) draw bold — the succession chain is the roll
+   that moves the destination itself; field arrows under $5M are latched but not drawn; pairing
+   quality (% of shed mass the destination accounts for) rides every hover — low pairing is
+   evaporation in a roll costume.
+5. **Tracked from day one** (operator: "i want it tracked"): the `levelstate` feature records
+   every level's state per bar + the nearest actionable level, outcomes score hold/break against
+   the forward window, three questions enrolled (forming_holds / weak_leads / door_breaks),
+   rules.json seeded (73 rules).
+
+## v14.29 — the read speaks ES, the flag prices itself, the arrows stop lying about motion
+
+Three operator catches in one look (while still on v14.25 — the reminder that a build not
+TM-updated is a build not shipped):
+1. **Every number in the read is ES now** — "KING 7670" was the SPXW strike; the King and any
+   challenger print at their chart price, the strike stays on the rail labels and hovers.
+2. **The SPY K flag carries its price BELOW the line**, ES-mapped, with the name alone on top —
+   neither end collides with the rail labels.
+3. **A moving arrow now means LIVE, full stop.** The animation keyed off (conf && !live), so a
+   signal-level roll (2 bars) that had ALREADY stopped flowing still animated — motion asserted
+   where none existed. Dashes = mass moving this window; solid = latched structure, whatever the
+   count. The grammar the lane always claimed, now enforced.
+
 ## v14.28 — the third pillar is THE DESTINATION (operator-rephrased)
 
 "King, Support and Resistance, Destination." The direction-lean of v14.27 becomes the doctrine\'s
