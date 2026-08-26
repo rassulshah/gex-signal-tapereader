@@ -101,9 +101,11 @@ approved for build until the operator picks an option. Numbered in the order rai
   openU 762.72 (YESTERDAY'S 8:30 bar; the chart hadn't back-filled today yet), rr 10.0676 (EMA
   seeded off a stale SPY price), and date "2026-08-26" (SESSION_DAY computed from the stale candle
   window — and it did NOT flip to 08-27 later). Every rr-scaled value sat ~+20.
-- FIXED LIVE by clearing gpts_emopen_v1 → clean re-capture (rr 10.0419, openU 764.67, pill 7690 ✓)
-  — but the record's date STILL says 08-26, so SESSION_DAY is stuck on yesterday even with today's
-  RTH bars on the chart: a real latent defect (wrong day-keying for peaks/recording windows?).
+- FIXED LIVE by clearing gpts_emopen_v1 → clean re-capture (rr 10.0419, openU 764.67, pill 7690 ✓).
+- ⚠ CORRECTION (verified 10:55): the "date still says 08-26 / SESSION_DAY stuck" claim was MY
+  calendar error — today IS 2026-08-26 (the midnight ET session roll was Aug 25→26). ctTodayStr,
+  SESSION_DAY and the record date were all CORRECT. Item (b) below is WITHDRAWN; the warm-up guard
+  (a) and the persisted heal clock (c) were real and shipped in v14.19.
 - AGGRAVATOR: the v13.9 rr self-heal needs 5 SUSTAINED minutes and its timer is in-memory — every
   install/reload restarts it, so on a build-iteration morning it never fires.
 - NEXT BUILD (needs decisions): (a) capture warm-up guard — refuse the emopen capture until the

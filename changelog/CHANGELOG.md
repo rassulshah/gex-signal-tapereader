@@ -1,3 +1,24 @@
+## v14.21 — the chart-flip guard lands (queued since the GLD/USO corruption path was verified)
+
+Operator, after browsing symbols: "make sure that doesn't corrupt anything… and clear the data
+also." Two halves:
+
+**The guard**: an unrecognized chart symbol (GLD, USO, a stock — anything without a pairing in
+FUT_UNDERLYING) marks FUTMODE.foreign. The single candle-ingestion gate (refreshSym) then
+DISCARDS the fiber candles instead of writing the foreign instrument's bars into the SPY book
+through the 'SPY' default — the verified corruption path — and the last-resort price fallback is
+gated too. The face says so: "RECORDING PAUSED, foreign data discarded". Feed-side state (walls,
+levels, ladders) is symbol-keyed and unaffected. The recognized set (ES/MES/NQ/MNQ/SPX/SPXW/
+SPY/QQQ) flips freely, as before.
+
+**The sweep ("clear the data")**: applyCandles now drops any bar whose close sits >15% from the
+batch median — a foreign bar is on a different price SCALE entirely (GLD ~428 vs SPY ~765; a real
+intraday range is <2%), so history self-cleans even if something ever slipped in. Verified live
+first: today's books were CLEAN (SPY 50 bars, 764.57–766.93, zero out-of-range).
+
+test_futures_mode +5 (foreign flag, face message, both ingestion gates, and the sweep EXECUTED:
+a planted 428 bar dropped from six real ones). Suite at the baseline six.
+
 ## v14.20 — the export steps back to THE THREE KINGS (operator-directed)
 
 "Too many levels — let's step back to only exporting the kings. SPY king, SPX king and QQQ king.

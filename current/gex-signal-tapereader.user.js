@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.20
+// @version    14.21
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -596,7 +596,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.20';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.21';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -716,6 +716,22 @@ function convertFiberCandlesCont(raw){
 function applyCandles(sym, arr){
   var S=STATE[sym];
   if(!arr.length) return;
+  // (v14.21, operator: "clear the data also") SCALE SWEEP — the retroactive half of the guard.
+  // A foreign bar that ever slipped in (or arrives in a mixed batch) is on a different PRICE
+  // SCALE entirely (GLD ~428 vs SPY ~765 = 44% off; a real intraday range is <2%). Any bar whose
+  // close sits >15% from the batch median is discarded, so the books also self-clean history.
+  try{
+    if(arr.length>=5){
+      var cls=arr.map(function(c){ return c.c; }).filter(function(x){ return typeof x==='number'&&x>0; }).sort(function(a,b){ return a-b; });
+      if(cls.length>=5){
+        var med=cls[Math.floor(cls.length/2)];
+        if(med>0){
+          var kept=arr.filter(function(c){ return typeof c.c==='number' && Math.abs(c.c/med-1)<=0.15; });
+          if(kept.length!==arr.length){ arr=kept; if(!arr.length) return; }
+        }
+      }
+    }
+  }catch(eSw){}
   var nowBucket=Math.floor(ctNowSecOfDay()/CANDLE_S)*CANDLE_S;
   var closed=[], cur=null;
   arr.forEach(function(c){
@@ -5818,8 +5834,13 @@ function futModeCompute(){
     out.futPx=(det.sym===chart)?det.px:null;
     var und=FUT_UNDERLYING[chart]||null;
     if(!und){
+      // (v14.21, operator-approved: the phase-1 CHART-FLIP GUARD, queued since the GLD/USO
+      // corruption path was verified) an UNRECOGNIZED chart symbol marks the mode FOREIGN.
+      // Every ingestion site checks this flag: recording PAUSES and the foreign candles are
+      // DISCARDED — they must never land in the SPY book through the 'SPY' default below.
       out.ok=false; out.underlying='SPY'; out.r=1;
-      out.msg='No options tape for '+chart+' — levels unavailable';
+      out.foreign=(chart!=='SPY');
+      out.msg='No options tape for '+chart+' — levels unavailable'+(chart!=='SPY'?' · RECORDING PAUSED, foreign data discarded':'');
       return out;
     }
     out.underlying=und;
@@ -22534,7 +22555,12 @@ function refreshSym(sym){
     // in-play, drift and R:R all keep working on the cash scale they were built for.
     var raw=futRawCandles(sym);
     var conv=null;
-    if(raw && raw.length){
+    // (v14.21) THE CHART-FLIP GUARD, at the one gate every candle passes through. On a foreign
+    // chart (GLD, USO, a stock — anything without a recognized pairing) the fiber candles are the
+    // FOREIGN instrument's bars: writing them into this book is the verified corruption path.
+    // They are discarded here — feed-side state (walls, levels) is symbol-keyed and stays live.
+    var FOREIGN=false; try{ FOREIGN=!!(FUTMODE && FUTMODE.foreign); }catch(eFo){}
+    if(raw && raw.length && !FOREIGN){
       // (v10.23 Issue C) build the CONTINUOUS close series BEFORE applyCandles so
       // it can compute the prior-session count; SMA/trend read this, not today-only.
       S.contCloses=convertFiberCandlesCont(raw);
@@ -22544,7 +22570,7 @@ function refreshSym(sym){
     }
     // (v10.55 PART E) no candles at all and the chart is a future: the underlying price
     // is still knowable as futPrice / r. Used ONLY as a last resort — the feed wins.
-    if(S.price==null){ try{ var up=futUnderlyingPx(); if(up!=null && FUT_UNDERLYING[FUTMODE.chart]===sym) S.price=up; }catch(eUp){} }
+    if(S.price==null && !FOREIGN){ try{ var up=futUnderlyingPx(); if(up!=null && FUT_UNDERLYING[FUTMODE.chart]===sym) S.price=up; }catch(eUp){} }
     if(haveFeed){
       // ---- Primary path: network feed ----
       var j=f.j;

@@ -163,5 +163,26 @@ ok(activeSym()==='QQQ', '7a an NQ chart makes QQQ the active underlying', active
 global.FUTMODE={ chart:'ES', fam:'ES', underlying:'SPY', r:10.0676, live:true, approx:false, ok:true };
 ok(activeSym()==='SPY', '7b an ES chart keeps SPY', activeSym());
 
+// ---------- (v14.21) THE CHART-FLIP GUARD ----------
+(function(){
+  const src2=require('fs').readFileSync('./v10.js','utf8');
+  const okG=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+JSON.stringify(g):''));} };
+  const fmc=(()=>{const re=/function\s+futModeCompute\s*\(/g;const m=re.exec(src2);let i=src2.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src2.length;k++){if(src2[k]==='{')d++;else if(src2[k]==='}'){d--;if(d===0){e=k;break;}}}return src2.slice(m.index,e+1);})();
+  okG(/out\.foreign=\(chart!=='SPY'\)/.test(fmc), 'gA an unrecognized chart marks the mode FOREIGN');
+  okG(/RECORDING PAUSED, foreign data discarded/.test(fmc), 'gB ...and says so on the face');
+  const rsy=(()=>{const re=/function\s+refreshSym\s*\(/g;const m=re.exec(src2);let i=src2.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src2.length;k++){if(src2[k]==='{')d++;else if(src2[k]==='}'){d--;if(d===0){e=k;break;}}}return src2.slice(m.index,e+1);})();
+  okG(/FUTMODE && FUTMODE\.foreign/.test(rsy) && /raw\.length && !FOREIGN/.test(rsy), 'gC the ingestion gate discards foreign candles');
+  okG(/S\.price==null && !FOREIGN/.test(rsy), 'gD ...and the last-resort price path is gated too');
+  // the scale sweep, executed
+  const apc=(()=>{const re=/function\s+applyCandles\s*\(/g;const m=re.exec(src2);let i=src2.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src2.length;k++){if(src2[k]==='{')d++;else if(src2[k]==='}'){d--;if(d===0){e=k;break;}}}return src2.slice(m.index,e+1);})();
+  const ST={ T:{ candles:[], cur:null, contCloses:[] } };
+  const env='var STATE='+'ST'+', CANDLE_S=180; function ctNowSecOfDay(){return 50000;} function ctTodayStr(){return "2026-08-26";} function mul(a,b){return a*b;}';
+  const run=new Function('ST', env+apc.replace('function applyCandles','return function applyCandles'))(ST);
+  const mk=(so,c)=>({b:so*1000,t:so*1000,so:so,day:'2026-08-26',c:c,h:c+0.3,l:c-0.3,o:c});
+  const bars=[mk(30600,765.1),mk(30780,765.4),mk(30960,764.9),mk(31140,765.6),mk(31320,765.2),mk(31500,428.1),mk(31680,765.0)];
+  run('T', bars);
+  okG(ST.T.candles.length===6 && ST.T.candles.every(c=>c.c>700), 'gE the scale sweep DROPS the 428 foreign bar and keeps the six real ones', ST.T.candles.length);
+})();
+
 console.log('\n'+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
