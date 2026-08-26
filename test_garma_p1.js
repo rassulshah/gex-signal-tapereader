@@ -118,5 +118,12 @@ ok(/the SPXW side reads the LATCHED crown/.test(src), 'k6 Trinity reads the latc
   ok(/USD/.test(ex('evCalFetch')) && /high/.test(ex('evCalFetch')), 'c6 USD + High impact only');
 })();
 
+// ---------- (v14.39) 1b max-pain + the levels strip ----------
+ok(/expect pinning; max pain/.test(src), 'o1 an OPEX day names the pin target (operator: the simplest thing)');
+ok(/g3lstrip/.test(src) && /LEVELS/.test(src), 'o2 the levels strip renders under the read (approved mockup)');
+ok(/\u00b7 node/.test(src) || src.indexOf("' \\u00b7 node'")>=0, 'o3 confluence chips say "· node" (Garma r22)');
+ok(/session TICKS are RETIRED/.test(src) && !/g3sess" style/.test(src), 'o4 the rail ticks retired in the strip\'s favour');
+ok(/g3lvk/.test(src), 'o5 SPY K keeps its purple identity in the strip');
+
 console.log('test_garma_p1: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

@@ -1,3 +1,15 @@
+## v14.39 — GARMA 1b (max pain on OPEX) + THE LEVELS STRIP (approved mockup)
+
+1b, the operator\'s "simplest thing that is useful": an OPEX day\'s lead clause names the pin
+target — "OPEX day — expect pinning; max pain 7594" — one clause, pulling the MP the IF chain
+already computes. QUAD-split and EM-caution options ledgered, not built.
+
+THE LEVELS STRIP (mockups/mockup-levels-strip.html, operator-approved): session structure gets
+its own row under the read — chips nearest-first, \u25b2 overhead / \u25bc beneath with signed
+distance, BLUE + "· node" when a gamma level sits on it (Garma r22 made unmissable), SPY K in its
+purple. The rail\'s session TICKS are RETIRED in its favour ("the rail seems cluttered") — the
+rail keeps only what moves; sessionLevels() and the read\'s confluence naming live on unchanged.
+
 ## v14.38 + companion v1.14 — GARMA 1a: the economic calendar (operator-approved)
 
 The EVENT day now stamps itself. Source: ForexFactory\'s free weekly feed (no key, impact-rated),

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.38
+// @version    14.39
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -598,7 +598,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.38';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.39';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -18808,6 +18808,20 @@ function ensureV3Css(){
     '#gpts-body .g3lvwFORMING{color:#7cc7ff}'+
     '#gpts-body .g3lvwWEAKENING{color:#f2b45a}'+
     '#gpts-body .g3lvwTURNING{color:#cdb4fa}'+
+    // (v14.39) the levels strip — structure in its own row under the read
+    '#gpts-body .g3lstrip{display:flex;align-items:center;gap:4px;flex-wrap:wrap;background:rgba(139,152,169,.05);'+
+      'border:1px solid rgba(139,152,169,.2);border-radius:4px;padding:2px 6px;margin:0 0 4px;cursor:help}'+
+    '#gpts-body .g3lstrip em{font-style:normal;font-size:6px;font-weight:900;letter-spacing:.08em;color:#5b6675;margin-right:1px}'+
+    '#gpts-body .g3lv{display:inline-flex;align-items:center;gap:3px;font-size:7.5px;font-weight:800;color:#8b98a9;'+
+      'border:1px solid #2a3340;border-radius:3px;padding:0 4px;line-height:11px}'+
+    '#gpts-body .g3lv b{color:#c9d1da;font-weight:800}'+
+    '#gpts-body .g3lv u{text-decoration:none;color:#5b6675;font-size:6.5px;font-weight:700}'+
+    '#gpts-body .g3lvup::before{content:"\u25b2";color:#e0645f;font-size:5px;margin-right:1px}'+
+    '#gpts-body .g3lvdn::before{content:"\u25bc";color:#2ec27e;font-size:5px;margin-right:1px}'+
+    '#gpts-body .g3lv.g3lvc{border-color:rgba(124,199,255,.5)}'+
+    '#gpts-body .g3lv.g3lvc b,#gpts-body .g3lv.g3lvc u{color:#7cc7ff}'+
+    '#gpts-body .g3lv.g3lvk{border-color:#cdb4fa}'+
+    '#gpts-body .g3lv.g3lvk b{color:#cdb4fa}'+
     // (v14.35) session-structure ticks — the skeleton, dimmer than everything gamma
     '#gpts-body .g3sess{position:absolute;top:15px;width:0;height:10px;border-left:1px solid #46505c;'+
       'transform:translateX(-50%);z-index:0;cursor:help;opacity:.9}'+
@@ -21165,6 +21179,13 @@ function secFrame(sym){
         var frDT=dayTypeOf(sym, EB);
         var frTri=trinityRead();
         var frLead=frDT.t+' day';
+        // (v14.39, Garma 1b, operator-approved "simplest thing") OPEX names the pin target
+        if(frDT.t==='OPEX'){
+          try{ var frMPL=ifLadder(sym);
+            if(frMPL && !frMPL.err && frMPL.maxPain!=null && frMPL.dispScale>0)
+              frLead+=' \u2014 expect pinning; max pain '+frameNum(frMPL.maxPain*frMPL.dispScale);
+          }catch(eMPx){}
+        }
         if(frTri.of>=2){
           frLead+=' \u00b7 Trinity '+frTri.n+'-of-'+frTri.of+' (Kings '+frTri.side+' price'+
                   (frTri.dissent.length?('; '+frTri.dissent.join('/')+' dissent'+(frTri.dissent.length>1?'':'s')):'')+')';
@@ -21311,6 +21332,40 @@ function secFrame(sym){
       }catch(eF6){}
       if(FR.length){
         var frTxt=FR.map(function(fseg){ return fseg.charAt(0).toUpperCase()+fseg.slice(1); }).join('. ')+'.';
+        // (v14.39, approved mockup mockups/mockup-levels-strip.html) THE LEVELS STRIP — session
+        // structure gets its own row under the read; the rail keeps only what moves. Chips sorted
+        // nearest-first, \u25b2 = overhead, \u25bc = beneath, blue = a gamma node sits ON it
+        // (Garma r22 confluence), SPY K keeps its purple identity.
+        try{
+          var LS9=[];
+          if(SESSL){
+            [['IBH',SESSL.ibSet?SESSL.ibH:null],['IBL',SESSL.ibSet?SESSL.ibL:null],
+             ['PDH',SESSL.pdh],['PDL',SESSL.pdl],['PDC',SESSL.pdc]].forEach(function(sd){
+              if(sd[1]!=null) LS9.push({ n:sd[0], at:sd[1] }); });
+          }
+          try{
+            if(CFG.spyFlag!==false && typeof LASTFEED!=='undefined' && LASTFEED.SPY && LASTFEED.SPY.j &&
+               (Date.now()-(LASTFEED.SPY.ts||0))<=FEED_STALE_MS*3 && typeof EB.scaleUsed==='number'){
+              var ew9=null; try{ ew9=extractWalls(LASTFEED.SPY.j); }catch(e9a){}
+              if(ew9 && ew9.king!=null) LS9.push({ n:'SPY K', at:ew9.king*EB.scaleUsed, spyk:true });
+            }
+          }catch(e9b){}
+          if(LS9.length){
+            var frNow9=(typeof EB.nowLive==='number')?EB.nowLive:EB.now;
+            LS9.forEach(function(L9){ L9.d=L9.at-frNow9;
+              L9.confl=false;
+              try{ for(var c9=0;c9<RAILPS.length;c9++){ if(Math.abs(RAILPS[c9].disp-L9.at)<=SESS_CONFL_PTS){ L9.confl=true; break; } } }catch(e9c){}
+            });
+            LS9.sort(function(a9,b9){ return Math.abs(a9.d)-Math.abs(b9.d); });
+            var h9='<div class="g3lstrip"'+g3tip('THE LEVELS — session structure (30-min IB, prior day) and the SPY King, nearest first. \u25b2 overhead, \u25bc beneath, with the distance. BLUE = a gamma node sits on it (Garma r22: structure + node stacked beats either alone). The rail carries only what moves; this row is the skeleton it moves around.')+'><em>LEVELS</em>';
+            LS9.forEach(function(L9){
+              h9+='<span class="g3lv'+(L9.d>0?' g3lvup':' g3lvdn')+(L9.confl?' g3lvc':'')+(L9.spyk?' g3lvk':'')+'">'+
+                  g3esc(L9.n)+' <b>'+g3esc(frameNum(L9.at))+'</b><u>'+(L9.d>0?'+':'')+Math.round(L9.d)+(L9.confl?' \u00b7 node':'')+'</u></span>';
+            });
+            h9+='</div>';
+            h+=h9;
+          }
+        }catch(eLS9){}
         h+='<div class="g3tread"'+g3tip('THE READ, on three things: THE KING (held or contested, which side of price), SUPPORT AND RESISTANCE (nearest level each side, live build/drain, defence verdicts \u2014 the SPY King competes as a level), THE DESTINATION (dominant magnet by pull = size/distance, 2\u00d7 dominance gate, path priced fuelled/braked/clear, feeding rolls named). All measured from the rail arrays. A destination is where the flow points, not a promise.')+'>'+
             g3esc(frTxt)+'</div>';
       }
@@ -21555,25 +21610,9 @@ function secFrame(sym){
                  '><em>DOOR</em></i>';
            });
          }catch(eDo){}
-         // (v14.35, Garma item 1) SESSION TICKS — the price-structure skeleton, dim and thin:
-         // IB high/low (30-min, matching Skylit's own IB30 badges) + prior day H/L/C. Not gamma,
-         // no states — the frame he hangs the map on. Confluence with a node upgrades the READ.
-         try{
-           if(SESSL){
-             var sessDefs=[['IBH',SESSL.ibSet?SESSL.ibH:null,'Initial-Balance HIGH (first 30 min) \u2014 break-and-retest above supports a trend long (Garma r18); also a target.'],
-                           ['IBL',SESSL.ibSet?SESSL.ibL:null,'Initial-Balance LOW (first 30 min) \u2014 break from below supports a short if the maps resist (Garma r19).'],
-                           ['PDH',SESSL.pdh,'Prior-day HIGH \u2014 session structure; a target when structurally relevant (Garma r34).'],
-                           ['PDL',SESSL.pdl,'Prior-day LOW \u2014 session structure.'],
-                           ['PDC',SESSL.pdc,'Prior-day CLOSE \u2014 session structure.']];
-             sessDefs.forEach(function(sd){
-               if(sd[1]==null) return;
-               var xS=emPosRail(EB, sd[1], RB);
-               if(!isFinite(xS) || xS<=0.2 || xS>=99.8) return;   // off-frame: skip, never pile at the edge
-               h2+='<i class="g3sess" style="left:'+xS.toFixed(1)+'%"'+g3tip(sd[2]+' At '+frameNum(sd[1])+'.')+
-                   '><em>'+sd[0]+'</em></i>';
-             });
-           }
-         }catch(eSt){}
+         // (v14.39) the session TICKS are RETIRED — the approved levels strip replaced them ("the rail
+         // seems cluttered… have the levels on its own section below the read"). sessionLevels()
+         // and the read's confluence naming live on; only the rail marks left.
          // (v14.23, operator requirement: "have some line or flag show the spy king even though
          // all the dynamics are from the spxw — sometimes there are bounces based on the spy
          // king") THE SPY KING FLAG. Full-height dashed line at the SPY crown's price, in the SPY
