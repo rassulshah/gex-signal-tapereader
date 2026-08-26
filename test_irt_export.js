@@ -68,9 +68,9 @@ ok(!!king, '2a the King exports as SPXW KING + %King — source-prefixed, no str
 ok(king && /^EPU26,7727\.750000,/.test(king), '2b SPX 7710 lands at ES 7727.75 — the RAIL\'s price on the 0.25 tick', king);
 ok(king && king.split(',')[4]==='3', '2c the King is drawn heaviest');
 const gk=eRows.find(l=>/SPXW GK 79%/.test(l));
-ok(gk && gk.split(',')[3]===String((247<<16)+(113<<8)+163), '2d a -gamma GK wears the accelerator purple (COLORREF)', gk&&gk.split(',')[3]);
+ok(gk && gk.split(',')[3]===String((163<<16)+(113<<8)+247), '2d a -gamma GK wears the accelerator purple (COLORREF)', gk&&gk.split(',')[3]);
 const brk=eRows.find(l=>/SPXW BRK 41%/.test(l));
-ok(brk && brk.split(',')[3]===String((65<<16)+(195<<8)+227), '2e a +gamma node wears the brake yellow', brk&&brk.split(',')[3]);
+ok(brk && brk.split(',')[3]===String((227<<16)+(195<<8)+65), '2e a +gamma node wears the brake yellow', brk&&brk.split(',')[3]);
 const succ=eRows.find(l=>/SPXW SUCC/.test(l));
 ok(!!succ && !/SUCC \d/.test(b.csv), '2f the successor rides along as SPXW SUCC — NO % (meaning is "next King", not size)');
 ok(succ && /^EPU26,7647\.500000,/.test(succ), '2g ...at its converted tick price', succ);
@@ -79,9 +79,9 @@ ok(succ && /^EPU26,7647\.500000,/.test(succ), '2g ...at its converted tick price
 const spyK=eRows.find(l=>/SPY KING 100%/.test(l));
 ok(!!spyK, '3a SPY\'s King is NAMED — the 100% row is arithmetic, not a guess');
 ok(/SPY 44%/.test(b.csv), '3b every other SPY row is % only (roles would be guesses — the rail machine is SPXW-only)');
-ok(spyK && spyK.split(',')[3]===String((140<<16)+(222<<8)+240), '3c +gamma SPY wears the LIGHT yellow', spyK&&spyK.split(',')[3]);
+ok(spyK && spyK.split(',')[3]===String((240<<16)+(222<<8)+140), '3c +gamma SPY wears the LIGHT yellow', spyK&&spyK.split(',')[3]);
 const spy44=eRows.find(l=>/SPY 44%/.test(l));
-ok(spy44 && spy44.split(',')[3]===String((250<<16)+(180<<8)+205), '3d -gamma SPY wears the LIGHT purple', spy44&&spy44.split(',')[3]);
+ok(spy44 && spy44.split(',')[3]===String((205<<16)+(180<<8)+250), '3d -gamma SPY wears the LIGHT purple', spy44&&spy44.split(',')[3]);
 ok(spyK && Math.abs(parseFloat(spyK.split(',')[1]) - 7678.00) <= 0.25, '3e host-scale strike -> chart -> ES, on the tick', spyK&&spyK.split(',')[1]);
 ok(spyK && spyK.split(',')[5]==='1', '3f dotted, like Skylit draws the diamonds');
 
@@ -90,11 +90,11 @@ ok(/IF CW0/.test(b.csv) && /IF PW0/.test(b.csv) && /IF MAG0/.test(b.csv) && /IF 
    '4a CR->CW0, PS->PW0, Mag->MAG0, MP->MP0 (companion\'s * survives)');
 const ifcw=eRows.find(l=>/IF CW0/.test(l));
 ok(ifcw && /^EPU26,7761\.500000,/.test(ifcw), '4b IF CW0 772 × 10.0538 = 7761.53 → 7761.50 on the tick', ifcw);
-ok(ifcw && ifcw.split(',')[3]===String((109<<16)+(97<<8)+240), '4c CW0 is red (resistance)', ifcw&&ifcw.split(',')[3]);
+ok(ifcw && ifcw.split(',')[3]===String((240<<16)+(97<<8)+109), '4c CW0 is red (resistance)', ifcw&&ifcw.split(',')[3]);
 const ifpw=eRows.find(l=>/IF PW0/.test(l));
-ok(ifpw && ifpw.split(',')[3]===String((126<<16)+(194<<8)+46), '4d PW0 is green (support)', ifpw&&ifpw.split(',')[3]);
+ok(ifpw && ifpw.split(',')[3]===String((46<<16)+(194<<8)+126), '4d PW0 is green (support)', ifpw&&ifpw.split(',')[3]);
 const ifmag=eRows.find(l=>/IF MAG0/.test(l));
-ok(ifmag && ifmag.split(',')[3]===String((160<<16)+(140<<8)+120), '4e MAG0 is NEUTRAL — a magnet is not a wall', ifmag&&ifmag.split(',')[3]);
+ok(ifmag && ifmag.split(',')[3]===String((120<<16)+(140<<8)+160), '4e MAG0 is NEUTRAL — a magnet is not a wall', ifmag&&ifmag.split(',')[3]);
 ok(!/IF CR/.test(b.csv) && !/IF PS/.test(b.csv) && !/IF Mag[^0]/.test(b.csv), '4f the old CR/PS/Mag names are gone');
 
 // ---------- 5. the NQ block: QQQ book -> ENQU26, same file ----------
@@ -102,9 +102,9 @@ const nqK=qRows.find(l=>/QQQ KING 100%/.test(l));
 ok(!!nqK, '5a QQQ\'s King is named on the NQ chart');
 ok(nqK && /^ENQU26,27235\.000000,/.test(nqK), '5b QQQ 650 × 41.9 = 27235.00 on the 0.25 tick', nqK);
 ok(qRows.every(l=>/ ~/.test(l.split(',')[2])), '5c EVERY NQ label wears ~ — the ratio is manual by construction (no NQ price in Skylit)');
-ok(nqK && nqK.split(',')[3]===String((65<<16)+(195<<8)+227), '5d +gamma QQQ wears the full brake yellow', nqK&&nqK.split(',')[3]);
+ok(nqK && nqK.split(',')[3]===String((227<<16)+(195<<8)+65), '5d +gamma QQQ wears the full brake yellow', nqK&&nqK.split(',')[3]);
 const nq44=qRows.find(l=>/QQQ 44%/.test(l));
-ok(nq44 && nq44.split(',')[3]===String((247<<16)+(113<<8)+163), '5e -gamma QQQ wears the full accelerator purple', nq44&&nq44.split(',')[3]);
+ok(nq44 && nq44.split(',')[3]===String((163<<16)+(113<<8)+247), '5e -gamma QQQ wears the full accelerator purple', nq44&&nq44.split(',')[3]);
 ok(!/QQQ 6%/.test(b.csv), '5f the node threshold floors NQ rows too');
 { global.LASTFEED={ SPY:null, QQQ:{ ts:Date.now()-999999, feed:'gamma', j:QQQ().j } };
   ok(!/ENQU26/.test(irtBuildCsv().csv), '5g a stale QQQ feed exports NO NQ rows — absent, never old');
@@ -199,6 +199,20 @@ ok(b7.csv.split('\r\n').every(l=>l==='' || l.split(',').length===28), '8h every 
 // every reload from the v8 rewrite until 2026-08-26. Token-assert the merge lines exist.
 ok(/if\(typeof o\.irt\.on==='boolean'\) CFG\.irt\.on=o\.irt\.on;/.test(src), '8i loadCfg merges irt.on back (the every-reload OFF bug)');
 ok(/CFG\.irt\.nqRatio=o\.irt\.nqRatio/.test(src), '8j ...and the NQ fields persist too');
+
+// (v14.14) RGB, not COLORREF — the King rendered BLUE on the operator's chart under BGR
+ok(/function irtColor\(r,g,b\)\{ return \(r<<16\)\+\(g<<8\)\+b; \}/.test(src), '9a irtColor is RGB 0xRRGGBB (empirical: yellow rendered blue as BGR)');
+// (v14.14) the export price must not depend on which chart Atlas shows
+{ global.FUTMODE={ chart:'SPXW', fam:'SPX', r:1, live:true };            // the SPXW CASH chart
+  global.ifLadder=()=>({ dispScale:1.0, undScale:0.099773 });            // dispScale ~1 there
+  const Bc2=irtBuildCsv(); const kC2=Bc2.csv.split('\r\n').find(l=>/SPXW KING/.test(l)&&l.startsWith('EPU26,'));
+  ok(kC2 && Math.abs(parseFloat(kC2.split(',')[1]) - 7733.9) <= 0.25,
+     '9b on the SPXW CASH chart the rail rows go SPX->SPY->ES (undScale x r), never raw SPX (the 7655-on-ES bug)', kC2&&kC2.split(',')[1]);
+  ok(kC2 && parseFloat(kC2.split(',')[1]) !== 7710.00, '9c ...so the raw strike price never reaches the futures chart');
+  global.FUTMODE={ fam:'ES', r:10.0538, live:true };
+  global.ifLadder=()=>({ dispScale:1.0023 });
+  const Bc3=irtBuildCsv(); const kC3=Bc3.csv.split('\r\n').find(l=>/SPXW KING/.test(l)&&l.startsWith('EPU26,'));
+  ok(kC3 && /^EPU26,7727\.750000,/.test(kC3), '9d and on an ES chart the preferred dispScale path still lands on the rail\'s own price', kC3); }
 
 console.log('test_irt_export: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

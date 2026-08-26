@@ -1515,6 +1515,7 @@ eval(ex('emBand'));
     var IRT_COLORS={king:1,gate:2,ceil:3,flr:4,neg:5,deriv:6,ns:7,pb:8,mag:9,brk:10,accp:11};
     var SUCC_CHART_PCT=60; eval(ex_var('SUCC_CHART_PCT'));
     var CFG={ irt:{futSym:'EPU26', etfSym:''}, nodeThresh:20 };
+    var FUTMODE={ fam:'ES', live:true };   // (v14.14) the fixture charts ES — the dispScale path
     var nodeMapModel=function(){ return {ok:true, levels:[]}; };   // isolate: no SPY rows
     var irtRatio=function(){ return {r:r, live:true, src:'live'}; };
     var nextStopPick=function(){ return null; };

@@ -1,3 +1,18 @@
+## v14.14 — two operator-caught defects: byte-swapped colours, chart-frame prices
+
+**"Why is it blue?" — IRT reads PENCOLOR as plain RGB, not Windows COLORREF.** The King's yellow
+(227,195,65), written BGR as 0x41C3E3, rendered sky blue (65,195,227) on the operator's chart.
+Every colour since v11.4 (the first FlexLevels build) was byte-swapped; nobody had questioned a hue
+until now. irtColor is now (r<<16)+(g<<8)+b, token-asserted.
+
+**"I see SPXW KING at 7655 on the ES — is that right?" — no.** The rail rows' conversion rode on
+`dispScale`, which maps SPX -> the CHARTED symbol's frame: perfect on an ES chart (basis included),
+but ~1.0 on the SPXW CASH chart — so a file written while Atlas showed SPXW carried raw SPX prices
+on the EPU26 symbol, ~15 pts low (ES 7691 / SPX 7677 that moment). Fix, rail + SPY-derived blocks:
+prefer dispScale only when FUTMODE says an ES chart is live; otherwise spxK x undScale (SPX->SPY,
+chart-free) x the persisted live ES basis. The export price no longer depends on what Atlas shows.
+(+4 asserts, 65; em_band fixture pinned to the ES-chart path.)
+
 ## v14.13 — the NQ ratio measures itself (operator: "do a proper ratio — use Skylit's conversion")
 
 The guessed 41.9 default had the NQ lines ~480 points off-screen (ENQU26 29,233 ÷ QQQ 709.19 =

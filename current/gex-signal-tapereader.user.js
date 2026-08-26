@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.13
+// @version    14.14
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -596,7 +596,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.13';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.14';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3736,7 +3736,10 @@ function repoPickFolder(){
 // (marked approx). Export utility only — draws lines in IRT, makes no claim, nothing to enroll.
 var IRT_HEADER='SYMBOL,PRICE,LABEL,PENCOLOR,PENWIDTH,PENSTYLE,bDRAWTEXT,bDRAWPRICE,LABELPOS,bCUSTPOS,CUSTPOSALLMARGIN,CUSTPOSLEFTRIGHT,CUSTPOSUNITS,CUSTPOSWIDTH,bBANDS,BANDPENCOLOR,BANDPENWIDTH,BANDPENSTYLE,BANDABOVEBEL,BANDUNITS,BANDPRICE,bBANDS2,BAND2PENCOLOR,BAND2ABOVEBEL,BAND2UNITS,BAND2PRICE,bBANDLABELS,bTRANSLUCENT';
 var IRT_LAST={t:0, rows:0, how:null, err:null};
-function irtColor(r,g,b){ return (b<<16)+(g<<8)+r; }   // COLORREF 0x00BBGGRR
+// (v14.14 FIX) IRT reads PENCOLOR as plain RGB, NOT Windows COLORREF. Proven on the operator's
+// own chart 2026-08-26: the King's yellow (227,195,65), written BGR as 0x41C3E3, rendered SKY
+// BLUE (65,195,227) — "why is it blue?". Every colour since v11.4 was byte-swapped.
+function irtColor(r,g,b){ return (r<<16)+(g<<8)+b; }   // RGB 0x00RRGGBB (empirical, not COLORREF)
 // (v11.86) only draw a successor on the chart once it is prominent enough to mean something. The
 // project's SPY backtest used 60% as the threshold where the crown rolls 76% of the time; the same cut is
 // reused here so the chart and the doctrine agree. ⚖ HAND-SET, and the 76% is a SPY number.
@@ -3848,7 +3851,18 @@ function irtBuildCsv(){
     var Br=null; try{ Br=emBand(sym); }catch(eB2){}
     var Lx=null; try{ Lx=ifLadder(sym); }catch(eL2){}
     if(Br && Br.ok && Lx && !Lx.err && Lx.dispScale>0 && R && R.r>1){
-      var toSpy=function(spxK){ return (spxK*Lx.dispScale)/R.r; };
+      // (v14.14 FIX) THE EXPORT PRICE MUST NOT DEPEND ON WHICH CHART ATLAS SHOWS. dispScale maps
+      // SPX strike -> the CHARTED symbol's frame: on an ES chart that is the ES price (perfect —
+      // basis included, the preferred path), but on the SPXW CASH chart it is ~1.0 — and the file
+      // wrote raw SPX prices onto EPU26, ~15 pts low ("i see spxw king at 7655 on the es — is
+      // that right?", operator, 2026-08-26, ES 7691/SPX 7677). Chart-independent fallback:
+      // spxK × undScale (SPX->SPY, chart-free) × R.r (the persisted live ES basis).
+      var toSpy=function(spxK){
+        var esChart=false; try{ esChart=(typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.fam==='ES' && FUTMODE.live); }catch(eF){}
+        if(esChart && Lx.dispScale>0.5) return (spxK*Lx.dispScale)/R.r;
+        if(Lx.undScale>0) return spxK*Lx.undScale;
+        return (spxK*Lx.dispScale)/R.r;
+      };
       var ps=[]; try{ ps=emPiles(Br, sym)||[]; }catch(eP2){}
       if(emPiles.lastSrc==='skylit'){
         // (v14.8, operator-directed) NO STRIKE IN THE LABEL — IRT already prints the price on the
@@ -3926,7 +3940,13 @@ function irtBuildCsv(){
           // Colour = the SAME polarity language as SPXW, LIGHTER (sign from `net`, the carrier).
           var sgD=(r0.net!=null)?r0.net:0;
           var isK=(a===mxA);
-          rows.push({ k:(hostK*Lx2.dispScale)/R.r,
+          // (v14.14) same chart-frame independence as the rail rows (hostK is SPXW-scale here).
+          var kSpyD;
+          var esCh2=false; try{ esCh2=(typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.fam==='ES' && FUTMODE.live); }catch(eF2){}
+          if(esCh2 && Lx2.dispScale>0.5) kSpyD=(hostK*Lx2.dispScale)/R.r;
+          else if(Lx2.undScale>0) kSpyD=hostK*Lx2.undScale;
+          else kSpyD=(hostK*Lx2.dispScale)/R.r;
+          rows.push({ k:kSpyD,
                       lbl:isK?'SPY KING 100%':('SPY '+pctD+'%'),
                       col:(sgD<0)?IRT_COLORS.splp:IRT_COLORS.sply, w:isK?2:1, style:1 });
         });
