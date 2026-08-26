@@ -1,3 +1,19 @@
+## v14.15 — NQ rows come from the Atlas QQQ ladder, not the weekly feed
+
+Operator, comparing his IRT NQ chart against Atlas on QQQ: "it has less levels than my nq chart —
+something is wrong… use atlas as the source of truth." He was right about the mismatch and about
+the standard: v14.12–v14.14 sourced the NQ rows from LASTFEED.QQQ, the WEEKLY window (12+ strikes
+>=20%), while Atlas draws the FRONT/0DTE book (a handful). Same data family, different question —
+and the chart must ask Atlas's question.
+
+NQ source is now `tapeMap('QQQ')` — the rendered QQQ ladder, front expiry, the exact strikes,
+%King and polarity signs Atlas shows — with the gamma-feed fallback REJECTED (`fromFeed` ⇒ absent),
+because that fallback IS the weekly book and would silently change windows. Polarity now rides the
+tape's signed pct (negative = accelerator purple). Consequences, by design: the NQ rows expire with
+the 0DTE book exactly like the SPXW rail (the weekly rows' midnight survival was the tell), and an
+unreadable ladder writes NOTHING — absent, never weekly. Tests: QQQ stub moved to a sym-aware
+tapeMap, feed-fallback-rejection asserted (66).
+
 ## v14.14 — two operator-caught defects: byte-swapped colours, chart-frame prices
 
 **"Why is it blue?" — IRT reads PENCOLOR as plain RGB, not Windows COLORREF.** The King's yellow

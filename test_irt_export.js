@@ -35,15 +35,16 @@ const PILES=[
 ];
 global.emPiles=function(){ return PILES; };
 global.emPiles.lastSrc='skylit';
-global.tapeMap=()=>({ king:7710, pct:{ '7710':100, '7630':85, '7650':41 } });
+const SPXW_TAPE=()=>({ king:7710, pct:{ '7710':100, '7630':85, '7650':41 } });
+// (v14.15) the QQQ 0DTE ladder — Atlas is the source of truth. Signed pct = polarity.
+let QQQ_TAPE=()=>({ king:650, count:20, fromFeed:false,
+                    pct:{ '650':-100, '648':44, '640':6 } });
+global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():SPXW_TAPE());
 // derived diamonds (SPY source) on the SPXW feed — HOST-scale strikes (verified live 2026-08-26)
 const DRV=()=>({ ts:Date.now(), j:{ derived:[{ source:'SPY', ratio:10.02,
   levels:[{ l:[ {k:7660.3, v:900e6, net:1}, {k:7675.3, v:400e6, net:-1}, {k:7620.0, v:50e6, net:1} ] }] }] } });
 global.LASTSPXW=DRV();
-// the QQQ book (self-fetched feed) for the NQ block
-const QQQ=()=>({ ts:Date.now(), feed:'gamma', j:{ levels:[{ l:[
-  {k:650, v:900e6, net:1}, {k:648, v:400e6, net:-1}, {k:640, v:50e6, net:1} ] }] } });
-global.LASTFEED={ SPY:null, QQQ:QQQ() };
+global.LASTFEED={ SPY:null };
 
 // ---------- 1. format machinery ----------
 const b=irtBuildCsv();
@@ -102,13 +103,16 @@ const nqK=qRows.find(l=>/QQQ KING 100%/.test(l));
 ok(!!nqK, '5a QQQ\'s King is named on the NQ chart');
 ok(nqK && /^ENQU26,27235\.000000,/.test(nqK), '5b QQQ 650 × 41.9 = 27235.00 on the 0.25 tick', nqK);
 ok(qRows.every(l=>/ ~/.test(l.split(',')[2])), '5c EVERY NQ label wears ~ — the ratio is manual by construction (no NQ price in Skylit)');
-ok(nqK && nqK.split(',')[3]===String((227<<16)+(195<<8)+65), '5d +gamma QQQ wears the full brake yellow', nqK&&nqK.split(',')[3]);
+ok(nqK && nqK.split(',')[3]===String((163<<16)+(113<<8)+247), '5d a -gamma King (tape pct -100) wears the accelerator purple', nqK&&nqK.split(',')[3]);
 const nq44=qRows.find(l=>/QQQ 44%/.test(l));
-ok(nq44 && nq44.split(',')[3]===String((163<<16)+(113<<8)+247), '5e -gamma QQQ wears the full accelerator purple', nq44&&nq44.split(',')[3]);
+ok(nq44 && nq44.split(',')[3]===String((227<<16)+(195<<8)+65), '5e a +gamma node (tape pct +44) wears the brake yellow', nq44&&nq44.split(',')[3]);
 ok(!/QQQ 6%/.test(b.csv), '5f the node threshold floors NQ rows too');
-{ global.LASTFEED={ SPY:null, QQQ:{ ts:Date.now()-999999, feed:'gamma', j:QQQ().j } };
-  ok(!/ENQU26/.test(irtBuildCsv().csv), '5g a stale QQQ feed exports NO NQ rows — absent, never old');
-  global.LASTFEED={ SPY:null, QQQ:QQQ() }; }
+{ const keep=QQQ_TAPE;
+  QQQ_TAPE=()=>({ king:650, count:20, fromFeed:true, pct:{ '650':-100, '648':44 } });
+  ok(!/ENQU26/.test(irtBuildCsv().csv), '5g the FEED fallback (weekly window) is REJECTED — Atlas-rendered rows or nothing');
+  QQQ_TAPE=()=>null;
+  ok(!/ENQU26/.test(irtBuildCsv().csv), '5g2 no readable QQQ ladder → NO NQ rows — absent, never weekly');
+  QQQ_TAPE=keep; }
 { global.CFG.irt.nqOn=false;
   ok(!/ENQU26/.test(irtBuildCsv().csv), '5h NQ off in settings → no ENQU26 rows');
   global.CFG.irt.nqOn=true; }
@@ -151,10 +155,10 @@ ok(!/D-SPY/.test(b.csv) && !/D-QQQ/.test(b.csv), '6e the D-* lane labels are gon
 { global.ifChainRows=()=>null; global.emPiles.lastSrc='if-fallback'; global.LASTSPXW=null;
   const B=irtBuildCsv();
   ok(!!B && B.csv.split('\r\n').filter(l=>l&&!/^SYMBOL/.test(l)).every(l=>l.startsWith('ENQU26,')), '7c ES sources all down → the NQ block still writes alone', B&&B.n);
-  global.LASTFEED={ SPY:null, QQQ:null };
+  const keep7=QQQ_TAPE; QQQ_TAPE=()=>null;
   ok(irtBuildCsv()==null, '7d EVERY source down → nothing is written, never an empty confident file');
   global.ifChainRows=(s2,w2)=>IF_ROWS(); global.emPiles.lastSrc='skylit';
-  global.LASTSPXW=DRV(); global.LASTFEED={ SPY:null, QQQ:QQQ() }; }
+  global.LASTSPXW=DRV(); QQQ_TAPE=keep7; }
 { // diamonds: only the SPY source projects onto the ES chart
   global.LASTSPXW={ ts:Date.now(), j:{ derived:[
     { source:'QQQ', ratio:0.09, levels:[{ l:[ {k:7660.0, v:900e6, net:1} ] }] } ] } };
@@ -174,9 +178,9 @@ ok(/ ~/.test(irtBuildCsv().csv), '8a last-known ratio marks labels with ~');
 global.CFG.irt.futSym=''; global.CFG.irt.etfSym='';
 { const B=irtBuildCsv();
   ok(!!B && B.csv.split('\r\n').filter(l=>l&&!/^SYMBOL/.test(l)).every(l=>l.startsWith('ENQU26,')), '8b no ES symbol set → no wrong-symbol ES rows; NQ unaffected');
-  global.LASTFEED={ SPY:null, QQQ:null };
+  const keep8=QQQ_TAPE; QQQ_TAPE=()=>null;
   ok(irtBuildCsv()==null, '8c ...and with NQ dark too, nothing is written');
-  global.LASTFEED={ SPY:null, QQQ:QQQ() }; }
+  QQQ_TAPE=keep8; }
 global.CFG.irt.futSym='EPU26'; global.CFG.irt.etfSym='';
 global.FUTMODE={ fam:'ES', r:10.0538, live:true };
 irtBuildCsv();                                              // persists the live ratio
@@ -185,10 +189,10 @@ const b4=irtBuildCsv();
 ok(!!b4 && b4.ratio.src==='last-good' && Math.abs(b4.ratio.r-10.0538)<0.001, '8d on a CASH chart the export still writes, using the persisted ES ratio', b4&&b4.ratio);
 ok(/ ~/.test(b4.csv), '8e ...marked ~ because the ratio is not live');
 LS={};
-global.LASTFEED={ SPY:{ j:{ derived:[{source:'SPXW', ratio:0.09974500868055555}] } }, QQQ:QQQ() };
+global.LASTFEED={ SPY:{ j:{ derived:[{source:'SPXW', ratio:0.09974500868055555}] } } };
 const b5=irtBuildCsv();
 ok(b5 && b5.ratio.src==='spxw-derived' && Math.abs(b5.ratio.r-10.0256)<0.01, '8f no persisted ratio → the feed\'s own SPXW→SPY ratio', b5&&b5.ratio);
-global.LASTFEED={SPY:null, QQQ:QQQ()};
+global.LASTFEED={SPY:null};
 const b6=irtBuildCsv();
 ok(b6 && b6.ratio.src==='const' && b6.ratio.r===10.05, '8g last resort: the ES constant', b6&&b6.ratio);
 // comma sanitation still holds on the surviving label paths

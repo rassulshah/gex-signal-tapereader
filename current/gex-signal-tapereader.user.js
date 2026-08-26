@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.14
+// @version    14.15
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -596,7 +596,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.14';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.15';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3973,10 +3973,13 @@ function irtBuildCsv(){
   targets.forEach(function(T){
     rows.forEach(function(R){ out.push(irtCsvRow(T.sym, irtRound(R.k*T.mul, T.tick), R.lbl+T.tag, R.col, R.w, R.style)); });
   });
-  // ---- 4) NQ — the QQQ book, same file (v14.12, on by default) -----------------------------------
-  // Source: the panel's own self-fetched QQQ gamma feed (LASTFEED.QQQ — flowing since the early
-  // builds). Own-King %, node threshold, KING named (arithmetic), everything else % only.
-  // k(QQQ strike) x nqRatio -> NQ price, 0.25 tick. Stale feed => the block is ABSENT, never old.
+  // ---- 4) NQ — the QQQ 0DTE ladder, same file (v14.15: ATLAS IS THE SOURCE OF TRUTH) -------------
+  // (v14.12–v14.14 read LASTFEED.QQQ — the WEEKLY window — and the operator caught the mismatch on
+  // his own charts: 12+ weekly strikes in IRT vs the handful Atlas draws on QQQ. "Use atlas as the
+  // source of truth." Source is now tapeMap('QQQ') — the RENDERED QQQ ladder, front expiry, the
+  // exact strikes and %King Atlas shows — with the feed fallback REJECTED (fromFeed => absent),
+  // because that fallback is the weekly book and would silently change windows. Consequence, by
+  // design: the NQ rows expire with the 0DTE book, exactly like the SPXW rail. Absent, never weekly.
   var nqN=0;
   try{
     if(cfgI.nqOn!==false){
@@ -3984,23 +3987,19 @@ function irtBuildCsv(){
       // (v14.13) the ratio SELF-MEASURES on an NQ chart (same chain as ES); manual is a fallback.
       var RQ=irtNqRatio(cfgI);
       var nqR=RQ.r; var nqTag=RQ.live?'':' ~';
-      var FQ=(typeof LASTFEED!=='undefined')?LASTFEED.QQQ:null;
-      if(nqSym && nqR>1 && FQ && FQ.j && FQ.j.levels && FQ.j.levels.length &&
-         (Date.now()-(FQ.ts||0))<=FEED_STALE_MS*3){
-        var snapQ=FQ.j.levels[FQ.j.levels.length-1]; var rq=(snapQ&&snapQ.l)||[];
-        var mxQ=0; rq.forEach(function(r0){ var a=Math.abs(r0.v||0); if(a>mxQ) mxQ=a; });
-        if(mxQ>0){
-          var thrQ=(CFG.nodeThresh!=null)?CFG.nodeThresh:20;
-          rq.forEach(function(r0){
-            var a=Math.abs(r0.v||0); var p=Math.round(100*a/mxQ);
-            if(p<thrQ) return;
-            var sgQ=(r0.net!=null)?r0.net:0;
-            var isKQ=(a===mxQ);
-            out.push(irtCsvRow(nqSym, irtRound(r0.k*nqR, 0.25),
-                     (isKQ?'QQQ KING 100%':('QQQ '+p+'%'))+nqTag,
-                     (sgQ<0)?IRT_COLORS.accp:IRT_COLORS.brk, isKQ?3:2, 0));
-            nqN++;
-          });
+      var tq=null; try{ tq=tapeMap('QQQ'); }catch(eTq){}
+      if(nqSym && nqR>1 && tq && tq.pct && tq.king!=null && !tq.fromFeed && tq.count>=5){
+        var thrQ=(CFG.nodeThresh!=null)?CFG.nodeThresh:20;
+        for(var kq in tq.pct){
+          if(!tq.pct.hasOwnProperty(kq)) continue;
+          var kf=parseFloat(kq); if(!isFinite(kf)) continue;
+          var pv=tq.pct[kq]; if(typeof pv!=='number' || !isFinite(pv)) continue;
+          var ap=Math.abs(pv); if(ap<thrQ) continue;
+          var isKQ=(Math.abs(kf-tq.king)<=0.01);
+          out.push(irtCsvRow(nqSym, irtRound(kf*nqR, 0.25),
+                   (isKQ?'QQQ KING 100%':('QQQ '+Math.round(ap)+'%'))+nqTag,
+                   (pv<0)?IRT_COLORS.accp:IRT_COLORS.brk, isKQ?3:2, 0));
+          nqN++;
         }
       }
     }
