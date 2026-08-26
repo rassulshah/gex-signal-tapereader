@@ -182,6 +182,18 @@ ok(activeSym()==='SPY', '7b an ES chart keeps SPY', activeSym());
   const bars=[mk(30600,765.1),mk(30780,765.4),mk(30960,764.9),mk(31140,765.6),mk(31320,765.2),mk(31500,428.1),mk(31680,765.0)];
   run('T', bars);
   okG(ST.T.candles.length===6 && ST.T.candles.every(c=>c.c>700), 'gE the scale sweep DROPS the 428 foreign bar and keeps the six real ones', ST.T.candles.length);
+  // (v14.22) the PAIRING GATE — the cross-book leak the operator hit live ("the tape reader is
+  // messed up"): on an NQ chart, SPY received NQ/41.17 = QQQ-scale bars.
+  const frc=(()=>{const re=/function\s+futRawCandles\s*\(/g;const m=re.exec(src2);let i=src2.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src2.length;k++){if(src2[k]==='{')d++;else if(src2[k]==='}'){d--;if(d===0){e=k;break;}}}return src2.slice(m.index,e+1);})();
+  okG(/FUT_UNDERLYING\[FUTMODE\.chart\]!==sym\) return null/.test(frc), 'gF chart candles serve ONLY the paired symbol — the NQ->SPY leak is closed');
+  // and the feed-anchored batch rejection, executed: a WHOLE batch on the wrong scale is dropped
+  const apc2=(()=>{const re=/function\s+applyCandles\s*\(/g;const m=re.exec(src2);let i=src2.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src2.length;k++){if(src2[k]==='{')d++;else if(src2[k]==='}'){d--;if(d===0){e=k;break;}}}return src2.slice(m.index,e+1);})();
+  const ST2={ SPY:{ candles:[{c:765,so:30000}], cur:null, contCloses:[] } };
+  const env2='var STATE=ST, CANDLE_S=180, LASTFEED={SPY:{j:{levels:[{s:765.2,l:[]}]}}}; function ctNowSecOfDay(){return 50000;} function ctTodayStr(){return "2026-08-26";} function mul(a,b){return a*b;}';
+  const run2=new Function('ST', env2+apc2.replace('function applyCandles','return function applyCandles'))(ST2);
+  const qk=(so,c)=>({b:so*1000,t:so*1000,so:so,day:'2026-08-26',c:c,h:c+0.2,l:c-0.2,o:c});
+  run2('SPY', [qk(30600,708.4),qk(30780,708.6),qk(30960,708.2),qk(31140,708.9),qk(31320,708.5)]);
+  okG(ST2.SPY.candles.length===1 && ST2.SPY.candles[0].c===765, 'gG a WHOLE batch on the wrong scale (708s vs feed 765.2) is rejected — the book keeps its real bar', ST2.SPY.candles.length);
 })();
 
 console.log('\n'+pass+' passed, '+fail+' failed');

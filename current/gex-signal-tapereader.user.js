@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.21
+// @version    14.22
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -596,7 +596,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.21';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.22';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -725,6 +725,20 @@ function applyCandles(sym, arr){
       var cls=arr.map(function(c){ return c.c; }).filter(function(x){ return typeof x==='number'&&x>0; }).sort(function(a,b){ return a-b; });
       if(cls.length>=5){
         var med=cls[Math.floor(cls.length/2)];
+        // (v14.22) THE FEED IS THE ANCHOR. A batch that is wrong-scale THROUGHOUT (the NQ-chart
+        // leak: every bar ~708 on a 765 book) sails past a median-only check — the bars agree
+        // with each other. The self-fetched feed's own spot is always on the book's true scale
+        // and independent of the chart, so a batch whose median is >15% from it is discarded
+        // WHOLE. No feed spot (rare) → the relative sweep below still catches lone foreign bars.
+        var anchor=null;
+        try{ var lfA=(typeof LASTFEED!=='undefined')?LASTFEED[sym]:null;
+             var lvA=lfA&&lfA.j&&lfA.j.levels;
+             if(lvA&&lvA.length){ var sA=lvA[lvA.length-1].s; if(typeof sA==='number'&&sA>0) anchor=sA; } }catch(eAn){}
+        // Compare the batch's LAST close (now) to the feed's spot (also now): the right book
+        // disagrees by basis noise (<1%) even on a crash day; the QQQ-on-SPY leak reads 7.4% off
+        // (708 vs 765) — the exact live poisoning. 5%: room for chaos, death for the wrong book.
+        var lastC=arr[arr.length-1]&&arr[arr.length-1].c;
+        if(anchor && typeof lastC==='number' && lastC>0 && Math.abs(lastC/anchor-1)>0.05) return;
         if(med>0){
           var kept=arr.filter(function(c){ return typeof c.c==='number' && Math.abs(c.c/med-1)<=0.15; });
           if(kept.length!==arr.length){ arr=kept; if(!arr.length) return; }
@@ -5923,6 +5937,13 @@ function futRawCandles(sym){
   if(raw && raw.length) return raw;
   try{
     if(!dispIsFut()) return null;
+    // (v14.22, operator-caught: "the tape reader is messed up") THE PAIRING GATE. This fallback
+    // serves the CHART's candles divided by the CHART's ratio — which is only the requested
+    // symbol's data when the chart actually PAIRS with it. On an NQ chart, sym='SPY' fell through
+    // here and received NQ/41.17 = QQQ-SCALE bars; the SPY book then held ~708s, the session pin
+    // captured 708.49 as SPY's open, and the whole rail anchored at 7114. Chart candles are for
+    // the chart's own underlying, full stop.
+    if(FUT_UNDERLYING[FUTMODE.chart]!==sym) return null;
     var r=dispR(); if(!(r>0)) return null;
     var names=[FUTMODE.chart, FUTMODE.chart+'1', FUTMODE.chart+'1!'];
     for(var i=0;i<names.length;i++){

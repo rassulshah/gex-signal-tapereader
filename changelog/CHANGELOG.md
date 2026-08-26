@@ -1,3 +1,22 @@
+## v14.22 — the cross-book candle leak (operator: "the tape reader is messed up")
+
+The v14.21 guard covered FOREIGN charts; this was one layer deeper, between two RECOGNIZED books.
+While Atlas sat on the NQ chart, refreshSym('SPY') still ran — and futRawCandles' futures
+fallback served the CHART's candles divided by the CHART's ratio to ANY caller: NQ bars / 41.17 =
+QQQ-SCALE prices (~708) written into the SPY book. The session pin then captured 708.49 as SPY's
+open and the whole rail anchored at 7114 (measured live; healed by hand: emopen cleared, both
+books flushed, correct re-capture verified at openU 764.64).
+
+Two fixes: (1) THE PAIRING GATE — the futures fallback serves ONLY the symbol the chart pairs
+with (FUT_UNDERLYING[chart]===sym); chart candles are the chart's own underlying, full stop.
+(2) THE FEED ANCHOR in applyCandles — a batch that is wrong-scale THROUGHOUT defeats a
+median-only sweep (the bars agree with each other), so the batch's last close is compared to the
+self-fetched feed's own spot: the right book disagrees by basis noise even on a crash day; the
+QQQ-on-SPY leak reads 7.4% off; >5% drops the batch whole.
+
+test_futures_mode +2, both EXECUTED (the pairing-gate token and a planted 708-scale batch
+rejected against a 765.2 feed anchor). Suite at the baseline six.
+
 ## v14.21 — the chart-flip guard lands (queued since the GLD/USO corruption path was verified)
 
 Operator, after browsing symbols: "make sure that doesn't corrupt anything… and clear the data
