@@ -1,3 +1,33 @@
+## v14.28 — the third pillar is THE DESTINATION (operator-rephrased)
+
+"King, Support and Resistance, Destination." The direction-lean of v14.27 becomes the doctrine\'s
+own question — WHERE is the flow pulling price: the dominant magnet by measured pull
+(size/distance, the attract metric recorded since v13.4), gated at the tractor\'s own 2\u00d7
+dominance ("no dominant magnet — the field is contested" when it fails), the path to it priced by
+the same sums the target uses (CLEAR / FUELLED / BRAKED, with what the words mean spelled out),
+and rolls feeding the destination named with their size. The hover trimmed under the FRAME
+600-char guard (it caught the first draft at 642). A destination is where the flow points, not a
+promise.
+
+## v14.27 — the read is KING-FOCUSED, on three things (operator-directed)
+
+"The King, support and resistance, and direction." The flow read restructures around exactly
+those pillars: (1) THE KING — held or contested (latch seconds), its polarity, and where its
+magnet sits against price; (2) SUPPORT AND RESISTANCE — the nearest meaningful level each side
+with its live build/drain (>$1M/15m) and any defence verdict when price is on it; the SPY KING
+competes as a level on its own side (the operator\'s bounce lesson made structural); (3)
+DIRECTION — a measured LEAN summed from countable votes (the King\'s pull, the latched roll bias,
+build/drain geometry per side, defence verdicts), with the dissenting votes NAMED ("leaning UP —
+resistance draining, support building; against it, the King pulls from below") and MIXED when the
+votes cancel. The hover says a lean is context, not a signal. Same shared arrays throughout.
+
+## v14.26 — two flow-read blemishes from the first live sentence
+
+Sentence capitalization (each clause now capitalizes), and the roll-intent branch keyed off the
+wrong direction token — r.dir's down value is not the literal 'down', so the first live roll-down
+(7680→7655, $20M, destination UNDER price) read "lifting support toward price" instead of
+"planting support under price". Intent now keys off the same test as the printed word.
+
 ## v14.25 — the flow read speaks in sentences (operator: "more reader friendly and coherent")
 
 The v14.24 fragments become narrated prose — what is happening AND what the flow is trying to do,

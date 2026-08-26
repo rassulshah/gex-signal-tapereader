@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.25
+// @version    14.28
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -598,7 +598,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.25';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.28';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -20794,71 +20794,110 @@ function secFrame(sym){
     // draws from (RAILPS / RAILROLLS / velAt / reactDefence / the latch stores) — no second
     // derivation of anything, per the one-computation rule.
     try{
+      // (v14.28, operator-rephrased) THE READ, ON THREE THINGS: THE KING, SUPPORT AND RESISTANCE,
+      // and THE DESTINATION — the doctrine's own frame ("Spot the King: the session destination").
+      // The destination is the dominant magnet by MEASURED pull (size/distance, the attract metric
+      // recorded since v13.4; 77% toward on its first measured day), it must EARN dominance (>=2x
+      // the runner-up, the tractor's own gate), the path to it is priced by emPath (fuelled /
+      // braked / clear), and rolls that feed it are named. No dominant magnet = said plainly.
       var FR=[];
       var frNow=(typeof EB.nowLive==='number')?EB.nowLive:EB.now;
-      // 1 · what price is doing right now, and what the node under it is doing back
-      try{
-        var frBest=2.6, frP=null, frI;
-        for(frI=0;frI<RAILPS.length;frI++){ var frD=Math.abs(RAILPS[frI].disp-frNow);
-          if(frD<frBest){ frBest=frD; frP=RAILPS[frI]; } }
-        if(frP){ var frR=null; try{ frR=reactDefence(sym, frP.disp); }catch(eFR1){}
-          var frWho=frameNum(frP.disp)+' (a '+Math.round(frP.pct)+'% '+(frP.accel?'accelerator':'brake')+')';
-          if(frR && frR.verdict==='DEFENDING') FR.push('Price is testing '+frWho+' and the node is being DEFENDED \u2014 a deflection is forming');
-          else if(frR && frR.verdict==='ABANDONING') FR.push('Price is on '+frWho+' and the node is being ABANDONED \u2014 a break is forming');
-          else FR.push('Price is sitting on '+frWho+', still undecided');
-        }
-      }catch(eF1){}
-      // 2 · the crown: held, or under live challenge with the latch clock
+      // ---- 1 · THE KING ------------------------------------------------------------------------
+      var frKP=null;
       try{
         var frKL=null; try{ frKL=JSON.parse(localStorage.getItem('gpts_kinglatch_v1')||'null'); }catch(eKL2){}
+        var frKi;
+        for(frKi=0;frKi<RAILPS.length;frKi++){ if(RAILPS[frKi].role==='KING'){ frKP=RAILPS[frKi]; break; } }
         if(frKL && typeof frKL.k==='number'){
+          var frKD=(frKP&&typeof frKP.disp==='number')?frKP.disp:null;
+          var frKdist=(frKD!=null)?(frKD-frNow):null;
+          var frKtxt;
           if(frKL.cand!=null && frKL.cand!==frKL.k){
             var frHeld=Math.min(999, Math.round((Date.now()-(frKL.ct||Date.now()))/1000));
-            FR.push('the crown is being CONTESTED \u2014 '+frKL.cand+' has out-massed King '+frKL.k+' for '+frHeld+' of the '+Math.round(KING_LATCH_MS/1000)+'s it needs');
-          } else { FR.push('the King holds '+frKL.k); }
+            frKtxt='KING '+frKL.k+' is CONTESTED \u2014 '+frKL.cand+' has out-massed it for '+frHeld+' of 120s';
+          } else {
+            frKtxt='KING '+frKL.k+(frKP&&frKP.accel?' (accelerator)':' (brake)')+' holds';
+          }
+          if(frKdist!=null){
+            if(Math.abs(frKdist)<=1.5) frKtxt+=' \u2014 price is ON the King';
+            else frKtxt+=', '+Math.abs(frKdist).toFixed(0)+' '+(frKdist<0?'below price':'above price');
+          }
+          FR.push(frKtxt);
         }
       }catch(eF2){}
-      // 3 · the freshest roll, WITH its intent: where the destination sits against price is what
-      //     the flow is trying to build (the 2026-08-25 lesson: a roll-down under price plants
-      //     support; over price it drags the ceiling down)
+      // ---- 2 · SUPPORT AND RESISTANCE ----------------------------------------------------------
       try{
-        if(RAILROLLS && RAILROLLS.length){
-          var frRo=RAILROLLS[0], frDsc=1; try{ frDsc=ifDispScale()||1; }catch(eDsc){}
-          var frToD=frRo.to*frDsc;
-          var frIntent=(frRo.dir==='down')
-            ? (frToD<frNow?' \u2014 planting support under price':' \u2014 dragging the ceiling down')
-            : (frToD>frNow?' \u2014 raising the ceiling overhead':' \u2014 lifting support toward price');
-          FR.push('dealers are rolling '+(frRo.dir==='up'?'UP':'DOWN')+', '+frRo.from+'\u2192'+frRo.to+
-                  (frRo.amt?(' ('+(usdBig(Math.abs(frRo.amt))||'')+(frRo.live?' in flight':'')+')'):(frRo.live?' (in flight)':''))+frIntent);
+        var frSup=null, frRes=null, frSi;
+        for(frSi=0;frSi<RAILPS.length;frSi++){ var frPp=RAILPS[frSi];
+          if(typeof frPp.disp!=='number') continue;
+          if(frPp.disp<frNow-0.5){ if(!frSup || frPp.disp>frSup.disp) frSup=frPp; }
+          else if(frPp.disp>frNow+0.5){ if(!frRes || frPp.disp<frRes.disp) frRes=frPp; } }
+        function frLvl(P, word){
+          if(!P) return null;
+          var t=word+' '+frameNum(P.disp)+' ('+Math.round(P.pct)+'% '+(P.accel?'accelerator':'brake')+')';
+          var fv=null; try{ fv=velAt(P.k); }catch(eV2){}
+          if(fv && fv.v && !fv.stale && typeof fv.v.d15==='number' && Math.abs(fv.v.d15)>1e6)
+            t+=(fv.v.d15>0?', building':', draining');
+          if(Math.abs(P.disp-frNow)<=2.6){
+            var frRv=null; try{ frRv=reactDefence(sym, P.disp); }catch(eR3){}
+            if(frRv && frRv.verdict==='DEFENDING') t+=', being DEFENDED';
+            else if(frRv && frRv.verdict==='ABANDONING') t+=', being ABANDONED';
+          }
+          return t;
         }
+        try{
+          if(CFG.spyFlag!==false && typeof LASTFEED!=='undefined' && LASTFEED.SPY && LASTFEED.SPY.j &&
+             (Date.now()-(LASTFEED.SPY.ts||0))<=FEED_STALE_MS*3 && typeof EB.scaleUsed==='number'){
+            var frEW=null; try{ frEW=extractWalls(LASTFEED.SPY.j); }catch(eEW2){}
+            if(frEW && frEW.king!=null){
+              var frSK=frEW.king*EB.scaleUsed;
+              if(frSK<frNow-0.5 && (!frSup || frSK>frSup.disp)) frSup={ disp:frSK, pct:100, accel:false, spyK:true };
+              else if(frSK>frNow+0.5 && (!frRes || frSK<frRes.disp)) frRes={ disp:frSK, pct:100, accel:false, spyK:true };
+            }
+          }
+        }catch(eF5){}
+        var frS2=[];
+        var frSupT=frSup?(frSup.spyK?('support: the SPY KING at '+frameNum(frSup.disp)):frLvl(frSup,'support')):null;
+        var frResT=frRes?(frRes.spyK?('resistance: the SPY KING at '+frameNum(frRes.disp)):frLvl(frRes,'resistance')):null;
+        if(frSupT) frS2.push(frSupT);
+        if(frResT) frS2.push(frResT);
+        if(frS2.length) FR.push(frS2.join('; '));
       }catch(eF3){}
-      // 4 · where the money is moving fastest on the rail
+      // ---- 3 · THE DESTINATION -----------------------------------------------------------------
       try{
-        var frMv=null, frMvAbs=0, frJ;
-        for(frJ=0;frJ<RAILPS.length;frJ++){ var frV=velAt(RAILPS[frJ].k);
-          if(frV && frV.v && !frV.stale && typeof frV.v.d15==='number' && Math.abs(frV.v.d15)>frMvAbs){ frMvAbs=Math.abs(frV.v.d15); frMv={k:RAILPS[frJ].k, d:frV.v.d15, disp:RAILPS[frJ].disp}; } }
-        if(frMv && frMvAbs>1e6){
-          FR.push(frameNum(frMv.disp)+' is the fastest '+(frMv.d>0?'BUILD (+':'DRAIN (\u2212')+(usdBig(frMvAbs)||'')+'/15m)'+
-                  (frMv.d>0?(frMv.disp<frNow?' \u2014 support thickening below':' \u2014 resistance thickening above')
-                           :(frMv.disp<frNow?' \u2014 the floor is thinning':' \u2014 the ceiling is thinning')));
+        var frBestP=null, frSecond=0, frBpull=0, frDi;
+        for(frDi=0;frDi<RAILPS.length;frDi++){
+          var frDP=RAILPS[frDi], frDd=Math.abs(frDP.disp-frNow);
+          if(frDd<2.6 || frDd>60) continue;
+          var frUsd=(frDP.usdK!=null)?Math.abs(frDP.usdK*1000):((frDP.pct||0)*1e6);
+          var frPl=frUsd/frDd;
+          if(frPl>frBpull){ frSecond=frBpull; frBpull=frPl; frBestP=frDP; }
+          else if(frPl>frSecond){ frSecond=frPl; }
         }
-      }catch(eF4){}
-      // 5 · the SPY King, when it is close enough to act
-      try{
-        if(CFG.spyFlag!==false && typeof LASTFEED!=='undefined' && LASTFEED.SPY && LASTFEED.SPY.j &&
-           (Date.now()-(LASTFEED.SPY.ts||0))<=FEED_STALE_MS*3 && typeof EB.scaleUsed==='number'){
-          var frEW=null; try{ frEW=extractWalls(LASTFEED.SPY.j); }catch(eEW2){}
-          if(frEW && frEW.king!=null){
-            var frSK=frEW.king*EB.scaleUsed, frDist=frSK-frNow;
-            if(Math.abs(frDist)<=1.5) FR.push('and price is ON the SPY King at '+frameNum(frSK)+' \u2014 the other book\'s bounce level');
-            else if(Math.abs(frDist)<=30) FR.push('the SPY King '+(frDist>0?'waits overhead at ':'backstops below at ')+frameNum(frSK));
+        if(frBestP && frBpull>0){
+          var frDom=(frSecond>0)?(frBpull/frSecond):9;
+          if(frDom>=2){
+            var frDtxt='destination: '+frameNum(frBestP.disp)+(frBestP.role==='KING'?' \u2014 the King':'')+
+                       ', out-pulling everything '+(frDom>=9?'outright':(Math.round(frDom*10)/10)+'\u00d7');
+            var frPath=null; try{ frPath=emPath(EB, sym, frBestP.disp); }catch(ePt){}
+            if(frPath && frPath.ok) frDtxt+='; the path '+(frBestP.disp>frNow?'up':'down')+' is '+
+              (frPath.verdict==='clear'?'CLEAR':(frPath.verdict==='fuelled'?'FUELLED \u2014 accelerators outweigh the brakes in between':'BRAKED \u2014 brakes outweigh the fuel in between'));
+            try{
+              if(RAILROLLS && RAILROLLS.length){
+                var frFeed=null, frRi2, frDsc2=1; try{ frDsc2=ifDispScale()||1; }catch(eD3){}
+                for(frRi2=0;frRi2<RAILROLLS.length;frRi2++){ if(Math.abs(RAILROLLS[frRi2].to*frDsc2-frBestP.disp)<=1.5){ frFeed=RAILROLLS[frRi2]; break; } }
+                if(frFeed) frDtxt+='; rolls are feeding it'+(frFeed.amt?(' ('+(usdBig(Math.abs(frFeed.amt))||'')+')'):'');
+              }
+            }catch(eF7){}
+            FR.push(frDtxt);
+          } else {
+            FR.push('destination: no dominant magnet \u2014 the field is contested (top pull only '+(Math.round(frDom*10)/10)+'\u00d7 the next)');
           }
         }
-      }catch(eF5){}
+      }catch(eF6){}
       if(FR.length){
-        var frTxt=FR.slice(0,4).join('. ');
-        frTxt=frTxt.charAt(0).toUpperCase()+frTxt.slice(1)+'.';
-        h+='<div class="g3tread"'+g3tip('THE TAPE, narrated from what is measured right now \u2014 the in-play node and its defence verdict, the crown and any challenger on the latch clock, the freshest latched roll and what its destination is building against price, the biggest 15-minute flow move, and the SPY King\'s position. Every clause comes from the same arrays the rail draws \u2014 nothing here is opinion.')+'>'+
+        var frTxt=FR.map(function(fseg){ return fseg.charAt(0).toUpperCase()+fseg.slice(1); }).join('. ')+'.';
+        h+='<div class="g3tread"'+g3tip('THE READ, on three things: THE KING (held or contested, which side of price), SUPPORT AND RESISTANCE (nearest level each side, live build/drain, defence verdicts \u2014 the SPY King competes as a level), THE DESTINATION (dominant magnet by pull = size/distance, 2\u00d7 dominance gate, path priced fuelled/braked/clear, feeding rolls named). All measured from the rail arrays. A destination is where the flow points, not a promise.')+'>'+
             g3esc(frTxt)+'</div>';
       }
     }catch(eFRD){}
