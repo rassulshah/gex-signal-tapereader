@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.35
+// @version    14.36
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -598,7 +598,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.35';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.36';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -20127,29 +20127,43 @@ var IB_MIN_S=1800;   // ⚖ the 30-minute IB window, in seconds (Garma-verbatim;
 function sessionLevels(sym, scale){
   var out={ ibH:null, ibL:null, ibSet:false, pdh:null, pdl:null, pdc:null };
   try{
-    var cs=closedCandles(sym)||[]; if(!cs.length) return out;
     var sc=(typeof scale==='number'&&scale>0)?scale:1;
     var openSec=mul(8,3600)+mul(30,60);
-    var today=ctTodayStr();
-    var ibEnd=openSec+IB_MIN_S, ibH=null, ibL=null, pdH=null, pdL=null, pdC=null, prevDay=null, i;
-    for(i=0;i<cs.length;i++){ var c=cs[i]; if(!c || c.day===today) continue;
-      if(prevDay==null || c.day>prevDay) prevDay=c.day; }
-    for(i=0;i<cs.length;i++){ var b=cs[i]; if(!b) continue;
-      if(b.day===today && typeof b.so==='number' && b.so>=openSec && b.so<ibEnd){
-        if(b.h!=null && (ibH==null||b.h>ibH)) ibH=b.h;
-        if(b.l!=null && (ibL==null||b.l<ibL)) ibL=b.l;
-      } else if(prevDay!=null && b.day===prevDay){
-        if(b.h!=null && (pdH==null||b.h>pdH)) pdH=b.h;
-        if(b.l!=null && (pdL==null||b.l<pdL)) pdL=b.l;
-        if(b.c!=null) pdC=b.c;   // last prior-day bar wins = the close
-      }
+    var ibEnd=openSec+IB_MIN_S;
+    // IB — from the closed-candle store, which is TODAY-ONLY by construction (convertFiberCandles
+    // filters to the session day and stamps `so`, not `day` — v14.36 fix: the first cut checked a
+    // day field these candles never carried, so the ticks never drew).
+    var cs=closedCandles(sym)||[], i, ibH=null, ibL=null;
+    for(i=0;i<cs.length;i++){ var b=cs[i];
+      if(!b || typeof b.so!=='number' || b.so>=ibEnd) continue;
+      if(b.h!=null && (ibH==null||b.h>ibH)) ibH=b.h;
+      if(b.l!=null && (ibL==null||b.l<ibL)) ibL=b.l;
     }
     out.ibSet=(ctNowSecOfDay()>=ibEnd) && ibH!=null && ibL!=null;
     if(ibH!=null) out.ibH=ibH*sc;
     if(ibL!=null) out.ibL=ibL*sc;
-    if(pdH!=null) out.pdh=pdH*sc;
-    if(pdL!=null) out.pdl=pdL*sc;
-    if(pdC!=null) out.pdc=pdC*sc;
+    // Prior day H/L/C — from the RAW fiber window, which spans days and carries timestamps.
+    // RTH bars only (same gate as everything), the LATEST prior session in the window.
+    var raw=null; try{ raw=futRawCandles(sym); }catch(eR){}
+    if(raw && raw.length){
+      var today=ctTodayStr(), prevDay=null, j;
+      for(j=0;j<raw.length;j++){ var t0=raw[j]&&raw[j].time; if(typeof t0!=='number') continue;
+        var d0=naiveDayStr(t0); if(d0===today) continue;
+        if(prevDay==null || d0>prevDay) prevDay=d0; }
+      if(prevDay!=null){
+        var pdH=null,pdL=null,pdC=null,pdSo=-1;
+        for(j=0;j<raw.length;j++){ var x=raw[j]; if(!x || typeof x.time!=='number') continue;
+          if(naiveDayStr(x.time)!==prevDay) continue;
+          var so2=naiveSecOfDay(x.time); if(so2<openSec) continue;
+          if(x.high!=null && (pdH==null||x.high>pdH)) pdH=x.high;
+          if(x.low!=null  && (pdL==null||x.low<pdL))  pdL=x.low;
+          if(so2>pdSo && x.close!=null){ pdSo=so2; pdC=x.close; }
+        }
+        if(pdH!=null) out.pdh=pdH*sc;
+        if(pdL!=null) out.pdl=pdL*sc;
+        if(pdC!=null) out.pdc=pdC*sc;
+      }
+    }
   }catch(e){}
   return out;
 }

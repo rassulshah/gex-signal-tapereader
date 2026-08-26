@@ -1,3 +1,14 @@
+## v14.36 — the session ticks actually draw (data-shape fix, operator's check caught it)
+
+v14.35's sessionLevels checked a `day` field the live candles never carry, and looked for
+prior-day bars in a store that is today-only by construction — so every value computed null and
+zero ticks drew. The check on the live panel exposed it within minutes. Rewritten against the
+REAL shapes: IB from the today-only closed store (`so` gate alone), prior-day H/L/C from the raw
+fiber window (spans days, carries timestamps; RTH bars only). Tests rewritten with true-shape
+stubs including a pre-RTH decoy bar that must be ignored (20 executed). Also logged for polish:
+during a crown contest the Trinity clause (tape crown) and the King clause (latched crown) can
+read as disagreeing — same data, two stages of the latch; wording alignment queued.
+
 ## v14.35 — GARMA item 1: session-structure levels (30-minute IB + prior day)
 
 The context layer he maps before touching Skylit (10/11 videos). Corpus-verbatim answer to the

@@ -48,27 +48,37 @@ ok(/WAIT per doctrine/.test(src), '...and can say WAIT (Garma r12)');
 ok(/target BLOCKED by uncleared gatekeeper/.test(src), 'a braked path through a stalling GK names the block (Garma r5)');
 ok(/out\.day=dt\.t/.test(src) && /out\.trinity=tr\.n/.test(src), 'day type + Trinity ride the levelstate record for nightly conditioning');
 
-// ---------- (v14.35) item 1: session levels, executed ----------
+// ---------- (v14.36) item 1: session levels, executed against the REAL candle shapes ----------
+// (the v14.35 stubs modelled a `day` field the live candles never carry — the ticks never drew;
+// operator-caught. IB reads the today-only closed store; prior-day reads the raw fiber window.)
 (function(){
   global.mul=(a,b)=>a*b;
   global.ctTodayStr=()=>'2026-08-26';
-  global.ctNowSecOfDay=()=>40000;                       // 10:36 CT — IB long since set
-  const bar=(day,so,h,l,c)=>({day:day,so:so,h:h,l:l,c:c});
+  global.ctNowSecOfDay=()=>40000;
+  global.naiveDayStr=(t)=>new Date(t*1000).toISOString().slice(0,10);
+  global.naiveSecOfDay=(t)=>{ const d=new Date(t*1000); return d.getUTCHours()*3600+d.getUTCMinutes()*60; };
+  // closed store: TODAY only, so+h/l/c, NO day field (the real shape)
   global.closedCandles=()=>[
-    bar('2026-08-25',30600,765.0,764.0,764.5), bar('2026-08-25',52000,766.5,763.2,766.0), // prior day
-    bar('2026-08-26',30600,765.8,764.9,765.5), bar('2026-08-26',31500,766.2,765.1,765.9), // IB window
-    bar('2026-08-26',33000,767.0,765.8,766.8) ];                                          // after IB
+    {so:30600,h:765.8,l:764.9,c:765.5}, {so:31500,h:766.2,l:765.1,c:765.9},   // IB window
+    {so:33000,h:767.0,l:765.8,c:766.8} ];                                     // after IB
+  // raw fiber window: spans days, carries .time (epoch s, UTC used as naive here)
+  const T=(day,hh,mm)=>Math.floor(Date.parse(day+'T'+String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0')+':00Z')/1000);
+  global.futRawCandles=()=>[
+    {time:T('2026-08-25',9,0),  open:764.2,high:765.0,low:764.0,close:764.5},
+    {time:T('2026-08-25',14,0), open:765.5,high:766.5,low:763.2,close:766.0},   // prior-day extremes+close
+    {time:T('2026-08-25',7,0),  open:760.0,high:770.0,low:750.0,close:760.0},   // PRE-RTH: must be ignored
+    {time:T('2026-08-26',9,0),  open:765.0,high:765.8,low:764.9,close:765.5} ];
   eval(src.match(/var IB_MIN_S=\d+/)[0]+';');
   eval(src.match(/var SESS_CONFL_PTS=[\d.]+/)[0]+';');
   eval(ex('sessionLevels')); eval(ex('sessConfluence'));
-  const SL=sessionLevels('SPY', 10);                    // ×10 into the chart frame
+  const SL=sessionLevels('SPY', 10);
   ok(SL.ibSet===true, 's1 the IB is SET after 30 minutes (Garma waits for it)');
-  ok(SL.ibH===7662 && SL.ibL===7649, 's2 IB high/low come from the FIRST 30 MINUTES only (post-IB bars excluded)', [SL.ibH,SL.ibL]);
-  ok(SL.pdh===7665 && SL.pdl===7632 && SL.pdc===7660, 's3 prior-day H/L/C from the prior session bars', [SL.pdh,SL.pdl,SL.pdc]);
+  ok(SL.ibH===7662 && SL.ibL===7649, 's2 IB from the first-30-min bars of the today-only store', [SL.ibH,SL.ibL]);
+  ok(SL.pdh===7665 && SL.pdl===7632 && SL.pdc===7660, 's3 prior-day H/L/C from the raw window, RTH bars only (the 770/750 pre-RTH bar ignored)', [SL.pdh,SL.pdl,SL.pdc]);
   const cf=sessConfluence(SL, 7661);
   ok(cf && /IB high/.test(cf.name), 's4 a level within 2 pts of the IB high names the confluence (Garma r22)', cf);
   ok(sessConfluence(SL, 7620)==null, 's5 nothing within reach = no confluence claim');
-  global.ctNowSecOfDay=()=>31000;                        // 8:36 CT — inside the IB window
+  global.ctNowSecOfDay=()=>31000;
   const SL2=sessionLevels('SPY', 10);
   ok(SL2.ibSet===false, 's6 before the 30 minutes are up the IB is NOT set — Garma waits, so do we');
 })();
