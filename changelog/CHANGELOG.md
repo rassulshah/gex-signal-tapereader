@@ -1,3 +1,62 @@
+## v14.7 — ATTRACT: the fourth behaviour, drawn and measured
+
+The operator closed the loop on the node lifecycle: **attract → in play → deflect | break**. Attract
+had a metric all along — `w.pull = |cur| / distance`, recorded on every event since v13.4 "so it can
+be TESTED and replaced" — and today it finally was tested: taking the single top-pull node each bar,
+price moved TOWARD it within 30 minutes in **36/47 samples (77%)** on 2026-08-25. One day, and a
+magnet day flatters the number — which is exactly why this ships as a RECORDED feature, not a vote.
+
+**THE TRACTOR** on the rail: when one node's pull is at least 2× every other's, a dashed flow draws
+on the track from price toward it, drifting INTO the node, in the node's colour — the fourth effect
+beside breathe (in play), sonar rings (deflecting) and fracture (breaking). No dominant magnet, no
+tractor: a flat book stays quiet. Hover carries the metric, the doctrine, and the one-day caveat.
+
+**THE `attract` FEATURE** records per bar: the top node, its pull, its dominance ratio over the
+runner-up, side and distance — with a scale-free toward/away outcome (net forward movement favours
+the magnet\'s side). Two questions enrolled: does price go toward the magnet (vs the day\'s drift),
+and is the ≥2× dominance gate (the tractor\'s own threshold) actually earning its keep. rules.json
+is at 72 ids.
+
+Verification that fed this build (2026-08-25 ledger, 624 events): the rolls were caught — 66 into
+7665 built the operator\'s circled shelf, 23/22 into 7680/7685 built the closing wall; deflection
+anatomy per touch showed 7665 holding 74% while GROWING (26 defl vs 19 brk) and 7675 while DRAINING
+breaking **19 of 19** — the rate-of-change arbiter, measured, on one strike, same day.
+
+## v14.6 — flag-posts, the directional pill, live-only rolls, and the after-hours rail
+
+**1. FLAG-POSTS replace the discs** (operator-approved mockup). Each node is a vertical lozenge
+BEHIND the price pill — z-order, not piercing — tops aligned under the role tier so the role name
+can never be overlapped, height = sqrt(%King), colour = role, and the King alone is thicker and
+wears the lone diamond cap. A 3px post taller than the pill means price can sit ON a node and the
+node stays visible above and below the white body.
+
+**2. THE THREE INTERACTION STATES**, each wired to what is MEASURED, never to an opinion: the
+nearest post inside the deflection zone is IN PLAY and *breathes* (slow halo); if the node is
+DEFENDING (reactDefence), it *rings* — fast green sonar off the contact point, a wall holding; if
+ABANDONING, it *fractures* — the post renders as separating dashes with a red gutter-flicker, a
+break forming. Three unrelated grammars, impossible to confuse. The disc-era motion grammar
+(recv/grow/fade rings) rides the posts unchanged.
+
+**3. THE PILL'S TIP IS ITS SILHOUETTE** (operator-directed): green tip on the RIGHT = last bar
+closed up, red tip on the LEFT = down. Inside, only the rounded price.
+
+**4. ROLLS ARE AN RTH STORY** ("there is no roll now" — caught live at night). `rollsLive()` gates
+every DISPLAY of the latch — rail lane, profile RU/RD badges and bias chip, NODES connector — on
+sessionPhase().rth. The latch itself keeps recording exactly as before.
+
+**5. THE AFTER-HOURS RAIL tells the truth.** Post-close, the band is YESTERDAY'S expected move — a
+straddle that expired at 15:00 forecasts nothing. One amber chip (AFTER HOURS · EM EXPIRED —
+re-anchors at the open), EL/EH dimmed and struck through, the target, budget labels and roll lane
+retired, the used-range fill faded. Pre-open keeps its own prevClose-anchor behaviour.
+
+**⚠ THE SUITE FINDING, bigger than this build: 28 of ~40 test files never set an exit code.** They
+printed FAIL and exited zero — the runner saw green. That is how the v13.9 connector rewrite broke
+9 assertions in test_velocity_policy, v14.2's spacers broke the g3emk property checks in
+test_depth_axes and test_node_rule, and nobody noticed for five versions. Every file now exits
+nonzero on failure, and the stale assertions were rewritten for the designs that deliberately
+replaced them (posts, gutter connector, textless lane, profile-header bias, AH-dim spans). The
+suite's green is honest again; the six pre-v13.8 reds remain the known burn-down list.
+
 ## v14.5 — v14.4 shipped HALF-WRITTEN, and the operator caught it on the live face
 
 The v14.4 edit script raised an assertion on its LAST replacement and exited WITHOUT SAVING — and I

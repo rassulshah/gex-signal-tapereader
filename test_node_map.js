@@ -103,3 +103,6 @@ const RJ=JSON.parse(fs.readFileSync('./learning/rules.json','utf8'));
 ok('7b rules.json seeds map.transfer + map.lean (55 ids)', RJ.rules['map.transfer'] && RJ.rules['map.lean'] && Object.keys(RJ.rules).length>=54, Object.keys(RJ.rules).length);
 ok('7c LLM brief evaluates the Map', /map\.transfer/.test(fs.readFileSync('./docs/LLM-NIGHTLY-BRIEF.md','utf8')));
 console.log('test_node_map: '+p+' passed, '+f+' failed');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

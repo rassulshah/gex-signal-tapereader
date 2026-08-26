@@ -52,3 +52,6 @@ ok('no leg → no leg sentence', say({dir:'none'})==='');
 const all=[D({pbZone:{lo:768,hi:771}}),D({handoff:{active:true,from:{k:771},to:{k:769}}}),D({pbDetected:{k:769},lastPB:{k:769}}),D({pbDetected:{k:769},lastPB:{k:769},atPB:true}),D({deflected:true,deflectedFrom:769,lastPB:{k:769}}),D({stack:{k:770,from:769,holding:true}}),D({stack:{k:770,from:769,holding:false}}),D({magnetReached:true})].map(say).join(' ');
 ok('no imperatives in the voice', !/\b(sell now|buy now|go long|go short|enter|stop at|size)\b/i.test(all));
 console.log('test_read_voice_leg: '+p+' passed, '+f+' failed');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

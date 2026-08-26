@@ -40,3 +40,6 @@ const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.l
   ok(!/function ifNum\(x\)/.test(src), 'nothing redeclares ifNum with the formatter signature');
 }
 console.log('\n'+pass+' pass / '+fail+' fail');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

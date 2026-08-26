@@ -87,7 +87,8 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
      'but there is NO equal-and-opposite balance check (INVERTED: that assumption was wrong)');
   ok(/ROLL_MAX_DIST/.test(rs), 'and proximity is required');
   ok(/function rollBias/.test(src), 'the aggregate exists');
-  ok(/migrating /.test(ex('secLoc')), 'and reaches the face as one line, not five badges');
+  // (v14.4/6) the bias line moved to the GAMMA PROFILE header, operator-directed — one home
+  ok(/ROLL BIAS /.test(ex('gammaProfileHtml')), 'and reaches the face as one chip on the profile header');
 }
 // ---------- ONE BOOK: NODES AND THE RAIL ----------
 {
@@ -191,7 +192,9 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
   const sl=ex('secLoc');
   ok(!/TN\.slice\(0,\s*\d+\)/.test(noc(sl)),
      'no cap on the node list — v13.5 sliced to 6 while the rail drew 7 (INVERTED v13.6)');
-  ok(/TN\.forEach\(function\(n\)\{/.test(sl), 'every node is rendered');
+  // (v13.9) nodes enter ONE display ladder (with the ES row) and every ladder row renders
+  ok(/TN\.forEach\(function\(n0\)\{/.test(sl) && /dispRows\.forEach\(function\(row, rowIdx\)\{/.test(sl),
+     'every node enters the display ladder and every ladder row is rendered');
   ok(/if the list ever needs limiting, the RAIL must limit too/.test(sl),
      'and the reason a cap here is dangerous is written down');
 }
@@ -212,43 +215,43 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
   const sl=ex('secLoc');
   // ⚠ the class name existing proves nothing — a mutation that wrapped the emission in `if(false)`
   // left every string in place and this suite passed it. Assert the emission is reached.
-  ok(/if\(!esShown && pxNow!=null && n\.es<pxNow\)\{\s*\n\s*h\+='<div class="g3ndes"/.test(sl),
+  ok(/if\(esAt<0 && pxNow!=null && n0\.es<pxNow\)\{ esAt=dispRows\.length; dispRows\.push\(\{ es:1 \}\); \}/.test(sl)
+     && /if\(row\.es\)\{/.test(sl) && /class="g3ndes"/.test(sl),
      'the ES price row is emitted directly under its condition, ungated');
-  ok(/n\.es<pxNow/.test(sl), 'inserted where it belongs — between the nodes above and below it');
+  ok(/n0\.es<pxNow/.test(sl), 'inserted where it belongs — between the nodes above and below it');
   ok(/below every node/.test(sl), 'and it still appears when price is under everything');
 }
-// ---------- bias at the top, in red ----------
+// ---------- (v14.4/6) bias lives on the PROFILE header now ----------
 {
-  const sl=ex('secLoc');
-  const iBias=sl.indexOf('g3ndbiasTop'), iHead=sl.indexOf('g3ndhd');
-  ok(iBias>-1 && iHead>-1 && iBias<iHead, 'ROLL BIAS is emitted ABOVE the table header');
-  ok(/g3ndbiasTop\{[^}]*color:#e0645f/.test(src), 'and rendered red');
+  const gp=ex('gammaProfileHtml');
+  ok(/g3gpbias/.test(gp) && /ROLL BIAS /.test(gp), 'ROLL BIAS is emitted as the profile-header chip');
+  ok(/g3gpbias\{[^}]*color:#e0645f/.test(src), 'and rendered red');
+  // (v14.6) and rolls are an RTH story: every display of the latch gates on the session
+  ok(/function rollsLive/.test(src), 'the session gate exists');
+  ok(/if\(rollsLive\(\)\) RAILROLLS=/.test(src) && /if\(rollsLive\(\)\) ROLLS=/.test(src) &&
+     /if\(rollsLive\(\)\)\{ ROLLS=rollLatched\(sym\)/.test(src),
+     'and binds on ALL THREE consumers — rail, profile, nodes list');
 }
 
-
-
-// ---------- (v13.8) THE ROLL IS SHOWN AS A CAUSE, NOT A LABEL ----------
+// ---------- (v13.9) THE ROLL IS SHOWN AS A CONNECTOR IN ITS OWN GUTTER ----------
 {
   const sl=ex('secLoc');
-  // a connector from the source ROW to the destination ROW
-  ok(/var gut=\{\}/.test(sl) && /function gutHtml/.test(sl), 'a row-to-row connector is built');
-  ok(/piece = \(i===a\) \? 'tail' : \(\(i===b\) \? 'head' : 'mid'\)/.test(sl),
-     'source draws the tail, destination the head, rows between the line');
-  // ⚠ per-row segments, NOT one absolute shape computed from indices
-  ok(/Rows are different heights/.test(sl),
-     'and the reason it is per-row is recorded — badges wrap, so index maths would drift');
-  ok(/h\+= gutHtml\(rowIdx\);/.test(sl), 'every row emits its own segment');
-  ok(/border-top:4px solid '\+c|border-bottom:4px solid '\+c/.test(sl), 'the destination gets an arrowhead');
+  // per-roll segments assembled per display row, dot at the source, elbow+head at the destination
+  ok(/function addSeg\(i,s\)/.test(sl) && /function vseg\(i,box\)/.test(sl), 'a row-to-row connector is built');
+  ok(/g3nddot/.test(sl) && /g3ndhead/.test(sl) && /g3ndstub/.test(sl),
+     'source draws the dot, destination the elbow and arrowhead');
+  ok(/Per-row segments \(rows are different heights/.test(sl),
+     'and the reason it is per-row is recorded — one absolute shape would drift');
+  ok(/var segHtml=\(segs\[rowIdx\]\|\|\[\]\)\.join\(''\);/.test(sl), 'every row emits its own segments');
+  ok(/border-left:6px solid '\+col/.test(sl), 'the destination gets an arrowhead');
   ok(/g3ndrow\{position:relative\}/.test(src), 'rows are the positioning context for it');
-
-  // the badge sits under the number it explains
-  ok(/g3ndr2\{display:grid;grid-template-columns:11px 1fr 40px 44px 44px 44px 50px/.test(src),
-     'r2 shares r1’s grid, so a badge can align to a column');
-  ok(/'<span class="g3ndrc">'\+rollChip\+'<\/span>'/.test(sl), 'the roll badge occupies the 5m cell');
-  ok(/belongs directly beneath the number it explains/.test(sl),
-     'and the reason is recorded — a roll EXPLAINS a sharp recent change');
-  // ⚠ INVERTED: it must not drift back to the right margin
-  ok(!/if\(rf\)\s+chipsHtml\+=/.test(noc(sl)), 'the roll badge is no longer pushed to the right margin');
+  // (v14.x) the chip NAMES the roll on the source row's sub-line; the connector says where it went
+  ok(/ROLL '\+arr\+' /.test(sl), 'the chip names the roll');
+  ok(/chipAt\[at\]=chipAt\[at\]\|\|\[\]/.test(sl), 'and lands on the source row (or the destination when the source vacated)');
 }
+
 
 console.log('\n'+pass+' pass / '+fail+' fail');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

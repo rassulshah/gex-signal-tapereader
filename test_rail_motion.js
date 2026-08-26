@@ -9,10 +9,18 @@ let pass=0,fail=0;
 function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==undefined?'  got: '+x:''));} }
 
 // ---------- circles ----------
-ok(/\.g3pile\{position:absolute;bottom:2px;transform:translateX\(-50%\);border-radius:50%\}/.test(src),
-   'nodes are discs, not bars');
-ok(/var dia=Math\.max\(6, Math\.min\(18, Math\.round\(Math\.sqrt\(P\.pct\/100\)\*15\)\)\)/.test(src),
-   'diameter scales by sqrt so a King does not flatten a 30% node into invisibility');
+// (v14.6) discs became FLAG-POSTS behind the price pill (operator-approved mockup)
+ok(/\.g3pile\{position:absolute;top:19px;transform:translateX\(-50%\);border-radius:2px;z-index:1\}/.test(src),
+   'nodes are posts behind the pill (z 1), top-aligned under the role tier');
+ok(/var ph=Math\.max\(20, Math\.round\(Math\.sqrt\(P\.pct\/100\)\*44\)\)/.test(src),
+   'post HEIGHT scales by sqrt so a King does not flatten a 30% node into invisibility');
+ok(/g3kcap/.test(src) && src.indexOf("P.role==='KING')?'<i class=\"g3kcap\">")>-1,
+   'the King alone wears the diamond cap');
+ok(/g3defl::after\{border-color:#2ec27e;animation:g3sonar 1\.1s/.test(src) &&
+   /g3broke\{background:repeating-linear-gradient/.test(src) && /@keyframes g3breathe/.test(src),
+   'the three interaction states exist: breathe / fast rings / fracture');
+ok(/reactDefence\(sym, ipP\.disp\)/.test(src),
+   'deflect-vs-break comes from the MEASURED reaction, never an opinion');
 
 // ---------- motion is RATIONED, and decided once ----------
 {
@@ -67,18 +75,19 @@ ok(/@keyframes g3sonar\{0%\{transform:scale\(1\)/.test(src) && /@keyframes g3inw
   // ⚠ (v13.7) reported live: blue roll text sitting on top of the rail's "7664 EL" price. A label
   // centred with translateX(-50%) near an end hangs half outside the track. The NODE labels on this
   // same rail have clamped since v11.93 — the roll labels were written without reusing that rule.
-  ok(/mid>88\) \? 'transform:translateX\(-100%\);'/.test(rl), 'a label near the right edge right-aligns inward');
-  ok(/mid<12\) \? 'transform:translateX\(0\);'/.test(rl), 'and one near the left edge left-aligns inward');
-  // ⚠ asserting the token `lEdge` exists passes even when its USE is deleted and only the declaration
-  // remains — a mutation proved it. Assert it reaches the emitted style attribute.
-  ok(/color:'\+col\+';'\+lEdge\+'"/.test(rl),
-     'the clamp is concatenated into the style attribute, not merely computed');
+  // (v14.0) THE LANE IS TEXTLESS (operator-directed): no labels, so no label clamp — the
+  // arrowhead's padded hover target carries every number the label used to.
+  ok(!/g3rlab/.test(rl), 'no text labels on the lane — the operator reads the arrows');
+  ok(/width:14px;height:12px/.test(rl), 'the arrowhead hover target is padded, not a bare triangle');
+  ok(rl.indexOf("'ROLL '")>-1, 'and its hover leads with the roll sentence');
 }
 // ---------- every viewer gets an off switch ----------
 // ⚠ a reduced-motion block ALREADY existed for .g3pulse, so asserting the at-rule exists passes on
 // someone else's rule. Assert OUR selectors are the ones disabled.
-ok(/@media \(prefers-reduced-motion: reduce\)\{#gpts-body \.g3pile::after,#gpts-body \.g3rl \.fl\{animation:none !important\}\}/.test(src),
+ok(/@media \(prefers-reduced-motion: reduce\)\{#gpts-body \.g3pile::after,#gpts-body \.g3rl \.fl,#gpts-body \.g3inplay,#gpts-body \.g3broke,#gpts-body \.g3tractor\{animation:none !important\}\}/.test(src),
    'the OS preference disables THESE animations, not merely some animation somewhere');
 ok(/motion: true,/.test(src), 'and there is a real setting');
 ok(/classList\.toggle\('g3nomo', CFG\.motion===false\)/.test(src), 'applied on every render, no reload needed');
 console.log('\n'+pass+' pass / '+fail+' fail');
+// (v14.6) this file printed failures and exited ZERO for three versions — silent-red, now fixed
+process.exit(fail?1:0);

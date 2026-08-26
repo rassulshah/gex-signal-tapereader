@@ -1,0 +1,153 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Flag-posts v2 — states, shapes, tiers</title>
+<style>
+  body{background:#0d1117;color:#e6edf3;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+       font-variant-numeric:tabular-nums;margin:0;padding:26px;display:flex;gap:34px;flex-wrap:wrap;align-items:flex-start}
+  .panel{width:480px;background:#0d1117;border:1px solid #232a36;border-radius:6px;padding:10px 12px}
+  .cap{font-size:11px;font-weight:800;letter-spacing:.08em;color:#8b98a9;margin:0 0 6px;text-transform:uppercase}
+  .cap b{color:#7cc7ff}
+  .note{font-size:10px;color:#8b98a9;line-height:1.55;margin-top:10px;width:480px}
+  .note b{color:#e6edf3}
+
+  .frow{display:flex;align-items:stretch;gap:6px}
+  .fspace{width:40px;flex:none;font-size:9px;font-weight:800;color:#8b98a9;position:relative}
+  .fspace b{color:#e6edf3}
+  .ftrack{flex:1;position:relative}
+  .elh{position:absolute;top:34px;font-size:9px}
+
+  /* TIER MAP (fixed, nothing may cross): 0-10 roll lane · 12-20 role names · 22-58 posts+track+pill · 60+ prices */
+  .rail{height:82px}
+  .track{position:absolute;top:39px;left:0;right:0;height:3px;background:#2a3340;border-radius:2px}
+  .used{position:absolute;top:39px;height:3px;background:#3d4a5c}
+
+  /* the post: a plain rounded lozenge BEHIND the pill (z 1 < pill z 3). Tops all END at y=22,
+     so the role name at 12-20 sits exactly on its post and can never be overlapped. */
+  .post{position:absolute;width:3px;transform:translateX(-50%);border-radius:2px;z-index:1;top:22px}
+  .king{width:4px}
+  .kcap{position:absolute;top:-5px;left:50%;transform:translateX(-50%) rotate(45deg);width:5px;height:5px;background:#e3c341}
+  .role{position:absolute;top:12px;transform:translateX(-50%);font-size:7px;font-weight:800;letter-spacing:.04em;z-index:2}
+
+  /* the pill rides ON TOP (z 3): the post disappears behind it and re-emerges above and below */
+  .pill{position:absolute;top:33px;height:13px;background:#fff;color:#0d1117;font-size:8.5px;font-weight:800;
+        padding:0 5px;display:flex;align-items:center;border-radius:7px;z-index:3;box-shadow:0 0 0 2px #0b0e14}
+  .tipL{position:absolute;left:-6px;top:50%;transform:translateY(-50%);width:0;height:0;
+        border-top:6px solid transparent;border-bottom:6px solid transparent;border-right:7px solid #f0616d}
+
+  /* ---- STATE EFFECTS ---- */
+  /* IN PLAY: the post BREATHES — a slow node-colour halo, unmistakable but calm */
+  @keyframes breathe{0%,100%{box-shadow:0 0 3px 0 rgba(227,195,65,.35)}50%{box-shadow:0 0 9px 2.5px rgba(227,195,65,.85)}}
+  .inplay{animation:breathe 1.8s ease-in-out infinite}
+  /* DEFLECTING: energy BOUNCES OFF — crisp sonar rings expand from the contact point; post stays solid */
+  .ring{position:absolute;left:50%;width:10px;height:10px;border:1.5px solid #2ec27e;border-radius:50%;
+        transform:translate(-50%,-50%);opacity:0;animation:ping 1.6s ease-out infinite;z-index:2;pointer-events:none}
+  .ring.r2{animation-delay:.55s}
+  @keyframes ping{0%{opacity:.9;width:6px;height:6px}100%{opacity:0;width:30px;height:30px}}
+  /* BREAKING: the post FRACTURES — it renders as separating dashes and gutters with a fast red flicker */
+  .broke{background:repeating-linear-gradient(to bottom,currentColor 0 4px,transparent 4px 8px)!important;
+         animation:gutter .5s steps(2) infinite}
+  @keyframes gutter{0%,100%{opacity:.85;box-shadow:0 0 4px 1px rgba(240,97,109,.6)}50%{opacity:.35;box-shadow:none}}
+  @media (prefers-reduced-motion:reduce){.inplay,.ring,.broke{animation:none}}
+
+  /* the roll lane lives WHOLLY in tier 0-10 and its arrowheads point DOWN onto post tops */
+  .lanearrow{position:absolute;top:0;height:10px;pointer-events:none}
+  .plab{position:absolute;top:62px;transform:translateX(-50%);text-align:center;font-size:9px;font-weight:800;line-height:1.15}
+  .plab i{display:block;font-style:normal;font-size:8px;color:#c9d1da}
+  .labrow{height:26px}
+
+  /* shape strip */
+  .shapes{display:flex;gap:36px;align-items:flex-end;padding:14px 6px 6px}
+  .sh{position:relative;height:64px;width:60px}
+  .sh .nm{position:absolute;bottom:-14px;left:0;right:0;text-align:center;font-size:8px;color:#8b98a9;font-weight:700}
+  .sh .p{position:absolute;left:50%;transform:translateX(-50%);bottom:8px;background:#e3c341;border-radius:2px}
+</style>
+</head>
+<body>
+
+<!-- ============ A: post shapes to choose from ============ -->
+<div>
+<div class="cap">A · post shapes <b>(pick one — the cap was the ugly part, so most drop it)</b></div>
+<div class="panel">
+  <div class="shapes">
+    <div class="sh"><span class="p" style="width:3px;height:44px"></span><span class="nm">1 · clean<br>lozenge</span></div>
+    <div class="sh"><span class="p" style="width:3px;height:44px"></span>
+      <span style="position:absolute;left:50%;transform:translateX(-50%) rotate(45deg);bottom:52px;width:6px;height:6px;background:#e3c341"></span>
+      <span class="nm">2 · diamond top<br>(King only)</span></div>
+    <div class="sh"><span class="p" style="width:3px;height:44px;background:linear-gradient(to top,#e3c341,rgba(227,195,65,.15))"></span>
+      <span class="nm">3 · fading<br>beacon</span></div>
+    <div class="sh"><span class="p" style="width:7px;height:44px;background:rgba(227,195,65,.28);border-radius:3px"></span>
+      <span class="p" style="width:3px;height:44px"></span>
+      <span class="nm">4 · cored<br>(soft sheath)</span></div>
+  </div>
+</div>
+<div class="note"><b>Recommendation: #1 for every node, #2's diamond reserved for the King alone</b> —
+one clean vertical everywhere, and the single diamond reads as the crown without any flag clutter.
+#4 is the alternative if you want more presence at a glance (the sheath widens with %King while the
+core stays 3px).</div>
+</div>
+
+<!-- ============ B: the rail — states, tiers, nothing overlapping ============ -->
+<div>
+<div class="cap">B · behind the pill, three states, fixed tiers <b>(animated — watch it)</b></div>
+<div class="panel">
+  <div class="frow rail">
+    <span class="fspace"><span class="elh"><b>7628</b> EL</span></span>
+    <div class="ftrack">
+      <!-- tier 0-10: the roll lane, arrowheads DROP onto post tops, never entering lower tiers -->
+      <svg class="lanearrow" style="left:0;width:100%" viewBox="0 0 400 10" preserveAspectRatio="none">
+        <path d="M188 9 L188 3 L288 3 L288 7" fill="none" stroke="#7cc7ff" stroke-width="1.3" opacity=".7"/>
+      </svg>
+      <span style="position:absolute;left:72%;top:7px;transform:translateX(-50%);width:0;height:0;border-left:3px solid transparent;border-right:3px solid transparent;border-top:4px solid #7cc7ff;z-index:2"></span>
+
+      <div class="track"></div><div class="used" style="left:34%;width:26%"></div>
+
+      <!-- KING 7655 · IN PLAY: price pill sits on it; post runs BEHIND the pill, breathing -->
+      <span class="role" style="left:36%;color:#e3c341">KING</span>
+      <span class="post king inplay" style="left:36%;height:36px;background:#e3c341"><i class="kcap"></i></span>
+
+      <!-- BRK 7660 · DEFLECTING: solid post + sonar rings bouncing off the contact point -->
+      <span class="role" style="left:47%;color:#e3c341">BRK</span>
+      <span class="post" style="left:47%;height:36px;background:#e3c341"></span>
+      <span class="ring" style="left:47%;top:40px"></span>
+      <span class="ring r2" style="left:47%;top:40px"></span>
+
+      <!-- ACC 7670 · quiet: plain, slightly dimmed -->
+      <span class="post" style="left:60%;height:28px;background:#a371f7;opacity:.75;top:28px"></span>
+
+      <!-- GK 7680 · BREAKING: the post fractures into dashes and gutters red -->
+      <span class="role" style="left:72%;color:#e3c341">GK</span>
+      <span class="post broke" style="left:72%;height:36px;background:#e3c341;color:#e3c341"></span>
+
+      <span class="post" style="left:88%;height:24px;background:#e3c341;opacity:.6;top:30px"></span>
+
+      <!-- the pill ON TOP of the King's post: post visible above and below, hidden behind the body -->
+      <span class="pill" style="left:calc(36% - 14px)">7654<span class="tipL"></span></span>
+    </div>
+    <span class="fspace" style="text-align:right"><span class="elh" style="right:0">EH <b>7729</b></span></span></div>
+
+  <div class="frow labrow"><span class="fspace"></span>
+    <div class="ftrack">
+      <span class="plab" style="left:36%;top:0;color:#e3c341">7655<i>7655</i></span>
+      <span class="plab" style="left:47%;top:0;color:#e3c341">7660<i>7660</i></span>
+      <span class="plab" style="left:72%;top:0;color:#e3c341">7680<i>7680</i></span>
+    </div><span class="fspace"></span></div>
+</div>
+<div class="note">
+  <b>Z-order:</b> the post runs BEHIND the pill — it vanishes under the white body and re-emerges above
+  and below, so the pill stays perfectly readable and the node stays present. <b>The three effects:</b>
+  ① <b>IN PLAY</b> (King): the post <i>breathes</i> — a slow node-colour halo, calm but unmissable.
+  ② <b>DEFLECTING</b> (7660): <i>sonar rings</i> expand off the contact point while the post stays solid
+  — energy bouncing off a wall that is holding. ③ <b>BREAKING</b> (7680): the post <i>fractures</i> —
+  it renders as separating dashes with a fast red gutter-flicker — structure failing while price passes.
+  Wired to what the panel already measures: in-play = inside the deflection zone; deflect vs break =
+  the live 3-way classifier + DEFENDING/ABANDONING, so the animation is never an opinion the data
+  doesn't hold. <b>Tiers are fixed and disjoint:</b> roll lane 0-10 (arrowheads now DROP onto post
+  tops), role names 12-20 sitting exactly on their posts, posts+track+pill 22-58, prices 60+. Nothing
+  can overlap anything by construction — same rule that fixed the profile badges.
+</div>
+</div>
+
+</body>
+</html>

@@ -94,3 +94,6 @@ ok(!/[^a-zA-Z]rr[^a-zA-Z0-9]/.test(bodyOf('secLoc').replace(/rrN/g,'')),
    'and never references an undeclared rr from another scope');
 ok(/tradeNodes\(sym\)/.test(bodyOf('secLoc')),'and TRADE LOCATION calls it');
 console.log('\n'+pass+' pass / '+fail+' fail');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

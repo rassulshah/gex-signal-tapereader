@@ -221,3 +221,6 @@ const book=(net)=>({ j:{ levels:[ {l:[{k:100,v:Math.abs(net),d:1,net:net}]} ] },
 }
 
 console.log('\n'+pass+' pass / '+fail+' fail');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

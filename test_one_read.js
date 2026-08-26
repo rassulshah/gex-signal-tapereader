@@ -80,3 +80,6 @@ ok('22 ES levels round to the 0.25 tick (7716.36 → 7716.25, 7726.41 → 7726.5
 global.FUTMODE={fam:null}; eval(ex('fmtFut'));
 ok('23 SPY/QQQ levels unchanged (no tick rounding)', fmtFut(768.36)==='768.36');
 console.log('test_one_read: '+p+' passed, '+f+' failed');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

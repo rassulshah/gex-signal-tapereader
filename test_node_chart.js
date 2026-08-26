@@ -222,3 +222,6 @@ function node(k,v,n){ const seq=[]; for(let i=0;i<n;i++) seq.push({t:T-(n-1-i)*1
    'and the key lives in the chart hover instead');
 }
 console.log('\n'+pass+' pass / '+fail+' fail');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

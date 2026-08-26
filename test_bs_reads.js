@@ -74,3 +74,6 @@ eq(yearsTo(O(7700,'C',{expireDay:20}),20260821),null,'an expiry in the past is n
 ok(d1Of(7700,7700,0.12,0.02)!==null,'d1 computes at the money');
 eq(d1Of(7700,7700,0,0.02),null,'zero vol has no d1 rather than an infinity');
 console.log('\n'+pass+' pass / '+fail+' fail');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

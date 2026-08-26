@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.5
+// @version    14.7
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -564,7 +564,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.5';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.7';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -2948,6 +2948,10 @@ function rollLatchTick(sym){
     rollLatchSave();
   }catch(e){}
 }
+// (v14.6) rolls are an RTH story. After the close the 0DTE book they came from has expired, and
+// the operator caught yesterday's arrows still animating over tonight's rail ("there is no roll
+// now"). Every DISPLAY of the latch gates on this; the latch itself keeps recording as before.
+function rollsLive(){ try{ var P=sessionPhase(); return !!(P&&P.rth); }catch(e){ return true; } }
 // the display list: what the NODES section and the rail both draw. NEVER a raw rollScan.
 function rollLatched(sym){
   var out=[];
@@ -12186,6 +12190,44 @@ function registerCoreFeatures(){
     rule:{ id:'rolllatch', tier:'hand', condition:'display-side counting of rollScan sightings per closed bar',
            mechanism:'Two consecutive sightings draw, three latch; a latched roll persists while its destination holds >=60% of its at-confirmation mass, then GAVE BACK retires it. Recorded so the review can test STUCK vs GAVE BACK destinations against plain growth.' } });
 
+  // (v14.7) ATTRACT — doctrine magnetism made measurable. pull = |cur| / distance; the top-pull
+  // node beyond the deflection zone is recorded every bar with whether price then moved TOWARD it.
+  // First reading (2026-08-25, one day): toward within 30m in 77% of samples. Recorded, not voted,
+  // until the nightly walk-forward clears the bar.
+  registerFeature({ key:'attract', label:'Attract (dominant magnet: pull = size/dist)', phase:'dashboard', fwd:FEAT_FWD,
+    record:function(sym){
+      var TN=[]; try{ TN=tradeNodes(sym)||[]; }catch(e){}
+      var px=null; try{ var B=emBand(sym); px=(B&&B.ok)?B.now:null; }catch(e2){}
+      if(px==null || !TN.length) return { hasTop:0 };
+      var best=null, second=null;
+      TN.forEach(function(n){
+        var d=Math.abs(n.es-px); if(d<2.6||d>60) return;
+        var usd=(n.vel&&typeof n.vel.cur==='number')?Math.abs(n.vel.cur):null; if(usd==null) return;
+        var pull=usd/d;
+        if(!best||pull>best.pull){ second=best; best={k:n.k,es:n.es,pull:pull,above:(n.es>px)}; }
+        else if(!second||pull>second.pull) second={pull:pull};
+      });
+      if(!best) return { hasTop:0 };
+      return { hasTop:1, k:best.k, es:+best.es.toFixed(2), dist:+(best.es-px).toFixed(2),
+               pullM:+(best.pull/1e6).toFixed(3), dom:second?+(best.pull/second.pull).toFixed(2):null,
+               above:best.above?1:0 };
+    },
+    // toward = net forward movement favours the magnet's side. Scale-free on purpose: mfe/mae are
+    // in the fwd window's own units, so no ES/underlying conversion can poison the verdict.
+    outcome:function(rec, fwd){
+      if(!rec||!rec.hasTop||!fwd) return { hit:null, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
+      var toward = rec.above ? ((fwd.mfe||0) > Math.abs(fwd.mae||0)) : (Math.abs(fwd.mae||0) > (fwd.mfe||0));
+      return { hit:toward, mfe:fwd.mfe, mae:fwd.mae };
+    },
+    questions:[
+      { id:'attract_toward', when:[{f:'hasTop',v:1}], outcome:'hold',
+        note:'does price move TOWARD the dominant magnet over the forward window? 2026-08-25 first reading: 77% over 30m, one day, magnet-day flattered. Control: the day\'s drift baseline. If this holds walk-forward, the tractor earns promotion from display to vote.' },
+      { id:'attract_dominant', when:[{f:'dom',v:2}], outcome:'hold',
+        note:'is a >=2x-dominant magnet more reliable than a marginal one? The tractor only draws at >=2x — this checks that gate against the data.' }
+    ],
+    rule:{ id:'attract', tier:'hand', condition:'top pull = |cur|/distance among nodes beyond the deflection zone',
+           mechanism:'Doctrine magnetism (every node is a magnet; the closer price drifts, the stronger the pull) made measurable. Recorded per bar with the toward/away outcome; the rail tractor draws only when the pull is >=2x the runner-up.' } });
+
   registerFeature({ key:'node', label:'Node grade', phase:'dashboard', fwd:FEAT_FWD,
     record:function(sym, ctx){
       var m=(ctx&&ctx.m)||nodeMapModel(sym);
@@ -18532,6 +18574,10 @@ function ensureV3Css(){
     '#gpts-body .g3f2 b.g3over{color:#f0616d}'+
     '#gpts-body .g3emx{font-size:8.5px;color:#6c7889;font-style:italic}'+
     // (v11.57) the rails carry the two numbers the trader actually reads off this row
+    '#gpts-body .g3ahdim{opacity:.35;text-decoration:line-through}'+
+    '#gpts-body .g3ahchip{display:inline-block;margin:1px 0 3px;padding:1px 6px;border-radius:3px;font-size:7px;'+
+      'font-weight:800;letter-spacing:.05em;color:#f2b45a;background:rgba(242,180,90,.12);'+
+      'border:1px solid rgba(242,180,90,.45);cursor:help}'+
     '#gpts-body .g3emk{font-size:10.5px;font-weight:800;color:#e6edf3;line-height:1;white-space:nowrap}'+
     '#gpts-body .g3emk small{display:block;font-size:6px;font-weight:800;letter-spacing:.09em;color:#6c7889;margin-top:1px}'+
     // WHERE THE DAY HAS BEEN. Dim on purpose: it is context behind the live marks, never competing with them.
@@ -18688,6 +18734,10 @@ function ensureV3Css(){
       'font-weight:800;padding:0 4px;display:inline-flex;align-items:center;gap:1px;line-height:1;'+
       'white-space:nowrap;z-index:3;cursor:help}'+
     '#gpts-body .g3emn i{font-style:normal;font-size:7px}'+
+    '#gpts-body .g3ptipR{position:absolute;right:-6px;top:50%;transform:translateY(-50%);width:0;height:0;'+
+      'border-top:6px solid transparent;border-bottom:6px solid transparent;border-left:7px solid #2ec27e}'+
+    '#gpts-body .g3ptipL{position:absolute;left:-6px;top:50%;transform:translateY(-50%);width:0;height:0;'+
+      'border-top:6px solid transparent;border-bottom:6px solid transparent;border-right:7px solid #f0616d}'+
     // TARGET moves to CYAN. Yellow now means POSITIVE GAMMA (Skylit's Pika), so the target cannot keep it.
     // Cyan is the one hue the palette had not spent, and the T glyph carries identity without colour.
     '#gpts-body .g3emT{position:absolute;top:21px;font-size:9px;font-weight:800;color:#4fd1e0;'+
@@ -18698,7 +18748,31 @@ function ensureV3Css(){
     // positive gamma = brake. Same convention as their heatmap, so the two never read as different things.
     // (v13.5) NODES ARE CIRCLES. A bar encodes size in one dimension and reads as a chart element;
     // a disc reads as an object with mass, which is what a node behaves like.
-    '#gpts-body .g3pile{position:absolute;bottom:2px;transform:translateX(-50%);border-radius:50%}'+
+    // (v14.6, operator-approved mockup) THE DISC IS NOW A FLAG-POST: a vertical lozenge BEHIND the
+    // price pill (z 1 vs the pill's 3), tops aligned under the role tier so the role name can never
+    // be overlapped, height = sqrt(%King). A 3px post taller than the pill means price can sit on a
+    // node and the node stays visible above and below the pill.
+    '#gpts-body .g3pile{position:absolute;top:19px;transform:translateX(-50%);border-radius:2px;z-index:1}'+
+    '#gpts-body .g3kcap{position:absolute;top:-5px;left:50%;transform:translateX(-50%) rotate(45deg);'+
+      'width:5px;height:5px;background:#e3c341}'+
+    // interaction states (wired to what is MEASURED: in the deflection zone; DEFENDING; ABANDONING)
+    '@keyframes g3breathe{0%,100%{box-shadow:0 0 3px 0 rgba(230,237,243,.25)}50%{box-shadow:0 0 9px 2.5px rgba(230,237,243,.8)}}'+
+    '#gpts-body .g3inplay{animation:g3breathe 1.8s ease-in-out infinite}'+
+    '#gpts-body .g3ip::after{width:16px;height:16px;left:50%;top:60%;margin:-8px 0 0 -8px}'+
+    '#gpts-body .g3defl::after{border-color:#2ec27e;animation:g3sonar 1.1s ease-out infinite}'+
+    '#gpts-body .g3broke{background:repeating-linear-gradient(to bottom,currentColor 0 4px,transparent 4px 8px)!important;'+
+      'animation:g3gutter .5s steps(2) infinite}'+
+    '@keyframes g3gutter{0%,100%{opacity:.85;box-shadow:0 0 4px 1px rgba(240,97,109,.6)}50%{opacity:.35}}'+
+    '#gpts-body .g3pile.acc{color:#a371f7}'+
+    '#gpts-body .g3pile.brk{color:#e3c341}'+
+    // (v14.7) the tractor: a dashed flow ON the track, drifting toward the dominant magnet
+    '#gpts-body .g3tractor{position:absolute;top:25px;height:4px;opacity:.55;cursor:help;'+
+      'background:repeating-linear-gradient(90deg,currentColor 0 4px,transparent 4px 12px);'+
+      'background-size:24px 100%;border-radius:2px}'+
+    '#gpts-body .g3tR{animation:g3tflowR 1.1s linear infinite}'+
+    '#gpts-body .g3tL{animation:g3tflowL 1.1s linear infinite}'+
+    '@keyframes g3tflowR{from{background-position-x:0}to{background-position-x:24px}}'+
+    '@keyframes g3tflowL{from{background-position-x:0}to{background-position-x:-24px}}'+
     // ⚠⚠ MOTION IS EXPENSIVE ATTENTION. Only nodes whose 15m change is DECISIVE animate, capped at
     // three at once (G3_MOTION_MAX), cycles 2.2-2.6s so it breathes rather than flickers. With six
     // nodes moving the rail becomes the busiest thing on screen at exactly the moment it must be read
@@ -18729,8 +18803,8 @@ function ensureV3Css(){
     '#gpts-body .g3rl .fl{animation:g3flow 1.6s linear infinite}'+
     // ⚠ EVERY VIEWER GETS AN OFF SWITCH. On a second monitor during a fast tape some people want none
     // of this, and the OS-level preference must be honoured without being asked.
-    '@media (prefers-reduced-motion: reduce){#gpts-body .g3pile::after,#gpts-body .g3rl .fl{animation:none !important}}'+
-    '#gpts-body.g3nomo .g3pile::after,#gpts-body.g3nomo .g3rl .fl{animation:none !important}'+
+    '@media (prefers-reduced-motion: reduce){#gpts-body .g3pile::after,#gpts-body .g3rl .fl,#gpts-body .g3inplay,#gpts-body .g3broke,#gpts-body .g3tractor{animation:none !important}}'+
+    '#gpts-body.g3nomo .g3pile::after,#gpts-body.g3nomo .g3rl .fl,#gpts-body.g3nomo .g3inplay,#gpts-body.g3nomo .g3broke,#gpts-body.g3nomo .g3tractor{animation:none !important}'+
     '#gpts-body .g3pile.acc{background:#a371f7}'+
     '#gpts-body .g3pile.brk{background:#e3c341}'+
     // (v11.68) BALANCED: drawn, because the gamma is really there, but hollow — the legs cancel so
@@ -19808,7 +19882,7 @@ function gammaProfileHtml(EB, RB, sym, elLab, ehLab){
     var H=68;                                   // drawable height inside the 72px band
 
     // ---- the pieces every consumer below shares -------------------------------------------------
-    var ROLLS=[]; try{ ROLLS=(rollLatched(sym)||[]); }catch(eRL){}
+    var ROLLS=[]; try{ if(rollsLive()) ROLLS=(rollLatched(sym)||[]); }catch(eRL){}
     var rrN=1; try{ rrN=dispIsFut()?dispR():1; }catch(eRR){}
     var pbES=null; try{ var pbK=pbNodeK(sym); if(pbK!=null) pbES=pbK*rrN; }catch(ePB){}
     // 0DTE walls, mapped to the NEAREST rail bar so the badge can live inside it
@@ -20421,6 +20495,11 @@ function secFrame(sym){
     // (v11.99) RAIL SPACE FOR DRAWING. emPos stays the MEASUREMENT (clamped, recorded as `pct`);
     // RB is the drawn track, which grows once a boundary has been run so "how far past" is visible.
     var RB=emRailBounds(EB);
+    // (v14.6) AFTER THE CLOSE the band is YESTERDAY'S expected move — a straddle that expired at
+    // 15:00 forecasts nothing. The rail says so instead of pretending: chip, dimmed struck-through
+    // EL/EH, no target, no budget labels, no roll lane (gated above). Pre-open keeps its own
+    // prevClose-anchor behaviour; this state is strictly close -> midnight.
+    var AH=false; try{ var SPah=sessionPhase(); AH=!!(SPah && !SPah.rth && SPah.mins>=SPah.close); }catch(eAH){}
     // ⚠ (v13.5) ONE COMPUTATION, TWO CONSUMERS. The roll lane above the rail and the motion on the
     // circles must show the SAME rolls. Computing them twice is precisely the failure recorded in
     // PROJECT-CONSTANTS: two derivations of one thing drift, and here they would drift WITHIN a
@@ -20432,18 +20511,19 @@ function secFrame(sym){
     // destination that returned its mass no longer supports that claim (the node list still shows
     // its grey chip while it retires).
     var RAILROLLS=[];
-    try{ RAILROLLS=(rollLatched(sym)||[]).filter(function(rF){ return !rF.gone; }); }catch(eRR){}
+    try{ if(rollsLive()) RAILROLLS=(rollLatched(sym)||[]).filter(function(rF){ return !rF.gone; }); }catch(eRR){}
     var str=!!EB.stretched, pOpen=emPosRail(EB,EB.open,RB), pNow=emPosRail(EB,EB.now,RB);
     var fa=Math.min(pOpen,pNow), fb=Math.max(pOpen,pNow);
     var gTxt2=(EB.gamma==null)?'gamma unknown'
              :(EB.gamma>0?'positive gamma — dealers hedge AGAINST the move, so range compresses and levels tend to hold'
                          :'negative gamma — dealers hedge WITH the move, so ranges expand and the edge is where overshoot happens');
+    if(AH) h+='<div class="g3ahchip"'+g3tip('The expected move was priced by TODAY\'S straddle, which expired at the close — after hours it forecasts nothing. The band is kept as "where yesterday\'s band was", dimmed and struck through; the target, budget figures and roll arrows retire with it. Everything re-anchors from the fresh straddle at the next open.')+'>AFTER HOURS · EM EXPIRED — re-anchors at the open</div>';
     h+='<span class="g3emw"'+g3tip('Where today can go, where it is, and how much is left. The rail is '+(EB.anchor==='prevClose'?'the prior close':'the open')+' plus and minus the expected move, fixed for the session. Notch = anchor, white dot = price now, T = target, dim span = where the day has been.'+(EB.est?' ~EST: captured late, so this band is narrower than the open\'s was.':'')+(EB.anchor==='prevClose'?' Pre-open: re-anchors to the real open on the first bar.':''))+'>';
     // (v11.68) THE ROW IS NAMED FOR WHAT IT IS. The ATM straddle is ~0.80 sigma, not 1.00 — Brenner and
     // Subrahmanyam, and every vendor guide that bothers to say so puts the conversion at x1.25. A row
     // labelled EM implies ~68% containment; this band delivers ~58%. The WIDTH IS UNCHANGED and every
     // level sits exactly where it did — only the claim has been corrected.
-    var EL_LAB='<span class="g3emk"'+g3tip('Expected low — the open minus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.low/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(RB.under?RB.lo:EB.low))+'<small>'+(EB.est?'~':'')+(RB.under?'RAIL':'EL')+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
+    var EL_LAB='<span class="g3emk'+(AH?' g3ahdim':'')+'"'+g3tip('Expected low — the open minus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.low/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(RB.under?RB.lo:EB.low))+'<small>'+(EB.est?'~':'')+(RB.under?'RAIL':'EL')+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
     h+=EL_LAB;
     var laneHtml=railRollLane(EB, RB, RAILROLLS);
     h+='<span class="g3emt'+(laneHtml?' g3haslane':'')+'">'+laneHtml+
@@ -20451,12 +20531,12 @@ function secFrame(sym){
        ((EB.hiWater!=null&&EB.loWater!=null)?('<i class="g3emx2" style="left:'+emPosRail(EB,EB.loWater,RB).toFixed(1)+'%;width:'+Math.max(0,emPosRail(EB,EB.hiWater,RB)-emPosRail(EB,EB.loWater,RB)).toFixed(1)+'%"></i>'+
          '<i class="g3emw2" style="left:'+emPosRail(EB,EB.loWater,RB).toFixed(1)+'%"></i>'+
          '<i class="g3emw2" style="left:'+emPosRail(EB,EB.hiWater,RB).toFixed(1)+'%"></i>'):'')+
-       '<i class="g3emf'+(str?' g3str':'')+'" style="left:'+fa.toFixed(1)+'%;width:'+Math.max(0,fb-fa).toFixed(1)+'%"></i>'+
+       '<i class="g3emf'+(str?' g3str':'')+'" style="left:'+fa.toFixed(1)+'%;width:'+Math.max(0,fb-fa).toFixed(1)+'%'+(AH?';opacity:.3':'')+'"></i>'+
        // (v11.64) USED AND REMAINING, BOTH SIDES, ON THE RAIL. Each side of the anchor holds one full
        // expected move of budget, split by how far the day actually got that way. Defined by the
        // EXTREMES, not the dot, so the four figures sit still and only change when a new high or low
        // prints — a retrace does not hand budget back, because the day has already spent that range.
-       (function(){
+       (AH?'':(function(){
          if(!EB.mult || EB.hiWater==null || EB.loWater==null) return '';
          var pLo=emPosRail(EB,EB.loWater,RB), pHi=emPosRail(EB,EB.hiWater,RB), pOp=emPosRail(EB,EB.open,RB), t='';
          function seg(a,b,val,cls,tip){
@@ -20469,7 +20549,7 @@ function secFrame(sym){
          t+=seg(pOp,pHi,(EB.hiWater-EB.open)*M,'g3used','Upside already used: the open to the high of day.');
          t+=seg(pHi,100,(EB.high-EB.hiWater)*M,'g3lft','Upside still available: from the high of day to the expected high.');
          return t;
-       })()+
+       })())+
        '<i class="g3emo" style="left:'+pOpen.toFixed(1)+'%"></i>'+
        // (v11.99) where the expected move ACTUALLY ended, once the rail has grown beyond it. Without
        // this the rescale would quietly redefine the rail END as the expected move, which is the one
@@ -20480,7 +20560,7 @@ function secFrame(sym){
                    '<span class="g3embl" style="left:'+emPosRail(EB,EB.low,RB).toFixed(1)+'%">EL '+g3esc(frameNum(EB.low))+'</span>') : '')+
        // (v11.75) SAME COLOUR TEST AS THE CHIP ON ROW 1. Two marks for one level that disagreed about
        // its colour was worse than either colour alone.
-       (ifMagEarly!=null?('<span class="g3emT'+((ifMagEarly<EB.low||ifMagEarly>EB.high)?' out':'')+((ifMagEarly>EB.now)?' up':' dn')+'" style="left:'+emPosRail(EB,ifMagEarly,RB).toFixed(1)+'%">T</span>'):'')+
+       (!AH && ifMagEarly!=null?('<span class="g3emT'+((ifMagEarly<EB.low||ifMagEarly>EB.high)?' out':'')+((ifMagEarly>EB.now)?' up':' dn')+'" style="left:'+emPosRail(EB,ifMagEarly,RB).toFixed(1)+'%">T</span>'):'')+
        // (v14.4, operator-directed) THE DOT IS NOW A PILL: the rounded ES price with an arrowhead
        // for which way the last bar closed. Direction from the last two CLOSED candles — a per-tick
        // wiggle would make the arrow flicker; a bar is a decision. Edge-clamped like every label.
@@ -20488,7 +20568,9 @@ function secFrame(sym){
          var d0=0; try{ var csP=closedCandles(sym)||[];
            if(csP.length>=2 && typeof csP[csP.length-1].c==='number' && typeof csP[csP.length-2].c==='number')
              d0=csP[csP.length-1].c-csP[csP.length-2].c; }catch(ePd){}
-         var arr=(d0>0)?'<i style="color:#1a7f4e">▲</i>':(d0<0?'<i style="color:#c0392b">▼</i>':'');
+         // (v14.6, operator-directed) the tip is part of the pill's SILHOUETTE on the travel side —
+         // green on the right = moving up-rail, red on the left = moving down. Inside: only the price.
+         var arr=(d0>0)?'<i class="g3ptipR"></i>':(d0<0?'<i class="g3ptipL"></i>':'');
          var pEdge=(pNow>92)?';transform:translateX(-100%)':((pNow<8)?';transform:translateX(0)':'');
          return '<span class="g3emn'+(str?' g3str':'')+'" style="left:'+pNow.toFixed(1)+'%'+pEdge+'"'+
                 g3tip('Price now: '+frameNum(EB.now)+' on the chart\'s scale, rounded to save space. The arrow is the LAST CLOSED BAR\'s direction — up green, down red, absent when flat.'+(str?' RED PILL: price is beyond the expected move — STRETCHED.':''))+
@@ -20525,6 +20607,46 @@ function secFrame(sym){
              if(typeof m.d60==='number' && m.d60<0) motion[m.k]='fade';   // static, costs no attention
            }
          }catch(eMo){}
+         // (v14.6) WHO IS PRICE ON? The nearest pile inside the deflection zone is IN PLAY, and its
+         // MEASURED reaction picks the effect: DEFENDING = fast green rings (deflect forming),
+         // ABANDONING = fracture (break forming), otherwise the calm breathe.
+         var IPK=null, IPST='g3inplay';
+         try{
+           var ipBest=2.6, ipP=null;
+           for(var ipI=0;ipI<ps.length;ipI++){ var ipD=Math.abs(ps[ipI].disp-EB.now);
+             if(ipD<ipBest){ ipBest=ipD; ipP=ps[ipI]; } }
+           if(ipP){ IPK=ipP.k;
+             var rDf=reactDefence(sym, ipP.disp);
+             IPST=(rDf&&rDf.verdict==='DEFENDING')?'g3defl':((rDf&&rDf.verdict==='ABANDONING')?'g3broke':'g3inplay'); }
+         }catch(eIP){}
+         // (v14.7) THE TRACTOR — attract made visible. Doctrine: every node is a magnet and pull
+         // grows as price converges; nevWhy has RECORDED pull = size/distance since v13.4. The ONE
+         // dominant attractor — outside the deflection zone, pull >= 2x the runner-up — draws a
+         // directional flow on the track: dashes drifting from price INTO the node. First
+         // measurement (2026-08-25): price moved toward the top-pull node within 30m in 36/47
+         // samples (77%) — ONE day, magnet-day flattered; the `attract` feature keeps score nightly.
+         var AT=null;
+         try{
+           var atBest=null, atSecond=null;
+           for(var atI=0;atI<ps.length;atI++){
+             var atP=ps[atI], atD=Math.abs(atP.disp-EB.now);
+             if(atD<2.6 || atD>60) continue;
+             var atUsd=(atP.usdK!=null)?Math.abs(atP.usdK*1000):((atP.pct||0)*1e6);
+             var atPull=atUsd/atD;
+             if(!atBest || atPull>atBest.pull){ atSecond=atBest; atBest={p:atP,pull:atPull}; }
+             else if(!atSecond || atPull>atSecond.pull) atSecond={p:atP,pull:atPull};
+           }
+           if(atBest && (!atSecond || atBest.pull>=2*atSecond.pull)) AT=atBest.p;
+         }catch(eAT){}
+         if(AT){
+           var atX=emPosRail(EB,AT.disp,RB);
+           var atLo=Math.min(pNow,atX), atHi=Math.max(pNow,atX);
+           if(isFinite(atLo) && (atHi-atLo)>1.5){
+             var atCol=AT.balanced?'#8b98a9':(AT.accel?'#a371f7':'#e3c341');
+             h2+='<i class="g3tractor'+(atX>pNow?' g3tR':' g3tL')+'" style="left:'+atLo.toFixed(1)+'%;width:'+(atHi-atLo).toFixed(1)+'%;color:'+atCol+'"'+
+                 g3tip('ATTRACT — the dominant magnet. '+frameNum(AT.disp)+' out-pulls every other node at least 2-to-1 (pull = size ÷ distance, the metric recorded on every event since v13.4). Doctrine: the closer price drifts, the stronger the pull. The dashes drift TOWARD the node. First measurement 2026-08-25: price moved toward the top-pull node within 30m in 77% of samples — one day only; the attract feature records this every bar so the nightly review keeps honest score.')+'></i>';
+           }
+         }
          // (v14.5) NEIGHBOUR LABEL THINNING. 7655 and 7660 are 2.5% of the rail apart tonight, and
          // their labels rendered as one mashed string ("76557660", operator-caught). The bigger pile
          // keeps its label; a smaller one within 4% of an already-labelled pile stays label-less —
@@ -20584,15 +20706,22 @@ function secFrame(sym){
                if(vE.v.d60>0) capCls=' g3grow'; else if(vE.v.d60<0) capCls=' g3bleed';
              }
            }catch(eCap){}
-           // (v13.5) A DISC, NOT A BAR. Diameter from sqrt(%King) so a 100% King does not flatten a
-           // 30% node into invisibility — the same scaling the bar height used, applied to both axes.
-           var dia=Math.max(6, Math.min(18, Math.round(Math.sqrt(P.pct/100)*15)));
+           // (v14.6) A POST, NOT A DISC. Height from sqrt(%King) — the same scaling, one axis —
+           // BEHIND the pill (z 1 vs 3), top-aligned under the role tier. King is thicker and wears
+           // the lone diamond cap. The disc's motion grammar (recv/grow/fade) rides the post as-is.
+           var pw=(P.role==='KING')?4:3;
+           var ph=Math.max(20, Math.round(Math.sqrt(P.pct/100)*44));
            var mo=motion[P.k]||'';
            var moCls = (mo==='recv') ? ' g3recv' : (mo==='grow' ? ' g3grow' : (mo==='fade' ? ' g3fade' : ''));
-           h2+='<i class="g3pile '+pcls+capCls+moCls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%;width:'+dia+'px;height:'+dia+'px"'+g3tip(tip
-                 +(mo==='recv'?' \u2014 SIZE IS ARRIVING HERE: another strike is shedding into it.'
-                  :(mo==='grow'?' \u2014 ACCUMULATING: adding size right now.'
-                  :(mo==='fade'?' \u2014 DISSIPATING: coming apart.':''))))+'></i>';
+           var ipCls=(IPK!=null && P.k===IPK)?(' g3ip '+IPST):'';
+           h2+='<i class="g3pile '+pcls+capCls+moCls+ipCls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%;width:'+pw+'px;height:'+ph+'px"'+g3tip(tip
+                 +(mo==='recv'?' — SIZE IS ARRIVING HERE: another strike is shedding into it.'
+                  :(mo==='grow'?' — ACCUMULATING: adding size right now.'
+                  :(mo==='fade'?' — DISSIPATING: coming apart.':'')))
+                 +(ipCls?(IPST==='g3defl'?' ⚡ PRICE IS ON THIS NODE and it is DEFENDING — deflect forming.'
+                        :(IPST==='g3broke'?' ⚡ PRICE IS ON THIS NODE and it is being ABANDONED — break forming.'
+                        :' ⚡ PRICE IS ON THIS NODE — in play.')):''))+'>'+
+                ((P.role==='KING')?'<i class="g3kcap"></i>':'')+'</i>';
            // (v11.79) THE LABEL THE USER ASKED FOR, TWICE, AND I MOCKED TWICE WITHOUT BUILDING:
            // ES price on top (the number they trade), SPXW strike and the node's role beneath it.
            // (v11.81) ROLE beats polarity on the label. A King is still an accelerator; the hover keeps
@@ -20616,7 +20745,7 @@ function secFrame(sym){
          return h2;
        })()+
        '</span>';
-    var EH_LAB='<span class="g3emk"'+g3tip('Expected high — the open plus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.high/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a ceiling.')+'>'+g3esc(frameNum(RB.over?RB.hi:EB.high))+'<small>'+(EB.est?'~':'')+(RB.over?'RAIL':'EH')+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
+    var EH_LAB='<span class="g3emk'+(AH?' g3ahdim':'')+'"'+g3tip('Expected high — the open plus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.high/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a ceiling.')+'>'+g3esc(frameNum(RB.over?RB.hi:EB.high))+'<small>'+(EB.est?'~':'')+(RB.over?'RAIL':'EH')+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
     h+=EH_LAB;
     h+='</span>';
   } else {
@@ -21491,7 +21620,7 @@ function secLoc(sym){
     // confirmed roll while its destination holds. BIAS reads the same list minus GAVE BACK entries —
     // a withdrawn roll is not evidence the book is migrating.
     var ROLLS=[], BIAS=null;
-    try{ ROLLS=rollLatched(sym); BIAS=rollBias(ROLLS.filter(function(r0){ return !r0.gone; })); }catch(eRS){}
+    try{ if(rollsLive()){ ROLLS=rollLatched(sym); BIAS=rollBias(ROLLS.filter(function(r0){ return !r0.gone; })); } }catch(eRS){}
     if(TN.length){
       h+='<div class="g3nodehd" style="display:flex;align-items:center;gap:4px"'+g3tip('Where can a trade actually happen? Per the rule the trade is off a NODE. These are Skylit\'s SPXW nodes shown at ES prices, with their strike beneath. The four columns are Skylit\'s OWN published rate-of-change — the same numbers their strike popup shows — so this panel can be checked against their ladder directly.')+'>NODES '+
          gpInfo('NODES — how to read a node, the three-axis model. SIZE (the $ value, %King) is magnet strength: how hard it pulls. POLARITY is its character ON CONTACT: +gamma is a brake/wall, -gamma is an accelerator/fuel. RATE OF CHANGE (5m/15m/60m/Day) is the arbiter between wall and door: a node being DEFENDED (growing into a test) tends to hold; a node being ABANDONED (draining) is a door — price passes through what nobody defends, and the vacated strike leaves air. Rolls are S/R relocating: the arrow shows where size went; a destination UNDER price is candidate support whichever way it rolled. Chip colours say what it means for PRICE, not what the node is.')+'</div>';

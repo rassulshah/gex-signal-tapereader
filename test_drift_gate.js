@@ -95,3 +95,6 @@ ok(/class="g3chip gate/.test(src) && /background:transparent!important/.test(src
 ok(/withCall=\(B\.dir!==0 && dDir!==0\)/.test(src),'and the shipped gate compares drift direction to the call');
 ok(/against the call/.test(src),'with the contradicting case spelled out on the face');
 console.log('\n'+pass+' pass / '+fail+' fail');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

@@ -1,7 +1,7 @@
 {
  "schema": "gex-rules/v2",
  "asOf": "2026-08-25",
- "version": "13.9",
+ "version": "14.7",
  "note": "THE MENTAL MODEL IN DATA FORM, MACHINE-APPLICABLE. weights.dir are the LIVE direction-scoring constants the panel reads at boot. The WEEKLY learning run writes rules/proposals/challengers/killList and NEVER touches weights; only the panel applyProposals() moves a weight, and only after RE-CHECKING the promotion bar in code (n>=20 AND walkForward.held over >=3 NEW sessions AND no regime flip). clearsBar asserted by the reviewer is advisory. The NIGHTLY run writes learning/log/YYYY-MM-DD.json only. Sparse data never nudges a weight: it is reported as insufficient and the hand-set value stands.",
  "unlockN": 20,
  "walkForwardSessions": 3,
@@ -2221,6 +2221,37 @@
    },
    "mechanism": "Two consecutive sightings draw, three latch; a latched roll persists while its destination holds >=60% of its at-confirmation mass, then GAVE BACK retires it. Recorded so the review can test STUCK vs GAVE BACK destinations against plain growth.",
    "tier": "hand",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "attract": {
+   "id": "attract",
+   "tier": "hand",
+   "condition": "top pull = |cur|/distance among nodes beyond the deflection zone",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Doctrine magnetism (every node is a magnet; the closer price drifts, the stronger the pull) made measurable. Recorded per bar with the toward/away outcome; the rail tractor draws only when the pull is >=2x the runner-up.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,

@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Flag-posts + overnight rail — mockup</title>
+<style>
+  body{background:#0d1117;color:#e6edf3;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+       font-variant-numeric:tabular-nums;margin:0;padding:26px;display:flex;gap:34px;flex-wrap:wrap;align-items:flex-start}
+  .panel{width:470px;background:#0d1117;border:1px solid #232a36;border-radius:6px;padding:10px 12px}
+  .cap{font-size:11px;font-weight:800;letter-spacing:.08em;color:#8b98a9;margin:0 0 6px;text-transform:uppercase}
+  .cap b{color:#7cc7ff}
+  .note{font-size:10px;color:#8b98a9;line-height:1.55;margin-top:10px;width:470px}
+  .note b{color:#e6edf3}
+
+  .frow{display:flex;align-items:stretch;gap:6px}
+  .fspace{width:40px;flex:none;font-size:9px;font-weight:800;color:#8b98a9;position:relative}
+  .fspace b{color:#e6edf3}
+  .ftrack{flex:1;position:relative}
+  .elh{position:absolute;top:14px;font-size:9px}
+
+  .rail{height:44px}
+  .track{position:absolute;top:20px;left:0;right:0;height:3px;background:#2a3340;border-radius:2px}
+  .used{position:absolute;top:20px;height:3px;background:#3d4a5c}
+
+  /* ---- THE FLAG-POST: a vertical post through the track. Height = %King (sqrt), colour = role.
+         Always pokes ABOVE and BELOW the pill, so a node is never hidden by price sitting on it. */
+  .post{position:absolute;width:2px;transform:translateX(-50%);border-radius:1px}
+  .post i{position:absolute;top:-3px;left:50%;transform:translateX(-50%);width:5px;height:3px;border-radius:1px}
+  .post.king{width:3px}
+  .post.king i{width:7px;height:4px}
+  /* interaction: the touched post glows, brightens, and clearly pierces the pill */
+  .hot{box-shadow:0 0 6px 1px rgba(227,195,65,.75);z-index:4}
+
+  /* the price pill: directional TAG — the tip is part of the silhouette, on the travel side */
+  .pill{position:absolute;top:14px;height:13px;background:#fff;color:#0d1117;font-size:8.5px;font-weight:800;
+        padding:0 5px;display:flex;align-items:center;border-radius:7px;z-index:3;box-shadow:0 0 0 2px #0b0e14}
+  .tipR{position:absolute;right:-6px;top:50%;transform:translateY(-50%);width:0;height:0;
+        border-top:6px solid transparent;border-bottom:6px solid transparent;border-left:7px solid #2ec27e}
+  .tipL{position:absolute;left:-6px;top:50%;transform:translateY(-50%);width:0;height:0;
+        border-top:6px solid transparent;border-bottom:6px solid transparent;border-right:7px solid #f0616d}
+
+  .plab{position:absolute;top:36px;transform:translateX(-50%);text-align:center;font-size:9px;font-weight:800;line-height:1.15}
+  .plab i{display:block;font-style:normal;font-size:8px;color:#c9d1da}
+  .rolebar{position:absolute;top:2px;transform:translateX(-50%);font-size:7px;font-weight:800;letter-spacing:.04em}
+  .labrow{height:26px}
+
+  .dim{opacity:.32;filter:saturate(.4)}
+  .onchip{font-size:7px;font-weight:800;letter-spacing:.06em;padding:1px 5px;border-radius:3px;
+          color:#f2b45a;background:rgba(242,180,90,.12);border:1px solid rgba(242,180,90,.45)}
+  .hd2{display:flex;align-items:center;gap:6px;font-size:7px;font-weight:800;letter-spacing:.12em;color:#8b98a9;margin-bottom:6px}
+</style>
+</head>
+<body>
+
+<!-- ============ A: RTH — flag-posts, price interacting with the King ============ -->
+<div>
+<div class="cap">A · flag-posts, live session <b>(price ON the King — nothing hidden)</b></div>
+<div class="panel">
+  <div class="frow rail">
+    <span class="fspace"><span class="elh"><b>7628</b> EL</span></span>
+    <div class="ftrack">
+      <div class="track"></div><div class="used" style="left:34%;width:26%"></div>
+
+      <!-- posts: height sqrt(%K), colour = role; caps are the "flag" -->
+      <span class="rolebar" style="left:36%;color:#e3c341">KING</span>
+      <span class="post king hot" style="left:36%;top:6px;height:32px;background:#e3c341"><i style="background:#e3c341"></i></span>
+      <span class="rolebar" style="left:47%;color:#e3c341">BRK</span>
+      <span class="post" style="left:47%;top:12px;height:20px;background:#e3c341;opacity:.85"><i style="background:#e3c341"></i></span>
+      <span class="post" style="left:60%;top:14px;height:16px;background:#a371f7;opacity:.8"><i style="background:#a371f7"></i></span>
+      <span class="rolebar" style="left:72%;color:#e3c341">GK</span>
+      <span class="post" style="left:72%;top:11px;height:22px;background:#e3c341;opacity:.85"><i style="background:#e3c341"></i></span>
+      <span class="post" style="left:88%;top:15px;height:14px;background:#e3c341;opacity:.7"><i style="background:#e3c341"></i></span>
+
+      <!-- the pill sits ON the King's post: the post pierces it above and below; tip = travel side -->
+      <span class="pill" style="left:calc(36% - 14px)">7654<span class="tipL"></span></span>
+    </div>
+    <span class="fspace" style="text-align:right"><span class="elh" style="right:0">EH <b>7729</b></span></span></div>
+
+  <div class="frow labrow"><span class="fspace"></span>
+    <div class="ftrack">
+      <span class="plab" style="left:36%;top:0;color:#e3c341">7655<i>7655</i></span>
+      <span class="plab" style="left:47%;top:0;color:#e3c341">7660<i>7660</i></span>
+      <span class="plab" style="left:72%;top:0;color:#e3c341">7680<i>7680</i></span>
+    </div><span class="fspace"></span></div>
+</div>
+<div class="note">
+  <b>The post replaces the disc.</b> Height carries what the diameter used to (sqrt of %King — the King
+  is tallest and thickest, with a wider cap), colour still carries the role, and the role word rides the
+  post's top. Because a post is 2px wide and taller than the pill, <b>price can sit directly on a node
+  and the node stays visible</b> — the King's post here pierces the pill above and below, and the
+  interaction is announced by the glow (`hot`): brighter, haloed, on top. The pill is now a
+  <b>directional tag</b>: the tip is part of its silhouette on the travel side — red tip on the LEFT =
+  moving down-rail, green tip on the RIGHT = moving up — nothing to read inside but the price.
+</div>
+</div>
+
+<!-- ============ B: OVERNIGHT — what the rail should claim after the close ============ -->
+<div>
+<div class="cap">B · after the close <b>(the EM is yesterday's — say so, dim it)</b></div>
+<div class="panel">
+  <div class="hd2">① FRAME <span class="onchip">AFTER HOURS · EM EXPIRED — re-anchors at the open</span></div>
+  <div class="frow rail">
+    <span class="fspace dim"><span class="elh" style="text-decoration:line-through"><b>7628</b> EL</span></span>
+    <div class="ftrack">
+      <div class="track"></div>
+      <div class="used dim" style="left:34%;width:26%"></div>
+      <!-- yesterday's band boundaries: ghosts, struck through, no claim -->
+      <span class="dim" style="position:absolute;left:8%;top:12px;width:1px;height:18px;background:#8b98a9"></span>
+      <span class="dim" style="position:absolute;left:96%;top:12px;width:1px;height:18px;background:#8b98a9"></span>
+      <!-- the book that IS live stays bright: posts + pill -->
+      <span class="rolebar" style="left:36%;color:#e3c341">KING</span>
+      <span class="post king hot" style="left:36%;top:6px;height:32px;background:#e3c341"><i style="background:#e3c341"></i></span>
+      <span class="post" style="left:47%;top:12px;height:20px;background:#e3c341;opacity:.85"><i style="background:#e3c341"></i></span>
+      <span class="pill" style="left:calc(36% - 14px)">7654<span class="tipL"></span></span>
+      <!-- NO roll arrows, NO target T, NO EM labels: session-derived overlays retire at the close -->
+    </div>
+    <span class="fspace dim" style="text-align:right"><span class="elh" style="right:0;text-decoration:line-through">EH <b>7729</b></span></span></div>
+
+  <div class="frow labrow"><span class="fspace"></span>
+    <div class="ftrack">
+      <span class="plab" style="left:36%;top:0;color:#e3c341">7655<i>7655</i></span>
+      <span class="plab" style="left:47%;top:0;color:#e3c341">7660<i>7660</i></span>
+    </div><span class="fspace"></span></div>
+</div>
+<div class="note">
+  <b>What you caught, and the recommendation drawn in:</b> tonight the rail shows EL 7600 / EH with an
+  "EH 7662" marker mid-track — that band is <b>yesterday's expected move</b>, priced by a straddle that
+  expired at 15:00. After the close it is not a forecast of anything, so the rail should say so instead
+  of pretending: one <b>AFTER HOURS · EM EXPIRED</b> chip on the FRAME header, the EL/EH numbers and
+  band shading <b>dimmed and struck through</b> (kept only as "where yesterday's band was"), and every
+  session-derived overlay retired with it — <b>the roll arrows</b> (your "hard blue line and moving
+  line": one was a latched roll drawn solid, one an in-flight roll animating — both from the expired
+  0DTE book, meaningless overnight), the cyan <b>T target</b>, and the used-range budget figures. What
+  stays bright is only what is actually live overnight: the price pill and the posts of whatever book
+  Skylit is now showing. At the next open the band re-anchors from the fresh straddle and everything
+  wakes up as normal.
+</div>
+</div>
+
+</body>
+</html>

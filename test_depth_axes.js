@@ -95,9 +95,10 @@ eq(confTier({ok:false},766),null,'and an empty read is the same');
   // element, which is the property that mattered. The old greps kept passing on the NAME of the old
   // helper, so when the helper went they failed while the property was intact. Assert the PROPERTY.
   const FR=ex('secFrame');
-  const emk=FR.split('<span class="g3emk"').slice(1);
+  const emk=FR.split('<span class="g3emk').slice(1)
+    .filter(x=>!x.startsWith("\"','")&&!x.startsWith('" style="visibility:hidden"'));  // (v14.6) skip the spc() literals
   ok(emk.length>=2, 'the FRAME band cells are on the line', emk.length);
-  ok(emk.every(x=>x.startsWith("'+g3tip(")),
+  ok(emk.every(x=>x.startsWith("\"'+g3tip(")||x.startsWith("'+(AH?' g3ahdim':'')+'\"'+g3tip(")),
      'and every one of them opens with its tip, so the VALUE is hoverable and not just the label',
      emk.map(x=>x.slice(0,24)));
   ok(/'EL'/.test(FR) && /'EH'/.test(FR),
@@ -113,3 +114,6 @@ eq(confTier({ok:false},766),null,'and an empty read is the same');
   ok(/both loaded/.test(src),'and it calls out when both books are heavy');
 }
 console.log('\n'+pass+' pass / '+fail+' fail');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

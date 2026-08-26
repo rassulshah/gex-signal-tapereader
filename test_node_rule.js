@@ -55,9 +55,10 @@ ok(/Levels give CONTEXT/.test(src),'with the distinction that levels are context
   // The v11.45 audit found 114 fields tipped and 41 not, and fixed it with cell(lab,val,tip).
   // The FRAME rewrite (v11.66-v11.86) replaced that helper. The GAP is what must stay closed, not
   // the helper's name -- so assert that no FRAME cell renders a value outside its tipped element.
-  const emk=src.split('<span class="g3emk"').slice(1);
+  const emk=src.split('<span class="g3emk').slice(1)
+    .filter(x=>!x.startsWith("\"','")&&!x.startsWith('" style="visibility:hidden"'));  // (v14.6) skip the spc() literals
   ok(emk.length>=2,'FRAME band cells are rendered as tipped spans', emk.length);
-  ok(emk.every(x=>x.startsWith("'+g3tip(")),
+  ok(emk.every(x=>x.startsWith("\"'+g3tip(")||x.startsWith("'+(AH?' g3ahdim':'')+'\"'+g3tip(")),
      'each wrapping label AND value in ONE tipped element, which is what the v11.45 hover audit fixed',
      emk.map(x=>x.slice(0,24)));
   ok(/class="g3r'\+far\+band\+'"'\+g3tip/.test(src),'ladder ROWS carry the tip, so the number is hoverable');
@@ -65,3 +66,6 @@ ok(/Levels give CONTEXT/.test(src),'with the distinction that levels are context
   ok(/class="g3vd2"'\+g3tip/.test(src),'and the verdict block');
 }
 console.log('\n'+pass+' pass / '+fail+' fail');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

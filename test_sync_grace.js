@@ -39,3 +39,6 @@ ok('1g every failure is still in the diagnostics log (4 failures logged)', RECON
 ok('2a render() shows the banner only through syncBannerShow(__sync)', /if\(syncBannerShow\(__sync\)\)\{ html\+=syncBannerHtml\(__sync\); \}/.test(src));
 ok('2b syncBannerHtml itself refuses to render below the grace', /function syncBannerHtml\(r\)\{\s*if\(!syncBannerShow\(r\)\) return '';/.test(src));
 console.log('test_sync_grace: '+p+' passed, '+f+' failed');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

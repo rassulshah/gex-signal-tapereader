@@ -57,3 +57,6 @@ ok('7a ✓ carries direction: ↓ for resistance/short, ↑ for support/long', /
 // the visible card uses the latch, not the per-poll reactionQuality
 ok('8a the in-play card renders the latched trigger (trigHtml), not the live reaction mark', /trigHtml/.test(ex('deflZonesBlock')));
 console.log('test_defl_trigger: '+p+' passed, '+f+' failed');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

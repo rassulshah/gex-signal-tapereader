@@ -93,3 +93,6 @@ ok('6g direction hover explains SHADOW mode', /GEX\/VEX drift is in SHADOW mode/
 // ---- Dashboard tab from Testing ----
 ok('8a Dashboard tab calls showDashboard(), which clears BOTH view flags', /showDashboard\(\)'/.test(src) && /showDashboard=function\(\)\{ ANALYSIS_VIEW=false; TESTING_VIEW=false;/.test(src));
 console.log('test_nodes_on_watch: '+p+' passed, '+f+' failed');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

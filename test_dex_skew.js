@@ -84,3 +84,6 @@ ok(dexSkewFor([], 7700, all)===null,'an empty selection is null, not a zero read
   eq(r.netDex, 0.5*100*100*7700, 'only contracts passing the window filter are counted');
 }
 console.log('\n'+pass+' pass / '+fail+' fail');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

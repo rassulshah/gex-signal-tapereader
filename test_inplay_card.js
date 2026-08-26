@@ -51,3 +51,6 @@ ok('4a defl.trigger is a registered FEATURE', /registerFeature\(\{\s*key:'defl\.
 ok('4b rules.json seeds defl.trigger', /"id":\s*"defl\.trigger"/.test(fs.readFileSync('./learning/rules.json','utf8')));
 ok('4c LLM brief evaluates defl.trigger as the deflection hit-rate', /defl\.trigger[\s\S]{0,300}hit-rate/i.test(fs.readFileSync('./docs/LLM-NIGHTLY-BRIEF.md','utf8')));
 console.log('test_inplay_card: '+p+' passed, '+f+' failed');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

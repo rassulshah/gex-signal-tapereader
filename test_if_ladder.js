@@ -162,3 +162,6 @@ ok((CHAIN=chain({toFri:null,dte0:null}), !!ifLadder('SPY').err),'a chain with no
   eq(at(L,'FLIP'),7679.88,'theirs wins over ours whenever both exist');
 }
 console.log('\n'+pass+' pass / '+fail+' fail');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

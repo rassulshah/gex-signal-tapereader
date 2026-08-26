@@ -76,3 +76,6 @@ ok('7b rules.json seeds leg.handoff', /"id":\s*"leg\.handoff"/.test(fs.readFileS
 ok('7c LLM brief evaluates leg.handoff (lead time)', /leg\.handoff[\s\S]{0,400}lead/i.test(fs.readFileSync('./docs/LLM-NIGHTLY-BRIEF.md','utf8')));
 ok('7d master-spec §24 documents the handoff', /24\.1[^\n]*HANDOFF/.test(fs.readFileSync('./master-spec.md','utf8')));
 console.log('test_handoff: '+p+' passed, '+f+' failed');
+
+// (v14.6) exit code added: this file could print FAIL and still exit 0 — the silent-red pattern.
+process.exit((typeof fail!=="undefined"&&fail)?1:0);

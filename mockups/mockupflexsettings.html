@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>FlexLevels export settings — v14.8 mockup</title>
+<style>
+  body{background:#0d1117;color:#e6edf3;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+       font-variant-numeric:tabular-nums;margin:0;padding:26px;display:flex;gap:34px;flex-wrap:wrap;align-items:flex-start}
+  .panel{width:430px;background:#11161f;border:1px solid #2a3340;border-radius:6px;padding:12px 14px}
+  .cap{font-size:11px;font-weight:800;letter-spacing:.08em;color:#8b98a9;margin:0 0 8px;text-transform:uppercase}
+  .cap b{color:#7cc7ff}
+  .note{font-size:10px;color:#8b98a9;line-height:1.55;margin-top:10px;width:430px}
+  .note b{color:#e6edf3}
+  .hd{display:flex;align-items:center;gap:5px;font-size:8px;font-weight:800;letter-spacing:.1em;color:#8b98a9;margin-bottom:8px}
+  .inf{width:9px;height:9px;border-radius:50%;border:1px solid #4a5568;color:#8b98a9;font-size:6.5px;
+       display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-style:normal;flex:none}
+  .tog{margin-left:auto;width:26px;height:14px;border-radius:7px;background:#2ec27e;position:relative}
+  .tog i{position:absolute;right:2px;top:2px;width:10px;height:10px;border-radius:50%;background:#fff}
+  .row{display:flex;align-items:center;gap:6px;font-size:9px;margin:7px 0}
+  .lbl{color:#8b98a9;font-weight:700;font-size:7.5px;letter-spacing:.06em;width:58px;flex:none}
+  .btn{font-size:8px;font-weight:800;padding:2px 8px;border-radius:3px;background:rgba(124,199,255,.12);
+       color:#7cc7ff;border:1px solid rgba(124,199,255,.4);cursor:pointer}
+  .btn2{background:rgba(139,152,169,.1);color:#c9d4e2;border-color:rgba(139,152,169,.35)}
+  .val{color:#e6edf3;font-weight:700}
+  .ok{color:#2ec27e;font-weight:800}
+  .inp{background:#0d1117;border:1px solid #2a3340;border-radius:3px;color:#e6edf3;font-size:8.5px;
+       padding:2px 5px;width:88px;font-family:inherit}
+  .inp.small{width:56px}
+  .pills{display:flex;gap:4px}
+  .pill{font-size:8px;font-weight:800;padding:2px 8px;border-radius:9px;border:1px solid #2a3340;color:#8b98a9;cursor:pointer}
+  .pill.on{background:rgba(124,199,255,.15);color:#7cc7ff;border-color:#7cc7ff}
+  table{width:100%;border-collapse:collapse;margin-top:4px}
+  th{font-size:6.5px;color:#5b6675;font-weight:800;letter-spacing:.06em;text-align:left;padding:3px 4px;
+     border-bottom:1px solid #2a3340;text-transform:uppercase}
+  td{font-size:8.5px;padding:5px 4px;border-bottom:1px solid rgba(42,51,64,.5);vertical-align:middle}
+  .chk{width:11px;height:11px;border-radius:2px;border:1px solid #4a5568;display:inline-block}
+  .chk.on{background:#2ec27e;border-color:#2ec27e;position:relative}
+  .chk.on::after{content:"✓";position:absolute;inset:0;font-size:8px;color:#0d1117;font-weight:900;
+                 display:flex;align-items:center;justify-content:center}
+  .mkt{font-weight:800;color:#e6edf3}
+  .src{color:#8b98a9;font-size:7.5px}
+  .live{color:#2ec27e;font-weight:800;font-size:7.5px}
+  .stale{color:#f2b45a;font-weight:800;font-size:7.5px}
+  .dead{color:#7d8794;font-weight:700;font-size:7.5px}
+  .statline{font-size:8px;color:#8b98a9;margin-top:8px;display:flex;gap:6px;align-items:center}
+</style>
+</head>
+<body>
+
+<div>
+<div class="cap">⚙ settings › <b>FLEXLEVELS EXPORT (Investor/RT)</b> — v14.8 mockup</div>
+<div class="panel">
+  <div class="hd">FLEXLEVELS EXPORT <i class="inf">i</i><span class="tog"><i></i></span></div>
+
+  <div class="row"><span class="lbl">FOLDER</span>
+    <span class="btn">Pick folder…</span>
+    <span class="ok">✓ Google Drive › IRT-levels</span></div>
+
+  <div class="row"><span class="lbl">FILE</span>
+    <input class="inp" value="FlexLevelsExport.csv"/>
+    <span class="src">one file, all markets — FlexLevels routes rows by their SYMBOL column</span></div>
+
+  <div class="row"><span class="lbl">UPDATE</span>
+    <span class="pills">
+      <span class="pill">1m</span><span class="pill on">3m</span><span class="pill">5m</span>
+      <span class="pill">15m</span><span class="pill">30m</span><span class="pill">1h</span>
+    </span></div>
+
+  <table>
+    <tr><th></th><th>market</th><th>from</th><th>contract</th><th>ratio</th><th></th></tr>
+    <tr><td><span class="chk on"></span></td><td class="mkt">ES</td><td class="src">SPX · SPXW tape</td>
+        <td><input class="inp small" value="EPU26"/></td>
+        <td class="val">10.0436</td><td class="live">LIVE</td></tr>
+    <tr><td><span class="chk on"></span></td><td class="mkt">NQ</td><td class="src">QQQ book</td>
+        <td><input class="inp small" value="NQU26"/></td>
+        <td class="val">41.87~</td><td class="stale">cached 2h</td></tr>
+    <tr><td><span class="chk"></span></td><td class="mkt">GC</td><td class="src">GLD book</td>
+        <td><input class="inp small" value="GCZ26"/></td>
+        <td><input class="inp small" placeholder="manual"/></td><td class="dead">never seen</td></tr>
+    <tr><td><span class="chk"></span></td><td class="mkt">CL</td><td class="src">USO book</td>
+        <td><input class="inp small" value="CLV26"/></td>
+        <td><input class="inp small" placeholder="manual"/></td><td class="dead">never seen</td></tr>
+  </table>
+
+  <div class="statline">
+    <span class="btn btn2">Export now</span>
+    <span>last write <b class="val">09:32:05</b> · <b class="val">41 rows</b> · ES+NQ · to folder</span></div>
+</div>
+
+<div class="note">
+  <b>How the pieces behave:</b> the folder is picked ONCE (the handle persists) — point it inside
+  Google Drive desktop and FlexLevels picks the file up from the synced copy; the panel silently
+  rewrites it on the cadence. A market's <b>ratio goes LIVE</b> whenever that chart + tape pairing is
+  on screen (the same futures-basis capture ES uses today), is <b>cached with the ~ tag</b> otherwise
+  — the tilde is also appended to those rows' labels inside IRT, so a level from a stale ratio
+  announces itself — and can be typed manually for a book the panel has never seen paired. GC/CL rows
+  need their books flowing: GLD/USO join the background self-fetch in this build, so their levels
+  refresh without the chart being on them. Unchecked markets write nothing. ⓘ carries all of this.
+  <b>Also in v14.8, invisible here:</b> the chart-flip guard — an unrecognized chart symbol (GLD, USO,
+  anything) PAUSES recording with a visible note instead of writing foreign candles into the SPY book.
+</div>
+</div>
+
+</body>
+</html>
