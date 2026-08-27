@@ -1,8 +1,22 @@
 # ⓪a DAY — HOD/LOD · the approved mockup, transcribed
 
-_Source: `mockups/hodlod-v2-approved.png`, re-supplied by the operator 2026-08-27 after the original
-"Mockup hodlod v2" HTML and "Hodlod stats2" JSON were **offered as downloads and never saved** —
-neither reached Drive or the repo. This file exists so the design cannot be lost a second time._
+_Source: the operator's approved v2 mockup._
+
+⚠⚠ **CORRECTION, 2026-08-27 evening: THE ORIGINAL HTML WAS NEVER LOST.** This file was written in the
+belief that "Mockup hodlod v2" had only ever been offered as a download and never saved. It is in the
+repo, at the ROOT rather than in `mockups/`, and it is on GitHub:
+
+    mockuphodlodv2.html      8,397 bytes   ← THE APPROVED DESIGN, renders clean, 0 page errors
+    mockuphodlodv1.html      7,979 bytes   ← the prior draft
+    mockuphodlod.html        7,003 bytes   ← n=4 proposal, the earliest
+    mockuphodlod (1).html    7,117 bytes   ← the 284-session version of the same
+
+Two earlier notes said these were gone. Both were wrong, and both were **failure pattern #4 —
+concluding "absent" from a shallow look**, in this case not searching the repo root. Render
+`mockuphodlodv2.html` before working from this transcription: the HTML is the artefact, this file is
+a description of it.
+
+⚠ What IS genuinely missing is the EVIDENCE, not the design — see the section at the end._
 
 ⚠ **THE NUMBERS BELOW ARE THE MOCKUP'S, NOT MEASURED BY THIS CONTEXT.** They came from a prior
 session's study over the same 284-day corpus. Every one is a claim to be re-derived before it ships.
@@ -112,3 +126,35 @@ Four separate disclosures, and each one is load-bearing:
 - Under FEATURE ENROLLMENT this cannot ship as a display: it needs a `FEATURES` entry
   `{key,label,record,outcome,fwd,questions,rule}` so it is recorded per bar, scored nightly, and
   graduates `⚖ → 📊` only at eff n ≥ 20 with walk-forward sessions behind it.
+
+
+---
+
+## ⚠⚠ WHAT IS ACTUALLY BLOCKING THIS BUILD (2026-08-27)
+
+**The design is safe. The data behind it is not.**
+
+| artefact | state |
+|---|---|
+| `mockuphodlodv2.html` — the approved design | **PRESENT**, repo root, on GitHub |
+| `data/es-1min/EPM26-1min.csv.gz` — 284 RTH sessions of ES 1-min | **GONE.** Committed in the sandbox 2026-08-27 (`a26cdfd`), never pushed, sandbox copy lost |
+| "Hodlod stats2" JSON — the measured rates behind every number on the mockup | **GONE.** Offered as a download, never saved |
+
+**EVERY FIGURE ON THAT MOCKUP CAME FROM A STUDY OVER THAT CORPUS** — the 84%, the `n=45`, the 43/47,
+the median +24 and p25 +11, the −12 miss case, and the whole 42/54/66/75/84 elapsed-time ladder.
+Without the corpus they cannot be re-derived, and this project's standing rule is that nothing ships
+as a displayed rate without its n and its date. **Building the section against numbers we cannot
+reproduce would be shipping a confident wrong answer** — the exact thing PROJECT-CONSTANTS warns
+about. So the section is BLOCKED on the operator re-supplying the ES 1-min CSV, and on nothing else.
+
+⚠ **WHY THE FILE CANNOT RIDE THE INSTALLER BACK.** The payload cap is 6MB and the corpus is ~5.2MB
+gzipped from 28MB raw; it was excluded from `FILES` for that reason. The durable route is the
+operator dropping it into `C:\Dev\gex-signal-tapereader\data\es-1min\` on his own machine, where
+his next push carries it. Until then a cloud session cannot see it.
+
+## THE ONE THING THE CODE ALSO LACKS
+
+`IB60` is one of the five confirmation chips and **the codebase has zero hits for it**.
+`sessionLevels()` computes `ibH`/`ibL`/`ibSet` from `IB_MIN_S=1800` — a 30-minute initial balance —
+plus `pdh`/`pdl`/`pdc`. `PMH`/`PML` are also absent (item 14, still open in LOCKED-ITEMS). IB60 is
+net-new work and the operator has explicitly asked for a sweep testing IB30 **and** IB60 breaks.

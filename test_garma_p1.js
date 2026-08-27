@@ -70,6 +70,9 @@ ok(/out\.day=dt\.t/.test(src) && /out\.trinity=tr\.n/.test(src), 'day type + Tri
     {time:T('2026-08-26',9,0),  open:765.0,high:765.8,low:764.9,close:765.5} ];
   eval(src.match(/var IB_MIN_S=\d+/)[0]+';');
   eval(src.match(/var SESS_CONFL_PTS=[\d.]+/)[0]+';');
+  // (v14.57) sessionLevels gained IB60 beside IB30 — the constant must exist for the eval, or the
+  // function throws inside its own try/catch and returns an all-null result that reads as no data.
+  global.IB60_MIN_S=3600;
   eval(ex('sessionLevels')); eval(ex('sessConfluence'));
   const SL=sessionLevels('SPY', 10);
   ok(SL.ibSet===true, 's1 the IB is SET after 30 minutes (Garma waits for it)');

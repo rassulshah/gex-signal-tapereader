@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.56
+// @version    14.57
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -144,6 +144,7 @@ var CFG = {
   // (v14.55) after the close, serve the latched close-of-session book instead of the rolled one.
   // A real setting, not a debug flag: someone studying the OVERNIGHT book wants it off.
   lastBook: true,
+  dayHL: true,        // (v14.57) the ⓪ a DAY — HOD/LOD section
   ftReq: true, boPb: true, dir: 'both', nodeThresh: 20, voidBackN: 2,
   trendOn: true, trendMA: { SPY:50, QQQ:50 },
   smaShort: { SPY:9, QQQ:9 }, smaLong: { SPY:21, QQQ:21 },
@@ -193,6 +194,7 @@ function loadCfg(){
       if(o.smaLong){ if(o.smaLong.SPY) CFG.smaLong.SPY=o.smaLong.SPY; if(o.smaLong.QQQ) CFG.smaLong.QQQ=o.smaLong.QQQ; }
       if(typeof o.cfgOpen==='boolean') CFG.cfgOpen=o.cfgOpen;
       if(typeof o.lastBook==='boolean') CFG.lastBook=o.lastBook;
+      if(typeof o.dayHL==='boolean') CFG.dayHL=o.dayHL;
       if(typeof o.showSPY==='boolean') CFG.showSPY=o.showSPY;
       if(typeof o.showQQQ==='boolean') CFG.showQQQ=o.showQQQ;
       // #5 display
@@ -624,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.56';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.57';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -19632,6 +19634,47 @@ function ensureV3Css(){
     '#gpts-body .g3ldup{color:#2ec27e}#gpts-body .g3lddn{color:#e0645f}#gpts-body .g3ldfl{color:#5b6675}'+
     '#gpts-body .g3ld60{color:#cdb4fa;font-weight:900}'+
     '#gpts-body .g3ldoff{font-size:8px;color:#5b6675;margin:1px 0 3px;cursor:help}'+
+    // (v14.57) ⓪ a DAY — HOD/LOD. Stats table on top, READ box underneath, per the operator's
+    // approved mockuphodlodv2.html and his ask: "give me this in the read section under the stats".
+    '#gpts-body .g3day{margin-bottom:6px}'+
+    '#gpts-body .g3dayhd{font-size:8px;font-weight:900;letter-spacing:.08em;color:#8b98a9;'+
+      'text-transform:uppercase;margin:0 0 4px;cursor:help}'+
+    '#gpts-body .g3dayg{display:table;width:100%;font-size:8.2px;margin-bottom:5px}'+
+    '#gpts-body .g3dayr{display:table-row}'+
+    '#gpts-body .g3dayr i{display:table-cell;font-style:normal;font-weight:900;color:#4b5563;width:12px}'+
+    '#gpts-body .g3dayr span{display:table-cell;padding:1px 5px 1px 0;white-space:nowrap}'+
+    '#gpts-body .g3dayr.hd span{font-size:6.8px;font-weight:900;letter-spacing:.08em;color:#4b5563}'+
+    '#gpts-body .g3dayr.a span{color:#c9d1da;font-weight:700}'+
+    '#gpts-body .g3dayr.a b{color:#f2b45a;font-weight:900}'+
+    // the E row is deliberately dim: it is the BACKDROP the live row is read against, never a
+    // forecast. Same weight as A would invite reading it as a target.
+    '#gpts-body .g3dayr.e span{color:#5b6675;font-weight:600}'+
+    '#gpts-body .g3dayl{display:flex;gap:3px;margin-bottom:5px}'+
+    '#gpts-body .g3daylb{flex:1;text-align:center;padding:2px 0;border-radius:3px;cursor:help;'+
+      'background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06)}'+
+    '#gpts-body .g3daylb b{display:block;font-size:8.4px;font-weight:900;color:#6c7889}'+
+    '#gpts-body .g3daylb i{display:block;font-style:normal;font-size:6.4px;font-weight:800;color:#4b5563}'+
+    // the ACTIVE rung — the one the standing extreme has actually earned
+    '#gpts-body .g3daylb.on{background:rgba(46,194,126,.16);border-color:rgba(46,194,126,.55)}'+
+    '#gpts-body .g3daylb.on b{color:#2ec27e}'+
+    '#gpts-body .g3daylb.on i{color:#2ec27e;opacity:.8}'+
+    '#gpts-body .g3dayread{font-size:8.6px;font-weight:700;color:#c9d4e2;line-height:1.5;'+
+      'background:rgba(46,194,126,.06);border:1px solid rgba(46,194,126,.28);border-radius:4px;'+
+      'padding:5px 7px;cursor:help}'+
+    '#gpts-body .g3dayread b{color:#2ec27e;font-weight:900}'+
+    '#gpts-body .g3daydim{color:#6c7889;font-weight:600}'+
+    '#gpts-body .g3daysub{font-size:8px;font-weight:600;color:#8b98a9;margin-top:2px;line-height:1.45}'+
+    '#gpts-body .g3daysub b{color:#f2b45a}'+
+    '#gpts-body .g3daychips{display:flex;gap:3px;align-items:center;margin-top:4px}'+
+    '#gpts-body .g3daychips b{margin-left:auto;font-size:8.4px;font-weight:900;color:#2ec27e}'+
+    '#gpts-body .g3daychip{font-size:6.8px;font-weight:900;letter-spacing:.03em;padding:1px 4px;'+
+      'border-radius:3px;cursor:help;border:1px solid}'+
+    '#gpts-body .g3daychip.y{color:#2ec27e;border-color:rgba(46,194,126,.5);background:rgba(46,194,126,.10)}'+
+    '#gpts-body .g3daychip.n{color:#6c7889;border-color:rgba(139,152,169,.3)}'+
+    // ⚠ NOT A FAILING TICK — an input we do not have. The two must never look the same.
+    '#gpts-body .g3daychip.na{color:#4b5563;border-color:rgba(75,85,99,.4);border-style:dashed}'+
+    '#gpts-body .g3dayfoot{font-size:6.8px;color:#4b5563;margin-top:3px;cursor:help}'+
+    '#gpts-body .g3dayfoot b{color:#f2b45a}'+
     // ⚠ WHEN THE LADDER IS ON, THE OLD RAIL AND PROFILE ARE HIDDEN, NOT DELETED. They stay in the
     // DOM for one release so the two can be compared live by toggling one class, and so a problem
     // with the ladder is a setting away from being reverted rather than a rebuild.
@@ -21055,8 +21098,22 @@ function evCalActive(){
 // VWAP needs volume the fibers may not carry, overnight needs ETH bars the panel does not record.
 // Values return in the CHART frame (× the band's pinned scale), same frame as the rail.
 var IB_MIN_S=1800;   // ⚖ the 30-minute IB window, in seconds (Garma-verbatim; Skylit IB30 agrees)
+// (v14.57) IB60 — the SIXTY-minute initial balance, beside the thirty. The approved HOD/LOD mockup
+// lists IB60 as one of its five confirmation chips and this codebase had zero hits for it. Both are
+// kept because the operator asked for a sweep testing IB30 AND IB60 breaks.
+// ⚠ DECLARED HERE, beside IB_MIN_S, and not next to the code that uses it. The first draft put it
+// after sessionLevels; `var` hoists so production was fine, but a test that evals the function alone
+// hit a ReferenceError swallowed by its own try/catch and returned an all-null result that looked
+// like missing data. That is failure pattern #5 exactly, and it cost a green suite.
+var IB60_MIN_S=3600;
+var ES_USD_PER_PT=50;   // the ES contract multiplier: HL RNG prints points AND dollars
 function sessionLevels(sym, scale){
-  var out={ ibH:null, ibL:null, ibSet:false, pdh:null, pdl:null, pdc:null };
+  // (v14.57) IB60 joins IB30. The approved HOD/LOD mockup lists IB60 as one of its five
+  // confirmation chips and the codebase had ZERO hits for it — `IB_MIN_S=1800` is a THIRTY minute
+  // initial balance. Both are kept: the operator asked for a sweep testing IB30 AND IB60 breaks,
+  // which is impossible if one replaces the other.
+  var out={ ibH:null, ibL:null, ibSet:false, ib60H:null, ib60L:null, ib60Set:false,
+            pdh:null, pdl:null, pdc:null, open:null };
   try{
     var sc=(typeof scale==='number'&&scale>0)?scale:1;
     var openSec=mul(8,3600)+mul(30,60);
@@ -21064,15 +21121,27 @@ function sessionLevels(sym, scale){
     // IB — from the closed-candle store, which is TODAY-ONLY by construction (convertFiberCandles
     // filters to the session day and stamps `so`, not `day` — v14.36 fix: the first cut checked a
     // day field these candles never carried, so the ticks never drew).
-    var cs=closedCandles(sym)||[], i, ibH=null, ibL=null;
+    var ib60End=openSec+IB60_MIN_S;
+    var cs=closedCandles(sym)||[], i, ibH=null, ibL=null, i6H=null, i6L=null, op=null, opSo=1e9;
     for(i=0;i<cs.length;i++){ var b=cs[i];
-      if(!b || typeof b.so!=='number' || b.so>=ibEnd) continue;
-      if(b.h!=null && (ibH==null||b.h>ibH)) ibH=b.h;
-      if(b.l!=null && (ibL==null||b.l<ibL)) ibL=b.l;
+      if(!b || typeof b.so!=='number' || b.so<openSec) continue;
+      if(b.so<opSo && b.o!=null){ opSo=b.so; op=b.o; }        // the session's opening print
+      if(b.so<ibEnd){
+        if(b.h!=null && (ibH==null||b.h>ibH)) ibH=b.h;
+        if(b.l!=null && (ibL==null||b.l<ibL)) ibL=b.l;
+      }
+      if(b.so<ib60End){
+        if(b.h!=null && (i6H==null||b.h>i6H)) i6H=b.h;
+        if(b.l!=null && (i6L==null||b.l<i6L)) i6L=b.l;
+      }
     }
     out.ibSet=(ctNowSecOfDay()>=ibEnd) && ibH!=null && ibL!=null;
     if(ibH!=null) out.ibH=ibH*sc;
     if(ibL!=null) out.ibL=ibL*sc;
+    out.ib60Set=(ctNowSecOfDay()>=ib60End) && i6H!=null && i6L!=null;
+    if(i6H!=null) out.ib60H=i6H*sc;
+    if(i6L!=null) out.ib60L=i6L*sc;
+    if(op!=null) out.open=op*sc;
     // Prior day H/L/C — from the RAW fiber window, which spans days and carries timestamps.
     // RTH bars only (same gate as everything), the LATEST prior session in the window.
     var raw=null; try{ raw=futRawCandles(sym); }catch(eR){}
@@ -21097,6 +21166,81 @@ function sessionLevels(sym, scale){
     }
   }catch(e){}
   return out;
+}
+// ============================================================================================
+// (v14.57) ⓪ a DAY — HOD/LOD.  Spec: `mockuphodlodv2.html` (repo root, the operator's approved
+// design) and its transcription `mockups/hodlod-v2-SPEC.md`.
+//
+// His question, in his own words: "determine if a lod or hod is in and we are going to the other
+// extremity."
+//
+// ⚠⚠ EVERY RATE BELOW IS MEASURED, AND THE SCRIPT THAT MEASURES IT IS IN THE REPO.
+// `tools/study-hodlod.py` over `data/es-1min/EPM26-1min.csv.gz` — 284 complete RTH sessions,
+// 2025-06-02 → 2026-08-21. It reproduces the approved mockup independently, which is how we know
+// the mockup's own figures were real: mockup ladder 42/54/66/75/84 vs derived 41/56/67/75/84',
+// mockup first-extremity 08:51 vs derived 08:51, mockup range ~$2,800/56pts vs derived $2825/56.5pts.
+//
+// ⚠ THE LADDER IS A SURVIVAL STATISTIC, and it is the only genuinely predictive thing here.
+// Walk the session tracking the running extreme; each time a new one prints, the previous candidate
+// died having stood N minutes. For a holding window W: among candidates that stood >= W, what
+// fraction were still the extreme at the close? That is "the longer the low has stood, the likelier
+// it is the low of the day" as a rate rather than an intuition.
+//
+// ⚠ THE SEQUENCE IS A COIN FLIP AND THE SECTION SAYS SO ON ITS FACE: which extremity prints
+// first is 51/49 over 284 sessions. Bare order carries nothing; only the SURVIVAL does.
+var HODLOD_BASE = {
+  n: 284, first: '2025-06-02', last: '2026-08-21',
+  ladder: [{w:30,rate:41,n:1169}, {w:60,rate:56,n:811}, {w:90,rate:67,n:642}, {w:120,rate:75,n:541}, {w:180,rate:84,n:433},],
+  tookMin: 21.0, gapMin: 237.5,
+  rngPts: 56.5, rngUsd: 2825.0,
+  rngP25: 41.8, rngP75: 80.2,
+  firstClock: 31860, secondClock: 48300,
+  lodFirstPct: 51
+};
+function hlClock(sec){ try{ sec=Math.round(sec); return two(Math.floor(sec/3600))+':'+two(Math.floor((sec%3600)/60)); }catch(e){ return '\u2014'; } }
+function hlDur(min){ try{ min=Math.round(min); if(min<60) return min+'m';
+  return Math.floor(min/60)+'h'+two(min%60); }catch(e){ return '\u2014'; } }
+// which rung the standing extremity has reached. Returns the HIGHEST window it clears, so a low that
+// has stood 100 minutes reads the 90m rate, never the 180m one it has not earned.
+function hlTier(stoodMin){
+  var t=null;
+  for(var i=0;i<HODLOD_BASE.ladder.length;i++){ if(stoodMin>=HODLOD_BASE.ladder[i].w) t=HODLOD_BASE.ladder[i]; }
+  return t;
+}
+// ⚠ TODAY'S NUMBERS ONLY — no base rate is computed here, they are all in HODLOD_BASE.
+function hodLod(sym){
+  var out={ ok:false, why:'' };
+  try{
+    var cs=closedCandles(sym)||[];
+    if(!cs.length){ out.why='no candles'; return out; }
+    var openSec=mul(8,3600)+mul(30,60);
+    var hi=null,lo=null,hiT=null,loT=null,op=null,opSo=1e9,lastT=null,n=0;
+    for(var i=0;i<cs.length;i++){ var b=cs[i];
+      if(!b || typeof b.so!=='number' || b.so<openSec) continue;
+      n++;
+      if(b.so<opSo && b.o!=null){ opSo=b.so; op=b.o; }
+      if(b.h!=null && (hi==null||b.h>hi)){ hi=b.h; hiT=b.so; }
+      if(b.l!=null && (lo==null||b.l<lo)){ lo=b.l; loT=b.so; }
+      lastT=b.so;
+    }
+    if(hi==null||lo==null||!n){ out.why='no RTH bars yet'; return out; }
+    var nowSec=ctNowSecOfDay();
+    // ⚠ in a REPLAY or a frozen book the wall clock is not the session clock; use the last bar.
+    var clock=(inReplay()||showingStaleBook())?lastT:Math.max(lastT, Math.min(nowSec, mul(15,3600)));
+    var firstLow=(loT<hiT);
+    out.ok=true; out.bars=n; out.open=op; out.clock=clock;
+    out.hod=hi; out.lod=lo; out.hodT=hiT; out.lodT=loT;
+    out.first=firstLow?'LOD':'HOD'; out.firstT=firstLow?loT:hiT;
+    out.second=firstLow?'HOD':'LOD'; out.secondT=firstLow?hiT:loT;
+    out.took=Math.max(0,(out.firstT-openSec)/60);
+    out.gap=Math.abs(hiT-loT)/60;
+    out.rngPts=hi-lo; out.rngUsd=(hi-lo)*ES_USD_PER_PT;
+    // THE STANDING EXTREMITY is the one that printed FIRST and has not been replaced since — it is
+    // the one the ladder is about. How long it has stood is measured to NOW, not to the other one.
+    out.stood=Math.max(0,(clock-out.firstT)/60);
+    out.tier=hlTier(out.stood);
+    return out;
+  }catch(e){ out.why='threw: '+(e&&e.message||e); return out; }
 }
 // the confluence check the read uses: the nearest session level within reach of a price
 var SESS_CONFL_PTS=2.0;   // ⚖ hand-set: "nodes are zones" (Garma r29) — 2 ES pts counts as ON it
@@ -24860,6 +25004,105 @@ var STEP_TIPS=[
  'WHERE WOULD YOU ACTUALLY TRADE? You trade AT levels, never between them. If price is mid-range there is no trade yet, and this step stays unlit. The rail shows the walls and where price sits between them; the chart shows how price is behaving as it approaches and whether the node there is building or dying.',
  'IS THE LEVEL DOING SOMETHING? This is the trigger, and it is the step most people skip. Price reaching a level is not a signal \u2014 the level defending itself is. A rejection wick that closes back inside, node dollars growing into the test, VIX ticking up while price holds highs. No reaction means no trade, however good the location looked.',
  'DO YOU TAKE IT, OR REFUSE IT? Entry, stop, target, R-multiple \u2014 or nothing. A blank here is a result: the regime or the R:R floor vetoed it. A day with two setups and eight refusals is this working, not failing.'];
+// ============================================================================================
+// (v14.57) ⓪a DAY — the section. `mockuphodlodv2.html` is the approved layout: the STATS TABLE on
+// top and the READ BOX underneath, which is the operator's ask verbatim — "give me this in the read
+// section under the stats".
+//
+// ⚠⚠ FIVE COLUMNS OF THE MOCKUP ARE DELIBERATELY NOT BUILT: BOP, WICK, W.END, WICK% and MUD.
+// Their definitions exist nowhere — not in the mockup, not in the Academy, not in any spec — and
+// this file's own doctrine gate says to say so and get agreement rather than invent. Inventing five
+// timing statistics and printing them beside measured ones would make the whole row untrustworthy,
+// because nothing on the face would distinguish the derived from the guessed. They are named as
+// PENDING on the section itself so the gap is visible rather than quietly absent.
+// ⚠ VWAP is one of the mockup's five chips and the codebase has NO VWAP — zero hits. It renders as
+// unavailable, never as a passing tick.
+function secDay(sym){
+  try{
+    var D=hodLod(sym);
+    var h='<div class="g3b g3day">';
+    if(!D.ok){
+      return h+'<div class="g3rx" style="color:#6c7889">\u24ea a DAY \u2014 HOD/LOD \u00b7 '+
+        g3esc(D.why||'no data')+'. <b>This is not a reading, it is no reading.</b></div></div>';
+    }
+    var base=HODLOD_BASE, T=D.tier;
+    var openSec=mul(8,3600)+mul(30,60);
+    h+='<div class="g3dayhd"'+g3tip('Today\u2019s high and low against their own base rates, measured over '+base.n+' complete RTH sessions of ES 1-minute data, '+base.first+' to '+base.last+'. Regenerate with tools/study-hodlod.py.')+
+       '>\u24ea a DAY \u2014 HOD/LOD \u00b7 '+hlClock(D.clock)+' CT \u00b7 '+base.n+'d ES 1-min</div>';
+    // ---- the stats table: A over E, so every live number is read against its own base rate -------
+    function row(cls,tag,cells){ var r='<div class="g3dayr '+cls+'"><i>'+tag+'</i>';
+      for(var i=0;i<cells.length;i++) r+='<span>'+cells[i]+'</span>'; return r+'</div>'; }
+    h+='<div class="g3dayg">';
+    h+=row('hd','',['1ST','TOOK','2ND','HL GAP','HL RNG']);
+    h+=row('a','A',[
+      '<b>'+D.first+' '+hlClock(D.firstT)+'</b>',
+      hlDur(D.took),
+      (D.secondT>D.firstT && D.secondT<=D.clock) ? (D.second+' '+hlClock(D.secondT)) : (D.second+' pend.'),
+      hlDur(D.gap)+((D.secondT>=D.clock)?'\u2026':''),
+      '$'+Math.round(D.rngUsd).toLocaleString()+' \u2014 '+D.rngPts.toFixed(1)+'pts' ]);
+    h+=row('e','E',[
+      '\u2014 '+hlClock(base.firstClock),
+      '~'+hlDur(base.tookMin),
+      hlClock(base.secondClock),
+      '~'+hlDur(base.gapMin),
+      '~$'+Math.round(base.rngUsd).toLocaleString()+' \u2014 '+base.rngPts+'pts ('+base.rngP25+'\u2013'+base.rngP75+')' ]);
+    h+='</div>';
+    // ---- the elapsed-time ladder ----------------------------------------------------------------
+    h+='<div class="g3dayl">';
+    for(var i=0;i<base.ladder.length;i++){
+      var L=base.ladder[i], on=(T && T.w===L.w);
+      h+='<span class="g3daylb'+(on?' on':'')+'"'+
+        g3tip('Among running extremes that had stood at least '+L.w+' minutes, '+L.held+' of '+L.n+
+        ' were still the extreme at the close \u2014 '+L.rate+'%. Measured over '+base.n+
+        ' sessions. This is the ONLY predictive figure in this section: the longer an extreme stands, the likelier it is the day\u2019s.')+
+        '><b>'+L.rate+'%</b><i>'+(L.w<60?(L.w+'m'):(L.w/60+'h'))+'</i></span>';
+    }
+    h+='</div>';
+    // ---- THE READ -------------------------------------------------------------------------------
+    var verdict = T ? (D.first+' IN \u2014 '+T.rate+'%') : (D.first+' STANDING \u2014 too early to rate');
+    h+='<div class="g3dayread"'+g3tip('The verdict, then the evidence behind it, then what it implies. \u26a0 It never says price WILL do anything \u2014 it reports how often a standing extreme of this age survived, with the n behind that exact number.')+'>'+
+       '<b>'+g3esc(verdict)+'</b> <span class="g3daydim">('+
+       (T?('stood '+hlDur(D.stood)+' \u00b7 n='+T.n):('stood '+hlDur(D.stood)+' \u00b7 under the 30m floor'))+
+       ')</span>'+
+       (T?(' \u00b7 <b>toward '+D.second+'</b>'):'')+
+       '<div class="g3daysub">'+
+       (T? ('when an extreme of this age held, the other side printed later \u2014 median gap '+hlDur(base.gapMin)+', usually around '+hlClock(base.secondClock)+'. '+
+            '<b>\u26a0 when it did not hold, it was replaced:</b> '+(100-T.rate)+'% of the time at this age.')
+         : 'no rate is claimed below 30 minutes \u2014 the shortest measured window.')+
+       '</div>';
+    // the chips
+    var SL=null; try{ SL=sessionLevels(sym,1); }catch(eSL){}
+    var chips=[];
+    (function(){
+      var px=null; try{ var cs=closedCandles(sym)||[]; if(cs.length) px=cs[cs.length-1].c; }catch(e){}
+      var low=(D.first==='LOD');
+      function chip(nm,ok,tip){ chips.push({n:nm,ok:ok,t:tip}); }
+      chip('OPEN', (px!=null&&D.open!=null)?(low?px>D.open:px<D.open):null,
+        'Price has reclaimed the session open in the direction the standing extreme implies.');
+      chip('VWAP', null, '\u26a0 NOT AVAILABLE \u2014 this panel computes no VWAP. The mockup lists it as one of the five; it is absent from the codebase entirely, so it is shown unavailable rather than ticked.');
+      chip('SWP', (SL&&px!=null)?(low?(SL.pdl!=null&&D.lod<SL.pdl&&px>SL.pdl):(SL.pdh!=null&&D.hod>SL.pdh&&px<SL.pdh)):null,
+        'A sweep of the prior day\u2019s extreme that was then reclaimed \u2014 the liquidity grab.');
+      chip('IB60', (SL&&SL.ib60Set&&px!=null)?(low?px>SL.ib60H:px<SL.ib60L):null,
+        'The 60-minute initial balance has been broken in the implied direction. \u26a0 New at v14.57 \u2014 the panel had IB30 only.');
+      chip('POS', (px!=null&&D.rngPts>0)?(low?((px-D.lod)/D.rngPts>0.5):((D.hod-px)/D.rngPts>0.5)):null,
+        'Price sits in the far half of the day\u2019s range from the standing extreme.');
+    })();
+    var nOk=0,nLive=0;
+    var cs2='';
+    for(var ci=0;ci<chips.length;ci++){ var C2=chips[ci];
+      if(C2.ok!==null){ nLive++; if(C2.ok) nOk++; }
+      cs2+='<span class="g3daychip '+(C2.ok===null?'na':(C2.ok?'y':'n'))+'"'+g3tip(C2.t)+'>'+C2.n+' '+(C2.ok===null?'\u2013':(C2.ok?'\u2713':'\u2717'))+'</span>';
+    }
+    h+='<div class="g3daychips">'+cs2+'<b>'+nOk+'/'+nLive+'</b></div>';
+    h+='</div>';
+    // ---- the honesty line -----------------------------------------------------------------------
+    h+='<div class="g3dayfoot"'+g3tip('What this section is standing on, stated on its own face rather than in a hover nobody opens.')+'>'+
+       'seq '+base.lodFirstPct+'/'+(100-base.lodFirstPct)+' coin-flip \u00b7 every rate carries its n \u00b7 '+
+       '<b>BOP/WICK/W.END/WICK%/MUD pending a definition</b> \u00b7 descriptive \u2014 no entries/stops</div>';
+    return h+'</div>';
+  }catch(e){ swallow('secDay', e); return ''; }
+}
+
 function panelV3(sym){
   ensureV3Css();
   var S=stepState(sym);
@@ -24872,6 +25115,10 @@ function panelV3(sym){
   h+='</div>';
   // (v11.36) the "waiting on" line is gone — it restated in small grey type what BIAS says two rows
   // below in large type. The step bar already shows where you are.
+  // (v14.57) ⓪a DAY sits ABOVE the numbered sections, as the mockup shows: it frames the whole
+  // session before any structure is read. It is NOT one of the five steps, so it renders outside
+  // the step loop and carries no step header.
+  try{ if(CFG.dayHL!==false) h+=secDay(sym); }catch(eD){ swallow('secDay-mount', eD); }
   var secs=[secBias, secLoc];   // (v14.32) REACTION/EXECUTE retired from the face; secFrame renders inside secLoc
   for(var j=0;j<secs.length;j++){
     var c=S.done[j]?'done':((j===S.cur)?'on':'');

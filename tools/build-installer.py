@@ -86,11 +86,28 @@ for f in sorted(os.listdir('tools')):
         FILES.append(p)
 # (v14.3) mockups are DESIGN documents: html/md only. A 0.64MB day-data .json and old .patch files
 # had drifted in and were shipping with every build.
+# (v14.57) PNGs ride too, and they are small. The render + overlap audit is MANDATORY before a
+# mockup is sent (PROJECT-CONSTANTS L-D) and it has caught four real collisions in two days — but the
+# output was landing nowhere durable, so the evidence for "this was audited" evaporated with each
+# sandbox. ~120KB total against a 6MB cap; the argument for excluding them was never a size one.
 for f in sorted(os.listdir('mockups')):
     p=os.path.join('mockups', f)
-    if os.path.isfile(p) and (f.endswith('.html') or f.endswith('.md')):
+    if os.path.isfile(p) and (f.endswith('.html') or f.endswith('.md') or f.endswith('.png')):
         FILES.append(p)
 FILES += sorted(f for f in os.listdir('.') if f.startswith('test_') and f.endswith('.js'))
+# (v14.57) THE EVIDENCE THE HOD/LOD SECTION RESTS ON — but NOT the corpus itself.
+# ⚠ test_hodlod.js READS data/es-1min/BASERATES.json to assert the panel's baked ladder still equals
+# the study's output. Ship the test without the file and the suite goes red on his machine for a
+# missing input rather than a real defect. Caught by decoding the payload before sending, which is
+# the only check that would have found it.
+# ⚠ EPM26-1min.csv.gz is DELIBERATELY EXCLUDED: 5.1MB against the 6MB payload cap below. It reaches
+# GitHub by living in his working tree, not by riding the installer. See data/es-1min/README.md.
+for _p in ['data/es-1min/BASERATES.json', 'data/es-1min/README.md']:
+    if os.path.exists(_p):
+        FILES.append(_p)
+# the approved HOD/LOD design lives at the repo ROOT, not in mockups/ — which is exactly why two
+# earlier sessions reported it lost. Ship it so a fresh clone has the spec beside its transcription.
+FILES += sorted(f for f in os.listdir('.') if f.startswith('mockuphodlod') and f.endswith('.html'))
 
 # --- size guard: fail LOUDLY before shipping a payload cmd.exe cannot digest --------------------
 # `more +n` walks the whole file line by line; past a few MB of base64 it is minutes, not seconds,

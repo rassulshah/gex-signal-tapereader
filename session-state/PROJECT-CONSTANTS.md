@@ -252,11 +252,32 @@ changelog entry — SOURCE + ROLE + STRENGTH, operator-locked; do not rename wit
 
 **`tools/BUILD-CHECKLIST.md` runs on EVERY build. The user should never have to say "save".**
 
+⚠⚠ **THE MANDATED PER-BUILD SNAPSHOT HAS NEVER ONCE REACHED GITHUB, AND DOES NOT NEED TO.**
+The save procedure says to snapshot the built script under `session-state/snapshots/vNNNN/`. The
+installer payload excludes that directory (correctly — it is ~1.6MB per build against a 6MB cap, and
+v14.3 already had to stop 39 stale snapshots re-shipping every time), and the CLOUD CANNOT PUSH. So
+every snapshot ever taken has died with its sandbox: `git ls-tree origin/main -- session-state/snapshots/`
+returns **nothing**. Measured 2026-08-27.
+**This is fine, and the instruction should stop implying otherwise.** `current/gex-signal-tapereader.user.js`
+is committed on every build, so **git history already IS the snapshot** — `git show <tag-or-sha>:current/gex-signal-tapereader.user.js`
+recovers any version exactly. The local snapshot is a convenience for diffing inside one session.
+⚠ What the payload SHOULD carry, and now does from v14.57, is `mockups/*.png` — the render and
+overlap-audit output. That evidence is ~120KB, it is the proof a mockup was audited before it was
+sent, and it was evaporating with each sandbox for no reason at all.
+
 - ⚠ **THE SANDBOX CONTAINER RESET TWICE ON 2026-08-22.** **The installer's push is the only durable copy.**
   Recover with `git clone https://github.com/rassulshah/gex-signal-tapereader.git`.
 - **Cannot push from the sandbox** — github.com is blocked at the proxy. The .bat pushes from the user's machine.
 - **npm cannot install in the sandbox either** (403). `jsdom` is absent, so `test_tapeking.js` cannot pass here.
 - Harness reads **`./v10.js`** — `cp current/gex-signal-tapereader.user.js v10.js` FIRST.
+  ⚠⚠ **v14.56: `v10.js` AND `install.bat` WERE TRACKED DESPITE BEING IN `.gitignore`.** A gitignore
+  entry never untracks a file that is already tracked, so both kept being committed — `install.bat`
+  at 2.2MB of base64 per build, against an ignore rule whose own comment says it "bloated every
+  diff", and `v10.js` frozen at **v11.48**, 42 versions behind `current/`. Anyone running a single
+  test from a fresh clone was testing v11.48 and getting a GREEN suite that said nothing about the
+  shipped panel — the stale-but-green state this file warns about elsewhere. Both are now
+  `git rm --cached`'d; `tools/run-tests.sh` regenerates `v10.js` on every run, and a missing file
+  fails loudly instead. **When you add a path to `.gitignore`, check `git ls-files` for it.**
 - **`node tools/smoke.js`** — fails on anything a render catch swallowed.
 - **`test_no_dupes.js`** fails on any NEW function-name collision. Four to date. **GREP BEFORE NAMING.**
 - **Version pins** in `test_direction_grade.js`, `test_pipeline_indicator.js`, `test_rules_v2.js`,

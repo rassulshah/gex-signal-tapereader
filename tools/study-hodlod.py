@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+"""
+HOD/LOD BASE RATES over the ES 1-min corpus.  Every figure the ⓪a section displays is derived here,
+with its n, so nothing on the panel is a number we cannot reproduce.
+
+⚠ DEFINITIONS ARE THE WHOLE BALLGAME and the mockup states them loosely, so they are pinned here:
+  RTH            08:30-15:00 CT inclusive = 391 one-minute bars.  A COMPLETE session has >=386 of
+                 them; that threshold is what reproduces the mockup header's "284d".  At >=391 the
+                 count is 283.  Same corpus, different filter - the prior note warned about exactly
+                 this, so the filter is stated rather than assumed.
+  HOD / LOD      max(High) / min(Low) over RTH, FIRST occurrence if it repeats.
+  1ST / 2ND      whichever extremity printed first, and the other.
+  TOOK           minutes from the RTH open to the 1st extremity.
+  HL GAP         minutes between the two extremities.
+  HL RNG         HOD-LOD, in points and in dollars (ES = $50/point).
+  THE LADDER     a SURVIVAL statistic, and the one thing on the section that is genuinely
+                 predictive: walk the session, track the running extreme; every time a new one is
+                 set, the previous candidate "died" having stood some number of minutes.  For a
+                 holding window W, among all candidates that stood >= W, what fraction were still
+                 the extreme at the close?  That is "the longer the low has stood, the likelier it
+                 is the low of the day", as a measured rate rather than an intuition.
+"""
+import csv, collections, json, sys, statistics as st
+
+RTH_A, RTH_B = 8*3600+30*60, 15*3600
+MIN_BARS = 386
+PT_USD = 50.0
+WINDOWS = [30, 60, 90, 120, 180]
+
+def load(path):
+    ses = collections.defaultdict(list)
+    with open(path) as f:
+        for x in csv.DictReader(f):
+            s = (x.get('Date') or '').strip()
+            if ' ' not in s:
+                continue
+            d, t = s.split(' ', 1)
+            p = t.split(':')
+            try:
+                sec = int(p[0])*3600 + int(p[1])*60
+                if not (RTH_A <= sec <= RTH_B):
+                    continue
+                ses[d].append((sec, float(x['High']), float(x['Low']), float(x['Close'])))
+            except (ValueError, IndexError):
+                continue
+    return {d: sorted(v) for d, v in ses.items() if len(v) >= MIN_BARS}
+
+def survival(bars, low_side):
+    """(stood_minutes, survived_to_close) for every running-extreme candidate in one session."""
+    out, best, since = [], None, None
+    for sec, hi, lo, _ in bars:
+        v = lo if low_side else hi
+        new = best is None or (v < best if low_side else v > best)
+        if new:
+            if best is not None:
+                out.append(((sec - since)//60, False))
+            best, since = v, sec
+    out.append(((bars[-1][0] - since)//60, True))
+    return out
+
+def main(path):
+    ses = load(path)
+    days = sorted(ses)
+    rows, surv_lo, surv_hi = [], [], []
+    for d in days:
+        b = ses[d]
+        hi = max(b, key=lambda r: r[1]); lo = min(b, key=lambda r: r[2])
+        hod_t, lod_t = hi[0], lo[0]
+        first_low = lod_t < hod_t
+        rng = hi[1] - lo[2]
+        rows.append(dict(day=d, hod_t=hod_t, lod_t=lod_t, first='LOD' if first_low else 'HOD',
+                         took=(min(hod_t, lod_t)-RTH_A)//60, gap=abs(hod_t-lod_t)//60,
+                         rng_pts=round(rng, 2), rng_usd=round(rng*PT_USD, 2)))
+        surv_lo += survival(b, True); surv_hi += survival(b, False)
+
+    def ladder(sv):
+        out = {}
+        for w in WINDOWS:
+            elig = [s for s in sv if s[0] >= w]
+            hit = sum(1 for s in elig if s[1])
+            out[w] = dict(n=len(elig), held=hit,
+                          rate=round(100*hit/len(elig)) if elig else None)
+        return out
+
+    med = lambda xs: round(st.median(xs), 1) if xs else None
+    firsts = collections.Counter(r['first'] for r in rows)
+    res = dict(
+        corpus=dict(sessions=len(days), first=days[0], last=days[-1],
+                    min_bars=MIN_BARS, rth='08:30-15:00 CT', pt_usd=PT_USD),
+        sequence=dict(LOD_first=firsts['LOD'], HOD_first=firsts['HOD'],
+                      pct_LOD_first=round(100*firsts['LOD']/len(rows))),
+        expected=dict(
+            took_min=med([r['took'] for r in rows]),
+            gap_min=med([r['gap'] for r in rows]),
+            rng_pts=med([r['rng_pts'] for r in rows]),
+            rng_usd=med([r['rng_usd'] for r in rows]),
+            rng_p25=round(st.quantiles([r['rng_pts'] for r in rows], n=4)[0], 1),
+            rng_p75=round(st.quantiles([r['rng_pts'] for r in rows], n=4)[2], 1),
+            first_clock=med([min(r['hod_t'], r['lod_t']) for r in rows]),
+            second_clock=med([max(r['hod_t'], r['lod_t']) for r in rows])),
+        ladder=dict(low=ladder(surv_lo), high=ladder(surv_hi),
+                    both=ladder(surv_lo + surv_hi)),
+    )
+    print(json.dumps(res, indent=1))
+    return res
+
+if __name__ == '__main__':
+    main(sys.argv[1] if len(sys.argv) > 1 else '/tmp/es.csv')

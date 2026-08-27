@@ -1,3 +1,83 @@
+## v14.57 — ⓪a DAY, HOD/LOD: built, on measured rates, from a corpus the operator had to send twice
+
+> "make sure you save it in github and dont forget next time. im surprised you didnt put it there.
+> i have given it to you before. now build the feature"
+
+**HE WAS RIGHT AND THE ROOT CAUSE IS ALWAYS THE SAME ONE.** The ES corpus was supplied 2026-08-27,
+committed in a cloud sandbox at `a26cdfd`, **never pushed**, and lost with the container. The cloud
+cannot push. Anything that exists only in a sandbox commit does not exist. It is now committed with
+a README that says so in the first paragraph.
+
+**AND THE MOCKUPS WERE NEVER LOST EITHER.** `mockuphodlodv2.html` — the approved design — has been in
+the repo ROOT the whole time, along with three earlier drafts, all on GitHub. Two prior notes called
+them gone. Both were failure pattern #4: concluding "absent" from a look that did not search the
+repo root. `mockups/hodlod-v2-SPEC.md` now carries the correction.
+
+### THE STUDY REPRODUCES THE MOCKUP INDEPENDENTLY
+
+`tools/study-hodlod.py` over 284 complete RTH sessions (2025-06-02 → 2026-08-21):
+
+| the mockup printed | derived here |
+|---|---|
+| ladder 42 / 54 / 66 / 75 / 84 | **41 / 56 / 67 / 75 / 84** (n 1169 / 811 / 642 / 541 / 433) |
+| `E — 08:51` first extremity | **08:51** |
+| `E ~3h52` HL gap | **3h57** |
+| `E ~$2,800 — 56pts (42–80)` | **$2,825 — 56.5pts (41.8–80.2)** |
+| `seq 48/52 coin-flip` | **51/49** |
+
+That is how we know the mockup's own figures were real rather than sketched. **⚠ THE COMPLETENESS
+THRESHOLD IS LOAD-BEARING:** `>=386` RTH bars gives 284 sessions, `>=391` gives 283, and a single
+386-bar session is the entire difference. The prior note warned that a rebuilt study missing 284 had
+"changed the filter rather than found more data" — so the filter is stated, not assumed.
+
+**THE LADDER IS A SURVIVAL STATISTIC AND IT IS THE ONLY PREDICTIVE THING IN THE SECTION.** Walk the
+session tracking the running extreme; each time a new one prints the previous candidate died having
+stood N minutes. For a window W: among candidates that stood ≥ W, what fraction were still the
+extreme at the close? `test_hodlod` asserts the rates are **monotone increasing** — if they were not,
+the section's one claim would be unsupported and the ladder must not ship.
+
+### WHAT SHIPPED
+
+⓪a sits above the numbered sections. Stats table on top, READ box underneath — his ask verbatim,
+*"give me this in the read section under the stats"*. The `A` row is today, the `E` row is the
+284-session median beneath it, dimmed because it is a backdrop and not a target. The ladder
+highlights the rung the standing extreme has actually **earned** — 100 minutes reads the 90m rate,
+never the 120m. The read names the verdict, its n, the consequence, and **the miss case beside the
+odds of being right**, which was the best thing in the mockup.
+
+**IB60 is new** — the codebase had zero hits for it and `IB_MIN_S` is a THIRTY-minute balance. Both
+are kept, because the operator asked for a sweep testing IB30 **and** IB60 breaks.
+
+### WHAT IS DELIBERATELY NOT BUILT, AND SAYS SO ON THE FACE
+
+**BOP · WICK · W.END · WICK% · MUD.** Their definitions exist nowhere — not in the mockup, not in the
+Academy, not in any spec. The doctrine gate says name it and get agreement rather than invent.
+Printing five guessed timing statistics beside measured ones would make the whole row untrustworthy,
+because nothing on the face would separate derived from guessed. The section prints
+**"BOP/WICK/W.END/WICK% pending a definition"** so the gap is visible rather than quietly absent.
+
+**VWAP.** One of the mockup's five chips, and this codebase has NO VWAP — zero hits. It renders as
+UNAVAILABLE with a dashed border of its own, never as a failing tick, and the tally reads 3/**4**
+rather than pretending to a fifth input we do not have.
+
+### TWO REGRESSIONS THE SUITE CAUGHT, BOTH MINE
+
+**`IB60_MIN_S` was declared AFTER the function that used it.** `var` hoists so production was fine —
+but a test that evals `sessionLevels` alone hit a ReferenceError, swallowed by that function's own
+try/catch, and got an all-null result that reads exactly like missing data. Failure pattern #5, and
+it took three green assertions down with it. Moved beside `IB_MIN_S` where the reader already is.
+
+**`test_lastbook`'s stray-guard scan flagged `hodLod`.** Correctly, then wrongly: `hodLod` does test
+`inReplay()||showingStaleBook()`, but to choose WHICH CLOCK to measure against, not to gate a write.
+In a replay the wall clock is not the session clock, and using it would inflate STOOD by hours and
+hand the top rung to an extreme that never earned it — a fabricated 84%. `test_hodlod` p1/p2 pin it.
+
+test_hodlod.js — 40 asserts, **six mutation-tested**: TOOK from midnight, STOOD measured to the other
+extreme, the top rung awarded to any age, replay using the wall clock, the range losing its $50
+multiplier, and the baked ladder diverging from `BASERATES.json`. Every one fires.
+Suite 117 green, 6 documented baseline reds. smoke clean.
+Rendered from the real `secDay()`: 39 elements, 0 overlaps, 0 past the panel edge, 0 page errors.
+
 ## v14.56 — the chute has two kinds of occupant, and the nudge only knew about one
 
 Found by rendering the mockup the operator asked to see, not by reading the code. The pairwise

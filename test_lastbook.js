@@ -47,6 +47,10 @@ ok(/inReplay\(\)\s*\|\|\s*showingStaleBook\(\)/.test(RB),
     .filter(([, l]) => !/function inReplay|recorderBlind|SESSION_DAY&&SESSION_DAY\.fallback/.test(l))
     .filter(([, l]) => !/^\s*\/\//.test(l))            // comments are not call sites
     .filter(([, l]) => !/inReplay\(\) \|\| showingStaleBook\(\)/.test(l)) // recorderBlind's own body
+    // ⚠ NOT a recorder guard: hodLod asks WHICH CLOCK to measure against, and in both a replay and a
+    // frozen book the wall clock is not the session clock. Same predicate, different question — it
+    // reads, it never writes. Using recorderBlind() there would name it wrongly.
+    .filter(([, l]) => !/inReplay\(\)\|\|showingStaleBook\(\)\)\?lastT/.test(l))
     .filter(([, l]) => !/return '';/.test(l))            // gammaProfileHtml — a DISPLAY guard, correct
     .filter(([, l]) => !/out\.replay=/.test(l))          // __gptsDebug.session
     .filter(([, l]) => !/if\(inReplay\(\)\) return;/.test(l)); // lastBookSave's own guard

@@ -69,6 +69,19 @@ are present in the current build **except premarket H/L — `PMH`/`PML`/`premark
 The operator's Skylit session-levels setting includes Premarket H/L, so the level is on his chart and
 absent from our record. Not confirmed cancelled; treat as open until he says otherwise.
 
+### ⓪a HOD/LOD · APPROVED, NOT BUILT, AND BLOCKED ON DATA
+**The design is `mockuphodlodv2.html` — in the repo ROOT, on GitHub, renders clean.** Two earlier
+notes called it lost; both were wrong (failure pattern #4, not searching the repo root).
+`mockups/hodlod-v2-SPEC.md` is the transcription and now carries the correction.
+
+⚠⚠ **BLOCKED ON ONE FILE: `data/es-1min/EPM26-1min.csv.gz`,** 284 complete RTH sessions of ES 1-min.
+Committed in the sandbox 2026-08-27 (`a26cdfd`), **never pushed**, sandbox copy gone. Every rate on
+the mockup — 84%, n=45, 43/47, med +24, p25 +11, the −12 miss case, the 42/54/66/75/84 ladder — came
+from a study over it. They cannot be re-derived without it, and nothing here ships a rate without its
+n. **Ask the operator to re-supply the CSV; it is the only blocker.**
+⚠ It cannot ride the installer back — 5.2MB gzipped against a 6MB payload cap. He drops it into
+`C:\Dev\gex-signal-tapereader\data\es-1min\` and his next push carries it.
+
 ### IB60 · required by the approved HOD/LOD mockup, does not exist
 `mockups/hodlod-v2-SPEC.md` shows `IB60` as one of the five confirmation chips.
 `sessionLevels()` computes **IB30 only** (`IB_MIN_S=1800` → `ibH`/`ibL`/`ibSet`) plus PDH/PDL/PDC.
