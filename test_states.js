@@ -71,12 +71,14 @@ RD=null;
 ok(levelMarkerOf(7650,7651,'SPY',false).m==='IN PLAY', 'm3 price on it with no verdict yet = IN PLAY');
 ok(levelMarkerOf(7650,7700,'SPY',false)===null, 'm4 a level price is nowhere near gets no marker');
 // ⚠ POTENTIAL vs EVIDENCE
-ok(levelMarkerOf(7650,7700,'SPY',true).m==='◂T',
-   'm5 dominant pull with no closing distance is POTENTIAL only — the marker says where flow points');
-global.closedCandles=()=>Array.from({length:9},(_,i)=>({c:7700+i*2}));   // price walking AWAY
-ok(levelMarkerOf(7650,7718,'SPY',true).m==='◂T', 'm6 ...and stays potential while price walks away');
-global.closedCandles=()=>Array.from({length:9},(_,i)=>({c:7700-i*4}));   // price closing IN
-ok(levelMarkerOf(7650,7668,'SPY',true).m==='ATTRACTING',
+// ⚠ the scale argument is REQUIRED: without it the closing test cannot be computed and the marker
+// must fall back to POTENTIAL rather than guessing (see r1 below for why that matters).
+ok(levelMarkerOf(7650,7700,'SPY',true,0).m==='◂T',
+   'm5 no scale to judge distance with = POTENTIAL only, never an invented ATTRACTING');
+global.closedCandles=()=>Array.from({length:9},(_,i)=>({c:770+i*0.2}));   // underlying, walking AWAY
+ok(levelMarkerOf(7650,7718,'SPY',true,10).m==='◂T', 'm6 ...and stays potential while price walks away');
+global.closedCandles=()=>Array.from({length:9},(_,i)=>({c:770-i*0.4}));   // underlying, closing IN
+ok(levelMarkerOf(7650,7668,'SPY',true,10).m==='ATTRACTING',
    'm7 dominant pull AND the distance closing = ATTRACTING — evidence, not potential');
 ok(/ATTRACTING REQUIRES EVIDENCE, NOT POTENTIAL/.test(src), 'm8 the distinction is documented');
 ok(/BREAKING DOES NOT MEAN PRICE HAS BROKEN THROUGH/.test(src),
@@ -97,14 +99,74 @@ ok(/TAP_TOL\*step/.test(UT) && /TAP_AWAY\*step/.test(UT),
 ok(/last\.l>k\+away \|\| last\.h<k-away/.test(UT),
    't2 the re-arm needs a WHOLE CLOSED BAR clear — it was judged on a live tick, which noise inflated');
 ok(!/var px=S\.price;\s*\n\s*if\(px!=null && Math\.abs\(px-k\)>=TAP_AWAY\)/.test(src), 't3 ...and the tick path is gone');
+global.STEP_MIN_STRIKES=v('STEP_MIN_STRIKES'); global.STEP_DEFAULT=v('STEP_DEFAULT'); global.STEP_CACHE={};
 eval(ex('strikeStepOf'));
 let TP={pct:{}}; global.tapeMap=()=>TP;
-[7625,7630,7635,7650,7655].forEach(k=>TP.pct[k.toFixed(2)]=1);
-ok(strikeStepOf('SPXW')===5, 't4 SPXW\'s step is measured from the tape as 5', strikeStepOf('SPXW'));
-TP={pct:{}}; [760,761,762,763].forEach(k=>TP.pct[k.toFixed(2)]=1);
+// ⚠ these ladders must be DENSE — a sparse set is now refused and falls back, which is the fix, so a
+// 5-strike fixture would pass on the fallback and prove nothing about the measurement.
+TP={pct:{}}; for(let i=0;i<40;i++) TP.pct[(7600+i*5).toFixed(2)]=1;
+ok(strikeStepOf('SPXW')===5, 't4 SPXW\'s step is measured from a dense tape as 5', strikeStepOf('SPXW'));
+global.STEP_CACHE={};
+TP={pct:{}}; for(let i=0;i<40;i++) TP.pct[(700+i).toFixed(2)]=1;
 ok(strikeStepOf('SPY')===1, 't5 ...and SPY\'s as 1, so today\'s SPY behaviour is reproduced exactly');
-TP={pct:{}}; [7625,7630,7640,7645].forEach(k=>TP.pct[k.toFixed(2)]=1);   // one strike missing
-ok(strikeStepOf('SPXW')===5, 't6 the MEDIAN gap is used, so a missing strike cannot skew it');
+global.STEP_CACHE={};
+TP={pct:{}}; for(let i=0;i<40;i++){ if(i===7||i===19) continue; TP.pct[(7600+i*5).toFixed(2)]=1; }
+ok(strikeStepOf('SPXW')===5, 't6 the MEDIAN gap is used, so missing strikes cannot skew it');
+global.STEP_CACHE={};
+
+
+// ================= (v14.50) THE SEVEN DEFECTS AN INDEPENDENT REVIEW FOUND =================
+// Every one of these was invisible to the 33 asserts above and would have shipped.
+// 1 — ATTRACTING compared two different price scales and therefore fired ALWAYS.
+ok(/THE SCALE PARAMETER IS LOAD-BEARING/.test(src), 'r1 the scale bug is documented at the site');
+ok(/function levelMarkerOf\(dispPrice, now, sym, isTopPull, undScale\)/.test(src),
+   'r1b the marker takes the underlying->display scale explicitly');
+ok(/was\*undScale/.test(src) && !/was\*dsc/.test(src),
+   'r1c the past close is converted on THAT scale, not the SPX basis');
+{ // executed: price walking AWAY must NOT read ATTRACTING
+  let RD2=null; global.reactDefence=()=>RD2;
+  // level 7650 in chart space; bars are UNDERLYING (~760) and cross with undScale=10.
+  const S=10;
+  eval(ex('levelMarkerOf'));
+  // walking AWAY: six bars ago underlying was 754 (=7540, gap 110); now 750 (=7500, gap 150)
+  global.closedCandles=()=>Array.from({length:9},(_,i)=>({c:754-i*0.5}));
+  ok(levelMarkerOf(7650,7500,'SPY',true,S).m==='◂T',
+     'r1d walking away = potential only — the ◂T branch is reachable again',
+     levelMarkerOf(7650,7500,'SPY',true,S));
+  // closing IN: six bars ago underlying was 750 (=7500, gap 150); now 760 (=7600, gap 50)
+  global.closedCandles=()=>Array.from({length:9},(_,i)=>({c:750+i*0.5}));
+  ok(levelMarkerOf(7650,7600,'SPY',true,S).m==='ATTRACTING', 'r1e closing in = ATTRACTING',
+     levelMarkerOf(7650,7600,'SPY',true,S));
+}
+// 2 — strikeStepOf measured a SPARSE feed map and inflated the tap tolerances
+ok(/ONLY A DENSE LADDER MAY SET THE STEP/.test(src), 'r2 the sparse-map trap is documented');
+{ global.STEP_CACHE={};
+  let TP={pct:{}}; global.tapeMap=()=>TP;
+  [7625,7650,7700].forEach(k=>TP.pct[k.toFixed(2)]=1);            // a sparse subset
+  ok(strikeStepOf('SPXW')===5, 'r2a a sparse map falls back to the book default, not its own gaps',
+     strikeStepOf('SPXW'));
+  TP={pct:{}}; for(let i=0;i<40;i++) TP.pct[(7600+i*5).toFixed(2)]=1;
+  ok(strikeStepOf('SPXW')===5, 'r2b a DENSE ladder sets it properly');
+  TP={pct:{}}; [7625,7700].forEach(k=>TP.pct[k.toFixed(2)]=1);
+  ok(strikeStepOf('SPXW')===5, 'r2c ...and the last dense reading is remembered when it goes sparse');
+}
+// 3 — zero was treated as a sign in the TURN test
+VEL=V(0,-10,5); PEAK=null; TAPS=0;
+ok(levelStateOf(7650,null).st!=='TURN DN', 'r3 a FLAT 5m does not "agree" with a falling 15m');
+VEL=V(5,10,0);
+ok(levelStateOf(7650,null).st!=='TURN UP', 'r3b ...and a flat hour is not something to flip against');
+// 5 — a rounded -0.4 printed as "0%/15m draining"
+VEL=V(-0.2,-0.4,-3);
+ok(!/0%\/15m draining/.test(levelStateOf(7650,null).why||''),
+   'r5 nothing that rounds to zero is described as draining');
+// the operator's own example: the badge must read PRIOR tests while a test is under way
+ok(/A TAP COMPLETES WHEN PRICE LEAVES, NOT WHEN IT ARRIVES/.test(src),
+   'r8 a tap counts on LEAVING — during the second test the badge reads 1x, the number you decide on');
+ok(/st\.on=true/.test(src) && /if\(st\.on\)\{ st\.taps\+\+/.test(src), 'r8b ...implemented that way');
+// 7 — the pull contest mixed dollars with %King
+ok(/LIKE FOR LIKE, OR NOT AT ALL/.test(src), 'r7 the unit mixing is documented');
+ok(/if\(frDP\.usdK==null\) continue;/.test(src),
+   'r7b a node with no dollar reading sits the contest out rather than inventing one');
 
 console.log('test_states: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

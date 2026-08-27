@@ -1,3 +1,46 @@
+## v14.50 — an independent review found seven defects in v14.49; all seven fixed
+
+The operator asked for a review. An independent reviewer read only the new code and found seven real
+faults, every one invisible to the 33 asserts that had just passed. Two were severe.
+
+**1 ⚠⚠ ATTRACTING FIRED ON EVERY DOMINANT-PULL NODE, ALWAYS.** The closing-distance test converted a
+past close with `ifDispScale()` — the SPX→ES BASIS (~1.002) — but `closedCandles()` returns the
+UNDERLYING book's bars (SPY, ~765). So a 765 close became 767 and was compared against a chart-space
+level near 7650: the historic gap was always ~6900, always larger than the current one, so "the
+distance is closing" was true on every render. The ◂T branch was unreachable dead code. A state built
+specifically to be falsifiable could not be falsified. Now uses `EB.scaleUsed`, the underlying→display
+ratio the SPY King already used, passed in explicitly so the scale cannot be guessed again.
+
+**2 ⚠⚠ THE STRIKE-STEP FIX RESTORED THE BUG IT WAS WRITTEN TO FIX.** `strikeStepOf` measured the gap
+between whatever strikes `tapeMap` returned — but that falls back to the FEED-derived map when the DOM
+tape is unreadable, and that map holds only strikes above a strength floor. Median gap of a sparse
+subset is 3 or 4 on a book whose strikes are 1 apart, inflating the tap tolerances several-fold; and
+with under three surviving strikes it returned 1, silently reinstating the ten-times-too-tight SPXW
+behaviour. Now only a DENSE ladder (12+ strikes) may set the step, the last good reading is cached per
+book, and the fallback is an honest per-book default.
+
+**3** Zero was treated as a sign in the TURN test: `(a>0)===(b>0)` puts 0 in the negative bucket, so a
+flat 5m "agreed" with a falling 15m and a flat hour was "flipped against". TURN fired on rows where
+the ROC column — which guards zero correctly — showed no 60m badge at all. The two surfaces disagreed
+on the same row. **4** A dead ternary on `rollsCtx.srcTo`, never populated by either caller.
+**5** `Math.round(-0.4)` is `-0`, which prints as "0" — the hover read "0%/15m draining".
+**6** The STATE cell was 44px with `nowrap`; "WEAKENING" renders ~50px and printed over the ROC
+numbers. The test asserted the OFFSETS were ordered, which they were — proving nothing about what is
+drawn. Every column now declares a WIDTH and the test asserts `offset+width <= next offset`.
+**7** The pull contest mixed units: real dollars for nodes carrying `usdK`, and `pct*1e6` — an invented
+dollar figure — for those without. An 80%King node with no dollar reading scored 8e7 against a genuine
+$50M node's 5e7 and won on a number nobody measured. Such a node now sits the contest out.
+
+**AND A SEMANTIC CORRECTION FROM THE OPERATOR'S OWN CHART.** He marked three tests of a level that
+held and one that failed, and said the badge should have read **1×** at the failed test — one prior
+test is the fact you decide on. Counting on CONTACT would have shown 2× while that second test was
+still under way: reporting a test you are currently inside. **A tap now completes when price LEAVES,
+not when it arrives**, so during a test the count reads the tests that came before it. Consecutive
+bars on the level remain one test, as before.
+
+test_states.js 33 → 49 asserts, test_ladder 56 → 76, test_lifecycle rewritten for the new semantics.
+Suite green, 6 baseline reds unchanged.
+
 ## v14.49 — THE LEVEL LIFECYCLE, settled
 
 Worked out with the operator one state at a time, then checked against Skylit Academy doctrine

@@ -22,7 +22,8 @@ function v(n){const m=new RegExp('(?:var\\s+)?\\b'+n+'\\s*=\\s*([^;,\\n]+)').exe
 // ---- geometry lives in one place ----
 const W=v('LAD_W'), LVL=v('LAD_LVL'), PXC=v('LAD_PXC'), PXW=v('LAD_PXW'), NODE=v('LAD_NODE'), NMAX=v('LAD_NMAX'),
       KPCT=v('LAD_KPCT'), CH=v('LAD_CH'), CHW=v('LAD_CHW'), PROF=v('LAD_PROF'), PMAX=v('LAD_PMAX'),
-      ROLL=v('LAD_ROLL'), ST=v('LAD_ST'), ROC=v('LAD_ROC');
+      ROLL=v('LAD_ROLL'), ST=v('LAD_ST'), STW=v('LAD_STW'), TAP=v('LAD_TAP'),
+      TAPW=v('LAD_TAPW'), ROC=v('LAD_ROC'), ROCW=v('LAD_ROCW');
 ok([W,LVL,PXC,NODE,NMAX,KPCT,CH,CHW,PROF,PMAX,ROLL,ST,ROC].every(x=>typeof x==='number'),
    'g1 every column offset is a named constant, not a magic number in the markup');
 
@@ -37,7 +38,13 @@ ok([W,LVL,PXC,NODE,NMAX,KPCT,CH,CHW,PROF,PMAX,ROLL,ST,ROC].every(x=>typeof x==='
   ok(KPCT+38<=chuteL,  'g3 the %King label ends before the chute too (the King label bug)', {end:KPCT+38,chuteL});
   ok(PROF-PMAX>=chuteR,'g4 the profile grows inward but never enters the chute from the right', {inner:PROF-PMAX,chuteR});
   ok(ROLL>=PROF,       'g5 the roll lane sits outside the profile');
-  ok(ST>=ROLL && ROC>=ST,'g6 state then roc, in that order, outside the rolls');
+  // ⚠ THE WIDTHS ARE PART OF THE ARITHMETIC. The old test checked only that the OFFSETS were ordered,
+  // which they were — while a 44px state cell rendering "WEAKENING" at ~50px printed over the ROC
+  // numbers beside it. Ordering offsets proves nothing about what actually gets drawn.
+  ok(ST+STW<=TAP,      'g6a the state cell ENDS before the tests counter begins', {end:ST+STW,TAP});
+  ok(TAP+TAPW<=ROC,    'g6b the counter ends before the roc column begins', {end:TAP+TAPW,ROC});
+  ok(ROC+ROCW<=W,      'g6c the roc column ends inside the ladder', {end:ROC+ROCW,W});
+  ok(STW>=50,          'g6d the state cell is wide enough for the longest word (WEAKENING)', STW);
   ok(PXC+PXW<=NODE,    'g7 the price column ends before the node bars begin', {end:PXC+PXW,NODE});
   ok(LVL+4<PXC,        'g8 levels sit left of the price column');
 }
@@ -100,7 +107,7 @@ ok(/classList\.toggle\('g3ladon'/.test(src), 'x3 ...and the class is actually ap
 // 1. THE LADDER MUST FIT, OR SCROLL — never clip. At 646px inside a 486px body with overflow
 //    hidden, STATE and ROC were gone with nothing to say so. Silently dropping live data is the
 //    worst failure this panel has.
-ok(W<=584, 'w1 the ladder stays close to a default-width panel', W);
+ok(W<=640, 'w1 the ladder stays within a resizable panel', W);
 ok(/g3ladwrap\{overflow-x:auto/.test(src), 'w2 ...and the container SCROLLS rather than clips');
 ok(/g3ladwrap"><div class="g3lad"/.test(src), 'w3 ...with the scroller actually wrapping the ladder');
 ok(/costing information|instead of costing information/.test(src), 'w4 the reasoning is recorded');

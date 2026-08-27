@@ -14,6 +14,9 @@ ok(src.indexOf('var TAP_PROB = { 0:80, 1:66, 2:33 }')>=0, 'shipped TAP_PROB 80/6
 
 // harness state + minimal deps
 var TAP_TOL=0.20, TAP_AWAY=0.60, TAP_PROB={0:80,1:66,2:33};
+// (v14.50) the tolerances are fractions of a STRIKE GAP now; SPY's gap is 1, so every number
+// in this file is unchanged — which is the point of the fix.
+global.strikeStepOf=function(){ return 1; };
 var TAPS={SPY:{},QQQ:{}};
 var STATE={SPY:{price:772, candles:[]}};
 function todayKey(){ return '2026-8-13'; }
@@ -32,20 +35,32 @@ ok(nodeTapCount('SPY',770)===0, '770 untouched -> 0 taps');
 ok(nodeLifecycle('SPY',770,'Steady').stage==='Fresh', '0 taps + steady -> Fresh');
 ok(nodeLifecycle('SPY',770,'Steady').prob===80, 'Fresh -> ~80% 1st-tap prob');
 
-// ---- TESTED: one tap ----
-feed(770.1, 769.9, 770.3);   // wick touches 770 (within 0.20)
-ok(nodeTapCount('SPY',770)===1, 'wick into 770 -> 1 tap');
-ok(nodeLifecycle('SPY',770,'Steady').stage==='Tested', '1 tap -> Tested');
-ok(nodeLifecycle('SPY',770,'Steady').prob===66, 'Tested -> ~66% prob');
+// ---- A TEST IN PROGRESS STILL READS THE PRIOR COUNT ----------------------------------------
+// ⚠⚠ (v14.50) SEMANTICS CHANGED, FROM THE OPERATOR'S OWN CHART. He marked three tests of a level
+// that held and one that failed, and said the badge should have read 1x AT THE FAILED TEST — because
+// one prior test is the fact you decide on. Counting on CONTACT would have shown 2x while that second
+// test was still under way: telling you about a test you are currently inside. So a tap now completes
+// when price LEAVES, and during a test the count still reads the tests that came before it.
+feed(770.1, 769.9, 770.3);   // wick touches 770 — a test is UNDER WAY
+ok(nodeTapCount('SPY',770)===0, 'a test in progress still reads 0 prior tests — this is attempt one');
+ok(nodeLifecycle('SPY',770,'Steady').prob===80, '...so the odds shown are the untested ~80%');
 
-// ---- one long SIT should NOT inflate taps ----
+// one long SIT is still ONE test, which was the original rule and has not changed
 feed(770.05, 769.95, 770.15);  // still sitting on 770, never left
-ok(nodeTapCount('SPY',770)===1, 'still sitting on 770 (never left) -> still 1 tap (no inflation)');
+ok(nodeTapCount('SPY',770)===0, 'consecutive bars on the level do not accumulate');
 
-// ---- price LEAVES (>= TAP_AWAY), then RETURNS = 2nd tap = DELIVERED ----
-feed(771.2, 771.0, 771.4);    // left 770 by >=0.60 (re-arms)
-feed(770.1, 769.9, 770.3);    // returns and touches -> 2nd tap
-ok(nodeTapCount('SPY',770)===2, 'left then returned -> 2nd tap');
+// ---- the test ENDS when price clears the level by a whole closed bar ----
+feed(771.2, 771.0, 771.4);    // a WHOLE bar clear of 770 -> the first test completes
+ok(nodeTapCount('SPY',770)===1, 'price leaves -> the first test is banked');
+ok(nodeLifecycle('SPY',770,'Steady').stage==='Tested', '1 tap -> Tested');
+ok(nodeLifecycle('SPY',770,'Steady').prob===66, 'Tested -> ~66% on the next one');
+
+// ---- price RETURNS: the operator's failed second test ----
+feed(770.1, 769.9, 770.3);    // back on the level — attempt two, in progress
+ok(nodeTapCount('SPY',770)===1,
+   'attempt two IN PROGRESS still reads 1x — exactly the number the operator wanted at that moment');
+feed(771.2, 771.0, 771.4);    // and clears again
+ok(nodeTapCount('SPY',770)===2, 'once it ends, the second test banks');
 ok(nodeLifecycle('SPY',770,'Steady').stage==='Delivered', '2 taps -> Delivered (graveyard)');
 ok(nodeLifecycle('SPY',770,'Steady').prob===33, 'Delivered -> ~33% prob');
 

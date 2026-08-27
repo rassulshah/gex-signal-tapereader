@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.49
+// @version    14.50
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -620,7 +620,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.49';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.50';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -2939,17 +2939,36 @@ var ABS_DECLINE_TOL = 4;    // %King may only decline up to this and still 'hold
 var TAP_TOL   = 0.20;   // a wick within 20% of a strike gap = touching the node
 var TAP_AWAY  = 0.60;   // a whole closed bar 60% of a gap clear re-arms it for the next test
 // the book's own strike spacing, measured from the tape rather than assumed: SPY 1, SPXW 5, QQQ 1.
+// ⚠⚠ (v14.50) ONLY A DENSE LADDER MAY SET THE STEP, AND A GOOD READING IS CACHED. tapeMap falls back
+// to the FEED-derived map whenever the DOM tape is unreadable, and that map holds only strikes above
+// a strength floor — a sparse subset whose median gap is 3 or 4 on a book whose strikes are 1 apart.
+// Measuring the step from that inflates the tap tolerances several-fold; worse, with under three
+// surviving strikes the old code returned 1, silently restoring the exact ten-times-too-tight SPXW
+// bug it was written to fix. So: a reading counts only when the ladder is dense enough to be the real
+// grid, the last good value is remembered per book, and the fallback is an honest per-book default
+// rather than a number that happens to be right for SPY alone.
+var STEP_MIN_STRIKES=12;      // fewer rendered strikes than this is a subset, not a grid
+var STEP_DEFAULT={ SPY:1, QQQ:1, SPXW:5, SPX:5 };
+var STEP_CACHE={};
 function strikeStepOf(sym){
+  sym=sym||'SPXW';
   try{
-    var tp=tapeMap(sym||'SPXW'); if(!tp||!tp.pct) return 1;
-    var ks=[]; for(var k in tp.pct){ var f=parseFloat(k); if(isFinite(f)) ks.push(f); }
-    if(ks.length<3) return 1;
-    ks.sort(function(a,b){ return a-b; });
-    var gaps=[]; for(var i=1;i<ks.length;i++){ var g=ks[i]-ks[i-1]; if(g>0) gaps.push(g); }
-    if(!gaps.length) return 1;
-    gaps.sort(function(a,b){ return a-b; });
-    return gaps[Math.floor(gaps.length/2)] || 1;    // median gap — immune to a missing strike
-  }catch(e){ return 1; }
+    var tp=tapeMap(sym); 
+    if(tp && tp.pct){
+      var ks=[]; for(var k in tp.pct){ var f=parseFloat(k); if(isFinite(f)) ks.push(f); }
+      if(ks.length>=STEP_MIN_STRIKES){
+        ks.sort(function(a,b){ return a-b; });
+        var gaps=[]; for(var i=1;i<ks.length;i++){ var g=ks[i]-ks[i-1]; if(g>0) gaps.push(g); }
+        if(gaps.length){
+          gaps.sort(function(a,b){ return a-b; });
+          var med=gaps[Math.floor(gaps.length/2)];
+          if(med>0){ STEP_CACHE[sym]=med; return med; }
+        }
+      }
+    }
+  }catch(e){}
+  if(STEP_CACHE[sym]>0) return STEP_CACHE[sym];     // the last DENSE reading, not a sparse guess
+  return STEP_DEFAULT[sym]||1;
 }
 var TAP_STAGES = { FRESH:0, TESTED:1, DELIVERED:2 }; // tap-count thresholds
 // Academy tap-reaction probabilities (factual annotation, NOT a trade instruction).
@@ -3366,7 +3385,7 @@ function updateTaps(sym){
   for(var key in tp.pct){
     var k=parseFloat(key); if(!(k>0)) continue;
     var st=store[key];
-    if(!st || st.day!==dk){ st=store[key]={ taps:0, off:true, day:dk }; }
+    if(!st || st.day!==dk){ st=store[key]={ taps:0, on:false, day:dk }; }
     // ⚠⚠ (v14.49) TWO FIXES, BOTH FOUND BY CHECKING THE CODE AGAINST THE OPERATOR'S OWN RULE:
     // "consecutive bars touching it is ONE test; it only counts again if it bounced and returned".
     //
@@ -3384,10 +3403,18 @@ function updateTaps(sym){
     var step=1; try{ step=strikeStepOf(sym)||1; }catch(eSt){}
     var tol=TAP_TOL*step, away=TAP_AWAY*step;
     var touching = (last.l<=k+tol && last.h>=k-tol);
+    // ⚠⚠ (v14.50) A TAP COMPLETES WHEN PRICE LEAVES, NOT WHEN IT ARRIVES — and the difference is the
+    // whole point of the counter. The operator's own example: a level held its first test, then FAILED
+    // its second. At the moment of that second test the badge must read 1x — "you are watching attempt
+    // two" — because that is the number you decide on. Incrementing on CONTACT would have shown 2x
+    // while the second test was still in progress, which is both wrong and useless: it would be
+    // telling you about a test you are currently inside.
+    // So `on` marks a test IN PROGRESS and the count rises only once price has cleared the level by a
+    // whole closed bar. Consecutive bars touching remain ONE test, which was the original rule.
     if(touching){
-      if(st.off){ st.taps++; st.off=false; }   // a NEW tap: was away, now touching
+      st.on=true;                              // a test is under way; the count still reads PRIOR tests
     } else if(last.l>k+away || last.h<k-away){
-      st.off=true;                             // a WHOLE CLOSED BAR clear of the level re-arms it
+      if(st.on){ st.taps++; st.on=false; }     // the test ENDED — only now does it count
     }
   }
 }
@@ -19259,7 +19286,7 @@ function ensureV3Css(){
     '@keyframes g3ldflow{to{stroke-dashoffset:-18}}'+
     '#gpts-body .g3ldflow{animation:g3ldflow 1.5s linear infinite}'+
     '#gpts-body .g3ldramt{position:absolute;left:12px;font-size:7.6px;font-weight:900;transform:translateY(-50%);white-space:nowrap;cursor:help}'+
-    '#gpts-body .g3ldst{position:absolute;left:'+LAD_ST+'px;width:44px;font-size:8.4px;font-weight:900;'+
+    '#gpts-body .g3ldst{position:absolute;left:'+LAD_ST+'px;width:'+LAD_STW+'px;font-size:8.4px;font-weight:900;'+
       'transform:translateY(-50%);white-space:nowrap;cursor:help}'+
     // (v14.49) the settled vocabulary: BUILDING · HOLDING · TURN UP/DN · WEAKENING · SPENT
     '#gpts-body .g3ldstBUILDING{color:#7cc7ff}'+
@@ -19268,7 +19295,7 @@ function ensureV3Css(){
     '#gpts-body .g3ldstSPENT{color:#6c7889}'+
     '#gpts-body .g3ldstHOLDING{display:none}'+
     // the TESTS counter — its own slot, reddening as the level is spent by testing
-    '#gpts-body .g3ldtap{position:absolute;left:'+(LAD_ST+46)+'px;font-size:7px;font-weight:900;'+
+    '#gpts-body .g3ldtap{position:absolute;left:'+LAD_TAP+'px;width:'+LAD_TAPW+'px;font-size:7px;font-weight:900;'+
       'transform:translateY(-50%);padding:0 3px;border-radius:5px;background:rgba(255,255,255,.10);cursor:help}'+
     '#gpts-body .g3ldtap1{color:#c9d1da}'+
     '#gpts-body .g3ldtap2{color:#f2b45a;background:rgba(242,180,90,.20)}'+
@@ -20944,11 +20971,15 @@ function levelStateOf(k, rollsCtx){
     //     price returned to a drained level: never treat it as support, never park a stop behind it.
     if(ret!=null && ret<LVL_SPENT_PEAK)
       return out('SPENT','holds only '+Math.round(ret*100)+'% of its own day peak — the mass has gone'+
-        (isSrc?', shed into '+ (rollsCtx.srcTo&&rollsCtx.srcTo[k]!=null?frameNumSafe(rollsCtx.srcTo[k]):'another strike'):'')+
+        (isSrc?', shed into another strike':'')+
         '. \u26a0 SPENT here means MASS, not Skylit\u2019s DELIVERED, which is tap-exhaustion \u2014 that is the counter beside it');
     if(vv && typeof vv.p5==='number' && typeof vv.p15==='number'){
       // 2 · TURN — an inflection outranks the trend it interrupts
-      if(typeof vv.p60==='number' && Math.abs(vv.p15)>=LVL_TURN_P15 &&
+      // ⚠ ZERO IS NOT A SIGN. `(a>0)===(b>0)` puts 0 in the negative bucket, so a flat 5m "agreed"
+      // with a falling 15m and a flat hour was "flipped against" — TURN fired on rows where the ROC
+      // column, which guards for zero correctly, showed no 60m badge at all. The two surfaces
+      // disagreed on the same row.
+      if(typeof vv.p60==='number' && vv.p5!==0 && vv.p60!==0 && Math.abs(vv.p15)>=LVL_TURN_P15 &&
          (vv.p5>0)===(vv.p15>0) && (vv.p15>0)!==(vv.p60>0))
         return out(vv.p15>0?'TURN UP':'TURN DN','5m and 15m agree and have both flipped against the hour');
       // 3 · BUILDING — size arriving, from a roll or from fresh flow alike
@@ -20956,7 +20987,9 @@ function levelStateOf(k, rollsCtx){
         return out('BUILDING','+'+Math.round(vv.p15)+'%/15m arriving'+(isDst?', a roll destination':'')+
           ' \u2014 new support or resistance forming here');
       // 4 · WEAKENING
-      if(vv.p15<=LVL_WEAK_P15 || (typeof vv.p60==='number' && vv.p15<0 && vv.p60<0))
+      // ⚠ Math.round(-0.4) is -0, which prints as "0" — the hover read "0%/15m draining". Anything
+      // that rounds to nothing is not draining in any sense worth a word.
+      if(vv.p15<=LVL_WEAK_P15 || (typeof vv.p60==='number' && vv.p15<=-1 && vv.p60<0))
         return out('WEAKENING',Math.round(vv.p15)+'%/15m draining'+(isSrc?', feeding a roll':'')+
           (tapsN===0?' with no interaction at all \u2014 Skylit\u2019s DECAYING, a quiet death':''));
     }
@@ -20979,7 +21012,15 @@ function frameNumSafe(x){ try{ return frameNum(x); }catch(e){ return String(x); 
 // the closer price drifts, the stronger the pull") is satisfied by the stricter test, not contradicted.
 var LVL_INPLAY_PTS=3;      // ⚖ how close price must be to count as standing on a level
 var LVL_CLOSE_BARS=5;      // ⚖ bars over which the distance must have closed to say ATTRACTING
-function levelMarkerOf(dispPrice, now, sym, isTopPull){
+// ⚠⚠ (v14.50) THE SCALE PARAMETER IS LOAD-BEARING. The first version converted a past close with
+// ifDispScale(), which is the SPX→ES BASIS (~1.002) — but closedCandles() returns the UNDERLYING
+// book's bars (SPY, ~765). So a 765 close became 767 and was compared against a chart-space level of
+// ~7650: the gap was always ~6900, always larger than the current distance, and ATTRACTING therefore
+// fired on EVERY dominant-pull node on every render, with a hover claiming the distance was closing
+// while price walked away. The ◂T branch was unreachable dead code — the exact falsifiability the
+// marker was built to provide. The correct multiplier is the band's own underlying→display ratio,
+// EB.scaleUsed, which is what ladderKings uses for the SPY King.
+function levelMarkerOf(dispPrice, now, sym, isTopPull, undScale){
   try{
     if(typeof dispPrice!=='number' || typeof now!=='number') return null;
     var d=Math.abs(dispPrice-now);
@@ -20994,12 +21035,12 @@ function levelMarkerOf(dispPrice, now, sym, isTopPull){
     if(isTopPull){
       var closing=null;
       try{
-        var cs=closedCandles(sym)||[], dsc=ifDispScale()||1;
-        if(cs.length>LVL_CLOSE_BARS){
+        var cs=closedCandles(sym)||[];
+        if(cs.length>LVL_CLOSE_BARS && undScale>0){
           var was=cs[cs.length-1-LVL_CLOSE_BARS].c;
           if(typeof was==='number'){
-            var wasDisp=was*dsc;
-            closing=Math.abs(dispPrice-wasDisp)>d;   // the gap has narrowed since then
+            var wasDisp=was*undScale;               // underlying bar -> chart space, the SAME space as dispPrice
+            closing=Math.abs(dispPrice-wasDisp)>d;  // the gap has narrowed since then
           }
         }
       }catch(e1){}
@@ -21064,8 +21105,13 @@ function levelDoors(rolls, dsc){
 // invisible with nothing to say they were missing. Silently dropping data is the worst failure this
 // panel can have. The columns below are compressed to 520 and the container SCROLLS rather than
 // clips, so a narrow panel costs a scrollbar instead of costing information.
-var LAD_W=580, LAD_LVL=78, LAD_PXC=96, LAD_PXW=56, LAD_NODE=154, LAD_NMAX=70, LAD_KPCT=226,
-    LAD_CH=268, LAD_CHW=44, LAD_PROF=436, LAD_PMAX=76, LAD_ROLL=440, LAD_ST=488, LAD_ROC=528;
+// ⚠ (v14.50) THE WIDTHS ARE PART OF THE ARITHMETIC, NOT JUST THE OFFSETS. LAD_ST was 488 with a
+// 44px cell and LAD_ROC was 528 — the offsets ordered correctly, which is all the test checked, while
+// "WEAKENING" at 8.4px/900 renders ~50px wide and printed straight over the ROC numbers. Every column
+// now declares its WIDTH and test_ladder asserts offset+width <= next offset.
+var LAD_W=632, LAD_LVL=78, LAD_PXC=96, LAD_PXW=56, LAD_NODE=154, LAD_NMAX=70, LAD_KPCT=226,
+    LAD_CH=268, LAD_CHW=44, LAD_PROF=436, LAD_PMAX=76, LAD_ROLL=440,
+    LAD_ST=488, LAD_STW=54, LAD_TAP=546, LAD_TAPW=24, LAD_ROC=574, LAD_ROCW=56;
 var LAD_SNAP_PTS=2;         // a level within this many points of a node shares that node's row
 // (v14.48, operator-directed) THE THREE KINGS, ON ONE SCALE. "I want to see where price is relative
 // to the 3 kings" — SPXW's, SPY's and QQQ's, each as a pill in the price column with its own crown
@@ -21218,7 +21264,8 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
            g3tip('Price has TESTED this level '+lvS.taps+'× today — it reached it, left, and came back. Skylit\u2019s own lifecycle: untested reacts ~80% of the time, a second test ~66%, a third and beyond ~33% (the graveyard). The next test here holds ~'+
            (TAP_PROB[Math.min(lvS.taps,2)])+'%. An untested level is the strong one and every test spends it.')+'>'+lvS.taps+'×</span>';
       try{
-        var mk=levelMarkerOf(P.disp, now, sym, (TGT!=null && Math.abs(TGT-P.disp)<0.01));
+        var mk=levelMarkerOf(P.disp, now, sym, (TGT!=null && Math.abs(TGT-P.disp)<0.01),
+                             (EB&&typeof EB.scaleUsed==='number')?EB.scaleUsed:0);
         if(mk) h+='<span class="g3ldmk g3ldmk'+mk.m.replace(/[^A-Z]/g,'')+'" style="top:'+t.toFixed(1)+'px"'+
           g3tip(mk.m+' — '+mk.why+'.')+'>'+g3esc(mk.m)+'</span>';
       }catch(eMk){}
@@ -22438,7 +22485,13 @@ function secFrame(sym){
         for(frDi=0;frDi<RAILPS.length;frDi++){
           var frDP=RAILPS[frDi], frDd=Math.abs(frDP.disp-frNow);
           if(frDd<2.6 || frDd>60) continue;
-          var frUsd=(frDP.usdK!=null)?Math.abs(frDP.usdK*1000):((frDP.pct||0)*1e6);
+          // ⚠ (v14.50) LIKE FOR LIKE, OR NOT AT ALL. This mixed two units: real dollars for nodes
+          // carrying usdK, and pct*1e6 — a made-up dollar figure — for those that did not. An 80%King
+          // node with no dollar reading scored 8e7 against a genuine $50M node's 5e7 and won the
+          // contest on a number nobody measured. A node without a dollar reading now sits the contest
+          // out rather than entering it with an invented one.
+          if(frDP.usdK==null) continue;
+          var frUsd=Math.abs(frDP.usdK*1000);
           var frPl=frUsd/frDd;
           if(frPl>frBpull){ frSecond=frBpull; frBpull=frPl; frBestP=frDP; }
           else if(frPl>frSecond){ frSecond=frPl; }
