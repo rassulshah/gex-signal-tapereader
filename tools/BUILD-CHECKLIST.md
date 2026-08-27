@@ -1,8 +1,14 @@
 # ⚠⚠ TWO RULES BEFORE ANYTHING ELSE ON THIS LIST
 
-**1 · DELIVER EXACTLY ONE FILE.** `installvNNNN.bat`, plus the Tampermonkey links as text. His
-words: *"you are supposed to just give me an install file."* No zip+applier pair, no "here are
-both", no extra attachments alongside it. `build-installer.py` prints the single filename to send.
+**1 · DELIVER EXACTLY ONE FILE — WITH ITS TAMPERMONKEY LINKS.** `installvNNNN.bat`, and the links
+pasted as text in the same message. Two of his instructions, both standing:
+*"you are supposed to just give me an install file"* and *"make sure you give me tampermonkey links
+when you give me install files."* No zip+applier pair, no "here are both", no extra attachments.
+`build-installer.py` prints the filename AND the links in one block — copy the whole block.
+⚠ Then tell him: wait ~5 min for the CDN, **CLICK THE LINK**, reload Atlas. Tampermonkey's default
+update check is ONCE A DAY; the click is the reliable step, and a *Reinstall* prompt means he
+already has the build. On 2026-08-27 a build went out with no links and he ran a known-buggy
+version for an hour.
 
 **2 · REGENERATE THE CHAT HISTORY, LAST.** `python3 tools/chat-history.py --title '<...>'` then fill
 DECISIONS / SHIPPED / OPEN AT CLOSE. Run it AFTER the final exchange or the tail is missing.

@@ -59,6 +59,29 @@ ok(/fallback only/i.test(BUILDER),
 ok(/ZIPNAME\s*=\s*'gexdrop%s\.zip'/.test(BUILDER) && /BATNAME\s*=\s*'applygex%s\.bat'/.test(BUILDER),
    'd2e ...but it is still BUILT — one file is a DELIVERY rule, not a reason to delete the fallback');
 
+// ---- 2b · THE TAMPERMONKEY LINKS ARE PART OF THE DELIVERY --------------------------------
+// ⚠ Operator-mandated 2026-08-24 and restated 2026-08-27: "make sure you give me tampermonkey links
+// when you give me install files." On 2026-08-27 installv1458.bat went out with NO links and he ran
+// a build with a known unit bug for an hour, because Tampermonkey's default update check is ONCE A
+// DAY and nothing prompted him to force it. The links used to print sixty lines below the filename,
+// in a block easy to scroll past. They must print INSIDE the delivery block, welded to the filename.
+{
+  const blk = /==== DELIVER EXACTLY ONE FILE[\s\S]{0,1400}?round-trip/.exec(BUILDER);
+  ok(!!blk, 'd2f the delivery block is identifiable in the builder');
+  ok(blk && /raw\.githubusercontent\.com/.test(blk[0]),
+     'd2g the Tampermonkey raw URL prints INSIDE the delivery block, not sixty lines below it');
+  ok(blk && /Companion/.test(blk[0]),
+     'd2h ...and the companion is named too, so only what CHANGED gets relinked');
+  ok(blk && /CLICK THE LINK/.test(blk[0]),
+     'd2i ...and it says to CLICK the link — TM auto-update is once a day, the click is reliable');
+  ok(blk && /Reinstall/.test(blk[0]),
+     'd2j ...and that a Reinstall prompt means he already HAS the build, not that it failed');
+}
+ok(/tampermonkey links when you give me install files/i.test(CONFIG),
+   'd2k the config a load reads FIRST carries the operator quote about the links');
+ok(/CLICK THE LINK/i.test(CHECKLIST) && /once a day/i.test(CHECKLIST),
+   'd2l the build checklist carries the click rule and why');
+
 // ---- 3 · PROJECT-CONSTANTS must not still call the pair the primary delivery -----------------
 ok(!/The primary delivery is now zip/.test(CONSTS),
    'd3 PROJECT-CONSTANTS no longer calls the zip+applier pair "the primary delivery"');

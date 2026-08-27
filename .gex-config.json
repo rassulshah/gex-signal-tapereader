@@ -142,6 +142,8 @@
     "neverAlso": "no zip+applier pair, no 'here are both options', no extra attachments sent alongside it",
     "fallback": "gexdropNNNN.zip + applygexNNNN.bat are still BUILT and still work - send them ONLY if he reports the .bat failed",
     "howItBroke": "tools/build-installer.py printed 'DELIVER THESE TWO FILES (primary)', PROJECT-CONSTANTS called that pair 'the primary delivery', and skills/gex/SKILL.md said 'ship ONE'. Three documents, two answers; a context followed the tool banner over the operator's standing rule and sent three attachments on 2026-08-27.",
-    "enforcement": "test_delivery.js fails the build if any of the three stops stating the rule, or if the builder reinstates a two-file banner"
+    "enforcement": "test_delivery.js fails the build if any source stops stating the one-file rule, if the builder reinstates a two-file banner, or if the builder stops printing the Tampermonkey links inside the delivery block.",
+    "alwaysWith": "⚠ THE TAMPERMONKEY LINKS ARE PART OF THE DELIVERY, NOT A SEPARATE STEP. Operator-mandated 2026-08-24 and restated 2026-08-27: 'make sure you give me tampermonkey links when you give me install files.' Every message carrying an install file ends with the raw URL for the script(s) that CHANGED, plus: wait ~5 min for the CDN, CLICK THE LINK, reload Atlas.",
+    "clickTheLink": "Tampermonkey's default update check is ONCE A DAY, so a fresh push does not reach the browser on its own in any useful time. The click is the reliable step. A link offering 'Reinstall' means auto-update already won the race and he HAS the build - that is correct, not a failure. On 2026-08-27 a build shipped with no links and he ran a known-buggy version for an hour."
   }
 }

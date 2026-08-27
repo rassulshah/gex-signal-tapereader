@@ -289,12 +289,31 @@ sent, and it was evaporating with each sandbox for no reason at all.
   (Avast IDP.HELU.PSE88) — `certutil` + `tar`. CRLF.
 - **`eval()` inside a forEach callback declares into the CALLBACK's scope.** Join and eval once.
 
-### THREE INSTALL FAILURES, IDENTICAL FROM THE USER'S SIDE
+### FOUR INSTALL FAILURES, IDENTICAL FROM THE USER'S SIDE
 | symptom | cause | one-call check |
 |---|---|---|
 | GitHub serves the old version | the installer did not push | clone and read `@version` |
 | GitHub new, browser old | **the page was already open. RELOAD.** | reload the tab |
 | raw stale ~5 min | CDN cache, `max-age=300` | read `cache-control`/`age` |
+| **GitHub new, raw new, TM still old** | **Tampermonkey has not run its update check yet** | read the running `@version` off the panel and compare to the raw URL |
+
+⚠⚠ **THE FOURTH ONE COST THE OPERATOR TIME ON 2026-08-27 AND THE WRONG ADVICE WAS MINE.**
+Tampermonkey auto-updates **on its own schedule — the default check interval is ONCE A DAY**, not on
+demand. Earlier that evening it happened to have already run when he clicked the link, so the link
+offered *Reinstall*; I generalised from that single lucky observation and told him **"no, you never
+need to click the Tampermonkey link."** An hour later GitHub and the CDN both served v14.58 while his
+panel ran v14.57 and still showed the bug the build fixed.
+
+**THE RULE, AND IT IS THE ONE TO GIVE HIM EVERY TIME:**
+> run the `.bat` → wait ~5 minutes for the CDN → **CLICK THE LINK** → reload the Atlas tab.
+
+The click is the reliable step. Auto-update is a bonus that sometimes beats you to it, and when it
+does the link says *Reinstall* — which is CORRECT and means you already have the build, not that
+something failed. Telling him to skip the click because it once said Reinstall is the error.
+⚠ He can shorten the wait permanently: Tampermonkey dashboard → **Settings → Script Update →
+check interval**, or the dashboard's ↻ to force a check for all scripts.
+⚠ **Diagnose this one by reading the RUNNING version off the panel**, not by asking. `@version` on
+the raw URL vs the version in the panel footer separates "TM has not fetched" from every other mode.
 
 ⚠ **CHECK THE RAW URL YOURSELF BEFORE TELLING THE USER TO CLICK.** This cost four cycles on 2026-08-22.
 

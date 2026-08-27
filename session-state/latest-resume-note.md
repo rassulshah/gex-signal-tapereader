@@ -152,6 +152,13 @@ stopped recording will produce confident numbers about three days in August.
 2. **RENDER EVERY MOCKUP HEADLESS BEFORE SENDING IT**, capture `pageerror`, and run the **pairwise
    bounding-box OVERLAP AUDIT**. In v14.54 it caught two collisions no screenshot explained — one of
    them in the fix for the other. `/tmp/ladshot.js` style, `executablePath:'/opt/pw-browsers/chromium'`.
+3a. ⚠ **AND TELL HIM TO CLICK THE LINK.** Tampermonkey's default update check is ONCE A DAY, so a
+   fresh push does NOT reach his browser on its own in any useful time. The sequence is: run the
+   `.bat` → wait ~5 min for the CDN → **click the Tampermonkey link** → reload Atlas. If the link
+   says *Reinstall* that means auto-update already beat you to it and he HAS the build — it is not a
+   failure. Diagnose by reading the running version off the panel, never by asking.
+   (I told him the opposite on 2026-08-27 after seeing one lucky auto-update, and he sat on a build
+   with a known bug for an hour.) See the FOUR INSTALL FAILURES table in PROJECT-CONSTANTS.
 3. ⚠⚠ **DELIVER EXACTLY ONE FILE.** His words, 2026-08-15 and again 2026-08-27: *"you are supposed
    to just give me an install file."* One `installvNNNN.bat` (dash-free, dot-free — downloads strip
    both), plus the Tampermonkey links as text. **Not a zip+applier pair. Not "here are both". Not

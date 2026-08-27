@@ -430,9 +430,22 @@ assert '-' not in ZIPNAME.replace('.zip','') and '-' not in BATNAME.replace('.ba
 print('install.bat  %d bytes  HDRLINES=%d  %d files  script v%s  companion v%s'
       % (os.path.getsize('install.bat'), n, len(names), V, VC))
 print('')
-print('==== DELIVER EXACTLY ONE FILE ====')
+print('==== DELIVER EXACTLY ONE FILE, WITH THE LINKS BELOW IT ====')
 print('   %s      <- send THIS, and nothing else' % _DELIVER)
 print('   (fallback only, if he reports the .bat failed: %s + %s)' % (ZIPNAME, BATNAME))
+# ⚠⚠ THE LINKS ARE PART OF THE DELIVERY, NOT A SEPARATE STEP. Operator-mandated 2026-08-24 and
+# again 2026-08-27: "make sure you give me tampermonkey links when you give me install files."
+# On 2026-08-27 installv1458.bat went out with NO links and he sat on a build with a known unit bug
+# while Tampermonkey's once-a-day update check had not fired. The links used to print sixty lines
+# further down, in a block easy to scroll past; they print HERE now, welded to the filename.
+print('')
+print('   PASTE THESE WITH IT, EVERY TIME:')
+print('   - Tapereader v%s (changed) - https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js' % V)
+print('   - Companion v%s%s' % (VC, ' - UNCHANGED, do not reinstall' if 'UNCHANGED' in COMPAN_NOTE else ' - CHANGED, update it too'))
+print('   - Then: wait ~5 min (CDN) -> CLICK THE LINK -> reload Atlas. TM auto-update is')
+print('     ONCE A DAY by default, so the click is the reliable step. "Reinstall" means he')
+print('     already has it, which is fine, not a failure.')
+print('')
 print('  (install-v%s.bat still exists as the self-extracting fallback)' % V)
 print('round-trip: tar payload AND zip both byte-identical to the working tree')
 # (v14.3, user-directed: "you must give me the tampermonkey link every time you give me an install

@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-27 · v14.58 · session `115bed5f` — v14.58: the HOD/LOD range was in the wrong instrument
+## 2026-08-27 · v14.58 · session `115bed5f` — v14.58: HOD/LOD range units; the links and chat-history rules made mechanical
 
-_24 operator prompts · transcript `115bed5f-f45c-559e-a15a-46475dd506fc.jsonl`_
+_28 operator prompts · transcript `115bed5f-f45c-559e-a15a-46475dd506fc.jsonl`_
 
 ### THE EXCHANGE
 
@@ -540,6 +540,211 @@ LOD IN — 84% (stood 6h27 · n=433) · toward HOD
 **And that reveals a real bug I shipped: `5.1pts` against an expected `56.5`.** That's not a quiet day — it's a unit error, and it's the exact landmine `PROJECT-CONSTANTS` L-F names.
 
 `closedCandles()` returns the **underlying** book's bars — SPY, around 765 — so the range is 5.1 *SPY* points. I then multiplied by 50, the **ES** contract multiplier. Two different instruments on one row, and the `E` row beside it is in ES points, so the comparison is meaningless.
+To answer your actual question first: **no, you never need to click the Tampermonkey link.** It updates itself from the `@updateURL` — that's why it offered *Reinstall* earlier, it had already pulled the new version. The link only forces the check early. **Reloading the Atlas tab is the step that matters.**
+
+And the section *is* on the app — it renders above ①, and it was working. But your "I don't see it" made me actually read what it was printing, and it was wrong:
+
+```
+A   ...   $256 — 5.1pts
+E   ...   ~$2,825 — 56.5pts
+``` …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 11 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (23:10):** The eleven commits reach GitHub the moment you run `installv1458.bat` — verified it carries 293 files at v14.58 with the unit fix in it. I won't keep restating that; the sandbox has no push route and the `.bat` is it.
+
+**Exactly one tracked file the installer can't carry:** `data/es-1min/EPM26-1min.csv.gz`, 5MB against a 6MB payload cap. That's the file you've now given me twice. Drop it into `C:\Dev\gex-signal-tapereader\data\es-1min\` and your next run commits it — after that it's safe permanently.
+
+Where things stand for tomorrow, shortest version:
+
+- **Run `installv1458.bat`, reload** — the ⓪a section should read ~51pts / ~$2,550 for today, not 5.1pts.
+- **After 15:00 CT** — `__gptsDebug.lastBook()` should flip to `serving:true`. First real test of the close-of-session book.
+- **Three things ⓪a still owes:** feature enrollment (it records nothing and is scored by nothing, against your own mandate), your definitions for BOP/WICK/W.END/WICK%/MUD, and VWAP which doesn't exist in the codebase.
+- **Still unexplained:** the feature records collapsing — 3,822 on 08-20 against 15 today. That gates any study we'd run on the gamma side.
+
+**OPERATOR:**
+> doesnt' tamper moneky automatically update. i did the install  byt its not updating to the lates tversion
+
+**me (23:15):** I was wrong earlier and I should correct it plainly: **Tampermonkey auto-updates on a schedule, not immediately.** Its default check interval is once a day. Earlier tonight it happened to have already run when you clicked — I generalised from that one lucky timing and told you clicking is never needed. That was wrong, and it's why you're stuck now.
+
+Your install worked fine. Every layer below Tampermonkey is correct:
+
+```
+GitHub   v14.58   (2f7cbe1 pushed)
+raw CDN  v14.58   serving it now
+your TM  v14.57   ← hasn't run its update check yet
+```
+
+You're still on 14.57 — the panel is showing `$255 — 5.1pts`, the exact bug 14.58 fixes.
+
+**So yes, click the link this time:**
+
+https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+
+It'll say **Update** now, not Reinstall, because the remote is genuinely newer than what you have. Then reload Atlas and the range should read roughly **51pts / $2,550**.
+
+If you'd rather not click a link after every build, Tampermonkey's dashboard has a **Settings → Script Update → Check interval** you can set to hourly, and the dashboard's ↻ button forces a check for all scripts on demand. Either removes the wait.
+
+The rule I should have given you, and will use from now on: **run the `.bat`, wait ~5 minutes for the CDN, then click the link and reload.** The click is the reliable step; auto-update is a bonus that sometimes beats you to it.
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 11 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (23:15):** Content-wise everything is on GitHub — the panel code is byte-identical, and the eleven commits are just parallel history from my sandbox. **Only the corpus differs.**
+
+One thing worth fixing while it's fresh, because my wrong advice came from a gap in the docs:
+Recorded. The `THREE INSTALL FAILURES` table in `PROJECT-CONSTANTS` had no row for *"GitHub new, raw new, Tampermonkey still old"* — so nothing in the docs contradicted my bad advice. It has four rows now, and the resume note carries the sequence so the next session gives you the right instruction from the start:
+
+**run the `.bat` → wait ~5 min → click the link → reload.**
+
+And a *Reinstall* prompt means auto-update won the race and you already have the build — not that something broke.
+
+Everything is on GitHub except the corpus (verified: panel code byte-identical). The one action left on your side is clicking that link to get onto v14.58, and dropping the ES file into `data\es-1min\` so it stops being the only thing that can't survive a session.
+
+**OPERATOR:**
+> in that case make sureyou give me tampermonkey links whenyou give me install filse. also make sure you are saving chat history for next context etc...
+
+**me (23:17):** You're right, and I dropped it on the last one — `installv1458.bat` went out with no links, which is exactly how you ended up stuck on 14.57. Making both mechanical rather than something I remember.
+
+### DECISIONS
+
+- **HE CAUGHT THE UNIT BUG ON THE FACE.** v14.57 printed `$255 - 5.1pts` beside an expected
+  `~$2,825 - 56.5pts`. `closedCandles()` returns the UNDERLYING book (SPY ~765), so the range was in
+  SPY points and was then multiplied by the ES contract multiplier. Failure pattern #1 and landmine
+  L-F in one line, written in the same build that quoted both of them. **Forty assertions passed over
+  it** because every synthetic session used a scale I chose - the harness shared the code\'s wrong
+  assumption. The ratio is now IN the harness.
+- **A FOURTH INSTALL FAILURE MODE, AND THE WRONG ADVICE WAS MINE.** Tampermonkey auto-updates on its
+  own schedule - DEFAULT ONCE A DAY. It happened to have already run when he clicked earlier, so the
+  link said *Reinstall*; I generalised from that one observation and told him **"no, you never need
+  to click the Tampermonkey link."** An hour later GitHub and the CDN both served v14.58 while his
+  panel ran v14.57 and still showed the bug that build fixed. The three-failure table had no row for
+  "GitHub new, raw new, TM still old", so nothing in the docs contradicted me. It has four rows now.
+- **THE LINKS ARE PART OF THE DELIVERY, NOT A SEPARATE STEP.** `installv1458.bat` went out with no
+  links at all. They used to print sixty lines below the filename in the builder output, in a block
+  easy to scroll past; they now print INSIDE the delivery block, welded to the filename, and
+  `test_delivery.js` d2f-d2l fail the build if they move out again or if the CLICK instruction is
+  dropped. Both mutation-tested.
+- **THE RULE TO GIVE HIM EVERY TIME:** run the .bat -> wait ~5 min for the CDN -> **CLICK THE LINK**
+  -> reload Atlas. A *Reinstall* prompt means auto-update won the race and he HAS the build.
+  Diagnose by reading the running version off the panel, never by asking him.
+
+### SHIPPED
+
+**v14.58** - the HOD/LOD range converted to CHART space before the ES multiplier; no dollar figure
+at all on a non-futures chart. test_hodlod 40 -> 42 asserts, both new ones mutation-tested.
+
+**Process, all mechanical rather than remembered:** the Tampermonkey links welded into the builder\'s
+delivery block; the FOUR INSTALL FAILURES table in PROJECT-CONSTANTS; the click rule in the config,
+the checklist and the resume note; `test_delivery.js` 21 -> 28 asserts.
+Suite 118 green / 6 documented baseline reds.
+
+### OPEN AT CLOSE
+
+1. **⚠ HE IS ON v14.57 AND MUST CLICK THE LINK TO REACH v14.58.** GitHub and the CDN both serve
+   14.58; only Tampermonkey is behind. Confirm the panel footer reads 14.58 and the range reads
+   ~51pts / ~$2,550 rather than 5.1pts.
+2. **⚠ THE CORPUS MUST REACH GITHUB FROM HIS MACHINE** - `data/es-1min/EPM26-1min.csv.gz`, 5MB
+   against a 6MB payload cap, the ONLY tracked file the installer cannot carry. Supplied twice,
+   lost once.
+3. **⓪a IS NOT ENROLLED IN FEATURES** - records nothing, scored by nothing, against the 2026-08-17
+   mandate. The next thing that section needs.
+4. **BOP/WICK/W.END/WICK%/MUD need his definitions**; VWAP does not exist in the codebase.
+5. Tomorrow after 15:00 CT: confirm `__gptsDebug.lastBook()` flips to `serving:true`.
+6. **⚠ THE FEATURE RECORDS ARE COLLAPSING** - 3,822 on 08-20 vs 15 on 08-27. Gates any study.
+7. **ITEM 18 / Yahoo**, deadline **2026-09-16**.
+
+### COMMITS THIS CONTEXT
+
+```
+6954fdc a FOURTH install failure mode, and the wrong advice was mine
+f186331 v14.58: the HOD/LOD range measured SPY and priced ES
+9d42cf5 installer: carry the render/overlap-audit PNGs; and the snapshot rule was never real
+6b0b618 installer: ship the HOD/LOD evidence, not just the code that reads it
+5ad4d55 v14.57: the HOD/LOD section, built on measured rates
+0f5e339 data: the ES 1-min corpus, SECOND supply - and the study that reproduces the mockup
+61f9325 correct the record: the HOD/LOD mockups were never lost
+19dd8ff untrack install.bat and v10.js - both were gitignored AND tracked
+9691627 v14.56: the EM label moves, not the crown - the mockup already said so
+abfa060 v14.56: the chute nudge - EM pills and crowns share one column
+6ee7f6a v14.55: the close-of-session book, and the one-file delivery rule
+1775903 v14.54: the ladder re-laid to the approved mockup, plus the one-file delivery rule
+```
+
+---
+
+<!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-27 · v14.58 · session `115bed5f` — v14.58: the HOD/LOD range was in the wrong instrument
+**OPERATOR:**
+> oh my .. i think i messed up and closed the prior session.. i was working on my project can you remember ?
+## GEX LOADED — v14.53
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> did you read the chat history .. do you know where we were at
+> "well lets implement the fix for all of the inssues incldueing in place.. have you compleeted the load gex and have you ensured the chat history is saved..."
+**OPERATOR:**
+> just give me the build and the tampermnonkey link
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> make sure this instruction is somewhere when load gex happens so the next context knows i am supposed to get 1 install file. also are you saving chat history like you are supposed to . the instructions should indicate that
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> continue.. and why are you taking so long
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> reloaded . please check
+**OPERATOR:**
+> first show me the mockups of how this is supposed to look
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> @"/root/.claude/uploads/115bed5f-f45c-559e-a15a-46475dd506fc/b2f83551-mockupladderv11_6.html" [files attached]
+> 
+> this was the latest mockup.
+**OPERATOR:**
+> did you get the mockup
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 4 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> tamper monky is showing me the link to reinstall instead of update
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> i ran it but it still says reinstall
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 5 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> there's alot missing so i really cant say much .. also check the mockups and your logs because we were discussing a hod lod feture and i gave you data and it needs to be built
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 6 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> @"/root/.claude/uploads/115bed5f-f45c-559e-a15a-46475dd506fc/8078c1c7-ES_TestingData.txt" [files attached]
+> 
+> make sure you save it in github and dont forget next time. im surprised you didnt' put it there. i have given it to you before.   now build the feature
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 9 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> do i need to click on a tampermonkey link
 
 ### DECISIONS
 
@@ -554,11 +759,13 @@ LOD IN — 84% (stood 6h27 · n=433) · toward HOD
 - **NO DOLLARS ON A NON-FUTURES CHART.** `rngUsd` is null when the chart is not futures, because the
   $50 multiplier describes ES and nothing else. Printing it anyway is the same error one step down.
 
+
 ### SHIPPED
 
 **v14.58** - the HOD/LOD range converted to CHART space before the multiplier; no dollar figure at
 all when the chart is not futures. test_hodlod 40 -> 42 asserts, both new ones mutation-tested.
 Suite 118 green / 6 documented baseline reds.
+
 
 ### OPEN AT CLOSE
 
@@ -572,26 +779,8 @@ Suite 118 green / 6 documented baseline reds.
 5. **⚠ THE FEATURE RECORDS ARE COLLAPSING** - 3,822 on 08-20 vs 15 on 08-27. Gates any study.
 6. **ITEM 18 / Yahoo**, deadline **2026-09-16**.
 
-### COMMITS THIS CONTEXT
 
-```
-9d42cf5 installer: carry the render/overlap-audit PNGs; and the snapshot rule was never real
-6b0b618 installer: ship the HOD/LOD evidence, not just the code that reads it
-5ad4d55 v14.57: the HOD/LOD section, built on measured rates
-0f5e339 data: the ES 1-min corpus, SECOND supply - and the study that reproduces the mockup
-61f9325 correct the record: the HOD/LOD mockups were never lost
-19dd8ff untrack install.bat and v10.js - both were gitignored AND tracked
-9691627 v14.56: the EM label moves, not the crown - the mockup already said so
-abfa060 v14.56: the chute nudge - EM pills and crowns share one column
-6ee7f6a v14.55: the close-of-session book, and the one-file delivery rule
-1775903 v14.54: the ladder re-laid to the approved mockup, plus the one-file delivery rule
-fd20a09 data: daily export 27-Thu-08
-4504238 --help
-```
-
----
-
-<!-- EARLIER-CONTEXTS -->
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 
