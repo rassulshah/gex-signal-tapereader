@@ -28,6 +28,12 @@ let NOWSEC = 15*3600;
 global.ctNowSecOfDay = () => NOWSEC;
 global.inReplay = () => false;
 global.showingStaleBook = () => false;
+// the underlying->chart converter. closedCandles() returns the UNDERLYING book (SPY ~765); the
+// section's E row is in CHART points (ES). Without this the two halves of one row are different
+// instruments — which is exactly how v14.57 shipped "5.1pts" beside an expected "56.5pts".
+let FUT = true, RR = 10.04;
+global.dispIsFut = () => FUT;
+global.dispR = () => RR;
 let CANDLES = [];
 global.closedCandles = () => CANDLES;
 eval(ex('hlClock')); eval(ex('hlDur')); eval(ex('hlTier')); eval(ex('hodLod'));
@@ -80,8 +86,19 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   ok(D.second === 'HOD', 'h4 ...and the HOD is the other side');
   ok(Math.round(D.took) === 10, 'h5 TOOK is measured from the RTH OPEN, not from the first bar', D.took);
   ok(Math.round(D.gap) === 190, 'h6 HL GAP is the distance between the two extremes', D.gap);
-  ok(Math.abs(D.rngPts - 100) < 1e-9, 'h7 the range is HOD-LOD in points', D.rngPts);
-  ok(Math.abs(D.rngUsd - 5000) < 1e-9, 'h8 ...and in dollars at $50/pt, the ES multiplier', D.rngUsd);
+  // ⚠⚠ THE UNIT BUG v14.57 SHIPPED. closedCandles() is the UNDERLYING book; the range must be
+  // converted to CHART space BEFORE the ES multiplier, or points and dollars describe an instrument
+  // the number never measured — and the E row beside it is in chart points.
+  ok(Math.abs(D.rngPts - 100*RR) < 1e-6,
+     'h7 the range is converted to CHART points, not left in underlying points', D.rngPts);
+  ok(Math.abs(D.rngUsd - 100*RR*50) < 1e-6,
+     'h8 ...and the $50 ES multiplier is applied to CHART points, never to underlying ones', D.rngUsd);
+  { FUT = false;
+    const F = hodLod('SPY');
+    ok(Math.abs(F.rngPts - 100) < 1e-9, 'h8b on a non-futures chart the ratio is 1', F.rngPts);
+    ok(F.rngUsd === null,
+       'h8c ...and NO dollar figure is printed, because the ES multiplier does not describe it', F.rngUsd);
+    FUT = true; }
   // ⚠ STOOD IS MEASURED TO NOW, NOT TO THE OTHER EXTREME. The ladder asks how long the standing low
   // has survived up to this moment; measuring to the HOD would freeze it and the rung would stop
   // advancing while the low went on holding.

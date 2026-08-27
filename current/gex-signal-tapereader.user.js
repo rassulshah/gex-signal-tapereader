@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.57
+// @version    14.58
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.57';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.58';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -21224,6 +21224,17 @@ function hodLod(sym){
       lastT=b.so;
     }
     if(hi==null||lo==null||!n){ out.why='no RTH bars yet'; return out; }
+    // ⚠⚠ UNITS. THIS SHIPPED WRONG IN v14.57 AND THE OPERATOR SAW IT: "$256 — 5.1pts" against an
+    // expected "~$2,825 — 56.5pts".
+    // `closedCandles()` returns the UNDERLYING book's bars — SPY, ~765 — so hi-lo is in SPY points.
+    // v14.57 multiplied that by ES_USD_PER_PT, the ES contract multiplier, producing dollars for an
+    // instrument the number never described. And the E row beside it is in ES points, so the two
+    // halves of the same row were on different scales: PROJECT-CONSTANTS failure pattern #1, a value
+    // shown under a label that implies a different instrument, with nothing throwing.
+    // `rr` is the live underlying->chart ratio the whole panel converts with (~10.04 for ES/SPY).
+    // ⚠ The TIMES need no conversion — a clock is a clock. Only the PRICES do.
+    var rr=1; try{ rr=(dispIsFut() && dispR()>0) ? dispR() : 1; }catch(eRR){ rr=1; }
+    out.scale=rr; out.isFut=(rr!==1);
     var nowSec=ctNowSecOfDay();
     // ⚠ in a REPLAY or a frozen book the wall clock is not the session clock; use the last bar.
     var clock=(inReplay()||showingStaleBook())?lastT:Math.max(lastT, Math.min(nowSec, mul(15,3600)));
@@ -21234,7 +21245,10 @@ function hodLod(sym){
     out.second=firstLow?'HOD':'LOD'; out.secondT=firstLow?hiT:loT;
     out.took=Math.max(0,(out.firstT-openSec)/60);
     out.gap=Math.abs(hiT-loT)/60;
-    out.rngPts=hi-lo; out.rngUsd=(hi-lo)*ES_USD_PER_PT;
+    // converted to CHART space before the multiplier, so points and dollars describe the same
+    // instrument the E row does. On a non-futures chart rr is 1 and the multiplier does not apply.
+    out.rngPts=(hi-lo)*rr;
+    out.rngUsd=out.isFut ? out.rngPts*ES_USD_PER_PT : null;
     // THE STANDING EXTREMITY is the one that printed FIRST and has not been replaced since — it is
     // the one the ladder is about. How long it has stood is measured to NOW, not to the other one.
     out.stood=Math.max(0,(clock-out.firstT)/60);
@@ -25039,7 +25053,7 @@ function secDay(sym){
       hlDur(D.took),
       (D.secondT>D.firstT && D.secondT<=D.clock) ? (D.second+' '+hlClock(D.secondT)) : (D.second+' pend.'),
       hlDur(D.gap)+((D.secondT>=D.clock)?'\u2026':''),
-      '$'+Math.round(D.rngUsd).toLocaleString()+' \u2014 '+D.rngPts.toFixed(1)+'pts' ]);
+      (D.rngUsd!=null?('$'+Math.round(D.rngUsd).toLocaleString()+' \u2014 '):'')+D.rngPts.toFixed(1)+'pts' ]);
     h+=row('e','E',[
       '\u2014 '+hlClock(base.firstClock),
       '~'+hlDur(base.tookMin),

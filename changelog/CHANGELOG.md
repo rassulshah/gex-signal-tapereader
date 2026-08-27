@@ -1,3 +1,31 @@
+## v14.58 — the HOD/LOD range was measuring one instrument and pricing another
+
+**The operator caught it on the face, immediately, the way he always does.** v14.57 printed:
+
+    A   ...   $256 — 5.1pts
+    E   ...   ~$2,825 — 56.5pts (41.8–80.2)
+
+`closedCandles()` returns the **UNDERLYING** book's bars — SPY, around 765 — so `hi-lo` was 5.1 SPY
+points. v14.57 then multiplied that by `ES_USD_PER_PT`, the **ES** contract multiplier, producing a
+dollar figure for an instrument the number never described. And the `E` row directly beneath it is in
+ES points, so the two halves of one row were on different scales.
+
+That is failure pattern #1 — *a value shown under a label implying a different instrument, with
+nothing throwing* — and landmine L-F, *name both units out loud before comparing two numbers*, in a
+single line of code I wrote after quoting both of them in the same build.
+
+**Fixed:** the range is converted to CHART space with the live underlying→chart ratio (`dispR()`,
+~10.04 for ES/SPY) BEFORE the multiplier. ⚠ The TIMES needed no conversion — a clock is a clock.
+⚠ And `rngUsd` is now **null** on a non-futures chart rather than a wrong number: the $50 multiplier
+describes ES and nothing else, so the section prints points alone there.
+
+⚠⚠ **FORTY ASSERTIONS PASSED OVER THIS.** Every one used a synthetic session whose scale I chose,
+so the harness and the code shared the same wrong assumption. The fix puts the ratio INTO the harness
+so the two halves of the row can never silently be different instruments again — and both new
+assertions are mutation-tested, including re-introducing the exact v14.57 line.
+
+test_hodlod 40 → 42 asserts. Suite 118 green, 6 documented baseline reds.
+
 ## v14.57 — ⓪a DAY, HOD/LOD: built, on measured rates, from a corpus the operator had to send twice
 
 > "make sure you save it in github and dont forget next time. im surprised you didnt put it there.

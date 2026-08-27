@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-27 · v14.57 · session `115bed5f` — v14.57: the HOD/LOD section built, on a corpus supplied twice
+## 2026-08-27 · v14.58 · session `115bed5f` — v14.58: the HOD/LOD range was in the wrong instrument
 
-_22 operator prompts · transcript `115bed5f-f45c-559e-a15a-46475dd506fc.jsonl`_
+_24 operator prompts · transcript `115bed5f-f45c-559e-a15a-46475dd506fc.jsonl`_
 
 ### THE EXCHANGE
 
@@ -502,6 +502,159 @@ One honest scope call before I write: your mockup's `BOP / WICK / W.END / WICK% 
 Two real regressions, not chores. The second one matters — I may have changed IB30's behaviour:
 Found it — and it's the swallowed-ReferenceError shape (pattern #5): I declared `IB60_MIN_S` *after* the function that uses it. It hoists in production, but it means the constant lives nowhere near its use.
 Renders clean — 39 elements, zero overlaps, nothing past the panel edge, no page errors. Running the suite and saving.
+The payload check caught a build-breaker: **`test_hodlod.js` reads `data/es-1min/BASERATES.json`, and that file isn't shipping** — the suite would go red on …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 9 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (23:05):** Concrete answer, and it's mostly good news: **running `installv1457.bat` puts 683 of 693 tracked files on GitHub.** Ten don't make it, and two of those groups are worth fixing right now.
+Use this `installv1457.bat` rather than the one a few messages up — same v14.57 panel, but the payload now carries two things it was silently dropping.
+
+I chased the "unpushed" warning down to actual numbers instead of repeating myself, and it found something:
+
+**No build snapshot has ever reached GitHub.** `git ls-tree origin/main -- session-state/snapshots/` returns nothing. The save procedure has mandated a per-build snapshot for weeks; the payload excludes that directory (rightly — 1.6MB a build against a 6MB cap) and the cloud can't push, so every one has died with its sandbox. That's actually fine and the docs now say so: `current/` is committed every build, so **git history already is the snapshot** — `git show <sha>:current/gex-signal-tapereader.user.js` recovers any version exactly. What was worth fixing is that a rule nobody could satisfy was sitting in the checklist looking satisfied.
+
+**The render/overlap-audit PNGs were also evaporating** — 120KB against a 6MB cap, no size reason to exclude them. That audit is mandatory before I send you a mockup and has caught four real collisions in two days, including one inside my own fix. Its evidence now ships.
+
+After this, exactly **one** thing remains outside GitHub: `data/es-1min/EPM26-1min.csv.gz`, 5MB against the cap. That one genuinely can't ride the installer — drop the file into `C:\Dev\gex-signal-tapereader\data\es-1min\` once and your next run carries it.
+
+**OPERATOR:**
+> do i need to click on a tampermonkey link
+
+**me (23:07):** Short answer: **no.** Tampermonkey updates itself from the `@updateURL` — that's exactly why it said *Reinstall* earlier, it had already pulled the new version on its own before you clicked.
+
+The link is only a way to *force* the check if you don't want to wait. What you actually need is the reload.
+
+Let me check where you are right now:
+It **is** there — but it's rendering its refusal branch, not the section. Let me read what it's actually saying:
+It **is** on the app — you're looking at it, but scroll up in the panel; it renders above ① . Here's what it's showing:
+
+```
+⓪a DAY — HOD/LOD · 15:00 CT · 284d ES 1-min
+A   LOD 08:33   3m    HOD 12:09   3h36   $256 — 5.1pts
+E   — 08:51    ~21m   13:25      ~3h58   ~$2,825 — 56.5pts (41.8–80.2)
+LOD IN — 84% (stood 6h27 · n=433) · toward HOD
+```
+
+**And that reveals a real bug I shipped: `5.1pts` against an expected `56.5`.** That's not a quiet day — it's a unit error, and it's the exact landmine `PROJECT-CONSTANTS` L-F names.
+
+`closedCandles()` returns the **underlying** book's bars — SPY, around 765 — so the range is 5.1 *SPY* points. I then multiplied by 50, the **ES** contract multiplier. Two different instruments on one row, and the `E` row beside it is in ES points, so the comparison is meaningless.
+
+### DECISIONS
+
+- **THE OPERATOR CAUGHT THE UNIT BUG BY LOOKING AT THE FACE.** v14.57 printed `$256 - 5.1pts`
+  beside an expected `~$2,825 - 56.5pts`. `closedCandles()` returns the UNDERLYING book (SPY ~765),
+  so the range was in SPY points and was then multiplied by the ES contract multiplier - dollars for
+  an instrument the number never described, sitting next to an E row in ES points. Failure pattern #1
+  and landmine L-F in one line, and nothing threw.
+- **HE SAW IT BEFORE ANY TEST DID**, which is the pattern this project keeps recording: 40 asserts
+  passed over it because every one used a synthetic session whose scale I chose. The fix adds the
+  ratio to the harness so the two halves of the row can never be different instruments again.
+- **NO DOLLARS ON A NON-FUTURES CHART.** `rngUsd` is null when the chart is not futures, because the
+  $50 multiplier describes ES and nothing else. Printing it anyway is the same error one step down.
+
+### SHIPPED
+
+**v14.58** - the HOD/LOD range converted to CHART space before the multiplier; no dollar figure at
+all when the chart is not futures. test_hodlod 40 -> 42 asserts, both new ones mutation-tested.
+Suite 118 green / 6 documented baseline reds.
+
+### OPEN AT CLOSE
+
+1. **⚠ THE CORPUS MUST REACH GITHUB FROM HIS MACHINE** - `data/es-1min/EPM26-1min.csv.gz`, 5MB
+   against a 6MB payload cap, the ONLY tracked file the installer cannot carry. It has now been
+   supplied twice and lost once. Confirm it landed.
+2. **BOP/WICK/W.END/WICK%/MUD need his definitions**; VWAP does not exist in the codebase.
+3. **⓪a IS NOT ENROLLED IN FEATURES** - it records nothing and is scored by nothing, against the
+   2026-08-17 mandate. Next thing it needs.
+4. Tomorrow after 15:00 CT: confirm `__gptsDebug.lastBook()` flips to `serving:true`.
+5. **⚠ THE FEATURE RECORDS ARE COLLAPSING** - 3,822 on 08-20 vs 15 on 08-27. Gates any study.
+6. **ITEM 18 / Yahoo**, deadline **2026-09-16**.
+
+### COMMITS THIS CONTEXT
+
+```
+9d42cf5 installer: carry the render/overlap-audit PNGs; and the snapshot rule was never real
+6b0b618 installer: ship the HOD/LOD evidence, not just the code that reads it
+5ad4d55 v14.57: the HOD/LOD section, built on measured rates
+0f5e339 data: the ES 1-min corpus, SECOND supply - and the study that reproduces the mockup
+61f9325 correct the record: the HOD/LOD mockups were never lost
+19dd8ff untrack install.bat and v10.js - both were gitignored AND tracked
+9691627 v14.56: the EM label moves, not the crown - the mockup already said so
+abfa060 v14.56: the chute nudge - EM pills and crowns share one column
+6ee7f6a v14.55: the close-of-session book, and the one-file delivery rule
+1775903 v14.54: the ladder re-laid to the approved mockup, plus the one-file delivery rule
+fd20a09 data: daily export 27-Thu-08
+4504238 --help
+```
+
+---
+
+<!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-27 · v14.57 · session `115bed5f` — v14.57: the HOD/LOD section built, on a corpus supplied twice
+**OPERATOR:**
+> oh my .. i think i messed up and closed the prior session.. i was working on my project can you remember ?
+## GEX LOADED — v14.53
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> did you read the chat history .. do you know where we were at
+> "well lets implement the fix for all of the inssues incldueing in place.. have you compleeted the load gex and have you ensured the chat history is saved..."
+**OPERATOR:**
+> just give me the build and the tampermnonkey link
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> make sure this instruction is somewhere when load gex happens so the next context knows i am supposed to get 1 install file. also are you saving chat history like you are supposed to . the instructions should indicate that
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> continue.. and why are you taking so long
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> reloaded . please check
+**OPERATOR:**
+> first show me the mockups of how this is supposed to look
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> @"/root/.claude/uploads/115bed5f-f45c-559e-a15a-46475dd506fc/b2f83551-mockupladderv11_6.html" [files attached]
+> 
+> this was the latest mockup.
+**OPERATOR:**
+> did you get the mockup
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 4 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> tamper monky is showing me the link to reinstall instead of update
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> i ran it but it still says reinstall
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 5 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> there's alot missing so i really cant say much .. also check the mockups and your logs because we were discussing a hod lod feture and i gave you data and it needs to be built
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 6 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> @"/root/.claude/uploads/115bed5f-f45c-559e-a15a-46475dd506fc/8078c1c7-ES_TestingData.txt" [files attached]
+> 
+> make sure you save it in github and dont forget next time. im surprised you didnt' put it there. i have given it to you before.   now build the feature
 
 ### DECISIONS
 
@@ -527,6 +680,7 @@ Renders clean — 39 elements, zero overlaps, nothing past the panel edge, no pa
   "the longer it stands, the likelier it is the day\'s". `test_hodlod` b4 fails the build if the
   measured rates ever stop increasing.
 
+
 ### SHIPPED
 
 **v14.57** — ⓪a DAY / HOD/LOD: the model (`hodLod`), the baked measured base rates, the survival
@@ -538,6 +692,7 @@ Rendered from the real `secDay()`: 39 elements, 0 overlaps, 0 page errors.
 
 Earlier in this context: v14.54 (ladder re-laid, LAD_ROCW corrected), v14.55 (close-of-session book,
 one-file delivery rule), v14.56 (the chute nudge — EM label moves, not the crown).
+
 
 ### OPEN AT CLOSE
 
@@ -553,26 +708,8 @@ one-file delivery rule), v14.56 (the chute nudge — EM label moves, not the cro
 7. ⓪a is NOT yet enrolled in FEATURES — the enrollment mandate says no feature ships un-enrolled.
    It records nothing and is scored by nothing. That is the next thing it needs.
 
-### COMMITS THIS CONTEXT
 
-```
-0f5e339 data: the ES 1-min corpus, SECOND supply - and the study that reproduces the mockup
-61f9325 correct the record: the HOD/LOD mockups were never lost
-19dd8ff untrack install.bat and v10.js - both were gitignored AND tracked
-9691627 v14.56: the EM label moves, not the crown - the mockup already said so
-abfa060 v14.56: the chute nudge - EM pills and crowns share one column
-6ee7f6a v14.55: the close-of-session book, and the one-file delivery rule
-1775903 v14.54: the ladder re-laid to the approved mockup, plus the one-file delivery rule
-fd20a09 data: daily export 27-Thu-08
-4504238 --help
-0b1dcad v14.52: FlexLevels CSV written in place so IRT stops needing a refresh
-1936918 v14.51: export refuses empty days (it was losing whole sessions); full session handoff and handoff contract
-32d1347 v14.50: seven review defects fixed incl. ATTRACTING always-true and the strike-step regression; taps complete on leaving
-```
-
----
-
-<!-- EARLIER-CONTEXTS -->
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 
