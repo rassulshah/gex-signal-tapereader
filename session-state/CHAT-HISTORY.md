@@ -15,309 +15,201 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-27 · v14.53 · session `977e28e4` — v14.53: the IRT permission fix, and the load-procedure repairs
+## 2026-08-27 · v14.54 · session `115bed5f` — v14.54: the ladder re-laid to the approved mockup; v14.52 verified
 
-_16 operator prompts · transcript `977e28e4-8047-5057-b36d-d3d9bb263dcb.jsonl`_
+_4 operator prompts · transcript `115bed5f-f45c-559e-a15a-46475dd506fc.jsonl`_
 
 ### THE EXCHANGE
 
 **OPERATOR:**
+> oh my .. i think i messed up and closed the prior session.. i was working on my project can you remember ?
+
+**me (21:45):** Yes — I've got it back. Cloned fresh from git (full clone, per the rule that was fixed yesterday) and read the handoff chain.
+
+## GEX LOADED — v14.53
+
+**1 · Files** `.gex-config.json` · `latest-resume-note.md` (full) · `CHAT-HISTORY.md` CURRENT-CONTEXT (full) · `LOCKED-ITEMS.md` · `PROJECT-CONSTANTS.md` · `DECISIONS.md` D-1→D-16 · `INSIDERFINANCE.md` · `SKYLIT-FEEDS.md` · `YAHOO-PIPELINE.md` · `ISSUES-NEXT-BUILD.md` · `hodlod-v2-SPEC.md` · `SOURCE-OF-TRUTH.md` · all 11 Academy articles + 00-INDEX · CHANGELOG head (v14.53→v14.50) · all 9 day-files.
+
+⚠ **Code read: the full function map (751 module-scope functions, every section banner) plus the ladder/rail render region in full — not the whole 24,784 lines this session.** I'll read any region in full before we touch it; say the word if you want the whole file first.
+
+**2 · Architecture** L0 feed hooks (`installFeedObserver` patches `window.fetch`/XHR in *page* context — `@grant none` is load-bearing) → `extractWalls`, `findTapeTable`/`validKingRow`, `velHarvest` fibers → L1 `STATE`/`LASTFEED`/`VEL`/`PEAK`/`TAPS` → L2 `trendVerdict` 5-state SMA-50 (TREND_DOM 15/20, reversal 11) → L3 `biasVotes` (SMA owns direction, DRIFT gates), `directionGrade` → L4 `legEngine`/`deflTrigger`/`inPlayZone`/`tradeFrame` → L5 recorder FEATURES→IDB→`buildDayExport`/`irtExportNow` → L6–7 one `render()` → `panelV3`. Final line `})();`.
+
+**3 · Platform** Skylit = FLOW (`|net|≡v`, no call/put split, so no Call Wall). InsiderFinance = STRUCTURE (`GEX=γ×OI×100×spot²×0.01`, puts negative). Scale chain k → disp (×~1.0023) → und (×~0.0998). Never compare across books, windows or scales.
+
+**4 · Doctrine constants** Taps **80/66/33** + DECAYING = quiet death, no interaction · node gate **FRESH? GROWING?** both or find another level · REAL grows / HEDGE …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+
+**me (21:45):** Working tree is clean — the only change was `v10.js`, which I'd overwritten as the documented pre-test step (`cp current/… v10.js`), and I've restored it. Nothing to commit: the sandbox can't push to this repo anyway (github.com is blocked at the proxy — the installer pushes from your machine).
+
+But restoring it surfaced something real:
+
+**`v10.js` at HEAD is v11.48 — 42 versions and 6,555 lines behind `current/`.**
+
+```
+v10.js       @version 11.48    18,229 lines
+current/     @version 14.53    24,784 lines
+```
+
+The test harness reads `./v10.js`, not `current/`. My 115 green / 6 red is trustworthy because I ran the `cp` first, as `PROJECT-CONSTANTS.md` mandates — but **anyone who forgets that step runs 121 test files against v11.48 and gets a green suite that says nothing about the shipped panel.** That is exactly the "stale-but-green is more dangerous than red" hazard the constants file names, sitting in the repo as a committed file rather than a procedure everyone has to remember.
+
+Two ways to close it, and it's your call which — the stale copy rides out on the next installer push either way:
+
+- **Delete `v10.js` from the repo** and have `run-tests.sh` do the `cp` itself, so the harness cannot read a stale file because there isn't one.
+- **Keep it and refresh it in the same commit as every build**, with a test that fails when its `GPTS_VERSION` ≠ `current/`'s — the same mechanism `test_chat_history.js` already uses.
+
+I'd take the first: a generated artefact that can drift is the failure pattern in `PROJECT-CONSTANTS.md` §9, and deleting it removes the drift rather than policing it.
+
+That's a side finding, not a change of subject — my question from a moment ago still stands: **Yahoo/item 18 (deadline 2026-09-16) next, or the study over the three usable day-files?**
+
+**OPERATOR:**
+> did you read the chat history .. do you know where we were at
+
+**me (21:48):** Yes — the CURRENT-CONTEXT entry, in full. Here's where we stopped, in your words rather than my summary.
+
+**Your last instruction was:**
+
+> "well lets implement the fix for all of the inssues incldueing in place.. have you compleeted the load gex and have you ensured the chat history is saved..."
+
+**Only half of it shipped.** v14.53 was the IRT permission fix and nothing else. The layout half — which you'd raised one prompt earlier with a screenshot, *"did you also implement the fix related to the layout changes . see pic i think they maybe in the same fix as the in place fix"* — did **not** ship, and the reason it didn't is the thing worth carrying forward:
+
+I first told you five mockup items were unbuilt (rolls left of price, %King on the bar, kings as pills in the chute, EH/EL pills, STATE column). Then I measured the live panel and **corrected myself** — `g3ldst` 12, `g3ldtap` 6, `g3ldroc` 12 were all in the DOM and rendering. They weren't missing, they were **scrolled off the right edge**. The ladder is wider than the panel. So the build was refused deliberately: a width problem needs a decision from you and a rendered mockup, not render surgery. I re-measured it today — 632 wide in a 454 panel, **178px clipped**, still true.
+
+**Two other things from that session I'm carrying:**
+
+Before any of the ladder work, you'd said *"so we can move toward implementing the hod lod feature"* — that was the direction you were heading, and it's why you re-supplied the mockups: *"i gave you the mockups for you to get upto date . make sure you save to repo so you can refer to it."* The spec survived as `mockups/hodlod-v2-SPEC.md`. **The approved PNG and the 284-session ES corpus did not** — that commit never reached GitHub.
+
+And you were right three times about Yahoo while I said t …[trimmed]
+
+**OPERATOR:**
+> just give me the build and the tampermnonkey link
+
+**me (21:52):** Units settled by measurement, not by comment — on your live tape just now:
+
+```
+SPXW King 7690   kingKd 12,680        ($K, thousands)
+velocity.cur    −12,680,083.27        (dollars)
+                 kingKd × 1000 == |cur|  ✓
+```
+
+So `d15` is dollars and the King's mass is `kingKd × 1000`. That's the scale the delta profile needs, and it's the exact unit trap `PROJECT-CONSTANTS` L-F warns about. Building now.
+The mockup answers the width question — but laying it over the shipped code surfaced the real constraint, so let me state it before I write anything:
+
+**Your panel body is 454px. The mockup you approved is drawn at 544px.** There is no arrangement of nine columns of 8.4px text that fits 454. So the build compacts the ladder as far as the mockup allows (632 → ~574) and the last stretch is one drag of the panel edge, not code.
+
+Building the compaction now.
+The overlap audit earned its keep — it found two real defects, one of which explains an old mystery:
+
+### COMMITS THIS CONTEXT
+
+```
+fd20a09 data: daily export 27-Thu-08
+4504238 --help
+0b1dcad v14.52: FlexLevels CSV written in place so IRT stops needing a refresh
+1936918 v14.51: export refuses empty days (it was losing whole sessions); full session handoff and handoff contract
+32d1347 v14.50: seven review defects fixed incl. ATTRACTING always-true and the strike-step regression; taps complete on leaving
+34e864b v14.49: the level lifecycle - states, marker and tests counter split; two tap-counting fixes
+4d0596c v14.46: THE LADDER - rail, profile and percentages rotated onto one vertical price axis; GPTS_VERSION unstuck
+753a1e8 v14.44: Garma V2 phase A2 - dark pool lifecycle fresh/holding/broken/flipped/reclaimed from watched bars
+f6e6237 v14.42: Garma V2 phase A1 - dark pool capture, levels on the line, no lifecycle claimed yet
+27dd59b v14.41: Garma V2 phase 0 - air pocket on the path clause, USED level state from tap counts, event caps not suspends, tool-hierarchy refusals
+32243f1 v14.40: THE LEVELS LINE - line on top, levels hanging below, IF levels moved off the main rail onto it
+602b7b9 v14.39
+```
+
+### DECISIONS
+
+- **BUILT THE APPROVED MOCKUP, NOT A NEW DESIGN.** He said "just give me the build" with the width
+  strategy still formally undecided. Rather than invent a layout, the build implements
+  `mockups/mockup-ladder-v11.html` — the spec he had already reviewed — and leaves the one genuinely
+  open question (the panel is 454px, the mockup is drawn at 544px) to him.
+- **DEVIATED FROM THE MOCKUP ON TWO POINTS, DELIBERATELY.** (1) The mockup puts `.tgt` at x=274,
+  which is INSIDE the chute; the chute rule is load-bearing and test-asserted, so the marker column
+  stays outside at LAD_MK. (2) The mockup abbreviates the states to WEAK/FORM/TURN/DOOR/USED at 38px;
+  the vocabulary was SETTLED at v14.49 and the resume note says not to re-litigate it, so the words
+  win and the column keeps 54px. Both deviations cost width and both were taken knowingly.
+- **UNITS MEASURED, NOT ASSUMED.** Before writing the delta profile, probed the live tape:
+  `kingKd` 12680 vs `velocity.cur` −12,680,083.27 on SPXW 7690. kingKd is THOUSANDS, cur/d15 are
+  DOLLARS. PROJECT-CONSTANTS L-F says name both units out loud; this is that, done with a measurement
+  instead of a comment.
+- **v14.52 IS VERIFIED AND THE QUESTION IS CLOSED.** `__gptsDebug.irt()` on his live tab returned
+  `inPlace:true, err:null`, 2.9 minutes old. Two builds had reasoned about a write that had never run.
+- **THE 24px MYSTERY IS SOLVED.** `LAD_ROCW` was 56 for a column needing 84. LOCKED-ITEMS had
+  recorded `scrollWidth 656 / LAD_W 632` as unexplained since v14.46.
+- **THE RENDER AUDIT CAUGHT MY OWN FIX.** The chute-intrusion fix clamped a label back on top of its
+  own bar. Three states, not two: fits, fits clamped, or is not drawn.
+- **DID NOT GUESS THE WIDTH STRATEGY.** 618 into 454 is impossible; the options and their costs are
+  written into LOCKED-ITEMS with an explicit instruction not to close it by deleting a column.
+
+### SHIPPED
+
+**v14.54** — the ladder re-laid to mockup v11: %King inside its bar (LAD_KPCT deleted), roll lane
+moved left of the prices, signed dollar delta profile replacing the mirrored %King profile, King
+pills and EM edges moved into the chute, SPXW crown test counter, price pill takes the tested king's
+colour, day-peak outline gated on a 12-point giveback, `LAD_ROCW` corrected 56 → 84.
+True width 657 → 618. test_ladder 84 → 108 asserts, eleven mutation-tested.
+Suite 114 green / 6 documented baseline reds. `tools/smoke.js` clean.
+Render + overlap audit: 53 elements, 0 page errors, 0 overlaps, 0 chute intrusions.
+
+### OPEN AT CLOSE
+
+1. **The ladder width decision — his.** 618 in a 454 body. Widen the panel (~620, one drag) is the
+   cheap answer; the alternatives reopen settled decisions. See `LOCKED-ITEMS.md`.
+2. **⚠ THE FEATURE RECORDS ARE COLLAPSING** — 3,822 on 08-20, 0 on 08-21 and 08-24, 2 on 08-26, 15
+   on 08-27. Every scorecard and promotion path runs on this. Diagnose BEFORE running any study.
+3. **BUILD ITEM 18**, deadline **2026-09-16** for the July gap.
+4. **Re-push the three files that never landed**: `design/DATA-ARCHITECTURE.md`, the 284-session ES
+   corpus, the mockup PNGs. A commit is not a push — verify by cloning.
+5. Whether IRT itself now shows lines without a refresh is still his observation to make.
+6. Still missing at HEAD: `FINDINGS.md`, `BUILD-PLAN.md`, `garma/`, `wicks/`.
+
+---
+
+<!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-27 · v14.53 · session `977e28e4` — v14.53: the IRT permission fix, and the load-procedure repairs
+**OPERATOR:**
 > load gex
-
-**me (14:32):** The main userscript is ~647k tokens of source — I'll read it in full as the skill mandates, in sequential chunks.
-
 **OPERATOR:**
 > we will tackle the yahoo issue later .. do you see our last conversation and did you load gex
-
-**me (14:40):** Both answers honestly:
-
-**Do I see the last conversation?** Not directly — each session starts fresh. What I have from it: the summary you pasted (the 5-component score: OPEN · VWAP · SWP · IB60 · POS, 5/5 = 82% at 60m, IB60 +14 / IB30 redundant, NOT-IN 36%, etc.) and the two screenshots. I searched your Google Drive — **the three files (Hodlod stats2, Mockup hodlod v2, Mockup v2) and the fresh ES 1-min dataset are not there.** Nothing in Drive was saved after 08-23; the Drive buttons in your pic were the save *option*, not confirmation. Those files lived only in that conversation. **Easiest fix: open that conversation and re-attach "Hodlod stats2" (JSON) and the ES 1-min CSV you gave it — then I can verify and deepen the analysis instead of rebuilding from nothing.**
-
-**Did I load gex?** Partially — about 60% done when your message came in. Cloned fresh from git: **v14.51 in the resume note, v14.52 at HEAD** (the IRT in-place-write fix, awaiting your live verification today). Fully read: resume note, PROJECT-CONSTANTS (all landmines), DECISIONS D-1→D-16, INSIDERFINANCE doc, both specs, SOURCE-OF-TRUTH, the IF companion v1.14 in full, and ~7,300 of 24,700 lines of the main userscript (feed intake, tape/ladder readers, recorder, pipeline, IRT export, setup machine, dark pool, rolls/taps). Still to read: the rest of the userscript (FRAME/ladder render, learning layers), the 11 Academy articles, and the data-coverage check. One discrepancy found: the skill references `skylit-docs/FINDINGS.md`, `BUILD-PLAN.md`, `garma/`, `wicks/` — none of those exist in the repo at HEAD, so a prior session's save never committed them.
-
-Yahoo parked, agreed (cloud is confirmed blocked — robots policy — so it'll be a user-side route when we come back to it).
-
-Want me to finish the load now ( …[trimmed]
-
 **OPERATOR:**
 > continue loading gex.  regarding yahoo, you already setup a solution in github that automates this. let me know whenyou are complete with loading gex so we can move toward implementing the hod lod feature and you can review out last conversation
-
-**me (14:41):** You've hit your monthly spend limit. Switch to another model, or manage usage credits at claude.ai/settings/usage?from=cc_cli_limit_message, to continue.
-
 **OPERATOR:**
 > continue
 > i asked you to load gex and you keep reading the same file over and over again
-
-**me (14:44):** You're right — I was working through the userscript in chunks and that read as spinning. Stopping there and reporting.
-**GEX LOADED — v14.52**
-
-**1 · Files loaded** (fresh clone, `0b1dcad`)
-`.gex-config.json` · resume note (full) · PROJECT-CONSTANTS · DECISIONS D-1→D-16 · INSIDERFINANCE · master-spec · teaching-spec · SOURCE-OF-TRUTH · all 11 Academy articles + 00-INDEX · `gex-if-levels.user.js` v1.14 (full) · `gex-signal-tapereader.user.js` — 20,240 of 24,726 lines. What I have **not** read: the render assembly and section builders from ~line 20,240 to the end (the ② LADDER draw code, `secFrame`, `render()` itself, boot). I have `emBand` and the ① FRAME model layer; I don't have the ladder's drawing code. Say the word if you want that before we touch UI.
-
-**2 · Architecture** — L0 feed intake (fetch/XHR hooks, `@grant none` load-bearing; freshness guard rejects replay payloads) → tape/ladder readers ($K-anchored, `tapeSync` 3-way King reconciliation) → L1 node ledger (`feedSeriesAll`, life/touches/influence) → L2 structure (`nodeFlow`, `mapNodeState`, `legStep`, roll latch) → L3 direction (`trendVerdict` 5-state, `directionGrade` hierarchy) → L4 setup (`inPlayZone`, `deflTrigger` latch, `tradeFrame`) → L5 recorder (FEATURES registry, IDB, day export) → L6 review → L7 voice. One `render()`, final line `})();`, 24,726 lines.
-
-**3 · Platform** — Skylit = FLOW (live positioning, `|net|≡v`, no call/put split on SPXW). InsiderFinance = STRUCTURE (OI×gamma, `GEX = γ×OI×100×spot²×0.01`, puts negative). Scale chain k → disp (×1.0023) → und (×0.0998). Never compare across books, windows, or scales.
-
-**4 · Doctrine constants, from memory**
-Taps **80/66/33** (fresh/tested/delivered) + DECAYING = weakens with *no* interaction · node gate: **is it FRESH? is it GROWING?** both yes or …[trimmed]
-
 **OPERATOR:**
 > did you read the javascript file ... are there duplicates ?
-
-**me (14:46):** Let me answer that with the actual check rather than from reading — that's what the project's own rule says.
-**Read: partially — 20,240 of 24,726 lines (82%).** I have every model/engine layer. What I have not read is roughly lines 20,240 → end: the ② LADDER draw code (`ladderHtml`), `secFrame`, `nodeChartHtml`, `rollDetect`, `render()` itself and boot. So if we touch the ladder UI I need that chunk first.
-
-**Duplicates: none that matter. Verified two ways, not from reading.**
-
-`node test_no_dupes.js` → **7 pass / 0 fail**, and its known-collision list is `[]` — zero tolerated collisions, so the four historical ones (including `ifNum`) are all genuinely resolved.
-
-My own independent scan, with comments and string literals stripped first (the project's own rule — prose has faked a call site four times here):
-
-- **751 module-scope function declarations, 0 duplicates.** That's the dangerous class — the one that shipped `ifNum` broken for nine releases, where the later declaration silently wins for the whole file. Clean.
-- **13 duplicated *nested* helper names**, and every one sits in a different parent: `X`/`Y` in five separate SVG builders, `add` in five, `sideMagnet`/`signedOff` in `kingHeaderBlock` and the PARKED `kingBlock`, and so on.
-- **0 same-parent shadowing** — no case where two same-named helpers live inside one function and the second silently wins.
-
-One thing worth flagging while I was in there: `kingBlock` (PARKED, no live caller) is a near-verbatim copy of `kingHeaderBlock` — same `signedOff`, same `sideMagnet`, same badge markup, differing only in `fmtNum` vs `fmtLvl`. It's the v13.2 "second computation of the same thing" pattern, sitting dormant. Not a bug today; it's the shape that becomes one when someone fixes the live copy and not the parked one. Kept …[trimmed]
-
 **OPERATOR:**
 > finish the load gex procedure and the resume note and everything you are suppose to do to get upto date first
-
-**me (14:47):** Finishing the last 4,486 lines — the ladder, FRAME assembly, node chart, render and boot.
-**LOAD COMPLETE — v14.52.**
-
-**1 · Files loaded**
-
-`.gex-config.json` · `session-state/latest-resume-note.md` · `PROJECT-CONSTANTS.md` · `DECISIONS.md` (D-1→D-16) · `INSIDERFINANCE.md` · `changelog/CHANGELOG.md` (head) · `master-spec.md` · `teaching-spec.md` · `SOURCE-OF-TRUTH.md` · `skylit-docs/learn/00-INDEX.md` + **all 11 Academy articles** · supporting `core-concepts` / `patternpedia` · `current/gex-if-levels.user.js` **(571 lines, full)** · `current/gex-signal-tapereader.user.js` **(24,726 lines, full — L1 → L24,726)** · `data/2026-08-17 … 08-26.json`.
-
-**Missing from the repo at HEAD** (referenced by the skill/config/code, never committed): `skylit-docs/FINDINGS.md`, `BUILD-PLAN.md`, `garma/V2-PHASE-PLAN.md`, `wicks/`. Same pattern as the Yahoo pipeline you said was set up — no `.github/workflows/`, no yahoo reference anywhere, only branch `main`.
-
-**2 · Architecture**
-
-L0 feed hooks (`installFeedObserver` patches `window.fetch`/XHR in page context — this is why `@grant none` is load-bearing and why IF is a separate script) → `extractWalls`, `findTapeTable`/`validKingRow`, fiber candles, freshness guard. L1 `STATE[sym]`/`LASTFEED`/`HIST`/`TAPS`/`VEL`. L2 `trendVerdict` 5-state SMA-50 (`TREND_DOM=15`, reversal `11`). L3 `biasVotes` — SMA owns direction, confirms cannot outvote it, DRIFT is a gate not a vote. L4 `legEngine`/`pbEntryPick`/`runMachine`. L5 recorder: `recordNodeSnapshot` → IndexedDB → `buildDayExport` (v14.51 empty-day refusal) + `irtExportNow` (v14.52 in-place write, `keepExistingData:true` / position 0 / truncate). L6–7 one `render()` → `panelV3` → **two** sections now (`secBias`, `secLoc`); REACTION/EXECUTE retired from display, functions alive for recorders. …[trimmed]
-
 **OPERATOR:**
 > @"/root/.claude/uploads/977e28e4-8047-5057-b36d-d3d9bb263dcb/5a36a9b1-ES_TestingData.txt" [files attached]
 > 
 > here is the data. i gave you the mockups for you to get upto date . make sure you save to repo so you can refer to it.  also did you identify how we get data from yahoo using git . the automated solution
-
-**me (14:56):** Data landed, and it checks out against the mockup exactly. Three answers.
-
 ## 1 · The data — it's the same corpus the mockup was built from
-
-406,154 rows, `EPM26`, 2025-05-30 → 2026-08-23. **284 days with a complete RTH session** — which is precisely the `284d ES 1-min` in the mockup header. That confirms provenance: the rates in that green box came from this file and no other, so a rebuilt study that doesn't also land on 284 has changed the filter rather than found more data.
-
-Timezone is **CT**, inferred not declared, and I'd rather say so than assume it: the Sunday session opens `17:0x` and a full day holds exactly 1380 bars = 23 hours. Both point at CT, the mockup's own clock reads `10:26 CT`, and the panel already lives in CT. RTH is `08:30–15:00` = 391 bars.
-
-**Two holes, and the second one is on a clock:**
-
-| gap | weekdays missing |
-|---|---|
-| 2026-07-18 → 2026-08-14 | **20** |
-| 2026-08-24 → today | 3+ |
-
 ## 2 · Saved to the repo — locally committed, not yet pushed
-
-Commit `a26cdfd`: `data/es-1min/EPM26-1min.csv.gz` (5.2 MB gzipped from 28 MB), a README recording the span/timezone/gaps, both mockup screenshots, and **`mockups/hodlod-v2-SPEC.md`** — a full transcription of the approved section, because the original "Mockup hodlod v2" HTML and "Hodlod stats2" JSON are gone and I'd rather not lose the design a third time.
-
-**I cannot push it.** The git proxy refuses to inject a credential for this repo — same wall PROJECT-CONSTANTS documents. So that commit lives only in this sandbox, which can reset. The durable copy still has to go through your machine, and there's no device bridge in this session either. Tell me which you want and I'll do it: an installer `.bat` carrying the payload, or you drop the file into `C:\Dev\gex-signal-tapereader\data\es-1min\` yourse …[trimmed]
-
 **OPERATOR:**
 > lets resolve the yahoo issue first.  there should be a complete yahoo automation workflow, maybe its a skill or something else , check the repot, google drive etc.. we dont want to rebuild the solution again
-
-**me (14:58):** Found it — and it's not in the repo, it's in Drive, from your Streamlit HOD/LOD app.
-That's the answer — it's not in GitHub, it's a whole Replit app in Drive. Let me pull the automation itself.
-Found it. Not GitHub — a **Replit app**, backed up to Drive.
-You may well be right — both could exist. Let me search properly for a workflow.
-You were right and I had it mislabeled. Confirmed from `.replit`.
-You were right, and I had the name wrong. It **is** a workflow, and it **is** in git.
-
-`.replit` defines it literally as one:
-
-```toml
-[[workflows.workflow]]
-name = "Data Scheduler"
-  [[workflows.workflow.tasks]]
-  task = "shell.exec"
-  args = "python scheduler.py"
-```
-
-The Streamlit app is a *separate parallel workflow in the same file* — the sibling, not the solution. Calling the whole thing "a Streamlit solution" was my error.
-
-**Why neither of us could find it:** `.git/config` has no GitHub remote. Only Replit-internal ones — `gitsafe-backup` at `git://gitsafe:5418/backup.git` and a stack of `subrepl-*` pointing at `ssh.janeway.replit.dev`. So it's genuinely committed to git and genuinely not clonable from GitHub. Both true at once, which is exactly how it went missing.
-
-**What it is:** `scheduler.py` (20.7 KB) + `yfinance_client.py` (28.6 KB), backed up to Drive. EOD download 17:00 CT Mon–Fri across 8 markets, a startup stale-check that also verifies intraday completeness, and a 60-day gap-filler with a hardcoded CME holiday table. Three fetch tiers — 7d/1m, 60d/2m, 2y/1d — all converted to Central, bad candles filtered, resampled to 3-minute.
-
-**Why it stopped, and this is the part that matters:**
-
-```toml
-[deployment]
-deploymentTarget = "autoscale"
-run = ["streamlit", "run", "app.py", ...]
-```
-
-An autoscale deployment spins down when idle, and its run command is the St …[trimmed]
-
 **OPERATOR:**
 > no .. maybe its a skill ..  i know there were files that were bing updated in git to get the data from yahoo
-
-**me (15:04):** The shallow clone — I only ever saw the tip. Let me get the full history.
-Found the real one. It's **item 18**, in our own repo's history.
-You were right all three times, and it was in our own repo the whole time. I'd only done a `--depth 1` clone, so I'd never seen the history. Full clone: 171 commits, and there it is.
-
-**Item 18, locked 2026-08-16**, from the resume note at `72e820e`:
-
 > **Yahoo Finance HTF/ITF data**: userscript-side fetch of `query1.finance.yahoo.com/v8/finance/chart/{SPY|QQQ|^SPX|^VIX|ES=F}` … New Layer-0 source `htfFeed` → cache `gpts_htf_v1` → `STATE.htf` → **`snap.htf` in the export**. … **Cloud sandbox CANNOT reach Yahoo (blocked) — the browser fetches, the cloud reads the exported day file.**
-
-**"Files being updated in git" is exactly right — it's the day files.** Git is the transport, not the fetcher. No cron, no Action, no server:
-
-```
-Tampermonkey (Skylit tab) ──fetch──▶ Yahoo
-   → STATE.htf → snap.htf → data/YYYY-MM-DD.json
-   → installer .bat commits + pushes → GitHub → cloud clones
-```
-
-Every segment of that pipe already exists and runs. Only the tap at the top was never fitted.
-
-**It was never built.** Verified four ways: zero hits for `htfFeed` / `gpts_htf_v1` / `query1` in either userscript; zero `"htf"` keys across all eight exported day files; nothing in the repo's own skill; no `.github/` in 171 commits.
-
-**And then it was lost.** Item 18 is in every resume note from 2026-08-15 through v11.23 on 2026-08-20 — and absent from every note after. Not cancelled, not finished. A handoff dropped it, ~24 versions ago. Same failure that ate the HOD/LOD mockup and `FINDINGS.md`.
-
-Two things item 18 got right that I got wrong:
-
-It anticipated my `ROBOTS_DISALLOWED` block in August 2026 and designed around it. And its stated limits are **1m ≤ 7 …[trimmed]
-
 **OPERATOR:**
 > first make sure you update the required architecture documentst so the next context knows .  yes finish item 18 and please remember to update load gex related documents because we are basically backtracking to get you upto speed in this new context wasting alot of time and credits which is really unfair because you didn't know something that you should have known and couldn't find it and there was no documentation on it.
-
-**me (15:08):** That's a fair hit, and the root cause is in the load procedure itself — `git clone --depth 1` hides exactly the history that held item 18. Let me fix the docs before building anything.
-Now the docs. Three new/updated, starting with the mechanism that failed.
-Docs are done. You're right that this should never have cost you a session, and the root cause was mechanical.
-
-**The bug was in the load procedure itself.** Both `.gex-config.json` and the skill said `git clone --depth 1`. The resume note is rewritten in full every build, so every superseded note — and every locked item that quietly fell out of one — lives *only* in history. A shallow clone made agreed, fully-specified work structurally invisible. Item 18 was one command away the entire time.
-
-Committed in `6e37fb8`:
-
-**`session-state/LOCKED-ITEMS.md`** (new) — the ledger that was missing. An item leaves it only by being **built** or **explicitly cancelled by you, with a date**. Never by omission. It opens by naming this failure so the next context understands why the file exists. Currently holds item 18, item 14's never-implemented PMH/PML (0 hits in the codebase, though premarket H/L is enabled on your Skylit chart), and the IB60 the HOD/LOD mockup requires but `sessionLevels()` doesn't have.
-
-**`design/DATA-ARCHITECTURE.md`** (new) — who can reach what, which is the thing no document stated. The browser is the only participant that can fetch freely; the cloud can't reach Yahoo *and can't push to git*; the day-file export is the transport between them. Plus why `@grant none` is load-bearing, why foreign fetches belong in the IF companion, the two books, the three scales, and the full-clone rule.
-
-**`.gex-config.json`** — a `cloneRule` block with the full-clone command and the three history-search commands to run …[trimmed]
-
 **OPERATOR:**
 > are you done with the load procedure
-
-**me (15:14):** Not fully — there are canonical files I listed but never actually read. Let me close them out rather than claim done.
-Two direct contradictions found between canonical docs. Fixing those before I call it done.
-Now yes — done, and I'd have been wrong to say so an hour ago.
-
-**What I'd actually skipped and have now read:** `SKYLIT-FEEDS.md` (the full application map, the four capture rules, the dark-pool endpoint), `design/architecture-design.md`, `FRAME-APPROACH-REVIEW.md`, `ISSUES-NEXT-BUILD.md` in full, `master-spec.md` in full, `skylit-docs/api/API-REFERENCE.md`, `skylit-docs/README.md`, and the CHANGELOG head (v14.52 → v14.49).
-
-**Two contradictions surfaced, both fixed in `1d62de0`:**
-
-`master-spec.md` §3.1 says *"AI Drive is the source of project continuity"* — and §0 of the same file says *"Git is the truth (the Drive folder is a stale mirror)."* A new context reading top-down hits §3.1 first and goes to Drive, which was ten versions behind. Same in `architecture-design.md`, which additionally describes **v9.1** against a live v14.52 and lists `workflow.md` and `developer-kickoff.md` in the restart package — neither exists. Both now carry banners rather than deletions, so nobody rediscovers the dead end.
-
-Also flagged: §2.1/§19/§22 still say *"the user must paste the current source"* and *"do not write code until the real source is pasted."* That's the pre-git protocol. The repo holds the canonical userscript now.
-
-**Three things from these files that bear directly on what's next:**
-
-`SKYLIT-FEEDS.md` documents a **required capture posture** I hadn't seen: RTH · READ AS %King · VELOCITY **All** · LOW NODES **never Hide**. Each of those Skylit settings silently breaks a measured pipeline if changed — an unrendered row can't be harvested.
-
-`API-REFERENCE.md` documen …[trimmed]
-
 **OPERATOR:**
 > i want a file called chat history , everytime you make me a build i want this file updated with the chat history of the context. then when i start a new context you will feed the last context history to the new context also as a part of the load gex procedure .  this should ensure you are upto date.
-
-**me (15:17):** Good idea — and it should be generated, not hand-written, or it'll drop things the same way the resume note dropped item 18. Let me check what's actually in the session log.
-Transcript is fully extractable, so this can be generated rather than remembered. Building the tool.
-Now wiring it into both ends — the load, and the build checklist.
-Done — `session-state/CHAT-HISTORY.md`, and it's **generated from the real session transcript**, not written from memory. That distinction matters: a remembered history drops whatever the writer forgets, which is precisely how item 18 vanished. `tools/chat-history.py` reads the actual `.jsonl` log, so it can't forget.
-
-**What it captures:** your prompts **verbatim**, every substantive reply, and three hand-filled sections — DECISIONS, SHIPPED, OPEN AT CLOSE. This context came out at 12 prompts, 26 KB.
-
-**It stays bounded on its own.** Two tiers: CURRENT CONTEXT in full detail, EARLIER CONTEXTS compressed to your verbatim prompts plus the decisions, with my replies dropped. Each run automatically demotes the previous entry, so the file doesn't grow without limit and a new context can still read the whole thing.
-
-**Your words are never trimmed, in either tier.** Compression only removes my output. This project already treats your exact phrasing as data — the standing business requirement is quoted verbatim in the resume note for the same reason — so paraphrasing you would defeat the point.
-
-**Wired at both ends:**
-
-On load, it's now the **second** mandatory read, and the `loadInstruction` spells out the order: resume note → chat history → locked items → data architecture. The reasoning is in the config so it survives: *the resume note says where we are; the chat history says how we got there.* Reading it is what stops a fresh context re- …[trimmed]
-
 **OPERATOR:**
 > i also want to make sure that the next context suggestion doesn't forget to make updates to the chat history , have you added this precaution anywhere. if not, add it to ensure i dont have to tell future context sessions to save chat history every time a new build is created.. after this , please continue on the load gex procedure until you are done
-
-**me (15:24):** The strongest precaution here is a test that fails the build — same mechanism `test_no_dupes.js` uses.
-Per the project's own rule — an assertion that never fails buys false confidence. Mutation test:
-Mutation 3 didn't fire — a false-confidence assertion, exactly what the rule warns about. The substring matched the `chatHistory` block instead of the file list. Fixing it properly:
-Baseline is red — the test caught a real gap in my own config wording. Fixing the config, not the test:
-`installv1452.bat` **is** in the repo — my second glob was wrong. And you have the Atlas tab open, so rather than infer, let me look.
-**v14.52 is live** — but the IRT export is erroring. Let me get the detail before I report.
-I created an empty IndexedDB by opening a name that didn't exist — cleaning that up and finding the real one.
-Found it — and this is more than a deployment question. **v14.52 is live, but the fix has never once executed.**
-
-**Deployment: confirmed.** Your Atlas tab reports `v14.52`, panel present, 100 debug hooks. It was committed `0b1dcad` at **02:11 CT last night**, and `installv1452.bat` is in the repo — so it was built, pushed, and installed.
-
-**But the export is dead, and has been all morning:**
-
-```
-last attempt : 09:34:04 CT   (54 minutes ago — cadence is 180s, so ~18 runs missed)
-rows         : 0
-err          : "no levels / no symbol set"
-inPlace      : ABSENT  ← the write path was never reached
-```
-
-`inPlace` being absent is the proof: v14.52's whole change lives inside the write path, and that code has not run since your last reload. **The in-place fix is still completely unverified — not because it's wrong, but because it never got a chance.**
-
-**The root cause, and it isn't the in-place logic:**
-
-```
-irtDir handle : SET, name="lsFlexLevels", kind=directory, re …[trimmed]
-
 **OPERATOR:**
 > did you also implement the fix related to the layout changes . see pic  i think they maybe in the same fix as the in place fix for excel flexlevels file
-
-**me (15:33):** v14.52 touched 40 lines, all IRT. **No layout work in it.** Let me render the agreed mockup and put it beside your screenshot.
-
 **OPERATOR:**
 > [Image: original 2200x2094, displayed at 2000x1904. Multiply coordinates by 1.10 to map to original image.]
-
-**me (15:35):** **No — none of the layout work went out with it.** They weren't the same fix. Commit `0b1dcad` touched 40 lines of the userscript and every one was IRT export; the CHANGELOG entry for v14.52 mentions no layout change at all.
-
-The layout items are still the **mockup-only list** from `mockups/mockup-ladder-v11.html`, agreed around v14.46–v14.51 and never built. Your screenshot confirms all five, and I rendered the mockup headless (0 page errors) so you can see the target side by side.
-
-| # | agreed in the mockup | your live panel | |
-|---|---|---|---|
-| 1 | **ROLLS is its own column, LEFT of PRICE**, amount at the origin | roll marks are on the **right**, past the delta profile | ✗ |
-| 2 | **%King left-justified INSIDE the bar** — `+62%`, `−80%`, `−100% KING` | %King is a **separate column** right of the bars | ✗ |
-| 3 | **the three Kings are pills INSIDE the chute**, with a test counter — `👑 7632 SPY 2×` | `👑7749`, `~7742 SPY`, `~7732 QQQ` sit **left** of price; no counters | ✗ |
-| 4 | **EH/EL are pills INSIDE the chute** — `EH 7691`, `EL 7666` | `~EH 7750` / `~EL 7696` sit **left** of price | ✗ |
-| 5 | **DELTA 15M $** signed dollar bars, plus a **STATE word column** (USED / FORM / DOOR / TURN / WEAK) | $ figures render, but in the right-hand block; no STATE column | partial |
-
-**Items 3 and 4 are the cause of the crowding you can see in your own picture.** `CW·CW0-1` is sitting beside `~EH 7750`, and `IBH·PW-PW0` beside `~7732 QQQ` — the level names are sharing the left gutter with five pills. The mockup doesn't *manage* that collision, it **removes** it: the pills belong in the chute, which leaves the gutter to the level names alone. Same reasoning that drove the 90° rotation — crowding that stops existing beats crowding that gets tuned.
-
-One caution before we touch it …[trimmed]
-
 **OPERATOR:**
 > well lets implement the fix for all of the inssues incldueing in place..   have you compleeted the load gex and have you ensured the chat history is saved and the delta will also be saved when new builds are completed and have you ensured that the next session will know to read the chat history from the prior session and will also continue creating a chat history and updating it so that the following load gex procedure is alo reading than updateing the chat history automatically
-
-**me (15:38):** Baseline confirmed: **115 green / 6 red** — exactly the 6 documented pre-v13.8 reds. Now the IRT code.
-Diagnosis confirmed in the code: `irtTick` fires every 180s, reaches line 4263, `requestPermission` rejects with no `.catch`, and `IRT_LAST` is never touched. Fixing it.
-Appended after the summary line — unreachable. Let me insert before it.
-`v10.js` is the stale copy — the harness reads it, not `current/`.
-Suite red on `test_chat_history.js` — the gate firing exactly as designed (version 14.53 vs history stamped 14.52). I'll regenerate at the end.
-
-Before I touch the ladder — your screenshot has a **horizontal scrollbar**. Let me measure the live panel rather than guess.
-Measured, and it reframes the whole thing:
-
-```
-panel viewport : 460px
-ladder width   : 656px   →  196px CLIPPED off the right
-columns present in the DOM:  g3ldst 12 ·  g3ldtap 6 ·  g3ldroc 12
-```
-
-**STATE, the test counters and the ROC columns are all built and rendering — they're just scrolled out of view.** The ladder is 656px inside a 460px panel. That's the layout problem, and it isn't the five mockup items I listed earlier.
-
-Let me finish v14.53 with the IRT fix and write this up properly.
-Now the chat history — the red test is the gate you asked for, firing.
 
 ### DECISIONS
 
@@ -341,6 +233,7 @@ Now the chat history — the red test is the gate you asked for, firing.
   (`@grant none` is load-bearing). It goes in the IF companion, on the v1.14 ForexFactory pattern.
 - **DOCTRINE GATE, item 18: NO ACADEMY FILE COVERS IT.** The operator's own spec; follow, don't invent.
 
+
 ### SHIPPED
 
 **v14.53** — the IRT permission fix (`navigator.userActivation` gate, the missing `.catch`, and
@@ -352,6 +245,7 @@ Documentation and data (no panel code): the 284-session ES corpus · `hodlod-v2-
 skill · `tools/chat-history.py` + `CHAT-HISTORY.md` + `test_chat_history.js` ·
 `tools/run-tests.sh` · staleness banners on `master-spec.md` §3.1 and `architecture-design.md`.
 
+
 ### OPEN AT CLOSE
 
 1. **Install v14.53, grant the folder permission once, then confirm `inPlace:true`** — that is the
@@ -362,26 +256,8 @@ skill · `tools/chat-history.py` + `CHAT-HISTORY.md` + `test_chat_history.js` ·
 5. Save the delivered `SKILL.md` to the account (the synced copy is a read-only cache).
 6. Still missing at HEAD: `FINDINGS.md`, `BUILD-PLAN.md`, `garma/`, `wicks/`.
 
-### COMMITS THIS CONTEXT
 
-```
-8bc5613 locked-items: the five ladder layout items, none of which shipped in v14.52
-7359f97 test_chat_history.js: a RED BUILD, not a checklist line, enforces the chat history
-c3f609a chat history: generated per-context record, read on load, written on every build
-1d62de0 docs: flag two canonical files that contradict the git-is-truth rule
-6e37fb8 docs: fix the load procedure that lost item 18 — full clone, locked-items ledger, data architecture
-0a78956 session-state: recover ITEM 18 — the Yahoo solution was ours all along
-679d1ad session-state: locate the Yahoo automation — Replit Workflow 'Data Scheduler', not GitHub
-a26cdfd data: ES 1-min corpus (284 full RTH days) + HOD/LOD v2 mockup spec
-0b1dcad v14.52: FlexLevels CSV written in place so IRT stops needing a refresh
-1936918 v14.51: export refuses empty days (it was losing whole sessions); full session handoff and handoff contract
-32d1347 v14.50: seven review defects fixed incl. ATTRACTING always-true and the strike-step regression; taps complete on leaving
-34e864b v14.49: the level lifecycle - states, marker and tests counter split; two tap-counting fixes
-```
-
----
-
-<!-- EARLIER-CONTEXTS -->
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 

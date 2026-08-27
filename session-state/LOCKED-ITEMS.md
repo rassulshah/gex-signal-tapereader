@@ -74,49 +74,51 @@ absent from our record. Not confirmed cancelled; treat as open until he says oth
 `sessionLevels()` computes **IB30 only** (`IB_MIN_S=1800` → `ibH`/`ibL`/`ibSet`) plus PDH/PDL/PDC.
 Net-new work, and the operator has explicitly asked for a sweep testing IB30 **and** IB60 breaks.
 
-### THE LADDER IS 656px WIDE INSIDE A 460px PANEL — 196px IS CLIPPED
-**MEASURED on the live panel 2026-08-27, and this SUPERSEDES the "five unbuilt mockup items" entry
-that stood here earlier today. I was wrong: most of them are built.**
+### THE LADDER WIDTH — ⚠ PARTLY CLOSED IN v14.54, ONE DECISION STILL OPEN
 
-    .g3ladwrap   scrollWidth 656   clientWidth 460   →  196px cut off
-    .g3lad       scrollWidth 656   clientWidth 632   →  24px over its own LAD_W
+**BUILT v14.54:** the ladder was re-laid to `mockups/mockup-ladder-v11.html`, the approved spec.
+%King moved inside its own bar (the `LAD_KPCT` column deleted), the roll lane moved left of the
+prices, the mirrored profile became the signed dollar delta profile, and the King pills and EM edges
+moved into the chute — which is what empties the left gutter the operator photographed.
 
-DOM element counts on the same render prove the columns exist and are rendering:
+**⚠ THE 24px THIS FILE COULD NOT EXPLAIN IS EXPLAINED.** It recorded `scrollWidth 656 / clientWidth
+632` as a discrepancy. `LAD_ROCW` was **56 for a column that needs 84** — the widest ROC string,
+`−100% −100% ▼99%`, is 83px — so the last column overflowed its declared width from v14.46 onward.
+`test_ladder` now asserts `LAD_ROC + LAD_ROCW === LAD_W`, so the constant cannot lie again.
 
-| column | class | elements |
-|---|---|---|
-| STATE | `g3ldst` | **12** |
-| test counters | `g3ldtap` | **6** |
-| ROC | `g3ldroc` | **12** |
-| levels | `g3ldlv` | 5 |
+**TRUE WIDTH: 657 → 618.** (Not 632 → 588: the old constants understated the original.)
 
-**So the "missing columns" are a WIDTH problem, not a build gap.** The operator sees a horizontal
-scrollbar and a ladder that appears to stop after the delta profile; everything past it is real,
-rendered, and off-screen. Any plan that starts by *building* STATE/TAP/ROC is rebuilding what exists.
+**⚠⚠ STILL OPEN, AND IT IS THE OPERATOR'S CALL: 618 DOES NOT FIT A 454px PANEL BODY.** Measured on
+his live panel 2026-08-27. No arrangement of nine columns of 8.4px text fits 454, and the approved
+mockup is itself drawn on a **544px** panel — so the design he signed off assumes a wider panel than
+he is running. The container SCROLLS rather than clips, so nothing is silently dropped. Three ways
+to close it and none may be taken without him:
 
-**What is genuinely still mockup-only** (`mockups/mockup-ladder-v11.html`, rendered at
-`mockups/mockup-ladder-v11-RENDERED.png`): the three King pills and `EH`/`EL` sit in the LEFT gutter
-beside the level names rather than inside the chute, and `%King` is its own column (`LAD_KPCT=226`)
-rather than being left-justified inside the bar.
+1. **Widen the panel to ~620.** It is resizable, it is one drag, and it costs nothing. Cheapest.
+2. **Abbreviate the STATE words** to the mockup's WEAK/FORM/TURN/DOOR/USED — but the vocabulary was
+   SETTLED at v14.49 (BUILDING · HOLDING · TURN UP/DN · WEAKENING · SPENT) and the resume note says
+   not to re-litigate it. Would save ~16px and reopen a closed decision for very little.
+3. **Drop a column.** The marker and the tests counter are the two candidates, and both are load-
+   bearing under the v14.49 three-orthogonal-facts rule. Not recommended without a measurement.
 
-⚠ **`%King`-on-the-bar IS THE ONE THAT RECLAIMS WIDTH** — it deletes a whole column, ~40px of the
-196px that need to go. Moving the pills into the chute fixes the gutter crowding but saves nothing
-horizontally. **Neither alone closes a 196px gap**, so the real decision is width strategy:
-tighten columns, widen the panel (it is resizable — 656px would show everything), or let the
-right-hand block wrap under. **That is an operator decision and it needs a rendered mockup first.**
-
-⚠ **DO NOT MOVE RENDER CODE WITHOUT THE OVERLAP AUDIT.** The chute is the walled column whose entire
-purpose is that nothing may overlap price, and `test_ladder` asserts the arithmetic (`offset+width <=
-next offset`, the v14.50 lesson — asserting offsets alone proved nothing about what is drawn).
-Render headless, run the pairwise `getBoundingClientRect` audit, THEN send.
+⚠ **DO NOT CLOSE THIS BY DELETING A COLUMN ON YOUR OWN INITIATIVE.** The width is a display
+preference; the columns are the level lifecycle.
 
 ---
 
 ## AWAITING OPERATOR VERIFICATION (not a build item — a question)
 
-- **v14.52 IRT in-place CSV write.** Does IRT show new lines without a manual refresh?
-  `__gptsDebug.irt()` reports `IRT_LAST.inPlace`. Fallback if not: a local HTTP server in that
-  folder. GitHub raw is NOT an option — CDN-cached ~5 min against a 1-min poll.
+- ✅ **CLOSED 2026-08-27 16:41 CT — the v14.52 in-place CSV write RUNS.** Measured on the live
+  panel: `inPlace:true`, `how:"file"`, `err:null`, last write 2.9 minutes old on a 180s cadence.
+  The atomic-replace diagnosis was correct. ⚠ What is confirmed is that OUR write path executes and
+  reports success; whether IRT itself now shows new lines without a refresh is still the operator's
+  observation to make. If it does not, the fallback is a local HTTP server in that folder
+  (`python -m http.server 8000`, then IRT "Remote File"). GitHub raw is NOT an option — CDN-cached
+  ~5 min against a 1-min poll.
+- **The FlexLevels CSV had only 3 rows at 16:41** (header + SPXW KING + QQQ KING) where an earlier
+  session logged 14 levels. After hours with velocities at 0, so probably expected — but it has not
+  been checked during RTH and it is the kind of thinning that passes for normal. Look once at the
+  open.
 
 ---
 

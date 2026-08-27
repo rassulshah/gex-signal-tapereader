@@ -1,3 +1,75 @@
+## v14.54 — the ladder re-laid to the approved mockup, and the 24px nobody could explain
+
+Operator: *"well lets implement the fix for all of the inssues incldueing in place"* — v14.53 shipped
+only the IRT half. This is the layout half, built to `mockups/mockup-ladder-v11.html`, the spec he
+already approved, rather than to anything invented here.
+
+**⚠ FIRST, THE THING THAT WAS OPEN: v14.52 IS VERIFIED.** Measured on his live panel at 16:41 CT,
+`__gptsDebug.irt()` returned `inPlace:true, how:"file", err:null`, last write 2.9 minutes old on a
+180s cadence. The atomic-replace diagnosis was right and the in-place write is running. That closes
+the question v14.52 and v14.53 were both unable to answer.
+
+**FOUR CHANGES, AND EACH DELETES WIDTH RATHER THAN TUNING IT.**
+
+1. **%King is left-justified INSIDE its own bar**, the type right-justified at the tip, so the whole
+   `LAD_KPCT` column is gone. Biggest single saving, and it also removes a read where the eye had to
+   travel from a bar to a distant figure to learn how long the bar was.
+2. **The roll lane moved LEFT of the prices**, into the gap that already existed between the level
+   names and the price column. Both ends of an arrow now meet the price column's own edge, so each
+   end points at the price it belongs to — and the old right-hand slot is reclaimed outright.
+3. **The mirrored %King profile became the SIGNED DELTA PROFILE IN DOLLARS** — Skylit's own delta15
+   hanging left off a zero line, green building and red draining, the figure immediately right.
+   The mirror drew the fact the node bar already drew, only backwards. Dollars earn the space: the
+   column beside it already prints percentages, and dollars make a roll checkable by eye ($4M leaves
+   one strike, $4M arrives at another).
+4. **The three King pills and the EM edges moved INTO the chute**, which is why it widens 44 to 66.
+   That is what empties the left gutter he photographed, where `CW·CW0-1` was sitting across
+   `~EH 7750`. The chute now carries every price that matters and nothing else may enter it.
+
+Plus: the SPXW crown carries its **test counter** (absent at zero — an untested crown is the ~80%
+state, and "0×" would read as weakness); the **price pill takes the tested king's colour** within 2
+points, with STRETCHED still winning because two states cannot share one background; and the
+**day-peak outline only draws after a 12-point giveback**, because outlining every node a point off
+its high was wallpaper.
+
+**⚠⚠ UNITS, MEASURED AND NOT ASSUMED.** The delta profile needed the King's dollar mass. Measured on
+the live tape 16:52 CT: SPXW King 7690, `tapeMap.kingKd` **12680**, `velocity.cur` **−12,680,083.27**.
+So `kingKd` is THOUSANDS and `cur`/`d15` are DOLLARS, and the King's mass is `kingKd × 1000`. Full
+scale is 45% of it, so the bar self-scales to the instrument and a quiet day stays quiet. This is
+exactly the pairing PROJECT-CONSTANTS L-F names as the most common real bug in this file, so the
+measurement that settles it is written at the site.
+
+**⚠⚠ AND THE 24px LOCKED-ITEMS COULD NOT ACCOUNT FOR.** It recorded `.g3lad scrollWidth 656 /
+clientWidth 632 — 24px over its own LAD_W` as unexplained. **`LAD_ROCW` was 56 for a column that
+needs 84**: the widest ROC string, `−100% −100% ▼99%`, measures 83px at 8.4px/800, so the last
+column has been overflowing its declared width since v14.46 and `LAD_W` has been telling the truth
+about every column except the one on the end. Found by the bounding-box audit, not by reading.
+`test_ladder` now asserts `LAD_ROC + LAD_ROCW === LAD_W`, so the constant cannot lie again.
+
+**THE TRUE WIDTH GOES 657 → 618.** Not 632 → 588, which is what the old constants would have
+claimed. ⚠ **618 still does not fit a 454px panel body, and no arrangement of nine columns of 8.4px
+text does — the approved mockup is itself drawn on a 544px panel.** The container scrolls rather than
+clips, so nothing is ever silently dropped. The last stretch is one drag of the panel edge, and it is
+his call, not something to close by deleting a column.
+
+**THE RENDER AUDIT EARNED ITS KEEP — TWICE, AND THE SECOND TIME AGAINST MY OWN FIX.** Pairwise
+bounding-box audit over 53 elements at the real fonts and worst-case strings:
+
+- It found `roleOut "RUG"` at `[206.8, 224.6]` against a chute starting at 224 — **over the wall by
+  six tenths of a pixel**, on a 74% node. Cause: the fit test charged the role for a *maximum-width*
+  %King instead of measuring the actual one, so a role that fit inside its bar was pushed out.
+- The clamp I wrote to fix that then put the label back **on top of its own bar**. There are three
+  states, not two: it fits where it wants, it fits clamped, or **it does not fit and is not drawn**.
+  `fitL` now floors at the bar's tip and returns null, and the hover still carries the role.
+
+Neither collision was visible in a screenshot and neither would have been caught by reading.
+
+test_ladder 84 → 108 asserts, **eleven of them mutation-tested** (narrow the state cell, divide
+kingKd instead of multiplying, flip the delta bars, suppress the fallback, restore the wallpaper
+peak, count king taps at the converted price, push the marker into the chute, clamp onto the bar,
+restore LAD_ROCW=56 — every one fires). Suite 114 green, the 6 documented baseline reds unchanged.
+`tools/smoke.js` clean.
+
 ## v14.53 — the IRT export had been silently dead every morning, and v14.52 never once ran
 
 **MEASURED ON THE LIVE PANEL, 2026-08-27 10:27 CT**, after the operator asked whether last night's

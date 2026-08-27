@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.53
+// @version    14.54
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -620,7 +620,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.53';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.54';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -19358,6 +19358,12 @@ function ensureV3Css(){
       'color:#0d1117;border-radius:8px;font-size:9px;font-weight:900;display:flex;align-items:center;'+
       'justify-content:center;transform:translateY(-50%);z-index:9;cursor:help}'+
     '#gpts-body .g3ldnow.str{background:#e0645f;color:#fff}'+
+    // (v14.54, mockup v11) WHEN PRICE IS ON A KING, THE PILL SAYS SO. Within LAD_KING_TEST_PTS of a
+    // crown the price pill takes that book's colour, so "price is testing the SPXW King" is one
+    // glance instead of an alignment the eye has to verify across two columns.
+    '#gpts-body .g3ldnow.kSPXW{background:#e3c341;color:#2a2408}'+
+    '#gpts-body .g3ldnow.kSPY{background:#cdb4fa;color:#1b1030}'+
+    '#gpts-body .g3ldnow.kQQQ{background:#5fd3bc;color:#08221d}'+
     '#gpts-body .g3ldnowarm{position:absolute;left:'+LAD_PXC+'px;right:6px;height:1px;background:rgba(255,255,255,.12);transform:translateY(-50%)}'+
     // levels · price
     '#gpts-body .g3ldlv{position:absolute;left:0;width:'+LAD_LVL+'px;text-align:right;font-size:8.4px;'+
@@ -19373,15 +19379,29 @@ function ensureV3Css(){
     // (v14.48) THE PILLS in the price column: the expected-move boundaries and the three Kings.
     // They overlay the price column and are allowed to extend a little left over the connector gap,
     // because a pill is the row's identity and the plain price beneath it is redundant while it shows.
-    '#gpts-body .g3ldempill{position:absolute;left:'+(LAD_PXC-14)+'px;font-size:7.8px;font-weight:900;'+
-      'color:#f2b45a;background:rgba(242,180,90,.10);border:1px solid rgba(242,180,90,.55);'+
-      'border-radius:7px;padding:0 5px;line-height:12px;transform:translateY(-50%);white-space:nowrap;cursor:help;z-index:4}'+
-    '#gpts-body .g3ldrailend{position:absolute;left:'+(LAD_PXC-14)+'px;font-size:7px;font-weight:800;'+
+    // (v14.54) THE PILLS NOW LIVE IN THE CHUTE, which is what empties the left gutter. Before this
+    // build the EM edges and the three crowns were parked at LAD_PXC-14, i.e. ON TOP of the level-name
+    // column - that is the collision the operator photographed, with CW.CW0-1 sitting across ~EH 7750.
+    // The chute is the one column that carries every price that matters: where price IS, the three
+    // crowns, and the two edges of the day's budget. Nothing else may enter it, and test_ladder
+    // asserts that - the MARKER, the tap counter and the delta profile all start at LAD_MK or later.
+    '#gpts-body .g3ldempill{position:absolute;left:'+(LAD_CH+2)+'px;width:'+(LAD_CHW-4)+'px;font-size:7.4px;'+
+      'font-weight:900;color:#f2b45a;background:rgba(242,180,90,.12);border:1px solid rgba(242,180,90,.55);'+
+      'border-radius:7px;padding:0 4px;height:13px;box-sizing:border-box;transform:translateY(-50%);'+
+      'white-space:nowrap;cursor:help;z-index:5;display:flex;align-items:center;justify-content:center;gap:3px}'+
+    '#gpts-body .g3ldrailend{position:absolute;left:'+(LAD_CH+LAD_CHW+4)+'px;font-size:7px;font-weight:800;'+
       'color:#4b5563;transform:translateY(-50%);white-space:nowrap;cursor:help}'+
-    '#gpts-body .g3ldking{position:absolute;left:'+(LAD_PXC-16)+'px;font-size:8px;font-weight:900;'+
-      'border-radius:8px;padding:0 5px;line-height:13px;transform:translateY(-50%);white-space:nowrap;'+
-      'cursor:help;z-index:5;display:inline-flex;align-items:center;gap:3px}'+
-    '#gpts-body .g3ldking b{font-weight:900;font-size:8.4px}'+
+    '#gpts-body .g3ldking{position:absolute;left:'+(LAD_CH+2)+'px;width:'+(LAD_CHW-4)+'px;font-size:8px;'+
+      'font-weight:900;border-radius:7px;padding:0 3px;height:14px;box-sizing:border-box;'+
+      'transform:translateY(-50%);white-space:nowrap;cursor:help;z-index:6;display:flex;align-items:center;gap:2px}'+
+    '#gpts-body .g3ldking b{font-weight:900;font-size:8px}'+
+    // THE TEST COUNTER, inside the crown it belongs to - absent until the king has actually been
+    // tested, because an untested crown is the strong one (~80%) and each distinct test spends it.
+    '#gpts-body .g3ldkt{margin-left:auto;font-size:6.4px;font-weight:900;line-height:9px;padding:0 3px;'+
+      'border-radius:5px;background:rgba(255,255,255,.14)}'+
+    '#gpts-body .g3ldkt1{color:#e6edf3}'+
+    '#gpts-body .g3ldkt2{color:#f2b45a;background:rgba(242,180,90,.22)}'+
+    '#gpts-body .g3ldkt3{color:#e0645f;background:rgba(224,100,95,.26)}'+
     // the book tag: deliberately small, because WHICH king is a qualifier on the price, not a rival to it
     '#gpts-body .g3ldking i{font-style:normal;font-size:5.6px;font-weight:900;letter-spacing:.06em;opacity:.85}'+
     '#gpts-body .g3ldkingSPXW{color:#e3c341;background:rgba(227,195,65,.12);border:1px solid rgba(227,195,65,.6)}'+
@@ -19391,9 +19411,14 @@ function ensureV3Css(){
     // before the hover is read that this one is a different kind of claim.
     '#gpts-body .g3ldking.approx{border-style:dashed}'+
     // nodes — anchored outside, growing INWARD toward the chute, type riding the bar
+    // (v14.54) %KING IS LEFT-JUSTIFIED INSIDE THE BAR and the type is right-justified at its tip, so
+    // the number belongs to the bar rather than to a column parked beside price. Deleting LAD_KPCT is
+    // the single largest width saving in this build (-42px) and it also removes a read where the eye
+    // had to travel from a bar to a distant figure to learn how long the bar was.
     '#gpts-body .g3ldbar{position:absolute;left:'+LAD_NODE+'px;height:12px;border-radius:2px;transform:translateY(-50%);'+
-      'display:flex;align-items:center;justify-content:flex-end;padding-right:3px;box-sizing:border-box;'+
-      'font-size:8px;font-weight:900;letter-spacing:.03em;font-style:normal;cursor:help}'+
+      'display:flex;align-items:center;justify-content:space-between;padding:0 3px 0 4px;box-sizing:border-box;'+
+      'font-size:8px;font-weight:900;letter-spacing:.03em;font-style:normal;cursor:help;overflow:hidden}'+
+    '#gpts-body .g3ldbar b{font-weight:900;font-size:8px}'+
     '#gpts-body .g3ldbar.acc{background:#a371f7;color:#1b1030}'+
     '#gpts-body .g3ldbar.brk{background:#e3c341;color:#2a2408}'+
     '#gpts-body .g3ldbar.bal{background:transparent;box-shadow:inset 0 0 0 1px rgba(139,152,169,.6);color:#8b98a9}'+
@@ -19402,24 +19427,45 @@ function ensureV3Css(){
       'border:1px solid #4a5462;border-left:none;border-radius:0 2px 2px 0;cursor:help}'+
     '#gpts-body .g3ldrole{position:absolute;font-size:8px;font-weight:900;transform:translateY(-50%);white-space:nowrap;cursor:help}'+
     '#gpts-body .g3ldrole.acc{color:#a371f7}#gpts-body .g3ldrole.brk{color:#e3c341}#gpts-body .g3ldrole.bal{color:#8b98a9}'+
-    '#gpts-body .g3ldkp{position:absolute;left:'+LAD_KPCT+'px;width:38px;text-align:right;font-size:8.4px;'+
-      'font-weight:800;transform:translateY(-50%);white-space:nowrap;cursor:help}'+
+    // the %King and the type fall OUT of the bar when the bar is too short to hold them, rather than
+    // being suppressed - a short bar is exactly the case where the number is not guessable from length.
+    '#gpts-body .g3ldkp{position:absolute;font-size:8px;font-weight:800;transform:translateY(-50%);'+
+      'white-space:nowrap;text-align:left;cursor:help}'+
     '#gpts-body .g3ldkp.acc{color:#a371f7}#gpts-body .g3ldkp.brk{color:#e3c341}#gpts-body .g3ldkp.bal{color:#8b98a9}'+
-    '#gpts-body .g3ldtgt{position:absolute;left:'+(LAD_CH+LAD_CHW-16)+'px;font-size:8.5px;font-weight:900;color:#4fd1e0;'+
+    '#gpts-body .g3ldtgt{position:absolute;left:'+(LAD_CH+LAD_CHW+4)+'px;font-size:8.5px;font-weight:900;color:#4fd1e0;'+
       'transform:translateY(-50%);background:#11161f;padding:0 2px;border-radius:2px;z-index:7;cursor:help}'+
-    // profile — mirrored, growing inward from the right
-    '#gpts-body .g3ldppk{position:absolute;height:10px;transform:translateY(-50%);border:1px solid #4a5462;'+
-      'border-right:none;border-radius:2px 0 0 2px;cursor:help}'+
-    '#gpts-body .g3ldpf{position:absolute;height:10px;transform:translateY(-50%);cursor:help}'+
-    '#gpts-body .g3ldpf.acc{background:rgba(163,113,247,.8)}'+
-    '#gpts-body .g3ldpf.brk{background:rgba(227,195,65,.8)}'+
-    '#gpts-body .g3ldpf.bal{box-shadow:inset 0 0 0 1px rgba(139,152,169,.6)}'+
+    // (v14.54) THE DELTA PROFILE - Skylit's own signed 15-minute rate of change, IN DOLLARS, hanging
+    // off a zero line. It replaces the mirrored %King profile, which drew the same fact the node bar
+    // already drew, only backwards.
+    // ⚠ WHY DOLLARS AND NOT PERCENT: the column immediately beside it already prints 5m/15m as
+    // PERCENTAGES, so a percent bar would have been its neighbour said twice. Dollars are the unit
+    // that actually creates hedging pressure, they match the roll arrows, and they make a roll
+    // CHECKABLE BY EYE - a source reads -$4M and its destination +$4M.
+    // ⚠ THE AXIS IS ON THE RIGHT AND THE BARS HANG LEFT OF IT (operator sketch). Every bar ends on the
+    // same line so their tips form one straight edge and lengths compare at a glance; every figure
+    // sits immediately right of that line so the numbers form a column too. COLOUR carries the sign,
+    // which is why the bars do not need opposite directions to say it.
+    '#gpts-body .g3lddbase{position:absolute;left:'+LAD_DAX+'px;top:0;bottom:0;width:1px;background:#4a5568}'+
+    '#gpts-body .g3lddtag{position:absolute;left:'+(LAD_DAX+4)+'px;top:0;font-size:6px;font-weight:900;'+
+      'letter-spacing:.08em;color:#5b6675;background:#11161f;padding:0 3px;border-radius:2px;cursor:help}'+
+    '#gpts-body .g3lddbar{position:absolute;height:9px;transform:translateY(-50%);border-radius:1px 0 0 1px;cursor:help}'+
+    '#gpts-body .g3lddbar.up{background:#2ec27e}'+
+    '#gpts-body .g3lddbar.dn{background:#e0645f}'+
+    '#gpts-body .g3lddval{position:absolute;left:'+LAD_DLAB+'px;width:'+LAD_DLABW+'px;font-size:7.4px;'+
+      'font-weight:900;transform:translateY(-50%);white-space:nowrap;cursor:help}'+
+    '#gpts-body .g3lddval.up{color:#2ec27e}'+
+    '#gpts-body .g3lddval.dn{color:#e0645f}'+
     // rolls · state · roc
-    '#gpts-body .g3ldrolls{position:absolute;left:'+LAD_ROLL+'px;top:0;width:60px;bottom:0}'+
+    // (v14.54) THE ROLL LANE SITS LEFT OF THE PRICES (operator-directed, mockup v11). Both ends of an
+    // arrow now meet the price column's own edge, so each end points at the price it belongs to
+    // instead of floating in a gutter on the far side of the ladder - and its old right-hand slot is
+    // reclaimed outright, which is 60px of the width this build had to find.
+    '#gpts-body .g3ldrolls{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none}'+
     '#gpts-body .g3ldrolls svg{position:absolute;left:0;top:0;overflow:visible}'+
     '@keyframes g3ldflow{to{stroke-dashoffset:-18}}'+
     '#gpts-body .g3ldflow{animation:g3ldflow 1.5s linear infinite}'+
-    '#gpts-body .g3ldramt{position:absolute;left:12px;font-size:7.6px;font-weight:900;transform:translateY(-50%);white-space:nowrap;cursor:help}'+
+    '#gpts-body .g3ldramt{position:absolute;left:'+(LAD_ROLL-16)+'px;width:'+LAD_ROLLW+'px;text-align:right;'+
+      'font-size:7.2px;font-weight:900;transform:translateY(-50%);white-space:nowrap;cursor:help;pointer-events:auto}'+
     '#gpts-body .g3ldst{position:absolute;left:'+LAD_ST+'px;width:'+LAD_STW+'px;font-size:8.4px;font-weight:900;'+
       'transform:translateY(-50%);white-space:nowrap;cursor:help}'+
     // (v14.49) the settled vocabulary: BUILDING · HOLDING · TURN UP/DN · WEAKENING · SPENT
@@ -19435,9 +19481,9 @@ function ensureV3Css(){
     '#gpts-body .g3ldtap2{color:#f2b45a;background:rgba(242,180,90,.20)}'+
     '#gpts-body .g3ldtap3{color:#e0645f;background:rgba(224,100,95,.24)}'+
     // the MARKER — the level's relationship to PRICE, beside the chute where the eye already is
-    '#gpts-body .g3ldmk{position:absolute;left:'+(LAD_CH+LAD_CHW+4)+'px;font-size:7.4px;font-weight:900;'+
-      'letter-spacing:.03em;transform:translateY(-50%);white-space:nowrap;background:#11161f;'+
-      'padding:0 3px;border-radius:3px;z-index:7;cursor:help}'+
+    '#gpts-body .g3ldmk{position:absolute;left:'+LAD_MK+'px;width:'+LAD_MKW+'px;font-size:7px;font-weight:900;'+
+      'letter-spacing:.02em;transform:translateY(-50%);white-space:nowrap;background:#11161f;'+
+      'padding:0 2px;box-sizing:border-box;border-radius:3px;z-index:7;cursor:help;overflow:hidden}'+
     '#gpts-body .g3ldmkBREAKING{color:#e0645f;box-shadow:inset 0 0 0 1px rgba(224,100,95,.55)}'+
     '#gpts-body .g3ldmkDEFENDING{color:#2ec27e;box-shadow:inset 0 0 0 1px rgba(46,194,126,.55)}'+
     '#gpts-body .g3ldmkATTRACTING{color:#4fd1e0;box-shadow:inset 0 0 0 1px rgba(79,209,224,.5)}'+
@@ -21243,9 +21289,55 @@ function levelDoors(rolls, dsc){
 // 44px cell and LAD_ROC was 528 — the offsets ordered correctly, which is all the test checked, while
 // "WEAKENING" at 8.4px/900 renders ~50px wide and printed straight over the ROC numbers. Every column
 // now declares its WIDTH and test_ladder asserts offset+width <= next offset.
-var LAD_W=632, LAD_LVL=78, LAD_PXC=96, LAD_PXW=56, LAD_NODE=154, LAD_NMAX=70, LAD_KPCT=226,
-    LAD_CH=268, LAD_CHW=44, LAD_PROF=436, LAD_PMAX=76, LAD_ROLL=440,
-    LAD_ST=488, LAD_STW=54, LAD_TAP=546, LAD_TAPW=24, LAD_ROC=574, LAD_ROCW=56;
+// (v14.54) RE-LAID TO mockups/mockup-ladder-v11.html, the operator-approved spec. Four changes, and
+// each one deletes width rather than tuning it:
+//   1. %King is LEFT-JUSTIFIED INSIDE ITS OWN BAR, so the whole LAD_KPCT column is GONE (-42px).
+//   2. THE ROLL LANE MOVED LEFT, into the gap that already existed between the level names and the
+//      prices, so its old right-hand slot is reclaimed outright (-60px).
+//   3. The mirrored %King profile became the SIGNED DELTA PROFILE IN DOLLARS - a zero line with the
+//      bars hanging left of it and the figure immediately right, which is narrower AND says something
+//      the %King bar did not already say.
+//   4. The three King pills and the EM edges moved INTO the chute, which is why it widens 44 -> 66.
+//      That is what empties the left gutter the operator photographed, where CW.CW0-1 was sitting on
+//      top of ~EH 7750.
+// NET: the ladder's TRUE width goes 657 -> 618 (the declared constants said 632 -> 618; the old
+// ROC column silently overflowed by 25px, which is the discrepancy LOCKED-ITEMS could not account
+// for). The left gutter the operator photographed is now empty.
+// (v14.54) THE HONEST PART: 574 STILL DOES NOT FIT A 454px PANEL BODY, and no arrangement of nine
+// columns of 8.4px text does - the approved mockup itself is drawn on a 544px panel. The container
+// SCROLLS rather than clips (v14.46), so nothing is ever silently dropped, and the panel is
+// resizable. This build makes the ladder as narrow as the approved design allows; the last stretch
+// is one drag of the panel edge. Do not "fix" the remainder by deleting a column without asking.
+// ⚠ STW STAYS WIDE ENOUGH FOR "WEAKENING". The approved mockup uses 38px because it abbreviates the
+// states to WEAK/FORM/TURN/DOOR/USED — but the vocabulary was SETTLED at v14.49 as
+// BUILDING · HOLDING · TURN UP/DN · WEAKENING · SPENT and the resume note says not to re-litigate it.
+// So the words win and the column keeps its 54px. That is the v14.50 lesson: a 50px word in a 44px
+// cell prints over its neighbour, and asserting the OFFSETS were ordered proved nothing about it.
+var LAD_W=618, LAD_LVL=66, LAD_ROLL=84, LAD_ROLLW=44, LAD_PXC=114, LAD_PXW=30,
+    LAD_NODE=150, LAD_NMAX=70,
+    LAD_CH=224, LAD_CHW=66,
+    LAD_MK=294, LAD_MKW=46, LAD_TAP=344, LAD_TAPW=20,
+    LAD_DAX=424, LAD_DMAX=56, LAD_DLAB=428, LAD_DLABW=44,
+    LAD_ST=476, LAD_STW=54, LAD_ROC=534, LAD_ROCW=84;
+// ⚠⚠ (v14.54) LAD_ROCW WAS 56 AND THE COLUMN NEEDS 84 — AND THAT IS THE 24px NOBODY COULD EXPLAIN.
+// LOCKED-ITEMS recorded ".g3lad scrollWidth 656 / clientWidth 632 = 24px over its own LAD_W" as an
+// unexplained discrepancy. This is it: the widest ROC string is "-100% -100% ▼99%", which measures
+// 83px at 8.4px/800, so the last column has been overflowing its declared width since v14.46 and
+// LAD_W has been telling the truth about every column except the one on the end.
+// Found by the pairwise bounding-box audit, not by reading — the same audit PROJECT-CONSTANTS L-D
+// mandates and the same lesson as L-E: assert WIDTHS, not just offsets.
+// (v14.54) THE DELTA PROFILE'S SCALE, AND ITS UNITS - MEASURED ON THE LIVE TAPE 2026-08-27 16:52 CT,
+// not assumed. SPXW King 7690: tapeMap kingKd = 12680, velocity.cur = -12,680,083.27. So
+// kingKd is in THOUSANDS of dollars and velocity.cur / .d15 are in DOLLARS, and kingKd*1000 is the
+// King's own mass. This is the exact unit pairing that PROJECT-CONSTANTS L-F names as the most
+// common real bug in this file, so it is written down with the measurement that settles it.
+// Full scale is a FRACTION OF THE KING rather than a fixed dollar figure, so it self-scales to the
+// instrument and a quiet day still looks quiet.
+var LAD_DELTA_FULL_FRAC=0.45;      // 45% of the King's mass fills the bar
+var LAD_DELTA_MIN_FRAC=0.02;       // below 2% of the King, a bar would be noise - draw nothing
+var LAD_PEAK_MIN_GIVEBACK=12;      // points of %King given back before the day-peak outline draws
+var LAD_PCT_IN_BAR=34;             // a bar at least this wide can carry its own %King inside it
+var LAD_KING_TEST_PTS=2;           // price within this many chart points of a crown is TESTING it
 var LAD_SNAP_PTS=2;         // a level within this many points of a node shares that node's row
 // (v14.48, operator-directed) THE THREE KINGS, ON ONE SCALE. "I want to see where price is relative
 // to the 3 kings" — SPXW's, SPY's and QQQ's, each as a pill in the price column with its own crown
@@ -21315,9 +21407,19 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
     var dsc=1; try{ dsc=ifDispScale()||1; }catch(eD){}
     var h='<div class="g3ladwrap"><div class="g3lad" style="height:'+H+'px">';
     var OFF=[];
+    // (v14.54) THE KING'S OWN MASS, in DOLLARS, which is what the delta profile is scaled against.
+    // ⚠ kingKd arrives in THOUSANDS from the tape and velocity.d15 is in DOLLARS - measured
+    // 2026-08-27 on SPXW 7690: kingKd 12680, velocity.cur -12,680,083. Multiply, never divide.
+    var kingUsd=0;
+    try{ var TK=tapeMap('SPXW'); if(TK && typeof TK.kingKd==='number' && isFinite(TK.kingKd)) kingUsd=Math.abs(TK.kingKd)*1000; }catch(eKU){}
+    var dFull=kingUsd>0?kingUsd*LAD_DELTA_FULL_FRAC:0, dMin=kingUsd>0?kingUsd*LAD_DELTA_MIN_FRAC:0;
 
     // ---- the chute: price, and the day's budget ------------------------------------------------
     h+='<i class="g3chute"></i>';
+    // the delta axis, and the WINDOW named ONCE at its head - repeating "15M" on every bar would be
+    // fifteen copies of a constant. The VALUE goes on each bar, because that is what varies.
+    if(dFull>0) h+='<i class="g3lddbase"></i><span class="g3lddtag"'+
+      g3tip('Every bar in this column is Skylit\u2019s own 15-minute delta for that strike, in DOLLARS of dealer gamma. Full scale is 45% of the King\u2019s own mass, so it self-scales to the instrument and a quiet day still looks quiet.')+'>15M $</span>';
     if(EB.hiWater!=null && EB.loWater!=null && inFrame(EB.hiWater) && inFrame(EB.loWater)){
       h+='<i class="g3ldrange" style="top:'+Y(EB.hiWater).toFixed(1)+'px;height:'+
          Math.max(1,(Y(EB.loWater)-Y(EB.hiWater))).toFixed(1)+'px"'+
@@ -21364,7 +21466,12 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       var pkPct=null;
       if(pkv!=null && vvE && typeof vvE.cur==='number' && Math.abs(vvE.cur)>0)
         pkPct=Math.min(100, pct*Math.abs(pkv)/Math.abs(vvE.cur));
-      var plen=(pkPct!=null&&pkPct>pct)?Math.max(len,pkPct/100*LAD_NMAX):0;
+      // ⚠ (v14.54) THE DAY PEAK ONLY DRAWS WHEN IT MEANS SOMETHING. Outlining every node a point off
+      // its high put a grey box on nearly every row and turned a real signal into wallpaper. The
+      // level has to have given back LAD_PEAK_MIN_GIVEBACK points of %King before it is worth a mark,
+      // and the delta column beside it already carries the live rate.
+      var giveback=(pkPct!=null)?(pkPct-pct):0;
+      var plen=(pkPct!=null && giveback>=LAD_PEAK_MIN_GIVEBACK)?Math.max(len,pkPct/100*LAD_NMAX):0;
       var role=P.role||'';
       var lvS=(LVLST&&LVLST[P.k])?LVLST[P.k]:null;
       var vv=null; try{ var vE=velAt(P.k); vv=(vE&&vE.v&&!vE.stale)?vE.v:null; }catch(eV){}
@@ -21376,18 +21483,59 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
         (lvS&&lvS.why?(' ◆ '+lvS.st+' — '+lvS.why+'.'):'');
       h+='<span class="g3ldpx" style="top:'+t.toFixed(1)+'px"'+g3tip(tip)+'>'+g3esc(frameNum(P.disp))+'</span>';
       if(plen>len) h+='<i class="g3ldpk" style="top:'+t.toFixed(1)+'px;width:'+plen.toFixed(0)+'px"'+
-        g3tip('Day peak — the outline is what this level HAD; the bar is what it holds now.')+'></i>';
-      var fits=(role && len>=(role.length*6.2+10));
+        g3tip('Day peak '+Math.round(pkPct)+'% — this level has given back '+Math.round(giveback)+' points of its own mass since its high today. The outline is what it HAD; the bar is what it holds now.')+'></i>';
+      // (v14.54) THE BAR CARRIES ITS OWN NUMBER ON THE LEFT AND ITS TYPE ON THE RIGHT, when there is
+      // room for each. Anything that does not fit falls OUT of the bar rather than being suppressed —
+      // a short bar is exactly the case where the number cannot be guessed from the length.
+      // ⚠ THE FIT TEST MEASURES THE ACTUAL STRINGS, NOT A CONSTANT. The first draft asked whether the
+      // bar cleared LAD_PCT_IN_BAR + the role's width, i.e. it charged the role for a %King of the
+      // MAXIMUM size no matter what the number actually was — so a 74% node with "+74%" and "RUG"
+      // (49px of text in a 52px bar) pushed the role outside, where the clamp then put it back on top
+      // of the bar's own tip. The render audit caught the collision; the cause was a fixed allowance
+      // standing in for a measurement. Widths are ~5.6px per char at 8px/900, ~6.2px for the role's
+      // wider letterforms, plus the bar's 7px of padding.
+      var pctTxt=(neg?'\u2212':'+')+pct+'%';
+      var pctW=pctTxt.length*5.6, roleW=role?(role.length*6.2):0;
+      var roomPct=(len>=Math.max(LAD_PCT_IN_BAR, pctW+8));
+      var roomTyp=(role && len>=(pctW+roleW+11));
       h+='<i class="g3ldbar '+k+(role==='KING'?' king':'')+'" style="top:'+t.toFixed(1)+'px;width:'+len.toFixed(0)+'px"'+
-         g3tip(tip)+'>'+(fits?g3esc(role):'')+'</i>';
-      if(role && !fits) h+='<span class="g3ldrole '+k+'" style="top:'+t.toFixed(1)+'px;left:'+(LAD_NODE+len+5).toFixed(0)+'px"'+g3tip(tip)+'>'+g3esc(role)+'</span>';
-      h+='<span class="g3ldkp '+k+'" style="top:'+t.toFixed(1)+'px"'+g3tip(tip)+'>'+(neg?'−':'+')+pct+'%'+(role==='KING'?' ♛':'')+'</span>';
+         g3tip(tip)+'>'+(roomPct?('<b>'+pctTxt+'</b>'):'')+(roomTyp?g3esc(role):'')+'</i>';
+      // ⚠⚠ A FALLBACK LABEL IS THE NEW WAY INTO THE CHUTE, and the render audit caught it: a 74% node
+      // with a 3-letter role put "RUG" at [206.8, 224.6] against a chute starting at 224 — over the
+      // wall by six tenths of a pixel. A label that has nowhere legal to sit is DROPPED, not shoved:
+      // the hover still names the role, and the bar's colour still carries the polarity, but nothing
+      // is ever allowed to touch price's channel. `fitL` returns null when there is no room at all.
+      // ⚠ THE FLOOR IS THE BAR'S OWN TIP, NOT THE COLUMN START. The first version clamped down to
+      // LAD_NODE, which meant a label with no legal gap was pushed back ON TOP OF THE BAR it belongs
+      // to — trading a chute intrusion for an overlap, which the audit then caught as well. There are
+      // three states, not two: it fits where it wants, it fits clamped, or IT DOES NOT FIT AND IS NOT
+      // DRAWN. The hover still carries the role and the bar's colour still carries the polarity, so
+      // nothing is lost that the row does not still say.
+      var barTip=LAD_NODE+len+2;
+      function fitL(x, wPx){ var max=LAD_CH-2-wPx; return (x<=max)?x:((max>=barTip)?max:null); }
+      if(!roomPct){
+        var pxL=fitL(LAD_NODE+len+4, pctTxt.length*5.6+2);
+        if(pxL!=null) h+='<span class="g3ldkp '+k+'" style="top:'+t.toFixed(1)+'px;left:'+pxL.toFixed(0)+'px"'+g3tip(tip)+'>'+pctTxt+'</span>';
+      }
+      if(role && !roomTyp){
+        var rlL=fitL(LAD_NODE+len+(roomPct?4:34), role.length*6.2+2);
+        if(rlL!=null) h+='<span class="g3ldrole '+k+'" style="top:'+t.toFixed(1)+'px;left:'+rlL.toFixed(0)+'px"'+g3tip(tip)+'>'+g3esc(role)+'</span>';
+      }
       // (v14.49) the destination marker folds into levelMarkerOf below, which distinguishes
       // POTENTIAL (dominant pull) from EVIDENCE (dominant pull AND the distance closing).
-      // profile mirror
-      var pf=Math.max(9, pct/100*LAD_PMAX), pp=(pkPct!=null&&pkPct>pct)?Math.max(pf,pkPct/100*LAD_PMAX):0;
-      if(pp>pf) h+='<i class="g3ldppk" style="top:'+t.toFixed(1)+'px;left:'+(LAD_PROF-pp).toFixed(0)+'px;width:'+pp.toFixed(0)+'px"'+g3tip(tip)+'></i>';
-      h+='<i class="g3ldpf '+k+'" style="top:'+t.toFixed(1)+'px;left:'+(LAD_PROF-pf).toFixed(0)+'px;width:'+pf.toFixed(0)+'px"'+g3tip(tip)+'></i>';
+      // THE DELTA PROFILE — Skylit's own signed 15m delta, in dollars, hanging left off the zero line.
+      // ⚠ THIS IS MAGNITUDE, NOT POLARITY. A purple (negative-gamma) node that is draining is not
+      // becoming MORE negative — it is becoming less of anything. Green builds, red drains, and the
+      // node bar's own colour is where polarity is read. Conflating the two would be a fifth instance
+      // of the mislabelling pattern this file already carries four of.
+      var d15=null; try{ if(vv && typeof vv.d15==='number' && isFinite(vv.d15)) d15=vv.d15; }catch(eD15){}
+      if(d15!=null && dFull>0 && Math.abs(d15)>=dMin){
+        var dUp=(d15>0), dMag=Math.max(2, Math.min(Math.abs(d15), dFull)/dFull*LAD_DMAX);
+        var dTxt=''; try{ dTxt=usdBig(Math.abs(d15))||''; }catch(eDT){}
+        var dTip='15 minutes moved '+(dUp?'+':'\u2212')+dTxt+' of dealer gamma at this strike — Skylit\u2019s own delta15, in DOLLARS. Length is how much moved; GREEN is building and RED is draining. \u26a0 MAGNITUDE, not polarity: a negative-gamma node that is draining is becoming less of anything, not more negative. Full scale is 45% of the King\u2019s own mass ('+(usdBig(dFull)||'')+').';
+        h+='<i class="g3lddbar '+(dUp?'up':'dn')+'" style="top:'+t.toFixed(1)+'px;left:'+(LAD_DAX-dMag).toFixed(0)+'px;width:'+dMag.toFixed(0)+'px"'+g3tip(dTip)+'></i>'+
+           '<span class="g3lddval '+(dUp?'up':'dn')+'" style="top:'+t.toFixed(1)+'px"'+g3tip(dTip)+'>'+(dUp?'+':'\u2212')+g3esc(dTxt)+'</span>';
+      }
       // the STATE, the TESTS COUNTER and the MARKER — three orthogonal facts, three slots. A row
       // reading "WEAKENING 3x" is draining AND worn out, which no single label could ever say.
       if(lvS && lvS.st && lvS.st!=='HOLDING')
@@ -21475,12 +21623,25 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       KG.forEach(function(K){
         if(!inFrame(K.at)){ OFF.push({n:K.book+' King', at:K.at}); return; }
         var t=Y(K.at), guard=0;
-        while(guard++<8 && used.some(function(u){ return Math.abs(u-t)<13; })) t+=13;
+        while(guard++<8 && used.some(function(u){ return Math.abs(u-t)<15; })) t+=15;
         used.push(t);
         var prox=(K.at>now)?'above price':'below price';
+        // (v14.54) THE TEST COUNTER ON THE CROWN. A king is a level like any other and is spent by
+        // being tested — the Academy's own table is ~80% untested, ~66% after one test, ~33% after
+        // two. The badge is ABSENT at zero, because an untested crown is the strong one and a "0x"
+        // would read as a weak signal rather than the strongest state on the board.
+        // ⚠ Taps are counted on the SPXW book at the king's OWN strike, not at its converted chart
+        // price — the tap machine lives in strike space and converting first would compare two scales.
+        var kt=0;
+        try{ if(K.book==='SPXW' && typeof K.raw==='number') kt=nodeTapCount('SPXW', K.raw)||0; }catch(eKT){}
+        var ktTip=(kt>0)
+          ? (' TESTED '+kt+'\u00d7 today: price reached it, left, and came back'+(kt>1?(' '+kt+' separate times'):' once')+
+             '. The next test holds ~'+(TAP_PROB[Math.min(kt,2)])+'% historically — every test spends it.')
+          : ' UNTESTED today — no distinct touch yet, which is the ~80% state.';
         h+='<span class="g3ldking g3ldking'+K.book+(K.kind==='proportional'?' approx':'')+'" style="top:'+t.toFixed(1)+'px"'+
-           g3tip(K.tip+' It sits '+Math.abs(Math.round(K.at-now))+' points '+prox+'.')+'>'+
-           '\u265b<b>'+(K.kind==='proportional'?'~':'')+g3esc(frameNum(K.at))+'</b><i>'+g3esc(K.book)+'</i></span>';
+           g3tip(K.tip+' It sits '+Math.abs(Math.round(K.at-now))+' points '+prox+'.'+(K.book==='SPXW'?ktTip:''))+'>'+
+           '\u265b<b>'+(K.kind==='proportional'?'~':'')+g3esc(frameNum(K.at))+'</b><i>'+g3esc(K.book)+'</i>'+
+           (kt>0?('<b class="g3ldkt g3ldkt'+Math.min(kt,3)+'">'+kt+'\u00d7</b>'):'')+'</span>';
       });
     }catch(eKG){}
 
@@ -21490,10 +21651,25 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
     // ---- price now ------------------------------------------------------------------------------
     if(inFrame(now)){
       var tn=Y(now);
+      // ⚠ (v14.54) TESTING A KING IS THE ONE THING THE PILL SHOULD SAY ON ITS OWN. Within
+      // LAD_KING_TEST_PTS of a crown the pill takes that book's colour, so "price is on the SPXW
+      // King" is a glance rather than an alignment the eye has to verify across two columns.
+      // The STRETCHED red still wins when both apply: being outside the day's budget is the louder
+      // fact, and two states cannot share one background.
+      var onK=null;
+      try{
+        var KGn=ladderKings(EB, sym);
+        for(var ki=0; ki<KGn.length; ki++){ if(Math.abs(KGn[ki].at-now)<=LAD_KING_TEST_PTS){ onK=KGn[ki]; break; } }
+      }catch(eOK){}
+      var nowCls=EB.stretched?' str':(onK?(' k'+onK.book):'');
+      var nowTip=EB.stretched
+        ? 'Price now — LIVE. RED: price is beyond the expected move — STRETCHED.'
+        : (onK ? ('Price now — LIVE, and TESTING the '+onK.book+' King at '+frameNum(onK.at)+'.'+
+                  (onK.kind==='proportional'?' \u26a0 that crown is a proportional bearing, not a basis conversion — a bearing, never a level.':''))
+               : 'Price now — LIVE.');
       h+='<i class="g3ldnowarm" style="top:'+tn.toFixed(1)+'px"></i>'+
-         '<span class="g3ldnow'+(EB.stretched?' str':'')+'" style="top:'+tn.toFixed(1)+'px"'+
-         g3tip('Price now — LIVE.'+(EB.stretched?' RED: price is beyond the expected move — STRETCHED.':''))+'>'+
-         g3esc(frameNum(now))+'</span>';
+         '<span class="g3ldnow'+nowCls+'" style="top:'+tn.toFixed(1)+'px"'+
+         g3tip(nowTip)+'>'+g3esc(frameNum(now))+'</span>';
     }
     h+='</div></div>';
     if(OFF.length){
@@ -21520,17 +21696,22 @@ function ladderRolls(ROLLS, Y, dsc, lo, hi, H){
       var a=r.from*dsc, b=r.to*dsc;
       if(!(a>=lo&&a<=hi) || !(b>=lo&&b<=hi)) continue;
       var yA=Y(a), yB=Y(b), up=(b>a), col=up?'#2ec27e':'#e0645f', mk=up?'g3ahU':'g3ahD';
-      var x0=6, xOut=x0+20+n*13, xEnd=0, rad=5, dir=(yB<yA)?-1:1, LAND=13;
-      var d='M '+x0+' '+yA.toFixed(1)+' H '+(xOut-rad)+' Q '+xOut+' '+yA.toFixed(1)+' '+xOut+' '+(yA+dir*rad).toFixed(1)+
-            ' V '+(yB-dir*rad).toFixed(1)+' Q '+xOut+' '+yB.toFixed(1)+' '+(xOut-rad)+' '+yB.toFixed(1)+' H '+(xEnd+LAND);
+      // (v14.54) MIRRORED: the lane is now LEFT of the price column, so both ends of the arrow meet
+      // the prices' own edge and each end points at the price it belongs to. Same grammar as the
+      // right-hand version — circle at the SOURCE, out, along, back in past the origin's x, then the
+      // head — reflected. ⚠ The landing stays a SEPARATE SOLID sub-path: a dashed stroke ends
+      // wherever the pattern falls and a final gap left the arrowhead floating (operator-caught).
+      var xEdge=LAD_PXC-2, xOut=LAD_ROLL+2+n*8, rad=4, dir=(yB<yA)?-1:1, LAND=10;
+      var d='M '+xEdge+' '+yA.toFixed(1)+' H '+(xOut+rad)+' Q '+xOut+' '+yA.toFixed(1)+' '+xOut+' '+(yA+dir*rad).toFixed(1)+
+            ' V '+(yB-dir*rad).toFixed(1)+' Q '+xOut+' '+yB.toFixed(1)+' '+(xOut+rad)+' '+yB.toFixed(1)+' H '+(xEdge-LAND);
       var amt=''; try{ amt=usdBig(Math.abs(r.amt||0))||''; }catch(eA){}
       var pq=(r.got!=null&&r.lost!=null&&Math.max(Math.abs(r.got),Math.abs(r.lost))>0)
              ? Math.round(100*Math.min(Math.abs(r.got),Math.abs(r.lost))/Math.max(Math.abs(r.got),Math.abs(r.lost))) : null;
-      svg+='<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="butt" opacity="'+(r.live?0.98:0.5)+'"'+
+      svg+='<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="butt" opacity="'+(r.live?0.98:0.5)+'"'+
            (r.live?' stroke-dasharray="5 4" class="g3ldflow"':'')+'/>'+
-           '<path d="M '+(xEnd+LAND)+' '+yB.toFixed(1)+' H '+xEnd+'" fill="none" stroke="'+col+'" stroke-width="1.6" stroke-linecap="butt" marker-end="url(#'+mk+')" opacity="'+(r.live?0.98:0.5)+'"/>'+
-           '<circle cx="'+x0+'" cy="'+yA.toFixed(1)+'" r="3" fill="'+col+'" opacity="'+(r.live?0.98:0.55)+'"/>'+
-           '<circle cx="'+x0+'" cy="'+yA.toFixed(1)+'" r="5.4" fill="none" stroke="'+col+'" stroke-width="1" opacity="'+(r.live?0.4:0.2)+'"/>';
+           '<path d="M '+(xEdge-LAND)+' '+yB.toFixed(1)+' H '+xEdge+'" fill="none" stroke="'+col+'" stroke-width="1.5" stroke-linecap="butt" marker-end="url(#'+mk+')" opacity="'+(r.live?0.98:0.5)+'"/>'+
+           '<circle cx="'+xEdge+'" cy="'+yA.toFixed(1)+'" r="2.7" fill="'+col+'" opacity="'+(r.live?0.98:0.55)+'"/>'+
+           '<circle cx="'+xEdge+'" cy="'+yA.toFixed(1)+'" r="4.8" fill="none" stroke="'+col+'" stroke-width="1" opacity="'+(r.live?0.4:0.2)+'"/>';
       if(amt) lab+='<span class="g3ldramt" style="color:'+col+';opacity:'+(r.live?1:0.6)+';top:'+(yA+9).toFixed(1)+'px"'+
         g3tip(amt+' left '+frameNum(a)+' and arrived at '+frameNum(b)+'.'+(pq!=null?(' Pairing quality '+pq+'% — how well the size lost matches the size gained.'):'')+
         ' '+(r.live?'LIVE.':'LATCHED — it happened earlier and is structure now, not motion.')+
@@ -21538,7 +21719,7 @@ function ladderRolls(ROLLS, Y, dsc, lo, hi, H){
       n++;
     }
     if(!n) return '';
-    return '<div class="g3ldrolls"><svg viewBox="0 0 60 '+H+'" width="60" height="'+H+'" preserveAspectRatio="none">'+
+    return '<div class="g3ldrolls"><svg width="'+LAD_W+'" height="'+H+'">'+
       '<defs><marker id="g3ahU" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto"><path d="M0,0.5 L6.5,3.5 L0,6.5 z" fill="#2ec27e"/></marker>'+
       '<marker id="g3ahD" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto"><path d="M0,0.5 L6.5,3.5 L0,6.5 z" fill="#e0645f"/></marker></defs>'+
       svg+'</svg>'+lab+'</div>';
