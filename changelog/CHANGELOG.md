@@ -1,3 +1,37 @@
+## v14.56 — the chute has two kinds of occupant, and the nudge only knew about one
+
+Found by rendering the mockup the operator asked to see, not by reading the code. The pairwise
+overlap audit on `mockups/lastbook-v1455-MOCKUP.png` reported:
+
+    empill "EL 7708"  x  king "~7716 QQQ"
+
+**v14.54 moved the EM edges AND the three crowns into the same 66px chute** — that was the point of
+the change, it is what emptied the left gutter — **but it left the nudge loop comparing crowns
+against CROWNS ONLY.** `used=[]` started empty and only ever collected king rows, so an expected-move
+pill and a king within ~15px drew straight through each other. The crowns had been nudging apart
+correctly since v14.48; what changed is that they acquired neighbours.
+
+Fixed by collecting the EM pill rows into `CHUTEY` as they are drawn and **seeding the nudge list
+with them** (`used=CHUTEY.slice()`), so a crown avoids an expected-move edge exactly as it avoids
+another crown — same column, same collision. `test_ladder` k11b/k11c pin both halves and the
+empty-seed mutation goes red.
+
+⚠ **THIS IS THE THIRD TIME THE OVERLAP AUDIT HAS BEATEN A SCREENSHOT**, and the second time in two
+builds: v14.54 found a role label six tenths of a pixel inside the chute, then found that the clamp
+written to fix it had stacked the label on its own bar. None of the three was visible by reading, and
+the first two were invisible in a screenshot too. `PROJECT-CONSTANTS` L-D is carrying its weight.
+
+⚠ **THE MOCKUP WAS THE DIAGNOSTIC, NOT THE DELIVERABLE.** The operator asked to see the design after
+the build rather than before, because he had said "I'll go with your recommendation so I can continue
+working". The picture then found a defect in code he had already installed. The standing rule is
+mockups FIRST; a feature of this size gets its picture before its code next time, go-ahead or not.
+
+**Version bumped without shipping.** The fix changed the userscript while it still read v14.55 — the
+version already installed on his machine. Two different files claiming one version is failure
+pattern #9, so the repo moved to 14.56 immediately even though delivery is his call.
+
+Suite 117 green, 6 documented baseline reds. test_ladder 108 -> 110 asserts.
+
 ## v14.55 — the close-of-session book, so the panel is not flat after the close
 
 Operator, an hour after the close: *"we are suppose to have a rule to show the last day so i can

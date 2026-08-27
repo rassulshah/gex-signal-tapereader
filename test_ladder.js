@@ -224,6 +224,30 @@ ok(/ew\.king\*EB\.scaleUsed/.test(src), 'k10 the SPY king uses the same live bas
 // so 13px of separation would still let two of them touch. 15 is the pill plus a hairline.
 ok(/Math\.abs\(u-t\)<15/.test(src),
    'k11 kings landing on the same line are NUDGED apart — two crowns on one row was the dual-king confusion');
+// ⚠⚠ (v14.56) THE CHUTE HAS THREE KINDS OF OCCUPANT AND THE EM LABEL IS THE ONE THAT MOVES.
+// This is the operator's own design, mockup-ladder-v11.html:343-354, which v14.54 shipped without
+// because I stopped reading the mockup at line 339. The band edges are drawn LAST and step around
+// the crowns AND the price pill; the amber LINE stays at the true price, so a nudged label loses
+// nothing. Nudging the CROWN instead (my first fix) is backwards — a crown has no line behind it.
+ok(/var EMQ=\[\]/.test(src) && /EMQ\.push/.test(src) && /EMQ\.forEach/.test(src),
+   'k11b the EM pills are QUEUED and emitted last, after the crowns and price');
+ok(/h\+='<i class="g3ldem" style="top:'\+t\.toFixed\(1\)\+'px"><\/i>';/.test(src),
+   'k11c ...while the amber LINE is drawn immediately, at the true price');
+ok(/CHUTEY\.push\(tn\)/.test(src),
+   'k11d PRICE is a chute occupant the EM label must clear — the two-columns defect');
+ok(/var KG=ladderKings\(EB, sym\), used=\[\];/.test(src),
+   'k11e the crowns nudge among THEMSELVES; they do not move for an EM pill');
+{
+  const emBlock = /EMQ\.forEach\(function\(e\)\{[\s\S]{0,2000}?\n    \}\);/.exec(src);
+  ok(emBlock && /guard\+\+<4/.test(emBlock[0]) && /Math\.abs\(u-t\)<15/.test(emBlock[0]),
+     'k11f ...and the EM nudge uses the mockup\'s own 15px pitch and 4-step guard');
+  // ⚠ AND AFTER THE FOUR STEPS, IT DROPS. With three crowns and the price pill in one chute the
+  // guard can be exhausted and the label lands back on a crown — the audit reproduced it. The amber
+  // line is already on the true row, so an absent pill loses nothing; a pill on a crown claims a row
+  // that belongs to something else. Same rule as the off-frame levels and the v14.54 node labels.
+  ok(emBlock && /if\(CHUTEY\.some\(function\(u\)\{ return Math\.abs\(u-t\)<15; \}\)\) return;/.test(emBlock[0]),
+     'k11g ...and a label with nowhere clear to sit is DROPPED, never drawn over a crown');
+}
 // ⚠ scoped to the LADDER: the old railLevelsLine still carries a 'SPY K' level, and that is correct —
 // the previous surface is hidden, not deleted, for one release so the two can be compared live.
 ok(!/n:'SPY K'/.test(LH), 'k12 the SPY King left the LADDER\'s levels column — it is a king pill now');

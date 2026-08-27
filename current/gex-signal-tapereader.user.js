@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.55
+// @version    14.56
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -624,7 +624,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.55';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.56';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -21545,6 +21545,9 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
     var dsc=1; try{ dsc=ifDispScale()||1; }catch(eD){}
     var h='<div class="g3ladwrap"><div class="g3lad" style="height:'+H+'px">';
     var OFF=[];
+    // every row the chute is already using — the crowns, then the price pill. The EM labels are
+    // drawn last and step around all of it.
+    var CHUTEY=[];
     // (v14.54) THE KING'S OWN MASS, in DOLLARS, which is what the delta profile is scaled against.
     // ⚠ kingKd arrives in THOUSANDS from the tape and velocity.d15 is in DOLLARS - measured
     // 2026-08-27 on SPXW 7690: kingKd 12680, velocity.cur -12,680,083. Multiply, never divide.
@@ -21568,16 +21571,36 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
     // grows to hold it and the boundary stays drawn where it always was — the expected move is a
     // PRICED level, never redefined as wherever the rail happens to end. When that happens the rail
     // end is marked separately, so "the band ended here" and "the drawing ends here" stay distinct.
+    // (v14.55) THE CHUTE HAS MORE THAN ONE KIND OF OCCUPANT NOW, so the nudge has to know about all
+    // of them. v14.54 moved the EM edges and the three crowns into the same 66px column but kept the
+    // nudge loop comparing kings against KINGS ONLY — so an EM pill and a crown a few points apart
+    // drew straight through each other. Caught by the overlap audit on the close-of-session mockup:
+    // `empill "EL 7708" x king "~7716 QQQ"`. Collect the pill rows here; the kings avoid them below.
+    // ⚠⚠ (v14.56) THE BAND EDGES ARE DRAWN LAST, and this is the operator's own design — it is in
+    // `mockups/mockup-ladder-v11.html` at lines 343-354 and v14.54 shipped without it because I
+    // stopped reading the mockup at line 339. The overlap audit then found the collision the
+    // mockup had already solved: `empill "EL 7708" x king "~7716 QQQ"`.
+    //
+    // ⚠ THE LINE IS EMITTED HERE, AT THE TRUE PRICE. Only the PILL is queued and nudged later.
+    // His words in the mockup: "ONLY THE LABEL MOVES; the amber line stays at the true price. A
+    // nudged label is a readability fix, a nudged LINE would be a lie about where the boundary is."
+    //
+    // ⚠ AND THIS IS WHY THE EM MOVES RATHER THAN THE CROWN. My first fix (v14.56, reverted here)
+    // nudged the KINGS clear of the EM pills instead. That is backwards: a nudged EM label still has
+    // its amber line marking the true row, so nothing is lost — a nudged CROWN has no line at all
+    // and would simply be pointing at the wrong price with no way to tell.
+    var EMQ=[];
     [['EH',EB.high,RB.over],['EL',EB.low,RB.under]].forEach(function(e){
       if(!inFrame(e[1])) return;
-      var t=Y(e[1]).toFixed(1);
-      h+='<i class="g3ldem" style="top:'+t+'px"></i>'+
-         '<span class="g3ldempill" style="top:'+t+'px"'+
-         g3tip((e[0]==='EH'?'Expected high':'Expected low')+' — the open '+(e[0]==='EH'?'plus':'minus')+
+      var t=Y(e[1]);
+      h+='<i class="g3ldem" style="top:'+t.toFixed(1)+'px"></i>';
+      EMQ.push({ t:t,
+        lab:(EB.est?'~':'')+e[0]+' '+g3esc(frameNum(e[1]))+(e[2]?' \u2913':''),
+        tip:(e[0]==='EH'?'Expected high':'Expected low')+' — the open '+(e[0]==='EH'?'plus':'minus')+
          ' the at-the-money straddle. \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%; multiply by 1.25 for a true one-sigma boundary. A priced level, never a floor or a ceiling.'+
          (EB.est?' ~EST: captured late in the session, so it is narrower than the open’s was.':'')+
-         (e[2]?' Price has run PAST it — the frame grew to hold price, so this line is where the expected move ENDED, not where the drawing does.':''))+
-         '>'+(EB.est?'~':'')+e[0]+' '+g3esc(frameNum(e[1]))+(e[2]?' \u2913':'')+'</span>';
+         (e[2]?' Price has run PAST it — the frame grew to hold price, so this line is where the expected move ENDED, not where the drawing does.':'')+
+         ' The amber line is at the TRUE price; this label may be nudged down to clear a crown or the price pill sharing its row.' });
     });
     if(RB.over && inFrame(RB.hi)) h+='<span class="g3ldrailend" style="top:'+Y(RB.hi).toFixed(1)+'px"'+
       g3tip('The rail end — the drawing was widened to hold price, which has run beyond the expected move.')+'>rail '+g3esc(frameNum(RB.hi))+'</span>';
@@ -21756,13 +21779,16 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
     // crowns on one line is the "dual kings" confusion the operator caught in the profile, and the
     // whole point of drawing three is being able to tell them apart.
     try{
+      // The crowns nudge against EACH OTHER, as they have since v14.48. What they do NOT do is move
+      // for an EM pill — the EM pill moves for THEM, below, because it is the one with a line left
+      // behind at the true price. `CHUTEY` records where they end up so the EM pass can see them.
       var KG=ladderKings(EB, sym), used=[];
       KG.sort(function(a,b){ return a.at-b.at; });
       KG.forEach(function(K){
         if(!inFrame(K.at)){ OFF.push({n:K.book+' King', at:K.at}); return; }
         var t=Y(K.at), guard=0;
         while(guard++<8 && used.some(function(u){ return Math.abs(u-t)<15; })) t+=15;
-        used.push(t);
+        used.push(t); CHUTEY.push(t);
         var prox=(K.at>now)?'above price':'below price';
         // (v14.54) THE TEST COUNTER ON THE CROWN. A king is a level like any other and is spent by
         // being tested — the Academy's own table is ~80% untested, ~66% after one test, ~33% after
@@ -21808,7 +21834,31 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       h+='<i class="g3ldnowarm" style="top:'+tn.toFixed(1)+'px"></i>'+
          '<span class="g3ldnow'+nowCls+'" style="top:'+tn.toFixed(1)+'px"'+
          g3tip(nowTip)+'>'+g3esc(frameNum(now))+'</span>';
+      CHUTEY.push(tn);            // price is a chute occupant too, and the loudest one
     }
+
+    // ---- the band edges, LAST, stepping around whatever already holds the chute -----------------
+    // (v14.56, mockup-ladder-v11.html:343-354) The crowns and the price pill are already placed, so
+    // the EM labels can SEE them. Same 15px pitch and 4-step guard the mockup uses.
+    // ⚠ PRICE IS IN THIS LIST AND THAT IS THE POINT. v14.54 moved the EM pills into the chute and
+    // nothing stopped one landing on the live price — the exact "current price is in two columns"
+    // defect the operator caught once already, and the reason the chute is a walled column at all.
+    EMQ.forEach(function(e){
+      var t=e.t, guard=0;
+      while(guard++<4 && CHUTEY.some(function(u){ return Math.abs(u-t)<15; })) t+=15;
+      // ⚠ DELIBERATE DEVIATION FROM THE MOCKUP, and it is one line. The mockup nudges up to four
+      // times and then draws regardless; with three crowns AND the price pill in one chute the
+      // guard can run out and the label lands back on a crown — the render audit reproduced exactly
+      // that (`king "7690 SPXW" x empill "EL 7708"`). His four-step limit is right, so the deviation
+      // is what happens AFTER it: a label with nowhere clear to sit is NOT DRAWN.
+      // Nothing is lost by dropping it. The amber LINE is already on the true row, the off-frame
+      // rule and the v14.54 node-label rule both work this way, and this file's own doctrine is
+      // that a clamped position is a false position. A pill sitting on a crown would be worse than
+      // an absent pill, because it would claim a row that belongs to something else.
+      if(CHUTEY.some(function(u){ return Math.abs(u-t)<15; })) return;
+      CHUTEY.push(t);
+      h+='<span class="g3ldempill" style="top:'+t.toFixed(1)+'px"'+g3tip(e.tip)+'>'+e.lab+'</span>';
+    });
     h+='</div></div>';
     if(OFF.length){
       OFF.sort(function(a,b){ return Math.abs(a.at-now)-Math.abs(b.at-now); });

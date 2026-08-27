@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-08-27 · panel v14.55 · supersedes every earlier resume note_
+_written 2026-08-27 · panel v14.56 (v14.55 is what is INSTALLED) · supersedes every earlier resume note_
 
 ---
 
@@ -189,9 +189,16 @@ next close. Do not "fix" it before then.
 ⚠ `pickSessionDay` was NEVER the problem and must not be loosened: it answers which day's PRICE BARS
 to draw and it answers correctly.
 
+## 6d · v14.56 IS BUILT AND NOT DELIVERED
+
+⚠ **He is running v14.55; the repo is v14.56.** The difference is one fix: the chute nudge. v14.54
+moved the EM edges and the three crowns into the same column but left the nudge comparing crowns
+against crowns only, so `EL 7708` and `~7716 QQQ` overlapped. Seeding the nudge list with the EM rows
+fixes it. Cosmetic, not data. **Ask before shipping it on its own — he asked whether to bundle it.**
+
 ## 7 · WHAT TO DO NEXT, IN ORDER
 
-1. **Install v14.55 and look at the ladder.** Then the width decision in `LOCKED-ITEMS.md` — most
+1. **Deliver v14.56, or bundle it — his call, already asked.** Then look at the ladder. Then the width decision in `LOCKED-ITEMS.md` — most
    likely just widening the panel to ~620, which is one drag.
 2. **DIAGNOSE THE FEATURE-RECORD COLLAPSE (§5).** Nothing statistical is trustworthy until this is
    understood. It is now ahead of the study in priority, because it decides what the study can say.

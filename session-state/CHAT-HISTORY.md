@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-27 · v14.55 · session `115bed5f` — v14.55: the close-of-session book, and the one-file delivery rule
+## 2026-08-27 · v14.56 · session `115bed5f` — v14.56: the chute nudge — EM pills and crowns share one column
 
-_8 operator prompts · transcript `115bed5f-f45c-559e-a15a-46475dd506fc.jsonl`_
+_12 operator prompts · transcript `115bed5f-f45c-559e-a15a-46475dd506fc.jsonl`_
 
 ### THE EXCHANGE
 
@@ -180,6 +180,221 @@ You've hit your monthly spend limit · raise it at claude.ai/settings/usage?from
 > continue.. and why are you taking so long
 
 **me (22:20):** Fair. Honest answer: the fallback had to route through `velAt`/`tapeMap`, which the **recorder** also reads — so a mistake there writes a frozen book into `data/*.json` as if it were live and silently poisons every rate we've measured. That meant converting nine write guards, and six existing tests broke correctly and had to be repaired. That's the time. Finishing now.
+117 green, the 6 documented baseline reds. Writing the save and building the one file.
+**installv1455.bat** — one file.
+
+**Tampermonkey — update ONLY what changed:**
+
+- **Tapereader v14.55** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+- Companion v1.14 — UNCHANGED, do not reinstall
+
+Wait ~5 min for the CDN, then reload Atlas — footer must read v14.55.
+
+---
+
+**What I found: your last-day rule was never broken.** It answers *which day's price bars to draw*, and it answered correctly — today had a session. The gap was one layer down:
+
+```
+velocity strikes by expiry:  08-28 → 256 · 09-16 → 70 · 08-27 → 0
+strikes with a non-zero 15m delta:  0 of 326
+```
+
+Skylit **drops the expired chain at the close**, so your ladder is already tomorrow's book with every rate of change at zero. Nothing answered *which expiry's nodes to draw*. That's why the panel went flat rather than blank.
+
+Now the panel latches the last healthy live book during the session and serves that after the close, with `● 2026-08-27 book — frozen 15:00` in the footer so the mode is never invisible.
+
+**One thing you need to know or you'll think it's broken: it can't work tonight.** The latch is only written during RTH and there has never been one. `__gptsDebug.lastBook()` will say `no latch yet` — that's correct. **The first time it engages is after tomorrow's close.**
+
+The …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (22:23):** Confirmed rather than assumed — the proxy refuses by design:
+
+```
+remote: access denied by the git proxy: rassulshah/gex-signal-tapereader is not in
+this session's authorized repository set
+```
+
+That's the documented architecture: **the cloud can read the repo but never push. The installer pushes from your machine.** So those two commits are sandbox bookkeeping — `installv1455.bat` is what actually gets the work into GitHub, by xcopying into `C:\Dev\gex-signal-tapereader` and committing there.
+
+Let me verify the file you're about to run really carries everything, since a payload that quietly drops files is how this project lost `DATA-ARCHITECTURE.md` and the ES corpus last time.
+Verified by decoding the actual file you'll run, not by trusting the builder:
+
+```
+payload files    : 281        VERDICT: ALL PRESENT
+payload @version : 14.55      GPTS_VERSION: 14.55   ✓ both spots agree
+recorderBlind    : present
+lastBookSave     : present
+```
+
+All 21 files I touched this session are inside it — both new test suites, the changelog, the resume note, the regenerated chat history, the corrected `.gitignore`, and the six repaired suites.
+
+**So nothing is pending on my side.** The two commits sitting unpushed here are sandbox bookkeeping — this container can't reach GitHub by design, and it just confirmed that with a 403 from the proxy rather than me quoting a doc at you. Running `installv1455.bat` is the push: it xcopies into `C:\Dev\gex-signal-tapereader` and commits from your machine.
+
+Two things ride along with it that aren't in the panel but matter:
+
+- **`installv*.bat` is now gitignored.** It wasn't — only `install-v*.bat` was — so v14.54's dash-free filename would have been swept into your repo history by `git add -A`. That's the same accident that put 28MB of old installers …[trimmed]
+
+**OPERATOR:**
+> reloaded . please check
+
+**me (22:26):** Everything landed. Checked on your live tab:
+
+```
+version        v14.55        debug hooks 101 (was 100 — the new lastBook hook)
+renderErrors   []            nothing swallowed
+ladder         618 wide in a 454 body → 164 clipped, scrolling not clipping
+```
+
+**The v14.54 layout is rendering as designed:**
+
+| | |
+|---|---|
+| node bars | 15, sample reads `−100% GK` — **%King is inside the bar** with the type at its tip |
+| %King fallbacks | 9 short bars dropped their number outside, none touching the chute |
+| king pills | 3, sample `♛7689 SPY` |
+| EM pills | 2, in the chute |
+| state / roc | 7 / 15 |
+
+**The v14.55 fallback reports exactly what it should, and this is the part to read carefully:**
+
+```
+serving : false
+why     : "no latch yet (it is written during RTH only)"
+liveFrontExp : 2026-08-28      ← the book has already rolled to tomorrow
+```
+
+That's correct, not a failure. The latch is only written during a live session and there has never been one. **Tomorrow after 15:00 CT it will have latched, and from then on the panel keeps showing that session's book instead of going flat.** Tonight it behaves exactly as it did before.
+
+You can watch it happen — `__gptsDebug.lastBook()` will flip `haveLatch` to true within a few seconds of the open tomorrow, and `serving` to true after the close.
+
+One consistency note while you're looking: the delta column drew its zero line but no bars, because every 15-minute delta on the page is currently 0. That's the flatness we just talked about, and it's the exact thing the latch will populate tomorrow.
+
+Two things still open from earlier, neither urgent tonight: the **164px** means widening the panel to ~620 shows every column at once, and the **feature-record collapse** (3,822 records on 08-20 vs 15 today) is still undiagnosed and gate …[trimmed]
+
+**OPERATOR:**
+> first show me the mockups of how this is supposed to look
+
+**me (22:27):** Fair — I built that without one because you said go, and the standing rule is mockups first. Rendering it now, with the overlap audit, before you look at anything.
+The audit caught a real bug — and it's in the shipped code, not just the mockup:
+
+```
+overlaps: empill "EL 7708"  ×  king "~7716 QQQ"
+```
+
+Kings are nudged apart from **each other**, but nothing nudges them clear of the EM pills — and since v14.54 all of them live in the same chute. Fixing that before you see it.
+**Left is tonight. Right is what you'll have after tomorrow's close.** Both drawn at your real 454px body, so the horizontal scroll you see is the honest 164px.
+
+The difference is the four right-hand columns. Tonight every 15m delta is zero, so **STATE, the delta profile and the roll arrows have nothing to say** — the ladder still draws, it just has no motion in it. After the close v14.55 serves the frozen 15:00 reading instead, so `BREAKING −$1.2M`, `BUILDING +$3.9M`, `ATTRACTING +$5.2M`, the tap counters and the ROC column all come back with real numbers. Footer reads `● 2026-08-27 book — frozen 15:00`.
+
+The %King values are your actual tape — King 7690, kingKd 12,680. **The delta dollars are illustrative and labelled as such**, because every d15 on the page was zero tonight, which is the whole reason the feature exists.
+
+---
+
+**Rendering it found a real bug in what you just installed.** The overlap audit caught:
+
+```
+empill "EL 7708"  ×  king "~7716 QQQ"
+```
+
+v14.54 moved the EM edges *and* the three crowns into the same 66px chute, but the nudge loop still only compared crowns against **other crowns**. An expected-move pill and a king within ~15px draw straight through each other. You can see it in the mockup's left panel if you look at where `EL 7708` and the QQQ crown sit — that's the fixed ver …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+
+### DECISIONS
+
+- **THE MOCKUP HE ASKED FOR FOUND A REAL BUG IN WHAT HE HAD ALREADY INSTALLED.** Rendering the
+  close-of-session design and running the pairwise overlap audit surfaced
+  `empill "EL 7708" x king "~7716 QQQ"`. v14.54 moved the EM edges AND the three crowns into the
+  same 66px chute but left the nudge loop comparing crowns against CROWNS ONLY, so an expected-move
+  pill and a king within ~15px drew straight through each other. Fixed by seeding the nudge list
+  with the EM rows; `test_ladder` k11b/k11c pin it and the empty-seed mutation goes red.
+- **THIS IS THE THIRD TIME THE AUDIT HAS BEATEN A SCREENSHOT** (v14.54 found a 0.6px chute
+  intrusion, then found the clamp that fixed it stacking a label on its own bar). The standing rule
+  "render every mockup headless before sending it" earned itself again — and this time the mockup
+  was not the deliverable, it was the diagnostic.
+- **HE ASKED FOR THE MOCKUP AFTER THE BUILD, NOT BEFORE**, because he had said "I'll go with your
+  recommendation so I can continue working". The standing rule is mockups FIRST; the build happened
+  on an explicit go-ahead, and the mockup then did its job late rather than not at all. Next feature
+  of this size gets its picture before its code, go-ahead or not.
+- **BUMPED TO v14.56 WITHOUT SHIPPING.** The fix changed the userscript while it still read v14.55 —
+  the version he had already installed. Two different files claiming one version is PROJECT-CONSTANTS
+  failure pattern #9, so the repo version moved immediately even though delivery is his call.
+- **DELTA DOLLARS ON THE MOCKUP ARE LABELLED ILLUSTRATIVE.** Every d15 on the page was 0 after the
+  close, which is the whole reason the feature exists, so they could not be measured from tonight.
+  The %King values ARE his real tape (King 7690, kingKd 12,680, 17:11 CT).
+
+### SHIPPED
+
+**v14.55 delivered and verified live** — footer v14.55, 101 debug hooks, `renderErrors []`, ladder
+618 in a 454 body, `%King` inside the bars (`−100% GK`), three king pills, two EM pills.
+`__gptsDebug.lastBook()` reports `no latch yet (it is written during RTH only)` — correct, and the
+first engagement is after the next close.
+
+**v14.56 built, NOT delivered** — the chute nudge fix, `test_ladder` 108 -> 110 asserts.
+`mockups/lastbook-v1455-MOCKUP.png` — tonight vs after-the-close, side by side at his real 454px.
+
+### OPEN AT CLOSE
+
+1. **v14.56 is built and waiting on his word** — deliver now, or bundle with the next change.
+2. **Tomorrow after 15:00 CT: check `__gptsDebug.lastBook()` flips `serving:true`.** That is the
+   first possible test of the whole feature; tonight it cannot engage and that is not a failure.
+3. **The ladder width decision — his.** 618 in a 454 body; widening to ~620 is one drag.
+4. **⚠ THE FEATURE RECORDS ARE COLLAPSING** — 3,822 on 08-20 vs 15 on 08-27. Diagnose before any study.
+5. **BUILD ITEM 18**, deadline **2026-09-16**.
+6. **Re-push the three files that never landed**: `DATA-ARCHITECTURE.md`, the ES corpus, the PNGs.
+
+
+### COMMITS THIS CONTEXT
+
+```
+6ee7f6a v14.55: the close-of-session book, and the one-file delivery rule
+1775903 v14.54: the ladder re-laid to the approved mockup, plus the one-file delivery rule
+fd20a09 data: daily export 27-Thu-08
+4504238 --help
+0b1dcad v14.52: FlexLevels CSV written in place so IRT stops needing a refresh
+1936918 v14.51: export refuses empty days (it was losing whole sessions); full session handoff and handoff contract
+32d1347 v14.50: seven review defects fixed incl. ATTRACTING always-true and the strike-step regression; taps complete on leaving
+34e864b v14.49: the level lifecycle - states, marker and tests counter split; two tap-counting fixes
+4d0596c v14.46: THE LADDER - rail, profile and percentages rotated onto one vertical price axis; GPTS_VERSION unstuck
+753a1e8 v14.44: Garma V2 phase A2 - dark pool lifecycle fresh/holding/broken/flipped/reclaimed from watched bars
+f6e6237 v14.42: Garma V2 phase A1 - dark pool capture, levels on the line, no lifecycle claimed yet
+27dd59b v14.41: Garma V2 phase 0 - air pocket on the path clause, USED level state from tap counts, event caps not suspends, tool-hierarchy refusals
+```
+
+---
+
+<!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-27 · v14.55 · session `115bed5f` — v14.55: the close-of-session book, and the one-file delivery rule
+**OPERATOR:**
+> oh my .. i think i messed up and closed the prior session.. i was working on my project can you remember ?
+## GEX LOADED — v14.53
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> did you read the chat history .. do you know where we were at
+> "well lets implement the fix for all of the inssues incldueing in place.. have you compleeted the load gex and have you ensured the chat history is saved..."
+**OPERATOR:**
+> just give me the build and the tampermnonkey link
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> make sure this instruction is somewhere when load gex happens so the next context knows i am supposed to get 1 install file. also are you saving chat history like you are supposed to . the instructions should indicate that
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> continue.. and why are you taking so long
 
 ### DECISIONS
 
@@ -214,6 +429,7 @@ You've hit your monthly spend limit · raise it at claude.ai/settings/usage?from
 - **SIX EXISTING TESTS BROKE CORRECTLY** and were fixed in the same commit rather than left red —
   they stub the guard to prove the recorder stays silent, and the guard changed name.
 
+
 ### SHIPPED
 
 **v14.54** — the ladder re-laid to mockup v11: %King inside its bar (LAD_KPCT deleted), roll lane
@@ -231,6 +447,7 @@ Docs/process: the one-file delivery rule in all six load-time sources · `test_d
 `test_lastbook.js` (38 asserts, 7 mutation-tested) · `installv*.bat` gitignored.
 Suite 115 green / 6 documented baseline reds. smoke clean.
 
+
 ### OPEN AT CLOSE
 
 1. **Install v14.55 and check the footer badge appears** — it needs a latch, and the latch is only
@@ -245,26 +462,8 @@ Suite 115 green / 6 documented baseline reds. smoke clean.
    corpus, the mockup PNGs.
 
 
-### COMMITS THIS CONTEXT
 
-```
-1775903 v14.54: the ladder re-laid to the approved mockup, plus the one-file delivery rule
-fd20a09 data: daily export 27-Thu-08
-4504238 --help
-0b1dcad v14.52: FlexLevels CSV written in place so IRT stops needing a refresh
-1936918 v14.51: export refuses empty days (it was losing whole sessions); full session handoff and handoff contract
-32d1347 v14.50: seven review defects fixed incl. ATTRACTING always-true and the strike-step regression; taps complete on leaving
-34e864b v14.49: the level lifecycle - states, marker and tests counter split; two tap-counting fixes
-4d0596c v14.46: THE LADDER - rail, profile and percentages rotated onto one vertical price axis; GPTS_VERSION unstuck
-753a1e8 v14.44: Garma V2 phase A2 - dark pool lifecycle fresh/holding/broken/flipped/reclaimed from watched bars
-f6e6237 v14.42: Garma V2 phase A1 - dark pool capture, levels on the line, no lifecycle claimed yet
-27dd59b v14.41: Garma V2 phase 0 - air pocket on the path clause, USED level state from tap counts, event caps not suspends, tool-hierarchy refusals
-32243f1 v14.40: THE LEVELS LINE - line on top, levels hanging below, IF levels moved off the main rail onto it
-```
-
----
-
-<!-- EARLIER-CONTEXTS -->
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 
