@@ -1,0 +1,132 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>The pinball ladder — v14.46 mockup</title>
+<style>
+ body{background:#0d1117;color:#e6edf3;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+      font-variant-numeric:tabular-nums;margin:0;padding:20px;display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+ .panel{width:566px;background:#11161f;border:1px solid #2a3340;border-radius:6px;padding:10px 12px}
+ .cap{font-size:11px;font-weight:800;letter-spacing:.07em;color:#8b98a9;margin:0 0 8px;text-transform:uppercase}
+ .note{font-size:10px;color:#8b98a9;line-height:1.6;width:566px;margin-top:10px}
+ .note b{color:#e6edf3}
+ .read{font-size:9px;font-weight:600;color:#c9d4e2;background:rgba(124,199,255,.05);
+       border:1px solid rgba(124,199,255,.18);border-radius:4px;padding:5px 8px;line-height:1.55;margin-bottom:6px}
+ .hdr{position:relative;height:12px;margin-bottom:1px}
+ .hdr span{position:absolute;font-size:5.5px;font-weight:900;letter-spacing:.09em;color:#4b5563;text-transform:uppercase}
+ .lad{position:relative;height:478px}
+ /* the CHUTE — price owns this channel and nothing else may enter it */
+ .chute{position:absolute;left:254px;width:38px;top:0;bottom:0;background:rgba(255,255,255,.028);
+        border-left:1px solid #2f3947;border-right:1px solid #2f3947}
+ .track{position:absolute;left:272px;top:0;bottom:0;width:1px;background:#3d4756}
+ .now{position:absolute;left:256px;width:34px;height:13px;background:#fff;color:#0d1117;border-radius:7px;
+      font-size:8.2px;font-weight:900;display:flex;align-items:center;justify-content:center;
+      transform:translateY(-50%);z-index:6}
+ .nowarm{position:absolute;left:130px;right:8px;height:1px;background:rgba(255,255,255,.13);transform:translateY(-50%)}
+ /* C1 price · C2 levels */
+ .px{position:absolute;left:0;width:36px;text-align:right;font-size:8.4px;font-weight:800;color:#c9d1da;transform:translateY(-50%)}
+ .px.lvpx{color:#8b98a9;font-weight:700;font-size:7.6px}
+ .lv{position:absolute;left:40px;width:86px;text-align:right;font-size:6.4px;font-weight:800;
+     color:#8b98a9;white-space:nowrap;transform:translateY(-50%)}
+ .lv.confl{color:#7cc7ff}.lv.spyk{color:#cdb4fa}.lv.dp{color:#5fd3bc}
+ .lvrule{position:absolute;left:128px;width:126px;height:1px;opacity:.28;transform:translateY(-50%)}
+ /* C3 nodes — bars grow LEFT toward the levels, ending at the chute */
+ .tick{position:absolute;height:3px;border-radius:1px;transform:translateY(-50%)}
+ .tick.acc{background:#a371f7}.tick.brk{background:#e3c341}
+ .tick.king{height:5px}
+ .kcap{position:absolute;left:246px;font-size:8px;transform:translateY(-50%);color:#e3c341}
+ .ip{position:absolute;left:238px;font-size:7px;transform:translateY(-50%);color:#fff}
+ /* C5 profile — bars grow RIGHT from the chute: outline = day peak, fill = now */
+ .peak{position:absolute;left:296px;height:9px;border:1px solid #5b6675;border-left:none;transform:translateY(-50%)}
+ .fill{position:absolute;left:296px;height:9px;transform:translateY(-50%);background:rgba(227,195,65,.75)}
+ .fill.acc{background:rgba(163,113,247,.75)}
+ /* C6 classification · C7 percentages */
+ .cls{position:absolute;left:420px;font-size:5.6px;font-weight:900;letter-spacing:.05em;
+      transform:translateY(-50%);white-space:nowrap}
+ .cls.acc{color:#a371f7}.cls.brk{color:#e3c341}
+ .cls em{font-style:normal;color:#7cc7ff}
+ .cls em.w{color:#f2b45a}
+ .pc{position:absolute;left:492px;width:66px;font-size:6.4px;font-weight:800;transform:translateY(-50%);white-space:nowrap}
+ .up{color:#2ec27e}.dn{color:#e0645f}.flat{color:#5b6675}
+ .edge{position:absolute;left:0;width:36px;text-align:right;font-size:6.6px;font-weight:800;color:#4b5563;transform:translateY(-50%)}
+ .off{font-size:7.6px;color:#5b6675;margin-top:3px;padding-left:40px}
+</style></head><body>
+
+<div>
+<div class="cap">THE PINBALL LADDER — seven columns, price alone in the middle · live 2026-08-26 tape</div>
+<div class="panel">
+  <div class="read">TREND UP day · Trinity 2-of-3 (QQQ dissents) — reduced conviction. KING 7652 (accelerator) holds,
+   40 below price. Support 7687 (32% brake); resistance 7707 (30% accelerator). The floor is ROLLING UP 3 sessions —
+   support migrating higher (confirmed). Destination: no dominant magnet — the field is contested.</div>
+  <div class="hdr">
+    <span style="left:0">price</span><span style="left:88px">levels</span>
+    <span style="left:190px">nodes</span><span style="left:258px">now</span>
+    <span style="left:300px">profile</span><span style="left:420px">class</span><span style="left:492px">15m · 60m</span>
+  </div>
+  <div class="lad" id="lad"></div>
+  <div class="off">▼ below the frame — DP 7579 fresh · DP 7541 fresh · DP 7471 fresh</div>
+</div>
+
+<div class="note">
+  <b>Price owns the middle channel and nothing else may enter it</b> — so it can never be overlapped, and it runs up
+  and down that chute while the nodes reach in from the left to deflect it. Tick length = %King, purple = negative
+  gamma (accelerator, moves through it run), yellow = positive (brake, it leans back).<br><br>
+  <b>Reading outward from price:</b> left — the node, then its level name (PDH, PDL, CW…), then the price itself on
+  the outside. Right — the gamma profile (outline = day peak, fill = now, so you see what a level HAD against what
+  it has), then the classification, then the change.<br><br>
+  <b>⚠ The 15m/60m column is illustrative here</b> — the tape is closed and every live velocity currently reads 0.
+  Green = building, red = draining. That column is what answers "is this support weakening".
+</div>
+</div>
+
+<script>
+const LO=7618, HI=7788, H=478, CH_L=254, CH_R=292;
+const y=p=>(H-((p-LO)/(HI-LO))*H);
+const lad=document.getElementById('lad');
+const add=h=>lad.insertAdjacentHTML('beforeend',h);
+add('<div class="chute"></div><div class="track"></div>');
+add('<div class="edge" style="top:'+y(7775)+'px">7775 rail</div>');
+add('<div class="edge" style="top:'+y(7666)+'px">7666 EL</div>');
+
+// ---- C2 LEVELS (+ their price in C1) ----
+[{p:7632,n:'SPY K',c:'spyk'},
+ {p:7662,n:'PDL',c:''},
+ {p:7678,n:'IBL · PW · FLIP · T',c:''},
+ {p:7692,n:'PDC · CW0',c:'confl'},
+ {p:7700,n:'PDH · IBH',c:''},
+ {p:7742,n:'CW',c:''}].forEach(L=>{
+  const t=y(L.p), col=L.c==='spyk'?'#cdb4fa':(L.c==='confl'?'#7cc7ff':'#6b7787');
+  add('<div class="px lvpx" style="top:'+t+'px">'+L.p+'</div>');
+  add('<div class="lv '+L.c+'" style="top:'+t+'px">'+L.n+'</div>');
+  add('<div class="lvrule" style="top:'+t+'px;background:'+col+'"></div>');
+});
+
+// ---- C3 NODES / C5 PROFILE / C6 CLASS / C7 % ----
+const N=[
+ {es:7642,p:-25,peak:34,cls:'ACC'},        {es:7647,p:-86,peak:92,cls:''},
+ {es:7652,p:-100,peak:100,cls:'KING',king:1},{es:7667,p:-56,peak:71,cls:'GK',st:'WEAK'},
+ {es:7677,p:-29,peak:29,cls:''},            {es:7682,p:-35,peak:35,cls:'ACC'},
+ {es:7687,p:32,peak:32,cls:'',st:'FORM'},   {es:7692,p:52,peak:58,cls:'BRK',ip:1},
+ {es:7707,p:-30,peak:44,cls:'ACC'},         {es:7747,p:43,peak:43,cls:''},
+ {es:7752,p:-80,peak:80,cls:'RRUG'},        {es:7757,p:70,peak:70,cls:''},
+ {es:7762,p:62,peak:66,cls:'BRK'},          {es:7767,p:31,peak:31,cls:''},
+ {es:7772,p:25,peak:25,cls:'BRK'}];
+const DEMO=[[-4,-9],[2,5],[0,1],[-11,-18],[1,0],[-3,-6],[14,9],[6,12],[-8,-14],[3,2],[-2,-5],[5,7],[9,4],[1,-1],[0,2]];
+N.forEach((n,i)=>{
+  const t=y(n.es), neg=n.p<0, k=neg?'acc':'brk';
+  const len=Math.max(9,Math.abs(n.p)/100*118);
+  add('<div class="px" style="top:'+t+'px">'+n.es+'</div>');
+  add('<div class="tick '+k+(n.king?' king':'')+'" style="top:'+t+'px;left:'+(CH_L-len)+'px;width:'+len+'px"></div>');
+  if(n.king) add('<div class="kcap" style="top:'+t+'px">♛</div>');
+  if(n.ip)   add('<div class="ip" style="top:'+t+'px">◂</div>');
+  const pw=n.peak/100*118, fw=Math.abs(n.p)/100*118;
+  add('<div class="peak" style="top:'+t+'px;width:'+pw+'px"></div>');
+  add('<div class="fill '+(neg?'acc':'')+'" style="top:'+t+'px;width:'+fw+'px"></div>');
+  add('<div class="cls '+k+'" style="top:'+t+'px">'+(n.cls||'')+
+      (n.st?(' <em class="'+(n.st==='WEAK'?'w':'')+'">'+n.st+'</em>'):'')+'</div>');
+  const a=DEMO[i][0], b=DEMO[i][1];
+  add('<div class="pc" style="top:'+t+'px"><span class="'+(a>0?'up':(a<0?'dn':'flat'))+'">'+(a>0?'+':'')+a+'%</span>'+
+      ' <span class="'+(b>0?'up':(b<0?'dn':'flat'))+'">'+(b>0?'+':'')+b+'%</span></div>');
+});
+add('<div class="nowarm" style="top:'+y(7692)+'px"></div>');
+add('<div class="now" style="top:'+y(7692)+'px">7692</div>');
+</script>
+</body></html>

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.44
+// @version    14.46
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -620,7 +620,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.39';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.46';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -10694,6 +10694,94 @@ function rollRun(vals){
   out.dir=out.count?d:0;
   return out;
 }
+// ============================================================================================
+// (v14.45, GARMA V2 PHASE B) INTRADAY ROLLING — and why it took a doctrine correction to unblock.
+//
+// v10.51 built FCHIST to SAMPLE the dominant floor/ceiling every closed bar and then DELIBERATELY
+// refused to compute a verdict from it, on the stated belief that "Flr/Ceil ROLLING is a
+// DAY-OVER-DAY measurement taken across map updates" and that "a single intraday session therefore
+// cannot produce a rolling verdict". Months of samples have been banked under that refusal.
+//
+// GARMA V2 (GM-ROLL-001/2/3) states the official rule differently and precisely: rolling is
+// migration of the dominant node ACROSS MAP UPDATES — "one print is noise, two consistent
+// migrations are signal, three are confirmation". Map updates happen all session. The day-over-day
+// reading in sessionRoll() below is one valid sampling of that rule; it is not the only one.
+//
+// ⚠ THE CADENCE IS THE WHOLE DESIGN. FCHIST holds one row per 3-minute bar, and consecutive 3-minute
+// samples are far too fine: a floor that ticks one strike and back would read as a migration every
+// few bars and the signal would fire all day. So the samples are BUCKETED to a coarse step and the
+// run is counted across BUCKETS. That is the intraday equivalent of "consecutive map updates" —
+// slow enough that a wobble cannot manufacture a run, fast enough to see a floor climbing.
+// ⚠ SAME COUNT RULE AS EVERYWHERE (2 signal, 3 confirm). Do not introduce a second threshold
+// vocabulary; the Academy's count rule already governs the PB chain and the session read.
+// ⚠ 15 MINUTES, AND THE NUMBER WAS CHOSEN BY ARITHMETIC, NOT TASTE. The count rule needs TWO
+// migrations for a signal and THREE for confirmation, and a migration takes one bucket — so the
+// bucket size sets how long the reading takes to exist at all: 30-minute buckets mean 90 minutes
+// before the panel can say "rolling" and two hours before it can confirm, which is most of a
+// daytrading session spent silent. At 15 minutes a signal is 45 minutes old and a confirmation an
+// hour — slow enough that a floor ticking one strike back and forth cannot manufacture a run (each
+// bucket takes the LAST sample, so a wobble lands on the same value), fast enough to be worth
+// reading before lunch. Do not lower it to chase responsiveness: below ~10m the 3-minute sampling
+// noise starts producing runs on its own, which is the exact failure v10.51 refused to risk.
+var ROLL_BUCKET_MIN=15;        // minutes per intraday bucket — see the arithmetic above
+var ROLL_MIN_BUCKETS=2;        // fewer than this and there is nothing to compare
+function rollBucketsOf(sym){
+  try{
+    var rows=fcHistOf(sym)||[], today=(typeof TODAY!=='undefined')?TODAY:null;
+    var buckets={}, order=[];
+    for(var i=0;i<rows.length;i++){
+      var r=rows[i];
+      if(!r || (today && r.d!==today)) continue;      // intraday means TODAY, never a stitched series
+      if(typeof r.t!=='number') continue;
+      var key=Math.floor(r.t/(ROLL_BUCKET_MIN*60000));
+      if(!buckets[key]){ buckets[key]={ k:key, flr:null, ceil:null }; order.push(key); }
+      // the LAST sample in a bucket is that bucket's reading — the map as it stood at the end of it
+      if(r.flr!=null) buckets[key].flr=r.flr;
+      if(r.ceil!=null) buckets[key].ceil=r.ceil;
+    }
+    order.sort(function(a,b){ return a-b; });
+    return order.map(function(k){ return buckets[k]; });
+  }catch(e){ return []; }
+}
+function intradayRoll(sym){
+  var out={ buckets:0, ready:false, flr:{count:0,dir:0}, ceil:{count:0,dir:0}, note:null };
+  try{
+    var b=rollBucketsOf(sym);
+    out.buckets=b.length;
+    out.ready=(b.length>=ROLL_MIN_BUCKETS);
+    if(!out.ready){ out.note='needs '+ROLL_MIN_BUCKETS+' buckets of '+ROLL_BUCKET_MIN+'m, have '+b.length; return out; }
+    out.flr=rollRun(b.map(function(x){ return x.flr; }));
+    out.ceil=rollRun(b.map(function(x){ return x.ceil; }));
+  }catch(e){}
+  return out;
+}
+// THE ROLLING READ — one structure, both cadences, in the operator's terms: is support migrating
+// higher, is the ceiling coming down, is the room above opening up.
+// ⚠ GM-ROLL-003 IS A TARGET RULE, NOT AN ENTRY RULE. A ceiling rolling UP expands where price MAY
+// go; it is never on its own a reason to be long, and the wording must never imply that.
+function rollingRead(sym){
+  try{
+    var S=null, I=null;
+    try{ S=sessionRoll(sym); }catch(e0){}
+    try{ I=intradayRoll(sym); }catch(e1){}
+    var parts=[], bull=0, bear=0;
+    function say(which, run, cadence, n){
+      if(!run || run.count<LEG_ROLL_SIGNAL || !run.dir) return;
+      var conf=(run.count>=LEG_ROLL_CONFIRM)?'confirmed':'signal';
+      if(which==='flr'){
+        if(run.dir>0){ bull++; parts.push('the floor is ROLLING UP '+run.count+' '+cadence+' \u2014 support migrating higher ('+conf+')'); }
+        else { bear++; parts.push('the floor is ROLLING DOWN '+run.count+' '+cadence+' \u2014 support giving way ('+conf+')'); }
+      } else {
+        if(run.dir<0){ bear++; parts.push('the ceiling is ROLLING DOWN '+run.count+' '+cadence+' \u2014 upside compressing ('+conf+')'); }
+        else { parts.push('the ceiling is ROLLING UP '+run.count+' '+cadence+' \u2014 more room above; a wider target, not a reason to be long ('+conf+')'); }
+      }
+    }
+    if(I && I.ready){ say('flr', I.flr, 'buckets'); say('ceil', I.ceil, 'buckets'); }
+    if(S && S.ready){ say('flr', S.flr, 'sessions'); say('ceil', S.ceil, 'sessions'); }
+    return { txt:parts.join('; '), n:parts.length, bull:bull, bear:bear,
+             intraday:I, session:S };
+  }catch(e){ return { txt:'', n:0, bull:0, bear:0 }; }
+}
 function sessionRoll(sym){
   var out={ sessions:0, ready:false, flr:{count:0,dir:0}, ceil:{count:0,dir:0},
             vote:0, signal:false, confirmed:false, note:null };
@@ -10878,6 +10966,8 @@ function legTagHtml(t, leg){
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.leg=function(s){ return legEngine(s||activeSym()); };
 window.__gptsDebug.sessionRoll=function(s){ return sessionRoll(s||activeSym()); };
+window.__gptsDebug.rolling=function(s){ var y=s||activeSym(); return { read:rollingRead(y),
+  buckets:rollBucketsOf(y).length, bucketMin:ROLL_BUCKET_MIN }; };
 window.__gptsDebug.futMode=function(){ return futModeRefresh(); };
 
 // ============================================================================
@@ -19024,6 +19114,12 @@ function ensureV3Css(){
     // 6.5px. So the smaller, quieter number was the one that mattered most. Both are 8.65px now.
     '#gpts-body .g3plab{position:absolute;bottom:-1px;transform:translateX(-50%);font-size:8.65px;'+
       'font-weight:800;white-space:nowrap;cursor:help;line-height:7.5px;text-align:center}'+
+    // (v14.46) THE SECOND LABEL ROW. Tier 2 hangs one label-height lower so neighbouring strikes
+    // never share a line; the rail row buys the space with a margin so the gamma profile below is
+    // pushed down rather than written over. Dimmed very slightly — not to hide it, but so the eye
+    // reads the top row first and the two rows do not compete as a single wall of numbers.
+    '#gpts-body .g3plab.g3t2{bottom:-21px;opacity:.88}'+
+    '#gpts-body .g3emt{margin-bottom:21px}'+
     '#gpts-body .g3plab.acc{color:#a371f7}'+
     '#gpts-body .g3plab.brk{color:#e3c341}'+
     '#gpts-body .g3plab.bal{color:#8b98a9}'+
@@ -19050,6 +19146,81 @@ function ensureV3Css(){
     // colour would argue with its own meaning.
     '#gpts-body .g3lvwUSED{color:#6c7889}'+
     '#gpts-body .g3pile.g3lvUSED{opacity:.55}'+
+    // ============================================================================================
+    // (v14.46) THE LADDER. All offsets derive from the LAD_* constants so the column geometry lives
+    // in ONE place: change a constant, the CSS follows, and nothing drifts out of alignment.
+    // ⚠ The CHUTE is price's alone — no other element may be positioned inside its x-range. That is
+    // the rule that keeps price from ever being overlapped, which is why it is a walled column and
+    // not merely a marker.
+    '#gpts-body .g3lad{position:relative;margin:2px 0 3px;min-width:'+LAD_W+'px}'+
+    '#gpts-body .g3chute{position:absolute;left:'+LAD_CH+'px;width:'+LAD_CHW+'px;top:0;bottom:0;'+
+      'background:rgba(255,255,255,.035);border-left:1px solid #333e4d;border-right:1px solid #333e4d}'+
+    '#gpts-body .g3ldrange{position:absolute;left:'+(LAD_CH+1)+'px;width:'+(LAD_CHW-2)+'px;'+
+      'background:rgba(124,199,255,.10);border-top:1px solid rgba(124,199,255,.3);border-bottom:1px solid rgba(124,199,255,.3);cursor:help}'+
+    '#gpts-body .g3ldem{position:absolute;left:'+(LAD_CH-6)+'px;width:'+(LAD_CHW+12)+'px;height:1px;background:#f2b45a;opacity:.75}'+
+    '#gpts-body .g3ldeml{position:absolute;left:'+(LAD_CH+LAD_CHW+8)+'px;font-size:7.4px;font-weight:900;'+
+      'color:#f2b45a;transform:translateY(-50%);white-space:nowrap;cursor:help}'+
+    '#gpts-body .g3ldopn{position:absolute;left:'+(LAD_CH+1)+'px;width:'+(LAD_CHW-2)+'px;height:1px;background:#8b98a9;opacity:.6;cursor:help}'+
+    '#gpts-body .g3ldnow{position:absolute;left:'+(LAD_CH+2)+'px;width:'+(LAD_CHW-4)+'px;height:15px;background:#fff;'+
+      'color:#0d1117;border-radius:8px;font-size:9px;font-weight:900;display:flex;align-items:center;'+
+      'justify-content:center;transform:translateY(-50%);z-index:9;cursor:help}'+
+    '#gpts-body .g3ldnow.str{background:#e0645f;color:#fff}'+
+    '#gpts-body .g3ldnowarm{position:absolute;left:'+LAD_PXC+'px;right:6px;height:1px;background:rgba(255,255,255,.12);transform:translateY(-50%)}'+
+    // levels · price
+    '#gpts-body .g3ldlv{position:absolute;left:0;width:'+LAD_LVL+'px;text-align:right;font-size:8.4px;'+
+      'font-weight:800;color:#8b98a9;white-space:nowrap;transform:translateY(-50%);overflow:hidden;text-overflow:ellipsis;cursor:help}'+
+    '#gpts-body .g3ldlvc{color:#7cc7ff}'+
+    '#gpts-body .g3ldlvspyk{color:#cdb4fa}'+
+    '#gpts-body .g3ldlvdp{color:#5fd3bc}'+
+    '#gpts-body .g3ldlviff{font-style:italic}'+
+    '#gpts-body .g3ldrule{position:absolute;left:'+(LAD_LVL+4)+'px;width:'+(LAD_PXC-LAD_LVL-8)+'px;height:1px;background:#6b7787;opacity:.3}'+
+    '#gpts-body .g3ldpx{position:absolute;left:'+LAD_PXC+'px;width:40px;text-align:right;font-size:8.4px;'+
+      'font-weight:800;color:#c9d1da;transform:translateY(-50%);cursor:help}'+
+    '#gpts-body .g3lddim{color:#77828f;font-weight:700}'+
+    // nodes — anchored outside, growing INWARD toward the chute, type riding the bar
+    '#gpts-body .g3ldbar{position:absolute;left:'+LAD_NODE+'px;height:12px;border-radius:2px;transform:translateY(-50%);'+
+      'display:flex;align-items:center;justify-content:flex-end;padding-right:3px;box-sizing:border-box;'+
+      'font-size:8px;font-weight:900;letter-spacing:.03em;font-style:normal;cursor:help}'+
+    '#gpts-body .g3ldbar.acc{background:#a371f7;color:#1b1030}'+
+    '#gpts-body .g3ldbar.brk{background:#e3c341;color:#2a2408}'+
+    '#gpts-body .g3ldbar.bal{background:transparent;box-shadow:inset 0 0 0 1px rgba(139,152,169,.6);color:#8b98a9}'+
+    '#gpts-body .g3ldbar.king{height:15px}'+
+    '#gpts-body .g3ldpk{position:absolute;left:'+LAD_NODE+'px;height:16px;transform:translateY(-50%);'+
+      'border:1px solid #4a5462;border-left:none;border-radius:0 2px 2px 0;cursor:help}'+
+    '#gpts-body .g3ldrole{position:absolute;font-size:8px;font-weight:900;transform:translateY(-50%);white-space:nowrap;cursor:help}'+
+    '#gpts-body .g3ldrole.acc{color:#a371f7}#gpts-body .g3ldrole.brk{color:#e3c341}#gpts-body .g3ldrole.bal{color:#8b98a9}'+
+    '#gpts-body .g3ldkp{position:absolute;left:'+LAD_KPCT+'px;width:38px;text-align:right;font-size:8.4px;'+
+      'font-weight:800;transform:translateY(-50%);white-space:nowrap;cursor:help}'+
+    '#gpts-body .g3ldkp.acc{color:#a371f7}#gpts-body .g3ldkp.brk{color:#e3c341}#gpts-body .g3ldkp.bal{color:#8b98a9}'+
+    '#gpts-body .g3ldtgt{position:absolute;left:'+(LAD_CH+LAD_CHW-16)+'px;font-size:8.5px;font-weight:900;color:#4fd1e0;'+
+      'transform:translateY(-50%);background:#11161f;padding:0 2px;border-radius:2px;z-index:7;cursor:help}'+
+    // profile — mirrored, growing inward from the right
+    '#gpts-body .g3ldppk{position:absolute;height:10px;transform:translateY(-50%);border:1px solid #4a5462;'+
+      'border-right:none;border-radius:2px 0 0 2px;cursor:help}'+
+    '#gpts-body .g3ldpf{position:absolute;height:10px;transform:translateY(-50%);cursor:help}'+
+    '#gpts-body .g3ldpf.acc{background:rgba(163,113,247,.8)}'+
+    '#gpts-body .g3ldpf.brk{background:rgba(227,195,65,.8)}'+
+    '#gpts-body .g3ldpf.bal{box-shadow:inset 0 0 0 1px rgba(139,152,169,.6)}'+
+    // rolls · state · roc
+    '#gpts-body .g3ldrolls{position:absolute;left:'+LAD_ROLL+'px;top:0;width:60px;bottom:0}'+
+    '#gpts-body .g3ldrolls svg{position:absolute;left:0;top:0;overflow:visible}'+
+    '@keyframes g3ldflow{to{stroke-dashoffset:-18}}'+
+    '#gpts-body .g3ldflow{animation:g3ldflow 1.5s linear infinite}'+
+    '#gpts-body .g3ldramt{position:absolute;left:12px;font-size:7.6px;font-weight:900;transform:translateY(-50%);white-space:nowrap;cursor:help}'+
+    '#gpts-body .g3ldst{position:absolute;left:'+LAD_ST+'px;width:44px;font-size:8.4px;font-weight:900;'+
+      'transform:translateY(-50%);white-space:nowrap;cursor:help}'+
+    '#gpts-body .g3ldstFORMING{color:#7cc7ff}#gpts-body .g3ldstWEAKENING{color:#f2b45a}'+
+    '#gpts-body .g3ldstTURNING{color:#cdb4fa}#gpts-body .g3ldstDOOR{color:#e0645f}'+
+    '#gpts-body .g3ldstUSED{color:#6c7889}#gpts-body .g3ldstHOLDING{display:none}'+
+    '#gpts-body .g3ldroc{position:absolute;left:'+LAD_ROC+'px;font-size:8.4px;font-weight:800;'+
+      'transform:translateY(-50%);white-space:nowrap;cursor:help}'+
+    '#gpts-body .g3ldup{color:#2ec27e}#gpts-body .g3lddn{color:#e0645f}#gpts-body .g3ldfl{color:#5b6675}'+
+    '#gpts-body .g3ld60{color:#cdb4fa;font-weight:900}'+
+    '#gpts-body .g3ldoff{font-size:8px;color:#5b6675;margin:1px 0 3px;cursor:help}'+
+    // ⚠ WHEN THE LADDER IS ON, THE OLD RAIL AND PROFILE ARE HIDDEN, NOT DELETED. They stay in the
+    // DOM for one release so the two can be compared live by toggling one class, and so a problem
+    // with the ladder is a setting away from being reverted rather than a rebuild.
+    '#gpts-body.g3ladon .g3emw,#gpts-body.g3ladon .g3gp,#gpts-body.g3ladon .g3gpfoot{display:none}'+
     // (v14.40) THE LEVELS LINE — the v14.39 chip strip's replacement, rebuilt to the operator's
     // sketch ("the idea was to have a line with small arrowheads... a separate rail or line above
     // the current one and the levels should be below it"). Same overlay trick as the roll lane:
@@ -20712,6 +20883,230 @@ function levelDoors(rolls, dsc){
 // "·node" (Garma r22: structure + node stacked beats either alone). Stacks that would overlap
 // (within 4.5% of the frame) merge into one — names joined, the shown price is the member nearest
 // price, every exact price in the hover. The white notch on the line is price now.
+// ============================================================================================
+// (v14.46) THE LADDER — the horizontal rail, the gamma profile and the percentages section,
+// rotated 90 degrees onto ONE vertical price axis. Spec: mockups/mockup-ladder-v10.html, arrived at
+// over ten operator-reviewed drafts.
+//
+// WHY THE ROTATION. The operator caught it as "there are more flags than strikes": the horizontal
+// rail drew 15 posts and could label only 9, because two neighbouring strikes sit ~23px apart while
+// a two-line label is ~22px wide, so half the labels had to be suppressed. Vertically those same two
+// strikes are ~15px apart and a label is ~9px TALL. The crowding does not get managed, it stops
+// existing — and every node can carry its price, its size, its type, its state and its rate of change.
+//
+// THE COLUMN ORDER IS THE OPERATOR'S, and each fact has exactly one home (7692 used to appear three
+// times):  levels · price · nodes ▸ | NOW | ◂ profile · rolls · state · roc
+// Nodes reach INWARD toward the price chute and the profile mirrors them, so bar length reads as how
+// far a level reaches toward price — the pinball framing the operator described.
+//
+// ⚠ NOTHING HERE COMPUTES A NEW FACT. It consumes the same shared arrays the rail consumed —
+// RAILPS / RAILROLLS / LVLST / SESSL / RAILTGT / velAt / peakOf — so the two surfaces can never
+// disagree. That is the one-computation rule this file runs on.
+// ⚠ THESE OFFSETS ARE LOAD-BEARING AND test_ladder ASSERTS THE ARITHMETIC BETWEEN THEM. The first
+// draft had LAD_PXC only 4px past LAD_LVL, which gave the connector rule a width of MINUS four
+// pixels — invisible, and invisible in a way no screenshot would have explained. The tests check
+// that every column clears the one before it and, above all, that NOTHING reaches into the chute.
+var LAD_W=646, LAD_LVL=96, LAD_PXC=116, LAD_NODE=162, LAD_NMAX=100, LAD_KPCT=266,
+    LAD_CH=308, LAD_CHW=50, LAD_PROF=466, LAD_PMAX=100, LAD_ROLL=470, LAD_ST=534, LAD_ROC=584;
+var LAD_SNAP_PTS=2;         // a level within this many points of a node shares that node's row
+function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
+  try{
+    if(!EB || !EB.ok || !RB) return '';
+    var lo=RB.lo, hi=RB.hi, span=hi-lo;
+    if(!(span>0)) return '';
+    // pitch: aim for ~16px per 5 chart points so adjacent strikes never touch, clamped either way
+    var H=Math.max(300, Math.min(640, Math.round(span/5*16)));
+    function Y(p){ return (H - ((p-lo)/span)*H); }
+    function inFrame(p){ return typeof p==='number' && p>=lo && p<=hi; }
+    var now=(typeof EB.nowLive==='number')?EB.nowLive:EB.now;
+    var dsc=1; try{ dsc=ifDispScale()||1; }catch(eD){}
+    var h='<div class="g3lad" style="height:'+H+'px">';
+    var OFF=[];
+
+    // ---- the chute: price, and the day's budget ------------------------------------------------
+    h+='<i class="g3chute"></i>';
+    if(EB.hiWater!=null && EB.loWater!=null && inFrame(EB.hiWater) && inFrame(EB.loWater)){
+      h+='<i class="g3ldrange" style="top:'+Y(EB.hiWater).toFixed(1)+'px;height:'+
+         Math.max(1,(Y(EB.loWater)-Y(EB.hiWater))).toFixed(1)+'px"'+
+         g3tip('Where the day has been: '+frameNum(EB.loWater)+' to '+frameNum(EB.hiWater)+'. A retrace does not hand budget back — the range is spent.')+'></i>';
+    }
+    [['EH',EB.high],['EL',EB.low]].forEach(function(e){
+      if(!inFrame(e[1])) return;
+      var t=Y(e[1]).toFixed(1);
+      h+='<i class="g3ldem" style="top:'+t+'px"></i><span class="g3ldeml" style="top:'+t+'px"'+
+         g3tip((e[0]==='EH'?'Expected high':'Expected low')+' — the open '+(e[0]==='EH'?'plus':'minus')+
+         ' the at-the-money straddle. The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. A priced level, never a floor or a ceiling.'+
+         (EB.est?' ~EST: captured late, so it is narrower than the open’s was.':''))+'>'+(EB.est?'~':'')+e[0]+'</span>';
+    });
+    if(inFrame(EB.open)) h+='<i class="g3ldopn" style="top:'+Y(EB.open).toFixed(1)+'px"'+
+       g3tip('The session open — the anchor the expected-move band is built from.')+'></i>';
+
+    // ---- the nodes ----------------------------------------------------------------------------
+    var NROW={};
+    for(var i=0;i<PS.length;i++){
+      var P=PS[i];
+      if(!inFrame(P.disp)){ OFF.push({n:'node '+frameNum(P.disp), at:P.disp}); continue; }
+      var t=Y(P.disp), neg=!!P.accel, k=P.balanced?'bal':(neg?'acc':'brk');
+      NROW[P.k]=P.disp;
+      var pct=Math.abs(P.pct||0);
+      var len=Math.max(9, pct/100*LAD_NMAX);
+      var pkv=null; try{ pkv=peakOf(P.k); }catch(ePk){}
+      var pkPct=(pkv!=null&&P.usdK!=null&&P.usdK!==0)?Math.min(100,Math.abs(pkv)/Math.abs(P.usdK)*pct):null;
+      var plen=(pkPct!=null&&pkPct>pct)?Math.max(len,pkPct/100*LAD_NMAX):0;
+      var role=P.role||'';
+      var lvS=(LVLST&&LVLST[P.k])?LVLST[P.k]:null;
+      var vv=null; try{ var vE=velAt(P.k); vv=(vE&&vE.v&&!vE.stale)?vE.v:null; }catch(eV){}
+      var tip=frameNum(P.disp)+' (SPXW '+P.k+') — '+pct+'% of King. '+
+        (P.balanced?'BALANCED — the legs very nearly cancel, so there is no side to lean on.'
+          :(neg?'NEGATIVE gamma: dealers are short here, so crossing it a hedge trades WITH the move — an ACCELERATOR.'
+               :'POSITIVE gamma: dealers are long here, so a hedge leans against price — a BRAKE.'))+
+        (pkPct!=null&&pkPct>pct?(' Day peak '+Math.round(pkPct)+'%, so it has given back '+Math.round(pkPct-pct)+' points of its own mass.'):'')+
+        (lvS&&lvS.why?(' ◆ '+lvS.st+' — '+lvS.why+'.'):'');
+      h+='<span class="g3ldpx" style="top:'+t.toFixed(1)+'px"'+g3tip(tip)+'>'+g3esc(frameNum(P.disp))+'</span>';
+      if(plen>len) h+='<i class="g3ldpk" style="top:'+t.toFixed(1)+'px;width:'+plen.toFixed(0)+'px"'+
+        g3tip('Day peak — the outline is what this level HAD; the bar is what it holds now.')+'></i>';
+      var fits=(role && len>=(role.length*6.2+10));
+      h+='<i class="g3ldbar '+k+(role==='KING'?' king':'')+'" style="top:'+t.toFixed(1)+'px;width:'+len.toFixed(0)+'px"'+
+         g3tip(tip)+'>'+(fits?g3esc(role):'')+'</i>';
+      if(role && !fits) h+='<span class="g3ldrole '+k+'" style="top:'+t.toFixed(1)+'px;left:'+(LAD_NODE+len+5).toFixed(0)+'px"'+g3tip(tip)+'>'+g3esc(role)+'</span>';
+      h+='<span class="g3ldkp '+k+'" style="top:'+t.toFixed(1)+'px"'+g3tip(tip)+'>'+(neg?'−':'+')+pct+'%'+(role==='KING'?' ♛':'')+'</span>';
+      if(TGT!=null && Math.abs(TGT-P.disp)<0.01)
+        h+='<span class="g3ldtgt" style="top:'+t.toFixed(1)+'px"'+g3tip('THE DESTINATION — the dominant magnet by measured pull (size ÷ distance), out-pulling every other node at least 2-to-1. Where the flow points, not a promise.')+'>◂T</span>';
+      // profile mirror
+      var pf=Math.max(9, pct/100*LAD_PMAX), pp=(pkPct!=null&&pkPct>pct)?Math.max(pf,pkPct/100*LAD_PMAX):0;
+      if(pp>pf) h+='<i class="g3ldppk" style="top:'+t.toFixed(1)+'px;left:'+(LAD_PROF-pp).toFixed(0)+'px;width:'+pp.toFixed(0)+'px"'+g3tip(tip)+'></i>';
+      h+='<i class="g3ldpf '+k+'" style="top:'+t.toFixed(1)+'px;left:'+(LAD_PROF-pf).toFixed(0)+'px;width:'+pf.toFixed(0)+'px"'+g3tip(tip)+'></i>';
+      if(lvS && lvS.st)
+        h+='<span class="g3ldst g3ldst'+lvS.st+'" style="top:'+t.toFixed(1)+'px"'+g3tip(lvS.st+' — '+(lvS.why||'')+'.')+'>'+g3esc(lvS.st.slice(0,5))+'</span>';
+      if(vv && typeof vv.p5==='number' && typeof vv.p15==='number'){
+        var arg=(typeof vv.p60==='number' && vv.p15!==0 && vv.p60!==0 && (vv.p15>0)!==(vv.p60>0));
+        h+='<span class="g3ldroc" style="top:'+t.toFixed(1)+'px"'+
+           g3tip('Skylit’s own rate of change for this strike — the same numbers their strike popup shows. 5m '+Math.round(vv.p5)+'%, 15m '+Math.round(vv.p15)+'%'+(typeof vv.p60==='number'?(', 60m '+Math.round(vv.p60)+'%'):'')+'.'+
+           (arg?' The HOUR DISAGREES with the 15m — that is the TURNING condition, which is why it is printed here and nowhere else.':''))+'>'+
+           ldNum(vv.p5)+' '+ldNum(vv.p15)+(arg?(' <b class="g3ld60">'+(vv.p60>0?'▲':'▼')+Math.abs(Math.round(vv.p60))+'%</b>'):'')+'</span>';
+      }
+    }
+
+    // ---- the levels, snapped to a node's row when they are within a couple of points ------------
+    var LV=[];
+    if(SESSL){
+      [['IBH',SESSL.ibSet?SESSL.ibH:null],['IBL',SESSL.ibSet?SESSL.ibL:null],
+       ['PDH',SESSL.pdh],['PDL',SESSL.pdl],['PDC',SESSL.pdc]].forEach(function(sd){
+        if(sd[1]!=null) LV.push({n:sd[0], at:sd[1], tip:'Session structure, RTH bars only.'}); });
+    }
+    try{
+      if(CFG.spyFlag!==false && typeof LASTFEED!=='undefined' && LASTFEED.SPY && LASTFEED.SPY.j &&
+         (Date.now()-(LASTFEED.SPY.ts||0))<=FEED_STALE_MS*3 && typeof EB.scaleUsed==='number'){
+        var ew=null; try{ ew=extractWalls(LASTFEED.SPY.j); }catch(eW){}
+        if(ew && ew.king!=null) LV.push({n:'SPY K', at:ew.king*EB.scaleUsed, cls:'spyk',
+          tip:'The OTHER book’s crown, converted. Price bounces off it even when every dynamic here is SPXW.'});
+      }
+    }catch(eS){}
+    try{
+      var DL=darkPoolLevels(sym), DC=null; try{ DC=dpLifecycle(sym); }catch(eL){}
+      if(DL && typeof EB.scaleUsed==='number' && EB.scaleUsed>0){
+        DL.prints.forEach(function(pr,ix){
+          var st=(DC&&DC[ix]&&DC[ix].st&&DC[ix].st!=='UNKNOWN')?DC[ix].st:null;
+          LV.push({n:'DP'+(st?(' '+(DP_ST_SHORT[st]||'')):''), at:pr.px*EB.scaleUsed, cls:'dp',
+            tip:'Dark pool — Skylit’s own level set, the top prints over a 45-day lookback. A cash-equity print, which is why it is quoted on '+sym+' and converted here.'+(DC&&DC[ix]?(' STATE: '+DC[ix].st+' — '+DC[ix].why+'.'):'')});
+        });
+      }
+    }catch(eDp){}
+    try{
+      var IFL=ifLadder(sym);
+      if(IFL && !IFL.err){
+        var IFN={ CR:'CW', PS:'PW', CR0:'CW0', PS0:'PW0', Mag:'T', FLIP:'FLIP', 'FLIP*':'FLIP*' };
+        IFL.rows.forEach(function(r){
+          var toks=String(r.id).split('·').map(function(x){ return IFN[x]||null; }).filter(Boolean);
+          if(toks.length) LV.push({n:toks.join('·'), at:r.disp, cls:'iff',
+            tip:'InsiderFinance’s number, not ours — open-interest gamma, a stock not a flow.'});
+        });
+      }
+    }catch(eIf){}
+    var byRow={};
+    LV.forEach(function(L){
+      if(!inFrame(L.at)){ OFF.push({n:L.n, at:L.at}); return; }
+      // SNAP: two prices a point apart would be two rows fighting for one line. The node owns the
+      // row; the level hangs its NAME on it and drops its own price.
+      var host=null, hd=LAD_SNAP_PTS;
+      for(var kk in NROW){ var d=Math.abs(NROW[kk]-L.at); if(d<=hd){ hd=d; host=NROW[kk]; } }
+      var at=(host!=null)?host:L.at;
+      var key=at.toFixed(2);
+      if(!byRow[key]) byRow[key]={ at:at, host:(host!=null), names:[], tips:[], cls:'' };
+      byRow[key].names.push(L.n); byRow[key].tips.push(L.n+' '+frameNum(L.at)+' — '+L.tip);
+      if(L.cls && !byRow[key].cls) byRow[key].cls=L.cls;
+    });
+    for(var rk in byRow){
+      var R=byRow[rk], t2=Y(R.at);
+      var confl=(R.host && !R.cls);
+      h+='<span class="g3ldlv'+(R.cls?(' g3ldlv'+R.cls):(confl?' g3ldlvc':''))+'" style="top:'+t2.toFixed(1)+'px"'+
+         g3tip(R.tips.join(' · ')+(R.host?' Shown on this node’s row — structure and gamma stacked.':''))+'>'+
+         g3esc(R.names.join(' · '))+'</span>';
+      if(!R.host) h+='<span class="g3ldpx g3lddim" style="top:'+t2.toFixed(1)+'px"'+g3tip(R.tips.join(' · '))+'>'+g3esc(frameNum(R.at))+'</span>';
+      h+='<i class="g3ldrule'+(R.cls?(' g3ldlv'+R.cls):'')+'" style="top:'+t2.toFixed(1)+'px"></i>';
+    }
+
+    // ---- the rolls -----------------------------------------------------------------------------
+    h+=ladderRolls(ROLLS, Y, dsc, lo, hi, H);
+
+    // ---- price now ------------------------------------------------------------------------------
+    if(inFrame(now)){
+      var tn=Y(now);
+      h+='<i class="g3ldnowarm" style="top:'+tn.toFixed(1)+'px"></i>'+
+         '<span class="g3ldnow'+(EB.stretched?' str':'')+'" style="top:'+tn.toFixed(1)+'px"'+
+         g3tip('Price now — LIVE.'+(EB.stretched?' RED: price is beyond the expected move — STRETCHED.':''))+'>'+
+         g3esc(frameNum(now))+'</span>';
+    }
+    h+='</div>';
+    if(OFF.length){
+      OFF.sort(function(a,b){ return Math.abs(a.at-now)-Math.abs(b.at-now); });
+      h+='<div class="g3ldoff"'+g3tip('Outside the drawn frame and therefore NOT plotted — a clamped position would be a false one. Named here with distance instead.')+'>▾ off frame — '+
+        g3esc(OFF.slice(0,5).map(function(o){ return o.n+' '+frameNum(o.at)+' ('+((o.at-now)>0?'+':'')+Math.round(o.at-now)+')'; }).join(' · '))+
+        (OFF.length>5?(' · and '+(OFF.length-5)+' more'):'')+'</div>';
+    }
+    return h;
+  }catch(e){ swallow('ladder', e); return ''; }
+}
+function ldNum(v){ v=Math.round(v||0);
+  return '<b class="'+(v>0?'g3ldup':(v<0?'g3lddn':'g3ldfl'))+'">'+(v>0?'+':'')+v+'%</b>'; }
+// The roll arrows, to the operator's sketch: a filled circle at the SOURCE, OUT to the right, along
+// the ladder, then back IN past the origin's own x, and only then the arrowhead. The head is never
+// welded to a corner. ⚠ The landing is a SEPARATE SOLID sub-path: a dashed stroke ends wherever the
+// dash pattern falls, and a final gap at the head leaves it floating (operator-caught).
+function ladderRolls(ROLLS, Y, dsc, lo, hi, H){
+  try{
+    if(!ROLLS || !ROLLS.length) return '';
+    var svg='', lab='', n=0;
+    for(var i=0;i<ROLLS.length && n<4;i++){
+      var r=ROLLS[i];
+      var a=r.from*dsc, b=r.to*dsc;
+      if(!(a>=lo&&a<=hi) || !(b>=lo&&b<=hi)) continue;
+      var yA=Y(a), yB=Y(b), up=(b>a), col=up?'#2ec27e':'#e0645f', mk=up?'g3ahU':'g3ahD';
+      var x0=6, xOut=x0+20+n*13, xEnd=0, rad=5, dir=(yB<yA)?-1:1, LAND=13;
+      var d='M '+x0+' '+yA.toFixed(1)+' H '+(xOut-rad)+' Q '+xOut+' '+yA.toFixed(1)+' '+xOut+' '+(yA+dir*rad).toFixed(1)+
+            ' V '+(yB-dir*rad).toFixed(1)+' Q '+xOut+' '+yB.toFixed(1)+' '+(xOut-rad)+' '+yB.toFixed(1)+' H '+(xEnd+LAND);
+      var amt=''; try{ amt=usdBig(Math.abs(r.amt||0))||''; }catch(eA){}
+      var pq=(r.got!=null&&r.lost!=null&&Math.max(Math.abs(r.got),Math.abs(r.lost))>0)
+             ? Math.round(100*Math.min(Math.abs(r.got),Math.abs(r.lost))/Math.max(Math.abs(r.got),Math.abs(r.lost))) : null;
+      svg+='<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="butt" opacity="'+(r.live?0.98:0.5)+'"'+
+           (r.live?' stroke-dasharray="5 4" class="g3ldflow"':'')+'/>'+
+           '<path d="M '+(xEnd+LAND)+' '+yB.toFixed(1)+' H '+xEnd+'" fill="none" stroke="'+col+'" stroke-width="1.6" stroke-linecap="butt" marker-end="url(#'+mk+')" opacity="'+(r.live?0.98:0.5)+'"/>'+
+           '<circle cx="'+x0+'" cy="'+yA.toFixed(1)+'" r="3" fill="'+col+'" opacity="'+(r.live?0.98:0.55)+'"/>'+
+           '<circle cx="'+x0+'" cy="'+yA.toFixed(1)+'" r="5.4" fill="none" stroke="'+col+'" stroke-width="1" opacity="'+(r.live?0.4:0.2)+'"/>';
+      if(amt) lab+='<span class="g3ldramt" style="color:'+col+';opacity:'+(r.live?1:0.6)+';top:'+(yA+9).toFixed(1)+'px"'+
+        g3tip(amt+' left '+frameNum(a)+' and arrived at '+frameNum(b)+'.'+(pq!=null?(' Pairing quality '+pq+'% — how well the size lost matches the size gained.'):'')+
+        ' '+(r.live?'LIVE.':'LATCHED — it happened earlier and is structure now, not motion.')+
+        ' ⚠ INFERRED from paired changes, never an observed transfer: nobody publishes that a position moved between strikes.')+'>'+g3esc(amt)+'</span>';
+      n++;
+    }
+    if(!n) return '';
+    return '<div class="g3ldrolls"><svg viewBox="0 0 60 '+H+'" width="60" height="'+H+'" preserveAspectRatio="none">'+
+      '<defs><marker id="g3ahU" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto"><path d="M0,0.5 L6.5,3.5 L0,6.5 z" fill="#2ec27e"/></marker>'+
+      '<marker id="g3ahD" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto"><path d="M0,0.5 L6.5,3.5 L0,6.5 z" fill="#e0645f"/></marker></defs>'+
+      svg+'</svg>'+lab+'</div>';
+  }catch(e){ return ''; }
+}
+
 function railLevelsLine(EB, RB, RAILPS, SESSL, sym){
   try{
     if(!EB || !EB.ok) return '';
@@ -21643,6 +22038,7 @@ function secFrame(sym){
     // its grey chip while it retires).
     var RAILROLLS=[];
     try{ if(rollsLive()) RAILROLLS=(rollLatched(sym)||[]).filter(function(rF){ return !rF.gone; }); }catch(eRR){}
+    var RAILTGT=null;   // (v14.46) the destination, set by the READ below and consumed by the LADDER
     // (v14.35, Garma item 1) session-structure levels, once per render, in the chart frame
     var SESSL=null; try{ SESSL=sessionLevels(sym, (EB&&typeof EB.scaleUsed==='number')?EB.scaleUsed:1); }catch(eSL){}
     // (v14.30) the level-engine context rides the SAME latched list (one computation, N consumers)
@@ -21771,11 +22167,17 @@ function secFrame(sym){
             if(frDd2<frDoD){ frDoD=frDd2; frDo=LVLDOORS[frDi2]; } }
           if(frDo) frS2.push(frameNum(frDo.disp)+' is a DOOR \u2014 drained, expect pass-through');
         }catch(eDo2){}
+        // (v14.45, GARMA V2 PHASE B) IS NEW SUPPORT AND RESISTANCE FORMING? The operator's standing
+        // requirement asks for exactly this and the panel has never answered it, despite banking the
+        // measurements since v10.51. A floor migrating higher across map updates IS new support
+        // forming; a ceiling migrating lower IS resistance closing in. It belongs in the S&R clause,
+        // beside the levels it is describing.
+        try{ var frRoll=rollingRead(sym); if(frRoll && frRoll.txt) frS2.push(frRoll.txt); }catch(eRo){}
         if(frS2.length) FR.push(frS2.join('; '));
       }catch(eF3){}
       // ---- 3 · THE DESTINATION -----------------------------------------------------------------
       try{
-        var frBestP=null, frSecond=0, frBpull=0, frDi;
+        var frBestP=null, frSecond=0, frBpull=0, frDi;   // (v14.46) shared with the ladder via RAILTGT
         for(frDi=0;frDi<RAILPS.length;frDi++){
           var frDP=RAILPS[frDi], frDd=Math.abs(frDP.disp-frNow);
           if(frDd<2.6 || frDd>60) continue;
@@ -21787,6 +22189,7 @@ function secFrame(sym){
         if(frBestP && frBpull>0){
           var frDom=(frSecond>0)?(frBpull/frSecond):9;
           if(frDom>=2){
+            try{ RAILTGT=frBestP.disp; }catch(eTg){}   // (v14.46) the ladder marks the same destination
             var frDtxt='destination: '+frameNum(frBestP.disp)+(frBestP.role==='KING'?' \u2014 the King':'')+
                        ', out-pulling everything '+(frDom>=9?'outright':(Math.round(frDom*10)/10)+'\u00d7');
             // (v14.30) DESTINATION CONCENTRATION — how much of the near book agrees
@@ -21852,6 +22255,12 @@ function secFrame(sym){
             g3esc(frTxt)+'</div>';
       }
     }catch(eFRD){}
+    // (v14.46) THE LADDER, emitted BEFORE the old rail and hiding it via the g3ladon body class.
+    // Additive on purpose: the previous surface stays in the DOM for one release so the two can be
+    // compared live, and so a fault is a toggle away from being reverted rather than a rebuild.
+    if(CFG.ladder!==false){
+      try{ h+=ladderHtml(EB, RB, sym, RAILPS, RAILROLLS, SESSL, LVLST, RAILTGT); }catch(eLAD){ swallow('ladder', eLAD); }
+    }
     h+='<span class="g3emw"'+g3tip('Where today can go, where it is, and how much is left. The rail is '+(EB.anchor==='prevClose'?'the prior close':'the open')+' plus and minus the expected move, fixed for the session. Notch = anchor, white dot = price now, T = target, dim span = where the day has been.'+(EB.est?' ~EST: captured late, so this band is narrower than the open\'s was.':'')+(EB.anchor==='prevClose'?' Pre-open: re-anchors to the real open on the first bar.':''))+'>';
     // (v11.68) THE ROW IS NAMED FOR WHAT IT IS. The ATM straddle is ~0.80 sigma, not 1.00 — Brenner and
     // Subrahmanyam, and every vendor guide that bothers to say so puts the conversion at x1.25. A row
@@ -21989,17 +22398,38 @@ function secFrame(sym){
          // their labels rendered as one mashed string ("76557660", operator-caught). The bigger pile
          // keeps its label; a smaller one within 4% of an already-labelled pile stays label-less —
          // its dot, bar and hover are untouched, only the text yields.
-         var LBLOK={};
+         // ⚠⚠ (v14.46, operator-caught: "there are more flags than strikes") EVERY POST GETS ITS
+         // NUMBER. v14.5 suppressed any label within 4% of an already-labelled one to stop "76557660"
+         // mashing, and on a normal ladder that silently blanks half the rail: adjacent 5-point
+         // strikes sit ~3.7% apart, just inside the rule, so the operator was looking at 15 posts
+         // and 9 numbers. Six bars with no identity is a worse failure than two labels touching —
+         // a post you cannot name is a post you cannot trade.
+         // THE FIX IS A SECOND ROW, not a wider gap: labels alternate between two tiers, so each
+         // tier only needs ~7.4% of clearance and the whole ladder fits at its natural spacing. A
+         // label is only suppressed now if BOTH tiers are still occupied within 4% — genuinely
+         // impossible, rather than merely tight. The ROLE tags keep the old single-tier thinning:
+         // the number is what identifies a post, the role is a bonus, and stacking roles too would
+         // put text into the track.
+         var LBLOK={}, LBLTIER={}, ROLEOK={};
          try{
            var lblCand=ps.filter(function(pL){ return pL.pct>=PLAB_MIN_PCT; })
                          .sort(function(a,b){ return b.pct-a.pct; });
-           var lblX=[];
+           var tierX=[[],[]], roleX=[];
            lblCand.forEach(function(pL){
-             var xL=emPosRail(EB, pL.disp, RB);
-             for(var q=0;q<lblX.length;q++) if(Math.abs(lblX[q]-xL)<4) return;
-             lblX.push(xL); LBLOK[pL.k]=1;
+             var xL=emPosRail(EB, pL.disp, RB), q;
+             // roles: unchanged single-tier thinning
+             var rOK=true;
+             for(q=0;q<roleX.length;q++) if(Math.abs(roleX[q]-xL)<4){ rOK=false; break; }
+             if(rOK){ roleX.push(xL); ROLEOK[pL.k]=1; }
+             // labels: first tier with room wins; bigger piles are placed first, so the strongest
+             // node keeps the top row and the eye reads size before it reads position
+             for(var t=0;t<2;t++){
+               var clash=false;
+               for(q=0;q<tierX[t].length;q++) if(Math.abs(tierX[t][q]-xL)<4){ clash=true; break; }
+               if(!clash){ tierX[t].push(xL); LBLOK[pL.k]=1; LBLTIER[pL.k]=t; return; }
+             }
            });
-         }catch(eLT){ ps.forEach(function(pL){ LBLOK[pL.k]=1; }); }
+         }catch(eLT){ ps.forEach(function(pL){ LBLOK[pL.k]=1; LBLTIER[pL.k]=0; ROLEOK[pL.k]=1; }); }
          for(var pi=0;pi<ps.length;pi++){
            var P=ps[pi];
            // sqrt so a 100% King does not flatten a 30% pile into invisibility
@@ -22069,7 +22499,7 @@ function secFrame(sym){
            // (v11.81) ROLE beats polarity on the label. A King is still an accelerator; the hover keeps
            // both, but "KING" is the word that changes what you do and "ACC" is not.
            var role = P.role || (P.balanced ? 'BAL' : (P.accel ? 'ACC' : 'BRK'));
-           if(P.pct>=PLAB_MIN_PCT && LBLOK[P.k]){
+           if(P.pct>=PLAB_MIN_PCT && ROLEOK[P.k]){
              // (v11.93) THE ROLE MOVES ABOVE THE RAIL, into its own tier between the money amounts and
              // the track. Below the rail it was sharing one line with the SPX strike, so on a crowded
              // ladder "7645 ACC" and "7665 KING" competed for width against their neighbours and the
@@ -22080,8 +22510,10 @@ function secFrame(sym){
              var rEdge = (P.pos>94) ? ';transform:translateX(-100%)' : ((P.pos<6) ? ';transform:translateX(0)' : '');
              h2+='<span class="g3prole '+pcls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%'+rEdge+'"'+g3tip(tip)+'>'+
                  g3esc(role)+'</span>';
+           }
+           if(P.pct>=PLAB_MIN_PCT && LBLOK[P.k]){
              var lvWord=(lvS && lvS.st!=='HOLDING')?('<em class="g3lvw g3lvw'+lvS.st+'">'+lvS.st.slice(0,4)+'</em>'):'';
-             h2+='<span class="g3plab '+pcls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%"'+g3tip(tip)+'>'+
+             h2+='<span class="g3plab '+pcls+(LBLTIER[P.k]?' g3t2':'')+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%"'+g3tip(tip)+'>'+
                  frameNum(P.disp)+'<i>'+P.k+'</i>'+lvWord+'</span>';
            }
          }
@@ -23610,6 +24042,9 @@ function render(){
   if(!elBody) return;
   // (v13.5) one class governs all rail motion; CSS does the rest
   try{ elBody.classList.toggle('g3nomo', CFG.motion===false); }catch(eMoC){}
+  // (v14.46) the ladder replaces the horizontal rail and the profile — hidden, not deleted, for one
+  // release, so the two surfaces can be compared by toggling this one class.
+  try{ elBody.classList.toggle('g3ladon', CFG.ladder!==false); }catch(eLdC){}
   try{ wireBodyDelegation(); }catch(eWD){}
   RENDER_SEQ++;   // (v10.14) new tick: srBattle memoizes per render so its
                   // crossover state isn't corrupted by being called twice.

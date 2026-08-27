@@ -3,7 +3,52 @@ const fs=require('fs'); const src=fs.readFileSync('./v10.js','utf8');
 function noc(s){ return String(s).replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,''); }
 function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.exec(src);let i=src.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}return src.slice(m.index,e+1);}
 let pass=0,fail=0;
-function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==undefined?'  got: '+x:''));} }
+function ok(c,m,x){ if(c){pass++;} else {fail++; 
+// ---- (v14.46) EVERY POST GETS ITS NUMBER ----------------------------------------------------
+// Operator-caught: "there are more flags than strikes". Measured live 2026-08-26: 15 posts on the
+// rail, 9 labels. v14.5's 4% neighbour-thinning blanked six of them, because adjacent 5-point
+// strikes sit ~3.7% apart — just inside the rule. A post you cannot name is a post you cannot trade.
+{
+  const src=require('fs').readFileSync('./v10.js','utf8');
+  ok(/EVERY POST GETS ITS\s*\n?\s*\/\/ NUMBER/.test(src) || /more flags than strikes/.test(src),
+     'v1446a the operator\'s report is recorded where the fix lives');
+  ok(/var LBLOK=\{\}, LBLTIER=\{\}, ROLEOK=\{\}/.test(src),
+     'v1446b labels and roles are gated SEPARATELY — the number identifies the post, the role is a bonus');
+  ok(/for\(var t=0;t<2;t\+\+\)/.test(src), 'v1446c labels are allocated across TWO tiers');
+  ok(/g3plab\.g3t2\{bottom:-21px/.test(src), 'v1446d ...and tier 2 hangs a full label lower');
+  ok(/g3emt\{margin-bottom:21px\}/.test(src),
+     'v1446e the row BUYS the space, so the gamma profile is pushed down rather than written over');
+  ok(/LBLTIER\[P\.k\]\?' g3t2':''/.test(src), 'v1446f the tier reaches the rendered class');
+
+  // the allocator, executed: a ladder of evenly-spaced strikes must lose NO labels
+  const alloc=(xs)=>{
+    const tierX=[[],[]], out=[];
+    xs.forEach((x)=>{
+      for(let t=0;t<2;t++){
+        let clash=false;
+        for(let q=0;q<tierX[t].length;q++) if(Math.abs(tierX[t][q]-x)<4){ clash=true; break; }
+        if(!clash){ tierX[t].push(x); out.push(t); return; }
+      }
+      out.push(null);
+    });
+    return out;
+  };
+  // the operator's actual rail: 15 posts, 3.7% apart
+  const XS=[2.3,6,9.7,20.7,28,31.7,35.3,39,50,79.3,83,86.7,90.3,94,97.7];
+  const T=alloc(XS);
+  ok(T.filter(t=>t===null).length===0, 'v1446g on the live 15-post rail, NO label is dropped', T);
+  ok(T.filter(t=>t===0).length>0 && T.filter(t=>t===1).length>0, 'v1446h ...they share both tiers');
+  // and same-tier neighbours are never closer than the clearance
+  let bad=0;
+  for(let i=0;i<XS.length;i++) for(let j=i+1;j<XS.length;j++)
+    if(T[i]===T[j] && Math.abs(XS[i]-XS[j])<4) bad++;
+  ok(bad===0, 'v1446i no two labels on the same tier are within 4% — nothing can mash', bad);
+  // a pathological cluster still refuses rather than overlapping
+  const C=alloc([50,50.5,51,51.5]);
+  ok(C[3]===null, 'v1446j four labels inside 2% still drops the last — refusal beats overlap', C);
+}
+
+console.log('FAIL '+m+(x!==undefined?'  got: '+x:''));} }
 
 // ---------- the step bar ----------
 {

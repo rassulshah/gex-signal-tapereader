@@ -236,5 +236,74 @@ ok(/a broken level only becomes[\s\S]{0,80}resistance after a rejection/.test(sr
    'l17 GM-DP-003 recorded: BROKEN is not yet resistance, FLIPPED is');
 ok(/lifecycle:\(function\(\)\{ try\{ return dpLifecycle/.test(src), 'l18 __gptsDebug.dp() exposes the lifecycle');
 
+
+// ================= (v14.45) PHASE B — ROLLING STRUCTURE =================
+// V2 (GM-ROLL-001/2/3) unblocks a refusal that stood since v10.51: FCHIST has SAMPLED the dominant
+// floor/ceiling every closed bar for months and deliberately computed nothing, believing rolling
+// was day-over-day only. Official doctrine says migration across MAP UPDATES — 2 signal, 3 confirm.
+global.ROLL_BUCKET_MIN=v('ROLL_BUCKET_MIN');
+global.ROLL_MIN_BUCKETS=v('ROLL_MIN_BUCKETS');
+global.LEG_ROLL_SIGNAL=v('LEG_ROLL_SIGNAL');
+global.LEG_ROLL_CONFIRM=v('LEG_ROLL_CONFIRM');
+eval(ex('rollRun'));
+ok(global.LEG_ROLL_SIGNAL===2 && global.LEG_ROLL_CONFIRM===3,
+   'b1 the SAME count rule as everywhere: 2 signal, 3 confirm — no second vocabulary');
+ok(rollRun([660,661,662]).count===2 && rollRun([660,661,662]).dir===1, 'b2 two migrations up = a run of 2');
+ok(rollRun([660,661,662,663]).count===3, 'b3 three = confirmation territory');
+ok(rollRun([660,661,660]).count===1, 'b4 a reversal ends the run');
+ok(rollRun([660,660,660]).count===0, 'b5 a flat floor is not rolling');
+ok(rollRun([662,661,660]).dir===-1, 'b6 ...and downward migration is signed');
+
+// bucketing — the cadence IS the design
+global.TODAY='2026-08-26';
+let FCROWS=[];
+const tB0=Date.parse('2026-08-26T14:00:00Z');
+// a floor that wobbles one strike back and forth every 3 minutes must NOT read as rolling
+for(let i=0;i<20;i++) FCROWS.push({d:'2026-08-26', t:tB0+i*180000, flr:660+(i%2), ceil:700});
+global.fcHistOf=()=>FCROWS;
+eval(ex('rollBucketsOf')); eval(ex('intradayRoll'));
+let IW=intradayRoll('SPY');
+// ⚠ a wobble CAN leave a run of 1 — doctrine calls one print noise, and the threshold is what
+// rejects it. Assert the thing that matters: it never reaches SIGNAL.
+ok(IW.flr.count < global.LEG_ROLL_SIGNAL,
+   'b7 a floor ticking back and forth every bar never reaches signal — one print is noise', IW.flr);
+ok(rollingRead0().indexOf('ROLLING')<0, 'b7b ...and the read stays silent about it');
+function rollingRead0(){ try{ eval(ex('rollingRead')); global.sessionRoll=()=>({ready:false}); return rollingRead('SPY').txt||''; }catch(e){ return ''; } }
+// a floor genuinely climbing across buckets does. ⚠ THE ARITHMETIC MATTERS: one migration per
+// bucket, so a SIGNAL (2) needs 3 buckets and a CONFIRMATION (3) needs 4. At 15m that is 45 and 60
+// minutes. The first draft used 30m buckets and this test caught it: 90 minutes before the panel
+// could say anything is most of a daytrading session spent silent.
+ok(global.ROLL_BUCKET_MIN===15, 'b8a the bucket is 15 minutes, so a signal is 45m old and not 90m');
+FCROWS=[];
+for(let i=0;i<40;i++) FCROWS.push({d:'2026-08-26', t:tB0+i*180000, flr:660+Math.floor(i/5), ceil:700});
+let IC=intradayRoll('SPY');
+ok(IC.buckets>=4, 'b8b 40 bars of 3m = 8 buckets of 15m', IC.buckets);
+ok(IC.ready && IC.flr.dir===1 && IC.flr.count>=2, 'b8 a floor climbing across buckets IS a roll', IC.flr);
+// yesterday's rows never stitch into today's intraday read
+FCROWS=[{d:'2026-08-25', t:tB0-86400000, flr:640, ceil:700},{d:'2026-08-26', t:tB0, flr:660, ceil:700}];
+ok(intradayRoll('SPY').buckets===1, 'b9 intraday means TODAY — yesterday is not stitched in', intradayRoll('SPY').buckets);
+ok(intradayRoll('SPY').ready===false && /needs 2 buckets/.test(intradayRoll('SPY').note||''),
+   'b10 one bucket is not a reading, and it says how far off it is');
+
+// the read
+global.sessionRoll=()=>({ready:true, flr:{count:3,dir:1}, ceil:{count:0,dir:0}, sessions:7});
+FCROWS=[]; for(let i=0;i<40;i++) FCROWS.push({d:'2026-08-26', t:tB0+i*180000, flr:660, ceil:700-Math.floor(i/5)});
+eval(ex('rollingRead'));
+let RR=rollingRead('SPY');
+ok(/floor is ROLLING UP 3 sessions/.test(RR.txt), 'b11 the day-over-day roll finally reaches the read', RR.txt);
+ok(/ceiling is ROLLING DOWN/.test(RR.txt) && /upside compressing/.test(RR.txt), 'b12 ...alongside the intraday one');
+ok(/confirmed/.test(RR.txt), 'b13 3 migrations is labelled confirmed, not merely signal');
+// GM-ROLL-003 — a ceiling rolling UP is a TARGET rule, never an entry rule
+global.sessionRoll=()=>({ready:true, flr:{count:0,dir:0}, ceil:{count:2,dir:1}, sessions:7});
+FCROWS=[{d:'2026-08-26', t:tB0, flr:660, ceil:700}];
+let RU=rollingRead('SPY');
+ok(/more room above/.test(RU.txt) && /not a reason to be long/.test(RU.txt),
+   'b14 GM-ROLL-003: a rising ceiling widens the TARGET and is explicitly not an entry', RU.txt);
+ok(RU.bull===0, 'b15 ...and it casts no bullish vote');
+ok(/GM-ROLL-003 IS A TARGET RULE, NOT AN ENTRY RULE/.test(src), 'b16 the rule is written where it is enforced');
+ok(/THE CADENCE IS THE WHOLE DESIGN/.test(src), 'b17 the bucketing rationale is recorded');
+ok(/rollingRead\(sym\); if\(frRoll && frRoll\.txt\) frS2\.push/.test(src),
+   'b18 rolling is pushed into the S&R clause — "new support and resistance forming"');
+
 console.log('test_garma_v2: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

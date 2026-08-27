@@ -1,0 +1,148 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>The ladder v5</title>
+<style>
+ body{background:#0d1117;color:#e6edf3;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+      font-variant-numeric:tabular-nums;margin:0;padding:18px}
+ .panel{width:930px;background:#11161f;border:1px solid #2a3340;border-radius:6px;padding:10px 12px}
+ .cap{font-size:11px;font-weight:800;letter-spacing:.07em;color:#8b98a9;margin:0 0 8px;text-transform:uppercase}
+ .note{font-size:11px;color:#8b98a9;line-height:1.7;width:930px;margin-top:12px}
+ .note b{color:#e6edf3}
+ .read{font-size:9.5px;font-weight:600;color:#c9d4e2;background:rgba(124,199,255,.05);
+       border:1px solid rgba(124,199,255,.18);border-radius:4px;padding:6px 8px;line-height:1.55;margin-bottom:8px}
+ .hdr{position:relative;height:15px}
+ .hdr span{position:absolute;font-size:7.5px;font-weight:900;letter-spacing:.1em;color:#4b5563;text-transform:uppercase}
+ .lad{position:relative}
+ .lv{position:absolute;left:0;width:132px;text-align:right;font-size:8.4px;font-weight:800;
+     color:#8b98a9;white-space:nowrap;transform:translateY(-50%)}
+ .lv.confl{color:#7cc7ff}.lv.spyk{color:#cdb4fa}.lv.dp{color:#5fd3bc}
+ .px{position:absolute;left:138px;width:44px;text-align:right;font-size:8.4px;font-weight:800;
+     color:#c9d1da;transform:translateY(-50%)}
+ .px.dim{color:#77828f;font-weight:700}
+ .rule{position:absolute;left:134px;width:52px;height:1px;opacity:.3;transform:translateY(-50%)}
+ .tick{position:absolute;height:5px;border-radius:1px;transform:translateY(-50%)}
+ .tick.acc{background:#a371f7}.tick.brk{background:#e3c341}.tick.king{height:7px}
+ .npk{position:absolute;height:9px;transform:translateY(-50%);border:1px solid #4a5462;border-left:none;border-radius:0 2px 2px 0}
+ .nk{position:absolute;left:344px;width:48px;text-align:right;font-size:8.4px;font-weight:800;
+     transform:translateY(-50%);white-space:nowrap}
+ .nk.acc{color:#a371f7}.nk.brk{color:#e3c341}
+ .chute{position:absolute;left:398px;width:62px;top:0;bottom:0;background:rgba(255,255,255,.035);
+        border-left:1px solid #333e4d;border-right:1px solid #333e4d}
+ .now{position:absolute;left:400px;width:58px;height:17px;background:#fff;color:#0d1117;border-radius:9px;
+      font-size:9.8px;font-weight:900;display:flex;align-items:center;justify-content:center;
+      transform:translateY(-50%);z-index:8}
+ .nowarm{position:absolute;left:134px;width:786px;height:1px;background:rgba(255,255,255,.13);transform:translateY(-50%)}
+ .ppk{position:absolute;height:11px;transform:translateY(-50%);border:1px solid #4a5462;border-right:none;border-radius:2px 0 0 2px}
+ .pfl{position:absolute;height:11px;transform:translateY(-50%)}
+ .pfl.acc{background:rgba(163,113,247,.8)}.pfl.brk{background:rgba(227,195,65,.8)}
+ .typ{position:absolute;left:624px;width:52px;font-size:8.4px;font-weight:900;letter-spacing:.03em;
+      transform:translateY(-50%);white-space:nowrap}
+ .typ.acc{color:#a371f7}.typ.brk{color:#e3c341}
+ .st{position:absolute;left:684px;width:52px;font-size:8.4px;font-weight:900;transform:translateY(-50%);white-space:nowrap}
+ .st.f{color:#7cc7ff}.st.w{color:#f2b45a}.st.u{color:#6c7889}.st.d{color:#cdb4fa}
+ .r1{position:absolute;left:744px;width:70px;font-size:8.4px;font-weight:800;transform:translateY(-50%);white-space:nowrap}
+ .r6{position:absolute;left:826px;width:40px;font-size:8.4px;font-weight:800;transform:translateY(-50%);white-space:nowrap}
+ .ef{position:absolute;left:874px;font-size:8.4px;font-weight:900;letter-spacing:.03em;transform:translateY(-50%);white-space:nowrap}
+ .up{color:#2ec27e}.dn{color:#e0645f}.fl{color:#5b6675}
+ .setup{position:absolute;border:1px solid;border-radius:3px;pointer-events:none}
+ .setup b{position:absolute;left:50%;top:-1px;transform:translate(-50%,-50%);font-size:8.4px;font-weight:900;
+          padding:0 5px;background:#11161f;white-space:nowrap}
+ .edge{position:absolute;left:138px;width:44px;text-align:right;font-size:7.4px;font-weight:800;color:#4b5563;transform:translateY(-50%)}
+ .off{font-size:8.4px;color:#5b6675;margin-top:5px;padding-left:8px}
+ .legend{font-size:9px;color:#6b7787;margin-top:6px;padding-left:8px;line-height:1.6}
+ .legend b{font-weight:900}
+</style></head><body>
+
+<div class="cap">THE LADDER v5 — every fact in its own column</div>
+<div class="panel">
+  <div class="read">TREND UP day · Trinity 2-of-3 (QQQ dissents). KING 7652 (accelerator) holds, 40 below price.
+   Support 7687 (32% brake); resistance 7707 (30% accelerator). The floor is ROLLING UP 3 sessions (confirmed).</div>
+  <div class="hdr">
+    <span style="left:78px">levels</span><span style="left:142px">price</span>
+    <span style="left:250px">nodes ▸</span><span style="left:352px">%king</span><span style="left:412px">now</span>
+    <span style="left:520px">◂ profile</span><span style="left:624px">type</span><span style="left:684px">state</span>
+    <span style="left:744px">5m · 15m</span><span style="left:826px">60m</span><span style="left:874px">effect</span>
+  </div>
+  <div class="lad" id="lad"></div>
+  <div class="off">▼ below the frame — DP 7579 fresh · DP 7541 fresh · DP 7471 fresh</div>
+  <div class="legend"><b style="color:#2ec27e">FLOOR</b> positive gamma under price — dealers lean against a fall ·
+    <b style="color:#e0645f">CAP</b> positive gamma over price — they lean against a rise ·
+    <b style="color:#e0645f">TRAPDOOR</b> negative under price — a break down accelerates ·
+    <b style="color:#2ec27e">LAUNCH</b> negative over price — a break up accelerates</div>
+</div>
+
+<div class="note">
+  <b>Fixed:</b> the King's %King label had landed inside the price chute — it now has its own right-aligned slot that
+  bars can never reach into. FORM / WEAK moved out of the type column into their own STATE column. Levels pulled in
+  tight against the price axis. 5m and 15m sit together; 60m stands apart so you can compare the pair against the hour.<br><br>
+  <b>The new column is EFFECT, and it is mechanical, not predictive.</b> It is polarity × which side of price the level
+  sits on — nothing else, no forecast: positive gamma below price is a <b style="color:#2ec27e">FLOOR</b>, positive above
+  is a <b style="color:#e0645f">CAP</b>, negative below is a <b style="color:#e0645f">TRAPDOOR</b>, negative above is a
+  <b style="color:#2ec27e">LAUNCH</b>. Read as a column it paints the picture you asked for: today it is green under
+  price and mixed above — floors beneath, and above price the negative nodes at 7707 and 7752 are LAUNCHes rather than
+  caps, which is what a trend-up day with contested resistance actually looks like.<br><br>
+  <b>⚠ The ROC columns are illustrative</b> — the tape is closed and every live velocity reads 0.
+</div>
+
+<script>
+const LO=7620,HI=7786,H=570;
+const NODE_L=190, NODE_MAX=148, PROF_R=616, PROF_MAX=148, NOWPX=7692;
+const y=p=>(H-((p-LO)/(HI-LO))*H);
+const lad=document.getElementById('lad'); lad.style.height=H+'px';
+const add=h=>lad.insertAdjacentHTML('beforeend',h);
+add('<div class="chute"></div>');
+add('<div class="edge" style="top:'+y(7775)+'px">7775 rail</div>');
+
+[{p:7632,n:'SPY K',c:'spyk'},{p:7662,n:'PDL'},{p:7678,n:'IBL · PW · FLIP · T'},
+ {p:7692,n:'PDC · CW0',c:'confl',node:1},{p:7700,n:'PDH · IBH'},{p:7742,n:'CW'}].forEach(L=>{
+  const t=y(L.p), col=L.c==='spyk'?'#cdb4fa':(L.c==='confl'?'#7cc7ff':'#6b7787');
+  add('<div class="lv '+(L.c||'')+'" style="top:'+t+'px">'+L.n+'</div>');
+  if(!L.node) add('<div class="px dim" style="top:'+t+'px">'+L.p+'</div>');
+  add('<div class="rule" style="top:'+t+'px;background:'+col+'"></div>');
+});
+
+const N=[
+ {es:7642,p:-25,peak:34,typ:'ACC',r:[-2,-4,-9]},  {es:7647,p:-86,peak:92,r:[1,2,5]},
+ {es:7652,p:-100,peak:100,typ:'KING',king:1,r:[0,0,1]},
+ {es:7667,p:-56,peak:71,typ:'GK',st:'WEAK',r:[-6,-11,-18]},
+ {es:7677,p:-29,r:[0,1,0]},                        {es:7682,p:-35,typ:'ACC',r:[-1,-3,-6]},
+ {es:7687,p:32,st:'FORM',r:[8,14,9]},              {es:7692,p:52,peak:58,typ:'BRK',r:[3,6,12]},
+ {es:7707,p:-30,peak:44,typ:'ACC',r:[-5,-8,-14]},  {es:7747,p:43,r:[2,3,2]},
+ {es:7752,p:-80,typ:'RRUG',r:[-1,-2,-5]},          {es:7757,p:70,r:[2,5,7]},
+ {es:7762,p:62,peak:66,typ:'BRK',r:[4,9,4]},       {es:7767,p:31,r:[0,1,-1]},
+ {es:7772,p:25,typ:'BRK',st:'USED',r:[0,0,2]}];
+
+function effect(p, es){
+  const above = es>NOWPX;
+  if(p>0) return above ? ['CAP','dn'] : ['FLOOR','up'];
+  return above ? ['LAUNCH','up'] : ['TRAPDOOR','dn'];
+}
+const num=v=>'<span class="'+(v>0?'up':(v<0?'dn':'fl'))+'">'+(v>0?'+':'')+v+'%</span>';
+
+N.forEach(n=>{
+  const t=y(n.es), neg=n.p<0, k=neg?'acc':'brk';
+  const len=Math.max(10,Math.abs(n.p)/100*NODE_MAX);
+  const pk =Math.max(len,(n.peak||Math.abs(n.p))/100*NODE_MAX);
+  add('<div class="px" style="top:'+t+'px">'+n.es+'</div>');
+  if(pk>len+3) add('<div class="npk" style="top:'+t+'px;left:'+NODE_L+'px;width:'+pk+'px"></div>');
+  add('<div class="tick '+k+(n.king?' king':'')+'" style="top:'+t+'px;left:'+NODE_L+'px;width:'+len+'px"></div>');
+  add('<div class="nk '+k+'" style="top:'+t+'px">'+(neg?'−':'+')+Math.abs(n.p)+'%'+(n.king?' ♛':'')+'</div>');
+  const pfl=Math.max(10,Math.abs(n.p)/100*PROF_MAX), ppk=Math.max(pfl,(n.peak||Math.abs(n.p))/100*PROF_MAX);
+  if(ppk>pfl+3) add('<div class="ppk" style="top:'+t+'px;left:'+(PROF_R-ppk)+'px;width:'+ppk+'px"></div>');
+  add('<div class="pfl '+k+'" style="top:'+t+'px;left:'+(PROF_R-pfl)+'px;width:'+pfl+'px"></div>');
+  add('<div class="typ '+k+'" style="top:'+t+'px">'+(n.typ||'')+'</div>');
+  if(n.st) add('<div class="st '+(n.st==='WEAK'?'w':(n.st==='USED'?'u':'f'))+'" style="top:'+t+'px">'+n.st+'</div>');
+  add('<div class="r1" style="top:'+t+'px">'+num(n.r[0])+' '+num(n.r[1])+'</div>');
+  add('<div class="r6" style="top:'+t+'px">'+num(n.r[2])+'</div>');
+  const e=effect(n.p,n.es);
+  add('<div class="ef '+e[1]+'" style="top:'+t+'px">'+e[0]+'</div>');
+});
+
+(function(){ const a=y(7757), b=y(7752);
+  add('<div class="setup" style="top:'+(a-10)+'px;height:'+((b-a)+20)+'px;left:'+(NODE_L-6)+'px;width:'+
+      (NODE_MAX+16)+'px;border-color:#2ec27e"><b style="color:#2ec27e">REVERSE RUG</b></div>');
+})();
+add('<div class="nowarm" style="top:'+y(NOWPX)+'px"></div>');
+add('<div class="now" style="top:'+y(NOWPX)+'px">'+NOWPX+'</div>');
+</script>
+</body></html>

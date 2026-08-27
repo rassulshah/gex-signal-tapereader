@@ -1,0 +1,135 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>The ladder v4 — bars point inward</title>
+<style>
+ body{background:#0d1117;color:#e6edf3;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+      font-variant-numeric:tabular-nums;margin:0;padding:20px}
+ .panel{width:788px;background:#11161f;border:1px solid #2a3340;border-radius:6px;padding:10px 12px}
+ .cap{font-size:11px;font-weight:800;letter-spacing:.07em;color:#8b98a9;margin:0 0 8px;text-transform:uppercase}
+ .note{font-size:11px;color:#8b98a9;line-height:1.65;width:788px;margin-top:12px}
+ .note b{color:#e6edf3}
+ .read{font-size:9.5px;font-weight:600;color:#c9d4e2;background:rgba(124,199,255,.05);
+       border:1px solid rgba(124,199,255,.18);border-radius:4px;padding:6px 8px;line-height:1.55;margin-bottom:8px}
+ .hdr{position:relative;height:15px}
+ .hdr span{position:absolute;font-size:7.5px;font-weight:900;letter-spacing:.1em;color:#4b5563;text-transform:uppercase}
+ .lad{position:relative}
+ .lv{position:absolute;left:0;width:118px;text-align:right;font-size:8.4px;font-weight:800;
+     color:#8b98a9;white-space:nowrap;transform:translateY(-50%)}
+ .lv.confl{color:#7cc7ff}.lv.spyk{color:#cdb4fa}.lv.dp{color:#5fd3bc}
+ .px{position:absolute;left:124px;width:44px;text-align:right;font-size:8.4px;font-weight:800;
+     color:#c9d1da;transform:translateY(-50%)}
+ .px.dim{color:#77828f;font-weight:700}
+ .rule{position:absolute;left:120px;width:52px;height:1px;opacity:.3;transform:translateY(-50%)}
+ /* NODES — anchored on the OUTSIDE, growing INWARD toward the price chute */
+ .tick{position:absolute;height:5px;border-radius:1px;transform:translateY(-50%)}
+ .tick.acc{background:#a371f7}.tick.brk{background:#e3c341}.tick.king{height:7px}
+ .npk{position:absolute;height:9px;transform:translateY(-50%);border:1px solid #4a5462;border-left:none;border-radius:0 2px 2px 0}
+ .nlab{position:absolute;font-size:8.4px;font-weight:800;transform:translateY(-50%);white-space:nowrap}
+ .nlab.acc{color:#a371f7}.nlab.brk{color:#e3c341}
+ /* the CURRENT PRICE chute */
+ .chute{position:absolute;left:364px;width:62px;top:0;bottom:0;background:rgba(255,255,255,.035);
+        border-left:1px solid #333e4d;border-right:1px solid #333e4d}
+ .now{position:absolute;left:366px;width:58px;height:17px;background:#fff;color:#0d1117;border-radius:9px;
+      font-size:9.8px;font-weight:900;display:flex;align-items:center;justify-content:center;
+      transform:translateY(-50%);z-index:8}
+ .nowarm{position:absolute;left:120px;width:672px;height:1px;background:rgba(255,255,255,.13);transform:translateY(-50%)}
+ /* PROFILE — anchored on the OUTSIDE (right), growing INWARD (leftward) toward the chute */
+ .ppk{position:absolute;height:11px;transform:translateY(-50%);border:1px solid #4a5462;border-right:none;border-radius:2px 0 0 2px}
+ .pfl{position:absolute;height:11px;transform:translateY(-50%)}
+ .pfl.acc{background:rgba(163,113,247,.8)}.pfl.brk{background:rgba(227,195,65,.8)}
+ .cls{position:absolute;left:624px;font-size:8.4px;font-weight:900;letter-spacing:.03em;
+      transform:translateY(-50%);white-space:nowrap}
+ .cls.acc{color:#a371f7}.cls.brk{color:#e3c341}
+ .cls em{font-style:normal;font-weight:800}.cls em.f{color:#7cc7ff}.cls em.w{color:#f2b45a}
+ .pc{position:absolute;left:706px;font-size:8.4px;font-weight:800;transform:translateY(-50%);white-space:nowrap}
+ .up{color:#2ec27e}.dn{color:#e0645f}.fl{color:#5b6675}
+ .setup{position:absolute;border:1px solid;border-radius:3px;pointer-events:none}
+ .setup b{position:absolute;left:50%;top:-1px;transform:translate(-50%,-50%);font-size:8.4px;font-weight:900;
+          letter-spacing:.04em;padding:0 5px;background:#11161f;white-space:nowrap}
+ .edge{position:absolute;left:124px;width:44px;text-align:right;font-size:7.4px;font-weight:800;color:#4b5563;transform:translateY(-50%)}
+ .off{font-size:8.4px;color:#5b6675;margin-top:5px;padding-left:8px}
+</style></head><body>
+
+<div class="cap">THE LADDER v4 — bars grow INWARD toward price · levels ▸ price ▸ nodes ▸ ⟨NOW⟩ ◂ profile ◂ class ◂ %</div>
+<div class="panel">
+  <div class="read">TREND UP day · Trinity 2-of-3 (QQQ dissents). KING 7652 (accelerator) holds, 40 below price.
+   Support 7687 (32% brake); resistance 7707 (30% accelerator). The floor is ROLLING UP 3 sessions (confirmed).</div>
+  <div class="hdr">
+    <span style="left:64px">levels</span><span style="left:128px">price</span>
+    <span style="left:250px">nodes ▸</span><span style="left:378px">now</span>
+    <span style="left:492px">◂ profile</span><span style="left:624px">class</span><span style="left:706px">15m 60m</span>
+  </div>
+  <div class="lad" id="lad"></div>
+  <div class="off">▼ below the frame — DP 7579 fresh · DP 7541 fresh · DP 7471 fresh</div>
+</div>
+
+<div class="note">
+  <b>Both sides now point inward.</b> A node is anchored at the outer edge and reaches toward the price chute, so
+  bar length is how far that level reaches toward price: the −100 King almost touches the channel, a 25% node barely
+  leaves the axis. The profile mirrors it from the right. Price sits between them and they close in on it.<br><br>
+  <b>Column order as you asked</b> — PDH and friends outermost, then the price, then the nodes, then price itself.<br><br>
+  <b>Back in:</b> the profile (outline = day peak, fill = now — the gap is what a level has given back today) and the
+  15m/60m change, green building / red draining. <b>⚠ that last column is illustrative</b>: the tape is closed and
+  every live velocity reads 0 right now.<br><br>
+  <b>Setups bracket the nodes they are made of</b> — REVERSE RUG spans 7752 and 7757, so you can see what it is built from.
+</div>
+
+<script>
+const LO=7620,HI=7786,H=570;
+const NODE_L=174, NODE_MAX=184, CH_L=364, CH_R=426, PROF_R=610, PROF_MAX=184;
+const y=p=>(H-((p-LO)/(HI-LO))*H);
+const lad=document.getElementById('lad'); lad.style.height=H+'px';
+const add=h=>lad.insertAdjacentHTML('beforeend',h);
+add('<div class="chute"></div>');
+add('<div class="edge" style="top:'+y(7775)+'px">7775 rail</div>');
+
+[{p:7632,n:'SPY K',c:'spyk'},{p:7662,n:'PDL'},{p:7678,n:'IBL · PW · FLIP · T'},
+ {p:7692,n:'PDC · CW0',c:'confl',node:1},{p:7700,n:'PDH · IBH'},{p:7742,n:'CW'}].forEach(L=>{
+  const t=y(L.p), col=L.c==='spyk'?'#cdb4fa':(L.c==='confl'?'#7cc7ff':'#6b7787');
+  add('<div class="lv '+(L.c||'')+'" style="top:'+t+'px">'+L.n+'</div>');
+  if(!L.node) add('<div class="px dim" style="top:'+t+'px">'+L.p+'</div>');
+  add('<div class="rule" style="top:'+t+'px;background:'+col+'"></div>');
+});
+
+const N=[
+ {es:7642,p:-25,peak:34,cls:'ACC',d:[-4,-9]},   {es:7647,p:-86,peak:92,d:[2,5]},
+ {es:7652,p:-100,peak:100,cls:'KING',king:1,d:[0,1]},
+ {es:7667,p:-56,peak:71,cls:'GK',st:'WEAK',d:[-11,-18]},
+ {es:7677,p:-29,d:[1,0]},                        {es:7682,p:-35,cls:'ACC',d:[-3,-6]},
+ {es:7687,p:32,st:'FORM',d:[14,9]},              {es:7692,p:52,peak:58,cls:'BRK',d:[6,12]},
+ {es:7707,p:-30,peak:44,cls:'ACC',d:[-8,-14]},   {es:7747,p:43,d:[3,2]},
+ {es:7752,p:-80,cls:'RRUG',d:[-2,-5]},           {es:7757,p:70,d:[5,7]},
+ {es:7762,p:62,peak:66,cls:'BRK',d:[9,4]},       {es:7767,p:31,d:[1,-1]},
+ {es:7772,p:25,cls:'BRK',d:[0,2]}];
+
+N.forEach(n=>{
+  const t=y(n.es), neg=n.p<0, k=neg?'acc':'brk';
+  const len=Math.max(10,Math.abs(n.p)/100*NODE_MAX);
+  const pk =Math.max(len,(n.peak||Math.abs(n.p))/100*NODE_MAX);
+  add('<div class="px" style="top:'+t+'px">'+n.es+'</div>');
+  // NODE: anchored outside (left), growing inward (right) toward the chute
+  if(pk>len+3) add('<div class="npk" style="top:'+t+'px;left:'+NODE_L+'px;width:'+pk+'px"></div>');
+  add('<div class="tick '+k+(n.king?' king':'')+'" style="top:'+t+'px;left:'+NODE_L+'px;width:'+len+'px"></div>');
+  add('<div class="nlab '+k+'" style="top:'+t+'px;left:'+(NODE_L+pk+6)+'px">'+
+      (neg?'−':'+')+Math.abs(n.p)+'%'+(n.king?' ♛':'')+'</div>');
+  // PROFILE: anchored outside (right), growing inward (left) toward the chute
+  const pfl=Math.max(10,Math.abs(n.p)/100*PROF_MAX), ppk=Math.max(pfl,(n.peak||Math.abs(n.p))/100*PROF_MAX);
+  if(ppk>pfl+3) add('<div class="ppk" style="top:'+t+'px;left:'+(PROF_R-ppk)+'px;width:'+ppk+'px"></div>');
+  add('<div class="pfl '+k+'" style="top:'+t+'px;left:'+(PROF_R-pfl)+'px;width:'+pfl+'px"></div>');
+  add('<div class="cls '+k+'" style="top:'+t+'px">'+(n.cls||'')+
+      (n.st?(' <em class="'+(n.st==='WEAK'?'w':'f')+'">'+n.st+'</em>'):'')+'</div>');
+  add('<div class="pc" style="top:'+t+'px"><span class="'+(n.d[0]>0?'up':(n.d[0]<0?'dn':'fl'))+'">'+
+      (n.d[0]>0?'+':'')+n.d[0]+'%</span> <span class="'+(n.d[1]>0?'up':(n.d[1]<0?'dn':'fl'))+'">'+
+      (n.d[1]>0?'+':'')+n.d[1]+'%</span></div>');
+});
+
+// setup bracket, over the nodes it is made of
+(function(){ const a=y(7757), b=y(7752);
+  add('<div class="setup" style="top:'+(a-10)+'px;height:'+((b-a)+20)+'px;left:'+(NODE_L-6)+'px;width:'+
+      (NODE_MAX+16)+'px;border-color:#2ec27e"><b style="color:#2ec27e">REVERSE RUG</b></div>');
+})();
+
+add('<div class="nowarm" style="top:'+y(7692)+'px"></div>');
+add('<div class="now" style="top:'+y(7692)+'px">7692</div>');
+</script>
+</body></html>

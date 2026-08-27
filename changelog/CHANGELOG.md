@@ -1,3 +1,85 @@
+## v14.46 — THE LADDER (and the version string that had been lying since v14.40)
+
+**⚠ GPTS_VERSION WAS STUCK AT 14.39.** It is a separate constant from the `@version` header and its
+own comment calls it "THE ONE VERSION STRING — header, footer, export, logs all read this". From
+v14.40 to v14.45 only the header was bumped, so the panel footer told the operator it was running
+v14.39 through six installs — every one of which had in fact landed. The existing tests pinned the
+header, and pinned that the footer USES GPTS_VERSION, but never that the two AGREE; that is the crack
+this fell through, and `test_ladder` now asserts equality.
+
+**THE LADDER.** The horizontal rail, the gamma profile and the percentages section, rotated 90° onto
+ONE vertical price axis. Ten operator-reviewed drafts; spec is `mockups/mockup-ladder-v10.html`.
+
+Why: the operator caught it as "there are more flags than strikes" — the rail drew 15 posts and could
+label only 9, because two neighbouring strikes sit ~23px apart while a two-line label is ~22px wide.
+Vertically those strikes are ~15px apart and a label is ~9px TALL. The crowding does not get managed,
+it stops existing, and every node now carries its price, size, type, state and rate of change.
+
+Columns, the operator's order, each fact with exactly one home (7692 used to appear three times):
+`levels · price · nodes ▸ | NOW | ◂ profile · rolls · state · roc`. Nodes reach INWARD toward price
+and the profile mirrors them, so bar length reads as how far a level reaches toward price.
+
+⚠ **THE CHUTE IS PRICE'S ALONE** — a walled column no other element may enter, which is what makes
+"price is overlapped" structurally impossible rather than merely unlikely. test_ladder asserts the
+arithmetic: a 100% bar stops before it, the %King label stops before it, the profile stops before it.
+
+⚠ **A TEST CAUGHT A LAYOUT BUG NO SCREENSHOT WOULD HAVE EXPLAINED.** The first column layout gave the
+level/price connector a width of MINUS four pixels. Column offsets are now named constants with
+asserted arithmetic between them.
+
+ROLL ARROWS to the operator's sketch: filled circle at the source, OUT to the right, along the ladder,
+back IN past the origin's own x, and only then the arrowhead. The landing is a SEPARATE SOLID
+sub-path — a dashed stroke ends wherever the pattern falls, and a final gap at the head left it
+floating. The amount sits at the ORIGIN, so two rolls into one destination cannot stack their labels.
+
+Carried over intact: the expected-move band with its 0.80-sigma caveat, the day's range, the open,
+the stretched pill, off-frame disclosure, the destination (shared from the READ via RAILTGT — one
+computation, never a second opinion), dark-pool lifecycle, level-to-node row snapping, and a hover on
+every element including the column headers.
+
+**REVERSIBLE BY ONE CLASS.** The old rail and profile are HIDDEN, not deleted, for one release:
+`CFG.ladder=false` (or removing `g3ladon`) restores the previous surface instantly, so the two can be
+compared live and a fault is a toggle rather than a rebuild.
+
+New `test_ladder.js` (48 asserts). Suite green, 6 baseline reds unchanged.
+
+## v14.45 — GARMA V2 PHASE B: ROLLING STRUCTURE (a four-month refusal, unblocked)
+
+v10.51 built FCHIST to sample the dominant floor and ceiling every closed bar and then DELIBERATELY
+computed nothing from it, on the stated belief that "Flr/Ceil ROLLING is a DAY-OVER-DAY measurement"
+and that "a single intraday session cannot produce a rolling verdict". Months of samples have been
+banked under that refusal — 7 sessions on the operator's machine right now.
+
+GARMA V2 (GM-ROLL-001/2/3) states the official rule precisely: rolling is migration of the dominant
+node ACROSS MAP UPDATES — one print is noise, two consistent migrations are signal, three are
+confirmation. Map updates happen all session. The day-over-day reading was one valid sampling of
+that rule, never the only one. So the refusal lifts, and the banked data becomes usable.
+
+**INTRADAY ROLLING**, bucketed. FCHIST holds one row per 3-minute bar and consecutive 3-minute
+samples are far too fine — a floor that ticks one strike and back would read as a migration every
+few bars. Samples are therefore bucketed and the run counted across BUCKETS, each bucket taking the
+LAST sample in it (the map as it stood at the end of that window).
+
+⚠ **THE BUCKET IS 15 MINUTES, AND A TEST CHOSE THE NUMBER.** One migration per bucket means the
+bucket size sets how long the reading takes to EXIST: the first draft used 30 minutes, and the
+regression fixture showed that meant 90 minutes before the panel could say "rolling" and two hours
+before it could confirm — most of a daytrading session spent silent. At 15 minutes a signal is 45
+minutes old and a confirmation an hour. Not lower: below ~10m the 3-minute sampling noise starts
+producing runs on its own, which is the exact failure v10.51 refused to risk.
+
+**IT REACHES THE FACE.** The S&R clause now answers the operator's standing requirement directly —
+"the floor is ROLLING UP 3 sessions — support migrating higher (confirmed)"; "the ceiling is ROLLING
+DOWN 2 buckets — upside compressing (signal)". That IS new support and resistance forming, in his
+own words, and the panel has never said it despite measuring it since v10.51.
+
+⚠ **GM-ROLL-003 IS A TARGET RULE, NOT AN ENTRY RULE.** A ceiling rolling UP expands where price MAY
+go and is explicitly NOT a reason to be long: it reads "more room above; a wider target, not a
+reason to be long", and casts no bullish vote. Tested.
+
+Same count rule as everywhere (2 signal, 3 confirm) — no second threshold vocabulary. Intraday means
+TODAY; yesterday is never stitched in. `__gptsDebug.rolling()` added. test_garma_v2.js 81 -> 102
+asserts. Suite green, 6 baseline reds unchanged.
+
 ## v14.44 — GARMA V2 PHASE A2: THE DARK-POOL LIFECYCLE
 
 fresh / holding / retesting / broken / reclaimed / flipped / unknown, computed from bars we actually

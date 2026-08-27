@@ -1,0 +1,134 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>The vertical ladder — v14.46 mockup</title>
+<style>
+ body{background:#0d1117;color:#e6edf3;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+      font-variant-numeric:tabular-nums;margin:0;padding:22px;display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap}
+ .panel{width:560px;background:#11161f;border:1px solid #2a3340;border-radius:6px;padding:10px 12px}
+ .cap{font-size:11px;font-weight:800;letter-spacing:.07em;color:#8b98a9;margin:0 0 8px;text-transform:uppercase}
+ .note{font-size:10px;color:#8b98a9;line-height:1.6;width:560px;margin-top:10px}
+ .note b{color:#e6edf3}
+ .read{font-size:9px;font-weight:600;color:#c9d4e2;background:rgba(124,199,255,.05);
+       border:1px solid rgba(124,199,255,.18);border-radius:4px;padding:5px 8px;line-height:1.55;margin-bottom:8px}
+ /* THE VERTICAL LADDER */
+ .lad{position:relative;height:470px;margin:2px 0 4px}
+ .axis{position:absolute;left:132px;top:0;bottom:0;width:2px;background:#4a5568}
+ .paxis{position:absolute;left:410px;top:0;bottom:0;width:2px;background:#39424e}
+ .row{position:absolute;left:0;right:0;height:0}
+ .px{position:absolute;left:88px;width:40px;text-align:right;font-size:8.5px;font-weight:800;color:#c9d1da;
+     transform:translateY(-50%);letter-spacing:.01em}
+ .k{position:absolute;left:132px;width:34px;text-align:right;font-size:6px;font-weight:700;color:#5b6675;
+    transform:translateY(-50%);margin-left:-38px;display:none}
+ .tick{position:absolute;left:134px;height:3px;transform:translateY(-50%);border-radius:1px}
+ .tick.acc{background:#a371f7}.tick.brk{background:#e3c341}
+ .pct{position:absolute;font-size:6.5px;font-weight:800;transform:translateY(-50%);color:#8b98a9;white-space:nowrap}
+ .role{position:absolute;font-size:5.5px;font-weight:900;letter-spacing:.05em;transform:translateY(-50%);white-space:nowrap}
+ .role.acc{color:#a371f7}.role.brk{color:#e3c341}
+ .crown{position:absolute;font-size:9px;transform:translateY(-50%);color:#e3c341}
+ /* levels hang on the LEFT of the axis */
+ .lv{position:absolute;right:auto;left:0;width:84px;text-align:right;font-size:6.5px;font-weight:800;
+     transform:translateY(-50%);white-space:nowrap;color:#8b98a9}
+ .lv b{color:#c9d1da;font-weight:800}
+ .lv.confl,.lv.confl b{color:#7cc7ff}
+ .lv.spyk,.lv.spyk b{color:#cdb4fa}
+ .lv.iff{font-style:italic}
+ .lvline{position:absolute;left:86px;width:44px;height:1px;background:currentColor;opacity:.35;transform:translateY(-50%)}
+ /* price now */
+ .now{position:absolute;left:112px;height:13px;background:#fff;color:#0d1117;border-radius:7px;font-size:8.5px;
+      font-weight:900;display:flex;align-items:center;padding:0 5px;transform:translateY(-50%);z-index:5}
+ .nowline{position:absolute;left:132px;right:12px;height:1px;background:rgba(255,255,255,.22);transform:translateY(-50%)}
+ /* gamma profile — bars grow LEFT from their own axis, same y */
+ .pbar{position:absolute;height:9px;transform:translateY(-50%);border:1px solid #666;border-right:none;
+       background:rgba(227,195,65,.22)}
+ .pbar.acc{background:rgba(163,113,247,.22)}
+ .plab{position:absolute;left:416px;font-size:6.5px;font-weight:800;color:#8b98a9;transform:translateY(-50%)}
+ .edge{position:absolute;left:88px;width:40px;text-align:right;font-size:7px;font-weight:800;color:#5b6675;transform:translateY(-50%)}
+ .off{font-size:8px;color:#5b6675;margin-top:2px;padding-left:88px}
+ h4{font-size:9px;letter-spacing:.06em;color:#5b6675;margin:0 0 4px;font-weight:900;text-transform:uppercase}
+</style></head><body>
+
+<div>
+<div class="cap">THE VERTICAL LADDER — rotated 90°, both rails on one price axis (your sketch, live 2026-08-26 numbers)</div>
+<div class="panel">
+  <div class="read">TREND UP day · Trinity 2-of-3 (QQQ dissents) — reduced conviction. KING 7652 (accelerator) holds,
+    40 below price. Support 7687 (32% brake); resistance 7707 (30% accelerator). The floor is ROLLING UP 3 sessions —
+    support migrating higher (confirmed). Destination: no dominant magnet — the field is contested.</div>
+
+  <div class="lad" id="lad"></div>
+  <div class="off">▼ 3 dark pools below the frame — DP 7579 fresh (−113), DP 7541 fresh (−151), DP 7471 fresh (−221)</div>
+</div>
+
+<div class="note">
+  <b>Why the rotation fixes it.</b> Horizontally, two neighbouring strikes sit ~23px apart and a two-line label is
+  ~22px wide — so half the labels had to be suppressed and you saw 15 bars with 9 numbers. Vertically the same two
+  strikes are ~15px apart and a label is only ~9px tall. <b>Every one of the 15 nodes gets its price, its %King,
+  its role and its state, with room to spare.</b><br><br>
+  <b>And the two rails become one.</b> Levels hang on the LEFT of the axis, gamma nodes tick out to the RIGHT,
+  the gamma profile grows left from its own axis at the same height. One price scale, read straight down —
+  the way a ladder is read. Tick length = %King. Purple = negative gamma (accelerator), yellow = positive (brake).
+  The white pill is price now; ♛ is the latched King.
+</div>
+</div>
+
+<script>
+const LO=7625, HI=7785, H=470;
+const y = p => (H - ((p-LO)/(HI-LO))*H);
+const lad=document.getElementById('lad');
+function add(html){ lad.insertAdjacentHTML('beforeend', html); }
+add('<div class="axis"></div><div class="paxis"></div>');
+// rail ends
+add('<div class="edge" style="top:'+y(7775)+'px">7775 RAIL</div>');
+add('<div class="edge" style="top:'+y(7666)+'px">7666 EL</div>');
+
+// ---- LEVELS, left of the axis ----
+const LV=[
+ {p:7632,n:'SPY K',cls:'spyk'},
+ {p:7662,n:'PDL',cls:''},
+ {p:7678,n:'IBL·IF PW·T·FLIP',cls:'iff'},
+ {p:7692,n:'PDC·IF CW0',cls:'confl'},
+ {p:7700,n:'PDH·IBH',cls:''},
+ {p:7742,n:'IF CW',cls:'iff'}
+];
+LV.forEach(L=>{
+  add('<div class="lv '+L.cls+'" style="top:'+y(L.p)+'px">'+L.n+' <b>'+L.p+'</b></div>');
+  add('<div class="lvline '+L.cls+'" style="top:'+y(L.p)+'px;color:'+(L.cls==='spyk'?'#cdb4fa':(L.cls==='confl'?'#7cc7ff':'#8b98a9'))+'"></div>');
+});
+
+// ---- NODES: all 15, live values ----
+const N=[
+ {es:7642,k:7625,p:-25,role:'ACC'},   {es:7647,k:7630,p:-86,role:''},
+ {es:7652,k:7635,p:-100,role:'KING',king:1}, {es:7667,k:7650,p:-56,role:'GK'},
+ {es:7677,k:7660,p:-29,role:''},      {es:7682,k:7665,p:-35,role:'ACC'},
+ {es:7687,k:7670,p:32,role:''},       {es:7692,k:7675,p:52,role:'BRK',ip:1},
+ {es:7707,k:7690,p:-30,role:'ACC'},   {es:7747,k:7730,p:43,role:''},
+ {es:7752,k:7735,p:-80,role:'RRUG'},  {es:7757,k:7740,p:70,role:''},
+ {es:7762,k:7745,p:62,role:'BRK'},    {es:7767,k:7750,p:31,role:''},
+ {es:7772,k:7755,p:25,role:'BRK'}
+];
+N.forEach(n=>{
+  const t=y(n.es), neg=n.p<0, cls=neg?'acc':'brk', len=Math.max(8, Math.abs(n.p)/100*150);
+  add('<div class="px" style="top:'+t+'px">'+n.es+'</div>');
+  add('<div class="tick '+cls+'" style="top:'+t+'px;width:'+len+'px;height:'+(n.king?4:3)+'px"></div>');
+  add('<div class="pct" style="top:'+t+'px;left:'+(138+len)+'px">'+(neg?'−':'+')+Math.abs(n.p)+'%'+
+      (n.role?(' <span class="role '+cls+'">'+n.role+'</span>'):'')+
+      (n.ip?' <span style="color:#fff">◂ in play</span>':'')+'</div>');
+  if(n.king) add('<div class="crown" style="top:'+t+'px;left:'+(134+len+46)+'px">♛</div>');
+});
+
+// price now
+add('<div class="nowline" style="top:'+y(7692)+'px"></div>');
+add('<div class="now" style="top:'+y(7692)+'px">7692</div>');
+
+// ---- GAMMA PROFILE: bars grow LEFT from the right axis, same price scale ----
+const PR=[{p:7772,v:25},{p:7762,v:62},{p:7757,v:70},{p:7752,v:80},{p:7707,v:30},
+          {p:7692,v:52,form:1},{p:7687,v:32},{p:7667,v:56},{p:7652,v:100},{p:7647,v:86}];
+PR.forEach(b=>{
+  const t=y(b.p), w=b.v/100*95;
+  add('<div class="pbar '+(b.p===7652||b.p===7647||b.p===7752||b.p===7667||b.p===7707?'acc':'')+
+      '" style="top:'+t+'px;left:'+(410-w)+'px;width:'+w+'px"></div>');
+  if(b.form) add('<div class="plab" style="top:'+t+'px">FORM 52%</div>');
+});
+add('<div class="plab" style="top:'+y(7652)+'px">100% ♛</div>');
+add('<div class="plab" style="top:'+y(7752)+'px">80%</div>');
+</script>
+</body></html>

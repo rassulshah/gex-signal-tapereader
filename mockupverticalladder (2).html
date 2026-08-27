@@ -1,0 +1,145 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>The four-column ladder — v14.46 mockup</title>
+<style>
+ body{background:#0d1117;color:#e6edf3;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+      font-variant-numeric:tabular-nums;margin:0;padding:20px}
+ .wrap{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+ .panel{width:576px;background:#11161f;border:1px solid #2a3340;border-radius:6px;padding:10px 12px}
+ .cap{font-size:11px;font-weight:800;letter-spacing:.07em;color:#8b98a9;margin:0 0 8px;text-transform:uppercase}
+ .note{font-size:11px;color:#8b98a9;line-height:1.65;width:576px;margin-top:12px}
+ .note b{color:#e6edf3}
+ .read{font-size:9.5px;font-weight:600;color:#c9d4e2;background:rgba(124,199,255,.05);
+       border:1px solid rgba(124,199,255,.18);border-radius:4px;padding:6px 8px;line-height:1.55;margin-bottom:8px}
+ .hdr{position:relative;height:14px}
+ .hdr span{position:absolute;font-size:7px;font-weight:900;letter-spacing:.1em;color:#4b5563;text-transform:uppercase}
+ .lad{position:relative}
+ /* col 1 LEVELS · col 2 PRICE · col 3 NODES → CURRENT PRICE · col 4 CLASSIFICATION */
+ .lv {position:absolute;left:0;width:104px;text-align:right;font-size:8.4px;font-weight:800;
+      color:#8b98a9;white-space:nowrap;transform:translateY(-50%)}
+ .lv.confl{color:#7cc7ff}.lv.spyk{color:#cdb4fa}.lv.dp{color:#5fd3bc}
+ .px {position:absolute;left:110px;width:44px;text-align:right;font-size:8.4px;font-weight:800;
+      color:#c9d1da;transform:translateY(-50%)}
+ .px.dim{color:#77828f;font-weight:700}
+ .rule{position:absolute;left:106px;width:52px;height:1px;opacity:.3;transform:translateY(-50%)}
+ .tick{position:absolute;left:164px;height:4px;border-radius:1px;transform:translateY(-50%)}
+ .tick.acc{background:#a371f7}.tick.brk{background:#e3c341}.tick.king{height:6px}
+ .kpct{position:absolute;font-size:8.4px;font-weight:800;transform:translateY(-50%);white-space:nowrap}
+ .kpct.acc{color:#a371f7}.kpct.brk{color:#e3c341}
+ /* the CURRENT PRICE column — its own channel, nothing else enters */
+ .chute{position:absolute;left:398px;width:60px;top:0;bottom:0;background:rgba(255,255,255,.03);
+        border-left:1px solid #2f3947;border-right:1px solid #2f3947}
+ .now{position:absolute;left:400px;width:56px;height:16px;background:#fff;color:#0d1117;border-radius:8px;
+      font-size:9.6px;font-weight:900;display:flex;align-items:center;justify-content:center;
+      transform:translateY(-50%);z-index:6}
+ .nowarm{position:absolute;left:158px;width:240px;height:1px;background:rgba(255,255,255,.16);transform:translateY(-50%)}
+ .cls{position:absolute;left:466px;font-size:8.4px;font-weight:900;letter-spacing:.03em;
+      transform:translateY(-50%);white-space:nowrap}
+ .cls.acc{color:#a371f7}.cls.brk{color:#e3c341}
+ .cls em{font-style:normal;font-size:8.4px;font-weight:800}
+ .cls em.f{color:#7cc7ff}.cls em.w{color:#f2b45a}
+ .cls u{text-decoration:none;font-weight:800}
+ .up{color:#2ec27e}.dn{color:#e0645f}
+ /* a SETUP bracket, drawn OVER the nodes it is made of */
+ .setup{position:absolute;left:158px;border:1px solid;border-right:none;border-radius:3px 0 0 3px;pointer-events:none}
+ .setup b{position:absolute;left:6px;top:50%;transform:translateY(-50%);font-size:8.4px;font-weight:900;
+          letter-spacing:.04em;padding:0 4px;background:#11161f;white-space:nowrap}
+ .edge{position:absolute;left:110px;width:44px;text-align:right;font-size:7.4px;font-weight:800;color:#4b5563;transform:translateY(-50%)}
+ .off{font-size:8.4px;color:#5b6675;margin-top:4px;padding-left:10px}
+</style></head><body>
+<div class="wrap">
+
+<div>
+<div class="cap">A · FOUR COLUMNS — levels · price · nodes→price · classification (live 2026-08-26)</div>
+<div class="panel">
+  <div class="read">TREND UP day · Trinity 2-of-3 (QQQ dissents). KING 7652 (accelerator) holds, 40 below price.
+   Support 7687 (32% brake); resistance 7707 (30% accelerator). The floor is ROLLING UP 3 sessions (confirmed).</div>
+  <div class="hdr">
+    <span style="left:56px">levels</span><span style="left:120px">price</span>
+    <span style="left:236px">nodes</span><span style="left:404px">now</span><span style="left:466px">classification</span>
+  </div>
+  <div class="lad" id="ladA"></div>
+  <div class="off">▼ below the frame — DP 7579 fresh · DP 7541 fresh · DP 7471 fresh</div>
+</div>
+</div>
+
+<div>
+<div class="cap">B · A RUG, for comparison — the bracket sits over the two nodes that make it</div>
+<div class="panel">
+  <div class="read">RANGE day · Trinity 3-of-3 below price. A RUG is configured at 7700/7690 — positive ceiling
+   over negative fuel, no floor beneath. WATCHING: it activates on a rejection, not on the shape.</div>
+  <div class="hdr">
+    <span style="left:56px">levels</span><span style="left:120px">price</span>
+    <span style="left:236px">nodes</span><span style="left:404px">now</span><span style="left:466px">classification</span>
+  </div>
+  <div class="lad" id="ladB"></div>
+</div>
+</div>
+
+<div class="note">
+  <b>Every fact now has exactly one home.</b> 7692 used to appear three times — as a node price, as a level price,
+  and in the chute. The price axis (column 2) carries it once; the chute (column 3) carries only where price IS.<br><br>
+  <b>The nodes reach across toward the chute</b> — bar length is %King, so a −100 King almost touches the channel and
+  a 25% node barely leaves the axis. Purple = negative gamma (accelerator), yellow = positive (brake). The outline
+  behind a bar is its day peak, so a bar short of its own outline is a level that has been giving size back.<br><br>
+  <b>A setup is drawn over the nodes that make it</b> — the bracket spans exactly the strikes involved, so REVERSE RUG
+  is visibly made of 7752 and 7757, not an opinion floating beside them. Fonts are now all one size, matching the price axis.
+</div>
+</div>
+
+<script>
+function build(id, LO, HI, H, LEVELS, NODES, NOW, SETUPS){
+  const el=document.getElementById(id);
+  el.style.height=H+'px';
+  const y=p=>(H-((p-LO)/(HI-LO))*H);
+  const add=h=>el.insertAdjacentHTML('beforeend',h);
+  add('<div class="chute"></div>');
+  LEVELS.forEach(L=>{
+    const t=y(L.p), col=L.c==='spyk'?'#cdb4fa':(L.c==='confl'?'#7cc7ff':'#6b7787');
+    add('<div class="lv '+(L.c||'')+'" style="top:'+t+'px">'+L.n+'</div>');
+    if(!L.node) add('<div class="px dim" style="top:'+t+'px">'+L.p+'</div>');
+    add('<div class="rule" style="top:'+t+'px;background:'+col+'"></div>');
+  });
+  NODES.forEach(n=>{
+    const t=y(n.es), neg=n.p<0, k=neg?'acc':'brk';
+    const len=Math.max(12,Math.abs(n.p)/100*196), pk=Math.max(12,(n.peak||Math.abs(n.p))/100*196);
+    add('<div class="px" style="top:'+t+'px">'+n.es+'</div>');
+    if(pk>len+3) add('<div style="position:absolute;left:164px;top:'+t+'px;width:'+pk+'px;height:8px;'+
+        'transform:translateY(-50%);border:1px solid #4a5462;border-left:none;border-radius:0 2px 2px 0"></div>');
+    add('<div class="tick '+k+(n.king?' king':'')+'" style="top:'+t+'px;width:'+len+'px"></div>');
+    add('<div class="kpct '+k+'" style="top:'+t+'px;left:'+(170+Math.max(len,pk))+'px">'+
+        (neg?'−':'+')+Math.abs(n.p)+'%'+(n.king?' ♛':'')+'</div>');
+    add('<div class="cls '+k+'" style="top:'+t+'px">'+(n.cls||'')+
+        (n.st?(' <em class="'+(n.st==='WEAK'?'w':'f')+'">'+n.st+'</em>'):'')+
+        (n.d!=null?(' <u class="'+(n.d>0?'up':'dn')+'">'+(n.d>0?'+':'')+n.d+'%</u>'):'')+'</div>');
+  });
+  (SETUPS||[]).forEach(S=>{
+    const a=y(S.hi), b=y(S.lo);
+    add('<div class="setup" style="top:'+(a-9)+'px;height:'+((b-a)+18)+'px;width:'+S.w+'px;border-color:'+S.col+'">'+
+        '<b style="color:'+S.col+'">'+S.n+'</b></div>');
+  });
+  add('<div class="nowarm" style="top:'+y(NOW)+'px"></div>');
+  add('<div class="now" style="top:'+y(NOW)+'px">'+NOW+'</div>');
+}
+
+build('ladA', 7620, 7786, 560,
+ [{p:7632,n:'SPY K',c:'spyk'},{p:7662,n:'PDL'},{p:7678,n:'IBL · PW · FLIP · T'},
+  {p:7692,n:'PDC · CW0',c:'confl',node:1},{p:7700,n:'PDH · IBH'},{p:7742,n:'CW'}],
+ [{es:7642,p:-25,peak:34,cls:'ACC',d:-4},{es:7647,p:-86,peak:92,d:2},
+  {es:7652,p:-100,peak:100,cls:'KING',king:1,d:0},{es:7667,p:-56,peak:71,cls:'GK',st:'WEAK',d:-11},
+  {es:7677,p:-29,d:1},{es:7682,p:-35,cls:'ACC',d:-3},
+  {es:7687,p:32,cls:'',st:'FORM',d:14},{es:7692,p:52,peak:58,cls:'BRK',d:6},
+  {es:7707,p:-30,peak:44,cls:'ACC',d:-8},{es:7747,p:43,d:3},
+  {es:7752,p:-80,cls:'RRUG',d:-2},{es:7757,p:70,d:5},
+  {es:7762,p:62,peak:66,cls:'BRK',d:9},{es:7767,p:31,d:1},{es:7772,p:25,cls:'BRK',d:0}],
+ 7692,
+ [{hi:7757,lo:7752,n:'REVERSE RUG',col:'#2ec27e',w:236}]);
+
+build('ladB', 7660, 7730, 280,
+ [{p:7700,n:'PDH',node:1},{p:7671,n:'PDL'}],
+ [{es:7710,p:22,d:1},{es:7700,p:78,peak:78,cls:'BRK',d:4},
+  {es:7690,p:-64,cls:'ACC',d:-9},{es:7680,p:-41,cls:'ACC',d:-12},{es:7668,p:18,d:-3}],
+ 7697,
+ [{hi:7700,lo:7690,n:'RUG · watching',col:'#e0645f',w:236}]);
+</script>
+</body></html>
