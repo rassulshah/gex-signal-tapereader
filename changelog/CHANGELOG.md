@@ -1,3 +1,108 @@
+## v14.49 — THE LEVEL LIFECYCLE, settled
+
+Worked out with the operator one state at a time, then checked against Skylit Academy doctrine
+before building.
+
+**THREE ORTHOGONAL FACTS, THREE PLACES TO SAY THEM.** The old engine crushed them into one word and
+the collisions showed: a level receiving size while worn out could only be one or the other.
+
+- **STATE** — the level's own condition: `BUILDING · HOLDING · TURN UP/DN · WEAKENING · SPENT`
+- **MARKER** — its relationship to price: `BREAKING · DEFENDING · ATTRACTING · ◂T`
+- **COUNTER** — how many times price tested it, absent at zero
+
+A row can now read **`BREAKING · WEAKENING · 3×`** — price is on it, it is failing, it was already
+bleeding, and it had been tested three times. The panel could not say that at all before.
+
+**AGAINST SKYLIT'S OWN LIFECYCLE** (FRESH → TESTED → DELIVERED → DECAYING):
+- FRESH/TESTED/DELIVERED is the TAP axis and is exactly our counter — same taps, same ~80/66/33.
+- Their DECAYING means "weakens with NO interaction". WEAKENING does not test for that and does not
+  need to: WEAKENING with **0 taps** IS their DECAYING; with 2 taps it is worn by testing. Splitting
+  the axes made the distinction finer, not coarser.
+- ⚠ **SPENT IS NOT THEIR "DELIVERED"** — theirs is tap-exhaustion, ours is mass. Said explicitly in
+  the hover, because two neighbouring vocabularies quietly meaning different things is how a panel
+  starts lying.
+- Their **HALO** fires when the multi-window rates AGREE; **TURN** fires when they DISAGREE.
+
+**BUILDING AND SPENT NO LONGER REQUIRE A ROLL PAIRING.** The old FORMING/DOOR only fired on a paired
+roll destination/source, but the pairing describes how we DETECTED mass moving — it says nothing
+about what the level now IS. A level gaining from fresh flow is building; a level that evaporated
+with no identifiable destination is just as empty and price passes through it identically.
+
+**⚠ ATTRACTING REQUIRES EVIDENCE, NOT POTENTIAL.** Pull = size ÷ distance is a property of the
+geometry: a node can hold the most pull all session while price walks away from it, and the old ◂T
+would have sat there looking authoritative the whole time. ATTRACTING additionally requires the
+DISTANCE TO BE CLOSING, which makes it falsifiable. ◂T survives for dominant-pull-without-evidence,
+and the two are now different claims.
+
+**⚠ BREAKING IS THE LEVEL FAILING, NOT PRICE BREAKING THROUGH.** It means the node is being ABANDONED
+while price tests it. Whether price then passes is a separate question this panel does not answer —
+Beach Ball doctrine is explicit that an overshoot is not confirmation.
+
+**TWO TAP-COUNTING BUGS, both found by checking the code against the operator's own rule:**
+1. **The tolerances were SPY units applied to SPXW strikes.** `TAP_TOL`/`TAP_AWAY` were written when
+   only SPY was tracked, where strikes sit 1 point apart — so 0.20 and 0.60 MEANT 20% and 60% of a
+   strike gap. On SPXW, whose strikes are 5 apart, they became 4% and 12%: ten times too tight. The
+   consequence was specific — a bounce that came within a point of the King and turned away, a
+   textbook test, never registered, so a defended King read as untested. Now scaled by the book's own
+   measured strike step (median gap, immune to a missing strike).
+2. **The re-arm was tick-based while the touch was bar-based.** A single tick past the away-distance
+   re-armed the counter, so choppy sessions inflated it. A whole CLOSED BAR must now be clear.
+
+⚠ Every threshold here is HAND-SET, not measured, and labelled as such in the source.
+
+New `test_states.js` (33 asserts). test_garma_v2 rewritten where it asserted the retired vocabulary —
+it keeps the doctrine, test_states owns the mechanics. Suite green, 6 baseline reds unchanged.
+
+## v14.48 — THE THREE KINGS, and the expected move as pills
+
+**All three crowns on one scale**, as pills in the price column: SPXW's, SPY's and QQQ's, each with a
+crown to its left, the ES price, and a small tag saying which book it belongs to. Kings landing on
+the same line are NUDGED apart rather than stacked — two crowns on one row is the dual-king confusion
+the operator caught in the profile, and the point of drawing three is being able to tell them apart.
+
+⚠⚠ **THE TWO CONVERSIONS ARE NOT THE SAME KIND OF THING, AND THE PANEL MUST NOT PRETEND THEY ARE.**
+- **SPXW → ES is a BASIS.** ES is a future ON the index SPXW prices; the ratio is real, live and
+  self-correcting (ifLadder's dispScale, anchored on Skylit's own spot).
+- **SPY → ES** is that same basis one step removed — what the SPY King flag has always used.
+- **QQQ → ES is NEITHER.** QQQ tracks the Nasdaq-100 and ES tracks the S&P 500: different indices,
+  no basis between them. The only honest mapping is PROPORTIONAL — "if QQQ travelled from here to
+  its King and ES moved the same percentage, ES would be here" — and that assumes a correlation of
+  one, which is false on exactly the days it matters most, a tech-led move. It is drawn because the
+  operator asked to see all three against price, and it is marked three ways: a TILDE on the price, a
+  DASHED pill so the eye is told before the hover is read, and a hover that says plainly it is **a
+  bearing, never a level**. The `kind` field carries `basis` vs `proportional` in the data itself so
+  a later version cannot quietly promote it.
+
+**The expected move is now a pill** at each extreme of the price column, and the old rail's over/under
+behaviour is preserved exactly: when price runs PAST a boundary the frame grows to hold it and the
+boundary stays drawn where it always was — the expected move is a PRICED level, never redefined as
+wherever the drawing happens to end. When that happens the rail end is marked separately, so "the
+band ended here" and "the drawing ends here" stay distinct. The 0.80-sigma caveat and its 1.25
+conversion survive the move.
+
+The SPY King leaves the ladder's levels column, since it is a king pill now rather than a level name.
+
+test_ladder.js 56 -> 73 asserts. Suite green, 6 baseline reds unchanged.
+
+## v14.47 — the two bugs the ladder's first live render found
+
+Both invisible to a 48-assert suite, both obvious the second the panel drew itself.
+
+**⚠ THE LADDER WAS CLIPPING TWO COLUMNS.** It was laid out at 646px inside a 486px body with
+`overflow:hidden`, so STATE and ROC were simply gone — live data absent from the face with nothing
+to say it was missing. Silently dropping data is the worst failure this panel can have. Columns are
+compressed to 520 and the container now SCROLLS rather than clips, so a narrow panel costs a
+scrollbar instead of costing information. (The panel is resizable; widening it shows all of it.)
+
+**⚠ EVERY DAY-PEAK OUTLINE WAS MAXED OUT.** `PEAK.m[k]` stores `|velocity.cur|` — the space the
+Level Engine divides in (`|vv.cur| / pk`). The ladder divided it by `P.usdK`, which is THOUSANDS of
+dollars: the ratio came out ~1000x, clamped to 100, and drew a full-width outline behind every
+single node. The "what a level HAD versus what it holds" signal was therefore meaningless on all of
+them. Peak-as-%King is now today's %King scaled by peak/now, both in `|cur|` space, and a test pins
+that it is never divided by `usdK` again.
+
+test_ladder.js 48 -> 56 asserts. Suite green, 6 baseline reds unchanged.
+
 ## v14.46 — THE LADDER (and the version string that had been lying since v14.40)
 
 **⚠ GPTS_VERSION WAS STUCK AT 14.39.** It is a separate constant from the `@version` header and its

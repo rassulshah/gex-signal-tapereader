@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.46
+// @version    14.49
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -620,7 +620,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.46';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.49';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -2934,8 +2934,23 @@ var ABS_DECLINE_TOL = 4;    // %King may only decline up to this and still 'hold
 // within TAP_TOL of the strike, then LEAVES by >= TAP_AWAY, then RETURNS = the next
 // tap (one long sit != many taps). Persisted per trading day per strike.
 // Real-vs-Hedge (cross-session growth) is a SEPARATE, later item (needs recorder history).
-var TAP_TOL   = 0.20;   // wick within this many strikes of the node = touching it
-var TAP_AWAY  = 0.60;   // price must leave by >= this before a re-touch counts as a NEW tap
+// ⚠ THESE ARE FRACTIONS OF A STRIKE GAP, NOT POINTS — see the note in updateTaps. They read as
+// absolute numbers only because SPY's strikes happen to sit 1 point apart, which is what hid the bug.
+var TAP_TOL   = 0.20;   // a wick within 20% of a strike gap = touching the node
+var TAP_AWAY  = 0.60;   // a whole closed bar 60% of a gap clear re-arms it for the next test
+// the book's own strike spacing, measured from the tape rather than assumed: SPY 1, SPXW 5, QQQ 1.
+function strikeStepOf(sym){
+  try{
+    var tp=tapeMap(sym||'SPXW'); if(!tp||!tp.pct) return 1;
+    var ks=[]; for(var k in tp.pct){ var f=parseFloat(k); if(isFinite(f)) ks.push(f); }
+    if(ks.length<3) return 1;
+    ks.sort(function(a,b){ return a-b; });
+    var gaps=[]; for(var i=1;i<ks.length;i++){ var g=ks[i]-ks[i-1]; if(g>0) gaps.push(g); }
+    if(!gaps.length) return 1;
+    gaps.sort(function(a,b){ return a-b; });
+    return gaps[Math.floor(gaps.length/2)] || 1;    // median gap — immune to a missing strike
+  }catch(e){ return 1; }
+}
 var TAP_STAGES = { FRESH:0, TESTED:1, DELIVERED:2 }; // tap-count thresholds
 // Academy tap-reaction probabilities (factual annotation, NOT a trade instruction).
 var TAP_PROB = { 0:80, 1:66, 2:33 }; // 3rd+ tap (index 2) = spent zone
@@ -3352,13 +3367,27 @@ function updateTaps(sym){
     var k=parseFloat(key); if(!(k>0)) continue;
     var st=store[key];
     if(!st || st.day!==dk){ st=store[key]={ taps:0, off:true, day:dk }; }
-    var touching = (last.l<=k+TAP_TOL && last.h>=k-TAP_TOL);
+    // ⚠⚠ (v14.49) TWO FIXES, BOTH FOUND BY CHECKING THE CODE AGAINST THE OPERATOR'S OWN RULE:
+    // "consecutive bars touching it is ONE test; it only counts again if it bounced and returned".
+    //
+    // 1. THE TOLERANCES ARE IN STRIKE-SPACING UNITS, NOT ABSOLUTE POINTS. TAP_TOL/TAP_AWAY were
+    //    written when only SPY was tracked, where strikes sit 1 point apart — so 0.20 and 0.60 MEANT
+    //    20% and 60% of a strike gap. Applied to SPXW, whose strikes are 5 points apart, the same
+    //    constants became 4% and 12% of a gap: roughly TEN TIMES too tight. The consequence was
+    //    specific and bad — a bounce that came within a point of the King and turned away, a textbook
+    //    test, never registered, so a defended King read as untested. Scaling by the book's own
+    //    strike step reproduces today's SPY behaviour exactly and fixes every other book.
+    // 2. THE RE-ARM IS NOW BAR-BASED, LIKE THE TOUCH. Touching was judged on a CLOSED BAR (correct —
+    //    that is why consecutive bars count once) but clearing was judged on the LIVE PRICE, so a
+    //    single tick past the away-distance re-armed it and the next touch counted as a fresh test.
+    //    On a choppy day that inflates the count with noise. A bar is a decision, here as everywhere.
+    var step=1; try{ step=strikeStepOf(sym)||1; }catch(eSt){}
+    var tol=TAP_TOL*step, away=TAP_AWAY*step;
+    var touching = (last.l<=k+tol && last.h>=k-tol);
     if(touching){
       if(st.off){ st.taps++; st.off=false; }   // a NEW tap: was away, now touching
-    } else {
-      // only re-arm once price has clearly LEFT the strike (prevents one sit = many taps)
-      var px=S.price;
-      if(px!=null && Math.abs(px-k)>=TAP_AWAY) st.off=true;
+    } else if(last.l>k+away || last.h<k-away){
+      st.off=true;                             // a WHOLE CLOSED BAR clear of the level re-arms it
     }
   }
 }
@@ -19152,7 +19181,10 @@ function ensureV3Css(){
     // ⚠ The CHUTE is price's alone — no other element may be positioned inside its x-range. That is
     // the rule that keeps price from ever being overlapped, which is why it is a walled column and
     // not merely a marker.
-    '#gpts-body .g3lad{position:relative;margin:2px 0 3px;min-width:'+LAD_W+'px}'+
+    '#gpts-body .g3ladwrap{overflow-x:auto;overflow-y:hidden;margin:2px 0 3px}'+
+    '#gpts-body .g3ladwrap::-webkit-scrollbar{height:5px}'+
+    '#gpts-body .g3ladwrap::-webkit-scrollbar-thumb{background:#2a3340;border-radius:3px}'+
+    '#gpts-body .g3lad{position:relative;min-width:'+LAD_W+'px}'+
     '#gpts-body .g3chute{position:absolute;left:'+LAD_CH+'px;width:'+LAD_CHW+'px;top:0;bottom:0;'+
       'background:rgba(255,255,255,.035);border-left:1px solid #333e4d;border-right:1px solid #333e4d}'+
     '#gpts-body .g3ldrange{position:absolute;left:'+(LAD_CH+1)+'px;width:'+(LAD_CHW-2)+'px;'+
@@ -19177,6 +19209,26 @@ function ensureV3Css(){
     '#gpts-body .g3ldpx{position:absolute;left:'+LAD_PXC+'px;width:40px;text-align:right;font-size:8.4px;'+
       'font-weight:800;color:#c9d1da;transform:translateY(-50%);cursor:help}'+
     '#gpts-body .g3lddim{color:#77828f;font-weight:700}'+
+    // (v14.48) THE PILLS in the price column: the expected-move boundaries and the three Kings.
+    // They overlay the price column and are allowed to extend a little left over the connector gap,
+    // because a pill is the row's identity and the plain price beneath it is redundant while it shows.
+    '#gpts-body .g3ldempill{position:absolute;left:'+(LAD_PXC-14)+'px;font-size:7.8px;font-weight:900;'+
+      'color:#f2b45a;background:rgba(242,180,90,.10);border:1px solid rgba(242,180,90,.55);'+
+      'border-radius:7px;padding:0 5px;line-height:12px;transform:translateY(-50%);white-space:nowrap;cursor:help;z-index:4}'+
+    '#gpts-body .g3ldrailend{position:absolute;left:'+(LAD_PXC-14)+'px;font-size:7px;font-weight:800;'+
+      'color:#4b5563;transform:translateY(-50%);white-space:nowrap;cursor:help}'+
+    '#gpts-body .g3ldking{position:absolute;left:'+(LAD_PXC-16)+'px;font-size:8px;font-weight:900;'+
+      'border-radius:8px;padding:0 5px;line-height:13px;transform:translateY(-50%);white-space:nowrap;'+
+      'cursor:help;z-index:5;display:inline-flex;align-items:center;gap:3px}'+
+    '#gpts-body .g3ldking b{font-weight:900;font-size:8.4px}'+
+    // the book tag: deliberately small, because WHICH king is a qualifier on the price, not a rival to it
+    '#gpts-body .g3ldking i{font-style:normal;font-size:5.6px;font-weight:900;letter-spacing:.06em;opacity:.85}'+
+    '#gpts-body .g3ldkingSPXW{color:#e3c341;background:rgba(227,195,65,.12);border:1px solid rgba(227,195,65,.6)}'+
+    '#gpts-body .g3ldkingSPY{color:#cdb4fa;background:rgba(205,180,250,.12);border:1px solid rgba(205,180,250,.6)}'+
+    '#gpts-body .g3ldkingQQQ{color:#5fd3bc;background:rgba(95,211,188,.10);border:1px solid rgba(95,211,188,.5)}'+
+    // ⚠ the QQQ crown is a PROPORTIONAL BEARING, not a basis conversion — dashed, so the eye is told
+    // before the hover is read that this one is a different kind of claim.
+    '#gpts-body .g3ldking.approx{border-style:dashed}'+
     // nodes — anchored outside, growing INWARD toward the chute, type riding the bar
     '#gpts-body .g3ldbar{position:absolute;left:'+LAD_NODE+'px;height:12px;border-radius:2px;transform:translateY(-50%);'+
       'display:flex;align-items:center;justify-content:flex-end;padding-right:3px;box-sizing:border-box;'+
@@ -19209,9 +19261,27 @@ function ensureV3Css(){
     '#gpts-body .g3ldramt{position:absolute;left:12px;font-size:7.6px;font-weight:900;transform:translateY(-50%);white-space:nowrap;cursor:help}'+
     '#gpts-body .g3ldst{position:absolute;left:'+LAD_ST+'px;width:44px;font-size:8.4px;font-weight:900;'+
       'transform:translateY(-50%);white-space:nowrap;cursor:help}'+
-    '#gpts-body .g3ldstFORMING{color:#7cc7ff}#gpts-body .g3ldstWEAKENING{color:#f2b45a}'+
-    '#gpts-body .g3ldstTURNING{color:#cdb4fa}#gpts-body .g3ldstDOOR{color:#e0645f}'+
-    '#gpts-body .g3ldstUSED{color:#6c7889}#gpts-body .g3ldstHOLDING{display:none}'+
+    // (v14.49) the settled vocabulary: BUILDING · HOLDING · TURN UP/DN · WEAKENING · SPENT
+    '#gpts-body .g3ldstBUILDING{color:#7cc7ff}'+
+    '#gpts-body .g3ldstWEAKENING{color:#f2b45a}'+
+    '#gpts-body .g3ldstTURNUP{color:#2ec27e}#gpts-body .g3ldstTURNDN{color:#e0645f}'+
+    '#gpts-body .g3ldstSPENT{color:#6c7889}'+
+    '#gpts-body .g3ldstHOLDING{display:none}'+
+    // the TESTS counter — its own slot, reddening as the level is spent by testing
+    '#gpts-body .g3ldtap{position:absolute;left:'+(LAD_ST+46)+'px;font-size:7px;font-weight:900;'+
+      'transform:translateY(-50%);padding:0 3px;border-radius:5px;background:rgba(255,255,255,.10);cursor:help}'+
+    '#gpts-body .g3ldtap1{color:#c9d1da}'+
+    '#gpts-body .g3ldtap2{color:#f2b45a;background:rgba(242,180,90,.20)}'+
+    '#gpts-body .g3ldtap3{color:#e0645f;background:rgba(224,100,95,.24)}'+
+    // the MARKER — the level's relationship to PRICE, beside the chute where the eye already is
+    '#gpts-body .g3ldmk{position:absolute;left:'+(LAD_CH+LAD_CHW+4)+'px;font-size:7.4px;font-weight:900;'+
+      'letter-spacing:.03em;transform:translateY(-50%);white-space:nowrap;background:#11161f;'+
+      'padding:0 3px;border-radius:3px;z-index:7;cursor:help}'+
+    '#gpts-body .g3ldmkBREAKING{color:#e0645f;box-shadow:inset 0 0 0 1px rgba(224,100,95,.55)}'+
+    '#gpts-body .g3ldmkDEFENDING{color:#2ec27e;box-shadow:inset 0 0 0 1px rgba(46,194,126,.55)}'+
+    '#gpts-body .g3ldmkATTRACTING{color:#4fd1e0;box-shadow:inset 0 0 0 1px rgba(79,209,224,.5)}'+
+    '#gpts-body .g3ldmkINPLAY{color:#c9d1da}'+
+    '#gpts-body .g3ldmkT{color:#4fd1e0}'+
     '#gpts-body .g3ldroc{position:absolute;left:'+LAD_ROC+'px;font-size:8.4px;font-weight:800;'+
       'transform:translateY(-50%);white-space:nowrap;cursor:help}'+
     '#gpts-body .g3ldup{color:#2ec27e}#gpts-body .g3lddn{color:#e0645f}#gpts-body .g3ldfl{color:#5b6675}'+
@@ -20828,33 +20898,116 @@ function pocketOnPath(pockets, from, to){
     return best?best.pk:null;
   }catch(e){ return null; }
 }
+// ============================================================================================
+// (v14.49) THE LEVEL LIFECYCLE — settled with the operator, checked against Skylit Academy doctrine.
+//
+// THREE ORTHOGONAL FACTS, THREE PLACES TO SAY THEM. The old engine crushed them into one word and
+// the collisions showed: a level receiving size while worn out could only be one or the other.
+//   1. STATE    — the level's own condition:  BUILDING · HOLDING · TURN UP/DN · WEAKENING · SPENT
+//   2. MARKER   — its relationship to price:  BREAKING · DEFENDING · ATTRACTING · (dominant pull)
+//   3. COUNTER  — how many times price tested it, absent at zero
+//
+// AGAINST SKYLIT'S OWN LIFECYCLE (Academy node-lifecycle: FRESH -> TESTED -> DELIVERED -> DECAYING):
+//   · FRESH/TESTED/DELIVERED is the TAP axis and is exactly our counter — same taps, same
+//     probabilities (~80/66/33). Their core rule "target FRESH positioning, not used levels" is what
+//     the counter exists to serve.
+//   · DECAYING is theirs for "weakens with NO interaction" — a quiet death. WEAKENING does not test
+//     for that, but it does not have to: WEAKENING with 0 taps IS their DECAYING, and WEAKENING with
+//     2 taps is worn by testing. Splitting the axes made the distinction finer, not coarser.
+//   · ⚠ SPENT IS NOT SKYLIT'S "DELIVERED". Theirs is tap-exhaustion; ours is mass. The hover says so
+//     explicitly, because two neighbouring vocabularies quietly meaning different things is exactly
+//     how a panel starts lying.
+//   · Skylit's HALO fires when their multi-window rates AGREE; TURN fires when they DISAGREE.
+//     Complementary, no overlap.
+//
+// ⚠ BUILDING AND SPENT NO LONGER REQUIRE A ROLL PAIRING. The old FORMING/DOOR only fired on a paired
+// roll destination/source. But the pairing describes how we DETECTED mass moving; it says nothing
+// about what the level now IS. A level gaining size from fresh flow is building; a level that
+// evaporated with no identifiable destination is just as empty and price passes through it
+// identically. Requiring a pairing to describe something the pairing does not govern was a leftover
+// from when rolls were the only lens we had.
+//
+// ⚠⚠ EVERY THRESHOLD BELOW IS HAND-SET, NOT MEASURED. They are scored nightly like everything else
+// and should be EARNED rather than chosen once there is enough data. Do not read them as findings.
+var LVL_BUILD_P15=8;    // ⚖ % of own mass gained in 15m that says BUILDING
+var LVL_SPENT_PEAK=0.5; // ⚖ retention of own day peak below which a level is SPENT
 function levelStateOf(k, rollsCtx){
   try{
     var v=null; try{ v=velAt(k); }catch(e0){}
     var vv=(v&&v.v&&!v.stale)?v.v:null;
     var tapsN=0; try{ tapsN=nodeTapCount('SPXW', k)||0; }catch(eTp){}
-    var isSrc=rollsCtx&&rollsCtx.src&&rollsCtx.src[k], isDst=rollsCtx&&rollsCtx.dst&&rollsCtx.dst[k];
     var pk=null; try{ pk=peakOf(k); }catch(e1){}
     var ret=(pk&&vv&&typeof vv.cur==='number'&&pk>0)?Math.abs(vv.cur)/pk:null;
-    if(isSrc && ret!=null && ret<LVL_DOOR_PEAK) return { st:'DOOR', why:'roll source, holds '+Math.round(ret*100)+'% of its own peak' };
-    if(isDst && vv && typeof vv.d15==='number' && vv.d15>0) return { st:'FORMING', why:'roll destination, still building' };
-    if(vv && typeof vv.p5==='number' && typeof vv.p15==='number' && typeof vv.p60==='number'){
-      if(Math.abs(vv.p15)>=LVL_TURN_P15 && (vv.p5>0)===(vv.p15>0) && (vv.p15>0)!==(vv.p60>0))
-        return { st:'TURNING', why:'5m and 15m have flipped against the hour' };
-      if(vv.p15<=LVL_WEAK_P15 || (vv.p15<0 && vv.p60<0))
-        return { st:'WEAKENING', why:(Math.round(vv.p15))+'%/15m draining'+(isSrc?', roll source':'') };
+    var isSrc=rollsCtx&&rollsCtx.src&&rollsCtx.src[k], isDst=rollsCtx&&rollsCtx.dst&&rollsCtx.dst[k];
+    function out(st,why){ return { st:st, why:why, taps:tapsN }; }
+    // 1 · SPENT — terminal. The mass has gone, whoever took it. 19/19 measured pass-throughs when
+    //     price returned to a drained level: never treat it as support, never park a stop behind it.
+    if(ret!=null && ret<LVL_SPENT_PEAK)
+      return out('SPENT','holds only '+Math.round(ret*100)+'% of its own day peak — the mass has gone'+
+        (isSrc?', shed into '+ (rollsCtx.srcTo&&rollsCtx.srcTo[k]!=null?frameNumSafe(rollsCtx.srcTo[k]):'another strike'):'')+
+        '. \u26a0 SPENT here means MASS, not Skylit\u2019s DELIVERED, which is tap-exhaustion \u2014 that is the counter beside it');
+    if(vv && typeof vv.p5==='number' && typeof vv.p15==='number'){
+      // 2 · TURN — an inflection outranks the trend it interrupts
+      if(typeof vv.p60==='number' && Math.abs(vv.p15)>=LVL_TURN_P15 &&
+         (vv.p5>0)===(vv.p15>0) && (vv.p15>0)!==(vv.p60>0))
+        return out(vv.p15>0?'TURN UP':'TURN DN','5m and 15m agree and have both flipped against the hour');
+      // 3 · BUILDING — size arriving, from a roll or from fresh flow alike
+      if(vv.p15>=LVL_BUILD_P15)
+        return out('BUILDING','+'+Math.round(vv.p15)+'%/15m arriving'+(isDst?', a roll destination':'')+
+          ' \u2014 new support or resistance forming here');
+      // 4 · WEAKENING
+      if(vv.p15<=LVL_WEAK_P15 || (typeof vv.p60==='number' && vv.p15<0 && vv.p60<0))
+        return out('WEAKENING',Math.round(vv.p15)+'%/15m draining'+(isSrc?', feeding a roll':'')+
+          (tapsN===0?' with no interaction at all \u2014 Skylit\u2019s DECAYING, a quiet death':''));
     }
-    if(isSrc) return { st:'WEAKENING', why:'feeding a roll' };
-    // (v14.41, GARMA V2 GM-MAP-007) A USED LEVEL IS A WEAKER LEVEL, and the Academy already put
-    // numbers on it: 1st tap ~80% reaction, 2nd ~66%, 3rd+ ~33% — the "graveyard". updateTaps() has
-    // counted distinct taps per SPXW strike since v11.84 (a wick within tolerance, price leaving by
-    // TAP_AWAY, then returning = the NEXT tap, so one long sit is never many taps) and the Level
-    // Engine never asked. A third tap is not a nuance, it is a regime change in the hold rate, so it
-    // earns a state. It is deliberately ranked BELOW the live states: a level actively receiving a
-    // roll is having fresh size delivered to it, and that is the newer fact.
-    if(tapsN>=3) return { st:'USED', why:tapsN+' taps today \u2014 ~33% hold historically (Academy graveyard)', taps:tapsN };
-    return { st:'HOLDING', why:'steady'+(tapsN>0?(', '+tapsN+' tap'+(tapsN>1?'s':'')+' today \u2014 next test holds ~'+(TAP_PROB[tapsN]!=null?TAP_PROB[tapsN]:33)+'% historically'):''), taps:tapsN };
-  }catch(e){ return { st:'HOLDING', why:'' }; }
+    if(isSrc) return out('WEAKENING','feeding a roll');
+    return out('HOLDING','steady'+(tapsN>0?(', tested '+tapsN+'\u00d7 today \u2014 the next test holds ~'+
+      (TAP_PROB[Math.min(tapsN,2)])+'% historically'):''));
+  }catch(e){ return { st:'HOLDING', why:'', taps:0 }; }
+}
+function frameNumSafe(x){ try{ return frameNum(x); }catch(e){ return String(x); } }
+// THE MARKER — this level's relationship to PRICE, which is a different kind of fact from its own
+// condition and therefore gets its own slot. Naturally exclusive: price cannot be arriving at and
+// standing on the same level.
+// ⚠ BREAKING DOES NOT MEAN PRICE HAS BROKEN THROUGH. It means the level is being ABANDONED while
+// price tests it — the node is shedding mass under the test. Whether price then passes is a separate
+// question this panel does not answer, and Beach Ball doctrine is explicit that an overshoot is not
+// confirmation.
+// ⚠ ATTRACTING REQUIRES EVIDENCE, NOT POTENTIAL. Pull = size/distance is a property of the geometry:
+// a node can hold the most pull all session while price walks away from it. ATTRACTING additionally
+// requires the DISTANCE TO BE CLOSING, which makes it falsifiable. Doctrine ("every node is a magnet;
+// the closer price drifts, the stronger the pull") is satisfied by the stricter test, not contradicted.
+var LVL_INPLAY_PTS=3;      // ⚖ how close price must be to count as standing on a level
+var LVL_CLOSE_BARS=5;      // ⚖ bars over which the distance must have closed to say ATTRACTING
+function levelMarkerOf(dispPrice, now, sym, isTopPull){
+  try{
+    if(typeof dispPrice!=='number' || typeof now!=='number') return null;
+    var d=Math.abs(dispPrice-now);
+    if(d<=LVL_INPLAY_PTS){
+      var rd=null; try{ rd=reactDefence(sym, dispPrice); }catch(e0){}
+      if(rd && rd.verdict==='DEFENDING')
+        return { m:'DEFENDING', why:'price is on it and it is ABSORBING the test \u2014 15m building while price sits here' };
+      if(rd && rd.verdict==='ABANDONING')
+        return { m:'BREAKING', why:'price is on it and it is being ABANDONED \u2014 the level is shedding mass under the test. \u26a0 This is the LEVEL failing, not a claim that price has broken through' };
+      return { m:'IN PLAY', why:'price is on it; the tape shows no clear reaction either way yet' };
+    }
+    if(isTopPull){
+      var closing=null;
+      try{
+        var cs=closedCandles(sym)||[], dsc=ifDispScale()||1;
+        if(cs.length>LVL_CLOSE_BARS){
+          var was=cs[cs.length-1-LVL_CLOSE_BARS].c;
+          if(typeof was==='number'){
+            var wasDisp=was*dsc;
+            closing=Math.abs(dispPrice-wasDisp)>d;   // the gap has narrowed since then
+          }
+        }
+      }catch(e1){}
+      if(closing===true) return { m:'ATTRACTING', why:'the dominant magnet by measured pull (size \u00f7 distance) AND the distance has been closing over the last '+LVL_CLOSE_BARS+' bars \u2014 evidence, not just potential' };
+      return { m:'\u25c2T', why:'the dominant magnet by pull (size \u00f7 distance), out-pulling the runner-up at least 2-to-1. POTENTIAL only \u2014 the distance is not currently closing, so this is where the flow points rather than where price is going' };
+    }
+    return null;
+  }catch(e){ return null; }
 }
 // the DOOR list — drained sources that are no longer piles at all (the strongest measured stat:
 // 19/19 pass-throughs). Built from the latched rolls; each door carries its ES price for drawing.
@@ -20906,9 +21059,69 @@ function levelDoors(rolls, dsc){
 // draft had LAD_PXC only 4px past LAD_LVL, which gave the connector rule a width of MINUS four
 // pixels — invisible, and invisible in a way no screenshot would have explained. The tests check
 // that every column clears the one before it and, above all, that NOTHING reaches into the chute.
-var LAD_W=646, LAD_LVL=96, LAD_PXC=116, LAD_NODE=162, LAD_NMAX=100, LAD_KPCT=266,
-    LAD_CH=308, LAD_CHW=50, LAD_PROF=466, LAD_PMAX=100, LAD_ROLL=470, LAD_ST=534, LAD_ROC=584;
+// ⚠⚠ AND THE WHOLE THING MUST FIT THE PANEL. The first layout was 646px wide inside a 486px body
+// with overflow hidden, so STATE and ROC were clipped away entirely — two columns of live data
+// invisible with nothing to say they were missing. Silently dropping data is the worst failure this
+// panel can have. The columns below are compressed to 520 and the container SCROLLS rather than
+// clips, so a narrow panel costs a scrollbar instead of costing information.
+var LAD_W=580, LAD_LVL=78, LAD_PXC=96, LAD_PXW=56, LAD_NODE=154, LAD_NMAX=70, LAD_KPCT=226,
+    LAD_CH=268, LAD_CHW=44, LAD_PROF=436, LAD_PMAX=76, LAD_ROLL=440, LAD_ST=488, LAD_ROC=528;
 var LAD_SNAP_PTS=2;         // a level within this many points of a node shares that node's row
+// (v14.48, operator-directed) THE THREE KINGS, ON ONE SCALE. "I want to see where price is relative
+// to the 3 kings" — SPXW's, SPY's and QQQ's, each as a pill in the price column with its own crown
+// and the book it belongs to.
+//
+// ⚠⚠ THE TWO CONVERSIONS ARE NOT THE SAME KIND OF THING, AND THE PANEL MUST NOT PRETEND THEY ARE.
+//   SPXW → ES  is a BASIS. ES is a future ON the index SPXW prices; the ratio is a real, live,
+//              self-correcting number (ifLadder's dispScale, anchored on Skylit's own spot).
+//   SPY  → ES  is the same basis one step removed, and is what the SPY King flag has always used.
+//   QQQ  → ES  is NEITHER. QQQ tracks the Nasdaq-100 and ES tracks the S&P 500: they are DIFFERENT
+//              INDICES with no basis between them. The only honest mapping is PROPORTIONAL — "if
+//              QQQ travelled from here to its King, and ES moved by the same percentage, ES would
+//              be here" — and that assumes a correlation of one, which is false on exactly the days
+//              it matters most (a tech-led selloff). It is drawn because the operator asked to see
+//              all three on one scale, it is marked with a tilde, and the hover says plainly that it
+//              is an approximation rather than a level. Do not let a later version quietly promote
+//              it to a level: it is a bearing, not a price.
+function ladderKings(EB, sym){
+  var out=[];
+  try{
+    var now=(typeof EB.nowLive==='number')?EB.nowLive:EB.now;
+    // SPXW — the latched crown, the same one the profile and the read name
+    try{
+      var lk=null; try{ var o=JSON.parse(localStorage.getItem(KING_LATCH_KEY)||'null');
+        if(o && o.day===ctTodayStr() && typeof o.k==='number') lk=o.k; }catch(eL){}
+      if(lk==null){ var tp=tapeMap('SPXW'); if(tp && tp.king!=null) lk=tp.king; }
+      var dsc=0; try{ dsc=ifDispScale()||0; }catch(eD){}
+      if(lk!=null && dsc>0) out.push({ at:lk*dsc, book:'SPXW', raw:lk, kind:'basis',
+        tip:'The SPXW King — the heaviest node on Skylit’s ladder, and the crown every %King on this rail is a ratio to. SPXW '+lk+' on an ES basis, which is a real live conversion: ES is a future ON this index.' });
+    }catch(e1){}
+    // SPY — the other book's crown, same basis one step removed
+    try{
+      if(typeof LASTFEED!=='undefined' && LASTFEED.SPY && LASTFEED.SPY.j &&
+         (Date.now()-(LASTFEED.SPY.ts||0))<=FEED_STALE_MS*3 && typeof EB.scaleUsed==='number' && EB.scaleUsed>0){
+        var ew=extractWalls(LASTFEED.SPY.j);
+        if(ew && ew.king!=null) out.push({ at:ew.king*EB.scaleUsed, book:'SPY', raw:ew.king, kind:'basis',
+          tip:'The SPY King — the other book’s crown. Price bounces off it even when every dynamic on this rail is SPXW; proven the day it was asked for. SPY '+ew.king+' converted on the live ES/SPY ratio.' });
+      }
+    }catch(e2){}
+    // QQQ — a DIFFERENT INDEX. Proportional bearing only, and flagged as one.
+    try{
+      if(typeof LASTFEED!=='undefined' && LASTFEED.QQQ && LASTFEED.QQQ.j &&
+         (Date.now()-(LASTFEED.QQQ.ts||0))<=FEED_STALE_MS*3 && now>0){
+        var ewq=extractWalls(LASTFEED.QQQ.j);
+        var qs=null;
+        try{ qs=(STATE.QQQ||{}).price; }catch(eQ){}
+        if(qs==null){ var lv=LASTFEED.QQQ.j.levels; if(lv&&lv.length && typeof lv[lv.length-1].s==='number') qs=lv[lv.length-1].s; }
+        if(ewq && ewq.king!=null && qs>0){
+          out.push({ at:now*(ewq.king/qs), book:'QQQ', raw:ewq.king, kind:'proportional',
+            tip:'The QQQ King, QQQ '+ewq.king+', shown as a PROPORTIONAL BEARING on this ES scale — where ES would sit if it moved the same percentage QQQ would need to reach its crown. ⚠ NOT a basis: QQQ tracks the Nasdaq-100 and ES the S&P 500, so this assumes the two move together, which is exactly false on a tech-led day. A bearing, never a level — the tilde says so.' });
+        }
+      }
+    }catch(e3){}
+  }catch(e){}
+  return out;
+}
 function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
   try{
     if(!EB || !EB.ok || !RB) return '';
@@ -20920,7 +21133,7 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
     function inFrame(p){ return typeof p==='number' && p>=lo && p<=hi; }
     var now=(typeof EB.nowLive==='number')?EB.nowLive:EB.now;
     var dsc=1; try{ dsc=ifDispScale()||1; }catch(eD){}
-    var h='<div class="g3lad" style="height:'+H+'px">';
+    var h='<div class="g3ladwrap"><div class="g3lad" style="height:'+H+'px">';
     var OFF=[];
 
     // ---- the chute: price, and the day's budget ------------------------------------------------
@@ -20930,14 +21143,26 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
          Math.max(1,(Y(EB.loWater)-Y(EB.hiWater))).toFixed(1)+'px"'+
          g3tip('Where the day has been: '+frameNum(EB.loWater)+' to '+frameNum(EB.hiWater)+'. A retrace does not hand budget back — the range is spent.')+'></i>';
     }
-    [['EH',EB.high],['EL',EB.low]].forEach(function(e){
+    // (v14.48) THE EXPECTED MOVE AS PILLS IN THE PRICE COLUMN, at the extremes of the day's budget.
+    // ⚠ THE OLD RAIL'S BEHAVIOUR IS PRESERVED EXACTLY: when price runs PAST a boundary the frame
+    // grows to hold it and the boundary stays drawn where it always was — the expected move is a
+    // PRICED level, never redefined as wherever the rail happens to end. When that happens the rail
+    // end is marked separately, so "the band ended here" and "the drawing ends here" stay distinct.
+    [['EH',EB.high,RB.over],['EL',EB.low,RB.under]].forEach(function(e){
       if(!inFrame(e[1])) return;
       var t=Y(e[1]).toFixed(1);
-      h+='<i class="g3ldem" style="top:'+t+'px"></i><span class="g3ldeml" style="top:'+t+'px"'+
+      h+='<i class="g3ldem" style="top:'+t+'px"></i>'+
+         '<span class="g3ldempill" style="top:'+t+'px"'+
          g3tip((e[0]==='EH'?'Expected high':'Expected low')+' — the open '+(e[0]==='EH'?'plus':'minus')+
-         ' the at-the-money straddle. The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. A priced level, never a floor or a ceiling.'+
-         (EB.est?' ~EST: captured late, so it is narrower than the open’s was.':''))+'>'+(EB.est?'~':'')+e[0]+'</span>';
+         ' the at-the-money straddle. \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%; multiply by 1.25 for a true one-sigma boundary. A priced level, never a floor or a ceiling.'+
+         (EB.est?' ~EST: captured late in the session, so it is narrower than the open’s was.':'')+
+         (e[2]?' Price has run PAST it — the frame grew to hold price, so this line is where the expected move ENDED, not where the drawing does.':''))+
+         '>'+(EB.est?'~':'')+e[0]+' '+g3esc(frameNum(e[1]))+(e[2]?' \u2913':'')+'</span>';
     });
+    if(RB.over && inFrame(RB.hi)) h+='<span class="g3ldrailend" style="top:'+Y(RB.hi).toFixed(1)+'px"'+
+      g3tip('The rail end — the drawing was widened to hold price, which has run beyond the expected move.')+'>rail '+g3esc(frameNum(RB.hi))+'</span>';
+    if(RB.under && inFrame(RB.lo)) h+='<span class="g3ldrailend" style="top:'+Y(RB.lo).toFixed(1)+'px"'+
+      g3tip('The rail end — the drawing was widened to hold price, which has run beyond the expected move.')+'>rail '+g3esc(frameNum(RB.lo))+'</span>';
     if(inFrame(EB.open)) h+='<i class="g3ldopn" style="top:'+Y(EB.open).toFixed(1)+'px"'+
        g3tip('The session open — the anchor the expected-move band is built from.')+'></i>';
 
@@ -20951,7 +21176,14 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       var pct=Math.abs(P.pct||0);
       var len=Math.max(9, pct/100*LAD_NMAX);
       var pkv=null; try{ pkv=peakOf(P.k); }catch(ePk){}
-      var pkPct=(pkv!=null&&P.usdK!=null&&P.usdK!==0)?Math.min(100,Math.abs(pkv)/Math.abs(P.usdK)*pct):null;
+      var vvE=null; try{ var vX=velAt(P.k); vvE=(vX&&vX.v)?vX.v:null; }catch(eVx){}
+      // ⚠⚠ UNITS. PEAK.m[k] stores |velocity.cur| — the SAME space the Level Engine divides in
+      // (`|vv.cur| / pk`). The first draft divided it by P.usdK, which is THOUSANDS of dollars: the
+      // ratio came out ~1000x, clamped to 100, and every single node drew a full-width day-peak
+      // outline. Peak-as-%King is today's %King scaled by peak/now, both in |cur| space.
+      var pkPct=null;
+      if(pkv!=null && vvE && typeof vvE.cur==='number' && Math.abs(vvE.cur)>0)
+        pkPct=Math.min(100, pct*Math.abs(pkv)/Math.abs(vvE.cur));
       var plen=(pkPct!=null&&pkPct>pct)?Math.max(len,pkPct/100*LAD_NMAX):0;
       var role=P.role||'';
       var lvS=(LVLST&&LVLST[P.k])?LVLST[P.k]:null;
@@ -20970,14 +21202,26 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
          g3tip(tip)+'>'+(fits?g3esc(role):'')+'</i>';
       if(role && !fits) h+='<span class="g3ldrole '+k+'" style="top:'+t.toFixed(1)+'px;left:'+(LAD_NODE+len+5).toFixed(0)+'px"'+g3tip(tip)+'>'+g3esc(role)+'</span>';
       h+='<span class="g3ldkp '+k+'" style="top:'+t.toFixed(1)+'px"'+g3tip(tip)+'>'+(neg?'−':'+')+pct+'%'+(role==='KING'?' ♛':'')+'</span>';
-      if(TGT!=null && Math.abs(TGT-P.disp)<0.01)
-        h+='<span class="g3ldtgt" style="top:'+t.toFixed(1)+'px"'+g3tip('THE DESTINATION — the dominant magnet by measured pull (size ÷ distance), out-pulling every other node at least 2-to-1. Where the flow points, not a promise.')+'>◂T</span>';
+      // (v14.49) the destination marker folds into levelMarkerOf below, which distinguishes
+      // POTENTIAL (dominant pull) from EVIDENCE (dominant pull AND the distance closing).
       // profile mirror
       var pf=Math.max(9, pct/100*LAD_PMAX), pp=(pkPct!=null&&pkPct>pct)?Math.max(pf,pkPct/100*LAD_PMAX):0;
       if(pp>pf) h+='<i class="g3ldppk" style="top:'+t.toFixed(1)+'px;left:'+(LAD_PROF-pp).toFixed(0)+'px;width:'+pp.toFixed(0)+'px"'+g3tip(tip)+'></i>';
       h+='<i class="g3ldpf '+k+'" style="top:'+t.toFixed(1)+'px;left:'+(LAD_PROF-pf).toFixed(0)+'px;width:'+pf.toFixed(0)+'px"'+g3tip(tip)+'></i>';
-      if(lvS && lvS.st)
-        h+='<span class="g3ldst g3ldst'+lvS.st+'" style="top:'+t.toFixed(1)+'px"'+g3tip(lvS.st+' — '+(lvS.why||'')+'.')+'>'+g3esc(lvS.st.slice(0,5))+'</span>';
+      // the STATE, the TESTS COUNTER and the MARKER — three orthogonal facts, three slots. A row
+      // reading "WEAKENING 3x" is draining AND worn out, which no single label could ever say.
+      if(lvS && lvS.st && lvS.st!=='HOLDING')
+        h+='<span class="g3ldst g3ldst'+lvS.st.replace(/\s+/g,'')+'" style="top:'+t.toFixed(1)+'px"'+
+           g3tip(lvS.st+' — '+(lvS.why||'')+'.')+'>'+g3esc(lvS.st)+'</span>';
+      if(lvS && lvS.taps>0)
+        h+='<span class="g3ldtap g3ldtap'+Math.min(lvS.taps,3)+'" style="top:'+t.toFixed(1)+'px"'+
+           g3tip('Price has TESTED this level '+lvS.taps+'× today — it reached it, left, and came back. Skylit\u2019s own lifecycle: untested reacts ~80% of the time, a second test ~66%, a third and beyond ~33% (the graveyard). The next test here holds ~'+
+           (TAP_PROB[Math.min(lvS.taps,2)])+'%. An untested level is the strong one and every test spends it.')+'>'+lvS.taps+'×</span>';
+      try{
+        var mk=levelMarkerOf(P.disp, now, sym, (TGT!=null && Math.abs(TGT-P.disp)<0.01));
+        if(mk) h+='<span class="g3ldmk g3ldmk'+mk.m.replace(/[^A-Z]/g,'')+'" style="top:'+t.toFixed(1)+'px"'+
+          g3tip(mk.m+' — '+mk.why+'.')+'>'+g3esc(mk.m)+'</span>';
+      }catch(eMk){}
       if(vv && typeof vv.p5==='number' && typeof vv.p15==='number'){
         var arg=(typeof vv.p60==='number' && vv.p15!==0 && vv.p60!==0 && (vv.p15>0)!==(vv.p60>0));
         h+='<span class="g3ldroc" style="top:'+t.toFixed(1)+'px"'+
@@ -20994,14 +21238,8 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
        ['PDH',SESSL.pdh],['PDL',SESSL.pdl],['PDC',SESSL.pdc]].forEach(function(sd){
         if(sd[1]!=null) LV.push({n:sd[0], at:sd[1], tip:'Session structure, RTH bars only.'}); });
     }
-    try{
-      if(CFG.spyFlag!==false && typeof LASTFEED!=='undefined' && LASTFEED.SPY && LASTFEED.SPY.j &&
-         (Date.now()-(LASTFEED.SPY.ts||0))<=FEED_STALE_MS*3 && typeof EB.scaleUsed==='number'){
-        var ew=null; try{ ew=extractWalls(LASTFEED.SPY.j); }catch(eW){}
-        if(ew && ew.king!=null) LV.push({n:'SPY K', at:ew.king*EB.scaleUsed, cls:'spyk',
-          tip:'The OTHER book’s crown, converted. Price bounces off it even when every dynamic here is SPXW.'});
-      }
-    }catch(eS){}
+    // (v14.48) the SPY King is no longer a LEVEL NAME here — it is one of the three KING PILLS in
+    // the price column, beside SPXW's and QQQ's, so all three can be read against price at once.
     try{
       var DL=darkPoolLevels(sym), DC=null; try{ DC=dpLifecycle(sym); }catch(eL){}
       if(DL && typeof EB.scaleUsed==='number' && EB.scaleUsed>0){
@@ -21046,6 +21284,25 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       h+='<i class="g3ldrule'+(R.cls?(' g3ldlv'+R.cls):'')+'" style="top:'+t2.toFixed(1)+'px"></i>';
     }
 
+    // ---- THE THREE KINGS, as pills in the price column ------------------------------------------
+    // ⚠ Kings that land within a few pixels of each other are NUDGED apart rather than stacked: two
+    // crowns on one line is the "dual kings" confusion the operator caught in the profile, and the
+    // whole point of drawing three is being able to tell them apart.
+    try{
+      var KG=ladderKings(EB, sym), used=[];
+      KG.sort(function(a,b){ return a.at-b.at; });
+      KG.forEach(function(K){
+        if(!inFrame(K.at)){ OFF.push({n:K.book+' King', at:K.at}); return; }
+        var t=Y(K.at), guard=0;
+        while(guard++<8 && used.some(function(u){ return Math.abs(u-t)<13; })) t+=13;
+        used.push(t);
+        var prox=(K.at>now)?'above price':'below price';
+        h+='<span class="g3ldking g3ldking'+K.book+(K.kind==='proportional'?' approx':'')+'" style="top:'+t.toFixed(1)+'px"'+
+           g3tip(K.tip+' It sits '+Math.abs(Math.round(K.at-now))+' points '+prox+'.')+'>'+
+           '\u265b<b>'+(K.kind==='proportional'?'~':'')+g3esc(frameNum(K.at))+'</b><i>'+g3esc(K.book)+'</i></span>';
+      });
+    }catch(eKG){}
+
     // ---- the rolls -----------------------------------------------------------------------------
     h+=ladderRolls(ROLLS, Y, dsc, lo, hi, H);
 
@@ -21057,7 +21314,7 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
          g3tip('Price now — LIVE.'+(EB.stretched?' RED: price is beyond the expected move — STRETCHED.':''))+'>'+
          g3esc(frameNum(now))+'</span>';
     }
-    h+='</div>';
+    h+='</div></div>';
     if(OFF.length){
       OFF.sort(function(a,b){ return Math.abs(a.at-now)-Math.abs(b.at-now); });
       h+='<div class="g3ldoff"'+g3tip('Outside the drawn frame and therefore NOT plotted — a clamped position would be a false one. Named here with distance instead.')+'>▾ off frame — '+

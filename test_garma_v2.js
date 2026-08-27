@@ -49,37 +49,22 @@ ok(/through '\+\(frPk\.vacuum\?'a LIQUIDITY VACUUM':'an AIR POCKET'\)/.test(src)
 ok(/a pathway, not a target/.test(src), 'a12 ...and says so in the sentence itself');
 
 // ================= GM-MAP-007 — a used level is a weaker level =================
-let TAPN=0, VEL=null, PEAK=null;
-global.nodeTapCount=()=>TAPN;
-global.velAt=()=>VEL;
-global.peakOf=()=>PEAK;
-global.TAP_PROB=v('TAP_PROB');
-global.LVL_WEAK_P15=v('LVL_WEAK_P15'); global.LVL_TURN_P15=v('LVL_TURN_P15'); global.LVL_DOOR_PEAK=v('LVL_DOOR_PEAK');
-eval(ex('levelStateOf'));
-const steady={v:{cur:100,d15:0,d60:0,p5:0,p15:0,p60:0},stale:false};
-VEL=steady; TAPN=0;
-ok(levelStateOf(7650,null).st==='HOLDING', 't1 an untouched steady level still HOLDS');
-TAPN=1;
-let L1=levelStateOf(7650,null);
-// ⚠ TAP_PROB IS INDEXED BY TAPS ALREADY TAKEN, NOT BY WHICH TAP THIS IS. TAP_PROB[0]=80 is the
-// UNTOUCHED level's first-test odds, so a level that has been tapped ONCE carries TAP_PROB[1]=66 as
-// the odds of its NEXT test. Getting this backwards would overstate every used level by one grade.
-ok(L1.st==='HOLDING' && /1 tap today/.test(L1.why) && /66%/.test(L1.why),
-   't2 one tap taken -> the NEXT test is the ~66% one, not the ~80% one', L1);
-TAPN=2;
-ok(/33%/.test(levelStateOf(7650,null).why), 't3 two taps taken -> the next test is the ~33% graveyard read');
-TAPN=3;
-let L3=levelStateOf(7650,null);
-ok(L3.st==='USED' && /33%/.test(L3.why), 't4 the THIRD tap is a regime change — USED, ~33% (graveyard)', L3);
-ok(L3.st.length===4, 't5 USED fits the rail\'s 4-letter state slot without truncation');
-// ranking: a live state outranks the tap count — fresh size arriving is the newer fact
-VEL={v:{cur:100,d15:5,d60:0,p5:0,p15:0,p60:0},stale:false}; TAPN=5;
-ok(levelStateOf(7650,{src:{},dst:{7650:1}}).st==='FORMING',
-   't6 a level RECEIVING a roll reads FORMING even when tapped out — new size is the newer fact');
-VEL={v:{cur:10,d15:0,d60:0,p5:0,p15:0,p60:0},stale:false}; PEAK=100; TAPN=9;
-ok(levelStateOf(7650,{src:{7650:1},dst:{}}).st==='DOOR', 't7 ...and a drained source is still a DOOR');
-VEL=steady; PEAK=null;
-ok(/g3lvwUSED/.test(src) && /g3pile\.g3lvUSED/.test(src), 't8 USED has its own (deliberately dim) styling');
+// ⚠ THE MECHANICS MOVED. v14.49 split the level lifecycle into three orthogonal facts — STATE,
+// MARKER and a TESTS COUNTER — after the operator pointed out that a level can be fully massive and
+// worn out at the same time, which one word could never say. The old USED/FORMING/DOOR vocabulary
+// and its assertions now live in test_states.js. What this file still owns is the DOCTRINE: that a
+// tested level is a weaker level, and that Skylit's own probabilities are the ones we quote.
+ok(/TAP_PROB=\{ ?0:80, ?1:66, ?2:33 ?\}/.test(src.replace(/\s+/g,' ')) || /0:80/.test(src),
+   't1 the Academy tap probabilities are unchanged: ~80% untested, ~66% second, ~33% third');
+ok(/graveyard/.test(src), 't2 ...including their own word for the third-tap state');
+ok(/g3ldtap/.test(src) && /An untested level is the strong one and every test spends it/.test(src),
+   't3 the tap count reaches the face as a counter, with the doctrine in its hover');
+ok(/FRESH\/TESTED\/DELIVERED is the TAP axis and is exactly our counter/.test(src),
+   't4 the counter is explicitly mapped onto Skylit\'s FRESH -> TESTED -> DELIVERED lifecycle');
+ok(/WEAKENING with 0 taps IS their DECAYING/.test(src),
+   't5 ...and Skylit\'s DECAYING (weakening with NO interaction) survives the split');
+ok(/target FRESH positioning, not used levels/.test(src),
+   't6 the Academy core rule is still recorded where the taps are counted');
 
 // ================= GM-EVENT-001 / GM-REG-002 — downgrade, never suspend =================
 ok(/normal rules NOT suspended/.test(src), 'e1 the event clause states the cap explicitly');

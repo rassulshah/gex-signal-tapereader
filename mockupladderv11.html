@@ -1,0 +1,271 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>The ladder v10 — complete</title>
+<style>
+ body{background:#0d1117;color:#e6edf3;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+      font-variant-numeric:tabular-nums;margin:0;padding:18px}
+ .panel{width:604px;background:#11161f;border:1px solid #2a3340;border-radius:6px;padding:10px 12px}
+ .cap{font-size:11px;font-weight:800;letter-spacing:.07em;color:#8b98a9;margin:0 0 8px;text-transform:uppercase}
+ .note{font-size:11px;color:#8b98a9;line-height:1.7;width:604px;margin-top:12px}
+ .note b{color:#e6edf3}
+ .read{font-size:9.5px;font-weight:600;color:#c9d4e2;background:rgba(124,199,255,.05);
+       border:1px solid rgba(124,199,255,.18);border-radius:4px;padding:6px 8px;line-height:1.55;margin-bottom:6px;cursor:help}
+ .mig{font-size:9.5px;font-weight:700;line-height:1.55;padding:6px 8px;border-radius:4px;margin-bottom:8px;
+      background:rgba(46,194,126,.07);border:1px solid rgba(46,194,126,.32);color:#c9d4e2;cursor:help}
+ .mig b{color:#2ec27e;font-weight:900;letter-spacing:.04em}
+ .mig i{font-style:normal;color:#7cc7ff;font-weight:800}
+ .hdr{position:relative;height:15px}
+ .hdr span{position:absolute;font-size:7.5px;font-weight:900;letter-spacing:.1em;color:#4b5563;
+           text-transform:uppercase;cursor:help}
+ .lad{position:relative}
+ [title]{cursor:help}
+ .lv{position:absolute;left:0;width:78px;text-align:right;font-size:8.4px;font-weight:800;
+     color:#8b98a9;white-space:nowrap;transform:translateY(-50%)}
+ .lv.confl{color:#7cc7ff}.lv.dp{color:#5fd3bc}
+ .px{position:absolute;left:96px;width:62px;text-align:right;font-size:8.4px;font-weight:800;
+     color:#c9d1da;transform:translateY(-50%);padding-right:2px;box-sizing:border-box}
+ .px.dim{color:#77828f;font-weight:700}
+ /* KING CELLS — the row's own price cell is highlighted, rather than a pill floating over it */
+ .px.king{border-radius:3px;padding:1px 3px 1px 2px;display:flex;align-items:center;gap:3px;
+          justify-content:flex-end;line-height:11px}
+ .px.king em{font-style:normal;font-size:9px;margin-right:auto}
+ .px.king i{font-style:normal;font-size:5.6px;font-weight:900;letter-spacing:.05em;opacity:.9}
+ .px.kSPXW{color:#e3c341;background:rgba(227,195,65,.16);box-shadow:inset 0 0 0 1px rgba(227,195,65,.55)}
+ .px.kSPY {color:#cdb4fa;background:rgba(205,180,250,.16);box-shadow:inset 0 0 0 1px rgba(205,180,250,.55)}
+ .px.kQQQ {color:#5fd3bc;background:rgba(95,211,188,.13);box-shadow:inset 0 0 0 1px rgba(95,211,188,.45);
+           border:1px dashed rgba(95,211,188,.7);box-shadow:none}
+ .rule{position:absolute;left:82px;width:10px;height:1px;opacity:.3;transform:translateY(-50%)}
+ .tick{position:absolute;left:162px;height:12px;border-radius:2px;transform:translateY(-50%);display:flex;
+       align-items:center;justify-content:flex-end;padding-right:3px;box-sizing:border-box;font-size:8px;font-weight:900}
+ .tick.acc{background:#a371f7;color:#1b1030}.tick.brk{background:#e3c341;color:#2a2408}
+ .tick.king{height:15px}
+ .tout{position:absolute;font-size:8px;font-weight:900;transform:translateY(-50%);white-space:nowrap}
+ .tout.acc{color:#a371f7}.tout.brk{color:#e3c341}
+ .npk{position:absolute;left:162px;height:16px;transform:translateY(-50%);border:1px solid #4a5462;
+      border-left:none;border-radius:0 2px 2px 0}
+ /* %King is LEFT-justified inside its own bar; the type is right-justified at the tip. The number
+    belongs to the bar, not to a column parked next to price. */
+ .tick{justify-content:space-between;padding-left:4px}
+ .tick b{font-weight:900;font-size:8px}
+ .nkout{position:absolute;font-size:8px;font-weight:800;transform:translateY(-50%);white-space:nowrap;text-align:left}
+ .nkout.acc{color:#a371f7}.nkout.brk{color:#e3c341}
+ .chute{position:absolute;left:328px;width:44px;top:0;bottom:0;background:rgba(255,255,255,.035);
+        border-left:1px solid #333e4d;border-right:1px solid #333e4d}
+ .range{position:absolute;left:329px;width:42px;background:rgba(124,199,255,.10);
+        border-top:1px solid rgba(124,199,255,.3);border-bottom:1px solid rgba(124,199,255,.3)}
+ .emline{position:absolute;left:322px;width:56px;height:1px;background:#f2b45a;opacity:.75}
+ .emlab{position:absolute;right:auto;left:0;width:78px;text-align:right;font-size:7.6px;font-weight:900;color:#f2b45a;
+        background:rgba(242,180,90,.10);border:1px solid rgba(242,180,90,.55);border-radius:7px;
+        padding:0 4px;line-height:12px;transform:translateY(-50%);white-space:nowrap;box-sizing:border-box}
+ .opn{position:absolute;left:329px;width:42px;height:1px;background:#8b98a9;opacity:.6}
+ .opnlab{position:absolute;left:378px;font-size:7.4px;font-weight:800;color:#8b98a9;transform:translateY(-50%)}
+ .now{position:absolute;left:330px;width:40px;height:16px;background:#fff;color:#0d1117;border-radius:8px;
+      font-size:9px;font-weight:900;display:flex;align-items:center;justify-content:center;
+      transform:translateY(-50%);z-index:9}
+ .now.str{background:#e0645f;color:#fff}
+ .nowarm{position:absolute;left:82px;width:510px;height:1px;background:rgba(255,255,255,.12);transform:translateY(-50%)}
+ /* THE DELTA PROFILE — signed 15m rate of change from a zero line: building right, draining left */
+ .dzero{position:absolute;left:444px;top:0;bottom:0;width:1px;background:#39424e}
+ .dbar{position:absolute;height:9px;transform:translateY(-50%);border-radius:1px}
+ .dbar.up{background:rgba(46,194,126,.85)}.dbar.dn{background:rgba(224,100,95,.85)}
+ .dclamp{position:absolute;font-size:7px;font-weight:900;transform:translateY(-50%)}
+ .st{position:absolute;left:496px;width:38px;font-size:8.4px;font-weight:900;transform:translateY(-50%);white-space:nowrap}
+ .st.f{color:#7cc7ff}.st.w{color:#f2b45a}.st.u{color:#6c7889}.st.t{color:#cdb4fa}.st.d{color:#e0645f}
+ .r1{position:absolute;left:538px;font-size:8.4px;font-weight:800;transform:translateY(-50%);white-space:nowrap}
+ .h60{color:#cdb4fa;font-weight:900}
+ .up{color:#2ec27e}.dn{color:#e0645f}.fl{color:#5b6675}
+ .setup{position:absolute;border:1px solid;border-radius:3px}
+ /* the label rides the bracket's TOP-LEFT corner, outside the bar area, so it can never sit over a
+    node's own type text (which is what it did when centred). */
+ /* ⚠ THE SETUP LABEL HAS NO HOME BETWEEN THE ROWS. Centred on the bracket it crossed a node's type
+    text; on the corner it clipped the bar beneath; above the line it landed on the row above. Rows are
+    ~17px apart and the word is 60px long — there is no free band. So the bracket keeps only its SPINE
+    over the nodes it is made of, and the NAME goes to the levels column, which has width and its own
+    collision handling. The spine says WHICH nodes; the name says what they are. */
+ .setup{border-left-width:2px}
+ .setupname{position:absolute;left:0;width:78px;text-align:right;font-size:8px;font-weight:900;
+            transform:translateY(-50%);white-space:nowrap}
+ .tgt{position:absolute;left:356px;font-size:8.5px;font-weight:900;color:#4fd1e0;transform:translateY(-50%);
+      background:#11161f;padding:0 2px;border-radius:2px;z-index:7}
+ .edge{position:absolute;left:96px;width:62px;text-align:right;font-size:7.4px;font-weight:800;color:#4b5563;transform:translateY(-50%)}
+ .off{font-size:8.4px;color:#5b6675;margin-top:5px;padding-left:8px}
+ .status{font-size:8.4px;color:#5b6675;margin-top:3px;padding-left:8px}
+ .status b{color:#f2b45a}
+ svg.rolls{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+ .rlab{position:absolute;font-size:7.6px;font-weight:900;transform:translateY(-50%);white-space:nowrap;pointer-events:auto}
+</style></head><body>
+
+<div class="cap">THE LADDER v10 — complete · every element hovers</div>
+<div class="panel">
+  <div class="read" title="The section composed into one mechanism: the day type, the King, support and resistance, and where the flow points. It never says likely, will or should — gamma tells you HOW price moves, never which way.">TREND UP day · Trinity 2-of-3 (QQQ dissents). KING 7652 (accelerator) holds, 40 below price.
+   Support 7687 (32% brake); resistance 7707 (30% accelerator).</div>
+  <div class="mig" title="MIGRATION — where gamma is moving, not where price will go. Speaks only when three independent checks agree: the net roll vector (2 rolls minimum), the rolling floor/ceiling structure, and where levels are forming vs draining. One dissent gives SPLIT. UNPROVEN and scored nightly: single arrows tested 4/12 as a 30-minute direction signal, which is why two plus a structural second opinion are required.">▲ <b>GAMMA MIGRATING UP</b> — <i>2 of 3 rolls carry mass higher, $5M net ↑</i>;
+   <i>floor rolling up 3 sessions (confirmed)</i>; support FORMING at 7687 beneath price while 7667 drains.</div>
+  <div class="hdr">
+    <span style="left:34px" title="Session structure and the other books' levels.">levels</span>
+    <span style="left:100px" title="ES price. A KING's cell is highlighted in its book's colour with a crown and the book it belongs to — the row itself is the king, rather than a pill floating over it.">price · kings</span>
+    <span style="left:180px" title="Bar length = %King; the type rides the bar; the faint outline is the day peak.">nodes ▸</span>
+    <span style="left:238px" title="A roll: gamma leaving one strike and arriving at another. Now beside the nodes it describes.">rolls</span>
+    <span style="left:334px" title="Price, and the day's budget.">now</span>
+    <span style="left:404px" title="THE DELTA PROFILE — Skylit's own 15-minute rate of change, signed: building to the right in green, draining to the left in red, from a zero line. Fixed scale, so a quiet day looks quiet.">◂ delta 15m ▸</span>
+    <span style="left:496px" title="What this level is doing.">state</span>
+    <span style="left:538px" title="5m and 15m; the 60m appears only when it disagrees with the 15m.">5m · 15m</span>
+  </div>
+  <div class="lad" id="lad"></div>
+  <div class="off" title="Levels outside the drawn frame are not plotted, because a clamped position would be a false one. They are named here with their distance instead.">▼ below the frame — DP 7579 fresh (−113) · DP 7541 fresh (−151) · DP 7471 fresh (−221)</div>
+  <div class="status" title="What the panel is running on right now. Any degraded input is named here rather than silently changing a number.">SPXW · 3 exps · 293 strikes · 1m old · ES/SPY 10.043 live · <b>⚠ after hours — EM expired, velocities 0</b></div>
+</div>
+
+<div class="note">
+  <b>Amounts moved to the origin.</b> Two rolls into one destination used to stack their labels; at the source they
+  cannot, because a strike can only shed once per window.<br><br>
+  <b>Put back — the day's budget.</b> The horizontal rail carried the expected-move band, the day's range, the open
+  marker and the stretched state, and my earlier drafts silently dropped all of it. Vertically it is better than it
+  ever was: the blue band in the chute is where the day has been, the amber lines are the expected move, the grey tick
+  is the open, and the pill turns red when price is beyond the band. Today price sits <b>just above EH 7691 — stretched</b>.<br><br>
+  <b>Put back — the destination.</b> The cyan ◂T marks the dominant magnet by measured pull.<br><br>
+  <b>Every element hovers</b>, headers included, each one saying what it is and why it is trustworthy — two sentences, not an essay.
+</div>
+
+<script>
+const LO=7620,HI=7786,H=570;
+const PXC=96,PXW=62,NODE_L=162,NODE_MAX=70,ROLL_L=236,KPCT=286,
+      CH_L=328,CH_W=44,DZ=444,DMAX=44,ST_L=496,ROC_L=538,NOWPX=7692;
+const DELTA_FULL=40;
+const PEAK_MIN_GIVEBACK=12;   // points of %King given back before the day-peak outline is worth drawing   // fixed scale: 40% of a strike's own mass in 15m fills the bar
+const EL=7666,EH=7691,LOD=7671,HOD=7704,OPEN=7678;
+const y=p=>(H-((p-LO)/(HI-LO))*H);
+const lad=document.getElementById('lad'); lad.style.height=H+'px';
+const add=h=>lad.insertAdjacentHTML('beforeend',h);
+add('<div class="chute"></div><div class="dzero"></div>');
+add('<div class="range" title="Where the day has been." style="top:'+y(HOD)+'px;height:'+(y(LOD)-y(HOD))+'px"></div>');
+// the EM pills are drawn LAST, so they can be nudged clear of a level that shares their row.
+// ⚠ ONLY THE LABEL MOVES — the line stays at the true price. A nudged label is a readability fix;
+// a nudged LINE would be a lie about where the boundary is.
+window.__EM=[[EH,'EH '+EH],[EL,'EL '+EL]];
+window.__EM.forEach(e=>{ add('<div class="emline" style="top:'+y(e[0])+'px"></div>'); });
+const N=[
+ {es:7642,p:-25,peak:34,typ:'ACC',r:[-2,-4,-9]},{es:7647,p:-86,peak:92,r:[1,2,5]},
+ {es:7652,p:-100,peak:100,typ:'KING',king:'SPXW',r:[0,0,1]},
+ {es:7667,p:-56,peak:71,typ:'GK',st:'WEAK',r:[-6,-11,-18]},
+ {es:7677,p:-29,r:[0,1,0]},{es:7682,p:-35,typ:'ACC',r:[-1,-3,-6]},
+ {es:7687,p:32,st:'FORM',r:[8,14,9]},{es:7692,p:52,peak:58,typ:'BRK',r:[3,6,12]},
+ {es:7707,p:-30,peak:44,typ:'ACC',st:'TURN',r:[-5,-8,6],tgt:1},
+ {es:7747,p:43,peak:58,st:'DOOR',r:[-9,-16,-11]},
+ {es:7752,p:-80,typ:'RRUG',r:[-1,-2,-5]},{es:7757,p:70,st:'FORM',r:[2,5,7]},
+ {es:7762,p:62,peak:66,typ:'BRK',r:[4,9,4]},{es:7767,p:31,r:[0,1,-1]},
+ {es:7772,p:25,typ:'BRK',st:'USED',r:[0,0,2]}];
+// the other two crowns land on their own rows
+const KINGS=[{es:7652,book:'SPXW'},{es:7632,book:'SPY'},{es:7716,book:'QQQ',approx:1}];
+const num=v=>'<span class="'+(v>0?'up':(v<0?'dn':'fl'))+'">'+(v>0?'+':'')+v+'%</span>';
+const stc=s=>s==='WEAK'?'w':(s==='USED'?'u':(s==='TURN'?'t':(s==='DOOR'?'d':'f')));
+const STT={WEAK:'Draining faster than the book — it may not hold when price arrives.',
+ FORM:'A roll destination still building. Measured: destinations held 74%.',
+ TURN:'5m and 15m have flipped against the hour.',
+ DOOR:'A drained roll source under half its own day peak. 19/19 measured pass-throughs.',
+ USED:'Tapped 3+ times today — ~33% hold, the graveyard.'};
+
+function kingCell(es, book, approx){
+  return '<div class="px king k'+book+'" title="The '+book+' King'+
+    (approx?', shown as a PROPORTIONAL BEARING on this ES scale — QQQ tracks the Nasdaq-100 and ES the S&P 500, so this assumes they move together, which is false on exactly the days it matters. A bearing, never a level.':' — a real basis conversion.')+
+    '" style="top:'+y(es)+'px"><em>♛</em>'+(approx?'~':'')+es+'<i>'+book+'</i></div>';
+}
+const kingAt={}; KINGS.forEach(k=>kingAt[k.es]=k);
+
+N.forEach(n=>{
+  const t=y(n.es),neg=n.p<0,k=neg?'acc':'brk';
+  const len=Math.max(8,Math.abs(n.p)/100*NODE_MAX), pk=Math.max(len,(n.peak||Math.abs(n.p))/100*NODE_MAX);
+  const tip=n.es+' — '+Math.abs(n.p)+'% of King, '+(neg?'negative gamma (accelerator)':'positive gamma (brake)')+
+    (n.peak&&n.peak>Math.abs(n.p)?('. Day peak '+n.peak+'%, so it has given back '+(n.peak-Math.abs(n.p))+' points.'):'');
+  if(kingAt[n.es]) add(kingCell(n.es, kingAt[n.es].book, kingAt[n.es].approx));
+  else add('<div class="px" title="'+tip+'" style="top:'+t+'px">'+n.es+'</div>');
+  // ⚠ THE DAY PEAK ONLY DRAWS WHEN IT MEANS SOMETHING. Outlining every node that is a point off its
+  // high put a grey box on nearly every row and turned a real signal into wallpaper. PEAK_MIN_GIVEBACK
+  // points of %King is the floor — below that the level has not actually given anything back worth
+  // acting on, and the delta column already carries the live rate.
+  const give=(n.peak||Math.abs(n.p))-Math.abs(n.p);
+  if(give>=PEAK_MIN_GIVEBACK) add('<div class="npk" title="Day peak '+n.peak+'% — this level has given back '+give+' points of its own mass since its high today. The outline is what it HAD." style="top:'+t+'px;width:'+pk+'px"></div>');
+  const pctTxt=(neg?'−':'+')+Math.abs(n.p)+'%';
+  // the bar carries its own number on the left and its type on the right, when there is room for each
+  const roomPct = len>=34, roomTyp = n.typ && len>=(34+n.typ.length*6.2+6);
+  add('<div class="tick '+k+(n.typ==='KING'?' king':'')+'" title="'+tip+'" style="top:'+t+'px;width:'+len+'px">'+
+      (roomPct?'<b>'+pctTxt+'</b>':'')+(roomTyp?n.typ:'')+'</div>');
+  if(!roomPct) add('<div class="nkout '+k+'" title="'+tip+'" style="top:'+t+'px;left:'+(NODE_L+len+4)+'px">'+pctTxt+'</div>');
+  if(n.typ&&!roomTyp) add('<div class="tout '+k+'" title="'+tip+'" style="top:'+t+'px;left:'+(NODE_L+len+(roomPct?4:36))+'px">'+n.typ+'</div>');
+  if(n.tgt) add('<div class="tgt" title="THE DESTINATION — dominant magnet by measured pull." style="top:'+t+'px">◂T</div>');
+  // THE DELTA PROFILE — signed 15m, fixed scale
+  const d15=n.r[1], mag=Math.min(Math.abs(d15),DELTA_FULL)/DELTA_FULL*DMAX;
+  if(Math.abs(d15)>0.4){
+    const up=d15>0;
+    add('<div class="dbar '+(up?'up':'dn')+'" title="15-minute rate of change: '+(d15>0?'+':'')+d15+'% of this strike’s own mass. Green builds to the right, red drains to the left; the scale is fixed at ±'+DELTA_FULL+'% so a quiet day looks quiet." style="top:'+t+'px;left:'+(up?DZ:(DZ-mag))+'px;width:'+Math.max(2,mag)+'px"></div>');
+    if(Math.abs(d15)>=DELTA_FULL) add('<div class="dclamp" style="top:'+t+'px;left:'+(up?(DZ+mag+2):(DZ-mag-14))+'px;color:'+(up?'#2ec27e':'#e0645f')+'">'+(up?'▸':'◂')+'</div>');
+  }
+  if(n.st) add('<div class="st '+stc(n.st)+'" title="'+STT[n.st]+'" style="top:'+t+'px">'+n.st+'</div>');
+  const arg=(n.r[1]>0)!==(n.r[2]>0)&&n.r[1]!==0&&n.r[2]!==0;
+  add('<div class="r1" title="Skylit’s own rate of change: 5m '+n.r[0]+'%, 15m '+n.r[1]+'%, 60m '+n.r[2]+'%.'+(arg?' The hour DISAGREES with the 15m — the TURNING condition.':'')+'" style="top:'+t+'px">'+
+      num(n.r[0])+' '+num(n.r[1])+(arg?(' <span class="h60">'+(n.r[2]>0?'▲':'▼')+Math.abs(n.r[2])+'%</span>'):'')+'</div>');
+});
+// kings that are not themselves nodes still get a highlighted row
+KINGS.forEach(k=>{ if(!N.some(n=>n.es===k.es)) add(kingCell(k.es,k.book,k.approx)); });
+
+// ---- THE LEVELS COLUMN (restored) — snapped to a node's row when within 2 points -------------
+const LEV=[{p:7662,n:'PDL'},{p:7678,n:'IBL · PW · FLIP · T'},{p:7692,n:'PDC · CW0',c:'confl'},
+           {p:7700,n:'PDH · IBH'},{p:7742,n:'CW'},{p:7579,n:'DP fresh',c:'dp'}];
+const byRow={};
+LEV.forEach(L=>{
+  if(L.p<LO||L.p>HI) return;
+  let host=null,hd=2;
+  N.forEach(n=>{ const d=Math.abs(n.es-L.p); if(d<=hd){ hd=d; host=n.es; } });
+  const at=host!=null?host:L.p, key=at.toFixed(2);
+  if(!byRow[key]) byRow[key]={at:at,host:host!=null,names:[],c:''};
+  byRow[key].names.push(L.n); if(L.c&&!byRow[key].c) byRow[key].c=L.c;
+});
+Object.keys(byRow).forEach(k=>{
+  const R=byRow[k], t=y(R.at);
+  add('<div class="lv '+(R.c||(R.host?'confl':''))+'" title="'+R.names.join(' · ')+
+      (R.host?' — shown on this node’s row: structure and gamma stacked.':'')+'" style="top:'+t+'px">'+R.names.join(' · ')+'</div>');
+  add('<div class="rule" style="top:'+t+'px;background:'+(R.c==='dp'?'#5fd3bc':(R.host?'#7cc7ff':'#6b7787'))+'"></div>');
+  if(!R.host) add('<div class="px dim" style="top:'+t+'px">'+R.at+'</div>');
+});
+add('<div class="opn" style="top:'+y(OPEN)+'px"></div>');
+add('<div class="opnlab" title="The session open — the anchor the band is built from.">open</div>'.replace('title=','style="top:'+y(OPEN)+'px" title='));
+
+
+// ---- ROLLS, now beside the nodes they describe ----
+const ROLLS=[{from:7667,to:7692,amt:'$4M',live:1},{from:7747,to:7757,amt:'$2M',live:1},{from:7772,to:7762,amt:'$1M',live:0}];
+let svg='<svg class="rolls" width="604" height="'+H+'"><defs>'+
+ '<marker id="ahU" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto"><path d="M0,0.5 L6.5,3.5 L0,6.5 z" fill="#2ec27e"/></marker>'+
+ '<marker id="ahD" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto"><path d="M0,0.5 L6.5,3.5 L0,6.5 z" fill="#e0645f"/></marker></defs>';
+ROLLS.forEach((r,i)=>{
+  const yA=y(r.from),yB=y(r.to),up=(r.to>r.from),col=up?'#2ec27e':'#e0645f',mk=up?'ahU':'ahD';
+  const x0=ROLL_L+4,xOut=x0+14+i*10,xEnd=ROLL_L-8,rad=4,dir=(yB<yA)?-1:1,LAND=11;
+  const d='M '+x0+' '+yA+' H '+(xOut-rad)+' Q '+xOut+' '+yA+' '+xOut+' '+(yA+dir*rad)+
+          ' V '+(yB-dir*rad)+' Q '+xOut+' '+yB+' '+(xOut-rad)+' '+yB+' H '+(xEnd+LAND);
+  svg+='<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="butt" opacity="'+(r.live?.98:.5)+'"'+
+       (r.live?' stroke-dasharray="5 4"><animate attributeName="stroke-dashoffset" from="18" to="0" dur="1.5s" repeatCount="indefinite"/></path>':'/>');
+  svg+='<path d="M '+(xEnd+LAND)+' '+yB+' H '+xEnd+'" fill="none" stroke="'+col+'" stroke-width="1.5" stroke-linecap="butt" marker-end="url(#'+mk+')" opacity="'+(r.live?.98:.5)+'"/>';
+  svg+='<circle cx="'+x0+'" cy="'+yA+'" r="2.7" fill="'+col+'" opacity="'+(r.live?.98:.55)+'"/>'+
+       '<circle cx="'+x0+'" cy="'+yA+'" r="4.8" fill="none" stroke="'+col+'" stroke-width="1" opacity="'+(r.live?.4:.2)+'"/>';
+});
+svg+='</svg>'; add(svg);
+ROLLS.forEach((r,i)=>{
+  const up=(r.to>r.from),col=up?'#2ec27e':'#e0645f';
+  add('<div class="rlab" title="'+r.amt+' left '+r.from+' and arrived at '+r.to+'. Inferred from paired changes, never an observed transfer." style="color:'+col+';opacity:'+(r.live?1:.6)+';left:'+(ROLL_L+6)+'px;top:'+(y(r.from)+9)+'px">'+r.amt+'</div>');
+});
+
+(function(){
+  const top=(y(7757)+y(7762))/2, bot=(y(7752)+y(7747))/2, tip='REVERSE RUG — negative gamma above a positive floor with nothing capping it, the squeeze mirror of a rug. CONFIGURED ONLY: per doctrine it activates on a confirmed bounce, not on the shape.';
+  add('<div class="setup" title="'+tip+'" style="top:'+top+'px;height:'+(bot-top)+'px;left:'+(NODE_L-5)+'px;width:'+(NODE_MAX+8)+'px;border-color:#2ec27e"></div>');
+  add('<div class="setupname" title="'+tip+'" style="top:'+((top+bot)/2)+'px;color:#2ec27e">RRUG ⌐ watching</div>');
+})();
+// EM labels last, nudged off any level row they would land on
+window.__EM.forEach(e=>{
+  let t=y(e[0]);
+  const taken=[...document.querySelectorAll('#lad .lv')].map(el=>parseFloat(el.style.top));
+  let guard=0;
+  while(guard++<4 && taken.some(v=>Math.abs(v-t)<11)) t+=12;
+  add('<div class="emlab" title="The expected move — about 0.80 sigma, so it contains roughly 58% of closes, not 68%. A priced level, never a floor or ceiling. The amber line is at the true price; this label may be nudged to clear a level sharing its row." style="top:'+t+'px">'+e[1]+'</div>');
+});
+add('<div class="nowarm" style="top:'+y(NOWPX)+'px"></div>');
+add('<div class="now str" title="Price now. RED: beyond the expected high — stretched." style="top:'+y(NOWPX)+'px">'+NOWPX+'</div>');
+</script>
+</body></html>

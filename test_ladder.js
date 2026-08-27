@@ -20,7 +20,7 @@ function v(n){const m=new RegExp('(?:var\\s+)?\\b'+n+'\\s*=\\s*([^;,\\n]+)').exe
 }
 
 // ---- geometry lives in one place ----
-const W=v('LAD_W'), LVL=v('LAD_LVL'), PXC=v('LAD_PXC'), NODE=v('LAD_NODE'), NMAX=v('LAD_NMAX'),
+const W=v('LAD_W'), LVL=v('LAD_LVL'), PXC=v('LAD_PXC'), PXW=v('LAD_PXW'), NODE=v('LAD_NODE'), NMAX=v('LAD_NMAX'),
       KPCT=v('LAD_KPCT'), CH=v('LAD_CH'), CHW=v('LAD_CHW'), PROF=v('LAD_PROF'), PMAX=v('LAD_PMAX'),
       ROLL=v('LAD_ROLL'), ST=v('LAD_ST'), ROC=v('LAD_ROC');
 ok([W,LVL,PXC,NODE,NMAX,KPCT,CH,CHW,PROF,PMAX,ROLL,ST,ROC].every(x=>typeof x==='number'),
@@ -38,7 +38,7 @@ ok([W,LVL,PXC,NODE,NMAX,KPCT,CH,CHW,PROF,PMAX,ROLL,ST,ROC].every(x=>typeof x==='
   ok(PROF-PMAX>=chuteR,'g4 the profile grows inward but never enters the chute from the right', {inner:PROF-PMAX,chuteR});
   ok(ROLL>=PROF,       'g5 the roll lane sits outside the profile');
   ok(ST>=ROLL && ROC>=ST,'g6 state then roc, in that order, outside the rolls');
-  ok(PXC+40<=NODE,     'g7 the price column ends before the node bars begin');
+  ok(PXC+PXW<=NODE,    'g7 the price column ends before the node bars begin', {end:PXC+PXW,NODE});
   ok(LVL+4<PXC,        'g8 levels sit left of the price column');
 }
 
@@ -93,6 +93,62 @@ ok(/classList\.toggle\('g3ladon'/.test(src), 'x3 ...and the class is actually ap
  ['price now','g3ldnow'],['expected move','g3ldem'],['day range','g3ldrange'],['open','g3ldopn'],
  ['profile','g3ldpf'],['rolls','g3ldrolls'],['state','g3ldst'],['roc','g3ldroc'],['destination','g3ldtgt']
 ].forEach(c=>ok(new RegExp(c[1]).test(src), 'c: '+c[0]+' has a home on the ladder'));
+
+
+// ---- (v14.47) THE TWO BUGS THE FIRST LIVE RENDER FOUND -------------------------------------
+// Both were invisible to the test suite and obvious the moment the panel drew itself.
+// 1. THE LADDER MUST FIT, OR SCROLL — never clip. At 646px inside a 486px body with overflow
+//    hidden, STATE and ROC were gone with nothing to say so. Silently dropping live data is the
+//    worst failure this panel has.
+ok(W<=584, 'w1 the ladder stays close to a default-width panel', W);
+ok(/g3ladwrap\{overflow-x:auto/.test(src), 'w2 ...and the container SCROLLS rather than clips');
+ok(/g3ladwrap"><div class="g3lad"/.test(src), 'w3 ...with the scroller actually wrapping the ladder');
+ok(/costing information|instead of costing information/.test(src), 'w4 the reasoning is recorded');
+// 2. UNITS. PEAK.m[k] is |velocity.cur|; P.usdK is THOUSANDS of dollars. Dividing one by the other
+//    gave ~1000x, clamped to 100, and drew a full-width day-peak outline on EVERY node.
+ok(!/Math\.abs\(pkv\)\/Math\.abs\(P\.usdK\)/.test(src),
+   'u1 the day peak is NOT divided by usdK — that was a 1000x unit error');
+ok(/pct\*Math\.abs\(pkv\)\/Math\.abs\(vvE\.cur\)/.test(src),
+   'u2 peak-as-%King scales today\'s %King by peak/now, both in |cur| space');
+ok(/UNITS\. PEAK\.m\[k\] stores \|velocity\.cur\|/.test(src), 'u3 the unit trap is documented at the site');
+// the Level Engine divides in the same space — the two must never diverge
+ok(/Math\.abs\(vv\.cur\)\/pk/.test(src), 'u4 ...the same space levelStateOf divides in');
+
+
+// ---- (v14.48) THE THREE KINGS ----------------------------------------------------------------
+// "I want to see where price is relative to the 3 kings" — SPXW's, SPY's and QQQ's, as pills.
+eval(ex('ladderKings'));
+ok(/g3ldkingSPXW/.test(src) && /g3ldkingSPY/.test(src) && /g3ldkingQQQ/.test(src),
+   'k1 all three books get a king pill with its own colour');
+ok(/\\u265b<b>/.test(src) || /♛<b>/.test(src), 'k2 the crown icon sits to the LEFT of the price');
+ok(/g3ldking i\{font-style:normal;font-size:5\.6px/.test(src),
+   'k3 the book tag is small — a qualifier on the price, not a rival to it');
+// ⚠⚠ THE CONVERSION HONESTY. SPXW→ES and SPY→ES are a real basis; QQQ→ES is NOT — different indices,
+// no basis between them, so the only honest mapping is proportional and it assumes a correlation of
+// one, which is false on exactly the days it matters. It must be marked as a bearing, not a level.
+ok(/kind:'basis'/.test(src) && /kind:'proportional'/.test(src),
+   'k4 the two KINDS of conversion are distinguished in the data, not just the prose');
+ok(/QQQ\s*→\s*ES\s*is NEITHER/.test(src), 'k5 the difference is documented where the conversion happens');
+ok(/A bearing, never a level/.test(src), 'k6 ...and stated in the operator-facing hover');
+ok(/kind==='proportional'\?'~':''/.test(src), 'k7 the QQQ price carries a tilde');
+ok(/g3ldking\.approx\{border-style:dashed\}/.test(src),
+   'k8 ...and a dashed pill, so the eye is told before the hover is read');
+ok(/now\*\(ewq\.king\/qs\)/.test(src), 'k9 the QQQ bearing is price x (king / QQQ spot) — proportional, as described');
+ok(/ew\.king\*EB\.scaleUsed/.test(src), 'k10 the SPY king uses the same live basis the SPY flag always used');
+ok(/Math\.abs\(u-t\)<13/.test(src),
+   'k11 kings landing on the same line are NUDGED apart — two crowns on one row was the dual-king confusion');
+// ⚠ scoped to the LADDER: the old railLevelsLine still carries a 'SPY K' level, and that is correct —
+// the previous surface is hidden, not deleted, for one release so the two can be compared live.
+ok(!/n:'SPY K'/.test(LH), 'k12 the SPY King left the LADDER\'s levels column — it is a king pill now');
+ok(/railLevelsLine/.test(src), 'k13 ...while the old surface stays intact and revertible');
+
+// ---- (v14.48) the expected move as pills, with the old rail's over/under behaviour intact ----
+ok(/g3ldempill/.test(src), 'e1 EH and EL are pills in the price column');
+ok(/\['EH',EB\.high,RB\.over\]/.test(src) && /\['EL',EB\.low,RB\.under\]/.test(src),
+   'e2 ...and they know whether price has run past them');
+ok(/g3ldrailend/.test(src) && /where the expected move ENDED, not where the drawing does/.test(src),
+   'e3 when price runs past, the RAIL END is marked separately — the band is never redefined as the frame');
+ok(/0\.80 sigma/.test(src) && /1\.25/.test(src), 'e4 the sigma caveat and its conversion survive');
 
 console.log('test_ladder: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
