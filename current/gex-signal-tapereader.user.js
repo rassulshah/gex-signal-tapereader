@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.51
+// @version    14.52
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -620,7 +620,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.51';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.52';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4225,7 +4225,41 @@ function irtExportNow(force){
     repoKvGet('irtDir', function(h){
       if(h && h.getFileHandle){
         var name=(cfgI.file||'FlexLevelsExport.csv');
-        var doWrite=function(){ h.getFileHandle(name,{create:true}).then(function(fh){ return fh.createWritable(); }).then(function(w){ return w.write(built.csv).then(function(){ return w.close(); }); }).then(function(){ IRT_LAST={t:Date.now(),rows:built.n,how:'file',err:null,ratio:built.ratio&&built.ratio.src}; }).catch(function(eW){ IRT_LAST={t:Date.now(),rows:0,how:null,err:''+eW}; }); };
+        // ⚠⚠ (v14.52, operator-reported) WRITE IN PLACE — DO NOT LET THE FILE BE REPLACED.
+        // `createWritable()` defaults to keepExistingData:false, and Chromium implements that as an
+        // ATOMIC REPLACE: it writes a swap file and RENAMES IT OVER the original on close(). The
+        // contents are always correct, but the file IDENTITY changes on every single export. IRT's
+        // FlexLevels extension opens FlexLevelsExport.csv once and polls it every minute — so after
+        // our first write it is polling a file that no longer receives updates, and the levels only
+        // appear when the operator hits refresh and forces it to re-open by path. Then the next
+        // export orphans its handle again. The symptom was "it only works after I refresh".
+        // keepExistingData:true opens the EXISTING file instead of a swap, so writing at position 0
+        // and truncating to the new length mutates that same file and its identity survives.
+        // ⚠ TRUNCATE IS NOT OPTIONAL. Without it, a shorter export leaves the tail of the previous,
+        // longer one behind — IRT would read valid rows followed by stale garbage rows.
+        // ⚠ BYTE LENGTH, NOT STRING LENGTH. csv.length counts characters; truncate() takes bytes.
+        var doWrite=function(){
+          var bytes; try{ bytes=new Blob([built.csv]).size; }catch(eB){ bytes=built.csv.length; }
+          h.getFileHandle(name,{create:true})
+            .then(function(fh){ return fh.createWritable({keepExistingData:true}); })
+            .then(function(w){
+              return w.write({type:'write', position:0, data:built.csv})
+                .then(function(){ return w.truncate(bytes); })
+                .then(function(){ return w.close(); });
+            })
+            .then(function(){ IRT_LAST={t:Date.now(),rows:built.n,how:'file',err:null,inPlace:true,ratio:built.ratio&&built.ratio.src}; })
+            .catch(function(eW){
+              // if a browser ever refuses the in-place path, fall back to the replacing write rather
+              // than exporting nothing — stale-after-refresh beats no levels at all, and IRT_LAST
+              // records which path ran so the operator can tell them apart.
+              try{
+                h.getFileHandle(name,{create:true}).then(function(fh){ return fh.createWritable(); })
+                  .then(function(w){ return w.write(built.csv).then(function(){ return w.close(); }); })
+                  .then(function(){ IRT_LAST={t:Date.now(),rows:built.n,how:'file',err:null,inPlace:false,note:'in-place write refused ('+eW+') — fell back to replace; IRT may need a refresh',ratio:built.ratio&&built.ratio.src}; })
+                  .catch(function(e2){ IRT_LAST={t:Date.now(),rows:0,how:null,err:''+e2}; });
+              }catch(e3){ IRT_LAST={t:Date.now(),rows:0,how:null,err:''+eW}; }
+            });
+        };
         if(h.queryPermission){ h.queryPermission({mode:'readwrite'}).then(function(st){ if(st==='granted') doWrite(); else h.requestPermission({mode:'readwrite'}).then(function(st2){ if(st2==='granted') doWrite(); else IRT_LAST={t:Date.now(),rows:0,how:null,err:'folder permission denied'}; }); }).catch(doWrite); }
         else doWrite();
       } else {

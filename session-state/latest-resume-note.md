@@ -145,6 +145,20 @@ vectors. `recorderLoad()` keeps 10 rolling days in localStorage; anything not ex
 
 ---
 
+## 6b · OPEN, AWAITING LIVE VERIFICATION (2026-08-27)
+
+**The IRT FlexLevels CSV write (v14.52).** The operator reported the local file only showed lines
+after a manual refresh. Diagnosed as `createWritable()` defaulting to an ATOMIC REPLACE in Chromium —
+a swap file renamed over the original, so the file IDENTITY changed on every export and IRT, which
+opens the file once and polls it, was left holding an orphan. Fixed by writing in place
+(`keepExistingData:true`, write at position 0, truncate to byte length).
+**⚠ THIS IS A HYPOTHESIS UNTIL HE WATCHES IT TOMORROW.** Ask him. If the lines still need a refresh,
+the fallback is a local HTTP server (`python -m http.server 8000` in that folder, then IRT's "Remote
+File" → `http://localhost:8000/FlexLevelsExport.csv`, ideally with `Cache-Control: no-store`).
+**GitHub raw is NOT an option** — CDN-cached about 5 minutes against a 1-minute poll, and it would
+need a push per export. `__gptsDebug.irt()` reports `IRT_LAST.inPlace` so you can see which write
+path actually ran.
+
 ## 7 · WHAT TO DO NEXT, IN ORDER
 
 1. **Verify the export fix and recover 2026-08-26.** Nothing below is trustworthy until the pipeline is.

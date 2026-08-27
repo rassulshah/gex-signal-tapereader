@@ -1,3 +1,34 @@
+## v14.52 — the FlexLevels CSV is written IN PLACE, not replaced
+
+Operator-reported: *"it has problems reading from a local file unless i refresh — only after i
+refresh will the lines be displayed."*
+
+**Cause, and it was ours.** `createWritable()` defaults to `keepExistingData:false`, which Chromium
+implements as an **ATOMIC REPLACE**: it writes a swap file and RENAMES IT OVER the original on
+close(). The CSV contents were always correct — but the **file identity changed on every export**.
+IRT's FlexLevels extension opens `FlexLevelsExport.csv` once and polls it every minute, so from our
+first write onward it was polling a file that no longer received updates. Hitting refresh forced it
+to re-open by path, the levels appeared, and the next export orphaned its handle again.
+
+`keepExistingData:true` opens the EXISTING file rather than a swap, so writing at position 0 and
+truncating to the new length mutates that same file and its identity survives the write.
+
+⚠ **TRUNCATE IS NOT OPTIONAL.** Without it a shorter export leaves the tail of the previous, longer
+one behind and IRT reads valid rows followed by stale ones. ⚠ **BYTES, NOT CHARACTERS** —
+`truncate()` takes bytes, so the length is measured with `Blob.size`.
+
+If a browser ever refuses the in-place path it falls back to the replacing write rather than
+exporting nothing: levels that need a refresh beat no levels at all. `IRT_LAST.inPlace` records which
+path ran, so the two can be told apart from `__gptsDebug.irt()`.
+
+**Unverified against IRT itself** — the diagnosis fits the symptom exactly, but it is a hypothesis
+until the operator watches the lines update tomorrow without touching refresh. The fallback to a
+local HTTP server (`http://localhost:8000/FlexLevelsExport.csv` via "Remote File") remains the
+option if this does not do it; GitHub raw is NOT suitable, being CDN-cached ~5 minutes against a
+1-minute poll.
+
+test_irt_export.js 37 → 44 asserts. Suite green, 6 baseline reds unchanged.
+
 ## v14.51 — the export that was losing whole sessions, and a real handoff
 
 **⚠⚠ THE PIPELINE WAS SILENTLY LOSING DAYS.** `buildDayExport` used `dateKey || TODAY` — the

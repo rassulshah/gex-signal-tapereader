@@ -136,5 +136,33 @@ ok(b7.csv.split('\r\n').every(l=>l==='' || l.split(',').length===28), '7f every 
 ok(/if\(typeof o\.irt\.on==='boolean'\) CFG\.irt\.on=o\.irt\.on;/.test(src), '7g loadCfg still merges irt.on back');
 ok(/CFG\.irt\.nqRatio=o\.irt\.nqRatio/.test(src), '7h ...and the NQ fields persist');
 
+
+// ---- (v14.52) THE CSV IS WRITTEN IN PLACE, NOT REPLACED --------------------------------------
+// Operator-reported: "it has problems reading from a local file unless i refresh — only after i
+// refresh will the lines be displayed." Cause: createWritable() defaults to keepExistingData:false,
+// which Chromium implements as an ATOMIC REPLACE — a swap file renamed over the original on close.
+// The contents were always right, but the file IDENTITY changed on every export, so IRT (which opens
+// the file once and polls it every minute) kept polling an orphaned file until a manual refresh made
+// it re-open by path. Writing in place keeps the identity and the poll just works.
+{
+  const EX = ex('irtExportNow');
+  ok(/createWritable\(\{keepExistingData:true\}\)/.test(EX),
+     'ip1 the writable keeps the existing file instead of creating a swap to rename over it');
+  ok(/type:'write', position:0/.test(EX),
+     'ip2 ...and writes from position 0 of that same file');
+  ok(/w\.truncate\(bytes\)/.test(EX),
+     'ip3 TRUNCATE IS NOT OPTIONAL — without it a shorter export leaves the previous tail behind');
+  ok(/new Blob\(\[built\.csv\]\)\.size/.test(EX),
+     'ip4 truncate takes BYTES, so the length is measured as bytes and not characters');
+  // the fallback must exist: no levels at all is worse than levels that need a refresh
+  ok(/in-place write refused/.test(EX) && /fell back to replace/.test(EX),
+     'ip5 a browser that refuses the in-place path falls back to the replacing write');
+  ok(/inPlace:true/.test(EX) && /inPlace:false/.test(EX),
+     'ip6 ...and IRT_LAST records WHICH path ran, so the two can be told apart');
+  // ordering: truncate must follow the write, or it would clip the data just written
+  ok(EX.indexOf("position:0") < EX.indexOf("w.truncate(bytes)"),
+     'ip7 the truncate happens AFTER the write, not before it');
+}
+
 console.log('test_irt_export: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
