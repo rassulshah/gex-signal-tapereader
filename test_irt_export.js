@@ -164,5 +164,45 @@ ok(/CFG\.irt\.nqRatio=o\.irt\.nqRatio/.test(src), '7h ...and the NQ fields persi
      'ip7 the truncate happens AFTER the write, not before it');
 }
 
+// ---- (v14.53) THE PERMISSION PATH — the export was silently dead for 54 minutes -----------------
+// Measured on the live panel 2026-08-27 10:27 CT: handle SET, queryPermission "prompt", IRT_LAST
+// frozen 54 minutes stale while irtTick fired every 180s. Chrome resets File System Access
+// permission to "prompt" on EVERY page load, and requestPermission() REQUIRES A USER GESTURE — so
+// from a timer it REJECTS, and the old code had no .catch on that inner promise. The rejection
+// vanished and IRT_LAST was never written, so the face showed an unrelated stale error.
+// v14.52's in-place write had therefore never executed even once.
+{
+  const fs=require('fs');
+  const src=fs.readFileSync('./v10.js','utf8');
+  const i=src.indexOf('function irtExportNow'); const j=src.indexOf('function irtTick');
+  const body=(i>=0&&j>i)?src.slice(i,j):'';
+  ok(body.length>0, 'irtExportNow is findable');
+  ok(/navigator\.userActivation/.test(body),
+     'it checks navigator.userActivation before ever calling requestPermission');
+  ok(/needsGesture\s*:\s*true/.test(body),
+     'it flags needsGesture so the FACE can say a click is required');
+  // ⚠ the specific regression: an inner promise with no .catch
+  const reqIdx=body.indexOf('requestPermission');
+  const after=reqIdx>=0?body.slice(reqIdx):'';
+  ok(reqIdx>=0 && /\.catch\(/.test(after),
+     'the requestPermission promise has a .catch — an unhandled rejection is what froze IRT_LAST');
+  ok(/permission request refused/.test(body),
+     'a refused permission request reports itself instead of disappearing');
+  // and it must NOT blindly retry requestPermission from a timer
+  ok(/if\(!active\)/.test(body.replace(/\s/g,'')) || /if\s*\(\s*!active\s*\)/.test(body),
+     'with no user activation it reports rather than attempting a call that cannot succeed');
+}
+// the face must surface it — the config drawer is not enough, nobody opens it while trading
+{
+  const fs=require('fs');
+  const src=fs.readFileSync('./v10.js','utf8');
+  const i=src.indexOf('function feedStatusHtml');
+  const body=i>=0?src.slice(i,i+6000):'';
+  ok(/IRT_LAST\s*&&\s*IRT_LAST\.needsGesture/.test(body),
+     'feedStatusHtml reads the needsGesture flag');
+  ok(/IRT needs a click/.test(body),
+     'and prints a footer warning naming the fix');
+}
+
 console.log('test_irt_export: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

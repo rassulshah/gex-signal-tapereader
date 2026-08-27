@@ -1,0 +1,102 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>HOD/LOD section</title>
+<style>
+ body{background:#0d1117;color:#e6edf3;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+      font-variant-numeric:tabular-nums;margin:0;padding:20px}
+ .panel{width:620px;background:#11161f;border:1px solid #2a3340;border-radius:6px;padding:10px 12px}
+ .cap{font-size:11px;font-weight:800;letter-spacing:.07em;color:#8b98a9;margin:0 0 8px;text-transform:uppercase}
+ .note{font-size:11px;color:#8b98a9;line-height:1.7;width:620px;margin-top:12px}
+ .note b{color:#e6edf3}
+ .sec{font-size:8px;font-weight:900;letter-spacing:.1em;color:#5b6675;margin:0 0 4px}
+ table{border-collapse:collapse;width:100%;font-size:8.8px}
+ th{font-size:6.6px;font-weight:900;letter-spacing:.07em;color:#4b5563;text-transform:uppercase;
+    text-align:right;padding:0 5px 3px;white-space:nowrap;cursor:help}
+ th:first-child,td:first-child{text-align:left}
+ td{text-align:right;padding:2px 5px;white-space:nowrap;border-top:1px solid #1a212c;cursor:help}
+ tr.exp td{color:#8b98a9;font-weight:700}
+ tr.exp td:first-child{color:#5b6675;font-weight:900;letter-spacing:.05em}
+ tr.now td{color:#e6edf3;font-weight:800}
+ tr.now td:first-child{color:#7cc7ff;font-weight:900;letter-spacing:.05em}
+ .up{color:#2ec27e}.dn{color:#e0645f}.dim{color:#5b6675}.amber{color:#f2b45a}
+ .pend{color:#5b6675;font-style:italic}
+ .curve{margin-top:7px;display:flex;gap:0;align-items:flex-end;height:34px;cursor:help}
+ .curve div{flex:1;text-align:center}
+ .curve i{display:block;margin:0 auto;width:60%;background:rgba(46,194,126,.55);border-radius:2px 2px 0 0}
+ .curve i.on{background:#2ec27e}
+ .curve b{display:block;font-size:6.4px;font-weight:900;color:#8b98a9;margin-top:2px}
+ .curve u{display:block;font-size:6.4px;font-weight:900;text-decoration:none;color:#5b6675}
+ .curve div.on b,.curve div.on u{color:#2ec27e}
+ .verdict{font-size:9.5px;font-weight:600;color:#c9d4e2;background:rgba(124,199,255,.05);
+          border:1px solid rgba(124,199,255,.18);border-radius:4px;padding:6px 8px;line-height:1.55;margin-top:8px;cursor:help}
+ .verdict b{color:#2ec27e;font-weight:900}
+ .warn{font-size:8px;color:#f2b45a;margin-top:5px;cursor:help}
+</style></head><body>
+
+<div class="cap">③ HOD / LOD — 284 sessions of 1-minute ES, 2025-06 → 2026-08</div>
+<div class="panel">
+  <div class="sec">HIGH &amp; LOW OF DAY</div>
+  <table>
+    <tr><th>&nbsp;</th>
+      <th title="When the FIRST of the two extremes printed. 75% of sessions set one by 10:30 ET, median 09:51 — barely 20 minutes after the open. That early timing is what makes the rest of the day tradeable.">1st ext</th>
+      <th title="How long that extreme has stood without being exceeded. This is the confidence, and it is the single most useful number in the section.">held</th>
+      <th title="Measured probability that an extreme which has stood this long turns out to be the day's final one. From 284 sessions of new-extreme events.">p(final)</th>
+      <th title="When the SECOND extreme printed — the end of the ride. Median 14:23 ET.">2nd ext</th>
+      <th title="High minus low. Median 56 pts, quartiles 42 and 80. This IS the travel from one extreme to the other, because they are the two ends of it.">range</th>
+      <th title="Today's range against the 56-point median. Near or past 100% means the day has already spent a typical session's travel.">rng used</th>
+      <th title="Where price sits between today's low and today's high.">now</th>
+    </tr>
+    <tr class="exp">
+      <td title="Median across 284 clean RTH sessions. Median, not mean, so outliers cannot drag it.">EXPECTED <span class="dim">n=284</span></td>
+      <td>09:51</td><td>—</td><td>see curve</td><td>14:23</td><td>56</td><td>—</td><td>—</td>
+    </tr>
+    <tr class="now">
+      <td title="Today, updating as each bar closes.">TODAY</td>
+      <td><span class="up">HOD 09:51</span></td>
+      <td><span class="up">2h14</span></td>
+      <td><span class="up">75%</span></td>
+      <td class="pend">pending</td>
+      <td>41</td>
+      <td><span class="amber">73%</span></td>
+      <td>34%</td>
+    </tr>
+  </table>
+
+  <div class="curve" title="MEASURED, from every new-extreme event across 284 sessions: given a high has stood N minutes without being exceeded, how often was it the day's final high? Monotonic and useful — 30 minutes tells you almost nothing, three hours is near-certainty. Today's bar is highlighted.">
+    <div><i style="height:9px"></i><b>38%</b><u>30m</u></div>
+    <div><i style="height:13px"></i><b>54%</b><u>60m</u></div>
+    <div><i style="height:17px"></i><b>68%</b><u>90m</u></div>
+    <div class="on"><i class="on" style="height:19px"></i><b>75%</b><u>120m</u></div>
+    <div><i style="height:21px"></i><b>84%</b><u>180m</u></div>
+  </div>
+
+  <div class="verdict" title="The row above in one sentence. It states a measured probability WITH its sample, and never says 'will'.">
+    <b>HIGH PROBABLY IN.</b> Printed 09:51, has stood 2h14 — highs that survive two hours went on to be
+    the day's high in <b>75%</b> of 284 sessions. Median travel to the other extreme is 56 pts; 41 spent,
+    so a typical day has ~15 left. The second extreme usually prints 14:23.
+  </div>
+
+  <div class="warn" title="Two things the numbers do not say, both of which would mislead if left out.">
+    ⚠ Sequence is a COIN FLIP — 48% high-first / 52% low-first across 284 days. Do not assume OHLC.
+    ⚠ The survival curve mixes duration with time-of-day: an extreme cannot stand 3 hours unless it
+    printed early, so the long buckets are partly measuring "it happened early".
+  </div>
+</div>
+
+<div class="note">
+  <b>The 4-day sample was wrong about the thing you most wanted.</b> It said 75% of days print the high
+  first. Across 284 sessions it is <b>48%</b> — a coin flip. Anyone who had built a bias on those four
+  days would have been trading a pattern that does not exist.<br><br>
+  <b>What IS real, and it is better than the sequence would have been:</b><br>
+  · <b>75% of sessions set one extreme by 10:30 ET</b>, median 09:51 — about twenty minutes in. So on
+  three days in four, by mid-morning one end of the day is already fixed.<br>
+  · The other extreme prints at a median of <b>14:23</b>, roughly four hours later. That gap is the ride.<br>
+  · Median range is <b>56 pts</b> (p25 42, p75 80) — that is the full distance between the two extremes.<br>
+  · <b>The survival curve is the edge.</b> 30 minutes of standing means almost nothing (38%); two hours
+  means 75%; three hours means 84%. It converts "the high was a while ago" into a number.<br><br>
+  <b>Lows hold slightly better than highs early on</b> — at 15 minutes, 35% versus 26%. Small, but
+  consistent with lows being made in panic and highs in drift.<br><br>
+  <b>Cost to build: low.</b> Everything above came from bars we already have; the live row needs only
+  today's running high, low and their timestamps. The 284-session table is computed once from your
+  file and stored as a few KB of derived stats — the 28 MB source never goes in the repo.
+</div>
+</body></html>

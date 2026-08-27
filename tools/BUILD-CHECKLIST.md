@@ -25,6 +25,19 @@ undocumented. That has already happened repeatedly in this project.
    `test_pipeline_indicator.js`, `test_rules_v2.js`, `test_read_v1047.js`.
 5. **Prepend a CHANGELOG entry.** Not what changed — *why it was wrong before*. The reasoning is the part
    that stops it recurring.
+6a. **REGENERATE `session-state/CHAT-HISTORY.md` IN THE SAME COMMIT.**
+   ⚠ **`test_chat_history.js` FAILS THE BUILD IF YOU DO NOT.** The version stamped in the history
+   must equal `GPTS_VERSION`, so bumping the version without regenerating turns the suite red. This
+   is deliberate: a checklist line is prose a hurried context can skip, and prose is what lost item
+   18. The test also pins the wiring (config, skill, this file) so the generator cannot be quietly
+   orphaned.
+   `python3 tools/chat-history.py --title "<what this context was about>"`, then fill DECISIONS /
+   SHIPPED / OPEN AT CLOSE by hand. Operator-mandated 2026-08-27 and it is not optional: the next
+   `load gex` reads the CURRENT-CONTEXT entry in full, and it is the only record of what was *said*
+   — the corrections and the rejected approaches — as opposed to what was concluded. It is generated
+   from the real transcript precisely so it cannot forget; the hand-written parts are the three
+   summary sections only.
+
 6. **UPDATE `session-state/latest-resume-note.md` IN THE SAME COMMIT.** Rewrite the affected sections
    rather than appending; an accreted note buries the important parts. It must carry:
    - current version of BOTH scripts and what is verified live

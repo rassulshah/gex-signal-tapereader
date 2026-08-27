@@ -6,6 +6,29 @@ Touch this file only when one of these things actually changes.
 
 ---
 
+
+## L-H · THE CHAT HISTORY IS PART OF THE BUILD, AND A TEST ENFORCES IT
+
+**Operator-mandated 2026-08-27**, and he asked specifically that a future context not have to be
+told: *"i also want to make sure that the next context suggestion doesn't forget to make updates to
+the chat history ... so i dont have to tell future context sessions to save chat history every time
+a new build is created."*
+
+Every build regenerates `session-state/CHAT-HISTORY.md` via `python3 tools/chat-history.py`, then
+fills DECISIONS / SHIPPED / OPEN AT CLOSE by hand. Every `load gex` reads the CURRENT-CONTEXT entry
+in full, second after the resume note.
+
+⚠ **THE ENFORCEMENT IS `test_chat_history.js`, NOT A CHECKLIST LINE.** The version stamped in the
+history must equal `GPTS_VERSION` — bump one without the other and the suite goes red and the build
+stops. Checklists are prose, and prose is exactly what lost item 18 out of the resume note. The test
+also pins the wiring in `.gex-config.json`, the skill and `BUILD-CHECKLIST.md`, so the generator
+cannot be silently unhooked and left costing effort for nothing.
+
+⚠ Its own first draft contained an assertion that **could not fail** — a substring check that matched
+the `chatHistory` block even after the file was deleted from `projectFiles`. Mutation testing caught
+it. That is the third time in this project an assertion has bought false confidence; **mutate every
+new assertion and confirm it fires before trusting it.**
+
 ## LANDMINES ADDED 2026-08-27 (each cost real rework this session)
 
 **L-A · TWO VERSION STRINGS, AND THEY DRIFT.** `// @version` in the header and `var GPTS_VERSION`

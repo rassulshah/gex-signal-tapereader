@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.52
+// @version    14.53
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -620,7 +620,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.52';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.53';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4260,7 +4260,48 @@ function irtExportNow(force){
               }catch(e3){ IRT_LAST={t:Date.now(),rows:0,how:null,err:''+eW}; }
             });
         };
-        if(h.queryPermission){ h.queryPermission({mode:'readwrite'}).then(function(st){ if(st==='granted') doWrite(); else h.requestPermission({mode:'readwrite'}).then(function(st2){ if(st2==='granted') doWrite(); else IRT_LAST={t:Date.now(),rows:0,how:null,err:'folder permission denied'}; }); }).catch(doWrite); }
+        // ⚠⚠ (v14.53, MEASURED ON THE LIVE PANEL 2026-08-27 10:27 CT) THE EXPORT HAD BEEN SILENTLY
+        // DEAD ALL MORNING AND v14.52's IN-PLACE WRITE HAD NEVER ONCE EXECUTED.
+        // Live state: handle SET (name "lsFlexLevels", a real FileSystemDirectoryHandle), but
+        // queryPermission returned **"prompt"**, and IRT_LAST was frozen 54 minutes stale at an
+        // unrelated "no levels" error while irtTick kept firing every 180s.
+        //
+        // TWO FAULTS, STACKED:
+        //  1. **CHROME RESETS FILE SYSTEM ACCESS PERMISSION TO "prompt" ON EVERY PAGE LOAD.** The
+        //     handle survives in IndexedDB; the GRANT does not. So every morning after the first
+        //     reload the panel needs the permission back.
+        //  2. **requestPermission() REQUIRES USER ACTIVATION.** Called from a 180-second timer there
+        //     is no gesture, so it REJECTS (NotAllowedError) rather than resolving — and the old code
+        //     put no .catch on that inner promise. The rejection vanished, IRT_LAST was never
+        //     written, and the face showed a stale error that looked like a DATA problem. It was a
+        //     permissions problem wearing a data problem's clothes, which is why v14.52 was diagnosed
+        //     against a write that was not happening.
+        //
+        // ⚠ DO NOT "FIX" THIS BY CALLING requestPermission ANYWAY. It cannot succeed from a timer,
+        // and retrying it every 3 minutes buys nothing but an unhandled rejection. The honest move is
+        // to DETECT that there is no gesture, say so in words the operator can act on, and let the
+        // next real click carry it — `irtPickFolder` and the ⇩ Export-now button both run inside one.
+        if(h.queryPermission){
+          h.queryPermission({mode:'readwrite'}).then(function(st){
+            if(st==='granted'){ doWrite(); return; }
+            var active=false;
+            try{ active=!!(navigator.userActivation && navigator.userActivation.isActive); }catch(eU){ active=false; }
+            if(!active){
+              IRT_LAST={t:Date.now(), rows:0, how:null, needsGesture:true,
+                        err:'FOLDER PERMISSION NEEDS ONE CLICK — Chrome drops it on every page load. Open the gear and press ⇩ Export now (or re-pick the IRT folder); exports then resume on their own.'};
+              return;
+            }
+            h.requestPermission({mode:'readwrite'}).then(function(st2){
+              if(st2==='granted') doWrite();
+              else IRT_LAST={t:Date.now(), rows:0, how:null, needsGesture:true,
+                             err:'folder permission denied — re-pick the IRT folder in the gear'};
+            }).catch(function(eP){
+              // ⚠ THE MISSING .catch. Without it this rejection was invisible and the panel froze.
+              IRT_LAST={t:Date.now(), rows:0, how:null, needsGesture:true,
+                        err:'permission request refused ('+((eP&&eP.name)||eP)+') — press ⇩ Export now in the gear once'};
+            });
+          }).catch(doWrite);
+        }
         else doWrite();
       } else {
         IRT_LAST={t:Date.now(),rows:0,how:null,err:'no folder picked'};
@@ -17136,6 +17177,23 @@ function feedStatusHtml(){
            'style="color:'+PAL.shortAccent+';font-weight:600">⚠ tape</span>';
     }
   }catch(eW){}
+  // ⚠⚠ (v14.53) THE IRT PERMISSION WARNING BELONGS ON THE FACE, NOT IN THE GEAR.
+  // Measured live 2026-08-27: the export had been dead for 54 minutes and the only evidence was a
+  // stale error inside the config drawer, which nobody opens while trading. Chrome drops the
+  // folder permission on every page load and requestPermission cannot run from a timer, so this
+  // state happens EVERY MORNING and costs a whole session of levels if it is not visible.
+  // It is deliberately the loudest thing in the footer and it names the fix in four words.
+  try{
+    if(typeof IRT_LAST==='object' && IRT_LAST && IRT_LAST.needsGesture){
+      warn+=(warn?' ':'')+'<span title="'+
+        'The IRT FlexLevels export is NOT running. Chrome resets the output folder permission to '+
+        '\'prompt\' on every page load, and the browser refuses to re-request it from a background '+
+        'timer because that needs a user gesture. One click restores it for the session: open the '+
+        'gear and press the IRT Export-now button, or re-pick the folder. Exports then resume on '+
+        'their own cadence. This is not a data problem and the levels are being built fine."'+
+        ' style="color:'+PAL.shortAccent+';font-weight:700">⚠ IRT needs a click</span>';
+    }
+  }catch(eIW){}
   // (v10.17) The 📥 Save Day button moved OFF the dashboard footer and INTO the
   // Analysis tab as an in-tab "Save & prep review" banner (the tab is the trigger).
   // (v10.52) PIPELINE INDICATOR — replaces the v10.50 feed/vex/rec dots. Those three

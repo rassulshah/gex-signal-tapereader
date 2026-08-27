@@ -1,0 +1,89 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>HOD/LOD section — mockup v1</title>
+<style>
+  body{background:#0b0f15;color:#e6edf3;font:11px/1.45 Consolas,Menlo,monospace;margin:0;padding:18px}
+  .panel{width:560px;background:#11161f;border:1px solid #232b38;border-radius:6px;padding:8px}
+  .sec{border:1px solid #232b38;border-radius:5px;padding:6px 8px;margin-bottom:8px}
+  .h{color:#8b98a9;font-size:10px;letter-spacing:.08em;margin-bottom:5px}
+  .h b{color:#c9d4e2}
+  .grid{display:grid;grid-template-columns:22px 92px 62px 56px 66px 62px 52px 76px;gap:0 6px;align-items:baseline}
+  .grid2{display:grid;grid-template-columns:22px 92px 130px 176px;gap:0 6px;align-items:baseline;margin-top:2px}
+  .lab{color:#5b6675;font-size:9px}
+  .a{color:#e6edf3}.e{color:#8b98a9}
+  .grn{color:#2ec27e}.red{color:#e0645f}.amb{color:#f2b45a}.dim{color:#5b6675}.blu{color:#7cc7ff}
+  .read{background:#0e1a14;border:1px solid #1d4230;border-radius:5px;padding:6px 8px;margin:7px 0 5px}
+  .read .verdict{color:#2ec27e;font-weight:bold}
+  .chips{display:flex;gap:6px;margin-top:5px;flex-wrap:nowrap}
+  .chip{border:1px solid #26562f;background:#0f2317;color:#2ec27e;border-radius:3px;padding:1px 6px;font-size:10px;cursor:default}
+  .chip.off{border-color:#37404e;background:#161c26;color:#5b6675}
+  .surv{display:flex;gap:4px;align-items:flex-end;margin-top:6px}
+  .sv{flex:1;text-align:center;cursor:default}
+  .sv .bar{background:#1d4230;border-radius:2px 2px 0 0;margin:0 6px}
+  .sv.hit .bar{background:#2ec27e}
+  .sv .pc{font-size:10px;color:#8b98a9}.sv.hit .pc{color:#2ec27e;font-weight:bold}
+  .sv .bk{font-size:9px;color:#5b6675}
+  .foot{color:#5b6675;font-size:9px;margin-top:6px}
+  .trend{opacity:.35}
+  .num{color:#e3c341}
+</style></head><body>
+<div class="panel">
+
+  <!-- ══════════ NEW SECTION: DAY STRUCTURE (sits ABOVE ② TREND) ══════════ -->
+  <div class="sec">
+    <div class="h"><b>②a DAY — HOD/LOD</b> · 10:26 CT · <span class="dim">284d ES 1-min</span></div>
+
+    <!-- THE READ -->
+    <div class="read" title="Q: is one extremity of the day already in, and which leg are we in?
+Derivation, measured over 284 sessions: the LOD has stood 1h14 (60m survival base 54%). Price has reclaimed the open, holds above the 50-SMA, and the PDL sweep held — that state resolved as the final LOD on 78% of sessions (n=92; without the sweep 72%, n=241). When this state was wrong, price extended a median 15 pts beyond the standing LOD. Descriptive only — a measured rate, not a forecast.">
+      <span class="verdict">LOD PROBABLY IN — 78%</span> <span class="dim">(n=92)</span> · <span class="a">MARKUP toward HOD</span><br>
+      <span class="e">stood 1h14 · open reclaimed · &gt;SMA50 · PDL sweep held — hits ran a median <span class="num">+27</span> more; misses extended <span class="num">−15</span> past the LOD. 2nd extremity usually ~<span class="num">13:22</span>.</span>
+    </div>
+
+    <!-- EVIDENCE CHIPS -->
+    <div class="chips">
+      <span class="chip" title="Q: has price traded back through the session open since the extremity printed (his BOP)? YES — 09:30, 18m after the LOD. At 1h standing, reclaimed-open lifts the base 54% → 63% alone.">OPEN ✓</span>
+      <span class="chip" title="Q: is price on the far side of the 1-min 50-SMA from the extremity? YES. At 1h standing: 67% alone; with OPEN ✓ → 72% (n=241).">SMA50 ✓</span>
+      <span class="chip" title="Q: did the extremity sweep a key level (ONL/PDL for a low; ONH/PDH for a high) and hold back inside it? YES — LOD 7658 swept PDL 7660, closed back above. Adds +6 on top of OPEN+SMA → 78% (n=92). A sweep-reclaim in the first minutes means NOTHING (fires below baseline) — it needs standing.">SWP·PDL ✓</span>
+      <span class="chip" title="Q: has price made a 20-bar high since the LOD (momentum away from it)? YES at 09:26. Weak alone at 1h (most days have it by then); its ABSENCE at 30m is the tell (−15 vs base).">20B ✓</span>
+      <span class="chip off" title="Q: which read fires when the evidence is AGAINST? If the LOD had stood 1h with price still below the open AND below the 50-SMA, only 30% of those LODs held (n=128) — the extremity probably EXTENDS. That state prints here as NOT IN.">NOT-IN 30%</span>
+    </div>
+
+    <!-- SURVIVAL STRIP -->
+    <div class="surv">
+      <div class="sv" title="Q: how often is an extremity that stood 30m the day's final one? 42% (237/568). TODAY's LOD is past this bucket."><div class="bar" style="height:13px"></div><div class="pc">42%</div><div class="bk">30m</div></div>
+      <div class="sv hit" title="Q: …stood 60m? 54% (306/564). TODAY: LOD stood 1h14 — this is the active bucket; the read's evidence lifts it to 78%."><div class="bar" style="height:17px"></div><div class="pc">54%</div><div class="bk">60m ◂</div></div>
+      <div class="sv" title="Q: …stood 90m? 66% (356/540)."><div class="bar" style="height:21px"></div><div class="pc">66%</div><div class="bk">90m</div></div>
+      <div class="sv" title="Q: …stood 2h? 75% (380/507)."><div class="bar" style="height:24px"></div><div class="pc">75%</div><div class="bk">2h</div></div>
+      <div class="sv" title="Q: …stood 3h? 84% (364/431). Caution: long buckets partly measure 'it printed early'."><div class="bar" style="height:27px"></div><div class="pc">84%</div><div class="bk">3h</div></div>
+    </div>
+
+    <!-- A / E ROWS — his grammar -->
+    <div style="margin-top:7px">
+      <div class="grid lab"><span></span><span>1ST</span><span>TOOK</span><span>BOP</span><span>WICK</span><span>W.END</span><span>WICK%</span><span>MUD</span></div>
+      <div class="grid a" title="Q: what has TODAY actually printed? 1st extremity was the LOW, 09:12. Open→LOD 42m; LOD→open reclaim 18m; whole wick 1h00 ending 09:30; wick = 31% of today's range so far; markup running 56m (started at the open reclaim 09:30, unfinished).">
+        <span>A</span><span class="red">LOD 09:12</span><span>42m</span><span>18m</span><span>1h00</span><span>09:30</span><span>31%</span><span class="amb">56m…</span>
+      </div>
+      <div class="grid e" title="Q: what does the median of 284 sessions look like? 1st extremity 08:51 (75% of days have one end in by 09:30). Each column is its own median — they need not add up.">
+        <span>E</span><span>— 08:51</span><span>~21m</span><span>~6m</span><span>~34m</span><span>~09:04</span><span>~21%</span><span>~3h19</span>
+      </div>
+      <div class="grid2 lab" style="margin-top:4px"><span></span><span>2ND</span><span>HL GAP</span><span>HL RNG</span></div>
+      <div class="grid2 a" title="Q: where is the other extremity? Not printed yet — the read above says the ride toward it is on. Range so far 21 pts = 37% of the expected 56.">
+        <span>A</span><span class="amb">HOD pend.</span><span>1h14…</span><span class="num">$1,050 — 21.0pts</span>
+      </div>
+      <div class="grid2 e" title="Q: the medians: 2nd extremity 13:22 CT, gap between extremities 3h52, day range 56 pts (p25 42 / p75 80).">
+        <span>E</span><span>13:22</span><span>~3h52</span><span>~$2,800 — 56pts <span class="dim">(42–80)</span></span>
+      </div>
+    </div>
+
+    <div class="foot" title="Q: what feeds this? Everything is computed from bars the panel already has, plus ONH/ONL/PDH/PDL. The 284-session table ships as a few KB of derived stats; the 28MB source never enters the repo. Sequence is a coin flip (48/52) — the read never claims which side prints first.">
+      seq 48/52 coin-flip · all rates measured, n shown · descriptive — no entries/stops</div>
+  </div>
+
+  <!-- ══════════ EXISTING ② TREND (position reference only) ══════════ -->
+  <div class="sec trend">
+    <div class="h"><b>② TREND</b></div>
+    <div>SPY <span class="grn">UP</span> · 50-SMA rising · conf 3/4 · <span class="dim">(existing section, unchanged)</span></div>
+  </div>
+
+</div>
+</body></html>

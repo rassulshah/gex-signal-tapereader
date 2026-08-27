@@ -1,3 +1,46 @@
+## v14.53 — the IRT export had been silently dead every morning, and v14.52 never once ran
+
+**MEASURED ON THE LIVE PANEL, 2026-08-27 10:27 CT**, after the operator asked whether last night's
+in-place fix had deployed. It had — the tab reported v14.52 — but:
+
+    irtDir handle : SET, "lsFlexLevels", a real FileSystemDirectoryHandle
+    permission    : "prompt"          ← not "granted"
+    IRT_LAST      : frozen 54 minutes stale, on an unrelated "no levels" error
+    inPlace       : ABSENT            ← the write path had never been reached
+
+**v14.52's entire change lives inside that write path, so it had never executed even once.** It was
+diagnosed, shipped and reasoned about against a write that was not happening.
+
+**TWO FAULTS, STACKED.** (1) **Chrome resets File System Access permission to `"prompt"` on every
+page load** — the handle survives in IndexedDB, the grant does not, so this happens EVERY MORNING.
+(2) **`requestPermission()` requires a user gesture**, so from the 180-second `irtTick` it REJECTS
+rather than resolving — and the inner promise had **no `.catch`**. The rejection vanished, `IRT_LAST`
+was never written, and the face kept showing a stale error that looked like a DATA problem. It was a
+permissions problem wearing a data problem's clothes.
+
+⚠ **THE FIX IS NOT TO RETRY.** `requestPermission` cannot succeed from a timer, and calling it every
+three minutes buys nothing but an unhandled rejection. The panel now checks
+`navigator.userActivation.isActive` FIRST, and with no gesture it refuses to attempt the call and
+says so in words that name the remedy. The next real click carries it — `irtPickFolder` and the
+gear's Export-now button both run inside one.
+
+**AND IT SAYS SO ON THE FACE.** The old error was only visible inside the config drawer, which nobody
+opens while trading — which is how 54 minutes went by. `feedStatusHtml` now prints **⚠ IRT needs a
+click** in the footer whenever `needsGesture` is set, with the four-word fix in its hover.
+
+⚠ **THE IN-PLACE WRITE OF v14.52 IS STILL UNVERIFIED.** This build is what finally lets it run. Once
+the permission is granted, `__gptsDebug.irt()` will report `inPlace:true` and only then can we say
+whether the atomic-replace diagnosis was right.
+
+**Also measured, NOT fixed here:** the ladder is **656px wide inside a 460px panel — 196px of the
+right-hand side is clipped.** `g3ldst` (12), `g3ldtap` (6) and `g3ldroc` (12) are all present in the
+DOM and rendering; they are simply off-screen. The missing-columns appearance is a WIDTH problem, not
+a build gap. Recorded in `session-state/LOCKED-ITEMS.md`; it needs a mockup and an overlap audit
+before any render code moves.
+
+test_irt_export.js 44 → 52 asserts, mutation-tested (removing the `.catch` fires the assertion).
+Suite: 115 green, the 6 documented baseline reds unchanged.
+
 ## v14.52 — the FlexLevels CSV is written IN PLACE, not replaced
 
 Operator-reported: *"it has problems reading from a local file unless i refresh — only after i

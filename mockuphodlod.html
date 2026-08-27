@@ -1,0 +1,99 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>HOD/LOD section</title>
+<style>
+ body{background:#0d1117;color:#e6edf3;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+      font-variant-numeric:tabular-nums;margin:0;padding:20px}
+ .panel{width:600px;background:#11161f;border:1px solid #2a3340;border-radius:6px;padding:10px 12px}
+ .cap{font-size:11px;font-weight:800;letter-spacing:.07em;color:#8b98a9;margin:0 0 8px;text-transform:uppercase}
+ .note{font-size:11px;color:#8b98a9;line-height:1.7;width:600px;margin-top:12px}
+ .note b{color:#e6edf3}
+ .sec{font-size:8px;font-weight:900;letter-spacing:.1em;color:#5b6675;margin:0 0 4px}
+ table{border-collapse:collapse;width:100%;font-size:8.6px}
+ th{font-size:6.6px;font-weight:900;letter-spacing:.07em;color:#4b5563;text-transform:uppercase;
+    text-align:right;padding:0 4px 3px;white-space:nowrap;cursor:help}
+ th:first-child,td:first-child{text-align:left}
+ td{text-align:right;padding:2px 4px;white-space:nowrap;border-top:1px solid #1a212c;cursor:help}
+ tr.exp td{color:#8b98a9;font-weight:700}
+ tr.exp td:first-child{color:#5b6675;font-weight:900;letter-spacing:.05em}
+ tr.now td{color:#e6edf3;font-weight:800}
+ tr.now td:first-child{color:#7cc7ff;font-weight:900;letter-spacing:.05em}
+ .up{color:#2ec27e}.dn{color:#e0645f}.dim{color:#5b6675}.amber{color:#f2b45a}
+ .pend{color:#5b6675;font-style:italic}
+ .verdict{font-size:9.5px;font-weight:600;color:#c9d4e2;background:rgba(124,199,255,.05);
+          border:1px solid rgba(124,199,255,.18);border-radius:4px;padding:6px 8px;line-height:1.55;margin-top:6px;cursor:help}
+ .verdict b{color:#2ec27e;font-weight:900}
+ .warn{font-size:8px;color:#f2b45a;margin-top:5px;cursor:help}
+ .bar{position:relative;height:9px;margin-left:6px;margin-right:6px;background:#0f131b;border:1px solid #222a36;border-radius:3px;margin-top:6px}
+ .bar i{position:absolute;top:0;bottom:0;background:rgba(124,199,255,.16)}
+ .bar b{position:absolute;top:-1px;bottom:-1px;width:2px;background:#fff}
+ .bar em{position:absolute;top:-12px;font-style:normal;font-size:6px;font-weight:900;color:#5b6675;transform:translateX(-50%)}
+ .bar u{position:absolute;top:11px;font-style:normal;text-decoration:none;font-size:6px;font-weight:900;transform:translateX(-50%)}
+</style></head><body>
+
+<div class="cap">③ HOD / LOD — proposed section, above ① TREND</div>
+<div class="panel">
+  <div class="sec">HIGH &amp; LOW OF DAY</div>
+  <table>
+    <tr><th>&nbsp;</th>
+      <th title="The time the FIRST of the two extremes printed. This is the decision point: once one extreme is in, the day's remaining travel is toward the other.">1st ext</th>
+      <th title="How long the first extreme has stood without being taken out. The longer it holds, the more likely it is the day's true extreme.">held</th>
+      <th title="The time the SECOND extreme printed — the end of the ride.">2nd ext</th>
+      <th title="OHLC = the high printed first (open, high, low, close). OLHC = the low printed first. Every daily candle is one or the other.">seq</th>
+      <th title="High minus low, in ES points.">range</th>
+      <th title="THE TRADEABLE NUMBER: how far price travelled from the first extreme to the second. This is the ride you are trying to catch.">run after 1st</th>
+      <th title="Today's range as a percentage of the typical range. Near 100% means the day has already spent its usual travel.">rng used</th>
+    </tr>
+    <tr class="exp">
+      <td title="Median of the recorded sessions, outliers excluded by using the MEDIAN rather than the mean. n is shown because with a sample this small the numbers are indicative, not reliable.">EXPECTED <span class="dim">n=4</span></td>
+      <td>10:34</td><td>—</td><td>13:56</td><td>75% OHLC</td><td>4.4</td><td>3.1</td><td>—</td>
+    </tr>
+    <tr class="now">
+      <td title="Today, updating live as bars close.">TODAY</td>
+      <td><span class="up">HOD 09:51</span></td>
+      <td><span class="up">2h14</span></td>
+      <td class="pend">pending</td>
+      <td>OHLC</td>
+      <td>3.2</td>
+      <td>2.1 <span class="dim">so far</span></td>
+      <td><span class="amber">73%</span></td>
+    </tr>
+  </table>
+
+  <div class="bar" title="Where price sits between today's low and today's high. The markers are the two extremes and the white line is price now.">
+    <i style="left:0;width:34%"></i><b style="left:34%"></b>
+    <em style="left:4%">LOD 7663</em><em style="left:93%">HOD 7690 ↑1st</em>
+    <u style="left:34%;color:#fff">now 7672 · 34% of range</u>
+  </div>
+
+  <div class="verdict" title="A synthesis of the row above, in the only terms that matter: has an extreme formed, is it holding, and how much travel is typically left. It states probability WITH its sample size and never says 'will'.">
+    <b>HIGH IS IN — probably.</b> The high printed at 09:51 and has stood 2h14. Of the recorded days,
+    3 of 4 that set an extreme before 10:30 kept it. Median travel from the first extreme to the
+    second is 3.1 pts; 2.1 has been spent, leaving ~1.0. The second extreme typically prints 13:56.
+  </div>
+
+  <div class="warn" title="The sample is not yet large enough to trade off. It is shown so the section is honest about what it knows, and it grows by one row per session.">
+    ⚠ n=4 clean sessions. 2 further days were EXCLUDED because recording began after the open, so
+    their extremes cannot be trusted. Nothing here is a probability you should size against yet.
+  </div>
+</div>
+
+<div class="note">
+  <b>The premise, in your words:</b> a daily candle is either OHLC or OLHC — the high comes first or
+  the low does. If you can tell that one extreme is in, the rest of the day travels toward the other.
+  Every column is chosen to answer that one question.<br><br>
+  <b>The three that carry the trade:</b> <b>1st ext</b> says an extreme has printed and when.
+  <b>held</b> is the confidence — an extreme that has stood two hours is a very different thing from
+  one printed ten minutes ago. <b>run after 1st</b> is the ride itself, and today's realised figure
+  against the median tells you how much is plausibly left.<br><br>
+  <b>⚠ THE NUMBERS ABOVE ARE REAL AND THE SAMPLE IS TOO SMALL.</b> They are computed from your own
+  recorded sessions (2026-08-18 to 08-25): 5 of 6 set the high first, median first extreme 10:34,
+  median second 13:56, median range 4.4. But <b>two of those days began recording after the open</b>
+  — 10:21 and 10:38 — so their "first extreme" may simply be the first bar we saw. Excluding them
+  leaves <b>four</b> clean sessions. This section should ship counting, and start speaking only once
+  it has enough days to mean something.<br><br>
+  <b>What it needs from the recorder:</b> nothing new — <code>snaps</code> already carry per-bar
+  <code>h</code>, <code>l</code> and timestamps, which is exactly what these figures were computed
+  from. It does need the session covered from the open, which is the same export discipline v14.51
+  just fixed.
+</div>
+</body></html>

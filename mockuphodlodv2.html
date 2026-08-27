@@ -1,0 +1,86 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>HOD/LOD section — mockup v2 (read under stats)</title>
+<style>
+  body{background:#0b0f15;color:#e6edf3;font:11px/1.45 Consolas,Menlo,monospace;margin:0;padding:18px}
+  .panel{width:560px;background:#11161f;border:1px solid #232b38;border-radius:6px;padding:8px}
+  .sec{border:1px solid #232b38;border-radius:5px;padding:6px 8px;margin-bottom:8px}
+  .h{color:#8b98a9;font-size:10px;letter-spacing:.08em;margin-bottom:5px}
+  .h b{color:#c9d4e2}
+  .grid{display:grid;grid-template-columns:22px 92px 62px 56px 66px 62px 52px 76px;gap:0 6px;align-items:baseline}
+  .grid2{display:grid;grid-template-columns:22px 92px 130px 176px;gap:0 6px;align-items:baseline;margin-top:2px}
+  .lab{color:#5b6675;font-size:9px}
+  .a{color:#e6edf3}.e{color:#8b98a9}
+  .grn{color:#2ec27e}.red{color:#e0645f}.amb{color:#f2b45a}.dim{color:#5b6675}
+  .surv{display:flex;gap:4px;align-items:flex-end;margin-top:7px}
+  .sv{flex:1;text-align:center;cursor:default}
+  .sv .bar{background:#1d4230;border-radius:2px 2px 0 0;margin:0 6px}
+  .sv.hit .bar{background:#2ec27e}
+  .sv .pc{font-size:10px;color:#8b98a9}.sv.hit .pc{color:#2ec27e;font-weight:bold}
+  .sv .bk{font-size:9px;color:#5b6675}
+  .read{background:#0e1a14;border:1px solid #1d4230;border-radius:5px;padding:6px 8px;margin-top:8px}
+  .read .verdict{color:#2ec27e;font-weight:bold}
+  .chips{display:flex;gap:5px;margin-top:5px;align-items:center}
+  .chip{border:1px solid #26562f;background:#0f2317;color:#2ec27e;border-radius:3px;padding:1px 6px;font-size:10px;cursor:default}
+  .chip.off{border-color:#37404e;background:#161c26;color:#5b6675}
+  .meter{margin-left:auto;color:#2ec27e;font-weight:bold;font-size:11px;cursor:default}
+  .foot{color:#5b6675;font-size:9px;margin-top:6px}
+  .trend{opacity:.35}
+  .num{color:#e3c341}
+</style></head><body>
+<div class="panel">
+
+  <!-- ══════════ NEW SECTION (sits ABOVE ② TREND) ══════════ -->
+  <div class="sec">
+    <div class="h"><b>②a DAY — HOD/LOD</b> · 10:26 CT · <span class="dim">284d ES 1-min</span></div>
+
+    <!-- STATS: A / E rows, his grammar -->
+    <div class="grid lab"><span></span><span>1ST</span><span>TOOK</span><span>BOP</span><span>WICK</span><span>W.END</span><span>WICK%</span><span>MUD</span></div>
+    <div class="grid a" title="Q: what has TODAY actually printed? First extremity was the LOW, 09:12. Open→LOD 42m; LOD back to the open price 18m; whole wick 1h00 ending 09:30; the wick is 31% of today's range so far; the markup leg has run 56m since the open reclaim (unfinished).">
+      <span>A</span><span class="red">LOD 09:12</span><span>42m</span><span>18m</span><span>1h00</span><span>09:30</span><span>31%</span><span class="amb">56m…</span>
+    </div>
+    <div class="grid e" title="Q: what does the median of 284 sessions look like? First extremity 08:51 CT; 75% of days have one end in by 09:30. Each column is its own median — they need not add up.">
+      <span>E</span><span>— 08:51</span><span>~21m</span><span>~6m</span><span>~34m</span><span>~09:04</span><span>~21%</span><span>~3h19</span>
+    </div>
+    <div class="grid2 lab" style="margin-top:4px"><span></span><span>2ND</span><span>HL GAP</span><span>HL RNG</span></div>
+    <div class="grid2 a" title="Q: where is the other extremity? Not printed yet. Range so far 21 pts = 37% of the expected 56 — the ride, if the LOD is in, has room by range.">
+      <span>A</span><span class="amb">HOD pend.</span><span>1h14…</span><span class="num">$1,050 — 21.0pts</span>
+    </div>
+    <div class="grid2 e" title="Q: the medians: 2nd extremity 13:22 CT, gap between extremities 3h52, day range 56 pts (p25 42 / p75 80).">
+      <span>E</span><span>13:22</span><span>~3h52</span><span>~$2,800 — 56pts <span class="dim">(42–80)</span></span>
+    </div>
+
+    <!-- SURVIVAL STRIP -->
+    <div class="surv">
+      <div class="sv" title="Q: how often is an extremity that stood 30m the day's final one? 42% (568 samples). Positive claims do not fire here — only NOT-IN does (score ≤1 at 30m: held 29%, n=248)."><div class="bar" style="height:13px"></div><div class="pc">42%</div><div class="bk">30m</div></div>
+      <div class="sv hit" title="Q: …stood 60m? 54% base (n=564). TODAY's LOD stood 1h14 — active gate; the evidence score lifts or kills it (tiers in the read below)."><div class="bar" style="height:17px"></div><div class="pc">54%</div><div class="bk">60m ◂</div></div>
+      <div class="sv" title="Q: …stood 90m? 66% (n=540)."><div class="bar" style="height:21px"></div><div class="pc">66%</div><div class="bk">90m</div></div>
+      <div class="sv" title="Q: …stood 2h? 75% (n=507)."><div class="bar" style="height:24px"></div><div class="pc">75%</div><div class="bk">2h</div></div>
+      <div class="sv" title="Q: …stood 3h? 84% (n=431). Caution: long buckets partly measure 'it printed early'."><div class="bar" style="height:27px"></div><div class="pc">84%</div><div class="bk">3h</div></div>
+    </div>
+
+    <!-- THE READ — under the stats -->
+    <div class="read" title="Q: is one extremity in, and which leg are we in? The read = evidence score at the standing gate, measured over 284 sessions, time-of-day matched. Score counts five independent states: open reclaimed · far side of VWAP · key-level sweep held · opposite IB60 break · ≥60% of range away. Tiers at 60m standing: 5/5 → 82% (n=57; before 10:30 84%, n=45) · 3–4 → 64% (n=231) · 2 → no read (unstable cell) · 0–1 → NOT-IN, held only 36% (n=232). Stable on both halves of the sample. Descriptive — a measured rate, never a forecast.">
+      <span class="verdict">LOD IN — 84%</span> <span class="dim">(5/5 · stood 1h14 · n=45)</span> · <span class="a">MARKUP toward HOD</span><br>
+      <span class="e">ride left med <span class="num">+24</span> (p25 +11) · other extremity printed later on 43/47 of these, usually ~<span class="num">13:22</span> · when this tier missed, price ran med <span class="num">−12</span> past the LOD</span>
+      <div class="chips">
+        <span class="chip" title="Q: has price traded back through the session open since the extremity (your BOP)? YES — 09:30, 18m after the LOD. Alone at 1h standing: 63% vs 54% base.">OPEN ✓</span>
+        <span class="chip" title="Q: is price on the far side of the session VWAP from the extremity? YES. Alone: 67% at 1h. (50-SMA reads nearly the same thing — VWAP scored equal or better and is the one counted.)">VWAP ✓</span>
+        <span class="chip" title="Q: did the extremity sweep a key level (ONL/PDL for a low, ONH/PDH for a high) and hold back inside? YES — LOD 7658 swept PDL 7660, closed back above. In every top combination (e.g. swp+ib60+pos: 80%, n=61). A sweep-reclaim in the first minutes means nothing — it needs standing.">SWP ✓</span>
+        <span class="chip" title="Q: has price broken the opposite side of the first hour's range (IB60) since the extremity? YES — 10:07 broke IB high. Alone: 69% at 1h (IB30 break is weaker, +8, and is not counted).">IB60 ✓</span>
+        <span class="chip" title="Q: has price travelled at least 60% of the day's range away from the extremity? YES — 74% of range. Alone: 70% at 1h; below 40% it inverts (32%).">POS ✓</span>
+        <span class="meter" title="Q: the tier table at this gate (60m): 5/5 → 82% (n=57) · 3–4 → 64% (n=231) · 2 → no read · 0–1 → NOT-IN 36% (n=232), i.e. the extremity usually EXTENDS. At 30m only NOT-IN fires (29%, n=248). By 90m: 5/5 → 86% (n=78).">5/5</span>
+      </div>
+    </div>
+
+    <div class="foot" title="Q: what feeds this? Bars the panel already has, plus ONH/ONL/PDH/PDL and VWAP. The 284-session table ships as a 4KB derived-stats file; the 28MB source stays out of the repo. Sequence is a coin flip (48/52) — the read never claims which side prints first, only whether the printed one is final.">
+      seq 48/52 coin-flip · every rate carries its n · half-split stable · descriptive — no entries/stops</div>
+  </div>
+
+  <!-- ══════════ EXISTING ② TREND (position reference) ══════════ -->
+  <div class="sec trend">
+    <div class="h"><b>② TREND</b></div>
+    <div>SPY <span class="grn">UP</span> · 50-SMA rising · conf 3/4 · <span class="dim">(existing section, unchanged)</span></div>
+  </div>
+
+</div>
+</body></html>

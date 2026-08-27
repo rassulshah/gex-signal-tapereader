@@ -15,12 +15,16 @@
       "current/gex-signal-tapereader.user.js",
       "current/gex-if-levels.user.js",
       "session-state/latest-resume-note.md",
+      "session-state/CHAT-HISTORY.md",
       "changelog/CHANGELOG.md",
       "design/architecture-design.md",
       "skylit-docs/README.md",
       "session-state/INSIDERFINANCE.md",
       "session-state/DECISIONS.md",
       "session-state/PROJECT-CONSTANTS.md",
+      "session-state/LOCKED-ITEMS.md",
+      "session-state/YAHOO-PIPELINE.md",
+      "design/DATA-ARCHITECTURE.md",
       "session-state/SKYLIT-FEEDS.md",
       "session-state/FRAME-APPROACH-REVIEW.md",
       "BUILD-PLAN.md",
@@ -68,7 +72,7 @@
       },
       "warning": "NEVER compare a number from one window, book or scale against another. Four separate false-alarm bugs came from exactly that."
     },
-    "loadNote": "Read session-state/PROJECT-CONSTANTS.md AND session-state/latest-resume-note.md BOTH \u2014 the constants file holds the failure patterns and the user's standing rules, the resume note holds only where we are. Then DECISIONS.md (why the panel is the way it is, D-1..D-13) and INSIDERFINANCE.md (the second book). \u26a0 FRAME-APPROACH-REVIEW.md is a SNAPSHOT of 2026-08-23 \u2014 later builds closed some of its flaws without updating it, so verify every item against the code before calling it open.",
+    "loadNote": "Read session-state/PROJECT-CONSTANTS.md AND session-state/latest-resume-note.md BOTH — the constants file holds the failure patterns and the user's standing rules, the resume note holds only where we are. Then DECISIONS.md (why the panel is the way it is, D-1..D-13) and INSIDERFINANCE.md (the second book). ⚠ FRAME-APPROACH-REVIEW.md is a SNAPSHOT of 2026-08-23 — later builds closed some of its flaws without updating it, so verify every item against the code before calling it open.",
     "analystPackages": [
       "garma/claude_package_v2/rules.json",
       "garma/claude_package_v2/revision_audit/named_pattern_ontology.json",
@@ -99,9 +103,36 @@
       "get tapereader",
       "get gex tapereader"
     ],
-    "instruction": "When user invokes any of the aliases above, fetch ALL canonical files from the GitHub repository (rawUrlBase URLs), read the full userscript, read all Skylit platform docs, and report: (1) files loaded, (2) code architecture understanding, (3) platform understanding, (4) current version, (5) patch state, (6) next step. Do NOT ask for clarification on repo location \u2014 use the URLs above."
+    "instruction": "When user invokes any of the aliases above, fetch ALL canonical files from the GitHub repository (rawUrlBase URLs), read the full userscript, read all Skylit platform docs, and report: (1) files loaded, (2) code architecture understanding, (3) platform understanding, (4) current version, (5) patch state, (6) next step. Do NOT ask for clarification on repo location — use the URLs above."
   },
-  "version": "2026-08-18",
-  "lastUpdated": "2026-08-19T02:00:00Z",
-  "loadInstruction": "\u26a0 2026-08-27: READ session-state/latest-resume-note.md IN FULL FIRST \u2014 it is a briefing, not a changelog, and a context that skips it will re-litigate settled decisions. TWO analyst packages now inform the build (Garma = gamma-map-first, Wicks = charts-first); BUILD-PLAN.md is the master sequence across both. Several headline measurement rates in this project are ONE-DAY samples and at least one is contradicted by a later day \u2014 never quote a rate without its n and its date."
+  "cloneRule": {
+    "command": "git clone https://github.com/rassulshah/gex-signal-tapereader.git",
+    "warning": "⚠⚠ CLONE FULL. NEVER --depth 1. This config said --depth 1 until 2026-08-27 and it cost the operator most of a session. latest-resume-note.md is REWRITTEN IN FULL every build, so every superseded note — and every locked item that silently fell out of one — exists ONLY in history. A shallow clone makes agreed, specified work structurally invisible. That is exactly how ITEM 18 (the Yahoo pipeline, locked 2026-08-16) was reported three times as 'never built' while its full spec sat in commit 72e820e.",
+    "beforeConcludingSomethingWasNeverBuilt": [
+      "git log --all --oneline -S\"<term>\" -i",
+      "git log --all --pretty=format: --name-only --diff-filter=A | sort -u | grep -i \"<term>\"",
+      "for c in $(git log --all --pretty=%h -- session-state/latest-resume-note.md); do git show $c:session-state/latest-resume-note.md | grep -qi \"<term>\" && echo $c; done"
+    ]
+  },
+  "knownMissingAtHead": {
+    "note": "Referenced by this config, by the skill, or by live code comments, and ABSENT from the repo. Do not assume a fresh clone is broken; do not silently re-invent them either.",
+    "files": [
+      "skylit-docs/FINDINGS.md",
+      "BUILD-PLAN.md",
+      "garma/V2-PHASE-PLAN.md",
+      "wicks/"
+    ]
+  },
+  "version": "2026-08-27",
+  "lastUpdated": "2026-08-27T16:00:00Z",
+  "loadInstruction": "⚠ 2026-08-27: CLONE FULL (see cloneRule — never --depth 1). READ IN THIS ORDER, IN FULL, BEFORE ANYTHING ELSE: (1) session-state/latest-resume-note.md — a briefing, not a changelog; a context that skips it will re-litigate settled decisions. (2) session-state/CHAT-HISTORY.md, the CURRENT-CONTEXT entry — what was actually SAID last context: the corrections, the approaches already rejected, and the operator's exact words. The resume note says where we are; this says how we got there. (3) session-state/LOCKED-ITEMS.md — agreed work that is NOT built. It exists because the resume note lost ITEM 18 and a whole session went to re-discovering it. (4) design/DATA-ARCHITECTURE.md — who can reach what: the browser is the only participant that can fetch freely, the cloud cannot reach Yahoo and CANNOT PUSH, git is the transport between them. ⚠ master-spec.md §3.1-3.2 and design/architecture-design.md are OBSOLETE where they name AI Drive as the source of truth — both carry banners; git is the truth. TWO analyst packages inform the build (Garma = gamma-map-first, Wicks = charts-first); BUILD-PLAN.md is the master sequence across both, and is currently MISSING at HEAD. Several headline measurement rates in this project are ONE-DAY samples and at least one is contradicted by a later day — never quote a rate without its n and its date.",
+  "chatHistory": {
+    "file": "session-state/CHAT-HISTORY.md",
+    "generator": "tools/chat-history.py",
+    "mandate": "Operator-mandated 2026-08-27: 'everytime you make me a build i want this file updated with the chat history of the context. then when i start a new context you will feed the last context history to the new context also as a part of the load gex procedure.'",
+    "onLoad": "READ THE CURRENT-CONTEXT ENTRY OF session-state/CHAT-HISTORY.md IN FULL, immediately after latest-resume-note.md and before anything else. It is the only file that carries what was SAID rather than what was concluded — the corrections, the approaches that were rejected, and the operator exact words. The resume note says where we are; CHAT-HISTORY.md says how we got there and what was already tried.",
+    "onBuild": "python3 tools/chat-history.py --title '<what this context was about>', then fill DECISIONS / SHIPPED / OPEN AT CLOSE before committing. Generated from the real session transcript, never written from memory.",
+    "tiers": "CURRENT CONTEXT is full detail; EARLIER CONTEXTS are compressed to the operator's verbatim prompts plus decisions. Each run demotes the previous current entry automatically, so the file stays bounded.",
+    "rule": "Operator prompts are VERBATIM and are NEVER trimmed in either tier. Compression removes the assistant's replies only."
+  }
 }
