@@ -41,8 +41,14 @@ anything. Get the files from git, in this priority order:
 **Read `.gex-config.json` at the repo root FIRST** — it lists the canonical files and the exact
 load instruction. Then read, in order:
 
-1. `session-state/latest-resume-note.md` — the single source of "where we are": locked scope for
-   the next version, phase status, open threads, standing workflow agreements.
+1. **`session-state/latest-resume-note.md` — READ IT IN FULL, START TO FINISH, BEFORE ANYTHING
+   ELSE. Do not skim it and do not summarise it back to the user.** It is written as a BRIEFING, not
+   a changelog: where we are, the settled vocabulary, the decisions and WHY, the measurements and how
+   much to trust each one, how this user works, and what to do next in order. A context that skips it
+   will re-litigate settled questions and re-introduce fixed bugs — both have happened.
+   ⚠ It contains a section titled **"WHAT THE DATA ACTUALLY SAYS"**. Several headline numbers in this
+   project are ONE-DAY samples and at least one is contradicted by a later day. Never quote a rate
+   from this project without its n and its date.
 1a. **`session-state/PROJECT-CONSTANTS.md` — THE LANDMINES AND THE USER'S STANDING RULES.** Nine
    failure patterns that explain nearly every bug here, plus the process failure that ended the
    2026-08-24 session. ⚠ **The single most-violated rule in this project is ONE AT A TIME: discuss
@@ -202,6 +208,27 @@ unverified premise produces a confident wrong answer.
 
 The same session also invented a six-stage node lifecycle while `node-lifecycle.md` defined four
 stages on two orthogonal axes. **Check the doctrine before reasoning, not after.**
+
+## ⚠️ HANDOFF CONTRACT — what "save" must guarantee (added 2026-08-27)
+
+A save is not done when the files are committed. It is done when **a fresh context could pick up
+mid-sentence**. Before you call a save complete, the resume note must let a new session answer all of
+these WITHOUT asking the user:
+
+1. What is the standing business requirement, in his own words?
+2. What shipped last, what is only a mockup, and what is agreed but unbuilt?
+3. What vocabulary/design decisions are SETTLED, and why — so they are not reopened?
+4. Which measurements are trustworthy, with **n and date**, and which are one-day samples?
+5. What is the next action, in order?
+6. How does this user work — one at a time, discuss before building, mockups rendered first?
+
+If any answer is missing, the save is incomplete. Rewrite the note rather than appending to it: an
+append-only note becomes an archaeology exercise, and the next context will read the top and stop.
+**Keep the previous note as a dated snapshot** (`session-state/<date>_resume-<version>.md`) so the
+history survives without cluttering the live briefing.
+
+Also persist, every time: the CHANGELOG entry (with the REASONING, not just the change), a snapshot
+of the built script under `session-state/snapshots/vNNNN/`, and any new analyst packages or mockups.
 
 ## SAVE — AUTOMATIC ON EVERY BUILD (not a command the user has to remember)
 

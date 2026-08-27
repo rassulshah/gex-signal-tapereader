@@ -49,7 +49,9 @@ const DAY={
 };
 global.recorderLoad=function(){ return { days:{ '2026-08-18':DAY } }; };
 
-eval(['VERSION_STR','buildDayExport'].map(ex).join('\n'));
+// (v14.51) buildDayExport now consults dayHasData/lastDayWithData so an empty day can never be
+// written over a real one — both must be in scope for it to run.
+eval(['VERSION_STR','dayHasData','lastDayWithData','buildDayExport'].map(ex).join('\n'));
 
 // ================= 1. buildDayExport CARRIES EVERYTHING =====================
 const P=buildDayExport('2026-08-18');

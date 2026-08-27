@@ -1,3 +1,34 @@
+## v14.51 — the export that was losing whole sessions, and a real handoff
+
+**⚠⚠ THE PIPELINE WAS SILENTLY LOSING DAYS.** `buildDayExport` used `dateKey || TODAY` — the
+wall-clock day. Run before the open (2026-08-26 at 01:56 ET) "today" was a day with no bars in it
+yet, so the file written was EMPTY and stamped with that date. Nothing ran again after the session,
+so the **182 snapshots and 59 deflections that day actually recorded never reached a file**, and the
+repo held a blank that was indistinguishable from "nothing happened". We spent this session quoting
+statistics at each other while the pipeline feeding them was dropping sessions.
+
+Two guards, because either alone would have failed here: with no explicit date the export now takes
+**the most recent day that HAS DATA**, not the calendar day; and an empty day is **REFUSED loudly**,
+by both export paths — `saveDayToFile` builds first, checks, and only then chooses repo or download,
+where before it handed `TODAY` straight to `repoExportDay` and reintroduced the very bug.
+
+**THE HANDOFF.** `session-state/latest-resume-note.md` rewritten from scratch as a BRIEFING rather
+than a changelog: the standing requirement in his own words, what is shipped vs mockup-only vs
+agreed-unbuilt, the settled level vocabulary and why it is settled, **what the data actually says
+with n and date beside every rate**, how this operator works, and the next actions in order. The
+previous note is kept as a dated snapshot.
+
+The `gex` skill gains a **HANDOFF CONTRACT**: a save is not complete when files are committed, it is
+complete when a fresh context can answer six named questions without asking the user. And the load
+procedure now says to read the resume note IN FULL, first, and never to quote a rate from this
+project without its n and its date.
+
+`PROJECT-CONSTANTS.md` gains seven landmines from this session — the two drifting version strings,
+multi-edit scripts that abort and write nothing, literal unicode in the source, rendering mockups
+before sending them, asserting widths and not just offsets, the three unit bugs, and this export.
+
+test_states.js 49 → 60 asserts. Suite green, 6 baseline reds unchanged.
+
 ## v14.50 — an independent review found seven defects in v14.49; all seven fixed
 
 The operator asked for a review. An independent reviewer read only the new code and found seven real

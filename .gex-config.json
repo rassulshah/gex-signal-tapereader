@@ -22,7 +22,11 @@
       "session-state/DECISIONS.md",
       "session-state/PROJECT-CONSTANTS.md",
       "session-state/SKYLIT-FEEDS.md",
-      "session-state/FRAME-APPROACH-REVIEW.md"
+      "session-state/FRAME-APPROACH-REVIEW.md",
+      "BUILD-PLAN.md",
+      "garma/V2-PHASE-PLAN.md",
+      "session-state/ISSUES-NEXT-BUILD.md",
+      "mockups/mockup-ladder-v11.html"
     ],
     "skyliDocs": [
       "skylit-docs/core-concepts/core-concepts.md",
@@ -64,7 +68,13 @@
       },
       "warning": "NEVER compare a number from one window, book or scale against another. Four separate false-alarm bugs came from exactly that."
     },
-    "loadNote": "Read session-state/PROJECT-CONSTANTS.md AND session-state/latest-resume-note.md BOTH \u2014 the constants file holds the failure patterns and the user's standing rules, the resume note holds only where we are. Then DECISIONS.md (why the panel is the way it is, D-1..D-13) and INSIDERFINANCE.md (the second book). \u26a0 FRAME-APPROACH-REVIEW.md is a SNAPSHOT of 2026-08-23 \u2014 later builds closed some of its flaws without updating it, so verify every item against the code before calling it open."
+    "loadNote": "Read session-state/PROJECT-CONSTANTS.md AND session-state/latest-resume-note.md BOTH \u2014 the constants file holds the failure patterns and the user's standing rules, the resume note holds only where we are. Then DECISIONS.md (why the panel is the way it is, D-1..D-13) and INSIDERFINANCE.md (the second book). \u26a0 FRAME-APPROACH-REVIEW.md is a SNAPSHOT of 2026-08-23 \u2014 later builds closed some of its flaws without updating it, so verify every item against the code before calling it open.",
+    "analystPackages": [
+      "garma/claude_package_v2/rules.json",
+      "garma/claude_package_v2/revision_audit/named_pattern_ontology.json",
+      "wicks/rules.json",
+      "wicks/research/SYNTHESIS_AUDIT.md"
+    ]
   },
   "loadCommand": {
     "aliases": [
@@ -92,5 +102,6 @@
     "instruction": "When user invokes any of the aliases above, fetch ALL canonical files from the GitHub repository (rawUrlBase URLs), read the full userscript, read all Skylit platform docs, and report: (1) files loaded, (2) code architecture understanding, (3) platform understanding, (4) current version, (5) patch state, (6) next step. Do NOT ask for clarification on repo location \u2014 use the URLs above."
   },
   "version": "2026-08-18",
-  "lastUpdated": "2026-08-19T02:00:00Z"
+  "lastUpdated": "2026-08-19T02:00:00Z",
+  "loadInstruction": "\u26a0 2026-08-27: READ session-state/latest-resume-note.md IN FULL FIRST \u2014 it is a briefing, not a changelog, and a context that skips it will re-litigate settled decisions. TWO analyst packages now inform the build (Garma = gamma-map-first, Wicks = charts-first); BUILD-PLAN.md is the master sequence across both. Several headline measurement rates in this project are ONE-DAY samples and at least one is contradicted by a later day \u2014 never quote a rate without its n and its date."
 }

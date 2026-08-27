@@ -6,6 +6,43 @@ Touch this file only when one of these things actually changes.
 
 ---
 
+## LANDMINES ADDED 2026-08-27 (each cost real rework this session)
+
+**L-A · TWO VERSION STRINGS, AND THEY DRIFT.** `// @version` in the header and `var GPTS_VERSION`
+are separate. Only the header was bumped from v14.40 to v14.45, so the panel footer reported v14.39
+through SIX installs — every one of which had landed — while the operator was being told to verify
+the footer. Bump both. `test_ladder` asserts they are equal.
+
+**L-B · A MULTI-EDIT SCRIPT THAT ABORTS WRITES NOTHING.** Python edit scripts that assert-then-exit
+discard every successful edit made earlier in the same run. The file has been left referencing a
+variable that no longer existed — a ReferenceError `node -c` cannot see, because it is scope, not
+syntax. ONE EDIT, ONE WRITE, VERIFY.
+
+**L-C · THE SOURCE CONTAINS LITERAL `—`, `÷`, `◂`, `’`.** Not `\u` escapes. Match them literally in
+edit scripts. And a shell heredoc turns `\'` into `\\'`, which ends a JS string early — that shipped
+a mockup that rendered an empty frame.
+
+**L-D · RENDER EVERY MOCKUP BEFORE SENDING IT.** Nine went out unrendered this session; one was
+broken. Load it headless (Playwright, `executablePath:'/opt/pw-browsers/chromium'`), capture
+`pageerror`, screenshot it, and run a pairwise bounding-box OVERLAP AUDIT. That audit caught four
+collisions that no screenshot explained and one column with a NEGATIVE width.
+
+**L-E · ASSERT WIDTHS, NOT JUST OFFSETS.** A layout test checked that column offsets were ordered —
+they were — while a 50px word sat in a 44px cell and printed over its neighbour. Assert
+`offset + width <= next offset`.
+
+**L-F · UNITS ARE THE MOST COMMON REAL BUG IN THIS FILE.** Three separate ones this session:
+`PEAK.m[k]` (dollars) divided by `usdK` (THOUSANDS) → every day-peak outline maxed out; a past close
+converted with the SPX→ES basis (~1.002) instead of the underlying→display ratio (~10.04) → a state
+that could never be false; tap tolerances written in SPY units (1-pt strikes) applied to SPXW (5-pt
+strikes) → ten times too tight, so a defended King read as untested. **Before comparing two numbers
+in this file, name both units out loud.**
+
+**L-G · AN EMPTY EXPORT IS WORSE THAN NO EXPORT.** `buildDayExport` used the wall-clock day, so a
+pre-open run wrote an empty file stamped with that date and nothing overwrote it — indistinguishable
+from "nothing happened", and one real session was lost that way. Fixed in v14.51 with two guards.
+
+
 ## ⚠ EIGHT FAILURE PATTERNS — THESE EXPLAIN NEARLY EVERY BUG IN THIS PROJECT
 
 **1. Mislabeling.** A value shown under a label implying a different source, window or scale. The ladder

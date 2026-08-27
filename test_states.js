@@ -168,5 +168,29 @@ ok(/LIKE FOR LIKE, OR NOT AT ALL/.test(src), 'r7 the unit mixing is documented')
 ok(/if\(frDP\.usdK==null\) continue;/.test(src),
    'r7b a node with no dollar reading sits the contest out rather than inventing one');
 
+
+// ================= (v14.51) THE EXPORT THAT LOST A SESSION =================
+// `dateKey || TODAY` exported the wall-clock day. Run before the open, "today" had no bars yet, so
+// the file written was EMPTY and stamped with that date — and nothing overwrote it afterwards. The
+// 182 snapshots and 59 deflections 2026-08-26 actually recorded never reached a file, while the repo
+// held a blank that looked exactly like a completed session.
+eval(ex('dayHasData')); eval(ex('lastDayWithData'));
+ok(dayHasData({snaps:{SPY:[1,2]},events:{}})===true,  'x1 a day with bars has data');
+ok(dayHasData({snaps:{SPY:[]},events:{}})===false,    'x2 a day with empty arrays does NOT');
+ok(dayHasData({snaps:{},events:{}})===false,          'x3 ...nor an empty shell');
+ok(dayHasData(null)===false,                          'x4 ...nor a missing day');
+ok(dayHasData({defl:{SPY:[1]}})===true,               'x5 deflections alone count as data');
+const DB={days:{'2026-08-24':{snaps:{SPY:[1]}}, '2026-08-25':{snaps:{SPY:[1,2]}}, '2026-08-26':{snaps:{SPY:[]}}}};
+ok(lastDayWithData(DB)==='2026-08-25',
+   'x6 the most recent day WITH DATA is chosen, not the latest calendar key', lastDayWithData(DB));
+ok(lastDayWithData({days:{}})===null, 'x7 no data anywhere = null, never a guess');
+ok(/AN EXPORT MUST NEVER WRITE AN EMPTY DAY OVER A REAL ONE/.test(src), 'x8 the incident is recorded at the site');
+ok(/if\(!dayHasData\(day\)\)\{/.test(src) && /refused:/.test(src),
+   'x9 an empty day is REFUSED with a reason, not written silently');
+ok(/if\(!payload \|\| payload\.empty\)\{/.test(src),
+   'x10 ...and saveDayToFile honours the refusal before it writes or downloads anything');
+ok(/repoExportDay\(payload\.date, false\)/.test(src),
+   'x11 the repo path uses the RESOLVED date, not the wall-clock day that caused this');
+
 console.log('test_states: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

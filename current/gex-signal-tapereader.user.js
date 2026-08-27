@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.50
+// @version    14.51
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -620,7 +620,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.50';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.51';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -5317,10 +5317,44 @@ function buildFeatureMatrix(day){
   }catch(e){}
   return rows;
 }
+// ⚠⚠ (v14.51) AN EXPORT MUST NEVER WRITE AN EMPTY DAY OVER A REAL ONE — AND IT DID.
+// `dk = dateKey || TODAY` exported whatever calendar day it happened to be. Run before the open —
+// 2026-08-26 at 01:56 ET — "today" was a day with no bars in it yet, so the file written was EMPTY
+// and stamped with that date. Nothing ran again after the session, so the 182 snapshots and 59
+// deflections that day actually recorded never reached a file, and the repo held an empty record
+// that looked exactly like "nothing happened". A measurement programme that silently loses sessions
+// cannot settle anything, and this one lost one while we were quoting statistics at each other.
+// TWO GUARDS, because either alone would have failed here:
+//   1. with no explicit date, export the most recent day that HAS DATA, not the wall-clock day;
+//   2. refuse outright to build an export whose day is empty, and say so loudly.
+function dayHasData(day){
+  try{
+    if(!day) return false;
+    var n=0;
+    ['snaps','events','feat','defl','pblog'].forEach(function(k){
+      var v=day[k]; if(!v) return;
+      if(Object.prototype.toString.call(v)==='[object Array]') n+=v.length;
+      else if(typeof v==='object') for(var s in v){ if(Object.prototype.toString.call(v[s])==='[object Array]') n+=v[s].length; }
+    });
+    return n>0;
+  }catch(e){ return false; }
+}
+function lastDayWithData(db){
+  try{
+    var ds=Object.keys((db&&db.days)||{}).sort();
+    for(var i=ds.length-1;i>=0;i--) if(dayHasData(db.days[ds[i]])) return ds[i];
+  }catch(e){}
+  return null;
+}
 function buildDayExport(dateKey){
   var db=recorderLoad();
-  var dk=dateKey||TODAY;
+  var dk=dateKey || (dayHasData(db.days&&db.days[TODAY]) ? TODAY : (lastDayWithData(db)||TODAY));
   var day=(db.days&&db.days[dk])?db.days[dk]:{snaps:{},events:{}};
+  if(!dayHasData(day)){
+    // an empty export is worse than none: it overwrites a real record with a plausible-looking blank
+    return { schema:'gex-day-export/v1', date:dk, empty:true, generatedAt:new Date().toISOString(),
+             refused:'REFUSED — this day has no recorded bars. Exporting it would write an empty file that is indistinguishable from a completed session. Nothing was written.' };
+  }
   return {
     schema:'gex-day-export/v1',
     // (v10.42) FEEDBACK LOOP payload: the projection scorecard + auto tuning
@@ -5387,9 +5421,17 @@ function saveDayToFile(dateKey){
   // (a name the push task never looks for) while the auto export wrote `data/<date>.json`; the
   // banner flipped only for the download. Both buttons now go through repoExportDay (repo folder
   // first, download of the SAME filename as fallback) and success flips the banner.
-  try{ if(typeof repoExportDay==='function'){ repoExportDay(dateKey||TODAY, false); return (dateKey||TODAY)+'.json'; } }catch(e0){}
+  // ⚠ (v14.51) BOTH PATHS MUST HONOUR THE REFUSAL. repoExportDay was handed `dateKey||TODAY`, which
+  // reintroduced the wall-clock day the guard exists to avoid; and a refused payload must never be
+  // written or downloaded. Build FIRST, check, then choose a path.
+  var payload=null;
+  try{ payload=buildDayExport(dateKey); }catch(eB){ console.warn('[GPTS] export build failed',eB); return null; }
+  if(!payload || payload.empty){
+    console.warn('[GPTS] '+((payload&&payload.refused)||'export refused — no recorded bars for that day'));
+    return null;
+  }
+  try{ if(typeof repoExportDay==='function'){ repoExportDay(payload.date, false); return payload.date+'.json'; } }catch(e0){}
   try{
-    var payload=buildDayExport(dateKey);
     var name=payload.date+'.json';
     var blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
     var url=URL.createObjectURL(blob);
