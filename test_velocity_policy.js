@@ -29,8 +29,12 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
 // VEL_META sat at ts:0 while Skylit's ladder was on screen. The comment made the mistake look considered.
 {
   ok(/function velStart\(/.test(src), 'the harvest has its own starter');
-  ok(/setInterval\(function\(\)\{ try\{ velHarvest\(\); \}catch\(e\)\{\} \}, VEL_MS\)/.test(src),
+  // (v14.55) the same timer also latches the close-of-session book — it needs the SAME clock,
+  // because the latch must be written from the last healthy LIVE harvest, not from a feed tick.
+  ok(/setInterval\(function\(\)\{ try\{ velHarvest\(\); \}catch\(e\)\{\}[\s\S]{0,120}\}, VEL_MS\)/.test(src),
      'driven by its own timer, not by a feed tick');
+  ok(/lastBookSave\(\); \}catch\(e2\)\{\} \}, VEL_MS\)/.test(src),
+     '...and the close-of-session latch rides that same harvest clock');
   ok(/velStart\(\); \}catch\(eVS\)/.test(ex('buildPanel')), 'started when the panel is built');
   // --- INVERTED: it must NEVER be reachable only through the feed path again ---
   // ⚠ STRIP COMMENTS FIRST. The comment explaining this very removal contains both `if(haveFeed){`

@@ -65,9 +65,11 @@ ok(pickSessionDay([{time:'x'},{}]).fallback===false, 'junk timestamps are skippe
   const entries=['recordNodeSnapshot','recordOutcomeEvent','recordDeflections','actRecord','resolveFeatureOutcomes'];
   entries.forEach(fn=>{
     const b=ex(fn);
-    ok(/typeof inReplay==='function' && inReplay\(\)\) return/.test(b),
+    // (v14.55) the guard is recorderBlind() = inReplay() || showingStaleBook(). Accept either
+    // spelling: what this asserts is that the path is GUARDED, not which gate it names.
+    ok(/typeof (inReplay|recorderBlind)==='function' && (inReplay|recorderBlind)\(\)\) return/.test(b),
        'GUARD 2: '+fn+' writes NOTHING while replaying a past session');
-    ok(/typeof inReplay/.test(b),
+    ok(/typeof (inReplay|recorderBlind)/.test(b),
        '  ...and guards with typeof, so it cannot ReferenceError inside its own try/catch');
   });
   ok(/convertFiberCandles/.test(src) && /SESSION_DAY\s*=\s*pickSessionDay/.test(src),

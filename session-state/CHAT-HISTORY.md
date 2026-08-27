@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-27 · v14.54 · session `115bed5f` — v14.54: the ladder re-laid to the approved mockup; v14.52 verified
+## 2026-08-27 · v14.55 · session `115bed5f` — v14.55: the close-of-session book, and the one-file delivery rule
 
-_4 operator prompts · transcript `115bed5f-f45c-559e-a15a-46475dd506fc.jsonl`_
+_8 operator prompts · transcript `115bed5f-f45c-559e-a15a-46475dd506fc.jsonl`_
 
 ### THE EXCHANGE
 
@@ -101,10 +101,154 @@ The mockup answers the width question — but laying it over the shipped code su
 
 Building the compaction now.
 The overlap audit earned its keep — it found two real defects, one of which explains an old mystery:
+**v14.54 — the layout half of your last instruction.** Built to `mockup-ladder-v11.html`, your own approved spec, not to anything I invented.
+
+**Tampermonkey — update ONLY what changed:**
+
+- **Tapereader v14.54** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+- Companion v1.14 — UNCHANGED, do not reinstall
+
+Then wait ~5 min for the raw CDN, and **RELOAD the Atlas tab** — footer must read v14.54.
+
+---
+
+**First: v14.52 is verified.** Your live panel at 16:41 CT returned `inPlace:true, err:null`, last write 2.9 min old on a 180s cadence. Two builds reasoned about a write that had never run; it runs.
+
+**Four changes, each deleting width rather than tuning it:**
+
+| | |
+|---|---|
+| **%King moved inside its own bar** | the parked column is gone entir …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+
+**me (22:06):** The stop hook caught something more important than a dirty tree — **the payload I just sent is missing two files, by the exact mechanism I documented two hours ago.**
+You're right — one file. Here it is.
+`HDRLINES=123` matches the `exit /b 0` line — header arithmetic checks out, CRLF, dash-free name.
+**installv1454.bat** — download, double-click. Ignore the two files I sent before it.
+
+**Tampermonkey — update ONLY what changed:**
+
+- **Tapereader v14.54** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+- Companion v1.14 — UNCHANGED, do not reinstall
+
+Wait ~5 min for the raw CDN, then **reload the Atlas tab** — footer must say v14.54.
+
+One thing you should know rather than discover: the ladder is now 618px wide against your 454px panel body, so it will still scroll sideways. Widen the panel to about 620 and every column lands on screen at once.
+
+**OPERATOR:**
+> make sure this instruction is somewhere when load gex happens so the next context knows i am supposed to get 1 install file. also are you saving chat history like you are supposed to . the instructions should indicate that
+
+**me (22:08):** Both fair. Let me answer the second one with evidence rather than a claim, then fix the first — because the first is my fault and it's a contradiction in your own docs, not just a missing note.
+Confirmed — and it's not a missing note, it's three documents disagreeing:
+
+| source | says |
+|---|---|
+| `skills/gex/SKILL.md` :280 | *"ship ONE self-contained installer `.bat`"* — your rule, 2026-08-15 |
+| `PROJECT-CONSTANTS.md` :441 | *"The primary delivery is now zip + `tar -xf`"* |
+| `tools/build-installer.py` :401 | prints **"DELIVER THESE TWO FILES (primary)"** |
+
+I followed the builder's banner. Fixing all three, and pinning it with a test rather than prose.
+Understood — you're blocked, that takes priority. Let me look at what the last-session rule actually does.
+The rule looks right in code — so let me measure your live panel rather than guess, since the box is what lies here.
+Both of your rules are now enforced by a red build, not by prose — `test_delivery.js`, 21 assertions, four of them mutation-tested:
+
+- **One file**: the builder's own banner was the culprit. It printed *"DELIVER THESE TWO FILES (primary)"* while the skill said *"ship ONE"*. All six sources a context reads — config, skill, constants, resume note, checklist, builder — now carry your exact words, and the test goes red if any of them stops.
+- **Chat history**: yes, regenerated this build and green (`test_chat_history.js`, 24/24, stamped v14.54). The instruction now says to run it **last**, after the final exchange — which means this conversation's tail goes in at the next build.
+
+---
+
+Now your blocker. I measured your panel rather than guess, and **the last-day rule is working correctly — it isn't the problem.**
+
+```
+session : showing 2026-08-27 · replay:false · rth:false · "live/today"
+phase   : CLOSE …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+
+**me (22:13):** Yes — building it. Let me first read how the book's expiry is decided, because the recorder must be blind to a stale book exactly like it is to a replay.
+The panel isn't blank after hours — it's *flat*: v14.5 already tolerates the rolled expiry, but every velocity delta is zero, so states, ROC and rolls all go quiet. So the fallback has to latch the last **live** book and replay it. Recorder safety first.
+The badge landed inside the IRT branch and appends to `out` where that scope builds `warn` — a swallowed ReferenceError waiting to happen (failure pattern #5). Fixing the placement.
+Six existing tests broke — and they broke *correctly*: they stub `inReplay` to prove the recorder stays silent, and the guards now call `recorderBlind`. Fixing the tests in the same commit so this can't become camouflage.
+You've hit your monthly spend limit · raise it at claude.ai/settings/usage?from=cc_cli_limit_message · your weekly limit resets Aug 30, 12am (UTC)
+
+**OPERATOR:**
+> continue.. and why are you taking so long
+
+**me (22:20):** Fair. Honest answer: the fallback had to route through `velAt`/`tapeMap`, which the **recorder** also reads — so a mistake there writes a frozen book into `data/*.json` as if it were live and silently poisons every rate we've measured. That meant converting nine write guards, and six existing tests broke correctly and had to be repaired. That's the time. Finishing now.
+
+### DECISIONS
+
+- **BUILT THE APPROVED MOCKUP, NOT A NEW DESIGN (v14.54).** He said "just give me the build" with the
+  width strategy formally undecided. Implemented `mockups/mockup-ladder-v11.html` — the spec he had
+  already reviewed — and left the one real open question (his panel is 454px, the mockup is drawn at
+  544px) to him rather than inventing an answer.
+- **THE ONE-FILE RULE WAS BROKEN BY A TOOL BANNER, NOT A MISSING NOTE.** `build-installer.py` printed
+  "DELIVER THESE TWO FILES (primary)", PROJECT-CONSTANTS called that pair "the primary delivery", and
+  the skill said "ship ONE". Three documents, two answers; I followed the banner and sent three
+  attachments. All six sources a load reads now carry his exact words, and `test_delivery.js`
+  (21 asserts, 4 mutation-tested) goes red if one drifts.
+- **`installv*.bat` WAS NOT GITIGNORED** — only `install-v*.bat` was. The dash-free name v14.54
+  introduced would have been swept into history by `git add -A` on his machine: the v13.8 failure
+  that put 28MB of installers in `mockups/`.
+- **THE LAST-DAY RULE WAS NOT BROKEN, AND MUST NOT BE "FIXED" (v14.55).** Measured at 17:11 CT:
+  `pickSessionDay` returned today correctly because today had a session. The gap is one layer down —
+  Skylit DROPS the expired chain at the close, so the ladder becomes tomorrow's book with every rate
+  of change at zero (0 of 326 strikes had a non-zero d15). The panel was FLAT, not blank.
+  `pickSessionDay` answers "which day's PRICE BARS"; nothing answered "which expiry's NODES".
+- **THE RECORDER IS BLIND BY CONSTRUCTION, IN ONE PLACE.** Serving latched numbers through `velAt` /
+  `tapeMap` reaches every consumer including the recorder, and a latched book written to
+  `data/*.json` as live would poison every base rate permanently — DECISIONS D-10 exactly. The nine
+  write guards now call `recorderBlind()` = `inReplay() || showingStaleBook()`. A tenth write path
+  means calling `recorderBlind()`.
+- **FOUR CONDITIONS, ALL REQUIRED, ALL FAILING CLOSED.** Setting on · not RTH · latch belongs to the
+  session being shown · the live front expiry has actually rolled. `showingStaleBook` has zero bare
+  `return true`s; the only true is the rolled comparison itself, and a mutation proving that was
+  added after the first six mutations left that path silent.
+- **`tapeMapLive` / `tapeMap` SPLIT** so the latch cannot feed itself: `lastBookSave` reads the raw
+  reader, never the front door, or it would re-latch its own output every tick and never age out.
+- **SIX EXISTING TESTS BROKE CORRECTLY** and were fixed in the same commit rather than left red —
+  they stub the guard to prove the recorder stays silent, and the guard changed name.
+
+### SHIPPED
+
+**v14.54** — the ladder re-laid to mockup v11: %King inside its bar (LAD_KPCT deleted), roll lane
+left of the prices, signed dollar delta profile, King pills and EM edges into the chute, crown test
+counter, price pill takes the tested king's colour, day-peak gated on a 12-point giveback.
+`LAD_ROCW` corrected 56 -> 84, which is the 24px LOCKED-ITEMS could never account for. True width
+657 -> 618. Render + overlap audit caught two collisions, the second inside the fix for the first.
+
+**v14.55** — the close-of-session book: latch the last healthy live SPXW reading during RTH, serve it
+after the close once the live front expiry rolls, badge it in the footer with the session and the
+clock time it froze, gear toggle, `__gptsDebug.lastBook()` explaining any non-engagement.
+`recorderBlind()` centralises nine write guards.
+
+Docs/process: the one-file delivery rule in all six load-time sources · `test_delivery.js` ·
+`test_lastbook.js` (38 asserts, 7 mutation-tested) · `installv*.bat` gitignored.
+Suite 115 green / 6 documented baseline reds. smoke clean.
+
+### OPEN AT CLOSE
+
+1. **Install v14.55 and check the footer badge appears** — it needs a latch, and the latch is only
+   written during RTH, so **the first time it can possibly work is after tomorrow's close.** Tonight
+   `__gptsDebug.lastBook()` will say `no latch yet`. That is correct, and it is the one thing about
+   this build he should be told plainly.
+2. **The ladder width decision — his.** 618 in a 454 body; widening the panel to ~620 is one drag.
+3. **⚠ THE FEATURE RECORDS ARE COLLAPSING** — 3,822 on 08-20, 0 on 08-21 and 08-24, 2 on 08-26,
+   15 on 08-27. Every scorecard and promotion path runs on this. Diagnose BEFORE any study.
+4. **BUILD ITEM 18**, deadline **2026-09-16**.
+5. **Re-push the three files that never landed**: `design/DATA-ARCHITECTURE.md`, the 284-session ES
+   corpus, the mockup PNGs.
+
 
 ### COMMITS THIS CONTEXT
 
 ```
+1775903 v14.54: the ladder re-laid to the approved mockup, plus the one-file delivery rule
 fd20a09 data: daily export 27-Thu-08
 4504238 --help
 0b1dcad v14.52: FlexLevels CSV written in place so IRT stops needing a refresh
@@ -116,8 +260,26 @@ fd20a09 data: daily export 27-Thu-08
 f6e6237 v14.42: Garma V2 phase A1 - dark pool capture, levels on the line, no lifecycle claimed yet
 27dd59b v14.41: Garma V2 phase 0 - air pocket on the path clause, USED level state from tap counts, event caps not suspends, tool-hierarchy refusals
 32243f1 v14.40: THE LEVELS LINE - line on top, levels hanging below, IF levels moved off the main rail onto it
-602b7b9 v14.39
 ```
+
+---
+
+<!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-27 · v14.54 · session `115bed5f` — v14.54: the ladder re-laid to the approved mockup; v14.52 verified
+**OPERATOR:**
+> oh my .. i think i messed up and closed the prior session.. i was working on my project can you remember ?
+## GEX LOADED — v14.53
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> did you read the chat history .. do you know where we were at
+> "well lets implement the fix for all of the inssues incldueing in place.. have you compleeted the load gex and have you ensured the chat history is saved..."
+**OPERATOR:**
+> just give me the build and the tampermnonkey link
 
 ### DECISIONS
 
@@ -143,6 +305,7 @@ f6e6237 v14.42: Garma V2 phase A1 - dark pool capture, levels on the line, no li
 - **DID NOT GUESS THE WIDTH STRATEGY.** 618 into 454 is impossible; the options and their costs are
   written into LOCKED-ITEMS with an explicit instruction not to close it by deleting a column.
 
+
 ### SHIPPED
 
 **v14.54** — the ladder re-laid to mockup v11: %King inside its bar (LAD_KPCT deleted), roll lane
@@ -152,6 +315,7 @@ colour, day-peak outline gated on a 12-point giveback, `LAD_ROCW` corrected 56 �
 True width 657 → 618. test_ladder 84 → 108 asserts, eleven mutation-tested.
 Suite 114 green / 6 documented baseline reds. `tools/smoke.js` clean.
 Render + overlap audit: 53 elements, 0 page errors, 0 overlaps, 0 chute intrusions.
+
 
 ### OPEN AT CLOSE
 
@@ -167,7 +331,9 @@ Render + overlap audit: 53 elements, 0 page errors, 0 overlaps, 0 chute intrusio
 
 ---
 
-<!-- EARLIER-CONTEXTS -->
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 

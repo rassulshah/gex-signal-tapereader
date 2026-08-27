@@ -51,7 +51,9 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
 // ---------- capture must never be poisoned or block the older recorder ----------
 {
   const sc=ex('nevScan');
-  ok(/inReplay\(\)\) return null/.test(sc), 'a replayed session is never recorded as today');
+  // (v14.55) recorderBlind() covers replay AND the close-of-session book
+  ok(/(inReplay|recorderBlind)\(\)\) return null/.test(sc),
+     'a replayed session — or a latched close-of-session book — is never recorded as today');
   ok(/day\._lastBar===bar/.test(sc), 'one scan per closed bar, not per render');
   ok(/try\{ nevScan\(activeSym\(\)\); \}catch\(eNS\)\{\}/.test(src) &&
      /try\{ nevBackfill\(activeSym\(\)\); \}catch\(eNB\)\{\}/.test(src),

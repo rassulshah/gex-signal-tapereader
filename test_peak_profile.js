@@ -23,6 +23,11 @@ eq(esTick(NaN),     null,      'non-numbers stay null');
 global.localStorage={_s:{},getItem(k){return this._s[k]??null},setItem(k,v){this._s[k]=String(v)}};
 global.STATE={SPY:{lastClosedB:0}};
 global.inReplay=()=>false;
+// (v14.55) the recorder guards call recorderBlind() now — ONE gate covering replay AND the
+// close-of-session book, so a latched book can never be written as live. Stub both: the guard
+// deliberately fails toward recording, so an unstubbed recorderBlind makes this test pass for the
+// wrong reason.
+global.recorderBlind=()=>(global.inReplay()||false);
 global.velOk=()=>true;
 let TODAY_STR='2026-08-25';
 global.ctTodayStr=()=>TODAY_STR;
@@ -74,10 +79,10 @@ ok(peakOf(765)===900e6||peakOf(765)===null, 'note: same-day other-book rows are 
   eq(peakOf(7700), 5e6,  'today accumulates fresh'); }
 
 // replay never writes
-{ global.inReplay=()=>true;
+{ global.inReplay=()=>true; global.recorderBlind=()=>true;
   VEL={ 7700:{k:7700,cur:99e6,exp:'2026-08-26'} }; STATE.SPY.lastClosedB=4; peakTick('SPY');
   eq(peakOf(7700), 5e6, 'replay writes nothing');
-  global.inReplay=()=>false; }
+  global.inReplay=()=>false; global.recorderBlind=()=>false; }
 
 console.log(pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

@@ -1436,7 +1436,10 @@ eval(ex('emBand'));
   // ⚠ (v11.85) REPLAY MUST NOT BE RECORDED AS TODAY. sampleTapeHistory keys by todayKey() and is NOT
   // replay-guarded, so a Sunday replay of Friday writes Friday's nodes under Sunday's date — mislabelled,
   // which is worse than missing, because nothing downstream can tell.
-  ok(/inReplay\(\)\)\{ out\.why='replay/.test(t), 'replay refuses to record');
+  // (v14.55) the guard is recorderBlind() = inReplay() || showingStaleBook() — one gate covering a
+  // replay AND a latched close-of-session book, so neither can be written as live.
+  ok(/(inReplay|recorderBlind)\(\)\)\{ out\.why='replay/.test(t),
+     'replay — or a latched close-of-session book — refuses to record');
   {
     const code=t.split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
     ok(code.indexOf('inReplay')<code.indexOf('sampleTapeHistory'),

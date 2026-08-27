@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-08-27 · panel v14.54 · supersedes every earlier resume note_
+_written 2026-08-27 · panel v14.55 · supersedes every earlier resume note_
 
 ---
 
@@ -17,9 +17,14 @@ Three mechanisms prevent a repeat and none works if you skip it:
 2. **THE LOAD CLONES FULL.** `git clone` with no `--depth`. Before ever concluding something was
    never built: `git log --all --oneline -S"<term>" -i`.
 3. **`session-state/CHAT-HISTORY.md`** — what was *said* last context, in his exact words, generated
-   by `tools/chat-history.py` from the real transcript. `test_chat_history.js` fails the build if its
-   stamped version does not match `GPTS_VERSION`. Read the CURRENT-CONTEXT entry **second**, right
-   after this note.
+   by `tools/chat-history.py` from the real transcript. Read the CURRENT-CONTEXT entry **second**,
+   right after this note.
+   ⚠⚠ **AND REGENERATE IT ON EVERY BUILD — he must never have to ask whether you did.** He asked on
+   2026-08-27 (*"are you saving chat history like you are supposed to"*), which is the question this
+   mechanism exists to make unnecessary. `python3 tools/chat-history.py --title '<...>'`, then fill
+   DECISIONS / SHIPPED / OPEN AT CLOSE by hand. **`test_chat_history.js` FAILS THE BUILD** when the
+   stamped version does not equal `GPTS_VERSION`, so a forgotten regeneration goes red rather than
+   quiet. Run it LAST, after the final exchange, or the tail of the session is missing from it.
 
 ⚠⚠ **A COMMIT IS NOT A PUSH, AND THIS BIT US AGAIN.** The 2026-08-27 session committed nine times in
 the sandbox; the installer squashed them into one commit named `--help` and **three files never
@@ -147,8 +152,13 @@ stopped recording will produce confident numbers about three days in August.
 2. **RENDER EVERY MOCKUP HEADLESS BEFORE SENDING IT**, capture `pageerror`, and run the **pairwise
    bounding-box OVERLAP AUDIT**. In v14.54 it caught two collisions no screenshot explained — one of
    them in the fix for the other. `/tmp/ladshot.js` style, `executablePath:'/opt/pw-browsers/chromium'`.
-3. **Deliver ONE install file per build, dash-free name `installvNNNN.bat`, plus the Tampermonkey
-   links, EVERY time.** Downloads strip dashes AND dots.
+3. ⚠⚠ **DELIVER EXACTLY ONE FILE.** His words, 2026-08-15 and again 2026-08-27: *"you are supposed
+   to just give me an install file."* One `installvNNNN.bat` (dash-free, dot-free — downloads strip
+   both), plus the Tampermonkey links as text. **Not a zip+applier pair. Not "here are both". Not
+   the installer plus a render plus a screenshot.** On 2026-08-27 the builder's own banner said
+   "DELIVER THESE TWO FILES (primary)" while the skill said "ship ONE", and a context followed the
+   banner. All three sources now agree and `test_delivery.js` fails the build if one drifts.
+   The zip+applier is the FALLBACK — send it only if he reports the .bat failed.
 4. **Bump BOTH version strings** — `// @version` and `var GPTS_VERSION`. `test_ladder` asserts they
    match. Also bump the four version pins: `test_direction_grade`, `test_pipeline_indicator`,
    `test_read_v1047`, `test_rules_v2`.
@@ -161,9 +171,27 @@ stopped recording will produce confident numbers about three days in August.
 
 ---
 
+## 6c · THE CLOSE-OF-SESSION BOOK (v14.55) — AND WHY IT WILL LOOK BROKEN TONIGHT
+
+After the close Skylit drops the expired chain, so the ladder becomes TOMORROW's book with every
+rate of change at zero — the panel goes FLAT, not blank. v14.55 latches the last healthy live SPXW
+reading during RTH and serves it once the front expiry rolls, badged in the footer with the session
+and the time it froze.
+
+⚠⚠ **THE LATCH IS WRITTEN DURING RTH ONLY AND THERE HAS NEVER BEEN ONE.** Until a full RTH session
+runs with v14.55 installed, `__gptsDebug.lastBook()` reports `no latch yet` and the panel behaves
+exactly as before. **That is correct, not a failure.** The first time it can engage is after the
+next close. Do not "fix" it before then.
+
+⚠ **THE RECORDER IS BLIND TO IT BY CONSTRUCTION.** Nine write paths call `recorderBlind()` =
+`inReplay() || showingStaleBook()`. **A tenth write path means calling `recorderBlind()`** — never
+`inReplay()` directly. `test_lastbook.js` scans for strays and goes red on one.
+⚠ `pickSessionDay` was NEVER the problem and must not be loosened: it answers which day's PRICE BARS
+to draw and it answers correctly.
+
 ## 7 · WHAT TO DO NEXT, IN ORDER
 
-1. **Install v14.54 and look at the ladder.** Then the width decision in `LOCKED-ITEMS.md` — most
+1. **Install v14.55 and look at the ladder.** Then the width decision in `LOCKED-ITEMS.md` — most
    likely just widening the panel to ~620, which is one drag.
 2. **DIAGNOSE THE FEATURE-RECORD COLLAPSE (§5).** Nothing statistical is trustworthy until this is
    understood. It is now ahead of the study in priority, because it decides what the study can say.

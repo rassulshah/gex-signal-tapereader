@@ -30,7 +30,11 @@ global.document={ visibilityState:'visible' };
 global.readTapeFromDOM=function(sym){ return { pct:{'999.00':100,'998.00':50,'997.00':40,'996.00':30,'995.00':25,'994.00':22}, king:999, count:6, kingSrc:'dollar', kingConflict:false }; };
 
 eval(src.match(/var FEED_REJECTS=[\s\S]*?;\n/)[0]);
-eval(['feedNewestT','extractWalls','synthDerived','feedStructMap','onFeed','ensureFeeds','tapeMap'].map(ex).join('\n'));
+// (v14.55) tapeMap became a thin front door over tapeMapLive: it serves the latched
+// close-of-session book when the live front expiry has rolled away. This suite tests the LIVE
+// reader, so both halves are loaded and the stale-book gate is stubbed OFF.
+global.showingStaleBook=()=>false;
+eval(['feedNewestT','extractWalls','synthDerived','feedStructMap','onFeed','ensureFeeds','tapeMapLive','tapeMap'].map(ex).join('\n'));
 
 // ---- synthetic RAW GAMMA payload: King 775 (|v| largest), 770 is -gamma, 780 +gamma ----
 function gammaPayload(){

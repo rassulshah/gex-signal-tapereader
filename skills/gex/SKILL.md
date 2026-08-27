@@ -277,7 +277,13 @@ getting files to the USER (SendUserFile) and into the git repo (source of truth)
    data-layer scope, shelved items, OPEN THREADS (exactly where discussion stopped, in the user's
    "1 by 1" style), mockups list, standing workflow agreements, any live-DOM/parser findings.
 2. Prepend a CHANGELOG entry (mark `PLANNED / NOT YET BUILT` if no code shipped).
-3. DELIVERY RULE (user-mandated 2026-08-15): ship ONE self-contained installer `.bat` — files
+3. ⚠⚠ **DELIVERY RULE — ONE FILE. user-mandated 2026-08-15, restated verbatim 2026-08-27:**
+   **"you are supposed to just give me an install file."** Send EXACTLY ONE `.bat`, named
+   `installvNNNN.bat` (no dashes, no dots — downloads strip them), plus the Tampermonkey links as
+   text. Never a zip+applier pair, never "here are both options", never extra attachments alongside
+   it. `tools/build-installer.py` prints the one filename to send; `test_delivery.js` fails the build
+   if this rule stops being stated. The zip+applier is a FALLBACK, sent only if he says the .bat
+   failed. Original wording follows: ship ONE self-contained installer `.bat` — files
    embedded as base64 inside the .bat (no separate zip). ⚠️ **NO POWERSHELL ANYWHERE — Avast flags it
    (IDP.HELU.PSE88).** Decode with `more +<HDRLINES>` then `certutil -f -decode` then `tar -xzf`;
    `<HDRLINES>` must equal the `exit /b 0` line number and be recomputed whenever the header changes.

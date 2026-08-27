@@ -287,10 +287,24 @@ assert not re.search(r'v11\.(?!' + re.escape(V.split('.', 1)[1]) + r')\d+', txt.
 # user ran an older one and reported bugs that had already been fixed three builds earlier. A file
 # whose name cannot be told apart from seven others is a file that gets run out of order.
 # `install.bat` stays as the canonical repo path (the scheduled task and the docs reference it);
+# ⚠⚠ THE DELIVERY IS **ONE FILE**. OPERATOR-MANDATED 2026-08-15, RESTATED 2026-08-27:
+#   "you are supposed to just give me an install file."
+# He downloads ONE thing and double-clicks it. Not a zip plus an applier, not a pair, not "primary
+# and fallback" - ONE. On 2026-08-27 this banner named the zip+applier pair as primary, and a
+# context followed a two-file banner over his standing rule and sent him three attachments. It was
+# wrong, not the rule.
+# The self-extracting `.bat` IS the deliverable. The zip+applier pair below still gets BUILT, because
+# it is the proven fallback for the day the self-extractor fails on his machine again — but it is
+# never what gets sent unless he is told the .bat failed and asks for it.
+# ⚠ THE NAME CARRIES NO DASHES AND NO DOTS except the extension: downloads strip both, and eight
+# identically-named installers in one session got run out of order.
 # `install-v<VER>.bat` is the copy that gets sent. It is gitignored so it never enters the payload.
 import shutil
 _versioned = 'install-v%s.bat' % V
 shutil.copyfile('install.bat', _versioned)
+# THE FILE THAT ACTUALLY GETS SENT — dash-free, dot-free, unmistakable in a Downloads folder.
+_DELIVER = 'installv%s.bat' % V.replace('.', '')
+shutil.copyfile('install.bat', _DELIVER)
 
 # ==== (v14.3) THE ZIP + APPLIER PAIR — THE PRIMARY DELIVERY ======================================
 # 2026-08-25: the self-extracting installer failed on the user's machine THREE ways in one day —
@@ -398,7 +412,10 @@ assert '-' not in ZIPNAME.replace('.zip','') and '-' not in BATNAME.replace('.ba
 
 print('install.bat  %d bytes  HDRLINES=%d  %d files  script v%s  companion v%s'
       % (os.path.getsize('install.bat'), n, len(names), V, VC))
-print('DELIVER THESE TWO FILES (primary): %s + %s' % (ZIPNAME, BATNAME))
+print('')
+print('==== DELIVER EXACTLY ONE FILE ====')
+print('   %s      <- send THIS, and nothing else' % _DELIVER)
+print('   (fallback only, if he reports the .bat failed: %s + %s)' % (ZIPNAME, BATNAME))
 print('  (install-v%s.bat still exists as the self-extracting fallback)' % V)
 print('round-trip: tar payload AND zip both byte-identical to the working tree')
 # (v14.3, user-directed: "you must give me the tampermonkey link every time you give me an install

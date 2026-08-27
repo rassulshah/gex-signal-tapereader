@@ -17,6 +17,11 @@ global.window={__gptsDebug:{}};
 global.localStorage={_s:{},getItem(k){return this._s[k]??null},setItem(k,v){this._s[k]=String(v)},removeItem(k){delete this._s[k]}};
 global.STATE={SPY:{lastClosedB:0}};
 global.inReplay=()=>false;
+// (v14.55) the recorder guards call recorderBlind() now — ONE gate covering replay AND the
+// close-of-session book, so a latched book can never be written as live. Stub both: the guard
+// deliberately fails toward recording, so an unstubbed recorderBlind makes this test pass for the
+// wrong reason.
+global.recorderBlind=()=>(global.inReplay()||false);
 global.velOk=()=>true;
 global.ctTodayStr=()=>'2026-08-25';
 global.ROLL_MIN_ABS=exVar('ROLL_MIN_ABS'); global.ROLL_MAX_DIST=exVar('ROLL_MAX_DIST'); global.ROLL_MIN_RATIO=exVar('ROLL_MIN_RATIO');
@@ -93,11 +98,11 @@ bar(ROLLING); bar(ROLLING); bar(ROLLING);
   eq(rollLatched('SPY').length, 0, 'yesterday\'s latch is refused'); }
 
 // ---- a replay must never write the latch ----
-{ global.inReplay=()=>true;
+{ global.inReplay=()=>true; global.recorderBlind=()=>true;
   ROLL_LATCH={ day:null, per:{} }; BAR++; STATE.SPY.lastClosedB=BAR; VEL=ROLLING;
   rollLatchTick('SPY');
   eq(Object.keys(ROLL_LATCH.per).length, 0, 'replay writes nothing');
-  global.inReplay=()=>false; }
+  global.inReplay=()=>false; global.recorderBlind=()=>false; }
 
 console.log(pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

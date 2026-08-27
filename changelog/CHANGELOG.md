@@ -1,3 +1,76 @@
+## v14.55 — the close-of-session book, so the panel is not flat after the close
+
+Operator, an hour after the close: *"we are suppose to have a rule to show the last day so i can
+continue working."*
+
+**⚠ THE RULE WAS NOT BROKEN, AND MUST NOT BE "FIXED".** Measured on the live panel at 17:11 CT:
+
+    session   showing 2026-08-27 · replay:false · rth:false      <- pickSessionDay was CORRECT
+    velocity strikes by expiry:  2026-08-28 -> 256 · 2026-09-16 -> 70 · 2026-08-27 -> 0
+    strikes with a non-zero 15m delta: 0 of 326
+
+`pickSessionDay` answers **which day's PRICE BARS to draw**, and it answered right — today had a
+session, so there was nothing to substitute. The gap is one layer down: **Skylit drops the expired
+chain at the close**, so the ladder becomes TOMORROW's book with every rate of change at zero.
+Nothing answered *which expiry's NODES to draw*. The panel was **flat, not blank** — states all fell
+to HOLDING, the ROC column read zeros, rolls stopped, and v14.54's delta profile drew nothing.
+
+**THE FIX.** During RTH the panel latches the last healthy SPXW reading (`gpts_lastbook_v1`: %King
+map, king, kingKd, and each strike's velocity object). After the close, once the live front expiry
+has rolled away from the latched one, `tapeMap('SPXW')` and `velAt()` serve the latch instead. Every
+consumer — ladder, states, ROC, rolls, profile — works unchanged, because they all read those two.
+
+**⚠⚠ AND THE RECORDER IS BLIND TO IT, WHICH IS THE WHOLE RISK OF THE FEATURE.** Serving latched
+numbers through the two shared readers reaches the recorder too, and a latched book written into
+`data/*.json` as though it were live would poison every base rate the learning layer computes,
+permanently and undetectably. That is DECISIONS D-10 exactly. So the nine recorder guards no longer
+test `inReplay()` directly — they call **`recorderBlind()` = `inReplay() || showingStaleBook()`**, one
+place that cannot be half-updated. Adding a tenth write path means calling `recorderBlind()`.
+⚠ The DISPLAY guard in `gammaProfileHtml` deliberately still tests `inReplay()` only, or the profile
+would blank itself in exactly the mode built to render it.
+
+**FOUR CONDITIONS, ALL REQUIRED, AND ALL FAILING CLOSED.** setting on · **never during RTH** · the
+latch belongs to the session being shown · the live front expiry has actually rolled.
+`showingStaleBook` contains **no bare `return true`** — the only true is the rolled comparison itself,
+every other exit returns false, back to the live book. That assertion exists because the first six
+mutations left one path silent: turning the "no live book to compare" exit into `return true` would
+have served the latch on a freshly loaded tab with an empty VEL, i.e. stale numbers during a live
+session, which is the one thing this must never become.
+
+**`tapeMapLive` / `tapeMap` SPLIT.** The original reader survives untouched as `tapeMapLive`;
+`tapeMap` is a thin front door. `lastBookSave` reads the RAW reader — through the front door it would
+re-latch its own output every tick and the book would never age out.
+
+**A MODE YOU CANNOT SEE IS A MODE THAT LIES.** The footer carries `● 2026-08-27 book — frozen 15:00`,
+naming the session and the clock time, with a hover that says nothing is being recorded. ⚠ The first
+draft of that badge appended to `out` from inside the IRT branch — syntactically valid, silently
+dead, swallowed by the catch, and invisible to `node --check`. Failure pattern #5.
+
+⚠ **A DEGRADED BOOK IS NEVER LATCHED** (`n >= SK_MIN_STRIKES`, the same floor `skPiles` refuses
+below). A thin latch would be served for hours as though it were the close, and nothing on the face
+would distinguish it from a quiet day.
+
+⚠⚠ **IT CANNOT WORK TONIGHT.** The latch is written during RTH only, and there has never been one.
+`__gptsDebug.lastBook()` will report `no latch yet (it is written during RTH only)` — which is
+correct behaviour, not a failure. **The first time this can engage is after tomorrow's close.**
+
+test_lastbook.js — 38 asserts, **seven mutation-tested**: revert one recorder path to `inReplay`,
+drop stale-book from `recorderBlind`, latch outside RTH, latch a degraded book, let the latch feed
+itself through the front door, and serve when there is no live book to compare.
+**Six existing suites broke correctly and were fixed in the same commit** rather than left red —
+they stub the guard to prove the recorder stays silent, and the guard changed name.
+Suite 117 green, 6 documented baseline reds. smoke clean.
+
+**ALSO IN THIS BUILD — THE ONE-FILE DELIVERY RULE.** *"you are supposed to just give me an install
+file."* His rule since 2026-08-15, and it broke because three documents disagreed:
+`build-installer.py` printed "DELIVER THESE TWO FILES (primary)", `PROJECT-CONSTANTS` called that
+pair "the primary delivery", and the skill said "ship ONE". I followed the banner and sent three
+attachments. All six sources a load reads now carry his exact words; `test_delivery.js` (21 asserts,
+4 mutation-tested) fails the build if one drifts; the builder prints the single filename to send.
+The chat-history rule is stated beside it, including that it runs **last**.
+⚠ `installv*.bat` was NOT gitignored — only `install-v*.bat` was — so v14.54's dash-free name would
+have been swept into history by `git add -A`. That is the v13.8 failure that put 28MB in `mockups/`.
+
 ## v14.54 — the ladder re-laid to the approved mockup, and the 24px nobody could explain
 
 Operator: *"well lets implement the fix for all of the inssues incldueing in place"* — v14.53 shipped

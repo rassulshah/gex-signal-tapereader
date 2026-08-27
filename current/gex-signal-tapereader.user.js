@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.54
+// @version    14.55
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -141,6 +141,9 @@ var CFG = {
   // some people want none of it, and `prefers-reduced-motion` only covers those who set it at the OS.
   motion: true,
   tapeGate: true,   // (v10.38) suppress structural read when app/tape disagree. false = legacy behaviour.
+  // (v14.55) after the close, serve the latched close-of-session book instead of the rolled one.
+  // A real setting, not a debug flag: someone studying the OVERNIGHT book wants it off.
+  lastBook: true,
   ftReq: true, boPb: true, dir: 'both', nodeThresh: 20, voidBackN: 2,
   trendOn: true, trendMA: { SPY:50, QQQ:50 },
   smaShort: { SPY:9, QQQ:9 }, smaLong: { SPY:21, QQQ:21 },
@@ -189,6 +192,7 @@ function loadCfg(){
       if(o.smaShort){ if(o.smaShort.SPY) CFG.smaShort.SPY=o.smaShort.SPY; if(o.smaShort.QQQ) CFG.smaShort.QQQ=o.smaShort.QQQ; }
       if(o.smaLong){ if(o.smaLong.SPY) CFG.smaLong.SPY=o.smaLong.SPY; if(o.smaLong.QQQ) CFG.smaLong.QQQ=o.smaLong.QQQ; }
       if(typeof o.cfgOpen==='boolean') CFG.cfgOpen=o.cfgOpen;
+      if(typeof o.lastBook==='boolean') CFG.lastBook=o.lastBook;
       if(typeof o.showSPY==='boolean') CFG.showSPY=o.showSPY;
       if(typeof o.showQQQ==='boolean') CFG.showQQQ=o.showQQQ;
       // #5 display
@@ -620,7 +624,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.54';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.55';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -672,6 +676,93 @@ var SESSION_DAY = { day:null, fallback:false };
 // why. A lost session is loud; a silently dead recorder is not. `node tools/smoke.js` calls the session
 // hook, so a missing declaration surfaces as a failed build rather than as a quiet data gap.
 function inReplay(){ try{ return !!(SESSION_DAY && SESSION_DAY.fallback); }catch(e){ return false; } }
+// ============================================================================================
+// (v14.55) THE LAST-SESSION BOOK — "show me the last day so i can continue working"
+//
+// THE PROBLEM, MEASURED ON THE LIVE PANEL 2026-08-27 17:11 CT, an hour after the close:
+//     session   showing 2026-08-27, replay:false, rth:false   <- the day rule was CORRECT
+//     velocity strikes by expiry:  2026-08-28 -> 256 · 2026-09-16 -> 70 · 2026-08-27 -> 0
+//     strikes with a non-zero 15m delta: 0 of 326
+// Skylit DROPS the expired chain at the close, so the ladder becomes TOMORROW's book with every
+// rate of change at zero. The panel was not blank, it was FLAT — states all fell to HOLDING, the
+// ROC column read zeros, rolls stopped, and the v14.54 delta profile drew nothing.
+//
+// ⚠ THE EXISTING RULE WAS NEVER WRONG AND MUST NOT BE "FIXED". `pickSessionDay` answers *which
+// day's PRICE BARS to draw* and it answered correctly — today had a session. It was never built to
+// answer *which expiry's NODES to draw*, which is a different question with a different failure.
+//
+// SO: during RTH we latch the last healthy live book; after the close, if the front expiry has
+// rolled away from the session being shown, we serve that latch instead of a dead one.
+//
+// ⚠⚠ AND THE RECORDER MUST BE BLIND TO IT — this is the whole risk of the feature. Serving latched
+// numbers through velAt()/tapeMap() reaches EVERY consumer, the recorder included, and writing a
+// latched book into data/*.json as though it were live would poison every base rate the learning
+// layer computes, permanently and undetectably. That is DECISIONS D-10 exactly. So the nine
+// recorder guards no longer test inReplay() directly: they call recorderBlind(), which is ONE
+// place that can never be half-updated. Adding a tenth write path means calling recorderBlind().
+var LASTBOOK_KEY='gpts_lastbook_v1';
+var LASTBOOK=null, LASTBOOK_READ=false;
+function lastBookLoad(){
+  if(LASTBOOK_READ) return LASTBOOK;
+  LASTBOOK_READ=true;
+  try{ LASTBOOK=JSON.parse(localStorage.getItem(LASTBOOK_KEY)||'null'); }catch(e){ LASTBOOK=null; }
+  return LASTBOOK;
+}
+// Latched ONLY from a live RTH session, and only from a book healthy enough to be worth keeping.
+// ⚠ A latch written from a degraded read is worse than no latch: it would be served for hours as
+// though it were the close, and nothing on the face would distinguish "thin book" from "quiet day".
+function lastBookSave(){
+  try{
+    if(inReplay()) return;
+    var P=null; try{ P=sessionPhase(); }catch(eP){}
+    if(!P || !P.rth) return;                       // never latch outside a live session
+    var T=null; try{ T=tapeMapLive('SPXW'); }catch(eT){}
+    if(!T || !T.pct || T.king==null) return;
+    var n=T.count||Object.keys(T.pct).length;
+    if(!(n>=SK_MIN_STRIKES)) return;               // same health floor skPiles refuses below
+    var exp=null, vel={};
+    for(var kk in T.pct){
+      var k=parseFloat(kk); if(!(k>0)) continue;
+      var v=null; try{ v=VEL[String(k)]||VEL[kk]; }catch(eV){}
+      if(!v) continue;
+      if(!exp && v.exp) exp=v.exp;
+      vel[kk]={ cur:v.cur, d5:v.d5, d15:v.d15, d60:v.d60,
+                p5:v.p5, p15:v.p15, p60:v.p60, exp:v.exp||null };
+    }
+    LASTBOOK={ day:sessionDayStr(), ts:Date.now(), exp:exp, king:T.king, kingKd:T.kingKd,
+               count:n, kingSrc:T.kingSrc||null, pct:T.pct, vel:vel };
+    LASTBOOK_READ=true;
+    try{ localStorage.setItem(LASTBOOK_KEY, JSON.stringify(LASTBOOK)); }catch(eS){}
+  }catch(e){}
+}
+// The front expiry the LIVE page is currently showing — the thing that rolls at the close.
+function liveFrontExp(){
+  try{
+    var best=null, n=0;
+    for(var kk in VEL){ var v=VEL[kk]; if(!v||!v.exp) continue;
+      if(!best || v.exp<best){ best=v.exp; } n++; }
+    return n?best:null;
+  }catch(e){ return null; }
+}
+// ⚠ FOUR CONDITIONS, ALL REQUIRED. Any one of them alone would serve stale numbers during a live
+// session, which is the failure this feature must not become.
+function showingStaleBook(){
+  try{
+    if(CFG.lastBook===false) return false;
+    var P=null; try{ P=sessionPhase(); }catch(eP){}
+    if(!P || P.rth) return false;                  // 1 · never during RTH
+    var B=lastBookLoad();
+    if(!B || !B.pct || B.king==null) return false; // 2 · we actually have a latch
+    if(B.day!==sessionDayStr()) return false;      // 3 · it is THIS session's book, not an old one
+    var fe=liveFrontExp();
+    if(!fe || !B.exp) return false;
+    return fe!==B.exp;                             // 4 · the live front has actually ROLLED away
+  }catch(e){ return false; }
+}
+// ONE guard for every path that writes. Never test inReplay() directly in a recorder again.
+function recorderBlind(){
+  try{ return inReplay() || showingStaleBook(); }catch(e){ return false; }
+}
 function sessionDayStr(){ try{ return (SESSION_DAY && SESSION_DAY.day) || ctTodayStr(); }catch(e){ return ctTodayStr(); } }
 function pickSessionDay(raw){
   var today=ctTodayStr();
@@ -1273,7 +1364,22 @@ function feedStructMap(sym){
              kingConflict:false, kingKd:null, fromFeed:true };
   }catch(e){ return null; }
 }
+// (v14.55) tapeMapLive is the ORIGINAL reader, unchanged. tapeMap is now a thin front door that
+// serves the latched close-of-session book when the live front expiry has rolled away from it.
+// ⚠ THE SPLIT EXISTS SO THE LATCH CANNOT FEED ITSELF. lastBookSave() reads tapeMapLive(); if it
+// read tapeMap() it would re-latch its own output every tick and the book would never age out.
 function tapeMap(sym){
+  try{
+    if(sym==='SPXW' && showingStaleBook()){
+      var B=lastBookLoad();
+      if(B) return { pct:B.pct, king:B.king, kingKd:B.kingKd, count:B.count,
+                     kingSrc:B.kingSrc, vel:{}, src:'lastbook', stale:true,
+                     staleDay:B.day, staleTs:B.ts, staleExp:B.exp };
+    }
+  }catch(e){}
+  return tapeMapLive(sym);
+}
+function tapeMapLive(sym){
   try{
     var now=Date.now();
     var c=TAPE_CACHE[sym];
@@ -3028,7 +3134,7 @@ function trackSpxwNodes(){
     // ⚠ THE SAME HOLE EXISTS ON THE SPY PATH and is NOT fixed here — it has been running for many
     // versions and silently changing its keying without evidence is its own risk. Recorded in
     // DECISIONS.md D-10 instead. THIS path refuses.
-    if(typeof inReplay==='function' && inReplay()){ out.why='replay \u2014 not recording'; return out; }
+    if(typeof recorderBlind==='function' && recorderBlind()){ out.why='replay \u2014 not recording'; return out; }
     var tp=tapeMap('SPXW');
     if(!tp || !tp.pct || !Object.keys(tp.pct).length){ out.why='SPXW tape unreadable'; return out; }
     if(!(tp.count>=SK_MIN_STRIKES)){ out.why='SPXW tape thin ('+tp.count+' strikes)'; return out; }
@@ -3136,6 +3242,15 @@ function velHarvest(){
 // Read one strike. Never lies about freshness.
 function velAt(k){
   try{
+    // (v14.55) the close-of-session book. ⚠ `stale:false` is DELIBERATE and is not a lie about
+    // freshness: every consumer treats stale:true as "refuse to read this", which would blank the
+    // very columns this mode exists to show. The honesty lives one level up — recorderBlind() stops
+    // it ever being written, and the face carries a badge naming the session and the time it froze.
+    if(showingStaleBook()){
+      var B=lastBookLoad(), lv=B&&B.vel?(B.vel[String(k)]||B.vel[(+k).toFixed(2)]):null;
+      if(lv) return { v:lv, age:0, stale:false, lastBook:true };
+      return null;
+    }
     var v=VEL[k]; if(!v) return null;
     var age=Date.now()-(v.ts||0);
     return { v:v, age:age, stale:(age>VEL_STALE_MS) };
@@ -3154,7 +3269,8 @@ var VEL_MS = 3000;
 function velStart(){
   try{
     if(window.__gptsVelTimer) return;
-    window.__gptsVelTimer = setInterval(function(){ try{ velHarvest(); }catch(e){} }, VEL_MS);
+    window.__gptsVelTimer = setInterval(function(){ try{ velHarvest(); }catch(e){}
+                                                     try{ lastBookSave(); }catch(e2){} }, VEL_MS);
     try{ velHarvest(); }catch(e2){}          // and once immediately, so the first render has data
   }catch(e){}
 }
@@ -3240,7 +3356,7 @@ function rollLatchLoad(){ try{ var s=JSON.parse(localStorage.getItem(ROLL_LATCH_
   if(s && s.per && s.day===ctTodayStr()) ROLL_LATCH=s; }catch(e){} }
 function rollLatchTick(sym){
   try{
-    if(typeof inReplay==='function' && inReplay()) return;      // a replay must never write the latch
+    if(typeof recorderBlind==='function' && recorderBlind()) return;      // a replay must never write the latch
     if(!velOk()) return;
     var S=STATE[sym]||{}; var bar=S.lastClosedB||0; if(!bar) return;
     var today=ctTodayStr();
@@ -3339,7 +3455,7 @@ function peakLoad(){
 }
 function peakTick(sym){
   try{
-    if(typeof inReplay==='function' && inReplay()) return;   // a replay must never write today's peaks
+    if(typeof recorderBlind==='function' && recorderBlind()) return;   // a replay must never write today's peaks
     if(!velOk()) return;
     var today=ctTodayStr();
     // ⚠ the reset must carry the schema stamp, or every save after a day roll is discarded at the
@@ -3742,7 +3858,7 @@ function recordNodeSnapshot(sym){
     // (v11.55) GUARD 2: last-session mode replays a PAST day. Writing those bars as if they were
     // today would poison every base rate the learning layer computes — permanently, and
     // undetectably after the fact. Nothing records while the panel is showing a replayed session.
-    if(typeof inReplay==='function' && inReplay()) return;
+    if(typeof recorderBlind==='function' && recorderBlind()) return;
     var S=STATE[sym]; if(!S) return;
     var bar=S.lastClosedB||0;
     if(!bar) return;
@@ -4776,7 +4892,7 @@ function nevWhy(sym, node, px){
 // have thrown those away. Size is RECORDED as context, never used as a filter.
 function nevScan(sym){
   try{
-    if(typeof inReplay==='function' && inReplay()) return null;   // never record a replay as today
+    if(typeof recorderBlind==='function' && recorderBlind()) return null;   // never record a replay as today
     if(!TODAY || !velOk()) return null;
     var S=STATE[sym]||{}; var bar=S.lastClosedB||0; if(!bar) return null;
     var day=nevDay();
@@ -4926,7 +5042,7 @@ function recordOutcomeEvent(sym, s){
     // (v11.55) GUARD 2: last-session mode replays a PAST day. Writing those bars as if they were
     // today would poison every base rate the learning layer computes — permanently, and
     // undetectably after the fact. Nothing records while the panel is showing a replayed session.
-    if(typeof inReplay==='function' && inReplay()) return;
+    if(typeof recorderBlind==='function' && recorderBlind()) return;
     var fs=futureStructureSummary(sym);
     var ctx=null;
     if(fs){
@@ -6563,6 +6679,10 @@ function cfgHtml(){
   html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 4px" title="Compact node cells: single-line rows (strike, role\u00b7%King, badge). Off = full sparkline+growth view.">'+
     '<span>Compact node cells</span>'+
     '<input type="checkbox" class="gpts-compact" '+cmpChk+' style="cursor:pointer"></div>';
+  var lbChk = (CFG.lastBook!==false) ? 'checked' : '';
+  html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 4px" title="AFTER THE CLOSE, SHOW THE LAST SESSION\u2019S BOOK. Skylit drops the expired chain when the market closes, so the ladder becomes the NEXT expiry with every rate of change at zero \u2014 the panel goes flat, not blank. With this on, the last healthy reading of the closed session is served instead, badged in the footer with the time it froze. \u26a0 The recorder is blind to it by construction, so nothing latched can ever reach data/*.json. Turn it OFF to watch the overnight book build.">'+
+    '<span>Show last session\u2019s book after the close</span>'+
+    '<input type="checkbox" class="gpts-lastbook" '+lbChk+' style="cursor:pointer"></div>';
   html+='<div style="padding:2px 4px" title="Growth strip length: how many 3m closes the strip shows (each = 3 min).">'+
     '<div style="display:flex;justify-content:space-between"><span>Growth strip length</span><span class="gpts-sl-val">'+CFG.stripLen+' \u00b7 '+(CFG.stripLen*3)+'m</span></div>'+
     '<input type="range" class="gpts-nt gpts-striplen" min="4" max="12" step="1" value="'+CFG.stripLen+'"></div>';
@@ -6731,6 +6851,8 @@ function wireConfig(){
   // #5 display controls
   var cmp=elCfg.querySelector('.gpts-compact');
   if(cmp) cmp.addEventListener('change', function(){ CFG.compact=cmp.checked; saveCfg(); render(); });
+  var lbx=elCfg.querySelector('.gpts-lastbook');
+  if(lbx) lbx.addEventListener('change', function(){ CFG.lastBook=lbx.checked; saveCfg(); render(); });
   var sl=elCfg.querySelector('.gpts-striplen');
   var slv=elCfg.querySelector('.gpts-sl-val');
   if(sl){
@@ -8141,7 +8263,7 @@ function recordDeflections(sym){
     // (v11.55) GUARD 2: last-session mode replays a PAST day. Writing those bars as if they were
     // today would poison every base rate the learning layer computes — permanently, and
     // undetectably after the fact. Nothing records while the panel is showing a replayed session.
-    if(typeof inReplay==='function' && inReplay()) return;
+    if(typeof recorderBlind==='function' && recorderBlind()) return;
     var m=nodeMapModel(sym); if(!m || !m.ok || !m.levels) return;
     var S=STATE[sym]||{}; var px=S.price; if(px==null) return;
     var db=recorderLoad(); var day=recorderDay(db);
@@ -11723,7 +11845,7 @@ function actRecord(sym, action){
     // (v11.55) GUARD 2: last-session mode replays a PAST day. Writing those bars as if they were
     // today would poison every base rate the learning layer computes — permanently, and
     // undetectably after the fact. Nothing records while the panel is showing a replayed session.
-    if(typeof inReplay==='function' && inReplay()) return null;
+    if(typeof recorderBlind==='function' && recorderBlind()) return null;
     var sp=spineOf(sym);
     var rec={ t:Date.now(), sym:sym,
               k:(sp.inPlay&&sp.inPlay.k!=null)?sp.inPlay.k:null,
@@ -14410,7 +14532,7 @@ function resolveFeatureOutcomes(sym){
     // (v11.55) GUARD 2: last-session mode replays a PAST day. Writing those bars as if they were
     // today would poison every base rate the learning layer computes — permanently, and
     // undetectably after the fact. Nothing records while the panel is showing a replayed session.
-    if(typeof inReplay==='function' && inReplay()) return 0;
+    if(typeof recorderBlind==='function' && recorderBlind()) return 0;
     var S=STATE[sym]||{}; var cs=S.candles||[]; var n=cs.length;
     if(!n) return 0;
     var db=recorderLoad(); var day=recorderDay(db);
@@ -17194,6 +17316,22 @@ function feedStatusHtml(){
         ' style="color:'+PAL.shortAccent+';font-weight:700">⚠ IRT needs a click</span>';
     }
   }catch(eIW){}
+  // ⚠⚠ (v14.55) A MODE YOU CANNOT SEE IS A MODE THAT LIES. The whole face is showing a book
+  // that stopped moving hours ago, so it says so — in the FOOTER, where the eye already goes, not
+  // in the gear drawer nobody opens. It names the SESSION and the CLOCK TIME the book froze at,
+  // because "stale" without a timestamp is not a disclosure, it is a mood.
+  // ⚠ It appends to `warn`, the variable THIS scope builds. The first draft appended to `out`
+  // from inside the IRT branch — syntactically fine, silently dead, swallowed by the catch.
+  // That is failure pattern #5, and node --check cannot see it.
+  try{
+    if(showingStaleBook()){
+      var LB=lastBookLoad()||{};
+      var lbT=''; try{ lbT=fmtClock(Math.floor((LB.ts||0)/1000)); }catch(eLT){}
+      warn+=(warn?' ':'')+'<span title="THE MARKET IS CLOSED AND THE LIVE BOOK HAS ROLLED. Skylit drops the expired chain at the close, so the ladder on the page is the NEXT expiry with every rate of change at zero. What you are looking at is the last healthy reading of the '+
+        (LB.day||'')+' session, frozen at '+lbT+' \u2014 real numbers, not live ones. Nothing is recorded while this shows: the recorder is blind to it by construction (recorderBlind), so it can never enter data/*.json as though it were live. Turn it off in the gear to watch the overnight book instead."'+
+        ' style="color:#7cc7ff;font-weight:800">\u25cf '+(LB.day||'last session')+' book \u2014 frozen '+lbT+'</span>';
+    }
+  }catch(eLB){}
   // (v10.17) The 📥 Save Day button moved OFF the dashboard footer and INTO the
   // Analysis tab as an in-tab "Save & prep review" banner (the tab is the trigger).
   // (v10.52) PIPELINE INDICATOR — replaces the v10.50 feed/vex/rec dots. Those three
@@ -24596,6 +24734,37 @@ window.__gptsDebug.session = function(){
            note:(SESSION_DAY&&SESSION_DAY.fallback)
              ? 'REPLAY of '+SESSION_DAY.day+' — nothing on the face is live, and the recorder is OFF'
              : 'live/today' };
+};
+// (v14.55) the close-of-session book: is it being served, and if not, WHICH of the four conditions
+// failed. A mode that silently does not engage is as bad as one that silently does.
+window.__gptsDebug.lastBook = function(){
+  var B=null, P=null;
+  try{ B=lastBookLoad(); }catch(e){}
+  try{ P=sessionPhase(); }catch(e){}
+  var fe=null; try{ fe=liveFrontExp(); }catch(e){}
+  var on=false; try{ on=showingStaleBook(); }catch(e){}
+  return {
+    serving: on,
+    settingOn: CFG.lastBook!==false,
+    rthNow: !!(P&&P.rth),
+    haveLatch: !!(B&&B.pct&&B.king!=null),
+    latchDay: B?B.day:null,
+    sessionDay: (function(){ try{ return sessionDayStr(); }catch(e){ return null; } })(),
+    latchExp: B?B.exp:null,
+    liveFrontExp: fe,
+    rolled: !!(fe && B && B.exp && fe!==B.exp),
+    strikes: B&&B.pct?Object.keys(B.pct).length:0,
+    king: B?B.king:null, kingKd: B?B.kingKd:null,
+    frozenAt: (B&&B.ts)?new Date(B.ts).toLocaleString('en-US',{timeZone:'America/Chicago'}):null,
+    recorderBlind: (function(){ try{ return recorderBlind(); }catch(e){ return null; } })(),
+    why: on ? 'serving the '+(B&&B.day)+' book, frozen — recorder OFF'
+            : (CFG.lastBook===false ? 'setting is off'
+              : (P&&P.rth ? 'live session — never serves during RTH'
+              : (!(B&&B.pct) ? 'no latch yet (it is written during RTH only)'
+              : (B.day!==((function(){ try{ return sessionDayStr(); }catch(e){ return null; } })()) ? 'latch is from a different session'
+              : (!fe ? 'no live book on the page to compare against'
+              : 'the live front expiry has NOT rolled yet — the live book is still the right one')))))
+  };
 };
 // (v11.62) hedging flow per point, with the window it came from
 window.__gptsDebug.flow = function(sy){ try{ var f=hedgeFlow(sy||activeSym());

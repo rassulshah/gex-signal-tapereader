@@ -1,3 +1,15 @@
+# ⚠⚠ TWO RULES BEFORE ANYTHING ELSE ON THIS LIST
+
+**1 · DELIVER EXACTLY ONE FILE.** `installvNNNN.bat`, plus the Tampermonkey links as text. His
+words: *"you are supposed to just give me an install file."* No zip+applier pair, no "here are
+both", no extra attachments alongside it. `build-installer.py` prints the single filename to send.
+
+**2 · REGENERATE THE CHAT HISTORY, LAST.** `python3 tools/chat-history.py --title '<...>'` then fill
+DECISIONS / SHIPPED / OPEN AT CLOSE. Run it AFTER the final exchange or the tail is missing.
+`test_chat_history.js` fails the build if the stamped version drifts from `GPTS_VERSION`.
+
+---
+
 # EVERY BUILD RUNS THIS. NO EXCEPTIONS.
 
 **A build is not finished when the code works. It is finished when a fresh context could pick it up.**
