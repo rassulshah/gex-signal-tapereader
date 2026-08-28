@@ -293,7 +293,11 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   }));
   ok(bad === 0, 't3 every populated cell has n>=25 and a sane percentage', bad);
   ok(cells >= 50, 't4 the table is actually populated', cells);
-  ok(thin > 0, 't5 ...and thin cells are NULL rather than guessed', thin);
+  // ⚠ (v14.70) THIS ASSERTED `thin > 0` AND BROKE WHEN THE TABLE BECAME FULLY POPULATED — it was
+  // testing the DATA, not the logic. A full table is the goal, not a regression. What must hold is
+  // that hlCell REFUSES a thin cell, which is tested below (t11b) against an injected one.
+  ok(thin === 0 || thin > 0, 't5 thin-cell count recorded (data, not a contract)', {filled: cells, thin});
+  ok(cells === 72, 't5b ...and the table is now fully populated — 45 min of coverage regained', cells);
 
   // MONOTONE IN BOTH AXES — the table's whole claim. Not asserted cell-by-cell (noise), but the
   // corners must obey it or the thing is not measuring what it says.
@@ -312,11 +316,18 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   // ⚠ A THIN CELL MUST REFUSE, NOT GUESS. The 08:30 block has under 25 observations at every
   // distance, because the session has barely started. Added after a mutation showed nothing
   // asserted this directly - "absence of data is not a reading" has to be tested, not just written.
-  const thinCell = hlCell(0.5, 10);
+  // ⚠ INJECT A THIN CELL rather than relying on the shipped table having one. The 08:30 column used
+  // to be empty and was used as the fixture here; v14.70 filled it, which broke a test of logic that
+  // had been quietly coupled to data. Absence of data is not a reading — that has to stay TESTED,
+  // not merely true by accident.
+  const savedRow = HLTAB[0].slice();
+  HLTAB[0][0] = [7, null];                       // n=7, under the 25-sample floor
+  const thinCell = hlCell(0.02, 10);
   ok(thinCell && thinCell.p === null && /too few/.test(thinCell.why || ''),
      't11b a thin cell returns p=null AND says why', thinCell);
-  ok(thinCell && typeof thinCell.n === 'number',
+  ok(thinCell && thinCell.n === 7,
      't11c ...and still reports how many samples it does have', thinCell && thinCell.n);
+  HLTAB[0] = savedRow;
 
   // the CALL: threshold, refusal, and the "still ahead" companion
   const D = ok0 => ({ ok: true, posr: ok0.posr, clock: OPEN + ok0.mins * 60, first: 'LOD',
@@ -388,13 +399,19 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
      'u1d a thin cell refuses and names its n');
   ok(/too early/.test(hlVerdict({first:'LOD'}, null, null)),
      'u1e no call at all falls back without throwing');
-  ok(HLTAB_META.notIn === 20 && HLTAB_META.notInHit === 72,
-     'u2 the NOT-IN threshold and its MEASURED rate are both declared', 
+  // (v14.70) 72 -> 85 when the table gained the first 45 minutes: the NOT-IN call lived almost
+  // entirely in the cells the old study had excluded. n went 85 -> 230 and it fires an hour earlier.
+  ok(HLTAB_META.notIn === 20 && HLTAB_META.notInHit === 85,
+     'u2 the NOT-IN threshold and its MEASURED rate are both declared',
      [HLTAB_META.notIn, HLTAB_META.notInHit]);
   ok(HLTAB_META.notInHit < HLTAB_META.inHit,
      'u3 ...and it is recorded as WEAKER than the IN call, which it is (72 vs 94)');
-  ok(HLTAB_META.notInN < 150,
-     'u4 ...on a thin n, also declared', HLTAB_META.notInN);
+  // ⚠ WAS `notInN < 150` — an assertion that the sample was THIN. v14.70 made it 230, so the test
+  // that guarded honesty about a weakness now guards that the weakness was fixed. Assert the n is
+  // DECLARED and real, not that it is small.
+  ok(HLTAB_META.notInN >= 200,
+     'u4 ...on an n that is no longer thin — the missing cells were where this call lived',
+     HLTAB_META.notInN);
 
   // the call sets notIn only at the low end
   const D = o2 => ({ ok:true, posr:o2.posr, clock:OPEN + o2.mins*60, first:'LOD',
@@ -415,8 +432,12 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
      'u9 ...and says so plainly when it already has, instead of pointing at a finished move');
   ok(/secondMed/.test(SD) && /secondQ1/.test(SD),
      'u10 the clause carries WHEN to expect it, with its spread');
-  ok(HLTAB_META.secondMed === '13:33' && HLTAB_META.secondAhead === 97,
-     'u11 the timing and the "still ahead" share are measured constants, not prose');
+  // (v14.70) re-measured on the widened table: 13:33 -> 13:29, 97% -> 99% still ahead.
+  // ⚠ Pinned to the CURRENT measurement rather than a range, so a table change that forgets to
+  // re-derive these gets caught instead of quietly quoting numbers from a table that no longer exists.
+  ok(HLTAB_META.secondMed === '13:29' && HLTAB_META.secondAhead === 99,
+     'u11 the timing and the "still ahead" share are measured constants, not prose',
+     [HLTAB_META.secondMed, HLTAB_META.secondAhead]);
 
   // the hover must separate CELL rate from DECISION rate — this project's oldest failure
   ok(/CELL rate/.test(SD) && /DECISION rate/.test(SD),

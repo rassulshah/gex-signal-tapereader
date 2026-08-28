@@ -1,3 +1,39 @@
+## v14.70 — a deleted feature's constraint was costing 45 minutes a day
+
+The panel said **"no rate (thin cell, n=0)"** for the first 45 minutes of every session. Not a bug in
+the panel — the table genuinely had no data there, because the original study **skipped the first 60
+minutes of every day** so that `IB60` would exist before a row could be scored.
+
+**IB60 was then measured as worthless** (AUC 0.655, adds nothing once `posr` is known) and dropped
+from the model. **The exclusion stayed behind.** A deleted feature went on costing coverage in the
+hour the operator prepares in.
+
+### Re-derived from minute 5
+
+| | before | after |
+|---|---|---|
+| observations | 38,054 | **44,302** |
+| cells with data | 64 / 72 | **72 / 72** |
+| 08:30 column | all thin | 4 · 10 · 16 · 22 · 27 · 32 · 40 · 47 % |
+| AUC, SAME late-session rows | 0.8787 | **0.8787 — identical** |
+
+⚠ **Strictly additive** — verified on the overlapping rows before shipping, so nothing that already
+worked was traded away.
+
+### The NOT-IN call lived in the missing cells
+
+    IN   (cell >= 70%)   94% n=284 09:55  ->  92% n=284 09:35   (20 min earlier)
+    NOT  (cell <= 20%)   72% n= 85 09:45  ->  85% n=230 08:40   (+13 pts, n x2.7, 65 min earlier)
+
+A fresh extreme at 08:35 is a **4%** chance of being the day's — that is the single most useful cell
+in the table, and it did not exist.
+
+⚠ **Two tests had to be decoupled from the data.** They used the empty 08:30 column as their fixture
+for "a thin cell refuses", so filling the table broke them — they were testing DATA, not LOGIC. They
+inject a thin cell now. `test_hodlod` 124 → 125.
+
+Suite 119 green, 6 documented baseline reds. FINDINGS F-11.
+
 ## v14.69 — the base rates were hidden behind a candle
 
 > "i cant see anything on the panel for hod/lod section"

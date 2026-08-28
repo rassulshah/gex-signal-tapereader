@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.69
+// @version    14.70
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.69';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.70';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -21437,22 +21437,36 @@ function hodlodBase(){
 // `inHit`/`notInHit` are DECISION accuracies - how often the call was right the FIRST time it
 // crossed, one row per session, which is the only n a trader can act on. The face shows the cell;
 // the hover shows the decision. Both measured on the FIRST-PRINTED extreme, which is what ⓪a calls.
-var HLTAB_META={ sessions:284, obs:38054, first:'2025-06-02', last:'2026-08-21', binMin:45,
-                 thresh:70,   inHit:94,    inN:284,   inCT:'09:55',
-                 notIn:20,    notInHit:72, notInN:85, notInCT:'09:45',
-                 // when the call is right and the far side has NOT yet printed, when does it come?
-                 secondMed:'13:33', secondQ1:'11:51', secondQ3:'14:47', secondAhead:97 };
+// ⚠ THESE ARE TWO DIFFERENT NUMBERS AND CONFUSING THEM WOULD BE THIS PROJECT'S OLDEST MISTAKE.
+// `thresh`/`notIn` are CELL probabilities - what the table says at this instant.
+// `inHit`/`notInHit` are DECISION accuracies - how often the call was right the FIRST time it
+// crossed, one row per session, on the FIRST-PRINTED extreme, which is what ⓪ a calls.
+//
+// ⚠⚠ (v14.70) THE TABLE NOW COVERS THE WHOLE SESSION. It previously skipped the first 60 minutes of
+// every day because the study required IB60 to exist before scoring a row. IB60 was then MEASURED
+// AS WORTHLESS (AUC 0.655, adds nothing once posr is known) and dropped from the model - but the
+// exclusion stayed behind, leaving the 08:30 column empty and the panel saying "thin cell, n=0" for
+// the first 45 minutes of every session. Re-derived from minute 5: 72 of 72 cells populated,
+// 44,302 observations. ⚠ Verified strictly additive - AUC on the SAME late-session rows is
+// IDENTICAL (0.8787), so nothing that already worked was traded away.
+// ⚠ AND THE NOT-IN CALL LIVED IN THE MISSING CELLS: 72% on n=85 became 85% on n=230, and it fires
+// at 08:40 instead of 09:45. A leftover constraint from a deleted feature was costing the better
+// half of the feature.
+var HLTAB_META={ sessions:284, obs:44302, first:'2025-06-02', last:'2026-08-21', binMin:45, minBar:5,
+                 thresh:70,   inHit:92,    inN:284,   inCT:'9:35',
+                 notIn:20,    notInHit:85, notInN:230, notInCT:'8:40',
+                 secondMed:'13:29', secondQ1:'11:48', secondQ3:'14:45', secondAhead:99 };
 // rows = posr octile (0 = on the extreme, 7 = the far side); cols = 45-minute blocks from 08:30 CT.
 // each cell is [n, percent] and a cell under 25 observations is null - it REFUSES rather than guesses.
 var HLTAB=[
-    [[0,null],[538,7],[881,8],[902,9],[855,12],[923,15],[922,20],[899,28],[604,47]],
-    [[0,null],[444,19],[687,21],[635,33],[676,36],[627,39],[560,57],[569,66],[516,84]],
-    [[0,null],[380,27],[542,34],[551,49],[572,56],[542,65],[519,68],[534,84],[441,96]],
-    [[0,null],[332,36],[441,50],[462,55],[450,65],[456,78],[546,85],[544,95],[425,99]],
-    [[0,null],[347,46],[444,62],[473,67],[452,73],[466,81],[563,91],[560,97],[425,100]],
-    [[0,null],[383,60],[533,72],[543,75],[573,84],[537,88],[517,95],[532,98],[441,100]],
-    [[0,null],[444,62],[700,76],[642,86],[675,89],[632,95],[557,98],[569,99],[519,100]],
-    [[0,null],[540,78],[884,84],[904,90],[859,96],[927,99],[928,99],[905,100],[605,100]]
+    [[740,4],[819,7],[881,8],[902,9],[855,12],[923,15],[922,20],[899,28],[604,47]],
+    [[598,10],[655,18],[687,21],[635,33],[676,36],[627,39],[560,57],[569,66],[516,84]],
+    [[507,16],[566,26],[542,34],[551,49],[572,56],[542,65],[519,68],[534,84],[441,96]],
+    [[411,22],[503,33],[441,50],[462,55],[450,65],[456,78],[546,85],[544,95],[425,99]],
+    [[440,27],[523,45],[444,62],[473,67],[452,73],[466,81],[563,91],[560,97],[425,100]],
+    [[492,32],[566,58],[533,72],[543,75],[573,84],[537,88],[517,95],[532,98],[441,100]],
+    [[604,40],[656,59],[700,76],[642,86],[675,89],[632,95],[557,98],[569,99],[519,100]],
+    [[752,47],[824,74],[884,84],[904,90],[859,96],[927,99],[928,99],[905,100],[605,100]]
   ];
 function hlCell(posr, mins){
   try{

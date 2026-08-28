@@ -519,3 +519,51 @@ Bound both keys by BYTES, shed oldest-first until the payload fits; route quota 
 knew 08-27 was safe); and add `__gptsDebug.storage()` reporting total, top keys and headroom.
 
 ⚠ **IT WILL REFILL WITHIN ONE SESSION.** Six MB from a single day is the measured rate.
+
+---
+
+## F-11 · A DELETED FEATURE'S CONSTRAINT WAS COSTING THE BETTER HALF OF THE TABLE
+**Status: PROVISIONAL** · 2026-08-28 · 284 sessions, EPM26 1-minute.
+
+The ⓪a table skipped the **first 60 minutes of every session**. That exclusion came from the original
+study requiring `IB60` to exist before a row could be scored. **IB60 was then measured as worthless**
+(AUC 0.655; adds nothing once `posr` is known — F-1/F-2) and dropped from the model. The constraint
+stayed behind.
+
+Consequence: the 08:30 column of the table was entirely empty, and the panel printed
+**"no rate (thin cell, n=0)" for the first 45 minutes of every session** — the hour the operator
+prepares in.
+
+### Re-derived from minute 5
+
+| | before (t≥60) | after (t≥5) |
+|---|---|---|
+| observations | 38,054 | **44,302** |
+| cells with data | 64 / 72 | **72 / 72** |
+| 08:30 column | all thin | 4 · 10 · 16 · 22 · 27 · 32 · 40 · 47 % |
+| **AUC on the SAME late-session rows** | 0.8787 | **0.8787 — identical** |
+
+⚠ **Strictly additive.** The overlap AUC is unchanged to four decimals, so nothing that already
+worked was traded for the new coverage. (Pooled Brier rises 0.132 → 0.138 because the new early rows
+are intrinsically harder, not because the model degraded.)
+
+### And the NOT-IN call lived almost entirely in the missing cells
+
+| call | before | after |
+|---|---|---|
+| **IN** (cell ≥70%) | 94%, n=284, 09:55 | 92%, n=284, **09:35** |
+| **NOT IN** (cell ≤20%) | 72%, n=**85**, 09:45 | **85%**, n=**230**, **08:40** |
+
+The NOT-IN call is where the early cells live — a fresh extreme at 08:35 is a 4% chance of being the
+day's. It went from a thin modest edge to **85% on n=230, an hour earlier**. The IN call trades 2
+points of accuracy for 20 minutes.
+
+⚠ **THE LESSON, AND IT IS THE POINT OF THIS ENTRY:** when a feature is removed, the constraints it
+imposed on the STUDY do not remove themselves. IB60 was deleted from the model in the same session
+that measured it worthless, and its footprint went on silently costing 45 minutes of coverage a day.
+**Grep the study for every assumption a deleted feature justified.**
+
+### Tests had to be decoupled from the data
+Two assertions used the empty 08:30 column as their fixture for "a thin cell refuses". Filling the
+table broke them — they were testing DATA, not LOGIC. They now inject a thin cell and assert the
+refusal directly, so the table's contents can change without breaking a test of behaviour.

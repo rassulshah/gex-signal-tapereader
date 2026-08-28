@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-28 · v14.69 · session `4c22fa2b` — v14.69: the base rates were hidden behind a candle; IRT export verified working
+## 2026-08-28 · v14.70 · session `4c22fa2b` — v14.70: a deleted feature's constraint was costing 45 minutes of coverage a day
 
-_69 operator prompts · transcript `4c22fa2b-bee3-5451-b379-dc2a50cb42bd.jsonl`_
+_71 operator prompts · transcript `4c22fa2b-bee3-5451-b379-dc2a50cb42bd.jsonl`_
 
 ### THE EXCHANGE
 
@@ -1711,6 +1711,306 @@ It matches what your own notes flagged as unverified: *"the FlexLevels CSV had o
 
 **me (13:32):** `w3` still didn't fire — because there are **two** `NOREAD ? row('a','A',...)` guards (the two stat blocks) and my assertion matched whichever survived. It can't detect one being broken. Tightening it to require both.
 All five guards now fire under mutation, including the one that was quietly untestable. Recording and shipping.
+The check was wrong, not the code — the source stores `\u2019` as an escape, so my literal curly apostrophe didn't match. Re-verifying against what's actually in the file.
+**installv1469.bat** — use this instead of 1468 (it includes it). Verified: **write path untouched**, safe to install while you trade.
+
+- **Tapereader v14.69** — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+- Companion v1.15 — unchanged
+
+**You couldn't see the feature because of one line.** Everything we built was in your v14.67 — behind this:
+
+```js
+if(!D.ok) return '⓪a DAY — HOD/LOD · no candles…';
+```
+
+`hodLod()` returns `ok:false` whenever there are no bars, so that early return hid the whole section. But four fifths of it never needed a bar:
+
+| | needs a candle? |
+|---|---|
+| E row — trimmed means over 284 sessions | **no** |
+| survival ladder 41/56/67/75/84 | **no** |
+| corpus provenance + honesty line | **no** |
+| the 8×9 LOD/HOD table | **no** |
+| A row, verdict, `posr` | yes |
+
+It's a backtest baked into the build, and it was being hidden at exactly the hour you prepare.
+
+Now pre-open you get the base rates, the ladder, and the shape of a typical session — *first extremity ~09:03, other side ~13:02, range ~61.4pts*. ⚠ **The A row still refuses**, em-dashes with the doctrine intact: *"Today's row is empty on purpose: This is not a reading, it is no reading."*
+
+**On IRT — it's working.** Measured live: `how …[trimmed]
+
+**OPERATOR:**
+> i clciked tamper monkey but it is not giving me an update option
+
+**me (13:36):** Checking the raw URL myself before telling you anything — that's the rule here.
+Your push landed — **GitHub is at v14.69.** So the `.bat` worked. Now the decisive check is what's actually running in your browser, not what the link offers.
+Two things, and the first is good news.
+
+**Your panel is alive and the section is working:**
+
+```
+⓪a DAY — HOD/LOD · 08:36 CT · 284d ES 1-min
+LOD STANDING — no rate (thin cell, n=0)  (stood 7m · under the 30m floor)
+1ST  LOD  TOOK  BOP  WICK  W.END  WICK%  MUD
+```
+
+Candles are flowing, the stats table is rendering, and storage is healthy:
+
+```
+1,717 KB of 10,240 · 17% full · canWrite40KB: true
+largest key now: gpts_futbars_v1 = 963 KB   <- the corpus tap, collecting
+```
+
+**On the update:** you're running **v14.68**, GitHub has **v14.69**. Tampermonkey isn't offering it because `raw.githubusercontent.com` caches for ~5 minutes and your push was recent. Wait a few minutes and click again — it'll say Update. It matters less now anyway: v14.69's fix is the *pre-open* display, and you're past the open.
+
+⚠ **One thing worth knowing, because it'll look like a bug at 09:00:** `no rate (thin cell, n=0)` is the table correctly refusing — **it has no coverage in the first 45 minutes of the session.** My study skipped the first 60 minutes of every session because IB60 had to exist before a row could be scored. I then measured IB60 as worthless and dropped it from the model — but the exclusion stayed behind. So the table's first time-column is empty for a reason that no longer applies.
+
+Practically: **the LOD/HOD verdict starts speaking around 09:15**, not 08:30. That's a self-inflicted blind spot in the first 45 minutes, and it's fixable — re-derive the table without the leftover constraint and you'd get roughly 45 more minutes of coverage at the …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 26 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (13:37):** Content is on GitHub — origin is at v14.69, verified. The count is parallel history.
+
+Meanwhile, the blind spot I just found is fixable cloud-side with no risk to your session. Testing whether removing that leftover constraint actually buys coverage.
+**Clean win.** Dropping the leftover constraint fills the table completely:
+
+```
+current   (skips first 60 min)   64/72 cells   08:30 column: entirely thin
+proposed  (skips first  5 min)   72/72 cells   08:30 column: 4% 10% 16% 22% 27% 32% 40% 47%
+```
+
+That's **~45 minutes of coverage gained every session**, and the new column is monotone and sensible — sitting on a fresh low at 08:35 is a 4% chance it's the day's low; having travelled most of the range by then, 47%. Let me confirm it doesn't degrade what's already there before I touch it.
+Strictly additive — **identical AUC (0.8787) on the same late-session rows**, so nothing existing degrades; we just gain eight cells. The higher Brier is the new early rows being genuinely harder, not the model getting worse.
+
+⚠ But changing the table means the hover's decision stats (94% / 72%) were measured on a *different* table. Re-deriving both together, or the face would quote numbers from something that no longer exists.
+**That's a bigger win than the coverage alone**, and the NOT‑IN call is transformed:
+
+```
+                 before (64 cells)          after (72 cells)
+IN  P>=70%   94% at 09:55, n=284        92% at 09:35, n=284   — 20 min earlier
+NOT P<=20%   72% at 09:45, n= 85        85% at 08:40, n=230   — +13 pts, n×2.7, 65 min earlier
+```
+
+The NOT‑IN call lived almost entirely in the cells I'd excluded. It goes from a thin modest edge to **85% on n=230, an hour earlier**. Building it.
+Four failures, and every one is a test encoding the *old* data rather than the logic — includ …[trimmed]
+
+### DECISIONS
+
+- **HE COULD NOT SEE THE FEATURE, AND IT WAS ONE LINE.** `if(!D.ok) return <one line>` hid the ENTIRE
+  ⓪a section whenever there were no candles — the 284-session base rates, the ladder, the corpus
+  provenance, the table. None of it needs a bar. v14.69 made NOREAD a flag; the A row dashes and
+  keeps the refusal doctrine verbatim.
+- **A DELETED FEATURE'S CONSTRAINT WAS COSTING 45 MINUTES A DAY (F-11).** The table skipped the first
+  60 minutes of every session because the study required IB60 to exist first. IB60 was measured
+  WORTHLESS and dropped from the model in the same session — **the exclusion stayed behind**.
+  Re-derived from minute 5: 72/72 cells, and AUC on the SAME late rows is IDENTICAL (0.8787), so it
+  is strictly additive. ⚠ **Grep the study for every assumption a deleted feature justified.**
+- **THE NOT-IN CALL LIVED IN THE MISSING CELLS:** 72% on n=85 at 09:45 became **85% on n=230 at
+  08:40**. The better half of the feature had been excluded by a leftover.
+- **TWO TESTS WERE COUPLED TO DATA, NOT LOGIC.** They used the empty 08:30 column as the fixture for
+  "a thin cell refuses"; filling the table broke them. They inject a thin cell now. ⚠ A test that
+  passes because of what the data happens to contain is not testing the code.
+- **THE IRT EXPORT IS WORKING** — verified live (how:file, inPlace:true, err:null, both Kings on
+  EPU26). Only two rows because emPiles has no band anchor: the same F-10 chain. Expect it to fill
+  once bars anchor the band.
+- **STORAGE IS HEALTHY** — 1,717 KB of 10,240 (17%), canWrite40KB true, and `gpts_futbars_v1` at
+  963 KB is now the largest key: the corpus tap is collecting for the first time.
+
+### SHIPPED
+
+**v14.68** `__gptsDebug.storage()` with a real write probe · **v14.69** the ⓪a static half renders
+without candles · **v14.70** the full-session table (72/72 cells) with re-derived decision stats.
+All three display/read-only and safe to install mid-session. test_hodlod 115 -> 125.
+
+### OPEN AT CLOSE
+
+1. **BUILD THE PARKED PATCH** — `session-state/pending/v14.68-bounded-writes.patch` + its tests.
+   Storage refills at ~6 MB/day; today it is being watched by hand.
+2. **VERIFY TODAY RECORDED** — `__gptsDebug.featHealth()`: calls ≈ ok, enq climbing. F-10 confirmation.
+3. **The latch writes tonight for the first time** → tomorrow the pre-open band anchors, the rail
+   draws, and the IRT export should carry more than two rows. Self-healing.
+4. **The EM band ±5pt clipping is STILL unmeasured** — every attempt landed pre-open. ⚠ `dte0 EM =
+   42.3pts` reads correct, contradicting that note's hypothesis (a). Re-measure before believing it.
+5. Rail defects open: EM clipping, price-pill staleness, node-in-play hidden by the pill, flag-post
+   label collision, and the `rows:1` miscount in the IRT export.
+6. The nightly review fires tonight on the digest prompts — first test in ten days.
+
+---
+
+<!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-28 · v14.69 · session `4c22fa2b` — v14.69: the base rates were hidden behind a candle; IRT export verified working
+**OPERATOR:**
+> load gex
+**OPERATOR:**
+> Check the architecture doc for the yahoo pipeline that updates the es data file daily.  I want to make sure we have the latest data for the hod lod feature so it updates daily
+**OPERATOR:**
+> I just wanted to make sure we had a process in place that obtained es data duly and updated the data file.  I know the process workflow is in git and it can be found checking what was committed but you had a lot of difficulty finding it the lat time
+**OPERATOR:**
+> Yes I want this process automated so the hod lid is always updated based on the latest data.  I also need you to ensure you are able to find it in the future and place its details in the architecture document for this project so it is read every time load he’s is done.  I want to get this out of the way. The process should be extendable to other markets like nq gc nd cl in the future.
+**OPERATOR:**
+> Continue from where you left off.
+## The design
+**OPERATOR:**
+> i'm surprised its not there.  there should be a design or architecture document  that already talks about yahoo finance, Inside Finance (IF) etc. can you double check
+**OPERATOR:**
+> make sure everything is documented and can be retrieved via load gex protocol and build .
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are commit(s) on branch 'main' that GitHub will show as Unverified (missing signature, or committer email is not noreply@anthropic.com):
+> 24f490f claude@anthropic.com
+> Please run 'git config user.email noreply@anthropic.com && git config user.name Claude', then 'git commit --amend --no-edit --reset-author' for the tip commit, or 'git rebase --exec "git commit --amend --no-edit --reset-author" 24f490f7ef899eaa6bbcc55136b7a9d0d867e2d8^' for earlier commits, then push.
+**OPERATOR:**
+> i think you are missing some fields.    look at the pics.  do you know what the fields are
+**OPERATOR:**
+> wick% is the percentage fo the total range .  so if the total range is 100, and the wick is 10, the wick is 10% .. cand you check
+**OPERATOR:**
+> i dont know what you are asking me. if there is no wick , then its 0 .   these days should not be averaged . also crazy outliers should not be averaged.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> i thought they were all averages.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 4 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> ok.. so now you understand every field .  for example mud, stands for markup or markdown. markup is open to the high after the lower wick forms and markedown is open to the low after the upper wick forms.
+**OPERATOR:**
+> yes its back to open (bop) .The next step is for you to understand that my intention and goal behind this field is to identiy a low or a high of day so i can profit when it goes to the other extremity.  This means you need to help identify whether the lod or hod is done .  you can use this data ,  IB 30, IB 60, Sweeps, sma 50,  20 bar high or low, and any suggestions or recommendations you have to do this . run many combinations and figure out a hight probability way to figure this out, so you meet my requirement of identifying if the lod or hod has been made.   do you understand.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are untracked files in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> i also want you to test the various combinations with  divergences . for example es keeps making low and nq doesn't   as well as momentum divergences where es makes a low but a momentum indicator doesnt. ive added nq data in the same folder. see if it helps in idnetifyign hod and lod have occurred. Test combinations of everything. i want you to create a predictive probabilstic model so i can use it to identify if a hod or lod has occurred.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 7 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> check everything .. is the model built
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> lets discuss 1 at a time
+**OPERATOR:**
+> what do you mean the rule is earlier.. are you saying i have to wait for the model to give me any real information
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> what is a better predictor for determining the hod or lod has occurred ?
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> i just want to know with high accuracy whether the hod or lod have occurred. that is my requirement. I want to know it as early as possible.  have you tested multiple combinations. have you used the nq divergence as well and tested it .  does the model use all of these factors to give right answers early .  is this model solid ?
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> what is the model using to determine if a hod or lod has occurred
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 11 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> before going any further , is this a standard model . is this the right use case for it  for predicting hod lod .  step back and see if you made the right choice for this type of problem. consider the approach .  just double check and sanity check.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 11 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> so what do you recommend we do next..
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are untracked files in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> i'll go with your recommendation
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 14 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> check .  also do you need the badges below like vwap , ib60 etc.    just make sure this is done right.  also lets but the lod in read on top. ov the hod/lod statistics.    review everything to ensure correctnes and let me know if any enshancements need to be made  .  For example , one enhancement would be predicting if today with be a red day or green day where the close is greater than the open or less than the open.   optimize this feature to the best of your ability.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 16 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> ok.. lets build your enhancemetn but first what other enhancements can you reccomend ?
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 16 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> yes,  lets test everything and then have 1 build
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 18 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> i hope you are doing the appropriate saves and updating necessary documents  and chat history so the next context will know what to do
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 19 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> i want to make  sure that all of this is reviewed daily /nightly by an llm for analysis testing and improvement.. is that already built
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 19 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> i'll go with your recommendation
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 19 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> yes.. lets get it all out of the way . so we can have a clean application and start focusing on enhancing it.. all of these issues need to be closed
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 21 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> give the tampermonkey links .. i just installed 1467
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 21 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> are you saying all issues are closed and we are ready for continued  enhancement .   Its hard to do that, because the appdoesn't show anything because it is pre RTH open .
+**OPERATOR:**
+> i clicked the companion 1.15 and reinstalled. do you want me to go back and click 1.14, if so give me the link
+**OPERATOR:**
+> i reloaded.. check and tell me how we can fix the next issue. all issues need to be fixed before further enhancment
+**OPERATOR:**
+> i did the reinstall.. please check ..
+**OPERATOR:**
+> just added and saved.. see pic
+**OPERATOR:**
+> what is the next issue
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 21 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> ok.. next issue
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 22 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> i'll take your recommendation .. nex issue
+**OPERATOR:**
+> how many issues are left
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 22 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> i'll take your recommendation on all . can you imprlement all and do not stop untill they are done ?
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 25 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> i cant see anything on the panel for hod/lod section or the stale state
+**OPERATOR:**
+> what about the hod lod that we designed that i gave you the data for. all the stats , the model etc
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
 
 ### DECISIONS
 
@@ -1730,11 +2030,13 @@ All five guards now fire under mutation, including the one that was quietly unte
 - **THE BUILD WAS SPLIT BY INSTALL RISK, at his instruction** — he is installing during the session,
   so display-only changes ship and the bounded-write patch stays parked.
 
+
 ### SHIPPED
 
 **v14.69** — the ⓪a static half (base rates, ladder, provenance) renders without candles; the A row
 refuses in place. **v14.68** — `__gptsDebug.storage()` with a real write probe. Both safe mid-session.
 test_hodlod 115 -> 124, every new guard mutation-tested after two were found not to fire.
+
 
 ### OPEN AT CLOSE
 
@@ -1751,7 +2053,9 @@ test_hodlod 115 -> 124, every new guard mutation-tested after two were found not
 
 ---
 
-<!-- EARLIER-CONTEXTS -->
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 
