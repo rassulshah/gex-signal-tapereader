@@ -131,6 +131,17 @@ if os.path.isdir('tools/fixtures'):
         p = os.path.join('tools/fixtures', f)
         if os.path.isfile(p):
             FILES.append(p)
+# (v14.67) ⚠⚠ docs/ WAS NEVER IN THE MANIFEST EITHER — THE FOURTH DIRECTORY IT HAS SILENTLY
+# DROPPED (after design/ at v14.59, skylit-docs/ at v14.63 and tools/fixtures/). This one is the
+# worst of the four: docs/LLM-NIGHTLY-BRIEF.md is the CONTRACT the scheduled review clones and
+# follows. Ship the fix without it and the nightly keeps reading the old instructions from GitHub —
+# the build would look successful and change nothing.
+# ⚠ THE PATTERN IS THE POINT: a manifest built from an explicit list silently omits every directory
+# nobody thought to add. Each was caught only by DECODING THE .bat before sending. Text only.
+for f in sorted(os.listdir('docs')):
+    p = os.path.join('docs', f)
+    if os.path.isfile(p) and (f.endswith('.md') or f.endswith('.txt')):
+        FILES.append(p)
 FILES += sorted(f for f in os.listdir('.') if f.startswith('test_') and f.endswith('.js'))
 # (v14.57) THE EVIDENCE THE HOD/LOD SECTION RESTS ON — but NOT the corpus itself.
 # ⚠ test_hodlod.js READS data/es-1min/BASERATES.json to assert the panel's baked ladder still equals

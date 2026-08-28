@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-28 · v14.66 · session `4c22fa2b` — v14.66: the NOT-IN call, and the far-side clause gated on evidence
+## 2026-08-28 · v14.67 · session `4c22fa2b` — v14.67: the learning layer had never run - digest, instrument, and all four tasks repointed
 
-_41 operator prompts · transcript `4c22fa2b-bee3-5451-b379-dc2a50cb42bd.jsonl`_
+_49 operator prompts · transcript `4c22fa2b-bee3-5451-b379-dc2a50cb42bd.jsonl`_
 
 ### THE EXCHANGE
 
@@ -969,6 +969,355 @@ NOT-IN    P<=20%   n= 85   72% broke     09:45
 The IN call is **better** than I thought (94%, not 76%). The NOT-IN is **worse** — my 93% came from a mixed sample that included asking about the *second* extreme, a different question. Restricted properly it's 72% on n=85. Still beats the ~57% base at that hour, but it's a modest edge on thin data, not the headline I quoted. Building it with its real numbers.
 Two mutations didn't fire — and the first is the important kind: `u1` greps the source for "NOT IN" and still matched a dead branch. That's testing a string, not behaviour. Extracting the verdict into a function so it can be executed.
 The mutation fires now. `t21` broke because the "thin cell" text moved into `hlVerdict` — and it's already covered by `u1d`, which executes it. Pointing it at the right place.
+**installv1466.bat** — one build, everything in it.
+
+- **Tapereader v14.66** — https://raw.githubusercontent.com/ras …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 18 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (03:50):** Verified file-by-file: **`installv1466.bat` carries HEAD exactly** — all eighteen commits, including the three new FINDINGS entries and both new study tools. Tree is clean; nothing left to build.
+
+The hook counts against `origin`, which this container gets a 403 from by design. Running that file is the push.
+
+One action, two clicks:
+
+1. Run **`installv1466.bat`**
+2. Wait ~5 min → click **Tapereader v14.66** *and* **companion v1.15**
+3. Reload Atlas → footer reads v14.66
+
+The companion is the one that's never been updated, and it's why the corpus tap has collected nothing so far. After one session on this build you'll have `futBars` accumulating for ES/NQ/GC/CL, and the LOD/HOD table will start forward-scoring itself so `PROVISIONAL` can turn into a measured number.
+
+**OPERATOR:**
+> i hope you are doing the appropriate saves and updating necessary documents  and chat history so the next context will know what to do
+
+**me (03:52):** Good question to ask, and I should check rather than reassure you.
+You were right to ask, and the answer is **no — I've been failing at exactly the thing this project is built to prevent.**
+
+```
+CHAT-HISTORY.md      v14.66  ✓
+CHANGELOG.md         v14.66  ✓
+FINDINGS.md          v14.66  ✓
+latest-resume-note   v14.59  ✗  SEVEN BUILDS STALE
+LOCKED-ITEMS.md      v14.59  ✗
+PROJECT-CONSTANTS    v14.59  ✗
+DATA-ARCHITECTURE    v14.59  ✗
+.gex-config.json     v14.59  ✗
+```
+
+The resume note — the file `load gex` reads **first and in full** — has zero mentions of `lodhod`, `HLTAB`, `posr`, or F‑1 through F‑8. A fresh context would rebuild the model from scratch. Fixing all of it now.
+Saves fixed and verified against the handoff contract — a fresh context can now answer all eight questions without asking you. The resume note was seven builds stale; that's recorded as landmine **L‑R**, along with *why* it happened: `test_chat_history.js` fails red when the history goes stale, and **nothing guards the resume note**. A rule enforced by a test gets followed; a rule enforced by a checklist gets followed until it's busy.
+
+Now — more recommendations for this feature. One is an inconsistency I introduced and should have caught:
+
+**1 · ⚠ The table can never update itself.** I built a courier so the *wick* base rates travel from GitHub to your panel without a rebuild — that was the whole point of `gpts_hodlod_base_v1`. But `HLTAB` is **hardcoded in the userscript**. As the corpus grows through the daily tap, the wick rates refresh themselves and the LOD/HOD table silently ages until I cut a build. Two base-rate systems, one self-updating and one frozen, with no reason for the difference. The courier already exists; the table just needs to ride it.
+
+**2 · The call should alert.** You said "as e …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 19 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (03:56):** **No code changed** — panel and companion are byte-identical to what you have. What `installv1466.bat` is missing is only the five handoff documents I just repaired, ~8KB of text.
+
+I'm not cutting a `1467` for that. You haven't run 1466 yet, and a second near-identical file is the exact trap I keep warning about. Those documents will ride the next build — which is item 1, the table courier, if you want it.
+
+⚠ One honest caveat on that: the doc fixes exist **only in this container** until some build carries them. This sandbox has reset mid-session twice historically. If you'd rather bank them now, say so and I'll rebuild — otherwise they go out with the next real change.
+
+So the state is:
+
+- **Run `installv1466.bat`** and click **both** links — that's still the correct file for the panel, and it's what pushes 18 of the 19 commits.
+- **Item 1** (make the LOD/HOD table self-updating like the wick rates already are) is queued and would carry the docs with it.
+
+Your call on whether to start item 1.
+
+**OPERATOR:**
+> i want to make  sure that all of this is reviewed daily /nightly by an llm for analysis testing and improvement.. is that already built
+
+**me (03:58):** Let me check rather than tell you — both the repo side and whether anything is actually scheduled.
+**It's built and scheduled — and it has not worked since 18 August.**
+
+**Four scheduled tasks exist and are firing:**
+
+| task | schedule | last run |
+|---|---|---|
+| nightly review (contract 1) | weekdays 20:45 UTC | fired 08‑27, **PENDING** |
+| evening review (primary) | weekdays 22:47 UTC | fired 08‑27, **PENDING** |
+| morning catch-up | Tue–Sat 12:33 UTC | 08‑27 **SUCCEEDED** |
+| weekly review (contract 2) | Saturdays | 08‑22 **ABANDONED** |
+
+**But nothing comes back:**
+
+```
+review/                     README.md only — ZERO reviews have ever landed
+learning/log/               ONE file, 2026-08-18
+learning/rules.json         74 rules · 0 with any measured n · 0 promoted · 0 ever verified
+review-pull.log             last entry 2026-08-18
+```
+
+Ten days of runs, no output in the repo. The loop fires, produces something, and it dies on the way home.
+
+**Four things are wrong, and they compound:**
+
+⚠ **The delivery cascade isn't landing.** Reviews go device-bridge → Google Drive `GEX-review-inbox` → `review-pull.bat` on your PC. That mover's log stops at 08‑18, so either the Drive drop isn't happening or the local task isn't running.
+
+⚠ **Every one of those tasks uses `git clone --depth 1`** — the exact thing this project banned on 2026‑08‑27 after it cost you a session. They're reading a repo with no history.
+
+⚠ **The brief they follow knows nothing about the new work.** `docs/LLM-NIGHTLY-BRIEF.md` has zero mentions of `lodhod`, `posr`, the wick family or `futBars`. Even a working review would ignore everything built this week — including the `lodhod` rule I just enrolled, which is *waiting* to be forward-scored.
+
+⚠ **They run on Haiku**, which is a small model for a job whos …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 19 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (03:59):** **Found it. The reviews aren't being written at all.**
+
+```
+GEX-review-inbox/          EMPTY (only the _done/ folder)
+GEX-review-inbox/_done/    ONE file — 2026-08-18.json, 216 bytes
+```
+
+So this isn't a broken mover on your PC. Your `review-pull.bat` worked perfectly on 18 August, picked up the file, moved it, and logged it. **Nothing has been dropped in the inbox since.** The reviews are firing, running, and producing nothing that reaches Drive.
+
+And look at the size — **216 bytes**. Even that one surviving file is a stub, not a review.
+
+Two of last night's runs are still sitting at **PENDING**, which for a job that should take minutes means they're hanging or dying mid-run rather than completing and failing to deliver.
+
+⚠ And the thing I'd bet on as the cause, from the trigger prompts themselves: **step 3 of the nightly says "if today's day file is missing or `snaps.SPY` is empty, do NOT write a log — write a `MISSING-<date>.txt` and stop."** There's no `MISSING-*.txt` in the inbox either, so it isn't even reaching that branch cleanly. Combined with two PENDING runs, the likeliest story is the runs are failing before delivery — and nobody has been watching, because the tasks notify on push only when they finish with something noteworthy.
+
+So the answer to your question, precisely: **the review layer is built, scheduled, and has produced exactly one 216-byte artefact in ten days.** Every rule reads `n=0` because nothing has ever measured anything — including the `lodhod` rule I enrolled today and told you would be forward-scored.
+
+That reframes the priority list. The gamma conditioning, the forward test, `PROVISIONAL` becoming measured — **all of it depends on a learning loop that has never once run end to end.**
+
+I'd want to look at what one of those PENDING sessions …[trimmed]
+
+**OPERATOR:**
+> i'll go with your recommendation
+
+**me (04:00):** Found it, and it's not a delivery problem at all.
+**The review can't read its own input.**
+
+```
+data/2026-08-27.json   4.2 MB  ≈ 1,041,000 tokens
+Haiku context                     200,000 tokens
+                       -> the file is 5.2x the entire context window
+```
+
+The weekly review is told to read **all** of `data/*.json` — 29MB, roughly **7 million tokens, 36× the window.**
+
+And the correlation is exact:
+
+```
+2026-08-18   1.3 MB   LOG WRITTEN   <- the last day the file fit
+2026-08-19   4.3 MB   nothing
+2026-08-20   5.9 MB   nothing
+...every day since  nothing
+```
+
+**The last successful review is the last day the file was small enough to read.** Nothing about Drive, the mover, or your PC was ever broken — your `review-pull.bat` did its job correctly on 08‑18 and has had nothing to move since. The runs sit `PENDING` because they're drowning, not because delivery fails.
+
+⚠ **And the project already knew.** `DECISIONS.md` D‑11, written 2026‑08‑24: *"a day export is 5.9 MB; the whole live tape state is ~6 KB. **The archive needs a digest.**"* It was measured, written down, and the nightly review was pointed at the raw file anyway. The repo is the first place to look, again.
+
+**The fix is a digest step, and it's cheap.** The review session has a Python sandbox — it just has to use it. A `tools/day-digest.py` that turns a 4MB day file into a ~50KB summary carrying exactly what the review needs: per-feature n / hit-rate / vote-split, regime tags, effective n, contradictions, data-health. Then the brief says *run the digest first, read the digest* — and the whole thing fits comfortably.
+
+That also fixes the thing I've been promising you all session: **`lodhod` can only be forward-scored by a review that can actually open the file.**
+
+Three things to change together:
+1. **`t …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 19 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (04:00):** Same nineteen commits, tree clean, nothing new since the docs repair. Eighteen are inside `installv1466.bat`; the nineteenth is the handoff-document fix, which will ride the next build.
+
+I've stopped short of building the digest because that's a real change and you haven't said go — but it's worth being blunt about what it unblocks, since it's larger than it looks.
+
+**Nothing in the learning layer has ever worked.** Every rule reads `n=0`, nothing has been promoted, nothing verified — not because the loop was badly designed, but because since 19 August the review has been asked to read a file five times larger than its own context. That means the forward-scoring I've described repeatedly this session — the thing that turns `PROVISIONAL` into measured, that would eventually let the table condition on the gamma side — has never once run.
+
+So the digest isn't housekeeping. It's the thing standing between you and every "we'll know once it's been scored" I've said today.
+
+Say go and I'll build the three pieces: the extractor, the brief rewritten around it and covering this week's features, and the four scheduled tasks repointed with the `--depth 1` removed.
+
+**OPERATOR:**
+> yes.. lets get it all out of the way . so we can have a clean application and start focusing on enhancing it.. all of these issues need to be closed
+
+**me (04:01):** Right — let me close them. Starting with the feature-record collapse, because a digest of empty data is still empty.
+The enqueue is gated only on `snap.feat` being truthy. Let me look at what's actually in the file rather than keep reasoning.
+The key sets are the tell — 15 keys on 08‑27, 6 and 2 on 08‑26, but 32 on 08‑20. Not random subsets. Let me check how features get registered.
+The guard is the mechanism: `if(FEATURES.length) return` checks whether **any** feature registered, not whether all 47 did. But I'd be speculating about why only one bar recorded. Your panel is live — let me ask it.
+Good news and a limit. **You're on v14.66** — you installed and reloaded. And the registry is **healthy at 47 features**, so my partial-registration theory is wrong for the current build.
+
+But `feat:{}` and `snaps:{}` — the recorder is empty after hours, so I can't catch the collapse tonight. It only misbehaves during a live session.
+
+So I'll do the thing that actually answers it: **instrument it**, so the next RTH session records *why* rather than leaving us to guess. Plus the digest work you approved.
+4.2MB → 6.7KB. A 600× reduction, and every day now fits with room to spare. Checking that it flags the collapse rather than averaging over it:
+The digest works end to end — it flags 08‑25 and 08‑27 as **COLLAPSED** with the coverage figures (1% of bars on 08‑27), keeps the vote splits and the one-way flag, and states effective n. Now the instrumentation so the next live session tells us *why*.
+Instrumentation that can break the thing it measures is worse than none — `FEATH.calls++` throws when the harness evals the function in isolation. Making every counter access unable to fail.
+Still a dependency — `fh` isn't defined either when the function is eval'd alone. The only genuinely …[trimmed]
+
+### DECISIONS
+
+- **HE ASKED WHETHER THE SAVES WERE BEING DONE. THEY WERE NOT.** CHAT-HISTORY, CHANGELOG and FINDINGS
+  were current at v14.66 while `latest-resume-note.md`, LOCKED-ITEMS, PROJECT-CONSTANTS,
+  DATA-ARCHITECTURE and `.gex-config.json` all sat at **v14.59** - SEVEN builds stale, with ZERO
+  mentions of `lodhod`, `HLTAB` or `posr`. A fresh context would have rebuilt the model from scratch.
+  ⚠ **The history is current because `test_chat_history.js` goes red when it is not. Nothing guards
+  the resume note.** A rule enforced by a test is followed; a rule enforced by a checklist is
+  followed until it is busy. Recorded as landmine L-R.
+- **THE LEARNING LAYER HAS NEVER RUN.** He asked whether the nightly LLM review was built. It is
+  built, scheduled and firing - and has produced ONE 216-byte artefact in ten days. The cause is
+  arithmetic: `data/2026-08-27.json` is 4.2 MB ≈ 1,041,000 tokens against a 200,000-token context.
+  **The last review that ever landed is the last day the file was 1.3 MB.** Every rule reads n=0.
+  ⚠ **Every "enrolled so it will be forward-scored" written in this project - including everything I
+  said about `lodhod` today - has described a loop that never closed.**
+- ⚠ **AND D-11 ALREADY SAID IT** (2026-08-24): *"a day export is 5.9 MB ... The archive needs a
+  digest."* Measured, written down, and the review was pointed at the raw file anyway. Third
+  occurrence of "the repo is the first place to look".
+- **NOTHING WAS BROKEN AT HIS END.** `review-pull.bat` worked correctly on 08-18 and has had nothing
+  to move since; `GEX-review-inbox` is empty. I nearly went looking at his PC.
+- **INSTRUMENTATION MUST NOT BREAK WHAT IT MEASURES, AND MUST DEPEND ON NOTHING.** Two attempts at
+  the collapse counters failed: a bare `FEATH.calls++` threw ReferenceError under the harness, then a
+  helper `fh()` did the same. Each ADDED a new way for a bar to record nothing - the exact bug being
+  investigated. Now a self-contained try/catch per counter.
+- **`registerCoreFeatures()` WAS CALLED UNGUARDED** inside featRecordAll, so a throw there killed the
+  bar's whole record silently. Now caught and counted. Its guard is `if(FEATURES.length) return` -
+  "did ANY register", not "did all 47" - so a partial registry would be permanent. Healthy at 47 on
+  the live panel tonight, but it had to be ruled out with a counter, not an argument.
+
+### SHIPPED
+
+**v14.67** - `tools/day-digest.py` (4.2 MB -> ~7 KB, with `dataHealth` flagging collapsed days),
+the nightly brief rewritten around it and covering `lodhod`, the feature-record collapse
+instrumented behind `__gptsDebug.featHealth()`, and **all four scheduled tasks repointed**: digest
+first, FULL clone (all four used the banned `--depth 1`), check `dataHealthVerdict` before computing,
+score `lodhod` without copying its backtest into rules.json.
+**Docs brought current**: resume note rewritten at v14.66/67, LOCKED-ITEMS, PROJECT-CONSTANTS L-N..L-R,
+DATA-ARCHITECTURE, `.gex-config.json`, FINDINGS F-9.
+
+### OPEN AT CLOSE
+
+1. ⚠⚠ **HE IS ON v14.66 AND MUST INSTALL v14.67 + CLICK BOTH LINKS.** The COMPANION has never been
+   updated on his machine - still v1.14 - so the Yahoo corpus tap has never run once.
+2. ⚠ **THE COLLAPSE IS NOT FIXED, IT IS INSTRUMENTED.** Ask for `__gptsDebug.featHealth()` DURING a
+   live RTH session; the recorder is empty after hours, which is why it could not be diagnosed
+   tonight. `calls >> ok` means the registry; `ok` high with `enq` low means the dedupe.
+3. **The review runs tonight at 20:45 and 22:47 UTC** on the new prompts. First real test.
+4. ⚠ **The scheduled tasks still run on Haiku.** With the digest the context problem is gone, so it
+   is now viable - but the job's value is statistical honesty. Worth asking him.
+5. **The table is still PROVISIONAL** and will stay so until the loop actually closes.
+6. Unbuilt: the LOD/HOD table cannot self-update (the wick rates courier; `HLTAB` is baked in),
+   alerting on the call, gamma conditioning (blocked on 2), overnight context.
+
+---
+
+<!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-28 · v14.66 · session `4c22fa2b` — v14.66: the NOT-IN call, and the far-side clause gated on evidence
+**OPERATOR:**
+> load gex
+**OPERATOR:**
+> Check the architecture doc for the yahoo pipeline that updates the es data file daily.  I want to make sure we have the latest data for the hod lod feature so it updates daily
+**OPERATOR:**
+> I just wanted to make sure we had a process in place that obtained es data duly and updated the data file.  I know the process workflow is in git and it can be found checking what was committed but you had a lot of difficulty finding it the lat time
+**OPERATOR:**
+> Yes I want this process automated so the hod lid is always updated based on the latest data.  I also need you to ensure you are able to find it in the future and place its details in the architecture document for this project so it is read every time load he’s is done.  I want to get this out of the way. The process should be extendable to other markets like nq gc nd cl in the future.
+**OPERATOR:**
+> Continue from where you left off.
+## The design
+**OPERATOR:**
+> i'm surprised its not there.  there should be a design or architecture document  that already talks about yahoo finance, Inside Finance (IF) etc. can you double check
+**OPERATOR:**
+> make sure everything is documented and can be retrieved via load gex protocol and build .
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are commit(s) on branch 'main' that GitHub will show as Unverified (missing signature, or committer email is not noreply@anthropic.com):
+> 24f490f claude@anthropic.com
+> Please run 'git config user.email noreply@anthropic.com && git config user.name Claude', then 'git commit --amend --no-edit --reset-author' for the tip commit, or 'git rebase --exec "git commit --amend --no-edit --reset-author" 24f490f7ef899eaa6bbcc55136b7a9d0d867e2d8^' for earlier commits, then push.
+**OPERATOR:**
+> i think you are missing some fields.    look at the pics.  do you know what the fields are
+**OPERATOR:**
+> wick% is the percentage fo the total range .  so if the total range is 100, and the wick is 10, the wick is 10% .. cand you check
+**OPERATOR:**
+> i dont know what you are asking me. if there is no wick , then its 0 .   these days should not be averaged . also crazy outliers should not be averaged.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> i thought they were all averages.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 4 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> ok.. so now you understand every field .  for example mud, stands for markup or markdown. markup is open to the high after the lower wick forms and markedown is open to the low after the upper wick forms.
+**OPERATOR:**
+> yes its back to open (bop) .The next step is for you to understand that my intention and goal behind this field is to identiy a low or a high of day so i can profit when it goes to the other extremity.  This means you need to help identify whether the lod or hod is done .  you can use this data ,  IB 30, IB 60, Sweeps, sma 50,  20 bar high or low, and any suggestions or recommendations you have to do this . run many combinations and figure out a hight probability way to figure this out, so you meet my requirement of identifying if the lod or hod has been made.   do you understand.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are untracked files in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> i also want you to test the various combinations with  divergences . for example es keeps making low and nq doesn't   as well as momentum divergences where es makes a low but a momentum indicator doesnt. ive added nq data in the same folder. see if it helps in idnetifyign hod and lod have occurred. Test combinations of everything. i want you to create a predictive probabilstic model so i can use it to identify if a hod or lod has occurred.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 7 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> check everything .. is the model built
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> lets discuss 1 at a time
+**OPERATOR:**
+> what do you mean the rule is earlier.. are you saying i have to wait for the model to give me any real information
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> what is a better predictor for determining the hod or lod has occurred ?
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> i just want to know with high accuracy whether the hod or lod have occurred. that is my requirement. I want to know it as early as possible.  have you tested multiple combinations. have you used the nq divergence as well and tested it .  does the model use all of these factors to give right answers early .  is this model solid ?
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> what is the model using to determine if a hod or lod has occurred
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 11 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> before going any further , is this a standard model . is this the right use case for it  for predicting hod lod .  step back and see if you made the right choice for this type of problem. consider the approach .  just double check and sanity check.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 11 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> so what do you recommend we do next..
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are untracked files in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> i'll go with your recommendation
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 14 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> check .  also do you need the badges below like vwap , ib60 etc.    just make sure this is done right.  also lets but the lod in read on top. ov the hod/lod statistics.    review everything to ensure correctnes and let me know if any enshancements need to be made  .  For example , one enhancement would be predicting if today with be a red day or green day where the close is greater than the open or less than the open.   optimize this feature to the best of your ability.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 16 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> ok.. lets build your enhancemetn but first what other enhancements can you reccomend ?
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 16 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> yes,  lets test everything and then have 1 build
 
 ### DECISIONS
 
@@ -993,6 +1342,7 @@ The mutation fires now. `t21` broke because the "thin cell" text moved into `hlV
   Failure pattern #8, sixth occurrence, caught by mutation rather than by review.
 - **RED/GREEN REFUSED** (F-6) and **the badge row deleted on evidence** (v14.65).
 
+
 ### SHIPPED
 
 **v14.66** - three-state verdict (IN / STANDING / NOT IN) with measured rates and n for each; the
@@ -1000,6 +1350,7 @@ far-side clause gated on the second extreme not having printed, carrying when to
 (~13:33, IQR 11:51-14:47); `hlVerdict()` extracted for testability. test_hodlod 98 -> 115, every new
 guard mutation-tested including two that had to be rewritten after mutation showed they could not
 fail. FINDINGS F-6, F-7, F-8 added.
+
 
 ### OPEN AT CLOSE
 
@@ -1016,7 +1367,9 @@ fail. FINDINGS F-6, F-7, F-8 added.
 
 ---
 
-<!-- EARLIER-CONTEXTS -->
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 

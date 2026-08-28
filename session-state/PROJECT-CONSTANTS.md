@@ -29,6 +29,38 @@ the `chatHistory` block even after the file was deleted from `projectFiles`. Mut
 it. That is the third time in this project an assertion has bought false confidence; **mutate every
 new assertion and confirm it fires before trusting it.**
 
+## LANDMINES ADDED 2026-08-28b (the LOD/HOD feature)
+
+**L-N · MEASURE THE QUESTION THE FACE ACTUALLY PUTS.** The LOD/HOD call was reported at **76%** and
+the NOT-IN call at **93%**. Both were wrong: the sample pooled BOTH sides at every bar, which also
+asks "is the SECOND extreme in" — a different and harder question that ⓪a never puts. Restricted to
+the first-printed extreme, the true numbers are **94%** and **72%**. Same data, same code, wrong
+population. ⚠ Before quoting a rate, state which rows it was computed over and whether the face asks
+that question.
+
+**L-O · A GREP CANNOT TELL A LIVE BRANCH FROM A DEAD ONE — SIXTH OCCURRENCE.** An assertion grepped
+the render source for "NOT IN" and stayed GREEN when the branch was mutated out. Fixed by extracting
+`hlVerdict()` so the branch can be EXECUTED. **If a test greps rendered markup for a word, it is
+testing the vocabulary, not the logic.**
+
+**L-P · "UNCHANGED" MUST MEAN "UNCHANGED FOR HIM", NOT "UNCHANGED VS ORIGIN".** `release-links.sh`
+marks a script changed by diffing against `origin/main`. The companion reached origin at v14.59, so
+every later build correctly reported it "unchanged" — and the delivery note said *skip it*. **He had
+never installed it.** The corpus tap therefore never ran once, across four builds. ⚠ The comparison
+that matters is against the version RUNNING IN HIS BROWSER; read it off the panel.
+
+**L-Q · THE INSTALLER MANIFEST HAS SILENTLY DROPPED THREE DIRECTORIES.** `design/`, `skylit-docs/`
+and `tools/fixtures/` were each absent from the payload until a pre-send decode caught them —
+including on the build whose entire purpose was creating `FINDINGS.md`. **DECODE THE .bat AND CHECK
+THE FILE LIST BEFORE SENDING. It is the only check that finds this class of bug.**
+
+**L-R · THE RESUME NOTE WENT SEVEN BUILDS STALE WHILE EVERYTHING ELSE WAS CURRENT.**
+`CHAT-HISTORY.md`, `CHANGELOG.md` and `FINDINGS.md` were updated on every build because
+`test_chat_history.js` fails red when the history is not. **Nothing guards the resume note**, so it
+sat at v14.59 through v14.66 with no mention of the feature that was built — and the operator had to
+ask. ⚠ **A rule enforced by a test is followed; a rule enforced by a checklist is followed until it
+is busy.** Update the resume note in the SAME COMMIT as the build.
+
 ## LANDMINES ADDED 2026-08-28 (the ES corpus pipeline)
 
 **L-I · A TEST THAT WRITES INTO PRODUCTION STORAGE IS A DATA-POISONING BUG.** The first run of

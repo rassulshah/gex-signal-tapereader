@@ -183,6 +183,22 @@ one run nobody watches. **Always redirect the output root when testing.**
 
 ---
 
+## 6a · THE CORPORA ON DISK (updated 2026-08-28)
+
+| file | what | sessions |
+|---|---|---|
+| `data/es-1min/ES TestingData.txt` | EPM26 1-minute, CSV **with** a header, `Y-m-d H:M` | 284 |
+| `data/es-1min/NQ TestingData.txt` | ENQU26 1-minute, **TAB**, **no** header, `Y-m-dTH:M` | 188 |
+
+⚠⚠ **THE TWO FILES ARE NOT THE SAME FORMAT** — different delimiter, header and timestamp style.
+Assuming they were cost a run. `tools/model-lodhod.py::load()` sniffs all three from the file itself.
+⚠ **THE ES CORPUS WAS NEVER MISSING.** Tooling looked for `EPM26-1min.csv.gz`, did not find it, and
+reported the corpus absent — **the operator supplied it twice because of that error.** When a file
+is "missing", list the FOLDER before trusting the NAME.
+
+**What the daily Yahoo tap is FOR:** these corpora are static exports. The tap keeps them growing so
+the ⓪a base rates and the LOD/HOD table can be re-derived on current data instead of ageing.
+
 ## 7 · KNOWN GAPS
 
 - **`data/es-1min/EPM26-1min.csv.gz` is NOT on GitHub.** 5.1MB against a 6MB installer payload cap —

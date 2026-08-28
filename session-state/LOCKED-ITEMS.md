@@ -36,7 +36,44 @@ that is one handoff away from never having happened.**
 
 ---
 
+## BUILT 2026-08-28 — moved here rather than deleted, so nobody wonders if they were lost
+
+### ⓪a HOD/LOD — BUILT v14.57, and the whole feature completed v14.60–v14.66
+The design (`mockuphodlodv2.html`) was never lost. Shipped: the stats table, the wick family with the
+operator's own definitions, trimmed-mean E row, and the LOD/HOD probability table with a three-state
+verdict. Evidence in `skylit-docs/FINDINGS.md` F-1 … F-8.
+
+### The wick family — DEFINED BY THE OPERATOR 2026-08-28, BUILT v14.60
+BOP/WICK/W.END/WICK%/MUD had been printed as PENDING since v14.57 for want of a definition. He gave
+them; they were confirmed bar-by-bar on the tape. **No longer pending.**
+
+---
+
 ## OPEN — LOCKED, NOT BUILT
+
+### ⚠ CONDITION THE LOD/HOD TABLE ON THE GAMMA SIDE — the highest-value unbuilt idea
+**Raised and agreed 2026-08-28.** The table knows nothing about the panel it lives in. Does price
+sitting on the King, or a low printing at a put wall, change the probability that the extreme holds?
+**This is what would make the feature belong to THIS tool** rather than being generic price structure
+any charting package could compute.
+⚠⚠ **BLOCKED by the feature-record collapse** (below) — there is no usable recorded history pairing
+node state with session extremes. Unblocking that is the prerequisite, not a side quest.
+
+### ⚠ THE FEATURE-RECORD COLLAPSE — diagnosis, not a feature, and it gates everything
+3,822 records on 08-20 against **15** on 08-27. `matrix` rows track exactly (108→3132, 122→3822,
+0, 0, 23→990, 2→8, 1→15) against 133 SPY snaps, so it is **ONE upstream gate, not 46 features
+failing**. It blocks the gamma conditioning AND the forward test of the LOD/HOD table.
+
+### Overnight / globex context — untested, cheap
+The ES/NQ corpora contain ETH bars that every study currently filters out. Does the overnight range
+or direction inform where the RTH extreme lands? Genuinely unknown; one study answers it.
+
+### A test that the resume note was updated
+`test_chat_history.js` fails the build when the chat history goes stale. **Nothing guards the resume
+note** — and on 2026-08-28 it went SEVEN builds stale while every other document was current, until
+the operator asked. The same mechanism would close it.
+
+
 
 ### ITEM 18 · Yahoo Finance HTF/ITF data
 **Locked 2026-08-16. Lost 2026-08-20. Recovered 2026-08-27. ⚠ HALF BUILT 2026-08-28 (v14.59).**

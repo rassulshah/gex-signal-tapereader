@@ -1,3 +1,60 @@
+# ⚠⚠ READ THIS FIRST — THE REVIEW MUST NOT OPEN THE DAY FILE
+
+**Rewritten 2026-08-28 after the review layer was found to have been dead for ten days.**
+
+    data/2026-08-27.json     4.2 MB   ~= 1,041,000 tokens
+    your context window                   200,000 tokens
+    -> the raw day file is 5.2x everything you can hold.
+
+The correlation is exact. The last review that ever landed was **2026-08-18**, the last day the
+export was 1.3 MB. From 08-19 (4.3 MB) onward: nine scheduled runs, **zero** output, and every rule
+in `learning/rules.json` still reads `n=0`. **Nothing in the learning layer has ever been measured.**
+
+## THE ONE RULE THAT CHANGES: DIGEST FIRST
+
+```bash
+python3 tools/day-digest.py data/<DATE>.json /tmp/digest.json   # 4.2 MB -> ~7 KB
+```
+
+**Read `/tmp/digest.json`. NEVER `cat` a file from `data/`.** The digest carries everything this
+contract asks for: per-feature n / resolved / scored / rate / **vote split** / one-way flag /
+MFE / MAE / per-regime, `effectiveN`, the node-event ledger summarised, and `dataHealth`.
+You have a shell — use it. Anything the digest lacks, extract with a script; do not read the source.
+
+## ⚠ CHECK `dataHealthVerdict` BEFORE COMPUTING ANYTHING
+
+The digest flags a day whose feature records cover almost no bars:
+
+    2026-08-20   3822 records / 122 bars of 131 snapshots  (93%)   ok
+    2026-08-27     15 records /   1 bar  of 133 snapshots  ( 1%)   COLLAPSED
+
+**If it says COLLAPSED, say so as the headline and do NOT compute rates over it.** A confident
+number from 1 bar is worse than no number. This is an open defect (see `LOCKED-ITEMS.md`); v14.67
+adds counters — ask the operator for `__gptsDebug.featHealth()` taken DURING a live session.
+
+## ⚠ CLONE FULL. NEVER `--depth 1`.
+
+Every scheduled prompt used `--depth 1` until 2026-08-28. A shallow clone has no history, and this
+project has lost specified work to exactly that.
+
+## WHAT IS NEW SINCE THIS BRIEF WAS LAST TOUCHED, AND MUST NOW BE SCORED
+
+| feature key | what it claims | what to check |
+|---|---|---|
+| **`lodhod`** | has the LOD/HOD already printed? An 8x9 table on posr x time. **IN at cell>=70% measured 94% (n=284), NOT IN at <=20% measured 72% (n=85)** — both BACKTESTED, never forward-tested | does the live rate match the cell rate? Report `called` vs outcome with n. **This is the single most important new row.** |
+| `levelstate` | five level states | hold/break rate per state |
+| ⓪a wick family | BOP/WICK/W.END/WICK%/MUD | recorded but not yet scored |
+
+⚠ **`lodhod` starts at `n=0` and its backtest is NOT a live rate.** Never copy 94% into
+`learning/rules.json` — that field is for what YOU measured forward.
+
+⚠ **The panel's own evidence lives in `skylit-docs/FINDINGS.md` (F-1..F-8).** Read it before
+proposing anything: sweeps (48%), momentum divergence and NQ cross-market divergence are all
+measured DEAD, and a 5-feature regression was measured as no better than the table. Do not propose
+re-adding them.
+
+---
+
 # LLM REVIEW CONTRACTS — NIGHTLY (light) and WEEKLY (heavy) · v11.0 LOCKDOWN
 
 > **LOCKDOWN (v11.0, 2026-08-18).** No new features are being built. For the next ≥20 sessions the review's whole

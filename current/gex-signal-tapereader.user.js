@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.66
+// @version    14.67
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.66';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.67';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -14465,8 +14465,34 @@ function featRegime(sym, ctx){
   try{ event=!!eventTagNow(); }catch(e3){}
   return { tag:tag, opex:opex, event:event };
 }
+// ⚠⚠ (v14.67) THE FEATURE-RECORD COLLAPSE INSTRUMENT.
+// data/2026-08-27.json holds 133 SPY snapshots and feature records for exactly ONE bar. 08-25: 22
+// bars of 148. 08-20 was healthy at 122 of 131. Every downstream rate, scorecard and promotion runs
+// on these records, so the learning layer has been reading almost nothing for a week and NOBODY
+// COULD SEE WHY - the whole path is wrapped in silent try/catch, which is how it stayed invisible.
+//
+// Three counters, no behaviour change. `__gptsDebug.featHealth()` reads them live.
+// ⚠ registerCoreFeatures() is the prime suspect: its guard is `if(FEATURES.length) return`, which
+// asks "did ANY feature register", not "did ALL 47". If it ever throws part-way, the registry is
+// left permanently short AND featRecordAll throws (this call is NOT inside a try), so snap.feat is
+// null and the bar records NOTHING. The registry is healthy at 47 on the live panel tonight, so
+// that is not tonight's cause - but a partial registry would look exactly like this and must be
+// ruled out with a counter rather than an argument.
+var FEATH={ calls:0, ok:0, regThrew:0, recThrew:0, enq:0, enqSkipped:0, lastErr:null, lastKeys:0, registered:0 };
+// ⚠⚠ INSTRUMENTATION MUST NEVER BE ABLE TO BREAK THE THING IT MEASURES, AND IT MUST DEPEND ON
+// NOTHING. Two attempts failed this: a bare `FEATH.calls++` threw ReferenceError when the harness
+// eval'd featRecordAll in isolation, and so did a helper `fh()` - each one ADDED a new way for the
+// bar to record nothing, which is exactly the bug being investigated. The only safe form is a
+// self-contained try/catch per counter, referencing nothing that might not be in scope.
 function featRecordAll(sym, ctx){
-  registerCoreFeatures();
+  try{ FEATH.calls++; }catch(e){}
+  try{ registerCoreFeatures(); }
+  catch(eReg){
+    // Previously unguarded: a throw here killed the whole bar's record silently.
+    try{ FEATH.regThrew++; FEATH.lastErr='registerCoreFeatures: '+(eReg&&eReg.message||eReg); }catch(e){}
+    try{ swallow('registerCoreFeatures', eReg); }catch(e9){}
+  }
+  try{ FEATH.registered=FEATURES.length; }catch(e8){}
   var out={};
   var rg={ tag:'na', opex:false, event:false };
   try{ rg=featRegime(sym, ctx)||rg; }catch(e0){}
@@ -14475,12 +14501,14 @@ function featRecordAll(sym, ctx){
   var ms={ rulesAsOf:null, weightsHash:null };
   try{ ms=modelStamp()||ms; }catch(e2){}
   FEATURES.forEach(function(f){
-    try{ out[f.key]=f.record(sym, ctx); }catch(e){ out[f.key]=null; }
+    try{ out[f.key]=f.record(sym, ctx); }
+    catch(e){ out[f.key]=null; try{ FEATH.recThrew++; FEATH.lastErr=f.key+': '+(e&&e.message||e); }catch(e2){} }
     try{ if(out[f.key] && typeof out[f.key]==='object'){
       out[f.key].regime={ tag:rg.tag, opex:rg.opex, event:rg.event };
       out[f.key].model={ rulesAsOf:ms.rulesAsOf, weightsHash:ms.weightsHash };
     } }catch(e1){}
   });
+  try{ FEATH.lastKeys=Object.keys(out).length; FEATH.ok++; }catch(e7){}
   return out;
 }
 // Append this bar's feature records to the day's pending queue. Idempotent per
@@ -14508,7 +14536,8 @@ function featEnqueue(sym, snapFeat, ctx){
         if(arr[i].bar!==bar) break;                       // reached the previous bar: nothing else to check
         if(arr[i].key===k){ dup=true; break; }
       }
-      if(dup) continue;
+      if(dup){ try{ FEATH.enqSkipped++; }catch(e6){} continue; }
+      try{ FEATH.enq++; }catch(e5){}
       arr.push({ key:k, t:t, bar:bar, n:n,
                  px:(ctx&&ctx.px!=null)?ctx.px:null,
                  session:(ctx&&ctx.session)?ctx.session.bucket:null,
@@ -24504,6 +24533,23 @@ function swallow(tag, e){
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.renderErrors=function(){ return RENDER_ERRS.slice(); };
 // (v14.59) the corpus feed and the base rates, both inspectable without editing code
+// (v14.67) why did this bar record nothing? Read it DURING a live session - the recorder is empty
+// after hours, which is why this could not be diagnosed from a night-time console.
+window.__gptsDebug.featHealth=function(){
+  try{
+    var d=null; try{ d=recorderDay(recorderLoad()); }catch(e1){}
+    var per={};
+    if(d&&d.feat) for(var s in d.feat){ var a=d.feat[s]||[], b={}, k={};
+      a.forEach(function(r){ b[r.bar]=1; k[r.key]=1; });
+      per[s]={ records:a.length, bars:Object.keys(b).length, keys:Object.keys(k).length,
+               snaps:((d.snaps&&d.snaps[s])||[]).length }; }
+    return { counters:FEATH, perSymbol:per,
+             reading:'calls = bars that tried; ok = bars that produced a record set; regThrew = the '+
+                     'registry blew up (registry left short AND the bar lost); recThrew = individual '+
+                     'features failed; enq vs enqSkipped = appended vs deduped. If calls >> ok, the '+
+                     'registry is the cause. If ok is high but enq is low, the DEDUPE is eating them.' };
+  }catch(e){ return 'threw: '+(e&&e.message||e); }
+};
 window.__gptsDebug.futBars=function(){ try{ return futBarsHealth(); }catch(e){ return 'threw: '+e.message; } };
 window.__gptsDebug.futBarsRaw=function(){ try{ return futBarsLoad(); }catch(e){ return null; } };
 window.__gptsDebug.hlBase=function(){ try{ var B=hodlodBase(); return { src:B.src, n:B.n, first:B.first, last:B.last, at:B.at, ladder:B.ladder }; }catch(e){ return 'threw: '+e.message; } };

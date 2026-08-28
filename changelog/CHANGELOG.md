@@ -1,3 +1,42 @@
+## v14.67 — the learning layer had never run, and the collapse gets an instrument
+
+> "i want to make sure that all of this is reviewed daily/nightly by an llm ... is that already built"
+
+Built, scheduled, firing — and **dead since 2026-08-18**.
+
+### THE REVIEW COULD NOT OPEN ITS OWN INPUT
+
+    data/2026-08-27.json   4.2 MB  ~= 1,041,000 tokens
+    review model context               200,000 tokens   -> 5.2x the entire window
+
+The last review that ever landed is the last day the day file was 1.3 MB. Nine scheduled runs since,
+zero output, and **every rule in `learning/rules.json` still reads `n=0`** — nothing in this project
+has ever been forward-scored. Every "enrolled so it will be scored nightly" has described a loop
+that never closed. ⚠ `DECISIONS.md` D-11 recorded the size problem on 2026-08-24 and the review was
+pointed at the raw file anyway.
+
+**`tools/day-digest.py`** — 4.2 MB → ~7 KB, aggregates only: per-feature n / rate / **vote split** /
+oneWay / MFE / MAE / per-regime, `effectiveN`, node events, and **`dataHealth`** which flags a
+collapsed day instead of averaging over it. All four scheduled tasks now digest first, clone FULL
+(all four used the banned `--depth 1`), check `dataHealthVerdict` before computing, and score
+`lodhod` without copying its backtest into `rules.json`.
+
+### THE FEATURE-RECORD COLLAPSE GETS AN INSTRUMENT
+
+08-27: 133 snapshots, feature records for **one bar**. The whole path is wrapped in silent try/catch,
+which is why it stayed invisible. v14.67 adds counters — `calls`, `ok`, `regThrew`, `recThrew`,
+`enq`, `enqSkipped` — read live with **`__gptsDebug.featHealth()`**. ⚠ `registerCoreFeatures()` was
+called UNGUARDED inside `featRecordAll`, so a throw there killed the whole bar's record silently; it
+is now caught and counted. The registry is healthy at 47 on the live panel, so that is not tonight's
+cause — but it had to be ruled out with a counter rather than an argument.
+
+⚠ **Instrumentation must never break what it measures, and must depend on nothing.** Two attempts
+failed this: a bare `FEATH.calls++` threw ReferenceError when the harness eval'd `featRecordAll`
+alone, and so did a helper `fh()` — each ADDED a new way for the bar to record nothing, which is the
+bug under investigation. Every counter is now a self-contained try/catch.
+
+Suite 119 green, 6 documented baseline reds. FINDINGS F-9.
+
 ## v14.66 — the NOT-IN call, and a clause that was pointing at a finished move
 
 Two things were tested before building, and both changed what got built.

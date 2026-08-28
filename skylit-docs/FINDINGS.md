@@ -421,3 +421,54 @@ both extremes are in the face says *"both extremes in — the range is set"* ins
 ### 4 · When the far side IS still ahead, it prints at
 **median 13:33, IQR 11:51–14:47.** That is the clause the operator asked for, and it is measured
 rather than borrowed from the unconditional E-row median.
+
+---
+
+## F-9 · THE LEARNING LAYER HAS NEVER RUN — the review could not open its own input
+**Status: CONFIRMED** (arithmetic, not inference) · 2026-08-28 · `tools/day-digest.py`
+
+The operator asked whether the nightly LLM review was built. It is built, scheduled and firing — and
+it has produced **one 216-byte artefact in ten days.**
+
+### The cause is arithmetic
+
+    data/2026-08-27.json     4.2 MB   ~= 1,041,000 tokens
+    the review model's context             200,000 tokens
+    -> the day file is 5.2x the ENTIRE window; the WEEKLY reads all of them, ~7M tokens (36x)
+
+### And the correlation is exact
+
+| day file | size | review outcome |
+|---|---|---|
+| 2026-08-18 | **1.3 MB** | **LOG WRITTEN** |
+| 2026-08-19 | 4.3 MB | nothing |
+| 2026-08-20 | 5.9 MB | nothing |
+| …every day since | | nothing |
+
+**The last review that ever landed is the last day the file was small enough to read.** Nothing about
+Drive, the mover or the operator's PC was broken: `review-pull.bat` did its job on 08-18 and has had
+nothing to move since. `GEX-review-inbox` is empty; `_done/` holds one file.
+
+⚠⚠ **THE CONSEQUENCE, AND IT INVALIDATES A LOT OF LANGUAGE USED IN THIS PROJECT:** every rule in
+`learning/rules.json` reads `n=0`, `promoted:false`, `lastVerified:null`. **Nothing has ever been
+forward-scored.** Every "it will be scored nightly" and "enrolled so the live rate accumulates"
+written into this codebase — including for `lodhod` — has been describing a loop that never closed.
+
+⚠ **AND THE PROJECT ALREADY KNEW.** `DECISIONS.md` D-11, 2026-08-24: *"a day export is 5.9 MB … The
+archive needs a digest."* Measured, written down, and the review was pointed at the raw file anyway.
+**The repo is the first place to look, not the last** — third occurrence of that lesson.
+
+### The fix
+`tools/day-digest.py` — 4.2 MB → ~7 KB (600x), emitting only aggregates: per-feature n / resolved /
+scored / rate / **vote split** / oneWay flag / MFE / MAE / per-regime, `effectiveN`, node events
+summarised, and **`dataHealth`**, which flags a day whose feature records cover almost no bars:
+
+    2026-08-20   3822 records / 122 bars of 131 snapshots (93%)   ok
+    2026-08-27     15 records /   1 bar  of 133 snapshots ( 1%)   COLLAPSED
+
+All four scheduled tasks now digest first, clone FULL (every one used `--depth 1`, banned since
+2026-08-27), check `dataHealthVerdict` before computing anything, and are told to score `lodhod`
+without copying its backtest into `rules.json`.
+
+⚠ **A REVIEW THAT CANNOT SEE ITS INPUT FAILS SILENTLY AND LOOKS LIKE A QUIET MARKET.** Nothing
+alerted for ten days because "no findings" and "no data" produced the same empty result.
