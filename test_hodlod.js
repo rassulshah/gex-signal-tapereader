@@ -425,5 +425,31 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
      'u13 ...and both carry their n');
 }
 
+// ---- 11 · NO CANDLES MUST NOT HIDE THE BACKTEST (v14.69) -------------------------------------
+// ⚠ The old gate was `if(!D.ok) return <one line>`, which hid the 284-session base rates, the
+// survival ladder and the corpus provenance whenever there were no bars — i.e. every pre-open
+// minute, which is exactly when the operator prepares. None of that needs a candle.
+{
+  const SD = ex('secDay');
+  ok(/var NOREAD/.test(SD), 'w1 the no-read case is a FLAG, not an early return');
+  ok(!/if\(!D\.ok\)\{\s*return h\+/.test(SD.replace(/\s+/g,' ')),
+     'w2 ...and the early return that hid everything is gone');
+  // ⚠ COUNT, DO NOT JUST MATCH. There are TWO A rows (the excursion block and the day block) and a
+  // single-match assertion passed while one of them was mutated away — it found the survivor.
+  ok((SD.match(/NOREAD \? row\('a','A'/g)||[]).length === 2,
+     'w3 BOTH A rows show em-dashes rather than inventing today',
+     (SD.match(/NOREAD \? row\('a','A'/g)||[]).length);
+  ok(/showing the base rates only/.test(SD), 'w4 the header says WHY the A row is empty');
+  ok(/This is not a reading, it is no reading/.test(SD),
+     'w5 ...and the refusal still reads as a refusal (doctrine, not decoration)');
+  ok(/NOREAD \? 'WAITING FOR THE SESSION/.test(SD), 'w6 there is no verdict without bars');
+  ok(/if\(!NOREAD\)\{ try\{ CALL=lodhodCall/.test(SD),
+     'w7 the table is not consulted when there is nothing to consult it about');
+  // the static half must still be reachable in the no-read path
+  ok(/g3dayl/.test(SD) && /g3dayfoot/.test(SD),
+     'w8 the ladder and the honesty line are outside the gate');
+  ok(/backtest over/.test(SD), 'w9 ...and the evidence line names them as a backtest, not today');
+}
+
 console.log('test_hodlod: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

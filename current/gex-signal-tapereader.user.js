@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.68
+// @version    14.69
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.68';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.69';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -25466,14 +25466,21 @@ function secDay(sym){
   try{
     var D=hodLod(sym);
     var h='<div class="g3b g3day">';
-    if(!D.ok){
-      return h+'<div class="g3rx" style="color:#6c7889">\u24ea a DAY \u2014 HOD/LOD \u00b7 '+
-        g3esc(D.why||'no data')+'. <b>This is not a reading, it is no reading.</b></div></div>';
-    }
-    var base=hodlodBase(), T=D.tier;
+    // ---- (v14.69) NO CANDLES MUST NOT HIDE THE WHOLE SECTION -----------------------------------
+    // Operator, 2026-08-28: "i cant see anything on the panel for hod/lod section" and, earlier,
+    // "its hard to do that, because the app doesn't show anything because it is pre RTH open."
+    //
+    // ⚠ The old gate was `if(!D.ok) return <one line>`, which made EVERYTHING unreachable — the
+    // 284-session base rates, the survival ladder, the wick E row, the corpus provenance. None of
+    // those need a single candle: they are a backtest baked into the build. Hiding them pre-open
+    // hid the whole feature at exactly the hour he prepares for the day.
+    // ⚠ THE A ROW STILL REFUSES. Absence of data is not a reading — today's numbers stay em-dash
+    // and the header says WHY. What returns is the part that was always knowable.
+    var NOREAD = !D.ok;
+    var base=hodlodBase(), T=NOREAD?null:D.tier;
     var openSec=mul(8,3600)+mul(30,60);
-    h+='<div class="g3dayhd"'+g3tip('Today\u2019s high and low against their own base rates, measured over '+base.n+' complete RTH sessions of ES 1-minute data, '+base.first+' to '+base.last+'. Regenerate with tools/study-hodlod.py.')+
-       '>\u24ea a DAY \u2014 HOD/LOD \u00b7 '+hlClock(D.clock)+' CT \u00b7 '+base.n+'d ES 1-min</div>';
+    h+='<div class="g3dayhd"'+g3tip('Today\u2019s high and low against their own base rates, measured over '+base.n+' complete RTH sessions of ES 1-minute data, '+base.first+' to '+base.last+'. Regenerate with tools/study-hodlod.py. \u26a0 The E row and the ladder are a BACKTEST and are shown even before the session has bars \u2014 the A row is today and refuses until there are.')+
+       '>\u24ea a DAY \u2014 HOD/LOD \u00b7 '+(NOREAD?('<span style="color:#6c7889">'+g3esc(D.why||'no data')+' \u2014 showing the base rates only</span>'):(hlClock(D.clock)+' CT'))+' \u00b7 '+base.n+'d ES 1-min</div>';
     // (v14.65) THE VERDICT GOES FIRST. Operator, 2026-08-28: "lets put the lod in read on top of
     // the hod/lod statistics." He is right and it is not only a preference: the stats are the
     // EVIDENCE for the call, and evidence belongs under the conclusion it supports. Reading a
@@ -25482,11 +25489,14 @@ function secDay(sym){
     // (v14.64) THE VERDICT IS THE TABLE'S, NOT THE LADDER'S. The ladder answers "how long has it
     // stood"; the table answers the operator's actual question with the one input that matters.
     // ⚠ It REFUSES rather than guesses when the cell is thin - see hlCell().
-    var CALL=null; try{ CALL=lodhodCall(D); }catch(eC){}
-    var verdict = hlVerdict(D, CALL, T);
+    var CALL=null; if(!NOREAD){ try{ CALL=lodhodCall(D); }catch(eC){} }
+    // ⚠ WITH NO BARS THERE IS NO VERDICT, AND SAYING SO IS THE POINT. What replaces it is the
+    // question the section will answer once the session has a range - not a number.
+    var verdict = NOREAD ? 'WAITING FOR THE SESSION \u2014 no bars yet' : hlVerdict(D, CALL, T);
     h+='<div class="g3dayread"'+g3tip('HAS THE EXTREME ALREADY PRINTED? A lookup over '+HLTAB_META.sessions+' sessions of ES 1-minute ('+HLTAB_META.first+' to '+HLTAB_META.last+'), on TWO axes: how far price has travelled off the extreme, and the clock. That pair scored AUC 0.879 \u2014 a 5-feature regression scored 0.880, so the table is shipped instead: every cell carries its own n and you can argue with it. \u26a0 IB30, IB60, the 50-SMA, sweeps and BOTH divergences were measured and left out \u2014 they are either proxies for the distance term or worth nothing (sweeps 48%, below their own base rate). \u26a0 The percentage is how often an extreme in THIS state was the day\u2019s \u2014 a CELL rate, re-read every bar. It is NOT a forecast of price. \u26a0 The DECISION rate is a different number and is the one to judge it by: the first time the table crosses '+HLTAB_META.thresh+'%% it was right '+HLTAB_META.inHit+'%% of the time (n='+HLTAB_META.inN+', median '+HLTAB_META.inCT+' CT), and the far side was still ahead on '+HLTAB_META.secondAhead+'%% of those. The NOT-IN call is weaker and thinner: at '+HLTAB_META.notIn+'%% the extreme broke '+HLTAB_META.notInHit+'%% of the time (n='+HLTAB_META.notInN+', median '+HLTAB_META.notInCT+' CT) against a ~57%% base at that hour. \u26a0 PROVISIONAL: one instrument, one 15-month window, no forward test yet \u2014 the live rate is being scored nightly beside it. The verdict, then the evidence behind it, then what it implies. \u26a0 It never says price WILL do anything \u2014 it reports how often a standing extreme of this age survived, with the n behind that exact number.')+'>'+
        '<b'+((CALL&&CALL.in)?' class="g3dayin"':'')+'>'+g3esc(verdict)+'</b> <span class="g3daydim">('+
-       ((CALL&&CALL.p!=null)
+       (NOREAD ? ('the rates below are a backtest over '+base.n+' sessions, '+base.first+' to '+base.last)
+        : (CALL&&CALL.p!=null)
           ? ('travelled '+Math.round(100*D.posr)+'% off it \u00b7 n='+CALL.n)
           : (T?('stood '+hlDur(D.stood)+' \u00b7 n='+T.n):('stood '+hlDur(D.stood)+' \u00b7 under the 30m floor')))+
        ')</span>'+
@@ -25502,7 +25512,10 @@ function secDay(sym){
              ' ('+HLTAB_META.secondQ1+'\u2013'+HLTAB_META.secondQ3+')</span>')
           : ((CALL && CALL.in) ? ' \u00b7 <span class="g3daydim">both extremes in \u2014 the range is set</span>' : ''))+
        '<div class="g3daysub">'+
-       (T? ('when an extreme of this age held, the other side printed later \u2014 median gap '+hlDur(base.gapMin)+', usually around '+hlClock(base.secondClock)+'. '+
+       (NOREAD ? ('<b>Today\u2019s row is empty on purpose: This is not a reading, it is no reading.</b> '+
+                  'Once the first extremity prints, this line reports how often an extreme of that age was the day\u2019s \u2014 with its n. '+
+                  'Typical session: first extremity ~'+hlClock(base.firstClock)+', the other side ~'+hlClock(base.secondClock)+', range ~'+base.rngPts+'pts.')
+        : T? ('when an extreme of this age held, the other side printed later \u2014 median gap '+hlDur(base.gapMin)+', usually around '+hlClock(base.secondClock)+'. '+
             '<b>\u26a0 when it did not hold, it was replaced:</b> '+(100-T.rate)+'% of the time at this age.')
          : 'no rate is claimed below 30 minutes \u2014 the shortest measured window.')+
        '</div>';
@@ -25536,8 +25549,9 @@ function secDay(sym){
       '. The MEAN is what is shown on every field. Each carries its own n because the exclusions bite differently. p25/p75 on the range stay true percentiles \u2014 trimming a quantile would make it describe a spread it no longer covers.')
       :'The E row is the expected result averaged over the corpus. The wick columns have no base rate yet.';
     h+='<div class="g3dayg g3dayg8"'+g3tip(eTip)+'>';
-    h+=row('hd','',['1ST',''+D.first,'TOOK','BOP','WICK','W.END','WICK%','MUD']);
-    h+=row('a','A',[
+    h+=row('hd','',['1ST',NOREAD?'TIME':(''+D.first),'TOOK','BOP','WICK','W.END','WICK%','MUD']);
+    var DASH='\u2014';
+    h+= NOREAD ? row('a','A',[DASH,DASH,DASH,DASH,DASH,DASH,DASH,DASH]) : row('a','A',[
       '<b>'+D.first+'</b>',
       '<b>'+hlClock(D.firstT)+'</b>',
       hlDur(D.took),
@@ -25559,7 +25573,7 @@ function secDay(sym){
     // ---- block 2: THE DAY ------------------------------------------------------------------
     h+='<div class="g3dayg g3dayg4">';
     h+=row('hd','',['2ND','HL GAP','HL RNG']);
-    h+=row('a','A',[
+    h+= NOREAD ? row('a','A',[DASH,DASH,DASH]) : row('a','A',[
       (D.secondT>D.firstT && D.secondT<=D.clock) ? ('<b>'+D.second+' '+hlClock(D.secondT)+'</b>') : (D.second+' pend.'),
       hlDur(D.gap)+((D.secondT>=D.clock)?'\u2026':''),
       (D.rngUsd!=null?('$'+Math.round(D.rngUsd).toLocaleString()+' \u2014 '):'')+D.rngPts.toFixed(1)+'pts' ]);

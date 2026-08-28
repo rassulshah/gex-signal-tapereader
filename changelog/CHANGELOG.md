@@ -1,3 +1,39 @@
+## v14.69 — the base rates were hidden behind a candle
+
+> "i cant see anything on the panel for hod/lod section"
+> "what about the hod lod that we designed that i gave you the data for. all the stats, the model etc"
+
+Everything built over the last two days **was** in his build. It was behind one line:
+
+    if(!D.ok) return h+'<div class="g3rx">⓪a DAY — HOD/LOD · '+why+'. This is not a reading…</div>';
+
+`hodLod()` returns `ok:false` whenever there are no candles — i.e. **every pre-open minute**, which
+is exactly when he prepares for the day. That early return made the whole section unreachable:
+
+| hidden by the gate | needs a candle? |
+|---|---|
+| the E row — trimmed means over 284 sessions | **no** |
+| the survival ladder 41 / 56 / 67 / 75 / 84 | **no** |
+| the corpus provenance and honesty line | **no** |
+| the 8×9 LOD/HOD table itself | **no** |
+| the A row, the verdict, `posr` | yes |
+
+**Four fifths of the section is a backtest baked into the build and never needed a bar.**
+
+⚠ **The A row still refuses.** Today's numbers stay em-dash, the header says *why*, and the sub-line
+keeps the doctrine verbatim — *"Today's row is empty on purpose: This is not a reading, it is no
+reading."* What returns is only the part that was always knowable. Absence of data is still not a
+reading; it just no longer takes the 284-session evidence down with it.
+
+Pre-open the section now reads: the base rates, the ladder, and *"first extremity ~09:03, the other
+side ~13:02, range ~61.4pts"* — the shape of a typical session, which is what a pre-open panel is for.
+
+`test_hodlod` 115 → 124. ⚠ One new assertion was **untestable when written**: `w3` matched whichever
+of the two A-row guards survived mutation, so breaking one left it green. It counts both now — the
+fourth time in this project an assertion has bought false confidence.
+
+Suite 119 green, 6 documented baseline reds.
+
 ## v14.68 — __gptsDebug.storage(), and the one fault that produced six bugs
 
 **localStorage was FULL at exactly 10,240 KB** — Chrome's cap. `gpts_recorder_v7` held 5,957 KB for a
