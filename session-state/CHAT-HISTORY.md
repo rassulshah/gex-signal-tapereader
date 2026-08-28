@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-28 · v14.63 · session `4c22fa2b` — v14.63: FINDINGS.md, the LOD/HOD rule study and the calibrated model
+## 2026-08-28 · v14.64 · session `4c22fa2b` — v14.64: the LOD/HOD call ships as a table, enrolled from day one
 
-_19 operator prompts · transcript `4c22fa2b-bee3-5451-b379-dc2a50cb42bd.jsonl`_
+_35 operator prompts · transcript `4c22fa2b-bee3-5451-b379-dc2a50cb42bd.jsonl`_
 
 ### THE EXCHANGE
 
@@ -440,6 +440,479 @@ Model built and calibrated on your 284 sessions. Direct answers first.
 
 Rather than send a second file called `installv1462.bat` — the exact "can't tell two files apart" landmine — I'll bump to a distinct version. First, what are you actually running?
 You're on **v14.58**; GitHub is on 14.59 (so `installv1459.bat` ran but Tampermonkey never pulled it), and 14.60–62 plus all the research exist only here. One file will carry the lot.
+The payload check earns its keep again — **`FINDINGS.md` isn't in it.** The builder's manifest doesn't cover files at the root of `skylit-docs/`, and that file is the entire point of this build.
+The size guard caught it — 6.3MB against the 6MB cap, and a payload that big hangs on extraction. Trimming to what `load gex` actually requires.
+`mockups/` has grown to 1.84MB — it ships every mockup ever made. Applying the same "newest only" rule the builder already uses for session-state snapshots.
+**installv1463.bat** — this one carries everything. **Ignore 1460 and 1462.**
+
+**Tampermonkey — you need to click this one:**
+
+- **Tapereader v14.63** — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+- Companion v1.15 — unchanged, skip it
+
+Run the `.bat` → wait ~5 min → **click the link** → reload Atlas. Footer must read **v14.63**.
+
+⚠ **You're on v14.58 right now** — I read it off your panel rather than asking. GitHub was already on 14.59, so `installv1459.bat` ran fine but Tamper …[trimmed]
+
+**OPERATOR:**
+> check everything .. is the model built
+
+**me (02:53):** Checking rather than telling you from memory.
+**No. The model is not built.** It exists as a validated study and a set of coefficients — nothing in the panel computes it.
+
+Here's the honest state of everything, checked not remembered:
+
+**In the shipped userscript (v14.63):**
+
+| | |
+|---|---|
+| Corpus courier reader + `futBars` in the day export | ✅ |
+| Base-rate courier + downgrade floor | ✅ |
+| Wick family — BOP / WICK / W.END / WICK% / MUD | ✅ |
+| W.End as a *close* back through the open | ✅ |
+| E row = trimmed mean, stated on the face | ✅ |
+| The `undefined of 1169` hover fix | ✅ |
+| **The probability model** | ❌ **not in the panel** |
+| **`posr` — the feature that carries the model** | ❌ not computed anywhere |
+| **A verdict naming the trigger** | ❌ |
+| **SWP still renders as a confirmation** | ⚠️ despite measuring 48% |
+
+**The model lives in `tools/model-lodhod.py` only** — an offline script over the corpus. It's not in `FEATURES`, has no entry in `learning/rules.json`, and is scored by nothing. By your own 2026‑08‑17 mandate — no feature ships un-enrolled — it isn't shippable in its current form.
+
+**And the corpus pipeline has never run on real data:**
+
+```
+data/futures/ entries              : 0
+day files carrying futBars         : 0 of 9
+```
+
+That's expected — it needs one session with v14.63 + companion v1.15 actually running — but it means the tap is unproven outside a fixture. Worth saying plainly rather than letting "built" imply "working."
+
+**So what you have right now** is: the fields defined and live on the panel, the research answering your question (IB60 = +32 over the clock; sweeps dead; momentum divergence dead; `posr` is the whole model), and a validated 5‑coefficient model sitting in a file.
+
+**What's needed to make it real** — and I'm not starting w …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (02:54):** Nothing new to send — the hook is counting commits, not checking whether they've already been handed over.
+
+I verified it file-by-file rather than assuming: **`installv1463.bat`, already in your hands, is byte-identical to HEAD** on the userscript, the companion, `FINDINGS.md`, both study tools, the builder, the chat history and the changelog. All ten unpushed commits are inside that one file. The working tree is clean and I've changed nothing since building it — the last few turns were read-only audit commands.
+
+So the outstanding action is still just yours: **run `installv1463.bat`**, wait ~5 min, click the Tampermonkey link, reload Atlas. That's what pushes those ten commits to GitHub and moves your panel off v14.58.
+
+I'm deliberately not cutting a v14.64 to satisfy the hook — a second file with near-identical contents is exactly the "ran the wrong installer" trap that cost a live-market turn once already.
+
+Still waiting on your word for the three build items (compute the probability in `hodLod()`, put the verdict on ⓪a and demote SWP, enrol it in `FEATURES`), and on `NQ TestingData.txt` for the cross-market divergence test.
+
+**OPERATOR:**
+> lets discuss 1 at a time
+
+**me (02:56):** Fair — that's your rule and I've been stacking three items into every message.
+
+**Item 1: what drives the call — the model, or the rule?**
+
+I built both and they're closer than I expected:
+
+```
+IB60 broken            78% at 10:01   fires on 339 of 568 session-sides
+model P>=0.80          79% at 10:40   fires on 521 of 568
+```
+
+The rule is binary and 40 minutes earlier. The model is a calibrated number available at every moment, so it can size — 65% means 65% — but it doesn't hit harder.
+
+My recommendation is **the model**, for one reason that isn't in those numbers: the rule can only ever say yes or no, and on the days it says nothing you're left with the clock. The model always has an answer, and it's honest about how confident it is.
+
+Your call — model, rule, or both on the face?
+
+**OPERATOR:**
+> what do you mean the rule is earlier.. are you saying i have to wait for the model to give me any real information
+
+**me (02:59):** You're right to push — my framing was wrong, and it matters.
+
+Those two times aren't "when each starts working." They're the median time each **first crosses its own threshold**, and I picked a high threshold (0.80) for the model. The model produces a number at every bar from the open. It's never silent — at 09:35 it just might say 31%.
+
+Let me answer your actual question with the right test: **fix the clock, and see which knows more at that moment.**
+No — you don't wait. That was my error in how I presented it.
+
+Look at **09:45**, same instant for both:
+
+```
+MODEL   113 session-sides at P>=0.80  ->  80% correct   (the low IS in)
+        290 session-sides at P<=0.40  ->  22% correct   (the low is NOT in)
+        = 403 of 568 already labelled, both sides accurate
+
+RULE     72 fired                     ->  76% correct
+        496 "silent"                  ->  38%  <- unlabelled, base rate, no help
+```
+
+The model is already working at 09:45. It's working at 09:30. What I called "10:40" was just the median time it first reaches a *0.80* threshold — an arbitrarily high bar I chose. Asking it for 65% confidence gets an answer far earlier.
+
+And here's the part I under-sold: **the rule's "silent" is not silence.** When IB60 hasn't broken, that's 496 session-sides sitting at the 38% base rate that you still have to make a decision about. The model splits that exact same moment into a confident-yes bucket and a **confident-no** bucket — and the confident-no is 78% right that the low is *not* in yet.
+
+That second half has no equivalent in the rule. "This low is probably not the low" is what keeps you from buying a low that's about to break, and IB60 can never tell you that — it only ever stays quiet.
+
+Fixed-clock AUC runs 0.78 at 09:30 rising to 0.86 by noon, so it discriminates f …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (02:59):** Same ten commits as before — nothing has changed since I last checked. Tree is clean, HEAD is unchanged, and `installv1463.bat` (already sent) is still byte-identical to it. Running that file is what pushes them; I'm not cutting another installer to quiet the hook.
+
+Back to item 1, which is where we were: **model, rule, or both on the face?** My recommendation is the model — it labels ~70% of session-sides into a confident bucket by 09:45, in both directions, where the rule labels 13% in one.
+
+**OPERATOR:**
+> what is a better predictor for determining the hod or lod has occurred ?
+
+**me (03:01):** Let me answer that with a measurement rather than an opinion — each feature **alone**, no clock, so nothing borrows the time-of-day effect.
+Measured, on your 284 sessions. Each predictor **alone**, with no clock to lean on:
+
+```
+posr    0.829   how far price has travelled from the extreme, as a fraction of the day's range
+stood   0.818   how long the extreme has stood
+rsi     0.798   momentum level
+sma     0.713   50-SMA
+opn     0.709   open reclaimed
+ib30    0.684
+mins    0.679   time of day
+ib60    0.655
+swp     0.559   sweep + reclaim
+mdiv    0.545   momentum divergence
+bN      0.501   60-minute breakout  <- exactly a coin flip
+```
+
+**The best single predictor is how far price has travelled away from the extreme.** On its own — no clock, nothing else — it scores 0.829, which beats the entire three-feature time baseline (0.820). Nothing else comes close as a standalone.
+
+And the two-feature answer is the one worth remembering:
+
+```
+posr alone           0.829
+posr + stood         0.858
+posr + stood + rsi   0.861
+full 5-feature model 0.880
+```
+
+**Distance travelled + how long it's stood gets you most of the way.** Everything else is refinement.
+
+The reason this matters more than it sounds: **IB60, IB30, the 50-SMA, open-reclaimed — those all scored well earlier only because they're crude proxies for `posr`.** IB60 alone is 0.655; the thing it's approximating is 0.829. You were reaching for the right idea through a binary switch.
+
+As a plain rule it's also good, and earlier:
+
+```
+posr >= 0.90     343 sides   78%   at 09:55
+IB60 broken      323 sides   80%   at 10:10
+```
+
+Nearly the same accuracy, 15 minutes earlier, from a simpler quantity.
+
+⚠ One caveat on `posr`, and it's real: it's measured against the *running* range, which is still growing early in the session — so …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (03:02):** Same ten commits, still unchanged, still already in your hands as `installv1463.bat`. Nothing new to send.
+
+Where we are on **item 1**: the measurement answered it. Distance travelled from the extreme (`posr` 0.829) paired with how long it's stood (0.818) is the real predictor — and IB60, IB30, SMA and open-reclaimed only looked good earlier because they're crude switches approximating that same quantity. IB60 alone is 0.655 against the 0.829 of the thing it's proxying.
+
+That settles model vs rule on the evidence rather than on my preference: **the model**, because the best predictor is a continuous distance, and a binary trigger throws away most of it.
+
+Unless you disagree, item 1 is closed and item 2 is what the face shows. Your call.
+
+**OPERATOR:**
+> i just want to know with high accuracy whether the hod or lod have occurred. that is my requirement. I want to know it as early as possible.  have you tested multiple combinations. have you used the nq divergence as well and tested it .  does the model use all of these factors to give right answers early .  is this model solid ?
+
+**me (03:05):** Straight answers, then I'll close the gaps.
+NQ is on GitHub — you pushed it. Pulling it and testing the divergence properly.
+Different format — NQ is tab-separated with ISO timestamps and no header, ES is CSV with a `VOL` column. Writing a format-sniffing loader rather than assuming.
+163 overlapping sessions. Now the three things you asked: NQ divergence, an actual exhaustive combination search, and the early-vs-accuracy frontier.
+Two real findings. Let me pin the second one properly and then build what you actually asked for — the earliest point at which a call can be made accurately.
+Direct answers to all four.
+
+**Have I tested multiple combinations?** Now yes, properly — an exhaustive 1/2/3-way search over 16 binarised features, 339 combinations that cleared a coverage floor, train/holdout split by date.
+
+**Have I tested the NQ divergence?** Yes, now that you pushed it — 163 overlapping sessions.
+
+**It doesn't work. Neither divergence does.**
+
+```
+time only              0.8440
++ posr + rsi           0.8956
++ NQ divergence        0.8942     -0.0014
+```
+
+And the raw direction is opposite to the intuition: when ES makes a low and NQ doesn't, the low holds **66%** of the time versus **70%** when they agree. Divergence makes the low slightly *less* reliable, not more.
+
+⚠ One nuance worth having, because it looks like a signal and isn't: both divergences appear strongly *anti*-predictive — momentum divergence fires and the extreme holds only 24–31% against a 46–60% base. That reads as "the low is NOT in," which sounds useful. But it's an artefact: **a divergence can only fire at the instant a fresh extreme prints**, which is exactly when price is *at* the extreme — and `posr` already says that. The model gets nothing new, which is why the AUC doesn't move.
+
+**Does the mode …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+
+**me (03:08):** Committed — `F-3` now records the NQ result, why both divergences only *look* like inverse signals, why the exhaustive search's 98–100% winners are the clock in disguise, and the frontier.
+
+Everything from this session is now durable in git, and the one action that gets it to GitHub is still running `installv1463.bat`.
+
+The answer to your requirement, in one line: **80% accuracy by 10:10 on 90% of days**, and by 09:45 the model can already call 22% of session-sides at 84%.
+
+My question stands — build it? The probability on ⓪a, with forward scoring wired in from day one, since that's the only thing that will turn "provisional" into "solid."
+
+**OPERATOR:**
+> what is the model using to determine if a hod or lod has occurred
+
+**me (03:10):** Five inputs. Nothing else — no IB30, no IB60, no sweeps, no SMA, no divergences, because every one of those was measured and found to be either a proxy for one of these or worth nothing.
+Five inputs, and one of them does most of the work:
+
+```
+posr    +1.199  ##########################   how far price has travelled off the extreme
+mins    +0.702  ###############              what time it is
+stood   +0.529  ############                 how long the extreme has stood untaken
+rsi     +0.377  ########                     momentum level, oriented to the side asked
+extmin  +0.125  ###                          how early in the session the extreme printed
+```
+
+In plain terms, it's asking five questions about the low you're looking at:
+
+1. **How far has price walked away from it?** — as a fraction of the day's range so far. This is the dominant term by a factor of two.
+2. **How late in the session are we?**
+3. **How long has it survived** without being taken out?
+4. **Is momentum leaning away from it?**
+5. **Did it print early or late** in the day?
+
+Every coefficient is positive, so it reads exactly as intuition would: further away, later, longer standing, stronger momentum away — each independently makes it more likely that low is the day's low.
+
+**What it looks like in practice** — same low, printed 09:00, never taken out:
+
+| | P(this is the low) |
+|---|---|
+| 09:15, price still sitting on it | **5%** |
+| 10:00, price 30% off it | **26%** |
+| 10:00, price 70% off it | **70%** |
+| 10:00, price 95% off it | **89%** |
+| 11:30, price 70% off it | 87% |
+| 13:00, price 70% off it | 95% |
+| 13:00, price falls back onto it | **23%** |
+
+Compare the three 10:00 rows: identical clock, identical 60 minutes of standing, same session. The *only* thing that changes is distance travelled — an …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 11 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (03:11):** Checked precisely: **no panel or companion code has changed** — those are byte-identical to what you already have. The only difference is two research files: `FINDINGS.md` gained the F‑3 entry (+3.1KB) and `model-lodhod.py` gained the format-sniffing loader for the NQ file (+1.5KB).
+
+I'm deliberately not cutting a second installer for 4.6KB of notes. You haven't run `installv1463.bat` yet — your panel is still v14.58 — and handing you a near-identical `installv1464.bat` is precisely the "ran the wrong one" trap that already cost a live-market turn in this project. Those two files will ride the next real build.
+
+So the action is unchanged: **run `installv1463.bat`**, wait ~5 min, click the Tampermonkey link, reload. That pushes everything up to F‑2 and moves you off v14.58.
+
+And the open question is still the same one — build the probability onto ⓪a, with forward scoring wired in from the start?
+
+**OPERATOR:**
+> before going any further , is this a standard model . is this the right use case for it  for predicting hod lod .  step back and see if you made the right choice for this type of problem. consider the approach .  just double check and sanity check.
+
+**me (03:13):** Good question, and worth doing properly rather than defending what I built. Let me state the concerns I can see, then test them instead of arguing them.
+
+**Three things I'd challenge about my own approach:**
+
+1. **This is really a survival problem, and I framed it as classification.** The true question is "will a new low print before the close?" — time-to-event with censoring. I turned it into a yes/no at every bar, which manufactures ~188k correlated rows out of 568 independent ones.
+2. **A logistic on 5 features may be over-engineering.** If a plain two-way lookup table does as well, the model is ceremony.
+3. **The target may not match your decision.** You want to profit *going to the other extremity*. I'm predicting "does this low survive" — which is not the same as "does price travel."
+
+Testing the first two.
+That was worth doing. **The check says I over-engineered it.**
+You were right to make me check. **The model doesn't earn its complexity.**
+
+```
+lookup table: posr x time      AUC 0.8787   Brier 0.1321
+logistic, 5 features          AUC 0.8795   Brier 0.1321
+```
+
+Identical Brier, 0.0008 of AUC apart. A two-dimensional table is the model. Everything else was ceremony — and adding `stood` to the table made it *worse* (0.8729), which is overfitting from thin cells.
+
+That table above **is** the whole thing. Read it directly: price 60% off the low at 10:00 → 72%. Same distance at 11:30 → 84%. Still sitting on the low at 13:00 → 20%.
+
+**On the framing you asked me to question** — I tested the survival/hazard version, which is the textbook fit for "will a new low print before the close":
+
+```
+hazard -> survival curve       AUC 0.8751   Brier 0.1464
+direct classification          AUC 0.8795   Brier 0.1321
+```
+
+It's *worse*, mainly on calibration. So the classification fr …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 11 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (03:14):** The sanity result isn't in the repo yet, and it's the most important finding of the session — it says ship less. Recording it.
+Recorded as **F‑4**, including the part that doesn't flatter the work: the regression was ceremony, the table is the model, and the survival framing I'd assumed was wrong is actually worse — but it was an assumption until I measured it, and this project's own rule is that an assumption written in the voice of a measurement is a defect.
+
+Twelve commits now, all still riding on `installv1463.bat` plus these research notes for the next build.
+
+So the position going into your decision has changed for the better: **there's less to build than I proposed.** Not a model with coefficients and a scoring function — a 56-cell table, every cell carrying its own n, that you can read and argue with.
+
+And the honest gap is still open: this tells you whether the low holds, not whether price travels to the high. **Want me to measure that before we build anything?** It's the difference between "the low is in" and "there's a trade in it."
+
+**OPERATOR:**
+> so what do you recommend we do next..
+
+**me (03:16):** **Measure the travel before building anything.** One item, and here's why it's urgent rather than tidy-minded.
+
+The table's confidence is driven almost entirely by `posr` — *how far price has already moved away from the low*. So the model is most confident exactly when the move has already happened. At `posr` 0.9 it says 84% at 10:00 — but 90% of the day's range is already behind you.
+
+If that's how it plays out, the feature tells you the low is in at precisely the moment there's nothing left to trade, and we'd be building the wrong thing. That's cheap to check and expensive to discover after shipping.
+
+Running it now.
+My worry was wrong, and the numbers say so:
+
+```
+conf       n   correct   median CT   range LEFT   actually got
+P>=0.70  552      73%       10:10          49%          30%
+P>=0.75  550      75%       10:40          49%          29%
+P>=0.90  477      91%       12:25          41%          21%
+```
+
+**At 10:10, when the table first says 70%, half the day's range is still ahead — and price actually travels 30% of the day's range that way before the close.** On a typical 61-point ES day that's ~18 points of favourable excursion.
+
+So the confidence isn't bought entirely with the move. Waiting from 70% to 90% buys you +18 points of accuracy and costs 2h15m and about a third of the remaining travel.
+
+⚠ One honest read on that last column: it's maximum favourable excursion toward the far extreme, not a realized trade. It's the right descriptive statistic for a tool that doesn't give entries or stops — but it's the best case within the move, not what you'd bank.
+
+**My recommendation, one thing:**
+
+**Build the table onto ⓪a, calling it at P≥0.70, and enrol it in FEATURES from the first line of code.**
+
+Three reasons:
+
+- **P≥0.70 is the operating point the data picks* …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are untracked files in the repository. Please commit and push these changes to the remote branch.
+
+**me (03:17):** Committed as **F‑5**, including the fact that I stated the fear before testing it and it turned out wrong — that's worth recording as much as the numbers are.
+
+`skylit-docs/FINDINGS.md` now holds the whole investigation: F‑1 the rule study, F‑2 the model, F‑3 both divergences dead, F‑4 the model being over-engineered, F‑5 that there's genuinely a trade left when it fires.
+
+My recommendation is unchanged and I think the evidence is now complete enough to act on:
+
+**Build the table onto ⓪a at P≥0.70, enrolled in FEATURES from the first line of code.**
+
+`LOD IN — 73% · half the range still ahead`, the cell's n in the hover, scored nightly from the first session.
+
+That's the one thing I'd do next. Your call.
+
+**OPERATOR:**
+> i'll go with your recommendation
+
+**me (03:18):** Building it. First the table itself, with the n behind every cell, in a form the panel can embed.
+64 of 72 cells populated, smallest n = 332. Now the enrollment contract — I need the exact shape the tests demand.
+Now building. Panel first — the table, `posr`, and the call.
+`posr` next — and note that the panel can only use the *running* range, not the final one the study had in hindsight.
+Now tests for the new behaviour — executed, then each guard mutated to confirm it actually fires.
+Test caught a real bug — `lodhodCall` sets `out.left` while the render and the test both read `CALL.far`, so the "still ahead" figure would never have drawn. Fixing the code, not the test.
+Five of six fired. The sixth was a no-op mutation on my part, not a missing test — but it exposed that nothing directly asserts a thin cell refuses. Adding that.
+Now the visual check — rendering the section headless at your real 454px with the overlap audit, before it goes anywhere.
+
+### DECISIONS
+
+- **HE ASKED ME TO SANITY-CHECK THE APPROACH AND IT DID NOT SURVIVE.** The 5-feature logistic was
+  measured against a plain 2-axis lookup: AUC 0.8795 vs 0.8787, **identical Brier 0.1321**. The
+  regression was ceremony. **The table ships** - same accuracy, every cell carries its n, and it can
+  be argued with. Adding a third axis made it worse (thin cells). This is the operator's own standing
+  instruction - *"why are you making things more complicated"* - arriving as a measurement.
+- **THE SURVIVAL FRAMING WAS WORTH TESTING AND IS WORSE.** A discrete-time hazard model is the
+  textbook fit for "will a new extreme print before the close": AUC 0.8751, Brier 0.1464 against the
+  classifier's 0.8795 / 0.1321. Classification was right - but it had been an ASSUMPTION until then.
+- **I STATED A FEAR AND IT WAS WRONG.** The worry was that the table is most confident only once the
+  move is over, since its confidence comes from posr. Measured (F-5): at the 70% call, **half the
+  range is still ahead** and price travels a median 30% of it. Recorded because stating the fear
+  before testing it is what made the test happen.
+- **THE OPERATING POINT IS 70%, PICKED BY THE DATA.** Below it the edge over the clock is thin; above
+  it, time and forgone travel cost more than the accuracy gained.
+- **BOTH DIVERGENCES AND SWEEPS ARE OUT, ON EVIDENCE.** Sweeps 48% (below their own base rate),
+  momentum divergence 0.545, NQ cross-market -0.0014. ⚠ SWP had been rendering as a CONFIRMATION on
+  ⓪a since v14.57; its hover now carries the 48%.
+- **A TEST CAUGHT A SILENT RENDER BUG.** `lodhodCall` set `out.left`; the render and the test read
+  `CALL.far`. The "% still ahead" would never have drawn. Found by an assertion that EXECUTES the
+  function - a grep for `left` would have passed.
+- **AND A MUTATION CAUGHT A TEST THAT COULD NOT FAIL** - nothing asserted that a thin cell refuses.
+  Fifth occurrence of that pattern in this project.
+
+### SHIPPED
+
+**v14.64** - ⓪a renders `LOD IN — 76% (travelled 78% off it · n=1204) · 22% of the range still
+ahead`. 8x9 lookup table (284 sessions, 38,054 observations) baked in with per-cell n; `posr`
+computed scale-free; SWP demoted with its measured rate; FEATURES entry + `learning/rules.json`
+`lodhod` at n=0. test_hodlod 65 -> 96, all new guards mutation-tested. Rendered at 454px: fits.
+
+### OPEN AT CLOSE
+
+1. **HE IS ON v14.58 AND MUST CLICK THE TAMPERMONKEY LINK.** installv1463 was never run either.
+2. **The corpus tap has still never run on real couriered data** - `data/futures/` is empty and no
+   day file carries `futBars`. It needs one live session on v14.64 + companion v1.15.
+3. **The table is PROVISIONAL** until the forward score accumulates - that is what enrolment is for.
+4. The **feature-record collapse** (3,822 on 08-20 vs 15 on 08-27) still gates any study over the
+   panel's own recorded data, and now gates the forward test of this feature too.
+5. ⓪a's wick E row is live; **VWAP still does not exist**.
+
+---
+
+<!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-28 · v14.63 · session `4c22fa2b` — v14.63: FINDINGS.md, the LOD/HOD rule study and the calibrated model
+**OPERATOR:**
+> load gex
+**OPERATOR:**
+> Check the architecture doc for the yahoo pipeline that updates the es data file daily.  I want to make sure we have the latest data for the hod lod feature so it updates daily
+**OPERATOR:**
+> I just wanted to make sure we had a process in place that obtained es data duly and updated the data file.  I know the process workflow is in git and it can be found checking what was committed but you had a lot of difficulty finding it the lat time
+**OPERATOR:**
+> Yes I want this process automated so the hod lid is always updated based on the latest data.  I also need you to ensure you are able to find it in the future and place its details in the architecture document for this project so it is read every time load he’s is done.  I want to get this out of the way. The process should be extendable to other markets like nq gc nd cl in the future.
+**OPERATOR:**
+> Continue from where you left off.
+## The design
+**OPERATOR:**
+> i'm surprised its not there.  there should be a design or architecture document  that already talks about yahoo finance, Inside Finance (IF) etc. can you double check
+**OPERATOR:**
+> make sure everything is documented and can be retrieved via load gex protocol and build .
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are commit(s) on branch 'main' that GitHub will show as Unverified (missing signature, or committer email is not noreply@anthropic.com):
+> 24f490f claude@anthropic.com
+> Please run 'git config user.email noreply@anthropic.com && git config user.name Claude', then 'git commit --amend --no-edit --reset-author' for the tip commit, or 'git rebase --exec "git commit --amend --no-edit --reset-author" 24f490f7ef899eaa6bbcc55136b7a9d0d867e2d8^' for earlier commits, then push.
+**OPERATOR:**
+> i think you are missing some fields.    look at the pics.  do you know what the fields are
+**OPERATOR:**
+> wick% is the percentage fo the total range .  so if the total range is 100, and the wick is 10, the wick is 10% .. cand you check
+**OPERATOR:**
+> i dont know what you are asking me. if there is no wick , then its 0 .   these days should not be averaged . also crazy outliers should not be averaged.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> i thought they were all averages.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 4 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> ok.. so now you understand every field .  for example mud, stands for markup or markdown. markup is open to the high after the lower wick forms and markedown is open to the low after the upper wick forms.
+**OPERATOR:**
+> yes its back to open (bop) .The next step is for you to understand that my intention and goal behind this field is to identiy a low or a high of day so i can profit when it goes to the other extremity.  This means you need to help identify whether the lod or hod is done .  you can use this data ,  IB 30, IB 60, Sweeps, sma 50,  20 bar high or low, and any suggestions or recommendations you have to do this . run many combinations and figure out a hight probability way to figure this out, so you meet my requirement of identifying if the lod or hod has been made.   do you understand.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are untracked files in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> i also want you to test the various combinations with  divergences . for example es keeps making low and nq doesn't   as well as momentum divergences where es makes a low but a momentum indicator doesnt. ive added nq data in the same folder. see if it helps in idnetifyign hod and lod have occurred. Test combinations of everything. i want you to create a predictive probabilstic model so i can use it to identify if a hod or lod has occurred.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 7 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
 
 ### DECISIONS
 
@@ -467,11 +940,13 @@ You're on **v14.58**; GitHub is on 14.59 (so `installv1459.bat` ran but Tampermo
 - **CROSS-MARKET DIVERGENCE REMAINS UNTESTED.** `NQ TestingData.txt` is on his machine, not on GitHub.
   Its 0.0000 must not be read as a negative result.
 
+
 ### SHIPPED
 
 **v14.63** - a research build; no panel behaviour change from v14.62. `skylit-docs/FINDINGS.md`
 created (F-1, F-2), `tools/study-lodhod.py`, `tools/model-lodhod.py`. Carries v14.60-14.62, which
 never reached GitHub.
+
 
 ### OPEN AT CLOSE
 
@@ -485,7 +960,9 @@ never reached GitHub.
 
 ---
 
-<!-- EARLIER-CONTEXTS -->
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 

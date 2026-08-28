@@ -28,20 +28,49 @@ SMA_MIN, NBAR_MIN = 150, 60
 
 
 def load(path):
+    """⚠ THE TWO CORPORA ARE NOT THE SAME FORMAT, and assuming they were cost a run:
+         ES : comma, WITH a header, `Symbol,Date,VOL,Open,High,Low,Close,Volume`, date "Y-m-d H:M"
+         NQ : TAB, NO header, `Symbol,DateTime,Open,High,Low,Close,Volume,?`, date "Y-m-dTH:M"
+       So the delimiter, the header and the column ORDER are all sniffed from the file itself rather
+       than declared. Take the shape from the real artefact - the same rule the IF scrape taught us.
+    """
     ses = collections.defaultdict(list)
     with io.open(path, encoding='utf-8', errors='replace') as f:
-        for x in csv.DictReader(f):
-            s = (x.get('Date') or '').strip()
-            if ' ' not in s:
+        first = f.readline()
+        f.seek(0)
+        tab = first.count('\t') > first.count(',')
+        sep = '\t' if tab else ','
+        has_hdr = 'Open' in first or 'Date' in first
+        cols = None
+        if has_hdr:
+            cols = [c.strip() for c in next(csv.reader([first], delimiter=sep))]
+            f.readline()
+        for parts in csv.reader(f, delimiter=sep):
+            if len(parts) < 6:
                 continue
-            d, t = s.split(' ', 1)
-            p = t.split(':')
             try:
-                sec = int(p[0])*3600 + int(p[1])*60
+                if cols:
+                    rec = dict(zip(cols, parts))
+                    stamp = (rec.get('Date') or rec.get('DateTime') or '').strip()
+                    o_, h_, l_, c_ = (float(rec['Open']), float(rec['High']),
+                                      float(rec['Low']), float(rec['Close']))
+                else:
+                    # headerless: Symbol, stamp, O, H, L, C, ...
+                    stamp = parts[1].strip()
+                    o_, h_, l_, c_ = (float(parts[2]), float(parts[3]),
+                                      float(parts[4]), float(parts[5]))
+                stamp = stamp.strip('"')
+                if 'T' in stamp:
+                    d, t = stamp.split('T', 1)
+                elif ' ' in stamp:
+                    d, t = stamp.split(' ', 1)
+                else:
+                    continue
+                pt = t.split(':')
+                sec = int(pt[0])*3600 + int(pt[1])*60
                 if not (RTH_A <= sec <= RTH_B):
                     continue
-                ses[d].append((sec, float(x['Open']), float(x['High']),
-                               float(x['Low']), float(x['Close'])))
+                ses[d].append((sec, o_, h_, l_, c_))
             except (ValueError, IndexError, KeyError):
                 continue
     return {d: sorted(v) for d, v in ses.items() if len(v) >= MIN_BARS}

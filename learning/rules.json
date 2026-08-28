@@ -2290,6 +2290,37 @@
     "sessions": 0,
     "held": false
    }
+  },
+  "lodhod": {
+   "id": "lodhod",
+   "tier": "hand",
+   "condition": "2-axis lookup: posr octile x 45-minute block, threshold 70%",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Has the standing session extreme already printed? A lookup table over 284 sessions of EPM26 1-minute data (2025-06-02 to 2026-08-21, 38,054 observations) on two axes: how far price has travelled off the extreme as a fraction of the running session range, and minutes since the open. posr alone scores AUC 0.829 - better than the entire 3-feature clock baseline (0.820). A 5-feature logistic scored 0.8795 against the table's 0.8787 with an identical Brier (0.1321), so the TABLE ships: same accuracy, every cell carries its own n, and it can be argued with. Measured and REJECTED: IB30 (0.684), IB60 (0.655), 50-SMA (0.713), open-reclaimed (0.709), 60m breakout (0.501), sweep+reclaim (0.559 - 48% standalone, BELOW its own base rate), momentum divergence (0.545) and NQ cross-market divergence (-0.0014 AUC). PROVISIONAL: one instrument, one 15-month regime, no forward test. See skylit-docs/FINDINGS.md F-1 through F-5.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
   }
  },
  "proposals": [],

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.63
+// @version    14.64
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.63';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.64';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -12878,6 +12878,52 @@ function registerCoreFeatures(){
   // review shows STUCK destinations behaving differently from GAVE BACK ones — and THIS record is
   // the data that test needs: one row per bar carrying the whole latch state, with the standard
   // forward window beside it.
+  // (v14.64) ⓪a's call, enrolled from its FIRST line of code. The 2026-08-17 mandate says no feature
+  // ships un-enrolled, and this one needs it more than most: every rate on it is a BACKTEST over 284
+  // sessions of one instrument with no forward test. The live rate has to accumulate beside it.
+  registerFeature({ key:'lodhod', label:'Has the LOD/HOD already printed?', phase:'dashboard', fwd:FEAT_FWD,
+    record:function(sym, ctx){
+      var D=null, C=null;
+      try{ D=hodLod(sym); }catch(e1){}
+      if(!D || !D.ok) return { ok:0, why:(D&&D.why)||'no read' };
+      try{ C=lodhodCall(D); }catch(e2){}
+      return { ok:1,
+               side:D.first,                       // which extremity is standing
+               posr:(D.posr!=null)?+D.posr.toFixed(3):null,
+               mins:Math.round((D.clock-(mul(8,3600)+mul(30,60)))/60),
+               stood:Math.round(D.stood),
+               p:(C&&C.p!=null)?C.p:null,          // what the TABLE said on this bar
+               cellN:(C?C.n:null),
+               called:(C&&C.in)?1:0,               // did it cross the 70% threshold
+               far:(C&&C.far!=null)?+C.far.toFixed(3):null,
+               // the extremes themselves, so the nightly review can compute the TRUE session label
+               lod:D.lod, hod:D.hod, lodT:D.lodT, hodT:D.hodT, rngPts:+((D.rngPts||0).toFixed(2)) };
+    },
+    // ⚠ THIS OUTCOME IS A PROXY AND MUST BE READ AS ONE. The true label - "was this the day's
+    // extreme" - is only knowable AT THE CLOSE, which no forward window can see. What is scored here
+    // is whether the standing extreme SURVIVED the forward window. A bar-level scorer cannot do
+    // better; the session-level truth is recomputed nightly from lod/hod/lodT/hodT above.
+    outcome:function(rec, fwd){
+      var held=null;
+      try{
+        if(rec && rec.ok && fwd){
+          held = (rec.side==='LOD') ? ((fwd.mae!=null) ? (fwd.mae > -(rec.rngPts||0)*0.999 ? 1 : 0) : null)
+                                    : ((fwd.mfe!=null) ? (fwd.mfe <  (rec.rngPts||0)*0.999 ? 1 : 0) : null);
+        }
+      }catch(e){}
+      return { hit:held, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
+    },
+    questions:[
+      { id:'lodhod_table_calibrated', when:[{f:'called',v:1}], outcome:'hold',
+        note:'when the table says >=70%, does the extreme actually survive at that rate LIVE? The 284-session backtest is not a forward test, and this is the only thing that turns it from PROVISIONAL into measured.' },
+      { id:'lodhod_posr_carries_it', when:[{f:'ok',v:1}], outcome:'hold',
+        note:'does posr alone still separate held from broken on live bars the way it did in the corpus (AUC 0.829)? If it decays, the table is regime-bound and the cells need re-deriving.' },
+      { id:'lodhod_travel_left', when:[{f:'called',v:1}], outcome:'mfe',
+        note:'at the moment of the call, F-5 measured HALF the range still ahead and a median 30% of it travelled. Does the live MFE match, or is the call arriving after the move?' }
+    ],
+    rule:{ id:'lodhod', tier:'hand',
+           condition:'2-axis lookup: posr octile x 45-minute block, threshold 70%',
+           mechanism:'Has the standing session extreme already printed? A table over 284 sessions of EPM26 1-minute (2025-06-02 to 2026-08-21), 38,054 observations, on two axes only: how far price has travelled off the extreme as a fraction of the running range (AUC 0.829 alone, better than the whole clock baseline at 0.820) and minutes since the open. A 5-feature logistic scored 0.8795 against the table 0.8787 with an IDENTICAL Brier of 0.1321, so the table ships - it is inspectable and every cell carries its n. IB30/IB60/50-SMA/open-reclaimed/60m-breakout are proxies for the distance term; sweeps (48%, below their own base rate), momentum divergence and NQ cross-market divergence were all measured and rejected. PROVISIONAL until forward-scored.' } });
   registerFeature({ key:'rolllatch', label:'Roll latch (1 noise / 2 signal / 3 confirm)', phase:'dashboard', fwd:FEAT_FWD,
     record:function(sym){
       var rl=[]; try{ rl=rollLatched(sym)||[]; }catch(e){}
@@ -19664,6 +19710,7 @@ function ensureV3Css(){
       'background:rgba(46,194,126,.06);border:1px solid rgba(46,194,126,.28);border-radius:4px;'+
       'padding:5px 7px;cursor:help}'+
     '#gpts-body .g3dayread b{color:#2ec27e;font-weight:900}'+
+    '#gpts-body .g3dayread b.g3dayin{color:#f2b45a}'+
     '#gpts-body .g3daydim{color:#6c7889;font-weight:600}'+
     '#gpts-body .g3daysub{font-size:8px;font-weight:600;color:#8b98a9;margin-top:2px;line-height:1.45}'+
     '#gpts-body .g3daysub b{color:#f2b45a}'+
@@ -21330,6 +21377,79 @@ function hodlodBase(){
   B.src='baked'; B.at=null;
   return B;
 }
+// ============================================================================================
+// (v14.64) HAS THE LOW / HIGH OF DAY ALREADY PRINTED?
+//
+// The operator's requirement, verbatim 2026-08-28: "i just want to know with high accuracy whether
+// the hod or lod have occurred ... I want to know it as early as possible."
+//
+// ⚠⚠ THIS IS A TABLE, NOT A MODEL, AND THAT IS A DELIBERATE DOWNGRADE. A 5-feature logistic was
+// built first and then measured against a plain two-way lookup:
+//     lookup posr x time     AUC 0.8787   Brier 0.1321
+//     logistic, 5 features   AUC 0.8795   Brier 0.1321
+// Identical Brier, 0.0008 of AUC. The regression was ceremony. The table wins on everything that is
+// not AUC: every cell carries its own n, the operator can READ it and argue with it, and drift shows
+// up as a cell that stops matching. Five coefficients cannot be argued with. See FINDINGS F-4.
+// ⚠ Adding a third axis (`stood`) made it WORSE - 0.8729 - because the cells go thin. Two axes.
+//
+// THE TWO AXES, and why these two:
+//   posr  = (price - extreme) / (session range so far). How far price has travelled AWAY from the
+//           extreme. Alone it scores AUC 0.829 - better than the entire clock baseline (0.820).
+//   mins  = minutes since the RTH open. The base rate rises from ~40% at 09:30 to ~64% by noon all
+//           on its own, so time is IN the table rather than something the table gets credit for.
+//
+// ⚠ WHAT IS DELIBERATELY NOT IN IT, each measured and rejected (FINDINGS F-1/F-2/F-3):
+//   IB30 / IB60 (AUC 0.684 / 0.655)   - crude switches approximating posr (0.829)
+//   the 50-SMA (0.713), open reclaimed (0.709), 60-minute breakout (0.501)
+//   sweep + reclaim (0.559)           - 48% standalone, BELOW its own base rate
+//   momentum divergence (0.545) and NQ cross-market divergence (-0.0014 AUC)
+//   ⚠ Both divergences only LOOK anti-predictive: they can fire ONLY at the instant a fresh extreme
+//     prints, which is exactly posr~0 - a state the table already reads. See F-3.
+//
+// ⚠ PROVISIONAL. 284 sessions of EPM26 1-minute, 2025-06-02 -> 2026-08-21. ONE instrument, ONE
+// 15-month regime, and NO forward test. It is enrolled in FEATURES from its first line so the live
+// rate accumulates honestly beside the backtest.
+var HLTAB_META={ sessions:284, obs:38054, first:'2025-06-02', last:'2026-08-21', binMin:45, thresh:70 };
+// rows = posr octile (0 = on the extreme, 7 = the far side); cols = 45-minute blocks from 08:30 CT.
+// each cell is [n, percent] and a cell under 25 observations is null - it REFUSES rather than guesses.
+var HLTAB=[
+    [[0,null],[538,7],[881,8],[902,9],[855,12],[923,15],[922,20],[899,28],[604,47]],
+    [[0,null],[444,19],[687,21],[635,33],[676,36],[627,39],[560,57],[569,66],[516,84]],
+    [[0,null],[380,27],[542,34],[551,49],[572,56],[542,65],[519,68],[534,84],[441,96]],
+    [[0,null],[332,36],[441,50],[462,55],[450,65],[456,78],[546,85],[544,95],[425,99]],
+    [[0,null],[347,46],[444,62],[473,67],[452,73],[466,81],[563,91],[560,97],[425,100]],
+    [[0,null],[383,60],[533,72],[543,75],[573,84],[537,88],[517,95],[532,98],[441,100]],
+    [[0,null],[444,62],[700,76],[642,86],[675,89],[632,95],[557,98],[569,99],[519,100]],
+    [[0,null],[540,78],[884,84],[904,90],[859,96],[927,99],[928,99],[905,100],[605,100]]
+  ];
+function hlCell(posr, mins){
+  try{
+    if(typeof posr!=='number' || typeof mins!=='number') return null;
+    var pi=Math.max(0,Math.min(HLTAB.length-1, Math.floor(posr*HLTAB.length)));
+    var ti=Math.max(0,Math.min(HLTAB[0].length-1, Math.floor(mins/HLTAB_META.binMin)));
+    var c=HLTAB[pi][ti];
+    if(!c || c[1]==null) return { p:null, n:(c?c[0]:0), pi:pi, ti:ti, why:'too few samples in this cell' };
+    return { p:c[1], n:c[0], pi:pi, ti:ti };
+  }catch(e){ return null; }
+}
+// THE CALL. Descriptive only - it says how often an extreme in this state was the day's, never what
+// price will do. `left` is how much of the session range still lies between price and the far side,
+// which is the honest companion to the probability: F-5 measured that at the 70% call HALF the range
+// is still ahead and price travelled a median 30% of it.
+function lodhodCall(D){
+  try{
+    if(!D || !D.ok || D.posr==null) return null;
+    var c=hlCell(D.posr, (D.clock-(mul(8,3600)+mul(30,60)))/60);
+    if(!c) return null;
+    // ⚠ THE FIELD IS `far`, AND IT WAS `left` FOR ONE COMMIT. The render and the test both read
+    // CALL.far, so the "% still ahead" figure silently never drew. Caught by t14 executing the
+    // function rather than grepping it - a grep would have found `left` and been satisfied.
+    var out={ p:c.p, n:c.n, cell:c, first:D.first, in:false, far:null };
+    if(D.far!=null) out.far=Math.max(0, Math.min(1, D.far));
+    out.in = (c.p!=null && c.p>=HLTAB_META.thresh);
+    return out;
+  }catch(e){ return null; }
+}
 function hlClock(sec){ try{ sec=Math.round(sec); return two(Math.floor(sec/3600))+':'+two(Math.floor((sec%3600)/60)); }catch(e){ return '\u2014'; } }
 function hlDur(min){ try{ min=Math.round(min); if(min<60) return min+'m';
   return Math.floor(min/60)+'h'+two(min%60); }catch(e){ return '\u2014'; } }
@@ -21426,6 +21546,34 @@ function hodLod(sym){
         }
       }
     }catch(eW){}
+    // ---- (v14.64) posr - THE ONE INPUT THE TABLE TURNS ON --------------------------------------
+    // How far price has travelled AWAY from the standing extreme, as a fraction of the session
+    // range SO FAR. Alone it scores AUC 0.829, better than the whole clock baseline (0.820), and
+    // it is what IB30/IB60/the 50-SMA/open-reclaimed were all crudely approximating.
+    //
+    // ⚠ SCALE-FREE BY CONSTRUCTION, and it must stay that way. `hi`, `lo` and the last close are
+    // all UNDERLYING prices off closedCandles(); rr cancels in the ratio. Do NOT build this from
+    // out.rngPts, which is already converted to chart space - dividing a converted range by an
+    // unconverted distance is landmine L-F and is exactly how v14.57 shipped 5.1pts beside 56.5.
+    //
+    // ⚠ THE DENOMINATOR IS THE RUNNING RANGE AND IT GROWS ALL SESSION. That is a moving denominator
+    // (failure pattern #2), and it is accepted here KNOWINGLY: the table was BUILT on the same
+    // running-range definition, so the live number and the base rate are the same measurement. It
+    // would be wrong to "fix" this to a final range - that number is not knowable at the time of
+    // the call, and the study's own `range left` column used hindsight for exactly that reason.
+    out.posr=null; out.far=null;
+    try{
+      var lastC=null;
+      for(var pi2=cs.length-1; pi2>=0; pi2--){ var pb=cs[pi2];
+        if(pb && typeof pb.so==='number' && pb.so>=openSec && pb.c!=null){ lastC=pb.c; break; } }
+      var rngU=hi-lo;
+      if(lastC!=null && rngU>0){
+        out.posr=(out.first==='LOD') ? (lastC-lo)/rngU : (hi-lastC)/rngU;
+        out.posr=Math.max(0, Math.min(1, out.posr));
+        // what is still between price and the OTHER extreme, on the same running scale
+        out.far=1-out.posr;
+      }
+    }catch(ePr){}
     out.stood=Math.max(0,(clock-out.firstT)/60);
     out.tier=hlTier(out.stood, hodlodBase());
     return out;
@@ -25282,11 +25430,26 @@ function secDay(sym){
     }
     h+='</div>';
     // ---- THE READ -------------------------------------------------------------------------------
-    var verdict = T ? (D.first+' IN \u2014 '+T.rate+'%') : (D.first+' STANDING \u2014 too early to rate');
-    h+='<div class="g3dayread"'+g3tip('The verdict, then the evidence behind it, then what it implies. \u26a0 It never says price WILL do anything \u2014 it reports how often a standing extreme of this age survived, with the n behind that exact number.')+'>'+
-       '<b>'+g3esc(verdict)+'</b> <span class="g3daydim">('+
-       (T?('stood '+hlDur(D.stood)+' \u00b7 n='+T.n):('stood '+hlDur(D.stood)+' \u00b7 under the 30m floor'))+
+    // (v14.64) THE VERDICT IS THE TABLE'S, NOT THE LADDER'S. The ladder answers "how long has it
+    // stood"; the table answers the operator's actual question with the one input that matters.
+    // ⚠ It REFUSES rather than guesses when the cell is thin - see hlCell().
+    var CALL=null; try{ CALL=lodhodCall(D); }catch(eC){}
+    var verdict;
+    if(CALL && CALL.p!=null){
+      verdict = D.first+(CALL.in?' IN':' STANDING')+' — '+CALL.p+'%';
+    } else if(CALL){
+      verdict = D.first+' STANDING — no rate (thin cell, n='+CALL.n+')';
+    } else {
+      verdict = T ? (D.first+' IN — '+T.rate+'%') : (D.first+' STANDING — too early to rate');
+    }
+    h+='<div class="g3dayread"'+g3tip('HAS THE EXTREME ALREADY PRINTED? A lookup over '+HLTAB_META.sessions+' sessions of ES 1-minute ('+HLTAB_META.first+' to '+HLTAB_META.last+'), on TWO axes: how far price has travelled off the extreme, and the clock. That pair scored AUC 0.879 \u2014 a 5-feature regression scored 0.880, so the table is shipped instead: every cell carries its own n and you can argue with it. \u26a0 IB30, IB60, the 50-SMA, sweeps and BOTH divergences were measured and left out \u2014 they are either proxies for the distance term or worth nothing (sweeps 48%, below their own base rate). \u26a0 The percentage is how often an extreme in THIS state was the day\u2019s. It is NOT a forecast of price. \u26a0 PROVISIONAL: one instrument, one 15-month window, no forward test yet \u2014 the live rate is being scored nightly beside it. The verdict, then the evidence behind it, then what it implies. \u26a0 It never says price WILL do anything \u2014 it reports how often a standing extreme of this age survived, with the n behind that exact number.')+'>'+
+       '<b'+((CALL&&CALL.in)?' class="g3dayin"':'')+'>'+g3esc(verdict)+'</b> <span class="g3daydim">('+
+       ((CALL&&CALL.p!=null)
+          ? ('travelled '+Math.round(100*D.posr)+'% off it \u00b7 n='+CALL.n)
+          : (T?('stood '+hlDur(D.stood)+' \u00b7 n='+T.n):('stood '+hlDur(D.stood)+' \u00b7 under the 30m floor')))+
        ')</span>'+
+       ((CALL&&CALL.p!=null&&CALL.far!=null)
+          ? (' \u00b7 <b>'+Math.round(100*CALL.far)+'% of the range still ahead</b>') : '')+
        (T?(' \u00b7 <b>toward '+D.second+'</b>'):'')+
        '<div class="g3daysub">'+
        (T? ('when an extreme of this age held, the other side printed later \u2014 median gap '+hlDur(base.gapMin)+', usually around '+hlClock(base.secondClock)+'. '+
@@ -25304,7 +25467,7 @@ function secDay(sym){
         'Price has reclaimed the session open in the direction the standing extreme implies.');
       chip('VWAP', null, '\u26a0 NOT AVAILABLE \u2014 this panel computes no VWAP. The mockup lists it as one of the five; it is absent from the codebase entirely, so it is shown unavailable rather than ticked.');
       chip('SWP', (SL&&px!=null)?(low?(SL.pdl!=null&&D.lod<SL.pdl&&px>SL.pdl):(SL.pdh!=null&&D.hod>SL.pdh&&px<SL.pdh)):null,
-        'A sweep of the prior day\u2019s extreme that was then reclaimed \u2014 the liquidity grab.');
+        '\u26a0 UNPROVEN \u2014 AND MEASURED AGAINST. A sweep of the prior day\u2019s extreme, reclaimed. Over 284 sessions it was right 48% of the time, BELOW the 45% base rate at that hour (lift +3), and it failed the same way on an independent 50-session sample (53%). It is drawn for context only and must not be read as a confirmation. FINDINGS F-1.');
       chip('IB60', (SL&&SL.ib60Set&&px!=null)?(low?px>SL.ib60H:px<SL.ib60L):null,
         'The 60-minute initial balance has been broken in the implied direction. \u26a0 New at v14.57 \u2014 the panel had IB30 only.');
       chip('POS', (px!=null&&D.rngPts>0)?(low?((px-D.lod)/D.rngPts>0.5):((D.hod-px)/D.rngPts>0.5)):null,

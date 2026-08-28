@@ -1,3 +1,63 @@
+## v14.64 — ⓪a answers the question it was built for
+
+> "i just want to know with high accuracy whether the hod or lod have occurred ... as early as possible."
+
+⓪a now says **`LOD IN — 76%  (travelled 78% off it · n=1204) · 22% of the range still ahead`**.
+
+### IT IS A TABLE, AND THAT IS A DELIBERATE DOWNGRADE
+
+A 5-feature logistic was built first, then measured against a plain two-axis lookup:
+
+    lookup  posr x time      AUC 0.8787   Brier 0.1321
+    logistic, 5 features     AUC 0.8795   Brier 0.1321
+
+Identical Brier, 0.0008 of AUC. **The regression was ceremony.** The table ships because it wins on
+everything that is not AUC: every cell carries its own **n**, it can be read and argued with, and
+drift shows up as a cell that stops matching. ⚠ Adding a third axis (`stood`) made it **worse**
+(0.8729) — thin cells overfit. Two axes. FINDINGS **F-4**.
+
+### THE TWO AXES, AND WHAT WAS THROWN OUT
+
+`posr` — how far price has travelled off the extreme as a fraction of the running range — scores
+**AUC 0.829 alone**, better than the entire three-feature clock baseline (0.820). Measured and
+**rejected**: IB30 (0.684), IB60 (0.655), the 50-SMA (0.713), open-reclaimed (0.709), 60-minute
+breakout (0.501), **sweep+reclaim (0.559 — 48% standalone, BELOW its own base rate)**, momentum
+divergence (0.545) and **NQ cross-market divergence (−0.0014 AUC)**.
+
+⚠ Those five "confirmations" were never independent — they are crude switches approximating the
+distance term. **Stacking them was measuring one thing five times.**
+
+⚠ **SWP IS DEMOTED ON THE FACE.** Its hover now carries its measured 48% and says it must not be
+read as a confirmation. It had been shipping as one since v14.57.
+
+### THE OPERATING POINT IS THE DATA'S, NOT A PREFERENCE
+
+**70%.** At the first bar the table reaches it — median **10:10 CT** — F-5 measured **half the day's
+range still ahead**, and price travelled a median **30% of the range** toward the far extreme.
+Waiting for 90% buys +18 points of accuracy and costs 2h15m and a third of the remaining travel.
+
+### ENROLLED FROM ITS FIRST LINE OF CODE
+
+Every rate above is a **backtest** over one instrument and one 15-month regime with **no forward
+test**. Per the 2026-08-17 mandate it ships enrolled: a `FEATURES` entry recording posr, the cell,
+its n and the call per bar; three questions including one that forward-tests the table's own
+calibration; and `lodhod` in `learning/rules.json` starting at **n=0, rate=null** — the backtest is
+explicitly not a live rate.
+
+⚠ The outcome scorer is a **proxy** and says so in source: "was this the day's extreme" is only
+knowable at the close, so the bar-level scorer measures survival of the forward window and the
+session-level truth is recomputed nightly.
+
+### CAUGHT BY THE TESTS
+
+`lodhodCall` set `out.left` while the render and the test both read `CALL.far` — the "% still ahead"
+figure would silently never have drawn. Found by an assertion that **executes** the function; a grep
+would have found `left` and been satisfied. `test_hodlod` 65 → 96, every new guard mutation-tested,
+including one that had to be rewritten after a mutation proved it could not fail.
+
+Rendered at the real 454px body: fits, no page errors, nothing past the edge.
+Suite 119 green, 6 documented baseline reds.
+
 ## v14.63 — the research build: FINDINGS.md exists, and the LOD/HOD model
 
 **No panel behaviour changes from v14.62.** This build exists to make seven commits of work durable:

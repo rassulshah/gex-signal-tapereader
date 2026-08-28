@@ -266,5 +266,100 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
      's7 the wick columns use that same statistic', [B.wick.bop, W.bop, W.bop_median]);
 }
 
+// ---- 9 · THE LOD/HOD CALL (v14.64) — the table, not a model ---------------------------------
+// ⚠ Built AFTER a 5-feature logistic was measured against a plain 2-axis lookup and found to add
+// 0.0008 AUC on an identical Brier. The table ships because it is inspectable. FINDINGS F-4.
+{
+  global.HLTAB = val('HLTAB');
+  global.HLTAB_META = val('HLTAB_META');
+  eval(ex('hlCell')); eval(ex('lodhodCall'));
+
+  ok(Array.isArray(HLTAB) && HLTAB.length === 8 && HLTAB[0].length === 9,
+     't1 the table is 8 posr octiles x 9 time blocks', HLTAB && [HLTAB.length, HLTAB[0].length]);
+  ok(HLTAB_META.sessions === 284 && HLTAB_META.thresh === 70,
+     't2 it declares its corpus and its threshold on the face of the constant');
+
+  // EVERY populated cell must carry a real n — a percentage without one is what this project bans
+  let cells = 0, thin = 0, bad = 0;
+  HLTAB.forEach(r => r.forEach(c => {
+    if (c[1] === null) { thin++; return; }
+    cells++;
+    if (!(c[0] >= 25) || c[1] < 0 || c[1] > 100) bad++;
+  }));
+  ok(bad === 0, 't3 every populated cell has n>=25 and a sane percentage', bad);
+  ok(cells >= 50, 't4 the table is actually populated', cells);
+  ok(thin > 0, 't5 ...and thin cells are NULL rather than guessed', thin);
+
+  // MONOTONE IN BOTH AXES — the table's whole claim. Not asserted cell-by-cell (noise), but the
+  // corners must obey it or the thing is not measuring what it says.
+  const g = (p, t) => HLTAB[p][t][1];
+  ok(g(7, 8) > g(0, 8), 't6 at the same hour, further from the extreme scores higher',
+     [g(0, 8), g(7, 8)]);
+  ok(g(7, 8) > g(7, 1), 't7 at the same distance, later in the session scores higher',
+     [g(7, 1), g(7, 8)]);
+  ok(g(0, 1) < 25, 't8 sitting ON a fresh extreme early is a LOW probability, as it must be', g(0, 1));
+
+  // hlCell clamps rather than throwing, and refuses thin cells
+  ok(hlCell(0.5, 200) && hlCell(0.5, 200).p !== null, 't9 a normal lookup returns a rate');
+  ok(hlCell(1.5, 9999) !== null, 't10 out-of-range inputs clamp instead of throwing',
+     hlCell(1.5, 9999));
+  ok(hlCell('x', 100) === null, 't11 a non-numeric input returns null, not a number');
+  // ⚠ A THIN CELL MUST REFUSE, NOT GUESS. The 08:30 block has under 25 observations at every
+  // distance, because the session has barely started. Added after a mutation showed nothing
+  // asserted this directly - "absence of data is not a reading" has to be tested, not just written.
+  const thinCell = hlCell(0.5, 10);
+  ok(thinCell && thinCell.p === null && /too few/.test(thinCell.why || ''),
+     't11b a thin cell returns p=null AND says why', thinCell);
+  ok(thinCell && typeof thinCell.n === 'number',
+     't11c ...and still reports how many samples it does have', thinCell && thinCell.n);
+
+  // the CALL: threshold, refusal, and the "still ahead" companion
+  const D = ok0 => ({ ok: true, posr: ok0.posr, clock: OPEN + ok0.mins * 60, first: 'LOD',
+                      rngPts: 50, far: 1 - ok0.posr });
+  const hi = lodhodCall(D({ posr: 0.95, mins: 300 }));
+  ok(hi && hi.p >= 70 && hi.in === true, 't12 a high cell crosses the 70% threshold', hi && hi.p);
+  const lowc = lodhodCall(D({ posr: 0.02, mins: 50 }));
+  ok(lowc && lowc.p < 70 && lowc.in === false,
+     't13 sitting on a fresh extreme does NOT call it in', lowc && lowc.p);
+  ok(Math.abs(hi.far - 0.05) < 1e-9,
+     't14 `far` is what is still ahead toward the other extreme', hi.far);
+  ok(lodhodCall({ ok: false }) === null, 't15 no read -> no call');
+  ok(lodhodCall({ ok: true, posr: null, clock: OPEN }) === null,
+     't16 ...and a missing posr refuses rather than defaulting to a number');
+
+  // the threshold is the one the DATA picked (F-5), not a preference
+  ok(HLTAB_META.thresh === 70,
+     't17 the operating point is 70% — where F-5 measured half the range still ahead');
+
+  // posr must be scale-free: the same session on a futures chart gives the SAME posr
+  CANDLES = session([{m:0,h:101,l:100,o:100,c:100},{m:5,h:101,l:90,c:92},
+                     {m:60,h:130,l:120,c:129},{m:120,h:130,l:125,c:128}]);
+  NOWSEC = OPEN + 120*60;
+  RR = 1;    const a1 = hodLod('SPY');
+  RR = 10.04; const a2 = hodLod('SPY');
+  ok(a1.posr != null && Math.abs(a1.posr - a2.posr) < 1e-9,
+     't18 posr is scale-free — identical on a futures chart', [a1.posr, a2.posr]);
+  ok(a1.far != null && Math.abs((a1.posr + a1.far) - 1) < 1e-9,
+     't19 posr + far = 1, both on the running range');
+  ok(a2.rngPts !== a1.rngPts, 't19b ...while rngPts DOES convert, proving the scale changed');
+
+  // the face
+  const SD = ex('secDay');
+  ok(/lodhodCall/.test(SD), 't20 the section calls the table');
+  ok(/thin cell/.test(SD), 't21 ...and says so when the cell is too thin to rate');
+  ok(/still ahead/.test(SD), 't22 the remaining range is on the face beside the probability');
+  ok(/UNPROVEN/.test(src) && /48%/.test(src),
+     't23 SWP is demoted to unproven WITH its measured 48%', /UNPROVEN/.test(src));
+  ok(/PROVISIONAL/.test(SD), 't24 the hover admits it is a backtest, not a forward test');
+
+  // enrolment — the 2026-08-17 mandate
+  ok(/key:'lodhod'/.test(src), 't25 the feature is in the FEATURES registry');
+  const rules = JSON.parse(fs.readFileSync('./learning/rules.json', 'utf8'));
+  ok(!!rules.rules.lodhod, 't26 ...and has a rule in learning/rules.json');
+  ok(rules.rules.lodhod.n === 0 && rules.rules.lodhod.rate === null,
+     't27 which starts UNMEASURED — the backtest is not a live rate', rules.rules.lodhod);
+  ok(/lodhod_table_calibrated/.test(src), 't28 with a question that forward-tests the table itself');
+}
+
 console.log('test_hodlod: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -162,3 +162,161 @@ the binary rule is still competitive as a single trigger.
 ### What would move this
 The NQ corpus (cross-market divergence, the one hypothesis still open), a second instrument to rule
 out an EPM26 artefact, and forward-scoring on live sessions via the FEATURES registry.
+
+---
+
+## F-3 · BOTH DIVERGENCES ARE DEAD, AND THE EARLINESS/ACCURACY FRONTIER
+**Status: PROVISIONAL** · measured 2026-08-28 · 163 sessions where ES and NQ overlap
+(2025-11-24 → 2026-08-21) · `tools/model-lodhod.py`
+
+**The operator's requirement, verbatim:** *"i just want to know with high accuracy whether the hod or
+lod have occurred ... I want to know it as early as possible."*
+
+### 1 · CROSS-MARKET (NQ) DIVERGENCE DOES NOT HELP — now actually tested
+
+    time only                0.8440
+    + posr + rsi             0.8956
+    + xdiv (NQ divergence)   0.8942     delta -0.0014
+
+Raw and uncontrolled, the direction is **opposite to the intuition**: when ES makes a new low and NQ
+does not, the low holds **66%** of the time against **70%** when both make it. Divergence makes the
+extreme slightly LESS reliable. ⚠ F-2 recorded this as UNTESTED because the corpus was absent; it is
+tested now and the answer is no.
+
+### 2 · WHY BOTH DIVERGENCES *LOOK* LIKE STRONG INVERSE SIGNALS, AND ARE NOT
+Time-controlled, momentum divergence fires and the extreme holds only 24-31% against a 46-60% base —
+which reads as a powerful "the extreme is NOT in" call. **It is an artefact.** A divergence can only
+fire at the instant a fresh extreme prints, which is precisely when `posr` ≈ 0. The model already
+knows price is sitting on the extreme, so the divergence adds nothing (-0.0004 / -0.0014 AUC).
+⚠ **A feature that can only fire in one state is measuring that state, not predicting anything.**
+This is failure pattern 7 in a new costume and it fooled me for one pass.
+
+### 3 · THE EXHAUSTIVE SEARCH, AND WHY ITS WINNERS ARE A TRAP
+All 1/2/3-way combinations of 16 binarised features; 339 cleared a coverage floor; split by date.
+The top of the table reaches **98-100% on holdout** — and **every one of them contains `stood120`
+and fires between 11:30 and 12:45**. By then the base rate is already ~64%.
+⚠ **They are the clock wearing a costume.** With 339 combinations tested, the top of any such
+ranking is partly luck; the honest reading is the frontier below, not the leaderboard.
+
+### 4 · THE FRONTIER — the answer to "as early as possible"
+
+| accuracy wanted | earliest the model reaches it | share of session-sides |
+|---|---|---|
+| 70% | 09:50 | 98% |
+| 75% | 10:00 | 94% |
+| **80%** | **10:10** | **90%** |
+| 85% | 10:30 | 85% |
+| 90% | 11:15 | 79% |
+| 95% | 12:20 | 65% |
+
+**80% by 10:10 on 90% of days is the practical operating point.** Going to 90% costs an hour and a
+fifth of the days. Held to a fixed clock instead: by **09:45**, `P>=0.85` already labels 73
+session-sides at **84%**.
+
+### 5 · WHAT IS AND IS NOT SOLID
+**Solid:** the calibration (predicted vs actual within 1-2 points at every decile), the frontier, and
+the three negative results — sweeps (F-1), momentum divergence, NQ divergence — each confirmed on
+independent samples.
+**Not solid:** one instrument, one 15-month regime, **no forward test on unseen days**. The single
+thing that would settle it is forward scoring through the FEATURES registry, per the 2026-08-17
+mandate: predict live, score the outcome, and let n accumulate honestly.
+
+---
+
+## F-4 · THE MODEL DOES NOT EARN ITS COMPLEXITY — SHIP THE TABLE
+**Status: CONFIRMED** (the comparison is internal and reproducible) · 2026-08-28
+Script: `tools/sanity-lodhod.py` · 284 sessions.
+
+**The operator asked the right question:** *"is this a standard model. is this the right use case for
+it ... step back and see if you made the right choice for this type of problem."*
+
+### 1 · A TWO-DIMENSIONAL LOOKUP TABLE EQUALS THE REGRESSION
+
+    lookup table  posr x time            AUC 0.8787   Brier 0.1321
+    lookup table  posr x time x stood    AUC 0.8729   Brier 0.1349
+    logistic, 2 features (posr, mins)    AUC 0.8759   Brier 0.1340
+    logistic, 5 features                 AUC 0.8795   Brier 0.1321
+
+**Identical Brier. 0.0008 of AUC.** The five-feature model is ceremony. ⚠ And adding `stood` to the
+table made it WORSE — thin cells overfit. Two dimensions is the right size.
+
+**SHIP THE TABLE, NOT THE REGRESSION.** Same accuracy, same calibration, and it is INSPECTABLE: every
+cell carries its own n, the operator can argue with a number he can see, and live drift against it is
+visible. Five coefficients cannot be argued with. This also honours his standing instruction —
+*"why are you making things more complicated"* — which this project has been burned by ignoring.
+
+### 2 · THE SURVIVAL FRAMING IS NOT BETTER, AND IT WAS WORTH CHECKING
+"Will a new extreme print before the close?" is a time-to-event question, so a discrete-time hazard
+model is the textbook fit. Built and measured:
+
+    hazard -> survival curve             AUC 0.8751   Brier 0.1464
+    direct classification (shipped)      AUC 0.8795   Brier 0.1321
+
+Direct classification wins, mainly on calibration. ⚠ The classification framing was the right call —
+but it had been an ASSUMPTION until this test, and the project's rule is that an assumption written
+in the voice of a measurement is a defect.
+
+### 3 · IT IS REGIME-STABLE
+
+| slice | AUC | base |
+|---|---|---|
+| quiet days (range < median) | 0.858 | 67% |
+| volatile days (range >= median) | 0.899 | 65% |
+| first half of the corpus | 0.869 | 63% |
+| second half | 0.894 | 69% |
+
+No collapse, and it is slightly BETTER when the market actually moves — which is when it is used.
+
+### 4 · THE TABLE ITSELF — P(this extreme is the day's), 284 sessions, 38,054 observations
+
+| posr \ CT | 9:15 | 10:00 | 10:45 | 11:30 | 12:15 | 13:00 | 13:45 |
+|---|---|---|---|---|---|---|---|
+| 0.88-1.00 | 78% | 84% | 90% | 96% | 99% | 99% | 100% |
+| 0.75-0.88 | 62% | 76% | 86% | 89% | 95% | 98% | 99% |
+| 0.62-0.75 | 60% | 72% | 75% | 84% | 88% | 95% | 98% |
+| 0.50-0.62 | 46% | 62% | 67% | 73% | 81% | 91% | 97% |
+| 0.38-0.50 | 36% | 50% | 55% | 65% | 78% | 85% | 95% |
+| 0.25-0.38 | 27% | 34% | 49% | 56% | 65% | 68% | 84% |
+| 0.12-0.25 | 19% | 21% | 33% | 36% | 39% | 57% | 66% |
+| 0.00-0.12 | 7% | 8% | 9% | 12% | 15% | 20% | 28% |
+
+⚠ Cells under 25 observations are not shown and must not be invented.
+
+### 5 · THE CRITICISM THAT SURVIVES
+**The target is not the decision.** This predicts *does this extreme hold*. The operator's stated goal
+is *can I profit travelling to the other extremity*. A low can hold perfectly while price goes
+nowhere. **Expected travel to the opposite extreme, conditional on the extreme holding, is a
+DIFFERENT measurement and has not been made.** Do not present this table as answering it.
+
+---
+
+## F-5 · THERE IS STILL A TRADE LEFT WHEN THE CALL FIRES — the fear was wrong
+**Status: PROVISIONAL** · 2026-08-28 · `tools/study-travel.py` · 284 sessions.
+
+**The worry, stated before it was tested:** the table's confidence comes almost entirely from `posr` —
+how far price has ALREADY moved off the extreme — so it should be most confident exactly when the
+move is over. If true, it would call the low at the moment there is nothing left to trade, and the
+whole feature would be answering the wrong question.
+
+**Measured, at the first bar the (out-of-fold) table reaches each confidence:**
+
+| confidence | n | correct | median CT | range still ahead | actually travelled |
+|---|---|---|---|---|---|
+| P ≥ 0.60 | 558 | 65% | 09:55 | 51% | 34% |
+| **P ≥ 0.70** | **552** | **73%** | **10:10** | **49%** | **30%** |
+| P ≥ 0.75 | 550 | 75% | 10:40 | 49% | 29% |
+| P ≥ 0.80 | 546 | 81% | 11:15 | 47% | 25% |
+| P ≥ 0.85 | 509 | 84% | 11:25 | 44% | 25% |
+| P ≥ 0.90 | 477 | 91% | 12:25 | 41% | 21% |
+
+**The fear was wrong.** At the 70% call, **half the day's range is still ahead**, and price does
+travel a median **30% of the day's range** toward the far extreme before the close. Waiting from 70%
+to 90% buys **+18 points of accuracy** and costs **2h15m and a third of the remaining travel**.
+
+⚠ **`actually travelled` IS MAXIMUM FAVOURABLE EXCURSION, NOT A REALIZED TRADE.** It is the correct
+descriptive statistic for a tool that is forbidden entries, stops and sizing — but it is the best
+case inside the move, not what anyone banks. Never present it as a return.
+
+### The operating point this argues for
+**P ≥ 0.70.** Below it the edge over the clock is thin; above it the cost in time and forgone travel
+rises faster than the accuracy does. The data picks this point, not a preference.
