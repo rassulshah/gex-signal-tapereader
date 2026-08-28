@@ -1,1 +1,8 @@
 Tue 08/18/2026 19:19:07.94 skipped 2026-08-18.json - already in repo (logs are append-only) 
+Fri 08/28/2026 16:05:01.97 placed 2026-08-27_catch-up-review.json -> C:\Dev\gex-signal-tapereader\learning\log\2026-08-27_catch-up-review.json 
+[main 16aaff2] review: nightly/weekly files pulled from Drive inbox 28-Fri-08
+ 1 file changed, 86 insertions(+)
+ create mode 100644 learning/log/2026-08-27_catch-up-review.json
+To https://github.com/rassulshah/gex-signal-tapereader.git
+   a27ed19..16aaff2  main -> main
+Fri 08/28/2026 16:05:05.82 pushed 1 file(s) 

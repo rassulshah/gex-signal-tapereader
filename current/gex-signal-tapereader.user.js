@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.77
+// @version    14.80
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.77';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.80';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4400,14 +4400,69 @@ function irtBuildCsv(){
         var ewK=null; try{ ewK=extractWalls(FYK.j); }catch(eEW){}
         if(ewK && ewK.king!=null){
           var sgK=1; try{ (ewK.walls||[]).forEach(function(wK){ if(wK.k===ewK.king && wK.pos===false) sgK=-1; }); }catch(eSg2){}
+          // (v14.79) SOLID. Operator: "Make the king lines solid" — the Kings are the anchors and
+          // now read as one family; only the 0DTE walls and the QQQ bearing are broken lines.
           rows.push({ k:ewK.king, lbl:'SPY KING',
-                      col:(sgK<0)?IRT_COLORS.splp:IRT_COLORS.sply, w:2, style:1 });
+                      col:(sgK<0)?IRT_COLORS.splp:IRT_COLORS.sply, w:2, style:0 });
           irtKingLatch('SPY', ewK.king, sgK);
           spyDone=true;
         }
       }
     }
   }catch(eKG){}
+  // ---- (v14.79 · corrected v14.80) THE 0DTE LEVELS FROM INSIDERFINANCE — CW0 · PW0 · FLIP0 ----
+  // Operator, 2026-08-28: "put the CW0 and PW0 and the Flip0 that you are getting from inside
+  // finance in the irt export ... make the 0 dte levels dotted ... Put wall should be green, call
+  // wall should be red, flip can be purple."
+  //
+  // ⚠ IT READS `ifLadder()` ROWS — the SAME array the rail draws. Their `disp` field is already in
+  // chart space (SPX strike x the live basis), so nothing is re-derived here; dividing by R.r puts
+  // it back in the rows[] SPY-space the targets loop expects, and the loop re-applies the ratio.
+  // One quantity, one source (DECISIONS v13.2) — the rule this export broke twice today.
+  //
+  // ⚠⚠ THE FLIP ROW IS `dte0.gf.flip`, NEVER THEIR PUBLISHED ZERO GAMMA — corrected v14.80.
+  // Operator, 2026-08-28: "the flip 0dte is displayed when 0dte is selected just like how you get
+  // the walls for 0 dte." He is right, and v14.79 had it backwards. The companion fetches
+  // `insiderfinance.io/gamma-exposure/SPX` with NO expiry filter, so `pub.zeroGamma` scraped off
+  // their header is their DEFAULT ALL-EXPIRY view — the same reason their header walls read
+  // 7900/7500 on 2026-08-22 while 0DTE was 7700/7665 (`INSIDERFINANCE.md`, `pub.wallsAreAllExpiry`).
+  // Their payload carries every contract, and `gammaFlip()` run over the FRONT EXPIRY ONLY is what
+  // their page draws when 0DTE is selected. That is the SAME provenance as CW0/PW0: their contracts,
+  // our 0DTE filter. So the row is plain **FLIP0**, no asterisk — CR0/PS0 carry none either.
+  // ⚠ AND THERE IS NO ALL-EXPIRY FALLBACK (his call, asked and answered 2026-08-28). When the 0DTE
+  // flip cannot be computed the row is ABSENT. Substituting the all-expiry number would put a purple
+  // dotted line on his chart that answers a different question and cannot be told apart at a glance.
+  try{
+    var IFL=null; try{ IFL=ifLadder(sym); }catch(eIF){}
+    if(IFL && !IFL.err && IFL.rows && IFL.rows.length && R && R.r>1){
+      var seen={};
+      IFL.rows.forEach(function(rw){
+        try{
+          if(!rw || typeof rw.disp!=='number') return;
+          var ids=String(rw.id||'').split('\u00b7');
+          var lbl=null, col=null;
+          if(ids.indexOf('CR0')>=0){ lbl='CW0'; col=IRT_COLORS.ceil; }        // call wall — RED
+          else if(ids.indexOf('PS0')>=0){ lbl='PW0'; col=IRT_COLORS.flr; }    // put wall — GREEN
+          if(!lbl) return;
+          if(seen[lbl]) return; seen[lbl]=1;
+          rows.push({ k:rw.disp/R.r, lbl:lbl, col:col, w:2, style:2 });       // 2 = dotted
+        }catch(eR){}
+      });
+      // the flip — 0DTE ONLY, from their contracts filtered to the front expiry
+      var fl=null, flWhy='no dte0 gamma flip';
+      try{
+        var cc=ifChain((IFL.srcSym==='QQQ')?'QQQ':'SPX');
+        if(cc && !cc.err && cc.dte0 && cc.dte0.gf && typeof cc.dte0.gf.flip==='number' &&
+           cc.dte0.gf.flip>0 && IFL.dispScale>0){
+          fl=cc.dte0.gf.flip*IFL.dispScale; flWhy='FLIP0';
+        }
+      }catch(eF){ flWhy='flip threw'; }
+      if(fl!=null) rows.push({ k:fl/R.r, lbl:'FLIP0', col:IRT_COLORS.neg, w:2, style:2 });  // purple, dotted
+      try{ IRT_LAST.ifWhy='0DTE from ifLadder ('+Object.keys(seen).join(',')+'+'+flWhy+')'; }catch(eW){}
+    } else {
+      try{ IRT_LAST.ifWhy=(IFL&&IFL.err)?('no IF ladder: '+IFL.err):'no IF ladder'; }catch(eW2){}
+    }
+  }catch(eIFL){ try{ IRT_LAST.ifWhy='threw: '+(eIFL&&eIFL.message||eIFL); }catch(eW3){} }
   if(!spyDone){
     var HY=irtKingHeld('SPY');
     if(HY){ rows.push({ k:HY.k, lbl:'SPY KING', col:(HY.pct<0)?IRT_COLORS.splp:IRT_COLORS.sply, w:2, style:1 });
@@ -4616,9 +4671,35 @@ function irtQqqKing(){
 // ⚠ IT MUST STAY ON A CLICK. Do not "improve" this by calling it from irtTick: the call would
 // reject with NotAllowedError, the rejection would be swallowed, and the button would look broken
 // while quietly training everyone to ignore it. That is the v14.53 lesson, verbatim.
+// ⚠⚠ (v14.78) TWO BUGS LIVED HERE, AND THE SECOND WOULD HAVE SURVIVED THE FIRST FIX.
+//   1. The listener was attached to a container the panel later re-rendered away from, so the click
+//      reached nothing. Fixed by DELEGATION on document (capture) — re-render-proof.
+//   2. ⚠ USER ACTIVATION IS SPENT ASYNCHRONOUSLY. `repoKvGet` is an IndexedDB read, so calling
+//      requestPermission() from ITS callback happens after the gesture has been consumed and Chrome
+//      rejects with NotAllowedError — the exact failure v14.53 documented for the timer path, in a
+//      new costume. The handle is therefore CACHED at boot and the permission is requested
+//      SYNCHRONOUSLY inside the click.
+var IRT_DIR_H=null;
+try{ repoKvGet('irtDir', function(h){ IRT_DIR_H=h||null; }); }catch(eDH){}
 function irtGrantFolder(){
+  // the synchronous path: a cached handle means requestPermission() runs INSIDE the gesture
+  try{
+    if(IRT_DIR_H && IRT_DIR_H.requestPermission){
+      IRT_DIR_H.requestPermission({mode:'readwrite'}).then(function(st){
+        if(st==='granted'){ IRT_LAST={t:Date.now(),rows:0,how:'permission granted',err:null};
+                            try{ irtExportNow(true); }catch(e1){} }
+        else { IRT_LAST={t:Date.now(),rows:0,how:null,err:'permission '+st+' — the file cannot be written'}; }
+        try{ renderCfg(); }catch(e2){}
+      }).catch(function(e){
+        IRT_LAST={t:Date.now(),rows:0,how:null,err:'permission request failed: '+(e&&e.message||e)};
+        try{ renderCfg(); }catch(e3){}
+      });
+      return;
+    }
+  }catch(e0){}
   try{
     repoKvGet('irtDir', function(h){
+      IRT_DIR_H=h||null;
       if(!h || !h.requestPermission){
         IRT_LAST={t:Date.now(),rows:0,how:null,err:'no folder picked yet — use 📁 folder first'};
         try{ renderCfg(); }catch(e0){} return;
@@ -7150,8 +7231,19 @@ function wireConfig(){
   // sat there doing nothing with no error anywhere. Shipped in v14.76 and caught by the operator in
   // one click: "im clicking on grant and it doesnt do anything". Every other control in this block
   // uses elCfg; mine was the only one that didn't, and the guard hid it.
-  var irtG=elCfg.querySelector('.gpts-irt-grant');
-  if(irtG) irtG.addEventListener('click', function(){ irtGrantFolder(); });
+  // ⚠ DELEGATED, NOT BOUND. v14.76 queried elBody (wrong root); v14.77 queried elCfg and STILL did
+  // nothing, because the panel re-renders and the node the listener was bound to is replaced. One
+  // capture-phase listener on document survives every re-render, and it is installed once.
+  if(!window.__gptsGrantWired){
+    window.__gptsGrantWired=true;
+    document.addEventListener('click', function(ev){
+      try{
+        var t=ev && ev.target;
+        var hit=(t && t.closest) ? t.closest('.gpts-irt-grant') : null;
+        if(hit) irtGrantFolder();
+      }catch(e){}
+    }, true);
+  }
   var irtNqOn=elCfg.querySelector('.gpts-irt-nqon');
   if(irtNqOn) irtNqOn.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.nqOn=irtNqOn.checked; saveCfg(); });
   var irtNqS=elCfg.querySelector('.gpts-irt-nqsym');

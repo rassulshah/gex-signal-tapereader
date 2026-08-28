@@ -1,3 +1,90 @@
+## v14.80 — the flip row is the 0DTE flip, not their all-expiry one
+
+> "the flip 0dte is displayed when 0dte is selected just like how you get the walls for 0 dte."
+
+**He is right and v14.79 was backwards.** I had preferred InsiderFinance's *published* Zero Gamma and
+treated the real 0DTE flip as the alternative, hedging the difference with a `FLIP0*` / `FLIP` label
+split. The code says why that was wrong: the companion fetches
+`insiderfinance.io/gamma-exposure/SPX` **with no expiry parameter**, so what it scrapes is their
+DEFAULT ALL-EXPIRY view — the documented reason their header walls read 7900/7500 on 2026-08-22
+while 0DTE was 7700/7665 (`pub.wallsAreAllExpiry`). Their payload carries every contract, and
+`gammaFlip()` run over the **front expiry only** is precisely what their page draws with 0DTE
+selected. That is the SAME provenance as CW0/PW0: their contracts, our 0DTE filter.
+
+So: the row is always `dte0.gf.flip × dispScale`, labelled plain **`FLIP0`** — no asterisk, because
+CR0/PS0 carry none and nothing here is more derived than they are.
+
+⚠ **AND THE ALL-EXPIRY FALLBACK IS GONE**, asked and answered: when the 0DTE flip cannot be computed
+the row is **absent**. A purple dotted line answering a different question cannot be told from this
+one at a glance, and `FLIP` vs `FLIP0` is one character to carry that weight.
+
+`i8b` pins the PRICE, not just the label — 7712.75 from `dte0.gf`, five points off the ladder's
+all-expiry 7717.71 — so a silent swap back to the wrong source fails even if the label is right.
+Four mutations run individually (fallback resurrected, `toFri` for `dte0`, asterisk restored,
+`dispScale` dropped); all four caught. `test_irt_export` 106 → **108**.
+
+⚠ **Also untracked `v10.js` again.** It is generated, `.gitignore`s it, and the doctrine says never
+commit it — a stale committed copy once produced a green suite testing a panel 42 versions behind.
+It had crept back into the index and my own mutation run left it holding the PREVIOUS version, which
+is exactly how that failure starts. Not in any installer payload; the builder manifest excludes it.
+
+## v14.79 — the 0DTE walls and the flip join the export; kings go solid
+
+> "put the CW0 and PW0 and the Flip0 that you are getting from inside finance in the irt export …
+> Make the king lines solid. make the 0 dte levels dotted instead and they should be red and green.
+> Put wall should be green, call wall should be red, flip can be purple."
+
+**Three new rows on every configured symbol**, read from `ifLadder()`'s own `rows[]` — the same array
+the rail draws, with `disp` already in chart space, so nothing is re-derived in the exporter
+(DECISIONS v13.2, the rule this file broke twice today):
+
+    CW0     call wall, 0DTE      RED     dotted
+    PW0     put wall, 0DTE       GREEN   dotted
+    FLIP0*  zero gamma, 0DTE     PURPLE  dotted
+    SPXW / SPY KING              SOLID   (SPY was dashed)
+
+⚠⚠ **THE FLIP IS NOT ALWAYS A 0DTE NUMBER, AND THE LABEL SAYS WHICH.** InsiderFinance's published
+Zero Gamma is **ALL-EXPIRY** (`INSIDERFINANCE.md` §4). Labelling that `FLIP0` would claim 0DTE for a
+number that is not — failure pattern #1, the oldest defect in this project. So: a genuine 0DTE flip
+is computed from `dte0.gf` and ships as **`FLIP0*`** (asterisk = derived, the convention `MP*`
+already uses); when only their all-expiry figure exists, the row is plain **`FLIP`** and makes no
+0DTE claim. `i8`/`i9` assert both branches.
+
+⚠ **A ban list had to be reversed, deliberately:** `5e` asserted `FLIP` must never appear in the
+file — correct when the export was Kings-only, wrong now that he has asked for it. Recorded rather
+than quietly deleted.
+
+⚠ **And "every source dark" needed the IF ladder added to it** — third time this session an
+existing assertion silently stopped covering the newest rows.
+
+Five mutations run individually (colours swapped, style solid, kings dashed, flip mislabelled 0DTE,
+flip colour changed) — all five fail correctly. `test_irt_export` 94 → **106**; suite 122 green.
+
+## v14.78 — the grant button, third attempt: delegated, and the gesture kept alive
+
+> "i clicked it and it does nothing" (twice)
+
+**Two bugs, and the second would have survived the fix for the first.**
+
+1. **The listener was bound to a node the panel replaces.** v14.76 queried `elBody` (wrong root,
+   null lookup, swallowed by `if(irtG)`). v14.77 queried `elCfg` — correct root, still dead, because
+   the config panel RE-RENDERS and the node the listener was attached to is thrown away. Measured on
+   the live panel: `document.querySelectorAll('.gpts-cfg').length === 0` while the button was on
+   screen. Now it is **delegated on `document` in the capture phase**, installed once, re-render-proof.
+2. ⚠⚠ **USER ACTIVATION IS SPENT ASYNCHRONOUSLY.** `irtGrantFolder` read the directory handle from
+   IndexedDB and called `requestPermission()` in the callback — by then the gesture is gone and
+   Chrome rejects with `NotAllowedError`. That is the v14.53 timer lesson wearing a different hat.
+   The handle is now **cached at boot** and the permission is requested **synchronously inside the
+   click**.
+
+⚠ **THE TESTS WERE WRONG TWICE, IN THE SAME WAY.** `g8` asserted a literal `addEventListener('click',
+function(){ irtGrantFolder(); })` — it passed while the button did nothing, twice, because it tested
+the SPELLING of the binding rather than whether a click arrives. `g10` compared string positions and
+stayed green with the cached path disabled. Both execute now: `g10` calls the handler with a cached
+handle and asserts **IndexedDB is never touched**, which is the thing that preserves activation.
+
+Suite 122 green / 6 baseline red; `test_irt_export` 90 → 94.
+
 ## v14.77 — the grant button was wired to the wrong root and did nothing
 
 > "im clicking on grant and it doesnt do anything"

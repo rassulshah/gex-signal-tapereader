@@ -31,7 +31,14 @@ global.FUTMODE={ fam:'ES', r:10.0538, live:true };
 global.ctTodayStr=()=>'2026-08-27';
 
 // ---- sources, stubbed ----
-global.ifLadder=()=>({ dispScale:1.0023 });
+let IFL_ROWS=[{id:'CR0', k:7750, disp:7767.83, und:773.2},
+               {id:'PS0', k:7650, disp:7667.60, und:763.2},
+               {id:'FLIP', k:7700, disp:7717.71, und:768.2},
+               {id:'Mag', k:7710, disp:7727.74, und:769.2}];
+global.ifLadder=(sym)=>({ dispScale:1.0023, rows:IFL_ROWS, err:null,
+                          srcSym:(sym==='QQQ'?'QQQ':'SPX') });   // srcSym is real: ifLadder returns it
+let IF_CHAIN={ dte0:{ gf:{ flip:7695 } } };
+global.ifChain=()=>IF_CHAIN;
 const SPXW_TAPE=()=>({ king:7710, pct:{ '7710.00':100, '7630.00':85, '7650.00':41 } });
 let QQQ_TAPE=()=>({ king:650, count:20, fromFeed:false, pct:{ '650.00':-100, '648.00':44 } });
 global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():SPXW_TAPE());
@@ -48,11 +55,14 @@ ok(lines[0]==='SYMBOL,PRICE,LABEL,PENCOLOR,PENWIDTH,PENSTYLE,bDRAWTEXT,bDRAWPRIC
 // (v14.75) 2 king rows × 2 configured symbols (EPU26 + ETF SPY) + the NQ king + the QQQ king
 // PROJECTED onto EPU26. The projection is counted with the NQ side because it is the same King in a
 // second coordinate system, not a fourth King.
-ok(b.n===4 && lines.length===1+2*2+2, '1b n=4 (3 kings + the ES projection); rows = 2×2 syms + NQ + projection', [b.n,lines.length]);
+// (v14.79) the 0DTE trio (CW0 · PW0 · FLIP0) rides EVERY configured target, like the kings do.
+// rows[] = 2 kings + 3 IF levels = 5, x 2 target symbols = 10, + the NQ king + the ES projection.
+ok(b.n===7 && lines.length===1+5*2+2,
+   '1b n=7 (2 kings + 3 IF levels + NQ king + ES projection); rows = 5x2 syms + 2', [b.n,lines.length]);
 const eRows=lines.filter(l=>l.startsWith('EPU26,'));
 const qRows=lines.filter(l=>l.startsWith('ENQU26,'));
-ok(eRows.length===3 && qRows.length===1,
-   '1c EPU26 carries SPXW + SPY + the projected QQQ; ENQU26 carries the native QQQ', [eRows.length,qRows.length]);
+ok(eRows.length===6 && qRows.length===1,
+   '1c EPU26 carries SPXW + SPY + CW0 + PW0 + FLIP + the projected QQQ; ENQU26 the native QQQ', [eRows.length,qRows.length]);
 ok(eRows.filter(l=>/QQQ KING/.test(l)).length===1 && /,2,1,/.test(eRows.find(l=>/QQQ KING/.test(l))||''),
    '1c2 ...and the projection is DASHED (style 1), so it cannot pass for a native level at a glance');
 ok(lines.slice(1).every(l=>l.split(',').length===28), '1d every row keeps exactly 28 columns');
@@ -69,7 +79,7 @@ ok(kx && kx.split(',')[4]==='3', '2d drawn heaviest');
   const Bc=irtBuildCsv(); const kc=Bc.csv.split('\r\n').find(l=>/SPXW KING/.test(l)&&l.startsWith('EPU26,'));
   ok(kc && Math.abs(parseFloat(kc.split(',')[1]) - 7733.9) <= 0.25, '2e on the SPXW CASH chart the king goes SPX→SPY→ES, never raw SPX', kc&&kc.split(',')[1]);
   global.FUTMODE={ fam:'ES', r:10.0538, live:true };
-  global.ifLadder=()=>({ dispScale:1.0023 }); }
+  global.ifLadder=()=>({ dispScale:1.0023, rows:IFL_ROWS, err:null }); }
 { // the LATCHED crown exports, not a mid-flap blip (the v14.19 lesson)
   const T2=()=>({ king:7700, pct:{ '7700.00':-100, '7710.00':96 } });   // crown just flipped
   global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():T2());
@@ -124,6 +134,58 @@ ok(kq.split(',')[3]===String((163<<16)+(113<<8)+247), '4d a negative QQQ crown w
   ok(/ENQU26/.test(csvF), '4f a feed-sourced QQQ King is now WRITTEN, not refused (v14.15 reversed)');
   ok(/via feed/.test(IRT_LAST.nqWhy||''), '4f2 ...and the export records that it came from the feed', IRT_LAST.nqWhy);
   QQQ_TAPE=keep; }
+// ---------- 4i. THE 0DTE LEVELS FROM INSIDERFINANCE (v14.79) ----------
+// Operator: "put the CW0 and PW0 and the Flip0 ... make the 0 dte levels dotted ... Put wall should
+// be green, call wall should be red, flip can be purple." ⚠ Read from ifLadder's OWN rows — the
+// array the rail draws — never re-derived here.
+{
+  const B=irtBuildCsv(); const L=B.csv.split('\r\n').filter(l=>/^EPU26/.test(l));
+  const row=(name)=>L.find(l=>l.split(',')[2].indexOf(name)===0);
+  const cw=row('CW0'), pw=row('PW0'), fl=L.find(l=>/FLIP/.test(l.split(',')[2]));
+  ok(!!cw && !!pw, 'i1 CW0 and PW0 are exported', [!!cw,!!pw]);
+  ok(cw && cw.split(',')[3]===String((240<<16)+(97<<8)+109), 'i2 the CALL wall is RED', cw&&cw.split(',')[3]);
+  ok(pw && pw.split(',')[3]===String((46<<16)+(194<<8)+126), 'i3 the PUT wall is GREEN', pw&&pw.split(',')[3]);
+  ok(fl && fl.split(',')[3]===String((163<<16)+(113<<8)+247), 'i4 the FLIP is PURPLE', fl&&fl.split(',')[3]);
+  ok(cw && cw.split(',')[5]==='2' && pw.split(',')[5]==='2' && fl.split(',')[5]==='2',
+     'i5 all three 0DTE lines are DOTTED (PENSTYLE 2)', [cw&&cw.split(',')[5], pw&&pw.split(',')[5], fl&&fl.split(',')[5]]);
+  // ⚠ THE KINGS ARE SOLID — "Make the king lines solid". A style that says "king" must not also say
+  // "0DTE wall"; the two families are told apart by the line, not only by the label.
+  const kings=L.filter(l=>/KING/.test(l.split(',')[2]) && !/QQQ/.test(l.split(',')[2]));
+  ok(kings.length>=2 && kings.every(l=>l.split(',')[5]==='0'),
+     'i6 the SPXW and SPY Kings are SOLID (PENSTYLE 0)', kings.map(l=>l.split(',')[2]+':'+l.split(',')[5]));
+  // the price comes from ifLadder's own `disp`, converted back through the SAME ratio the loop applies
+  const R=irtRatio().r;
+  ok(cw && Math.abs(parseFloat(cw.split(',')[1]) - Math.round((7767.83/R*R)/0.25)*0.25) <= 0.25,
+     'i7 CW0 lands on ifLadder\'s own disp price, on the 0.25 tick', cw&&cw.split(',')[1]);
+  // ⚠⚠ THE FLIP ROW IS THE 0DTE FLIP, AND ONLY THAT (v14.80). Operator, 2026-08-28: "the flip 0dte
+  // is displayed when 0dte is selected just like how you get the walls for 0 dte." The companion
+  // fetches their page with NO expiry filter, so `pub.zeroGamma` is their ALL-EXPIRY view; the 0DTE
+  // flip is `dte0.gf.flip` — their contracts, front expiry only, exactly like CW0/PW0. Plain FLIP0,
+  // no asterisk, because CR0/PS0 carry none and the provenance is identical.
+  ok(fl && fl.split(',')[2].split(' ')[0]==='FLIP0',
+     'i8 the flip is labelled FLIP0 — same provenance as CW0/PW0, no asterisk', fl&&fl.split(',')[2]);
+  // 7695 (dte0.gf.flip) x 1.0023 = 7712.70 -> 7712.75 on the tick. The ladder's ALL-EXPIRY FLIP row
+  // sits at disp 7717.71, five points away — so this assertion tells the two sources apart by PRICE,
+  // not merely by label, which is the failure the operator caught.
+  ok(fl && parseFloat(fl.split(',')[1])===7712.75,
+     'i8b ...and its price is dte0.gf.flip x dispScale (7712.75), NOT the ladder\'s all-expiry 7717.71',
+     fl&&fl.split(',')[1]);
+  // ⚠⚠ NO ALL-EXPIRY FALLBACK — his call, asked and answered 2026-08-28: "draw nothing". A purple
+  // dotted line answering a DIFFERENT question cannot be told from this one at a glance.
+  { const keep=IF_CHAIN; IF_CHAIN={};                       // no 0DTE flip available
+    const B2=irtBuildCsv();
+    ok(!/FLIP/.test(B2.csv),
+       'i9 no 0DTE flip -> NO flip row at all; their all-expiry zero gamma is never substituted',
+       (B2.csv.split('\r\n').find(l=>/FLIP/.test(l))||'(absent)'));
+    ok(/no dte0 gamma flip/.test(IRT_LAST.ifWhy||''), 'i9b ...and the export says so', IRT_LAST.ifWhy);
+    IF_CHAIN=keep; }
+  { const keep=IFL_ROWS; IFL_ROWS=[];
+    const B3=irtBuildCsv();
+    ok(!/CW0|PW0/.test(B3.csv), 'i10 no IF ladder -> no 0DTE rows invented');
+    ok(/no IF ladder|0DTE from/.test(IRT_LAST.ifWhy||''), 'i11 ...and the export says why', IRT_LAST.ifWhy);
+    IFL_ROWS=keep; }
+}
+
 // ---------- 4p. THE QQQ KING ON ES — READ FROM THE RAIL, NOT RECOMPUTED (v14.75) ----------
 // The operator pointed at his own panel: "my tapereader app shows the qqq king" — `~7721 QQQ` in the
 // price chute. ⚠ The export must write THAT number. A second computation, however well argued, puts
@@ -238,7 +300,12 @@ ok(!/IF /.test(b.csv), '5a the IF walls are out of the file');
 ok(!/SUCC/.test(b.csv), '5b SUCC is out');
 ok(!/SPXW (BRK|ACC|GK|RRUG|RUG|BAL)/.test(b.csv), '5c the rail percentage rows are out');
 ok(!/SPY \d+%/.test(b.csv) && !/QQQ \d+%/.test(b.csv), '5d the SPY/QQQ percentage rows are out');
-ok(!/NextStop|PBentry|FLIP|D-SPY/.test(b.csv), '5e and none of the long-dead lanes returned');
+// ⚠ (v14.79) FLIP LEFT THIS BAN LIST DELIBERATELY. The operator asked for it: "put the CW0 and PW0
+// and the Flip0 that you are getting from inside finance in the irt export". The ban existed because
+// the export was Kings-only and a stray lane meant a leak; a level he asked for is not a leak.
+// The others stay banned — they were removed for cause and nothing has asked for them back.
+ok(!/NextStop|PBentry|D-SPY/.test(b.csv), '5e and none of the long-dead lanes returned');
+ok(/FLIP/.test(b.csv), '5e2 ...while the FLIP is now IN, by request');
 
 // ---------- 6. resilience: any king alone still writes; all dark writes nothing ----------
 // ⚠ (v14.74) EVERY "a dark source writes nothing" CASE MUST CLEAR THE LATCH FIRST, or it silently
@@ -260,11 +327,14 @@ ok(!/NextStop|PBentry|FLIP|D-SPY/.test(b.csv), '5e and none of the long-dead lan
   const keep6=QQQ_TAPE;
   // ⚠ (v14.75) the RAIL's bearing is a source too — "every source dark" now has to include it, or
   // this assertion silently tests everything except the newest row.
+  // ⚠ (v14.79) the IF ladder is a source too — "every source dark" must include it, or this
+  // assertion quietly tests everything except the newest rows. Third time this pattern has bitten.
   global.tapeMap=()=>null; QQQ_TAPE=()=>null; global.ladderFor=()=>null;
+  const keepIFL=IFL_ROWS; IFL_ROWS=[];
   delete LS[IRT_QQQK_KEY]; delete LS[IRT_KINGS_KEY];
   const keepRail=RAIL_QQQ; RAIL_QQQ=null;
   ok(irtBuildCsv()==null, '6c every source dark AND nothing latched → nothing is written, never an empty confident file');
-  RAIL_QQQ=keepRail;
+  RAIL_QQQ=keepRail; IFL_ROWS=keepIFL;
   QQQ_TAPE=keep6; global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():SPXW_TAPE());
 let QQQ_LADDER=()=>null;                      // (v14.73) the face's array; null = fall through to the tape
 global.ladderFor=(s)=>(s==='QQQ'?QQQ_LADDER():null);
@@ -442,7 +512,7 @@ ok(/CFG\.irt\.nqRatio=o\.irt\.nqRatio/.test(src), '7h ...and the NQ fields persi
   let asked=null, exported=0;
   global.renderCfg=()=>{};
   global.irtExportNow=()=>{ exported++; };
-  const mk=(state, handle)=>{ asked=null;
+  const mk=(state, handle)=>{ asked=null; global.IRT_DIR_H=null;   // (v14.78) a fresh load has no cached handle
     global.repoKvGet=(k,cb)=>cb(handle===undefined
       ? { requestPermission:(o)=>{ asked=o&&o.mode; return sync(state); } }
       : handle); };
@@ -466,17 +536,40 @@ ok(/CFG\.irt\.nqRatio=o\.irt\.nqRatio/.test(src), '7h ...and the NQ fields persi
   const CFGSRC = src.slice(src.indexOf('gpts-irt-grant')-200, src.indexOf('gpts-irt-grant')+900);
   ok(/Allow on every visit/.test(CFGSRC),
      'g7 the hover tells him the exact Chrome option that makes the grant permanent');
-  ok(/addEventListener\('click', function\(\)\{ irtGrantFolder\(\); \}\)/.test(src),
-     'g8 ...and it is wired to a CLICK — the only context where requestPermission can succeed');
+  // ⚠ g8 USED TO ASSERT A LITERAL BINDING and passed while the button did nothing, twice. What
+  // matters is that a CLICK reaches irtGrantFolder — by delegation — not how it is spelled.
+  ok(/gpts-irt-grant[\s\S]{0,80}irtGrantFolder\(\)/.test(src),
+     'g8 a click on the grant reaches irtGrantFolder');
   // ⚠⚠ WIRED TO THE RIGHT ROOT. v14.76 queried elBody while the config panel renders into
   // `.gpts-cfg` (elCfg), so the lookup returned null, `if(irtG)` swallowed it, and the button did
   // NOTHING with no error. Every other control in that block uses elCfg. Assert the ROOT, not just
   // the listener — "it is wired" was true and useless.
+  // ⚠⚠ (v14.78) DELEGATED, NOT BOUND — and this assertion replaces one that was WRONG TWICE.
+  // v14.76 bound to elBody (null lookup, silent). v14.77 bound to elCfg and STILL did nothing: the
+  // panel re-renders, and the node the listener was attached to is replaced. Asserting "it is bound
+  // to the right container" was asserting the wrong property entirely — the requirement is that a
+  // click ANYWHERE on that class reaches the handler, forever.
+  ok(/document\.addEventListener\('click'[\s\S]{0,240}gpts-irt-grant/.test(src),
+     'g8b the grant is DELEGATED on document, so a re-render cannot detach it');
+  ok(/closest\('\.gpts-irt-grant'\)/.test(src),
+     'g8c ...matching by closest(), so a click on the label inside the span still counts');
+  // ⚠ USER ACTIVATION: requestPermission must run INSIDE the gesture. Reading the handle from
+  // IndexedDB first spends the activation and Chrome rejects — the v14.53 lesson in a new costume.
+  // ⚠ EXECUTED. The first version compared string POSITIONS in the source, so disabling the cached
+  // branch with `if(false)` left it green — it was testing the order of two words, not behaviour.
   {
-    const w=src.slice(src.indexOf("querySelector('.gpts-irt-grant')")-40, src.indexOf("querySelector('.gpts-irt-grant')")+40);
-    ok(/elCfg\.querySelector\('\.gpts-irt-grant'\)/.test(w),
-       'g8b ...from elCfg, the root the config panel actually renders into', w.trim());
+    let kvCalls=0;
+    global.repoKvGet=(k,cb)=>{ kvCalls++; cb(null); };
+    global.IRT_DIR_H={ requestPermission:(o)=>{ asked=o&&o.mode; return sync('granted'); } };
+    const before=exported;
+    irtGrantFolder();
+    ok(kvCalls===0,
+       'g10 with a cached handle the permission is asked SYNCHRONOUSLY — IndexedDB is never touched, so the click keeps its user activation', kvCalls);
+    ok(asked==='readwrite' && exported===before+1, 'g10b ...and the granted path still writes the file');
+    global.IRT_DIR_H=null;
   }
+  ok(/var IRT_DIR_H=null;[\s\S]{0,200}repoKvGet\('irtDir'/.test(src),
+     'g11 ...and the handle is cached at boot, not fetched when the button is pressed');
   ok(!/setInterval[\s\S]{0,200}irtGrantFolder/.test(src),
      'g9 ...and is never called from a timer, where it would reject and be swallowed (the v14.53 lesson)');
 }
