@@ -1,3 +1,31 @@
+## v14.74 — every King latches, because a partial file deletes levels
+
+**Measured on his machine at 14:00 CT:** `FlexLevelsExport.csv` held **one data row** — the QQQ King —
+while the SPXW and SPY Kings were simply absent. `IRT_LAST.rows=1` agreed, a build seconds later
+produced all three, and every input was healthy (dispScale 1.0015, SPXW tape 100 strikes, SPY ladder
+769). One degraded tick — a SPY feed outside its 36-second window, or the ES ratio momentarily
+unresolved — writes a file **without** those rows.
+
+⚠ **The QQQ row survived that tick because v14.73 had just given it a latch. The two without one did
+not.** The fix argued for itself.
+
+- **`irtKingLatch` / `irtKingHeld`** — every King is remembered for the session day and re-emitted
+  when its reader blinks, with `IRT_LAST.spxWhy` / `spyWhy` / `nqWhy` reporting `live` or `held Nm`.
+- ⚠ **Day-scoped, deliberately.** A held King from this session is a level that existed minutes ago;
+  yesterday's is a different book.
+- ⚠ **A REVERSED ASSERTION, and the reason:** `3d` used to demand that a stale SPY feed export **no**
+  SPY King — *"absent, never old"*. That rule is right for a READING and wrong for a LEVEL. Over the
+  polling HTTP server the old behaviour would have **erased his ES levels mid-session**; on `file://`
+  it left orphans instead, which is how it stayed invisible.
+- **Quarter points, on the held path too** — the operator: *"remember that es is in 1/4 pt … also the
+  nq"*. Held Kings re-enter through the same `irtRound(px, 0.25)`, and it is now asserted for ES and
+  NQ. ⚠ The first version of that assertion failed on the cash-SPY ETF row: cents, not quarters —
+  asserting one instrument's tick rules on another is this project's oldest defect in miniature.
+
+Tests: `test_irt_export` 64 → **70**. ⚠ Two of the new assertions had to be tightened after mutation
+testing showed they could not fail: one counted rows instead of naming them (it passed with the SPXW
+hold deleted), and nothing covered the day boundary. Both fire now.
+
 ## v14.73 — the export now writes the King the FACE is showing
 
 > "this is so strange because you show the qqq king in the tapereader app so you know the level"

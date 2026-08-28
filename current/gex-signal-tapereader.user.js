@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.73
+// @version    14.74
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.73';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.74';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4275,7 +4275,7 @@ function irtBuildCsv(){
   var targets=[];
   if(futSym && R.r>1) targets.push({sym:futSym, mul:R.r, tick:0.25, tag:R.live?'':' ~'});
   if(etfSym) targets.push({sym:etfSym, mul:1, tick:0, tag:''});
-  var rows=[];
+  var rows=[], spxDone=false, spyDone=false;
   // ---- 1) SPXW KING (the latched crown), chart-frame independent, in SPY row-space -------------
   try{
     var Lx=null; try{ Lx=ifLadder(sym); }catch(eL2){}
@@ -4292,8 +4292,18 @@ function irtBuildCsv(){
       else kSpyX=(kK*Lx.dispScale)/R.r;
       rows.push({ k:kSpyX, lbl:'SPXW KING',
                   col:(sgX<0)?IRT_COLORS.accp:IRT_COLORS.brk, w:3, style:0 });
+      irtKingLatch('SPXW', kSpyX, sgX);
+      spxDone=true;
     }
   }catch(eSPX){}
+  // (v14.74) HOLD rather than DROP. See the latch comment above: the alternative is a file that
+  // silently loses a level the operator is trading against.
+  if(!spxDone){
+    var HX=irtKingHeld('SPXW');
+    if(HX){ rows.push({ k:HX.k, lbl:'SPXW KING', col:(HX.pct<0)?IRT_COLORS.accp:IRT_COLORS.brk, w:3, style:0 });
+            try{ IRT_LAST.spxWhy='held '+HX.ageMin+'m'; }catch(eH1){} }
+    else { try{ IRT_LAST.spxWhy='no tape and nothing latched today'; }catch(eH2){} }
+  } else { try{ IRT_LAST.spxWhy='live'; }catch(eH3){} }
   // ---- 2) SPY KING — from the self-fetched book, always fresh (v14.19 guarantee) ---------------
   try{
     if(typeof LASTFEED!=='undefined'){
@@ -4304,10 +4314,18 @@ function irtBuildCsv(){
           var sgK=1; try{ (ewK.walls||[]).forEach(function(wK){ if(wK.k===ewK.king && wK.pos===false) sgK=-1; }); }catch(eSg2){}
           rows.push({ k:ewK.king, lbl:'SPY KING',
                       col:(sgK<0)?IRT_COLORS.splp:IRT_COLORS.sply, w:2, style:1 });
+          irtKingLatch('SPY', ewK.king, sgK);
+          spyDone=true;
         }
       }
     }
   }catch(eKG){}
+  if(!spyDone){
+    var HY=irtKingHeld('SPY');
+    if(HY){ rows.push({ k:HY.k, lbl:'SPY KING', col:(HY.pct<0)?IRT_COLORS.splp:IRT_COLORS.sply, w:2, style:1 });
+            try{ IRT_LAST.spyWhy='held '+HY.ageMin+'m'; }catch(eH4){} }
+    else { try{ IRT_LAST.spyWhy='no fresh SPY feed and nothing latched today'; }catch(eH5){} }
+  } else { try{ IRT_LAST.spyWhy='live'; }catch(eH6){} }
   // ES/ETF target expansion (SPXW King then SPY King)
   targets.forEach(function(T2){
     rows.forEach(function(R2){ out.push(irtCsvRow(T2.sym, irtRound(R2.k*T2.mul, T2.tick), R2.lbl+T2.tag, R2.col, R2.w, R2.style)); });
@@ -4363,6 +4381,39 @@ function irtBuildCsv(){
 // no King" from "the panel blinked". A level held from earlier in the session is honest as long as
 // it SAYS it is held; a level that silently disappears is not.
 var IRT_QQQK_KEY='gpts_irt_qqqking_v1';
+// (v14.74) THE SAME LATCH, FOR EVERY KING — and today's file is why.
+// ⚠⚠ MEASURED 2026-08-28 14:00 CT on the operator's own machine: FlexLevelsExport.csv contained
+// ONE data row, the QQQ King, while the SPXW and SPY Kings were absent. The panel's own record
+// agreed (`IRT_LAST.rows=1`), and a build seconds later produced all three. The inputs were healthy
+// throughout — dispScale 1.0015, SPXW tape 100 strikes, SPY ladder 769 — so the loss was transient:
+// one degraded tick (a stale SPY feed inside its 36s window, or the ES ratio momentarily unresolved)
+// writes a file WITHOUT those rows, and every consumer then believes the levels are gone.
+// ⚠ THE QQQ ROW SURVIVED THAT TICK BECAUSE IT HAD A LATCH. The two without one did not. That is the
+// whole argument for this code.
+// ⚠ On `file://` IRT never re-read, so the operator saw ORPHANED lines — stale but present. Over
+// the HTTP server, which does poll, the same write would have ERASED his ES levels mid-session.
+// A partial file is worse than a late one: nothing distinguishes "this level is gone" from
+// "the panel blinked".
+var IRT_KINGS_KEY='gpts_irt_kings_v1';
+function irtKingLatch(name, k, pct){
+  try{
+    if(typeof k!=='number' || !isFinite(k)) return;
+    var o={}; try{ o=JSON.parse(localStorage.getItem(IRT_KINGS_KEY)||'{}')||{}; }catch(e0){}
+    if(o.day!==ctTodayStr()){ o={ day:ctTodayStr() }; }
+    o[name]={ k:k, pct:(typeof pct==='number'?pct:0), t:Date.now() };
+    localStorage.setItem(IRT_KINGS_KEY, JSON.stringify(o));
+  }catch(e){}
+}
+// ⚠ DAY-SCOPED, DELIBERATELY. Yesterday's King is not a level, it is a memory of one — and this
+// project's own rule is that absence of data must never render as data. A held King from THIS
+// session is a level that existed minutes ago; one from yesterday is a different book.
+function irtKingHeld(name){
+  try{
+    var o=JSON.parse(localStorage.getItem(IRT_KINGS_KEY)||'null');
+    if(!o || o.day!==ctTodayStr() || !o[name] || typeof o[name].k!=='number') return null;
+    return { k:o[name].k, pct:o[name].pct||0, ageMin:Math.round((Date.now()-(o[name].t||0))/60000) };
+  }catch(e){ return null; }
+}
 function irtQqqKing(){
   var out={ k:null, pct:0, src:null, why:'' };
   try{
@@ -4373,6 +4424,7 @@ function irtQqqKing(){
                     if(typeof v==='number') p=v; }catch(e2){}
       out.k=L.king; out.pct=p; out.src=(L.src||'ladder');
       try{ localStorage.setItem(IRT_QQQK_KEY, JSON.stringify({k:out.k, pct:p, day:ctTodayStr(), t:Date.now()})); }catch(e3){}
+      irtKingLatch('QQQ', out.k, p);
       return out;
     }
     // 2 — the tape reader, which may hand back a feed-sourced map. ⚠ ACCEPTED HERE, unlike v14.15:

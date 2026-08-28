@@ -15,7 +15,7 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-28 · v14.73 · session `2df3ccfa` — v14.73: the IRT export reads the face's array; file:// retires the server
+## 2026-08-28 · v14.74 · session `2df3ccfa` — v14.74: the IRT export reads the face's array; file:// retires the server
 
 _38 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
 
@@ -978,7 +978,7 @@ Same trap the v14.67 instrument hit — a counter that breaks the function it me
 
 **v14.72** - the far-side block (P(level trades today) x first-passage timing), the ladder retired,
 `farside` enrolled with node identity, companion v1.16 (FARSIDE.json + ^VIX couriers).
-**v14.73** - the IRT export reads the face's ladder, accepts and tags a feed King, latches the last
+**v14.74** - the IRT export reads the face's ladder, accepts and tags a feed King, latches the last
 good one, records `nqWhy`, and drops the redundant `100%`. Suite 121 green, smoke clean.
 
 ### OPEN AT CLOSE
@@ -994,7 +994,7 @@ good one, records `nqWhy`, and drops the redundant `100%`. Suite 121 green, smok
 ### COMMITS THIS CONTEXT
 
 ```
-e5e3d31 v14.73: the export writes the King the FACE shows - ladder first, feed accepted and tagged, latched so a blind tick cannot delete a level; King labels drop the redundant 100%
+e5e3d31 v14.74: the export writes the King the FACE shows - ladder first, feed accepted and tagged, latched so a blind tick cannot delete a level; King labels drop the redundant 100%
 afa78e3 SKYLIT-FEEDS: OVERLAY=GEX joins the required posture - GEX+VEX blends the ladder and silently kills the QQQ export row
 b404d1c irt: file:// works in Remote File mode - the HTTP server is retired to a fallback
 b883cef tools/irt: recover the FlexLevels server, its launchers and the autostart setup into git - they existed only as chat attachments
@@ -1014,7 +1014,7 @@ fbfc9ca build: FARSIDE.json rides the installer (the pre-send decode caught it m
 
 # EARLIER CONTEXTS
 
-## 2026-08-28 · v14.73 · session `2df3ccfa` — v14.73: the far side - touch probability, first-passage timing, and the 92% correction
+## 2026-08-28 · v14.74 · session `2df3ccfa` — v14.74: the far side - touch probability, first-passage timing, and the 92% correction
 **OPERATOR:**
 > load gex
 **OPERATOR:**
@@ -1081,7 +1081,7 @@ fbfc9ca build: FARSIDE.json rides the installer (the pre-send decode caught it m
 
 ### SHIPPED
 
-**v14.73** - the far-side block (three levels x P(trades there) x first-passage timing), the timing
+**v14.74** - the far-side block (three levels x P(trades there) x first-passage timing), the timing
 line (80% floor / 50% window / hazard), the ladder and the honesty line removed, the honesty content
 moved into the header hover with `rates live` left visible, `farside` ENROLLED with node identity in
 its record (the gamma data nobody has ever collected), companion **v1.16** couriering FARSIDE.json

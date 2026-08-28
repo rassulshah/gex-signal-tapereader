@@ -17,8 +17,8 @@ eval(['irtColor'].map(ex).join('\n')); eval(v('IRT_COLORS'));
 eval(v('IRT_RATIO_KEY')); eval(v('IRT_NQRATIO_KEY'));
 eval(v('KING_LATCH_KEY'));
 eval(src.match(/var KING_LATCH_MS=\d+/)[0]+';');   // trailing comment defeats the v() grab
-eval(v('IRT_QQQK_KEY'));
-eval(['irtRound','irtCsvRow','irtRatio','irtNqRatio','kingLatchTick','irtQqqKing','irtBuildCsv'].map(ex).join('\n'));
+eval(v('IRT_QQQK_KEY')); eval(v('IRT_KINGS_KEY'));
+eval(['irtRound','irtCsvRow','irtRatio','irtNqRatio','kingLatchTick','irtKingLatch','irtKingHeld','irtQqqKing','irtBuildCsv'].map(ex).join('\n'));
 global.ES_RATIO=10.05; global.NQ_RATIO=41.36; global.FEED_STALE_MS=12000;
 var LS={}; global.localStorage={ getItem:k=>(k in LS?LS[k]:null), setItem:(k,val)=>{LS[k]=String(val);} };
 global.CFG={ nodeThresh:20, irt:{ on:true, secs:180, futSym:'EPU26', etfSym:'SPY', file:'FlexLevelsExport.csv',
@@ -73,9 +73,24 @@ const ky=eRows.find(l=>/SPY KING/.test(l));
 ok(!!ky, '3a SPY KING present — "i must always have the spy and spxw king"');
 ok(ky && Math.abs(parseFloat(ky.split(',')[1]) - 765*10.0538) <= 0.25, '3b SPY 765 × the ES ratio, on the tick', ky&&ky.split(',')[1]);
 ok(ky && ky.split(',')[3]===String((205<<16)+(180<<8)+250), '3c a negative SPY crown wears the LIGHT purple', ky&&ky.split(',')[3]);
-{ global.LASTFEED={ SPY:{ ts:Date.now()-999999, j:{} } };
-  const Bs=irtBuildCsv();
-  ok(!/SPY KING/.test(Bs.csv), '3d a stale SPY feed exports NO SPY king — absent, never old');
+// ⚠⚠ (v14.74) THIS ASSERTION IS REVERSED, and the operator's own file is the reason.
+// It used to demand that a stale SPY feed export NO SPY king — "absent, never old". Measured on his
+// machine 2026-08-28: FlexLevelsExport.csv held ONE row (the QQQ King) while SPXW and SPY were gone,
+// because one degraded tick wrote a file without them. Over the polling HTTP server that DELETES the
+// levels from his chart mid-session. "Absent, never old" is right for a READING; it is wrong for a
+// LEVEL, which does not stop existing because a feed blinked. The King is now HELD for the session
+// day and the hold is reported in IRT_LAST.spyWhy.
+{ delete LS[IRT_KINGS_KEY];
+  global.LASTFEED={ SPY:{ ts:Date.now()-999999, j:{} } };
+  const Bs0=irtBuildCsv();
+  ok(!/SPY KING/.test(Bs0.csv), '3d a stale SPY feed with NOTHING latched exports no SPY king');
+  global.LASTFEED={ SPY:{ ts:Date.now(), j:{} } };
+  irtBuildCsv();                                      // one good tick seeds the latch
+  global.LASTFEED={ SPY:{ ts:Date.now()-999999, j:{} } };
+  const Bs1=irtBuildCsv();
+  ok(/SPY KING/.test(Bs1.csv),
+     '3d2 ...but once seen today it is HELD through a stale tick — a level does not vanish because a feed blinked');
+  ok(/held/.test(IRT_LAST.spyWhy||''), '3d3 ...and the export says it is held, not live', IRT_LAST.spyWhy);
   global.LASTFEED={ SPY:{ ts:Date.now(), j:{} } }; }
 
 // ---------- 4. the QQQ king ----------
@@ -100,6 +115,45 @@ ok(kq.split(',')[3]===String((163<<16)+(113<<8)+247), '4d a negative QQQ crown w
   ok(/ENQU26/.test(csvF), '4f a feed-sourced QQQ King is now WRITTEN, not refused (v14.15 reversed)');
   ok(/via feed/.test(IRT_LAST.nqWhy||''), '4f2 ...and the export records that it came from the feed', IRT_LAST.nqWhy);
   QQQ_TAPE=keep; }
+// ---------- 4x. ⚠ ES AND NQ TRADE IN QUARTER POINTS — INCLUDING A HELD KING ----------
+// The operator, 2026-08-28: "remember that es is in 1/4 pt". The live path has rounded to the tick
+// since v14.x; the HOLD path is new, and a latched King re-enters through the same conversion, so it
+// must land on the same grid. A level at 7726.63 is not a price anyone can trade against.
+{ delete LS[IRT_KINGS_KEY];
+  const Bgood=irtBuildCsv();                                   // one good tick seeds every King
+  // ⚠ FUTURES ROWS ONLY. The ETF target (cash SPY/QQQ) trades in cents and is written with tick 0 —
+  // asserting a 0.25 grid on it would be asserting the wrong instrument's rules, which is this
+  // project's oldest defect in miniature. ES and NQ are the quarter-point instruments.
+  const isFut=(l)=>/^E(PU|NQU)/.test(l);
+  ok(Bgood.csv.trim().split('\r\n').slice(1).filter(isFut).every(function(l){
+       const px=parseFloat(l.split(',')[1]);
+       return Math.abs(px/0.25 - Math.round(px/0.25)) < 1e-9;
+     }), '4x every LIVE ES/NQ row lands on the 0.25 tick');
+  const keepT=global.tapeMap, keepF=global.LASTFEED, keepQ=QQQ_TAPE, keepL=QQQ_LADDER;
+  global.tapeMap=()=>null; global.LASTFEED={ SPY:{ ts:Date.now()-999999, j:{} } };
+  QQQ_TAPE=()=>null; QQQ_LADDER=()=>null;                      // every reader blind: all three HELD
+  const Bheld=irtBuildCsv();
+  const heldRows=Bheld.csv.trim().split('\r\n').slice(1);
+  // ⚠ NAME EVERY KING. "at least three rows" passed with the SPXW hold deleted — a mutation proved
+  // it. An assertion that counts rows is not an assertion about WHICH rows.
+  ok(/SPXW KING/.test(Bheld.csv) && /SPY KING/.test(Bheld.csv) && /QQQ KING/.test(Bheld.csv),
+     '4x2 ...and a fully blind tick still writes ALL THREE Kings it saw today',
+     heldRows.map(l=>l.split(',')[2]));
+  // ⚠ AND NEVER ACROSS DAYS. A held King from this session is a level minutes old; one from
+  // yesterday is a different book. Same rule as the QQQ latch (q4).
+  { const stash=LS[IRT_KINGS_KEY];
+    const y=JSON.parse(stash); y.day='2026-08-26';
+    LS[IRT_KINGS_KEY]=JSON.stringify(y);
+    const Bstale=irtBuildCsv();
+    ok(!Bstale || (!/SPXW KING/.test(Bstale.csv) && !/SPY KING/.test(Bstale.csv)),
+       '4x2b yesterday\'s Kings are NOT held into today', Bstale && Bstale.csv.split('\r\n').length);
+    LS[IRT_KINGS_KEY]=stash; }
+  ok(heldRows.filter(isFut).every(function(l){
+       const px=parseFloat(l.split(',')[1]);
+       return Math.abs(px/0.25 - Math.round(px/0.25)) < 1e-9;
+     }), '4x3 ...with every HELD ES/NQ row on the 0.25 tick too — a held King is still a tradeable price');
+  global.tapeMap=keepT; global.LASTFEED=keepF; QQQ_TAPE=keepQ; QQQ_LADDER=keepL; }
+
 // ---------- 4g. the face's ladder OUTRANKS the tape (v13.2: one quantity, one source) ----------
 { const keepL=QQQ_LADDER, keepT=QQQ_TAPE;
   QQQ_LADDER=()=>({ king:660, count:100, src:'trinity', pct:{'660.00':100} });
@@ -132,7 +186,11 @@ ok(!/SPY \d+%/.test(b.csv) && !/QQQ \d+%/.test(b.csv), '5d the SPY/QQQ percentag
 ok(!/NextStop|PBentry|FLIP|D-SPY/.test(b.csv), '5e and none of the long-dead lanes returned');
 
 // ---------- 6. resilience: any king alone still writes; all dark writes nothing ----------
-{ global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():null); // SPXW tape dead
+// ⚠ (v14.74) EVERY "a dark source writes nothing" CASE MUST CLEAR THE LATCH FIRST, or it silently
+// tests the latch instead of the darkness — the same trap that hid inside 6b/6c when the QQQ latch
+// landed. The latch is the FEATURE here; these assertions are about what happens with nothing held.
+{ delete LS[IRT_KINGS_KEY];
+  global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():null); // SPXW tape dead
   const B1=irtBuildCsv();
   ok(!!B1 && !/SPXW KING/.test(B1.csv) && /SPY KING/.test(B1.csv) && /QQQ KING/.test(B1.csv), '6a SPXW dark → SPY + QQQ kings still write');
   global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():SPXW_TAPE()); }
@@ -141,11 +199,11 @@ ok(!/NextStop|PBentry|FLIP|D-SPY/.test(b.csv), '5e and none of the long-dead lan
   // earlier in the session the export SHOULD still write it — that is the whole point of the latch —
   // so "every source dark" now has to mean dark AND nothing held. Leaving the latch in place made
   // this assertion silently test the latch instead of the darkness.
-  delete LS[IRT_QQQK_KEY];
+  delete LS[IRT_QQQK_KEY]; delete LS[IRT_KINGS_KEY];
   const B2=irtBuildCsv();
   ok(!!B2 && /SPXW KING/.test(B2.csv) && !/SPY KING/.test(B2.csv) && !/ENQU26/.test(B2.csv), '6b only the SPXW king alive → it writes alone');
   const keep6=QQQ_TAPE;
-  global.tapeMap=()=>null; QQQ_TAPE=()=>null; delete LS[IRT_QQQK_KEY];
+  global.tapeMap=()=>null; QQQ_TAPE=()=>null; delete LS[IRT_QQQK_KEY]; delete LS[IRT_KINGS_KEY];
   ok(irtBuildCsv()==null, '6c every source dark AND nothing latched → nothing is written, never an empty confident file');
   QQQ_TAPE=keep6; global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():SPXW_TAPE());
 let QQQ_LADDER=()=>null;                      // (v14.73) the face's array; null = fall through to the tape

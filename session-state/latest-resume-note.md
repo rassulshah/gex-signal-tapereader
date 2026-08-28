@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-08-28 · panel v14.73 · companion v1.16 · supersedes every earlier resume note_
+_written 2026-08-28 · panel v14.74 · companion v1.16 · supersedes every earlier resume note_
 
 ---
 
@@ -43,7 +43,7 @@ And for ⓪a, 2026-08-28:
 
 ---
 
-## 2 · WHERE WE ARE — v14.73, and what ⓪a now says
+## 2 · WHERE WE ARE — v14.74, and what ⓪a now says
 
     LOD IN — 89%            (travelled 93% off it · n=430)
     HOD not before 12:00 — 80% · most likely 12:00–14:30 (50%) · 69% into the close if not in by 13:15

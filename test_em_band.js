@@ -1541,7 +1541,12 @@ eval(ex('emBand'));
     var KING_LATCH_KEY='k', KING_LATCH_MS=120000;
     var LASTFEED={ SPY:{ ts:Date.now(), j:{} } };
     var extractWalls=function(){ return opt.spyKing===null ? null : { king:765, walls:[{k:765, pct:100, pos:true}] }; };
-    eval(ex('irtRound')); eval(ex('irtCsvRow')); eval(ex('kingLatchTick')); eval(ex('irtBuildCsv'));
+    // (v14.74) the export now holds a King through a blind tick, so the fixture needs the latch
+    // helpers. ⚠ The store is per-fixture (__ls), so one fixture can never seed another's hold —
+    // a shared latch would make these assertions depend on the order they run in.
+    var IRT_KINGS_KEY='gpts_irt_kings_v1';
+    eval(ex('irtRound')); eval(ex('irtCsvRow')); eval(ex('kingLatchTick'));
+    eval(ex('irtKingLatch')); eval(ex('irtKingHeld')); eval(ex('irtQqqKing')); eval(ex('irtBuildCsv'));
     var b=irtBuildCsv();
     if(!b) return { rows:[], byLabel:{} };
     var rows=b.csv.trim().split('\r\n').slice(1).map(function(l){
