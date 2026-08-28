@@ -320,3 +320,104 @@ case inside the move, not what anyone banks. Never present it as a return.
 ### The operating point this argues for
 **P ≥ 0.70.** Below it the edge over the clock is thin; above it the cost in time and forgone travel
 rises faster than the accuracy does. The data picks this point, not a preference.
+
+---
+
+## F-6 · RED / GREEN DAY IS ALREADY ANSWERED BY THE OPEN — do not build it
+**Status: CONFIRMED** (the baseline is definitional) · 2026-08-28 · `tools/study-redgreen.py` ·
+284 sessions.
+
+**Operator's enhancement idea:** *"predicting if today will be a red day or green day where the close
+is greater than the open or less than the open."*
+
+**The control:** "is price above the open RIGHT NOW" is already a strong guess at the close. Quoting
+accuracy against 50% would make anything look brilliant.
+
+| features | AUC | accuracy |
+|---|---|---|
+| sign now (the baseline) | 0.796 | **83%** |
+| + time + which extreme came first + posr | 0.819 | **83%** |
+| + 50-SMA | 0.825 | **83%** |
+| everything | 0.905 | **83%** |
+
+**Accuracy does not move at any hour** — 73/73 at 09:30, 76/76 at 10:30, 79/79 at 11:00, 85/85 at
+13:00, 88/88 at 14:00. The extra features reorder CONFIDENCE but never change a CALL.
+
+⚠ **And the confidence is overconfident where it would be used.** Aggregate calibration is decent
+(deciles 6/14/25/39/47/57/61/70/83/97), but taken at the FIRST moment it looks sure — which is how a
+panel would surface it — it says ≥90% and delivers 83%, says ≥95% and delivers 90%. First-crossing
+selection, the same effect that inflated the first pass of F-1.
+
+**NOT BUILT.** It would be machinery around a comparison the operator can make by looking at the
+chart. If it is ever revisited, the only honest form is a continuous confidence readout, never an
+alarm — and it must be quoted against the sign-now baseline, never against 50%.
+
+---
+
+## F-7 · THE TABLE TRANSFERS BETWEEN INSTRUMENTS — the "one instrument" caveat is half-answered
+**Status: PROVISIONAL → strengthened** · 2026-08-28 · `tools/study-transfer.py`
+ES: 284 sessions / 38,054 rows · NQ: 188 sessions / 25,192 rows.
+
+The strongest objection to F-4 was that the table stood on ONE instrument. Tested:
+
+    ES table   -> NQ data     AUC 0.8877   Brier 0.1237
+    NQ's OWN table -> NQ      AUC 0.8853   Brier 0.1225   (out-of-fold)
+    NQ table   -> ES data     AUC 0.8804   Brier 0.1338
+
+**The ES table predicts NQ as well as NQ's own table does** — very slightly better, most likely
+because it is built on 96 more sessions. Cell by cell: **64 comparable cells, mean absolute gap 4.5
+points, only 5 differ by more than 10.**
+
+### What this means
+1. **ONE TABLE SERVES BOTH MARKETS.** No per-instrument build, and no reason to assume GC/CL will
+   need one either — though that stays untested until the corpus tap collects them.
+2. **It is measuring session STRUCTURE, not something about ES.** "How far price has travelled off
+   the extreme, and what time it is" behaves the same way on a different contract with a different
+   tick, a different multiplier and a different volatility. That is a much stronger claim than a
+   backtest on one symbol.
+3. ⚠ **Still PROVISIONAL.** Two correlated index futures over overlapping windows is not two
+   independent tests — ES and NQ move together. It answers "is this an ES artefact" (no); it does
+   NOT answer "does this hold in a different regime" or "does it hold forward".
+
+---
+
+## F-8 · THE PANEL CALLS THE FIRST-PRINTED EXTREME, AND THAT CHANGES BOTH NUMBERS
+**Status: PROVISIONAL** · 2026-08-28 · `tools/study-notin.py` · 284 sessions.
+
+Two questions were tested before building, and both changed the build.
+
+### 1 · Restricting to what ⓪a ACTUALLY calls makes the IN call much stronger
+
+⓪a reports on `D.first` — the extremity that printed FIRST. An earlier pass measured over BOTH sides
+at every bar, which also asks "is the SECOND extreme in", a different and harder question.
+
+| | n | correct | median CT | far side still ahead |
+|---|---|---|---|---|
+| P ≥ 70% | 284 | **94%** | 09:55 | **97%** |
+| P ≥ 75% | 284 | 95% | 10:00 | 94% |
+| P ≥ 80% | 284 | 98% | 10:20 | 91% |
+
+**94% at 09:55, not the 76% previously quoted.** ⚠ The mixed-sample figure was answering a question
+the panel does not ask. **Always measure the question the face actually puts.**
+
+### 2 · The NOT-IN call is REAL but much weaker than the first pass suggested
+
+| | n | broke | median CT |
+|---|---|---|---|
+| P ≤ 15% | 71 | 77% | 09:45 |
+| **P ≤ 20%** | **85** | **72%** | **09:45** |
+| P ≤ 25% | 100 | 67% | 09:35 |
+
+An unrestricted pass measured **93%** here. That number came from the same mixed sample and **must
+not be quoted**. Restricted properly it is **72% on n=85**, against a ~57% base at that hour — a real
++15 edge, arriving early, on thin data. It ships with those numbers on its hover, not the 93%.
+
+### 3 · "toward the HOD" was being printed on days the HOD had already happened
+The clause fired whenever a ladder tier existed. Measured across both sides it was wrong ~47% of the
+time; restricted to the first-printed extreme it is wrong only 3% at the 70% call. **Either way it
+was guessing at something directly observable** (`D.secondT > D.clock`), so it is now gated, and when
+both extremes are in the face says *"both extremes in — the range is set"* instead.
+
+### 4 · When the far side IS still ahead, it prints at
+**median 13:33, IQR 11:51–14:47.** That is the clause the operator asked for, and it is measured
+rather than borrowed from the unconditional E-row median.

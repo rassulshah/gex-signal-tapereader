@@ -1,3 +1,84 @@
+## v14.66 — the NOT-IN call, and a clause that was pointing at a finished move
+
+Two things were tested before building, and both changed what got built.
+
+### THE IN CALL IS STRONGER THAN v14.64 CLAIMED — 94%, not 76%
+
+⓪a reports on the FIRST-printed extreme. The earlier measurement pooled BOTH sides at every bar,
+which also asks "is the SECOND extreme in" — a different, harder question. Restricted to what the
+face actually says:
+
+| | n | correct | median CT | far side still ahead |
+|---|---|---|---|---|
+| **P ≥ 70%** | **284** | **94%** | **09:55** | **97%** |
+
+⚠ **Always measure the question the face actually puts.** FINDINGS F-8.
+
+### THE NOT-IN CALL SHIPS, WITH ITS REAL NUMBERS
+
+`LOD NOT IN — 92%` when the cell is at or below 20%. Measured: **72% on n=85, median 09:45**, against
+a ~57% base at that hour. ⚠ An unrestricted pass measured **93%** and that figure is **wrong for this
+question** — it came from the mixed sample. The hover carries 72% and its n.
+
+This is the half a binary rule can never give: *"this low is not the low"* is what stops you buying a
+low that is about to break, and it arrives at 09:45.
+
+### A CLAUSE THAT WAS ADVICE ABOUT SOMETHING ALREADY OVER
+
+`· toward HOD` printed whenever a ladder tier existed — including on days the HOD had **already
+printed**. It is now gated on `D.secondT > D.clock`, which was directly observable all along, and
+when both extremes are in it says **"both extremes in — the range is set"**. When the far side IS
+ahead it now carries **when**: typically ~13:33 (IQR 11:51–14:47), measured conditionally.
+
+### AND A TEST THAT PASSED AGAINST A DEAD BRANCH
+
+`u1` grepped the render source for "NOT IN" and passed when the branch was mutated out — a grep
+cannot tell a live branch from a dead one. The verdict logic is extracted as `hlVerdict()` and is now
+**executed** by the test. Failure pattern #8, caught by mutation rather than review.
+
+test_hodlod 98 → 115. Suite 119 green, 6 documented baseline reds.
+
+## v14.65 — the verdict goes first, and the badge row is deleted on evidence
+
+> "do you need the badges below like vwap, ib60 etc." … "lets put the lod in read on top of the
+> hod/lod statistics."
+
+**THE READ IS NOW ABOVE THE STATS.** He is right, and it is not only a preference: the table is the
+EVIDENCE for the call, and evidence belongs under the conclusion it supports.
+
+### THE CHIP ROW IS GONE, AND EVERY CHIP WENT FOR A MEASURED REASON
+
+| chip | why it was removed |
+|---|---|
+| **SWP** | 48% standalone, **below** the 45% base rate at that hour. It was shipping as a *confirmation*. |
+| **IB60 / IB30 / OPEN** | AUC 0.655 / 0.684 / 0.709 — crude switches approximating `posr`, which is one of the table's two axes. |
+| **POS** | literally `posr` thresholded at 0.5 — **the table's own axis, rounded to a tick**. |
+| **VWAP** | does not exist in this codebase; rendered a permanent grey dash. |
+
+⚠ Showing those beside the table was **the same evidence twice, dressed as independent agreement** —
+failure pattern 7 wearing a badge. And the `2/4` tally read like a score while counting proxies of one
+quantity. **A row that cannot add information but looks like it does is worse than an empty row.**
+
+⚠ Nothing was deleted from the RECORD: `sessionLevels()` still computes IB30/IB60/PD levels and the
+recorder still stores them, so the nightly review can revisit this. Only the face stops implying they
+are independent confirmation.
+
+### RED / GREEN DAY — TESTED, AND NOT BUILT
+
+His enhancement idea, measured over 284 sessions before writing any of it:
+
+    sign now (is price above the open)   AUC 0.796   accuracy 83%
+    + time + first-extreme + posr        AUC 0.819   accuracy 83%
+    + 50-SMA                             AUC 0.825   accuracy 83%
+    everything                           AUC 0.905   accuracy 83%
+
+**Accuracy never moves** — 73/73 at 09:30, 79/79 at 11:00, 88/88 at 14:00. A red/green predictor
+would be machinery around "is price above the open", which is visible on the chart.
+⚠ And taken at FIRST CROSSING — the way it would actually be used — it is **overconfident**: says
+≥90%, delivers 83%; says ≥95%, delivers 90%. **Not built.** Recorded in FINDINGS F-6.
+
+Suite 119 green, 6 documented baseline reds. Rendered at 454px: fits, no page errors.
+
 ## v14.64 — ⓪a answers the question it was built for
 
 > "i just want to know with high accuracy whether the hod or lod have occurred ... as early as possible."

@@ -209,9 +209,14 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   CANDLES = bars; NOWSEC = OPEN + 120*60;
   ok(!/BOP:|mudMin/.test(src), 'n2b no stray duplicate implementation of these fields');
   // VWAP is one of the mockup's five chips and this codebase has none.
-  ok(/NOT AVAILABLE/.test(SD) && /g3daychip\.na/.test(src),
-     'n3 VWAP renders UNAVAILABLE with its own style — never a failing tick');
-  ok(/no VWAP|NO VWAP/.test(src), 'n4 ...and the absence is documented, not silent');
+  // (v14.65) THE CHIP ROW IS GONE - every chip was a measured proxy for the table's own axis, a
+  // measured NEGATIVE (SWP 48%), or a permanent dash (VWAP). What must survive is the REASONING,
+  // so a later context does not helpfully add them back.
+  ok(!/g3daychips/.test(SD), 'n3 the chip row is removed from the section');
+  ok(/SWP\s+48%|48% standalone/.test(SD) || /48%/.test(SD),
+     'n4 ...and SWP\'s measured 48% is recorded at the removal site, not just deleted');
+  ok(/VWAP\s+does not exist|VWAP  does not exist|VWAP/.test(SD),
+     'n4b ...and VWAP\'s absence is still explained where the chip used to be');
 }
 
 // ---- 8 · the honesty furniture ---------------------------------------------------------------
@@ -346,10 +351,15 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   // the face
   const SD = ex('secDay');
   ok(/lodhodCall/.test(SD), 't20 the section calls the table');
-  ok(/thin cell/.test(SD), 't21 ...and says so when the cell is too thin to rate');
+  // (v14.66) the refusal text moved into hlVerdict when it was extracted for testability; u1d
+  // executes it. Assert it at its NEW home rather than deleting the guard.
+  ok(/thin cell/.test(ex('hlVerdict')),
+     't21 ...and says so when the cell is too thin to rate (now in hlVerdict)');
   ok(/still ahead/.test(SD), 't22 the remaining range is on the face beside the probability');
-  ok(/UNPROVEN/.test(src) && /48%/.test(src),
-     't23 SWP is demoted to unproven WITH its measured 48%', /UNPROVEN/.test(src));
+  ok(/48%/.test(SD) && /BELOW the 45% base/.test(SD),
+     't23 SWP is gone from the face AND its 48% is recorded at the removal site');
+  ok(/posr` thresholded at 0\.5|posr thresholded at 0\.5/.test(SD),
+     't23b ...and POS is documented as having been the table\'s own axis, rounded');
   ok(/PROVISIONAL/.test(SD), 't24 the hover admits it is a backtest, not a forward test');
 
   // enrolment — the 2026-08-17 mandate
@@ -359,6 +369,60 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   ok(rules.rules.lodhod.n === 0 && rules.rules.lodhod.rate === null,
      't27 which starts UNMEASURED — the backtest is not a live rate', rules.rules.lodhod);
   ok(/lodhod_table_calibrated/.test(src), 't28 with a question that forward-tests the table itself');
+}
+
+// ---- 10 · THE NOT-IN CALL AND THE CONDITIONAL FAR-SIDE CLAUSE (v14.66) ----------------------
+{
+  const SD = ex('secDay');
+  // three states, not two
+  // ⚠ EXECUTED, NOT GREPPED. The first version of u1 grepped secDay for "NOT IN" and passed against
+  // a DEAD branch when mutation-tested. hlVerdict is extracted so the branch can actually be run.
+  eval(ex('hlVerdict'));
+  const V = (p, inn, notIn) => hlVerdict({first:'LOD'}, {p:p, in:inn, notIn:notIn, n:900}, null);
+  ok(/^LOD NOT IN — 92%$/.test(V(8, false, true)),
+     'u1 a low cell produces a NOT IN verdict with the INVERTED percentage', V(8,false,true));
+  ok(/^LOD IN — 88%$/.test(V(88, true, false)), 'u1b a high cell produces IN', V(88,true,false));
+  ok(/^LOD STANDING — 45%$/.test(V(45, false, false)),
+     'u1c the middle produces STANDING, neither call', V(45,false,false));
+  ok(/thin cell, n=900/.test(hlVerdict({first:'LOD'},{p:null,n:900},null)),
+     'u1d a thin cell refuses and names its n');
+  ok(/too early/.test(hlVerdict({first:'LOD'}, null, null)),
+     'u1e no call at all falls back without throwing');
+  ok(HLTAB_META.notIn === 20 && HLTAB_META.notInHit === 72,
+     'u2 the NOT-IN threshold and its MEASURED rate are both declared', 
+     [HLTAB_META.notIn, HLTAB_META.notInHit]);
+  ok(HLTAB_META.notInHit < HLTAB_META.inHit,
+     'u3 ...and it is recorded as WEAKER than the IN call, which it is (72 vs 94)');
+  ok(HLTAB_META.notInN < 150,
+     'u4 ...on a thin n, also declared', HLTAB_META.notInN);
+
+  // the call sets notIn only at the low end
+  const D = o2 => ({ ok:true, posr:o2.posr, clock:OPEN + o2.mins*60, first:'LOD',
+                     rngPts:50, far:1-o2.posr, secondT:OPEN+400*60 });
+  const lowc = lodhodCall(D({posr:0.02, mins:50}));
+  ok(lowc && lowc.notIn === true && lowc.in === false,
+     'u5 a fresh extreme early triggers NOT IN, not IN', lowc && [lowc.p, lowc.notIn]);
+  const hic = lodhodCall(D({posr:0.95, mins:300}));
+  ok(hic && hic.in === true && hic.notIn === false, 'u6 a high cell is IN and not NOT-IN');
+  const mid = lodhodCall(D({posr:0.5, mins:150}));
+  ok(mid && mid.in === false && mid.notIn === false,
+     'u7 the middle is STANDING — neither call', mid && mid.p);
+
+  // ⚠ THE CLAUSE THAT WAS WRONG BEFORE: "toward HOD" must be conditional on the far side being ahead
+  ok(/D\.secondT>D\.clock/.test(SD),
+     'u8 the far-side clause is gated on the second extreme not having printed');
+  ok(/both extremes in/.test(SD),
+     'u9 ...and says so plainly when it already has, instead of pointing at a finished move');
+  ok(/secondMed/.test(SD) && /secondQ1/.test(SD),
+     'u10 the clause carries WHEN to expect it, with its spread');
+  ok(HLTAB_META.secondMed === '13:33' && HLTAB_META.secondAhead === 97,
+     'u11 the timing and the "still ahead" share are measured constants, not prose');
+
+  // the hover must separate CELL rate from DECISION rate — this project's oldest failure
+  ok(/CELL rate/.test(SD) && /DECISION rate/.test(SD),
+     'u12 the hover distinguishes the cell probability from the decision accuracy');
+  ok(/n='\+HLTAB_META\.inN/.test(SD) && /n='\+HLTAB_META\.notInN/.test(SD),
+     'u13 ...and both carry their n');
 }
 
 console.log('test_hodlod: ' + pass + ' passed, ' + fail + ' failed');

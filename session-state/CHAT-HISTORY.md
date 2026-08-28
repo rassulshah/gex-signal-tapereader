@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-28 · v14.64 · session `4c22fa2b` — v14.64: the LOD/HOD call ships as a table, enrolled from day one
+## 2026-08-28 · v14.66 · session `4c22fa2b` — v14.66: the NOT-IN call, and the far-side clause gated on evidence
 
-_35 operator prompts · transcript `4c22fa2b-bee3-5451-b379-dc2a50cb42bd.jsonl`_
+_41 operator prompts · transcript `4c22fa2b-bee3-5451-b379-dc2a50cb42bd.jsonl`_
 
 ### THE EXCHANGE
 
@@ -817,6 +817,438 @@ Now tests for the new behaviour — executed, then each guard mutated to confirm
 Test caught a real bug — `lodhodCall` sets `out.left` while the render and the test both read `CALL.far`, so the "still ahead" figure would never have drawn. Fixing the code, not the test.
 Five of six fired. The sixth was a no-op mutation on my part, not a missing test — but it exposed that nothing directly asserts a thin cell refuses. Adding that.
 Now the visual check — rendering the section headless at your real 454px with the overlap audit, before it goes anywhere.
+Render is clean — the two "overlaps" are the standard inline-wrap artefact (the green bold spans two lines, so its bounding rect naively intersects its siblings); visually it reads correctly and nothing exceeds the 454px body.
+
+Finishing the build.
+**installv1464.bat** — carries everything from v14.59 onward. **Ignore 1460, 1462 and 1463.**
+
+- **Tapereader v14.64** — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+- Companion v1.15 — unchanged, skip it
+
+Run the `.bat` → wait ~5 min → **click the link** → reload Atlas. Footer must read **v14.64**. You're on v14.58, so the click matters.
+
+⓪a now reads:
+
+```
+LOD IN — 76%  (travelled 78% off it · n=1204) · 22% of the range still ahead
+```
+
+**It shipped as a table, not a model** — because you made me check. Identical Br …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 14 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (03:26):** Verified file-by-file: **`installv1464.bat` carries HEAD exactly** — panel, companion, FINDINGS, rules.json, changelog, chat history and resume note all byte-identical. All fourteen commits are inside the file I just sent. Tree is clean; nothing new to build.
+
+The hook counts commits against `origin`, and the cloud can't reach `origin` — running that `.bat` is what closes the gap.
+
+So there's one action left and it's yours: **run `installv1464.bat`, wait ~5 min, click the Tampermonkey link, reload Atlas.** That pushes all fourteen commits to GitHub and takes your panel from v14.58 to v14.64 with the LOD/HOD call live.
+
+After that first session on v14.64, two things start happening on their own — the corpus tap begins collecting ES/NQ/GC/CL bars, and the table starts being forward-scored so `PROVISIONAL` can eventually become measured.
+
+**OPERATOR:**
+> check .  also do you need the badges below like vwap , ib60 etc.    just make sure this is done right.  also lets but the lod in read on top. ov the hod/lod statistics.    review everything to ensure correctnes and let me know if any enshancements need to be made  .  For example , one enhancement would be predicting if today with be a red day or green day where the close is greater than the open or less than the open.   optimize this feature to the best of your ability.
+
+**me (03:34):** He's on **v14.63** — so what you're looking at is still the old ladder verdict, not the table. Let me check the companion too, since the corpus tap reports no data.
+Numbers check out — every field on that face is internally consistent:
+
+```
+TOOK 3m    08:30 + 3  = 08:33 = LOD        ✓
+BOP  9m    08:33 + 9  = 08:42 = W.END      ✓
+WICK 12m   = TOOK + BOP, and 08:30+12      ✓
+GAP  3h36  12:09 − 08:33                   ✓
+MUD  3h27  12:09 − 08:42                   ✓
+RNG  51.4pts × $50 = $2,570 ≈ $2,571       ✓
+```
+
+**But two things are wrong at your end, and one is my fault:**
+
+⚠ **You're on v14.63, not v14.64** — that `LOD IN — 84% (stood 6h27 · n=433)` is the *old ladder* verdict. The table isn't in that build.
+
+⚠ **Your companion is still v1.14.** `gpts_futbars_v1` is absent, so the Yahoo corpus tap has never run. I told you "Companion v1.15 — unchanged, skip it" on the last two builds. That was wrong: my script marks changes against *origin*, and v1.15 reached origin back at v14.59 — but it never reached *your browser*. **You need to click the companion link too.**
+
+Now — your enhancement idea. Testing it before I build anything.
+Clean negative, and worth knowing before building:
+
+```
+                                  AUC    accuracy
+sign now (is price above open)   0.796      83%
++ time + first-extreme + posr    0.819      83%
++ 50-SMA                         0.825      83%
+everything                       0.905      83%
+```
+
+**Accuracy never moves.** Identical at every hour — 73/73 at 09:30, 79/79 at 11:00, 88/88 at 14:00. A red/green predictor would be an elaborate way to tell you whether price is above the open, which you can see.
+
+But the AUC *does* move, and that gap is the real finding — the model can't beat the sign on the *call*, but it knows how much to trust i …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 16 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (03:40):** Verified: **`installv1465.bat` carries HEAD exactly** — all sixteen commits, byte-for-byte on every file I checked. Tree is clean, nothing new to build. The hook counts against `origin`, which this container can't reach; running that file is what closes it.
+
+One action, and it's two clicks rather than one this time:
+
+1. Run **`installv1465.bat`**
+2. Wait ~5 min, then click **both** links — Tapereader v14.65 **and companion v1.15**, the one that's never updated
+3. Reload Atlas — footer must read **v14.65**
+
+That takes you from v14.63 to the table verdict with the badges gone and the read on top, and it finally turns the corpus tap on. After one session you'll have `futBars` collecting ES/NQ/GC/CL, and the table will start being forward-scored so `PROVISIONAL` can become measured.
+
+The one thing I'd build next when you're ready: the **"NOT IN"** call — those 7–9% cells are the table's most confident readings and the face currently wastes them.
+
+**OPERATOR:**
+> ok.. lets build your enhancemetn but first what other enhancements can you reccomend ?
+
+**me (03:42):** Before I list them, one of my candidates is cheap to settle right now and changes what we'd build — **does the ES table even work on NQ?** If it transfers, one table serves every market. If not, each market needs its own.
+**It transfers.** That's a better result than I expected:
+
+```
+ES table -> NQ data    AUC 0.8877   Brier 0.1237
+NQ's own table -> NQ   AUC 0.8853   Brier 0.1225   (out-of-fold)
+NQ table -> ES data    AUC 0.8804
+```
+
+The ES table works on NQ *as well as NQ's own table does*. Cell by cell: 64 comparable cells, mean gap 4.5 points, only 5 differ by more than 10. **One table serves both markets** — no per-market build needed, and the "one instrument" caveat on the whole feature is now half-answered. This is structural behaviour, not an ES artefact.
+
+Here's what I'd recommend, ranked, with what each is actually resting on:
+
+**1 · The "NOT IN" call** *(agreed — evidence-backed)*
+The 7–9% cells are the table's most confident readings and the face currently says "STANDING." *"This low is not the low, 92%"* is the half a rule can never give you.
+
+**2 · Pair the call with when to expect the other side** *(cheap, data already on the panel)*
+"LOD IN — 76%" begs "so when's the high?" The `E` row already knows: median gap 3h50m, typically ~13:02. One clause, no new measurement.
+
+**3 · Show live-vs-backtest on the face** *(this is what makes it honest)*
+Once enrolled and scoring: `table 76% · live 74% (n=31)`. It turns `PROVISIONAL` from a disclaimer into a number you can watch, and it's how you'd catch the table going stale.
+
+**4 · ⚠ Condition the table on the gamma side — and this is the big one**
+This is a GEX tool, and the LOD/HOD feature currently knows nothing about it. Does "price is sitting on the King" or "the low printed at a put wall" change the probabilit …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 16 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (03:43):** The transfer result isn't in the repo — and it materially upgrades the feature's standing, so it shouldn't live only in this conversation.
+Recorded as **F‑7** with the transfer test saved as a tool, so it's reproducible when GC and CL data arrives.
+
+That's seventeen commits now, sixteen of them in `installv1465.bat` already — F‑7 is documentation and will ride the next build.
+
+My recommendation stands: **build 1 and 2 together** — the "NOT IN" call, and pairing it with when to expect the other side. They're one edit to the same line, and both rest on measurements already made.
+
+And the one I'd queue right behind them: **conditioning the table on the gamma side**, which is blocked until the feature-record collapse is diagnosed. That's the difference between a good generic model and something only your panel could produce.
+
+Say go and I'll build 1 and 2.
+
+**OPERATOR:**
+> yes,  lets test everything and then have 1 build
+
+**me (03:44):** Testing everything that feeds the build first.
+Two findings, and the second one would have made me ship bad advice.
+
+**A · The NOT-IN side is the better half — more accurate *and* earlier:**
+
+```
+first drop to P<=15%   n=318   93% actually broke   09:45
+first drop to P<=20%   n=346   91% actually broke   09:45
+```
+
+93% at 09:45, against the IN call's 76% at 10:10.
+
+**B · ⚠ When the IN call fires, the other extreme has already printed ~half the time.** The face currently says "· toward HOD" unconditionally — that's wrong on half the days. Let me pin the panel-relevant version before building.
+That correction matters — restricting to what the panel actually calls changes both numbers:
+
+```
+IN  call  P>=70%   n=284   94% correct   09:55   other side still ahead 97%
+                                                  it prints ~13:33 (IQR 11:51-14:47)
+NOT-IN    P<=20%   n= 85   72% broke     09:45
+```
+
+The IN call is **better** than I thought (94%, not 76%). The NOT-IN is **worse** — my 93% came from a mixed sample that included asking about the *second* extreme, a different question. Restricted properly it's 72% on n=85. Still beats the ~57% base at that hour, but it's a modest edge on thin data, not the headline I quoted. Building it with its real numbers.
+Two mutations didn't fire — and the first is the important kind: `u1` greps the source for "NOT IN" and still matched a dead branch. That's testing a string, not behaviour. Extracting the verdict into a function so it can be executed.
+The mutation fires now. `t21` broke because the "thin cell" text moved into `hlVerdict` — and it's already covered by `u1d`, which executes it. Pointing it at the right place.
+
+### DECISIONS
+
+- **"TEST EVERYTHING THEN ONE BUILD" WAS THE RIGHT ORDER AND IT CHANGED THE BUILD TWICE.**
+- **THE IN CALL IS 94%, NOT 76%.** ⓪a reports on the FIRST-PRINTED extreme; the v14.64 measurement
+  pooled BOTH sides at every bar, which also asks "is the SECOND extreme in" - a different, harder
+  question. Restricted to what the face actually says: **94% at 09:55, n=284, far side still ahead
+  97% of the time.** ⚠ ALWAYS MEASURE THE QUESTION THE FACE ACTUALLY PUTS.
+- **AND THE NOT-IN CALL IS 72%, NOT THE 93% I QUOTED HIM AN HOUR EARLIER.** Same mixed-sample error,
+  in the other direction. Restricted: 72% on n=85, median 09:45, against a ~57% base. It ships with
+  THOSE numbers on its hover. I told him the 93% in conversation and corrected it before building -
+  which is the entire argument for testing before building.
+- **"toward HOD" WAS BEING PRINTED ON DAYS THE HOD HAD ALREADY HAPPENED.** The clause fired whenever
+  a ladder tier existed. Across both sides it was wrong ~47% of the time; restricted to the first
+  extreme, 3%. Either way it was GUESSING AT SOMETHING DIRECTLY OBSERVABLE (`D.secondT > D.clock`).
+  Now gated, and when both extremes are in the face says "both extremes in - the range is set".
+- **THE TABLE TRANSFERS TO NQ** (F-7): ES table on NQ data AUC 0.8877 vs NQ's own 0.8853, 64 cells
+  with a mean gap of 4.5 points. One table serves both markets; it is measuring session structure,
+  not something about ES.
+- **A TEST PASSED AGAINST A DEAD BRANCH.** `u1` grepped the render source for "NOT IN" and stayed
+  green when the branch was mutated out. The verdict is extracted as `hlVerdict()` and EXECUTED now.
+  Failure pattern #8, sixth occurrence, caught by mutation rather than by review.
+- **RED/GREEN REFUSED** (F-6) and **the badge row deleted on evidence** (v14.65).
+
+### SHIPPED
+
+**v14.66** - three-state verdict (IN / STANDING / NOT IN) with measured rates and n for each; the
+far-side clause gated on the second extreme not having printed, carrying when to expect it
+(~13:33, IQR 11:51-14:47); `hlVerdict()` extracted for testability. test_hodlod 98 -> 115, every new
+guard mutation-tested including two that had to be rewritten after mutation showed they could not
+fail. FINDINGS F-6, F-7, F-8 added.
+
+### OPEN AT CLOSE
+
+1. ⚠⚠ **BOTH TAMPERMONKEY LINKS.** He has never updated the COMPANION - it is still v1.14, so the
+   Yahoo corpus tap has never run once. Panel v14.66 AND companion v1.15.
+2. **The corpus tap has still never collected** - `data/futures/` empty, no day file has `futBars`.
+3. **The table is PROVISIONAL** until the FEATURES forward score accumulates.
+4. ⚠ **THE HIGHEST-VALUE UNBUILT IDEA: condition the table on the gamma side** - does price sitting
+   on the King or a wall change the probability? That is what would make this feature belong to THIS
+   panel rather than being generic price structure. **BLOCKED by the feature-record collapse.**
+5. **Diagnosing the feature-record collapse is therefore the top priority**, not housekeeping:
+   3,822 records on 08-20 against 15 on 08-27, with `matrix` rows tracking exactly.
+6. Untested and cheap: overnight/globex context (the corpus has ETH bars we currently filter out).
+
+---
+
+<!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-28 · v14.65 · session `4c22fa2b` — v14.65: verdict on top, badge row deleted on evidence, red/green tested and refused
+**OPERATOR:**
+> load gex
+**OPERATOR:**
+> Check the architecture doc for the yahoo pipeline that updates the es data file daily.  I want to make sure we have the latest data for the hod lod feature so it updates daily
+**OPERATOR:**
+> I just wanted to make sure we had a process in place that obtained es data duly and updated the data file.  I know the process workflow is in git and it can be found checking what was committed but you had a lot of difficulty finding it the lat time
+**OPERATOR:**
+> Yes I want this process automated so the hod lid is always updated based on the latest data.  I also need you to ensure you are able to find it in the future and place its details in the architecture document for this project so it is read every time load he’s is done.  I want to get this out of the way. The process should be extendable to other markets like nq gc nd cl in the future.
+**OPERATOR:**
+> Continue from where you left off.
+## The design
+**OPERATOR:**
+> i'm surprised its not there.  there should be a design or architecture document  that already talks about yahoo finance, Inside Finance (IF) etc. can you double check
+**OPERATOR:**
+> make sure everything is documented and can be retrieved via load gex protocol and build .
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are commit(s) on branch 'main' that GitHub will show as Unverified (missing signature, or committer email is not noreply@anthropic.com):
+> 24f490f claude@anthropic.com
+> Please run 'git config user.email noreply@anthropic.com && git config user.name Claude', then 'git commit --amend --no-edit --reset-author' for the tip commit, or 'git rebase --exec "git commit --amend --no-edit --reset-author" 24f490f7ef899eaa6bbcc55136b7a9d0d867e2d8^' for earlier commits, then push.
+**OPERATOR:**
+> i think you are missing some fields.    look at the pics.  do you know what the fields are
+**OPERATOR:**
+> wick% is the percentage fo the total range .  so if the total range is 100, and the wick is 10, the wick is 10% .. cand you check
+**OPERATOR:**
+> i dont know what you are asking me. if there is no wick , then its 0 .   these days should not be averaged . also crazy outliers should not be averaged.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> i thought they were all averages.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 4 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> ok.. so now you understand every field .  for example mud, stands for markup or markdown. markup is open to the high after the lower wick forms and markedown is open to the low after the upper wick forms.
+**OPERATOR:**
+> yes its back to open (bop) .The next step is for you to understand that my intention and goal behind this field is to identiy a low or a high of day so i can profit when it goes to the other extremity.  This means you need to help identify whether the lod or hod is done .  you can use this data ,  IB 30, IB 60, Sweeps, sma 50,  20 bar high or low, and any suggestions or recommendations you have to do this . run many combinations and figure out a hight probability way to figure this out, so you meet my requirement of identifying if the lod or hod has been made.   do you understand.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are untracked files in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> i also want you to test the various combinations with  divergences . for example es keeps making low and nq doesn't   as well as momentum divergences where es makes a low but a momentum indicator doesnt. ive added nq data in the same folder. see if it helps in idnetifyign hod and lod have occurred. Test combinations of everything. i want you to create a predictive probabilstic model so i can use it to identify if a hod or lod has occurred.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 7 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> check everything .. is the model built
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> lets discuss 1 at a time
+**OPERATOR:**
+> what do you mean the rule is earlier.. are you saying i have to wait for the model to give me any real information
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> what is a better predictor for determining the hod or lod has occurred ?
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> i just want to know with high accuracy whether the hod or lod have occurred. that is my requirement. I want to know it as early as possible.  have you tested multiple combinations. have you used the nq divergence as well and tested it .  does the model use all of these factors to give right answers early .  is this model solid ?
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> what is the model using to determine if a hod or lod has occurred
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 11 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> before going any further , is this a standard model . is this the right use case for it  for predicting hod lod .  step back and see if you made the right choice for this type of problem. consider the approach .  just double check and sanity check.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 11 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> so what do you recommend we do next..
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are untracked files in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> i'll go with your recommendation
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 14 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> check .  also do you need the badges below like vwap , ib60 etc.    just make sure this is done right.  also lets but the lod in read on top. ov the hod/lod statistics.    review everything to ensure correctnes and let me know if any enshancements need to be made  .  For example , one enhancement would be predicting if today with be a red day or green day where the close is greater than the open or less than the open.   optimize this feature to the best of your ability.
+
+### DECISIONS
+
+- **HE WAS ON THE WRONG BUILD AND I HAD TOLD HIM TO SKIP THE COMPANION.** His panel read v14.63 and
+  `gpts_futbars_v1` was ABSENT - the companion was still v1.14, so the Yahoo corpus tap had never
+  run. My delivery note said "Companion v1.15 - unchanged, skip it" for two builds. `release-links.sh`
+  marks changed-vs-ORIGIN, and v1.15 reached origin at v14.59 - but never reached his BROWSER.
+  ⚠ **THE COMPARISON MUST BE AGAINST WHAT HE IS RUNNING, NOT AGAINST ORIGIN.** Same family as the
+  Tampermonkey error of 2026-08-27.
+- **THE BADGE ROW IS DELETED, ON EVIDENCE, NOT TASTE.** He asked whether the chips were needed. SWP
+  48% (below its own base rate), IB60 0.655 / IB30 0.684 / OPEN 0.709 (all proxies for `posr`, one of
+  the table's two axes), POS was literally posr thresholded at 0.5, VWAP does not exist.
+  **Showing them beside the table was the same evidence twice, dressed as independent agreement**,
+  and the "2/4" tally read like a score. The reasoning is recorded AT the removal site so a later
+  context does not helpfully add them back.
+- **THE VERDICT MOVED ABOVE THE STATS**, at his instruction - and the reason generalises: the stats
+  are the EVIDENCE for the call, so they belong under the conclusion.
+- **RED/GREEN WAS TESTED AND REFUSED.** His idea. Against the correct baseline - "is price above the
+  open right now", 83% - adding time, first-extreme, posr and the 50-SMA moves accuracy **not at all**
+  at any hour. And at first crossing it is OVERCONFIDENT (says >=90%, delivers 83%). Recorded as F-6
+  so it is not rebuilt on intuition later.
+- **THE ARITHMETIC ON HIS FACE WAS VERIFIED FIELD BY FIELD** and is correct: TOOK 3m, BOP 9m,
+  WICK 12m = TOOK+BOP, W.END 08:42 = open+WICK, MUD 3h27 = HOD-W.END, GAP 3h36, RNG 51.4pts x $50.
+
+
+### SHIPPED
+
+**v14.65** - the read moved above the stats; the ⓪a chip row removed entirely with the measured
+reason for each chip left at the removal site; F-6 recorded. test_hodlod 96 -> 98 (the chip
+assertions were rewritten to test the new contract rather than deleted). Suite 119 green.
+
+
+### OPEN AT CLOSE
+
+1. ⚠⚠ **HE MUST CLICK BOTH TAMPERMONKEY LINKS.** Panel v14.65 AND **companion v1.15** - the
+   companion is the one that has never updated, and without it there is no corpus tap at all.
+2. **The corpus tap has still never run** - `data/futures/` empty, no day file carries `futBars`.
+3. **The table is PROVISIONAL** until the forward score accumulates through the FEATURES entry.
+4. **Per-market tables** (NQ/GC/CL) are the natural next build once the tap is collecting - the
+   table is instrument-specific and there is no reason to assume ES's cells transfer.
+5. **A "NOT IN" call is the strongest unbuilt idea**: the table's low cells (7-9%) are its most
+   confident readings and the face currently just says STANDING.
+6. The **feature-record collapse** still gates the forward test.
+
+---
+
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
+
+# EARLIER CONTEXTS
+
+## 2026-08-28 · v14.64 · session `4c22fa2b` — v14.64: the LOD/HOD call ships as a table, enrolled from day one
+**OPERATOR:**
+> load gex
+**OPERATOR:**
+> Check the architecture doc for the yahoo pipeline that updates the es data file daily.  I want to make sure we have the latest data for the hod lod feature so it updates daily
+**OPERATOR:**
+> I just wanted to make sure we had a process in place that obtained es data duly and updated the data file.  I know the process workflow is in git and it can be found checking what was committed but you had a lot of difficulty finding it the lat time
+**OPERATOR:**
+> Yes I want this process automated so the hod lid is always updated based on the latest data.  I also need you to ensure you are able to find it in the future and place its details in the architecture document for this project so it is read every time load he’s is done.  I want to get this out of the way. The process should be extendable to other markets like nq gc nd cl in the future.
+**OPERATOR:**
+> Continue from where you left off.
+## The design
+**OPERATOR:**
+> i'm surprised its not there.  there should be a design or architecture document  that already talks about yahoo finance, Inside Finance (IF) etc. can you double check
+**OPERATOR:**
+> make sure everything is documented and can be retrieved via load gex protocol and build .
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are commit(s) on branch 'main' that GitHub will show as Unverified (missing signature, or committer email is not noreply@anthropic.com):
+> 24f490f claude@anthropic.com
+> Please run 'git config user.email noreply@anthropic.com && git config user.name Claude', then 'git commit --amend --no-edit --reset-author' for the tip commit, or 'git rebase --exec "git commit --amend --no-edit --reset-author" 24f490f7ef899eaa6bbcc55136b7a9d0d867e2d8^' for earlier commits, then push.
+**OPERATOR:**
+> i think you are missing some fields.    look at the pics.  do you know what the fields are
+**OPERATOR:**
+> wick% is the percentage fo the total range .  so if the total range is 100, and the wick is 10, the wick is 10% .. cand you check
+**OPERATOR:**
+> i dont know what you are asking me. if there is no wick , then its 0 .   these days should not be averaged . also crazy outliers should not be averaged.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> i thought they were all averages.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 4 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> ok.. so now you understand every field .  for example mud, stands for markup or markdown. markup is open to the high after the lower wick forms and markedown is open to the low after the upper wick forms.
+**OPERATOR:**
+> yes its back to open (bop) .The next step is for you to understand that my intention and goal behind this field is to identiy a low or a high of day so i can profit when it goes to the other extremity.  This means you need to help identify whether the lod or hod is done .  you can use this data ,  IB 30, IB 60, Sweeps, sma 50,  20 bar high or low, and any suggestions or recommendations you have to do this . run many combinations and figure out a hight probability way to figure this out, so you meet my requirement of identifying if the lod or hod has been made.   do you understand.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are untracked files in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> i also want you to test the various combinations with  divergences . for example es keeps making low and nq doesn't   as well as momentum divergences where es makes a low but a momentum indicator doesnt. ive added nq data in the same folder. see if it helps in idnetifyign hod and lod have occurred. Test combinations of everything. i want you to create a predictive probabilstic model so i can use it to identify if a hod or lod has occurred.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 7 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> check everything .. is the model built
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> lets discuss 1 at a time
+**OPERATOR:**
+> what do you mean the rule is earlier.. are you saying i have to wait for the model to give me any real information
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> what is a better predictor for determining the hod or lod has occurred ?
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> i just want to know with high accuracy whether the hod or lod have occurred. that is my requirement. I want to know it as early as possible.  have you tested multiple combinations. have you used the nq divergence as well and tested it .  does the model use all of these factors to give right answers early .  is this model solid ?
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> what is the model using to determine if a hod or lod has occurred
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 11 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> before going any further , is this a standard model . is this the right use case for it  for predicting hod lod .  step back and see if you made the right choice for this type of problem. consider the approach .  just double check and sanity check.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 11 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> so what do you recommend we do next..
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are untracked files in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> i'll go with your recommendation
 
 ### DECISIONS
 
@@ -843,12 +1275,14 @@ Now the visual check — rendering the section headless at your real 454px with 
 - **AND A MUTATION CAUGHT A TEST THAT COULD NOT FAIL** - nothing asserted that a thin cell refuses.
   Fifth occurrence of that pattern in this project.
 
+
 ### SHIPPED
 
 **v14.64** - ⓪a renders `LOD IN — 76% (travelled 78% off it · n=1204) · 22% of the range still
 ahead`. 8x9 lookup table (284 sessions, 38,054 observations) baked in with per-cell n; `posr`
 computed scale-free; SWP demoted with its measured rate; FEATURES entry + `learning/rules.json`
 `lodhod` at n=0. test_hodlod 65 -> 96, all new guards mutation-tested. Rendered at 454px: fits.
+
 
 ### OPEN AT CLOSE
 
@@ -862,7 +1296,9 @@ computed scale-free; SWP demoted with its measured rate; FEATURES entry + `learn
 
 ---
 
-<!-- EARLIER-CONTEXTS -->
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 
