@@ -59,7 +59,28 @@ any charting package could compute.
 ⚠⚠ **BLOCKED by the feature-record collapse** (below) — there is no usable recorded history pairing
 node state with session extremes. Unblocking that is the prerequisite, not a side quest.
 
-### ⚠ THE FEATURE-RECORD COLLAPSE — diagnosis, not a feature, and it gates everything
+### ⚠⚠ STORAGE QUOTA — THE ROOT CAUSE, FOUND 2026-08-28, FIX NOT BUILT
+**localStorage was FULL at exactly 10 MB** (`gpts_recorder_v7` 5,957 KB for ONE day +
+`gpts_nodeevents_v1` 3,228 KB). Every `setItem` in the system was throwing behind `catch(e){}`.
+**This IS the feature-record collapse** — and the corpus tap, the base-rate courier and the 8.5-hour
+stale IF chain. One fault, five symptoms. See FINDINGS **F-10**.
+
+Cleared by hand on the live panel 2026-08-28 (9.5 MB freed; 08-27 was already exported to the repo
+with MORE snapshots than storage held, so nothing was lost). **Everything came alive instantly**:
+ES/NQ/GC/CL 1,905–1,916 bars each, base rates delivered, IF chain live.
+
+⚠⚠ **IT WILL REFILL WITHIN ONE SESSION — 6 MB per day is the measured rate.** The fix is code:
+1. Bound `gpts_recorder_v7` and `gpts_nodeevents_v1` by BYTES, shedding oldest-first until it fits.
+   `NEV_MAX=4000` caps events, not bytes; `nevSave()` has no size cap at all.
+2. `recorderSave()`'s quota fallback drops the oldest NON-today day — useless when today is the only
+   day and is itself 6 MB. It needs to shed within today.
+3. **Make a quota failure LOUD** — through `swallow()` into `__gptsDebug.renderErrors()`, and onto
+   the face. A pipeline that cannot write must say so.
+4. Prune days already exported; `gpts_last_export` already knows which are safe.
+5. `__gptsDebug.storage()` — total, top keys, headroom.
+⚠ **Do NOT build this during a live session** — it touches the recorder's write path.
+
+### ⚠ THE FEATURE-RECORD COLLAPSE — ROOT CAUSE FOUND (see above); the v14.67 instrument was aimed wrong
 3,822 records on 08-20 against **15** on 08-27. `matrix` rows track exactly (108→3132, 122→3822,
 0, 0, 23→990, 2→8, 1→15) against 133 SPY snaps, so it is **ONE upstream gate, not 46 features
 failing**. It blocks the gamma conditioning AND the forward test of the LOD/HOD table.
@@ -129,23 +150,19 @@ are present in the current build **except premarket H/L — `PMH`/`PML`/`premark
 The operator's Skylit session-levels setting includes Premarket H/L, so the level is on his chart and
 absent from our record. Not confirmed cancelled; treat as open until he says otherwise.
 
-### ⓪a HOD/LOD · APPROVED, NOT BUILT, AND BLOCKED ON DATA
-**The design is `mockuphodlodv2.html` — in the repo ROOT, on GitHub, renders clean.** Two earlier
-notes called it lost; both were wrong (failure pattern #4, not searching the repo root).
-`mockups/hodlod-v2-SPEC.md` is the transcription and now carries the correction.
+### ✅ ⓪a HOD/LOD — BUILT (v14.57 → v14.66). Entry kept so nobody re-discovers it.
+**Closed 2026-08-28.** This said "APPROVED, NOT BUILT, BLOCKED ON DATA" and every word of that is now
+wrong: the corpus was never missing (it is `data/es-1min/ES TestingData.txt`, 284 sessions — the
+tooling looked for `EPM26-1min.csv.gz` and reported it absent, which is why the operator supplied it
+twice), and the section shipped complete with the wick family, trimmed-mean base rates and the
+probability table. See FINDINGS F-1..F-8.
 
-⚠⚠ **BLOCKED ON ONE FILE: `data/es-1min/EPM26-1min.csv.gz`,** 284 complete RTH sessions of ES 1-min.
-Committed in the sandbox 2026-08-27 (`a26cdfd`), **never pushed**, sandbox copy gone. Every rate on
-the mockup — 84%, n=45, 43/47, med +24, p25 +11, the −12 miss case, the 42/54/66/75/84 ladder — came
-from a study over it. They cannot be re-derived without it, and nothing here ships a rate without its
-n. **Ask the operator to re-supply the CSV; it is the only blocker.**
-⚠ It cannot ride the installer back — 5.2MB gzipped against a 6MB payload cap. He drops it into
-`C:\Dev\gex-signal-tapereader\data\es-1min\` and his next push carries it.
-
-### IB60 · required by the approved HOD/LOD mockup, does not exist
-`mockups/hodlod-v2-SPEC.md` shows `IB60` as one of the five confirmation chips.
-`sessionLevels()` computes **IB30 only** (`IB_MIN_S=1800` → `ibH`/`ibL`/`ibSet`) plus PDH/PDL/PDC.
-Net-new work, and the operator has explicitly asked for a sweep testing IB30 **and** IB60 breaks.
+### ✅ IB60 — BUILT v14.57. `sessionLevels()` now computes IB30 AND IB60.
+**Closed 2026-08-28.** Both are kept deliberately: the operator asked for a sweep testing IB30 *and*
+IB60 breaks, which is impossible if one replaces the other.
+⚠ Measured since (FINDINGS F-1/F-2): **IB60 scores AUC 0.655 on the LOD/HOD question and adds nothing
+once `posr` is known** — it is a crude switch approximating distance-travelled. It stays computed and
+recorded; it is NOT a confirmation and was removed from the ⓪a face at v14.65.
 
 ### THE LADDER WIDTH — ⚠ PARTLY CLOSED IN v14.54, ONE DECISION STILL OPEN
 

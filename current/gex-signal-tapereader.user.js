@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.67
+// @version    14.68
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.67';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.68';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -24535,6 +24535,37 @@ window.__gptsDebug.renderErrors=function(){ return RENDER_ERRS.slice(); };
 // (v14.59) the corpus feed and the base rates, both inspectable without editing code
 // (v14.67) why did this bar record nothing? Read it DURING a live session - the recorder is empty
 // after hours, which is why this could not be diagnosed from a night-time console.
+// (v14.68) STORAGE HEALTH — read-only, and the one call that would have saved a week.
+// ⚠ FINDINGS F-10: on 2026-08-28 localStorage was measured FULL at exactly 10,240 KB
+// (gpts_recorder_v7 5,957 KB for ONE day + gpts_nodeevents_v1 3,228 KB). EVERY setItem in the
+// system had been failing behind catch(e){} for about a week, producing five separate "bugs": the
+// feature-record collapse, the corpus tap never running, the base-rate courier never delivering,
+// InsiderFinance levels 8.5 hours stale, and a wrong conclusion about the companion's version.
+// The panel kept drawing through all of it.
+// ⚠ THIS IS DIAGNOSIS ONLY. The bounded-write fix is NOT in this build — it changes the recorder's
+// write path and was deliberately held back so it could not risk a live session. See
+// session-state/pending/v14.68-bounded-writes.patch and LOCKED-ITEMS.
+// ⚠ IT REFILLS AT ROUGHLY 6 MB PER DAY. Check it; do not assume it.
+window.__gptsDebug.storage=function(){
+  try{
+    var CAP=10*1024, per={}, total=0, i, k, b;
+    for(i=0;i<localStorage.length;i++){ k=localStorage.key(i);
+      b=(k.length+(localStorage.getItem(k)||'').length)*2; total+=b; per[k]=Math.round(b/1024); }
+    var kb=Math.round(total/1024);
+    var top=Object.keys(per).sort(function(x,y){ return per[y]-per[x]; }).slice(0,8)
+              .map(function(x){ return x+'='+per[x]+'KB'; });
+    // can we still write? a probe is worth more than an estimate - the failure is silent otherwise.
+    var canWrite=true;
+    try{ localStorage.setItem('__gptsProbe', new Array(20*1024).join('y')); localStorage.removeItem('__gptsProbe'); }
+    catch(ep){ canWrite=false; }
+    return { totalKB:kb, capKB:CAP, headroomKB:CAP-kb, pctFull:Math.round(100*kb/CAP),
+             canWrite40KB:canWrite, top:top,
+             verdict: (!canWrite) ? '\u26a0\u26a0 FULL - every write in the panel is failing silently RIGHT NOW'
+                    : (kb>CAP*0.85) ? '\u26a0 nearly full - clear gpts_nodeevents_v1 (derived, safe mid-session)'
+                    : 'ok',
+             safeToClear:'gpts_nodeevents_v1 is derived and re-accumulates. NEVER clear gpts_recorder_v7 during RTH - it holds today\u2019s snapshots and feature records.' };
+  }catch(e){ return 'threw: '+(e&&e.message||e); }
+};
 window.__gptsDebug.featHealth=function(){
   try{
     var d=null; try{ d=recorderDay(recorderLoad()); }catch(e1){}

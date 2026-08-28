@@ -116,6 +116,28 @@ open", already 83% — nothing moves accuracy at any hour. **Do not build it.**
 
 ---
 
+## 4b · ⚠⚠ THE ONE THING THAT EXPLAINED FIVE BUGS — localStorage WAS FULL (2026-08-28)
+
+    localStorage      10,240 KB = exactly Chrome's 10 MB cap
+    gpts_recorder_v7   5,957 KB  (ONE day)
+    gpts_nodeevents_v1 3,228 KB
+    40 KB write probe  QuotaExceededError
+
+**Every `setItem` was failing behind `catch(e){}`.** That is the feature-record collapse (15 records
+across 1 bar against 133 snapshots), the corpus tap "never running", the base-rate courier never
+arriving, and IF levels 8.5 hours stale. **One fault, five symptoms**, chased for two sessions.
+
+⚠ Cleared by hand; everything came alive within 12 seconds. **It refills at ~6 MB/day — the fix is
+NOT built.** See FINDINGS F-10 and LOCKED-ITEMS.
+
+⚠ **TWO LESSONS WORTH MORE THAN THE FIX:**
+- **A diagnostic created its own evidence.** Deleting two keys to test "is the companion alive"
+  freed exactly enough room for the tiny calendar object to write — which looked like proof the
+  script ran and only Yahoo was broken. **Check the quota before concluding from a storage probe.**
+- **The v14.67 instrument was aimed at the wrong layer.** `FEATH` counters asked registry-vs-dedupe.
+  Neither: the records were built correctly every bar and discarded at the final `setItem`.
+  **Measure the cheapest thing first.**
+
 ## 5 · WHAT TO DO NEXT, IN ORDER
 
 1. ⚠⚠ **HE MUST CLICK BOTH TAMPERMONKEY LINKS.** He has **never** updated the companion — it is

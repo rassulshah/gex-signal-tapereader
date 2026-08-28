@@ -1,3 +1,42 @@
+## v14.68 — __gptsDebug.storage(), and the one fault that produced six bugs
+
+**localStorage was FULL at exactly 10,240 KB** — Chrome's cap. `gpts_recorder_v7` held 5,957 KB for a
+SINGLE day and `gpts_nodeevents_v1` 3,228 KB; a 40 KB write probe threw QuotaExceededError. Every
+`setItem` in the system had been failing behind `catch(e){}` for about a week.
+
+**One fault. Six symptoms, every one of which was chased separately:**
+
+| symptom | cause |
+|---|---|
+| feature records collapsed (15 records / 1 bar vs 133 snapshots) | `recorderSave()` → quota |
+| the Yahoo corpus tap "never ran" | `futStore()` → quota |
+| the base-rate courier never delivered | quota |
+| InsiderFinance levels 8.5 hours stale | the companion's `store()` → quota |
+| "the companion is running v1.14" | **wrong** — v1.15 was correct all along |
+| **the blank pre-open rail** | `lastBookSave()` → quota, so the band never had a prior close |
+
+⚠ **A diagnostic created its own evidence.** Deleting two keys to test whether the companion was
+alive freed exactly enough room for the tiny calendar object to write — which read as proof the
+script ran and only Yahoo was broken.
+
+⚠ **v14.67's instrument was aimed at the wrong layer.** The FEATH counters asked registry-vs-dedupe.
+Neither: records were built correctly every bar and thrown away at the final `setItem`. **One quota
+check would have found in thirty seconds what a night of reasoning did not.**
+
+### WHAT SHIPS HERE — DIAGNOSIS ONLY, ON PURPOSE
+
+`__gptsDebug.storage()` — total, cap, headroom, top keys, and a **real 40 KB write probe** rather
+than an estimate, because the failure is silent and an estimate would have missed it. Its verdict
+names `gpts_nodeevents_v1` as the safe mid-session clear and `gpts_recorder_v7` as never-during-RTH.
+
+⚠ **The bounded-write fix is deliberately NOT in this build.** It changes `recorderSave()`, and the
+operator is installing during a live session — the first in over a week that can actually record.
+It is parked at `session-state/pending/v14.68-bounded-writes.patch` for the post-close build.
+
+⚠ **Storage refills at roughly 6 MB/day.** Check `__gptsDebug.storage()`; do not assume.
+
+Suite 119 green, 6 documented baseline reds. FINDINGS F-10.
+
 ## v14.67 — the learning layer had never run, and the collapse gets an instrument
 
 > "i want to make sure that all of this is reviewed daily/nightly by an llm ... is that already built"

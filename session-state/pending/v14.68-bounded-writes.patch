@@ -1,0 +1,156 @@
+diff --git a/current/gex-signal-tapereader.user.js b/current/gex-signal-tapereader.user.js
+index 8b4cbbd..9b6b10f 100644
+--- a/current/gex-signal-tapereader.user.js
++++ b/current/gex-signal-tapereader.user.js
+@@ -1,7 +1,7 @@
+ // ==UserScript==
+ // @name         Gex Signal Tapereader
+ // @namespace    gpts
+-// @version    14.67
++// @version    14.68
+ // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
+ // @match        https://app.skylit.ai/atlas*
+ // @grant        none
+@@ -626,7 +626,7 @@ function ensureFeeds(){
+   }catch(e){}
+ }
+ 
+-var GPTS_VERSION='14.67';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
++var GPTS_VERSION='14.68';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+ console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
+ 
+ function fiberKeyOf(el){
+@@ -3747,11 +3747,86 @@ function recorderLoad(){
+     if(!db||typeof db!=='object') db={days:{}}; if(!db.days) db.days={}; return db;
+   }catch(e){ return {days:{}}; }
+ }
++// ============================================================================================
++// (v14.68) BOUNDED WRITES, AND A FAILED WRITE THAT SHOUTS.
++//
++// ⚠⚠ WHY THIS EXISTS — FINDINGS F-10. On 2026-08-28 localStorage was measured FULL at exactly
++// 10,240 KB: gpts_recorder_v7 5,957 KB holding ONE day, gpts_nodeevents_v1 3,228 KB. A 40 KB write
++// probe threw QuotaExceededError. EVERY setItem in the system had been failing behind catch(e){} for
++// about a week, and that single fault produced five separate "bugs":
++//     the feature-record collapse (15 records / 1 bar against 133 snapshots)
++//     the Yahoo corpus tap "never running"
++//     the base-rate courier never delivering
++//     InsiderFinance levels 8.5 hours stale
++//     and a wrong conclusion that the companion was running an old version
++// The panel kept drawing through all of it. Nothing anywhere said the disk was full.
++//
++// TWO RULES, AND THE SECOND MATTERS MORE THAN THE FIRST:
++//   1. Every large write goes through lsPut(), which SHRINKS THE PAYLOAD TO A BYTE BUDGET before
++//      writing. Counting records was never enough - NEV_MAX capped events at 4000 while 1,332 of
++//      them reached 3.2 MB, because each carries a why-vector plus three outcome objects.
++//   2. A write that still fails is reported through swallow() into __gptsDebug.renderErrors() and
++//      counted in LS_HEALTH. A data layer that cannot write MUST say so. Silence is what cost the
++//      week, not the quota.
++var LS_CAP_KB     = 10*1024;                 // Chrome's per-origin cap, measured
++var LS_BUDGET_KB  = { 'gpts_recorder_v7':3600, 'gpts_nodeevents_v1':1200 };
++var LS_HEALTH     = { writes:0, shed:0, quotaHits:0, lastErr:null, lastErrAt:null, lastKB:{} };
++function lsKB(str){ try{ return Math.round(str.length*2/1024); }catch(e){ return -1; } }
++function lsTotalKB(){
++  try{ var t=0; for(var i=0;i<localStorage.length;i++){ var k=localStorage.key(i);
++        t+=(k.length+(localStorage.getItem(k)||'').length)*2; } return Math.round(t/1024); }
++  catch(e){ return -1; }
++}
++// shed(obj) must make obj smaller and return true, or return false when it can shed no further.
++function lsPut(key, obj, shed){
++  var budget=LS_BUDGET_KB[key]||1024, s='', i;
++  for(i=0;i<24;i++){
++    try{ s=JSON.stringify(obj); }
++    catch(eS){ try{ swallow('lsPut/stringify '+key, eS); }catch(e0){} return false; }
++    if(lsKB(s)<=budget) break;
++    if(!shed || !shed(obj)) break;          // cannot shrink further - try the write anyway
++    try{ LS_HEALTH.shed++; }catch(e1){}
++  }
++  try{
++    localStorage.setItem(key, s);
++    LS_HEALTH.writes++; LS_HEALTH.lastKB[key]=lsKB(s);
++    return true;
++  }catch(e){
++    // ⚠ THE LOUD PART. Do not swallow this - it is the exact failure that went unseen for a week.
++    try{
++      LS_HEALTH.quotaHits++;
++      LS_HEALTH.lastErr=key+' '+lsKB(s)+'KB — '+(e&&e.name||e)+' (total '+lsTotalKB()+'KB of '+LS_CAP_KB+'KB)';
++      LS_HEALTH.lastErrAt=Date.now();
++      swallow('STORAGE FULL: '+LS_HEALTH.lastErr, e);
++    }catch(e2){}
++    // last resort: shed hard, once, so the session keeps recording something rather than nothing
++    if(shed){
++      for(var m=0;m<10;m++){ if(!shed(obj)) break; }
++      try{ localStorage.setItem(key, JSON.stringify(obj)); LS_HEALTH.writes++; return true; }catch(e3){}
++    }
++    return false;
++  }
++}
+ function recorderSave(db){
+   try{
+     var dates=Object.keys(db.days).sort();
+     while(dates.length>RECORDER_DAYS){ delete db.days[dates.shift()]; }
+-    localStorage.setItem(RECORDER_KEY, JSON.stringify(db));
++    // (v14.68) budgeted write. The shedder drops whole OLDER days first, then trims TODAY oldest-
++    // first - snapshots as well as feature records. ⚠ The old fallback halved `feat` only, but the
++    // 5,957 KB measured on 2026-08-28 was mostly SNAPS, so it shed the wrong thing and then gave up.
++    // ⚠ It never deletes today outright: a day wiped mid-session is a lost session.
++    if(lsPut(RECORDER_KEY, db, function(d){
++        var ds=Object.keys(d.days).sort(), v=null, i;
++        for(i=0;i<ds.length;i++){ if(ds[i]!==TODAY){ v=ds[i]; break; } }
++        if(v){ delete d.days[v]; return true; }
++        var day=d.days[TODAY]; if(!day) return false;
++        var did=false;
++        if(day.snaps) Object.keys(day.snaps).forEach(function(sy){
++          var a=day.snaps[sy]||[]; if(a.length>20){ day.snaps[sy]=a.slice(Math.ceil(a.length*0.25)); did=true; } });
++        if(day.feat) Object.keys(day.feat).forEach(function(sy){
++          var a=day.feat[sy]||[]; if(a.length>40){ day.feat[sy]=a.slice(Math.ceil(a.length*0.25)); did=true; } });
++        return did;
++      })) return;
+   }catch(e){
+     // On quota: drop the oldest day that is NOT today and retry; if today is the only day,
+     // shed the oldest half of today's feature queue instead. Never delete today — that
+@@ -4807,7 +4882,21 @@ function nevLoad(){
+   if(!NEV || typeof NEV!=='object') NEV={ v:1, days:{} };
+   return NEV;
+ }
+-function nevSave(){ try{ localStorage.setItem(NEV_KEY, JSON.stringify(NEV)); }catch(e){} }
++// (v14.68) ⚠ THIS HAD NO SIZE CAP AT ALL. NEV_MAX=4000 bounds EVENTS, not bytes - and 1,332 events
++// reached 3,228 KB because each carries a why-vector plus three outcome objects. Budgeted now, and
++// the shedder drops the OLDEST events of the OLDEST day first.
++function nevSave(){
++  try{
++    lsPut(NEV_KEY, NEV, function(db){
++      if(!db || !db.days) return false;
++      var ds=Object.keys(db.days).sort(), i;
++      for(i=0;i<ds.length;i++){ if(ds[i]!==TODAY && db.days[ds[i]]){ delete db.days[ds[i]]; return true; } }
++      var d=db.days[TODAY];
++      if(d && d.ev && d.ev.length>50){ d.ev=d.ev.slice(Math.ceil(d.ev.length*0.30)); return true; }
++      return false;
++    });
++  }catch(e){ try{ swallow('nevSave', e); }catch(e2){} }
++}
+ function nevDay(){
+   var db=nevLoad(), d=TODAY||'unknown';
+   if(!db.days[d]) db.days[d]={ ev:[] };
+@@ -24535,6 +24624,22 @@ window.__gptsDebug.renderErrors=function(){ return RENDER_ERRS.slice(); };
+ // (v14.59) the corpus feed and the base rates, both inspectable without editing code
+ // (v14.67) why did this bar record nothing? Read it DURING a live session - the recorder is empty
+ // after hours, which is why this could not be diagnosed from a night-time console.
++// (v14.68) STORAGE HEALTH. F-10: localStorage filled to exactly 10,240 KB and every write in the
++// system failed silently for a week. This is the one call that would have found it in 30 seconds.
++window.__gptsDebug.storage=function(){
++  try{
++    var per={}, total=0, i, k, b;
++    for(i=0;i<localStorage.length;i++){ k=localStorage.key(i);
++      b=(k.length+(localStorage.getItem(k)||'').length)*2; total+=b; per[k]=Math.round(b/1024); }
++    var top=Object.keys(per).sort(function(x,y){ return per[y]-per[x]; }).slice(0,8)
++              .map(function(x){ return x+'='+per[x]+'KB'; });
++    var kb=Math.round(total/1024);
++    return { totalKB:kb, capKB:LS_CAP_KB, headroomKB:LS_CAP_KB-kb,
++             pctFull:Math.round(100*kb/LS_CAP_KB),
++             budgets:LS_BUDGET_KB, top:top, health:LS_HEALTH,
++             verdict:(kb>LS_CAP_KB*0.85)?'⚠ NEARLY FULL — writes are about to start failing':'ok' };
++  }catch(e){ return 'threw: '+(e&&e.message||e); }
++};
+ window.__gptsDebug.featHealth=function(){
+   try{
+     var d=null; try{ d=recorderDay(recorderLoad()); }catch(e1){}

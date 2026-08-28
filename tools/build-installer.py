@@ -79,6 +79,17 @@ for f in sorted(os.listdir('session-state')):
     if not os.path.isfile(p) or f.endswith('.log'): continue
     if _SNAP.match(f) and f!=_keep_snap: continue
     FILES.append(p)
+# (v14.68) ⚠⚠ session-state/pending/ — WORK THAT IS BUILT BUT DELIBERATELY NOT SHIPPED YET.
+# `os.listdir` returns the directory name and `os.path.isfile` rejects it, so anything nested here
+# was silently dropped — the FIFTH directory this manifest has lost (design/, skylit-docs/,
+# tools/fixtures/, docs/, now this). The first thing parked here was the bounded-write fix for
+# FINDINGS F-10, held back so it could not risk a live trading session. **A patch that exists only
+# in a sandbox does not exist** — that is how ITEM 18 and the ES corpus were lost.
+if os.path.isdir('session-state/pending'):
+    for f in sorted(os.listdir('session-state/pending')):
+        p=os.path.join('session-state/pending', f)
+        if os.path.isfile(p):
+            FILES.append(p)
 # (v14.63) ⚠⚠ skylit-docs/ WAS NEVER IN THE PAYLOAD EITHER, AND THAT NEARLY LOST FINDINGS.md ON
 # THE VERY BUILD THAT CREATED IT. Same shape as the design/ omission fixed at v14.59: a directory a
 # `load gex` is REQUIRED to read, travelling by luck rather than by manifest. FINDINGS.md is named by

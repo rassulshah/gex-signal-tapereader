@@ -472,3 +472,50 @@ without copying its backtest into `rules.json`.
 
 ⚠ **A REVIEW THAT CANNOT SEE ITS INPUT FAILS SILENTLY AND LOOKS LIKE A QUIET MARKET.** Nothing
 alerted for ten days because "no findings" and "no data" produced the same empty result.
+
+---
+
+## F-10 · localStorage WAS FULL. THAT IS THE FEATURE-RECORD COLLAPSE, AND FOUR OTHER "BUGS".
+**Status: CONFIRMED** (measured on the live panel) · 2026-08-28
+
+    localStorage total   10,240 KB   = exactly Chrome's 10 MB cap
+    gpts_recorder_v7      5,957 KB   holding ONE day (2026-08-27)
+    gpts_nodeevents_v1    3,228 KB   one day of node events
+    write probe, 40 KB    QuotaExceededError
+
+**Every write in the system was failing, silently, behind `catch(e){}`.**
+
+### It was not five bugs. It was one.
+
+| symptom chased | actual cause |
+|---|---|
+| feature records collapsed (15 records / 1 bar vs 133 snapshots) | `recorderSave()` → `setItem` → quota |
+| the Yahoo corpus tap "never ran" | `futStore()` → quota (and its fallback → quota) |
+| the base-rate courier never delivered | same |
+| InsiderFinance levels 8.5 hours stale | the companion's `store()` → quota |
+| "the companion is running v1.14" | **wrong.** v1.15 was installed and correct all along |
+
+⚠⚠ **AND A DIAGNOSTIC CREATED ITS OWN EVIDENCE.** Deleting `gpts_evcal_v1` and `gpts_futbars_v1` to
+test "is the companion alive" freed just enough room for the tiny calendar object to write — which
+looked like proof the script was running and the Yahoo courier specifically was broken. **The probe
+changed the state it was measuring.** Before concluding from a storage experiment, check the quota.
+
+⚠ **THE INSTRUMENT ADDED IN v14.67 WAS AIMED AT THE WRONG LAYER.** `FEATH` counters were built to
+find out why `featRecordAll` produced nothing — registry vs dedupe. Neither. The records were built
+correctly every bar and thrown away at the final `setItem`. **One quota check would have found in
+thirty seconds what a night of reasoning did not.** Measure the cheapest thing first.
+
+### Why nothing noticed for a week
+`recorderSave()` HAS quota handling: on failure it drops the oldest non-today day and retries. It
+could not work here — the recorder held **only** today, so there was no victim, and today alone was
+6 MB. `nevSave()` has no size cap at all (`NEV_MAX=4000` caps EVENTS, not bytes; 1,332 events reached
+3.2 MB because each carries a why-vector plus three outcome objects). And every failure path is
+`catch(e){}`, so the panel kept drawing, the recorder kept "recording", and nothing said the disk was
+full. **Failure pattern #5 — a swallowed error is invisible — in the storage layer.**
+
+### The fix (NOT YET BUILT — see LOCKED-ITEMS)
+Bound both keys by BYTES, shed oldest-first until the payload fits; route quota failures through
+`swallow()` so they reach `__gptsDebug.renderErrors()`; prune days already exported (`gpts_last_export`
+knew 08-27 was safe); and add `__gptsDebug.storage()` reporting total, top keys and headroom.
+
+⚠ **IT WILL REFILL WITHIN ONE SESSION.** Six MB from a single day is the measured rate.
