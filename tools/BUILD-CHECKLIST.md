@@ -1,3 +1,23 @@
+# ⚠ STEP ZERO AND STEP LAST: ✅ SAVE DONE
+
+**Operator-mandated 2026-08-28.** Every build message ends with an explicit **`✅ SAVE DONE`** line
+naming what was updated, so he knows a future context can pick this up if this one closes.
+
+Before sending ANY build, all of these must be current:
+
+- [ ] `session-state/CHAT-HISTORY.md` — regenerated AND its DECISIONS / SHIPPED / OPEN AT CLOSE filled
+- [ ] `session-state/latest-resume-note.md` — **declares the current panel version**
+- [ ] `changelog/CHANGELOG.md` — an entry for this version, with the REASONING
+- [ ] `skylit-docs/FINDINGS.md` — if any measurement changed
+- [ ] `session-state/LOCKED-ITEMS.md` — if an item opened or closed
+- [ ] `node test_savedone.js` green
+
+⚠ `test_savedone.js` enforces this. The resume note went SEVEN builds stale on 2026-08-28 and then
+FOUR more the same day while the chat history stayed perfect — because a test guarded one and
+nothing guarded the other.
+
+---
+
 # ⚠⚠ TWO RULES BEFORE ANYTHING ELSE ON THIS LIST
 
 **1 · DELIVER EXACTLY ONE FILE — WITH ITS TAMPERMONKEY LINKS.** `installvNNNN.bat`, and the links

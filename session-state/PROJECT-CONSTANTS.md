@@ -29,6 +29,22 @@ the `chatHistory` block even after the file was deleted from `projectFiles`. Mut
 it. That is the third time in this project an assertion has bought false confidence; **mutate every
 new assertion and confirm it fires before trusting it.**
 
+## ✅ THE SAVE-DONE RULE — operator-mandated 2026-08-28, ENFORCED BY A TEST
+
+> "after you give me a build, i want a confirmation something like a checkmark save done for future
+> context. this tells me that you have updated the chat history and any relevant files that a future
+> context would need to proceed if this context was closed."
+
+**Every build message ends with `✅ SAVE DONE` and names what was updated.** `test_savedone.js` fails
+the build if the resume note does not declare the current panel version, if CHAT-HISTORY or the
+CHANGELOG are unstamped, if a ledger is missing, or if this rule stops being written down.
+
+⚠ **Why it is a TEST and not a checklist line — this is L-R, finally acted on.** On 2026-08-28
+`latest-resume-note.md` went SEVEN builds stale (v14.59 against a v14.66 panel, no mention of the
+feature being built), was fixed, and went FOUR builds stale again the same day. `CHAT-HISTORY.md`
+was perfect throughout, for exactly one reason: `test_chat_history.js` goes red when it is not.
+**A rule enforced by a test is followed. A rule enforced by a checklist is followed until it is busy.**
+
 ## LANDMINES ADDED 2026-08-28b (the LOD/HOD feature)
 
 **L-N · MEASURE THE QUESTION THE FACE ACTUALLY PUTS.** The LOD/HOD call was reported at **76%** and

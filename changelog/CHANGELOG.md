@@ -1,3 +1,30 @@
+## v14.71 — ✅ SAVE DONE, enforced by a test
+
+> "after you give me a build, i want a confirmation something like a checkmark save done for future
+> context."
+
+He asked for a receipt. Checking whether I deserved one proved his point: CHAT-HISTORY, CHANGELOG and
+FINDINGS were current at v14.70 — **`latest-resume-note.md` still said v14.66.** Four builds stale, on
+the same day I had already rescued it from seven builds stale.
+
+⚠ **The asymmetry is the lesson.** The chat history never rots because `test_chat_history.js` goes red
+when it does. The resume note had no guard, so it rotted twice in one day — by me, while I was
+actively writing about the danger of it. That was recorded as landmine **L-R** this morning and then
+not acted on for four builds.
+
+**`test_savedone.js`** fails the build when the resume note does not declare the current panel
+version, when CHAT-HISTORY or the CHANGELOG are unstamped, when a ledger is missing, or when the
+convention stops being written down. Mutation-tested: staling the note, unstamping the history and
+dropping the rule from the checklist each turn it red.
+
+The convention now lives in four places a context actually reads: `.gex-config.json` (read first on
+load), `PROJECT-CONSTANTS.md`, `tools/BUILD-CHECKLIST.md`, and section 0b of the resume note.
+
+⚠ The resume note also carries the corrected decision stats. **The 64-cell figures — 94% IN, 72%
+NOT-IN — must not be quoted.** Current: **IN 92% n=284 @09:35 · NOT IN 85% n=230 @08:40**.
+
+Suite 120 green, 6 documented baseline reds.
+
 ## v14.70 — a deleted feature's constraint was costing 45 minutes a day
 
 The panel said **"no rate (thin cell, n=0)"** for the first 45 minutes of every session. Not a bug in

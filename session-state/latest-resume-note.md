@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-08-28 · panel v14.66 · companion v1.15 · supersedes every earlier resume note_
+_written 2026-08-28 · panel v14.71 · companion v1.15 · supersedes every earlier resume note_
 
 ---
 
@@ -30,6 +30,24 @@ session. `installvNNNN.bat`, run on his machine, is the only route to GitHub.
 
 He works **one item at a time** and expects you to **discuss before building**. He has caught more
 real defects than the test suite has. When he pushes back, he is usually right.
+
+---
+
+## 0b · ⚠⚠ THE SAVE-DONE RULE (operator-mandated 2026-08-28)
+
+> "after you give me a build, i want a confirmation something like a checkmark save done for future
+> context. this tells me that you have updated the chat history and any relevant files that a future
+> context would need to proceed if this context was closed."
+
+**Every build ends with an explicit `✅ SAVE DONE` line** naming what was updated. It is not a
+courtesy — it is the receipt that the handoff chain is current.
+
+⚠ **`test_savedone.js` ENFORCES IT.** It fails the build when `latest-resume-note.md` does not
+declare the current panel version, when CHAT-HISTORY or the CHANGELOG are not stamped, when a ledger
+is missing, or when this convention stops being written down. **The resume note went SEVEN builds
+stale on 2026-08-28 and then FOUR more the same day, while CHAT-HISTORY stayed perfect — because a
+test guarded one and nothing guarded the other.** A rule enforced by a test is followed; a rule
+enforced by a checklist is followed until it is busy.
 
 ---
 
@@ -113,6 +131,29 @@ open", already 83% — nothing moves accuracy at any hour. **Do not build it.**
 - ⚠ **EVERY E-ROW FIELD IS A TRIMMED MEAN** (Tukey 1.5×IQR), not a median — *"i thought they were
   all averages."* One row, one statistic. `s1`–`s7` pin it. p25/p75 stay true percentiles.
 - ⚠ Zero wick **prints 0** and leaves the medians; never reclaiming the open is **null, not 0**.
+
+---
+
+## 4c · WHAT SHIPPED 2026-08-28 AFTER THE STORAGE FIND (v14.68 → v14.70)
+
+- **v14.68** `__gptsDebug.storage()` — total, cap, headroom, top keys and a REAL 40 KB write probe.
+  ⚠ The bounded-write FIX is **not** built: it is parked at
+  `session-state/pending/v14.68-bounded-writes.patch` because he installs during live sessions.
+- **v14.69** ⓪a's static half renders **without candles**. The old `if(!D.ok) return <one line>` hid
+  the base rates, the ladder, the provenance and the table whenever there were no bars — i.e. every
+  pre-open minute. The A row still refuses, verbatim.
+- **v14.70** THE TABLE NOW COVERS THE WHOLE SESSION (**F-11**). It had skipped the first 60 minutes
+  because the study required IB60 to exist first; IB60 was measured worthless and dropped, and the
+  exclusion stayed behind. Re-derived from minute 5: **72/72 cells**, and AUC on the SAME late rows
+  is IDENTICAL (0.8787) — strictly additive.
+  ⚠ **THE NOT-IN CALL LIVED IN THE MISSING CELLS: 72% n=85 @09:45 → 85% n=230 @08:40.**
+  ⚠ **DO NOT QUOTE the older figures** (94/09:55 IN, 72/09:45 NOT-IN) — they belong to the 64-cell
+  table. Current: **IN 92% n=284 @09:35 · NOT IN 85% n=230 @08:40**.
+
+⚠ **VERIFIED WORKING LIVE 2026-08-28:** the IRT export (`how:file`, `inPlace:true`, `err:null`, both
+Kings on EPU26) and the Yahoo corpus tap (ES/NQ/GC/CL ~1,900 bars each). ⚠ The IRT export carries
+only TWO rows because `emPiles` has no band anchor — same F-10 chain; expect it to fill once bars
+anchor the band.
 
 ---
 

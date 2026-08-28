@@ -123,8 +123,8 @@
       "wicks/"
     ]
   },
-  "version": "2026-08-28b",
-  "lastUpdated": "2026-08-28T04:30:00Z",
+  "version": "2026-08-28c",
+  "lastUpdated": "2026-08-28T14:40:00Z",
   "loadInstruction": "⚠ 2026-08-28: READ design/DATA-ARCHITECTURE.md - it is the ONE place that says WHO CAN REACH WHAT (the panel is @grant none and cannot fetch cross-origin; the companion holds the grants; the cloud can clone but CANNOT PUSH; git is the transport), every data source, the four transports, and the daily ES corpus pipeline. It exists because those facts used to live only in session-state/, which is rewritten in full every build - the same mechanism that lost ITEM 18 for 24 versions. design/architecture-design.md is SUPERSEDED on data sources by it. ⚠ TWO STANDING OPERATOR RULES, STATED HERE SO A LOAD CANNOT MISS THEM: (1) DELIVERY IS ONE FILE - see deliveryRule; send exactly one installvNNNN.bat and nothing else. (2) CHAT HISTORY IS REGENERATED ON EVERY BUILD and READ ON EVERY LOAD - see chatHistory; a build that skips it goes red on test_chat_history.js. ⚠ 2026-08-27: CLONE FULL (see cloneRule — never --depth 1). READ IN THIS ORDER, IN FULL, BEFORE ANYTHING ELSE: (1) session-state/latest-resume-note.md — a briefing, not a changelog; a context that skips it will re-litigate settled decisions. (2) session-state/CHAT-HISTORY.md, the CURRENT-CONTEXT entry — what was actually SAID last context: the corrections, the approaches already rejected, and the operator's exact words. The resume note says where we are; this says how we got there. (3) session-state/LOCKED-ITEMS.md — agreed work that is NOT built. It exists because the resume note lost ITEM 18 and a whole session went to re-discovering it. (4) design/DATA-ARCHITECTURE.md — who can reach what: the browser is the only participant that can fetch freely, the cloud cannot reach Yahoo and CANNOT PUSH, git is the transport between them. ⚠ master-spec.md §3.1-3.2 and design/architecture-design.md are OBSOLETE where they name AI Drive as the source of truth — both carry banners; git is the truth. TWO analyst packages inform the build (Garma = gamma-map-first, Wicks = charts-first); BUILD-PLAN.md is the master sequence across both, and is currently MISSING at HEAD. Several headline measurement rates in this project are ONE-DAY samples and at least one is contradicted by a later day — never quote a rate without its n and its date.",
   "chatHistory": {
     "file": "session-state/CHAT-HISTORY.md",
@@ -180,5 +180,18 @@
     "doNotQuote": "76% for the IN call or 93% for the NOT-IN call - both came from a sample that pooled BOTH sides at every bar, a question the panel never asks. See F-8.",
     "rejected": "IB30/IB60/50-SMA/open-reclaimed/60m-breakout are proxies for posr; sweeps 48%; momentum divergence -0.0004; NQ divergence -0.0014; red/green adds nothing over the sign of price vs the open.",
     "status": "PROVISIONAL - enrolled in FEATURES and learning/rules.json at n=0; the forward score is what turns it into a measured rate."
+  },
+  "saveDone": {
+    "rule": "Operator-mandated 2026-08-28: EVERY message that delivers a build ends with an explicit \"✅ SAVE DONE\" line naming what was updated for a future context.",
+    "quote": "\"after you give me a build, i want a confirmation something like a checkmark save done for future context. this tells me that you have updated the chat history and any relevant files that a future context would need to proceed if this context was closed.\"",
+    "mustBeCurrent": [
+      "session-state/CHAT-HISTORY.md",
+      "session-state/latest-resume-note.md",
+      "changelog/CHANGELOG.md",
+      "skylit-docs/FINDINGS.md (when a measurement changed)",
+      "session-state/LOCKED-ITEMS.md (when an item opened or closed)"
+    ],
+    "enforcement": "test_savedone.js fails the build when the resume note does not declare the current panel version, when CHAT-HISTORY or the CHANGELOG are unstamped, when a ledger is missing, or when this convention stops being written down.",
+    "why": "latest-resume-note.md went SEVEN builds stale on 2026-08-28 and then FOUR more the same day, while CHAT-HISTORY.md stayed perfect - because a test guarded one and nothing guarded the other. A rule enforced by a test is followed; a rule enforced by a checklist is followed until it is busy."
   }
 }
