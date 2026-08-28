@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.15
+// @version      1.16
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
@@ -590,7 +590,12 @@ var FUT_MARKETS=[
   { k:'ES', y:'ES=F' },
   { k:'NQ', y:'NQ=F' },
   { k:'GC', y:'GC=F' },
-  { k:'CL', y:'CL=F' }
+  { k:'CL', y:'CL=F' },
+  // (v1.16) ⚠ VIX IS A DIFFERENT KIND OF ROW AND IS FETCHED DIFFERENTLY — see vixCourier below.
+  // It is not an intraday bar feed; what the model wants is the DAILY LEVEL, back far enough to
+  // cover the corpus, because implied volatility prices the session that is COMING while the
+  // panel's realized sigma only measures the one that just happened. The operator noticed the VIX
+  // book is already rendered by Skylit: that gives the live level but cannot backfill history.
 ];
 var FUT_WIN_A=13*3600, FUT_WIN_B=21*3600+30*60;   // the generous UTC window described above
 var FUT_POLL_MS=60*60*1000;                        // hourly is plenty for a daily corpus
@@ -664,6 +669,77 @@ function futCourier(){
   }catch(e){ log('futCourier threw', e.message); }
 }
 
+// ---- (v1.16) THE VIX DAILY COURIER — the one input class the corpus cannot supply -------------
+// FINDINGS F-16 measured the daily ATR and it adds NOTHING to the touch model: realized sigma
+// already contains it. Implied volatility is the one volatility measure that is not a slower copy
+// of what we already have - it prices event risk that has not happened yet. This couriers two
+// years of DAILY ^VIX so tools/ can test whether a VIX-scaled sigma beats the realized one over
+// the whole 197-session corpus. ⚠ It is NOT wired into the panel's sigma: nothing displays it
+// until that test says it earns its place.
+var VIX_KEY='gpts_vix_daily_v1';
+var VIX_POLL_MS=12*60*60*1000;
+var vixLast=0;
+function vixCourier(){
+  try{
+    if(Date.now()-vixLast < VIX_POLL_MS) return;
+    vixLast=Date.now();
+    GM_xmlhttpRequest({
+      method:'GET',
+      url:'https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=2y',
+      timeout:25000,
+      onload:function(res){
+        try{
+          if(!res || res.status!==200){ store2(VIX_KEY,{err:'HTTP '+(res&&res.status),at:Date.now()}); return; }
+          var j=JSON.parse(res.responseText||'{}');
+          var r=j && j.chart && j.chart.result && j.chart.result[0];
+          var q=r && r.indicators && r.indicators.quote && r.indicators.quote[0];
+          if(!r || !r.timestamp || !q || !q.close){ store2(VIX_KEY,{err:'no quote arrays',at:Date.now()}); return; }
+          var rows=[], i;
+          for(i=0;i<r.timestamp.length;i++){
+            // ⚠ a null close is DROPPED, never zeroed - a VIX of 0 is not a quiet day, it is a hole.
+            if(q.close[i]==null) continue;
+            rows.push([ r.timestamp[i], +q.close[i].toFixed(2) ]);
+          }
+          store2(VIX_KEY, { at:Date.now(), n:rows.length, rows:rows });
+          log('vix delivered:', rows.length, 'daily closes');
+        }catch(e){ store2(VIX_KEY,{err:'parse: '+e.message,at:Date.now()}); }
+      },
+      onerror:function(){ store2(VIX_KEY,{err:'network error',at:Date.now()}); },
+      ontimeout:function(){ store2(VIX_KEY,{err:'timeout',at:Date.now()}); }
+    });
+  }catch(e){ log('vixCourier threw', e.message); }
+}
+function store2(key,obj){ try{ localStorage.setItem(key, JSON.stringify(obj)); }catch(e){ log('store2 failed', key, e.message); } }
+// ---- (v1.16) THE FAR-SIDE TABLE COURIER — this is what "it improves as data is gathered" means --
+// The panel carries a baked-in FS_BASE. tools/study-farside.py re-derives data/es-1min/FARSIDE.json
+// from a longer corpus; this brings it to the browser without a rebuild, exactly as the HOD/LOD
+// base rates already travel. The panel VALIDATES it (fsNormalise: >=120 sessions, every rated cell
+// n>=60, monotone in distance) and keeps the baked copy when the payload fails - an old known-good
+// table beats a fresh unparseable one.
+var FSIDE_KEY='gpts_farside_v1';
+var FSIDE_URL='https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/data/es-1min/FARSIDE.json';
+var FSIDE_POLL_MS=6*60*60*1000;
+var fsideLast=0;
+function fsideCourier(){
+  try{
+    if(Date.now()-fsideLast < FSIDE_POLL_MS) return;
+    fsideLast=Date.now();
+    GM_xmlhttpRequest({
+      method:'GET', url:FSIDE_URL, timeout:20000,
+      onload:function(res){
+        try{
+          if(!res || res.status!==200) return;
+          var j=JSON.parse(res.responseText);
+          if(!j || !j.corpus || !(j.corpus.sessions>0) || !j.touch || !j.timing || !j.hazard || !j.floor) return;
+          localStorage.setItem(FSIDE_KEY, JSON.stringify({ at:Date.now(), base:j }));
+          log('far-side table delivered:', j.corpus.sessions, 'sessions');
+        }catch(e){ log('far-side parse failed', e.message); }
+      },
+      onerror:function(){ log('far-side fetch failed'); },
+      ontimeout:function(){ log('far-side fetch timeout'); }
+    });
+  }catch(e){ log('fsideCourier threw', e.message); }
+}
 // ---- (v1.15) THE BASE-RATE COURIER — what makes "always updated" true ------------------------
 // The HOD/LOD base rates are re-derived in the cloud by tools/study-hodlod.py and committed as
 // data/es-1min/BASERATES.json. Without this courier the panel would still be reading HODLOD_BASE,
@@ -700,7 +776,7 @@ function hlBaseCourier(){
 }
 function tick(){ try{ if(document.visibilityState!=='visible') return;
   for(var i=0;i<SYMS.length;i++) pull(SYMS[i]);
-  evCalCourier(); futCourier(); hlBaseCourier();
+  evCalCourier(); futCourier(); hlBaseCourier(); vixCourier(); fsideCourier();
 }catch(e){} }
 
 setTimeout(tick, 4000);
@@ -716,6 +792,10 @@ try{
     fut:function(){ try{ return JSON.parse(localStorage.getItem(FUTBARS_KEY)||'null'); }catch(e){ return null; } },
     futPull:function(k){ var m=null; FUT_MARKETS.forEach(function(x){ if(x.k===(k||'ES')) m=x; }); if(!m) return 'no such market'; futLast=0; futPull(m); return 'pulling '+m.y; },
     hlBase:function(){ try{ return JSON.parse(localStorage.getItem(HLBASE_KEY)||'null'); }catch(e){ return null; } },
+    vix:function(){ try{ var v=JSON.parse(localStorage.getItem(VIX_KEY)||'null'); return v&&v.rows?{n:v.rows.length,at:v.at,last:v.rows[v.rows.length-1]}:v; }catch(e){ return null; } },
+    vixPull:function(){ vixLast=0; vixCourier(); return 'pulling ^VIX'; },
+    fside:function(){ try{ var f=JSON.parse(localStorage.getItem(FSIDE_KEY)||'null'); return f&&f.base?{at:f.at,sessions:f.base.corpus.sessions}:f; }catch(e){ return null; } },
+    fsidePull:function(){ fsideLast=0; fsideCourier(); return 'pulling the far-side table'; },
     hlBasePull:function(){ hlbLast=0; hlBaseCourier(); return 'pulling base rates'; },
     _extract:extractChain, _levelsFor:levelsFor, _windows:windows
   };

@@ -161,7 +161,19 @@ FILES += sorted(f for f in os.listdir('.') if f.startswith('test_') and f.endswi
 # the only check that would have found it.
 # ⚠ EPM26-1min.csv.gz is DELIBERATELY EXCLUDED: 5.1MB against the 6MB payload cap below. It reaches
 # GitHub by living in his working tree, not by riding the installer. See data/es-1min/README.md.
-for _p in ['data/es-1min/BASERATES.json', 'data/es-1min/README.md']:
+# ⚠⚠ (v14.72) FARSIDE.json JOINS THEM, AND IT WAS MISSING FROM THE FIRST BUILD OF THE FEATURE THAT
+# NEEDS IT — caught by decoding the .bat before sending, which is the ONLY check that finds this
+# class of bug (landmine L-Q, now four occurrences). The far-side courier fetches this file from
+# GitHub; if it never reaches GitHub, the courier 404s forever and the panel silently serves its
+# baked-in table with nothing saying so.
+# ⚠ (v14.73) tools/irt/ RIDES TOO. The FlexLevels server, its launchers and the autostart setup
+# existed ONLY as chat attachments until 2026-08-28, which is exactly why a later context searched
+# the repo, found nothing, and told the operator they had never been built. Anything he has to RUN
+# belongs in the payload.
+for _p in ['data/es-1min/BASERATES.json', 'data/es-1min/FARSIDE.json', 'data/es-1min/README.md',
+           'tools/irt/irtserve.py', 'tools/irt/irtserve.bat', 'tools/irt/irtstartup.bat',
+           'tools/irt/setupautostart.bat', 'tools/irt/README.md',
+           'tools/irt/FlexLevelsExport.sample.csv']:
     if os.path.exists(_p):
         FILES.append(_p)
 # the approved HOD/LOD design lives at the repo ROOT, not in mockups/ — which is exactly why two

@@ -1,3 +1,91 @@
+## v14.73 — the export now writes the King the FACE is showing
+
+> "this is so strange because you show the qqq king in the tapereader app so you know the level"
+
+He was right, and the measurement backed him: the QQQ book was **healthy** (100 strikes, 37 non-zero,
+King 717, $94.2M) and on his screen, while `FlexLevelsExport.csv` refused to carry a row for it —
+for two hours, with nothing anywhere saying why.
+
+**The cause was structural.** The FACE reads the rendered ladder (`ladderFor`); the EXPORT re-derived
+the same King through `tapeMap()` and then applied a rule the face never applies — `!fromFeed`, from
+the v14.15 decision that the QQQ King must come from Atlas rather than the feed. Two computations of
+one quantity, drifting apart — which **DECISIONS v13.2 already forbade**: *"when two parts of the
+face must agree, they read the SAME ARRAY."*
+
+- **The export now reads the face's ladder first**, falls back to the tape, and **LATCHES** today's
+  last good King so a blind tick can never *delete* a level from his chart. Every path is tagged.
+- ⚠ **v14.15 IS REVERSED, deliberately:** a feed-sourced QQQ King is now written and marked. Refusing
+  it bought a **missing** level, not a safer one. The feed is Skylit's own gamma book.
+- **`IRT_LAST.nqWhy`** records exactly why a QQQ row was skipped — `no NQ ratio` / `no ladder` /
+  `latched` / `via feed`. This afternoon's diagnosis took two hours of inference; next time it is one
+  call.
+- **King labels drop the redundant `100%`** — *"since these are already kings you dont need to
+  mention 100%."* A King is 100% by definition; the slot cost chart width and said nothing.
+
+⚠ **Also recorded today, from the same session:** `file://` works in IRT's **Remote File** field and
+re-reads on the 1-minute timer — so the HTTP server built on 2026-08-27 is retired to a fallback
+(`tools/irt/`, now in git; it had existed only as chat attachments). And **OVERLAY = GEX** joins the
+required posture in `SKYLIT-FEEDS.md`: GEX+VEX blends the ladder's %King values (7750 read 57% vs 68%).
+
+Tests: `test_irt_export` 57 → **64**, every new assertion executed and mutation-tested (ladder-over-
+tape, the latch, the day guard, the thin-ladder refusal, the label). ⚠ Two of the suite's own
+assertions had to be corrected in the same commit: one hardcoded the NQ ratio (testing the ratio, not
+the King) and one asserted "every source dark writes nothing" without clearing the latch — which
+would have silently tested the latch instead of the darkness.
+
+## v14.72 — the far side: where the other extremity can get to, and when
+
+> "i want it to say something like LOD IN -74%, HOD expected around 7772-7792 in 3.5 Hrs between
+> 1:30pm and 2pm - 80%" … "did you do your best in creating a good model for predicting hod lod
+> times" … "it must be able to improve as data is gathered"
+
+**What he asked for could not be built as asked, and the measurement says why.** A 30-minute timing
+box is worth **15%**; an hour is worth 24%; a two-sided window must be **3.6 hours** wide to reach
+80%. So the face states an 80% **one-sided floor** ("not before 12:00") and shows the middle-half
+window at its true **50%**. Printing "3–3.5h, 80%" would have been a lie of precision.
+
+**Five findings got us here, three of them negative** (`skylit-docs/FINDINGS.md` F-12…F-16):
+
+- **F-12** — the hover's advertised **92% IN call is 63% in real time.** The study behind it picked
+  the side *with hindsight*, so every failed call was relabelled out of the sample. The CELL rate on
+  the face is honest (says 70–79%, happens 75%); the DECISION figure was not.
+- **F-13** — predicting the far side's price directly is a dead end: **a fixed 1.36× expansion beats
+  gradient boosting** (9.2 vs 9.9 pts). Timing as an extremum is the clock. 16 factors, none survive.
+- **F-14** — re-posed as **"will price REACH this level"**: AUC **0.826**, calibrated at every
+  decile, and **half of all readings land in a ≤20% bucket that is right 92% of the time.**
+- **F-15** — re-posed as **first passage**, timing becomes predictable (AUC 0.692, calibrated) — and
+  the analytic law `T ~ (d/σ)²` does 95% of the work of a ten-feature model.
+- **F-16** — the daily ATR adds nothing; level identity adds nothing under a dense control. ⚠ **A
+  sparse control claimed +12 points and it was a phantom** — the near-miss is recorded with the fix.
+
+### What shipped
+
+- **⓪a's far-side block**: three levels the panel already draws (node/King, EM edge, prior-day, dark
+  pool, round number), each with **P(trades there today)** and the **first-passage time as a range**.
+- **The NO call on the face** — the sharpest thing the model says — in amber, not red: it is the
+  most accurate statement here, not a hazard.
+- **The timing line**: the 80% floor, the 50% window, and the hazard ("69% into the close if not in
+  by 13:15"), which updates every bar.
+- **The ladder is gone.** It answered the verdict's question with a weaker instrument (age alone,
+  AUC 0.818 vs 0.879) and disagreed with it on the face — 74% above, 41% highlighted below. Adding
+  `stood` to the table was measured *worse* (F-4), so it was never extra information.
+- **The honesty line moved into the header hover**, except `rates live` / `rates baked in`, which
+  stays visible because a frozen corpus changes how much to trust every row under it.
+- **`farside` is enrolled from its first line** — and its record carries each level's **node
+  identity** (%King, polarity, role), which is the data the gamma question needs and nobody has ever
+  collected.
+- **Companion v1.16**: couriers `FARSIDE.json` (so a re-derived table reaches the panel with no
+  build) and two years of daily **^VIX** (so implied-vs-realized σ can finally be tested).
+- **`tools/study-farside.py`** derives every table the panel carries — the numbers the last feature
+  shipped with could not be re-derived, which is how the 92% survived.
+
+### Tests
+`test_farside.js` — 30 assertions, all executed, every guard mutation-tested individually (six
+mutations, six distinct failures). `test_hodlod` updated for the new face: the forecast-vocabulary
+ban is now **scoped to a region the SOURCE declares** (`PROB-BLOCK-START/END`) and is *stricter*
+inside it — "likely" may not appear without a percentage. Suite **119 green**, 6 documented baseline
+reds. Rules 74 → 75.
+
 ## v14.71 — ✅ SAVE DONE, enforced by a test
 
 > "after you give me a build, i want a confirmation something like a checkmark save done for future

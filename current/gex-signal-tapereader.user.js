@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.71
+// @version    14.73
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.71';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.73';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4255,7 +4255,11 @@ function irtBuildCsv(){
   // the export used to carry — the rail's node set, SUCC, the IF walls, the percentage rows —
   // stays on the PANEL, where density is cheap; the chart gets only the three crowns.
   // Kept from the earlier builds, because each was operator-verified the hard way:
-  //   · label grammar SOURCE + ROLE (v14.12) — "SPXW KING 100%" / "SPY KING 100%" / "QQQ KING 100%"
+  //   · label grammar SOURCE + ROLE (v14.12) — "SPXW KING" / "SPY KING" / "QQQ KING"
+  //     ⚠ (v14.73) THE STRENGTH FIELD IS GONE FROM THESE THREE. The operator, 2026-08-28: "since
+  //     these are already kings you dont need to mention 100%." He is right — a King is 100% by
+  //     definition, so the slot carried no information and cost chart width. The grammar is
+  //     unchanged for every OTHER row, where strength still distinguishes one node from another.
   //   · RGB colours (v14.14): SPXW full yellow/purple by polarity, SPY the lighter shade, QQQ full
   //   · chart-frame-independent SPXW conversion (v14.14) and the Atlas-anchored basis (v14.17/18)
   //   · the LATCHED crown (v14.19) — the exported SPXW King is the rail's, not a mid-flap blip
@@ -4286,7 +4290,7 @@ function irtBuildCsv(){
       if(esCh && Lx.dispScale>0.5) kSpyX=(kK*Lx.dispScale)/R.r;
       else if(Lx.undScale>0) kSpyX=kK*Lx.undScale;
       else kSpyX=(kK*Lx.dispScale)/R.r;
-      rows.push({ k:kSpyX, lbl:'SPXW KING 100%',
+      rows.push({ k:kSpyX, lbl:'SPXW KING',
                   col:(sgX<0)?IRT_COLORS.accp:IRT_COLORS.brk, w:3, style:0 });
     }
   }catch(eSPX){}
@@ -4298,7 +4302,7 @@ function irtBuildCsv(){
         var ewK=null; try{ ewK=extractWalls(FYK.j); }catch(eEW){}
         if(ewK && ewK.king!=null){
           var sgK=1; try{ (ewK.walls||[]).forEach(function(wK){ if(wK.k===ewK.king && wK.pos===false) sgK=-1; }); }catch(eSg2){}
-          rows.push({ k:ewK.king, lbl:'SPY KING 100%',
+          rows.push({ k:ewK.king, lbl:'SPY KING',
                       col:(sgK<0)?IRT_COLORS.splp:IRT_COLORS.sply, w:2, style:1 });
         }
       }
@@ -4308,27 +4312,92 @@ function irtBuildCsv(){
   targets.forEach(function(T2){
     rows.forEach(function(R2){ out.push(irtCsvRow(T2.sym, irtRound(R2.k*T2.mul, T2.tick), R2.lbl+T2.tag, R2.col, R2.w, R2.style)); });
   });
-  // ---- 3) QQQ KING — the rendered 0DTE ladder (Atlas), onto ENQU26 ------------------------------
+  // ---- 3) QQQ KING — v14.73: READ THE SAME ARRAY THE FACE READS -------------------------------
+  // ⚠⚠ THE OPERATOR CAUGHT THIS, AND HE WAS RIGHT: "this is so strange because you show the qqq
+  // king in the tapereader app so you know the level."  The panel displayed a healthy QQQ book
+  // (100 strikes, 37 non-zero, King 717, $94.2M) while this export refused to write a row for it,
+  // for two hours, with nothing on any face saying why.
+  //
+  // The cause was structural, not a bug in either half: the FACE reads the rendered ladder
+  // (`ladderFor`), while this exporter re-derived the same King through `tapeMap()` and then applied
+  // a rule the face never applies — `!fromFeed`, from the v14.15 decision that the QQQ King must
+  // come from Atlas rather than the feed. Two computations of one quantity, and they drifted.
+  //
+  // DECISIONS v13.2 already wrote the rule this broke, after the rail and the NODES list disagreed
+  // within one session of shipping:
+  //     "when two parts of the face must agree, they read the SAME ARRAY — not two arrays built
+  //      from the same source with matching rules. Matching rules drift; a shared reference cannot."
+  //
+  // So: the ladder the face draws is the source. `tapeMap` becomes the FALLBACK, and a LATCH holds
+  // the last good King for the session so a momentary read failure can never DELETE a level from
+  // his chart — a line that vanishes is worse than one that is a minute old, because only one of
+  // them is visible. Every path is named in the label's source tag and in IRT_LAST.nqWhy.
   var nqN=0;
   try{
     if(cfgI.nqOn!==false){
       var nqSym=(cfgI.nqSym||'ENQU26').trim();
       var RQ=irtNqRatio(cfgI);
       var nqR=RQ.r; var nqTag=RQ.live?'':' ~';
-      var tq=null; try{ tq=tapeMap('QQQ'); }catch(eTq){}
-      if(nqSym && nqR>1 && tq && tq.king!=null && !tq.fromFeed && tq.count>=5){
-        var sgQ=0; try{ var pq=tq.pct&&(tq.pct[tq.king.toFixed(2)]!=null?tq.pct[tq.king.toFixed(2)]:tq.pct[String(tq.king)]);
-                        if(typeof pq==='number') sgQ=pq; }catch(eSq){}
-        out.push(irtCsvRow(nqSym, irtRound(tq.king*nqR, 0.25), 'QQQ KING 100%'+nqTag,
-                 (sgQ<0)?IRT_COLORS.accp:IRT_COLORS.brk, 3, 0));
+      var QK=irtQqqKing();
+      // ⚠ THE INSTRUMENT MUST NOT BE ABLE TO BREAK WHAT IT MEASURES. v14.67's FEATH counters threw
+      // when a harness eval'd the function in isolation, which is how an instrument becomes the
+      // defect. Every write to it is guarded and the export runs identically without it.
+      try{ IRT_LAST.nqWhy = !nqSym ? 'no NQ symbol configured'
+                          : !(nqR>1) ? ('no NQ ratio ('+RQ.src+')')
+                          : (QK.k==null ? QK.why : ('ok via '+QK.src)); }catch(eW){}
+      if(nqSym && nqR>1 && QK.k!=null){
+        out.push(irtCsvRow(nqSym, irtRound(QK.k*nqR, 0.25), 'QQQ KING'+nqTag,
+                 (QK.pct<0)?IRT_COLORS.accp:IRT_COLORS.brk, 3, 0));
         nqN++;
       }
-    }
-  }catch(eNQ){}
+    } else { try{ IRT_LAST.nqWhy='nqOn is off'; }catch(eW2){} }
+  }catch(eNQ){ try{ IRT_LAST.nqWhy='threw: '+(eNQ&&eNQ.message||eNQ); }catch(eW3){} }
   if(out.length<=1) return null;
   return { csv:out.join('\r\n')+'\r\n', n:rows.length+nqN,
            targets:targets.map(function(t){return t.sym;}).concat(nqN?[(cfgI.nqSym||'ENQU26').trim()]:[]),
            ratio:R };
+}
+// (v14.73) THE QQQ KING THE EXPORT WRITES — face first, tape second, latch last.
+// ⚠ THE LATCH IS THE POINT. Before this, one unreadable tick removed the level from the CSV and
+// IRT — polling correctly — erased it from the chart. The operator then has no way to tell "QQQ has
+// no King" from "the panel blinked". A level held from earlier in the session is honest as long as
+// it SAYS it is held; a level that silently disappears is not.
+var IRT_QQQK_KEY='gpts_irt_qqqking_v1';
+function irtQqqKing(){
+  var out={ k:null, pct:0, src:null, why:'' };
+  try{
+    // 1 — the array the FACE reads (v13.2: one quantity, one source)
+    var L=null; try{ L=ladderFor('QQQ'); }catch(e1){}
+    if(L && L.king!=null && L.count>=5){
+      var p=0; try{ var v=L.pct&&(L.pct[L.king.toFixed(2)]!=null?L.pct[L.king.toFixed(2)]:L.pct[String(L.king)]);
+                    if(typeof v==='number') p=v; }catch(e2){}
+      out.k=L.king; out.pct=p; out.src=(L.src||'ladder');
+      try{ localStorage.setItem(IRT_QQQK_KEY, JSON.stringify({k:out.k, pct:p, day:ctTodayStr(), t:Date.now()})); }catch(e3){}
+      return out;
+    }
+    // 2 — the tape reader, which may hand back a feed-sourced map. ⚠ ACCEPTED HERE, unlike v14.15:
+    // a feed King is Skylit's own gamma book, and refusing it bought a missing level rather than a
+    // wrong one. It is TAGGED so the face can never imply it came from the rendered ladder.
+    var T=null; try{ T=tapeMap('QQQ'); }catch(e4){}
+    if(T && T.king!=null && T.count>=5){
+      var p2=0; try{ var v2=T.pct&&(T.pct[T.king.toFixed(2)]!=null?T.pct[T.king.toFixed(2)]:T.pct[String(T.king)]);
+                     if(typeof v2==='number') p2=v2; }catch(e5){}
+      out.k=T.king; out.pct=p2; out.src=(T.fromFeed?'feed':'tape');
+      try{ localStorage.setItem(IRT_QQQK_KEY, JSON.stringify({k:out.k, pct:p2, day:ctTodayStr(), t:Date.now()})); }catch(e6){}
+      return out;
+    }
+    // 3 — the latch: today's last good King, rather than deleting the operator's level
+    try{
+      var o=JSON.parse(localStorage.getItem(IRT_QQQK_KEY)||'null');
+      if(o && o.day===ctTodayStr() && typeof o.k==='number'){
+        out.k=o.k; out.pct=o.pct||0; out.src='latched';
+        out.why='held from '+Math.round((Date.now()-(o.t||0))/60000)+'m ago';
+        return out;
+      }
+    }catch(e7){}
+    out.why='no QQQ ladder, no tape, and nothing latched today';
+    return out;
+  }catch(e){ out.why='threw: '+(e&&e.message||e); return out; }
 }
 function irtPickFolder(){
   if(!window.showDirectoryPicker){ alert('This browser lacks the File System Access API.'); return; }
@@ -12924,6 +12993,74 @@ function registerCoreFeatures(){
     rule:{ id:'lodhod', tier:'hand',
            condition:'2-axis lookup: posr octile x 45-minute block, threshold 70%',
            mechanism:'Has the standing session extreme already printed? A table over 284 sessions of EPM26 1-minute (2025-06-02 to 2026-08-21), 38,054 observations, on two axes only: how far price has travelled off the extreme as a fraction of the running range (AUC 0.829 alone, better than the whole clock baseline at 0.820) and minutes since the open. A 5-feature logistic scored 0.8795 against the table 0.8787 with an IDENTICAL Brier of 0.1321, so the table ships - it is inspectable and every cell carries its n. IB30/IB60/50-SMA/open-reclaimed/60m-breakout are proxies for the distance term; sweeps (48%, below their own base rate), momentum divergence and NQ cross-market divergence were all measured and rejected. PROVISIONAL until forward-scored.' } });
+  // ============================================================================================
+  // (v14.72) THE FAR SIDE — ENROLLED FROM ITS FIRST LINE, per the 2026-08-17 mandate.
+  //
+  // The operator, 2026-08-28: "make sure that with additional data, it can be improved and that we
+  // start collecting that data ... i want to ensure that the LLM gets it and can make self
+  // improvement to this feature."
+  //
+  // So this records the INPUTS the next version of the model would need, not just its output:
+  // the sigma, the distance of every level IN SIGMA, and — the point of the whole exercise — the
+  // level's NODE IDENTITY (%King, polarity, role). ⚠ That last field is the gamma experiment:
+  // FINDINGS F-16 built the design (train a distance-only model, ask whether a class of level beats
+  // its own distance-matched expectation) and proved that prior-day and overnight levels DO NOT.
+  // Nobody can ask it of the King or a put wall until these rows exist. This is that collection.
+  //
+  // ⚠ SIZE IS DELIBERATE. Three levels, rounded, ~200 bytes a bar. The recorder filled a 10MB quota
+  // in one session on 2026-08-27 (F-10) and this must not be what does it again.
+  registerFeature({ key:'farside', label:'Where can the far side get to, and when?', phase:'dashboard', fwd:FEAT_FWD,
+    record:function(sym){
+      var D=null, F=null;
+      try{ D=hodLod(sym); }catch(e1){}
+      if(!D || !D.ok) return { ok:0, why:(D&&D.why)||'no read' };
+      try{ F=fsRead(sym, D); }catch(e2){}
+      if(!F || !F.ok) return { ok:0, why:(F&&F.why)||'no far-side read' };
+      var lv=[];
+      for(var i=0;i<F.levels.length && i<3;i++){
+        var L=F.levels[i];
+        lv.push({ px:+L.px.toFixed(2), lab:L.lab||L.label, dSig:+L.dSig.toFixed(3),
+                  p:L.p, n:L.n, med:L.med,
+                  // the gamma identity — the whole reason to record this
+                  kind:(L.extra&&L.extra.kind)||null,
+                  pct:(L.extra&&L.extra.pct!=null)?L.extra.pct:null,
+                  sgn:(L.extra&&L.extra.signed!=null)?L.extra.signed:null,
+                  role:(L.extra&&L.extra.role)||null });
+      }
+      return { ok:1, side:F.side, sig:+F.sig.toFixed(3), px:+F.px.toFixed(2),
+               minsLeft:Math.round(F.minsLeft), bars:F.bars, barMin:F.barMin,
+               floorAt:F.floorAt, hazP:(F.haz?F.haz.p:null),
+               noPx:(F.no?+F.no.px.toFixed(2):null), noP:(F.no?F.no.p:null),
+               src:F.src, levels:lv };
+    },
+    // ⚠ THIS OUTCOME IS A PROXY AND THE REVIEW MUST TREAT IT AS ONE. A forward window cannot see
+    // the close, so what is scored here is whether the NEAREST rated level was reached inside the
+    // window. The real label — was it traded before the close, and how long did it take — is
+    // recomputed nightly from the day file, which carries every bar.
+    outcome:function(rec, fwd){
+      var hit=null;
+      try{
+        if(rec && rec.ok && rec.levels && rec.levels.length && fwd){
+          var L=rec.levels[0], d=Math.abs(L.px-rec.px);
+          hit=(rec.side==='HOD') ? ((fwd.mfe!=null)?(fwd.mfe>=d?1:0):null)
+                                 : ((fwd.mae!=null)?(-fwd.mae>=d?1:0):null);
+        }
+      }catch(e){}
+      return { hit:hit, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
+    },
+    questions:[
+      { id:'farside_touch_calibrated', when:[{f:'ok',v:1}], outcome:'hold',
+        note:'does P(this level trades today) hold up live? The table says 0.826 AUC and calibrated on 388k backtest observations and has NEVER been forward-scored. Compare the predicted p of the nearest level against what actually happened, bucketed - a systematic gap in one direction means the sigma scaling is wrong for live bars, not that the table is wrong.' },
+      { id:'farside_no_call', when:[{f:'ok',v:1}], outcome:'hold',
+        note:'the <=20% NO call is the sharpest thing this model says (backtest: 92% of those levels never traded). Score it separately - it is the half the operator can act on, and a NO call that fails is far more damaging than a missed YES.' },
+      { id:'farside_gamma_identity', when:[{f:'ok',v:1}], outcome:'hold',
+        note:'⚠ THE ONE THAT MATTERS: at the SAME distance in sigma and the same time left, does a level with node identity (King, high %King, negative polarity) get traded MORE than a level without it? tools/study-atrlevels.py holds the design - train a distance-only model, then test the residual by class. ⚠ USE A DENSE DISTANCE CONTROL: a sparse one produced a phantom +12 points for prior-day levels (F-16). Needs ~40 clean sessions.' },
+      { id:'farside_timing_floor', when:[{f:'ok',v:1}], outcome:'mfe',
+        note:'the 80% floor says the far side is still ahead of +61 minutes. Does that hold live, and does the hazard (P last-45 given still out) match its backtest curve of 36/45/64/91% by clock?' }
+    ],
+    rule:{ id:'farside', tier:'hand',
+           condition:'P(level traded before close) from a distance-in-sigma x minutes-left table; the call is the <=20% refusal and the >=50% reach',
+           mechanism:'Where can the OTHER extremity get to, and when. Distance to each level the panel already draws, measured in the session\u2019s own volatility (1-bar sd x sqrt(bars left)), read against 388,494 observations over 197 ES sessions: AUC 0.826, Brier 0.147, calibrated within 3 points at every decile (FINDINGS F-14). Timing is the first-passage distribution GIVEN the level is reached, median and IQR by distance (F-15) - the analytic law T ~ (d/sigma)^2 does 95% of the work of a 10-feature model. ⚠ Predicting the far side\u2019s PRICE directly was measured and REJECTED: a fixed 1.36x range expansion beats gradient boosting (F-13). ⚠ The daily ATR and level identity (prior-day, overnight) add nothing once distance is controlled (F-16). PROVISIONAL: one instrument, no forward test.' } });
   registerFeature({ key:'rolllatch', label:'Roll latch (1 noise / 2 signal / 3 confirm)', phase:'dashboard', fwd:FEAT_FWD,
     record:function(sym){
       var rl=[]; try{ rl=rollLatched(sym)||[]; }catch(e){}
@@ -19745,6 +19882,29 @@ function ensureV3Css(){
     '#gpts-body .g3daysub b{color:#f2b45a}'+
       'border-radius:3px;cursor:help;border:1px solid}'+
     // ⚠ NOT A FAILING TICK — an input we do not have. The two must never look the same.
+    // (v14.72) THE FAR SIDE. Its own frame in the blue accent so it reads as a DIFFERENT question
+    // from the green verdict above it: the verdict is about the extreme that has printed, this is
+    // about the one that has not.
+    '#gpts-body .g3far{margin:5px 0 4px;border:1px solid rgba(74,144,217,.30);'+
+      'background:rgba(74,144,217,.05);border-radius:4px;padding:4px 6px;cursor:help}'+
+    '#gpts-body .g3farhd{font-size:6.8px;font-weight:900;letter-spacing:.08em;color:#4b5563;'+
+      'text-transform:uppercase;margin-bottom:2px}'+
+    '#gpts-body .g3fart{display:table;width:100%;font-size:8.2px}'+
+    '#gpts-body .g3farr{display:table-row}'+
+    '#gpts-body .g3farr span{display:table-cell;padding:1px 6px 1px 0;white-space:nowrap}'+
+    '#gpts-body .g3farr.h span{font-size:6.4px;font-weight:900;letter-spacing:.07em;color:#4b5563}'+
+    '#gpts-body .g3farr .k{color:#f2b45a;font-weight:900}'+
+    '#gpts-body .g3farr .p{color:#2ec27e;font-weight:900}'+
+    '#gpts-body .g3farr .pm{color:#8b98a9;font-weight:800}'+
+    '#gpts-body .g3farr .t{color:#8b98a9;font-weight:600}'+
+    '#gpts-body .g3farr .w{color:#6c7889;font-weight:600}'+
+    // ⚠ NOT RED. This is the model's most accurate statement, not a warning - amber, like every
+    // other high-confidence figure on this panel.
+    '#gpts-body .g3farno{font-size:8px;font-weight:800;color:#8b98a9;margin-top:3px}'+
+    '#gpts-body .g3farno b{color:#f2b45a;font-weight:900}'+
+    '#gpts-body .g3fardim{font-size:8px;font-weight:600;color:#6c7889}'+
+    '#gpts-body .g3daytime{font-size:8.4px;font-weight:800;color:#c9d4e2;margin-top:3px;line-height:1.45}'+
+    '#gpts-body .g3daytime b{color:#2ec27e;font-weight:900}'+
     '#gpts-body .g3dayfoot{font-size:6.8px;color:#4b5563;margin-top:3px;cursor:help}'+
     '#gpts-body .g3dayfoot b{color:#f2b45a}'+
     // ⚠ WHEN THE LADDER IS ON, THE OLD RAIL AND PROFILE ARE HIDDEN, NOT DELETED. They stay in the
@@ -21499,6 +21659,25 @@ function hlVerdict(D, CALL, T){
     return T ? (D.first+' IN — '+T.rate+'%') : (D.first+' STANDING — too early to rate');
   }catch(e){ return (D&&D.first?D.first:'')+' —'; }
 }
+// (v14.72) THE "% OF THE RANGE" CLAUSE - GATED AND RENAMED, because it was claiming something it
+// never measured. `far` is 1 - posr: the distance from price to the OTHER END OF THE RANGE PRINTED
+// SO FAR, on the running range. It is not a forecast of travel, and it printed as "% of the range
+// still ahead" even on days BOTH extremes were already in - on the same line that says "the range
+// is set". The operator caught it: "the 1% of the range still ahead seems to imply that we are at
+// the top". The arithmetic was right and the LABEL was wrong: failure pattern #1, a value shown
+// under a label implying a different claim, with nothing throwing.
+// ⚠ The gate is the SAME directly observable fact the "toward HOD" clause has used since v14.66
+// (D.secondT > D.clock). One fact, one gate, two clauses - they can never disagree again.
+// ⚠ EXTRACTED SO A TEST CAN EXECUTE IT. Its predecessor was covered by a grep of the render source
+// for "still ahead", which passed against a clause that fired in the wrong state - L-O / failure
+// pattern #8. Running the function is the only assertion that can fail for the right reason.
+function hlFarClause(D, CALL){
+  try{
+    if(!D || !CALL || CALL.far==null) return '';
+    if(!(D.secondT>D.clock)) return '';
+    return ' \u00b7 <b>'+Math.round(100*CALL.far)+'% of the range to today\u2019s '+D.second+' so far</b>';
+  }catch(e){ return ''; }
+}
 function lodhodCall(D){
   try{
     if(!D || !D.ok || D.posr==null) return null;
@@ -21519,6 +21698,276 @@ function lodhodCall(D){
     return out;
   }catch(e){ return null; }
 }
+
+// ============================================================================================
+// (v14.72) THE FAR SIDE — WHERE THE OTHER EXTREMITY CAN GET TO, HOW LIKELY, AND WHEN
+//
+// The operator's requirement, 2026-08-28, verbatim: "i want it to say something like LOD IN -74%,
+// HOD expected around 7772-7792 in 3.5 Hrs between 1:30pm and 2pm - 80%", then, after the numbers
+// came back: "the probability is very low when predicting the other side ... what data points would
+// allow you to predict this better".
+//
+// ⚠⚠ WHAT WAS MEASURED AND WHY THIS IS SHAPED THE WAY IT IS — FINDINGS F-13, F-14, F-15, F-16.
+//   · Predicting the far side's PRICE directly is a dead end: a fixed 1.36x expansion beats a
+//     10-feature gradient boosting model (9.2 vs 9.9 ES points of median error). F-13.
+//   · Predicting its CLOCK is worse: the clock alone beats every factor set tried. F-13.
+//   · Re-posed as "will price REACH this level before the close", the same data gives
+//     AUC 0.826, calibrated at every decile, and HALF of all readings land in a <=20% bucket that
+//     is right 92% of the time. F-14. That is the model this block ships.
+//   · Re-posed as "GIVEN it reaches the level, when", timing becomes predictable too - and the
+//     analytic first-passage law T ~ (distance/sigma)^2 does 95% of the work of the ML model. F-15.
+//   · Daily ATR adds nothing (the realized sigma already contains it) and level IDENTITY - prior
+//     day high/low/close, overnight extremes - adds nothing once distance is properly controlled.
+//     ⚠ A SPARSE CONTROL SAID +12 POINTS AND IT WAS A PHANTOM. F-16.
+//
+// ⚠ SO THE HONEST CLAIM IS NARROW: this says how often a level LIKE THIS ONE, at this distance,
+// with this much session left, has been traded. It never says price WILL go there, and the timing
+// is a RANGE because the median error is 42 minutes on an 86-minute horizon.
+//
+// ⚠ THE 80% TIME CLAIM IS A ONE-SIDED FLOOR, NOT A BOX. Measured: a 30-minute box around the
+// median is worth 15% and an hour is worth 24%; to reach 80% a two-sided window has to be 3.6
+// HOURS wide. So the face states the floor ("not before X") at 80% and the middle-half window at
+// its true 50%. Printing "3-3.5h, 80%" would be a lie of precision.
+var FARSIDE_KEY='gpts_farside_v1';
+// ⚖ the baked-in fallback. Re-derive with tools/study-farside.py; the courier below prefers a
+// fresher data/es-1min/FARSIDE.json exactly as the HOD/LOD base rates already travel.
+var FS_BASE={
+  corpus:{ market:'ES', sessions:197, first:'2025-05-30', last:'2026-08-23', obs:388494 },
+  bins:{ dist:[0,0.25,0.5,0.75,1.0,1.5,2.0,3.0], minsLeft:[0,45,90,135,180,240,300,390], minCell:60 },
+  // rows = distance in sigma, cols = minutes LEFT in the session; cell = [n, percent]
+  touch:[[null,null,null,null,null,null,null],
+         [[9088,75],[10224,66],[10224,65],[10220,64],[13632,63],[13632,60],[19312,60]],
+         [[4544,55],[5112,44],[5112,41],[5110,39],[6816,36],[6816,34],[9656,35]],
+         [[4544,43],[5112,32],[5112,28],[5110,26],[6816,24],[6816,22],[9656,23]],
+         [[9088,28],[10224,18],[10224,15],[10220,14],[13632,12],[13632,12],[19312,11]],
+         [[4544,16],[5112,8],[5112,7],[5110,6],[6816,6],[6816,5],[9656,4]],
+         [[9088,5],[10224,2],[10224,2],[10220,2],[13632,2],[13632,1],[19312,1]]],
+  // minutes to touch GIVEN touched: [n, median, q25, q75] by the same distance bins
+  timing:[[0,null,null,null],[54826,30,11,72],[17004,59,24,121],[11692,68,28,138],
+          [12845,72,28,148],[3047,70,25,139],[1870,65,22,132]],
+  // [minute-of-day CT, n, P(the far side prints in the last 45 min | it has not printed yet)]
+  hazard:[[660,141,36],[690,150,42],[720,143,45],[750,141,54],[780,121,64],[810,105,74],
+          [840,87,91],[870,67,100]],
+  // the one-sided floor: 80% of far sides were still ahead of +61 minutes from the call
+  floor:{ n:197, p80:61, p50:157, q25:79, q75:220 }
+};
+// ⚖ hand-set, same reasoning as HLBASE_MIN_*: a courier payload must clear a floor before it may
+// replace a 197-session base. Monotonicity is not evidence (landmine L-J).
+var FS_MIN_SESSIONS=120;
+var FS_MIN_CELL=60;
+function fsNormalise(j){
+  try{
+    if(!j || !j.corpus || !(j.corpus.sessions>=FS_MIN_SESSIONS)) return null;
+    if(!j.bins || !j.bins.dist || !j.bins.minsLeft || !j.touch || !j.timing || !j.hazard || !j.floor) return null;
+    if(j.touch.length!==j.bins.dist.length-1) return null;
+    var i,k,row,any=0;
+    for(i=0;i<j.touch.length;i++){
+      row=j.touch[i]; if(!row) continue;
+      if(row.length!==j.bins.minsLeft.length-1) return null;
+      for(k=0;k<row.length;k++) if(row[k] && row[k][1]!=null){
+        if(!(row[k][0]>=FS_MIN_CELL)) return null;
+        if(row[k][1]<0 || row[k][1]>100) return null;
+        any++;
+      }
+    }
+    if(any<8) return null;
+    // THE TABLE'S ONE CLAIM IS THAT FURTHER IS LESS LIKELY. If a re-derived corpus breaks that, the
+    // block's only predictive statement is unsupported and the payload is REFUSED rather than drawn.
+    for(k=0;k<j.touch[0].length;k++){
+      var prev=null;
+      for(i=0;i<j.touch.length;i++){
+        var c=j.touch[i] && j.touch[i][k];
+        if(!c || c[1]==null) continue;
+        if(prev!=null && c[1]>prev+2) return null;
+        prev=c[1];
+      }
+    }
+    if(!(j.floor.p80>0)) return null;
+    return j;
+  }catch(e){ return null; }
+}
+function fsBase(){
+  try{
+    var raw=null; try{ raw=JSON.parse(localStorage.getItem(FARSIDE_KEY)||'null'); }catch(e0){}
+    if(raw && raw.base){
+      var N=fsNormalise(raw.base);
+      if(N){ N.src='courier'; N.at=raw.at||null; return N; }
+    }
+  }catch(e){}
+  var B={}; for(var k in FS_BASE) B[k]=FS_BASE[k];
+  B.src='baked'; B.at=null; return B;
+}
+function fsBin(edges, x){
+  try{
+    if(typeof x!=='number' || !isFinite(x)) return -1;
+    for(var i=0;i<edges.length-1;i++) if(x>=edges[i] && x<edges[i+1]) return i;
+    return (x>=edges[edges.length-1]) ? edges.length-2 : -1;
+  }catch(e){ return -1; }
+}
+// P(this level trades before the close). REFUSES on a thin cell rather than guessing - the same
+// contract the HOD/LOD table already keeps.
+function fsTouch(dSig, minsLeft, base){
+  try{
+    var B=base||fsBase();
+    var di=fsBin(B.bins.dist, dSig), ti=fsBin(B.bins.minsLeft, minsLeft);
+    if(di<0||ti<0) return null;
+    var row=B.touch[di]; if(!row) return { p:null, n:0, why:'no row' };
+    var c=row[ti];
+    if(!c || c[1]==null) return { p:null, n:(c?c[0]:0), why:'too few samples in this cell' };
+    return { p:c[1], n:c[0], di:di, ti:ti };
+  }catch(e){ return null; }
+}
+// minutes to touch GIVEN it is touched - a RANGE, because the median error is 42 minutes (F-15)
+function fsTime(dSig, base){
+  try{
+    var B=base||fsBase(), di=fsBin(B.bins.dist, dSig);
+    if(di<0) return null;
+    var t=B.timing[di];
+    if(!t || t[1]==null) return null;
+    return { n:t[0], med:t[1], q1:t[2], q3:t[3] };
+  }catch(e){ return null; }
+}
+// P(the far side prints in the last 45 minutes | it has not printed by this clock) - the "are we
+// on track" reading, and the only timing statement that gets stronger as the session ages.
+function fsHazard(minOfDay, base){
+  try{
+    var B=base||fsBase(), H=B.hazard||[], best=null, i;
+    for(i=0;i<H.length;i++) if(H[i][0]<=minOfDay && (!best || H[i][0]>best[0])) best=H[i];
+    if(!best) return null;
+    return { at:best[0], n:best[1], p:best[2] };
+  }catch(e){ return null; }
+}
+// the session's remaining sigma, in UNDERLYING units. Bars are the chart's, not minutes, so the
+// scaling is done in BAR units and converted once - mixing the two is landmine L-F.
+function fsSigma(sym){
+  try{
+    var cs=closedCandles(sym)||[], openSec=mul(8,3600)+mul(30,60);
+    var xs=[], i, prev=null, gaps=[];
+    for(i=0;i<cs.length;i++){ var b=cs[i];
+      if(!b || typeof b.so!=='number' || b.so<openSec || b.c==null) continue;
+      if(prev!=null){ xs.push(b.c-prev.c); gaps.push(b.so-prev.so); }
+      prev=b;
+    }
+    if(xs.length<8) return { ok:false, why:'not enough bars yet ('+xs.length+')' };
+    var m=0, j; for(j=0;j<xs.length;j++) m+=xs[j]; m/=xs.length;
+    var v=0; for(j=0;j<xs.length;j++) v+=(xs[j]-m)*(xs[j]-m);
+    var sd=Math.sqrt(v/Math.max(1,xs.length-1));
+    gaps.sort(function(a,b){ return a-b; });
+    var barSec=gaps[Math.floor(gaps.length/2)]||60;
+    var nowSec=ctNowSecOfDay(), closeSec=mul(15,3600);
+    var minsLeft=Math.max(0,(closeSec-Math.min(nowSec,closeSec))/60);
+    var barsLeft=minsLeft/Math.max(1,(barSec/60));
+    if(!(sd>0)) return { ok:false, why:'no measurable volatility yet' };
+    return { ok:true, sdBar:sd, barMin:barSec/60, bars:xs.length, minsLeft:minsLeft,
+             sigUnd:sd*Math.sqrt(Math.max(1,barsLeft)) };
+  }catch(e){ return { ok:false, why:'threw: '+(e&&e.message||e) }; }
+}
+// ⚠ EVERY LEVEL COMES FROM A SOURCE THE PANEL ALREADY DRAWS, AND CARRIES ITS NAME. A level with no
+// name is a number the operator cannot check, and this project's oldest defect is a value under a
+// label that implies something else.
+function fsLevels(sym, dir, pxDisp, sigDisp, base){
+  var out=[];
+  try{
+    if(!(sigDisp>0) || typeof pxDisp!=='number') return out;
+    var rr=1; try{ rr=(dispIsFut() && dispR()>0)?dispR():1; }catch(eR){}
+    var add=function(px, label, extra){
+      try{
+        if(typeof px!=='number' || !isFinite(px)) return;
+        var d=(dir>0)?(px-pxDisp):(pxDisp-px);
+        if(!(d>0)) return;                                   // the far side only
+        var dSig=d/sigDisp;
+        var T=fsTouch(dSig, base.__minsLeft, base), M=fsTime(dSig, base);
+        out.push({ px:px, label:label, d:d, dSig:dSig,
+                   p:(T?T.p:null), n:(T?T.n:0), why:(T?T.why:null),
+                   med:(M?M.med:null), q1:(M?M.q1:null), q3:(M?M.q3:null),
+                   extra:extra||null });
+      }catch(e){}
+    };
+    // 1 - THE NODES. The gamma book, which is the whole reason this panel exists.
+    try{
+      var B=emBand(sym), P=emPiles(B, sym)||[];
+      for(var i=0;i<P.length;i++){
+        var pl=P[i]; if(!pl || typeof pl.disp!=='number') continue;
+        var nm=(pl.pct!=null?(pl.pct+'%K'):'node');
+        if(emPiles.lastKing!=null && pl.k===emPiles.lastKing) nm='KING '+nm;
+        add(pl.disp, nm, { kind:'node', pct:pl.pct, signed:pl.signed, role:pl.role||null });
+      }
+      if(B && B.ok){
+        add(B.high, 'EM high', { kind:'em' });
+        add(B.low,  'EM low',  { kind:'em' });
+      }
+    }catch(eN){}
+    // 2 - the session levels the chart already carries
+    try{
+      var SL=sessionLevels(sym, rr);
+      if(SL){
+        add(SL.pdh,'prior-day high',{kind:'pdh'}); add(SL.pdl,'prior-day low',{kind:'pdl'});
+        add(SL.pdc,'prior-day close',{kind:'pdc'});
+        if(SL.ibSet){ add(SL.ibH,'IB high',{kind:'ibh'}); add(SL.ibL,'IB low',{kind:'ibl'}); }
+      }
+    }catch(eS){}
+    // 3 - the dark pool prints, which Skylit publishes as a 45-day top-N level set
+    try{
+      var DP=darkPoolLevels(sym);
+      if(DP && DP.prints && !DP.stale) for(var q=0;q<DP.prints.length && q<3;q++){
+        add(DP.prints[q].px*rr, 'dark pool', { kind:'dp' });
+      }
+    }catch(eD){}
+    // 4 - round numbers. ⚠ The ONLY level class that beat its own distance-matched expectation
+    // (+4.6 pts, +-2.5, ~1.8 SE) - weak, PROVISIONAL, and labelled as a round number, not as
+    // structure. See FINDINGS F-16.
+    try{
+      var step=25, r0=step*(dir>0?Math.ceil(pxDisp/step):Math.floor(pxDisp/step));
+      add(r0, 'round '+r0, { kind:'round' });
+    }catch(eRn){}
+    // dedupe within a point, keep the richer label, nearest first, and only what the table can rate
+    out.sort(function(a,b){ return a.d-b.d; });
+    var keep=[];
+    for(var z=0;z<out.length;z++){
+      var dup=false;
+      for(var y=0;y<keep.length;y++) if(Math.abs(keep[y].px-out[z].px)<1.0){ dup=true; break; }
+      if(!dup) keep.push(out[z]);
+    }
+    return keep;
+  }catch(e){ return out; }
+}
+// THE WHOLE BLOCK, as data. Extracted from the renderer so a test can EXECUTE it - a grep over
+// markup tests the vocabulary, not the logic (landmine L-O, sixth occurrence).
+function fsRead(sym, D){
+  var out={ ok:false, why:'' };
+  try{
+    if(!D || !D.ok){ out.why=(D&&D.why)||'no session read'; return out; }
+    if(D.secondT!=null && D.secondT<=D.clock){ out.why='both extremes in'; return out; }
+    var S=fsSigma(sym);
+    if(!S.ok){ out.why=S.why; return out; }
+    var rr=1; try{ rr=(dispIsFut() && dispR()>0)?dispR():1; }catch(eR){}
+    var base=fsBase(); base.__minsLeft=S.minsLeft;
+    var lastC=null, cs=closedCandles(sym)||[], openSec=mul(8,3600)+mul(30,60);
+    for(var i=cs.length-1;i>=0;i--){ var b=cs[i];
+      if(b && typeof b.so==='number' && b.so>=openSec && b.c!=null){ lastC=b.c; break; } }
+    if(lastC==null){ out.why='no closing price yet'; return out; }
+    var dir=(D.first==='LOD')?1:-1;                       // the far side of the standing extreme
+    var pxDisp=lastC*rr, sigDisp=S.sigUnd*rr;
+    var lv=fsLevels(sym, dir, pxDisp, sigDisp, base);
+    var rated=[]; for(var q=0;q<lv.length;q++) if(lv[q].p!=null) rated.push(lv[q]);
+    out.ok=true; out.side=D.second; out.dir=dir; out.px=pxDisp; out.sig=sigDisp;
+    out.minsLeft=S.minsLeft; out.bars=S.bars; out.barMin=S.barMin;
+    out.levels=rated.slice(0,3);
+    out.src=base.src; out.corpus=base.corpus;
+    // the NO call: the first level whose probability is at or under the refusal threshold. It is the
+    // sharpest thing the model says - half of all readings land there and they are right 92%.
+    out.no=null;
+    for(var w=0;w<rated.length;w++) if(rated[w].p<=20){ out.no=rated[w]; break; }
+    // the 80% floor and the middle-half window, both anchored on NOW
+    var nowMin=Math.round(ctNowSecOfDay()/60);
+    out.floorMin=base.floor.p80; out.q25=base.floor.q25; out.q75=base.floor.q75;
+    out.floorAt=nowMin+base.floor.p80; out.winA=nowMin+base.floor.q25; out.winB=nowMin+base.floor.q75;
+    out.haz=fsHazard(nowMin, base);
+    return out;
+  }catch(e){ out.why='threw: '+(e&&e.message||e); return out; }
+}
+function fsClockMin(m){ try{ m=Math.round(m); return Math.floor(m/60)+':'+two(m%60); }catch(e){ return '—'; } }
+
 function hlClock(sec){ try{ sec=Math.round(sec); return two(Math.floor(sec/3600))+':'+two(Math.floor((sec%3600)/60)); }catch(e){ return '\u2014'; } }
 function hlDur(min){ try{ min=Math.round(min); if(min<60) return min+'m';
   return Math.floor(min/60)+'h'+two(min%60); }catch(e){ return '\u2014'; } }
@@ -25493,8 +25942,13 @@ function secDay(sym){
     var NOREAD = !D.ok;
     var base=hodlodBase(), T=NOREAD?null:D.tier;
     var openSec=mul(8,3600)+mul(30,60);
-    h+='<div class="g3dayhd"'+g3tip('Today\u2019s high and low against their own base rates, measured over '+base.n+' complete RTH sessions of ES 1-minute data, '+base.first+' to '+base.last+'. Regenerate with tools/study-hodlod.py. \u26a0 The E row and the ladder are a BACKTEST and are shown even before the session has bars \u2014 the A row is today and refuses until there are.')+
-       '>\u24ea a DAY \u2014 HOD/LOD \u00b7 '+(NOREAD?('<span style="color:#6c7889">'+g3esc(D.why||'no data')+' \u2014 showing the base rates only</span>'):(hlClock(D.clock)+' CT'))+' \u00b7 '+base.n+'d ES 1-min</div>';
+    // (v14.72) THE HONESTY LINE MOVED INTO THIS HOVER. Operator, 2026-08-28: "the white text at the
+    // bottom is not really helpful. remove it." It carried the corpus size, the date, live-vs-baked
+    // and the wick n \u2014 all real, none of it worth a row of a 454px panel. ⚠ ONE WORD STAYS
+    // VISIBLE: whether the rates are LIVE or BAKED IN, because a frozen corpus changes how much to
+    // trust every figure below it and nothing else on the face would say so.
+    h+='<div class="g3dayhd"'+g3tip('Today\u2019s high and low against their own base rates, measured over '+base.n+' complete RTH sessions of ES 1-minute data, '+base.first+' to '+base.last+'. Regenerate with tools/study-hodlod.py. \u26a0 The E row is a BACKTEST and is shown even before the session has bars \u2014 the A row is today and refuses until there are. \u00b7 sequence '+base.lodFirstPct+'/'+(100-base.lodFirstPct)+' LOD-first, a coin-flip \u00b7 every rate carries its n \u00b7 '+(base.src==='courier'?'rates delivered by the courier':'rates baked into this build')+' \u00b7 wick fields are TRIMMED MEANS over n='+((base.wick&&base.wick.wick_n)||0)+' sessions with no-wick days and Tukey outliers excluded \u00b7 descriptive \u2014 no entries/stops, no sizing.')+
+       '>\u24ea a DAY \u2014 HOD/LOD \u00b7 '+(NOREAD?('<span style="color:#6c7889">'+g3esc(D.why||'no data')+' \u2014 showing the base rates only</span>'):(hlClock(D.clock)+' CT'))+' \u00b7 '+base.n+'d ES 1-min \u00b7 '+(base.src==='courier'?'rates live':'rates baked in')+'</div>';
     // (v14.65) THE VERDICT GOES FIRST. Operator, 2026-08-28: "lets put the lod in read on top of
     // the hod/lod statistics." He is right and it is not only a preference: the stats are the
     // EVIDENCE for the call, and evidence belongs under the conclusion it supports. Reading a
@@ -25504,6 +25958,8 @@ function secDay(sym){
     // stood"; the table answers the operator's actual question with the one input that matters.
     // ⚠ It REFUSES rather than guesses when the cell is thin - see hlCell().
     var CALL=null; if(!NOREAD){ try{ CALL=lodhodCall(D); }catch(eC){} }
+    // (v14.72) the far side - computed once, read by the timing line and the level block below
+    var FS=null; if(!NOREAD){ try{ FS=fsRead(sym, D); }catch(eF){ swallow('fsRead', eF); } }
     // ⚠ WITH NO BARS THERE IS NO VERDICT, AND SAYING SO IS THE POINT. What replaces it is the
     // question the section will answer once the session has a range - not a number.
     var verdict = NOREAD ? 'WAITING FOR THE SESSION \u2014 no bars yet' : hlVerdict(D, CALL, T);
@@ -25514,17 +25970,29 @@ function secDay(sym){
           ? ('travelled '+Math.round(100*D.posr)+'% off it \u00b7 n='+CALL.n)
           : (T?('stood '+hlDur(D.stood)+' \u00b7 n='+T.n):('stood '+hlDur(D.stood)+' \u00b7 under the 30m floor')))+
        ')</span>'+
-       ((CALL&&CALL.p!=null&&CALL.far!=null)
-          ? (' \u00b7 <b>'+Math.round(100*CALL.far)+'% of the range still ahead</b>') : '')+
+       hlFarClause(D, CALL)+
        // ⚠⚠ CONDITIONAL, AND IT WAS NOT BEFORE. This clause said "toward HOD" whenever a ladder
        // tier existed - including on days the HOD had ALREADY printed, where it is advice about
        // something already over. Measured: at the 70% call the far side is still ahead 97% of the
        // time, so the clause is usually right - but "usually" is not a reason to print it blind.
        // `D.secondT > D.clock` is directly observable, so there is no excuse for guessing.
        ((CALL && CALL.in && D.secondT>D.clock)
-          ? (' \u00b7 <b>toward '+D.second+'</b> <span class="g3daydim">typically ~'+HLTAB_META.secondMed+
-             ' ('+HLTAB_META.secondQ1+'\u2013'+HLTAB_META.secondQ3+')</span>')
-          : ((CALL && CALL.in) ? ' \u00b7 <span class="g3daydim">both extremes in \u2014 the range is set</span>' : ''))+
+          ? '' : ((CALL && CALL.in) ? ' \u00b7 <span class="g3daydim">both extremes in \u2014 the range is set</span>' : ''))+
+       // ---- (v14.72) THE TIMING LINE ------------------------------------------------------------
+       // ⚠⚠ AN 80% CLAIM AND A 30-MINUTE BOX ARE NOT COMPATIBLE, AND THE FACE SAYS SO. Measured over
+       // 197 sessions: a box +-15 min around the median lands 15% of the time, +-30 lands 24%, and a
+       // TWO-SIDED window has to be 3.6 HOURS wide to reach 80%. So the 80% statement is a ONE-SIDED
+       // FLOOR - "not before X" - and the middle-half window is shown at its true 50%. The operator
+       // asked for "3-3.5 hrs, 80%"; printing that would be a lie of precision. FINDINGS F-13/F-15.
+       /* PROB-BLOCK-START — everything between these markers is a CALIBRATED PROBABILITY with its
+          number attached, which is a different object from a forecast. The forecast-vocabulary ban
+          (test_hodlod f6, DECISIONS D-7/D-12) applies OUTSIDE them and is STRICTER inside: no
+          "likely" without a percentage beside it. Widening this region is a deliberate act. */
+       (FS && FS.ok ? ('<div class="g3daytime"><b>'+g3esc(FS.side)+' not before '+fsClockMin(FS.floorAt)+
+          ' \u2014 80%</b> \u00b7 most likely <b>'+fsClockMin(FS.winA)+'\u2013'+fsClockMin(FS.winB)+
+          '</b> <span class="g3daydim">(50%)</span>'+
+          (FS.haz ? (' \u00b7 <span class="g3daydim">'+FS.haz.p+'% into the close if not in by '+
+                     fsClockMin(FS.haz.at)+'</span>') : '')+'</div>') : '')+
        '<div class="g3daysub">'+
        (NOREAD ? ('<b>Today\u2019s row is empty on purpose: This is not a reading, it is no reading.</b> '+
                   'Once the first extremity prints, this line reports how often an extreme of that age was the day\u2019s \u2014 with its n. '+
@@ -25596,23 +26064,38 @@ function secDay(sym){
       '~'+hlDur(base.gapMin),
       '~$'+Math.round(base.rngUsd).toLocaleString()+' \u2014 '+base.rngPts+'pts ('+base.rngP25+'\u2013'+base.rngP75+')' ]);
     h+='</div>';
-    // ---- the elapsed-time ladder ----------------------------------------------------------------
-    h+='<div class="g3dayl">';
-    for(var i=0;i<base.ladder.length;i++){
-      var L=base.ladder[i], on=(T && T.w===L.w);
-      h+='<span class="g3daylb'+(on?' on':'')+'"'+
-        g3tip('Among running extremes that had stood at least '+L.w+' minutes, '+L.held+' of '+L.n+
-        ' were still the extreme at the close \u2014 '+L.rate+'%. Measured over '+base.n+
-        ' sessions. This is the ONLY predictive figure in this section: the longer an extreme stands, the likelier it is the day\u2019s.')+
-        '><b>'+L.rate+'%</b><i>'+(L.w<60?(L.w+'m'):(L.w/60+'h'))+'</i></span>';
+    // ---- (v14.72) THE FAR SIDE — the block that replaced the ladder ---------------------------
+    // ⚠ THE LADDER WAS DELETED, AND FOR THE SAME REASON THE CHIP ROW WAS AT v14.65: it answered the
+    // SAME question as the verdict above it (is this extreme the day's) with a WEAKER instrument -
+    // age alone, AUC 0.818, against the table's 0.879 - and the two disagreed on the face. The
+    // operator saw it: "im not sure what the purpose of the 41% and the various percentages are
+    // when the percent is already mentioned at the top". Adding `stood` as a third axis to the
+    // table was MEASURED WORSE (0.8729 vs 0.8787, FINDINGS F-4), so the ladder is not information
+    // the verdict lacks - it is the same information, diluted.
+    // ⚠ The base rates themselves are NOT deleted: hodlodBase() still serves the E row, still
+    // travels by courier, and the ladder can be re-derived from BASERATES.json at any time.
+    if(FS && FS.ok && FS.levels && FS.levels.length){
+      /* still inside PROB-BLOCK */
+      h+='<div class="g3far"'+g3tip('WHERE CAN THE OTHER EXTREMITY GET TO, AND WHEN? Each row is a level the panel already draws \u2014 a node, the King, an expected-move edge, a prior-day level, the dark pool, a round number. TRADES THERE is how often a level at that distance, with this much session left, was traded before the close: '+FS.corpus.obs.toLocaleString()+' observations over '+FS.corpus.sessions+' sessions, AUC 0.826, calibrated within 3 points at every decile (FINDINGS F-14). IF IT DOES is the first-passage time GIVEN it is reached, shown as a range because the median error is 42 minutes on an 86-minute horizon (F-15). \u26a0 Distance is measured in the session\u2019s own volatility (sigma = 1-bar sd \u00d7 \u221abars left), which is why a 20-point level is not always the same bet. \u26a0 The daily ATR and the IDENTITY of the level (prior-day high, overnight extreme) were both tested and add nothing once distance is controlled \u2014 only round numbers survived, weakly (F-16). \u26a0 PROVISIONAL: one instrument, no forward test yet. It never says price WILL trade there.')+'>';
+      h+='<div class="g3farhd">FAR SIDE \u2014 WHERE THE '+g3esc(FS.side)+' CAN GET TO, AND WHEN</div>';
+      h+='<div class="g3fart"><div class="g3farr h"><span>LEVEL</span><span>WHAT IT IS</span><span>TRADES THERE</span><span>IF IT DOES</span></div>';
+      for(var fi=0; fi<FS.levels.length; fi++){
+        var L2=FS.levels[fi];
+        h+='<div class="g3farr"><span class="k">'+frameNum(L2.px)+'</span>'+
+           '<span class="w">'+g3esc(L2.label)+'</span>'+
+           '<span class="'+(L2.p>=50?'p':'pm')+'">'+L2.p+'%</span>'+
+           '<span class="t">'+(L2.med!=null?('~'+hlDur(L2.med)+' <span class="w">('+hlDur(L2.q1)+'\u2013'+hlDur(L2.q3)+')</span>'):'\u2014')+'</span></div>';
+      }
+      h+='</div>';
+      // ⚠ THE SHARPEST THING THE MODEL SAYS IS A NO. Half of all readings land at or under 20% and
+      // those levels traded 8% of the time. It is not a warning, it is the high-confidence call.
+      if(FS.no) h+='<div class="g3farno">'+frameNum(FS.no.px)+' and beyond \u2014 <b>'+(100-FS.no.p)+'%</b> it does not trade there today</div>';
+      h+='</div>';
+    } else if(FS && !FS.ok && !NOREAD){
+      h+='<div class="g3far"><div class="g3farhd">FAR SIDE</div><div class="g3fardim">'+
+         g3esc(FS.why||'no reading')+' \u2014 this is not a clear path, it is no reading.</div></div>';
     }
-    h+='</div>';
-    // ---- the honesty line -----------------------------------------------------------------------
-    h+='<div class="g3dayfoot"'+g3tip('What this section is standing on, stated on its own face rather than in a hover nobody opens.')+'>'+
-       'seq '+base.lodFirstPct+'/'+(100-base.lodFirstPct)+' coin-flip \u00b7 every rate carries its n \u00b7 '+
-       'corpus '+base.n+'d through '+g3esc(String(base.last))+' \u00b7 '+
-       (base.src==='courier'?'rates live':'rates baked in')+' \u00b7 '+
-       (eW.wick_n?('wick avg n='+eW.wick_n+' \u00b7 trimmed mean \u00b7 '+(eW.zeroWick||0)+' no-wick + outlier days excluded'):'<b>wick base rates pending a corpus</b>')+' \u00b7 descriptive \u2014 no entries/stops</div>';
+    /* PROB-BLOCK-END */
     return h+'</div>';
   }catch(e){ swallow('secDay', e); return ''; }
 }

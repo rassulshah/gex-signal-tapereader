@@ -567,3 +567,249 @@ that measured it worthless, and its footprint went on silently costing 45 minute
 Two assertions used the empty 08:30 column as their fixture for "a thin cell refuses". Filling the
 table broke them — they were testing DATA, not LOGIC. They now inject a thin cell and assert the
 refusal directly, so the table's contents can change without breaking a test of behaviour.
+
+
+---
+
+## F-12 · THE ADVERTISED "92% IN CALL" IS 63% IN REAL TIME — THE SIDE WAS PICKED WITH HINDSIGHT
+**Status: CONFIRMED** (three independent reproductions) · 2026-08-28 · `tools/study-second.py`
+
+The ⓪a hover states the decision rate as **92% correct, n=284, median 09:35** (`HLTAB_META.inHit`).
+Reproduced on the same 284 sessions, the number the PANEL earns in real time is **63%**.
+
+    the panel, live      calls whichever extreme is FIRST-PRINTED AT THAT MOMENT (running loT<hiT)
+                         first crossing of the 70% cell   ->  63%, median 09:20, n=284
+    the study behind 92  selected the side that TURNED OUT to print first (final flT<fhT)
+                         first crossing of the 70% cell   ->  91%, median 09:31, n=284
+    same, OOF cells, t>=60, restricted to that side       ->  94%, median 09:55   (the shipped 92/94)
+
+**Selecting the side with hindsight conditions on the answer.** When a standing low breaks at 11:00
+the panel was WRONG — but in that session the HIGH becomes the first-printed extreme, so the study
+asks about the high instead and the miss is never recorded. Every failure is relabelled out of the
+sample. This is landmine **L-N** ("measure the question the face actually puts") in a new costume,
+one version after L-N was written.
+
+⚠ **WHAT IS NOT WRONG: the CELL rate on the face is honest.** Calibrated over all 44,302
+observations on the first-printed side:
+
+    table says  10-19% -> actual 12%    40-49% -> 47%    70-79% -> 75%    90-99% -> 97%
+
+So "LOD IN — 74%" is a true 74%. It is the DECISION figure in the hover that is inflated.
+
+⚠ **The 63% is the FIRST CROSSING — the earliest and weakest moment.** Accuracy is buyable with time:
+
+    cell >=70%  63% @ 09:20      >=85%  86% @ 10:45      >=95%  92% @ 11:46
+    cell >=80%  79% @ 10:06      >=90%  89% @ 10:53
+
+⚠ **The study that produced 92/85 was never committed.** v14.70 shipped the table, the tests and the
+FINDINGS entry, but no tool that reproduces those two numbers — so they could not be re-checked from
+the repo. **A number on the face needs a committed script that regenerates it.**
+
+---
+
+## F-13 · THE OPPOSITE EXTREMITY: A TWO-LINE RULE, NOT A MODEL — AND THE CLOCK OWNS THE TIMING
+**Status: PROVISIONAL** · 2026-08-28 · `tools/study-second.py`, `study-secondpred.py`,
+`study-secondpred2.py` · ES 284 sessions (+NQ 188 for transfer)
+
+**The operator's ask:** *"HOD expected around 7772-7792 in 3.5 Hrs between 1:30pm and 2pm - 80%"*,
+then *"different probabilities for the HOD time and the HOD price range"*, then *"did you try your
+best ... different factors, combinations, models"*.
+
+⚠⚠ **A BUG IN MY OWN HARNESS INFLATED THE FIRST VERSION OF THIS ENTRY.** `held` was evaluated with
+the running extremes read AFTER the bar loop — i.e. the FINAL session extremes — so it was always 1
+and the "the first extreme held" filter was a no-op that kept every FAILED call in the sample.
+Corrected numbers below; the discarded ones (AUC 0.628 holdout, realized volatility +0.017 on
+timing, an 82% NQ band transfer) were measured on a contaminated sample and **must not be quoted**.
+**The same class of error as F-12, one hour after writing F-12.** State WHEN a variable is read.
+
+### 1 · The 30-minute box does not exist
++-15 minutes around the median lands **4%** of the time; +-30 lands **9%**. An 80% time window is
+~3.5 hours wide. The opposite extreme is near-uniform across the session with a spike into the
+close: **35-40% print in the final 45 minutes**.
+
+### 2 · THE TRADEOFF THE OPERATOR ACTUALLY CHOOSES FROM (real-time side selection, no hindsight)
+
+| call at | n | correct | median CT | travel left to the far side | 80% price band |
+|---|---|---|---|---|---|
+| cell >=70% | 284 | 63% | 09:20 | 27.0 pts | 55 pts |
+| cell >=80% | 284 | 79% | 10:06 | 21.2 pts | 44 pts |
+| cell >=85% | 284 | 86% | 10:45 | 18.8 pts | 41 pts |
+| **cell >=90%** | 284 | **89%** | 10:53 | **17.8 pts** | **41 pts** |
+| cell >=95% | 284 | 92% | 11:46 | 16.1 pts | 37 pts |
+
+### 3 · PRICE — the ML model DOES NOT BEAT TWO LINES OF ARITHMETIC (n=206, call >=90%)
+Predicting the final range fixes the far-side price. Median absolute error:
+
+    "the range is already done"        14.5 pts
+    "a typical day" (the E row)        18.1 pts
+    fixed 1.36x expansion from here     9.2 pts     <- THE RULE
+    gradient-boosted model, 10 factors  9.9 pts     <- WORSE
+
+And the interval is the same story:
+
+    80% band, conditional CQR (10 factors)                    cov 81%   width 42 pts
+    80% band, expansion-multiple quantiles x today's range    cov 80%   width 41 pts
+
+**SHIP THE RULE.** `far side ~ standing extreme + 1.36 x (range so far)`, banded by the historical
+spread of the expansion multiple. Third occurrence of F-4's lesson in one project.
+
+⚠ **AND SAY HOW WEAK IT IS.** The point estimate is out by a median **9.2 pts on a target that is
+typically 17.8 pts away**, and the 80% band (41 pts) is ~70% of a typical 57-pt day. **A 20-pt band
+- the width the operator asked for - is worth about 50%, not 80%.**
+
+### 4 · TIME — the clock is the model, and nothing else survives (5,738 bar-rows, corrected)
+
+    clock alone (minutes since open, minutes left)   AUC 0.7441
+    clock + realized volatility                      AUC 0.6632
+    clock + all 12 other factors                     AUC 0.7061
+
+The usable form is the hazard: given the far side has NOT printed yet, P(it prints in the last 45
+minutes) = **33% by 11:00 · 53% by 12:30 · 69% by 13:15 · 90% by 14:00.**
+
+### 5 · MEASURED AND REJECTED — sixteen factors, one pass each, none survived
+Overnight/globex range (**the corpus is 24h and every earlier study threw ETH away** — it is the
+WORST of the sixteen, -0.06 AUC), volume and volume rate, IB30 size, efficiency ratio, day of week,
+gap vs prior close, distance to prior-day high/low, minutes-to-first-extreme, realized volatility,
+posr at the call, wick%, elapsed since the call, prior-day range, and every 2-3 way combination the
+add-one search covered. ⚠ The overnight session is now TESTED for this question - LOCKED-ITEMS
+carried it as "untested, cheap".
+
+### 6 · WHAT IS NOT TESTED, AND IT IS THE ONE THAT WOULD MAKE THIS OURS
+**The gamma book.** Nine recorded sessions, several of them F-10 collapsed, so "does a low printing
+at a put wall, or price sitting on the King, tighten the band" cannot be asked yet. Until it can,
+this feature is generic price structure that any charting package could compute - measured
+honestly, but not ours. **That is the strongest argument for the storage fix.**
+
+
+---
+
+## F-14 · CHANGE THE QUESTION: "CAN PRICE GET THERE" IS PREDICTABLE, "WHERE WILL THE EXTREME BE" IS NOT
+**Status: PROVISIONAL** · 2026-08-28 · `tools/study-touch.py` · 284 ES sessions, 71,568 decisions
+
+F-13 exhausted the extremum framing: the best point estimate is a fixed 1.36x expansion and the ML
+model loses to it. So the framing was changed - from *predict the far-side price* to **P(a NAMED
+LEVEL is touched before the close)**, evaluated every 15 minutes at level distances of
+0.25-2.0 sigma on both sides, sigma = realized 1-minute vol x sqrt(minutes left).
+
+    AUC 0.826   Brier 0.147   base rate 28%
+
+### Calibration, out-of-fold, grouped by session
+| predicted | 0-10 | 10-20 | 20-30 | 30-40 | 40-50 | 50-60 | 60-70 | 70-80 |
+|---|---|---|---|---|---|---|---|---|
+| **actual** | 4% | 17% | 25% | 35% | 43% | 53% | 66% | 71% |
+
+### And it is SHARP where it matters
+**48% of all decisions land at P<=20%, and those levels were touched only 8% of the time** - i.e. a
+92%-accurate "price does NOT get there today" call, available on half of all decisions. The high
+side is thin (0.9% of rows reach P>=80%), which is honest: reaching a far level is rarely a
+near-certainty.
+
+### Why this is the right shape for THIS panel
+1. **The operator trades from nodes.** "Will price reach the node at 7792, and when" is the question
+   the tool exists to answer; "what will the exact HOD price be" is a question nobody trades.
+2. **The median of the touch curve IS the far-side estimate** - the price where P(touch) = 50% - so
+   the band from F-13 falls out of this model instead of needing its own.
+3. **It is where the gamma book plugs in.** The levels stop being sigma multiples and become the
+   King, the node strikes, the EM edges, the prior-day levels. **Does a level's node identity change
+   its touch probability at the same distance?** That is a single, measurable experiment - and it is
+   the first question in this project where the answer would make the tool ours rather than generic.
+   It needs the recorder working (F-10) and ~40+ clean sessions.
+
+
+---
+
+## F-15 · TIMING IS PREDICTABLE ONCE THE QUESTION IS POSED AS FIRST PASSAGE, NOT AS AN EXTREMUM
+**Status: PROVISIONAL** · 2026-08-28 · `tools/study-firstpass.py` · 284 ES sessions, 7,168 arrivals
+
+**Written because the operator asked "did you do your best" and the answer was no.** F-13 concluded
+"the clock is the model" for timing. That conclusion is CORRECT FOR THE QUESTION IT ASKED — *when
+does the extremum print* — and that question is nearly unanswerable: unconditional, near-uniform,
+with a spike into the close. Re-posed as **"given price REACHES this level, when does it get
+there"**, timing becomes partially predictable.
+
+### Point prediction, minutes-to-touch (median absolute error, median horizon 86 min)
+
+    the unconditional median                  49.0 min
+    the clock alone                           46.0 min
+    the analytic first-passage scaling T~(d/sigma)^2   42.0 min   <- PHYSICS, one feature
+    distance + vol + time left                43.3 min
+    + the touch model's inputs                42.3 min
+    + APPROACH VELOCITY + first-passage       41.7 min
+
+⚠ **The analytic scaling law does 95% of the work of the full model with ONE feature.** Fourth
+occurrence of this project's oldest lesson: the simple thing wins, ship the simple thing.
+
+### As the call a face can make — "does it arrive within the hour?"
+
+    clock alone                          AUC 0.637
+    distance + vol + time left           AUC 0.670
+    + approach velocity + first-passage  AUC 0.692    base rate 36%
+
+    calibration:  predicted 0-20% -> actual 14% | 20-40% -> 33% | 40-60% -> 47% | 60-80% -> 62%
+
+### The three things that had not been tried, and what each was worth
+1. **Posing it conditionally** (given it arrives) — the whole difference. Without it, timing is a
+   clock; with it, it is a first-passage problem with real structure.
+2. **APPROACH VELOCITY** — the rate price is closing on the level, oriented toward it, over 15 and
+   30 minutes. Every earlier feature was static. Worth **+0.022 AUC**.
+3. **The analytic first-passage scaling** — worth more alone than ten ML features together.
+
+### And one that was worth nothing
+**REGIME SPLIT.** Fitting trend-ish (price at a range extreme) and chop (mid-range) separately:
+AUC 0.684 and 0.691 against 0.692 pooled. **One model serves both.**
+
+### What this composes into
+Per level, two calibrated numbers and a horizon:
+`7772 · touched today 78% (F-14) · within the hour 45% · typically ~50 min (F-15)`.
+⚠ Median error is **42 minutes on an 86-minute median horizon** — roughly 50% relative. It is a
+range statement, never a clock time.
+
+
+---
+
+## F-16 · THE DAILY ATR ADDS NOTHING, LEVEL IDENTITY ADDS NOTHING — AND A SPARSE CONTROL NEARLY SOLD ME A PHANTOM
+**Status: CONFIRMED** (the negative), **PROVISIONAL** (round numbers) · 2026-08-28
+`tools/study-atrlevels.py` · 279 sessions, 59,108 level-decisions
+
+**The operator asked:** *"can you use the expected move, the daily atr ... any levels, indicators,
+data that would allow you to better predict the timing"*.
+
+### A · DAILY ATR(14): NO
+| added to the touch model | AUC |
+|---|---|
+| the shipped inputs (distance/sigma, clock, range, realized vol) | **0.8771** |
+| + daily ATR(14) | 0.8767 |
+| + range-so-far / ATR ("how much of a normal day is used") | 0.8770 |
+| + room left in a normal day · + distance measured in ATR | 0.8770 / 0.8769 |
+
+**The realized-volatility sigma already contains it.** ATR is a slower estimate of the same quantity.
+
+### B · LEVEL IDENTITY: NO — AND THE FIRST ANSWER WAS A PHANTOM
+The test: train a distance-only model on synthetic levels placed at k*sigma, then ask whether a
+NAMED level is touched more often than that model expects at the same distance, time and volatility.
+
+    with a SPARSE control (sigma levels at only 0.75 and 1.5)      with a DENSE control (0.15 -> 2.5)
+      prior-day high   +10.4 pts                                     -0.3 pts
+      prior-day low    +11.4                                         +2.4
+      prior-day close  +12.6                                         -0.3
+      overnight high   +13.7                                         -1.0
+      overnight low    +12.2                                         +0.9
+      round number     +45.4                                         +4.6  (+-2.5)
+
+⚠⚠ **EVERY ONE OF THOSE "LIFTS" WAS THE CONTROL EXTRAPOLATING.** With levels at only two distances,
+the model had to guess the curve in between, and the named levels sat in the gap. Densify the control
+and the entire effect vanishes. **I was one write-up away from reporting "prior-day levels are worth
++12 points of touch probability", which is false.**
+**THE RULE: a matched control must SPAN the range of the thing it is controlling for, densely.**
+
+Round numbers survive at **+4.6 pts (+-2.5, session-clustered)** — weak, ~1.8 SE, PROVISIONAL.
+
+### C · WHY THIS MATTERS MORE THAN THE ANSWER: it is the gamma experiment, already built
+`study-atrlevels.py`'s residual test is exactly the design the gamma question needs - swap the named
+levels for the King, the put wall and the node strikes, and ask whether they beat their own
+distance-matched expectation. Two consequences:
+1. **The experiment is ready** the moment the recorder has clean sessions (F-10).
+2. ⚠ **Temper the prior.** If prior-day and overnight extremes - the levels every chart package draws
+   - carry nothing once distance is controlled, "the put wall is a magnet" deserves the same
+   scepticism and the same dense control. Gamma is mechanistically different (dealer hedging
+   transacts AT the strike), so it is still worth asking. It is not worth assuming.

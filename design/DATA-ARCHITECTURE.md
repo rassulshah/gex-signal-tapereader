@@ -134,6 +134,27 @@ unsupported), when the corpus is **< 120 sessions**, or when any rung has **n < 
 `57/80/100/100/100` — monotone, well-formed, and complete nonsense. **Monotonicity is not evidence.**
 An old known-good rate beats a fresh unparseable one.
 
+### (v14.72) TWO MORE COURIERS ON THE SAME PIPE — and one of them is the improvement loop
+
+```
+  companion v1.16 · GM_xmlhttpRequest
+     raw.githubusercontent.com/.../data/es-1min/FARSIDE.json   -> gpts_farside_v1
+        the far-side touch/timing tables. Re-derive with tools/study-farside.py, push, and the
+        panel picks them up WITHOUT A BUILD - validated first (fsNormalise: >=120 sessions, every
+        rated cell n>=60, monotone in distance) or the baked-in copy stands.
+     query1.finance.yahoo.com/v8/finance/chart/^VIX?interval=1d&range=2y  -> gpts_vix_daily_v1
+        two years of daily VIX. NOT wired into the panel - it exists so the cloud can test whether
+        an IMPLIED sigma beats the realized one over the corpus. The daily ATR was measured and adds
+        nothing (F-16); implied vol is the one volatility measure that is not a slower copy of what
+        the panel already computes.
+```
+
+⚠ **The `farside` FEATURE RECORD is a data-collection instrument, not just telemetry.** Every bar it
+writes the three nearest rated levels with their distance IN SIGMA **and their node identity**
+(`kind`, %King, polarity, role). Nothing in this project can answer "does a put wall get traded more
+often than empty air at the same distance" until those rows exist - which is why the record carries
+the gamma fields even though nothing consumes them yet. See `docs/LLM-NIGHTLY-BRIEF.md` ⭐ section.
+
 ### Adding a market is ONE ROW
 
 `FUT_MARKETS` in `current/gex-if-levels.user.js`: `{ k:'NQ', y:'NQ=F' }`. Contract multiplier, CQG

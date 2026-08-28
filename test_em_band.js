@@ -1556,12 +1556,12 @@ eval(ex('emBand'));
 
   // --- exactly the two ES kings arrive ---------------------------------------------------------
   ok(F.rows.length===2,               'kings only: the SPXW and SPY crowns, nothing else', F.rows.map(x=>x.lbl));
-  ok(!!L['SPXW KING 100%'],           'the SPXW King, in the locked grammar');
-  ok(!!L['SPY KING 100%'],            'and the SPY King — "i must always have the spy and spxw king"');
+  ok(!!L['SPXW KING'],           'the SPXW King, in the locked grammar');
+  ok(!!L['SPY KING'],            'and the SPY King — "i must always have the spy and spxw king"');
 
   // --- THE PRICES ------------------------------------------------------------------------------
-  ok(L['SPXW KING 100%'].price===7727.75, 'SPX 7710 lands at ES 7727.75 — the rail\'s price on the 0.25 tick', L['SPXW KING 100%'].price);
-  ok(Math.abs(L['SPY KING 100%'].price - 765*10.0458) <= 0.25, 'SPY 765 lands at SPY x r, on the tick', L['SPY KING 100%'].price);
+  ok(L['SPXW KING'].price===7727.75, 'SPX 7710 lands at ES 7727.75 — the rail\'s price on the 0.25 tick', L['SPXW KING'].price);
+  ok(Math.abs(L['SPY KING'].price - 765*10.0458) <= 0.25, 'SPY 765 lands at SPY x r, on the tick', L['SPY KING'].price);
   F.rows.forEach(function(x){
     ok(Math.abs(x.price/0.25 - Math.round(x.price/0.25)) < 1e-9,
        'every emitted price is a tradeable ES price: '+x.lbl+' = '+x.price, x.price);
@@ -1569,23 +1569,23 @@ eval(ex('emBand'));
 
   // --- THE SCALE PROPERTY: R.r cancels on the SPXW king (dispScale path) -----------------------
   const F2=irtFixture(10.6000);
-  ok(F2.byLabel['SPXW KING 100%'].price===7727.75,
+  ok(F2.byLabel['SPXW KING'].price===7727.75,
      'the SPXW king does NOT move when the futures ratio moves — R.r cancels through dispScale',
-     F2.byLabel['SPXW KING 100%'].price);
-  ok(L['SPXW KING 100%'].price === Math.round(7710*1.0023/0.25)*0.25,
+     F2.byLabel['SPXW KING'].price);
+  ok(L['SPXW KING'].price === Math.round(7710*1.0023/0.25)*0.25,
      'and the price is exactly irtRound(spxStrike x dispScale, 0.25), independent of the ratio');
   // ...while the SPY king legitimately DOES ride the ratio (it is a SPY strike x r)
-  ok(Math.abs(F2.byLabel['SPY KING 100%'].price - 765*10.6) <= 0.25,
+  ok(Math.abs(F2.byLabel['SPY KING'].price - 765*10.6) <= 0.25,
      'the SPY king rides the live ratio — different book, different scale, correctly so');
 
   // --- the latch: a mid-flap tape does not move the exported crown ------------------------------
   const Ff=irtFixture(10.0458);                              // seeds the latch at 7710 (fresh store)
-  ok(Ff.byLabel['SPXW KING 100%'].price===7727.75, 'latch seeded on first sight of the crown');
+  ok(Ff.byLabel['SPXW KING'].price===7727.75, 'latch seeded on first sight of the crown');
 
   // --- colours carry the polarity --------------------------------------------------------------
-  ok(L['SPXW KING 100%'].col==='11',  'a -gamma SPXW crown wears the accelerator purple');
-  ok(L['SPY KING 100%'].col==='12',   'a +gamma SPY crown wears the light yellow');
-  ok(L['SPXW KING 100%'].w==='3',     'the SPXW king is drawn heaviest');
+  ok(L['SPXW KING'].col==='11',  'a -gamma SPXW crown wears the accelerator purple');
+  ok(L['SPY KING'].col==='12',   'a +gamma SPY crown wears the light yellow');
+  ok(L['SPXW KING'].w==='3',     'the SPXW king is drawn heaviest');
 
   // --- absence: the trimmed lanes stay out -----------------------------------------------------
   ok(!F.rows.some(x=>/GK|BRK|ACC|SUCC|IF /.test(x.lbl)), 'no roles, no SUCC, no IF walls — three-line contract', F.rows.map(x=>x.lbl));

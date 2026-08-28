@@ -41,17 +41,63 @@ project has lost specified work to exactly that.
 
 | feature key | what it claims | what to check |
 |---|---|---|
-| **`lodhod`** | has the LOD/HOD already printed? An 8x9 table on posr x time. **IN at cell>=70% measured 94% (n=284), NOT IN at <=20% measured 72% (n=85)** — both BACKTESTED, never forward-tested | does the live rate match the cell rate? Report `called` vs outcome with n. **This is the single most important new row.** |
+| **`lodhod`** | has the LOD/HOD already printed? An 8x9 table on posr x time. ⚠⚠ **THE HOVER'S 92% IS WRONG — see F-12.** Measured in real time (the side the panel actually calls) it is **63% at the first crossing of 70%**, rising to 89% at a >=90% cell | does the live rate match the CELL rate? Report `called` vs outcome with n, and **report the first-crossing decision rate separately** — they are different numbers and this project has already confused them twice |
+| **`farside`** ⭐ | **v14.72, and the operator's top priority.** Where can the OTHER extremity get to, and when: P(a level trades before the close) from a distance-in-sigma x minutes-left table (AUC 0.826 backtest, F-14), plus first-passage timing given it is reached (F-15) | **four things, in this order** — see the block below |
 | `levelstate` | five level states | hold/break rate per state |
 | ⓪a wick family | BOP/WICK/W.END/WICK%/MUD | recorded but not yet scored |
 
 ⚠ **`lodhod` starts at `n=0` and its backtest is NOT a live rate.** Never copy 94% into
 `learning/rules.json` — that field is for what YOU measured forward.
 
-⚠ **The panel's own evidence lives in `skylit-docs/FINDINGS.md` (F-1..F-8).** Read it before
-proposing anything: sweeps (48%), momentum divergence and NQ cross-market divergence are all
-measured DEAD, and a 5-feature regression was measured as no better than the table. Do not propose
-re-adding them.
+⚠ **The panel's own evidence lives in `skylit-docs/FINDINGS.md` (F-1..F-16).** Read it before
+proposing anything: sweeps (48%), momentum divergence and NQ cross-market divergence, the daily ATR,
+the overnight session, IB30 size, day-of-week and level identity are all measured DEAD, and two
+separate regressions were measured as no better than a table and a scaling law. **Do not propose
+re-adding them**, and if you propose something new, say which finding it does not duplicate.
+
+---
+
+## ⭐ `farside` — WHAT THE REVIEW MUST DO WITH IT (operator-mandated 2026-08-28)
+
+> "make sure that with additional data, it can be improved and that we start collecting that data to
+> figure how to increase the prediction ... i want to ensure that the LLM gets it and can make self
+> improvement to this feature ... i want this feature to be a top priority."
+
+**Each bar records** (in `feat.farside`): the session `sig`, the three nearest rated levels with
+their distance IN SIGMA, the table's `p`, the expected first-passage `med`, and — the point of the
+whole exercise — each level's **node identity**: `kind` (node/em/pdh/pdl/pdc/ibh/ibl/dp/round),
+`pct` (%King), `sgn` (signed polarity) and `role`.
+
+**1 · SCORE THE TOUCH CALL.** For every recorded level, did price trade there before the close? The
+day file carries every bar, so this is computable exactly. Bucket by predicted `p` (deciles) and
+report predicted-vs-actual with n. ⚠ A systematic gap in ONE direction is a sigma-scaling problem
+(the panel's bars are the chart's interval, the backtest used 1-minute), NOT evidence the table is
+wrong. Say which you think it is and why.
+
+**2 · SCORE THE NO CALL SEPARATELY.** Levels with `p<=20` are the sharpest thing this model says
+(backtest: 92% never traded). A failed NO is far more damaging than a missed YES. Report its own
+rate, with n, and flag ANY session where a `p<=20` level traded.
+
+**3 · ⭐ THE GAMMA QUESTION — this is what would make the feature ours.** At the SAME distance in
+sigma and the same time left, does a level with node identity (`kind:'node'`, high `pct`, negative
+`sgn`) get traded MORE than one without it? **The design is already built and validated:
+`tools/study-atrlevels.py`** — train a distance-only model, then test each class's residual.
+⚠⚠ **USE A DENSE DISTANCE CONTROL.** A sparse one produced a phantom +12 points for prior-day
+levels that vanished under a proper control (F-16). Needs ~40 clean sessions; report how many exist
+and DO NOT run it below 25.
+
+**4 · PROPOSE A NEW TABLE, NEVER APPLY ONE.** If the live data disagrees with the baked table,
+write a proposed `FARSIDE.json` into `review/` alongside your log — same shape as
+`data/es-1min/FARSIDE.json`, produced by `tools/study-farside.py`. The operator's push moves it to
+`data/es-1min/`, the companion couriers it, and the panel validates it before use (>=120 sessions,
+every rated cell n>=60, monotone in distance) — so a bad proposal is refused rather than drawn.
+**That loop is the feature's self-improvement path: you propose, the gate decides, the panel adopts.**
+
+⚠ **What NOT to propose for this feature, because it is already measured:** the daily ATR (adds
+nothing, F-16), the overnight range (worst of sixteen factors, F-16), level identity for prior-day
+and overnight levels (nothing, F-16), predicting the far side's price directly (a fixed 1.36x
+expansion beats gradient boosting, F-13), or a narrow timing window at high probability (a 30-minute
+box is worth 15%, F-15).
 
 ---
 

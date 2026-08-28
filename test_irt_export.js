@@ -17,7 +17,8 @@ eval(['irtColor'].map(ex).join('\n')); eval(v('IRT_COLORS'));
 eval(v('IRT_RATIO_KEY')); eval(v('IRT_NQRATIO_KEY'));
 eval(v('KING_LATCH_KEY'));
 eval(src.match(/var KING_LATCH_MS=\d+/)[0]+';');   // trailing comment defeats the v() grab
-eval(['irtRound','irtCsvRow','irtRatio','irtNqRatio','kingLatchTick','irtBuildCsv'].map(ex).join('\n'));
+eval(v('IRT_QQQK_KEY'));
+eval(['irtRound','irtCsvRow','irtRatio','irtNqRatio','kingLatchTick','irtQqqKing','irtBuildCsv'].map(ex).join('\n'));
 global.ES_RATIO=10.05; global.NQ_RATIO=41.36; global.FEED_STALE_MS=12000;
 var LS={}; global.localStorage={ getItem:k=>(k in LS?LS[k]:null), setItem:(k,val)=>{LS[k]=String(val);} };
 global.CFG={ nodeThresh:20, irt:{ on:true, secs:180, futSym:'EPU26', etfSym:'SPY', file:'FlexLevelsExport.csv',
@@ -30,6 +31,8 @@ global.ifLadder=()=>({ dispScale:1.0023 });
 const SPXW_TAPE=()=>({ king:7710, pct:{ '7710.00':100, '7630.00':85, '7650.00':41 } });
 let QQQ_TAPE=()=>({ king:650, count:20, fromFeed:false, pct:{ '650.00':-100, '648.00':44 } });
 global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():SPXW_TAPE());
+let QQQ_LADDER=()=>null;                      // (v14.73) the face's array; null = fall through to the tape
+global.ladderFor=(s)=>(s==='QQQ'?QQQ_LADDER():null);
 global.LASTFEED={ SPY:{ ts:Date.now(), j:{} } };
 global.extractWalls=()=>({ king:765, walls:[{k:765, pct:100, pos:false}] });
 
@@ -46,7 +49,7 @@ ok(eRows.length===2 && qRows.length===1, '1c EPU26 carries exactly TWO kings; EN
 ok(lines.slice(1).every(l=>l.split(',').length===28), '1d every row keeps exactly 28 columns');
 
 // ---------- 2. the SPXW king ----------
-const kx=eRows.find(l=>/SPXW KING 100%/.test(l));
+const kx=eRows.find(l=>/SPXW KING/.test(l));
 ok(!!kx, '2a SPXW KING present');
 ok(kx && /^EPU26,7727\.750000,/.test(kx), '2b SPX 7710 → ES 7727.75 (dispScale path, 0.25 tick)', kx);
 ok(kx && kx.split(',')[3]===String((227<<16)+(195<<8)+65), '2c +gamma crown wears the full yellow (RGB)', kx&&kx.split(',')[3]);
@@ -66,7 +69,7 @@ ok(kx && kx.split(',')[4]==='3', '2d drawn heaviest');
   global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():SPXW_TAPE()); LS[KING_LATCH_KEY]=undefined; delete LS[KING_LATCH_KEY]; }
 
 // ---------- 3. the SPY king ----------
-const ky=eRows.find(l=>/SPY KING 100%/.test(l));
+const ky=eRows.find(l=>/SPY KING/.test(l));
 ok(!!ky, '3a SPY KING present — "i must always have the spy and spxw king"');
 ok(ky && Math.abs(parseFloat(ky.split(',')[1]) - 765*10.0538) <= 0.25, '3b SPY 765 × the ES ratio, on the tick', ky&&ky.split(',')[1]);
 ok(ky && ky.split(',')[3]===String((205<<16)+(180<<8)+250), '3c a negative SPY crown wears the LIGHT purple', ky&&ky.split(',')[3]);
@@ -77,7 +80,8 @@ ok(ky && ky.split(',')[3]===String((205<<16)+(180<<8)+250), '3c a negative SPY c
 
 // ---------- 4. the QQQ king ----------
 const kq=qRows[0];
-ok(/QQQ KING 100%/.test(kq), '4a QQQ KING present on ENQU26');
+ok(/QQQ KING/.test(kq) && !/100%/.test(kq),
+   '4a QQQ KING present on ENQU26, and the redundant 100% is gone (operator, 2026-08-28)');
 ok(/^ENQU26,27235\.000000,/.test(kq), '4b QQQ 650 × 41.9 (manual-chain ratio) on the 0.25 tick', kq);
 ok(/ ~/.test(kq.split(',')[2]), '4c ...wearing ~ (ratio not measured live)', kq.split(',')[2]);
 ok(kq.split(',')[3]===String((163<<16)+(113<<8)+247), '4d a negative QQQ crown wears the full purple', kq.split(',')[3]);
@@ -85,9 +89,40 @@ ok(kq.split(',')[3]===String((163<<16)+(113<<8)+247), '4d a negative QQQ crown w
   const Bq=irtBuildCsv(); const k2=Bq.csv.split('\r\n').find(l=>/QQQ KING/.test(l));
   ok(k2 && !/ ~/.test(k2.split(',')[2]) && /^ENQU26,26774\.250000,/.test(k2), '4e on a live NQ chart the ratio is MEASURED — no ~ (v14.13 chain intact)', k2);
   global.FUTMODE={ fam:'ES', r:10.0538, live:true }; }
+// ⚠⚠ (v14.73) THIS ASSERTION IS REVERSED, DELIBERATELY, AND THE REASON IS RECORDED.
+// v14.15 refused a feed-sourced QQQ King ("Atlas is the source of truth, feed fallback rejected").
+// On 2026-08-28 that rule cost the operator the level for two hours while the panel was DISPLAYING
+// a healthy QQQ book — he caught it: "you show the qqq king in the tapereader app so you know the
+// level." Refusing bought a MISSING level, not a safer one. The feed King is Skylit's own gamma
+// book; it is now written and TAGGED, and the source is reported in IRT_LAST.nqWhy.
 { const keep=QQQ_TAPE; QQQ_TAPE=()=>({ king:650, count:20, fromFeed:true, pct:{'650.00':-100} });
-  ok(!/ENQU26/.test(irtBuildCsv().csv), '4f the weekly feed fallback stays REJECTED (v14.15) — ladder or nothing');
+  const csvF=irtBuildCsv().csv;
+  ok(/ENQU26/.test(csvF), '4f a feed-sourced QQQ King is now WRITTEN, not refused (v14.15 reversed)');
+  ok(/via feed/.test(IRT_LAST.nqWhy||''), '4f2 ...and the export records that it came from the feed', IRT_LAST.nqWhy);
   QQQ_TAPE=keep; }
+// ---------- 4g. the face's ladder OUTRANKS the tape (v13.2: one quantity, one source) ----------
+{ const keepL=QQQ_LADDER, keepT=QQQ_TAPE;
+  QQQ_LADDER=()=>({ king:660, count:100, src:'trinity', pct:{'660.00':100} });
+  QQQ_TAPE=()=>({ king:650, count:20, fromFeed:false, pct:{'650.00':-100} });
+  const row=irtBuildCsv().csv.split('\r\n').find(l=>/QQQ KING/.test(l));
+  // ⚠ the ratio in force here is whatever irtNqRatio resolves (test 4e cached a live one), so the
+  // expectation is derived from it rather than hardcoded — a hardcoded 41.9 tested the RATIO, not
+  // the KING, and would have passed on the wrong strike.
+  const RNQ=irtNqRatio(CFG.irt).r;
+  ok(row && Math.abs(parseFloat(row.split(',')[1]) - 660*RNQ) <= 0.25,
+     '4g the export writes the King the FACE shows (660), not the tape\'s (650)', row&&row.split(',')[1]);
+  ok(/via trinity/.test(IRT_LAST.nqWhy||''), '4g2 ...and says which array it read', IRT_LAST.nqWhy);
+  QQQ_LADDER=keepL; QQQ_TAPE=keepT; }
+// ---------- 4h. THE LATCH — an unreadable tick must never DELETE the operator's level ----------
+{ const keepL=QQQ_LADDER, keepT=QQQ_TAPE;
+  QQQ_LADDER=()=>({ king:661, count:100, src:'trinity', pct:{'661.00':100} });
+  irtBuildCsv();                                   // seeds today's latch
+  QQQ_LADDER=()=>null; QQQ_TAPE=()=>null;          // both readers go blind
+  const row2=irtBuildCsv().csv.split('\r\n').find(l=>/QQQ KING/.test(l));
+  ok(row2 && Math.abs(parseFloat(row2.split(',')[1]) - 661*irtNqRatio(CFG.irt).r) <= 0.25,
+     '4h a blind tick HOLDS the last good King — the line stays on his chart', row2&&row2.split(',')[1]);
+  ok(/latched/.test(IRT_LAST.nqWhy||''), '4h2 ...and the export says it is held, not fresh', IRT_LAST.nqWhy);
+  QQQ_LADDER=keepL; QQQ_TAPE=keepT; }
 
 // ---------- 5. everything else stays OUT ----------
 ok(!/IF /.test(b.csv), '5a the IF walls are out of the file');
@@ -102,12 +137,19 @@ ok(!/NextStop|PBentry|FLIP|D-SPY/.test(b.csv), '5e and none of the long-dead lan
   ok(!!B1 && !/SPXW KING/.test(B1.csv) && /SPY KING/.test(B1.csv) && /QQQ KING/.test(B1.csv), '6a SPXW dark → SPY + QQQ kings still write');
   global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():SPXW_TAPE()); }
 { global.tapeMap=(s)=>(s==='QQQ'?null:SPXW_TAPE()); global.LASTFEED={ SPY:null };
+  // ⚠ (v14.73) THE LATCH MUST BE CLEARED FOR THIS TEST TO MEAN ANYTHING. With a King latched from
+  // earlier in the session the export SHOULD still write it — that is the whole point of the latch —
+  // so "every source dark" now has to mean dark AND nothing held. Leaving the latch in place made
+  // this assertion silently test the latch instead of the darkness.
+  delete LS[IRT_QQQK_KEY];
   const B2=irtBuildCsv();
   ok(!!B2 && /SPXW KING/.test(B2.csv) && !/SPY KING/.test(B2.csv) && !/ENQU26/.test(B2.csv), '6b only the SPXW king alive → it writes alone');
   const keep6=QQQ_TAPE;
-  global.tapeMap=()=>null; QQQ_TAPE=()=>null;
-  ok(irtBuildCsv()==null, '6c every source dark → nothing is written, never an empty confident file');
+  global.tapeMap=()=>null; QQQ_TAPE=()=>null; delete LS[IRT_QQQK_KEY];
+  ok(irtBuildCsv()==null, '6c every source dark AND nothing latched → nothing is written, never an empty confident file');
   QQQ_TAPE=keep6; global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():SPXW_TAPE());
+let QQQ_LADDER=()=>null;                      // (v14.73) the face's array; null = fall through to the tape
+global.ladderFor=(s)=>(s==='QQQ'?QQQ_LADDER():null);
   global.LASTFEED={ SPY:{ ts:Date.now(), j:{} } }; }
 
 // ---------- 7. ratio machinery (unchanged contract) ----------
@@ -204,5 +246,64 @@ ok(/CFG\.irt\.nqRatio=o\.irt\.nqRatio/.test(src), '7h ...and the NQ fields persi
      'and prints a footer warning naming the fix');
 }
 
+// ============================================================================================
+// (v14.73) THE QQQ KING — face first, tape second, LATCH last.
+// The operator, 2026-08-28: "this is so strange because you show the qqq king in the tapereader
+// app so you know the level." He was right: the face read one array, the export re-derived from
+// another with a stricter rule, and the level silently vanished from his chart for two hours.
+// ⚠ Every assertion below EXECUTES irtQqqKing under a stubbed world — a grep cannot tell which
+// source won, and "which source won" is the entire behaviour.
+// ============================================================================================
+{
+  const mk = (o) => {
+    const store = {};
+    global.localStorage = { getItem:k=>store[k]||null, setItem:(k,v)=>{store[k]=v;}, _s:store };
+    global.ctTodayStr = () => '2026-08-28';
+    global.ladderFor = () => o.ladder || null;
+    global.tapeMap   = () => o.tape || null;
+    return store;
+  };
+  eval(ex('irtQqqKing'));
+
+  // 1 · the face's ladder wins
+  mk({ ladder:{ king:717, count:100, src:'trinity', pct:{'717.00':100} } });
+  let r = irtQqqKing();
+  ok(r.k===717 && r.src==='trinity', 'q1 the export takes the King the FACE is showing', [r.k, r.src]);
+
+  // 2 · a feed-sourced tape is ACCEPTED and TAGGED, where v14.15 refused it outright
+  mk({ ladder:null, tape:{ king:718, count:60, fromFeed:true, pct:{'718.00':100} } });
+  r = irtQqqKing();
+  ok(r.k===718 && r.src==='feed',
+     'q2 a feed King is written and TAGGED, not refused — refusing bought a missing level, not a safer one', [r.k, r.src]);
+
+  // 3 · THE LATCH — nothing readable, but today's King was seen earlier
+  const st = mk({ ladder:{ king:717, count:100, src:'trinity', pct:{'717.00':100} } });
+  irtQqqKing();                                   // seeds the latch
+  global.ladderFor = () => null; global.tapeMap = () => null;
+  r = irtQqqKing();
+  ok(r.k===717 && r.src==='latched' && /held from/.test(r.why),
+     'q3 an unreadable tick HOLDS the last good King instead of deleting the level', [r.k, r.src, r.why]);
+
+  // 4 · ...but never across days
+  const st2 = mk({ ladder:null, tape:null });
+  st2['gpts_irt_qqqking_v1'] = JSON.stringify({k:700, pct:100, day:'2026-08-27', t:Date.now()});
+  r = irtQqqKing();
+  ok(r.k===null && /nothing latched today/.test(r.why),
+     'q4 yesterday\'s King is NOT latched into today — a stale level is worse than none', r.why);
+
+  // 5 · a thin ladder is not a ladder
+  mk({ ladder:{ king:717, count:2, src:'trinity', pct:{} }, tape:null });
+  r = irtQqqKing();
+  ok(r.k===null, 'q5 a 2-strike ladder is refused, not drawn', [r.k, r.src]);
+
+  // 6 · the label no longer claims 100% — a King is 100% by definition (operator, 2026-08-28)
+  const B = ex('irtBuildCsv');
+  ok(!/KING 100%/.test(B) && /'SPXW KING'/.test(B) && /'QQQ KING'/.test(B),
+     'q6 King labels drop the redundant 100%');
+  ok(/IRT_LAST\.nqWhy/.test(B),
+     'q7 the export RECORDS why a QQQ row was skipped — this cost an afternoon of inference');
+}
+
 console.log('test_irt_export: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
+

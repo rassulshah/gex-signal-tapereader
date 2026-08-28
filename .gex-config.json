@@ -31,7 +31,8 @@
       "BUILD-PLAN.md",
       "garma/V2-PHASE-PLAN.md",
       "session-state/ISSUES-NEXT-BUILD.md",
-      "mockups/mockup-ladder-v11.html"
+      "mockups/mockup-ladder-v11.html",
+      "data/es-1min/FARSIDE.json"
     ],
     "skyliDocs": [
       "skylit-docs/core-concepts/core-concepts.md",
@@ -123,8 +124,8 @@
       "wicks/"
     ]
   },
-  "version": "2026-08-28c",
-  "lastUpdated": "2026-08-28T14:40:00Z",
+  "version": "2026-08-28d",
+  "lastUpdated": "2026-08-28T17:40:00Z",
   "loadInstruction": "⚠ 2026-08-28: READ design/DATA-ARCHITECTURE.md - it is the ONE place that says WHO CAN REACH WHAT (the panel is @grant none and cannot fetch cross-origin; the companion holds the grants; the cloud can clone but CANNOT PUSH; git is the transport), every data source, the four transports, and the daily ES corpus pipeline. It exists because those facts used to live only in session-state/, which is rewritten in full every build - the same mechanism that lost ITEM 18 for 24 versions. design/architecture-design.md is SUPERSEDED on data sources by it. ⚠ TWO STANDING OPERATOR RULES, STATED HERE SO A LOAD CANNOT MISS THEM: (1) DELIVERY IS ONE FILE - see deliveryRule; send exactly one installvNNNN.bat and nothing else. (2) CHAT HISTORY IS REGENERATED ON EVERY BUILD and READ ON EVERY LOAD - see chatHistory; a build that skips it goes red on test_chat_history.js. ⚠ 2026-08-27: CLONE FULL (see cloneRule — never --depth 1). READ IN THIS ORDER, IN FULL, BEFORE ANYTHING ELSE: (1) session-state/latest-resume-note.md — a briefing, not a changelog; a context that skips it will re-litigate settled decisions. (2) session-state/CHAT-HISTORY.md, the CURRENT-CONTEXT entry — what was actually SAID last context: the corrections, the approaches already rejected, and the operator's exact words. The resume note says where we are; this says how we got there. (3) session-state/LOCKED-ITEMS.md — agreed work that is NOT built. It exists because the resume note lost ITEM 18 and a whole session went to re-discovering it. (4) design/DATA-ARCHITECTURE.md — who can reach what: the browser is the only participant that can fetch freely, the cloud cannot reach Yahoo and CANNOT PUSH, git is the transport between them. ⚠ master-spec.md §3.1-3.2 and design/architecture-design.md are OBSOLETE where they name AI Drive as the source of truth — both carry banners; git is the truth. TWO analyst packages inform the build (Garma = gamma-map-first, Wicks = charts-first); BUILD-PLAN.md is the master sequence across both, and is currently MISSING at HEAD. Several headline measurement rates in this project are ONE-DAY samples and at least one is contradicted by a later day — never quote a rate without its n and its date.",
   "chatHistory": {
     "file": "session-state/CHAT-HISTORY.md",
@@ -193,5 +194,13 @@
     ],
     "enforcement": "test_savedone.js fails the build when the resume note does not declare the current panel version, when CHAT-HISTORY or the CHANGELOG are unstamped, when a ledger is missing, or when this convention stops being written down.",
     "why": "latest-resume-note.md went SEVEN builds stale on 2026-08-28 and then FOUR more the same day, while CHAT-HISTORY.md stayed perfect - because a test guarded one and nothing guarded the other. A rule enforced by a test is followed; a rule enforced by a checklist is followed until it is busy."
+  },
+  "farside": {
+    "what": "⓪a's far-side block: P(a level trades before the close) x first-passage timing. v14.72.",
+    "tables": "data/es-1min/FARSIDE.json, derived by tools/study-farside.py, couriered by companion v1.16 into gpts_farside_v1 and VALIDATED before use (>=120 sessions, every rated cell n>=60, monotone in distance).",
+    "evidence": "FINDINGS F-12..F-16. F-14 is the model (AUC 0.826, calibrated); F-15 is the timing; F-13 says do NOT predict the far-side price directly; F-16 says the daily ATR and level identity add nothing - and records the phantom a sparse control produced.",
+    "doNotRePropose": "sweeps, momentum/NQ divergence, IB30/IB60, 50-SMA, open-reclaimed, 60m breakout, daily ATR, overnight range, volume, day-of-week, gap, prior-day/overnight level identity, red/green days, a 5-feature logistic, or a narrow high-probability timing window. All measured, all recorded.",
+    "improvementLoop": "the nightly review scores the touch call and the <=20% NO call, runs the gamma test with a DENSE distance control, and PROPOSES a new FARSIDE.json into review/ - it never applies one. See docs/LLM-NIGHTLY-BRIEF.md, the star section.",
+    "⚠ correction": "HLTAB_META.inHit still advertises 92% for the IN call. F-12 measured 63% in real time - the 92% study selected the side with hindsight. Fix in the next build."
   }
 }

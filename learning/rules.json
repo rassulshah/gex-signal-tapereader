@@ -1,6 +1,6 @@
 {
  "schema": "gex-rules/v2",
- "asOf": "2026-08-26",
+ "asOf": "2026-08-28",
  "version": "14.7",
  "note": "THE MENTAL MODEL IN DATA FORM, MACHINE-APPLICABLE. weights.dir are the LIVE direction-scoring constants the panel reads at boot. The WEEKLY learning run writes rules/proposals/challengers/killList and NEVER touches weights; only the panel applyProposals() moves a weight, and only after RE-CHECKING the promotion bar in code (n>=20 AND walkForward.held over >=3 NEW sessions AND no regime flip). clearsBar asserted by the reviewer is advisory. The NIGHTLY run writes learning/log/YYYY-MM-DD.json only. Sparse data never nudges a weight: it is reported as insufficient and the hand-set value stands.",
  "unlockN": 20,
@@ -93,7 +93,7 @@
   "decision": {
    "id": "decision",
    "tier": "hand",
-   "condition": "Direction grade \u00d7 in-play Node grade",
+   "condition": "Direction grade × in-play Node grade",
    "rate": null,
    "n": 0,
    "mfe": null,
@@ -121,10 +121,10 @@
     "held": false
    }
   },
-  "decision.A\u00d7A": {
-   "id": "decision.A\u00d7A",
+  "decision.A×A": {
+   "id": "decision.A×A",
    "tier": "hand",
-   "condition": "decisionCell=A\u00d7A",
+   "condition": "decisionCell=A×A",
    "rate": null,
    "n": 0,
    "mfe": null,
@@ -143,7 +143,7 @@
      "n": 0
     }
    },
-   "mechanism": "Matrix cell A\u00d7A must earn its label from measured outcomes.",
+   "mechanism": "Matrix cell A×A must earn its label from measured outcomes.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,
@@ -152,10 +152,10 @@
     "held": false
    }
   },
-  "decision.A\u00d7B": {
-   "id": "decision.A\u00d7B",
+  "decision.A×B": {
+   "id": "decision.A×B",
    "tier": "hand",
-   "condition": "decisionCell=A\u00d7B",
+   "condition": "decisionCell=A×B",
    "rate": null,
    "n": 0,
    "mfe": null,
@@ -174,7 +174,7 @@
      "n": 0
     }
    },
-   "mechanism": "Matrix cell A\u00d7B must earn its label from measured outcomes.",
+   "mechanism": "Matrix cell A×B must earn its label from measured outcomes.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,
@@ -183,10 +183,10 @@
     "held": false
    }
   },
-  "decision.A\u00d7C": {
-   "id": "decision.A\u00d7C",
+  "decision.A×C": {
+   "id": "decision.A×C",
    "tier": "hand",
-   "condition": "decisionCell=A\u00d7C",
+   "condition": "decisionCell=A×C",
    "rate": null,
    "n": 0,
    "mfe": null,
@@ -205,7 +205,7 @@
      "n": 0
     }
    },
-   "mechanism": "Matrix cell A\u00d7C must earn its label from measured outcomes.",
+   "mechanism": "Matrix cell A×C must earn its label from measured outcomes.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,
@@ -214,10 +214,10 @@
     "held": false
    }
   },
-  "decision.B\u00d7A": {
-   "id": "decision.B\u00d7A",
+  "decision.B×A": {
+   "id": "decision.B×A",
    "tier": "hand",
-   "condition": "decisionCell=B\u00d7A",
+   "condition": "decisionCell=B×A",
    "rate": null,
    "n": 0,
    "mfe": null,
@@ -236,7 +236,7 @@
      "n": 0
     }
    },
-   "mechanism": "Matrix cell B\u00d7A must earn its label from measured outcomes.",
+   "mechanism": "Matrix cell B×A must earn its label from measured outcomes.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,
@@ -245,10 +245,10 @@
     "held": false
    }
   },
-  "decision.B\u00d7B": {
-   "id": "decision.B\u00d7B",
+  "decision.B×B": {
+   "id": "decision.B×B",
    "tier": "hand",
-   "condition": "decisionCell=B\u00d7B",
+   "condition": "decisionCell=B×B",
    "rate": null,
    "n": 0,
    "mfe": null,
@@ -267,7 +267,7 @@
      "n": 0
     }
    },
-   "mechanism": "Matrix cell B\u00d7B must earn its label from measured outcomes.",
+   "mechanism": "Matrix cell B×B must earn its label from measured outcomes.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,
@@ -276,10 +276,10 @@
     "held": false
    }
   },
-  "decision.B\u00d7C": {
-   "id": "decision.B\u00d7C",
+  "decision.B×C": {
+   "id": "decision.B×C",
    "tier": "hand",
-   "condition": "decisionCell=B\u00d7C",
+   "condition": "decisionCell=B×C",
    "rate": null,
    "n": 0,
    "mfe": null,
@@ -298,7 +298,7 @@
      "n": 0
     }
    },
-   "mechanism": "Matrix cell B\u00d7C must earn its label from measured outcomes.",
+   "mechanism": "Matrix cell B×C must earn its label from measured outcomes.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,
@@ -307,10 +307,10 @@
     "held": false
    }
   },
-  "decision.C\u00d7A": {
-   "id": "decision.C\u00d7A",
+  "decision.C×A": {
+   "id": "decision.C×A",
    "tier": "hand",
-   "condition": "decisionCell=C\u00d7A",
+   "condition": "decisionCell=C×A",
    "rate": null,
    "n": 0,
    "mfe": null,
@@ -329,7 +329,7 @@
      "n": 0
     }
    },
-   "mechanism": "Matrix cell C\u00d7A must earn its label from measured outcomes.",
+   "mechanism": "Matrix cell C×A must earn its label from measured outcomes.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,
@@ -338,10 +338,10 @@
     "held": false
    }
   },
-  "decision.C\u00d7B": {
-   "id": "decision.C\u00d7B",
+  "decision.C×B": {
+   "id": "decision.C×B",
    "tier": "hand",
-   "condition": "decisionCell=C\u00d7B",
+   "condition": "decisionCell=C×B",
    "rate": null,
    "n": 0,
    "mfe": null,
@@ -360,7 +360,7 @@
      "n": 0
     }
    },
-   "mechanism": "Matrix cell C\u00d7B must earn its label from measured outcomes.",
+   "mechanism": "Matrix cell C×B must earn its label from measured outcomes.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,
@@ -369,10 +369,10 @@
     "held": false
    }
   },
-  "decision.C\u00d7C": {
-   "id": "decision.C\u00d7C",
+  "decision.C×C": {
+   "id": "decision.C×C",
    "tier": "hand",
-   "condition": "decisionCell=C\u00d7C",
+   "condition": "decisionCell=C×C",
    "rate": null,
    "n": 0,
    "mfe": null,
@@ -391,7 +391,7 @@
      "n": 0
     }
    },
-   "mechanism": "Matrix cell C\u00d7C must earn its label from measured outcomes.",
+   "mechanism": "Matrix cell C×C must earn its label from measured outcomes.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,
@@ -403,7 +403,7 @@
   "defl.trigger": {
    "id": "defl.trigger",
    "tier": "hand",
-   "condition": "closed bar tags the node zone and closes back away from it (\u2713), or closes through it (\u2717)",
+   "condition": "closed bar tags the node zone and closes back away from it (✓), or closes through it (✗)",
    "rate": null,
    "n": 0,
    "mfe": null,
@@ -453,7 +453,7 @@
      "n": 0
     }
    },
-   "mechanism": "Anticipation is geometry, not prophecy \u2014 it must still be scored like everything else.",
+   "mechanism": "Anticipation is geometry, not prophecy — it must still be scored like everything else.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,
@@ -867,7 +867,7 @@
   },
   "em.pace": {
    "id": "em.pace",
-   "condition": "pct of the straddle travelled divided by \u221a(elapsed fraction of the cash session); not reported below 4% elapsed",
+   "condition": "pct of the straddle travelled divided by √(elapsed fraction of the cash session); not reported below 4% elapsed",
    "rate": null,
    "n": 0,
    "mfe": null,
@@ -949,7 +949,7 @@
      "n": 0
     }
    },
-   "mechanism": "The front expiry pins price today; the later expirations are the walls that survive the close. If breadth separates the two, it belongs in the node grade \u2014 by promotion, not by opinion.",
+   "mechanism": "The front expiry pins price today; the later expirations are the walls that survive the close. If breadth separates the two, it belongs in the node grade — by promotion, not by opinion.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,
@@ -1042,7 +1042,7 @@
      "n": 0
     }
    },
-   "mechanism": "The magnet is where dealer hedging is heaviest, so price is drawn to it; the walls are the two edges where a deflection is most likely. Migration is the live part \u2014 a floor that rolls up is dealers defending higher. Non-voting until the scorecard earns it.",
+   "mechanism": "The magnet is where dealer hedging is heaviest, so price is drawn to it; the walls are the two edges where a deflection is most likely. Migration is the live part — a floor that rolls up is dealers defending higher. Non-voting until the scorecard earns it.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,
@@ -1178,7 +1178,7 @@
   "ledger.touch": {
    "id": "ledger.touch",
    "tier": "hand",
-   "condition": "in-play node touched; ledger state acm | dec | gone | hold AT THE TOUCH (v11.92 \u2014 it was the node\u2019s CURRENT state on every touch until then, a seconds-vs-milliseconds clock mismatch)",
+   "condition": "in-play node touched; ledger state acm | dec | gone | hold AT THE TOUCH (v11.92 — it was the node’s CURRENT state on every touch until then, a seconds-vs-milliseconds clock mismatch)",
    "rate": null,
    "n": 0,
    "mfe": null,
@@ -1197,7 +1197,7 @@
      "n": 0
     }
    },
-   "mechanism": "A node is respected while dealers are adding to it and abandoned while they unwind. If true, the acm/dec chip is a deflection filter; if not, it is decoration. \u26a0 EVERY RECORD BEFORE v11.92 IS VOID for this question: the touch state was stamped from the last sample rather than the sample at the touch, so all touches on a node carried one identical label. Measured live 2026-08-24: 763.00 had 32 touches all reading acm, 763.50 had 33 all dec, 764.00 had 20 all gone.",
+   "mechanism": "A node is respected while dealers are adding to it and abandoned while they unwind. If true, the acm/dec chip is a deflection filter; if not, it is decoration. ⚠ EVERY RECORD BEFORE v11.92 IS VOID for this question: the touch state was stamped from the last sample rather than the sample at the touch, so all touches on a node carried one identical label. Measured live 2026-08-24: 763.00 had 32 touches all reading acm, 763.50 had 33 all dec, 764.00 had 20 all gone.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,
@@ -1228,7 +1228,7 @@
      "n": 0
     }
    },
-   "mechanism": "A trend in node terms is magnet \u2192 pullback node \u2192 magnet. If the phases do not separate outcomes, the model is a story.",
+   "mechanism": "A trend in node terms is magnet → pullback node → magnet. If the phases do not separate outcomes, the model is a story.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,
@@ -1240,7 +1240,7 @@
   "leg.handoff": {
    "id": "leg.handoff",
    "tier": "hand",
-   "condition": "old pullback node/ceiling Dec (m15 \u2264 \u22128% or \u226525% off its session peak) AND a lower node above price building (m15 \u2265 +8% or \u2265 PB_MIN_PCT)",
+   "condition": "old pullback node/ceiling Dec (m15 ≤ −8% or ≥25% off its session peak) AND a lower node above price building (m15 ≥ +8% or ≥ PB_MIN_PCT)",
    "rate": null,
    "n": 0,
    "mfe": null,
@@ -1352,7 +1352,7 @@
      "n": 0
     }
    },
-   "mechanism": "Pullback nodes appear AFTER the move, so the only honest forecast is the ZONE \u2014 and it must be scored as one.",
+   "mechanism": "Pullback nodes appear AFTER the move, so the only honest forecast is the ZONE — and it must be scored as one.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,
@@ -1519,7 +1519,7 @@
   "nextStop": {
    "id": "nextStop",
    "tier": "hand",
-   "condition": "rule-based pick: leg magnet \u2192 PB target \u2192 Map lean node \u2192 wall on the King side \u2192 nearer wall",
+   "condition": "rule-based pick: leg magnet → PB target → Map lean node → wall on the King side → nearer wall",
    "rate": null,
    "n": 0,
    "mfe": null,
@@ -1922,7 +1922,7 @@
   "pbEntry": {
    "id": "pbEntry",
    "tier": "hand",
-   "condition": "rule-based pick: leg PB (not \u2717) \u2192 predicted PB zone \u2192 last PB \u2192 Map pullback candidate \u2192 opposite wall; B = leg + Acm + SMA agree + within reach",
+   "condition": "rule-based pick: leg PB (not ✗) → predicted PB zone → last PB → Map pullback candidate → opposite wall; B = leg + Acm + SMA agree + within reach",
    "rate": null,
    "n": 0,
    "mfe": null,
@@ -2139,7 +2139,7 @@
   "bias.confirm": {
    "id": "bias.confirm",
    "tier": "hand",
-   "condition": "the \u2461 BIAS confirm tally: which supplementary reads agree with the 50-SMA that owns the direction, how many are live, and PA recorded in shadow after being removed from the vote at v11.88",
+   "condition": "the ② BIAS confirm tally: which supplementary reads agree with the 50-SMA that owns the direction, how many are live, and PA recorded in shadow after being removed from the vote at v11.88",
    "rate": null,
    "n": 0,
    "mfe": null,
@@ -2158,7 +2158,7 @@
      "n": 0
     }
    },
-   "mechanism": "The 50-SMA owns the call and the supplementary reads confirm it or they do not; TREND alone measured 34%, so the count is meant to separate a call worth pressing from one worth halving. That claim has never been measured because the tally was never recorded. \u26a0 The confirms are not independent of each other \u2014 SKEW, ACCUM and ROLL all read the same option book, which is why CROSS (a different instrument) was added and PA (the same price series as the SMA) was dropped.",
+   "mechanism": "The 50-SMA owns the call and the supplementary reads confirm it or they do not; TREND alone measured 34%, so the count is meant to separate a call worth pressing from one worth halving. That claim has never been measured because the tally was never recorded. ⚠ The confirms are not independent of each other — SKEW, ACCUM and ROLL all read the same option book, which is why CROSS (a different instrument) was added and PA (the same price series as the SMA) was dropped.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,
@@ -2189,7 +2189,7 @@
      "n": 0
     }
    },
-   "mechanism": "A break of a confirmed trend is itself evidence, so demanding the full 15 the other way costs 4 bars after the turn is already visible. \u26a0 The cost is symmetric and measured: once a trend has confirmed once, both directions flip at 11, and the minimum gap between opposite flips falls from 10 new bars to 2. Whether 12 minutes of lead is worth that is the open question, which is why the strict and slope-gated machines are recorded on every bar beside the one that ships.",
+   "mechanism": "A break of a confirmed trend is itself evidence, so demanding the full 15 the other way costs 4 bars after the turn is already visible. ⚠ The cost is symmetric and measured: once a trend has confirmed once, both directions flip at 11, and the minimum gap between opposite flips falls from 10 new bars to 2. Whether 12 minutes of lead is worth that is the open question, which is why the strict and slope-gated machines are recorded on every bar beside the one that ships.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,
@@ -2314,6 +2314,37 @@
     }
    },
    "mechanism": "Has the standing session extreme already printed? A lookup table over 284 sessions of EPM26 1-minute data (2025-06-02 to 2026-08-21, 38,054 observations) on two axes: how far price has travelled off the extreme as a fraction of the running session range, and minutes since the open. posr alone scores AUC 0.829 - better than the entire 3-feature clock baseline (0.820). A 5-feature logistic scored 0.8795 against the table's 0.8787 with an identical Brier (0.1321), so the TABLE ships: same accuracy, every cell carries its own n, and it can be argued with. Measured and REJECTED: IB30 (0.684), IB60 (0.655), 50-SMA (0.713), open-reclaimed (0.709), 60m breakout (0.501), sweep+reclaim (0.559 - 48% standalone, BELOW its own base rate), momentum divergence (0.545) and NQ cross-market divergence (-0.0014 AUC). PROVISIONAL: one instrument, one 15-month regime, no forward test. See skylit-docs/FINDINGS.md F-1 through F-5.",
+   "promoted": false,
+   "promotedOn": null,
+   "lastVerified": null,
+   "walkForward": {
+    "sessions": 0,
+    "held": false
+   }
+  },
+  "farside": {
+   "id": "farside",
+   "tier": "hand",
+   "condition": "P(level traded before close) from a distance-in-sigma x minutes-left table; the call is the <=20% refusal and the >=50% reach",
+   "rate": null,
+   "n": 0,
+   "mfe": null,
+   "mae": null,
+   "regime": {
+    "trend": {
+     "rate": null,
+     "n": 0
+    },
+    "chop": {
+     "rate": null,
+     "n": 0
+    },
+    "opex": {
+     "rate": null,
+     "n": 0
+    }
+   },
+   "mechanism": "Where can the OTHER extremity get to, and when. Distance to each level the panel already draws, measured in the session's own volatility (1-bar sd x sqrt(bars left)), read against 388,494 observations over 197 ES sessions: AUC 0.826, Brier 0.147, calibrated within 3 points at every decile (FINDINGS F-14). Timing is the first-passage distribution GIVEN the level is reached, median and IQR by distance (F-15) - the analytic law T ~ (d/sigma)^2 does 95% of the work of a 10-feature model. Predicting the far side's PRICE directly was measured and REJECTED: a fixed 1.36x range expansion beats gradient boosting (F-13). The daily ATR and level identity (prior-day, overnight) add nothing once distance is controlled - only round numbers survived, weakly (F-16). PROVISIONAL: one instrument, no forward test.",
    "promoted": false,
    "promotedOn": null,
    "lastVerified": null,

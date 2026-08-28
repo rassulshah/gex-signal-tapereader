@@ -1,253 +1,171 @@
 # RESUME NOTE — read this before anything else
-_written 2026-08-28 · panel v14.71 · companion v1.15 · supersedes every earlier resume note_
+_written 2026-08-28 · panel v14.73 · companion v1.16 · supersedes every earlier resume note_
 
 ---
 
-## ⚠ 0 · THE CARRY-FORWARD CONTRACT, AND HOW IT JUST FAILED
+## ⚠ 0 · THE CARRY-FORWARD CONTRACT
 
 **This note is rewritten IN FULL every build. Anything not re-typed is GONE, silently.**
-
-⚠⚠ **IT WENT SEVEN BUILDS STALE IN THE SESSION THAT WROTE THIS.** v14.60 through v14.66 shipped —
-the entire LOD/HOD feature — while this file still said v14.59 and contained zero mentions of
-`lodhod`, `HLTAB` or `posr`. `CHAT-HISTORY.md`, `CHANGELOG.md` and `FINDINGS.md` were updated every
-build; this one was not, and **the operator had to ask.** A fresh context would have rebuilt the
-model from scratch.
-**THE RULE: this note is updated in the SAME COMMIT as the build, exactly like the chat history.**
-There is no test enforcing it — `test_chat_history.js` guards the history only — so it depends on
-the checklist being followed. Consider adding one.
+It went SEVEN builds stale on 2026-08-28 and then FOUR more the same day; `test_savedone.js` now
+fails the build when it does not declare the current panel version. Update it in the SAME COMMIT.
 
 1. **`session-state/LOCKED-ITEMS.md`** — agreed-but-unbuilt work. Check every build.
-2. **THE LOAD CLONES FULL** (never `--depth 1`), and **searches the right string**: use
-   `git grep -li "<bare word>" $(git rev-list --all)`. Twice this session a narrow pattern produced
-   a confident "it does not exist" that was wrong.
-3. **`session-state/CHAT-HISTORY.md`** — what was *said*. Read second. Regenerated every build.
+2. **THE LOAD CLONES FULL** (never `--depth 1`).
+3. **`session-state/CHAT-HISTORY.md`** — what was *said*. Read second.
 4. **`design/DATA-ARCHITECTURE.md`** — who can reach what.
-5. **`skylit-docs/FINDINGS.md`** — F-1..F-8, our measurements. **It exists now** (created 2026-08-28
-   after never having existed in any commit).
+5. **`skylit-docs/FINDINGS.md`** — F-1…**F-16**. Read F-12 through F-16 before touching ⓪a.
 
-⚠⚠ **A COMMIT IS NOT A PUSH.** The cloud gets a 403 from the git proxy — verified again this
-session. `installvNNNN.bat`, run on his machine, is the only route to GitHub.
+⚠⚠ **A COMMIT IS NOT A PUSH.** The cloud gets a 403 from the git proxy. `installvNNNN.bat`, run on
+his machine, is the only route to GitHub.
 
 He works **one item at a time** and expects you to **discuss before building**. He has caught more
-real defects than the test suite has. When he pushes back, he is usually right.
+real defects than the test suite has. **When he pushes back, he is usually right** — on 2026-08-28
+he asked "did you do your best" about a model I had already concluded on, and the honest answer was
+no; re-posing the question turned an AUC of 0.53 into 0.83.
 
 ---
 
-## 0b · ⚠⚠ THE SAVE-DONE RULE (operator-mandated 2026-08-28)
-
-> "after you give me a build, i want a confirmation something like a checkmark save done for future
-> context. this tells me that you have updated the chat history and any relevant files that a future
-> context would need to proceed if this context was closed."
-
-**Every build ends with an explicit `✅ SAVE DONE` line** naming what was updated. It is not a
-courtesy — it is the receipt that the handoff chain is current.
-
-⚠ **`test_savedone.js` ENFORCES IT.** It fails the build when `latest-resume-note.md` does not
-declare the current panel version, when CHAT-HISTORY or the CHANGELOG are not stamped, when a ledger
-is missing, or when this convention stops being written down. **The resume note went SEVEN builds
-stale on 2026-08-28 and then FOUR more the same day, while CHAT-HISTORY stayed perfect — because a
-test guarded one and nothing guarded the other.** A rule enforced by a test is followed; a rule
-enforced by a checklist is followed until it is busy.
-
----
-
-## 1 · THE STANDING BUSINESS REQUIREMENT (his words, never paraphrase it away)
+## 1 · THE STANDING BUSINESS REQUIREMENT (his words)
 
 > "I am a trader and need to know where to take trades from and where price is going, so basically I
 > need to know potential support and resistance especially if it is weakening and new support and
 > resistance is forming as well as where price is going."
 
-And for ⓪a specifically, 2026-08-28:
+And for ⓪a, 2026-08-28:
 
-> "i just want to know with high accuracy whether the hod or lod have occurred ... I want to know it
-> as early as possible."
+> "i just want to know with high accuracy whether the hod or lod have occurred … I want to know it as
+> early as possible" → then → "the reads focus should be on determining if the first extremity is in
+> with the %, you do this now, and then predicting things like the opposite extremity and when it
+> will be reached. And if we are on track to reach it or not."
 
----
-
-## 2 · WHERE WE ARE — v14.66
-
-**⓪a answers the LOD/HOD question with a measured table.** The face reads:
-
-    LOD IN — 88%   (travelled 91% off it · n=2396) · toward HOD  typically ~13:33 (11:51–14:47)
-
-Three states: **IN** (cell ≥70%), **STANDING**, **NOT IN** (cell ≤20%).
-
-**THE ENGINE IS AN 8×9 LOOKUP TABLE, NOT A MODEL, AND THAT WAS A DELIBERATE DOWNGRADE.**
-A 5-feature logistic was built first and measured against a plain two-axis lookup:
-`AUC 0.8795 vs 0.8787, IDENTICAL Brier 0.1321`. The regression was ceremony. The table ships because
-every cell carries its own **n**, it can be read and argued with, and drift shows as a cell that
-stops matching. ⚠ A third axis (`stood`) made it **worse**. See **FINDINGS F-4**.
-
-**The two axes:** `posr` (how far price has travelled off the extreme ÷ running session range) and
-minutes since the open. `posr` alone scores **AUC 0.829** — better than the whole clock baseline.
-
-**Measured decision rates** (first crossing, one row per session, FIRST-printed extreme):
-- **IN at ≥70%: 94% correct, median 09:55, n=284**, far side still ahead on 97%
-- **NOT IN at ≤20%: 72%, median 09:45, n=85** vs a ~57% base — real, early, thin
-
-⚠ **DO NOT QUOTE 76% FOR THE IN CALL OR 93% FOR THE NOT-IN CALL.** Both came from a sample that
-pooled BOTH sides at every bar, which also asks "is the SECOND extreme in" — a different, harder
-question the panel never puts. **Measure the question the face actually asks.** (F-8)
+> "i want this feature to be a top priority, its ok for now but it must be able to improve as data is
+> gathered and insights are given by the nightly review and those changes are incorporated."
 
 ---
 
-## 3 · WHAT WAS MEASURED AND REJECTED — do not re-add these
+## 2 · WHERE WE ARE — v14.73, and what ⓪a now says
 
-| candidate | AUC alone | verdict |
-|---|---|---|
-| `posr` distance travelled | **0.829** | **the model** |
-| `stood` | 0.818 | in the clock baseline |
-| RSI level | 0.798 | redundant with posr |
-| 50-SMA | 0.713 | proxy for posr |
-| open reclaimed | 0.709 | proxy |
-| IB30 / IB60 | 0.684 / 0.655 | **crude switches approximating posr** |
-| sweep + reclaim | 0.559 | **48% standalone — BELOW its own base rate** |
-| momentum divergence | 0.545 | **−0.0004 AUC. His hypothesis, answered no** |
-| NQ cross-market divergence | — | **−0.0014 AUC. Tested on 163 overlapping sessions** |
-| 60-minute breakout | 0.501 | a coin flip |
+    LOD IN — 89%            (travelled 93% off it · n=430)
+    HOD not before 12:00 — 80% · most likely 12:00–14:30 (50%) · 69% into the close if not in by 13:15
+    FAR SIDE — 7745 EM high·node 62%K  66%  ~35m (15m–1h10)
+               7758 KING 100%K         34%  ~1h20 (40m–2h40)
+               7772 prior-day high     15%  ~2h10 (1h–3h30)
+               7790 and beyond — 96% it does not trade there today
 
-⚠ **THE CHIP ROW WAS DELETED FOR THIS REASON** (v14.65). Showing IB60/OPEN/POS beside the table was
-**the same evidence twice, dressed as independent agreement** — POS was literally `posr` thresholded
-at 0.5. VWAP does not exist in this codebase.
-⚠ **BOTH DIVERGENCES ONLY LOOK ANTI-PREDICTIVE.** They can fire only at the instant a fresh extreme
-prints — which is exactly `posr≈0`, a state the table already reads. (F-3)
-
-**THE TABLE TRANSFERS TO NQ** (F-7): ES table on NQ data **AUC 0.8877** vs NQ's own table 0.8853.
-64 comparable cells, mean gap 4.5 points. It measures session structure, not something about ES —
-so **one table serves both markets**.
-
-**RED/GREEN DAYS: TESTED AND REFUSED** (F-6). Against the correct baseline — "is price above the
-open", already 83% — nothing moves accuracy at any hour. **Do not build it.**
+**THE MODEL IS A TABLE AND A SCALING LAW, NOT A REGRESSION — for the third time in this project.**
+- **P(a level trades before the close)** from a distance-in-σ × minutes-left table: **AUC 0.826,
+  Brier 0.147, calibrated at every decile**, 388,494 observations over 197 ES sessions (**F-14**).
+- **Timing** = the first-passage distribution GIVEN the level is reached (**F-15**). The analytic law
+  `T ~ (d/σ)²` does 95% of the work of a ten-feature model.
+- σ = 1-bar sd × √(bars left), computed from the panel's own candles, in BAR units then converted
+  once (mixing bar and minute units is landmine L-F).
 
 ---
 
-## 4 · THE WICK FAMILY — his definitions, confirmed on the tape (v14.60–14.62)
+## 3 · THE FIVE FINDINGS THAT PRODUCED IT — read before proposing anything
 
-- **TOOK** open → first extremity · **W.END** the first bar to **CLOSE** back through the session
-  open (⚠ close, not touch) · **BOP** = "Back to Open", extremity → W.END · **WICK** = TOOK + BOP ·
-  **WICK%** = |open − extremity| ÷ range (**a PRICE ratio**) · **MUD** = "MarkUp/MarkDown", W.END →
-  the second extremity.
-- Verified against his own panel on 2026-08-27: Wick% 26 vs 26, W.End 8:42 vs 8:42 **exactly**.
-- ⚠ **EVERY E-ROW FIELD IS A TRIMMED MEAN** (Tukey 1.5×IQR), not a median — *"i thought they were
-  all averages."* One row, one statistic. `s1`–`s7` pin it. p25/p75 stay true percentiles.
-- ⚠ Zero wick **prints 0** and leaves the medians; never reclaiming the open is **null, not 0**.
+| | |
+|---|---|
+| **F-12** | ⚠⚠ **the hover's 92% IN call is 63% in real time.** The study picked the side WITH HINDSIGHT, so failed calls were relabelled out of the sample. The CELL rate is honest; the DECISION figure is not. **`HLTAB_META.inHit` STILL SAYS 92 — fix it.** |
+| **F-13** | predicting the far side's PRICE directly is dead: a fixed **1.36× expansion beats gradient boosting** (9.2 vs 9.9 pts). Timing as an extremum is the clock. |
+| **F-14** | the reframe: **"will price REACH this level"** — AUC 0.826, and **half of all readings land at ≤20%, where levels traded 8% of the time.** |
+| **F-15** | timing works as **first passage**, AUC 0.692, calibrated. Approach velocity worth +0.022. Regime splits worth nothing. |
+| **F-16** | **daily ATR: nothing. Level identity: nothing** under a dense control. ⚠ **A sparse control claimed +12 points — a phantom.** |
 
----
-
-## 4c · WHAT SHIPPED 2026-08-28 AFTER THE STORAGE FIND (v14.68 → v14.70)
-
-- **v14.68** `__gptsDebug.storage()` — total, cap, headroom, top keys and a REAL 40 KB write probe.
-  ⚠ The bounded-write FIX is **not** built: it is parked at
-  `session-state/pending/v14.68-bounded-writes.patch` because he installs during live sessions.
-- **v14.69** ⓪a's static half renders **without candles**. The old `if(!D.ok) return <one line>` hid
-  the base rates, the ladder, the provenance and the table whenever there were no bars — i.e. every
-  pre-open minute. The A row still refuses, verbatim.
-- **v14.70** THE TABLE NOW COVERS THE WHOLE SESSION (**F-11**). It had skipped the first 60 minutes
-  because the study required IB60 to exist first; IB60 was measured worthless and dropped, and the
-  exclusion stayed behind. Re-derived from minute 5: **72/72 cells**, and AUC on the SAME late rows
-  is IDENTICAL (0.8787) — strictly additive.
-  ⚠ **THE NOT-IN CALL LIVED IN THE MISSING CELLS: 72% n=85 @09:45 → 85% n=230 @08:40.**
-  ⚠ **DO NOT QUOTE the older figures** (94/09:55 IN, 72/09:45 NOT-IN) — they belong to the 64-cell
-  table. Current: **IN 92% n=284 @09:35 · NOT IN 85% n=230 @08:40**.
-
-⚠ **VERIFIED WORKING LIVE 2026-08-28:** the IRT export (`how:file`, `inPlace:true`, `err:null`, both
-Kings on EPU26) and the Yahoo corpus tap (ES/NQ/GC/CL ~1,900 bars each). ⚠ The IRT export carries
-only TWO rows because `emPiles` has no band anchor — same F-10 chain; expect it to fill once bars
-anchor the band.
+⚠ **DO NOT RE-PROPOSE:** sweeps, momentum divergence, NQ divergence, IB30/IB60, the 50-SMA,
+open-reclaimed, the 60-minute breakout, the daily ATR, the overnight range, volume, day-of-week,
+gap, prior-day/overnight level identity, red/green days, a 5-feature logistic, or a narrow
+high-probability timing box. Every one is measured and recorded.
 
 ---
 
-## 4b · ⚠⚠ THE ONE THING THAT EXPLAINED FIVE BUGS — localStorage WAS FULL (2026-08-28)
+## 4 · WHAT HE ASKED FOR THAT CANNOT BE BUILT, AND WHY THE FACE SAYS SO
 
-    localStorage      10,240 KB = exactly Chrome's 10 MB cap
-    gpts_recorder_v7   5,957 KB  (ONE day)
-    gpts_nodeevents_v1 3,228 KB
-    40 KB write probe  QuotaExceededError
+> "i wanted something like LOD IN 80%, HOD in about 3-3.5 hrs 80%. are you saying this cannot be done
+> with high probability?"
 
-**Every `setItem` was failing behind `catch(e){}`.** That is the feature-record collapse (15 records
-across 1 bar against 133 snapshots), the corpus tap "never running", the base-rate courier never
-arriving, and IF levels 8.5 hours stale. **One fault, five symptoms**, chased for two sessions.
-
-⚠ Cleared by hand; everything came alive within 12 seconds. **It refills at ~6 MB/day — the fix is
-NOT built.** See FINDINGS F-10 and LOCKED-ITEMS.
-
-⚠ **TWO LESSONS WORTH MORE THAN THE FIX:**
-- **A diagnostic created its own evidence.** Deleting two keys to test "is the companion alive"
-  freed exactly enough room for the tiny calendar object to write — which looked like proof the
-  script ran and only Yahoo was broken. **Check the quota before concluding from a storage probe.**
-- **The v14.67 instrument was aimed at the wrong layer.** `FEATH` counters asked registry-vs-dedupe.
-  Neither: the records were built correctly every bar and discarded at the final `setItem`.
-  **Measure the cheapest thing first.**
-
-## 5 · WHAT TO DO NEXT, IN ORDER
-
-1. ⚠⚠ **HE MUST CLICK BOTH TAMPERMONKEY LINKS.** He has **never** updated the companion — it is
-   still v1.14 on his machine, so the Yahoo corpus tap has **never run once**. Panel v14.66 AND
-   companion v1.15. Diagnose by reading the running version off the panel, never by asking.
-   ⚠ `release-links.sh` marks changed-vs-**origin**; what matters is changed-vs-**his browser**.
-2. **CONFIRM THE TAP RAN.** `__gptsDebug.futBars()`, then his push, then
-   `python3 tools/append-futures.py`. `data/futures/` is still empty and no day file carries
-   `futBars`.
-3. ⚠ **THE HIGHEST-VALUE UNBUILT IDEA: condition the table on the GAMMA side.** Does price sitting
-   on the King, or a low printing at a put wall, change the probability? **That is what would make
-   this feature belong to THIS panel rather than being generic price structure any charting package
-   could compute.** BLOCKED — see 4.
-4. **DIAGNOSE THE FEATURE-RECORD COLLAPSE. This is the top priority, not housekeeping.**
-   3,822 records on 08-20 against **15** on 08-27; `matrix` rows track exactly (108→3132, 122→3822,
-   0, 0, 23→990, 2→8, 1→15) against 133 SPY snaps. **One upstream gate, not 46 features failing.**
-   It blocks item 3 and the forward test of the table.
-5. **The ladder width** — 618px in a 454px body, still his call. `LOCKED-ITEMS.md`.
-6. **ITEM 18 is HALF built** — the Yahoo route and bar feed exist; Tier 1/2 (`snap.htf`, DMAs, ATR,
-   HTF levels) do not. ⚠ **The 2026-09-16 backfill deadline for 07-18→08-14 is untouched.**
-7. Untested and cheap: **overnight/globex context** — the corpus has ETH bars we filter out.
+Measured, n=197: a **±15-minute box lands 15%** of the time, an hour 24%, and a **two-sided window
+must be 3.6 hours wide to reach 80%**. So the face carries a **one-sided 80% floor** ("not before
+12:00") plus the middle-half window at its true **50%**, and prints the arithmetic underneath.
+**Printing "3–3.5h, 80%" would be a lie of precision.** He accepted this.
 
 ---
 
-## 6 · HOW TO WORK WITH HIM
+## 5 · HOW IT IMPROVES — this is the part he cares most about
 
-1. **ONE AT A TIME.** State one item, its fix, ask, STOP. The tell of the failure: three headings,
-   a table, and "which do you prefer" at the bottom.
-2. **Do not build until he says build.** He says it plainly.
-3. **TEST BEFORE YOU BUILD.** On 2026-08-28 "test everything then one build" changed the build twice
-   and caught two wrong numbers I had already told him.
-4. **RENDER EVERY MOCKUP HEADLESS FIRST** with the pairwise overlap audit.
-5. ⚠⚠ **DELIVER EXACTLY ONE FILE.** His words: *"you are supposed to just give me an install file."*
-   One `installvNNNN.bat` (dash-free, dot-free) **plus the Tampermonkey links as text**.
-6. ⚠ **AND TELL HIM TO CLICK THE LINKS** — Tampermonkey's default check is once a day.
-7. **Bump BOTH version strings** and the four test pins (`test_direction_grade`,
-   `test_pipeline_indicator`, `test_read_v1047`, `test_rules_v2`). Rule count pin lives in
-   `test_rules_v2` (**74** now).
-8. **One edit, one write, verify.** A multi-edit script that aborts writes NOTHING.
-9. **Run the whole suite; 6 baseline reds are expected.**
-10. **MUTATE EVERY NEW ASSERTION INDIVIDUALLY.** Twice this session a guard could not fail.
-11. **VERIFY THE INSTALLER BY DECODING IT.** It has silently dropped `design/`, `skylit-docs/` and
-    `tools/fixtures/` — each caught only by decoding the `.bat` before sending.
-12. **He is often right about things the tests pass on.**
+1. **DATA.** `farside` is enrolled and records, every bar, the three nearest rated levels with their
+   distance in σ, the table's p, the expected first-passage time, **and each level's node identity**
+   (`kind`, %King, polarity, role). That last field is the gamma dataset nobody has ever collected.
+2. **ANALYSIS.** `docs/LLM-NIGHTLY-BRIEF.md` carries a ⭐ section telling the review exactly what to
+   do: score the touch call by decile, score the ≤20% NO call separately, run the gamma test
+   (**with a dense distance control** — F-16), and **propose a new `FARSIDE.json`, never apply one**.
+3. **ADOPTION.** Companion v1.16 couriers `data/es-1min/FARSIDE.json` into `gpts_farside_v1`; the
+   panel validates it (≥120 sessions, every rated cell n≥60, monotone in distance) and keeps the
+   baked table if the payload fails. **A better table reaches the face without a build.**
+4. **THE UNTESTED INPUT.** v1.16 also couriers two years of daily **^VIX** — not wired into anything.
+   Implied vol is the one volatility measure that is not a slower copy of what the panel computes.
+   The next cloud-side study is implied-vs-realized σ over the corpus.
 
 ---
 
-## 7 · POINTERS
+## 6 · WHAT TO DO NEXT, IN ORDER
 
-- **`skylit-docs/FINDINGS.md`** — F-1 the rule study · F-2 the model · F-3 divergences dead ·
-  **F-4 the model does not earn its complexity, ship the table** · F-5 there is a trade left when it
-  fires · F-6 red/green refused · F-7 it transfers to NQ · F-8 measure the question the face asks.
-- `design/DATA-ARCHITECTURE.md` · `session-state/LOCKED-ITEMS.md` · `INSIDERFINANCE.md` ·
-  `SKYLIT-FEEDS.md` (RTH · READ AS %King · VELOCITY All · LOW NODES never Hide) ·
-  `PROJECT-CONSTANTS.md` · `DECISIONS.md` D-1..D-16 · `ISSUES-NEXT-BUILD.md`.
-- Studies, all reproducible: `tools/study-lodhod.py` · `model-lodhod.py` · `sanity-lodhod.py` ·
-  `study-travel.py` · `study-redgreen.py` · `study-transfer.py` · `study-notin.py` ·
-  `study-hodlod.py` · `append-futures.py`.
-- **Corpora are ON GitHub** — `data/es-1min/ES TestingData.txt` (284 sessions) and
-  `NQ TestingData.txt` (188). ⚠ The tooling once looked for `EPM26-1min.csv.gz` and reported the
-  corpus missing; **he supplied it twice because of that error.**
+1. ⚠⚠ **CONFIRM THE PANEL IS ACTUALLY RUNNING.** On 2026-08-28 `__gptsDebug` answered at 09:57 and
+   was **undefined by 11:20** in the same tab. If it stayed down, that session recorded nothing.
+   Read the running version off the panel; never ask.
+2. **BUILD THE PARKED STORAGE FIX** — `session-state/pending/v14.68-bounded-writes.patch` +
+   `test_storage.js`. It is the prerequisite for every clean session the gamma test needs (F-10).
+3. **CORRECT `HLTAB_META.inHit`** from 92 to the real-time figure, and re-word the hover (F-12).
+4. **THE `dates=` PROBE.** He was given a console line to test whether Skylit serves historical node
+   maps. If it does, the gamma question is a weekend study over hundreds of sessions instead of a
+   month of collection. The live request shape is
+   `/tv/api/gex/levels?…&data_type=combined&nodes=p20&exp_mode=current&dates=YYYY-MM-DD`.
+   ⚠ Those params have DRIFTED from `SKYLIT-FEEDS.md` (it documents `gamma|vanna`, `500`, `week`).
+5. **The implied-vs-realized σ study**, once `gpts_vix_daily_v1` has delivered.
+6. **The ladder width** — 618px in a 454px body, still his call.
+7. ⚠ **THE IRT PIPE IS SOLVED AND THE SERVER IS RETIRED (2026-08-28).** IRT's **Remote File** field
+   accepts `file:///C:/Users/rassul/InvestorRT/rtx/lsFlexLevels/FlexLevelsExport.csv` and re-reads it
+   on its 1-minute timer — verified live, the King redrew 7803.50 → 7726.00 with no server running.
+   `tools/irt/` keeps the HTTP server as a fallback only. **Do not run `setupautostart.bat`.**
+   ⚠ The 2026-08-27 note "IRT does not poll a local file" was true of **Local File mode only**; the
+   inference that HTTP was therefore required was wrong.
+8. **Two label changes he approved 2026-08-28**: drop `100%` from the King labels (a King is 100% by
+   definition), and consider a QQQ→ES **projected** row on the ES chart — labelled as a projection
+   (`D-QQQ`), never as an S&P level.
+7. **ITEM 18 Tier 1/2** and the **2026-09-16 backfill deadline**, untouched.
+
+---
+
+## 7 · HOW TO WORK WITH HIM
+
+1. **ONE AT A TIME.** State one item, its fix, ask, STOP.
+2. **Do not build until he says build.** He says it plainly ("lets finish this off and build").
+3. **TEST BEFORE YOU BUILD.** Twice on 2026-08-28 a measurement changed the build after I had already
+   described it to him.
+4. **RENDER EVERY MOCKUP HEADLESS** with the pairwise overlap audit, at **454px**.
+5. ⚠⚠ **DELIVER EXACTLY ONE FILE.** His words, 2026-08-15 and restated 2026-08-27: *"you are
+   supposed to just give me an install file."* One `installvNNNN.bat`, dash-free and dot-free,
+   **plus the Tampermonkey links as text**, plus **tell him to click them** — Tampermonkey's default
+   update check is once a day, so the click is the reliable step.
+6. **Bump both version strings** and the four test pins; the rule-count pin is **75** now.
+7. **One edit, one write, verify.** A multi-edit script that aborts writes nothing.
+8. **MUTATE EVERY NEW ASSERTION INDIVIDUALLY** — six were mutation-tested this build and all six
+   fired on the right assertion.
+9. **Run the whole suite; 6 baseline reds are expected** (`expiry_profile`, `node_map`, `sma_cont`,
+   `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
+10. **VERIFY THE INSTALLER BY DECODING IT** before sending — it has silently dropped directories.
+11. **End every build message with `✅ SAVE DONE`** naming what was updated.
+
+---
 
 ## 8 · DOCTRINE THAT MUST NOT BE LOST
 
 - **Two books, never averaged.** Skylit = FLOW. InsiderFinance = OI×gamma.
-- **Name both units out loud before comparing two numbers.** `kingKd` thousands, `velocity` dollars.
+- **Name both units out loud before comparing two numbers.**
 - **Absence of data is not a reading.** Thin cells refuse; they do not guess.
 - **A well-formed number is not a supported one.** Monotone ≠ evidence.
-- **Measure against the right baseline** — the clock for LOD/HOD, the open's sign for red/green.
-  Against 50% everything looks brilliant.
+- **Measure the question the FACE actually puts** — and state WHEN each variable was read. Both
+  halves of that rule were broken this session and caught (F-12, F-13).
+- **A matched control must SPAN its range densely**, or it invents an effect (F-16).
 - **Gamma tells you HOW price moves, never WHICH WAY.**
 - **Anything unproven ships labelled unproven and scored nightly.**

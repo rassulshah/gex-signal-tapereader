@@ -157,9 +157,35 @@ VALUE OVER TIME sparkline (≈10m of client-held history) | RATE OF CHANGE 1m/5m
 EXTENDED 1h/4h/1d | 1m Velocity`. Confirms: per-strike history exists CLIENT-SIDE beyond the
 velocity deltas — a possible richer harvest target if ever needed.
 
-### REQUIRED POSTURE for the panel's capture (the four rules)
-**RTH · READ AS %King · VELOCITY All · LOW NODES Dim or Fade (never Hide).** Session ETH, Value
-display, Selected velocity, or Hidden low nodes each degrade or break a measured pipeline.
+### REQUIRED POSTURE for the panel's capture (now FIVE rules)
+**RTH · READ AS %King · VELOCITY All · LOW NODES Dim or Fade (never Hide) · OVERLAY = GEX.**
+Session ETH, Value display, Selected velocity, or Hidden low nodes each degrade or break a measured
+pipeline.
+
+⚠⚠ **OVERLAY = GEX IS NEW, MEASURED 2026-08-28, AND IT WAS NEVER WRITTEN DOWN.** The overlay mode
+changes what the LADDER shows, not just the chart. Same instant, same strikes:
+
+    GEX+VEX   King 7715  $K 57,714   7750 = 57%   7755 = 32%
+    GEX only  King 7715  $K 60,552   7750 = 68%   7755 = 42%
+
+The King STRIKE survived; its dollar value and every %King did not. An 11-point difference on a node
+you would size against.
+
+**What already defended against it, and what did not:**
+- `tapeMapLive()` checks `LASTDISP[sym]` and, when the display is not pure gamma, reads structure
+  from the **gamma feed** instead of the DOM. So the rail, the piles and the SPXW King stayed on
+  clean gamma. ✅
+- The **QQQ King in the IRT export** is barred from feed sourcing by the v14.15 decision (Atlas is
+  the source of truth for QQQ), so in GEX+VEX it has NO source and the row silently vanishes from
+  `FlexLevelsExport.csv` — and IRT, polling correctly, deletes the level. ❌ That is the whole
+  symptom the operator reported as "I don't see the QQQ levels on NQ".
+- ⚠ `__gptsDebug.tape(sym)` calls `readTapeFromDOM` DIRECTLY and bypasses that guard, so it reports
+  the blended numbers. **A debug hook that skips the production path is not a measurement of the
+  production path** — this cost one wrong alarm before it was caught.
+
+⚠ **VENDOR DRIFT, same day:** the live requests now carry `data_type=combined`, `nodes=p20`,
+`exp_mode=current` — this document said `gamma|vanna`, `nodes=500`, `exp_mode=week`. `combined` is
+what trips the not-pure-gamma branch.
 
 
 ### View Controls (the HEATMAP/overlay sub-panel — the panel behind READ AS)

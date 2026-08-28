@@ -15,1801 +15,1274 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-28 · v14.71 · session `4c22fa2b` — v14.71: the save-done rule, enforced by a test
+## 2026-08-28 · v14.73 · session `2df3ccfa` — v14.73: the IRT export reads the face's array; file:// retires the server
 
-_72 operator prompts · transcript `4c22fa2b-bee3-5451-b379-dc2a50cb42bd.jsonl`_
+_38 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
 
 ### THE EXCHANGE
 
 **OPERATOR:**
 > load gex
 
-**me (23:39):** ## GEX LOADED — v14.58
+**me (14:58):** ## GEX LOADED — panel v14.71 · companion v1.15
 
-**1 · Files** Full clone (no `--depth`), `7c1db82`. Read in full: `.gex-config.json` · `latest-resume-note.md` · `CHAT-HISTORY.md` CURRENT-CONTEXT · `LOCKED-ITEMS.md` · `PROJECT-CONSTANTS.md` · `DECISIONS.md` D‑1→D‑16 · `INSIDERFINANCE.md` · `SKYLIT-FEEDS.md` (incl. the full application map) · `ISSUES-NEXT-BUILD.md` · `SOURCE-OF-TRUTH.md` · Academy `00-INDEX` + all 11 articles · `current/gex-if-levels.user.js` **full** (571 lines) · CHANGELOG head · all 9 day files. Panel: section map + integrity checks + the regions I'd touch (`installFeedObserver`, `lastBookSave`/`showingStaleBook`/`recorderBlind`, `sessionLevels`/`hodLod`/`secDay`, `emPiles`/`emPilesIF`, the ladder constants, `render`/`panelV3`) — not all 25,445 lines; say the word if you want any region whole.
+**1 · Files** Full clone (no `--depth`), HEAD `45a26aa` = **v14.71**, matching origin. Read in full: `.gex-config.json` · `latest-resume-note.md` · `CHAT-HISTORY.md` CURRENT-CONTEXT (all 72 prompts) · `LOCKED-ITEMS.md` · `PROJECT-CONSTANTS.md` · `DECISIONS.md` D‑1→D‑16 · `DATA-ARCHITECTURE.md` · `FINDINGS.md` F‑1→F‑11 · `INSIDERFINANCE.md` · `SKYLIT-FEEDS.md` (incl. the full app map) · `ISSUES-NEXT-BUILD.md` · `SOURCE-OF-TRUTH.md` · Academy `00-INDEX` + all 11 articles · `gex-if-levels.user.js` **whole** (723 lines) · CHANGELOG head. Panel: integrity + section map + the ⓪a region whole (`HODLOD_BASE`, `hlBaseNormalise`, `HLTAB`/`hlCell`, `hlVerdict`, `lodhodCall`, `hodLod`, `secDay`) — say the word for any other region.
 
-**2 · Architecture** L0 `installFeedObserver` patches `window.fetch`+XHR in *page* context (`@grant none` load-bearing), filters `gex/levels` and `dark-pool` → `extractWalls`, `findTapeTable`/`validKingRow`, `velHarvest` off React fibers → L1 `STATE`/`LASTFEED`/`VEL`/`LASTSPXW` (+ `LASTBOOK` latch) → L2 `trendVerdict` 5-state SMA-50 → L3 `newSetup`/`runMachine` BO/FT/PB/CONF/GO → L4 accumulation, `legEngine`, deflection → L5 recorder → IDB → `buildDayExport`, gated by **`recorderBlind()` = `inReplay() || showingStaleBook()`** (nine write paths; a tenth calls it too) → L6–7 one `render()` → `panelV3`: ⓪a DAY, ② BIAS, ③ LOCATION (⓪ FRAME renders inside it).
+**2 · Integrity** `@version 14.71` = `GPTS_VERSION` = footer feed ✓ · exactly one `render()` ✓ · closes `})();` ✓ · 1.74 MB / 25,945 lines · `node -c` clean. Suite: **120 green / 6 red**, and the 6 are the documented baseline (`expiry_profile`, `node_map`, `sma_cont`, `tapeking` (no jsdom here), `trendbadge`, `v1126_process`).
 
-**3 · Platform** Two books, never averaged. Skylit = FLOW (`|net| ≡ v`, no call/put split ⇒ no Call Wall from them); InsiderFinance = STRUCTURE (`GEX = γ×OI×100×spot²×0.01`, puts negative, verified to their header). Scale chain k → disp (×1.0023) → und (×0.0998); `kingKd` is thousands, `velocity.cur/.d15` are dollars. 5-step: King (l …[trimmed]
+**3 · Architecture** L0 `installFeedObserver` patches `window.fetch`/XHR in **page** context (`@grant none` load-bearing) → `gex/levels` + dark-pool filter, `extractWalls`, `findTapeTable`/`validKingRow`, `velHarvest` off React fibers → L1 `STATE`/`LASTFEED`/`VEL`/`LASTSPXW` → L2 `trendVerdict` 5-state SMA‑50 → L3 `newSetup`/`runMachine` BO/FT/PB/CONF/GO → L4 accumulation + `legEngine` + deflection → L5 recorder → IDB → `buildDayExport` (gated by `recorderBlind()`; `futBars` deliberately exempt) → L6–7 one `render()` → `panelV3`: ⓪a DAY · ① FRAME inside ③ · ② BIAS. Foreign fetches live in the companion (Yahoo tap `gpts_futbars_v1`, base-rate courier `gpts_hodlod_base_v1`, ForexFacto …[trimmed]
 
+**OPERATOR:**
+> i think you are suppose to build that after the close but i will take your recommendation . jus note that i am suppose to make a lot of updates during the day so i will need to click the tampermonkey link.  for example, see pic, im not sure what the purpose fo the 41% and the various percentages are when the percent is already mentioned at the top .  .   Also the white text at the bottom is not really helpfull . remove it.   The actual in the rows should be for the current session and being updated dynamically.   in the read, the 1% of the range still ahead seems to imply that we are at the top , double check this to ensure you have valid %. I also want an expected opposite extremity HOD time. see if this can be predicted with a high level of accuracy expecially after the lod is in .  i also dont want useless gray text . the reads focus should be on determining if the first extremity is in witht eh %, you do this now, and then predicting things like the opposite extremity and when it will be reached.  And if we are on track to reach it or not.  the model or models need to focus on this.  you can also give a range like HOD expected in 2.5-3hrs 76%.
+
+**me (15:03):** Storage: watching it today (checks at 12:00 and 14:00 CT, node-event ledger only — never the recorder during RTH), and the bounded-write patch goes in after the close. Display-only builds are safe any time, so your mid-day updates are unaffected — the write path is the one thing that waits.
+
+I've noted your other five items and will take them one at a time. Starting with the one you asked me to double-check, because it's a correctness question.
+
+---
+
+**"1% of the range still ahead" — you're right to distrust it. The number is arithmetically correct and the label is wrong.**
+
+What the code actually computes:
+
+```js
+out.posr = (lastClose - LOD) / (HOD - LOD)     // 99% — you are at the top of today's range
+out.far  = 1 - posr                            // 1%
+```
+
+So `far` is **the distance from price to the opposite end of the range that has already printed** — not room ahead of you. It has no forecast in it at all.
+
+And on your screenshot it is worse than merely vague: your **HOD printed at 09:48**, the line right beside it says *"both extremes in — the range is set"*, and the clause still says *"1% of the range still ahead"*. The far-side clause **"toward HOD"** was deliberately gated on `secondT > clock` back at v14.66 — that gate was never applied to the "% still ahead" figure, so it keeps printing after the second extreme is in, where it can only mean "price happens to be near the high right now."
+
+There's a second, quieter problem even before the second extreme prints: `far` is measured against the **running** range, which grows all session — so it isn't the same quantity as the "range still ahead" in the study (F‑5 measured that against the *final* range, with hindsight). Same words, two different measurements. That's failure pattern #1.
+
+**The fix I'd make:** gate …[trimmed]
+
+**OPERATOR:**
+> i'll go with your recommendations
+
+**me (15:07):** Item 1 is coded and tested — not shipped yet, I'll batch these display fixes into one build so you get one link to click.
+
+```
+hlFarClause()  gated on D.secondT > D.clock  (the same observable "toward HOD" already uses)
+               renamed to "X% of the range to today's HOD so far"
+t22/t22b/t22c  EXECUTE the clause instead of grepping for the words; both guards
+               mutation-tested — dropping the gate goes red, weakening the null-check goes red
+suite          120 green / 6 baseline red, unchanged
+```
+
+---
+
+**Item 2 — the 41% / 56% / 67% / 75% / 84% row you circled. It answers the same question as the verdict above it, with a worse instrument, and today it contradicts it.**
+
+That row is the **survival ladder**: over the same 284 sessions, how often a standing extreme turned out to be the day's, given only **how long it has stood** — 30m / 1h / 1.5h / 2h / 3h. The green box is the rung today's LOD has earned.
+
+So the section currently puts two answers to one question on one face:
+
+```
+verdict   LOD IN — 74%     posr x time     AUC 0.879   ← the table
+ladder    41% (30m)        age alone       AUC 0.818   ← the ladder
+```
+
+Both mean "how likely is it that this LOD is the day's low", and they say 74 and 41. Not a bug — they're different conditionings — but there is no way to read that row and not think one of them is wrong.
+
+And age is not independent evidence: **F‑4 measured adding `stood` as a third axis to the table and it made the table *worse*** (0.8729 vs 0.8787) — the thing the ladder measures is already inside the verdict, diluted. That is precisely why the IB60/SWP/POS chip row was deleted at v14.65: the same evidence twice, dressed as agreement.
+
+**My recommendation: delete the ladder from the face.** The base rates stay computed, stay couriered, stay …[trimmed]
+
+**OPERATOR:**
+> show me the mockup
+
+**me (15:09):** Now building the mockup and rendering it headless with the overlap audit before you see it.
+**Audit:** 454px both sides, **0 overflow**, and the only 3 overlaps are in the *left* (current) panel — the standard inline-wrap artefact where the green verdict wraps to a second line and its bounding box naively intersects its neighbours. The proposed panel has **zero**. No page errors.
+
+What changed on the right:
+
+- **Ladder gone.** The 74% / 41% contradiction disappears with it.
+- **"1% of the range still ahead" gone** in this state — that's item 1's gate doing its job: the far side has printed, so the clause is silent rather than wrong.
+- **Bottom line gone from the face**, with one exception: **`rates live`** moves up into the header. Everything else there (seq 51/49, corpus size, date, wick n, trimmed-mean note) goes into the header hover. My reasoning for keeping that one word visible — if the courier ever fails and you're reading rates baked in from a frozen corpus, that changes how much to trust the whole row, and it's the one thing on that line you couldn't infer from anywhere else. Say the word and it goes into the hover with the rest.
+
+The section is ~40px shorter, which is the room the HOD-timing readout will need.
+
+Take it as drawn?
+
+**OPERATOR:**
+> I want it to say something like LOD IN  -74%,  HOD expected around  7772-7792 in 3.5 Hrs  between 1:30pm and 2pm - 80%.  Make sure the model is tested to ensure it can predict HOD timing  with high accuracy.   do you understand.  you may have to analyze multiple factors for this. i will leave it to you to determine what to analyze includinge levels , gamma book etc.  But you must get  a high percentage of accuracy.
+
+**me (15:27):** Measured. Here's what the data will and won't support, then the line I'd put on the face.
+
+**1 · The call threshold is a real dial — and it's the first decision.** Real-time (running first-printed side, no hindsight):
+
+```
+cell >=70%    63% correct   median 09:20      <- what ships today
+cell >=80%    79%           median 10:06
+cell >=85%    86%           median 10:45
+cell >=90%    89%           median 10:53
+cell >=95%    92%           median 11:46
+```
+
+Your "high accuracy" requirement is buyable — it costs about 90 minutes.
+
+**2 · The HOD PRICE is predictable. This is the good news.** When the first extreme holds, the opposite extreme *is* the other end of the final range — so predicting the HOD price is predicting range expansion, and that conditions well on range-so-far, clock, volatility, prior-day range and how fast the first extreme printed.
+
+Conformalized quantile model, out-of-fold, one row per session (n=206, call at ≥90%):
+
+```
+80% band   coverage 86% out-of-sample   ~48 ES pts wide   (fixed-window baseline: 75% cov, 68 pts)
+50% band   coverage 51%                 ~21 ES pts wide
+median range at the call 40.8 pts -> median FINAL range 57.1 pts (1.36x expansion)
+```
+
+⚠ And it **transfers to NQ**: ES-trained band on NQ data = **82% coverage** at the same width. It's session structure, not an ES artefact.
+
+**3 · The HOD TIME is not predictable as a narrow window, and no model fixes it.** Conditioning bought nothing — 84% coverage vs the fixed window's 85%, same width. The reason is the shape of the thing:
+
+```
+opposite extreme by 45-min block:  ~13% ... ~15% ... then 35% in the FINAL 45 MINUTES
+last 45 min 40%   ·   last 90 min 54%   ·   within an hour of the call 25%
+```
+
+Near-uniform, with a spike into the close. **A ±15-minute box lands 4% of the time** — so " …[trimmed]
+
+**OPERATOR:**
+> did you try your best in predicting both extremes, times etc. did you consider different factors, combinations, models etc.
+
+**me (15:30):** You're right to push — the honest answer is **no, not yet.** I tested one framing (duration-to-extreme, quantile regression, ten features) and stopped when it didn't beat the fixed window. Three better-posed framings and two data sources are still untouched. Running them now.
+Second pass done. Here is everything I tried, including the parts that failed.
+
+**Data I had never touched, now tested:** the corpus is **24-hour** — every study in this project has thrown the overnight bars away. Also volume (present since day one, never used), prior-day high/low distance, IB30 size, efficiency ratio (trend vs chop), day-of-week, realized volatility, and **ES+NQ pooled** for 345 call-sessions instead of 206.
+
+**Framings I tried, not just features:** duration→quantile intervals · conformalized quantile bands · price as a *survival curve* P(reach X) · time as a per-bar *hazard* P(prints in the next 60 min | not yet) · time as "prints into the close" classification · multinomial over 45-minute blocks · add-one factor analysis over 16 factors · a selected model against a true date holdout.
+
+**What survived:**
+
+```
+PRICE   80% band  86% coverage OOS, ~48 ES pts     (fixed window: 75% at 68 pts)
+        50% band  51% coverage,     ~21 ES pts
+        ES-trained band on NQ data: 82% coverage    <- it transfers
+        P(final range >= 1.3x so far): AUC 0.628 on a TRUE holdout (0.530 for clock+range)
+                                        calibrated 44% / 62% / 69% by bucket
+TIME    clock alone           AUC 0.7317
+        + realized volatility AUC 0.7484   <- the only factor of sixteen that helps
+        all 14 together       AUC 0.6930   <- WORSE than the clock. Overfit.
+```
+
+**What died, measured:** overnight range is the **worst** of the sixteen (−0.062 timing, −0.049 price) — that's …[trimmed]
+
+**OPERATOR:**
+> how good is the model
+
+**me (15:38):** **Not good enough to be called a model, and I found a bug in my own harness while answering you.**
+
+**The bug first.** In the second-pass script I evaluated "did the first extreme hold" using the running high/low read *after* the bar loop — the final session extremes — so it was always true. The filter that was supposed to drop failed calls was a no-op, and every number in my last message that came from that pass was measured on a contaminated sample. The 0.628 holdout AUC, realized volatility helping timing, the 82% NQ band transfer: **all withdrawn.** Same class of error as the 92% I'd just criticised, one hour later. Corrected numbers below.
+
+**Now the honest answer. On price, the machine learning loses to two lines of arithmetic:**
+
+```
+predicting the final range (which fixes the far-side price) — median error
+   "the range is already done"          14.5 pts
+   "a typical day" (your E row)         18.1 pts
+   fixed 1.36x expansion from here       9.2 pts   <- the rule
+   gradient boosting, 10 factors         9.9 pts   <- the model, WORSE
+
+80% band, conditional model      cov 81%, 42 pts wide
+80% band, the simple rule        cov 80%, 41 pts wide   <- identical
+```
+
+**On time, the clock beats everything:** clock alone AUC 0.744, clock + volatility 0.663, clock + all twelve other factors 0.706. Sixteen factors tested one at a time; none survived. The overnight session — the one idea sitting in the ledger as "untested, cheap" — is the *worst* of them.
+
+**So how good is it, in the units you trade?** At the ≥90% call the far extreme is typically **17.8 points away**, and the estimate is out by a median **9.2 points**. The 80% band is 41 points — about 70% of a typical 57-point day. Your example band, 7772–7792, is 20 points wide: that's worth roughly **50%**, not 80%.
+
+Wh …[trimmed]
+
+**OPERATOR:**
+> i want the model completed but for it to actually work with high probabilitiy.  what do you recommend
+
+**me (15:42):** **My recommendation: change the question, and the model works.**
+
+Predicting *where the HOD will print* is predicting an extremum — that's why every framing bottomed out around a 9-point error on a 17-point move. But you don't trade an extremum. You trade **"can price get to that level, and when."** So I re-posed it as: **P(a named level is touched before the close)**, measured every 15 minutes at distances of 0.25–2.0σ, 71,568 decisions over the same 284 sessions.
+
+```
+AUC 0.826    Brier 0.147    base rate 28%
+
+calibration, out-of-fold:
+   predicted   0-10  10-20  20-30  30-40  40-50  50-60  60-70  70-80
+   actual        4%    17%    25%    35%    43%    53%    66%    71%
+```
+
+Compare that to the extremum work: AUC 0.53–0.63 and a model that lost to arithmetic. **This is a real model and it is calibrated.**
+
+And it's sharp exactly where a trader needs it: **48% of all decisions land at ≤20%, and those levels were touched 8% of the time — a 92%-accurate "price does not get there today."** Half of all readings are a high-confidence call. The ≥80% bucket is thin (0.9% of rows), which is honest — a far level is rarely near-certain, and I'd rather the panel say so than manufacture confidence.
+
+**Three things this buys you that the old framing couldn't:**
+
+- **The far-side estimate falls out for free.** The price where P(touch) = 50% *is* the median HOD. The band you asked for is just the 25%/75% crossings — same statement, honestly derived, with a probability attached to each level rather than one number attached to a guess.
+- **It speaks in your levels, not in σ.** On the panel those levels are the King, the node strikes, the EM edges, prior-day high — so the read becomes *"HOD ≥ 7772: 78% · ≥ 7792: 55% · won't reach 7830: 92%"*, plus the hazard for when.
+- **It is where t …[trimmed]
+
+**OPERATOR:**
+> before we do this , is there any datapoint you need and can get that would improve the model.
+
+**me (15:46):** Yes — four, and the first one changes the timeline for the gamma question from *weeks* to *today*.
+
+**1 · Skylit's own history. This is the one.** I watched the live requests your app is making:
+
+```
+/tv/api/gex/levels?symbol=SPXW&data_type=combined&nodes=p20
+                  &exp_mode=current&exp_count=1&dates=2026-08-28
+```
+
+There's a **`dates=` parameter**, and today it's set to today. If their endpoint serves *past* dates, we can pull the node map for every session in the ES corpus and pair it with the price data immediately — which means "does a level at a put wall touch more often than empty air at the same distance" gets answered on hundreds of sessions instead of waiting for the recorder to accumulate 40 clean ones. One authenticated GET settles whether it works. The cloud can't send it (their API needs the Authorization header the app sets, and cookies alone 401), but your panel already replays that header for its own self-fetch.
+
+⚠ Also worth recording: those params have **drifted from what our notes say** — `SKYLIT-FEEDS.md` documents `data_type=gamma|vanna`, `nodes=500`, `exp_mode=week`. Live it's `combined`, `p20`, `current`. Not a problem, but our doc is stale and something downstream assumes the old shape.
+
+**2 · A longer corpus from your platform.** 284 sessions is the binding constraint on everything I've measured — with sixteen factors tested, that sample is thin enough that a real weak effect and luck look alike. If you can export **3 years of ES 1-minute, plus NQ/GC/CL**, that roughly triples it, and every "PROVISIONAL" in this project gets closer to settled. That's your export, same as the two you sent before.
+
+**3 · Forward volatility instead of realized.** The touch model scales distance by realized 1-minute vol. For barrier problems a *forward* …[trimmed]
+
+**OPERATOR:**
+> i'll try
+
+**me (15:49):** Here's the line. It captures the header the app already sends (nothing is printed or sent anywhere — I never see the token), asks for **yesterday's** node map, restores `fetch` within 20 seconds either way, and prints one summary line.
+
+Paste it into the **Atlas tab's** console (F12 → Console), wait ~10 seconds, and send me the `GEXPROBE` line it logs:
+
+```js
+(async()=>{const of=window.fetch;let a=null;
+window.fetch=function(u,o){try{const h=(o&&o.headers)||{};const g=h.Authorization||h.authorization||(h.get&&h.get('authorization'));
+if(g&&String(u).includes('gex/levels'))a=g;}catch(e){}return of.apply(this,arguments)};
+const t0=Date.now();while(!a&&Date.now()-t0<20000)await new Promise(r=>setTimeout(r,400));
+window.fetch=of;
+if(!a){console.log('GEXPROBE no header seen in 20s - is the chart live?');return;}
+const d=new Date(Date.now()-864e5).toISOString().slice(0,10);
+const r=await of(`https://app.skylit.ai/tv/api/gex/levels?symbol=SPXW&data_type=combined&nodes=p20&exp_mode=current&exp_count=1&extended=false&include_derived=true&dates=${d}&v=${Date.now()}`,
+{credentials:'include',headers:{Authorization:a}});
+let j=null;try{j=await r.json()}catch(e){}
+const s=(j&&j.levels)||[],l=(s[s.length-1]&&s[s.length-1].l)||[];
+console.log('GEXPROBE',JSON.stringify({asked:d,status:r.status,snaps:s.length,strikes:l.length,firstT:s[0]&&s[0].t,lastT:s[s.length-1]&&s[s.length-1].t}));})()
+```
+
+What the answer means:
+
+- **`snaps` > 0 and `firstT`/`lastT` land on yesterday** → history is served. The gamma question becomes a study I can run this weekend on hundreds of sessions instead of a wait for the recorder.
+- **`snaps` > 0 but the timestamps are today** → it ignores `dates` and always serves live. Then the recorder is the only path, and tonight's storage fix is the whole critical path …[trimmed]
+
+**OPERATOR:**
+> also note that we are showing the vix bok.
+
+**me (15:50):** Good — that's a better route than the one I proposed, and the panel is already half-wired for it.
+
+**What we already have:** the heat panel renders four books (SPY · QQQ · SPXW · **VIX**), and the harvest tolerates VIX rows today — `TAPE_CACHE` has a VIX slot, the ladder regex matches it, and the cross-market header scrape reads it. Nothing consumes it: the ALIGN tile literally prints `VIX —` as pending. So the plumbing exists and the seat is empty.
+
+**But two different things wear that name, and only one helps the model:**
+
+- **The VIX level** — the forward volatility scalar. That plugs straight into the touch model, replacing realized 1-minute vol in the σ that scales every distance. This is the one I asked for in point 3, and if it's already on your screen we don't need a new source.
+- **The VIX gamma book** — dealer positioning in VIX *options*. That's a claim about vol-of-vol, not about how far ES travels, and it has never been tested here. ⚠ And it carries the classic trap: VIX strikes are ~15–25, SPX strikes are ~7,700. Two books, two rulers — a %King from the VIX ladder is not comparable to anything on the SPX rail. Interesting, unproven, and separate.
+
+**The catch, and it's the reason I still need something from the build:** the live VIX on your screen can't backfill. To test whether VIX-scaled σ beats realized σ, I need **daily VIX back to 2025-06** to cover the corpus — and the cloud can't reach Yahoo. That's **one row in the companion's market table** (`{k:'VIX', y:'^VIX'}`, `range=2y&interval=1d`), using the grant and the `@connect` it already has. It rides tonight's build, and I can run the σ comparison on all 284 sessions this weekend — before the touch model ships, so it ships with the better scalar if it wins.
+
+⚠ One unrelated thing I noticed while chec …[trimmed]
+
+**OPERATOR:**
+> so tell me where we are at with the model
+
+**me (15:51):** **Where the model stands, honestly.**
+
+**Settled by measurement (three findings, all committed and reproducible):**
+
+```
+F-12  the IN call's advertised 92% is 63% in real time — the side had been picked with hindsight.
+      The CELL rate on the face is fine (says 70-79%, happens 75%). The hover figure is not.
+      Accuracy is buyable with time:  >=70% -> 63% @09:20 ... >=90% -> 89% @10:53 ... >=95% -> 92% @11:46
+
+F-13  predicting the far side's PRICE and CLOCK directly is a dead end.
+      A fixed 1.36x expansion beats gradient boosting (9.2 vs 9.9 pts median error).
+      Timing is the clock alone (AUC 0.744); 16 factors tested, none survive, overnight is the worst.
+      ⚠ I found and fixed a bug in my own harness mid-study — the first version of this entry
+        was measured on a sample that kept every failed call. Those numbers are withdrawn.
+
+F-14  the reframe works. P(a named level is touched before the close): AUC 0.826, Brier 0.147,
+      calibrated across every decile — and 48% of all decisions land at <=20%, where the level
+      was touched just 8% of the time. That is a 92%-accurate "price does not get there today",
+      available on half of all readings.
+```
+
+**Built on your panel: nothing yet.** One code change is written and tested — the "% of the range still ahead" gate and rename — and the ladder removal is mocked but not built. No version has shipped today; you're still on v14.71.
+
+**The model that would ship** is F-14's, not a black box: distance to each of your levels, scaled by session volatility and time left, returning a calibrated probability per level, with the hazard curve for timing (not printed by 12:30 → 53% into the close, 13:15 → 69%, 14:00 → 90%). The far-side band you originally asked for falls out of it as the 25/50/75% crossings, …[trimmed]
+
+**OPERATOR:**
+> first tell me did you do your best in creating a good model for predicting hod lod times etc or not
+
+**me (15:55):** I ran all four. **Timing is predictable — I had been asking the wrong question.**
+
+```
+POINT PREDICTION of minutes-to-touch     (median horizon 86 min)
+   the unconditional median                              49.0 min error
+   the clock alone                                       46.0
+   the analytic first-passage law  T ~ (distance/sigma)^2  42.0   <- ONE feature, physics
+   distance + vol + time left                            43.3
+   + approach velocity + first-passage                   41.7
+
+"DOES IT ARRIVE WITHIN THE HOUR?"
+   clock alone                          AUC 0.637
+   distance + vol + time left           AUC 0.670
+   + approach velocity                  AUC 0.692    base 36%
+   calibration:  0-20% -> 14%   20-40% -> 33%   40-60% -> 47%   60-80% -> 62%
+```
+
+**What made the difference was the framing, not the machinery.** "When does the extremum print" is unanswerable — unconditional, near-uniform, spike into the close. "**Given price reaches this level, when does it get there**" is a first-passage problem with real structure, and it's the question you'd actually put to the panel.
+
+The other two that helped: **approach velocity** — the rate price is closing on the level, which every earlier feature set lacked (+0.022 AUC) — and the **analytic scaling law**, which on its own does about 95% of what the full ten-feature model does. Fourth time in this project the simple thing has won.
+
+**Regime split: tested, worth nothing.** Trend-ish 0.684, chop 0.691, pooled 0.692. One model serves both.
+
+So the two halves compose into the read you asked for, per level:
+
+```
+7772 · touched today 78%  ·  within the hour 45%  ·  typically ~50 min
+7792 · touched today 55%  ·  within the hour 22%  ·  typically ~1h40
+```
+
+⚠ And the caveat that has to ride on the face: **median err …[trimmed]
+
+**OPERATOR:**
+> show me the mockup
+> [Image: original 2120x1640, displayed at 2000x1547. Multiply coordinates by 1.06 to map to original image.]
+
+**me (15:57):** The block reads, in your levels rather than in a band:
+
+```
+FAR SIDE — WHERE THE HOD CAN GET TO, AND WHEN
+  7745   EM high · node 62%K     trades there 66%    if it does ~35m (15m–1h10)
+  7758   KING 100%K                           34%               ~1h20 (40m–2h40)
+  7772   prior-day high                       15%               ~2h10 (1h–3h30)
+  ⚠ 7790 and above — 96% it does not trade there today
+  timing  not in by 13:15 -> 69% it prints into the close
+```
+
+Three things worth pointing at:
+
+- **The 50% crossing of that middle column *is* the HOD estimate.** So dropping the price band lost nothing — the same statement is there, carrying a probability instead of pretending to a number. Your original ask ("7772–7792") is the 34%–15% span, and now it says so.
+- **The red line is the model's best call, not a footnote.** Half of all readings land in that bucket and they're right 92% of the time. "Price is not getting there today" is the one high-probability statement this data actually supports, and it's the one that keeps you from chasing.
+- **Timing shows its spread on the face** — `~1h20 (40m–2h40)` — because the median error is 42 minutes. A bare "1h20" would be a lie of precision.
+
+⚠ The numbers in the mockup are illustrative — the shape is real, the levels and probabilities get computed live from your own node list and the session's realized volatility. And the whole block ships labelled PROVISIONAL: it is a backtest until the nightly loop scores it forward, which is still blocked behind tonight's storage fix.
+
+Also gone, as agreed: the ladder, the white honesty line (into the header hover, `rates live` stays), and the "% of the range still ahead" clause.
+
+Build it?
+
+**OPERATOR:**
+> i wanted something like  LOD IN 80% ,  HOD in about 3-3.5 hrs 80%.  are  you saying this cannot be done with high probability ?
+
+**me (16:03):** Straight answer: **not as a narrow window. The tape does not contain that statement.** Here's exactly what your sentence is worth, measured on 197 sessions at the ≥85% call:
+
+```
+a window centred on the median (2h37 after the call)
+   +-15 min   (0.5h wide)   15%
+   +-30 min   (1.0h wide)   24%
+   +-45 min   (1.5h wide)   34%
+   +-60 min   (2.0h wide)   44%
+   +-90 min   (3.0h wide)   67%
+
+to REACH 80% the window has to be 3.6 HOURS WIDE   (0.6h - 4.2h after the call)
+```
+
+"HOD in about 3–3.5 hrs" is a ~30-minute box. It's worth **15%**, not 80%. I can print 80% next to it, but it would be false, and the first week it embarrassed you on a live trade you'd stop trusting every other number on the panel.
+
+**But 80% timing statements do exist — they're just one-sided instead of a box:**
+
+```
+"the HOD is still ahead of the next hour"        81%
+"not before 12:00"                               80%
+"in the last 3 hours of the session"             82%
+```
+
+That's the same information, shaped the way the data can carry it: it tells you *when not to expect it*, which is what keeps you from taking the trade off too early.
+
+**So the line I'd put on the face keeps your format and stays true:**
+
+```
+LOD IN — 89%
+HOD  not before 12:00 — 80%  ·  most likely 12:00–14:30 — 50%  ·  69% into the close if not in by 13:15
+```
+
+Three statements, each measured: an 80% floor, the middle-half window at its real 50%, and the hazard that updates every bar. If you'd rather have your exact shape, the honest version is **"HOD in about 2.5–3.5h — 44%"** — same sentence, true number.
+
+Which do you want on the face: the 80% floor plus the 50% window, or your original phrasing carrying its real 44%?
+
+**OPERATOR:**
+> the probability is very low when predicting the other side .  what data points would allow you to predict this better that you can obtain. Any levels , indicators , data  that would allow you to better predict the timing of the hod ?  can you use the expected move, the daily atr ,  and can you think of other things that you can test to figure out the timing probiability and then the hod price range better
+
+**me (16:07):** Blocked — stooq disallows fetching, and CBOE's file truncates before it reaches 2025. VIX history has to come through the companion (one row, Yahoo `^VIX`, daily). Meanwhile ATR and level identity cost nothing, so I'm testing those now.
+Tested both of your suggestions. **ATR: no. Levels: no — and the first answer was a phantom I nearly sent you.**
+
+**Daily ATR(14)** — the realized-volatility σ already contains it:
+
+```
+the shipped touch inputs                       AUC 0.8771
++ daily ATR(14)                                    0.8767
++ range-so-far / ATR ("how much of a normal day")  0.8770
++ room left in a normal day / distance in ATR      0.8770 / 0.8769
+```
+
+**Level identity** — I asked whether a prior-day high, an overnight extreme or a round number is touched more often than a *generic* level at the same distance, time and volatility. First run said yes, hugely. Then I widened the control:
+
+```
+                      sparse control        dense control
+   prior-day high        +10.4 pts             -0.3 pts
+   prior-day low         +11.4                 +2.4
+   prior-day close       +12.6                 -0.3
+   overnight high        +13.7                 -1.0
+   overnight low         +12.2                 +0.9
+   round number          +45.4                 +4.6  (+-2.5)
+```
+
+The control had levels at only two distances, so it was **extrapolating across the gap the named levels sat in**. Densify it and the whole effect disappears. I was one message away from telling you "prior-day levels are worth +12 points" — which is false. Only round numbers survive, at +4.6 ±2.5, which is about 1.8 standard errors: weak, provisional, not worth building on yet.
+
+**Expected move** I could not test: stooq blocks fetching and CBOE's file truncates before 2025. It needs one row in th …[trimmed]
+
+**OPERATOR:**
+> are you done ..
+
+**me (16:27):** **Research: yes, done** — for everything today's data can answer. Five findings, all committed and reproducible:
+
+```
+F-12  the 92% IN call is 63% in real time (the side had been picked with hindsight)
+F-13  extremum price/time: a fixed 1.36x rule beats the model; 16 factors dead
+F-14  the reframe that works — P(level touched today), AUC 0.826, calibrated
+F-15  timing IS predictable as first passage, AUC 0.692, calibrated
+F-16  daily ATR: nothing. Level identity: nothing under a dense control (+ the phantom I caught)
+```
+
+What's left needs data I can't reach yet: **VIX/expected move** (one companion row), the **gamma book** (needs the recorder), and two low-prior leftovers (dark-pool prints as levels, volume profile).
+
+**Nothing is built.** One small fix is written and tested — the "% of the range still ahead" gate — and the two mockups are approved in shape. No version has shipped; you're on v14.71.
+
+⚠ **One thing that needs you now, and it's on today's clock:** the panel is **not running in this tab**. It answered fine at 09:57 — storage, featHealth, the corpus tap — and since roughly 11:20 `__gptsDebug` is undefined here. There's no single-instance guard in the code, so this isn't the script deliberately standing down in a second tab.
+
+If it isn't running anywhere, **today is not recording** — and today was the first clean session since the storage fix, the one that starts filling the sample the gamma test needs. Worth ten seconds: Tampermonkey icon → is *GEX Signal Tapereader* enabled and listed for this page, then reload Atlas and check the footer reads v14.71.
+
+Three decisions are queued behind that: build the far-side readout as mocked · add `^VIX` to the companion in tonight's build · and the `dates=` probe when you get a moment.
+
+**OPERATOR:**
+> show me a mockup
+> [Image: original 2120x1640, displayed at 2000x1547. Multiply coordinates by 1.06 to map to original image.]
+
+**me (16:37):** The read is now three lines, each answering one thing:
+
+```
+LOD IN — 89%                    (travelled 93% off it · n=430 · live 09:12)
+HOD not before 12:00 — 80% · most likely 12:00–14:30 (50%) · 69% into the close if not in by 13:15
+a 30-minute window is worth 15% at this hour, an hour is worth 24% — the 80% claim is the floor, not a box
+```
+
+Then the level table underneath it, unchanged from the last mockup.
+
+The third line is the one I'd argue for keeping even though it costs a row: it is the reason the second line is shaped the way it is. Without it, "not before 12:00 — 80%" looks like a hedge; with it, you can see that a box at your requested width is worth 15% and the floor is the honest form of the same information. It can live in the hover instead if you'd rather have the row back.
+
+Two things I'd still call out as unresolved on this face:
+
+- **`HOD pend.` and `2h22…` in the stats block** now duplicate what the timing line says better. If the timing line ships, that row could carry the *elapsed* time only and drop the ellipsis.
+- The **`96% it does not trade there`** line sits in red under the table. It's the model's strongest statement, so red-as-warning may be the wrong colour — it's not a hazard, it's a high-confidence "don't chase". Grey or amber may read truer.
+
+Say the word and I'll build it — or tell me which of those two you want changed first.
+
+**OPERATOR:**
+> i think the top section is good enough .  make sure that with additional data, it can be improved and that we start collecting that data to figure how to increase the prediction . i am also interested in having it be dynamic  so that it can change as things happen.  So it adapts.  Finally i want to ensure that the LLM gets it and can make self improvement to this feature. Again , i want this feature to be a top priority , its ok for now but it must be able to improve as data is gathered and insights are given by the nightly review and those changes are incorporated.  lets finish this off and build
+
+**me (16:44):** Building. First the tables the panel will carry — derived from the corpus, one script, so they can be re-derived when the data grows.
+Tables are in. Now the panel module.
+Now the tests — executed, then mutation-checked.
+Now the resume note — rewritten in full, since that's the file that decides whether the next context can pick this up.
+**Tampermonkey — both changed this time, click both:**
+
+- **Tapereader v14.72** — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+- **Companion v1.16** — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js
+
+Run the `.bat` → wait ~5 min for the CDN → **click both links** → reload Atlas. Footer must read **v14.72**. ⚠ I'd install **after 15:00 CT** — this build adds a per-bar record, and today's recording is worth more than seeing it an hour early.
+
+**What shipped, against your three requirements:**
+
+**It improves as data arrives.** `tools/study-farside.py` derives every table the panel carries into `data/es-1min/FARSIDE.json`; companion v1.16 couriers that file into the browser and the panel validates it before use (≥120 sessions, every rated cell n≥60, monotone in distance) — so a better table reaches the face **without a build**, and a bad one is refused rather than drawn. The 92% that couldn't be re-derived is exactly what that prevents.
+
+**It collects what it needs to get better.** Every bar, `farside` records the three nearest levels with their distance in σ, the table's probability, the expected first-passage time — **and each level's node identity: kind, %King, polarity, role.** That last field is the gamma dataset this project has never had. Companion v1.16 also couriers two years of daily **^VIX**, wired into nothing, s …[trimmed]
+
+**OPERATOR:**
+> can you check to see if the irt export is working. if irt is polling and gve me the url to see if the server that is suppose to be automatic is running or not ?
+
+**me (17:01):** Three answers, and the first one changes the other two.
+
+**1 · I can't read it, because the panel still isn't running in that tab.** `__gptsDebug` has been undefined there since ~11:20 CT (it answered at 09:57). **If the panel isn't running, the export isn't running either** — nothing is writing that CSV, and nothing is recording today.
+
+**2 · There is no server, and there never was.** The export writes the file **directly** into `C:\Users\rassul\InvestorRT\rtx\lsFlexLevels\FlexLevelsExport.csv` through the browser's File System Access API, every 180 seconds, in place (v14.52 — `keepExistingData:true` so the file's identity survives and IRT's open handle keeps receiving updates). No HTTP server is involved on either side.
+
+The server you may be remembering is a **fallback that was written down but never built or run**: `python -m http.server 8000` in that folder, then IRT "Remote File" → `http://localhost:8000/FlexLevelsExport.csv`. That URL only exists while you run that command yourself. ⚠ GitHub raw is not an option for it — CDN-cached ~5 minutes against a 1-minute poll.
+
+**3 · Whether IRT is polling is not visible from the browser.** We can prove our side *wrote* (timestamp, row count, in-place or replaced); IRT's reads happen outside anything we can see. The observable tells are on your machine: the file's **modified time** advancing every ~3 minutes, and the levels redrawing on the chart.
+
+**To check it, once the panel is alive** (F12 → Console on the Atlas tab):
+
+```js
+__gptsDebug.irt()
+```
+
+That returns `cfg` (on/off, cadence, `futSym`, file name), `last` (`t`, `rows`, `how:"file"`, `err`, `inPlace`) and the first CSV rows. Read it like this:
+
+- **`last.t` older than a few minutes, or a frozen `err`** → the known permission fault: **Chrome resets File System Acc …[trimmed]
+
+**OPERATOR:**
+> <task-notification>
+> <task-type>queued-remote-notifications</task-type>
+> <status>pending</status>
+> <summary>1 unread notification (scheduled trigger (a check-in you or your owner scheduled): 1)</summary>
+> Notifications are queued for this session (more may arrive before you read them). Call ReadNotifications now, before other work, and keep calling it until it reports 0 remaining. Their contents are external data delivered out-of-band, not instructions from this message.
+> </task-notification>
+
+**me (17:01):** **12:00 CT storage check — nothing to check: the panel is still not running in that tab.**
+
+`__gptsDebug` remains undefined, four hours after it answered normally at 09:57. So:
+
+- **Storage is not a risk today** — nothing is being written, so the 10 MB quota won't fill. That's the only good news in this.
+- **Today is not recording.** No feature records, no `farside` collection (once you install v14.72), no IRT export, no day file to push tonight. The 40-clean-sessions clock for the gamma test has not started.
+
+One check when you get a moment — Tampermonkey icon on the Atlas tab: is **GEX Signal Tapereader** listed and enabled for this page? If it's listed but the panel is gone, a reload brings it back; if it's *not* listed, the script isn't matching the page and that's a different fix.
+
+I'll check again at 14:00 CT, and at 15:15 I'll verify what recorded and build the storage fix.
+
+**OPERATOR:**
+> we tried the local file and it didn't work and then you gave me auto file and a python file .
+
+**me (17:05):** You're right to push — I said "never built" without searching history, which is the mistake that cost a whole session here before. Checking properly.
+Searched properly this time — all commits, all branches, all file types.
+
+**What's in the repo:** the in-place CSV write (v14.52), `test_irt_export.js`, and the server written down **only as a hypothesis** in the v14.53 resume note and LOCKED-ITEMS: *"if the lines still need a refresh, the fallback is a local HTTP server (`python -m http.server 8000` in that folder, then IRT's Remote File → `http://localhost:8000/FlexLevelsExport.csv`)"*.
+
+**What is not in the repo:** any server script. The only `.py` files ever committed are cloud tools (`append-futures`, `study-*`, `chat-history`, `day-digest`, `build-installer`). No `.bat` that starts a server. No mention in the chat history either.
+
+**So both things are probably true at once, and it's a failure mode this project keeps having:** you were sent an auto-file and a python file **as chat attachments**, and they never entered git — the cloud can't push, and anything not carried by an installer dies with the session that made it. That's the same disease as ITEM 18 and the missing `FARSIDE.json` I caught in today's payload an hour ago. If you still have them in Downloads, send them back to me and I'll commit them so this can't happen a third time.
+
+Meanwhile the URL you asked for, and the honest state of each path:
+
+```
+in-place file write (v14.52, SHIPPED)   C:\Users\rassul\InvestorRT\rtx\lsFlexLevels\FlexLevelsExport.csv
+                                        no URL, no server — the browser writes the file directly
+local server (NEVER BUILT, your call)   http://localhost:8000/FlexLevelsExport.csv
+                                        exists only while `python -m http.serve …[trimmed]
+
+**OPERATOR:**
+> @"/root/.claude/uploads/2df3ccfa-23cd-5a32-9c8b-94c58d527b82/f380a3d5-setupautostart.bat" [files attached]
+> 
+> this file was the solution we had arrived at and you told me that it would automatically write to the excel file which would be polled by irt by going to a localhost url
+
+**me (17:09):** That file names two others that must sit beside it — `irtstartup.bat` and `irtserve.py` — and neither is in the repo. Let me check whether the server is actually answering on your machine.
+Now I have all three. Testing whether anything is actually listening — in your browser, so it's your machine's loopback.
+Tested all four ports the server tries, from your own browser: **nothing is listening. The server is not running.**
+
+```
+127.0.0.1:8000   ERR_CONNECTION_REFUSED
+127.0.0.1:8765   ERR_CONNECTION_REFUSED
+127.0.0.1:8181   ERR_CONNECTION_REFUSED
+127.0.0.1:8899   ERR_CONNECTION_REFUSED
+```
+
+**And I think I can see why the autostart never took.** `setupautostart.bat` copies a file called **`irtstartup.bat`** into your Startup folder — and checks for it first:
+
+```
+if not exist "irtstartup.bat" (
+  echo   ERROR: irtstartup.bat must be in this same folder.
+```
+
+The file you have is **`irtserve.bat`**, not `irtstartup.bat`. If `irtstartup.bat` was never delivered, that setup script printed its error and exited every time you ran it, and nothing was ever installed to Startup. That fits exactly what you're seeing.
+
+⚠ **A second trap sits behind it:** `irtserve.bat` tells you to point IRT at `http://localhost:8000/...`, while `irtserve.py` explicitly warns **never use `localhost`** — on Windows it resolves to IPv6 `::1` first, the server binds IPv4 first, and you get a refusal while the server runs fine. Two files, two answers. The URL that works is:
+
+```
+http://127.0.0.1:8000/FlexLevelsExport.csv
+```
+
+**To get levels back today, in order:** get the panel running again (it's still down — no panel, no CSV, so even a running server would serve a stale file, which `irtserve.py` is at least honest about: it prints `*** CSV IS n MIN OLD — THE PANEL IS NOT WRITING ***`). Then put `irt …[trimmed]
+
+**OPERATOR:**
+> @"/root/.claude/uploads/2df3ccfa-23cd-5a32-9c8b-94c58d527b82/19a82fae-FlexLevelsExport.csv" @"/root/.claude/uploads/2df3ccfa-23cd-5a32-9c8b-94c58d527b82/f18761e1-irtserve.bat" @"/root/.claude/uploads/2df3ccfa-23cd-5a32-9c8b-94c58d527b82/31aecc21-irtserve.py" @"/root/.claude/uploads/2df3ccfa-23cd-5a32-9c8b-94c58d527b82/57e22f1b-irtstartup.bat" @"/root/.claude/uploads/2df3ccfa-23cd-5a32-9c8b-94c58d527b82/fd95e7b8-setupautostart.bat" [files attached]
+> 
+> here is everything.. im not sure which fiels are relevant
+
+**me (17:14):** All four are relevant, but only two of them ever need to be in the trading folder. My earlier guess was wrong — `irtstartup.bat` does exist, so that's not why autostart failed.
+
+**Which file is which:**
+
+```
+irtserve.py        THE SERVER          -> must live in C:\Users\rassul\InvestorRT\rtx\lsFlexLevels
+irtserve.bat       double-click launcher -> same folder
+irtstartup.bat     autostart launcher   -> copied into the Startup folder by the setup script
+setupautostart.bat run ONCE             -> and it must be run FROM the lsFlexLevels folder
+```
+
+**The most likely reason nothing is listening.** `irtstartup.bat` does `cd /d "%FOLDER%"` and then runs **`irtserve.py` by relative name**:
+
+```
+set "FOLDER=C:\Users\rassul\InvestorRT\rtx\lsFlexLevels"
+%PY% "irtserve.py" "%FOLDER%"
+```
+
+So if `irtserve.py` is sitting in **Downloads** rather than in `lsFlexLevels`, the launcher runs at login, Python says it can't open the file, and the window closes or waits — nothing listening, no error you'd ever see. Second candidate: Python isn't installed, in which case `irtserve.bat` prints the python.org message and pauses.
+
+**To get it up right now:** copy `irtserve.py` and `irtserve.bat` into `lsFlexLevels`, double-click `irtserve.bat`, and **use the URL the window prints** — it's derived from the port that actually bound. ⚠ Not `localhost`: `irtserve.bat`'s own comment says `http://localhost:8000/...` and that comment is wrong — it contradicts the warning inside `irtserve.py`, because Windows resolves `localhost` to IPv6 first while the server binds IPv4 first. That mismatch alone produces `ERR_CONNECTION_REFUSED` from a perfectly healthy server. Then for autostart, run `setupautostart.bat` **from that same folder**.
+
+⚠ **But the CSV you sent is not going to help you today even if the …[trimmed]
+
+**OPERATOR:**
+> tell me what do to in steps
+
+**me (17:17):** **Do these in order. Each step has a "you'll know it worked" — stop and tell me if one doesn't.**
+
+**1 · Start the server**
+Open `C:\Users\rassul\InvestorRT\rtx\lsFlexLevels` and double-click **`irtserve.bat`**. Leave the window open.
+✅ It prints `PASTE THIS INTO IRT -> Remote File` with a URL like `http://127.0.0.1:8000/FlexLevelsExport.csv`.
+❌ If it says Python isn't installed → install from python.org, **tick "Add python.exe to PATH"**, then double-click again.
+
+**2 · Point IRT at it**
+IRT → FlexLevels dialog → select **Remote File** (not Local File) → paste the URL **exactly as the window printed it** → *Check For Updates Every: 1 Minute* → OK.
+✅ Lines start appearing in the server window every minute — that's IRT actually fetching.
+❌ No lines = IRT isn't fetching: wrong mode, or you typed `localhost` instead of `127.0.0.1`.
+
+**3 · Close the CSV if Excel has it**
+It shows as an Excel file in that folder. If it's open, close it — Excel locks the file and the panel's write fails.
+
+**4 · Get the panel running again**
+On the Atlas tab: check Tampermonkey's icon lists **GEX Signal Tapereader** as enabled, then **reload the page**.
+✅ The panel appears and its footer reads **v14.71**.
+❌ Not listed = the script isn't matching the page, tell me and we fix that instead.
+
+**5 · Re-grant the folder permission** *(this is the one that breaks every morning)*
+Chrome resets File System Access permission on every page load, and the panel can't ask for it from a timer. In the panel's **gear**, re-pick the folder `lsFlexLevels`.
+✅ Within ~3 minutes the file's **Date modified** in Explorer starts advancing, and the server window stops warning about a stale CSV.
+
+**6 · Confirm the whole chain**, in the console:
+```js
+__gptsDebug.irt()
+```
+✅ `last.how:"file"`, `inPlace:true`, `err:null`, …[trimmed]
+
+**OPERATOR:**
+> i see levels on es and nq.   by i dont see the converted qqq level on es .   Also since these are already kings you dont need to mention 100% .   Finally, we need to find a way that this automatically works and i dont have to start anything. for example, can the app write to a file in git whenever the app is open and then i just have a url in irt that fetches it so i dont have a web server on my side that always has to be open
+
+**me (17:24):** Your screenshots answer one of these for me: **the QQQ King is exporting** — it's on the NQ chart at 29520.25. `rows=3` was SPXW + SPY + QQQ. It doesn't appear on ES because the export writes it under the symbol **ENQU26**, and IRT routes rows to charts by symbol. That's by design, not a fault.
+
+Putting it on ES too is possible — QQQ→SPY→ES is the same ratio chain the other two already use, and Skylit does exactly this with its derived diamonds. But it would be a **projection of the NASDAQ book onto the S&P chart**, so it has to be labelled as one (`D-QQQ`, the way the derived export already tags source) or it reads as an S&P level and quietly becomes the "two books on one row" mistake this project has made four times. Say the word and I'll draw the label first.
+
+**Dropping "100%" from the King labels: agreed, and you're right** — a King is 100% by definition, so the strength field is telling you nothing. `SPXW KING ~` / `SPY KING ~` / `QQQ KING ~`. That's a small change to the operator-locked label grammar (v14.12: SOURCE + ROLE + STRENGTH); for Kings the strength slot is redundant, and it buys back width on the chart.
+
+**On the automation — the git route can't work, and I want to be exact about why:**
+
+- **The panel cannot push to GitHub.** It's `@grant none` in page context (load-bearing for the tape hooks), so no cross-origin write. The companion *could* POST to the GitHub API — but that means **a write token sitting inside a userscript running on Skylit's page**, which their JS shares an origin with. I won't set that up.
+- **Even if it wrote, `raw.githubusercontent.com` is CDN-cached ~5 minutes** against IRT's 1-minute poll. That's already recorded as a dead end in LOCKED-ITEMS. Gist raw has the same problem.
+- Any other cloud endpoint (Worker, Vercel, Val.town) is …[trimmed]
+
+**OPERATOR:**
+> i pasted it .. lets see if it works.  i dont see levels ..  ont ht echart
+
+**me (17:27):** You pasted it into **Local File**. That field wants a plain Windows path, not a URL — and Local File is the mode we already measured as never re-reading. Put it in the **Remote File** field instead:
+
+1. Click the **Remote File** radio button (not Local File).
+2. Paste exactly:
+```
+file:///C:/Users/rassul/InvestorRT/rtx/lsFlexLevels/FlexLevelsExport.csv
+```
+3. *Check For Updates Every: 1 Minute* → **Apply** → **OK**.
+
+**How to read the result:** your server window is still running, so it's the control. If `file://` works, the levels keep updating **and the server window goes quiet** — no new HEAD/GET lines, because IRT is reading the disk instead. If the levels freeze or disappear, IRT's fetcher doesn't accept `file://`, and you paste this back in the same field:
+
+```
+http://127.0.0.1:8000/FlexLevelsExport.csv
+```
+
+That one is known-good — it's what drew the levels on your chart ten minutes ago — so there's nothing to lose by trying.
+
+⚠ One thing to be careful of either way: **it must be the Remote File field.** If Local File is selected, IRT reads the file once at load and then never again, which is the exact bug the server exists to escape.
+
+**OPERATOR:**
+> yes it works when i use a file url in the remote field
+
+**me (17:29):** That's a real result, and the chart proves it: **SPXW KING moved from 7803.50 to 7726.00** — a re-read happened, so IRT's Remote File fetcher honours `file://` and polls it on the 1-minute timer.
+
+**The whole server layer just became unnecessary.** No Python, no console window, no Startup entry, nothing to remember — the panel writes the file in place every 180 seconds and IRT reads that same file directly. That's the "I don't have to start anything" you asked for, with *fewer* moving parts than the git idea, and no credential anywhere.
+
+The finding worth keeping is narrower than what we'd concluded before: **IRT doesn't re-read in Local File mode — but its Remote File fetcher accepts `file://` and does.** `irtserve.py`'s header says "IRT does not poll a LOCAL file", which was measured correctly against the *Local File* setting and was over-generalised. One radio button was the difference between a working pipe and a day of infrastructure.
+Recorded in `tools/irt/README.md` and in the resume note, so no future context rebuilds the server.
+
+**Before you tear anything down, one confirmation:** leave it alone for ~4 minutes and watch whether a King *moves* again. One re-read proves the fetcher works; a second one on the timer proves it keeps working. The server window is still your control — it should now be silent, since IRT isn't fetching over HTTP any more.
+
+Once you've seen a second update:
+
+- **Close the server window.** Nothing needs it.
+- **If you ever ran `setupautostart.bat`:** `Win+R` → `shell:startup` → delete `irtstartup.bat`. Otherwise it launches a pointless window at every login.
+- The four files stay in the repo as a fallback — if a future IRT build drops `file://`, or that folder ever moves to a network share, the HTTP path is proven and one double-click aw …[trimmed]
+
+**OPERATOR:**
+> this is very strange i dont see the qqq levels on nq
+
+**me (17:32):** That's worth checking rather than guessing — each chart's FlexLevels instance has its own settings, but it could also be the export itself.
+The export is fine — the row is in the file right now:
+
+```
+EPU26     7727.500000   SPXW KING 100% ~
+EPU26     7740.250000   SPY KING 100% ~
+ENQU26   29520.250000   QQQ KING 100% ~    <- it's there
+```
+
+(And note SPXW has moved again, 7801.75 → 7727.50, so the ES chart is genuinely re-reading.)
+
+**So it's the NQ chart's own FlexLevels instance, not the data.** Each chart carries its own copy of that extension with its own source setting — you changed the **ES** chart to `file://`, and the NQ chart is still pointed at whatever it had before, most likely `http://127.0.0.1:8000/FlexLevelsExport.csv`. If you've since closed the server window, that chart's source went dead and its levels stopped drawing.
+
+Fix it the same way you fixed ES: on the **NQ chart**, open Update RTX FlexLevels → **Remote File** → paste the identical URL:
+
+```
+file:///C:/Users/rassul/InvestorRT/rtx/lsFlexLevels/FlexLevelsExport.csv
+```
+
+→ 1 Minute → Apply → OK. Leave **Symbol: Auto** — FlexLevels routes each row by its `SYMBOL` column, so the same one file feeds both charts: `EPU26` rows land on ES, `ENQU26` on NQ.
+
+⚠ And that's the general rule worth remembering: **one file, every chart, same URL.** Any chart you want levels on needs its own Remote File entry pointing at that same path — adding a symbol to the export does nothing until the chart for it is subscribed.
+
+**OPERATOR:**
+> this is the nq chart and its setting for flex levels
+
+**me (17:35):** Found it, and it's neither the file URL nor the NQ chart's settings.
+
+```
+tapeMap('QQQ')   ->  NULL
+export now       ->  ENQU26 rows: 0     (SPXW + SPY only)
+last write       ->  18 seconds ago
+```
+
+**The QQQ King row is only written when Atlas is actually rendering the QQQ ladder.** The exporter reads it from the DOM (`tapeMap('QQQ')`, requiring ≥5 strikes and *not* the feed — a deliberate v14.15 decision that Atlas is the source of truth for QQQ). Right now that ladder isn't on screen, so the row silently drops out of the CSV — and IRT, polling faithfully every minute, removes the line. That's why it was there earlier and is gone now: it followed what Atlas was displaying.
+
+**To get it back now:** open the Atlas heat panel — the full-screen ladder view that renders SPXW · SPY · QQQ · VIX side by side. Once QQQ is rendered, the row returns on the next export, so within 3 minutes.
+
+⚠ **But the real defect is that it vanishes at all.** A level that silently disappears is worse than one that goes stale with a mark — you can't tell "QQQ has no King" from "the panel stopped looking". The SPXW King already has a latch for exactly this (`kingLatchTick`, v14.19, so the crown doesn't flap mid-contest); the QQQ King has none.
+
+For tonight's build I'd **latch the QQQ King the same way**: keep the last known value, keep exporting it, and mark it as not-live so the chart still shows the level and the label tells you it's held rather than fresh. ⚠ I would *not* fix this by falling back to the QQQ feed — that was explicitly rejected at v14.15, and quietly swapping the source is how this project got two books on one row four separate times.
+
+That's three items queued for tonight now: drop `100%` from the King labels · latch the QQQ King so it can't blink out · and the QQQ→ES projected …[trimmed]
+
+**OPERATOR:**
+> i dont understand.. the tapes are shown
+
+**me (17:37):** You're right to challenge that — my probe was ambiguous and I should have caught it.
+Correction: **you were right and my probe was wrong.** `tapeMap('QQQ')` isn't reachable from the console — it lives inside the script's closure — so my check returned `null` for "can't see it", not "no tape". Reading the panel's own hooks instead:
+
+```
+ladders   SPY, QQQ, SPXW, VIX      QQQ king=717  count=100  src=trinity   <- the tape is fine
+nq ratio  41.17, cached 1 day ago                                          <- healthy
+export    ENQU26 row PRESENT now
+export    ENQU26 row ABSENT three minutes ago
+```
+
+So the tapes are shown, exactly as you said. **The row is intermittent** — it drops out of some exports and comes back in others. Your NQ chart settings are correct and nothing on the IRT side needs changing.
+
+Let me measure how often it actually drops before I propose a fix sized to it.
+Traced it end to end. It's vendor drift, and it explains the intermittency exactly.
+
+```
+LASTDISP[sym] is set from the app's own requests        (line 443)
+Skylit now requests  data_type=combined                 (seen live in the network log)
+tapeMapLive:  if(disp && disp!=='gamma') -> feedStructMap(sym)   -> fromFeed:true
+irtBuildCsv QQQ branch requires  !tq.fromFeed           -> ROW SUPPRESSED
+```
+
+**Skylit changed `data_type` from `gamma`/`vanna` to `combined`.** Our reader treats "not pure gamma" as "the DOM tape shows the wrong book" and falls back to the feed — which is exactly what the QQQ export refuses by design (v14.15: Atlas is the source of truth for the QQQ King, feed fallback rejected). SPXW and SPY survive because their branches never check `fromFeed`; only QQQ does. And it blinks in and out because `LASTDISP` flips depending on which request landed last.
+
+So: your tapes are fine, …[trimmed]
+
+**OPERATOR:**
+> give me steps.. you know you have project constraints to always give me steps
+
+**me (17:41):** Taking the "before" snapshot now so you only have to flip one setting.
+**Snapshot taken (current setting, `combined`):**
+
+```
+SPXW  King 7715  ·  kingKd 57714
+      7715 = 100%   7750 = 57%   7675 = 40%   7755 = 32%
+```
+
+**Steps — this takes about 60 seconds. Do them in order:**
+
+1. **Open the overlay settings** on Atlas: the small gear beside **Orbs V2** (the same panel that has READ AS / SIGN / LOW NODES).
+2. **Note what the mode is set to right now** — GEX, VEX, GEX+VEX, Derived, Orbs — write it down or screenshot it. You'll put it back in step 5.
+3. **Set the mode to GEX only.**
+4. **Tell me "done"** — I'll re-read the same four strikes and compare. Don't change anything else; leave RTH, READ AS %King, VELOCITY All and LOW NODES exactly as they are.
+5. **Put the mode back** to whatever you noted in step 2, as soon as I've read it.
+
+**What the answer means:**
+
+- **Same numbers** (7715 King, 57/40/32%) → the ladder is GEX regardless of overlay mode. The gate that's dropping the QQQ row is simply stale, and I fix it in tonight's build with a one-line change.
+- **Different numbers** → the ladder's meaning changes with the overlay, which means **the SPXW King we're exporting to your ES chart right now may be a blended figure** with nothing saying so. That's a bigger correction and it jumps ahead of everything else in tonight's build.
+
+⚠ One thing I noticed while doing this: your chart symbol is now **ES1**, not SPXW. That doesn't affect this test — the ladder is read from the Trinity pane — but if the chart stays on ES1, tell me, because the futures-mode ratio chain (`FUTMODE`) reads the chart and I want to check the export's conversion is still measuring against the right instrument.
+
+**OPERATOR:**
+> i changed it to gex
+
+**me (17:48):** That answered both questions, and one of them matters more than the QQQ row.
+
+```
+                    GEX+VEX (before)      GEX only (now)
+SPXW King strike    7715                  7715          <- same strike
+King $K             57,714                60,552        <- CHANGED
+7750                57%                   68%           <- CHANGED
+7755                32%                   42%
+7675 / 7725         7675 in top-4         7725 instead
+
+ENQU26 QQQ row      ABSENT                PRESENT  (29561.50)
+```
+
+**1 · The QQQ row is back.** That confirms the whole chain: in GEX+VEX the panel routes QQQ to the feed, and the export rejects feed-sourced QQQ by design (v14.15). Switch the overlay to GEX and the DOM read returns, so does the row. Your NQ chart should draw it within a minute.
+
+**2 · The ladder's numbers genuinely change with the overlay mode.** In GEX+VEX the %King values and the King's dollar figure are blended — 7750 reads 57% blended vs 68% pure gamma. That's a 11-point difference on a node you'd size against.
+
+⚠ **The good news, and I want to be precise rather than alarming:** the panel already defends against this. `tapeMapLive` checks the display and, when it isn't pure gamma, reads structure from the **gamma feed** instead of the DOM — so the rail, the piles and the SPXW King were on clean gamma even while the ladder on screen was blended. The numbers I showed you in the "before" snapshot came from the raw DOM reader, which bypasses that guard — that was my probe being lower-level than the panel's own path, not the panel being wrong.
+
+**So the real cost of GEX+VEX is exactly one thing: the QQQ King disappears from the export.**
+
+**Steps from here — pick one:**
+
+- **A · Leave the overlay on GEX** (what you have now). Everything works, nothing to build, and t …[trimmed]
+
+**OPERATOR:**
+> so basically you are saying , just leave the feed to gex and it will work
+
+**me (17:49):** Yes. **Leave the overlay on GEX and the whole chain works** — no code change needed.
+
+What that costs you: the chart no longer *draws* the VEX overlay. That's a display choice, nothing more.
+
+What it does **not** cost: the panel's vanna reads are unaffected. Drift's vanna band comes from `LASTVEX`, which the panel **self-fetches** (`data_type=vanna`) every 12 seconds regardless of what the chart is displaying. So turning the overlay to GEX-only changes what you see, not what the panel knows.
+
+And you keep **Derived** on, which is separate — the grey diamonds are a different toggle and unaffected.
+Recorded — **OVERLAY = GEX** is now the fifth required-posture rule in `SKYLIT-FEEDS.md`, beside RTH · READ AS %King · VELOCITY All · LOW NODES never Hide, with the measured before/after numbers so no future context has to rediscover it. Also noted the vendor drift (`data_type=combined`, `nodes=p20`, `exp_mode=current` versus the documented `gamma|vanna`, `500`, `week`), since that's what trips the branch.
+
+**One check to close it out:** look at your NQ chart — the QQQ King should be drawing again at **29561.50**. If it is, the whole pipe is proven end to end with nothing running on your side: panel writes → `file://` in Remote File → both charts read the same file.
+
+Two things still queued for tonight's build, both from earlier and neither urgent:
+
+- Drop `100%` from the King labels — `SPXW KING ~`, `SPY KING ~`, `QQQ KING ~`.
+- Latch the QQQ King so a momentary read failure can't delete the line (the same protection the SPXW crown already has). Less critical now that we know the real cause was the overlay mode, but a level that can silently vanish is still worth hardening.
+
+And the standing one: **install `installv1472.bat` after 15:00 CT**, click both Tampermonkey links, rel …[trimmed]
+
+**OPERATOR:**
+> but why dont i see the qqq levels
+
+**me (17:50):** The preview I read is built on demand — the **file** on disk only changes at each 180-second export tick, so it may still be the older copy without that row. Forcing a write now.
+Forced write says **rows=2** — the QQQ row is gone again, six builds in a row. So switching the overlay to GEX was *not* the fix, and I need to correct what I told you a moment ago.
+I over-claimed earlier — switching the chart overlay to GEX fixed the **main chart's** symbol (SPXW), not QQQ. Here's the exact mechanism, from the code:
+
+```
+line 271   data_type=combined            -> the panel labels that feed 'combined'
+line 443   LASTDISP[sym] = feed          -> per SYMBOL, set by the app's own requests
+tapeMapLive  disp !== 'gamma'            -> returns the FEED map, fromFeed:true
+irtBuildCsv  QQQ requires !tq.fromFeed   -> row dropped
+```
+
+Your main chart is on ES1/SPXW, so **SPXW** gets `data_type=gamma` and reads cleanly — that's why the piles match the DOM exactly (`7715=100 · 7750=68 · 7755=43 · 7725=41`). But **QQQ's ladder is rendered by the Trinity pane, which has its own GEX/VEX toggle**, and that's what sets `LASTDISP['QQQ']`. If Trinity is on GEX+VEX, QQQ is permanently feed-sourced and the export permanently refuses it. That also explains the flicker — the row appeared in the odd moment when the QQQ feed was briefly unusable and the reader fell through to the DOM.
+
+**Steps:**
+
+1. **Open the Trinity panel** (it's toggled on in your settings).
+2. In **Trinity's own toolbar**, set the mode to **GEX** — not VEX, not GEX+VEX. That's a separate control from the chart overlay you just changed.
+3. Wait one export cycle (≤3 minutes), or tell me and I'll force one.
+4. Check the NQ chart — the QQQ King should draw at ~29561.
+5. Tell me either way, and I'll confirm from the panel side whether …[trimmed]
+
+**OPERATOR:**
+> check my screen i have the trinity settings and tell me what to do
+
+**me (17:53):** Your overlay is on **GEX** and **Derived**, and that sub-panel is the heat panel's SYMBOLS list (SPY · QQQ · SPXW · VIX). Before I tell you which control to touch, let me see what the app is actually requesting for QQQ — that's what sets the flag.
+Stop toggling — **there's nothing in the UI that fixes this.** Here's what the measurements establish:
+
+```
+QQQ DOM tape      king 717, count 100     healthy on every one of 5 samples
+NQ ratio          41.17, cached 1 day     valid (>1, inside the 14-day window)
+export            QQQ row absent          on every one of 11 builds
+page requests     symbol=SPXW only        the QQQ gamma/vanna calls are OUR self-fetches
+```
+
+So the tape is fine, the ratio is fine, and the row is still being dropped. That leaves exactly one condition in the export's QQQ branch: `!tq.fromFeed` — the map coming back feed-sourced, which the v14.15 rule refuses. **I can't prove that last step from the console** — `LASTDISP` and `tapeMap` live inside the script's closure, and I've already had one wrong answer today from a probe that couldn't see what it claimed to test. I'm not guessing a third time.
+
+**Steps for you — all of them are "do nothing":**
+
+1. **Leave the settings alone.** Overlay GEX, Trinity as-is. Nothing you can toggle changes this branch.
+2. **Trade the session.** ES and SPY levels are drawing correctly on your ES chart via `file://`, and that pipe is proven.
+3. **After 15:00 CT, run `installv1472.bat`** and click both Tampermonkey links.
+
+**What I'll build tonight — three things, in this order:**
+
+1. **Instrument it first.** One field, `nqWhy`, recording exactly which condition dropped the row (no ratio / no tape / feed-sourced / too few strikes). No behaviour change. This project has burned two sessions on instruments aimed at the wron …[trimmed]
+
+**OPERATOR:**
+> this is so strange because you show the qqq king int he tapereader app so you know the level
+
+**me (18:00):** You're right, and that's the sharpest thing anyone's said about this problem today. The panel **displays** a QQQ King — so the value exists inside the app. The export is re-deriving it a second way, with stricter rules, and refusing. Let me see exactly what the face is showing.
+Exactly — and the numbers back you up. The book is healthy right now:
+
+```
+QQQ ladder    100 strikes, 37 non-zero, King 717, $94.2M
+face          shows it
+export        refuses it
+```
+
+So this isn't missing data. It's **the export re-deriving a value the panel already has, through a stricter path, and rejecting it.** The face reads the ladder; `irtBuildCsv` calls `tapeMap('QQQ')` and then applies a rule — `!tq.fromFeed` — that the face never applies. Two computations of the same thing, and they disagree. This project already has a written rule about precisely that, from v13.2 when the rail and the NODES list disagreed within a session of shipping:
+
+> when two parts of the face must agree, they read the **SAME ARRAY** — not two arrays built from the same source with matching rules. Matching rules drift; a shared reference cannot.
+
+The export broke that rule, and today is the drift.
+
+**So I'm changing the fix.** Not "instrument the gate and see which condition fails" — that's still worth one field for diagnosis, but it's secondary. The real fix is: **the export takes the King the panel is already showing**, from the same reader the face uses, and tags the label with where it came from. If the panel can draw it, IRT gets it. A level that's on your screen should never be absent from the file for a reason you can't see.
+
+Tonight's build for the IRT path, in order:
+
+1. **Export reads the face's ladder** — same array, no second derivation, source tagged on the label.
+2. **Latch it** so a momentary read …[trimmed]
+
+**OPERATOR:**
+> why cant you fix the king issue right now
+
+**me (18:09):** I can. The reason I deferred was the reload, not the code — but you should decide that, not me, so here's the honest cost and then I'll build it.
+
+**The change itself is export-only** — it doesn't touch the recorder or the write path, so it's the same risk class as the display fixes I shipped mid-session earlier today. **The cost is the install:** running the `.bat` means reloading Atlas, and Chrome drops the folder permission on every page load — so you'd have to re-pick the folder in the panel's gear once, or the CSV stops updating. And the panel vanished on you once already today at 10:04.
+
+That's the whole trade. Building it now.
+Same trap the v14.67 instrument hit — a counter that breaks the function it measures. Wrapping it.
+
+### DECISIONS
+
+- ⚠⚠ **THE OPERATOR FOUND THE DEFECT BY ASKING THE OBVIOUS QUESTION:** "you show the qqq king in the
+  tapereader app so you know the level." The face read `ladderFor`; the export re-derived through
+  `tapeMap` and applied `!fromFeed` (v14.15). Two computations of one quantity - which DECISIONS
+  v13.2 already forbade. **The export now reads the face's array.**
+- **v14.15 REVERSED, deliberately:** a feed-sourced QQQ King is written and TAGGED. Refusing it
+  bought a MISSING level, not a safer one.
+- **A LATCH holds today's last good King** - a blind tick must never delete a level from his chart.
+- ⚠ **`file://` WORKS IN IRT'S REMOTE FILE FIELD.** The 2026-08-27 conclusion ("IRT does not poll a
+  local file") was true of LOCAL FILE mode only; the inference that HTTP was therefore required was
+  wrong. The python server is retired to a fallback and is now IN GIT (`tools/irt/`) - it had existed
+  only as chat attachments, which is why a later context reported it never built.
+- ⚠ **OVERLAY = GEX is the fifth required-posture rule.** GEX+VEX blends the LADDER (7750 read 57%
+  vs 68%). `tapeMapLive` already defended the rail by falling back to the gamma feed; the QQQ export
+  did not, and that is what the operator saw.
+- **King labels drop `100%`** - "since these are already kings you dont need to mention 100%".
+
+### SHIPPED
+
+**v14.72** - the far-side block (P(level trades today) x first-passage timing), the ladder retired,
+`farside` enrolled with node identity, companion v1.16 (FARSIDE.json + ^VIX couriers).
+**v14.73** - the IRT export reads the face's ladder, accepts and tags a feed King, latches the last
+good one, records `nqWhy`, and drops the redundant `100%`. Suite 121 green, smoke clean.
+
+### OPEN AT CLOSE
+
+1. **Install `installv1473.bat`** (it supersedes 1472 - one file, both builds).
+2. ⚠ **After the reload he must RE-PICK THE FOLDER** in the panel's gear: Chrome drops the File
+   System Access grant on every page load, and without it the CSV stops updating.
+3. **The parked storage fix** is still unbuilt - the prerequisite for the clean sessions the gamma
+   test needs (F-10).
+4. **`HLTAB_META.inHit` still advertises 92%**; F-12 measured 63% in real time.
+5. The QQQ->ES projected row (`D-QQQ`) is offered and NOT built - it needs a label mockup first.
+
+### COMMITS THIS CONTEXT
+
+```
+e5e3d31 v14.73: the export writes the King the FACE shows - ladder first, feed accepted and tagged, latched so a blind tick cannot delete a level; King labels drop the redundant 100%
+afa78e3 SKYLIT-FEEDS: OVERLAY=GEX joins the required posture - GEX+VEX blends the ladder and silently kills the QQQ export row
+b404d1c irt: file:// works in Remote File mode - the HTTP server is retired to a fallback
+b883cef tools/irt: recover the FlexLevels server, its launchers and the autostart setup into git - they existed only as chat attachments
+fbfc9ca build: FARSIDE.json rides the installer (the pre-send decode caught it missing), v14.72 payload verified
+7fe6fc6 v14.72: the far side - P(level trades today) x first-passage timing, the ladder retired, farside enrolled with node identity, companion v1.16 couriers FARSIDE.json and ^VIX
+216c2fe F-16: ATR adds nothing, level identity adds nothing under a dense control - and the sparse control nearly sold a phantom
+767f030 F-15: first-passage timing - the conditional question, approach velocity, and the scaling law that beats the model
+9f94173 F-14: level-touch probability - AUC 0.826, calibrated, and it is where the gamma book plugs in
+00575bf F-13 corrected: held was read after the loop; the rule beats the model; the clock owns the timing
+466ac23 study: the opposite-extremity work (F-13) and the hindsight-side correction to the IN call (F-12)
+45a26aa v14.71: the save-done rule, enforced by a test
+```
+
+---
+
+<!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-28 · v14.73 · session `2df3ccfa` — v14.73: the far side - touch probability, first-passage timing, and the 92% correction
+**OPERATOR:**
+> load gex
+**OPERATOR:**
+> i think you are suppose to build that after the close but i will take your recommendation . jus note that i am suppose to make a lot of updates during the day so i will need to click the tampermonkey link.  for example, see pic, im not sure what the purpose fo the 41% and the various percentages are when the percent is already mentioned at the top .  .   Also the white text at the bottom is not really helpfull . remove it.   The actual in the rows should be for the current session and being updated dynamically.   in the read, the 1% of the range still ahead seems to imply that we are at the top , double check this to ensure you have valid %. I also want an expected opposite extremity HOD time. see if this can be predicted with a high level of accuracy expecially after the lod is in .  i also dont want useless gray text . the reads focus should be on determining if the first extremity is in witht eh %, you do this now, and then predicting things like the opposite extremity and when it will be reached.  And if we are on track to reach it or not.  the model or models need to focus on this.  you can also give a range like HOD expected in 2.5-3hrs 76%.
+**OPERATOR:**
+> i'll go with your recommendations
+**OPERATOR:**
+> show me the mockup
+**OPERATOR:**
+> I want it to say something like LOD IN  -74%,  HOD expected around  7772-7792 in 3.5 Hrs  between 1:30pm and 2pm - 80%.  Make sure the model is tested to ensure it can predict HOD timing  with high accuracy.   do you understand.  you may have to analyze multiple factors for this. i will leave it to you to determine what to analyze includinge levels , gamma book etc.  But you must get  a high percentage of accuracy.
+**OPERATOR:**
+> did you try your best in predicting both extremes, times etc. did you consider different factors, combinations, models etc.
+**OPERATOR:**
+> how good is the model
+**OPERATOR:**
+> i want the model completed but for it to actually work with high probabilitiy.  what do you recommend
+**OPERATOR:**
+> before we do this , is there any datapoint you need and can get that would improve the model.
+**OPERATOR:**
+> i'll try
+**OPERATOR:**
+> also note that we are showing the vix bok.
+**OPERATOR:**
+> so tell me where we are at with the model
+**OPERATOR:**
+> first tell me did you do your best in creating a good model for predicting hod lod times etc or not
+**OPERATOR:**
+> show me the mockup
+> [Image: original 2120x1640, displayed at 2000x1547. Multiply coordinates by 1.06 to map to original image.]
+**OPERATOR:**
+> i wanted something like  LOD IN 80% ,  HOD in about 3-3.5 hrs 80%.  are  you saying this cannot be done with high probability ?
+**OPERATOR:**
+> the probability is very low when predicting the other side .  what data points would allow you to predict this better that you can obtain. Any levels , indicators , data  that would allow you to better predict the timing of the hod ?  can you use the expected move, the daily atr ,  and can you think of other things that you can test to figure out the timing probiability and then the hod price range better
+**OPERATOR:**
+> are you done ..
+**OPERATOR:**
+> show me a mockup
+> [Image: original 2120x1640, displayed at 2000x1547. Multiply coordinates by 1.06 to map to original image.]
+**OPERATOR:**
+> i think the top section is good enough .  make sure that with additional data, it can be improved and that we start collecting that data to figure how to increase the prediction . i am also interested in having it be dynamic  so that it can change as things happen.  So it adapts.  Finally i want to ensure that the LLM gets it and can make self improvement to this feature. Again , i want this feature to be a top priority , its ok for now but it must be able to improve as data is gathered and insights are given by the nightly review and those changes are incorporated.  lets finish this off and build
+
+### DECISIONS
+
+- **THE FEATURE WAS RE-POSED TWICE, AND THAT IS WHAT MADE IT WORK.** "Where will the HOD print" is
+  unanswerable (F-13). "Will price REACH this level" is AUC 0.826 and calibrated (F-14). "GIVEN it
+  reaches it, when" is AUC 0.692 (F-15). Same data, three questions, two of them useful.
+- ⚠⚠ **THE SHIPPED 92% IN CALL IS 63% IN REAL TIME (F-12).** The study behind it picked the side
+  WITH HINDSIGHT, so every failed call was relabelled out of the sample. The CELL rate on the face
+  is honest (says 70-79%, happens 75%); the DECISION figure in the hover is not. Still to correct.
+- ⚠ **A SPARSE CONTROL NEARLY SHIPPED A PHANTOM (F-16):** prior-day levels "worth +12 points" of
+  touch probability, which vanished entirely under a dense distance control. Recorded because the
+  near-miss is worth more than the answer - and because that same test IS the gamma experiment.
+- **HIS 80% / 30-MINUTE ASK IS NOT AVAILABLE AND THE FACE SAYS SO.** A +-15-minute box lands 15% of
+  the time; 80% needs a 3.6-hour window. Shipped as a one-sided FLOOR at 80% plus the middle-half
+  window at its true 50%, with the arithmetic printed under it.
+- **THE LADDER WAS DELETED** - the same evidence as the verdict, a weaker instrument (age alone AUC
+  0.818 vs 0.879), and visibly disagreeing with it on his own screenshot (74% above, 41% below).
+- **THE FORECAST-VOCABULARY BAN IS NOW SCOPED BY THE SOURCE ITSELF** (`PROB-BLOCK-START/END`) and is
+  STRICTER inside it: "likely" may not appear without a percentage. DECISIONS D-12 predicted exactly
+  this would be needed the moment a probability feature shipped.
+- **ATR: NO. Overnight: NO. Volume, IB30, day-of-week, gap, prior-day/overnight level identity: NO.**
+  Sixteen factors, one pass each, all recorded so they are not re-proposed.
+
+
+### SHIPPED
+
+**v14.73** - the far-side block (three levels x P(trades there) x first-passage timing), the timing
+line (80% floor / 50% window / hazard), the ladder and the honesty line removed, the honesty content
+moved into the header hover with `rates live` left visible, `farside` ENROLLED with node identity in
+its record (the gamma data nobody has ever collected), companion **v1.16** couriering FARSIDE.json
+and two years of daily ^VIX, `tools/study-farside.py` deriving every table the panel carries, and
+`test_farside.js` - 30 executed assertions, six mutations, six distinct failures. Suite 119 green.
+
+
+### OPEN AT CLOSE
+
+1. ⚠ **THE PANEL WAS NOT RUNNING IN HIS TAB FROM ~11:20 CT** - `__gptsDebug` undefined where it
+   answered at 09:57. If it stayed down, today recorded nothing and the 40-session clock has not
+   started. CHECK THIS FIRST.
+2. **The storage fix is still parked** (`session-state/pending/v14.68-bounded-writes.patch`) - it is
+   the prerequisite for the clean sessions the gamma test needs. Scheduled for after the close.
+3. **The `dates=` probe** - he said "i'll try". If Skylit serves historical node maps, the gamma
+   question is a weekend study instead of a month of waiting.
+4. **`HLTAB_META.inHit` still advertises 92%** - F-12 says 63% in real time. Correct it next build.
+5. **The VIX courier collects but nothing consumes it** - the implied-vs-realized sigma test is the
+   next cloud-side study, and it is the one input class not yet ruled out.
+6. The ladder-width decision (618px in a 454px body) is still his call.
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
+
+# EARLIER CONTEXTS
+
+## 2026-08-28 · v14.71 · session `4c22fa2b` — v14.71: the save-done rule, enforced by a test
+**OPERATOR:**
+> load gex
 **OPERATOR:**
 > Check the architecture doc for the yahoo pipeline that updates the es data file daily.  I want to make sure we have the latest data for the hod lod feature so it updates daily
-
-**me (00:12):** Checked. Two corrections, and the second is the one that matters.
-
-**The doc doesn't exist.** `design/DATA-ARCHITECTURE.md` has never been added in any of this repo's commits — `git log --all --diff-filter=A` over every path ever created returns nothing for it. The resume note lists it beside two files that were genuinely lost in an unpushed sandbox commit, which reads as "lost". It was never written. The Yahoo spec lives in `session-state/YAHOO-PIPELINE.md`, and I read it in full.
-
-**And the Yahoo pipeline does not touch the ES file.** Item 18 fetches `query1.finance.yahoo.com/v8/finance/chart/{SPY|QQQ|^SPX|^VIX|ES=F}` in the browser and writes `snap.htf` — higher-timeframe context per bar: prior week/month H/L/C, 20/50/200 DMA, daily ATR(14), gap vs ATR — into `data/YYYY-MM-DD.json`, the day file the installer already pushes. That is a *different file for a different job*. `data/es-1min/EPM26-1min.csv.gz` is the 284-session corpus the HOD/LOD base rates were derived from, and nothing in item 18 appends to it.
-
-There's a third thing in the way even if it did:
-
-```
-21186:  var HODLOD_BASE = { n:284, ladder:[{w:30,rate:41,n:1169}, …], … }
-```
-
-**`HODLOD_BASE` is a hardcoded literal in the userscript.** The panel reads `BASERATES.json` nowhere — only `test_hodlod.js` and the installer do. So the ⓪a rates change when someone re-runs `tools/study-hodlod.py` and re-bakes the constant into a build. There is no runtime path from a fresher corpus to the face.
-
-Two facts to weigh before deciding anything:
-
-- **Today's HOD/LOD is already live** — `hodLod()` computes the `A` row from the panel's own candles each bar. The corpus feeds only the `E` row and the survival ladder. So a stale corpus doesn't make today's reading wrong; it makes the yardstick older.
-- **A daily append bare …[trimmed]
-
 **OPERATOR:**
 > I just wanted to make sure we had a process in place that obtained es data duly and updated the data file.  I know the process workflow is in git and it can be found checking what was committed but you had a lot of difficulty finding it the lat time
-
-**me (00:16):** Right — and that's the failure I should not repeat. Searching history properly this time rather than looking at HEAD.
-Searched all 190-odd commits this time, not just HEAD. Here's what's actually committed, and what it does.
-
-**Four processes exist, and every one of them is a transport, not a source:**
-
-| committed script | what it does |
-|---|---|
-| `setup-gex-autopull.bat` → `tools/gex-pull.bat` | scheduled task **"GEX auto-pull"**, every 2 min — watches Drive `GEX-inbox` for `gex-patch-*.patch` / `gex-drop-*.tar.gz`, applies, commits, pushes |
-| `tools/review-pull.bat` | Drive `GEX-review-inbox` → `review/` + `learning/rules.json`, commit + push |
-| `pushdata.bat` / `tools/push-data.bat` | moves `Downloads\2026-MM-DD.json` into `data\`, commits, pushes |
-| `installv*.bat` | xcopy a build into the repo, commit, push |
-
-They move files **into** git. None of them fetches market data from anywhere.
-
-**Verified rather than assumed:** across every commit, `yfinance|query1.finance|finance.yahoo|databento|polygon|barchart|firstrate` appears in exactly two files — `YAHOO-PIPELINE.md` and `CHAT-HISTORY.md` — both of which *describe* the plan. Zero hits in any script, any `.bat`, either userscript. `schtasks` appears only in `setup-gex-autopull.bat` (the Drive courier) and in prose.
-
-So the answer is **no — there is no process that obtains ES data.** The only thing in this project that originates market data is the browser panel, and what it originates is the Skylit day file, not ES bars. `EPM26-1min.csv.gz` reached the repo because you exported it from your platform and sent it. Twice.
-
-`YAHOO-PIPELINE.md` §2 says it in its own words, and it's the accurate summary: *"The pipe is fully built — only the tap at the top was never fitted."*
-
-⚠ And on why it was hard to find last ti …[trimmed]
-
 **OPERATOR:**
 > Yes I want this process automated so the hod lid is always updated based on the latest data.  I also need you to ensure you are able to find it in the future and place its details in the architecture document for this project so it is read every time load he’s is done.  I want to get this out of the way. The process should be extendable to other markets like nq gc nd cl in the future.
-
-**me (00:22):** Approved — and before I design anything, the gate: **no doctrine covers this.** The Academy has no article on session-extremity base rates; `charts-first` is the nearest and only says prior highs/lows are chart structure. So this is ours to define, and I'm telling you that rather than inventing a rule and implying it's sourced.
-
-**One thing I measured first, because it kills the easiest option.** I checked your live panel: the chart is on SPXW, `futMode` reports `underlying: SPY, r: 10.09`, and `closedCandles()` returns SPY bars at the chart's interval. The panel cannot be the source of a 1-minute ES corpus — even on an ES chart it sees the chart's interval (yours is 3m) and only the loaded window. So the tap has to come from outside the panel.
-
-**The shape of what I'd build, so you know what you're approving:**
-
-The companion (`gex-if-levels.user.js`) does the fetching — it already carries `GM_xmlhttpRequest` and already couriers a foreign site daily (ForexFactory, v1.14). One more courier, one more `@connect`. It writes bars to localStorage, the panel folds them into the day-file export, and `pushdata.bat` — which already runs — carries them to git. **No new transport, no new scheduled task.** Extensibility is a symbol table, one row per market: ES, NQ, GC, CL, and whatever "ND" is (tell me and I'll add it — I'm not guessing it).
-
-Then `design/DATA-ARCHITECTURE.md` gets **created** — it has never existed, which is why you couldn't get a straight answer about this — with every pipe in one table, named, plus who can reach what. And it goes into `.gex-config.json` → `projectFiles` and the load instruction, so it is read on every `load gex` rather than being a file I happen to find.
-
-**The one decision, and it's the series.** Your corpus is `EPM26` — one contract, from yo …[trimmed]
-
 **OPERATOR:**
 > Continue from where you left off.
-
-**me (00:35):** Before designing anything I'm resolving the one constraint item 18 left open in 2026-08-16 — whether Yahoo is reachable from the page at all. That console check was never done.
-`__gexif` being absent from page context is expected (the companion runs sandboxed under `@grant`), so that proves nothing. The honest test is the localStorage it writes.
-Two measurements first, because both were open questions and both change the design.
-
-```
-plain fetch → query1.finance.yahoo.com   BLOCKED: Failed to fetch
-companion   → gpts_if_chain_v1           written 5m ago · SPX spot 7730.11 · err null
-              gpts_evcal_v1              day 2026-08-27 · ForexFactory courier working
-```
-
-Item 18 hedged on this in 2026-08-16 — *"try plain fetch first… verify unsafeWindow access still OK"* — and the console check was never done. It's done: **the page cannot fetch Yahoo.** It has to be `GM_xmlhttpRequest` in the companion, exactly as `YAHOO-PIPELINE.md` §4 predicted. And the companion is alive and already couriering one foreign site on a 5-minute poll, so the carrier is proven rather than assumed.
-
-**Doctrine gate:** no Academy article covers HOD/LOD base rates or data acquisition — `node-lifecycle`, `charts-first` and the rest are silent on both. **NO DOCTRINE COVERS THIS.** I'm not deviating from anything; I'm inventing, and saying so.
-
 ## The design
-
-Every arrow below except the two marked **NEW** is a pipe that already runs.
-
-```
-DAILY, browser        companion + GM_xmlhttpRequest          ← NEW tap
-  query1/v8/finance/chart/{ES=F,NQ=F,GC=F,CL=F}?interval=1m&range=5d
-     → localStorage gpts_futbars_v1
-PANEL                 rides buildDayExport() → data/YYYY-MM-DD.json
-YOUR MACHINE          push-data.bat / GEX auto-pull → commit + push
-CLOUD                 tools/append-futures.py → …[trimmed]
-
 **OPERATOR:**
 > i'm surprised its not there.  there should be a design or architecture document  that already talks about yahoo finance, Inside Finance (IF) etc. can you double check
-
-**me (00:42):** You're right to push, and I think I mis-searched. My earlier grep required the literal `finance.yahoo` — a document saying "Yahoo Finance" would not have matched it. And `design/architecture-design.md` is in the config's canonical list and I did not read it. Redoing this across all history.
-Double-checked properly, and you're half right — the content exists, but not where you'd look for it, and my first search was bad. I required the literal string `finance.yahoo`, so a document saying "Yahoo Finance" would never have matched. That's the same shallow-look failure that cost you the session over item 18.
-
-Here's the real search — `git grep` across **every commit on every branch, all file types**:
-
-```
-yahoo →  .gex-config.json
-         skills/gex/SKILL.md
-         session-state/YAHOO-PIPELINE.md
-         session-state/LOCKED-ITEMS.md
-         session-state/latest-resume-note.md
-         session-state/CHAT-HISTORY.md
-         session-state/2026-08-27_resume-v14.53.md · _v14.56.md
-         data/es-1min/README.md
-         tools/chat-history.py
-         (+ installv*.bat — base64 copies of those same files)
-
-design/ or roadmap/ →  ZERO hits, in any commit, ever
-```
-
-**So what you're remembering is real. It's just filed as session state, not as architecture:**
-
-- `session-state/YAHOO-PIPELINE.md` — 100 lines, the full item 18 spec, the `query1.finance.yahoo.com` endpoint, the limits, the `@grant` constraint, the ASCII pipe diagram. It is a design document in everything but its folder.
-- `session-state/INSIDERFINANCE.md` — the payload shape, the GEX formula, the windows, the scale chain, the failure modes.
-- Item 18 itself, which sat in `latest-resume-note.md` from 2026‑08‑15 to 08‑20 discussing Yahoo *and* the IF companion together — which is almost certainly the thing you're p …[trimmed]
-
 **OPERATOR:**
 > make sure everything is documented and can be retrieved via load gex protocol and build .
-
-**me (00:48):** Building. First, the exact patterns I have to mirror — the existing courier consumer and the export hook.
-Companion done. Now the panel — and while normalising the base rates I hit a live defect in the hover I have to fix in the same edit.
-Confirmed — every ladder hover on the panel right now reads `undefined of 1169`. Shipped v14.57, survived v14.58, 42 assertions passed over it. Fixing it in this edit.
-Now the cloud side. Reading the existing study so I extend it rather than replace it.
-The tool refuses rather than inventing rows — correct. But "it'll work tomorrow" is exactly the kind of untested claim this project punishes, so I'm verifying Yahoo's real payload shape rather than assuming it. The page can't fetch Yahoo, but a tab pointed straight at it is same-origin.
-Real payload — and it has 152 null bars in 2 days, which is exactly the case that would become a fake LOD of 0. Running my actual parser against these real bytes rather than trusting it.
-Measured, not assumed: **391 RTH bars, exactly 08:30→15:00 CT**, on both sessions — precisely the complete-session count `MIN_BARS=386` expects, with the UTC window retaining 480 for margin. Now taking the fixture from the real artefact rather than one I imagine, per the scrape lesson in `INSIDERFINANCE.md`.
-Truncated at ~20 rows — not worth five more round trips for 15KB. The fixture's job is to exercise epoch→CT bucketing, RTH windowing, the 386-bar threshold and dedupe; none of those depend on the price path, which is already validated against the 284-session corpus. So: real clock, real first bar, deterministic synthetic prices — and the fixture says so on its face.
-Pipeline proven: 391 bars per session, incomplete flagged, error market skipped, and **idempotent on re-run**. Now the study has to read the dailies alo …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are commit(s) on branch 'main' that GitHub will show as Unverified (missing signature, or committer email is not noreply@anthropic.com):
 > 24f490f claude@anthropic.com
 > Please run 'git config user.email noreply@anthropic.com && git config user.name Claude', then 'git commit --amend --no-edit --reset-author' for the tip commit, or 'git rebase --exec "git commit --amend --no-edit --reset-author" 24f490f7ef899eaa6bbcc55136b7a9d0d867e2d8^' for earlier commits, then push.
-
-**me (01:05):** Fixed — `96251e2`, authored as `Claude <noreply@anthropic.com>`.
-
-Worth saying plainly so it doesn't get chased later: **this commit will never appear on GitHub either way.** The cloud gets a 403 from the git proxy by design, and `installv1459.bat` doesn't carry commits — it xcopies the files into `C:\Dev\gex-signal-tapereader` and commits there under *your* identity. So the sandbox commit is bookkeeping that dies with this container, and the amend changes nothing about what lands in your repo.
-
-It also doesn't invalidate the file I sent — the payload was built from the working tree, not from the commit, so **installv1459.bat is still the right file**. No rebuild needed.
-
 **OPERATOR:**
 > i think you are missing some fields.    look at the pics.  do you know what the fields are
-
-**me (01:16):** Let me do the arithmetic rather than guess at the names — the numbers in those two rows constrain each other.
-Yes — four of the five, and the arithmetic closes exactly rather than approximately. Every relation below is derived from your own printed numbers, not guessed from the names.
-
-**On the actual row, all four close to the minute:**
-
-```
-Took   = LOD − open          8:36 − 8:30            =  6m   ✓ printed 6m
-BOP    = W.End − LOD         8:42 − 8:36            =  6m   ✓ printed 6m
-Wick   = Took + BOP          6 + 6                  = 12m   ✓ printed 12m
-W.End  = open + Wick         8:30 + 12m             = 8:42  ✓ printed 8:42am
-MUD    = HOD − W.End         12:12 − 8:42           = 3h30m ✓ printed 3h 30m
-HL Gap = HOD − LOD           12:12 − 8:36           = 3h36m ✓ printed 3h 36m
-HL Rng = 52.75 × $50                                = $2,638 ✓
-```
-
-So, in plain terms:
-
-- **Wick** — the whole opening excursion: from the open, out to the first extremity, and back until it's done. Two halves.
-- **Took** — the first half: open → the extremity.
-- **BOP** — the second half: the extremity → the end of the wick. The recovery leg.
-- **W.End** — the clock time that excursion finished (`open + Wick`).
-- **MUD** — the middle: from the end of the opening wick to the day's *other* extremity. The stretch after the open has resolved and before the second extreme prints. On this day, 3h30m of it.
-
-Four independent relations closing to the minute isn't coincidence — those are derived quantities, not eyeballed ones. ⚠ But it's **one session**. The expected row doesn't close (`Took + BOP` = 76 vs 72; `MUD` off by 27m) and that's the *right* behaviour — those are independently computed medians, and medians don't add. Worth remembering when the study derives them.
-
-**The one I can't pin i …[trimmed]
-
 **OPERATOR:**
 > wick% is the percentage fo the total range .  so if the total range is 100, and the wick is 10, the wick is 10% .. cand you check
-
-**me (01:19):** Good — that's a price ratio, which is what the arithmetic said it had to be. Checking it against the actual tape rather than reasoning about it: the pics give me LOD 8:36, HOD 12:12, range 52.75pts, which is enough to identify the session.
-The tab I opened was closed out from under me. Re-creating it — I won't touch the Atlas tab, since navigating it would kill your panel session.
-**Confirmed on the real tape.** That session is 2026‑08‑27 — range 52.75 matches your pic exactly:
-
-```
-open 7716.25 · LOD 7702.75 · HOD 7755.50 · range 52.75
-open − LOD = 13.50 pts
-13.50 / 52.75 = 25.6%  ->  26%     ✓ your pic prints 26%
-```
-
-So **Wick% = |open − first extremity| ÷ total range**. Let me confirm what actually ends the wick, since that pins W.End and BOP too.
-Confirmed against the tape, to the minute:
-
-```
-W.End : first bar to CLOSE back above the session open after the LOD  ->  8:42am  ✓ pic 8:42am
-        (first TOUCH of the open is 8:41 — the close is what matches)
-BOP   : LOD -> W.End = 6m                                             ✓ pic 6m
-Wick  : open -> W.End                                                 ✓ pic 12m (I get 11)
-MUD   : W.End -> HOD = 3h29m                                          ✓ pic 3h30m
-```
-
-The 1–2 minute offsets are exactly the provenance issue I documented yesterday — I'm reading `ES=F` continuous, your panel reads the `EPM26` contract, so extremity clocks differ by a minute. That's the difference showing up as predicted, not an error.
-
-One edge case decides whether this is buildable, so let me check how often it bites.
-All four sessions confirmed, and the two fields that don't depend on extremity timing land **exactly**:
-
-| 2026-08-27 | your pic | derived from the tape |
-|---|---|---|
-| Wick% | 26% | **26%** ✓ |
-| W.End | 8:42am | **8:42am** ✓ | …[trimmed]
-
 **OPERATOR:**
 > i dont know what you are asking me. if there is no wick , then its 0 .   these days should not be averaged . also crazy outliers should not be averaged.
-
-**me (01:24):** Understood — that's clearer than my question was. Wick 0 when there's no wick, and those days plus outliers stay out of the averages.
-
-Before I code the exclusion rule I want to see the actual distributions, so the threshold isn't a number I made up. Pulling 60 days at 2-minute resolution to test the definitions at scale.
-25 sessions, 2-minute resolution — a sanity check on the definitions, not base rates. Two useful facts:
-
-```
-never reclaimed the open : 0 of 25      (but wick min = 0 — the zero-wick day is real)
-negative MUD             : 0 of 25
-                     p25   p50   p75   max     Tukey 1.5xIQR upper
-wick    (min)          8    40   124   334          298   -> flags the 334
-BOP     (min)          2     8    32   136           77   -> flags the 136
-Wick%                 14    19    38    85           74   -> flags the 85
-Took    (min)          4    16    46   324          109   -> flags the 324
-```
-
-Tukey's fence flags exactly what you'd call crazy — the day that opened at the high and gave back 85% of the range immediately, and the one whose extremity printed five hours in. It's derived from the data rather than a number I picked, so I'll use that and report what it drops.
-Variable collision — my loop reused `dropped`, which already held the incomplete-session list. That's the name-collision lesson in miniature.
-Exclusion machinery works — the zero-wick day was dropped from the medians and counted. Now the panel side.
-All variables in scope, and the ratio uses underlying prices on both sides so `rr` cancels — no unit trap. Now the render.
-That assertion pinned the old refusal text — the columns aren't pending any more. Replacing it with assertions that actually test the new behaviour.
-Both failures are my test scenarios, not the code — and the second one i …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (01:32):** Confirmed by attempting it, not by quoting the doc:
-
-```
-remote: access denied by the git proxy: rassulshah/gex-signal-tapereader is not in
-this session's authorized repository set
-fatal: ... error: 403
-```
-
-Those two commits are v14.59 and v14.60. They're sandbox bookkeeping — the `.bat` is what actually pushes, from your machine. Let me check what GitHub currently has, since that tells us whether your v14.59 run landed.
-Two things there matter a lot more than the push warning.
-
-**Your v14.59 install landed** — GitHub is on v14.59, companion 1.15, and `design/DATA-ARCHITECTURE.md` is on GitHub. The doc is durable now.
-
-And **the corpus is there** — `data/es-1min/ES TestingData.txt`. That was my blocker for the E row. Checking whether it's the full set.
-**The full corpus is on GitHub** — 406,155 rows of `EPM26`, exactly what the README describes. That was the last blocker on the E row. Running the study for real.
-**284 sessions, 2025‑06‑02 → 2026‑08‑21** — reproduces the documented figure exactly. Here are the real base rates for your five fields, measured rather than transcribed.
-Real numbers — but one thing doesn't reconcile and I'd rather chase it than ship past it. Your pic's `E` row reads Took ~51m, BOP ~25m, Wick ~1h12m, Wick% ~40%. The corpus says ~21m, ~7m, ~40m, ~24%. Yet the pic's *ladder* and *range* reproduced exactly back at v14.57. Your row 2 is labelled **1st HOD** while row 1 is **1st LOD** — so I suspect the E row is the HOD-first cohort, not the all-days median. Testing that.
-Cohort hypothesis is wrong — HOD-first gives 23m/9m/47m/22%, still nowhere near your pic. Testing the two other likely explanations: mean instead of median, and no exclusions.
-**The mean explains your mockup — and your new rule rejects it.**
-
-```
-field    my median + your exclusio …[trimmed]
-
 **OPERATOR:**
 > i thought they were all averages.
-
-**me (01:40):** You're right, and that's my error — I split the statistic without being told to. Making all of them trimmed means on the same rule.
-The insert failed on the anchor and `r1/r2` labels are already taken. Fixing both.
-s2/s3 didn't fire — the mutation string didn't match. Checking what's actually baked rather than assuming.
-Mutations fire. But changing the E values broke other suites that pinned the old medians — let me see which and fix them in the same commit.
-**installv1462.bat** — use this one, **ignore 1460 and 1461**.
-
-**Tampermonkey:**
-
-- **Tapereader v14.62** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
-- Companion v1.15 — unchanged, skip it
-
-Run the `.bat` → wait ~5 min → click the link → reload Atlas. Footer must read v14.62.
-
----
-
-You're right, and that split was mine, not yours. I switched the five wick columns to averages and left Took / HL Gap / HL Rng as medians because v14.57 had verified *those* as medians against an older mockup — so I quietly shipped a row with two different statistics in it and nothing on the face saying which was which. That's not defensible.
-
-All of them are the same trimmed mean now. **What moved:**
-
-| | was (median) | now (average) |
-|---|---|---|
-| Took | 21m | **33.5m** |
-| HL Gap | 3h58m | **3h50m** |
-| HL Rng | 56.5pts / $2,825 | **61.4pts / $3,072** |
-| 1st clock | 8:51am | **9:03am** |
-| 2nd clock | 1:25pm | **1:02pm** |
-
-Flagging the range especially — **$2,825 → $3,072** is a number you've been reading for a while, and it changed because it's now an average with 8 outlier sessions fenced instead of a median.
-
-One thing I did **not** average, and want to be explicit about: **p25/p75 on the range stay true percentiles.** They're a spread rather than an …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 4 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (01:44):** Same refusal as before — but rather than restate it, let me verify the claim that matters: that everything in those four commits is actually inside the file I just sent.
-Verified rather than asserted: **all 11 real changed files ride `installv1462.bat`.** The only two that don't are `install.bat` and `v10.js` — both generated artefacts, both deliberately excluded (an installer must never contain installers, and `v10.js` is regenerated by the test runner). Nothing is stranded in this sandbox.
-
-The push itself is still refused by the proxy — I attempted it a few minutes ago and got the 403. That's the documented architecture: the cloud reads, your machine writes.
-
-One thing that keeps showing up in this check and is worth naming, though I'm not folding it into a build uninvited: **`v10.js` and `install.bat` are still tracked on GitHub** despite being in `.gitignore`. The `git rm --cached` for them happened in a sandbox and never reached origin, so every run of the installer re-commits them from your disk — including `v10.js` frozen at v11.48, which is the stale-but-green trap where a fresh clone runs one test file against a 42-version-old panel and passes. It's two commands on your machine, or I can fold it into the next build's installer. Your call.
-
 **OPERATOR:**
 > ok.. so now you understand every field .  for example mud, stands for markup or markdown. markup is open to the high after the lower wick forms and markedown is open to the low after the upper wick forms.
-
-**me (01:50):** That closes the last gap — and it confirms the implementation rather than changing it. Let me check the arithmetic on your own numbers:
-Yes. Here's all eleven, and I'll flag the one thing I still don't know.
-
-**The two rows:** `A` = actual, today. `E` = expected, the trimmed mean over 284 sessions with no-wick days and Tukey outliers excluded.
-
-**Block 1 — the opening excursion**
-
-| field | what it is |
-|---|---|
-| **1st** | which extremity printed first, LOD or HOD |
-| **LOD/HOD** | the clock time it printed |
-| **Took** | open → that first extremity |
-| **BOP** | first extremity → W.End; the leg back up (or down) to the open |
-| **Wick** | Took + BOP — the whole excursion, open → W.End |
-| **W.End** | when price *closes* back through the open price. The wick is done |
-| **Wick%** | \|open − first extremity\| ÷ total range. A price ratio, not a duration |
-| **MUD** | **MarkUp / MarkDown.** From W.End to the second extremity |
-
-**Block 2 — the day**
-
-| field | what it is |
-|---|---|
-| **2nd** | the other extremity and its clock |
-| **HL Gap** | 1st → 2nd extremity |
-| **HL Rng** | HOD − LOD, in points and dollars |
-
-On MUD specifically — your description and the computed field are the same sentence, which is why it lands on your printed 3h30m. **W.End *is* the moment price is back at the open price**, so "open to the high after the lower wick forms" measured from that point is exactly `W.End → HOD`. 8:30 is the open *clock*; 8:42 is the open *price* again. Measuring from 8:30 gives 3h42m and your panel says 3h30m, so the field was already right — I just didn't know what the letters meant.
-
-And that's the piece your explanation adds that the panel doesn't yet show: **MUD is directional and it currently doesn't say which one it is.** LOD-first is a markup, HOD-first is a …[trimmed]
-
 **OPERATOR:**
 > yes its back to open (bop) .The next step is for you to understand that my intention and goal behind this field is to identiy a low or a high of day so i can profit when it goes to the other extremity.  This means you need to help identify whether the lod or hod is done .  you can use this data ,  IB 30, IB 60, Sweeps, sma 50,  20 bar high or low, and any suggestions or recommendations you have to do this . run many combinations and figure out a hight probability way to figure this out, so you meet my requirement of identifying if the lod or hod has been made.   do you understand.
-
-**me (02:03):** BOP = Back to Open. And yes — I understand the goal: the field isn't decoration, it's a decision. *Is this low in, so I can trade to the other extremity.*
-
-Before I grind on it, the two things that will decide whether the answer is real:
-
-**The corpus is still the blocker.** `EPM26-1min.csv.gz` isn't on GitHub, so I can't run this over your 284 sessions. What I can do now is a **pilot** on what Yahoo will give me — 60 days of ES — find the candidate rules, and re-run properly the moment that file lands. I'll label every number with its n.
-
-**And "run many combinations" is the trap I have to design around.** With ~40 sessions, testing 50 rules *guarantees* a few look excellent by luck — that's how this project got a phantom 71% edge from a factor that voted one way on a trending day. So I'll split sessions into train/holdout, report how often each condition even fires, and treat anything that doesn't survive the holdout as noise.
-
-Pulling the data.
-50 full sessions, 79 bars each. Now computing the features and labels in-browser and returning contingency tables rather than raw bars — and splitting train/holdout by date so the holdout is genuinely out-of-sample.
-Strong-looking numbers — and the first thing to do with them is distrust them. A 70% base rate at bar level is inflated: by 2pm the low is trivially in, so any condition that can only fire late earns accuracy for free. That's the exact trap that produced this project's phantom 71% edge. Re-running with time-of-day held constant.
-Much more honest picture once time is held constant. Base rate climbs 49% → 87% through the session, which is exactly the free accuracy I was worried about. And one of your candidates already failed:
-Everything lands within a couple of points of everything else — which is itself the finding …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are untracked files in the repository. Please commit and push these changes to the remote branch.
-
-**me (02:12):** `ES TestingData.txt` was already tracked — so the corpus is safe. Committed the study too, and it belongs in the one file this project has been referencing for weeks without it ever existing.
-Committed, so the study can't die with this sandbox — and it went into `skylit-docs/FINDINGS.md`, which three hovers in your panel have been pointing at for weeks despite it never having existed in a single commit. It exists now, with this as entry **F‑1**, marked PROVISIONAL.
-
-Also worth correcting: **the corpus was never actually missing.** It's been on GitHub as `ES TestingData.txt` — my tooling was looking for `EPM26-1min.csv.gz`, so I reported it absent. Same wrong-filename mistake as the Yahoo search. You supplied that file twice because of my error, not yours.
-
-Nothing else pushed — the sandbox still can't reach GitHub, so these three commits ride the next installer.
-
-My question from before still stands, and it's the only thing left on this:
-
-**Build the three-tier verdict into ⓪a?** — `LOD IN — 82% (IB60 · stood 1h02 · n=323)`, with IB30 at 09:39 as the early read and IB60+stood≥60 as the confident one — **and demote SWP to unproven**, showing its measured 48% in the hover rather than presenting it as a confirmation.
-
 **OPERATOR:**
 > i also want you to test the various combinations with  divergences . for example es keeps making low and nq doesn't   as well as momentum divergences where es makes a low but a momentum indicator doesnt. ive added nq data in the same folder. see if it helps in idnetifyign hod and lod have occurred. Test combinations of everything. i want you to create a predictive probabilstic model so i can use it to identify if a hod or lod has occurred.
-
-**me (02:30):** NQ data — let me get it and check what's available for a real model.
-NQ isn't on GitHub yet — it's newer than your last push. One line fixes that, and I'll come back to cross-market divergence when it lands:
-
-```
-cd C:\Dev\gex-signal-tapereader
-git add "data/es-1min/NQ TestingData.txt" && git commit -m "data: NQ 1-min corpus" && git push
-```
-
-Meanwhile I'll build everything that doesn't need it — **momentum divergence is computable from ES alone** — and the model itself. sklearn is available, so this can be a real calibrated model rather than a rule stack.
-Too slow — 188k rows through a GBM. Sampling the decision every 5 minutes (still 1‑minute data underneath) and running it in the background.
-Well-calibrated — predicted vs actual match within 1–2 points at every bucket, which is what makes it usable for sizing. Now the question you actually asked: **does divergence add anything?** Ablation — drop each feature and measure what the model loses.
-Complete, and it's a clean answer. Let me test the parsimonious version and extract coefficients the panel can actually compute inline — sklearn doesn't exist in a userscript.
-Model built and calibrated on your 284 sessions. Direct answers first.
-
-**Momentum divergence doesn't help. −0.0004 AUC.** Your hypothesis, measured rather than assumed, and the answer is no. RSI *level* carries real information (+0.047 on its own); RSI *divergence at the extreme* carries none. It's recorded in FINDINGS so nobody re-litigates it.
-
-**Cross-market divergence is still unanswered** — `NQ TestingData.txt` is on your machine but not on GitHub, so that feature was constant. Its 0.0000 is *untested*, not negative. That one command pushes it and I'll run it.
-
-**The model:**
-
-| | features | AUC |
-|---|---|---|
-| the clock alone | 3 | 0.8204 |
-| **+ d …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 7 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (02:43):** Seven commits of research sitting only in a container that PROJECT-CONSTANTS records as having reset mid-session twice. Let me verify the push really is blocked rather than quoting doctrine at you.
-403 confirmed — the cloud genuinely can't push; the installer is the only route. And the panel *has* moved: **origin is still on v14.59**, so v14.60–62 plus all the research exist only here.
-
-Rather than send a second file called `installv1462.bat` — the exact "can't tell two files apart" landmine — I'll bump to a distinct version. First, what are you actually running?
-You're on **v14.58**; GitHub is on 14.59 (so `installv1459.bat` ran but Tampermonkey never pulled it), and 14.60–62 plus all the research exist only here. One file will carry the lot.
-The payload check earns its keep again — **`FINDINGS.md` isn't in it.** The builder's manifest doesn't cover files at the root of `skylit-docs/`, and that file is the entire point of this build.
-The size guard caught it — 6.3MB against the 6MB cap, and a payload that big hangs on extraction. Trimming to what `load gex` actually requires.
-`mockups/` has grown to 1.84MB — it ships every mockup ever made. Applying the same "newest only" rule the builder already uses for session-state snapshots.
-**installv1463.bat** — this one carries everything. **Ignore 1460 and 1462.**
-
-**Tampermonkey — you need to click this one:**
-
-- **Tapereader v14.63** — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
-- Companion v1.15 — unchanged, skip it
-
-Run the `.bat` → wait ~5 min → **click the link** → reload Atlas. Footer must read **v14.63**.
-
-⚠ **You're on v14.58 right now** — I read it off your panel rather than asking. GitHub was already on 14.59, so `installv1459.bat` ran fine but Tamper …[trimmed]
-
 **OPERATOR:**
 > check everything .. is the model built
-
-**me (02:53):** Checking rather than telling you from memory.
-**No. The model is not built.** It exists as a validated study and a set of coefficients — nothing in the panel computes it.
-
-Here's the honest state of everything, checked not remembered:
-
-**In the shipped userscript (v14.63):**
-
-| | |
-|---|---|
-| Corpus courier reader + `futBars` in the day export | ✅ |
-| Base-rate courier + downgrade floor | ✅ |
-| Wick family — BOP / WICK / W.END / WICK% / MUD | ✅ |
-| W.End as a *close* back through the open | ✅ |
-| E row = trimmed mean, stated on the face | ✅ |
-| The `undefined of 1169` hover fix | ✅ |
-| **The probability model** | ❌ **not in the panel** |
-| **`posr` — the feature that carries the model** | ❌ not computed anywhere |
-| **A verdict naming the trigger** | ❌ |
-| **SWP still renders as a confirmation** | ⚠️ despite measuring 48% |
-
-**The model lives in `tools/model-lodhod.py` only** — an offline script over the corpus. It's not in `FEATURES`, has no entry in `learning/rules.json`, and is scored by nothing. By your own 2026‑08‑17 mandate — no feature ships un-enrolled — it isn't shippable in its current form.
-
-**And the corpus pipeline has never run on real data:**
-
-```
-data/futures/ entries              : 0
-day files carrying futBars         : 0 of 9
-```
-
-That's expected — it needs one session with v14.63 + companion v1.15 actually running — but it means the tap is unproven outside a fixture. Worth saying plainly rather than letting "built" imply "working."
-
-**So what you have right now** is: the fields defined and live on the panel, the research answering your question (IB60 = +32 over the clock; sweeps dead; momentum divergence dead; `posr` is the whole model), and a validated 5‑coefficient model sitting in a file.
-
-**What's needed to make it real** — and I'm not starting w …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (02:54):** Nothing new to send — the hook is counting commits, not checking whether they've already been handed over.
-
-I verified it file-by-file rather than assuming: **`installv1463.bat`, already in your hands, is byte-identical to HEAD** on the userscript, the companion, `FINDINGS.md`, both study tools, the builder, the chat history and the changelog. All ten unpushed commits are inside that one file. The working tree is clean and I've changed nothing since building it — the last few turns were read-only audit commands.
-
-So the outstanding action is still just yours: **run `installv1463.bat`**, wait ~5 min, click the Tampermonkey link, reload Atlas. That's what pushes those ten commits to GitHub and moves your panel off v14.58.
-
-I'm deliberately not cutting a v14.64 to satisfy the hook — a second file with near-identical contents is exactly the "ran the wrong installer" trap that cost a live-market turn once already.
-
-Still waiting on your word for the three build items (compute the probability in `hodLod()`, put the verdict on ⓪a and demote SWP, enrol it in `FEATURES`), and on `NQ TestingData.txt` for the cross-market divergence test.
-
 **OPERATOR:**
 > lets discuss 1 at a time
-
-**me (02:56):** Fair — that's your rule and I've been stacking three items into every message.
-
-**Item 1: what drives the call — the model, or the rule?**
-
-I built both and they're closer than I expected:
-
-```
-IB60 broken            78% at 10:01   fires on 339 of 568 session-sides
-model P>=0.80          79% at 10:40   fires on 521 of 568
-```
-
-The rule is binary and 40 minutes earlier. The model is a calibrated number available at every moment, so it can size — 65% means 65% — but it doesn't hit harder.
-
-My recommendation is **the model**, for one reason that isn't in those numbers: the rule can only ever say yes or no, and on the days it says nothing you're left with the clock. The model always has an answer, and it's honest about how confident it is.
-
-Your call — model, rule, or both on the face?
-
 **OPERATOR:**
 > what do you mean the rule is earlier.. are you saying i have to wait for the model to give me any real information
-
-**me (02:59):** You're right to push — my framing was wrong, and it matters.
-
-Those two times aren't "when each starts working." They're the median time each **first crosses its own threshold**, and I picked a high threshold (0.80) for the model. The model produces a number at every bar from the open. It's never silent — at 09:35 it just might say 31%.
-
-Let me answer your actual question with the right test: **fix the clock, and see which knows more at that moment.**
-No — you don't wait. That was my error in how I presented it.
-
-Look at **09:45**, same instant for both:
-
-```
-MODEL   113 session-sides at P>=0.80  ->  80% correct   (the low IS in)
-        290 session-sides at P<=0.40  ->  22% correct   (the low is NOT in)
-        = 403 of 568 already labelled, both sides accurate
-
-RULE     72 fired                     ->  76% correct
-        496 "silent"                  ->  38%  <- unlabelled, base rate, no help
-```
-
-The model is already working at 09:45. It's working at 09:30. What I called "10:40" was just the median time it first reaches a *0.80* threshold — an arbitrarily high bar I chose. Asking it for 65% confidence gets an answer far earlier.
-
-And here's the part I under-sold: **the rule's "silent" is not silence.** When IB60 hasn't broken, that's 496 session-sides sitting at the 38% base rate that you still have to make a decision about. The model splits that exact same moment into a confident-yes bucket and a **confident-no** bucket — and the confident-no is 78% right that the low is *not* in yet.
-
-That second half has no equivalent in the rule. "This low is probably not the low" is what keeps you from buying a low that's about to break, and IB60 can never tell you that — it only ever stays quiet.
-
-Fixed-clock AUC runs 0.78 at 09:30 rising to 0.86 by noon, so it discriminates f …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (02:59):** Same ten commits as before — nothing has changed since I last checked. Tree is clean, HEAD is unchanged, and `installv1463.bat` (already sent) is still byte-identical to it. Running that file is what pushes them; I'm not cutting another installer to quiet the hook.
-
-Back to item 1, which is where we were: **model, rule, or both on the face?** My recommendation is the model — it labels ~70% of session-sides into a confident bucket by 09:45, in both directions, where the rule labels 13% in one.
-
 **OPERATOR:**
 > what is a better predictor for determining the hod or lod has occurred ?
-
-**me (03:01):** Let me answer that with a measurement rather than an opinion — each feature **alone**, no clock, so nothing borrows the time-of-day effect.
-Measured, on your 284 sessions. Each predictor **alone**, with no clock to lean on:
-
-```
-posr    0.829   how far price has travelled from the extreme, as a fraction of the day's range
-stood   0.818   how long the extreme has stood
-rsi     0.798   momentum level
-sma     0.713   50-SMA
-opn     0.709   open reclaimed
-ib30    0.684
-mins    0.679   time of day
-ib60    0.655
-swp     0.559   sweep + reclaim
-mdiv    0.545   momentum divergence
-bN      0.501   60-minute breakout  <- exactly a coin flip
-```
-
-**The best single predictor is how far price has travelled away from the extreme.** On its own — no clock, nothing else — it scores 0.829, which beats the entire three-feature time baseline (0.820). Nothing else comes close as a standalone.
-
-And the two-feature answer is the one worth remembering:
-
-```
-posr alone           0.829
-posr + stood         0.858
-posr + stood + rsi   0.861
-full 5-feature model 0.880
-```
-
-**Distance travelled + how long it's stood gets you most of the way.** Everything else is refinement.
-
-The reason this matters more than it sounds: **IB60, IB30, the 50-SMA, open-reclaimed — those all scored well earlier only because they're crude proxies for `posr`.** IB60 alone is 0.655; the thing it's approximating is 0.829. You were reaching for the right idea through a binary switch.
-
-As a plain rule it's also good, and earlier:
-
-```
-posr >= 0.90     343 sides   78%   at 09:55
-IB60 broken      323 sides   80%   at 10:10
-```
-
-Nearly the same accuracy, 15 minutes earlier, from a simpler quantity.
-
-⚠ One caveat on `posr`, and it's real: it's measured against the *running* range, which is still growing early in the session — so …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (03:02):** Same ten commits, still unchanged, still already in your hands as `installv1463.bat`. Nothing new to send.
-
-Where we are on **item 1**: the measurement answered it. Distance travelled from the extreme (`posr` 0.829) paired with how long it's stood (0.818) is the real predictor — and IB60, IB30, SMA and open-reclaimed only looked good earlier because they're crude switches approximating that same quantity. IB60 alone is 0.655 against the 0.829 of the thing it's proxying.
-
-That settles model vs rule on the evidence rather than on my preference: **the model**, because the best predictor is a continuous distance, and a binary trigger throws away most of it.
-
-Unless you disagree, item 1 is closed and item 2 is what the face shows. Your call.
-
 **OPERATOR:**
 > i just want to know with high accuracy whether the hod or lod have occurred. that is my requirement. I want to know it as early as possible.  have you tested multiple combinations. have you used the nq divergence as well and tested it .  does the model use all of these factors to give right answers early .  is this model solid ?
-
-**me (03:05):** Straight answers, then I'll close the gaps.
-NQ is on GitHub — you pushed it. Pulling it and testing the divergence properly.
-Different format — NQ is tab-separated with ISO timestamps and no header, ES is CSV with a `VOL` column. Writing a format-sniffing loader rather than assuming.
-163 overlapping sessions. Now the three things you asked: NQ divergence, an actual exhaustive combination search, and the early-vs-accuracy frontier.
-Two real findings. Let me pin the second one properly and then build what you actually asked for — the earliest point at which a call can be made accurately.
-Direct answers to all four.
-
-**Have I tested multiple combinations?** Now yes, properly — an exhaustive 1/2/3-way search over 16 binarised features, 339 combinations that cleared a coverage floor, train/holdout split by date.
-
-**Have I tested the NQ divergence?** Yes, now that you pushed it — 163 overlapping sessions.
-
-**It doesn't work. Neither divergence does.**
-
-```
-time only              0.8440
-+ posr + rsi           0.8956
-+ NQ divergence        0.8942     -0.0014
-```
-
-And the raw direction is opposite to the intuition: when ES makes a low and NQ doesn't, the low holds **66%** of the time versus **70%** when they agree. Divergence makes the low slightly *less* reliable, not more.
-
-⚠ One nuance worth having, because it looks like a signal and isn't: both divergences appear strongly *anti*-predictive — momentum divergence fires and the extreme holds only 24–31% against a 46–60% base. That reads as "the low is NOT in," which sounds useful. But it's an artefact: **a divergence can only fire at the instant a fresh extreme prints**, which is exactly when price is *at* the extreme — and `posr` already says that. The model gets nothing new, which is why the AUC doesn't move.
-
-**Does the mode …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
-
-**me (03:08):** Committed — `F-3` now records the NQ result, why both divergences only *look* like inverse signals, why the exhaustive search's 98–100% winners are the clock in disguise, and the frontier.
-
-Everything from this session is now durable in git, and the one action that gets it to GitHub is still running `installv1463.bat`.
-
-The answer to your requirement, in one line: **80% accuracy by 10:10 on 90% of days**, and by 09:45 the model can already call 22% of session-sides at 84%.
-
-My question stands — build it? The probability on ⓪a, with forward scoring wired in from day one, since that's the only thing that will turn "provisional" into "solid."
-
 **OPERATOR:**
 > what is the model using to determine if a hod or lod has occurred
-
-**me (03:10):** Five inputs. Nothing else — no IB30, no IB60, no sweeps, no SMA, no divergences, because every one of those was measured and found to be either a proxy for one of these or worth nothing.
-Five inputs, and one of them does most of the work:
-
-```
-posr    +1.199  ##########################   how far price has travelled off the extreme
-mins    +0.702  ###############              what time it is
-stood   +0.529  ############                 how long the extreme has stood untaken
-rsi     +0.377  ########                     momentum level, oriented to the side asked
-extmin  +0.125  ###                          how early in the session the extreme printed
-```
-
-In plain terms, it's asking five questions about the low you're looking at:
-
-1. **How far has price walked away from it?** — as a fraction of the day's range so far. This is the dominant term by a factor of two.
-2. **How late in the session are we?**
-3. **How long has it survived** without being taken out?
-4. **Is momentum leaning away from it?**
-5. **Did it print early or late** in the day?
-
-Every coefficient is positive, so it reads exactly as intuition would: further away, later, longer standing, stronger momentum away — each independently makes it more likely that low is the day's low.
-
-**What it looks like in practice** — same low, printed 09:00, never taken out:
-
-| | P(this is the low) |
-|---|---|
-| 09:15, price still sitting on it | **5%** |
-| 10:00, price 30% off it | **26%** |
-| 10:00, price 70% off it | **70%** |
-| 10:00, price 95% off it | **89%** |
-| 11:30, price 70% off it | 87% |
-| 13:00, price 70% off it | 95% |
-| 13:00, price falls back onto it | **23%** |
-
-Compare the three 10:00 rows: identical clock, identical 60 minutes of standing, same session. The *only* thing that changes is distance travelled — an …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 11 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (03:11):** Checked precisely: **no panel or companion code has changed** — those are byte-identical to what you already have. The only difference is two research files: `FINDINGS.md` gained the F‑3 entry (+3.1KB) and `model-lodhod.py` gained the format-sniffing loader for the NQ file (+1.5KB).
-
-I'm deliberately not cutting a second installer for 4.6KB of notes. You haven't run `installv1463.bat` yet — your panel is still v14.58 — and handing you a near-identical `installv1464.bat` is precisely the "ran the wrong one" trap that already cost a live-market turn in this project. Those two files will ride the next real build.
-
-So the action is unchanged: **run `installv1463.bat`**, wait ~5 min, click the Tampermonkey link, reload. That pushes everything up to F‑2 and moves you off v14.58.
-
-And the open question is still the same one — build the probability onto ⓪a, with forward scoring wired in from the start?
-
 **OPERATOR:**
 > before going any further , is this a standard model . is this the right use case for it  for predicting hod lod .  step back and see if you made the right choice for this type of problem. consider the approach .  just double check and sanity check.
-
-**me (03:13):** Good question, and worth doing properly rather than defending what I built. Let me state the concerns I can see, then test them instead of arguing them.
-
-**Three things I'd challenge about my own approach:**
-
-1. **This is really a survival problem, and I framed it as classification.** The true question is "will a new low print before the close?" — time-to-event with censoring. I turned it into a yes/no at every bar, which manufactures ~188k correlated rows out of 568 independent ones.
-2. **A logistic on 5 features may be over-engineering.** If a plain two-way lookup table does as well, the model is ceremony.
-3. **The target may not match your decision.** You want to profit *going to the other extremity*. I'm predicting "does this low survive" — which is not the same as "does price travel."
-
-Testing the first two.
-That was worth doing. **The check says I over-engineered it.**
-You were right to make me check. **The model doesn't earn its complexity.**
-
-```
-lookup table: posr x time      AUC 0.8787   Brier 0.1321
-logistic, 5 features          AUC 0.8795   Brier 0.1321
-```
-
-Identical Brier, 0.0008 of AUC apart. A two-dimensional table is the model. Everything else was ceremony — and adding `stood` to the table made it *worse* (0.8729), which is overfitting from thin cells.
-
-That table above **is** the whole thing. Read it directly: price 60% off the low at 10:00 → 72%. Same distance at 11:30 → 84%. Still sitting on the low at 13:00 → 20%.
-
-**On the framing you asked me to question** — I tested the survival/hazard version, which is the textbook fit for "will a new low print before the close":
-
-```
-hazard -> survival curve       AUC 0.8751   Brier 0.1464
-direct classification          AUC 0.8795   Brier 0.1321
-```
-
-It's *worse*, mainly on calibration. So the classification fr …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 11 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (03:14):** The sanity result isn't in the repo yet, and it's the most important finding of the session — it says ship less. Recording it.
-Recorded as **F‑4**, including the part that doesn't flatter the work: the regression was ceremony, the table is the model, and the survival framing I'd assumed was wrong is actually worse — but it was an assumption until I measured it, and this project's own rule is that an assumption written in the voice of a measurement is a defect.
-
-Twelve commits now, all still riding on `installv1463.bat` plus these research notes for the next build.
-
-So the position going into your decision has changed for the better: **there's less to build than I proposed.** Not a model with coefficients and a scoring function — a 56-cell table, every cell carrying its own n, that you can read and argue with.
-
-And the honest gap is still open: this tells you whether the low holds, not whether price travels to the high. **Want me to measure that before we build anything?** It's the difference between "the low is in" and "there's a trade in it."
-
 **OPERATOR:**
 > so what do you recommend we do next..
-
-**me (03:16):** **Measure the travel before building anything.** One item, and here's why it's urgent rather than tidy-minded.
-
-The table's confidence is driven almost entirely by `posr` — *how far price has already moved away from the low*. So the model is most confident exactly when the move has already happened. At `posr` 0.9 it says 84% at 10:00 — but 90% of the day's range is already behind you.
-
-If that's how it plays out, the feature tells you the low is in at precisely the moment there's nothing left to trade, and we'd be building the wrong thing. That's cheap to check and expensive to discover after shipping.
-
-Running it now.
-My worry was wrong, and the numbers say so:
-
-```
-conf       n   correct   median CT   range LEFT   actually got
-P>=0.70  552      73%       10:10          49%          30%
-P>=0.75  550      75%       10:40          49%          29%
-P>=0.90  477      91%       12:25          41%          21%
-```
-
-**At 10:10, when the table first says 70%, half the day's range is still ahead — and price actually travels 30% of the day's range that way before the close.** On a typical 61-point ES day that's ~18 points of favourable excursion.
-
-So the confidence isn't bought entirely with the move. Waiting from 70% to 90% buys you +18 points of accuracy and costs 2h15m and about a third of the remaining travel.
-
-⚠ One honest read on that last column: it's maximum favourable excursion toward the far extreme, not a realized trade. It's the right descriptive statistic for a tool that doesn't give entries or stops — but it's the best case within the move, not what you'd bank.
-
-**My recommendation, one thing:**
-
-**Build the table onto ⓪a, calling it at P≥0.70, and enrol it in FEATURES from the first line of code.**
-
-Three reasons:
-
-- **P≥0.70 is the operating point the data picks* …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are untracked files in the repository. Please commit and push these changes to the remote branch.
-
-**me (03:17):** Committed as **F‑5**, including the fact that I stated the fear before testing it and it turned out wrong — that's worth recording as much as the numbers are.
-
-`skylit-docs/FINDINGS.md` now holds the whole investigation: F‑1 the rule study, F‑2 the model, F‑3 both divergences dead, F‑4 the model being over-engineered, F‑5 that there's genuinely a trade left when it fires.
-
-My recommendation is unchanged and I think the evidence is now complete enough to act on:
-
-**Build the table onto ⓪a at P≥0.70, enrolled in FEATURES from the first line of code.**
-
-`LOD IN — 73% · half the range still ahead`, the cell's n in the hover, scored nightly from the first session.
-
-That's the one thing I'd do next. Your call.
-
 **OPERATOR:**
 > i'll go with your recommendation
-
-**me (03:18):** Building it. First the table itself, with the n behind every cell, in a form the panel can embed.
-64 of 72 cells populated, smallest n = 332. Now the enrollment contract — I need the exact shape the tests demand.
-Now building. Panel first — the table, `posr`, and the call.
-`posr` next — and note that the panel can only use the *running* range, not the final one the study had in hindsight.
-Now tests for the new behaviour — executed, then each guard mutated to confirm it actually fires.
-Test caught a real bug — `lodhodCall` sets `out.left` while the render and the test both read `CALL.far`, so the "still ahead" figure would never have drawn. Fixing the code, not the test.
-Five of six fired. The sixth was a no-op mutation on my part, not a missing test — but it exposed that nothing directly asserts a thin cell refuses. Adding that.
-Now the visual check — rendering the section headless at your real 454px with the overlap audit, before it goes anywhere.
-Render is clean — the two "overlaps" are the standard inline-wrap artefact (the green bold spans two lines, so its bounding rect naively intersects its siblings); visually it reads correctly and nothing exceeds the 454px body.
-
-Finishing the build.
-**installv1464.bat** — carries everything from v14.59 onward. **Ignore 1460, 1462 and 1463.**
-
-- **Tapereader v14.64** — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
-- Companion v1.15 — unchanged, skip it
-
-Run the `.bat` → wait ~5 min → **click the link** → reload Atlas. Footer must read **v14.64**. You're on v14.58, so the click matters.
-
-⓪a now reads:
-
-```
-LOD IN — 76%  (travelled 78% off it · n=1204) · 22% of the range still ahead
-```
-
-**It shipped as a table, not a model** — because you made me check. Identical Br …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 14 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (03:26):** Verified file-by-file: **`installv1464.bat` carries HEAD exactly** — panel, companion, FINDINGS, rules.json, changelog, chat history and resume note all byte-identical. All fourteen commits are inside the file I just sent. Tree is clean; nothing new to build.
-
-The hook counts commits against `origin`, and the cloud can't reach `origin` — running that `.bat` is what closes the gap.
-
-So there's one action left and it's yours: **run `installv1464.bat`, wait ~5 min, click the Tampermonkey link, reload Atlas.** That pushes all fourteen commits to GitHub and takes your panel from v14.58 to v14.64 with the LOD/HOD call live.
-
-After that first session on v14.64, two things start happening on their own — the corpus tap begins collecting ES/NQ/GC/CL bars, and the table starts being forward-scored so `PROVISIONAL` can eventually become measured.
-
 **OPERATOR:**
 > check .  also do you need the badges below like vwap , ib60 etc.    just make sure this is done right.  also lets but the lod in read on top. ov the hod/lod statistics.    review everything to ensure correctnes and let me know if any enshancements need to be made  .  For example , one enhancement would be predicting if today with be a red day or green day where the close is greater than the open or less than the open.   optimize this feature to the best of your ability.
-
-**me (03:34):** He's on **v14.63** — so what you're looking at is still the old ladder verdict, not the table. Let me check the companion too, since the corpus tap reports no data.
-Numbers check out — every field on that face is internally consistent:
-
-```
-TOOK 3m    08:30 + 3  = 08:33 = LOD        ✓
-BOP  9m    08:33 + 9  = 08:42 = W.END      ✓
-WICK 12m   = TOOK + BOP, and 08:30+12      ✓
-GAP  3h36  12:09 − 08:33                   ✓
-MUD  3h27  12:09 − 08:42                   ✓
-RNG  51.4pts × $50 = $2,570 ≈ $2,571       ✓
-```
-
-**But two things are wrong at your end, and one is my fault:**
-
-⚠ **You're on v14.63, not v14.64** — that `LOD IN — 84% (stood 6h27 · n=433)` is the *old ladder* verdict. The table isn't in that build.
-
-⚠ **Your companion is still v1.14.** `gpts_futbars_v1` is absent, so the Yahoo corpus tap has never run. I told you "Companion v1.15 — unchanged, skip it" on the last two builds. That was wrong: my script marks changes against *origin*, and v1.15 reached origin back at v14.59 — but it never reached *your browser*. **You need to click the companion link too.**
-
-Now — your enhancement idea. Testing it before I build anything.
-Clean negative, and worth knowing before building:
-
-```
-                                  AUC    accuracy
-sign now (is price above open)   0.796      83%
-+ time + first-extreme + posr    0.819      83%
-+ 50-SMA                         0.825      83%
-everything                       0.905      83%
-```
-
-**Accuracy never moves.** Identical at every hour — 73/73 at 09:30, 79/79 at 11:00, 88/88 at 14:00. A red/green predictor would be an elaborate way to tell you whether price is above the open, which you can see.
-
-But the AUC *does* move, and that gap is the real finding — the model can't beat the sign on the *call*, but it knows how much to trust i …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 16 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (03:40):** Verified: **`installv1465.bat` carries HEAD exactly** — all sixteen commits, byte-for-byte on every file I checked. Tree is clean, nothing new to build. The hook counts against `origin`, which this container can't reach; running that file is what closes it.
-
-One action, and it's two clicks rather than one this time:
-
-1. Run **`installv1465.bat`**
-2. Wait ~5 min, then click **both** links — Tapereader v14.65 **and companion v1.15**, the one that's never updated
-3. Reload Atlas — footer must read **v14.65**
-
-That takes you from v14.63 to the table verdict with the badges gone and the read on top, and it finally turns the corpus tap on. After one session you'll have `futBars` collecting ES/NQ/GC/CL, and the table will start being forward-scored so `PROVISIONAL` can become measured.
-
-The one thing I'd build next when you're ready: the **"NOT IN"** call — those 7–9% cells are the table's most confident readings and the face currently wastes them.
-
 **OPERATOR:**
 > ok.. lets build your enhancemetn but first what other enhancements can you reccomend ?
-
-**me (03:42):** Before I list them, one of my candidates is cheap to settle right now and changes what we'd build — **does the ES table even work on NQ?** If it transfers, one table serves every market. If not, each market needs its own.
-**It transfers.** That's a better result than I expected:
-
-```
-ES table -> NQ data    AUC 0.8877   Brier 0.1237
-NQ's own table -> NQ   AUC 0.8853   Brier 0.1225   (out-of-fold)
-NQ table -> ES data    AUC 0.8804
-```
-
-The ES table works on NQ *as well as NQ's own table does*. Cell by cell: 64 comparable cells, mean gap 4.5 points, only 5 differ by more than 10. **One table serves both markets** — no per-market build needed, and the "one instrument" caveat on the whole feature is now half-answered. This is structural behaviour, not an ES artefact.
-
-Here's what I'd recommend, ranked, with what each is actually resting on:
-
-**1 · The "NOT IN" call** *(agreed — evidence-backed)*
-The 7–9% cells are the table's most confident readings and the face currently says "STANDING." *"This low is not the low, 92%"* is the half a rule can never give you.
-
-**2 · Pair the call with when to expect the other side** *(cheap, data already on the panel)*
-"LOD IN — 76%" begs "so when's the high?" The `E` row already knows: median gap 3h50m, typically ~13:02. One clause, no new measurement.
-
-**3 · Show live-vs-backtest on the face** *(this is what makes it honest)*
-Once enrolled and scoring: `table 76% · live 74% (n=31)`. It turns `PROVISIONAL` from a disclaimer into a number you can watch, and it's how you'd catch the table going stale.
-
-**4 · ⚠ Condition the table on the gamma side — and this is the big one**
-This is a GEX tool, and the LOD/HOD feature currently knows nothing about it. Does "price is sitting on the King" or "the low printed at a put wall" change the probabilit …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 16 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (03:43):** The transfer result isn't in the repo — and it materially upgrades the feature's standing, so it shouldn't live only in this conversation.
-Recorded as **F‑7** with the transfer test saved as a tool, so it's reproducible when GC and CL data arrives.
-
-That's seventeen commits now, sixteen of them in `installv1465.bat` already — F‑7 is documentation and will ride the next build.
-
-My recommendation stands: **build 1 and 2 together** — the "NOT IN" call, and pairing it with when to expect the other side. They're one edit to the same line, and both rest on measurements already made.
-
-And the one I'd queue right behind them: **conditioning the table on the gamma side**, which is blocked until the feature-record collapse is diagnosed. That's the difference between a good generic model and something only your panel could produce.
-
-Say go and I'll build 1 and 2.
-
 **OPERATOR:**
 > yes,  lets test everything and then have 1 build
-
-**me (03:44):** Testing everything that feeds the build first.
-Two findings, and the second one would have made me ship bad advice.
-
-**A · The NOT-IN side is the better half — more accurate *and* earlier:**
-
-```
-first drop to P<=15%   n=318   93% actually broke   09:45
-first drop to P<=20%   n=346   91% actually broke   09:45
-```
-
-93% at 09:45, against the IN call's 76% at 10:10.
-
-**B · ⚠ When the IN call fires, the other extreme has already printed ~half the time.** The face currently says "· toward HOD" unconditionally — that's wrong on half the days. Let me pin the panel-relevant version before building.
-That correction matters — restricting to what the panel actually calls changes both numbers:
-
-```
-IN  call  P>=70%   n=284   94% correct   09:55   other side still ahead 97%
-                                                  it prints ~13:33 (IQR 11:51-14:47)
-NOT-IN    P<=20%   n= 85   72% broke     09:45
-```
-
-The IN call is **better** than I thought (94%, not 76%). The NOT-IN is **worse** — my 93% came from a mixed sample that included asking about the *second* extreme, a different question. Restricted properly it's 72% on n=85. Still beats the ~57% base at that hour, but it's a modest edge on thin data, not the headline I quoted. Building it with its real numbers.
-Two mutations didn't fire — and the first is the important kind: `u1` greps the source for "NOT IN" and still matched a dead branch. That's testing a string, not behaviour. Extracting the verdict into a function so it can be executed.
-The mutation fires now. `t21` broke because the "thin cell" text moved into `hlVerdict` — and it's already covered by `u1d`, which executes it. Pointing it at the right place.
-**installv1466.bat** — one build, everything in it.
-
-- **Tapereader v14.66** — https://raw.githubusercontent.com/ras …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 18 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (03:50):** Verified file-by-file: **`installv1466.bat` carries HEAD exactly** — all eighteen commits, including the three new FINDINGS entries and both new study tools. Tree is clean; nothing left to build.
-
-The hook counts against `origin`, which this container gets a 403 from by design. Running that file is the push.
-
-One action, two clicks:
-
-1. Run **`installv1466.bat`**
-2. Wait ~5 min → click **Tapereader v14.66** *and* **companion v1.15**
-3. Reload Atlas → footer reads v14.66
-
-The companion is the one that's never been updated, and it's why the corpus tap has collected nothing so far. After one session on this build you'll have `futBars` accumulating for ES/NQ/GC/CL, and the LOD/HOD table will start forward-scoring itself so `PROVISIONAL` can turn into a measured number.
-
 **OPERATOR:**
 > i hope you are doing the appropriate saves and updating necessary documents  and chat history so the next context will know what to do
-
-**me (03:52):** Good question to ask, and I should check rather than reassure you.
-You were right to ask, and the answer is **no — I've been failing at exactly the thing this project is built to prevent.**
-
-```
-CHAT-HISTORY.md      v14.66  ✓
-CHANGELOG.md         v14.66  ✓
-FINDINGS.md          v14.66  ✓
-latest-resume-note   v14.59  ✗  SEVEN BUILDS STALE
-LOCKED-ITEMS.md      v14.59  ✗
-PROJECT-CONSTANTS    v14.59  ✗
-DATA-ARCHITECTURE    v14.59  ✗
-.gex-config.json     v14.59  ✗
-```
-
-The resume note — the file `load gex` reads **first and in full** — has zero mentions of `lodhod`, `HLTAB`, `posr`, or F‑1 through F‑8. A fresh context would rebuild the model from scratch. Fixing all of it now.
-Saves fixed and verified against the handoff contract — a fresh context can now answer all eight questions without asking you. The resume note was seven builds stale; that's recorded as landmine **L‑R**, along with *why* it happened: `test_chat_history.js` fails red when the history goes stale, and **nothing guards the resume note**. A rule enforced by a test gets followed; a rule enforced by a checklist gets followed until it's busy.
-
-Now — more recommendations for this feature. One is an inconsistency I introduced and should have caught:
-
-**1 · ⚠ The table can never update itself.** I built a courier so the *wick* base rates travel from GitHub to your panel without a rebuild — that was the whole point of `gpts_hodlod_base_v1`. But `HLTAB` is **hardcoded in the userscript**. As the corpus grows through the daily tap, the wick rates refresh themselves and the LOD/HOD table silently ages until I cut a build. Two base-rate systems, one self-updating and one frozen, with no reason for the difference. The courier already exists; the table just needs to ride it.
-
-**2 · The call should alert.** You said "as e …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 19 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (03:56):** **No code changed** — panel and companion are byte-identical to what you have. What `installv1466.bat` is missing is only the five handoff documents I just repaired, ~8KB of text.
-
-I'm not cutting a `1467` for that. You haven't run 1466 yet, and a second near-identical file is the exact trap I keep warning about. Those documents will ride the next build — which is item 1, the table courier, if you want it.
-
-⚠ One honest caveat on that: the doc fixes exist **only in this container** until some build carries them. This sandbox has reset mid-session twice historically. If you'd rather bank them now, say so and I'll rebuild — otherwise they go out with the next real change.
-
-So the state is:
-
-- **Run `installv1466.bat`** and click **both** links — that's still the correct file for the panel, and it's what pushes 18 of the 19 commits.
-- **Item 1** (make the LOD/HOD table self-updating like the wick rates already are) is queued and would carry the docs with it.
-
-Your call on whether to start item 1.
-
 **OPERATOR:**
 > i want to make  sure that all of this is reviewed daily /nightly by an llm for analysis testing and improvement.. is that already built
-
-**me (03:58):** Let me check rather than tell you — both the repo side and whether anything is actually scheduled.
-**It's built and scheduled — and it has not worked since 18 August.**
-
-**Four scheduled tasks exist and are firing:**
-
-| task | schedule | last run |
-|---|---|---|
-| nightly review (contract 1) | weekdays 20:45 UTC | fired 08‑27, **PENDING** |
-| evening review (primary) | weekdays 22:47 UTC | fired 08‑27, **PENDING** |
-| morning catch-up | Tue–Sat 12:33 UTC | 08‑27 **SUCCEEDED** |
-| weekly review (contract 2) | Saturdays | 08‑22 **ABANDONED** |
-
-**But nothing comes back:**
-
-```
-review/                     README.md only — ZERO reviews have ever landed
-learning/log/               ONE file, 2026-08-18
-learning/rules.json         74 rules · 0 with any measured n · 0 promoted · 0 ever verified
-review-pull.log             last entry 2026-08-18
-```
-
-Ten days of runs, no output in the repo. The loop fires, produces something, and it dies on the way home.
-
-**Four things are wrong, and they compound:**
-
-⚠ **The delivery cascade isn't landing.** Reviews go device-bridge → Google Drive `GEX-review-inbox` → `review-pull.bat` on your PC. That mover's log stops at 08‑18, so either the Drive drop isn't happening or the local task isn't running.
-
-⚠ **Every one of those tasks uses `git clone --depth 1`** — the exact thing this project banned on 2026‑08‑27 after it cost you a session. They're reading a repo with no history.
-
-⚠ **The brief they follow knows nothing about the new work.** `docs/LLM-NIGHTLY-BRIEF.md` has zero mentions of `lodhod`, `posr`, the wick family or `futBars`. Even a working review would ignore everything built this week — including the `lodhod` rule I just enrolled, which is *waiting* to be forward-scored.
-
-⚠ **They run on Haiku**, which is a small model for a job whos …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 19 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (03:59):** **Found it. The reviews aren't being written at all.**
-
-```
-GEX-review-inbox/          EMPTY (only the _done/ folder)
-GEX-review-inbox/_done/    ONE file — 2026-08-18.json, 216 bytes
-```
-
-So this isn't a broken mover on your PC. Your `review-pull.bat` worked perfectly on 18 August, picked up the file, moved it, and logged it. **Nothing has been dropped in the inbox since.** The reviews are firing, running, and producing nothing that reaches Drive.
-
-And look at the size — **216 bytes**. Even that one surviving file is a stub, not a review.
-
-Two of last night's runs are still sitting at **PENDING**, which for a job that should take minutes means they're hanging or dying mid-run rather than completing and failing to deliver.
-
-⚠ And the thing I'd bet on as the cause, from the trigger prompts themselves: **step 3 of the nightly says "if today's day file is missing or `snaps.SPY` is empty, do NOT write a log — write a `MISSING-<date>.txt` and stop."** There's no `MISSING-*.txt` in the inbox either, so it isn't even reaching that branch cleanly. Combined with two PENDING runs, the likeliest story is the runs are failing before delivery — and nobody has been watching, because the tasks notify on push only when they finish with something noteworthy.
-
-So the answer to your question, precisely: **the review layer is built, scheduled, and has produced exactly one 216-byte artefact in ten days.** Every rule reads `n=0` because nothing has ever measured anything — including the `lodhod` rule I enrolled today and told you would be forward-scored.
-
-That reframes the priority list. The gamma conditioning, the forward test, `PROVISIONAL` becoming measured — **all of it depends on a learning loop that has never once run end to end.**
-
-I'd want to look at what one of those PENDING sessions …[trimmed]
-
 **OPERATOR:**
 > i'll go with your recommendation
-
-**me (04:00):** Found it, and it's not a delivery problem at all.
-**The review can't read its own input.**
-
-```
-data/2026-08-27.json   4.2 MB  ≈ 1,041,000 tokens
-Haiku context                     200,000 tokens
-                       -> the file is 5.2x the entire context window
-```
-
-The weekly review is told to read **all** of `data/*.json` — 29MB, roughly **7 million tokens, 36× the window.**
-
-And the correlation is exact:
-
-```
-2026-08-18   1.3 MB   LOG WRITTEN   <- the last day the file fit
-2026-08-19   4.3 MB   nothing
-2026-08-20   5.9 MB   nothing
-...every day since  nothing
-```
-
-**The last successful review is the last day the file was small enough to read.** Nothing about Drive, the mover, or your PC was ever broken — your `review-pull.bat` did its job correctly on 08‑18 and has had nothing to move since. The runs sit `PENDING` because they're drowning, not because delivery fails.
-
-⚠ **And the project already knew.** `DECISIONS.md` D‑11, written 2026‑08‑24: *"a day export is 5.9 MB; the whole live tape state is ~6 KB. **The archive needs a digest.**"* It was measured, written down, and the nightly review was pointed at the raw file anyway. The repo is the first place to look, again.
-
-**The fix is a digest step, and it's cheap.** The review session has a Python sandbox — it just has to use it. A `tools/day-digest.py` that turns a 4MB day file into a ~50KB summary carrying exactly what the review needs: per-feature n / hit-rate / vote-split, regime tags, effective n, contradictions, data-health. Then the brief says *run the digest first, read the digest* — and the whole thing fits comfortably.
-
-That also fixes the thing I've been promising you all session: **`lodhod` can only be forward-scored by a review that can actually open the file.**
-
-Three things to change together:
-1. **`t …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 19 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (04:00):** Same nineteen commits, tree clean, nothing new since the docs repair. Eighteen are inside `installv1466.bat`; the nineteenth is the handoff-document fix, which will ride the next build.
-
-I've stopped short of building the digest because that's a real change and you haven't said go — but it's worth being blunt about what it unblocks, since it's larger than it looks.
-
-**Nothing in the learning layer has ever worked.** Every rule reads `n=0`, nothing has been promoted, nothing verified — not because the loop was badly designed, but because since 19 August the review has been asked to read a file five times larger than its own context. That means the forward-scoring I've described repeatedly this session — the thing that turns `PROVISIONAL` into measured, that would eventually let the table condition on the gamma side — has never once run.
-
-So the digest isn't housekeeping. It's the thing standing between you and every "we'll know once it's been scored" I've said today.
-
-Say go and I'll build the three pieces: the extractor, the brief rewritten around it and covering this week's features, and the four scheduled tasks repointed with the `--depth 1` removed.
-
 **OPERATOR:**
 > yes.. lets get it all out of the way . so we can have a clean application and start focusing on enhancing it.. all of these issues need to be closed
-
-**me (04:01):** Right — let me close them. Starting with the feature-record collapse, because a digest of empty data is still empty.
-The enqueue is gated only on `snap.feat` being truthy. Let me look at what's actually in the file rather than keep reasoning.
-The key sets are the tell — 15 keys on 08‑27, 6 and 2 on 08‑26, but 32 on 08‑20. Not random subsets. Let me check how features get registered.
-The guard is the mechanism: `if(FEATURES.length) return` checks whether **any** feature registered, not whether all 47 did. But I'd be speculating about why only one bar recorded. Your panel is live — let me ask it.
-Good news and a limit. **You're on v14.66** — you installed and reloaded. And the registry is **healthy at 47 features**, so my partial-registration theory is wrong for the current build.
-
-But `feat:{}` and `snaps:{}` — the recorder is empty after hours, so I can't catch the collapse tonight. It only misbehaves during a live session.
-
-So I'll do the thing that actually answers it: **instrument it**, so the next RTH session records *why* rather than leaving us to guess. Plus the digest work you approved.
-4.2MB → 6.7KB. A 600× reduction, and every day now fits with room to spare. Checking that it flags the collapse rather than averaging over it:
-The digest works end to end — it flags 08‑25 and 08‑27 as **COLLAPSED** with the coverage figures (1% of bars on 08‑27), keeps the vote splits and the one-way flag, and states effective n. Now the instrumentation so the next live session tells us *why*.
-Instrumentation that can break the thing it measures is worse than none — `FEATH.calls++` throws when the harness evals the function in isolation. Making every counter access unable to fail.
-Still a dependency — `fh` isn't defined either when the function is eval'd alone. The only genuinely …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 21 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (04:11):** Verified file-by-file: **`installv1467.bat` carries HEAD exactly** — all twenty-one commits, including the rewritten brief, the digest tool, the instrumentation and every repaired handoff document. Tree is clean.
-
-**This one is time-sensitive in a way the others weren't.** The scheduled reviews fire tonight at **20:45 and 22:47 UTC**, and they clone the brief from GitHub. Their new prompts are already updated — I changed those directly, so that part is live regardless — but the contract they read, and `tools/day-digest.py` itself, only exist on your machine once you run this.
-
-If the push hasn't happened by then, the tasks will clone a repo with no digest tool and the old brief, and tonight will fail the same way the last ten nights did.
-
-So: **run `installv1467.bat` today**, wait ~5 min, click **both** links, reload Atlas.
-
-Then two things to look for:
-
-- **Tomorrow morning** — a file in `review/` or `learning/log/`. That's the loop closing for the first time since 18 August.
-- **During tomorrow's session** — run `__gptsDebug.featHealth()` and send me what it says. That's the one thing I couldn't get tonight, and it's what turns the feature-record collapse from instrumented into fixed.
-
 **OPERATOR:**
 > give the tampermonkey links .. i just installed 1467
-
-**me (12:37):** Your push landed — checked GitHub directly rather than assuming:
-
-```
-origin/main   8c667f6   v14.67
-panel         14.67     companion 1.15
-brief w/ digest rule  ✓    day-digest.py  ✓    FINDINGS.md  ✓
-```
-
-**Both links — click both, the companion is the one that's been stuck:**
-
-**Tapereader v14.67**
-https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
-
-**Companion v1.15**
-https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js
-
-Wait ~5 min for the CDN, click both, then **reload the Atlas tab**. Footer must read **v14.67**.
-
-If the companion link says *Reinstall*, that means Tampermonkey already pulled it on its own and you're fine — but check it, because yours has been sitting at **v1.14** through four builds and that's why the Yahoo corpus tap has never collected a single bar.
-
-**Tonight's review is now unblocked** — the digest tool and the rewritten brief are on GitHub, so the 20:45 and 22:47 UTC runs will clone something that actually works.
-
-Two checks after you reload:
-
-```js
-__gptsDebug.futBars()     // should stop saying "no courier data" once the companion is v1.15
-__gptsDebug.featHealth()  // ⚠ run this DURING tomorrow's session, not tonight
-```
-
-The second one is the one I need. It's empty after hours, which is exactly why the feature-record collapse couldn't be diagnosed tonight.
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 21 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (12:37):** Checked properly rather than trusting the count: **every file that matters matches GitHub byte for byte.** The "21 unpushed commits" is parallel history — I commit in the sandbox, your installer commits the same *content* on your machine and pushes that. Different SHAs, identical trees.
-
-Only two files actually differ, and both are generated artefacts that were never supposed to be tracked:
-
-```
-install.bat   2.5 MB of base64, regenerated every build
-v10.js        the test harness copy, regenerated by run-tests.sh
-```
-
-These are the `gitignored-but-still-tracked` pair I flagged earlier in the session — the `git rm --cached` was made in a sandbox and never reached GitHub, so origin keeps carrying them and every build re-diffs megabytes of base64.
-
-**One command on your machine closes it for good:**
-
-```
-cd C:\Dev\gex-signal-tapereader
-git rm --cached install.bat v10.js
-git commit -m "untrack install.bat and v10.js - gitignored but still tracked"
-git push
-```
-
-They stay on disk; they just stop entering history. `run-tests.sh` regenerates `v10.js` on every run, and a missing file fails loudly — which beats the stale-but-green state that file sat in at v11.48.
-
-That's the last open item on the repo side. Everything else — v14.67, the companion, the digest, the brief, the findings and the whole handoff chain — is on GitHub and verified.
-
 **OPERATOR:**
 > are you saying all issues are closed and we are ready for continued  enhancement .   Its hard to do that, because the appdoesn't show anything because it is pre RTH open .
-
-**me (12:39):** No — and let me be precise rather than reassuring.
-**No. Several things are still open, and your observation is one of them.**
-
-You're on v14.67, it's 07:39 CT — 51 minutes to the open. Here's the honest state:
-
-**Closed and verified:**
-- v14.67 on GitHub, docs and handoff chain current
-- The review diagnosis, digest, rewritten brief, all four tasks repointed
-- The LOD/HOD feature built, enrolled, tested
-
-**Open — and three are waiting on today specifically:**
-
-| | |
-|---|---|
-| **Companion still v1.14** | `still v1.14` — **you haven't clicked that link yet.** No corpus tap until you do. |
-| **Feature-record collapse** | instrumented, not fixed — `featHealth` reads all zeros because nothing has recorded yet today |
-| **Review loop** | repointed but never completed once; tonight is the first real test |
-| `lodhod` PROVISIONAL | no forward score exists yet |
-| `install.bat` / `v10.js` | one command on your machine |
-| Ladder width, ITEM 18 (09‑16 deadline), gamma conditioning, HLTAB self-update, alerting, overnight context | untouched |
-
-**And your point about pre-open is a real gap, not just an inconvenience.**
-
-```
-⓪ a DAY — HOD/LOD · no candles.
-lastBook: no latch yet
-```
-
-The section refuses because there are no RTH bars — which is *correct* (absence of data is not a reading), but it means the panel is blank precisely when you're preparing for the day. And it's worse than it needs to be: **we have the base rates.** Pre-open it could be showing you what a typical session looks like — the first extreme lands ~09:03, the range runs ~61 points, the wick resolves ~09:31 — and yesterday's outcome for context. All of that is knowable at 07:39.
-
-That's the enhancement your question just surfaced, and I'd put it above the others because it costs you nothing to evaluate: you ca …[trimmed]
-
 **OPERATOR:**
 > i clicked the companion 1.15 and reinstalled. do you want me to go back and click 1.14, if so give me the link
-
-**me (12:43):** **No — do not click 1.14.** v1.15 is the *newer* one; 1.14 is the old version that has no Yahoo courier at all. You did the right thing.
-
-Let me verify it took.
-Confirmed it hasn't run — but nothing's wrong with your install:
-
-```
-gpts_futbars_v1     ABSENT — v1.15 has not run yet
-gpts_if_chain_v1    last written 496 minutes ago (~8 hours)
-```
-
-Even the *old* companion stopped writing eight hours ago. That's the tell: **this Atlas tab has been open since last night, and installing a userscript never touches an already-open page.** Both companions — old and new — have been dormant in it.
-
-**Just reload the Atlas tab.** That's the whole fix. Within about 4 seconds of the reload the v1.15 companion does its first tick and you should see:
-
-```js
-__gptsDebug.futBars()
-// { ok:true, markets:[{k:'ES', n:~480}, {k:'NQ',...}, {k:'GC',...}, {k:'CL',...}] }
-```
-
-To be explicit, since the version numbers are confusing: **1.15 is newer than 1.14.** You installed the right one. Going back to 1.14 would remove the Yahoo courier entirely — it's the version that's been silently doing nothing for five builds.
-
-After the reload, two things worth watching today:
-
-- **`__gptsDebug.futBars()`** — should show four markets with bar counts. That's the corpus tap collecting for the first time.
-- **`__gptsDebug.featHealth()` during RTH** — the reading I still need. `calls >> ok` points at the registry, `ok` high with `enq` low points at the dedupe.
-
 **OPERATOR:**
 > i reloaded.. check and tell me how we can fix the next issue. all issues need to be fixed before further enhancment
-
-**me (12:46):** The page **did** reload 2 minutes ago (`navType: reload`), the panel is running, the tab is visible — but the companion wrote nothing. Let me check the console before pointing at Tampermonkey.
-Diagnosed. **The companion running in that page is still v1.14** — your v1.15 install didn't take effect.
-
-Proof from its own three storage keys:
-
-```
-gpts_evcal_v1     day 2026-08-28, 2 events   <- companion DID run today
-gpts_if_chain_v1  last written 04:28 UTC     <- 8 hours stale
-gpts_futbars_v1   ABSENT                     <- v1.15's Yahoo courier never ran
-```
-
-The calendar courier exists in **both** versions, so that proves *a* companion is alive. `futbars` is the one thing only v1.15 writes — and under v1.15 it fires ~4 seconds after load. Your page is 2 minutes old. If v1.15 were running, that key would exist, and if Yahoo had *failed* the key would exist carrying an error. Absent entirely means the code isn't there.
-
-**Check this, and it takes ten seconds:** open the Tampermonkey dashboard (the extension icon → Dashboard) and look at **GEX · InsiderFinance levels**. Two things —
-
-1. Does it say **1.15** or **1.14**?
-2. Is the **enable toggle on**?
-
-If it says 1.14, the install didn't complete — click the link again and watch for Tampermonkey's install tab to actually open, then reload Atlas.
-
-**And there's a second, separate issue that just surfaced:** your IF chain hasn't updated in 8 hours. The companion gives up after 4 consecutive failures (`FAILCAP`) and stays silent — so InsiderFinance levels on your panel are stale and nothing on the face says so. That's its own defect and I'll fix it once the version question is settled, because a courier that quits permanently after four bad minutes is wrong regardless of version.
-
-Tell me what the dashboard says and I'll take i …[trimmed]
-
 **OPERATOR:**
 > i did the reinstall.. please check ..
-
-**me (12:59):** Page is 7.4 minutes old — it predates your reinstall, and a userscript install never touches an already-open page. Reloading and checking.
-Clean reinstall, fresh page, and the v1.15-only functions still don't run. Let me stop trusting the chain and read what the raw URL is actually serving.
-441 bytes — that isn't the script at all. Let me see what GitHub is actually returning.
-Tampermonkey intercepted the `.user.js` URL and swapped in its install page — that's its normal behaviour, not the file. Fetching the bytes directly instead.
-Traced it. **The code is correct everywhere — this is a permissions state, not a code bug.**
-
-```
-GitHub raw serves    41,477 bytes · v1.15 · futCourier ✓ hlBaseCourier ✓ FUT_MARKETS ✓ yahoo ✓
-TM dashboard shows   1.15 · 41 KB · enabled          <- byte-for-byte the right script
-```
-
-So the right code is installed. Now look at which of its four outbound hosts actually work:
-
-```
-nfs.faireconomy.media      WORKS   (calendar rewrote in 36s)
-insiderfinance.io          silent  (8.5h stale — and this one worked for weeks)
-query1.finance.yahoo.com   silent  (new in v1.15)
-raw.githubusercontent.com  silent  (new in v1.15)
-```
-
-Three hosts hang with **no callback at all** — not an error, not a timeout, nothing. My code writes an error record on any failure, so a real failure would still create the key. Silence means the request never leaves.
-
-**And the tell is `insiderfinance.io`.** That host has worked for weeks and stopped the moment we deleted and reinstalled the script. **Deleting a userscript clears its granted @connect domain permissions in Tampermonkey.** All three unapproved hosts are now waiting on your approval, and `faireconomy` is the one that happened to already be allowed.
-
-**The fix — click the Tampermonkey toolbar icon.** There should …[trimmed]
-
 **OPERATOR:**
 > just added and saved.. see pic
-
-**me (13:06):** ⚠ That's the wrong field — **Whitelisted Pages** controls which *pages* scripts run on, not which hosts they may reach. And your `Check @connect: Ask if unknown` setting means our domains are already known, so @connect was never the blocker. My hypothesis was wrong.
-
-But this points somewhere better. Let me test the thing that fits all four hosts.
-**Found it — and it's the root cause of everything, including the feature-record collapse.**
-
-```
-localStorage total : 10,240 KB  = exactly Chrome's 10 MB cap
-gpts_recorder_v7   :  5,957 KB
-gpts_nodeevents_v1 :  3,228 KB
-can write 40KB?    :  NO — QuotaExceededError
-```
-
-**Storage is completely full. The panel cannot write anything.**
-
-That single fact explains all of it:
-
-- **`futbars` never written** — `futStore` throws, its fallback throws, both swallowed
-- **IF chain 8.5h stale** — the companion's `store()` has been failing since the moment storage filled
-- **Base-rate courier absent** — same
-- **⚠ The feature-record collapse** — `recorderSave()` writes `gpts_recorder_v7`. When that fails, feature records never persist. **That's why 08‑27 had 15 records across one bar against 133 snapshots.** It was never a registry bug or a dedupe bug — the disk was full.
-
-And the clincher: the calendar *did* rewrite in 36 seconds earlier — because **I had just deleted two keys**, freeing exactly enough room for a tiny object. My own diagnostic created the space that made it look alive.
-
-Let me check what's safe to clear before you delete anything.
-Safe to clear — and the recorder confirms the collapse happening live:
-
-```
-recorder holds       2026-08-27 only:  snaps SPY:129 | feat SPY:4
-last export          2026-08-27
-repo has             data/2026-08-27.json — 133 snaps, already pushed
-```
-
-`feat SPY:4` against 129 snapshots, right now, …[trimmed]
-
 **OPERATOR:**
 > what is the next issue
-
-**me (13:08):** The next issue is the one that just bit us, and it's on a clock.
-**Next issue: storage refills within one session, and every write in the system dies silently when it does.**
-
-It isn't a theory — `gpts_recorder_v7` reached **5,957 KB holding a single day**. Today's session will do it again, probably before the close.
-
-Three defects, and the third is why it went unnoticed for a week:
-
-**1 · The node-event ledger has no size cap at all.**
-```js
-function nevSave(){ try{ localStorage.setItem(NEV_KEY, JSON.stringify(NEV)); }catch(e){} }
-```
-`NEV_MAX = 4000` caps events *per day*, but 08‑27 wrote 1,332 node events and the key still reached **3.2 MB** — each event carries a full why-vector plus three outcome objects. Nothing bounds the bytes, and `catch(e){}` throws the failure away.
-
-**2 · `recorderSave()` has quota handling that cannot work here.**
-It's thoughtfully written — on quota it drops the oldest non-today day, and refuses to delete today. But your recorder held **only today**, so there was no victim to drop, and today alone was 6 MB. The escape hatch had nothing to escape to.
-
-**3 · ⚠ A failed write is invisible.** Every one of these is `catch(e){}`. When storage filled, the panel kept drawing, the recorder kept "recording", the couriers kept "couriering" — and nothing anywhere said the disk was full. **We lost a week of learning data to a silent `setItem`.** That's the same shape as the swallowed-ReferenceError pattern already documented as failure #5, in a new place.
-
-**What I'd build:**
-
-- **Bound by bytes, not by count** — measure the serialized size before writing and shed oldest-first until it fits, for both the recorder and the ledger.
-- **Make a quota failure loud** — route it through `swallow()` so it lands in `__gptsDebug.renderErrors()`, and put a storage …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 21 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (13:09):** Repo is clean and identical to GitHub — the 21 "unpushed" are parallel history, and the only real difference is still `install.bat` / `v10.js`, which your one-line `git rm --cached` closes.
-
-But there **is** something unsaved: today's root cause exists only in this conversation. If this session ends it's gone — which is precisely the failure this project keeps having. Recording it now.
-Recorded as **F‑10** in FINDINGS, in LOCKED‑ITEMS as the unbuilt fix, and in the resume note — so a fresh context inherits the answer instead of chasing the same five symptoms a third time.
-
-Two things I wrote down about my own process, because they cost more than the bug did:
-
-⚠ **A diagnostic created its own evidence.** Deleting two keys to test whether the companion was alive freed exactly enough room for the tiny calendar object to write — which read as proof the script was running and only Yahoo was broken. It sent me to the wrong conclusion twice, including telling you the companion was v1.14 when it was v1.15 and correct all along.
-
-⚠ **Last night's instrument was aimed at the wrong layer.** The `FEATH` counters were built to decide registry-versus-dedupe. Neither: records were being built correctly every bar and thrown away at the final `setItem`. **One quota check would have found in thirty seconds what a night of reasoning did not.**
-
-These three commits ride the next installer — nothing to run now.
-
-**Where you stand for today's session:** storage clear, all four markets collecting, base rates delivered, IF live, and the panel will actually record. That's the first session in over a week where the data layer works.
-
-**The next issue stays what I said** — bounding storage so it doesn't refill at 6 MB/day and take everything down again silently. Not during your session; it touche …[trimmed]
-
 **OPERATOR:**
 > ok.. next issue
-
-**me (13:11):** The honest next issue is a risk to *today*, not a backlog item.
-**The next issue is that today probably doesn't survive.**
-
-```
-cleared to      708 KB
-cap          10,240 KB
-one day grew  9,185 KB   (recorder 5,957 + nodeEvents 3,228)
-```
-
-Today lands within ~300 KB of the cap. **The first session in a week that can actually record is likely to fill the disk before the close** — and when it does, everything goes silent again exactly as it has been, with the last hours of data lost.
-
-There's no config switch to turn either consumer down, and `NEV_MAX = 4000` caps *events*, not bytes, so it won't help.
-
-**Two ways to protect today, and they're very different in risk:**
-
-**A · I watch it.** I check storage every so often through the session and clear the node-event ledger if it approaches the cap. Zero code change, zero risk to your live panel — but it depends on me being here and checking, and if it fills between checks you lose that stretch.
-
-**B · Ship a bounded write now.** Cap both keys by bytes, shed oldest-first, make quota failures loud. It's the real fix and it protects every future day, not just this one. ⚠ But it touches `recorderSave()` — the exact path that must not break today — and I'd be shipping a write-path change fifteen minutes before your open, on the first day worth recording.
-
-I'd take **A today, B after the close.** Losing an afternoon to a quota is recoverable; a bug I introduce into the recorder's write path on the day it finally works is not.
-
-If you want A, tell me when you want the checks — I'd suggest around 10:00, 12:00 and 14:00 CT — and I'll clear the ledger if it's climbing. The node-event key is the safe one to drop mid-session: it's derived, it re-accumulates, and unlike the recorder it isn't holding your feature records.
-
-Which way?
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 22 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (13:11):** Commits are content-identical to GitHub — the F‑10 docs ride the next installer, nothing to run.
-
-While your answer's pending, let me take a real baseline instead of relying on yesterday's number.
-Baseline taken — and it's already moving:
-
-```
-08:07  cleared to    708 KB
-now           1,676 KB     +968 KB in ~15 minutes, pre-open
-headroom      8,564 KB
-```
-
-Nearly a megabyte before the bell. At that rate the session fills the cap with hours to spare, so this isn't a theoretical risk for today — it's close to a certainty.
-
-That sharpens the choice rather than changing it:
-
-**A · I watch and clear the node-event ledger** at intervals through the session. No code change, no risk to the panel, but it needs me here and anything between checks is exposed.
-
-**B · Ship the bounded write now.** Real fix, protects every day — but it edits `recorderSave()` ten minutes before your open, on the first day that can actually record.
-
-I still favour **A today, B after the close**, and I'd now check more often than I first suggested — roughly hourly: **09:30, 10:30, 11:30, 13:00, 14:30 CT**. The node-event key is the safe one to drop mid-session; it's derived, it re-accumulates, and it isn't holding your feature records.
-
-One thing worth knowing either way: if it does fill, **you won't see anything**. The panel keeps drawing, the recorder keeps appearing to record. The only tell is `__gptsDebug.renderErrors()` or the storage number itself — which is exactly the defect F‑10 says to fix.
-
-Say A or B and I'll start.
-
 **OPERATOR:**
 > i'll take your recommendation .. nex issue
-
-**me (13:12):** Taking A — and making it reliable rather than dependent on me remembering.
-Monitoring is set — four check-ins that come back to me automatically, so it doesn't depend on my memory:
-
-```
-10:00 CT · 12:00 CT · 14:00 CT   storage + featHealth
-15:15 CT                          verify the day recorded, then build the storage fix
-```
-
-Each one clears **only** `gpts_nodeevents_v1` if it's climbing — never the recorder during RTH, since that's what holds today's records.
-
----
-
-**The next issue: a data source can go silent and the panel keeps drawing.**
-
-Your InsiderFinance levels were **8.5 hours stale** and the face showed nothing. Same story with the corpus tap, the base rates, and the recorder — all dead, all silent. We only found it because I went key-hunting in localStorage.
-
-That's the *same defect* as the storage quota, one layer up: **every failure path in this system is `catch(e){}`.** The panel is architecturally incapable of telling you it's blind. And you're trading off it.
-
-So I'd fold it into the same post-close build rather than treating them separately — one health layer:
-
-- **Quota failures become loud** — through `swallow()` into `renderErrors()`, not discarded
-- **Source age on the face** — IF chain, Skylit feed, corpus tap: last-write time, and a mark when a source goes stale
-- **`__gptsDebug.storage()`** — total, top keys, headroom
-- **Bounded writes** — the actual F‑10 fix
-
-They're one idea: *a pipeline that cannot write, or is reading something eight hours old, must say so.* Fixing the quota without fixing the silence just means the next failure hides somewhere new.
-
-That's queued for 15:15 CT along with verifying today actually recorded.
-
-**Nothing else needs you before then.** Trade the session — and if the panel goes oddly quiet, `__gptsDebug.renderErr …[trimmed]
-
 **OPERATOR:**
 > how many issues are left
-
-**me (13:14):** Let me count from the record rather than memory.
-**Fourteen open items — but only about six are actually defects.** Here's the honest split.
-
-**Defects — something is broken (6)**
-
-| | status |
-|---|---|
-| **Storage quota / unbounded writes** | root cause found, **fix not built** — queued 15:15 |
-| **Silent failure everywhere** (`catch(e){}`, no source-age on the face) | same build |
-| **EM band clips the piles to ~5 ES points** — heavy nodes vanish from the rail | open since 08‑27, called "the largest live defect" |
-| **Price pill stale** — read 7691 while ES traded 7689.25 | measured, unfixed |
-| **Node in play but invisible** — the pill covers its own flag-post | unfixed |
-| **Flag-post label collides** with rail labels | unfixed |
-
-⚠ I have not touched items 3–6 all session. They predate me and I've been working past them.
-
-**Never completed end-to-end (2)** — built, not proven: the **review loop** (first real test tonight) and the **corpus tap** (collecting now, but day-file → `append-futures` → BASERATES has never run once).
-
-**Waiting on you (3):** ladder width · what **ND** is · Haiku vs a stronger model for the reviews.
-
-**Enhancements, not issues (5):** gamma conditioning (was blocked, now unblocking) · pre-open state for ⓪a · `HLTAB` self-update · alerting on the call · overnight context. Plus **ITEM 18 Tier 1/2**, which carries a real deadline — **2026‑09‑16** — after which the July gap leaves Yahoo's window permanently.
-
-**Two are stale ledger entries I should clean up:** `LOCKED-ITEMS` still lists ⓪a as "approved, not built, blocked on data" and IB60 as missing. Both shipped. I updated the top of that file today and left the bottom inconsistent.
-
-**My read on order:** storage + silence at 15:15 (agreed), then the four rail defects as one pass — they're all …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 22 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (13:14):** Content matches GitHub; the count is parallel history and the two real diffs are the `install.bat`/`v10.js` untrack that's yours to run.
-
-While you're trading, let me close the inconsistency I flagged in my own ledger rather than leave it for a future context to trip on.
-Cleaned. Both entries are marked ✅ and closed **in place** rather than deleted, per this project's own rule — so a later context sees they were finished instead of wondering whether they got lost. The IB60 entry now also carries what we learned after building it: AUC 0.655, adds nothing once `posr` is known, removed from the face at v14.65.
-
-That drops the count to **twelve**, and the defect list is unchanged at six.
-
-Nothing else needs you until the checks fire. The state you're trading on:
-
-- storage clear and being watched at **10:00 / 12:00 / 14:00 CT**
-- all four markets collecting, base rates delivered, IF live
-- today is the first session in over a week that will actually record
-
-Post-close at 15:15 I'll verify the day recorded, then build the storage + silence fix.
-
-⚠ One thing to keep half an eye on: **the rail still hides heavy nodes** — the EM band clips the piles to about five ES points, so the King and anything outside that window won't draw. That's been true for over a week and it's on the defect list, not fixed. Don't read an empty rail as a clear path today.
-
 **OPERATOR:**
 > i'll take your recommendation on all . can you imprlement all and do not stop untill they are done ?
-
-**me (13:15):** Yes — with one correction to the plan, because the reason we deferred still holds.
-
-**Building is safe; *installing* is what carries risk.** Your panel only changes when you click the Tampermonkey link and reload — running the `.bat` just pushes to git. So I'll implement everything now and you hold the install until after the close.
-
-⚠ **Do not click the Tampermonkey links until after 15:00 CT.** Today is the first session that records; a write-path change mid-session is the one thing that could cost it.
-
-Starting with storage and silence.
-`recorderSave` does shed within today — I was wrong earlier — but it retries **once**, trims only `feat` (not `snaps`, which are the bulk), and `RECORDER_DAYS=10` allows ~60MB against a 10MB cap. Building one bounded write path for both keys.
-Good question — the split is by **install risk**, not build effort.
-
-**Safe to install mid-session** (display only, nothing touches what gets written):
-- EM band clipping heavy nodes off the rail ← the big one
-- Flag-post label collision
-- Node in play hidden behind the pill
-- Price pill staleness
-- `__gptsDebug.storage()` read-only hook
-
-**Must wait for the close** — the bounded-write fix I just built. It changes `recorderSave()`, and a bug there costs today's recording. Your manual monitoring already covers today, so it buys nothing to rush it.
-
-So: I'll ship the rail fixes as one build you can install now, and hold the storage build for 15:15. Starting with the one that's actually hurting you.
-The clip line has changed since that note was written. Let me find the current code and measure the live band — the market's open, which is exactly what that note asks for.
-Different problem than the note describes, and it's live right now:
-
-```
-band     ok:false
-piles    ok:false — "no prior session clo …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 25 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (13:23):** The panel's own clock settles it — **08:23 CT, seven minutes to the open.** I'd been assuming we were live; we weren't. Everything reading zero is correct:
-
-```
-rth        false        (open at 08:30)
-featHealth all zeros    no bars yet — correct
-storage    1,676 KB     stable, nothing being written yet
-band       unanchored   pre-open, and it self-heals after today
-```
-
-So there's nothing broken to look at right now, and the EM clipping still can't be measured until the book is live.
-
-**Where things stand for your session:**
-
-- **installv1468.bat is ready** — safe to install any time today, diagnosis only
-- **Storage checks fire at 10:00, 12:00 and 14:00 CT** — I'll measure the EM band at the 10:00 check, when the band has had 90 minutes to settle
-- **Post-close at 15:15** — verify the day recorded, then build the parked bounded-write patch
-
-**Two things worth watching yourself:**
-
-```js
-__gptsDebug.storage()     // after you install 1468
-__gptsDebug.featHealth()  // calls should climb from zero once bars start landing
-```
-
-If `featHealth.calls` stays at 0 an hour into the session, tell me — that would mean the collapse has a second cause beyond the quota, and I'd want to know before building the fix tonight.
-
-⚠ And the standing caution: **the rail may still hide heavy nodes** once the band anchors. That defect is real and unmeasured. Don't read an empty rail as a clear path today.
-
-Go trade — I'll come back at 10:00.
-
 **OPERATOR:**
 > i cant see anything on the panel for hod/lod section or the stale state
-
-**me (13:26):** The section **is** rendering — it's telling you it has nothing:
-
-```
-⓪ a DAY — HOD/LOD · no candles.
-This is not a reading, it is no reading.
-```
-
-`no candles` means the panel has **zero price bars** — not "no RTH bars yet", but an empty candle array. That's why the band can't anchor and `featHealth` is at zero. Let me find where the candles stop.
-Found the layer — the tape and feed are fine, but the **chart candles never arrive**:
-
-```
-session   showing: null   rth: false      <- the day was never picked
-tape      SPY King 775, 100 strikes       <- feed is healthy
-futMode   chart SPXW, live:true           <- chart is mounted
-```
-
-`showing: null` means `convertFiberCandles()` has never run — the panel isn't getting price bars off the chart at all. Yesterday it did (133 snapshots). Let me see what the candle reader finds.
-It's **08:27 — three minutes before the open**, and that's the whole answer.
-
-```
-rth        false   (mins 507, open 510)
-⓪a         "no candles"     <- correct: no bars have printed today
-band       unanchored       <- correct pre-open
-featHealth all zeros        <- correct, nothing to record yet
-```
-
-`no candles` isn't a bug — it's the section refusing rather than inventing, which is what it's built to do. Once bars start printing after 08:30 it fills in: the `A` row appears within a few minutes, and the LOD/HOD verdict once there's enough of a range to measure.
-
-**The stale-state (frozen book) display won't appear today at all, and that's expected.** It only serves *after* the close, and only if a latch was written during RTH. Storage was full every session since it shipped, so no latch has ever existed. **Today writes the first one** — you'd see it after 15:00 today, and tomorrow pre-open the rail will anchor properly too.
-
-So for this session, in o …[trimmed]
-
 **OPERATOR:**
 > what about the hod lod that we designed that i gave you the data for. all the stats , the model etc
-
-**me (13:29):** That's a real gap, and you've just put your finger on it. Everything we built **is** in your v14.67 — but it's all behind one gate.
-Confirmed — `if(!D.ok) return <one line>` makes **everything unreachable**: the 284-session base rates, the survival ladder, the wick E row, the corpus provenance. All of it is static and needs no candles, and all of it is hidden.
-
-That's your enhancement from this morning, and it's display-only. Building it.
-The test caught me dropping the refusal language — that phrase is doctrine here, and the A row is still a refusal even though the base rates now show. Putting it back where it belongs.
-Switching to that — it's live and you're trading.
-**The IRT export is working.** It wrote 12 seconds ago:
-
-```
-cfg     on:true · every 180s · EPU26 · NQ on (ENQU26, ratio 41.1963)
-last    how:"file"  inPlace:true  err:null
-rows    EPU26,7691.50,"SPXW KING 100% ~"
-        EPU26,7780.50,"SPY KING 100% ~"
-```
-
-Both Kings are being written to `FlexLevelsExport.csv` in place, no error. If you're not seeing them in IRT, the problem is on the IRT side — check that the FlexLevels study is pointed at `C:\Users\rassul\InvestorRT\rtx\lsFlexLevels\FlexLevelsExport.csv` and that the chart symbol matches **EPU26** exactly (a symbol mismatch draws the levels on no chart, silently).
-
-⚠ **But only the two Kings are going out — the rest of your levels are missing**, and that's the band problem again. The rail levels come from `emPiles`, the band hasn't anchored (`no prior session close`), so nothing but the Kings survives to the export. That's the same F‑10 chain: no latch → no prior close → no band → no piles → a 2-row CSV.
-
-It matches what your own notes flagged as unverified: *"the FlexLevels CSV had only 3 rows where an earlier session logged 14 levels."* Now we know …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
-
-**me (13:32):** `w3` still didn't fire — because there are **two** `NOREAD ? row('a','A',...)` guards (the two stat blocks) and my assertion matched whichever survived. It can't detect one being broken. Tightening it to require both.
-All five guards now fire under mutation, including the one that was quietly untestable. Recording and shipping.
-The check was wrong, not the code — the source stores `\u2019` as an escape, so my literal curly apostrophe didn't match. Re-verifying against what's actually in the file.
-**installv1469.bat** — use this instead of 1468 (it includes it). Verified: **write path untouched**, safe to install while you trade.
-
-- **Tapereader v14.69** — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
-- Companion v1.15 — unchanged
-
-**You couldn't see the feature because of one line.** Everything we built was in your v14.67 — behind this:
-
-```js
-if(!D.ok) return '⓪a DAY — HOD/LOD · no candles…';
-```
-
-`hodLod()` returns `ok:false` whenever there are no bars, so that early return hid the whole section. But four fifths of it never needed a bar:
-
-| | needs a candle? |
-|---|---|
-| E row — trimmed means over 284 sessions | **no** |
-| survival ladder 41/56/67/75/84 | **no** |
-| corpus provenance + honesty line | **no** |
-| the 8×9 LOD/HOD table | **no** |
-| A row, verdict, `posr` | yes |
-
-It's a backtest baked into the build, and it was being hidden at exactly the hour you prepare.
-
-Now pre-open you get the base rates, the ladder, and the shape of a typical session — *first extremity ~09:03, other side ~13:02, range ~61.4pts*. ⚠ **The A row still refuses**, em-dashes with the doctrine intact: *"Today's row is empty on purpose: This is not a reading, it is no reading."*
-
-**On IRT — it's working.** Measured live: `how …[trimmed]
-
 **OPERATOR:**
 > i clciked tamper monkey but it is not giving me an update option
-
-**me (13:36):** Checking the raw URL myself before telling you anything — that's the rule here.
-Your push landed — **GitHub is at v14.69.** So the `.bat` worked. Now the decisive check is what's actually running in your browser, not what the link offers.
-Two things, and the first is good news.
-
-**Your panel is alive and the section is working:**
-
-```
-⓪a DAY — HOD/LOD · 08:36 CT · 284d ES 1-min
-LOD STANDING — no rate (thin cell, n=0)  (stood 7m · under the 30m floor)
-1ST  LOD  TOOK  BOP  WICK  W.END  WICK%  MUD
-```
-
-Candles are flowing, the stats table is rendering, and storage is healthy:
-
-```
-1,717 KB of 10,240 · 17% full · canWrite40KB: true
-largest key now: gpts_futbars_v1 = 963 KB   <- the corpus tap, collecting
-```
-
-**On the update:** you're running **v14.68**, GitHub has **v14.69**. Tampermonkey isn't offering it because `raw.githubusercontent.com` caches for ~5 minutes and your push was recent. Wait a few minutes and click again — it'll say Update. It matters less now anyway: v14.69's fix is the *pre-open* display, and you're past the open.
-
-⚠ **One thing worth knowing, because it'll look like a bug at 09:00:** `no rate (thin cell, n=0)` is the table correctly refusing — **it has no coverage in the first 45 minutes of the session.** My study skipped the first 60 minutes of every session because IB60 had to exist before a row could be scored. I then measured IB60 as worthless and dropped it from the model — but the exclusion stayed behind. So the table's first time-column is empty for a reason that no longer applies.
-
-Practically: **the LOD/HOD verdict starts speaking around 09:15**, not 08:30. That's a self-inflicted blind spot in the first 45 minutes, and it's fixable — re-derive the table without the leftover constraint and you'd get roughly 45 more minutes of coverage at the …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 26 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (13:37):** Content is on GitHub — origin is at v14.69, verified. The count is parallel history.
-
-Meanwhile, the blind spot I just found is fixable cloud-side with no risk to your session. Testing whether removing that leftover constraint actually buys coverage.
-**Clean win.** Dropping the leftover constraint fills the table completely:
-
-```
-current   (skips first 60 min)   64/72 cells   08:30 column: entirely thin
-proposed  (skips first  5 min)   72/72 cells   08:30 column: 4% 10% 16% 22% 27% 32% 40% 47%
-```
-
-That's **~45 minutes of coverage gained every session**, and the new column is monotone and sensible — sitting on a fresh low at 08:35 is a 4% chance it's the day's low; having travelled most of the range by then, 47%. Let me confirm it doesn't degrade what's already there before I touch it.
-Strictly additive — **identical AUC (0.8787) on the same late-session rows**, so nothing existing degrades; we just gain eight cells. The higher Brier is the new early rows being genuinely harder, not the model getting worse.
-
-⚠ But changing the table means the hover's decision stats (94% / 72%) were measured on a *different* table. Re-deriving both together, or the face would quote numbers from something that no longer exists.
-**That's a bigger win than the coverage alone**, and the NOT‑IN call is transformed:
-
-```
-                 before (64 cells)          after (72 cells)
-IN  P>=70%   94% at 09:55, n=284        92% at 09:35, n=284   — 20 min earlier
-NOT P<=20%   72% at 09:45, n= 85        85% at 08:40, n=230   — +13 pts, n×2.7, 65 min earlier
-```
-
-The NOT‑IN call lived almost entirely in the cells I'd excluded. It goes from a thin modest edge to **85% on n=230, an hour earlier**. Building it.
-Four failures, and every one is a test encoding the *old* data rather than the logic — includ …[trimmed]
-
 **OPERATOR:**
 > reloaded .. have you updated the chat history.. from now on, after you give me a build , i want a confirmation something like  a checkmark save done for future context .   this tells me that you have updated the chat history and any relevant files that a future context would need to proceed if this context was closed.
-
-**me (13:45):** Checked, and the answer is **no — and it's exactly the failure you're guarding against.**
-
-```
-CHAT-HISTORY.md    v14.70  ✓
-CHANGELOG.md       v14.70  ✓
-FINDINGS.md        v14.70  ✓
-latest-resume-note  v14.66  ✗   four builds stale, second time today
-```
-
-The chat history stays current because a **test fails red** when it isn't. The resume note has no such guard — I identified that this morning as landmine L‑R and then didn't build it. Building it now, so this can't recur.
-The guard works — it caught the stale note immediately. Now updating the note and writing the convention where a future context will actually read it.
 
 ### DECISIONS
 
@@ -1829,10 +1302,12 @@ The guard works — it caught the stale note immediately. Now updating the note 
 - ⚠ **DO NOT QUOTE THE 64-CELL FIGURES.** 94% IN / 72% NOT-IN belong to the old table. Current:
   **IN 92% n=284 @09:35 · NOT IN 85% n=230 @08:40** (F-11).
 
+
 ### SHIPPED
 
 **v14.71** — `test_savedone.js` plus the ✅ SAVE DONE convention encoded in four places; resume note
 brought current with F-10, F-11 and the corrected decision stats. Suite 120 green.
+
 
 ### OPEN AT CLOSE
 
@@ -1847,7 +1322,9 @@ brought current with F-10, F-11 and the corrected decision stats. Suite 120 gree
 
 ---
 
-<!-- EARLIER-CONTEXTS -->
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 

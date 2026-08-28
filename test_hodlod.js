@@ -227,8 +227,26 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   ok(/descriptive/.test(SD) && /no entries\/stops/.test(SD), 'f3 ...and the scope boundary holds');
   ok(/when it did not hold/.test(SD), 'f4 THE MISS CASE IS PRINTED beside the odds of being right');
   ok(/This is not a reading, it is no reading/.test(SD), 'f5 a refusal reads as a refusal, never as calm');
-  ok(!/\bwill\b|\bshould\b|likely/.test(SD.replace(/\/\/[^\n]*/g, '')),
-     'f6 no forecast vocabulary — gamma and structure describe, they do not predict');
+  // (v14.72) SCOPED, AND DECISIONS D-12 SAID IT WOULD HAVE TO BE: "§30 executes the read composer and
+  // fails on forecast vocabulary. An AI read making real directional calls will trip it — that test
+  // must be scoped to the MECHANISM sentence before any such feature ships."
+  // The far-side block is a CALIBRATED PROBABILITY, which is a different object from a forecast: it
+  // says how often a level like this one was traded, with the number attached. So the ban still
+  // applies to everything outside that block, and inside it the rule becomes STRICTER — the word
+  // "likely" may not appear without a percentage beside it.
+  {
+    // the exempt region is DECLARED IN THE SOURCE, not guessed by this test — so widening it is a
+    // visible edit in the panel rather than a quiet loosening here.
+    ok(/PROB-BLOCK-START/.test(SD) && /PROB-BLOCK-END/.test(SD),
+       'f6a the probability surface is explicitly marked in the source');
+    const noFar = SD.replace(/\/\/[^\n]*/g,'')
+                    .replace(/PROB-BLOCK-START[\s\S]*?PROB-BLOCK-END/, '');
+    ok(!/\bwill\b|\bshould\b|likely/.test(noFar),
+       'f6 no forecast vocabulary outside the probability block — mechanism describes, it does not predict');
+    const far = SD.match(/most likely[\s\S]{0,140}/);
+    ok(far && /\(50%\)|%/.test(far[0]),
+       'f6b ...and inside it, "most likely" NEVER appears without its measured probability', far&&far[0].slice(0,90));
+  }
 }
 
 // ---- 9 · IB60 is new, and IB30 survives it ---------------------------------------------------
@@ -366,7 +384,17 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   // executes it. Assert it at its NEW home rather than deleting the guard.
   ok(/thin cell/.test(ex('hlVerdict')),
      't21 ...and says so when the cell is too thin to rate (now in hlVerdict)');
-  ok(/still ahead/.test(SD), 't22 the remaining range is on the face beside the probability');
+  // (v14.72) t22 USED TO GREP THE RENDER FOR "still ahead" - and that clause was firing on days
+  // both extremes were already in, which the grep could never see. Execute the clause instead.
+  eval(ex('hlFarClause'));
+  const FC = hlFarClause;
+  const fcAhead = FC({ second:'HOD', secondT: 400*60, clock: 200*60 }, { far:0.42 });
+  ok(/42%/.test(fcAhead) && /HOD/.test(fcAhead) && !/still ahead/.test(fcAhead),
+     't22 the range clause names the extreme it measures TO, and no longer claims travel', fcAhead);
+  ok(FC({ second:'HOD', secondT: 100*60, clock: 200*60 }, { far:0.01 }) === '',
+     't22b ...and is SILENT once the far side has printed - the state that made it wrong');
+  ok(FC({ second:'HOD', secondT: 400*60, clock: 200*60 }, { far:null }) === '',
+     't22c ...and refuses when there is no measurement rather than printing 0%');
   ok(/48%/.test(SD) && /BELOW the 45% base/.test(SD),
      't23 SWP is gone from the face AND its 48% is recorded at the removal site');
   ok(/posr` thresholded at 0\.5|posr thresholded at 0\.5/.test(SD),
@@ -430,8 +458,13 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
      'u8 the far-side clause is gated on the second extreme not having printed');
   ok(/both extremes in/.test(SD),
      'u9 ...and says so plainly when it already has, instead of pointing at a finished move');
-  ok(/secondMed/.test(SD) && /secondQ1/.test(SD),
-     'u10 the clause carries WHEN to expect it, with its spread');
+  // (v14.72) WHEN-TO-EXPECT-IT moved off the ladder tier and onto the far-side line, where it is
+  // measured rather than borrowed from the unconditional E-row median. The property is unchanged:
+  // the face must say WHEN, and must show the SPREAD rather than a single clock time.
+  ok(/not before/.test(SD) && /floorAt/.test(SD),
+     'u10 the face carries a WHEN — as a one-sided 80% floor, because a 30-min box is worth 15%');
+  ok(/winA/.test(SD) && /winB/.test(SD) && /\(50%\)/.test(SD),
+     'u10b ...and the two-sided window carries its own, honest, 50%');
   // (v14.70) re-measured on the widened table: 13:33 -> 13:29, 97% -> 99% still ahead.
   // ⚠ Pinned to the CURRENT measurement rather than a range, so a table change that forgets to
   // re-derive these gets caught instead of quietly quoting numbers from a table that no longer exists.
@@ -467,8 +500,12 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   ok(/if\(!NOREAD\)\{ try\{ CALL=lodhodCall/.test(SD),
      'w7 the table is not consulted when there is nothing to consult it about');
   // the static half must still be reachable in the no-read path
-  ok(/g3dayl/.test(SD) && /g3dayfoot/.test(SD),
-     'w8 the ladder and the honesty line are outside the gate');
+  // (v14.72) the ladder and the foot were REMOVED (they restated the verdict and cost a row); what
+  // must still survive the no-candle path is the static half the operator prepares on — the E rows.
+  ok(/g3dayg/.test(SD) && /NOREAD \? row\('a','A'/.test(SD),
+     'w8 the E rows are outside the gate and the A row refuses — the pre-open state that v14.69 fixed');
+  ok(!/g3daylb/.test(SD) && !/g3dayfoot/.test(SD),
+     'w8b ...and the ladder and honesty line are gone, deliberately, not by accident');
   ok(/backtest over/.test(SD), 'w9 ...and the evidence line names them as a backtest, not today');
 }
 

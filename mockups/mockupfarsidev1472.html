@@ -1,0 +1,105 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>⓪a far-side readout — touch probability + first-passage timing</title>
+<style>
+body{margin:0;background:#05070b;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+.wrap{display:flex;gap:20px;padding:16px;align-items:flex-start}
+.cap{font-size:11px;font-weight:800;letter-spacing:.06em;color:#8b98a9;text-transform:uppercase;margin:0 0 6px}
+.cap span{font-weight:600;text-transform:none;letter-spacing:0;color:#5b6675}
+.panel{width:454px;box-sizing:border-box;background:#0b0e14;border:1px solid #1e2530;border-radius:6px;padding:8px;color:#e6edf3}
+.g3day{margin-bottom:6px}
+.g3dayhd{font-size:8px;font-weight:900;letter-spacing:.08em;color:#8b98a9;text-transform:uppercase;margin:0 0 4px;cursor:help}
+.g3dayg{display:table;width:100%;font-size:8.2px;margin-bottom:5px}
+.g3dayr{display:table-row}
+.g3dayr i{display:table-cell;font-style:normal;font-weight:900;color:#4b5563;width:12px}
+.g3dayr span{display:table-cell;padding:1px 5px 1px 0;white-space:nowrap}
+.g3dayr.hd span{font-size:6.8px;font-weight:900;letter-spacing:.08em;color:#4b5563}
+.g3dayr.a span{color:#c9d1da;font-weight:700}
+.g3dayr.a b{color:#f2b45a;font-weight:900}
+.g3dayr.e span{color:#5b6675;font-weight:600}
+.g3dayread{font-size:8.6px;font-weight:700;color:#c9d4e2;line-height:1.5;background:rgba(46,194,126,.06);border:1px solid rgba(46,194,126,.28);border-radius:4px;padding:5px 7px;cursor:help}
+.g3dayread b{color:#2ec27e;font-weight:900}
+.g3dayread b.g3dayin{color:#f2b45a}
+.g3daydim{color:#6c7889;font-weight:600}
+.g3daysub{font-size:8px;font-weight:600;color:#8b98a9;margin-top:2px;line-height:1.45}
+.g3daysub b{color:#f2b45a}
+/* NEW — the far-side block */
+.g3far{margin:5px 0 4px;border:1px solid rgba(74,144,217,.30);background:rgba(74,144,217,.05);border-radius:4px;padding:4px 6px}
+.g3farhd{font-size:6.8px;font-weight:900;letter-spacing:.08em;color:#4b5563;text-transform:uppercase;margin-bottom:2px;cursor:help}
+.g3fart{display:table;width:100%;font-size:8.2px}
+.g3farr{display:table-row}
+.g3farr span{display:table-cell;padding:1px 6px 1px 0;white-space:nowrap}
+.g3farr.h span{font-size:6.4px;font-weight:900;letter-spacing:.07em;color:#4b5563}
+.g3farr b{font-weight:900;color:#c9d1da}
+.g3farr .k{color:#f2b45a;font-weight:900}
+.g3farr .p{color:#2ec27e;font-weight:900}
+.g3farr .pm{color:#8b98a9;font-weight:800}
+.g3farr .t{color:#8b98a9;font-weight:600}
+.g3farr .w{color:#6c7889;font-weight:600}
+.g3farno{font-size:8px;font-weight:800;color:#e0645f;margin-top:3px}
+.g3farno span{color:#8b98a9;font-weight:600}
+.g3fartime{font-size:8px;font-weight:600;color:#8b98a9;margin-top:2px}
+.g3fartime b{color:#f2b45a;font-weight:900}
+.note{font-size:10px;color:#6c7889;line-height:1.55;margin-top:10px;width:454px}
+.note b{color:#f2b45a}.note code{color:#8b98a9}
+</style></head><body>
+<div class="wrap">
+ <div>
+  <p class="cap">Proposed — ⓪a with the far-side readout <span>(454px, your panel width)</span></p>
+  <div class="panel"><div class="g3day">
+    <div class="g3dayhd">⓪ a DAY — HOD/LOD · 11:34 CT · 284d ES 1-min · rates live ⌄</div>
+
+    <div class="g3dayread">
+      <b class="g3dayin">LOD IN — 89%</b> <span class="g3daydim">(travelled 93% off it · n=430 · right 89% of the time at this level, live 09:12)</span>
+      <div class="g3daysub">the far side has not printed. <b>⚠ when a call at this level was wrong</b>, the low was replaced within the hour on 6 of 10 of those days.</div>
+    </div>
+
+    <div class="g3far">
+      <div class="g3farhd">FAR SIDE — WHERE THE HOD CAN GET TO, AND WHEN</div>
+      <div class="g3fart">
+        <div class="g3farr h"><span>LEVEL</span><span>WHAT IT IS</span><span>TRADES THERE</span><span>IF IT DOES</span></div>
+        <div class="g3farr"><span class="k">7745</span><span class="w">EM high · node 62%K</span><span class="p">66%</span><span class="t">~35m <span class="w">(15m–1h10)</span></span></div>
+        <div class="g3farr"><span class="k">7758</span><span class="w">KING 100%K</span><span class="p">34%</span><span class="t">~1h20 <span class="w">(40m–2h40)</span></span></div>
+        <div class="g3farr"><span class="k">7772</span><span class="w">prior-day high</span><span class="pm">15%</span><span class="t">~2h10 <span class="w">(1h–3h30)</span></span></div>
+      </div>
+      <div class="g3farno">⚠ 7790 and above — 96% it does not trade there today <span>(the NO call is the sharp one: n=34,000, right 92%)</span></div>
+      <div class="g3fartime">timing <b>if the HOD is not in by 13:15 → 69%</b> it prints into the close <span class="w">· median gap 3h50</span></div>
+    </div>
+
+    <div class="g3dayg">
+      <div class="g3dayr hd"><i></i><span>1ST</span><span>LOD</span><span>TOOK</span><span>BOP</span><span>WICK</span><span>W.END</span><span>WICK%</span><span>MUD</span></div>
+      <div class="g3dayr a"><i>A</i><span><b>LOD</b></span><span><b>09:12</b></span><span>42m</span><span>24m</span><span>1h06</span><span>09:36</span><span>53%</span><span>—</span></div>
+      <div class="g3dayr e"><i>E</i><span></span><span>~09:03</span><span>~34m</span><span>~14m</span><span>~1h01</span><span>~09:31</span><span>~28%</span><span>~3h20</span></div>
+    </div>
+    <div class="g3dayg">
+      <div class="g3dayr hd"><i></i><span>2ND</span><span>HL GAP</span><span>HL RNG</span></div>
+      <div class="g3dayr a"><i>A</i><span>HOD pend.</span><span>2h22…</span><span>$1,950 — 39.0pts</span></div>
+      <div class="g3dayr e"><i>E</i><span>~13:02</span><span>~3h50</span><span>~$3,072 — 61.4pts (41.8–80.2)</span></div>
+    </div>
+  </div></div>
+
+  <div class="note">
+   Every number has a source: <b>66/34/15%</b> = P(level trades today), F‑14, AUC 0.826, calibrated to
+   within 3 points at every decile. <b>~35m / ~1h20 / ~2h10</b> = first‑passage timing given it gets
+   there, F‑15 — shown with its spread because the median error is 42 min. <b>96% it does not trade
+   there</b> is the model's sharpest call: half of all readings land in that bucket and they are right
+   92% of the time. <b>69% into the close</b> is the hazard, updating every bar.
+  </div>
+ </div>
+
+ <div>
+  <p class="cap">What replaced what</p>
+  <div class="note" style="margin-top:0">
+   <b>Gone:</b> the 41/56/67/75/84 ladder (it answered the same question as the verdict, with a weaker
+   instrument, and disagreed with it on the face) · the white honesty line at the bottom (its content
+   moves into the header hover; only <code>rates live</code> stays visible) · “% of the range still
+   ahead”, which printed even on days both extremes were already in.<br><br>
+   <b>New:</b> one block that answers the question you actually put — <i>where can the HOD get to, how
+   likely, and when</i> — in your own levels rather than in a price band. The <b>50% crossing of that
+   column is the HOD estimate</b>, so nothing was lost by dropping the band; it just carries a
+   probability now instead of pretending to a number.<br><br>
+   <b>Not on the face and deliberately so:</b> no entry, no stop, no target language. Every figure is
+   descriptive and carries its n in the hover, and the whole block is labelled <b>PROVISIONAL</b> until
+   it has been forward‑scored on live sessions.
+  </div>
+ </div>
+</div></body></html>

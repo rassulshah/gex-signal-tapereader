@@ -51,7 +51,21 @@ them; they were confirmed bar-by-bar on the tape. **No longer pending.**
 
 ## OPEN — LOCKED, NOT BUILT
 
-### ⚠ CONDITION THE LOD/HOD TABLE ON THE GAMMA SIDE — the highest-value unbuilt idea
+### ⚠ CONDITION THE FAR SIDE ON THE GAMMA BOOK — DESIGN BUILT, COLLECTION STARTED v14.72, TEST BLOCKED
+**Updated 2026-08-28.** The question is unchanged and it is still the highest-value unbuilt idea.
+What changed is that it is no longer an intention:
+- **The experiment exists and is validated** — `tools/study-atrlevels.py`: train a distance-only
+  touch model, then test whether a CLASS of level beats its own distance-matched expectation. Run
+  on prior-day and overnight levels it returned **nothing** (F-16), which is the control working.
+- ⚠⚠ **AND IT NEARLY RETURNED A PHANTOM.** With a sparse distance control the same script said
+  prior-day levels were worth **+12 points**. Dense control: zero. **Any run of this test must span
+  the distance range densely.**
+- **The data is being collected from v14.72** — the `farside` feature records each level's `kind`,
+  `pct` (%King), `sgn` (polarity) and `role` every bar.
+- **Still blocked on ~40 clean sessions**, which is blocked on the storage fix (F-10).
+- The nightly brief carries it as ⭐ item 3 with the method and the warning.
+
+### ⚠ THE OLD FRAMING, kept because the answer changed: "condition the LOD/HOD TABLE on gamma"
 **Raised and agreed 2026-08-28.** The table knows nothing about the panel it lives in. Does price
 sitting on the King, or a low printing at a put wall, change the probability that the extreme holds?
 **This is what would make the feature belong to THIS tool** rather than being generic price structure
