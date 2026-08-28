@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.76
+// @version    14.77
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.76';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.77';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -7145,7 +7145,12 @@ function wireConfig(){
   if(irtE) irtE.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.etfSym=(irtE.value||'').trim().toUpperCase(); saveCfg(); });
   var irtD=elCfg.querySelector('.gpts-irt-dir');
   if(irtD) irtD.addEventListener('click', function(){ irtPickFolder(); });
-  var irtG=elBody.querySelector('.gpts-irt-grant');
+  // ⚠ elCfg, NOT elBody. The config panel renders into `.gpts-cfg`, which is a SIBLING of
+  // `#gpts-body` — so `elBody.querySelector` returned null, `if(irtG)` swallowed it, and the button
+  // sat there doing nothing with no error anywhere. Shipped in v14.76 and caught by the operator in
+  // one click: "im clicking on grant and it doesnt do anything". Every other control in this block
+  // uses elCfg; mine was the only one that didn't, and the guard hid it.
+  var irtG=elCfg.querySelector('.gpts-irt-grant');
   if(irtG) irtG.addEventListener('click', function(){ irtGrantFolder(); });
   var irtNqOn=elCfg.querySelector('.gpts-irt-nqon');
   if(irtNqOn) irtNqOn.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.nqOn=irtNqOn.checked; saveCfg(); });
@@ -25276,27 +25281,26 @@ window.__gptsDebug.renderErrors=function(){ return RENDER_ERRS.slice(); };
 // write path and was deliberately held back so it could not risk a live session. See
 // session-state/pending/v14.68-bounded-writes.patch and LOCKED-ITEMS.
 // ⚠ IT REFILLS AT ROUGHLY 6 MB PER DAY. Check it; do not assume it.
+// (v14.77) ⚠ THE BUDGETS AND HEALTH COUNTERS ARE BACK. v14.76 added a second copy of this hook with
+// the patch, then removed the WRONG duplicate — the older definition survived and `LS_HEALTH` became
+// invisible. Bounded writes were fine; the instrument was not. F-10's second half is "a data layer
+// that cannot write MUST SAY SO", and it says so here.
 window.__gptsDebug.storage=function(){
   try{
-    var CAP=10*1024, per={}, total=0, i, k, b;
+    var per={}, total=0, i, k, b;
     for(i=0;i<localStorage.length;i++){ k=localStorage.key(i);
       b=(k.length+(localStorage.getItem(k)||'').length)*2; total+=b; per[k]=Math.round(b/1024); }
-    var kb=Math.round(total/1024);
     var top=Object.keys(per).sort(function(x,y){ return per[y]-per[x]; }).slice(0,8)
               .map(function(x){ return x+'='+per[x]+'KB'; });
-    // can we still write? a probe is worth more than an estimate - the failure is silent otherwise.
-    var canWrite=true;
-    try{ localStorage.setItem('__gptsProbe', new Array(20*1024).join('y')); localStorage.removeItem('__gptsProbe'); }
-    catch(ep){ canWrite=false; }
-    return { totalKB:kb, capKB:CAP, headroomKB:CAP-kb, pctFull:Math.round(100*kb/CAP),
-             canWrite40KB:canWrite, top:top,
-             verdict: (!canWrite) ? '\u26a0\u26a0 FULL - every write in the panel is failing silently RIGHT NOW'
-                    : (kb>CAP*0.85) ? '\u26a0 nearly full - clear gpts_nodeevents_v1 (derived, safe mid-session)'
-                    : 'ok',
-             safeToClear:'gpts_nodeevents_v1 is derived and re-accumulates. NEVER clear gpts_recorder_v7 during RTH - it holds today\u2019s snapshots and feature records.' };
+    var kb=Math.round(total/1024);
+    return { totalKB:kb, capKB:LS_CAP_KB, headroomKB:LS_CAP_KB-kb,
+             pctFull:Math.round(100*kb/LS_CAP_KB),
+             canWrite40KB:(function(){ try{ localStorage.setItem('__gpts_probe','x'.repeat(20480));
+               localStorage.removeItem('__gpts_probe'); return true; }catch(e){ return false; } })(),
+             budgets:LS_BUDGET_KB, health:LS_HEALTH, top:top,
+             verdict:(kb>LS_CAP_KB*0.85)?'\u26a0 NEARLY FULL \u2014 writes are about to start failing':'ok' };
   }catch(e){ return 'threw: '+(e&&e.message||e); }
-};
-window.__gptsDebug.featHealth=function(){
+};window.__gptsDebug.featHealth=function(){
   try{
     var d=null; try{ d=recorderDay(recorderLoad()); }catch(e1){}
     var per={};

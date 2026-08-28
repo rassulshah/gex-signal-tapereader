@@ -468,6 +468,15 @@ ok(/CFG\.irt\.nqRatio=o\.irt\.nqRatio/.test(src), '7h ...and the NQ fields persi
      'g7 the hover tells him the exact Chrome option that makes the grant permanent');
   ok(/addEventListener\('click', function\(\)\{ irtGrantFolder\(\); \}\)/.test(src),
      'g8 ...and it is wired to a CLICK — the only context where requestPermission can succeed');
+  // ⚠⚠ WIRED TO THE RIGHT ROOT. v14.76 queried elBody while the config panel renders into
+  // `.gpts-cfg` (elCfg), so the lookup returned null, `if(irtG)` swallowed it, and the button did
+  // NOTHING with no error. Every other control in that block uses elCfg. Assert the ROOT, not just
+  // the listener — "it is wired" was true and useless.
+  {
+    const w=src.slice(src.indexOf("querySelector('.gpts-irt-grant')")-40, src.indexOf("querySelector('.gpts-irt-grant')")+40);
+    ok(/elCfg\.querySelector\('\.gpts-irt-grant'\)/.test(w),
+       'g8b ...from elCfg, the root the config panel actually renders into', w.trim());
+  }
   ok(!/setInterval[\s\S]{0,200}irtGrantFolder/.test(src),
      'g9 ...and is never called from a timer, where it would reject and be swallowed (the v14.53 lesson)');
 }

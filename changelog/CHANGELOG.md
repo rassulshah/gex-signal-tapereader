@@ -1,3 +1,20 @@
+## v14.77 — the grant button was wired to the wrong root and did nothing
+
+> "im clicking on grant and it doesnt do anything"
+
+v14.76 wired it with `elBody.querySelector('.gpts-irt-grant')`. The config panel renders into
+**`.gpts-cfg`** — a SIBLING of `#gpts-body` — so the lookup returned null, the `if(irtG)` guard
+swallowed it, and the button sat on the face doing nothing, with no error anywhere. Every other
+control in that same block uses `elCfg`; mine was the only one that didn't.
+
+⚠ **The test said "it is wired to a CLICK" and was true and useless** — it asserted the listener
+existed, never which ROOT the lookup used. `g8b` now asserts the root. A defensive `if(x)` guard
+around a query is how a null lookup becomes silence: it is the same shape as failure pattern #5.
+
+Also fixed: `__gptsDebug.storage()` lost its `budgets`/`health` fields when a duplicate hook was
+removed in v14.76 — the older definition survived. Bounded writes were unaffected; only the
+counters were invisible.
+
 ## v14.76 — one click ends the daily permission dance, and the writes are finally bounded
 
 > "i need to ensure that when the market closes i can continue working in the app … I also need to

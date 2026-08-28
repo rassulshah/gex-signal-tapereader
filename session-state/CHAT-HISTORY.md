@@ -15,7 +15,7 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-28 · v14.76 · session `2df3ccfa` — v14.76: the far side, the IRT pipe, bounded writes and the permanent grant
+## 2026-08-28 · v14.77 · session `2df3ccfa` — v14.77: the far side, the IRT pipe, bounded writes and the permanent grant
 
 _61 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
 
@@ -1574,10 +1574,10 @@ s16 caught something real: my shedder assumed the wrong shape. Checking what `NE
 - **EVERY KING LATCHES** (v14.74): the file held ONE row while two Kings were absent; the only
   survivor was the one with a latch.
 - **v14.15 REVERSED** — a feed-sourced QQQ King is written and TAGGED; refusing bought a MISSING level.
-- **BOUNDED WRITES SHIPPED** (v14.76) with three defects caught in the application: a shedder written
+- **BOUNDED WRITES SHIPPED** (v14.77) with three defects caught in the application: a shedder written
   against the wrong NEV shape, a new hard dependency that resurrected the one-bar queue in nine test
   files, and three constants with trailing comments that the harness's val() reads through.
-- **THE PERMANENT GRANT** (v14.76): Chrome 122+ "Allow on every visit" survives reloads and restarts;
+- **THE PERMANENT GRANT** (v14.77): Chrome 122+ "Allow on every visit" survives reloads and restarts;
   the panel just had to ASK FROM A CLICK. That ends the daily folder re-pick.
 
 ### SHIPPED
@@ -1586,7 +1586,7 @@ s16 caught something real: my shedder assumed the wrong shape. Checking what `NE
 **v14.73** export reads the face's ladder; feed King tagged; `nqWhy`; labels lose `100%`.
 **v14.74** every King latches for the session day; quarter-point rounding asserted on the held path.
 **v14.75** the QQQ King on ES from `ladderKings` — dashed, tilde-tagged, 0.25 grid.
-**v14.76** 🔓 grant button (permanent folder permission) + bounded writes + LS_HEALTH.
+**v14.77** 🔓 grant button (permanent folder permission) + bounded writes + LS_HEALTH.
 Suite 122 green / 6 baseline red; smoke clean; test_storage 19 (first run ever); test_irt_export 89.
 
 ### OPEN AT CLOSE
@@ -1602,7 +1602,7 @@ Suite 122 green / 6 baseline red; smoke clean; test_storage 19 (first run ever);
 ### COMMITS THIS CONTEXT
 
 ```
-95bfd16 v14.76: one-click permanent folder grant + bounded writes (F-10 shipped) - three real defects caught while applying the parked patch
+95bfd16 v14.77: one-click permanent folder grant + bounded writes (F-10 shipped) - three real defects caught while applying the parked patch
 945cd98 handoff: chat history current at v14.75
 4114322 v14.75: the QQQ King on ES reads the rail's own bearing - one quantity, one source; dashed, tilde-tagged, 0.25 grid
 9911451 irt: CORRECTION - file:// reads once on apply and does not poll; the HTTP server is the path, autostart it
@@ -1622,7 +1622,7 @@ fbfc9ca build: FARSIDE.json rides the installer (the pre-send decode caught it m
 
 # EARLIER CONTEXTS
 
-## 2026-08-28 · v14.76 · session `2df3ccfa` — v14.76: the far side ships, the IRT pipe closes, and the export reads the rail
+## 2026-08-28 · v14.77 · session `2df3ccfa` — v14.77: the far side ships, the IRT pipe closes, and the export reads the rail
 **OPERATOR:**
 > load gex
 **OPERATOR:**
@@ -1772,7 +1772,7 @@ fbfc9ca build: FARSIDE.json rides the installer (the pre-send decode caught it m
 **v14.72** far-side block + `farside` enrolled + companion v1.16 (FARSIDE.json, ^VIX).
 **v14.73** the export reads the face's ladder; feed King accepted and tagged; `nqWhy`; labels lose 100%.
 **v14.74** every King latches for the session day; quarter-point rounding asserted on the held path.
-**v14.76** the QQQ King on ES, read from `ladderKings` (the rail's own bearing), dashed and tilde-tagged.
+**v14.77** the QQQ King on ES, read from `ladderKings` (the rail's own bearing), dashed and tilde-tagged.
 Suite 121 green, smoke clean, test_irt_export 57 -> 80.
 
 
@@ -1793,7 +1793,7 @@ _(compressed — operator prompts verbatim; replies dropped. Full detail is in g
 
 # EARLIER CONTEXTS
 
-## 2026-08-28 · v14.76 · session `2df3ccfa` — v14.76: the IRT export reads the face's array; file:// retires the server
+## 2026-08-28 · v14.77 · session `2df3ccfa` — v14.77: the IRT export reads the face's array; file:// retires the server
 **OPERATOR:**
 > load gex
 **OPERATOR:**
@@ -1906,7 +1906,7 @@ _(compressed — operator prompts verbatim; replies dropped. Full detail is in g
 
 **v14.72** - the far-side block (P(level trades today) x first-passage timing), the ladder retired,
 `farside` enrolled with node identity, companion v1.16 (FARSIDE.json + ^VIX couriers).
-**v14.76** - the IRT export reads the face's ladder, accepts and tags a feed King, latches the last
+**v14.77** - the IRT export reads the face's ladder, accepts and tags a feed King, latches the last
 good one, records `nqWhy`, and drops the redundant `100%`. Suite 121 green, smoke clean.
 
 
@@ -1925,7 +1925,7 @@ _(compressed — operator prompts verbatim; replies dropped. Full detail is in g
 
 # EARLIER CONTEXTS
 
-## 2026-08-28 · v14.76 · session `2df3ccfa` — v14.76: the far side - touch probability, first-passage timing, and the 92% correction
+## 2026-08-28 · v14.77 · session `2df3ccfa` — v14.77: the far side - touch probability, first-passage timing, and the 92% correction
 **OPERATOR:**
 > load gex
 **OPERATOR:**
@@ -1992,7 +1992,7 @@ _(compressed — operator prompts verbatim; replies dropped. Full detail is in g
 
 ### SHIPPED
 
-**v14.76** - the far-side block (three levels x P(trades there) x first-passage timing), the timing
+**v14.77** - the far-side block (three levels x P(trades there) x first-passage timing), the timing
 line (80% floor / 50% window / hazard), the ladder and the honesty line removed, the honesty content
 moved into the header hover with `rates live` left visible, `farside` ENROLLED with node identity in
 its record (the gamma data nobody has ever collected), companion **v1.16** couriering FARSIDE.json
