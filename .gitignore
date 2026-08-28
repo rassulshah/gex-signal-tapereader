@@ -19,3 +19,7 @@ applygex*.bat
 pushgex*.bat
 install-v*.bat
 installv*.bat
+
+# python bytecode from the study tools
+__pycache__/
+*.pyc

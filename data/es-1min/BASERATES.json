@@ -5,7 +5,11 @@
   "last": "2026-08-21",
   "min_bars": 386,
   "rth": "08:30-15:00 CT",
-  "pt_usd": 50.0
+  "pt_usd": 50.0,
+  "sources": {
+   "ES TestingData.txt": 284
+  },
+  "incomplete_dropped": 12
  },
  "sequence": {
   "LOD_first": 146,
@@ -13,14 +17,30 @@
   "pct_LOD_first": 51
  },
  "expected": {
-  "took_min": 21.0,
-  "gap_min": 237.5,
-  "rng_pts": 56.5,
-  "rng_usd": 2825.0,
+  "took_min": 33.5,
+  "gap_min": 229.5,
+  "rng_pts": 61.4,
+  "rng_usd": 3072.2,
   "rng_p25": 41.8,
   "rng_p75": 80.2,
-  "first_clock": 31860.0,
-  "second_clock": 48300.0
+  "first_clock": 32608.6,
+  "second_clock": 46919.6,
+  "statistic": "trimmed mean (Tukey 1.5xIQR outliers excluded), operator-specified 2026-08-28",
+  "outliers_excluded": {
+   "took": 15,
+   "gap": 0,
+   "rng_pts": 8,
+   "rng_usd": 8,
+   "first_clock": 15,
+   "second_clock": 0
+  },
+  "median_for_contrast": {
+   "took_min": 21.0,
+   "gap_min": 237.5,
+   "rng_pts": 56.5,
+   "first_clock": 31860.0,
+   "second_clock": 48300.0
+  }
  },
  "ladder": {
   "low": {
@@ -104,5 +124,38 @@
     "rate": 84
    }
   }
- }
+ },
+ "wickFamily": {
+  "median": {
+   "wick": 61.1,
+   "wick_median": 40.0,
+   "wick_n": 252,
+   "bop": 14.4,
+   "bop_median": 7.0,
+   "bop_n": 232,
+   "mud": 199.8,
+   "mud_median": 196,
+   "mud_n": 265,
+   "wick_pct": 28.1,
+   "wick_pct_median": 24.0,
+   "wick_pct_n": 264,
+   "wick_pts": 15.4,
+   "wick_pts_median": 12.5,
+   "wick_pts_n": 255
+  },
+  "excluded": {
+   "never_reclaimed": 0,
+   "zero_wick": 19,
+   "outliers_tukey_1_5_iqr": {
+    "wick": 13,
+    "bop": 33,
+    "mud": 0,
+    "wick_pct": 1,
+    "wick_pts": 10
+   },
+   "rule": "operator 2026-08-28: no-wick days and crazy outliers are not averaged; a zero wick still PRINTS 0 on the day's own row"
+  },
+  "wend_definition": "first bar to CLOSE back through the session open after the first extremity"
+ },
+ "generatedAt": "2026-08-28T01:40:28Z"
 }

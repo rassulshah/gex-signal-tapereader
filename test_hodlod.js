@@ -146,14 +146,68 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   ok(Lv.stood > R.stood, 'p2 ...where the live path would have used the wall clock', {live:Lv.stood, replay:R.stood});
 }
 
-// ---- 7 · WHAT IS DELIBERATELY NOT BUILT, AND SAYS SO -----------------------------------------
-// ⚠ BOP/WICK/W.END/WICK%/MUD have no definition anywhere — not the mockup, not the Academy, not a
-// spec. The doctrine gate says say so and get agreement rather than invent. Printing five guessed
-// timing statistics beside measured ones would make the whole row untrustworthy.
+// ---- 7 · THE WICK FAMILY (v14.60) — DEFINED BY THE OPERATOR, CONFIRMED ON THE TAPE ----------
+// ⚠ These five were PENDING through v14.59 because no definition existed. He supplied them on
+// 2026-08-28 and they were then verified bar-by-bar against the live ES tape for 2026-08-27, where
+// the two fields independent of extremity timing matched exactly (Wick% 26, W.End 8:42am).
 {
   const SD = ex('secDay');
-  ok(/pending a definition/.test(SD), 'n1 the unbuilt columns are named as PENDING on the face');
-  ok(!/BOP:|wick%|mudMin/.test(src), 'n2 ...and none of them is silently computed anyway');
+  ok(/WICK%/.test(SD) && /W\.END/.test(SD) && /MUD/.test(SD) && /BOP/.test(SD),
+     'n1 the wick columns are on the face now, not named as pending');
+  ok(!/pending a definition/.test(SD),
+     'n1b ...and the old PENDING refusal is gone with them');
+  // the whole session, reconstructed: open 100, LOD at +5m, reclaim at +8m, HOD at +100m
+  const bars = [];
+  for (let m = 0; m <= 120; m++) {
+    let o = 100, h = 100.5, l = 99.5, c = 100;
+    if (m === 5) { l = 90; c = 92; }               // the LOD
+    if (m > 5 && m < 8) { c = 95; h = 96; }        // still under the open
+    if (m === 8) { c = 101; h = 101; }             // FIRST CLOSE back through the open -> W.End
+    if (m === 100) { h = 130; c = 129; }           // the HOD
+    bars.push({ so: OPEN + m*60, o: m===0?100:o, h: h, l: l, c: c });
+  }
+  CANDLES = bars; NOWSEC = OPEN + 120*60;
+  const W = hodLod('SPY');
+  ok(W.first === 'LOD' && Math.round(W.took) === 5, 'n2 TOOK is open -> first extremity', W.took);
+  ok(W.wend === OPEN + 8*60, 'n3 W.END is the first bar to CLOSE back through the open (not touch)',
+     W.wend && (W.wend - OPEN)/60);
+  ok(Math.round(W.bop) === 3, 'n4 BOP is first extremity -> W.END', W.bop);
+  ok(Math.round(W.wick) === 8 && Math.round(W.wick) === Math.round(W.took + W.bop),
+     'n5 WICK is open -> W.END, and equals TOOK + BOP', [W.wick, W.took, W.bop]);
+  ok(Math.round(W.mud) === 92, 'n6 MUD is W.END -> the second extremity', W.mud);
+  // open 100, LOD 90, HOD 130 -> range 40, excursion 10 -> 25%
+  ok(W.wickPct === 25, 'n7 WICK% is a PRICE ratio: |open - extremity| / range', W.wickPct);
+  // ⚠ THE UNIT TRAP THIS SECTION ALREADY SHIPPED ONCE. Wick% must be scale-free: the same session
+  // on a futures chart must give the SAME percentage, or it is v14.57's 5.1-vs-56.5 bug again.
+  RR = 1; const W1 = hodLod('SPY'); const pctSpy = W1.wickPct;
+  RR = 10.04;
+  const W2 = hodLod('SPY');
+  ok(W2.wickPct === pctSpy, 'n8 WICK% is scale-free — identical on a futures chart', [pctSpy, W2.wickPct]);
+  ok(Math.abs(W2.rngPts - W1.rngPts*10.04) < 0.01 && W2.rngPts !== W1.rngPts,
+     'n8b ...while the RANGE does convert with rr, proving the scale really changed',
+     [W1.rngPts, W2.rngPts]);
+  RR = 10.04;
+  // NEVER RECLAIMED is not zero. A session that opens at its low and runs has no completed wick.
+  // ⚠ A GENUINE never-reclaim is narrower than it first looks, and building this case taught me
+  // that: price must set the LOD first, then make its HIGH afterwards, and still never CLOSE back
+  // through the open. If the low is on the opening bar and that bar closes at the open, the wick is
+  // a real ZERO — which is his rule, not a miss.
+  CANDLES = [{ so: OPEN, o: 100, h: 100, l: 99, c: 99.5 }];
+  for (let m = 1; m <= 120; m++) {
+    let h = 99.8, l = 99, c = 99.5;
+    if (m === 5) { l = 90; c = 92; }              // the LOD, first
+    if (m === 100) { h = 100.5; c = 99.9; }       // the HOD, later — but it never CLOSES >= 100
+    CANDLES.push({ so: OPEN + m*60, o: 99.5, h: h, l: l, c: c });
+  }
+  const NR = hodLod('SPY');
+  ok(NR.first === 'LOD', 'n8c the never-reclaim fixture really is LOD-first', NR.first);
+  ok(NR.reclaimed === false && NR.wend === null && NR.wick === null && NR.mud === null,
+     'n9 never closing back through the open leaves W.END/WICK/MUD NULL — not 0', 
+     {reclaimed:NR.reclaimed, wick:NR.wick});
+  ok(/\\u2014/.test(ex('secDay')) || /hlv\(/.test(ex('secDay')),
+     'n9b ...and the face renders them as em-dash through hlv(), never as a number');
+  CANDLES = bars; NOWSEC = OPEN + 120*60;
+  ok(!/BOP:|mudMin/.test(src), 'n2b no stray duplicate implementation of these fields');
   // VWAP is one of the mockup's five chips and this codebase has none.
   ok(/NOT AVAILABLE/.test(SD) && /g3daychip\.na/.test(src),
      'n3 VWAP renders UNAVAILABLE with its own style — never a failing tick');
@@ -179,6 +233,37 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   const SL = ex('sessionLevels');
   ok(/out\.ib60H=/.test(SL) && /out\.ibH=/.test(SL), 'i3 both are emitted from sessionLevels');
   ok(/out\.open=/.test(SL), 'i4 the session OPEN is captured — the OPEN chip needs it');
+}
+
+// ---- 8 · ONE ROW, ONE STATISTIC (v14.62) ----------------------------------------------------
+// ⚠ THIS TEST EXISTS BECAUSE I GOT IT WRONG. v14.61 made the wick columns trimmed MEANS and left
+// TOOK / HL GAP / HL RNG as MEDIANS, because those had been verified that way against an older
+// mockup. The operator: "i thought they were all averages." A table where two columns are means and
+// three are medians is one nobody can reason about, and nothing on the face said which was which.
+{
+  const B = global.HODLOD_BASE;
+  const BR = JSON.parse(fs.readFileSync('./data/es-1min/BASERATES.json', 'utf8'));
+  ok(/trimmed mean/i.test(BR.expected.statistic || ''),
+     's1 the study declares its statistic inside the artefact', BR.expected.statistic);
+  [['tookMin','took_min'],['gapMin','gap_min'],['rngPts','rng_pts'],
+   ['firstClock','first_clock'],['secondClock','second_clock']].forEach(([bk, sk]) => {
+    ok(Math.abs(B[bk] - BR.expected[sk]) < 0.51,
+       's2 ' + bk + ' is baked from the trimmed MEAN', [B[bk], BR.expected[sk]]);
+  });
+  const mc = BR.expected.median_for_contrast;
+  ok(B.tookMin !== mc.took_min && B.rngPts !== mc.rng_pts,
+     's3 ...and differs from the median, proving the statistic actually changed',
+     [B.tookMin, mc.took_min, B.rngPts, mc.rng_pts]);
+  ok(typeof B.medTook === 'number' && typeof B.medRng === 'number',
+     's4 the medians are still carried so the hover can disclose the choice');
+  ok(BR.expected.rng_p25 < BR.expected.rng_pts && BR.expected.rng_p75 > BR.expected.rng_pts,
+     's5 p25/p75 stay TRUE percentiles bracketing the mean — a trimmed quantile describes nothing',
+     [BR.expected.rng_p25, BR.expected.rng_pts, BR.expected.rng_p75]);
+  ok(/EVERY field is a TRIMMED MEAN/.test(ex('secDay')),
+     's6 the face states that every field is the same statistic');
+  const W = BR.wickFamily.median;
+  ok(Math.abs(B.wick.bop - W.bop) < 0.51 && B.wick.bop !== W.bop_median,
+     's7 the wick columns use that same statistic', [B.wick.bop, W.bop, W.bop_median]);
 }
 
 console.log('test_hodlod: ' + pass + ' passed, ' + fail + ' failed');

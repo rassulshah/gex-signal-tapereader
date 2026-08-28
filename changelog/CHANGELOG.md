@@ -1,3 +1,161 @@
+## v14.63 — the research build: FINDINGS.md exists, and the LOD/HOD model
+
+**No panel behaviour changes from v14.62.** This build exists to make seven commits of work durable:
+the cloud cannot push (403 from the git proxy, re-verified), so the installer is the only route to
+GitHub, and PROJECT-CONSTANTS records this sandbox resetting mid-session twice.
+
+**`skylit-docs/FINDINGS.md` NOW EXISTS.** Named by three live hovers and never written in any commit
+— verified with `git log --all --diff-filter=A`. Two entries:
+
+- **F-1 · The initial balance answers "is the extreme in". Sweeps do not.** 284 sessions, one row per
+  session-side, lift measured against the base rate AT THE SAME CLOCK TIME. `IB60 broken` = 78% at
+  10:01 against a 46% base (**+32**). `IB30 broken` = 74% at 09:39 against 41% (**+33**).
+  ⚠ **`sweep + reclaim` = 48%, lift +3 — below the same-hour base.** Two independent samples agree.
+  ⚠ **The 50-SMA adds nothing to this question**: `IB60` and `IB60+SMA` return identical n and hit.
+- **F-2 · A calibrated probability, and momentum divergence does not help.** Time-only baseline AUC
+  0.8204; five features reach **0.8795**; all fourteen reach 0.8792. `posr` — distance travelled from
+  the extreme over the session range — is **+0.0574 of the +0.0588** headroom, and IB30/IB60/SMA/open/
+  breakout are all proxies for it. **Momentum divergence: −0.0004 AUC.** Measured, not assumed.
+  ⚠ **Cross-market divergence is UNTESTED** — `NQ TestingData.txt` is not on GitHub.
+
+Calibration is honest at every decile (predicted 7/15/25/35/45/55/65/75/86/96 vs actual
+9/17/25/34/45/57/65/74/84/96), which is what makes it usable for sizing rather than as a bare signal.
+
+**New tools:** `tools/study-lodhod.py` (the rule study) and `tools/model-lodhod.py` (the model,
+GroupKFold by session date, ablation, calibration, threshold table).
+
+⚠ **The corpus was never missing.** It has been on GitHub as `data/es-1min/ES TestingData.txt` the
+whole time; the tooling looked for `EPM26-1min.csv.gz` and reported it absent. Same wrong-filename
+error as the Yahoo search two builds earlier. The operator supplied that file twice because of it.
+
+Suite 119 green, 6 documented baseline reds.
+
+## v14.62 — one row, one statistic
+
+> "i thought they were all averages."
+
+He was right and the split was mine. v14.61 made the five wick columns trimmed **means** and left
+TOOK / HL GAP / HL RNG as **medians**, because those had been verified as medians against an older
+mockup at v14.57. **A table where two columns are means and three are medians is one nobody can
+reason about**, and nothing on the face said which was which.
+
+Every E field is now the same trimmed mean: exclude the zero-wick days and the Tukey 1.5xIQR
+outliers, then average.
+
+| field | was (median) | now (trimmed mean) | outliers fenced |
+|---|---|---|---|
+| Took | 21m | **33.5m** | 0 |
+| HL Gap | 3h58m | **3h50m** | 0 |
+| HL Rng | 56.5pts / $2,825 | **61.4pts / $3,072** | 8 |
+| 1st clock | 8:51am | **9:03am** | 15 |
+| 2nd clock | 1:25pm | **1:02pm** | 0 |
+
+⚠ **p25/p75 stay TRUE percentiles.** They are a spread, not an average, and a trimmed quantile
+describes a range it no longer covers. Asserted to still bracket the mean.
+
+⚠ **The medians are kept and disclosed** in the hover — on this right-skewed data Wick averages
+1h01m against a 40m median, so hiding the choice of statistic would be dishonest.
+
+**The enforcement is a test, not a note.** `s1`–`s7` pin every baked E field to the study's trimmed
+mean, assert each DIFFERS from the median so the switch cannot silently revert, and require the face
+to state which statistic it is showing. Mutation-tested: putting `tookMin` back to 21.0 or `rngPts`
+back to 56.5 turns the suite red. `BASERATES.json` now carries `statistic`, `outliers_excluded` and
+`median_for_contrast` so the choice is legible in the artefact itself.
+
+test_hodlod 54 -> 65. Suite 119 green, 6 baseline reds.
+
+## v14.61 — the corpus was already on GitHub, and the E row is a trimmed mean
+
+> "the e row is the expected result based on averages. the a is the actual result based on today"
+
+**THE CORPUS ARRIVED AND NOBODY NOTICED.** Chasing an "unpushed commits" warning, a check of what
+`origin/main` actually holds turned up **`data/es-1min/ES TestingData.txt` — 406,155 rows of EPM26**,
+the file two resume notes list as the one remaining blocker. His v14.59 installer run swept it up.
+
+⚠ **AND THE STUDY COULD NOT SEE IT.** Every doc predicted `EPM26-1min.csv.gz`; the file arrived under
+a different name, so `study-hodlod.py` printed *"no sources for ES"* over a corpus sitting right
+there. That is the too-narrow-search failure for the second time in two days — the same shape as
+grepping `finance.yahoo` and concluding no Yahoo docs existed. The lookup now tries every name the
+file has worn, and falls back to globbing the directory.
+
+**284 sessions, 2025-06-02 → 2026-08-21 — the documented figure, reproduced exactly.**
+
+### THE E ROW IS A TRIMMED MEAN
+
+His instruction, plus *"no wick days should not be averaged. also crazy outliers should not be
+averaged"*: drop the **19 zero-wick days** and the Tukey 1.5×IQR outliers, **then average**.
+
+| field | E (trimmed mean) | n | median, for contrast |
+|---|---|---|---|
+| BOP | **~14m** | 232 | 7m |
+| Wick | **~1h01m** | 252 | 40m |
+| Wick% | **~28%** | 264 | 24% |
+| MUD | **~3h20m** | 265 | 3h16m |
+
+**This also explains his mockup.** Its E row matched the RAW mean — BOP 26m against his ~25m, Wick
+1h09m against his ~1h12m — which is precisely what a handful of 300-minute sessions inflates, and
+precisely what his new exclusion rule removes. The shipped numbers are his own instruction applied to
+his own design.
+
+⚠ **The median is kept and disclosed in the hover**, because on this right-skewed data the two
+diverge hard and the choice of statistic should be visible rather than assumed.
+⚠ **Each field carries its OWN n** — the exclusions bite differently per field (33 BOP outliers
+fenced, 13 Wick, 1 Wick%, 0 MUD). A shared n would overstate all of them.
+⚠ **Only the WICK fields moved to a mean.** TOOK / HL GAP / HL RNG stay medians — they were verified
+against his mockup that way at v14.57 and changing them would move numbers he has been reading.
+
+A cohort hypothesis was tested and killed first: the HOD-first subset gives Took 23m / BOP 9m /
+Wick 47m, nowhere near the mockup. One query, before any code.
+
+Suite 119 green, 6 baseline reds.
+
+## v14.60 — the five pending fields, defined by the operator and confirmed on the tape
+
+> "wick% is the percentage of the total range." … "if there is no wick, then its 0. these days
+> should not be averaged. also crazy outliers should not be averaged."
+
+BOP / WICK / W.END / WICK% / MUD shipped as **PENDING** in v14.57 because no definition existed —
+not in the mockup, not in the Academy, not in any spec. They are defined now, and **not by guessing**:
+four of them were derived from the arithmetic of his own printed row, then every one was verified
+bar-by-bar against the live ES tape for 2026-08-27.
+
+| 2026-08-27 | his panel | derived from the tape |
+|---|---|---|
+| **Wick%** | 26% | **26%** |
+| **W.End** | 8:42am | **8:42am** |
+| **Wick** | 12m | **12m** |
+| Took | 6m | 5m |
+| BOP | 6m | 7m |
+| MUD | 3h30m | 3h28m |
+
+The three that miss are all extremity-clock dependent and all miss by 1–2 minutes in the direction
+the `ES=F`-vs-`EPM26` contract offset predicts — the provenance warning in DATA-ARCHITECTURE.md
+proving itself on its second day rather than staying theoretical.
+
+**The definitions:** TOOK = open → first extremity · **W.END = the first bar to CLOSE back through
+the session open** after it (⚠ close, not touch — first touch was 8:41, first close 8:42, his panel
+says 8:42) · BOP = extremity → W.END · WICK = TOOK + BOP · **WICK% = |open − extremity| ÷ range, a
+PRICE ratio** (no duration ratio can make 26%: wick/session is 3.1%, wick/gap 5.6%) · MUD = W.END →
+the second extremity.
+
+**His exclusions, applied in the study and counted in the output:** a zero wick prints **0** on the
+day's own row and leaves the medians; outliers are fenced by **Tukey 1.5×IQR computed from the
+corpus** rather than a threshold I picked. Over 25 sessions of 2-minute ES that fence flags exactly
+the days you would call crazy — an 85% opening wick, a 324-minute Took.
+
+⚠ **NEVER RECLAIMING THE OPEN IS NOT ZERO — IT IS UNKNOWN.** Printing 0 there would claim the
+excursion ended instantly, the opposite of what happened. Those render em-dash.
+
+⚠ **THE E ROW IS EMPTY UNTIL THE CORPUS LANDS.** The baked-in base predates these definitions, so the
+wick columns show em-dash and the honesty line reads *"wick base rates pending a corpus"* rather than
+borrowing the mockup's numbers. It fills when `EPM26-1min.csv.gz` reaches GitHub and the study reruns.
+
+⓪a is now two blocks matching his mockup — the opening excursion, then the day. Rendered headless at
+his real 454px body: **442px used, zero overlaps, nothing past the edge.** Tight, not clipped.
+
+`test_hodlod` 42 → 54, five new guards mutation-tested: W.End touch-vs-close, the Wick% scale trap,
+never-reclaimed-as-zero, MUD's origin, BOP's origin. Suite 119 green, 6 baseline reds.
+
 ## v14.59 — the ES corpus gets a tap, and the base rates learn to travel
 
 > "i just wanted to make sure we had a process in place that obtained es data daily and updated the

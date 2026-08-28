@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.59
+// @version    14.63
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.59';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.63';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -21198,11 +21198,32 @@ var HODLOD_BASE = {
   // renders the tip and greps the OUTPUT for 'undefined'.
   ladder: [{w:30,rate:41,n:1169,held:481}, {w:60,rate:56,n:811,held:453}, {w:90,rate:67,n:642,held:427},
            {w:120,rate:75,n:541,held:407}, {w:180,rate:84,n:433,held:362}],
-  tookMin: 21.0, gapMin: 237.5,
-  rngPts: 56.5, rngUsd: 2825.0,
+  // ⚠⚠ EVERY E FIELD IS A TRIMMED MEAN, not a median. Operator 2026-08-28, after I had switched
+  // only the wick columns: "i thought they were all averages." He was right and the split was mine
+  // - one row must be one statistic. Tukey 1.5xIQR outliers are excluded before averaging, per
+  // "crazy outliers should not be averaged"; the fence removed 8 range and 15 first-clock outliers.
+  // ⚠ WHAT MOVED, so nobody re-derives the old numbers and thinks the study broke:
+  //     Took 21m -> 34m · HL Gap 3h58 -> 3h50 · Rng 56.5 -> 61.4pts · 1st 8:51 -> 9:03
+  // The medians are kept below purely for the hover's mean-vs-median disclosure.
+  tookMin: 33.5, gapMin: 229.5,
+  rngPts: 61.4, rngUsd: 3072.2,
   rngP25: 41.8, rngP75: 80.2,
-  firstClock: 31860, secondClock: 48300,
-  lodFirstPct: 51
+  firstClock: 32608.6, secondClock: 46919.6,
+  medTook: 21.0, medGap: 237.5, medRng: 56.5, medFirstClock: 31860.0, medSecondClock: 48300.0,
+  lodFirstPct: 51,
+  // (v14.61) THE WICK FAMILY, MEASURED over the same 284 sessions that reproduce the ladder. The
+  // corpus reached GitHub 2026-08-28 as `data/es-1min/ES TestingData.txt` (406,155 rows, EPM26).
+  // ⚠ THESE ARE TRIMMED MEANS, NOT MEDIANS. Operator: "the e row is the expected result based on
+  // AVERAGES", plus "no wick days should not be averaged. also crazy outliers should not be
+  // averaged." So: drop the 19 zero-wick days and the Tukey 1.5xIQR outliers, THEN average.
+  // ⚠ EACH FIELD CARRIES ITS OWN n because the exclusions bite differently: 33 BOP, 13 Wick,
+  // 1 Wick%, 0 MUD outliers fenced. A shared n would overstate all of them.
+  // ⚠ The median is very different on this right-skewed data (BOP mean 14.4m vs median 7.0m) and the
+  // hover says so - the choice of statistic is his, and it is disclosed rather than assumed.
+  wick: { bop:14.4, wick:61.1, mud:199.8, wickPct:28.1,
+          bopMed:7.0, wickMed:40.0, mudMed:196, wickPctMed:24.0,
+          bop_n:232, wick_n:252, mud_n:265, wickPct_n:264,
+          zeroWick:19, neverReclaimed:0 }
 };
 // ---- (v14.59) THE BASE RATES NOW TRAVEL ON THEIR OWN ----------------------------------------
 // HODLOD_BASE above is the BAKED-IN fallback: correct on the day it was compiled and frozen after.
@@ -21279,8 +21300,19 @@ function hlBaseNormalise(j){
     // rather than drawn - the same gate test_hodlod applies to the baked-in rates.
     for(i=1;i<out.length;i++) if(out[i].rate<out[i-1].rate) return null;
     var E=j.expected||{}, S=j.sequence||{};
+    // (v14.60) the wick family rides through with its OWN n, because it is averaged over a
+    // DIFFERENT set of sessions than the ladder: no-wick days and Tukey outliers are excluded per
+    // the operator's rule. A shared n would overstate what these medians stand on.
+    var W=(j.wickFamily && j.wickFamily.median) ? j.wickFamily.median : null;
     return { n:j.corpus.sessions, first:j.corpus.first, last:j.corpus.last, ladder:out,
+             wick: W ? { wick:W.wick, bop:W.bop, mud:W.mud, wickPct:W.wick_pct,
+                         wickMed:W.wick_median, bopMed:W.bop_median, mudMed:W.mud_median,
+                         wickPctMed:W.wick_pct_median,
+                         wick_n:W.wick_n, bop_n:W.bop_n, mud_n:W.mud_n, wickPct_n:W.wick_pct_n,
+                         excluded:(j.wickFamily||{}).excluded||null } : {},
              tookMin:E.took_min, gapMin:E.gap_min, rngPts:E.rng_pts, rngUsd:E.rng_usd,
+             medTook:(E.median_for_contrast||{}).took_min, medGap:(E.median_for_contrast||{}).gap_min,
+             medRng:(E.median_for_contrast||{}).rng_pts,
              rngP25:E.rng_p25, rngP75:E.rng_p75,
              firstClock:E.first_clock, secondClock:E.second_clock,
              lodFirstPct:S.pct_LOD_first };
@@ -21352,6 +21384,48 @@ function hodLod(sym){
     out.rngUsd=out.isFut ? out.rngPts*ES_USD_PER_PT : null;
     // THE STANDING EXTREMITY is the one that printed FIRST and has not been replaced since — it is
     // the one the ladder is about. How long it has stood is measured to NOW, not to the other one.
+    // ---- (v14.60) THE WICK FAMILY -----------------------------------------------------------
+    // His definitions, 2026-08-28, DERIVED from his own printed numbers and then CONFIRMED bar by
+    // bar on the live ES tape for 2026-08-27. The two fields that do not depend on extremity
+    // timing matched EXACTLY: Wick% 26 vs 26, W.End 8:42am vs 8:42am. The other three land within
+    // the 1-2 minute ES=F-vs-EPM26 contract offset that design/DATA-ARCHITECTURE.md predicts.
+    //
+    //   W.END  the first bar to CLOSE back through the SESSION OPEN after the first extremity.
+    //          ⚠ CLOSE, NOT TOUCH. First touch was 8:41, first close 8:42; his panel says 8:42.
+    //   BOP    first extremity -> W.END, the recovery leg.
+    //   WICK   TOOK + BOP = open -> W.END, the whole opening excursion.
+    //   WICK%  |open - first extremity| / total range. ⚠ A PRICE RATIO, NOT A DURATION - no
+    //          duration ratio can produce his 26% (wick/session 3.1%, wick/gap 5.6%).
+    //   MUD    W.END -> the second extremity.
+    //
+    // ⚠ "if there is no wick, then its 0" (his words). A wick that ends on its own first bar is a
+    // REAL zero and prints 0. NEVER RECLAIMING the open is NOT zero - it is UNKNOWN, and printing
+    // 0 there would claim the excursion ended instantly, the opposite of what happened. Those
+    // print as em-dash. Both are excluded from the base-rate medians (tools/study-hodlod.py); the
+    // exclusion is his rule, and it lives on the study side because that is what averages.
+    out.wickPct=null; out.wend=null; out.bop=null; out.wick=null; out.mud=null; out.reclaimed=false;
+    try{
+      if(op!=null && out.rngPts>0){
+        var extPx=(out.first==='LOD')?lo:hi;
+        // ⚠ SAME SCALE ON BOTH SIDES. `op`, `hi` and `lo` are all UNDERLYING prices straight off
+        // closedCandles(); rr cancels in the ratio, so Wick% needs no conversion. (rngPts is
+        // already converted - do NOT divide a converted range by an unconverted excursion, which
+        // is landmine L-F and is how v14.57 shipped 5.1pts beside 56.5.)
+        var wickPtsUnd=Math.abs(op-extPx), rngUnd=(hi-lo);
+        if(rngUnd>0) out.wickPct=Math.round(100*wickPtsUnd/rngUnd);
+        for(var wi=0; wi<cs.length; wi++){
+          var wb=cs[wi];
+          if(!wb || typeof wb.so!=='number' || wb.so<out.firstT || wb.c==null) continue;
+          if((out.first==='LOD') ? (wb.c>=op) : (wb.c<=op)){ out.wend=wb.so; break; }
+        }
+        if(out.wend!=null){
+          out.reclaimed=true;
+          out.bop=Math.max(0,(out.wend-out.firstT)/60);
+          out.wick=Math.max(0,(out.wend-openSec)/60);
+          out.mud=Math.max(0,(out.secondT-out.wend)/60);
+        }
+      }
+    }catch(eW){}
     out.stood=Math.max(0,(clock-out.firstT)/60);
     out.tier=hlTier(out.stood, hodlodBase());
     return out;
@@ -25152,18 +25226,47 @@ function secDay(sym){
     // ---- the stats table: A over E, so every live number is read against its own base rate -------
     function row(cls,tag,cells){ var r='<div class="g3dayr '+cls+'"><i>'+tag+'</i>';
       for(var i=0;i<cells.length;i++) r+='<span>'+cells[i]+'</span>'; return r+'</div>'; }
-    h+='<div class="g3dayg">';
-    h+=row('hd','',['1ST','TOOK','2ND','HL GAP','HL RNG']);
+    // (v14.60) HIS MOCKUP IS TWO BLOCKS, NOT ONE ROW OF FIVE. Block 1 is the OPENING EXCURSION
+    // (the wick family); block 2 is the DAY (second extremity, gap, range). Both keep the A-over-E
+    // shape so every live number sits above its own base rate.
+    function hlv(v,f){ return (v==null)?'\u2014':f(v); }
+    var eW=base.wick||{};
+    var eTip=eW.wick_n?('The E row is the EXPECTED result: EVERY field is a TRIMMED MEAN over '+base.n+' sessions \u2014 '+
+      (eW.zeroWick||0)+' no-wick days and the Tukey 1.5\u00d7IQR outliers are excluded before averaging, which is the operator\u2019s rule. '+
+      '\u26a0 This data is right-skewed, so the mean and median differ a lot \u2014 Wick averages '+hlDur(eW.wick)+' vs a median of '+
+      hlDur(eW.wickMed)+', BOP '+hlDur(eW.bop)+' vs '+hlDur(eW.bopMed)+', TOOK '+hlDur(base.tookMin)+' vs '+hlDur(base.medTook)+
+      '. The MEAN is what is shown on every field. Each carries its own n because the exclusions bite differently. p25/p75 on the range stay true percentiles \u2014 trimming a quantile would make it describe a spread it no longer covers.')
+      :'The E row is the expected result averaged over the corpus. The wick columns have no base rate yet.';
+    h+='<div class="g3dayg g3dayg8"'+g3tip(eTip)+'>';
+    h+=row('hd','',['1ST',''+D.first,'TOOK','BOP','WICK','W.END','WICK%','MUD']);
     h+=row('a','A',[
-      '<b>'+D.first+' '+hlClock(D.firstT)+'</b>',
+      '<b>'+D.first+'</b>',
+      '<b>'+hlClock(D.firstT)+'</b>',
       hlDur(D.took),
-      (D.secondT>D.firstT && D.secondT<=D.clock) ? (D.second+' '+hlClock(D.secondT)) : (D.second+' pend.'),
+      hlv(D.bop,hlDur),
+      hlv(D.wick,hlDur),
+      hlv(D.wend,hlClock),
+      hlv(D.wickPct,function(v){ return v+'%'; }),
+      hlv(D.mud,hlDur) ]);
+    h+=row('e','E',[
+      '',
+      '~'+hlClock(base.firstClock),
+      '~'+hlDur(base.tookMin),
+      hlv(eW.bop,function(v){ return '~'+hlDur(v); }),
+      hlv(eW.wick,function(v){ return '~'+hlDur(v); }),
+      hlv(eW.wick,function(v){ return '~'+hlClock(mul(8,3600)+mul(30,60)+v*60); }),
+      hlv(eW.wickPct,function(v){ return '~'+Math.round(v)+'%'; }),
+      hlv(eW.mud,function(v){ return '~'+hlDur(v); }) ]);
+    h+='</div>';
+    // ---- block 2: THE DAY ------------------------------------------------------------------
+    h+='<div class="g3dayg g3dayg4">';
+    h+=row('hd','',['2ND','HL GAP','HL RNG']);
+    h+=row('a','A',[
+      (D.secondT>D.firstT && D.secondT<=D.clock) ? ('<b>'+D.second+' '+hlClock(D.secondT)+'</b>') : (D.second+' pend.'),
       hlDur(D.gap)+((D.secondT>=D.clock)?'\u2026':''),
       (D.rngUsd!=null?('$'+Math.round(D.rngUsd).toLocaleString()+' \u2014 '):'')+D.rngPts.toFixed(1)+'pts' ]);
     h+=row('e','E',[
-      '\u2014 '+hlClock(base.firstClock),
-      '~'+hlDur(base.tookMin),
-      hlClock(base.secondClock),
+      '~'+hlClock(base.secondClock),
       '~'+hlDur(base.gapMin),
       '~$'+Math.round(base.rngUsd).toLocaleString()+' \u2014 '+base.rngPts+'pts ('+base.rngP25+'\u2013'+base.rngP75+')' ]);
     h+='</div>';
@@ -25220,7 +25323,7 @@ function secDay(sym){
        'seq '+base.lodFirstPct+'/'+(100-base.lodFirstPct)+' coin-flip \u00b7 every rate carries its n \u00b7 '+
        'corpus '+base.n+'d through '+g3esc(String(base.last))+' \u00b7 '+
        (base.src==='courier'?'rates live':'rates baked in')+' \u00b7 '+
-       '<b>BOP/WICK/W.END/WICK%/MUD pending a definition</b> \u00b7 descriptive \u2014 no entries/stops</div>';
+       (eW.wick_n?('wick avg n='+eW.wick_n+' \u00b7 trimmed mean \u00b7 '+(eW.zeroWick||0)+' no-wick + outlier days excluded'):'<b>wick base rates pending a corpus</b>')+' \u00b7 descriptive \u2014 no entries/stops</div>';
     return h+'</div>';
   }catch(e){ swallow('secDay', e); return ''; }
 }

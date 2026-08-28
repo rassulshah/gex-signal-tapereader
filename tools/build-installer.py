@@ -79,6 +79,17 @@ for f in sorted(os.listdir('session-state')):
     if not os.path.isfile(p) or f.endswith('.log'): continue
     if _SNAP.match(f) and f!=_keep_snap: continue
     FILES.append(p)
+# (v14.63) ⚠⚠ skylit-docs/ WAS NEVER IN THE PAYLOAD EITHER, AND THAT NEARLY LOST FINDINGS.md ON
+# THE VERY BUILD THAT CREATED IT. Same shape as the design/ omission fixed at v14.59: a directory a
+# `load gex` is REQUIRED to read, travelling by luck rather than by manifest. FINDINGS.md is named by
+# three live hovers and by SOURCE-OF-TRUTH; the Academy mirror is the project's doctrine.
+# Caught by decoding the .bat before sending - the only check that finds this class of bug.
+# Markdown only: no captured HTML, no images.
+for _root, _dirs, _fs in os.walk('skylit-docs'):
+    for f in sorted(_fs):
+        if f.endswith('.md'):
+            FILES.append(os.path.join(_root, f))
+FILES.append('SOURCE-OF-TRUTH.md')
 for f in sorted(os.listdir('tools')):
     p=os.path.join('tools', f)
     # (v13.9) NO .bat, NO .log — an installer must never contain installers.
@@ -90,9 +101,17 @@ for f in sorted(os.listdir('tools')):
 # mockup is sent (PROJECT-CONSTANTS L-D) and it has caught four real collisions in two days — but the
 # output was landing nowhere durable, so the evidence for "this was audited" evaporated with each
 # sandbox. ~120KB total against a 6MB cap; the argument for excluding them was never a size one.
-for f in sorted(os.listdir('mockups')):
-    p=os.path.join('mockups', f)
-    if os.path.isfile(p) and (f.endswith('.html') or f.endswith('.md') or f.endswith('.png')):
+# (v14.63) ⚠ mockups/ HAD GROWN TO 1.84MB AND TIPPED THE 6MB CAP on the build that created
+# FINDINGS.md — it was shipping every mockup ever made. Same disease the session-state snapshots had
+# at v14.3, same cure: SPECS always (.md, kilobytes, and they are the approved designs), but only the
+# TWELVE most recent renders. Older ones stay in git history, which is where a superseded render
+# belongs; they stop riding in every payload forever.
+_mk_md = [f for f in sorted(os.listdir('mockups')) if f.endswith('.md')]
+_mk_bin = [f for f in os.listdir('mockups') if f.endswith('.html') or f.endswith('.png')]
+_mk_bin.sort(key=lambda f: os.path.getmtime(os.path.join('mockups', f)), reverse=True)
+for f in _mk_md + _mk_bin[:12]:
+    p = os.path.join('mockups', f)
+    if os.path.isfile(p):
         FILES.append(p)
 # (v14.59) ⚠⚠ design/ WAS NEVER IN THE PAYLOAD, AND THAT IS HOW DATA-ARCHITECTURE.md WAS LOST.
 # The 2026-08-27 note recorded `design/DATA-ARCHITECTURE.md` as a file that "never landed" and blamed

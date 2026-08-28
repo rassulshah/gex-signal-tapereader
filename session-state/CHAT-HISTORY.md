@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-28 · v14.59 · session `4c22fa2b` — v14.59: the ES corpus tap, the base-rate courier, and the architecture document that never existed
+## 2026-08-28 · v14.63 · session `4c22fa2b` — v14.63: FINDINGS.md, the LOD/HOD rule study and the calibrated model
 
-_7 operator prompts · transcript `4c22fa2b-bee3-5451-b379-dc2a50cb42bd.jsonl`_
+_19 operator prompts · transcript `4c22fa2b-bee3-5451-b379-dc2a50cb42bd.jsonl`_
 
 ### THE EXCHANGE
 
@@ -165,6 +165,592 @@ Measured, not assumed: **391 RTH bars, exactly 08:30→15:00 CT**, on both sessi
 Truncated at ~20 rows — not worth five more round trips for 15KB. The fixture's job is to exercise epoch→CT bucketing, RTH windowing, the 386-bar threshold and dedupe; none of those depend on the price path, which is already validated against the 284-session corpus. So: real clock, real first bar, deterministic synthetic prices — and the fixture says so on its face.
 Pipeline proven: 391 bars per session, incomplete flagged, error market skipped, and **idempotent on re-run**. Now the study has to read the dailies alo …[trimmed]
 
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are commit(s) on branch 'main' that GitHub will show as Unverified (missing signature, or committer email is not noreply@anthropic.com):
+> 24f490f claude@anthropic.com
+> Please run 'git config user.email noreply@anthropic.com && git config user.name Claude', then 'git commit --amend --no-edit --reset-author' for the tip commit, or 'git rebase --exec "git commit --amend --no-edit --reset-author" 24f490f7ef899eaa6bbcc55136b7a9d0d867e2d8^' for earlier commits, then push.
+
+**me (01:05):** Fixed — `96251e2`, authored as `Claude <noreply@anthropic.com>`.
+
+Worth saying plainly so it doesn't get chased later: **this commit will never appear on GitHub either way.** The cloud gets a 403 from the git proxy by design, and `installv1459.bat` doesn't carry commits — it xcopies the files into `C:\Dev\gex-signal-tapereader` and commits there under *your* identity. So the sandbox commit is bookkeeping that dies with this container, and the amend changes nothing about what lands in your repo.
+
+It also doesn't invalidate the file I sent — the payload was built from the working tree, not from the commit, so **installv1459.bat is still the right file**. No rebuild needed.
+
+**OPERATOR:**
+> i think you are missing some fields.    look at the pics.  do you know what the fields are
+
+**me (01:16):** Let me do the arithmetic rather than guess at the names — the numbers in those two rows constrain each other.
+Yes — four of the five, and the arithmetic closes exactly rather than approximately. Every relation below is derived from your own printed numbers, not guessed from the names.
+
+**On the actual row, all four close to the minute:**
+
+```
+Took   = LOD − open          8:36 − 8:30            =  6m   ✓ printed 6m
+BOP    = W.End − LOD         8:42 − 8:36            =  6m   ✓ printed 6m
+Wick   = Took + BOP          6 + 6                  = 12m   ✓ printed 12m
+W.End  = open + Wick         8:30 + 12m             = 8:42  ✓ printed 8:42am
+MUD    = HOD − W.End         12:12 − 8:42           = 3h30m ✓ printed 3h 30m
+HL Gap = HOD − LOD           12:12 − 8:36           = 3h36m ✓ printed 3h 36m
+HL Rng = 52.75 × $50                                = $2,638 ✓
+```
+
+So, in plain terms:
+
+- **Wick** — the whole opening excursion: from the open, out to the first extremity, and back until it's done. Two halves.
+- **Took** — the first half: open → the extremity.
+- **BOP** — the second half: the extremity → the end of the wick. The recovery leg.
+- **W.End** — the clock time that excursion finished (`open + Wick`).
+- **MUD** — the middle: from the end of the opening wick to the day's *other* extremity. The stretch after the open has resolved and before the second extreme prints. On this day, 3h30m of it.
+
+Four independent relations closing to the minute isn't coincidence — those are derived quantities, not eyeballed ones. ⚠ But it's **one session**. The expected row doesn't close (`Took + BOP` = 76 vs 72; `MUD` off by 27m) and that's the *right* behaviour — those are independently computed medians, and medians don't add. Worth remembering when the study derives them.
+
+**The one I can't pin i …[trimmed]
+
+**OPERATOR:**
+> wick% is the percentage fo the total range .  so if the total range is 100, and the wick is 10, the wick is 10% .. cand you check
+
+**me (01:19):** Good — that's a price ratio, which is what the arithmetic said it had to be. Checking it against the actual tape rather than reasoning about it: the pics give me LOD 8:36, HOD 12:12, range 52.75pts, which is enough to identify the session.
+The tab I opened was closed out from under me. Re-creating it — I won't touch the Atlas tab, since navigating it would kill your panel session.
+**Confirmed on the real tape.** That session is 2026‑08‑27 — range 52.75 matches your pic exactly:
+
+```
+open 7716.25 · LOD 7702.75 · HOD 7755.50 · range 52.75
+open − LOD = 13.50 pts
+13.50 / 52.75 = 25.6%  ->  26%     ✓ your pic prints 26%
+```
+
+So **Wick% = |open − first extremity| ÷ total range**. Let me confirm what actually ends the wick, since that pins W.End and BOP too.
+Confirmed against the tape, to the minute:
+
+```
+W.End : first bar to CLOSE back above the session open after the LOD  ->  8:42am  ✓ pic 8:42am
+        (first TOUCH of the open is 8:41 — the close is what matches)
+BOP   : LOD -> W.End = 6m                                             ✓ pic 6m
+Wick  : open -> W.End                                                 ✓ pic 12m (I get 11)
+MUD   : W.End -> HOD = 3h29m                                          ✓ pic 3h30m
+```
+
+The 1–2 minute offsets are exactly the provenance issue I documented yesterday — I'm reading `ES=F` continuous, your panel reads the `EPM26` contract, so extremity clocks differ by a minute. That's the difference showing up as predicted, not an error.
+
+One edge case decides whether this is buildable, so let me check how often it bites.
+All four sessions confirmed, and the two fields that don't depend on extremity timing land **exactly**:
+
+| 2026-08-27 | your pic | derived from the tape |
+|---|---|---|
+| Wick% | 26% | **26%** ✓ |
+| W.End | 8:42am | **8:42am** ✓ | …[trimmed]
+
+**OPERATOR:**
+> i dont know what you are asking me. if there is no wick , then its 0 .   these days should not be averaged . also crazy outliers should not be averaged.
+
+**me (01:24):** Understood — that's clearer than my question was. Wick 0 when there's no wick, and those days plus outliers stay out of the averages.
+
+Before I code the exclusion rule I want to see the actual distributions, so the threshold isn't a number I made up. Pulling 60 days at 2-minute resolution to test the definitions at scale.
+25 sessions, 2-minute resolution — a sanity check on the definitions, not base rates. Two useful facts:
+
+```
+never reclaimed the open : 0 of 25      (but wick min = 0 — the zero-wick day is real)
+negative MUD             : 0 of 25
+                     p25   p50   p75   max     Tukey 1.5xIQR upper
+wick    (min)          8    40   124   334          298   -> flags the 334
+BOP     (min)          2     8    32   136           77   -> flags the 136
+Wick%                 14    19    38    85           74   -> flags the 85
+Took    (min)          4    16    46   324          109   -> flags the 324
+```
+
+Tukey's fence flags exactly what you'd call crazy — the day that opened at the high and gave back 85% of the range immediately, and the one whose extremity printed five hours in. It's derived from the data rather than a number I picked, so I'll use that and report what it drops.
+Variable collision — my loop reused `dropped`, which already held the incomplete-session list. That's the name-collision lesson in miniature.
+Exclusion machinery works — the zero-wick day was dropped from the medians and counted. Now the panel side.
+All variables in scope, and the ratio uses underlying prices on both sides so `rr` cancels — no unit trap. Now the render.
+That assertion pinned the old refusal text — the columns aren't pending any more. Replacing it with assertions that actually test the new behaviour.
+Both failures are my test scenarios, not the code — and the second one i …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (01:32):** Confirmed by attempting it, not by quoting the doc:
+
+```
+remote: access denied by the git proxy: rassulshah/gex-signal-tapereader is not in
+this session's authorized repository set
+fatal: ... error: 403
+```
+
+Those two commits are v14.59 and v14.60. They're sandbox bookkeeping — the `.bat` is what actually pushes, from your machine. Let me check what GitHub currently has, since that tells us whether your v14.59 run landed.
+Two things there matter a lot more than the push warning.
+
+**Your v14.59 install landed** — GitHub is on v14.59, companion 1.15, and `design/DATA-ARCHITECTURE.md` is on GitHub. The doc is durable now.
+
+And **the corpus is there** — `data/es-1min/ES TestingData.txt`. That was my blocker for the E row. Checking whether it's the full set.
+**The full corpus is on GitHub** — 406,155 rows of `EPM26`, exactly what the README describes. That was the last blocker on the E row. Running the study for real.
+**284 sessions, 2025‑06‑02 → 2026‑08‑21** — reproduces the documented figure exactly. Here are the real base rates for your five fields, measured rather than transcribed.
+Real numbers — but one thing doesn't reconcile and I'd rather chase it than ship past it. Your pic's `E` row reads Took ~51m, BOP ~25m, Wick ~1h12m, Wick% ~40%. The corpus says ~21m, ~7m, ~40m, ~24%. Yet the pic's *ladder* and *range* reproduced exactly back at v14.57. Your row 2 is labelled **1st HOD** while row 1 is **1st LOD** — so I suspect the E row is the HOD-first cohort, not the all-days median. Testing that.
+Cohort hypothesis is wrong — HOD-first gives 23m/9m/47m/22%, still nowhere near your pic. Testing the two other likely explanations: mean instead of median, and no exclusions.
+**The mean explains your mockup — and your new rule rejects it.**
+
+```
+field    my median + your exclusio …[trimmed]
+
+**OPERATOR:**
+> i thought they were all averages.
+
+**me (01:40):** You're right, and that's my error — I split the statistic without being told to. Making all of them trimmed means on the same rule.
+The insert failed on the anchor and `r1/r2` labels are already taken. Fixing both.
+s2/s3 didn't fire — the mutation string didn't match. Checking what's actually baked rather than assuming.
+Mutations fire. But changing the E values broke other suites that pinned the old medians — let me see which and fix them in the same commit.
+**installv1462.bat** — use this one, **ignore 1460 and 1461**.
+
+**Tampermonkey:**
+
+- **Tapereader v14.62** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+- Companion v1.15 — unchanged, skip it
+
+Run the `.bat` → wait ~5 min → click the link → reload Atlas. Footer must read v14.62.
+
+---
+
+You're right, and that split was mine, not yours. I switched the five wick columns to averages and left Took / HL Gap / HL Rng as medians because v14.57 had verified *those* as medians against an older mockup — so I quietly shipped a row with two different statistics in it and nothing on the face saying which was which. That's not defensible.
+
+All of them are the same trimmed mean now. **What moved:**
+
+| | was (median) | now (average) |
+|---|---|---|
+| Took | 21m | **33.5m** |
+| HL Gap | 3h58m | **3h50m** |
+| HL Rng | 56.5pts / $2,825 | **61.4pts / $3,072** |
+| 1st clock | 8:51am | **9:03am** |
+| 2nd clock | 1:25pm | **1:02pm** |
+
+Flagging the range especially — **$2,825 → $3,072** is a number you've been reading for a while, and it changed because it's now an average with 8 outlier sessions fenced instead of a median.
+
+One thing I did **not** average, and want to be explicit about: **p25/p75 on the range stay true percentiles.** They're a spread rather than an …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 4 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (01:44):** Same refusal as before — but rather than restate it, let me verify the claim that matters: that everything in those four commits is actually inside the file I just sent.
+Verified rather than asserted: **all 11 real changed files ride `installv1462.bat`.** The only two that don't are `install.bat` and `v10.js` — both generated artefacts, both deliberately excluded (an installer must never contain installers, and `v10.js` is regenerated by the test runner). Nothing is stranded in this sandbox.
+
+The push itself is still refused by the proxy — I attempted it a few minutes ago and got the 403. That's the documented architecture: the cloud reads, your machine writes.
+
+One thing that keeps showing up in this check and is worth naming, though I'm not folding it into a build uninvited: **`v10.js` and `install.bat` are still tracked on GitHub** despite being in `.gitignore`. The `git rm --cached` for them happened in a sandbox and never reached origin, so every run of the installer re-commits them from your disk — including `v10.js` frozen at v11.48, which is the stale-but-green trap where a fresh clone runs one test file against a 42-version-old panel and passes. It's two commands on your machine, or I can fold it into the next build's installer. Your call.
+
+**OPERATOR:**
+> ok.. so now you understand every field .  for example mud, stands for markup or markdown. markup is open to the high after the lower wick forms and markedown is open to the low after the upper wick forms.
+
+**me (01:50):** That closes the last gap — and it confirms the implementation rather than changing it. Let me check the arithmetic on your own numbers:
+Yes. Here's all eleven, and I'll flag the one thing I still don't know.
+
+**The two rows:** `A` = actual, today. `E` = expected, the trimmed mean over 284 sessions with no-wick days and Tukey outliers excluded.
+
+**Block 1 — the opening excursion**
+
+| field | what it is |
+|---|---|
+| **1st** | which extremity printed first, LOD or HOD |
+| **LOD/HOD** | the clock time it printed |
+| **Took** | open → that first extremity |
+| **BOP** | first extremity → W.End; the leg back up (or down) to the open |
+| **Wick** | Took + BOP — the whole excursion, open → W.End |
+| **W.End** | when price *closes* back through the open price. The wick is done |
+| **Wick%** | \|open − first extremity\| ÷ total range. A price ratio, not a duration |
+| **MUD** | **MarkUp / MarkDown.** From W.End to the second extremity |
+
+**Block 2 — the day**
+
+| field | what it is |
+|---|---|
+| **2nd** | the other extremity and its clock |
+| **HL Gap** | 1st → 2nd extremity |
+| **HL Rng** | HOD − LOD, in points and dollars |
+
+On MUD specifically — your description and the computed field are the same sentence, which is why it lands on your printed 3h30m. **W.End *is* the moment price is back at the open price**, so "open to the high after the lower wick forms" measured from that point is exactly `W.End → HOD`. 8:30 is the open *clock*; 8:42 is the open *price* again. Measuring from 8:30 gives 3h42m and your panel says 3h30m, so the field was already right — I just didn't know what the letters meant.
+
+And that's the piece your explanation adds that the panel doesn't yet show: **MUD is directional and it currently doesn't say which one it is.** LOD-first is a markup, HOD-first is a …[trimmed]
+
+**OPERATOR:**
+> yes its back to open (bop) .The next step is for you to understand that my intention and goal behind this field is to identiy a low or a high of day so i can profit when it goes to the other extremity.  This means you need to help identify whether the lod or hod is done .  you can use this data ,  IB 30, IB 60, Sweeps, sma 50,  20 bar high or low, and any suggestions or recommendations you have to do this . run many combinations and figure out a hight probability way to figure this out, so you meet my requirement of identifying if the lod or hod has been made.   do you understand.
+
+**me (02:03):** BOP = Back to Open. And yes — I understand the goal: the field isn't decoration, it's a decision. *Is this low in, so I can trade to the other extremity.*
+
+Before I grind on it, the two things that will decide whether the answer is real:
+
+**The corpus is still the blocker.** `EPM26-1min.csv.gz` isn't on GitHub, so I can't run this over your 284 sessions. What I can do now is a **pilot** on what Yahoo will give me — 60 days of ES — find the candidate rules, and re-run properly the moment that file lands. I'll label every number with its n.
+
+**And "run many combinations" is the trap I have to design around.** With ~40 sessions, testing 50 rules *guarantees* a few look excellent by luck — that's how this project got a phantom 71% edge from a factor that voted one way on a trending day. So I'll split sessions into train/holdout, report how often each condition even fires, and treat anything that doesn't survive the holdout as noise.
+
+Pulling the data.
+50 full sessions, 79 bars each. Now computing the features and labels in-browser and returning contingency tables rather than raw bars — and splitting train/holdout by date so the holdout is genuinely out-of-sample.
+Strong-looking numbers — and the first thing to do with them is distrust them. A 70% base rate at bar level is inflated: by 2pm the low is trivially in, so any condition that can only fire late earns accuracy for free. That's the exact trap that produced this project's phantom 71% edge. Re-running with time-of-day held constant.
+Much more honest picture once time is held constant. Base rate climbs 49% → 87% through the session, which is exactly the free accuracy I was worried about. And one of your candidates already failed:
+Everything lands within a couple of points of everything else — which is itself the finding …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are untracked files in the repository. Please commit and push these changes to the remote branch.
+
+**me (02:12):** `ES TestingData.txt` was already tracked — so the corpus is safe. Committed the study too, and it belongs in the one file this project has been referencing for weeks without it ever existing.
+Committed, so the study can't die with this sandbox — and it went into `skylit-docs/FINDINGS.md`, which three hovers in your panel have been pointing at for weeks despite it never having existed in a single commit. It exists now, with this as entry **F‑1**, marked PROVISIONAL.
+
+Also worth correcting: **the corpus was never actually missing.** It's been on GitHub as `ES TestingData.txt` — my tooling was looking for `EPM26-1min.csv.gz`, so I reported it absent. Same wrong-filename mistake as the Yahoo search. You supplied that file twice because of my error, not yours.
+
+Nothing else pushed — the sandbox still can't reach GitHub, so these three commits ride the next installer.
+
+My question from before still stands, and it's the only thing left on this:
+
+**Build the three-tier verdict into ⓪a?** — `LOD IN — 82% (IB60 · stood 1h02 · n=323)`, with IB30 at 09:39 as the early read and IB60+stood≥60 as the confident one — **and demote SWP to unproven**, showing its measured 48% in the hover rather than presenting it as a confirmation.
+
+**OPERATOR:**
+> i also want you to test the various combinations with  divergences . for example es keeps making low and nq doesn't   as well as momentum divergences where es makes a low but a momentum indicator doesnt. ive added nq data in the same folder. see if it helps in idnetifyign hod and lod have occurred. Test combinations of everything. i want you to create a predictive probabilstic model so i can use it to identify if a hod or lod has occurred.
+
+**me (02:30):** NQ data — let me get it and check what's available for a real model.
+NQ isn't on GitHub yet — it's newer than your last push. One line fixes that, and I'll come back to cross-market divergence when it lands:
+
+```
+cd C:\Dev\gex-signal-tapereader
+git add "data/es-1min/NQ TestingData.txt" && git commit -m "data: NQ 1-min corpus" && git push
+```
+
+Meanwhile I'll build everything that doesn't need it — **momentum divergence is computable from ES alone** — and the model itself. sklearn is available, so this can be a real calibrated model rather than a rule stack.
+Too slow — 188k rows through a GBM. Sampling the decision every 5 minutes (still 1‑minute data underneath) and running it in the background.
+Well-calibrated — predicted vs actual match within 1–2 points at every bucket, which is what makes it usable for sizing. Now the question you actually asked: **does divergence add anything?** Ablation — drop each feature and measure what the model loses.
+Complete, and it's a clean answer. Let me test the parsimonious version and extract coefficients the panel can actually compute inline — sklearn doesn't exist in a userscript.
+Model built and calibrated on your 284 sessions. Direct answers first.
+
+**Momentum divergence doesn't help. −0.0004 AUC.** Your hypothesis, measured rather than assumed, and the answer is no. RSI *level* carries real information (+0.047 on its own); RSI *divergence at the extreme* carries none. It's recorded in FINDINGS so nobody re-litigates it.
+
+**Cross-market divergence is still unanswered** — `NQ TestingData.txt` is on your machine but not on GitHub, so that feature was constant. Its 0.0000 is *untested*, not negative. That one command pushes it and I'll run it.
+
+**The model:**
+
+| | features | AUC |
+|---|---|---|
+| the clock alone | 3 | 0.8204 |
+| **+ d …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 7 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (02:43):** Seven commits of research sitting only in a container that PROJECT-CONSTANTS records as having reset mid-session twice. Let me verify the push really is blocked rather than quoting doctrine at you.
+403 confirmed — the cloud genuinely can't push; the installer is the only route. And the panel *has* moved: **origin is still on v14.59**, so v14.60–62 plus all the research exist only here.
+
+Rather than send a second file called `installv1462.bat` — the exact "can't tell two files apart" landmine — I'll bump to a distinct version. First, what are you actually running?
+You're on **v14.58**; GitHub is on 14.59 (so `installv1459.bat` ran but Tampermonkey never pulled it), and 14.60–62 plus all the research exist only here. One file will carry the lot.
+
+### DECISIONS
+
+- **THE CORPUS WAS NEVER MISSING.** It has been on GitHub as `data/es-1min/ES TestingData.txt` the
+  whole time. My tooling looked for `EPM26-1min.csv.gz`, found nothing, and I reported it absent -
+  across three separate messages, and he supplied the file TWICE because of it. **Same wrong-filename
+  error as the `finance.yahoo` grep two builds earlier, in the same session.** When a file is
+  "missing", check the FOLDER before checking the name.
+- **THE INITIAL BALANCE ANSWERS HIS QUESTION; SWEEPS DO NOT.** 284 sessions, one row per session-side,
+  lift measured against the base rate AT THE SAME CLOCK TIME (without that control the first pass
+  looked twice as good as it was). IB60 78% at 10:01 vs a 46% base. **Sweeps 48%, lift +3** - two
+  independent samples agree, and the SWP chip currently ships as a confirmation.
+- **HIS OWN HYPOTHESIS, ANSWERED NO.** Momentum divergence: **-0.0004 AUC**. RSI *level* helps
+  (+0.047); RSI *divergence at the extreme* does not. Recorded in FINDINGS so it is not re-litigated.
+- **ONE QUANTITY IS ALMOST THE WHOLE MODEL.** `posr` (distance travelled from the extreme / session
+  range) is +0.0574 of the +0.0588 total headroom over the clock. IB30, IB60, the 50-SMA,
+  open-reclaimed and the 60-minute breakout are all PROXIES for it - which is why the rule study kept
+  returning identical numbers for every combination. **Stacking confirmations was measuring one thing
+  five times.**
+- **FIVE FEATURES BEAT FOURTEEN.** AUC 0.8795 vs 0.8792. The shippable model is five coefficients the
+  panel can compute inline; every coefficient is positive.
+- **THE MODEL IS NOT OBVIOUSLY BETTER THAN THE RULE, AND THE NOTE SAYS SO.** Plain IB60 is 78% at
+  10:01 on 339 session-sides; the model reaches 79% at 10:40 on 521. Its real advantage is a
+  CALIBRATED number at every moment, which supports sizing - not a higher hit rate.
+- **CROSS-MARKET DIVERGENCE REMAINS UNTESTED.** `NQ TestingData.txt` is on his machine, not on GitHub.
+  Its 0.0000 must not be read as a negative result.
+
+### SHIPPED
+
+**v14.63** - a research build; no panel behaviour change from v14.62. `skylit-docs/FINDINGS.md`
+created (F-1, F-2), `tools/study-lodhod.py`, `tools/model-lodhod.py`. Carries v14.60-14.62, which
+never reached GitHub.
+
+### OPEN AT CLOSE
+
+1. **HE IS ON v14.58.** GitHub was on 14.59, so installv1459.bat ran but Tampermonkey never pulled
+   it. This build must be followed by CLICKING THE LINK, then reloading Atlas.
+2. **PUSH `NQ TestingData.txt`** - it is the only thing blocking the cross-market divergence test.
+3. **Not yet built, and awaiting his word:** the ⓪a verdict line (three-tier IB30/IB60/IB60+stood),
+   demoting SWP to unproven with its measured 48%, and wiring the model as a live probability.
+4. The **feature-record collapse** still gates any study over the panel's own recorded data.
+5. ⓪a is still **not enrolled in FEATURES**; VWAP still absent.
+
+---
+
+<!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-28 · v14.62 · session `4c22fa2b` — v14.62: one row, one statistic - every E field is a trimmed mean
+**OPERATOR:**
+> load gex
+**OPERATOR:**
+> Check the architecture doc for the yahoo pipeline that updates the es data file daily.  I want to make sure we have the latest data for the hod lod feature so it updates daily
+**OPERATOR:**
+> I just wanted to make sure we had a process in place that obtained es data duly and updated the data file.  I know the process workflow is in git and it can be found checking what was committed but you had a lot of difficulty finding it the lat time
+**OPERATOR:**
+> Yes I want this process automated so the hod lid is always updated based on the latest data.  I also need you to ensure you are able to find it in the future and place its details in the architecture document for this project so it is read every time load he’s is done.  I want to get this out of the way. The process should be extendable to other markets like nq gc nd cl in the future.
+**OPERATOR:**
+> Continue from where you left off.
+## The design
+**OPERATOR:**
+> i'm surprised its not there.  there should be a design or architecture document  that already talks about yahoo finance, Inside Finance (IF) etc. can you double check
+**OPERATOR:**
+> make sure everything is documented and can be retrieved via load gex protocol and build .
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are commit(s) on branch 'main' that GitHub will show as Unverified (missing signature, or committer email is not noreply@anthropic.com):
+> 24f490f claude@anthropic.com
+> Please run 'git config user.email noreply@anthropic.com && git config user.name Claude', then 'git commit --amend --no-edit --reset-author' for the tip commit, or 'git rebase --exec "git commit --amend --no-edit --reset-author" 24f490f7ef899eaa6bbcc55136b7a9d0d867e2d8^' for earlier commits, then push.
+**OPERATOR:**
+> i think you are missing some fields.    look at the pics.  do you know what the fields are
+**OPERATOR:**
+> wick% is the percentage fo the total range .  so if the total range is 100, and the wick is 10, the wick is 10% .. cand you check
+**OPERATOR:**
+> i dont know what you are asking me. if there is no wick , then its 0 .   these days should not be averaged . also crazy outliers should not be averaged.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> i thought they were all averages.
+
+### DECISIONS
+
+- **ONE ROW, ONE STATISTIC — AND I HAD BROKEN THAT.** v14.61 made the five wick columns trimmed
+  MEANS and left TOOK / HL GAP / HL RNG as MEDIANS, because those had been verified as medians
+  against an older mockup at v14.57. He said: *"i thought they were all averages."* He was right and
+  the split was my invention. **A table where two columns are means and three are medians is one
+  nobody can reason about, and nothing on the face said which was which.** Every E field is now the
+  same trimmed mean.
+- **WHAT MOVED, recorded so nobody re-derives the old numbers and thinks the study broke:**
+  Took 21m -> 33.5m · HL Gap 3h58 -> 3h50 · Rng 56.5 -> 61.4pts ($2,825 -> $3,072) ·
+  1st clock 8:51am -> 9:03am · 2nd clock 1:25pm -> 1:02pm.
+- **p25/p75 STAY TRUE PERCENTILES.** They are explicitly a spread, not an average; a trimmed
+  quantile describes a range it no longer covers. `s5` asserts they still bracket the mean.
+- **THE ENFORCEMENT IS A TEST, NOT A NOTE.** `s1-s7` pin every baked E field to the study's trimmed
+  mean, assert it DIFFERS from the median (so the switch cannot silently revert), and require the
+  face to state the statistic. Mutation-tested: reverting `tookMin` to 21.0 or `rngPts` to 56.5
+  turns the suite red.
+
+
+### SHIPPED
+
+**v14.62** - every E field a trimmed mean; the study emits `statistic`, `outliers_excluded` and
+`median_for_contrast` inside BASERATES.json so the choice is legible in the artefact itself; the
+hover names mean vs median on three fields. test_hodlod 54 -> 65.
+
+
+### OPEN AT CLOSE
+
+1. What is **ND**?
+2. The **feature-record collapse** (3,822 on 08-20 vs 15 on 08-27) still gates any study.
+3. ⓪a still **not enrolled in FEATURES**; VWAP still absent.
+4. The corpus tap has **never run on real couriered data** - fixture only. After a session on
+   v14.62 + companion v1.15: `__gptsDebug.futBars()`, his push, then `tools/append-futures.py`.
+5. The wick E row now stands on the corpus; the LADDER still stands on the same 284 sessions.
+
+---
+
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
+
+# EARLIER CONTEXTS
+
+## 2026-08-28 · v14.61 · session `4c22fa2b` — v14.61: the corpus arrived, the wick base rates are real, and the E row is a trimmed mean
+**OPERATOR:**
+> load gex
+**OPERATOR:**
+> Check the architecture doc for the yahoo pipeline that updates the es data file daily.  I want to make sure we have the latest data for the hod lod feature so it updates daily
+**OPERATOR:**
+> I just wanted to make sure we had a process in place that obtained es data duly and updated the data file.  I know the process workflow is in git and it can be found checking what was committed but you had a lot of difficulty finding it the lat time
+**OPERATOR:**
+> Yes I want this process automated so the hod lid is always updated based on the latest data.  I also need you to ensure you are able to find it in the future and place its details in the architecture document for this project so it is read every time load he’s is done.  I want to get this out of the way. The process should be extendable to other markets like nq gc nd cl in the future.
+**OPERATOR:**
+> Continue from where you left off.
+## The design
+**OPERATOR:**
+> i'm surprised its not there.  there should be a design or architecture document  that already talks about yahoo finance, Inside Finance (IF) etc. can you double check
+**OPERATOR:**
+> make sure everything is documented and can be retrieved via load gex protocol and build .
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are commit(s) on branch 'main' that GitHub will show as Unverified (missing signature, or committer email is not noreply@anthropic.com):
+> 24f490f claude@anthropic.com
+> Please run 'git config user.email noreply@anthropic.com && git config user.name Claude', then 'git commit --amend --no-edit --reset-author' for the tip commit, or 'git rebase --exec "git commit --amend --no-edit --reset-author" 24f490f7ef899eaa6bbcc55136b7a9d0d867e2d8^' for earlier commits, then push.
+**OPERATOR:**
+> i think you are missing some fields.    look at the pics.  do you know what the fields are
+**OPERATOR:**
+> wick% is the percentage fo the total range .  so if the total range is 100, and the wick is 10, the wick is 10% .. cand you check
+**OPERATOR:**
+> i dont know what you are asking me. if there is no wick , then its 0 .   these days should not be averaged . also crazy outliers should not be averaged.
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+### DECISIONS
+
+- **THE CORPUS IS ON GITHUB AND NOBODY NOTICED.** Chasing an "unpushed commits" warning, I checked
+  what origin actually holds and found **`data/es-1min/ES TestingData.txt`** - 406,155 rows of
+  EPM26, the file listed as the last blocker in two resume notes. His v14.59 installer run swept it
+  up. ⚠ It arrived under a DIFFERENT NAME than every doc predicted (`EPM26-1min.csv.gz`), and
+  `study-hodlod.py` reported "no sources for ES" because it looked for one spelling. That is the
+  too-narrow-search failure for the second time in two days; the lookup now tries every name the
+  file has worn.
+- **THE E ROW IS A TRIMMED MEAN, ON HIS INSTRUCTION.** *"the e row is the expected result based on
+  averages"* + *"no wick days should not be averaged. also crazy outliers should not be averaged"*
+  = exclude the 19 zero-wick days and the Tukey outliers, THEN average. Not a median.
+- **AND THAT EXPLAINS HIS MOCKUP.** Its E row matched the RAW mean (BOP 26m vs pic ~25m, Wick 1h09m
+  vs pic ~1h12m) - which is exactly what a handful of 300-minute sessions inflates, and exactly what
+  his new exclusion rule exists to remove. The shipped numbers are his own instruction applied to
+  his own design, not a disagreement with it.
+- **THE MEDIAN IS KEPT AND DISCLOSED.** On this right-skewed data they diverge hard - BOP mean 14m
+  vs median 7m, Wick 1h01m vs 40m. The hover names both so the choice of statistic is visible rather
+  than assumed.
+- **A COHORT HYPOTHESIS THAT WAS WRONG, AND WORTH RECORDING.** I first guessed his E row was the
+  HOD-first cohort. Measured: HOD-first gives Took 23m / BOP 9m / Wick 47m - nowhere near the pic.
+  Testing it took one query and killed a plausible-sounding story before it reached the code.
+
+
+### SHIPPED
+
+**v14.61** - real wick base rates baked in (BOP ~14m n=232, Wick ~1h01m n=252, Wick% ~28% n=264,
+MUD ~3h20m n=265), `BASERATES.json` regenerated over the full 284-session corpus with both the
+trimmed mean and the median, the study's corpus lookup widened, and the E-row hover disclosing the
+statistic. The E row is no longer em-dash.
+
+
+### OPEN AT CLOSE
+
+1. **Only the WICK fields moved to a trimmed mean.** TOOK / HL GAP / HL RNG are still medians -
+   they were verified against his mockup that way at v14.57 and he has not asked to change them.
+   Ask before switching, it moves numbers he has been reading.
+2. What is **ND**?
+3. The **feature-record collapse** (3,822 on 08-20 vs 15 on 08-27) still gates any study.
+4. ⓪a still **not enrolled in FEATURES**; VWAP still absent.
+5. The corpus tap has still **never run on real couriered data** - fixture only.
+
+---
+
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
+
+# EARLIER CONTEXTS
+
+## 2026-08-28 · v14.60 · session `4c22fa2b` — v14.60: the wick family defined, confirmed on the tape, and built
+**OPERATOR:**
+> load gex
+**OPERATOR:**
+> Check the architecture doc for the yahoo pipeline that updates the es data file daily.  I want to make sure we have the latest data for the hod lod feature so it updates daily
+**OPERATOR:**
+> I just wanted to make sure we had a process in place that obtained es data duly and updated the data file.  I know the process workflow is in git and it can be found checking what was committed but you had a lot of difficulty finding it the lat time
+**OPERATOR:**
+> Yes I want this process automated so the hod lid is always updated based on the latest data.  I also need you to ensure you are able to find it in the future and place its details in the architecture document for this project so it is read every time load he’s is done.  I want to get this out of the way. The process should be extendable to other markets like nq gc nd cl in the future.
+**OPERATOR:**
+> Continue from where you left off.
+## The design
+**OPERATOR:**
+> i'm surprised its not there.  there should be a design or architecture document  that already talks about yahoo finance, Inside Finance (IF) etc. can you double check
+**OPERATOR:**
+> make sure everything is documented and can be retrieved via load gex protocol and build .
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are commit(s) on branch 'main' that GitHub will show as Unverified (missing signature, or committer email is not noreply@anthropic.com):
+> 24f490f claude@anthropic.com
+> Please run 'git config user.email noreply@anthropic.com && git config user.name Claude', then 'git commit --amend --no-edit --reset-author' for the tip commit, or 'git rebase --exec "git commit --amend --no-edit --reset-author" 24f490f7ef899eaa6bbcc55136b7a9d0d867e2d8^' for earlier commits, then push.
+**OPERATOR:**
+> i think you are missing some fields.    look at the pics.  do you know what the fields are
+**OPERATOR:**
+> wick% is the percentage fo the total range .  so if the total range is 100, and the wick is 10, the wick is 10% .. cand you check
+**OPERATOR:**
+> i dont know what you are asking me. if there is no wick , then its 0 .   these days should not be averaged . also crazy outliers should not be averaged.
+
+### DECISIONS
+
+- **HE DEFINED THE FIVE PENDING FIELDS, AND THE TAPE CONFIRMED THEM.** BOP/WICK/W.END/WICK%/MUD had
+  been printed as PENDING since v14.57 because no definition existed anywhere. He supplied Wick%
+  (*"the percentage of the total range"*) and the rest were DERIVED from his own printed numbers,
+  then verified bar-by-bar on the live ES tape for 2026-08-27. The two fields that do not depend on
+  extremity timing matched EXACTLY - **Wick% 26 vs 26, W.End 8:42am vs 8:42am**. The other three
+  land within the 1-2 minute ES=F-vs-EPM26 offset that DATA-ARCHITECTURE.md predicts, which is the
+  provenance warning proving itself useful rather than theoretical.
+- **W.END IS A CLOSE, NOT A TOUCH.** First touch of the open was 8:41, first close 8:42; his panel
+  prints 8:42. One session decided that, and it is written down as such.
+- **WICK% IS A PRICE RATIO, ESTABLISHED BY ELIMINATION.** No duration ratio can produce 26%
+  (wick/session 3.1%, wick/gap 5.6%). That was the reasoning that let me ask him one precise
+  question instead of five vague ones.
+- **HIS EXCLUSION RULE:** *"if there is no wick, then its 0 ... these days should not be averaged.
+  also crazy outliers should not be averaged."* So a zero wick PRINTS 0 on the day's own row and is
+  excluded from the medians, and outliers are fenced by **Tukey 1.5xIQR computed from the corpus** -
+  a threshold derived from the data rather than a number I chose. Every exclusion is COUNTED into
+  BASERATES.json so the n on the face is the n behind the number.
+- **NEVER RECLAIMING THE OPEN IS NOT ZERO - IT IS UNKNOWN.** A session that never closes back
+  through the open has no completed wick; printing 0 would claim the excursion ended instantly, the
+  opposite of what happened. Those render em-dash. Building the test fixture for it taught me the
+  case is narrower than it looks: it needs the LOD first, the high afterwards, and no close back
+  through the open all day.
+- **I ASKED A BAD QUESTION.** He replied *"i dont know what you are asking me"* - I had framed a
+  refusal-rule question in my own vocabulary instead of asking what the field meant. The answer was
+  simpler than the question. **Ask in his terms.**
+- **A FIFTH NAME COLLISION.** `dropped` in the new Tukey loop shadowed the incomplete-session list
+  built forty lines above, and `len(dropped)` exploded. GREP BEFORE NAMING.
+
+
+### SHIPPED
+
+**v14.60** - the wick family computed on the A row (`hodLod`), the two-block ⓪a layout matching his
+mockup, the E row carried through `hlBaseNormalise` with its OWN n (a different session set from the
+ladder), and `tools/study-hodlod.py` computing all six over the corpus with his exclusions applied.
+`test_hodlod` 42 -> 54 asserts, five new guards mutation-tested (W.End touch-vs-close, the Wick%
+scale trap, never-reclaimed-as-zero, MUD's origin, BOP's origin).
+
+
+### OPEN AT CLOSE
+
+1. **THE E ROW IS EMPTY UNTIL THE CORPUS LANDS.** The baked-in base carries no wick family - those
+   six were defined after it was compiled - so the E row prints em-dash and the honesty line says
+   *"wick base rates pending a corpus"*. It fills the moment
+   `data/es-1min/EPM26-1min.csv.gz` reaches GitHub and the study re-runs.
+2. **WIDTH.** His mockup blocks are ~780px against a 454px panel body - the same problem as the
+   ladder. Measured before shipping.
+3. What is **ND**?
+4. The **feature-record collapse** (3,822 on 08-20 vs 15 on 08-27) still gates any study.
+5. ⓪a is still **not enrolled in FEATURES**; VWAP still does not exist.
+
+---
+
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
+
+# EARLIER CONTEXTS
+
+## 2026-08-28 · v14.59 · session `4c22fa2b` — v14.59: the ES corpus tap, the base-rate courier, and the architecture document that never existed
+**OPERATOR:**
+> load gex
+**OPERATOR:**
+> Check the architecture doc for the yahoo pipeline that updates the es data file daily.  I want to make sure we have the latest data for the hod lod feature so it updates daily
+**OPERATOR:**
+> I just wanted to make sure we had a process in place that obtained es data duly and updated the data file.  I know the process workflow is in git and it can be found checking what was committed but you had a lot of difficulty finding it the lat time
+**OPERATOR:**
+> Yes I want this process automated so the hod lid is always updated based on the latest data.  I also need you to ensure you are able to find it in the future and place its details in the architecture document for this project so it is read every time load he’s is done.  I want to get this out of the way. The process should be extendable to other markets like nq gc nd cl in the future.
+**OPERATOR:**
+> Continue from where you left off.
+## The design
+**OPERATOR:**
+> i'm surprised its not there.  there should be a design or architecture document  that already talks about yahoo finance, Inside Finance (IF) etc. can you double check
+**OPERATOR:**
+> make sure everything is documented and can be retrieved via load gex protocol and build .
+
 ### DECISIONS
 
 - **THE SEARCH WAS WRONG AND HE CAUGHT IT.** I reported that no design or architecture document
@@ -202,6 +788,7 @@ Pipeline proven: 391 bars per session, incomplete flagged, error market skipped,
   `LOCKED-ITEMS.md` carries the split table so nobody greps `yahoo`, finds the courier, and concludes
   it shipped.
 
+
 ### SHIPPED
 
 **v14.59 + companion v1.15** - the Yahoo 1-minute bar courier (ES/NQ/GC/CL), the `futBars` leg of the
@@ -214,6 +801,7 @@ by `test_futbars.js` f31-f41. It had never existed in any commit.
 
 `test_futbars.js` - 46 assertions, every guard individually mutation-tested. Suite 118 green + 46,
 6 documented baseline reds.
+
 
 ### OPEN AT CLOSE
 
@@ -229,7 +817,9 @@ by `test_futbars.js` f31-f41. It had never existed in any commit.
 
 ---
 
-<!-- EARLIER-CONTEXTS -->
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 

@@ -1,0 +1,164 @@
+# FINDINGS — what WE measured, beside what the Academy says
+
+**This file is named by three live hovers in the panel and had NEVER EXISTED in any commit** —
+verified 2026-08-28 with `git log --all --diff-filter=A`. It was not lost; it was never written.
+Created 2026-08-28 with its first real entry.
+
+**Read it alongside `skylit-docs/learn/`, never merged into it.** The Academy is doctrine — the
+vendor's prior. This file is evidence. Where they disagree, the disagreement is the finding, and
+`SOURCE-OF-TRUTH.md`'s 2026-08-25 amendment governs: doctrine is the default where there is no
+evidence; evidence wins where there is.
+
+**Every entry carries a STATUS: OPEN · PROVISIONAL · CONFIRMED · SUPERSEDED.**
+⚠ A SUPERSEDED finding is kept, never deleted, so a later context does not rediscover a dead end.
+
+---
+
+## F-1 · IS THE LOW / HIGH OF DAY IN? THE INITIAL BALANCE ANSWERS IT. SWEEPS DO NOT.
+**Status: PROVISIONAL** (one corpus, one instrument, 284 sessions) · measured 2026-08-28
+Script: `tools/study-lodhod.py` · Corpus: `data/es-1min/ES TestingData.txt`, EPM26 1-minute,
+284 complete RTH sessions, 2025-06-02 → 2026-08-21.
+
+**The operator's question, verbatim:** *"identify a low or a high of day so i can profit when it
+goes to the other extremity ... you need to help identify whether the lod or hod is done."*
+
+### Method, and why each control is there
+- **One row per (session, side), at the bar the rule FIRST fires.** 188,000 bar-observations are not
+  188,000 observations — the label barely changes within a session. Effective n is **568
+  session-sides**, and that is what is quoted.
+- **Lift is measured against the base rate AT THE SAME CLOCK TIME.** The chance a standing extreme
+  is the day's climbs from ~40% at 09:30 to ~64% by noon, so any rule that can only fire late
+  collects that for free. This is PROJECT-CONSTANTS pattern 7, and it is the single reason the
+  first pass of this study looked twice as good as it was.
+- **Train/holdout split by date** (60/40), because 18 rules were tested.
+
+### Result
+
+| rule | n | hit | median fire | base at that hour | **lift** |
+|---|---|---|---|---|---|
+| IB60 broken + extreme stood ≥60m | 323 | **82%** | 10:17 | 50% | **+32** |
+| IB60 broken + 60m breakout | 332 | 80% | 10:03 | 47% | +33 |
+| **IB60 broken** | 339 | **78%** | 10:01 | 46% | **+32** |
+| **IB30 broken** | 364 | 74% | **09:39** | 41% | **+33** |
+| >75% of range from the extreme | 428 | 69% | 09:35 | 40% | +29 |
+| 60-minute breakout | 551 | 70% | 10:31 | 52% | +18 |
+| SMA50 (150 min) | 567 | 55% | 09:30 | 39% | +16 |
+| **sweep + reclaim** | 230 | **48%** | 09:58 | 45% | **+3** |
+| *wait 120m (the ladder alone)* | 508 | 74% | 11:09 | 58% | +16 |
+| *wait 180m* | 431 | 84% | 12:02 | 64% | +20 |
+
+### What this says
+1. **THE INITIAL BALANCE IS THE SIGNAL.** IB30 and IB60 deliver +32/+33 over the clock, and deliver
+   it at 09:39–10:17 — while the session still has its range ahead of it. Waiting to noon reaches
+   84% but only +20, on a base already at 64%.
+2. **SWEEPS ARE DEAD FOR THIS QUESTION. 48%, lift +3, BELOW the same-hour base.** Two independent
+   samples agree (a 50-session Yahoo ES pilot gave 53%; this corpus gives 48%). ⚠ The `SWP` chip
+   ships on ⓪a as a confirmation and should not be read as one.
+3. **THE 50-SMA CARRIES NO INDEPENDENT INFORMATION HERE.** Alone: 55%. And `IB60` and `IB60+SMA`
+   return *identical* n and hit (339 / 78%) — whenever IB60 has broken, the SMA condition is already
+   true. ⚠ This is NOT a verdict on the 50-SMA as a direction tool, which is the operator's stated
+   backbone and a different question.
+4. **STACKING CONFIRMATIONS DOES NOTHING.** IB60, IB60+SMA, IB60+far and IB60+SMA+far are all 78% at
+   n≈339. Every added condition shrinks the sample without moving the rate. **One clean trigger.**
+
+### Against the Academy
+`learn/` has no article on session-extremity timing, so **no doctrine is contradicted or confirmed
+here** — this is ours. The nearest neighbour is `charts-first`, which treats prior highs and lows as
+chart structure rather than exposure, and is consistent with an initial-balance break mattering.
+
+### What would move this
+Another instrument (NQ/GC/CL — the corpus tap now collects them), a second contract to rule out an
+`EPM26`-specific artefact, and a live forward-scored season. Until then: **PROVISIONAL**.
+
+---
+
+## F-2 · A CALIBRATED PROBABILITY FOR "IS THE EXTREME IN" — AND WHAT ACTUALLY DRIVES IT
+**Status: PROVISIONAL** (ES only; the cross-market half is UNTESTED) · measured 2026-08-28
+Script: `tools/model-lodhod.py` · 284 sessions, EPM26 1-minute, decision sampled every 5 minutes.
+
+**The operator's ask:** *"test the various combinations with divergences ... create a predictive
+probabilistic model so i can use it to identify if a hod or lod has occurred."*
+
+### The control that decides whether any of this is real
+The chance a standing extreme is the day's rises from ~40% at 09:30 to ~64% by noon **for free**. So
+a model given only the clock already scores **AUC 0.8204**. That is the number to beat, and every
+figure below is quoted against it. Folds are **GroupKFold by session date** — bars inside one session
+share a label, so a random split would leak it.
+
+### Result
+
+| model | features | AUC | Brier |
+|---|---|---|---|
+| time only (the baseline) | 3 | 0.8204 | 0.1627 |
+| time + `posr` | 4 | 0.8778 | 0.1331 |
+| **time + `posr` + `rsi`** | **5** | **0.8795** | **0.1321** |
+| everything | 14 | 0.8792 | 0.1323 |
+
+**Five features equal fourteen.** Total headroom over the clock is **+0.059 AUC**, and `posr` alone —
+how far price has travelled from the extreme as a fraction of the session range — is **+0.0574 of it**.
+
+### What each feature is worth ON TOP OF TIME (add-one), and what is lost when DROPPED
+
+| feature | add-one | drop-one | reading |
+|---|---|---|---|
+| `posr` distance travelled from the extreme | **+0.0574** | **−0.0067** | **carries the model** |
+| `rsi` momentum level | +0.0472 | −0.0011 | strong alone, mostly redundant with posr |
+| `sma` 50-SMA (150m) | +0.0365 | 0.0000 | a proxy for posr |
+| `ib30` broken | +0.0181 | +0.0004 | a proxy for posr |
+| `opn` open reclaimed | +0.0175 | 0.0000 | a proxy for posr |
+| `ib60` broken | +0.0150 | +0.0004 | a proxy for posr |
+| `swp` sweep + reclaim | +0.0048 | −0.0013 | ~nothing (see F-1: 48% standalone) |
+| `bN` 60-minute breakout | +0.0021 | 0.0000 | nothing |
+| **`mdiv` MOMENTUM DIVERGENCE** | **−0.0004** | **+0.0003** | **NOTHING. Measured, not assumed.** |
+| `xdiv` cross-market divergence | 0.0000 | 0.0000 | ⚠ **UNTESTED** — NQ corpus not present |
+| `side` low vs high | −0.0001 | +0.0004 | the model is symmetric, as F-1 found |
+
+### The three things this says
+1. **ONE QUANTITY EXPLAINS ALMOST ALL OF IT.** IB30, IB60, the 50-SMA, open-reclaimed and the 60-minute
+   breakout are all proxies for *price has travelled away from the extreme and stayed away*. `posr`
+   measures that directly and absorbs them — which is exactly why F-1 found IB60, IB60+SMA, IB60+far
+   and IB60+SMA+far returning identical numbers. **Stacking confirmations is measuring one thing five
+   times.**
+2. **MOMENTUM DIVERGENCE DOES NOT HELP. −0.0004 AUC.** RSI *level* carries information (+0.047 alone);
+   RSI *divergence at the extreme* carries none. This was the operator's own hypothesis and the answer
+   is no — recorded so it is not re-litigated.
+3. **CROSS-MARKET DIVERGENCE IS NOT ANSWERED.** `NQ TestingData.txt` exists on the operator's machine
+   but is not on GitHub, so `xdiv` was constant 0. **Do not read its 0.0000 as a negative result.**
+
+### The shippable model
+`P = 1/(1+exp(-z))`, standardised inputs, fitted on all 284 sessions:
+
+    z = 1.14337
+        +0.70156 * ((mins   - 225.000) /  96.698)     minutes since the RTH open
+        +0.52858 * ((stood  - 132.809) / 105.981)     minutes the extreme has stood
+        +0.12454 * ((extmin -  92.191) /  94.910)     minutes from the open to the extreme
+        +1.19937 * ((posr   -   0.500) /   0.3167)    (price - extreme) / session range
+        +0.37715 * ((rsi    -  50.000) /   5.3794)    RSI, oriented to the side being asked
+
+⚠ Every coefficient is POSITIVE and that is the whole story: later in the session, longer standing,
+further travelled, stronger momentum away — each independently makes the extreme more likely to hold.
+
+### Calibration (out-of-fold) — this is what makes it usable for sizing
+
+| predicted | 7% | 15% | 25% | 35% | 45% | 55% | 65% | 75% | 86% | 96% |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **actual** | 9% | 17% | 25% | 34% | 45% | 57% | 65% | 74% | 84% | 96% |
+
+### Decision thresholds — first crossing, one row per session-side
+
+| threshold | n | hit | median fire |
+|---|---|---|---|
+| P ≥ 0.60 | 562 | 66% | 09:55 |
+| P ≥ 0.75 | 536 | 75% | 10:25 |
+| P ≥ 0.80 | 521 | 79% | 10:40 |
+| P ≥ 0.85 | 497 | 84% | 11:00 |
+| P ≥ 0.90 | 463 | 88% | 11:30 |
+
+⚠ **Compare honestly with F-1.** The plain `IB60 broken` rule gives **78% at 10:01** on 339
+session-sides. The model reaches 79% at 10:40 — but fires on 521. The model's real advantage is not a
+higher hit rate, it is a **calibrated number available at every moment**, which supports sizing;
+the binary rule is still competitive as a single trigger.
+
+### What would move this
+The NQ corpus (cross-market divergence, the one hypothesis still open), a second instrument to rule
+out an EPM26 artefact, and forward-scoring on live sessions via the FEATURES registry.

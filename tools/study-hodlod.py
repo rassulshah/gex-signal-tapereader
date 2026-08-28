@@ -50,7 +50,8 @@ def load(path, ses=None):
                 sec = int(p[0])*3600 + int(p[1])*60
                 if not (RTH_A <= sec <= RTH_B):
                     continue
-                ses[d].append((sec, float(x['High']), float(x['Low']), float(x['Close'])))
+                ses[d].append((sec, float(x['High']), float(x['Low']), float(x['Close']),
+                               float(x['Open'])))
             except (ValueError, IndexError):
                 continue
     return ses
@@ -82,10 +83,82 @@ def load_sources(paths):
             prov[d] = os.path.basename(path)
     return ses, prov
 
+# ---------------------------------------------------------------------------------------------
+# THE WICK FAMILY — operator-defined 2026-08-28, then CONFIRMED against the live ES tape.
+#
+# His mockup prints six fields this study did not compute. They were derived from his own printed
+# numbers and then verified bar-by-bar on 2026-08-27, where the two fields that do not depend on
+# extremity timing landed EXACTLY: Wick% 26 vs 26, W.End 8:42am vs 8:42am.
+#
+#   TOOK    open -> the first extremity
+#   W.END   the first bar to CLOSE back through the SESSION OPEN after that extremity.
+#           ⚠ CLOSE, not touch. On 2026-08-27 the first touch was 8:41 and the first close 8:42;
+#           his panel prints 8:42. One session decided this - if a later day disagrees, revisit.
+#   BOP     first extremity -> W.END (the recovery leg)
+#   WICK    TOOK + BOP, i.e. open -> W.END (the whole opening excursion)
+#   WICK%   |open - first extremity| / total range. ⚠ A PRICE ratio, NOT a duration: no duration
+#           ratio can produce his printed 26% (wick/session = 3.1%, wick/gap = 5.6%).
+#   MUD     W.END -> the second extremity (the middle, after the open resolves)
+#
+# ⚠⚠ HIS EXCLUSION RULE, VERBATIM 2026-08-28: "if there is no wick, then its 0 ... these days
+# should not be averaged. also crazy outliers should not be averaged."
+# So: a zero-wick session REPORTS 0 and is EXCLUDED from the wick-family medians. It is still a
+# perfectly good session for TOOK, HL GAP and HL RNG, so it is excluded from those medians NOWHERE.
+# Outliers are fenced by TUKEY 1.5xIQR, which is computed FROM THE CORPUS rather than chosen by me,
+# and every exclusion is COUNTED into the output so nothing is dropped invisibly.
+def wick_fields(bars):
+    """bars: (sec, high, low, close, open) sorted. Returns the six fields for one session."""
+    o0, OPEN = bars[0][0], bars[0][4]
+    hi = max(bars, key=lambda r: r[1]); lo = min(bars, key=lambda r: r[2])
+    hod_t, lod_t = hi[0], lo[0]
+    low_first = lod_t < hod_t
+    first_t = lod_t if low_first else hod_t
+    second_t = hod_t if low_first else lod_t
+    ext = lo[2] if low_first else hi[1]
+    rng = hi[1] - lo[2]
+    wick_pts = abs(OPEN - ext)
+    wend = None
+    for b in bars:
+        if b[0] < first_t:
+            continue
+        if (b[3] >= OPEN) if low_first else (b[3] <= OPEN):
+            wend = b[0]
+            break
+    took = (first_t - o0) // 60
+    out = dict(first='LOD' if low_first else 'HOD', took=took,
+               wick_pts=round(wick_pts, 2),
+               wick_pct=round(100 * wick_pts / rng) if rng > 0 else None,
+               reclaimed=wend is not None)
+    if wend is None:
+        # never closed back through the open: there is no completed wick. NOT zero - UNKNOWN.
+        # Reporting 0 here would say "the excursion ended instantly", the opposite of what happened.
+        out.update(wend=None, bop=None, wick=None, mud=None)
+    else:
+        out.update(wend=wend, bop=(wend - first_t) // 60, wick=(wend - o0) // 60,
+                   mud=max(0, (second_t - wend) // 60))
+    return out
+
+
+def tukey_keep(vals):
+    """Tukey 1.5xIQR fence. Returns (kept, n_dropped). The fence comes from the data, not from me."""
+    xs = sorted(v for v in vals if v is not None)
+    if len(xs) < 8:
+        return xs, 0
+    def pc(p):
+        i = (len(xs) - 1) * p
+        a, b = int(i), min(int(i) + 1, len(xs) - 1)
+        return xs[a] + (xs[b] - xs[a]) * (i - a)
+    q1, q3 = pc(0.25), pc(0.75)
+    iqr = q3 - q1
+    lo_f, hi_f = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+    kept = [v for v in xs if lo_f <= v <= hi_f]
+    return kept, len(xs) - len(kept)
+
+
 def survival(bars, low_side):
     """(stood_minutes, survived_to_close) for every running-extreme candidate in one session."""
     out, best, since = [], None, None
-    for sec, hi, lo, _ in bars:
+    for sec, hi, lo, _c, _o in bars:
         v = lo if low_side else hi
         new = best is None or (v < best if low_side else v > best)
         if new:
@@ -114,9 +187,11 @@ def main(paths, out=None):
         hod_t, lod_t = hi[0], lo[0]
         first_low = lod_t < hod_t
         rng = hi[1] - lo[2]
-        rows.append(dict(day=d, hod_t=hod_t, lod_t=lod_t, first='LOD' if first_low else 'HOD',
-                         took=(min(hod_t, lod_t)-RTH_A)//60, gap=abs(hod_t-lod_t)//60,
-                         rng_pts=round(rng, 2), rng_usd=round(rng*PT_USD, 2)))
+        rec = dict(day=d, hod_t=hod_t, lod_t=lod_t, first='LOD' if first_low else 'HOD',
+                   took=(min(hod_t, lod_t)-RTH_A)//60, gap=abs(hod_t-lod_t)//60,
+                   rng_pts=round(rng, 2), rng_usd=round(rng*PT_USD, 2))
+        rec.update(wick_fields(b))
+        rows.append(rec)
         surv_lo += survival(b, True); surv_hi += survival(b, False)
 
     def ladder(sv):
@@ -128,7 +203,25 @@ def main(paths, out=None):
                           rate=round(100*hit/len(elig)) if elig else None)
         return out
 
-    med = lambda xs: round(st.median(xs), 1) if xs else None
+    # ⚠⚠ EVERY E FIELD IS A TRIMMED MEAN. Operator, 2026-08-28: "the e row is the expected result
+    # based on averages" and, when I had switched only the wick columns, "i thought they were all
+    # averages." He is right and the split was my invention: TOOK / HL GAP / HL RNG / the clocks
+    # were still medians because v14.57 had verified them that way against an older mockup. One row,
+    # one statistic - a table where two columns are means and three are medians is a table nobody
+    # can reason about.
+    # ⚠ "also crazy outliers should not be averaged", so the SAME Tukey 1.5xIQR fence applies here
+    # as to the wick family, and the count of what it removed is reported per field.
+    # ⚠ p25/p75 stay TRUE PERCENTILES. They are explicitly a spread, not an average, and trimming a
+    # quantile would make it describe a range it no longer covers.
+    trim_drop = {}
+    def med(xs, _key=None):
+        if not xs:
+            return None
+        kept, n_out = tukey_keep(xs)
+        if _key:
+            trim_drop[_key] = n_out
+        return round(sum(kept) / len(kept), 1) if kept else None
+    med_true = lambda xs: round(st.median(xs), 1) if xs else None
     firsts = collections.Counter(r['first'] for r in rows)
     res = dict(
         corpus=dict(sessions=len(days), first=days[0], last=days[-1],
@@ -136,17 +229,55 @@ def main(paths, out=None):
         sequence=dict(LOD_first=firsts['LOD'], HOD_first=firsts['HOD'],
                       pct_LOD_first=round(100*firsts['LOD']/len(rows))),
         expected=dict(
-            took_min=med([r['took'] for r in rows]),
-            gap_min=med([r['gap'] for r in rows]),
-            rng_pts=med([r['rng_pts'] for r in rows]),
-            rng_usd=med([r['rng_usd'] for r in rows]),
+            took_min=med([r['took'] for r in rows], 'took'),
+            gap_min=med([r['gap'] for r in rows], 'gap'),
+            rng_pts=med([r['rng_pts'] for r in rows], 'rng_pts'),
+            rng_usd=med([r['rng_usd'] for r in rows], 'rng_usd'),
             rng_p25=round(st.quantiles([r['rng_pts'] for r in rows], n=4)[0], 1),
             rng_p75=round(st.quantiles([r['rng_pts'] for r in rows], n=4)[2], 1),
-            first_clock=med([min(r['hod_t'], r['lod_t']) for r in rows]),
-            second_clock=med([max(r['hod_t'], r['lod_t']) for r in rows])),
+            first_clock=med([min(r['hod_t'], r['lod_t']) for r in rows], 'first_clock'),
+            second_clock=med([max(r['hod_t'], r['lod_t']) for r in rows], 'second_clock'),
+            statistic='trimmed mean (Tukey 1.5xIQR outliers excluded), operator-specified 2026-08-28',
+            outliers_excluded=trim_drop,
+            median_for_contrast=dict(
+                took_min=med_true([r['took'] for r in rows]),
+                gap_min=med_true([r['gap'] for r in rows]),
+                rng_pts=med_true([r['rng_pts'] for r in rows]),
+                first_clock=med_true([min(r['hod_t'], r['lod_t']) for r in rows]),
+                second_clock=med_true([max(r['hod_t'], r['lod_t']) for r in rows]))),
         ladder=dict(low=ladder(surv_lo), high=ladder(surv_hi),
                     both=ladder(surv_lo + surv_hi)),
     )
+    # ---- THE WICK FAMILY, with his two exclusions applied and COUNTED ------------------------
+    # "if there is no wick, then its 0 ... these days should not be averaged. also crazy outliers
+    # should not be averaged."  Zero-wick and never-reclaimed sessions leave the wick medians;
+    # Tukey fences the rest. Every drop is reported so the n on the face is the n behind the number.
+    wick_rows = [r for r in rows if r.get('reclaimed')]
+    n_never = len(rows) - len(wick_rows)
+    n_zero = sum(1 for r in wick_rows if r['wick'] == 0)
+    pool = [r for r in wick_rows if r['wick'] not in (None, 0)]
+    wick_stats, wick_drop = {}, {}
+    for key in ('wick', 'bop', 'mud', 'wick_pct', 'wick_pts'):
+        # ⚠ NOT `dropped` — that name already holds the incomplete-session list built above, and
+        # shadowing it made len(dropped) explode 40 lines later. GREP BEFORE NAMING (5th collision).
+        kept, n_out = tukey_keep([r[key] for r in pool])
+        # ⚠ THE MEAN, NOT THE MEDIAN. Operator, 2026-08-28: "the e row is the expected result based
+        # on AVERAGES." Combined with "no wick days should not be averaged. also crazy outliers
+        # should not be averaged", that is a TRIMMED MEAN: exclude the zero-wick days and the Tukey
+        # outliers first, then average what is left. The median is kept alongside it because the two
+        # differ a lot on this right-skewed data (BOP mean 26m raw vs median 8m) and a reader should
+        # be able to see that rather than take one on faith.
+        wick_stats[key] = round(sum(kept) / len(kept), 1) if kept else None
+        wick_stats[key + '_median'] = round(st.median(kept), 1) if kept else None
+        wick_drop[key] = n_out
+        wick_stats[key + '_n'] = len(kept)
+    res['wickFamily'] = dict(
+        median=wick_stats,
+        excluded=dict(never_reclaimed=n_never, zero_wick=n_zero,
+                      outliers_tukey_1_5_iqr=wick_drop,
+                      rule="operator 2026-08-28: no-wick days and crazy outliers are not averaged; "
+                           "a zero wick still PRINTS 0 on the day's own row"),
+        wend_definition="first bar to CLOSE back through the session open after the first extremity")
     # the mix, so a consumer can see a pooled corpus rather than discover it
     mix = collections.Counter(prov[d] for d in days)
     res['corpus']['sources'] = dict(mix)
@@ -167,10 +298,22 @@ def market_sources(market):
     """The vendor corpus (if present) FIRST, then every Yahoo daily for this market."""
     src = []
     if market == 'ES':
-        for c in ('data/es-1min/EPM26-1min.csv.gz', 'data/es-1min/EPM26-1min.csv'):
+        # ⚠ THE CORPUS HAS ARRIVED UNDER MORE THAN ONE NAME. The README calls it
+        # EPM26-1min.csv.gz; what actually reached GitHub on 2026-08-28 was the operator's raw
+        # export, "ES TestingData.txt" - same columns, 406,155 rows, uncompressed. Looking for one
+        # spelling and reporting "no sources" would have been the fourth time in this project that a
+        # file was declared absent because the search was too narrow. Try every name it has worn.
+        for c in ('data/es-1min/EPM26-1min.csv.gz', 'data/es-1min/EPM26-1min.csv',
+                  'data/es-1min/ES TestingData.txt', 'data/es-1min/ES_TestingData.txt'):
             if os.path.exists(c):
                 src.append(c)
                 break
+        if not src:
+            import glob as _g
+            for c in sorted(_g.glob('data/es-1min/*.txt') + _g.glob('data/es-1min/*.csv*')):
+                if not c.endswith('BASERATES.json'):
+                    src.append(c)
+                    break
     src += sorted(glob.glob(os.path.join('data/futures', market, '*.csv')))
     return src
 
