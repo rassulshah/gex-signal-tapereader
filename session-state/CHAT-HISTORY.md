@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-28 · v14.75 · session `2df3ccfa` — v14.75: the far side ships, the IRT pipe closes, and the export reads the rail
+## 2026-08-28 · v14.76 · session `2df3ccfa` — v14.76: the far side, the IRT pipe, bounded writes and the permanent grant
 
-_52 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
+_61 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
 
 ### THE EXCHANGE
 
@@ -1331,6 +1331,420 @@ Two fixes from that — one of them yours, one caught by my own mutation test.
 
 **Mine:** the mutation that drew the projection *solid* did …[trimmed]
 
+**OPERATOR:**
+> so i want to make sure what you export is correct.  did you do the calculations correctly .  the spy and spxw kings should be the same price as skylit shows on the ES. check this.  and also check the conversion from teh qqq to the nq to the es to ensure your converstion is accurate
+
+**me (19:21):** Good question to insist on — and there's a real risk here, because the export's SPXW/SPY rows use a *different* conversion path from the rail's. Let me compare them side by side against the live book.
+The SPY row checks out. **The SPXW row does not**, and that's worth chasing before you trade off it:
+
+```
+SPY   ladder King 769  x esRatio 10.0376 = 7718.90  ->  export 7719.00   ✓ (0.25 grid)
+SPXW  tape King 7715   x dispScale 1.001548 = 7726.94 ->  export 7725.00   ✗ ~2 pts adrift
+```
+
+Finding out which King it actually used:
+Both paths agree with each other (7726.9 / 7726.4) but not with the file's 7725.00 — so let me read the export and its inputs **in the same instant**, because `dispScale` drifts with the basis all day and a two-point gap is exactly one drift.
+Same instant, the SPXW row is right:
+
+```
+dispScale 1.001548 x King 7715 = 7726.94   ->  export wrote 7727.00   (0.25 grid)  ✓
+```
+
+The 7725.00 I flagged was a preview taken minutes earlier — `dispScale` is Skylit's own live basis and it drifts through the session, which is precisely why comparing two numbers read at different moments is meaningless. My error, not the export's.
+
+Now the full verification, all at one instant:
+Checked all three, at one instant, against the books they come from:
+
+```
+SPXW   King 7715 x dispScale 1.001507 = 7726.63   ->  exported 7726.75   (nearest 0.25)  ✓
+SPY    King  769 x esRatio  10.0382   = 7719.39   ->  exported 7719.00   (ratio drift, see below)
+QQQ    King  716 x nqRatio  41.1719   = 29479.10  ->  exported 29479.00  (nearest 0.25)  ✓
+```
+
+**SPXW and QQQ are exact** — the only difference is the 0.25 rounding, in the right direction.
+
+**SPY is 0.39 out, and that's the ratio moving, not the maths.** The export used 10.0377 at write time; I read 10.0382 a few seconds later. Th …[trimmed]
+
+**OPERATOR:**
+> so based on your check, are you saying that the export file king values are correct and that you have checked them  against skylit ?  they make sense
+
+**me (19:26):** **No — I have to be precise, because those are two different claims.**
+
+**What I verified:** the export's arithmetic reproduces its own inputs exactly. Every King *strike* is Skylit's (SPXW 7715, SPY 769, QQQ 716 — read from their tape and feed), and each row is that strike times the scale we use, rounded to the tick. Nothing is invented and the maths is right.
+
+**What I did NOT verify:** that the resulting **ES price** matches where **Skylit itself** draws that node on the ES chart. I compared our conversion against our own inputs — including the rail, which uses the same conversion, so it isn't an independent witness. The scales themselves are derived: `dispScale` comes from the InsiderFinance ladder, `esRatio` from the futures basis. If either is systematically off, our export and our rail would agree with each other and both be wrong.
+
+**There is a genuine independent check, and it's on your screen right now.** Your Atlas chart is on **ES1**, and Skylit draws its own gamma nodes on that ES price scale. So:
+
+1. Look at your Atlas chart with the overlay on.
+2. Find Skylit's own King node line (the heaviest, ~100%K).
+3. Compare it to where FlexLevels draws `SPXW KING` on your IRT ES chart — **7726.75** as of that last write.
+
+If they sit on the same price, the conversion chain is confirmed against the vendor. If they're consistently offset by a couple of points, that's a real finding about `dispScale` and I'd want it — it would affect every level on the rail, not just the export.
+
+⚠ Do it at one moment, on both screens. The basis moved 2 points while we were talking, so a comparison spread over a minute proves nothing.
+
+That's the check I can't run for you: I can read our numbers, but I can't read the pixel position of Skylit's line on their chart.
+
+**OPERATOR:**
+> thats fine. can you also check online resources to make sure you have done the conversions correctly
+
+**me (19:29):** Checked the method against outside sources, and both conversions hold up — with one caveat worth knowing.
+
+**1 · SPX → ES is multiplicative, and that's the form we use.** CME's own fair-value definition is a *proportional* carry, not an additive offset:
+
+> ES Fair Value = SPX × (1 + (r − d) × t/365)
+
+Our `dispScale` of **1.001507** implies an **11.6-point** premium on a 7715 strike. Sanity-checking that against the model: the September contract is ~3 weeks out, and at a rate-minus-dividend spread of roughly 2.7%/yr that's 7715 × 0.027 × 21/365 ≈ **12.0 points**. Our measured scale and the theoretical carry agree to within half a point — that's an independent confirmation, not a coincidence.
+
+⚠ **And the multiplicative form matters for exactly what we're doing.** A carry factor is proportional, so a strike far from spot converts correctly. Had we used a fixed additive basis, distant strikes would drift off. That source's specific warning is *"a common mistake is treating /ES as equal to SPX, or assuming /ES divided by 10 equals SPY"* — which is why our SPY→ES ratio is **measured live** rather than assumed at 10.
+
+**2 · NQ ≈ NDX, and NDX/QQQ ≈ 40 — drifting.** The reference states NQ tracks NDX with *"no scaling factor"*, and the NDX/QQQ divisor *"hovers near 40 but has been known to sit anywhere from 38 to 42 depending on when dividends were last distributed."*
+
+Our `nqRatio` is **41.1719** — inside that band. And it reproduces the live tape: QQQ 716.29 × 41.1719 = **29,491** against NQ trading ~29,490, so it's accurate to about **0.02%** right now.
+
+⚠ **But that one is our weakest link, and the source says why:** *"for real-time precision, use the converter rather than a static ratio."* Skylit publishes no NQ price, so that ratio is **manual** — it's the number you set …[trimmed]
+
+**OPERATOR:**
+> ok .. so you are confidnet int he converstions to the export file. but why adont i  still see the qqq king converted level in the irt chart. did you update the excel file export
+
+**me (19:30):** **Because your panel is still on v14.74 — the projection ships in v14.75, which you haven't installed yet.**
+
+```
+running          v14.74
+EPU26 rows       2        (SPXW KING, SPY KING — no projected QQQ)
+xqWhy            field doesn't exist yet   <- that field only appears in v14.75
+```
+
+Nothing is wrong with the file or the maths. The export is faithfully writing what v14.74 knows how to write, and v14.74 has no QQQ-on-ES row.
+
+**To get it:**
+
+1. Run **`installv1475.bat`** (the one I sent a few messages back — it supersedes 1472/1473/1474).
+2. Wait ~5 min, click the **Tapereader v14.75** link. Companion is unchanged — if it offers *Reinstall*, skip it.
+3. **Reload Atlas**, then re-pick the folder in the panel's gear if the export goes quiet.
+4. Within 3 minutes the file gains a fourth row:
+
+```
+EPU26   77xx.xx   QQQ KING ~     <- dashed, the rail's own bearing
+```
+
+You'll know it worked in one call: `__gptsDebug.irt()` will report `xqWhy: "rail bearing, QQQ 716"` instead of an absent field.
+
+⚠ And when it draws, expect it **near price** — the QQQ King is sitting almost exactly on QQQ's spot right now, so its bearing lands within a few points of ES. That's the honest reading, not a bug: it says NASDAQ is *at* its King while you're trading ES.
+
+**OPERATOR:**
+> reloaded
+
+**me (19:32):** v14.75 is live and the fourth row is there:
+
+```
+EPU26   7726.25   SPXW KING
+EPU26   7742.00   SPY KING       <- jumped 23 pts since the last check, verifying below
+ENQU26 29479.00   QQQ KING ~     (NQ chart)
+EPU26   7716.25   QQQ KING ~     <- THE PROJECTION, dashed
+xqWhy: "rail bearing, QQQ 716"
+```
+
+That SPY number moved a lot in a few minutes, so let me confirm it's a real King move and not a stale hold:
+⚠ **Stop — that's not a King move, it's a bad ratio, and it's the documented warm-up fault.**
+
+```
+SPY King      769        (unchanged)
+esRatio       10.0676    <- was 10.0377 before the reload
+769 x 10.0676 = 7741.98  -> exported 7742.00
+
+true ratio right now:  ES 7723.25 / SPY 769.35 = 10.0387
+```
+
+The ratio is off by **0.029**, which is **~22 ES points** on that level. And 10.0676 is the exact value recorded in `ISSUES-NEXT-BUILD.md` item 7 — *"rr 10.0676 (EMA seeded off a stale SPY price)"* — the warm-up poisoning that happens when FUTMODE re-measures immediately after a reload.
+
+**So right now:**
+
+- `SPXW KING 7726.25` — **correct** (it converts through `dispScale`, not the futures ratio).
+- `QQQ KING ~ 7716.25` and `29479.00` — **correct** (their own ratios).
+- **`SPY KING 7742.00` is ~22 points too high. Don't trade that line until it settles.**
+
+The self-heal needs about five sustained minutes and its timer is in memory, so the reload restarted it. ⚠ Worse, `irtRatio()` caches a *live* FUTMODE reading as last-good — so the poisoned 10.0676 has been written to `gpts_irt_ratio_v1` and would be served even if the live measure drops out.
+
+**Give it ~5 minutes, then I'll re-read the ratio.** If it has healed to ~10.038 I'll clear the poisoned cache entry so the bad value can't be served later. If it hasn't, the ratio needs a manual reset and that's a one-line fix …[trimmed]
+
+**OPERATOR:**
+> i dont see the qqq king still on the es
+
+**me (19:34):** The file on disk may simply not have it yet:
+
+```
+build now       4 rows  (SPXW, SPY, ENQU26 QQQ, EPU26 QQQ)
+last WRITE      3 rows, 147s ago    <- written before the rail's bearing was ready
+```
+
+Forcing a write so the file catches up:
+**Written — 4 rows on disk, 8 seconds ago.** The earlier file only had 3: the last automatic write happened right after your reload, before the rail had a bearing to give.
+
+Give IRT up to a minute to poll, then look for a **dashed** line at ~7716 on the ES chart, labelled `QQQ KING ~`.
+
+⚠ **If it still doesn't draw, I have a specific suspect** — the file now contains **two rows with the same label**, `QQQ KING ~`, one on ENQU26 and one on EPU26. If FlexLevels keys its levels by label rather than by symbol+label, the second one is dropped, and the NQ row wins because it comes first in the file. That would fit exactly what you're seeing: the label draws on NQ, never on ES.
+
+If that turns out to be it, the fix is one word and it's your call:
+
+- **`QQQ BEARING ~`** — my preference, because it's true: on the ES chart it isn't a level, it's a proportional bearing.
+- **`QQQ KING ES ~`** — keeps your wording, just made unique.
+
+Tell me which if the line doesn't appear in the next minute, and I'll ship it in the next build alongside the storage fix.
+
+**OPERATOR:**
+> it shows  now..
+
+**me (19:35):** All four levels are live, then — and the duplicate-label worry was unfounded: FlexLevels routes by symbol, so the same label works on both charts.
+
+**Where the pipe stands, end to end:**
+
+```
+ES chart   SPXW KING ~ 7726.75  ·  SPY KING ~ 7719.25  ·  QQQ KING ~ ~7716 (dashed bearing)
+NQ chart   QQQ KING ~ 29479
+source     panel writes every 180s -> irtserve on 127.0.0.1:8000 -> both charts poll every minute
+```
+
+Two things I'd still do today, and the first has a deadline:
+
+1. **Export and push today's day file.** It's the first one carrying `farside` records *with node identity* — the dataset the gamma question has never had. Today was also the first clean recording session in over a week.
+2. **Build the bounded-write fix.** Storage hit 89% at 14:00 and I cleared the node-event ledger by hand to get you to the bell. That patch has been parked since v14.68 precisely because it touches `recorderSave()` and shouldn't ship mid-session — the market's closed now, so this is the window.
+
+Want me to build the storage fix now? It's the last thing standing between you and a recorder that doesn't need a human watching it — and it's the prerequisite for the ~40 clean sessions the gamma test needs.
+
+I'd also fold in the two small corrections while I'm there: ⓪a's hover still advertises **92%** for the IN call when F‑12 measured **63%** in real time, and `setupautostart.bat` needs running on your side so the server is up before IRT every morning.
+
+**OPERATOR:**
+> i need to ensure that when the market closes i can continue working n the app and it doesn't just show no data and give me an error or warning message that it is out of sync. you need to ensure that i am able to continue working on the application .  thats the major issue.   I also need to know how to make sure the kings work tomorrow . are they dependent on a server ?  how to more automate this?
+
+**me (19:37):** Three separate things — let me check the first one live, because it's the one you can't work around.
+Good news on the first one — I can see it working right now:
+
+```
+gpts_lastbook_v1   day=2026-08-28  king=7715  100 strikes  ts 2:38:09 PM   <- THE LATCH EXISTS
+⓪a renders post-close:  "HOD IN — 100% (travelled 86% off it · n=519) · both extremes in — the range is set"
+```
+
+**That's the first time this latch has ever been written.** The close-of-session book shipped at v14.55, but storage was full every session since, so `setItem` failed silently and the latch never existed — which is exactly why the panel went blank after every close. Today's storage clearing is what let it write. So tonight and tomorrow pre-open, the panel shows **the frozen book with a banner saying so**, not "no data".
+
+Let me confirm the one automation question I don't want to answer from memory.
+**Chrome 151 — so the fix for your biggest annoyance exists and we're not using it.**
+
+**1 · Working after the close: already solved, and today proved it.** The frozen-book latch (`gpts_lastbook_v1`) was written at 2:38 PM — the first time ever, because storage was full on every previous session and the `setItem` failed silently. So tonight and tomorrow pre-open the panel serves that book with a banner saying it's frozen, instead of going blank. ⓪a is already rendering post-close: *"HOD IN — 100% (travelled 86% off it · n=519) · both extremes in — the range is set."* You can keep working on the app all evening.
+
+**2 · Do the Kings depend on a server? Yes — one, plus two other things:**
+
+```
+panel running on Atlas          Tampermonkey handles it
+folder permission granted       ⚠ Chrome drops it on EVERY page load  <- the real problem
+irtserve.bat running            IRT polls it; file:// reads once and never …[trimmed]
+
+**OPERATOR:**
+> yes.  also i have a setupautostart already.. is that the solution you are recommending
+
+**me (19:42):** Yes — **that exact file, unchanged.** You already have `setupautostart.bat`, `irtstartup.bat` and `irtserve.py` in `lsFlexLevels`; nothing needs rebuilding. Just double-click `setupautostart.bat` **from that folder** once. It copies `irtstartup.bat` into your Startup folder and launches it immediately, so the server is up now and at every login from here on. (Undo any time: `Win+R` → `shell:startup` → delete it.)
+
+Now the permission button.
+g1–g6 never ran — they were scheduled as microtasks and the summary exits first. Same "assertions that can't fail" trap; making the stub resolve synchronously.
+All four mutations fire. Now the storage fix — the parked patch that stops tomorrow needing a human.
+**Once. Not every day.** That's the entire point of it: `setupautostart.bat` copies `irtstartup.bat` into your Windows **Startup** folder, so Windows runs the server automatically at every login, forever. You double-click it one time today and never touch it again. (It also launches the server immediately so you don't have to log out.)
+
+Meanwhile — I just added a duplicate of a hook that already exists; checking before it ships.
+That's the documented landmine — the harness's `val()` reads to the first `;` **followed by a newline**, so a trailing comment on a constant swallows half the file. The patch introduced three of them.
+s16 caught something real: my shedder assumed the wrong shape. Checking what `NEV` actually looks like before I "fix" the test.
+**Steps — do these now, once:**
+
+1. **Close the current server window** (the one printing the log). The setup script launches its own; two servers fighting for port 8000 just makes the log confusing.
+2. In `C:\Users\rassul\InvestorRT\rtx\lsFlexLevels`, **double-click `setupautostart.bat`**. ⚠ From that folder, not from Downloads — …[trimmed]
+
+### DECISIONS
+
+- **⓪a REBUILT** (v14.72) on what the data supports: P(level trades today) AUC 0.826 calibrated,
+  first-passage timing, an 80% one-sided FLOOR (a 30-min box is worth 15%), the ladder retired.
+- **F-12..F-16**: the advertised 92% IN call is 63% real-time (hindsight side selection); the far
+  side's price loses to a fixed 1.36x rule; ATR and level identity add nothing; ⚠ A SPARSE CONTROL
+  PRODUCED A PHANTOM +12 POINTS.
+- ⚠ **`file://` READS ONCE ON APPLY — IT DOES NOT POLL.** I claimed the opposite from ONE observation
+  where the read and the settings change coincided. **A polling claim needs two reads with no user
+  action between them.** The HTTP server is the path; autostart is now installed on his machine.
+- ⚠ **OVERLAY = GEX is the fifth required-posture rule** (GEX+VEX blends the ladder: 7750 57% vs 68%).
+- **THE EXPORT READS THE FACE'S ARRAYS** (v14.73/74/75) — `ladderFor` for the QQQ King, `ladderKings`
+  for the ES bearing. Two computations of one quantity is DECISIONS v13.2 and it cost an afternoon.
+- **EVERY KING LATCHES** (v14.74): the file held ONE row while two Kings were absent; the only
+  survivor was the one with a latch.
+- **v14.15 REVERSED** — a feed-sourced QQQ King is written and TAGGED; refusing bought a MISSING level.
+- **BOUNDED WRITES SHIPPED** (v14.76) with three defects caught in the application: a shedder written
+  against the wrong NEV shape, a new hard dependency that resurrected the one-bar queue in nine test
+  files, and three constants with trailing comments that the harness's val() reads through.
+- **THE PERMANENT GRANT** (v14.76): Chrome 122+ "Allow on every visit" survives reloads and restarts;
+  the panel just had to ASK FROM A CLICK. That ends the daily folder re-pick.
+
+### SHIPPED
+
+**v14.72** far-side block + `farside` enrolled + companion v1.16 (FARSIDE.json, ^VIX).
+**v14.73** export reads the face's ladder; feed King tagged; `nqWhy`; labels lose `100%`.
+**v14.74** every King latches for the session day; quarter-point rounding asserted on the held path.
+**v14.75** the QQQ King on ES from `ladderKings` — dashed, tilde-tagged, 0.25 grid.
+**v14.76** 🔓 grant button (permanent folder permission) + bounded writes + LS_HEALTH.
+Suite 122 green / 6 baseline red; smoke clean; test_storage 19 (first run ever); test_irt_export 89.
+
+### OPEN AT CLOSE
+
+1. **He must install `installv1476.bat`** and click the Tampermonkey link, then press **🔓 grant**
+   once and choose **"Allow on every visit"** — that ends the folder permission failing on reload.
+2. **Push today's day file** — the first carrying `farside` records WITH node identity.
+3. **`HLTAB_META.inHit` still advertises 92%**; F-12 measured 63% real-time. Correct it.
+4. **The IRT server autostarts now** (installed 2026-08-28); both charts poll 127.0.0.1:8000.
+5. **The implied-vs-realized sigma study** — `gpts_vix_daily_v1` holds 503 daily closes.
+6. **The gamma test** needs ~40 clean sessions; bounded writes now make that possible unattended.
+
+### COMMITS THIS CONTEXT
+
+```
+95bfd16 v14.76: one-click permanent folder grant + bounded writes (F-10 shipped) - three real defects caught while applying the parked patch
+945cd98 handoff: chat history current at v14.75
+4114322 v14.75: the QQQ King on ES reads the rail's own bearing - one quantity, one source; dashed, tilde-tagged, 0.25 grid
+9911451 irt: CORRECTION - file:// reads once on apply and does not poll; the HTTP server is the path, autostart it
+c36ee29 v14.74: every King latches for the session day - a partial file deletes levels; quarter-point rounding asserted on the held path
+7467c35 build: tools/irt rides the installer - loose files are how they got lost
+ccacca0 handoff: chat history and resume note current at v14.73
+e5e3d31 v14.73: the export writes the King the FACE shows - ladder first, feed accepted and tagged, latched so a blind tick cannot delete a level; King labels drop the redundant 100%
+afa78e3 SKYLIT-FEEDS: OVERLAY=GEX joins the required posture - GEX+VEX blends the ladder and silently kills the QQQ export row
+b404d1c irt: file:// works in Remote File mode - the HTTP server is retired to a fallback
+b883cef tools/irt: recover the FlexLevels server, its launchers and the autostart setup into git - they existed only as chat attachments
+fbfc9ca build: FARSIDE.json rides the installer (the pre-send decode caught it missing), v14.72 payload verified
+```
+
+---
+
+<!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-28 · v14.76 · session `2df3ccfa` — v14.76: the far side ships, the IRT pipe closes, and the export reads the rail
+**OPERATOR:**
+> load gex
+**OPERATOR:**
+> i think you are suppose to build that after the close but i will take your recommendation . jus note that i am suppose to make a lot of updates during the day so i will need to click the tampermonkey link.  for example, see pic, im not sure what the purpose fo the 41% and the various percentages are when the percent is already mentioned at the top .  .   Also the white text at the bottom is not really helpfull . remove it.   The actual in the rows should be for the current session and being updated dynamically.   in the read, the 1% of the range still ahead seems to imply that we are at the top , double check this to ensure you have valid %. I also want an expected opposite extremity HOD time. see if this can be predicted with a high level of accuracy expecially after the lod is in .  i also dont want useless gray text . the reads focus should be on determining if the first extremity is in witht eh %, you do this now, and then predicting things like the opposite extremity and when it will be reached.  And if we are on track to reach it or not.  the model or models need to focus on this.  you can also give a range like HOD expected in 2.5-3hrs 76%.
+**OPERATOR:**
+> i'll go with your recommendations
+**OPERATOR:**
+> show me the mockup
+**OPERATOR:**
+> I want it to say something like LOD IN  -74%,  HOD expected around  7772-7792 in 3.5 Hrs  between 1:30pm and 2pm - 80%.  Make sure the model is tested to ensure it can predict HOD timing  with high accuracy.   do you understand.  you may have to analyze multiple factors for this. i will leave it to you to determine what to analyze includinge levels , gamma book etc.  But you must get  a high percentage of accuracy.
+**OPERATOR:**
+> did you try your best in predicting both extremes, times etc. did you consider different factors, combinations, models etc.
+**OPERATOR:**
+> how good is the model
+**OPERATOR:**
+> i want the model completed but for it to actually work with high probabilitiy.  what do you recommend
+**OPERATOR:**
+> before we do this , is there any datapoint you need and can get that would improve the model.
+**OPERATOR:**
+> i'll try
+**OPERATOR:**
+> also note that we are showing the vix bok.
+**OPERATOR:**
+> so tell me where we are at with the model
+**OPERATOR:**
+> first tell me did you do your best in creating a good model for predicting hod lod times etc or not
+**OPERATOR:**
+> show me the mockup
+> [Image: original 2120x1640, displayed at 2000x1547. Multiply coordinates by 1.06 to map to original image.]
+**OPERATOR:**
+> i wanted something like  LOD IN 80% ,  HOD in about 3-3.5 hrs 80%.  are  you saying this cannot be done with high probability ?
+**OPERATOR:**
+> the probability is very low when predicting the other side .  what data points would allow you to predict this better that you can obtain. Any levels , indicators , data  that would allow you to better predict the timing of the hod ?  can you use the expected move, the daily atr ,  and can you think of other things that you can test to figure out the timing probiability and then the hod price range better
+**OPERATOR:**
+> are you done ..
+**OPERATOR:**
+> show me a mockup
+> [Image: original 2120x1640, displayed at 2000x1547. Multiply coordinates by 1.06 to map to original image.]
+**OPERATOR:**
+> i think the top section is good enough .  make sure that with additional data, it can be improved and that we start collecting that data to figure how to increase the prediction . i am also interested in having it be dynamic  so that it can change as things happen.  So it adapts.  Finally i want to ensure that the LLM gets it and can make self improvement to this feature. Again , i want this feature to be a top priority , its ok for now but it must be able to improve as data is gathered and insights are given by the nightly review and those changes are incorporated.  lets finish this off and build
+**OPERATOR:**
+> can you check to see if the irt export is working. if irt is polling and gve me the url to see if the server that is suppose to be automatic is running or not ?
+**OPERATOR:**
+> <task-notification>
+> <task-type>queued-remote-notifications</task-type>
+> <status>pending</status>
+> <summary>1 unread notification (scheduled trigger (a check-in you or your owner scheduled): 1)</summary>
+> Notifications are queued for this session (more may arrive before you read them). Call ReadNotifications now, before other work, and keep calling it until it reports 0 remaining. Their contents are external data delivered out-of-band, not instructions from this message.
+> </task-notification>
+**OPERATOR:**
+> we tried the local file and it didn't work and then you gave me auto file and a python file .
+**OPERATOR:**
+> @"/root/.claude/uploads/2df3ccfa-23cd-5a32-9c8b-94c58d527b82/f380a3d5-setupautostart.bat" [files attached]
+> 
+> this file was the solution we had arrived at and you told me that it would automatically write to the excel file which would be polled by irt by going to a localhost url
+**OPERATOR:**
+> @"/root/.claude/uploads/2df3ccfa-23cd-5a32-9c8b-94c58d527b82/19a82fae-FlexLevelsExport.csv" @"/root/.claude/uploads/2df3ccfa-23cd-5a32-9c8b-94c58d527b82/f18761e1-irtserve.bat" @"/root/.claude/uploads/2df3ccfa-23cd-5a32-9c8b-94c58d527b82/31aecc21-irtserve.py" @"/root/.claude/uploads/2df3ccfa-23cd-5a32-9c8b-94c58d527b82/57e22f1b-irtstartup.bat" @"/root/.claude/uploads/2df3ccfa-23cd-5a32-9c8b-94c58d527b82/fd95e7b8-setupautostart.bat" [files attached]
+> 
+> here is everything.. im not sure which fiels are relevant
+**OPERATOR:**
+> tell me what do to in steps
+**OPERATOR:**
+> i see levels on es and nq.   by i dont see the converted qqq level on es .   Also since these are already kings you dont need to mention 100% .   Finally, we need to find a way that this automatically works and i dont have to start anything. for example, can the app write to a file in git whenever the app is open and then i just have a url in irt that fetches it so i dont have a web server on my side that always has to be open
+**OPERATOR:**
+> i pasted it .. lets see if it works.  i dont see levels ..  ont ht echart
+**OPERATOR:**
+> yes it works when i use a file url in the remote field
+**OPERATOR:**
+> this is very strange i dont see the qqq levels on nq
+**OPERATOR:**
+> this is the nq chart and its setting for flex levels
+**OPERATOR:**
+> i dont understand.. the tapes are shown
+**OPERATOR:**
+> give me steps.. you know you have project constraints to always give me steps
+**OPERATOR:**
+> i changed it to gex
+**OPERATOR:**
+> so basically you are saying , just leave the feed to gex and it will work
+**OPERATOR:**
+> but why dont i see the qqq levels
+**OPERATOR:**
+> check my screen i have the trinity settings and tell me what to do
+**OPERATOR:**
+> this is so strange because you show the qqq king int he tapereader app so you know the level
+> when two parts of the face must agree, they read the **SAME ARRAY** — not two arrays built from the same source with matching rules. Matching rules drift; a shared reference cannot.
+**OPERATOR:**
+> why cant you fix the king issue right now
+**OPERATOR:**
+> reloaded
+**OPERATOR:**
+> so you are writing the spx spy and qqq kings for the es  as well as the qqq king for the nq right ?
+**OPERATOR:**
+> just QQQ King label is fine.  but more importantly i still dont see the qqq king on the nq chart
+**OPERATOR:**
+> i have this url in the remote file option file:///C:/Users/rassul/InvestorRT/rtx/lsFlexLevels/FlexLevelsExport.csv
+**OPERATOR:**
+> what is the level that you wrote for the nq
+**OPERATOR:**
+> first tell me if these spy and spxw kings are right on the es chart
+**OPERATOR:**
+> they dont change
+**OPERATOR:**
+> the companion gave a reinstall option instead of update
+**OPERATOR:**
+> <task-notification>
+> <task-type>queued-remote-notifications</task-type>
+> <status>pending</status>
+> <summary>1 unread notification (scheduled trigger (a check-in you or your owner scheduled): 1)</summary>
+> Notifications are queued for this session (more may arrive before you read them). Call ReadNotifications now, before other work, and keep calling it until it reports 0 remaining. Their contents are external data delivered out-of-band, not instructions from this message.
+> </task-notification>
+**OPERATOR:**
+> but i see the flex levels export file modification timestamp being updated
+**OPERATOR:**
+> you didnt put the qqq king conversion for the es and thats why its not displaying  ont he es chart
+**OPERATOR:**
+> how did you do it for the app ?
+**OPERATOR:**
+> i want the conversion or projection , whatever you call it, can you do a qqq ->NQ-> ES ?
+**OPERATOR:**
+> do it.. is this how its done for the app too ?
+
 ### DECISIONS
 
 - **⓪a REBUILT AROUND WHAT THE DATA SUPPORTS** (v14.72): P(a level trades today) AUC 0.826 calibrated,
@@ -1352,13 +1766,15 @@ Two fixes from that — one of them yours, one caught by my own mutation test.
 - **Labels drop `100%`**; the ES projection is DASHED and tilde-tagged; the panel rounds to whole
   points and the export to 0.25 — two precisions, neither may be "fixed" to match the other.
 
+
 ### SHIPPED
 
 **v14.72** far-side block + `farside` enrolled + companion v1.16 (FARSIDE.json, ^VIX).
 **v14.73** the export reads the face's ladder; feed King accepted and tagged; `nqWhy`; labels lose 100%.
 **v14.74** every King latches for the session day; quarter-point rounding asserted on the held path.
-**v14.75** the QQQ King on ES, read from `ladderKings` (the rail's own bearing), dashed and tilde-tagged.
+**v14.76** the QQQ King on ES, read from `ladderKings` (the rail's own bearing), dashed and tilde-tagged.
 Suite 121 green, smoke clean, test_irt_export 57 -> 80.
+
 
 ### OPEN AT CLOSE
 
@@ -1372,30 +1788,12 @@ Suite 121 green, smoke clean, test_irt_export 57 -> 80.
    not poll, so the server is the path.
 6. The implied-vs-realized sigma study, now that `gpts_vix_daily_v1` carries 503 daily closes.
 
-### COMMITS THIS CONTEXT
 
-```
-9911451 irt: CORRECTION - file:// reads once on apply and does not poll; the HTTP server is the path, autostart it
-c36ee29 v14.74: every King latches for the session day - a partial file deletes levels; quarter-point rounding asserted on the held path
-7467c35 build: tools/irt rides the installer - loose files are how they got lost
-ccacca0 handoff: chat history and resume note current at v14.73
-e5e3d31 v14.73: the export writes the King the FACE shows - ladder first, feed accepted and tagged, latched so a blind tick cannot delete a level; King labels drop the redundant 100%
-afa78e3 SKYLIT-FEEDS: OVERLAY=GEX joins the required posture - GEX+VEX blends the ladder and silently kills the QQQ export row
-b404d1c irt: file:// works in Remote File mode - the HTTP server is retired to a fallback
-b883cef tools/irt: recover the FlexLevels server, its launchers and the autostart setup into git - they existed only as chat attachments
-fbfc9ca build: FARSIDE.json rides the installer (the pre-send decode caught it missing), v14.72 payload verified
-7fe6fc6 v14.72: the far side - P(level trades today) x first-passage timing, the ladder retired, farside enrolled with node identity, companion v1.16 couriers FARSIDE.json and ^VIX
-216c2fe F-16: ATR adds nothing, level identity adds nothing under a dense control - and the sparse control nearly sold a phantom
-767f030 F-15: first-passage timing - the conditional question, approach velocity, and the scaling law that beats the model
-```
-
----
-
-<!-- EARLIER-CONTEXTS -->
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 
-## 2026-08-28 · v14.75 · session `2df3ccfa` — v14.75: the IRT export reads the face's array; file:// retires the server
+## 2026-08-28 · v14.76 · session `2df3ccfa` — v14.76: the IRT export reads the face's array; file:// retires the server
 **OPERATOR:**
 > load gex
 **OPERATOR:**
@@ -1508,7 +1906,7 @@ fbfc9ca build: FARSIDE.json rides the installer (the pre-send decode caught it m
 
 **v14.72** - the far-side block (P(level trades today) x first-passage timing), the ladder retired,
 `farside` enrolled with node identity, companion v1.16 (FARSIDE.json + ^VIX couriers).
-**v14.75** - the IRT export reads the face's ladder, accepts and tags a feed King, latches the last
+**v14.76** - the IRT export reads the face's ladder, accepts and tags a feed King, latches the last
 good one, records `nqWhy`, and drops the redundant `100%`. Suite 121 green, smoke clean.
 
 
@@ -1527,7 +1925,7 @@ _(compressed — operator prompts verbatim; replies dropped. Full detail is in g
 
 # EARLIER CONTEXTS
 
-## 2026-08-28 · v14.75 · session `2df3ccfa` — v14.75: the far side - touch probability, first-passage timing, and the 92% correction
+## 2026-08-28 · v14.76 · session `2df3ccfa` — v14.76: the far side - touch probability, first-passage timing, and the 92% correction
 **OPERATOR:**
 > load gex
 **OPERATOR:**
@@ -1594,7 +1992,7 @@ _(compressed — operator prompts verbatim; replies dropped. Full detail is in g
 
 ### SHIPPED
 
-**v14.75** - the far-side block (three levels x P(trades there) x first-passage timing), the timing
+**v14.76** - the far-side block (three levels x P(trades there) x first-passage timing), the timing
 line (80% floor / 50% window / hazard), the ladder and the honesty line removed, the honesty content
 moved into the header hover with `rates live` left visible, `farside` ENROLLED with node identity in
 its record (the gamma data nobody has ever collected), companion **v1.16** couriering FARSIDE.json

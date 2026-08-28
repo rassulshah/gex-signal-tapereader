@@ -1,3 +1,47 @@
+## v14.76 — one click ends the daily permission dance, and the writes are finally bounded
+
+> "i need to ensure that when the market closes i can continue working in the app … I also need to
+> know how to make sure the kings work tomorrow … how to more automate this?"
+
+### 1 · The permanent folder grant — 🔓 grant
+
+Chrome resets the File System Access permission to **"prompt" on every page load**, and
+`requestPermission()` cannot succeed from a timer (no user activation). That single fact broke the
+export twice today: the CSV stopped at 10:04 and again after each reload.
+
+⚠ **Chrome 122+ ends it permanently** — the prompt offers *"Allow on every visit"*, which survives
+reloads AND browser restarts, and needs no code beyond asking **from a click**. The operator runs
+Chrome 151. So the IRT panel gains a **🔓 grant** button: click once, choose *Allow on every visit*,
+and the daily re-pick is over. It writes the file immediately as proof, reports a denial in words,
+and names the missing step when no folder has been picked.
+⚠ It must stay on a click — calling it from `irtTick` would reject, be swallowed, and look broken.
+
+### 2 · BOUNDED WRITES — the F-10 fix, finally shipped
+
+`lsPut()` shrinks a payload to a **byte budget** before writing (recorder 3,600 KB, node events
+1,200 KB), sheds oldest-first, and routes a real quota failure through `swallow()` into
+`renderErrors()` with `LS_HEALTH` counters. **Silence is what cost the week, not the quota.**
+
+⚠ **Three real defects were caught applying it, each by a test that executes rather than greps:**
+- **The nevSave shedder was written against the wrong shape.** `NEV` is `{v:1,days:{d:{ev:[]}}}`; my
+  version assumed `{ev:[]}`, so it would have shed NOTHING and let the quota bite exactly as before.
+- **`recorderSave` started REQUIRING `lsPut`** — nine test files went red because harnesses that eval
+  it in isolation don't define it, the ReferenceError fell into the old fallback, and the one-bar
+  queue came back. It degrades to a plain write when `lsPut` is absent.
+- **Three constants shipped with trailing comments**, which `val()` in the harness reads through to
+  the next `;\n` — documented in PROJECT-CONSTANTS and reintroduced anyway. `test_storage.js`
+  refused to load until they were bare.
+- ⚠ And `s11` was a grep (`/day\.snaps/`) that passed with the snapshot branch mutated to `if(false)`.
+  It executes the shedder now.
+
+### 3 · Working after the close — verified, not asserted
+`gpts_lastbook_v1` was written for the first time today (day 2026-08-28, King 7715, 100 strikes,
+14:38). The close-of-session book shipped at v14.55 but storage was full every session since, so the
+latch never existed and the panel went blank every evening. It renders now.
+
+Tests: `test_storage.js` 19 green (it had never run), `test_irt_export` 80 → **89**, suite **121
+green / 6 baseline red**.
+
 ## v14.75 — the QQQ King on the ES chart, read from the rail rather than recomputed
 
 > "i want the conversion or projection, whatever you call it, can you do a qqq -> NQ -> ES ?"

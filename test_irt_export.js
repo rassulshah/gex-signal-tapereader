@@ -422,6 +422,57 @@ ok(/CFG\.irt\.nqRatio=o\.irt\.nqRatio/.test(src), '7h ...and the NQ fields persi
      'q7 the export RECORDS why a QQQ row was skipped — this cost an afternoon of inference');
 }
 
+// ============================================================================================
+// (v14.76) THE ONE-CLICK PERMANENT GRANT.
+// Chrome resets the File System Access permission on EVERY page load, and requestPermission()
+// cannot succeed without user activation — which is why the export went silent at 10:04 on
+// 2026-08-28 and again after each reload. Chrome 122+ offers "Allow on every visit"; all the panel
+// has to do is ASK FROM A CLICK.
+// ⚠ Every assertion below EXECUTES irtGrantFolder against a stubbed handle. A grep would not tell
+// a granted path from a denied one, and the difference is the whole feature.
+// ============================================================================================
+{
+  eval(ex('irtGrantFolder'));
+  // ⚠ A SYNCHRONOUS THENABLE, not a real Promise. The first version stubbed with Promise.resolve()
+  // and scheduled its assertions as microtasks — which run AFTER the summary and process.exit, so
+  // six assertions silently never executed and the suite went green. Second time today. If a test
+  // needs the event loop to finish before it asserts, it is not asserting.
+  const sync=(v)=>({ then:(f)=>{ let r; try{ r=f(v); }catch(e){ return sync(v); } return sync(r); },
+                     catch:()=>sync(v) });
+  let asked=null, exported=0;
+  global.renderCfg=()=>{};
+  global.irtExportNow=()=>{ exported++; };
+  const mk=(state, handle)=>{ asked=null;
+    global.repoKvGet=(k,cb)=>cb(handle===undefined
+      ? { requestPermission:(o)=>{ asked=o&&o.mode; return sync(state); } }
+      : handle); };
+
+  // 1 · a granted click writes the file immediately — proof, not a promise
+  mk('granted'); irtGrantFolder();
+  ok(asked==='readwrite', 'g1 the grant asks for READWRITE, the mode the export needs', asked);
+  ok(IRT_LAST.how==='permission granted' && IRT_LAST.err===null, 'g2 a granted click is recorded as granted', IRT_LAST.how);
+  ok(exported===1, 'g3 ...and the file is written straight away, so the operator SEES it work', exported);
+
+  // 2 · a denial says so in words he can act on — never a silent no-op
+  mk('denied'); irtGrantFolder();
+  ok(/permission denied/.test(IRT_LAST.err||''), 'g4 a denial is REPORTED, not swallowed', IRT_LAST.err);
+  ok(exported===1, 'g5 ...and nothing is written on a denial', exported);
+
+  // 3 · no folder picked yet -> it names the missing step
+  mk('granted', null); irtGrantFolder();
+  ok(/no folder picked/.test(IRT_LAST.err||''), 'g6 with no handle it names the missing step', IRT_LAST.err);
+
+  // 4 · the button exists, is wired to a CLICK, and its hover names the Chrome option
+  const CFGSRC = src.slice(src.indexOf('gpts-irt-grant')-200, src.indexOf('gpts-irt-grant')+900);
+  ok(/Allow on every visit/.test(CFGSRC),
+     'g7 the hover tells him the exact Chrome option that makes the grant permanent');
+  ok(/addEventListener\('click', function\(\)\{ irtGrantFolder\(\); \}\)/.test(src),
+     'g8 ...and it is wired to a CLICK — the only context where requestPermission can succeed');
+  ok(!/setInterval[\s\S]{0,200}irtGrantFolder/.test(src),
+     'g9 ...and is never called from a timer, where it would reject and be swallowed (the v14.53 lesson)');
+}
+
 console.log('test_irt_export: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
+
 

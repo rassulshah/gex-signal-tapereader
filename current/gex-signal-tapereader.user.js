@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.75
+// @version    14.76
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.75';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.76';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3747,11 +3747,99 @@ function recorderLoad(){
     if(!db||typeof db!=='object') db={days:{}}; if(!db.days) db.days={}; return db;
   }catch(e){ return {days:{}}; }
 }
+// ============================================================================================
+// (v14.68) BOUNDED WRITES, AND A FAILED WRITE THAT SHOUTS.
+//
+// ⚠⚠ WHY THIS EXISTS — FINDINGS F-10. On 2026-08-28 localStorage was measured FULL at exactly
+// 10,240 KB: gpts_recorder_v7 5,957 KB holding ONE day, gpts_nodeevents_v1 3,228 KB. A 40 KB write
+// probe threw QuotaExceededError. EVERY setItem in the system had been failing behind catch(e){} for
+// about a week, and that single fault produced five separate "bugs":
+//     the feature-record collapse (15 records / 1 bar against 133 snapshots)
+//     the Yahoo corpus tap "never running"
+//     the base-rate courier never delivering
+//     InsiderFinance levels 8.5 hours stale
+//     and a wrong conclusion that the companion was running an old version
+// The panel kept drawing through all of it. Nothing anywhere said the disk was full.
+//
+// TWO RULES, AND THE SECOND MATTERS MORE THAN THE FIRST:
+//   1. Every large write goes through lsPut(), which SHRINKS THE PAYLOAD TO A BYTE BUDGET before
+//      writing. Counting records was never enough - NEV_MAX capped events at 4000 while 1,332 of
+//      them reached 3.2 MB, because each carries a why-vector plus three outcome objects.
+//   2. A write that still fails is reported through swallow() into __gptsDebug.renderErrors() and
+//      counted in LS_HEALTH. A data layer that cannot write MUST say so. Silence is what cost the
+//      week, not the quota.
+// ⚠⚠ KEEP THESE THREE DECLARATIONS BARE — NO TRAILING COMMENTS. The test harness's val() reads a
+// constant up to the first `;` FOLLOWED BY A NEWLINE, so a trailing comment silently swallows the
+// next declarations and the eval dies with "Unexpected token ';'". Documented in PROJECT-CONSTANTS,
+// and this patch reintroduced it anyway — caught by test_storage.js refusing to load.
+// LS_CAP_KB is Chrome's per-origin cap, measured at exactly 10,240 KB on 2026-08-28.
+var LS_CAP_KB     = 10*1024;
+// per-key byte budgets: the recorder gets the lion's share, the node-event ledger is capped hard
+// because 1,332 events reached 3.2 MB while NEV_MAX (4000 EVENTS) never fired.
+var LS_BUDGET_KB  = { 'gpts_recorder_v7':3600, 'gpts_nodeevents_v1':1200 };
+var LS_HEALTH     = { writes:0, shed:0, quotaHits:0, lastErr:null, lastErrAt:null, lastKB:{} };
+function lsKB(str){ try{ return Math.round(str.length*2/1024); }catch(e){ return -1; } }
+function lsTotalKB(){
+  try{ var t=0; for(var i=0;i<localStorage.length;i++){ var k=localStorage.key(i);
+        t+=(k.length+(localStorage.getItem(k)||'').length)*2; } return Math.round(t/1024); }
+  catch(e){ return -1; }
+}
+// shed(obj) must make obj smaller and return true, or return false when it can shed no further.
+function lsPut(key, obj, shed){
+  var budget=LS_BUDGET_KB[key]||1024, s='', i;
+  for(i=0;i<24;i++){
+    try{ s=JSON.stringify(obj); }
+    catch(eS){ try{ swallow('lsPut/stringify '+key, eS); }catch(e0){} return false; }
+    if(lsKB(s)<=budget) break;
+    if(!shed || !shed(obj)) break;          // cannot shrink further - try the write anyway
+    try{ LS_HEALTH.shed++; }catch(e1){}
+  }
+  try{
+    localStorage.setItem(key, s);
+    LS_HEALTH.writes++; LS_HEALTH.lastKB[key]=lsKB(s);
+    return true;
+  }catch(e){
+    // ⚠ THE LOUD PART. Do not swallow this - it is the exact failure that went unseen for a week.
+    try{
+      LS_HEALTH.quotaHits++;
+      LS_HEALTH.lastErr=key+' '+lsKB(s)+'KB — '+(e&&e.name||e)+' (total '+lsTotalKB()+'KB of '+LS_CAP_KB+'KB)';
+      LS_HEALTH.lastErrAt=Date.now();
+      swallow('STORAGE FULL: '+LS_HEALTH.lastErr, e);
+    }catch(e2){}
+    // last resort: shed hard, once, so the session keeps recording something rather than nothing
+    if(shed){
+      for(var m=0;m<10;m++){ if(!shed(obj)) break; }
+      try{ localStorage.setItem(key, JSON.stringify(obj)); LS_HEALTH.writes++; return true; }catch(e3){}
+    }
+    return false;
+  }
+}
 function recorderSave(db){
   try{
     var dates=Object.keys(db.days).sort();
     while(dates.length>RECORDER_DAYS){ delete db.days[dates.shift()]; }
-    localStorage.setItem(RECORDER_KEY, JSON.stringify(db));
+    // (v14.76) budgeted write. The shedder drops whole OLDER days first, then trims TODAY oldest-
+    // first — snapshots as well as feature records. ⚠ The old fallback halved `feat` only, but the
+    // 5,957 KB measured on 2026-08-28 was mostly SNAPS, so it shed the wrong thing and gave up.
+    // ⚠ It never deletes today outright: a day wiped mid-session is a lost session.
+    // ⚠⚠ DEGRADE, DO NOT DEPEND. Nine test files went red when this started REQUIRING lsPut:
+    // harnesses that eval recorderSave in isolation don't define it, the ReferenceError was caught
+    // by the outer try, and execution fell into the OLD quota fallback — which halves `feat` and
+    // produced exactly the one-bar queue this project spent a week diagnosing. A new dependency in
+    // a hot path must not change behaviour when it is absent.
+    if(typeof lsPut!=='function'){ localStorage.setItem(RECORDER_KEY, JSON.stringify(db)); return; }
+    if(lsPut(RECORDER_KEY, db, function(d){
+        var ds=Object.keys(d.days).sort(), v=null, i;
+        for(i=0;i<ds.length;i++){ if(ds[i]!==TODAY){ v=ds[i]; break; } }
+        if(v){ delete d.days[v]; return true; }
+        var day=d.days[TODAY]; if(!day) return false;
+        var did=false;
+        if(day.snaps) Object.keys(day.snaps).forEach(function(sy){
+          var a=day.snaps[sy]||[]; if(a.length>20){ day.snaps[sy]=a.slice(Math.ceil(a.length*0.25)); did=true; } });
+        if(day.feat) Object.keys(day.feat).forEach(function(sy){
+          var a=day.feat[sy]||[]; if(a.length>40){ day.feat[sy]=a.slice(Math.ceil(a.length*0.25)); did=true; } });
+        return did;
+      })) return;
   }catch(e){
     // On quota: drop the oldest day that is NOT today and retry; if today is the only day,
     // shed the oldest half of today's feature queue instead. Never delete today — that
@@ -4514,6 +4602,42 @@ function irtQqqKing(){
 // ES all day, so it would sit at the same distance from price forever and say nothing when reached.
 // Captured ONCE per session day, the line moves only when the QQQ King itself rolls — which is what
 // makes it behave like a level rather than a restatement of where price already is.
+// (v14.76) ONE CLICK, GRANTED FOREVER — the fix for the fault that broke the levels twice on
+// 2026-08-28. Chrome resets a File System Access grant to "prompt" on EVERY page load, and
+// `requestPermission()` cannot succeed from a timer (no user activation), so the export goes silent
+// after each reload until the operator re-picks the folder. Measured that morning: the CSV stopped
+// at 10:04 and nothing on the face said why.
+//
+// ⚠⚠ CHROME 122+ CAN END THIS PERMANENTLY. The permission prompt now offers "Allow on every visit" —
+// indefinite access surviving reloads AND browser restarts — and it needs NO code change beyond
+// calling requestPermission() from a real click. That is what this button is. The operator runs
+// Chrome 151, so it is available today.
+//
+// ⚠ IT MUST STAY ON A CLICK. Do not "improve" this by calling it from irtTick: the call would
+// reject with NotAllowedError, the rejection would be swallowed, and the button would look broken
+// while quietly training everyone to ignore it. That is the v14.53 lesson, verbatim.
+function irtGrantFolder(){
+  try{
+    repoKvGet('irtDir', function(h){
+      if(!h || !h.requestPermission){
+        IRT_LAST={t:Date.now(),rows:0,how:null,err:'no folder picked yet — use 📁 folder first'};
+        try{ renderCfg(); }catch(e0){} return;
+      }
+      h.requestPermission({mode:'readwrite'}).then(function(st){
+        if(st==='granted'){
+          IRT_LAST={t:Date.now(),rows:0,how:'permission granted',err:null};
+          try{ irtExportNow(true); }catch(e1){}          // prove it immediately, not next tick
+        } else {
+          IRT_LAST={t:Date.now(),rows:0,how:null,err:'permission '+st+' — the file cannot be written'};
+        }
+        try{ renderCfg(); }catch(e2){}
+      }).catch(function(e){
+        IRT_LAST={t:Date.now(),rows:0,how:null,err:'permission request failed: '+(e&&e.message||e)};
+        try{ renderCfg(); }catch(e3){}
+      });
+    });
+  }catch(e){ IRT_LAST={t:Date.now(),rows:0,how:null,err:'grant threw: '+(e&&e.message||e)}; }
+}
 function irtPickFolder(){
   if(!window.showDirectoryPicker){ alert('This browser lacks the File System Access API.'); return; }
   window.showDirectoryPicker({mode:'readwrite'}).then(function(h){ repoKvSet('irtDir', h); IRT_LAST={t:Date.now(),rows:0,how:'folder set',err:null}; renderCfg(); }).catch(function(){});
@@ -4991,7 +5115,29 @@ function nevLoad(){
   if(!NEV || typeof NEV!=='object') NEV={ v:1, days:{} };
   return NEV;
 }
-function nevSave(){ try{ localStorage.setItem(NEV_KEY, JSON.stringify(NEV)); }catch(e){} }
+// (v14.76) BOUNDED BY BYTES. NEV_MAX caps EVENTS at 4000; on 2026-08-28 just 1,332 of them reached
+// 3.2 MB because each carries a why-vector plus three outcome objects. Counting the wrong unit is
+// how a cap passes every check and still fills the disk.
+function nevSave(){
+  try{
+    if(typeof lsPut!=='function'){ localStorage.setItem(NEV_KEY, JSON.stringify(NEV)); return; }
+    // ⚠⚠ THE SHEDDER MUST MATCH THE REAL SHAPE, AND MY FIRST ONE DID NOT. NEV is
+    // `{ v:1, days:{ 'YYYY-MM-DD': { ev:[...] } } }` — I wrote it against `{ev:[]}` and an array,
+    // so it would have returned false on every call, shed nothing, and let the quota bite exactly as
+    // before. `test_storage.js` s16 caught it. A budget with a shedder that cannot shed is a comment.
+    // Older days go first; then today's oldest events, a quarter at a time. Today is never emptied.
+    lsPut(NEV_KEY, NEV, function(o){
+      try{
+        var days=(o&&o.days)||null; if(!days) return false;
+        var ks=Object.keys(days).sort(), i;
+        for(i=0;i<ks.length;i++) if(ks[i]!==TODAY){ delete days[ks[i]]; return true; }
+        var d=days[TODAY]; if(!d || !d.ev || d.ev.length<20) return false;
+        d.ev=d.ev.slice(Math.ceil(d.ev.length*0.25));
+        return true;
+      }catch(e){ return false; }
+    });
+  }catch(e){ try{ swallow('nevSave', e); }catch(e2){} }
+}
 function nevDay(){
   var db=nevLoad(), d=TODAY||'unknown';
   if(!db.days[d]) db.days[d]={ ev:[] };
@@ -6818,7 +6964,11 @@ function cfgHtml(){
     '<label style="font-size:10px;color:'+PAL.sub+'" title="The FUTURES symbol as IRT charts it (contract rolls quarterly — update it each roll, e.g. EPU26 = ES Sep 2026). Levels are converted with the live ES/SPY ratio; ~ marks a last-known ratio.">Fut <input type="text" class="gpts-irt-fut" value="'+(I.futSym||'')+'" style="width:58px;background:#0f131b;border:1px solid '+PAL.line+';color:'+PAL.ink+';border-radius:3px;font-size:10px;padding:1px 3px"></label>'+
     '<label style="font-size:10px;color:'+PAL.sub+'" title="Optional second symbol at SPY prices (e.g. SPY). Blank = off.">ETF <input type="text" class="gpts-irt-etf" value="'+(I.etfSym||'')+'" style="width:44px;background:#0f131b;border:1px solid '+PAL.line+';color:'+PAL.ink+';border-radius:3px;font-size:10px;padding:1px 3px"></label>'+
     '<span class="gpts-irt-dir" style="cursor:pointer;font-size:10px;color:'+PAL.blue+';font-weight:700" title="Pick the folder ONCE (e.g. InvestorRT\\rtx\\lsFlexLevels, or a Google-Drive-synced folder). The handle persists; every export writes silently.">📁 folder</span>'+
-    '<span class="gpts-irt-now" style="cursor:pointer;font-size:10px;color:'+PAL.blue+';font-weight:700" title="Write the file right now.">⟳ now</span></div>';
+    '<span class="gpts-irt-now" style="cursor:pointer;font-size:10px;color:'+PAL.blue+';font-weight:700" title="Write the file right now.">⟳ now</span>'+
+    // (v14.76) the permanent grant. Chrome resets the folder permission on EVERY page load and the
+    // panel cannot ask for it from a timer — so this button exists, and choosing "Allow on every
+    // visit" in the prompt ends the daily re-pick for good (Chrome 122+; the operator runs 151).
+    '<span class="gpts-irt-grant" style="cursor:pointer;font-size:10px;color:'+PAL.amber+';font-weight:800" title="GRANT FOLDER ACCESS — click once, then choose &quot;Allow on every visit&quot; in Chrome&#39;s prompt. Chrome drops this permission on every page load and the panel CANNOT ask for it from its timer (no user gesture), which is why the export goes silent after a reload. Allowing on every visit makes the grant survive reloads and browser restarts, so the levels keep writing with no daily click. It writes the file immediately as proof.">🔓 grant</span></div>';
   // (v14.12) NQ block — QQQ book -> NQ rows in the SAME file (FlexLevels routes by SYMBOL).
   // CQG symbology: ENQU26. The ratio is MANUAL (no NQ price exists anywhere in Skylit) so NQ
   // labels always carry '~'; update the number here when it drifts (NQ price / QQQ price).
@@ -6995,6 +7145,8 @@ function wireConfig(){
   if(irtE) irtE.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.etfSym=(irtE.value||'').trim().toUpperCase(); saveCfg(); });
   var irtD=elCfg.querySelector('.gpts-irt-dir');
   if(irtD) irtD.addEventListener('click', function(){ irtPickFolder(); });
+  var irtG=elBody.querySelector('.gpts-irt-grant');
+  if(irtG) irtG.addEventListener('click', function(){ irtGrantFolder(); });
   var irtNqOn=elCfg.querySelector('.gpts-irt-nqon');
   if(irtNqOn) irtNqOn.addEventListener('change', function(){ CFG.irt=CFG.irt||{}; CFG.irt.nqOn=irtNqOn.checked; saveCfg(); });
   var irtNqS=elCfg.querySelector('.gpts-irt-nqsym');
