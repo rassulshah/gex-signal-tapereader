@@ -94,6 +94,24 @@ for f in sorted(os.listdir('mockups')):
     p=os.path.join('mockups', f)
     if os.path.isfile(p) and (f.endswith('.html') or f.endswith('.md') or f.endswith('.png')):
         FILES.append(p)
+# (v14.59) ⚠⚠ design/ WAS NEVER IN THE PAYLOAD, AND THAT IS HOW DATA-ARCHITECTURE.md WAS LOST.
+# The 2026-08-27 note recorded `design/DATA-ARCHITECTURE.md` as a file that "never landed" and blamed
+# an unpushed sandbox commit. Both halves were wrong: it had never been WRITTEN, and even once it was,
+# this builder would have dropped it silently, because `design/` was not in the manifest at all.
+# A doc that a `load gex` is required to read cannot travel by luck. Text only - the mockup .html
+# files in design/ are big and already have a home in mockups/.
+for f in sorted(os.listdir('design')):
+    p = os.path.join('design', f)
+    if os.path.isfile(p) and (f.endswith('.md') or f.endswith('.txt')):
+        FILES.append(p)
+# (v14.59) the fixtures the tests read. test_futbars.js and append-futures.py both use
+# tools/fixtures/futbars-day.json; shipping the test without its input turns his suite red for a
+# missing file rather than a real defect - the exact trap BASERATES.json fell into at v14.57.
+if os.path.isdir('tools/fixtures'):
+    for f in sorted(os.listdir('tools/fixtures')):
+        p = os.path.join('tools/fixtures', f)
+        if os.path.isfile(p):
+            FILES.append(p)
 FILES += sorted(f for f in os.listdir('.') if f.startswith('test_') and f.endswith('.js'))
 # (v14.57) THE EVIDENCE THE HOD/LOD SECTION RESTS ON — but NOT the corpus itself.
 # ⚠ test_hodlod.js READS data/es-1min/BASERATES.json to assert the panel's baked ladder still equals

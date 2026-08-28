@@ -15,599 +15,299 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-27 · v14.58 · session `115bed5f` — v14.58: HOD/LOD range units; the links and chat-history rules made mechanical
+## 2026-08-28 · v14.59 · session `4c22fa2b` — v14.59: the ES corpus tap, the base-rate courier, and the architecture document that never existed
 
-_28 operator prompts · transcript `115bed5f-f45c-559e-a15a-46475dd506fc.jsonl`_
+_7 operator prompts · transcript `4c22fa2b-bee3-5451-b379-dc2a50cb42bd.jsonl`_
 
 ### THE EXCHANGE
 
 **OPERATOR:**
+> load gex
+
+**me (23:39):** ## GEX LOADED — v14.58
+
+**1 · Files** Full clone (no `--depth`), `7c1db82`. Read in full: `.gex-config.json` · `latest-resume-note.md` · `CHAT-HISTORY.md` CURRENT-CONTEXT · `LOCKED-ITEMS.md` · `PROJECT-CONSTANTS.md` · `DECISIONS.md` D‑1→D‑16 · `INSIDERFINANCE.md` · `SKYLIT-FEEDS.md` (incl. the full application map) · `ISSUES-NEXT-BUILD.md` · `SOURCE-OF-TRUTH.md` · Academy `00-INDEX` + all 11 articles · `current/gex-if-levels.user.js` **full** (571 lines) · CHANGELOG head · all 9 day files. Panel: section map + integrity checks + the regions I'd touch (`installFeedObserver`, `lastBookSave`/`showingStaleBook`/`recorderBlind`, `sessionLevels`/`hodLod`/`secDay`, `emPiles`/`emPilesIF`, the ladder constants, `render`/`panelV3`) — not all 25,445 lines; say the word if you want any region whole.
+
+**2 · Architecture** L0 `installFeedObserver` patches `window.fetch`+XHR in *page* context (`@grant none` load-bearing), filters `gex/levels` and `dark-pool` → `extractWalls`, `findTapeTable`/`validKingRow`, `velHarvest` off React fibers → L1 `STATE`/`LASTFEED`/`VEL`/`LASTSPXW` (+ `LASTBOOK` latch) → L2 `trendVerdict` 5-state SMA-50 → L3 `newSetup`/`runMachine` BO/FT/PB/CONF/GO → L4 accumulation, `legEngine`, deflection → L5 recorder → IDB → `buildDayExport`, gated by **`recorderBlind()` = `inReplay() || showingStaleBook()`** (nine write paths; a tenth calls it too) → L6–7 one `render()` → `panelV3`: ⓪a DAY, ② BIAS, ③ LOCATION (⓪ FRAME renders inside it).
+
+**3 · Platform** Two books, never averaged. Skylit = FLOW (`|net| ≡ v`, no call/put split ⇒ no Call Wall from them); InsiderFinance = STRUCTURE (`GEX = γ×OI×100×spot²×0.01`, puts negative, verified to their header). Scale chain k → disp (×1.0023) → und (×0.0998); `kingKd` is thousands, `velocity.cur/.d15` are dollars. 5-step: King (l …[trimmed]
+
+**OPERATOR:**
+> Check the architecture doc for the yahoo pipeline that updates the es data file daily.  I want to make sure we have the latest data for the hod lod feature so it updates daily
+
+**me (00:12):** Checked. Two corrections, and the second is the one that matters.
+
+**The doc doesn't exist.** `design/DATA-ARCHITECTURE.md` has never been added in any of this repo's commits — `git log --all --diff-filter=A` over every path ever created returns nothing for it. The resume note lists it beside two files that were genuinely lost in an unpushed sandbox commit, which reads as "lost". It was never written. The Yahoo spec lives in `session-state/YAHOO-PIPELINE.md`, and I read it in full.
+
+**And the Yahoo pipeline does not touch the ES file.** Item 18 fetches `query1.finance.yahoo.com/v8/finance/chart/{SPY|QQQ|^SPX|^VIX|ES=F}` in the browser and writes `snap.htf` — higher-timeframe context per bar: prior week/month H/L/C, 20/50/200 DMA, daily ATR(14), gap vs ATR — into `data/YYYY-MM-DD.json`, the day file the installer already pushes. That is a *different file for a different job*. `data/es-1min/EPM26-1min.csv.gz` is the 284-session corpus the HOD/LOD base rates were derived from, and nothing in item 18 appends to it.
+
+There's a third thing in the way even if it did:
+
+```
+21186:  var HODLOD_BASE = { n:284, ladder:[{w:30,rate:41,n:1169}, …], … }
+```
+
+**`HODLOD_BASE` is a hardcoded literal in the userscript.** The panel reads `BASERATES.json` nowhere — only `test_hodlod.js` and the installer do. So the ⓪a rates change when someone re-runs `tools/study-hodlod.py` and re-bakes the constant into a build. There is no runtime path from a fresher corpus to the face.
+
+Two facts to weigh before deciding anything:
+
+- **Today's HOD/LOD is already live** — `hodLod()` computes the `A` row from the panel's own candles each bar. The corpus feeds only the `E` row and the survival ladder. So a stale corpus doesn't make today's reading wrong; it makes the yardstick older.
+- **A daily append bare …[trimmed]
+
+**OPERATOR:**
+> I just wanted to make sure we had a process in place that obtained es data duly and updated the data file.  I know the process workflow is in git and it can be found checking what was committed but you had a lot of difficulty finding it the lat time
+
+**me (00:16):** Right — and that's the failure I should not repeat. Searching history properly this time rather than looking at HEAD.
+Searched all 190-odd commits this time, not just HEAD. Here's what's actually committed, and what it does.
+
+**Four processes exist, and every one of them is a transport, not a source:**
+
+| committed script | what it does |
+|---|---|
+| `setup-gex-autopull.bat` → `tools/gex-pull.bat` | scheduled task **"GEX auto-pull"**, every 2 min — watches Drive `GEX-inbox` for `gex-patch-*.patch` / `gex-drop-*.tar.gz`, applies, commits, pushes |
+| `tools/review-pull.bat` | Drive `GEX-review-inbox` → `review/` + `learning/rules.json`, commit + push |
+| `pushdata.bat` / `tools/push-data.bat` | moves `Downloads\2026-MM-DD.json` into `data\`, commits, pushes |
+| `installv*.bat` | xcopy a build into the repo, commit, push |
+
+They move files **into** git. None of them fetches market data from anywhere.
+
+**Verified rather than assumed:** across every commit, `yfinance|query1.finance|finance.yahoo|databento|polygon|barchart|firstrate` appears in exactly two files — `YAHOO-PIPELINE.md` and `CHAT-HISTORY.md` — both of which *describe* the plan. Zero hits in any script, any `.bat`, either userscript. `schtasks` appears only in `setup-gex-autopull.bat` (the Drive courier) and in prose.
+
+So the answer is **no — there is no process that obtains ES data.** The only thing in this project that originates market data is the browser panel, and what it originates is the Skylit day file, not ES bars. `EPM26-1min.csv.gz` reached the repo because you exported it from your platform and sent it. Twice.
+
+`YAHOO-PIPELINE.md` §2 says it in its own words, and it's the accurate summary: *"The pipe is fully built — only the tap at the top was never fitted."*
+
+⚠ And on why it was hard to find last ti …[trimmed]
+
+**OPERATOR:**
+> Yes I want this process automated so the hod lid is always updated based on the latest data.  I also need you to ensure you are able to find it in the future and place its details in the architecture document for this project so it is read every time load he’s is done.  I want to get this out of the way. The process should be extendable to other markets like nq gc nd cl in the future.
+
+**me (00:22):** Approved — and before I design anything, the gate: **no doctrine covers this.** The Academy has no article on session-extremity base rates; `charts-first` is the nearest and only says prior highs/lows are chart structure. So this is ours to define, and I'm telling you that rather than inventing a rule and implying it's sourced.
+
+**One thing I measured first, because it kills the easiest option.** I checked your live panel: the chart is on SPXW, `futMode` reports `underlying: SPY, r: 10.09`, and `closedCandles()` returns SPY bars at the chart's interval. The panel cannot be the source of a 1-minute ES corpus — even on an ES chart it sees the chart's interval (yours is 3m) and only the loaded window. So the tap has to come from outside the panel.
+
+**The shape of what I'd build, so you know what you're approving:**
+
+The companion (`gex-if-levels.user.js`) does the fetching — it already carries `GM_xmlhttpRequest` and already couriers a foreign site daily (ForexFactory, v1.14). One more courier, one more `@connect`. It writes bars to localStorage, the panel folds them into the day-file export, and `pushdata.bat` — which already runs — carries them to git. **No new transport, no new scheduled task.** Extensibility is a symbol table, one row per market: ES, NQ, GC, CL, and whatever "ND" is (tell me and I'll add it — I'm not guessing it).
+
+Then `design/DATA-ARCHITECTURE.md` gets **created** — it has never existed, which is why you couldn't get a straight answer about this — with every pipe in one table, named, plus who can reach what. And it goes into `.gex-config.json` → `projectFiles` and the load instruction, so it is read on every `load gex` rather than being a file I happen to find.
+
+**The one decision, and it's the series.** Your corpus is `EPM26` — one contract, from yo …[trimmed]
+
+**OPERATOR:**
+> Continue from where you left off.
+
+**me (00:35):** Before designing anything I'm resolving the one constraint item 18 left open in 2026-08-16 — whether Yahoo is reachable from the page at all. That console check was never done.
+`__gexif` being absent from page context is expected (the companion runs sandboxed under `@grant`), so that proves nothing. The honest test is the localStorage it writes.
+Two measurements first, because both were open questions and both change the design.
+
+```
+plain fetch → query1.finance.yahoo.com   BLOCKED: Failed to fetch
+companion   → gpts_if_chain_v1           written 5m ago · SPX spot 7730.11 · err null
+              gpts_evcal_v1              day 2026-08-27 · ForexFactory courier working
+```
+
+Item 18 hedged on this in 2026-08-16 — *"try plain fetch first… verify unsafeWindow access still OK"* — and the console check was never done. It's done: **the page cannot fetch Yahoo.** It has to be `GM_xmlhttpRequest` in the companion, exactly as `YAHOO-PIPELINE.md` §4 predicted. And the companion is alive and already couriering one foreign site on a 5-minute poll, so the carrier is proven rather than assumed.
+
+**Doctrine gate:** no Academy article covers HOD/LOD base rates or data acquisition — `node-lifecycle`, `charts-first` and the rest are silent on both. **NO DOCTRINE COVERS THIS.** I'm not deviating from anything; I'm inventing, and saying so.
+
+## The design
+
+Every arrow below except the two marked **NEW** is a pipe that already runs.
+
+```
+DAILY, browser        companion + GM_xmlhttpRequest          ← NEW tap
+  query1/v8/finance/chart/{ES=F,NQ=F,GC=F,CL=F}?interval=1m&range=5d
+     → localStorage gpts_futbars_v1
+PANEL                 rides buildDayExport() → data/YYYY-MM-DD.json
+YOUR MACHINE          push-data.bat / GEX auto-pull → commit + push
+CLOUD                 tools/append-futures.py → …[trimmed]
+
+**OPERATOR:**
+> i'm surprised its not there.  there should be a design or architecture document  that already talks about yahoo finance, Inside Finance (IF) etc. can you double check
+
+**me (00:42):** You're right to push, and I think I mis-searched. My earlier grep required the literal `finance.yahoo` — a document saying "Yahoo Finance" would not have matched it. And `design/architecture-design.md` is in the config's canonical list and I did not read it. Redoing this across all history.
+Double-checked properly, and you're half right — the content exists, but not where you'd look for it, and my first search was bad. I required the literal string `finance.yahoo`, so a document saying "Yahoo Finance" would never have matched. That's the same shallow-look failure that cost you the session over item 18.
+
+Here's the real search — `git grep` across **every commit on every branch, all file types**:
+
+```
+yahoo →  .gex-config.json
+         skills/gex/SKILL.md
+         session-state/YAHOO-PIPELINE.md
+         session-state/LOCKED-ITEMS.md
+         session-state/latest-resume-note.md
+         session-state/CHAT-HISTORY.md
+         session-state/2026-08-27_resume-v14.53.md · _v14.56.md
+         data/es-1min/README.md
+         tools/chat-history.py
+         (+ installv*.bat — base64 copies of those same files)
+
+design/ or roadmap/ →  ZERO hits, in any commit, ever
+```
+
+**So what you're remembering is real. It's just filed as session state, not as architecture:**
+
+- `session-state/YAHOO-PIPELINE.md` — 100 lines, the full item 18 spec, the `query1.finance.yahoo.com` endpoint, the limits, the `@grant` constraint, the ASCII pipe diagram. It is a design document in everything but its folder.
+- `session-state/INSIDERFINANCE.md` — the payload shape, the GEX formula, the windows, the scale chain, the failure modes.
+- Item 18 itself, which sat in `latest-resume-note.md` from 2026‑08‑15 to 08‑20 discussing Yahoo *and* the IF companion together — which is almost certainly the thing you're p …[trimmed]
+
+**OPERATOR:**
+> make sure everything is documented and can be retrieved via load gex protocol and build .
+
+**me (00:48):** Building. First, the exact patterns I have to mirror — the existing courier consumer and the export hook.
+Companion done. Now the panel — and while normalising the base rates I hit a live defect in the hover I have to fix in the same edit.
+Confirmed — every ladder hover on the panel right now reads `undefined of 1169`. Shipped v14.57, survived v14.58, 42 assertions passed over it. Fixing it in this edit.
+Now the cloud side. Reading the existing study so I extend it rather than replace it.
+The tool refuses rather than inventing rows — correct. But "it'll work tomorrow" is exactly the kind of untested claim this project punishes, so I'm verifying Yahoo's real payload shape rather than assuming it. The page can't fetch Yahoo, but a tab pointed straight at it is same-origin.
+Real payload — and it has 152 null bars in 2 days, which is exactly the case that would become a fake LOD of 0. Running my actual parser against these real bytes rather than trusting it.
+Measured, not assumed: **391 RTH bars, exactly 08:30→15:00 CT**, on both sessions — precisely the complete-session count `MIN_BARS=386` expects, with the UTC window retaining 480 for margin. Now taking the fixture from the real artefact rather than one I imagine, per the scrape lesson in `INSIDERFINANCE.md`.
+Truncated at ~20 rows — not worth five more round trips for 15KB. The fixture's job is to exercise epoch→CT bucketing, RTH windowing, the 386-bar threshold and dedupe; none of those depend on the price path, which is already validated against the 284-session corpus. So: real clock, real first bar, deterministic synthetic prices — and the fixture says so on its face.
+Pipeline proven: 391 bars per session, incomplete flagged, error market skipped, and **idempotent on re-run**. Now the study has to read the dailies alo …[trimmed]
+
+### DECISIONS
+
+- **THE SEARCH WAS WRONG AND HE CAUGHT IT.** I reported that no design or architecture document
+  mentioned Yahoo. The grep required the literal `finance.yahoo` - a file saying **"Yahoo Finance"**
+  could never have matched. He said *"i'm surprised its not there ... can you double check"*, and the
+  honest search (`git grep -li yahoo` over every commit, every branch, all file types) found eight
+  files. His memory was right; my search was wrong. **Failure pattern #4, committed in the same
+  session that quoted it.**
+- **BUT THE CONCLUSION HELD, FOR A BETTER REASON.** Zero hits in `design/` or `roadmap/`, in any
+  commit, ever. What he remembered is real and lives in `session-state/` - `YAHOO-PIPELINE.md`,
+  `INSIDERFINANCE.md`, and item 18 inside a resume note. **Architecture knowledge was stored in the
+  one folder that gets rewritten in full every build.** That is the disease, and it is the same one
+  that lost ITEM 18 for 24 versions.
+- **THE PANEL CANNOT REACH YAHOO - MEASURED.** `await fetch(query1...)` from the live Atlas page:
+  `BLOCKED: Failed to fetch`. Item 18 hedged on this in 2026-08-16 (*"verify unsafeWindow access
+  still OK"*) and nobody ran the check for eleven days. The tap therefore lives in the companion,
+  which already couriers ForexFactory. `@grant none` in the panel stays load-bearing.
+- **THE COURIER IS DUMB ON PURPOSE.** No tz conversion, no RTH logic in the userscript; all session
+  logic in Python with a real tz database. The companion's own `ctToday()` hardcodes -5h and IS wrong
+  under CST - it must not be copied.
+- **MONOTONICITY IS NOT EVIDENCE.** Two synthetic sessions produced a ladder of 57/80/100/100/100
+  that passed every structural check. A size floor (120 sessions, n>=50 per rung) now gates whether a
+  couriered payload may replace the 284-session baked-in base.
+- **A TEST WROTE SYNTHETIC PRICES INTO THE REAL CORPUS PATH.** The first fixture run put invented
+  OHLC into `data/futures/ES/` - same columns, same filenames, nothing to flag it. `GEX_FUTURES_OUT`
+  now redirects test output. **Ask what happens when a TEST runs a tool that writes.**
+- **AN ASSERTION THAT COULD NOT FAIL, FOURTH OCCURRENCE.** Mutation testing showed deleting the
+  session floor left the suite green, because a different guard was catching the same payload.
+  Fixed with a 40-session case that only the session floor can refuse.
+- **ND WAS NOT INVENTED.** He named ES/NQ/GC/ND/CL. ND is not a contract this context could identify,
+  and a guessed symbol puts the wrong series in the corpus under a right-looking name. `f26` fails
+  the build if it appears.
+- **ITEM 18 IS HALF BUILT AND SAYS SO.** The route and the bar feed exist; Tier 1/Tier 2
+  (`snap.htf`, DMAs, ATR, HTF levels) do not, and the 2026-09-16 backfill deadline is untouched.
+  `LOCKED-ITEMS.md` carries the split table so nobody greps `yahoo`, finds the courier, and concludes
+  it shipped.
+
+### SHIPPED
+
+**v14.59 + companion v1.15** - the Yahoo 1-minute bar courier (ES/NQ/GC/CL), the `futBars` leg of the
+day export, `tools/append-futures.py`, `tools/study-hodlod.py --market`, the BASERATES courier and the
+validated `hodlodBase()` that prefers it, and the **"undefined of 1169"** ladder-hover fix that had
+been on the face since v14.57.
+
+**`design/DATA-ARCHITECTURE.md`** - 198 lines, wired into `.gex-config.json` and the skill, enforced
+by `test_futbars.js` f31-f41. It had never existed in any commit.
+
+`test_futbars.js` - 46 assertions, every guard individually mutation-tested. Suite 118 green + 46,
+6 documented baseline reds.
+
+### OPEN AT CLOSE
+
+1. **The tap has never run on real couriered data** - the fixture proves the code, not the loop.
+   After a session on v14.59 + v1.15: `__gptsDebug.futBars()`, then his push, then
+   `python3 tools/append-futures.py`.
+2. **What is "ND"?**
+3. **`data/es-1min/EPM26-1min.csv.gz` still not on GitHub** - 5.1MB vs a 6MB payload cap.
+4. **The feature-record collapse** - 3,822 on 08-20 vs 15 on 08-27; `matrix` rows track it exactly,
+   so it is ONE upstream gate. Gates any study.
+5. **The ladder width** - 618 in a 454px body, his call.
+6. **⓪a enrollment, BOP/WICK/W.END/WICK%/MUD definitions, VWAP.**
+
+---
+
+<!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-27 · v14.58 · session `115bed5f` — v14.58: HOD/LOD range units; the links and chat-history rules made mechanical
+**OPERATOR:**
 > oh my .. i think i messed up and closed the prior session.. i was working on my project can you remember ?
-
-**me (21:45):** Yes — I've got it back. Cloned fresh from git (full clone, per the rule that was fixed yesterday) and read the handoff chain.
-
 ## GEX LOADED — v14.53
-
-**1 · Files** `.gex-config.json` · `latest-resume-note.md` (full) · `CHAT-HISTORY.md` CURRENT-CONTEXT (full) · `LOCKED-ITEMS.md` · `PROJECT-CONSTANTS.md` · `DECISIONS.md` D-1→D-16 · `INSIDERFINANCE.md` · `SKYLIT-FEEDS.md` · `YAHOO-PIPELINE.md` · `ISSUES-NEXT-BUILD.md` · `hodlod-v2-SPEC.md` · `SOURCE-OF-TRUTH.md` · all 11 Academy articles + 00-INDEX · CHANGELOG head (v14.53→v14.50) · all 9 day-files.
-
-⚠ **Code read: the full function map (751 module-scope functions, every section banner) plus the ladder/rail render region in full — not the whole 24,784 lines this session.** I'll read any region in full before we touch it; say the word if you want the whole file first.
-
-**2 · Architecture** L0 feed hooks (`installFeedObserver` patches `window.fetch`/XHR in *page* context — `@grant none` is load-bearing) → `extractWalls`, `findTapeTable`/`validKingRow`, `velHarvest` fibers → L1 `STATE`/`LASTFEED`/`VEL`/`PEAK`/`TAPS` → L2 `trendVerdict` 5-state SMA-50 (TREND_DOM 15/20, reversal 11) → L3 `biasVotes` (SMA owns direction, DRIFT gates), `directionGrade` → L4 `legEngine`/`deflTrigger`/`inPlayZone`/`tradeFrame` → L5 recorder FEATURES→IDB→`buildDayExport`/`irtExportNow` → L6–7 one `render()` → `panelV3`. Final line `})();`.
-
-**3 · Platform** Skylit = FLOW (`|net|≡v`, no call/put split, so no Call Wall). InsiderFinance = STRUCTURE (`GEX=γ×OI×100×spot²×0.01`, puts negative). Scale chain k → disp (×~1.0023) → und (×~0.0998). Never compare across books, windows or scales.
-
-**4 · Doctrine constants** Taps **80/66/33** + DECAYING = quiet death, no interaction · node gate **FRESH? GROWING?** both or find another level · REAL grows / HEDGE …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
-
-**me (21:45):** Working tree is clean — the only change was `v10.js`, which I'd overwritten as the documented pre-test step (`cp current/… v10.js`), and I've restored it. Nothing to commit: the sandbox can't push to this repo anyway (github.com is blocked at the proxy — the installer pushes from your machine).
-
-But restoring it surfaced something real:
-
-**`v10.js` at HEAD is v11.48 — 42 versions and 6,555 lines behind `current/`.**
-
-```
-v10.js       @version 11.48    18,229 lines
-current/     @version 14.53    24,784 lines
-```
-
-The test harness reads `./v10.js`, not `current/`. My 115 green / 6 red is trustworthy because I ran the `cp` first, as `PROJECT-CONSTANTS.md` mandates — but **anyone who forgets that step runs 121 test files against v11.48 and gets a green suite that says nothing about the shipped panel.** That is exactly the "stale-but-green is more dangerous than red" hazard the constants file names, sitting in the repo as a committed file rather than a procedure everyone has to remember.
-
-Two ways to close it, and it's your call which — the stale copy rides out on the next installer push either way:
-
-- **Delete `v10.js` from the repo** and have `run-tests.sh` do the `cp` itself, so the harness cannot read a stale file because there isn't one.
-- **Keep it and refresh it in the same commit as every build**, with a test that fails when its `GPTS_VERSION` ≠ `current/`'s — the same mechanism `test_chat_history.js` already uses.
-
-I'd take the first: a generated artefact that can drift is the failure pattern in `PROJECT-CONSTANTS.md` §9, and deleting it removes the drift rather than policing it.
-
-That's a side finding, not a change of subject — my question from a moment ago still stands: **Yahoo/item 18 (deadline 2026-09-16) next, or the study over the three usable day-files?**
-
 **OPERATOR:**
 > did you read the chat history .. do you know where we were at
-
-**me (21:48):** Yes — the CURRENT-CONTEXT entry, in full. Here's where we stopped, in your words rather than my summary.
-
-**Your last instruction was:**
-
 > "well lets implement the fix for all of the inssues incldueing in place.. have you compleeted the load gex and have you ensured the chat history is saved..."
-
-**Only half of it shipped.** v14.53 was the IRT permission fix and nothing else. The layout half — which you'd raised one prompt earlier with a screenshot, *"did you also implement the fix related to the layout changes . see pic i think they maybe in the same fix as the in place fix"* — did **not** ship, and the reason it didn't is the thing worth carrying forward:
-
-I first told you five mockup items were unbuilt (rolls left of price, %King on the bar, kings as pills in the chute, EH/EL pills, STATE column). Then I measured the live panel and **corrected myself** — `g3ldst` 12, `g3ldtap` 6, `g3ldroc` 12 were all in the DOM and rendering. They weren't missing, they were **scrolled off the right edge**. The ladder is wider than the panel. So the build was refused deliberately: a width problem needs a decision from you and a rendered mockup, not render surgery. I re-measured it today — 632 wide in a 454 panel, **178px clipped**, still true.
-
-**Two other things from that session I'm carrying:**
-
-Before any of the ladder work, you'd said *"so we can move toward implementing the hod lod feature"* — that was the direction you were heading, and it's why you re-supplied the mockups: *"i gave you the mockups for you to get upto date . make sure you save to repo so you can refer to it."* The spec survived as `mockups/hodlod-v2-SPEC.md`. **The approved PNG and the 284-session ES corpus did not** — that commit never reached GitHub.
-
-And you were right three times about Yahoo while I said t …[trimmed]
-
 **OPERATOR:**
 > just give me the build and the tampermnonkey link
-
-**me (21:52):** Units settled by measurement, not by comment — on your live tape just now:
-
-```
-SPXW King 7690   kingKd 12,680        ($K, thousands)
-velocity.cur    −12,680,083.27        (dollars)
-                 kingKd × 1000 == |cur|  ✓
-```
-
-So `d15` is dollars and the King's mass is `kingKd × 1000`. That's the scale the delta profile needs, and it's the exact unit trap `PROJECT-CONSTANTS` L-F warns about. Building now.
-The mockup answers the width question — but laying it over the shipped code surfaced the real constraint, so let me state it before I write anything:
-
-**Your panel body is 454px. The mockup you approved is drawn at 544px.** There is no arrangement of nine columns of 8.4px text that fits 454. So the build compacts the ladder as far as the mockup allows (632 → ~574) and the last stretch is one drag of the panel edge, not code.
-
-Building the compaction now.
-The overlap audit earned its keep — it found two real defects, one of which explains an old mystery:
-**v14.54 — the layout half of your last instruction.** Built to `mockup-ladder-v11.html`, your own approved spec, not to anything I invented.
-
-**Tampermonkey — update ONLY what changed:**
-
-- **Tapereader v14.54** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
-- Companion v1.14 — UNCHANGED, do not reinstall
-
-Then wait ~5 min for the raw CDN, and **RELOAD the Atlas tab** — footer must read v14.54.
-
----
-
-**First: v14.52 is verified.** Your live panel at 16:41 CT returned `inPlace:true, err:null`, last write 2.9 min old on a 180s cadence. Two builds reasoned about a write that had never run; it runs.
-
-**Four changes, each deleting width rather than tuning it:**
-
-| | |
-|---|---|
-| **%King moved inside its own bar** | the parked column is gone entir …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
-
-**me (22:06):** The stop hook caught something more important than a dirty tree — **the payload I just sent is missing two files, by the exact mechanism I documented two hours ago.**
-You're right — one file. Here it is.
-`HDRLINES=123` matches the `exit /b 0` line — header arithmetic checks out, CRLF, dash-free name.
-**installv1454.bat** — download, double-click. Ignore the two files I sent before it.
-
-**Tampermonkey — update ONLY what changed:**
-
-- **Tapereader v14.54** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
-- Companion v1.14 — UNCHANGED, do not reinstall
-
-Wait ~5 min for the raw CDN, then **reload the Atlas tab** — footer must say v14.54.
-
-One thing you should know rather than discover: the ladder is now 618px wide against your 454px panel body, so it will still scroll sideways. Widen the panel to about 620 and every column lands on screen at once.
-
 **OPERATOR:**
 > make sure this instruction is somewhere when load gex happens so the next context knows i am supposed to get 1 install file. also are you saving chat history like you are supposed to . the instructions should indicate that
-
-**me (22:08):** Both fair. Let me answer the second one with evidence rather than a claim, then fix the first — because the first is my fault and it's a contradiction in your own docs, not just a missing note.
-Confirmed — and it's not a missing note, it's three documents disagreeing:
-
-| source | says |
-|---|---|
-| `skills/gex/SKILL.md` :280 | *"ship ONE self-contained installer `.bat`"* — your rule, 2026-08-15 |
-| `PROJECT-CONSTANTS.md` :441 | *"The primary delivery is now zip + `tar -xf`"* |
-| `tools/build-installer.py` :401 | prints **"DELIVER THESE TWO FILES (primary)"** |
-
-I followed the builder's banner. Fixing all three, and pinning it with a test rather than prose.
-Understood — you're blocked, that takes priority. Let me look at what the last-session rule actually does.
-The rule looks right in code — so let me measure your live panel rather than guess, since the box is what lies here.
-Both of your rules are now enforced by a red build, not by prose — `test_delivery.js`, 21 assertions, four of them mutation-tested:
-
-- **One file**: the builder's own banner was the culprit. It printed *"DELIVER THESE TWO FILES (primary)"* while the skill said *"ship ONE"*. All six sources a context reads — config, skill, constants, resume note, checklist, builder — now carry your exact words, and the test goes red if any of them stops.
-- **Chat history**: yes, regenerated this build and green (`test_chat_history.js`, 24/24, stamped v14.54). The instruction now says to run it **last**, after the final exchange — which means this conversation's tail goes in at the next build.
-
----
-
-Now your blocker. I measured your panel rather than guess, and **the last-day rule is working correctly — it isn't the problem.**
-
-```
-session : showing 2026-08-27 · replay:false · rth:false · "live/today"
-phase   : CLOSE …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
-
-**me (22:13):** Yes — building it. Let me first read how the book's expiry is decided, because the recorder must be blind to a stale book exactly like it is to a replay.
-The panel isn't blank after hours — it's *flat*: v14.5 already tolerates the rolled expiry, but every velocity delta is zero, so states, ROC and rolls all go quiet. So the fallback has to latch the last **live** book and replay it. Recorder safety first.
-The badge landed inside the IRT branch and appends to `out` where that scope builds `warn` — a swallowed ReferenceError waiting to happen (failure pattern #5). Fixing the placement.
-Six existing tests broke — and they broke *correctly*: they stub `inReplay` to prove the recorder stays silent, and the guards now call `recorderBlind`. Fixing the tests in the same commit so this can't become camouflage.
-You've hit your monthly spend limit · raise it at claude.ai/settings/usage?from=cc_cli_limit_message · your weekly limit resets Aug 30, 12am (UTC)
-
 **OPERATOR:**
 > continue.. and why are you taking so long
-
-**me (22:20):** Fair. Honest answer: the fallback had to route through `velAt`/`tapeMap`, which the **recorder** also reads — so a mistake there writes a frozen book into `data/*.json` as if it were live and silently poisons every rate we've measured. That meant converting nine write guards, and six existing tests broke correctly and had to be repaired. That's the time. Finishing now.
-117 green, the 6 documented baseline reds. Writing the save and building the one file.
-**installv1455.bat** — one file.
-
-**Tampermonkey — update ONLY what changed:**
-
-- **Tapereader v14.55** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
-- Companion v1.14 — UNCHANGED, do not reinstall
-
-Wait ~5 min for the CDN, then reload Atlas — footer must read v14.55.
-
----
-
-**What I found: your last-day rule was never broken.** It answers *which day's price bars to draw*, and it answered correctly — today had a session. The gap was one layer down:
-
-```
-velocity strikes by expiry:  08-28 → 256 · 09-16 → 70 · 08-27 → 0
-strikes with a non-zero 15m delta:  0 of 326
-```
-
-Skylit **drops the expired chain at the close**, so your ladder is already tomorrow's book with every rate of change at zero. Nothing answered *which expiry's nodes to draw*. That's why the panel went flat rather than blank.
-
-Now the panel latches the last healthy live book during the session and serves that after the close, with `● 2026-08-27 book — frozen 15:00` in the footer so the mode is never invisible.
-
-**One thing you need to know or you'll think it's broken: it can't work tonight.** The latch is only written during RTH and there has never been one. `__gptsDebug.lastBook()` will say `no latch yet` — that's correct. **The first time it engages is after tomorrow's close.**
-
-The …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (22:23):** Confirmed rather than assumed — the proxy refuses by design:
-
-```
-remote: access denied by the git proxy: rassulshah/gex-signal-tapereader is not in
-this session's authorized repository set
-```
-
-That's the documented architecture: **the cloud can read the repo but never push. The installer pushes from your machine.** So those two commits are sandbox bookkeeping — `installv1455.bat` is what actually gets the work into GitHub, by xcopying into `C:\Dev\gex-signal-tapereader` and committing there.
-
-Let me verify the file you're about to run really carries everything, since a payload that quietly drops files is how this project lost `DATA-ARCHITECTURE.md` and the ES corpus last time.
-Verified by decoding the actual file you'll run, not by trusting the builder:
-
-```
-payload files    : 281        VERDICT: ALL PRESENT
-payload @version : 14.55      GPTS_VERSION: 14.55   ✓ both spots agree
-recorderBlind    : present
-lastBookSave     : present
-```
-
-All 21 files I touched this session are inside it — both new test suites, the changelog, the resume note, the regenerated chat history, the corrected `.gitignore`, and the six repaired suites.
-
-**So nothing is pending on my side.** The two commits sitting unpushed here are sandbox bookkeeping — this container can't reach GitHub by design, and it just confirmed that with a 403 from the proxy rather than me quoting a doc at you. Running `installv1455.bat` is the push: it xcopies into `C:\Dev\gex-signal-tapereader` and commits from your machine.
-
-Two things ride along with it that aren't in the panel but matter:
-
-- **`installv*.bat` is now gitignored.** It wasn't — only `install-v*.bat` was — so v14.54's dash-free filename would have been swept into your repo history by `git add -A`. That's the same accident that put 28MB of old installers …[trimmed]
-
 **OPERATOR:**
 > reloaded . please check
-
-**me (22:26):** Everything landed. Checked on your live tab:
-
-```
-version        v14.55        debug hooks 101 (was 100 — the new lastBook hook)
-renderErrors   []            nothing swallowed
-ladder         618 wide in a 454 body → 164 clipped, scrolling not clipping
-```
-
-**The v14.54 layout is rendering as designed:**
-
-| | |
-|---|---|
-| node bars | 15, sample reads `−100% GK` — **%King is inside the bar** with the type at its tip |
-| %King fallbacks | 9 short bars dropped their number outside, none touching the chute |
-| king pills | 3, sample `♛7689 SPY` |
-| EM pills | 2, in the chute |
-| state / roc | 7 / 15 |
-
-**The v14.55 fallback reports exactly what it should, and this is the part to read carefully:**
-
-```
-serving : false
-why     : "no latch yet (it is written during RTH only)"
-liveFrontExp : 2026-08-28      ← the book has already rolled to tomorrow
-```
-
-That's correct, not a failure. The latch is only written during a live session and there has never been one. **Tomorrow after 15:00 CT it will have latched, and from then on the panel keeps showing that session's book instead of going flat.** Tonight it behaves exactly as it did before.
-
-You can watch it happen — `__gptsDebug.lastBook()` will flip `haveLatch` to true within a few seconds of the open tomorrow, and `serving` to true after the close.
-
-One consistency note while you're looking: the delta column drew its zero line but no bars, because every 15-minute delta on the page is currently 0. That's the flatness we just talked about, and it's the exact thing the latch will populate tomorrow.
-
-Two things still open from earlier, neither urgent tonight: the **164px** means widening the panel to ~620 shows every column at once, and the **feature-record collapse** (3,822 records on 08-20 vs 15 today) is still undiagnosed and gate …[trimmed]
-
 **OPERATOR:**
 > first show me the mockups of how this is supposed to look
-
-**me (22:27):** Fair — I built that without one because you said go, and the standing rule is mockups first. Rendering it now, with the overlap audit, before you look at anything.
-The audit caught a real bug — and it's in the shipped code, not just the mockup:
-
-```
-overlaps: empill "EL 7708"  ×  king "~7716 QQQ"
-```
-
-Kings are nudged apart from **each other**, but nothing nudges them clear of the EM pills — and since v14.54 all of them live in the same chute. Fixing that before you see it.
-**Left is tonight. Right is what you'll have after tomorrow's close.** Both drawn at your real 454px body, so the horizontal scroll you see is the honest 164px.
-
-The difference is the four right-hand columns. Tonight every 15m delta is zero, so **STATE, the delta profile and the roll arrows have nothing to say** — the ladder still draws, it just has no motion in it. After the close v14.55 serves the frozen 15:00 reading instead, so `BREAKING −$1.2M`, `BUILDING +$3.9M`, `ATTRACTING +$5.2M`, the tap counters and the ROC column all come back with real numbers. Footer reads `● 2026-08-27 book — frozen 15:00`.
-
-The %King values are your actual tape — King 7690, kingKd 12,680. **The delta dollars are illustrative and labelled as such**, because every d15 on the page was zero tonight, which is the whole reason the feature exists.
-
----
-
-**Rendering it found a real bug in what you just installed.** The overlap audit caught:
-
-```
-empill "EL 7708"  ×  king "~7716 QQQ"
-```
-
-v14.54 moved the EM edges *and* the three crowns into the same 66px chute, but the nudge loop still only compared crowns against **other crowns**. An expected-move pill and a king within ~15px draw straight through each other. You can see it in the mockup's left panel if you look at where `EL 7708` and the QQQ crown sit — that's the fixed ver …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
-
-**me (22:30):** The tree has a worse problem than being dirty: **the userscript changed but still says v14.55 — the same version you installed.** Two different files both claiming one version is the drift PROJECT-CONSTANTS §9 documents. Bumping so the repo can't lie about it.
-Committed and the tree is clean. Nothing pushed — this container gets a 403 from the git proxy by design, so the installer is still the only route to GitHub.
-
-Three commits now sit here waiting on that: v14.54, v14.55, and v14.56.
-
-**One thing worth flagging, because it's the kind of mismatch this project keeps getting bitten by:** you're running **v14.55**, the repo is now **v14.56**. I bumped it the moment the nudge fix landed rather than leaving two different files both calling themselves v14.55 — that's the drift in `PROJECT-CONSTANTS` §9, where `install.bat` announced v11.49 while carrying v11.86. Your footer will keep reading v14.55 and that's correct, not a failed install.
-
-So the question from before still stands, and it's the only thing blocking: **v14.56 now, or bundled with whatever's next?** It's one cosmetic fix — an EM pill and a crown overlapping when they land within ~15px — so there's no harm in it waiting.
-
-For tomorrow, in priority order: check `__gptsDebug.lastBook()` flips to `serving:true` after the close (first real test of the fallback), then the panel width, then the feature-record collapse — 3,822 records on 08-20 against 15 today, which gates any study we'd run.
-
 **OPERATOR:**
 > @"/root/.claude/uploads/115bed5f-f45c-559e-a15a-46475dd506fc/b2f83551-mockupladderv11_6.html" [files attached]
 > 
 > this was the latest mockup.
-
-**me (22:35):** That's a newer mockup than the repo's, and it **solves the collision I just fixed — the other way round.** Let me diff before I touch anything.
-They're **byte-identical** — same 28,814 bytes, zero diff. The repo already has this exact file, so nothing was lost and you don't need to re-supply it.
-
-But putting it in front of me surfaced something worse than a stale file:
-The mockup answered this at **lines 343–354, and I stopped reading at 339.** That 16-line gap is why the collision existed, and why my fix is backwards: your design nudges the **EM label** (which has an amber line still marking the true price), not the crown (which has nothing to fall back on). It also nudges clear of the **price pill**, which my build doesn't consider at all.
-The audit still bites, and it's an honest limitation of the mockup's own guard: with four crowns and price in one chute, `EL` runs out of its 4 nudge steps and lands back on the SPXW crown.
-You've hit your monthly spend limit · raise it at claude.ai/settings/usage?from=cc_cli_limit_message · your weekly limit resets Aug 30, 12am (UTC)
-
 **OPERATOR:**
 > did you get the mockup
-
-**me (22:38):** Yes — got it, and it's **byte-identical** to the copy already in the repo (28,814 bytes, zero diff). Nothing was lost, and you don't need to re-send it.
-
-But putting it in front of me caught a real miss on my part. **I read that mockup to line 339 when I built v14.54. The answer was at lines 343–354.**
-
-Your design says the **EM label** is the thing that moves, and it steps around the crowns *and the price pill*. My fix yesterday moved the **crown** instead — backwards, because a nudged EM label still has its amber line sitting on the true row, while a nudged crown has nothing behind it and just points at the wrong price. And I never considered the price pill at all, which is the "current price in two columns" defect you caught once before.
-
-Now built to your design. One deliberate deviation, one line: after your four nudge steps, if a label still has nowhere clear, **it isn't drawn** — the amber line already marks the true price, and a pill sitting on a crown claims a row that belongs to something else. That's what you're seeing in the render: `EL 7708` is absent in a chute holding three crowns and price, while its line stays put.
-
-Audit clean on both panels, suite 117 green, 114 ladder asserts with the nudge, the drop and the price-occupant rule all mutation-tested.
-Committed. **v14.56 is built and still not delivered** — you're running v14.55, and the only difference is this chute fix plus the earlier nudge work. Say the word and I'll send the one file.
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 4 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (22:39):** Four commits now exist only in this container — and `PROJECT-CONSTANTS` records that this sandbox has reset mid-session twice. The installer is the only thing that makes them durable, so I'll stop holding it.
-**installv1456.bat**
-
-**Tampermonkey — update ONLY what changed:**
-
-- **Tapereader v14.56** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
-- Companion v1.14 — UNCHANGED, do not reinstall
-
-Wait ~5 min for the CDN, reload Atlas, footer should read v14.56.
-
-I stopped waiting on your answer about bundling because the risk changed: four commits existed only in this container, and running this is the only thing that pushes them to GitHub. If you'd rather have held it, no harm — installing is the same one click either way.
-
-Verified before sending: `HDRLINES=123` matches the `exit /b 0` line, CRLF, 282 files, and the userscript inside reads 14.56 in both version spots with the chute fix, the close-of-session latch and `recorderBlind` all present.
-
-What's in it beyond v14.55: the EM label now steps around the crowns **and** the price pill instead of the crown moving, per your mockup — plus the drop rule when a label has nowhere clear to sit.
-
-Tomorrow's checks, in order: after 15:00 CT confirm `__gptsDebug.lastBook()` flips to `serving:true` (first real test of the fallback), then the panel width, then the feature-record collapse — 3,822 records on 08-20 against 15 on 08-27, which gates any study.
-
 **OPERATOR:**
 > tamper monky is showing me the link to reinstall instead of update
-
-**me (22:41):** Documented failure mode — and the rule is I check the raw URL myself before telling you to click anything. Doing that now.
-Checked GitHub directly rather than guessing — **and Tampermonkey is telling you the truth:**
-
-```
-origin/main  →  v14.55   (GPTS_VERSION 14.55)
-your browser →  v14.55
-```
-
-Same version, so Tampermonkey correctly offers *Reinstall*. **v14.56 is not on GitHub yet.** Its two commits are still sitting only in this sandbox:
-
-```
-9691627  v14.56: the EM label moves, not the crown     ← not pushed
-abfa060  v14.56: the chute nudge                        ← not pushed
-281b5e3  v14.55  ← this is what GitHub has
-```
-
-This is failure mode #1 in `PROJECT-CONSTANTS`, not the CDN cache: the push hasn't happened. And the push only happens when the `.bat` runs — the link is the *second* step, never the first.
-
-So: **have you run `installv1456.bat` yet?** If not, run it and the link becomes *Update* about 5 minutes later. If you did run it, then it failed to push and I need to see what it printed — that window closes fast, so if it's gone, just run it again and watch for the git lines near the end.
-
-Either way, don't reinstall from the link right now — it would just reinstall the v14.55 you already have and tell us nothing.
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
-
-**me (22:42):** `install.bat` is **in `.gitignore` but still tracked** — gitignore never untracks an already-tracked file, so it's been silently committed anyway, 2.2MB of base64 per build. Its own ignore rule says why that's wrong:
-`v10.js` is in that same ignore list and is **also still tracked** — and it's the stale harness copy I flagged earlier. Let me close both properly, since untracking it means the test runner must make its own copy.
-`run-tests.sh` already regenerates `v10.js` on every run, so untracking it is safe — and a missing file fails loudly, which beats the stale-but-green state that file has been sitting in at v11.48.
-Clean tree, suite still 117 green. That one was worth the stop-hook nagging:
-
-**Both `install.bat` and `v10.js` were in `.gitignore` and tracked anyway** — a gitignore entry never untracks something already tracked, so git kept committing them. `install.bat` is 2.2MB of base64 per build, against an ignore rule whose own comment says it *"bloated every diff"*; two of those four commits were mine today.
-
-`v10.js` is the worse one. It's the file the test harness reads, and the committed copy was frozen at **v11.48 — 42 versions and 6,555 lines behind `current/`**. Running `node test_ladder.js` straight from a fresh clone tested v11.48 and returned green. That's the stale-but-green state `PROJECT-CONSTANTS` warns about, sitting in the repo as an actual file. `run-tests.sh` already regenerates it, so untracking is safe and a missing file now fails loudly.
-
-**None of this changes the panel** — no userscript code moved, so `installv1456.bat` is still the right file and still v14.56.
-
-Which leaves the actual blocker unchanged: **GitHub is on v14.55, so the Tampermonkey link will keep saying *Reinstall* until `installv1456.bat` runs and pushes.** If you've alread …[trimmed]
-
 **OPERATOR:**
 > i ran it but it still says reinstall
-
-**me (22:44):** Your push landed — and this is now the *good* problem:
-**Nothing is wrong. You already have v14.56 — Tampermonkey is right to say *Reinstall*.**
-
-Here's the full chain, all three links checked directly:
-
-```
-GitHub origin/main        v14.56   ← your push landed (7362a3a)
-raw CDN, fetched just now v14.56   ← serving it, cache-control max-age=300
-your Tampermonkey          v14.56   ← which is why it offers Reinstall, not Update
-your Atlas page            v14.55   ← still running the copy loaded before the update
-```
-
-Tampermonkey auto-checked the update URL, pulled 14.56 on its own, and now compares installed-against-remote as equal — so the link has nothing to offer you but a reinstall. Clicking it would be a no-op.
-
-**Just reload the Atlas tab.** That's failure mode #2 in `PROJECT-CONSTANTS` — *"GitHub new, browser old: the page was already open. RELOAD."* Installing a userscript never touches an already-open page; the panel keeps running whatever was injected at load.
-
-After the reload the footer will read v14.56 and you'll have the corrected chute: the EM label steps around the crowns and the price pill, and drops rather than sitting on one.
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 5 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (22:44):** Those five are sandbox commits — your machine made its own parallel commits, so the *content* mostly matches. The real question is what's actually different, so let me diff against GitHub rather than count commits.
-Diffed properly, and the answer is reassuring on the thing that matters plus one thing you should know:
-
-**The shipped userscript on GitHub is byte-identical to mine.** Nothing about v14.56 is missing.
-
-But your machine's `git add -A` swept two files it shouldn't have:
-
-```
-installv1454.bat        27,985 lines (~2 MB)  ← now in your repo on GitHub
-gexlocalstub.user.js    38 lines              ← a stray local file
-```
-
-That's the v13.8 accident repeating — the one that put 28MB of installers in `mockups/`. I added `installv*.bat` to `.gitignore`, but only *after* building `installv1454.bat`, so that run carried the old ignore list and swept itself in. From v14.55 onward the rule is in place, which is why `installv1455.bat` and `installv1456.bat` did **not** get swept.
-
-What's genuinely mine and not yet on GitHub is small: the `PROJECT-CONSTANTS` note about gitignored-but-tracked files, the `run-tests.sh` annotation, and two mockup PNGs. **No panel code** — so this needs no new install and can ride whatever we build next.
-
-The 2MB installer sitting in your history is harmless but permanent unless removed. Cleaning it is one command on your machine (`git rm --cached installv1454.bat gexlocalstub.user.js`, commit, push) — it stays on disk, just leaves the repo. Want me to fold that into the next build's installer instead so you don't have to type anything?
-
 **OPERATOR:**
 > there's alot missing so i really cant say much .. also check the mockups and your logs because we were discussing a hod lod feture and i gave you data and it needs to be built
-
-**me (22:47):** You're right to push on this. Let me find what actually survived rather than tell you again what's lost — because there are hodlod files sitting at the repo root I haven't looked at.
-**The HOD/LOD mockups are not lost** — `mockuphodlodv2.html` is in the repo *and* on GitHub. Yesterday's note recorded them as gone; that was failure pattern #4, concluding "absent" from a shallow look.
-Found it. **`mockuphodlodv2.html` is the original approved mockup — alive, on GitHub, renders clean.** That's the design you approved, and it matches the transcription exactly. Three earlier drafts are there too.
-
-Let me correct the record, because two documents say these were lost.
-**No — I don't have it.** Verified: `data/es-1min/` is absent from my clone, absent from GitHub, and the only file uploaded to this session is the ladder mockup. It was committed in yesterday's sandbox at `a26cdfd` and never pushed; that container is gone.
-
-So I can't build the whole section honestly. But the split is cleaner than it sounds:
-
-**Computable right now, no corpus needed** — everything in the `A` row. Today's actual HOD/LOD and their clock times, TOOK, BOP, WICK, W.END, WICK%, MUD, HL GAP, HL RNG. All of that comes from the panel's own candles via `closedCandles()`/`sessionLevels()`. Plus IB60, which is net-new but is just a 3600-second initial balance beside the existing 1800.
-
-**Needs the corpus, and cannot be faked** — the entire `E` row (the ~medians), the 42/54/66/75/84% elapsed-time ladder, and every figure in the green READ box: the 84%, `n=45`, 43/47, median +24, p25 +11, and the −12 miss case. Those came from a study over 284 sessions. Putting them on the panel without being able to re-derive them would be shipping numbers we can't defend — and this project's rule is no rate without its n and …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 6 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (22:49):** Tree is clean, everything committed. **No panel code is pending** — `current/` is byte-identical to GitHub, so you're not missing anything that affects the running panel.
-
-What's local-only is documentation: the HOD/LOD correction (`hodlod-v2-SPEC.md`, `LOCKED-ITEMS.md`), the gitignored-but-tracked lesson in `PROJECT-CONSTANTS`, the `run-tests.sh` note, and two build snapshots. I'm deliberately not cutting a third installer tonight just to carry doc changes — these ride the next build, which happens the moment you answer on HOD/LOD.
-
-So the only thing outstanding is that question: **`A` row live now with the `E` row and READ box openly refusing until the ES corpus is back — or hold the whole section until you re-supply the CSV?**
-
 **OPERATOR:**
 > @"/root/.claude/uploads/115bed5f-f45c-559e-a15a-46475dd506fc/8078c1c7-ES_TestingData.txt" [files attached]
 > 
 > make sure you save it in github and dont forget next time. im surprised you didnt' put it there. i have given it to you before.   now build the feature
-
-**me (22:55):** Provenance confirmed, and the 284 is reproducible — it's a threshold detail worth recording:
-**The study reproduces your mockup almost exactly** — independent derivation, same corpus:
-
-| mockup | re-derived now |
-|---|---|
-| `284d` | **284 sessions** (≥386 RTH bars) |
-| ladder `42 · 54 · 66 · 75 · 84` | **41 · 56 · 67 · 75 · 84** |
-| `E — 08:51` first extremity | **08:51** |
-| `E ~3h52` HL gap | **3h57** |
-| `E ~$2,800 — 56pts (42–80)` | **$2,825 — 56.5pts (41.8–80.2)** |
-| `seq 48/52 coin-flip` | **51/49** |
-
-Those numbers are real and now reproducible. Getting the corpus into git first, since that's the part that keeps getting lost.
-Corpus committed. Now the feature — checking what inputs actually exist before I design the chips.
-Everything I need for the core is there. **Not** VWAP — zero hits — so that chip can't be faked.
-
-One honest scope call before I write: your mockup's `BOP / WICK / W.END / WICK% / MUD` columns aren't defined anywhere I can verify, and inventing five statistics and presenting them as measured is the exact thing the doctrine gate forbids. I'm building the columns whose definitions are unambiguous, and leaving those five explicitly pending your definition rather than guessing.
-Two real regressions, not chores. The second one matters — I may have changed IB30's behaviour:
-Found it — and it's the swallowed-ReferenceError shape (pattern #5): I declared `IB60_MIN_S` *after* the function that uses it. It hoists in production, but it means the constant lives nowhere near its use.
-Renders clean — 39 elements, zero overlaps, nothing past the panel edge, no page errors. Running the suite and saving.
-The payload check caught a build-breaker: **`test_hodlod.js` reads `data/es-1min/BASERATES.json`, and that file isn't shipping** — the suite would go red on …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 9 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (23:05):** Concrete answer, and it's mostly good news: **running `installv1457.bat` puts 683 of 693 tracked files on GitHub.** Ten don't make it, and two of those groups are worth fixing right now.
-Use this `installv1457.bat` rather than the one a few messages up — same v14.57 panel, but the payload now carries two things it was silently dropping.
-
-I chased the "unpushed" warning down to actual numbers instead of repeating myself, and it found something:
-
-**No build snapshot has ever reached GitHub.** `git ls-tree origin/main -- session-state/snapshots/` returns nothing. The save procedure has mandated a per-build snapshot for weeks; the payload excludes that directory (rightly — 1.6MB a build against a 6MB cap) and the cloud can't push, so every one has died with its sandbox. That's actually fine and the docs now say so: `current/` is committed every build, so **git history already is the snapshot** — `git show <sha>:current/gex-signal-tapereader.user.js` recovers any version exactly. What was worth fixing is that a rule nobody could satisfy was sitting in the checklist looking satisfied.
-
-**The render/overlap-audit PNGs were also evaporating** — 120KB against a 6MB cap, no size reason to exclude them. That audit is mandatory before I send you a mockup and has caught four real collisions in two days, including one inside my own fix. Its evidence now ships.
-
-After this, exactly **one** thing remains outside GitHub: `data/es-1min/EPM26-1min.csv.gz`, 5MB against the cap. That one genuinely can't ride the installer — drop the file into `C:\Dev\gex-signal-tapereader\data\es-1min\` once and your next run carries it.
-
 **OPERATOR:**
 > do i need to click on a tampermonkey link
-
-**me (23:07):** Short answer: **no.** Tampermonkey updates itself from the `@updateURL` — that's exactly why it said *Reinstall* earlier, it had already pulled the new version on its own before you clicked.
-
-The link is only a way to *force* the check if you don't want to wait. What you actually need is the reload.
-
-Let me check where you are right now:
-It **is** there — but it's rendering its refusal branch, not the section. Let me read what it's actually saying:
-It **is** on the app — you're looking at it, but scroll up in the panel; it renders above ① . Here's what it's showing:
-
-```
-⓪a DAY — HOD/LOD · 15:00 CT · 284d ES 1-min
-A   LOD 08:33   3m    HOD 12:09   3h36   $256 — 5.1pts
-E   — 08:51    ~21m   13:25      ~3h58   ~$2,825 — 56.5pts (41.8–80.2)
-LOD IN — 84% (stood 6h27 · n=433) · toward HOD
-```
-
-**And that reveals a real bug I shipped: `5.1pts` against an expected `56.5`.** That's not a quiet day — it's a unit error, and it's the exact landmine `PROJECT-CONSTANTS` L-F names.
-
-`closedCandles()` returns the **underlying** book's bars — SPY, around 765 — so the range is 5.1 *SPY* points. I then multiplied by 50, the **ES** contract multiplier. Two different instruments on one row, and the `E` row beside it is in ES points, so the comparison is meaningless.
-To answer your actual question first: **no, you never need to click the Tampermonkey link.** It updates itself from the `@updateURL` — that's why it offered *Reinstall* earlier, it had already pulled the new version. The link only forces the check early. **Reloading the Atlas tab is the step that matters.**
-
-And the section *is* on the app — it renders above ①, and it was working. But your "I don't see it" made me actually read what it was printing, and it was wrong:
-
-```
-A   ...   $256 — 5.1pts
-E   ...   ~$2,825 — 56.5pts
-``` …[trimmed]
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 11 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (23:10):** The eleven commits reach GitHub the moment you run `installv1458.bat` — verified it carries 293 files at v14.58 with the unit fix in it. I won't keep restating that; the sandbox has no push route and the `.bat` is it.
-
-**Exactly one tracked file the installer can't carry:** `data/es-1min/EPM26-1min.csv.gz`, 5MB against a 6MB payload cap. That's the file you've now given me twice. Drop it into `C:\Dev\gex-signal-tapereader\data\es-1min\` and your next run commits it — after that it's safe permanently.
-
-Where things stand for tomorrow, shortest version:
-
-- **Run `installv1458.bat`, reload** — the ⓪a section should read ~51pts / ~$2,550 for today, not 5.1pts.
-- **After 15:00 CT** — `__gptsDebug.lastBook()` should flip to `serving:true`. First real test of the close-of-session book.
-- **Three things ⓪a still owes:** feature enrollment (it records nothing and is scored by nothing, against your own mandate), your definitions for BOP/WICK/W.END/WICK%/MUD, and VWAP which doesn't exist in the codebase.
-- **Still unexplained:** the feature records collapsing — 3,822 on 08-20 against 15 today. That gates any study we'd run on the gamma side.
-
 **OPERATOR:**
 > doesnt' tamper moneky automatically update. i did the install  byt its not updating to the lates tversion
-
-**me (23:15):** I was wrong earlier and I should correct it plainly: **Tampermonkey auto-updates on a schedule, not immediately.** Its default check interval is once a day. Earlier tonight it happened to have already run when you clicked — I generalised from that one lucky timing and told you clicking is never needed. That was wrong, and it's why you're stuck now.
-
-Your install worked fine. Every layer below Tampermonkey is correct:
-
-```
-GitHub   v14.58   (2f7cbe1 pushed)
-raw CDN  v14.58   serving it now
-your TM  v14.57   ← hasn't run its update check yet
-```
-
-You're still on 14.57 — the panel is showing `$255 — 5.1pts`, the exact bug 14.58 fixes.
-
-**So yes, click the link this time:**
-
-https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
-
-It'll say **Update** now, not Reinstall, because the remote is genuinely newer than what you have. Then reload Atlas and the range should read roughly **51pts / $2,550**.
-
-If you'd rather not click a link after every build, Tampermonkey's dashboard has a **Settings → Script Update → Check interval** you can set to hourly, and the dashboard's ↻ button forces a check for all scripts on demand. Either removes the wait.
-
-The rule I should have given you, and will use from now on: **run the `.bat`, wait ~5 minutes for the CDN, then click the link and reload.** The click is the reliable step; auto-update is a bonus that sometimes beats you to it.
-
 **OPERATOR:**
 > Stop hook feedback:
 > [~/.claude/stop-hook-git-check.sh]: There are 11 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (23:15):** Content-wise everything is on GitHub — the panel code is byte-identical, and the eleven commits are just parallel history from my sandbox. **Only the corpus differs.**
-
-One thing worth fixing while it's fresh, because my wrong advice came from a gap in the docs:
-Recorded. The `THREE INSTALL FAILURES` table in `PROJECT-CONSTANTS` had no row for *"GitHub new, raw new, Tampermonkey still old"* — so nothing in the docs contradicted my bad advice. It has four rows now, and the resume note carries the sequence so the next session gives you the right instruction from the start:
-
-**run the `.bat` → wait ~5 min → click the link → reload.**
-
-And a *Reinstall* prompt means auto-update won the race and you already have the build — not that something broke.
-
-Everything is on GitHub except the corpus (verified: panel code byte-identical). The one action left on your side is clicking that link to get onto v14.58, and dropping the ES file into `data\es-1min\` so it stops being the only thing that can't survive a session.
-
 **OPERATOR:**
 > in that case make sureyou give me tampermonkey links whenyou give me install filse. also make sure you are saving chat history for next context etc...
-
-**me (23:17):** You're right, and I dropped it on the last one — `installv1458.bat` went out with no links, which is exactly how you ended up stuck on 14.57. Making both mechanical rather than something I remember.
 
 ### DECISIONS
 
@@ -632,6 +332,7 @@ Everything is on GitHub except the corpus (verified: panel code byte-identical).
   -> reload Atlas. A *Reinstall* prompt means auto-update won the race and he HAS the build.
   Diagnose by reading the running version off the panel, never by asking him.
 
+
 ### SHIPPED
 
 **v14.58** - the HOD/LOD range converted to CHART space before the ES multiplier; no dollar figure
@@ -641,6 +342,7 @@ at all on a non-futures chart. test_hodlod 40 -> 42 asserts, both new ones mutat
 delivery block; the FOUR INSTALL FAILURES table in PROJECT-CONSTANTS; the click rule in the config,
 the checklist and the resume note; `test_delivery.js` 21 -> 28 asserts.
 Suite 118 green / 6 documented baseline reds.
+
 
 ### OPEN AT CLOSE
 
@@ -657,26 +359,8 @@ Suite 118 green / 6 documented baseline reds.
 6. **⚠ THE FEATURE RECORDS ARE COLLAPSING** - 3,822 on 08-20 vs 15 on 08-27. Gates any study.
 7. **ITEM 18 / Yahoo**, deadline **2026-09-16**.
 
-### COMMITS THIS CONTEXT
 
-```
-6954fdc a FOURTH install failure mode, and the wrong advice was mine
-f186331 v14.58: the HOD/LOD range measured SPY and priced ES
-9d42cf5 installer: carry the render/overlap-audit PNGs; and the snapshot rule was never real
-6b0b618 installer: ship the HOD/LOD evidence, not just the code that reads it
-5ad4d55 v14.57: the HOD/LOD section, built on measured rates
-0f5e339 data: the ES 1-min corpus, SECOND supply - and the study that reproduces the mockup
-61f9325 correct the record: the HOD/LOD mockups were never lost
-19dd8ff untrack install.bat and v10.js - both were gitignored AND tracked
-9691627 v14.56: the EM label moves, not the crown - the mockup already said so
-abfa060 v14.56: the chute nudge - EM pills and crowns share one column
-6ee7f6a v14.55: the close-of-session book, and the one-file delivery rule
-1775903 v14.54: the ladder re-laid to the approved mockup, plus the one-file delivery rule
-```
-
----
-
-<!-- EARLIER-CONTEXTS -->
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 

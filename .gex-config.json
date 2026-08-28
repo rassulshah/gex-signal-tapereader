@@ -115,7 +115,7 @@
     ]
   },
   "knownMissingAtHead": {
-    "note": "Referenced by this config, by the skill, or by live code comments, and ABSENT from the repo. Do not assume a fresh clone is broken; do not silently re-invent them either.",
+    "note": "Referenced by this config, by the skill, or by live code comments, and ABSENT from the repo. Do not assume a fresh clone is broken; do not silently re-invent them either. ⚠ design/DATA-ARCHITECTURE.md WAS on this list and is now WRITTEN (2026-08-28) - it had never existed in any commit, verified with git log --all --diff-filter=A. skylit-docs/FINDINGS.md has also never existed; it is not lost, it was never written.",
     "files": [
       "skylit-docs/FINDINGS.md",
       "BUILD-PLAN.md",
@@ -123,9 +123,9 @@
       "wicks/"
     ]
   },
-  "version": "2026-08-27",
-  "lastUpdated": "2026-08-27T16:00:00Z",
-  "loadInstruction": "⚠ TWO STANDING OPERATOR RULES, STATED HERE SO A LOAD CANNOT MISS THEM: (1) DELIVERY IS ONE FILE - see deliveryRule; send exactly one installvNNNN.bat and nothing else. (2) CHAT HISTORY IS REGENERATED ON EVERY BUILD and READ ON EVERY LOAD - see chatHistory; a build that skips it goes red on test_chat_history.js. ⚠ 2026-08-27: CLONE FULL (see cloneRule — never --depth 1). READ IN THIS ORDER, IN FULL, BEFORE ANYTHING ELSE: (1) session-state/latest-resume-note.md — a briefing, not a changelog; a context that skips it will re-litigate settled decisions. (2) session-state/CHAT-HISTORY.md, the CURRENT-CONTEXT entry — what was actually SAID last context: the corrections, the approaches already rejected, and the operator's exact words. The resume note says where we are; this says how we got there. (3) session-state/LOCKED-ITEMS.md — agreed work that is NOT built. It exists because the resume note lost ITEM 18 and a whole session went to re-discovering it. (4) design/DATA-ARCHITECTURE.md — who can reach what: the browser is the only participant that can fetch freely, the cloud cannot reach Yahoo and CANNOT PUSH, git is the transport between them. ⚠ master-spec.md §3.1-3.2 and design/architecture-design.md are OBSOLETE where they name AI Drive as the source of truth — both carry banners; git is the truth. TWO analyst packages inform the build (Garma = gamma-map-first, Wicks = charts-first); BUILD-PLAN.md is the master sequence across both, and is currently MISSING at HEAD. Several headline measurement rates in this project are ONE-DAY samples and at least one is contradicted by a later day — never quote a rate without its n and its date.",
+  "version": "2026-08-28",
+  "lastUpdated": "2026-08-28T01:20:00Z",
+  "loadInstruction": "⚠ 2026-08-28: READ design/DATA-ARCHITECTURE.md - it is the ONE place that says WHO CAN REACH WHAT (the panel is @grant none and cannot fetch cross-origin; the companion holds the grants; the cloud can clone but CANNOT PUSH; git is the transport), every data source, the four transports, and the daily ES corpus pipeline. It exists because those facts used to live only in session-state/, which is rewritten in full every build - the same mechanism that lost ITEM 18 for 24 versions. design/architecture-design.md is SUPERSEDED on data sources by it. ⚠ TWO STANDING OPERATOR RULES, STATED HERE SO A LOAD CANNOT MISS THEM: (1) DELIVERY IS ONE FILE - see deliveryRule; send exactly one installvNNNN.bat and nothing else. (2) CHAT HISTORY IS REGENERATED ON EVERY BUILD and READ ON EVERY LOAD - see chatHistory; a build that skips it goes red on test_chat_history.js. ⚠ 2026-08-27: CLONE FULL (see cloneRule — never --depth 1). READ IN THIS ORDER, IN FULL, BEFORE ANYTHING ELSE: (1) session-state/latest-resume-note.md — a briefing, not a changelog; a context that skips it will re-litigate settled decisions. (2) session-state/CHAT-HISTORY.md, the CURRENT-CONTEXT entry — what was actually SAID last context: the corrections, the approaches already rejected, and the operator's exact words. The resume note says where we are; this says how we got there. (3) session-state/LOCKED-ITEMS.md — agreed work that is NOT built. It exists because the resume note lost ITEM 18 and a whole session went to re-discovering it. (4) design/DATA-ARCHITECTURE.md — who can reach what: the browser is the only participant that can fetch freely, the cloud cannot reach Yahoo and CANNOT PUSH, git is the transport between them. ⚠ master-spec.md §3.1-3.2 and design/architecture-design.md are OBSOLETE where they name AI Drive as the source of truth — both carry banners; git is the truth. TWO analyst packages inform the build (Garma = gamma-map-first, Wicks = charts-first); BUILD-PLAN.md is the master sequence across both, and is currently MISSING at HEAD. Several headline measurement rates in this project are ONE-DAY samples and at least one is contradicted by a later day — never quote a rate without its n and its date.",
   "chatHistory": {
     "file": "session-state/CHAT-HISTORY.md",
     "generator": "tools/chat-history.py",
@@ -145,5 +145,18 @@
     "enforcement": "test_delivery.js fails the build if any source stops stating the one-file rule, if the builder reinstates a two-file banner, or if the builder stops printing the Tampermonkey links inside the delivery block.",
     "alwaysWith": "⚠ THE TAMPERMONKEY LINKS ARE PART OF THE DELIVERY, NOT A SEPARATE STEP. Operator-mandated 2026-08-24 and restated 2026-08-27: 'make sure you give me tampermonkey links when you give me install files.' Every message carrying an install file ends with the raw URL for the script(s) that CHANGED, plus: wait ~5 min for the CDN, CLICK THE LINK, reload Atlas.",
     "clickTheLink": "Tampermonkey's default update check is ONCE A DAY, so a fresh push does not reach the browser on its own in any useful time. The click is the reliable step. A link offering 'Reinstall' means auto-update already won the race and he HAS the build - that is correct, not a failure. On 2026-08-27 a build shipped with no links and he ran a known-buggy version for an hour."
+  },
+  "dataPipeline": {
+    "doc": "design/DATA-ARCHITECTURE.md",
+    "summary": "Companion v1.15 fetches Yahoo 1-min bars (ES/NQ/GC/CL) hourly -> gpts_futbars_v1 -> the panel carries them in data/YYYY-MM-DD.json under `futBars` -> the operator pushes -> tools/append-futures.py writes data/futures/<SYM>/YYYY-MM-DD.csv -> tools/study-hodlod.py rewrites BASERATES.json -> the companion couriers it back to gpts_hodlod_base_v1 -> the panel prefers it over the baked-in HODLOD_BASE. Only the two Yahoo legs are new.",
+    "addAMarket": "one row in FUT_MARKETS in current/gex-if-levels.user.js, e.g. { k:'NQ', y:'NQ=F' }",
+    "ND": "NOT ADDED. The operator named \"nd\" on 2026-08-28 and no context has identified the contract. test_futbars.js f26 fails the build if ND appears before he says what it is.",
+    "checks": [
+      "__gptsDebug.futBars()",
+      "__gptsDebug.hlBase()",
+      "__gexif.fut()",
+      "__gexif.futPull('ES')"
+    ],
+    "blocker": "data/es-1min/EPM26-1min.csv.gz is still not on GitHub (5.1MB vs a 6MB payload cap); until it lands the study cannot re-derive the 284-session rates."
   }
 }

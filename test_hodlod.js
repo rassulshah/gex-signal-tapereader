@@ -36,6 +36,13 @@ global.dispIsFut = () => FUT;
 global.dispR = () => RR;
 let CANDLES = [];
 global.closedCandles = () => CANDLES;
+global.HLBASE_KEY='gpts_hodlod_base_v1';
+global.HLBASE_MIN_SESSIONS=120; global.HLBASE_MIN_BUCKET=50;
+// (v14.59) the base rates are couriered now, so hlTier/hodLod read hodlodBase() rather than the
+// frozen literal. With no localStorage in this harness it returns the baked-in copy, which is
+// exactly what these tests were already asserting against.
+global.localStorage={ getItem:()=>null, setItem:()=>{}, removeItem:()=>{} };
+eval(ex('hlBaseNormalise')); eval(ex('hodlodBase'));
 eval(ex('hlClock')); eval(ex('hlDur')); eval(ex('hlTier')); eval(ex('hodLod'));
 
 const OPEN = 8*3600+30*60;

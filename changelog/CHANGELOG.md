@@ -1,3 +1,89 @@
+## v14.59 — the ES corpus gets a tap, and the base rates learn to travel
+
+> "i just wanted to make sure we had a process in place that obtained es data daily and updated the
+> data file." … "make sure everything is documented and can be retrieved via load gex protocol"
+
+**THE ANSWER WAS NO, AND FINDING THAT OUT TOOK TWO BAD SEARCHES.** The first grep required the literal
+string `finance.yahoo`, so a document saying *"Yahoo Finance"* could never have matched it — failure
+pattern #4 in the same session that quoted it. The honest search (`git grep -li yahoo` across every
+commit, every branch, all file types) returns eight files, **none of them in `design/` or
+`roadmap/`**. Four transports exist — `gex-pull`, `review-pull`, `push-data`, the installer — and
+every one is a courier. Nothing in this project has ever fetched market data except the panel, and
+what the panel fetches is Skylit.
+
+### THE TAP (companion v1.15)
+
+`query1.finance.yahoo.com/v8/finance/chart/{ES=F,NQ=F,GC=F,CL=F}?interval=1m&range=5d`, hourly, into
+`gpts_futbars_v1`. It lives in the COMPANION because the panel cannot reach it — **measured**, not
+assumed:
+
+```
+await fetch('https://query1.finance.yahoo.com/...')   ->  BLOCKED: Failed to fetch
+```
+
+Item 18 hedged on exactly that in 2026-08-16 (*"verify unsafeWindow access still OK"*) and the console
+check sat undone for eleven days. It is done. `@grant none` in the panel stays load-bearing.
+
+### VERIFIED AGAINST THE REAL ENDPOINT, NOT A GUESS
+
+Fetched live before writing the parser, per the rule that fixtures come from the real artefact:
+
+| measured | value |
+|---|---|
+| bars returned, `ES=F` 1m 2d | 2674 |
+| **null OHLC bars** | **152** — a null treated as zero becomes a low of 0 and a fake LOD |
+| RTH bars retained per session | **391, exactly 08:30→15:00 CT** — the count `MIN_BARS=386` expects |
+| tz / gmtoffset | America/New_York / −14400 |
+
+The courier keeps a **UTC** window (13:00–21:30) rather than an RTH one, because 08:30–15:00 CT is a
+different UTC span under CDT and CST. **All session logic happens once, in Python, with a real tz
+database** — the companion's own `ctToday()` hardcodes −5h and is wrong under CST.
+
+### THE RETURN LEG — what makes "always updated" true
+
+`HODLOD_BASE` was a hardcoded literal and the panel read `BASERATES.json` nowhere, so fresh data still
+needed a build. Now the companion couriers `BASERATES.json` into `gpts_hodlod_base_v1` and the panel
+prefers it. ⓪a prints `corpus 284d through <date> · rates live|baked in` on its own face.
+
+⚠ **IT REFUSES A DOWNGRADE.** Malformed, non-monotone, `< 120` sessions, or any rung with `n < 50`
+loses to the baked-in literal. **Caught during the build: two synthetic sessions produced
+`57/80/100/100/100` — monotone, well-formed, and complete nonsense. Monotonicity is not evidence.**
+
+### AND A DEFECT THAT WAS ON THE FACE FOR TWO RELEASES
+
+`HODLOD_BASE.ladder` carried no `held`, so **every ⓪a ladder hover has read "undefined of 1169"**
+since v14.57. Forty-two assertions passed over it because not one executed the hover text. The
+rungs now carry `held`, and a test asserts `held/n` reproduces the printed rate.
+
+### NEW
+
+`tools/append-futures.py` (day files → `data/futures/<SYM>/YYYY-MM-DD.csv`, idempotent — verified
+`+0` on a second pass, incomplete sessions flagged) · `tools/study-hodlod.py --market ES --out …`
+reading the vendor corpus **and** the dailies, recording the source mix · `test_futbars.js`, 46
+assertions, **every guard individually mutation-tested**.
+
+⚠ `GEX_FUTURES_OUT` exists because the first fixture run wrote **synthetic prices into
+`data/futures/ES/`** — the real corpus path. A test that writes to production storage is a
+corpus-poisoning bug waiting for the one run nobody watches.
+
+### THE DOCUMENT
+
+**`design/DATA-ARCHITECTURE.md` — 198 lines, and it had never existed in any commit.** Verified with
+`git log --all --diff-filter=A`; it was not lost, it was never written. Every fact about who-fetches-
+what lived in `session-state/`, the folder rewritten in full every build — the same mechanism that
+lost ITEM 18 for 24 versions. It is wired into `.gex-config.json` and the skill, and
+`test_futbars.js` f31–f41 fail the build if it is unhooked or if the old architecture doc loses its
+supersede banner.
+
+⚠ **ITEM 18 IS HALF BUILT, NOT DONE.** The route and the bar feed exist; Tier 1/Tier 2 (`snap.htf`,
+DMAs, ATR, HTF levels) do not, and the **2026-09-16** backfill deadline for 07-18→08-14 is untouched.
+
+⚠ **ND WAS NOT ADDED.** The operator named it; no context could identify the contract, and a guessed
+symbol puts the wrong series in the corpus under a right-looking name. f26 fails the build if it
+appears. Adding it is one row.
+
+Suite 118 green + `test_futbars` 46, the 6 documented baseline reds.
+
 ## v14.58 — the HOD/LOD range was measuring one instrument and pricing another
 
 **The operator caught it on the face, immediately, the way he always does.** v14.57 printed:

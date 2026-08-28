@@ -20,16 +20,26 @@ with its n, so nothing on the panel is a number we cannot reproduce.
                  the extreme at the close?  That is "the longer the low has stood, the likelier it
                  is the low of the day", as a measured rate rather than an intuition.
 """
-import csv, collections, json, sys, statistics as st
+import csv, collections, glob, gzip, io, json, os, sys, statistics as st
 
 RTH_A, RTH_B = 8*3600+30*60, 15*3600
 MIN_BARS = 386
 PT_USD = 50.0
 WINDOWS = [30, 60, 90, 120, 180]
 
-def load(path):
-    ses = collections.defaultdict(list)
-    with open(path) as f:
+def _open(path):
+    """.gz or plain - the vendor corpus ships gzipped, the dailies do not."""
+    if path.endswith('.gz'):
+        return io.TextIOWrapper(gzip.open(path, 'rb'), encoding='utf-8')
+    return io.open(path, encoding='utf-8')
+
+
+def load(path, ses=None):
+    """Accumulate sessions from one CSV. Columns are Symbol,Date,VOL,Open,High,Low,Close,Volume for
+    BOTH the vendor corpus and the Yahoo dailies - tools/append-futures.py writes that layout
+    deliberately so there is exactly one parser and one definition of a bar."""
+    ses = collections.defaultdict(list) if ses is None else ses
+    with _open(path) as f:
         for x in csv.DictReader(f):
             s = (x.get('Date') or '').strip()
             if ' ' not in s:
@@ -43,7 +53,34 @@ def load(path):
                 ses[d].append((sec, float(x['High']), float(x['Low']), float(x['Close'])))
             except (ValueError, IndexError):
                 continue
+    return ses
+
+
+def complete(ses):
+    """⚠ MIN_BARS IS LOAD-BEARING: >=386 gives 284 sessions on the vendor corpus, >=391 gives 283,
+    and one 386-bar session is the entire difference. Changing it changes the filter, not the data."""
     return {d: sorted(v) for d, v in ses.items() if len(v) >= MIN_BARS}
+
+
+def load_sources(paths):
+    """Merge every source into one session map, and report which day came from where.
+
+    ⚠⚠ PROVENANCE IS RECORDED, NOT ASSUMED. The vendor corpus is EPM26 - ONE contract. The Yahoo
+    dailies are ES=F - the CONTINUOUS front-month quote. They differ by the calendar spread across a
+    roll: points, not ticks. For HOD/LOD the statistics are a CLOCK and a RANGE and a constant basis
+    shifts neither, but that is an ARGUMENT, not a measurement - so every day carries its source and
+    `sources` lands in BASERATES.json where the panel and any later study can see the mix.
+    ⚠ A day present in BOTH wins from the FIRST source listed (the vendor corpus), because a
+    single-contract print is the more authoritative of the two. Never averaged."""
+    ses, prov = collections.defaultdict(list), {}
+    for path in paths:
+        one = load(path)
+        for d, bars in one.items():
+            if d in ses:
+                continue                      # first source wins; see above
+            ses[d] = bars
+            prov[d] = os.path.basename(path)
+    return ses, prov
 
 def survival(bars, low_side):
     """(stood_minutes, survived_to_close) for every running-extreme candidate in one session."""
@@ -58,9 +95,18 @@ def survival(bars, low_side):
     out.append(((bars[-1][0] - since)//60, True))
     return out
 
-def main(path):
-    ses = load(path)
+def main(paths, out=None):
+    if isinstance(paths, str):
+        paths = [paths]
+    raw, prov = load_sources(paths)
+    ses = complete(raw)
+    dropped = sorted(set(raw) - set(ses))
     days = sorted(ses)
+    if not days:
+        print('NO COMPLETE SESSIONS in %s.' % ', '.join(paths), file=sys.stderr)
+        print('Refusing to emit base rates from nothing - an empty ladder would render as a', file=sys.stderr)
+        print('confident 0%%. Check the inputs; do not lower MIN_BARS to make this pass.', file=sys.stderr)
+        return None
     rows, surv_lo, surv_hi = [], [], []
     for d in days:
         b = ses[d]
@@ -101,8 +147,45 @@ def main(path):
         ladder=dict(low=ladder(surv_lo), high=ladder(surv_hi),
                     both=ladder(surv_lo + surv_hi)),
     )
-    print(json.dumps(res, indent=1))
+    # the mix, so a consumer can see a pooled corpus rather than discover it
+    mix = collections.Counter(prov[d] for d in days)
+    res['corpus']['sources'] = dict(mix)
+    res['corpus']['incomplete_dropped'] = len(dropped)
+    res['generatedAt'] = __import__('datetime').datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    if out:
+        with io.open(out, 'w', encoding='utf-8') as f:
+            f.write(json.dumps(res, indent=1))
+        print('wrote %s  (%d sessions, %s -> %s, sources: %s)'
+              % (out, res['corpus']['sessions'], res['corpus']['first'], res['corpus']['last'],
+                 ', '.join('%s x%d' % kv for kv in sorted(mix.items()))))
+    else:
+        print(json.dumps(res, indent=1))
     return res
 
+
+def market_sources(market):
+    """The vendor corpus (if present) FIRST, then every Yahoo daily for this market."""
+    src = []
+    if market == 'ES':
+        for c in ('data/es-1min/EPM26-1min.csv.gz', 'data/es-1min/EPM26-1min.csv'):
+            if os.path.exists(c):
+                src.append(c)
+                break
+    src += sorted(glob.glob(os.path.join('data/futures', market, '*.csv')))
+    return src
+
+
 if __name__ == '__main__':
-    main(sys.argv[1] if len(sys.argv) > 1 else '/tmp/es.csv')
+    a = sys.argv[1:]
+    if a and a[0] == '--market':
+        mk = a[1] if len(a) > 1 else 'ES'
+        outp = a[3] if len(a) > 3 and a[2] == '--out' else (
+            'data/es-1min/BASERATES.json' if mk == 'ES' else 'data/futures/%s/BASERATES.json' % mk)
+        srcs = market_sources(mk)
+        if not srcs:
+            print('no sources for %s - looked for the vendor corpus and data/futures/%s/*.csv' % (mk, mk),
+                  file=sys.stderr)
+            sys.exit(1)
+        print('sources: %s' % ', '.join(srcs))
+        sys.exit(0 if main(srcs, outp) else 1)
+    main(a or ['/tmp/es.csv'])

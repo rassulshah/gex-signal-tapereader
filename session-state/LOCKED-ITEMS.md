@@ -39,7 +39,30 @@ that is one handoff away from never having happened.**
 ## OPEN — LOCKED, NOT BUILT
 
 ### ITEM 18 · Yahoo Finance HTF/ITF data
-**Locked 2026-08-16. Lost 2026-08-20. Recovered 2026-08-27. NOT BUILT.**
+**Locked 2026-08-16. Lost 2026-08-20. Recovered 2026-08-27. ⚠ HALF BUILT 2026-08-28 (v14.59).**
+
+⚠⚠ **READ THIS BEFORE CLAIMING ITEM 18 IS DONE. IT IS NOT.** v14.59 built the *route* item 18
+specified and used it for ONE purpose — the daily ES bar corpus behind ⓪a HOD/LOD:
+
+| item 18 asked for | state |
+|---|---|
+| the Yahoo `chart` endpoint reached from the browser | **BUILT** — companion v1.15, `GM_xmlhttpRequest`, `@connect query1.finance.yahoo.com` |
+| plain `fetch` first, `GM_xmlhttpRequest` as fallback | **SETTLED** — plain fetch measured **BLOCKED** from page context 2026-08-27; the grant route is the only one |
+| a Layer-0 source feeding the day export | **BUILT** — `gpts_futbars_v1` → `futBars` in `data/YYYY-MM-DD.json` |
+| **Tier 1: prior week/month H/L/C, 20/50/200 DMA, daily ATR(14), gap vs ATR, position in weekly range** | **NOT BUILT** |
+| **Tier 2: 60m/15m 1h/4h trend + swings, 1h ATR** | **NOT BUILT** |
+| **`STATE.htf` / `snap.htf` / "nearest chart level" per node; READ citing an HTF level** | **NOT BUILT** — zero hits for `htf` in either script |
+
+**So the pipe and the tap exist and carry 1-minute bars; the HTF/ITF derived reads do not exist.**
+Anyone who greps `yahoo` and finds the courier must not conclude item 18 shipped. The remaining work
+is a consumer of bars we now already have, which is strictly easier than it was.
+
+⚠ **THE 2026-09-16 DEADLINE STILL STANDS AND IS NOT ADDRESSED.** The daily tap prevents *new* gaps;
+it does nothing for the existing **2026-07-18 → 08-14** hole, which is recoverable only at 2-minute
+resolution and only until 09-16. That is a separate backfill run, still unbuilt.
+
+### ITEM 18-OLD · the original entry, kept verbatim for the record
+**Locked 2026-08-16. Lost 2026-08-20. Recovered 2026-08-27.**
 
 Full specification and the recovered verbatim text: **`session-state/YAHOO-PIPELINE.md`**.
 

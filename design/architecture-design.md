@@ -1,5 +1,12 @@
 # GEX Signal Tapereader — Architecture / Design Document
 
+> ⚠⚠ **SUPERSEDED ON DATA SOURCES by `design/DATA-ARCHITECTURE.md` (2026-08-28).**
+> This file's Layer 0 lists only the Skylit feed and the fiber candles. It predates the
+> InsiderFinance companion, the two-book split, the futures corpus and the Yahoo tap, and it still
+> names **AI Drive** as the persistent store — git is the source of truth. It remains correct on
+> the layer model, the file-shape rules and the observational boundary.
+> **Where the two disagree about where data comes from, DATA-ARCHITECTURE.md wins.**
+
 ## Purpose
 This document exists so a brand-new context window can recover the app's architecture and design intent without inferring it from scattered notes. It is a structural design reference, not the authoritative code source. If this document conflicts with the current userscript, the current userscript wins.
 

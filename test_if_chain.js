@@ -26,7 +26,12 @@ eval(['ymdOf','ymdNum','windows','levelsFor','dexSkewFor','expectedMove','gammaF
   ok(/@grant\s+GM_xmlhttpRequest/.test(src),'this script takes the grant');
   ok(/@connect\s+insiderfinance\.io/.test(src),'and declares the host it reaches');
   ok(/@match\s+https:\/\/app\.skylit\.ai\/atlas/.test(src),'it runs on the SAME page as the Tapereader, so they share an origin for localStorage');
-  ok(!/unsafeWindow/.test(src),'it never touches the page window — it has no tape to break');
+  // ⚠ STRIP COMMENTS BEFORE GREPPING. FIFTH occurrence of the documented sub-trap: v1.15's Yahoo
+  // courier quotes item 18's own hedge ("verify unsafeWindow access still OK") in a comment
+  // explaining why the tap lives HERE and not in the panel — and this assertion went red over a
+  // word in prose. A grep over comments tests the documentation, not the code.
+  const code = src.replace(/\/\*[\s\S]*?\*\//g,' ').replace(/^\s*\/\/.*$/gm,' ');
+  ok(!/unsafeWindow/.test(code),'it never touches the page window — it has no tape to break');
 }
 // ---------- extractChain ----------
 {

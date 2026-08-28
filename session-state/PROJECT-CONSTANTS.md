@@ -29,6 +29,39 @@ the `chatHistory` block even after the file was deleted from `projectFiles`. Mut
 it. That is the third time in this project an assertion has bought false confidence; **mutate every
 new assertion and confirm it fires before trusting it.**
 
+## LANDMINES ADDED 2026-08-28 (the ES corpus pipeline)
+
+**L-I · A TEST THAT WRITES INTO PRODUCTION STORAGE IS A DATA-POISONING BUG.** The first run of
+`tools/append-futures.py` against its own fixture wrote **synthetic prices straight into
+`data/futures/ES/2026-08-26.csv`** — the exact path the real corpus lives in. Same columns, same
+filenames, plausible OHLC. Nothing would ever have flagged them, and a study over that directory
+would have reported confident rates over invented data. The tool now honours `GEX_FUTURES_OUT` and
+every test redirects it. **Before a tool writes anywhere, ask what happens when a TEST runs it.**
+
+**L-J · MONOTONICITY IS NOT EVIDENCE.** The couriered base rates are validated for shape and for a
+rising ladder. Two synthetic sessions produced `57/80/100/100/100` — monotone, well-formed, and
+complete nonsense, and it passed every check. A payload must also clear a SIZE floor
+(`HLBASE_MIN_SESSIONS=120`, `HLBASE_MIN_BUCKET=50`) before it may replace a 284-session base.
+**A well-formed number is not a supported one.**
+
+**L-K · AN ASSERTION THAT CANNOT FAIL, FOR THE FOURTH TIME.** `test_futbars` f13 was meant to prove
+the session floor. Mutation testing showed deleting that floor left the suite **green** — the
+payload's rungs were also threadbare, so a different guard was doing all the work. Fixed with f13b:
+a 40-session corpus with HEALTHY rungs, which only the session floor can refuse.
+**Mutate every new assertion INDIVIDUALLY, and confirm the specific guard you meant to test is what
+goes red.**
+
+**L-L · A COMMENT CONTAINING THE TOKEN IT DISCUSSES — FIFTH OCCURRENCE.** v1.15's courier quotes item
+18's own hedge (*"verify unsafeWindow access still OK"*) while explaining why the tap lives in the
+companion. `test_if_chain`'s "it never touches the page window" assertion greps raw source and went
+red over a word in prose. The test now strips comments before matching. **A grep over comments tests
+the documentation, not the code.**
+
+**L-M · THE COURIER IS DUMB ON PURPOSE.** No timezone conversion, no RTH logic in the userscript —
+all of it lives in `tools/append-futures.py` with a real tz database. The companion's own `ctToday()`
+hardcodes −5h and **is wrong under CST**; it predates this rule and must not be copied. A sandboxed
+script doing DST arithmetic is how a corpus goes quietly wrong for half the year.
+
 ## LANDMINES ADDED 2026-08-27 (each cost real rework this session)
 
 **L-A · TWO VERSION STRINGS, AND THEY DRIFT.** `// @version` in the header and `var GPTS_VERSION`

@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.14
+// @version      1.15
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
 // @connect      insiderfinance.io
 // @connect      nfs.faireconomy.media
+// @connect      query1.finance.yahoo.com
+// @connect      raw.githubusercontent.com
 // @run-at       document-idle
 // (v1.11) WITHOUT THESE TWO LINES TAMPERMONKEY WILL NEVER OFFER AN UPDATE FOR THIS SCRIPT — EVER.
 // The tapereader has carried them for releases; the companion never did, so it sat silently at an
@@ -553,7 +555,153 @@ function evCalCourier(){
     });
   }catch(e){ log('calendar courier threw', e.message); }
 }
-function tick(){ try{ if(document.visibilityState!=='visible') return; for(var i=0;i<SYMS.length;i++) pull(SYMS[i]); evCalCourier(); }catch(e){} }
+// ---- (v1.15) THE FUTURES BAR COURIER — 1-minute OHLC for the HOD/LOD corpus ------------------
+// WHY THIS LIVES HERE AND NOT IN THE PANEL: measured from the live Atlas page 2026-08-27,
+//     await fetch('https://query1.finance.yahoo.com/v8/finance/chart/ES=F?interval=1m&range=1d')
+//     -> BLOCKED: Failed to fetch
+// Item 18 (2026-08-16) said "try plain fetch first ... verify unsafeWindow access still OK" and that
+// console check was never done. It is done: the page CANNOT reach Yahoo. GM_xmlhttpRequest is
+// privileged past CORS and needs a @grant, and @grant none is load-bearing in the panel (its feed
+// hooks patch window.fetch in PAGE context). So the tap belongs in this script, which already
+// couriers one foreign site.
+//
+// ⚠⚠ THIS COURIER IS DELIBERATELY DUMB. It does NO session logic, NO timezone conversion and NO
+// RTH classification. Bars are couriered raw ({t,o,h,l,c,v} on Yahoo's own epoch seconds) and every
+// session decision is made ONCE, in tools/append-futures.py, with a real tz database. A sandboxed
+// userscript doing DST arithmetic is how you get a corpus that is silently wrong for half the year —
+// note that ctToday() below hardcodes -5h and is therefore already wrong in CST. Do not copy it.
+//
+// ⚠ THE TRIM IS A UTC WINDOW, NOT AN RTH WINDOW. 08:30-15:00 CT is 13:30-20:00 UTC under CDT and
+// 14:30-21:00 under CST, so 13:00-21:30 UTC covers RTH in both without knowing which is in force.
+// It is deliberately GENEROUS: over-collecting costs bytes, under-collecting loses a session
+// permanently once it falls out of Yahoo's 7-day 1-minute window.
+//
+// ⚠ 1-MINUTE DATA IS <=7 DAYS. range=5d on a daily poll survives a long weekend or a few days away.
+// A gap longer than seven days CANNOT be recovered at this resolution, ever — which is why the
+// panel shows corpus staleness on its face rather than averaging over a hole.
+var FUTBARS_KEY='gpts_futbars_v1';
+// EXTENDING TO A NEW MARKET IS ONE ROW. `y` is the Yahoo symbol; everything else (contract
+// multiplier, CQG symbol, RTH window) is the CLOUD's business and lives in tools/append-futures.py,
+// because none of it is needed to fetch a bar.
+// ⚠ ND is NOT in this table. The operator named "nd" and I do not know which contract that is;
+// guessing one would put a wrong series in the corpus under a right-looking name. Add it here when
+// he says what it is.
+var FUT_MARKETS=[
+  { k:'ES', y:'ES=F' },
+  { k:'NQ', y:'NQ=F' },
+  { k:'GC', y:'GC=F' },
+  { k:'CL', y:'CL=F' }
+];
+var FUT_WIN_A=13*3600, FUT_WIN_B=21*3600+30*60;   // the generous UTC window described above
+var FUT_POLL_MS=60*60*1000;                        // hourly is plenty for a daily corpus
+var futLast=0;
+function futParse(txt){
+  try{
+    var j=JSON.parse(txt);
+    var r=j && j.chart && j.chart.result && j.chart.result[0];
+    if(!r) return { err:(j&&j.chart&&j.chart.error&&j.chart.error.description)||'no result' };
+    var ts=r.timestamp, q=r.indicators && r.indicators.quote && r.indicators.quote[0];
+    if(!ts || !ts.length || !q) return { err:'no timestamp/quote arrays' };
+    // ⚠ ARRAY-LEVEL GUARD BEFORE THE LOOP, AND IT RETURNS AN ERROR. The first cut `break`-ed out of
+    // the loop instead, which yields rows:[] with err:null - "absence of data read as absence of
+    // obstacles", DECISIONS D-6 in a new place. A refusal has to name itself.
+    if(!q.open||!q.high||!q.low||!q.close) return { err:'quote arrays missing (open/high/low/close)' };
+    var rows=[], i, sod;
+    for(i=0;i<ts.length;i++){
+      // ⚠ Yahoo emits null OHLC for gaps - MEASURED: 152 nulls in 2674 bars over 2 days on ES=F,
+      // 2026-08-27. A null bar is not a zero bar; drop it rather than letting it become a low of 0
+      // and a fake LOD.
+      if(q.open[i]==null||q.high[i]==null||q.low[i]==null||q.close[i]==null) continue;
+      sod=((ts[i]%86400)+86400)%86400;
+      if(sod<FUT_WIN_A||sod>FUT_WIN_B) continue;
+      rows.push([ ts[i], q.open[i], q.high[i], q.low[i], q.close[i], (q.volume&&q.volume[i]!=null)?q.volume[i]:0 ]);
+    }
+    return { rows:rows,
+             sym:(r.meta&&r.meta.symbol)||null,
+             gran:(r.meta&&r.meta.dataGranularity)||null,
+             tz:(r.meta&&r.meta.exchangeTimezoneName)||null,
+             gmtoffset:(r.meta&&r.meta.gmtoffset!=null)?r.meta.gmtoffset:null };
+  }catch(e){ return { err:'parse: '+e.message }; }
+}
+function futStore(key, obj){
+  try{
+    var cur={}; try{ cur=JSON.parse(localStorage.getItem(FUTBARS_KEY)||'{}')||{}; }catch(e){}
+    cur[key]=obj; cur._v=1; cur._at=Date.now();
+    localStorage.setItem(FUTBARS_KEY, JSON.stringify(cur));
+  }catch(e){
+    // localStorage is finite and this is the biggest thing we write. If it overflows, drop the
+    // OTHER markets rather than losing this one silently — and say so in the record.
+    try{ var only={}; only[key]=obj; only._v=1; only._at=Date.now(); only._trimmed=true;
+         localStorage.setItem(FUTBARS_KEY, JSON.stringify(only)); }catch(e2){ log('futStore failed', e2.message); }
+  }
+}
+function futPull(m){
+  try{
+    GM_xmlhttpRequest({
+      method:'GET',
+      url:'https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(m.y)+'?interval=1m&range=5d',
+      timeout:25000,
+      onload:function(res){
+        try{
+          if(!res || res.status!==200){ futStore(m.k, { err:'HTTP '+(res&&res.status), at:Date.now() }); return; }
+          var P=futParse(res.responseText||'');
+          if(P.err){ futStore(m.k, { err:P.err, at:Date.now() }); return; }
+          futStore(m.k, { at:Date.now(), sym:P.sym, gran:P.gran, tz:P.tz, gmtoffset:P.gmtoffset,
+                          n:P.rows.length, rows:P.rows });
+          log('futures', m.k, P.rows.length, 'bars');
+        }catch(e){ futStore(m.k, { err:'compute: '+e.message, at:Date.now() }); }
+      },
+      onerror:function(){ futStore(m.k, { err:'network error', at:Date.now() }); },
+      ontimeout:function(){ futStore(m.k, { err:'timeout', at:Date.now() }); }
+    });
+  }catch(e){ futStore(m.k, { err:'GM_xmlhttpRequest unavailable: '+e.message, at:Date.now() }); }
+}
+function futCourier(){
+  try{
+    if(Date.now()-futLast < FUT_POLL_MS) return;
+    futLast=Date.now();
+    for(var i=0;i<FUT_MARKETS.length;i++) futPull(FUT_MARKETS[i]);
+  }catch(e){ log('futCourier threw', e.message); }
+}
+
+// ---- (v1.15) THE BASE-RATE COURIER — what makes "always updated" true ------------------------
+// The HOD/LOD base rates are re-derived in the cloud by tools/study-hodlod.py and committed as
+// data/es-1min/BASERATES.json. Without this courier the panel would still be reading HODLOD_BASE,
+// a hardcoded literal, and fresh data would need a whole new build to reach the face. With it, the
+// rates travel on their own.
+// ⚠ raw.githubusercontent.com is CDN-cached ~5 minutes (max-age=300). Irrelevant here: base rates
+// change once a day at most.
+var HLBASE_KEY='gpts_hodlod_base_v1';
+var HLBASE_URL='https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/data/es-1min/BASERATES.json';
+var HLBASE_POLL_MS=6*60*60*1000;
+var hlbLast=0;
+function hlBaseCourier(){
+  try{
+    if(Date.now()-hlbLast < HLBASE_POLL_MS) return;
+    hlbLast=Date.now();
+    GM_xmlhttpRequest({
+      method:'GET', url:HLBASE_URL, timeout:20000,
+      onload:function(res){
+        try{
+          if(!res || res.status!==200) return;
+          var j=JSON.parse(res.responseText);
+          // ⚠ VALIDATE BEFORE STORING. A malformed or truncated payload must never reach the face —
+          // the panel falls back to its baked-in literal, which is old but known-good. Absence of
+          // data is not a reading; neither is a half-parsed one.
+          if(!j || !j.corpus || !(j.corpus.sessions>0) || !j.ladder || !j.ladder.both) return;
+          localStorage.setItem(HLBASE_KEY, JSON.stringify({ at:Date.now(), base:j }));
+          log('base rates delivered:', j.corpus.sessions, 'sessions through', j.corpus.last);
+        }catch(e){ log('base rates parse failed', e.message); }
+      },
+      onerror:function(){ log('base rates fetch failed'); },
+      ontimeout:function(){ log('base rates fetch timeout'); }
+    });
+  }catch(e){ log('hlBaseCourier threw', e.message); }
+}
+function tick(){ try{ if(document.visibilityState!=='visible') return;
+  for(var i=0;i<SYMS.length;i++) pull(SYMS[i]);
+  evCalCourier(); futCourier(); hlBaseCourier();
+}catch(e){} }
 
 setTimeout(tick, 4000);
 setInterval(tick, POLL_MS);
@@ -565,6 +713,10 @@ try{
     read:function(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)||'null'); }catch(e){ return null; } },
     clear:function(){ try{ localStorage.removeItem(LS_KEY); }catch(e){} return 'cleared'; },
     fails:function(){ return fails; },
+    fut:function(){ try{ return JSON.parse(localStorage.getItem(FUTBARS_KEY)||'null'); }catch(e){ return null; } },
+    futPull:function(k){ var m=null; FUT_MARKETS.forEach(function(x){ if(x.k===(k||'ES')) m=x; }); if(!m) return 'no such market'; futLast=0; futPull(m); return 'pulling '+m.y; },
+    hlBase:function(){ try{ return JSON.parse(localStorage.getItem(HLBASE_KEY)||'null'); }catch(e){ return null; } },
+    hlBasePull:function(){ hlbLast=0; hlBaseCourier(); return 'pulling base rates'; },
     _extract:extractChain, _levelsFor:levelsFor, _windows:windows
   };
 }catch(e){}

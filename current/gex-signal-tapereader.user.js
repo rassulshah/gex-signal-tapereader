@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.58
+// @version    14.59
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.58';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.59';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -5596,6 +5596,8 @@ function buildDayExport(dateKey){
     // (v11.0) THE NODE LEDGER — every node's life, touches, reactions, influence (layer 1)
     ledger:(function(){ try{ var o={}; RECORDER_SYMS.forEach(function(s){ o[s]=ledgerExport(s); }); return o; }catch(eLd){ return null; } })(),
     sessionRoll:(function(){ try{ var o={}; RECORDER_SYMS.forEach(function(s){ o[s]=sessionRoll(s); }); return o; }catch(eSr){ return null; } })(),
+    // (v14.59) the HOD/LOD corpus feed - raw courier bars, bucketed downstream by tools/append-futures.py
+    futBars:(function(){ try{ return futBarsLoad(); }catch(eFb){ return null; } })(),
     futures:(function(){ try{ return { chart:FUTMODE.chart, underlying:FUTMODE.underlying, r:FUTMODE.r,
                                        live:!!FUTMODE.live, approx:!!FUTMODE.approx, ok:!!FUTMODE.ok }; }catch(eFu){ return null; } })(),
     event:(function(){ try{ return eventTagLabel(); }catch(eEv){ return null; } })(),
@@ -21190,21 +21192,120 @@ function sessionLevels(sym, scale){
 // first is 51/49 over 284 sessions. Bare order carries nothing; only the SURVIVAL does.
 var HODLOD_BASE = {
   n: 284, first: '2025-06-02', last: '2026-08-21',
-  ladder: [{w:30,rate:41,n:1169}, {w:60,rate:56,n:811}, {w:90,rate:67,n:642}, {w:120,rate:75,n:541}, {w:180,rate:84,n:433},],
+  // ⚠ `held` WAS MISSING AND THE HOVER PRINTED "undefined of 1169" FROM v14.57 THROUGH v14.58.
+  // 42 assertions passed over it because not one of them executed the hover text. That is failure
+  // pattern #8 exactly: a test that greps the source instead of running it. test_hodlod now
+  // renders the tip and greps the OUTPUT for 'undefined'.
+  ladder: [{w:30,rate:41,n:1169,held:481}, {w:60,rate:56,n:811,held:453}, {w:90,rate:67,n:642,held:427},
+           {w:120,rate:75,n:541,held:407}, {w:180,rate:84,n:433,held:362}],
   tookMin: 21.0, gapMin: 237.5,
   rngPts: 56.5, rngUsd: 2825.0,
   rngP25: 41.8, rngP75: 80.2,
   firstClock: 31860, secondClock: 48300,
   lodFirstPct: 51
 };
+// ---- (v14.59) THE BASE RATES NOW TRAVEL ON THEIR OWN ----------------------------------------
+// HODLOD_BASE above is the BAKED-IN fallback: correct on the day it was compiled and frozen after.
+// The companion (v1.15) couriers data/es-1min/BASERATES.json into gpts_hodlod_base_v1, so a
+// re-derived corpus reaches the face without a new build. That is the whole of "always updated".
+//
+// ⚠⚠ VALIDATE, THEN PREFER. A truncated or malformed payload must lose to the literal, because an
+// old known-good rate beats a fresh unparseable one. Absence of data is not a reading and neither is
+// half of one. Every refusal names itself in `src` so the face can say which rates it is showing.
+// ⚠ THE SHAPES DIFFER ON PURPOSE. BASERATES.json is the study's output ({ladder:{low,high,both}},
+// keyed by window) and this literal is the panel's display shape (a sorted array). Normalising here,
+// in ONE place, is what stops two consumers drifting apart - and `both` is the series the section
+// displays, never low or high alone.
+// ---- (v14.59) THE FUTURES BARS RIDE THE DAY EXPORT ------------------------------------------
+// The companion couriers raw 1-minute bars into gpts_futbars_v1; the panel does nothing to them but
+// carry them into data/YYYY-MM-DD.json, which the installer already commits and pushes. That is the
+// entire transport - no new pipe was built, the existing one is simply carrying one more passenger.
+//
+// ⚠ THE RECORDER GUARD DOES NOT APPLY HERE, AND THAT IS DELIBERATE. recorderBlind() exists because a
+// replayed or frozen BOOK must never be written as though it were live. These bars are not derived
+// from the displayed book at all - they are Yahoo's own timestamped prints, and every one carries its
+// own epoch, so tools/append-futures.py buckets them by THEIR clock and never by the file's date.
+// Suppressing them in replay would lose real sessions for no gain. (Compare D-10: the sin there was
+// mislabelling, and nothing here is labelled by the session being shown.)
+// ⚠ We pass them through VERBATIM. No trimming, no rounding, no session logic - see the companion's
+// header for why all of that belongs in Python.
+var FUTBARS_KEY='gpts_futbars_v1';
+function futBarsLoad(){
+  try{
+    var o=JSON.parse(localStorage.getItem(FUTBARS_KEY)||'null');
+    if(!o || typeof o!=='object') return null;
+    return o;
+  }catch(e){ return null; }
+}
+// what the face needs to know: is the corpus feed alive, and how old is it
+function futBarsHealth(){
+  try{
+    var o=futBarsLoad(); if(!o) return { ok:false, why:'no courier data (is the companion running?)' };
+    var mk=[], k, ageMin=null;
+    for(k in o){ if(k.charAt(0)==='_') continue;
+      var m=o[k]; if(!m) continue;
+      mk.push({ k:k, n:(m.rows?m.rows.length:0), err:m.err||null, at:m.at||null });
+    }
+    if(o._at) ageMin=Math.round((Date.now()-o._at)/60000);
+    return { ok:mk.length>0, markets:mk, ageMin:ageMin, trimmed:!!o._trimmed };
+  }catch(e){ return { ok:false, why:'threw: '+(e&&e.message||e) }; }
+}
+var HLBASE_KEY='gpts_hodlod_base_v1';
+// ⚖ hand-set: the baked-in base stands on 284 sessions; do not swap it for less.
+// ⚠ KEEP THESE DECLARATIONS BARE - the test harness's val() reads a constant up to the first
+// `;` followed by a NEWLINE, so a trailing comment on this line silently captures half the file.
+var HLBASE_MIN_SESSIONS=120;
+// ⚖ hand-set: a rung with a tiny n is a number, not a rate.
+var HLBASE_MIN_BUCKET=50;
+function hlBaseNormalise(j){
+  try{
+    if(!j || !j.corpus || !(j.corpus.sessions>0)) return null;
+    var L=j.ladder && j.ladder.both; if(!L) return null;
+    var out=[], ws=Object.keys(L).map(Number).sort(function(a,b){ return a-b; }), i, R;
+    for(i=0;i<ws.length;i++){
+      R=L[String(ws[i])];
+      if(!R || !(R.n>0) || typeof R.rate!=='number') return null;
+      out.push({ w:ws[i], rate:R.rate, n:R.n, held:R.held });
+    }
+    if(out.length<2) return null;
+    // ⚠⚠ A SMALL CORPUS PASSES EVERY OTHER CHECK AND IS STILL WRONG. Caught while building this:
+    // TWO synthetic sessions produced ladder rates 57/80/100/100/100 - monotone, well-formed, and
+    // complete nonsense. Monotonicity does not imply evidence. The baked-in fallback stands on 284
+    // sessions, so a courier payload must clear a floor before it is allowed to REPLACE it.
+    if(!(j.corpus.sessions>=HLBASE_MIN_SESSIONS)) return null;
+    for(i=0;i<out.length;i++) if(!(out[i].n>=HLBASE_MIN_BUCKET)) return null;
+    // THE LADDER'S ONE CLAIM IS THAT IT RISES. If a re-derived corpus ever produces a non-monotone
+    // ladder, the section's only predictive statement is unsupported and the payload is REFUSED
+    // rather than drawn - the same gate test_hodlod applies to the baked-in rates.
+    for(i=1;i<out.length;i++) if(out[i].rate<out[i-1].rate) return null;
+    var E=j.expected||{}, S=j.sequence||{};
+    return { n:j.corpus.sessions, first:j.corpus.first, last:j.corpus.last, ladder:out,
+             tookMin:E.took_min, gapMin:E.gap_min, rngPts:E.rng_pts, rngUsd:E.rng_usd,
+             rngP25:E.rng_p25, rngP75:E.rng_p75,
+             firstClock:E.first_clock, secondClock:E.second_clock,
+             lodFirstPct:S.pct_LOD_first };
+  }catch(e){ return null; }
+}
+function hodlodBase(){
+  try{
+    var raw=null; try{ raw=JSON.parse(localStorage.getItem(HLBASE_KEY)||'null'); }catch(e0){}
+    if(raw && raw.base){
+      var N=hlBaseNormalise(raw.base);
+      if(N){ N.src='courier'; N.at=raw.at||null; return N; }
+    }
+  }catch(e){}
+  var B={}; for(var k in HODLOD_BASE) B[k]=HODLOD_BASE[k];
+  B.src='baked'; B.at=null;
+  return B;
+}
 function hlClock(sec){ try{ sec=Math.round(sec); return two(Math.floor(sec/3600))+':'+two(Math.floor((sec%3600)/60)); }catch(e){ return '\u2014'; } }
 function hlDur(min){ try{ min=Math.round(min); if(min<60) return min+'m';
   return Math.floor(min/60)+'h'+two(min%60); }catch(e){ return '\u2014'; } }
 // which rung the standing extremity has reached. Returns the HIGHEST window it clears, so a low that
 // has stood 100 minutes reads the 90m rate, never the 180m one it has not earned.
-function hlTier(stoodMin){
-  var t=null;
-  for(var i=0;i<HODLOD_BASE.ladder.length;i++){ if(stoodMin>=HODLOD_BASE.ladder[i].w) t=HODLOD_BASE.ladder[i]; }
+function hlTier(stoodMin, base){
+  var B=base||hodlodBase(), t=null;
+  for(var i=0;i<B.ladder.length;i++){ if(stoodMin>=B.ladder[i].w) t=B.ladder[i]; }
   return t;
 }
 // ⚠ TODAY'S NUMBERS ONLY — no base rate is computed here, they are all in HODLOD_BASE.
@@ -21252,7 +21353,7 @@ function hodLod(sym){
     // THE STANDING EXTREMITY is the one that printed FIRST and has not been replaced since — it is
     // the one the ladder is about. How long it has stood is measured to NOW, not to the other one.
     out.stood=Math.max(0,(clock-out.firstT)/60);
-    out.tier=hlTier(out.stood);
+    out.tier=hlTier(out.stood, hodlodBase());
     return out;
   }catch(e){ out.why='threw: '+(e&&e.message||e); return out; }
 }
@@ -24154,6 +24255,11 @@ function swallow(tag, e){
 }
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.renderErrors=function(){ return RENDER_ERRS.slice(); };
+// (v14.59) the corpus feed and the base rates, both inspectable without editing code
+window.__gptsDebug.futBars=function(){ try{ return futBarsHealth(); }catch(e){ return 'threw: '+e.message; } };
+window.__gptsDebug.futBarsRaw=function(){ try{ return futBarsLoad(); }catch(e){ return null; } };
+window.__gptsDebug.hlBase=function(){ try{ var B=hodlodBase(); return { src:B.src, n:B.n, first:B.first, last:B.last, at:B.at, ladder:B.ladder }; }catch(e){ return 'threw: '+e.message; } };
+
 // ⚠⚠ (v13.1b) THE NODES LIST IS NOW THE RAIL'S OWN LIST — not a second list that agrees.
 // v13.1 rebuilt this from `tapeMap('SPXW')` with its own strength floor and reach window. That was
 // still a SECOND COMPUTATION of "which nodes matter", and it promptly disagreed with the rail twice:
@@ -25039,7 +25145,7 @@ function secDay(sym){
       return h+'<div class="g3rx" style="color:#6c7889">\u24ea a DAY \u2014 HOD/LOD \u00b7 '+
         g3esc(D.why||'no data')+'. <b>This is not a reading, it is no reading.</b></div></div>';
     }
-    var base=HODLOD_BASE, T=D.tier;
+    var base=hodlodBase(), T=D.tier;
     var openSec=mul(8,3600)+mul(30,60);
     h+='<div class="g3dayhd"'+g3tip('Today\u2019s high and low against their own base rates, measured over '+base.n+' complete RTH sessions of ES 1-minute data, '+base.first+' to '+base.last+'. Regenerate with tools/study-hodlod.py.')+
        '>\u24ea a DAY \u2014 HOD/LOD \u00b7 '+hlClock(D.clock)+' CT \u00b7 '+base.n+'d ES 1-min</div>';
@@ -25112,6 +25218,8 @@ function secDay(sym){
     // ---- the honesty line -----------------------------------------------------------------------
     h+='<div class="g3dayfoot"'+g3tip('What this section is standing on, stated on its own face rather than in a hover nobody opens.')+'>'+
        'seq '+base.lodFirstPct+'/'+(100-base.lodFirstPct)+' coin-flip \u00b7 every rate carries its n \u00b7 '+
+       'corpus '+base.n+'d through '+g3esc(String(base.last))+' \u00b7 '+
+       (base.src==='courier'?'rates live':'rates baked in')+' \u00b7 '+
        '<b>BOP/WICK/W.END/WICK%/MUD pending a definition</b> \u00b7 descriptive \u2014 no entries/stops</div>';
     return h+'</div>';
   }catch(e){ swallow('secDay', e); return ''; }
