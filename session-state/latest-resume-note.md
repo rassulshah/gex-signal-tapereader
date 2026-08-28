@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-08-28 · panel v14.74 · companion v1.16 · supersedes every earlier resume note_
+_written 2026-08-28 · panel v14.75 · companion v1.16 · supersedes every earlier resume note_
 
 ---
 
@@ -43,7 +43,7 @@ And for ⓪a, 2026-08-28:
 
 ---
 
-## 2 · WHERE WE ARE — v14.74, and what ⓪a now says
+## 2 · WHERE WE ARE — v14.75, and what ⓪a now says
 
     LOD IN — 89%            (travelled 93% off it · n=430)
     HOD not before 12:00 — 80% · most likely 12:00–14:30 (50%) · 69% into the close if not in by 13:15
@@ -123,12 +123,17 @@ must be 3.6 hours wide to reach 80%**. So the face carries a **one-sided 80% flo
    ⚠ Those params have DRIFTED from `SKYLIT-FEEDS.md` (it documents `gamma|vanna`, `500`, `week`).
 5. **The implied-vs-realized σ study**, once `gpts_vix_daily_v1` has delivered.
 6. **The ladder width** — 618px in a 454px body, still his call.
-7. ⚠ **THE IRT PIPE IS SOLVED AND THE SERVER IS RETIRED (2026-08-28).** IRT's **Remote File** field
-   accepts `file:///C:/Users/rassul/InvestorRT/rtx/lsFlexLevels/FlexLevelsExport.csv` and re-reads it
-   on its 1-minute timer — verified live, the King redrew 7803.50 → 7726.00 with no server running.
-   `tools/irt/` keeps the HTTP server as a fallback only. **Do not run `setupautostart.bat`.**
-   ⚠ The 2026-08-27 note "IRT does not poll a local file" was true of **Local File mode only**; the
-   inference that HTTP was therefore required was wrong.
+7. ⚠⚠ **THE IRT PIPE IS SOLVED, AND THE SERVER IS THE PATH (2026-08-28, corrected the same day).**
+   IRT's **Remote File** field accepts a `file://` URL and reads it **once, on Apply — it does NOT
+   poll.** Proof: after v14.73 removed `100%` from the King labels, both charts still drew
+   `SPXW KING 100%`, and `Refresh` did not move them. ⚠ An earlier note in this file said `file://`
+   polled and that the server was retired; that was written from ONE observation in which the read
+   and the settings change happened at the same instant. **A polling claim needs two reads with no
+   user action between them.**
+   **Standing config:** `irtserve.bat` running (autostart via `setupautostart.bat`), BOTH charts on
+   `http://127.0.0.1:8000/FlexLevelsExport.csv`, Check Every 1 Minute. Verified live: three Kings,
+   current labels, both charts. ⚠ **Never run that server against a panel older than v14.74** — a
+   partial write would erase levels a polling client is watching.
 8. **Two label changes he approved 2026-08-28**: drop `100%` from the King labels (a King is 100% by
    definition), and consider a QQQ→ES **projected** row on the ES chart — labelled as a projection
    (`D-QQQ`), never as an S&P level.

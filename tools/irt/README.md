@@ -54,28 +54,39 @@ the format ever drifts. ⚠ Its two rows are the "band never anchored" case, not
 
 ---
 
-## ⚠⚠ 2026-08-28 — THE SERVER IS NO LONGER NEEDED. `file://` WORKS IN **REMOTE FILE** MODE.
+## ⚠⚠ 2026-08-28 — THE SERVER IS THE PATH. `file://` READS ONCE AND NEVER POLLS.
 
-**Measured on the operator's own chart:** paste
+**This section replaces an earlier one written the same afternoon that said the opposite.** Both
+halves were measured; the first was measured too soon.
 
-    file:///C:/Users/rassul/InvestorRT/rtx/lsFlexLevels/FlexLevelsExport.csv
+**What is true:** IRT's **Remote File** field ACCEPTS a `file:///C:/.../FlexLevelsExport.csv` URL and
+reads it — the SPXW King redrew 7803.50 → 7726.00 the moment it was applied.
+**What was WRONG:** concluding it therefore polls. It does not. Measured an hour later: the panel had
+shipped v14.73, which removed `100%` from the King labels, and both charts were still drawing
+`SPXW KING 100%` — labels that no longer existed in the file. **`Refresh` did not move them either.**
+`file://` gives one read at apply-time and then silence.
 
-into IRT's **Remote File** field (not Local File), *Check For Updates Every: 1 Minute*, and the levels
-**re-read on the timer** — confirmed by SPXW KING redrawing from 7803.50 to 7726.00 without any HTTP
-server running.
+⚠ **HOW THIS FOOLED ME, because the pattern will recur:** the one confirming observation (a level
+moving) happened at the same moment as the settings change that caused the read. Cause and
+confirmation were simultaneous, so a single re-read looked like a working poll. **A polling claim
+needs TWO reads with no user action between them.**
 
-**So the 2026-08-27 conclusion was over-generalised.** What was measured then was true and remains
-true: **IRT never re-reads a LOCAL FILE.** What was inferred from it — "so the file must be served
-over HTTP" — was wrong. The Remote File fetcher takes a URL of any scheme it understands, and
-`file://` is one of them. **One radio button separated a working pipe from a day of infrastructure.**
+### So the standing configuration is:
 
-⚠ **THE LESSON, and it is this project's oldest one in a new costume:** the fix was built on an
-untested premise about WHICH SETTING was at fault. The measurement was real; the boundary drawn
-around it was not. Before building infrastructure to route around a limit, test the limit's edges.
+    irtserve.bat running (or autostarted)
+    BOTH charts -> Remote File -> http://127.0.0.1:8000/FlexLevelsExport.csv, Check Every 1 Minute
 
-### What this means for the four files here
-They are now a **FALLBACK, not the path.** Keep them: if a future IRT version drops `file://`
-support, or the folder moves onto a network share, the HTTP server still works and is proven. But
-nothing needs to be running, nothing goes in Startup, and `setupautostart.bat` should NOT be run.
-**To undo an autostart that was already installed:** `Win+R` → `shell:startup` → delete
-`irtstartup.bat`.
+Verified live 2026-08-28 15:0x CT: both charts polling, all three Kings drawing with current labels
+(`SPXW KING` 7725.25 · `SPY KING` 7718.25 on ES, `QQQ KING ~` 29479.00 on NQ).
+
+**RUN `setupautostart.bat` ONCE, from the lsFlexLevels folder**, so the server starts at every login
+and the operator never touches it. (An earlier version of this file said NOT to. That was written
+during the hour when `file://` was believed to poll.)
+
+### ⚠ And a partial file is what makes the polling path dangerous — fixed in v14.74
+While IRT was NOT re-reading, the panel wrote a file containing only ONE row (the QQQ King); the
+SPXW and SPY rows were absent because one degraded tick dropped them. On `file://` that left
+harmless orphans on the chart. **Over this polling server it would have ERASED those levels
+mid-session.** v14.74 latches every King for the session day, so a blinking reader can no longer
+blank a chart. **Do not run this server against a panel older than v14.74.**
+

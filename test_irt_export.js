@@ -19,6 +19,10 @@ eval(v('KING_LATCH_KEY'));
 eval(src.match(/var KING_LATCH_MS=\d+/)[0]+';');   // trailing comment defeats the v() grab
 eval(v('IRT_QQQK_KEY')); eval(v('IRT_KINGS_KEY'));
 eval(['irtRound','irtCsvRow','irtRatio','irtNqRatio','kingLatchTick','irtKingLatch','irtKingHeld','irtQqqKing','irtBuildCsv'].map(ex).join('\n'));
+// (v14.75) the projection reads the RAIL's array — stub the two functions it comes from
+let RAIL_QQQ={ at:7691.25, book:'QQQ', raw:650, kind:'proportional' };
+global.emBand=()=>({ ok:true, now:7691.2, nowLive:7691.2, scaleUsed:10.0538 });
+global.ladderKings=()=>[{at:7727.75,book:'SPXW'},{at:7691.25,book:'SPY'}].concat(RAIL_QQQ?[RAIL_QQQ]:[]);
 global.ES_RATIO=10.05; global.NQ_RATIO=41.36; global.FEED_STALE_MS=12000;
 var LS={}; global.localStorage={ getItem:k=>(k in LS?LS[k]:null), setItem:(k,val)=>{LS[k]=String(val);} };
 global.CFG={ nodeThresh:20, irt:{ on:true, secs:180, futSym:'EPU26', etfSym:'SPY', file:'FlexLevelsExport.csv',
@@ -33,7 +37,7 @@ let QQQ_TAPE=()=>({ king:650, count:20, fromFeed:false, pct:{ '650.00':-100, '64
 global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():SPXW_TAPE());
 let QQQ_LADDER=()=>null;                      // (v14.73) the face's array; null = fall through to the tape
 global.ladderFor=(s)=>(s==='QQQ'?QQQ_LADDER():null);
-global.LASTFEED={ SPY:{ ts:Date.now(), j:{} } };
+global.LASTFEED={ SPY:{ ts:Date.now(), j:{ levels:[{ s:765 }] } }, QQQ:{ ts:Date.now(), j:{ levels:[{ s:650 }] } } };
 global.extractWalls=()=>({ king:765, walls:[{k:765, pct:100, pos:false}] });
 
 // ---------- 1. the whole file is three kings ----------
@@ -41,11 +45,16 @@ const b=irtBuildCsv();
 ok(!!b, '0 builds');
 const lines=b.csv.trim().split('\r\n');
 ok(lines[0]==='SYMBOL,PRICE,LABEL,PENCOLOR,PENWIDTH,PENSTYLE,bDRAWTEXT,bDRAWPRICE,LABELPOS,bCUSTPOS,CUSTPOSALLMARGIN,CUSTPOSLEFTRIGHT,CUSTPOSUNITS,CUSTPOSWIDTH,bBANDS,BANDPENCOLOR,BANDPENWIDTH,BANDPENSTYLE,BANDABOVEBEL,BANDUNITS,BANDPRICE,bBANDS2,BAND2PENCOLOR,BAND2ABOVEBEL,BAND2UNITS,BAND2PRICE,bBANDLABELS,bTRANSLUCENT', '1a header verbatim from the sample');
-// 2 king rows × 2 configured symbols (EPU26 + ETF SPY) + 1 NQ king
-ok(b.n===3 && lines.length===1+2*2+1, '1b n=3 kings; rows = 2×2 syms + 1 NQ', [b.n,lines.length]);
+// (v14.75) 2 king rows × 2 configured symbols (EPU26 + ETF SPY) + the NQ king + the QQQ king
+// PROJECTED onto EPU26. The projection is counted with the NQ side because it is the same King in a
+// second coordinate system, not a fourth King.
+ok(b.n===4 && lines.length===1+2*2+2, '1b n=4 (3 kings + the ES projection); rows = 2×2 syms + NQ + projection', [b.n,lines.length]);
 const eRows=lines.filter(l=>l.startsWith('EPU26,'));
 const qRows=lines.filter(l=>l.startsWith('ENQU26,'));
-ok(eRows.length===2 && qRows.length===1, '1c EPU26 carries exactly TWO kings; ENQU26 exactly ONE', [eRows.length,qRows.length]);
+ok(eRows.length===3 && qRows.length===1,
+   '1c EPU26 carries SPXW + SPY + the projected QQQ; ENQU26 carries the native QQQ', [eRows.length,qRows.length]);
+ok(eRows.filter(l=>/QQQ KING/.test(l)).length===1 && /,2,1,/.test(eRows.find(l=>/QQQ KING/.test(l))||''),
+   '1c2 ...and the projection is DASHED (style 1), so it cannot pass for a native level at a glance');
 ok(lines.slice(1).every(l=>l.split(',').length===28), '1d every row keeps exactly 28 columns');
 
 // ---------- 2. the SPXW king ----------
@@ -115,6 +124,52 @@ ok(kq.split(',')[3]===String((163<<16)+(113<<8)+247), '4d a negative QQQ crown w
   ok(/ENQU26/.test(csvF), '4f a feed-sourced QQQ King is now WRITTEN, not refused (v14.15 reversed)');
   ok(/via feed/.test(IRT_LAST.nqWhy||''), '4f2 ...and the export records that it came from the feed', IRT_LAST.nqWhy);
   QQQ_TAPE=keep; }
+// ---------- 4p. THE QQQ KING ON ES — READ FROM THE RAIL, NOT RECOMPUTED (v14.75) ----------
+// The operator pointed at his own panel: "my tapereader app shows the qqq king" — `~7721 QQQ` in the
+// price chute. ⚠ The export must write THAT number. A second computation, however well argued, puts
+// a line on the chart that disagrees with the pill on the rail (DECISIONS v13.2).
+{ const B=irtBuildCsv();
+  const proj=B.csv.split('\r\n').filter(l=>/^EPU26/.test(l) && /QQQ KING/.test(l));
+  ok(proj.length===1, '4p the ES chart gets exactly ONE projected QQQ King row', proj.length);
+  ok(proj[0] && Math.abs(parseFloat(proj[0].split(',')[1]) - 7691.25) <= 0.001,
+     '4p2 ...at the RAIL\'s own bearing, unrounded and unrecomputed', proj[0]&&proj[0].split(',')[1]);
+  ok(/rail bearing/.test(IRT_LAST.xqWhy||''), '4p3 ...and the export says where it came from', IRT_LAST.xqWhy);
+  // move the rail's bearing: the export must follow it, because it is not its own number
+  const keep=RAIL_QQQ; RAIL_QQQ={ at:7745.00, book:'QQQ', raw:655, kind:'proportional' };
+  const B2=irtBuildCsv();
+  const p2=B2.csv.split('\r\n').filter(l=>/^EPU26/.test(l) && /QQQ KING/.test(l))[0];
+  ok(p2 && Math.abs(parseFloat(p2.split(',')[1]) - 7745.00) <= 0.001,
+     '4p4 ...and it FOLLOWS the rail when the rail moves — one quantity, one source', p2&&p2.split(',')[1]);
+  // the rail has no bearing (QQQ feed stale): the export writes none rather than inventing one
+  RAIL_QQQ=null;
+  const B3=irtBuildCsv();
+  ok(!B3.csv.split('\r\n').some(l=>/^EPU26/.test(l) && /QQQ KING/.test(l)),
+     '4p5 no rail bearing -> no projected row; the export never computes its own');
+  ok(/no QQQ bearing/.test(IRT_LAST.xqWhy||''), '4p6 ...and names the absence', IRT_LAST.xqWhy);
+  RAIL_QQQ=keep; }
+// ⚠ IT IS A BEARING, NOT A LEVEL — and the FILE has to say so, because the chart is the only surface
+// the operator sees. Dashed (style 1) and tilde-tagged, per ladderKings' own warning that a
+// proportional mapping assumes a correlation of one and is false on exactly the days it matters.
+{ const row=irtBuildCsv().csv.split('\r\n').find(l=>/^EPU26/.test(l) && /QQQ KING/.test(l));
+  // ⚠ BY COLUMN INDEX, NOT BY SUBSTRING. The first version tested /,2,1,/ against the whole row and
+  // passed with the style mutated to SOLID — ",2,1," also occurs in the band fields near the end.
+  // A mutation caught it. PENWIDTH is column 4, PENSTYLE column 5.
+  const c=row?row.split(','):[];
+  ok(c[4]==='2' && c[5]==='1',
+     '4p7 the projection is DASHED (PENSTYLE=1), so it cannot pass for a native level', [c[4],c[5]]);
+  ok(row && / ~/.test(c[2]), '4p8 ...and wears the tilde', c[2]);
+  // ⚠ THE PANEL ROUNDS TO WHOLE POINTS, THE EXPORT MUST NOT. Operator, 2026-08-28: "on my tapereader
+  // app, i have it rounded to the nearest whole number; on the export it should be based on the ES
+  // chart which is in .25 increments." The rail's DISPLAY uses frameNum (whole points, D-9); the
+  // export reads the RAW bearing off the same array and applies its own 0.25 rounding. Same
+  // quantity, two precisions — and nobody may "fix" one to match the other.
+  const keep=RAIL_QQQ; RAIL_QQQ={ at:7691.63, book:'QQQ', raw:650, kind:'proportional' };
+  const r2=irtBuildCsv().csv.split('\r\n').find(l=>/^EPU26/.test(l) && /QQQ KING/.test(l));
+  const px=parseFloat(r2.split(',')[1]);
+  ok(Math.abs(px-7691.75)<=0.001,
+     '4p9 a raw 7691.63 bearing exports as 7691.75 — the ES tick, NOT the panel\'s whole point (7692)', px);
+  RAIL_QQQ=keep; }
+
 // ---------- 4x. ⚠ ES AND NQ TRADE IN QUARTER POINTS — INCLUDING A HELD KING ----------
 // The operator, 2026-08-28: "remember that es is in 1/4 pt". The live path has rounded to the tick
 // since v14.x; the HOLD path is new, and a latched King re-enters through the same conversion, so it
@@ -203,8 +258,13 @@ ok(!/NextStop|PBentry|FLIP|D-SPY/.test(b.csv), '5e and none of the long-dead lan
   const B2=irtBuildCsv();
   ok(!!B2 && /SPXW KING/.test(B2.csv) && !/SPY KING/.test(B2.csv) && !/ENQU26/.test(B2.csv), '6b only the SPXW king alive → it writes alone');
   const keep6=QQQ_TAPE;
-  global.tapeMap=()=>null; QQQ_TAPE=()=>null; delete LS[IRT_QQQK_KEY]; delete LS[IRT_KINGS_KEY];
+  // ⚠ (v14.75) the RAIL's bearing is a source too — "every source dark" now has to include it, or
+  // this assertion silently tests everything except the newest row.
+  global.tapeMap=()=>null; QQQ_TAPE=()=>null; global.ladderFor=()=>null;
+  delete LS[IRT_QQQK_KEY]; delete LS[IRT_KINGS_KEY];
+  const keepRail=RAIL_QQQ; RAIL_QQQ=null;
   ok(irtBuildCsv()==null, '6c every source dark AND nothing latched → nothing is written, never an empty confident file');
+  RAIL_QQQ=keepRail;
   QQQ_TAPE=keep6; global.tapeMap=(s)=>(s==='QQQ'?QQQ_TAPE():SPXW_TAPE());
 let QQQ_LADDER=()=>null;                      // (v14.73) the face's array; null = fall through to the tape
 global.ladderFor=(s)=>(s==='QQQ'?QQQ_LADDER():null);

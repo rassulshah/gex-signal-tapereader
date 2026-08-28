@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.74
+// @version    14.75
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.74';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.75';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4370,6 +4370,47 @@ function irtBuildCsv(){
       }
     } else { try{ IRT_LAST.nqWhy='nqOn is off'; }catch(eW2){} }
   }catch(eNQ){ try{ IRT_LAST.nqWhy='threw: '+(eNQ&&eNQ.message||eNQ); }catch(eW3){} }
+  // ---- 4) THE QQQ KING ON THE ES CHART — THE RAIL'S OWN BEARING (v14.75) ---------------------
+  // > "i want the conversion or projection, whatever you call it, can you do a qqq -> NQ -> ES ?"
+  //
+  // ⚠⚠ IT READS `ladderKings()` — THE ARRAY THE RAIL ALREADY DRAWS. The panel has shown this bearing
+  // as `~7721 QQQ` in the price chute all along; the operator pointed at it. Computing a second one
+  // here — even with better maths — would put a line on his chart that disagrees with the pill on
+  // his rail, which is DECISIONS v13.2 exactly: "when two parts of the face must agree, they read
+  // the SAME ARRAY. Matching rules drift; a shared reference cannot." That drift is the bug we spent
+  // this afternoon on.
+  //
+  // ⚠ AND IT IS A BEARING, NOT A LEVEL — `ladderKings` says so at length: QQQ tracks the Nasdaq-100
+  // and ES the S&P 500, so the proportional mapping assumes a correlation of one, which is false on
+  // exactly the days it matters (a tech-led selloff). It ships DASHED and tilde-tagged for that
+  // reason. ⚠ A LATER VERSION MUST NOT PROMOTE IT TO A LEVEL.
+  //
+  // ⚠ The chain the operator asked for reduces to this same number: QQQ->NQ->ES has the NQ ratio
+  // cancel out, leaving ES_px x (king / QQQ_px), which is what the rail computes.
+  // ⚠ NOT ANCHORED, deliberately, and against my own first instinct: D-1 anchors the BAND because a
+  // band that recentres on price can never show overextension. This is not a band — it is a bearing
+  // that only means anything against live price, and the rail draws it live. Anchoring it here would
+  // have made the export disagree with the face.
+  try{
+    if(cfgI.nqOn!==false && futSym){
+      var EBq=null; try{ EBq=emBand(sym); }catch(eEB){}
+      var LKq=(EBq && EBq.ok) ? (ladderKings(EBq, sym)||[]) : [];
+      var qk=null; LKq.forEach(function(x){ if(x && x.book==='QQQ') qk=x; });
+      // ⚠ THE RAW BEARING, NOT THE RAIL'S PRINTED ONE. Operator, 2026-08-28: "on my tapereader app
+      // i have it rounded to the nearest whole number; on the export it should be based on the ES
+      // chart which is in .25 increments." `ladderKings` returns `at` unrounded; the rail's DISPLAY
+      // applies frameNum (whole points, D-9) and the export applies irtRound(0.25). Same quantity,
+      // two precisions — do not make either match the other.
+      if(qk && typeof qk.at==='number' && qk.at>0){
+        out.push(irtCsvRow(futSym, irtRound(qk.at, 0.25), 'QQQ KING ~',
+                 IRT_COLORS.brk, 2, 1));                       // dashed: a bearing, not a level
+        nqN++;
+        try{ IRT_LAST.xqWhy='rail bearing, QQQ '+qk.raw; }catch(eX1){}
+      } else {
+        try{ IRT_LAST.xqWhy=(EBq&&EBq.ok)?'the rail has no QQQ bearing right now':'no band'; }catch(eX2){}
+      }
+    }
+  }catch(eXQ){ try{ IRT_LAST.xqWhy='threw: '+(eXQ&&eXQ.message||eXQ); }catch(eX3){} }
   if(out.length<=1) return null;
   return { csv:out.join('\r\n')+'\r\n', n:rows.length+nqN,
            targets:targets.map(function(t){return t.sym;}).concat(nqN?[(cfgI.nqSym||'ENQU26').trim()]:[]),
@@ -4451,6 +4492,28 @@ function irtQqqKing(){
     return out;
   }catch(e){ out.why='threw: '+(e&&e.message||e); return out; }
 }
+// ============================================================================================
+// (v14.75) THE QQQ KING PROJECTED ONTO THE ES CHART — operator-requested 2026-08-28.
+//
+// > "i want the conversion or projection, whatever you call it, can you do a qqq -> NQ -> ES ?"
+//
+// ⚠⚠ FIRST, WHAT THIS IS NOT. SPY -> ES is a CONVERSION: they track the same index, so 765 SPY IS
+// 7688 ES, an identity. QQQ -> ES is a PROJECTION: different underlyings, no price the level equals.
+// The panel itself refuses this — `trinityRead()` compares each book's King to ITS OWN spot and
+// reports agreement, never a converted price. This row exists because the operator asked for it on
+// his chart, and it is drawn DASHED so it cannot be mistaken for a native level at a glance.
+//
+// ⚠ THE CHAIN HE ASKED FOR REDUCES, and that is the reason it is safe to build:
+//     QQQ King -> NQ   = king x nqRatio
+//     NQ -> ES         = x (ES/NQ),  and ES/NQ = (SPY x esRatio) / (QQQ x nqRatio)
+//     => the whole chain = ES_px x (king / QQQ_px)  — THE NQ RATIO CANCELS.
+// So no extra assumption enters through the NQ leg; the only real input is the ES/NQ price ratio.
+//
+// ⚠ AND THAT RATIO IS ANCHORED, per DECISIONS D-1: "a band that recentres on price is always
+// centred on you, so it can never show overextension." A live ratio would drag this line along with
+// ES all day, so it would sit at the same distance from price forever and say nothing when reached.
+// Captured ONCE per session day, the line moves only when the QQQ King itself rolls — which is what
+// makes it behave like a level rather than a restatement of where price already is.
 function irtPickFolder(){
   if(!window.showDirectoryPicker){ alert('This browser lacks the File System Access API.'); return; }
   window.showDirectoryPicker({mode:'readwrite'}).then(function(h){ repoKvSet('irtDir', h); IRT_LAST={t:Date.now(),rows:0,how:'folder set',err:null}; renderCfg(); }).catch(function(){});

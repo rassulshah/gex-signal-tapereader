@@ -1,3 +1,35 @@
+## v14.75 — the QQQ King on the ES chart, read from the rail rather than recomputed
+
+> "i want the conversion or projection, whatever you call it, can you do a qqq -> NQ -> ES ?"
+> …then, decisively: **"my tapereader app shows the qqq king"**
+
+**He was pointing at `~7721 QQQ` in his own price chute.** The panel has drawn that bearing all
+along, and I had just told him the app never crosses frames — wrong, and he corrected it with a
+screenshot.
+
+**The chain he asked for reduces, which is why it is safe:** `QQQ King -> NQ -> ES` has the NQ ratio
+cancel out, leaving `ES_px x (king / QQQ_px)` — exactly what `ladderKings()` already computes.
+
+⚠ **So the export READS `ladderKings()` rather than computing its own.** My first cut anchored an
+ES/NQ ratio at the open (D-1 reasoning) and would have put a line on his chart that **disagreed with
+the pill on his rail** — DECISIONS v13.2, the same defect class as the QQQ King two builds ago:
+*"when two parts of the face must agree, they read the SAME ARRAY."* The anchored helper was deleted
+rather than left as dead code.
+
+- **It is a BEARING, not a level**, and `ladderKings` says so at length: QQQ tracks the Nasdaq-100,
+  ES the S&P 500, so a proportional mapping assumes a correlation of one — false on exactly the days
+  it matters. It ships **dashed** and tilde-tagged. ⚠ A later version must not promote it.
+- **Two precisions, deliberately** — the operator: *"on my tapereader app i have it rounded to the
+  nearest whole number; on the export it should be based on the ES chart which is in .25
+  increments."* The rail DISPLAYS whole points (`frameNum`, D-9); the export reads the RAW bearing
+  and applies `irtRound(0.25)`. Neither may be "fixed" to match the other.
+- `IRT_LAST.xqWhy` reports `rail bearing, QQQ <strike>` or names the absence.
+
+Tests: `test_irt_export` 70 → **80**. ⚠ **A mutation caught a false assertion of mine:** the dashed
+check matched `,2,1,` anywhere in the 28 columns — including the band fields — so it passed with the
+style mutated to SOLID. It reads PENWIDTH and PENSTYLE by column index now. Two further mutations
+(recompute instead of reading the rail; skip the 0.25 grid) both fail correctly.
+
 ## v14.74 — every King latches, because a partial file deletes levels
 
 **Measured on his machine at 14:00 CT:** `FlexLevelsExport.csv` held **one data row** — the QQQ King —
