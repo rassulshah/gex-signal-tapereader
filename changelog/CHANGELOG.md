@@ -1,3 +1,35 @@
+## v14.80.1 — "update the companion" was wrong for eight builds
+
+> "the companion has a reinstall instead of update"
+
+He was reading Tampermonkey correctly and my delivery note was contradicting his screen. Tampermonkey
+offers **Reinstall** when the installed @version already matches the URL. The companion last moved at
+v14.72 (1.15 → 1.16) and has been byte-identical for eight releases.
+
+⚠⚠ **THE COMPARISON WAS FINE; THE BASELINE WAS NINE RELEASES OLD.** `changed()` diffs against
+`origin/main`, and this clone's ref was pinned at **v14.71** — the cloud cannot PUSH, so nothing here
+ever advanced it, while his machine pushed every installer. Every diff therefore said CHANGED.
+
+⚠⚠ **THE CLOUD CAN FETCH. ONLY PUSH IS BLOCKED.** `git fetch origin main` was never attempted here
+because *"the cloud has no GitHub access"* was carried as ONE fact when it is TWO. The same shape as
+the `file://` polling error the day before: a true observation generalised past its evidence. The
+builder now fetches first — and the fetch also confirmed v14.80 is live on GitHub with the `FLIP0`
+fix in it, so his install landed.
+
+⚠ **The panel line was worse: `(changed)` was a hardcoded literal.** Usually true, which is why it
+survived — and false on any build touching only tools/ or tests, like this one. Both lines are now
+measured, and a failed fetch prints **"could not verify"** rather than guessing CHANGED. Guessing is
+what produced eight false reinstall instructions; an unverifiable answer is stated as unverifiable.
+
+A wrong reinstall instruction is not cosmetic — he reinstalls the companion mid-session, the courier
+restarts, and the IF chain it feeds blinks out during RTH, on his face.
+
+New `test_installer_note.js` (14). **Two of its assertions were fake on first writing and mutation
+caught both**: one grepped the whole file for "UNVERIFIED" and still matched a string in the verdict
+helper after the line that SETS it was deleted; the other matched only the console line's exact
+spacing, so re-hardcoding the markdown line slipped through. Both rebound to the branch and to
+*every* printed line. Seven mutations now fail correctly.
+
 ## v14.80 — the flip row is the 0DTE flip, not their all-expiry one
 
 > "the flip 0dte is displayed when 0dte is selected just like how you get the walls for 0 dte."

@@ -50,15 +50,57 @@ MSG = MSG.replace('"', "'")          # the message sits inside "..." in the .bat
 # --- did the companion actually change against origin/main? -------------------------------------
 # Linking a script that did NOT change makes Tampermonkey offer "Reinstall" instead of "Update",
 # which reads exactly like a failed push. So the installer must say which one moved.
+#
+# ⚠⚠ THE BASELINE MUST BE FETCHED FIRST, AND FOR EIGHT BUILDS IT WAS NOT (fixed 2026-08-28).
+# Operator: "the companion has a reinstall instead of update." He was reading a true signal off
+# Tampermonkey and my note contradicted it. The cause: this clone's `origin/main` ref was pinned at
+# v14.71 — the cloud cannot PUSH (403), so nothing here ever advanced it — while HIS machine had
+# pushed every installer since. The companion last moved at v14.72 (1.15 -> 1.16) and has been
+# byte-identical for eight releases, but every diff against a nine-release-old ref said "CHANGED",
+# so I told him to reinstall it eight times.
+#
+# ⚠ THE CLOUD CAN FETCH. Only push is blocked. `git fetch` was never tried here because "the cloud
+# has no GitHub access" was carried as one fact when it is two — the same shape as the `file://`
+# polling error: one true observation generalised past its evidence.
+FETCH_OK = True
+try:
+    _f = subprocess.run(['git', 'fetch', 'origin', 'main'], capture_output=True, timeout=120)
+    FETCH_OK = (_f.returncode == 0)
+    if not FETCH_OK:
+        print('WARNING: git fetch failed - the CHANGED/UNCHANGED verdict below is not trustworthy')
+except Exception as e:
+    FETCH_OK = False
+    print('WARNING: git fetch threw (%s) - CHANGED/UNCHANGED not trustworthy' % e)
+
 def changed(path):
     try:
         r = subprocess.run(['git', 'diff', '--quiet', 'origin/main', '--', path])
         return r.returncode != 0
     except Exception:
         return True
+
 COMPAN_NOTE = 'companion, @version %s' % VC
-if not changed(COMPAN):
+if not FETCH_OK:
+    # ⚠ NEVER SAY "CHANGED" ON A STALE BASELINE. An unverifiable answer is stated as unverifiable;
+    # guessing "changed" is what produced eight false reinstall instructions.
+    COMPAN_NOTE += ', CHANGE UNVERIFIED (no fetch)'
+elif not changed(COMPAN):
     COMPAN_NOTE += ', UNCHANGED this release'
+
+# ⚠ THE PANEL LINE WAS HARDCODED "(changed)" — the same defect, unnoticed because it is USUALLY
+# true. On a build that only touches tools/ or tests it is false, and a false "(changed)" sends him
+# to reinstall a script Tampermonkey will offer as "Reinstall". Both lines are now measured.
+def _panel_verdict():
+    if not FETCH_OK:
+        return '(change unverified - no fetch)'
+    return '(changed)' if changed(SCRIPT) else '(UNCHANGED, do not reinstall)'
+
+def _compan_verdict(dash):
+    if 'UNVERIFIED' in COMPAN_NOTE:
+        return ' %s COULD NOT VERIFY (no fetch) - check Tampermonkey: it says Update or Reinstall' % dash
+    if 'UNCHANGED' in COMPAN_NOTE:
+        return ' %s UNCHANGED, do not reinstall' % dash
+    return ' %s CHANGED, update it too' % dash
 
 # --- the payload ---------------------------------------------------------------------------------
 FILES = []
@@ -511,8 +553,8 @@ print('   (fallback only, if he reports the .bat failed: %s + %s)' % (ZIPNAME, B
 # further down, in a block easy to scroll past; they print HERE now, welded to the filename.
 print('')
 print('   PASTE THESE WITH IT, EVERY TIME:')
-print('   - Tapereader v%s (changed) - https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js' % V)
-print('   - Companion v%s%s' % (VC, ' - UNCHANGED, do not reinstall' if 'UNCHANGED' in COMPAN_NOTE else ' - CHANGED, update it too'))
+print('   - Tapereader v%s %s - https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js' % (V, _panel_verdict()))
+print('   - Companion v%s%s' % (VC, _compan_verdict('-')))
 print('   - Then: wait ~5 min (CDN) -> CLICK THE LINK -> reload Atlas. TM auto-update is')
 print('     ONCE A DAY by default, so the click is the reliable step. "Reinstall" means he')
 print('     already has it, which is fine, not a failure.')
@@ -525,6 +567,6 @@ print('round-trip: tar payload AND zip both byte-identical to the working tree')
 print('')
 print('==== PASTE THIS WITH THE INSTALL FILE — EVERY TIME ====')
 print('**Tampermonkey — update ONLY what changed:**')
-print('- **Tapereader v%s** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js' % V)
-print('- Companion v%s%s' % (VC, ' — UNCHANGED, do not reinstall' if 'UNCHANGED' in COMPAN_NOTE else ' — CHANGED, update it too'))
+print('- **Tapereader v%s** %s — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js' % (V, _panel_verdict()))
+print('- Companion v%s%s' % (VC, _compan_verdict('—')))
 print('Then wait ~5 min (raw CDN cache) and RELOAD the Atlas tab — footer must say v%s.' % V)

@@ -15,7 +15,24 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-28 · v14.80 · session `2df3ccfa` — v14.79: the far side, the IRT pipe, bounded writes and the permanent grant
+## 2026-08-28 · v14.80.1 · session `2df3ccfa` — v14.79: the far side, the IRT pipe, bounded writes and the permanent grant
+
+### v14.80.1 — he caught a false instruction I had repeated eight times
+
+> "the companion has a reinstall instead of update"
+
+Tampermonkey says Reinstall when the version already matches. The companion has not changed since
+v14.72; I had told him to update it on every build since, because the builder diffed against an
+`origin/main` ref pinned at v14.71 — the cloud cannot push, so nothing here advanced it.
+
+⚠ **The cloud CAN fetch.** I had never tried, because "the cloud has no GitHub access" was carried
+as one fact when it is two. The fetch also proved v14.80 is live on GitHub with the `FLIP0` fix — his
+install landed. The panel's "(changed)" was a hardcoded literal too; both lines are measured now, and
+an unfetchable baseline prints "could not verify" instead of guessing.
+
+New `test_installer_note.js` (14). Two of its assertions were fake on first writing; mutation caught
+both.
+
 
 ### v14.80 — he corrected the flip within the hour
 
