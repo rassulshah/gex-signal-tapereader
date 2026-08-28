@@ -1,0 +1,86 @@
+{
+  "schema": "gex-review/catchup-v1",
+  "date": "2026-08-27",
+  "runType": "catch-up",
+  "dataHealth": {
+    "verdict": "COLLAPSED",
+    "reason": "feature records cover almost no bars",
+    "records": 15,
+    "distinctBars": 1,
+    "snapshots": 133,
+    "coveragePct": 1,
+    "healthStatus": "FAILED"
+  },
+  "dataCollectionStatus": "FAILURE — feature-scoring layer did not instrument most bars",
+  "cannotAnalyze": "Yes — n=0 per feature. Collapsed data forbids rate computation.",
+  "why": "Contract rule: 'If dataHealth says COLLAPSED, do NOT compute rates. A confident number from 1 bar is worse than no number.'",
+  "ledgerHealth": {
+    "nodeEventsRecorded": 1332,
+    "byType": {
+      "ACCUM": 351,
+      "TURN_UP": 93,
+      "DISSIP": 434,
+      "ROLL": 391,
+      "TURN_DN": 63
+    },
+    "status": "HEALTHY — node layer captured data normally"
+  },
+  "features": {
+    "allReportN": 1,
+    "scored0": [
+      "leg.handoff",
+      "exp.breadth",
+      "gex.path",
+      "map.transfer",
+      "map.lean",
+      "defl.trigger",
+      "predictors"
+    ],
+    "scored1At100pct": [
+      "leg.roll",
+      "leg.magnet",
+      "nextStop",
+      "nextStop.60",
+      "pbEntry",
+      "pbEntry.60",
+      "levels",
+      "ledger.touch"
+    ],
+    "note": "All features show n=1 (one bar). Effective n per feature = 1 bar / 10-bar fwd window = 0.1. This is not a sample."
+  },
+  "rootCause": "Feature-scoring export failed. Ledger data (nodes, touches) arrived; feature keys did not. ~1000 records expected; 15 received.",
+  "eventLog": [
+    {
+      "time": "2026-08-28T12:42Z",
+      "event": "Evening run 2026-08-27",
+      "status": "FAILED",
+      "output": "No file written to review/2026-08-27.json"
+    },
+    {
+      "time": "2026-08-28T12:42Z",
+      "event": "Catch-up run initiated",
+      "status": "COMPLETED (but data is unusable)"
+    },
+    {
+      "time": "2026-08-28T12:42Z",
+      "event": "Data health check",
+      "status": "COLLAPSED — 1% coverage"
+    }
+  ],
+  "nextSteps": [
+    "Check feature-scoring pipeline on 2026-08-27 export (panel's scoring layer)",
+    "Verify snaps.SPY[].feat.* keys exist in raw data/2026-08-27.json (if not present, export failed)",
+    "Check whether resolved.SPY[] queue has entries (if yes, the issue is export format; if no, scoring errored)",
+    "The weekly run (Saturday) will need all five day logs from Mon–Fri to pool. This catch-up cannot write a usable log."
+  ],
+  "unableToReport": [
+    "Per-feature rates (n too small)",
+    "Regime splits (no data)",
+    "Vote-direction splits (no data)",
+    "Calibration checks (no data)",
+    "MFE/MAE analysis (n=1)",
+    "Contradictions (no coverage)",
+    "Proposals (insufficient data across any dimension)"
+  ],
+  "summary": "Evening review failed to run. Data export for 2026-08-27 is catastrophically incomplete: feature collection produced ~1% of expected records. Node ledger is healthy; feature-scoring layer is broken. Cannot analyze. This is F-9 in action: a review that cannot see its input fails silently and looks like a quiet market."
+}
