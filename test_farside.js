@@ -90,9 +90,19 @@ ok(fsNormalise(trunc) === null, 'n5 a truncated payload is REFUSED rather than h
 // ---- the face: the numbers it prints must come from the model, not from prose --------------------
 const SD = ex('secDay');
 ok(/fsRead\(sym, ?D\)/.test(SD), 'f1 the section computes the far side from the model');
-ok(/not before/.test(SD) && /80%/.test(SD),
-   'f2 the 80% claim is on the face as a one-sided FLOOR');
-ok(/\(50%\)/.test(SD), 'f3 ...and the two-sided window is labelled with its real 50%, not with 80%');
+// ⚠⚠ STRIP COMMENTS FIRST. f2 kept passing after the wording changed because the v14.86 comment
+// EXPLAINING the change contains the phrase "not before" — the assertion was satisfied by the note
+// describing what it was supposed to be checking. Third time this exact shape has appeared this
+// week (test_layout_v13's STEP_TIPS, the ladder mockup audit, this). Assertions about RENDERED TEXT
+// read the rendered text.
+const SDR = SD.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^[ \t]*\/\/.*$/gm,'');
+ok(/' after '/.test(SDR) && /80%/.test(SDR) && /fsClock12\(FS\.floorAt\)/.test(SDR),
+   'f2 the 80% claim is on the face as a one-sided FLOOR — "SIDE after <clock> — 80%"');
+// (v14.86) the middle-half window moved into the hover when the read line was compressed to one
+// line. It kept its 50%, which is the only thing f3 ever cared about.
+ok(/50%, not 80%/.test(SDR) && /winA/.test(SDR) && /winB/.test(SDR),
+   'f3 ...and the two-sided window is labelled with its real 50%, stated against the 80% floor');
+ok(!/most likely/i.test(SDR), 'f3b ...and the hedge word it used to carry is gone');
 ok(!/g3daylb/.test(SD), 'f4 the survival ladder is GONE — it answered the verdict\'s question with a weaker instrument');
 ok(!/g3dayfoot/.test(SD), 'f5 ...and the white honesty line is gone from the face');
 ok(/rates live/.test(SD) && /rates baked in/.test(SD),

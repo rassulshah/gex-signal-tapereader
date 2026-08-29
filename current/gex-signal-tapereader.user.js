@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.84
+// @version    14.87
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.84';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.87';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -20088,8 +20088,8 @@ function ensureV3Css(){
     '#gpts-body .g3ldeml{position:absolute;left:'+(LAD_CH+LAD_CHW+8)+'px;font-size:7.4px;font-weight:900;'+
       'color:#f2b45a;transform:translateY(-50%);white-space:nowrap;cursor:help}'+
     '#gpts-body .g3ldopn{position:absolute;left:'+(LAD_CH+1)+'px;width:'+(LAD_CHW-2)+'px;height:1px;background:#8b98a9;opacity:.6;cursor:help}'+
-    '#gpts-body .g3ldnow{position:absolute;left:'+(LAD_CH+LAD_CHW-LAD_PILLW-2)+'px;width:'+LAD_PILLW+'px;height:15px;background:#fff;'+
-      'color:#0d1117;border-radius:8px;font-size:9px;font-weight:900;display:flex;align-items:center;'+
+    '#gpts-body .g3ldnow{position:absolute;left:'+(LAD_CH+Math.round((LAD_CHW-LAD_PILLW)/2))+'px;width:'+LAD_PILLW+'px;height:16px;background:#fff;'+
+      'color:#0d1117;border-radius:8px;font-size:10px;font-weight:900;display:flex;align-items:center;'+
       'justify-content:center;transform:translateY(-50%);z-index:9;cursor:help}'+
     '#gpts-body .g3ldnow.str{background:#e0645f;color:#fff}'+
     // (v14.54, mockup v11) WHEN PRICE IS ON A KING, THE PILL SAYS SO. Within LAD_KING_TEST_PTS of a
@@ -20145,16 +20145,17 @@ function ensureV3Css(){
     // (v14.83) the EM pill joins the pill zone. It was the last chute occupant still spanning the
     // FULL chute width, which was fine when the chute was pills-only at full width and wrong now
     // that the price and both crowns are 44px right-justified — one column of pills, one geometry.
-    '#gpts-body .g3ldempill{position:absolute;left:'+(LAD_CH+LAD_CHW-LAD_PILLW-2)+'px;width:'+LAD_PILLW+'px;font-size:7.4px;'+
+    '#gpts-body .g3ldempill{position:absolute;left:'+(LAD_CH+Math.round((LAD_CHW-LAD_PILLW)/2))+'px;width:'+LAD_PILLW+'px;font-size:8px;'+
       'font-weight:900;color:#f2b45a;background:rgba(242,180,90,.12);border:1px solid rgba(242,180,90,.55);'+
       'border-radius:7px;padding:0 4px;height:13px;box-sizing:border-box;transform:translateY(-50%);'+
       'white-space:nowrap;cursor:help;z-index:5;display:flex;align-items:center;justify-content:center;gap:3px}'+
     '#gpts-body .g3ldrailend{position:absolute;left:'+(LAD_CH+LAD_CHW+4)+'px;font-size:7px;font-weight:800;'+
       'color:#4b5563;transform:translateY(-50%);white-space:nowrap;cursor:help}'+
-    '#gpts-body .g3ldking{position:absolute;left:'+(LAD_CH+LAD_CHW-LAD_PILLW-2)+'px;width:'+LAD_PILLW+'px;font-size:8px;'+
-      'font-weight:900;border-radius:7px;padding:0 3px;height:14px;box-sizing:border-box;'+
-      'transform:translateY(-50%);white-space:nowrap;cursor:help;z-index:6;display:flex;align-items:center;gap:2px}'+
-    '#gpts-body .g3ldking b{font-weight:900;font-size:8px}'+
+    '#gpts-body .g3ldking{position:absolute;left:'+(LAD_CH+Math.round((LAD_CHW-LAD_PILLW)/2))+'px;width:'+LAD_PILLW+'px;font-size:9px;'+
+      'font-weight:900;border-radius:7px;padding:0 3px;height:15px;box-sizing:border-box;'+
+      'transform:translateY(-50%);white-space:nowrap;cursor:help;z-index:6;display:flex;align-items:center;'+
+      'justify-content:center;gap:2px}'+
+    '#gpts-body .g3ldking b{font-weight:900;font-size:9px}'+
     // THE TEST COUNTER, inside the crown it belongs to - absent until the king has actually been
     // tested, because an untested crown is the strong one (~80%) and each distinct test spends it.
     '#gpts-body .g3ldkt{margin-left:auto;font-size:6.4px;font-weight:900;line-height:9px;padding:0 3px;'+
@@ -22065,11 +22066,12 @@ function hlCell(posr, mins){
 function hlVerdict(D, CALL, T){
   try{
     if(CALL && CALL.p!=null){
-      if(CALL.notIn) return D.first+' NOT IN — '+(100-CALL.p)+'%';
-      return D.first+(CALL.in?' IN':' STANDING')+' — '+CALL.p+'%';
+      // (v14.86) no em-dash between the state and its number — "HOD IN 100%", his wording.
+      if(CALL.notIn) return D.first+' NOT IN '+(100-CALL.p)+'%';
+      return D.first+(CALL.in?' IN ':' STANDING ')+CALL.p+'%';
     }
     if(CALL) return D.first+' STANDING — no rate (thin cell, n='+CALL.n+')';
-    return T ? (D.first+' IN — '+T.rate+'%') : (D.first+' STANDING — too early to rate');
+    return T ? (D.first+' IN '+T.rate+'%') : (D.first+' STANDING — too early to rate');
   }catch(e){ return (D&&D.first?D.first:'')+' —'; }
 }
 // (v14.72) THE "% OF THE RANGE" CLAUSE - GATED AND RENAMED, because it was claiming something it
@@ -22380,6 +22382,14 @@ function fsRead(sym, D){
   }catch(e){ out.why='threw: '+(e&&e.message||e); return out; }
 }
 function fsClockMin(m){ try{ m=Math.round(m); return Math.floor(m/60)+':'+two(m%60); }catch(e){ return '—'; } }
+// (v14.86) THE READ LINE SPEAKS 12-HOUR. Operator, 2026-08-29: "LOD after 1:30pm — 80%". The stats
+// table above keeps 24-hour (10:00, 12:09) because it is a table of measurements and columns of
+// 24-hour times sort and align; the READ is a sentence and reads as one. Two formats on one face is
+// a real cost, taken deliberately and only here.
+function fsClock12(m){
+  try{ m=Math.round(m); var h=Math.floor(m/60), mm=m%60, ap=(h>=12?'pm':'am'), h12=h%12; if(h12===0) h12=12;
+       return h12+':'+two(mm)+ap; }catch(e){ return '\u2014'; }
+}
 
 function hlClock(sec){ try{ sec=Math.round(sec); return two(Math.floor(sec/3600))+':'+two(Math.floor((sec%3600)/60)); }catch(e){ return '\u2014'; } }
 function hlDur(min){ try{ min=Math.round(min); if(min<60) return min+'m';
@@ -22392,6 +22402,69 @@ function hlTier(stoodMin, base){
   return t;
 }
 // ⚠ TODAY'S NUMBERS ONLY — no base rate is computed here, they are all in HODLOD_BASE.
+
+// ---- (v14.87) PT AND THE CLOSE LEG — what the day paid AFTER the second extreme ----------------
+// Operator, 2026-08-29: "pt is hod to the lowest point prior to the close that doesn't take out the
+// lod, and pt time is the time that it took ... there maybe an opportunity to trade from the second
+// extreme to the close."
+//
+// TWO DIFFERENT LEGS, AND THEY ARE 58% APART — so both ship, each under a label that matches it:
+//   PT   = second extreme -> the FURTHEST point back before the close   (the excursion)
+//   LC   = second extreme -> the CLOSE                                  (where it ended up)
+// LC is named for the second extreme: LOD-second -> LC, HOD-second -> HC. Measured medians over 283
+// sessions (tools/study-pt.py, tools/study-secondleg.py): PT 0h49 / 19.8pts, LC 1h43 / 12.5pts.
+// A day that retraces 20 points and closes back at the extreme has PT 20 and LC ~0. PT is the one
+// that answers "was there a trade"; LC is the one that answers "did it hold".
+//
+// ⚠⚠ "THAT DOESN'T TAKE OUT THE LOD" IS TRUE BY CONSTRUCTION, and the code says so rather than
+// filtering: if the low after the HOD had broken the LOD, THAT would be the day's LOD and the HOD
+// would not be the second extreme. `viol` counts violations so a mislabelled pair is loud rather
+// than silently producing a nonsense PT. 0 violations in 283 recorded sessions.
+var PT_META={
+  n:283, first:'2025-06-02', last:'2026-08-21',
+  ptMin:49,  ptPts:19.8,  ptQ25:11.8, ptQ75:32.2,   // ALL sessions
+  lcMin:103, lcPts:12.5,  lcQ25:7.2,  lcQ75:21.5,
+  // by which extreme printed second — the asymmetry is large enough to show the right one
+  hod:{ ptMin:46, ptPts:17.0, lcMin:98,  lcPts:9.8  },   // HOD second: PT is a pullback DOWN
+  lod:{ ptMin:51, ptPts:24.0, lcMin:115, lcPts:15.2 }    // LOD second: PT is a bounce UP
+};
+function hlPT(sym, D){
+  var out={ ok:false, why:'' };
+  try{
+    if(!D || !D.ok){ out.why=(D&&D.why)||'no session read'; return out; }
+    if(D.secondT==null || D.secondT>D.clock){ out.why='second extreme not in'; return out; }
+    var cs=closedCandles(sym)||[];
+    var rr=(typeof D.scale==='number' && D.scale>0)?D.scale:1;
+    var secondIsHOD=(D.second==='HOD');
+    var secP=secondIsHOD?D.hod:D.lod;
+    var advP=null, advT=null, lastC=null, lastT=null;
+    for(var i=0;i<cs.length;i++){
+      var b=cs[i]; if(!b || typeof b.so!=='number' || b.so<D.secondT) continue;
+      var v=secondIsHOD?b.l:b.h;
+      if(typeof v!=='number') continue;
+      if(advP==null || (secondIsHOD ? v<advP : v>advP)){ advP=v; advT=b.so; }
+      if(typeof b.c==='number'){ lastC=b.c; lastT=b.so; }
+    }
+    if(advP==null){ out.why='no bars after the second extreme'; return out; }
+    // the invariant, asserted rather than assumed
+    out.viol = secondIsHOD ? (advP < D.lod - 1e-9) : (advP > D.hod + 1e-9);
+    out.side=D.second;
+    out.ptMin=Math.max(0,(advT-D.secondT)/60);
+    out.ptPts=Math.abs(secP-advP)*rr;
+    out.ptUsd=D.isFut ? out.ptPts*ES_USD_PER_PT : null;
+    if(lastC!=null){
+      out.lcMin=Math.max(0,(lastT-D.secondT)/60);
+      out.lcPts=Math.abs(secP-lastC)*rr;
+      out.lcUsd=D.isFut ? out.lcPts*ES_USD_PER_PT : null;
+    }
+    // LC vs HC — named for the extreme that printed second, which is what he asked for
+    out.lcTag=secondIsHOD?'HC':'LC';
+    out.exp=secondIsHOD?PT_META.hod:PT_META.lod;
+    out.ok=true;
+    return out;
+  }catch(e){ out.why=String(e&&e.message||e); return out; }
+}
+
 function hodLod(sym){
   var out={ ok:false, why:'' };
   try{
@@ -22907,7 +22980,21 @@ var LAD_W=618,
     LAD_LVL=56, LAD_LVLW=46,      // the level NAME, right-aligned hard against its price
     LAD_PXC=104, LAD_PXW=34,
     LAD_NODE=140, LAD_NMAX=70,
-    LAD_CH=236, LAD_CHW=56, LAD_PILLW=44,
+    // (v14.85) PILLS BACK TO CENTRE, AND BIGGER — operator, 2026-08-29: "justify center the price
+    // and kings in the column and slightly increase their size just like before."
+    // ⚠ The right-justification was correct ONLY while v14.82 kept the level NAMES in the chute's
+    // left strip; the pills were pushed right to make room for them. v14.83 moved the names back
+    // out beside their prices, so the reason vanished and the pills were left hugging a wall for a
+    // neighbour that no longer exists. 50px in a 56px chute, centred, 3px of air each side.
+    // ⚠ (v14.87) THE PILLS ARE BACK TO THEIR ORIGINAL WIDTH. Operator: "make them back to the way
+    // they were in terms of size and taking up the column." v14.85 restored the CENTRING but not the
+    // SIZE — the chute had been narrowed 66 -> 56 in v14.83 when the level names moved out of it, so
+    // a 50px pill in a 56px chute looked proportionally right and was 12px smaller than the 62px
+    // pill it replaced. Chute back to 66 (taken leftward, since mk starts at 294 and cannot move),
+    // pills back to 62. The larger FONTS from v14.85 are kept — he asked for those separately.
+    // ⚠ Bars end at 210, so the gap before the chute is 16px. g3 asserts the %King fallback label
+    // still clears it at its worst offset (207 <= 226).
+    LAD_CH=226, LAD_CHW=66, LAD_PILLW=62,
     LAD_MK=294, LAD_MKW=46, LAD_TAP=344, LAD_TAPW=20,
     LAD_DAX=424, LAD_DMAX=56, LAD_DLAB=428, LAD_DLABW=44,
     LAD_ST=476, LAD_STW=54, LAD_ROC=534, LAD_ROCW=84;
@@ -26431,16 +26518,34 @@ function secDay(sym){
     var CALL=null; if(!NOREAD){ try{ CALL=lodhodCall(D); }catch(eC){} }
     // (v14.72) the far side - computed once, read by the timing line and the level block below
     var FS=null; if(!NOREAD){ try{ FS=fsRead(sym, D); }catch(eF){ swallow('fsRead', eF); } }
+    // (v14.87) PT and the close leg — the two legs after the second extreme
+    var PTL=null; if(!NOREAD){ try{ PTL=hlPT(sym, D); }catch(ePT){ swallow('hlPT', ePT); } }
     // ⚠ WITH NO BARS THERE IS NO VERDICT, AND SAYING SO IS THE POINT. What replaces it is the
     // question the section will answer once the session has a range - not a number.
     var verdict = NOREAD ? 'WAITING FOR THE SESSION \u2014 no bars yet' : hlVerdict(D, CALL, T);
-    h+='<div class="g3dayread"'+g3tip('HAS THE EXTREME ALREADY PRINTED? A lookup over '+HLTAB_META.sessions+' sessions of ES 1-minute ('+HLTAB_META.first+' to '+HLTAB_META.last+'), on TWO axes: how far price has travelled off the extreme, and the clock. That pair scored AUC 0.879 \u2014 a 5-feature regression scored 0.880, so the table is shipped instead: every cell carries its own n and you can argue with it. \u26a0 IB30, IB60, the 50-SMA, sweeps and BOTH divergences were measured and left out \u2014 they are either proxies for the distance term or worth nothing (sweeps 48%, below their own base rate). \u26a0 The percentage is how often an extreme in THIS state was the day\u2019s \u2014 a CELL rate, re-read every bar. It is NOT a forecast of price. \u26a0\u26a0 The DECISION rate is a different number and is the one to judge it by: the first time the table crosses '+HLTAB_META.thresh+'%% it was right '+HLTAB_META.inHit+'%% of the time (n='+HLTAB_META.inN+', median '+HLTAB_META.inCT+' CT), and the far side was still ahead on '+HLTAB_META.secondAhead+'%% of those. This figure READ '+HLTAB_META.inHindsight+'%% until 2026-08-28 and that was wrong: the study behind it picked whichever extreme TURNED OUT to print first, which is a decision made after the answer was known. Live, the panel must call whichever extreme is first-printed AT THAT MOMENT, and that earns '+HLTAB_META.inHit+'%%. \u26a0\u26a0 AND CORRECTING THE IN CALL REVERSED THE RANKING: the NOT-IN call is now the STRONGER of the two. At '+HLTAB_META.notIn+'%% the extreme broke '+HLTAB_META.notInHit+'%% of the time (n='+HLTAB_META.notInN+', median '+HLTAB_META.notInCT+' CT) against a ~57%% base at that hour \u2014 '+HLTAB_META.notInHit+'%% against the IN call\u2019s '+HLTAB_META.inHit+'%%. This hover called NOT-IN \u201cweaker and thinner\u201d for as long as IN was quoted at 92, and that sentence inherited the error rather than being measured. It fires EARLIER too ('+HLTAB_META.notInCT+' vs '+HLTAB_META.inCT+' CT). Treat \u201cthe extreme is NOT in\u201d as the more reliable of the two calls. \u26a0 PROVISIONAL: one instrument, one 15-month window, no forward test yet \u2014 the live rate is being scored nightly beside it. The verdict, then the evidence behind it, then what it implies. \u26a0 It never says price WILL do anything \u2014 it reports how often a standing extreme of this age survived, with the n behind that exact number.')+'>'+
-       '<b'+((CALL&&CALL.in)?' class="g3dayin"':'')+'>'+g3esc(verdict)+'</b> <span class="g3daydim">('+
-       (NOREAD ? ('the rates below are a backtest over '+base.n+' sessions, '+base.first+' to '+base.last)
-        : (CALL&&CALL.p!=null)
-          ? ('travelled '+Math.round(100*D.posr)+'% off it \u00b7 n='+CALL.n)
-          : (T?('stood '+hlDur(D.stood)+' \u00b7 n='+T.n):('stood '+hlDur(D.stood)+' \u00b7 under the 30m floor')))+
-       ')</span>'+
+    h+='<div class="g3dayread"'+g3tip('HAS THE EXTREME ALREADY PRINTED? A lookup over '+HLTAB_META.sessions+' sessions of ES 1-minute ('+HLTAB_META.first+' to '+HLTAB_META.last+'), on TWO axes: how far price has travelled off the extreme, and the clock. That pair scored AUC 0.879 \u2014 a 5-feature regression scored 0.880, so the table is shipped instead: every cell carries its own n and you can argue with it. \u26a0 IB30, IB60, the 50-SMA, sweeps and BOTH divergences were measured and left out \u2014 they are either proxies for the distance term or worth nothing (sweeps 48%, below their own base rate). \u26a0 The percentage is how often an extreme in THIS state was the day\u2019s \u2014 a CELL rate, re-read every bar. It is NOT a forecast of price. \u26a0\u26a0 The DECISION rate is a different number and is the one to judge it by: the first time the table crosses '+HLTAB_META.thresh+'%% it was right '+HLTAB_META.inHit+'%% of the time (n='+HLTAB_META.inN+', median '+HLTAB_META.inCT+' CT), and the far side was still ahead on '+HLTAB_META.secondAhead+'%% of those. This figure READ '+HLTAB_META.inHindsight+'%% until 2026-08-28 and that was wrong: the study behind it picked whichever extreme TURNED OUT to print first, which is a decision made after the answer was known. Live, the panel must call whichever extreme is first-printed AT THAT MOMENT, and that earns '+HLTAB_META.inHit+'%%. \u26a0\u26a0 AND CORRECTING THE IN CALL REVERSED THE RANKING: the NOT-IN call is now the STRONGER of the two. At '+HLTAB_META.notIn+'%% the extreme broke '+HLTAB_META.notInHit+'%% of the time (n='+HLTAB_META.notInN+', median '+HLTAB_META.notInCT+' CT) against a ~57%% base at that hour \u2014 '+HLTAB_META.notInHit+'%% against the IN call\u2019s '+HLTAB_META.inHit+'%%. This hover called NOT-IN \u201cweaker and thinner\u201d for as long as IN was quoted at 92, and that sentence inherited the error rather than being measured. It fires EARLIER too ('+HLTAB_META.notInCT+' vs '+HLTAB_META.inCT+' CT). Treat \u201cthe extreme is NOT in\u201d as the more reliable of the two calls. \u26a0 PROVISIONAL: one instrument, one 15-month window, no forward test yet \u2014 the live rate is being scored nightly beside it. The verdict, then the evidence behind it, then what it implies. \u26a0 It never says price WILL do anything \u2014 it reports how often a standing extreme of this age survived, with the n behind that exact number.'+
+       // ⚠⚠ (v14.86) THE EVIDENCE MOVED HERE WHEN THE READ LINE WAS COMPRESSED, AND IT HAD TO.
+       // The face used to print "(travelled 85% off it \u00b7 n=519)" and the middle-half window
+       // beside the verdict. Compressing to one line would have DELETED the n and the 50% window
+       // if they were not re-homed \u2014 and a percentage with no n behind it reachable is exactly
+       // what this section exists not to be. Same lesson as the roll caveat in v14.83.
+       (NOREAD ? '' :
+         ((CALL&&CALL.p!=null) ? (' \u25b8 THIS READING: price has travelled '+Math.round(100*D.posr)+'% off that extreme, and the cell behind the number holds n='+CALL.n+'.')
+          : (T ? (' \u25b8 THIS READING: the extreme has stood '+hlDur(D.stood)+', n='+T.n+'.')
+               : (' \u25b8 THIS READING: the extreme has stood '+hlDur(D.stood)+' \u2014 under the 30m floor, so no rate is quoted.')))+
+         ((FS&&FS.ok) ? (' \u25b8 THE FAR SIDE: the 80% figure is a ONE-SIDED FLOOR \u2014 '+FS.side+' after '+fsClock12(FS.floorAt)+
+              '. It is NOT a window: measured over 197 sessions a \u00b115-minute box lands 15% of the time and a two-sided window needs 3.6 HOURS to reach 80%. The MIDDLE HALF of outcomes falls between '+
+              fsClock12(FS.winA)+' and '+fsClock12(FS.winB)+', and that band is 50%, not 80%.'+
+              (FS.haz ? (' If it has not printed by '+fsClock12(FS.haz.at)+', '+FS.haz.p+'% of the remaining cases land in the close.') : '')) : ''))+
+       '')+'>'+
+       // ⚠⚠ (v14.86) ONE LINE, TWO FACTS, BOTH WITH THEIR NUMBER — operator, 2026-08-29:
+       // "why dont you just say HOD IN 100% \u00b7 LOD after 1:30pm \u2014 80%."
+       // The evidence parenthetical ("travelled 85% off it \u00b7 n=519") moved into the hover. It is
+       // the n behind the number and it must stay REACHABLE, but it was competing with the verdict
+       // for the same glance. NOREAD still shows its explanation inline, because with no bars the
+       // line has nothing else to say and a bare "WAITING" would look broken.
+       '<b'+((CALL&&CALL.in)?' class="g3dayin"':'')+'>'+g3esc(verdict)+'</b>'+
+       (NOREAD ? (' <span class="g3daydim">(the rates below are a backtest over '+base.n+' sessions, '+base.first+' to '+base.last+')</span>') : '')+
        hlFarClause(D, CALL)+
        // ⚠⚠ CONDITIONAL, AND IT WAS NOT BEFORE. This clause said "toward HOD" whenever a ladder
        // tier existed - including on days the HOD had ALREADY printed, where it is advice about
@@ -26459,11 +26564,15 @@ function secDay(sym){
           number attached, which is a different object from a forecast. The forecast-vocabulary ban
           (test_hodlod f6, DECISIONS D-7/D-12) applies OUTSIDE them and is STRICTER inside: no
           "likely" without a percentage beside it. Widening this region is a deliberate act. */
-       (FS && FS.ok ? ('<div class="g3daytime"><b>'+g3esc(FS.side)+' not before '+fsClockMin(FS.floorAt)+
-          ' \u2014 80%</b> \u00b7 most likely <b>'+fsClockMin(FS.winA)+'\u2013'+fsClockMin(FS.winB)+
-          '</b> <span class="g3daydim">(50%)</span>'+
-          (FS.haz ? (' \u00b7 <span class="g3daydim">'+FS.haz.p+'% into the close if not in by '+
-                     fsClockMin(FS.haz.at)+'</span>') : '')+'</div>') : '')+
+       // ⚠⚠ AND IT IS STILL A ONE-SIDED FLOOR. "after X \u2014 80%" is the SAME claim "not before X"
+       // made; what it is not is a window. A two-sided box cannot carry this number: +-15 min lands
+       // 15% of the time, +-30 lands 24%, and a window has to be 3.6 HOURS wide to reach 80%
+       // (F-13/F-15, 197 sessions). The middle half and the hazard clause moved to the hover, where
+       // they keep their own true percentages.
+       // ⚠ "middle half", not "most likely" — the banned-vocabulary list (f6) is not the reason;
+       // it is that "middle half" is what an interquartile range IS, and it says so without hedging.
+       (FS && FS.ok ? (' \u00b7 <b'+((CALL&&CALL.in)?'':' class="g3dayin"')+'>'+g3esc(FS.side)+' after '+
+          fsClock12(FS.floorAt)+' \u2014 80%</b>') : '')+
        '<div class="g3daysub">'+
        (NOREAD ? ('<b>Today\u2019s row is empty on purpose: This is not a reading, it is no reading.</b> '+
                   'Once the first extremity prints, this line reports how often an extreme of that age was the day\u2019s \u2014 with its n. '+
@@ -26524,16 +26633,26 @@ function secDay(sym){
       hlv(eW.mud,function(v){ return '~'+hlDur(v); }) ]);
     h+='</div>';
     // ---- block 2: THE DAY ------------------------------------------------------------------
-    h+='<div class="g3dayg g3dayg4">';
-    h+=row('hd','',['2ND','HL GAP','HL RNG']);
-    h+= NOREAD ? row('a','A',[DASH,DASH,DASH]) : row('a','A',[
+    // (v14.87) block 2 carries the two legs that come AFTER the second extreme. PT TOOK / PT is the
+    // excursion he defined; LC (or HC) GAP / RANGE is the same leg measured to the close. Both are
+    // shown because they are 58% apart and answer different questions — see PT_META.
+    var ptTag=(PTL&&PTL.ok)?PTL.lcTag:'LC';
+    h+='<div class="g3dayg g3dayg6">';
+    h+=row('hd','',['2ND','HL GAP','HL RNG','PT TOOK','PT',ptTag+' GAP \u00b7 RNG']);
+    h+= NOREAD ? row('a','A',[DASH,DASH,DASH,DASH,DASH,DASH]) : row('a','A',[
       (D.secondT>D.firstT && D.secondT<=D.clock) ? ('<b>'+D.second+' '+hlClock(D.secondT)+'</b>') : (D.second+' pend.'),
       hlDur(D.gap)+((D.secondT>=D.clock)?'\u2026':''),
-      (D.rngUsd!=null?('$'+Math.round(D.rngUsd).toLocaleString()+' \u2014 '):'')+D.rngPts.toFixed(1)+'pts' ]);
+      (D.rngUsd!=null?('$'+Math.round(D.rngUsd).toLocaleString()+' \u2014 '):'')+D.rngPts.toFixed(1)+'pts',
+      (PTL&&PTL.ok)?('<b>'+hlDur(PTL.ptMin)+'</b>'):DASH,
+      (PTL&&PTL.ok)?('<b>'+PTL.ptPts.toFixed(1)+'pts</b>'+(PTL.ptUsd!=null?(' <span class="g3daydim">$'+Math.round(PTL.ptUsd).toLocaleString()+'</span>'):'')):DASH,
+      (PTL&&PTL.ok&&PTL.lcMin!=null)?(hlDur(PTL.lcMin)+' \u00b7 '+PTL.lcPts.toFixed(1)+'pts'):DASH ]);
     h+=row('e','E',[
       '~'+hlClock(base.secondClock),
       '~'+hlDur(base.gapMin),
-      '~$'+Math.round(base.rngUsd).toLocaleString()+' \u2014 '+base.rngPts+'pts ('+base.rngP25+'\u2013'+base.rngP75+')' ]);
+      '~$'+Math.round(base.rngUsd).toLocaleString()+' \u2014 '+base.rngPts+'pts ('+base.rngP25+'\u2013'+base.rngP75+')',
+      (PTL&&PTL.ok)?('~'+hlDur(PTL.exp.ptMin)):('~'+hlDur(PT_META.ptMin)),
+      (PTL&&PTL.ok)?('~'+PTL.exp.ptPts.toFixed(1)+'pts'):('~'+PT_META.ptPts+'pts'),
+      (PTL&&PTL.ok)?('~'+hlDur(PTL.exp.lcMin)+' \u00b7 ~'+PTL.exp.lcPts.toFixed(1)+'pts'):('~'+hlDur(PT_META.lcMin)+' \u00b7 ~'+PT_META.lcPts+'pts') ]);
     h+='</div>';
     // ---- (v14.72) THE FAR SIDE — the block that replaced the ladder ---------------------------
     // ⚠ THE LADDER WAS DELETED, AND FOR THE SAME REASON THE CHIP ROW WAS AT v14.65: it answered the

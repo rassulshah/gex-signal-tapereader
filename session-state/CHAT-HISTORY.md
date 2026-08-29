@@ -15,7 +15,57 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-29 · v14.84 · session `2df3ccfa` — v14.79: the far side, the IRT pipe, bounded writes and the permanent grant
+## 2026-08-29 · v14.87 · session `2df3ccfa` — v14.79: the far side, the IRT pipe, bounded writes and the permanent grant
+
+### v14.87 — PT built, pills restored, and eight rounds of ⓪a mockups
+
+He redesigned ⓪a over ~8 mockup rounds. Settled: A/E/Δ rows, HL and LC/HC gap+range beside the read,
+SLvl next to HOD and TLvl next to LOD, wick family renamed PTWICK / PTWick% / PTMUD and aligned under
+their first-extreme counterparts, FAR SIDE removed.
+
+⚠ **His PT definition is NOT what I first measured.** I took second-extreme-to-CLOSE (12.5 pts); PT
+is second-extreme-to-the-furthest-point-back (19.8). Both now ship under labels that match them.
+
+⚠ He commented directly on a mockup FILE and I could not read it — file-card comments do not reach
+me. He screenshotted them. **Offer an artifact next time; this section took eight rounds.**
+
+**Built:** pills at 62px, PT/PT TOOK, LC-HC gap+range, side-specific expecteds.
+**Not built:** SLvl/TLvl and the PTWICK family — the wick study has never run on the second extreme.
+
+
+### v14.86 — "why dont you just say HOD IN 100% · LOD after 1:30pm — 80%"
+
+He iterated the wording three times in three messages, each shorter, and the last one was right.
+Built verbatim. The em-dash between state and number is gone; the clock is 12-hour on this line only
+(the stats table stays 24-hour — it is a table, and columns of times align).
+
+⚠ It is still a ONE-SIDED FLOOR. "after X" is the same claim "not before X" made. The window he
+originally wanted (3.5-4hrs, 75%) remains unsupportable: +/-15m lands 15%, and a two-sided box needs
+3.6 HOURS for 80% (F-13/F-15).
+
+⚠ The n, the middle-half window and the hazard clause were RE-HOMED to the hover before the line was
+compressed — deleting them was the real risk. A mutation still caught the hazard clause going
+silently, and a guard was added.
+
+⚠ test_farside f2 was passing off my own comment. Third time this shape appeared this week.
+
+
+### v14.85 — pills re-centred, and the HOD header question re-opened
+
+> "justify center the price and kings in the column and slightly increase their size just like
+> before. now lets get back to the HOD section ... i want something simple and more effective like
+> HOD IN 100%, LOD expected 3.5-4hrs. 75% ... i think you were working on this. tell me what you
+> came up with"
+
+Pills had been right-justified since v14.82 to clear the level names that lived in the chute then;
+v14.83 moved the names out and left the pills pinned. Centred, 50px, one size up.
+
+⚠ **The HOD format he is asking for is the one F-13/F-15 refused.** A two-sided 30-minute window at
+75% is not supportable: measured over 197 sessions a +/-15m box lands **15%** of the time, +/-30m
+lands 24%, and a two-sided window needs **3.6 HOURS** to reach 80%. That is why the face prints a
+ONE-SIDED FLOOR ("not before X - 80%") plus the middle-half at its true 50%. Told him this rather
+than printing the number he asked for. **Not built pending his call.**
+
 
 ### v14.84 — the two wrong numbers, and the headers
 

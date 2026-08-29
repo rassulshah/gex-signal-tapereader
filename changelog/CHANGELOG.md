@@ -1,3 +1,109 @@
+## v14.87 — PT, the close leg, and the pills back to full size
+
+> "pt is hod to the lowest point prior to the close that doesn't take out the lod, and pt time is the
+> time that it took" … "make them back to the way they were in terms of size and taking up the column"
+
+**① THE PILLS ARE THEIR ORIGINAL WIDTH AGAIN — 62px.** v14.85 restored the CENTRING and I called it
+done; it wasn't. The chute had been narrowed 66 → 56 in v14.83 when the level names moved out, so a
+50px pill *looked* proportionally right while being **12px smaller** than the 62px pill it replaced.
+Chute back to 66 (taken leftward — `LAD_MK` at 294 cannot move), pills to 62. The larger fonts from
+v14.85 stay; those were asked for separately.
+
+**② PT AND THE CLOSE LEG ARE TWO DIFFERENT NUMBERS AND BOTH SHIP.**
+
+⚠⚠ **I MEASURED THE WRONG ONE FIRST.** `study-secondleg.py` took the distance from the second extreme
+to the **closing price** and reported 12.5 pts. His definition is the distance to the **furthest point
+back** — the excursion — which is **19.8 pts**. **58% apart.** A day that retraces 20 points and closes
+back at the extreme has PT 20 and LC ~0. PT answers *was there a trade*; LC answers *did it hold*. So:
+
+    PT TOOK / PT     second extreme -> the furthest point back   ~0h49 / ~19.8 pts
+    LC (or HC)       second extreme -> the close                 ~1h43 / ~12.5 pts
+
+⚠ **The expectation is SIDE-SPECIFIC because the asymmetry is ~40%.** PT after a LOD is **24.0 pts**;
+after a HOD, **17.0**. A pooled number would be wrong by nearly half on whichever side you are
+actually on, so `PT_META` carries both and the face reads the one matching today. The close leg is
+named for the same fact: **LC** after a LOD, **HC** after a HOD.
+
+⚠ **"That doesn't take out the LOD" is true BY CONSTRUCTION** — had the pullback broken the LOD, that
+would BE the day's LOD and the HOD would not be the second extreme. The code asserts it anyway
+(`out.viol`): a violation means the extremes were mislabelled, and that should be loud rather than
+producing a nonsense PT. **0 violations in 283 recorded sessions.**
+
+⚠ **Two of the new assertions were fake and mutation caught both.** `p7` matched `*rr` on the
+neighbouring LC line, so dropping the scale conversion from PT alone stayed green — a 28-point ES
+excursion would have printed as **2.8**. `p5` matched an error STRING that survives when the clock
+half of the guard is deleted, which would compute PT from bars that have not happened yet. Both
+rebound to the thing itself.
+
+10 mutations run individually; all 10 fail correctly. Suite 123 green, smoke clean.
+
+**NOT in this build, and deliberately:** `SLvl` / `TLvl` and the `PTWICK / PTWick% / PTMUD` family.
+The wick study has only ever run on the FIRST extreme, and shipping three columns of invented
+expected values is exactly what made the wick family untrustworthy the first time.
+
+## v14.86 — the ⓪a read is one line
+
+> "the header where it says HOD in has unnecessary text. i want something simple and more effective"
+> → "why dont you just say **HOD IN 100% · LOD after 1:30pm — 80%**."
+
+That is now exactly what it says. Two facts, both carrying their number, on one line, in a 12-hour
+clock because that is how he reads a time back. The em-dash between the state and its percentage is
+gone (`HOD IN 100%`, not `HOD IN — 100%`).
+
+**What came off the face and where it went — this is the whole risk of a compression:**
+
+| was on the face | now |
+|---|---|
+| `(travelled 85% off it · n=519)` | hover — **the n behind the number** |
+| `most likely 12:00–14:30 (50%)` | hover, renamed **MIDDLE HALF**, keeping its 50% |
+| `69% into the close if not in by 13:15` | hover — the hazard clause |
+
+⚠⚠ **A PERCENTAGE WHOSE n IS NOT REACHABLE IS THE THING THIS SECTION EXISTS NOT TO BE.** Compressing
+the line would have DELETED the n, the 50% window and the hazard clause if they had not been
+re-homed first. Same failure the roll caveat nearly hit in v14.83 — a claim's evidence dying as a
+side effect of tidying the claim.
+
+⚠ **He asked for the format F-13/F-15 refused, and this is not that.** "LOD after 1:30pm — 80%" is a
+ONE-SIDED FLOOR — the same claim "not before" made. It is not a window, and it cannot become one:
+±15 minutes lands **15%**, ±30 lands 24%, and a two-sided box needs **3.6 HOURS** to reach 80%
+(197 sessions). The middle half is in the hover at its true **50%, stated against the 80%** so the
+two can never be read as the same number.
+
+⚠ **"most likely" is gone entirely**, replaced by **MIDDLE HALF** — which is what an interquartile
+range is, and says so without hedging.
+
+⚠⚠ **AND AN ASSERTION WAS PASSING OFF MY OWN COMMENT.** `test_farside` f2 checked the face for
+"not before"; after the wording changed it kept passing, satisfied by the v14.86 comment EXPLAINING
+the change. **Third instance of this exact shape this week** (test_layout_v13's STEP_TIPS, the
+ladder mockup audit, this one). Assertions about rendered text now strip comments first.
+
+6 mutations run individually; a seventh was added when the hazard clause was deleted silently and
+nothing went red. All caught now. Suite 123 green, smoke clean.
+
+## v14.85 — the pills go back to the middle
+
+> "justify center the price and kings in the column and slightly increase their size just like
+> before."
+
+⚠⚠ **THEY WERE HUGGING A WALL FOR A NEIGHBOUR THAT NO LONGER EXISTED.** v14.82 pushed the price and
+crown pills hard right so the level NAMES could occupy the chute's left strip. v14.83 moved the names
+back out beside their prices at his request — and nobody moved the pills back. They spent two builds
+right-justified against nothing, which is the shape of every layout bug this file has: a decision
+that was correct for a reason, kept after the reason was deleted.
+
+Pills 44 → **50px in a 56px chute, centred, 3px of air each side**; price 9 → 10px, crowns 8 → 9px.
+The **EM pill moved with them** — it was the occupant left behind the last time this zone moved.
+
+⚠ **A mutation survived and it was the interesting one:** centring the pill's BOX while leaving its
+CONTENT left-aligned looks identical to the bug just fixed, because the king pill is a flex row
+(crown + price + book letter). `x7d` now pins `justify-content:center` on the pill itself. Centring
+a container is half the job.
+
+`x7c` asserts the chute/pill gap stays EVEN, so "centred" cannot quietly become off-by-one.
+
+5 mutations run individually; all 5 fail correctly (after the sixth was added for the survivor).
+Suite 123 green, smoke clean.
+
 ## v14.84 — two wrong percentages off the face, and the headers with them
 
 > "fix errors and give me the latest fix … why is trend and location at the top headers. lets remove

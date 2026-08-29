@@ -243,9 +243,15 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
                     .replace(/PROB-BLOCK-START[\s\S]*?PROB-BLOCK-END/, '');
     ok(!/\bwill\b|\bshould\b|likely/.test(noFar),
        'f6 no forecast vocabulary outside the probability block — mechanism describes, it does not predict');
-    const far = SD.match(/most likely[\s\S]{0,140}/);
-    ok(far && /\(50%\)|%/.test(far[0]),
-       'f6b ...and inside it, "most likely" NEVER appears without its measured probability', far&&far[0].slice(0,90));
+    // ⚠⚠ (v14.86) "most likely" IS GONE FROM THE FACE. The window moved into the hover and is now
+    // called what it is — the MIDDLE HALF — which states the interquartile range without hedging.
+    // The guard follows the phrase: wherever the window is described, its 50% must be beside it,
+    // because the whole point of F-15 is that this band is 50% and the floor beside it is 80%.
+    const mh = SD.match(/MIDDLE HALF[\s\S]{0,220}/i);
+    ok(mh && /50%/.test(mh[0]),
+       'f6b the middle-half window NEVER appears without its own measured 50%', mh&&mh[0].slice(0,90));
+    ok(!/most likely/i.test(SD.replace(/\/\/[^\n]*/g,'')),
+       'f6c ...and "most likely" is gone from the rendered text, not just relabelled around');
   }
 }
 
@@ -418,10 +424,11 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   // a DEAD branch when mutation-tested. hlVerdict is extracted so the branch can actually be run.
   eval(ex('hlVerdict'));
   const V = (p, inn, notIn) => hlVerdict({first:'LOD'}, {p:p, in:inn, notIn:notIn, n:900}, null);
-  ok(/^LOD NOT IN — 92%$/.test(V(8, false, true)),
+  // (v14.86) the em-dash between the state and its number is gone — operator: "HOD IN 100%".
+  ok(/^LOD NOT IN 92%$/.test(V(8, false, true)),
      'u1 a low cell produces a NOT IN verdict with the INVERTED percentage', V(8,false,true));
-  ok(/^LOD IN — 88%$/.test(V(88, true, false)), 'u1b a high cell produces IN', V(88,true,false));
-  ok(/^LOD STANDING — 45%$/.test(V(45, false, false)),
+  ok(/^LOD IN 88%$/.test(V(88, true, false)), 'u1b a high cell produces IN', V(88,true,false));
+  ok(/^LOD STANDING 45%$/.test(V(45, false, false)),
      'u1c the middle produces STANDING, neither call', V(45,false,false));
   ok(/thin cell, n=900/.test(hlVerdict({first:'LOD'},{p:null,n:900},null)),
      'u1d a thin cell refuses and names its n');
@@ -474,10 +481,23 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   // (v14.72) WHEN-TO-EXPECT-IT moved off the ladder tier and onto the far-side line, where it is
   // measured rather than borrowed from the unconditional E-row median. The property is unchanged:
   // the face must say WHEN, and must show the SPREAD rather than a single clock time.
-  ok(/not before/.test(SD) && /floorAt/.test(SD),
-     'u10 the face carries a WHEN — as a one-sided 80% floor, because a 30-min box is worth 15%');
-  ok(/winA/.test(SD) && /winB/.test(SD) && /\(50%\)/.test(SD),
-     'u10b ...and the two-sided window carries its own, honest, 50%');
+  // (v14.86) the floor now reads "AFTER x" on the read line itself — same one-sided claim, his
+  // wording: "why dont you just say HOD IN 100% · LOD after 1:30pm — 80%."
+  ok(/' after '/.test(SD) && /floorAt/.test(SD) && /80%/.test(SD),
+     'u10 the face carries a WHEN — a one-sided 80% floor, because a 30-min box is worth 15%');
+  ok(/fsClock12\(FS\.floorAt\)/.test(SD),
+     'u10a ...on a 12-hour clock, which is how he reads a time back');
+  // (v14.86) the window lives in the HOVER now, so the assertion follows it there rather than
+  // being deleted — the number it protects is unchanged and still has to be stated.
+  ok(/winA/.test(SD) && /winB/.test(SD) && /50%, not 80%/.test(SD),
+     'u10b ...and the two-sided window carries its own, honest, 50% — stated against the 80% floor');
+  ok(/travelled '\+Math\.round\(100\*D\.posr\)/.test(SD) && /n='\+CALL\.n/.test(SD),
+     'u10c ...and the EVIDENCE (travel % and n) survived the compression, in the hover');
+  // ⚠ THE HAZARD CLAUSE IS THE THIRD THING THAT MOVED, and it had no guard until a mutation
+  // deleted it silently. It is the only statement about what happens when the floor is CLEARED and
+  // the extreme still has not printed — the case a one-sided floor says nothing about by design.
+  ok(/FS\.haz\.p/.test(SD) && /FS\.haz\.at/.test(SD) && /land in the close/.test(SD),
+     'u10d ...and so did the hazard clause — what happens if the floor passes and it still has not printed');
   // (v14.70) re-measured on the widened table: 13:33 -> 13:29, 97% -> 99% still ahead.
   // ⚠ Pinned to the CURRENT measurement rather than a range, so a table change that forgets to
   // re-derive these gets caught instead of quietly quoting numbers from a table that no longer exists.
@@ -520,6 +540,69 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   ok(!/g3daylb/.test(SD) && !/g3dayfoot/.test(SD),
      'w8b ...and the ladder and honesty line are gone, deliberately, not by accident');
   ok(/backtest over/.test(SD), 'w9 ...and the evidence line names them as a backtest, not today');
+}
+
+
+// ============================================================================================
+// (v14.87) PT AND THE CLOSE LEG
+// Operator: "pt is hod to the lowest point prior to the close that doesn't take out the lod, and
+// pt time is the time that it took."
+// ============================================================================================
+{
+  const PT = ex('hlPT');
+
+  // ⚠⚠ I MEASURED THE WRONG THING FIRST. study-secondleg.py took the distance to the CLOSE and
+  // reported 12.5 pts; PT is the furthest point back and is 19.8 — 58% apart. A day that retraces
+  // 20 points and closes back at the extreme has PT 20 and LC ~0. Both ship, under labels that
+  // match them, and this pins that PT tracks a RUNNING EXTREME rather than a last value.
+  ok(/advP==null \|\| \(secondIsHOD \? v<advP : v>advP\)/.test(PT),
+     'p1 PT walks for the FURTHEST point after the second extreme, not the last one');
+  ok(/var v=secondIsHOD\?b\.l:b\.h;/.test(PT),
+     'p2 ...taking the LOW after a HOD and the HIGH after a LOD');
+  ok(/out\.lcPts=Math\.abs\(secP-lastC\)/.test(PT),
+     'p3 ...and LC is measured to the CLOSING price, separately');
+
+  // "doesn't take out the lod" holds by construction — if it had, that would BE the day's LOD.
+  // A violation means the extremes were mislabelled, which is worth catching loudly.
+  ok(/out\.viol *= *secondIsHOD *\? *\(advP < D\.lod/.test(PT),
+     'p4 the "does not take out the first extreme" invariant is CHECKED, not assumed');
+
+  // ⚠ ALSO FAKE: the message string survives even when the CLOCK half of the guard is deleted, which
+  // would compute PT from bars that have not happened yet. Bind to the condition, not its text.
+  ok(/if\(D\.secondT==null \|\| D\.secondT>D\.clock\)/.test(PT),
+     'p5 no PT until the second extreme has actually printed — clock half included');
+  ok(/b\.so<D\.secondT\) continue/.test(PT), 'p6 ...and only bars AT OR AFTER it are considered');
+
+  // closedCandles() is the UNDERLYING book (SPY ~765); D.scale converts to chart points. Forgetting
+  // it would report a 28-point ES excursion as 2.8 — landmine L-F, two price spaces mixed.
+  // ⚠ FAKE ON FIRST WRITING, caught by mutation: /\*rr;/ matched the LC line, so dropping the scale
+  // from PT alone left it green — and a 28-point ES excursion would have printed as 2.8. Bind to
+  // EACH conversion, by name.
+  ok(/out\.ptPts=Math\.abs\(secP-advP\)\*rr;/.test(PT),
+     'p7 the PT distance is converted from the underlying book to chart points');
+  ok(/out\.lcPts=Math\.abs\(secP-lastC\)\*rr;/.test(PT),
+     'p7b ...and so is the LC distance, separately');
+  ok(/out\.ptUsd=D\.isFut \? out\.ptPts\*ES_USD_PER_PT/.test(PT),
+     'p8 ...and dollars come from the ONE contract multiplier, only on a futures chart');
+
+  ok(/out\.lcTag=secondIsHOD\?'HC':'LC'/.test(PT),
+     'p9 the close leg is HC after a HOD and LC after a LOD — his naming');
+
+  // The asymmetry is large: PT after a LOD is 24.0 pts, after a HOD 17.0. One pooled number would
+  // be wrong by ~40% on whichever side you are actually on.
+  ok(/var PT_META=\{/.test(src), 'p10 the PT numbers live in one constant');
+  ok(/hod:\{ ptMin:46, ptPts:17\.0/.test(src) && /lod:\{ ptMin:51, ptPts:24\.0/.test(src),
+     'p11 ...with a separate expectation per side, because they differ by ~40%');
+  ok(/out\.exp=secondIsHOD\?PT_META\.hod:PT_META\.lod/.test(PT),
+     'p12 ...and the face reads the one matching today');
+  ok(/n:283/.test(src), 'p13 ...and carries the n behind them');
+
+  const SD2 = ex('secDay');
+  ok(/PTL=hlPT\(sym, D\)/.test(SD2), 'p14 secDay computes it');
+  ok(/'PT TOOK','PT'/.test(SD2) && /ptTag\+' GAP/.test(SD2),
+     'p15 ...and the header names all three legs');
+  ok(/PTL\.exp\.ptMin/.test(SD2) && /PTL\.exp\.ptPts/.test(SD2),
+     'p16 ...and the E row uses the SIDE-SPECIFIC expectation, not the pooled one');
 }
 
 console.log('test_hodlod: ' + pass + ' passed, ' + fail + ' failed');
