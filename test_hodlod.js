@@ -605,5 +605,67 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
      'p16 ...and the E row uses the SIDE-SPECIFIC expectation, not the pooled one');
 }
 
+
+// ============================================================================================
+// (v14.89) SLvl / TLvl, AND THE PT LEG'S WICK FAMILY
+// ============================================================================================
+{
+  const LH = ex('hlLevelHit'), PT2 = ex('hlPT'), SD3 = ex('secDay');
+
+  // ---- ONLY LEVELS THE CHART ALREADY DRAWS --------------------------------------------------
+  // ⚠⚠ If this strip could name a level the chart does not show, it would be useless — you cannot
+  // act on a level you cannot see. Both sources are the panel's own.
+  // ⚠ FAKE ON FIRST WRITING, caught by mutation: greppping for `ifLadder(sym)` matched the ASSIGNMENT
+  // even after the loop that uses it was gated off with `if(false)`, so the walls silently vanished
+  // from the candidate set while the assertion stayed green. Bind to the loop being REACHABLE.
+  ok(/sessionLevels\(sym, rr\)/.test(LH), 'L1 session levels feed the candidate set');
+  ok(/if\(IL && !IL\.err && IL\.rows\) IL\.rows\.forEach/.test(LH),
+     'L1b ...and so do the walls, through a loop that actually runs');
+  ok(/add\(SL\.pdh,'PDH'\)/.test(LH) && /add\(SL\.pdl,'PDL'\)/.test(LH) && /'CW0'/.test(LH),
+     'L2 ...prior-day, initial balance and the walls');
+
+  // ---- THE FURTHEST ONE, NOT THE FIRST ------------------------------------------------------
+  // A move that clears three levels is described by the LAST one it cleared.
+  ok(/if\(best==null \|\| \(up \? L\.px>best\.px : L\.px<best\.px\)\) best=L;/.test(LH),
+     'L3 the level reported is the FURTHEST from the open, not the nearest');
+  ok(/L\.px>opDisp && L\.px<=extPx/.test(LH),
+     'L4 ...and it must lie BETWEEN the open and that extreme, in that extreme\'s direction');
+
+  // ---- SCALE. sessionLevels takes rr; the extremes come from the underlying book -------------
+  ok(/var opDisp=D\.open\*rr;/.test(LH) && /\(firstUp\?D\.hod:D\.lod\)\*rr/.test(LH),
+     'L5 open and extremes are converted to chart space before being compared to the levels');
+
+  // ---- TLvl WAITS FOR THE SECOND EXTREME ----------------------------------------------------
+  ok(/if\(D\.secondT!=null && D\.secondT<=D\.clock\)\{/.test(LH),
+     'L6 no TLvl until the second extreme has printed');
+
+  // ---- THEY SIT WITH THEIR OWN EXTREME ------------------------------------------------------
+  // Operator: "they should be right after the HOD and LOD fields."
+  ok(/\['1ST','SLvl'/.test(SD3), 'L7 SLvl is the column immediately after the 1ST extreme');
+  ok(/\['2ND','TLvl'/.test(SD3), 'L8 TLvl is the column immediately after the 2ND extreme');
+  ok(/g3daylv\.sw\{[^}]*#e3b341/.test(src) && /g3daylv\.tg\{[^}]*#5fd08a/.test(src),
+     'L9 a sweep and a target are coloured differently — two events, not two of one');
+
+  // ---- THE PROFILE LEVELS ARE ABSENT ON PURPOSE ---------------------------------------------
+  // ⚠ Measured: a prior POC is tagged 46.6% of the next session against 46.3% for a SHAM level at
+  // the same distance. Distance explains the tags. They may ship as a RECORD, never as a claim.
+  ok(!/pVAH|pVAL|pPOC/.test(LH),
+     'L10 no profile levels yet — they are tagged no more often than distance alone explains');
+
+  // ---- THE PT WICK FAMILY --------------------------------------------------------------------
+  ok(/out\.ptWickPct=Math\.round\(100\*out\.ptPts\/D\.rngPts\)/.test(PT2),
+     'L11 PTWick% mirrors WICK% — the excursion over the day\'s range');
+  ok(/out\.ptMud=Math\.max\(0,\(lastT-advT\)\/60\)/.test(PT2),
+     'L12 PTMUD mirrors MUD — the PT extreme to the close');
+  ok(/ptWickPct:40, ptMud:52/.test(src) && /ptWickPct:56, ptMud:56/.test(src),
+     'L13 ...both side-specific, because PT itself is ~40% asymmetric');
+
+  // ⚠⚠ PTWICK IS NOT BUILT, AND THAT IS THE POINT. WICK needs an ANCHOR the move started from and
+  // later reclaimed; the PT leg's anchor IS the second extreme. He defined the first wick family
+  // himself when asked — ask again rather than invent one and print it beside measured columns.
+  ok(!/ptWick\b|'PTWICK'/.test(PT2), 'L14 PTWICK is NOT derived — its definition has not been given');
+  ok(/PTWICK IS NOT DERIVED/.test(src), 'L15 ...and the code says why, so nobody quietly invents one');
+}
+
 console.log('test_hodlod: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

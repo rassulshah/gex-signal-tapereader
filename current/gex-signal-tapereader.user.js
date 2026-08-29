@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.87
+// @version    14.89
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.87';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.89';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -20268,6 +20268,14 @@ function ensureV3Css(){
     // the E row is deliberately dim: it is the BACKDROP the live row is read against, never a
     // forecast. Same weight as A would invite reading it as a target.
     '#gpts-body .g3dayr.e span{color:#5b6675;font-weight:600}'+
+    // (v14.88) SLvl / TLvl chips. Amber for a SWEEP (something price took out on its way to the
+    // first extreme), green for a TARGET (what the second extreme reached). Two colours because
+    // they are two different events, not two instances of one.
+    '#gpts-body .g3daylv{display:inline-block;font-size:7.4px;font-weight:900;padding:0 3px;'+
+      'border-radius:3px;line-height:12px;white-space:nowrap}'+
+    '#gpts-body .g3daylv.sw{color:#e3b341;background:rgba(227,195,65,.13);border:1px solid rgba(227,195,65,.42)}'+
+    '#gpts-body .g3daylv.tg{color:#5fd08a;background:rgba(46,194,126,.14);border:1px solid rgba(46,194,126,.40)}'+
+    '#gpts-body .g3daylv.nd{color:#b98cff;background:rgba(150,110,255,.14);border:1px solid rgba(150,110,255,.42)}'+
     '#gpts-body .g3dayl{display:flex;gap:3px;margin-bottom:5px}'+
     '#gpts-body .g3daylb{flex:1;text-align:center;padding:2px 0;border-radius:3px;cursor:help;'+
       'background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06)}'+
@@ -22425,8 +22433,9 @@ var PT_META={
   ptMin:49,  ptPts:19.8,  ptQ25:11.8, ptQ75:32.2,   // ALL sessions
   lcMin:103, lcPts:12.5,  lcQ25:7.2,  lcQ75:21.5,
   // by which extreme printed second — the asymmetry is large enough to show the right one
-  hod:{ ptMin:46, ptPts:17.0, lcMin:98,  lcPts:9.8  },   // HOD second: PT is a pullback DOWN
-  lod:{ ptMin:51, ptPts:24.0, lcMin:115, lcPts:15.2 }    // LOD second: PT is a bounce UP
+  ptWickPct:44, ptMud:54,                                // PT as % of the day range; PT extreme -> close
+  hod:{ ptMin:46, ptPts:17.0, lcMin:98,  lcPts:9.8,  ptWickPct:40, ptMud:52 },  // HOD 2nd: pullback DOWN
+  lod:{ ptMin:51, ptPts:24.0, lcMin:115, lcPts:15.2, ptWickPct:56, ptMud:56 }   // LOD 2nd: bounce UP
 };
 function hlPT(sym, D){
   var out={ ok:false, why:'' };
@@ -22449,6 +22458,7 @@ function hlPT(sym, D){
     // the invariant, asserted rather than assumed
     out.viol = secondIsHOD ? (advP < D.lod - 1e-9) : (advP > D.hod + 1e-9);
     out.side=D.second;
+    out.ptPx=advP;            // (v14.89) the PT extreme itself — hlNodeAt needs the PRICE, not just the excursion
     out.ptMin=Math.max(0,(advT-D.secondT)/60);
     out.ptPts=Math.abs(secP-advP)*rr;
     out.ptUsd=D.isFut ? out.ptPts*ES_USD_PER_PT : null;
@@ -22457,9 +22467,186 @@ function hlPT(sym, D){
       out.lcPts=Math.abs(secP-lastC)*rr;
       out.lcUsd=D.isFut ? out.lcPts*ES_USD_PER_PT : null;
     }
+    // (v14.88) the PT leg's own wick family, mirroring the operator's first-extreme definitions:
+    //   WICK% = |open - extreme| / range   ->  PTWick% = the PT excursion / the day's range
+    //   MUD   = reclaim -> second extreme  ->  PTMUD   = the PT extreme -> the close
+    // ⚠⚠ PTWICK IS NOT DERIVED. WICK is "the open to the bar that RECLAIMS the open" — it needs an
+    // anchor the move started from and later took back. The PT leg's anchor IS the second extreme,
+    // so "reclaim" would mean returning to that extreme, a different event from anything the
+    // first-extreme family measures. He defined BOP/WICK/W.END/WICK%/MUD himself when asked; ask
+    // again rather than invent one and print it beside measured columns (the v14.57 lesson).
+    if(D.rngPts>0) out.ptWickPct=Math.round(100*out.ptPts/D.rngPts);
+    if(lastT!=null && advT!=null) out.ptMud=Math.max(0,(lastT-advT)/60);
     // LC vs HC — named for the extreme that printed second, which is what he asked for
     out.lcTag=secondIsHOD?'HC':'LC';
     out.exp=secondIsHOD?PT_META.hod:PT_META.lod;
+    out.ok=true;
+    return out;
+  }catch(e){ out.why=String(e&&e.message||e); return out; }
+}
+
+
+// ---- (v14.88) SLvl AND TLvl — what each extreme took out on its way ----------------------------
+// Operator, 2026-08-29: "the SLvl ... is the level that was swept when making the first extremity
+// (eg hod) and the TLvl ... is the target level after the second extremity."
+//
+// A level counts as TAKEN OUT when price traded BEYOND it, between the session open and that
+// extreme, in that extreme's direction. The one reported is the FURTHEST from the open — the
+// deepest thing the excursion reached — because a move that clears three levels is described by the
+// last one it cleared, not the first.
+//
+// ⚠⚠ THESE ARE THE LEVELS THE PANEL ALREADY DRAWS. Prior-day H/L/C and the initial-balance edges
+// come from sessionLevels(); the walls come from ifLadder(). Nothing new is derived, so the strip
+// can never name a level the chart does not show — the failure mode that would make it useless.
+// ⚠ THE PROFILE LEVELS (pVAH/pVAL/pPOC) ARE DELIBERATELY ABSENT FOR NOW. They are computable —
+// futBarsRaw() carries volume — but measured 2026-08-29 (tools/study-profile.py) a prior POC is
+// tagged 46.6% of the next session against 46.3% for a SHAM level at the same distance, and VAL is
+// 43.5% against 43.5%. Distance explains the tags, not the level. They can be added as a record;
+// they must never be added as a claim, and they must never be called a "value area" — the VALUE 70%
+// tile already means the gamma band around the King.
+function hlLevelHit(sym, D){
+  var out={ ok:false, sweep:null, target:null, why:'' };
+  try{
+    if(!D || !D.ok || D.open==null){ out.why='no session read'; return out; }
+    var rr=(typeof D.scale==='number' && D.scale>0)?D.scale:1;
+    var opDisp=D.open*rr;
+    var LV=[];
+    function add(px,name){ if(typeof px==='number' && isFinite(px) && px>0) LV.push({px:px,name:name}); }
+    try{ var SL=sessionLevels(sym, rr);
+      if(SL){ add(SL.pdh,'PDH'); add(SL.pdl,'PDL'); add(SL.pdc,'PDC');
+              if(SL.ibSet){ add(SL.ibH,'IBH'); add(SL.ibL,'IBL'); } }
+    }catch(eS){}
+    try{ var IL=ifLadder(sym);
+      if(IL && !IL.err && IL.rows) IL.rows.forEach(function(r){
+        var ids=String(r.id||'').split('·');
+        if(ids.indexOf('CR0')>=0) add(r.disp,'CW0');
+        else if(ids.indexOf('PS0')>=0) add(r.disp,'PW0');
+        else if(ids.indexOf('CR')>=0) add(r.disp,'CW');
+        else if(ids.indexOf('PS')>=0) add(r.disp,'PW');
+      });
+    }catch(eI){}
+    if(!LV.length){ out.why='no levels to test against'; return out; }
+    // for one extreme: every level strictly between the open and that extreme, furthest one wins
+    function furthest(extPx, up){
+      var best=null;
+      for(var i=0;i<LV.length;i++){
+        var L=LV[i];
+        if(up ? (L.px>opDisp && L.px<=extPx) : (L.px<opDisp && L.px>=extPx)){
+          if(best==null || (up ? L.px>best.px : L.px<best.px)) best=L;
+        }
+      }
+      return best;
+    }
+    var firstUp=(D.first==='HOD');
+    var firstPx=(firstUp?D.hod:D.lod)*rr;
+    out.sweep=furthest(firstPx, firstUp);
+    if(D.secondT!=null && D.secondT<=D.clock){
+      var secUp=(D.second==='HOD');
+      var secPx=(secUp?D.hod:D.lod)*rr;
+      out.target=furthest(secPx, secUp);
+    }
+    out.n=LV.length; out.ok=true;
+    return out;
+  }catch(e){ out.why=String(e&&e.message||e); return out; }
+}
+
+// ---- (v14.89) HodN / LodN / PTN — THE NODE THE EXTREME TESTED BEFORE REVERSING ----------------
+// Operator, 2026-08-29: "a lodN (lod node) and hodN (hod node) which are nodes that the extreme
+// TESTED BEFORE REVERSING. it usually tests it or even penetrates it a little and then reverses."
+// And on which node counts: "we are looking for 1 of the three kings, either a spy node, spxy node
+// or a qqq node to have caused a deflection."
+//
+// ⚠⚠ THE GEOMETRY IS HIS, AND IT IS ATR-SCALED, NOT A FIXED BAND. Finalised 2026-08-29 against
+// tools/study-deflect-grid.py: "in a downmove the low of the candle has to be within 1 atr of the
+// high of the node but cannot be more than 2 atr below the node." Tested as stated, then tightened
+// on evidence:
+//   · approach 1.0 ATR. 1.25 adds 34% more events and DROPS the turn rate (59.2% -> 57.6%) — it
+//     admits visits that never tested anything. 0.75 only loses events.
+//   · penetration 1.5 ATR. 2.0 is not wrong, it simply does not bite: only 3% of tests reach past
+//     1 ATR at all, so 1.5 and 2.0 differ by 0-4 events in ~400. 1.5 is tighter for free.
+//   · the test reads the WICK, never the close. Close-as-trigger won EVERY aggregate metric — 40%
+//     fewer events at the same turn rate with a better adverse excursion — and is WRONG: on
+//     2026-08-25 he circled 763.20 at node 763, where the low was 763.28 and the CLOSE was 764.80.
+//     A 1.5-point rejection wick, a textbook deflection, discarded by a close rule. The selectivity
+//     gain WAS the cost of dropping the sharpest instances.
+//   ⚠ THE SPLIT THAT MATTERS: the WICK says price TESTED the node; the CLOSE says whether it
+//     DEFLECTED or BROKE. This function answers the first question only.
+//
+// ⚠⚠ AND IT IS NOT A CLAIM THAT THE NODE CAUSED THE TURN. Measured over 8 sessions, fading every
+// node touch has NO edge (t=+0.41 on a top-5 node universe, t=-0.32 on the SPY+SPXW kings, both
+// null): deflections run +0.92 MFE / +0.26 MAE and breaks run +0.29 / +0.86 — mirror images — and
+// 56% BREAK, so the two legs cancel. This field REPORTS which king the extreme was standing on.
+// Anyone who reads it as "the node held it" is reading in something the data does not carry; the
+// ex-ante deflect/break discriminator is OPEN-QUESTIONS Q11 and is not built.
+var DEFL_NEAR = 1.0;   // ATR multiples: may stop this far SHORT of the node and still be a test
+var DEFL_THRU = 1.5;   // ATR multiples: may penetrate this far THROUGH it and still be a test
+var DEFL_META = { near:DEFL_NEAR, thru:DEFL_THRU, wick:true, sessions:8, deflect:79, breaks:25,
+                  breakShare:56, tTop5:0.41, tKings:-0.32, calibrated:'2026-08-29' };
+
+// The three kings, each on the SPY DISPLAY scale so an extreme can be compared to them directly.
+// ⚠ SPXW converts through ifLadder().dispScale — the SAME chain trinityRead() uses, not a second
+// one invented here. ⚠ QQQ is a proportional BEARING, never a conversion: QQQ has its own dollar
+// scale, so what carries over is where its king sits RELATIVE to its own price.
+function deflKings(sym, rr){
+  var out=[];
+  try{
+    var t=null; try{ t=tapeMap('SPY'); }catch(e0){}
+    if(t && t.king!=null) out.push({ b:'SPY', disp:t.king*rr });
+  }catch(e1){}
+  try{
+    var tx=tapeMap('SPXW'), L=ifLadder('SPY');
+    if(tx && tx.king!=null && L && !L.err && L.dispScale>0) out.push({ b:'SPX', disp:tx.king*L.dispScale });
+  }catch(e2){}
+  try{
+    var tq=tapeMap('QQQ'), qp=(STATE['QQQ']||{}).price, sp=(STATE[sym]||{}).price;
+    if(tq && tq.king!=null && qp>0 && sp>0) out.push({ b:'QQQ', disp:(tq.king/qp)*sp*rr, bearing:true });
+  }catch(e3){}
+  return out;
+}
+
+// Which king did THIS extreme test? `up` = the extreme is a high (approached from below, the HIGH
+// is the probe); otherwise it is a low and the LOW is the probe. Closest qualifying king wins.
+function deflNodeAt(extDisp, up, kings, atrDisp){
+  if(!(atrDisp>0) || extDisp==null || !kings || !kings.length) return null;
+  var lo, hi, best=null;
+  for(var i=0;i<kings.length;i++){
+    var K=kings[i];
+    if(!(K.disp>0)) continue;
+    // asymmetric on purpose: tight on the approach side, loose through it
+    if(up){ lo=K.disp-DEFL_NEAR*atrDisp; hi=K.disp+DEFL_THRU*atrDisp; }
+    else  { lo=K.disp-DEFL_THRU*atrDisp; hi=K.disp+DEFL_NEAR*atrDisp; }
+    if(extDisp>=lo && extDisp<=hi){
+      var d=Math.abs(extDisp-K.disp);
+      if(best==null || d<best.d) best={ b:K.b, disp:K.disp, d:d, bearing:!!K.bearing,
+                                        pen:(up?(extDisp-K.disp):(K.disp-extDisp)) };
+    }
+  }
+  return best;
+}
+
+// HodN / LodN / PTN for the ⓪a strip: the node each of the three extremes tested.
+function hlNodeAt(sym, D, PTL){
+  var out={ ok:false, first:null, second:null, pt:null, why:'' };
+  try{
+    if(!D || !D.ok){ out.why=(D&&D.why)||'no session read'; return out; }
+    var rr=(typeof D.scale==='number' && D.scale>0)?D.scale:1;
+    var kings=deflKings(sym, rr);
+    if(!kings.length){ out.why='no king available in any book'; return out; }
+    var aD=atr(sym)*rr;
+    if(!(aD>0)){ out.why='no ATR'; return out; }
+    out.atr=aD; out.kings=kings.length;
+    var firstUp=(D.first==='HOD');
+    out.first=deflNodeAt((firstUp?D.hod:D.lod)*rr, firstUp, kings, aD);
+    if(D.secondT!=null && D.secondT<=D.clock){
+      var secUp=(D.second==='HOD');
+      out.second=deflNodeAt((secUp?D.hod:D.lod)*rr, secUp, kings, aD);
+    }
+    // the PT leg's own extreme — the furthest point back before the close
+    if(PTL && PTL.ok && PTL.ptPx!=null){
+      // PT runs AGAINST the second extreme, so it is a high when the second was a low
+      var ptUp=(D.second==='LOD');
+      out.pt=deflNodeAt(PTL.ptPx*rr, ptUp, kings, aD);
+    }
     out.ok=true;
     return out;
   }catch(e){ out.why=String(e&&e.message||e); return out; }
@@ -26520,6 +26707,24 @@ function secDay(sym){
     var FS=null; if(!NOREAD){ try{ FS=fsRead(sym, D); }catch(eF){ swallow('fsRead', eF); } }
     // (v14.87) PT and the close leg — the two legs after the second extreme
     var PTL=null; if(!NOREAD){ try{ PTL=hlPT(sym, D); }catch(ePT){ swallow('hlPT', ePT); } }
+    // (v14.88) what each extreme took out on its way — SLvl for the first, TLvl for the second
+    var LVH=null; if(!NOREAD){ try{ LVH=hlLevelHit(sym, D); }catch(eLH){ swallow('hlLevelHit', eLH); } }
+    function lvTag(L, cls){ return L ? ('<span class="g3daylv '+cls+'">'+g3esc(L.name)+' '+frameNum(L.px)+'</span>') : '\u2014'; }
+    // (v14.89) the node chip: which BOOK's king the extreme tested, and how far off it landed.
+    // ⚠ The book is the point — he asked for "either a spy node, spxy node or a qqq node" by name.
+    // ⚠ A QQQ hit is flagged `~` because QQQ is a proportional BEARING, not a converted price.
+    function ndTag(N, cls){
+      if(!N) return '—';
+      var pen=(N.pen>0)?('+'+N.pen.toFixed(1)):N.pen.toFixed(1);
+      return '<span class="g3daylv '+cls+'" title="'+g3esc(N.b)+' king at '+frameNum(N.disp)+
+             ' — the extreme landed '+pen+' from it ('+(N.pen>0?'penetrated':'stopped short')+
+             '), inside the test band of '+DEFL_NEAR+' ATR short / '+DEFL_THRU+' ATR through. '+
+             (N.bearing?'⚠ QQQ is a proportional BEARING off its own price, not a converted level. ':'')+
+             '⚠ THIS REPORTS WHICH KING THE EXTREME STOOD ON. It is NOT a claim the node caused the turn: '+
+             'over '+DEFL_META.sessions+' sessions fading every node touch has no edge (t='+DEFL_META.tTop5+
+             ' top-5, t='+DEFL_META.tKings+' kings) because '+DEFL_META.breakShare+'% BREAK and the two legs cancel.">'+
+             g3esc(N.b)+' '+frameNum(N.disp)+'</span>';
+    }
     // ⚠ WITH NO BARS THERE IS NO VERDICT, AND SAYING SO IS THE POINT. What replaces it is the
     // question the section will answer once the session has a range - not a number.
     var verdict = NOREAD ? 'WAITING FOR THE SESSION \u2014 no bars yet' : hlVerdict(D, CALL, T);
@@ -26603,6 +26808,7 @@ function secDay(sym){
     // (the wick family); block 2 is the DAY (second extremity, gap, range). Both keep the A-over-E
     // shape so every live number sits above its own base rate.
     function hlv(v,f){ return (v==null)?'\u2014':f(v); }
+    var NDH=null; try{ NDH=hlNodeAt(SYM, D, PTL); }catch(eND){ NDH=null; }
     var eW=base.wick||{};
     var eTip=eW.wick_n?('The E row is the EXPECTED result: EVERY field is a TRIMMED MEAN over '+base.n+' sessions \u2014 '+
       (eW.zeroWick||0)+' no-wick days and the Tukey 1.5\u00d7IQR outliers are excluded before averaging, which is the operator\u2019s rule. '+
@@ -26611,10 +26817,15 @@ function secDay(sym){
       '. The MEAN is what is shown on every field. Each carries its own n because the exclusions bite differently. p25/p75 on the range stay true percentiles \u2014 trimming a quantile would make it describe a spread it no longer covers.')
       :'The E row is the expected result averaged over the corpus. The wick columns have no base rate yet.';
     h+='<div class="g3dayg g3dayg8"'+g3tip(eTip)+'>';
-    h+=row('hd','',['1ST',NOREAD?'TIME':(''+D.first),'TOOK','BOP','WICK','W.END','WICK%','MUD']);
+    // (v14.88) SLvl sits immediately after the extreme it belongs to — operator: "they should be
+    // right after the HOD and LOD fields ... it is the level that was swept when making the first
+    // extremity". The level is part of what that extreme DID, not a trailing column.
+    h+=row('hd','',['1ST','SLvl',(D.first==='HOD'?'HodN':'LodN'),NOREAD?'TIME':(''+D.first),'TOOK','BOP','WICK','W.END','WICK%','MUD']);
     var DASH='\u2014';
-    h+= NOREAD ? row('a','A',[DASH,DASH,DASH,DASH,DASH,DASH,DASH,DASH]) : row('a','A',[
+    h+= NOREAD ? row('a','A',[DASH,DASH,DASH,DASH,DASH,DASH,DASH,DASH,DASH,DASH]) : row('a','A',[
       '<b>'+D.first+'</b>',
+      lvTag(LVH&&LVH.sweep, 'sw'),
+      ndTag(NDH&&NDH.first, 'nd'),
       '<b>'+hlClock(D.firstT)+'</b>',
       hlDur(D.took),
       hlv(D.bop,hlDur),
@@ -26623,6 +26834,8 @@ function secDay(sym){
       hlv(D.wickPct,function(v){ return v+'%'; }),
       hlv(D.mud,hlDur) ]);
     h+=row('e','E',[
+      '',
+      '',
       '',
       '~'+hlClock(base.firstClock),
       '~'+hlDur(base.tookMin),
@@ -26638,20 +26851,30 @@ function secDay(sym){
     // shown because they are 58% apart and answer different questions — see PT_META.
     var ptTag=(PTL&&PTL.ok)?PTL.lcTag:'LC';
     h+='<div class="g3dayg g3dayg6">';
-    h+=row('hd','',['2ND','HL GAP','HL RNG','PT TOOK','PT',ptTag+' GAP \u00b7 RNG']);
-    h+= NOREAD ? row('a','A',[DASH,DASH,DASH,DASH,DASH,DASH]) : row('a','A',[
+    h+=row('hd','',['2ND','TLvl',(D.second==='HOD'?'HodN':'LodN'),'HL GAP','HL RNG','PT TOOK','PT','PTWick%','PTMUD','PTN',ptTag+' GAP \u00b7 RNG']);
+    h+= NOREAD ? row('a','A',[DASH,DASH,DASH,DASH,DASH,DASH,DASH,DASH,DASH,DASH,DASH]) : row('a','A',[
       (D.secondT>D.firstT && D.secondT<=D.clock) ? ('<b>'+D.second+' '+hlClock(D.secondT)+'</b>') : (D.second+' pend.'),
+      lvTag(LVH&&LVH.target, 'tg'),
+      ndTag(NDH&&NDH.second, 'nd'),
       hlDur(D.gap)+((D.secondT>=D.clock)?'\u2026':''),
       (D.rngUsd!=null?('$'+Math.round(D.rngUsd).toLocaleString()+' \u2014 '):'')+D.rngPts.toFixed(1)+'pts',
       (PTL&&PTL.ok)?('<b>'+hlDur(PTL.ptMin)+'</b>'):DASH,
       (PTL&&PTL.ok)?('<b>'+PTL.ptPts.toFixed(1)+'pts</b>'+(PTL.ptUsd!=null?(' <span class="g3daydim">$'+Math.round(PTL.ptUsd).toLocaleString()+'</span>'):'')):DASH,
+      (PTL&&PTL.ok&&PTL.ptWickPct!=null)?(PTL.ptWickPct+'%'):DASH,
+      (PTL&&PTL.ok&&PTL.ptMud!=null)?hlDur(PTL.ptMud):DASH,
+      ndTag(NDH&&NDH.pt, 'nd'),
       (PTL&&PTL.ok&&PTL.lcMin!=null)?(hlDur(PTL.lcMin)+' \u00b7 '+PTL.lcPts.toFixed(1)+'pts'):DASH ]);
     h+=row('e','E',[
       '~'+hlClock(base.secondClock),
+      '',
+      '',
       '~'+hlDur(base.gapMin),
       '~$'+Math.round(base.rngUsd).toLocaleString()+' \u2014 '+base.rngPts+'pts ('+base.rngP25+'\u2013'+base.rngP75+')',
       (PTL&&PTL.ok)?('~'+hlDur(PTL.exp.ptMin)):('~'+hlDur(PT_META.ptMin)),
       (PTL&&PTL.ok)?('~'+PTL.exp.ptPts.toFixed(1)+'pts'):('~'+PT_META.ptPts+'pts'),
+      '~'+((PTL&&PTL.ok)?PTL.exp.ptWickPct:PT_META.ptWickPct)+'%',
+      '~'+hlDur((PTL&&PTL.ok)?PTL.exp.ptMud:PT_META.ptMud),
+      '',
       (PTL&&PTL.ok)?('~'+hlDur(PTL.exp.lcMin)+' \u00b7 ~'+PTL.exp.lcPts.toFixed(1)+'pts'):('~'+hlDur(PT_META.lcMin)+' \u00b7 ~'+PT_META.lcPts+'pts') ]);
     h+='</div>';
     // ---- (v14.72) THE FAR SIDE — the block that replaced the ladder ---------------------------

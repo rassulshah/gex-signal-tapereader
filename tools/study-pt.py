@@ -86,3 +86,65 @@ print('\n--- PT vs the close-based figure study-secondleg.py reported ---')
 print('   PT median            %.1f pts' % q([l['ptPts'] for l in legs], .5))
 print('   close-based median   12.5 pts   <- understates the excursion by ~%.0f%%'
       % (100*(q([l['ptPts'] for l in legs], .5) - 12.5)/12.5))
+
+# ============================================================================================
+# THE PT LEG'S OWN WICK FAMILY — mirroring the operator's first-extreme definitions
+#
+#   WICK%  = |open - extreme| / day range      ->  PTWick% = PT distance / day range
+#   MUD    = reclaim -> second extreme          ->  PTMUD   = PT extreme -> the close
+#
+# ⚠⚠ PTWICK IS DELIBERATELY NOT DERIVED HERE. WICK is "the session open to the bar that RECLAIMS
+# the open" — it needs an ANCHOR that the move started from and later took back. The PT leg's anchor
+# is the second extreme itself, so "reclaim" would mean price returning TO that extreme, which is a
+# different event from anything the first-extreme family measures. Inventing a definition and
+# printing it beside measured columns is precisely what made the wick family untrustworthy in
+# v14.57; the operator supplied those definitions himself when asked. Ask again.
+# ============================================================================================
+print('\n' + '='*70)
+print('THE PT LEG WICK FAMILY  (PTWick% and PTMUD only — PTWICK needs a definition)')
+print('='*70)
+wpct=[]; mud=[]
+for d, bars in rows.items():
+    if len(bars) < 300: continue
+    bars.sort()
+    hi = max(bars, key=lambda b: b[1]); lo = min(bars, key=lambda b: b[2])
+    hiT, loT, hiP, loP = hi[0], lo[0], hi[1], lo[2]
+    if hiT == loT: continue
+    secondIsHOD = hiT > loT
+    secT = hiT if secondIsHOD else loT
+    secP = hiP if secondIsHOD else loP
+    after = [b for b in bars if b[0] >= secT]
+    if len(after) < 2: continue
+    if secondIsHOD: adv = min(after, key=lambda b: b[2]); advT, advP = adv[0], adv[2]
+    else:           adv = max(after, key=lambda b: b[1]); advT, advP = adv[0], adv[1]
+    rng = hiP - loP
+    if rng <= 0: continue
+    wpct.append(100.0*abs(secP-advP)/rng)
+    mud.append(bars[-1][0] - advT)          # PT extreme -> the close
+def qq(v,p):
+    v=sorted(v); return v[min(len(v)-1,max(0,int(round(p*(len(v)-1)))))] if v else 0
+print('  PTWick%%   median %d%%   middle half %d%% .. %d%%   n=%d'
+      % (round(qq(wpct,.5)), round(qq(wpct,.25)), round(qq(wpct,.75)), len(wpct)))
+print('  PTMUD     median %dh%02d  middle half %dh%02d .. %dh%02d   n=%d'
+      % (qq(mud,.5)//60, qq(mud,.5)%60, qq(mud,.25)//60, qq(mud,.25)%60,
+         qq(mud,.75)//60, qq(mud,.75)%60, len(mud)))
+# split by side, since PT itself is ~40% asymmetric
+for lab, want in (('second = HOD', True), ('second = LOD', False)):
+    W=[];M=[]
+    for d, bars in rows.items():
+        if len(bars) < 300: continue
+        bars.sort()
+        hi=max(bars,key=lambda b:b[1]); lo=min(bars,key=lambda b:b[2])
+        if hi[0]==lo[0]: continue
+        sH = hi[0] > lo[0]
+        if sH != want: continue
+        secT = hi[0] if sH else lo[0]; secP = hi[1] if sH else lo[2]
+        after=[b for b in bars if b[0]>=secT]
+        if len(after)<2: continue
+        if sH: adv=min(after,key=lambda b:b[2]); advT,advP=adv[0],adv[2]
+        else:  adv=max(after,key=lambda b:b[1]); advT,advP=adv[0],adv[1]
+        rng=hi[1]-lo[2]
+        if rng<=0: continue
+        W.append(100.0*abs(secP-advP)/rng); M.append(bars[-1][0]-advT)
+    print('    %s  PTWick%% ~%d%%   PTMUD ~%dh%02d   n=%d'
+          % (lab, round(qq(W,.5)), qq(M,.5)//60, qq(M,.5)%60, len(W)))

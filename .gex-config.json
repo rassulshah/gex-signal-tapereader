@@ -9,31 +9,41 @@
     "rawUrlBase": "https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main"
   },
   "canonicalFiles": {
-    "projectFiles": [
-      "master-spec.md",
-      "teaching-spec.md",
+    "_howToRead": "⚠⚠ TIERED ON PURPOSE. The old flat list of 24 was read 'in full' — including a 607KB CHANGELOG and a 362KB CHAT-HISTORY. A context that reads everything reads nothing carefully. Read tier0 COMPLETELY and FIRST; it is small and it is the whole state of play. Then tier1. Tier2 is read PARTIALLY, per its own note. Tier3 is reference — do NOT read on load; open it when a task touches it.",
+    "tier0_readFirstInFull": [
+      "session-state/LESSONS.md",
+      "session-state/latest-resume-note.md",
+      "session-state/OPEN-QUESTIONS.md",
+      "session-state/LOCKED-ITEMS.md"
+    ],
+    "tier0_note": "These four are the state of play and total well under 100KB. LESSONS first: it names results that have been WITHDRAWN, and quoting a withdrawn number is the most expensive thing a fresh context can do because it looks like knowledge. OPEN-QUESTIONS stops you re-asking what he already answered.",
+    "tier1_readInFull": [
       "current/gex-signal-tapereader.user.js",
       "current/gex-if-levels.user.js",
-      "session-state/latest-resume-note.md",
-      "session-state/CHAT-HISTORY.md",
-      "changelog/CHANGELOG.md",
-      "design/architecture-design.md",
-      "skylit-docs/README.md",
-      "session-state/INSIDERFINANCE.md",
-      "session-state/DECISIONS.md",
-      "session-state/PROJECT-CONSTANTS.md",
-      "session-state/LOCKED-ITEMS.md",
-      "session-state/YAHOO-PIPELINE.md",
       "design/DATA-ARCHITECTURE.md",
+      "session-state/PROJECT-CONSTANTS.md",
       "skylit-docs/FINDINGS.md",
-      "session-state/SKYLIT-FEEDS.md",
+      "session-state/DECISIONS.md",
+      "session-state/INSIDERFINANCE.md",
+      "session-state/SKYLIT-FEEDS.md"
+    ],
+    "tier1_note": "The code and the facts that govern it. DATA-ARCHITECTURE is the ONE place that says who can reach what. FINDINGS is our evidence as against the Academy's prior.",
+    "tier2_readPartially": {
+      "session-state/CHAT-HISTORY.md": "362KB. Read the CURRENT-CONTEXT entry IN FULL and nothing else. It is the only file carrying what was SAID rather than concluded — his corrections and his exact words.",
+      "changelog/CHANGELOG.md": "607KB. Read the TOP ~5 version entries only. Everything older is archaeology; git has it if you need it.",
+      "session-state/ISSUES-NEXT-BUILD.md": "Skim for anything still open."
+    },
+    "tier3_referenceOnly": [
+      "master-spec.md",
+      "teaching-spec.md",
+      "skylit-docs/README.md",
+      "design/architecture-design.md",
+      "session-state/YAHOO-PIPELINE.md",
       "session-state/FRAME-APPROACH-REVIEW.md",
-      "BUILD-PLAN.md",
-      "garma/V2-PHASE-PLAN.md",
-      "session-state/ISSUES-NEXT-BUILD.md",
       "mockups/mockup-ladder-v11.html",
       "data/es-1min/FARSIDE.json"
     ],
+    "tier3_note": "⚠ DO NOT READ ON LOAD. master-spec (2026-08-18), teaching-spec (2026-08-14) and skylit-docs/README (2026-08-14) predate the current design and are SUPERSEDED on data sources by design/DATA-ARCHITECTURE.md. Open one only when a task touches it, and prefer the code over any spec that disagrees with it.",
     "skyliDocs": [
       "skylit-docs/core-concepts/core-concepts.md",
       "skylit-docs/read-the-heatmap/how-to-read-and-use-heatseeker.md",
@@ -42,11 +52,32 @@
       "SOURCE-OF-TRUTH.md",
       "skylit-docs/api/API-REFERENCE.md"
     ],
-    "skylitApi": {
-      "file": "skylit-docs/api/API-REFERENCE.md",
-      "liveDocs": "https://docs.skylit.ai/api-reference/introduction",
-      "note": "re-capture if older than ~30 days; the API is in limited beta"
-    },
+    "projectFiles": [
+      "session-state/LESSONS.md",
+      "session-state/latest-resume-note.md",
+      "session-state/OPEN-QUESTIONS.md",
+      "session-state/LOCKED-ITEMS.md",
+      "current/gex-signal-tapereader.user.js",
+      "current/gex-if-levels.user.js",
+      "design/DATA-ARCHITECTURE.md",
+      "session-state/PROJECT-CONSTANTS.md",
+      "skylit-docs/FINDINGS.md",
+      "session-state/DECISIONS.md",
+      "session-state/INSIDERFINANCE.md",
+      "session-state/SKYLIT-FEEDS.md",
+      "session-state/CHAT-HISTORY.md",
+      "changelog/CHANGELOG.md",
+      "session-state/ISSUES-NEXT-BUILD.md",
+      "master-spec.md",
+      "teaching-spec.md",
+      "skylit-docs/README.md",
+      "design/architecture-design.md",
+      "session-state/YAHOO-PIPELINE.md",
+      "session-state/FRAME-APPROACH-REVIEW.md",
+      "mockups/mockup-ladder-v11.html",
+      "data/es-1min/FARSIDE.json"
+    ],
+    "_projectFilesNote": "⚠⚠ DERIVED — the exact union of tier0+tier1+tier2+tier3, in that order. It exists because test_chat_history, test_em_band and test_futbars read it, and retiering without it broke all three. It is NOT a second list to maintain: test_lessons asserts projectFiles === the union of the tiers, so adding a file to a tier and forgetting this goes red. Add files to a TIER; never edit this by hand.",
     "insiderFinance": {
       "doc": "session-state/INSIDERFINANCE.md",
       "companionScript": "current/gex-if-levels.user.js",
@@ -74,13 +105,18 @@
       },
       "warning": "NEVER compare a number from one window, book or scale against another. Four separate false-alarm bugs came from exactly that."
     },
-    "loadNote": "Read session-state/PROJECT-CONSTANTS.md AND session-state/latest-resume-note.md BOTH — the constants file holds the failure patterns and the user's standing rules, the resume note holds only where we are. Then DECISIONS.md (why the panel is the way it is, D-1..D-13) and INSIDERFINANCE.md (the second book). ⚠ FRAME-APPROACH-REVIEW.md is a SNAPSHOT of 2026-08-23 — later builds closed some of its flaws without updating it, so verify every item against the code before calling it open.",
+    "skylitApi": {
+      "file": "skylit-docs/api/API-REFERENCE.md",
+      "liveDocs": "https://docs.skylit.ai/api-reference/introduction",
+      "note": "re-capture if older than ~30 days; the API is in limited beta"
+    },
     "analystPackages": [
       "garma/claude_package_v2/rules.json",
       "garma/claude_package_v2/revision_audit/named_pattern_ontology.json",
       "wicks/rules.json",
       "wicks/research/SYNTHESIS_AUDIT.md"
-    ]
+    ],
+    "loadNote": "Read session-state/PROJECT-CONSTANTS.md AND session-state/latest-resume-note.md BOTH — the constants file holds the failure patterns and the user's standing rules, the resume note holds only where we are. Then DECISIONS.md (why the panel is the way it is, D-1..D-13) and INSIDERFINANCE.md (the second book). ⚠ FRAME-APPROACH-REVIEW.md is a SNAPSHOT of 2026-08-23 — later builds closed some of its flaws without updating it, so verify every item against the code before calling it open."
   },
   "loadCommand": {
     "aliases": [
@@ -124,8 +160,8 @@
       "wicks/"
     ]
   },
-  "version": "2026-08-28d",
-  "lastUpdated": "2026-08-28T17:40:00Z",
+  "version": "2026-08-30b",
+  "lastUpdated": "2026-08-30T07:30:00Z",
   "loadInstruction": "⚠ 2026-08-28: READ design/DATA-ARCHITECTURE.md - it is the ONE place that says WHO CAN REACH WHAT (the panel is @grant none and cannot fetch cross-origin; the companion holds the grants; the cloud can clone but CANNOT PUSH; git is the transport), every data source, the four transports, and the daily ES corpus pipeline. It exists because those facts used to live only in session-state/, which is rewritten in full every build - the same mechanism that lost ITEM 18 for 24 versions. design/architecture-design.md is SUPERSEDED on data sources by it. ⚠ TWO STANDING OPERATOR RULES, STATED HERE SO A LOAD CANNOT MISS THEM: (1) DELIVERY IS ONE FILE - see deliveryRule; send exactly one installvNNNN.bat and nothing else. (2) CHAT HISTORY IS REGENERATED ON EVERY BUILD and READ ON EVERY LOAD - see chatHistory; a build that skips it goes red on test_chat_history.js. ⚠ 2026-08-27: CLONE FULL (see cloneRule — never --depth 1). READ IN THIS ORDER, IN FULL, BEFORE ANYTHING ELSE: (1) session-state/latest-resume-note.md — a briefing, not a changelog; a context that skips it will re-litigate settled decisions. (2) session-state/CHAT-HISTORY.md, the CURRENT-CONTEXT entry — what was actually SAID last context: the corrections, the approaches already rejected, and the operator's exact words. The resume note says where we are; this says how we got there. (3) session-state/LOCKED-ITEMS.md — agreed work that is NOT built. It exists because the resume note lost ITEM 18 and a whole session went to re-discovering it. (4) design/DATA-ARCHITECTURE.md — who can reach what: the browser is the only participant that can fetch freely, the cloud cannot reach Yahoo and CANNOT PUSH, git is the transport between them. ⚠ master-spec.md §3.1-3.2 and design/architecture-design.md are OBSOLETE where they name AI Drive as the source of truth — both carry banners; git is the truth. TWO analyst packages inform the build (Garma = gamma-map-first, Wicks = charts-first); BUILD-PLAN.md is the master sequence across both, and is currently MISSING at HEAD. Several headline measurement rates in this project are ONE-DAY samples and at least one is contradicted by a later day — never quote a rate without its n and its date.",
   "chatHistory": {
     "file": "session-state/CHAT-HISTORY.md",
@@ -186,13 +222,15 @@
     "rule": "Operator-mandated 2026-08-28: EVERY message that delivers a build ends with an explicit \"✅ SAVE DONE\" line naming what was updated for a future context.",
     "quote": "\"after you give me a build, i want a confirmation something like a checkmark save done for future context. this tells me that you have updated the chat history and any relevant files that a future context would need to proceed if this context was closed.\"",
     "mustBeCurrent": [
+      "session-state/LESSONS.md",
+      "session-state/OPEN-QUESTIONS.md",
       "session-state/CHAT-HISTORY.md",
       "session-state/latest-resume-note.md",
       "changelog/CHANGELOG.md",
       "skylit-docs/FINDINGS.md (when a measurement changed)",
       "session-state/LOCKED-ITEMS.md (when an item opened or closed)"
     ],
-    "enforcement": "test_savedone.js fails the build when the resume note does not declare the current panel version, when CHAT-HISTORY or the CHANGELOG are unstamped, when a ledger is missing, or when this convention stops being written down.",
+    "enforcement": "test_savedone.js fails the build when the resume note does not declare the current panel version, when CHAT-HISTORY or the CHANGELOG are unstamped, when a ledger is missing, or when this convention stops being written down. | test_lessons.js enforces session-state/LESSONS.md carrying the current version, as the TOP entry. | ⚠ test_recordcurrent.js keys on COMMITS, not versions: if a commit touched current/, tools/, session-state/, changelog/, data/, design/ or skylit-docs/, then CHAT-HISTORY.md and LESSONS.md must be from that commit or later. The version-keyed tests are BLIND to any work that does not bump the version, which is most of it - proven 2026-08-30 when three bodies of work landed under an already-recorded v14.88 and all three guards stayed green.",
     "why": "latest-resume-note.md went SEVEN builds stale on 2026-08-28 and then FOUR more the same day, while CHAT-HISTORY.md stayed perfect - because a test guarded one and nothing guarded the other. A rule enforced by a test is followed; a rule enforced by a checklist is followed until it is busy."
   },
   "farside": {
@@ -202,5 +240,57 @@
     "doNotRePropose": "sweeps, momentum/NQ divergence, IB30/IB60, 50-SMA, open-reclaimed, 60m breakout, daily ATR, overnight range, volume, day-of-week, gap, prior-day/overnight level identity, red/green days, a 5-feature logistic, or a narrow high-probability timing window. All measured, all recorded.",
     "improvementLoop": "the nightly review scores the touch call and the <=20% NO call, runs the gamma test with a DENSE distance control, and PROPOSES a new FARSIDE.json into review/ - it never applies one. See docs/LLM-NIGHTLY-BRIEF.md, the star section.",
     "⚠ correction": "HLTAB_META.inHit still advertises 92% for the IN call. F-12 measured 63% in real time - the 92% study selected the side with hindsight. Fix in the next build."
+  },
+  "lessons": {
+    "file": "session-state/LESSONS.md",
+    "mandate": "Operator-mandated 2026-08-30: 'i need you to either use a document you already have or create a lessons learned document which you update every time there is a build. You will then also make it a part of the load gex procedure so future contexts know the lessons.'",
+    "onLoad": "READ session-state/LESSONS.md IN FULL, immediately after latest-resume-note.md and the CURRENT-CONTEXT entry of CHAT-HISTORY.md, and BEFORE proposing or measuring anything. Section 1 is the failure-pattern register - nearly every bug in this project is one of those patterns. Section 2 is the per-build log, newest first, and it names results that have been WITHDRAWN. Quoting a withdrawn number is the most expensive mistake a fresh context can make, because it looks like knowledge.",
+    "everyBuild": "Add one entry for the shipped version. Write only: something that turned out to be FALSE that a future context would repeat; a failure-pattern recurrence WITH its concrete instance; or a measurement that superseded an earlier one, naming the number now withdrawn. If none: write the version and 'no new lesson'. NEVER delete an entry.",
+    "enforcement": "test_lessons.js goes RED when LESSONS.md does not carry the current GPTS_VERSION, when this build is not the TOP entry, or when the file is dropped from canonicalFiles. A rule enforced by a test is followed; a rule enforced by a checklist is followed until it is busy.",
+    "withdrawnSoFar": [
+      "study-kingdeflect.py 'crowns beat chance by 17pp' - measured crowns where it should have measured nodes; superseded by study-nodeatextreme.py",
+      "SUCCESSION '76% crowned within 20 bars (n=148)' - does not reproduce at any horizon; 23% at 30m against the DRAWN crown",
+      "HLTAB_META.inHit 92% - hindsight side-selection; the real-time figure is 63% (F-12)"
+    ]
+  },
+  "loadSelfCheck": {
+    "why": "A load that reports 'files loaded' proves nothing was absorbed. Answer these from the files BEFORE doing any work, and say the answers out loud in the load report. A wrong answer here means the load failed and should be redone — that costs a minute; discovering it an hour in costs the session.",
+    "questions": [
+      {
+        "q": "Name three results that have been WITHDRAWN and must never be quoted.",
+        "where": "session-state/LESSONS.md, and .gex-config.json lessons.withdrawnSoFar"
+      },
+      {
+        "q": "What is the real-time accuracy of the ⓪a IN call, and which call is actually stronger?",
+        "where": "skylit-docs/FINDINGS.md F-12 — 63%, and NOT-IN at 85% is stronger"
+      },
+      {
+        "q": "Which is the crown the panel DRAWS, and how does it differ from the raw tape?",
+        "where": "kingLatchTick, 120s continuous hold — raw ~13.7 moves/session, drawn ~6.3"
+      },
+      {
+        "q": "Where do the full per-book node lists live?",
+        "where": "tri.<SYM>.top in every recorded snapshot, and LASTFEED.<SYM>.j.levels for the live session series"
+      },
+      {
+        "q": "What is failure pattern 4, and when did it last recur?",
+        "where": "session-state/LESSONS.md section 1 — 'concluding absent from a shallow look', three times on 2026-08-30"
+      },
+      {
+        "q": "Name one question only the operator can answer, and what it blocks.",
+        "where": "session-state/OPEN-QUESTIONS.md"
+      },
+      {
+        "q": "What is the delivery rule, exactly?",
+        "where": "deliveryRule — ONE installvNNNN.bat plus the Tampermonkey links as text"
+      }
+    ]
+  },
+  "openQuestions": {
+    "file": "session-state/OPEN-QUESTIONS.md",
+    "mandate": "Operator-mandated 2026-08-30, alongside the lessons register.",
+    "onLoad": "Read it in full with tier0. It is the difference between asking him something new and re-asking something he already answered. An agent that re-asks is spending the one resource this project cannot regenerate.",
+    "everyBuild": "Move anything answered into the ANSWERED section with its answer and date; add anything newly blocked. An entry leaves only by being answered or explicitly dropped.",
+    "rule": "NEVER guess an answer and build on it. Print an em-dash, say why, and ask."
   }
 }

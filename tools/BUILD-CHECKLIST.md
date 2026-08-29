@@ -158,6 +158,20 @@ fix for `toFri.em` vs `dte0.em` that would have surfaced in the first two minute
 assertion anyone writes for an EM feature is "which EM does it read". Instead it was found after a mockup
 had been built on the wrong number and thrown away. A test written first is a design review that runs.
 
+**2b. ⚠⚠ WRITE THE LESSON — `session-state/LESSONS.md`, TOP of the log, EVERY build.**
+`test_lessons.js` goes red without it, which is the only reason to expect it to be current — the
+resume note went seven builds stale while CHAT-HISTORY stayed perfect, and the difference was a test.
+Write ONLY: something that turned out to be FALSE that a future context would repeat; a
+failure-pattern recurrence WITH its concrete instance; or a measurement that SUPERSEDED an earlier
+one, naming the number now withdrawn. No lesson this build? Write the version and `no new lesson` —
+an empty entry is a fact, a skipped one is indistinguishable from an oversight. **Never delete an
+entry.** A withdrawn number stays, named as withdrawn, so nobody re-derives it and thinks it is new.
+
+**2c. ⚠⚠ THE RECORD IS KEYED ON COMMITS, NOT VERSIONS.** `test_recordcurrent.js` fails if any commit
+touching the project is newer than CHAT-HISTORY.md or LESSONS.md. **"It wasn't a build" is not an
+exemption** — a documentation or tooling commit obliges an entry exactly as a panel commit does. The
+version-keyed guards cannot see these; that was proven on 2026-08-30.
+
 **3. VERIFY THE DATA BEFORE DESIGNING ANYTHING.** One `__gptsDebug` call against the live page beats an
 hour of reasoning about what the payload probably contains. Every mockup drawn before that call is a
 mockup that may have to be discarded — and one already was.

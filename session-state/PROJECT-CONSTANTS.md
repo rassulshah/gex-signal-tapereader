@@ -169,6 +169,28 @@ v11.49: TERM was called "structurally dead — their payload does not carry it."
 Slope +1.3, rendered client-side.** The payload is not the page. Walk the tree, then look at what they
 actually display.
 
+**⚠⚠ 2026-08-30 — PATTERN 4 HAPPENED THREE TIMES IN ONE HOUR, AND THE OPERATOR CAUGHT ALL THREE.**
+He asked which node caused a deflection. In sequence I said: (a) "the panel was not recording that
+morning" — the recorder started at 13:15, but `LASTFEED.<SYM>.j.levels` held a **389-point series
+covering 08:30–14:58**, the whole session, and I had already read `levels[last].s` out of that same
+array minutes earlier; (b) "no king was near the high" — reading `tri.<SYM>.king`, one line, when
+`tri.<SYM>.top` in the SAME object is the **ranked node list for SPY, QQQ, SPXW and VIX**, recorded
+in every snapshot since the trinity shipped; (c) "Thursday cannot be answered" — the day files carry
+those same trinity tops for full sessions.
+
+The measured answer, once the right source was used: **every extreme in every book, 36 of 36, sat
+within 0.25% of a node; 32 of 36 within 0.10%.** My king-only answer had been "no node was there."
+
+**THE TELL, AND IT IS CHECKABLE:** each time I asked *"does the source I reached for have this?"*
+instead of *"what is the best source for this?"* — and each time the better source was ALREADY OPEN,
+in the same object, sometimes in a field I had used moments before. **Before concluding data is
+absent, enumerate the keys of what you already hold.** `Object.keys()` on the container would have
+ended all three in one call.
+
+⚠ It also invalidated work: `tools/study-kingdeflect.py` measured CROWNS against extremes and
+reported "crowns beat chance by 17pp". It should have measured NODES. Superseded by
+`tools/study-nodeatextreme.py`; do not quote the crown figures.
+
 **5. Defensive try/catch makes a missing reference INVISIBLE.** A function never defined (`tradeNodes`), a
 variable from another scope (`rr`). Header emitted, rows gone, looks exactly like "nothing to show".
 → `swallow(tag,e)` records it, `__gptsDebug.renderErrors()` exposes it, `node tools/smoke.js` FAILS on a
@@ -177,6 +199,20 @@ regex-literal contents, and a noisy check gets switched off.
 
 **6. When an edit script asserts, CHECK IT LANDED.** v11.46 shipped half a feature because a python edit
 aborted on a failed assertion and the failure went unnoticed.
+
+**⚠ 2026-08-29/30 — FIVE FAKE ASSERTIONS IN TWO DAYS, EACH A DIFFERENT SHAPE OF PATTERN 8.**
+All were caught by mutation, none by review, and each was satisfied by something ADJACENT to the
+thing it was meant to protect:
+- a grep for `UNVERIFIED` matched a string in the verdict helper after the line that SETS it was deleted;
+- a grep for the doctrine line matched **the comment I had just written quoting it**;
+- a grep for `not before` matched **the comment explaining that the wording had changed**;
+- `/\*rr;/` matched the neighbouring LC line, so dropping the scale conversion from PT stayed green
+  (a 28-point excursion would have printed as 2.8);
+- `ifLadder(sym)` matched the ASSIGNMENT after the loop consuming it was gated off with `if(false)`.
+
+**THE RULE: an assertion about rendered text strips comments first, and an assertion about a value
+binds to the statement that produces it — never to a word that appears near it.** Mutate every new
+assertion individually; "the suite is green" has never once caught one of these.
 
 **8. A TEST THAT GREPS THE SOURCE INSTEAD OF RUNNING IT. Three occurrences, and the worst one was
 mine.** v11.70's forecast ban pulled quoted strings with a regex and desynchronised on an apostrophe —

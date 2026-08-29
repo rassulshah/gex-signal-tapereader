@@ -1,3 +1,86 @@
+## v14.89 — HodN / LodN / PTN: the node each extreme tested before reversing
+
+> "a lodN (lod node) and hodN (hod node) which are nodes that the extreme tested before reversing.
+> it usually tests it or even penetrates it a little and then reverses"
+> "we are looking for 1 of the three kings, either a spy node, spxy node or a qqq node"
+
+Three new fields, each naming **which book's king** the extreme was standing on: **HodN/LodN after
+SLvl** (the first extreme), **HodN/LodN after TLvl** (the second), and **PTN** beside the closing
+leg (the final high or low). The book is the answer — SPY, SPX or QQQ — because that is what he
+asked for by name.
+
+**THE TEST BAND IS HIS, AND IT SCALES WITH ATR:**
+
+    downmove   node - 1.5 ATR  <=  LOW   <=  node + 1.0 ATR
+    upmove     node - 1.0 ATR  <=  HIGH  <=  node + 1.5 ATR
+
+Asymmetric on purpose: tight on the approach, loose through it, because a stab that pokes through
+and recovers is still a test. On 3-minute SPY that is roughly **0.40 short / 0.55 through** on a
+normal day, widening to 0.75 / 1.13 on a fast open — which a fixed band could never do.
+
+⚠ **THE CLOSE WAS TESTED AS THE TRIGGER AND REJECTED.** It won every aggregate metric — 40% fewer
+events at the same turn rate with a better adverse excursion — and it is wrong: on 2026-08-25 he
+circled 763.20 at node 763, where the low was 763.28 and the **close was 764.80**. A 1.5-point
+rejection wick, a textbook deflection, discarded. The selectivity gain *was* the cost of throwing
+away the sharpest instances. **The wick says price TESTED the node; the close says whether it
+DEFLECTED or BROKE.**
+
+⚠⚠ **AND THE FIELD IS NOT A CLAIM THAT THE NODE CAUSED THE TURN.** Over 8 sessions, fading every
+node touch has **no edge**: t=+0.41 on a top-5 node universe, t=-0.32 on the SPY+SPXW kings, both
+null. Deflections run +0.92 MFE / +0.26 MAE, breaks run +0.29 / +0.86 — mirror images — and **56%
+break**, so the legs cancel. The hover says so. Telling the two apart *beforehand* is Q11 and is
+not built; until it is, this field reports where the extreme stood, nothing more.
+
+⚠ QQQ enters as a proportional **bearing** off its own price, never a converted level, and is
+flagged in the hover. SPXW converts through `ifLadder().dispScale` — the same chain `trinityRead()`
+uses, not a second one invented here.
+
+`test_nodeat.js` (32 assertions) executes the geometry rather than grepping for it; every assertion
+was mutation-tested and one fake was found and fixed — `/out\.ptPx\s*=/` matched the line it was
+protecting even when that line was commented out.
+
+## v14.88 — SLvl, TLvl, and the PT leg's wick family
+
+> "build the second part and we will review tomorrow"
+
+**SLvl sits immediately after the 1ST extreme, TLvl immediately after the 2ND** — his correction, and
+the right one: the level is part of what that extreme DID, not a trailing column. A level counts as
+taken out when price traded BEYOND it, between the session open and that extreme, in that extreme's
+direction. **The FURTHEST one is reported**, because a move that clears three levels is described by
+the last one it cleared.
+
+⚠ **THEY CAN ONLY NAME LEVELS THE CHART ALREADY DRAWS** — `sessionLevels()` for prior-day H/L/C and
+the initial balance, `ifLadder()` for the walls. Nothing is derived here. A strip that could name a
+level the chart does not show would be unusable: you cannot act on a level you cannot see.
+
+**PTWick% and PTMUD mirror his own first-extreme definitions**, measured over the same 283 sessions:
+
+    WICK% = |open - extreme| / range   ->  PTWick% = the PT excursion / the day's range   ~44%
+    MUD   = reclaim -> second extreme  ->  PTMUD   = the PT extreme -> the close          ~0h54
+
+Both side-specific, because PT is ~40% asymmetric: after a LOD, PTWick% ~56%; after a HOD, ~40%.
+
+⚠⚠ **PTWICK IS NOT BUILT, DELIBERATELY.** WICK is "the open to the bar that RECLAIMS the open" — it
+needs an ANCHOR the move started from and later took back. The PT leg's anchor IS the second extreme,
+so "reclaim" would mean returning to that extreme, which is a different event from anything the
+first-extreme family measures. **He defined BOP/WICK/W.END/WICK%/MUD himself when asked**, and
+inventing a sixth and printing it beside measured columns is exactly what made that family
+untrustworthy in v14.57. The code says so, and `L14`/`L15` keep it that way until he answers.
+
+⚠ **The profile levels stay out too.** They are computable — `futBarsRaw()` carries volume — but a
+prior POC is tagged **46.6%** of the next session against **46.3%** for a sham level at the same
+distance, and VAL is **43.5% vs 43.5%**. Distance explains the tags, not the level. They may ship as
+a record; never as a claim, and never as a "value area" — the VALUE 70% tile already owns that phrase
+for the gamma band around the King.
+
+⚠ **A mutation survived and it was the instructive one:** grepping for `ifLadder(sym)` matched the
+ASSIGNMENT even after the loop consuming it was gated off, so the walls could vanish from the
+candidate set with the assertion still green. Rebound to the loop being reachable. That is the third
+distinct shape of this failure this week — a source grep satisfied by something adjacent to the thing
+it was protecting.
+
+11 mutations run individually; all 11 fail correctly. Suite 123 green, smoke clean.
+
 ## v14.87 — PT, the close leg, and the pills back to full size
 
 > "pt is hod to the lowest point prior to the close that doesn't take out the lod, and pt time is the
