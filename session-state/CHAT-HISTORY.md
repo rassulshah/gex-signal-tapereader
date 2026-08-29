@@ -15,7 +15,89 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-28 · v14.80.1 · session `2df3ccfa` — v14.79: the far side, the IRT pipe, bounded writes and the permanent grant
+## 2026-08-29 · v14.84 · session `2df3ccfa` — v14.79: the far side, the IRT pipe, bounded writes and the permanent grant
+
+### v14.84 — the two wrong numbers, and the headers
+
+> "fix errors and give me the latest fix … why is trend and location at the top headers. lets remove
+> that too." — and: "i dont believe the analysis and testing is done correctly"
+
+He is right to distrust it. In one thread I gave four different answers for how often the King moves
+(0-1, then 11.6, then 4.2, then 6.3) — a truncated window, the wrong book, the raw series instead of
+the drawn one, and a denominator bug. He caught the third himself: "i am looking at atlas and it
+doesn't seem to move that much."
+
+Shipped: `inHit` 92 → 63 (F-12), which also REVERSED the IN/NOT-IN ranking the hover asserted; the
+SUCCESSION 76% withdrawn and replaced by a single `SUCC_META` constant because the number had been
+typed into five places. Step bar and section headers removed.
+
+⚠ Two new assertions were fake; mutation caught both — one was satisfied by my own comment quoting
+the line it was meant to protect.
+
+**Open and NOT built:** the ♕2ND challenger glyph and the state-conditioned tile (mockups approved,
+he said leave it). The TREND section removal is asked-about, not decided.
+
+
+### v14.83 — he rejected v14.82's layout, and asked for King migration columns
+
+> "move the level name like PDC next to the price levels instead so it will look like 'PDC 7741'" …
+> "lets create two columns, 1 for spxw migration and the other for spy migration. they should be
+> slim columns and show the movement like steps."
+
+He was right about v14.82: names in the chute put 100px between a price and its name. Reverted, and
+the chute's "price's alone" invariant restored with it.
+
+Before building I answered his question with measured data: on 2026-08-28 the recorder holds only
+**13:15 onward**, and in that window the SPXW King made **0** durable moves and SPY **1** — the rest
+were flickers and the close roll. That is what made the feature viable: arrows are readable because
+migrations are rare.
+
+He picked row-alignment over his own sketch once both were mocked. ⚠ Retiring `ladderRolls` almost
+deleted the "INFERRED from paired changes" caveat, which lived only in its hover — caught by r11/r12
+and re-homed. ⚠ `test_lastbook` r3 caught my write path testing `inReplay()` instead of
+`recorderBlind()`.
+
+
+### v14.82 — five fixes off two photographs
+
+> "justify the price pill to the right ... at least 4 spaces to place the levels there instead ... if
+> two levels share the same space, display 1 but put both their names in the hoverover ... the node
+> gamma bars are covering some of the prices, especially the last digit ... you dont need to put 100%
+> for the king ... the expected value, it is crossed out."
+
+He circled the yellow bar sitting on the price. Cause: `.g3ldpx` was hardcoded `width:40px` while
+`LAD_PXW` beside it said 30 — 4px over the last digit on every node row, right-aligned so it hit the
+digit that matters. Landmine L-D again.
+
+His two answers to my questions conflicted by 4px; deleting the 66px name gutter paid for both.
+Names moved INTO the chute (46px strip), pills right-justified (44px) — which deliberately reverses
+the chute's "price's alone" invariant, kept in spirit as two walled sub-columns.
+
+Level merge is now by PIXELS; the old one keyed on price and never saw IBH×PDH at all. King drops its
+own 100%. Expired EM not drawn instead of struck through.
+
+⚠ A comment I wrote (`LAD_NODE=150 — a 4px overlap...`) sat earlier in the file than the declaration
+and `test_ladder`'s constant reader eval'd it, throwing before any assertion ran. Reader now strips
+comments.
+
+
+### v14.81 — he cut the gamma profile
+
+> "i dont think we need the bottom section where it says gamma profile and lists a bunch of levels
+> below, do you?" → "just remove it."
+
+I agreed, with two things said first: it was **broken** (21 overlapping label pairs measured on his
+live panel — the "+1.4189%63%" in his screenshot is three numbers on one spot), and **he had asked
+for it originally** back at v11.x, so the cut reverses his own earlier request. He cut it knowing
+both. 169px of a 1016px face back.
+
+⚠ ROLL BIAS rode on that header by his v14.4 direction. Asked rather than dropped it silently; he
+chose to rehome it to the ② LOCATION row. **My first version of the rehome was broken** — it read
+`ROLLS`, a local of `secLoc()`, which from `secFrame()` is a ReferenceError the bare catch would have
+swallowed: chip permanently absent, suite green. Caught in review.
+
+Kept: the flip sentence and the SET line. Untouched: the day-peak tracker the rail reads.
+
 
 ### v14.80.1 — he caught a false instruction I had repeated eight times
 

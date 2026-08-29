@@ -91,8 +91,9 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
      'but there is NO equal-and-opposite balance check (INVERTED: that assumption was wrong)');
   ok(/ROLL_MAX_DIST/.test(rs), 'and proximity is required');
   ok(/function rollBias/.test(src), 'the aggregate exists');
-  // (v14.4/6) the bias line moved to the GAMMA PROFILE header, operator-directed — one home
-  ok(/ROLL BIAS /.test(ex('gammaProfileHtml')), 'and reaches the face as one chip on the profile header');
+  // (v14.4/6 -> v14.81) the bias line lived on the GAMMA PROFILE header by his direction; the
+  // profile was cut 2026-08-28 and he chose to keep the chip, so it now rides the ② LOCATION row.
+  ok(/ROLL BIAS /.test(ex('secFrame')), 'and reaches the face as one chip on the LOCATION row');
 }
 // ---------- ONE BOOK: NODES AND THE RAIL ----------
 {
@@ -227,14 +228,29 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
 }
 // ---------- (v14.4/6) bias lives on the PROFILE header now ----------
 {
-  const gp=ex('gammaProfileHtml');
-  ok(/g3gpbias/.test(gp) && /ROLL BIAS /.test(gp), 'ROLL BIAS is emitted as the profile-header chip');
+  // ⚠⚠ THIS BLOCK WAS REWRITTEN, NOT DELETED (v14.81). The gamma profile is gone at his request,
+  // so "the profile-header chip" no longer names anything. The chip itself survives by his choice.
+  const gp=ex('secFrame');
+  ok(/g3gpbias/.test(gp) && /ROLL BIAS /.test(gp), 'ROLL BIAS is emitted on the LOCATION row');
   ok(/g3gpbias\{[^}]*color:#e0645f/.test(src), 'and rendered red');
+  ok(!/function gammaProfileHtml/.test(src), 'and its old home is actually gone, not merely unused');
+  // ⚠⚠ THE REHOMED CHIP MUST DERIVE ITS OWN ROLLS. `ROLLS` is a LOCAL of secLoc(); reading it from
+  // secFrame() is a ReferenceError that the surrounding catch would swallow, leaving the chip
+  // permanently absent with every test still green. That is exactly what the first draft did.
+  ok(/ROLLSf=rollsLive\(\)\?\(rollLatched\(sym\)\|\|\[\]\):\[\]/.test(noc(gp)),
+     'and it builds its own latched list rather than inheriting a scope it cannot see');
+  ok(!/rollBias\(ROLLS\.filter/.test(gp), 'and never reads secLoc\'s local ROLLS');
+  // ⚠⚠ A SOURCE GREP PROVES THE STRING EXISTS, NOT THAT IT RUNS. Mutation caught this: wrapping the
+  // emission in `if(0)` left every assertion above green while the chip vanished from the face.
+  // Bind the guard DIRECTLY to the emission so nothing can be inserted between them.
+  ok(/if\(BIASp && BIASp\.n>1 && BIASp\.dir!=='mixed'\)\s*\n?\s*h\+='<span class="g3gpbias"/.test(noc(gp)),
+     'and the bias test is the ONLY thing standing between it and h+= (no dead-coding it)');
   // (v14.6) and rolls are an RTH story: every display of the latch gates on the session
   ok(/function rollsLive/.test(src), 'the session gate exists');
-  ok(/if\(rollsLive\(\)\) RAILROLLS=/.test(src) && /if\(rollsLive\(\)\) ROLLS=/.test(src) &&
-     /if\(rollsLive\(\)\)\{ ROLLS=rollLatched\(sym\)/.test(src),
-     'and binds on ALL THREE consumers — rail, profile, nodes list');
+  ok(/if\(rollsLive\(\)\) RAILROLLS=/.test(src) &&
+     /if\(rollsLive\(\)\)\{ ROLLS=rollLatched\(sym\)/.test(src) &&
+     /ROLLSf=rollsLive\(\)/.test(src),
+     'and binds on ALL THREE consumers — rail, nodes list, and now the LOCATION chip');
 }
 
 // ---------- (v13.9) THE ROLL IS SHOWN AS A CONNECTOR IN ITS OWN GUTTER ----------

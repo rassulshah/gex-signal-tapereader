@@ -64,7 +64,17 @@ ok(/gpts-kp-drift/.test(src), 'GUARD: drift chip lives INSIDE the chart overlay'
 ok(/DESCRIPTIVE ONLY: 3-bar drift tested 50%/.test(src), 'GUARD: drift demotion documented at the chip');
 ok(/padR=46/.test(src), 'GUARD: right gutter reserved (padR=46)');
 ok(/x1="'\+\(W-padR\)\+'" y1="0"/.test(src), 'GUARD: gutter divider drawn');
-ok(/76% crowned .{0,3}20 bars \(n=148\)/.test(src), 'GUARD: succession claim carries its n');
+// ⚠⚠ (v14.84) THE 76% WAS WITHDRAWN — it did not reproduce on 9 recorded sessions at any horizon
+// (23% at 30m against the DRAWN crown). This guard used to check the claim carried its n; it now
+// checks the number comes from ONE constant, because the withdrawn figure had been hand-typed into
+// five separate strings and correcting it meant hunting all five.
+ok(/var SUCC_META=\{/.test(src), 'GUARD: the succession numbers live in one constant');
+ok(!/76% crowned/.test(src) && !/76% chance the crown/.test(src),
+   'GUARD: the withdrawn 76% claim appears in no live string');
+ok((src.match(/SUCC_META\./g)||[]).length>=5,
+   'GUARD: every site reads that constant rather than a typed number',
+   (src.match(/SUCC_META\./g)||[]).length);
+ok(/withdrawn:76/.test(src), 'GUARD: ...and the withdrawn figure is KEPT and named, not erased');
 ok(src.indexOf('outside value')>=0 && src.indexOf('(n=25)')>=0, 'GUARD: eVA outside-value read present with its n');
 ok(/measured 4d\/324 bars/.test(src), 'GUARD: base-rate provenance line present');
 

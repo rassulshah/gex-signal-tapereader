@@ -58,11 +58,14 @@ ok(/inReplay\(\)\s*\|\|\s*showingStaleBook\(\)/.test(RB),
      'r3 no write path still tests inReplay() directly instead of recorderBlind()', strays);
 }
 
-// ⚠ the DISPLAY guard must NOT become recorderBlind, or the profile blanks itself in exactly the
-// mode this feature was built to render.
-ok(/if\(typeof inReplay==='function' && inReplay\(\) \) return '';/.test(src) ||
-   /if\(typeof inReplay==='function' && inReplay\(\)\) return '';/.test(src),
-   'r4 the gammaProfileHtml DISPLAY guard still tests inReplay only — it must still draw');
+// ⚠⚠ r4 IS REVERSED, DELIBERATELY (v14.81). It guarded gammaProfileHtml's DISPLAY check — that it
+// tested inReplay() and not recorderBlind(), so the profile still drew over a frozen book. The
+// operator cut the gamma profile on 2026-08-28 ("just remove it"), so the guard it protected no
+// longer exists. The assertion now pins the REMOVAL instead of deleting quietly: if the profile ever
+// returns, this goes red and whoever restores it must re-make the recorderBlind decision on purpose
+// rather than inherit it. The r3 stray-scan filter above is left in place and is simply inert.
+ok(!/function gammaProfileHtml/.test(src),
+   'r4 the gammaProfileHtml display guard is gone WITH the profile — restore it and re-decide');
 
 // ---- 2 · FOUR CONDITIONS, ALL REQUIRED -------------------------------------------------------
 const SSB = ex('showingStaleBook');

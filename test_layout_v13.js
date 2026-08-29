@@ -67,7 +67,24 @@ console.log('FAIL '+m+(x!==undefined?'  got: '+x:''));} }
 // ⚠ the loops must be LENGTH-DRIVEN, or a future step count silently truncates the bar
 {
   const pv=ex('panelV3');
-  ok(/i<STEP_SHORT\.length/.test(pv), 'the chip loop is driven by the array length, not a literal 5');
+  // ⚠⚠ (v14.84) THE STEP BAR IS GONE — operator: "why is trend and location at the top headers.
+  // lets remove that too." This pinned that the chip loop was LENGTH-driven so a changed step count
+  // could not silently truncate the bar. There is no bar. The assertion now pins the removal, so
+  // reinstating a step bar turns it red and the length-driven rule has to be re-made deliberately.
+  ok(!/i<STEP_SHORT\.length/.test(pv) && !/g3steps/.test(pv),
+     'the step bar is gone from panelV3 — no chip loop, no g3steps container');
+  ok(!/g3sh '\+c\+'/.test(pv), '...and no per-section header row either');
+  // ⚠ the VOCABULARY survives even though nothing renders it: STEP_TIPS carried the only written
+  // statement of what each section is FOR. That is doctrine, and deleting it with the header would
+  // have lost it silently.
+  // ⚠⚠ FAKE ON FIRST WRITING, caught by mutation: it grepped the WHOLE FILE for the doctrine line,
+  // and the comment I had just written above panelV3 QUOTES that line — so gutting STEP_TIPS left
+  // the assertion green, satisfied by the comment describing the thing it was meant to protect.
+  // Bind to the array's own text.
+  const TIPS=(/var STEP_TIPS=\[[\s\S]*?\];/.exec(src)||[''])[0];
+  ok(TIPS.length>0 && /you trade AT levels, never between them/i.test(TIPS),
+     '...but STEP_TIPS is KEPT — the doctrine it carries is not the header it was attached to',
+     TIPS.length);
   ok(/j<secs\.length/.test(pv), 'and so is the section loop');
   ok(/var secs=\[secBias, secLoc\]/.test(pv), 'two sections render (v14.32: secReact/secExec retired, functions kept for recorders/debug)');
   ok(!/secFrame/.test(noc(pv).replace(/var secs=.*/,'')), 'panelV3 does not render secFrame as a section');

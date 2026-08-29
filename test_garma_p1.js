@@ -86,11 +86,16 @@ ok(/out\.day=dt\.t/.test(src) && /out\.trinity=tr\.n/.test(src), 'day type + Tri
   ok(SL2.ibSet===false, 's6 before the 30 minutes are up the IB is NOT set — Garma waits, so do we');
 })();
 
-// ---------- (v14.37) the dual-crown regression + the live audit ----------
-ok(/var isKing=isRail && \(r\.rail\.role==='KING'\);/.test(src),
-   'k1 the profile crown has ONE source — the latched role (the dual-crown bug: tape isKing crowned the challenger too)');
-ok(/var isChal=isRail && !isKing && !!r\.rail\.isKing;/.test(src),
-   'k2 the tape-100% challenger is marked, not crowned');
+// ---------- (v14.37 -> v14.81) the dual-crown regression ----------
+// ⚠⚠ k1/k2 PINNED CODE INSIDE gammaProfileHtml — the fix for the dual-crown bug, where the tape's
+// isKing crowned the challenger alongside the latched KING. The operator cut the gamma profile on
+// 2026-08-28, so that code is gone and with it the only place the bug could occur. The assertions
+// are REWRITTEN to pin the removal rather than deleted: the dual-crown fix was expensive to find,
+// and anyone who reinstates a bar-drawing profile must re-derive it deliberately, not rediscover it.
+ok(!/function gammaProfileHtml/.test(src),
+   'k1 the profile that carried the dual-crown fix is gone (operator, 2026-08-28)');
+ok(!/var isChal=isRail && !isKing/.test(src),
+   'k2 ...and so is the challenger-vs-crown split it existed to keep straight — re-derive it if the profile returns');
 ok(src.indexOf('\u2694')>0, 'k3 ...and wears the contest mark');
 ok(/__gptsDebug\.audit = function/.test(src), 'k4 the live audit exists (__gptsDebug.audit)');
 ok(/TWO CROWNS in the profile/.test(src), 'k5 ...and checks the exact invariant that was violated');

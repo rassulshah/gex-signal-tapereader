@@ -6,6 +6,10 @@ function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.ex
   let i=src.indexOf('{',m.index),d=0,e=-1;
   for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}
   return src.slice(m.index,e+1);}
+// (v14.84) kingProjection now reads SUCC_META for the succession basis string — the one constant
+// that replaced the withdrawn 76% typed into five places. Pull the declaration in with the
+// functions, so the harness exercises the SAME numbers the panel ships rather than a stub.
+eval((/var SUCC_META=\{[\s\S]*?\n\};/.exec(src)||[''])[0]);
 eval(['fmtKd','fmtChg','kingProjection','projRecs'].map(ex).join('\n'));
 
 // ---- the two display bugs from the live screenshot ----
@@ -42,7 +46,19 @@ ok(kingProjection({ok:false},ctx)===null, 'not-ok analyzer -> null (never invent
 var recs1=projRecs({covN:30,cov:15, etaErrs:new Array(20).fill(9), etaMed:9, succN:12,succ:5, pinN:6,pin:2, reachN:25,reach:20, days:9});
 ok(recs1.some(r=>r.sev==='high'&&/Cone too narrow/.test(r.t)),   'coverage 50% -> widen-cone recommendation');
 ok(recs1.some(r=>/ETA runs late/.test(r.t)),                     'ETA median +9m -> rate-window recommendation');
-ok(recs1.some(r=>r.sev==='high'&&/Succession hit 42%/.test(r.t)),'succession under backtest -> threshold recommendation');
+// ⚠⚠ (v14.84) THIS FIXTURE WAS BUILT AROUND THE WITHDRAWN 76%. 5/12 = 42% used to be "under the
+// backtest" and raised a high-severity warning. Against the MEASURED 23% (SUCC_META.hz30), 42% is
+// comfortably ABOVE expectation and warning about it would be crying wolf. The threshold moved, so
+// the fixture has to move with it — otherwise the test pins the old, wrong bar.
+ok(!recs1.some(r=>r.sev==='high'&&/Succession hit/.test(r.t)),
+   'succession at 42% is ABOVE the measured 23% — no HIGH warning, and that is the fix not the bug',
+   recs1.filter(r=>/Succession/.test(r.t)).map(r=>r.sev+':'+r.t.slice(0,40)));
+ok(!/n=148 backtest/.test(src), '...and no live string still calls the withdrawn figure "the backtest"');
+var recsLo=projRecs({covN:30,cov:28, etaErrs:new Array(20).fill(1), etaMed:1, succN:12,succ:2, pinN:6,pin:5, reachN:25,reach:22, days:9});
+ok(recsLo.some(r=>r.sev==='high'&&/Succession hit 17%/.test(r.t)),
+   '...and a genuinely low 17% DOES raise it', recsLo.filter(r=>/Succession/.test(r.t)).map(r=>r.t));
+ok(recsLo.some(r=>/node STATE split/.test(r.t)),
+   '...pointing at the state split, not at the 60% size threshold — size is the weakest of the three');
 var recs2=projRecs({covN:3,cov:2, etaErrs:[], etaMed:null, succN:2,succ:2, pinN:1,pin:1, reachN:4,reach:3, days:1});
 ok(recs2.every(r=>r.sev==='info'),  'insufficient n -> only honest "recording" lines, no fabricated tuning');
 

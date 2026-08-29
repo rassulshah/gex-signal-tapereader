@@ -432,8 +432,21 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   ok(HLTAB_META.notIn === 20 && HLTAB_META.notInHit === 85,
      'u2 the NOT-IN threshold and its MEASURED rate are both declared',
      [HLTAB_META.notIn, HLTAB_META.notInHit]);
-  ok(HLTAB_META.notInHit < HLTAB_META.inHit,
-     'u3 ...and it is recorded as WEAKER than the IN call, which it is (72 vs 94)');
+  // ⚠⚠ (v14.84) u3 IS INVERTED, AND THAT IS THE POINT. It asserted the NOT-IN call was WEAKER than
+  // the IN call — true only while IN was quoted at the hindsight-inflated 92 (F-12). Corrected to
+  // the real-time 63, NOT-IN at 85 is the STRONGER call, and it fires an hour earlier. The old
+  // assertion was not wrong about the code; it was faithfully pinning a claim that inherited the
+  // error. A test that pins a consequence of a bug goes green right up until the bug is fixed.
+  ok(HLTAB_META.notInHit > HLTAB_META.inHit,
+     'u3 ...and NOT-IN is now the STRONGER call (85 vs 63) — the correction reversed the ranking',
+     [HLTAB_META.notInHit, HLTAB_META.inHit]);
+  ok(HLTAB_META.inHit === 63 && HLTAB_META.inHindsight === 92,
+     'u3b the real-time rate is shipped and the withdrawn hindsight figure is kept, named',
+     [HLTAB_META.inHit, HLTAB_META.inHindsight]);
+  // ⚠ FAKE ON FIRST WRITING, caught by mutation: this only checked the NEW sentence was present, so
+  // restoring the OLD one alongside it left the assertion green with the face saying both.
+  ok(/NOT-IN call is now the STRONGER/.test(src) && !/NOT-IN call is weaker and thinner/.test(src),
+     'u3c ...and the hover says so, with the old "weaker and thinner" claim GONE, not merely joined');
   // ⚠ WAS `notInN < 150` — an assertion that the sample was THIN. v14.70 made it 230, so the test
   // that guarded honesty about a weakness now guards that the weakness was fixed. Assert the n is
   // DECLARED and real, not that it is small.

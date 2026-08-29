@@ -1,3 +1,221 @@
+## v14.84 — two wrong percentages off the face, and the headers with them
+
+> "fix errors and give me the latest fix … why is trend and location at the top headers. lets remove
+> that too."
+
+**① `HLTAB_META.inHit` 92 → 63.** FINDINGS **F-12**, open since 2026-08-28, three independent
+reproductions. The study behind 92 selected whichever extreme TURNED OUT to print first; the live
+panel must call whichever is first-printed AT THAT MOMENT. Selecting the side with hindsight
+conditions on the answer, so 92 was never a rate this panel could earn. The withdrawn figure is
+KEPT as `inHindsight:92` and named in the hover — a number that was wrong for weeks should say so,
+not vanish.
+
+⚠⚠ **AND THE CORRECTION REVERSED A RANKING NOBODY HAD RE-CHECKED.** The hover called the NOT-IN
+call *"weaker and thinner"* — true only while IN was quoted at 92. At the real 63, **NOT-IN (85%,
+n=230) is the STRONGER call**, and it fires an hour earlier (08:40 vs 09:20). `test_hodlod` u3
+asserted the old ranking and went red, which is the test doing its job: **it had been pinning a
+consequence of the bug, and stayed green right up until the bug was fixed.**
+
+**② The SUCCESSION 76% is withdrawn.** It did not reproduce on 9 recorded sessions at any horizon —
+23% within 30m, 41% within 60m, 55% across a whole session. The original was 4 days scored against
+the **raw tape**, where a one-snapshot flicker between near-equal strikes counted as a succession;
+re-scored against the crown the panel actually DRAWS it collapses.
+
+⚠⚠ **THE REAL DEFECT WAS THAT ONE NUMBER LIVED IN FIVE PLACES** — the tile hover, the projection
+basis, two Analysis rows and a recommendation — all hand-typed. Correcting it meant hunting all
+five, and the next correction would have meant hunting them again. `SUCC_META` now holds them once
+and every site reads it. The crown-margin text was also justified by 76% and said **"UNSTABLE,
+succession live"**; it now states the measured rate instead.
+
+**What the tile says now:** size alone is the weakest of the three signals. On the same 9 sessions,
+by the node's own state at ≥80%: **BUILDING 42%, FADING 39%, STEADY 7%** — below the 8% base rate.
+Motion is the signal, stasis is the anti-signal.
+
+**③ THE STEP BAR AND SECTION HEADERS ARE GONE.** They were the last of a five-step workflow
+dismantled piece by piece — ① FRAME dissolved in v13.0, REACTION and EXECUTE retired in v14.32 —
+leaving a progress tracker for a two-step process whose two steps are the only two things on screen.
+⚠ `STEP_TIPS` is KEPT: it carried the only written statement of what each section is FOR (*"you
+trade AT levels, never between them"*), and that is doctrine, not decoration.
+
+⚠ **Two of the new assertions were fake and mutation caught both.** One checked the corrected hover
+sentence was present but not that the old one was gone, so a face saying BOTH passed. The other
+grepped the whole file for the doctrine line — and was satisfied by the comment I had just written
+quoting it, so gutting `STEP_TIPS` left it green. Both rebound to the thing itself.
+
+7 mutations run individually; all 7 fail correctly. Suite 123 green, smoke clean.
+
+## v14.83 — the name beside its price, and two King migration columns
+
+> "move the level name like PDC next to the price levels instead so it will look like 'PDC 7741' and
+> the arrows can be moved outside beyond the level names" … "lets create two columns, 1 for spxw
+> migration and the other for spy migration. they should be slim columns and show the movement like
+> steps."
+
+**v14.82's chute-strip is reverted at his request, and its invariant restored with it.** Putting the
+names inside the chute left a price with no name beside it and a name 100px from its price, pairable
+only by tracking a row across the bars. The name column comes back out, right-aligned with a **2px**
+gap so `PDC 7741` reads as one token — and the chute goes back to being **price's alone**, which is
+the invariant v14.82 deliberately reversed. The EM pill joined the 44px pill zone on the way past; it
+was the last chute occupant still spanning full width.
+
+**THE ROLL LANE BECAME THE TWO KING COLUMNS.** `ladderRolls` is retired: it was a SECOND drawing of
+rolls that `secLoc()` already renders in its own gutter (v13.9), with ROLL BIAS stating the
+whole-book direction on the ② LOCATION row. So the lane cost nothing to reclaim.
+
+⚠⚠ **BUT RETIRING IT ALMOST DELETED AN HONESTY CAVEAT.** The sentence *"⚠ INFERRED from paired
+changes, never an observed transfer"* lived ONLY in that drawer's hover. Nobody publishes that a
+position moved between strikes — a roll is a fall at one node matched to a rise at another, and that
+sentence is the only thing that says so. Caught by `r11`/`r12` going red. It is re-homed to the
+surviving roll hover, not re-typed shorter. **Deleting a drawing must never delete a claim's caveat.**
+
+**HE CHOSE ROW-ALIGNMENT OVER HIS OWN SKETCH.** He drew time running DOWN the column; both were
+mocked. Price-vertical won because vertical position means PRICE everywhere else in that band, and
+two meanings for one axis side by side is read wrong at a glance. So a run sitting at 7741 is LEVEL
+with `PDH 7741` and needs no label; time runs left-to-right in 24px and lives in the hover.
+
+**THE TRACK, AND THE THREE THINGS THAT ARE NOT MIGRATIONS:**
+
+⚠⚠ **It reads `ladderKings()` — the same call the crown pills read.** Measured on his live recorder
+2026-08-28: `snap.king` and `snap.tri.SPY.king` **disagreed at 13:24 and 13:36** (769 vs 771), one
+with hysteresis and one without, so *"how many times did the King move"* had two answers. A column
+drawing from one while the pill drew from the other would point away from the crown beside it.
+
+⚠⚠ **It stores `raw`, not `at`.** `at` is chart space and moves with every basis drift — tracking it
+would record a migration every few minutes and never a real one.
+
+⚠⚠ **A change that reverts is a FLICKER.** Friday held three single-observation excursions that all
+reverted (SPY 769 at 13:24 and 13:36, SPXW 7690 at 13:51 — near-equal strikes trading places).
+Drawing them would have put four steps on a day that had **one** real move. A strike must be seen
+`KT_DWELL` times running; probation is held outside the persisted track so a flicker never reaches
+storage at all.
+
+⚠ **And the expiry roll is not a migration.** At the close every crown "moves" (7715→7710, 771→760).
+RTH-gated out, and each point carries the expiry it was seen under so a roll can never be redrawn
+silently as a move.
+
+⚠ **An empty column says WHICH kind of empty** — nothing moved, or nothing was watched. The recorder
+only held 13:15 onward on 2026-08-28; "no arrow" and "no data" must not look the same.
+
+⚠ **`test_lastbook` r3 caught the first draft**: `ktTick` WRITES, so it must ask `recorderBlind()`
+(replay OR frozen book), not `inReplay()` alone — a frozen post-close book would have appended
+phantom migrations. An existing assertion doing its job.
+
+⚠ Also removed a fallback chain whose first link could never fire: `sessionPhase()` has no `openMs`.
+Dead code that reads as robustness.
+
+`__gptsDebug.kingTrack()` answers the migration count from the console. 27 new assertions,
+**14 mutations run individually — all 14 fail correctly.** Column audit: 12 columns, **0 overlaps**,
+618px unchanged. Suite 123 green, smoke clean.
+
+## v14.82 — the ladder's left half, rebuilt around five things he photographed
+
+> "justify the price pill to the right and make the price pill smaller from the left so we can have
+> at least 4 spaces to place the levels there instead ... if two levels share the same space, display
+> 1 but put both their names in the hoverover ... the node gamma bars ... are covering some of the
+> prices, especially the last digit ... you dont need to put 100% for the king ... the expected
+> value, it is crossed out ... you can remove it from being displayed."
+
+**① THE BAR OVER THE PRICE WAS A HARDCODED WIDTH BESIDE A CONSTANT THAT SAID SOMETHING ELSE.**
+`.g3ldpx` was emitted as `width:40px` while `LAD_PXW` read **30**, so the price spanned 114→154 while
+the bars started at `LAD_NODE=150`. **A 4px overlap on every node row**, and because the price is
+right-aligned those 4px land on the last digit — exactly what he circled. This is landmine **L-D**
+verbatim (*assert WIDTHS, not just offsets*), the same shape as the 24px `LAD_ROCW` overflow found in
+v14.54, and it survived because every test pinned OFFSETS.
+
+**② THE CHUTE IS NOW TWO WALLED SUB-COLUMNS — and that reverses a stated invariant on purpose.**
+Its own CSS still says the chute is *"price's alone — no other element may be positioned inside its
+x-range."* That rule existed so price can never be overlapped, and it is kept in spirit: a **46px
+name strip** on the left, a **44px pill zone** right-justified against the wall, nothing crossing
+between them. The wall moved; it did not come down.
+
+⚠ **His two answers conflicted by 4px and the freed gutter paid for both.** He wanted "at least 4
+spaces" for names AND a one-letter book tag on the Kings; a 66px chute cannot do both (44px pills
+leave 20px ≈ 3 characters). Deleting the 66px name gutter and spending 30px of it on the chute buys
+46px of strip **and** 44px pills. Everything RIGHT of the chute is untouched — five constants moved
+instead of twenty, and `LAD_W` never changed.
+
+⚠ `LAD_ROLL` had to move with it. The roll lane sat BETWEEN the names and the prices; with the names
+gone it had nothing to sit between and its amounts landed on the prices. Caught by `g5b`, an
+assertion that already existed for exactly this.
+
+**③ ONE LETTER, FROM AN EXPLICIT MAP.** `{SPXW:'S', SPY:'Y', QQQ:'Q'}` — **not** `book.charAt(0)`,
+because SPXW and SPY both start with S and a shortcut would print the same letter for two books,
+which is worse than no letter.
+
+**④ THE MERGE IS IN PIXELS, NOT POINTS.** `byRow` keyed on price, so it merged only levels at the
+SAME price — IBH 7758 × PDH 7756 stayed two rows and drew on top of each other (measured **66×4px**
+live, with PDH×CW0 and IBL×PDC alongside it). The same 2-point gap is 12px on a tight frame and 3px
+on a wide one, so points cannot answer *"do these two texts touch"*. Rows within 11px now collapse,
+chaining so three tight levels become one row and not two, both names on the face and every hover
+carried. ⚠ **A row snapped to a node is never absorbed** — folding it into a neighbour would quietly
+restate where the level is.
+
+**⑤ THE KING'S 100% IS THE DENOMINATOR ANNOUNCING ITSELF.** Suppressed — but tied to the VALUE being
+100, never to the role, so a King mid-roll that is *not* 100 still prints its number.
+
+**⑥ THE EXPIRED BAND IS NOT DRAWN.** Two different marks both read as a strikethrough and he was
+right about both: the amber boundary LINE runs at the true price and passes through its own label,
+and `.g3ahdim` really did strike the rail markers through — a styling whose meaning lived only in a
+hover he never opened. A mark that has to be hovered to be understood is a puzzle, not a mark. After
+hours the band is simply absent; the AFTER HOURS chip says why in words. ⚠ `emBand()` is untouched —
+a badge went, not a measurement (v11.95).
+
+⚠⚠ **AND A COMMENT I WROTE BROKE THE WHOLE SUITE FILE.** A prose line reading `LAD_NODE=150 — a 4px
+overlap...` sits earlier in the file than the declaration, so `test_ladder`'s constant reader matched
+the COMMENT, `eval`'d *"150 — a 4px overlap..."*, and the file threw before one assertion ran. The
+reader now strips comments first: **a geometry reader steerable by a comment silently tests the wrong
+numbers the day someone writes a helpful note.**
+
+22 new assertions. **15 mutations run individually — all 15 fail correctly.** Column audit: 11
+columns, **0 overlaps**, 618px unchanged. Suite 123 green, smoke clean.
+
+## v14.81 — the gamma profile is gone
+
+> "i dont think we need the bottom section where it says gamma profile and lists a bunch of levels
+> below, do you?" … "just remove it."
+
+**169px back on a 1016px face — 17% of everything he can see.** Removed: the profile bars, the
+5m/15m/60m ROC matrix, the state row, the `CW … PW … heaviest now …` summary line, and the legend.
+
+⚠⚠ **HE ASKED FOR THIS FEATURE ORIGINALLY.** Requested around v11.x, node bands were shipped in its
+place (recorded then as a flag substitution and a failure), and it was finally built for real in
+v14.0–14.4. Removing it reverses his own earlier request, so that was put to him BEFORE the cut
+rather than discovered afterwards. Do not restore it on the theory it was lost by accident.
+
+**Why it did not earn the space:** the rail already carries BUILDING / DEFENDING and the dollar
+delta on every strike it draws, so the profile was a second telling for strikes he does not trade
+off; the summary line restated three numbers sitting two inches above it; the legend never changed,
+and a legend that never changes is a hover. ⚠ It was also BROKEN when cut — measured on his live
+panel: **21 overlapping label pairs**, the $ axis landing on the row captions ("+1.4189%63%" in his
+screenshot is three numbers on the same pixels). He was judging a garbled version of the idea.
+
+⚠⚠ **A CHIP HE HAD PLACED RODE ON THAT HEADER.** ROLL BIAS was moved there in v14.4 by his own
+direction — *"the one whole-book line belongs on it. One home."* Deleting the header would have
+deleted it silently. Asked; he chose to rehome it, and it now sits on the ② LOCATION row beside the
+regime chip — the other whole-book row — LEFT of `T:`, which v11.75 gave the right-hand end
+deliberately.
+
+⚠⚠ **AND THE REHOME WAS BROKEN ON FIRST WRITING — caught in review, not by a test.** The v14.4
+original read `ROLLS`, which is a **local of `secLoc()`**. Moved into `secFrame()` that is a
+ReferenceError, and the surrounding bare `catch` would have swallowed it: the chip simply never
+appears, suite fully green, nothing logged. It now builds its own latched list, and the catch reports
+through `swallow()` instead of eating the error. **A rehomed line must re-derive its inputs, never
+inherit a scope it can no longer see.**
+
+**Survivors, deliberately:** the flip sentence ("Through it hedging flips from damping to
+amplifying") and the SET provenance line — both outside the removed function, both saying something
+the rail does not. The day-peak tracker (`PEAK`/`peakOf`) is untouched; the rail's bar outlines and
+roll arrows read it. Deleting a display must never delete the measurement behind it (v11.95).
+
+**Three test files reversed rather than deleted** — `test_lastbook` r4 (the profile's replay display
+guard), `test_garma_p1` k1/k2 (the dual-crown fix), `test_velocity_policy` (the bias chip's home).
+Each now pins the REMOVAL, so reinstating a profile turns them red and forces those decisions to be
+re-made on purpose instead of rediscovered. ⚠ One new assertion was fake and mutation caught it: a
+source grep proved the chip's string existed, and wrapping the emission in `if(0)` left it green
+while the chip vanished — the guard is now bound directly to the `h+=`.
+
+Six mutations run individually; all six fail correctly. Suite 123 green, smoke clean.
+
 ## v14.80.1 — "update the companion" was wrong for eight builds
 
 > "the companion has a reinstall instead of update"

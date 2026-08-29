@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.80.1
+// @version    14.84
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.80.1';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.84';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -9419,6 +9419,22 @@ function evaBandFromPct(pctMap){
     acc+=arr[i][1]; if(acc>=0.7*tot) break; }
   return {lo:lo, hi:hi, cov:+(acc/tot).toFixed(2)};
 }
+// ⚠⚠ (v14.84) THE SUCCESSION NUMBERS LIVE HERE, ONCE. The withdrawn 76% was hand-typed into FIVE
+// separate strings — the tile hover, the projection basis, two Analysis rows and a recommendation —
+// so correcting it meant finding all five, and the next correction would have meant finding them
+// again. That is how a number stays wrong in a corner of the face nobody re-reads. One object now;
+// every site reads it.
+//
+// MEASURED 2026-08-29, `tools/study-succession3.py`, 9 recorded sessions, 1094 snapshots.
+// ⚠ Scored against the crown the panel DRAWS (kingLatchTick, 120s hold) — NOT the raw tape, which
+// flaps between near-equal strikes several times an hour. The original 76% was 4 days scored on the
+// raw tape, where a one-snapshot flicker counted as a succession. It does not reproduce at any
+// horizon: 23% at 30m, 41% at 60m, 55% across a whole session.
+var SUCC_META={
+  sessions:9, n:727, hz30:23, hz60:41, hzDay:55, chance:8, withdrawn:76, withdrawnN:148,
+  // by the node's OWN state, at >=80% of the King. Motion is the signal; stasis is the anti-signal.
+  stBuild:42, stBuildN:169, stFade:39, stFadeN:93, stSteady:7, stSteadyN:245
+};
 function successionFromPct(pctMap, kingK){
   if(!pctMap) return null;
   var bk=null, bv=0;
@@ -9533,7 +9549,7 @@ function kingReadHtml(A, kv){
     tile('K$ · TODAY', kdV, 'King dollar magnitude parsed from the tape ($K row) and its change vs session open. Growth = real directional intent; bleed = hedge decay, pin thesis weakening (Academy node-lifecycle). Recorded every bar.')+
     tile('DIST', distV, 'Strikes between price and King. Gravity gate: on our recorded data the toward-King edge exists only within 3 strikes (54-60% inside vs 47%/0% beyond) — outside it, pull claims are suppressed.')+
     tile('VALUE 70%', evaV, 'Exposure Value Area: the tightest strike band around the King holding ~70% of total dealer mass (POC concept). Inside = rotation regime (57% toward-King, n=260). OUTSIDE = imbalance — continuation, do NOT fade (n=25).')+
-    tile('SUCCESSION'+(A.succHot?' ⚠':''), (A.succHot?'<span style="color:'+PAL.amber+'">'+succV+'</span>':succV), 'Strongest non-King strike as % of King mass. When ≥60%: measured 76% chance the crown ROLLS TO THAT STRIKE within 20 bars, median 12 min (n=148). The #1 backtested leading indicator.', A.succHot)+
+    tile('SUCCESSION'+(A.succHot?' ⚠':''), (A.succHot?'<span style="color:'+PAL.amber+'">'+succV+'</span>':succV), 'Strongest non-King strike as % of King mass \u2014 who is second in line. \u26a0 THIS TILE CLAIMED '+SUCC_META.withdrawn+'% UNTIL 2026-08-29 AND IT DID NOT REPRODUCE. Re-measured on 9 recorded sessions against the crown the panel actually DRAWS (the latched one, not the raw tape that flaps between near-equal strikes): at \u226560% the crown moved to that strike '+SUCC_META.hz30+'% of the time within 30 minutes, '+SUCC_META.hz60+'% within an hour, and never above '+SUCC_META.hzDay+'% at ANY horizon. The original 76% was 4 days scored against the raw tape, where a one-snapshot flicker counted as a succession. \u26a0 What DOES separate is the node\u2019s own STATE, on the same 9 sessions at \u226580%: BUILDING '+SUCC_META.stBuild+'% and FADING '+SUCC_META.stFade+'% within 30m, but STEADY only '+SUCC_META.stSteady+'% \u2014 below the '+SUCC_META.chance+'% base rate for any ranked strike. Motion is the signal, stasis is the anti-signal, and SIZE ALONE is the weakest of the three. Read the state chip on that node\u2019s own row before reading this number.', A.succHot)+
     tile('TAPS · CROSS', A.taps+' · '+A.cross, 'Tap episodes at the King today and side crossings. Academy freshness claim: 1st tap ~80% reaction, 2nd ~66%, 3rd ~33% (unverified). Many crossings = chop axis, not a wall.')+
     tile('PHASE', A.phase+(A.toClose?' · '+A.toClose+'m':''), 'Session phase (CT): OPEN 8:30-9:30 · MID · LUNCH 11:30-1:00 · POWER = last 30m (forced-flow volatility; pin window when near the King). Minutes shown = to the 15:00 close.')+
     tile('ALIGN', alignV, 'Cross-market King agreement: is QQQ\'s King on the same side of its own price as SPY\'s? Aligned = system-wide pull. VIX confirmation chip pending the ladder spike.')+
@@ -9544,7 +9560,7 @@ function kingReadHtml(A, kv){
             :'polarity unknown';
   var P=[];
   if(A.over) P.push(g('OVERSHOOT of +γ King',PAL.amber)+' without a 14-bar high — stretch not break; reversion through '+fmtNum(A.king)+' favored ⚖');
-  if(A.succHot && A.succ) P.push(g('SUCCESSION: '+fmtNum(A.succ.k)+' at '+A.succ.a+'%',PAL.amber)+' — 📊 76% crowned ≤20 bars (n=148)');
+  if(A.succHot && A.succ) P.push(g('SUCCESSION: '+fmtNum(A.succ.k)+' at '+A.succ.a+'%',PAL.amber)+' \u2014 \ud83d\udcca '+SUCC_META.hz30+'% crowned \u226430m, '+SUCC_META.hz60+'% \u226460m (n='+SUCC_META.n+') \u2014 read the node\u2019s STATE');
   if(!A.grav) P.push('outside gravity (>3) — pull '+g('unsupported')+' 📊');
   else if(A.appr && A.appr.approaching) P.push('approaching — 📊 63% continue; ETA ~'+(A.appr.etaBars*3)+'m'+((A.phase==='POWER'&&A.adist<=1.5)?' · '+g('PIN WINDOW',PAL.gold)+' ⚖':''));
   if(A.inVA===false) P.push(g('outside value',PAL.amber)+' — imbalance: don’t fade 📊 (n=25)');
@@ -9581,7 +9597,7 @@ function kingProjection(A, ctx){
           rate:null, cone:null, pin:false, basis:{} };
   // Projected King: ONLY when Succession Watch is hot (>=60% of King mass).
   if(A.succHot && A.succ){ P.projKing=A.succ.k; P.projSrc='succession';
-    P.basis.succ='76% crowned <=20 bars (n=148, sharpens in Analysis)'; }
+    P.basis.succ=SUCC_META.hz30+'% crowned <='+30+'m, '+SUCC_META.hz60+'% <=60m (n='+SUCC_META.n+') - state matters more than size'; }
   P.tgt = (P.projKing!=null)?P.projKing:A.king;            // T2 = operative King (cap)
   if(typeof ctx.gateK==='number' && ctx.gateK!==P.tgt &&
      ((A.px<P.tgt && ctx.gateK>A.px && ctx.gateK<P.tgt) ||
@@ -17449,9 +17465,9 @@ function projRecs(sc){
     else recs.push({sev:'ok', t:'ETA error median '+sc.etaMed+'m — acceptable.'});
   } else recs.push({sev:'info', t:'ETA error: recording ('+sc.etaErrs.length+'/15).'});
   if(sc.succN>=10){ var sr=pct(sc.succ,sc.succN);
-    if(sr<60) recs.push({sev:'high', t:'Succession hit '+sr+'% < backtest 76% — raise the 60% threshold or require 2 consecutive bars hot.'});
-    else recs.push({sev:'ok', t:'Succession hit '+sr+'% (n='+sc.succN+') — live rate replaces the n=148 backtest label.'});
-  } else recs.push({sev:'info', t:'Succession: '+sc.succN+'/10 live samples — label still uses the 4-day backtest (76%, n=148).'});
+    if(sr<SUCC_META.hz30) recs.push({sev:'high', t:'Succession hit '+sr+'% < the measured '+SUCC_META.hz30+'% — check the node STATE split before touching the 60% threshold; size alone is the weakest of the three.'});
+    else recs.push({sev:'ok', t:'Succession hit '+sr+'% (n='+sc.succN+') — at or above the measured '+SUCC_META.hz30+'% (n='+SUCC_META.n+'); the live rate replaces the label.'});
+  } else recs.push({sev:'info', t:'Succession: '+sc.succN+'/10 live samples — label uses the '+SUCC_META.sessions+'-session measurement ('+SUCC_META.hz30+'% <=30m, n='+SUCC_META.n+').'});
   if(sc.pinN>=5){ var pr=pct(sc.pin,sc.pinN);
     recs.push({sev:(pr>=60?'ok':'med'), t:'Pin-band hit '+pr+'% (n='+sc.pinN+').'+(pr<60?' Widen band to ±0.75 or require taps<3.':'')});
   } else recs.push({sev:'info', t:'Pin band: '+sc.pinN+'/5 flagged closes recorded.'});
@@ -17465,7 +17481,7 @@ function projScorecardHtml(){
   function pct(a,b){ return b?Math.round(100*a/b)+'%':'● recording'; }
   var h='<div style="padding:5px 8px;background:'+PAL.card+';border:1px solid '+PAL.line+';border-radius:8px;margin:4px 0">'+
     '<div title="Scores every projection the Dashboard drew, after the fact. This is the sharpening loop: the projected chart’s labels re-read from these live rates once they unlock." style="color:'+PAL.gold+';font-size:9px;font-weight:800;letter-spacing:.5px;margin-bottom:3px">🎯 PROJECTION SCORECARD <span style="color:'+PAL.sub+';font-weight:400">('+sc.days+'d recorded)</span></div>'+
-    row('Succession ≥60% → crowned ≤20 bars', (sc.succN?pct(sc.succ,sc.succN)+' n='+sc.succN:'● recording'), 'Live version of the 76% (n=148) backtest.')+
+    row('Succession ≥60% → crowned ≤30m', (sc.succN?pct(sc.succ,sc.succN)+' n='+sc.succN:'● recording'), 'Live version of the measured '+SUCC_META.hz30+'% (n='+SUCC_META.n+', '+SUCC_META.sessions+' sessions). ⚠ The withdrawn '+SUCC_META.withdrawn+'% claim was scored against the RAW tape, where a one-snapshot flicker counted as a succession.')+
     row('Target reached by close', pct(sc.reach,sc.reachN)+(sc.reachN?' n='+sc.reachN:''), 'Any later bar within ±0.5 of the projected target.')+
     row('ETA error (median)', (sc.etaMed!=null?(sc.etaMed>0?'+':'')+sc.etaMed+'m n='+sc.etaErrs.length:'● recording'), 'First-touch time minus projected ETA.')+
     row('Cone coverage', pct(sc.cov,sc.covN)+(sc.covN?' n='+sc.covN:''), 'Price within the volatility cone at the projection horizon. Target ~70%.')+
@@ -20072,7 +20088,7 @@ function ensureV3Css(){
     '#gpts-body .g3ldeml{position:absolute;left:'+(LAD_CH+LAD_CHW+8)+'px;font-size:7.4px;font-weight:900;'+
       'color:#f2b45a;transform:translateY(-50%);white-space:nowrap;cursor:help}'+
     '#gpts-body .g3ldopn{position:absolute;left:'+(LAD_CH+1)+'px;width:'+(LAD_CHW-2)+'px;height:1px;background:#8b98a9;opacity:.6;cursor:help}'+
-    '#gpts-body .g3ldnow{position:absolute;left:'+(LAD_CH+2)+'px;width:'+(LAD_CHW-4)+'px;height:15px;background:#fff;'+
+    '#gpts-body .g3ldnow{position:absolute;left:'+(LAD_CH+LAD_CHW-LAD_PILLW-2)+'px;width:'+LAD_PILLW+'px;height:15px;background:#fff;'+
       'color:#0d1117;border-radius:8px;font-size:9px;font-weight:900;display:flex;align-items:center;'+
       'justify-content:center;transform:translateY(-50%);z-index:9;cursor:help}'+
     '#gpts-body .g3ldnow.str{background:#e0645f;color:#fff}'+
@@ -20084,14 +20100,37 @@ function ensureV3Css(){
     '#gpts-body .g3ldnow.kQQQ{background:#5fd3bc;color:#08221d}'+
     '#gpts-body .g3ldnowarm{position:absolute;left:'+LAD_PXC+'px;right:6px;height:1px;background:rgba(255,255,255,.12);transform:translateY(-50%)}'+
     // levels · price
-    '#gpts-body .g3ldlv{position:absolute;left:0;width:'+LAD_LVL+'px;text-align:right;font-size:8.4px;'+
-      'font-weight:800;color:#8b98a9;white-space:nowrap;transform:translateY(-50%);overflow:hidden;text-overflow:ellipsis;cursor:help}'+
+    // (v14.83) RIGHT-ALIGNED AND HARD AGAINST THE PRICE, so the pair reads as one token: "PDC 7741".
+    // It clips rather than runs — the full name and every merged partner are in the hover.
+    // ---- (v14.83) the two King migration columns ----------------------------------------------
+    '#gpts-body .g3ldkc{position:absolute;top:0;bottom:0;background:rgba(255,255,255,.03);'+
+      'border-left:1px solid rgba(255,255,255,.07);border-right:1px solid rgba(255,255,255,.07);cursor:help}'+
+    '#gpts-body .g3ldkcw{position:absolute;top:4px;text-align:center;font-size:6.4px;font-weight:900;'+
+      'letter-spacing:.06em;color:#3f4b5b;cursor:help}'+
+    '#gpts-body .g3ldkrun{position:absolute;height:1.8px;transform:translateY(-50%);border-radius:1px;cursor:help}'+
+    '#gpts-body .g3ldkstep{position:absolute;width:1.8px;border-radius:1px}'+
+    '#gpts-body .g3ldkknot{position:absolute;width:5px;height:5px;border-radius:50%;box-sizing:border-box;'+
+      'transform:translate(-50%,-50%);background:#11161f;cursor:help}'+
+    '#gpts-body .g3ldkS{background:#e3c341}'+
+    '#gpts-body .g3ldkknot.g3ldkS{background:#11161f;border:1.4px solid #e3c341}'+
+    '#gpts-body .g3ldkY{background:#cdb4fa}'+
+    '#gpts-body .g3ldkknot.g3ldkY{background:#11161f;border:1.4px solid #cdb4fa}'+
+    '#gpts-body .g3ldlv{position:absolute;left:'+LAD_LVL+'px;width:'+LAD_LVLW+'px;text-align:right;font-size:8.4px;'+
+      'font-weight:800;color:#8b98a9;white-space:nowrap;transform:translateY(-50%);overflow:hidden;text-overflow:ellipsis;cursor:help;z-index:8}'+
     '#gpts-body .g3ldlvc{color:#7cc7ff}'+
     '#gpts-body .g3ldlvspyk{color:#cdb4fa}'+
     '#gpts-body .g3ldlvdp{color:#5fd3bc}'+
     '#gpts-body .g3ldlviff{font-style:italic}'+
-    '#gpts-body .g3ldrule{position:absolute;left:'+(LAD_LVL+4)+'px;width:'+(LAD_PXC-LAD_LVL-8)+'px;height:1px;background:#6b7787;opacity:.3}'+
-    '#gpts-body .g3ldpx{position:absolute;left:'+LAD_PXC+'px;width:40px;text-align:right;font-size:8.4px;'+
+    // (v14.82) .g3ldrule retired — it drew the dashes from the name gutter to the price, and the
+    // gutter is gone. Kept as a no-op rule rather than deleted so any stray emitter cannot inherit
+    // a width from elsewhere and draw a stripe across the ladder.
+    '#gpts-body .g3ldrule{display:none}'+
+    // ⚠⚠ THIS WIDTH WAS HARDCODED 40 WHILE LAD_PXW SAID 30, AND THAT IS THE BAR-OVER-THE-PRICE BUG.
+    // Measured on his live panel 2026-08-28: .g3ldpx spanned 114..154 and .g3ldbar started at
+    // LAD_NODE (150) — a 4px overlap on EVERY node row, and because the price is RIGHT-aligned those
+    // 4px land on the last digit. He circled it. The constant is now the single source (L-D: assert
+    // WIDTHS, not just offsets — the same lesson that found the 24px LAD_ROCW overflow in v14.54).
+    '#gpts-body .g3ldpx{position:absolute;left:'+LAD_PXC+'px;width:'+LAD_PXW+'px;text-align:right;font-size:8.4px;'+
       'font-weight:800;color:#c9d1da;transform:translateY(-50%);cursor:help}'+
     '#gpts-body .g3lddim{color:#77828f;font-weight:700}'+
     // (v14.48) THE PILLS in the price column: the expected-move boundaries and the three Kings.
@@ -20103,13 +20142,16 @@ function ensureV3Css(){
     // The chute is the one column that carries every price that matters: where price IS, the three
     // crowns, and the two edges of the day's budget. Nothing else may enter it, and test_ladder
     // asserts that - the MARKER, the tap counter and the delta profile all start at LAD_MK or later.
-    '#gpts-body .g3ldempill{position:absolute;left:'+(LAD_CH+2)+'px;width:'+(LAD_CHW-4)+'px;font-size:7.4px;'+
+    // (v14.83) the EM pill joins the pill zone. It was the last chute occupant still spanning the
+    // FULL chute width, which was fine when the chute was pills-only at full width and wrong now
+    // that the price and both crowns are 44px right-justified — one column of pills, one geometry.
+    '#gpts-body .g3ldempill{position:absolute;left:'+(LAD_CH+LAD_CHW-LAD_PILLW-2)+'px;width:'+LAD_PILLW+'px;font-size:7.4px;'+
       'font-weight:900;color:#f2b45a;background:rgba(242,180,90,.12);border:1px solid rgba(242,180,90,.55);'+
       'border-radius:7px;padding:0 4px;height:13px;box-sizing:border-box;transform:translateY(-50%);'+
       'white-space:nowrap;cursor:help;z-index:5;display:flex;align-items:center;justify-content:center;gap:3px}'+
     '#gpts-body .g3ldrailend{position:absolute;left:'+(LAD_CH+LAD_CHW+4)+'px;font-size:7px;font-weight:800;'+
       'color:#4b5563;transform:translateY(-50%);white-space:nowrap;cursor:help}'+
-    '#gpts-body .g3ldking{position:absolute;left:'+(LAD_CH+2)+'px;width:'+(LAD_CHW-4)+'px;font-size:8px;'+
+    '#gpts-body .g3ldking{position:absolute;left:'+(LAD_CH+LAD_CHW-LAD_PILLW-2)+'px;width:'+LAD_PILLW+'px;font-size:8px;'+
       'font-weight:900;border-radius:7px;padding:0 3px;height:14px;box-sizing:border-box;'+
       'transform:translateY(-50%);white-space:nowrap;cursor:help;z-index:6;display:flex;align-items:center;gap:2px}'+
     '#gpts-body .g3ldking b{font-weight:900;font-size:8px}'+
@@ -20182,8 +20224,6 @@ function ensureV3Css(){
     '#gpts-body .g3ldrolls svg{position:absolute;left:0;top:0;overflow:visible}'+
     '@keyframes g3ldflow{to{stroke-dashoffset:-18}}'+
     '#gpts-body .g3ldflow{animation:g3ldflow 1.5s linear infinite}'+
-    '#gpts-body .g3ldramt{position:absolute;left:'+(LAD_ROLL-16)+'px;width:'+LAD_ROLLW+'px;text-align:right;'+
-      'font-size:7.2px;font-weight:900;transform:translateY(-50%);white-space:nowrap;cursor:help;pointer-events:auto}'+
     '#gpts-body .g3ldst{position:absolute;left:'+LAD_ST+'px;width:'+LAD_STW+'px;font-size:8.4px;font-weight:900;'+
       'transform:translateY(-50%);white-space:nowrap;cursor:help}'+
     // (v14.49) the settled vocabulary: BUILDING · HOLDING · TURN UP/DN · WEAKENING · SPENT
@@ -21976,8 +22016,17 @@ function hodlodBase(){
 // ⚠ AND THE NOT-IN CALL LIVED IN THE MISSING CELLS: 72% on n=85 became 85% on n=230, and it fires
 // at 08:40 instead of 09:45. A leftover constraint from a deleted feature was costing the better
 // half of the feature.
+// ⚠⚠ (v14.84) `inHit` WAS 92 AND THE HONEST NUMBER IS 63. FINDINGS F-12, confirmed by three
+// independent reproductions (`tools/study-second.py`), open since 2026-08-28:
+//     the panel, live   calls whichever extreme is FIRST-PRINTED AT THAT MOMENT   -> 63%, n=284
+//     the study behind 92   selected the side that TURNED OUT to print first      -> 91%, n=284
+// Selecting the side with hindsight conditions on the answer. When a standing low breaks at 11:00
+// the live panel had already made the call and was wrong; the backtest silently re-picked. 92 was
+// never a rate this panel could earn — it was the rate of a decision made after the fact.
+// ⚠ THE CELL RATES IN HLTAB ARE UNAFFECTED. They are a lookup of what happened, not a decision, and
+// their AUC 0.879 stands. Only the DECISION accuracy quoted in the hover was wrong.
 var HLTAB_META={ sessions:284, obs:44302, first:'2025-06-02', last:'2026-08-21', binMin:45, minBar:5,
-                 thresh:70,   inHit:92,    inN:284,   inCT:'9:35',
+                 thresh:70,   inHit:63,    inN:284,   inCT:'9:20',   inHindsight:92,
                  notIn:20,    notInHit:85, notInN:230, notInCT:'8:40',
                  secondMed:'13:29', secondQ1:'11:48', secondQ3:'14:45', secondAhead:99 };
 // rows = posr octile (0 = on the extreme, 7 = the far side); cols = 45-minute blocks from 08:30 CT.
@@ -22814,9 +22863,51 @@ function levelDoors(rolls, dsc){
 // BUILDING · HOLDING · TURN UP/DN · WEAKENING · SPENT and the resume note says not to re-litigate it.
 // So the words win and the column keeps its 54px. That is the v14.50 lesson: a 50px word in a 44px
 // cell prints over its neighbour, and asserting the OFFSETS were ordered proved nothing about it.
-var LAD_W=618, LAD_LVL=66, LAD_ROLL=84, LAD_ROLLW=44, LAD_PXC=114, LAD_PXW=30,
-    LAD_NODE=150, LAD_NMAX=70,
-    LAD_CH=224, LAD_CHW=66,
+// ⚠⚠ (v14.82) THE LEFT GUTTER IS GONE AND THE CHUTE ATE THE SPACE — operator, 2026-08-28:
+// "justify the price pill to the right and make the price pill smaller from the left so we can have
+// at least 4 spaces to place the levels there instead ... if two levels share the same space,
+// display 1 but put both their names in the hoverover."
+//
+// ⚠⚠ THIS REVERSES A STATED INVARIANT, ON PURPOSE. The CSS below still says the chute is "price's
+// alone — no other element may be positioned inside its x-range". That rule existed to guarantee
+// price is never overlapped, and it is KEPT IN SPIRIT: the chute is now TWO walled sub-columns —
+// a level strip on the left and the pill zone on the right — and nothing may cross between them.
+// Price still cannot be overlapped. What changed is that the wall moved, not that it came down.
+//
+// ⚠ HIS TWO ANSWERS CONFLICTED BY 4px AND THE FREED GUTTER PAYS FOR BOTH. He asked for "at least 4
+// spaces" for level names AND for the Kings to keep a one-letter book tag; a 66px chute cannot do
+// both (44px pills leave 20px ~ 3 chars). Removing the 66px name gutter and spending 30px of it on
+// the chute gives 46px of strip (~6 chars) AND 44px pills. Everything RIGHT of the chute is
+// UNCHANGED — LAD_MK/TAP/DAX/ST/ROC and LAD_W all keep their values, so this touches five numbers
+// instead of twenty. The ladder is still 618px; narrowing it to the 454px body is a separate item.
+// ⚠⚠ (v14.83) THE NAME SITS BESIDE ITS PRICE, AND THE ROLL LANE BECAME THE KING COLUMNS.
+// Operator, 2026-08-28/29, rejecting v14.82's layout: "move the level name like PDC next to the
+// price levels instead so it will look like 'PDC 7741' and the arrows can be moved outside beyond
+// the level names" ... "lets create two columns, 1 for spxw migration and the other for spy
+// migration. they should be slim columns and show the movement like steps."
+//
+// v14.82 put the names INSIDE the chute, 100px from the prices they belong to. He was right that it
+// reads badly: a price with no name beside it and a name with no price beside it, paired only by
+// tracking a row across the bars. The name column comes back OUT of the chute and sits immediately
+// left of the price, so "PDC 7741" reads as one thing — and the chute shrinks back to pills-only.
+//
+// ⚠ THE ROLL LANE IS REPURPOSED, NOT LOST. `ladderRolls` drew per-node roll connectors here — a
+// SECOND drawing of something `secLoc()` already draws in its own gutter (v13.9, "the roll is shown
+// as a connector in its own gutter"), and ROLL BIAS still summarises the whole book on the LOCATION
+// row. So the lane costs nothing to reclaim, and the two King columns take it.
+//
+// ⚠ THE COLUMNS ARE ROW-ALIGNED, WHICH IS THE WHOLE POINT (he chose this over his own sketch).
+// His drawing ran TIME down the column; that would make vertical position mean time in a band where
+// it means PRICE everywhere else, and at a glance the eye reads a step's height as a level. Here
+// y is price on the ladder's own scale — a run sitting on 7741 is LEVEL with "PDH 7741" — and time
+// runs left-to-right inside the 24px, so "when" is approximate and lives in the hover.
+var LAD_W=618,
+    LAD_KS=2,  LAD_KSW=24,        // SPXW migration column
+    LAD_KY=28, LAD_KYW=24,        // SPY migration column
+    LAD_LVL=56, LAD_LVLW=46,      // the level NAME, right-aligned hard against its price
+    LAD_PXC=104, LAD_PXW=34,
+    LAD_NODE=140, LAD_NMAX=70,
+    LAD_CH=236, LAD_CHW=56, LAD_PILLW=44,
     LAD_MK=294, LAD_MKW=46, LAD_TAP=344, LAD_TAPW=20,
     LAD_DAX=424, LAD_DMAX=56, LAD_DLAB=428, LAD_DLABW=44,
     LAD_ST=476, LAD_STW=54, LAD_ROC=534, LAD_ROCW=84;
@@ -22856,6 +22947,85 @@ var LAD_SNAP_PTS=2;         // a level within this many points of a node shares 
 //              all three on one scale, it is marked with a tilde, and the hover says plainly that it
 //              is an approximation rather than a level. Do not let a later version quietly promote
 //              it to a level: it is a bearing, not a price.
+
+// ---- (v14.83) THE KING TRACK — where each crown has sat today, and when it moved ---------------
+// Operator: "if the king only moved a few times, can you draw the source to destination with the
+// migration number so i can track the migration during the day."
+//
+// ⚠⚠ IT READS `ladderKings()` — THE SAME CALL THE CHUTE PILLS READ. Measured 2026-08-28: the
+// recorder's own `snap.king` and `snap.tri.SPY.king` DISAGREED at 13:24 and 13:36 (769 vs 771), so
+// "how many times did the King move" had two different answers depending on which field you asked.
+// A column that drew from one while the pill drew from the other would put an arrow pointing away
+// from the crown beside it. One source, asserted by test.
+//
+// ⚠⚠ IT TRACKS `raw`, NOT `at`. `at` is the chart-space price and it moves every time the ES/SPX
+// basis drifts — tracking it would record a migration every few minutes and never a real one.
+// `raw` is the strike in its own book's space and only changes when the crown actually changes.
+//
+// ⚠⚠ A CHANGE THAT REVERTS IS A FLICKER, NOT A MIGRATION. On 2026-08-28 the raw series held three
+// single-observation excursions (SPY 769 at 13:24 and 13:36, SPXW 7690 at 13:51) that all reverted
+// immediately — two near-equal strikes trading places. Drawing them would have put four steps on a
+// day that had ONE real move. A new strike must be seen KT_DWELL times running before it is
+// written, and a pending strike that reverts is discarded without a trace.
+//
+// ⚠ AND THE EXPIRY ROLL IS NOT A MIGRATION. At the close Skylit rolls the front expiry and every
+// crown "moves" — 7715→7710 and 771→760 on 2026-08-28. That is bookkeeping. The RTH gate excludes
+// it, and each point carries the expiry it was observed under so a roll can never be silently
+// redrawn as a move.
+var KT_KEY='gpts_kingtrack_v1';
+var KT_SCHEMA=1;
+var KT_DWELL=2;                 // consecutive observations at a new strike before it is a migration
+var KT_MAX=40;                  // points per book per day; a day with 40 King moves is a broken feed
+var KTRACK={ v:KT_SCHEMA, day:null, b:{} };
+var KT_PEND={};                 // book -> {k, n} — the strike on probation, never persisted
+function ktLoad(){
+  try{
+    var o=JSON.parse(localStorage.getItem(KT_KEY)||'null');
+    if(o && o.v===KT_SCHEMA && o.day===ctTodayStr() && o.b) KTRACK=o;
+  }catch(e){}
+  if(KTRACK.day!==ctTodayStr()){ KTRACK={ v:KT_SCHEMA, day:ctTodayStr(), b:{} }; KT_PEND={}; }
+}
+function ktSave(){
+  try{ if(typeof lsPut==='function') lsPut(KT_KEY, KTRACK, false);
+       else localStorage.setItem(KT_KEY, JSON.stringify(KTRACK)); }catch(e){}
+}
+// the books that get a column. QQQ is deliberately absent: its crown is a PROPORTIONAL BEARING, not
+// a level (ladderKings marks it kind:'proportional'), and a migration line implies a level moved.
+var KT_BOOKS=['SPXW','SPY'];
+function ktTick(EB, sym){
+  try{
+    // ⚠⚠ recorderBlind(), NOT inReplay() — caught by test_lastbook r3, which exists for exactly this.
+    // ktTick WRITES to localStorage, and every write path must ask the one predicate that means
+    // "the face is not showing live truth": a replay OR a frozen book. Testing replay alone would
+    // have let a frozen post-close book append phantom migrations to today's track.
+    if(typeof recorderBlind==='function' && recorderBlind()) return;
+    var P=null; try{ P=sessionPhase(); }catch(e0){}
+    if(!P || !P.rth) return;                       // RTH only — this also excludes the close roll
+    ktLoad();
+    var KG=[]; try{ KG=ladderKings(EB, sym)||[]; }catch(e1){ return; }
+    var exp=null; try{ var tk=tapeMap('SPXW'); exp=(tk&&tk.exp!=null)?String(tk.exp):null; }catch(eE){}
+    var dirty=false;
+    KT_BOOKS.forEach(function(bk){
+      var K=null;
+      for(var i=0;i<KG.length;i++){ if(KG[i].book===bk && KG[i].kind==='basis'){ K=KG[i]; break; } }
+      if(!K || typeof K.raw!=='number' || !(K.raw>0)) return;
+      var arr=KTRACK.b[bk] || (KTRACK.b[bk]=[]);
+      var last=arr.length?arr[arr.length-1].k:null;
+      if(last===K.raw){ delete KT_PEND[bk]; return; }          // unchanged — clear any probation
+      var pd=KT_PEND[bk];
+      if(!pd || pd.k!==K.raw){ KT_PEND[bk]={ k:K.raw, n:1 }; return; }   // new candidate, on probation
+      pd.n++;
+      if(pd.n<KT_DWELL) return;                                 // not yet held long enough
+      delete KT_PEND[bk];
+      if(arr.length>=KT_MAX) return;
+      arr.push({ t:Date.now(), k:K.raw, e:exp });
+      dirty=true;
+    });
+    if(dirty) ktSave();
+  }catch(e){}
+}
+function ktOf(book){ try{ return (KTRACK.b&&KTRACK.b[book])?KTRACK.b[book]:[]; }catch(e){ return []; } }
+
 function ladderKings(EB, sym){
   var out=[];
   try{
@@ -22895,8 +23065,78 @@ function ladderKings(EB, sym){
   }catch(e){}
   return out;
 }
+
+// ---- (v14.83) THE TWO KING COLUMNS — a step chart per book, row-aligned ----------------------
+// He chose row-alignment over his own sketch: y is PRICE on the ladder's own scale, so a run sitting
+// at 7741 is LEVEL with "PDH 7741" and the strike reads itself. Time runs left-to-right inside the
+// 24px, so "when" is approximate on the face and exact in the hover.
+//
+// ⚠ THE RECORDED STRIKE IS CONVERTED AT RENDER TIME, WITH TODAY'S BASIS. The track stores `raw`
+// (the book's own strike). Converting once at record time would freeze a stale basis into the
+// drawing and the run would drift off its row as the day went on. Same conversion ladderKings uses,
+// so a run and its crown pill can never land on different rows.
+function ladderKingCols(EB, sym, Y, lo, hi, H){
+  var h='';
+  try{
+    // ⚠ THE OPEN IS THE FIRST CLOSED CANDLE, NOT A sessionPhase FIELD. My first draft asked
+    // sessionPhase() for an `openMs` it does not have — a fallback chain whose first link could
+    // never fire, which reads like robustness and is dead code. closedCandles() is already filtered
+    // to today from 08:30 CT (the same fact emBand relies on for its anchor).
+    var openMs=null, nowMs=Date.now();
+    try{ var cs=closedCandles(sym)||[]; if(cs.length) openMs=cs[0].t; }catch(e1){}
+    var span=(openMs!=null && nowMs>openMs)?(nowMs-openMs):0;
+    var dsc=0; try{ dsc=ifDispScale()||0; }catch(eD){}
+    var COLS=[{ book:'SPXW', x:LAD_KS, w:LAD_KSW, cls:'S', conv:function(k){ return dsc>0?k*dsc:null; } },
+              { book:'SPY',  x:LAD_KY, w:LAD_KYW, cls:'Y',
+                conv:function(k){ return (typeof EB.scaleUsed==='number'&&EB.scaleUsed>0)?k*EB.scaleUsed:null; } }];
+    COLS.forEach(function(C){
+      h+='<i class="g3ldkc" style="left:'+C.x+'px;width:'+C.w+'px"'+
+         g3tip('Where the '+C.book+' King has sat today. Vertical position is PRICE on this ladder’s own scale — a run is LEVEL with the row it names. Time runs left to right across this column, from the open to now, so the LENGTH of a run is how long that strike held the crown. ⚠ A change that reverted before it was seen '+KT_DWELL+' times running is a FLICKER and is not drawn — two near-equal strikes trading places is not a migration. The expiry roll at the close is not drawn either.')+
+         '></i>';
+      var pts=ktOf(C.book);
+      if(!pts.length || !span){
+        h+='<span class="g3ldkcw" style="left:'+C.x+'px;width:'+C.w+'px"'+
+           g3tip('No migration recorded for the '+C.book+' King today. Either the crown has not moved, or the panel was not running for part of the session — the track only holds what it saw. It records from whenever the panel starts, not from the open.')+
+           '>'+C.cls+'</span>';
+        return;
+      }
+      var xAt=function(t){
+        var f=(t-openMs)/span; if(f<0) f=0; if(f>1) f=1;
+        return C.x+2+f*(C.w-5);
+      };
+      var prevY=null, prevX=null;
+      pts.forEach(function(pt, i){
+        var disp=C.conv(pt.k); if(disp==null) return;
+        if(disp<lo || disp>hi) return;                 // off the frame: no run to draw
+        var y=Y(disp), x0=xAt(pt.t);
+        var x1=(i+1<pts.length)?xAt(pts[i+1].t):(C.x+C.w-2);
+        // the step UP TO this run, from where the previous one sat
+        if(prevY!=null){
+          var top=Math.min(prevY,y), hgt=Math.abs(y-prevY);
+          h+='<i class="g3ldkstep g3ldk'+C.cls+'" style="left:'+x0.toFixed(1)+'px;top:'+top.toFixed(1)+'px;height:'+hgt.toFixed(1)+'px"></i>';
+          h+='<i class="g3ldkknot g3ldk'+C.cls+'" style="left:'+x0.toFixed(1)+'px;top:'+y.toFixed(1)+'px"'+
+             g3tip(C.book+' King migrated to '+g3esc(String(pt.k))+' at '+g3esc(ctHHMM(pt.t))+'. Migration '+i+' of the day. It held its previous strike for '+g3esc(ktDur(pts[i-1].t, pt.t))+'.')+'></i>';
+        }
+        h+='<i class="g3ldkrun g3ldk'+C.cls+'" style="left:'+x0.toFixed(1)+'px;top:'+y.toFixed(1)+'px;width:'+Math.max(1,(x1-x0)).toFixed(1)+'px"'+
+           g3tip(C.book+' King at '+g3esc(String(pt.k))+(i===0?' from when recording began':(' from '+g3esc(ctHHMM(pt.t))))+
+                 ((i+1<pts.length)?(' until '+g3esc(ctHHMM(pts[i+1].t))):' — still there')+'.')+'></i>';
+        prevY=y; prevX=x1;
+      });
+    });
+  }catch(e){ try{ swallow('kingCols', e); }catch(e9){} }
+  return h;
+}
+function ctHHMM(ms){ try{ var d=new Date(ms-5*3600000); return d.toISOString().slice(11,16); }catch(e){ return '?'; } }
+function ktDur(a,b){
+  try{ var m=Math.round((b-a)/60000); if(m<60) return m+'m';
+       return Math.floor(m/60)+'h'+(m%60<10?'0':'')+(m%60); }catch(e){ return '?'; }
+}
+
 function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
   try{
+    // (v14.83) the King track records here, from the SAME EB the crown pills are about to be drawn
+    // from — one call site, so the columns and the pills cannot diverge.
+    try{ ktTick(EB, sym); }catch(eKT){ try{ swallow('kingTrack', eKT); }catch(e9){} }
     if(!EB || !EB.ok || !RB) return '';
     var lo=RB.lo, hi=RB.hi, span=hi-lo;
     if(!(span>0)) return '';
@@ -22952,8 +23192,24 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
     // nudged the KINGS clear of the EM pills instead. That is backwards: a nudged EM label still has
     // its amber line marking the true row, so nothing is lost — a nudged CROWN has no line at all
     // and would simply be pointing at the wrong price with no way to tell.
+    // ⚠⚠ (v14.82) AFTER THE CLOSE THE BAND IS NOT DRAWN AT ALL — operator, 2026-08-28: "Regarding the
+    // expected value, it is crossed out.. if it is no longer valid because the days finishing, you
+    // can remove it from being displayed, because i am not sure why you have a line over it."
+    //
+    // Two different marks BOTH read as a strikethrough on his face and he was right about both:
+    //   1. the ladder's amber boundary LINE runs at the true price and, when the label is not nudged,
+    //      passes straight through its own text — it looks struck out and is not;
+    //   2. the rail's `.g3emk` markers really were given `.g3ahdim` = opacity .35 + line-through,
+    //      a deliberate "expired" styling whose meaning lived only in a hover he never opened.
+    // A mark whose meaning is only in a hover is not a mark, it is a puzzle. After hours the whole
+    // band now simply goes; the AFTER HOURS · EM EXPIRED chip already says why, in words.
+    // ⚠ THE MEASUREMENT IS UNTOUCHED. emBand() still computes, still records, and `EB` still feeds
+    // the reads and the recorder — only the DRAWING stops (v11.95: removing a badge must never
+    // remove the measurement behind it).
     var EMQ=[];
-    [['EH',EB.high,RB.over],['EL',EB.low,RB.under]].forEach(function(e){
+    var emAH=false; try{ var SPem=sessionPhase(); emAH=!!(SPem && !SPem.rth && SPem.mins>=SPem.close); }catch(eEMAH){}
+    if(emAH) EMQ.emExpired=true;
+    (emAH?[]:[['EH',EB.high,RB.over],['EL',EB.low,RB.under]]).forEach(function(e){
       if(!inFrame(e[1])) return;
       var t=Y(e[1]);
       h+='<i class="g3ldem" style="top:'+t.toFixed(1)+'px"></i>';
@@ -23019,8 +23275,17 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       // standing in for a measurement. Widths are ~5.6px per char at 8px/900, ~6.2px for the role's
       // wider letterforms, plus the bar's 7px of padding.
       var pctTxt=(neg?'\u2212':'+')+pct+'%';
-      var pctW=pctTxt.length*5.6, roleW=role?(role.length*6.2):0;
-      var roomPct=(len>=Math.max(LAD_PCT_IN_BAR, pctW+8));
+      // ⚠ (v14.82) THE KING DOES NOT WEAR ITS OWN 100% — operator, 2026-08-28: "you dont need to put
+      // 100% for the king." Every other %King on this rail is a RATIO TO THE KING, so the King's own
+      // number is 100 by construction: it is the denominator announcing itself. Same call he made in
+      // v14.73 for the IRT export labels; this is the rail catching up. The word KING stays, the
+      // hover still carries the dollar mass, and a NON-100 King (possible only mid-roll, when the
+      // crown has just changed hands) still prints its number — the suppression is tied to the
+      // VALUE being 100, not to the role, so it can never hide a King that is not actually the top.
+      var kingIs100=(role==='KING' && pct>=100);
+      var showPct=!kingIs100;
+      var pctW=showPct?(pctTxt.length*5.6):0, roleW=role?(role.length*6.2):0;
+      var roomPct=(showPct && len>=Math.max(LAD_PCT_IN_BAR, pctW+8));
       var roomTyp=(role && len>=(pctW+roleW+11));
       h+='<i class="g3ldbar '+k+(role==='KING'?' king':'')+'" style="top:'+t.toFixed(1)+'px;width:'+len.toFixed(0)+'px"'+
          g3tip(tip)+'>'+(roomPct?('<b>'+pctTxt+'</b>'):'')+(roomTyp?g3esc(role):'')+'</i>';
@@ -23037,7 +23302,7 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       // nothing is lost that the row does not still say.
       var barTip=LAD_NODE+len+2;
       function fitL(x, wPx){ var max=LAD_CH-2-wPx; return (x<=max)?x:((max>=barTip)?max:null); }
-      if(!roomPct){
+      if(!roomPct && showPct){
         var pxL=fitL(LAD_NODE+len+4, pctTxt.length*5.6+2);
         if(pxL!=null) h+='<span class="g3ldkp '+k+'" style="top:'+t.toFixed(1)+'px;left:'+pxL.toFixed(0)+'px"'+g3tip(tip)+'>'+pctTxt+'</span>';
       }
@@ -23127,11 +23392,43 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       byRow[key].names.push(L.n); byRow[key].tips.push(L.n+' '+frameNum(L.at)+' — '+L.tip);
       if(L.cls && !byRow[key].cls) byRow[key].cls=L.cls;
     });
+    // ---- (v14.82) TWO LEVELS ON ONE LINE BECOME ONE LINE -----------------------------------------
+    // Operator, 2026-08-28: "if two levels share the same space, display 1 but put both their names
+    // in the hoverover."
+    //
+    // ⚠⚠ THE OLD MERGE WAS BY PRICE AND THE COLLISION IS IN PIXELS. `byRow` already keyed on
+    // at.toFixed(2), so it merged only levels at the SAME price, and LAD_SNAP_PTS pulled a level onto
+    // a NODE row — but two levels 2-3 points apart with no node between them stayed two rows and
+    // simply drew on top of each other. Measured on his live panel: IBH 7758 x PDH 7756 (66x4px),
+    // PDH x CW0 (66x5px), IBL 7744 x PDC 7741 (66x4px) — three collisions, all invisible to a
+    // price-keyed merge. Points are the wrong unit: the SAME 2-point gap is 12px on a tight frame
+    // and 3px on a wide one, so the test has to be the thing the eye actually sees.
+    // ⚠ HOSTED ROWS ARE NEVER ABSORBED. A row sitting on a node owns that node's line; folding it
+    // into a neighbour would move a level off the node it was snapped to and quietly restate where
+    // it is. Only free-floating rows merge, and always INTO the lower-y row so the group keeps a
+    // stable anchor as price moves.
+    var MERGE_PX=11;                     // one row height; below this the two texts touch
+    try{
+      var keys=Object.keys(byRow).sort(function(a,b){ return Y(byRow[a].at)-Y(byRow[b].at); });
+      for(var mi=1; mi<keys.length; mi++){
+        var cur=byRow[keys[mi]], prv=byRow[keys[mi-1]];
+        if(!cur || !prv) continue;
+        if(cur.host || prv.host) continue;
+        if(Math.abs(Y(cur.at)-Y(prv.at))>=MERGE_PX) continue;
+        prv.names=prv.names.concat(cur.names);
+        prv.tips=prv.tips.concat(cur.tips);
+        prv.merged=(prv.merged||1)+1;
+        if(!prv.cls && cur.cls) prv.cls=cur.cls;
+        delete byRow[keys[mi]];
+        keys[mi]=keys[mi-1];             // the next row measures against the row that survived
+      }
+    }catch(eMg){ try{ swallow('levelMerge', eMg); }catch(e9){} }
     for(var rk in byRow){
       var R=byRow[rk], t2=Y(R.at);
       var confl=(R.host && !R.cls);
       h+='<span class="g3ldlv'+(R.cls?(' g3ldlv'+R.cls):(confl?' g3ldlvc':''))+'" style="top:'+t2.toFixed(1)+'px"'+
-         g3tip(R.tips.join(' · ')+(R.host?' Shown on this node’s row — structure and gamma stacked.':''))+'>'+
+         g3tip(R.tips.join(' · ')+(R.host?' Shown on this node’s row — structure and gamma stacked.':'')+
+               (R.merged>1?(' ⚠ '+R.merged+' levels within '+MERGE_PX+'px of each other share this line — every one of them is named above, and the price shown is the topmost. They are close enough that the chart cannot separate them; treat this as a ZONE, not a line.'):''))+'>'+
          g3esc(R.names.join(' · '))+'</span>';
       if(!R.host) h+='<span class="g3ldpx g3lddim" style="top:'+t2.toFixed(1)+'px"'+g3tip(R.tips.join(' · '))+'>'+g3esc(frameNum(R.at))+'</span>';
       h+='<i class="g3ldrule'+(R.cls?(' g3ldlv'+R.cls):'')+'" style="top:'+t2.toFixed(1)+'px"></i>';
@@ -23167,13 +23464,23 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
           : ' UNTESTED today — no distinct touch yet, which is the ~80% state.';
         h+='<span class="g3ldking g3ldking'+K.book+(K.kind==='proportional'?' approx':'')+'" style="top:'+t.toFixed(1)+'px"'+
            g3tip(K.tip+' It sits '+Math.abs(Math.round(K.at-now))+' points '+prox+'.'+(K.book==='SPXW'?ktTip:''))+'>'+
-           '\u265b<b>'+(K.kind==='proportional'?'~':'')+g3esc(frameNum(K.at))+'</b><i>'+g3esc(K.book)+'</i>'+
+           // ⚠ (v14.82) ONE LETTER, NOT THE WHOLE BOOK NAME — his choice when the pill narrowed to
+           // 44px: "Keep one letter: 7728 S / Y / Q". The pill COLOUR already encodes the book
+           // (gold/purple/teal) and has since v14.48; the letter is the cue that does not depend on
+           // remembering which colour is which. Full book name stays in the hover, which already
+           // names it. ⚠ The map is explicit rather than book.charAt(0) — SPXW and SPY both start
+           // with S, and a first-character shortcut would print the same letter for two books.
+           '\u265b<b>'+(K.kind==='proportional'?'~':'')+g3esc(frameNum(K.at))+'</b><i>'+
+           g3esc({SPXW:'S', SPY:'Y', QQQ:'Q'}[K.book]||String(K.book).charAt(0))+'</i>'+
            (kt>0?('<b class="g3ldkt g3ldkt'+Math.min(kt,3)+'">'+kt+'\u00d7</b>'):'')+'</span>';
       });
     }catch(eKG){}
 
     // ---- the rolls -----------------------------------------------------------------------------
-    h+=ladderRolls(ROLLS, Y, dsc, lo, hi, H);
+    // (v14.83) the roll lane is now the two King columns — see ladderKingCols(). `ladderRolls` is
+    // NOT called here any more; secLoc() draws the same rolls in its own gutter and ROLL BIAS
+    // summarises them on the LOCATION row, so nothing about rolls is lost by reclaiming this space.
+    h+=ladderKingCols(EB, sym, Y, lo, hi, H);
 
     // ---- price now ------------------------------------------------------------------------------
     if(inFrame(now)){
@@ -23238,44 +23545,14 @@ function ldNum(v){ v=Math.round(v||0);
 // the ladder, then back IN past the origin's own x, and only then the arrowhead. The head is never
 // welded to a corner. ⚠ The landing is a SEPARATE SOLID sub-path: a dashed stroke ends wherever the
 // dash pattern falls, and a final gap at the head leaves it floating (operator-caught).
-function ladderRolls(ROLLS, Y, dsc, lo, hi, H){
-  try{
-    if(!ROLLS || !ROLLS.length) return '';
-    var svg='', lab='', n=0;
-    for(var i=0;i<ROLLS.length && n<4;i++){
-      var r=ROLLS[i];
-      var a=r.from*dsc, b=r.to*dsc;
-      if(!(a>=lo&&a<=hi) || !(b>=lo&&b<=hi)) continue;
-      var yA=Y(a), yB=Y(b), up=(b>a), col=up?'#2ec27e':'#e0645f', mk=up?'g3ahU':'g3ahD';
-      // (v14.54) MIRRORED: the lane is now LEFT of the price column, so both ends of the arrow meet
-      // the prices' own edge and each end points at the price it belongs to. Same grammar as the
-      // right-hand version — circle at the SOURCE, out, along, back in past the origin's x, then the
-      // head — reflected. ⚠ The landing stays a SEPARATE SOLID sub-path: a dashed stroke ends
-      // wherever the pattern falls and a final gap left the arrowhead floating (operator-caught).
-      var xEdge=LAD_PXC-2, xOut=LAD_ROLL+2+n*8, rad=4, dir=(yB<yA)?-1:1, LAND=10;
-      var d='M '+xEdge+' '+yA.toFixed(1)+' H '+(xOut+rad)+' Q '+xOut+' '+yA.toFixed(1)+' '+xOut+' '+(yA+dir*rad).toFixed(1)+
-            ' V '+(yB-dir*rad).toFixed(1)+' Q '+xOut+' '+yB.toFixed(1)+' '+(xOut+rad)+' '+yB.toFixed(1)+' H '+(xEdge-LAND);
-      var amt=''; try{ amt=usdBig(Math.abs(r.amt||0))||''; }catch(eA){}
-      var pq=(r.got!=null&&r.lost!=null&&Math.max(Math.abs(r.got),Math.abs(r.lost))>0)
-             ? Math.round(100*Math.min(Math.abs(r.got),Math.abs(r.lost))/Math.max(Math.abs(r.got),Math.abs(r.lost))) : null;
-      svg+='<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="butt" opacity="'+(r.live?0.98:0.5)+'"'+
-           (r.live?' stroke-dasharray="5 4" class="g3ldflow"':'')+'/>'+
-           '<path d="M '+(xEdge-LAND)+' '+yB.toFixed(1)+' H '+xEdge+'" fill="none" stroke="'+col+'" stroke-width="1.5" stroke-linecap="butt" marker-end="url(#'+mk+')" opacity="'+(r.live?0.98:0.5)+'"/>'+
-           '<circle cx="'+xEdge+'" cy="'+yA.toFixed(1)+'" r="2.7" fill="'+col+'" opacity="'+(r.live?0.98:0.55)+'"/>'+
-           '<circle cx="'+xEdge+'" cy="'+yA.toFixed(1)+'" r="4.8" fill="none" stroke="'+col+'" stroke-width="1" opacity="'+(r.live?0.4:0.2)+'"/>';
-      if(amt) lab+='<span class="g3ldramt" style="color:'+col+';opacity:'+(r.live?1:0.6)+';top:'+(yA+9).toFixed(1)+'px"'+
-        g3tip(amt+' left '+frameNum(a)+' and arrived at '+frameNum(b)+'.'+(pq!=null?(' Pairing quality '+pq+'% — how well the size lost matches the size gained.'):'')+
-        ' '+(r.live?'LIVE.':'LATCHED — it happened earlier and is structure now, not motion.')+
-        ' ⚠ INFERRED from paired changes, never an observed transfer: nobody publishes that a position moved between strikes.')+'>'+g3esc(amt)+'</span>';
-      n++;
-    }
-    if(!n) return '';
-    return '<div class="g3ldrolls"><svg width="'+LAD_W+'" height="'+H+'">'+
-      '<defs><marker id="g3ahU" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto"><path d="M0,0.5 L6.5,3.5 L0,6.5 z" fill="#2ec27e"/></marker>'+
-      '<marker id="g3ahD" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto"><path d="M0,0.5 L6.5,3.5 L0,6.5 z" fill="#e0645f"/></marker></defs>'+
-      svg+'</svg>'+lab+'</div>';
-  }catch(e){ return ''; }
-}
+// ---- (v14.83) ladderRolls RETIRED — the lane it drew into is now the King columns ------------
+// It drew per-node roll connectors in the ladder's left gutter. That was a SECOND drawing of
+// something secLoc() already renders in its own gutter (v13.9), and ROLL BIAS still states the
+// whole-book direction on the ② LOCATION row — so removing this drawing removes no information,
+// only a duplicate. The operator asked for the lane: "repurpose the arrows that we have today to
+// show how the spx and the spy kings movement during the day."
+// ⚠ ROLLS / rollLatched / rollBias are UNTOUCHED. A display went, not a measurement (v11.95).
+
 
 function railLevelsLine(EB, RB, RAILPS, SESSL, sym){
   try{
@@ -23432,7 +23709,15 @@ function railRollLane(EB, RB, rolls, piles){
         h+='<span style="position:absolute;left:'+xFrom.toFixed(1)+'%;top:-1px;transform:translateX(-50%);'+
              'font-size:6px;font-weight:800;color:'+((r.dir==='up')?'#7cc7ff':'#e0645f')+';opacity:.8;white-space:nowrap"'+
            g3tip('The roll\'s SOURCE — '+frameNum(r.from*dsc)+' (SPXW '+r.from+'). It shed '+(function(){try{return usdBig(Math.abs(r.lost))||'its mass';}catch(eU){return 'its mass';}})()+
-                 ' into '+frameNum(r.to*dsc)+' and now sits below the node threshold, which is why no post stands here: a completed roll empties its origin.')+
+                 ' into '+frameNum(r.to*dsc)+' and now sits below the node threshold, which is why no post stands here: a completed roll empties its origin.'+
+                 // ⚠⚠ (v14.83) THIS CAVEAT MOVED HERE RATHER THAN DYING WITH ladderRolls. It was the
+                 // roll-amount hover's, and that drawer was retired when its lane became the King
+                 // columns — which would have silently deleted the one sentence saying a roll is an
+                 // INFERENCE. Nobody publishes that a position moved between strikes; we pair a fall
+                 // at one node with a rise at another and call it a roll. Losing an honesty caveat
+                 // as a side effect of deleting a drawing is exactly the failure this project keeps
+                 // catching, so it is re-homed to the surviving roll hover, not re-typed shorter.
+                 ' \u26a0 INFERRED from paired changes, never an observed transfer: nobody publishes that a position moved between strikes, so this is a fall at one node matched to a rise at another. Pairing quality is what decides whether that match is trustworthy.')+
            '>'+g3esc(frameNum(r.from*dsc))+'</span>';
       }
       var col=(r.dir==='up')?'#7cc7ff':'#e0645f';
@@ -23477,256 +23762,39 @@ function railRollLane(EB, RB, rolls, piles){
     return '<div class="g3rl"><svg viewBox="0 0 1000 22" preserveAspectRatio="none">'+svg+'</svg>'+h+'</div>';
   }catch(e){ return ''; }
 }
-// ---- (v14.3) THE GAMMA PROFILE — the flow book as the face's primary read ----------------------
-// Outline = the strike's DAY PEAK; fill = held NOW (linear); the hollow part is the position that
-// CLOSED intraday. Today's SPXW expiry only, in the rail's own frame (hidden EL/EH clones).
-// (v14.3, operator-directed, mockup-approved):
-//   - the strike labels under the bars are GONE — the rail above already names every strike
-//   - in their place, the ROC MATRIX: Skylit's own 5m/15m/60m per strike, the NODES grammar
-//   - a $ AXIS in the left margin with dashed gridlines — sqrt-spaced BECAUSE THE HEIGHTS ARE
-//     (linear labels on sqrt bars would lie); the ⓘ says so
-//   - price is a thin vertical line with ▾, replacing the bottom marker row
-//   - ALL BADGES LIVE INSIDE THE BARS as 1-2 letter pills (operator's codes): S R SF RF TU TD H
-//     for the node state, RU/RD for latched rolls, CW/PW for the 0DTE walls, ▶ watch and the aged
-//     dot at the base. FIT RULE: badges stack from the bar's top in priority order (%K, wall,
-//     state, roll) and draw only while they fit inside the bar; the rest is hover-only. Nothing is
-//     ever drawn outside a bar, so nothing can overlap. Grey minors never carry badges.
-//   - bare R is always the STATE (no arrow, price-meaning colour); RU/RD is always the ROLL
-//     (roll-lane colours, dashed border on the way down) — the collision is structural, not visual
-// This layout is deliberately self-sufficient (%K, size, peak-vs-now, momentum, walls, watch) so
-// the NODES section can eventually retire; only the roll connectors would move here when it does.
-function gammaProfileHtml(EB, RB, sym, elLab, ehLab){
-  try{
-    if(!EB || !EB.ok || !velOk()) return '';
-    if(typeof inReplay==='function' && inReplay()) return '';
-    var today=null; try{ today=ctTodayStr(); }catch(eT){}
-    var dsc=1; try{ dsc=ifDispScale()||1; }catch(e0){}
-    if(!(dsc>0)) dsc=1;
-    var TNp=[]; try{ TNp=tradeNodes(sym)||[]; }catch(e1){}
-    var railBy={}; TNp.forEach(function(n){ railBy[n.k]=n; });
-    // (v14.5) the reference expiry = whatever book the rail is actually showing right now. The
-    // exp===today filter went false for every minor after the close (Skylit rolls the front), and
-    // the grey bars silently vanished while the exempt rail bars stayed — operator-caught.
-    var refExp=null;
-    try{ for(var ri0=0;ri0<TNp.length && !refExp;ri0++){
-           var vr0=(typeof VEL==='object'&&VEL)?VEL[String(TNp[ri0].k)]:null;
-           if(vr0 && vr0.exp) refExp=vr0.exp; } }catch(eRE){}
-    if(!refExp) refExp=today;
-    var rows=[];
-    for(var kk in PEAK.m){
-      var k=parseFloat(kk); if(!(k>0)) continue;
-      var pk=PEAK.m[kk]; if(!(pk>0)) continue;
-      var rn=railBy[k]||null;
-      if(!rn){ var vhh=null; try{ vhh=(typeof VEL==='object'&&VEL)?VEL[kk]:null; }catch(eVH){}
-               if(!vhh || !refExp || vhh.exp!==refExp) continue; }
-      var es=rn?rn.es:(k*dsc);
-      var x=emPosRail(EB, es, RB);
-      if(!isFinite(x) || x<1.5 || x>98.5) continue;
-      var ve=velAt(k), cur=(ve&&ve.v&&typeof ve.v.cur==='number')?Math.abs(ve.v.cur):null;
-      rows.push({ k:k, es:es, x:x, peak:pk, cur:cur, rail:rn });
-    }
-    if(!rows.length) return '';
-    rows.sort(function(a,b){ return b.peak-a.peak; });
-    if(rows.length>28) rows=rows.slice(0,28);
-    var mx=rows[0].peak; if(!(mx>0)) return '';
-    var H=68;                                   // drawable height inside the 72px band
-
-    // ---- the pieces every consumer below shares -------------------------------------------------
-    var ROLLS=[]; try{ if(rollsLive()) ROLLS=(rollLatched(sym)||[]); }catch(eRL){}
-    var rrN=1; try{ rrN=dispIsFut()?dispR():1; }catch(eRR){}
-    var pbES=null; try{ var pbK=pbNodeK(sym); if(pbK!=null) pbES=pbK*rrN; }catch(ePB){}
-    // 0DTE walls, mapped to the NEAREST rail bar so the badge can live inside it
-    var walls=[], wallByK={};
-    try{
-      var IFW={ SPY:'SPX', QQQ:'QQQ' };
-      var c0=null; try{ c0=ifChain(IFW[sym]||sym); }catch(eC0){}
-      var lv0=(c0 && !c0.err && c0.dte0 && c0.dte0.lv)?c0.dte0.lv:null;
-      if(lv0) [{tag:'CW', k:lv0.cr}, {tag:'PW', k:lv0.ps}].forEach(function(w0){
-        if(w0.k==null) return;
-        var disp=w0.k*dsc, wx=emPosRail(EB, disp, RB);
-        if(!isFinite(wx)) return;
-        var near=null;
-        rows.forEach(function(r){ if(r.rail && Math.abs(r.es-disp)<=3 &&
-          (near==null||Math.abs(r.es-disp)<Math.abs(near.es-disp))) near=r; });
-        var np=(near && near.cur!=null && near.peak>0)?Math.round(100*Math.min(1,near.cur/near.peak)):null;
-        walls.push({ tag:w0.tag, disp:disp, x:wx, pct:np, host:near?near.k:null, sk:w0.k });
-        if(near) wallByK[near.k]=w0;
-      });
-    }catch(e2){}
-    // roll badge per strike: the SOURCE carries it; the destination does when the source left the face
-    var rollByK={};
-    ROLLS.slice(0,3).forEach(function(r){
-      var e={ dir:r.dir, r:r };
-      if(railBy[r.from]) { if(!rollByK[r.from]) rollByK[r.from]=e; }
-      else if(railBy[r.to]) { if(!rollByK[r.to]) rollByK[r.to]=e; }
-    });
-    // the state letters — the operator's codes for the nodeChip vocabulary
-    function stateBadge(n){
-      var c=null; try{ c=nodeChip(n); }catch(eC){}
-      if(!c) return null;
-      var t=c.txt||'';
-      var code = (t.indexOf('TURNING ↓')===0) ? 'TD'
-               : (t.indexOf('TURNING ↑')===0) ? 'TU'
-               : (t==='RESISTANCE BUILDING')       ? 'R'
-               : (t==='SUPPORT BUILDING')          ? 'S'
-               : (t==='RESISTANCE FAILING')        ? 'RF'
-               : (t==='SUPPORT FAILING')           ? 'SF'
-               : 'H';
-      var cls = (c.cls==='g3cBull')?'g3gpBull':(c.cls==='g3cBear')?'g3gpBear':(c.cls==='g3cTurn')?'g3gpTurn':'g3gpNeut';
-      return { code:code, cls:cls, full:t };
-    }
-
-    // ---- the $ axis: round values placed by the SAME sqrt the bars use --------------------------
-    function niceVal(v){ var p=Math.pow(10,Math.floor(Math.log(v)/Math.LN10));
-      var m=v/p; var n=(m>=7.5)?10:(m>=3.5)?5:(m>=2.25)?2.5:(m>=1.5)?2:1; return n*p; }
-    var ticks=[]; [0.9,0.3,0.07].forEach(function(f){ var v=niceVal(mx*f);
-      if(v<mx && ticks.indexOf(v)<0) ticks.push(v); });
-    var yl='', gl='';
-    ticks.forEach(function(v){ var top=Math.round(72-Math.sqrt(v/mx)*H);
-      yl+='<span class="g3gpylab" style="top:'+top+'px">'+usdBig(v)+'</span>';
-      gl+='<i class="g3gpgrid" style="top:'+top+'px"></i>'; });
-
-    // ---- the bars, badges inside ----------------------------------------------------------------
-    var h2=gl;
-    var pxX=emPosRail(EB, EB.now, RB);
-    if(isFinite(pxX)) h2+='<i class="g3gppxl" style="left:'+pxX.toFixed(1)+'%"></i>'+
-                          '<span class="g3gppxc" style="left:'+pxX.toFixed(1)+'%">▾</span>';
-    rows.forEach(function(r){
-      var isRail=!!r.rail;
-      var col=isRail?(NODE_COL[r.rail.cls]||'#8b98a9'):'#5b6675';
-      var hPk=Math.max(3, Math.round(Math.sqrt(r.peak/mx)*H));
-      var frac=(r.cur!=null && r.peak>0)?Math.max(0, Math.min(1, r.cur/r.peak)):0;
-      var hCur=Math.round(hPk*frac);
-      if(r.cur!=null && r.cur>0 && hCur<1) hCur=1;
-      var pkPct=(r.cur!=null && r.peak>0)?Math.round(100*frac):null;
-      var kingPct=(isRail && typeof r.rail.pct==='number')?Math.round(r.rail.pct):null;
-      // (v14.37, operator-caught: TWO crowns in the profile during a contest) ONE SOURCE for the
-      // crown: the LATCHED role. r.rail.isKing carries the tape's momentary 100% row — during a
-      // crown contest that is the CHALLENGER, and crowning both drew two kings where Skylit shows
-      // one. The challenger keeps its honest number and wears the contest mark instead.
-      var isKing=isRail && (r.rail.role==='KING');
-      var isChal=isRail && !isKing && !!r.rail.isKing;
-      var isPB=(isRail && pbES!=null && Math.abs(pbES-r.es)<=1.5);
-      var st=isRail?stateBadge(r.rail):null;
-      var wl=isRail?wallByK[r.k]:null;
-      var ro=isRail?rollByK[r.k]:null;
-      // one hover carries EVERYTHING, so the fit rule never hides information
-      var tip=frameNum(r.es)+' (SPXW '+r.k+') — holds '+(r.cur!=null?usdBig(r.cur):'?')+
-              ' now against a day peak of '+usdBig(r.peak)+
-              (pkPct!=null?(' — '+pkPct+'% of its own peak'+
-                (pkPct>=95?': at its high, still building.':(pkPct<50?': mostly CLOSED — a vacated strike is a door, not a wall.':'.'))):'.')+
-              (kingPct!=null?(' '+kingPct+'% of the King.'):'')+
-              (st?(' State: '+st.full+'.'):'')+
-              (wl?(' '+(wl.tag==='CW'?'CALL WALL':'PUT WALL')+' (0DTE) — InsiderFinance\'s '+(wl.tag==='CW'?'most call-dominant strike above spot':'most put-dominant strike below spot')+' in today\'s expiry.'):'')+
-              (ro?(' ROLL '+(ro.dir==='up'?'UP':'DOWN')+(railBy[ro.r.from]?(' into '+frameNum(ro.r.to*dsc)):(' from '+frameNum(ro.r.from*dsc)))+
-                   ' · '+(usdBig(Math.abs(ro.r.amt))||'')+(ro.r.conf&&!ro.r.live?(' · '+ro.r.ageMin+'m old'):'')+(ro.r.gone?' · GAVE BACK — retiring.':(ro.r.live?' · in flight.':' · STUCK.'))):'')+
-              (isPB?' ▶ WATCH: the pullback engine\'s selected node — what EXECUTE is armed against.':'')+
-              (r.rail&&r.rail.velStale?' ● AGED: not currently rendered in their ladder; values are last-seen.':'')+
-              ' Outline = day peak (Skylit flow, today\'s SPXW only); fill = now; hollow = closed intraday.'+
-              (isRail?'':' GREY: below the rail\'s strength floor — context only.');
-      // the badge stack, drawn only while it fits (priority: %K, wall, state, roll)
-      var stk='', used=2;
-      function fits(hh){ return (used+hh)<=(hPk-2); }
-      // (v14.5) %K rides ON TOP of the bar (operator-directed, lost in the v14.4 half-write)
-      if(wl && fits(11)){ stk+='<span class="g3gpbg '+(wl.tag==='CW'?'g3gpWc':'g3gpWp')+'">'+wl.tag+'</span>'; used+=11; }
-      if(st && fits(11)){ stk+='<span class="g3gpbg '+st.cls+'">'+st.code+'</span>'; used+=11; }
-      if(ro && fits(11)){
-        var rcls=ro.r.gone?'g3gpNeut':(ro.dir==='up'?'g3gpRu':'g3gpRd');
-        stk+='<span class="g3gpbg '+rcls+'">'+(ro.dir==='up'?'RU':'RD')+'</span>'; used+=11; }
-      var base='';
-      if(isRail && (isPB || (r.rail&&r.rail.velStale)) && (used+10)<=hPk){
-        base='<span class="g3gpbase">'+(isPB?'<i class="g3gpwmk">▶</i>':'')+
-             ((r.rail&&r.rail.velStale)?'<i class="g3gpadot"></i>':'')+'</span>';
-      }
-      h2+='<i class="g3gpb'+(isPB?' g3gpwatch':'')+'" style="left:'+r.x.toFixed(1)+'%;width:'+(isRail?15:5)+
-            'px;height:'+hPk+'px;border-color:'+col+(isRail?'':';opacity:.45')+'"'+g3tip(tip)+'>'+
-            (hCur>0?('<b style="height:'+Math.min(hCur,hPk-1)+'px;background:'+col+';opacity:'+(isRail?'.5':'.4')+'"></b>'):'')+
-            (stk?('<span class="g3gpstk">'+stk+'</span>'):'')+base+
-          '</i>';
-      if(isRail && kingPct!=null)
-        // (v14.23, operator-directed) THE KING WEARS THE CROWN, not a percentage — its % is 100 by
-        // definition, so the label carried no information. Same royal mark as the rail post's cap.
-        h2+='<span class="g3gppct" style="left:'+r.x.toFixed(1)+'%;bottom:'+(hPk+2)+'px;color:'+(isKing?'#e3c341':(isChal?'#a371f7':'#e6edf3'))+(isKing?';font-size:9px':'')+'">'+(isKing?'\u265b':(kingPct+'%'+(isChal?'\u2694':'')))+'</span>';
-    });
-    // a wall with no rail bar to live in keeps a floating flag — the only exception, and it is rare
-    walls.forEach(function(w){
-      if(w.host!=null) return;
-      if(w.x<1.5 || w.x>98.5) return;
-      h2+='<span class="g3gpwall '+(w.tag==='CW'?'cw':'pw')+'" style="left:'+w.x.toFixed(1)+'%"'+
-          g3tip((w.tag==='CW'?'CALL WALL':'PUT WALL')+' (0DTE) — SPX '+w.sk+', shown at '+frameNum(w.disp)+'. No qualifying node at this strike, so the flag floats.')+
-          '>'+w.tag+'</span>';
-    });
-
-    // ---- the ROC matrix: rows = 5m / 15m / 60m, columns = the rail strikes ----------------------
-    function rocRow(cap, fld){
-      var rr='';
-      rows.forEach(function(r){
-        if(!r.rail || !r.rail.vel) return;
-        var pv=velP(r.rail.vel[fld]);
-        rr+='<span class="g3gproc '+pv.cls+'" style="left:'+r.x.toFixed(1)+'%">'+pv.txt+'</span>';
-      });
-      return '<div class="g3gprow g3gprocrow"><span class="g3gpsp">'+spc(elLab)+
-             '<span class="g3gpcap">'+cap+'</span></span>'+
-             '<span class="g3gpt g3gprocline">'+rr+'</span>'+spc(ehLab)+'</div>';
-    }
-
-    // ---- (v14.30) THE STATE ROW — the conclusion the three ROC rows imply, printed ------------
-    // Under each column: FORMING / WEAKENING / TURNING / (blank when HOLDING — silence is a state
-    // too). The percentages above are the evidence; this word is what they mean for the trade.
-    // (v14.30b) the row is BUILT here and APPENDED after the 60M ROC row below — the first cut
-    // emitted it at this lexical point, which is still INSIDE the bar track's container, so the
-    // words floated over the bars' tops (operator: "something doesn't seem right like the layout").
-    var stateRow='';
-    try{
-      var stCells='';
-      rows.forEach(function(r){
-        var stL=(r.rail&&LVLST_G[r.k])?LVLST_G[r.k]:null;
-        if(stL && stL.st!=='HOLDING')
-          stCells+='<span class="g3lvcell g3lvw'+stL.st+'" style="left:'+r.x.toFixed(1)+'%"'+g3tip('STATE: '+stL.st+' \u2014 '+stL.why+'. The rows above are the evidence; this word is the conclusion.')+'>'+stL.st.slice(0,4)+'</span>';
-      });
-      if(stCells) stateRow='<div class="g3gprow g3gprocrow"><span class="g3gpsp">'+spc(elLab)+
-        '<span class="g3gpcap">ST</span></span>'+
-        '<span class="g3gpt g3gprocline" style="position:relative">'+stCells+'</span>'+spc(ehLab)+'</div>';
-    }catch(eStR){}
-    // ---- WALLS line + legend --------------------------------------------------------------------
-    var vh2='';
-    if(walls.length){
-      var bits=walls.map(function(w){
-        var st2=(w.pct==null)?'' : (w.pct>=70?' — defended ('+w.pct+'% of peak)':' — being dismantled ('+w.pct+'% of peak)');
-        return '<b>'+w.tag+' '+frameNum(w.disp)+'</b>'+st2;
-      });
-      var heavy=null; rows.forEach(function(r){ if(r.cur!=null && (heavy==null||r.cur>heavy.cur)) heavy=r; });
-      if(heavy) bits.push('heaviest now '+frameNum(heavy.es)+' ('+usdBig(heavy.cur)+')');
-      vh2='<div class="g3ndverd" style="margin-top:5px;display:flex;gap:5px;align-items:baseline"><span style="flex:1">'+bits.join(' · ')+'</span>'+
-          gpInfo('WALLS — structure vs defence. CW/PW are InsiderFinance\'s 0DTE call/put walls (open interest — the only book with the split). Defended or dismantled is Skylit\'s FLOW at that strike: how much of its own day peak it still holds. Never averaged. ⚠ Descriptive only; F6 stands.')+'</div>';
-    }
-    var legend='<div class="g3gpleg">'+
-      '<span class="g3gpbg g3gpBull">S</span><span class="g3gpbg g3gpBear">R</span><span class="g3gpbg g3gpBear">SF</span><span class="g3gpbg g3gpBull">RF</span><i>state</i>'+
-      '<span class="g3gpbg g3gpTurn">TU</span><span class="g3gpbg g3gpTurn">TD</span><i>turning</i>'+
-      '<span class="g3gpbg g3gpNeut">H</span><i>holding</i>'+
-      '<span class="g3gpbg g3gpRu">RU</span><span class="g3gpbg g3gpRd">RD</span><i>roll</i>'+
-      '<span class="g3gpbg g3gpWc">CW</span><span class="g3gpbg g3gpWp">PW</span><i>0DTE walls</i>'+
-      '<i class="g3gpwmk" style="font-style:normal">▶</i><i>watch</i>'+
-      '<i class="g3gpadot" style="display:inline-block"></i><i>aged</i></div>';
-
-    var biasChip='';
-    try{
-      var BIASp=rollBias(ROLLS.filter(function(rB){ return !rB.gone; }));
-      if(BIASp && BIASp.n>1 && BIASp.dir!=='mixed')
-        biasChip='<span class="g3gpbias"'+g3tip('Which way is the whole book moving? Each roll is one node handing size to another; when they all point the same way the structure is migrating. ⚠ Measured: a roll destination holds no better than a node that is simply GROWING — this says WHERE size is going, not that it will hold.')+
-          '>ROLL BIAS '+(BIASp.dir==='up'?'↑':'↓')+' · '+(BIASp.dir==='up'?BIASp.up:BIASp.dn)+'/'+BIASp.n+' '+(BIASp.dir==='up'?'up':'down')+'</span>';
-    }catch(eBC){}
-    var hdr='<div class="g3gphd">GAMMA PROFILE '+
-      gpInfo('THE GAMMA PROFILE — each bar is one SPXW strike in TODAY\'S expiry, from Skylit\'s live flow, verbatim. OUTLINE = the most it held today; FILL = now (56% full means 56%); the hollow part is the position that CLOSED intraday. BADGES live inside the bars: the number is %KING; S/R = support/resistance building, SF/RF = failing (colour = what it means for PRICE — a failing ceiling is green), TU/TD = turning, H = holding; RU/RD = a latched roll (dashed = down); CW/PW = InsiderFinance\'s 0DTE call/put walls, a different book, never mixed into the bars; ▶ = the watch node; the amber dot = aged values. Badges draw only while they fit in the bar — the hover always carries the full story. The $ axis is SQRT-SPACED because the heights are (so the King does not flatten small strikes); the dashed lines mark round dollar values. Below: Skylit\'s own 5m/15m/60m per strike. The white line is price. Blank during replay.')+
-      '<small>outline = day peak · fill = now · number = %King · $ axis sqrt-spaced</small>'+biasChip+'</div>';
-    function spc(l){ return (l||'').replace('<span class="g3emk"','<span class="g3emk" style="visibility:hidden"'); }
-    return hdr+
-      '<div class="g3gprow"><span class="g3gpsp">'+spc(elLab)+yl+'</span><span class="g3gpt g3gp">'+h2+'</span>'+spc(ehLab)+'</div>'+
-      rocRow('5M','p5')+rocRow('15M','p15')+rocRow('60M','p60')+
-      stateRow+
-      vh2+legend;
-  }catch(e){ return ''; }
-}
+// ---- (v14.81) THE GAMMA PROFILE WAS REMOVED — operator, 2026-08-28 ---------------------------
+// > "i dont think we need the bottom section where it says gamma profile and lists a bunch of
+// >  levels below" ... "just remove it."
+//
+// ⚠ HE ASKED FOR THIS FEATURE ORIGINALLY. It was requested around v11.x, node bands were shipped in
+// its place (recorded as a flag substitution and a failure), and it was finally built for real in
+// v14.0-14.4. Removing it is REVERSING HIS OWN EARLIER REQUEST, which was put to him explicitly
+// before the cut so the decision was made knowingly. Do not "restore" it on the theory that it was
+// lost by accident; if it comes back it comes back because he asks again.
+//
+// WHAT IT SHOWED and why the rail made it redundant: bars per SPXW strike (outline = day peak,
+// fill = now) plus a 5m/15m/60m ROC matrix. But the rail already carries BUILDING / DEFENDING and
+// the dollar delta on every strike it draws, so the profile was a second telling of the same thing
+// for strikes he does not trade off. Its WALLS summary line (`CW ... PW ... heaviest now ...`)
+// restated three numbers already on the rail two inches above, and its legend was a static key —
+// a legend that never changes is a hover, not 169px of a 1016px face.
+//
+// ⚠ IT WAS ALSO BROKEN when it was cut, which is why it read as noise: measured on his live panel
+// 2026-08-28, 21 overlapping label pairs in that region — the $ axis labels were landing on the row
+// captions ("+1.4189%63%" in his screenshot was three numbers on the same pixels).
+//
+// WHAT MOVED RATHER THAN DIED: the **ROLL BIAS** chip. It lived on this header by his own direction
+// in v14.4 ("the one whole-book line belongs on it. One home."), so deleting the header silently
+// would have deleted a chip he had placed. Asked, and he chose to rehome it — it now sits in the
+// ② LOCATION row beside the regime chip, which is the other whole-book row. `LVLST_G` went with the
+// profile: it existed only to hand the rail's level states to the ROC state row.
+//
+// WHAT DELIBERATELY SURVIVED: the flip sentence ("Through it hedging flips from damping to
+// amplifying") and the SET provenance line. Both sit OUTSIDE this function and both say something
+// the rail does not.
+//
+// The day-peak tracker (PEAK / peakOf) is UNTOUCHED — the rail's bar outlines and the roll arrows
+// read it. Deleting a display must never delete the measurement behind it (v11.95's lesson).
 
 function gpInfo(txt){ return '<i class="g3inf"'+g3tip(txt)+'>i</i>'; }
 
@@ -24161,6 +24229,28 @@ function secFrame(sym){
   // (v11.79) IT CARRIES ITS DISTANCE. "Is the target close" needs the GAP, not two prices the reader then
   // subtracts — and the gap is the number that changes as price moves, which is the one worth watching.
   // (v11.80) WHOLE POINTS, like every other price here. dispNum printed "+16.37".
+  // ---- (v14.81) ROLL BIAS, REHOMED ------------------------------------------------------------
+  // It lived on the GAMMA PROFILE header by his direction in v14.4 ("the one whole-book line belongs
+  // on it. One home."). The profile was cut on 2026-08-28; deleting its header would have silently
+  // deleted a chip HE had placed, so it was put to him and he chose to keep it. This row is the other
+  // whole-book row — regime, playbook, target — so the reasoning that sent it to the profile header
+  // sends it here now. It goes LEFT of the target: v11.75 gave `T:` the right-hand end deliberately.
+  // ⚠ SAME GATE AS BEFORE: rollsLive() already decides whether ROLLS is populated at all (v14.6, "it
+  // binds on ALL THREE consumers"); one of those three consumers is gone, the gate is unchanged.
+  // ⚠ AND THE HOVER STILL SAYS WHAT WAS MEASURED — a roll destination holds no better than a node
+  // that is simply growing. Moving a chip must not upgrade its claim.
+  // ⚠⚠ IT MUST BUILD ITS OWN ROLL LIST. The v14.4 original read `ROLLS`, which is a LOCAL of
+  // secLoc() — fine while the chip lived in a function secLoc also fed, and a ReferenceError the
+  // moment it moved here. The bare catch below would have swallowed it and the chip would simply
+  // never have appeared, with every test still green. Caught in review, 2026-08-28: a rehomed line
+  // must re-derive its inputs, never inherit a scope it can no longer see.
+  try{
+    var ROLLSf=rollsLive()?(rollLatched(sym)||[]):[];
+    var BIASp=rollBias(ROLLSf.filter(function(rB){ return !rB.gone; }));
+    if(BIASp && BIASp.n>1 && BIASp.dir!=='mixed')
+      h+='<span class="g3gpbias"'+g3tip('Which way is the whole book moving? Each roll is one node handing size to another; when they all point the same way the structure is migrating. \u26a0 Measured: a roll destination holds no better than a node that is simply GROWING — this says WHERE size is going, not that it will hold.')+
+        '>ROLL BIAS '+(BIASp.dir==='up'?'\u2191':'\u2193')+' \u00b7 '+(BIASp.dir==='up'?BIASp.up:BIASp.dn)+'/'+BIASp.n+' '+(BIASp.dir==='up'?'up':'down')+'</span>';
+  }catch(eBC){ try{ swallow('rollBiasChip', eBC); }catch(e9){} }
   var tgtUp=null;
   try{ if(ifMagEarly!=null && EBc && EBc.ok && typeof EBc.now==='number') tgtUp=(ifMagEarly>EBc.now); }catch(eTU){}
   if(ifMagEarly!=null) h+='<span class="g3tgt'+(tgtUp===true?' up':(tgtUp===false?' dn':''))+'"'+g3tip('Where is the day trying to go? The heaviest strike in InsiderFinance\'s book — where dealer hedging concentrates and price tends to be pulled. '+(tgtUp===true?'GREEN: it sits ABOVE price. ':(tgtUp===false?'RED: it sits BELOW price. ':''))+'A destination, not a forecast, and it reads the same book as the ladder below so the two can never disagree. The T hanging from the LEVELS LINE is this same level.')+'>T: '+frameNum(ifMagEarly)+((EBc&&EBc.ok&&typeof EBc.now==='number')?(' <span class="g3dist">'+((ifMagEarly>=EBc.now)?'+':'\u2212')+frameNum(Math.abs(ifMagEarly-EBc.now))+'</span>'):'')+'</span>';
@@ -24216,7 +24306,8 @@ function secFrame(sym){
       var lvDsc=1; try{ lvDsc=ifDispScale()||1; }catch(eLd){}
       RAILROLLS.forEach(function(rr){ LVLCTX.src[rr.from]=1; LVLCTX.dst[rr.to]=1; });
       RAILPS.forEach(function(pp){ LVLST[pp.k]=levelStateOf(pp.k, LVLCTX); });
-      LVLST_G=LVLST;
+      // (v14.81) LVLST_G is gone with the gamma profile — it existed ONLY to hand these level
+      // states to the profile's ROC state row. LVLST itself stays; the rail reads it.
       LVLDOORS=levelDoors(RAILROLLS, lvDsc);
     }catch(eLE){}
     var str=!!EB.stretched, pOpen=emPosRail(EB,EB.open,RB),
@@ -24375,15 +24466,18 @@ function secFrame(sym){
                 frTot+=frW; if(Math.abs(frCP.disp-frBestP.disp)<=10.5) frAt+=frW; }
               if(frTot>0) frDtxt+=' holding '+Math.round(100*frAt/frTot)+'% of the near book';
             }catch(eCn){}
-            // (v14.30) CROWN MARGIN — how safe the destination's crown is (successor at 60% ->
-            // 76% chance the crown moves within 20 bars, n=148: small margin = unstable target)
+            // (v14.30, number corrected v14.84) CROWN MARGIN — how safe the destination's crown is.
+            // ⚠ THIS FEATURE WAS JUSTIFIED BY THE WITHDRAWN 76%. The real figure at a 60% successor
+            // is SUCC_META.hz30 (23%) within 30 minutes — so a thin margin means the destination is
+            // LESS certain, not that the crown is about to move. The margin is still worth showing;
+            // the word it earns is softer. See SUCC_META and tools/study-succession3.py.
             try{ var frKM=emPiles.lastRoles;
               var frTp=tapeMap('SPXW');
               if(frTp && frTp.pct && frTp.king!=null){
                 var frTop2=0, frKk2;
                 for(frKk2 in frTp.pct){ var frKv=Math.abs(frTp.pct[frKk2]);
                   if(parseFloat(frKk2)!==frTp.king && frKv>frTop2) frTop2=frKv; }
-                if(frTop2>0) frDtxt+='; crown margin '+Math.max(0,100-Math.round(frTop2))+'%'+(frTop2>=60?' \u2014 UNSTABLE, succession live':'');
+                if(frTop2>0) frDtxt+='; crown margin '+Math.max(0,100-Math.round(frTop2))+'%'+(frTop2>=60?(' \u2014 thin crown margin: a successor this size took over '+SUCC_META.hz30+'% of the time within 30m (n='+SUCC_META.n+')'):'');
               }
             }catch(eKm){}
             var frPath=null; try{ frPath=emPath(EB, sym, frBestP.disp); }catch(ePt){}
@@ -24442,7 +24536,8 @@ function secFrame(sym){
     // Subrahmanyam, and every vendor guide that bothers to say so puts the conversion at x1.25. A row
     // labelled EM implies ~68% containment; this band delivers ~58%. The WIDTH IS UNCHANGED and every
     // level sits exactly where it did — only the claim has been corrected.
-    var EL_LAB='<span class="g3emk'+(AH?' g3ahdim':'')+'"'+g3tip('Expected low — the open minus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.low/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(RB.under?RB.lo:EB.low))+'<small>'+(EB.est?'~':'')+(RB.under?'RAIL':'EL')+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
+    // (v14.82) not dimmed-and-struck after hours — not drawn. See the EMQ note in ladderHtml.
+    var EL_LAB=AH?'':('<span class="g3emk"'+g3tip('Expected low — the open minus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.low/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(RB.under?RB.lo:EB.low))+'<small>'+(EB.est?'~':'')+(RB.under?'RAIL':'EL')+(EB.notToday?' \u2260TODAY':'')+'</small></span>');
     h+=EL_LAB;
     var laneHtml=railRollLane(EB, RB, RAILROLLS, RAILPS);
     var lvlLineHtml=''; try{ lvlLineHtml=railLevelsLine(EB, RB, RAILPS, SESSL, sym); }catch(eLL){}
@@ -24737,7 +24832,7 @@ function secFrame(sym){
          return h2;
        })()+
        '</span>';
-    var EH_LAB='<span class="g3emk'+(AH?' g3ahdim':'')+'"'+g3tip('Expected high — the open plus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.high/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a ceiling.')+'>'+g3esc(frameNum(RB.over?RB.hi:EB.high))+'<small>'+(EB.est?'~':'')+(RB.over?'RAIL':'EH')+(EB.notToday?' \u2260TODAY':'')+'</small></span>';
+    var EH_LAB=AH?'':('<span class="g3emk"'+g3tip('Expected high — the open plus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.high/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a ceiling.')+'>'+g3esc(frameNum(RB.over?RB.hi:EB.high))+'<small>'+(EB.est?'~':'')+(RB.over?'RAIL':'EH')+(EB.notToday?' \u2260TODAY':'')+'</small></span>');
     h+=EH_LAB;
     h+='</span>';
   } else {
@@ -24755,8 +24850,7 @@ function secFrame(sym){
   // The PHASE tag survives and moved to row 1: 2-3 characters, and the only thing that says POWER HOUR
   // during a live session.
   h+='</div>';
-  // (v14.0) the gamma profile hangs directly under the rail, on the SAME x-scale — see gammaProfileHtml
-  if(EB && EB.ok){ try{ h+=gammaProfileHtml(EB, RB, sym, EL_LAB, EH_LAB); }catch(eGP){ swallow('gammaProfile', eGP); } }
+  // (v14.81) the gamma profile hung here until the operator cut it — see the tombstone above it.
   // ---- (v11.57) THE SHAPE LINE: has this day already turned, and is anything left in it? ----
   // Goal 2 is not distance travelled, it is what REMAINS. Goal 3 is whether it could turn — either
   // because it is stretched, or because it has ALREADY turned once and may rotate again.
@@ -25458,7 +25552,6 @@ function tradeNodes(sym){
 var NODE_COL={ acc:'#a371f7', brk:'#e3c341', bal:'#8b98a9' };
 // (v14.30) the level-engine state map, published by the rail render each pass so the profile's
 // state row reads the SAME states the rail wears (one computation, two consumers).
-var LVLST_G={};
 
 // ---- how a node reads: SIDE x DIRECTION OF CHANGE, and nothing else ----
 // That pair IS the support/resistance question. Everything the face shows about a node is this.
@@ -25681,8 +25774,9 @@ function secLoc(sym){
         h+='<div class="g3rx"><em></em><span style="color:#f2b45a">rate of change unavailable \u2014 '+
            g3esc((VEL_META&&VEL_META.why)||'no velocity')+'</span></div>';
       }
-      // (v14.4) ROLL BIAS moved again — to the GAMMA PROFILE header (operator-directed): the
-      // profile is becoming the primary read, and the one whole-book line belongs on it. One home.
+      // (v14.4 -> v14.81) ROLL BIAS lived on the GAMMA PROFILE header by his direction ("the one
+      // whole-book line belongs on it. One home."). The profile was cut 2026-08-28; the chip was
+      // rehomed to the ② LOCATION row rather than dropped with it. Still one home.
       // ⚠ EVERY NODE THE RAIL DRAWS. v13.5 sliced to 6 and the rail drew 7, so a node was visible on
       // the rail and absent from the list — the exact inconsistency the shared-array fix existed to end.
       // A cap here silently reintroduces it; if the list ever needs limiting, the RAIL must limit too.
@@ -26202,6 +26296,20 @@ window.__gptsDebug.session = function(){
 };
 // (v14.55) the close-of-session book: is it being served, and if not, WHICH of the four conditions
 // failed. A mode that silently does not engage is as bad as one that silently does.
+// (v14.83) the King track, so "how many times did it move" can be answered from the console
+// without exporting a day file — and so the flicker suppression can be seen working.
+window.__gptsDebug.kingTrack = function(){
+  try{
+    ktLoad();
+    var out={ day:KTRACK.day, dwell:KT_DWELL, pending:JSON.parse(JSON.stringify(KT_PEND||{})), books:{} };
+    KT_BOOKS.forEach(function(b){
+      var a=ktOf(b);
+      out.books[b]={ migrations:Math.max(0,a.length-1),
+        points:a.map(function(p){ return ctHHMM(p.t)+' '+p.k+(p.e?(' exp'+p.e):''); }) };
+    });
+    return out;
+  }catch(e){ return { err:String(e&&e.message||e) }; }
+};
 window.__gptsDebug.lastBook = function(){
   var B=null, P=null;
   try{ B=lastBookLoad(); }catch(e){}
@@ -26326,7 +26434,7 @@ function secDay(sym){
     // ⚠ WITH NO BARS THERE IS NO VERDICT, AND SAYING SO IS THE POINT. What replaces it is the
     // question the section will answer once the session has a range - not a number.
     var verdict = NOREAD ? 'WAITING FOR THE SESSION \u2014 no bars yet' : hlVerdict(D, CALL, T);
-    h+='<div class="g3dayread"'+g3tip('HAS THE EXTREME ALREADY PRINTED? A lookup over '+HLTAB_META.sessions+' sessions of ES 1-minute ('+HLTAB_META.first+' to '+HLTAB_META.last+'), on TWO axes: how far price has travelled off the extreme, and the clock. That pair scored AUC 0.879 \u2014 a 5-feature regression scored 0.880, so the table is shipped instead: every cell carries its own n and you can argue with it. \u26a0 IB30, IB60, the 50-SMA, sweeps and BOTH divergences were measured and left out \u2014 they are either proxies for the distance term or worth nothing (sweeps 48%, below their own base rate). \u26a0 The percentage is how often an extreme in THIS state was the day\u2019s \u2014 a CELL rate, re-read every bar. It is NOT a forecast of price. \u26a0 The DECISION rate is a different number and is the one to judge it by: the first time the table crosses '+HLTAB_META.thresh+'%% it was right '+HLTAB_META.inHit+'%% of the time (n='+HLTAB_META.inN+', median '+HLTAB_META.inCT+' CT), and the far side was still ahead on '+HLTAB_META.secondAhead+'%% of those. The NOT-IN call is weaker and thinner: at '+HLTAB_META.notIn+'%% the extreme broke '+HLTAB_META.notInHit+'%% of the time (n='+HLTAB_META.notInN+', median '+HLTAB_META.notInCT+' CT) against a ~57%% base at that hour. \u26a0 PROVISIONAL: one instrument, one 15-month window, no forward test yet \u2014 the live rate is being scored nightly beside it. The verdict, then the evidence behind it, then what it implies. \u26a0 It never says price WILL do anything \u2014 it reports how often a standing extreme of this age survived, with the n behind that exact number.')+'>'+
+    h+='<div class="g3dayread"'+g3tip('HAS THE EXTREME ALREADY PRINTED? A lookup over '+HLTAB_META.sessions+' sessions of ES 1-minute ('+HLTAB_META.first+' to '+HLTAB_META.last+'), on TWO axes: how far price has travelled off the extreme, and the clock. That pair scored AUC 0.879 \u2014 a 5-feature regression scored 0.880, so the table is shipped instead: every cell carries its own n and you can argue with it. \u26a0 IB30, IB60, the 50-SMA, sweeps and BOTH divergences were measured and left out \u2014 they are either proxies for the distance term or worth nothing (sweeps 48%, below their own base rate). \u26a0 The percentage is how often an extreme in THIS state was the day\u2019s \u2014 a CELL rate, re-read every bar. It is NOT a forecast of price. \u26a0\u26a0 The DECISION rate is a different number and is the one to judge it by: the first time the table crosses '+HLTAB_META.thresh+'%% it was right '+HLTAB_META.inHit+'%% of the time (n='+HLTAB_META.inN+', median '+HLTAB_META.inCT+' CT), and the far side was still ahead on '+HLTAB_META.secondAhead+'%% of those. This figure READ '+HLTAB_META.inHindsight+'%% until 2026-08-28 and that was wrong: the study behind it picked whichever extreme TURNED OUT to print first, which is a decision made after the answer was known. Live, the panel must call whichever extreme is first-printed AT THAT MOMENT, and that earns '+HLTAB_META.inHit+'%%. \u26a0\u26a0 AND CORRECTING THE IN CALL REVERSED THE RANKING: the NOT-IN call is now the STRONGER of the two. At '+HLTAB_META.notIn+'%% the extreme broke '+HLTAB_META.notInHit+'%% of the time (n='+HLTAB_META.notInN+', median '+HLTAB_META.notInCT+' CT) against a ~57%% base at that hour \u2014 '+HLTAB_META.notInHit+'%% against the IN call\u2019s '+HLTAB_META.inHit+'%%. This hover called NOT-IN \u201cweaker and thinner\u201d for as long as IN was quoted at 92, and that sentence inherited the error rather than being measured. It fires EARLIER too ('+HLTAB_META.notInCT+' vs '+HLTAB_META.inCT+' CT). Treat \u201cthe extreme is NOT in\u201d as the more reliable of the two calls. \u26a0 PROVISIONAL: one instrument, one 15-month window, no forward test yet \u2014 the live rate is being scored nightly beside it. The verdict, then the evidence behind it, then what it implies. \u26a0 It never says price WILL do anything \u2014 it reports how often a standing extreme of this age survived, with the n behind that exact number.')+'>'+
        '<b'+((CALL&&CALL.in)?' class="g3dayin"':'')+'>'+g3esc(verdict)+'</b> <span class="g3daydim">('+
        (NOREAD ? ('the rates below are a backtest over '+base.n+' sessions, '+base.first+' to '+base.last)
         : (CALL&&CALL.p!=null)
@@ -26467,12 +26575,21 @@ function panelV3(sym){
   ensureV3Css();
   var S=stepState(sym);
   var h='<div class="g3">';
-  h+='<div class="g3steps">';
-  for(var i=0;i<STEP_SHORT.length;i++){
-    var cls=S.done[i]?'done':((i===S.cur)?'on':'');
-    h+='<span class="'+cls+'"'+g3tip(STEP_TIPS[i])+'>'+STEP_SHORT[i]+'</span>';
-  }
-  h+='</div>';
+  // ⚠⚠ (v14.84) THE STEP BAR AND THE SECTION HEADERS ARE GONE — operator, 2026-08-29: "why is trend
+  // and location at the top headers. lets remove that too."
+  //
+  // They are the last of a FIVE-STEP WORKFLOW (FRAME / TREND / LOCATION / REACTION / EXECUTE) that
+  // has been dismantled one piece at a time: ① FRAME dissolved in v13.0, REACTION and EXECUTE were
+  // retired from the face in v14.32, and what remained was a progress bar for a two-step process
+  // whose two steps are the only two things on the screen. A tracker that can only ever read "1 of
+  // 2" or "2 of 2" is spending pixels to say where you are in a list you can see all of.
+  // ⚠ stepState() SURVIVES and is still computed — `S.done`/`S.cur` feed nothing on the face now,
+  // but the step logic is read by the recorder and by __gptsDebug.steps. A display went, not a
+  // measurement (v11.95). If it is still unreferenced after a clean week, delete it properly —
+  // the same standing instruction v14.32 left for secReact/secExec.
+  // ⚠ THE HOVERS DIED WITH THE HEADERS. STEP_TIPS carried the only written statement of what each
+  // section is FOR ("you trade AT levels, never between them"). That is doctrine, not decoration,
+  // and it is preserved in STEP_TIPS below rather than deleted, so restoring it is a paste.
   // (v11.36) the "waiting on" line is gone — it restated in small grey type what BIAS says two rows
   // below in large type. The step bar already shows where you are.
   // (v14.57) ⓪a DAY sits ABOVE the numbered sections, as the mockup shows: it frames the whole
@@ -26481,8 +26598,7 @@ function panelV3(sym){
   try{ if(CFG.dayHL!==false) h+=secDay(sym); }catch(eD){ swallow('secDay-mount', eD); }
   var secs=[secBias, secLoc];   // (v14.32) REACTION/EXECUTE retired from the face; secFrame renders inside secLoc
   for(var j=0;j<secs.length;j++){
-    var c=S.done[j]?'done':((j===S.cur)?'on':'');
-    h+='<span class="g3sh '+c+'"'+g3tip(STEP_TIPS[j])+'>'+STEP_NAMES[j]+'</span>';
+    // (v14.84) no header row — the sections butt directly against each other.
     try{ h+=secs[j](sym); }catch(eS){ swallow('section'+(j+1), eS); h+='<div class="g3b"><div class="g3rx"><span style="color:#f0616d">'+g3esc(String(eS&&eS.message||eS))+'</span></div></div>'; }
   }
   h+='</div>';

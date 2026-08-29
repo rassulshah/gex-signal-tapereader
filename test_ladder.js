@@ -6,7 +6,13 @@ let pass=0, fail=0;
 const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+JSON.stringify(g):''));} };
 function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.exec(src);let i=src.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}return src.slice(m.index,e+1);}
 // ⚠ the LAD_* constants share one multi-var declaration, so only the FIRST is preceded by `var`.
-function v(n){const m=new RegExp('(?:var\\s+)?\\b'+n+'\\s*=\\s*([^;,\\n]+)').exec(src); return m?eval('('+m[1]+')'):undefined;}
+// ⚠⚠ COMMENTS ARE STRIPPED FIRST, AND THAT IS NOT COSMETIC (v14.84). A prose line reading
+// "LAD_NODE=150 - a 4px overlap on every node row" sits EARLIER in the file than the declaration, so
+// the raw regex matched the COMMENT, eval'd "150 - a 4px overlap..." and the whole suite file threw
+// before a single assertion ran. A geometry reader that can be steered by a comment is a reader that
+// silently tests the wrong numbers the day someone writes a helpful note.
+const srcNC=src.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^[ \t]*\/\/.*$/gm,'');
+function v(n){const m=new RegExp('(?:var\\s+)?\\b'+n+'\\s*=\\s*([^;,\\n]+)').exec(srcNC); return m?eval('('+m[1]+')'):undefined;}
 
 // ---- ⚠ THE VERSION GUARD. GPTS_VERSION is a SEPARATE constant from the @version header, and its own
 // comment calls it "THE ONE VERSION STRING — header, footer, export, logs all read this". From v14.40
@@ -22,11 +28,13 @@ function v(n){const m=new RegExp('(?:var\\s+)?\\b'+n+'\\s*=\\s*([^;,\\n]+)').exe
 // ---- geometry lives in one place ----
 const W=v('LAD_W'), LVL=v('LAD_LVL'), PXC=v('LAD_PXC'), PXW=v('LAD_PXW'), NODE=v('LAD_NODE'), NMAX=v('LAD_NMAX'),
       CH=v('LAD_CH'), CHW=v('LAD_CHW'), MK=v('LAD_MK'), MKW=v('LAD_MKW'),
-      ROLL=v('LAD_ROLL'), ROLLW=v('LAD_ROLLW'), ST=v('LAD_ST'), STW=v('LAD_STW'), TAP=v('LAD_TAP'),
+      KS=v('LAD_KS'), KSW=v('LAD_KSW'), KY=v('LAD_KY'), KYW=v('LAD_KYW'), LVLW=v('LAD_LVLW'),
+      PILLW=v('LAD_PILLW'),
+      ST=v('LAD_ST'), STW=v('LAD_STW'), TAP=v('LAD_TAP'),
       TAPW=v('LAD_TAPW'), ROC=v('LAD_ROC'), ROCW=v('LAD_ROCW'),
       DAX=v('LAD_DAX'), DMAX=v('LAD_DMAX'), DLAB=v('LAD_DLAB'), DLABW=v('LAD_DLABW'),
       PCTIN=v('LAD_PCT_IN_BAR');
-ok([W,LVL,PXC,NODE,NMAX,CH,CHW,MK,MKW,ROLL,ST,ROC,DAX,DMAX,DLAB,PCTIN].every(x=>typeof x==='number'),
+ok([W,LVL,LVLW,PXC,NODE,NMAX,CH,CHW,MK,MKW,KS,KSW,KY,KYW,ST,ROC,DAX,DMAX,DLAB,PCTIN].every(x=>typeof x==='number'),
    'g1 every column offset is a named constant, not a magic number in the markup');
 // ⚠ (v14.54) THE COLUMN THAT WAS DELETED MUST STAY DELETED. %King moved inside its own bar; if a
 // later build reinstates LAD_KPCT the 42px comes back and the arithmetic below silently loosens.
@@ -48,10 +56,18 @@ ok(v('LAD_KPCT')===undefined && v('LAD_PROF')===undefined,
      'g3 the %King fallback label ends before the chute even at its worst offset',
      {end:NODE+(PCTIN-1)+4+30, chuteL});
   ok(DAX-DMAX>=chuteR, 'g4 the delta bars hang left off their axis but never reach the chute', {inner:DAX-DMAX,chuteR});
-  // (v14.54) the roll lane moved LEFT of the prices, so it must clear the level names on one side
-  // and stop before the price column on the other.
-  ok(ROLL-16>=LVL+2,   'g5a the roll amounts start after the level names end', {lab:ROLL-16, lvEnd:LVL});
-  ok((ROLL-16)+ROLLW<=PXC, 'g5b ...and end before the price column begins', {end:(ROLL-16)+ROLLW, PXC});
+  // ⚠⚠ (v14.84) g5a/g5b ARE REWRITTEN, NOT DELETED. They guarded the ROLL LANE's gap between the
+  // level names and the prices. The operator repurposed that lane into the two King migration
+  // columns ("repurpose the arrows that we have today to show how the spx and the spy kings
+  // movement during the day"), so the lane still exists — it just holds something else, and it
+  // still has to clear what is beside it.
+  ok(KS>=0 && KS+KSW<=KY, 'g5a the SPXW column ends before the SPY column begins', {sEnd:KS+KSW, KY});
+  ok(KY+KYW<=LVL, 'g5b ...and the SPY column ends before the level names begin', {yEnd:KY+KYW, LVL});
+  // ⚠ AND THE NAME MUST TOUCH ITS PRICE. That is the whole point of v14.84: "PDC 7741" as one
+  // token. A gap wider than a space between them and they read as two separate columns again.
+  ok(LVL+LVLW<=PXC && PXC-(LVL+LVLW)<=4,
+     'g5c the level name ends immediately before its price — they read as one token',
+     {nameEnd:LVL+LVLW, PXC, gap:PXC-(LVL+LVLW)});
   // ⚠ THE WIDTHS ARE PART OF THE ARITHMETIC. The old test checked only that the OFFSETS were ordered,
   // which they were — while a 44px state cell rendering "WEAKENING" at ~50px printed over the ROC
   // numbers beside it. Ordering offsets proves nothing about what actually gets drawn.
@@ -78,21 +94,81 @@ eval(ex('ldNum'));
 ok(/g3ldup/.test(ldNum(5)) && /\+5%/.test(ldNum(5)), 'r1 a building strike reads green and signed');
 ok(/g3lddn/.test(ldNum(-5)), 'r2 ...and a draining one red');
 ok(/g3ldfl/.test(ldNum(0)),  'r3 ...and flat is neither');
-const RL=ex('ladderRolls');
-ok(/H '\+\(xOut\+rad\)/.test(RL) && /V '/.test(RL), 'r4 the path steps OUT (leftward now), then along the ladder');
-ok(/xEdge=LAD_PXC-2/.test(RL), 'r5 ...and both ends land on the PRICE column\'s own edge, per the operator sketch');
-ok(/THE LANDING IS A SEPARATE SOLID sub-path|landing is a SEPARATE SOLID/.test(src),
-   'r6 the landing is documented as a separate solid path');
-ok((RL.match(/marker-end/g)||[]).length===1 && /stroke-dasharray/.test(RL),
-   'r7 exactly one arrowhead per roll, and it lives on the SOLID sub-path — never on the dashed one');
-ok(/r\.live\?0\.98:0\.5/.test(RL) && /r\.live\?' stroke-dasharray/.test(RL),
-   'r8 only LIVE rolls animate — a latched roll is structure, not motion');
-ok(/circle cx="'\+xEdge/.test(RL), 'r9 the SOURCE carries a filled circle, so no arrow rises from blank track');
-ok(/xOut=LAD_ROLL\+2\+n\*8/.test(RL), 'r9b the lane is LEFT of the prices and fans by roll index');
-ok(/yA\+9/.test(RL), 'r10 the amount sits at the ORIGIN, below the out-run — two rolls into one destination cannot stack');
+// ⚠⚠ (v14.84) r4-r7 PINNED `ladderRolls`, WHICH IS GONE. The operator repurposed its lane:
+// "repurpose the arrows that we have today to show how the spx and the spy kings movement during
+// the day." The drawing was a DUPLICATE — secLoc() renders the same rolls in its own gutter (v13.9)
+// and ROLL BIAS states the whole-book direction on the ② LOCATION row — so removing it removed no
+// information. These assertions now pin the REMOVAL and the replacement, so a future context cannot
+// quietly reinstate a second roll drawing in a lane that is spoken for.
+ok(!/function ladderRolls/.test(src), 'r4 ladderRolls is gone, not merely uncalled');
+ok(!/g3ldramt/.test(src), 'r5 ...and so is its CSS — a retired drawer leaves no styling behind');
+ok(/function ladderKingCols/.test(src) && /h\+=ladderKingCols\(/.test(src),
+   'r6 the King columns took the lane, and are actually called');
+// ⚠ ROLLS THEMSELVES MUST SURVIVE THE LOSS OF THIS DRAWING (v11.95: a badge went, not a measurement)
+ok(/function rollLatched/.test(src) && /function rollBias/.test(src) && /ROLL BIAS /.test(src),
+   'r7 the roll MEASUREMENT and its whole-book chip are untouched');
+// r8-r10 described ladderRolls' own SVG and went with it. r11/r12 are about the roll HOVER, which
+// lives in secLoc() and survives — they stay, unchanged, because the claim they guard is unchanged.
 ok(/INFERRED from paired changes, never an observed transfer/.test(src),
    'r11 the hover says a roll is inferred, not observed');
 ok(/pairing quality|Pairing quality/i.test(src), 'r12 ...and carries its pairing quality');
+
+// ============================================================================================
+// (v14.84) THE KING MIGRATION COLUMNS
+// ============================================================================================
+const KC=ex('ladderKingCols'), KT=ex('ktTick');
+
+// ---- ONE SOURCE, OR THE COLUMN CONTRADICTS THE CROWN BESIDE IT -------------------------------
+// ⚠⚠ MEASURED 2026-08-28: the recorder's `snap.king` and `snap.tri.SPY.king` disagreed at 13:24 and
+// 13:36 (769 vs 771) — one has hysteresis, one does not — so "how many times did the King move" had
+// two different answers. The track reads ladderKings(), the same call the chute pills read.
+ok(/KG=ladderKings\(EB, sym\)/.test(KT),
+   'k1 the track reads ladderKings() — the SAME source the crown pills draw from');
+ok(/ktTick\(EB, sym\)/.test(ex('ladderHtml')),
+   'k2 ...and it is ticked from ladderHtml with that same EB, so the two cannot diverge');
+
+// ---- TRACK THE STRIKE, NOT THE CHART PRICE ---------------------------------------------------
+// ⚠⚠ `at` is chart space and moves whenever the ES/SPX basis drifts. Tracking it would record a
+// migration every few minutes and never a real one. `raw` only changes when the crown changes.
+ok(/K\.raw/.test(KT) && !/pd\.k!==K\.at|k:K\.at/.test(KT),
+   'k3 the track stores the book\'s own strike (raw), never the drifting chart price');
+ok(/conv:function\(k\)\{ return dsc>0\?k\*dsc:null; \}/.test(KC),
+   'k4 ...and converts at RENDER time, so a run stays level with its row as the basis moves');
+
+// ---- A FLICKER IS NOT A MIGRATION ------------------------------------------------------------
+// ⚠⚠ Friday held THREE single-observation excursions that all reverted (SPY 769 at 13:24 and 13:36,
+// SPXW 7690 at 13:51). Drawing them would have put four steps on a day that had one real move.
+ok(/KT_DWELL=\d+/.test(src), 'k5 a dwell threshold exists');
+ok(/if\(pd\.n<KT_DWELL\) return;/.test(KT),
+   'k6 ...and a new strike is only written once it has been seen KT_DWELL times running');
+ok(/if\(last===K\.raw\)\{ delete KT_PEND\[bk\]; return; \}/.test(KT),
+   'k7 ...and a candidate that reverts is discarded, leaving no trace');
+ok(/KT_PEND/.test(KT) && !/KTRACK\.b\[bk\]\.push\(\{ t:Date\.now\(\), k:K\.raw \}\);[\s\S]{0,40}pd/.test(KT),
+   'k8 probation is held OUTSIDE the persisted track — a flicker never reaches storage');
+
+// ---- THE EXPIRY ROLL IS NOT A MIGRATION ------------------------------------------------------
+// At the close Skylit rolls the front expiry and EVERY crown "moves" (7715->7710, 771->760 on
+// 2026-08-28). That is bookkeeping.
+ok(/if\(!P \|\| !P\.rth\) return;/.test(KT), 'k9 RTH only — which excludes the close roll outright');
+ok(/e:exp/.test(KT), 'k10 ...and each point carries the expiry it was seen under, so a roll is visible');
+
+// ---- WRITES ASK recorderBlind, NOT inReplay --------------------------------------------------
+// ⚠ Caught by test_lastbook r3 on the first draft. ktTick WRITES, so it must ask the one predicate
+// that means "the face is not showing live truth" — a replay OR a frozen book.
+ok(/recorderBlind\(\)\) return;/.test(KT) && !/inReplay\(\)\) return;/.test(KT),
+   'k11 the write path asks recorderBlind(), never inReplay() alone');
+
+// ---- THE COLUMNS ARE ROW-ALIGNED, WHICH IS WHY HE CHOSE THEM ---------------------------------
+// He drew time running DOWN the column; he then chose price-vertical instead, because vertical
+// position means PRICE everywhere else in this band and two meanings for one axis misleads.
+ok(/Y\(disp\)/.test(KC), 'k12 vertical position is the ladder\'s own price scale');
+ok(/if\(disp<lo \|\| disp>hi\) return;/.test(KC),
+   'k13 ...and a strike off the frame draws NO run rather than clamping to an edge it never sat on');
+ok(/QQQ/.test(KC.slice(0, KC.indexOf('COLS.forEach'))) === false && /'SPXW'/.test(KC) && /'SPY'/.test(KC),
+   'k14 two columns, SPXW and SPY — QQQ is a proportional BEARING and gets no migration line');
+// an empty column must say WHY, because "no arrow" has two very different meanings
+ok(/g3ldkcw/.test(KC) && /panel was not running/.test(KC),
+   'k15 an empty column says whether nothing moved or nothing was watched');
 
 // ---- honesty invariants ----
 const LH=ex('ladderHtml');
@@ -124,8 +200,19 @@ ok(/classList\.toggle\('g3ladon'/.test(src), 'x3 ...and the class is actually ap
 
 
 // ---- (v14.54) %KING RIDES ITS OWN BAR --------------------------------------------------------
-ok(/roomPct=\(len>=Math\.max\(LAD_PCT_IN_BAR, pctW\+8\)\)/.test(LH),
+ok(/roomPct=\(showPct && len>=Math\.max\(LAD_PCT_IN_BAR, pctW\+8\)\)/.test(LH),
    'p1 the bar carries its own %King when it is wide enough');
+// ---- (v14.84) ...AND THE KING DOES NOT CARRY ITS OWN 100% -----------------------------------
+// Operator: "you dont need to put 100% for the king." Every %King on this rail is a ratio TO the
+// King, so its own number is the denominator announcing itself.
+ok(/kingIs100=\(role==='KING' && pct>=100\)/.test(LH),
+   'p1b the suppression is tied to the VALUE being 100, not to the role');
+ok(/if\(!roomPct && showPct\)/.test(LH),
+   'p1c ...and the OUTSIDE-the-bar fallback is suppressed too, or it would print what the bar hid');
+// ⚠ a King that is NOT 100 can only happen mid-roll, when the crown has just changed hands — and
+// that is exactly when you need the number. Binding to the role alone would hide it.
+ok(!/kingIs100=\(role==='KING'\)/.test(LH),
+   'p1d ...so a non-100 King still prints its number');
 // ⚠ the fit test must MEASURE the strings. Charging the role for a maximum-width %King pushed a
 // role out of a bar that could hold it, and the clamp then dropped it back on top of that bar.
 ok(/roomTyp=\(role && len>=\(pctW\+roleW\+11\)\)/.test(LH),
@@ -260,6 +347,80 @@ ok(/\['EH',EB\.high,RB\.over\]/.test(src) && /\['EL',EB\.low,RB\.under\]/.test(s
 ok(/g3ldrailend/.test(src) && /where the expected move ENDED, not where the drawing does/.test(src),
    'e3 when price runs past, the RAIL END is marked separately — the band is never redefined as the frame');
 ok(/0\.80 sigma/.test(src) && /1\.25/.test(src), 'e4 the sigma caveat and its conversion survive');
+
+
+// ============================================================================================
+// (v14.84) THE FIVE THINGS HE ASKED FOR ON 2026-08-28, EACH PINNED
+// ============================================================================================
+
+// ---- 1 · THE BAR NO LONGER SITS ON THE PRICE ------------------------------------------------
+// ⚠⚠ THE DEFECT WAS A HARDCODED WIDTH BESIDE A CONSTANT THAT SAID SOMETHING ELSE. `.g3ldpx` was
+// emitted as `width:40px` while LAD_PXW read 30, so the price spanned PXC..PXC+40 and the bars
+// started at LAD_NODE — measured 114..154 against a bar at 150, a 4px overlap on EVERY node row.
+// The price is RIGHT-aligned, so those 4px land on the last digit. He circled it.
+// This is landmine L-D verbatim: assert WIDTHS, not just offsets.
+ok(/\.g3ldpx\{position:absolute;left:'\+LAD_PXC\+'px;width:'\+LAD_PXW\+'px/.test(src),
+   'x1 the price column takes its width from LAD_PXW — no second, disagreeing number');
+ok(!/\.g3ldpx\{[^}]*width:40px/.test(src), 'x1b ...and the hardcoded 40 is gone, not shadowed');
+ok(PXC+PXW <= NODE-1,
+   'x2 the price column ENDS before the bars begin — the whole point', {pxEnd:PXC+PXW, NODE});
+
+// ---- 2 · THE NAME SITS BESIDE ITS PRICE, AND THE CHUTE IS PILLS ONLY -------------------------
+// ⚠⚠ v14.84 PUT THE NAMES INSIDE THE CHUTE AND HE REJECTED IT: "move the level name like PDC next
+// to the price levels instead so it will look like 'PDC 7741'". He was right — 100px separated a
+// price from the name that belonged to it, and the pair could only be matched by tracking a row
+// across the bars. The chute's own "price's alone" invariant, which v14.84 deliberately reversed,
+// is therefore RESTORED: the names left, the strip is gone, and nothing but pills sits in there.
+ok(v('LAD_LVSW')===undefined, 'x3 the chute sub-column strip is gone with the names it held');
+ok(/\.g3ldlv\{position:absolute;left:'\+LAD_LVL\+'px;width:'\+LAD_LVLW\+'px;text-align:right/.test(src),
+   'x4 the name is right-aligned in its own column, hard against the price');
+ok(LVL+LVLW+4 >= PXC, 'x5 ...with no gap wide enough to read as a separate column',
+   {nameEnd:LVL+LVLW, PXC});
+ok(CH+CHW-PILLW-2 >= CH, 'x6b the pill zone is inside the chute', {pillStart:CH+CHW-PILLW-2, CH});
+ok(/\.g3ldnow\{position:absolute;left:'\+\(LAD_CH\+LAD_CHW-LAD_PILLW-2\)\+'px;width:'\+LAD_PILLW\+'px/.test(src),
+   'x6 the price pill is still right-justified against the chute wall');
+ok(/\.g3ldking\{position:absolute;left:'\+\(LAD_CH\+LAD_CHW-LAD_PILLW-2\)\+'px;width:'\+LAD_PILLW\+'px/.test(src),
+   'x7 ...and the Kings share that exact zone, so the two can never disagree');
+// ⚠ THE CHUTE IS PRICE'S AGAIN. Nothing may be positioned inside its x-range but the pills.
+ok(!/left:'\+\(LAD_CH\+2\)\+'px/.test(src),
+   'x8 nothing is positioned at the chute\'s left wall any more — the invariant is restored');
+ok(/text-overflow:ellipsis/.test(/\.g3ldlv\{[^}]*\}/.exec(src)[0]),
+   'x9 a name too long for its column CLIPS rather than running over its price');
+ok(NODE+NMAX <= CH-2, 'x10 the bars still stop before the chute', {barEnd:NODE+NMAX, CH});
+
+// ---- 3 · ONE LETTER FOR THE BOOK -------------------------------------------------------------
+// ⚠ SPXW and SPY BOTH START WITH S. A charAt(0) shortcut would print the same letter for two books,
+// which is worse than no letter at all — the map is explicit for exactly that reason.
+ok(/\{SPXW:'S', SPY:'Y', QQQ:'Q'\}/.test(LH), 'x11 the book tag is an EXPLICIT map, not charAt(0)');
+ok(!/<i>'\+g3esc\(K\.book\)\+'<\/i>/.test(LH), 'x12 ...and the full book name no longer rides the pill');
+
+// ---- 4 · TWO LEVELS ON ONE LINE BECOME ONE LINE ----------------------------------------------
+// ⚠⚠ MERGE IN PIXELS, NOT POINTS. The old byRow keyed on price, so it merged only levels at the
+// SAME price; IBH 7758 x PDH 7756 stayed two rows and drew on top of each other (measured 66x4px on
+// his live panel). The same 2-point gap is 12px on a tight frame and 3px on a wide one, so points
+// cannot answer "do these two texts touch".
+ok(/MERGE_PX=\d+/.test(LH), 'x13 the merge threshold exists');
+ok(/Math\.abs\(Y\(cur\.at\)-Y\(prv\.at\)\)>=MERGE_PX/.test(LH),
+   'x14 ...and it measures RENDERED Y, not a price gap');
+ok(/if\(cur\.host \|\| prv\.host\) continue;/.test(LH),
+   'x15 a row snapped to a node is never absorbed — that would restate where the level is');
+ok(/prv\.names=prv\.names\.concat\(cur\.names\)/.test(LH) && /prv\.tips=prv\.tips\.concat\(cur\.tips\)/.test(LH),
+   'x16 both names AND both hovers survive the merge — "put both their names in the hoverover"');
+ok(/keys\[mi\]=keys\[mi-1\]/.test(LH),
+   'x17 the next row measures against the SURVIVOR, so three tight levels collapse to one, not two');
+
+// ---- 5 · THE EXPIRED BAND IS NOT DRAWN -------------------------------------------------------
+// He read the amber boundary line running through its own label as a strikethrough, and separately
+// `.g3ahdim` really did strike the rail markers through. A mark whose meaning lives only in a hover
+// is a puzzle. After hours the band is simply absent; the AFTER HOURS chip says why in words.
+ok(/\(emAH\?\[\]:\[\['EH',EB\.high,RB\.over\],\['EL',EB\.low,RB\.under\]\]\)/.test(LH),
+   'x18 after hours the ladder draws NO EM lines and NO EM pills');
+ok(/var EL_LAB=AH\?'':\(/.test(src) && /var EH_LAB=AH\?'':\(/.test(src),
+   'x19 ...and the rail markers are absent rather than struck through');
+ok(!/g3ahdim/.test(src.replace(/^[ \t]*\/\/.*$/gm,'').replace(/'#gpts-body \.g3ahdim[^']*'/,'')),
+   'x20 nothing still ASKS for the struck-through styling');
+// ⚠ the MEASUREMENT must survive the removal of its drawing (v11.95).
+ok(/function emBand/.test(src), 'x21 emBand() itself is untouched — a badge went, not a measurement');
 
 console.log('test_ladder: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
