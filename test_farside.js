@@ -107,10 +107,20 @@ ok(!/g3daylb/.test(SD), 'f4 the survival ladder is GONE — it answered the verd
 ok(!/g3dayfoot/.test(SD), 'f5 ...and the white honesty line is gone from the face');
 ok(/rates live/.test(SD) && /rates baked in/.test(SD),
    'f6 ...but live-vs-baked stays VISIBLE, because a frozen corpus changes how much to trust the row');
-ok(/it does not trade there today/.test(SD),
-   'f7 the NO call — the sharpest thing the model says — is on the face');
-ok(/g3farno/.test(SD) && !/g3farno[^}]*color:#e0645f/.test(src.slice(src.indexOf('.g3farno'), src.indexOf('.g3farno')+120)),
-   'f8 ...and it is NOT painted as a warning: it is the most accurate statement here, not a hazard');
+// (v14.90) THE FAR SIDE TABLE IS OFF THE FACE — his agreed layout ends "FAR SIDE block: REMOVED".
+// The NO CALL is NOT: it moved into the read-line hover, because it was the sharpest statement the
+// model makes and the table was its only home. f7 guards the RE-HOMED text; f8 is retired with it,
+// since there is no longer a painted element to check the colour of.
+// ⚠ COMMENT-BLIND. Written against raw SD this passed on the COMMENT that says "THE NO CALL IS
+// RE-HOMED HERE" — a mutation deleting the real clause survived. Strip comments first. Sixth time
+// this family has appeared; it is always mutation that finds it, never reading.
+(function(){
+  const SDL = SD.replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
+  ok(/does NOT trade there today/.test(SDL) && /FS\.no/.test(SDL),
+     'f7 the NO call survived the FAR SIDE removal — re-homed into the read hover');
+})();
+ok(!/h\s*\+=\s*[^\n]*g3farno/.test(SD),
+   'f8 ...and the old painted block is gone, not merely restyled');
 
 // ---- enrollment: no feature ships un-enrolled (2026-08-17 mandate) --------------------------------
 ok(/registerFeature\(\{ key:'farside'/.test(src), 'e1 the feature is registered');

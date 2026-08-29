@@ -1,3 +1,38 @@
+## v14.90 — the agreed ⓪a layout, actually shipped
+
+> "you did not implement all the changes we have been talking about"
+> "even the dntend Brk area was also removed .. all those changes and you didn't implement any of them"
+
+He was right. Four changes had been agreed — two of them **recorded as done** — and were still on the
+face. This ships them.
+
+**THE HL / LC·HC METRICS MOVED TO THE TOP STRIP**, right of the read, as asked: *"keep the HL metrics
+like HL gap and range at the top to the right of the forecast so we dont take up so much vertical
+space"*. **This is what had broken his column alignment.** While HL GAP, HL RNG and the LC·RNG pair
+sat in block 2 they pushed PTWick% and PTMUD three columns left of WICK% and MUD.
+
+    1ST | SLvl | HodN | TIME | TOOK    | BOP | WICK | W.END   | WICK%   | MUD
+    2ND | TLvl | LodN | TIME | PT TOOK | PT  | PTN  | (empty) | PTWick% | PTMUD
+
+PTWick% under WICK%, PTMUD under MUD — the pairing from his first sketch. The slot under **W.END
+stays deliberately empty**; there is no PT analogue of a wick-end clock. PTN takes the WICK column,
+the only home left that keeps the alignment.
+
+**THE TREND SECTION IS OFF THE FACE.** He asked at v14.88 whether it could go and it was never
+answered with evidence. The evidence was already on file: DRIFT is a measured **coin flip (50.0%,
+n=68)**, `test_trendbadge` is one of the six permanently-red files, and the confirm tally's own hover
+admits it has never been scored against TREND's 34%. ⚠ `secBias()` is **kept** — `bias.confirm` is a
+registered feature still writing to the recorder, and deleting the function would have stopped that
+record silently.
+
+**THE FAR SIDE BLOCK IS OFF THE FACE**, which the agreed layout has said since v14.88 while the block
+went on rendering. ⚠⚠ **The NO CALL was re-homed, not deleted** — "X and beyond, N% it does NOT trade
+there today" lived ONLY in that table, and it is the sharpest statement the model makes (half of all
+readings land at or under 20%; those levels traded 8%). It now sits in the read-line hover. Same
+failure the ROLL BIAS rehome hit at v14.83: a caveat whose only home was the block being retired.
+
+Dead CSS for the step bar (4 rules) and the FAR SIDE table (14 rules) removed with them.
+
 ## v14.89 — HodN / LodN / PTN: the node each extreme tested before reversing
 
 > "a lodN (lod node) and hodN (hod node) which are nodes that the extreme tested before reversing.

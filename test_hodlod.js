@@ -599,15 +599,18 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
 
   const SD2 = ex('secDay');
   ok(/PTL=hlPT\(sym, D\)/.test(SD2), 'p14 secDay computes it');
-  ok(/'PT TOOK','PT'/.test(SD2) && /ptTag\+' GAP/.test(SD2),
-     'p15 ...and the header names all three legs');
+  // (v14.90) LC|HC GAP·RNG moved OUT of the table and into the strip beside the read — operator:
+  // "keep the HL metrics ... at the top to the right of the forecast". So the header no longer
+  // names it; the STRIP does. Both halves are asserted so the leg cannot go missing entirely.
+  ok(/'PT TOOK','PT'/.test(SD2) && /lcT\+' GAP/.test(SD2),
+     'p15 ...and the PT legs are named in the table, the LC|HC pair in the top strip');
   ok(/PTL\.exp\.ptMin/.test(SD2) && /PTL\.exp\.ptPts/.test(SD2),
      'p16 ...and the E row uses the SIDE-SPECIFIC expectation, not the pooled one');
 }
 
 
 // ============================================================================================
-// (v14.89) SLvl / TLvl, AND THE PT LEG'S WICK FAMILY
+// (v14.90) SLvl / TLvl, AND THE PT LEG'S WICK FAMILY
 // ============================================================================================
 {
   const LH = ex('hlLevelHit'), PT2 = ex('hlPT'), SD3 = ex('secDay');

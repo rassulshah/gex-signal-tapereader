@@ -108,13 +108,33 @@ ok(/t=\+?'\+DEFL_META\.tTop5|DEFL_META\.tTop5/.test(src), 'n26 the null-result t
   const b2=counts.filter(c=>c[2]>bound).map(c=>c[1]);
   ok(b1.length>=3 && b1.every(x=>x===b1[0]), 'n27 block 1 rows all have the same cell count', b1);
   ok(b2.length>=3 && b2.every(x=>x===b2[0]), 'n28 block 2 rows all have the same cell count', b2);
-  ok(b1[0]===10, 'n29 block 1 is 10 wide (HodN/LodN added after SLvl)', b1[0]);
-  ok(b2[0]===11, 'n30 block 2 is 11 wide (node after TLvl, PTN before the close leg)', b2[0]);
+  // ⚠⚠ THE ALIGNMENT CONTRACT (v14.90). The blocks must be the SAME WIDTH or his column pairing
+  // silently breaks — PTWick% under WICK%, PTMUD under MUD, from his very first sketch. This is
+  // exactly what shipped broken in v14.90: HL GAP / HL RNG / LC·RNG were still living in block 2
+  // and pushed the whole PT family three columns left. A per-block width check would NOT have
+  // caught it; only comparing the two does.
+  ok(b1[0]===b2[0], 'n29 both blocks are the SAME width — the alignment contract', [b1[0],b2[0]]);
+  ok(b1[0]===10, 'n30 the agreed scheme is 10 columns', b1[0]);
 })();
 
 // ---- the headers he named --------------------------------------------------------------------
 ok(/'HodN':'LodN'/.test(src), 'n31 the first-extreme header switches HodN/LodN with the extreme');
 ok(/'PTN'/.test(src), 'n32 PTN is a column on the second row');
+
+// ---- (v14.90) THE AGREED REMOVALS. Each was recorded as done and was still rendering. ---------
+const live=src.replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
+ok(!/secs\s*=\s*\[\s*secBias/.test(live), 'n33 the TREND section is off the face (secBias not mounted)');
+ok(/function secBias/.test(live), 'n34 ...but secBias SURVIVES — bias.confirm still feeds the recorder');
+// ⚠ the first version of n35 grepped the whole file for `g3farhd` and failed on the leftover CSS
+// RULE, not a render — a class name in a stylesheet is not a section on the face. Assert on the
+// EMITTER instead. (And n36 named the wrong producer: it is fsRead(), not farSide().)
+ok(!/h\s*\+=\s*[^\n]*g3farhd/.test(live), 'n35 nothing EMITS the FAR SIDE block any more');
+ok(/fsRead\s*\(/.test(live), 'n36 ...but fsRead() survives — the read-line hover still uses it');
+ok(!/g3steps/.test(live), 'n37 the dead step-bar CSS is gone');
+// ⚠ CSS-BLIND, like n35 was. `/g3dayhl/` matched the STYLE RULE, so blanking the emitter left it
+// green — the mutation survived. Assert on the emitter, as with n35.
+ok(/h\s*\+=\s*'<div class="g3dayhl">'/.test(live), 'n38 the HL / LC-HC strip is EMITTED beside the read');
+ok(!/'HL GAP'|'HL RNG'/.test(live), 'n39 HL GAP / HL RNG are NOT table columns any more');
 
 console.log('test_nodeat: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

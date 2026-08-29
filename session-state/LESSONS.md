@@ -131,6 +131,41 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v14.90 · 2026-08-29 · **THE RECORD SAID "REMOVED" AND THE CODE WENT ON RENDERING**
+
+> "you did not implement all the changes we have been talking about"
+> "even the dntend Brk area was also removed .. all those changes and you didn't implement any of them"
+
+Four agreed changes were unshipped. **Two of them were written down as DONE.** The resume note's
+agreed-layout block ends `FAR SIDE block: REMOVED` and has since v14.88 — while the block rendered
+every session. A record that asserts a change which never shipped is worse than the unshipped
+change, because it is the thing that stops anyone looking.
+
+⚠ **AND I READ THAT NOTE THIS SESSION.** I quoted its column scheme back accurately and still did
+not check the scheme against the code. **A spec read as documentation is not a spec CHECKED against
+the build.** The check is mechanical and takes one grep per line.
+
+⚠⚠ **THE ALIGNMENT WAS BROKEN BY A LEFTOVER, NOT A MISTAKE IN THE NEW WORK.** HL GAP / HL RNG /
+LC·RNG were still living in block 2 — they were supposed to move to the top strip at v14.87 — and
+they pushed PTWick% and PTMUD three columns off WICK% and MUD. Then v14.89 added HodN/LodN/PTN on
+top, making rows of 10 and 11 that could not align at all. **When a layout looks wrong after an
+addition, check what should have LEFT before blaming what arrived.** `test_nodeat` n29 now asserts
+the two blocks are the SAME WIDTH — a per-block width check would never have caught this.
+
+⚠ REMOVING A BLOCK DELETES WHATEVER LIVES ONLY THERE. The FAR SIDE table was the only home of the
+NO CALL — the sharpest thing the model says. Re-homed to the read hover. Third time this exact
+shape has appeared (ROLL BIAS v14.83, the INFERRED caveat, now this): **before deleting a block,
+list what it is the only home of.**
+
+⚠ TWO MORE COMMENT/CSS-BLIND ASSERTIONS, both mutation-caught: `/g3farhd/` and `/g3dayhl/` matched
+STYLE RULES rather than emitters, and `/THE NO CALL/` matched the comment I had just written saying
+it was re-homed. Seventh and eighth in this family. **Any assertion whose regex could match prose or
+CSS must strip comments and target the emitter.**
+
+⚠ Three of my OWN test assertions were wrong before the code was: the block splitter split on text
+inside the block, and a scope check required `function secBias` inside `panelV3`'s body. **When a
+new assertion fails, suspect the assertion first — it is younger than the code.**
+
 ### v14.89 · 2026-08-29 · **A REGEX THAT MATCHES ITS OWN COMMENTED-OUT LINE**
 
 ⚠⚠ AND THE ORDERING GUARD HAD BEEN PASSING FOR THE WRONG REASON. `v14.88c` sat at the head of this

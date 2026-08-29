@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.89
+// @version    14.90
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.89';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.90';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -19937,10 +19937,6 @@ function ensureV3Css(){
     var s=document.createElement('style'); s.id=V3CSS_ID;
     s.textContent=
     '#gpts-body .g3{font-variant-numeric:tabular-nums}'+
-    '#gpts-body .g3steps{display:flex;gap:2px;padding:1px 0 4px}'+
-    '#gpts-body .g3steps span{flex:1;text-align:center;font-size:7px;font-weight:800;padding:3px 1px;border-radius:3px;background:rgba(139,152,169,.09);color:#8b98a9;cursor:default}'+
-    '#gpts-body .g3steps span.done{color:#2ec27e;background:rgba(46,194,126,.13)}'+
-    '#gpts-body .g3steps span.on{background:rgba(242,180,90,.24);color:#f2b45a;box-shadow:0 0 0 1px rgba(242,180,90,.4)}'+
     '#gpts-body .g3wait{font-size:9px;color:#8b98a9;text-align:center;padding:0 0 5px}'+
     '#gpts-body .g3wait b{color:#f2b45a;font-weight:800}'+
     '#gpts-body .g3sh{display:block;text-align:center;font-size:8px;font-weight:800;letter-spacing:.13em;color:#8b98a9;margin-top:6px;margin-bottom:2px;padding:2px 0;border-radius:3px;background:rgba(139,152,169,.09)}'+
@@ -20276,6 +20272,10 @@ function ensureV3Css(){
     '#gpts-body .g3daylv.sw{color:#e3b341;background:rgba(227,195,65,.13);border:1px solid rgba(227,195,65,.42)}'+
     '#gpts-body .g3daylv.tg{color:#5fd08a;background:rgba(46,194,126,.14);border:1px solid rgba(46,194,126,.40)}'+
     '#gpts-body .g3daylv.nd{color:#b98cff;background:rgba(150,110,255,.14);border:1px solid rgba(150,110,255,.42)}'+
+    // (v14.90) the HL / LC-HC strip: right-aligned beside the read, one row, no vertical cost.
+    '#gpts-body .g3dayhl{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;padding:2px 0 4px;font-size:8.2px}'+
+    '#gpts-body .g3dayhl span{color:#c9d4e2;font-weight:800;white-space:nowrap}'+
+    '#gpts-body .g3dayhl i{color:#8b98a9;font-style:normal;font-weight:700;margin-right:4px}'+
     '#gpts-body .g3dayl{display:flex;gap:3px;margin-bottom:5px}'+
     '#gpts-body .g3daylb{flex:1;text-align:center;padding:2px 0;border-radius:3px;cursor:help;'+
       'background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06)}'+
@@ -20298,24 +20298,10 @@ function ensureV3Css(){
     // (v14.72) THE FAR SIDE. Its own frame in the blue accent so it reads as a DIFFERENT question
     // from the green verdict above it: the verdict is about the extreme that has printed, this is
     // about the one that has not.
-    '#gpts-body .g3far{margin:5px 0 4px;border:1px solid rgba(74,144,217,.30);'+
       'background:rgba(74,144,217,.05);border-radius:4px;padding:4px 6px;cursor:help}'+
-    '#gpts-body .g3farhd{font-size:6.8px;font-weight:900;letter-spacing:.08em;color:#4b5563;'+
       'text-transform:uppercase;margin-bottom:2px}'+
-    '#gpts-body .g3fart{display:table;width:100%;font-size:8.2px}'+
-    '#gpts-body .g3farr{display:table-row}'+
-    '#gpts-body .g3farr span{display:table-cell;padding:1px 6px 1px 0;white-space:nowrap}'+
-    '#gpts-body .g3farr.h span{font-size:6.4px;font-weight:900;letter-spacing:.07em;color:#4b5563}'+
-    '#gpts-body .g3farr .k{color:#f2b45a;font-weight:900}'+
-    '#gpts-body .g3farr .p{color:#2ec27e;font-weight:900}'+
-    '#gpts-body .g3farr .pm{color:#8b98a9;font-weight:800}'+
-    '#gpts-body .g3farr .t{color:#8b98a9;font-weight:600}'+
-    '#gpts-body .g3farr .w{color:#6c7889;font-weight:600}'+
     // ⚠ NOT RED. This is the model's most accurate statement, not a warning - amber, like every
     // other high-confidence figure on this panel.
-    '#gpts-body .g3farno{font-size:8px;font-weight:800;color:#8b98a9;margin-top:3px}'+
-    '#gpts-body .g3farno b{color:#f2b45a;font-weight:900}'+
-    '#gpts-body .g3fardim{font-size:8px;font-weight:600;color:#6c7889}'+
     '#gpts-body .g3daytime{font-size:8.4px;font-weight:800;color:#c9d4e2;margin-top:3px;line-height:1.45}'+
     '#gpts-body .g3daytime b{color:#2ec27e;font-weight:900}'+
     '#gpts-body .g3dayfoot{font-size:6.8px;color:#4b5563;margin-top:3px;cursor:help}'+
@@ -26741,7 +26727,16 @@ function secDay(sym){
          ((FS&&FS.ok) ? (' \u25b8 THE FAR SIDE: the 80% figure is a ONE-SIDED FLOOR \u2014 '+FS.side+' after '+fsClock12(FS.floorAt)+
               '. It is NOT a window: measured over 197 sessions a \u00b115-minute box lands 15% of the time and a two-sided window needs 3.6 HOURS to reach 80%. The MIDDLE HALF of outcomes falls between '+
               fsClock12(FS.winA)+' and '+fsClock12(FS.winB)+', and that band is 50%, not 80%.'+
-              (FS.haz ? (' If it has not printed by '+fsClock12(FS.haz.at)+', '+FS.haz.p+'% of the remaining cases land in the close.') : '')) : ''))+
+              (FS.haz ? (' If it has not printed by '+fsClock12(FS.haz.at)+', '+FS.haz.p+'% of the remaining cases land in the close.') : '')+
+              // ⚠⚠ THE NO CALL IS RE-HOMED HERE, NOT DELETED (v14.90). It lived ONLY in the FAR SIDE
+              // table, and removing that table would have taken the sharpest statement the model
+              // makes with it: half of all readings land at or under 20%, and those levels traded
+              // 8% of the time. That is the high-confidence call, not a warning. This is the same
+              // failure the ROLL BIAS rehome hit in v14.83 — a caveat whose only home was the block
+              // being retired. `test_farside` f7 now guards it HERE.
+              ((FS.no) ? (' \u25b8 THE NO CALL: '+frameNum(FS.no.px)+' and beyond \u2014 '+(100-FS.no.p)+
+                          '% it does NOT trade there today. Half of all readings land at or under 20%, '+
+                          'and those levels traded 8% of the time: the no is the most accurate thing here.') : '')) : ''))+
        '')+'>'+
        // ⚠⚠ (v14.86) ONE LINE, TWO FACTS, BOTH WITH THEIR NUMBER — operator, 2026-08-29:
        // "why dont you just say HOD IN 100% \u00b7 LOD after 1:30pm \u2014 80%."
@@ -26786,6 +26781,23 @@ function secDay(sym){
             '<b>\u26a0 when it did not hold, it was replaced:</b> '+(100-T.rate)+'% of the time at this age.')
          : 'no rate is claimed below 30 minutes \u2014 the shortest measured window.')+
        '</div>';
+    // ---- (v14.90) THE HL / LC-HC METRICS SIT BESIDE THE READ, NOT IN THE TABLE -----------------
+    // Operator, 2026-08-29: "keep the HL metrics like HL gap and range at the top to the right of
+    // the forecast so we dont take up so much vertical space", and the LC|HC pair "up there also".
+    // ⚠⚠ THIS IS WHAT BROKE HIS COLUMN ALIGNMENT. While HL GAP, HL RNG and the LC·RNG pair sat in
+    // block 2 they pushed PTWick% and PTMUD three columns left of WICK% and MUD — the exact
+    // alignment he asked for in his first sketch. Moving them here is what restores it; they were
+    // never table columns in the agreed layout.
+    if(!NOREAD){
+      var lcT=(PTL&&PTL.ok)?PTL.lcTag:'LC';
+      h+='<div class="g3dayhl">'+
+         '<span><i>HL GAP</i>'+hlDur(D.gap)+((D.secondT>=D.clock)?'\u2026':'')+'</span>'+
+         '<span><i>HL RNG</i>'+(D.rngUsd!=null?('$'+Math.round(D.rngUsd).toLocaleString()+' \u2014 '):'')+D.rngPts.toFixed(1)+'pts</span>'+
+         ((PTL&&PTL.ok&&PTL.lcMin!=null)
+            ? ('<span><i>'+lcT+' GAP</i>'+hlDur(PTL.lcMin)+'</span><span><i>'+lcT+' RNG</i>'+PTL.lcPts.toFixed(1)+'pts</span>')
+            : ('<span><i>'+lcT+' GAP</i>\u2014</span><span><i>'+lcT+' RNG</i>\u2014</span>'))+
+         '</div>';
+    }
     // ---- (v14.65) THE CHIP ROW IS GONE, AND EVERY CHIP WAS REMOVED FOR A MEASURED REASON ----
     // Operator, 2026-08-28: "do you need the badges below like vwap, ib60 etc."  Measured over 284
     // sessions (FINDINGS F-1/F-2), the answer is no, and keeping them was actively misleading:
@@ -26851,63 +26863,48 @@ function secDay(sym){
     // shown because they are 58% apart and answer different questions — see PT_META.
     var ptTag=(PTL&&PTL.ok)?PTL.lcTag:'LC';
     h+='<div class="g3dayg g3dayg6">';
-    h+=row('hd','',['2ND','TLvl',(D.second==='HOD'?'HodN':'LodN'),'HL GAP','HL RNG','PT TOOK','PT','PTWick%','PTMUD','PTN',ptTag+' GAP \u00b7 RNG']);
-    h+= NOREAD ? row('a','A',[DASH,DASH,DASH,DASH,DASH,DASH,DASH,DASH,DASH,DASH,DASH]) : row('a','A',[
-      (D.secondT>D.firstT && D.secondT<=D.clock) ? ('<b>'+D.second+' '+hlClock(D.secondT)+'</b>') : (D.second+' pend.'),
+    // ⚠⚠ THE COLUMN SCHEME IS HIS, FROM THE EIGHT MOCKUP ROUNDS, AND IT IS AN ALIGNMENT CONTRACT:
+    //        1ST | SLvl | HodN | TIME | TOOK    | BOP | WICK | W.END   | WICK%   | MUD
+    //        2ND | TLvl | LodN | TIME | PT TOOK | PT  | PTN  | (empty) | PTWick% | PTMUD
+    // PTWick% sits under WICK%, PTMUD under MUD. ⚠ THE SLOT UNDER W.END IS DELIBERATELY EMPTY —
+    // it was in his very first sketch and there is no PT analogue of a wick-end clock.
+    // ⚠ PTWICK IS STILL ABSENT ON PURPOSE (OPEN-QUESTIONS Q1): WICK is "open -> the bar that
+    // RECLAIMS the open", and the PT leg's anchor is the second extreme, so "reclaim" would mean a
+    // different event. He defined BOP/WICK/W.END/WICK%/MUD himself; this one waits for him rather
+    // than being invented. `test_hodlod` L14/L15 hold it absent.
+    // ⚠ PTN takes the WICK column because LC|HC moved to the top strip and left it the only home
+    // that keeps the WICK-family alignment intact. Say the word and it moves.
+    h+=row('hd','',['2ND','TLvl',(D.second==='HOD'?'HodN':'LodN'),(NOREAD?'TIME':(''+D.second)),'PT TOOK','PT','PTN','','PTWick%','PTMUD']);
+    h+= NOREAD ? row('a','A',[DASH,DASH,DASH,DASH,DASH,DASH,DASH,'',DASH,DASH]) : row('a','A',[
+      '<b>'+D.second+'</b>',
       lvTag(LVH&&LVH.target, 'tg'),
       ndTag(NDH&&NDH.second, 'nd'),
-      hlDur(D.gap)+((D.secondT>=D.clock)?'\u2026':''),
-      (D.rngUsd!=null?('$'+Math.round(D.rngUsd).toLocaleString()+' \u2014 '):'')+D.rngPts.toFixed(1)+'pts',
+      (D.secondT>D.firstT && D.secondT<=D.clock) ? ('<b>'+hlClock(D.secondT)+'</b>') : (D.second+' pend.'),
       (PTL&&PTL.ok)?('<b>'+hlDur(PTL.ptMin)+'</b>'):DASH,
       (PTL&&PTL.ok)?('<b>'+PTL.ptPts.toFixed(1)+'pts</b>'+(PTL.ptUsd!=null?(' <span class="g3daydim">$'+Math.round(PTL.ptUsd).toLocaleString()+'</span>'):'')):DASH,
-      (PTL&&PTL.ok&&PTL.ptWickPct!=null)?(PTL.ptWickPct+'%'):DASH,
-      (PTL&&PTL.ok&&PTL.ptMud!=null)?hlDur(PTL.ptMud):DASH,
       ndTag(NDH&&NDH.pt, 'nd'),
-      (PTL&&PTL.ok&&PTL.lcMin!=null)?(hlDur(PTL.lcMin)+' \u00b7 '+PTL.lcPts.toFixed(1)+'pts'):DASH ]);
+      '',
+      (PTL&&PTL.ok&&PTL.ptWickPct!=null)?(PTL.ptWickPct+'%'):DASH,
+      (PTL&&PTL.ok&&PTL.ptMud!=null)?hlDur(PTL.ptMud):DASH ]);
     h+=row('e','E',[
+      '',
+      '',
+      '',
       '~'+hlClock(base.secondClock),
-      '',
-      '',
-      '~'+hlDur(base.gapMin),
-      '~$'+Math.round(base.rngUsd).toLocaleString()+' \u2014 '+base.rngPts+'pts ('+base.rngP25+'\u2013'+base.rngP75+')',
       (PTL&&PTL.ok)?('~'+hlDur(PTL.exp.ptMin)):('~'+hlDur(PT_META.ptMin)),
       (PTL&&PTL.ok)?('~'+PTL.exp.ptPts.toFixed(1)+'pts'):('~'+PT_META.ptPts+'pts'),
-      '~'+((PTL&&PTL.ok)?PTL.exp.ptWickPct:PT_META.ptWickPct)+'%',
-      '~'+hlDur((PTL&&PTL.ok)?PTL.exp.ptMud:PT_META.ptMud),
       '',
-      (PTL&&PTL.ok)?('~'+hlDur(PTL.exp.lcMin)+' \u00b7 ~'+PTL.exp.lcPts.toFixed(1)+'pts'):('~'+hlDur(PT_META.lcMin)+' \u00b7 ~'+PT_META.lcPts+'pts') ]);
+      '',
+      '~'+((PTL&&PTL.ok)?PTL.exp.ptWickPct:PT_META.ptWickPct)+'%',
+      '~'+hlDur((PTL&&PTL.ok)?PTL.exp.ptMud:PT_META.ptMud) ]);
     h+='</div>';
-    // ---- (v14.72) THE FAR SIDE — the block that replaced the ladder ---------------------------
-    // ⚠ THE LADDER WAS DELETED, AND FOR THE SAME REASON THE CHIP ROW WAS AT v14.65: it answered the
-    // SAME question as the verdict above it (is this extreme the day's) with a WEAKER instrument -
-    // age alone, AUC 0.818, against the table's 0.879 - and the two disagreed on the face. The
-    // operator saw it: "im not sure what the purpose of the 41% and the various percentages are
-    // when the percent is already mentioned at the top". Adding `stood` as a third axis to the
-    // table was MEASURED WORSE (0.8729 vs 0.8787, FINDINGS F-4), so the ladder is not information
-    // the verdict lacks - it is the same information, diluted.
-    // ⚠ The base rates themselves are NOT deleted: hodlodBase() still serves the E row, still
-    // travels by courier, and the ladder can be re-derived from BASERATES.json at any time.
-    if(FS && FS.ok && FS.levels && FS.levels.length){
-      /* still inside PROB-BLOCK */
-      h+='<div class="g3far"'+g3tip('WHERE CAN THE OTHER EXTREMITY GET TO, AND WHEN? Each row is a level the panel already draws \u2014 a node, the King, an expected-move edge, a prior-day level, the dark pool, a round number. TRADES THERE is how often a level at that distance, with this much session left, was traded before the close: '+FS.corpus.obs.toLocaleString()+' observations over '+FS.corpus.sessions+' sessions, AUC 0.826, calibrated within 3 points at every decile (FINDINGS F-14). IF IT DOES is the first-passage time GIVEN it is reached, shown as a range because the median error is 42 minutes on an 86-minute horizon (F-15). \u26a0 Distance is measured in the session\u2019s own volatility (sigma = 1-bar sd \u00d7 \u221abars left), which is why a 20-point level is not always the same bet. \u26a0 The daily ATR and the IDENTITY of the level (prior-day high, overnight extreme) were both tested and add nothing once distance is controlled \u2014 only round numbers survived, weakly (F-16). \u26a0 PROVISIONAL: one instrument, no forward test yet. It never says price WILL trade there.')+'>';
-      h+='<div class="g3farhd">FAR SIDE \u2014 WHERE THE '+g3esc(FS.side)+' CAN GET TO, AND WHEN</div>';
-      h+='<div class="g3fart"><div class="g3farr h"><span>LEVEL</span><span>WHAT IT IS</span><span>TRADES THERE</span><span>IF IT DOES</span></div>';
-      for(var fi=0; fi<FS.levels.length; fi++){
-        var L2=FS.levels[fi];
-        h+='<div class="g3farr"><span class="k">'+frameNum(L2.px)+'</span>'+
-           '<span class="w">'+g3esc(L2.label)+'</span>'+
-           '<span class="'+(L2.p>=50?'p':'pm')+'">'+L2.p+'%</span>'+
-           '<span class="t">'+(L2.med!=null?('~'+hlDur(L2.med)+' <span class="w">('+hlDur(L2.q1)+'\u2013'+hlDur(L2.q3)+')</span>'):'\u2014')+'</span></div>';
-      }
-      h+='</div>';
-      // ⚠ THE SHARPEST THING THE MODEL SAYS IS A NO. Half of all readings land at or under 20% and
-      // those levels traded 8% of the time. It is not a warning, it is the high-confidence call.
-      if(FS.no) h+='<div class="g3farno">'+frameNum(FS.no.px)+' and beyond \u2014 <b>'+(100-FS.no.p)+'%</b> it does not trade there today</div>';
-      h+='</div>';
-    } else if(FS && !FS.ok && !NOREAD){
-      h+='<div class="g3far"><div class="g3farhd">FAR SIDE</div><div class="g3fardim">'+
-         g3esc(FS.why||'no reading')+' \u2014 this is not a clear path, it is no reading.</div></div>';
-    }
+    // ---- (v14.72 -> v14.90) THE FAR SIDE BLOCK IS REMOVED --------------------------------
+    // The agreed ⓪ a layout (2026-08-29, eight mockup rounds) ends "FAR SIDE block: REMOVED" and
+    // the resume note has said so since v14.88 — while the block went on rendering. A record that
+    // asserts a change which never shipped is worse than the unshipped change: it stops anyone
+    // looking. This is the removal the note was describing.
+    // ⚠ farSide() IS KEPT and still feeds the READ LINE's hover — the one-sided-floor clause and
+    // the 80%/50% distinction live there. Only the standalone table is gone.
     /* PROB-BLOCK-END */
     return h+'</div>';
   }catch(e){ swallow('secDay', e); return ''; }
@@ -26938,7 +26935,17 @@ function panelV3(sym){
   // session before any structure is read. It is NOT one of the five steps, so it renders outside
   // the step loop and carries no step header.
   try{ if(CFG.dayHL!==false) h+=secDay(sym); }catch(eD){ swallow('secDay-mount', eD); }
-  var secs=[secBias, secLoc];   // (v14.32) REACTION/EXECUTE retired from the face; secFrame renders inside secLoc
+  // (v14.90) THE TREND SECTION IS OFF THE FACE — operator, 2026-08-29: "even the dntend Brk area
+  // was also removed". He asked at v14.88 whether TREND could go and the question was never
+  // answered with evidence; it is answered now, and the evidence was already on file:
+  //   · DRIFT is a measured COIN FLIP — 50.0%, n=68, and its own chip says DESCRIPTIVE ONLY.
+  //   · `test_trendbadge` is one of the six permanently-red files.
+  //   · the confirm tally's own hover admits "whether the count improves on TREND's 34% has never
+  //     been tested" — a conviction number nobody has ever scored.
+  // ⚠ secBias() IS KEPT, not deleted: bias.confirm is still a registered FEATURE writing to the
+  // recorder, so the reads keep being scored nightly even with nothing drawn. Deleting the function
+  // would silently stop that record — the same mistake as the ROLL BIAS rehome in v14.83.
+  var secs=[secLoc];   // (v14.32) REACTION/EXECUTE retired; secFrame renders inside secLoc
   for(var j=0;j<secs.length;j++){
     // (v14.84) no header row — the sections butt directly against each other.
     try{ h+=secs[j](sym); }catch(eS){ swallow('section'+(j+1), eS); h+='<div class="g3b"><div class="g3rx"><span style="color:#f0616d">'+g3esc(String(eS&&eS.message||eS))+'</span></div></div>'; }
