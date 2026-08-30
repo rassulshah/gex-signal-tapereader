@@ -131,6 +131,79 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.09b · 2026-08-31 · **A WIDTH GUARD CAUGHT ME DOING THE EXACT THING IT WAS WRITTEN FOR**
+
+`test_ladder` w1b: "THE BUILD MUST NOT GET WIDER. 632 -> 588 was the whole point; a later change that
+adds a column and pushes it back up has undone this build without anything else noticing." I added a
+48px roll lane and tripped w1, w1b and w1c together.
+
+⚠⚠ **THE GUARD'S PURPOSE IS NOT TO FORBID, IT IS TO MAKE THE DECISION VISIBLE.** Its own words are
+"without anything else noticing" — so the correct response is neither to bump the number silently nor
+to abandon the feature, but to argue for it in the open. The lane was squeezed 44 -> 20px to land on
+w1's 640 ceiling, w1b was amended ONCE with the reason written into the assertion, and w1c was
+repointed at the new last column so LAD_W still cannot drift from the layout.
+
+⚠ **AND THE AMENDMENT CARRIES THE NEXT ARGUMENT.** The assertion now reads "640 IS NOW THE CAP. The
+next column that wants width argues for it here, in these words." A guard that is relaxed without
+leaving that sentence behind is a guard that will be relaxed again by someone who never saw the first
+argument.
+
+### v15.09 · 2026-08-31 · **I RE-BROKE A COUNTING RULE HE HAD ALREADY TAUGHT ME**
+
+"each day will only have a few pullback opportunties and each pullback has 1 deflection so when you
+have that many deflections in a day, its because the data was not classified correctly."
+
+`study-rollsupport.py` counted every bar against every node: 481 events over 4 sessions, ~120 a day.
+**He taught me this exact lesson on 29 Aug** with his circled charts — "in each circle you only count
+it as 1 deflection" — and `study-deflect-atr.py` still carries the fix. I wrote a NEW study three
+days later and reverted to per-bar counting without noticing.
+
+⚠⚠ **A LESSON FIXED IN ONE FILE IS NOT A LESSON LEARNED.** The correction lived in the study it was
+written for; nothing carried it into the next one. **When a counting rule is corrected, it belongs in
+the LESSON LOG as a rule about counting, not as a comment in one script** — which is what this entry
+is for.
+
+⚠ THE TELL WAS AVAILABLE WITHOUT HIM: **120 pullbacks a day is not a plausible number** and I printed
+it without pausing. A count that disagrees with how the thing behaves in life is a defect in the
+counter, not a finding. **Sanity-check a rate against lived experience before reporting it.**
+
+⚠ THE FIX IS A DEFINITION, NOT A THRESHOLD. A pullback is the extreme of its OWN 30-minute
+neighbourhood — a structural property — rather than "moved more than X". Tightening a threshold would
+have produced any number I wanted; the neighbourhood test produces 3 a session because that is how
+many there are.
+
+⚠ AND A CAVEAT SPLIT ACROSS A STRING CONCATENATION IS UNGUARDED. `'NOT A '+'CLAIM...'` reads
+perfectly and cannot be grepped, so the test protecting it passed on a mutation that deleted the
+phrase. **A guarded sentence that a guard cannot match is not guarded.** Kept whole on one line.
+
+### v15.08 · 2026-08-30 · **THE PANEL MEASURED A PROXY WHILE THE REAL INSTRUMENT SAT IN STORAGE**
+
+"its the es that i am trading but using spxw nodes." The structure side was right — ES has no book,
+so kings and nodes come from other tapes. The MEASUREMENT side was not: HOD, LOD, the candle, EFF
+and the GREEN/RED call were computed from SPY candles x an EMA ratio, while true ES 1-minute bars
+sat unused in localStorage the whole time.
+
+⚠⚠ **I VERIFIED AGAINST ATLAS BEFORE BUILDING, AND IT CHANGED THE ARGUMENT.** Atlas draws each book
+in its own native scale, unconverted. Reading the real numbers off his page — ES 7722.50, SPX
+7711.76, SPY 769.35 — showed SPX and ES are TEN POINTS apart while SPY is 10.04x away. **That is why
+his pairing works and why SPY does not belong in the path.** I would have made a weaker version of
+this change from reasoning alone; the page settled it in one call.
+
+⚠ **A PROXY IS NOT WRONG BY ITS AVERAGE ERROR, IT IS WRONG BY WHAT IT CANNOT SEE.** SPY x ratio gives
+the RANGE to within hundredths — a fact that would have justified leaving it. But SPY and ES do not
+tick in step, so the MINUTE an extreme prints can differ, and TOOK / BOP / MUD / W.END / HL GAP are
+all timestamps. And SPY has no overnight session while ONH/ONL already come from ES bars. **Judge a
+proxy on the quantity you actually use it for, not the one that is easiest to check.**
+
+⚠ THE TRAP INSIDE THE FIX: `hodLod` set `out.scale=rr` from `dispR()`. With ES bars that would have
+multiplied ES prices by ten — the exact failure the change exists to remove, reintroduced by the
+change itself. The scale now comes FROM the bar source. **When you swap a data source, every derived
+constant of the old source is suspect.**
+
+⚠ AND THE TEST HARNESS NEEDED THE NEW DEPENDENCY. `hodLod` threw into its own catch and every
+extremity assertion failed with an EMPTY result rather than a wrong one — which reads like the
+function is broken rather than un-stubbed. **A silent catch turns a missing stub into a mystery.**
+
 ### v15.07 · 2026-08-30 · **TRANSPOSING A TABLE FIXED A READING PROBLEM I HAD NOT NOTICED**
 
 He asked for the three rows turned vertical to save space. What it actually fixed is that the E row

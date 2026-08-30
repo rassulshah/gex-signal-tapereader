@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-30 · v15.07 · session `2df3ccfa` — v15.07 - the vertical redesign
+## 2026-08-30 · v15.09 · session `2df3ccfa` — v15.09 - roll arrows and the corrected pullback unit
 
-_53 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
+_59 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
 
 ### THE EXCHANGE
 
@@ -1228,6 +1228,603 @@ These assert the row form, which no longer exists. Rewriting them for the column
 The candle edit was lost when that script aborted. Applying it now:
 My regex replaced only the message line and orphaned the opening. Repairing:
 Only the record guards left. Writing the records and shipping:
+Built. **v15.07 — 129 green / 6 baseline red.**
+
+**Tapereader v15.07** — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+**Companion v1.16 — unchanged.**
+
+Three columns — 1ST · 2ND · DAY — label / actual / expected, 1px rules, tabular figures.
+
+**Transposing turned out to fix something I hadn't noticed was broken.** The E row sat *under* the A row, so comparing an actual against its expected meant tracking two rows. Side by side, `TOOK 5h30 against 34m` — a low that took ten times the normal time to form — is legible at a glance. You asked for a space change and got a comprehension gain.
+
+**The design pass caught four things my eye had passed:** money coloured amber when money isn't a status; no `tabular-nums`, which is the actual mechanism behind "aligned" rather than the hand-tuning I'd been doing; spine segments abutting instead of separated by 2px of surface; and a dashed axis, which reads as "projection".
+
+**The candle's height is now derived, not chosen:** `DAYCOL_HD(16) + DAYCOL_N(9) × DAYCOL_ROW(13) = 133`. It had been picked by eye t …[trimmed]
+
+**OPERATOR:**
+> i want to make sure that this is the ES .. i said spxw before, but its the es that i am trading but using spxw nodes.. do you understand that.  also
+
+**me (04:01):** Yes — and that distinction matters more than a label. Let me verify what the panel is actually doing rather than assume:
+Yes, I understand — and it's an important distinction I had slightly wrong. **You trade ES; SPXW is the book you read.** The panel is wired that way (`IFSYM = {SPY:'SPX'}` — the ladder reads the SPX chain and displays it at ES scale), so the *nodes* are right.
+
+But checking rather than assuming turned up something you should know:
+
+```
+true ES 1-minute bars, in your storage right now:  391 RTH bars, H 7782.50  L 7711.75  range 70.75
+what the panel measures HOD/LOD from:              SPY candles × 10.0384 (an EMA ratio)
+```
+
+**The panel computes the HOD, LOD, the candle, EFF and the GREEN/RED call from SPY candles multiplied by a ratio — while true ES bars sit unused in localStorage.**
+
+For *range* the conversion is near-exact (70.75 ÷ 10.038 = 7.048, so the error is hundredths). Where it actually costs you is:
+
+- **The extreme times.** SPY and ES don't tick identically, so the minute the high prints can differ — and TOOK, MUD, HL GAP and the whole wick family are built on those timestamps.
+- **The overnight session.** SPY doesn't have one. ONH/ONL and anything pre-open are derived from ES bars already, so the panel is mixing two instruments in one section.
+- **The ratio drifts.** It's an EMA, so it's approximately right and never exactly right.
+
+Since you're trading ES, the honest fix is to measure the ES bars directly rather than infer them from the ETF. That's a contained change — `hodLod` and the candle read `futBarsLoad()` instead of `closedCandles('SPY')` when the chart is a future.
+
+Two things before I build:
+
+**The Market setting currently reads "SPX / SPY (default)"**, which describes the book but not what you trade. It should say **ES · SPXW …[trimmed]
+
+**OPERATOR:**
+> i just want to make sure this approach is consistent with atlas.. check it
+
+**me (04:04):** Good instinct — Atlas is the source of truth here, not my reasoning. Let me read what it actually draws:
+Now I can answer this properly. **Atlas draws each book in its own native scale:**
+Checked against Atlas, and your approach is consistent — with one real discrepancy you should know about.
+
+**What Atlas actually does:** it draws **each book in its own native scale, side by side, unconverted.** The SPY column shows SPY strikes (806–855), the SPXW column shows SPX strikes (7890–7960), QQQ shows QQQ strikes. It's a table of four books, not an overlay.
+
+**The three instruments:**
+
+```
+ES1 (what you trade)     7722.50
+SPX  (the SPXW book)     7711.76      basis:  ES − SPX = +10.74
+SPY  (the ETF)             769.35      ratio:  ES ÷ SPY = 10.0377
+```
+
+**The key fact, and it validates your setup:** SPX and ES are **10.74 points apart** — essentially the same scale. So reading SPXW nodes on an ES chart needs a ~1.0014 basis adjustment, not a conversion. That's why the pairing works: the book and the instrument are natively compatible.
+
+**SPY is the odd one out at 10.04×** — and every scale disaster tonight involved SPY sitting in the display path.
+
+**The one discrepancy:** the panel converts SPX strikes to ES for the chart (a level Atlas lists as **7750** the panel draws at **7760.7**), because a level has to sit at the right *height* on an ES chart. Atlas doesn't convert, because its ladder is a list rather than an overlay. Both are correct for their purpose — but the numbers differ by the basis, so cross-checking a level between my panel and Atlas's node table means allowing ~10.7 points. That's worth knowing rather than discovering mid-trade.
+
+**And it sharpens the recommendation I made:** since you trade ES and read SPXW, and those two are natively 10 points apart, **SPY …[trimmed]
+
+**OPERATOR:**
+> yes.  we are using other markets to get things like their kings because ES doesn't have its own book, so we use other tapes..  ok build
+
+**me (04:07):** Now the model is clear: **ES has no book of its own, so structure comes from other tapes — but the price action being measured should be ES's own bars.** Building that separation:
+Now the same source for `gdRead`, `gdActual` and `hlEff`, so the whole measurement path is one instrument:
+These tests *execute* `hodLod` against a fixture, so they need the new dependency stubbed. Let me look:
+The harness evals specific functions from source — `measureBars` won't be among them. Let me check:
+I understand it now, and checking Atlas first changed the argument — I'd have built a weaker version from reasoning alone.
+
+**Atlas draws each book in its own native scale, unconverted** — SPY column 806–855, SPXW column 7890–7960, side by side. And the real numbers off your page settle why your setup works:
+
+```
+ES1  7722.50      SPX  7711.76      ES − SPX = +10.74      ← natively compatible
+SPY   769.35                        ES ÷ SPY = 10.0377     ← a different instrument
+```
+
+**SPX and ES are ten points apart.** That's exactly why reading SPXW nodes on an ES chart is sound — you're not converting, you're adjusting a basis. **SPY is 10.04× away, and every scale disaster tonight had SPY in the display path.**
+
+So the separation is now honest:
+
+```
+STRUCTURE    nodes · kings · walls · flip    ← SPXW / SPY / QQQ.  ES has no book. Unchanged.
+MEASUREMENT  HOD · LOD · candle · EFF · GD/RD ← ES's own 1-minute bars, which were in your
+             and every duration                  storage unused the whole time.
+```
+
+`measureBars()` returns the true ES session already in chart scale, falls back to the SPY proxy, and **always names which it used** — a measurement whose instrument is unknown isn't a measurement.
+
+Two things worth flagging:
+
+**The proxy wasn't wrong on average — it was wrong on …[trimmed]
+
+**OPERATOR:**
+> i'll resume tomorrow.. with you .. in the mean time. i have antoher feature i need to reimplement. I use to have arrows that showed where the gamma was flowing out of and into . this is important because many times new pullback nodes show up to support a move or to stop a move. I need you to add those arrows but it should be on the right side , just make sure you dont overwrite any labels. i will leave the layout to you .    here are some examples of new nodes or existing nodes getting gamma increases that created a pullback. see the 2 circles, they show gamma coming in and deflecting a pullback.  so i want to use delta to show an increase in this gamma and the arrows showing if there was sometype of roll where gamma moved from other nodes in to a node to create new support or resistance.  work on this, think about it , use data , then update the delta as you see fit and design the arrows .. do you understand the task
+
+**me (04:15):** Understood. Let me state the task back so we're aligned, then work it properly.
+
+**What you're asking for:** arrows on the right side of the ladder showing gamma *rolling* — leaving one node and arriving at another — because a node that's *gaining* gamma is what creates the new support or resistance that turns a pullback. Your two circles are exactly that: gamma arriving, then price deflecting off it. Delta should express the increase; the arrows should express where it came from.
+
+Let me start with what already exists and whether the data supports the claim:
+The roll engine and even arrow-drawing code still exist. Let me check what actually renders, then test his claim against data:
+`railRollLane` draws on the horizontal rail — he wants them on the vertical ladder's right. Before designing anything, let me test his actual claim, because this is exactly the hypothesis I pre-registered as **gx-004**:
+Important result, and it's **the opposite of the hypothesis** — but before I report that, I need to check I measured the right quantity:
+**`nodes[].abs` — absolute dollars per strike.** I measured `%King`, which is *relative* to the king, so a node's share falls when the king grows even if its own gamma is flat. That's the wrong quantity for your question. Re-running on absolute dollars:
+9 sessions have node data — my filter was still requiring `tri`, which isn't needed now. Re-running across all of them:
+4 sessions, 481 touches — and the honest answer is **no measurable effect**:
+
+```
+node GAINING $ into the touch    n=139   deflect 68%   −4 pp   inside noise
+flat                             n=280   deflect 74%   +2 pp   inside noise
+node SHEDDING $ into the touch   n= 62   deflect 73%   +1 pp   inside noise
+                                          base rate 72%
+```
+
+That' …[trimmed]
+
+**OPERATOR:**
+> i like A, but you are suppose to use arrows that are stepped with a dot at the source like this (rought sketch) and i think they were animated also showing flow going from one node to another.
+
+**me (04:22):** That's the classic roll shape — dot at source, out, across, back in with the head. Let me check the animation the original used:
+`@keyframes g3ldflow{to{stroke-dashoffset:-18}}` — the flowing dashes are still in the stylesheet. Let me check the motion guard, then build it:
+Stepped exactly as you drew — dot at the source, out, across, then back in with the head at the destination. Orthogonal, so two rolls at neighbouring strikes nest instead of crossing diagonally, and the step depth tells you which is which.
+
+**You were right that it was animated, and the animation is still in the panel** — `@keyframes g3ldflow{to{stroke-dashoffset:-18}}`, 1.5s linear. I'm reusing it rather than writing a second one, so the roll lane flows at the same rate as everything else in the tool.
+
+**Live flows, latched sits still.** That's already doctrine here — a note in the source says the moving dashes *claim* live flow, so they key strictly off `r.live`. A latched roll is a solid line with its age, because it's a fact about the past rather than something happening now.
+
+There's a checkbox in the mockup to simulate `CFG.motion = false`. Your reduced-motion setting already exists, and the roll lane joins the selector that stops — the arrows stay, the flow stops. The information is in the shape, not the movement.
+
+**One cost to decide on:** the lane is 56px, and your ladder is already 618px against a 560px panel. I'd take it from `LAD_ROCW`, which is 84px for a column whose widest actual string measures 83 — so there's no slack there, but it's the only column with a documented over-allocation. The alternative is widening the panel ~60px, which the ladder has wanted since well before tonight.
+
+Two things I'll carry into the build rather than quietly drop: **a roll is inferred, never observed** …[trimmed]
+
+**OPERATOR:**
+> build..  basically there are 3 conditions that deserve proper testing .  new gamma,  more gamma, rolling gamma.   they all deserve to be tested. but you may need to check your testing because deflections were not recorded in the right way . each day will only have a few pullback opportunties and each pullback has 1 deflection so when you have that many deflections in a day, its because the data was not classified correctly.
+
+**me (04:27):** You're right, and that's a regression on a lesson you already taught me. Earlier I collapsed deflections to **one per price event** and got ~10/session. This roll study went back to counting **every bar × every node** — 120/day. Let me fix the unit first, because everything rests on it:
+43/session is still far too many — and I can see duplicates at the same minute, so the collapse isn't working either. Let me define a swing properly: the extreme of its own neighbourhood, not just any local dip:
+**Median 3 per session, range 2–5** — that matches "a few pullback opportunities". And they're found from price alone, blind to nodes, so testing whether a node was there isn't circular. Now your three conditions:
+12 pullbacks with node data, split into cells of 1–6 — unmeasurable, exactly as expected. But **the frame is now correct**, and that's the deliverable: the numbers arrive with sessions. Now building the arrows:
+That's "MORE gamma" of your three — the node brightening *is* its mass growing, and Atlas encodes that as brightness. Let me check whether I can look that session up:
+Two findings. **No 08-28 file** — that session's export never reached the repo, so I can't look up your exact example (worth fixing; it's the second time a day file has gone missing). But the effect you're describing is unmistakable in the data I do have:
+
+```
+2026-08-27   node 770  →  $7M rising to $761M   115×  within one session
+             node 771  →  $37M to $892M          24×
+             node 772  →  $20M to $630M          31×
+```
+
+"Lighting up" isn't subtle — it's two orders of magnitude. Building both the arrows and that growth signal:
+The phrase is split across a string concatenation — `'NOT A '+ 'CLAIM...'`. Better to fix the source than the test, since a caveat split mid-phrase is frag …[trimmed]
+
+### DECISIONS
+
+_Fill in before committing: what was settled, what was corrected, what was refused._
+
+### SHIPPED
+
+_Version + what actually changed, or "no code shipped"._
+
+### OPEN AT CLOSE
+
+_What the next context must pick up. Cross-check `LOCKED-ITEMS.md`._
+
+### COMMITS THIS CONTEXT
+
+```
+559c1c2 v15.09: roll arrows returned; the pullback unit corrected from ~120/day to ~3
+3a90394 v15.08: measure ES bars directly; structure still comes from the books that have one
+954fcdd v15.07: the vertical redesign - three columns, derived candle height, EFF and BODY
+07f0085 v15.06: pin the panel to the SPX book by default; separate the candle label columns
+7d57b0a v15.05: reject off-scale piles in the rail frame; remove the hide-guard that suppressed real data
+114ff43 v15.04: the ladder refuses to draw across two price scales instead of compressing them
+37d1612 v15.03: the empty ladder names the missing book instead of rendering blank
+e976ccb v15.02: latch every governing book so QQQ has one; SLvl/TLvl drop IB and overflow to the E row
+147a089 v15.01: the reversal band is asymmetric like the deflection geometry; candle layout to his spec
+664bfa4 v15.00: the king at the time of each extreme; ONH/ONL; the prior-day profile as a record
+5547816 v14.99: reversal levels at the wick tips; the shape spine returns
+2e7b169 v14.98: the candle narrow as he drew it - stacked labels, MUD and money in the body
+```
+
+---
+
+<!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-30 · v15.09 · session `2df3ccfa` — v15.09 - roll arrows, and the pullback unit corrected
+**OPERATOR:**
+> try this rule and tell me how it works out for the deflections.  in a downmove the low of the candle has to be within 1 atr  of the high of the  node but  cannot be more than 2 atr below the node.  check this and see if it covers all the deflections.
+**OPERATOR:**
+> tell me how good the rule is for identiifying deflections . for example is 2 atr too much, should it be 1.5 at or  should it be the close which is  within 1 atr below the node ?   i want ot finalize deflections
+**OPERATOR:**
+> ok.. so , tell me simply what should the deflection range be above and below the node
+**OPERATOR:**
+> ok..  now have you completed your detection of deflections
+**OPERATOR:**
+> ok do it.
+**OPERATOR:**
+> try giving me the install again
+**OPERATOR:**
+> how was it working before ?  you just gave me the install file .. what happened
+**OPERATOR:**
+> yes
+**OPERATOR:**
+> reloaded check
+**OPERATOR:**
+> you did not implement all the changes we have been talking about . see pic
+**OPERATOR:**
+> look at the top also .  it doesn't have the changes we discussed  .   even the dntend Brk area was also removed .. all those changes and you didn't implement any of them
+**OPERATOR:**
+> something is not right ..  the bottom row for LOD should be aligned  with the hod rows and its fields should be almost mirror image of the hod lines where applicable.  for example pt took is a mirror image of a took ..  use your intelligence and determine what should be there.  Also lets create a thrid row for the HL fields like HL Gap HL Rng  HL $ ,  im not sure LC Gap and LC rang should be .... figure it out ..  and give me mockup
+**OPERATOR:**
+> before we go any further.   do you realize that i am taking the model of the daily bar and trying to measure the movements in it from open to close
+**OPERATOR:**
+> ok.. show me the mockup .  i am also interested in seeing a daily bar being constructed througout the day . maybe show it to the right . of the statistics.  so i can visually see what is going on .. can you come up with tsomething liek this ?   show me mockup
+**OPERATOR:**
+> the fields dont show sequence step by step .. can you do better. look at how i tried to identify an extremity first  etc..
+**OPERATOR:**
+> how can you take my approach and just enhance that .. i dont want to deviate too much from what i have
+**OPERATOR:**
+> ok i'll go with your recommendation .. give me mockup
+**OPERATOR:**
+> in the last row there is an empty first cell where we can put the actual and expected values for a GD or a RD.  but first i need you to have a model that predicts this . you can use the data , the day of week, overnight , open  etc..   but come up with a way to identify if today will be green or red. if you need more than the open like the 1st hour or 30 min IB range and break to figure this out , let me know, Whatever the case, i need a model to predict if we close above or below the open to determine if today will be a red or green day with decent probability .
+**OPERATOR:**
+> you can also use prior day values .  it maybe helpfull like if a prior day is green  or red and see how that impacts the ability to forecast as well as if we are above or below the weekly open
+**OPERATOR:**
+> so how good is it at predicting
+**OPERATOR:**
+> ok build it and move the candle to the left side of the app, currently its on the right side of the app..    so the daily candle and its contstruction will be my mental model for daytrading using all of these measurements . let me know if there are any other measurements that should be added and if you can make the data points, models goto the llm everynight for refinement and prediction with the gamma book  to see how it can better predict things like hod lod  green day  red day  price and time projection , trend reversal , deflections etc..  its very important that this feature be a world class feature but it will require your help in constant refinement via the use of llm to identify additional datapoints and measurements to better prediction
+**OPERATOR:**
+> Yes.
+**OPERATOR:**
+> How can you use other datapoints like prior day poc vah val. Did you do any tests on whether they provide support resistance or help predict highs and lows or whether they help determine if we will close green or red.  For example, if we open above prior day poc or vah or in between vah and Val, how does that help us predict ?   What about combinations.
+**OPERATOR:**
+> There is one more thing but I’m not sure if you have the data.  The regime.  If we are in a positive gamma vs negative gamma regime would be an important filter to predicting reversals support resistance va trend continuation.  Is there any way that can be obtained and included in testing
+**OPERATOR:**
+> So I want you to tell me what is the useful result of all of this testing. Can you predict anything better like hod lod Green Day vs red day reversals deflections etc.
+**OPERATOR:**
+> So where are we with all of this.  Explain simply
+**OPERATOR:**
+> Fix the bugs and issues so we can continue enhancing
+**OPERATOR:**
+> you need to give me the tampermonkey link
+**OPERATOR:**
+> reloaded
+**OPERATOR:**
+> the problem is that i wont be able to work. last time we had this problem , you showed the stale data so that i could continue working ..
+**OPERATOR:**
+> i reloaded.
+**OPERATOR:**
+> look at my screen and check yourself
+**OPERATOR:**
+> the alignment is messe up for the candle . and other things are also messed up .. check and look at the screen
+**OPERATOR:**
+> remember to always give me a tampermoneky link with the build.. i reloaded . check everyhing
+**OPERATOR:**
+> the candle is taking up too much horizontal space . here is a sample pic.  the idea is to identify the hod and lod times, how long it took ,  as well as the mud time and distance as well as how much money could have been made.  i'll let you refine this.
+**OPERATOR:**
+> show me3 mockup
+**OPERATOR:**
+> I like  this but add any levels that were swept by the wicks or targetted.  They should be levels around the edges not levels that the maket blew through and kept going. the idea is to identify where the market reversed and then targetted.  do not include ib.. they should be key levels like poc, vah, val, pdh, pdl, onh, onl, cw0, pw0, or any major level.  the level should be close to the candle  especially near the wick.   do you understand
+**OPERATOR:**
+> I like E. proviede build
+**OPERATOR:**
+> complete the open items and then i'll install
+**OPERATOR:**
+> are you sure this is correct because the candle shows the market took out bot the prior day high and the prior day (thrusdays) low.   also place the MUD labels above the open for red bars and below the open for green bars. i also need to know how much money was in the MUD , so place that on the second line below the MUD time.  put the total amount in dollars below the second line of the extremity , so for example, it would be below the LOD  2h48 line.   also the lod labels are too low , bring them slightly closer to the wick same distanc e and the hod 2h09 and the wick
+**OPERATOR:**
+> there is something wrong with the ladder ..  it has no data from friday which it is suppose to show so i can continue working on it and the lables are cutt off
+**OPERATOR:**
+> did you fix so that it will show data from friday . you can select a specific time like 15 min before the close or something like that so that i can continue working.. right now you ahve totally messed up everyghing.. look at the ladder..
+**OPERATOR:**
+> reloaded .. please check
+**OPERATOR:**
+> you need to fix this. see screen .. it is unreadable
+**OPERATOR:**
+> reloaded.  check
+**OPERATOR:**
+> what the hell is the matter with you .  the requirement was to see fridays informaiton because today is saturday  and you just removed everything from the display .. are you an idiiot
+**OPERATOR:**
+> check
+**OPERATOR:**
+> to keep things simple untill we make alot for progress. put a guard on this application so it always shows spxw by default, uless another another market in the settingis selected.    I thought i had this requirement in the past bu it must have been in another contex.
+**OPERATOR:**
+> before you go further i see you have basically 3rosws , 1 for 1st, then another for 2nd and then day.. can you turn them vertical wihtotu taking too much vertical space . they should be aligned with each other and the candle
+> product mockups
+**OPERATOR:**
+> I like this. but where is the expected values for each column and you may want to have a subtle gray seperator between the columns
+**OPERATOR:**
+> i like it.. make everything look nicer though .. including the candle and its labels.. do a good ui job and give me mockups . make sure everything is aligned and symmetrical too . if there are any additional fields or suggestions, now is the time
+**OPERATOR:**
+> you are taking up too much vertical space under the candle which is creating unused space to the right of the candle near the bottom.
+**OPERATOR:**
+> build
+**OPERATOR:**
+> i want to make sure that this is the ES .. i said spxw before, but its the es that i am trading but using spxw nodes.. do you understand that.  also
+**OPERATOR:**
+> i just want to make sure this approach is consistent with atlas.. check it
+**OPERATOR:**
+> yes.  we are using other markets to get things like their kings because ES doesn't have its own book, so we use other tapes..  ok build
+**OPERATOR:**
+> i'll resume tomorrow.. with you .. in the mean time. i have antoher feature i need to reimplement. I use to have arrows that showed where the gamma was flowing out of and into . this is important because many times new pullback nodes show up to support a move or to stop a move. I need you to add those arrows but it should be on the right side , just make sure you dont overwrite any labels. i will leave the layout to you .    here are some examples of new nodes or existing nodes getting gamma increases that created a pullback. see the 2 circles, they show gamma coming in and deflecting a pullback.  so i want to use delta to show an increase in this gamma and the arrows showing if there was sometype of roll where gamma moved from other nodes in to a node to create new support or resistance.  work on this, think about it , use data , then update the delta as you see fit and design the arrows .. do you understand the task
+**OPERATOR:**
+> i like A, but you are suppose to use arrows that are stepped with a dot at the source like this (rought sketch) and i think they were animated also showing flow going from one node to another.
+**OPERATOR:**
+> build..  basically there are 3 conditions that deserve proper testing .  new gamma,  more gamma, rolling gamma.   they all deserve to be tested. but you may need to check your testing because deflections were not recorded in the right way . each day will only have a few pullback opportunties and each pullback has 1 deflection so when you have that many deflections in a day, its because the data was not classified correctly.
+
+### DECISIONS
+
+- **A PULLBACK IS THE UNIT, and it is the extreme of its own 30-minute neighbourhood.** ~3 a session,
+  not ~120. Found from PRICE ALONE so the node question is not circular.
+- **A lesson fixed in one file is not a lesson learned** — I re-broke his counting rule three days
+  after he taught it, in a new study, because the fix lived only in the old one.
+- **Sanity-check a rate against lived experience.** 120 pullbacks a day is not plausible and I
+  printed it without pausing.
+- **NEW / MORE / ROLLING are three separate claims** and are tested separately; 12 events over 7
+  sessions cannot resolve any of them, and the hover says so.
+- **A caveat split across a string concatenation is unguarded** — kept whole on one line.
+
+
+### SHIPPED
+
+**v15.09** — the roll lane (stepped, dot at source, live-flows/latched-still, reduced-motion safe),
+`tools/study-pullback.py`, `test_rolllane.js` (17 assertions, all mutation-tested).
+
+
+### OPEN AT CLOSE
+
+- **Verify on his screen** — the lane sits after ROC; LAD_W is now 666 against a 560px panel, so it
+  scrolls. The panel wants widening.
+- ⚠ **2026-08-28 has no day file** — his "lighting up" example cannot be looked up. Second day file
+  lost; worth a guard.
+- **gx-004 needs 150 sessions.** The frame is correct now; the numbers arrive with the data.
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
+
+# EARLIER CONTEXTS
+
+## 2026-08-30 · v15.08 · session `2df3ccfa` — v15.08 - measure ES, read the books
+**OPERATOR:**
+> try this rule and tell me how it works out for the deflections.  in a downmove the low of the candle has to be within 1 atr  of the high of the  node but  cannot be more than 2 atr below the node.  check this and see if it covers all the deflections.
+**OPERATOR:**
+> tell me how good the rule is for identiifying deflections . for example is 2 atr too much, should it be 1.5 at or  should it be the close which is  within 1 atr below the node ?   i want ot finalize deflections
+**OPERATOR:**
+> ok.. so , tell me simply what should the deflection range be above and below the node
+**OPERATOR:**
+> ok..  now have you completed your detection of deflections
+**OPERATOR:**
+> ok do it.
+**OPERATOR:**
+> try giving me the install again
+**OPERATOR:**
+> how was it working before ?  you just gave me the install file .. what happened
+**OPERATOR:**
+> yes
+**OPERATOR:**
+> reloaded check
+**OPERATOR:**
+> you did not implement all the changes we have been talking about . see pic
+**OPERATOR:**
+> look at the top also .  it doesn't have the changes we discussed  .   even the dntend Brk area was also removed .. all those changes and you didn't implement any of them
+**OPERATOR:**
+> something is not right ..  the bottom row for LOD should be aligned  with the hod rows and its fields should be almost mirror image of the hod lines where applicable.  for example pt took is a mirror image of a took ..  use your intelligence and determine what should be there.  Also lets create a thrid row for the HL fields like HL Gap HL Rng  HL $ ,  im not sure LC Gap and LC rang should be .... figure it out ..  and give me mockup
+**OPERATOR:**
+> before we go any further.   do you realize that i am taking the model of the daily bar and trying to measure the movements in it from open to close
+**OPERATOR:**
+> ok.. show me the mockup .  i am also interested in seeing a daily bar being constructed througout the day . maybe show it to the right . of the statistics.  so i can visually see what is going on .. can you come up with tsomething liek this ?   show me mockup
+**OPERATOR:**
+> the fields dont show sequence step by step .. can you do better. look at how i tried to identify an extremity first  etc..
+**OPERATOR:**
+> how can you take my approach and just enhance that .. i dont want to deviate too much from what i have
+**OPERATOR:**
+> ok i'll go with your recommendation .. give me mockup
+**OPERATOR:**
+> in the last row there is an empty first cell where we can put the actual and expected values for a GD or a RD.  but first i need you to have a model that predicts this . you can use the data , the day of week, overnight , open  etc..   but come up with a way to identify if today will be green or red. if you need more than the open like the 1st hour or 30 min IB range and break to figure this out , let me know, Whatever the case, i need a model to predict if we close above or below the open to determine if today will be a red or green day with decent probability .
+**OPERATOR:**
+> you can also use prior day values .  it maybe helpfull like if a prior day is green  or red and see how that impacts the ability to forecast as well as if we are above or below the weekly open
+**OPERATOR:**
+> so how good is it at predicting
+**OPERATOR:**
+> ok build it and move the candle to the left side of the app, currently its on the right side of the app..    so the daily candle and its contstruction will be my mental model for daytrading using all of these measurements . let me know if there are any other measurements that should be added and if you can make the data points, models goto the llm everynight for refinement and prediction with the gamma book  to see how it can better predict things like hod lod  green day  red day  price and time projection , trend reversal , deflections etc..  its very important that this feature be a world class feature but it will require your help in constant refinement via the use of llm to identify additional datapoints and measurements to better prediction
+**OPERATOR:**
+> Yes.
+**OPERATOR:**
+> How can you use other datapoints like prior day poc vah val. Did you do any tests on whether they provide support resistance or help predict highs and lows or whether they help determine if we will close green or red.  For example, if we open above prior day poc or vah or in between vah and Val, how does that help us predict ?   What about combinations.
+**OPERATOR:**
+> There is one more thing but I’m not sure if you have the data.  The regime.  If we are in a positive gamma vs negative gamma regime would be an important filter to predicting reversals support resistance va trend continuation.  Is there any way that can be obtained and included in testing
+**OPERATOR:**
+> So I want you to tell me what is the useful result of all of this testing. Can you predict anything better like hod lod Green Day vs red day reversals deflections etc.
+**OPERATOR:**
+> So where are we with all of this.  Explain simply
+**OPERATOR:**
+> Fix the bugs and issues so we can continue enhancing
+**OPERATOR:**
+> you need to give me the tampermonkey link
+**OPERATOR:**
+> reloaded
+**OPERATOR:**
+> the problem is that i wont be able to work. last time we had this problem , you showed the stale data so that i could continue working ..
+**OPERATOR:**
+> i reloaded.
+**OPERATOR:**
+> look at my screen and check yourself
+**OPERATOR:**
+> the alignment is messe up for the candle . and other things are also messed up .. check and look at the screen
+**OPERATOR:**
+> remember to always give me a tampermoneky link with the build.. i reloaded . check everyhing
+**OPERATOR:**
+> the candle is taking up too much horizontal space . here is a sample pic.  the idea is to identify the hod and lod times, how long it took ,  as well as the mud time and distance as well as how much money could have been made.  i'll let you refine this.
+**OPERATOR:**
+> show me3 mockup
+**OPERATOR:**
+> I like  this but add any levels that were swept by the wicks or targetted.  They should be levels around the edges not levels that the maket blew through and kept going. the idea is to identify where the market reversed and then targetted.  do not include ib.. they should be key levels like poc, vah, val, pdh, pdl, onh, onl, cw0, pw0, or any major level.  the level should be close to the candle  especially near the wick.   do you understand
+**OPERATOR:**
+> I like E. proviede build
+**OPERATOR:**
+> complete the open items and then i'll install
+**OPERATOR:**
+> are you sure this is correct because the candle shows the market took out bot the prior day high and the prior day (thrusdays) low.   also place the MUD labels above the open for red bars and below the open for green bars. i also need to know how much money was in the MUD , so place that on the second line below the MUD time.  put the total amount in dollars below the second line of the extremity , so for example, it would be below the LOD  2h48 line.   also the lod labels are too low , bring them slightly closer to the wick same distanc e and the hod 2h09 and the wick
+**OPERATOR:**
+> there is something wrong with the ladder ..  it has no data from friday which it is suppose to show so i can continue working on it and the lables are cutt off
+**OPERATOR:**
+> did you fix so that it will show data from friday . you can select a specific time like 15 min before the close or something like that so that i can continue working.. right now you ahve totally messed up everyghing.. look at the ladder..
+**OPERATOR:**
+> reloaded .. please check
+**OPERATOR:**
+> you need to fix this. see screen .. it is unreadable
+**OPERATOR:**
+> reloaded.  check
+**OPERATOR:**
+> what the hell is the matter with you .  the requirement was to see fridays informaiton because today is saturday  and you just removed everything from the display .. are you an idiiot
+**OPERATOR:**
+> check
+**OPERATOR:**
+> to keep things simple untill we make alot for progress. put a guard on this application so it always shows spxw by default, uless another another market in the settingis selected.    I thought i had this requirement in the past bu it must have been in another contex.
+**OPERATOR:**
+> before you go further i see you have basically 3rosws , 1 for 1st, then another for 2nd and then day.. can you turn them vertical wihtotu taking too much vertical space . they should be aligned with each other and the candle
+> product mockups
+**OPERATOR:**
+> I like this. but where is the expected values for each column and you may want to have a subtle gray seperator between the columns
+**OPERATOR:**
+> i like it.. make everything look nicer though .. including the candle and its labels.. do a good ui job and give me mockups . make sure everything is aligned and symmetrical too . if there are any additional fields or suggestions, now is the time
+**OPERATOR:**
+> you are taking up too much vertical space under the candle which is creating unused space to the right of the candle near the bottom.
+**OPERATOR:**
+> build
+**OPERATOR:**
+> i want to make sure that this is the ES .. i said spxw before, but its the es that i am trading but using spxw nodes.. do you understand that.  also
+**OPERATOR:**
+> i just want to make sure this approach is consistent with atlas.. check it
+**OPERATOR:**
+> yes.  we are using other markets to get things like their kings because ES doesn't have its own book, so we use other tapes..  ok build
+
+### DECISIONS
+
+- **MEASURE ES, READ THE BOOKS.** Structure (kings/nodes/walls) from SPXW/SPY/QQQ because ES has no
+  book; measurement (HOD/LOD/candle/EFF/GD-RD) from ES's OWN bars.
+- **Verified against Atlas first** — it draws each book in its native scale. ES−SPX = +10.74 (why the
+  pairing works); ES/SPY = 10.0377 (why SPY does not belong in the path).
+- **Judge a proxy on the quantity you use it for.** SPY×ratio gives RANGE to hundredths but cannot
+  give extreme TIMESTAMPS or an overnight session.
+- **When you swap a data source, every derived constant of the old one is suspect** — `out.scale=rr`
+  would have multiplied ES by ten.
+
+
+### SHIPPED
+
+**v15.08** — `measureBars()`; `hodLod` / `gdRead` / `gdActual` / `hlEff` all measure ES when the chart
+is a future, naming the source. `test_measure.js` (16 assertions, all mutation-tested).
+
+
+### OPEN AT CLOSE
+
+- **Verify on his screen** — the ⓪a numbers should now be ES's own, and `D.src` should read ES.
+- **The Market setting still reads "SPX / SPY"** — it should say ES · SPXW nodes.
+- ⚠ Cross-checking a level between the panel and Atlas's node table means allowing the ~10.7 basis.
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
+
+# EARLIER CONTEXTS
+
+## 2026-08-30 · v15.07 · session `2df3ccfa` — v15.07 - the vertical redesign
+**OPERATOR:**
+> try this rule and tell me how it works out for the deflections.  in a downmove the low of the candle has to be within 1 atr  of the high of the  node but  cannot be more than 2 atr below the node.  check this and see if it covers all the deflections.
+**OPERATOR:**
+> tell me how good the rule is for identiifying deflections . for example is 2 atr too much, should it be 1.5 at or  should it be the close which is  within 1 atr below the node ?   i want ot finalize deflections
+**OPERATOR:**
+> ok.. so , tell me simply what should the deflection range be above and below the node
+**OPERATOR:**
+> ok..  now have you completed your detection of deflections
+**OPERATOR:**
+> ok do it.
+**OPERATOR:**
+> try giving me the install again
+**OPERATOR:**
+> how was it working before ?  you just gave me the install file .. what happened
+**OPERATOR:**
+> yes
+**OPERATOR:**
+> reloaded check
+**OPERATOR:**
+> you did not implement all the changes we have been talking about . see pic
+**OPERATOR:**
+> look at the top also .  it doesn't have the changes we discussed  .   even the dntend Brk area was also removed .. all those changes and you didn't implement any of them
+**OPERATOR:**
+> something is not right ..  the bottom row for LOD should be aligned  with the hod rows and its fields should be almost mirror image of the hod lines where applicable.  for example pt took is a mirror image of a took ..  use your intelligence and determine what should be there.  Also lets create a thrid row for the HL fields like HL Gap HL Rng  HL $ ,  im not sure LC Gap and LC rang should be .... figure it out ..  and give me mockup
+**OPERATOR:**
+> before we go any further.   do you realize that i am taking the model of the daily bar and trying to measure the movements in it from open to close
+**OPERATOR:**
+> ok.. show me the mockup .  i am also interested in seeing a daily bar being constructed througout the day . maybe show it to the right . of the statistics.  so i can visually see what is going on .. can you come up with tsomething liek this ?   show me mockup
+**OPERATOR:**
+> the fields dont show sequence step by step .. can you do better. look at how i tried to identify an extremity first  etc..
+**OPERATOR:**
+> how can you take my approach and just enhance that .. i dont want to deviate too much from what i have
+**OPERATOR:**
+> ok i'll go with your recommendation .. give me mockup
+**OPERATOR:**
+> in the last row there is an empty first cell where we can put the actual and expected values for a GD or a RD.  but first i need you to have a model that predicts this . you can use the data , the day of week, overnight , open  etc..   but come up with a way to identify if today will be green or red. if you need more than the open like the 1st hour or 30 min IB range and break to figure this out , let me know, Whatever the case, i need a model to predict if we close above or below the open to determine if today will be a red or green day with decent probability .
+**OPERATOR:**
+> you can also use prior day values .  it maybe helpfull like if a prior day is green  or red and see how that impacts the ability to forecast as well as if we are above or below the weekly open
+**OPERATOR:**
+> so how good is it at predicting
+**OPERATOR:**
+> ok build it and move the candle to the left side of the app, currently its on the right side of the app..    so the daily candle and its contstruction will be my mental model for daytrading using all of these measurements . let me know if there are any other measurements that should be added and if you can make the data points, models goto the llm everynight for refinement and prediction with the gamma book  to see how it can better predict things like hod lod  green day  red day  price and time projection , trend reversal , deflections etc..  its very important that this feature be a world class feature but it will require your help in constant refinement via the use of llm to identify additional datapoints and measurements to better prediction
+**OPERATOR:**
+> Yes.
+**OPERATOR:**
+> How can you use other datapoints like prior day poc vah val. Did you do any tests on whether they provide support resistance or help predict highs and lows or whether they help determine if we will close green or red.  For example, if we open above prior day poc or vah or in between vah and Val, how does that help us predict ?   What about combinations.
+**OPERATOR:**
+> There is one more thing but I’m not sure if you have the data.  The regime.  If we are in a positive gamma vs negative gamma regime would be an important filter to predicting reversals support resistance va trend continuation.  Is there any way that can be obtained and included in testing
+**OPERATOR:**
+> So I want you to tell me what is the useful result of all of this testing. Can you predict anything better like hod lod Green Day vs red day reversals deflections etc.
+**OPERATOR:**
+> So where are we with all of this.  Explain simply
+**OPERATOR:**
+> Fix the bugs and issues so we can continue enhancing
+**OPERATOR:**
+> you need to give me the tampermonkey link
+**OPERATOR:**
+> reloaded
+**OPERATOR:**
+> the problem is that i wont be able to work. last time we had this problem , you showed the stale data so that i could continue working ..
+**OPERATOR:**
+> i reloaded.
+**OPERATOR:**
+> look at my screen and check yourself
+**OPERATOR:**
+> the alignment is messe up for the candle . and other things are also messed up .. check and look at the screen
+**OPERATOR:**
+> remember to always give me a tampermoneky link with the build.. i reloaded . check everyhing
+**OPERATOR:**
+> the candle is taking up too much horizontal space . here is a sample pic.  the idea is to identify the hod and lod times, how long it took ,  as well as the mud time and distance as well as how much money could have been made.  i'll let you refine this.
+**OPERATOR:**
+> show me3 mockup
+**OPERATOR:**
+> I like  this but add any levels that were swept by the wicks or targetted.  They should be levels around the edges not levels that the maket blew through and kept going. the idea is to identify where the market reversed and then targetted.  do not include ib.. they should be key levels like poc, vah, val, pdh, pdl, onh, onl, cw0, pw0, or any major level.  the level should be close to the candle  especially near the wick.   do you understand
+**OPERATOR:**
+> I like E. proviede build
+**OPERATOR:**
+> complete the open items and then i'll install
+**OPERATOR:**
+> are you sure this is correct because the candle shows the market took out bot the prior day high and the prior day (thrusdays) low.   also place the MUD labels above the open for red bars and below the open for green bars. i also need to know how much money was in the MUD , so place that on the second line below the MUD time.  put the total amount in dollars below the second line of the extremity , so for example, it would be below the LOD  2h48 line.   also the lod labels are too low , bring them slightly closer to the wick same distanc e and the hod 2h09 and the wick
+**OPERATOR:**
+> there is something wrong with the ladder ..  it has no data from friday which it is suppose to show so i can continue working on it and the lables are cutt off
+**OPERATOR:**
+> did you fix so that it will show data from friday . you can select a specific time like 15 min before the close or something like that so that i can continue working.. right now you ahve totally messed up everyghing.. look at the ladder..
+**OPERATOR:**
+> reloaded .. please check
+**OPERATOR:**
+> you need to fix this. see screen .. it is unreadable
+**OPERATOR:**
+> reloaded.  check
+**OPERATOR:**
+> what the hell is the matter with you .  the requirement was to see fridays informaiton because today is saturday  and you just removed everything from the display .. are you an idiiot
+**OPERATOR:**
+> check
+**OPERATOR:**
+> to keep things simple untill we make alot for progress. put a guard on this application so it always shows spxw by default, uless another another market in the settingis selected.    I thought i had this requirement in the past bu it must have been in another contex.
+**OPERATOR:**
+> before you go further i see you have basically 3rosws , 1 for 1st, then another for 2nd and then day.. can you turn them vertical wihtotu taking too much vertical space . they should be aligned with each other and the candle
+> product mockups
+**OPERATOR:**
+> I like this. but where is the expected values for each column and you may want to have a subtle gray seperator between the columns
+**OPERATOR:**
+> i like it.. make everything look nicer though .. including the candle and its labels.. do a good ui job and give me mockups . make sure everything is aligned and symmetrical too . if there are any additional fields or suggestions, now is the time
+**OPERATOR:**
+> you are taking up too much vertical space under the candle which is creating unused space to the right of the candle near the bottom.
+**OPERATOR:**
+> build
 
 ### DECISIONS
 
@@ -1239,10 +1836,12 @@ Only the record guards left. Writing the records and shipping:
   eye had passed: colour decorating values, no tabular-nums, abutting fills, a dashed axis.
 - **EFF and BODY added**; EFF's expected is a MEDIAN (a ratio must not be trimmed) and says so.
 
+
 ### SHIPPED
 
 **v15.07** — the vertical redesign, `hlEff()`/`EFF_META`, `DAYCOL_*`, the candle height-matched with
 the track and duplicate total removed. n27-n34, n39d-f, n45, n50, and six test files re-expressed.
+
 
 ### OPEN AT CLOSE
 
@@ -1250,26 +1849,8 @@ the track and duplicate total removed. n27-n34, n39d-f, n45, n50, and six test f
 - ⚠ QQQ's Friday book was never recorded; latches from the next RTH. The market is pinned to SPX.
 - **gx-008 forward scoring** can start immediately.
 
-### COMMITS THIS CONTEXT
 
-```
-07f0085 v15.06: pin the panel to the SPX book by default; separate the candle label columns
-7d57b0a v15.05: reject off-scale piles in the rail frame; remove the hide-guard that suppressed real data
-114ff43 v15.04: the ladder refuses to draw across two price scales instead of compressing them
-37d1612 v15.03: the empty ladder names the missing book instead of rendering blank
-e976ccb v15.02: latch every governing book so QQQ has one; SLvl/TLvl drop IB and overflow to the E row
-147a089 v15.01: the reversal band is asymmetric like the deflection geometry; candle layout to his spec
-664bfa4 v15.00: the king at the time of each extreme; ONH/ONL; the prior-day profile as a record
-5547816 v14.99: reversal levels at the wick tips; the shape spine returns
-2e7b169 v14.98: the candle narrow as he drew it - stacked labels, MUD and money in the body
-4c1085a v14.97: the scale fault was upstream; the ladder now verifies itself against price
-c4737b2 v14.96: one table so the columns actually align; the counting test was a proxy that passed on a broken screen
-d716fb6 v14.95: SYM vs sym killed the whole day section; add an undeclared-identifier lint
-```
-
----
-
-<!-- EARLIER-CONTEXTS -->
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 

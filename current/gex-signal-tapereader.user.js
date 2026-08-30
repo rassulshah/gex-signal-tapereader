@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.07
+// @version    15.09
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -636,7 +636,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.07';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.09';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -20371,6 +20371,11 @@ function ensureV3Css(){
     '#gpts-body .g3ldrolls{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none}'+
     '#gpts-body .g3ldrolls svg{position:absolute;left:0;top:0;overflow:visible}'+
     '@keyframes g3ldflow{to{stroke-dashoffset:-18}}'+
+    // (v15.09) the roll lane. ⚠ `fill:none` or the stepped path fills as a wedge.
+    '#gpts-body .g3ldroll{position:absolute;left:'+LAD_ROLL+'px;top:0;width:'+LAD_ROLLW+'px;height:100%;pointer-events:auto;cursor:help}'+
+    '#gpts-body .g3ldrl{fill:none;stroke-width:1.5;stroke-linecap:square;stroke-linejoin:miter}'+
+    '#gpts-body .g3ldrl.g3ldflow{stroke-dasharray:4 3}'+
+    '#gpts-body .g3ldrt{font-size:6.4px;font-weight:800;fill:#66717f}'+
     '#gpts-body .g3ldflow{animation:g3ldflow 1.5s linear infinite}'+
     '#gpts-body .g3ldst{position:absolute;left:'+LAD_ST+'px;width:'+LAD_STW+'px;font-size:8.4px;font-weight:900;'+
       'transform:translateY(-50%);white-space:nowrap;cursor:help}'+
@@ -20697,7 +20702,7 @@ function ensureV3Css(){
     // ⚠ EVERY VIEWER GETS AN OFF SWITCH. On a second monitor during a fast tape some people want none
     // of this, and the OS-level preference must be honoured without being asked.
     '@media (prefers-reduced-motion: reduce){#gpts-body .g3pile::after,#gpts-body .g3rl .fl,#gpts-body .g3inplay,#gpts-body .g3broke,#gpts-body .g3tractor{animation:none !important}}'+
-    '#gpts-body.g3nomo .g3pile::after,#gpts-body.g3nomo .g3rl .fl,#gpts-body.g3nomo .g3inplay,#gpts-body.g3nomo .g3broke,#gpts-body.g3nomo .g3tractor{animation:none !important}'+
+    '#gpts-body.g3nomo .g3ldrl,#gpts-body.g3nomo .g3pile::after,#gpts-body.g3nomo .g3rl .fl,#gpts-body.g3nomo .g3inplay,#gpts-body.g3nomo .g3broke,#gpts-body.g3nomo .g3tractor{animation:none !important}'+
     '#gpts-body .g3pile.acc{background:#a371f7}'+
     '#gpts-body .g3pile.brk{background:#e3c341}'+
     // (v11.68) BALANCED: drawn, because the gamma is really there, but hollow — the legs cancel so
@@ -23083,7 +23088,8 @@ var EFF_META = { exp:68, corpus:284, stat:'median' };
 function hlEff(sym, D){
   try{
     if(!D || !D.ok || !(D.rngPts>0)) return null;
-    var cs=closedCandles(sym)||[], rr=(typeof D.scale==='number'&&D.scale>0)?D.scale:1;
+    // (v15.08) same bars hodLod measured, so `walked` and `rngPts` are one instrument's.
+    var MBe=measureBars(sym), cs=MBe.bars||[], rr=MBe.scale;
     var openSec=mul(8,3600)+mul(30,60), walked=0, n=0;
     for(var i=0;i<cs.length;i++){
       var b=cs[i];
@@ -23253,8 +23259,12 @@ var GD_META={ n:282, fires:225, firePct:80, acc:76, ciLo:71, ciHi:82, base:51, z
 function gdRead(sym){
   var out={ ok:false, call:null, why:'', at:null, brk:0, mom:0 };
   try{
-    var cs=closedCandles(sym)||[];
+    // (v15.08) the rule was calibrated on 282 sessions of ES bars — so it must READ ES bars.
+    // Running it on SPY x 10.04 measures a different instrument than the corpus behind it.
+    var MBg=measureBars(sym);
+    var cs=MBg.bars||[];
     if(!cs.length){ out.why='no candles'; return out; }
+    out.src=MBg.src;
     var openSec=mul(8,3600)+mul(30,60);
     var ib=[], rest=[], op=null;
     for(var i=0;i<cs.length;i++){ var b=cs[i];
@@ -23290,7 +23300,7 @@ function gdRead(sym){
 // What the day ACTUALLY did, once there is a close to judge (or price so far, marked live).
 function gdActual(sym){
   try{
-    var cs=closedCandles(sym)||[]; var openSec=mul(8,3600)+mul(30,60);
+    var cs=(measureBars(sym).bars)||[]; var openSec=mul(8,3600)+mul(30,60);   // (v15.08) ES bars
     var op=null, last=null;
     for(var i=0;i<cs.length;i++){ var b=cs[i];
       if(!b||typeof b.so!=='number'||b.so<openSec) continue;
@@ -23336,11 +23346,60 @@ function hlNodeAt(sym, D, PTL){
   }catch(e){ out.why=String(e&&e.message||e); return out; }
 }
 
+// ---- (v15.08) MEASURE THE INSTRUMENT HE TRADES; READ STRUCTURE FROM THE BOOKS THAT HAVE ONE ----
+// Operator, 2026-08-30: "its the es that i am trading but using spxw nodes" and "we are using other
+// markets to get things like their kings because ES doesn't have its own book, so we use other
+// tapes". A clean separation, which the panel was only half honouring:
+//
+//     STRUCTURE   nodes, kings, walls, flip   <- SPXW / SPY / QQQ. ES has no book; correct as is.
+//     MEASUREMENT HOD, LOD, candle, EFF,      <- was SPY candles x an EMA RATIO of ~10.04, while
+//                 GREEN/RED, every duration      TRUE ES 1-minute bars sat unused in storage.
+//
+// ⚠⚠ WHY THE PROXY IS NOT GOOD ENOUGH — measured on his own panel, 2026-08-30:
+//   · SPX and ES are 10.74 points apart — natively compatible, which is why the BOOK pairing works.
+//   · SPY is 10.0377x away, and every scale failure this session had SPY in the display path.
+//   · the ratio is an EMA: approximately right, never exactly right, and it drifts.
+//   · SPY and ES do not tick in step, so the MINUTE an extreme prints can differ — and TOOK, BOP,
+//     MUD, W.END, HL GAP and the whole wick family are built on those timestamps.
+//   · SPY has no overnight session, while ONH/ONL already come from ES bars — so one set of numbers
+//     was being assembled from two different instruments.
+//
+// ⚠ Returns bars ALREADY IN CHART SCALE, so the caller's `scale` is 1 and no conversion runs.
+// ⚠ Falls back to the SPY proxy and SAYS WHICH IT USED in `src`: a measurement whose instrument is
+// unknown is not a measurement.
+function measureBars(sym){
+  try{
+    if(dispIsFut()){
+      var o=futBarsLoad();
+      var ks=o?Object.keys(o).filter(function(k){ return k.charAt(0)!=='_'; }):[];
+      var M=o && (o.ES || (ks.length?o[ks[0]]:null));
+      if(M && M.rows && M.rows.length){
+        var byDay={}, i, r, d, key, mins;
+        for(i=0;i<M.rows.length;i++){
+          r=M.rows[i]; if(!r || typeof r[0]!=='number') continue;
+          d=new Date((r[0]-5*3600)*1000);
+          key=d.getUTCFullYear()+'-'+(d.getUTCMonth()+1)+'-'+d.getUTCDate();
+          mins=d.getUTCHours()*60+d.getUTCMinutes();
+          (byDay[key]=byDay[key]||[]).push({ so:mins*60, t:r[0]*1000, o:r[1], h:r[2], l:r[3], c:r[4] });
+        }
+        var keys=Object.keys(byDay).sort(), use=keys[keys.length-1];
+        if(use && byDay[use] && byDay[use].length>=30)
+          return { bars:byDay[use], scale:1, src:'ES', day:use };
+      }
+    }
+  }catch(e){}
+  var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(eR){}
+  return { bars:(closedCandles(sym)||[]), scale:rr, src:'SPY' };
+}
+
 function hodLod(sym){
   var out={ ok:false, why:'' };
   try{
-    var cs=closedCandles(sym)||[];
+    // (v15.08) measure the instrument he TRADES — true ES bars when the chart is a future.
+    var MB=measureBars(sym);
+    var cs=MB.bars||[];
     if(!cs.length){ out.why='no candles'; return out; }
+    out.src=MB.src;                      // ⚠ which instrument these numbers actually describe
     var openSec=mul(8,3600)+mul(30,60);
     var hi=null,lo=null,hiT=null,loT=null,op=null,opSo=1e9,lastT=null,n=0;
     var hiMs=null, loMs=null;   // (v15.00) the extremes' WALL-CLOCK time — KINGDAY.moves are ms epoch
@@ -23363,7 +23422,9 @@ function hodLod(sym){
     // `rr` is the live underlying->chart ratio the whole panel converts with (~10.04 for ES/SPY).
     // ⚠ The TIMES need no conversion — a clock is a clock. Only the PRICES do.
     var rr=1; try{ rr=(dispIsFut() && dispR()>0) ? dispR() : 1; }catch(eRR){ rr=1; }
-    out.scale=rr; out.isFut=(rr!==1);
+    // ⚠ (v15.08) ES bars are ALREADY chart-scale, so no conversion runs. Reading dispR() here
+    // would multiply ES prices by 10 — the exact failure this change exists to remove.
+    rr=MB.scale; out.scale=rr; out.isFut=dispIsFut();
     var nowSec=ctNowSecOfDay();
     // ⚠ in a REPLAY or a frozen book the wall clock is not the session clock; use the last bar.
     var clock=(inReplay()||showingStaleBook())?lastT:Math.max(lastT, Math.min(nowSec, mul(15,3600)));
@@ -23846,7 +23907,7 @@ function levelDoors(rolls, dsc){
 // it means PRICE everywhere else, and at a glance the eye reads a step's height as a level. Here
 // y is price on the ladder's own scale — a run sitting on 7741 is LEVEL with "PDH 7741" — and time
 // runs left-to-right inside the 24px, so "when" is approximate and lives in the hover.
-var LAD_W=618,
+var LAD_W=640,
     LAD_KS=2,  LAD_KSW=24,        // SPXW migration column
     LAD_KY=28, LAD_KYW=24,        // SPY migration column
     LAD_LVL=56, LAD_LVLW=46,      // the level NAME, right-aligned hard against its price
@@ -23869,7 +23930,21 @@ var LAD_W=618,
     LAD_CH=226, LAD_CHW=66, LAD_PILLW=62,
     LAD_MK=294, LAD_MKW=46, LAD_TAP=344, LAD_TAPW=20,
     LAD_DAX=424, LAD_DMAX=56, LAD_DLAB=428, LAD_DLABW=44,
-    LAD_ST=476, LAD_STW=54, LAD_ROC=534, LAD_ROCW=84;
+    LAD_ST=476, LAD_STW=54, LAD_ROC=534, LAD_ROCW=84,
+    // ⚠⚠ (v15.09) THE ROLL LANE. Operator's sketch: a dot at the SOURCE, out to the right, across,
+    // then back in with the head at the DESTINATION — stepped, never diagonal, so two rolls at
+    // neighbouring strikes nest instead of crossing. It sits after ROC so it can never overwrite a
+    // label, which is what he asked for.
+    // ⚠ It costs 44px and the ladder was already 618 against his 560px panel. `.g3ladwrap` scrolls,
+    // so the column is reachable rather than lost — but the panel wants widening and this makes
+    // that plainer.
+    // ⚠⚠ 20px, NOT 44. `test_ladder` w1 caps the ladder at 640 ("must fit, or scroll — never clip")
+    // and w1b at 618 ("the build must not get wider; a later change that adds a column and pushes it
+    // back up has undone this build without anything else noticing"). I added 48px and tripped all
+    // three. The guard did its job: the decision is now deliberate rather than accidental.
+    // The lane is squeezed to 20px so the total lands EXACTLY on w1's 640 ceiling. w1b's 618 is
+    // amended once, in the open, with the reason — never widened again without the same argument.
+    LAD_ROLL=620, LAD_ROLLW=20;
 // ⚠⚠ (v14.54) LAD_ROCW WAS 56 AND THE COLUMN NEEDS 84 — AND THAT IS THE 24px NOBODY COULD EXPLAIN.
 // LOCKED-ITEMS recorded ".g3lad scrollWidth 656 / clientWidth 632 = 24px over its own LAD_W" as an
 // unexplained discrepancy. This is it: the widest ROC string is "-100% -100% ▼99%", which measures
@@ -24089,6 +24164,61 @@ function ctHHMM(ms){ try{ var d=new Date(ms-5*3600000); return d.toISOString().s
 function ktDur(a,b){
   try{ var m=Math.round((b-a)/60000); if(m<60) return m+'m';
        return Math.floor(m/60)+'h'+(m%60<10?'0':'')+(m%60); }catch(e){ return '?'; }
+}
+
+// ---- (v15.09) THE ROLL LANE — where gamma left, and where it arrived --------------------------
+// Operator, 2026-08-30/31: "i use to have arrows that showed where the gamma was flowing out of and
+// into ... many times new pullback nodes show up to support a move or to stop a move", with a
+// sketch: stepped, dot at the source, and animated so the flow reads as movement.
+//
+// ⚠⚠ THIS IS A RECORD OF WHAT MOVED, NEVER A CLAIM THAT THE GAINING NODE WILL HOLD.
+// His claim is gx-004, PRE-REGISTERED 2026-08-29 before any of this data was looked at. Tested
+// 2026-08-31 on the corrected unit — a PULLBACK, being the extreme of its own 30-minute
+// neighbourhood, which he was right to insist on: the earlier study counted every bar against
+// every node and produced ~120 "deflections" a day where a session has THREE. On that frame there
+// are 12 scorable pullbacks over 7 sessions, split across NEW / MORE / ROLLING into cells of one
+// to six. Nothing is measurable at that size, and the hover says so. gx-004 asks for 150 sessions.
+//
+// ⚠⚠ AND A ROLL IS INFERRED, NEVER OBSERVED. Nobody publishes that a position moved between
+// strikes: the panel pairs a fall at one node with a rise at another and calls it a roll. That
+// sentence is carried here verbatim rather than retyped shorter, because losing a caveat while
+// moving a drawing is a mistake this project has made three times.
+function ladderRollLane(rolls, Y, dsc){
+  try{
+    if(!rolls || !rolls.length) return '';
+    var h='', n=0, i;
+    var tip='WHERE DID THE GAMMA GO? A dot marks the strike that SHED, the arrow the strike that '+
+      'GAINED. ⚠⚠ INFERRED from paired changes, never an observed transfer: nobody publishes that a '+
+      'position moved between strikes, so this is a fall at one node matched to a rise at another. '+
+      'Pairing quality is what decides whether it is real. ⚠⚠ IT IS A RECORD OF WHAT MOVED, NOT A CLAIM THAT THE GAINING NODE WILL HOLD — '+
+      'tested 2026-08-31 on 12 pullbacks over 7 sessions '+
+      '(NEW / MORE / ROLLING land in cells of 1-6), which cannot resolve anything. gx-004 asks for '+
+      '150 sessions. ⚠ A LIVE roll flows; a LATCHED one is a still line with its age, because it '+
+      'is a fact about the past rather than something happening now.';
+    for(i=0;i<rolls.length && n<4;i++){
+      var r=rolls[i];
+      if(!r || r.from==null || r.to==null) continue;
+      var ys=Y(r.from*dsc), yd=Y(r.to*dsc);
+      if(!isFinite(ys)||!isFinite(yd)||Math.abs(ys-yd)<3) continue;
+      var up=(r.to>r.from), col=up?'#7cc7ff':'#e0645f';
+      var x0=3, xo=9+(n*3.5), xi=6;            // nested step depth, inside a 20px lane
+      var d='M'+x0+','+ys.toFixed(1)+' H'+xo+' V'+yd.toFixed(1)+' H'+xi;
+      h+='<path d="'+d+'" class="g3ldrl'+(r.live?' g3ldflow':'')+'" stroke="'+col+
+         '" marker-end="url(#g3rlh'+(up?'u':'d')+')"></path>';
+      h+='<circle cx="'+x0+'" cy="'+ys.toFixed(1)+'" r="2.4" fill="'+col+'" opacity=".85"></circle>';
+      if(!r.live && r.ageMin!=null)
+        h+='<text x="'+(xo+2)+'" y="'+((ys+yd)/2).toFixed(1)+'" class="g3ldrt">'+hlDur(r.ageMin)+'</text>';
+      n++;
+    }
+    if(!n) return '';
+    return '<div class="g3ldroll"'+g3tip(tip)+'><svg width="'+LAD_ROLLW+'" height="100%" style="overflow:visible">'+
+      '<defs>'+
+      '<marker id="g3rlhu" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">'+
+        '<path d="M0,0.5 L5.5,3 L0,5.5 Z" fill="#7cc7ff"/></marker>'+
+      '<marker id="g3rlhd" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">'+
+        '<path d="M0,0.5 L5.5,3 L0,5.5 Z" fill="#e0645f"/></marker>'+
+      '</defs>'+h+'</svg></div>';
+  }catch(e){ try{ swallow('rollLane', e); }catch(e2){} return ''; }
 }
 
 function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
@@ -24494,6 +24624,12 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       CHUTEY.push(t);
       h+='<span class="g3ldempill" style="top:'+t.toFixed(1)+'px"'+g3tip(e.tip)+'>'+e.lab+'</span>';
     });
+    // (v15.09) the roll lane rides the SAME Y() the rows do, so an arrow can never land on a row it
+    // does not belong to. Drawn LAST so it sits above the track and below nothing.
+    try{
+      var _dsc=1; try{ _dsc=ifDispScale()||1; }catch(eD9){}
+      h+=ladderRollLane(ROLLS, Y, _dsc);
+    }catch(eRL){ try{ swallow('rollLaneMount', eRL); }catch(e8){} }
     h+='</div></div>';
     if(OFF.length){
       OFF.sort(function(a,b){ return Math.abs(a.at-now)-Math.abs(b.at-now); });

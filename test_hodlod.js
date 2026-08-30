@@ -43,6 +43,11 @@ global.HLBASE_MIN_SESSIONS=120; global.HLBASE_MIN_BUCKET=50;
 // exactly what these tests were already asserting against.
 global.localStorage={ getItem:()=>null, setItem:()=>{}, removeItem:()=>{} };
 eval(ex('hlBaseNormalise')); eval(ex('hodlodBase'));
+// ⚠ (v15.09) hodLod now measures via measureBars() — ES bars when the chart is a future, the SPY
+// proxy otherwise. It must be loaded, or hodLod throws into its own catch and every extremity
+// assertion below fails with an empty result rather than a wrong one.
+global.futBarsLoad = () => null;                 // no courier data in the harness -> SPY fallback
+eval(ex('measureBars'));
 eval(ex('hlClock')); eval(ex('hlDur')); eval(ex('hlTier')); eval(ex('hodLod'));
 
 const OPEN = 8*3600+30*60;
@@ -152,7 +157,7 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
 // the two fields independent of extremity timing matched exactly (Wick% 26, W.End 8:42am).
 {
   const SD = ex('secDay');
-  // (v15.07) transposed: the wick family are column-1 FIELDS now, not table columns.
+  // (v15.09) transposed: the wick family are column-1 FIELDS now, not table columns.
   ok(/dcell\('BOP'/.test(SD) && /dcell\('WICK'/.test(SD) && /dcell\('W\.END'/.test(SD) &&
      /dcell\('OF BAR'/.test(SD) && /dcell\('MUD'/.test(SD),
      'n1 the wick family is on the face as column-1 fields, not named as pending');
@@ -525,10 +530,10 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
      'w2 ...and the early return that hid everything is gone');
   // ⚠ COUNT, DO NOT JUST MATCH. There are TWO A rows (the excursion block and the day block) and a
   // single-match assertion passed while one of them was mutated away — it found the survivor.
-  // (v15.07) THREE A rows now — the excursion block, the day block, and the new SPAN row that
+  // (v15.09) THREE A rows now — the excursion block, the day block, and the new SPAN row that
   // carries the GREEN/RED call. The count is kept (not loosened to >=1) for the reason above: a
   // single-match assertion passed while one row was mutated away.
-  // ⚠⚠ (v15.07) TRANSPOSED. There are no A rows: every cell carries its own NOREAD guard, so the
+  // ⚠⚠ (v15.09) TRANSPOSED. There are no A rows: every cell carries its own NOREAD guard, so the
   // count is of GUARDS, not rows — and there must be one per data cell or a cell invents a number
   // on a day with no bars. That is the v14.69 refusal, re-expressed for columns.
   ok((SD.match(/NOREAD\?Z:/g)||[]).length >= 20,
@@ -607,10 +612,10 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
 
   const SD2 = ex('secDay');
   ok(/PTL=hlPT\(sym, D\)/.test(SD2), 'p14 secDay computes it');
-  // (v15.07) LC|HC GAP·RNG moved OUT of the table and into the strip beside the read — operator:
+  // (v15.09) LC|HC GAP·RNG moved OUT of the table and into the strip beside the read — operator:
   // "keep the HL metrics ... at the top to the right of the forecast". So the header no longer
   // names it; the STRIP does. Both halves are asserted so the leg cannot go missing entirely.
-  // (v15.07) the LC pair moved AGAIN — out of the v15.07 top strip and into ROW 3, which is where
+  // (v15.09) the LC pair moved AGAIN — out of the v15.09 top strip and into ROW 3, which is where
   // he asked for it ("a thrid row for the HL fields"). Both existed for one build and printed the
   // spans twice. Assert the row-3 home, and that the strip is gone.
   ok(/dcell\('PT TOOK'/.test(SD2) && /dcell\('PT'/.test(SD2) && /dcell\('LC GAP'/.test(SD2),
@@ -621,7 +626,7 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
 
 
 // ============================================================================================
-// (v15.07) SLvl / TLvl, AND THE PT LEG'S WICK FAMILY
+// (v15.09) SLvl / TLvl, AND THE PT LEG'S WICK FAMILY
 // ============================================================================================
 {
   const LH = ex('hlLevelHit'), PT2 = ex('hlPT'), SD3 = ex('secDay');
@@ -640,7 +645,7 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
 
   // ---- THE FURTHEST ONE, NOT THE FIRST ------------------------------------------------------
   // A move that clears three levels is described by the LAST one it cleared.
-  // (v15.07) the cell now lists EVERY level taken out, furthest FIRST — he asked for names only so
+  // (v15.09) the cell now lists EVERY level taken out, furthest FIRST — he asked for names only so
   // several fit ("PDH, CW, VAH, POC"). The furthest-first ordering is the same rule as before, now
   // expressed as a sort rather than a single winner; `furthest()` still exists and returns [0].
   ok(/hit\.sort\(function\(a,b\)\{ return up \? \(b\.px-a\.px\) : \(a\.px-b\.px\); \}\)/.test(LH),
@@ -660,7 +665,7 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
 
   // ---- THEY SIT WITH THEIR OWN EXTREME ------------------------------------------------------
   // Operator: "they should be right after the HOD and LOD fields."
-  // (v15.07) transposed: "right after the HOD and LOD fields" now means FIRST IN ITS OWN COLUMN —
+  // (v15.09) transposed: "right after the HOD and LOD fields" now means FIRST IN ITS OWN COLUMN —
   // SLvl heads the 1ST column, TLvl heads the 2ND. The level is still the first thing said about
   // each extreme, which is what he asked for; only the axis changed.
   ok(SD3.indexOf("dcell('SLvl'") >= 0 && SD3.indexOf("dcell('SLvl'") < SD3.indexOf("dcell('TIME'"),

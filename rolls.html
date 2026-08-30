@@ -1,0 +1,122 @@
+<meta charset="utf-8"><title>roll arrows — design</title>
+<style>
+ :root{--surface:#11161d;--line:#1e2733;--rule:#212b38;--ink:#e6edf5;--ink3:#66717f;--ink4:#4d5866;
+       --up:#7cc7ff;--dn:#e0645f;--lvl:#e3b341;--grow:#2ec27e}
+ body{background:#0d1117;color:#9aa7b6;font:12px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:18px 20px 40px}
+ h2{font-size:11px;letter-spacing:.11em;color:var(--ink3);text-transform:uppercase;margin:0 0 4px;font-weight:800}
+ h3{font-size:10px;color:var(--ink);margin:18px 0 2px;font-weight:800}
+ .w{font-size:8.5px;color:var(--ink4);margin:0 0 8px}
+ .panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 12px;width:520px}
+ p{color:#9aa7b6;font-size:11px;max-width:960px;margin:8px 0}
+ .why{border-left:2px solid var(--line);padding-left:11px;margin:16px 0 0}
+ b.g{color:var(--grow)}b.a{color:var(--lvl)}b.r{color:var(--dn)}
+ text{font-family:-apple-system,Segoe UI,Roboto,sans-serif}
+</style>
+<h2>roll arrows — where gamma left, and where it arrived</h2>
+
+<h3>A — a 22px lane on the right, arrows span source → destination</h3>
+<div class="w">the lane is its own column; nothing is drawn over a label</div>
+<div class="panel">
+<svg width="496" height="252" viewBox="0 0 496 252">
+ <!-- existing ladder columns, sketched -->
+ <text x="4"  y="12" font-size="7" font-weight="800" fill="var(--ink4)">LEVEL</text>
+ <text x="86" y="12" font-size="7" font-weight="800" fill="var(--ink4)">PRICE</text>
+ <text x="140" y="12" font-size="7" font-weight="800" fill="var(--ink4)">NODE $</text>
+ <text x="330" y="12" font-size="7" font-weight="800" fill="var(--ink4)">Δ 15M</text>
+ <text x="416" y="12" font-size="7" font-weight="800" fill="var(--grow)">ROLLS</text>
+ <line x1="410" y1="16" x2="410" y2="246" stroke="var(--rule)" stroke-width="1"/>
+ <line x1="466" y1="16" x2="466" y2="246" stroke="var(--rule)" stroke-width="1"/>
+ <text x="474" y="12" font-size="7" font-weight="800" fill="var(--ink4)">ROC</text>
+
+ <!-- rows -->
+ <g font-size="8" font-weight="800">
+  <text x="4"  y="40"  fill="var(--lvl)">CW0</text><text x="86" y="40" fill="var(--ink)">7760</text>
+  <rect x="140" y="34" width="96" height="8" rx="1" fill="#3b4a5c"/><text x="330" y="40" fill="var(--ink3)">+2%</text><text x="474" y="40" fill="var(--ink3)">+2%</text>
+  <text x="4"  y="70"  fill="var(--lvl)">PDH</text><text x="86" y="70" fill="var(--ink)">7750</text>
+  <rect x="140" y="64" width="168" height="8" rx="1" fill="var(--grow)" opacity=".55"/>
+  <text x="330" y="70" fill="var(--grow)">+41%</text><text x="474" y="70" fill="var(--grow)">+41%</text>
+  <text x="4"  y="100" fill="var(--ink4)"></text><text x="86" y="100" fill="var(--ink)">7745</text>
+  <rect x="140" y="94" width="44" height="8" rx="1" fill="#3b4a5c"/><text x="330" y="100" fill="var(--dn)">−28%</text><text x="474" y="100" fill="var(--dn)">−28%</text>
+  <text x="4"  y="130" fill="var(--ink4)"></text><text x="86" y="130" fill="var(--ink)">7740</text>
+  <rect x="140" y="124" width="70" height="8" rx="1" fill="#3b4a5c"/><text x="330" y="130" fill="var(--ink3)">0%</text><text x="474" y="130" fill="var(--ink3)">0%</text>
+  <text x="4"  y="160" fill="var(--lvl)">PW0</text><text x="86" y="160" fill="var(--ink)">7730</text>
+  <rect x="140" y="154" width="120" height="8" rx="1" fill="var(--grow)" opacity=".35"/>
+  <text x="330" y="160" fill="var(--grow)">+12%</text><text x="474" y="160" fill="var(--grow)">+12%</text>
+  <text x="4"  y="190" fill="var(--ink4)"></text><text x="86" y="190" fill="var(--ink)">7725</text>
+  <rect x="140" y="184" width="30" height="8" rx="1" fill="#3b4a5c"/><text x="330" y="190" fill="var(--dn)">−19%</text><text x="474" y="190" fill="var(--dn)">−19%</text>
+  <text x="4"  y="220" fill="var(--ink4)"></text><text x="86" y="220" fill="var(--ink)">7715</text>
+  <rect x="140" y="214" width="52" height="8" rx="1" fill="#3b4a5c"/><text x="330" y="220" fill="var(--ink3)">−3%</text><text x="474" y="220" fill="var(--ink3)">−3%</text>
+ </g>
+
+ <!-- THE ROLL LANE: a stem from the source, a head at the destination -->
+ <defs>
+   <marker id="ah" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
+     <path d="M0,0 L5,2.5 L0,5 Z" fill="var(--up)"/></marker>
+   <marker id="ad" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
+     <path d="M0,0 L5,2.5 L0,5 Z" fill="var(--dn)"/></marker>
+ </defs>
+ <!-- 7745 -> 7750, a live roll (dashed = still moving) -->
+ <circle cx="420" cy="97" r="2" fill="var(--dn)" opacity=".8"/>
+ <path d="M420,97 C432,97 432,70 428,68" stroke="var(--up)" stroke-width="1.4" fill="none"
+       stroke-dasharray="3 2" marker-end="url(#ah)"/>
+ <text x="436" y="84" font-size="6.4" font-weight="800" fill="var(--up)">+5</text>
+ <!-- 7725 -> 7730, latched (solid = stuck) -->
+ <circle cx="420" cy="187" r="2" fill="var(--dn)" opacity=".8"/>
+ <path d="M420,187 C432,187 432,160 428,158" stroke="var(--up)" stroke-width="1.4" fill="none"
+       marker-end="url(#ah)"/>
+ <text x="436" y="174" font-size="6.4" font-weight="800" fill="var(--ink3)">18m</text>
+</svg>
+</div>
+
+<h3>B — no lane: the arrow rides the Δ column, source shown as a ghost</h3>
+<div class="w">costs zero extra width — the ladder is already 618px against his 560px panel</div>
+<div class="panel">
+<svg width="496" height="130" viewBox="0 0 496 130">
+ <text x="330" y="12" font-size="7" font-weight="800" fill="var(--ink4)">Δ 15M · ROLLS</text>
+ <g font-size="8" font-weight="800">
+  <text x="86" y="40" fill="var(--ink)">7750</text>
+  <rect x="140" y="34" width="168" height="8" rx="1" fill="var(--grow)" opacity=".55"/>
+  <text x="330" y="40" fill="var(--grow)">+41%</text>
+  <path d="M372,40 L386,40" stroke="var(--up)" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="392" y="40" font-size="6.8" font-weight="800" fill="var(--up)">◄ 7745</text>
+  <text x="86" y="80" fill="var(--ink)">7745</text>
+  <rect x="140" y="74" width="44" height="8" rx="1" fill="#3b4a5c"/>
+  <text x="330" y="80" fill="var(--dn)">−28%</text>
+  <text x="392" y="80" font-size="6.8" font-weight="800" fill="var(--dn)">► 7750</text>
+  <text x="86" y="120" fill="var(--ink)">7730</text>
+  <rect x="140" y="114" width="120" height="8" rx="1" fill="var(--grow)" opacity=".35"/>
+  <text x="330" y="120" fill="var(--grow)">+12%</text>
+  <path d="M372,120 L386,120" stroke="var(--up)" stroke-width="1.4" marker-end="url(#ah)"/>
+  <text x="392" y="120" font-size="6.8" font-weight="800" fill="var(--up)">◄ 7725</text>
+ </g>
+</svg>
+</div>
+
+<div class="why">
+<p><b class="a">What the data says, before the design.</b> I tested your claim directly — it is
+<b>gx-004</b>, pre-registered on 29 Aug before any of this was looked at: "the deflect/break split is
+decided by whether the node is GAINING dollars in the minutes before price arrives." Over 4 sessions
+and 481 touches:</p>
+<p style="font-size:10px;color:#8b98a9">node GAINING $ &nbsp;68% deflect &nbsp;·&nbsp; flat &nbsp;74% &nbsp;·&nbsp; SHEDDING $ &nbsp;73% &nbsp;— against a 72% base. <b>All three inside noise.</b></p>
+<p><b>That is not a refutation.</b> gx-004 needs 150 sessions and there are 4; nothing this size can
+resolve a five-point effect. Your two circles are real observations — the data simply cannot yet say
+whether they beat chance. ⚠ So <b>the arrows ship as a RECORD of where gamma moved, never as a claim
+that the gaining node will hold</b> — the same treatment the profile levels got, and the hover will
+say so in those words.</p>
+<p>⚠⚠ And one caveat that must survive: <b>a roll is INFERRED, never observed.</b> Nobody publishes
+that a position moved between strikes — the panel pairs a fall at one node with a rise at another
+and calls it a roll. That sentence already exists in the codebase and I will re-home it onto
+whatever I build, because deleting a caveat while moving a drawing is a mistake this project has
+made three times.</p>
+<p><b class="g">A</b> gives rolls their own 22px lane: a dot at the source, a curved stem, an
+arrowhead at the destination. Live rolls dash, latched ones are solid with their age — the existing
+grammar. Unambiguous, and it costs 22px the panel does not have (the ladder is already 618px against
+your 560px panel).</p>
+<p><b class="g">B</b> costs nothing: the Δ column already tells you a node gained 41%; the arrow just
+names <i>where from</i>. <b>◄ 7745</b> on the gainer, <b>► 7750</b> on the loser — the pair reads as
+one transfer without a second lane.</p>
+<p><b class="a">I would take B</b>, and would add one thing to Δ: it currently shows a percentage
+only. Making the <b>bar itself</b> green when the node is gaining and grey when flat means the
+"gamma arriving" signal is visible without reading a number — which is what you are actually
+scanning for.</p>
+</div>

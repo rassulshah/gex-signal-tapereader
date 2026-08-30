@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-08-28 · panel v15.07 · companion v1.16 · supersedes every earlier resume note_
+_written 2026-08-28 · panel v15.09 · companion v1.16 · supersedes every earlier resume note_
 
 ---
 

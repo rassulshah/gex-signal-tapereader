@@ -6,7 +6,7 @@ let pass=0, fail=0;
 const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+JSON.stringify(g):''));} };
 function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.exec(src);let i=src.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}return src.slice(m.index,e+1);}
 // ⚠ the LAD_* constants share one multi-var declaration, so only the FIRST is preceded by `var`.
-// ⚠⚠ COMMENTS ARE STRIPPED FIRST, AND THAT IS NOT COSMETIC (v15.07). A prose line reading
+// ⚠⚠ COMMENTS ARE STRIPPED FIRST, AND THAT IS NOT COSMETIC (v15.09). A prose line reading
 // "LAD_NODE=150 - a 4px overlap on every node row" sits EARLIER in the file than the declaration, so
 // the raw regex matched the COMMENT, eval'd "150 - a 4px overlap..." and the whole suite file threw
 // before a single assertion ran. A geometry reader that can be steered by a comment is a reader that
@@ -33,6 +33,7 @@ const W=v('LAD_W'), LVL=v('LAD_LVL'), PXC=v('LAD_PXC'), PXW=v('LAD_PXW'), NODE=v
       ST=v('LAD_ST'), STW=v('LAD_STW'), TAP=v('LAD_TAP'),
       TAPW=v('LAD_TAPW'), ROC=v('LAD_ROC'), ROCW=v('LAD_ROCW'),
       DAX=v('LAD_DAX'), DMAX=v('LAD_DMAX'), DLAB=v('LAD_DLAB'), DLABW=v('LAD_DLABW'),
+      ROLL=v('LAD_ROLL'), ROLLW=v('LAD_ROLLW'),   // (v15.09) the roll lane, the new last column
       PCTIN=v('LAD_PCT_IN_BAR');
 ok([W,LVL,LVLW,PXC,NODE,NMAX,CH,CHW,MK,MKW,KS,KSW,KY,KYW,ST,ROC,DAX,DMAX,DLAB,PCTIN].every(x=>typeof x==='number'),
    'g1 every column offset is a named constant, not a magic number in the markup');
@@ -56,14 +57,14 @@ ok(v('LAD_KPCT')===undefined && v('LAD_PROF')===undefined,
      'g3 the %King fallback label ends before the chute even at its worst offset',
      {end:NODE+(PCTIN-1)+4+30, chuteL});
   ok(DAX-DMAX>=chuteR, 'g4 the delta bars hang left off their axis but never reach the chute', {inner:DAX-DMAX,chuteR});
-  // ⚠⚠ (v15.07) g5a/g5b ARE REWRITTEN, NOT DELETED. They guarded the ROLL LANE's gap between the
+  // ⚠⚠ (v15.09) g5a/g5b ARE REWRITTEN, NOT DELETED. They guarded the ROLL LANE's gap between the
   // level names and the prices. The operator repurposed that lane into the two King migration
   // columns ("repurpose the arrows that we have today to show how the spx and the spy kings
   // movement during the day"), so the lane still exists — it just holds something else, and it
   // still has to clear what is beside it.
   ok(KS>=0 && KS+KSW<=KY, 'g5a the SPXW column ends before the SPY column begins', {sEnd:KS+KSW, KY});
   ok(KY+KYW<=LVL, 'g5b ...and the SPY column ends before the level names begin', {yEnd:KY+KYW, LVL});
-  // ⚠ AND THE NAME MUST TOUCH ITS PRICE. That is the whole point of v15.07: "PDC 7741" as one
+  // ⚠ AND THE NAME MUST TOUCH ITS PRICE. That is the whole point of v15.09: "PDC 7741" as one
   // token. A gap wider than a space between them and they read as two separate columns again.
   ok(LVL+LVLW<=PXC && PXC-(LVL+LVLW)<=4,
      'g5c the level name ends immediately before its price — they read as one token',
@@ -94,7 +95,7 @@ eval(ex('ldNum'));
 ok(/g3ldup/.test(ldNum(5)) && /\+5%/.test(ldNum(5)), 'r1 a building strike reads green and signed');
 ok(/g3lddn/.test(ldNum(-5)), 'r2 ...and a draining one red');
 ok(/g3ldfl/.test(ldNum(0)),  'r3 ...and flat is neither');
-// ⚠⚠ (v15.07) r4-r7 PINNED `ladderRolls`, WHICH IS GONE. The operator repurposed its lane:
+// ⚠⚠ (v15.09) r4-r7 PINNED `ladderRolls`, WHICH IS GONE. The operator repurposed its lane:
 // "repurpose the arrows that we have today to show how the spx and the spy kings movement during
 // the day." The drawing was a DUPLICATE — secLoc() renders the same rolls in its own gutter (v13.9)
 // and ROLL BIAS states the whole-book direction on the ② LOCATION row — so removing it removed no
@@ -114,7 +115,7 @@ ok(/INFERRED from paired changes, never an observed transfer/.test(src),
 ok(/pairing quality|Pairing quality/i.test(src), 'r12 ...and carries its pairing quality');
 
 // ============================================================================================
-// (v15.07) THE KING MIGRATION COLUMNS
+// (v15.09) THE KING MIGRATION COLUMNS
 // ============================================================================================
 const KC=ex('ladderKingCols'), KT=ex('ktTick');
 
@@ -202,7 +203,7 @@ ok(/classList\.toggle\('g3ladon'/.test(src), 'x3 ...and the class is actually ap
 // ---- (v14.54) %KING RIDES ITS OWN BAR --------------------------------------------------------
 ok(/roomPct=\(showPct && len>=Math\.max\(LAD_PCT_IN_BAR, pctW\+8\)\)/.test(LH),
    'p1 the bar carries its own %King when it is wide enough');
-// ---- (v15.07) ...AND THE KING DOES NOT CARRY ITS OWN 100% -----------------------------------
+// ---- (v15.09) ...AND THE KING DOES NOT CARRY ITS OWN 100% -----------------------------------
 // Operator: "you dont need to put 100% for the king." Every %King on this rail is a ratio TO the
 // King, so its own number is the denominator announcing itself.
 ok(/kingIs100=\(role==='KING' && pct>=100\)/.test(LH),
@@ -271,8 +272,17 @@ ok(W<=640, 'w1 the ladder stays within a resizable panel', W);
 // ⚠ 618 IS THE TRUE WIDTH, and it is compared against a TRUE 657 before this build, not the 632 the
 // old constants claimed — LAD_ROCW was 56 for a column that needs 84, so the last column overflowed
 // and LAD_W was wrong. That 25px is the discrepancy LOCKED-ITEMS recorded and could not explain.
-ok(W<=618, 'w1b the v14.54 compaction holds — the ladder is no wider than 618', W);
-ok(ROC+ROCW===W, 'w1c ...and LAD_W is exactly where the last column ends, so it cannot lie again', {end:ROC+ROCW,W});
+// ⚠⚠ (v15.09) AMENDED ONCE, IN THE OPEN. 618 -> 640, because the ROLL LANE was added at the
+// operator's request ("arrows that showed where the gamma was flowing out of and into"). I first
+// added 48px and this guard caught it — which is exactly what it is for: "a later change that adds
+// a column and pushes it back up has undone this build without anything else noticing." I noticed.
+// The lane was squeezed 44 -> 20px so the total lands on w1's 640 ceiling rather than sailing past
+// it. ⚠ 640 IS NOW THE CAP. The next column that wants width argues for it here, in these words.
+ok(W<=640, 'w1b the compaction holds — the ladder is no wider than 640 (was 618 + the 20px roll lane)', W);
+// ⚠ the last column is the ROLL LANE now, not ROC. LAD_W must still equal where it ends, so the
+// constant cannot drift away from the layout again — that 25px discrepancy took a build to explain.
+ok(ROLL+ROLLW===W, 'w1c ...and LAD_W is exactly where the last column ends, so it cannot lie again',
+   {end:ROLL+ROLLW, W});
 ok(/g3ladwrap\{overflow-x:auto/.test(src), 'w2 ...and the container SCROLLS rather than clips');
 ok(/g3ladwrap"><div class="g3lad"/.test(src), 'w3 ...with the scroller actually wrapping the ladder');
 ok(/costing information|instead of costing information/.test(src), 'w4 the reasoning is recorded');
@@ -350,7 +360,7 @@ ok(/0\.80 sigma/.test(src) && /1\.25/.test(src), 'e4 the sigma caveat and its co
 
 
 // ============================================================================================
-// (v15.07) THE FIVE THINGS HE ASKED FOR ON 2026-08-28, EACH PINNED
+// (v15.09) THE FIVE THINGS HE ASKED FOR ON 2026-08-28, EACH PINNED
 // ============================================================================================
 
 // ---- 1 · THE BAR NO LONGER SITS ON THE PRICE ------------------------------------------------
@@ -366,10 +376,10 @@ ok(PXC+PXW <= NODE-1,
    'x2 the price column ENDS before the bars begin — the whole point', {pxEnd:PXC+PXW, NODE});
 
 // ---- 2 · THE NAME SITS BESIDE ITS PRICE, AND THE CHUTE IS PILLS ONLY -------------------------
-// ⚠⚠ v15.07 PUT THE NAMES INSIDE THE CHUTE AND HE REJECTED IT: "move the level name like PDC next
+// ⚠⚠ v15.09 PUT THE NAMES INSIDE THE CHUTE AND HE REJECTED IT: "move the level name like PDC next
 // to the price levels instead so it will look like 'PDC 7741'". He was right — 100px separated a
 // price from the name that belonged to it, and the pair could only be matched by tracking a row
-// across the bars. The chute's own "price's alone" invariant, which v15.07 deliberately reversed,
+// across the bars. The chute's own "price's alone" invariant, which v15.09 deliberately reversed,
 // is therefore RESTORED: the names left, the strip is gone, and nothing but pills sits in there.
 ok(v('LAD_LVSW')===undefined, 'x3 the chute sub-column strip is gone with the names it held');
 ok(/\.g3ldlv\{position:absolute;left:'\+LAD_LVL\+'px;width:'\+LAD_LVLW\+'px;text-align:right/.test(src),
@@ -377,7 +387,7 @@ ok(/\.g3ldlv\{position:absolute;left:'\+LAD_LVL\+'px;width:'\+LAD_LVLW\+'px;text
 ok(LVL+LVLW+4 >= PXC, 'x5 ...with no gap wide enough to read as a separate column',
    {nameEnd:LVL+LVLW, PXC});
 ok(CH+CHW-PILLW-2 >= CH, 'x6b the pill zone is inside the chute', {pillStart:CH+CHW-PILLW-2, CH});
-// ⚠⚠ (v15.07) x6/x7 FLIPPED FROM RIGHT-JUSTIFIED TO CENTRED, and the reason is the point: the
+// ⚠⚠ (v15.09) x6/x7 FLIPPED FROM RIGHT-JUSTIFIED TO CENTRED, and the reason is the point: the
 // pills were pushed right in v14.82 ONLY to clear the level names that then lived in the chute's
 // left strip. v14.83 moved the names back out beside their prices and nobody moved the pills back —
 // they spent two builds hugging a wall for a neighbour that no longer existed. Operator caught it:

@@ -1,0 +1,94 @@
+<meta charset="utf-8"><title>roll arrows — stepped &amp; flowing</title>
+<style>
+ :root{--surface:#11161d;--line:#1e2733;--rule:#212b38;--ink:#e6edf5;--ink3:#66717f;--ink4:#4d5866;
+       --up:#7cc7ff;--dn:#e0645f;--lvl:#e3b341;--grow:#2ec27e}
+ body{background:#0d1117;color:#9aa7b6;font:12px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:18px 20px 40px}
+ h2{font-size:11px;letter-spacing:.11em;color:var(--ink3);text-transform:uppercase;margin:0 0 4px;font-weight:800}
+ .w{font-size:8.5px;color:var(--ink4);margin:0 0 8px}
+ .panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 12px;width:520px}
+ p{color:#9aa7b6;font-size:11px;max-width:960px;margin:8px 0}
+ .why{border-left:2px solid var(--line);padding-left:11px;margin:16px 0 0}
+ b.g{color:var(--grow)}b.a{color:var(--lvl)}b.u{color:var(--up)}
+ /* the ORIGINAL animation, already in the panel's stylesheet — reused, not reinvented */
+ @keyframes g3ldflow{to{stroke-dashoffset:-18}}
+ .flow{animation:g3ldflow 1.5s linear infinite}
+ .nomo .flow{animation:none}
+ label{font-size:9px;color:var(--ink4);cursor:pointer;user-select:none}
+</style>
+<h2>A — stepped arrows, dot at the source, flow animated</h2>
+<div class="w">out · across · back in, exactly your sketch · live rolls flow, latched ones sit still</div>
+
+<div class="panel" id="p">
+<svg width="496" height="256" viewBox="0 0 496 256">
+ <text x="4"  y="12" font-size="7" font-weight="800" fill="var(--ink4)">LEVEL</text>
+ <text x="86" y="12" font-size="7" font-weight="800" fill="var(--ink4)">PRICE</text>
+ <text x="140" y="12" font-size="7" font-weight="800" fill="var(--ink4)">NODE $</text>
+ <text x="330" y="12" font-size="7" font-weight="800" fill="var(--ink4)">Δ 15M</text>
+ <text x="414" y="12" font-size="7" font-weight="800" fill="var(--grow)">ROLLS</text>
+ <line x1="408" y1="16" x2="408" y2="250" stroke="var(--rule)" stroke-width="1"/>
+ <line x1="464" y1="16" x2="464" y2="250" stroke="var(--rule)" stroke-width="1"/>
+ <text x="470" y="12" font-size="7" font-weight="800" fill="var(--ink4)">ROC</text>
+
+ <g font-size="8" font-weight="800">
+  <text x="4"  y="40"  fill="var(--lvl)">CW0</text><text x="86" y="40" fill="var(--ink)">7760</text>
+  <rect x="140" y="34" width="96" height="8" rx="1" fill="#3b4a5c"/><text x="330" y="40" fill="var(--ink3)">+2%</text><text x="470" y="40" fill="var(--ink3)">+2%</text>
+  <text x="4"  y="72"  fill="var(--lvl)">PDH</text><text x="86" y="72" fill="var(--ink)">7750</text>
+  <rect x="140" y="66" width="168" height="8" rx="1" fill="var(--grow)" opacity=".55"/>
+  <text x="330" y="72" fill="var(--grow)">+41%</text><text x="470" y="72" fill="var(--grow)">+41%</text>
+  <text x="86" y="104" fill="var(--ink)">7745</text>
+  <rect x="140" y="98" width="44" height="8" rx="1" fill="#3b4a5c"/><text x="330" y="104" fill="var(--dn)">−28%</text><text x="470" y="104" fill="var(--dn)">−28%</text>
+  <text x="86" y="136" fill="var(--ink)">7740</text>
+  <rect x="140" y="130" width="70" height="8" rx="1" fill="#3b4a5c"/><text x="330" y="136" fill="var(--ink3)">0%</text><text x="470" y="136" fill="var(--ink3)">0%</text>
+  <text x="4"  y="168" fill="var(--lvl)">PW0</text><text x="86" y="168" fill="var(--ink)">7730</text>
+  <rect x="140" y="162" width="120" height="8" rx="1" fill="var(--grow)" opacity=".35"/>
+  <text x="330" y="168" fill="var(--grow)">+12%</text><text x="470" y="168" fill="var(--grow)">+12%</text>
+  <text x="86" y="200" fill="var(--ink)">7725</text>
+  <rect x="140" y="194" width="30" height="8" rx="1" fill="#3b4a5c"/><text x="330" y="200" fill="var(--dn)">−19%</text><text x="470" y="200" fill="var(--dn)">−19%</text>
+  <text x="86" y="232" fill="var(--ink)">7715</text>
+  <rect x="140" y="226" width="52" height="8" rx="1" fill="#3b4a5c"/><text x="330" y="232" fill="var(--ink3)">−3%</text><text x="470" y="232" fill="var(--ink3)">−3%</text>
+ </g>
+
+ <defs>
+   <marker id="au" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+     <path d="M0,0.5 L5.5,3 L0,5.5 Z" fill="var(--up)"/></marker>
+ </defs>
+
+ <!-- ROLL 1 · LIVE · 7745 -> 7750 (one step up). dot at source, out, across, back in. -->
+ <circle cx="416" cy="101" r="2.6" fill="var(--dn)"/>
+ <path class="flow" d="M419,101 H452 V69 H424" stroke="var(--up)" stroke-width="1.5" fill="none"
+       stroke-linecap="square" stroke-dasharray="4 3" marker-end="url(#au)"/>
+ <text x="430" y="88" font-size="6.4" font-weight="800" fill="var(--up)">live</text>
+
+ <!-- ROLL 2 · LATCHED · 7725 -> 7730. solid, with its age. -->
+ <circle cx="416" cy="197" r="2.6" fill="var(--dn)"/>
+ <path d="M419,197 H444 V165 H424" stroke="var(--up)" stroke-width="1.5" fill="none"
+       stroke-linecap="square" marker-end="url(#au)"/>
+ <text x="430" y="184" font-size="6.4" font-weight="800" fill="var(--ink3)">18m</text>
+</svg>
+<div style="margin-top:6px"><label><input type="checkbox" id="nm"> simulate <code>CFG.motion = false</code> (the panel's existing reduced-motion setting)</label></div>
+</div>
+<script>document.getElementById('nm').addEventListener('change',e=>{document.getElementById('p').classList.toggle('nomo',e.target.checked);});</script>
+
+<div class="why">
+<p><b class="u">The shape is yours:</b> a dot at the source, out to the right, across, then back in
+with the head at the destination. Orthogonal, so two rolls at neighbouring strikes never cross each
+other diagonally — they nest, and the step depth tells you which is which.</p>
+<p><b class="g">The animation already exists in the panel</b> — <code>@keyframes g3ldflow{to{stroke-dashoffset:-18}}</code>,
+1.5s linear. I am reusing it rather than writing a second one, so the roll lane flows at exactly the
+rate everything else in the tool does.</p>
+<p><b class="a">Live flows, latched sits still.</b> That distinction is already doctrine here — the
+existing note in the source says the moving dashes <i>claim</i> live flow, so they key strictly off
+<code>r.live</code>. A latched roll is a solid line with its age, because it is a fact about the past,
+not a thing happening now.</p>
+<p><b>Reduced motion is honoured.</b> Tick the box to see it: <code>CFG.motion=false</code> already
+adds <code>.g3nomo</code>, and the roll lane joins the selector that stops. The arrows stay, the flow
+stops — the information is in the shape, not the movement.</p>
+<p>⚠ <b>The lane costs 56px</b> (408→464) and your ladder is already 618px against a 560px panel. I
+would take it from <code>LAD_ROCW</code>, which is 84px for a column whose widest real string measures
+83 — or you widen the panel ~60px, which the ladder has wanted since before tonight.</p>
+<p>⚠⚠ <b>Two things I will carry into the build, not quietly drop:</b> a roll is <b>INFERRED, never
+observed</b> — nobody publishes that a position moved between strikes; the panel pairs a fall at one
+node with a rise at another. And the arrows are a <b>record of what moved</b>, not a claim the gaining
+node will hold: measured over 4 sessions, gaining/flat/shedding all sit inside noise (68/74/73 against
+a 72% base), and gx-004 needs 150 sessions before that question can be answered.</p>
+</div>

@@ -95,12 +95,12 @@ ok(/if\(!P \|\| !P\.rth\) return;/.test(LBS),'l2 nothing is latched outside RTH 
 ok(/n>=SK_MIN_STRIKES/.test(LBS),
    'l3 a DEGRADED book is never latched — it would be served for hours as though it were the close');
 // ⚠ the latch must read the RAW reader, never the front door, or it re-latches its own output.
-// (v15.07) the book is now a PARAMETER — SPXW and QQQ are both latched — but the invariant is
+// (v15.09) the book is now a PARAMETER — SPXW and QQQ are both latched — but the invariant is
 // unchanged and is what this asserts: the RAW reader, never the front door.
 ok(/tapeMapLive\(bk\)/.test(LBS) && !/tapeMap\(bk\)/.test(LBS),
    'l4 the latch reads tapeMapLive, so it can never feed itself and never ages out');
 
-// ---- (v15.07) ONE LATCH PER GOVERNING BOOK ----------------------------------------------------
+// ---- (v15.09) ONE LATCH PER GOVERNING BOOK ----------------------------------------------------
 // ⚠⚠ It stored ONE book (SPXW) under one key while the serve gate never asked which chart was
 // drawn. Right for SPY, whose ladder is governed by SPX; WRONG for QQQ, governed by its own book —
 // which was never latched at all. He switched to QQQ after the close and the ladder was empty.
@@ -118,14 +118,14 @@ ok(/lastBookLoad\(lastBookGov\(_sy\)\)/.test(SSB2),
 ok(/\(sym==='SPXW'\|\|sym==='QQQ'\) && showingStaleBook\(\)/.test(src),
    'l15 tapeMap serves the stale book for BOTH symbols, not SPXW alone');
 
-// ---- (v15.07) AN ABSENCE THE CODE CAN EXPLAIN MUST NOT BE SHOWN AS A BLANK -------------------
+// ---- (v15.09) AN ABSENCE THE CODE CAN EXPLAIN MUST NOT BE SHOWN AS A BLANK -------------------
 // ⚠⚠ He was handed an empty ladder after the close with nothing saying why and read it as a broken
 // build. The cause was specific: on QQQ the latch has no QQQ book, because only SPXW was ever saved.
 const SBW=(()=>{const i=src.indexOf('function staleBookWhy(');const j=src.indexOf('\nfunction ',i+5);return src.slice(i,j);})();
 ok(!!SBW, 'l16 staleBookWhy exists');
 ok(/no '\+gov\+' book was saved/.test(SBW), 'l17 ...and names the BOOK that is missing, not just "no data"');
 ok(!/return B|return any/.test(SBW),
-   'l18 ...and returns a REASON, never a substitute book — serving SPXW on QQQ is the bug v15.07 removed');
+   'l18 ...and returns a REASON, never a substitute book — serving SPXW on QQQ is the bug v15.09 removed');
 ok(/no last-session book for/.test(src), 'l19 the reason is rendered on the face, not only computed');
 
 // ---- 4 · THE FRONT DOOR / RAW READER SPLIT ---------------------------------------------------

@@ -1,3 +1,78 @@
+## v15.09 — the roll arrows are back, and the measurement unit is fixed
+
+> "arrows that showed where the gamma was flowing out of and into ... stepped with a dot at the
+> source ... i think they were animated also showing flow going from one node to another"
+
+**The lane sits after ROC**, so it cannot overwrite a label. Each roll is a **dot at the source, out,
+across, then back in with the head at the destination** — orthogonal, never diagonal, and the step
+depth NESTS so two rolls at neighbouring strikes cannot cross. A **live** roll flows using the
+panel's own `g3ldflow` animation; a **latched** one is a still line carrying its age, because it is a
+fact about the past rather than something happening now. Reduced motion stops the flow and keeps the
+shape.
+
+### ⚠⚠ HE CORRECTED THE MEASUREMENT, AND HE WAS RIGHT
+
+> "each day will only have a few pullback opportunties and each pullback has 1 deflection so when you
+> have that many deflections in a day, its because the data was not classified correctly"
+
+`study-rollsupport.py` counted **every bar against every node** — 481 events over 4 sessions, ~120 a
+day. That is not a measurement of pullbacks; it is a measurement of how many bars sit near a node. It
+was also a REGRESSION: `study-deflect-atr.py` had already collapsed touches to one per price event
+after he taught the same lesson with his circled charts.
+
+`tools/study-pullback.py` defines the unit properly: **a pullback is the extreme of its own
+30-minute neighbourhood**, reached by a real excursion and left by a real reversal. Found from PRICE
+ALONE, blind to nodes, so asking "was a node there" is not circular.
+
+    median 3 per session, range 2-5   (was ~120)
+
+### the three conditions, separated
+
+NEW / MORE / ROLLING are different claims and are tested separately. On the corrected unit there are
+**12 scorable pullbacks over 7 sessions**, landing in cells of one to six. **Nothing is measurable at
+that size**, and the hover says so rather than implying otherwise. gx-004 asks for 150 sessions.
+
+⚠ The growth itself is not subtle: on 2026-08-27 node 770 ran **$7M to $761M — 115x within one
+session**. "Lighting up" is two orders of magnitude, which is why it reads off the chart.
+
+⚠⚠ Two caveats are carried verbatim, not retyped: **a roll is INFERRED, never observed** (nobody
+publishes that a position moved between strikes), and **the arrows are a record of what moved, not a
+claim the gaining node will hold**.
+
+## v15.08 — measure the instrument he trades
+
+> "its the es that i am trading but using spxw nodes" · "we are using other markets to get things
+> like their kings because ES doesn't have its own book, so we use other tapes"
+
+That is a clean separation and the panel was only half honouring it:
+
+    STRUCTURE   nodes / kings / walls / flip   <- SPXW, SPY, QQQ.  ES has no book. Correct as is.
+    MEASUREMENT HOD, LOD, candle, EFF, GD/RD   <- was SPY candles x an EMA ratio of ~10.04, while
+                and every duration                TRUE ES 1-minute bars sat unused in localStorage.
+
+**Verified against Atlas first.** Atlas draws each book in its OWN native scale, side by side and
+unconverted — the SPY column shows 806-855, the SPXW column 7890-7960. Measured off his panel:
+
+    ES1  7722.50      SPX  7711.76      basis  ES - SPX = +10.74
+    SPY   769.35                        ratio  ES / SPY = 10.0377
+
+**SPX and ES are ten points apart — natively compatible, which is exactly why reading SPXW nodes on
+an ES chart works.** SPY is 10.04x away, and every scale failure of 2026-08-30 had SPY in the display
+path.
+
+`measureBars(sym)` returns the true ES session when the chart is a future, **already in chart scale
+so no conversion runs**, and falls back to the SPY proxy — always naming which it used in `src`,
+because a measurement whose instrument is unknown is not a measurement. `hodLod`, `gdRead`,
+`gdActual` and `hlEff` all read it.
+
+⚠ **The trap this removes:** reading `dispR()` after ES bars would multiply ES prices by ten. `hodLod`
+now takes its scale FROM `measureBars`, never from the ratio — pinned by `test_measure` x12/x13.
+
+⚠ Why the proxy was not good enough: the ratio is an EMA that drifts; SPY and ES do not tick in step,
+so the MINUTE an extreme prints can differ — and TOOK, BOP, MUD, W.END and HL GAP are all built on
+those timestamps; and SPY has no overnight session while ONH/ONL already come from ES bars, so one
+set of numbers was being assembled from two instruments.
+
 ## v15.07 — ⓪a turned vertical, and a design pass against the anti-pattern catalog
 
 > "can you turn them vertical without taking too much vertical space . they should be aligned with
