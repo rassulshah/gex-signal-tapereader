@@ -1,3 +1,66 @@
+## v15.07 — ⓪a turned vertical, and a design pass against the anti-pattern catalog
+
+> "can you turn them vertical without taking too much vertical space . they should be aligned with
+> each other and the candle" · "make everything look nicer ... make sure everything is aligned and
+> symmetrical" · "you are taking up too much vertical space under the candle"
+
+**Three rows became three columns** — 1ST · 2ND · DAY — each with label / actual / expected, separated
+by a 1px rule one shade off the surface.
+
+⚠ **Transposing fixed something the row form got wrong.** The E row sat UNDER the A row, so comparing
+an actual with its expected meant tracking two rows. Side by side, today's **TOOK 5h30 against 34m** —
+a low that took ten times the normal time to form — is readable at a glance. It was invisible before.
+
+### the design pass — four faults it caught
+
+1. **Colour was decorating values.** `$725` and `$913` were amber; money is not a status. Values wear
+   ink now, and colour is reserved for what it MEANS: green/red polarity, amber a level, violet a node.
+2. **`tabular-nums` on the table** — equal-width digits, so columns align without hand-tuned widths.
+   That is the mechanism behind "aligned and symmetrical", not a nudge.
+3. **The spine segments abutted.** 2px gaps and rounded ends now — adjacent fills separate by SURFACE,
+   never by a border, because a border adds a line carrying no information.
+4. **The session track was dashed.** Dashing reads as "projection" when it is an axis.
+
+### the height is DERIVED, not chosen
+
+    CH = DAYCOL_HD(16) + DAYCOL_N(9) x DAYCOL_ROW(13) = 133
+
+The candle is built to the same constant, so it ends where the table ends and the dead space beside
+it cannot return when a field is added. ⚠ **Two things under the candle were removed as redundant:**
+the session track (its job was "when did H and L print" — the labels say that, more precisely) and
+the day total (**the same number as the DAY column's HL $**, printed 60px away).
+
+### two new fields
+
+**EFF** — range ÷ distance actually walked, the one number that says trend-or-chop. Computed during
+the candle work at v14.98 and dropped for width. ⚠ Its expected 68% is a **MEDIAN** over 284 sessions,
+and the statistic is named in `EFF_META`: a ratio takes a median, because trimming a ratio's tails
+distorts the middle it is meant to describe. **BODY** completes 40/45/16 as text.
+
+## v15.06 — the panel is pinned to the SPX book, and the candle labels stop colliding
+
+> "put a guard on this application so it always shows spxw by default, unless another market in the
+> settings is selected"
+
+**`CFG.mkt` defaults to `SPX`.** Everything measured in this project stands on the SPX/SPY book — the
+284-session HOD/LOD corpus, the GREEN/RED rule, the deflection geometry, the last-session latch.
+Following the CHART meant one click onto a QQQ or ES tab silently swapped the panel onto a book with
+none of that behind it. That is exactly how SPX-scale strikes came to be drawn against a 716 QQQ
+price and collapsed into a nine-pixel band.
+
+    Settings -> Market:  SPX / SPY (default)  ·  QQQ  ·  Auto — follow the chart
+
+⚠⚠ **A SILENT PIN WOULD BE WORSE THAN NO PIN**, because every number would look like the chart's. When
+the pin disagrees with the chart in front of him the face says so: `◉ SPY book (chart: QQQ)`.
+
+### the ⓪a candle
+
+> "why si the hod lod section all messed up"
+
+The reversal-level names were drawn at `cx+14` and the MUD block centred on `cx`, so on a bar whose
+body sits low they landed on top of each other — `PDL ONL VAL` over `MUD 57m $913`. Names now
+right-align to the frame edge, MUD stays on the bar. 80 -> 96px, and the collision cannot recur.
+
 ## v15.05 — fix the frame, do not hide the data
 
 > "the requirement was to see fridays informaiton because today is saturday and you just removed

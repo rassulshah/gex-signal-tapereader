@@ -59,7 +59,7 @@ ok(/dispIsFut\(\)\?dispR\(\):1/.test(EB), 's7 emBand still scales by dispR() —
 const CLEAN=src.replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
 ok(!/sessionLevels\(sym,\s*\(EB&&typeof EB\.scaleUsed==='number'\)\?EB\.scaleUsed:1\)/.test(CLEAN),
    's10 session levels no longer fall back to the CASH scale');
-// ⚠⚠ (v15.05) s11/s12 ORIGINALLY ASSERTED THAT SESSION LEVELS *DECLINE* WITHOUT A SCALE. That
+// ⚠⚠ (v15.07) s11/s12 ORIGINALLY ASSERTED THAT SESSION LEVELS *DECLINE* WITHOUT A SCALE. That
 // shipped, and it cost the operator his after-hours levels: "i wont be able to work". Declining is
 // right for a number that would be WRONG; it is wrong for a scale that can be DERIVED. The ratio is
 // a persisted EMA and survives the close. The assertions now pin the DERIVE behaviour.
@@ -72,7 +72,7 @@ ok(/dispIsFut\(\)/.test(DS) && /dispR\(\)/.test(DS), 's13 displayScale reads the
 ok(/'fut:live'/.test(DS) && /'fut:ratio'/.test(DS) && /src:'cash'/.test(DS), 's14 ...and names all three states');
 ok(!/return null/.test(DS), 's15 ...and NEVER returns nothing — a derivable scale is always derived');
 
-// ---- (v15.05) THE LADDER MUST VERIFY ITS OWN SCALE AGAINST PRICE --------------------------
+// ---- (v15.07) THE LADDER MUST VERIFY ITS OWN SCALE AGAINST PRICE --------------------------
 // ⚠⚠ Two builds "fixed" this by making call sites agree, and the operator's screen stayed broken,
 // because the fault is UPSTREAM: their payload can carry a spot on one scale and strikes on
 // another. No amount of consistency between consumers repairs an inconsistent SOURCE.
@@ -94,8 +94,8 @@ ok(/scaleSrc='fixed:'/.test(LAD), 's18 ...and a correction is NAMED, never appli
   ok(Math.abs(fixed-dispPx)/dispPx < 0.25, 's21 ...and the correction lands it beside price', +fixed.toFixed(1));
 })();
 
-// ---- (v15.05) THE FRAME REJECTS OFF-SCALE PILES; IT DOES NOT HIDE THE LADDER ---------------
-// ⚠⚠ v15.05 hid the ladder when its frame did not match the chart price. That removed REAL FRIDAY
+// ---- (v15.07) THE FRAME REJECTS OFF-SCALE PILES; IT DOES NOT HIDE THE LADDER ---------------
+// ⚠⚠ v15.07 hid the ladder when its frame did not match the chart price. That removed REAL FRIDAY
 // DATA from the face to avoid drawing it badly — "you just removed everything from the display".
 // The fault was never the data, only the frame it was forced into: emRailBounds widened the rail to
 // hold EVERY pile, so one SPX-scale node dragged `hi` to 7760 while `lo` stayed at 716 and every row
@@ -108,7 +108,7 @@ ok(/scaleSrc='fixed:'/.test(LAD), 's18 ...and a correction is NAMED, never appli
      'g2 ...it is SKIPPED, not clamped — clamping would stack it invisibly at the edge');
   ok(/var ref=\(typeof B\.now==='number'/.test(RB), 'g3 the reference is the chart price');
   // ⚠ THE HIDE-GUARD MUST BE GONE. Hiding converts a rendering bug into a DATA-LOSS bug.
-  ok(!/ladder hidden/.test(src), 'g4 the v15.05 hide-guard is removed — no panel is ever blanked for layout');
+  ok(!/ladder hidden/.test(src), 'g4 the v15.07 hide-guard is removed — no panel is ever blanked for layout');
   // arithmetic on his real numbers
   const ref=716.46;
   ok(7660 > ref*2, 'g5 an SPX pile is rejected on a QQQ rail');

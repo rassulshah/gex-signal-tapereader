@@ -1,0 +1,126 @@
+<meta charset="utf-8"><title>⓪a — height-matched</title>
+<style>
+ :root{--surface:#11161d;--line:#1e2733;--rule:#212b38;--ink:#e6edf5;--ink2:#9aa7b6;--ink3:#66717f;--ink4:#4d5866;
+       --up:#2ec27e;--dn:#f0616d;--lvl:#e3b341;--node:#b98cff}
+ body{background:#0d1117;color:var(--ink2);font:12px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:18px 20px 40px}
+ h2{font-size:11px;letter-spacing:.11em;color:var(--ink3);text-transform:uppercase;margin:0 0 8px;font-weight:800}
+ .panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:11px 13px;
+        display:flex;gap:13px;align-items:flex-start;width:536px}
+ .cols{display:flex;flex:1;min-width:0}
+ .col{flex:1 1 0;min-width:0;padding:0 10px}
+ .col:first-child{padding-left:0}.col:last-child{padding-right:0}
+ .col + .col{border-left:1px solid var(--rule)}
+ .hd{color:var(--ink);font-weight:800;font-size:8.6px;letter-spacing:.05em;height:16px;
+     border-bottom:1px solid var(--rule);margin-bottom:4px;white-space:nowrap;
+     display:flex;justify-content:space-between;align-items:baseline}
+ .hd i{font-style:normal;color:var(--ink4);font-weight:700;font-size:7.4px;letter-spacing:0}
+ table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:8.6px}
+ tr{height:13px} td{padding:0;white-space:nowrap;vertical-align:baseline}
+ td.lab{color:var(--ink4);font-weight:700;font-size:7.4px;width:44%}
+ td.a{color:var(--ink);font-weight:800}
+ td.e{color:var(--ink3);font-weight:600;font-size:7.8px;text-align:right;width:30%}
+ .chip{border-radius:3px;padding:0 3px;font-weight:800;font-size:7.8px}
+ .chip.lv{background:rgba(227,195,65,.12);border:1px solid rgba(227,195,65,.38);color:var(--lvl)}
+ .chip.tg{background:rgba(46,194,126,.12);border:1px solid rgba(46,194,126,.36);color:var(--up)}
+ .chip.nd{background:rgba(150,110,255,.12);border:1px solid rgba(150,110,255,.38);color:var(--node)}
+ .t{color:#f2b45a}.z{color:var(--ink4)}.up{color:var(--up)}
+ p{color:var(--ink2);font-size:11px;max-width:940px;margin:8px 0}
+ .why{border-left:2px solid var(--line);padding-left:11px;margin:16px 0 0}
+ b.g{color:var(--up)}b.a{color:var(--lvl)}
+ .key{font-size:7.8px;color:var(--ink4);margin-top:7px}
+</style>
+<h2>⓪a — the candle now ends where the table ends</h2>
+
+<div class="panel">
+ <!-- 137px tall: header 16 + 9 rows x 13 = 133, +4 -->
+ <svg width="98" height="137" viewBox="0 0 98 137" style="display:block">
+  <rect x="3" y="20"   width="3" height="34.8" rx="1.5" fill="var(--lvl)" opacity=".5"/>
+  <rect x="3" y="56.8" width="3" height="39.4" rx="1.5" fill="var(--up)"  opacity=".55"/>
+  <rect x="3" y="98.2" width="3" height="12.7" rx="1.5" fill="var(--up)"  opacity=".3"/>
+  <text x="9" y="40"  font-size="6.4" font-weight="800" fill="var(--ink3)">40</text>
+  <text x="9" y="79"  font-size="6.4" font-weight="800" fill="var(--ink3)">45</text>
+  <text x="9" y="107" font-size="6.4" font-weight="800" fill="var(--ink3)">16</text>
+
+  <text x="49" y="8"    font-size="8" font-weight="800" fill="var(--ink)"  text-anchor="middle">HOD 14:57</text>
+  <text x="49" y="15.5" font-size="7" font-weight="700" fill="var(--ink3)" text-anchor="middle">0m</text>
+
+  <line x1="49" y1="20" x2="49" y2="112.9" stroke="var(--ink3)" stroke-width="1.2"/>
+  <rect x="39" y="56.8" width="20" height="41.4" rx="1" fill="var(--up)" fill-opacity=".14" stroke="var(--up)" stroke-width="1"/>
+  <line x1="33" y1="98.2" x2="39" y2="98.2" stroke="var(--ink)" stroke-width="1.6"/>
+  <line x1="59" y1="56.8" x2="65" y2="56.8" stroke="var(--ink)" stroke-width="1.6"/>
+  <line x1="39" y1="68" x2="59" y2="68" stroke="var(--node)" stroke-width="1"/>
+
+  <text x="49" y="79"  font-size="7" font-weight="800" fill="var(--ink)"  text-anchor="middle">MUD 57m</text>
+  <text x="49" y="87"  font-size="7" font-weight="700" fill="var(--ink3)" text-anchor="middle">$913</text>
+
+  <text x="95" y="24"    font-size="6.4" font-weight="800" fill="var(--lvl)" text-anchor="end">PDH</text>
+  <text x="95" y="31"    font-size="6.4" font-weight="800" fill="var(--lvl)" text-anchor="end">PDC</text>
+  <text x="95" y="106"   font-size="6.4" font-weight="800" fill="var(--up)"  text-anchor="end">PDL</text>
+  <text x="95" y="113"   font-size="6.4" font-weight="800" fill="var(--up)"  text-anchor="end">ONL</text>
+
+  <text x="49" y="126"   font-size="8" font-weight="800" fill="var(--ink)"  text-anchor="middle">LOD 14:00</text>
+  <text x="49" y="133.5" font-size="7" font-weight="700" fill="var(--ink3)" text-anchor="middle">57m</text>
+ </svg>
+
+ <div class="cols">
+  <div class="col">
+   <div class="hd"><span>1ST · LOD</span><i>actual / exp</i></div>
+   <table>
+    <tr><td class="lab">SLvl</td>  <td class="a z">—</td><td class="e"></td></tr>
+    <tr><td class="lab">LodN</td>  <td class="a"><span class="chip nd">QQQ 7717</span></td><td class="e"></td></tr>
+    <tr><td class="lab">TIME</td>  <td class="a t">14:00</td><td class="e">09:03</td></tr>
+    <tr><td class="lab">TOOK</td>  <td class="a">5h30</td><td class="e">34m</td></tr>
+    <tr><td class="lab">BOP</td>   <td class="a">0m</td><td class="e">14m</td></tr>
+    <tr><td class="lab">WICK</td>  <td class="a z">—</td><td class="e">1h01</td></tr>
+    <tr><td class="lab">W.END</td> <td class="a z">—</td><td class="e">09:31</td></tr>
+    <tr><td class="lab">OF BAR</td><td class="a">16%</td><td class="e">28%</td></tr>
+    <tr><td class="lab">MUD</td>   <td class="a">57m</td><td class="e">3h20</td></tr>
+   </table>
+  </div>
+  <div class="col">
+   <div class="hd"><span>2ND · HOD</span><i>actual / exp</i></div>
+   <table>
+    <tr><td class="lab">TLvl</td>   <td class="a"><span class="chip tg">PDH PDC</span></td><td class="e"></td></tr>
+    <tr><td class="lab">HodN</td>   <td class="a"><span class="chip nd">SPY 7729</span></td><td class="e"></td></tr>
+    <tr><td class="lab">TIME</td>   <td class="a t">14:57</td><td class="e">13:02</td></tr>
+    <tr><td class="lab">PT TOOK</td><td class="a">0m</td><td class="e">46m</td></tr>
+    <tr><td class="lab">PT</td>     <td class="a">8.8pts</td><td class="e">17.0</td></tr>
+    <tr><td class="lab">PTWICK</td> <td class="a z">—</td><td class="e">1h29</td></tr>
+    <tr><td class="lab"></td>       <td class="a"></td><td class="e"></td></tr>
+    <tr><td class="lab">OF BAR</td> <td class="a">40%</td><td class="e">56%</td></tr>
+    <tr><td class="lab">PTMUD</td>  <td class="a">0m</td><td class="e">56m</td></tr>
+   </table>
+  </div>
+  <div class="col">
+   <div class="hd"><span>DAY</span><i>actual / exp</i></div>
+   <table>
+    <tr><td class="lab">GD/RD</td> <td class="a up">GD +6.5</td><td class="e">76%</td></tr>
+    <tr><td class="lab">PTN</td>   <td class="a z">—</td><td class="e"></td></tr>
+    <tr><td class="lab">HL GAP</td><td class="a">57m</td><td class="e">3h50</td></tr>
+    <tr><td class="lab">HL RNG</td><td class="a">14.5</td><td class="e">61.4</td></tr>
+    <tr><td class="lab">HL $</td>  <td class="a">$725</td><td class="e">$3,072</td></tr>
+    <tr><td class="lab">LC GAP</td><td class="a">2h48</td><td class="e">1h55</td></tr>
+    <tr><td class="lab">LC RNG</td><td class="a">1.0</td><td class="e">15.2</td></tr>
+    <tr><td class="lab">EFF</td>   <td class="a">55%</td><td class="e">68%</td></tr>
+    <tr><td class="lab">BODY</td>  <td class="a">45%</td><td class="e">—</td></tr>
+   </table>
+  </div>
+ </div>
+</div>
+<div class="key">right-hand figures are the EXPECTED — trimmed mean over 284 sessions · 40 / 45 / 16 sum to 100% of the bar</div>
+
+<div class="why">
+<p><b class="g">Both things under the candle were redundant</b>, which is why cutting them costs
+nothing:</p>
+<p><b>$725 was already in the DAY column as HL $.</b> The same number twice, 60px apart. It goes.</p>
+<p><b>The session track carried no information the labels did not.</b> Its job was "when did H and L
+print" — and <b>HOD 14:57</b> and <b>LOD 14:00</b> say exactly that, more precisely. The order is
+already stated by the 1ST / 2ND column headers. A picture that restates its own labels is
+decoration.</p>
+<p><b class="a">The candle is now 137px — header 16 + nine rows at 13 = 133.</b> It ends where the
+table ends, so the dead space to its right is gone and the block reads as one rectangle. The height
+is derived from the row count rather than chosen, so adding or removing a field keeps them matched.</p>
+<p>⚠ One consequence worth naming: the bar is shorter, so the wick/body proportions are drawn in less
+space. The spine and the <b>40 / 45 / 16</b> figures carry the shape regardless — which is exactly why
+that column earns its 3px, and why I put it back after cutting it at v14.98.</p>
+</div>

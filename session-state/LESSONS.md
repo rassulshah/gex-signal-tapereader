@@ -131,6 +131,58 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.07 · 2026-08-30 · **TRANSPOSING A TABLE FIXED A READING PROBLEM I HAD NOT NOTICED**
+
+He asked for the three rows turned vertical to save space. What it actually fixed is that the E row
+sat UNDER the A row, so comparing an actual with its expected meant tracking two rows. As a column
+pair they sit side by side, and `TOOK 5h30 vs 34m` — a low that took TEN TIMES the normal time —
+became visible at a glance. **A layout change requested for space returned a comprehension gain I
+had not seen was missing.**
+
+⚠⚠ **I RAN THE DESIGN PASS AGAINST A CATALOG, NOT MY TASTE, AND IT CAUGHT FOUR THINGS I HAD SHIPPED.**
+Colour decorating values ($725 in amber — money is not a status); no `tabular-nums` (the actual
+mechanism behind "aligned", which I had been approximating by hand); spine segments abutting instead
+of separated by 2px of surface; a dashed axis, which reads as "projection". **"Make it look nicer"
+is a checkable procedure, not an aesthetic judgement** — and my eye had passed all four.
+
+⚠ **A DERIVED DIMENSION CANNOT DRIFT.** The candle's height was CHOSEN (216, then 137) and each time
+it disagreed with the table beside it, leaving the void he pointed at twice. It is now
+`DAYCOL_HD + DAYCOL_N * DAYCOL_ROW` — add a field and both move together. **When two elements must
+match, derive one from the other rather than setting both.**
+
+⚠ AND THE REDUNDANCY WAS THE WHOLE PROBLEM. The void under the candle held a session track that
+restated its own labels and a dollar total that appeared 60px away in the DAY column. **A number
+printed twice is worse than a number printed once**, and cutting both cost nothing.
+
+⚠ SIX TEST FILES ASSERTED THE ROW FORM and had to be re-expressed for columns — "3 A rows" became
+"one NOREAD guard per data cell", "SLvl is the column after 1ST" became "SLvl heads the 1ST column".
+**When a layout is transposed, its tests describe the OLD axis** and rewriting them is where you
+find out whether they asserted the CONTRACT or the SHAPE.
+
+### v15.06 · 2026-08-30 · **THE PANEL FOLLOWED THE CHART WHEN EVERY NUMBER IN IT STANDS ON ONE BOOK**
+
+`activeSym()` returned QQQ whenever a QQQ chart was open. But the 284-session HOD/LOD corpus, the
+GREEN/RED rule, the deflection geometry and the last-session latch are ALL the SPX/SPY book. One
+click onto another tab silently swapped the panel onto a book with none of that evidence behind it.
+
+⚠⚠ **THAT IS THE ROOT OF THE WHOLE EVENING.** The nine-pixel ladder, the SPX King against a 716
+price, the empty QQQ book — every one of them is this. I chased four symptoms across five builds
+without asking why the panel was reading QQQ at all. **When several unrelated-looking faults share
+one instrument, the instrument selection IS the fault.**
+
+⚠ AND HE HAD ASKED BEFORE: "I thought i had this requirement in the past but it must have been in
+another context." A standing requirement that lives only in a conversation is lost when the context
+ends. **This is what PROJECT-CONSTANTS and the lesson log exist for** — the requirement is now code
+plus a test, not a memory.
+
+⚠ A PIN MUST ANNOUNCE ITSELF. Pinned to SPX while a QQQ chart is open, every number on the face is
+SPX — which is correct AND is exactly how someone reads a price off the wrong instrument. The badge
+`◉ SPY book (chart: QQQ)` costs nothing and removes the trap.
+
+⚠ THE CANDLE COLLISION WAS TWO COLUMNS SHARING ONE X. Level names at cx+14, MUD centred on cx —
+fine until the body sat low. **Two independently-positioned text blocks in one narrow frame will
+eventually meet; give them separate columns rather than tuning offsets.**
+
 ### v15.05 · 2026-08-30 · **I HID REAL DATA TO AVOID DRAWING IT BADLY**
 
 v15.04 hid the ladder when its frame did not match the chart price. The operator: "the requirement

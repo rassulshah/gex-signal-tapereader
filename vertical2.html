@@ -1,0 +1,111 @@
+<meta charset="utf-8"><title>⓪a — vertical, with expecteds</title>
+<style>
+ body{background:#0d1117;color:#c9d4e2;font:12px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:18px 20px 40px}
+ h2{font-size:11px;letter-spacing:.11em;color:#8b98a9;text-transform:uppercase;margin:0 0 8px;font-weight:800}
+ .panel{background:#11161d;border:1px solid #1e2733;border-radius:6px;padding:10px 12px;display:flex;gap:10px;align-items:flex-start;width:536px}
+ .cols{display:flex;flex:1;min-width:0}
+ .col{padding:0 9px;flex:1;min-width:0}
+ .col + .col{border-left:1px solid #1e2733}
+ .col:first-child{padding-left:0}
+ .hd{color:#e6edf5;font-weight:800;font-size:9px;border-bottom:1px solid #1e2733;padding-bottom:2px;margin-bottom:2px;white-space:nowrap}
+ table{border-collapse:collapse;font-size:8.6px;width:100%}
+ td{padding:1.5px 0;white-space:nowrap}
+ td.lab{color:#5b6675;font-weight:800;font-size:7.6px;padding-right:7px}
+ td.a{color:#e6edf5;font-weight:800;padding-right:6px}
+ td.e{color:#65717f;font-weight:600;font-size:8px;text-align:right}
+ .lv{background:rgba(227,195,65,.13);border:1px solid rgba(227,195,65,.42);color:#e3b341;border-radius:3px;padding:0 3px;font-weight:800}
+ .lv.tg{background:rgba(46,194,126,.14);border-color:rgba(46,194,126,.40);color:#5fd08a}
+ .nd{background:rgba(150,110,255,.14);border:1px solid rgba(150,110,255,.42);color:#b98cff;border-radius:3px;padding:0 3px;font-weight:800}
+ .am{color:#f2b45a}.dim{color:#5b6675}.gd{color:#2ec27e}
+ p{color:#9aa7b6;font-size:11px;max-width:940px;margin:8px 0}
+ .why{border-left:2px solid #2b3644;padding-left:11px;margin:16px 0 0}
+ b.g{color:#5fd08a}b.a{color:#e3b341}
+ .key{font-size:8px;color:#5b6675;margin-top:6px}
+</style>
+<h2>B, with the expected column and column rules — 536px panel, true size</h2>
+
+<div class="panel">
+ <svg width="96" height="216" viewBox="0 0 96 216">
+  <rect x="4" y="34" width="3" height="52" fill="#e3b341" opacity=".55"/>
+  <rect x="4" y="86" width="3" height="58" fill="#2ec27e" opacity=".6"/>
+  <rect x="4" y="144" width="3" height="20" fill="#5fd08a" opacity=".55"/>
+  <text x="10" y="62" font-size="6.5" font-weight="800" fill="#e3b341">40%</text>
+  <text x="10" y="118" font-size="6.5" font-weight="800" fill="#2ec27e">45%</text>
+  <text x="10" y="157" font-size="6.5" font-weight="800" fill="#5fd08a">16%</text>
+  <text x="48" y="14" font-size="8" font-weight="800" fill="#e6edf5" text-anchor="middle">HOD 14:57</text>
+  <text x="48" y="25" font-size="7.5" font-weight="700" fill="#8b98a9" text-anchor="middle">0m</text>
+  <line x1="48" y1="34" x2="48" y2="164" stroke="#8b98a9" stroke-width="1.4"/>
+  <rect x="37" y="86" width="22" height="58" fill="#2ec27e" fill-opacity=".16" stroke="#2ec27e" stroke-width="1.2"/>
+  <line x1="32" y1="144" x2="37" y2="144" stroke="#e6edf5" stroke-width="1.6"/>
+  <line x1="59" y1="86" x2="64" y2="86" stroke="#e6edf5" stroke-width="1.6"/>
+  <text x="48" y="103" font-size="7.5" font-weight="700" fill="#c9d4e2" text-anchor="middle">MUD 57m</text>
+  <text x="48" y="113" font-size="7.5" font-weight="700" fill="#e3b341" text-anchor="middle">$913</text>
+  <text x="94" y="40" font-size="6.5" font-weight="800" fill="#e3b341" text-anchor="end">PDH</text>
+  <text x="94" y="48" font-size="6.5" font-weight="800" fill="#e3b341" text-anchor="end">PDC</text>
+  <text x="94" y="152" font-size="6.5" font-weight="800" fill="#5fd08a" text-anchor="end">PDL</text>
+  <text x="94" y="160" font-size="6.5" font-weight="800" fill="#5fd08a" text-anchor="end">ONL</text>
+  <text x="48" y="182" font-size="8" font-weight="800" fill="#e6edf5" text-anchor="middle">LOD 14:00</text>
+  <text x="48" y="193" font-size="7.5" font-weight="700" fill="#8b98a9" text-anchor="middle">57m</text>
+  <text x="48" y="205" font-size="8" font-weight="800" fill="#e3b341" text-anchor="middle">$725</text>
+ </svg>
+
+ <div class="cols">
+  <div class="col">
+   <div class="hd">1ST · LOD</div>
+   <table>
+    <tr><td class="lab">SLvl</td><td class="a dim">—</td><td class="e"></td></tr>
+    <tr><td class="lab">LodN</td><td class="a"><span class="nd">QQQ 7717</span></td><td class="e"></td></tr>
+    <tr><td class="lab">TIME</td><td class="a am">14:00</td><td class="e">~09:03</td></tr>
+    <tr><td class="lab">TOOK</td><td class="a">5h30</td><td class="e">~34m</td></tr>
+    <tr><td class="lab">BOP</td><td class="a">0m</td><td class="e">~14m</td></tr>
+    <tr><td class="lab">WICK</td><td class="a dim">—</td><td class="e">~1h01</td></tr>
+    <tr><td class="lab">W.END</td><td class="a dim">—</td><td class="e">~09:31</td></tr>
+    <tr><td class="lab">WICK%</td><td class="a">16%</td><td class="e">~28%</td></tr>
+    <tr><td class="lab">MUD</td><td class="a">57m</td><td class="e">~3h20</td></tr>
+   </table>
+  </div>
+  <div class="col">
+   <div class="hd">2ND · HOD</div>
+   <table>
+    <tr><td class="lab">TLvl</td><td class="a"><span class="lv tg">PDH PDC</span></td><td class="e"></td></tr>
+    <tr><td class="lab">HodN</td><td class="a"><span class="nd">SPY 7729</span></td><td class="e"></td></tr>
+    <tr><td class="lab">TIME</td><td class="a am">14:57</td><td class="e">~13:02</td></tr>
+    <tr><td class="lab">PT TOOK</td><td class="a">0m</td><td class="e">~46m</td></tr>
+    <tr><td class="lab">PT</td><td class="a">8.8pts</td><td class="e">~17.0</td></tr>
+    <tr><td class="lab">PTWICK</td><td class="a dim">—</td><td class="e">~1h29</td></tr>
+    <tr><td class="lab"></td><td class="a"></td><td class="e"></td></tr>
+    <tr><td class="lab">PTWick%</td><td class="a">40%</td><td class="e">~56%</td></tr>
+    <tr><td class="lab">PTMUD</td><td class="a">0m</td><td class="e">~56m</td></tr>
+   </table>
+  </div>
+  <div class="col">
+   <div class="hd">DAY</div>
+   <table>
+    <tr><td class="lab">GD/RD</td><td class="a gd">GD +6.5</td><td class="e">76%</td></tr>
+    <tr><td class="lab">PTN</td><td class="a dim">—</td><td class="e"></td></tr>
+    <tr><td class="lab">HL GAP</td><td class="a">57m</td><td class="e">~3h50</td></tr>
+    <tr><td class="lab">HL RNG</td><td class="a">14.5</td><td class="e">~61.4</td></tr>
+    <tr><td class="lab">HL $</td><td class="a">$725</td><td class="e">~$3,072</td></tr>
+    <tr><td class="lab">LC GAP</td><td class="a">2h48</td><td class="e">~1h55</td></tr>
+    <tr><td class="lab">LC RNG</td><td class="a">1.0</td><td class="e">~15.2</td></tr>
+    <tr><td class="lab">LC $</td><td class="a dim">—</td><td class="e">~$760</td></tr>
+   </table>
+  </div>
+ </div>
+</div>
+<div class="key">grey right-hand figures are the EXPECTED value — trimmed mean over the 284-session corpus. A blank means that field has no base rate.</div>
+
+<div class="why">
+<p><b class="g">The expected sits to the right of each actual</b>, dimmed and right-aligned, so every
+number is beside the thing it should be compared with. That is what the old E row did across the
+table; transposed, it becomes a third sub-column and reads better — you no longer have to track down
+two rows to find the pair.</p>
+<p><b class="g">A 1px rule between columns</b> (<code>#1e2733</code>, the same tone as the section
+border) with 9px of air either side. Enough to separate, quiet enough not to read as a table grid.</p>
+<p><b class="a">Two things worth noticing in your own data here:</b> TOOK <b>5h30</b> against an
+expected <b>~34m</b> — the low took ten times the normal time to form; and LC GAP <b>2h48</b> against
+<b>~1h55</b>. Those gaps are the point of showing the expected beside the actual, and they were much
+harder to see when the E row sat underneath.</p>
+<p>⚠ Blanks are deliberate: SLvl, the node fields and PTN have <b>no base rate</b>. An empty cell says
+that; a dash would imply the number exists and is missing.</p>
+</div>

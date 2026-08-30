@@ -152,8 +152,10 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
 // the two fields independent of extremity timing matched exactly (Wick% 26, W.End 8:42am).
 {
   const SD = ex('secDay');
-  ok(/WICK%/.test(SD) && /W\.END/.test(SD) && /MUD/.test(SD) && /BOP/.test(SD),
-     'n1 the wick columns are on the face now, not named as pending');
+  // (v15.07) transposed: the wick family are column-1 FIELDS now, not table columns.
+  ok(/dcell\('BOP'/.test(SD) && /dcell\('WICK'/.test(SD) && /dcell\('W\.END'/.test(SD) &&
+     /dcell\('OF BAR'/.test(SD) && /dcell\('MUD'/.test(SD),
+     'n1 the wick family is on the face as column-1 fields, not named as pending');
   ok(!/pending a definition/.test(SD),
      'n1b ...and the old PENDING refusal is gone with them');
   // the whole session, reconstructed: open 100, LOD at +5m, reclaim at +8m, HOD at +100m
@@ -523,11 +525,14 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
      'w2 ...and the early return that hid everything is gone');
   // ⚠ COUNT, DO NOT JUST MATCH. There are TWO A rows (the excursion block and the day block) and a
   // single-match assertion passed while one of them was mutated away — it found the survivor.
-  // (v15.05) THREE A rows now — the excursion block, the day block, and the new SPAN row that
+  // (v15.07) THREE A rows now — the excursion block, the day block, and the new SPAN row that
   // carries the GREEN/RED call. The count is kept (not loosened to >=1) for the reason above: a
   // single-match assertion passed while one row was mutated away.
-  ok((SD.match(/NOREAD \? row\('a','A'/g)||[]).length === 3,
-     'w3 ALL THREE A rows show em-dashes rather than inventing today',
+  // ⚠⚠ (v15.07) TRANSPOSED. There are no A rows: every cell carries its own NOREAD guard, so the
+  // count is of GUARDS, not rows — and there must be one per data cell or a cell invents a number
+  // on a day with no bars. That is the v14.69 refusal, re-expressed for columns.
+  ok((SD.match(/NOREAD\?Z:/g)||[]).length >= 20,
+     'w3 EVERY data cell refuses individually when there is no session',
      (SD.match(/NOREAD \? row\('a','A'/g)||[]).length);
   ok(/showing the base rates only/.test(SD), 'w4 the header says WHY the A row is empty');
   ok(/This is not a reading, it is no reading/.test(SD),
@@ -538,8 +543,8 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   // the static half must still be reachable in the no-read path
   // (v14.72) the ladder and the foot were REMOVED (they restated the verdict and cost a row); what
   // must still survive the no-candle path is the static half the operator prepares on — the E rows.
-  ok(/g3dayg/.test(SD) && /NOREAD \? row\('a','A'/.test(SD),
-     'w8 the E rows are outside the gate and the A row refuses — the pre-open state that v14.69 fixed');
+  ok(/dcell\(lab, val, exp\)/.test(SD) && /g3dce/.test(src),
+     'w8 the EXPECTED rides beside every actual, outside the NOREAD gate — the state v14.69 fixed');
   ok(!/g3daylb/.test(SD) && !/g3dayfoot/.test(SD),
      'w8b ...and the ladder and honesty line are gone, deliberately, not by accident');
   ok(/backtest over/.test(SD), 'w9 ...and the evidence line names them as a backtest, not today');
@@ -602,21 +607,21 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
 
   const SD2 = ex('secDay');
   ok(/PTL=hlPT\(sym, D\)/.test(SD2), 'p14 secDay computes it');
-  // (v15.05) LC|HC GAP·RNG moved OUT of the table and into the strip beside the read — operator:
+  // (v15.07) LC|HC GAP·RNG moved OUT of the table and into the strip beside the read — operator:
   // "keep the HL metrics ... at the top to the right of the forecast". So the header no longer
   // names it; the STRIP does. Both halves are asserted so the leg cannot go missing entirely.
-  // (v15.05) the LC pair moved AGAIN — out of the v15.05 top strip and into ROW 3, which is where
+  // (v15.07) the LC pair moved AGAIN — out of the v15.07 top strip and into ROW 3, which is where
   // he asked for it ("a thrid row for the HL fields"). Both existed for one build and printed the
   // spans twice. Assert the row-3 home, and that the strip is gone.
-  ok(/'PT TOOK','PT'/.test(SD2) && /'LC GAP','LC RNG','LC \$'/.test(SD2) && !/g3dayhl/.test(SD2),
-     'p15 ...PT legs in row 2, the LC span in row 3, and no duplicate strip');
+  ok(/dcell\('PT TOOK'/.test(SD2) && /dcell\('PT'/.test(SD2) && /dcell\('LC GAP'/.test(SD2),
+     'p15 ...PT legs in the 2ND column, the LC span in DAY');
   ok(/PTL\.exp\.ptMin/.test(SD2) && /PTL\.exp\.ptPts/.test(SD2),
      'p16 ...and the E row uses the SIDE-SPECIFIC expectation, not the pooled one');
 }
 
 
 // ============================================================================================
-// (v15.05) SLvl / TLvl, AND THE PT LEG'S WICK FAMILY
+// (v15.07) SLvl / TLvl, AND THE PT LEG'S WICK FAMILY
 // ============================================================================================
 {
   const LH = ex('hlLevelHit'), PT2 = ex('hlPT'), SD3 = ex('secDay');
@@ -635,7 +640,7 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
 
   // ---- THE FURTHEST ONE, NOT THE FIRST ------------------------------------------------------
   // A move that clears three levels is described by the LAST one it cleared.
-  // (v15.05) the cell now lists EVERY level taken out, furthest FIRST — he asked for names only so
+  // (v15.07) the cell now lists EVERY level taken out, furthest FIRST — he asked for names only so
   // several fit ("PDH, CW, VAH, POC"). The furthest-first ordering is the same rule as before, now
   // expressed as a sort rather than a single winner; `furthest()` still exists and returns [0].
   ok(/hit\.sort\(function\(a,b\)\{ return up \? \(b\.px-a\.px\) : \(a\.px-b\.px\); \}\)/.test(LH),
@@ -655,8 +660,13 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
 
   // ---- THEY SIT WITH THEIR OWN EXTREME ------------------------------------------------------
   // Operator: "they should be right after the HOD and LOD fields."
-  ok(/\['1ST','SLvl'/.test(SD3), 'L7 SLvl is the column immediately after the 1ST extreme');
-  ok(/\['2ND','TLvl'/.test(SD3), 'L8 TLvl is the column immediately after the 2ND extreme');
+  // (v15.07) transposed: "right after the HOD and LOD fields" now means FIRST IN ITS OWN COLUMN —
+  // SLvl heads the 1ST column, TLvl heads the 2ND. The level is still the first thing said about
+  // each extreme, which is what he asked for; only the axis changed.
+  ok(SD3.indexOf("dcell('SLvl'") >= 0 && SD3.indexOf("dcell('SLvl'") < SD3.indexOf("dcell('TIME'"),
+     'L7 SLvl heads the 1ST column, before its TIME');
+  ok(SD3.indexOf("dcell('TLvl'") >= 0 && SD3.indexOf("dcell('TLvl'") < SD3.indexOf("dcell('PT TOOK'"),
+     'L8 TLvl heads the 2ND column, before its PT TOOK');
   ok(/g3daylv\.sw\{[^}]*#e3b341/.test(src) && /g3daylv\.tg\{[^}]*#5fd08a/.test(src),
      'L9 a sweep and a target are coloured differently — two events, not two of one');
 

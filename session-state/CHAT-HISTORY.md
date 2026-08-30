@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-30 · v15.05 · session `2df3ccfa` — v15.05 - fix the frame, do not hide the data
+## 2026-08-30 · v15.07 · session `2df3ccfa` — v15.07 - the vertical redesign
 
-_46 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
+_53 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
 
 ### THE EXCHANGE
 
@@ -1080,31 +1080,181 @@ if(pd+pad2>out.hi) out.hi=pd+pad2;   // widens the frame to hold EVERY pile
 ```
 
 The rail frame widens to include every node — **including nodes on a completely different price scale.** One SPX-scale pile drags `hi` to 7760 while `lo` stays at 716. Fixing that properly instead of hiding the result:
+**Tapereader v15.05** — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+**Companion v1.16 — unchanged.** Suite 128 green / 6 baseline red.
+
+Hiding the ladder was the wrong call and you're right to be angry about it. Those rows were Friday's book — **real data** — and I suppressed the one thing in the pipeline that was correct, to avoid drawing it badly. For a request that was literally "let me see Friday", that's the worse failure of the two.
+
+**The actual bug was four lines away and I never read it.** In `emRailBounds`:
+
+```js
+if(pd+pad2>out.hi) out.hi=pd+pad2;   // widens the rail to hold EVERY pile
+```
+
+Right for a far King. Catastrophic for a node from another book — one SPX-scale pile dragged `hi` to 7760 while `lo` stayed at 716, so the frame spanned 7,000 points and every row collapsed into nine pixels.
+
+Now a pile more than 2× from the chart price is **skipped** — not clamped, which would just stack it invisibly at the edge. The rail draws everything that belongs on it. The hide-guard is gone.
+
+Looking back at the sequence honestly: v15.02 was correct but routed onto a broken path, v15.03 exp …[trimmed]
+
+**OPERATOR:**
+> check
+
+**me (03:23):** The ladder is drawing properly now:
+
+```
+7 price rows, 721.54 → 729.89     ← QQQ scale, matching your 716.46 chart
+spread 187px across a 300px rail   minimum gap 26px between rows
+hide-guard: gone      candle + ⓪a section: intact
+```
+
+No pile-up — rows are 26px apart instead of stacked inside nine pixels. And the prices are **721–729**, on QQQ's own scale, where before they were SPX-scale 7611–7710. The off-scale piles are being rejected from the frame exactly as intended.
+
+So the rendering fault is genuinely fixed, not suppressed.
+
+**What's on your QQQ screen now** is live QQQ structure — the ⓪a section, the candle, and a readable ladder. What it still doesn't have is **Friday's QQQ book**, and the badge says so: only SPXW was ever latched, so there's nothing to restore. That starts recording from the next session.
+
+**Friday's book exists for SPY** — SPXW, frozen 14:59 CT. If you switch the chart there, the full ladder from Friday populates.
+
+I'd rather stop here than keep changing things tonight. The sequence that led to this — correct fix, wrong path, symptom explained, symptom suppressed, cause finally found — cost you four reloads and a lot of patience, and the root cause I kept circling (a QQQ chart being served SPX levels) is still unfixed. That's the one real piece of work left, and it deserves a fresh start rather than another patch.
+
+**OPERATOR:**
+> to keep things simple untill we make alot for progress. put a guard on this application so it always shows spxw by default, uless another another market in the settingis selected.    I thought i had this requirement in the past bu it must have been in another contex.
+
+**me (03:28):** I have the pattern. Building the market guard:
+Now the badge, so a pin that disagrees with your chart can never be silent:
+The candle's level names and the MUD block are colliding — both land in the same space when the body sits low. Fixing the geometry:
+**Tapereader v15.06** — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+**Companion v1.16 — unchanged.** Suite 129 green / 6 baseline red.
+
+**The panel is now pinned to the SPX book by default.** `Settings → Market` gives you SPX/SPY (default), QQQ, or Auto — follow the chart.
+
+And this was the root of the entire evening. Every measured thing in the tool stands on the SPX/SPY book — the 284-session HOD/LOD corpus, the GREEN/RED rule, the deflection geometry, the last-session latch. `activeSym()` followed whatever chart was open, so one click onto a QQQ or ES tab silently swapped the panel onto a book with none of that behind it. The nine-pixel ladder, the SPX King against a 716 price, the missing Friday book — **all of them are that one thing.** I chased four symptoms across five builds without once asking why the panel was reading QQQ at all.
+
+You were right that you'd asked for this before. A standing requirement that lives only in a conversation is gone when that context ends — it's code and a test now, not a memory.
+
+**One thing I added deliberately:** when the pin disagrees with your chart, the face says so — `◉ SPY book (chart: QQQ)`. Pinned to SPX with a QQQ chart open, every number is SPX, which is what you want *and* is exactly how someone reads a price off the wrong instrument. The badge costs nothing and removes the trap.
+
+**On the ⓪a mess** — the reversal-level names were drawn at a bar-relative offset and the MUD block centred on the bar, so on a …[trimmed]
+
+**OPERATOR:**
+> before you go further i see you have basically 3rosws , 1 for 1st, then another for 2nd and then day.. can you turn them vertical wihtotu taking too much vertical space . they should be aligned with each other and the candle
+> product mockups
+
+**me (03:33):** Transposing them. Three options, all sized against the candle:
+Two ways to transpose, both drawn at true size against a 536px panel with the candle to scale.
+
+**A — one shared label column, three value columns.** This preserves the alignment contract you built over eight mockup rounds: TOOK above PT TOOK, WICK% above PTWick%, MUD above PTMUD. It works because the 1ST and 2ND legs genuinely mirror each other, so one label serves both.
+
+**B — each column names its own fields.** No compromise labels, but ~30px wider and it loses the visual mirror between the two extremes.
+
+**I'd take A**, with one change I'd argue for: **drop DAY out of the table.**
+
+DAY is where A strains — its fields are HL GAP / HL RNG / HL $, not TOOK / BOP / WICK, so the shared labels turn into fudges like *TOOK · GAP*. But that's a symptom of forcing it into a shape it doesn't fit. DAY isn't a third leg; it's a summary of the whole bar. And the candle already carries HL $ and the LC leg — so those numbers have a natural home that isn't a table column.
+
+That would leave a clean two-column mirror beside the candle, which is exactly what your eight rounds were driving at.
+
+**On vertical space:** both are ~130px against the current ~96px. But the candle is 216px, so it's already the taller element — the section doesn't actually grow. You're spending horizontal space you have and reclaiming nothing you need.
+
+Tell me A or B, and whether DAY moves onto the candle or stays as a column.
+
+**OPERATOR:**
+> I like this. but where is the expected values for each column and you may want to have a subtle gray seperator between the columns
+
+**me (03:38):** Both added.
+
+**The expected sits immediately right of each actual**, dimmed and right-aligned. Transposing actually improves it: the E row used to sit underneath, so you had to track two rows to find a pair. Now every number is beside the thing it should be compared against.
+
+**A 1px rule between columns** in `#1e2733` — the same tone as the section border — with 9px of air either side. Enough to separate, quiet enough not to read as a spreadsheet grid.
+
+Two things in your own data that this layout makes obvious and the old one didn't:
+
+- **TOOK 5h30 against ~34m expected** — that low took roughly ten times the normal time to form.
+- **LC GAP 2h48 against ~1h55.**
+
+That contrast is the whole reason for putting the expected next to the actual rather than under it.
+
+One deliberate choice worth flagging: **the blanks are blanks, not dashes.** SLvl, the node fields and PTN have no base rate at all — nothing to expect. An empty cell says that honestly; a dash would imply a number exists and is missing.
+
+Say go and I'll build it.
+
+**OPERATOR:**
+> i like it.. make everything look nicer though .. including the candle and its labels.. do a good ui job and give me mockups . make sure everything is aligned and symmetrical too . if there are any additional fields or suggestions, now is the time
+
+**me (03:41):** This is a real design pass on a data visualization, so let me use the proper guidance rather than improvise:
+Audited my mockup against the anti-pattern catalog and found four real violations. Building the polished version:
+I ran this against the visualisation anti-pattern catalog rather than trusting my eye, and it caught four real faults in what I'd shown you:
+
+**1 · Colour was decorating values.** `$725` and `$913` were amber for no reason — money isn't a status. Values now wear ink, and colour is reserved for what it *means*: green/red for the day's polarity, amber for a level, violet for a node. Four semantic colours, one job each.
+
+**2 · `tabular-nums` on the table** — equal-width digits, so every column aligns vertically. That's the direct answer to "aligned and symmetrical", and it's why the numbers now line up without me hand-tuning widths. A 13px row rhythm runs through all three columns, and the candle's label baselines sit on the same grid.
+
+**3 · The spine segments abutted each other.** They now have 2px gaps and rounded ends — adjacent fills separate by *surface*, never by a border, because a border adds a line carrying no information.
+
+**4 · The session track was dashed.** Dashing reads as "projection" when it's just an axis. Solid hairline, one shade off the surface.
+
+Columns are equal-width and bottom-aligned at nine rows, so the rules run full height and the block reads as one object. The blank in 2ND is your deliberate W.END gap.
+
+**Two fields I'd add:**
+
+**EFF — 55% against ~68%.** Range ÷ distance actually walked. It's the one number that says trend-or-chop, I computed it during the candle work and then dropped it when the width came down. Today walked 55% efficient, well under normal — that's a chop day, and nothing else on the face says so.
+
+**BODY …[trimmed]
+
+**OPERATOR:**
+> you are taking up too much vertical space under the candle which is creating unused space to the right of the candle near the bottom.
+
+**me (03:47):** You're right — and the fix is that both of those are redundant. **$725 is already in the DAY column as HL $**, and the track's information is the HOD/LOD times, which the labels already carry. Cutting them makes the candle exactly the table's height:
+Both things you circled turned out to be redundant, so cutting them costs nothing:
+
+**$725 was already in the DAY column as HL $** — the same number twice, 60px apart.
+
+**The session track carried no information its own labels didn't.** Its job was "when did H and L print", and `HOD 14:57` / `LOD 14:00` say exactly that, more precisely. The order is already stated by the 1ST / 2ND headers. A picture restating its own labels is decoration.
+
+**The candle is now 137px — header 16 + nine rows × 13 = 133.** It ends where the table ends, so the dead space beside it is gone and the block reads as one rectangle. The height is *derived* from the row count rather than picked, so adding or removing a field keeps them matched automatically.
+
+One consequence worth naming rather than discovering later: the bar is shorter, so the wick and body are drawn in less vertical space. The **40 / 45 / 16** spine carries the shape regardless — which is precisely why that 3px column earns its place, and why I put it back after wrongly cutting it at v14.98 to save width.
+
+If this is right, say go and I'll build it.
+
+**OPERATOR:**
+> build
+
+**me (03:50):** Building it. Let me locate the exact span to replace:
+Now the pieces those columns reference — `DAYCOL_N`, `EFF_META`, `hlEff`, and the `gdTip`/`GDc` that lived in the block I replaced:
+`GDc` and `gdTip` were in the block I replaced. Restoring them, plus the CSS and the height-matched candle:
+Now the candle — height derived from the row count, track and duplicate total removed:
+These assert the row form, which no longer exists. Rewriting them for the column contract:
+The candle edit was lost when that script aborted. Applying it now:
+My regex replaced only the message line and orphaned the opening. Repairing:
+Only the record guards left. Writing the records and shipping:
 
 ### DECISIONS
 
-- **NEVER hide a panel to fix a layout fault.** v15.04 suppressed real Friday data to avoid drawing
-  it badly. Hiding turns a rendering bug into a data-loss bug — the more expensive one.
-- **When a frame is wrong, read the code that BUILDS the frame.** `emRailBounds` was four lines from
-  the symptom for three builds.
-- **Skip an off-scale pile, do not clamp it** — clamping stacks it invisibly at the edge.
+- **⓪a is THREE COLUMNS** (1ST · 2ND · DAY), label / actual / expected, 1px rules. The expected now
+  sits BESIDE its actual instead of under it — `TOOK 5h30 vs 34m` is legible for the first time.
+- **A derived dimension cannot drift**: the candle height is `DAYCOL_HD + DAYCOL_N*DAYCOL_ROW`.
+- **A number printed twice is worse than once** — the day total came off the candle; it is HL $.
+- **"Make it look nicer" is a checkable procedure.** The anti-pattern catalog caught four faults my
+  eye had passed: colour decorating values, no tabular-nums, abutting fills, a dashed axis.
+- **EFF and BODY added**; EFF's expected is a MEDIAN (a ratio must not be trimmed) and says so.
 
 ### SHIPPED
 
-**v15.05** — `emRailBounds` rejects piles >2x from the chart price; the v15.04 hide-guard removed
-(g1-g7). The ladder draws everything that belongs on its rail.
+**v15.07** — the vertical redesign, `hlEff()`/`EFF_META`, `DAYCOL_*`, the candle height-matched with
+the track and duplicate total removed. n27-n34, n39d-f, n45, n50, and six test files re-expressed.
 
 ### OPEN AT CLOSE
 
-- **Verify on his screen**: the QQQ ladder should DRAW again, showing whatever is on QQQ's own scale.
-- ⚠ **QQQ still has no Friday BOOK** (never recorded; latches from the next RTH). SPY shows Friday's
-  SPXW book frozen 14:59 CT and works now.
-- ⚠ **A QQQ chart being served SPX-scale levels is still the underlying fault** — same root as
-  `KING 7675.84` vs 716.46.
+- **Verify on his screen** — three columns level with the candle, no void bottom-right.
+- ⚠ QQQ's Friday book was never recorded; latches from the next RTH. The market is pinned to SPX.
+- **gx-008 forward scoring** can start immediately.
 
 ### COMMITS THIS CONTEXT
 
 ```
+07f0085 v15.06: pin the panel to the SPX book by default; separate the candle label columns
+7d57b0a v15.05: reject off-scale piles in the rail frame; remove the hide-guard that suppressed real data
 114ff43 v15.04: the ladder refuses to draw across two price scales instead of compressing them
 37d1612 v15.03: the empty ladder names the missing book instead of rendering blank
 e976ccb v15.02: latch every governing book so QQQ has one; SLvl/TLvl drop IB and overflow to the E row
@@ -1115,13 +1265,258 @@ e976ccb v15.02: latch every governing book so QQQ has one; SLvl/TLvl drop IB and
 4c1085a v14.97: the scale fault was upstream; the ladder now verifies itself against price
 c4737b2 v14.96: one table so the columns actually align; the counting test was a proxy that passed on a broken screen
 d716fb6 v14.95: SYM vs sym killed the whole day section; add an undeclared-identifier lint
-62d1cdc v14.94: one displayScale function; session levels derive instead of declining
-114d933 v14.93: the 10x scale mismatch - one switch, two preconditions, fixed in both places it lived
 ```
 
 ---
 
 <!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-30 · v15.06 · session `2df3ccfa` — v15.06 - pin the market to SPX
+**OPERATOR:**
+> try this rule and tell me how it works out for the deflections.  in a downmove the low of the candle has to be within 1 atr  of the high of the  node but  cannot be more than 2 atr below the node.  check this and see if it covers all the deflections.
+**OPERATOR:**
+> tell me how good the rule is for identiifying deflections . for example is 2 atr too much, should it be 1.5 at or  should it be the close which is  within 1 atr below the node ?   i want ot finalize deflections
+**OPERATOR:**
+> ok.. so , tell me simply what should the deflection range be above and below the node
+**OPERATOR:**
+> ok..  now have you completed your detection of deflections
+**OPERATOR:**
+> ok do it.
+**OPERATOR:**
+> try giving me the install again
+**OPERATOR:**
+> how was it working before ?  you just gave me the install file .. what happened
+**OPERATOR:**
+> yes
+**OPERATOR:**
+> reloaded check
+**OPERATOR:**
+> you did not implement all the changes we have been talking about . see pic
+**OPERATOR:**
+> look at the top also .  it doesn't have the changes we discussed  .   even the dntend Brk area was also removed .. all those changes and you didn't implement any of them
+**OPERATOR:**
+> something is not right ..  the bottom row for LOD should be aligned  with the hod rows and its fields should be almost mirror image of the hod lines where applicable.  for example pt took is a mirror image of a took ..  use your intelligence and determine what should be there.  Also lets create a thrid row for the HL fields like HL Gap HL Rng  HL $ ,  im not sure LC Gap and LC rang should be .... figure it out ..  and give me mockup
+**OPERATOR:**
+> before we go any further.   do you realize that i am taking the model of the daily bar and trying to measure the movements in it from open to close
+**OPERATOR:**
+> ok.. show me the mockup .  i am also interested in seeing a daily bar being constructed througout the day . maybe show it to the right . of the statistics.  so i can visually see what is going on .. can you come up with tsomething liek this ?   show me mockup
+**OPERATOR:**
+> the fields dont show sequence step by step .. can you do better. look at how i tried to identify an extremity first  etc..
+**OPERATOR:**
+> how can you take my approach and just enhance that .. i dont want to deviate too much from what i have
+**OPERATOR:**
+> ok i'll go with your recommendation .. give me mockup
+**OPERATOR:**
+> in the last row there is an empty first cell where we can put the actual and expected values for a GD or a RD.  but first i need you to have a model that predicts this . you can use the data , the day of week, overnight , open  etc..   but come up with a way to identify if today will be green or red. if you need more than the open like the 1st hour or 30 min IB range and break to figure this out , let me know, Whatever the case, i need a model to predict if we close above or below the open to determine if today will be a red or green day with decent probability .
+**OPERATOR:**
+> you can also use prior day values .  it maybe helpfull like if a prior day is green  or red and see how that impacts the ability to forecast as well as if we are above or below the weekly open
+**OPERATOR:**
+> so how good is it at predicting
+**OPERATOR:**
+> ok build it and move the candle to the left side of the app, currently its on the right side of the app..    so the daily candle and its contstruction will be my mental model for daytrading using all of these measurements . let me know if there are any other measurements that should be added and if you can make the data points, models goto the llm everynight for refinement and prediction with the gamma book  to see how it can better predict things like hod lod  green day  red day  price and time projection , trend reversal , deflections etc..  its very important that this feature be a world class feature but it will require your help in constant refinement via the use of llm to identify additional datapoints and measurements to better prediction
+**OPERATOR:**
+> Yes.
+**OPERATOR:**
+> How can you use other datapoints like prior day poc vah val. Did you do any tests on whether they provide support resistance or help predict highs and lows or whether they help determine if we will close green or red.  For example, if we open above prior day poc or vah or in between vah and Val, how does that help us predict ?   What about combinations.
+**OPERATOR:**
+> There is one more thing but I’m not sure if you have the data.  The regime.  If we are in a positive gamma vs negative gamma regime would be an important filter to predicting reversals support resistance va trend continuation.  Is there any way that can be obtained and included in testing
+**OPERATOR:**
+> So I want you to tell me what is the useful result of all of this testing. Can you predict anything better like hod lod Green Day vs red day reversals deflections etc.
+**OPERATOR:**
+> So where are we with all of this.  Explain simply
+**OPERATOR:**
+> Fix the bugs and issues so we can continue enhancing
+**OPERATOR:**
+> you need to give me the tampermonkey link
+**OPERATOR:**
+> reloaded
+**OPERATOR:**
+> the problem is that i wont be able to work. last time we had this problem , you showed the stale data so that i could continue working ..
+**OPERATOR:**
+> i reloaded.
+**OPERATOR:**
+> look at my screen and check yourself
+**OPERATOR:**
+> the alignment is messe up for the candle . and other things are also messed up .. check and look at the screen
+**OPERATOR:**
+> remember to always give me a tampermoneky link with the build.. i reloaded . check everyhing
+**OPERATOR:**
+> the candle is taking up too much horizontal space . here is a sample pic.  the idea is to identify the hod and lod times, how long it took ,  as well as the mud time and distance as well as how much money could have been made.  i'll let you refine this.
+**OPERATOR:**
+> show me3 mockup
+**OPERATOR:**
+> I like  this but add any levels that were swept by the wicks or targetted.  They should be levels around the edges not levels that the maket blew through and kept going. the idea is to identify where the market reversed and then targetted.  do not include ib.. they should be key levels like poc, vah, val, pdh, pdl, onh, onl, cw0, pw0, or any major level.  the level should be close to the candle  especially near the wick.   do you understand
+**OPERATOR:**
+> I like E. proviede build
+**OPERATOR:**
+> complete the open items and then i'll install
+**OPERATOR:**
+> are you sure this is correct because the candle shows the market took out bot the prior day high and the prior day (thrusdays) low.   also place the MUD labels above the open for red bars and below the open for green bars. i also need to know how much money was in the MUD , so place that on the second line below the MUD time.  put the total amount in dollars below the second line of the extremity , so for example, it would be below the LOD  2h48 line.   also the lod labels are too low , bring them slightly closer to the wick same distanc e and the hod 2h09 and the wick
+**OPERATOR:**
+> there is something wrong with the ladder ..  it has no data from friday which it is suppose to show so i can continue working on it and the lables are cutt off
+**OPERATOR:**
+> did you fix so that it will show data from friday . you can select a specific time like 15 min before the close or something like that so that i can continue working.. right now you ahve totally messed up everyghing.. look at the ladder..
+**OPERATOR:**
+> reloaded .. please check
+**OPERATOR:**
+> you need to fix this. see screen .. it is unreadable
+**OPERATOR:**
+> reloaded.  check
+**OPERATOR:**
+> what the hell is the matter with you .  the requirement was to see fridays informaiton because today is saturday  and you just removed everything from the display .. are you an idiiot
+**OPERATOR:**
+> check
+**OPERATOR:**
+> to keep things simple untill we make alot for progress. put a guard on this application so it always shows spxw by default, uless another another market in the settingis selected.    I thought i had this requirement in the past bu it must have been in another contex.
+
+### DECISIONS
+
+- **THE PANEL IS PINNED TO THE SPX BOOK BY DEFAULT (`CFG.mkt='SPX'`).** Every measured thing in this
+  project stands on it. Following the chart was the root of the whole evening's faults.
+- **A pin must announce itself** — `◉ SPY book (chart: QQQ)` — or every number looks like the chart's.
+- **Two text blocks in one narrow frame need separate columns**, not tuned offsets.
+- **A standing requirement that lives only in a conversation is lost.** He had asked for this before,
+  in another context. It is code plus a test now.
+
+
+### SHIPPED
+
+**v15.06** — `CFG.mkt` (SPX default) + Settings→Market + the disagreement badge (m1-m14); candle
+80→96px with the label columns separated (n45b, n45c).
+
+
+### OPEN AT CLOSE
+
+- **Verify on his screen**: the panel should read SPX on any chart, with the badge when they differ.
+- ⚠ QQQ's Friday book was never recorded; it latches from the next RTH.
+- **gx-008 forward scoring** can start immediately.
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
+
+# EARLIER CONTEXTS
+
+## 2026-08-30 · v15.05 · session `2df3ccfa` — v15.05 - fix the frame, do not hide the data
+**OPERATOR:**
+> try this rule and tell me how it works out for the deflections.  in a downmove the low of the candle has to be within 1 atr  of the high of the  node but  cannot be more than 2 atr below the node.  check this and see if it covers all the deflections.
+**OPERATOR:**
+> tell me how good the rule is for identiifying deflections . for example is 2 atr too much, should it be 1.5 at or  should it be the close which is  within 1 atr below the node ?   i want ot finalize deflections
+**OPERATOR:**
+> ok.. so , tell me simply what should the deflection range be above and below the node
+**OPERATOR:**
+> ok..  now have you completed your detection of deflections
+**OPERATOR:**
+> ok do it.
+**OPERATOR:**
+> try giving me the install again
+**OPERATOR:**
+> how was it working before ?  you just gave me the install file .. what happened
+**OPERATOR:**
+> yes
+**OPERATOR:**
+> reloaded check
+**OPERATOR:**
+> you did not implement all the changes we have been talking about . see pic
+**OPERATOR:**
+> look at the top also .  it doesn't have the changes we discussed  .   even the dntend Brk area was also removed .. all those changes and you didn't implement any of them
+**OPERATOR:**
+> something is not right ..  the bottom row for LOD should be aligned  with the hod rows and its fields should be almost mirror image of the hod lines where applicable.  for example pt took is a mirror image of a took ..  use your intelligence and determine what should be there.  Also lets create a thrid row for the HL fields like HL Gap HL Rng  HL $ ,  im not sure LC Gap and LC rang should be .... figure it out ..  and give me mockup
+**OPERATOR:**
+> before we go any further.   do you realize that i am taking the model of the daily bar and trying to measure the movements in it from open to close
+**OPERATOR:**
+> ok.. show me the mockup .  i am also interested in seeing a daily bar being constructed througout the day . maybe show it to the right . of the statistics.  so i can visually see what is going on .. can you come up with tsomething liek this ?   show me mockup
+**OPERATOR:**
+> the fields dont show sequence step by step .. can you do better. look at how i tried to identify an extremity first  etc..
+**OPERATOR:**
+> how can you take my approach and just enhance that .. i dont want to deviate too much from what i have
+**OPERATOR:**
+> ok i'll go with your recommendation .. give me mockup
+**OPERATOR:**
+> in the last row there is an empty first cell where we can put the actual and expected values for a GD or a RD.  but first i need you to have a model that predicts this . you can use the data , the day of week, overnight , open  etc..   but come up with a way to identify if today will be green or red. if you need more than the open like the 1st hour or 30 min IB range and break to figure this out , let me know, Whatever the case, i need a model to predict if we close above or below the open to determine if today will be a red or green day with decent probability .
+**OPERATOR:**
+> you can also use prior day values .  it maybe helpfull like if a prior day is green  or red and see how that impacts the ability to forecast as well as if we are above or below the weekly open
+**OPERATOR:**
+> so how good is it at predicting
+**OPERATOR:**
+> ok build it and move the candle to the left side of the app, currently its on the right side of the app..    so the daily candle and its contstruction will be my mental model for daytrading using all of these measurements . let me know if there are any other measurements that should be added and if you can make the data points, models goto the llm everynight for refinement and prediction with the gamma book  to see how it can better predict things like hod lod  green day  red day  price and time projection , trend reversal , deflections etc..  its very important that this feature be a world class feature but it will require your help in constant refinement via the use of llm to identify additional datapoints and measurements to better prediction
+**OPERATOR:**
+> Yes.
+**OPERATOR:**
+> How can you use other datapoints like prior day poc vah val. Did you do any tests on whether they provide support resistance or help predict highs and lows or whether they help determine if we will close green or red.  For example, if we open above prior day poc or vah or in between vah and Val, how does that help us predict ?   What about combinations.
+**OPERATOR:**
+> There is one more thing but I’m not sure if you have the data.  The regime.  If we are in a positive gamma vs negative gamma regime would be an important filter to predicting reversals support resistance va trend continuation.  Is there any way that can be obtained and included in testing
+**OPERATOR:**
+> So I want you to tell me what is the useful result of all of this testing. Can you predict anything better like hod lod Green Day vs red day reversals deflections etc.
+**OPERATOR:**
+> So where are we with all of this.  Explain simply
+**OPERATOR:**
+> Fix the bugs and issues so we can continue enhancing
+**OPERATOR:**
+> you need to give me the tampermonkey link
+**OPERATOR:**
+> reloaded
+**OPERATOR:**
+> the problem is that i wont be able to work. last time we had this problem , you showed the stale data so that i could continue working ..
+**OPERATOR:**
+> i reloaded.
+**OPERATOR:**
+> look at my screen and check yourself
+**OPERATOR:**
+> the alignment is messe up for the candle . and other things are also messed up .. check and look at the screen
+**OPERATOR:**
+> remember to always give me a tampermoneky link with the build.. i reloaded . check everyhing
+**OPERATOR:**
+> the candle is taking up too much horizontal space . here is a sample pic.  the idea is to identify the hod and lod times, how long it took ,  as well as the mud time and distance as well as how much money could have been made.  i'll let you refine this.
+**OPERATOR:**
+> show me3 mockup
+**OPERATOR:**
+> I like  this but add any levels that were swept by the wicks or targetted.  They should be levels around the edges not levels that the maket blew through and kept going. the idea is to identify where the market reversed and then targetted.  do not include ib.. they should be key levels like poc, vah, val, pdh, pdl, onh, onl, cw0, pw0, or any major level.  the level should be close to the candle  especially near the wick.   do you understand
+**OPERATOR:**
+> I like E. proviede build
+**OPERATOR:**
+> complete the open items and then i'll install
+**OPERATOR:**
+> are you sure this is correct because the candle shows the market took out bot the prior day high and the prior day (thrusdays) low.   also place the MUD labels above the open for red bars and below the open for green bars. i also need to know how much money was in the MUD , so place that on the second line below the MUD time.  put the total amount in dollars below the second line of the extremity , so for example, it would be below the LOD  2h48 line.   also the lod labels are too low , bring them slightly closer to the wick same distanc e and the hod 2h09 and the wick
+**OPERATOR:**
+> there is something wrong with the ladder ..  it has no data from friday which it is suppose to show so i can continue working on it and the lables are cutt off
+**OPERATOR:**
+> did you fix so that it will show data from friday . you can select a specific time like 15 min before the close or something like that so that i can continue working.. right now you ahve totally messed up everyghing.. look at the ladder..
+**OPERATOR:**
+> reloaded .. please check
+**OPERATOR:**
+> you need to fix this. see screen .. it is unreadable
+**OPERATOR:**
+> reloaded.  check
+**OPERATOR:**
+> what the hell is the matter with you .  the requirement was to see fridays informaiton because today is saturday  and you just removed everything from the display .. are you an idiiot
+
+### DECISIONS
+
+- **NEVER hide a panel to fix a layout fault.** v15.04 suppressed real Friday data to avoid drawing
+  it badly. Hiding turns a rendering bug into a data-loss bug — the more expensive one.
+- **When a frame is wrong, read the code that BUILDS the frame.** `emRailBounds` was four lines from
+  the symptom for three builds.
+- **Skip an off-scale pile, do not clamp it** — clamping stacks it invisibly at the edge.
+
+
+### SHIPPED
+
+**v15.05** — `emRailBounds` rejects piles >2x from the chart price; the v15.04 hide-guard removed
+(g1-g7). The ladder draws everything that belongs on its rail.
+
+
+### OPEN AT CLOSE
+
+- **Verify on his screen**: the QQQ ladder should DRAW again, showing whatever is on QQQ's own scale.
+- ⚠ **QQQ still has no Friday BOOK** (never recorded; latches from the next RTH). SPY shows Friday's
+  SPXW book frozen 14:59 CT and works now.
+- ⚠ **A QQQ chart being served SPX-scale levels is still the underlying fault** — same root as
+  `KING 7675.84` vs 716.46.
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 
