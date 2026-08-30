@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.96
+// @version    15.00
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.96';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.00';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -20306,11 +20306,13 @@ function ensureV3Css(){
     '#gpts-body .g3dayhd{display:none}'+
     '#gpts-body .g3daylv.nd{color:#b98cff;background:rgba(150,110,255,.14);border:1px solid rgba(150,110,255,.42)}'+
     '#gpts-body .g3dayrow{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}'+
-    '#gpts-body .g3daycdl{flex:0 0 132px}'+
-    '#gpts-body .g3daytbl{flex:1 1 240px;min-width:0}'+
+    '#gpts-body .g3daycdl{flex:0 0 82px}'+
+    '#gpts-body .g3daytbl{flex:1 1 200px;min-width:0}'+
     '#gpts-body .g3cdl{display:block}'+
     '#gpts-body .g3cp{font-size:7.5px;font-weight:800}'+
     '#gpts-body .g3cl{font-size:8px;font-weight:800;fill:#e6edf5}'+
+    '#gpts-body .g3cs{font-size:7.5px;font-weight:700;fill:#8b98a9}'+
+    '#gpts-body .g3cx{font-size:6.5px;font-weight:800}'+
     '#gpts-body .g3cdtk{font-size:7px;font-weight:700;fill:#5b6675}'+
     '#gpts-body .g3gd{color:#2ec27e}'+
     '#gpts-body .g3rd{color:#f0616d}'+
@@ -20949,6 +20951,33 @@ function ifLadder(sym){
               rows:[], src:'IF', ageMin:age, rolled:!!c.rolled,
               nExps:(c.toFri&&c.toFri.exps)?c.toFri.exps.length:null,
               n:W?W.strikes:null, maxPain:W?W.maxPain:(D0?D0.maxPain:null), err:null };
+    // ⚠⚠ (v14.97) THE SCALE IS VERIFIED AGAINST PRICE, NOT ASSUMED FROM theirSpot.
+    // Two builds fixed the wrong thing here. The real fault is UPSTREAM: their payload can return a
+    // spot on one scale and strikes on another — the recorded chain holds {"cr":7735, ..., "ps":765}
+    // in ONE object. `k * (dispPx/theirSpot)` then multiplies a SPY-scale strike by an SPX-derived
+    // ratio and lands at 773.34 beside a 7710.6 price. Every number is individually plausible; only
+    // the DISTANCE between them is absurd, which is why it survived two fixes and four builds.
+    //
+    // So the ladder now CHECKS ITSELF: after scaling, the strike nearest the money must land within
+    // a sane distance of the price the chart is drawing. If the whole ladder is off by ~the futures
+    // ratio, the strike scale disagreed with theirSpot and the ratio is corrected once, for all
+    // rows, and RECORDED in scaleSrc as 'fixed:10x'. ⚠ A correction that cannot be seen is how this
+    // class of bug hides, so it is named on the object and never applied silently.
+    function _sane(){
+      try{
+        if(!(dispPx>0)) return;
+        var probe=null;
+        try{ var W0=(c.toFri&&c.toFri.lv)?c.toFri.lv:((c.dte0&&c.dte0.lv)?c.dte0.lv:null);
+             if(W0){ probe=(typeof W0.mag==='number')?W0.mag:((typeof W0.cr==='number')?W0.cr:null); } }catch(eP){}
+        if(!(probe>0)) return;
+        var got=probe*dispScale, off=Math.abs(got-dispPx)/dispPx;
+        if(off<0.25) return;                       // within a quarter of price: the scale is fine
+        var alt=dispScale*(dispPx/Math.max(1e-9,got));
+        var got2=probe*alt;
+        if(Math.abs(got2-dispPx)/dispPx < 0.25){ dispScale=alt; scaleSrc='fixed:'+ (off>3?'10x':'basis'); }
+      }catch(eS){}
+    }
+    _sane();
     function add(id, k){
       if(k==null) return;
       for(var i=0;i<out.rows.length;i++){
@@ -22615,6 +22644,51 @@ function hlLevelHit(sym, D){
   }catch(e){ out.why=String(e&&e.message||e); return out; }
 }
 
+// ---- (v15.00) THE KING AT A MOMENT, NOT THE KING NOW ------------------------------------------
+// ⚠⚠ THE BUG THIS FIXES WAS INVISIBLE AND TOTAL. `deflKings()` read tapeMap(), which is the CURRENT
+// king — so HodN/LodN compared a 10:00 extreme to the king at 16:00. On the operator's screen both
+// read em-dash every day while PTN found a node, and that asymmetry was the tell: the PT extreme is
+// recent, so the current king is still near it. The feature was answering the wrong question and
+// looking merely like "no data".
+//
+// KINGDAY.moves is a timestamped journey — {k, dir, t} in ms epoch — so the king at any moment
+// today is a lookup, not a guess.
+// ⚠ SPXW HAS NO JOURNEY. loadKingDay() rehydrates SPY and QQQ only. Rather than silently substitute
+// the current SPXW king (the exact error being fixed), SPX is OMITTED when a historical read is
+// asked for, and the hover says so. An absent book is a gap; a present-but-wrong one is a lie.
+function kingAt(sym, ms){
+  try{
+    var kd=kingDay(sym);
+    if(!kd || !kd.moves || !kd.moves.length) return null;
+    if(typeof ms!=='number' || !(ms>0)) return (typeof kd.cur==='number')?kd.cur:null;
+    var k=null;
+    for(var i=0;i<kd.moves.length;i++){
+      var mv=kd.moves[i];
+      if(typeof mv.t!=='number' || mv.t>ms) break;
+      if(typeof mv.k==='number') k=mv.k;
+    }
+    // before the first recorded move, the journey's seed is the best answer available
+    if(k==null && typeof kd.moves[0].k==='number') k=kd.moves[0].k;
+    return k;
+  }catch(e){ return null; }
+}
+
+// The kings as they stood AT `ms`, on the SPY display scale. Same contract as deflKings(), but
+// time-aware — and honest about which books can answer.
+function deflKingsAt(sym, rr, ms){
+  var out=[];
+  try{
+    var ks=kingAt('SPY', ms);
+    if(ks!=null) out.push({ b:'SPY', disp:ks*rr, at:ms });
+    // ⚠ QQQ stays a proportional BEARING, never a conversion — its own king relative to its own
+    // price, carried across. Uses the CURRENT QQQ price because no QQQ price journey is recorded;
+    // flagged `approx` so nothing downstream can mistake it for exact.
+    var kq=kingAt('QQQ', ms), qp=(STATE['QQQ']||{}).price, sp=(STATE[sym]||{}).price;
+    if(kq!=null && qp>0 && sp>0) out.push({ b:'QQQ', disp:(kq/qp)*sp*rr, bearing:true, approx:true, at:ms });
+  }catch(e){}
+  return out;
+}
+
 // ---- (v14.89) HodN / LodN / PTN — THE NODE THE EXTREME TESTED BEFORE REVERSING ----------------
 // Operator, 2026-08-29: "a lodN (lod node) and hodN (hod node) which are nodes that the extreme
 // TESTED BEFORE REVERSING. it usually tests it or even penetrates it a little and then reverses."
@@ -22700,6 +22774,141 @@ function deflNodeAt(extDisp, up, kings, atrDisp){
 // numbers prove it — WICK% 51% is not a ratio, it is where the OPEN sits in the bar, and 51 + 35 +
 // 14 = 100. If those three ever fail to reach 100 the section is lying about something.
 // ⚠ It renders on the LEFT of the stats by his instruction.
+// ---- (v15.00) ONH / ONL AND THE PRIOR-DAY VOLUME PROFILE --------------------------------------
+// Operator's level list: "poc, vah, val, pdh, pdl, onh, onl, cw0, pw0". PDH/PDL/PDC and the walls
+// already existed; these four did not — ONH/ONL had ZERO hits in the file and no profile was
+// computed anywhere. Both come from `futBarsLoad()`, whose rows are [epoch, o, h, l, c, VOLUME] at
+// one minute, already on the ES scale the chart draws.
+//
+// ⚠⚠ THE PROFILE LEVELS SHIP AS A RECORD, NEVER AS A CLAIM, AND THE HOVER MUST SAY SO. Measured
+// over 284 sessions (tools/study-profile.py): a prior POC is tagged 46.6% of the next session
+// against 46.3% for a SHAM level at the same distance; VAL 43.5% against 43.5%. And re-measured
+// 2026-08-30 (tools/study-openloc.py) on his own question — the open's position relative to prior
+// value predicts neither direction (all buckets within 4pp, |z|<1) nor range (46% big-range outside
+// value against 50% expected), and the day's HIGH sat at a profile level 16% of the time against
+// 21% FOR THE SHAM. **Distance explains these levels; the levels explain nothing.** Drawing them is
+// a record of what was sitting there. Any wording that implies they HELD would assert something
+// measured false.
+var PROF_VA = 0.70;      // the share of volume inside the value area — the standard definition
+function futSessionBars(offsetDays){
+  // RTH bars for today (0) or the prior session (1), from the courier's 1-minute ES rows.
+  try{
+    var o=futBarsLoad(); if(!o) return null;
+    var M=o.ES||o[Object.keys(o).filter(function(k){return k.charAt(0)!=='_';})[0]];
+    if(!M || !M.rows || !M.rows.length) return null;
+    var byDay={}, i, r, d;
+    for(i=0;i<M.rows.length;i++){
+      r=M.rows[i]; if(!r || typeof r[0]!=='number') continue;
+      d=new Date((r[0]-5*3600)*1000);                       // CT
+      var key=d.getUTCFullYear()+'-'+(d.getUTCMonth()+1)+'-'+d.getUTCDate();
+      var mins=d.getUTCHours()*60+d.getUTCMinutes();
+      (byDay[key]=byDay[key]||{rth:[],on:[]})[(mins>=510 && mins<=900)?'rth':'on'].push(r);
+    }
+    var keys=Object.keys(byDay).sort();
+    var k=keys[keys.length-1-(offsetDays||0)];
+    return k?byDay[k]:null;
+  }catch(e){ return null; }
+}
+function overnightHL(){
+  // ⚠ the OVERNIGHT that precedes TODAY — the bars outside 08:30-15:00 on today's key.
+  try{
+    var S=futSessionBars(0); if(!S || !S.on.length) return null;
+    var h=-1e18,l=1e18;
+    for(var i=0;i<S.on.length;i++){ if(S.on[i][2]>h) h=S.on[i][2]; if(S.on[i][3]<l) l=S.on[i][3]; }
+    return (h>l)?{ onh:h, onl:l, n:S.on.length }:null;
+  }catch(e){ return null; }
+}
+function priorProfile(){
+  // POC = the busiest price; VA = the PROF_VA band grown around it, one tick at a time, taking the
+  // heavier side. Standard construction, on the PRIOR session's RTH.
+  try{
+    var S=futSessionBars(1); if(!S || S.rth.length<60) return null;
+    var vol={}, tick=1.0, i, k, tot=0;
+    for(i=0;i<S.rth.length;i++){
+      var r=S.rth[i], lo=r[3], hi=r[2], v=(typeof r[5]==='number')?r[5]:1;
+      var n=Math.max(1, Math.round((hi-lo)/tick)+1), share=v/n;
+      for(k=0;k<n;k++){ var px=Math.round((lo+k*tick)/tick)*tick; vol[px]=(vol[px]||0)+share; tot+=share; }
+    }
+    var ks=Object.keys(vol).map(parseFloat).sort(function(a,b){return a-b;});
+    if(!ks.length) return null;
+    var poc=ks[0]; for(i=0;i<ks.length;i++) if(vol[ks[i]]>vol[poc]) poc=ks[i];
+    var pi=ks.indexOf(poc), lo2=pi, hi2=pi, acc=vol[poc];
+    while(acc<PROF_VA*tot && (lo2>0 || hi2<ks.length-1)){
+      var dn=(lo2>0)?vol[ks[lo2-1]]:-1, up=(hi2<ks.length-1)?vol[ks[hi2+1]]:-1;
+      if(up>=dn && hi2<ks.length-1){ hi2++; acc+=vol[ks[hi2]]; }
+      else if(lo2>0){ lo2--; acc+=vol[ks[lo2]]; }
+      else break;
+    }
+    return { poc:poc, val:ks[lo2], vah:ks[hi2] };
+  }catch(e){ return null; }
+}
+
+// ---- (v14.99) REVERSAL LEVELS — what the wicks actually turned on ------------------------------
+// Operator, 2026-08-30: "add any levels that were swept by the wicks or targetted. They should be
+// levels around the edges not levels that the maket blew through and kept going. the idea is to
+// identify where the market reversed and then targetted. do not include ib.. they should be key
+// levels like poc, vah, val, pdh, pdl, onh, onl, cw0, pw0, or any major level."
+//
+// ⚠⚠ THE FILTER IS THE FEATURE. A level that price traded THROUGH is not evidence of anything — it
+// is a line the market ignored. Only a level sitting at an EXTREME can have turned price. So the
+// test is distance to the HIGH or the LOW, and everything mid-range is excluded by construction
+// rather than by a rule that could drift.
+//
+// ⚠ TOLERANCE IS 1 ATR, the same band the deflection geometry settled on against his own circled
+// charts (v14.91). It scales with the session: 0.4pts off a wick counts on a quiet morning and does
+// not on a fast open. A fixed band would do the opposite of what he asked on exactly the days that
+// matter.
+//
+// ⚠ IB AND IB60 ARE EXCLUDED BY NAME, not by threshold — he said so explicitly, and a threshold
+// would let them back in whenever they happened to coincide with a wick.
+// ⚠ ONH/ONL and POC/VAH/VAL are NOT here: the panel has no overnight extremes and computes no
+// volume profile. They are absent rather than approximated. ⚠⚠ And when the profile levels ARE
+// added they must be labelled a RECORD, never a claim: measured over 284 sessions a prior POC is
+// tagged 46.6% of the next session against 46.3% for a SHAM level at the same distance
+// (tools/study-profile.py). Drawing them as reversal evidence would assert something measured false.
+var REVL_ATR = 1.0;      // multiples of ATR: how close a level must sit to an extreme
+var REVL_MAX = 3;        // per side — more than three names will not fit and will not be read
+function revLevels(sym, D){
+  var out={ hi:[], lo:[], ok:false };
+  try{
+    if(!D || !D.ok) return out;
+    var rr=(typeof D.scale==='number' && D.scale>0)?D.scale:1;
+    var tol=atr(sym)*rr*REVL_ATR;
+    if(!(tol>0)) return out;
+    var H=D.hod*rr, L=D.lod*rr, LV=[];
+    function add(px,name){ if(typeof px==='number' && isFinite(px) && px>0) LV.push({px:px,name:name}); }
+    try{ var SL=sessionLevels(sym, rr);
+      // ⚠ pdh/pdl/pdc ONLY — ibH/ibL/ib60H/ib60L are deliberately not read here.
+      if(SL){ add(SL.pdh,'PDH'); add(SL.pdl,'PDL'); add(SL.pdc,'PDC'); }
+    }catch(eS){}
+    // (v15.00) ONH / ONL — his list, and they had zero hits in the file until now.
+    try{ var ON=overnightHL(); if(ON){ add(ON.onh,'ONH'); add(ON.onl,'ONL'); } }catch(eO){}
+    // (v15.00) the prior-day profile. ⚠ A RECORD, NOT A CLAIM — see priorProfile()'s note and the
+    // hover: as reversal markers these measured NO better than a sham at the same distance.
+    try{ var PR=priorProfile(); if(PR){ add(PR.poc,'POC'); add(PR.vah,'VAH'); add(PR.val,'VAL'); } }catch(eR){}
+    try{ var IL=ifLadder(sym);
+      if(IL && !IL.err && IL.rows) IL.rows.forEach(function(r){
+        var ids=String(r.id||'').split('·');
+        if(ids.indexOf('CR0')>=0)      add(r.disp,'CW0');
+        else if(ids.indexOf('PS0')>=0) add(r.disp,'PW0');
+        else if(ids.indexOf('CR')>=0)  add(r.disp,'CW');
+        else if(ids.indexOf('PS')>=0)  add(r.disp,'PW');
+        else if(ids.indexOf('FLIP')>=0)add(r.disp,'FLIP');
+      });
+    }catch(eI){}
+    for(var i=0;i<LV.length;i++){
+      var dH=Math.abs(LV[i].px-H), dL=Math.abs(LV[i].px-L);
+      if(dH<=tol && dH<=dL)      out.hi.push({ name:LV[i].name, px:LV[i].px, d:dH });
+      else if(dL<=tol)           out.lo.push({ name:LV[i].name, px:LV[i].px, d:dL });
+    }
+    function near(a,b){ return a.d-b.d; }
+    out.hi.sort(near); out.lo.sort(near);
+    out.hi=out.hi.slice(0,REVL_MAX); out.lo=out.lo.slice(0,REVL_MAX);
+    out.tol=tol; out.ok=true;
+    return out;
+  }catch(e){ return out; }
+}
+
 function dayCandleSvg(sym, D, PTL){
   try{
     if(!D || !D.ok || D.open==null) return '';
@@ -22708,45 +22917,78 @@ function dayCandleSvg(sym, D, PTL){
     var A=gdActual(sym); var C=(A&&A.now!=null)?A.now*rr:null;
     var rng=H-L;
     if(!(rng>0) || C==null) return '';
-    var TOP=14, HGT=176, W=150;
+    // ⚠ (v14.98) THE MONEY. "how much money could have been made" — the full HOD-to-LOD move. It
+    // reads em-dash when the panel is on the cash scale, so it is derived here from the futures
+    // ratio rather than left blank: a figure that can be computed must be.
+    var usd=null;
+    try{
+      if(typeof D.rngUsd==='number' && D.rngUsd>0) usd=D.rngUsd;
+      else { var dr=displayScale(sym); if(dr && dr.scale>1) usd=(D.hod-D.lod)*dr.scale*ES_USD_PER_PT; }
+    }catch(eU){}
+    // ⚠⚠ NARROW BY INSTRUCTION — "the candle is taking up too much horizontal space". His sketch
+    // stacks the annotations ABOVE and BELOW the bar instead of beside it, which is what makes it
+    // fit: the width is the BAR, not the labels. The three shape percentages and the side legend
+    // are gone with it; the body carries MUD and the money, as he drew.
+    var W=80, TOP=30, HGT=140;
     function y(px){ return TOP + (H-px)/rng*HGT; }
-    var up=H-Math.max(O,C), body=Math.abs(O-C), dn=Math.min(O,C)-L;
-    var pu=Math.round(100*up/rng), pb=Math.round(100*body/rng), pd=Math.round(100*dn/rng);
-    var green=(C>O);
-    var bodyTop=y(Math.max(O,C)), bodyH=Math.max(1.5, Math.abs(y(O)-y(C)));
-    var col=green?'#2ec27e':'#f0616d';
-    var h='<svg class="g3cdl" viewBox="0 0 '+W+' 214" width="'+W+'" height="214">';
-    // the three segments, as bars down the left — the sum check made visible
-    h+='<rect x="6" y="'+y(H).toFixed(1)+'" width="4" height="'+Math.max(0,(bodyTop-y(H))).toFixed(1)+'" fill="#e3b341" opacity=".30"/>';
-    h+='<rect x="6" y="'+bodyTop.toFixed(1)+'" width="4" height="'+bodyH.toFixed(1)+'" fill="'+col+'" opacity=".34"/>';
-    h+='<rect x="6" y="'+(bodyTop+bodyH).toFixed(1)+'" width="4" height="'+Math.max(0,(y(L)-bodyTop-bodyH)).toFixed(1)+'" fill="#5fd08a" opacity=".30"/>';
-    h+='<text x="4" y="'+((y(H)+bodyTop)/2+3).toFixed(1)+'" class="g3cp" fill="#e3b341" text-anchor="end">'+pu+'%</text>';
-    h+='<text x="4" y="'+(bodyTop+bodyH/2+3).toFixed(1)+'" class="g3cp" fill="'+col+'" text-anchor="end">'+pb+'%</text>';
-    h+='<text x="4" y="'+((bodyTop+bodyH+y(L))/2+3).toFixed(1)+'" class="g3cp" fill="#5fd08a" text-anchor="end">'+pd+'%</text>';
-    // the candle
-    h+='<line x1="38" y1="'+y(H).toFixed(1)+'" x2="38" y2="'+y(L).toFixed(1)+'" stroke="#8b98a9" stroke-width="1.5"/>';
-    h+='<rect x="30" y="'+bodyTop.toFixed(1)+'" width="16" height="'+bodyH.toFixed(1)+'" fill="'+col+'" fill-opacity=".55" stroke="'+col+'" stroke-width="1"/>';
-    h+='<line x1="20" y1="'+y(O).toFixed(1)+'" x2="30" y2="'+y(O).toFixed(1)+'" stroke="#e6edf5" stroke-width="2"/>';
-    h+='<line x1="46" y1="'+y(C).toFixed(1)+'" x2="56" y2="'+y(C).toFixed(1)+'" stroke="#e6edf5" stroke-width="2"/>';
-    // the PT retrace, if there is one
+    var green=(C>O), col=green?'#2ec27e':'#f0616d', cx=48;   // (v14.99) the bar sits right of the spine
+    var bodyTop=y(Math.max(O,C)), bodyH=Math.max(3, Math.abs(y(O)-y(C)));
+    var firstUp=(D.first==='HOD');
+    // the leg that FOLLOWS each extreme, which is what his sketch annotates
+    var afterHod = firstUp ? D.gap : ((PTL&&PTL.ok&&PTL.lcMin!=null)?PTL.lcMin:null);
+    var afterLod = firstUp ? ((PTL&&PTL.ok&&PTL.lcMin!=null)?PTL.lcMin:null) : D.gap;
+    var h='<svg class="g3cdl" viewBox="0 0 '+W+' 216" width="'+W+'" height="216">';
+    // ⚠ (v14.99) THE SHAPE SPINE — upper wick / body / lower wick as % of range, and they SUM TO
+    // 100. It is the only figure on the candle that proves the decomposition is honest, and it was
+    // dropped at v14.98 when the width came down. A 3px column gives it back for almost nothing.
+    var _up=H-Math.max(O,C), _bd=Math.abs(O-C), _dn=Math.min(O,C)-L;
+    var _pu=Math.round(100*_up/rng), _pb=Math.round(100*_bd/rng), _pd=Math.round(100*_dn/rng);
+    h+='<rect x="4" y="'+y(H).toFixed(1)+'" width="3" height="'+Math.max(0,(bodyTop-y(H))).toFixed(1)+'" fill="#e3b341" opacity=".55"/>';
+    h+='<rect x="4" y="'+bodyTop.toFixed(1)+'" width="3" height="'+bodyH.toFixed(1)+'" fill="'+col+'" opacity=".6"/>';
+    h+='<rect x="4" y="'+(bodyTop+bodyH).toFixed(1)+'" width="3" height="'+Math.max(0,(y(L)-bodyTop-bodyH)).toFixed(1)+'" fill="#5fd08a" opacity=".55"/>';
+    h+='<text x="10" y="'+((y(H)+bodyTop)/2+2).toFixed(1)+'" class="g3cx" fill="#e3b341">'+_pu+'%</text>';
+    h+='<text x="10" y="'+(bodyTop+bodyH/2+2).toFixed(1)+'" class="g3cx" fill="'+col+'">'+_pb+'%</text>';
+    h+='<text x="10" y="'+((bodyTop+bodyH+y(L))/2+2).toFixed(1)+'" class="g3cx" fill="#5fd08a">'+_pd+'%</text>';
+    // HOD above
+    h+='<text x="'+cx+'" y="10" class="g3cl" text-anchor="middle">HOD '+hlClock(D.hodT)+'</text>';
+    if(afterHod!=null) h+='<text x="'+cx+'" y="21" class="g3cs" text-anchor="middle">'+hlDur(afterHod)+'</text>';
+    // the bar
+    h+='<line x1="'+cx+'" y1="'+y(H).toFixed(1)+'" x2="'+cx+'" y2="'+y(L).toFixed(1)+'" stroke="#8b98a9" stroke-width="1.4"/>';
+    h+='<rect x="'+(cx-11)+'" y="'+bodyTop.toFixed(1)+'" width="22" height="'+bodyH.toFixed(1)+'" fill="'+col+'" fill-opacity=".16" stroke="'+col+'" stroke-width="1.2"/>';
+    h+='<line x1="'+(cx-16)+'" y1="'+y(O).toFixed(1)+'" x2="'+(cx-11)+'" y2="'+y(O).toFixed(1)+'" stroke="#e6edf5" stroke-width="1.6"/>';
+    h+='<line x1="'+(cx+11)+'" y1="'+y(C).toFixed(1)+'" x2="'+(cx+16)+'" y2="'+y(C).toFixed(1)+'" stroke="#e6edf5" stroke-width="1.6"/>';
     if(PTL && PTL.ok && PTL.ptPx!=null){
       var pt=PTL.ptPx*rr;
-      if(pt>=L && pt<=H) h+='<line x1="30" y1="'+y(pt).toFixed(1)+'" x2="46" y2="'+y(pt).toFixed(1)+'" stroke="#b98cff" stroke-width="1.3" stroke-dasharray="3 2"/>';
+      if(pt>=L && pt<=H) h+='<line x1="'+(cx-11)+'" y1="'+y(pt).toFixed(1)+'" x2="'+(cx+11)+'" y2="'+y(pt).toFixed(1)+'" stroke="#b98cff" stroke-width="1.2" stroke-dasharray="3 2"/>';
     }
-    var firstUp=(D.first==='HOD');
-    h+='<text x="62" y="'+(y(H)+3).toFixed(1)+'" class="g3cl">H <tspan fill="#e3b341">'+hlClock(firstUp?D.hodT:D.hodT)+'</tspan></text>';
-    h+='<text x="62" y="'+(y(O)+3).toFixed(1)+'" class="g3cl" fill="#9aa7b6">O</text>';
-    h+='<text x="62" y="'+(y(C)+3).toFixed(1)+'" class="g3cl">C <tspan fill="#5b6675">now</tspan></text>';
-    h+='<text x="62" y="'+(y(L)+3).toFixed(1)+'" class="g3cl">L <tspan fill="#5fd08a">'+hlClock(D.lodT)+'</tspan></text>';
-    // the construction track: WHEN the two extremes printed
-    var t0=mul(8,3600)+mul(30,60), t1=mul(15,3600), X0=8, X1=W-10;
-    function x(sec){ return X0 + Math.max(0,Math.min(1,(sec-t0)/(t1-t0)))*(X1-X0); }
-    h+='<line x1="'+X0+'" y1="196" x2="'+X1+'" y2="196" stroke="#2b3644" stroke-width="1.3"/>';
-    h+='<circle cx="'+x(D.hodT).toFixed(1)+'" cy="196" r="2.8" fill="#e3b341"/>';
-    h+='<circle cx="'+x(D.lodT).toFixed(1)+'" cy="196" r="2.8" fill="#5fd08a"/>';
-    h+='<circle cx="'+x(D.clock).toFixed(1)+'" cy="196" r="2.2" fill="#fff"/>';
-    h+='<text x="'+X0+'" y="209" class="g3cdtk">8:30</text>';
-    h+='<text x="'+X1+'" y="209" class="g3cdtk" text-anchor="end">15:00</text>';
+    // MUD and the money, inside the body when it is tall enough — his sketch puts them there
+    var mid=bodyTop+bodyH/2, inside=(bodyH>=30);
+    var ty=inside?(mid-4):(y(L)+0);
+    if(D.mud!=null) h+='<text x="'+cx+'" y="'+ty.toFixed(1)+'" class="g3cs" text-anchor="middle" fill="#c9d4e2">MUD '+hlDur(D.mud)+'</text>';
+    if(usd!=null)   h+='<text x="'+cx+'" y="'+(ty+10).toFixed(1)+'" class="g3cs" text-anchor="middle" fill="#e3b341">$'+Math.round(usd).toLocaleString()+'</text>';
+    // ⚠⚠ (v14.99) THE REVERSAL LEVELS. Names only, stacked at the wick TIP they belong to — his
+    // choice of option E over the 104px version with tick lines. Position implies the price; the
+    // hover carries the number, because dropping it from the face must not make it unreachable.
+    try{
+      var RV=revLevels(sym, D);
+      if(RV && RV.ok){
+        var hy=y(H)+3, ri, rj;
+        for(ri=0; ri<RV.hi.length; ri++){
+          h+='<text x="'+(cx+14)+'" y="'+(hy+ri*8).toFixed(1)+'" class="g3cx" fill="#e3b341"><title>'+
+             g3esc(RV.hi[ri].name+' '+frameNum(RV.hi[ri].px)+' \u2014 within 1 ATR of the HIGH, so the wick reversed ON it')+
+             '</title>'+g3esc(RV.hi[ri].name)+'</text>';
+        }
+        var ly=y(L)-3-((RV.lo.length-1)*8);
+        for(rj=0; rj<RV.lo.length; rj++){
+          h+='<text x="'+(cx+14)+'" y="'+(ly+rj*8).toFixed(1)+'" class="g3cx" fill="#5fd08a"><title>'+
+             g3esc(RV.lo[rj].name+' '+frameNum(RV.lo[rj].px)+' \u2014 within 1 ATR of the LOW, so the wick reversed ON it')+
+             '</title>'+g3esc(RV.lo[rj].name)+'</text>';
+        }
+      }
+    }catch(eRV){}
+    // LOD below
+    h+='<text x="'+cx+'" y="'+(TOP+HGT+22)+'" class="g3cl" text-anchor="middle">LOD '+hlClock(D.lodT)+'</text>';
+    if(afterLod!=null) h+='<text x="'+cx+'" y="'+(TOP+HGT+33)+'" class="g3cs" text-anchor="middle">'+hlDur(afterLod)+'</text>';
     h+='</svg>';
     return h;
   }catch(e){ swallow('dayCandle', e); return ''; }
@@ -22843,16 +23085,23 @@ function hlNodeAt(sym, D, PTL){
   try{
     if(!D || !D.ok){ out.why=(D&&D.why)||'no session read'; return out; }
     var rr=(typeof D.scale==='number' && D.scale>0)?D.scale:1;
-    var kings=deflKings(sym, rr);
-    if(!kings.length){ out.why='no king available in any book'; return out; }
     var aD=atr(sym)*rr;
     if(!(aD>0)){ out.why='no ATR'; return out; }
-    out.atr=aD; out.kings=kings.length;
+    out.atr=aD;
+    // ⚠⚠ (v15.00) EACH EXTREME IS COMPARED TO THE KING AS IT STOOD WHEN THAT EXTREME PRINTED.
+    // Reading the CURRENT king made HodN/LodN structurally impossible to satisfy — a 10:00 high
+    // was being measured against a 16:00 king — while PTN worked, because the PT extreme is recent.
     var firstUp=(D.first==='HOD');
-    out.first=deflNodeAt((firstUp?D.hod:D.lod)*rr, firstUp, kings, aD);
+    var firstMs=firstUp?D.hodMs:D.lodMs, secMs=firstUp?D.lodMs:D.hodMs;
+    var kFirst=deflKingsAt(sym, rr, firstMs);
+    if(!kFirst.length) kFirst=deflKings(sym, rr);          // no journey yet: today's only answer
+    out.kings=kFirst.length;
+    if(!kFirst.length){ out.why='no king available in any book'; return out; }
+    out.first=deflNodeAt((firstUp?D.hod:D.lod)*rr, firstUp, kFirst, aD);
     if(D.secondT!=null && D.secondT<=D.clock){
       var secUp=(D.second==='HOD');
-      out.second=deflNodeAt((secUp?D.hod:D.lod)*rr, secUp, kings, aD);
+      var kSec=deflKingsAt(sym, rr, secMs); if(!kSec.length) kSec=deflKings(sym, rr);
+      out.second=deflNodeAt((secUp?D.hod:D.lod)*rr, secUp, kSec, aD);
     }
     // the PT leg's own extreme — the furthest point back before the close
     if(PTL && PTL.ok && PTL.ptPx!=null){
@@ -22872,12 +23121,13 @@ function hodLod(sym){
     if(!cs.length){ out.why='no candles'; return out; }
     var openSec=mul(8,3600)+mul(30,60);
     var hi=null,lo=null,hiT=null,loT=null,op=null,opSo=1e9,lastT=null,n=0;
+    var hiMs=null, loMs=null;   // (v15.00) the extremes' WALL-CLOCK time — KINGDAY.moves are ms epoch
     for(var i=0;i<cs.length;i++){ var b=cs[i];
       if(!b || typeof b.so!=='number' || b.so<openSec) continue;
       n++;
       if(b.so<opSo && b.o!=null){ opSo=b.so; op=b.o; }
-      if(b.h!=null && (hi==null||b.h>hi)){ hi=b.h; hiT=b.so; }
-      if(b.l!=null && (lo==null||b.l<lo)){ lo=b.l; loT=b.so; }
+      if(b.h!=null && (hi==null||b.h>hi)){ hi=b.h; hiT=b.so; hiMs=b.t; }
+      if(b.l!=null && (lo==null||b.l<lo)){ lo=b.l; loT=b.so; loMs=b.t; }
       lastT=b.so;
     }
     if(hi==null||lo==null||!n){ out.why='no RTH bars yet'; return out; }
@@ -22897,7 +23147,7 @@ function hodLod(sym){
     var clock=(inReplay()||showingStaleBook())?lastT:Math.max(lastT, Math.min(nowSec, mul(15,3600)));
     var firstLow=(loT<hiT);
     out.ok=true; out.bars=n; out.open=op; out.clock=clock;
-    out.hod=hi; out.lod=lo; out.hodT=hiT; out.lodT=loT;
+    out.hod=hi; out.lod=lo; out.hodT=hiT; out.lodT=loT; out.hodMs=hiMs; out.lodMs=loMs;
     out.first=firstLow?'LOD':'HOD'; out.firstT=firstLow?loT:hiT;
     out.second=firstLow?'HOD':'LOD'; out.secondT=firstLow?hiT:loT;
     out.took=Math.max(0,(out.firstT-openSec)/60);

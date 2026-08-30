@@ -131,6 +131,88 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.00 · 2026-08-30 · **AN ASYMMETRY BETWEEN THREE FIELDS WAS THE WHOLE DIAGNOSIS**
+
+HodN and LodN read em-dash every day; PTN found a node. I noted that as two separate observations
+for two builds before seeing it was ONE fact: `deflKings()` reads the CURRENT king, and the PT
+extreme is the only one recent enough for the current king to still be near it. **A 10:00 high was
+being measured against a 16:00 king.**
+
+⚠⚠ **THE FEATURE FAILED IN THE SHAPE OF ITS OWN "NO DATA" STATE**, which is why it survived four
+builds. Em-dash is a legitimate reading — no king within tolerance — so nothing looked wrong.
+**When a field CAN legitimately be empty, empty is not evidence that it works; you need a case where
+it MUST be non-empty.** PTN was that case sitting in plain sight.
+
+⚠ THE FIX OMITS SPX RATHER THAN SUBSTITUTING. Only SPY and QQQ have journeys. Filling SPX with its
+CURRENT king would have been the precise error being fixed, one field over. **When a fix has a gap,
+leave the gap visible — do not patch it with the thing that caused the bug.**
+
+⚠ AND A WEAK MUTATION LOOKED LIKE A FAKE ASSERTION. Replacing the FIRST "46.6%" left two more in the
+file, so p1 stayed green and I nearly recorded it as a bad test. It was a bad MUTATION — the
+assertion is "this evidence exists somewhere", and only removing every instance tests it. Fourth
+mutation-technique error this session, all the same shape: **mutating something narrower than the
+assertion covers.**
+
+### v14.99 · 2026-08-30 · **THE EXCLUSION HE ASKED FOR FELL OUT OF THE INCLUSION RULE**
+
+"levels around the edges not levels that the maket blew through and kept going." My first instinct
+was two rules — one to admit edge levels, one to reject traded-through ones. **A level price traded
+through is mid-range, and therefore near NEITHER extreme.** One rule does both, and the second rule
+would have been a threshold that could drift out of agreement with the first.
+
+⚠ IB IS EXCLUDED **BY NAME**, NOT BY THRESHOLD. He said "do not include ib". A distance test would
+let it back in on any day the initial balance happened to sit on a wick — which is common. When an
+exclusion is categorical, encode it categorically.
+
+⚠ I DROPPED THE SHAPE SPINE AT v14.98 CHASING WIDTH, AND IT WAS THE WRONG THING TO CUT. The
+wick/body/wick percentages are the only figure on the candle that SUMS TO 100 — the check that the
+whole daily-bar decomposition is honest. It costs 3px. **When trimming for space, rank by evidence
+carried per pixel, not by what is easiest to remove.**
+
+⚠ TWO MUTATIONS SURVIVED BECAUSE I DELETED ONE LINE OF A THREE-LINE EMIT. The remaining lines still
+matched. **A deletion mutation must remove the whole construct** — loop, statement, block — or it
+tests nothing. Third mutation-technique error this session; the pattern is mutating something
+NARROWER than the assertion covers.
+
+### v14.98 · 2026-08-30 · **HIS SKETCH CARRIED THE LAYOUT PRINCIPLE, NOT JUST THE CONTENT**
+
+"the candle is taking up too much horizontal space" — with a drawing. The drawing was not a list of
+fields; it was the fix. **Stacking the annotations above and below the bar is what makes it narrow**,
+because the width becomes the BAR rather than the labels. I had put labels in a right-hand column
+and three percentage bars in a left-hand one, which is why it needed 150px.
+
+⚠ AND THE SKETCH RESOLVED AN AMBIGUITY I WOULD HAVE GUESSED WRONG. His "2h 9m" under the HOD is not
+TOOK — 08:30 to 10:03 is 1h33. It is 10:03 -> 12:12, the leg that FOLLOWS the extreme. Checking his
+two numbers against the live panel (HL GAP 2h09, LC GAP 2h48) settled it in one step. **When a
+sketch carries numbers, arithmetic against real data tells you what they mean.**
+
+⚠ FOUR MUTATIONS SURVIVED AT FIRST because I mutated CONDITIONS (`if(x)` -> `if(false)`) while the
+emitted text stayed matchable. **A condition mutation does not test a presence assertion; deletion
+does.** Re-run by DELETING each line, three then died — and the fourth (n48) matched a variable
+DECLARATION rather than its emitter. A value computed and never drawn is not a feature.
+
+### v14.97 · 2026-08-30 · **I FIXED THE CONSUMERS TWICE WHEN THE SOURCE WAS WRONG**
+
+v14.93 made two call sites agree on a scale. v14.94 gave them one function. His screen did not
+change, because the fault was never between consumers: **their payload returns a spot on one scale
+and strikes on another** — `{"cr":7735, ..., "ps":765}` in one object.
+
+⚠⚠ **CONSISTENCY BETWEEN CONSUMERS CANNOT REPAIR AN INCONSISTENT SOURCE.** Both my fixes were
+correct improvements and neither touched the bug. **When a fix does not move the symptom, the model
+of the fault is wrong — stop refining the fix and re-derive the fault.** I refined twice.
+
+⚠⚠ **AND I ONLY FOUND IT BY READING HIS LIVE PANEL.** The values that settled it — pill 7710.6,
+T 773.34, stored SPXW king 769.849, ratio 10.0387 — are not derivable from source. Four builds of
+reasoning about code lost to one look at the running thing.
+
+⚠ THE FIX IS A SELF-CHECK, NOT A CONVERSION. A level near the money must land near the price the
+chart draws; if the ladder is off by ~the futures ratio it is corrected once and NAMED `fixed:10x`.
+**A silent correction would have re-hidden the same class of bug.**
+
+⚠ AND s16 CAUGHT NOTHING AT FIRST: it asserted `function _sane()` EXISTS, so deleting the CALL left
+it green. Second "declared but never invoked" gap this session (after "assigned but not returned").
+**Assert the invocation, not the declaration.**
+
 ### v14.96 · 2026-08-30 · **A TEST THAT PASSED WHILE THE SCREEN WAS VISIBLY BROKEN**
 
 He said "the alignment is messe up". The ⓪a section was THREE separate `display:table` divs, and a

@@ -59,7 +59,7 @@ ok(/dispIsFut\(\)\?dispR\(\):1/.test(EB), 's7 emBand still scales by dispR() —
 const CLEAN=src.replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
 ok(!/sessionLevels\(sym,\s*\(EB&&typeof EB\.scaleUsed==='number'\)\?EB\.scaleUsed:1\)/.test(CLEAN),
    's10 session levels no longer fall back to the CASH scale');
-// ⚠⚠ (v14.96) s11/s12 ORIGINALLY ASSERTED THAT SESSION LEVELS *DECLINE* WITHOUT A SCALE. That
+// ⚠⚠ (v15.00) s11/s12 ORIGINALLY ASSERTED THAT SESSION LEVELS *DECLINE* WITHOUT A SCALE. That
 // shipped, and it cost the operator his after-hours levels: "i wont be able to work". Declining is
 // right for a number that would be WRONG; it is wrong for a scale that can be DERIVED. The ratio is
 // a persisted EMA and survives the close. The assertions now pin the DERIVE behaviour.
@@ -71,6 +71,28 @@ const DS=grab('displayScale').replace(/\/\/[^\n]*/g,'');
 ok(/dispIsFut\(\)/.test(DS) && /dispR\(\)/.test(DS), 's13 displayScale reads the same switch and ratio as emBand');
 ok(/'fut:live'/.test(DS) && /'fut:ratio'/.test(DS) && /src:'cash'/.test(DS), 's14 ...and names all three states');
 ok(!/return null/.test(DS), 's15 ...and NEVER returns nothing — a derivable scale is always derived');
+
+// ---- (v15.00) THE LADDER MUST VERIFY ITS OWN SCALE AGAINST PRICE --------------------------
+// ⚠⚠ Two builds "fixed" this by making call sites agree, and the operator's screen stayed broken,
+// because the fault is UPSTREAM: their payload can carry a spot on one scale and strikes on
+// another. No amount of consistency between consumers repairs an inconsistent SOURCE.
+// ⚠ DEFINED IS NOT CALLED. Deleting the `_sane();` invocation left the function declared and s16
+// green — the same shape as "assigned but not returned" earlier this session. Assert the CALL.
+ok(/function _sane\(\)/.test(LAD), 's16 the ladder defines a scale sanity check');
+ok(/\n\s*_sane\(\);/.test(LAD), 's16b ...and actually CALLS it before building the rows');
+ok(/off<0\.25/.test(LAD), 's17 ...a level near the money must land near the price it is drawn against');
+ok(/scaleSrc='fixed:'/.test(LAD), 's18 ...and a correction is NAMED, never applied silently');
+(function(){
+  // the real numbers off his screen, 2026-08-30
+  const dispPx=7723.2, theirSpot=7711.0, strike=772.0;
+  let scale=dispPx/theirSpot;                 // 1.0016 — the broken state
+  const got=strike*scale;
+  ok(Math.abs(got-773.34)<1.5, 's19 the broken path reproduces his T: 773.34', +got.toFixed(2));
+  const off=Math.abs(got-dispPx)/dispPx;
+  ok(off>0.25, 's20 ...and it is 90% away from price, which the sanity check catches', +off.toFixed(2));
+  const alt=scale*(dispPx/got), fixed=strike*alt;
+  ok(Math.abs(fixed-dispPx)/dispPx < 0.25, 's21 ...and the correction lands it beside price', +fixed.toFixed(1));
+})();
 
 console.log('test_scaleagree: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

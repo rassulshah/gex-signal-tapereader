@@ -1,0 +1,110 @@
+<meta charset="utf-8"><title>⓪a candle — three narrow options</title>
+<style>
+ body{background:#0d1117;color:#c9d4e2;font:12px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:20px 22px 44px}
+ h2{font-size:11px;letter-spacing:.11em;color:#8b98a9;text-transform:uppercase;margin:0 0 14px;font-weight:800}
+ .row{display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap}
+ .opt{background:#11161d;border:1px solid #1e2733;border-radius:6px;padding:12px 14px}
+ .opt h3{font-size:10px;color:#e6edf5;margin:0 0 2px;font-weight:800}
+ .w{font-size:8.5px;color:#6b7787;margin:0 0 10px}
+ .pair{display:flex;gap:10px;align-items:flex-start}
+ .tbl{font-size:8px;color:#4b5563;line-height:1.9;padding-top:26px;white-space:nowrap}
+ p{color:#9aa7b6;font-size:11px;max-width:900px;margin:8px 0}
+ .why{border-left:2px solid #2b3644;padding-left:11px;margin:16px 0 0}
+ b.g{color:#5fd08a}b.a{color:#e3b341}
+ text{font-family:-apple-system,Segoe UI,Roboto,sans-serif}
+</style>
+<h2>the narrow candle — same data, three ways</h2>
+<p style="margin-top:-6px">HOD 10:00 · LOD 12:09 · HL GAP 2h09 · LC GAP 2h48 · MUD 1h18 · range 7.0pts = $350</p>
+
+<div class="row">
+
+ <!-- ============ A : as shipped in v14.98 ============ -->
+ <div class="opt">
+  <h3>A — as shipped (v14.98)</h3>
+  <div class="w">76px · labels stacked, MUD + $ inside the body</div>
+  <div class="pair">
+  <svg width="76" height="216" viewBox="0 0 76 216">
+   <text x="38" y="10" font-size="8" font-weight="800" fill="#e6edf5" text-anchor="middle">HOD 10:00</text>
+   <text x="38" y="21" font-size="7.5" font-weight="700" fill="#8b98a9" text-anchor="middle">2h09</text>
+   <line x1="38" y1="30" x2="38" y2="170" stroke="#8b98a9" stroke-width="1.4"/>
+   <rect x="22" y="60" width="32" height="49" fill="#f0616d" fill-opacity=".16" stroke="#f0616d" stroke-width="1.2"/>
+   <line x1="16" y1="60" x2="22" y2="60" stroke="#e6edf5" stroke-width="1.6"/>
+   <line x1="54" y1="109" x2="60" y2="109" stroke="#e6edf5" stroke-width="1.6"/>
+   <line x1="22" y1="97" x2="54" y2="97" stroke="#b98cff" stroke-width="1.2" stroke-dasharray="3 2"/>
+   <text x="38" y="81" font-size="7.5" font-weight="700" fill="#c9d4e2" text-anchor="middle">MUD 1h18</text>
+   <text x="38" y="91" font-size="7.5" font-weight="700" fill="#e3b341" text-anchor="middle">$350</text>
+   <text x="38" y="192" font-size="8" font-weight="800" fill="#e6edf5" text-anchor="middle">LOD 12:09</text>
+   <text x="38" y="203" font-size="7.5" font-weight="700" fill="#8b98a9" text-anchor="middle">2h48</text>
+  </svg>
+  <div class="tbl">1ST │ SLvl │ HodN<br>2ND │ TLvl │ LodN<br>DAY │ &nbsp;&nbsp;&nbsp; │ PTN</div>
+  </div>
+ </div>
+
+ <!-- ============ B : tighter still ============ -->
+ <div class="opt">
+  <h3>B — tighter</h3>
+  <div class="w">58px · money under the LOD, body carries MUD alone</div>
+  <div class="pair">
+  <svg width="58" height="216" viewBox="0 0 58 216">
+   <text x="29" y="10" font-size="8" font-weight="800" fill="#e6edf5" text-anchor="middle">10:00</text>
+   <text x="29" y="20" font-size="7" font-weight="700" fill="#8b98a9" text-anchor="middle">▲ 2h09</text>
+   <line x1="29" y1="30" x2="29" y2="170" stroke="#8b98a9" stroke-width="1.4"/>
+   <rect x="18" y="60" width="22" height="49" fill="#f0616d" fill-opacity=".16" stroke="#f0616d" stroke-width="1.2"/>
+   <line x1="13" y1="60" x2="18" y2="60" stroke="#e6edf5" stroke-width="1.6"/>
+   <line x1="40" y1="109" x2="45" y2="109" stroke="#e6edf5" stroke-width="1.6"/>
+   <line x1="18" y1="97" x2="40" y2="97" stroke="#b98cff" stroke-width="1.2" stroke-dasharray="3 2"/>
+   <text x="29" y="88" font-size="7" font-weight="800" fill="#c9d4e2" text-anchor="middle">1h18</text>
+   <text x="29" y="192" font-size="8" font-weight="800" fill="#e6edf5" text-anchor="middle">12:09</text>
+   <text x="29" y="202" font-size="7" font-weight="700" fill="#8b98a9" text-anchor="middle">▼ 2h48</text>
+   <text x="29" y="213" font-size="7.5" font-weight="800" fill="#e3b341" text-anchor="middle">$350</text>
+  </svg>
+  <div class="tbl">1ST │ SLvl │ HodN<br>2ND │ TLvl │ LodN<br>DAY │ &nbsp;&nbsp;&nbsp; │ PTN</div>
+  </div>
+ </div>
+
+ <!-- ============ C : shape kept, as a hairline ============ -->
+ <div class="opt">
+  <h3>C — the shape survives</h3>
+  <div class="w">72px · a 3px spine keeps wick/body/wick %</div>
+  <div class="pair">
+  <svg width="72" height="216" viewBox="0 0 72 216">
+   <text x="40" y="10" font-size="8" font-weight="800" fill="#e6edf5" text-anchor="middle">HOD 10:00</text>
+   <text x="40" y="21" font-size="7.5" font-weight="700" fill="#8b98a9" text-anchor="middle">2h09</text>
+   <rect x="4" y="30" width="3" height="30" fill="#e3b341" opacity=".55"/>
+   <rect x="4" y="60" width="3" height="49" fill="#f0616d" opacity=".6"/>
+   <rect x="4" y="109" width="3" height="61" fill="#5fd08a" opacity=".55"/>
+   <text x="12" y="47" font-size="6.5" font-weight="800" fill="#e3b341">21%</text>
+   <text x="12" y="88" font-size="6.5" font-weight="800" fill="#f0616d">35%</text>
+   <text x="12" y="143" font-size="6.5" font-weight="800" fill="#5fd08a">44%</text>
+   <line x1="44" y1="30" x2="44" y2="170" stroke="#8b98a9" stroke-width="1.4"/>
+   <rect x="33" y="60" width="22" height="49" fill="#f0616d" fill-opacity=".16" stroke="#f0616d" stroke-width="1.2"/>
+   <line x1="28" y1="60" x2="33" y2="60" stroke="#e6edf5" stroke-width="1.6"/>
+   <line x1="55" y1="109" x2="60" y2="109" stroke="#e6edf5" stroke-width="1.6"/>
+   <line x1="33" y1="97" x2="55" y2="97" stroke="#b98cff" stroke-width="1.2" stroke-dasharray="3 2"/>
+   <text x="44" y="88" font-size="7" font-weight="800" fill="#c9d4e2" text-anchor="middle">1h18</text>
+   <text x="40" y="192" font-size="8" font-weight="800" fill="#e6edf5" text-anchor="middle">LOD 12:09</text>
+   <text x="40" y="203" font-size="7.5" font-weight="700" fill="#8b98a9" text-anchor="middle">2h48 · <tspan fill="#e3b341">$350</tspan></text>
+  </svg>
+  <div class="tbl">1ST │ SLvl │ HodN<br>2ND │ TLvl │ LodN<br>DAY │ &nbsp;&nbsp;&nbsp; │ PTN</div>
+  </div>
+ </div>
+
+</div>
+
+<div class="why">
+<p><b>All three are drawn at true size</b> against your 560px panel, with the first three table
+columns beside them so you can see what the table actually loses.</p>
+<p><b class="g">A</b> is what shipped — 76px. Both durations labelled, MUD and the money in the body.
+Most readable, widest.</p>
+<p><b class="g">B</b> is 58px — <b>18px narrower</b>, bought by dropping the HOD/LOD words (the ▲▼
+carry it) and moving the money below the bar. The body only holds MUD.</p>
+<p><b class="g">C</b> keeps the <b>wick / body / wick percentages</b> as a 3px spine — the one thing
+A and B threw away, and the only number on the candle that <i>sums to 100%</i> and so proves the
+decomposition is honest. 72px, because the spine costs 14px and the labels give it back.</p>
+<p><b class="a">My recommendation is C.</b> The shape fractions are the only part of the picture that
+says what KIND of day it was — 21/35/44 is a long lower wick and a down body, readable at a glance
+in a way no row of durations is. B saves 14px over it and loses that.</p>
+<p>⚠ One honest note on the money: <b>$350</b>, not the $1,000 in your sketch. 7.0pts x $50 per ES
+point. If you meant something else by "how much money could have been made" — a contract count, or
+the PT leg rather than the full range — say which and I will change the arithmetic, not the label.</p>
+</div>

@@ -85,7 +85,7 @@ ok(/t=\+?'\+DEFL_META\.tTop5|DEFL_META\.tTop5/.test(src), 'n26 the null-result t
 
 // ---- the table must not shear: header, A and E rows must agree per block ---------------------
 (function(){
-  // ⚠⚠ (v14.96) ONE TABLE, SO ONE ASSERTION. This used to split the section on the `g3dayg6` class
+  // ⚠⚠ (v15.00) ONE TABLE, SO ONE ASSERTION. This used to split the section on the `g3dayg6` class
   // and compare each block's cell counts. That test PASSED while the operator's screen was visibly
   // broken: three separate `display:table` divs each size columns from THEIR OWN content, so equal
   // cell COUNTS never produced equal cell WIDTHS — block 2 began halfway across his row.
@@ -120,7 +120,7 @@ ok(/t=\+?'\+DEFL_META\.tTop5|DEFL_META\.tTop5/.test(src), 'n26 the null-result t
 ok(/'HodN':'LodN'/.test(src), 'n31 the first-extreme header switches HodN/LodN with the extreme');
 ok(/'PTN'/.test(src), 'n32 PTN is a column on the second row');
 
-// ---- (v14.96) THE AGREED REMOVALS. Each was recorded as done and was still rendering. ---------
+// ---- (v15.00) THE AGREED REMOVALS. Each was recorded as done and was still rendering. ---------
 const live=src.replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
 ok(!/secs\s*=\s*\[\s*secBias/.test(live), 'n33 the TREND section is off the face (secBias not mounted)');
 ok(/function secBias/.test(live), 'n34 ...but secBias SURVIVES — bias.confirm still feeds the recorder');
@@ -132,7 +132,7 @@ ok(/fsRead\s*\(/.test(live), 'n36 ...but fsRead() survives — the read-line hov
 ok(!/g3steps/.test(live), 'n37 the dead step-bar CSS is gone');
 // ⚠ CSS-BLIND, like n35 was. `/g3dayhl/` matched the STYLE RULE, so blanking the emitter left it
 // green — the mutation survived. Assert on the emitter, as with n35.
-// (v14.96) the strip is superseded by ROW 3 — he asked for "a thrid row for the HL fields". Both
+// (v15.00) the strip is superseded by ROW 3 — he asked for "a thrid row for the HL fields". Both
 // shipped for one build and printed HL GAP/HL RNG TWICE; n39 caught it. Now: row 3 owns them, and
 // the strip must be GONE, or the duplication comes back.
 ok(!/g3dayhl/.test(live), 'n38 the old top strip is gone — row 3 owns the spans now');
@@ -143,6 +143,88 @@ ok(/GD_META/.test(live) && /gdRead\s*\(/.test(live), 'n40 the GREEN/RED call is 
 ok(/silentGreen/.test(live), 'n41 ...and the hover carries the SILENT-day coin flip, not just the win rate');
 ok(/priorDayAuc/.test(live), 'n42 ...and the prior-day NULL result, which he asked about specifically');
 ok(/dayCandleSvg\s*\(/.test(live), 'n43 the candle renders');
+// ---- (v15.00) HIS SKETCH: narrow bar, annotations stacked ABOVE and BELOW, money in the body ---
+// "the candle is taking up too much horizontal space". The width is the BAR, not the labels — that
+// is the whole point of stacking them, and a side legend would put it straight back.
+(function(){
+  const CD=grab('dayCandleSvg').replace(/\/\/[^\n]*/g,'');
+  ok(/var W=80,/.test(CD), 'n45 the candle is 80px wide, not 150');
+  ok(/text-anchor="middle"/.test(CD), 'n46 ...because the labels stack over the bar, not beside it');
+  ok(/HOD '\+hlClock\(D\.hodT\)/.test(CD) && /LOD '\+hlClock\(D\.lodT\)/.test(CD),
+     'n47 both extremes carry their CLOCK, as he drew');
+  // ⚠ the first version matched the DECLARATIONS, so deleting the emit lines left it green.
+  // Match the emitters — a variable computed and never drawn is not a feature.
+  ok(/if\(afterHod!=null\)\s*h\+=/.test(CD) && /if\(afterLod!=null\)\s*h\+=/.test(CD),
+     'n48 ...and both follow-on durations are actually DRAWN, not merely computed');
+  ok(/MUD '\+hlDur\(D\.mud\)/.test(CD), 'n49 MUD sits in the body');
+  ok(/ES_USD_PER_PT/.test(CD) && /Math\.round\(usd\)/.test(CD),
+     'n50 ...beside the money the move was worth');
+  // ---- (v15.00) the shape spine came BACK, and the reversal levels arrived --------------------
+  ok(/_pu\+'%/.test(CD) && /_pb\+'%/.test(CD) && /_pd\+'%/.test(CD),
+     'n51 the wick/body/wick percentages are drawn — the only figure that sums to 100');
+  ok(/revLevels\(sym, D\)/.test(CD), 'n52 the candle asks for the reversal levels');
+  ok(/RV\.hi\[ri\]\.name/.test(CD) && /RV\.lo\[rj\]\.name/.test(CD),
+     'n53 ...and DRAWS them at both wick tips');
+  ok(/frameNum\(RV\.hi\[ri\]\.px\)/.test(CD),
+     'n54 ...with the PRICE in the hover, since it is off the face');
+})();
+
+// ---- (v15.00) THE FILTER IS THE FEATURE -------------------------------------------------------
+(function(){
+  const RL=grab('revLevels').replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
+  ok(/REVL_ATR/.test(RL) && /atr\(sym\)\*rr\*REVL_ATR/.test(RL),
+     'r1 the tolerance is ATR-scaled, not a fixed band');
+  ok(/dH<=tol/.test(RL) && /dL<=tol/.test(RL),
+     'r2 a level must sit within tolerance of the HIGH or the LOW');
+  // ⚠ THE EXCLUSION HE ASKED FOR: anything traded THROUGH is mid-range and therefore near neither
+  // extreme, so it is excluded by construction. There is no separate rule that could drift.
+  ok(!/ibH|ibL|ib60H|ib60L/.test(RL),
+     'r3 IB and IB60 are excluded BY NAME — never readable, even when they coincide with a wick');
+  ok(/'PDH'/.test(RL) && /'PDL'/.test(RL) && /'PDC'/.test(RL), 'r4 PDH / PDL / PDC are read');
+  ok(/'CW0'/.test(RL) && /'PW0'/.test(RL), 'r5 CW0 / PW0 are read');
+  ok(/REVL_MAX/.test(RL) && /slice\(0,REVL_MAX\)/.test(RL), 'r6 capped per side, nearest first');
+  ok(/out\.hi\.sort\(near\)/.test(RL), 'r7 ...nearest to the extreme wins, not first found');
+  // the arithmetic, on his own numbers
+  const H=7716.6, L=7709.6, tol=0.38;
+  const near=(px)=>Math.abs(px-H)<=tol||Math.abs(px-L)<=tol;
+  ok(near(7716.4), 'r8 a level 0.2 off the HIGH qualifies');
+  ok(!near(7713.0), 'r9 ...and one mid-range, traded through, does NOT');
+  // (v15.00) the four levels that did not exist before
+  ok(/'ONH'/.test(RL) && /'ONL'/.test(RL), 'r10 ONH / ONL are read — zero hits in the file before this');
+  ok(/'POC'/.test(RL) && /'VAH'/.test(RL) && /'VAL'/.test(RL), 'r11 POC / VAH / VAL are read');
+})();
+
+// ---- (v15.00) THE KING AT A MOMENT, NOT THE KING NOW ------------------------------------------
+// ⚠⚠ HodN/LodN read em-dash on his screen EVERY day while PTN worked, and the asymmetry was the
+// tell: the PT extreme is recent, so the CURRENT king is still near it. A 10:00 high was being
+// measured against a 16:00 king. The feature answered the wrong question and looked like no data.
+(function(){
+  const KA=grab('kingAt').replace(/\/\/[^\n]*/g,'');
+  const DK=grab('deflKingsAt').replace(/\/\/[^\n]*/g,'');
+  const HN=grab('hlNodeAt').replace(/\/\/[^\n]*/g,'');
+  ok(/mv\.t>ms/.test(KA), 'k1 kingAt walks the journey and stops at the requested moment');
+  ok(/kingDay\(sym\)/.test(KA), 'k2 ...reading KINGDAY.moves, the timestamped history');
+  ok(/deflKingsAt\(sym, rr, firstMs\)/.test(HN), 'k3 the FIRST extreme is matched against the king of its own time');
+  ok(/deflKingsAt\(sym, rr, secMs\)/.test(HN), 'k4 ...and so is the second');
+  ok(/D\.hodMs/.test(HN) && /D\.lodMs/.test(HN), 'k5 ...using the wall-clock ms hodLod now records');
+  ok(/out\.hodMs=hiMs/.test(src) && /out\.lodMs=loMs/.test(src), 'k6 hodLod records both extremes\' ms');
+  // ⚠ SPXW has no journey; substituting its CURRENT king would be the exact bug being fixed.
+  ok(!/'SPX'/.test(DK), 'k7 SPX is OMITTED from the historical read — it has no journey to read');
+  ok(/approx:true/.test(DK), 'k8 ...and the QQQ bearing is flagged approximate, not passed off as exact');
+})();
+
+// ---- the profile levels must be a RECORD, never a claim ---------------------------------------
+(function(){
+  const PP=grab('priorProfile');
+  ok(/46\.6%/.test(src) && /46\.3%/.test(src),
+     'p1 the sham comparison that kills POC as a reversal marker is ON THE RECORD in the source');
+  ok(/RECORD, NEVER AS A CLAIM|RECORD, NOT A CLAIM/.test(src),
+     'p2 ...and the profile levels are labelled a record, not a claim');
+  ok(/PROF_VA/.test(PP) && /0\.70/.test(src), 'p3 the value area is the standard 70% of volume');
+})();
+(function(){
+  const CD=grab('dayCandleSvg');
+})();
 ok(/g3daycdl[\s\S]{0,200}g3daytbl/.test(live), 'n44 ...on the LEFT of the stats, per his instruction');
 
 console.log('test_nodeat: '+pass+' passed, '+fail+' failed');

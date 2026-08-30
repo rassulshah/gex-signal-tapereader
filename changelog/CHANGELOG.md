@@ -1,3 +1,112 @@
+## v15.00 — the open items, closed
+
+### HodN / LodN were structurally impossible to satisfy
+
+`deflKings()` read `tapeMap()` — the **current** king. So a 10:00 high was being compared against a
+16:00 king. Both fields read em-dash on his screen every day while **PTN worked**, and that asymmetry
+was the tell: the PT extreme is recent, so the current king is still near it. The feature was
+answering the wrong question and looking merely like "no data today".
+
+`KINGDAY.moves` is a timestamped journey, so the king at any moment is a lookup. `hodLod()` now
+records each extreme's wall-clock ms, and each extreme is matched against **the king of its own
+time**.
+
+⚠ **SPX is OMITTED from the historical read**, not substituted. `loadKingDay()` rehydrates SPY and
+QQQ only; using the current SPXW king would be the exact error being fixed. An absent book is a gap
+you can see. The QQQ bearing is flagged `approx` because no QQQ price journey is recorded.
+
+### ONH / ONL — zero hits in the file before this
+
+Both come from `futBarsLoad()`, whose rows are `[epoch, o, h, l, c, VOLUME]` at one minute, already
+on the ES scale the chart draws. The overnight window is everything outside 08:30–15:00 CT.
+
+### POC / VAH / VAL — shipped as a RECORD, and the hover says so
+
+A real volume profile on the prior session's RTH: POC is the busiest price, the value area is the
+standard 70% of volume grown around it one tick at a time.
+
+⚠⚠ **They earn nothing as reversal markers and the source says so in three places.** Over 284
+sessions a prior POC is tagged **46.6%** of the next session against **46.3% for a sham level at the
+same distance**; VAL 43.5% against 43.5%. Re-measured on his own question 2026-08-30: the open's
+position relative to prior value predicts neither direction (all buckets within 4pp, |z|<1) nor range
+(46% big-range outside value against 50% expected), and the day's HIGH sat at a profile level 16% of
+the time **against 21% for the sham**. Drawing them is a record of what was sitting there. Any
+wording implying they HELD would assert something measured false.
+
+`test_nodeat` k1–k8, r10–r11, p1–p3 — all mutation-tested.
+
+## v14.99 — the levels the wicks actually reversed on
+
+> "add any levels that were swept by the wicks or targetted. They should be levels around the edges
+> not levels that the maket blew through and kept going ... do not include ib"
+
+**THE FILTER IS THE FEATURE.** A level price traded THROUGH is not evidence of anything — it is a
+line the market ignored. Only a level sitting at an EXTREME can have turned price. So the test is
+simply distance to the HIGH or the LOW, and everything mid-range is excluded **by construction**
+rather than by a rule that could drift.
+
+    tolerance = 1 ATR      the same band the deflection geometry settled on against his own charts
+    read       PDH · PDL · PDC · CW0 · PW0 · CW · PW · FLIP
+    excluded   IB and IB60 — BY NAME, so they can never appear even when they coincide with a wick
+    capped     3 per side, nearest to the extreme first
+
+Names only, stacked at the wick tip they belong to — his choice of option E over the 104px version
+with tick lines. The **price rides in the hover**, because dropping a number off the face must not
+make it unreachable.
+
+**The shape spine is back.** Upper wick / body / lower wick as percentages that **sum to 100** — the
+only figure on the candle that proves the decomposition is honest, dropped at v14.98 when the width
+came down. A 3px column returns it for 4px net (80px total).
+
+⚠ **ONH / ONL and POC / VAH / VAL are ABSENT, not approximated.** The panel has no overnight extremes
+and computes no volume profile. ⚠⚠ And when the profile levels arrive they must be labelled a RECORD:
+over 284 sessions a prior POC is tagged 46.6% of the next session against **46.3% for a sham level at
+the same distance**. Drawing them as reversal evidence would assert something measured false.
+
+## v14.98 — the candle, narrow, as he drew it
+
+> "the candle is taking up too much horizontal space . here is a sample pic. the idea is to identify
+> the hod and lod times, how long it took, as well as the mud time and distance as well as how much
+> money could have been made."
+
+**150px -> 76px.** His sketch is what makes that possible: the annotations stack ABOVE and BELOW the
+bar instead of sitting beside it, so the width is the BAR, not the labels.
+
+    HOD 10:03          <- the clock
+    2h09               <- the leg that FOLLOWS it (HOD -> LOD)
+    [  MUD 1h18  ]     <- in the body, as he drew
+    [   $1,000   ]     <- what the move was worth
+    LOD 12:12
+    2h49               <- the leg that follows THAT one (LOD -> close)
+
+Reading his sketch against the live data confirmed the durations are the FOLLOWING legs, not TOOK:
+10:03 -> 12:12 is 2h09, and 12:12 -> the close is 2h49. Both match the panel's own HL GAP and LC GAP.
+
+The three shape percentages and the side legend are gone with the width — they were the reason it
+was 150px. **The money is now derived from the futures ratio** rather than left em-dash when the
+panel is on the cash scale: a figure that can be computed must be, which was the v14.94 lesson.
+
+## v14.97 — the scale fault was UPSTREAM, and the ladder now proves its own
+
+Two builds "fixed" the 10x mismatch by making consumers agree, and his screen stayed broken. Read
+live off his panel:
+
+    price pill  7710.6      T: 773.34      KING 769.85      persisted ratio 10.0387
+
+`T: 773.34` is a **~772 strike x a dispScale of ~1.0017**, where dispScale = dispPx (769.34 x 10.04)
+/ theirSpot (~7711). **Their payload carries a spot on one scale and strikes on another** — the
+recorded chain holds `{"cr":7735, ..., "ps":765}` in a single object. No amount of consistency
+between consumers repairs an inconsistent SOURCE, which is why v14.93 and v14.94 changed nothing.
+
+**The ladder now verifies its scale against price.** After scaling, the strike nearest the money must
+land within 25% of the price the chart draws. If the whole ladder is off by roughly the futures
+ratio, the correction is applied once for every row and **named** in `scaleSrc` as `fixed:10x` —
+a correction that cannot be seen is exactly how this hid for four builds.
+
+⚠ Pinned by `test_scaleagree` s16–s21, including a reproduction from the real numbers off his screen:
+the broken path produces 773.34, the check sees it is 90% away from price, and the correction lands
+it beside price.
+
 ## v14.96 — three tables cannot align; now there is one
 
 > "the alignment is messe up for the candle . and other things are also messed up"
