@@ -1,3 +1,26 @@
+## v15.05 — fix the frame, do not hide the data
+
+> "the requirement was to see fridays informaiton because today is saturday and you just removed
+> everything from the display"
+
+He is right, and v15.04 was the wrong call. **The 7611-7710 rows ARE Friday's book — real data.**
+The only thing wrong was the frame they were being forced into.
+
+**The mechanism, found in `emRailBounds`:**
+
+    if(pd+pad2>out.hi) out.hi=pd+pad2;    // widens the rail to hold EVERY pile
+
+Right for a far King. Catastrophic for a node from another book: on a QQQ chart one SPX-scale pile
+dragged `hi` to 7760 while `lo` stayed at 716, so the frame spanned ~7,000 points and every row
+collapsed into a nine-pixel band.
+
+**Now a pile more than 2x from the chart price is SKIPPED** — not clamped, which would stack it
+invisibly at the edge. The rail draws everything that belongs on it and omits what belongs on
+another one.
+
+⚠⚠ **THE v15.04 HIDE-GUARD IS REMOVED.** Hiding a panel is never a fix for a layout fault: it
+converts a rendering bug into a DATA-LOSS bug, and data loss is the more expensive of the two.
+
 ## v15.04 — the ladder refuses to draw across two price scales
 
 > "what the hell did you do . everything is a mess . look at the ladder . it is a complete mess"

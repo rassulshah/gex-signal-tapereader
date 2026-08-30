@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.04
+// @version    15.05
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.04';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.05';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -23985,35 +23985,12 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
     if(!EB || !EB.ok || !RB) return '';
     var lo=RB.lo, hi=RB.hi, span=hi-lo;
     if(!(span>0)) return '';
-    // ⚠⚠ (v15.04) THE LADDER REFUSES TO DRAW ACROSS TWO PRICE SCALES. On a QQQ chart it was handed
-    // SPX-scale strikes (7611-7710) against a 716 price, so `span` became ~7,200 points and every
-    // row landed inside a NINE PIXEL band — an unreadable pile. Operator: "it is a complete mess ...
-    // it is unreadable."
-    //
-    // ⚠ The cause is upstream (a QQQ chart falling back to the SPX chain) and is NOT fixed here.
-    // What is fixed is the FAILURE MODE: a frame whose span is many multiples of a sane day's range
-    // cannot produce a readable ladder, so it says so instead of drawing garbage. A refusal that
-    // names its reason is recoverable; an unreadable render is not.
-    // ⚠⚠ AND THIS IS MY REGRESSION. v15.02 correctly made showingStaleBook() false for QQQ, which
-    // dropped the ladder off the stale path onto the LIVE path — where the scale fault lives. The
-    // previous behaviour was empty; I turned empty into garbled. Empty was better, and a named
-    // refusal is better still.
-    try{
-      var _px=null; try{ _px=(STATE[sym]||{}).price; }catch(eP){}
-      if(_px>0){
-        var _mid=(lo+hi)/2;
-        // the frame's centre should be within a factor of ~2 of the price the chart draws
-        if(_mid > _px*2 || _mid < _px/2){
-          return '<div class="g3ladwrap"><div class="g3lad" style="height:34px">'+
-            '<div class="g3ldwarn" title="The ladder was handed levels around '+frameNum(_mid)+
-            ' while this chart is drawing '+frameNum(_px)+' — a different price scale. Rendering them '+
-            'together compresses every row into a few pixels, which is unreadable and worse than nothing. '+
-            'This is an upstream fault: a '+g3esc(sym)+' chart is being served levels from another book.">'+
-            '\u26a0 ladder hidden \u2014 levels near '+frameNum(_mid)+' do not match this chart at '+frameNum(_px)+
-            '</div></div></div>';
-        }
-      }
-    }catch(eSc){}
+    // ⚠ (v15.05) THE v15.04 HIDE-GUARD IS GONE. It removed real data from the face to avoid
+    // drawing it badly, which cost him Friday's book entirely — "you just removed everything from
+    // the display". The frame is fixed at source now (emRailBounds rejects off-scale piles), so the
+    // ladder draws what belongs on this rail and simply omits what belongs on another one.
+    // ⚠⚠ HIDING A PANEL IS NEVER A FIX FOR A LAYOUT FAULT. It converts a rendering bug into a
+    // DATA-LOSS bug, and data loss is the more expensive of the two.
     // pitch: aim for ~16px per 5 chart points so adjacent strikes never touch, clamped either way
     var H=Math.max(300, Math.min(640, Math.round(span/5*16)));
     function Y(p){ return (H - ((p-lo)/span)*H); }
@@ -24999,9 +24976,19 @@ function emRailBounds(B, piles){
     // "price ran past the expected move" on the face, and a far King must not fake that claim.
     if(piles && piles.length){
       var pad2=pad*0.5, pi;
+      // ⚠⚠ (v15.05) A PILE ON A DIFFERENT PRICE SCALE MUST NOT WIDEN THE FRAME. This loop grew the
+      // rail to hold EVERY node, which is right for a far King and catastrophic for a node from
+      // another book: on a QQQ chart one SPX-scale pile dragged `hi` to 7760 while `lo` stayed at
+      // 716, so the frame spanned 7,000 points and every row collapsed into a nine-pixel band.
+      // The operator saw the result and was right about it: "it is a complete mess ... unreadable".
+      // ⚠ THE PREVIOUS BUILD HID THE LADDER INSTEAD, WHICH WAS WORSE — it removed real Friday data
+      // from the face to avoid drawing it badly. The fault was never the DATA, only the frame it
+      // was being forced into. Reject the off-scale pile; keep every pile that belongs.
+      var ref=(typeof B.now==='number' && B.now>0)?B.now:((out.lo+out.hi)/2);
       for(pi=0;pi<piles.length;pi++){
         var pd=piles[pi]&&piles[pi].disp;
         if(typeof pd!=='number'||!isFinite(pd)) continue;
+        if(ref>0 && (pd>ref*2 || pd<ref/2)) continue;   // another book's scale — not this rail's
         if(pd+pad2>out.hi) out.hi=pd+pad2;
         if(pd-pad2<out.lo) out.lo=pd-pad2;
       }

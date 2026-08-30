@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-30 · v15.04 · session `2df3ccfa` — v15.04 - the ladder refuses two price scales
+## 2026-08-30 · v15.05 · session `2df3ccfa` — v15.05 - fix the frame, do not hide the data
 
-_44 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
+_46 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
 
 ### THE EXCHANGE
 
@@ -1020,31 +1020,92 @@ This is the same root cause as `KING 7675.84` against a 716.46 price, which I fl
 > you need to fix this. see screen .. it is unreadable
 
 **me (03:05):** Fixing it now. The right guard is general — the ladder must refuse to draw when its rows and the chart price are on different scales, rather than compressing them into an unreadable band:
+**Tapereader v15.04** — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+**Companion v1.16 — unchanged.** Suite 128 green / 6 baseline red.
+
+**The mess measured:** ladder 640px tall, every price row crammed into a **nine-pixel band** — drawing strikes 7611–7710 against a **716.46** QQQ price. The frame span became ~7,200 points, so every row stacked on every other row.
+
+**It was my regression.** v15.02 correctly made `showingStaleBook()` return false for QQQ, and that dropped the ladder off the stale path onto the **live** path — where the SPX-scale fallback lives. The live QQQ path had presumably been wrong for a long time; nothing reached it because the stale path was swallowing the case. I verified the branch I wrote and not the one I exposed.
+
+**The ladder now refuses to draw when its frame doesn't match the chart price**, and names both numbers:
+
+```
+⚠ ladder hidden — levels near 7660 do not match this chart at 716.46
+```
+
+The upstream fault — a QQQ chart being served another book's levels — is **not** fixed, and the message says so. I'd rather guard the failure mode and name the cause than fix the symptom silently and bury the real bug for another four builds.
+
+Two things worth saying plainly:
+
+**Empty was better than garbled, and I should have seen that coming.** When a render can't be correct, refusing with a reason beats attempting it.
+
+**SPY works right now** — the SPXW latch is the book that governs it, frozen 14:59 CT Friday, one minute before the close. If you want to keep working tonight, that's the path.
+
+The r …[trimmed]
+
+**OPERATOR:**
+> reloaded.  check
+
+**me (03:13):** v15.04 is working. The mess is gone:
+
+```
+ladder hidden — levels near 4237.17 do not match this chart at 716.46
+ladder height   640px → 34px      row pile-up: gone (spread 0)
+day section + candle: intact
+○ no last-session book for QQQ
+```
+
+And **that 4237.17 is the smoking gun.** It's the midpoint of a range running from your 716 QQQ price up to ~7760 SPX strikes — literally the average of two different price scales. That confirms the diagnosis exactly: the ladder frame was being built across both books at once, which is why every row collapsed into nine pixels.
+
+So the panel is readable again, and the two messages tell you why each piece is absent rather than leaving you to guess.
+
+**Where things stand:**
+
+**Working now** — the ⓪a section, the candle with reversal levels, the GD/RD call, and on a **SPY chart** the full ladder from Friday's book frozen at 14:59 CT.
+
+**Not working** — the QQQ ladder, honestly refused rather than garbled. Two separate causes, both now identified: Friday's QQQ book was never recorded (fixed from the next session), and a QQQ chart is being served SPX-scale levels (not fixed).
+
+**The next build** is that second one — making a QQQ chart read the QQQ book end to end. It's the same root cause as the `KING 7675.84` line, and it's the last thing standing between you and a working QQQ panel.
+
+I'd rather start that fresh than keep patching at the end of a long session — I've made two changes tonight that were individually correct and left you worse off, and that's a signal to stop and do the real fix properly rather than another quick one.
+
+**OPERATOR:**
+> what the hell is the matter with you .  the requirement was to see fridays informaiton because today is saturday  and you just removed everything from the display .. are you an idiiot
+
+**me (03:14):** You're right, and hiding it was the wrong call. Those 7611–7710 rows **are** Friday's book — real Friday data. The problem was only that they were being drawn against a QQQ price axis. I should have put them on their own scale, not deleted them.
+Found the actual mechanism — this is the real bug, not the symptom:
+
+```js
+if(pd+pad2>out.hi) out.hi=pd+pad2;   // widens the frame to hold EVERY pile
+```
+
+The rail frame widens to include every node — **including nodes on a completely different price scale.** One SPX-scale pile drags `hi` to 7760 while `lo` stays at 716. Fixing that properly instead of hiding the result:
 
 ### DECISIONS
 
-- **DEGRADE TOWARD SILENCE, NOT NOISE.** v15.02 turned an empty QQQ ladder into a garbled one; a
-  named refusal beats an unreadable render.
-- **A correct change can route execution onto a broken path nothing was exercising.** The live QQQ
-  scale fallback had been wrong all along; the stale path had been hiding it.
-- **Guard the failure mode, NAME the cause.** The upstream fault is unfixed and the message says so.
+- **NEVER hide a panel to fix a layout fault.** v15.04 suppressed real Friday data to avoid drawing
+  it badly. Hiding turns a rendering bug into a data-loss bug — the more expensive one.
+- **When a frame is wrong, read the code that BUILDS the frame.** `emRailBounds` was four lines from
+  the symptom for three builds.
+- **Skip an off-scale pile, do not clamp it** — clamping stacks it invisibly at the edge.
 
 ### SHIPPED
 
-**v15.04** — the ladder refuses to render when its frame centre is >2x from the chart price, naming
-both numbers (g1-g6). **v15.03** — `staleBookWhy()`. **v15.02** — per-book latch, SLvl/TLvl rules.
+**v15.05** — `emRailBounds` rejects piles >2x from the chart price; the v15.04 hide-guard removed
+(g1-g7). The ladder draws everything that belongs on its rail.
 
 ### OPEN AT CLOSE
 
-- ⚠⚠ **THE REAL BUG: a QQQ chart is served SPX-scale levels.** Same root as `KING 7675.84` vs a
-  716.46 price. The ladder now hides rather than garbles, but QQQ still has no usable ladder.
-  **This is the next build.**
-- **SPY works now** — the SPXW latch governs it, frozen 14:59 CT Friday.
-- **QQQ's Friday book was never recorded**; it latches from the next RTH.
+- **Verify on his screen**: the QQQ ladder should DRAW again, showing whatever is on QQQ's own scale.
+- ⚠ **QQQ still has no Friday BOOK** (never recorded; latches from the next RTH). SPY shows Friday's
+  SPXW book frozen 14:59 CT and works now.
+- ⚠ **A QQQ chart being served SPX-scale levels is still the underlying fault** — same root as
+  `KING 7675.84` vs 716.46.
 
 ### COMMITS THIS CONTEXT
 
 ```
+114ff43 v15.04: the ladder refuses to draw across two price scales instead of compressing them
 37d1612 v15.03: the empty ladder names the missing book instead of rendering blank
 e976ccb v15.02: latch every governing book so QQQ has one; SLvl/TLvl drop IB and overflow to the E row
 147a089 v15.01: the reversal band is asymmetric like the deflection geometry; candle layout to his spec
@@ -1056,12 +1117,129 @@ c4737b2 v14.96: one table so the columns actually align; the counting test was a
 d716fb6 v14.95: SYM vs sym killed the whole day section; add an undeclared-identifier lint
 62d1cdc v14.94: one displayScale function; session levels derive instead of declining
 114d933 v14.93: the 10x scale mismatch - one switch, two preconditions, fixed in both places it lived
-242651c record: fill the v14.92 close-out
 ```
 
 ---
 
 <!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-30 · v15.04 · session `2df3ccfa` — v15.04 - the ladder refuses two price scales
+**OPERATOR:**
+> try this rule and tell me how it works out for the deflections.  in a downmove the low of the candle has to be within 1 atr  of the high of the  node but  cannot be more than 2 atr below the node.  check this and see if it covers all the deflections.
+**OPERATOR:**
+> tell me how good the rule is for identiifying deflections . for example is 2 atr too much, should it be 1.5 at or  should it be the close which is  within 1 atr below the node ?   i want ot finalize deflections
+**OPERATOR:**
+> ok.. so , tell me simply what should the deflection range be above and below the node
+**OPERATOR:**
+> ok..  now have you completed your detection of deflections
+**OPERATOR:**
+> ok do it.
+**OPERATOR:**
+> try giving me the install again
+**OPERATOR:**
+> how was it working before ?  you just gave me the install file .. what happened
+**OPERATOR:**
+> yes
+**OPERATOR:**
+> reloaded check
+**OPERATOR:**
+> you did not implement all the changes we have been talking about . see pic
+**OPERATOR:**
+> look at the top also .  it doesn't have the changes we discussed  .   even the dntend Brk area was also removed .. all those changes and you didn't implement any of them
+**OPERATOR:**
+> something is not right ..  the bottom row for LOD should be aligned  with the hod rows and its fields should be almost mirror image of the hod lines where applicable.  for example pt took is a mirror image of a took ..  use your intelligence and determine what should be there.  Also lets create a thrid row for the HL fields like HL Gap HL Rng  HL $ ,  im not sure LC Gap and LC rang should be .... figure it out ..  and give me mockup
+**OPERATOR:**
+> before we go any further.   do you realize that i am taking the model of the daily bar and trying to measure the movements in it from open to close
+**OPERATOR:**
+> ok.. show me the mockup .  i am also interested in seeing a daily bar being constructed througout the day . maybe show it to the right . of the statistics.  so i can visually see what is going on .. can you come up with tsomething liek this ?   show me mockup
+**OPERATOR:**
+> the fields dont show sequence step by step .. can you do better. look at how i tried to identify an extremity first  etc..
+**OPERATOR:**
+> how can you take my approach and just enhance that .. i dont want to deviate too much from what i have
+**OPERATOR:**
+> ok i'll go with your recommendation .. give me mockup
+**OPERATOR:**
+> in the last row there is an empty first cell where we can put the actual and expected values for a GD or a RD.  but first i need you to have a model that predicts this . you can use the data , the day of week, overnight , open  etc..   but come up with a way to identify if today will be green or red. if you need more than the open like the 1st hour or 30 min IB range and break to figure this out , let me know, Whatever the case, i need a model to predict if we close above or below the open to determine if today will be a red or green day with decent probability .
+**OPERATOR:**
+> you can also use prior day values .  it maybe helpfull like if a prior day is green  or red and see how that impacts the ability to forecast as well as if we are above or below the weekly open
+**OPERATOR:**
+> so how good is it at predicting
+**OPERATOR:**
+> ok build it and move the candle to the left side of the app, currently its on the right side of the app..    so the daily candle and its contstruction will be my mental model for daytrading using all of these measurements . let me know if there are any other measurements that should be added and if you can make the data points, models goto the llm everynight for refinement and prediction with the gamma book  to see how it can better predict things like hod lod  green day  red day  price and time projection , trend reversal , deflections etc..  its very important that this feature be a world class feature but it will require your help in constant refinement via the use of llm to identify additional datapoints and measurements to better prediction
+**OPERATOR:**
+> Yes.
+**OPERATOR:**
+> How can you use other datapoints like prior day poc vah val. Did you do any tests on whether they provide support resistance or help predict highs and lows or whether they help determine if we will close green or red.  For example, if we open above prior day poc or vah or in between vah and Val, how does that help us predict ?   What about combinations.
+**OPERATOR:**
+> There is one more thing but I’m not sure if you have the data.  The regime.  If we are in a positive gamma vs negative gamma regime would be an important filter to predicting reversals support resistance va trend continuation.  Is there any way that can be obtained and included in testing
+**OPERATOR:**
+> So I want you to tell me what is the useful result of all of this testing. Can you predict anything better like hod lod Green Day vs red day reversals deflections etc.
+**OPERATOR:**
+> So where are we with all of this.  Explain simply
+**OPERATOR:**
+> Fix the bugs and issues so we can continue enhancing
+**OPERATOR:**
+> you need to give me the tampermonkey link
+**OPERATOR:**
+> reloaded
+**OPERATOR:**
+> the problem is that i wont be able to work. last time we had this problem , you showed the stale data so that i could continue working ..
+**OPERATOR:**
+> i reloaded.
+**OPERATOR:**
+> look at my screen and check yourself
+**OPERATOR:**
+> the alignment is messe up for the candle . and other things are also messed up .. check and look at the screen
+**OPERATOR:**
+> remember to always give me a tampermoneky link with the build.. i reloaded . check everyhing
+**OPERATOR:**
+> the candle is taking up too much horizontal space . here is a sample pic.  the idea is to identify the hod and lod times, how long it took ,  as well as the mud time and distance as well as how much money could have been made.  i'll let you refine this.
+**OPERATOR:**
+> show me3 mockup
+**OPERATOR:**
+> I like  this but add any levels that were swept by the wicks or targetted.  They should be levels around the edges not levels that the maket blew through and kept going. the idea is to identify where the market reversed and then targetted.  do not include ib.. they should be key levels like poc, vah, val, pdh, pdl, onh, onl, cw0, pw0, or any major level.  the level should be close to the candle  especially near the wick.   do you understand
+**OPERATOR:**
+> I like E. proviede build
+**OPERATOR:**
+> complete the open items and then i'll install
+**OPERATOR:**
+> are you sure this is correct because the candle shows the market took out bot the prior day high and the prior day (thrusdays) low.   also place the MUD labels above the open for red bars and below the open for green bars. i also need to know how much money was in the MUD , so place that on the second line below the MUD time.  put the total amount in dollars below the second line of the extremity , so for example, it would be below the LOD  2h48 line.   also the lod labels are too low , bring them slightly closer to the wick same distanc e and the hod 2h09 and the wick
+**OPERATOR:**
+> there is something wrong with the ladder ..  it has no data from friday which it is suppose to show so i can continue working on it and the lables are cutt off
+**OPERATOR:**
+> did you fix so that it will show data from friday . you can select a specific time like 15 min before the close or something like that so that i can continue working.. right now you ahve totally messed up everyghing.. look at the ladder..
+**OPERATOR:**
+> reloaded .. please check
+**OPERATOR:**
+> you need to fix this. see screen .. it is unreadable
+
+### DECISIONS
+
+- **DEGRADE TOWARD SILENCE, NOT NOISE.** v15.02 turned an empty QQQ ladder into a garbled one; a
+  named refusal beats an unreadable render.
+- **A correct change can route execution onto a broken path nothing was exercising.** The live QQQ
+  scale fallback had been wrong all along; the stale path had been hiding it.
+- **Guard the failure mode, NAME the cause.** The upstream fault is unfixed and the message says so.
+
+
+### SHIPPED
+
+**v15.04** — the ladder refuses to render when its frame centre is >2x from the chart price, naming
+both numbers (g1-g6). **v15.03** — `staleBookWhy()`. **v15.02** — per-book latch, SLvl/TLvl rules.
+
+
+### OPEN AT CLOSE
+
+- ⚠⚠ **THE REAL BUG: a QQQ chart is served SPX-scale levels.** Same root as `KING 7675.84` vs a
+  716.46 price. The ladder now hides rather than garbles, but QQQ still has no usable ladder.
+  **This is the next build.**
+- **SPY works now** — the SPXW latch governs it, frozen 14:59 CT Friday.
+- **QQQ's Friday book was never recorded**; it latches from the next RTH.
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 

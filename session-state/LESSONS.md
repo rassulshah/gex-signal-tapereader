@@ -131,6 +131,28 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.05 · 2026-08-30 · **I HID REAL DATA TO AVOID DRAWING IT BADLY**
+
+v15.04 hid the ladder when its frame did not match the chart price. The operator: "the requirement
+was to see fridays informaiton ... and you just removed everything from the display."
+
+⚠⚠ **THE ROWS WERE FRIDAY'S BOOK. THE DATA WAS NEVER THE PROBLEM — THE FRAME WAS.** I diagnosed a
+frame fault and then suppressed the CONTENT, which is the one thing in the pipeline that was
+correct. **Hiding a panel converts a rendering bug into a data-loss bug**, and for a user whose
+whole request was "let me see Friday", that is strictly the more expensive failure.
+
+⚠ THE REAL FAULT WAS FOUR LINES AWAY AND I DID NOT LOOK. `emRailBounds` widens the rail to hold
+EVERY pile — correct for a far King, catastrophic for a node from another book. One SPX pile
+dragged `hi` to 7760 against a 716 `lo`. **When a frame is wrong, read the code that BUILDS the
+frame** before reaching for a guard downstream of it.
+
+⚠ SKIP, DO NOT CLAMP. Clamping an off-scale pile to the edge stacks it invisibly there — the
+original reason this loop widened at all. The pile belongs to another rail; omit it.
+
+⚠⚠ AND THE PATTERN ACROSS THIS WHOLE SEQUENCE: v15.02 correct but routed onto a broken path, v15.03
+explained the symptom, v15.04 suppressed the symptom, v15.05 fixed the cause. **Three builds of
+treating a symptom because I never read the function that produced it.**
+
 ### v15.04 · 2026-08-30 · **I TURNED EMPTY INTO GARBLED, AND EMPTY WAS BETTER**
 
 v15.02 made `showingStaleBook()` correctly return false on QQQ. That was right, and it dropped the
