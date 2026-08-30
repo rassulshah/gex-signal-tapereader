@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.94
+// @version    14.95
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.94';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.95';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -27062,7 +27062,7 @@ function secDay(sym){
     // (the wick family); block 2 is the DAY (second extremity, gap, range). Both keep the A-over-E
     // shape so every live number sits above its own base rate.
     function hlv(v,f){ return (v==null)?'\u2014':f(v); }
-    var NDH=null; try{ NDH=hlNodeAt(SYM, D, PTL); }catch(eND){ NDH=null; }
+    var NDH=null; try{ NDH=hlNodeAt(sym, D, PTL); }catch(eND){ NDH=null; }
     var eW=base.wick||{};
     var eTip=eW.wick_n?('The E row is the EXPECTED result: EVERY field is a TRIMMED MEAN over '+base.n+' sessions \u2014 '+
       (eW.zeroWick||0)+' no-wick days and the Tukey 1.5\u00d7IQR outliers are excluded before averaging, which is the operator\u2019s rule. '+
@@ -27073,7 +27073,7 @@ function secDay(sym){
     // (v14.91) THE CANDLE SITS ON THE LEFT — operator: "move the candle to the left side of the
     // app". The stats are wrapped beside it so picture and numbers read as one object; the row is
     // flex-wrap, so a narrow panel stacks them instead of clipping the table.
-    var CDL = NOREAD ? '' : dayCandleSvg(SYM, D, PTL);
+    var CDL = NOREAD ? '' : dayCandleSvg(sym, D, PTL);
     if(CDL) h+='<div class="g3dayrow"><div class="g3daycdl">'+CDL+'</div><div class="g3daytbl">';
     h+='<div class="g3dayg g3dayg8"'+g3tip(eTip)+'>';
     // (v14.88) SLvl sits immediately after the extreme it belongs to — operator: "they should be
@@ -27152,7 +27152,7 @@ function secDay(sym){
     // Operator: "in the last row there is an empty first cell where we can put the actual and
     // expected values for a GD or a RD." A = what the day is doing, E = the call and its rate.
     var GDc=null, GDa=null;
-    try{ GDc=gdRead(SYM); GDa=gdActual(SYM); }catch(eGD){}
+    try{ GDc=gdRead(sym); GDa=gdActual(sym); }catch(eGD){}
     var gdTip='WILL TODAY CLOSE ABOVE OR BELOW ITS OWN OPEN? '+
       'The rule: price broke the FIRST 30 MINUTES\u2019 range in one direction AND is on that same side of the open. '+
       'Right '+GD_META.acc+'% of the time on the '+GD_META.firePct+'% of sessions it speaks (n='+GD_META.fires+' of '+GD_META.n+

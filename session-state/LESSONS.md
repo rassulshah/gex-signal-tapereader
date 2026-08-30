@@ -131,6 +131,34 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v14.95 · 2026-08-30 · **`SYM` vs `sym` — ONE TYPO, THREE BROKEN FEATURES, ZERO RED TESTS**
+
+The operator said "look at my screen and check yourself". I did, and the entire ⓪a section was
+missing from the DOM while the panel reported v14.94 loaded. `secDay(sym)` — and I had written
+`SYM` in four places since v14.91.
+
+⚠⚠ **`node --check` PASSES ON AN UNDECLARED IDENTIFIER.** It is not a syntax error; it is a runtime
+ReferenceError. And the section is mounted inside `swallow()`, so the throw was caught and the block
+silently disappeared. **A swallow around a whole section converts a typo into an invisible deletion.**
+
+⚠⚠ **THE TWO INSIDE try/catch WERE WORSE THAN THE ONE THAT THREW.** `hlNodeAt(SYM,...)` and
+`gdRead(SYM)` failed into their own catches and returned null forever. HodN/LodN/PTN and the
+GREEN/RED call would have read em-dash for weeks and looked like "no data today". **A catch that
+returns a neutral value turns a crash into a plausible reading.**
+
+⚠⚠ **47 ASSERTIONS ABOUT THIS SECTION AND NONE COULD SEE IT**, because every one is a SOURCE GREP.
+Greps prove text is present; they cannot prove it runs. That gap is now `test_undefined_ids.js`.
+
+⚠ AND THE LINT ITSELF NEEDED THREE FIXES — comma-separated declarators, regex literals read as
+identifiers, multi-line `var` statements — all FALSE ALARMS. Then loosening the parser to silence
+them destroyed its ability to detect anything, and **only mutation testing caught that**. I had
+already written "PASS" five times against a lint that detected nothing. **A lint's parser needs the
+same scrutiny as the code it polices, and the only proof it works is a bug you inject on purpose.**
+
+⚠ My first mutation was ALSO wrong: `dayCandleSvg(sym, D, PTL)` matches the function DEFINITION as
+well as the call, so I renamed a parameter and concluded the lint was broken. **Check that a
+mutation hit what you think it hit before believing what it tells you.**
+
 ### v14.94 · 2026-08-30 · **"DECLINE RATHER THAN DEFAULT" IS RIGHT FOR NUMBERS AND WRONG FOR SCALES**
 
 v14.93's second fix made `sessionLevels` decline when the scale was unknown. I wrote, approvingly,

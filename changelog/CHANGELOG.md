@@ -1,3 +1,31 @@
+## v14.95 — the ⓪a section was gone, and one typo did it
+
+> "look at my screen and check yourself"
+
+I looked. The whole ⓪a section was absent from the DOM — no candle, no stats, nothing — and the
+panel reported **v14.94** loaded correctly. Cause:
+
+    var CDL = NOREAD ? '' : dayCandleSvg(SYM, D, PTL);   // `SYM` is declared NOWHERE
+
+`secDay(sym)` takes **`sym`**. I wrote `SYM` in v14.91, in four places. `node --check` passes — an
+undeclared identifier is not a syntax error. The mount's own `swallow('secDay-mount')` caught the
+ReferenceError and the entire section vanished silently.
+
+⚠⚠ **AND TWO OF THE FOUR WERE INSIDE try/catch, WHICH IS WORSE.** `hlNodeAt(SYM,...)` and
+`gdRead(SYM)` threw into their own catch blocks and returned null forever — HodN / LodN / PTN and
+the GREEN/RED call would have read em-dash indefinitely with nothing failing anywhere. **One typo,
+three broken features, zero red tests.**
+
+**`test_undefined_ids.js` — the class of bug, not the instance.** Every existing assertion about
+this section is a source grep: greps prove text is PRESENT, never that it RUNS. This one collects
+every identifier the file declares and flags any bare reference in the rendering path that is
+neither declared nor a builtin. Mutation-proved against three injected identifiers.
+
+⚠ The lint needed three fixes of its own before it worked — comma-separated declarators, regex
+literals read as identifiers, and multi-line `var` statements — each a FALSE ALARM. Then loosening
+it to silence those destroyed its ability to detect anything, and only mutation testing caught that.
+**A lint's own parser needs the same scrutiny as the code it polices.**
+
 ## v14.94 — one scale function, and the levels come back after hours
 
 > "the problem is that i wont be able to work. last time we had this problem, you showed the stale

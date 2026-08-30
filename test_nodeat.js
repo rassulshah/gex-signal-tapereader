@@ -112,9 +112,9 @@ ok(/t=\+?'\+DEFL_META\.tTop5|DEFL_META\.tTop5/.test(src), 'n26 the null-result t
   const b2=counts.filter(c=>c[2]>bound).map(c=>c[1]);
   ok(b1.length>=3 && b1.every(x=>x===b1[0]), 'n27 block 1 rows all have the same cell count', b1);
   ok(b2.length>=3 && b2.every(x=>x===b2[0]), 'n28 block 2 rows all have the same cell count', b2);
-  // ⚠⚠ THE ALIGNMENT CONTRACT (v14.94). The blocks must be the SAME WIDTH or his column pairing
+  // ⚠⚠ THE ALIGNMENT CONTRACT (v14.95). The blocks must be the SAME WIDTH or his column pairing
   // silently breaks — PTWick% under WICK%, PTMUD under MUD, from his very first sketch. This is
-  // exactly what shipped broken in v14.94: HL GAP / HL RNG / LC·RNG were still living in block 2
+  // exactly what shipped broken in v14.95: HL GAP / HL RNG / LC·RNG were still living in block 2
   // and pushed the whole PT family three columns left. A per-block width check would NOT have
   // caught it; only comparing the two does.
   ok(b1[0]===b2[0], 'n29 both blocks are the SAME width — the alignment contract', [b1[0],b2[0]]);
@@ -126,7 +126,7 @@ ok(/t=\+?'\+DEFL_META\.tTop5|DEFL_META\.tTop5/.test(src), 'n26 the null-result t
 ok(/'HodN':'LodN'/.test(src), 'n31 the first-extreme header switches HodN/LodN with the extreme');
 ok(/'PTN'/.test(src), 'n32 PTN is a column on the second row');
 
-// ---- (v14.94) THE AGREED REMOVALS. Each was recorded as done and was still rendering. ---------
+// ---- (v14.95) THE AGREED REMOVALS. Each was recorded as done and was still rendering. ---------
 const live=src.replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
 ok(!/secs\s*=\s*\[\s*secBias/.test(live), 'n33 the TREND section is off the face (secBias not mounted)');
 ok(/function secBias/.test(live), 'n34 ...but secBias SURVIVES — bias.confirm still feeds the recorder');
@@ -138,7 +138,7 @@ ok(/fsRead\s*\(/.test(live), 'n36 ...but fsRead() survives — the read-line hov
 ok(!/g3steps/.test(live), 'n37 the dead step-bar CSS is gone');
 // ⚠ CSS-BLIND, like n35 was. `/g3dayhl/` matched the STYLE RULE, so blanking the emitter left it
 // green — the mutation survived. Assert on the emitter, as with n35.
-// (v14.94) the strip is superseded by ROW 3 — he asked for "a thrid row for the HL fields". Both
+// (v14.95) the strip is superseded by ROW 3 — he asked for "a thrid row for the HL fields". Both
 // shipped for one build and printed HL GAP/HL RNG TWICE; n39 caught it. Now: row 3 owns them, and
 // the strip must be GONE, or the duplication comes back.
 ok(!/g3dayhl/.test(live), 'n38 the old top strip is gone — row 3 owns the spans now');
