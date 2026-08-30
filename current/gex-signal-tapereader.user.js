@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.01
+// @version    15.02
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.01';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.02';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -728,11 +728,23 @@ function inReplay(){ try{ return !!(SESSION_DAY && SESSION_DAY.fallback); }catch
 // place that can never be half-updated. Adding a tenth write path means calling recorderBlind().
 var LASTBOOK_KEY='gpts_lastbook_v1';
 var LASTBOOK=null, LASTBOOK_READ=false;
-function lastBookLoad(){
-  if(LASTBOOK_READ) return LASTBOOK;
-  LASTBOOK_READ=true;
-  try{ LASTBOOK=JSON.parse(localStorage.getItem(LASTBOOK_KEY)||'null'); }catch(e){ LASTBOOK=null; }
-  return LASTBOOK;
+// ⚠⚠ (v15.02) THE LATCH IS PER BOOK. It stored ONE book — SPXW — under one key, and the serve gate
+// never asked which chart was being drawn. On SPY that is correct, because SPY's ladder is governed
+// by SPX. On QQQ it is not: QQQ is governed by its OWN book, which was never latched at all, so the
+// operator switched to QQQ after the close and the ladder was simply empty — "it has no data from
+// friday which it is suppose to show so i can continue working on it".
+// ⚠ The old single-book payload is still readable: an object with `pct` at the top level IS the
+// SPXW book, so a latch written by a previous build keeps working rather than being silently lost.
+function lastBookGov(sym){ return (sym==='QQQ') ? 'QQQ' : 'SPXW'; }
+function lastBookLoad(book){
+  if(!LASTBOOK_READ){
+    LASTBOOK_READ=true;
+    try{ LASTBOOK=JSON.parse(localStorage.getItem(LASTBOOK_KEY)||'null'); }catch(e){ LASTBOOK=null; }
+  }
+  if(!LASTBOOK) return null;
+  if(LASTBOOK.pct) return (!book || book==='SPXW') ? LASTBOOK : null;   // legacy single-book payload
+  var b=book||'SPXW';
+  return LASTBOOK[b]||null;
 }
 // Latched ONLY from a live RTH session, and only from a book healthy enough to be worth keeping.
 // ⚠ A latch written from a degraded read is worse than no latch: it would be served for hours as
@@ -742,22 +754,27 @@ function lastBookSave(){
     if(inReplay()) return;
     var P=null; try{ P=sessionPhase(); }catch(eP){}
     if(!P || !P.rth) return;                       // never latch outside a live session
-    var T=null; try{ T=tapeMapLive('SPXW'); }catch(eT){}
-    if(!T || !T.pct || T.king==null) return;
-    var n=T.count||Object.keys(T.pct).length;
-    if(!(n>=SK_MIN_STRIKES)) return;               // same health floor skPiles refuses below
-    var exp=null, vel={};
-    for(var kk in T.pct){
-      var k=parseFloat(kk); if(!(k>0)) continue;
-      var v=null; try{ v=VEL[String(k)]||VEL[kk]; }catch(eV){}
-      if(!v) continue;
-      if(!exp && v.exp) exp=v.exp;
-      vel[kk]={ cur:v.cur, d5:v.d5, d15:v.d15, d60:v.d60,
-                p5:v.p5, p15:v.p15, p60:v.p60, exp:v.exp||null };
-    }
-    LASTBOOK={ day:sessionDayStr(), ts:Date.now(), exp:exp, king:T.king, kingKd:T.kingKd,
-               count:n, kingSrc:T.kingSrc||null, pct:T.pct, vel:vel };
-    LASTBOOK_READ=true;
+    // (v15.02) latch EVERY governing book, so whichever chart he opens after the close has one.
+    var store={};
+    ['SPXW','QQQ'].forEach(function(bk){
+      var T=null; try{ T=tapeMapLive(bk); }catch(eT){ return; }
+      if(!T || !T.pct || T.king==null) return;
+      var n=T.count||Object.keys(T.pct).length;
+      if(!(n>=SK_MIN_STRIKES)) return;             // same health floor skPiles refuses below
+      var exp=null, vel={};
+      for(var kk in T.pct){
+        var k=parseFloat(kk); if(!(k>0)) continue;
+        var v=null; try{ v=VEL[String(k)]||VEL[kk]; }catch(eV){}
+        if(!v) continue;
+        if(!exp && v.exp) exp=v.exp;
+        vel[kk]={ cur:v.cur, d5:v.d5, d15:v.d15, d60:v.d60,
+                  p5:v.p5, p15:v.p15, p60:v.p60, exp:v.exp||null };
+      }
+      store[bk]={ day:sessionDayStr(), ts:Date.now(), exp:exp, king:T.king, kingKd:T.kingKd,
+                  count:n, kingSrc:T.kingSrc||null, pct:T.pct, vel:vel, book:bk };
+    });
+    if(!store.SPXW && !store.QQQ) return;          // ⚠ never overwrite a good latch with nothing
+    LASTBOOK=store; LASTBOOK_READ=true;
     try{ localStorage.setItem(LASTBOOK_KEY, JSON.stringify(LASTBOOK)); }catch(eS){}
   }catch(e){}
 }
@@ -777,7 +794,9 @@ function showingStaleBook(){
     if(CFG.lastBook===false) return false;
     var P=null; try{ P=sessionPhase(); }catch(eP){}
     if(!P || P.rth) return false;                  // 1 · never during RTH
-    var B=lastBookLoad();
+    // (v15.02) ask for the book that GOVERNS the chart being drawn, not always SPXW
+    var _sy=null; try{ _sy=activeSym(); }catch(eA){}
+    var B=lastBookLoad(lastBookGov(_sy));
     if(!B || !B.pct || B.king==null) return false; // 2 · we actually have a latch
     if(B.day!==sessionDayStr()) return false;      // 3 · it is THIS session's book, not an old one
     var fe=liveFrontExp();
@@ -1396,8 +1415,9 @@ function feedStructMap(sym){
 // read tapeMap() it would re-latch its own output every tick and the book would never age out.
 function tapeMap(sym){
   try{
-    if(sym==='SPXW' && showingStaleBook()){
-      var B=lastBookLoad();
+    // (v15.02) BOTH governing books, not just SPXW — a QQQ chart asks tapeMap('QQQ').
+    if((sym==='SPXW'||sym==='QQQ') && showingStaleBook()){
+      var B=lastBookLoad(sym);
       if(B) return { pct:B.pct, king:B.king, kingKd:B.kingKd, count:B.count,
                      kingSrc:B.kingSrc, vel:{}, src:'lastbook', stale:true,
                      staleDay:B.day, staleTs:B.ts, staleExp:B.exp };
@@ -3280,7 +3300,8 @@ function velAt(k){
     // very columns this mode exists to show. The honesty lives one level up — recorderBlind() stops
     // it ever being written, and the face carries a badge naming the session and the time it froze.
     if(showingStaleBook()){
-      var B=lastBookLoad(), lv=B&&B.vel?(B.vel[String(k)]||B.vel[(+k).toFixed(2)]):null;
+      var _gs=null; try{ _gs=lastBookGov(activeSym()); }catch(eG){}
+      var B=lastBookLoad(_gs), lv=B&&B.vel?(B.vel[String(k)]||B.vel[(+k).toFixed(2)]):null;
       if(lv) return { v:lv, age:0, stale:false, lastBook:true };
       return null;
     }
@@ -17952,7 +17973,8 @@ function feedStatusHtml(){
   // That is failure pattern #5, and node --check cannot see it.
   try{
     if(showingStaleBook()){
-      var LB=lastBookLoad()||{};
+      var LB=null; try{ LB=lastBookLoad(lastBookGov(activeSym())); }catch(eLB){}
+      LB=LB||{};
       var lbT=''; try{ lbT=fmtClock(Math.floor((LB.ts||0)/1000)); }catch(eLT){}
       warn+=(warn?' ':'')+'<span title="THE MARKET IS CLOSED AND THE LIVE BOOK HAS ROLLED. Skylit drops the expired chain at the close, so the ladder on the page is the NEXT expiry with every rate of change at zero. What you are looking at is the last healthy reading of the '+
         (LB.day||'')+' session, frozen at '+lbT+' \u2014 real numbers, not live ones. Nothing is recorded while this shows: the recorder is blind to it by construction (recorderBlind), so it can never enter data/*.json as though it were live. Turn it off in the gear to watch the overnight book instead."'+
@@ -20106,6 +20128,10 @@ function ensureV3Css(){
     '#gpts-body .g3ladwrap{overflow-x:auto;overflow-y:hidden;margin:2px 0 3px}'+
     '#gpts-body .g3ladwrap::-webkit-scrollbar{height:5px}'+
     '#gpts-body .g3ladwrap::-webkit-scrollbar-thumb{background:#2a3340;border-radius:3px}'+
+    // ⚠ (v15.02) THE LADDER IS 618px WIDE BY CONSTRUCTION (LAD_ROC 534 + LAD_ROCW 84) AND HIS PANEL IS
+    // SET TO 560px, so the ROC column sits past the edge. `.g3ladwrap` ALREADY scrolls (above), so
+    // that content is reachable — I nearly added a second overflow rule for a problem that was
+    // already solved. The genuine clipping was the LEVEL CELL: a fixed 46px holding 234px of names.
     '#gpts-body .g3lad{position:relative;min-width:'+LAD_W+'px}'+
     '#gpts-body .g3chute{position:absolute;left:'+LAD_CH+'px;width:'+LAD_CHW+'px;top:0;bottom:0;'+
       'background:rgba(255,255,255,.035);border-left:1px solid #333e4d;border-right:1px solid #333e4d}'+
@@ -20142,7 +20168,10 @@ function ensureV3Css(){
     '#gpts-body .g3ldkknot.g3ldkS{background:#11161f;border:1.4px solid #e3c341}'+
     '#gpts-body .g3ldkY{background:#cdb4fa}'+
     '#gpts-body .g3ldkknot.g3ldkY{background:#11161f;border:1.4px solid #cdb4fa}'+
+    // ⚠ the level cell is a fixed 46px and silently overflowed whenever several levels shared a
+    // strike ("CW·T · CW0 · PDH ·" needed 234px). It ELLIPSES now, and the full list is in its title.
     '#gpts-body .g3ldlv{position:absolute;left:'+LAD_LVL+'px;width:'+LAD_LVLW+'px;text-align:right;font-size:8.4px;'+
+    'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'+
       'font-weight:800;color:#8b98a9;white-space:nowrap;transform:translateY(-50%);overflow:hidden;text-overflow:ellipsis;cursor:help;z-index:8}'+
     '#gpts-body .g3ldlvc{color:#7cc7ff}'+
     '#gpts-body .g3ldlvspyk{color:#cdb4fa}'+
@@ -20304,6 +20333,7 @@ function ensureV3Css(){
     '#gpts-body .g3daylv.tg{color:#5fd08a;background:rgba(46,194,126,.14);border:1px solid rgba(46,194,126,.40)}'+
     '#gpts-body .g3dayr.sp>*{height:5px;padding:0;border:0}'+
     '#gpts-body .g3dayhd{display:none}'+
+    '#gpts-body .g3daylv.g3lvmore{opacity:.62;font-weight:700}'+
     '#gpts-body .g3daylv.nd{color:#b98cff;background:rgba(150,110,255,.14);border:1px solid rgba(150,110,255,.42)}'+
     '#gpts-body .g3dayrow{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}'+
     '#gpts-body .g3daycdl{flex:0 0 82px}'+
@@ -22599,10 +22629,15 @@ function hlLevelHit(sym, D){
     var opDisp=D.open*rr;
     var LV=[];
     function add(px,name){ if(typeof px==='number' && isFinite(px) && px>0) LV.push({px:px,name:name}); }
+    // ⚠ (v15.02) NO IB, BY NAME — operator: "the lvl fields like slvl and tlvl, should not have ibh
+    // or ibl". Same rule the reversal levels already follow: an exclusion he states categorically is
+    // encoded categorically, never as a threshold that lets it back in on a coincidence.
     try{ var SL=sessionLevels(sym, rr);
-      if(SL){ add(SL.pdh,'PDH'); add(SL.pdl,'PDL'); add(SL.pdc,'PDC');
-              if(SL.ibSet){ add(SL.ibH,'IBH'); add(SL.ibL,'IBL'); } }
+      if(SL){ add(SL.pdh,'PDH'); add(SL.pdl,'PDL'); add(SL.pdc,'PDC'); }
     }catch(eS){}
+    // (v15.02) the profile levels join the sweep sets — he listed them among the key levels.
+    try{ var PRs=priorProfile(); if(PRs){ add(PRs.poc,'POC'); add(PRs.vah,'VAH'); add(PRs.val,'VAL'); } }catch(ePs){}
+    try{ var ONs=overnightHL(); if(ONs){ add(ONs.onh,'ONH'); add(ONs.onl,'ONL'); } }catch(eOs){}
     try{ var IL=ifLadder(sym);
       if(IL && !IL.err && IL.rows) IL.rows.forEach(function(r){
         var ids=String(r.id||'').split('·');
@@ -27098,7 +27133,7 @@ window.__gptsDebug.kingTrack = function(){
 };
 window.__gptsDebug.lastBook = function(){
   var B=null, P=null;
-  try{ B=lastBookLoad(); }catch(e){}
+  try{ B={ SPXW:lastBookLoad('SPXW'), QQQ:lastBookLoad('QQQ') }; }catch(e){}
   try{ P=sessionPhase(); }catch(e){}
   var fe=null; try{ fe=liveFrontExp(); }catch(e){}
   var on=false; try{ on=showingStaleBook(); }catch(e){}
@@ -27225,15 +27260,27 @@ function secDay(sym){
     // it is on the rail and the chart already, and it was consuming the space the extra levels need.
     // ⚠ Furthest-first, so the deepest thing the excursion reached reads first. The prices survive
     // in the HOVER, because dropping them from the face must not make them unreachable.
+    // ⚠⚠ (v15.02) TWO ON THE A ROW, THE REST ON THE E ROW — operator: "it can have upto 2 levels,
+    // so for example tlvl can have pdl and poc. if there are more, use the expected row." The E row
+    // is otherwise empty in these two columns, so the overflow costs no space at all and nothing is
+    // dropped: every level stays on the face, and the full list with PRICES stays in the hover.
+    var LV_FACE=2;
+    function lvArr(LS){ return (LS && LS.length!=null) ? LS : (LS ? [LS] : []); }
+    function lvTip(arr){
+      var tip=[]; for(var i=0;i<arr.length;i++) tip.push(arr[i].name+' '+frameNum(arr[i].px));
+      return g3esc(tip.join('  \u00b7  '))+' \u2014 every level price traded BEYOND between the open and that extreme, furthest first.';
+    }
     function lvTag(LS, cls){
-      var arr = (LS && LS.length!=null) ? LS : (LS ? [LS] : []);
+      var arr=lvArr(LS);
       if(!arr.length) return '\u2014';
-      var names=[], tip=[];
-      for(var i=0;i<arr.length && i<4;i++){ names.push(g3esc(arr[i].name)); tip.push(arr[i].name+' '+frameNum(arr[i].px)); }
-      var more=(arr.length>4)?('<span class="g3daydim">+'+(arr.length-4)+'</span>'):'';
-      return '<span class="g3daylv '+cls+'" title="'+g3esc(tip.join('  \u00b7  '))+
-             ' \u2014 every level price traded BEYOND between the open and that extreme, furthest first.">'+
-             names.join(' ')+'</span>'+more;
+      var names=[]; for(var i=0;i<arr.length && i<LV_FACE;i++) names.push(g3esc(arr[i].name));
+      return '<span class="g3daylv '+cls+'" title="'+lvTip(arr)+'">'+names.join(' ')+'</span>';
+    }
+    function lvMore(LS, cls){
+      var arr=lvArr(LS);
+      if(arr.length<=LV_FACE) return '';
+      var names=[]; for(var i=LV_FACE;i<arr.length && i<LV_FACE+3;i++) names.push(g3esc(arr[i].name));
+      return '<span class="g3daylv '+cls+' g3lvmore" title="'+lvTip(arr)+'">'+names.join(' ')+'</span>';
     }
     // (v14.89) the node chip: which BOOK's king the extreme tested, and how far off it landed.
     // ⚠ The book is the point — he asked for "either a spy node, spxy node or a qqq node" by name.
@@ -27380,7 +27427,7 @@ function secDay(sym){
       hlv(D.mud,hlDur) ]);
     h+=row('e','E',[
       '',
-      '',
+      lvMore(LVH&&LVH.sweepAll, 'sw'),
       '',
       '~'+hlClock(base.firstClock),
       '~'+hlDur(base.tookMin),
@@ -27425,7 +27472,7 @@ function secDay(sym){
       (PTL&&PTL.ok&&PTL.ptMud!=null)?hlDur(PTL.ptMud):DASH ]);
     h+=row('e','E',[
       '',
-      '',
+      lvMore(LVH&&LVH.targetAll, 'tg'),
       '',
       '~'+hlClock(base.secondClock),
       (PTL&&PTL.ok)?('~'+hlDur(PTL.exp.ptMin)):('~'+hlDur(PT_META.ptMin)),

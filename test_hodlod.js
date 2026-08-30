@@ -523,7 +523,7 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
      'w2 ...and the early return that hid everything is gone');
   // ⚠ COUNT, DO NOT JUST MATCH. There are TWO A rows (the excursion block and the day block) and a
   // single-match assertion passed while one of them was mutated away — it found the survivor.
-  // (v15.01) THREE A rows now — the excursion block, the day block, and the new SPAN row that
+  // (v15.02) THREE A rows now — the excursion block, the day block, and the new SPAN row that
   // carries the GREEN/RED call. The count is kept (not loosened to >=1) for the reason above: a
   // single-match assertion passed while one row was mutated away.
   ok((SD.match(/NOREAD \? row\('a','A'/g)||[]).length === 3,
@@ -602,10 +602,10 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
 
   const SD2 = ex('secDay');
   ok(/PTL=hlPT\(sym, D\)/.test(SD2), 'p14 secDay computes it');
-  // (v15.01) LC|HC GAP·RNG moved OUT of the table and into the strip beside the read — operator:
+  // (v15.02) LC|HC GAP·RNG moved OUT of the table and into the strip beside the read — operator:
   // "keep the HL metrics ... at the top to the right of the forecast". So the header no longer
   // names it; the STRIP does. Both halves are asserted so the leg cannot go missing entirely.
-  // (v15.01) the LC pair moved AGAIN — out of the v15.01 top strip and into ROW 3, which is where
+  // (v15.02) the LC pair moved AGAIN — out of the v15.02 top strip and into ROW 3, which is where
   // he asked for it ("a thrid row for the HL fields"). Both existed for one build and printed the
   // spans twice. Assert the row-3 home, and that the strip is gone.
   ok(/'PT TOOK','PT'/.test(SD2) && /'LC GAP','LC RNG','LC \$'/.test(SD2) && !/g3dayhl/.test(SD2),
@@ -616,7 +616,7 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
 
 
 // ============================================================================================
-// (v15.01) SLvl / TLvl, AND THE PT LEG'S WICK FAMILY
+// (v15.02) SLvl / TLvl, AND THE PT LEG'S WICK FAMILY
 // ============================================================================================
 {
   const LH = ex('hlLevelHit'), PT2 = ex('hlPT'), SD3 = ex('secDay');
@@ -635,7 +635,7 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
 
   // ---- THE FURTHEST ONE, NOT THE FIRST ------------------------------------------------------
   // A move that clears three levels is described by the LAST one it cleared.
-  // (v15.01) the cell now lists EVERY level taken out, furthest FIRST — he asked for names only so
+  // (v15.02) the cell now lists EVERY level taken out, furthest FIRST — he asked for names only so
   // several fit ("PDH, CW, VAH, POC"). The furthest-first ordering is the same rule as before, now
   // expressed as a sort rather than a single winner; `furthest()` still exists and returns [0].
   ok(/hit\.sort\(function\(a,b\)\{ return up \? \(b\.px-a\.px\) : \(a\.px-b\.px\); \}\)/.test(LH),

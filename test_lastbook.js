@@ -95,8 +95,28 @@ ok(/if\(!P \|\| !P\.rth\) return;/.test(LBS),'l2 nothing is latched outside RTH 
 ok(/n>=SK_MIN_STRIKES/.test(LBS),
    'l3 a DEGRADED book is never latched — it would be served for hours as though it were the close');
 // ⚠ the latch must read the RAW reader, never the front door, or it re-latches its own output.
-ok(/tapeMapLive\('SPXW'\)/.test(LBS),
+// (v15.02) the book is now a PARAMETER — SPXW and QQQ are both latched — but the invariant is
+// unchanged and is what this asserts: the RAW reader, never the front door.
+ok(/tapeMapLive\(bk\)/.test(LBS) && !/tapeMap\(bk\)/.test(LBS),
    'l4 the latch reads tapeMapLive, so it can never feed itself and never ages out');
+
+// ---- (v15.02) ONE LATCH PER GOVERNING BOOK ----------------------------------------------------
+// ⚠⚠ It stored ONE book (SPXW) under one key while the serve gate never asked which chart was
+// drawn. Right for SPY, whose ladder is governed by SPX; WRONG for QQQ, governed by its own book —
+// which was never latched at all. He switched to QQQ after the close and the ladder was empty.
+ok(/\['SPXW','QQQ'\]\.forEach/.test(LBS), 'l10 BOTH governing books are latched');
+ok(/if\(!store\.SPXW && !store\.QQQ\) return;/.test(LBS),
+   'l11 ...and a latch is never overwritten with nothing');
+const LBL2=(()=>{const i=src.indexOf('function lastBookLoad(');const j=src.indexOf('\nfunction ',i+5);return src.slice(i,j);})();
+ok(/if\(LASTBOOK\.pct\) return/.test(LBL2),
+   'l12 a legacy single-book payload still reads — an old latch is not silently lost');
+ok(/function lastBookGov/.test(src) && /sym==='QQQ'\) \? 'QQQ' : 'SPXW'/.test(src),
+   'l13 the governing book is named per symbol');
+const SSB2=(()=>{const i=src.indexOf('function showingStaleBook(');const j=src.indexOf('\nfunction ',i+5);return src.slice(i,j);})();
+ok(/lastBookLoad\(lastBookGov\(_sy\)\)/.test(SSB2),
+   'l14 the serve gate asks for the book that governs the CHART BEING DRAWN');
+ok(/\(sym==='SPXW'\|\|sym==='QQQ'\) && showingStaleBook\(\)/.test(src),
+   'l15 tapeMap serves the stale book for BOTH symbols, not SPXW alone');
 
 // ---- 4 · THE FRONT DOOR / RAW READER SPLIT ---------------------------------------------------
 ok(/function tapeMapLive\(sym\)/.test(src), 't1 the original reader survives as tapeMapLive');

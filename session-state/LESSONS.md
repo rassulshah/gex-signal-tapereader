@@ -131,6 +131,27 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.02 · 2026-08-30 · **A PER-SYMBOL FEATURE STORED IN A SYMBOL-LESS KEY**
+
+The last-session book latched SPXW into `gpts_lastbook_v1` — one key, no symbol dimension — while the
+serve gate asked only "is there a latch?", never "for which chart?". Correct on SPY by coincidence,
+because SPY's ladder is governed by SPX. **Empty on QQQ, whose book was never latched at all.**
+
+⚠⚠ **THE BUG WAS INVISIBLE FOR AS LONG AS HE STAYED ON SPY.** A feature that is right for the
+default case and absent for every other one looks finished. **When a value is per-symbol, the KEY
+must be per-symbol** — storing it flat is the bug, and the missing dimension is what makes it
+undetectable from the working case.
+
+⚠ AND I ALMOST FIXED A PROBLEM THAT DID NOT EXIST. I diagnosed "the labels are cut off" as the
+ladder overflowing the panel and wrote an `overflow-x:auto` rule — which was ALREADY THERE, 7 lines
+above mine. The ladder scrolls; it was never clipped. **Read the existing CSS before adding to it**;
+the real clipping was one fixed-width cell.
+
+⚠ A LOOSE ADJACENCY WINDOW PASSED ON A NEIGHBOUR. Asserting `text-overflow:ellipsis` within 400
+chars of `.g3ldlv` stayed green after the rule was deleted, because the file has EIGHT such
+declarations and the next one was in range. Tightened to the exact fragment at <200. **When a token
+is common in the file, proximity is not identity.**
+
 ### v15.01 · 2026-08-30 · **HE QUESTIONED THE OUTPUT AND THE OUTPUT WAS RIGHT; THE RULE BEHIND IT WAS NOT**
 
 "are you sure this is correct because the candle shows the market took out both the prior day high

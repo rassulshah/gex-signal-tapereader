@@ -1,3 +1,35 @@
+## v15.02 — the QQQ ladder was empty because only SPXW was ever latched
+
+> "there is something wrong with the ladder .. it has no data from friday which it is suppose to
+> show so i can continue working on it and the lables are cutt off"
+
+**`lastBookSave()` latched ONE book — SPXW — under one key, and the serve gate never asked which
+chart was drawn.** That is correct for SPY, whose ladder is governed by SPX. It is wrong for QQQ,
+governed by its own book, **which was never latched at all**. He switched to QQQ after the close and
+there was nothing to serve.
+
+Both governing books are latched now, `lastBookGov(sym)` names which one a chart needs, and every
+consumer — `tapeMap`, the velocity read, the frozen-book badge, the debug surface — asks for the
+right one. ⚠ A legacy single-book payload still reads, so an existing latch is not silently lost, and
+a latch is never overwritten with nothing.
+
+### the labels
+
+⚠ **The ladder was NOT clipped — `.g3ladwrap` already scrolls.** It is 618px wide by construction
+(`LAD_ROC 534 + LAD_ROCW 84`) against his 560px panel, so the ROC column sits offscreen but reachable.
+I nearly added a second overflow rule for a problem already solved. **The genuine clipping was the
+LEVEL CELL**: a fixed 46px holding 234px of names (`CW·T · CW0 · PDH ·`). It ellipses now, full list
+in the title.
+
+### SLvl / TLvl
+
+> "should not have ibh or ibl and it can have upto 2 levels ... if there are more, use the expected row"
+
+IB excluded **by name**, the same way the reversal levels exclude it — an exclusion stated
+categorically is encoded categorically, never as a threshold that readmits it on a coincidence. Two
+names on the A row; the rest drop to the **E row**, which was blank in those two columns, so the
+overflow costs no space and nothing is lost. POC/VAH/VAL and ONH/ONL join the sweep sets.
+
 ## v15.01 — the reversal band was symmetric, and it should never have been
 
 > "are you sure this is correct because the candle shows the market took out both the prior day high
