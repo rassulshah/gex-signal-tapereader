@@ -131,6 +131,30 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v14.96 · 2026-08-30 · **A TEST THAT PASSED WHILE THE SCREEN WAS VISIBLY BROKEN**
+
+He said "the alignment is messe up". The ⓪a section was THREE separate `display:table` divs, and a
+table sizes its columns from its OWN content — so the three laid out independently and block 2 began
+halfway across the row.
+
+⚠⚠ **`test_nodeat` n29 ASSERTED THE BLOCKS HAD EQUAL CELL COUNTS, AND IT PASSED.** I wrote it in
+v14.90 believing it enforced his alignment contract, and I said so in the changelog. **Equal cell
+COUNTS do not produce equal cell WIDTHS across independent layout contexts.** The property he asked
+for is a RENDERING property; counting cells cannot see it, and a green test made me stop looking.
+
+⚠ **THE RULE: a test must assert the MECHANISM that delivers the property, not a proxy that
+correlates with it.** The mechanism here is ONE TABLE. That is now what is asserted — one table, and
+every row the same width — and splitting it back into three is caught.
+
+⚠ AND THE HOVER ALMOST DIED WITH THE WRAPPER. The GREEN/RED tip lived on the block-3 div; removing
+that div would have deleted the only place the model's n, CI, base rate and null results are
+reachable. Fourth time this shape has appeared (ROLL BIAS, the INFERRED caveat, the NO CALL, now
+this). **Before deleting a container, list what only lives on it.**
+
+⚠ The candle wrapped above the table because I set `flex:1 1 380px` on a 560px panel — it could
+never sit beside a 150px candle. I chose that number without checking his panel width, which is
+recorded in localStorage and was two tool calls away.
+
 ### v14.95 · 2026-08-30 · **`SYM` vs `sym` — ONE TYPO, THREE BROKEN FEATURES, ZERO RED TESTS**
 
 The operator said "look at my screen and check yourself". I did, and the entire ⓪a section was

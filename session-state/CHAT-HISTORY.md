@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-30 · v14.95 · session `2df3ccfa` — v14.95 - SYM vs sym: the section was gone
+## 2026-08-30 · v14.96 · session `2df3ccfa` — v14.96 - one table, so the columns align
 
-_32 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
+_33 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
 
 ### THE EXCHANGE
 
@@ -752,32 +752,40 @@ The lint found a real one (`GDa`) plus false positives — my declaration parser
 `pNow` is declared too — it's the second declarator in a **multi-line** `var` statement, and my regex stops at the newline. Third parsing bug in my own lint:
 The lint survived both mutations — so it isn't actually detecting anything. My loosened parser is over-capturing and sweeping bad identifiers into the "declared" set. Let me find out …[trimmed]
 
+**OPERATOR:**
+> the alignment is messe up for the candle . and other things are also messed up .. check and look at the screen
+
+**me (00:55):** The section is back. Let me zoom in to see the alignment properly:
+Now I can see both problems clearly.
+
+**The alignment failure is structural.** Block 1, block 2 and block 3 are three *separate* `display:table` elements — each sizes its own columns independently. Equal cell *counts* (which my test asserts) never produce equal cell *widths* across separate tables. Block 2's content starts halfway across because its own table laid itself out on its own content.
+
+**And the candle wrapped above** instead of sitting beside, because my flex-basis was too wide for your 560px panel.
+The test split blocks on `g3dayg6`, which no longer exists — there's one table now. Rewriting those assertions to the stronger form that single-table alignment actually requires:
+
 ### DECISIONS
 
-- **Source greps cannot prove code RUNS.** 47 assertions about ⓪a and none saw a ReferenceError that
-  deleted the whole section. `test_undefined_ids.js` closes that class.
-- **A swallow around a section turns a typo into an invisible deletion**, and a catch that returns a
-  neutral value turns a crash into a plausible reading. Both happened here from one typo.
-- **A lint that has been loosened to remove false alarms must be re-mutation-tested** — mine passed
-  five assertions while detecting nothing.
+- **A test must assert the MECHANISM, not a proxy.** n29 checked equal cell COUNTS and passed while
+  the screen was visibly misaligned. Alignment is a rendering property; only ONE TABLE delivers it.
+- **Blocks are separated by spacer ROWS**, never by new tables.
+- **The candle's flex-basis must fit his actual panel** (560px, in localStorage) — 380px never could.
 
 ### SHIPPED
 
-**v14.95** — `SYM` -> `sym` in secDay (4 sites; the candle, the node engine and the GREEN/RED call
-were all dead). `test_undefined_ids.js`, mutation-proved against three injected identifiers.
+**v14.96** — the ⓪a section is one table; n27-n30 rewritten to assert one-table + uniform width;
+GREEN/RED hover re-homed off the retired wrapper; candle 132px beside a 240px-basis table.
 
 ### OPEN AT CLOSE
 
-- ⚠⚠ **THE `T:` MISMATCH IS STILL ON HIS SCREEN** — `T: 773.34 −6937.26` against a 7710.6 pill, on
-  v14.94. The v14.93/94 fix did NOT resolve it, so the divergence has another source. Diagnose from
-  the live panel, not from the source: read `ifLadder().scaleSrc` and `emBand().scaleUsed` together.
-- **Verify ⓪a renders** once v14.95 is installed — that is the first thing to confirm.
-- ⚠ `deriv.zg` recorded on 25-70% of bars; gx-010 needs >=80%.
-- **gx-008 forward scoring** can start immediately.
+- ⚠⚠ **THE `T:` MISMATCH IS STILL UNRESOLVED** — `T: 773.34 −6937.26` against a 7710.6 pill survived
+  v14.93 and v14.94. Diagnose LIVE: read `ifLadder().scaleSrc` beside `emBand().scaleUsed`.
+- **Verify the layout on his screen** after v14.96 — that is the point of the build.
+- ⚠ `deriv.zg` on 25-70% of bars; gx-010 needs >=80%.
 
 ### COMMITS THIS CONTEXT
 
 ```
+d716fb6 v14.95: SYM vs sym killed the whole day section; add an undeclared-identifier lint
 62d1cdc v14.94: one displayScale function; session levels derive instead of declining
 114d933 v14.93: the 10x scale mismatch - one switch, two preconditions, fixed in both places it lived
 242651c record: fill the v14.92 close-out
@@ -789,12 +797,107 @@ d19bfc5 record: the installer manifest floor, and close out v14.92
 8317722 record: the value-area negative and the filter-control lesson
 71b8309 nightly: prior-day value area tested and closed negative; add subset_null, the control filters need
 64f194b record: fill the session close-out for the nightly loop design
-012dcc0 record: the nightly loop design
 ```
 
 ---
 
 <!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-30 · v14.95 · session `2df3ccfa` — v14.95 - SYM vs sym: the section was gone
+**OPERATOR:**
+> try this rule and tell me how it works out for the deflections.  in a downmove the low of the candle has to be within 1 atr  of the high of the  node but  cannot be more than 2 atr below the node.  check this and see if it covers all the deflections.
+**OPERATOR:**
+> tell me how good the rule is for identiifying deflections . for example is 2 atr too much, should it be 1.5 at or  should it be the close which is  within 1 atr below the node ?   i want ot finalize deflections
+**OPERATOR:**
+> ok.. so , tell me simply what should the deflection range be above and below the node
+**OPERATOR:**
+> ok..  now have you completed your detection of deflections
+**OPERATOR:**
+> ok do it.
+**OPERATOR:**
+> try giving me the install again
+**OPERATOR:**
+> how was it working before ?  you just gave me the install file .. what happened
+**OPERATOR:**
+> yes
+**OPERATOR:**
+> reloaded check
+**OPERATOR:**
+> you did not implement all the changes we have been talking about . see pic
+**OPERATOR:**
+> look at the top also .  it doesn't have the changes we discussed  .   even the dntend Brk area was also removed .. all those changes and you didn't implement any of them
+**OPERATOR:**
+> something is not right ..  the bottom row for LOD should be aligned  with the hod rows and its fields should be almost mirror image of the hod lines where applicable.  for example pt took is a mirror image of a took ..  use your intelligence and determine what should be there.  Also lets create a thrid row for the HL fields like HL Gap HL Rng  HL $ ,  im not sure LC Gap and LC rang should be .... figure it out ..  and give me mockup
+**OPERATOR:**
+> before we go any further.   do you realize that i am taking the model of the daily bar and trying to measure the movements in it from open to close
+**OPERATOR:**
+> ok.. show me the mockup .  i am also interested in seeing a daily bar being constructed througout the day . maybe show it to the right . of the statistics.  so i can visually see what is going on .. can you come up with tsomething liek this ?   show me mockup
+**OPERATOR:**
+> the fields dont show sequence step by step .. can you do better. look at how i tried to identify an extremity first  etc..
+**OPERATOR:**
+> how can you take my approach and just enhance that .. i dont want to deviate too much from what i have
+**OPERATOR:**
+> ok i'll go with your recommendation .. give me mockup
+**OPERATOR:**
+> in the last row there is an empty first cell where we can put the actual and expected values for a GD or a RD.  but first i need you to have a model that predicts this . you can use the data , the day of week, overnight , open  etc..   but come up with a way to identify if today will be green or red. if you need more than the open like the 1st hour or 30 min IB range and break to figure this out , let me know, Whatever the case, i need a model to predict if we close above or below the open to determine if today will be a red or green day with decent probability .
+**OPERATOR:**
+> you can also use prior day values .  it maybe helpfull like if a prior day is green  or red and see how that impacts the ability to forecast as well as if we are above or below the weekly open
+**OPERATOR:**
+> so how good is it at predicting
+**OPERATOR:**
+> ok build it and move the candle to the left side of the app, currently its on the right side of the app..    so the daily candle and its contstruction will be my mental model for daytrading using all of these measurements . let me know if there are any other measurements that should be added and if you can make the data points, models goto the llm everynight for refinement and prediction with the gamma book  to see how it can better predict things like hod lod  green day  red day  price and time projection , trend reversal , deflections etc..  its very important that this feature be a world class feature but it will require your help in constant refinement via the use of llm to identify additional datapoints and measurements to better prediction
+**OPERATOR:**
+> Yes.
+**OPERATOR:**
+> How can you use other datapoints like prior day poc vah val. Did you do any tests on whether they provide support resistance or help predict highs and lows or whether they help determine if we will close green or red.  For example, if we open above prior day poc or vah or in between vah and Val, how does that help us predict ?   What about combinations.
+**OPERATOR:**
+> There is one more thing but I’m not sure if you have the data.  The regime.  If we are in a positive gamma vs negative gamma regime would be an important filter to predicting reversals support resistance va trend continuation.  Is there any way that can be obtained and included in testing
+**OPERATOR:**
+> So I want you to tell me what is the useful result of all of this testing. Can you predict anything better like hod lod Green Day vs red day reversals deflections etc.
+**OPERATOR:**
+> So where are we with all of this.  Explain simply
+**OPERATOR:**
+> Fix the bugs and issues so we can continue enhancing
+**OPERATOR:**
+> you need to give me the tampermonkey link
+**OPERATOR:**
+> reloaded
+**OPERATOR:**
+> the problem is that i wont be able to work. last time we had this problem , you showed the stale data so that i could continue working ..
+**OPERATOR:**
+> i reloaded.
+**OPERATOR:**
+> look at my screen and check yourself
+
+### DECISIONS
+
+- **Source greps cannot prove code RUNS.** 47 assertions about ⓪a and none saw a ReferenceError that
+  deleted the whole section. `test_undefined_ids.js` closes that class.
+- **A swallow around a section turns a typo into an invisible deletion**, and a catch that returns a
+  neutral value turns a crash into a plausible reading. Both happened here from one typo.
+- **A lint that has been loosened to remove false alarms must be re-mutation-tested** — mine passed
+  five assertions while detecting nothing.
+
+
+### SHIPPED
+
+**v14.95** — `SYM` -> `sym` in secDay (4 sites; the candle, the node engine and the GREEN/RED call
+were all dead). `test_undefined_ids.js`, mutation-proved against three injected identifiers.
+
+
+### OPEN AT CLOSE
+
+- ⚠⚠ **THE `T:` MISMATCH IS STILL ON HIS SCREEN** — `T: 773.34 −6937.26` against a 7710.6 pill, on
+  v14.94. The v14.93/94 fix did NOT resolve it, so the divergence has another source. Diagnose from
+  the live panel, not from the source: read `ifLadder().scaleSrc` and `emBand().scaleUsed` together.
+- **Verify ⓪a renders** once v14.95 is installed — that is the first thing to confirm.
+- ⚠ `deriv.zg` recorded on 25-70% of bars; gx-010 needs >=80%.
+- **gx-008 forward scoring** can start immediately.
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 

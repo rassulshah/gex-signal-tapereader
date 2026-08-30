@@ -1,3 +1,24 @@
+## v14.96 — three tables cannot align; now there is one
+
+> "the alignment is messe up for the candle . and other things are also messed up"
+
+The ⓪a section was **three separate `display:table` divs**. A table sizes its columns from ITS OWN
+content, so three of them lay out independently — on his panel block 2 began halfway across the row
+while block 1 started at the left edge. **PTWick% under WICK%, PTMUD under MUD** was never going to
+happen.
+
+⚠⚠ **AND `test_nodeat` PASSED THE WHOLE TIME.** It asserted the blocks had equal CELL COUNTS. Equal
+counts do not produce equal WIDTHS across independent layout contexts — the alignment he asked for
+is a RENDERING property, and no amount of counting cells can verify it. The test now asserts what
+actually delivers it: **exactly one table, and every row in it the same width.**
+
+Blocks are separated by spacer ROWS instead of new tables. The GREEN/RED hover, which lived on the
+retired wrapper div, was re-homed onto the DAY header — the same lesson as the ROLL BIAS rehome:
+when a container goes, list what only lived on it first.
+
+**The candle now sits beside the table** rather than wrapping above it: the flex-basis was 380px on
+a 560px panel, so it could never fit next to a 150px candle. Now 132px + 240px.
+
 ## v14.95 — the ⓪a section was gone, and one typo did it
 
 > "look at my screen and check yourself"

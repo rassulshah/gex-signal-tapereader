@@ -85,13 +85,16 @@ ok(/t=\+?'\+DEFL_META\.tTop5|DEFL_META\.tTop5/.test(src), 'n26 the null-result t
 
 // ---- the table must not shear: header, A and E rows must agree per block ---------------------
 (function(){
-  const i=src.indexOf("h+=row('hd','',['1ST'");
-  if(i<0){ ok(false,'n27 the HL blocks are findable'); return; }
-  // ⚠ STRIP COMMENTS FIRST. This counter reported block 2 as 11 cells when it has 10 — it was
-  // counting commas inside a `//` comment sitting between two cells ("...= W.END, and TOOK + BOP
-  // = WICK to the minute"). Ninth comment-blind assertion this session, and the first one inside a
-  // test HELPER rather than an assertion. A helper that reads source must strip comments too.
-  const blk=src.slice(i,i+13000).replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
+  // ⚠⚠ (v14.96) ONE TABLE, SO ONE ASSERTION. This used to split the section on the `g3dayg6` class
+  // and compare each block's cell counts. That test PASSED while the operator's screen was visibly
+  // broken: three separate `display:table` divs each size columns from THEIR OWN content, so equal
+  // cell COUNTS never produced equal cell WIDTHS — block 2 began halfway across his row.
+  // ⚠ The alignment he asked for is a RENDERING property. Only a SINGLE table delivers it, so the
+  // test is now: exactly one table, and every row in it the same width.
+  const i=src.indexOf("h+=row('hd','',['1ST");
+  if(i<0){ ok(false,'n27 the HL rows are findable'); return; }
+  const j=src.indexOf('\nfunction ', i);
+  const blk=src.slice(i, j<0?i+14000:j).replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
   const cells=(txt)=>{ let dep={'[':0,'(':0,'{':0},n=1,q=null,esc=false;
     for(const ch of txt.slice(1)){
       if(q){ if(esc)esc=false; else if(ch==='\\')esc=true; else if(ch===q)q=null; continue; }
@@ -102,31 +105,22 @@ ok(/t=\+?'\+DEFL_META\.tTop5|DEFL_META\.tTop5/.test(src), 'n26 the null-result t
       else if(ch===']'){ if(dep['[']===0) return n; dep['[']--; }
       else if(ch===','&&!dep['[']&&!dep['(']&&!dep['{']) n++;
     } return null; };
-  const re=/row\('(hd|a|e)',\s*'[^']*',\s*\[/g; let m, counts=[];
-  while((m=re.exec(blk))) counts.push([m.group||m[1], cells(blk.slice(m.index+m[0].length-1)), m.index]);
-  // ⚠ split on the DIV that opens block 2, not on the string "2ND" — block 2's header row starts
-  // BEFORE the '2ND' literal it contains, so a string split puts it in block 1 and the test fails
-  // on itself. (It did, first run.)
-  const bound=blk.indexOf('g3dayg6');
-  const b1=counts.filter(c=>c[2]<bound).map(c=>c[1]);
-  const b2=counts.filter(c=>c[2]>bound).map(c=>c[1]);
-  ok(b1.length>=3 && b1.every(x=>x===b1[0]), 'n27 block 1 rows all have the same cell count', b1);
-  ok(b2.length>=3 && b2.every(x=>x===b2[0]), 'n28 block 2 rows all have the same cell count', b2);
-  // ⚠⚠ THE ALIGNMENT CONTRACT (v14.95). The blocks must be the SAME WIDTH or his column pairing
-  // silently breaks — PTWick% under WICK%, PTMUD under MUD, from his very first sketch. This is
-  // exactly what shipped broken in v14.95: HL GAP / HL RNG / LC·RNG were still living in block 2
-  // and pushed the whole PT family three columns left. A per-block width check would NOT have
-  // caught it; only comparing the two does.
-  ok(b1[0]===b2[0], 'n29 both blocks are the SAME width — the alignment contract', [b1[0],b2[0]]);
-  ok(b2.every(x=>x===b2[0]), 'n29b row 3 joins the same contract', b2);
-  ok(b1[0]===10, 'n30 the agreed scheme is 10 columns', b1[0]);
+  const widths=[];
+  for(const m of blk.matchAll(/row\('(hd|a|e|sp)',\s*'[^']*',\s*\[/g))
+    widths.push(cells(blk.slice(m.index+m[0].length-1)));
+  ok(widths.length>=8, 'n27 all the section rows are found', widths.length);
+  ok(widths.every(w=>w===widths[0]), 'n28 EVERY row is the same width — the alignment contract', widths);
+  ok(widths[0]===10, 'n29 ...and that width is the agreed 10 columns', widths[0]);
+  const sd=src.slice(src.indexOf('function secDay(sym){'), j<0?undefined:j);
+  const opens=(sd.match(/g3dayg /g)||[]).length;
+  ok(opens===1, 'n30 the section is ONE table — separate tables cannot align columns', opens);
 })();
 
 // ---- the headers he named --------------------------------------------------------------------
 ok(/'HodN':'LodN'/.test(src), 'n31 the first-extreme header switches HodN/LodN with the extreme');
 ok(/'PTN'/.test(src), 'n32 PTN is a column on the second row');
 
-// ---- (v14.95) THE AGREED REMOVALS. Each was recorded as done and was still rendering. ---------
+// ---- (v14.96) THE AGREED REMOVALS. Each was recorded as done and was still rendering. ---------
 const live=src.replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
 ok(!/secs\s*=\s*\[\s*secBias/.test(live), 'n33 the TREND section is off the face (secBias not mounted)');
 ok(/function secBias/.test(live), 'n34 ...but secBias SURVIVES — bias.confirm still feeds the recorder');
@@ -138,7 +132,7 @@ ok(/fsRead\s*\(/.test(live), 'n36 ...but fsRead() survives — the read-line hov
 ok(!/g3steps/.test(live), 'n37 the dead step-bar CSS is gone');
 // ⚠ CSS-BLIND, like n35 was. `/g3dayhl/` matched the STYLE RULE, so blanking the emitter left it
 // green — the mutation survived. Assert on the emitter, as with n35.
-// (v14.95) the strip is superseded by ROW 3 — he asked for "a thrid row for the HL fields". Both
+// (v14.96) the strip is superseded by ROW 3 — he asked for "a thrid row for the HL fields". Both
 // shipped for one build and printed HL GAP/HL RNG TWICE; n39 caught it. Now: row 3 owns them, and
 // the strip must be GONE, or the duplication comes back.
 ok(!/g3dayhl/.test(live), 'n38 the old top strip is gone — row 3 owns the spans now');

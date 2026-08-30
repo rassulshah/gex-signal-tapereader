@@ -107,7 +107,7 @@ ok(!/g3daylb/.test(SD), 'f4 the survival ladder is GONE — it answered the verd
 ok(!/g3dayfoot/.test(SD), 'f5 ...and the white honesty line is gone from the face');
 ok(/rates live/.test(SD) && /rates baked in/.test(SD),
    'f6 ...but live-vs-baked stays VISIBLE, because a frozen corpus changes how much to trust the row');
-// (v14.95) THE FAR SIDE TABLE IS OFF THE FACE — his agreed layout ends "FAR SIDE block: REMOVED".
+// (v14.96) THE FAR SIDE TABLE IS OFF THE FACE — his agreed layout ends "FAR SIDE block: REMOVED".
 // The NO CALL is NOT: it moved into the read-line hover, because it was the sharpest statement the
 // model makes and the table was its only home. f7 guards the RE-HOMED text; f8 is retired with it,
 // since there is no longer a painted element to check the colour of.

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.95
+// @version    14.96
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.95';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.96';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -20302,10 +20302,12 @@ function ensureV3Css(){
       'border-radius:3px;line-height:12px;white-space:nowrap}'+
     '#gpts-body .g3daylv.sw{color:#e3b341;background:rgba(227,195,65,.13);border:1px solid rgba(227,195,65,.42)}'+
     '#gpts-body .g3daylv.tg{color:#5fd08a;background:rgba(46,194,126,.14);border:1px solid rgba(46,194,126,.40)}'+
+    '#gpts-body .g3dayr.sp>*{height:5px;padding:0;border:0}'+
+    '#gpts-body .g3dayhd{display:none}'+
     '#gpts-body .g3daylv.nd{color:#b98cff;background:rgba(150,110,255,.14);border:1px solid rgba(150,110,255,.42)}'+
     '#gpts-body .g3dayrow{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}'+
-    '#gpts-body .g3daycdl{flex:0 0 150px}'+
-    '#gpts-body .g3daytbl{flex:1 1 380px;min-width:0}'+
+    '#gpts-body .g3daycdl{flex:0 0 132px}'+
+    '#gpts-body .g3daytbl{flex:1 1 240px;min-width:0}'+
     '#gpts-body .g3cdl{display:block}'+
     '#gpts-body .g3cp{font-size:7.5px;font-weight:800}'+
     '#gpts-body .g3cl{font-size:8px;font-weight:800;fill:#e6edf5}'+
@@ -27103,13 +27105,13 @@ function secDay(sym){
       hlv(eW.wick,function(v){ return '~'+hlClock(mul(8,3600)+mul(30,60)+v*60); }),
       hlv(eW.wickPct,function(v){ return '~'+Math.round(v)+'%'; }),
       hlv(eW.mud,function(v){ return '~'+hlDur(v); }) ]);
-    h+='</div>';
+    // (v14.96) block 1 does NOT close here — all three blocks are ONE table now.
     // ---- block 2: THE DAY ------------------------------------------------------------------
     // (v14.87) block 2 carries the two legs that come AFTER the second extreme. PT TOOK / PT is the
     // excursion he defined; LC (or HC) GAP / RANGE is the same leg measured to the close. Both are
     // shown because they are 58% apart and answer different questions — see PT_META.
     var ptTag=(PTL&&PTL.ok)?PTL.lcTag:'LC';
-    h+='<div class="g3dayg g3dayg6">';
+    h+=row('sp','',['','','','','','','','','','']);   // (v14.96) spacer ROW, not a new table
     // ⚠⚠ THE COLUMN SCHEME IS HIS, FROM THE EIGHT MOCKUP ROUNDS, AND IT IS AN ALIGNMENT CONTRACT:
     //        1ST | SLvl | HodN | TIME | TOOK    | BOP | WICK | W.END   | WICK%   | MUD
     //        2ND | TLvl | LodN | TIME | PT TOOK | PT  | PTN  | (empty) | PTWick% | PTMUD
@@ -27169,7 +27171,11 @@ function secDay(sym){
       '\u26a0 The call lands ~'+GD_META.callEarly+' at the median, some days not until '+GD_META.callLate+' \u2014 never at the open. '+
       '\u26a0 It gives the SIGN only, never the size. \u26a0 PROVISIONAL: one instrument, '+GD_META.first+' to '+GD_META.last+
       ', no forward test yet \u2014 it is momentum, and momentum regimes end.';
-    h+='<div class="g3dayg g3dayg6"'+g3tip(gdTip)+'>';
+    h+=row('sp','',['','','','','','','','','','']);   // (v14.96) spacer ROW, not a new table
+    // ⚠ the GREEN/RED hover lost its wrapper div when the three tables became one. Re-homed onto
+    // the DAY header row — the same lesson as the ROLL BIAS rehome: when a container goes, list
+    // what only lived on it FIRST.
+    h+='<div class="g3dayhd"'+g3tip(gdTip)+'></div>';
     h+=row('hd','',['DAY','','PTN','','HL GAP','HL RNG','HL $','LC GAP','LC RNG','LC $']);
     h+= NOREAD ? row('a','A',[DASH,'',DASH,'',DASH,DASH,DASH,DASH,DASH,DASH]) : row('a','A',[
       (GDa ? ('<b class="'+(GDa.green?'g3gd':'g3rd')+'">'+(GDa.green?'GD':'RD')+'</b> <span class="g3daydim">'+
@@ -27196,7 +27202,7 @@ function secDay(sym){
       (PTL&&PTL.ok)?('~'+hlDur(PTL.exp.lcMin)):('~'+hlDur(PT_META.lcMin)),
       (PTL&&PTL.ok)?('~'+PTL.exp.lcPts.toFixed(1)+'pts'):('~'+PT_META.lcPts+'pts'),
       '' ]);
-    h+='</div>';
+    // (v14.96) ...and the single table closes once, below.
     h+='</div>';
     if(CDL) h+='</div></div>';   // (v14.91) close g3daytbl + g3dayrow
     // ---- (v14.72 -> v14.90) THE FAR SIDE BLOCK IS REMOVED --------------------------------

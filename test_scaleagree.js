@@ -59,7 +59,7 @@ ok(/dispIsFut\(\)\?dispR\(\):1/.test(EB), 's7 emBand still scales by dispR() —
 const CLEAN=src.replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
 ok(!/sessionLevels\(sym,\s*\(EB&&typeof EB\.scaleUsed==='number'\)\?EB\.scaleUsed:1\)/.test(CLEAN),
    's10 session levels no longer fall back to the CASH scale');
-// ⚠⚠ (v14.95) s11/s12 ORIGINALLY ASSERTED THAT SESSION LEVELS *DECLINE* WITHOUT A SCALE. That
+// ⚠⚠ (v14.96) s11/s12 ORIGINALLY ASSERTED THAT SESSION LEVELS *DECLINE* WITHOUT A SCALE. That
 // shipped, and it cost the operator his after-hours levels: "i wont be able to work". Declining is
 // right for a number that would be WRONG; it is wrong for a scale that can be DERIVED. The ratio is
 // a persisted EMA and survives the close. The assertions now pin the DERIVE behaviour.
