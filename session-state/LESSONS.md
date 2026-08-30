@@ -131,6 +131,28 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.04 · 2026-08-30 · **I TURNED EMPTY INTO GARBLED, AND EMPTY WAS BETTER**
+
+v15.02 made `showingStaleBook()` correctly return false on QQQ. That was right, and it dropped the
+ladder off the stale path onto the LIVE path — where the SPX-scale fallback lives. Result: strikes
+7611-7710 drawn against a 716 price, a 7,200-point span, every row inside NINE PIXELS.
+
+⚠⚠ **A CORRECT CHANGE CAN ROUTE EXECUTION ONTO A BROKEN PATH THAT NOTHING ELSE WAS EXERCISING.** The
+live QQQ path had presumably been wrong for a long time; nothing reached it because the stale path
+swallowed the case. **When a fix changes WHICH branch runs, the newly-reachable branch is now yours
+to verify** — I verified the branch I wrote and not the one I exposed.
+
+⚠ **DEGRADE TOWARD SILENCE, NOT TOWARD NOISE.** Empty was a poor experience; garbled was a worse
+one, because it destroyed his ability to read anything at all and looked like total breakage. When
+a render cannot be correct, refusing with a reason beats attempting it.
+
+⚠ THE GUARD IS ON THE FAILURE MODE, NOT THE CAUSE. The upstream scale fallback is still wrong and
+the message says so. Fixing the symptom while NAMING it as a symptom is honest; fixing it silently
+would have buried the real bug for another four builds.
+
+⚠ AND `if(false) return ...` SURVIVED THE ASSERTION AGAIN — every message string stayed matchable.
+Pinned the STATEMENT SHAPE instead: the return must be the first thing after the scale test.
+
 ### v15.03 · 2026-08-30 · **I SHIPPED A FIX THAT COULD NOT TAKE EFFECT UNTIL MONDAY AND DID NOT SAY SO**
 
 v15.02 made the last-session latch per-book, correctly. But the latch is WRITTEN DURING RTH — so on

@@ -59,7 +59,7 @@ ok(/dispIsFut\(\)\?dispR\(\):1/.test(EB), 's7 emBand still scales by dispR() —
 const CLEAN=src.replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
 ok(!/sessionLevels\(sym,\s*\(EB&&typeof EB\.scaleUsed==='number'\)\?EB\.scaleUsed:1\)/.test(CLEAN),
    's10 session levels no longer fall back to the CASH scale');
-// ⚠⚠ (v15.03) s11/s12 ORIGINALLY ASSERTED THAT SESSION LEVELS *DECLINE* WITHOUT A SCALE. That
+// ⚠⚠ (v15.04) s11/s12 ORIGINALLY ASSERTED THAT SESSION LEVELS *DECLINE* WITHOUT A SCALE. That
 // shipped, and it cost the operator his after-hours levels: "i wont be able to work". Declining is
 // right for a number that would be WRONG; it is wrong for a scale that can be DERIVED. The ratio is
 // a persisted EMA and survives the close. The assertions now pin the DERIVE behaviour.
@@ -72,7 +72,7 @@ ok(/dispIsFut\(\)/.test(DS) && /dispR\(\)/.test(DS), 's13 displayScale reads the
 ok(/'fut:live'/.test(DS) && /'fut:ratio'/.test(DS) && /src:'cash'/.test(DS), 's14 ...and names all three states');
 ok(!/return null/.test(DS), 's15 ...and NEVER returns nothing — a derivable scale is always derived');
 
-// ---- (v15.03) THE LADDER MUST VERIFY ITS OWN SCALE AGAINST PRICE --------------------------
+// ---- (v15.04) THE LADDER MUST VERIFY ITS OWN SCALE AGAINST PRICE --------------------------
 // ⚠⚠ Two builds "fixed" this by making call sites agree, and the operator's screen stayed broken,
 // because the fault is UPSTREAM: their payload can carry a spot on one scale and strikes on
 // another. No amount of consistency between consumers repairs an inconsistent SOURCE.
@@ -92,6 +92,31 @@ ok(/scaleSrc='fixed:'/.test(LAD), 's18 ...and a correction is NAMED, never appli
   ok(off>0.25, 's20 ...and it is 90% away from price, which the sanity check catches', +off.toFixed(2));
   const alt=scale*(dispPx/got), fixed=strike*alt;
   ok(Math.abs(fixed-dispPx)/dispPx < 0.25, 's21 ...and the correction lands it beside price', +fixed.toFixed(1));
+})();
+
+// ---- (v15.04) THE LADDER REFUSES TO DRAW ACROSS TWO PRICE SCALES ---------------------------
+// ⚠⚠ On a QQQ chart the ladder was handed SPX-scale strikes (7611-7710) against a 716 price, so its
+// span became ~7,200 points and every row landed inside a NINE PIXEL band. "it is unreadable."
+// ⚠ MY REGRESSION: v15.02 correctly made showingStaleBook() false for QQQ, which dropped the ladder
+// off the stale path onto the LIVE path where the scale fault lives. Empty became garbled.
+(function(){
+  const LH=(()=>{const i=src.indexOf('function ladderHtml(');const j=src.indexOf('\nfunction ',i+5);return src.slice(i,j);})();
+  ok(/_mid > _px\*2 \|\| _mid < _px\/2/.test(LH),
+     'g1 the ladder compares its frame centre to the price the chart draws');
+  // ⚠ `if(false) return ...` left every message string matchable, so match the STATEMENT SHAPE:
+  // the guard's return must be the first thing after the scale test, unguarded by anything else.
+  (function(){
+    const m=LH.match(/_mid < _px\/2\)\{\s*([\s\S]{0,40})/);
+    ok(!!m && /^return '<div class="g3ladwrap"/.test((m[1]||'').trim()),
+       'g2 ...and RETURNS immediately on the scale test, with nothing between',
+       m ? (m[1]||'').trim().slice(0,40) : null);
+  })();
+  ok(/do not match this chart at/.test(LH), 'g3 ...naming both numbers, so the refusal is diagnosable');
+  ok(/upstream fault/.test(LH), 'g4 ...and saying the cause is upstream, not a missing feature');
+  // the arithmetic, on his real numbers
+  const mid=(7611+7710)/2, px=716.46;
+  ok(mid>px*2, 'g5 his case trips the guard', {mid:+mid.toFixed(0), px});
+  ok(!((7700+7730)/2 > 7711*2), 'g6 ...and a correctly-scaled SPX frame does NOT');
 })();
 
 console.log('test_scaleagree: '+pass+' passed, '+fail+' failed');

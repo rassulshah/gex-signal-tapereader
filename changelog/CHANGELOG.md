@@ -1,3 +1,26 @@
+## v15.04 — the ladder refuses to draw across two price scales
+
+> "what the hell did you do . everything is a mess . look at the ladder . it is a complete mess"
+> "it is unreadable"
+
+Measured off his screen: ladder 640px tall, every price row crammed into **y 452-461 — a nine pixel
+band** — drawing strikes 7611-7710 against a **716.46** QQQ price. The frame's span became ~7,200
+points, so every row landed on top of every other row.
+
+⚠⚠ **THIS WAS MY REGRESSION.** v15.02 correctly made `showingStaleBook()` return false for QQQ
+(there is no QQQ book), which dropped the ladder off the stale path onto the **LIVE** path — where
+the SPX-scale fallback lives. The previous behaviour was EMPTY. **I turned empty into garbled, and
+empty was better.**
+
+**The ladder now compares its frame centre to the price the chart is drawing and refuses to render
+when they are more than 2x apart**, naming both numbers:
+
+    ⚠ ladder hidden — levels near 7660 do not match this chart at 716.46
+
+⚠ The upstream fault — a QQQ chart being served levels from another book — is NOT fixed here, and
+the message says so. What is fixed is the failure mode: **a refusal that names its reason is
+recoverable; an unreadable render is not.**
+
 ## v15.03 — the empty ladder now says why
 
 > "it has no data from friday which it is suppose to show ... you have totally messed up everything"

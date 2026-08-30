@@ -5,7 +5,7 @@
 //
 // ⚠⚠ THE HONEST ANSWER IS THAT THE EXISTING GUARDS COULD NOT CATCH IT. test_savedone and
 // test_chat_history are VERSION-KEYED: they assert the current GPTS_VERSION appears in the file.
-// On 2026-08-30 three separate bodies of work landed under an already-recorded v15.03 — the node
+// On 2026-08-30 three separate bodies of work landed under an already-recorded v15.04 — the node
 // source failures, the trinity study, and the whole LESSONS.md register — and BOTH tests stayed
 // green with none of it written down. A version-keyed check is blind to every commit that does not
 // bump the version, which is most of them.

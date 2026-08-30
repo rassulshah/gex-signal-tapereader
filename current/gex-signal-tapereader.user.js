@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.03
+// @version    15.04
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.03';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.04';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -20171,6 +20171,7 @@ function ensureV3Css(){
     // that content is reachable — I nearly added a second overflow rule for a problem that was
     // already solved. The genuine clipping was the LEVEL CELL: a fixed 46px holding 234px of names.
     '#gpts-body .g3lad{position:relative;min-width:'+LAD_W+'px}'+
+    '#gpts-body .g3ldwarn{color:#e3b341;font-size:9px;font-weight:800;padding:8px 4px;cursor:help}'+
     '#gpts-body .g3chute{position:absolute;left:'+LAD_CH+'px;width:'+LAD_CHW+'px;top:0;bottom:0;'+
       'background:rgba(255,255,255,.035);border-left:1px solid #333e4d;border-right:1px solid #333e4d}'+
     '#gpts-body .g3ldrange{position:absolute;left:'+(LAD_CH+1)+'px;width:'+(LAD_CHW-2)+'px;'+
@@ -23984,6 +23985,35 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
     if(!EB || !EB.ok || !RB) return '';
     var lo=RB.lo, hi=RB.hi, span=hi-lo;
     if(!(span>0)) return '';
+    // ⚠⚠ (v15.04) THE LADDER REFUSES TO DRAW ACROSS TWO PRICE SCALES. On a QQQ chart it was handed
+    // SPX-scale strikes (7611-7710) against a 716 price, so `span` became ~7,200 points and every
+    // row landed inside a NINE PIXEL band — an unreadable pile. Operator: "it is a complete mess ...
+    // it is unreadable."
+    //
+    // ⚠ The cause is upstream (a QQQ chart falling back to the SPX chain) and is NOT fixed here.
+    // What is fixed is the FAILURE MODE: a frame whose span is many multiples of a sane day's range
+    // cannot produce a readable ladder, so it says so instead of drawing garbage. A refusal that
+    // names its reason is recoverable; an unreadable render is not.
+    // ⚠⚠ AND THIS IS MY REGRESSION. v15.02 correctly made showingStaleBook() false for QQQ, which
+    // dropped the ladder off the stale path onto the LIVE path — where the scale fault lives. The
+    // previous behaviour was empty; I turned empty into garbled. Empty was better, and a named
+    // refusal is better still.
+    try{
+      var _px=null; try{ _px=(STATE[sym]||{}).price; }catch(eP){}
+      if(_px>0){
+        var _mid=(lo+hi)/2;
+        // the frame's centre should be within a factor of ~2 of the price the chart draws
+        if(_mid > _px*2 || _mid < _px/2){
+          return '<div class="g3ladwrap"><div class="g3lad" style="height:34px">'+
+            '<div class="g3ldwarn" title="The ladder was handed levels around '+frameNum(_mid)+
+            ' while this chart is drawing '+frameNum(_px)+' — a different price scale. Rendering them '+
+            'together compresses every row into a few pixels, which is unreadable and worse than nothing. '+
+            'This is an upstream fault: a '+g3esc(sym)+' chart is being served levels from another book.">'+
+            '\u26a0 ladder hidden \u2014 levels near '+frameNum(_mid)+' do not match this chart at '+frameNum(_px)+
+            '</div></div></div>';
+        }
+      }
+    }catch(eSc){}
     // pitch: aim for ~16px per 5 chart points so adjacent strikes never touch, clamped either way
     var H=Math.max(300, Math.min(640, Math.round(span/5*16)));
     function Y(p){ return (H - ((p-lo)/span)*H); }
