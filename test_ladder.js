@@ -6,7 +6,7 @@ let pass=0, fail=0;
 const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+JSON.stringify(g):''));} };
 function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.exec(src);let i=src.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}return src.slice(m.index,e+1);}
 // ⚠ the LAD_* constants share one multi-var declaration, so only the FIRST is preceded by `var`.
-// ⚠⚠ COMMENTS ARE STRIPPED FIRST, AND THAT IS NOT COSMETIC (v15.02). A prose line reading
+// ⚠⚠ COMMENTS ARE STRIPPED FIRST, AND THAT IS NOT COSMETIC (v15.03). A prose line reading
 // "LAD_NODE=150 - a 4px overlap on every node row" sits EARLIER in the file than the declaration, so
 // the raw regex matched the COMMENT, eval'd "150 - a 4px overlap..." and the whole suite file threw
 // before a single assertion ran. A geometry reader that can be steered by a comment is a reader that
@@ -56,14 +56,14 @@ ok(v('LAD_KPCT')===undefined && v('LAD_PROF')===undefined,
      'g3 the %King fallback label ends before the chute even at its worst offset',
      {end:NODE+(PCTIN-1)+4+30, chuteL});
   ok(DAX-DMAX>=chuteR, 'g4 the delta bars hang left off their axis but never reach the chute', {inner:DAX-DMAX,chuteR});
-  // ⚠⚠ (v15.02) g5a/g5b ARE REWRITTEN, NOT DELETED. They guarded the ROLL LANE's gap between the
+  // ⚠⚠ (v15.03) g5a/g5b ARE REWRITTEN, NOT DELETED. They guarded the ROLL LANE's gap between the
   // level names and the prices. The operator repurposed that lane into the two King migration
   // columns ("repurpose the arrows that we have today to show how the spx and the spy kings
   // movement during the day"), so the lane still exists — it just holds something else, and it
   // still has to clear what is beside it.
   ok(KS>=0 && KS+KSW<=KY, 'g5a the SPXW column ends before the SPY column begins', {sEnd:KS+KSW, KY});
   ok(KY+KYW<=LVL, 'g5b ...and the SPY column ends before the level names begin', {yEnd:KY+KYW, LVL});
-  // ⚠ AND THE NAME MUST TOUCH ITS PRICE. That is the whole point of v15.02: "PDC 7741" as one
+  // ⚠ AND THE NAME MUST TOUCH ITS PRICE. That is the whole point of v15.03: "PDC 7741" as one
   // token. A gap wider than a space between them and they read as two separate columns again.
   ok(LVL+LVLW<=PXC && PXC-(LVL+LVLW)<=4,
      'g5c the level name ends immediately before its price — they read as one token',
@@ -94,7 +94,7 @@ eval(ex('ldNum'));
 ok(/g3ldup/.test(ldNum(5)) && /\+5%/.test(ldNum(5)), 'r1 a building strike reads green and signed');
 ok(/g3lddn/.test(ldNum(-5)), 'r2 ...and a draining one red');
 ok(/g3ldfl/.test(ldNum(0)),  'r3 ...and flat is neither');
-// ⚠⚠ (v15.02) r4-r7 PINNED `ladderRolls`, WHICH IS GONE. The operator repurposed its lane:
+// ⚠⚠ (v15.03) r4-r7 PINNED `ladderRolls`, WHICH IS GONE. The operator repurposed its lane:
 // "repurpose the arrows that we have today to show how the spx and the spy kings movement during
 // the day." The drawing was a DUPLICATE — secLoc() renders the same rolls in its own gutter (v13.9)
 // and ROLL BIAS states the whole-book direction on the ② LOCATION row — so removing it removed no
@@ -114,7 +114,7 @@ ok(/INFERRED from paired changes, never an observed transfer/.test(src),
 ok(/pairing quality|Pairing quality/i.test(src), 'r12 ...and carries its pairing quality');
 
 // ============================================================================================
-// (v15.02) THE KING MIGRATION COLUMNS
+// (v15.03) THE KING MIGRATION COLUMNS
 // ============================================================================================
 const KC=ex('ladderKingCols'), KT=ex('ktTick');
 
@@ -202,7 +202,7 @@ ok(/classList\.toggle\('g3ladon'/.test(src), 'x3 ...and the class is actually ap
 // ---- (v14.54) %KING RIDES ITS OWN BAR --------------------------------------------------------
 ok(/roomPct=\(showPct && len>=Math\.max\(LAD_PCT_IN_BAR, pctW\+8\)\)/.test(LH),
    'p1 the bar carries its own %King when it is wide enough');
-// ---- (v15.02) ...AND THE KING DOES NOT CARRY ITS OWN 100% -----------------------------------
+// ---- (v15.03) ...AND THE KING DOES NOT CARRY ITS OWN 100% -----------------------------------
 // Operator: "you dont need to put 100% for the king." Every %King on this rail is a ratio TO the
 // King, so its own number is the denominator announcing itself.
 ok(/kingIs100=\(role==='KING' && pct>=100\)/.test(LH),
@@ -350,7 +350,7 @@ ok(/0\.80 sigma/.test(src) && /1\.25/.test(src), 'e4 the sigma caveat and its co
 
 
 // ============================================================================================
-// (v15.02) THE FIVE THINGS HE ASKED FOR ON 2026-08-28, EACH PINNED
+// (v15.03) THE FIVE THINGS HE ASKED FOR ON 2026-08-28, EACH PINNED
 // ============================================================================================
 
 // ---- 1 · THE BAR NO LONGER SITS ON THE PRICE ------------------------------------------------
@@ -366,10 +366,10 @@ ok(PXC+PXW <= NODE-1,
    'x2 the price column ENDS before the bars begin — the whole point', {pxEnd:PXC+PXW, NODE});
 
 // ---- 2 · THE NAME SITS BESIDE ITS PRICE, AND THE CHUTE IS PILLS ONLY -------------------------
-// ⚠⚠ v15.02 PUT THE NAMES INSIDE THE CHUTE AND HE REJECTED IT: "move the level name like PDC next
+// ⚠⚠ v15.03 PUT THE NAMES INSIDE THE CHUTE AND HE REJECTED IT: "move the level name like PDC next
 // to the price levels instead so it will look like 'PDC 7741'". He was right — 100px separated a
 // price from the name that belonged to it, and the pair could only be matched by tracking a row
-// across the bars. The chute's own "price's alone" invariant, which v15.02 deliberately reversed,
+// across the bars. The chute's own "price's alone" invariant, which v15.03 deliberately reversed,
 // is therefore RESTORED: the names left, the strip is gone, and nothing but pills sits in there.
 ok(v('LAD_LVSW')===undefined, 'x3 the chute sub-column strip is gone with the names it held');
 ok(/\.g3ldlv\{position:absolute;left:'\+LAD_LVL\+'px;width:'\+LAD_LVLW\+'px;text-align:right/.test(src),
@@ -377,7 +377,7 @@ ok(/\.g3ldlv\{position:absolute;left:'\+LAD_LVL\+'px;width:'\+LAD_LVLW\+'px;text
 ok(LVL+LVLW+4 >= PXC, 'x5 ...with no gap wide enough to read as a separate column',
    {nameEnd:LVL+LVLW, PXC});
 ok(CH+CHW-PILLW-2 >= CH, 'x6b the pill zone is inside the chute', {pillStart:CH+CHW-PILLW-2, CH});
-// ⚠⚠ (v15.02) x6/x7 FLIPPED FROM RIGHT-JUSTIFIED TO CENTRED, and the reason is the point: the
+// ⚠⚠ (v15.03) x6/x7 FLIPPED FROM RIGHT-JUSTIFIED TO CENTRED, and the reason is the point: the
 // pills were pushed right in v14.82 ONLY to clear the level names that then lived in the chute's
 // left strip. v14.83 moved the names back out beside their prices and nobody moved the pills back —
 // they spent two builds hugging a wall for a neighbour that no longer existed. Operator caught it:

@@ -85,7 +85,7 @@ ok(/t=\+?'\+DEFL_META\.tTop5|DEFL_META\.tTop5/.test(src), 'n26 the null-result t
 
 // ---- the table must not shear: header, A and E rows must agree per block ---------------------
 (function(){
-  // ⚠⚠ (v15.02) ONE TABLE, SO ONE ASSERTION. This used to split the section on the `g3dayg6` class
+  // ⚠⚠ (v15.03) ONE TABLE, SO ONE ASSERTION. This used to split the section on the `g3dayg6` class
   // and compare each block's cell counts. That test PASSED while the operator's screen was visibly
   // broken: three separate `display:table` divs each size columns from THEIR OWN content, so equal
   // cell COUNTS never produced equal cell WIDTHS — block 2 began halfway across his row.
@@ -120,7 +120,7 @@ ok(/t=\+?'\+DEFL_META\.tTop5|DEFL_META\.tTop5/.test(src), 'n26 the null-result t
 ok(/'HodN':'LodN'/.test(src), 'n31 the first-extreme header switches HodN/LodN with the extreme');
 ok(/'PTN'/.test(src), 'n32 PTN is a column on the second row');
 
-// ---- (v15.02) THE AGREED REMOVALS. Each was recorded as done and was still rendering. ---------
+// ---- (v15.03) THE AGREED REMOVALS. Each was recorded as done and was still rendering. ---------
 const live=src.replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
 ok(!/secs\s*=\s*\[\s*secBias/.test(live), 'n33 the TREND section is off the face (secBias not mounted)');
 ok(/function secBias/.test(live), 'n34 ...but secBias SURVIVES — bias.confirm still feeds the recorder');
@@ -132,14 +132,14 @@ ok(/fsRead\s*\(/.test(live), 'n36 ...but fsRead() survives — the read-line hov
 ok(!/g3steps/.test(live), 'n37 the dead step-bar CSS is gone');
 // ⚠ CSS-BLIND, like n35 was. `/g3dayhl/` matched the STYLE RULE, so blanking the emitter left it
 // green — the mutation survived. Assert on the emitter, as with n35.
-// (v15.02) the strip is superseded by ROW 3 — he asked for "a thrid row for the HL fields". Both
+// (v15.03) the strip is superseded by ROW 3 — he asked for "a thrid row for the HL fields". Both
 // shipped for one build and printed HL GAP/HL RNG TWICE; n39 caught it. Now: row 3 owns them, and
 // the strip must be GONE, or the duplication comes back.
 ok(!/g3dayhl/.test(live), 'n38 the old top strip is gone — row 3 owns the spans now');
 ok(/'HL GAP','HL RNG','HL \$'/.test(live), 'n39 row 3 carries HL GAP / HL RNG / HL $');
 ok((live.match(/'HL GAP'/g)||[]).length===1, 'n39b ...exactly ONCE — not duplicated across strip and row');
 ok(/'LC GAP','LC RNG','LC \$'/.test(live), 'n39c row 3 carries the LC span beside HL');
-// ---- (v15.02) SLvl / TLvl: no IB, two on the face, the rest on the E row --------------------
+// ---- (v15.03) SLvl / TLvl: no IB, two on the face, the rest on the E row --------------------
 (function(){
   const LH=grab('hlLevelHit').replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
   ok(!/IBH|IBL|ibSet/.test(LH), 'v1 SLvl/TLvl never read IB — excluded BY NAME, as he asked');
@@ -170,7 +170,7 @@ ok(/GD_META/.test(live) && /gdRead\s*\(/.test(live), 'n40 the GREEN/RED call is 
 ok(/silentGreen/.test(live), 'n41 ...and the hover carries the SILENT-day coin flip, not just the win rate');
 ok(/priorDayAuc/.test(live), 'n42 ...and the prior-day NULL result, which he asked about specifically');
 ok(/dayCandleSvg\s*\(/.test(live), 'n43 the candle renders');
-// ---- (v15.02) HIS SKETCH: narrow bar, annotations stacked ABOVE and BELOW, money in the body ---
+// ---- (v15.03) HIS SKETCH: narrow bar, annotations stacked ABOVE and BELOW, money in the body ---
 // "the candle is taking up too much horizontal space". The width is the BAR, not the labels — that
 // is the whole point of stacking them, and a side legend would put it straight back.
 (function(){
@@ -183,7 +183,7 @@ ok(/dayCandleSvg\s*\(/.test(live), 'n43 the candle renders');
   // Match the emitters — a variable computed and never drawn is not a feature.
   ok(/if\(afterHod!=null\)\s*h\+=/.test(CD) && /if\(afterLod!=null\)\s*h\+=/.test(CD),
      'n48 ...and both follow-on durations are actually DRAWN, not merely computed');
-  // (v15.02) MUD sits on the side of the OPEN the session travelled — above on a red bar, below on
+  // (v15.03) MUD sits on the side of the OPEN the session travelled — above on a red bar, below on
   // a green one — and carries the money in the MUD LEG, which is |open - second extreme|, not range.
   ok(/MUD '\+hlDur\(D\.mud\)/.test(CD), 'n49 MUD is drawn');
   ok(/green \? \(y\(O\)\+LN\) : \(y\(O\)-LN-LN\)/.test(CD),
@@ -196,7 +196,7 @@ ok(/dayCandleSvg\s*\(/.test(live), 'n43 the candle renders');
   ok(/y\(L\)\+GAP\+LN\*3/.test(CD), 'n50b the day total gets its OWN third line under the extremity');
   ok(/ES_USD_PER_PT/.test(CD) && /Math\.round\(usd\)/.test(CD),
      'n50 ...beside the money the move was worth');
-  // ---- (v15.02) the shape spine came BACK, and the reversal levels arrived --------------------
+  // ---- (v15.03) the shape spine came BACK, and the reversal levels arrived --------------------
   ok(/_pu\+'%/.test(CD) && /_pb\+'%/.test(CD) && /_pd\+'%/.test(CD),
      'n51 the wick/body/wick percentages are drawn — the only figure that sums to 100');
   ok(/revLevels\(sym, D\)/.test(CD), 'n52 the candle asks for the reversal levels');
@@ -206,11 +206,11 @@ ok(/dayCandleSvg\s*\(/.test(live), 'n43 the candle renders');
      'n54 ...with the PRICE in the hover, since it is off the face');
 })();
 
-// ---- (v15.02) THE FILTER IS THE FEATURE -------------------------------------------------------
+// ---- (v15.03) THE FILTER IS THE FEATURE -------------------------------------------------------
 (function(){
   const RL=grab('revLevels').replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
   ok(/atr\(sym\)\*rr/.test(RL), 'r1 the tolerance is ATR-scaled, not a fixed band');
-  // ⚠⚠ (v15.02) ASYMMETRIC, like the deflection geometry. v14.99 used ONE symmetric tolerance,
+  // ⚠⚠ (v15.03) ASYMMETRIC, like the deflection geometry. v14.99 used ONE symmetric tolerance,
   // which is not what this project calibrated against his circled charts: a test may stop SHORT by
   // 1 ATR but may run THROUGH by 1.5, because a stab that pierces and recovers is still a test.
   // He caught the symptom — "the market took out both the prior day high and the prior day low".
@@ -238,12 +238,12 @@ ok(/dayCandleSvg\s*\(/.test(live), 'n43 the candle renders');
   ok(!okH(7717.2), 'r8c ...but 0.6 above is beyond the SHORT tolerance');
   ok(!okH(7715.8), 'r8d ...and 0.8 through is beyond the THROUGH tolerance — price kept going');
   ok(!okH(7713.0), 'r9 ...and one mid-range, traded through, does NOT');
-  // (v15.02) the four levels that did not exist before
+  // (v15.03) the four levels that did not exist before
   ok(/'ONH'/.test(RL) && /'ONL'/.test(RL), 'r10 ONH / ONL are read — zero hits in the file before this');
   ok(/'POC'/.test(RL) && /'VAH'/.test(RL) && /'VAL'/.test(RL), 'r11 POC / VAH / VAL are read');
 })();
 
-// ---- (v15.02) THE KING AT A MOMENT, NOT THE KING NOW ------------------------------------------
+// ---- (v15.03) THE KING AT A MOMENT, NOT THE KING NOW ------------------------------------------
 // ⚠⚠ HodN/LodN read em-dash on his screen EVERY day while PTN worked, and the asymmetry was the
 // tell: the PT extreme is recent, so the CURRENT king is still near it. A 10:00 high was being
 // measured against a 16:00 king. The feature answered the wrong question and looked like no data.

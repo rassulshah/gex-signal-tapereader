@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-30 · v15.02 · session `2df3ccfa` — v15.02 - per-book latch, SLvl/TLvl rules
+## 2026-08-30 · v15.03 · session `2df3ccfa` — v15.03 - the empty ladder explains itself
 
-_41 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
+_42 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
 
 ### THE EXCHANGE
 
@@ -963,30 +963,51 @@ Understood — and that's cleaner. Let me do all of it in one build:
 The wrapper markup already existed without CSS backing it — that's why it clipped. Let me verify it closes properly:
 `overflow-x:auto` was **already there** at line 20128 — so the ladder was scrollable, not clipped. My added rule is a redundant …[trimmed]
 
+**OPERATOR:**
+> did you fix so that it will show data from friday . you can select a specific time like 15 min before the close or something like that so that i can continue working.. right now you ahve totally messed up everyghing.. look at the ladder..
+
+**me (02:33):** Let me look at what's actually available before touching anything else — because I think my v15.02 fix is **inert until Monday**, which would explain this:
+Now I have the real picture, and I owe you a straight answer:
+I have the definitive answer, and I need to be straight with you rather than ship another guess.
+
+```
+the latch:  SPXW strikes 7465–7960, king 7715, frozen 19:59Z  = 14:59 CT, one minute before Friday's close
+QQQ book:   does not exist anywhere in storage
+```
+
+**Friday's QQQ book was never saved.** The latch only ever stored SPXW — that's the bug I fixed in v15.02, but the fix writes the QQQ book *during RTH*, so it can't take effect until Monday. It cannot retroactively create data that was never recorded. QQQ was equally empty before v15.02; I didn't break it, but I also haven't helped you today.
+
+**SPY will work right now** — the SPXW latch is exactly the book that governs SPY, frozen one minute before Friday's close, which is the "15 minutes before the close" you asked for.
+
+What I *can* fix immediately is the thing that made this look like breakage:
+Multi-line emit again — my deletion removed only the first line. Testing both:
+
 ### DECISIONS
 
-- **A per-symbol value needs a per-symbol KEY.** The last-session book was flat, so it was right on
-  SPY by coincidence and absent on QQQ.
-- **Read the existing CSS before adding to it** — the overflow rule I "added" was already there.
-- **SLvl/TLvl: IB excluded by name, 2 on the A row, overflow to the E row** (blank there anyway).
-- **When a token is common in the file, proximity is not identity** — a 400-char adjacency window
-  passed on a neighbour's rule.
+- **State a fix's LATENCY when shipping it.** v15.02's per-book latch writes during RTH, so on a
+  Sunday it changed nothing and read as broken.
+- **An absence the code can explain must never render as a blank.**
+- **REFUSED a QQQ fallback to the SPXW book** — that is the v15.02 bug re-entering as a convenience.
+- **Check what a store is MISSING**, not only what it holds. The diagnosis was one read away twice.
 
 ### SHIPPED
 
-**v15.02** — per-book latch (l10-l15), SLvl/TLvl rules (v1-v7), ladder level cell ellipses.
-**v15.01** — asymmetric reversal band, candle layout.
+**v15.03** — `staleBookWhy()` names the missing book on the face (l16-l19). **v15.02** — per-book
+latch, SLvl/TLvl rules.
 
 ### OPEN AT CLOSE
 
-- ⚠ **The KING line reads the SPXW king on a QQQ chart** — 7675.84 against a 716.46 price. Both a
-  scale AND a symbol error, seen live. NOT FIXED. Next.
-- **His panel is 560px; the ladder needs 618px.** Widening the panel is the cleanest answer.
-- ⚠ `deriv.zg` on 25-70% of bars; gx-010 needs >=80%.
+- **QQQ's Friday book cannot be recovered** — never recorded. It will latch from the next RTH.
+- ⚠ **The KING line reads the SPXW king on a QQQ chart** (7675.84 vs a 716.46 price) — scale AND
+  symbol error, seen live, NOT FIXED. Next.
+- **A true replay from the recorded day files** is the real answer to "show me Friday at 14:45" —
+  the repo has full snapshots; the panel cannot read them. Would need the companion to fetch.
+- **His panel is 560px; the ladder needs 618px.**
 
 ### COMMITS THIS CONTEXT
 
 ```
+e976ccb v15.02: latch every governing book so QQQ has one; SLvl/TLvl drop IB and overflow to the E row
 147a089 v15.01: the reversal band is asymmetric like the deflection geometry; candle layout to his spec
 664bfa4 v15.00: the king at the time of each extreme; ONH/ONL; the prior-day profile as a record
 5547816 v14.99: reversal levels at the wick tips; the shape spine returns
@@ -998,12 +1019,123 @@ d716fb6 v14.95: SYM vs sym killed the whole day section; add an undeclared-ident
 114d933 v14.93: the 10x scale mismatch - one switch, two preconditions, fixed in both places it lived
 242651c record: fill the v14.92 close-out
 d19bfc5 record: the installer manifest floor, and close out v14.92
-37776b4 record: close out v14.92
 ```
 
 ---
 
 <!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-30 · v15.02 · session `2df3ccfa` — v15.02 - per-book latch, SLvl/TLvl rules
+**OPERATOR:**
+> try this rule and tell me how it works out for the deflections.  in a downmove the low of the candle has to be within 1 atr  of the high of the  node but  cannot be more than 2 atr below the node.  check this and see if it covers all the deflections.
+**OPERATOR:**
+> tell me how good the rule is for identiifying deflections . for example is 2 atr too much, should it be 1.5 at or  should it be the close which is  within 1 atr below the node ?   i want ot finalize deflections
+**OPERATOR:**
+> ok.. so , tell me simply what should the deflection range be above and below the node
+**OPERATOR:**
+> ok..  now have you completed your detection of deflections
+**OPERATOR:**
+> ok do it.
+**OPERATOR:**
+> try giving me the install again
+**OPERATOR:**
+> how was it working before ?  you just gave me the install file .. what happened
+**OPERATOR:**
+> yes
+**OPERATOR:**
+> reloaded check
+**OPERATOR:**
+> you did not implement all the changes we have been talking about . see pic
+**OPERATOR:**
+> look at the top also .  it doesn't have the changes we discussed  .   even the dntend Brk area was also removed .. all those changes and you didn't implement any of them
+**OPERATOR:**
+> something is not right ..  the bottom row for LOD should be aligned  with the hod rows and its fields should be almost mirror image of the hod lines where applicable.  for example pt took is a mirror image of a took ..  use your intelligence and determine what should be there.  Also lets create a thrid row for the HL fields like HL Gap HL Rng  HL $ ,  im not sure LC Gap and LC rang should be .... figure it out ..  and give me mockup
+**OPERATOR:**
+> before we go any further.   do you realize that i am taking the model of the daily bar and trying to measure the movements in it from open to close
+**OPERATOR:**
+> ok.. show me the mockup .  i am also interested in seeing a daily bar being constructed througout the day . maybe show it to the right . of the statistics.  so i can visually see what is going on .. can you come up with tsomething liek this ?   show me mockup
+**OPERATOR:**
+> the fields dont show sequence step by step .. can you do better. look at how i tried to identify an extremity first  etc..
+**OPERATOR:**
+> how can you take my approach and just enhance that .. i dont want to deviate too much from what i have
+**OPERATOR:**
+> ok i'll go with your recommendation .. give me mockup
+**OPERATOR:**
+> in the last row there is an empty first cell where we can put the actual and expected values for a GD or a RD.  but first i need you to have a model that predicts this . you can use the data , the day of week, overnight , open  etc..   but come up with a way to identify if today will be green or red. if you need more than the open like the 1st hour or 30 min IB range and break to figure this out , let me know, Whatever the case, i need a model to predict if we close above or below the open to determine if today will be a red or green day with decent probability .
+**OPERATOR:**
+> you can also use prior day values .  it maybe helpfull like if a prior day is green  or red and see how that impacts the ability to forecast as well as if we are above or below the weekly open
+**OPERATOR:**
+> so how good is it at predicting
+**OPERATOR:**
+> ok build it and move the candle to the left side of the app, currently its on the right side of the app..    so the daily candle and its contstruction will be my mental model for daytrading using all of these measurements . let me know if there are any other measurements that should be added and if you can make the data points, models goto the llm everynight for refinement and prediction with the gamma book  to see how it can better predict things like hod lod  green day  red day  price and time projection , trend reversal , deflections etc..  its very important that this feature be a world class feature but it will require your help in constant refinement via the use of llm to identify additional datapoints and measurements to better prediction
+**OPERATOR:**
+> Yes.
+**OPERATOR:**
+> How can you use other datapoints like prior day poc vah val. Did you do any tests on whether they provide support resistance or help predict highs and lows or whether they help determine if we will close green or red.  For example, if we open above prior day poc or vah or in between vah and Val, how does that help us predict ?   What about combinations.
+**OPERATOR:**
+> There is one more thing but I’m not sure if you have the data.  The regime.  If we are in a positive gamma vs negative gamma regime would be an important filter to predicting reversals support resistance va trend continuation.  Is there any way that can be obtained and included in testing
+**OPERATOR:**
+> So I want you to tell me what is the useful result of all of this testing. Can you predict anything better like hod lod Green Day vs red day reversals deflections etc.
+**OPERATOR:**
+> So where are we with all of this.  Explain simply
+**OPERATOR:**
+> Fix the bugs and issues so we can continue enhancing
+**OPERATOR:**
+> you need to give me the tampermonkey link
+**OPERATOR:**
+> reloaded
+**OPERATOR:**
+> the problem is that i wont be able to work. last time we had this problem , you showed the stale data so that i could continue working ..
+**OPERATOR:**
+> i reloaded.
+**OPERATOR:**
+> look at my screen and check yourself
+**OPERATOR:**
+> the alignment is messe up for the candle . and other things are also messed up .. check and look at the screen
+**OPERATOR:**
+> remember to always give me a tampermoneky link with the build.. i reloaded . check everyhing
+**OPERATOR:**
+> the candle is taking up too much horizontal space . here is a sample pic.  the idea is to identify the hod and lod times, how long it took ,  as well as the mud time and distance as well as how much money could have been made.  i'll let you refine this.
+**OPERATOR:**
+> show me3 mockup
+**OPERATOR:**
+> I like  this but add any levels that were swept by the wicks or targetted.  They should be levels around the edges not levels that the maket blew through and kept going. the idea is to identify where the market reversed and then targetted.  do not include ib.. they should be key levels like poc, vah, val, pdh, pdl, onh, onl, cw0, pw0, or any major level.  the level should be close to the candle  especially near the wick.   do you understand
+**OPERATOR:**
+> I like E. proviede build
+**OPERATOR:**
+> complete the open items and then i'll install
+**OPERATOR:**
+> are you sure this is correct because the candle shows the market took out bot the prior day high and the prior day (thrusdays) low.   also place the MUD labels above the open for red bars and below the open for green bars. i also need to know how much money was in the MUD , so place that on the second line below the MUD time.  put the total amount in dollars below the second line of the extremity , so for example, it would be below the LOD  2h48 line.   also the lod labels are too low , bring them slightly closer to the wick same distanc e and the hod 2h09 and the wick
+**OPERATOR:**
+> there is something wrong with the ladder ..  it has no data from friday which it is suppose to show so i can continue working on it and the lables are cutt off
+
+### DECISIONS
+
+- **A per-symbol value needs a per-symbol KEY.** The last-session book was flat, so it was right on
+  SPY by coincidence and absent on QQQ.
+- **Read the existing CSS before adding to it** — the overflow rule I "added" was already there.
+- **SLvl/TLvl: IB excluded by name, 2 on the A row, overflow to the E row** (blank there anyway).
+- **When a token is common in the file, proximity is not identity** — a 400-char adjacency window
+  passed on a neighbour's rule.
+
+
+### SHIPPED
+
+**v15.02** — per-book latch (l10-l15), SLvl/TLvl rules (v1-v7), ladder level cell ellipses.
+**v15.01** — asymmetric reversal band, candle layout.
+
+
+### OPEN AT CLOSE
+
+- ⚠ **The KING line reads the SPXW king on a QQQ chart** — 7675.84 against a 716.46 price. Both a
+  scale AND a symbol error, seen live. NOT FIXED. Next.
+- **His panel is 560px; the ladder needs 618px.** Widening the panel is the cleanest answer.
+- ⚠ `deriv.zg` on 25-70% of bars; gx-010 needs >=80%.
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 

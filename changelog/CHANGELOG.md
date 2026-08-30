@@ -1,3 +1,25 @@
+## v15.03 — the empty ladder now says why
+
+> "it has no data from friday which it is suppose to show ... you have totally messed up everything"
+
+**Friday's QQQ book was never saved.** Read live off his storage: the latch holds SPXW strikes
+7465-7960, king 7715, frozen **19:59Z = 14:59 CT, one minute before Friday's close**. There is no QQQ
+book anywhere. v15.02 makes both books latch — but that write happens **during RTH**, so it cannot
+help until the next session, and it can never retroactively create data that was not recorded.
+
+⚠⚠ **A FIX THAT CANNOT TAKE EFFECT TODAY MUST SAY SO ON THE FACE, OR IT READS AS NO FIX AT ALL.**
+He was handed a blank ladder with nothing explaining it and reasonably concluded the build was
+broken. The cause was specific and knowable the whole time. It now reads:
+
+    ○ no last-session book for QQQ
+      "no QQQ book was saved for 2026-08-28 — only SPXW was ever latched. Fixed from the next
+       session; SPY reads the SPXW book and works now."
+
+⚠ It returns a REASON, never a substitute book. Serving the SPXW book on a QQQ chart is exactly what
+v15.02 removed; re-adding it here as a "fallback" would undo the fix while looking helpful.
+
+**SPY works right now** — the SPXW latch is the book that governs it, frozen a minute before the close.
+
 ## v15.02 — the QQQ ladder was empty because only SPXW was ever latched
 
 > "there is something wrong with the ladder .. it has no data from friday which it is suppose to

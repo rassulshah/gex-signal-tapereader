@@ -131,6 +131,28 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.03 · 2026-08-30 · **I SHIPPED A FIX THAT COULD NOT TAKE EFFECT UNTIL MONDAY AND DID NOT SAY SO**
+
+v15.02 made the last-session latch per-book, correctly. But the latch is WRITTEN DURING RTH — so on
+a Sunday it changed nothing, his QQQ ladder was still blank, and he read the build as broken. He was
+right to: from where he sat, I had "fixed" it twice and it was still empty.
+
+⚠⚠ **A FIX WHOSE EFFECT IS DEFERRED IS NOT A FIX UNTIL THE FACE SAYS WHEN.** I knew the write only
+happens in RTH and did not think about what he would see before then. **State the latency of a fix
+in the same breath as shipping it** — and when the code can explain an absence, put the explanation
+where the absence is.
+
+⚠ AND THE DIAGNOSIS WAS ONE STORAGE READ AWAY THE WHOLE TIME. The latch held SPXW 7465-7960 frozen
+at 14:59 CT and no QQQ book at all. I had already read that key twice this session without asking
+what was NOT in it. **Check what a store is missing, not only what it holds.**
+
+⚠ I ALSO NEARLY ADDED A "FALLBACK" that served the SPXW book on a QQQ chart — which is precisely the
+bug v15.02 removed, re-entering as a helpful-looking convenience. **A fallback that substitutes the
+wrong object is the original bug wearing a different name.**
+
+⚠ Multi-line emit deletion survived a mutation AGAIN (fourth time): removing the first of two lines
+left the second matchable. **Delete the whole construct.**
+
 ### v15.02 · 2026-08-30 · **A PER-SYMBOL FEATURE STORED IN A SYMBOL-LESS KEY**
 
 The last-session book latched SPXW into `gpts_lastbook_v1` — one key, no symbol dimension — while the

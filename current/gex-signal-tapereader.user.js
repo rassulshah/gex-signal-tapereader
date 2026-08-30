@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.02
+// @version    15.03
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.02';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.03';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -804,6 +804,35 @@ function showingStaleBook(){
     return fe!==B.exp;                             // 4 · the live front has actually ROLLED away
   }catch(e){ return false; }
 }
+// ---- (v15.03) WHY IS THE LADDER EMPTY? SAY IT, DO NOT LEAVE HIM GUESSING --------------------
+// Operator, 2026-08-30: "it has no data from friday which it is suppose to show ... you have
+// totally messed up everything.. look at the ladder."
+//
+// ⚠⚠ HE WAS LOOKING AT AN EMPTY LADDER WITH NOTHING TELLING HIM WHY. The cause was real and
+// specific — the last-session latch has ONLY ever stored SPXW, so on a QQQ chart after the close
+// there is genuinely no book to serve — but the face said nothing, so an explainable absence looked
+// like a broken build. v15.02 makes both books latch, and that write happens during RTH, so it
+// cannot help until the next session. **A fix that cannot take effect today must SAY SO on the
+// face, or it reads as no fix at all.**
+//
+// ⚠ This returns a REASON, never a substitute book. Serving the SPXW book on a QQQ chart is what
+// v15.02 removed, and re-adding it here as a "fallback" would undo the fix while looking helpful.
+function staleBookWhy(sym){
+  try{
+    if(CFG.lastBook===false) return null;
+    var P=null; try{ P=sessionPhase(); }catch(eP){}
+    if(!P || P.rth) return null;                       // live session: nothing to explain
+    var gov=lastBookGov(sym);
+    var B=lastBookLoad(gov);
+    if(B && B.pct && B.king!=null) return null;        // there IS a book — no message needed
+    var any=null; try{ any=lastBookLoad('SPXW'); }catch(eA){}
+    if(any && any.pct)
+      return 'no '+gov+' book was saved for '+(any.day||'the last session')+
+             ' — only SPXW was ever latched. Fixed from the next session; SPY reads the SPXW book and works now.';
+    return 'no last-session book has been latched yet — it is written during RTH.';
+  }catch(e){ return null; }
+}
+
 // ONE guard for every path that writes. Never test inReplay() directly in a recorder again.
 function recorderBlind(){
   try{ return inReplay() || showingStaleBook(); }catch(e){ return false; }
@@ -17979,6 +18008,15 @@ function feedStatusHtml(){
       warn+=(warn?' ':'')+'<span title="THE MARKET IS CLOSED AND THE LIVE BOOK HAS ROLLED. Skylit drops the expired chain at the close, so the ladder on the page is the NEXT expiry with every rate of change at zero. What you are looking at is the last healthy reading of the '+
         (LB.day||'')+' session, frozen at '+lbT+' \u2014 real numbers, not live ones. Nothing is recorded while this shows: the recorder is blind to it by construction (recorderBlind), so it can never enter data/*.json as though it were live. Turn it off in the gear to watch the overnight book instead."'+
         ' style="color:#7cc7ff;font-weight:800">\u25cf '+(LB.day||'last session')+' book \u2014 frozen '+lbT+'</span>';
+    }else{
+      // ⚠⚠ (v15.03) THE EMPTY LADDER NOW EXPLAINS ITSELF. He was handed a blank ladder after the
+      // close with nothing saying why, and read it as a broken build — "you have totally messed up
+      // everything.. look at the ladder". The cause was specific and knowable: on a QQQ chart the
+      // last-session latch has no QQQ book, because only SPXW was ever saved. **An absence the code
+      // can explain must never be shown as a blank.**
+      var _why=null; try{ _why=staleBookWhy(activeSym()); }catch(eW){}
+      if(_why) warn+=(warn?' ':'')+'<span title="'+g3esc(_why)+'" style="color:#e3b341;font-weight:800">'+
+                     '\u25cb no last-session book for '+g3esc(activeSym())+'</span>';
     }
   }catch(eLB){}
   // (v10.17) The 📥 Save Day button moved OFF the dashboard footer and INTO the
