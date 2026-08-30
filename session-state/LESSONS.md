@@ -131,6 +131,24 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v14.94 · 2026-08-30 · **"DECLINE RATHER THAN DEFAULT" IS RIGHT FOR NUMBERS AND WRONG FOR SCALES**
+
+v14.93's second fix made `sessionLevels` decline when the scale was unknown. I wrote, approvingly,
+"an absent level is a gap you can see, a mis-scaled one is a lie you cannot" — and shipped a build
+that **blanked his levels after hours**: "the problem is that i wont be able to work."
+
+⚠⚠ **THE PRINCIPLE WAS RIGHT AND I APPLIED IT TO THE WRONG OBJECT.** Decline when the VALUE would be
+wrong. Do not decline when the value is fine and only its SCALE is hard to reach — especially when
+that scale is derivable, which this one always is, because `FUTMODE.r` is a persisted EMA that
+survives the close. **"Correct or nothing" is a false choice whenever a third option is derivable.**
+
+⚠ AND I ONLY HALF-FIXED THE ROOT. v14.93 made two call sites AGREE; it left two sites each DERIVING
+a scale, which is the precise condition that caused the original divergence. `displayScale()` is now
+the single source. **Making two implementations agree is not the same as having one implementation.**
+
+⚠ The test assertions had to be REVERSED — s11/s12 pinned the declining behaviour I had just
+shipped. A guard written in the same breath as a mistake will faithfully protect the mistake.
+
 ### v14.93 · 2026-08-30 · **ONE SWITCH, TWO CONSUMERS, DIFFERENT REQUIREMENTS — AND NOTHING ERRORED**
 
 The 10x mismatch. `emBand()` honoured `dispIsFut()` via `dispR()` (needs only `FUTMODE.r`);

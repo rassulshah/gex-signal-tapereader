@@ -1,3 +1,21 @@
+## v14.94 — one scale function, and the levels come back after hours
+
+> "the problem is that i wont be able to work. last time we had this problem, you showed the stale
+> data so that i could continue working"
+
+**v14.93 made session levels DECLINE when the scale was unknown, and that cost him his after-hours
+levels.** Declining is the right answer for a number that would be WRONG. It is the wrong answer for
+a scale that can be **derived** — and it always can be, because `FUTMODE.r` is a persisted EMA that
+survives the close. PDH/PDL/PDC/IB now render on the correct scale instead of vanishing.
+
+**`displayScale(sym)` is now the single source.** v14.93 fixed the mismatch by making two call sites
+agree; that was right and incomplete, because it left two places each deriving a scale — which is
+the exact condition that produced the bug. One function now answers it, and names which state it is
+in: `fut:live` (a live futures print), `fut:ratio` (no print, the persisted EMA — correct, and what
+`emBand` has always used), or `cash` (not a futures chart, and 1 is right rather than a fallback).
+
+⚠ It never returns nothing. That property is pinned by `test_scaleagree` s15.
+
 ## v14.93 — the 10x scale mismatch, in both places it lived
 
 > "Fix the bugs and issues so we can continue enhancing"

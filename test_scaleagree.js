@@ -59,10 +59,18 @@ ok(/dispIsFut\(\)\?dispR\(\):1/.test(EB), 's7 emBand still scales by dispR() —
 const CLEAN=src.replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
 ok(!/sessionLevels\(sym,\s*\(EB&&typeof EB\.scaleUsed==='number'\)\?EB\.scaleUsed:1\)/.test(CLEAN),
    's10 session levels no longer fall back to the CASH scale');
-ok(/EB\.scaleUsed>0\s*\)\s*\?\s*EB\.scaleUsed\s*:\s*null/.test(CLEAN),
-   's11 ...they require a positive scale and decline without one');
-ok(/if\(_sc!=null\)\s*SESSL=sessionLevels\(sym,\s*_sc\)/.test(CLEAN),
-   's12 ...and sessionLevels is simply not called when the scale is unknown');
+// ⚠⚠ (v14.94) s11/s12 ORIGINALLY ASSERTED THAT SESSION LEVELS *DECLINE* WITHOUT A SCALE. That
+// shipped, and it cost the operator his after-hours levels: "i wont be able to work". Declining is
+// right for a number that would be WRONG; it is wrong for a scale that can be DERIVED. The ratio is
+// a persisted EMA and survives the close. The assertions now pin the DERIVE behaviour.
+ok(/EB\.scaleUsed>0\s*\)\s*\?\s*EB\.scaleUsed\s*:\s*displayScale\(sym\)\.scale/.test(CLEAN),
+   's11 session levels DERIVE the scale when emBand has none — they never blank out');
+ok(/if\(_sc>0\)\s*SESSL=sessionLevels\(sym,\s*_sc\)/.test(CLEAN),
+   's12 ...and they still refuse a zero/negative scale');
+const DS=grab('displayScale').replace(/\/\/[^\n]*/g,'');
+ok(/dispIsFut\(\)/.test(DS) && /dispR\(\)/.test(DS), 's13 displayScale reads the same switch and ratio as emBand');
+ok(/'fut:live'/.test(DS) && /'fut:ratio'/.test(DS) && /src:'cash'/.test(DS), 's14 ...and names all three states');
+ok(!/return null/.test(DS), 's15 ...and NEVER returns nothing — a derivable scale is always derived');
 
 console.log('test_scaleagree: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

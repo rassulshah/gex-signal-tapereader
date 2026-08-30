@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-30 · v14.93 · session `2df3ccfa` — v14.93 - the 10x scale mismatch fixed
+## 2026-08-30 · v14.94 · session `2df3ccfa` — v14.94 - one scale function, levels return after hours
 
-_27 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
+_30 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
 
 ### THE EXCHANGE
 
@@ -676,32 +676,61 @@ Seven consumers all use the identical `dispIsFut()?dispR():1` — consistent. `i
 Line 24764 — the same shape again: `sessionLevels(sym, EB.scaleUsed || 1)`, defaulting to the **cash scale** when `scaleUsed` is absent. That's what put `PDH 770.23` beside a 7710 price. Let me confirm:
 Nearly every cons …[trimmed]
 
+**OPERATOR:**
+> you need to give me the tampermonkey link
+
+**me (00:31):** **Tapereader v14.93** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+
+**Companion v1.16 — UNCHANGED, do not reinstall.**
+
+Run `installv1493.bat` first (attached in my previous message), wait ~5 min for the CDN cache, then **click the link** and reload Atlas. Tampermonkey only auto-checks once a day, so the click is the step that matters. "Reinstall" just means you already have it.
+
+Worth checking after hours tonight, since that's the state that produced the bug: the levels beside the price pill should now sit within a few points of it rather than ~6,900 away, and PDH/PDL should read on the same scale as everything else — or not appear at all, which is the honest outcome when the scale genuinely isn't known.
+
+**OPERATOR:**
+> reloaded
+
+**me (00:33):** Push landed — **origin/main is v14.93**, pushed by you at 19:31, and GitHub's copy is byte-identical to what I built. Both fixes are in it, the old cash fallback is gone.
+
+What to check on the reloaded panel:
+
+**The scale bug** — the read line's `T:` and the KING distance should now be a few points from the price pill, not ~6,900. Same for PDH/PDL on the rail: either on the same scale as everything else, or absent. Absent is the correct behaviour when the scale genuinely isn't known — a gap you can see rather than a wrong number you can't.
+
+**But this is after hours, which is exactly the state that produced the bug** — so it's the right moment to look, and it's the one thing I couldn't verify myself. The test proves the arithmetic; only your screen proves the wiring.
+
+The rest of what's new since you last looked properly: the candle on the left with the three segments summing to 100%, GREEN/RED in row 3 cell 1, PTWICK filled in, and levels as names only so several fit.
+
+Send a screenshot if anything still looks off — particularly any two numbers on the face whose *difference* looks implausible, since that's the signature this class of bug leaves.
+
+**OPERATOR:**
+> the problem is that i wont be able to work. last time we had this problem , you showed the stale data so that i could continue working ..
+
+**me (00:35):** That's my fault, and it's a real regression I should have thought about. Let me look at the last-session book and why it isn't filling the panel for you:
+Understood — and that's a regression I introduced. Making `SESSL` *decline* means after hours you get nothing where before you at least got something. The right answer is neither: it should degrade to the **correct** scale, not to nothing. One helper, used by both sites:
+
 ### DECISIONS
 
-- **The 10x mismatch was ONE SWITCH WITH TWO PRECONDITIONS**, not a bad conversion. `emBand` needed
-  `FUTMODE.r`; `ifLadder` needed `FUTMODE.futPx` and silently fell back to cash without it. After
-  hours `r` exists and `futPx` does not.
-- **Fixed as one scale, not a better fallback** — the ladder now derives the same ratio `emBand`
-  uses, and the state is NAMED (`scaleSrc`) instead of inferred.
-- **Found a SECOND site by auditing the shape, not the symptom** — `sessionLevels(..., :1)` put PDH
-  on the cash scale. It now DECLINES rather than defaulting.
+- **DECLINE is for wrong VALUES, not for hard-to-reach SCALES.** v14.93 blanked his after-hours
+  levels on a principle I applied to the wrong object. A derivable scale must be derived.
+- **`displayScale()` is the single source.** Making two sites agree is not the same as having one
+  implementation — the two-implementation state is what caused the original 10x divergence.
 
 ### SHIPPED
 
-**v14.93** — both scale-divergence sites fixed; `scaleSrc` added; `test_scaleagree.js` (13
-assertions, all mutation-tested, including a numeric reconstruction of the after-hours state).
+**v14.94** — `displayScale(sym)` added and used by both sites; session levels derive instead of
+declining; `test_scaleagree` s11/s12 reversed (they had pinned the mistake), s13-s15 added.
 
 ### OPEN AT CLOSE
 
-- **Verify on a live after-hours session** — the fix is proven arithmetically and by test, not yet
-  on his screen in the state that produced it.
-- ⚠ `deriv.zg` recorded on only 25–70% of bars; gx-010 needs ≥80%.
+- **Verify after hours on his screen** — levels present AND on the same scale as the price pill.
+- ⚠ `deriv.zg` recorded on only 25-70% of bars; gx-010 needs >=80%.
 - **A regime-sign source is needed** or gx-012 stays blocked.
-- **gx-008 forward scoring** can start immediately; no gamma book required.
+- **gx-008 forward scoring** can start immediately.
 
 ### COMMITS THIS CONTEXT
 
 ```
+114d933 v14.93: the 10x scale mismatch - one switch, two preconditions, fixed in both places it lived
 242651c record: fill the v14.92 close-out
 d19bfc5 record: the installer manifest floor, and close out v14.92
 37776b4 record: close out v14.92
@@ -713,12 +742,97 @@ d19bfc5 record: the installer manifest floor, and close out v14.92
 64f194b record: fill the session close-out for the nightly loop design
 012dcc0 record: the nightly loop design
 42ebbdf nightly: record the design lesson; fix a stray character
-c33a79e nightly: pre-register 8 hypotheses before the gamma data exists; open the verdict ledger
 ```
 
 ---
 
 <!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-30 · v14.93 · session `2df3ccfa` — v14.93 - the 10x scale mismatch fixed
+**OPERATOR:**
+> try this rule and tell me how it works out for the deflections.  in a downmove the low of the candle has to be within 1 atr  of the high of the  node but  cannot be more than 2 atr below the node.  check this and see if it covers all the deflections.
+**OPERATOR:**
+> tell me how good the rule is for identiifying deflections . for example is 2 atr too much, should it be 1.5 at or  should it be the close which is  within 1 atr below the node ?   i want ot finalize deflections
+**OPERATOR:**
+> ok.. so , tell me simply what should the deflection range be above and below the node
+**OPERATOR:**
+> ok..  now have you completed your detection of deflections
+**OPERATOR:**
+> ok do it.
+**OPERATOR:**
+> try giving me the install again
+**OPERATOR:**
+> how was it working before ?  you just gave me the install file .. what happened
+**OPERATOR:**
+> yes
+**OPERATOR:**
+> reloaded check
+**OPERATOR:**
+> you did not implement all the changes we have been talking about . see pic
+**OPERATOR:**
+> look at the top also .  it doesn't have the changes we discussed  .   even the dntend Brk area was also removed .. all those changes and you didn't implement any of them
+**OPERATOR:**
+> something is not right ..  the bottom row for LOD should be aligned  with the hod rows and its fields should be almost mirror image of the hod lines where applicable.  for example pt took is a mirror image of a took ..  use your intelligence and determine what should be there.  Also lets create a thrid row for the HL fields like HL Gap HL Rng  HL $ ,  im not sure LC Gap and LC rang should be .... figure it out ..  and give me mockup
+**OPERATOR:**
+> before we go any further.   do you realize that i am taking the model of the daily bar and trying to measure the movements in it from open to close
+**OPERATOR:**
+> ok.. show me the mockup .  i am also interested in seeing a daily bar being constructed througout the day . maybe show it to the right . of the statistics.  so i can visually see what is going on .. can you come up with tsomething liek this ?   show me mockup
+**OPERATOR:**
+> the fields dont show sequence step by step .. can you do better. look at how i tried to identify an extremity first  etc..
+**OPERATOR:**
+> how can you take my approach and just enhance that .. i dont want to deviate too much from what i have
+**OPERATOR:**
+> ok i'll go with your recommendation .. give me mockup
+**OPERATOR:**
+> in the last row there is an empty first cell where we can put the actual and expected values for a GD or a RD.  but first i need you to have a model that predicts this . you can use the data , the day of week, overnight , open  etc..   but come up with a way to identify if today will be green or red. if you need more than the open like the 1st hour or 30 min IB range and break to figure this out , let me know, Whatever the case, i need a model to predict if we close above or below the open to determine if today will be a red or green day with decent probability .
+**OPERATOR:**
+> you can also use prior day values .  it maybe helpfull like if a prior day is green  or red and see how that impacts the ability to forecast as well as if we are above or below the weekly open
+**OPERATOR:**
+> so how good is it at predicting
+**OPERATOR:**
+> ok build it and move the candle to the left side of the app, currently its on the right side of the app..    so the daily candle and its contstruction will be my mental model for daytrading using all of these measurements . let me know if there are any other measurements that should be added and if you can make the data points, models goto the llm everynight for refinement and prediction with the gamma book  to see how it can better predict things like hod lod  green day  red day  price and time projection , trend reversal , deflections etc..  its very important that this feature be a world class feature but it will require your help in constant refinement via the use of llm to identify additional datapoints and measurements to better prediction
+**OPERATOR:**
+> Yes.
+**OPERATOR:**
+> How can you use other datapoints like prior day poc vah val. Did you do any tests on whether they provide support resistance or help predict highs and lows or whether they help determine if we will close green or red.  For example, if we open above prior day poc or vah or in between vah and Val, how does that help us predict ?   What about combinations.
+**OPERATOR:**
+> There is one more thing but I’m not sure if you have the data.  The regime.  If we are in a positive gamma vs negative gamma regime would be an important filter to predicting reversals support resistance va trend continuation.  Is there any way that can be obtained and included in testing
+**OPERATOR:**
+> So I want you to tell me what is the useful result of all of this testing. Can you predict anything better like hod lod Green Day vs red day reversals deflections etc.
+**OPERATOR:**
+> So where are we with all of this.  Explain simply
+**OPERATOR:**
+> Fix the bugs and issues so we can continue enhancing
+
+### DECISIONS
+
+- **The 10x mismatch was ONE SWITCH WITH TWO PRECONDITIONS**, not a bad conversion. `emBand` needed
+  `FUTMODE.r`; `ifLadder` needed `FUTMODE.futPx` and silently fell back to cash without it. After
+  hours `r` exists and `futPx` does not.
+- **Fixed as one scale, not a better fallback** — the ladder now derives the same ratio `emBand`
+  uses, and the state is NAMED (`scaleSrc`) instead of inferred.
+- **Found a SECOND site by auditing the shape, not the symptom** — `sessionLevels(..., :1)` put PDH
+  on the cash scale. It now DECLINES rather than defaulting.
+
+
+### SHIPPED
+
+**v14.93** — both scale-divergence sites fixed; `scaleSrc` added; `test_scaleagree.js` (13
+assertions, all mutation-tested, including a numeric reconstruction of the after-hours state).
+
+
+### OPEN AT CLOSE
+
+- **Verify on a live after-hours session** — the fix is proven arithmetically and by test, not yet
+  on his screen in the state that produced it.
+- ⚠ `deriv.zg` recorded on only 25–70% of bars; gx-010 needs ≥80%.
+- **A regime-sign source is needed** or gx-012 stays blocked.
+- **gx-008 forward scoring** can start immediately; no gamma book required.
+
+
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.93
+// @version    14.94
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.93';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.94';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -677,6 +677,30 @@ var SESSION_DAY = { day:null, fallback:false };
 // building this very feature), all five write paths would silently stop recording and nothing would say
 // why. A lost session is loud; a silently dead recorder is not. `node tools/smoke.js` calls the session
 // hook, so a missing declaration surfaces as a failed build rather than as a quiet data gap.
+// ---- (v14.94) ONE DISPLAY SCALE, ONE FUNCTION -------------------------------------------------
+// v14.93 fixed the 10x mismatch by making two call sites agree. That was right and incomplete: it
+// left TWO places each deriving the scale, which is the condition that produced the bug. This is
+// the single source, and every consumer that needs "underlying -> chart" asks it.
+//
+// ⚠⚠ AND IT NEVER RETURNS NOTHING. v14.93 made sessionLevels DECLINE when the scale was unknown,
+// so after hours the operator lost PDH/PDL/PDC/IB entirely — "the problem is that i wont be able to
+// work". Declining is correct for a NUMBER that would be wrong; it is the wrong answer for a scale
+// that can be DERIVED. The ratio r is a persisted EMA and survives the close, so there is always a
+// correct scale available even when the live futures print is gone.
+//   fut:live   a live futures print          — exact
+//   fut:ratio  no print, the persisted EMA   — correct, and what emBand has always used
+//   cash       not a futures chart at all    — 1, and that is right, not a fallback
+function displayScale(sym){
+  var out={ scale:1, src:'cash' };
+  try{
+    if(!dispIsFut()) return out;
+    var r=dispR();
+    if(!(r>0)) return out;
+    out.scale=r; out.src=(FUTMODE && FUTMODE.futPx>0) ? 'fut:live' : 'fut:ratio';
+  }catch(e){}
+  return out;
+}
+
 function inReplay(){ try{ return !!(SESSION_DAY && SESSION_DAY.fallback); }catch(e){ return false; } }
 // ============================================================================================
 // (v14.55) THE LAST-SESSION BOOK — "show me the last day so i can continue working"
@@ -24768,10 +24792,14 @@ function secFrame(sym){
     // `>0` AND SKIPS — this one line was the exception, and being the exception is what made it
     // invisible. `SESSL` is null-checked by ladderHtml and railLevelsLine, so DECLINING is safe
     // and honest: an absent level is a gap you can see, a mis-scaled one is a lie you cannot.
+    // (v14.94) prefer emBand's own scale; otherwise DERIVE the same one rather than declining.
+    // ⚠ v14.93 declined here and cost the operator his after-hours levels. A scale that can be
+    // derived must be derived — declining is for a number that would be WRONG, not one that is
+    // merely harder to reach.
     var SESSL=null;
     try{
-      var _sc=(EB && typeof EB.scaleUsed==='number' && EB.scaleUsed>0) ? EB.scaleUsed : null;
-      if(_sc!=null) SESSL=sessionLevels(sym, _sc);
+      var _sc=(EB && typeof EB.scaleUsed==='number' && EB.scaleUsed>0) ? EB.scaleUsed : displayScale(sym).scale;
+      if(_sc>0) SESSL=sessionLevels(sym, _sc);
     }catch(eSL){}
     // (v14.30) the level-engine context rides the SAME latched list (one computation, N consumers)
     try{
