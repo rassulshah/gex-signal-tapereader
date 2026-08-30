@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    14.90
+// @version    14.93
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='14.90';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='14.93';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -2237,7 +2237,14 @@ function readTapeFromDOM(sym){
       // (v11.4.1) the BOOK King ($K in a later expiry column) only exists on the main table — carry it
       // across when the Trinity pane is the one being read, so `bk` keeps recording the King-dollar trend.
       rL.bookKing=LD.bookKing; if(!rL.bookKing && LD.src==='trinity'){ try{ var MN=(laddersByDollar()||{}).main; if(MN && MN.bookKing) rL.bookKing=MN.bookKing;
-        else if(LD.kingKd!=null) rL.bookKing={ k:LD.king, col:null, kd:LD.kingKd, neg:false, src:'trinity' }; }catch(eBK2){} } if(LD.kingConflict){ rL.kingConflict=true; rL.parseSuspect=LD.parseSuspect; }
+        // ⚠⚠ (v14.92) `neg` WAS HARDCODED false HERE AND THE RECORDER BANKED IT AS A MEASUREMENT.
+        // Six sessions of snapshots read "positive gamma" on 284 of 284 samples — not because the
+        // market was in positive gamma, but because this line said so. A constant that looks like
+        // data is worse than a gap: the gap is visible. It is NULL now, and the studies treat null
+        // as "not recorded" rather than as false.
+        // ⚠ The Trinity pane does not expose the sign, so it cannot be derived here. The honest
+        // regime signal is PRICE vs the FLIP (`deriv.zg`), which IS real and does vary.
+        else if(LD.kingKd!=null) rL.bookKing={ k:LD.king, col:null, kd:LD.kingKd, neg:null, src:'trinity' }; }catch(eBK2){} } if(LD.kingConflict){ rL.kingConflict=true; rL.parseSuspect=LD.parseSuspect; }
       return rL; } }catch(eLD){}
   var table=findTapeTable();
   if(!table) return null;
@@ -20272,10 +20279,16 @@ function ensureV3Css(){
     '#gpts-body .g3daylv.sw{color:#e3b341;background:rgba(227,195,65,.13);border:1px solid rgba(227,195,65,.42)}'+
     '#gpts-body .g3daylv.tg{color:#5fd08a;background:rgba(46,194,126,.14);border:1px solid rgba(46,194,126,.40)}'+
     '#gpts-body .g3daylv.nd{color:#b98cff;background:rgba(150,110,255,.14);border:1px solid rgba(150,110,255,.42)}'+
+    '#gpts-body .g3dayrow{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}'+
+    '#gpts-body .g3daycdl{flex:0 0 150px}'+
+    '#gpts-body .g3daytbl{flex:1 1 380px;min-width:0}'+
+    '#gpts-body .g3cdl{display:block}'+
+    '#gpts-body .g3cp{font-size:7.5px;font-weight:800}'+
+    '#gpts-body .g3cl{font-size:8px;font-weight:800;fill:#e6edf5}'+
+    '#gpts-body .g3cdtk{font-size:7px;font-weight:700;fill:#5b6675}'+
+    '#gpts-body .g3gd{color:#2ec27e}'+
+    '#gpts-body .g3rd{color:#f0616d}'+
     // (v14.90) the HL / LC-HC strip: right-aligned beside the read, one row, no vertical cost.
-    '#gpts-body .g3dayhl{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;padding:2px 0 4px;font-size:8.2px}'+
-    '#gpts-body .g3dayhl span{color:#c9d4e2;font-weight:800;white-space:nowrap}'+
-    '#gpts-body .g3dayhl i{color:#8b98a9;font-style:normal;font-weight:700;margin-right:4px}'+
     '#gpts-body .g3dayl{display:flex;gap:3px;margin-bottom:5px}'+
     '#gpts-body .g3daylb{flex:1;text-align:center;padding:2px 0;border-radius:3px;cursor:help;'+
       'background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06)}'+
@@ -20874,10 +20887,31 @@ function ifLadder(sym){
     if(typeof undPx!=='number') return { err:'no underlying price' };
     // scale from the governing book to the instrument on the chart, and to our underlying for the
     // candle-based reads, which run on the underlying scale.
-    var dispPx=undPx, dispScale=(undPx/theirSpot);
+    // ⚠⚠ (v14.93) THE 10x SCALE MISMATCH LIVED HERE. Two consumers read the SAME switch —
+    // dispIsFut() — but demanded DIFFERENT inputs to honour it:
+    //     emBand()   uses dispR(), which needs only FUTMODE.r
+    //     ifLadder() needed FUTMODE.futPx, and SILENTLY FELL BACK to the SPY scale without it
+    // FUTMODE.r is an EMA that persists; futPx is null whenever there is no live futures print —
+    // which is exactly AFTER HOURS. So the panel entered a state where the price pill read 7710
+    // (ES) while every ladder level read ~770 (SPY), and every distance between them was the
+    // subtraction of two different scales: "T: 773.34  -6937.26", "KING 769.85 holds, 6941 below
+    // price". Both numbers were individually correct and their difference was nonsense.
+    //
+    // ⚠ THE FIX IS ONE SCALE, NOT A BETTER FALLBACK. When the panel is in futures display mode the
+    // ladder now derives the SAME ES scale emBand uses (undPx x dispR()) if futPx is missing, so
+    // the two cannot diverge. If NEITHER input is available the ladder stays on the cash scale AND
+    // says so via `scaleSrc`, because a silent fallback is what made this invisible for four builds.
+    var dispPx=undPx, dispScale=(undPx/theirSpot), scaleSrc='cash';
     try{
-      if(dispIsFut() && FUTMODE.futPx!=null && FUTMODE.futPx>0){
-        dispPx=FUTMODE.futPx; dispScale=FUTMODE.futPx/theirSpot;   // ES / SPX — the live basis
+      if(dispIsFut()){
+        if(FUTMODE.futPx!=null && FUTMODE.futPx>0){
+          dispPx=FUTMODE.futPx; dispScale=FUTMODE.futPx/theirSpot; scaleSrc='fut:live';
+        }else{
+          var _r=dispR();
+          if(_r>0 && _r!==1 && undPx>0){
+            dispPx=undPx*_r; dispScale=dispPx/theirSpot; scaleSrc='fut:ratio';   // matches emBand()
+          }
+        }
       }
     }catch(e1){}
     var undScale=undPx/theirSpot;
@@ -20885,7 +20919,7 @@ function ifLadder(sym){
     var D0=(c.dte0&&c.dte0.lv)?c.dte0.lv:null;
     if(!W && !D0) return { err:'no levels in their chain' };
     var out={ px:dispPx, undPx:undPx, theirSpot:theirSpot, srcSym:src, spotSrc:spotSrc,
-              dispScale:+dispScale.toFixed(6), undScale:+undScale.toFixed(6),
+              dispScale:+dispScale.toFixed(6), undScale:+undScale.toFixed(6), scaleSrc:scaleSrc,
               rows:[], src:'IF', ageMin:age, rolled:!!c.rolled,
               nExps:(c.toFri&&c.toFri.exps)?c.toFri.exps.length:null,
               n:W?W.strikes:null, maxPain:W?W.maxPain:(D0?D0.maxPain:null), err:null };
@@ -22444,7 +22478,19 @@ function hlPT(sym, D){
     // the invariant, asserted rather than assumed
     out.viol = secondIsHOD ? (advP < D.lod - 1e-9) : (advP > D.hod + 1e-9);
     out.side=D.second;
-    out.ptPx=advP;            // (v14.89) the PT extreme itself — hlNodeAt needs the PRICE, not just the excursion
+    out.ptPx=advP;            // (v14.89) the PT extreme itself — hlNodeAt needs the PRICE
+    // (v14.91) PTWICK — the mirror of WICK, anchored on the SECOND EXTREME instead of the open.
+    // WICK = open -> the bar that reclaims the open (his numbers prove it: TOOK + BOP = WICK, and
+    // 10:00 + 51m = 10:51 = W.END). PTWICK is that same span measured from the second extreme.
+    // Null until price returns there, which on most days it never does — that is the honest state.
+    out.ptWickMin=null;
+    try{
+      for(var wi=0; wi<cs.length; wi++){
+        var wb=cs[wi];
+        if(!wb || typeof wb.so!=='number' || wb.so<=advT) continue;
+        if(secondIsHOD ? (wb.h>=secP) : (wb.l<=secP)){ out.ptWickMin=Math.max(0,(wb.so-D.secondT)/60); break; }
+      }
+    }catch(eW){}            // (v14.89) the PT extreme itself — hlNodeAt needs the PRICE, not just the excursion
     out.ptMin=Math.max(0,(advT-D.secondT)/60);
     out.ptPts=Math.abs(secP-advP)*rr;
     out.ptUsd=D.isFut ? out.ptPts*ES_USD_PER_PT : null;
@@ -22513,23 +22559,30 @@ function hlLevelHit(sym, D){
     }catch(eI){}
     if(!LV.length){ out.why='no levels to test against'; return out; }
     // for one extreme: every level strictly between the open and that extreme, furthest one wins
-    function furthest(extPx, up){
-      var best=null;
+    // (v14.91) EVERY level taken out, ordered by how far the excursion reached — not just the
+    // furthest. Operator: "in the levels column you list the price of the level . dont do that
+    // because we need the space for multiple levels so you can have something like PDH, CW, VAH,
+    // POC". The names ARE the information; the price is already on the rail and on the chart, and
+    // it was eating the room that the second, third and fourth level need.
+    function taken(extPx, up){
+      var hit=[];
       for(var i=0;i<LV.length;i++){
         var L=LV[i];
-        if(up ? (L.px>opDisp && L.px<=extPx) : (L.px<opDisp && L.px>=extPx)){
-          if(best==null || (up ? L.px>best.px : L.px<best.px)) best=L;
-        }
+        if(up ? (L.px>opDisp && L.px<=extPx) : (L.px<opDisp && L.px>=extPx)) hit.push(L);
       }
-      return best;
+      hit.sort(function(a,b){ return up ? (b.px-a.px) : (a.px-b.px); });   // furthest first
+      return hit;
     }
+    function furthest(extPx, up){ var t=taken(extPx,up); return t.length?t[0]:null; }
     var firstUp=(D.first==='HOD');
     var firstPx=(firstUp?D.hod:D.lod)*rr;
     out.sweep=furthest(firstPx, firstUp);
+    out.sweepAll=taken(firstPx, firstUp);
     if(D.secondT!=null && D.secondT<=D.clock){
       var secUp=(D.second==='HOD');
       var secPx=(secUp?D.hod:D.lod)*rr;
       out.target=furthest(secPx, secUp);
+      out.targetAll=taken(secPx, secUp);
     }
     out.n=LV.length; out.ok=true;
     return out;
@@ -22611,6 +22664,154 @@ function deflNodeAt(extDisp, up, kings, atrDisp){
 }
 
 // HodN / LodN / PTN for the ⓪a strip: the node each of the three extremes tested.
+// ---- (v14.91) THE DAY'S CANDLE, DRAWN AS IT FORMS ---------------------------------------------
+// Operator, 2026-08-29: "i am taking the model of the daily bar and trying to measure the movements
+// in it from open to close" and "i am also interested in seeing a daily bar being constructed
+// throughout the day ... so i can visually see what is going on".
+//
+// ⚠⚠ THIS IS THE FRAME THE WHOLE SECTION WAS MISSING. Every field in ⓪a is a part of ONE daily
+// candle, and the parts must sum to it: upper wick + body + lower wick = the range, always. His own
+// numbers prove it — WICK% 51% is not a ratio, it is where the OPEN sits in the bar, and 51 + 35 +
+// 14 = 100. If those three ever fail to reach 100 the section is lying about something.
+// ⚠ It renders on the LEFT of the stats by his instruction.
+function dayCandleSvg(sym, D, PTL){
+  try{
+    if(!D || !D.ok || D.open==null) return '';
+    var rr=(typeof D.scale==='number' && D.scale>0)?D.scale:1;
+    var H=D.hod*rr, L=D.lod*rr, O=D.open*rr;
+    var A=gdActual(sym); var C=(A&&A.now!=null)?A.now*rr:null;
+    var rng=H-L;
+    if(!(rng>0) || C==null) return '';
+    var TOP=14, HGT=176, W=150;
+    function y(px){ return TOP + (H-px)/rng*HGT; }
+    var up=H-Math.max(O,C), body=Math.abs(O-C), dn=Math.min(O,C)-L;
+    var pu=Math.round(100*up/rng), pb=Math.round(100*body/rng), pd=Math.round(100*dn/rng);
+    var green=(C>O);
+    var bodyTop=y(Math.max(O,C)), bodyH=Math.max(1.5, Math.abs(y(O)-y(C)));
+    var col=green?'#2ec27e':'#f0616d';
+    var h='<svg class="g3cdl" viewBox="0 0 '+W+' 214" width="'+W+'" height="214">';
+    // the three segments, as bars down the left — the sum check made visible
+    h+='<rect x="6" y="'+y(H).toFixed(1)+'" width="4" height="'+Math.max(0,(bodyTop-y(H))).toFixed(1)+'" fill="#e3b341" opacity=".30"/>';
+    h+='<rect x="6" y="'+bodyTop.toFixed(1)+'" width="4" height="'+bodyH.toFixed(1)+'" fill="'+col+'" opacity=".34"/>';
+    h+='<rect x="6" y="'+(bodyTop+bodyH).toFixed(1)+'" width="4" height="'+Math.max(0,(y(L)-bodyTop-bodyH)).toFixed(1)+'" fill="#5fd08a" opacity=".30"/>';
+    h+='<text x="4" y="'+((y(H)+bodyTop)/2+3).toFixed(1)+'" class="g3cp" fill="#e3b341" text-anchor="end">'+pu+'%</text>';
+    h+='<text x="4" y="'+(bodyTop+bodyH/2+3).toFixed(1)+'" class="g3cp" fill="'+col+'" text-anchor="end">'+pb+'%</text>';
+    h+='<text x="4" y="'+((bodyTop+bodyH+y(L))/2+3).toFixed(1)+'" class="g3cp" fill="#5fd08a" text-anchor="end">'+pd+'%</text>';
+    // the candle
+    h+='<line x1="38" y1="'+y(H).toFixed(1)+'" x2="38" y2="'+y(L).toFixed(1)+'" stroke="#8b98a9" stroke-width="1.5"/>';
+    h+='<rect x="30" y="'+bodyTop.toFixed(1)+'" width="16" height="'+bodyH.toFixed(1)+'" fill="'+col+'" fill-opacity=".55" stroke="'+col+'" stroke-width="1"/>';
+    h+='<line x1="20" y1="'+y(O).toFixed(1)+'" x2="30" y2="'+y(O).toFixed(1)+'" stroke="#e6edf5" stroke-width="2"/>';
+    h+='<line x1="46" y1="'+y(C).toFixed(1)+'" x2="56" y2="'+y(C).toFixed(1)+'" stroke="#e6edf5" stroke-width="2"/>';
+    // the PT retrace, if there is one
+    if(PTL && PTL.ok && PTL.ptPx!=null){
+      var pt=PTL.ptPx*rr;
+      if(pt>=L && pt<=H) h+='<line x1="30" y1="'+y(pt).toFixed(1)+'" x2="46" y2="'+y(pt).toFixed(1)+'" stroke="#b98cff" stroke-width="1.3" stroke-dasharray="3 2"/>';
+    }
+    var firstUp=(D.first==='HOD');
+    h+='<text x="62" y="'+(y(H)+3).toFixed(1)+'" class="g3cl">H <tspan fill="#e3b341">'+hlClock(firstUp?D.hodT:D.hodT)+'</tspan></text>';
+    h+='<text x="62" y="'+(y(O)+3).toFixed(1)+'" class="g3cl" fill="#9aa7b6">O</text>';
+    h+='<text x="62" y="'+(y(C)+3).toFixed(1)+'" class="g3cl">C <tspan fill="#5b6675">now</tspan></text>';
+    h+='<text x="62" y="'+(y(L)+3).toFixed(1)+'" class="g3cl">L <tspan fill="#5fd08a">'+hlClock(D.lodT)+'</tspan></text>';
+    // the construction track: WHEN the two extremes printed
+    var t0=mul(8,3600)+mul(30,60), t1=mul(15,3600), X0=8, X1=W-10;
+    function x(sec){ return X0 + Math.max(0,Math.min(1,(sec-t0)/(t1-t0)))*(X1-X0); }
+    h+='<line x1="'+X0+'" y1="196" x2="'+X1+'" y2="196" stroke="#2b3644" stroke-width="1.3"/>';
+    h+='<circle cx="'+x(D.hodT).toFixed(1)+'" cy="196" r="2.8" fill="#e3b341"/>';
+    h+='<circle cx="'+x(D.lodT).toFixed(1)+'" cy="196" r="2.8" fill="#5fd08a"/>';
+    h+='<circle cx="'+x(D.clock).toFixed(1)+'" cy="196" r="2.2" fill="#fff"/>';
+    h+='<text x="'+X0+'" y="209" class="g3cdtk">8:30</text>';
+    h+='<text x="'+X1+'" y="209" class="g3cdtk" text-anchor="end">15:00</text>';
+    h+='</svg>';
+    return h;
+  }catch(e){ swallow('dayCandle', e); return ''; }
+}
+
+// ---- (v14.91) GREEN DAY / RED DAY — will the session close above or below its own open? --------
+// Operator, 2026-08-29: "i need a model to predict if we close above or below the open to determine
+// if today will be a red or green day with decent probability."
+//
+// ⚠⚠ THE OPEN TELLS YOU NOTHING, AND THAT WAS MEASURED BEFORE ANYTHING WAS BUILT. Over 282 sessions
+// of ES 1-minute (tools/study-greenred.py) against a 51% base rate:
+//     overnight gap        AUC 0.479      nothing
+//     open in ON range     AUC 0.496      nothing
+//     IB30 range size      AUC 0.502      nothing
+//     day of week          AUC 0.447      noise
+//     PRIOR DAY green/red  AUC 0.500      EXACTLY a coin flip
+// He asked specifically about the prior day and the weekly open. The prior day is a clean NOTHING —
+// the rule scores 69% after a green day and 70% after a red one, and 69% after two of either. The
+// weekly open IS real (AUC 0.585; 57% green above it, 42% below) but adds NOTHING on top of the
+// rule and costs a quarter of the days, because at 09:30 it is re-reading the same information the
+// momentum term already carries. It is kept as CONTEXT in the hover, never as a filter.
+//
+// ⚠⚠ AND A LOGISTIC REGRESSION LOST TO A ONE-LINE RULE. Walk-forward, refit every 10 sessions:
+// the logistic on (r60, IB30-break) scored 74%; "the IB30 break and the first leg agree" scores
+// 77%. The rule ships. It has no parameters to rot and can be read on the face.
+//
+//     THE RULE — call the day GREEN if price broke the FIRST 30 MINUTES' RANGE upward AND is above
+//     the open at that point; RED if both are down; NO CALL if they disagree.
+//
+// ⚠ IT DECLINES WHERE IT KNOWS NOTHING, and that is not a design choice, it is measured: on the 57
+// disagreement days green came in 44% — a coin flip. A model that is silent on its blind days is
+// worth more than one that guesses through them.
+var GD_META={ n:282, fires:225, firePct:80, acc:76, ciLo:71, ciHi:82, base:51, z:8.8,
+              silent:57, silentGreen:44, callEarly:'09:03', callLate:'09:30',
+              q:[70,77,83,75], first:'2025-06-02', last:'2026-08-21',
+              logistic:74, priorDayAuc:0.500, weeklyAuc:0.585, wkAbove:57, wkBelow:42 };
+
+// The call. `early` uses the 09:00 close (median call 09:03); if that is silent the 09:30 leg is
+// tried, which is what lifts coverage from 72% to 80% of sessions.
+function gdRead(sym){
+  var out={ ok:false, call:null, why:'', at:null, brk:0, mom:0 };
+  try{
+    var cs=closedCandles(sym)||[];
+    if(!cs.length){ out.why='no candles'; return out; }
+    var openSec=mul(8,3600)+mul(30,60);
+    var ib=[], rest=[], op=null;
+    for(var i=0;i<cs.length;i++){ var b=cs[i];
+      if(!b || typeof b.so!=='number' || b.so<openSec) continue;
+      if(op==null && typeof b.o==='number') op=b.o;
+      if(b.so < openSec+1800) ib.push(b); else rest.push(b);
+    }
+    if(op==null){ out.why='no session open yet'; return out; }
+    out.open=op;
+    if(ib.length<8){ out.why='first 30 minutes not complete'; return out; }
+    var hi=-1e18, lo=1e18, k;
+    for(k=0;k<ib.length;k++){ if(ib[k].h>hi) hi=ib[k].h; if(ib[k].l<lo) lo=ib[k].l; }
+    out.ibH=hi; out.ibL=lo;
+    // which side of the opening range broke FIRST
+    for(k=0;k<rest.length;k++){
+      if(rest[k].h>hi){ out.brk=1;  out.brkAt=rest[k].so; break; }
+      if(rest[k].l<lo){ out.brk=-1; out.brkAt=rest[k].so; break; }
+    }
+    if(!out.brk){ out.why='the opening range has not broken yet'; return out; }
+    // momentum leg: the 09:00 close first, then 09:30 if that one disagrees
+    var c30=ib[ib.length-1].c, c60=null;
+    for(k=0;k<rest.length;k++){ if(rest[k].so < openSec+3600) c60=rest[k].c; }
+    var m30=(c30-op), m60=(c60!=null)?(c60-op):null;
+    if(m30!==0 && (m30>0)===(out.brk>0)){ out.mom=m30; out.at=GD_META.callEarly; }
+    else if(m60!=null && m60!==0 && (m60>0)===(out.brk>0)){ out.mom=m60; out.at=GD_META.callLate; }
+    else { out.why='the break and the first leg disagree — no call'; out.ok=true; return out; }
+    out.call=(out.brk>0)?'GD':'RD';
+    out.ok=true;
+    return out;
+  }catch(e){ out.why=String(e&&e.message||e); return out; }
+}
+
+// What the day ACTUALLY did, once there is a close to judge (or price so far, marked live).
+function gdActual(sym){
+  try{
+    var cs=closedCandles(sym)||[]; var openSec=mul(8,3600)+mul(30,60);
+    var op=null, last=null;
+    for(var i=0;i<cs.length;i++){ var b=cs[i];
+      if(!b||typeof b.so!=='number'||b.so<openSec) continue;
+      if(op==null && typeof b.o==='number') op=b.o;
+      last=b.c;
+    }
+    if(op==null||last==null) return null;
+    return { green:(last>op), pts:(last-op), open:op, now:last };
+  }catch(e){ return null; }
+}
+
 function hlNodeAt(sym, D, PTL){
   var out={ ok:false, first:null, second:null, pt:null, why:'' };
   try{
@@ -24560,7 +24761,18 @@ function secFrame(sym){
     try{ if(rollsLive()) RAILROLLS=(rollLatched(sym)||[]).filter(function(rF){ return !rF.gone; }); }catch(eRR){}
     var RAILTGT=null;   // (v14.46) the destination, set by the READ below and consumed by the LADDER
     // (v14.35, Garma item 1) session-structure levels, once per render, in the chart frame
-    var SESSL=null; try{ SESSL=sessionLevels(sym, (EB&&typeof EB.scaleUsed==='number')?EB.scaleUsed:1); }catch(eSL){}
+    // ⚠⚠ (v14.93) THE SAME SILENT-CASH-FALLBACK AS ifLadder, IN A SECOND PLACE. This read
+    //     `: 1` — so when EB.scaleUsed was unavailable, PDH/PDL/PDC/IB rendered on the CASH scale
+    // (~770) onto a chart drawn in ES (~7710). That is the `PDH 770.23` sitting beside a
+    // `DP 7563.81` on his rail. ⚠ EVERY OTHER CONSUMER OF scaleUsed IN THIS FILE GUARDS WITH
+    // `>0` AND SKIPS — this one line was the exception, and being the exception is what made it
+    // invisible. `SESSL` is null-checked by ladderHtml and railLevelsLine, so DECLINING is safe
+    // and honest: an absent level is a gap you can see, a mis-scaled one is a lie you cannot.
+    var SESSL=null;
+    try{
+      var _sc=(EB && typeof EB.scaleUsed==='number' && EB.scaleUsed>0) ? EB.scaleUsed : null;
+      if(_sc!=null) SESSL=sessionLevels(sym, _sc);
+    }catch(eSL){}
     // (v14.30) the level-engine context rides the SAME latched list (one computation, N consumers)
     try{
       var lvDsc=1; try{ lvDsc=ifDispScale()||1; }catch(eLd){}
@@ -26695,7 +26907,20 @@ function secDay(sym){
     var PTL=null; if(!NOREAD){ try{ PTL=hlPT(sym, D); }catch(ePT){ swallow('hlPT', ePT); } }
     // (v14.88) what each extreme took out on its way — SLvl for the first, TLvl for the second
     var LVH=null; if(!NOREAD){ try{ LVH=hlLevelHit(sym, D); }catch(eLH){ swallow('hlLevelHit', eLH); } }
-    function lvTag(L, cls){ return L ? ('<span class="g3daylv '+cls+'">'+g3esc(L.name)+' '+frameNum(L.px)+'</span>') : '\u2014'; }
+    // (v14.91) NAMES ONLY, and as many as were taken out. The price is dropped by his instruction —
+    // it is on the rail and the chart already, and it was consuming the space the extra levels need.
+    // ⚠ Furthest-first, so the deepest thing the excursion reached reads first. The prices survive
+    // in the HOVER, because dropping them from the face must not make them unreachable.
+    function lvTag(LS, cls){
+      var arr = (LS && LS.length!=null) ? LS : (LS ? [LS] : []);
+      if(!arr.length) return '\u2014';
+      var names=[], tip=[];
+      for(var i=0;i<arr.length && i<4;i++){ names.push(g3esc(arr[i].name)); tip.push(arr[i].name+' '+frameNum(arr[i].px)); }
+      var more=(arr.length>4)?('<span class="g3daydim">+'+(arr.length-4)+'</span>'):'';
+      return '<span class="g3daylv '+cls+'" title="'+g3esc(tip.join('  \u00b7  '))+
+             ' \u2014 every level price traded BEYOND between the open and that extreme, furthest first.">'+
+             names.join(' ')+'</span>'+more;
+    }
     // (v14.89) the node chip: which BOOK's king the extreme tested, and how far off it landed.
     // ⚠ The book is the point — he asked for "either a spy node, spxy node or a qqq node" by name.
     // ⚠ A QQQ hit is flagged `~` because QQQ is a proportional BEARING, not a converted price.
@@ -26781,23 +27006,12 @@ function secDay(sym){
             '<b>\u26a0 when it did not hold, it was replaced:</b> '+(100-T.rate)+'% of the time at this age.')
          : 'no rate is claimed below 30 minutes \u2014 the shortest measured window.')+
        '</div>';
-    // ---- (v14.90) THE HL / LC-HC METRICS SIT BESIDE THE READ, NOT IN THE TABLE -----------------
-    // Operator, 2026-08-29: "keep the HL metrics like HL gap and range at the top to the right of
-    // the forecast so we dont take up so much vertical space", and the LC|HC pair "up there also".
-    // ⚠⚠ THIS IS WHAT BROKE HIS COLUMN ALIGNMENT. While HL GAP, HL RNG and the LC·RNG pair sat in
-    // block 2 they pushed PTWick% and PTMUD three columns left of WICK% and MUD — the exact
-    // alignment he asked for in his first sketch. Moving them here is what restores it; they were
-    // never table columns in the agreed layout.
-    if(!NOREAD){
-      var lcT=(PTL&&PTL.ok)?PTL.lcTag:'LC';
-      h+='<div class="g3dayhl">'+
-         '<span><i>HL GAP</i>'+hlDur(D.gap)+((D.secondT>=D.clock)?'\u2026':'')+'</span>'+
-         '<span><i>HL RNG</i>'+(D.rngUsd!=null?('$'+Math.round(D.rngUsd).toLocaleString()+' \u2014 '):'')+D.rngPts.toFixed(1)+'pts</span>'+
-         ((PTL&&PTL.ok&&PTL.lcMin!=null)
-            ? ('<span><i>'+lcT+' GAP</i>'+hlDur(PTL.lcMin)+'</span><span><i>'+lcT+' RNG</i>'+PTL.lcPts.toFixed(1)+'pts</span>')
-            : ('<span><i>'+lcT+' GAP</i>\u2014</span><span><i>'+lcT+' RNG</i>\u2014</span>'))+
-         '</div>';
-    }
+    // ---- (v14.90 -> v14.91) THE TOP STRIP IS GONE, SUPERSEDED BY ROW 3 --------------------
+    // It moved here at v14.90 to unblock his column alignment. He then asked for "a thrid row for
+    // the HL fields like HL Gap HL Rng HL $", which is a better home: row 3 aligns them under the
+    // same columns as everything else and has room for the dollar figures. Leaving both would have
+    // printed HL GAP and HL RNG TWICE on one face — which is exactly what shipped for one build,
+    // and `test_nodeat` n39 caught it.
     // ---- (v14.65) THE CHIP ROW IS GONE, AND EVERY CHIP WAS REMOVED FOR A MEASURED REASON ----
     // Operator, 2026-08-28: "do you need the badges below like vwap, ib60 etc."  Measured over 284
     // sessions (FINDINGS F-1/F-2), the answer is no, and keeping them was actively misleading:
@@ -26828,6 +27042,11 @@ function secDay(sym){
       hlDur(eW.wickMed)+', BOP '+hlDur(eW.bop)+' vs '+hlDur(eW.bopMed)+', TOOK '+hlDur(base.tookMin)+' vs '+hlDur(base.medTook)+
       '. The MEAN is what is shown on every field. Each carries its own n because the exclusions bite differently. p25/p75 on the range stay true percentiles \u2014 trimming a quantile would make it describe a spread it no longer covers.')
       :'The E row is the expected result averaged over the corpus. The wick columns have no base rate yet.';
+    // (v14.91) THE CANDLE SITS ON THE LEFT — operator: "move the candle to the left side of the
+    // app". The stats are wrapped beside it so picture and numbers read as one object; the row is
+    // flex-wrap, so a narrow panel stacks them instead of clipping the table.
+    var CDL = NOREAD ? '' : dayCandleSvg(SYM, D, PTL);
+    if(CDL) h+='<div class="g3dayrow"><div class="g3daycdl">'+CDL+'</div><div class="g3daytbl">';
     h+='<div class="g3dayg g3dayg8"'+g3tip(eTip)+'>';
     // (v14.88) SLvl sits immediately after the extreme it belongs to — operator: "they should be
     // right after the HOD and LOD fields ... it is the level that was swept when making the first
@@ -26836,7 +27055,7 @@ function secDay(sym){
     var DASH='\u2014';
     h+= NOREAD ? row('a','A',[DASH,DASH,DASH,DASH,DASH,DASH,DASH,DASH,DASH,DASH]) : row('a','A',[
       '<b>'+D.first+'</b>',
-      lvTag(LVH&&LVH.sweep, 'sw'),
+      lvTag(LVH&&LVH.sweepAll, 'sw'),
       ndTag(NDH&&NDH.first, 'nd'),
       '<b>'+hlClock(D.firstT)+'</b>',
       hlDur(D.took),
@@ -26874,15 +27093,19 @@ function secDay(sym){
     // than being invented. `test_hodlod` L14/L15 hold it absent.
     // ⚠ PTN takes the WICK column because LC|HC moved to the top strip and left it the only home
     // that keeps the WICK-family alignment intact. Say the word and it moves.
-    h+=row('hd','',['2ND','TLvl',(D.second==='HOD'?'HodN':'LodN'),(NOREAD?'TIME':(''+D.second)),'PT TOOK','PT','PTN','','PTWick%','PTMUD']);
+    h+=row('hd','',['2ND','TLvl',(D.second==='HOD'?'HodN':'LodN'),(NOREAD?'TIME':(''+D.second)),'PT TOOK','PT','PTWICK','','PTWick%','PTMUD']);
     h+= NOREAD ? row('a','A',[DASH,DASH,DASH,DASH,DASH,DASH,DASH,'',DASH,DASH]) : row('a','A',[
       '<b>'+D.second+'</b>',
-      lvTag(LVH&&LVH.target, 'tg'),
+      lvTag(LVH&&LVH.targetAll, 'tg'),
       ndTag(NDH&&NDH.second, 'nd'),
       (D.secondT>D.firstT && D.secondT<=D.clock) ? ('<b>'+hlClock(D.secondT)+'</b>') : (D.second+' pend.'),
       (PTL&&PTL.ok)?('<b>'+hlDur(PTL.ptMin)+'</b>'):DASH,
       (PTL&&PTL.ok)?('<b>'+PTL.ptPts.toFixed(1)+'pts</b>'+(PTL.ptUsd!=null?(' <span class="g3daydim">$'+Math.round(PTL.ptUsd).toLocaleString()+'</span>'):'')):DASH,
-      ndTag(NDH&&NDH.pt, 'nd'),
+      // (v14.91) PTWICK — Q1 ANSWERED. WICK is open -> the bar that reclaims the OPEN; his own
+      // numbers prove the anchor (10:00 + BOP 51m = 10:51 = W.END, and TOOK + BOP = WICK to the
+      // minute). PTWICK is that same span anchored on the SECOND EXTREME instead. It is em-dash
+      // until price returns there, which on most days it never does — that is the honest state.
+      (PTL&&PTL.ok&&PTL.ptWickMin!=null)?hlDur(PTL.ptWickMin):DASH,
       '',
       (PTL&&PTL.ok&&PTL.ptWickPct!=null)?(PTL.ptWickPct+'%'):DASH,
       (PTL&&PTL.ok&&PTL.ptMud!=null)?hlDur(PTL.ptMud):DASH ]);
@@ -26897,7 +27120,57 @@ function secDay(sym){
       '',
       '~'+((PTL&&PTL.ok)?PTL.exp.ptWickPct:PT_META.ptWickPct)+'%',
       '~'+hlDur((PTL&&PTL.ok)?PTL.exp.ptMud:PT_META.ptMud) ]);
+    // ---- (v14.91) ROW 3 — THE SPANS, and the GREEN/RED call in the first cell -----------------
+    // Operator: "in the last row there is an empty first cell where we can put the actual and
+    // expected values for a GD or a RD." A = what the day is doing, E = the call and its rate.
+    var GDc=null, GDa=null;
+    try{ GDc=gdRead(SYM); GDa=gdActual(SYM); }catch(eGD){}
+    var gdTip='WILL TODAY CLOSE ABOVE OR BELOW ITS OWN OPEN? '+
+      'The rule: price broke the FIRST 30 MINUTES\u2019 range in one direction AND is on that same side of the open. '+
+      'Right '+GD_META.acc+'% of the time on the '+GD_META.firePct+'% of sessions it speaks (n='+GD_META.fires+' of '+GD_META.n+
+      ', 95% CI '+GD_META.ciLo+'\u2013'+GD_META.ciHi+'%), against a '+GD_META.base+'% base rate \u2014 z='+GD_META.z+'. '+
+      'Stable by quarter: '+GD_META.q.join('%, ')+'%. '+
+      '\u26a0\u26a0 IT IS SILENT WHEN ITS TWO INPUTS DISAGREE, and that is measured, not styling: on those '+GD_META.silent+
+      ' days green came in '+GD_META.silentGreen+'% \u2014 a coin flip. '+
+      '\u26a0\u26a0 THE OPEN ALONE PREDICTS NOTHING. Overnight gap AUC 0.479, open-in-overnight-range 0.496, IB30 size 0.502, '+
+      'day of week 0.447 \u2014 and the PRIOR DAY\u2019S COLOUR is AUC '+GD_META.priorDayAuc.toFixed(3)+', an exact coin flip: the rule scores '+
+      '69% after a green day and 70% after a red one. The WEEKLY OPEN is real (AUC '+GD_META.weeklyAuc+
+      '; '+GD_META.wkAbove+'% green above it, '+GD_META.wkBelow+'% below) but adds NOTHING on top of the rule and costs a quarter of the days, '+
+      'so it is context, not a filter. '+
+      '\u26a0 A LOGISTIC REGRESSION LOST TO THIS ONE-LINE RULE ('+GD_META.logistic+'% vs '+GD_META.acc+'%), so the rule ships. '+
+      '\u26a0 The call lands ~'+GD_META.callEarly+' at the median, some days not until '+GD_META.callLate+' \u2014 never at the open. '+
+      '\u26a0 It gives the SIGN only, never the size. \u26a0 PROVISIONAL: one instrument, '+GD_META.first+' to '+GD_META.last+
+      ', no forward test yet \u2014 it is momentum, and momentum regimes end.';
+    h+='<div class="g3dayg g3dayg6"'+g3tip(gdTip)+'>';
+    h+=row('hd','',['DAY','','PTN','','HL GAP','HL RNG','HL $','LC GAP','LC RNG','LC $']);
+    h+= NOREAD ? row('a','A',[DASH,'',DASH,'',DASH,DASH,DASH,DASH,DASH,DASH]) : row('a','A',[
+      (GDa ? ('<b class="'+(GDa.green?'g3gd':'g3rd')+'">'+(GDa.green?'GD':'RD')+'</b> <span class="g3daydim">'+
+              (GDa.pts>=0?'+':'')+ (GDa.pts*((typeof D.scale==='number'&&D.scale>0)?D.scale:1)).toFixed(1)+'</span>') : DASH),
+      '',
+      ndTag(NDH&&NDH.pt, 'nd'),
+      '',
+      hlDur(D.gap)+((D.secondT>=D.clock)?'\u2026':''),
+      D.rngPts.toFixed(1)+'pts',
+      (D.rngUsd!=null?('$'+Math.round(D.rngUsd).toLocaleString()):DASH),
+      (PTL&&PTL.ok&&PTL.lcMin!=null)?hlDur(PTL.lcMin):DASH,
+      (PTL&&PTL.ok&&PTL.lcPts!=null)?(PTL.lcPts.toFixed(1)+'pts'):DASH,
+      (PTL&&PTL.ok&&PTL.lcUsd!=null)?('$'+Math.round(PTL.lcUsd).toLocaleString()):DASH ]);
+    h+=row('e','E',[
+      (GDc && GDc.ok && GDc.call
+         ? ('<b class="'+(GDc.call==='GD'?'g3gd':'g3rd')+'">'+GDc.call+'</b> <span class="g3daydim">'+GD_META.acc+'%</span>')
+         : ('<span class="g3daydim">'+((GDc&&GDc.why)?g3esc(GDc.why.split('\u2014')[0].trim()):'waiting')+'</span>')),
+      '',
+      '',
+      '',
+      '~'+hlDur(base.gapMin),
+      '~'+base.rngPts+'pts',
+      '~$'+Math.round(base.rngUsd).toLocaleString(),
+      (PTL&&PTL.ok)?('~'+hlDur(PTL.exp.lcMin)):('~'+hlDur(PT_META.lcMin)),
+      (PTL&&PTL.ok)?('~'+PTL.exp.lcPts.toFixed(1)+'pts'):('~'+PT_META.lcPts+'pts'),
+      '' ]);
     h+='</div>';
+    h+='</div>';
+    if(CDL) h+='</div></div>';   // (v14.91) close g3daytbl + g3dayrow
     // ---- (v14.72 -> v14.90) THE FAR SIDE BLOCK IS REMOVED --------------------------------
     // The agreed ⓪ a layout (2026-08-29, eight mockup rounds) ends "FAR SIDE block: REMOVED" and
     // the resume note has said so since v14.88 — while the block went on rendering. A record that

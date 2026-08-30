@@ -131,6 +131,155 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v14.93 · 2026-08-30 · **ONE SWITCH, TWO CONSUMERS, DIFFERENT REQUIREMENTS — AND NOTHING ERRORED**
+
+The 10x mismatch. `emBand()` honoured `dispIsFut()` via `dispR()` (needs only `FUTMODE.r`);
+`ifLadder()` honoured it only if `FUTMODE.futPx` existed, and **silently fell back to the CASH
+scale** without it. `r` is a persisted EMA, `futPx` is null after hours. So the panel had a
+reachable state where one half read ES and the other read SPY, every individual number was correct,
+and every DIFFERENCE between them was nonsense.
+
+⚠⚠ **A SILENT FALLBACK ACROSS A UNIT BOUNDARY IS THE WORST KIND OF BUG.** Nothing throws, nothing
+looks empty, and every value stays plausible on its own. It is only visible in a SUBTRACTION —
+which is why it surfaced as "−6937.26" and not as a crash. **When two code paths honour the same
+switch, they must not have different preconditions for honouring it.**
+
+⚠ THE FIX IS ONE SCALE, NOT A SMARTER FALLBACK. Deriving the same ratio `emBand` uses means they
+cannot diverge. And the third state is NAMED (`scaleSrc`) rather than inferred — an undiagnosable
+state is how this survived four builds.
+
+⚠⚠ **AND IT LIVED IN A SECOND PLACE, WHICH I ONLY FOUND BY AUDITING RATHER THAN STOPPING AT THE
+REPRO.** `sessionLevels(sym, EB.scaleUsed : 1)`. Every other consumer of `scaleUsed` guards with
+`>0` and skips; this one line fell back to cash. **When a bug has a shape, grep for the shape, not
+the symptom** — the symptom I was handed was the T-distance, and it would have left the rail broken.
+
+⚠ DECLINING BEATS DEFAULTING. `SESSL` is now simply not computed when the scale is unknown. An
+absent level is a gap you can see; a mis-scaled one is a lie you cannot.
+
+### v14.92b · 2026-08-30 · **THE INSTALLER SILENTLY EXCLUDED EVERY tools/ SUBDIRECTORY**
+
+`os.listdir('tools')` + `isfile` skips directories. So `tools/nightly/` — the harness, the protocol,
+the verdict ledger and the **pre-registered hypothesis bank** — was committed locally and would
+never have reached GitHub. The build reported success every time.
+
+⚠⚠ **THE HYPOTHESIS BANK IS THE WORST POSSIBLE THING TO LOSE**, because its entire value is that it
+was demonstrably written BEFORE the data existed. A copy restored later proves nothing. This is the
+same shape as the ES corpus loss recorded in `data/es-1min/README.md` — "anything that only exists
+in a sandbox commit does not exist" — and it recurred within two days of that note being written.
+
+⚠ **A MANIFEST THAT WALKS ONE LEVEL IS A MANIFEST WITH A SILENT FLOOR.** It never errors; it just
+ships less than you think. Caught only because the payload was decoded and inspected after building
+— which is now the third time post-build verification has caught something the build itself called
+a success.
+
+### v14.92 · 2026-08-30 · **THE REGIME FIELD WAS A HARDCODED CONSTANT, AND THE RECORDER BANKED IT FOR NINE SESSIONS**
+
+He asked whether the positive/negative gamma regime could be used as a filter. It is recorded. It is
+also worthless: `neg:false` was **hardcoded** on the trinity read path, so all **284 samples across
+9 sessions** say "positive gamma" because that line says so.
+
+⚠⚠ **A CONSTANT THAT LOOKS LIKE DATA IS WORSE THAN A MISSING FIELD.** A gap is visible and stops you.
+A constant answers every query, passes every null check, and quietly makes any study built on it
+meaningless. Nine sessions of recording produced zero usable regime data and nothing flagged it.
+
+⚠⚠ **THE TELL WAS TWO RECORDED FIELDS DISAGREEING.** `bk.neg` claimed 100% positive gamma while
+price sat BELOW the flip (`deriv.zg`) on 60% of the SAME snapshots. Both describe the same thing;
+they cannot both be right. **Cross-check fields that should agree — the contradiction is free and it
+is what exposed this.** I only looked because the 100%/0% split was implausible.
+
+⚠ THE FIX IS `null`, NOT A DERIVED GUESS. The Trinity pane does not expose the sign, so there is
+nothing honest to derive it from. Null makes the hole visible; anything else would re-bury it.
+
+⚠ AND THE BETTER SIGNAL WAS ALREADY THERE: price vs the FLIP is real, varies (40% above / 60%
+below), is continuous rather than binary, and is what the doctrine actually describes. Registered as
+gx-010/gx-011. **The broken field was hiding a working one.**
+
+⚠ NOTHING WAS TESTED, DELIBERATELY. Six gamma sessions and a broken regime field is not a study, and
+running one anyway is how a number nobody can defend reaches the face.
+
+### v14.91c · 2026-08-30 · **A FILTER INHERITS THE EDGE IT IS FILTERING, AND MY HARNESS COULD NOT SEE IT**
+
+Testing his prior-day value-area question, eight combinations were scored and FOUR came back
+PROVISIONAL at 82–84% against a 79.5% incumbent. They were mutually contradictory — "open ABOVE
+VAH" and "open IN VALUE" are DISJOINT sets that scored 82.1% and 82.2%.
+
+**That contradiction is the tell, and it is the cheapest one available.** When several partitions
+that cannot all be true score the same, nothing is being discovered: the incumbent's accuracy is
+just being resampled.
+
+⚠⚠ **THE HOLE: the shuffle test cannot judge a FILTER.** Shuffling labels destroys the incumbent's
+edge — but a filter is a SUBSET of the incumbent's days and inherits that edge, so it clears a bar
+built on the assumption there is no edge. The right control is a RANDOM SUBSET OF THE SAME SIZE:
+median 79.5%, **p95 87.2%** at n=39. All four sat inside it. `subset_null()` added.
+
+⚠ AND I RE-JUDGED MY OWN RESULT WITH IT. gx-008 (90.2%, n=61) survived — p95 luck band 85.2% — but
+I did not know that until I built the control, and I had already written it into the ledger as a
+finding. **A new control must be run against the results already banked, not only against new ones.**
+
+⚠ THE NEGATIVE RESULT IS THE DELIVERABLE HERE. Prior-day POC/VAH/VAL predict neither direction
+(±4pp, |z|<1), nor range (46% big-range outside value against 50% expected), nor support/resistance
+— and on TWO tests the distance-matched SHAM beat the real level (16% vs 21%, 61% vs 64%). Logged
+as gx-009, CLOSED NEGATIVE, so an intuitive and widely-believed idea is not re-proposed monthly.
+
+### v14.91b · 2026-08-29 · **THE NIGHTLY LOOP: SIX SESSIONS OF GAMMA, AND A HARNESS THAT CAUGHT ITSELF**
+
+Designing the LLM refinement loop surfaced the constraint that governs it: **there are 6 sessions of
+gamma book and 284 of price.** Every shipped model is price-only. Nothing using the gamma book can
+be tested for months. So the loop starts by ACCUMULATING and PRE-REGISTERING — 8 hypotheses locked
+before the data to test them exists, which is stronger pre-registration than anything obtainable
+later.
+
+⚠⚠ **THE HARNESS FOUND A HOLE IN ITSELF ON ITS FIRST RUN.** Two proposals cleared all four bars at
+90% and 84% — and both were **subsets of the incumbent's firing days**. They select WHEN the shipped
+rule works; they add no new signal. **A confidence modifier reported as a predictor double-counts
+one edge.** `relation()` and `duplicate_of()` added. The two survivors were also 74% the same idea.
+
+⚠ **THE SHUFFLE TEST IS THE ONLY BAR THAT SCALES WITH AMBITION.** Over just 4 proposals the
+best-of-K noise band reached **64% at p95** against a 51% base. At twenty proposals a night — which
+is what "have the LLM find datapoints" means — anything under ~70% is indistinguishable from noise.
+Without it the loop manufactures a finding every night, forever.
+
+⚠ And the division that makes it safe: **the LLM proposes, the harness disposes.** The LLM never
+sees a result before its hypothesis is locked and has no vote on the verdict. Not distrust —
+arithmetic.
+
+### v14.91 · 2026-08-29 · **THE FRAME WAS THE FINDING, AND HE HAD TO TELL ME**
+
+> "do you realize that i am taking the model of the daily bar and trying to measure the movements
+> in it from open to close"
+
+No. I had been treating ⓪a as a LIST OF TIMING STATISTICS that happened to share a section, for
+eleven builds. They are the anatomy of ONE DAILY CANDLE. His own numbers prove it and I could have
+run that check any day: 51% + 35% + 14% = 100%, and WICK% is not a ratio, it is where the OPEN sits
+in the bar.
+
+⚠⚠ **THE TELL: I could decode every field but never asked what they were FOR.** TOOK + BOP = WICK,
+and 10:00 + 51m = 10:51 = W.END — I verified that arithmetic to the minute and STILL did not ask why
+those quantities would be interesting together. **Fields that reconstruct one object are a model of
+that object.** When several measurements close on an exact identity, the identity IS the design.
+
+⚠ AND THE FRAME ANSWERED AN OPEN QUESTION FOR FREE. PTWICK sat as Q1 for four builds, "undefinable",
+because I stopped at "reclaim would mean a different event". Once the anchor is named — WICK is
+measured off the OPEN — the mirror is mechanical: PTWICK is the same span off the SECOND EXTREME.
+**A question that will not close is often a framing problem, not a data problem.**
+
+⚠⚠ **A ONE-LINE RULE BEAT THE LOGISTIC REGRESSION, 77% TO 74%.** I built the regression first,
+because a model is what "predict" suggests. The rule ships. ⚠ And the negative results were the
+valuable half: the open predicts NOTHING (gap AUC 0.479, day-of-week 0.447), and the PRIOR DAY is
+AUC 0.500 — an exact coin flip. **He asked about the prior day expecting it to help; reporting that
+it does not is worth more than finding something that "works".**
+
+⚠ NINTH COMMENT-BLIND ASSERTION, and the first inside a test HELPER rather than an assertion — the
+cell counter counted commas in a `//` comment and reported 11 cells where there were 10. I chased
+the CODE first. **A helper that reads source must strip comments too.**
+
+⚠ A TWO-LETTER CSS CLASS COLLIDED. `.g3ct` was already the contract chip; `test_em_band` caught it
+in one run. In a 27k-line single file, short class names are a collision waiting to happen.
+
+⚠ AND I SHIPPED A DUPLICATE FOR ONE BUILD: the v14.90 top strip AND row 3 both printed HL GAP /
+HL RNG. **When a thing MOVES, delete the old home in the same edit** — n39 caught it only because
+it asserted the strip's existence and the assertion had to be rewritten.
+
 ### v14.90 · 2026-08-29 · **THE RECORD SAID "REMOVED" AND THE CODE WENT ON RENDERING**
 
 > "you did not implement all the changes we have been talking about"

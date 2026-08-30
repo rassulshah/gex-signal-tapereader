@@ -1,0 +1,114 @@
+<meta charset="utf-8"><title>⓪a — the daily bar, decomposed</title>
+<style>
+ body{background:#0d1117;color:#c9d4e2;font:12px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:18px 20px 44px}
+ h2{font-size:11px;letter-spacing:.11em;color:#8b98a9;text-transform:uppercase;margin:24px 0 8px;font-weight:800}
+ h2:first-child{margin-top:0}
+ .panel{background:#11161d;border:1px solid #1e2733;border-radius:6px;padding:11px 13px;display:flex;gap:18px;align-items:flex-start}
+ .stats{flex:1;min-width:0}
+ table{border-collapse:collapse;width:100%;font-size:9px}
+ th{color:#8b98a9;font-weight:800;text-align:left;padding:3px 7px 3px 0;font-size:8px;white-space:nowrap}
+ td{padding:2px 7px 2px 0;white-space:nowrap}
+ .tag{color:#5b6675;font-weight:800;font-size:8px;padding-right:7px}
+ .a td{color:#e6edf5;font-weight:800}
+ .e td{color:#6b7787}
+ .lv{background:rgba(227,195,65,.13);border:1px solid rgba(227,195,65,.42);color:#e3b341;border-radius:3px;padding:1px 4px;font-weight:800}
+ .lv.tg{background:rgba(46,194,126,.14);border-color:rgba(46,194,126,.40);color:#5fd08a}
+ .nd{background:rgba(150,110,255,.14);border:1px solid rgba(150,110,255,.42);color:#b98cff;border-radius:3px;padding:1px 4px;font-weight:800}
+ .am{color:#f2b45a}.dim{color:#5b6675}
+ .sep td{border-top:1px solid #1c2430;padding-top:5px}
+ .bar{width:250px;flex:0 0 250px}
+ p{color:#9aa7b6;font-size:11px;max-width:980px;margin:6px 0}
+ .why{border-left:2px solid #2b3644;padding-left:11px;margin:8px 0 16px}
+ b.g{color:#5fd08a}b.r{color:#f0616d}b.w{color:#fff}
+ .lgd{font-size:8px;color:#6b7787;margin-top:7px;line-height:1.7}
+ .sw{display:inline-block;width:8px;height:8px;border-radius:2px;vertical-align:-1px;margin-right:4px}
+</style>
+
+<h2>⓪a — today's bar, and how it got built</h2>
+<div class="panel">
+
+ <div class="stats">
+  <table>
+   <tr><th></th><th>WICK</th><th>LEVEL</th><th>NODE</th><th>TIME</th><th>TOOK</th><th>FOLD</th><th>SPAN</th><th>END</th><th>OF BAR</th><th>MUD</th></tr>
+   <tr class="a"><td class="tag">A</td><td>① HIGH</td><td><span class="lv">PDH 775.29</span></td><td><span class="nd">SPY 7729</span></td><td class="am">10:00</td><td>1h30</td><td>51m</td><td>2h21</td><td>10:51</td><td><b class="w">51%</b></td><td>1h18</td></tr>
+   <tr class="e"><td class="tag">E</td><td></td><td></td><td></td><td>~09:03</td><td>~34m</td><td>~14m</td><td>~1h01</td><td>~09:31</td><td>~28%</td><td>~3h20</td></tr>
+
+   <tr class="a"><td class="tag">A</td><td>② LOW</td><td><span class="lv tg">PDL 768.31</span></td><td><span class="nd">SPX 7714</span></td><td class="am">12:09</td><td>2h09</td><td>—</td><td>—</td><td>—</td><td><b class="w">14%</b></td><td>0m</td></tr>
+   <tr class="e"><td class="tag">E</td><td></td><td></td><td></td><td>~13:02</td><td>~3h50</td><td>~38m</td><td>~1h29</td><td>~14:10</td><td>~16%</td><td>~56m</td></tr>
+
+   <tr class="a sep"><td class="tag">A</td><td>BODY</td><td class="dim">O 7713.03</td><td class="dim">C 7710.60</td><td class="dim">now</td><td colspan="2">2.43pts ↓</td><td>$122</td><td></td><td><b class="w">35%</b></td><td></td></tr>
+   <tr class="a"><td class="tag">A</td><td>BAR</td><td class="dim">H 7716.60</td><td class="dim">L 7709.60</td><td></td><td colspan="2">RNG 7.0pts</td><td>$350</td><td></td><td class="dim">100%</td><td></td></tr>
+   <tr class="e"><td class="tag">E</td><td></td><td></td><td></td><td></td><td colspan="2">~61.4pts</td><td>~$3,072</td><td></td><td></td><td></td></tr>
+  </table>
+  <div class="lgd">
+   <b>TOOK</b> to the extreme · <b>FOLD</b> extreme → back to the open · <b>SPAN</b> = TOOK + FOLD ·
+   <b>END</b> its clock · <b>OF BAR</b> that wick as % of range · <b>MUD</b> fold → the other extreme
+  </div>
+ </div>
+
+ <div class="bar">
+  <svg viewBox="0 0 250 300" width="250" height="300">
+   <defs><linearGradient id="bd" x1="0" y1="0" x2="0" y2="1">
+     <stop offset="0" stop-color="#f0616d" stop-opacity=".85"/><stop offset="1" stop-color="#c8434f" stop-opacity=".85"/></linearGradient></defs>
+
+   <!-- segment brackets -->
+   <rect x="26" y="22"  width="7" height="114.2" fill="#e3b341" opacity=".30"/>
+   <rect x="26" y="136.2" width="7" height="77.8" fill="#f0616d" opacity=".38"/>
+   <rect x="26" y="214"  width="7" height="32"   fill="#5fd08a" opacity=".30"/>
+   <text x="20" y="83"  fill="#e3b341" font-size="9" font-weight="800" text-anchor="end">51%</text>
+   <text x="20" y="179" fill="#f0616d" font-size="9" font-weight="800" text-anchor="end">35%</text>
+   <text x="20" y="234" fill="#5fd08a" font-size="9" font-weight="800" text-anchor="end">14%</text>
+
+   <!-- the candle -->
+   <line x1="62" y1="22" x2="62" y2="246" stroke="#8b98a9" stroke-width="1.6"/>
+   <rect x="52" y="136.2" width="20" height="77.8" fill="url(#bd)" stroke="#f0616d" stroke-width="1"/>
+   <line x1="40" y1="136.2" x2="52" y2="136.2" stroke="#e6edf5" stroke-width="2"/>
+   <line x1="72" y1="214"  x2="84" y2="214"  stroke="#e6edf5" stroke-width="2"/>
+
+   <!-- PT marker -->
+   <line x1="52" y1="194.8" x2="72" y2="194.8" stroke="#b98cff" stroke-width="1.4" stroke-dasharray="3 2"/>
+   <text x="90" y="198" fill="#b98cff" font-size="8" font-weight="800">PT 7711.20 · +1.6 back</text>
+
+   <!-- labels -->
+   <text x="90" y="20"  fill="#e6edf5" font-size="9" font-weight="800">H 7716.60</text>
+   <text x="90" y="31"  fill="#e3b341" font-size="8" font-weight="800">① 10:00 · took 1h30</text>
+   <text x="90" y="133" fill="#9aa7b6" font-size="9" font-weight="800">O 7713.03</text>
+   <text x="90" y="211" fill="#e6edf5" font-size="9" font-weight="800">C 7710.60 <tspan fill="#5b6675">now</tspan></text>
+   <text x="90" y="252" fill="#e6edf5" font-size="9" font-weight="800">L 7709.60</text>
+   <text x="90" y="263" fill="#5fd08a" font-size="8" font-weight="800">② 12:09 · gap 2h09</text>
+
+   <!-- construction track -->
+   <line x1="26" y1="284" x2="234" y2="284" stroke="#2b3644" stroke-width="1.4"/>
+   <text x="26" y="297" fill="#5b6675" font-size="7.5" font-weight="700">08:30</text>
+   <text x="234" y="297" fill="#5b6675" font-size="7.5" font-weight="700" text-anchor="end">15:00</text>
+   <circle cx="26"  cy="284" r="2.6" fill="#8b98a9"/>
+   <circle cx="74"  cy="284" r="3.4" fill="#e3b341"/><text x="74" y="277" fill="#e3b341" font-size="7.5" font-weight="800" text-anchor="middle">H</text>
+   <circle cx="141" cy="284" r="3.4" fill="#5fd08a"/><text x="141" y="277" fill="#5fd08a" font-size="7.5" font-weight="800" text-anchor="middle">L</text>
+   <circle cx="230" cy="284" r="2.6" fill="#fff"/><text x="222" y="277" fill="#c9d4e2" font-size="7.5" font-weight="800" text-anchor="middle">now</text>
+   <rect x="230" y="280.5" width="4" height="7" fill="#5b6675" opacity=".5"/>
+  </svg>
+  <div class="lgd">
+   <span class="sw" style="background:#e3b341;opacity:.6"></span>upper wick &nbsp;
+   <span class="sw" style="background:#f0616d;opacity:.7"></span>body &nbsp;
+   <span class="sw" style="background:#5fd08a;opacity:.6"></span>lower wick<br>
+   the track shows the ORDER it was built, not the path.
+  </div>
+ </div>
+</div>
+
+<h2>what changed, and the one thing to decide</h2>
+<div class="why">
+<p><b>Rows are now HIGH and LOW, not 1ST and 2ND</b> — fixed, with ①/② badges for the order. The high
+row is always the high, so the two rows are true mirrors and the table never reorders itself
+mid-session.</p>
+<p><b class="g">OF BAR replaces WICK%, and now the column sums.</b> 51% + 35% + 14% = 100% — upper wick,
+body, lower wick. That is the whole candle, and it is the check that says the decomposition is right.</p>
+<p><b class="r">A real finding, and it needs your call:</b> the old <b>PTWick% 22%</b> is <u>not</u> the
+lower wick. It measures the PT retrace off the low (1.6pts); the lower wick is close-minus-low
+(1.0pt = <b>14%</b>). Two different things, and only the second belongs in a column that has to sum
+to 100%. I have put <b>14%</b> in the bar column and kept <b>PT</b> on the chart as the dashed violet
+mark, since the retrace is still worth seeing. If you would rather the column carry PT, it can — but
+then the three numbers stop adding up to the bar.</p>
+<p><b>Still forming:</b> C is "now", the body is drawn open-ended, and FOLD/SPAN/END on the LOW row
+are em-dash because price has not come back to the open. They will fill in if it does.</p>
+</div>

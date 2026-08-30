@@ -1,0 +1,104 @@
+<meta charset="utf-8"><title>⓪a — v14.91 final</title>
+<style>
+ body{background:#0d1117;color:#c9d4e2;font:12px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:18px 20px 44px}
+ h2{font-size:11px;letter-spacing:.11em;color:#8b98a9;text-transform:uppercase;margin:22px 0 8px;font-weight:800}
+ h2:first-child{margin-top:0}
+ .panel{background:#11161d;border:1px solid #1e2733;border-radius:6px;padding:11px 13px;display:flex;gap:16px;align-items:flex-start}
+ .stats{flex:1;min-width:0}
+ table{border-collapse:collapse;width:100%;font-size:9px}
+ th{color:#8b98a9;font-weight:800;text-align:left;padding:4px 7px 2px 0;font-size:8px;white-space:nowrap}
+ td{padding:2px 7px 2px 0;white-space:nowrap}
+ .tag{color:#5b6675;font-weight:800;font-size:8px;padding-right:6px}
+ .a td{color:#e6edf5;font-weight:800}
+ .e td{color:#65717f;font-weight:600}
+ .lv{background:rgba(227,195,65,.13);border:1px solid rgba(227,195,65,.42);color:#e3b341;border-radius:3px;padding:1px 4px;font-weight:800}
+ .lv.tg{background:rgba(46,194,126,.14);border-color:rgba(46,194,126,.40);color:#5fd08a}
+ .nd{background:rgba(150,110,255,.14);border:1px solid rgba(150,110,255,.42);color:#b98cff;border-radius:3px;padding:1px 4px;font-weight:800}
+ .am{color:#f2b45a}.dim{color:#5b6675}.wh{color:#fff}
+ th.new,td.new{background:rgba(46,194,126,.07)}
+ tr.r3 th,tr.r3 td{border-top:1px solid #1c2430}
+ .bar{width:200px;flex:0 0 200px}
+ p{color:#9aa7b6;font-size:11px;max-width:980px;margin:6px 0}
+ .why{border-left:2px solid #2b3644;padding-left:11px;margin:8px 0 14px}
+ b.g{color:#5fd08a}
+ .lgd{font-size:8px;color:#6b7787;margin-top:8px;line-height:1.7}
+ .gap{background:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(139,152,169,.10) 3px,rgba(139,152,169,.10) 6px)}
+</style>
+
+<h2>⓪a — v14.91 · your layout, three rows · green = new</h2>
+<div class="panel">
+ <div class="stats">
+  <table>
+   <tr><th></th><th>1ST</th><th>SLvl</th><th>HodN</th><th>HOD</th><th>TOOK</th><th>BOP</th><th>WICK</th><th>W.END</th><th>WICK%</th><th>MUD</th></tr>
+   <tr class="a"><td class="tag">A</td><td>HOD</td><td><span class="lv">PDH 775.29</span></td><td><span class="nd">SPY 7729</span></td><td class="am">10:00</td><td>1h30</td><td>51m</td><td>2h21</td><td>10:51</td><td>51%</td><td>1h18</td></tr>
+   <tr class="e"><td class="tag">E</td><td></td><td></td><td></td><td>~09:03</td><td>~34m</td><td>~14m</td><td>~1h01</td><td>~09:31</td><td>~28%</td><td>~3h20</td></tr>
+
+   <tr><th></th><th>2ND</th><th>TLvl</th><th>LodN</th><th>LOD</th><th>PT TOOK</th><th>PT</th><th class="new">PTWICK</th><th class="gap"></th><th>PTWick%</th><th>PTMUD</th></tr>
+   <tr class="a"><td class="tag">A</td><td>LOD</td><td><span class="lv tg">PDL 768.31</span></td><td><span class="nd">SPX 7714</span></td><td class="am">12:09</td><td>2h48</td><td>1.6pts</td><td class="new">—</td><td class="gap"></td><td>22%</td><td>0m</td></tr>
+   <tr class="e"><td class="tag">E</td><td></td><td></td><td></td><td>~13:02</td><td>~51m</td><td>~24.0pts</td><td class="new">~1h29</td><td class="gap"></td><td>~56%</td><td>~56m</td></tr>
+
+   <tr class="r3"><th></th><th>DAY</th><th></th><th class="new">PTN</th><th></th><th>HL GAP</th><th>HL RNG</th><th class="new">HL $</th><th>LC GAP</th><th>LC RNG</th><th class="new">LC $</th></tr>
+   <tr class="a"><td class="tag">A</td><td class="dim">span</td><td></td><td><span class="nd">QQQ 7735</span></td><td></td><td>2h09</td><td>7.0pts</td><td class="new">$350</td><td>2h48</td><td>1.0pts</td><td class="new">$50</td></tr>
+   <tr class="e"><td class="tag">E</td><td></td><td></td><td></td><td></td><td>~3h50</td><td>~61.4pts</td><td class="new">~$3,072</td><td>~1h55</td><td>~15.2pts</td><td class="new">~$760</td></tr>
+  </table>
+  <div class="lgd">
+   <b>PTWICK</b> = PT TOOK + the return to the LOD — the PT leg's span, anchored on the LOD exactly as
+   WICK is anchored on the open · the hatched cell under <b>W.END</b> stays empty by design
+  </div>
+ </div>
+
+ <div class="bar">
+  <svg viewBox="0 0 200 262" width="200" height="262">
+   <defs><linearGradient id="bd" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#f0616d" stop-opacity=".8"/><stop offset="1" stop-color="#c8434f" stop-opacity=".8"/></linearGradient></defs>
+   <rect x="13" y="16"  width="5" height="102" fill="#e3b341" opacity=".30"/>
+   <rect x="13" y="118" width="5" height="70"  fill="#f0616d" opacity=".38"/>
+   <rect x="13" y="188" width="5" height="29"  fill="#5fd08a" opacity=".30"/>
+   <text x="10" y="70"  fill="#e3b341" font-size="8" font-weight="800" text-anchor="end">51%</text>
+   <text x="10" y="157" fill="#f0616d" font-size="8" font-weight="800" text-anchor="end">35%</text>
+   <text x="10" y="206" fill="#5fd08a" font-size="8" font-weight="800" text-anchor="end">14%</text>
+
+   <line x1="44" y1="16" x2="44" y2="217" stroke="#8b98a9" stroke-width="1.5"/>
+   <rect x="35" y="118" width="18" height="70" fill="url(#bd)" stroke="#f0616d" stroke-width="1"/>
+   <line x1="24" y1="118" x2="35" y2="118" stroke="#e6edf5" stroke-width="2"/>
+   <line x1="53" y1="188" x2="64" y2="188" stroke="#e6edf5" stroke-width="2"/>
+   <line x1="35" y1="171" x2="53" y2="171" stroke="#b98cff" stroke-width="1.3" stroke-dasharray="3 2"/>
+
+   <text x="70" y="14"  fill="#e6edf5" font-size="8.5" font-weight="800">H <tspan fill="#e3b341">10:00</tspan></text>
+   <text x="70" y="115" fill="#9aa7b6" font-size="8.5" font-weight="800">O <tspan fill="#7d8894">fold 10:51</tspan></text>
+   <text x="70" y="169" fill="#b98cff" font-size="8.5" font-weight="800">PT +1.6</text>
+   <text x="70" y="191" fill="#e6edf5" font-size="8.5" font-weight="800">C <tspan fill="#5b6675">now</tspan></text>
+   <text x="70" y="221" fill="#e6edf5" font-size="8.5" font-weight="800">L <tspan fill="#5fd08a">12:09</tspan></text>
+
+   <line x1="13" y1="243" x2="187" y2="243" stroke="#2b3644" stroke-width="1.3"/>
+   <text x="13" y="256" fill="#5b6675" font-size="7.5" font-weight="700">08:30</text>
+   <text x="187" y="256" fill="#5b6675" font-size="7.5" font-weight="700" text-anchor="end">15:00</text>
+   <circle cx="13"  cy="243" r="2.3" fill="#8b98a9"/>
+   <circle cx="53"  cy="243" r="3" fill="#e3b341"/><text x="53"  y="236" fill="#e3b341" font-size="7.5" font-weight="800" text-anchor="middle">H</text>
+   <circle cx="76"  cy="243" r="2.5" fill="#7d8894"/>
+   <circle cx="111" cy="243" r="3" fill="#5fd08a"/><text x="111" y="236" fill="#5fd08a" font-size="7.5" font-weight="800" text-anchor="middle">L</text>
+   <circle cx="183" cy="243" r="2.5" fill="#fff"/><text x="183" y="236" fill="#c9d4e2" font-size="7.5" font-weight="800" text-anchor="middle">now</text>
+  </svg>
+  <div class="lgd">
+   51 · 35 · 14 = 100% of the bar<br>
+   <b style="color:#c9d4e2">EFF 55%</b> — walked 12.8pts to make a 7.0pt bar <span class="dim">(~68% typical)</span>
+  </div>
+ </div>
+</div>
+
+<h2>what changed</h2>
+<div class="why">
+<p><b>Your 10-column scheme, unchanged.</b> PT stays under BOP, PTWick% under WICK%, PTMUD under MUD,
+and the slot under W.END stays empty — hatched here so it reads as deliberate rather than missing.</p>
+<p><b class="g">PTWICK is the only new column in row 2</b>, and it is defined, not invented: BOP is the
+high going back to the <i>open</i> — your own numbers prove it, 10:00 + 51m = 10:51 = W.END, and
+TOOK + BOP = WICK to the minute. PTWICK is that same span anchored on the <i>LOD</i>. PT BOP and
+PT W.END are dropped as you agreed: they would be em-dash on most days, since price usually never
+returns to the LOD before the close.</p>
+<p><b class="g">Row 3 carries the spans</b> — HL GAP · HL RNG · HL $, with LC beside them, because LC
+is a span too and PT/LC measure the same leg two ways. PTN takes column 3, so HodN / LodN / PTN
+stack in one column.</p>
+<p><b class="g">The bar builds through the session</b> on the right: the three segments sum to 100%,
+the dashed violet line is the PT retrace, and the track shows when H and L printed. <b>EFF</b> sits
+under it rather than in the table — it describes the shape, not a span.</p>
+</div>

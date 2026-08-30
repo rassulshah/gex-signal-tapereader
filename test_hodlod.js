@@ -523,8 +523,11 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
      'w2 ...and the early return that hid everything is gone');
   // ⚠ COUNT, DO NOT JUST MATCH. There are TWO A rows (the excursion block and the day block) and a
   // single-match assertion passed while one of them was mutated away — it found the survivor.
-  ok((SD.match(/NOREAD \? row\('a','A'/g)||[]).length === 2,
-     'w3 BOTH A rows show em-dashes rather than inventing today',
+  // (v14.93) THREE A rows now — the excursion block, the day block, and the new SPAN row that
+  // carries the GREEN/RED call. The count is kept (not loosened to >=1) for the reason above: a
+  // single-match assertion passed while one row was mutated away.
+  ok((SD.match(/NOREAD \? row\('a','A'/g)||[]).length === 3,
+     'w3 ALL THREE A rows show em-dashes rather than inventing today',
      (SD.match(/NOREAD \? row\('a','A'/g)||[]).length);
   ok(/showing the base rates only/.test(SD), 'w4 the header says WHY the A row is empty');
   ok(/This is not a reading, it is no reading/.test(SD),
@@ -599,18 +602,21 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
 
   const SD2 = ex('secDay');
   ok(/PTL=hlPT\(sym, D\)/.test(SD2), 'p14 secDay computes it');
-  // (v14.90) LC|HC GAP·RNG moved OUT of the table and into the strip beside the read — operator:
+  // (v14.93) LC|HC GAP·RNG moved OUT of the table and into the strip beside the read — operator:
   // "keep the HL metrics ... at the top to the right of the forecast". So the header no longer
   // names it; the STRIP does. Both halves are asserted so the leg cannot go missing entirely.
-  ok(/'PT TOOK','PT'/.test(SD2) && /lcT\+' GAP/.test(SD2),
-     'p15 ...and the PT legs are named in the table, the LC|HC pair in the top strip');
+  // (v14.93) the LC pair moved AGAIN — out of the v14.93 top strip and into ROW 3, which is where
+  // he asked for it ("a thrid row for the HL fields"). Both existed for one build and printed the
+  // spans twice. Assert the row-3 home, and that the strip is gone.
+  ok(/'PT TOOK','PT'/.test(SD2) && /'LC GAP','LC RNG','LC \$'/.test(SD2) && !/g3dayhl/.test(SD2),
+     'p15 ...PT legs in row 2, the LC span in row 3, and no duplicate strip');
   ok(/PTL\.exp\.ptMin/.test(SD2) && /PTL\.exp\.ptPts/.test(SD2),
      'p16 ...and the E row uses the SIDE-SPECIFIC expectation, not the pooled one');
 }
 
 
 // ============================================================================================
-// (v14.90) SLvl / TLvl, AND THE PT LEG'S WICK FAMILY
+// (v14.93) SLvl / TLvl, AND THE PT LEG'S WICK FAMILY
 // ============================================================================================
 {
   const LH = ex('hlLevelHit'), PT2 = ex('hlPT'), SD3 = ex('secDay');
@@ -629,8 +635,13 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
 
   // ---- THE FURTHEST ONE, NOT THE FIRST ------------------------------------------------------
   // A move that clears three levels is described by the LAST one it cleared.
-  ok(/if\(best==null \|\| \(up \? L\.px>best\.px : L\.px<best\.px\)\) best=L;/.test(LH),
-     'L3 the level reported is the FURTHEST from the open, not the nearest');
+  // (v14.93) the cell now lists EVERY level taken out, furthest FIRST — he asked for names only so
+  // several fit ("PDH, CW, VAH, POC"). The furthest-first ordering is the same rule as before, now
+  // expressed as a sort rather than a single winner; `furthest()` still exists and returns [0].
+  ok(/hit\.sort\(function\(a,b\)\{ return up \? \(b\.px-a\.px\) : \(a\.px-b\.px\); \}\)/.test(LH),
+     'L3 the levels are ordered FURTHEST-FIRST from the open');
+  ok(/function furthest\(extPx, up\)\{ var t=taken\(extPx,up\); return t\.length\?t\[0\]:null; \}/.test(LH),
+     'L3b ...and the single furthest level is still derivable from that order');
   ok(/L\.px>opDisp && L\.px<=extPx/.test(LH),
      'L4 ...and it must lie BETWEEN the open and that extreme, in that extreme\'s direction');
 

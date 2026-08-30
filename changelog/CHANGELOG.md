@@ -1,3 +1,95 @@
+## v14.93 — the 10x scale mismatch, in both places it lived
+
+> "Fix the bugs and issues so we can continue enhancing"
+
+His screenshot: price pill **7710.6**, and beside it **"T: 773.34  −6937.26"** and **"KING 769.85
+holds, 6941 below price"**. Both numbers were individually correct. Their DIFFERENCE was an ES-scale
+price minus a SPY-scale level.
+
+**ROOT CAUSE — two consumers, one switch, different requirements.**
+
+    emBand()    honours dispIsFut() using dispR()        — needs only FUTMODE.r
+    ifLadder()  honoured it only if FUTMODE.futPx exists — and SILENTLY fell back to CASH without it
+
+`FUTMODE.r` is a persisted EMA; `futPx` is null whenever there is no live futures print — **which is
+after hours**, exactly the state on his screen. So the panel reached a condition where one half said
+"futures" and the other said "cash", every number stayed plausible, and **nothing errored**.
+
+**Fixed as one scale, not a better fallback.** With the switch on and `futPx` missing, the ladder now
+derives the same ES scale `emBand` uses (`undPx × dispR()`), so the two cannot diverge. If neither
+input exists it stays on cash **and says so** via the new `scaleSrc` (`fut:live` / `fut:ratio` /
+`cash`) — a silent fallback is what hid this for four builds.
+
+**AND THE SAME SHAPE LIVED IN A SECOND PLACE.** `sessionLevels(sym, EB.scaleUsed : 1)` put PDH/PDL/
+PDC/IB on the cash scale whenever `scaleUsed` was unavailable — the `PDH 770.23` sitting beside a
+`DP 7563.81` on his rail. ⚠ Every OTHER consumer of `scaleUsed` in the file guards with `>0` and
+skips; this one line was the exception, and being the exception is why it went unseen. It now
+declines: an absent level is a gap you can see, a mis-scaled one is a lie you cannot.
+
+`test_scaleagree.js` — 13 assertions, all mutation-tested, including a numeric reconstruction of the
+after-hours state showing the old logic really did produce a ~6,900-point gap.
+
+## v14.92 — the regime field was a constant
+
+> "If we are in a positive gamma vs negative gamma regime would be an important filter"
+
+`bk.neg` was **hardcoded `false`** on the trinity read path. Every snapshot the recorder has banked —
+**284 samples across 9 sessions** — says "positive gamma" because that line said so, not because the
+market did. Now `null`, so the gap is visible instead of silently wrong.
+
+⚠⚠ **THE TELL WAS A CONTRADICTION BETWEEN TWO RECORDED FIELDS.** `bk.neg` claimed 100% positive
+gamma while price sat **below the flip** on 60% of the same snapshots. Those cannot both be true.
+
+**The honest regime signal is price vs the flip (`deriv.zg`)** — real, varying, 40% above / 60%
+below, median distance −0.46pts. Registered as **gx-010** (side) and **gx-011** (distance), and it is
+the better signal anyway: continuous, and what the doctrine actually describes. `bk.neg` is **gx-012,
+BLOCKED** — recording resumes only when the sign has a real source, which the Trinity pane does not
+expose.
+
+Nothing was tested. Six gamma sessions and a broken field is not a study.
+
+## v14.91 — the daily candle, and a GREEN/RED model that beat its own regression
+
+> "i am taking the model of the daily bar and trying to measure the movements in it from open to close"
+> "i need a model to predict if we close above or below the open ... with decent probability"
+
+**THE CANDLE RENDERS ON THE LEFT**, building through the session: upper wick / body / lower wick with
+their percentages, the O and C ticks, the PT retrace dashed in violet, and a track showing when H and
+L printed. **The three segments sum to 100% of the range** — that total is the check that says the
+decomposition is honest, and it is the frame the section was missing. WICK% was never a ratio: it is
+where the OPEN sits in the bar.
+
+**GREEN DAY / RED DAY**, first cell of row 3. A = what the day is doing, E = the call.
+
+    the rule: price broke the FIRST 30 MINUTES' range one way AND is that side of the open
+    right 76% on the 80% of sessions it speaks (n=225 of 282, 95% CI 71-82%) vs a 51% base, z=8.8
+    stable by quarter: 70% · 77% · 83% · 75%      call lands ~09:03, some days 09:30
+
+⚠⚠ **A LOGISTIC REGRESSION LOST TO THE ONE-LINE RULE** — 74% against 77% walk-forward. The rule ships:
+no parameters to rot, and it can be read on the face.
+
+⚠⚠ **THE OPEN ALONE PREDICTS NOTHING**, measured before anything was built: overnight gap AUC 0.479,
+open-in-overnight-range 0.496, IB30 size 0.502, day of week 0.447. He asked specifically about two
+more: the **PRIOR DAY'S COLOUR is AUC 0.500** — an exact coin flip, and the rule scores 69% after a
+green day against 70% after a red one. The **WEEKLY OPEN is real** (AUC 0.585; 57% green above it,
+42% below) but adds **nothing** on top of the rule and costs a quarter of the days, so it is context
+in the hover, never a filter.
+
+⚠ **It is silent when its two inputs disagree** — and that is measured, not styling: on those 57 days
+green came in 44%, a coin flip. A model that declines on its blind days is worth more than one that
+guesses through them.
+
+**PTWICK ships — Q1 is answered.** His own numbers named the anchor: TOOK + BOP = WICK, and
+10:00 + 51m = 10:51 = W.END, so BOP is the high going back to *the open*. PTWICK is that same span
+measured from the second extreme. Em-dash until price returns there, which most days it never does.
+
+**ROW 3 carries the spans** — HL GAP · HL RNG · HL $ · LC GAP · LC RNG · LC $ — and the v14.90 top
+strip is **removed**: both shipped for one build and printed the spans twice.
+
+**LEVELS ARE NAMES ONLY, AND THERE CAN BE SEVERAL** — "PDH CW VAH POC", furthest-first. The price is
+dropped from the face by his instruction and kept in the hover, because dropping it must not make it
+unreachable.
+
 ## v14.90 — the agreed ⓪a layout, actually shipped
 
 > "you did not implement all the changes we have been talking about"

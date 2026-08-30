@@ -148,6 +148,19 @@ for f in sorted(os.listdir('tools')):
     # (v13.9) NO .bat, NO .log — an installer must never contain installers.
     if os.path.isfile(p) and not f.endswith('.log') and not f.lower().endswith('.bat'):
         FILES.append(p)
+# ⚠⚠ (v14.92) SUBDIRECTORIES OF tools/ WERE SILENTLY EXCLUDED. `os.listdir` + `isfile` skips every
+# directory, so tools/nightly/ — the harness, the protocol, the pre-registered hypothesis bank and
+# the verdict ledger — was committed locally and would NEVER have reached GitHub. This is the exact
+# shape of the loss recorded in data/es-1min/README.md: "anything that only exists in a sandbox
+# commit does not exist." The hypothesis bank is the one artefact whose whole value is that it was
+# written down BEFORE the data existed; losing it would make it unprovable.
+for _sub in ('nightly',):
+    _d=os.path.join('tools', _sub)
+    if os.path.isdir(_d):
+        for f in sorted(os.listdir(_d)):
+            _p=os.path.join(_d, f)
+            if os.path.isfile(_p) and not f.endswith('.log') and not f.lower().endswith('.bat'):
+                FILES.append(_p)
 # (v14.3) mockups are DESIGN documents: html/md only. A 0.64MB day-data .json and old .patch files
 # had drifted in and were shipping with every build.
 # (v14.57) PNGs ride too, and they are small. The render + overlap audit is MANDATORY before a

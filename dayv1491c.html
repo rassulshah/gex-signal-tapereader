@@ -1,0 +1,115 @@
+<meta charset="utf-8"><title>⓪a — the bar, leg by leg</title>
+<style>
+ body{background:#0d1117;color:#c9d4e2;font:12px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:18px 20px 44px}
+ h2{font-size:11px;letter-spacing:.11em;color:#8b98a9;text-transform:uppercase;margin:24px 0 8px;font-weight:800}
+ h2:first-child{margin-top:0}
+ .panel{background:#11161d;border:1px solid #1e2733;border-radius:6px;padding:11px 13px;display:flex;gap:16px;align-items:flex-start}
+ .stats{flex:1;min-width:0}
+ table{border-collapse:collapse;width:100%;font-size:9px}
+ th{color:#8b98a9;font-weight:800;text-align:left;padding:3px 7px 3px 0;font-size:8px;white-space:nowrap}
+ td{padding:2.5px 7px 2.5px 0;white-space:nowrap}
+ .n{color:#5b6675;font-weight:800;font-size:9px;padding-right:6px}
+ .a td{color:#e6edf5;font-weight:800}
+ .e td{color:#65717f;font-weight:600}
+ .lv{background:rgba(227,195,65,.13);border:1px solid rgba(227,195,65,.42);color:#e3b341;border-radius:3px;padding:1px 4px;font-weight:800}
+ .lv.tg{background:rgba(46,194,126,.14);border-color:rgba(46,194,126,.40);color:#5fd08a}
+ .nd{background:rgba(150,110,255,.14);border:1px solid rgba(150,110,255,.42);color:#b98cff;border-radius:3px;padding:1px 4px;font-weight:800}
+ .up{color:#5fd08a}.dn{color:#f0616d}.am{color:#f2b45a}.dim{color:#5b6675}
+ .fold td{color:#7d8894;font-weight:600}
+ .tot td{border-top:1px solid #223}
+ .tot td{padding-top:6px}
+ .bar{width:238px;flex:0 0 238px}
+ p{color:#9aa7b6;font-size:11px;max-width:980px;margin:6px 0}
+ .why{border-left:2px solid #2b3644;padding-left:11px;margin:8px 0 16px}
+ b.g{color:#5fd08a}b.r{color:#f0616d}b.w{color:#fff}
+ .lgd{font-size:8px;color:#6b7787;margin-top:8px;line-height:1.7}
+ code{color:#b98cff;font-size:10px}
+</style>
+
+<h2>⓪a — the day as a sequence of legs</h2>
+<div class="panel">
+ <div class="stats">
+  <table>
+   <tr><th></th><th>LEG</th><th>AT</th><th>TOOK</th><th>MOVE</th><th>OF BAR</th><th>LEVEL TAKEN</th><th>NODE TESTED</th></tr>
+
+   <tr class="a"><td class="n">①</td><td>OPEN → <b class="w">HIGH</b></td><td class="am">10:00</td><td>1h30</td><td class="up">+3.57</td><td>51% ▲</td><td><span class="lv">PDH 775.29</span></td><td><span class="nd">SPY 7729</span></td></tr>
+   <tr class="e"><td class="n"></td><td>expected</td><td>~09:03</td><td>~34m</td><td></td><td>~28%</td><td></td><td></td></tr>
+
+   <tr class="fold"><td class="n">②</td><td>HIGH → open <span class="dim">· the fold</span></td><td>10:51</td><td>51m</td><td class="dn">−3.57</td><td class="dim">wick closes</td><td></td><td></td></tr>
+   <tr class="e"><td class="n"></td><td>expected</td><td>~09:31</td><td>~14m</td><td></td><td></td><td></td><td></td></tr>
+
+   <tr class="a"><td class="n">③</td><td>open → <b class="w">LOW</b></td><td class="am">12:09</td><td>1h18</td><td class="dn">−3.43</td><td>49% ▼</td><td><span class="lv tg">PDL 768.31</span></td><td><span class="nd">SPX 7714</span></td></tr>
+   <tr class="e"><td class="n"></td><td>expected</td><td>~13:02</td><td>~3h20</td><td></td><td>~30%</td><td></td><td></td></tr>
+
+   <tr class="a"><td class="n">④</td><td>LOW → <b class="w">PT</b></td><td class="am">14:57</td><td>2h48</td><td class="up">+1.60</td><td>23%</td><td class="dim">—</td><td><span class="nd">QQQ 7735</span></td></tr>
+   <tr class="e"><td class="n"></td><td>expected</td><td>~13:53</td><td>~51m</td><td></td><td>~56%</td><td></td><td></td></tr>
+
+   <tr class="a"><td class="n">⑤</td><td>PT → <b class="w">CLOSE</b></td><td class="dim">15:00</td><td class="dim">pend</td><td class="dn">−0.60</td><td class="dim">14% wick</td><td></td><td></td></tr>
+
+   <tr class="a tot"><td class="n"></td><td class="dim">NET = the body</td><td></td><td></td><td class="dn">−2.43</td><td>35%</td><td class="dim">O 7713.03 → C 7710.60</td><td></td></tr>
+   <tr class="a"><td class="n"></td><td class="dim">TRAVEL / RANGE</td><td></td><td></td><td>12.77</td><td>eff <b class="w">55%</b></td><td class="dim">RNG 7.0pts · $350</td><td></td></tr>
+  </table>
+  <div class="lgd">
+   each leg starts where the last one ended · <b>MOVE</b> sums to the BODY · <b>TRAVEL</b> is the
+   distance actually walked to produce a 7.0pt bar
+  </div>
+ </div>
+
+ <div class="bar">
+  <svg viewBox="0 0 238 300" width="238" height="300">
+   <defs><linearGradient id="bd" x1="0" y1="0" x2="0" y2="1">
+     <stop offset="0" stop-color="#f0616d" stop-opacity=".8"/><stop offset="1" stop-color="#c8434f" stop-opacity=".8"/></linearGradient></defs>
+   <rect x="20" y="22"   width="6" height="114.2" fill="#e3b341" opacity=".30"/>
+   <rect x="20" y="136.2" width="6" height="77.8" fill="#f0616d" opacity=".38"/>
+   <rect x="20" y="214"  width="6" height="32"   fill="#5fd08a" opacity=".30"/>
+   <text x="16" y="83"  fill="#e3b341" font-size="8.5" font-weight="800" text-anchor="end">51%</text>
+   <text x="16" y="179" fill="#f0616d" font-size="8.5" font-weight="800" text-anchor="end">35%</text>
+   <text x="16" y="234" fill="#5fd08a" font-size="8.5" font-weight="800" text-anchor="end">14%</text>
+
+   <line x1="56" y1="22" x2="56" y2="246" stroke="#8b98a9" stroke-width="1.6"/>
+   <rect x="46" y="136.2" width="20" height="77.8" fill="url(#bd)" stroke="#f0616d" stroke-width="1"/>
+   <line x1="34" y1="136.2" x2="46" y2="136.2" stroke="#e6edf5" stroke-width="2"/>
+   <line x1="66" y1="214"  x2="78" y2="214"  stroke="#e6edf5" stroke-width="2"/>
+
+   <!-- the numbered sequence, mapped onto the bar -->
+   <circle cx="94" cy="22"   r="7.5" fill="#161d26" stroke="#e3b341" stroke-width="1.3"/><text x="94" y="25.5" fill="#e3b341" font-size="8" font-weight="800" text-anchor="middle">1</text>
+   <circle cx="94" cy="136.2" r="7.5" fill="#161d26" stroke="#7d8894" stroke-width="1.3"/><text x="94" y="139.7" fill="#9aa7b6" font-size="8" font-weight="800" text-anchor="middle">2</text>
+   <circle cx="94" cy="246"  r="7.5" fill="#161d26" stroke="#5fd08a" stroke-width="1.3"/><text x="94" y="249.5" fill="#5fd08a" font-size="8" font-weight="800" text-anchor="middle">3</text>
+   <circle cx="94" cy="194.8" r="7.5" fill="#161d26" stroke="#b98cff" stroke-width="1.3"/><text x="94" y="198.3" fill="#b98cff" font-size="8" font-weight="800" text-anchor="middle">4</text>
+   <circle cx="94" cy="214"  r="7.5" fill="#161d26" stroke="#e6edf5" stroke-width="1.3"/><text x="94" y="217.5" fill="#e6edf5" font-size="8" font-weight="800" text-anchor="middle">5</text>
+
+   <text x="108" y="19"  fill="#e6edf5" font-size="8.5" font-weight="800">H 7716.60 <tspan fill="#e3b341">10:00</tspan></text>
+   <text x="108" y="133" fill="#9aa7b6" font-size="8.5" font-weight="800">O 7713.03 <tspan fill="#7d8894">10:51 fold</tspan></text>
+   <text x="108" y="192" fill="#b98cff" font-size="8.5" font-weight="800">PT 7711.20 <tspan fill="#7d8894">14:57</tspan></text>
+   <text x="108" y="217" fill="#e6edf5" font-size="8.5" font-weight="800">C 7710.60 <tspan fill="#5b6675">now</tspan></text>
+   <text x="108" y="249" fill="#e6edf5" font-size="8.5" font-weight="800">L 7709.60 <tspan fill="#5fd08a">12:09</tspan></text>
+
+   <line x1="20" y1="282" x2="222" y2="282" stroke="#2b3644" stroke-width="1.4"/>
+   <text x="20" y="295" fill="#5b6675" font-size="7.5" font-weight="700">08:30</text>
+   <text x="222" y="295" fill="#5b6675" font-size="7.5" font-weight="700" text-anchor="end">15:00</text>
+   <circle cx="20"  cy="282" r="2.4" fill="#8b98a9"/>
+   <circle cx="66"  cy="282" r="3.2" fill="#e3b341"/><text x="66"  y="275" fill="#e3b341" font-size="7.5" font-weight="800" text-anchor="middle">1</text>
+   <circle cx="92"  cy="282" r="3.2" fill="#7d8894"/><text x="92"  y="275" fill="#7d8894" font-size="7.5" font-weight="800" text-anchor="middle">2</text>
+   <circle cx="132" cy="282" r="3.2" fill="#5fd08a"/><text x="132" y="275" fill="#5fd08a" font-size="7.5" font-weight="800" text-anchor="middle">3</text>
+   <circle cx="218" cy="282" r="3.2" fill="#b98cff"/><text x="218" y="275" fill="#b98cff" font-size="7.5" font-weight="800" text-anchor="middle">4</text>
+  </svg>
+  <div class="lgd">the circles on the bar are WHERE each leg ended; the track below is WHEN.</div>
+ </div>
+</div>
+
+<h2>why this reads better than rows of extremes</h2>
+<div class="why">
+<p><b>Every row is a leg, and each starts where the last ended</b> — open→high→back to open→low→PT→close.
+Read top to bottom and you have walked the session. The old 1ST/2ND rows carried the same numbers but
+made you assemble the order yourself.</p>
+<p><b class="g">MOVE sums to the BODY.</b> +3.57 −3.57 −3.43 +1.60 −0.60 = <b>−2.43</b>, which is exactly
+O→C. That is not decoration — it is the check that says no leg is missing. If the column stops
+summing, a leg has been dropped or double-counted.</p>
+<p><b class="g">TRAVEL and efficiency fall out for free.</b> Price walked <b>12.77pts</b> to produce a
+<b>7.0pt</b> bar — <b>55% efficient</b>. A trend day runs 80%+, a chop day 30%. That single number says
+what kind of day it was, and nothing on the face says it today.</p>
+<p><b class="r">The one I would drop:</b> leg ② (the fold) is the only row that is not an extreme, and
+on many days it never happens. It carries BOP/W.END, which you asked for — so it stays as a row, but
+greyed, because it is a <i>return</i>, not a new high or low. Tell me if you would rather it fold into
+row ① as two extra columns.</p>
+</div>

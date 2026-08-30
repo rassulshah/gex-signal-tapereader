@@ -87,7 +87,11 @@ ok(/t=\+?'\+DEFL_META\.tTop5|DEFL_META\.tTop5/.test(src), 'n26 the null-result t
 (function(){
   const i=src.indexOf("h+=row('hd','',['1ST'");
   if(i<0){ ok(false,'n27 the HL blocks are findable'); return; }
-  const blk=src.slice(i,i+6500);
+  // ⚠ STRIP COMMENTS FIRST. This counter reported block 2 as 11 cells when it has 10 — it was
+  // counting commas inside a `//` comment sitting between two cells ("...= W.END, and TOOK + BOP
+  // = WICK to the minute"). Ninth comment-blind assertion this session, and the first one inside a
+  // test HELPER rather than an assertion. A helper that reads source must strip comments too.
+  const blk=src.slice(i,i+13000).replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
   const cells=(txt)=>{ let dep={'[':0,'(':0,'{':0},n=1,q=null,esc=false;
     for(const ch of txt.slice(1)){
       if(q){ if(esc)esc=false; else if(ch==='\\')esc=true; else if(ch===q)q=null; continue; }
@@ -108,12 +112,13 @@ ok(/t=\+?'\+DEFL_META\.tTop5|DEFL_META\.tTop5/.test(src), 'n26 the null-result t
   const b2=counts.filter(c=>c[2]>bound).map(c=>c[1]);
   ok(b1.length>=3 && b1.every(x=>x===b1[0]), 'n27 block 1 rows all have the same cell count', b1);
   ok(b2.length>=3 && b2.every(x=>x===b2[0]), 'n28 block 2 rows all have the same cell count', b2);
-  // ⚠⚠ THE ALIGNMENT CONTRACT (v14.90). The blocks must be the SAME WIDTH or his column pairing
+  // ⚠⚠ THE ALIGNMENT CONTRACT (v14.93). The blocks must be the SAME WIDTH or his column pairing
   // silently breaks — PTWick% under WICK%, PTMUD under MUD, from his very first sketch. This is
-  // exactly what shipped broken in v14.90: HL GAP / HL RNG / LC·RNG were still living in block 2
+  // exactly what shipped broken in v14.93: HL GAP / HL RNG / LC·RNG were still living in block 2
   // and pushed the whole PT family three columns left. A per-block width check would NOT have
   // caught it; only comparing the two does.
   ok(b1[0]===b2[0], 'n29 both blocks are the SAME width — the alignment contract', [b1[0],b2[0]]);
+  ok(b2.every(x=>x===b2[0]), 'n29b row 3 joins the same contract', b2);
   ok(b1[0]===10, 'n30 the agreed scheme is 10 columns', b1[0]);
 })();
 
@@ -121,7 +126,7 @@ ok(/t=\+?'\+DEFL_META\.tTop5|DEFL_META\.tTop5/.test(src), 'n26 the null-result t
 ok(/'HodN':'LodN'/.test(src), 'n31 the first-extreme header switches HodN/LodN with the extreme');
 ok(/'PTN'/.test(src), 'n32 PTN is a column on the second row');
 
-// ---- (v14.90) THE AGREED REMOVALS. Each was recorded as done and was still rendering. ---------
+// ---- (v14.93) THE AGREED REMOVALS. Each was recorded as done and was still rendering. ---------
 const live=src.replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
 ok(!/secs\s*=\s*\[\s*secBias/.test(live), 'n33 the TREND section is off the face (secBias not mounted)');
 ok(/function secBias/.test(live), 'n34 ...but secBias SURVIVES — bias.confirm still feeds the recorder');
@@ -133,8 +138,18 @@ ok(/fsRead\s*\(/.test(live), 'n36 ...but fsRead() survives — the read-line hov
 ok(!/g3steps/.test(live), 'n37 the dead step-bar CSS is gone');
 // ⚠ CSS-BLIND, like n35 was. `/g3dayhl/` matched the STYLE RULE, so blanking the emitter left it
 // green — the mutation survived. Assert on the emitter, as with n35.
-ok(/h\s*\+=\s*'<div class="g3dayhl">'/.test(live), 'n38 the HL / LC-HC strip is EMITTED beside the read');
-ok(!/'HL GAP'|'HL RNG'/.test(live), 'n39 HL GAP / HL RNG are NOT table columns any more');
+// (v14.93) the strip is superseded by ROW 3 — he asked for "a thrid row for the HL fields". Both
+// shipped for one build and printed HL GAP/HL RNG TWICE; n39 caught it. Now: row 3 owns them, and
+// the strip must be GONE, or the duplication comes back.
+ok(!/g3dayhl/.test(live), 'n38 the old top strip is gone — row 3 owns the spans now');
+ok(/'HL GAP','HL RNG','HL \$'/.test(live), 'n39 row 3 carries HL GAP / HL RNG / HL $');
+ok((live.match(/'HL GAP'/g)||[]).length===1, 'n39b ...exactly ONCE — not duplicated across strip and row');
+ok(/'LC GAP','LC RNG','LC \$'/.test(live), 'n39c row 3 carries the LC span beside HL');
+ok(/GD_META/.test(live) && /gdRead\s*\(/.test(live), 'n40 the GREEN/RED call is wired into the face');
+ok(/silentGreen/.test(live), 'n41 ...and the hover carries the SILENT-day coin flip, not just the win rate');
+ok(/priorDayAuc/.test(live), 'n42 ...and the prior-day NULL result, which he asked about specifically');
+ok(/dayCandleSvg\s*\(/.test(live), 'n43 the candle renders');
+ok(/g3daycdl[\s\S]{0,200}g3daytbl/.test(live), 'n44 ...on the LEFT of the stats, per his instruction');
 
 console.log('test_nodeat: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
