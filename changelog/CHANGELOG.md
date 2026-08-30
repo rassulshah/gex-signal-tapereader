@@ -1,3 +1,29 @@
+## v15.01 — the reversal band was symmetric, and it should never have been
+
+> "are you sure this is correct because the candle shows the market took out both the prior day high
+> and the prior day (thrusdays) low"
+
+Checked: PDH 775.29 and PDL 768.31 differ by **6.98** against a **7.0** range, so price tagged both
+to within hundredths and reversed off each. The display was right — but the question exposed a real
+fault behind it.
+
+**v14.99 used ONE symmetric tolerance**, which is not the geometry this project already settled. The
+deflection band, calibrated against his own circled charts, is **asymmetric**: a test may stop 1 ATR
+SHORT of a level, but may run 1.5 ATR THROUGH it, because a stab that pierces and recovers is still
+a test. A level price EXCEEDED needs the through-tolerance; a symmetric band judges it by the wrong
+one. Now mirrored at both extremes.
+
+### the candle, to his layout
+
+- **MUD sits on the side of the open the session travelled** — above on a red bar, below on a green
+  one. It keeps the label out of the body it describes and puts it in the wick the leg crossed.
+- **The money in the MUD is a second line**, and it is NOT the day's range: MUD runs from the reclaim
+  of the open to the SECOND extreme, so the distance is `|open - second extreme|`.
+- **The day's total gets its own third line** beneath the extremity block. It rode the duration line
+  before, where it read as part of the timing rather than as the day's result.
+- **Both label blocks now hang off their own wick end at the same 9px gap.** They were anchored to
+  fixed positions, so the LOD block sat 22px clear while the HOD block sat 9px clear.
+
 ## v15.00 — the open items, closed
 
 ### HodN / LodN were structurally impossible to satisfy

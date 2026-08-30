@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-30 · v15.00 · session `2df3ccfa` — v15.00 - the open items closed
+## 2026-08-30 · v15.01 · session `2df3ccfa` — v15.01 - asymmetric reversal band and the candle layout
 
-_39 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
+_40 operator prompts · transcript `2df3ccfa-23cd-5a32-9c8b-94c58d527b82.jsonl`_
 
 ### THE EXCHANGE
 
@@ -913,6 +913,156 @@ Two things stay **absent rather than approximated**: ONH/ONL (no overnight extre
 **me (01:54):** Three items. Let me start with the king-at-time fix — the most consequential:
 `futBars` gives me `[epoch, o, h, l, c, volume]` at 1-minute — enough for both ONH/ONL and a real volume profile. And `KINGDAY.moves` is a timestamped king journey. Building all three:
 Now ONH/ONL and the volume profile from `futBars`:
+All three closed. **v15.00** — 128 green / 6 baseline red.
+
+**Tapereader v15.00** — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+**Companion v1.16 — unchanged.**
+
+**HodN / LodN were structurally impossible to satisfy.** `deflKings()` read the *current* king — so a 10:00 high was being compared against a 16:00 king. The diagnosis was sitting in front of me for two builds as two separate observations: HodN and LodN always empty, PTN always working. That's **one fact** — the PT extreme is recent, so the current king is still near it. `hodLod()` now records each extreme's wall-clock time and matches it against the king of that moment.
+
+That one survived four builds because **it failed in the shape of its own "no data" state.** Em-dash is a legitimate reading — no king within tolerance — so nothing looked broken. When a field can legitimately be empty, empty proves nothing; you need the case where it *must* be non-empty, and PTN was that case in plain sight.
+
+**SPX is omitted from the historical read, not substituted.** Only SPY and QQQ have journeys. Filling SPX with its current king would have been the precise bug being fixed, one field over — so the gap stays visible.
+
+**ONH / ONL** now come from the courier's 1-minute bars, already on the ES scale. Zero hits in the file before this.
+
+**POC / VAH / VAL** ship as a real volume profile on the prior session — but as a **record, not a claim**, and the so …[trimmed]
+
+**OPERATOR:**
+> are you sure this is correct because the candle shows the market took out bot the prior day high and the prior day (thrusdays) low.   also place the MUD labels above the open for red bars and below the open for green bars. i also need to know how much money was in the MUD , so place that on the second line below the MUD time.  put the total amount in dollars below the second line of the extremity , so for example, it would be below the LOD  2h48 line.   also the lod labels are too low , bring them slightly closer to the wick same distanc e and the hod 2h09 and the wick
+
+**me (02:06):** Good challenge — let me verify that against the real numbers before changing anything, because if price *took out* both levels they shouldn't qualify at all:
+v15.00 is already on your screen. And you're right to be suspicious — let me get the actual numbers, because `PDH 775.29` / `PDL 768.31` differ by **6.98** while the day's range reads **7.0**, which makes "took out both" close to arithmetically impossible:
+Checked, and the display is **correct but for a reason worth stating**: PDH 775.29 and PDL 768.31 differ by 6.98 against a 7.0 range, so price tagged both to within hundredths — it took them out by a tick and reversed, which is exactly a reversal test.
+
+But your challenge exposed a real flaw: my band is **symmetric**, while the deflection geometry we calibrated against your own charts is **asymmetric** — 1 ATR short, 1.5 ATR through. Fixing that plus the layout:
+Now the layout — MUD placement by bar colour, MUD money, total below the extremity, and the LOD labels brought in:
+Two more of the same shape — my assertions match text that survives the mutation. Tightening both:
+
+### DECISIONS
+
+- **The reversal band is ASYMMETRIC** — 1 ATR short, 1.5 ATR through — the same geometry the
+  deflection work calibrated against his charts. v14.99 built the rule a second time and lost the
+  calibration.
+- **Verify the output AND re-read the rule.** His challenge was wrong about the output and right
+  that something was off behind it.
+- **MUD money is the open-to-second-extreme leg**, never the day's range.
+
+### SHIPPED
+
+**v15.01** — asymmetric reversal band (r2, r2b, r2c, r8-r8d); MUD placed by bar colour with its own
+money line; the day total on its own third line; both label blocks at an equal 9px gap from their
+wick end.
+
+### OPEN AT CLOSE
+
+- **Verify on his screen** — HodN/LodN naming a king (v15.00's fix, unverified live), and whether
+  the asymmetric band changes which levels appear.
+- ⚠ `deriv.zg` on 25-70% of bars; gx-010 needs >=80%.
+- **gx-008 forward scoring** can start immediately; no gamma book required.
+
+### COMMITS THIS CONTEXT
+
+```
+664bfa4 v15.00: the king at the time of each extreme; ONH/ONL; the prior-day profile as a record
+5547816 v14.99: reversal levels at the wick tips; the shape spine returns
+2e7b169 v14.98: the candle narrow as he drew it - stacked labels, MUD and money in the body
+4c1085a v14.97: the scale fault was upstream; the ladder now verifies itself against price
+c4737b2 v14.96: one table so the columns actually align; the counting test was a proxy that passed on a broken screen
+d716fb6 v14.95: SYM vs sym killed the whole day section; add an undeclared-identifier lint
+62d1cdc v14.94: one displayScale function; session levels derive instead of declining
+114d933 v14.93: the 10x scale mismatch - one switch, two preconditions, fixed in both places it lived
+242651c record: fill the v14.92 close-out
+d19bfc5 record: the installer manifest floor, and close out v14.92
+37776b4 record: close out v14.92
+5308346 installer: tools/ subdirectories were silently excluded - the nightly bank would never have reached GitHub
+```
+
+---
+
+<!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-30 · v15.00 · session `2df3ccfa` — v15.00 - the open items closed
+**OPERATOR:**
+> try this rule and tell me how it works out for the deflections.  in a downmove the low of the candle has to be within 1 atr  of the high of the  node but  cannot be more than 2 atr below the node.  check this and see if it covers all the deflections.
+**OPERATOR:**
+> tell me how good the rule is for identiifying deflections . for example is 2 atr too much, should it be 1.5 at or  should it be the close which is  within 1 atr below the node ?   i want ot finalize deflections
+**OPERATOR:**
+> ok.. so , tell me simply what should the deflection range be above and below the node
+**OPERATOR:**
+> ok..  now have you completed your detection of deflections
+**OPERATOR:**
+> ok do it.
+**OPERATOR:**
+> try giving me the install again
+**OPERATOR:**
+> how was it working before ?  you just gave me the install file .. what happened
+**OPERATOR:**
+> yes
+**OPERATOR:**
+> reloaded check
+**OPERATOR:**
+> you did not implement all the changes we have been talking about . see pic
+**OPERATOR:**
+> look at the top also .  it doesn't have the changes we discussed  .   even the dntend Brk area was also removed .. all those changes and you didn't implement any of them
+**OPERATOR:**
+> something is not right ..  the bottom row for LOD should be aligned  with the hod rows and its fields should be almost mirror image of the hod lines where applicable.  for example pt took is a mirror image of a took ..  use your intelligence and determine what should be there.  Also lets create a thrid row for the HL fields like HL Gap HL Rng  HL $ ,  im not sure LC Gap and LC rang should be .... figure it out ..  and give me mockup
+**OPERATOR:**
+> before we go any further.   do you realize that i am taking the model of the daily bar and trying to measure the movements in it from open to close
+**OPERATOR:**
+> ok.. show me the mockup .  i am also interested in seeing a daily bar being constructed througout the day . maybe show it to the right . of the statistics.  so i can visually see what is going on .. can you come up with tsomething liek this ?   show me mockup
+**OPERATOR:**
+> the fields dont show sequence step by step .. can you do better. look at how i tried to identify an extremity first  etc..
+**OPERATOR:**
+> how can you take my approach and just enhance that .. i dont want to deviate too much from what i have
+**OPERATOR:**
+> ok i'll go with your recommendation .. give me mockup
+**OPERATOR:**
+> in the last row there is an empty first cell where we can put the actual and expected values for a GD or a RD.  but first i need you to have a model that predicts this . you can use the data , the day of week, overnight , open  etc..   but come up with a way to identify if today will be green or red. if you need more than the open like the 1st hour or 30 min IB range and break to figure this out , let me know, Whatever the case, i need a model to predict if we close above or below the open to determine if today will be a red or green day with decent probability .
+**OPERATOR:**
+> you can also use prior day values .  it maybe helpfull like if a prior day is green  or red and see how that impacts the ability to forecast as well as if we are above or below the weekly open
+**OPERATOR:**
+> so how good is it at predicting
+**OPERATOR:**
+> ok build it and move the candle to the left side of the app, currently its on the right side of the app..    so the daily candle and its contstruction will be my mental model for daytrading using all of these measurements . let me know if there are any other measurements that should be added and if you can make the data points, models goto the llm everynight for refinement and prediction with the gamma book  to see how it can better predict things like hod lod  green day  red day  price and time projection , trend reversal , deflections etc..  its very important that this feature be a world class feature but it will require your help in constant refinement via the use of llm to identify additional datapoints and measurements to better prediction
+**OPERATOR:**
+> Yes.
+**OPERATOR:**
+> How can you use other datapoints like prior day poc vah val. Did you do any tests on whether they provide support resistance or help predict highs and lows or whether they help determine if we will close green or red.  For example, if we open above prior day poc or vah or in between vah and Val, how does that help us predict ?   What about combinations.
+**OPERATOR:**
+> There is one more thing but I’m not sure if you have the data.  The regime.  If we are in a positive gamma vs negative gamma regime would be an important filter to predicting reversals support resistance va trend continuation.  Is there any way that can be obtained and included in testing
+**OPERATOR:**
+> So I want you to tell me what is the useful result of all of this testing. Can you predict anything better like hod lod Green Day vs red day reversals deflections etc.
+**OPERATOR:**
+> So where are we with all of this.  Explain simply
+**OPERATOR:**
+> Fix the bugs and issues so we can continue enhancing
+**OPERATOR:**
+> you need to give me the tampermonkey link
+**OPERATOR:**
+> reloaded
+**OPERATOR:**
+> the problem is that i wont be able to work. last time we had this problem , you showed the stale data so that i could continue working ..
+**OPERATOR:**
+> i reloaded.
+**OPERATOR:**
+> look at my screen and check yourself
+**OPERATOR:**
+> the alignment is messe up for the candle . and other things are also messed up .. check and look at the screen
+**OPERATOR:**
+> remember to always give me a tampermoneky link with the build.. i reloaded . check everyhing
+**OPERATOR:**
+> the candle is taking up too much horizontal space . here is a sample pic.  the idea is to identify the hod and lod times, how long it took ,  as well as the mud time and distance as well as how much money could have been made.  i'll let you refine this.
+**OPERATOR:**
+> show me3 mockup
+**OPERATOR:**
+> I like  this but add any levels that were swept by the wicks or targetted.  They should be levels around the edges not levels that the maket blew through and kept going. the idea is to identify where the market reversed and then targetted.  do not include ib.. they should be key levels like poc, vah, val, pdh, pdl, onh, onl, cw0, pw0, or any major level.  the level should be close to the candle  especially near the wick.   do you understand
+**OPERATOR:**
+> I like E. proviede build
+**OPERATOR:**
+> complete the open items and then i'll install
 
 ### DECISIONS
 
@@ -925,10 +1075,12 @@ Now ONH/ONL and the volume profile from `futBars`:
 - **When a field can legitimately be empty, empty proves nothing** — find the case where it MUST be
   non-empty.
 
+
 ### SHIPPED
 
 **v15.00** — `kingAt()` / `deflKingsAt()`, `hodLod` records extreme timestamps, `overnightHL()` for
 ONH/ONL, `priorProfile()` for POC/VAH/VAL. All open items closed. k1-k8, r10-r11, p1-p3.
+
 
 ### OPEN AT CLOSE
 
@@ -937,26 +1089,8 @@ ONH/ONL, `priorProfile()` for POC/VAH/VAL. All open items closed. k1-k8, r10-r11
 - ⚠ `deriv.zg` on 25-70% of bars; gx-010 needs >=80%.
 - **gx-008 forward scoring** can start immediately; no gamma book required.
 
-### COMMITS THIS CONTEXT
 
-```
-5547816 v14.99: reversal levels at the wick tips; the shape spine returns
-2e7b169 v14.98: the candle narrow as he drew it - stacked labels, MUD and money in the body
-4c1085a v14.97: the scale fault was upstream; the ladder now verifies itself against price
-c4737b2 v14.96: one table so the columns actually align; the counting test was a proxy that passed on a broken screen
-d716fb6 v14.95: SYM vs sym killed the whole day section; add an undeclared-identifier lint
-62d1cdc v14.94: one displayScale function; session levels derive instead of declining
-114d933 v14.93: the 10x scale mismatch - one switch, two preconditions, fixed in both places it lived
-242651c record: fill the v14.92 close-out
-d19bfc5 record: the installer manifest floor, and close out v14.92
-37776b4 record: close out v14.92
-5308346 installer: tools/ subdirectories were silently excluded - the nightly bank would never have reached GitHub
-238a1b5 v14.92: the regime field was a hardcoded constant; null it and register the flip as the real signal
-```
-
----
-
-<!-- EARLIER-CONTEXTS -->
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 

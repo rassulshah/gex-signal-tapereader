@@ -131,6 +131,25 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.01 · 2026-08-30 · **HE QUESTIONED THE OUTPUT AND THE OUTPUT WAS RIGHT; THE RULE BEHIND IT WAS NOT**
+
+"are you sure this is correct because the candle shows the market took out both the prior day high
+and the prior day low." Checked the arithmetic: PDH and PDL differ by 6.98 against a 7.0 range, so
+price tagged both by hundredths and reversed. **The display was correct.**
+
+⚠⚠ **AND THE CHALLENGE STILL FOUND A BUG.** v14.99 used a SYMMETRIC tolerance, when this project had
+already settled that the band is ASYMMETRIC — 1 ATR short, 1.5 ATR through, calibrated against his
+own circled charts at v14.91. A level price EXCEEDED must be judged by the through-tolerance. I had
+built the same geometry twice and only one copy carried the calibration.
+
+⚠ **A CHALLENGE TO AN OUTPUT IS WORTH INVESTIGATING EVEN WHEN THE OUTPUT SURVIVES IT.** The right
+answer was "yes, and here is the arithmetic" — but stopping there would have left a rule that
+disagrees with the one four builds of work went into. **Verify the output AND re-read the rule.**
+
+⚠ TWO MORE CONDITION-MUTATIONS SURVIVED, same shape as v14.98: I mutated an ASSIGNMENT while the
+assertion matched neighbouring arithmetic, and flipped a CONDITION while the assertion matched the
+emit text. Fifth and sixth this session. **The assertion must name the thing the mutation changes.**
+
 ### v15.00 · 2026-08-30 · **AN ASYMMETRY BETWEEN THREE FIELDS WAS THE WHOLE DIAGNOSIS**
 
 HodN and LodN read em-dash every day; PTN found a node. I noted that as two separate observations

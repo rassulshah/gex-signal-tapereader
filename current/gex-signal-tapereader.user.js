@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.00
+// @version    15.01
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -626,7 +626,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.00';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.01';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -22866,14 +22866,21 @@ function priorProfile(){
 // added they must be labelled a RECORD, never a claim: measured over 284 sessions a prior POC is
 // tagged 46.6% of the next session against 46.3% for a SHAM level at the same distance
 // (tools/study-profile.py). Drawing them as reversal evidence would assert something measured false.
-var REVL_ATR = 1.0;      // multiples of ATR: how close a level must sit to an extreme
+// ⚠⚠ (v15.01) THE BAND IS ASYMMETRIC, AND IT HAD TO BE. v14.99 used one symmetric tolerance,
+// which is not the geometry this project already settled: a test may stop SHORT of a level by 1 ATR,
+// but it may run THROUGH it by 1.5 — because a stab that pierces and recovers is still a test, and
+// that asymmetry was calibrated against his own circled charts (v14.91, OPEN-QUESTIONS Q10).
+// The operator caught the symptom: "the candle shows the market took out both the prior day high
+// and the prior day low" — a level price EXCEEDED needs the through-tolerance, not the short one.
+var REVL_SHORT = 1.0;    // ATR: price may stop this far SHORT of the level and still have tested it
+var REVL_THRU  = 1.5;    // ATR: price may run this far THROUGH it and still have reversed on it
 var REVL_MAX = 3;        // per side — more than three names will not fit and will not be read
 function revLevels(sym, D){
   var out={ hi:[], lo:[], ok:false };
   try{
     if(!D || !D.ok) return out;
     var rr=(typeof D.scale==='number' && D.scale>0)?D.scale:1;
-    var tol=atr(sym)*rr*REVL_ATR;
+    var tol=atr(sym)*rr;
     if(!(tol>0)) return out;
     var H=D.hod*rr, L=D.lod*rr, LV=[];
     function add(px,name){ if(typeof px==='number' && isFinite(px) && px>0) LV.push({px:px,name:name}); }
@@ -22897,9 +22904,14 @@ function revLevels(sym, D){
       });
     }catch(eI){}
     for(var i=0;i<LV.length;i++){
-      var dH=Math.abs(LV[i].px-H), dL=Math.abs(LV[i].px-L);
-      if(dH<=tol && dH<=dL)      out.hi.push({ name:LV[i].name, px:LV[i].px, d:dH });
-      else if(dL<=tol)           out.lo.push({ name:LV[i].name, px:LV[i].px, d:dL });
+      var px=LV[i].px;
+      // at the HIGH: the level ABOVE H was never reached (SHORT); BELOW H was exceeded (THROUGH)
+      var okH = (px>=H) ? ((px-H)<=tol*REVL_SHORT) : ((H-px)<=tol*REVL_THRU);
+      // at the LOW: mirrored — BELOW L was never reached, ABOVE L was exceeded
+      var okL = (px<=L) ? ((L-px)<=tol*REVL_SHORT) : ((px-L)<=tol*REVL_THRU);
+      var dH=Math.abs(px-H), dL=Math.abs(px-L);
+      if(okH && dH<=dL)  out.hi.push({ name:LV[i].name, px:px, d:dH, pen:(H-px) });
+      else if(okL)       out.lo.push({ name:LV[i].name, px:px, d:dL, pen:(px-L) });
     }
     function near(a,b){ return a.d-b.d; }
     out.hi.sort(near); out.lo.sort(near);
@@ -22929,7 +22941,7 @@ function dayCandleSvg(sym, D, PTL){
     // stacks the annotations ABOVE and BELOW the bar instead of beside it, which is what makes it
     // fit: the width is the BAR, not the labels. The three shape percentages and the side legend
     // are gone with it; the body carries MUD and the money, as he drew.
-    var W=80, TOP=30, HGT=140;
+    var W=80, TOP=34, HGT=130;
     function y(px){ return TOP + (H-px)/rng*HGT; }
     var green=(C>O), col=green?'#2ec27e':'#f0616d', cx=48;   // (v14.99) the bar sits right of the spine
     var bodyTop=y(Math.max(O,C)), bodyH=Math.max(3, Math.abs(y(O)-y(C)));
@@ -22950,8 +22962,12 @@ function dayCandleSvg(sym, D, PTL){
     h+='<text x="10" y="'+(bodyTop+bodyH/2+2).toFixed(1)+'" class="g3cx" fill="'+col+'">'+_pb+'%</text>';
     h+='<text x="10" y="'+((bodyTop+bodyH+y(L))/2+2).toFixed(1)+'" class="g3cx" fill="#5fd08a">'+_pd+'%</text>';
     // HOD above
-    h+='<text x="'+cx+'" y="10" class="g3cl" text-anchor="middle">HOD '+hlClock(D.hodT)+'</text>';
-    if(afterHod!=null) h+='<text x="'+cx+'" y="21" class="g3cs" text-anchor="middle">'+hlDur(afterHod)+'</text>';
+    // ⚠ (v15.01) BOTH LABEL BLOCKS HANG OFF THEIR OWN WICK END at the SAME gap. They were anchored
+    // to fixed y values, so the LOD block sat 22px off the wick while the HOD block sat 9px off —
+    // "the lod labels are too low, bring them slightly closer to the wick same distance".
+    var GAP=9, LN=11;
+    h+='<text x="'+cx+'" y="'+(y(H)-GAP-LN).toFixed(1)+'" class="g3cl" text-anchor="middle">HOD '+hlClock(D.hodT)+'</text>';
+    if(afterHod!=null) h+='<text x="'+cx+'" y="'+(y(H)-GAP).toFixed(1)+'" class="g3cs" text-anchor="middle">'+hlDur(afterHod)+'</text>';
     // the bar
     h+='<line x1="'+cx+'" y1="'+y(H).toFixed(1)+'" x2="'+cx+'" y2="'+y(L).toFixed(1)+'" stroke="#8b98a9" stroke-width="1.4"/>';
     h+='<rect x="'+(cx-11)+'" y="'+bodyTop.toFixed(1)+'" width="22" height="'+bodyH.toFixed(1)+'" fill="'+col+'" fill-opacity=".16" stroke="'+col+'" stroke-width="1.2"/>';
@@ -22961,11 +22977,25 @@ function dayCandleSvg(sym, D, PTL){
       var pt=PTL.ptPx*rr;
       if(pt>=L && pt<=H) h+='<line x1="'+(cx-11)+'" y1="'+y(pt).toFixed(1)+'" x2="'+(cx+11)+'" y2="'+y(pt).toFixed(1)+'" stroke="#b98cff" stroke-width="1.2" stroke-dasharray="3 2"/>';
     }
-    // MUD and the money, inside the body when it is tall enough — his sketch puts them there
-    var mid=bodyTop+bodyH/2, inside=(bodyH>=30);
-    var ty=inside?(mid-4):(y(L)+0);
-    if(D.mud!=null) h+='<text x="'+cx+'" y="'+ty.toFixed(1)+'" class="g3cs" text-anchor="middle" fill="#c9d4e2">MUD '+hlDur(D.mud)+'</text>';
-    if(usd!=null)   h+='<text x="'+cx+'" y="'+(ty+10).toFixed(1)+'" class="g3cs" text-anchor="middle" fill="#e3b341">$'+Math.round(usd).toLocaleString()+'</text>';
+    // ⚠⚠ (v15.01) MUD SITS ON THE SIDE OF THE OPEN THE MOVE WENT — "above the open for red bars and
+    // below the open for green bars". On a red bar the open is the body's TOP and the session ran
+    // down from it, so MUD belongs above; on a green bar it mirrors. That keeps the label out of the
+    // body it is describing, and puts it in the wick the MUD leg actually travelled.
+    // ⚠ THE MONEY IN THE MUD is a SECOND line, and it is NOT the day's range: MUD runs from the
+    // reclaim of the open to the SECOND extreme, so its distance is |open - second extreme|.
+    var mudUsd=null;
+    try{
+      var secPx=(D.second==='HOD')?D.hod:D.lod;
+      var mudPts=Math.abs(secPx-D.open)*rr;
+      var dr2=displayScale(sym);
+      if(mudPts>0 && dr2 && dr2.scale>1) mudUsd=Math.abs(secPx-D.open)*dr2.scale*ES_USD_PER_PT;
+      else if(mudPts>0 && D.isFut) mudUsd=mudPts*ES_USD_PER_PT;
+    }catch(eM){}
+    var mudY = green ? (y(O)+LN) : (y(O)-LN-LN);
+    if(D.mud!=null){
+      h+='<text x="'+cx+'" y="'+mudY.toFixed(1)+'" class="g3cs" text-anchor="middle" fill="#c9d4e2">MUD '+hlDur(D.mud)+'</text>';
+      if(mudUsd!=null) h+='<text x="'+cx+'" y="'+(mudY+LN).toFixed(1)+'" class="g3cs" text-anchor="middle" fill="#e3b341">$'+Math.round(mudUsd).toLocaleString()+'</text>';
+    }
     // ⚠⚠ (v14.99) THE REVERSAL LEVELS. Names only, stacked at the wick TIP they belong to — his
     // choice of option E over the 104px version with tick lines. Position implies the price; the
     // hover carries the number, because dropping it from the face must not make it unreachable.
@@ -22987,8 +23017,12 @@ function dayCandleSvg(sym, D, PTL){
       }
     }catch(eRV){}
     // LOD below
-    h+='<text x="'+cx+'" y="'+(TOP+HGT+22)+'" class="g3cl" text-anchor="middle">LOD '+hlClock(D.lodT)+'</text>';
-    if(afterLod!=null) h+='<text x="'+cx+'" y="'+(TOP+HGT+33)+'" class="g3cs" text-anchor="middle">'+hlDur(afterLod)+'</text>';
+    h+='<text x="'+cx+'" y="'+(y(L)+GAP+LN).toFixed(1)+'" class="g3cl" text-anchor="middle">LOD '+hlClock(D.lodT)+'</text>';
+    if(afterLod!=null) h+='<text x="'+cx+'" y="'+(y(L)+GAP+LN*2).toFixed(1)+'" class="g3cs" text-anchor="middle">'+hlDur(afterLod)+'</text>';
+    // ⚠ (v15.01) THE DAY'S TOTAL gets its own line beneath the extremity block — "put the total
+    // amount in dollars below the second line of the extremity". It rode the duration line before,
+    // where it read as part of the timing rather than as the day's result.
+    if(usd!=null) h+='<text x="'+cx+'" y="'+(y(L)+GAP+LN*3).toFixed(1)+'" class="g3cl" text-anchor="middle" fill="#e3b341">$'+Math.round(usd).toLocaleString()+'</text>';
     h+='</svg>';
     return h;
   }catch(e){ swallow('dayCandle', e); return ''; }

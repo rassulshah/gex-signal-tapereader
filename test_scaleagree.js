@@ -59,7 +59,7 @@ ok(/dispIsFut\(\)\?dispR\(\):1/.test(EB), 's7 emBand still scales by dispR() —
 const CLEAN=src.replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
 ok(!/sessionLevels\(sym,\s*\(EB&&typeof EB\.scaleUsed==='number'\)\?EB\.scaleUsed:1\)/.test(CLEAN),
    's10 session levels no longer fall back to the CASH scale');
-// ⚠⚠ (v15.00) s11/s12 ORIGINALLY ASSERTED THAT SESSION LEVELS *DECLINE* WITHOUT A SCALE. That
+// ⚠⚠ (v15.01) s11/s12 ORIGINALLY ASSERTED THAT SESSION LEVELS *DECLINE* WITHOUT A SCALE. That
 // shipped, and it cost the operator his after-hours levels: "i wont be able to work". Declining is
 // right for a number that would be WRONG; it is wrong for a scale that can be DERIVED. The ratio is
 // a persisted EMA and survives the close. The assertions now pin the DERIVE behaviour.
@@ -72,7 +72,7 @@ ok(/dispIsFut\(\)/.test(DS) && /dispR\(\)/.test(DS), 's13 displayScale reads the
 ok(/'fut:live'/.test(DS) && /'fut:ratio'/.test(DS) && /src:'cash'/.test(DS), 's14 ...and names all three states');
 ok(!/return null/.test(DS), 's15 ...and NEVER returns nothing — a derivable scale is always derived');
 
-// ---- (v15.00) THE LADDER MUST VERIFY ITS OWN SCALE AGAINST PRICE --------------------------
+// ---- (v15.01) THE LADDER MUST VERIFY ITS OWN SCALE AGAINST PRICE --------------------------
 // ⚠⚠ Two builds "fixed" this by making call sites agree, and the operator's screen stayed broken,
 // because the fault is UPSTREAM: their payload can carry a spot on one scale and strikes on
 // another. No amount of consistency between consumers repairs an inconsistent SOURCE.

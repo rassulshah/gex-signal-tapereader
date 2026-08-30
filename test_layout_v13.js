@@ -86,13 +86,13 @@ console.log('FAIL '+m+(x!==undefined?'  got: '+x:''));} }
      '...but STEP_TIPS is KEPT — the doctrine it carries is not the header it was attached to',
      TIPS.length);
   ok(/j<secs\.length/.test(pv), 'and so is the section loop');
-  // (v15.00) ONE section renders. TREND came off the face on his instruction — "even the dntend
+  // (v15.01) ONE section renders. TREND came off the face on his instruction — "even the dntend
   // Brk area was also removed" — and the evidence backed it: DRIFT is a 50.0% coin flip on n=68,
   // test_trendbadge is permanently red, and the confirm tally was never scored against TREND's 34%.
   // secBias() is KEPT so bias.confirm keeps feeding the recorder.
   // ⚠ `pv` is the panelV3 BODY — `function secBias` is declared outside it, so requiring both in
   // pv checked a scope that could never hold them. Mount site in pv, survival in the whole source.
-  ok(/var secs=\[secLoc\]/.test(pv), 'one section renders (v15.00: TREND off the face)');
+  ok(/var secs=\[secLoc\]/.test(pv), 'one section renders (v15.01: TREND off the face)');
   ok(/function secBias/.test(src), '...and secBias survives, so bias.confirm keeps feeding the recorder');
   ok(!/secFrame/.test(noc(pv).replace(/var secs=.*/,'')), 'panelV3 does not render secFrame as a section');
 }
