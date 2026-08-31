@@ -1,3 +1,92 @@
+## v15.10 — the replay slider: drag the panel back to any bar in the session
+
+> "i wanted a slider that i could slide to see how the app looked earlier on in the day" ·
+> "It should also work after hours or on the weekend, so if it is saturday, i want to go back to
+> friday and see what happened."
+
+**The whole panel rewinds** — ladder, kings, nodes, the frame and the ⓪a section all read the book
+recorded at the minute the handle is parked on. ◀ ▶ step the day, so a Saturday reaches Friday.
+
+### ⚠⚠ IT IS NOT A NEW RENDERER, AND THAT IS WHY IT IS SAFE
+
+The face has read its book through ONE door since v14.55 — `tapeMap(sym)` — and that door already
+carried a branch that serves a STORED book instead of the live tape (the last-session latch). Replay
+is that branch with a different source: any frame out of the IndexedDB repository. Every consumer
+downstream is unchanged and cannot tell the difference.
+
+    tapeMap(sym)   replay?  -> the frame's book        <- NEW, same shape
+                   stale?   -> the end-of-day latch    <- v14.55
+                   else     -> tapeMapLive()
+
+### MEASURED ON HIS OWN STORE BEFORE ANY CODE WAS WRITTEN
+
+    gpts_repo_v1.snaps    2,149 SPY frames over 18 days, back to 2026-08-11
+                          NOT bounded by the 3,600 KB localStorage budget — which held 28 bars
+    one frame at 13:00    30 KB: px/h/l, king, 28 node rows, all four books' kings + top lists,
+                          walls, deriv, sig, ep, inplay, and `vend` — Skylit's own per-strike
+                          cur/d5/d15/d60, field-for-field the `vel` contract the latch consumes
+
+**And the reconstruction was checked against the frame's own record.** %King is rebuilt by
+normalising `vend`'s dollars against the largest strike IN THAT BOOK; at 13:00 that reproduces the
+independently-recorded `tri.SPXW.top` exactly — **100 / −37 / 35 / −33 / 26 / 16 / −14 / 13**.
+
+### the four rules it is built on
+
+1. **A vendor row belongs to the book whose KING it sits nearest, in log space.** SPXW (~7700)
+   separates from anything; **SPY 767 and QQQ 716 are seven percent apart** and no magnitude rule
+   splits them. Mixing two books into one ladder is the error behind four phantom bugs here.
+2. **Refuse, never fall through.** A book with no rows returns an empty book, not the live tape.
+   Live numbers under a REPLAY badge would be invisible — every value plausible, every label wrong.
+3. ⚠⚠ **Replay never writes.** `replayOn()` joins `recorderBlind()`, the one gate nine write paths
+   already call. A replayed bar recorded as today is **DECISIONS D-10** — mislabelled data, which
+   nothing downstream can detect afterwards.
+4. **The handle snaps to a frame that EXISTS.** Asking for 13:01 gives the 13:00 book, labelled
+   13:00. A slider reporting a minute nothing was recorded at is inventing a reading.
+
+### the bars come from the frames
+
+On a PAST day the ES courier holds only the newest session and the chart holds today, so reading
+either would put today's candle under Friday's ladder. `measureBars()` builds the series from the
+frames themselves, truncated at the parked one — one source, one time.
+⚠ **The per-bar OPEN is reconstructed** as the previous close, because a frame does not store it.
+High, low and close are recorded and exact; `approxOpen` carries the fact to every consumer, so
+anything derived from the open (WICK%, BODY, the GREEN/RED call) inherits it knowingly.
+
+### VEND_MAX_ROWS 40 -> 90, because that cap is now the depth of a replay
+
+At 40 the split was ~19 SPXW / ~21 SPY+QQQ against 110–268 strikes live. The 19 reach down to 4% of
+King, so **every node the ladder DRAWS survives a replay** — the grey minors do not.
+⚠ It cannot enrich the 18 days already recorded; those replay at the depth they were stored.
+
+### also in this build, both asked for in the same message
+
+**The version sits in the header beside `Tapereader`** — *"so i know what version it is."* It reads
+`GPTS_VERSION`, so it cannot drift from the footer, and it is the first step of diagnosing four
+different install failures without scrolling 1,000px.
+
+**The READ row is off ① FRAME** — *"take out the read. I might come back to it later."*
+⚠ **The composer is NOT deleted.** `emRead()` is still called, because `test_em_band` §30 EXECUTES
+it and greps its output for forecast vocabulary — the ban that keeps this panel descriptive (D-7).
+Removing the call would leave that ban green while guarding nothing.
+
+### testing
+
+`test_replay.js`, **73 assertions, every one executing rather than grepping**, against three REAL
+recorded frames (09:30 / 13:00 / 14:45) out of `data/2026-08-31.json`.
+**20 mutations run individually, all 20 caught** — and two of them exposed fake assertions of mine:
+an evenly-spaced fixture that could not tell snapping from linear indexing, and an amber-colour grep
+that still matched the border after the background was deleted. **Both were fixed in the test.**
+
+⚠ **A new dependency in a hot path broke nine test files before the guard went in.** `measureBars` is
+eval'd in isolation by tests that do not define `replayOn`; the bare call threw, its catch called an
+undefined `swallow()`, and `hodLod` returned `{ok:false}` — which reads as "the session has no bars".
+Every replay call site now carries a `typeof` guard. That is v15.08's lesson, recurring inside the
+build that quotes it.
+
+⚠ `test_chat_history`'s placeholder check had to be scoped to the SECTION BODY: it searched the whole
+entry, and the entry contains the transcript, so a reply that QUOTED the placeholder text fired the
+guard on a correctly-filled file.
+
 ## v15.09 — the roll arrows are back, and the measurement unit is fixed
 
 > "arrows that showed where the gamma was flowing out of and into ... stepped with a dot at the

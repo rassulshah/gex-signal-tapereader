@@ -376,7 +376,7 @@ ok(lastTradingDay(1)==='2026-08-18', '3d Wednesday -> Tuesday', lastTradingDay(1
   ok(/PIPE_TTL_MS=600000/.test(src), '8f the remote check is throttled to 10 minutes');
   ok(/visibilityState/.test(ex('pipeCheck')), '8g pipeCheck skips a hidden tab');
   ok(/pipeCheck\(\);/.test(ex('tick')), '8h the render loop drives pipeCheck');
-  ok(/@version\s+15.09/.test(src) && /v'\+GPTS_VERSION\+' part1 loaded/.test(src) && />v'\+GPTS_VERSION\+'<\/span>/.test(src),
+  ok(/@version\s+15.10/.test(src) && /v'\+GPTS_VERSION\+' part1 loaded/.test(src) && />v'\+GPTS_VERSION\+'<\/span>/.test(src),
      '8i version stamped in all three spots');
   ok(/pipeReviewLine\(RV\)/.test(ex('briefLine')), '8j the pre-open brief may cite one review line');
 

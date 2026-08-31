@@ -59,9 +59,21 @@ if(h){
   ['### DECISIONS','### SHIPPED','### OPEN AT CLOSE'].forEach(function(sec){
     ok(curBlock.indexOf(sec)>=0, 'the current entry has a '+sec.replace('### ','')+' section');
   });
-  ok(curBlock.indexOf('_Fill in before committing')<0, 'DECISIONS was filled in, not left as the placeholder');
-  ok(curBlock.indexOf('_Version + what actually changed')<0, 'SHIPPED was filled in, not left as the placeholder');
-  ok(curBlock.indexOf('_What the next context must pick up')<0, 'OPEN AT CLOSE was filled in, not left as the placeholder');
+  // ⚠⚠ (v15.10) SCOPED TO THE SECTION BODY, NOT THE WHOLE ENTRY. These three searched the entire
+  // current block, and the block CONTAINS THE TRANSCRIPT — so the moment a reply quoted the
+  // placeholder text ("...still has its three summary sections as literal placeholders"), the guard
+  // fired on a file that was correctly filled in. That is the comment-contains-the-token family
+  // that has produced nine false results here, arriving one level up: the RECORD quotes the thing
+  // the guard looks for. Read the slice from the heading to the next heading instead.
+  var sectionBody=function(head){
+    var i=curBlock.indexOf(head); if(i<0) return '';
+    var rest=curBlock.slice(i+head.length);
+    var j=rest.indexOf('\n### ');
+    return j<0?rest:rest.slice(0,j);
+  };
+  ok(sectionBody('### DECISIONS').indexOf('_Fill in before committing')<0, 'DECISIONS was filled in, not left as the placeholder');
+  ok(sectionBody('### SHIPPED').indexOf('_Version + what actually changed')<0, 'SHIPPED was filled in, not left as the placeholder');
+  ok(sectionBody('### OPEN AT CLOSE').indexOf('_What the next context must pick up')<0, 'OPEN AT CLOSE was filled in, not left as the placeholder');
 }
 
 // ---- THE WIRING IS PINNED TOO ------------------------------------------------------------------

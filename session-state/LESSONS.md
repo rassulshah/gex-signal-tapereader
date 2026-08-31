@@ -131,6 +131,54 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.10 · 2026-08-31 · **THE FEATURE WAS ALREADY HALF-BUILT AND I ALMOST WROTE A SECOND ONE**
+
+He asked for a replay slider. My first instinct was to size a new renderer: something that reads the
+repository and draws a past face. **`tapeMap(sym)` has had a stored-book branch since v14.55** — it
+is how the panel already shows Friday after the close — and every consumer on the face reads its book
+through that one door. Replay is that branch with a different source, and the diff is small because
+of it.
+
+⚠⚠ **THE TELL WAS IN THE FILE I HAD ALREADY READ.** `lastBookSave()` stores
+`{king, kingKd, pct{}, vel{}}`, and the snapshot's `vend.rows` is `[k,cur,d5,d15,d60,d1d]` — the same
+four fields under different names. **Two structures that carry the same fields are usually one
+mechanism**, and noticing that is worth more than any amount of careful new code.
+
+⚠ **AND I MEASURED HIS STORE BEFORE DESIGNING, WHICH SETTLED TWO THINGS I WOULD HAVE GUESSED WRONG.**
+`gpts_repo_v1.snaps` holds 2,149 frames over 18 days and is NOT bounded by the localStorage budget —
+which at that moment held 28 bars. Reasoning from the budget alone would have concluded replay could
+reach back ninety minutes.
+
+⚠⚠ **A NEW DEPENDENCY IN A HOT PATH BROKE NINE TEST FILES, AND THE SYMPTOM NAMED THE WRONG CAUSE.**
+`measureBars` is eval'd in isolation by tests that do not define `replayOn`. The bare call threw
+ReferenceError; its catch called an undefined `swallow()`; that throw escaped into `hodLod`'s outer
+catch, which returns `{ok:false}` — **which the face reads as "the session has no bars."** Not a
+crash, a plausible empty. **This is v15.08's lesson verbatim** ("a silent catch turns a missing stub
+into a mystery") and it recurred inside the build whose comments quote it. Every replay call site now
+carries `typeof replayOn==='function'`, which is the pattern `recorderSave` already used for `lsPut`.
+
+⚠⚠ **MUTATION FOUND TWO FAKE ASSERTIONS OF MINE, AND ONE WAS THE FIXTURE, NOT THE RULE.**
+- The snap-to-nearest-frame test passed with the snap *removed*, because three near-evenly-spaced
+  frames make `round(p*(n-1))` land on the same indices as nearest-in-time. **The fixture was too
+  regular to separate the two behaviours.** A gap was added — which is also the case the feature
+  exists to handle honestly.
+- The "it goes amber in replay" test grepped for the colour, and the colour also appears in the
+  border and the badge, so deleting the background tint stayed green. Now it compares the strip's
+  GROUND between the two modes.
+**Twenty mutations, run one at a time; the suite being green caught neither.**
+
+⚠ **AND A GUARD FIRED ON THE RECORD QUOTING ITS OWN TRIGGER WORD.** `test_chat_history` searched the
+whole current entry for the generator's placeholder text — and the entry contains the transcript, so
+a reply that QUOTED the placeholder made a correctly-filled file go red. Scoped to the section body.
+**Ninth occurrence of the comment-contains-the-token family, arriving one level up: the RECORD is now
+big enough to contain the strings its own guards look for.**
+
+⚠ **HE REJECTED THE MOCKUP FORMAT BEFORE THE DESIGN.** An artifact page of six states came back as
+"i'm not interested in a replay card" — the trimmed face I drew to fit six panels side by side read
+as a widget, not as the panel rewinding. **What worked was injecting the strip into his LIVE panel
+and screenshotting it there.** For a change to an existing dense UI, a drawing of the change competes
+with his memory of the real thing; the real thing with the change in it does not.
+
 ### v15.09c · 2026-08-31 · **THE RESUME NOTE PASSED ITS GUARD ON A STAMP WHILE ITS BODY WAS NINE VERSIONS OLD**
 
 No code shipped. The previous context's window closed before the save finished, and what that

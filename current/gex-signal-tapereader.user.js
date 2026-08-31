@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.09
+// @version    15.10
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -131,6 +131,11 @@ var STATS_DAYS = 5;
 var READ_NEARX = 0.25;
 // --- Recorder (DATA layer feeding LLM analytics / prediction) ---
 var RECORDER_DAYS = 10;          // rolling trading days kept in localStorage
+// (v15.10) how many vendor velocity rows each snapshot keeps, biggest first. This is the DEPTH OF A
+// REPLAYED LADDER — see the vend block in the recorder for the measurement behind the number.
+// ⚠ Keep this declaration bare: the test harness reads constants up to the first `;` + newline, and
+// a trailing comment silently swallows the next declaration (PROJECT-CONSTANTS, L-K's neighbour).
+var VEND_MAX_ROWS = 90;
 var RECORDER_MAX_SNAPS = 200;    // hard cap of node-snapshots per symbol per day
 var RECORDER_MAX_EVENTS = 300;   // hard cap of outcome events per symbol per day
 var RECORDER_SYMS = ['SPY','QQQ'];
@@ -636,7 +641,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.09';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.10';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -801,6 +806,12 @@ function liveFrontExp(){
 // session, which is the failure this feature must not become.
 function showingStaleBook(){
   try{
+    // ⚠⚠ (v15.10) EXACTLY ONE PAST-BOOK MODE AT A TIME. Replay and the last-session latch both serve
+    // a stored book, and both put a badge on the face. With the slider engaged the latch must stand
+    // down, or the panel announces two different pasts at once — and the four call sites that test
+    // showingStaleBook() directly (the clock, the ladder badge, the footer, the day section) would
+    // each pick a different one. Replay is the explicit act, so replay wins.
+    if(typeof replayOn==='function' && replayOn()) return false;
     if(CFG.lastBook===false) return false;
     var P=null; try{ P=sessionPhase(); }catch(eP){}
     if(!P || P.rth) return false;                  // 1 · never during RTH
@@ -844,8 +855,281 @@ function staleBookWhy(sym){
 }
 
 // ONE guard for every path that writes. Never test inReplay() directly in a recorder again.
+// ============================================================================================
+// (v15.10) THE REPLAY SLIDER — "a slider that i could slide to see how the app looked earlier on"
+//
+// Operator, 2026-08-31: "i wanted a slider that i could slide to see how the app looked earlier on
+// in the day" and "It should also work after hours or on the weekend, so if it is saturday, i want
+// to go back to friday and see what happened."
+//
+// ⚠⚠ THIS IS NOT A NEW RENDERER, AND THAT IS THE WHOLE REASON IT IS SAFE. The face already reads
+// its book through ONE door — `tapeMap(sym)` — which since v14.55 has had a branch that serves a
+// STORED book instead of the live tape (the last-session latch). Replay is that same branch with a
+// different source: any frame out of the IndexedDB repository instead of the single end-of-day
+// latch. Every consumer downstream — ladder, piles, nodes, King, states — is unchanged and cannot
+// tell the difference, which is exactly the property that makes this a small change rather than a
+// second implementation of the panel (PROJECT-CONSTANTS: "when two parts of the face must agree,
+// they read the SAME ARRAY").
+//
+// ⚠⚠ AND IT MUST NEVER WRITE. `recorderBlind()` is the ONE gate every write path already calls, so
+// replay joins it here and nine recorder guards inherit the protection without being touched.
+// Writing a replayed bar as though it were now is DECISIONS D-10 — not wrong data, MISLABELLED
+// data, which nothing downstream can detect afterwards. That is the single biggest risk in this
+// feature and it is closed in one line.
+//
+// MEASURED before building, on the operator's own store (2026-08-31):
+//   gpts_repo_v1.snaps  2,149 SPY frames over 18 days, back to 2026-08-11 — NOT bounded by the
+//                       3,600 KB localStorage budget, which at that moment held only 28 bars.
+//   a frame at 13:00    30 KB: px/h/l, king, 28 node rows, all four books' kings + top lists,
+//                       walls, deriv, sig, ep, inplay, and `vend` — Skylit's own per-strike
+//                       cur/d5/d15/d60, which is field-for-field the `vel` contract the stale-book
+//                       path already consumes.
+//
+// ⚠ DEPTH IS THE ONE HONEST LIMITATION. `vend` was capped at 40 rows per frame until v15.10 (now
+// VEND_MAX_ROWS), and 40 rows split roughly 19 SPXW / 21 SPY+QQQ against 110-268 strikes live. The
+// 19 reach down to 4% of King, so every node the ladder DRAWS survives a replay — the grey minors
+// do not. Frames already recorded replay at the depth they were stored; the cap only deepens what
+// is captured from here on. Say this rather than let a thinner ladder read as a bug.
+var REPLAY={ on:false, day:null, idx:-1, frames:[], days:null, loading:false, err:null };
+function replayOn(){
+  try{ return !!(REPLAY.on && REPLAY.frames && REPLAY.frames.length && REPLAY.idx>=0 && REPLAY.idx<REPLAY.frames.length); }
+  catch(e){ return false; }
+}
+function replayFrame(){ try{ return replayOn()?REPLAY.frames[REPLAY.idx]:null; }catch(e){ return null; } }
+// the wall-clock second-of-day the slider is parked on — the clock the whole face should believe
+function replaySec(){
+  try{
+    var F=replayFrame(); if(!F || typeof F.t!=='number') return null;
+    var d=new Date(F.t-5*3600000);
+    return d.getUTCHours()*3600+d.getUTCMinutes()*60+d.getUTCSeconds();
+  }catch(e){ return null; }
+}
+// ⚠⚠ WHICH BOOK DOES A VENDOR ROW BELONG TO? SPXW (~7700) is a decade away and separates trivially,
+// but SPY (~767) and QQQ (~716) are SEVEN PERCENT apart — no magnitude rule can split them. Every
+// row is therefore assigned to the book whose OWN KING it sits nearest in log space, which needs no
+// threshold and cannot drift. Mixing two books into one ladder is the error that has produced four
+// separate phantom bugs in this project; this is the one place a replayed book could reintroduce it.
+function replayBookOf(k, tri){
+  try{
+    if(!(k>0) || !tri) return null;
+    var best=null, bd=Infinity, bks=['SPXW','SPY','QQQ','VIX'], i, kg, d;
+    for(i=0;i<bks.length;i++){
+      kg=tri[bks[i]] && tri[bks[i]].king;
+      if(!(kg>0)) continue;
+      d=Math.abs(Math.log(k/kg));
+      if(d<bd){ bd=d; best=bks[i]; }
+    }
+    return best;
+  }catch(e){ return null; }
+}
+// Build the book `tapeMap` expects, out of one recorded frame. Same shape the last-session latch
+// returns, so every downstream consumer is untouched.
+function replayBook(book){
+  try{
+    var F=replayFrame(); if(!F) return null;
+    var tri=F.tri||{};
+    var rows=(F.vend&&F.vend.rows)||[];
+    var mine=[], i, r;
+    for(i=0;i<rows.length;i++){
+      r=rows[i];
+      if(!r || !(r[0]>0) || typeof r[1]!=='number') continue;
+      if(replayBookOf(r[0], tri)===book) mine.push(r);
+    }
+    if(!mine.length) return null;
+    // %King is |value| against the LARGEST STRIKE IN THIS BOOK — the payload's own ruler, never the
+    // live one. Verified 2026-08-31: rebuilt this way, the 13:00 SPXW ladder reproduces the frame's
+    // own recorded `tri.SPXW.top` exactly — 100/-37/35/-33/26/16/-14/13.
+    var mx=0;
+    for(i=0;i<mine.length;i++) if(Math.abs(mine[i][1])>mx) mx=Math.abs(mine[i][1]);
+    if(!(mx>0)) return null;
+    var pct={}, vel={}, kk;
+    for(i=0;i<mine.length;i++){
+      r=mine[i]; kk=String(r[0]);
+      pct[kk]=Math.round(100*r[1]/mx);        // SIGNED, exactly as the live tape carries it
+      vel[kk]={ cur:r[1], d5:r[2], d15:r[3], d60:r[4], d1d:r[5], exp:F.exp||null };
+    }
+    var kg=(tri[book] && typeof tri[book].king==='number') ? tri[book].king : null;
+    return { pct:pct, king:kg, kingKd:Math.round(mx/1000), count:mine.length,
+             kingSrc:'replay', vel:vel, src:'replay', stale:true, replay:true,
+             staleDay:REPLAY.day, staleTs:F.t, staleExp:F.exp||null };
+  }catch(e){ try{ swallow('replayBook', e); }catch(e2){} return null; }
+}
+// ⚠⚠ WHEN REPLAY IS ON AND THIS BOOK HAS NO ROWS, REFUSE — DO NOT FALL THROUGH TO THE LIVE TAPE.
+// Serving live numbers under a REPLAY badge is the mislabelling failure this project keeps paying
+// for, and it would be invisible: every value plausible, every label wrong. An empty book is a gap
+// the face already knows how to explain (skPiles names its reason); a live book wearing a past
+// timestamp is a lie nothing downstream can catch.
+function replayEmptyBook(){
+  return { pct:{}, king:null, kingKd:null, count:0, kingSrc:'replay', vel:{},
+           src:'replay', stale:true, replay:true, empty:true,
+           staleDay:REPLAY.day, staleTs:(replayFrame()||{}).t||null, staleExp:null };
+}
 function recorderBlind(){
-  try{ return inReplay() || showingStaleBook(); }catch(e){ return false; }
+  // ⚠ replayOn() FIRST and in the same expression: a slider parked on 13:00 must be as blind to the
+  // recorder as a Skylit chart replay is. One gate, nine guards, no half-updates.
+  try{ return (typeof replayOn==='function' && replayOn()) || inReplay() || showingStaleBook(); }catch(e){ return false; }
+}
+// ---- loading: the repository already had both accessors, so this adds no storage code ----------
+var RP_OPEN_SEC=mul(8,3600)+mul(30,60), RP_CLOSE_SEC=mul(15,3600);
+function replayDayLabel(d){
+  try{
+    var p=String(d||'').split('-'); if(p.length<3) return String(d||'');
+    var dt=new Date(Date.UTC(+p[0], +p[1]-1, +p[2]));
+    var dow=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getUTCDay()];
+    var mon=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.getUTCMonth()];
+    return dow+' '+dt.getUTCDate()+' '+mon;
+  }catch(e){ return String(d||''); }
+}
+function replaySecOf(f){
+  try{ var d=new Date(f.t-5*3600000); return d.getUTCHours()*3600+d.getUTCMinutes()*60+d.getUTCSeconds(); }
+  catch(e){ return null; }
+}
+function replayLoadDays(cb){
+  try{ repoCoverage(function(c){ REPLAY.days=(c&&c.days)||[]; if(cb) cb(REPLAY.days); }); }
+  catch(e){ REPLAY.days=[]; if(cb) cb([]); }
+}
+function replayLoadDay(date, cb){
+  REPLAY.loading=true; REPLAY.err=null;
+  try{
+    repoDay(date, function(d){
+      var arr=(d && d.snaps && d.snaps.SPY) ? d.snaps.SPY.slice() : [];
+      arr.sort(function(a,b){ return a.t-b.t; });
+      // ⚠ RTH ONLY. The store keeps whatever was open — 2026-08-31 runs to 16:46 — and a slider whose
+      // track is two-thirds after-hours is a slider that is mostly useless. The frames are not
+      // deleted, they are simply not on the track.
+      arr=arr.filter(function(f){ var s=replaySecOf(f); return s!=null && s>=RP_OPEN_SEC && s<=RP_CLOSE_SEC; });
+      REPLAY.frames=arr; REPLAY.day=date; REPLAY.loading=false;
+      REPLAY.idx=arr.length?arr.length-1:-1;
+      if(!arr.length) REPLAY.err='no RTH frames recorded for '+replayDayLabel(date);
+      if(cb) cb(arr.length);
+      try{ render(); }catch(eR){}
+    });
+  }catch(e){ REPLAY.loading=false; REPLAY.err='could not read the repository'; if(cb) cb(0); }
+}
+function replayEnter(){
+  if(REPLAY.on) return;
+  REPLAY.on=true;
+  var start=null; try{ start=sessionDayStr(); }catch(e){}
+  replayLoadDays(function(days){
+    var d=start;
+    if(!days.length){ REPLAY.err='the repository holds no recorded days'; try{ render(); }catch(e2){} return; }
+    if(days.indexOf(d)<0) d=days[days.length-1];
+    replayLoadDay(d);
+  });
+  try{ render(); }catch(e3){}
+}
+function replayExit(){
+  REPLAY.on=false; REPLAY.frames=[]; REPLAY.idx=-1; REPLAY.err=null;
+  try{ render(); }catch(e){}
+}
+function replaySeek(i){
+  if(!REPLAY.frames.length) return;
+  REPLAY.idx=Math.max(0, Math.min(REPLAY.frames.length-1, i|0));
+  try{ render(); }catch(e){}
+}
+function replayStep(n){ replaySeek(REPLAY.idx+n); }
+// seek by FRACTION of the session clock, then snap to the nearest frame that exists.
+// ⚠ The handle lands on a RECORDED bar, never between two — asking for 13:01 gives the 13:00 book,
+// labelled 13:00. A slider that reports a time no frame was taken at is inventing a reading.
+function replaySeekPct(p){
+  if(!REPLAY.frames.length) return;
+  var want=RP_OPEN_SEC+(RP_CLOSE_SEC-RP_OPEN_SEC)*Math.max(0, Math.min(1, p));
+  var best=0, bd=Infinity, i, s, d;
+  for(i=0;i<REPLAY.frames.length;i++){
+    s=replaySecOf(REPLAY.frames[i]); if(s==null) continue;
+    d=Math.abs(s-want); if(d<bd){ bd=d; best=i; }
+  }
+  replaySeek(best);
+}
+function replayDayStep(n){
+  var days=REPLAY.days||[];
+  if(!days.length || !REPLAY.day) return;
+  var i=days.indexOf(REPLAY.day);
+  if(i<0) return;
+  var j=Math.max(0, Math.min(days.length-1, i+n));
+  if(j===i) return;
+  replayLoadDay(days[j]);
+}
+// ⚠ THE TRACK IS DRAWN EVEN WHEN REPLAY IS OFF, so the frames load while `on` stays false. That is
+// deliberate: `replayOn()` requires `on===true`, so a loaded day intercepts NOTHING until he
+// actually drags. It also means the ticks are there to be seen before he touches it — the coverage
+// of the day is information whether or not he replays it.
+var RP_ENSURED=false;
+function replayEnsure(){
+  if(RP_ENSURED) return;
+  RP_ENSURED=true;
+  replayLoadDays(function(days){
+    if(!days || !days.length) return;
+    var d=null; try{ d=sessionDayStr(); }catch(e){}
+    if(!d || days.indexOf(d)<0) d=days[days.length-1];
+    replayLoadDay(d);
+  });
+}
+function replayBarHtml(){
+  try{
+    if(CFG.replayBar===false) return '';
+    replayEnsure();
+    var on=replayOn(), F=replayFrame();
+    var frames=REPLAY.frames||[], days=REPLAY.days||[];
+    var A=PAL.amber, INK=PAL.ink, SUB=PAL.sub;
+    var col=on?A:INK;
+    var dayTxt=REPLAY.day?replayDayLabel(REPLAY.day):(REPLAY.loading?'loading…':'—');
+    var atSec=on?replaySec():null;
+    var clkTxt=on?hlClock(atSec):(frames.length?'LIVE':'—');
+    // the ticks ARE the frames — a day with holes shows them, and "nothing moved" can never look
+    // like "nothing was watched" (the lesson the King track had to learn in v14.83).
+    var ticks='', i, s, p, span=(RP_CLOSE_SEC-RP_OPEN_SEC);
+    for(i=0;i<frames.length;i++){
+      s=replaySecOf(frames[i]); if(s==null) continue;
+      p=100*(s-RP_OPEN_SEC)/span;
+      if(p<0||p>100) continue;
+      ticks+='<i style="position:absolute;top:0;width:2px;height:3px;background:#42566b;left:'+p.toFixed(2)+'%"></i>';
+    }
+    var hp=100;
+    if(on && atSec!=null) hp=Math.max(0, Math.min(100, 100*(atSec-RP_OPEN_SEC)/span));
+    var tip='DRAG TO ANY BAR IN THE SESSION. The whole panel rewinds — ladder, kings, nodes, the frame '+
+      'and the ⓪a section all read the book RECORDED at that minute, out of the local repository ('+
+      (days.length||0)+' days stored). ◀ ▶ step the day, so on a Saturday you can look at Friday. '+
+      '⚠ One frame per closed 3-minute bar: the handle snaps to a bar that EXISTS, so asking for 13:01 '+
+      'gives you the 13:00 book, labelled 13:00. ⚠ The ticks are the frames actually recorded — gaps are '+
+      'real, and mean the panel was not open. ⚠⚠ REPLAY NEVER WRITES: the recorder is blind to it, '+
+      'exactly as it is to a Skylit chart replay, so nothing replayed can ever reach data/*.json. '+
+      '⚠ A replayed ladder is as deep as the frame was stored — every node the ladder draws survives, '+
+      'the grey minors may not.';
+    var h='<div class="g3rp" data-grp="bar"'+g3tip(tip)+' style="display:flex;align-items:center;gap:8px;'+
+      'padding:0 6px;height:30px;background:'+(on?'rgba(242,180,90,0.07)':PAL.card)+';'+
+      'border-top:1px solid '+PAL.line+';border-bottom:1px solid '+(on?'rgba(242,180,90,0.45)':PAL.line)+';'+
+      'font-family:ui-monospace,monospace">';
+    h+='<span data-grp="prev" style="color:'+SUB+';font-size:11px;cursor:pointer;padding:0 2px">◀</span>';
+    h+='<span style="font-size:10.5px;color:'+col+';min-width:74px;text-align:center;font-variant-numeric:tabular-nums">'+g3esc(dayTxt)+'</span>';
+    h+='<span data-grp="next" style="color:'+SUB+';font-size:11px;cursor:pointer;padding:0 2px">▶</span>';
+    h+='<span class="g3rptrack" data-grp="track" style="position:relative;flex:1 1 auto;height:18px;display:flex;align-items:center;cursor:pointer">'+
+        '<span style="position:absolute;left:0;right:0;height:3px;background:#161c26;border-radius:2px"></span>'+
+        '<span style="position:absolute;left:0;right:0;height:3px;overflow:hidden;border-radius:2px">'+ticks+'</span>'+
+        '<span style="position:absolute;left:0;height:3px;width:'+hp.toFixed(2)+'%;background:'+(on?'rgba(242,180,90,0.5)':'rgba(74,144,217,0.45)')+';border-radius:2px"></span>'+
+        '<span style="position:absolute;left:'+hp.toFixed(2)+'%;width:9px;height:14px;border-radius:2px;background:'+(on?A:INK)+';border:1px solid #05070b;transform:translateX(-5px)"></span>'+
+        '<span style="position:absolute;top:14px;left:0;font-size:9px;color:#4a5666">'+hlClock(RP_OPEN_SEC)+'</span>'+
+        '<span style="position:absolute;top:14px;right:0;font-size:9px;color:#4a5666">'+hlClock(RP_CLOSE_SEC)+'</span>'+
+       '</span>';
+    h+='<span style="font-size:11.5px;color:'+(on?A:PAL.time)+';min-width:40px;text-align:right;font-variant-numeric:tabular-nums">'+g3esc(clkTxt)+'</span>';
+    if(on){
+      h+='<span data-grp="exit" style="font-size:9.5px;color:'+A+';background:rgba(242,180,90,0.13);padding:3px 6px;'+
+         'border-radius:9px;line-height:1;cursor:pointer" title="Back to live">↺ REPLAY</span>';
+    } else {
+      h+='<span style="font-size:9.5px;color:'+PAL.longAccent+';background:rgba(46,194,126,0.11);padding:3px 6px;'+
+         'border-radius:9px;line-height:1;display:inline-flex;align-items:center;gap:4px">'+
+         '<span style="width:6px;height:6px;border-radius:50%;background:'+PAL.longAccent+';display:inline-block"></span>LIVE</span>';
+    }
+    h+='</div>';
+    // ⚠ AN EMPTY DAY REFUSES AND NAMES ITSELF. "8 frames, all after hours" is a fact about the
+    // RECORDING, not about the market, and the two must never look the same.
+    if(REPLAY.err){
+      h+='<div style="padding:5px 8px;font-size:10px;color:'+A+';background:rgba(242,180,90,0.06);'+
+         'border-bottom:1px solid '+PAL.line+'">'+g3esc(REPLAY.err)+
+         ' — this is not a quiet day, the panel was not running.</div>';
+    }
+    return h;
+  }catch(e){ try{ swallow('replayBar', e); }catch(e2){} return ''; }
 }
 function sessionDayStr(){ try{ return (SESSION_DAY && SESSION_DAY.day) || ctTodayStr(); }catch(e){ return ctTodayStr(); } }
 function pickSessionDay(raw){
@@ -1454,6 +1738,14 @@ function feedStructMap(sym){
 // read tapeMap() it would re-latch its own output every tick and the book would never age out.
 function tapeMap(sym){
   try{
+    // ⚠⚠ (v15.10) REPLAY WINS OVER EVERYTHING, INCLUDING THE LIVE TAPE. This is the one door the
+    // whole face reads its book through, so putting replay here is what makes the slider move the
+    // ladder, the piles, the nodes and the King together rather than any of them separately.
+    // ⚠ It REFUSES rather than falling through — see replayEmptyBook().
+    if(typeof replayOn==='function' && replayOn()){
+      var RB=replayBook(sym);
+      return RB || replayEmptyBook();
+    }
     // (v15.02) BOTH governing books, not just SPXW — a QQQ chart asks tapeMap('QQQ').
     if((sym==='SPXW'||sym==='QQQ') && showingStaleBook()){
       var B=lastBookLoad(sym);
@@ -3338,6 +3630,15 @@ function velAt(k){
     // freshness: every consumer treats stale:true as "refuse to read this", which would blank the
     // very columns this mode exists to show. The honesty lives one level up — recorderBlind() stops
     // it ever being written, and the face carries a badge naming the session and the time it froze.
+    // ⚠⚠ (v15.10) REPLAY FIRST, AND IT RETURNS null RATHER THAN READING `VEL`. `VEL` is the LIVE
+    // harvest — reading it while the slider sits on 13:00 would print this evening's rate of change
+    // against a 13:00 ladder, which is the two-books-one-row error wearing a clock. A strike the
+    // frame did not store simply has no reading, and the ROC column already knows how to be empty.
+    if(typeof replayOn==='function' && replayOn()){
+      var RBv=null; try{ RBv=replayBook(lastBookGov(activeSym())); }catch(eRv){}
+      var rv=RBv&&RBv.vel?(RBv.vel[String(k)]||RBv.vel[(+k).toFixed(2)]):null;
+      return rv ? { v:rv, age:0, stale:false, lastBook:true, replay:true } : null;
+    }
     if(showingStaleBook()){
       var _gs=null; try{ _gs=lastBookGov(activeSym()); }catch(eG){}
       var B=lastBookLoad(_gs), lv=B&&B.vel?(B.vel[String(k)]||B.vel[(+k).toFixed(2)]):null;
@@ -4194,8 +4495,18 @@ function recordNodeSnapshot(sym){
         if(!rows.length) return null;
         // biggest first, capped — a day file should grow by tens of KB, not megabytes
         rows.sort(function(x,y){ return Math.abs(y[1])-Math.abs(x[1]); });
+        // ⚠⚠ (v15.10) THE CAP IS 90, WAS 40, AND THE REASON IS REPLAY. `vend` is what the replay
+        // slider rebuilds a past ladder FROM, so this cap is now the depth of every replayed book.
+        // MEASURED on 2026-08-31 13:00 with the 40-row cap: 40 rows split ~19 SPXW / ~21 SPY+QQQ,
+        // against 110-268 strikes live. The 19 reach down to 4% of King, so everything the ladder
+        // DRAWS at the P20 threshold survives — but the grey minors do not, and a replayed ladder
+        // was visibly thinner than the live one it claims to reproduce.
+        // ⚠ It cannot enrich the 18 days already recorded; those replay at whatever depth they were
+        // stored. This only deepens what is captured from here on.
+        // ⚠ Cost is bounded and small: +50 rows x 6 small ints is ~1.5 KB per frame, ~200 KB across
+        // a 131-bar session, against a day file that already runs ~6 MB.
         return { src:'skylit', f:['k','cur','d5','d15','d60','d1d'],
-                 ts:VEL_META.ts||null, n:rows.length, rows:rows.slice(0,40) };
+                 ts:VEL_META.ts||null, n:rows.length, rows:rows.slice(0,VEND_MAX_ROWS) };
       }catch(eV){ return null; } })(),
       // Provenance, machine-readable, so the nightly never has to guess which fields are ours.
       // ⚠ POLICY: a field is 'skylit'/'if' ONLY if it is the vendor's number unaltered. Anything we
@@ -6437,9 +6748,23 @@ function buildPanel(){
     borderRadius:'10px 10px 0 0', cursor:'move', display:'flex',
     justifyContent:'space-between', alignItems:'center'});
   var ttl=document.createElement('span');
+  // ⚠ (v15.10) THE VERSION SITS IN THE HEADER — operator, 2026-08-31: "put the version in the header
+  // where it says Tapereader , so i know what version it is." It was only in the footer, which is
+  // 1000px down a scrolling panel, so "which build am I actually running" meant scrolling to find out.
+  // That question is asked after EVERY install and it is the first step of diagnosing four different
+  // failure modes (PROJECT-CONSTANTS: "confirm the RUNNING version from the panel before diagnosing
+  // anything"). It reads GPTS_VERSION — the one version string — so it can never drift from the
+  // footer or the header comment.
   ttl.textContent='Tapereader';
   css(ttl,{color:PAL.ink, fontSize:'12px', fontWeight:'800', letterSpacing:'0.4px',
     borderLeft:'3px solid '+PAL.blue, paddingLeft:'7px', whiteSpace:'nowrap'});
+  var tver=document.createElement('span');
+  tver.id='gpts-hdrver';
+  tver.textContent='v'+GPTS_VERSION;
+  tver.title='The build running right now. Compare it to the @version at the raw GitHub URL: if the panel is LOWER, Tampermonkey has not fetched the update yet — click the link. Same number means you already have it.';
+  css(tver,{color:PAL.sub, fontSize:'9.5px', fontWeight:'700', letterSpacing:'0.2px',
+    marginLeft:'5px', fontFamily:'ui-monospace,monospace', whiteSpace:'nowrap'});
+  ttl.appendChild(tver);
   hdr.appendChild(ttl);
   var right=document.createElement('span');
   css(right,{display:'flex', alignItems:'center', gap:'6px'});
@@ -19554,6 +19879,53 @@ function wireBodyDelegation(){
   if(!elBody) return;
   // (re-attached each render because innerHTML is replaced). Attached with a guard flag so
   // it never stacks, and the drag handler ignores .gpts-act / .gpts-brief targets.
+  // ⚠⚠ (v15.10) THE REPLAY STRIP'S EVENTS, wired ONCE on elBody rather than on the strip itself,
+  // because render() replaces innerHTML on every tick and any handler bound to the strip would be
+  // discarded with it. Delegation is the same reason every other control here is delegated.
+  if(!elBody.__gptsRpWired){
+    elBody.__gptsRpWired=true;
+    var rpTrackOf=function(t){
+      while(t && t!==elBody){
+        if(t.getAttribute && t.getAttribute('data-grp')==='track') return t;
+        t=t.parentNode;
+      }
+      return null;
+    };
+    var rpSeekFrom=function(trk, clientX){
+      try{
+        var r=trk.getBoundingClientRect();
+        if(!(r.width>0)) return;
+        if(!REPLAY.on){ REPLAY.on=true; }        // dragging IS entering replay — no separate button
+        replaySeekPct((clientX-r.left)/r.width);
+      }catch(e){}
+    };
+    var rpDrag=null;
+    elBody.addEventListener('pointerdown', function(ev){
+      try{
+        var trk=rpTrackOf(ev.target);
+        if(!trk) return;
+        ev.preventDefault(); ev.stopPropagation();   // ⚠ or the panel's own drag-to-move takes it
+        rpDrag=trk; rpSeekFrom(trk, ev.clientX);
+      }catch(e){}
+    }, true);
+    window.addEventListener('pointermove', function(ev){
+      if(!rpDrag) return;
+      try{ rpSeekFrom(rpDrag, ev.clientX); }catch(e){}
+    });
+    window.addEventListener('pointerup', function(){ rpDrag=null; });
+    elBody.addEventListener('click', function(ev){
+      try{
+        var t=ev.target, w;
+        while(t && t!==elBody){
+          w=t.getAttribute && t.getAttribute('data-grp');
+          if(w==='prev'){ ev.stopPropagation(); replayDayStep(-1); return; }
+          if(w==='next'){ ev.stopPropagation(); replayDayStep(1); return; }
+          if(w==='exit'){ ev.stopPropagation(); replayExit(); return; }
+          t=t.parentNode;
+        }
+      }catch(e){}
+    }, true);
+  }
   if(!elBody.__gptsActWired){
     elBody.__gptsActWired=true;
     elBody.addEventListener('click', function(ev){
@@ -23368,6 +23740,39 @@ function hlNodeAt(sym, D, PTL){
 // ⚠ Falls back to the SPY proxy and SAYS WHICH IT USED in `src`: a measurement whose instrument is
 // unknown is not a measurement.
 function measureBars(sym){
+  // ⚠⚠ (v15.10) IN REPLAY THE BARS COME FROM THE FRAMES THEMSELVES, not from futBars or the chart.
+  // They have to: on a PAST day the ES courier holds only the most recent session and the chart
+  // holds today, so reading either would put TODAY'S candle under FRIDAY'S ladder — the two-sources-
+  // one-label failure this project keeps paying for. Each frame carries t, h, l and px, so the
+  // series that produced the book is also the series the ⓪a section measures. One source, one time.
+  //
+  // ⚠ THE PER-BAR OPEN IS RECONSTRUCTED, NOT RECORDED, and the face says so. A frame stores the
+  // bar's high, low and close but not its open, so `o` is taken as the PREVIOUS bar's close — true
+  // for a continuous session to within the gap between two 3-minute bars, and the first bar opens
+  // at its own close. HIGH, LOW and CLOSE are recorded values and are exact; anything derived from
+  // the OPEN (WICK%, BODY, the GREEN/RED call) inherits that approximation. `approxOpen` carries
+  // the fact to every consumer rather than leaving it to be rediscovered.
+  try{
+    // ⚠⚠ `typeof` GUARD, NOT A BARE CALL. Nine test files eval this function in isolation and do
+    // not define replayOn/REPLAY; a bare call throws ReferenceError, the catch below calls swallow()
+    // which is ALSO undefined there, and the throw escapes into hodLod's outer catch — which returns
+    // {ok:false} and reads as "the session has no bars". That is v15.08's lesson verbatim: a new
+    // dependency in a hot path must not change behaviour when it is absent.
+    if(typeof replayOn==='function' && replayOn()){
+      var RF=REPLAY.frames, out=[], i, f, prev=null;
+      for(i=0;i<=REPLAY.idx && i<RF.length;i++){
+        f=RF[i];
+        if(!f || typeof f.t!=='number' || typeof f.px!=='number') continue;
+        if(typeof f.h!=='number' || typeof f.l!=='number') continue;
+        var dd=new Date(f.t-5*3600000);
+        var so=dd.getUTCHours()*3600+dd.getUTCMinutes()*60+dd.getUTCSeconds();
+        out.push({ b:f.t, t:f.t, so:so, o:(prev==null?f.px:prev), h:f.h, l:f.l, c:f.px });
+        prev=f.px;
+      }
+      if(out.length) return { bars:out, scale:1, src:'replay', day:REPLAY.day, approxOpen:true };
+      return { bars:[], scale:1, src:'replay', day:REPLAY.day, approxOpen:true };
+    }
+  }catch(eRp){ try{ if(typeof swallow==='function') swallow('measureBars/replay', eRp); }catch(e0){} }
   try{
     if(dispIsFut()){
       var o=futBarsLoad();
@@ -23427,7 +23832,10 @@ function hodLod(sym){
     rr=MB.scale; out.scale=rr; out.isFut=dispIsFut();
     var nowSec=ctNowSecOfDay();
     // ⚠ in a REPLAY or a frozen book the wall clock is not the session clock; use the last bar.
-    var clock=(inReplay()||showingStaleBook())?lastT:Math.max(lastT, Math.min(nowSec, mul(15,3600)));
+    // ⚠ (v15.10) replayOn() joins this: the ⓪a clock must read the bar the slider is parked on, not
+    // the wall clock. Because the replay bar series is truncated at that frame, `lastT` IS that time
+    // — the truncation and the clock cannot disagree, which is why this is one condition and not two.
+    var clock=((typeof replayOn==='function'&&replayOn())||inReplay()||showingStaleBook())?lastT:Math.max(lastT, Math.min(nowSec, mul(15,3600)));
     var firstLow=(loT<hiT);
     out.ok=true; out.bars=n; out.open=op; out.clock=clock;
     out.hod=hi; out.lod=lo; out.hodT=hiT; out.lodT=loT; out.hodMs=hiMs; out.lodMs=loMs;
@@ -26002,14 +26410,21 @@ function secFrame(sym){
   // (v11.70) THE READ. Last row of the section, because it is the only element that needs everything
   // above it to exist first. It speaks on quiet states too — a flat tape is information, and a line that
   // goes blank reads as a line that broke.
+  // ---- (v15.10) THE READ IS OFF THE FACE \u2014 operator, 2026-08-31: "take out the read. I might come
+  // back to it later. The read is where it say Range day - Trinity ..."
+  //
+  // \u26a0\u26a0 THE DISPLAY WENT, THE FUNCTION DID NOT. `emRead()` is still called and still composed below
+  // in the v11.70 shape, because `test_em_band.js` \u00a730 EXECUTES it and greps the emitted sentences
+  // for forecast and instruction vocabulary \u2014 the ban that keeps this panel descriptive (DECISIONS
+  // D-7). Deleting the function would delete that guard silently, and a ban nobody executes is a
+  // comment. Same call, same composer; only the row is gone. `RD` is computed and deliberately not
+  // rendered, so restoring the line is one `h+=` away when he asks for it back.
+  // \u26a0 Its hover was the only place on the FACE stating "it is a mechanism, not a forecast" \u2014 that
+  // claim leaves with the claim it qualified, and it survives in DECISIONS D-7. Nothing else on the
+  // face makes a statement that needed it.
   if(EB.ok){
     var RD=null; try{ RD=emRead(EB, sym); }catch(eR){}
-    if(RD && RD.ok && RD.txt){
-      h+='<div class="g3read"'+g3tip('What can happen from here, and WHY \u2014 the section composed into one mechanism: where the day is, then the next level that changes how hedging behaves and what it changes to. '+
-            '\u26a0 IT IS A MECHANISM, NOT A FORECAST. It will never say likely, will, or should, it gives no probability and it names no trade \u2014 because every scorecard on this panel is still empty and gamma tells you HOW price moves, never WHICH WAY. '+
-            'Turning dollars of hedging into points of movement needs a market-impact figure no option chain contains, so the line states what the book DOES at a level and leaves the arrival to you.')+
-            '>'+g3esc(RD.txt)+'</div>';
-    }
+    void RD;
   }
   h+='</div>';
   return h;
@@ -27898,6 +28313,11 @@ function render(){
   // panel INSTEAD of the structural read. Showing confident node strengths
   // while out of sync with the tape is the failure mode that shipped on
   // 2026-08-14 - a wrong anchor presented as fact. Honest degradation instead.
+  // ⚠ (v15.10) THE REPLAY STRIP MOUNTS ONLY ON THE DASHBOARD — it is emitted here, AFTER the
+  // TESTING and ANALYSIS branches have already returned, so those two tabs are untouched. A slider
+  // over the Analysis tab would suggest it rewinds the scorecards, which it does not: those are
+  // computed over the whole recorded history and have no single moment to be parked on.
+  try{ html+=replayBarHtml(); }catch(eRPB){ swallow('replayBarHtml', eRPB); }
   var __sync = (CFG.tapeGate===false) ? {ok:true} : tapeSync('SPY');
   // (v10.47, user-directed) One-line banner instead of a blocking panel: the app must stay
   // visible (weekends / parse hiccups) so it can be inspected. Detail lives in the hover.

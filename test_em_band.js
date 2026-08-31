@@ -598,7 +598,15 @@ eval(ex('emBand'));
   ok(!/g3left/.test(f),    'and the remaining figure');
   ok(!/g3pace/.test(f),    'and the pace chip that duplicated the sentence');
   ok(!/g3replay/.test(f),  'and the replay badge, at the user request');
-  ok(/g3read/.test(f),     'the sentence remains, and is now the only prose on the section');
+  // ⚠⚠ (v15.10) THE READ ROW IS GONE — operator: "take out the read. I might come back to it later."
+  // This assertion used to be `ok(/g3read/...)`. It is INVERTED rather than deleted, because the
+  // interesting property is no longer "the sentence renders" but "the sentence stopped rendering AND
+  // the composer still runs". §30 of this file EXECUTES emRead() and greps its output for forecast
+  // and instruction vocabulary — the ban that keeps this panel descriptive (DECISIONS D-7). If the
+  // call site went away with the row, that ban would still pass while guarding nothing.
+  ok(!/g3read/.test(f),    'the read ROW is gone from the section');
+  ok(/emRead\(EB, sym\)/.test(f),
+     '...but emRead is STILL CALLED, so the forecast-vocabulary ban in section 30 still has a live composer');
   ok(/EB\.est\?'~':''/.test(f), '~EST moved onto the rail labels rather than dying in a hover');
   const tildes=(f.match(/EB\.est\?'~':''/g)||[]).length;
   ok(tildes===2, 'on both rails', tildes);
@@ -1238,8 +1246,11 @@ eval(ex('emBand'));
      'and it says which measurement it is, so the two are never read as one');
   ok(/InsiderFinance FALLBACK/.test(f),         'while the fallback hover says it is the fallback');
   // the standing caveat is identical on both branches — it is doctrine, not prose
+  // ⚠ (v15.10) WAS `caveats>=2`. The second copy lived in the READ row's hover, and it left with the
+  // row it qualified — a caveat exists to qualify a claim, and that claim is no longer on the face.
+  // What must NOT happen is the node hover losing it too, which is what this now pins.
   const caveats=(f.match(/needs a market-impact figure no option chain contains/g)||[]).length;
-  ok(caveats>=2, 'the no-distance caveat appears on BOTH branches, worded identically', caveats);
+  ok(caveats>=1, 'the no-distance caveat survives on the node hover, whose claim still stands', caveats);
 
   // SPX equivalent in the rail hovers
   ok(/index equivalent is SPX/.test(f),   'the rails quote their index equivalent');
