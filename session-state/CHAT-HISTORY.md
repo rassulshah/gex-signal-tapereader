@@ -1387,15 +1387,155 @@ The phrase is split across a string concatenation — `'NOT A '+ 'CLAIM...'`. Be
 
 ### DECISIONS
 
-_Fill in before committing: what was settled, what was corrected, what was refused._
+**⚠ Written 2026-08-31 by the following context.** The session ended before this block was filled —
+the operator's window closed, not a deliberate stop. Everything below is reconstructed from the
+transcript above, the CHANGELOG and the diff of `a1c6a88`, not from memory of the session.
+
+**The deflection geometry is FINAL (Q10 closed as a geometry question).** Approach **1.0 ATR**,
+penetration **1.5 ATR**, triggered on the **WICK**; the **CLOSE** decides deflect vs break. 1.25 ATR
+degrades the turn rate and the 2 ATR leg is a non-question — only 3% of tests reach past 1 ATR.
+79 deflections / 25 breaks over 8 sessions, calibrated 2026-08-29 (`DEFL_META`).
+
+**ONE PRICE EVENT IS ONE DEFLECTION — never one per node.** His rule, taught twice. Per-node counting
+double-counts by construction, because the band (1 ATR up + 1.5 down) is wider than the SPY strike
+spacing. He caught the regression a second time in this context: `study-rollsupport.py` had gone back
+to per-bar counting, ~120/day. **A pullback is the extreme of its own 30-minute neighbourhood** —
+a structural definition, found from PRICE ALONE so asking "was a node there" is not circular. Median
+**3 per session, range 2-5**.
+
+**THE NODE UNIVERSE IS A RANK, NOT A THRESHOLD.** His own chart header named it —
+`765.0: +88.4M  768.0: +54.7M  770.0: +52.9M` — he watches the **top few nodes by dollars**. The
+`%King >= 40` floor was the wrong instrument. All 12 of his marks sit within **0.40** of a node in
+the top 5.
+
+**⚠⚠ THE NODE SELECTS *WHERE*; THE PRICE ACTION DECIDES *WHAT*.** Node 764 on 2026-08-24 carries one
+white deflection and two red breakdowns. **Any model that scores nodes as reliable-or-not has
+mis-framed the question before it starts** — and it would look like a finding.
+
+**⓪a IS THE ANATOMY OF ONE DAILY CANDLE, open to close.** His frame, and he had to tell me: *"do you
+realize that i am taking the model of the daily bar and trying to measure the movements in it from
+open to close"*. His own numbers close to the minute — TOOK + BOP = WICK, and
+`51% + 35% + 14% = 100%`. **WICK% is not a ratio; it is where the OPEN sits in the bar.**
+
+**Q1 ANSWERED — PTWICK = PT TOOK + PT BOP**, the first-extreme shape anchored on the SECOND extreme
+exactly as WICK is anchored on the open. It was never undefinable; the anchor swap was the whole
+answer. **PT BOP and PT W.END were dropped** — em-dash most days, since price usually never returns
+to the second extreme before the close.
+
+**ENHANCE HIS LAYOUT, DO NOT REDESIGN IT.** *"how can you take my approach and just enhance that .. i
+dont want to deviate too much from what i have"* — said after a HIGH/LOW rewrite and a per-leg
+rewrite were both offered and rejected. The 10-column scheme he built over eight mockup rounds
+stands; only the mirror gaps were filled.
+
+**Then he asked for it TRANSPOSED** — three columns 1ST / 2ND / DAY, each label / actual / expected,
+1px rules between them. Transposing fixed something the row form got wrong: the E row sat UNDER the A
+row, so comparing an actual with its expected meant tracking two rows.
+
+**GREEN/RED SHIPS AS A ONE-LINE RULE, NOT A MODEL.** The opening 30-minute range breaks one way and
+price is on that side of the open: **76% right on the 80% of days it speaks, base 51%, z=8.8, n=282**,
+stable by quarter (70/77/83/75). It BEAT its own logistic (77 vs 74). Fourth occurrence of this
+project's oldest lesson.
+
+**Measured and REFUSED — do not re-propose:** the open alone predicts nothing (gap AUC 0.479,
+open-in-ON-range 0.496, IB30 size 0.502, day of week 0.447); **the prior day's colour is AUC 0.500,
+an exact coin flip**; the weekly open is real (0.585) but adds NOTHING on top and costs a quarter of
+the days; prior-day POC/VAH/VAL predict neither direction nor range nor S/R, and on two tests the
+distance-matched **SHAM beat the real level** (logged gx-009, CLOSED NEGATIVE).
+
+**THE GAMMA REGIME FIELD IS WORTHLESS AND IS NOW `null`.** `neg:false` was **hardcoded** on the
+trinity read path, so all 284 snapshots across 9 sessions say "positive gamma" because that line says
+so. Corrected to null rather than a derived guess — the Trinity pane does not expose the sign, so
+there is nothing honest to derive it from. **The better signal was already there:** price vs the FLIP
+varies 40/60 and is continuous (gx-010/gx-011).
+
+**THE PANEL IS PINNED TO THE SPX BOOK BY DEFAULT** (`CFG.mkt`, Settings -> Market: SPX/SPY · QQQ ·
+Auto). Everything measured in this project stands on that book. **And a silent pin would be worse
+than no pin** — when it disagrees with the chart the face says `◉ SPY book (chart: QQQ)`.
+
+**MEASUREMENT COMES FROM ES; STRUCTURE COMES FROM THE BOOKS THAT HAVE ONE.** *"its the es that i am
+trading but using spxw nodes"* / *"we are using other markets to get things like their kings because
+ES doesn't have its own book"*. **Verified against Atlas BEFORE building and it changed the argument:**
+Atlas draws each book in its own native scale, unconverted — ES 7722.50, SPX 7711.76 (**ten points
+apart**), SPY 769.35 (**10.04x away**). That is why his pairing works and why SPY does not belong in
+the measurement path.
+
+**A LADDER MUST NEVER DRAW ACROSS TWO PRICE SCALES — AND MUST NEVER HIDE REAL DATA TO AVOID IT.**
+v15.04 hid the ladder and he was right to be angry: *"the requirement was to see fridays informaiton
+... and you just removed everything from the display"*. Those rows WERE Friday's book. The fault was
+`emRailBounds` widening the frame to hold every pile including off-scale ones; an off-scale pile is
+now **SKIPPED, not clamped** (clamping stacks it invisibly at the edge).
+
+**THE ROLL ARROWS RETURN, STEPPED AND ORTHOGONAL** — dot at the source, out, across, back in with the
+head, nesting so neighbouring rolls cannot cross. **Live flows, latched sits still**: the moving
+dashes CLAIM live flow, so they key strictly off `r.live`. Reuses the panel's existing `g3ldflow`
+keyframes rather than a second animation. Two caveats carried verbatim: **a roll is INFERRED, never
+observed**, and **the arrows record what moved, not a claim the gaining node will hold**.
+
+**LAD_W 618 -> 640, ARGUED IN THE OPEN.** `test_ladder` w1b forbids the build getting wider, and it
+fired on exactly the change it was written for. The lane was squeezed 44 -> 20px to land on the cap,
+w1b was amended ONCE with the reason written into the assertion, and the amendment carries the next
+argument: *"640 IS NOW THE CAP. The next column that wants width argues for it here, in these words."*
 
 ### SHIPPED
 
-_Version + what actually changed, or "no code shipped"._
+**Panel v14.98 -> v15.09. Companion v1.16 throughout, unchanged.** All of it reached GitHub in
+`a1c6a88`, pushed by the operator.
+
+    v14.98  the candle narrow as he drew it - stacked labels, MUD and money in the body (150 -> 76px)
+    v14.99  reversal levels at the wick tips (option E); the shape spine returns; IB excluded BY NAME
+    v15.00  the king AT THE TIME of each extreme (HodN/LodN were structurally impossible before);
+            ONH/ONL from the courier's bars; the prior-day volume profile as a RECORD, no percentage
+    v15.01  the reversal band is asymmetric like the deflection geometry; candle layout to his spec
+    v15.02  every governing book latches, so QQQ has one; SLvl/TLvl drop IB and overflow to the E row
+    v15.03  the empty ladder names the missing book instead of rendering blank
+    v15.04  the ladder refuses to draw across two price scales  ⚠ WRONG CALL, reverted at v15.05
+    v15.05  reject off-scale piles in the rail frame; the hide-guard is gone
+    v15.06  the panel is pinned to the SPX book; the candle's label columns stop colliding
+    v15.07  ⓪a turned vertical - three columns, derived candle height, EFF and BODY
+    v15.08  measure ES bars directly (`measureBars`), structure still from the books that have one
+    v15.09  the roll arrows return; the pullback unit corrected from ~120/day to ~3
+
+Also shipped, not in the panel: `tools/study-pullback.py`, `tools/study-greenred.py`,
+`tools/study-rollsupport.py`, the nightly harness under `tools/nightly/` with its **pre-registered
+hypothesis bank** (8 hypotheses locked BEFORE the data to test them exists), `subset_null()` — the
+control that killed four false PROVISIONALs and re-judged gx-008 — and `test_measure.js`.
 
 ### OPEN AT CLOSE
 
-_What the next context must pick up. Cross-check `LOCKED-ITEMS.md`._
+⚠ **The three items the operator himself last named are Q11, the storage fix, and DEFLECT_ZONE.**
+
+1. **Q11 — the ex-ante deflect/break discriminator. The only question that matters now.** Detection is
+   finished; prediction is not. The touch itself has NO edge: deflect and break are mirror images
+   (+0.92/+0.26 vs +0.29/+0.86) and **56% break**, so they cancel to t~0 (t=+0.41 top-5, t=-0.32
+   kings). Candidates, untested: which book's king it is, whether the node is gaining or shedding
+   mass into the touch, approach velocity, time of day, whether an earlier test held.
+2. **THE RECORDER SHEDS THE MORNING — the current blocker on every gamma question.**
+   ⚠ **Corrected 2026-08-31, and the correction is the lesson:** this item first read "the F-10
+   storage fix is still unbuilt", copied from `LOCKED-ITEMS.md`. **It has been built since
+   v14.68/v14.76** — `lsPut`, `LS_BUDGET_KB`, `LS_HEALTH`, `__gptsDebug.storage`, `test_storage.js`
+   green. A parked patch against a **v14.67** base in `session-state/pending/` is what kept the ledger
+   saying otherwise. **A patch file is evidence of an intention, never of a state.**
+
+   The real fault, measured on `data/2026-08-31.json`: snapshots span **08:30–15:00 CT**, feature
+   records span **13:36–15:00** — the newest 29 bars of 131. The budget is **3600 KB** against a
+   **~6 MB** session, so the shedder trims today oldest-first as designed and the close-time export
+   keeps only what survived. **The ⓪a NOT-IN call fires at a median 08:40 and GREEN/RED at 09:03 —
+   neither is ever in the record meant to score them.** `LS_HEALTH` counts the shedding and
+   `buildDayExport` exports none of it, so nothing says it happened. See FINDINGS **F-10b**.
+   ⚠ Do NOT build it during a live session — it touches the recorder's write path.
+3. **`DEFLECT_ZONE` IS STILL 0.50, FIXED AND SYMMETRIC, IN 22 PLACES.** The finalised ATR geometry
+   (`DEFL_NEAR`/`DEFL_THRU`) governs ONLY `hlNodeAt` and its hover. The panel's live `deflectionAt`,
+   the in-play band, the ledger touch zone, king taps and the invalidation levels all still use the
+   old fixed band. **That is a deliberate, separately-tested change, not a one-line swap.**
+4. **Q3 (his) — sweep levels, plural: show the furthest, or all of them?** Two land on the A row and
+   the rest overflow to the E row today; he has not confirmed it.
+5. **Q4 (his) — what is the "nd" contract?** `test_futbars` f26 fails the build if ND appears before
+   he says. One row in `FUT_MARKETS`.
+6. ITEM 18 Tier 1/2 and the **2026-09-16** backfill deadline, untouched. The ladder is 640px in a
+   560px panel — it scrolls, and the width is still his call.
+
+⚠ **Q2 (does the TREND section earn its space) was ANSWERED BY REMOVAL at v14.90** — it is off the
+face. `OPEN-QUESTIONS.md` still lists it as blocked on him; that entry is stale.
 
 ### COMMITS THIS CONTEXT
 

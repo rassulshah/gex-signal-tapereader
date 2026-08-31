@@ -73,7 +73,15 @@ any charting package could compute.
 ⚠⚠ **BLOCKED by the feature-record collapse** (below) — there is no usable recorded history pairing
 node state with session extremes. Unblocking that is the prerequisite, not a side quest.
 
-### ⚠⚠ STORAGE QUOTA — THE ROOT CAUSE, FOUND 2026-08-28, FIX NOT BUILT
+### ✅ STORAGE QUOTA — THE ROOT CAUSE, FOUND 2026-08-28. **FIX BUILT v14.68/v14.76.**
+**⚠⚠ THIS ENTRY SAID "FIX NOT BUILT" UNTIL 2026-08-31 AND THAT WAS FALSE.** `lsPut`, `LS_CAP_KB`,
+`LS_BUDGET_KB`, `LS_HEALTH`, `lsTotalKB` and `__gptsDebug.storage` are all in the shipped panel, and
+`test_storage.js` is a live green test. What kept the entry looking open is
+`session-state/pending/v14.68-bounded-writes.patch` — a parked patch against a **v14.67** base that
+no longer applies, because the work it describes landed 42 versions ago. **A parked patch is not
+evidence that its work is unbuilt.** Kept, not deleted, with this note on it.
+
+**WHAT IS ACTUALLY OPEN IS A DIFFERENT PROBLEM — see the entry below.**
 **localStorage was FULL at exactly 10 MB** (`gpts_recorder_v7` 5,957 KB for ONE day +
 `gpts_nodeevents_v1` 3,228 KB). Every `setItem` in the system was throwing behind `catch(e){}`.
 **This IS the feature-record collapse** — and the corpus tap, the base-rate courier and the 8.5-hour
@@ -83,15 +91,35 @@ Cleared by hand on the live panel 2026-08-28 (9.5 MB freed; 08-27 was already ex
 with MORE snapshots than storage held, so nothing was lost). **Everything came alive instantly**:
 ES/NQ/GC/CL 1,905–1,916 bars each, base rates delivered, IF chain live.
 
-⚠⚠ **IT WILL REFILL WITHIN ONE SESSION — 6 MB per day is the measured rate.** The fix is code:
-1. Bound `gpts_recorder_v7` and `gpts_nodeevents_v1` by BYTES, shedding oldest-first until it fits.
-   `NEV_MAX=4000` caps events, not bytes; `nevSave()` has no size cap at all.
-2. `recorderSave()`'s quota fallback drops the oldest NON-today day — useless when today is the only
-   day and is itself 6 MB. It needs to shed within today.
-3. **Make a quota failure LOUD** — through `swallow()` into `__gptsDebug.renderErrors()`, and onto
-   the face. A pipeline that cannot write must say so.
-4. Prune days already exported; `gpts_last_export` already knows which are safe.
-5. `__gptsDebug.storage()` — total, top keys, headroom.
+All five parts of the original spec SHIPPED: bytes not counts (`lsPut` against `LS_BUDGET_KB`),
+shedding within today oldest-first, a LOUD failure through `swallow()` into `renderErrors()` plus
+`LS_HEALTH`, day pruning, and `__gptsDebug.storage()`.
+
+### ⚠⚠ THE SUCCESSOR PROBLEM — THE BUDGET IS SMALLER THAN A SESSION, AND THE MORNING IS SHED
+**MEASURED 2026-08-31 on that day's own file, and it is the current blocker on every gamma question.**
+
+    snapshots      131      08:30 -> 15:00 CT     the whole session
+    feature records 1370     13:36 -> 15:00 CT     29 distinct bars, ALL 48 feature keys
+    digest verdict  COLLAPSED, 22% bar coverage
+
+**The records are not missing at random — they are the NEWEST 29 bars.** That is the signature of
+`recorderSave()`'s shedder working exactly as designed: it trims today oldest-first, 25% of `feat`
+per pass, until the payload fits `LS_BUDGET_KB['gpts_recorder_v7'] = 3600 KB`. A session measures
+**~6 MB**. So the budget cannot hold a day, the export runs at the close — *after* the shedding — and
+every day file now systematically keeps only the last ~90 minutes.
+
+⚠⚠ **THE HOURS BEING THROWN AWAY ARE THE ONES THE MODELS LIVE IN.** The ⓪a NOT-IN call fires at a
+median of **08:40** and GREEN/RED at **09:03**. Neither is ever in the record that scores them.
+
+⚠ **AND NOTHING IN THE DAY FILE SAYS IT HAPPENED.** `LS_HEALTH` counts `shed`, `quotaHits` and
+`lastErr`, and `buildDayExport` does not carry any of it — grep the file for `lsHealth`/`shed`:
+zero hits. **The silent write failure became silent shedding.** Exporting `LS_HEALTH` is the cheapest
+next step and it is what would settle mechanism vs. hypothesis: right now "the shedder did it" is a
+strong inference from the timestamps, not a measurement.
+
+⚠ Do NOT simply raise the budget to 6 MB — that walks back toward the 10 MB cap this whole entry
+exists to respect. The candidates worth weighing are shedding to IndexedDB rather than dropping,
+exporting intraday rather than at the close, or recording features more cheaply.
 ⚠ **Do NOT build this during a live session** — it touches the recorder's write path.
 
 ### ⚠ THE FEATURE-RECORD COLLAPSE — ROOT CAUSE FOUND (see above); the v14.67 instrument was aimed wrong

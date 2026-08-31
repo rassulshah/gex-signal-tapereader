@@ -513,12 +513,41 @@ could not work here — the recorder held **only** today, so there was no victim
 `catch(e){}`, so the panel kept drawing, the recorder kept "recording", and nothing said the disk was
 full. **Failure pattern #5 — a swallowed error is invisible — in the storage layer.**
 
-### The fix (NOT YET BUILT — see LOCKED-ITEMS)
-Bound both keys by BYTES, shed oldest-first until the payload fits; route quota failures through
-`swallow()` so they reach `__gptsDebug.renderErrors()`; prune days already exported (`gpts_last_export`
-knew 08-27 was safe); and add `__gptsDebug.storage()` reporting total, top keys and headroom.
+### The fix — **BUILT v14.68/v14.76** (this section said "NOT YET BUILT" until 2026-08-31)
+Both keys are bounded by BYTES through `lsPut` against `LS_BUDGET_KB`; `recorderSave()` sheds today
+oldest-first; quota failures go through `swallow()` into `__gptsDebug.renderErrors()` and are counted
+in `LS_HEALTH`; days already exported are pruned; `__gptsDebug.storage()` exists. `test_storage.js`
+executes `lsPut` against a fake storage with a real quota and is green.
 
-⚠ **IT WILL REFILL WITHIN ONE SESSION.** Six MB from a single day is the measured rate.
+⚠ A **parked patch** (`session-state/pending/v14.68-bounded-writes.patch`, base v14.67) is what kept
+this reading as unbuilt in `LOCKED-ITEMS.md` for 42 versions. **A patch file is evidence of an
+intention, never of a state.**
+
+### ⚠⚠ F-10b · THE FIX WORKS AND THE BUDGET DOES NOT — THE MORNING IS SHED, SILENTLY
+**Status: CONFIRMED** (measured on the day file itself) · 2026-08-31
+
+    data/2026-08-31.json    snapshots       131    08:30 -> 15:00 CT   the whole session
+                            feature records 1370   13:36 -> 15:00 CT   the NEWEST 29 bars, all 48 keys
+                            day-digest verdict     COLLAPSED, 22% bar coverage
+
+`LS_BUDGET_KB['gpts_recorder_v7']` is **3600 KB**. A session measures **~6 MB** — the rate recorded in
+F-10 above. So the shedder trims today oldest-first exactly as designed, the export runs at the close
+**after** the shedding, and every day file now systematically retains only the last ~90 minutes.
+
+⚠⚠ **THE DISCARDED HOURS ARE THE ONES THE MODELS LIVE IN.** The ⓪a NOT-IN call fires at a median
+**08:40** (F-11) and the GREEN/RED call at **09:03** (`GD_META`). Neither is ever present in the
+record that is supposed to forward-score it. **Every "it will be scored nightly" claim in this
+codebase is again describing a loop that cannot close** — the same sentence F-9 had to write, one
+layer down.
+
+⚠ **AND THE DAY FILE CANNOT SAY SO.** `LS_HEALTH` counts `shed`, `quotaHits` and `lastErr`;
+`buildDayExport` carries none of them (zero hits for `lsHealth`/`shed`/`quota` in the file).
+**The silent write failure became silent shedding.** Exporting `LS_HEALTH` is the cheapest next step
+and the one that turns the inference above — drawn from timestamps — into a measurement.
+
+⚠ Do NOT simply raise the budget: it exists to respect a 10,240 KB cap that was measured full. The
+candidates are shedding to IndexedDB instead of dropping, exporting intraday rather than at the
+close, or recording features more cheaply.
 
 ---
 
