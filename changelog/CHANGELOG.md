@@ -1,3 +1,62 @@
+## v15.11 — replay reads the frame for the crowns and the accumulation, not today's tape
+
+> "this doesn't look right. the levels the king lanes the gamma profile, the status's etc. all
+> missing" · "can you make it exactly like it would be live, including arrows, gamma profile,
+> status, king lanes, the 3 kings, nodes etc.."
+
+**Nothing was broken — the panel was parked in replay at 13:33.** But measured on his panel, same
+instant, the replayed face was far thinner than the live one it claims to reproduce:
+
+    ladder node bars   1 vs 4      king pills   2 vs 5
+    ROC values        14 vs 26     states   {SPENT} vs {BUILDING, SPENT}
+
+### ⚠⚠ AND ONE OF THOSE WAS NOT THINNESS, IT WAS MISLABELLING
+
+`ladderKings()` reads the SPXW crown out of a latch keyed to `ctTodayStr()`, and the SPY and QQQ
+crowns out of `LASTFEED` — **all three of which are TODAY**. Replayed onto a past day that draws
+today's kings over Friday's ladder. Not missing data: **mislabelled data**, which is the failure this
+project cannot detect after the fact (D-10). Every crown IS recorded — `tri.{SPXW,SPY,QQQ}.king`,
+plus `xm.QQQ.px` for QQQ's proportional bearing — so all three now come from the frame, and the
+branch **returns** rather than falling through and appending today's as well.
+
+### THE ACCUMULATION LAYER REPLAYS THROUGH ONE SEAM
+
+The plan after v15.10 was to derive the state column from `d60` — a rule the panel does use in one
+place. **That would have been a DIFFERENT rule wearing the same words**, which is mislabelling again.
+
+`rawAccumMap()` builds every node's abs-sequence from `slicesFor(sym)`, and BUILDING / STEADY /
+FADING, the day peak and the DEFENDING / ABANDONING marks all fall out of that sequence. A frame's
+`vend.rows` carries `cur` per strike, and **a run of frames IS that sequence** — so `slicesFor()`
+synthesises slices in the live shape `{t, l:[{k,v,d,net}]}` and the real function runs unchanged,
+with the real thresholds, returning the label it would have returned live.
+
+⚠ One book per ladder: rows are filtered by `replayBookOf()` before they enter a slice, so no SPY
+strike can leak into an SPXW sequence.
+⚠ The window follows the handle — `ACC_WINDOW` frames back from the parked one, so dragging back
+shortens the history rather than showing a node the future of its own sequence.
+
+### what still cannot replay, stated rather than approximated
+
+- **THE ROLL ARROWS.** `rollLatched()` reads `ROLL_LATCH`, a stateful accumulator built during RTH
+  with count and dwell semantics; it is not in a frame and is not derivable in one pass. Replaying
+  it means re-running the latch over the frame sequence — its own build.
+- **THE GAMMA PROFILE.** It is not on the LIVE face either: removed at v14.81 at his own request
+  ("just remove it"). "Exactly like live" means it stays absent unless he asks for it back.
+
+### testing
+
+`test_replay.js` is now **97 assertions**. ⚠ **Two of the new ones were fake and mutation caught
+both** — `k4`/`k5` grepped the source for `RTri.SPY.king` and `RXm.QQQ.px`, so gating a crown off
+with `if(false && …)` left them green, and turning QQQ from a bearing into a raw level left
+`RXm.QQQ.px` sitting in a tip string. **Sixth occurrence of "a grep cannot tell a live branch from a
+dead one."** `ladderKings` is now EXECUTED and the returned crowns are checked by book, by raw
+strike and by converted position — which then caught two further mutations that dropped the scale
+conversion.
+
+⚠ `val('ACC_WINDOW')` hit the trailing-comment landmine PROJECT-CONSTANTS records beside L-K; the
+test reads that constant with a dedicated numeric regex rather than editing a long-standing
+declaration to suit a test.
+
 ## v15.10 — the replay slider: drag the panel back to any bar in the session
 
 > "i wanted a slider that i could slide to see how the app looked earlier on in the day" ·

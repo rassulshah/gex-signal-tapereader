@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.10
+// @version    15.11
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -641,7 +641,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.10';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.11';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -1628,6 +1628,41 @@ function stashSlice(sym, j){
 }
 
 function slicesFor(sym){
+  // ⚠⚠ (v15.11) THIS ONE FUNCTION IS THE SEAM FOR THE WHOLE ACCUMULATION LAYER. `rawAccumMap`
+  // builds every node's abs-sequence from these slices, and BUILDING / STEADY / FADING, the day
+  // peak and the DEFENDING / ABANDONING marks all fall out of that sequence. So replay does not
+  // need a second state rule — and must not have one. It needs the SAME rule fed a sequence
+  // rebuilt from the recorded frames.
+  //
+  // ⚠ WHY THIS BEATS THE OBVIOUS ALTERNATIVE. The panel already derives a label from `d60` in one
+  // place (`v.d60>0?'Building':...`), and v15.10 was going to ship that as replay's state column.
+  // It would have been a DIFFERENT rule from the live one wearing the same words — mislabelling,
+  // the failure this project keeps paying for. A frame's `vend.rows` carries `cur` per strike, and
+  // a run of frames IS the sequence `rawAccumMap` wants, so the real function can be fed real
+  // history and returns the label it would have returned live.
+  //
+  // ⚠ The shape is the live slice shape exactly — {t, l:[{k, v, d, net}]} — because rawAccumMap
+  // reads `n.v` for magnitude and `n.d` for polarity. `d` is taken from the SIGN of the recorded
+  // dollar value, which is the same convention the live feed uses.
+  try{
+    if(typeof replayOn==='function' && replayOn()){
+      var out=[], i, j, f, rows, l, r;
+      var lo=Math.max(0, REPLAY.idx-(ACC_WINDOW||60)+1);
+      for(i=lo;i<=REPLAY.idx && i<REPLAY.frames.length;i++){
+        f=REPLAY.frames[i]; rows=(f&&f.vend&&f.vend.rows)||[];
+        if(!rows.length) continue;
+        l=[];
+        for(j=0;j<rows.length;j++){
+          r=rows[j];
+          if(!r || !(r[0]>0) || typeof r[1]!=='number') continue;
+          if(replayBookOf(r[0], f.tri||{})!==sym) continue;   // one book per ladder, always
+          l.push({ k:r[0], v:Math.abs(r[1]), d:(r[1]>=0?1:-1), net:r[1] });
+        }
+        if(l.length) out.push({ t:f.t, l:l });
+      }
+      return out;
+    }
+  }catch(eRs){ try{ if(typeof swallow==='function') swallow('slicesFor/replay', eRs); }catch(e0){} }
   try{
     var raw=localStorage.getItem(SLICE_KEY); if(!raw) return [];
     var o=JSON.parse(raw); if(!o || o.date!==TODAY) return [];
@@ -24472,6 +24507,30 @@ function ladderKings(EB, sym){
   var out=[];
   try{
     var now=(typeof EB.nowLive==='number')?EB.nowLive:EB.now;
+    // ⚠⚠ (v15.11) IN REPLAY ALL THREE CROWNS COME FROM THE FRAME, AND v15.10 GOT THIS WRONG.
+    // The live path reads the SPXW crown out of KING_LATCH_KEY keyed to ctTodayStr(), and the SPY
+    // and QQQ crowns out of LASTFEED — all three of which are TODAY. Replayed onto Friday that
+    // drew today's kings over Friday's ladder: not missing data, MISLABELLED data, which is the one
+    // failure mode this project cannot detect after the fact (D-10, and the reason the operator saw
+    // "the king lanes missing" — they were being freshness-gated away rather than reconstructed).
+    // Every crown IS recorded: tri.{SPXW,SPY,QQQ}.king, and xm.QQQ.px for QQQ's proportional bearing.
+    if(typeof replayOn==='function' && replayOn()){
+      var RKF=replayFrame(), RTri=(RKF&&RKF.tri)||{}, RXm=(RKF&&RKF.xm)||{};
+      var rdsc=0; try{ rdsc=ifDispScale()||0; }catch(eRD){}
+      if(RTri.SPXW && RTri.SPXW.king>0 && rdsc>0)
+        out.push({ at:RTri.SPXW.king*rdsc, book:'SPXW', raw:RTri.SPXW.king, kind:'basis',
+          tip:'The SPXW King as it stood at '+hlClock(replaySec())+' — read from the frame recorded at that bar, not from today’s latch.' });
+      if(RTri.SPY && RTri.SPY.king>0 && typeof EB.scaleUsed==='number' && EB.scaleUsed>0)
+        out.push({ at:RTri.SPY.king*EB.scaleUsed, book:'SPY', raw:RTri.SPY.king, kind:'basis',
+          tip:'The SPY King as it stood at '+hlClock(replaySec())+', converted on the same ratio the rail uses.' });
+      // ⚠ QQQ stays a PROPORTIONAL BEARING here exactly as it is live — its own king against its own
+      // price, never a converted level. The frame stores that price in xm.QQQ.px, so the bearing is
+      // reconstructed from the same two numbers the live path uses rather than from today's tape.
+      if(RTri.QQQ && RTri.QQQ.king>0 && RXm.QQQ && RXm.QQQ.px>0 && now>0)
+        out.push({ at:now*(RTri.QQQ.king/RXm.QQQ.px), book:'QQQ', raw:RTri.QQQ.king, kind:'proportional',
+          tip:'The QQQ King at '+hlClock(replaySec())+' — a proportional BEARING off QQQ’s own price ('+RXm.QQQ.px+'), never a converted price, exactly as it is drawn live.' });
+      return out;
+    }
     // SPXW — the latched crown, the same one the profile and the read name
     try{
       var lk=null; try{ var o=JSON.parse(localStorage.getItem(KING_LATCH_KEY)||'null');

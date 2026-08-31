@@ -131,6 +131,44 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.11 · 2026-08-31 · **I SHIPPED A REPLAY THAT DREW TODAY'S KINGS ON A PAST DAY**
+
+He dragged the new slider to 13:33 and said the king lanes, statuses and nodes were missing. Nothing
+was broken — the panel was in replay — but the measurement was damning: **1 ladder node bar against
+4 live, 2 king pills against 5, 14 ROC values against 26.**
+
+⚠⚠ **AND ONE OF THOSE WAS NOT THINNESS.** `ladderKings()` reads the SPXW crown from a latch keyed to
+`ctTodayStr()` and the SPY/QQQ crowns from `LASTFEED`. **All three are TODAY.** On a replayed past
+day that silently draws today's crowns over Friday's ladder — mislabelled, not missing, which is the
+one class this project cannot detect afterwards. **I wired the book through `tapeMap` and assumed
+everything downstream followed. It does not: several consumers reach around it to live stores.**
+The check I should have run before shipping is mechanical — grep the render path for `LASTFEED`,
+`ctTodayStr` and the latch keys, and ask of each whether replay has an answer for it.
+
+⚠⚠ **THE FIX I WAS ABOUT TO SHIP WOULD HAVE BEEN A SECOND STATE RULE WEARING THE SAME WORDS.** I had
+agreed to derive BUILDING/FADING from `d60`. The panel's real rule is `rawAccumMap`, which reads a
+node's abs-sequence out of `slicesFor()` — and a run of frames IS that sequence. **Feeding the real
+function real history beats reproducing its vocabulary with a proxy**, and it cost less code. When a
+feature needs "the same thing but from another source", look for the SEAM the original reads through
+before writing a parallel rule.
+
+⚠ **TWO MORE FAKE ASSERTIONS, SAME FAMILY, CAUGHT ONLY BY MUTATION.** `k4` grepped for
+`RTri.SPY.king` — so `if(false && RTri.SPY.king…)` stayed green. `k5` grepped for `RXm.QQQ.px` — and
+turning QQQ from a proportional bearing into a raw level left that token sitting in a tip string.
+**Sixth occurrence of "a grep cannot tell a live branch from a dead one."** Executing `ladderKings`
+and checking the returned crowns then caught two further mutations that dropped the scale conversion
+entirely — a crown drawn at its raw strike sits ~18 points off on an ES rail.
+
+⚠ `val('ACC_WINDOW')` returned garbage because that declaration carries a trailing comment — the
+landmine PROJECT-CONSTANTS records next to L-K, hit from the test side this time. The test got its
+own numeric reader rather than the declaration being edited to suit it.
+
+⚠ **AND HE NAMED SOMETHING THAT IS NOT IN LIVE EITHER.** "make it exactly like live, including …
+gamma profile" — the gamma profile was REMOVED from the face at v14.81 at his own request. Exactly
+like live means it stays absent. **When a request lists something the baseline does not have, say so
+instead of building it**; the alternative is reinstating a feature he cut, under cover of a different
+request.
+
 ### v15.10 · 2026-08-31 · **THE FEATURE WAS ALREADY HALF-BUILT AND I ALMOST WROTE A SECOND ONE**
 
 He asked for a replay slider. My first instinct was to size a new renderer: something that reads the
@@ -172,6 +210,20 @@ whole current entry for the generator's placeholder text — and the entry conta
 a reply that QUOTED the placeholder made a correctly-filled file go red. Scoped to the section body.
 **Ninth occurrence of the comment-contains-the-token family, arriving one level up: the RECORD is now
 big enough to contain the strings its own guards look for.**
+
+⚠⚠ **AND THE SAVE ITSELF WAS INCOMPLETE UNTIL HE ASKED.** I shipped the build, wrote CHANGELOG,
+LESSONS, CHAT-HISTORY and the resume note, and printed ✅ SAVE DONE — and **skipped
+`OPEN-QUESTIONS.md`, which is on the mustBeCurrent list**, on a day that produced real material for
+it: his six circled deflections, 5 of 6 caught, and a structural miss. Worse, **Q2 had been answered
+BY A BUILD eleven versions earlier** (TREND left the face at v14.90) and the entry never closed,
+because nothing links "a build removed this" to "the question about it is settled".
+**A checklist item that is usually a no-op is the one that gets skipped when it isn't.** The fix is
+to read the list, not to remember it — and to check this file against the FACE every build.
+
+⚠ **A REVERTED `v10.js` MADE THREE SAVE GUARDS REPORT FAILURE ON A CORRECT BUILD** — the harness copy
+had been restored to the tracked v11.48 artefact to keep the tree clean, so every version-keyed test
+compared against v11.48. **This is v15.09c's own lesson, hit again in the same session that wrote
+it.** Regenerate before believing any version-keyed result.
 
 ⚠ **HE REJECTED THE MOCKUP FORMAT BEFORE THE DESIGN.** An artifact page of six states came back as
 "i'm not interested in a replay card" — the trimmed face I drew to fit six panels side by side read

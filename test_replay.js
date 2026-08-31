@@ -275,5 +275,95 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
   ok(/rows\.slice\(0,VEND_MAX_ROWS\)/.test(src), 'v6 ...and the recorder actually uses the constant, not a literal');
 }
 
+// ---- 12 · (v15.11) THE FACE MUST REPLAY AS RICHLY AS IT LIVES -----------------------------------
+// He installed v15.10, dragged to 13:33, and reported "the levels the king lanes the gamma profile,
+// the status's etc. all missing". Measured on his panel, same instant, replay vs live:
+//     ladder node bars 1 vs 4 · king pills 2 vs 5 · ROC values 14 vs 26 · states {SPENT} vs {BUILDING,SPENT}
+// Nothing was broken — replay was simply far thinner than the live face it claims to reproduce.
+{
+  // ⚠ NOT val() — that helper reads up to the first `;` FOLLOWED BY A NEWLINE, and ACC_WINDOW
+  // carries a trailing comment, which is the exact landmine PROJECT-CONSTANTS records next to L-K.
+  // A dedicated numeric read, rather than editing a long-standing declaration to suit a test.
+  const num=n=>{ const m=new RegExp('var\\s+'+n+'\\s*=\\s*(-?[0-9.]+)').exec(src); return m?parseFloat(m[1]):undefined; };
+  global.ACC_WINDOW=num('ACC_WINDOW');
+  ok(global.ACC_WINDOW>0, 'a0 ACC_WINDOW is readable — the replay window is the LIVE window', global.ACC_WINDOW); global.SLICE_KEY='gpts_slices_v7'; global.TODAY='2026-08-31';
+  global.localStorage={ getItem:()=>null };
+  eval(ex('slicesFor'));
+  REPLAY.on=true; REPLAY.frames=FR; REPLAY.idx=2; REPLAY.day='2026-08-31';
+
+  // ⚠⚠ THE ACCUMULATION LAYER IS FED THE REAL SEQUENCE, NOT A PROXY LABEL. rawAccumMap builds every
+  // node's abs-sequence from slicesFor(), and BUILDING/STEADY/FADING, the day peak and the
+  // DEFENDING/ABANDONING marks all fall out of it. Replay must not carry a SECOND state rule wearing
+  // the same words — that is mislabelling, the failure this project keeps paying for.
+  const sl=slicesFor('SPXW');
+  ok(sl.length>0, 'a1 replay synthesises slices, so the LIVE accumulation rule can run unchanged', sl.length);
+  ok(sl.length===3, 'a2 one slice per frame up to the parked one', sl.length);
+  ok(sl.every(x=>Array.isArray(x.l) && x.l.length>0), 'a3 every slice carries rows');
+  ok(sl.every(x=>x.l.every(n=>typeof n.k==='number' && typeof n.v==='number' && (n.d===1||n.d===-1))),
+     'a4 ...in the LIVE slice shape {k,v,d,net} — rawAccumMap reads n.v and n.d by name');
+  ok(sl[0].l.every(n=>n.v>=0), 'a5 v is a MAGNITUDE, as the live feed supplies it');
+  ok(sl[0].l.some(n=>n.d===-1), 'a6 ...and polarity survives in d, taken from the recorded sign');
+  ok(sl.every(x=>x.l.every(n=>n.k>1000)), 'a7 one book per ladder — no SPY strike leaks into the SPXW slices');
+  {
+    const q=slicesFor('QQQ');
+    ok(q.length>0 && q.every(x=>x.l.every(n=>n.k<1000 && n.k>600)), 'a8 ...and the QQQ slices carry only QQQ', q.length);
+  }
+  // a sequence is only a sequence if it MOVES with the handle
+  REPLAY.idx=0;
+  ok(slicesFor('SPXW').length===1, 'a9 dragging back shortens the sequence — history it has not seen yet');
+  REPLAY.idx=2;
+  // ⚠ THE SOURCE MUST BE THE FRAMES, NOT localStorage: on a PAST day the live slice store holds
+  // today, and TODAY's accumulation under Friday's ladder is the mislabelling this exists to avoid.
+  const slSrc=decomment(ex('slicesFor'));
+  const rIdx=slSrc.indexOf('REPLAY.frames'), lsIdx=slSrc.indexOf('localStorage');
+  ok(rIdx>-1 && lsIdx>-1 && rIdx<lsIdx, 'a10 the replay branch is reached BEFORE the localStorage one');
+}
+
+// ---- 13 · (v15.11) ALL THREE CROWNS COME FROM THE FRAME ----------------------------------------
+// ⚠⚠ v15.10 DREW TODAY'S KINGS ON A REPLAYED PAST DAY. ladderKings reads the SPXW crown from a latch
+// keyed to ctTodayStr() and the SPY/QQQ crowns from LASTFEED — all three live. On Friday that is not
+// missing data, it is MISLABELLED data. Every crown is recorded: tri.{SPXW,SPY,QQQ}.king, plus
+// xm.QQQ.px for QQQ's proportional bearing.
+{
+  const lk=decomment(ex('ladderKings'));
+  ok(/replayOn\(\)/.test(lk), 'k1 ladderKings knows about replay at all');
+  const rIdx=lk.indexOf('replayOn'), latchIdx=lk.indexOf('KING_LATCH_KEY'), feedIdx=lk.indexOf('LASTFEED');
+  ok(rIdx>-1 && latchIdx>rIdx, 'k2 ...and the replay branch precedes TODAY\'s SPXW latch');
+  ok(rIdx>-1 && feedIdx>rIdx, 'k3 ...and precedes the LIVE feed the SPY and QQQ crowns come from');
+  // ⚠⚠ k4/k5 WERE SOURCE GREPS AND BOTH SURVIVED MUTATION. Gating a crown off with `if(false && ...)`
+  // leaves `RTri.SPY.king` in the text, and turning QQQ from a bearing into a raw level leaves
+  // `RXm.QQQ.px` sitting in the tip string. A grep cannot tell a live branch from a dead one — the
+  // sixth occurrence of that in this project. So ladderKings is EXECUTED.
+  global.ifDispScale=()=>1.0023;
+  global.KING_LATCH_KEY='gpts_kingtrack_latch';
+  global.LASTFEED={}; global.FEED_STALE_MS=12000; global.STATE={QQQ:{}};
+  global.extractWalls=()=>null;
+  eval(ex('ladderKings'));
+  REPLAY.on=true; REPLAY.frames=FR; REPLAY.idx=1;
+  const KS=ladderKings({ now:7700, nowLive:7700, scaleUsed:10.0387 }, 'SPY');
+  const bookOf=b2=>KS.filter(x=>x.book===b2)[0];
+  ok(KS.length===3, 'k4 THREE crowns come back, not one — executed, not grepped', KS.map(x=>x.book));
+  ok(!!bookOf('SPXW') && bookOf('SPXW').raw===7700, 'k4b the SPXW crown is the frame\'s', bookOf('SPXW')&&bookOf('SPXW').raw);
+  // ⚠ `raw` alone survived a mutation that dropped the conversion — a crown at its RAW strike sits
+  // ~18 points off on an ES rail, which is exactly the scale class of bug this project keeps hitting.
+  ok(!!bookOf('SPXW') && Math.abs(bookOf('SPXW').at-7700*1.0023)<0.01,
+     'k4b2 ...drawn at the CONVERTED price, not the raw strike', bookOf('SPXW')&&bookOf('SPXW').at);
+  ok(!!bookOf('SPY') && Math.abs(bookOf('SPY').at-767*10.0387)<0.01,
+     'k4c2 ...and the SPY crown converts on the rail\'s own ratio', bookOf('SPY')&&bookOf('SPY').at);
+  ok(!!bookOf('SPY') && bookOf('SPY').raw===767, 'k4c the SPY crown is the frame\'s', bookOf('SPY')&&bookOf('SPY').raw);
+  ok(!!bookOf('QQQ') && bookOf('QQQ').raw===716, 'k4d the QQQ crown is the frame\'s', bookOf('QQQ')&&bookOf('QQQ').raw);
+  {
+    const q=bookOf('QQQ');
+    ok(q && q.kind==='proportional', 'k5 QQQ is drawn as a BEARING, never a converted level', q&&q.kind);
+    // the bearing is price x (its king / its own price) — NOT the raw strike, which would sit at 716
+    // on a 7700 rail and be off the chart entirely.
+    const want=7700*(716/FR[1].xm.QQQ.px);
+    ok(q && Math.abs(q.at-want)<0.5, 'k5b ...positioned off QQQ\'s OWN recorded price, not its strike', q&&Math.round(q.at));
+    ok(q && q.at>7000, 'k5c ...so it lands on the rail rather than 6,900 points below it', q&&Math.round(q.at));
+  }
+  ok(/return out;\n    \}/.test(lk) || /return out;/.test(lk.slice(rIdx, latchIdx>rIdx?latchIdx:undefined)),
+     'k6 the replay branch RETURNS — it cannot fall through and append today\'s crowns as well');
+}
+
 console.log('test_replay: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

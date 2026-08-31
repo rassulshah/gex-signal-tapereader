@@ -28,15 +28,15 @@ an ANCHOR the move started from and later took back. The PT leg's anchor IS the 
 family measures. He defined BOP/WICK/W.END/WICK%/MUD himself when asked; ask again.
 **Asked:** 2026-08-30, v14.88 delivery.
 
-### Q2 · Does the **TREND section** earn its space?
-**Blocks:** ~90px of a 454px face. He asked "do we need trend section, can it be removed" and it was
-never answered with evidence.
-**What is known:** its DRIFT chip is a measured coin flip (50.0%, n=68 — already demoted to
-"descriptive only" in the source), and `test_trendbadge.js` is one of the six permanently-red files,
-so that section is the least-tested thing on the face.
-**What is missing:** nobody has measured whether the 50-SMA count and the confirm chips predict
-anything. That study has not been run.
-**Asked:** 2026-08-29.
+### ✅ Q2 · Does the **TREND section** earn its space? — **ANSWERED BY REMOVAL, v14.90**
+**Closed 2026-08-31** (the entry sat here stale for eleven versions). He asked "do we need trend
+section, can it be removed" and it was removed from the face at **v14.90**, on the evidence that was
+already on file: the DRIFT chip is a measured coin flip (50.0%, n=68), `test_trendbadge` is one of
+the six permanently-red files, and the confirm tally's own hover admitted its count had never been
+scored. ⚠ `secBias()` is KEPT and still records — `bias.confirm` is an enrolled feature — so the
+reads keep being scored nightly with nothing drawn.
+⚠ **The lesson is the eleven versions, not the answer.** A question that has been settled BY A BUILD
+does not close itself here; nothing links the two. Check this file against the face every build.
 
 ### Q3 · **Sweep levels** — plural. Show the furthest, or all of them?
 **Blocks:** SLvl behaviour on a day that clears several levels. Currently the furthest is shown and
@@ -91,6 +91,25 @@ touch itself has NO edge - deflect and break are mirror images (+0.92/+0.26 vs +
 56% break, so they cancel to t~0. Candidate discriminators to test when day files extend: which
 book's king it is; whether the node is gaining or shedding mass into the touch; approach velocity;
 time of day; whether an earlier test of the same node already held.
+
+**⚠⚠ 2026-08-31 — THE SHARPEST CASE YET, AND IT SPLITS THE TWO CANDIDATE UNITS.** He circled SIX
+deflections on today's SPY and said "there is 1 deflection in each circle". All six land on real
+swing extremes in the recorded data. Measured against the finalised geometry:
+
+    09:30 low  764.73   node 765   CAUGHT        10:54 high 766.34            MISSED
+    11:09 low  764.98   node 765   CAUGHT        13:21 high 766.84  node 767  CAUGHT
+    12:33 low  765.17   node 765   CAUGHT        13:45 low  765.05  node 765  CAUGHT
+
+**5 of 6 by the node-first rule (15 deflections + 3 breaks detected), 4 of 6 by pullback-first
+(5 events).** Neither unit reproduces his set.
+
+⚠⚠ **THE MISS IS STRUCTURAL, NOT A THRESHOLD.** ATR(14) ran **0.33** today, so the test band is
+**0.81 points wide against a 5.15-point session range** — 95% of bars closed inside the 765/766
+bands, and on node 766 price never left the band between **09:39 and 11:00, 28 contiguous bars**. The
+episode latch correctly refuses to call that 28 tests, and in doing so swallows his 10:54 turn.
+**The rule that stops over-counting on a trending day is the same rule that blinds it on a coiled
+one.** Pullback-first misses it for a different reason: the run-up was 0.94 points against a 3-ATR
+(1.08) excursion floor, and it misses 13:21 too, on a shallow approach.
 
 **STILL WANTED: one session labelled EXHAUSTIVELY** - every deflection
 on that day, so the count has a denominator. Until then precision is unmeasurable and only recall

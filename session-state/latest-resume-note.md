@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-08-31 · panel v15.10 · companion v1.16 · supersedes every earlier resume note_
+_written 2026-08-31 · panel v15.11 · companion v1.16 · supersedes every earlier resume note_
 
 ---
 
@@ -60,7 +60,7 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.10, and what the face carries
+## 2 · WHERE WE ARE — v15.11, and what the face carries
 
 **Panel v15.10 · companion v1.16.** Suite **129 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
@@ -93,6 +93,16 @@ the 3,600 KB localStorage budget.
 ⚠ **A replayed ladder is as deep as the frame was stored.** `VEND_MAX_ROWS` went 40 → 90 for that
 reason, but it **cannot enrich the 18 days already recorded** — at 40 rows those hold ~19 SPXW
 strikes, down to 4% of King, which covers everything the ladder draws and not the grey minors.
+
+**v15.11 fixed the two things his first drag exposed.** All three crowns now come from the frame
+(`ladderKings` was reading TODAY's latch and TODAY's `LASTFEED` — mislabelling, not thinness), and
+the whole accumulation layer replays through `slicesFor()`, so BUILDING/STEADY/FADING, the day peak
+and the DEFENDING/ABANDONING marks come from the REAL rule fed a sequence rebuilt from the frames.
+
+⚠ **STILL CANNOT REPLAY, and both are stated on purpose:** the **roll arrows** (`ROLL_LATCH` is a
+stateful RTH accumulator, not in a frame — replaying it is its own build), and the **gamma profile**,
+which is not on the live face either (removed v14.81 at his request; do not reinstate it under cover
+of "make replay like live").
 
 **FIRST THING TO DO: drag it on the live panel.** Check the ladder, kings and ⓪a move together, the
 clock reads the parked bar, ◀ reaches Friday, and `__gptsDebug.storage()` shows no new writes.
