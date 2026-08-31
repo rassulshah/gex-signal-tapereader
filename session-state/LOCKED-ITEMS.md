@@ -95,32 +95,36 @@ All five parts of the original spec SHIPPED: bytes not counts (`lsPut` against `
 shedding within today oldest-first, a LOUD failure through `swallow()` into `renderErrors()` plus
 `LS_HEALTH`, day pruning, and `__gptsDebug.storage()`.
 
-### ⚠⚠ THE SUCCESSOR PROBLEM — THE BUDGET IS SMALLER THAN A SESSION, AND THE MORNING IS SHED
-**MEASURED 2026-08-31 on that day's own file, and it is the current blocker on every gamma question.**
+### ⚠ THE DAY EXPORT CARRIES READS BUT NOT ARCHIVED OUTCOMES — and the digest mislabels it
+**⚠⚠ THIS ENTRY REPLACES ONE WRITTEN AND WITHDRAWN THE SAME DAY.** For a few hours on 2026-08-31 it
+read "THE BUDGET IS SMALLER THAN A SESSION — THE MORNING IS SHED", stated as CONFIRMED. **That was
+false.** The disproof was inside the evidence it cited: snapshots covered the whole session while the
+queue did not, and the shedder being blamed trims both together. See FINDINGS **F-10b** (withdrawn)
+and **F-10c** (what is actually true).
 
-    snapshots      131      08:30 -> 15:00 CT     the whole session
-    feature records 1370     13:36 -> 15:00 CT     29 distinct bars, ALL 48 feature keys
-    digest verdict  COLLAPSED, 22% bar coverage
+**Measured on `data/2026-08-31.json`:**
 
-**The records are not missing at random — they are the NEWEST 29 bars.** That is the signature of
-`recorderSave()`'s shedder working exactly as designed: it trims today oldest-first, 25% of `feat`
-per pass, until the payload fits `LS_BUDGET_KB['gpts_recorder_v7'] = 3600 KB`. A session measures
-**~6 MB**. So the budget cannot hold a day, the export runs at the close — *after* the shedding — and
-every day file now systematically keeps only the last ~90 minutes.
+    snaps[].feat   131 of 131 bars   08:30 -> 15:00 CT   ALL 48 feature keys
+    day.feat        29 bars          13:36 -> 15:00 CT
+    digest verdict  "COLLAPSED, 22% bar coverage"        <- reads the QUEUE, not the record
 
-⚠⚠ **THE HOURS BEING THROWN AWAY ARE THE ONES THE MODELS LIVE IN.** The ⓪a NOT-IN call fires at a
-median of **08:40** and GREEN/RED at **09:03**. Neither is ever in the record that scores them.
+**The per-bar READS are complete and exported.** `day.feat` is a resolution queue; resolved records
+are mirrored to IndexedDB (`repoUpsertFeat` — "so local truth outlives LS") and `featStats()` reads
+localStorage **plus** that archive, so his machine holds the full history.
 
-⚠ **AND NOTHING IN THE DAY FILE SAYS IT HAPPENED.** `LS_HEALTH` counts `shed`, `quotaHits` and
-`lastErr`, and `buildDayExport` does not carry any of it — grep the file for `lsHealth`/`shed`:
-zero hits. **The silent write failure became silent shedding.** Exporting `LS_HEALTH` is the cheapest
-next step and it is what would settle mechanism vs. hypothesis: right now "the shedder did it" is a
-strong inference from the timestamps, not a measurement.
+**THE ACTUAL DEFECT: `buildDayExport` exports `day.feat` and not `FEAT_ARCHIVE`.** Resolved outcomes
+older than the queue window never reach the repo — which is the only thing the nightly review can
+read. The fix is an export change, not a storage change.
 
-⚠ Do NOT simply raise the budget to 6 MB — that walks back toward the 10 MB cap this whole entry
-exists to respect. The candidates worth weighing are shedding to IndexedDB rather than dropping,
-exporting intraday rather than at the close, or recording features more cheaply.
-⚠ **Do NOT build this during a live session** — it touches the recorder's write path.
+⚠ **AND `tools/day-digest.py` MUST STOP CALLING THIS A COLLAPSE.** Its `dataHealth` measures queue
+depth and prints "COLLAPSED — do NOT compute rates over it". On a day whose reads are complete that is
+wrong, and it caused two false diagnoses in one session. ⚠ F-9's historical table (`2026-08-27: 15
+records / 1 bar`) should be re-read against `snaps[].feat` before it is trusted.
+
+⚠⚠ **WHAT TRIMS THE QUEUE TO 29 BARS IS UNKNOWN AND MUST NOT BE GUESSED AGAIN.** `FEAT_KEEP_BARS` is
+**160** (above a 131-bar session) and the `lsPut` shedder is ruled out by the intact snapshots. **Two
+mechanisms have been named confidently and both were wrong.** `__gptsDebug.featHealth()` and
+`__gptsDebug.storage()` each answer it live on his panel in one call. Measure before writing.
 
 ### ⚠ THE FEATURE-RECORD COLLAPSE — ROOT CAUSE FOUND (see above); the v14.67 instrument was aimed wrong
 3,822 records on 08-20 against **15** on 08-27. `matrix` rows track exactly (108→3132, 122→3822,

@@ -189,28 +189,31 @@ it is why the loop starts by accumulating and pre-registering.
 
 ## 6 · WHAT TO DO NEXT, IN ORDER
 
-1. ⚠⚠ **THE RECORDER SHEDS THE MORNING. This is the blocker on every gamma question in §5.**
-   ⚠ **The F-10 storage fix is BUILT** (v14.68/v14.76 — `lsPut`, `LS_BUDGET_KB`, `LS_HEALTH`,
-   `__gptsDebug.storage`, `test_storage.js` green). `LOCKED-ITEMS.md` said "FIX NOT BUILT" until
-   2026-08-31 and that was false; a parked patch in `session-state/pending/` against a **v14.67**
-   base is what made it look open. **Check the code, not the ledger.**
+1. ⚠⚠ **THE DAY EXPORT CARRIES READS BUT NOT ARCHIVED OUTCOMES.**
+   ⚠ **Read FINDINGS F-10b before anything else here: it is WITHDRAWN.** For a few hours on
+   2026-08-31 this item said "the recorder sheds the morning", marked CONFIRMED. It was false, and the
+   disproof was inside the evidence it cited. **F-10c is the true version.** Also settled: the F-10
+   storage fix IS built (v14.68/v14.76) — a parked patch in `session-state/pending/` against a v14.67
+   base is what made the ledger say otherwise. **Check the code, not the ledger.**
 
-   **What is actually wrong, measured on `data/2026-08-31.json`:**
+   **Measured on `data/2026-08-31.json`:**
 
-       snapshots       131     08:30 -> 15:00 CT    the whole session
-       feature records 1370    13:36 -> 15:00 CT    the NEWEST 29 bars only
+       snaps[].feat   131 of 131 bars   08:30 -> 15:00 CT   ALL 48 feature keys
+       day.feat        29 bars          13:36 -> 15:00 CT
+       digest verdict  "COLLAPSED, 22%"                     <- it reads the QUEUE, not the record
 
-   The budget is **3600 KB**; a session measures **~6 MB**. So `recorderSave()`'s shedder trims today
-   oldest-first exactly as designed, the export runs at the close *after* the shedding, and every day
-   file keeps only the last ~90 minutes. **The ⓪a NOT-IN call fires at a median of 08:40 and
-   GREEN/RED at 09:03 — neither is ever in the record that is supposed to score them.**
+   **The per-bar reads are complete and exported.** `day.feat` is a resolution queue; resolved records
+   are mirrored to IndexedDB and `featStats()` reads localStorage plus that archive, so his machine
+   holds the full history. **The defect is that `buildDayExport` exports `day.feat` and not
+   `FEAT_ARCHIVE`** — so outcomes older than the queue window never reach the repo, which is the only
+   thing the nightly review can read. That is an EXPORT change, not a storage one.
 
-   ⚠ **Nothing in the day file says this happened** — `LS_HEALTH` counts `shed`/`quotaHits` and
-   `buildDayExport` carries none of it. **Exporting `LS_HEALTH` is the cheapest next step**, and it is
-   what turns "the shedder did it" from a strong inference off the timestamps into a measurement.
-   ⚠ Do NOT just raise the budget — that walks back toward the 10 MB cap. Weigh shedding to IndexedDB,
-   exporting intraday, or recording features more cheaply.
-   ⚠ **Do NOT build this during a live session** — it touches the recorder's write path.
+   ⚠ `tools/day-digest.py`'s `dataHealth` must stop reporting queue depth as bar coverage; it printed
+   COLLAPSED on a complete day and caused two false diagnoses in one session.
+   ⚠⚠ **What trims the queue to 29 bars is UNKNOWN.** `FEAT_KEEP_BARS`=160 rules out the bar cap;
+   intact snapshots rule out the `lsPut` shedder. **Two mechanisms have been named confidently and
+   both were wrong — measure with `__gptsDebug.featHealth()` before writing a third.**
+
 2. **Q11 — the ex-ante deflect/break discriminator.** The only open question that matters. Detection
    is finished; the touch itself has no edge (mirror legs, 56% break, t≈0). Candidates: which book's
    king, gaining vs shedding mass into the touch, approach velocity, time of day, whether an earlier

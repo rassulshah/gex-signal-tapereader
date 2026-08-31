@@ -239,7 +239,7 @@
     "evidence": "FINDINGS F-12..F-16. F-14 is the model (AUC 0.826, calibrated); F-15 is the timing; F-13 says do NOT predict the far-side price directly; F-16 says the daily ATR and level identity add nothing - and records the phantom a sparse control produced.",
     "doNotRePropose": "sweeps, momentum/NQ divergence, IB30/IB60, 50-SMA, open-reclaimed, 60m breakout, daily ATR, overnight range, volume, day-of-week, gap, prior-day/overnight level identity, red/green days, a 5-feature logistic, or a narrow high-probability timing window. All measured, all recorded.",
     "improvementLoop": "the nightly review scores the touch call and the <=20% NO call, runs the gamma test with a DENSE distance control, and PROPOSES a new FARSIDE.json into review/ - it never applies one. See docs/LLM-NIGHTLY-BRIEF.md, the star section.",
-    "⚠ correction": "HLTAB_META.inHit still advertises 92% for the IN call. F-12 measured 63% in real time - the 92% study selected the side with hindsight. Fix in the next build."
+    "⚠ correction": "RESOLVED: HLTAB_META.inHit was corrected to 63 at v14.84 (F-12). This note previously said it 'still advertises 92%' and was stale from 2026-08-30 to 2026-08-31."
   },
   "lessons": {
     "file": "session-state/LESSONS.md",
@@ -250,7 +250,8 @@
     "withdrawnSoFar": [
       "study-kingdeflect.py 'crowns beat chance by 17pp' - measured crowns where it should have measured nodes; superseded by study-nodeatextreme.py",
       "SUCCESSION '76% crowned within 20 bars (n=148)' - does not reproduce at any horizon; 23% at 30m against the DRAWN crown",
-      "HLTAB_META.inHit 92% - hindsight side-selection; the real-time figure is 63% (F-12)"
+      "HLTAB_META.inHit 92% - hindsight side-selection; the real-time figure is 63% (F-12)",
+      "FINDINGS F-10b 'the recorder sheds the morning' - shipped as CONFIRMED and withdrawn the same day; the reads were complete in snaps[].feat all along. Superseded by F-10c"
     ]
   },
   "loadSelfCheck": {

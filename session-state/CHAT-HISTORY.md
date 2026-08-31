@@ -1509,20 +1509,24 @@ control that killed four false PROVISIONALs and re-judged gx-008 — and `test_m
    (+0.92/+0.26 vs +0.29/+0.86) and **56% break**, so they cancel to t~0 (t=+0.41 top-5, t=-0.32
    kings). Candidates, untested: which book's king it is, whether the node is gaining or shedding
    mass into the touch, approach velocity, time of day, whether an earlier test held.
-2. **THE RECORDER SHEDS THE MORNING — the current blocker on every gamma question.**
-   ⚠ **Corrected 2026-08-31, and the correction is the lesson:** this item first read "the F-10
-   storage fix is still unbuilt", copied from `LOCKED-ITEMS.md`. **It has been built since
-   v14.68/v14.76** — `lsPut`, `LS_BUDGET_KB`, `LS_HEALTH`, `__gptsDebug.storage`, `test_storage.js`
-   green. A parked patch against a **v14.67** base in `session-state/pending/` is what kept the ledger
-   saying otherwise. **A patch file is evidence of an intention, never of a state.**
+2. **THE DAY EXPORT CARRIES READS BUT NOT ARCHIVED OUTCOMES.**
+   ⚠⚠ **This item was written wrong TWICE on 2026-08-31 and both versions are on GitHub's history.**
+   First as "the F-10 storage fix is still unbuilt" (it has been built since v14.68 — a parked patch
+   against a v14.67 base made the ledger lie). Then as "the recorder sheds the morning", marked
+   CONFIRMED in FINDINGS as F-10b. **Also false**, and the disproof was inside the evidence cited:
 
-   The real fault, measured on `data/2026-08-31.json`: snapshots span **08:30–15:00 CT**, feature
-   records span **13:36–15:00** — the newest 29 bars of 131. The budget is **3600 KB** against a
-   **~6 MB** session, so the shedder trims today oldest-first as designed and the close-time export
-   keeps only what survived. **The ⓪a NOT-IN call fires at a median 08:40 and GREEN/RED at 09:03 —
-   neither is ever in the record meant to score them.** `LS_HEALTH` counts the shedding and
-   `buildDayExport` exports none of it, so nothing says it happened. See FINDINGS **F-10b**.
-   ⚠ Do NOT build it during a live session — it touches the recorder's write path.
+       snaps[].feat   131 of 131 bars   08:30 -> 15:00 CT   ALL 48 feature keys
+       day.feat        29 bars          13:36 -> 15:00 CT
+
+   Snapshots covered the whole session while the queue did not — and the shedder being blamed trims
+   both **in the same pass**. The reads are complete and exported; `day.feat` is a resolution queue,
+   and resolved records are mirrored to IndexedDB where `featStats()` reads them.
+
+   **The real defect: `buildDayExport` exports `day.feat` and not `FEAT_ARCHIVE`**, so outcomes older
+   than the queue window never reach the repo — the only thing the nightly review can read. And
+   `tools/day-digest.py` reports queue depth as bar coverage, printing COLLAPSED on a complete day.
+   See FINDINGS **F-10c**. ⚠ What trims the queue to 29 bars is **unknown**; two mechanisms were named
+   confidently and both were wrong. Measure with `__gptsDebug.featHealth()` before writing a third.
 3. **`DEFLECT_ZONE` IS STILL 0.50, FIXED AND SYMMETRIC, IN 22 PLACES.** The finalised ATR geometry
    (`DEFL_NEAR`/`DEFL_THRU`) governs ONLY `hlNodeAt` and its hover. The panel's live `deflectionAt`,
    the in-play band, the ledger touch zone, king taps and the invalidation levels all still use the

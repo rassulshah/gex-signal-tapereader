@@ -523,322 +523,52 @@ executes `lsPut` against a fake storage with a real quota and is green.
 this reading as unbuilt in `LOCKED-ITEMS.md` for 42 versions. **A patch file is evidence of an
 intention, never of a state.**
 
-### ⚠⚠ F-10b · THE FIX WORKS AND THE BUDGET DOES NOT — THE MORNING IS SHED, SILENTLY
-**Status: CONFIRMED** (measured on the day file itself) · 2026-08-31
+### ⚠⚠ F-10b · **WITHDRAWN THE SAME DAY IT WAS WRITTEN.** The morning is NOT shed.
+**Status: SUPERSEDED by F-10c** · written and withdrawn 2026-08-31
+
+F-10b claimed the recorder sheds the morning: that `LS_BUDGET_KB['gpts_recorder_v7']`=3600 KB against
+a ~6 MB session made `recorderSave()`'s shedder trim today oldest-first, so every day file kept only
+the last ~90 minutes, and that "the ⓪a NOT-IN call fires at a median 08:40 and is never in the record
+meant to score it". **It was marked CONFIRMED. It is false, and it must not be quoted.**
+
+⚠⚠ **THE CONTRADICTION THAT DISPROVED IT WAS ALREADY ON THE PAGE WHEN IT WAS WRITTEN.** The same
+measurement showed **snapshots spanning the whole session** while the queue did not — and the shedder
+being blamed trims `snaps` and `feat` **in the same pass**. Both cannot be true. This project's own
+rule is to cross-check fields that should agree, because the contradiction is free; it was noticed and
+not followed. **Third recurrence of failure pattern 4 in one session, and the first one where the
+disproof was inside the evidence being cited.**
+
+### F-10c · THE READS ARE ALL EXPORTED. THE OUTCOMES ARE NOT. AND THE DIGEST MEASURES THE WRONG ARRAY.
+**Status: CONFIRMED** for what is measured below; **the queue-trim mechanism is OPEN** · 2026-08-31
+
+    data/2026-08-31.json
+      snaps[].feat    131 of 131 bars   08:30 -> 15:00 CT   ALL 48 feature keys, every bar
+      day.feat         29 bars          13:36 -> 15:00 CT
+      day-digest says  "COLLAPSED - feature records cover almost no bars.  22%"
+
+**1 · The per-bar feature READS are fully recorded and fully exported.** They live inside each
+snapshot. Nothing about the morning is missing from the day file.
+
+**2 · `day.feat` is a RESOLUTION QUEUE, not the record.** Records wait there for their forward window,
+are resolved in place, and are then **mirrored to IndexedDB** — `repoUpsertFeat(sym, date, resolved)`,
+commented "so local truth outlives LS". `featStats()` reads the localStorage days **plus** that
+archive, so on the operator's machine the full history is intact.
+
+**3 · THE EXPORT IS PARTIAL FOR OUTCOMES ONLY.** `buildDayExport` carries `feat:day.feat` and does
+**not** carry `FEAT_ARCHIVE`. So resolved outcomes older than the queue window exist on his machine
+and **never reach the repo** — which is where the nightly review reads from. That is the real defect
+this line of investigation found, and it is about the EXPORT, not about recording.
+
+**4 · ⚠⚠ `tools/day-digest.py`'s `dataHealth` READS THE QUEUE AND REPORTS IT AS BAR COVERAGE**, then
+prints `COLLAPSED ... do NOT compute rates over it`. On a day whose reads are complete that verdict is
+simply wrong, and it produced two false conclusions in one session before anyone checked
+`snaps[].feat`. ⚠ It also means the historical comparison in F-9 (`2026-08-27: 15 records / 1 bar`)
+should be **re-read against `snaps[].feat` before being trusted** — it may be measuring the same thing.
+
+**5 · WHAT IS NOT KNOWN, AND IS NOT GUESSED HERE.** What trims the queue to 29 bars is unidentified.
+`FEAT_KEEP_BARS` is **160**, above a 131-bar session, so the bar cap did not fire; and the `lsPut`
+shedder is ruled out by the snapshots being intact, since it trims both arrays together.
+**Two mechanisms have already been named confidently and both were wrong. The next statement about
+this needs a measurement, not a third reading of the source.** `__gptsDebug.featHealth()` and
+`__gptsDebug.storage()` both exist and answer it live, on his panel, in one call each.
 
-    data/2026-08-31.json    snapshots       131    08:30 -> 15:00 CT   the whole session
-                            feature records 1370   13:36 -> 15:00 CT   the NEWEST 29 bars, all 48 keys
-                            day-digest verdict     COLLAPSED, 22% bar coverage
-
-`LS_BUDGET_KB['gpts_recorder_v7']` is **3600 KB**. A session measures **~6 MB** — the rate recorded in
-F-10 above. So the shedder trims today oldest-first exactly as designed, the export runs at the close
-**after** the shedding, and every day file now systematically retains only the last ~90 minutes.
-
-⚠⚠ **THE DISCARDED HOURS ARE THE ONES THE MODELS LIVE IN.** The ⓪a NOT-IN call fires at a median
-**08:40** (F-11) and the GREEN/RED call at **09:03** (`GD_META`). Neither is ever present in the
-record that is supposed to forward-score it. **Every "it will be scored nightly" claim in this
-codebase is again describing a loop that cannot close** — the same sentence F-9 had to write, one
-layer down.
-
-⚠ **AND THE DAY FILE CANNOT SAY SO.** `LS_HEALTH` counts `shed`, `quotaHits` and `lastErr`;
-`buildDayExport` carries none of them (zero hits for `lsHealth`/`shed`/`quota` in the file).
-**The silent write failure became silent shedding.** Exporting `LS_HEALTH` is the cheapest next step
-and the one that turns the inference above — drawn from timestamps — into a measurement.
-
-⚠ Do NOT simply raise the budget: it exists to respect a 10,240 KB cap that was measured full. The
-candidates are shedding to IndexedDB instead of dropping, exporting intraday rather than at the
-close, or recording features more cheaply.
-
----
-
-## F-11 · A DELETED FEATURE'S CONSTRAINT WAS COSTING THE BETTER HALF OF THE TABLE
-**Status: PROVISIONAL** · 2026-08-28 · 284 sessions, EPM26 1-minute.
-
-The ⓪a table skipped the **first 60 minutes of every session**. That exclusion came from the original
-study requiring `IB60` to exist before a row could be scored. **IB60 was then measured as worthless**
-(AUC 0.655; adds nothing once `posr` is known — F-1/F-2) and dropped from the model. The constraint
-stayed behind.
-
-Consequence: the 08:30 column of the table was entirely empty, and the panel printed
-**"no rate (thin cell, n=0)" for the first 45 minutes of every session** — the hour the operator
-prepares in.
-
-### Re-derived from minute 5
-
-| | before (t≥60) | after (t≥5) |
-|---|---|---|
-| observations | 38,054 | **44,302** |
-| cells with data | 64 / 72 | **72 / 72** |
-| 08:30 column | all thin | 4 · 10 · 16 · 22 · 27 · 32 · 40 · 47 % |
-| **AUC on the SAME late-session rows** | 0.8787 | **0.8787 — identical** |
-
-⚠ **Strictly additive.** The overlap AUC is unchanged to four decimals, so nothing that already
-worked was traded for the new coverage. (Pooled Brier rises 0.132 → 0.138 because the new early rows
-are intrinsically harder, not because the model degraded.)
-
-### And the NOT-IN call lived almost entirely in the missing cells
-
-| call | before | after |
-|---|---|---|
-| **IN** (cell ≥70%) | 94%, n=284, 09:55 | 92%, n=284, **09:35** |
-| **NOT IN** (cell ≤20%) | 72%, n=**85**, 09:45 | **85%**, n=**230**, **08:40** |
-
-The NOT-IN call is where the early cells live — a fresh extreme at 08:35 is a 4% chance of being the
-day's. It went from a thin modest edge to **85% on n=230, an hour earlier**. The IN call trades 2
-points of accuracy for 20 minutes.
-
-⚠ **THE LESSON, AND IT IS THE POINT OF THIS ENTRY:** when a feature is removed, the constraints it
-imposed on the STUDY do not remove themselves. IB60 was deleted from the model in the same session
-that measured it worthless, and its footprint went on silently costing 45 minutes of coverage a day.
-**Grep the study for every assumption a deleted feature justified.**
-
-### Tests had to be decoupled from the data
-Two assertions used the empty 08:30 column as their fixture for "a thin cell refuses". Filling the
-table broke them — they were testing DATA, not LOGIC. They now inject a thin cell and assert the
-refusal directly, so the table's contents can change without breaking a test of behaviour.
-
-
----
-
-## F-12 · THE ADVERTISED "92% IN CALL" IS 63% IN REAL TIME — THE SIDE WAS PICKED WITH HINDSIGHT
-**Status: CONFIRMED** (three independent reproductions) · 2026-08-28 · `tools/study-second.py`
-
-The ⓪a hover states the decision rate as **92% correct, n=284, median 09:35** (`HLTAB_META.inHit`).
-Reproduced on the same 284 sessions, the number the PANEL earns in real time is **63%**.
-
-    the panel, live      calls whichever extreme is FIRST-PRINTED AT THAT MOMENT (running loT<hiT)
-                         first crossing of the 70% cell   ->  63%, median 09:20, n=284
-    the study behind 92  selected the side that TURNED OUT to print first (final flT<fhT)
-                         first crossing of the 70% cell   ->  91%, median 09:31, n=284
-    same, OOF cells, t>=60, restricted to that side       ->  94%, median 09:55   (the shipped 92/94)
-
-**Selecting the side with hindsight conditions on the answer.** When a standing low breaks at 11:00
-the panel was WRONG — but in that session the HIGH becomes the first-printed extreme, so the study
-asks about the high instead and the miss is never recorded. Every failure is relabelled out of the
-sample. This is landmine **L-N** ("measure the question the face actually puts") in a new costume,
-one version after L-N was written.
-
-⚠ **WHAT IS NOT WRONG: the CELL rate on the face is honest.** Calibrated over all 44,302
-observations on the first-printed side:
-
-    table says  10-19% -> actual 12%    40-49% -> 47%    70-79% -> 75%    90-99% -> 97%
-
-So "LOD IN — 74%" is a true 74%. It is the DECISION figure in the hover that is inflated.
-
-⚠ **The 63% is the FIRST CROSSING — the earliest and weakest moment.** Accuracy is buyable with time:
-
-    cell >=70%  63% @ 09:20      >=85%  86% @ 10:45      >=95%  92% @ 11:46
-    cell >=80%  79% @ 10:06      >=90%  89% @ 10:53
-
-⚠ **The study that produced 92/85 was never committed.** v14.70 shipped the table, the tests and the
-FINDINGS entry, but no tool that reproduces those two numbers — so they could not be re-checked from
-the repo. **A number on the face needs a committed script that regenerates it.**
-
----
-
-## F-13 · THE OPPOSITE EXTREMITY: A TWO-LINE RULE, NOT A MODEL — AND THE CLOCK OWNS THE TIMING
-**Status: PROVISIONAL** · 2026-08-28 · `tools/study-second.py`, `study-secondpred.py`,
-`study-secondpred2.py` · ES 284 sessions (+NQ 188 for transfer)
-
-**The operator's ask:** *"HOD expected around 7772-7792 in 3.5 Hrs between 1:30pm and 2pm - 80%"*,
-then *"different probabilities for the HOD time and the HOD price range"*, then *"did you try your
-best ... different factors, combinations, models"*.
-
-⚠⚠ **A BUG IN MY OWN HARNESS INFLATED THE FIRST VERSION OF THIS ENTRY.** `held` was evaluated with
-the running extremes read AFTER the bar loop — i.e. the FINAL session extremes — so it was always 1
-and the "the first extreme held" filter was a no-op that kept every FAILED call in the sample.
-Corrected numbers below; the discarded ones (AUC 0.628 holdout, realized volatility +0.017 on
-timing, an 82% NQ band transfer) were measured on a contaminated sample and **must not be quoted**.
-**The same class of error as F-12, one hour after writing F-12.** State WHEN a variable is read.
-
-### 1 · The 30-minute box does not exist
-+-15 minutes around the median lands **4%** of the time; +-30 lands **9%**. An 80% time window is
-~3.5 hours wide. The opposite extreme is near-uniform across the session with a spike into the
-close: **35-40% print in the final 45 minutes**.
-
-### 2 · THE TRADEOFF THE OPERATOR ACTUALLY CHOOSES FROM (real-time side selection, no hindsight)
-
-| call at | n | correct | median CT | travel left to the far side | 80% price band |
-|---|---|---|---|---|---|
-| cell >=70% | 284 | 63% | 09:20 | 27.0 pts | 55 pts |
-| cell >=80% | 284 | 79% | 10:06 | 21.2 pts | 44 pts |
-| cell >=85% | 284 | 86% | 10:45 | 18.8 pts | 41 pts |
-| **cell >=90%** | 284 | **89%** | 10:53 | **17.8 pts** | **41 pts** |
-| cell >=95% | 284 | 92% | 11:46 | 16.1 pts | 37 pts |
-
-### 3 · PRICE — the ML model DOES NOT BEAT TWO LINES OF ARITHMETIC (n=206, call >=90%)
-Predicting the final range fixes the far-side price. Median absolute error:
-
-    "the range is already done"        14.5 pts
-    "a typical day" (the E row)        18.1 pts
-    fixed 1.36x expansion from here     9.2 pts     <- THE RULE
-    gradient-boosted model, 10 factors  9.9 pts     <- WORSE
-
-And the interval is the same story:
-
-    80% band, conditional CQR (10 factors)                    cov 81%   width 42 pts
-    80% band, expansion-multiple quantiles x today's range    cov 80%   width 41 pts
-
-**SHIP THE RULE.** `far side ~ standing extreme + 1.36 x (range so far)`, banded by the historical
-spread of the expansion multiple. Third occurrence of F-4's lesson in one project.
-
-⚠ **AND SAY HOW WEAK IT IS.** The point estimate is out by a median **9.2 pts on a target that is
-typically 17.8 pts away**, and the 80% band (41 pts) is ~70% of a typical 57-pt day. **A 20-pt band
-- the width the operator asked for - is worth about 50%, not 80%.**
-
-### 4 · TIME — the clock is the model, and nothing else survives (5,738 bar-rows, corrected)
-
-    clock alone (minutes since open, minutes left)   AUC 0.7441
-    clock + realized volatility                      AUC 0.6632
-    clock + all 12 other factors                     AUC 0.7061
-
-The usable form is the hazard: given the far side has NOT printed yet, P(it prints in the last 45
-minutes) = **33% by 11:00 · 53% by 12:30 · 69% by 13:15 · 90% by 14:00.**
-
-### 5 · MEASURED AND REJECTED — sixteen factors, one pass each, none survived
-Overnight/globex range (**the corpus is 24h and every earlier study threw ETH away** — it is the
-WORST of the sixteen, -0.06 AUC), volume and volume rate, IB30 size, efficiency ratio, day of week,
-gap vs prior close, distance to prior-day high/low, minutes-to-first-extreme, realized volatility,
-posr at the call, wick%, elapsed since the call, prior-day range, and every 2-3 way combination the
-add-one search covered. ⚠ The overnight session is now TESTED for this question - LOCKED-ITEMS
-carried it as "untested, cheap".
-
-### 6 · WHAT IS NOT TESTED, AND IT IS THE ONE THAT WOULD MAKE THIS OURS
-**The gamma book.** Nine recorded sessions, several of them F-10 collapsed, so "does a low printing
-at a put wall, or price sitting on the King, tighten the band" cannot be asked yet. Until it can,
-this feature is generic price structure that any charting package could compute - measured
-honestly, but not ours. **That is the strongest argument for the storage fix.**
-
-
----
-
-## F-14 · CHANGE THE QUESTION: "CAN PRICE GET THERE" IS PREDICTABLE, "WHERE WILL THE EXTREME BE" IS NOT
-**Status: PROVISIONAL** · 2026-08-28 · `tools/study-touch.py` · 284 ES sessions, 71,568 decisions
-
-F-13 exhausted the extremum framing: the best point estimate is a fixed 1.36x expansion and the ML
-model loses to it. So the framing was changed - from *predict the far-side price* to **P(a NAMED
-LEVEL is touched before the close)**, evaluated every 15 minutes at level distances of
-0.25-2.0 sigma on both sides, sigma = realized 1-minute vol x sqrt(minutes left).
-
-    AUC 0.826   Brier 0.147   base rate 28%
-
-### Calibration, out-of-fold, grouped by session
-| predicted | 0-10 | 10-20 | 20-30 | 30-40 | 40-50 | 50-60 | 60-70 | 70-80 |
-|---|---|---|---|---|---|---|---|---|
-| **actual** | 4% | 17% | 25% | 35% | 43% | 53% | 66% | 71% |
-
-### And it is SHARP where it matters
-**48% of all decisions land at P<=20%, and those levels were touched only 8% of the time** - i.e. a
-92%-accurate "price does NOT get there today" call, available on half of all decisions. The high
-side is thin (0.9% of rows reach P>=80%), which is honest: reaching a far level is rarely a
-near-certainty.
-
-### Why this is the right shape for THIS panel
-1. **The operator trades from nodes.** "Will price reach the node at 7792, and when" is the question
-   the tool exists to answer; "what will the exact HOD price be" is a question nobody trades.
-2. **The median of the touch curve IS the far-side estimate** - the price where P(touch) = 50% - so
-   the band from F-13 falls out of this model instead of needing its own.
-3. **It is where the gamma book plugs in.** The levels stop being sigma multiples and become the
-   King, the node strikes, the EM edges, the prior-day levels. **Does a level's node identity change
-   its touch probability at the same distance?** That is a single, measurable experiment - and it is
-   the first question in this project where the answer would make the tool ours rather than generic.
-   It needs the recorder working (F-10) and ~40+ clean sessions.
-
-
----
-
-## F-15 · TIMING IS PREDICTABLE ONCE THE QUESTION IS POSED AS FIRST PASSAGE, NOT AS AN EXTREMUM
-**Status: PROVISIONAL** · 2026-08-28 · `tools/study-firstpass.py` · 284 ES sessions, 7,168 arrivals
-
-**Written because the operator asked "did you do your best" and the answer was no.** F-13 concluded
-"the clock is the model" for timing. That conclusion is CORRECT FOR THE QUESTION IT ASKED — *when
-does the extremum print* — and that question is nearly unanswerable: unconditional, near-uniform,
-with a spike into the close. Re-posed as **"given price REACHES this level, when does it get
-there"**, timing becomes partially predictable.
-
-### Point prediction, minutes-to-touch (median absolute error, median horizon 86 min)
-
-    the unconditional median                  49.0 min
-    the clock alone                           46.0 min
-    the analytic first-passage scaling T~(d/sigma)^2   42.0 min   <- PHYSICS, one feature
-    distance + vol + time left                43.3 min
-    + the touch model's inputs                42.3 min
-    + APPROACH VELOCITY + first-passage       41.7 min
-
-⚠ **The analytic scaling law does 95% of the work of the full model with ONE feature.** Fourth
-occurrence of this project's oldest lesson: the simple thing wins, ship the simple thing.
-
-### As the call a face can make — "does it arrive within the hour?"
-
-    clock alone                          AUC 0.637
-    distance + vol + time left           AUC 0.670
-    + approach velocity + first-passage  AUC 0.692    base rate 36%
-
-    calibration:  predicted 0-20% -> actual 14% | 20-40% -> 33% | 40-60% -> 47% | 60-80% -> 62%
-
-### The three things that had not been tried, and what each was worth
-1. **Posing it conditionally** (given it arrives) — the whole difference. Without it, timing is a
-   clock; with it, it is a first-passage problem with real structure.
-2. **APPROACH VELOCITY** — the rate price is closing on the level, oriented toward it, over 15 and
-   30 minutes. Every earlier feature was static. Worth **+0.022 AUC**.
-3. **The analytic first-passage scaling** — worth more alone than ten ML features together.
-
-### And one that was worth nothing
-**REGIME SPLIT.** Fitting trend-ish (price at a range extreme) and chop (mid-range) separately:
-AUC 0.684 and 0.691 against 0.692 pooled. **One model serves both.**
-
-### What this composes into
-Per level, two calibrated numbers and a horizon:
-`7772 · touched today 78% (F-14) · within the hour 45% · typically ~50 min (F-15)`.
-⚠ Median error is **42 minutes on an 86-minute median horizon** — roughly 50% relative. It is a
-range statement, never a clock time.
-
-
----
-
-## F-16 · THE DAILY ATR ADDS NOTHING, LEVEL IDENTITY ADDS NOTHING — AND A SPARSE CONTROL NEARLY SOLD ME A PHANTOM
-**Status: CONFIRMED** (the negative), **PROVISIONAL** (round numbers) · 2026-08-28
-`tools/study-atrlevels.py` · 279 sessions, 59,108 level-decisions
-
-**The operator asked:** *"can you use the expected move, the daily atr ... any levels, indicators,
-data that would allow you to better predict the timing"*.
-
-### A · DAILY ATR(14): NO
-| added to the touch model | AUC |
-|---|---|
-| the shipped inputs (distance/sigma, clock, range, realized vol) | **0.8771** |
-| + daily ATR(14) | 0.8767 |
-| + range-so-far / ATR ("how much of a normal day is used") | 0.8770 |
-| + room left in a normal day · + distance measured in ATR | 0.8770 / 0.8769 |
-
-**The realized-volatility sigma already contains it.** ATR is a slower estimate of the same quantity.
-
-### B · LEVEL IDENTITY: NO — AND THE FIRST ANSWER WAS A PHANTOM
-The test: train a distance-only model on synthetic levels placed at k*sigma, then ask whether a
-NAMED level is touched more often than that model expects at the same distance, time and volatility.
-
-    with a SPARSE control (sigma levels at only 0.75 and 1.5)      with a DENSE control (0.15 -> 2.5)
-      prior-day high   +10.4 pts                                     -0.3 pts
-      prior-day low    +11.4                                         +2.4
-      prior-day close  +12.6                                         -0.3
-      overnight high   +13.7                                         -1.0
-      overnight low    +12.2                                         +0.9
-      round number     +45.4                                         +4.6  (+-2.5)
-
-⚠⚠ **EVERY ONE OF THOSE "LIFTS" WAS THE CONTROL EXTRAPOLATING.** With levels at only two distances,
-the model had to guess the curve in between, and the named levels sat in the gap. Densify the control
-and the entire effect vanishes. **I was one write-up away from reporting "prior-day levels are worth
-+12 points of touch probability", which is false.**
-**THE RULE: a matched control must SPAN the range of the thing it is controlling for, densely.**
-
-Round numbers survive at **+4.6 pts (+-2.5, session-clustered)** — weak, ~1.8 SE, PROVISIONAL.
-
-### C · WHY THIS MATTERS MORE THAN THE ANSWER: it is the gamma experiment, already built
-`study-atrlevels.py`'s residual test is exactly the design the gamma question needs - swap the named
-levels for the King, the put wall and the node strikes, and ask whether they beat their own
-distance-matched expectation. Two consequences:
-1. **The experiment is ready** the moment the recorder has clean sessions (F-10).
-2. ⚠ **Temper the prior.** If prior-day and overnight extremes - the levels every chart package draws
-   - carry nothing once distance is controlled, "the put wall is a magnet" deserves the same
-   scepticism and the same dense control. Gamma is mechanistically different (dealer hedging
-   transacts AT the strike), so it is still worth asking. It is not worth assuming.
