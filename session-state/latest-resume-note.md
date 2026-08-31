@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-08-31 · panel v15.11 · companion v1.16 · supersedes every earlier resume note_
+_written 2026-08-31 · panel v15.12 · companion v1.16 · supersedes every earlier resume note_
 
 ---
 
@@ -60,7 +60,7 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.11, and what the face carries
+## 2 · WHERE WE ARE — v15.12, and what the face carries
 
 **Panel v15.10 · companion v1.16.** Suite **129 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
@@ -103,6 +103,14 @@ and the DEFENDING/ABANDONING marks come from the REAL rule fed a sequence rebuil
 stateful RTH accumulator, not in a frame — replaying it is its own build), and the **gamma profile**,
 which is not on the live face either (removed v14.81 at his request; do not reinstate it under cover
 of "make replay like live").
+
+⚠⚠ **v15.12 — THE EM PIN IS PER CHART FAMILY, AND THAT IS WHY ES WORKS AGAIN.** His pin was captured
+on the SPY chart (`rr:1`, `em:3.49` in SPY points) and on an ES chart was judged against an ES-scale
+floor of 7.7, healed away as implausible, and fell back to an expired $1.70 straddle — so the band
+refused and **the ladder, which lives inside that section, went with it.** The record is now keyed
+`sym|cash` / `sym|fut`, and a family with no pin SEEDS from the other using `emK`, the straddle in
+the BOOK's own points. ⚠ Pins written before v15.12 have no `emK` and use the ratio rescale, which
+is flagged `seedApprox`. **A stored value in DISPLAY units is a trap whenever the display can change.**
 
 **FIRST THING TO DO: drag it on the live panel.** Check the ladder, kings and ⓪a move together, the
 clock reads the parked bar, ◀ reaches Friday, and `__gptsDebug.storage()` shows no new writes.

@@ -237,7 +237,13 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
   REPLAY.on=false; REPLAY.frames=FR; REPLAY.idx=2; REPLAY.day='2026-08-31'; REPLAY.days=['2026-08-28','2026-08-31']; REPLAY.err=null;
   const live=replayBarHtml();
   ok(typeof live==='string' && live.length>0, 'x1 the strip renders LIVE without throwing', live.length);
-  ok(/LIVE/.test(live) && !/REPLAY<\/span>/.test(live), 'x2 ...and says LIVE, not REPLAY');
+  // ⚠ WAS `/LIVE/.test(live)` AND IT COULD NOT SEE THE BUG IT WAS MEANT TO GUARD. His strip read
+  // "LIVE LIVE" because the clock slot ALSO printed the badge's word. The badge says the MODE; the
+  // clock says the TIME — and when live, the useful time is the newest recorded frame.
+  ok((live.match(/LIVE/g)||[]).length===1, 'x2 the word LIVE appears ONCE, on the badge only',
+     (live.match(/LIVE/g)||[]).length);
+  ok(!/REPLAY<\/span>/.test(live), 'x2b ...and it does not say REPLAY while live');
+  ok(/14:45/.test(live), 'x2c the clock shows the NEWEST recorded frame, so the store\'s age is visible');
   ok((live.match(/<i style="position:absolute/g)||[]).length===3, 'x3 one tick per loaded frame', (live.match(/<i style="position:absolute/g)||[]).length);
   ok(/Mon 31 Aug/.test(live), 'x4 the day reads as a weekday');
   REPLAY.on=true;

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.11
+// @version    15.12
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -641,7 +641,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.11';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.12';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -1075,7 +1075,13 @@ function replayBarHtml(){
     var col=on?A:INK;
     var dayTxt=REPLAY.day?replayDayLabel(REPLAY.day):(REPLAY.loading?'loading…':'—');
     var atSec=on?replaySec():null;
-    var clkTxt=on?hlClock(atSec):(frames.length?'LIVE':'—');
+    // ⚠ (v15.12) THE CLOCK SLOT PRINTED "LIVE" WHILE THE BADGE BESIDE IT ALSO PRINTED "LIVE", so the
+    // strip read "LIVE LIVE" on his panel. The badge says the MODE; this slot says the TIME, and when
+    // the panel is live the useful time is the newest recorded frame — which also tells him at a
+    // glance how current the store is before he drags anything.
+    var lastSec=null;
+    try{ if(frames.length) lastSec=replaySecOf(frames[frames.length-1]); }catch(eLS){}
+    var clkTxt=on?hlClock(atSec):(lastSec!=null?hlClock(lastSec):'—');
     // the ticks ARE the frames — a day with holes shows them, and "nothing moved" can never look
     // like "nothing was watched" (the lesson the King track had to learn in v14.83).
     var ticks='', i, s, p, span=(RP_CLOSE_SEC-RP_OPEN_SEC);
@@ -21662,7 +21668,51 @@ function emBand(sym){
     try{ S=JSON.parse(localStorage.getItem(EMOPEN_KEY)||'null'); }catch(eP){}
     if(!S || typeof S!=='object' || S.date!==today || S.v!==EMOPEN_SCHEMA) S={ v:EMOPEN_SCHEMA, date:today, sym:{} };
     if(!S.sym) S.sym={};
-    var rec=S.sym[sym]||null;
+    // ⚠⚠ (v15.12) THE PIN IS PER (SYMBOL, CHART FAMILY) — operator, 2026-08-31: "when i switch to es,
+    // it doesn't work.. do i have to be on the spy".
+    //
+    // MEASURED ON HIS PANEL: the pin read {em:3.49, rr:1, openU:771.74} — captured at 08:30 on the SPY
+    // chart, so `em` is in SPY points. He then switched to ES, where emFloor is computed at the ES
+    // ratio (771.74 x 10.04 x 0.001 = 7.7). A perfectly good pin was judged 3.49 < 7.7, healed away as
+    // "implausible", and the fallback found today's 0DTE straddle at $1.70 — call 1.13 + put 0.57, an
+    // hour after those contracts expired. So the band refused, and the LADDER LIVES INSIDE THAT
+    // SECTION. Nothing was wrong with the pin; it was being read on the wrong ruler. Landmine L-F,
+    // "name both units out loud before comparing two numbers."
+    //
+    // ⚠ AND A BARE RESCALE WOULD NOT HAVE BEEN ENOUGH. `useRr` below deliberately pins the WHOLE band
+    // to the capturing chart's ratio (v11.65, "one scale, applied once"), so a SPY-captured record used
+    // on an ES chart would draw a SPY-scale band over ES prices. The scale is a property of the CHART,
+    // so the record is now keyed by chart family and each family holds its own.
+    //
+    // ⚠ THE SEED IS WHAT MAKES IT WORK TODAY. Switching charts must not require re-capturing from a
+    // chain that may be dead — so a family with no pin borrows the SAME SESSION's other-family pin and
+    // re-derives the display width from `emK`, the straddle in the BOOK's own points, which is what
+    // should have been stored all along. Legacy records without `emK` fall back to the ratio rescale
+    // and are marked approximate rather than silently trusted.
+    var emFam=(function(){ try{ return dispIsFut()?'fut':'cash'; }catch(eF){ return 'cash'; } })();
+    var emKey=sym+'|'+emFam;
+    var rec=S.sym[emKey]||null;
+    if(!rec && S.sym[sym] && emFam==='cash') rec=S.sym[sym];        // pre-v15.12 pins were cash-only
+    if(!rec){
+      var sibKey=null, sk;
+      for(sk in S.sym){ if(sk===emKey) continue; if(sk.split('|')[0]===sym){ sibKey=sk; break; } }
+      var sib=sibKey?S.sym[sibKey]:null;
+      if(sib && typeof sib.openU==='number' && sib.openU>0){
+        var seedEm=null, approx=false;
+        if(typeof sib.emK==='number' && sib.emK>0 && dsc>0) seedEm=sib.emK*dsc;
+        else if(typeof sib.em==='number' && sib.em>0 && typeof sib.rr==='number' && sib.rr>0 && rr>0){
+          seedEm=sib.em*(rr/sib.rr); approx=true;                    // legacy: no book-native width stored
+        }
+        if(seedEm>0){
+          rec={ em:seedEm, emK:(typeof sib.emK==='number'?sib.emK:null), k:sib.k, capMin:sib.capMin,
+                t:sib.t, rr:rr, openU:sib.openU, openSo:sib.openSo, fam:emFam,
+                seededFrom:sibKey, seedApprox:approx };
+          S.sym[emKey]=rec;
+          try{ localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eSd){}
+          out.emSeeded=sibKey; if(approx) out.emSeedApprox=true;
+        }
+      }
+    }
     // belt and braces: even a stamped record is refused if the field the pin depends on is absent
     if(rec && !(typeof rec.rr==='number' && rec.rr>0)){ rec=null; out.recaptured=true; }
     // (v14.16) EM SANITY FLOOR — the poisoned-pin lesson, again, one field over. On 2026-08-27 the
@@ -21717,9 +21767,14 @@ function emBand(sym){
         if(dispIsFut() && !(typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.live)) capOK=false;
       }catch(eCG){}
       if(!capOK){ out.why='warm-up: candle window or ratio is not yet today\'s — not pinning'; return out; }
-      rec={ em:emo.em*dsc, k:emo.k, capMin:(P&&P.rth)?(P.mins-P.open):null, t:Date.now(), rr:rr,
+      // ⚠ (v15.12) `emK` IS THE STRADDLE IN THE BOOK'S OWN POINTS, and it is the field that should
+      // always have been here. `em` is a DISPLAY width and is only true for the chart that captured
+      // it; `emK` is true everywhere, so the other chart family can re-derive its own width exactly
+      // instead of rescaling one approximation into another.
+      rec={ em:emo.em*dsc, emK:emo.em, k:emo.k, capMin:(P&&P.rth)?(P.mins-P.open):null,
+            t:Date.now(), rr:rr, fam:emFam,
             openU:openU, openSo:(cs.length&&typeof cs[0].so==='number')?cs[0].so:null };
-      S.sym[sym]=rec;
+      S.sym[emKey]=rec;
       try{ localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eW){}
     }
     if(!(rec.em>0)){ out.why='expected move came back zero'; return out; }
@@ -21737,7 +21792,7 @@ function emBand(sym){
     // other way, or the chart back-filled). It can move toward the true open, never forward with the slide.
     if(cs.length && typeof cs[0].so==='number' && typeof rec.openSo==='number' && cs[0].so<rec.openSo && cs[0].o>0){
       rec.openU=cs[0].o; rec.openSo=cs[0].so;
-      try{ S.sym[sym]=rec; localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eU){}
+      try{ S.sym[emKey]=rec; localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eU){}
       out.openHealed=true;
     }
     // (v13.9) SCALE-PIN SELF-HEAL. The rr pin exists so the rails do not wobble (v11.59) — but on
@@ -21758,7 +21813,10 @@ function emBand(sym){
         if(Math.abs(rr/rec.rr-1)>0.001){
           if(!RRB[sym]){ RRB[sym]=Date.now(); try{ localStorage.setItem('gpts_emrrbad_v1', JSON.stringify(RRB)); }catch(eR2){} }
           else if(Date.now()-RRB[sym] > 5*60000){
-            rec.rr=rr; S.sym[sym]=rec;
+            // ⚠ (v15.12) the ratio heal writes back under the FAMILY key too — writing it to the
+            // bare symbol would resurrect the pre-v15.12 record and hand the other chart a pin in
+            // the wrong units, which is the bug this build exists to close.
+            rec.rr=rr; S.sym[emKey]=rec;
             try{ localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eH){}
             delete RRB[sym]; try{ localStorage.setItem('gpts_emrrbad_v1', JSON.stringify(RRB)); }catch(eR3){}
             out.rrHealed=true;

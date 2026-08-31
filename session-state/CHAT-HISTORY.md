@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-08-31 · v15.11 · session `5e8d34b5` — v15.11 - replay reads the frame for the crowns and the accumulation
+## 2026-08-31 · v15.12 · session `5e8d34b5` — v15.12 - the EM pin survives a chart switch
 
-_28 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_32 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -608,6 +608,274 @@ The panel already derives state from `d60` in one place — but there's a better
 That's the `val()` landmine — `ACC_WINDOW` carries a trailing comment, which its own docs warn about.
 N6 and N7 survived — both are source greps again. Executing `ladderKings` instead.
 One more thing to settle before I write this up — whether the arrows can be reconstructed too.
+Arrows need the roll latch re-run over the frame sequence — that's its own build, not a wiring fix. Writing the records for what shipped.
+**Nothing was broken — you were parked in replay at 13:33.** But you were right that it looked wrong, and checking it found a real defect plus a design mistake I was about to make.
+
+Measured on your panel, same instant, replay vs live: **ladder bars 1 vs 4 · king pills 2 vs 5 · ROC values 14 vs 26 · states {SPENT} vs {BUILDING, SPENT}.**
+
+**The king lanes weren't thin — they were wrong.** `ladderKings()` reads the SPXW crown from a latch keyed to *today*, and the SPY and QQQ crowns from the *live* feed. Replayed onto a past day that draws today's crowns over Friday's ladder. That's not missing data, it's mislabelled data — the one class this project can't detect afterwards. All three crowns are recorded in every frame, so all three now come from the frame, with their scale conversions, and QQQ stays a pro …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (23:32):** Two commits now — `af2d349` (v15.10) and the v15.11 one. Both reach GitHub from the same `.bat`, because the installer ships the whole working tree rather than a diff.
+
+**So run only `installv1511.bat`.** It supersedes both earlier files — you never ran the v15.10 ones, and v15.11 contains everything they did plus the crown and state fixes. Discard `installv1510.bat`.
+
+Tree is clean, nothing else pending on my side.
+
+When you drag it, the one thing I most want to hear: **does the state column populate** — BUILDING / STEADY / FADING against the ladder rows — or is it still just SPENT. That's the fix I'm least able to verify from here, since it needs a session with real accumulation history behind the frames.
+
+**OPERATOR:**
+> when i swtich to es , it doesn't work.. do i have to be on the spy
+
+**me (23:40):** Let me look rather than guess — you're on ES now, and that's a different scale path.
+Two things, and the first matters before we chase anything: **your panel is still running v15.10** — the header says so. The v15.11 fixes aren't in yet.
+
+And what you're seeing isn't the replay feature. The badge reads LIVE, and the whole ② section has collapsed to 35px with an EM refusal. Let me get the numbers behind it.
+v15.11 is in, and your ES question now has a definite answer — **no, you don't have to be on SPY.** But switching to ES does break it right now, and I can show you exactly why. It isn't the replay feature.
+
+Your pinned expected-move record, read from your storage:
+
+```
+emPin.SPY = { em: 3.49, k: 7710, openU: 771.74, rr: 1, t: 08:30 }
+```
+
+**`rr: 1` means that pin was captured at 08:30 while you were on the SPY chart** — so `em: 3.49` is in SPY points. On an ES chart the floor is computed in ES points: `771.74 × 10.04 × 0.001 ≈ 7.7`. So a perfectly good SPY-scale pin (3.49) gets compared against an ES-scale floor (7.7), fails, and is discarded as implausible.
+
+It then falls through to the live 0DTE straddle — which right now is **call 1.13 + put 0.57 = $1.70**, because today's SPX contracts expired an hour ago. That fails too, so the band refuses, and the ladder lives inside that section. Hence 0 king pills, 0 ladder bars.
+
+**This is a units bug and it's pre-existing** — not from the replay work. It's the class `PROJECT-CONSTANTS` L-F calls the most common real bug in this file: *"before comparing two numbers, name both units out loud."*
+
+**And the fix is already sitting in the record.** The pin stores `rr: 1` — the scale it was captured at — and nothing ever uses it. Rescaling by `rr / rec.rr` before the comparison makes the pin survive a chart switch instead of being …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (23:43):** Both commits are on GitHub — origin is at v15.11 with the crown and accumulation fixes in it. My clone is realigned, `0 0`.
+
+One thing the push swept in that you'll want to know about: **a stray 14 KB file, `67a24bf4-…html`, is now committed at your repo root.** That's the artifact page from earlier — it landed in `C:\Dev\gex-signal-tapereader` and `git add -A` took it. Harmless, but it's the documented hazard that put ~28 MB of old installers into `mockups/` at v13.8, and `.gitignore` has no rule for it. I'd delete it and add a pattern for stray artifact HTML at the repo root, so a downloaded page can't ride along again.
+
+Otherwise I'm holding for your go on the two fixes from my last message:
+
+**The EM pin rescale** — your pin was captured at 08:30 on the SPY chart (`rr: 1`, `em: 3.49`), and on ES it's judged against an ES-scale floor of 7.7, so a good pin gets thrown away and the section collapses. The pin already stores the scale it was taken at; nothing uses it. Rescaling by `rr / rec.rr` makes it survive a chart switch. **That's what's actually stopping ES from working** — not the chart, and not replay.
+
+**The "LIVE LIVE" in the strip** — my bug, the clock slot and the badge both print it.
+
+Say go and I'll do those two plus the gitignore, in one build.
+
+**OPERATOR:**
+> go
+
+**me (23:47):** The pin stores `em` in display units but `rr` and `dsc` are two different conversions — so a rescale would carry a small basis error. Better fix: keep the book-native value.
+The deeper issue: `useRr` pins the *whole band* to the capturing chart's scale, so a SPY pin can't just be nudged past the floor. Keying the pin per chart family, and seeding across from the book-native straddle.
+My block leaves the shared stubs mutated and breaks later assertions — restoring them at its end.
+My block used the same date as a later refusal test, so it left a pin that test then found. Moving it to a date of its own.
+Three survived — all of them my assertions being too loose to see the thing they claim to protect.
+P7 survives — and that path matters, because **your stored pin has no `emK`**, so the legacy route is what will actually run when you install. Testing it.
+Same collision, different date — that block also runs on 2026-08-29. Moving the legacy test to a date nothing else uses.
+
+### DECISIONS
+
+**THE EM PIN IS PER (SYMBOL, CHART FAMILY).** His pin held `{em:3.49, rr:1}` — captured on the SPY
+chart — and on ES was judged against an ES-scale floor of 7.7, healed away, and fell back to a $1.70
+expired straddle. **The scale is a property of the CHART**, so `cash` and `fut` each hold their own
+record and neither is judged by the other's floor. A bare rescale would not have been enough:
+`useRr` pins the whole band to the capturing chart's ratio, so a SPY pin used on ES would draw a
+SPY-scale band over ES prices.
+
+**`emK` — THE STRADDLE IN THE BOOK'S OWN POINTS — IS NOW STORED**, and is what a family with no pin
+seeds from. It is true at every scale; `em` is a display width and is only true for the chart that
+wrote it. ⚠ Pins written before v15.12 have no `emK` and fall back to the ratio rescale, which
+inherits the basis error and is FLAGGED (`seedApprox`) rather than silently trusted.
+
+**THE CLOCK SAYS THE TIME, THE BADGE SAYS THE MODE.** The strip read "LIVE LIVE"; the clock now shows
+the newest recorded frame, which also exposes how current the store is before he drags.
+
+**A STRAY ARTIFACT PAGE REACHED ORIGIN** through the installer's `git add -A` — the v13.8 hazard with
+a different file type. Removed; `.gitignore` refuses a UUID-named `.html` at the root.
+
+### SHIPPED
+
+**v15.12.** `test_em_band` 625 assertions, `test_replay` 99. The chart switch is EXECUTED across a
+scale change. ⚠ **Four mutations survived initially and every one was a loose assertion of mine** — a
+tolerance that could not separate the exact seed from the legacy rescale, a `/LIVE/` grep that could
+not see "LIVE LIVE", and the approximate flag, which needed a legacy-pin test. ⚠ **And my own block
+broke five later assertions twice**: by leaving shared stubs flipped, then by planting a pin on a
+date another block uses (08-27, then 08-29).
+
+### OPEN AT CLOSE
+
+1. **THE ES CHART HAS NOT BEEN RE-CHECKED WITH v15.12 ON.** His pin is legacy (no `emK`), so the
+   approximate path is what will run — expect the band back at ~35 ES points and the ladder with it.
+2. **THE ROLL ARROWS IN REPLAY** — re-run the roll latch over the frame sequence. Its own build.
+3. **THE GAMMA PROFILE IS HIS CALL** — it is not on the live face; do not reinstate it under cover of
+   "make replay like live".
+4. Q11 (the ex-ante deflect/break discriminator) and the day-export gap (F-10c) unchanged.
+
+### COMMITS THIS CONTEXT
+
+```
+b25ebdd v15.11: replay reads the frame for the crowns and the accumulation
+5ae134d v15.10: the replay slider; the version in the header; the read removed
+a48e704 record: WITHDRAW F-10b - the morning is not shed; the reads were complete all along
+a278846 record: the F-10 storage fix IS built - the real bug is that the budget sheds the morning
+30d1892 data: daily export 31-Mon-08
+a1c6a88 v15.09: roll arrows and the corrected pullback unit
+aa97e8b v15.07: the vertical redesign
+2049394 v15.05: fix the frame, restore the ladder
+6e58657 v15.04: ladder refuses mismatched scales
+d2fe5f4 v15.03: the empty ladder explains itself
+3e7e340 v15.02: per-book latch; SLvl/TLvl rules
+6b223e1 v15.01: asymmetric reversal band, candle layout
+```
+
+---
+
+<!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-08-31 · v15.11 · session `5e8d34b5` — v15.11 - replay reads the frame for the crowns and the accumulation
+**OPERATOR:**
+> load gex.  i accidentally closed my last session .
+## 1 · Files loaded
+## 2 · Nothing was lost when the window closed
+## 3 · Architecture, as understood
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> lets take it step by step .. ask the first question or issue
+**OPERATOR:**
+> yes
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> yes
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> when i click on the tampermonkey link it tells me to reinstall . there is no update option
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> should i click the reinstall option in tampermonkey
+**OPERATOR:**
+> next
+**OPERATOR:**
+> ok
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> were you able to identify the deflections that i have circled. there is 1 deflection in each circle . this is for the current market spy , today
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> we need to continue refining the app. unfortunately i cant see the arrows on the left or the king lanes on the right.  i want to have a feature that allows me to go back during the day to examine what happened, almost like a slider that allows for a replay, so if i want to see the state of the market at 1:00pm , i can do that by dragging the slider back .   Also put the version in the header where it says Tapereader , so i know what version it is.  finally, take out the read . I might come back to it later. The read is where it say Range day  - Trinity .. ...  identify if you can imploement the replay feature.   It should also work after hours or on the weekend , so if it is saturday, i want to go back to friday and see what happened.   see if you can implement this and whether you have all the data to do this.
+**OPERATOR:**
+> yes
+> [Image: original 2480x3200, displayed at 1550x2000. Multiply coordinates by 1.60 to map to original image.]
+> Approach this as the design lead at a small studio known for their versatility, giving every client a visual identity pitched at the treatment the task actually calls for. Make deliberate choices about palette, typography, and layout that are specific to this subject, and avoid templated designs.
+> 
+> ## Read the request first
+> 
+> Calibrate treatment, not whether to design. A doc deserves the same craft as a landing page - what changes is the treatment that craft is delivered in. Format is not part of this read: author HTML, and publish Markdown only when a loaded skill explicitly instructs it - a Markdown publish keeps its filename as its title and takes almost none of the craft below, and is never a way to save time.
+> 
+> Many requests call for a more utilitarian treatment: a plan, a memo, a demo. Make it polished: include real typographic hierarchy, considered spacing, and a proper palette, but avoid over-designing. Most pages do not need a flashy, gigantic hero. Keep flourishes tasteful and limited.
+> 
+> Some requests call for an editorial treatment: a landing page, a game, an app or tool they'll keep or share.
+> 
+> When unsure: a well-composed page is never the wrong answer; an over-designed visual identity sometimes is.
+> 
+> Fundamentals below apply to everything. The editorial process after that runs only when the read above says so.
+> 
+> ## Fundamentals for every artifact
+> 
+> **Honor what's already there** Look for an existing design system first - CLAUDE.md, a tokens or theme file, existing component styles. When one exists, apply it; everything below fills gaps and never overrides. Precedence is always: the user's own words, then the project's existing system, then your choices.
+> 
+> **Ground it in the subject.** If the subject isn't already clear, pin it: one concrete subject, its audience, and the page's single job. The subject's own world - its materials, instruments, vernacular - is where distinctive choices come from. Build with real content throughout, never lorem.
+> 
+> **Pair typefaces** Typography carries the page even when the page isn't about typography. Google Fonts is the one font host the Artifact CSP admits - link it directly (`<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=...&display=swap">`); a face from anywhere else must be inlined as a @font-face data URI or it falls back silently. Either way, declare a real fallback stack. Keep running text near 65 characters wide; set a type scale and stay on it; give headings `text-wrap: balance`, body text room to breathe, and uppercase labels a touch of letter-spacing.
+> 
+> **Load libraries, don't paste them.** When the page genuinely needs a library - React, a charting or highlighting package - load its UMD build from cdnjs (only the script - a library's stylesheet still has to be inlined) with one pinned `<script src="https://cdnjs.cloudflare.com/ajax/libs/...">` placed before the inline script that uses its global, instead of inlining the library's source or hand-writing a stand-in; the Artifact tool's description lists the few other script hosts the CSP admits. The page's own CSS and JS, its images and its data ship with the page. Most pages need no library at all - reach for one only when it carries real weight.
+> 
+> **Choose neutrals, don't default to them.** A pure mid-grey reads as unconsidered; a grey with a slight hue bias toward the page's accent reads as chosen. Pure white and near-black are fine grounds when they suit the subject - the point is that the neutral was picked, not inherited.
+> 
+> **Design both themes.** The page renders in the viewer's theme, and the viewer has three states, not two: an explicit choice stamps `data-theme="dark"` / `data-theme="light"` on the root element, and the default "system" setting stamps *nothing* - most viewers see the un-stamped document, where only `prefers-color-scheme` separates light from dark. Structure the CSS token-level for all three: the bare `:root` block defines the complete light palette (for a deliberately dark-first design, swap light and dark consistently through this whole pattern); `@media (prefers-color-scheme: dark)` redefines only the tokens, guarded as `:root:not([data-theme="light"])` so an explicit light choice beats a dark OS; `:root[data-theme="dark"]` redefines them again so the toggle also wins in the other direction. Style components through the tokens, never directly inside a media or `[data-theme]` block - a color whose only definition sits behind `[data-theme]` never applies in the un-stamped state, and the page renders one theme's text on the other theme's ground. Two more rules keep each theme resolving as a set: the artifact composites over a ground the viewer paints in *its* theme, so `body` must set an explicit `background` from a token - a transparent body silently borrows the host's ground; and every element that sets a color takes it from the same token set as the surface behind it, never a literal that only works in one theme. Before publishing, scan the stylesheet for any color declared only inside a media or `[data-theme]` block - that is the classic unreadable-artifact bug. Give the second theme the same care as the first - don't naively invert; keep contrast legible and the accent working on both grounds. A design that deliberately commits to one visual world (a neon arcade screen, a letterpress invitation) may stay single-theme - then skip the media query and stamps entirely but still paint the background and every color explicitly, so the page holds on either host ground; make it a choice, not an omission.
+> 
+> **Let layout do the spacing.** Lay out sibling groups with flex or grid and `gap`, not per-element margins that silently collapse or double. Wide content - tables, code, diagrams - gets `overflow-x: auto` on its own container so the page body never scrolls sideways. Reach for `font-variant-numeric: tabular-nums` wherever digits line up in columns.
+> 
+> **Avoid AI-generated design** AI-generated design currently clusters around a few looks: warm cream (#F4F1EA) with a serif display and terracotta accent; near-black with a lone acid-green or vermilion pop; broadsheet hairline rules with dense columns; a purple-to-blue gradient hero on white; Inter or Space Grotesk as the "safe" face; emoji as section markers; everything centered; `rounded-lg` everywhere; accent bar/rail on rounded cards. Where the user pins down a visual direction, follow it exactly - their words always win, including when they ask for one of these looks. Where nothing is specified, don't spend that freedom on one of these defaults.
+> 
+> **Build cleanly** Be cognizant of overlapping elements, cascade collisions, silent font fallbacks; visual bugs hide in the gap between source and output. Close every non-void element, double-quote attributes, give keyboard focus a visible state, respect `prefers-reduced-motion`. For generative or decorative graphics, reach for Canvas or WebGL rather than hand-authoring long SVG path data.
+> 
+> **CSS rules** When writing the CSS, watch your selector specificities. It is easy to generate classes that cancel each other out - a type-based selector like `.section` fighting an element-based one like `.cta` over padding and margins between sections. Structure the cascade so it doesn't silently undo your spacing.
+> 
+> **Writing the copy** Words are design material, not decoration. Write from the user's side of the screen - name things by what people recognize, not how the system is built (a person manages *notifications*, not *webhook config*). Active voice; a control says exactly what happens ("Publish", then a toast that says "Published"). Errors explain what went wrong and how to fix it - no apologies, no vagueness. Specific beats clever.
+> 
+> **Name the page like a product, not a caption.** The `<title>` is the artifact's name in the gallery and the browser tab, and it sets the reader's first impression of care. Give the page a real name: a short noun phrase, typically two to four words, specific to the subject - or, for a page that exists to answer one question, that question itself, which is then the page's name. Stop at the name - a title that carries its own explainer after a dash or colon reads as generated filler. The name must also identify the page among many: in the gallery it sits beside dozens of other artifacts, and a generic category label that could sit on any of them fails as a name just as surely as an appended explainer. When a candidate title pairs the name with a generic word - a greeting, a category, a page-type label - the name is the half to keep; a trim that drops the identity and keeps the generic word produces exactly the title that could sit on any page. And the rule removes explainers, it does not impose brevity: a multi-word title that already reads as one specific name is finished, and shortening it further only makes it generic. The one-sentence publish `description` is where the explanation belongs; the gallery shows it right under the title.
+> 
+> **Structure is information** Structural devices, numbering, eyebrows, dividers, labels, should encode something true about the content, not decorate it. Many generic designs use numbered markers (01 / 02 / 03), but that's only appropriate if the content actually is a sequence - like a real process or a typed timeline where order carries information the reader needs. Question if choices like numbered markers actually make sense before incorporating them.
+> 
+> **When it's a UI, not a document** A dashboard or tool is scanned and operated, not read top-to-bottom, so the craft shifts from typography to information design. Surface the summary before the detail; encode state in form as well as number - a pill, a chip, a severity stripe - so what needs attention reads at a glance. Semantic color (good / warning / critical) is separate from the accent hue and doesn't count as your accent. Give sparklines and charts the same care as type: an area fill, a faint grid, an emphasized endpoint. What's interactive should look interactive.
+> 
+> 
+> 
+> ## Process
+> 
+> Before writing code, sketch a short design plan - a compact token system with color, type, and layout:
+> - **Color**: describe the palette as 4-6 named hex values.
+> - **Type**: typefaces for 2+ roles - a characterful display face used with restraint, a complementary body face, and a utility face for captions or data if needed.
+> - **Layout**: a layout concept in one or two sentences.
+> 
+> Then build, following the plan and deriving every color and type decision from it.
+> 
+> ## When the request is editorial
+> 
+> The stance shifts: the client has already rejected proposals that felt templated, and is paying for a distinctive point of view. Make opinionated calls, and take one real aesthetic risk where it serves the work.
+> 
+> Review the design plan against the subject before building: if any part of it reads like the generic default you would produce for any similar page, revise that part, and note what you changed and why. Only after you've confirmed the plan's uniqueness do you write the code, following the revised plan exactly.
+> 
+> **Principles** 
+> 
+> - The hero is a thesis: open with the most characteristic thing in the subject's world - headline, image, live demo, interactive moment. 
+> - Typography carries the personality of the page. Pair the display and body faces deliberately, not the same families you would reach for on any other project, and set a clear type scale with intentional weights, widths, and spacing. Make the type treatment itself a memorable part of the design, not a neutral delivery vehicle for the content. 
+> - Leverage motion deliberately. Think about where and if animation can serve the subject: a page-load sequence, a scroll-triggered reveal, hover micro-interactions, ambient atmosphere. An orchestrated moment usually lands harder than scattered effects; choose what the direction calls for. However, sometimes less is more, and extra animation contributes to the feeling that the design is AI-generated. 
+> - Match complexity to the vision. Maximalist directions need elaborate execution; minimal directions need precision in spacing, type, and detail. Elegance is executing the chosen vision well.
+> - Spend your boldness in one place; keep everything around it quiet. If the accent fights the ground, shift it toward analogous or drop saturation rather than replacing it.
+**OPERATOR:**
+> whre is the mockup
+**OPERATOR:**
+> im in claude for chrome and i cant see it.
+**OPERATOR:**
+> no , im not interested in a replay card.  i wanted a slider that i could slide to see how the app looked earlier on in the day.. can you do that.
+**OPERATOR:**
+> show me an actual mockup of how it will look. and make sure you dont break anything..
+**OPERATOR:**
+> perfec
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> dont you have a note somethere or some instruction that says what you have to save everytime you give me a build and give me a save confirmation too to save things like the chat history so that you can save the session and the next context can load the chat history and more .  can you check .
+> "after you give me a build, i want a confirmation something like a checkmark save done for future context. this tells me that you have updated the chat history and any relevant files that a future context would need to proceed if this context was closed."
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> this doesn't look right. the levels the king lanes the gamma profile, the status's etc.  all missing
+**OPERATOR:**
+> i dragged the slider.. yes
+**OPERATOR:**
+> yes.. can you make it exactly like it would be live, including arrows , gamma profile, status, king lanes,  the 3 kings, nodes etc..
 
 ### DECISIONS
 
@@ -633,6 +901,7 @@ means re-running the latch over the frame sequence, which is its own build. **Th
 not on the LIVE face either** — removed at v14.81 at his own request — so "exactly like live" leaves
 it absent unless he asks for it back.
 
+
 ### SHIPPED
 
 **v15.11.** `test_replay.js` at **97 assertions**; suite otherwise unchanged.
@@ -646,6 +915,7 @@ bearing into a raw level left the token in a tip string. Sixth occurrence of tha
 `ladderKings` is now executed and its crowns checked by book, raw strike AND converted position —
 which caught two further mutations that dropped the scale conversion.
 
+
 ### OPEN AT CLOSE
 
 1. **THE ROLL ARROWS IN REPLAY** — re-run the roll latch over the frame sequence. Its own build.
@@ -655,26 +925,8 @@ which caught two further mutations that dropped the scale conversion.
    do the ladder, crowns, states and ⓪a all move together, and does the state column populate.
 4. Q11 (the ex-ante deflect/break discriminator) and the day-export gap (F-10c) are unchanged.
 
-### COMMITS THIS CONTEXT
 
-```
-f903c63 v15.10: the replay slider; the version in the header; the read removed
-a48e704 record: WITHDRAW F-10b - the morning is not shed; the reads were complete all along
-a278846 record: the F-10 storage fix IS built - the real bug is that the budget sheds the morning
-30d1892 data: daily export 31-Mon-08
-a1c6a88 v15.09: roll arrows and the corrected pullback unit
-aa97e8b v15.07: the vertical redesign
-2049394 v15.05: fix the frame, restore the ladder
-6e58657 v15.04: ladder refuses mismatched scales
-d2fe5f4 v15.03: the empty ladder explains itself
-3e7e340 v15.02: per-book latch; SLvl/TLvl rules
-6b223e1 v15.01: asymmetric reversal band, candle layout
-d31d9b8 v15.00: open items closed
-```
-
----
-
-<!-- EARLIER-CONTEXTS -->
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 

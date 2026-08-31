@@ -131,6 +131,43 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.12 · 2026-08-31 · **"DO I HAVE TO BE ON THE SPY" — NO, AND HIS STORAGE HELD THE ANSWER**
+
+He switched to the ES chart and the whole ② section collapsed. The pin, read off his panel:
+`{em:3.49, rr:1, openU:771.74}` — **captured at 08:30 on the SPY chart, so `em` is in SPY points.**
+On ES the floor is computed at the ES ratio (7.7), so 3.49 failed it, the pin was healed away as
+"implausible", and the fallback found today's 0DTE straddle at **$1.70** — call 1.13 + put 0.57, an
+hour after expiry. The band refused and **the ladder lives inside that section.**
+
+⚠⚠ **NOTHING WAS WRONG WITH THE VALUE. IT WAS READ ON THE WRONG RULER.** Landmine L-F — "name both
+units out loud before comparing two numbers" — and the two numbers here were a *stored display width*
+and a *live floor*, which look identical and are not. **A stored value in DISPLAY units is a trap
+whenever the display can change**; store the book-native quantity and derive the display each time.
+
+⚠ **AND THE OBVIOUS FIX WAS WRONG.** Rescaling the pin past the floor would have left `useRr` pinning
+the whole band to the CAPTURING chart's ratio (v11.65, "one scale applied once") — a SPY-scale band
+drawn over ES prices. **The scale is a property of the chart, so the record is per chart family.**
+Reaching for the arithmetic fix before reading what consumed the value would have shipped that.
+
+⚠⚠ **FOUR MUTATIONS SURVIVED AND EVERY ONE WAS A LOOSE ASSERTION OF MINE, NOT A CODE GAP.**
+- a ±0.2 tolerance could not separate the EXACT seed from the legacy rescale — they differ by 0.04
+  here by construction. Fixed by asserting **which path ran**, not how close the number landed.
+- `/LIVE/.test(strip)` could not see "LIVE LIVE" — the very bug it guarded. Now counts occurrences.
+- the approximate-seed flag needed a **legacy-pin test**, and writing it mattered for a second
+  reason: **his stored pin has no `emK`, so the legacy path is the one that runs on his machine.**
+**A tolerance wide enough to pass both branches is not a test of either.**
+
+⚠⚠ **MY TEST BLOCK BROKE FIVE LATER ASSERTIONS, TWICE, AND BOTH TIMES BY SHARED STATE.** First by
+leaving `dispIsFut`/`dispR`/`ifLadder` flipped — the harness is sequential, so every later assertion
+ran against a cash chart it never asked for. Then by planting a pin on **2026-08-27**, a date the
+refusal block uses, so it found a valid record and stopped refusing; moving it to **08-29** collided
+with the prior-close block the same way. **A block that mutates shared stubs owns restoring them, and
+a test that plants a dated record owns picking a date nothing else runs on.**
+
+⚠ A stray Claude artifact page reached origin through the installer's `git add -A` — the v13.8
+hazard ("git add -A sweeps ANYTHING in the folder") recurring with a different file type.
+`.gitignore` now refuses a UUID-named `.html` at the root.
+
 ### v15.11 · 2026-08-31 · **I SHIPPED A REPLAY THAT DREW TODAY'S KINGS ON A PAST DAY**
 
 He dragged the new slider to 13:33 and said the king lanes, statuses and nodes were missing. Nothing

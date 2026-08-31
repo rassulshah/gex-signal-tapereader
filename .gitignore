@@ -23,3 +23,10 @@ installv*.bat
 # python bytecode from the study tools
 __pycache__/
 *.pyc
+
+# (v15.12) ⚠ STRAY ARTIFACT / BROWSER PAGES AT THE REPO ROOT. `git add -A` on his machine sweeps
+# ANYTHING in the folder — that is how ~28MB of old installers reached mockups/ at v13.8, and on
+# 2026-08-31 a downloaded Claude artifact page (67a24bf4-….html, 14KB) was committed to origin the
+# same way. A UUID-named .html at the root is never project content.
+/????????-????-????-????-????????????.html
+/*.crdownload

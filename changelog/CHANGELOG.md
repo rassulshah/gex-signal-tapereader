@@ -1,3 +1,62 @@
+## v15.12 — the expected-move pin survives a chart switch
+
+> "when i switch to es, it doesn't work.. do i have to be on the spy"
+
+**No — and the answer was in his own storage.** Read off the live panel:
+
+    emPin.SPY = { em: 3.49, rr: 1, openU: 771.74, k: 7710, t: 08:30 }
+
+`rr: 1` means that pin was captured at 08:30 **on the SPY chart**, so `em` is in SPY points. On an ES
+chart the floor is computed at the ES ratio — `771.74 x 10.04 x 0.001 = 7.7` — so a perfectly good
+pin was judged `3.49 < 7.7`, healed away as "implausible", and the fallback found today's 0DTE
+straddle at **$1.70** (call 1.13 + put 0.57, an hour after those contracts expired). The band
+refused, and **the ladder lives inside that section** — hence 0 king pills and 0 ladder bars.
+
+Nothing was wrong with the pin. It was being read on the wrong ruler. Landmine **L-F**.
+
+### ⚠ A BARE RESCALE WOULD NOT HAVE BEEN ENOUGH
+
+`useRr` deliberately pins the WHOLE band to the capturing chart's ratio (v11.65, "one scale, applied
+once"), so a SPY-captured record used on an ES chart would draw a SPY-scale band over ES prices.
+**The scale is a property of the CHART**, so the record is now keyed `sym|fam` — `cash` and `fut`
+each hold their own — and neither can be judged by the other's floor.
+
+### AND `emK` IS THE FIELD THAT SHOULD ALWAYS HAVE BEEN STORED
+
+Switching charts must not require re-capturing from a chain that may be dead. A family with no pin
+**seeds** from the same session's other family, re-deriving its width from `emK` — the straddle in
+the BOOK's own points, which is true at every scale. 35 SPX points becomes 35.08 ES points exactly,
+rather than a rescale of an already-scaled number.
+
+⚠ **Pins written before v15.12 have no `emK`** — including the one on his machine right now — so
+they fall back to the ratio rescale `em x (rr/rr')`, which inherits the SPX/SPY/ES basis error. That
+path **works and is flagged** (`seedApprox`), never silently trusted. It is tested with his real
+record, verbatim.
+
+### also
+
+**"LIVE LIVE"** — the replay strip printed the badge's word in the clock slot as well. The badge says
+the MODE; the clock says the TIME, and when live the useful time is the **newest recorded frame**,
+which also shows at a glance how current the store is before he drags anything.
+
+**A stray artifact page was committed to origin** by the installer's `git add -A` — the v13.8 hazard
+recurring. Removed, and `.gitignore` now refuses a UUID-named `.html` at the repo root.
+
+### testing
+
+`test_em_band` at **625** assertions, `test_replay` at **99**. The chart switch is EXECUTED across a
+scale change rather than grepped. ⚠ **Four mutations initially survived and each exposed a loose
+assertion of mine:** a tolerance wide enough to swallow the difference between the exact and the
+approximate seed (now asserts WHICH PATH RAN, and that `emK` was stored); a LIVE check that counted
+any occurrence of the word (now asserts it appears exactly once); and the approximate-seed flag,
+which needed a legacy-pin test — **the path that will actually run on his machine.**
+
+⚠ **AND MY OWN TEST BLOCK BROKE FIVE LATER ASSERTIONS TWICE.** The harness is sequential and shares
+globals: leaving `dispIsFut`/`dispR`/`ifLadder` flipped rewrote the world for everything below, and
+planting a pin on a date another block uses (08-27, then 08-29) left a valid record where that block
+expected none. **A test block that mutates shared state owns restoring it, and a test that plants a
+dated record owns picking a date nothing else runs on.**
+
 ## v15.11 — replay reads the frame for the crowns and the accumulation, not today's tape
 
 > "this doesn't look right. the levels the king lanes the gamma profile, the status's etc. all

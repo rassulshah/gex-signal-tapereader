@@ -133,6 +133,105 @@ eval(ex('emBand'));
   ok(B4.est===true,                     'a capture 150 minutes in is marked ~EST', B4.est);
   ok(B4.em===9,                         'and is used as-is — no sqrt(T) reconstruction is attempted', B4.em);
 
+  // ---------- (v15.12) THE PIN SURVIVES A CHART SWITCH ------------------------------------------
+  // ⚠⚠ Operator, 2026-08-31: "when i switch to es, it doesn't work.. do i have to be on the spy".
+  // MEASURED ON HIS PANEL: the pin held {em:3.49, rr:1, openU:771.74} — captured at 08:30 on the SPY
+  // chart — and on ES the floor is computed at the ES ratio (771.74 x 10.04 x 0.001 = 7.7). A good
+  // pin read 3.49 < 7.7, was healed away as "implausible", and the fallback found today's 0DTE
+  // straddle at $1.70 because those contracts had expired an hour earlier. The band refused, and the
+  // LADDER LIVES INSIDE THAT SECTION. Nothing was wrong with the pin; it was read on the wrong ruler.
+  //
+  // These assertions EXECUTE emBand across a scale change, because that is the only way to see it.
+  {
+    // ⚠ A DATE OF ITS OWN. The refusal block below runs on 2026-08-27 and expects NO pin for that
+    // day; capturing one here left it a valid record to find, and it stopped refusing. A pin is
+    // keyed by date, so a test that captures one owns picking a date nothing else uses.
+    global.ctTodayStr=function(){ return '2026-08-30'; };
+    global.__phase={ rth:true, mins:8*60+35, open:8*60+30 };
+    // capture on a CASH chart: rr 1, dsc 0.0998 — a 35-point SPX straddle is 3.49 SPY points
+    global.dispIsFut=function(){ return false; };
+    global.dispR=function(){ return 1; };
+    global.ifLadder=function(){ return { err:null, dispScale:0.0998 }; };
+    global.__cands=[ {o:771.74,h:772.2,l:771.0,c:771.9}, {o:771.9,h:772.0,l:770.5,c:770.8} ];
+    global.__chain={ err:null, dte0:{ em:{ em:35, k:7710 } }, toFri:{ em:{ em:70, k:7710 } } };
+    const C=emBand('SPY');
+    ok(C.ok===true, 'p1 the pin captures on the cash chart', C.why);
+    ok(Math.abs(C.em-3.49)<0.02, 'p2 ...as a SPY-scale width, exactly what his panel held', C.em);
+
+    // now switch to the ES chart — same session, same symbol, ratio 10.04 and basis 1.0023
+    global.dispIsFut=function(){ return true; };
+    global.dispR=function(){ return 10.04; };
+    global.ifLadder=function(){ return { err:null, dispScale:1.0023 }; };
+    // ⚠ and the live straddle is now DEAD, exactly as it was on his panel at 15:59. If the seed does
+    // not work there is nothing to fall back to, which is precisely why he saw the section collapse.
+    global.__chain={ err:null, dte0:{ em:{ em:1.7, k:7685 } }, toFri:{ em:{ em:65, k:7685 } } };
+    const E=emBand('SPY');
+    ok(E.ok===true, 'p3 THE BAND SURVIVES THE SWITCH TO ES — this is the whole bug', E.why);
+    ok(!/implausibly small/.test(E.why||''), 'p4 ...and is not healed away as implausible', E.why);
+    // 35 SPX points x the ES basis = 35.08 ES points. NOT 3.49 (the SPY width read on an ES rail),
+    // and NOT 1.7 (the dead straddle it would otherwise have fallen back to).
+    ok(Math.abs(E.em-35.08)<0.2, 'p5 ...at the ES width re-derived from the BOOK-native straddle', E.em);
+    ok(Math.abs(E.em-1.7)>1, 'p6 ...not the expired straddle it used to fall back to', E.em);
+    ok(Math.abs(E.em-3.49)>1, 'p7 ...and not the SPY width drawn on an ES rail', E.em);
+    // ⚠⚠ p5 CANNOT TELL THE EXACT PATH FROM THE LEGACY RESCALE — mutation proved it. Removing `emK`
+    // falls back to em x (rr/rr'), which lands within 0.05 of the same number here, so the tolerance
+    // swallows the difference. The property that actually matters is WHICH PATH RAN: the book-native
+    // width is exact at any scale, the rescale carries the SPX/SPY/ES basis error and is marked.
+    ok(!E.emSeedApprox, 'p7b the seed used the BOOK-NATIVE width, not the approximate rescale', E.emSeedApprox);
+    {
+      const st=JSON.parse(localStorage.getItem(EMOPEN_KEY)||'{}');
+      const fut=st.sym&&st.sym['SPY|fut'];
+      ok(!!fut && typeof fut.emK==='number' && Math.abs(fut.emK-35)<0.01,
+         'p7c ...and emK, the straddle in the BOOK\'s own points, is what was stored', fut&&fut.emK);
+    }
+    // the anchor is the underlying open on the ES ruler
+    ok(Math.abs(E.open-771.74*10.04)<1, 'p8 the anchor converts on the CURRENT chart ratio', E.open);
+
+    // and switching back must not disturb the cash pin
+    global.dispIsFut=function(){ return false; };
+    global.dispR=function(){ return 1; };
+    global.ifLadder=function(){ return { err:null, dispScale:0.0998 }; };
+    const C2=emBand('SPY');
+    ok(C2.ok===true && Math.abs(C2.em-3.49)<0.02,
+       'p9 switching back finds the cash pin untouched — one pin per chart family', C2.em);
+
+    // ---------- THE LEGACY PIN — this is the path that runs on HIS machine today ----------
+    // ⚠⚠ His stored record was written before v15.12 and has NO `emK`. So the exact path cannot run
+    // for him on the first switch; the ratio rescale is what carries it, and it MUST both work and
+    // be marked, because it inherits the SPX/SPY/ES basis error rather than being exact.
+    {
+      const st=JSON.parse(localStorage.getItem(EMOPEN_KEY)||'{}');
+      // his real record, verbatim off the panel 2026-08-31, minus emK
+      // ⚠ 2026-08-19 IS A DATE NO OTHER BLOCK USES. The pin store is date-scoped, so a test that
+      // plants one has to pick a day nothing else runs on — 08-27 broke the refusal block and 08-29
+      // broke the prior-close block, both by leaving a valid pin where one was not expected.
+      st.date='2026-08-19'; st.sym={ 'SPY|cash':{ em:3.49251, k:7710, openU:771.74, openSo:30600, rr:1, capMin:0, t:Date.now() } };
+      localStorage.setItem(EMOPEN_KEY, JSON.stringify(st));
+      global.ctTodayStr=function(){ return '2026-08-19'; };
+      global.dispIsFut=function(){ return true; };
+      global.dispR=function(){ return 10.04; };
+      global.ifLadder=function(){ return { err:null, dispScale:1.0023 }; };
+      global.__cands=[ {o:771.74,h:772.2,l:771.0,c:771.9}, {o:771.9,h:772.0,l:770.5,c:770.8} ];
+      global.__chain={ err:null, dte0:{ em:{ em:1.7, k:7685 } }, toFri:{ em:{ em:65, k:7685 } } };
+      const L=emBand('SPY');
+      ok(L.ok===true, 'p10 a LEGACY pin with no emK still survives the switch to ES', L.why);
+      ok(Math.abs(L.em-35.06)<0.3, 'p11 ...rescaled by the ratio it was captured at', L.em);
+      ok(L.emSeedApprox===true, 'p12 ...and FLAGGED approximate, because it inherits the basis error', L.emSeedApprox);
+    }
+
+    // ⚠⚠ RESTORE EVERY GLOBAL THIS BLOCK TOUCHED. The harness is sequential and shares state, so a
+    // stub left flipped here silently rewrites the WORLD for the assertions below — which is exactly
+    // what happened on the first run: five later checks failed against a cash chart they never asked
+    // for. A test block that mutates shared stubs owns putting them back.
+    global.dispIsFut=function(){ return true; };
+    global.dispR=function(){ return 10; };
+    global.ifLadder=function(){ return { err:null, dispScale:1 }; };
+    global.ctTodayStr=function(){ return '2026-08-26'; };
+    global.__phase={ rth:true, mins:11*60, open:8*60+30 };
+    global.__cands=[ {o:770.00,h:770.5,l:769.5,c:770.2}, {o:770.2,h:770.4,l:769.0,c:769.0} ];
+    global.__chain={ err:null, dte0:{ em:{ em:9, k:7700 } }, toFri:{ em:{ em:70, k:7700 } } };
+  }
+
   // ---------- refusals ----------
   global.ctTodayStr=function(){ return '2026-08-27'; };
   global.__chain={ err:null, dte0:{ em:null }, toFri:{ em:{ em:70, k:7700 } } };
