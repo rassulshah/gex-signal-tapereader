@@ -131,6 +131,39 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.23 — a fixture that omits a field cannot fail on a bug about that field
+
+**1 · The false thing.** The EM band's warm-up guard read `cs[0].time`. **The candles have no
+`time`** — they carry `t` and `so` — so `typeof undefined === 'number'` was false, the condition
+short-circuited, and the guard passed every capture since it was written. The band then anchored on
+YESTERDAY's open (768.6968 against a real 761.93) and drew 67 ES points above the session, all day,
+every day. ⚠ **A guard that reads a field the data does not have is not a weak guard, it is no
+guard** — and it looks exactly like a strong one in review.
+
+**2 · And the test fixtures made it invisible, which is the deeper failure.** They modelled a candle
+as `{o,h,l,c}` — no clock at all — and the harness stubbed `naiveDayStr()` to return "today" for
+every input BECAUSE of that. So the one assertion that could have caught this could not fail even in
+principle. ⚠ **A fixture missing the very fields a guard must read is a fixture that cannot fail on
+that bug.** When fixtures were made realistic, they immediately reached code the tests had never
+executed and needed two more constants — that is what an incomplete fixture costs, paid late.
+
+**3 · A constant is only meaningful with its unit, and `KT_DWELL=2` had none.** It was a COUNT of
+observations, applied to a live latch that observes per render (seconds) and a replay rebuild that
+walks 3-minute frames. **Same name, same number, two different rules** — ~6 seconds of probation
+live, 6 minutes in replay, so the live lane was near-unfiltered and the two surfaces could never
+agree about the same session. Now a duration, measured: 20 minutes gives a median of 2 SPXW / 3 SPY
+migrations across 11 sessions. ⚠ **When one constant is read by two loops running at different
+rates, it is two constants wearing one name.**
+
+**4 · Hoisting put the fix out of reach of the path that needed it.** `var _openSec` declared inside
+the capture branch is `undefined` on every render where a pin already exists — so the self-heal
+compared `so >= undefined` and never ran. The bug and its fix would have shipped together. ⚠ **A
+`var` inside a branch is a promise the whole function keeps and only that branch fulfils.**
+
+**5 · Dead defensive code reads as caution and is not.** `if(!c0) capOK=false;` sat on a path where
+`anchor==='open'` already guarantees the bar exists; mutation proved it — disabling the line changed
+nothing anywhere. Deleted rather than tested.
+
 ### v15.22 — one wrong idea about a variable can disable three features and look like a design
 
 **1 · The false thing, and it survived eight builds.** `D.secondT` was read as "the clock at which

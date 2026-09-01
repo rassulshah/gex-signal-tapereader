@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.22
+// @version    15.23
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.22';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.23';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -22069,6 +22069,14 @@ var EMBAND_RRBAD={};
 function emBand(sym){
   var out={ ok:false, why:'', est:false };
   try{
+    // ⚠⚠ (v15.23) DECLARED HERE, NOT INSIDE THE CAPTURE BRANCH. My first cut put it beside the
+    // warm-up guard — so on the path where a pin ALREADY EXISTS (which is every render after the
+    // first) it hoisted as `undefined`, `cs[0].so >= undefined` was false, and the self-heal that
+    // repairs a bad pin could never run. The bug being fixed and the fix for it would both have
+    // shipped. Caught by the heal's own assertion, which is why that assertion executes.
+    // ⚠ NOT mul() — the band tests eval this function in isolation and do not define it; a bare
+    // call throws inside emBand's own try and reads downstream as "the band refused".
+    var _openSec=8*3600+30*60;
     var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(eR){}
     var cs=closedCandles(sym)||[];
     var openU=null, nowU=null;
@@ -22212,10 +22220,32 @@ function emBand(sym){
       // bar (the chart had not back-filled today yet) and a contaminated early-EMA ratio — every
       // rr-scaled value sat +20 all morning. A pin is for the whole session: refuse it until the
       // candle window's opening bar is TODAY'S and, on a futures chart, the ratio is live.
+      // ⚠⚠ (v15.23) THIS GUARD HAS NEVER FIRED, AND IT IS WHY THE BAND HAS BEEN WRONG ALL DAY.
+      // It tested `cs[0].time` — A FIELD THE CANDLES DO NOT HAVE. They carry `t`, `so`, `o/h/l/c`.
+      // `typeof undefined === 'number'` is false, so the whole condition short-circuited and
+      // `capOK` stayed true at every single capture since the guard was written.
+      // MEASURED on his panel, 2026-09-01: the pin was taken at 08:30:08 with
+      // openU 768.6968 while today's real first RTH bar opened at 761.93 — the array had not yet
+      // rolled to today, so the anchor is YESTERDAY'S. Rendered on an ES chart that is
+      // 768.6968 x 10.0353 = 7714, against a true ES open of 7647: **the whole band sat 67 points
+      // above the session**, price spent the day "below the expected low", and EL wore the ⤓ that
+      // means broken-below from the first bar.
+      // ⚠ THE CAPTURE FIRES AT 08:30:0x BY DESIGN — the earliest possible moment is exactly when a
+      // rolling array is least likely to hold today. A once-per-session capture must prove the bar
+      // it is reading is today's, not assume the clock did it.
       var capOK=true;
       try{
-        if(out.anchor==='open' && cs.length && typeof cs[0].time==='number' &&
-           naiveDayStr(cs[0].time)!==ctTodayStr()) capOK=false;
+        if(out.anchor==='open'){
+          // ⚠ `anchor==='open'` is only set when cs.length and cs[0].o>0, so the bar EXISTS by the
+          // time this runs. My first cut opened with `if(!c0) capOK=false;` — dead defensive code,
+          // and mutation proved it: disabling that line changed nothing anywhere. A branch no test
+          // can reach is not caution, it is a line that reads as a check and is not one.
+          var c0=cs[0];
+          var c0t=(typeof c0.t==='number')?c0.t:((typeof c0.time==='number')?c0.time:null);
+          // it must be dated TODAY, and it must be at or after the RTH open.
+          if(c0t==null || naiveDayStr(c0t)!==ctTodayStr()) capOK=false;
+          else if(!(typeof c0.so==='number' && c0.so>=_openSec)) capOK=false;
+        }
         if(dispIsFut() && !(typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.live)) capOK=false;
       }catch(eCG){}
       if(!capOK){ out.why='warm-up: candle window or ratio is not yet today\'s — not pinning'; return out; }
@@ -22225,6 +22255,10 @@ function emBand(sym){
       // instead of rescaling one approximation into another.
       rec={ em:emo.em*dsc, emK:emo.em, k:emo.k, capMin:(P&&P.rth)?(P.mins-P.open):null,
             t:Date.now(), rr:rr, fam:emFam,
+            // ⚠ (v15.23) `openSo` IS NOT OPTIONAL. It was written as null whenever the array was in a
+            // bad state — which is the state that produces a bad pin — and the self-heal below
+            // requires it to be a NUMBER, so a pin captured badly could never be repaired. The
+            // capture is refused above when it cannot be filled, so it is always a number here.
             openU:openU, openSo:(cs.length&&typeof cs[0].so==='number')?cs[0].so:null };
       S.sym[emKey]=rec;
       try{ localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eW){}
@@ -22242,7 +22276,13 @@ function emBand(sym){
 
     // SELF-HEAL, BACKWARD ONLY: an EARLIER bar than the captured one replaces it (the window slid the
     // other way, or the chart back-filled). It can move toward the true open, never forward with the slide.
-    if(cs.length && typeof cs[0].so==='number' && typeof rec.openSo==='number' && cs[0].so<rec.openSo && cs[0].o>0){
+    // ⚠⚠ (v15.23) AND IT NOW REPAIRS A PIN THAT HAS NO `openSo` AT ALL. Requiring `rec.openSo` to
+    // be a number meant a record written during the warm-up — null openSo, wrong openU — was
+    // PERMANENT for the whole session: the guard let it in, and the heal could not reach it.
+    // A missing openSo is "we do not know which bar this came from", which is the strongest reason
+    // to replace it with one we do, not a reason to keep it.
+    if(cs.length && typeof cs[0].so==='number' && cs[0].so>=_openSec && cs[0].o>0 &&
+       (typeof rec.openSo!=='number' || cs[0].so<rec.openSo)){
       rec.openU=cs[0].o; rec.openSo=cs[0].so;
       try{ S.sym[emKey]=rec; localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eU){}
       out.openHealed=true;
@@ -25047,7 +25087,25 @@ var LAD_SNAP_PTS=2;         // a level within this many points of a node shares 
 // redrawn as a move.
 var KT_KEY='gpts_kingtrack_v1';
 var KT_SCHEMA=1;
-var KT_DWELL=2;                 // consecutive observations at a new strike before it is a migration
+// ⚠⚠ (v15.23) DWELL IS MEASURED IN MINUTES, NOT IN OBSERVATIONS. Operator, 2026-09-01: "the
+// movement of the kings in the king lanes doesn't make sense, it is too erratic. there should only
+// be a couple of movements in a day."
+// `KT_DWELL=2` was a COUNT, and it was applied to two streams running at completely different
+// rates: the LIVE latch ticks once per render (seconds), so two observations was about six SECONDS
+// of probation, while the REPLAY rebuild walks 3-minute frames, so the same constant meant six
+// MINUTES. The same number, the same name, two different rules — the live lane was near-unfiltered
+// and the two surfaces could not agree about the same session.
+// ⚠ MEASURED before choosing, over the 11 recorded sessions 2026-08-17 to 2026-08-31 (98-151 RTH
+// frames each), migrations per day at each dwell — median [min-max]:
+//     dwell   SPXW            SPY
+//       0m    5 [0-15]        5 [0-11]      ← unfiltered: what the live lane was showing
+//       6m    3 [0-9]         4 [0-8]
+//      15m    3 [0-5]         3 [0-5]
+//      20m    2 [0-4]         3 [0-5]       ← "a couple of movements in a day"
+//      30m    2 [0-4]         2 [0-4]       ← starts erasing real moves at the top of the range
+// 20 minutes is the smallest dwell whose MEDIAN is a couple and whose worst case is still four.
+// ⚠ n=11 sessions, one instrument, one three-week window. It is a measurement, not a law.
+var KT_DWELL_MIN=20;            // a new strike must HOLD this many minutes before it is a migration
 var KT_MAX=40;                  // points per book per day; a day with 40 King moves is a broken feed
 var KTRACK={ v:KT_SCHEMA, day:null, b:{} };
 var KT_PEND={};                 // book -> {k, n} — the strike on probation, never persisted
@@ -25094,9 +25152,10 @@ function ktTick(EB, sym){
       var last=arr.length?arr[arr.length-1].k:null;
       if(last===K.raw){ delete KT_PEND[bk]; return; }          // unchanged — clear any probation
       var pd=KT_PEND[bk];
-      if(!pd || pd.k!==K.raw){ KT_PEND[bk]={ k:K.raw, n:1 }; return; }   // new candidate, on probation
-      pd.n++;
-      if(pd.n<KT_DWELL) return;                                 // not yet held long enough
+      // ⚠ probation is held by CLOCK, so it means the same thing here as it does in replay. Counting
+      // renders made it depend on how often the panel happened to draw.
+      if(!pd || pd.k!==K.raw){ KT_PEND[bk]={ k:K.raw, t0:Date.now() }; return; }
+      if((Date.now()-pd.t0)/60000 < KT_DWELL_MIN) return;       // not yet held long enough
       delete KT_PEND[bk];
       if(arr.length>=KT_MAX) return;
       arr.push({ t:Date.now(), k:K.raw, e:exp });
@@ -25124,9 +25183,10 @@ function replayKingTrack(book){
       if(!(k>0)) continue;
       if(last===null){ out.push({ t:f.t, k:k, e:(f.exp!=null?String(f.exp):null), seed:true }); last=k; pend=null; continue; }
       if(k===last){ pend=null; continue; }
-      if(!pend || pend.k!==k){ pend={ k:k, n:1 }; continue; }   // new candidate, on probation
-      pend.n++;
-      if(pend.n<KT_DWELL) continue;                             // a flicker is not a migration
+      if(!pend || pend.k!==k){ pend={ k:k, t0:f.t }; continue; }   // new candidate, on probation
+      // ⚠ THE FRAME'S OWN CLOCK, so a gap in the recording cannot promote a flicker: two frames six
+      // minutes apart across a lunch gap is not twenty minutes of holding.
+      if((f.t-pend.t0)/60000 < KT_DWELL_MIN) continue;          // a flicker is not a migration
       pend=null; last=k;
       if(out.length<KT_MAX) out.push({ t:f.t, k:k, e:(f.exp!=null?String(f.exp):null) });
     }
@@ -25232,7 +25292,7 @@ function ladderKingCols(EB, sym, Y, lo, hi, H){
                 conv:function(k){ return (typeof EB.scaleUsed==='number'&&EB.scaleUsed>0)?k*EB.scaleUsed:null; } }];
     COLS.forEach(function(C){
       h+='<i class="g3ldkc" style="left:'+C.x+'px;width:'+C.w+'px"'+
-         g3tip('Where the '+C.book+' King has sat today. Vertical position is PRICE on this ladder’s own scale — a run is LEVEL with the row it names. Time runs left to right across this column, from the open to now, so the LENGTH of a run is how long that strike held the crown. ⚠ A change that reverted before it was seen '+KT_DWELL+' times running is a FLICKER and is not drawn — two near-equal strikes trading places is not a migration. The expiry roll at the close is not drawn either.')+
+         g3tip('Where the '+C.book+' King has sat today. Vertical position is PRICE on this ladder’s own scale — a run is LEVEL with the row it names. Time runs left to right across this column, from the open to now, so the LENGTH of a run is how long that strike held the crown. ⚠ A change that reverted before it had held '+KT_DWELL_MIN+' minutes is a FLICKER and is not drawn — two near-equal strikes trading places is not a migration. The expiry roll at the close is not drawn either.')+
          '></i>';
       var pts=ktOf(C.book);
       if(!pts.length || !span){
@@ -25369,7 +25429,7 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       [LAD_TAP, LAD_TAPW, 'TAPS', 'How many times price has tested this level today'],
       [LAD_DAX, LAD_DMAX, '\u039415m','Dollars of dealer exposure gained or lost at this strike over 15 minutes'],
       [LAD_ST,  LAD_STW,  'STATE','The level\u2019s own condition: BUILDING, WEAKENING, TURN, SPENT'],
-      [LAD_ROC, LAD_ROCW, 'ROC 5m/15m','Rate of change. Live these are Skylit\u2019s own percents; in replay they are this panel\u2019s measure of MASS and are italic']
+      [LAD_ROC, LAD_ROCW, 'ROC 15m','Rate of change over 15 minutes, matching the \u0394 column beside it. Live this is Skylit\u2019s own percent; in replay it is this panel\u2019s measure of MASS and is italic. The 5m and 60m are in the hover \u2014 the 60m shows here only when it DISAGREES with the 15m, which is the TURN condition']
     ];
     var hd='<div class="g3ladhd">';
     for(var hi2=0; hi2<LADHD.length; hi2++){
@@ -25589,7 +25649,13 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
              : 'Skylit\u2019s own rate of change for this strike — the same numbers their strike popup shows. ')+
            '5m '+Math.round(R5)+'%, 15m '+Math.round(R15)+'%'+(typeof R60==='number'?(', 60m '+Math.round(R60)+'%'):'')+'.'+
            (arg?' The HOUR DISAGREES with the 15m — that is the TURNING condition, which is why it is printed here and nowhere else.':''))+'>'+
-           ldNum(R5)+' '+ldNum(R15)+(arg?(' <b class="g3ld60">'+(R60>0?'▲':'▼')+Math.abs(Math.round(R60))+'%</b>'):'')+'</span>';
+           // ⚠ (v15.23) THE 5m IS GONE FROM THE COLUMN — operator, 2026-09-01: "lets get rid of the
+           // 5m roc and keep the 15m roc to be consistent with the delta profile." The Δ column
+           // beside it is a 15-minute figure, so printing 5m next to it invited reading two windows
+           // as one series. ⚠ THE 5m IS STILL COMPUTED AND STILL USED: the TURN state requires the
+           // 5m and 15m to agree AND both to have flipped against the hour. Removing it from the
+           // DISPLAY does not remove it from the decision, and the hover still carries all three.
+           ldNum(R15)+(arg?(' <b class="g3ld60">'+(R60>0?'▲':'▼')+Math.abs(Math.round(R60))+'%</b>'):'')+'</span>';
       }
     }
 
@@ -28713,7 +28779,7 @@ window.__gptsDebug.session = function(){
 window.__gptsDebug.kingTrack = function(){
   try{
     ktLoad();
-    var out={ day:KTRACK.day, dwell:KT_DWELL, pending:JSON.parse(JSON.stringify(KT_PEND||{})), books:{} };
+    var out={ day:KTRACK.day, dwellMin:KT_DWELL_MIN, pending:JSON.parse(JSON.stringify(KT_PEND||{})), books:{} };
     KT_BOOKS.forEach(function(b){
       var a=ktOf(b);
       out.books[b]={ migrations:Math.max(0,a.length-1),

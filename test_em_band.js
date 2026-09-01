@@ -67,13 +67,48 @@ function ex_var(n){
   const store={};
   global.localStorage={ getItem:k=>(k in store?store[k]:null), setItem:(k,v)=>{store[k]=String(v);} };
   global.STATE={ SPY:{ candles:[] } };
+  // ⚠⚠ (v15.23) FIXTURE BARS NOW CARRY `so` AND `t`, BECAUSE REAL ONES ALWAYS DO.
+  // These fixtures modelled a candle as {o,h,l,c} only. emBand's once-per-session capture has to
+  // prove the bar it anchors on is TODAY'S RTH open — it tested `cs[0].time`, a field that does not
+  // exist, so the guard never fired and on 2026-09-01 the band anchored on YESTERDAY's open
+  // (768.6968 against a real 761.93) and sat 67 ES points above the session all day.
+  // A fixture missing the very fields a guard must read is a fixture that cannot fail on that bug.
+  // RTH() stamps a real session clock onto them: 08:30 CT, three minutes apart, dated today.
+  // ⚠ the elapsed/pace block reads these; it was unreachable while the fixtures had no `so`, so the
+  // harness never needed them. Realistic fixtures reach more of the function — that is the point.
+  global.SESS_OPEN_SEC=30600; global.SESS_CLOSE_SEC=54000; global.PACE_MIN_ELAPSED=0.04;
+  global.RTH=function(bars, startSo){
+    var so=(startSo==null)?(8*3600+30*60):startSo;
+    return bars.map(function(b,i){
+      var o=Object.assign({}, b);
+      if(o.so==null) o.so=so+i*180;
+      if(o.t==null)  o.t=global.__dayMs()+o.so*1000;
+      return o;
+    });
+  };
   global.closedCandles=function(){ return global.__cands; };
   global.dispIsFut=function(){ return true; };
   global.dispR=function(){ return 10; };          // underlying -> chart
   global.FUTMODE={ live:true, futPx:null };       // (v14.19) the warm-up guard requires a live ratio
-  global.naiveDayStr=function(){ return global.ctTodayStr(); };   // fixture candles carry no .time
+  // ⚠⚠ (v15.23) THIS STUB WAS THE SHORTCUT THAT HID THE BUG. It returned "today" for every input
+  // because the fixtures carried no clock — so the one guard that had to notice a bar from another
+  // day could not fail here even in principle. The fixtures carry `t` now, and this is real.
+  global.naiveDayStr=function(ms){
+    var d=(typeof ms==='number')?new Date(ms):new Date();
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  };
   global.ifLadder=function(){ return { err:null, dispScale:1 }; };
+  // ⚠ and TODAY must be the same day RTH() stamps onto the bars, or every fixture is "yesterday".
   global.ctTodayStr=function(){ return '2026-08-24'; };
+  // ⚠ RTH() stamps its bars on THIS date, so "today" is one fact shared by the clock and the bars.
+  // Deriving the bars from the machine's real today while the panel's today is fixed would make
+  // every fixture look like yesterday — which is the failure this guard exists to catch, arriving
+  // as a broken harness instead of a caught bug.
+  // ⚠ AT CALL TIME, NOT ONCE. Several blocks below override ctTodayStr() to a date of their own so
+  // their pin cannot collide with another block's; a day computed once here would stamp every
+  // fixture on the FIRST block's date and every later block would refuse its own bars as yesterday.
+  global.__dayMs=function(){ var p=global.ctTodayStr().split('-');
+    return new Date(+p[0], +p[1]-1, +p[2]).getTime(); };
   global.sessionPhase=function(){ return global.__phase; };
   global.ifChain=function(){ return global.__chain; };
 
@@ -101,7 +136,7 @@ eval(ex('sessionDayStr'));
 eval(ex('emBand'));
 
   // open 770.00 (und) -> 7700 chart; EM 35 -> 35 chart; band 7665..7735
-  global.__cands=[ {o:770.00,h:770.5,l:769.5,c:770.2}, {o:770.2,h:770.4,l:769.0,c:769.0} ];
+  global.__cands=RTH([ {o:770.00,h:770.5,l:769.5,c:770.2}, {o:770.2,h:770.4,l:769.0,c:769.0} ]);
   global.__chain={ err:null, dte0:{ em:{ em:35, k:7700 } }, toFri:{ em:{ em:70, k:7700 } } };
   global.__phase={ rth:true, mins:8*60+35, open:8*60+30 };   // 5 minutes after the open
 
@@ -123,11 +158,19 @@ eval(ex('emBand'));
 
   // ---------- a new day re-captures ----------
   global.ctTodayStr=function(){ return '2026-08-25'; };
+  // ⚠ A NEW DAY NEEDS NEW BARS. Moving the clock alone leaves yesterday's timestamps on the
+  // fixture, which the v15.23 warm-up guard correctly refuses — the test would then be asserting
+  // that a stale array is rejected, not that a new day re-captures.
+  global.__cands=RTH(global.__cands.map(function(b){ return {o:b.o,h:b.h,l:b.l,c:b.c}; }));
   let B3=emBand('SPY');
   ok(B3.em===9,                         'a NEW day captures afresh rather than inheriting yesterday', B3.em);
 
   // ---------- late first capture is flagged, not reconstructed ----------
   global.ctTodayStr=function(){ return '2026-08-26'; };
+  // ⚠ A NEW DAY NEEDS NEW BARS. Moving the clock alone leaves yesterday's timestamps on the
+  // fixture, which the v15.23 warm-up guard correctly refuses — the test would then be asserting
+  // that a stale array is rejected, not that a new day re-captures.
+  global.__cands=RTH(global.__cands.map(function(b){ return {o:b.o,h:b.h,l:b.l,c:b.c}; }));
   global.__phase={ rth:true, mins:11*60, open:8*60+30 };     // 150 minutes after the open
   let B4=emBand('SPY');
   ok(B4.est===true,                     'a capture 150 minutes in is marked ~EST', B4.est);
@@ -152,7 +195,7 @@ eval(ex('emBand'));
     global.dispIsFut=function(){ return false; };
     global.dispR=function(){ return 1; };
     global.ifLadder=function(){ return { err:null, dispScale:0.0998 }; };
-    global.__cands=[ {o:771.74,h:772.2,l:771.0,c:771.9}, {o:771.9,h:772.0,l:770.5,c:770.8} ];
+    global.__cands=RTH([ {o:771.74,h:772.2,l:771.0,c:771.9}, {o:771.9,h:772.0,l:770.5,c:770.8} ]);
     global.__chain={ err:null, dte0:{ em:{ em:35, k:7710 } }, toFri:{ em:{ em:70, k:7710 } } };
     const C=emBand('SPY');
     ok(C.ok===true, 'p1 the pin captures on the cash chart', C.why);
@@ -211,7 +254,7 @@ eval(ex('emBand'));
       global.dispIsFut=function(){ return true; };
       global.dispR=function(){ return 10.04; };
       global.ifLadder=function(){ return { err:null, dispScale:1.0023 }; };
-      global.__cands=[ {o:771.74,h:772.2,l:771.0,c:771.9}, {o:771.9,h:772.0,l:770.5,c:770.8} ];
+      global.__cands=RTH([ {o:771.74,h:772.2,l:771.0,c:771.9}, {o:771.9,h:772.0,l:770.5,c:770.8} ]);
       global.__chain={ err:null, dte0:{ em:{ em:1.7, k:7685 } }, toFri:{ em:{ em:65, k:7685 } } };
       const L=emBand('SPY');
       ok(L.ok===true, 'p10 a LEGACY pin with no emK still survives the switch to ES', L.why);
@@ -228,7 +271,7 @@ eval(ex('emBand'));
     global.ifLadder=function(){ return { err:null, dispScale:1 }; };
     global.ctTodayStr=function(){ return '2026-08-26'; };
     global.__phase={ rth:true, mins:11*60, open:8*60+30 };
-    global.__cands=[ {o:770.00,h:770.5,l:769.5,c:770.2}, {o:770.2,h:770.4,l:769.0,c:769.0} ];
+    global.__cands=RTH([ {o:770.00,h:770.5,l:769.5,c:770.2}, {o:770.2,h:770.4,l:769.0,c:769.0} ]);
     global.__chain={ err:null, dte0:{ em:{ em:9, k:7700 } }, toFri:{ em:{ em:70, k:7700 } } };
   }
 
@@ -245,7 +288,7 @@ eval(ex('emBand'));
   // because closedCandles() is today-only. Quoting the expected move from the prior close is the
   // standard anchor when today has not started, and the real open replaces it the moment the first
   // RTH bar closes. It must SAY which reference it used or it is a mislabel.
-  global.__cands=[];
+  global.__cands=RTH([]);
   global.__chain={ err:null, dte0:{ em:{ em:20, k:7700 } }, toFri:{ em:{ em:70, k:7700 } } };
   global.ctTodayStr=function(){ return '2026-08-29'; };
   global.STATE={ SPY:{ price:772.00, contCloses:[
@@ -259,12 +302,12 @@ eval(ex('emBand'));
   ok(B7.now===7720,                     'now uses the live price when there is no candle', B7.now);
   ok(B7.pct===100,                      'displacement measured from the prior close', B7.pct);
 
-  global.__cands=[ {o:770.00,h:770.5,l:769.5,c:770.2}, {o:770.2,h:770.4,l:769.0,c:769.0} ];
+  global.__cands=RTH([ {o:770.00,h:770.5,l:769.5,c:770.2}, {o:770.2,h:770.4,l:769.0,c:769.0} ]);
   global.ctTodayStr=function(){ return '2026-08-30'; };
   let B8=emBand('SPY');
   ok(B8.anchor==='open',                're-anchors to the real open as soon as a bar closes', B8.anchor);
 
-  global.__cands=[];
+  global.__cands=RTH([]);
   global.STATE={ SPY:{ contCloses:[] } };
   global.ctTodayStr=function(){ return '2026-08-31'; };
   let B6=emBand('SPY');
@@ -1773,6 +1816,65 @@ eval(ex('emBand'));
   ok(nRail>=6, '42t2 and every mark on the track is placed in rail space', nRail);
   ok(/pNow=emPosRail/.test(f2) && /pOpen=emPosRail/.test(f2),
      '42u as do the price dot and the open marker');
+}
+
+// ---- (v15.23) THE WARM-UP GUARD, WHICH HAD NEVER FIRED ----------------------------------------
+// The once-per-session capture runs at 08:30:0x — the earliest possible moment, and therefore
+// exactly when a rolling candle array is least likely to have rolled to today. The guard meant to
+// catch that tested `cs[0].time`, A FIELD THE CANDLES DO NOT HAVE (they carry `t` and `so`), so
+// `typeof undefined === 'number'` was false, the condition short-circuited, and it passed every
+// time. MEASURED on his panel 2026-09-01: pinned openU 768.6968 while today's real first RTH bar
+// opened at 761.93 — on an ES chart that is 7714 against a true open of 7647, so the whole band sat
+// 67 points above the session and price was "below the expected low" from the first bar.
+{
+  const save=global.__cands, saveFut=global.dispIsFut;
+  const bar={o:770,h:770.5,l:769.5,c:770.2};
+  const dayMs=global.__dayMs();
+  global.dispIsFut=()=>false;
+
+  // a · yesterday's bar, correctly shaped — must be REFUSED
+  global.localStorage.setItem('gpts_emopen_v1', JSON.stringify({ v:0, date:'1970-01-01', sym:{} }));
+  global.__cands=[ Object.assign({},bar,{ so:8*3600+30*60, t:dayMs-24*3600*1000 }),
+                   Object.assign({},bar,{ so:8*3600+33*60, t:dayMs-24*3600*1000+180000 }) ];
+  let r=emBand('SPY');
+  ok(r.ok===false && /warm-up/.test(r.why||''),
+     'w1 EXECUTED: a first bar dated YESTERDAY refuses the pin', r.why);
+
+  // b · today's bar but from BEFORE the open (a pre-market print) — also refused
+  global.__cands=[ Object.assign({},bar,{ so:7*3600, t:dayMs+7*3600*1000 }) ];
+  r=emBand('SPY');
+  ok(r.ok===false && /warm-up/.test(r.why||''),
+     'w2 ...and so does a bar from before 08:30, however well dated', r.why);
+
+  // c · a bar with NO clock at all — the shape that let this through for months
+  global.__cands=[ {o:770,h:770.5,l:769.5,c:770.2} ];
+  r=emBand('SPY');
+  ok(r.ok===false && /warm-up/.test(r.why||''),
+     'w3 ...and a bar carrying no clock is refused rather than trusted', r.why);
+
+  // d · today's real open — accepted, and the anchor is THAT bar's open
+  global.localStorage.setItem('gpts_emopen_v1', JSON.stringify({ v:0, date:'1970-01-01', sym:{} }));
+  global.__cands=RTH([ {o:761.93,h:762.4,l:761.1,c:761.7}, {o:761.7,h:762.2,l:761.0,c:762.1} ]);
+  r=emBand('SPY');
+  ok(r.ok===true, 'w4 today\'s first RTH bar pins normally', r.why);
+  ok(Math.abs(r.open-761.93)<0.01, 'w4b ...and the anchor IS that bar\'s open', r.open);
+
+  // e · THE HEAL. A pin already stored with no openSo — the exact record his panel carried — must be
+  // repaired by a valid first bar, not kept for the session. Requiring openSo to be a NUMBER meant a
+  // badly-captured pin was permanent: the guard let it in and the heal could not reach it.
+  // ⚠ written through the harness's OWN storage — `STORE` is not the variable that backs it, and a
+  // reset that writes nowhere leaves the previous block's pin in place, which is how the first cut
+  // of this assertion "passed" against a record it never wrote.
+  global.localStorage.setItem('gpts_emopen_v1', JSON.stringify({ v:EMOPEN_SCHEMA, date:global.ctTodayStr(),
+    sym:{ 'SPY|cash':{ em:3.23, emK:32.5, k:7685, capMin:0, t:Date.now(), rr:1,
+                       openU:768.6968, openSo:null, fam:'cash' } } }));
+  global.__cands=RTH([ {o:761.93,h:762.4,l:761.1,c:761.7}, {o:761.7,h:762.2,l:761.0,c:762.1} ]);
+  r=emBand('SPY');
+  ok(r.ok===true && Math.abs(r.open-761.93)<0.01,
+     'w5 EXECUTED: a stored pin with a null openSo is HEALED onto today\'s real open', r.open);
+  ok(r.openHealed===true, 'w5b ...and says so, rather than repairing silently', r.openHealed);
+
+  global.__cands=save; global.dispIsFut=saveFut;
 }
 
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');

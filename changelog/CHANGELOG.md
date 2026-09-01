@@ -1,3 +1,82 @@
+## v15.23 — the expected-move band was anchored on yesterday's open, and the king lane's dwell was a count applied to two different clocks
+
+> "why is the expected high (EH) and expected low crossed out .. did you determine the values from
+> insider finance . did you draw them from the open" · "the movement of the kings in the king lanes
+> doesn't make sense, it is too erratic" · "lets get rid of the 5m roc" · "is the state also looking
+> at 15 min?"
+
+### ⚠⚠ THE BAND WAS 67 POINTS ABOVE THE SESSION, ALL DAY, EVERY DAY
+
+Read off his live panel, 2026-09-01:
+
+    the stored pin      openU 768.6968   rr 10.0353   →  anchor 7714
+    today's real open   ES 7647 (courier, first RTH bar 08:30) · SPY 761.93 (first closed candle)
+
+So EH/EL were drawn around **7714** on a session that opened at **7647**, price spent the entire day
+below the expected low, and EL wore the ⤓ that means *broken below* from the first bar. **That is
+what he was seeing as "crossed out" — the band was never near the market.**
+
+**Three failures stacked, and each one hid the next:**
+
+1. **The warm-up guard has never fired.** It tested `cs[0].time` — **a field the candles do not
+   have** (they carry `t` and `so`). `typeof undefined === 'number'` is false, so the condition
+   short-circuited and `capOK` stayed true at every capture since it was written.
+2. **So the capture ran at 08:30:08 against an array that had not yet rolled to today** — the
+   earliest possible moment is exactly when a rolling window is least likely to hold the session —
+   and stored `openSo: null`, because `cs[0].so` was not a number either.
+3. **And the self-heal requires `openSo` to be a NUMBER**, so the one mechanism that repairs a bad
+   anchor could not reach the records that need it. A pin captured badly was permanent for the day.
+
+Now: the first bar must be **dated today AND at or after 08:30 CT**, and a stored pin with no
+`openSo` is healed onto today's real open rather than kept.
+⚠ **`_openSec` is declared at function scope, not in the capture branch** — my first cut put it
+beside the guard, where it hoists as `undefined` on the path where a pin already exists (which is
+every render after the first), so `cs[0].so >= undefined` was false and the heal still could not run.
+The bug and its fix would both have shipped. The heal's own assertion caught it.
+
+**To answer him directly:** yes, the width is InsiderFinance's — the 0DTE ATM straddle, captured once
+per session; and yes, it is anchored on the open. The width was right. The open was yesterday's.
+
+### ⚠⚠ THE KING LANE: ONE CONSTANT, TWO CLOCKS
+
+`KT_DWELL = 2` was a COUNT of observations. The **live** latch observes once per render — seconds —
+so probation was about **six seconds**. The **replay** rebuild walks 3-minute frames, so the same
+constant meant **six minutes**. One name, two rules, and the live lane was effectively unfiltered.
+
+Measured over the **11 recorded sessions, 2026-08-17 to 2026-08-31** (98–151 RTH frames each),
+migrations per day, median [min–max]:
+
+    dwell    SPXW          SPY
+      0m     5 [0-15]      5 [0-11]     ← what the live lane was drawing
+      6m     3 [0-9]       4 [0-8]
+     15m     3 [0-5]       3 [0-5]
+     20m     2 [0-4]       3 [0-5]      ← "a couple of movements in a day"
+     30m     2 [0-4]       2 [0-4]      ← begins erasing real moves
+
+**`KT_DWELL_MIN = 20`** — the smallest dwell whose median is a couple and whose worst case is still
+four — and it is now a DURATION, held by the clock in both paths, so live and replay finally agree
+about the same session. ⚠ n=11 sessions, one instrument, one three-week window: a measurement, not a
+law. ⚠ Time-based dwell also means a GAP in the recording cannot promote a flicker.
+
+### the ROC column is 15m, and the answer to his last question
+
+The 5m is out of the column, to match the Δ column beside it. ⚠ **It is still computed and still
+decides**: TURN requires the 5m and the 15m to agree *and* both to have flipped against the hour.
+**BUILDING and WEAKENING are 15m** — the same window as the Δ column — and the hover still carries
+all three. Removing it from the display did not remove it from the decision.
+
+### verification
+`test_em_band.js` 625 → **632**, executing the guard against a bar from yesterday, a pre-open bar, a
+bar with no clock at all, and a stored pin with a null `openSo`.
+⚠⚠ **The fixtures had to be fixed first, and that is the finding underneath the finding.** They
+modelled a candle as `{o,h,l,c}` — no `so`, no `t` — and the harness stubbed `naiveDayStr()` to
+return "today" for every input *because* of that. **A fixture missing the very fields a guard must
+read is a fixture that cannot fail on that bug.** Realistic bars then reached code the tests had
+never executed (the pace block), which needed two more constants in the harness.
+`test_replay.js` 186 → **188**, `test_ladder` and `test_replay_face` rewritten for a duration.
+**Nine mutations run individually, nine caught** — one survived first and was dead defensive code
+(`if(!c0)` on a path where the bar exists by construction), which was deleted rather than tested.
+
 ## v15.22 — one wrong idea about `secondT` had three clauses dead for eight builds, and the dependencies now have a check
 
 > "the basic format is to identify if one extremity is in and when to expect the next extremity to be

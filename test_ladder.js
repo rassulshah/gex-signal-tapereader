@@ -139,9 +139,15 @@ ok(/conv:function\(k\)\{ return dsc>0\?k\*dsc:null; \}/.test(KC),
 // ---- A FLICKER IS NOT A MIGRATION ------------------------------------------------------------
 // ⚠⚠ Friday held THREE single-observation excursions that all reverted (SPY 769 at 13:24 and 13:36,
 // SPXW 7690 at 13:51). Drawing them would have put four steps on a day that had one real move.
-ok(/KT_DWELL=\d+/.test(src), 'k5 a dwell threshold exists');
-ok(/if\(pd\.n<KT_DWELL\) return;/.test(KT),
-   'k6 ...and a new strike is only written once it has been seen KT_DWELL times running');
+// ⚠⚠ (v15.23) DWELL IS A DURATION NOW, NOT A COUNT. `KT_DWELL=2` meant two OBSERVATIONS, and the
+// live latch observes once per render (seconds) while the replay rebuild walks 3-minute frames — so
+// one constant produced ~6 seconds of probation live and 6 minutes in replay. The live lane was
+// effectively unfiltered, which is what the operator saw: "too erratic ... there should only be a
+// couple of movements in a day."
+ok(/KT_DWELL_MIN=\d+/.test(src), 'k5 a dwell threshold exists, expressed in MINUTES');
+ok(/\(Date\.now\(\)-pd\.t0\)\/60000 < KT_DWELL_MIN/.test(KT),
+   'k6 ...and the live latch holds probation by the CLOCK, not by how often it happened to render');
+ok(!/pd\.n/.test(KT), 'k6b ...with no observation counter left to disagree with it');
 ok(/if\(last===K\.raw\)\{ delete KT_PEND\[bk\]; return; \}/.test(KT),
    'k7 ...and a candidate that reverts is discarded, leaving no trace');
 ok(/KT_PEND/.test(KT) && !/KTRACK\.b\[bk\]\.push\(\{ t:Date\.now\(\), k:K\.raw \}\);[\s\S]{0,40}pd/.test(KT),

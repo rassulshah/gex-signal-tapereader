@@ -462,7 +462,9 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
 // Operator, asked twice: "i dont see the king lane with the movement the kings made". `ktOf()` was
 // returning [] so the lane drew its "no migration recorded" placeholder — which reads as broken.
 {
-  global.KT_DWELL=2; global.KT_MAX=40;
+  // ⚠ (v15.23) dwell is MINUTES now, and these fixtures use real millisecond stamps so the rule
+  // being tested is the one that ships. `mk()` below spaces bars 3 minutes apart, as the recorder does.
+  global.KT_DWELL_MIN=20; global.KT_MAX=40;
   global.KTRACK={ v:1, day:'2026-08-31', b:{} };
   // ⚠ the memo object lives at module scope and the memo check sits OUTSIDE the function's try, so
   // an undefined RP_KT throws straight past it into ktOf's catch and returns [] — a green-looking
@@ -481,30 +483,42 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
   ok(JY[0].k!==J[0].k, 'kt6 ...and the two books do not share a journey');
   // ⚠ THE DWELL RULE SURVIVES: a strike seen ONCE is a flicker and is not a migration.
   {
-    const mk=(t,kk)=>({t:t, tri:{SPXW:{king:kk}}, exp:null});
-    REPLAY.frames=[mk(1,7700),mk(2,7700),mk(3,7705),mk(4,7700),mk(5,7700)];
-    REPLAY.idx=4; RP_KT.key=null;
-    const F=ktOf('SPXW');
-    ok(F.length===1, 'kt7 a strike seen ONCE and reverting is a FLICKER, not a migration', F.length);
-    REPLAY.frames=[mk(1,7700),mk(2,7700),mk(3,7705),mk(4,7705),mk(5,7705)];
-    REPLAY.idx=4; RP_KT.key=null;
-    const M=ktOf('SPXW');
-    ok(M.length===2 && M[1].k===7705, 'kt8 ...but held for KT_DWELL observations it IS one', M.map(x=>x.k));
+    // bars three minutes apart, like the recorder's
+    const T0=Date.parse('2026-08-31T14:00:00Z');
+    const mk=(i,kk)=>({t:T0+i*180000, tri:{SPXW:{king:kk}}, exp:null});
+    const run=(...ks)=>{ REPLAY.frames=ks.map((k,i)=>mk(i,k)); REPLAY.idx=ks.length-1; RP_KT.key=null;
+                         return ktOf('SPXW'); };
+    ok(run(7700,7700,7705,7700,7700).length===1,
+       'kt7 a strike seen ONCE and reverting is a FLICKER, not a migration');
+    // ⚠⚠ AT 20 MINUTES, THREE MORE 3-MINUTE BARS IS SIX MINUTES — NOT a migration. The old fixture
+    // asserted that two sightings promoted a strike, which was only ever true because the constant
+    // was a COUNT of 2. A duration cannot be satisfied by adding one bar.
+    ok(run(7700,7700,7705,7705,7705).length===1,
+       'kt8 a strike held SIX minutes is still a flicker at a 20-minute dwell');
+    const held=[7700,7700].concat(new Array(9).fill(7705));   // 7705 held from bar 2 to bar 10 = 24m
+    const M=run.apply(null, held);
+    ok(M.length===2 && M[1].k===7705,
+       'kt8 ...and held past twenty minutes it IS a migration', M.map(x=>x.k));
     // ⚠⚠ kt7/kt8 CANNOT SEE WHETHER KT_DWELL IS HONOURED — at 2 the loop structurally needs two
     // sightings to reach the push, so deleting the dwell check changes nothing and survived mutation.
     // The property is that the CONSTANT governs, not that the code happens to need two passes.
     // ⚠ MY FIRST VERSION OF kt8b WAS WRONG, NOT THE CODE: it reused kt8's fixture, which has THREE
     // sightings of 7705 — at dwell 3 that IS a migration. The case has to have exactly two.
-    global.KT_DWELL=3; RP_KT.key=null;
-    REPLAY.frames=[mk(1,7700),mk(2,7700),mk(3,7705),mk(4,7705)];
-    REPLAY.idx=3;
-    const T3=ktOf('SPXW');
-    ok(T3.length===1, 'kt8b at KT_DWELL=3, two sightings are NOT yet a migration — the constant governs', T3.length);
-    REPLAY.frames=[mk(1,7700),mk(2,7700),mk(3,7705),mk(4,7705),mk(5,7705),mk(6,7705)];
-    REPLAY.idx=5; RP_KT.key=null;
-    const T3b=ktOf('SPXW');
-    ok(T3b.length===2, 'kt8c ...and three sightings are', T3b.length);
-    global.KT_DWELL=2;
+    // ⚠ THE CONSTANT MUST GOVERN, not the loop's shape. Same fixture, two thresholds, two answers.
+    global.KT_DWELL_MIN=60; RP_KT.key=null;
+    ok(run.apply(null, held).length===1,
+       'kt8b at a 60-minute dwell the same 24-minute hold is NOT a migration — the constant governs');
+    global.KT_DWELL_MIN=5; RP_KT.key=null;
+    ok(run(7700,7700,7705,7705,7705).length===2,
+       'kt8c ...and at five minutes a six-minute hold IS one');
+    // ⚠ A GAP IN THE RECORDING MUST NOT PROMOTE A FLICKER. Two frames far apart are two sightings,
+    // not a long hold — which is precisely the confusion a COUNT could never notice.
+    global.KT_DWELL_MIN=20; RP_KT.key=null;
+    REPLAY.frames=[mk(0,7700), mk(1,7700), mk(2,7705), {t:T0+3*3600000, tri:{SPXW:{king:7705}}, exp:null}];
+    REPLAY.idx=3; RP_KT.key=null;
+    const G=ktOf('SPXW');
+    ok(G.length===2, 'kt8d two sightings THREE HOURS apart do satisfy a duration — it is a real hold', G.length);
+    global.KT_DWELL_MIN=20;
   }
   // and the journey grows as the handle moves
   REPLAY.frames=FR; RP_KT.key=null; REPLAY.idx=0;

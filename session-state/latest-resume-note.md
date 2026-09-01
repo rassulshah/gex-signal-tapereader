@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-01 · panel v15.22 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-01 · panel v15.23 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.22, and what the face carries
+## 2 · WHERE WE ARE — v15.23, and what the face carries
 
-**Panel v15.22 · companion v1.17.** Suite **134 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.23 · companion v1.17.** Suite **134 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -177,6 +177,35 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠ **v15.23a — THE EM BAND WAS ANCHORED ON YESTERDAY'S OPEN AND NOBODY COULD SEE IT.** Measured
+on his panel: pin `openU 768.6968 · rr 10.0353` → anchor **7714**, against a real ES open of **7647**
+(courier) and a SPY first candle of **761.93**. Price sat below EL all day and EL wore the ⤓.
+Three stacked failures: the warm-up guard tested **`cs[0].time`, a field the candles do not have**
+(they carry `t`/`so`), so it never fired; the capture then ran at 08:30:08 against an array that had
+not rolled to today and stored `openSo:null`; and the self-heal REQUIRES `openSo` to be a number, so
+a badly-captured pin was permanent for the session. ⚠ The width was always InsiderFinance's 0DTE
+straddle and the anchor was always meant to be the open — **the width was right, the open was
+yesterday's.**
+⚠ `_openSec` must stay at FUNCTION scope: inside the capture branch it hoists as `undefined` on
+every render where a pin exists, and the heal silently cannot run.
+
+⚠⚠ **v15.23b — `KT_DWELL` WAS A COUNT READ BY TWO LOOPS AT DIFFERENT RATES.** Live it ticks per
+render (seconds → ~6s of probation); in replay it walks 3-minute frames (→ 6 minutes). One name, two
+rules, and the live king lane was effectively unfiltered — "too erratic". Now **`KT_DWELL_MIN=20`**,
+a DURATION honoured by the clock in both paths. Measured over **11 sessions, 08-17 to 08-31**:
+
+    dwell   SPXW median [min-max]   SPY
+      0m    5 [0-15]                5 [0-11]     ← what he was seeing
+     20m    2 [0-4]                 3 [0-5]      ← shipped
+     30m    2 [0-4]                 2 [0-4]      ← starts erasing real moves
+
+⚠ n=11, one instrument, one three-week window. ⚠ A duration also means a GAP in the recording cannot
+promote a flicker, which a count could never notice.
+
+⚠ **THE ROC COLUMN IS 15m ONLY** (matching the Δ column). The 5m is still COMPUTED and still decides:
+TURN needs 5m and 15m to agree and both to have flipped against the hour. BUILDING/WEAKENING are 15m.
+All three windows remain in the hover.
 
 ⚠⚠⚠ **v15.22a — THE DEPENDENCIES HAVE A LIVE CHECK, AND `load gex` MUST READ
 `design/DEPENDENCIES.md`.** Operator-mandated: *"it is fundamental to the application."*

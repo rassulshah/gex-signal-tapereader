@@ -136,7 +136,13 @@ function laneRuns(html, cls){
 }
 ['S','Y'].forEach(function(cls){
   const xs=laneRuns(R.html, cls);
-  ok(xs.length>=4, 'f8'+cls+' the '+cls+' king lane draws the crown’s journey', xs.length);
+  // ⚠ (v15.23) THE COUNT IS NOW BOUNDED ABOVE AS WELL. Dwell became a DURATION (20 minutes,
+  // measured over the 11 recorded sessions: SPXW median 2 [0-4], SPY 3 [0-5]), because a count of
+  // observations meant ~6 seconds live and 6 minutes in replay — the same constant, two rules, and
+  // a lane the operator called "too erratic ... there should only be a couple of movements in a
+  // day". A lower bound alone would pass a lane that had gone back to fifteen.
+  ok(xs.length>=2 && xs.length<=7,
+     'f8'+cls+' the '+cls+' king lane draws a HANDFUL of runs — a journey, not a flicker reel', xs.length);
   const span=xs.length?(Math.max(...xs)-Math.min(...xs)):0;
   // the lane column is LAD_KSW/LAD_KYW wide (~26px); a session's runs must use most of it. With the
   // wall clock the whole morning landed inside ~6px.
@@ -254,6 +260,35 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
   });
   ok(xs.every((p,i)=> i===0 || p[0]>=xs[i-1][0]),
      'h5 ...and they run left to right in column order', xs.map(p=>p[0]));
+}
+
+// ---- 11 · THE ROC COLUMN IS 15m ONLY, AND THE 5m STILL DECIDES -------------------------------
+// Operator, 2026-09-01: "lets get rid of the 5m roc and keep the 15m roc to be consistent with the
+// delta profile. is the state also looking at 15 min?"
+// ⚠ The answer to the second question is IN these assertions: BUILDING and WEAKENING are 15m, and
+// TURN needs the 5m AND the 60m as well — so the 5m leaves the DISPLAY and stays in the DECISION.
+{
+  const cells=[...R.html.matchAll(/class="g3ldroc[^"]*"[^>]*>([\s\S]*?)<\/span>/g)]
+    .map(m=>m[1].replace(/<[^>]+>/g,'').trim());
+  ok(cells.length>=4, 'p1 the ROC column draws', cells.length);
+  // one percentage, plus an optional 60m arrow when the hour disagrees — never two plain numbers
+  cells.forEach(function(c,i){
+    const plain=(c.match(/-?\d+%/g)||[]).filter(x=>true);
+    const has60=/[\u25b2\u25bc]/.test(c);
+    ok(plain.length===(has60?2:1),
+       'p1·'+i+' ...one 15m figure per row'+(has60?' plus the 60m disagreement arrow':''), c);
+  });
+  const tip=(R.html.match(/class="g3ldroc[^"]*"[^>]*title="([^"]*)"/)||[])[1]||'';
+  ok(/5m/.test(tip) && /15m/.test(tip) && /60m/.test(tip),
+     'p2 ...while the hover still carries all three windows', tip.slice(0,80));
+  const hd=(R.html.match(/<div class="g3ladhd">([\s\S]*?)<\/div>/)||[])[1]||'';
+  ok(/ROC 15m/.test(hd) && !/ROC 5m/.test(hd), 'p3 ...and the header says 15m');
+  // ⚠ EXECUTED: the 5m must still be able to change the STATE, or this was a removal, not a re-fit.
+  const LS=R.run('levelStateOf.toString()');
+  ok(/P5!==0/.test(LS) && /\(P5>0\)===\(P15>0\)/.test(LS),
+     'p4 the TURN state still requires the 5m to agree with the 15m');
+  ok(/P15>=LVL_BUILD_P15/.test(LS) && /P15<=LVL_WEAK_P15/.test(LS),
+     'p5 ...and BUILDING and WEAKENING are decided on the 15m, matching the Δ column');
 }
 
 console.log('test_replay_face: '+pass+' passed, '+fail+' failed');

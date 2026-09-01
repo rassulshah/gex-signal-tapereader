@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-01 · v15.22 · session `5e8d34b5`
+## 2026-09-01 · v15.23 · session `5e8d34b5`
 
-_16 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_18 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -238,8 +238,48 @@ Now the test for the check, and the document `load gex` must read.
 A third clause was riding the same dead gate — and two tests were pinning the broken design.
 All three are my own comments quoting the strings the assertions forbid — the trap this project already has a name for.
 Baseline plus the save-procedure four. Fixing the missing companion link, then the record.
+The size guard is judging the raw tree, but what `more` reads is the .bat.
+**The line you asked for existed and had never once drawn.** It shipped at v14.72 gated on `D.secondT > D.clock` — but `secondT` is the clock of the later of the two *running* extremes, and a session has a running high and a running low within two bars. Measured on 08-31: at **08:45**, `secondT` was **08:39**. False from the third bar of every session, every day.
+
+Three clauses died on that one misreading — the far-side line, the "% of the range" clause, and inversely "both extremes in — the range is set", which printed all morning about a range with hours left. And two assertions in `test_hodlod` *demanded* that gate, holding it in place for eight builds. Now:
+
+```
+09:00   HOD STANDING …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 14 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (15:01):** 14 commits, tree clean. Push still refused for this repo by the proxy — unchanged from earlier in the session, and not something I can resolve from here. The installer carries them to your machine, where the applier commits and pushes.
+
+**OPERATOR:**
+> why is the expected high (EH) and expected low crossed out .. did you determine the values from insider finance . did you draw them from the open.. there is still an error in how you are displaying them.  the movement of the kings in the king lanes doesn't make sense, it is too erratic. there should only be a couple of movements in a day.. give me a solution  and you can see how atlas displays the king movments from one level to the other so we are consistent with atlas. also lets get rid of the 5m roc and keep the 15m roc to be consistent with the delta profile.  is the state also looking at 15 min ?
+
+**me (15:18):** The pin is centred on **7714** while ES actually opened at **7647**. Reading where that anchor came from.
+The anchor is **yesterday's** open — captured at 08:30:08, before today's first bar existed.
+A guard written against a field that doesn't exist — `cs[0].time`; the candles carry `t`.
+Three failures stacked: the guard can't fire, the capture stored `openSo: null`, and the self-heal requires that field to be a number.
+The fixtures model candles without `so` or `t` — the same incompleteness that let the bug hide.
+My appended block is outside the scope that owns the harness. Giving it its own.
+The heal couldn't fire — `_openSec` is only assigned inside the capture branch, so it's `undefined` on the path that matters.
+Now the king lane, the ROC and the state window.
+KT_DWELL is a *count*, applied to two streams with completely different rates — renders (seconds) live, frames (3 min) in replay. Measuring what a time-based rule gives.
+**20 minutes**, measured across 11 sessions. Implementing it in both paths so live and replay agree.
+Now the ROC column — dropping 5m, keeping 15m.
+X1 survived because that branch is unreachable — `anchor==='open'` already implies a first bar exists.
 
 ### DECISIONS
+
+**v15.23 · the band, the king lane, the ROC.**
+- **The EM band was anchored on YESTERDAY's open** — 7714 against a real ES open of 7647 — because
+  the warm-up guard tested `cs[0].time`, a field the candles do not have. That is what "crossed out"
+  was: price below EL from the first bar. The width was always IF's 0DTE straddle; the open was wrong.
+- **The test fixtures had no clock at all**, and the harness stubbed `naiveDayStr()` to "today"
+  because of it — so the guard could not fail in principle. Fixed the fixtures first.
+- **`KT_DWELL=2` was a count read by two loops at different rates** — ~6 seconds live, 6 minutes in
+  replay. Now 20 MINUTES, measured over 11 sessions (median 2 SPXW / 3 SPY per day).
+- **The 5m left the ROC column but not the decision** — TURN still needs it; BUILDING/WEAKENING are
+  15m, matching the Δ column.
 
 **v15.22 · the headline, the dependencies, the companion link.**
 - **"LOD IN 74% · HOD after 1:30 — 80%" had never drawn.** `secondT` is the later of the two RUNNING
@@ -326,6 +366,11 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.23** — the EM warm-up guard on `t`/`so` and an RTH bar; the openSo heal reachable; `_openSec`
+at function scope; `KT_DWELL_MIN=20` as a duration in both paths; the ROC column at 15m.
+`test_em_band` 625 → 632, `test_replay` → 188. Nine mutations, nine caught.
+Suite 134 green / 6 baseline red.
+
 **v15.22 · companion v1.17** — the far-side gate on the table's IN call; the floor on `D.clock`;
 a floor past the close as a refusal; `depsHealth()` + `__gptsDebug.deps()` + the `deps` footer chip;
 `design/DEPENDENCIES.md` wired into the gex skill's LOAD; both raw links in the delivery block.
@@ -356,6 +401,11 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. **His panel is still carrying the bad pin until it reloads** — the heal repairs it on the next
+   render after v15.23 is installed.
+2. **Run `__gptsDebug.deps()`** — SPY chain stale, and `irt.build` reported "nothing to write".
+3. The REPLAY side has still never been dragged on his real panel.
 
 1. **Run `__gptsDebug.deps()` on his panel** — the SPY chain was 11 days stale and may still be.
 2. **The REPLAY side has still never been dragged on his real panel.**
@@ -403,6 +453,9 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+d245994 test: Z5 survived mutation — a refusal nothing can reach is not a refusal
+00e2bbb build: the installer size gate measures the .bat, not a proxy for it
+0e971ef v15.22: the far-side line had never drawn, and the dependencies now have a live check
 22de227 v15.21 + companion v1.17: PT mixed two price scales, and the ladder never had headers
 487048c v15.20: the read is out, and the render audit was inventing a fault out of its own probe
 4a9b011 build: name the delivery file correctly in the builder's own note
@@ -412,9 +465,6 @@ e58c333 v15.19: one refusal upstream was hiding six surfaces, and nothing here c
 74c0b55 v15.17: arrows point at rows the ladder draws; the panel fits the window
 9ebaf19 v15.16: one constant was refusing 93% of every replayed session
 7b4d09e v15.15: the band centres on the replayed bar; the sync gate stands down; rolls get their strike
-7ec0a4e v15.14: the king lane draws the crown's journey
-8cf003b v15.13: the ladder fits the panel, and the arrows replay
-6806ea9 v15.12: the expected-move pin survives a chart switch
 ```
 
 ---
