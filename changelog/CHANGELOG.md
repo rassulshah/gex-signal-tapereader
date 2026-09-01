@@ -1,3 +1,93 @@
+## v15.18 — the arrows were pointing backwards, and the states could only say two things
+
+> "how is it that the stats of all except 1 is spent and only 1 is weakening.. something is not right"
+
+### ⚠⚠ THE STATUS WAS DIVIDING TODAY'S MASS BY TOMORROW'S PEAK
+
+`levelStateOf` calls a level SPENT when its mass has fallen below half of its own peak:
+
+    ret = |cur| / peakOf(k)      ret < LVL_SPENT_PEAK (0.5)  ->  SPENT
+
+In replay the numerator came from the parked frame and `peakOf(k)` came from `PEAK.m` — the LIVE
+whole-day peak, which includes every bar AFTER the moment being replayed. A level standing at its
+own high water mark at 14:12 was measured against a high water mark it would not reach for another
+two hours. Decoded off 2026-08-31, parked at 14:12:
+
+    strike      |cur|    peak->14:12   ret     peak WHOLE DAY   ret
+    7675     81988795      81988795   1.00          115827347   0.71
+    7700     51413336     111492387   0.46          173133335   0.30
+    7685     34840580      34840580   1.00          503965848   0.07   <- at its OWN peak, called SPENT
+    7695     19423931      39483659   0.49           97244233   0.20
+    7670     18218115      40808410   0.45           40808410   0.45
+
+7685 is the case that makes it plain: the strike was at 100% of the peak it had ever held by 14:12,
+and the face called it spent, because by 15:59 it had grown fourteen-fold. **Four of five SPENT was
+not a market observation. It was a clock error.**
+
+`replayPeakOf(k)` takes the max `|cur|` across frames up to `REPLAY.idx` — the peak as it was KNOWN
+at the parked moment — memoised on `day|idx`, and `peakOf()` routes to it whenever replay is on. A
+strike no frame up to that point carried has no peak, and returns `null` rather than a fabricated
+one, so the SPENT test simply does not fire on it.
+
+### the tap count is not recorded per frame, so replay stops pretending it is
+
+The same status line ends `WEAKENING … with no interaction at all — a quiet death` when a level has
+zero taps. `nodeTapCount()` reads TODAY's counter, so in replay every strike scored a confident
+zero and every one of them earned the clause. Replay now sets `tapsN=null, tapsKnown=false`, the
+DECAYING clause requires `tapsKnown && tapsN===0`, and the face says the count is *not recorded per
+frame* rather than inventing one. ⚠ Same shape as the SPENT bug and the same rule: **an absent
+measurement is not a zero.**
+
+### ⚠⚠ AND THEN THE ARROWS, WHICH WERE POINTING THE WRONG WAY — LIVE, NOT ONLY IN REPLAY
+
+> "look at the arrows and compare to the data and tell me if it makes sense"
+
+`rollScan` tested the SIGNED delta: a source had `d15 < -$40K`, a receiver `d15 > +$40K`. That is
+right on the positive side of the book and **exactly backwards on the negative side**, where a
+strike gaining mass gets a negative delta. Decoded at 14:12 on 2026-08-31:
+
+    7675   |cur|  59.6M -> 82.0M   d15 -22.4M    GAINED 22.4M   <- called the SOURCE
+    7670   |cur|  40.2M -> 18.2M   d15 +22.0M    SHED   22.0M   <- called the RECEIVER
+
+The face drew **7675 → 7670**. The mass went the other way: **7670 → 7675**, into the King. A roll is
+a move of MASS, and mass is `|cur|`, so both tests now measure `|cur| − |cur − d15|`. Swept over the
+129 recorded frames of 08-29/30/31: the old rule drew **446** arrows, the new one draws **310**;
+of those, 40 were being drawn REVERSED and only 15 were identical. Samples the new rule refuses:
+
+    7705 -> 7700   source GAINED 82K   destination LOST 340K      — inverted on both ends
+    7650 -> 7630   source GAINED 11.4M  destination gained 10.3M  — nothing moved; both were building
+
+⚠ `levelStateOf`'s isSrc/isDst, the SPENT hover's "shed into another strike" and `levelDoors` all
+read these pairs, so each inherited the inversion.
+
+### and the states could only ever say two things
+
+Every branch but SPENT sits behind `p5`/`p15` being numbers — **Skylit's** percents, which a recorded
+row does not carry ([k, cur, d5, d15, d60, d1d], six columns). So a replayed face could reach only
+SPENT, WEAKENING-via-roll-source, and HOLDING. **"2 weakening and everything else spent" was not a
+reading of the market; it was the complete list of things replay was able to say.**
+Replayed rows now carry `rp5/rp15/rp60` — ⚠ deliberately NOT `p5/p15/p60`, because the ROC column
+credits those to Skylit ("the same numbers their strike popup shows") and their sign convention for a
+deepening negative strike is not observable from a recording. `rp15` is this panel's own measure with
+its convention stated: the change in MASS. The state engine prefers the vendor's percent wherever it
+exists — live behaviour is untouched — and the hover says when the number is ours.
+At 14:12 the face now reads: **7670 SPENT (45% of peak, shed into 7675) · 7675 BUILDING (at its own
+peak, +38% of mass) · 7685 BUILDING · 7695 SPENT · 7700 SPENT** — one coherent event instead of five
+unrelated deaths.
+
+### verification
+`test_replay.js` 174 → **186 assertions**; `test_velocity_policy.js` +7, executing `rollScan` against
+those five real rows. Fixtures are the operator's own book, never invented numbers. q8 was written as
+a source grep and **survived mutation** (`if(false){ tapsN=null; … }` leaves the text in place) — the
+fourth such instance in this project — and was rewritten to EXECUTE `levelStateOf` in both modes.
+**Seventeen mutations run individually, seventeen caught**, including from/to swapped, the signed
+delta restored, the derivation written into `p15`, and the derivation outranking the vendor.
+`tools/audit-replay-face.js` is new: it decodes what the replayed face says at a chosen minute beside
+the recorded book, so the next claim about the arrows can be checked rather than asserted.
+⚠ It also caught a memo keyed on `day|idx` alone returning a peak for frames it no longer held; the
+key now carries the parked frame's own timestamp and depth.
+
+
 ## v15.17 — the arrows point at rows the ladder draws, and the panel fits the window
 
 > "see the arrows and determine if they make sense" · "I also cannot scroll up and down"

@@ -131,6 +131,56 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.18 — a threshold's DENOMINATOR has a provenance too
+
+**1 · Something that turned out to be false.** I had treated the replay seam as covering the *data*
+a computation reads. `peakOf` showed it also covers the *scale it is judged against*. The numerator
+was replayed and the denominator was live, so the ratio compared 14:12 to 15:59 — and the face
+reported it in the confident language of a measurement. Four of five levels read SPENT and not one
+of them was.
+
+**2 · Failure-pattern recurrence — "a consumer reaching around a replayed seam to a live source",
+tenth instance.** `tapeMap` → `ladderKings` → `slicesFor` → `velOk` → `rollsLive` → `ktOf` →
+`closedCandles` → `tapeSync` → `SK_MIN_STRIKES` → **`peakOf`**. Nine of the ten were found by the
+operator looking at his own panel, not by me reading the code. The listing method in the resume note
+is what was skipped, again: before claiming a replayed surface works, walk *every* input of *every*
+comparison between source and pixels — including the constants and the accumulators, not just the
+obvious feed.
+
+**3 · New pattern, and it is worth a name: AN ABSENT MEASUREMENT IS NOT A ZERO.** `nodeTapCount()`
+returns 0 both for "this level was never touched" and for "this run does not track taps". The first
+is a finding — *a quiet death* — and the second is ignorance, and the type system cannot tell them
+apart because both are the number 0. Two bugs this build were the same shape: a peak that does not
+exist yet, and a tap count that is not recorded. Both now return `null` and both callers ask before
+they speak. ⚠ Whenever a default value is the same token as a real measurement, the code has no way
+to be honest.
+
+**4 · A measurement that superseded an earlier one: THE ARROWS WERE INVERTED ON HALF THE BOOK.**
+`rollScan` tested the SIGNED delta, so on the negative side of the book a strike GAINING mass
+(-59.6M → -82.0M, d15 -22.4M) was the source and one EMPTYING (-40.2M → -18.2M, d15 +22.0M) was the
+receiver. Swept over 129 recorded frames: 446 old arrows, 310 new, **40 of them previously drawn
+REVERSED** and only 15 identical. The v11.34 note "receivers gained 2.8x, 8.6x, 13.1x and 16.5x what
+the losers shed" was measured with that inverted rule and **must not be quoted again as evidence
+about direction**. ⚠ The rule this produces: **when a quantity is SIGNED, decide once whether the
+code means the value or its magnitude, and say which in the name.** `cur` is a signed position;
+`|cur|` is mass. Three separate defects this build — SPENT's denominator, `rp15`, and the arrows —
+were the same confusion in three places.
+
+**5 · The operator found it by asking the face to agree with itself.** "look at the arrows and
+compare to the data and tell me if it makes sense" — the arrows said 7675 shed into 7670 while the
+status said 7675 was at 100% of its own peak. **Two surfaces reading the same book must be checked
+AGAINST EACH OTHER, not each against my expectation.** `tools/audit-replay-face.js` now prints them
+side by side for any minute of any recorded day, which is the check I should have been able to run
+before he had to ask.
+
+**6 · A source grep survived mutation. Again.** q8 asserted `/tapsN=null; tapsKnown=false/` against
+the source. Wrapping the assignment in `if(false){…}` leaves the text untouched, so the assertion
+passed against code that could never run. This is the *fourth* recorded instance in this project
+(v13.4 `if(false && …)`, v15.14 `/LIVE/` matching "LIVE LIVE", v15.16 the deleted background). The
+rule was already written and I wrote a grep anyway: **an assertion that does not execute the code is
+a comment with a PASS next to it.** The replacement executes `levelStateOf` in both modes and
+catches all three mutations.
+
 ### v15.17 · 2026-09-01 · **THE ARROWS WERE TRUE AND STILL WRONG TO SHOW**
 
 Decoded his four arrows at 14:12 against the recorded frame: every one a genuine roll pair, and every

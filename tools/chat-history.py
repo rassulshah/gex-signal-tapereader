@@ -166,6 +166,91 @@ def compress(block):
     return '\n'.join(keep)
 
 
+# ── COMPACTION RECOVERY ────────────────────────────────────────────────────────
+# When a context is compacted, the harness REWRITES the .jsonl: the turns before the compaction are
+# replaced by a single summary message, so this generator — reading the transcript, as it must —
+# finds a context with ZERO operator prompts and silently writes an entry with none. That is the
+# ITEM 18 failure the file exists to prevent, in a new costume.
+#
+# The summary itself carries the operator's messages verbatim, under a numbered "All user messages"
+# heading. They are recovered from there, deduped against what CHAT-HISTORY.md already quotes (an
+# earlier entry usually holds most of them), and marked RECOVERED so nobody mistakes a reconstructed
+# ordering for the transcript's own.
+COMPACT_HEAD = re.compile(r'^This session is being continued from a previous conversation', re.I)
+ALLMSGS = re.compile(r'^\s*\d+\.\s*\*\*All user messages:?\*\*\s*$', re.M)
+
+
+def compaction_summary(path):
+    """The text of a compaction-continuation message, or '' when the transcript is intact."""
+    with open(path, encoding='utf-8', errors='replace') as fh:
+        for line in fh:
+            try:
+                d = json.loads(line)
+            except Exception:
+                continue
+            m = d.get('message')
+            if not isinstance(m, dict) or m.get('role') != 'user':
+                continue
+            if is_tool_result(m.get('content')):
+                continue
+            t = text_of(m.get('content'))
+            if COMPACT_HEAD.match(t.strip()):
+                return t
+            return ''          # a real prompt came first: nothing was compacted away
+    return ''
+
+
+def recovered_prompts(summary, already):
+    """Verbatim operator prompts from a compaction summary that CHAT-HISTORY.md does not yet hold."""
+    # ⚠ Prompts are stored one blockquote line per source line, so a MULTI-LINE prompt is '> ' broken
+    # in the file and a raw substring test never matches it — every build would recover it again.
+    already = re.sub(r'\s+', ' ', re.sub(r'^\s*>\s?', '', already or '', flags=re.M))
+    m = ALLMSGS.search(summary or '')
+    if not m:
+        return []
+    tail = summary[m.end():]
+    stop = re.search(r'^\s*\d+\.\s*\*\*', tail, re.M)
+    if stop:
+        tail = tail[:stop.start()]
+    out = []
+    for ln in tail.split('\n'):
+        ln = ln.strip()
+        if not ln.startswith('-'):
+            continue
+        ln = ln.lstrip('- ').strip()
+        q = re.findall(r'"([^"]+)"', ln)
+        if not q:
+            continue
+        for txt in q:
+            key = re.sub(r'\s+', ' ', txt).strip()
+            if len(key) < 8:
+                continue
+            if already.find(key) >= 0:
+                continue          # an earlier entry already quotes it
+            if any(re.sub(r'\s+', ' ', o) == key for o in out):
+                continue
+            out.append(txt)
+    return out
+
+
+def carry_sections(prev, sid, place):
+    """Hand-written sections from the CURRENT entry, when it belongs to the SAME session."""
+    out = {}
+    if not prev or MARK_CUR not in prev:
+        return out
+    cur = prev.split(MARK_CUR, 1)[1].split(MARK_OLD, 1)[0]
+    if ('session `%s`' % sid) not in cur:
+        return out                        # a different context: its notes go to the earlier tier
+    for name in place:
+        m = re.search(r'^### ' + re.escape(name) + r'\s*\n(.*?)(?=^### |\Z)', cur, re.S | re.M)
+        if not m:
+            continue
+        txt = m.group(1).strip()
+        if txt and txt != place[name]:
+            out[name] = txt
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--transcript')
@@ -178,6 +263,19 @@ def main():
     turns = merge_adjacent(parse(path))
     if not turns:
         sys.exit('transcript parsed but held no conversation turns')
+
+    prev_md = ''
+    if os.path.exists(OUT):
+        with open(OUT, encoding='utf-8') as fh:
+            prev_md = fh.read()
+    # ⚠ Dedupe against the EARLIER tier only. The CURRENT block is the one this run REPLACES, so a
+    # prompt recovered by the previous run of this same context must be recovered again — otherwise
+    # every build after the first writes an entry with no prompts at all.
+    earlier_md = prev_md.split(MARK_OLD, 1)[1] if MARK_OLD in prev_md else prev_md
+    rec = recovered_prompts(compaction_summary(path), earlier_md)
+    if rec:
+        turns = [['user', '', t + '\n\n_[RECOVERED from the compaction summary — this context was '
+                  'compacted and the transcript no longer holds the turn itself]_'] for t in rec] + turns
 
     sid = os.path.basename(path).replace('.jsonl', '')[:8]
     ver = a.version or detect_version()
@@ -203,11 +301,18 @@ def main():
             body.append(f"**me ({ts}):** {cut}")
             body.append('')
 
-    body += ['### DECISIONS', '',
-             '_Fill in before committing: what was settled, what was corrected, what was refused._',
-             '', '### SHIPPED', '', '_Version + what actually changed, or "no code shipped"._',
-             '', '### OPEN AT CLOSE', '',
-             '_What the next context must pick up. Cross-check `LOCKED-ITEMS.md`._', '']
+    # ⚠ THE THREE SECTIONS BELOW ARE WRITTEN BY HAND AND THIS GENERATOR MUST NOT EAT THEM. A context
+    # ships several builds, and until v15.18 every rebuild replaced DECISIONS / SHIPPED / OPEN AT
+    # CLOSE with their placeholders — so the notes survived only if someone noticed and retyped them,
+    # and `test_chat_history` went red for what looked like a process failure instead of a tool bug.
+    PLACE = {
+        'DECISIONS': '_Fill in before committing: what was settled, what was corrected, what was refused._',
+        'SHIPPED': '_Version + what actually changed, or "no code shipped"._',
+        'OPEN AT CLOSE': '_What the next context must pick up. Cross-check `LOCKED-ITEMS.md`._',
+    }
+    kept = carry_sections(prev_md, sid, PLACE) if 'prev_md' in dir() else {}
+    for name in ('DECISIONS', 'SHIPPED', 'OPEN AT CLOSE'):
+        body += ['### ' + name, '', kept.get(name) or PLACE[name], '']
 
     recent = git('log', '--oneline', '-12')
     if recent:
@@ -239,7 +344,14 @@ def main():
     if MARK_CUR in prev:
         after = prev.split(MARK_CUR, 1)[1]
         cur_block, rest = (after.split(MARK_OLD, 1) + [''])[:2]
-        old_block = compress(cur_block).strip() + ('\n\n' + rest.strip() if rest.strip() else '')
+        # ⚠ Same context rebuilt (several builds per session is normal): REPLACE its entry. Demoting
+        # it would file a compressed copy of the context alongside the live one on every build.
+        same = ('session `%s`' % sid) in cur_block
+        kept = '' if same else compress(cur_block).strip()
+        old_block = (kept + ('\n\n' if kept and rest.strip() else '') + rest.strip()).strip()
+        # `rest` carries the tier's own heading; the writer emits one too. Without this a rebuilt
+        # context stacks a fresh '# EARLIER CONTEXTS' line on the file every single run.
+        old_block = re.sub(r'^#\s*EARLIER CONTEXTS\s*\n+', '', old_block)
     elif prev.strip():
         old_block = prev.strip()
 

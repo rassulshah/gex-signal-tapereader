@@ -644,5 +644,117 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
   ok(lIdx>-1 && pIdx>lIdx, 'p7 the vertical clamp runs AFTER the width fit, on the settled box');
 }
 
+// ---- 20 · (v15.18) THE DAY PEAK MUST NOT INCLUDE THE BAR'S OWN FUTURE ---------------------------
+// Operator: "how is it that the stats of all except 1 is spent and only 1 is weakening.. something
+// is not right." He was right. `levelStateOf` computes ret = |cur| / peakOf(k) and calls a level
+// SPENT below 0.50. In replay the NUMERATOR was the frame's mass and the DENOMINATOR was the LIVE
+// day-peak tracker — the maximum over the WHOLE session, including every bar AFTER the one drawn.
+//
+// MEASURED at 14:12 on 2026-08-31, retention against each denominator:
+//        strike      |cur|   peak->14:12  ret    peak WHOLE DAY  ret
+//        7675     81988795     81988795  1.00         115827347  0.71
+//        7700     51413336    111492387  0.46         173133335  0.30
+//        7685     34840580     34840580  1.00         503965848  0.07   <-- at its OWN peak, called SPENT
+//        7695     19423931     39483659  0.49          97244233  0.20
+//        7670     18218115     40808410  0.45          40808410  0.45
+// 7685 sat at 100% of its peak-to-date and was labelled SPENT because a spike that had not happened
+// yet was in the denominator.
+{
+  global.PEAK={ m:{ 7685:503965848, 7675:115827347 } };   // the LIVE tracker: whole-day maxima
+  global.RP_PEAK={ key:null, m:null };
+  eval(ex('replayPeakOf')); eval(ex('peakOf'));
+  const mk=(t,rows)=>({t:t, tri:{SPXW:{king:7675}}, vend:{rows:rows}});
+  //                     k        cur       d5 d15 d60 d1d
+  REPLAY.on=true; REPLAY.day='2026-08-31';
+  REPLAY.frames=[ mk(1,[[7685, 34840580,0,0,0,0]]),
+                  mk(2,[[7685, 20000000,0,0,0,0]]),
+                  mk(3,[[7685,503965848,0,0,0,0]]) ];   // the spike happens at frame 3
+  REPLAY.idx=1;
+  ok(peakOf(7685)===34840580,
+     'q1 the replayed peak is the max UP TO the parked bar — the later spike has not happened yet',
+     peakOf(7685));
+  ok(Math.abs(34840580/peakOf(7685)-1)<1e-9,
+     'q2 ...so a level at its own peak-to-date reads 100% retention, not 7%');
+  RP_PEAK.key=null; REPLAY.idx=2;
+  ok(peakOf(7685)===503965848, 'q3 dragging PAST the spike includes it — the peak grows with the handle', peakOf(7685));
+  RP_PEAK.key=null; REPLAY.idx=1;
+  ok(peakOf(9999)===null, 'q4 a strike the frames never carried has NO peak, rather than a wrong one');
+  REPLAY.on=false;
+  ok(peakOf(7685)===503965848, 'q5 live still reads the live tracker, untouched', peakOf(7685));
+  REPLAY.on=true;
+}
+{
+  // taps are not recorded per frame — a confident zero would invent "no interaction at all"
+  const ls=decomment(ex('levelStateOf'));
+  ok(/tapsKnown/.test(ls), 'q6 the state engine distinguishes "no taps" from "taps not tracked"');
+  ok(/tapsKnown && tapsN===0/.test(ls),
+     'q7 ...and only claims DECAYING when a zero is actually KNOWN');
+  // ⚠ q8 WAS A SOURCE GREP AND SURVIVED MUTATION — gating the assignment with `if(false)` leaves the
+  // text in place. levelStateOf is EXECUTED instead, which is the only way to see which branch ran.
+  global.LVL_TURN_P15=num('LVL_TURN_P15'); global.LVL_WEAK_P15=num('LVL_WEAK_P15');
+  global.LVL_BUILD_P15=num('LVL_BUILD_P15'); global.LVL_SPENT_PEAK=num('LVL_SPENT_PEAK');
+  global.TAP_PROB=[80,66,33];
+  global.nodeTapCount=()=>0;                       // the LIVE counter would say a confident zero
+  global.velAt=()=>({ v:{ cur:100, p5:0, p15:0, p60:0 }, stale:false });
+  global.PEAK={ m:{} };
+  global.RP_PEAK={ key:null, m:null };
+  eval(ex('replayPeakOf')); eval(ex('peakOf')); eval(ex('levelStateOf'));
+  REPLAY.on=true; REPLAY.day='d'; REPLAY.frames=[{t:1,tri:{SPXW:{king:7675}},vend:{rows:[[7675,100,0,0,0,0]]}}]; REPLAY.idx=0;
+  const stR=levelStateOf(7675, null);
+  ok(stR.taps===null, 'q8 EXECUTED: in replay the tap count is UNKNOWN, not a confident zero', stR.taps);
+  ok(!/no interaction at all/.test(stR.why),
+     'q8b ...so DECAYING — "a quiet death" — is never claimed from a count we do not have', stR.why);
+  ok(/not recorded per frame/.test(stR.why),
+     'q8c ...and the face says WHY it is silent rather than just omitting it', stR.why);
+  REPLAY.on=false;
+  const stL=levelStateOf(7675, null);
+  ok(stL.taps===0, 'q8d live, a real zero is still a real zero', stL.taps);
+  REPLAY.on=true;
+
+  // ---- s · THE RATE OF CHANGE A REPLAYED ROW CAN HONESTLY CARRY --------------------------------
+  // ⚠⚠ Until v15.18 a replayed row had NO p5/p15/p60 — a recorded row is [k,cur,d5,d15,d60,d1d] and
+  // the vendor's percents are not among them — while every state branch but SPENT sits behind those
+  // fields being numbers. So a replayed face could only ever say SPENT, WEAKENING-via-roll-source
+  // or HOLDING, which is exactly what the operator saw: "2 weakening and everything else spent".
+  // These use the REAL 14:12 CT rows of 2026-08-31.
+  eval(ex('replayBook')); eval(ex('replayBookOf'));
+  REPLAY.on=true; REPLAY.day='d'; REPLAY.idx=0;
+  REPLAY.frames=[{ t:1, tri:{ SPXW:{ king:7675 } }, vend:{ rows:[
+    [7675,-81988795,-8775320,-22426842,-88620743,-78949899],
+    [7670,-18218115,   803045, 21974932,  2050583,-13918766] ]}}];
+  const RB=replayBook('SPXW');
+  const r75=RB.vel['7675'], r70=RB.vel['7670'];
+  ok(typeof r75.p15!=='number',
+     's1 a replayed row NEVER carries p15 — that name means Skylit\'s own percent15Min', r75.p15);
+  ok(typeof r75.rp15==='number', 's2 ...it carries rp15, this panel\'s own measure, under its own name');
+  ok(Math.round(r75.rp15)===38,
+     's3 ...and rp15 is the change in MASS: -59.6M to -82.0M is +38%, not -38%', r75.rp15);
+  ok(Math.round(r70.rp15)===-55, 's4 ...while 7670, decaying toward zero, reads -55%', r70.rp15);
+
+  global.velAt=k=>{ const v=RB.vel[String(k)]; return v?{ v:v, age:0, stale:false }:null; };
+  PEAK={ m:{} }; RP_PEAK={ key:null, m:null };
+  const s75=levelStateOf(7675, null);
+  ok(s75.st==='BUILDING',
+     's5 EXECUTED: the King deepening into its own peak is BUILDING, not WEAKENING', s75.st);
+  ok(/not Skylit/.test(s75.why),
+     's6 ...and the hover says the number is ours, measured from the recorded deltas', s75.why);
+  // and the vendor's own percent still wins wherever it exists — live behaviour is untouched
+  global.velAt=()=>({ v:{ k:7675, cur:-81988795, d15:-22426842, rp15:37.7,
+                          p5:-9, p15:-38, p60:-12 }, age:0, stale:false });
+  const sVend=levelStateOf(7675, null);
+  ok(sVend.st==='WEAKENING' && !/not Skylit/.test(sVend.why),
+     's7 a row that HAS the vendor percents uses them, and says nothing about a derivation', sVend.st);
+  // a strike with no mass 15m ago has no percentage — undefined, never Infinity
+  REPLAY.frames=[{ t:1, tri:{ SPXW:{ king:7675 } }, vend:{ rows:[[7675,5000000,0,5000000,0,0]] }}];
+  const RB0=replayBook('SPXW');
+  ok(RB0.vel['7675'].rp15===undefined,
+     's8 a prior of ZERO yields no percent at all, rather than Infinity', RB0.vel['7675'].rp15);
+  global.velAt=()=>({ v:RB0.vel['7675'], age:0, stale:false });
+  const s9=levelStateOf(7675, null);
+  ok(s9.st==='HOLDING',
+     's9 ...and the state engine simply says nothing about a rate it does not have', s9);
+  REPLAY.on=true;
+}
+
 console.log('test_replay: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

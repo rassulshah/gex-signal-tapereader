@@ -94,6 +94,41 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
   // (v14.4/6 -> v14.81) the bias line lived on the GAMMA PROFILE header by his direction; the
   // profile was cut 2026-08-28 and he chose to keep the chip, so it now rides the ② LOCATION row.
   ok(/ROLL BIAS /.test(ex('secFrame')), 'and reaches the face as one chip on the LOCATION row');
+
+  // ---- (v15.18) A ROLL IS A MOVE OF MASS, AND MASS IS |cur| ----------------------------------
+  // ⚠⚠ EXECUTED, with the operator's own book: the five SPXW nodes at 14:12 CT on 2026-08-31,
+  // copied verbatim out of data/2026-08-31.json. Until this build rollScan tested the SIGNED delta,
+  // so on the NEGATIVE side of the book both halves were inverted — 7675 deepening from -59.6M to
+  // -82.0M (d15 -22.4M) was called a SOURCE while it GAINED $22.4M, and 7670 decaying from -40.2M
+  // toward -18.2M (d15 +22.0M) was called its RECEIVER while it emptied. The face drew 7675 -> 7670.
+  // The direction is the entire content of an arrow, so this was not a near miss.
+  const ROWS = [
+    { k:7675, cur:-81988795, d15:-22426842 },   // |cur| 59.6M -> 82.0M   GAINED 22.4M
+    { k:7700, cur:-51413336, d15:-15326975 },   // |cur| 36.1M -> 51.4M   GAINED 15.3M
+    { k:7685, cur: 34840580, d15:  7286541 },   // |cur| 27.6M -> 34.8M   gained  7.3M
+    { k:7695, cur: 19423931, d15:  6065799 },   // |cur| 13.4M -> 19.4M   gained  6.1M
+    { k:7670, cur:-18218115, d15: 21974932 }    // |cur| 40.2M -> 18.2M   SHED   22.0M
+  ];
+  const savedVelAt=global.velAt, savedVelOk=global.velOk;
+  global.velOk=()=>true;
+  global.velAt=k=>{ const v=ROWS.find(r=>r.k===k); return v?{ v:v, age:0, stale:false }:null; };
+  global.ROLL_MIN_ABS=40000; global.ROLL_MAX_DIST=25; global.ROLL_MIN_RATIO=0.40;
+  eval(rs);
+  const got=rollScan(ROWS.map(r=>r.k));
+  ok(got.length===1, 'v1 EXECUTED: exactly ONE roll is present in that book', got.length);
+  ok(got[0] && got[0].from===7670, 'v2 ...and the SOURCE is the strike that lost mass, 7670', got[0]&&got[0].from);
+  ok(got[0] && got[0].to===7675, 'v3 ...pointing AT the King, which gained it — the old rule drew this backwards', got[0]&&got[0].to);
+  ok(got[0] && Math.round(got[0].amt)===21974932, 'v4 ...and the amount is the MASS shed, not the signed delta', got[0]&&got[0].amt);
+  ok(!got.some(r=>r.from===7675), 'v5 a strike whose |cur| GREW is never a source, however negative its delta');
+  ok(!got.some(r=>r.to===7670),   'v6 ...and a strike whose |cur| SHRANK is never a receiver');
+  // a positive-side book must behave exactly as it always did — this fix must not move live behaviour
+  // where the sign never confused it.
+  const POS=[{k:7600,cur:1000000,d15:-500000},{k:7610,cur:900000,d15:400000}];
+  global.velAt=k=>{ const v=POS.find(r=>r.k===k); return v?{ v:v, age:0, stale:false }:null; };
+  const gp=rollScan([7600,7610]);
+  ok(gp.length===1 && gp[0].from===7600 && gp[0].to===7610,
+     'v7 on the positive side of the book the answer is unchanged', gp);
+  global.velAt=savedVelAt; global.velOk=savedVelOk;
 }
 // ---------- ONE BOOK: NODES AND THE RAIL ----------
 {

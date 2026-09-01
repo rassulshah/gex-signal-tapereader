@@ -107,5 +107,52 @@ ok(skill.indexOf('chat-history.py')>=0, 'the gex skill names the generator in th
 const chk=read('./tools/BUILD-CHECKLIST.md')||'';
 ok(chk.indexOf('chat-history.py')>=0, 'BUILD-CHECKLIST.md requires regenerating it every build');
 
+// ── COMPACTION RECOVERY (v15.18) ──────────────────────────────────────────────
+// A compacted context makes the harness REWRITE the .jsonl: the turns before the compaction become a
+// single summary message, so the generator — which must read the transcript — found ZERO operator
+// prompts and filed an entry with none. That is the ITEM 18 failure this whole file exists to stop.
+// These assertions EXECUTE the generator's own functions against a synthetic transcript rather than
+// grepping it, because the last source-grep assertion this project wrote survived mutation.
+const { execFileSync } = require('child_process');
+function py(code){
+  return execFileSync('python3', ['-c',
+    "import importlib.util,sys,json\n"+
+    "spec=importlib.util.spec_from_file_location('ch','tools/chat-history.py')\n"+
+    "m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"+code],
+    { encoding:'utf-8' }).trim();
+}
+const SUMMARY = 'This session is being continued from a previous conversation that ran out of context.\n'+
+  '6. **All user messages:**\n'+
+  '   - "the arrows dont make sense"\n'+
+  '   - "how is it that the stats of all except 1 is spent"\n'+
+  '7. **Pending Tasks:**\n   - ship it\n';
+
+let r = py("print(json.dumps(m.recovered_prompts("+JSON.stringify(SUMMARY)+", '')))");
+let got = JSON.parse(r);
+ok(got.length===2, 'r1 EXECUTED: a compaction summary yields the operator prompts it carries', got.length);
+ok(got[0]==='the arrows dont make sense', 'r2 ...verbatim, not paraphrased or reflowed', got[0]);
+ok(got.indexOf('ship it')<0, 'r3 ...and stops at the next numbered heading, so Pending Tasks is not a prompt');
+
+r = py("print(json.dumps(m.recovered_prompts("+JSON.stringify(SUMMARY)+
+       ", '> the arrows dont make sense')))");
+got = JSON.parse(r);
+ok(got.length===1 && got[0].indexOf('stats')>=0,
+   'r4 ...a prompt an EARLIER entry already quotes is not recovered twice', got.length);
+
+// ⚠ The file stores each prompt line behind a '> ', so a multi-line prompt is broken across
+// blockquote lines. Deduping on the raw text missed those and re-recovered them every build.
+r = py("print(json.dumps(m.recovered_prompts('This session is being continued from a previous "+
+       "conversation.\\n6. **All user messages:**\\n   - \"line one and line two\"\\n', "+
+       "'> line one\\n> and line two')))");
+ok(JSON.parse(r).length===0,
+   'r5 ...including one the file holds split across blockquote lines', r);
+
+r = py("print(m.compaction_summary('/dev/null') or 'NONE')");
+ok(r==='NONE', 'r6 an intact transcript reports no compaction, so nothing is recovered', r);
+
+const hist2 = read('./session-state/CHAT-HISTORY.md')||'';
+ok(!/^# EARLIER CONTEXTS[\s\S]*^# EARLIER CONTEXTS/m.test(hist2),
+   'r7 the file carries exactly ONE earlier-contexts heading — 59 had stacked up');
+
 console.log('\n'+pass+' pass / '+fail+' fail');
 process.exit(fail?1:0);

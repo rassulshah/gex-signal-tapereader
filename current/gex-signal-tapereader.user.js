@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.17
+// @version    15.18
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -641,7 +641,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.17';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.18';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -953,7 +953,34 @@ function replayBook(book){
       // session that holds 2,406 roll sightings — measured on 2026-08-31, pairs seen in 30-63 frames.
       // The live VEL objects carry `k` because the harvest reads it off the row; the replay ones did
       // not, and nothing in the shape said it was required.
-      vel[kk]={ k:r[0], cur:r[1], d5:r[2], d15:r[3], d60:r[4], d1d:r[5], exp:F.exp||null };
+      // ⚠⚠ (v15.18) WITHOUT A RATE OF CHANGE, EVERY STATE BRANCH BUT ONE IS DEAD IN REPLAY.
+      // A live VEL row carries the vendor's DELTAS (d5/d15/d60, dollars) AND the vendor's PERCENTS
+      // (p5/p15/p60) — and `levelStateOf` gates TURN, BUILDING and WEAKENING behind
+      // `p5`/`p15` being numbers. A recorded row is [k, cur, d5, d15, d60, d1d]: six columns, no
+      // percents. So on a replayed bar that gate was NEVER true and the only reachable states were
+      // SPENT, WEAKENING-via-roll-source and HOLDING. That is precisely the face the operator
+      // reported — "2 weakening and everything else spent" — and no correction to the DATA could
+      // have moved it, because the branches that say anything else could not be reached.
+      //
+      // ⚠⚠ THESE ARE NOT p5/p15/p60 AND MUST NEVER BE ASSIGNED TO THOSE NAMES. `p15` means Skylit's
+      // `percent15Min`, and the ROC column says so out loud — "the same numbers their strike popup
+      // shows". Their sign convention for a NEGATIVE strike growing more negative is not observable
+      // from a recorded row, so a reconstruction written into `p15` would put a possibly-inverted
+      // number under a tooltip crediting them for it. The ROC column stays EMPTY in replay, exactly
+      // as v15.10 decided.
+      //
+      // `rp15` is OUR OWN measure and its convention is stated: the change in MASS — |cur| against
+      // |cur - d15| — so a strike deepening from -59.5M to -81.9M is BUILDING, which is what a level
+      // gaining size means, rather than "down 38%" from reading a signed value as a quantity.
+      // Verified against the recorded series: d15 reproduces cur(t) - cur(t-15m) on 3,626 measured
+      // pairs, so the deltas themselves are the vendor's own and are sound.
+      // ⚠ A prior of ZERO has no percentage — left UNDEFINED, never Infinity.
+      var _rp=function(cur, d){ if(typeof cur!=='number'||typeof d!=='number') return undefined;
+                                var prior=Math.abs(cur-d); if(!prior) return undefined;
+                                return 100*(Math.abs(cur)-prior)/prior; };
+      vel[kk]={ k:r[0], cur:r[1], d5:r[2], d15:r[3], d60:r[4], d1d:r[5],
+                rp5:_rp(r[1],r[2]), rp15:_rp(r[1],r[3]), rp60:_rp(r[1],r[4]),
+                replayPct:true, exp:F.exp||null };
     }
     var kg=(tri[book] && typeof tri[book].king==='number') ? tri[book].king : null;
     return { pct:pct, king:kg, kingKd:Math.round(mx/1000), count:mine.length,
@@ -3782,26 +3809,40 @@ function rollScan(strikes){
   var out=[];
   try{
     if(!velOk() || !strikes || !strikes.length) return out;
+    // ⚠⚠ (v15.18) A ROLL IS A MOVE OF MASS, AND MASS IS |cur| — NOT cur. Until this build the test
+    // was `src.d15 < -ROLL_MIN_ABS` on the SIGNED delta, which is right on the positive side of the
+    // book and EXACTLY BACKWARDS on the negative side. A short-gamma strike deepening from -59.6M
+    // to -82.0M has d15 = -22.4M and was called a SOURCE while it was in fact GAINING $22.4M of
+    // mass; a strike decaying from -40.2M toward -18.2M has d15 = +22.0M and was called a
+    // RECEIVER while it emptied. Decoded off 2026-08-31 at 14:12 the face drew `7675 -> 7670`.
+    // The measured truth is `7670 -> 7675`: the mass left 7670 and arrived at the King. Every
+    // arrow on the negative side of the book has been pointing the wrong way, and the direction is
+    // the whole content of the claim.
+    // ⚠ This is a LIVE fix, not a replay one. `levelStateOf`'s isSrc/isDst, the SPENT hover's
+    // "shed into another strike", and `levelDoors` all read these pairs, so they were inheriting
+    // the inversion too.
     var rows=[];
     for(var i=0;i<strikes.length;i++){
       var e=velAt(strikes[i]);
-      if(e && e.v && typeof e.v.d15==='number') rows.push(e.v);
+      if(e && e.v && typeof e.v.d15==='number' && typeof e.v.cur==='number') rows.push(e.v);
     }
+    // the 15-minute change in MASS: |now| - |15m ago|. Positive = size arrived here.
+    function m15(v){ return Math.abs(v.cur) - Math.abs(v.cur - v.d15); }
     for(var a=0;a<rows.length;a++){
-      var src=rows[a];
-      if(!(src.d15 < -ROLL_MIN_ABS)) continue;          // must be SHEDDING, materially
-      var best=null;
+      var src=rows[a], sm=m15(src);
+      if(!(sm < -ROLL_MIN_ABS)) continue;               // must be SHEDDING MASS, materially
+      var best=null, bm=0;
       for(var b=0;b<rows.length;b++){
-        var dst=rows[b];
+        var dst=rows[b], dm=m15(dst);
         if(dst.k===src.k) continue;
         if(Math.abs(dst.k-src.k)>ROLL_MAX_DIST) continue;
-        if(!(dst.d15 > ROLL_MIN_ABS)) continue;          // must be RECEIVING, materially
-        var ratio=dst.d15/Math.abs(src.d15);
+        if(!(dm > ROLL_MIN_ABS)) continue;              // must be RECEIVING MASS, materially
+        var ratio=dm/Math.abs(sm);
         if(ratio<ROLL_MIN_RATIO) continue;
-        if(!best || dst.d15>best.d15) best=dst;
+        if(!best || dm>bm){ best=dst; bm=dm; }
       }
-      if(best) out.push({ from:src.k, to:best.k, lost:src.d15, got:best.d15,
-                          dir:(best.k>src.k)?'up':'dn', amt:Math.abs(src.d15) });
+      if(best) out.push({ from:src.k, to:best.k, lost:sm, got:bm,
+                          dir:(best.k>src.k)?'up':'dn', amt:Math.abs(sm) });
     }
   }catch(e){}
   return out;
@@ -4045,7 +4086,52 @@ function peakTick(sym){
     if(bar && PEAK.bar!==bar){ PEAK.bar=bar; peakSave(); }
   }catch(e){}
 }
-function peakOf(k){ var p=PEAK.m[k]; return (typeof p==='number'&&p>0)?p:null; }
+// ⚠⚠ (v15.18) IN REPLAY THE DAY PEAK COMES FROM THE FRAMES, AND THIS ONE LINE WAS TURNING NEARLY
+// EVERY LEVEL SPENT. Operator: "how is it that the stats of all except 1 is spent and only 1 is
+// weakening.. something is not right." He was right.
+//
+// `levelStateOf` computes  ret = |vv.cur| / peakOf(k)  and calls the level SPENT below 50%. In
+// replay the NUMERATOR was the replayed frame's mass while the DENOMINATOR was `PEAK`, the LIVE
+// day-peak tracker — which holds the maximum over the WHOLE session, including every bar AFTER the
+// one being replayed. A mid-session value divided by the day's eventual high is small almost by
+// construction, so almost every row fell under the threshold and read SPENT.
+//
+// ⚠ Two errors in one expression: a value from one source measured against a yardstick from another
+// (the project's oldest defect class), and a peak that includes the FUTURE of the bar being drawn.
+// A replayed peak is the max up to and including the parked frame — nothing later can have happened
+// yet from that bar's point of view.
+// ⚠ Memoised per (day, idx) because the state column calls this once per row, every render.
+var RP_PEAK={ key:null, m:null };
+function replayPeakOf(k){
+  try{
+    // ⚠ THE PARKED FRAME'S OWN TIMESTAMP IS PART OF THE KEY, NOT JUST day|idx. A day can be
+    // RELOADED into REPLAY.frames — a deeper record, a re-export — and land a different frame on the
+    // same index, at which point a memo keyed on the index alone answers about the frames it no
+    // longer holds. Silent, and wrong in the direction that invents mass.
+    var _f=REPLAY.frames&&REPLAY.frames[REPLAY.idx];
+    var _rn=(_f&&_f.vend&&_f.vend.rows&&_f.vend.rows.length)||0;
+    var key=REPLAY.day+'|'+REPLAY.idx+'|'+((_f&&_f.t)||0)+'|'+
+            ((REPLAY.frames&&REPLAY.frames.length)||0)+'|'+_rn;
+    if(RP_PEAK.key!==key){
+      var m={}, i, f, rows, j, r, bk;
+      for(i=0;i<=REPLAY.idx && i<REPLAY.frames.length;i++){
+        f=REPLAY.frames[i]; rows=(f&&f.vend&&f.vend.rows)||[];
+        for(j=0;j<rows.length;j++){
+          r=rows[j]; if(!r || !(r[0]>0) || typeof r[1]!=='number') continue;
+          var a2=Math.abs(r[1]);
+          if(!(m[r[0]]>a2)) m[r[0]]=a2;
+        }
+      }
+      RP_PEAK={ key:key, m:m };
+    }
+    var p=RP_PEAK.m[k];
+    return (typeof p==='number' && p>0) ? p : null;
+  }catch(e){ return null; }
+}
+function peakOf(k){
+  try{ if(typeof replayOn==='function' && replayOn()) return replayPeakOf(k); }catch(e0){}
+  var p=PEAK.m[k]; return (typeof p==='number'&&p>0)?p:null;
+}
 
 // ⚠ (v13.6) READ THE SAME ARRAY THE RAIL DOES. This used tapeMap('SPXW') keys while the rail scans
 // emPiles, so it reported 0 rolls while three arrows were drawn — a debug hook that disagrees with the
@@ -24421,7 +24507,14 @@ function levelStateOf(k, rollsCtx){
   try{
     var v=null; try{ v=velAt(k); }catch(e0){}
     var vv=(v&&v.v&&!v.stale)?v.v:null;
-    var tapsN=0; try{ tapsN=nodeTapCount('SPXW', k)||0; }catch(eTp){}
+    // ⚠ (v15.18) TAPS ARE NOT KNOWN FOR A REPLAYED DAY. `nodeTapCount` reads TODAY's live counter,
+    // so on a replayed bar it is either today's number against a past book or a confident ZERO — and
+    // zero is not "no interaction", it is "not tracked". That distinction matters because the
+    // WEAKENING branch below turns a zero into the claim "with no interaction at all — Skylit's
+    // DECAYING, a quiet death", which would be invented.
+    var tapsN=0, tapsKnown=true;
+    try{ if(typeof replayOn==='function' && replayOn()){ tapsN=null; tapsKnown=false; }
+         else tapsN=nodeTapCount('SPXW', k)||0; }catch(eTp){}
     var pk=null; try{ pk=peakOf(k); }catch(e1){}
     var ret=(pk&&vv&&typeof vv.cur==='number'&&pk>0)?Math.abs(vv.cur)/pk:null;
     var isSrc=rollsCtx&&rollsCtx.src&&rollsCtx.src[k], isDst=rollsCtx&&rollsCtx.dst&&rollsCtx.dst[k];
@@ -24432,29 +24525,37 @@ function levelStateOf(k, rollsCtx){
       return out('SPENT','holds only '+Math.round(ret*100)+'% of its own day peak — the mass has gone'+
         (isSrc?', shed into another strike':'')+
         '. \u26a0 SPENT here means MASS, not Skylit\u2019s DELIVERED, which is tap-exhaustion \u2014 that is the counter beside it');
-    if(vv && typeof vv.p5==='number' && typeof vv.p15==='number'){
+    // ⚠ (v15.18) THE VENDOR'S PERCENTS FIRST, OUR REPLAY DERIVATION SECOND, AND NEVER MIXED. A
+    // replayed row has no `p*` at all (see replayBook); `rp*` is this panel's own mass-change
+    // measure, offered ONLY to the state engine. A live row has no `rp*`, so live behaviour is
+    // untouched — same fields, same order, same numbers as before this line existed.
+    var P5=(vv&&typeof vv.p5==='number')?vv.p5:((vv&&typeof vv.rp5==='number')?vv.rp5:null);
+    var P15=(vv&&typeof vv.p15==='number')?vv.p15:((vv&&typeof vv.rp15==='number')?vv.rp15:null);
+    var P60=(vv&&typeof vv.p60==='number')?vv.p60:((vv&&typeof vv.rp60==='number')?vv.rp60:null);
+    var derived=!!(vv && vv.replayPct && typeof vv.p15!=='number');
+    if(vv && typeof P5==='number' && typeof P15==='number'){
       // 2 · TURN — an inflection outranks the trend it interrupts
       // ⚠ ZERO IS NOT A SIGN. `(a>0)===(b>0)` puts 0 in the negative bucket, so a flat 5m "agreed"
       // with a falling 15m and a flat hour was "flipped against" — TURN fired on rows where the ROC
       // column, which guards for zero correctly, showed no 60m badge at all. The two surfaces
       // disagreed on the same row.
-      if(typeof vv.p60==='number' && vv.p5!==0 && vv.p60!==0 && Math.abs(vv.p15)>=LVL_TURN_P15 &&
-         (vv.p5>0)===(vv.p15>0) && (vv.p15>0)!==(vv.p60>0))
-        return out(vv.p15>0?'TURN UP':'TURN DN','5m and 15m agree and have both flipped against the hour');
+      if(typeof P60==='number' && P5!==0 && P60!==0 && Math.abs(P15)>=LVL_TURN_P15 &&
+         (P5>0)===(P15>0) && (P15>0)!==(P60>0))
+        return out(P15>0?'TURN UP':'TURN DN','5m and 15m agree and have both flipped against the hour');
       // 3 · BUILDING — size arriving, from a roll or from fresh flow alike
-      if(vv.p15>=LVL_BUILD_P15)
-        return out('BUILDING','+'+Math.round(vv.p15)+'%/15m arriving'+(isDst?', a roll destination':'')+
+      if(P15>=LVL_BUILD_P15)
+        return out('BUILDING','+'+Math.round(P15)+'%/15m '+(derived?'of MASS arriving (measured from the recorded deltas, not Skylit\u2019s own %)':'arriving')+(isDst?', a roll destination':'')+
           ' \u2014 new support or resistance forming here');
       // 4 · WEAKENING
       // ⚠ Math.round(-0.4) is -0, which prints as "0" — the hover read "0%/15m draining". Anything
       // that rounds to nothing is not draining in any sense worth a word.
-      if(vv.p15<=LVL_WEAK_P15 || (typeof vv.p60==='number' && vv.p15<=-1 && vv.p60<0))
-        return out('WEAKENING',Math.round(vv.p15)+'%/15m draining'+(isSrc?', feeding a roll':'')+
-          (tapsN===0?' with no interaction at all \u2014 Skylit\u2019s DECAYING, a quiet death':''));
+      if(P15<=LVL_WEAK_P15 || (typeof P60==='number' && P15<=-1 && P60<0))
+        return out('WEAKENING',Math.round(P15)+'%/15m '+(derived?'of MASS draining (measured from the recorded deltas, not Skylit\u2019s own %)':'draining')+(isSrc?', feeding a roll':'')+
+          ((tapsKnown && tapsN===0)?' with no interaction at all \u2014 Skylit\u2019s DECAYING, a quiet death':''));
     }
     if(isSrc) return out('WEAKENING','feeding a roll');
-    return out('HOLDING','steady'+(tapsN>0?(', tested '+tapsN+'\u00d7 today \u2014 the next test holds ~'+
-      (TAP_PROB[Math.min(tapsN,2)])+'% historically'):''));
+    return out('HOLDING','steady'+((tapsKnown && tapsN>0)?(', tested '+tapsN+'\u00d7 today \u2014 the next test holds ~'+
+      (TAP_PROB[Math.min(tapsN,2)])+'% historically'):(tapsKnown?'':' \u2014 tap count is not recorded per frame, so it is not claimed here')));
   }catch(e){ return { st:'HOLDING', why:'', taps:0 }; }
 }
 function frameNumSafe(x){ try{ return frameNum(x); }catch(e){ return String(x); } }

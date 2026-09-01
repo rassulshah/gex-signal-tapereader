@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-08-31 · panel v15.17 · companion v1.16 · supersedes every earlier resume note_
+_written 2026-09-01 · panel v15.18 · companion v1.16 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.17, and what the face carries
+## 2 · WHERE WE ARE — v15.18, and what the face carries
 
-**Panel v15.17 · companion v1.16.** Suite **129 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.18 · companion v1.16.** Suite **132 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -179,11 +179,64 @@ reproducing the call — match the INPUT UNIVERSE too.**
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
 
+⚠⚠ **v15.18 — A THRESHOLD'S DENOMINATOR HAS A PROVENANCE TOO, AND THAT IS THE TENTH INSTANCE.**
+Four of five levels read **SPENT** on a replayed bar. `levelStateOf` divides the frame's mass by
+`peakOf(k)` — and `peakOf` returned the LIVE WHOLE-DAY peak, so 14:12 was being judged against a
+high water mark set at 15:59. Measured on 2026-08-31 at 14:12:
+
+    strike      |cur|    peak->14:12   ret     peak WHOLE DAY   ret
+    7675     81988795      81988795   1.00          115827347   0.71
+    7685     34840580      34840580   1.00          503965848   0.07   <- at its OWN peak, called SPENT
+
+`replayPeakOf(k)` is the max `|cur|` across frames **up to `REPLAY.idx`**, memoised on `day|idx`; a
+strike no earlier frame carried returns `null`, not a fabricated peak. ⚠ The seam covers not only
+the DATA a computation reads but **the scale it is judged against** — walk the constants and the
+accumulators, not just the feed.
+
+⚠⚠ **v15.18b — THE ROLL ARROWS WERE POINTING BACKWARDS ON HALF THE BOOK, LIVE AND IN REPLAY.**
+`rollScan` tested the SIGNED delta (`src.d15 < -$40K`), which is right on the positive side and
+inverted on the negative one, where a strike GAINING mass carries a negative delta:
+
+    7675  |cur| 59.6M -> 82.0M   d15 -22.4M   GAINED   <- was called the SOURCE
+    7670  |cur| 40.2M -> 18.2M   d15 +22.0M   SHED     <- was called the RECEIVER
+
+The face drew `7675 -> 7670`; the mass went `7670 -> 7675`, into the King. Both tests now measure
+`|cur| - |cur - d15|`. Over 129 recorded frames: **446 old arrows, 310 new, 40 of them previously
+drawn REVERSED**, 15 identical. ⚠ The v11.34 note "receivers gained 2.8x, 8.6x…" was measured under
+the inverted rule — **do not quote it again as evidence about direction.**
+⚠⚠ **AND THE STATES COULD ONLY EVER SAY TWO THINGS.** Every branch but SPENT is gated on `p5`/`p15`
+— SKYLIT's percents — which a recorded row does not carry. So replay could reach only SPENT,
+WEAKENING-via-roll-source and HOLDING: *"2 weakening and everything else spent"* was the complete
+list of things it could say, not a reading of the market. Replayed rows now carry `rp5/rp15/rp60`,
+**deliberately not `p5/p15/p60`** — the ROC column credits those to Skylit and their sign convention
+is not observable from a recording. `rp15` is ours and its convention is stated: the change in MASS.
+
+⚠⚠ **THE ONE RULE BEHIND ALL THREE OF THIS BUILD'S DEFECTS: `cur` IS SIGNED, `|cur|` IS MASS.**
+SPENT's denominator, `rp15`, and the arrows were the same confusion in three places. When a quantity
+is signed, decide once whether the code means the value or its magnitude — and say which in the name.
+
+⚠ **`tools/audit-replay-face.js` (new)** prints, for any minute of any recorded day, each node's
+mass, its peak-to-then, its state and the arrows, so a claim about the face can be CHECKED. Run it
+before answering any "does this make sense" question:
+`node tools/audit-replay-face.js 2026-08-31 14:12` ⚠ **its clock is CENTRAL, because the panel's is**
+(`ctNow` uses America/Chicago; `replaySec` subtracts 5h) — an audit on ET silently compares 15:12's
+book against 14:12's claim, which cost half an hour this build.
+
+⚠⚠ **AND THE RULE THAT COMES OUT OF IT: AN ABSENT MEASUREMENT IS NOT A ZERO.** `nodeTapCount()`
+returns 0 both for "never touched" — which the face reports as *a quiet death* — and for "this run
+does not track taps". Replay scored every strike a confident zero and every one earned the clause.
+Taps are now `null` with `tapsKnown=false`, DECAYING requires a zero that is actually KNOWN, and the
+face says the count is not recorded per frame. **Whenever a default is the same token as a real
+measurement, the code has no way to be honest.**
+⚠ The assertion for this was written as a SOURCE GREP and **survived mutation** — `if(false){
+tapsN=null; … }` leaves the text intact. Fourth recorded instance in this project. It now executes
+`levelStateOf` in both modes.
+
 ✅ **AND WHAT THE CHECK CONFIRMED AS CORRECT** — record confirmations, not only faults: the node
 profile is exact at 14:12 strike for strike, and "only five nodes" is every SPXW strike at or above
 the 20% threshold, the same filter the live ladder applies.
 
-**FIRST THING TO DO: drag it on the live panel.** Check the ladder, kings and ⓪a move together, the
+**FIRST THING TO DO: drag it on the live panel — v15.17 AND v15.18 HAVE NEVER BEEN SEEN WORKING.** Check the ladder, kings and ⓪a move together, the
 clock reads the parked bar, ◀ reaches Friday, and `__gptsDebug.storage()` shows no new writes.
 
 ### the rest of the face
