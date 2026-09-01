@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-01 · v15.33 · session `5e8d34b5`
+## 2026-09-01 · v15.34 · session `5e8d34b5`
 
-_46 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_48 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -698,8 +698,50 @@ The "behind 18" is your commits I don't have locally; harmless, since the payloa
 Now verifying the close-of-day freeze and today's recording before I build.
 Two things you need before the close — one of them is time-sensitive.
 **IRT is working** — `rows: 6, how: "file", inPlace: true, err: null`. My `deps` check was calling the builder as a probe and reporting a transient miss as broken. Fixing that before it lights your new lamp red.
+**Time-sensitive first — today's replay will only reach back to 13:39.** Your recorder holds 26 frames, first at **13:39:12**, because the panel was reloaded then and the recorder only runs while it's open. Nothing before that is recoverable. From here to the close it's recording cleanly (26 of 26 usable — v15.24's empty-frame guard is doing its job), so the freeze and slider will work for 13:39 → 15:00.
+
+**And building the IRT lamp caught my own check lying.** I read the live state before wiring it:
+
+```
+deps() said:   irt.build — "nothing to write, no levels resolved"
+IRT_LAST was:  { rows: 6, how: 'file', inPlace: true, err: null }
+```
+
+Six rows, written in place, no error. My v15.22 check re-ran `irtBuildCsv()` as a *probe*, and that rebuild depends on live inputs — one unlucky instant reads as a dead export. Had I shipped your lamp on top of it, it would have glowed red all day over nothing. It reads what actually reached the file now.
+
+**==== PASTE THIS WITH THE INSTALL FILE ====**
+
+- **Tapereader v15.33** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+- **Companion v1.17** — UNCHANGED, do not reinstall — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js
+
+Wait ~5 min for the CDN, then reload the Atlas tab — footer mus …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 26 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (19:53):** 26 commits, clean tree. Push refused here by the proxy as all session — `installv1533.bat` carries them to origin from your machine.
+
+Standing by for the next QA item. Worth noting the market closes in ~10 minutes, so once it does, the panel should freeze on the close-of-session book and the slider will cover 13:39 → 15:00 for today.
+
+**OPERATOR:**
+> check atlas and tell me for each type of king, how many rolls were there
+
+**me (19:56):** Our track has SPXW and SPY. Let me read what Atlas itself shows, including QQQ.
+Freeze first — the close is minutes away.
+Freeze is armed — I'll confirm the details in a moment. Moving the lamps into the header now.
+The lamp styles are scoped to `#gpts-body` — they'd be unstyled in the header.
 
 ### DECISIONS
+
+**v15.34 · lamps to the header, freeze verified.**
+- **The lamps moved into the header** to save a row; their CSS had to be re-scoped from `#gpts-body`
+  to `#gpts-panel` — a selector scoped to a parent encodes a location.
+- **The freeze was checked live at 14:57**: CFG.lastBook true, gpts_lastbook_v1 writing SPXW king
+  7625 / 100 strikes that second, recorder at 31 frames.
+- **Answered his king-roll question:** SPXW 5 recorded / 4 drawn, SPY 3 / 2, **QQQ not tracked**.
+  Atlas publishes no roll count — only a live King-distance chip — so there is nothing to reconcile.
+- ⚠ **Two stores disagree about "today":** recorder from 13:39, king track from 08:30.
 
 **v15.33 · the QA pass begins.**
 - **My deps() check was calling IRT broken while IRT was working** — it re-ran irtBuildCsv() as a
@@ -900,6 +942,9 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.34** — the feed lamps in the header (`#gpts-hdrlamps`), CSS scoped to the panel.
+Three mutations, three caught. Suite 135 green / 6 baseline red.
+
 **v15.33** — `feedLampsHtml()`; the ⓪a mount below the ladder; 1ST TP / 2ND TP; brighter labels;
 `irt.build` judged by what was written rather than a probe.
 `test_replay_face` → 151, `test_deps` → 36. Eleven mutations, eleven caught. Suite 135 green / 6 red.
@@ -978,6 +1023,11 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. **QQQ has no king track** — `KT_BOOKS` is SPXW + SPY. He asked about "each type of king", so this
+   is an open gap, not a decision.
+2. Today's slider covers 13:39 → close only.
+3. Proximity weighting and time-of-day windowing remain unshipped studies.
 
 1. **He is QA-ing the panel step by step** — expect one change at a time, and he wants the save
    confirmation block pasted every build.
@@ -1074,6 +1124,7 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+0e1bfd1 v15.33: ⓪a below the ladder, 1ST/2ND TP, brighter labels, and two feed lamps up top
 cc12ac1 v15.32: the build message carries the links AND a save confirmation, because the builder prints both
 d19aa28 v15.31: the day as a candle, the strike grid behind the nodes, IBH/IBL off the level rail
 3745d82 v15.30: the grip was capped at 560 while his panel was 673
@@ -1085,7 +1136,6 @@ f8f574e v15.28: the expected low was clipped on the frame's edge, and in replay 
 1f3539f v15.24: cross-examine the replayed face against the recording; stop storing frames with no book
 c5f29a7 study: keep the script that chose KT_DWELL_MIN
 265bc27 v15.23: the EM band was anchored on yesterday's open, and dwell was a count on two clocks
-d245994 test: Z5 survived mutation — a refusal nothing can reach is not a refusal
 ```
 
 ---

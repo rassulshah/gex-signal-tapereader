@@ -1,3 +1,37 @@
+## v15.34 — the feed lamps move into the header, and the close-of-day freeze is verified live
+
+> "put the irt and if indicators in the tapereader header to conserve space" · "Make sure you freeze
+> the app so that i can continue working because the market is about to close very soon"
+
+### THE LAMPS RIDE THE HEADER NOW
+
+v15.33 gave them their own row on the top strip, which cost 13px of the panel's scarcest dimension.
+They sit beside the version chip instead — same computation (`feedLampsHtml`), same `depsHealth()`
+the footer dot and `__gptsDebug.deps()` read, different home.
+⚠ The header is built ONCE and `render()` paints `#gpts-hdrlamps` each pass, so the lamps stay live
+without the row being rebuilt.
+⚠ **THE STYLE RULE IS SCOPED TO `#gpts-panel`, NOT `#gpts-body`.** A selector scoped to the body
+would have left them unstyled the moment they moved — a rule that encodes WHERE something used to
+live is a bug waiting for the next move, and this panel has paid for that shape before.
+
+### THE FREEZE — CHECKED ON HIS LIVE PANEL AT 14:57, THREE MINUTES BEFORE THE CLOSE
+
+    CFG.lastBook          true
+    gpts_lastbook_v1      SPXW king 7625, 100 strikes, stamped 14:57:39 — writing live
+    recorder today        31 frames, 13:39 → 14:57
+
+So the close-of-session book is being latched every render and will be there to serve after 15:00.
+⚠ **The recorder started at 13:39, not 08:30** — the panel was reloaded then and the recorder only
+runs while it is open. Today's slider covers **13:39 → the close** and nothing earlier. Nothing is
+recoverable before that; it was never written.
+⚠ The KING TRACK is a different store (`gpts_kingtrack_v1`, day-keyed) and it DID survive the
+reload — its points start at 08:30, so the king's journey covers the whole session even though the
+frames do not.
+
+### verification
+Three mutations run individually, three caught — the lamps not painted into the header, the header
+span never created, and the style reverting to body scope.
+
 ## v15.33 — the day section moves under the ladder, two feed lamps go up top, and my own IRT check was the thing failing
 
 > "move the hodlod section below the node ladder" · "update the heading where it says 1ST HOD, to

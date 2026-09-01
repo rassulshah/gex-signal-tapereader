@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.33
+// @version    15.34
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.33';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.34';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -1129,7 +1129,8 @@ function replayEnsure(){
 //         what "getting data every x minutes" actually means.
 // ⚠ Each lamp states its AGE, not just a colour. A green dot with no number is a claim you cannot
 // check; "IF 3m" is one you can.
-function feedLampsHtml(){
+// ⚠ `bare` = emit just the two lamps, for the header. The row wrapper is only for a body mount.
+function feedLampsHtml(bare){
   try{
     if(CFG.feedLamps===false) return '';
     var H=null; try{ H=depsHealth(); }catch(e0){ return ''; }
@@ -1155,13 +1156,13 @@ function feedLampsHtml(){
     var irt=by['irt.export'], build=by['irt.build'];
     var irtExtra=build?(' \u00b7 levels built: '+build.state+(build.rows!=null?(' ('+build.rows+' rows)'):'')+
                         (build.why?(' \u2014 '+build.why):'')):'';
-    return '<div class="g3flrow">'+
+    var _inner=
       lamp('IRT', irt, irtExtra+' \u26a0 IRT is a CSV written in place into the folder its FlexLevels '+
            'extension polls; Chrome drops the directory permission on reload and the symptom is a stale '+
            'file rather than an error.')+
       lamp('IF', ifLamp, ' \u26a0 the age is the FRESHEST symbol\u2019s. Under the SPX pin the companion '+
-           'stops fetching SPY, so a stale SPY is expected and does not redden this.')+
-      '</div>';
+           'stops fetching SPY, so a stale SPY is expected and does not redden this.');
+    return bare ? _inner : ('<div class="g3flrow">'+_inner+'</div>');
   }catch(e){ return ''; }
 }
 function replayBarHtml(){
@@ -7215,6 +7216,17 @@ function buildPanel(){
   css(tver,{color:PAL.sub, fontSize:'9.5px', fontWeight:'700', letterSpacing:'0.2px',
     marginLeft:'5px', fontFamily:'ui-monospace,monospace', whiteSpace:'nowrap'});
   ttl.appendChild(tver);
+  // ⚠ (v15.34) THE TWO FEED LAMPS RIDE THE HEADER — operator, 2026-09-01: "put the irt and if
+  // indicators in the tapereader header to conserve space." v15.33 gave them their own row on the
+  // top strip, which cost 13px of a panel whose vertical space is the scarce thing. The header
+  // already carries the version and has room beside it, and the lamps are two words each.
+  // ⚠ The header is built ONCE; render() fills this span each pass, so the lamps stay live without
+  // the row being rebuilt. Same computation as before — `feedLampsHtml()` — just a different home.
+  var tlamp=document.createElement('span');
+  tlamp.id='gpts-hdrlamps';
+  css(tlamp,{marginLeft:'9px', display:'inline-flex', gap:'8px', alignItems:'center',
+    fontSize:'8px', fontWeight:'800', letterSpacing:'.04em', color:'#b6c4d4', whiteSpace:'nowrap'});
+  ttl.appendChild(tlamp);
   hdr.appendChild(ttl);
   var right=document.createElement('span');
   css(right,{display:'flex', alignItems:'center', gap:'6px'});
@@ -21218,8 +21230,11 @@ function ensureV3Css(){
     // (v15.33) the two feed lamps on the top strip
     '#gpts-body .g3flrow{display:flex;gap:10px;align-items:center;padding:2px 2px 3px;font-size:8px;'+
       'font-weight:800;letter-spacing:.04em;color:#b6c4d4}'+
-    '#gpts-body .g3fl{display:inline-flex;align-items:center;gap:4px;cursor:help;white-space:nowrap}'+
-    '#gpts-body .g3fl i{width:6px;height:6px;border-radius:50%;display:inline-block}'+
+    // ⚠ (v15.34) NOT SCOPED TO #gpts-body — the lamps live in the HEADER now. A rule scoped to the
+    // body would have left them unstyled the moment they moved, which is a class of bug this panel
+    // has already paid for: a selector that encodes WHERE something used to be.
+    '#gpts-panel .g3fl{display:inline-flex;align-items:center;gap:4px;cursor:help;white-space:nowrap}'+
+    '#gpts-panel .g3fl i{width:6px;height:6px;border-radius:50%;display:inline-block;flex:0 0 auto}'+
     '#gpts-body .g3ldmin{position:absolute;left:'+LAD_NODE+'px;height:1px;background:#8b98a9;'+
       'opacity:.18;pointer-events:none;z-index:0;transform:translateY(-50%)}'+
     '#gpts-body .g3lddc{position:absolute;pointer-events:none;z-index:0;border-radius:1px}'+
@@ -29839,7 +29854,11 @@ function render(){
   // dependency you have to go looking for is one you check after something has already gone wrong.
   // These are the same two items, read from the same `depsHealth()`, promoted to the top strip where
   // they are seen without being sought. ⚠ ONE COMPUTATION, TWO SURFACES — never a second opinion.
-  try{ html+=feedLampsHtml(); }catch(eFL){ swallow('feedLamps', eFL); }
+  // ⚠ (v15.34) the lamps are painted into the HEADER, not appended to the body — see buildPanel.
+  try{
+    var _lampEl=document.getElementById('gpts-hdrlamps');
+    if(_lampEl) _lampEl.innerHTML=feedLampsHtml(true);
+  }catch(eFL){ swallow('feedLamps', eFL); }
   try{ html+=replayBarHtml(); }catch(eRPB){ swallow('replayBarHtml', eRPB); }
   var __sync = (CFG.tapeGate===false) ? {ok:true} : tapeSync('SPY');
   // (v10.47, user-directed) One-line banner instead of a blocking panel: the app must stay

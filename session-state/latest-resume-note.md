@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-01 · panel v15.33 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-01 · panel v15.34 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.33, and what the face carries
+## 2 · WHERE WE ARE — v15.34, and what the face carries
 
-**Panel v15.33 · companion v1.17.** Suite **135 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.34 · companion v1.17.** Suite **135 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -177,6 +177,19 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠ **v15.34 — THE FEED LAMPS ARE IN THE HEADER** beside the version chip (they cost a 13px row on
+the top strip). `render()` paints `#gpts-hdrlamps` each pass. ⚠ Their CSS is scoped to `#gpts-panel`,
+NOT `#gpts-body` — a selector scoped to a parent encodes a LOCATION, and locations change.
+✅ **THE CLOSE-OF-DAY FREEZE, VERIFIED LIVE at 14:57 on 2026-09-01:** `CFG.lastBook true`,
+`gpts_lastbook_v1` holding SPXW king 7625 / 100 strikes stamped that second, recorder at 31 frames.
+⚠ **TWO STORES, TWO ANSWERS ABOUT THE SAME DAY:** the RECORDER started at 13:39 (panel reloaded, and
+it only runs while open) so the slider covers 13:39→close; the KING TRACK is a separate day-keyed
+latch that SURVIVED the reload and starts at 08:30. Say which store when reporting coverage.
+📌 **2026-09-01 KING ROLLS (his question):** SPXW 5 recorded migrations / 4 drawn after the 20-minute
+dwell; SPY 3 recorded / 2 drawn; **QQQ NOT TRACKED AT ALL — `KT_BOOKS` is SPXW + SPY only**, though
+the ladder draws a QQQ crown. Atlas itself publishes no roll count, only a live King-distance chip
+per symbol, so there is nothing on their side to reconcile against.
 
 ⚠⚠⚠ **v15.33 — MY OWN `deps()` CHECK CALLED IRT BROKEN WHILE IRT WAS WORKING.** It reported
 `irt.build: nothing to write` while `IRT_LAST` held `{rows:6, how:'file', inPlace:true, err:null}`.

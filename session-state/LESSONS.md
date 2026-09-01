@@ -131,6 +131,18 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.34 — a selector that encodes where something used to live
+
+**1 · Moving an element broke its styling, and the CSS was the reason.** `.g3fl` was scoped
+`#gpts-body .g3fl`; the lamps moved to the header and would have rendered unstyled. ⚠ **A selector
+scoped to a PARENT encodes a location, and locations change.** Scope to the widest container the
+element could reasonably live in — here `#gpts-panel` — or the next move silently breaks it.
+
+**2 · Two stores, two answers about the same day.** The recorder started at 13:39 (panel reloaded);
+the king track starts at 08:30, because it is a separate day-keyed localStorage latch that survived
+the reload. ⚠ **"What does the panel remember about today" has more than one answer** — say which
+store when reporting coverage, or a true statement about one reads as a false one about the other.
+
 ### v15.33 — a health check that re-runs the work is measuring a different moment
 
 **1 · My own check was the only thing failing.** `deps()` reported `irt.build: nothing to write`

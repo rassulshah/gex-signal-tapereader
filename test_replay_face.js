@@ -642,11 +642,16 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
      'd4 the ⓪a labels are the brighter slate, not the 3:1 grey');
   ok(!/g3daylb b\{[^}]*color:#6c7889/.test(src), 'd4b ...with the dark value gone, not overridden');
   // d · the two feed lamps, at the top, from the SAME depsHealth the footer uses
-  const lampRow=(R.html.match(/class="g3flrow">([\s\S]*?)<\/div>/)||[])[1]||'';
-  ok(!!lampRow, 'd5 the feed lamps are drawn');
+  // ⚠ (v15.34) THE LAMPS MOVED INTO THE HEADER to conserve vertical space, so they are no longer in
+  // the BODY html at all — they are painted into #gpts-hdrlamps each render. Asserting against
+  // R.html would now be asserting they are absent from where they are not supposed to be.
+  const lampRow=R.run('(document.getElementById("gpts-hdrlamps")||{}).innerHTML||""');
+  ok(!!lampRow, 'd5 the feed lamps are drawn, in the header');
   ok(/IRT/.test(lampRow) && /IF/.test(lampRow), 'd5b ...one for IRT and one for InsiderFinance', lampRow.slice(0,80));
-  ok(R.html.indexOf('g3flrow')<iLad,
-     'd5c ...at the TOP, above the ladder', {lamps:R.html.indexOf('g3flrow'), ladder:iLad});
+  ok(R.html.indexOf('g3flrow')<0,
+     'd5c ...and they no longer take a row in the body — that was the point of moving them');
+  ok(/#gpts-panel \.g3fl\{/.test(src),
+     'd5c2 ...with a selector scoped to the PANEL, not the body they left');
   const fl=(src.match(/function feedLampsHtml\([\s\S]*?\n\}/)||[''])[0];
   ok(/depsHealth\(\)/.test(fl),
      'd5d ...reading the SAME check the footer dot and __gptsDebug.deps() read — never a second opinion');
