@@ -1872,7 +1872,12 @@ eval(ex('emBand'));
   r=emBand('SPY');
   ok(r.ok===true && Math.abs(r.open-761.93)<0.01,
      'w5 EXECUTED: a stored pin with a null openSo is HEALED onto today\'s real open', r.open);
-  ok(r.openHealed===true, 'w5b ...and says so, rather than repairing silently', r.openHealed);
+  // ⚠ (v15.26) EITHER REPAIR COUNTS, and which one fires is not the property under test. A pin with
+  // no `src` is now rebuilt by the RULER check before the openSo heal can reach it — both land the
+  // anchor on today's real open, and both say so. Asserting one specific flag would fail on a build
+  // that fixed the same fault by a better route.
+  ok(r.openHealed===true || r.rulerRebuilt===true,
+     'w5b ...and says so, rather than repairing silently', {healed:r.openHealed, ruler:r.rulerRebuilt});
 
   global.__cands=save; global.dispIsFut=saveFut;
 }
@@ -1910,6 +1915,44 @@ eval(ex('emBand'));
   ok(B2.ok===true && Math.abs(B2.open-(761.95*10.0353))<0.05,
      'm5 with no ES bars the underlying book is used and converted by ITS scale', B2.open);
 
+  global.measureBars=saveMB; global.closedCandles=saveCC; global.dispIsFut=saveFut;
+}
+
+// ---- (v15.26) A PIN IS ONLY MEANINGFUL WITH THE SERIES IT WAS TAKEN FROM --------------------
+// ⚠⚠ THIS IS THE REGRESSION v15.24 SHIPPED. Moving the anchor onto measureBars() made the current
+// scale 1 (ES bars are already chart-space) while the STORED pin still carried rr 10.0353 from the
+// derived SPY series. `useRr` preferred the stored one, so every candle-derived value became ES x 10:
+// measured on his live panel, hiWater = 7673 x 10.0353 = 76,986, the rail frame widened to hold it,
+// the span became ~69,000 points and EVERY ROW COLLAPSED ONTO ONE LINE at y=639.7 of a 640px frame.
+// The ladder went blank with no error anywhere — the audit was green and renderErrors was empty.
+{
+  const saveMB=global.measureBars, saveCC=global.closedCandles, saveFut=global.dispIsFut;
+  global.dispIsFut=()=>true; global.dispR=()=>10.0353;
+  global.ifLadder=()=>({ err:null, dispScale:1 });
+  global.__chain={ err:null, dte0:{ em:{ em:32.5, k:7685 } }, toFri:{ em:{ em:70, k:7685 } } };
+  global.closedCandles=()=>RTH([ {o:761.95,h:762.4,l:761.1,c:762.0} ]);
+  global.measureBars=()=>({ bars:RTH([ {o:7647,h:7673,l:7638,c:7660}, {o:7660,h:7666,l:7655,c:7661} ]),
+                            scale:1, src:'ES', day:'x' });
+  // a pin captured on the OTHER series: SPY units, rr 10.0353 — exactly what his panel held
+  global.localStorage.setItem('gpts_emopen_v1', JSON.stringify({ v:EMOPEN_SCHEMA, date:global.ctTodayStr(),
+    sym:{ 'SPY|fut':{ em:32.31, emK:32.5, k:7685, capMin:0, t:Date.now(), rr:10.0353,
+                      fam:'fut', openU:759.5653, openSo:30600 } } }));
+  const B=emBand('SPY');
+  ok(B.ok===true, 's1 the band still comes back', B.why);
+  ok(B.rulerRebuilt===true,
+     's2 EXECUTED: a pin whose ruler disagrees with the series is REBUILT, not used', B);
+  ok(Math.abs(B.scaleUsed-1)<1e-9,
+     's3 ...on the CURRENT series\' scale, so ES prices are not multiplied by ten', B.scaleUsed);
+  ok(Math.abs(B.open-7647)<0.01, 's4 ...anchored on the ES open', B.open);
+  ok(Math.abs(B.em-32.5)<0.01, 's5 ...and the WIDTH survives, rebuilt from emK', B.em);
+  // ⚠⚠ THE SYMPTOM ITSELF: the water marks must stay on the ladder's scale, not ten times it.
+  ok(B.hiWater<8000 && B.hiWater>7000,
+     's6 the high-water mark is an ES price, not ES x 10 — this is what collapsed the ladder', B.hiWater);
+  ok((B.high-B.low)<200, 's7 ...so the band spans points, not tens of thousands', B.high-B.low);
+  // and a pin that AGREES with the series is left alone
+  const B2=emBand('SPY');
+  ok(B2.rulerRebuilt!==true, 's8 the rebuild happens ONCE — a pin that agrees is not touched again');
+  ok(Math.abs(B2.open-7647)<0.01, 's8b ...and the rebuilt pin is what every later render reads', B2.open);
   global.measureBars=saveMB; global.closedCandles=saveCC; global.dispIsFut=saveFut;
 }
 

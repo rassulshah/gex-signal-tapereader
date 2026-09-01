@@ -405,5 +405,30 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
      'q9 ...and replay is exempt: the slider jumps, so a per-strike cache would carry state across a leap');
 }
 
+// ---- 14 · (v15.26) THE LADDER MUST ACTUALLY BE A LADDER -------------------------------------
+// ⚠⚠ WRITTEN BECAUSE v15.24 SHIPPED A BLANK FACE AND EVERY TEST WAS GREEN. A stale scale made the
+// rail frame span ~69,000 points, so `Y(p) = H - ((p-lo)/span)*H` returned ~H for every strike and
+// ALL THIRTEEN ROWS stacked on one line at y=639.7 of a 640px frame. The rows were in the DOM, the
+// audit was ok, renderErrors was empty, and the operator saw an empty panel.
+// ⚠ Every assertion in this file until now checked that something was PRESENT. Presence is not
+// legibility: these check that the rows are SPREAD, which is the property a ladder actually has.
+{
+  const tops=[...R.html.matchAll(/class="g3ldpx" style="top:([\d.]+)px"/g)].map(m=>+m[1]);
+  ok(tops.length>=4, 'y1 the ladder draws several rows', tops.length);
+  const lo=Math.min(...tops), hi=Math.max(...tops);
+  ok((hi-lo)>40, 'y2 EXECUTED: the rows are SPREAD down the frame, not stacked on one line',
+     {lo:+lo.toFixed(1), hi:+hi.toFixed(1), spread:+(hi-lo).toFixed(1)});
+  const distinct=new Set(tops.map(t=>Math.round(t))).size;
+  ok(distinct>=Math.min(4, tops.length),
+     'y3 ...and they sit at DISTINCT heights — a price axis that maps every strike to one pixel is not an axis',
+     {rows:tops.length, distinct});
+  // the frame itself: a band edge and the rows it contains must be the same order of magnitude
+  const EBn=JSON.parse(R.run('JSON.stringify((function(){var b=emBand("SPY");return {lo:b.low,hi:b.high,hw:b.hiWater};})())'));
+  ok((EBn.hi-EBn.lo)<500,
+     'y4 the expected-move band spans POINTS, not tens of thousands', EBn);
+  if(EBn.hw!=null) ok(EBn.hw<EBn.hi*1.5 && EBn.hw>EBn.lo*0.5,
+     'y5 ...and the high-water mark is on the same ruler as the band', EBn);
+}
+
 console.log('test_replay_face: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-01 · panel v15.25 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-01 · panel v15.26 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.25, and what the face carries
+## 2 · WHERE WE ARE — v15.26, and what the face carries
 
-**Panel v15.25 · companion v1.17.** Suite **134 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.26 · companion v1.17.** Suite **134 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -177,6 +177,22 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠⚠ **v15.26 — I SHIPPED A BLANK LADDER AT v15.24 AND THE WHOLE SUITE WAS GREEN. READ THIS BEFORE
+CHANGING WHERE ANY NUMBER COMES FROM.** v15.24 moved the band's anchor to `measureBars()` (ES bars,
+already chart-scale, rr 1) and left the STORED pin's `rr: 10.0353` from the derived SPY series.
+`useRr` preferred the stored one, so `hiWater = 7673 × 10.0353 = 76,986`, the rail frame spanned
+~69,000 points, and **all thirteen rows drew at `top:639.7px` of a 640px frame**. Audit ok, zero
+render errors, 134 green, blank panel.
+**A SCALE STORED IN ONE SERIES' UNITS IS MEANINGLESS AGAINST ANOTHER** — third instance (v11.65,
+v15.12). The pin now records `src` (the series) and is REBUILT from `emK` when the series or scale
+changes. ⚠ Replay pins are exempt, like the v15.24 heal — forgotten twice in three builds, caught
+both times by the cross-examination against `feat.emband`.
+⚠⚠ **AND THE SUITE COULD NOT SEE IT because every assertion checked PRESENCE.** `test_replay_face`
+y1-y5 now assert the GEOMETRY: rows spread, at distinct heights, the band spanning points not tens
+of thousands. **Presence is not legibility.**
+⚠ **WHEN HE REPORTS A DISPLAY FAULT, SCREENSHOT FIRST.** Every debug surface reported healthy —
+correctly — while the face was empty.
 
 ⚠⚠⚠ **v15.25a — THE DELTA PROFILE'S REAL EDGE, MEASURED. DO NOT OVERSTATE IT AGAIN.**
 `tools/study-deltacadence.js`, 13 sessions (08-17..08-31): **BUILDING is 52.8% against a 50% coin**

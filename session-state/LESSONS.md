@@ -131,6 +131,30 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.26 — I shipped a blank ladder and the whole suite was green
+
+**1 · What I broke.** v15.24 moved the band's anchor to `measureBars()`, whose ES bars are already
+chart-scale (rr 1) — and left the STORED pin's `rr: 10.0353`, captured against the derived SPY
+series. `useRr` preferred the stored one, so `hiWater = 7673 × 10.0353 = 76,986`, the rail frame
+spanned ~69,000 points, and all thirteen rows landed on ONE PIXEL. ⚠ **A scale stored in one series'
+units is meaningless against another.** Third instance (v11.65, v15.12): changing where numbers come
+from invalidates every stored number that describes them. A pin must record its series.
+
+**2 · The suite could not see it.** Audit ok, zero renderErrors, 134 green — and a blank panel.
+Every assertion checked that something was PRESENT; a ladder whose rows all sit at y=639.7 satisfies
+every one. ⚠ **Presence is not legibility.** The new guards assert the GEOMETRY — rows spread, at
+distinct heights, band spanning points not tens of thousands — and those fail on a whole class of
+fault rather than on the one cause I happened to think of.
+
+**3 · The operator found it in one glance and it took me four tool calls to see.** He said five
+words. The screenshot showed a header and nothing under it. ⚠ **When he reports a display fault,
+screenshot FIRST** — I queried debug surfaces that were all reporting healthy, because they were.
+
+**4 · The same exemption, forgotten twice in three builds.** The ruler rebuild fired on replayed
+pins, exactly as the openSo heal did at v15.24. Both were caught by the cross-examination against
+`feat.emband`. ⚠ **Every new repair path to the pin needs the replay exemption, and the reason is
+always the same: a replayed pin is a RECORDING, not a measurement.**
+
 ### v15.25 — present, correct and unreadable is a defect
 
 **1 · The rolls were being drawn the whole time.** Four real ones, as stepped blue paths in a 20px

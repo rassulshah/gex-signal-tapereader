@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.25
+// @version    15.26
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.25';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.26';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -22327,6 +22327,9 @@ function emBand(sym){
       // instead of rescaling one approximation into another.
       rec={ em:emo.em*dsc, emK:emo.em, k:emo.k, capMin:(P&&P.rth)?(P.mins-P.open):null,
             t:Date.now(), rr:rr, fam:emFam,
+            // ⚠ (v15.26) WHICH SERIES THIS WAS MEASURED ON. Without it a pin cannot be told apart
+            // from one taken on another ruler, which is what collapsed the ladder at v15.24.
+            src:(MB && MB.bars && MB.bars.length && MB.src) ? MB.src : 'und',
             // ⚠ (v15.23) `openSo` IS NOT OPTIONAL. It was written as null whenever the array was in a
             // bad state — which is the state that produces a bad pin — and the self-heal below
             // requires it to be a NUMBER, so a pin captured badly could never be repaired. The
@@ -22344,6 +22347,39 @@ function emBand(sym){
     // fixes were fighting each other, and the symptom was identical to the bug they were fixing.
     // There is no correction step now because there is nothing to correct: every candle-derived value is
     // built from the captured scale in the first place.
+    // ⚠⚠⚠ (v15.26) THE PIN'S RULER MUST BE THE RULER THE SERIES IS ON, AND v15.24 BROKE THIS.
+    // v15.24 moved the anchor onto `measureBars()` — TRUE ES bars, already chart-scale, so the
+    // current `rr` is 1. The STORED pin, captured before that build against the derived SPY series,
+    // carries `rr: 10.0353`. `useRr` preferred the pin's, so every candle-derived value was ES
+    // multiplied by ten: MEASURED on his live panel, `hiWater = 7673 x 10.0353 = 76,986`, the rail
+    // frame widened to hold it, span became ~69,000 points, and **every row on the ladder collapsed
+    // onto a single line at y=639.7 of a 640px frame**. The face went blank with no error anywhere.
+    // ⚠ A SCALE STORED IN ONE SERIES' UNITS IS MEANINGLESS AGAINST ANOTHER. This is the v11.65 /
+    // v15.12 lesson a third time: the pin is only interpretable together with the series it was
+    // taken from, so it now RECORDS that series and is rebuilt the moment it changes.
+    // `emK` exists for exactly this — the straddle in the BOOK's own points — so the width survives
+    // the rebuild and only the ruler changes. Nothing is re-fetched and nothing is lost.
+    var _srcNow=(MB && MB.bars && MB.bars.length && MB.src) ? MB.src : 'und';
+    // ⚠ NOT A REPLAY PIN — the same exemption the openSo heal needed at v15.24, for the same
+    // reason: a replayed pin is the frame's OWN recorded band, where `rr` is 1 by construction and
+    // `src` is the recording, not a series measured now. Rebuilding it replaces the recorded anchor
+    // and width with reconstructed ones — caught by the cross-examination (x4/x4b), which compares
+    // the replayed band against `feat.emband`. Both numbers look plausible; only the recording knows.
+    if(rec && !rec.replay && (rec.src!==_srcNow || !(Math.abs((rec.rr||0)/(rr||1)-1)<0.001))){
+      var _emK=(typeof rec.emK==='number' && rec.emK>0) ? rec.emK : null;
+      var _emNow=_emK!=null ? (_emK*dsc) : null;
+      if(_emNow>0 && cs.length && cs[0].o>0){
+        rec={ em:_emNow, emK:_emK, k:rec.k, capMin:rec.capMin, t:rec.t, rr:rr, fam:emFam,
+              src:_srcNow, openU:cs[0].o,
+              openSo:(typeof cs[0].so==='number')?cs[0].so:null, rebuiltFrom:(rec.src||'und') };
+        S.sym[emKey]=rec;
+        try{ localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eRb){}
+        out.rulerRebuilt=true;
+      }
+    }
+    // ⚠ AND THE CURRENT SERIES' SCALE WINS. A pin that survived the check above agrees with `rr`
+    // anyway; one that did not has just been rebuilt with it. There is no case where the stored
+    // number should override the ruler the numbers are actually on.
     var useRr=(typeof rec.rr==='number' && rec.rr>0) ? rec.rr : rr;
 
     // SELF-HEAL, BACKWARD ONLY: an EARLIER bar than the captured one replaces it (the window slid the

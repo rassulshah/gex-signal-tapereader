@@ -1,3 +1,51 @@
+## v15.26 — I collapsed the ladder onto one line, and every test was green
+
+> "you messed up the display"
+
+### ⚠⚠⚠ WHAT I BROKE, AND HOW IT LOOKED
+
+Read off his panel: **thirteen rows, all at `top: 639.7px` of a 640px frame.** The header drew, the
+rows were in the DOM, `__gptsDebug.audit()` returned ok, `renderErrors()` was empty — and the ladder
+was blank.
+
+    Y(p) = H - ((p-lo)/span)*H       span ≈ 69,000 points  →  Y ≈ H for every strike
+
+**v15.24 moved the band's anchor onto `measureBars()`** — true ES bars, already chart-scale, so the
+current scale is **1**. The pin stored on his machine was captured *before* that build, against the
+derived SPY series, and carries **`rr: 10.0353`**. `useRr` preferred the stored one, so every
+candle-derived value became ES × 10:
+
+    hiWater = 7673 × 10.0353 = 76,986
+
+`emRailBounds` widened the frame to hold it, and every row landed on the same pixel.
+
+**A scale stored in one series' units is meaningless against another.** This is the v11.65 and
+v15.12 lesson a third time, and I walked into it by changing the series and leaving the pin's ruler
+alone. A pin now RECORDS the series it was measured on (`src`), and the moment that or the scale
+disagrees it is **rebuilt** — `emK`, the straddle in the book's own points, exists for exactly this,
+so the width survives and only the ruler changes.
+⚠ Replay pins are exempt, like the v15.24 heal: a replayed pin is the frame's own recorded band.
+Caught by the cross-examination against `feat.emband` when I forgot that the first time.
+
+### ⚠⚠ AND THE TEST THAT SHOULD HAVE CAUGHT IT DID NOT EXIST
+
+Every assertion in `test_replay_face` checked that something was **present**. Presence is not
+legibility, and a blank ladder passes every one of them. New:
+
+    y1  the ladder draws several rows
+    y2  the rows are SPREAD down the frame, not stacked on one line
+    y3  ...at DISTINCT heights — an axis that maps every strike to one pixel is not an axis
+    y4  the band spans POINTS, not tens of thousands
+    y5  ...and the high-water mark is on the same ruler as the band
+
+y2 fails on exactly the build I shipped, whatever the cause. **A structural guard on the geometry
+catches a class of fault; a guard on the arithmetic catches only the one you thought of.**
+
+### verification
+`test_em_band.js` 637 → **646** (s1-s8: a pin whose ruler disagrees is rebuilt, on the current scale,
+anchored on the ES open, with the width preserved from `emK`, once and not repeatedly).
+`test_replay_face.js` 93 → **98**. Three mutations run individually, three caught.
+
 ## v15.25 — the amber line, the roll you could not see, and a measured answer on cadence
 
 > "why is there a amber/yellow line that crosses some of the pills" · "i need to be able to detect

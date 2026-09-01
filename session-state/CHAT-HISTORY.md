@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-01 · v15.25 · session `5e8d34b5`
+## 2026-09-01 · v15.26 · session `5e8d34b5`
 
-_22 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_24 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -335,8 +335,40 @@ The edge measurement is the important one — let me test whether a bigger move 
 Magnitude doesn't help; **proximity does** — 56.9% within 25 points of spot vs 51.7% further out. Checking the literature before I recommend anything.
 Measured: **5-minute hysteresis** cuts display churn by a third with no loss of edge; 10 minutes halves churn but destroys it. Implementing that plus the 1-minute clock.
 A7 survived — nothing executes the hysteresis over time. Fixing that.
+**EH/EL — checked from your own pin, and the arithmetic is exactly what you described:**
+
+```
+em 32.313255 · openU 759.5653 · rr 10.0353
+open = 759.5653 × 10.0353 = 7622.4
+EH   = 7622.4 + 32.31 = 7654.7  → drawn 7655  ✓
+EL   = 7622.4 − 32.31 = 7590.1  → drawn 7590  ✓
+```
+
+Yes — the width is InsiderFinance's 0DTE ATM straddle taken once at the open, added to and subtracted from the open. The arithmetic was never wrong. The **anchor** was, and v15.24 f …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 18 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (16:05):** 18 commits, tree clean. Push refused for this repo by the proxy — same as every turn this session. Running `installv1525.bat` commits and pushes them from your machine.
+
+**OPERATOR:**
+> you messed up the display
+
+**me (16:45):** Rows exist in the DOM — they're being positioned off the visible frame. Measuring where.
+Found it, and it's mine. Every row is pinned at y≈639.7 — the frame spans ~69,000 points.
+That test wouldn't have caught the *symptom*. Adding the structural guard that would.
+The rebuild is firing on the replayed pin too — same exemption as the heal.
 
 ### DECISIONS
+
+**v15.26 · I broke the ladder and shipped it.**
+- **v15.24's anchor change left the stored pin's ruler behind.** ES bars are chart-scale (rr 1); the
+  pin still carried rr 10.0353 from the derived SPY series, so hiWater became 76,986, the frame
+  spanned 69,000 points and all 13 rows drew on one pixel. Audit green, zero render errors, blank
+  panel. The pin now records its series and is rebuilt from emK when that changes.
+- **The suite could not see it** — every assertion checked PRESENCE. y1-y5 now assert the geometry.
+- **He found it in five words; it took me four tool calls.** Screenshot first on a display fault.
 
 **v15.25 · the amber line, the rolls, and the cadence.**
 - **EH/EL arithmetic verified from his own pin** — 759.5653 × 10.0353 = 7622.4, ±32.31 → 7655/7590.
@@ -460,6 +492,10 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.26** — the pin records `src` and is rebuilt when the series or scale changes (replay exempt);
+`test_replay_face` y1-y5 geometry guards. `test_em_band` → 646, `test_replay_face` → 98.
+Three mutations, three caught. Suite 134 green / 6 baseline red.
+
 **v15.25** — the EM rail in two segments; the per-row roll chip (paid for by ROC's slack);
 `LVL_HOLD_MIN=5` hysteresis; the 60m arrow colour-coded. New `tools/study-deltacadence.js`.
 `test_replay_face` 79 → 93. 12 mutations, 12 caught. Suite 134 green / 6 baseline red.
@@ -505,6 +541,9 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. **v15.24 and v15.25 were live-broken for him** — v15.26 is the first of that run he should keep.
+2. Proximity weighting (56.9% vs 51.7%) and time-of-day windowing are still unshipped studies.
 
 1. **Time-of-day weighting for the delta window is the next study** — 0DTE gamma decay is
    non-linear, so a fixed 15m window means something different at 09:00 than at 14:30. Not shipped.
@@ -567,6 +606,7 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+62f706f v15.25: the amber line, the roll nobody could see, and a measured answer on cadence
 1f3539f v15.24: cross-examine the replayed face against the recording; stop storing frames with no book
 c5f29a7 study: keep the script that chose KT_DWELL_MIN
 265bc27 v15.23: the EM band was anchored on yesterday's open, and dwell was a count on two clocks
@@ -578,7 +618,6 @@ d245994 test: Z5 survived mutation — a refusal nothing can reach is not a refu
 4a9b011 build: name the delivery file correctly in the builder's own note
 e58c333 v15.19: one refusal upstream was hiding six surfaces, and nothing here could draw the face
 2e74842 build: the installer no longer leaves a tracked 36k-line blob in the tree
-3b5701a v15.18: the arrows were pointing backwards, and the states could only say two things
 ```
 
 ---
