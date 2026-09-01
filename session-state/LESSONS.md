@@ -131,6 +131,37 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.15 · 2026-09-01 · **ONE CAUSE WORE FOUR SYMPTOMS, AND I FIXED THREE OF THEM SEPARATELY FIRST**
+
+"the nodeprofile has only 1 node. no arrows, no status. nothing." — and they were **one bug**.
+`emBand` reads `closedCandles()`, which returned the LIVE candles while the nodes came from the
+frame; `emPiles` clips every pile to that band; so a 13:12 book against a 21:00 band left one pile.
+One node bar. No states — they hang off the node rows. Nothing for `rollScan` to pair.
+
+⚠⚠ **I HAD ALREADY REPLAYED `measureBars` AND NEVER ASKED WHAT ELSE READS CANDLES.** The ⓪a section
+was correct because it goes through `measureBars`; the BAND goes through `closedCandles`, four lines
+away, and I did not look. **When a feature needs a source swapped, enumerate every reader of that
+source before declaring it done** — the same lesson `tapeMap` taught in v15.11, one seam over.
+
+⚠⚠ **A MISSING FIELD KILLED A FEATURE WITH NO ERROR.** `rollScan` compares `dst.k===src.k`; my
+replayed velocity rows had no `k`, so every pair was `undefined===undefined` — TRUE — and every roll
+was discarded as "the same strike". **2,406 roll sightings in the session, zero drawn, nothing
+thrown.** A shape that is "close enough" for one consumer is a silent failure for the next; the live
+objects carried `k` and nothing recorded that it was load-bearing.
+
+⚠ **AND THE FIRST FIX FOR THE ARROWS WAS WIRED TO THE WRONG BOOK** — scanning the CHART symbol while
+`velAt` served the GOVERNING one, so the strikes and the lookups could never meet. Two independent
+resolutions of "which book" is DECISIONS v13.2's defect class, and it took his panel to catch it.
+
+⚠ **"OUT OF SYNC" WAS A GUARD OUTSIDE ITS JURISDICTION.** `tapeSync` reconciles three LIVE King
+votes; against a recorded frame, disagreement is CORRECT. A health check must know which face it is
+judging, or it reports a fault that is really its own assumption.
+
+> **THE PATTERN ACROSS v15.10-v15.15: every one of these was a consumer reaching around the seam I
+> had replayed, to a live source. `tapeMap` (v15.11), `ladderKings` (v15.11), `slicesFor` (v15.11),
+> `velOk`/`rollsLive` (v15.13), `closedCandles` and `tapeSync` (v15.15). The lesson is not any one of
+> them — it is that "I swapped the source" is not a finished thought until every reader is listed.**
+
 ### v15.14 · 2026-09-01 · **THE FEATURE WAS BUILT; IT HAD NOTHING TO DRAW**
 
 ⚠⚠ **AND v15.13'S ARROWS WERE WIRED TO THE WRONG BOOK — HIS PANEL CAUGHT IT, NOT THE SUITE.**

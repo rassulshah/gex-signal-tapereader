@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-08-31 · panel v15.14 · companion v1.16 · supersedes every earlier resume note_
+_written 2026-08-31 · panel v15.15 · companion v1.16 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.14, and what the face carries
+## 2 · WHERE WE ARE — v15.15, and what the face carries
 
-**Panel v15.14 · companion v1.16.** Suite **129 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.15 · companion v1.16.** Suite **129 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -128,6 +128,20 @@ the journey is rebuilt from `tri.<book>.king` under the same `KT_DWELL` rule. Me
 **8 SPXW migrations, 10 SPY.** ⚠ That is the RECORDED trinity crown at dwell 2 — a DIFFERENT
 instrument from the latched crown measured at "SPXW 0 durable moves" on 08-28 over a truncated
 window. Neither number refutes the other; say which one you mean.
+
+⚠⚠ **v15.15 — THE SEAM LESSON, AND IT IS THE MOST IMPORTANT THING IN THIS NOTE.** Every defect from
+v15.10 to v15.15 was the same shape: a consumer reaching around a replayed seam to a LIVE source.
+`tapeMap`, `ladderKings`, `slicesFor`, `velOk`, `rollsLive`, `ktOf`, `closedCandles`, `tapeSync`.
+The last one cost four symptoms at once — `emBand` read LIVE candles while the nodes came from the
+frame, and `emPiles` clips piles to that band, so a 13:12 book against a 21:00 band left ONE pile:
+one node bar, no states, nothing for `rollScan`. **"I swapped the source" is not a finished thought
+until every reader of that source is enumerated.** Before claiming replay works: grep the render path
+for `LASTFEED`, `STATE[`, `VEL`, `ctTodayStr` and the latch keys.
+⚠ Also: a missing `k` on the replayed velocity rows made `rollScan` compare `undefined===undefined`
+and discard EVERY roll as "the same strike" — 2,406 sightings, zero drawn, nothing thrown.
+
+⚠ **STILL LIVE-SOURCED IN REPLAY: the ladder's LEVELS.** `ifLadder` reads `ifChain` (the live IF
+payload); the NODES replay, the LEVELS do not. Frames store `lev` and `deriv`, so it is buildable.
 
 **FIRST THING TO DO: drag it on the live panel.** Check the ladder, kings and ⓪a move together, the
 clock reads the parked bar, ◀ reaches Friday, and `__gptsDebug.storage()` shows no new writes.

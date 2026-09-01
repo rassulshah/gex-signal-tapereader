@@ -1,3 +1,48 @@
+## v15.15 — the band centres on the replayed bar, and the sync gate stands down
+
+> "the nodeprofile has only 1 node. no arrows, no status. nothing." · "it also says out of sync"
+
+**Three bugs, one root and two gates. All of them made the same symptom.**
+
+### ⚠⚠ 1 · THE BAND WAS CENTRED ON THE LIVE PRICE WHILE THE NODES CAME FROM THE FRAME
+
+`emBand()` takes `now` from `closedCandles()` — the LIVE last close — and `emPiles()` **clips every
+pile to that band**. So a book recorded at 13:12, measured against a 21:00 band, had almost every
+node fall outside it: **one surviving pile → one node bar → no states** (they hang off the node rows)
+**→ nothing for `rollScan` to pair.** One cause, four symptoms, exactly as he described them.
+
+`closedCandles()` is the seam and is now replay-aware. One change, not four patches: the band, the
+ATR, the trend machine and the pile clipper all read it.
+⚠ These are UNDERLYING candles and a frame's `px/h/l` are already that scale — no conversion added.
+
+### ⚠⚠ 2 · A MISSING `k` SILENTLY KILLED EVERY ROLL
+
+`rollScan` does `rows.push(e.v)` then `if(dst.k===src.k) continue`. The replayed velocity rows had no
+`k`, so **every pair compared `undefined===undefined` — TRUE — and every candidate was discarded as
+"the same strike".** Zero arrows, no error, on a session holding **2,406 roll sightings** (measured:
+pairs seen in 30–63 frames). The live `VEL` objects carry `k` because the harvest reads it off the
+row; nothing in the shape said it was required.
+
+### 3 · "OUT OF SYNC" WAS A LIVE HEALTH CHECK JUDGING A RECORDED FRAME
+
+`tapeSync()` reconciles three King votes that all read the LIVE DOM and feed. Against a replayed bar
+they are answering a different question, and **disagreeing is the correct outcome** — the frame is
+hours old by construction. The gate stands down in replay and says `reason:'replay'` rather than
+silently reporting health. ⚠ Live, three disagreeing votes still raise the banner.
+
+### also, from v15.14 checked on his panel
+
+**The king lanes now draw** — 14 runs, 12 steps, 12 knots, zero placeholders, where the live latch
+had nothing. **The ladder fits**: panel 560 → 667px, `640/640, hidden 0`.
+⚠ And v15.14's arrows were scanning the CHART symbol while `velAt` served the GOVERNING book, so
+`rollScan` got SPY strikes and looked them up in the SPX book. Two lookups of "the book" that
+disagree — DECISIONS v13.2's defect class.
+
+### testing
+
+`test_replay.js` at **146**. Every fix above is executed, not grepped, and each was mutation-tested
+individually.
+
 ## v15.14 — the king lane draws the crown's journey, and the arrows find their book
 
 ### ⚠⚠ v15.13 SHIPPED THE ARROWS WITH THE BOOKS MISMATCHED, AND HIS PANEL SHOWED IT

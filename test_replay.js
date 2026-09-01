@@ -106,6 +106,24 @@ ok(B.king===7700, 'r14 the king is the book\'s own king, not the SPY one', B&&B.
 ok(B.pct['7700']===-100, 'r17 the King reads -100: the SIGN is carried, not just the magnitude', B.pct['7700']);
 ok(B.kingKd>0 && Math.abs(B.kingKd-95471)<200, 'r18 kingKd is the king\'s own dollars in THOUSANDS', B.kingKd);
 ok(B.src==='replay' && B.replay===true, 'r19 the book announces itself as replayed — no consumer can mistake it for live');
+// ⚠⚠ EVERY VELOCITY ROW CARRIES ITS STRIKE, AND THIS IS NOT COSMETIC. `rollScan` does
+//   rows.push(e.v) … if(dst.k===src.k) continue … Math.abs(dst.k-src.k)>ROLL_MAX_DIST
+// so a missing `k` makes every pair compare undefined===undefined — TRUE — and every roll candidate
+// is silently discarded as "the same strike". v15.14 shipped that way and drew ZERO arrows on a
+// session holding 2,406 roll sightings. Nothing threw; the feature was just always empty.
+{
+  const vk=Object.keys(B.vel);
+  ok(vk.length>0, 'r19b the book carries velocity rows at all', vk.length);
+  ok(vk.every(k=>typeof B.vel[k].k==='number' && B.vel[k].k>0),
+     'r19c ...and EVERY one carries its own strike, which rollScan indexes pairs by');
+  ok(vk.every(k=>Math.abs(B.vel[k].k-parseFloat(k))<1e-9),
+     'r19d ...and it is the strike it is keyed under, not another row\'s');
+  ok(vk.every(k=>typeof B.vel[k].d15==='number'),
+     'r19e ...and d15, which is the quantity a roll is detected from');
+  // the real proof: distinct strikes, so a pair can differ
+  const ks=vk.map(k=>B.vel[k].k);
+  ok(new Set(ks).size===ks.length, 'r19f ...and the strikes are distinct — pairs can actually differ');
+}
 {
   const bq=replayBook('QQQ');
   ok(!!bq && bq.king===716, 'r20 the QQQ book rebuilds independently with its OWN king', bq&&bq.king);
@@ -501,6 +519,44 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
   ok(/if\(!arr\.length\)\{ arr\.push\(/.test(kt),
      'kt11 the LIVE track seeds its first observation, so a crown that never moves still draws a run');
   ok(/recorderBlind\(\)/.test(kt), 'kt12 ...and the track still never writes during a replay');
+}
+
+// ---- 16 · (v15.15) THE BAND MUST CENTRE ON THE REPLAYED BAR ------------------------------------
+// Operator: "the nodeprofile has only 1 node. no arrows, no status. nothing." · "it also says out of sync"
+// emBand takes `now` from closedCandles() — the LIVE last close — while the nodes came from the
+// frame. emPiles CLIPS every pile to that band, so a 13:12 book measured against a 21:00 band left
+// ONE surviving pile: one node bar, no states (they hang off the node rows), nothing for rollScan.
+{
+  global.STATE={ SPY:{ candles:[{o:9,h:9,l:9,c:9,so:1}] } };
+  eval(ex('closedCandles'));
+  REPLAY.on=true; REPLAY.frames=FR; REPLAY.idx=2;
+  const cs=closedCandles('SPY');
+  ok(cs.length===3, 'b1 in replay the BAND reads the frame bars, not the live candles', cs.length);
+  ok(cs[cs.length-1].c===FR[2].px, 'b2 ...so `now` is the price at the parked bar', cs[cs.length-1].c);
+  REPLAY.idx=0;
+  ok(closedCandles('SPY').length===1, 'b3 ...and it shortens with the handle');
+  REPLAY.idx=2;
+  ok(Math.abs(cs[0].c-FR[0].px)<1e-9, 'b4 the series is the frames in order, underlying scale — no conversion');
+  REPLAY.on=false;
+  ok(closedCandles('SPY')[0].c===9, 'b5 live still reads STATE candles, untouched');
+  REPLAY.on=true;
+}
+{
+  // the sync banner cannot judge a recorded frame
+  global.RECON_STATE={};
+  global.kingFromTapeTag=()=>1; global.kingFromFeed=()=>2; global.kingFromTapeMax=()=>3;   // maximal disagreement
+  global.reconcileVotes=()=>({ok:false, reason:'split'});
+  global.RECON_LOG_MAX=20; global.RECON_FAIL_ESCAL=3;
+  eval(ex('tapeSync'));
+  REPLAY.on=true;
+  const r=tapeSync('SPY');
+  ok(r.ok===true, 'sy1 in replay the tape-sync gate stands down — a frame cannot be out of sync with live');
+  ok(r.reason==='replay', 'sy2 ...and says why, rather than silently reporting health', r.reason);
+  ok(r.streak===0, 'sy3 ...and does not accumulate a failure streak while parked');
+  REPLAY.on=false;
+  const r2=tapeSync('SPY');
+  ok(r2.ok===false, 'sy4 live, three disagreeing votes still raise the banner — the guard is intact');
+  REPLAY.on=true;
 }
 
 console.log('test_replay: '+pass+' passed, '+fail+' failed');

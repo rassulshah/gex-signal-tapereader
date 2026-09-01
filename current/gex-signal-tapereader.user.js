@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.14
+// @version    15.15
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -641,7 +641,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.14';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.15';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -946,7 +946,14 @@ function replayBook(book){
     for(i=0;i<mine.length;i++){
       r=mine[i]; kk=String(r[0]);
       pct[kk]=Math.round(100*r[1]/mx);        // SIGNED, exactly as the live tape carries it
-      vel[kk]={ cur:r[1], d5:r[2], d15:r[3], d60:r[4], d1d:r[5], exp:F.exp||null };
+      // ⚠⚠ (v15.14b) `k` IS LOAD-BEARING AND ITS ABSENCE WAS SILENT. `rollScan` does
+      //     rows.push(e.v)  …  if(dst.k===src.k) continue;  …  Math.abs(dst.k-src.k)>ROLL_MAX_DIST
+      // so with no `k` on the velocity object EVERY pair compares `undefined===undefined`, which is
+      // TRUE, and every candidate is discarded as "the same strike". Zero rolls, no error, on a
+      // session that holds 2,406 roll sightings — measured on 2026-08-31, pairs seen in 30-63 frames.
+      // The live VEL objects carry `k` because the harvest reads it off the row; the replay ones did
+      // not, and nothing in the shape said it was required.
+      vel[kk]={ k:r[0], cur:r[1], d5:r[2], d15:r[3], d60:r[4], d1d:r[5], exp:F.exp||null };
     }
     var kg=(tri[book] && typeof tri[book].king==='number') ? tri[book].king : null;
     return { pct:pct, king:kg, kingKd:Math.round(mx/1000), count:mine.length,
@@ -1363,7 +1370,24 @@ function synthDerived(native, king, byK){
 
 console.log('[GPTS] v'+GPTS_VERSION+' part2 loaded');
 
-function closedCandles(sym){ var S=STATE[sym]; return (S&&S.candles)?S.candles:[]; }
+// ⚠⚠ (v15.15) THIS IS THE SEAM THE EM BAND READS, AND IT IS WHY THE LADDER HAD ONE NODE.
+// Operator, 2026-09-01: "the nodeprofile has only 1 node. no arrows, no status. nothing."
+// `emBand()` takes its `now` from these candles — the LIVE last close — while the nodes came from
+// the replayed frame. `emPiles` then CLIPS every pile to the band, so a book from 13:12 measured
+// against a 21:00 band fell almost entirely outside it: one surviving pile, one node bar, no states
+// (they hang off the node rows) and nothing for rollScan to pair.
+// ⚠ One seam, not four patches: emBand, atr(), the trend machine and the pile clipper all read this.
+// ⚠ These are UNDERLYING candles (the band converts by `rr`), and a frame's `px/h/l` are exactly
+// that — the same scale, so no conversion is introduced here.
+function closedCandles(sym){
+  try{
+    if(typeof replayOn==='function' && replayOn()){
+      var MB=measureBars(sym);
+      if(MB && MB.src==='replay' && MB.bars && MB.bars.length) return MB.bars;
+    }
+  }catch(e){}
+  var S=STATE[sym]; return (S&&S.candles)?S.candles:[];
+}
 function atr(sym){
   var c=closedCandles(sym); if(c.length<2) return 0.1;
   var n=Math.min(14,c.length-1); var sum=0;
@@ -2890,6 +2914,16 @@ function kingFromTapeMax(sym){
 // --- The gate. Call before rendering anything derived from %King. ---
 function tapeSync(sym){
   var st=RECON_STATE[sym] || (RECON_STATE[sym]={streak:0,last:null,log:[]});
+  // ⚠⚠ (v15.15) A REPLAYED FRAME CANNOT BE OUT OF SYNC WITH THE LIVE TAPE — operator: "it also says
+  // out of sync". The three votes below (`kingFromTapeTag`, `kingFromFeed`, `kingFromTapeMax`) all
+  // read the LIVE DOM and the LIVE feed. With the face showing a recorded bar they are answering a
+  // different question from the one the banner claims, and disagreeing is the CORRECT outcome — the
+  // frame is hours old by construction. This gate exists to catch a wrong anchor presented as fact
+  // on a LIVE face; it has no jurisdiction over a frame whose provenance is already on the badge.
+  try{ if(typeof replayOn==='function' && replayOn()){
+    st.streak=0; st.last={ ok:true, reason:'replay', streak:0, recurring:false, votes:null };
+    return st.last;
+  } }catch(eRS){}
   var votes={ tag:kingFromTapeTag(sym), feed:kingFromFeed(sym), tapemax:kingFromTapeMax(sym) };
   var r=reconcileVotes(votes);
   // carry the parser's own invariant flags through - a flagged parse is never healthy
