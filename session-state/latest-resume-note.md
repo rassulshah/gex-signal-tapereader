@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-01 · panel v15.32 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-01 · panel v15.33 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.32, and what the face carries
+## 2 · WHERE WE ARE — v15.33, and what the face carries
 
-**Panel v15.32 · companion v1.17.** Suite **135 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.33 · companion v1.17.** Suite **135 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -177,6 +177,24 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠⚠ **v15.33 — MY OWN `deps()` CHECK CALLED IRT BROKEN WHILE IRT WAS WORKING.** It reported
+`irt.build: nothing to write` while `IRT_LAST` held `{rows:6, how:'file', inPlace:true, err:null}`.
+v15.22 re-ran `irtBuildCsv()` AS A PROBE, and that rebuild depends on live inputs (the IF ladder, the
+ES ratio, the latched crown), so one unlucky instant reads as a dead export.
+**A HEALTH CHECK MUST OBSERVE THE SYSTEM, NOT PERTURB IT** — it reads `IRT_LAST.rows` now and probes
+only when no export has run this session. ⚠ Found only because I read the live state before building
+the lamp; shipping the lamp on that check would have glowed red at him all day over nothing.
+
+⚠ **TWO FEED LAMPS ON THE TOP STRIP** (`feedLampsHtml`), both from the SAME `depsHealth()` the footer
+dot and `__gptsDebug.deps()` read — never a second opinion:
+    IRT 2m   the panel WRITING king levels to the file IRT polls
+    IF 3m    InsiderFinance ARRIVING — the age of the FRESHEST usable chain
+Each states its AGE: a green dot with no number is a claim you cannot check.
+
+⚠ **LAYOUT:** ⓪a HOD/LOD is mounted BELOW the ladder (the mount moved, `secDay()` untouched);
+the columns are headed **1ST TP / 2ND TP** with the extreme's identity moved to the hover; the ⓪a
+labels went `#6c7889` → `#9fb0c4` (3.1:1 → ~7.4:1 on the card — his "dark grey" was a real number).
 
 ⚠⚠⚠ **v15.32 — EVERY BUILD MESSAGE CARRIES TWO BLOCKS THE BUILDER PRINTS. PASTE BOTH.**
 Operator, twice: *"i dont see the tamper monkey links or save confirmations."* Scroll to the END of

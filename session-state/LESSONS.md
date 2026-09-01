@@ -131,6 +131,29 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.33 — a health check that re-runs the work is measuring a different moment
+
+**1 · My own check was the only thing failing.** `deps()` reported `irt.build: nothing to write`
+while `IRT_LAST` held `{rows:6, how:'file', inPlace:true, err:null}` — the export was writing six
+rows to the file in place. v15.22's check called `irtBuildCsv()` as a probe, and that rebuild depends
+on live inputs, so one unlucky instant reads as a dead export. ⚠ **A health check must OBSERVE the
+system, not perturb it.** Read the artefact the work produced (`IRT_LAST.rows`), not a fresh attempt
+at the work. And I caught it only because I read the live state before building the lamp he asked
+for — had I shipped the lamp on top of the check, it would have glowed red all day over nothing.
+
+**2 · A label names a ROLE; the identity belongs with the facts.** "1ST · HOD" put today's answer in
+a heading. "1ST TP" names what the column always is, and which extreme it was moves into the hover.
+⚠ Nothing is lost, and the heading stops changing meaning between sessions.
+
+**3 · Contrast is a measurement, not a preference.** #6c7889 on the card is ~3.1:1, under the 4.5:1
+readable threshold — his "they look dark grey" was an accurate report of a number. #9fb0c4 is ~7.4:1.
+⚠ When he describes something as hard to see, compute the ratio rather than nudging the hex.
+
+**4 · Two mutations survived and both were greps against the SOURCE, not the OUTPUT.** `d5e` matched
+`ageMin` in the expression that computes the age, so blanking the printed string kept it green. ⚠
+**Assert what the face SHOWS. A name in the code is not a number on the screen** — the tenth
+recorded instance of this shape.
+
 ### v15.32 — a step that lives only in my head is a step with no mechanism
 
 **1 · The operator had to ask twice for something the builder already prints.** The Tampermonkey

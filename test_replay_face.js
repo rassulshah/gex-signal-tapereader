@@ -620,5 +620,43 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
      'c5c ...faintly: they are a scale, not a claim');
 }
 
+// ---- 17 · (v15.33) THE ⓪a SECTION, ITS HEADINGS, AND THE TWO FEED LAMPS ----------------------
+// Operator, 2026-09-01: "move the hodlod section below the node ladder" · "update the heading where
+// it says 1ST HOD, to 1ST TP , which stands for first turning point" · "make the labels a little
+// brighter" · "i need two additional indicators ... keep it on the top somewhere."
+{
+  const txt=R.html.replace(/<[^>]+>/g,' ');
+  // a · the ⓪a section is BELOW the ladder
+  const iLad=R.html.indexOf('g3ladwrap'), iDay=R.html.indexOf('\u24ea a DAY');
+  ok(iLad>=0 && iDay>=0, 'd1 both the ladder and the ⓪a section are drawn', {iLad, iDay});
+  ok(iLad<iDay, 'd2 EXECUTED: the ⓪a HOD/LOD section is mounted BELOW the ladder', {iLad, iDay});
+  // b · the turning-point headings
+  ok(/\b1ST TP\b/.test(txt) && /\b2ND TP\b/.test(txt),
+     'd3 the columns are headed 1ST TP and 2ND TP');
+  ok(!/1ST \u00b7 (HOD|LOD)/.test(txt), 'd3b ...and no longer name the extreme in the heading');
+  // ⚠ the identity is not LOST, it moves to the hover — a heading names the role, the hover the fact
+  ok(/FIRST TURNING POINT \u2014 today that was the (HOD|LOD)/.test(R.html),
+     'd3c ...while the hover still says WHICH extreme it was today');
+  // c · brighter labels, asserted as the colour actually shipped
+  ok(/g3daylb b\{[^}]*color:#9fb0c4/.test(src),
+     'd4 the ⓪a labels are the brighter slate, not the 3:1 grey');
+  ok(!/g3daylb b\{[^}]*color:#6c7889/.test(src), 'd4b ...with the dark value gone, not overridden');
+  // d · the two feed lamps, at the top, from the SAME depsHealth the footer uses
+  const lampRow=(R.html.match(/class="g3flrow">([\s\S]*?)<\/div>/)||[])[1]||'';
+  ok(!!lampRow, 'd5 the feed lamps are drawn');
+  ok(/IRT/.test(lampRow) && /IF/.test(lampRow), 'd5b ...one for IRT and one for InsiderFinance', lampRow.slice(0,80));
+  ok(R.html.indexOf('g3flrow')<iLad,
+     'd5c ...at the TOP, above the ladder', {lamps:R.html.indexOf('g3flrow'), ladder:iLad});
+  const fl=(src.match(/function feedLampsHtml\([\s\S]*?\n\}/)||[''])[0];
+  ok(/depsHealth\(\)/.test(fl),
+     'd5d ...reading the SAME check the footer dot and __gptsDebug.deps() read — never a second opinion');
+  // ⚠ BOUND TO THE RENDERED TEXT, not to the word `ageMin` in the source — blanking the age string
+  // left `ageMin` in the expression that computes it and the grep stayed green. Survived mutation.
+  ok(/ageMin/.test(fl), 'd5e the lamp computes an age');
+  ok(/IRT\s+\S/.test(lampRow.replace(/<[^>]+>/g,' ')) && /IF\s+\S/.test(lampRow.replace(/<[^>]+>/g,' ')),
+     'd5f ...and PRINTS it beside the label — a green dot with no number is a claim you cannot check',
+     lampRow.replace(/<[^>]+>/g,' ').trim().slice(0,40));
+}
+
 console.log('test_replay_face: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

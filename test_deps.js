@@ -111,9 +111,26 @@ ok(/off-scale/.test(byId(depsHealth(),'if.SPX').why),
 
 // ---- 7 · IRT: THE BUILD AND THE WRITE FAIL DIFFERENTLY AND ARE REPORTED SEPARATELY ------------
 STORE={ gpts_if_chain_v1: chain() };
-global.irtBuildCsv=()=>({ csv:'', rows:0 });
+// ⚠⚠ (v15.33) THE BUILD IS JUDGED BY WHAT THE LAST EXPORT WROTE, NOT BY A PROBE. Re-running
+// `irtBuildCsv()` as a health check re-runs work whose inputs are live, so one unlucky instant
+// reported FAIL while the real export was fine — measured on his panel with IRT_LAST at
+// {rows:6, how:'file', inPlace:true, err:null}. A health check observes; it does not perturb.
+global.IRT_LAST={ t:Date.now(), rows:0, err:null };
+global.irtBuildCsv=()=>({ csv:'x', rows:12 });          // a probe would say "fine" — it must not be asked
 ok(byId(depsHealth(),'irt.build').state==='FAIL',
-   'd7 nothing to write is a BUILD failure');
+   'd7 an export that wrote NO rows is a build failure, whatever a fresh probe would say');
+ok(/last export wrote no rows/.test(byId(depsHealth(),'irt.build').why),
+   'd7·why ...and says which fact it is reporting', byId(depsHealth(),'irt.build').why);
+global.IRT_LAST={ t:Date.now(), rows:6, err:null };
+ok(byId(depsHealth(),'irt.build').state==='OK',
+   'd7b six rows on the file is a build that WORKED, even if a probe would fail right now');
+// only with no export at all this session does the probe get asked
+global.IRT_LAST={ t:0, rows:null, err:null };
+global.irtBuildCsv=()=>({ csv:'', rows:0 });
+ok(/no export has run yet/.test(byId(depsHealth(),'irt.build').why),
+   'd7c ...and the probe is the FALLBACK, used only when nothing has run to observe',
+   byId(depsHealth(),'irt.build').why);
+global.IRT_LAST={ t:Date.now(), rows:12, err:null };
 global.irtBuildCsv=()=>({ csv:'x', rows:12 });
 global.IRT_LAST={ t:Date.now()-60*MIN, rows:12, err:null };
 ok(byId(depsHealth(),'irt.export').state==='STALE',

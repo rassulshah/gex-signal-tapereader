@@ -1,3 +1,53 @@
+## v15.33 — the day section moves under the ladder, two feed lamps go up top, and my own IRT check was the thing failing
+
+> "move the hodlod section below the node ladder" · "update the heading where it says 1ST HOD, to
+> 1ST TP , which stands for first turning point" · "make the labels a little brighter" · "i need two
+> additional indicators. 1 indicating that the application is writing to irt file export and another
+> that it is getting data from Inside Finance every x minutes. keep it on the top somewhere."
+
+### ⚠⚠ MY `deps()` CHECK WAS CALLING IRT BROKEN WHILE IRT WAS WORKING
+
+Before building the lamp he asked for, I read the live state — and the check that would have driven
+it was wrong:
+
+    deps() said:   irt.build — "nothing to write, no levels resolved"
+    IRT_LAST was:  { rows: 6, how: 'file', inPlace: true, err: null }
+
+Six rows, written in place, no error. **v15.22's check re-ran `irtBuildCsv()` as a probe** — and that
+rebuild depends on live inputs (the IF ladder, the ES ratio, the latched crown), so one unlucky
+instant returns zero rows and reports the export as dead.
+⚠ **A HEALTH CHECK MUST OBSERVE THE SYSTEM, NOT PERTURB IT.** Re-running the work to see whether the
+work is possible answers a different question, about a different moment. It reads `IRT_LAST.rows` —
+what actually reached the file — and only probes when no export has run yet this session.
+Had I shipped the lamp on top of that check, it would have glowed red at him all day over nothing.
+
+### THE TWO LAMPS, TOP OF THE PANEL
+
+    IRT 2m      is the panel WRITING the king levels to the file IRT polls
+    IF 3m       is InsiderFinance ARRIVING — the age of the freshest usable chain
+
+⚠ Both read the **same `depsHealth()`** the footer dot and `__gptsDebug.deps()` read, so the three can
+never disagree about the same moment. ⚠ Each states its **age**, not just a colour: a green dot with
+no number is a claim you cannot check. The IF lamp reports the *freshest* symbol, because under the
+SPX pin the companion stops fetching SPY and a stale SPY is expected.
+
+### THE THREE LAYOUT CHANGES
+
+- **⓪a HOD/LOD is mounted below the ladder.** The mount moved, not the section — `secDay()` is
+  untouched and still reads the same `measureBars` series.
+- **`1ST TP` / `2ND TP`.** ⚠ Which extreme it was is not lost, it moves to the hover: *"THE DAY'S
+  FIRST TURNING POINT — today that was the LOD"*. A heading names the ROLE; the identity is a fact
+  about today and belongs with the other facts.
+- **Brighter labels.** `#6c7889` on the `#12161f` card is about **3.1:1**, under the 4.5:1 readable
+  threshold. `#9fb0c4` measures **~7.4:1** and stays a muted slate, so the labels read without
+  competing with the values beside them.
+
+### verification
+`test_replay_face.js` → **151**, `test_deps.js` → **36**. Eleven mutations run individually, eleven
+caught after two rounds. ⚠ Two survived first and both were greps against the SOURCE rather than the
+rendered output: `d5e` matched the word `ageMin` in the expression that computes the age, so blanking
+the printed string left it green. Bound to the drawn text now.
+
 ## v15.32 — the delivery message carries the links and the save confirmation, because the builder prints both
 
 > "i dont see the tamper monky links or save confirmations which yuou are suppose to give me

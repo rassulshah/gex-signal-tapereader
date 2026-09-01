@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-01 · v15.32 · session `5e8d34b5`
+## 2026-09-01 · v15.33 · session `5e8d34b5`
 
-_42 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_46 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -617,8 +617,99 @@ But a price axis with holes in it reads as data loss, and "is this missing or is
 > i dont see the tamper monky links or save confirmations which yuou are suppose to give me everytime there is a build telling me the files that were save (eg chat history, lessons learned  etc.)
 
 **me (19:29):** You're right, and it's been missing for several builds. The builder prints that block; I stopped pasting it. Let me fix the cause first, then give you the one you're owed.
+You're right, and it's been missing for several builds. The builder has printed the Tampermonkey links at the end of every run since v14.3 — I stopped pasting them, and I never listed the record files at all. A test pinned that the *builder* emits the links; nothing pinned that the *message* carries them, because that step lived only in my head. That's the failure this project already documents in `LESSONS.md` §0, and I read it this session and let it lapse anyway.
+
+Both blocks now print at the end of every build, and the gex skill's SAVE procedure requires them.
+
+**==== PASTE THIS WITH THE INSTALL FILE ====**
+
+**Tampermonkey — update ONLY what changed:**
+- **Tapereader v15.32** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+- **Companion v1.17** — UNCHANGED, do not reinstall — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js
+
+Then wait ~5 min (raw CDN cache) and RELOAD the Atlas tab — footer must say v15.32.
+
+**==== SAVE CONFIRMATION ====**
+
+```
+saved    chat history (regenerated from the transcript)  session-state/CHAT-HISTORY.md
+saved    lessons learned                                 session-state/LESSONS.md
+saved    changelog                                       changelog/CHANGELOG.md
+saved    resume note                                     session-state/latest-resume-note.md
+also:    current/gex-signal-tapereader.user.js · skills/gex/SKILL.md · tools/build-installer.py
+         · test_delivery.js + 5 test pins
+commit:  cc12ac1  v15.32
+```
+
+The save list is read from `g …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 25 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (19:32):** 25 commits, clean tree. Push refused by the proxy for this repo — same as every turn this session; `installv1532.bat` pushes them from your machine.
+
+**OPERATOR:**
+> why is there no update in tampermonkey .its only reinstall
+
+**me (19:36):** The push landed — the raw URL now serves **15.32**. Checking what your panel is running.
+**Nothing is broken — it's cache timing.** Your push *did* land this time:
+
+```
+origin head:   071b0c1  v15.32
+raw URL now:   // @version 15.32
+your panel:    v15.31
+```
+
+So there genuinely is an update waiting. The raw CDN sends `cache-control: max-age=300` — five minutes — and you clicked while your edge still held **15.31**. Tampermonkey compared 15.31 against 15.31, found them equal, and offered only Reinstall. That's it behaving correctly on stale bytes.
+
+**Two ways forward:**
+
+Wait for the cache to expire and click again — the block says ~5 min for exactly this reason, and it's now past that. It should read **Update** rather than Reinstall.
+
+Or force it immediately with a cache-buster — Tampermonkey installs from any URL, and the query string gets a fresh edge:
+
+https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js?v=1532
+
+I confirmed that URL serves 15.32 right now.
+
+Worth noting from your live panel: **v15.31's changes are working** — 11 minor strike ticks drawn, the day's candle in two parts behind NOW, and no IBH/IBL on the level rail. So you're not missing anything urgent; 15.32 is the delivery-message fix (the links and save confirmation), not a panel change.
+
+One correction to what I told you two turns ago: I said the raw URL was serving 15.25 and your pushes were failing. That was true then. Origin now has 15.26 through 15.32 — so the pushes have been landing since, and the only thing biting today was the five-minute cache.
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 25 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (19:37):** Still refused here — but worth being precise about what that does and doesn't mean.
+
+```
+## main...origin/main [ahead 25, behind 18]
+```
+
+Your machine has been pushing successfully — origin carries v15.26 through v15.32, which is why the raw URL serves the current panel. What's stuck are **my 25 commits**: the changelog entries, the lessons, the chat history, the new tests (`test_ladder_layout`, `test_deps`) and the studies. Those only reach origin when the installer commits them from your side, and the installer commits whatever the payload wrote into your repo — so running `installv1532.bat` carries them.
+
+The "behind 18" is your commits I don't have locally; harmless, since the payload is built from my tree and yours gets overwritten by it on install.
+
+**OPERATOR:**
+> ok..1 thing to remember here is that the market is going to close soon and i need you to ensure that the application goes into freeze and i can replay it at various points fo the day by using the slider.  at this point, I am now  going to qa the application with you step by step to identify changes that are needed.  first change is to move the hodlod section bellow the node ladder. currently its on top of it.   update the heaading where it says 1ST0 HOD , to 1ST TP , which stands for first turning point .. similar to 2nd.  also make the labels a little brighter becaause they look dark grey , so try som other color to make it more visble.    go and build , make sure you give me thes save confirmation , check the documentation on how the save confirmaiton is suppose to look and what files need to be confirmed with updates.   make sure the chat history is saved so next context becomes aware quickly. Also in the build i need two additional indicators . 1 indicating tha the applicaiton is writing to irt file export and another that it is getting data from Inside Finnace every x minutes. keep it on the top somehwere.
+
+**me (19:46):** Now the two top indicators — IRT writing, and InsiderFinance freshness.
+Now verifying the close-of-day freeze and today's recording before I build.
+Two things you need before the close — one of them is time-sensitive.
+**IRT is working** — `rows: 6, how: "file", inPlace: true, err: null`. My `deps` check was calling the builder as a probe and reporting a transient miss as broken. Fixing that before it lights your new lamp red.
 
 ### DECISIONS
+
+**v15.33 · the QA pass begins.**
+- **My deps() check was calling IRT broken while IRT was working** — it re-ran irtBuildCsv() as a
+  probe. IRT_LAST showed rows:6, how:'file', inPlace:true, err:null. A health check observes; it
+  does not perturb. Caught before the lamp shipped on top of it.
+- **Two feed lamps at the top** (IRT + InsiderFinance), from the SAME depsHealth() the footer uses,
+  each showing its AGE.
+- **⓪a moved below the ladder; headings are 1ST TP / 2ND TP; labels brightened** 3.1:1 → 7.4:1.
+- ⚠ **HIS RECORDING TODAY STARTS AT 13:39** — the panel was reloaded then, and the recorder only
+  runs while it is open. Replay today can reach 13:39→close and no earlier.
 
 **v15.32 · the delivery message.**
 - **He had to ask twice for something the builder already prints.** The Tampermonkey links have
@@ -809,6 +900,10 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.33** — `feedLampsHtml()`; the ⓪a mount below the ladder; 1ST TP / 2ND TP; brighter labels;
+`irt.build` judged by what was written rather than a probe.
+`test_replay_face` → 151, `test_deps` → 36. Eleven mutations, eleven caught. Suite 135 green / 6 red.
+
 **v15.32** — the builder's save-confirmation block; `skills/gex/SKILL.md` step 0-bis.
 `test_delivery` → 44. Three mutations, three caught. Suite 135 green / 6 baseline red.
 
@@ -883,6 +978,11 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. **He is QA-ing the panel step by step** — expect one change at a time, and he wants the save
+   confirmation block pasted every build.
+2. **Today's replay only reaches back to 13:39** (panel reloaded then). Nothing recoverable earlier.
+3. Proximity weighting and time-of-day windowing remain unshipped studies.
 
 1. **Every build message: paste BOTH blocks from the end of the builder's output.**
 2. Install v15.32.
@@ -974,6 +1074,7 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+cc12ac1 v15.32: the build message carries the links AND a save confirmation, because the builder prints both
 d19aa28 v15.31: the day as a candle, the strike grid behind the nodes, IBH/IBL off the level rail
 3745d82 v15.30: the grip was capped at 560 while his panel was 673
 9155067 v15.29: the EL really was cut off — and only a real browser could show it
@@ -985,7 +1086,6 @@ f8f574e v15.28: the expected low was clipped on the frame's edge, and in replay 
 c5f29a7 study: keep the script that chose KT_DWELL_MIN
 265bc27 v15.23: the EM band was anchored on yesterday's open, and dwell was a count on two clocks
 d245994 test: Z5 survived mutation — a refusal nothing can reach is not a refusal
-00e2bbb build: the installer size gate measures the .bat, not a proxy for it
 ```
 
 ---

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.32
+// @version    15.33
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.32';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.33';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -1120,6 +1120,49 @@ function replayEnsure(){
     if(!d || days.indexOf(d)<0) d=days[days.length-1];
     replayLoadDay(d);
   });
+}
+// ⚠⚠ (v15.33) THE TWO FEED LAMPS. Both read `depsHealth()`, the same check the footer's `deps` dot
+// and `__gptsDebug.deps()` use, so the three can never disagree about the same moment.
+//   IRT   is the panel WRITING the king levels to the file IRT polls — build and write reported
+//         separately, because they fail differently (v15.22).
+//   IF    is InsiderFinance ARRIVING — the age of the freshest usable chain, in minutes, which is
+//         what "getting data every x minutes" actually means.
+// ⚠ Each lamp states its AGE, not just a colour. A green dot with no number is a claim you cannot
+// check; "IF 3m" is one you can.
+function feedLampsHtml(){
+  try{
+    if(CFG.feedLamps===false) return '';
+    var H=null; try{ H=depsHealth(); }catch(e0){ return ''; }
+    if(!H || !H.items) return '';
+    var by={}; H.items.forEach(function(it){ by[it.id]=it; });
+    function lamp(label, it, extra){
+      var st=it?it.state:'FAIL';
+      var col=(st==='OK')?PAL.longAccent:((st==='STALE')?PAL.amber:((st==='OFF')?PAL.sub:'#f0616d'));
+      var age=(it && typeof it.ageMin==='number')?(it.ageMin+'m'):((st==='OFF')?'off':'—');
+      return '<span class="g3fl"'+g3tip((it?(it.label+' — '+st+(it.why?(': '+it.why):'')):'not checked')+
+             (extra||''))+'><i style="background:'+col+'"></i>'+label+' '+g3esc(age)+'</span>';
+    }
+    // the freshest symbol is what decides whether IF data is arriving at all
+    var ifBest=null;
+    ['if.SPX','if.SPY','if.QQQ'].forEach(function(k){
+      var it=by[k]; if(!it || typeof it.ageMin!=='number') return;
+      if(!ifBest || it.ageMin<ifBest.ageMin) ifBest=it;
+    });
+    var ifOverall=by['if.usable'];
+    var ifLamp=ifBest?{ label:'InsiderFinance', state:(ifOverall?ifOverall.state:ifBest.state),
+                        ageMin:ifBest.ageMin,
+                        why:(ifOverall&&ifOverall.why)?ifOverall.why:ifBest.why }:null;
+    var irt=by['irt.export'], build=by['irt.build'];
+    var irtExtra=build?(' \u00b7 levels built: '+build.state+(build.rows!=null?(' ('+build.rows+' rows)'):'')+
+                        (build.why?(' \u2014 '+build.why):'')):'';
+    return '<div class="g3flrow">'+
+      lamp('IRT', irt, irtExtra+' \u26a0 IRT is a CSV written in place into the folder its FlexLevels '+
+           'extension polls; Chrome drops the directory permission on reload and the symptom is a stale '+
+           'file rather than an error.')+
+      lamp('IF', ifLamp, ' \u26a0 the age is the FRESHEST symbol\u2019s. Under the SPX pin the companion '+
+           'stops fetching SPY, so a stale SPY is expected and does not redden this.')+
+      '</div>';
+  }catch(e){ return ''; }
 }
 function replayBarHtml(){
   try{
@@ -21172,6 +21215,11 @@ function ensureV3Css(){
     // (v15.31) THE DAY'S CANDLE, behind the NOW column. Wick 3px, body 15px, both centred in the
     // chute, both z-index 0 so every pill draws on top and nothing loses a row to it.
     // (v15.31) the minor strikes — the grid the nodes sit on, so a GAP is visible as a gap.
+    // (v15.33) the two feed lamps on the top strip
+    '#gpts-body .g3flrow{display:flex;gap:10px;align-items:center;padding:2px 2px 3px;font-size:8px;'+
+      'font-weight:800;letter-spacing:.04em;color:#b6c4d4}'+
+    '#gpts-body .g3fl{display:inline-flex;align-items:center;gap:4px;cursor:help;white-space:nowrap}'+
+    '#gpts-body .g3fl i{width:6px;height:6px;border-radius:50%;display:inline-block}'+
     '#gpts-body .g3ldmin{position:absolute;left:'+LAD_NODE+'px;height:1px;background:#8b98a9;'+
       'opacity:.18;pointer-events:none;z-index:0;transform:translateY(-50%)}'+
     '#gpts-body .g3lddc{position:absolute;pointer-events:none;z-index:0;border-radius:1px}'+
@@ -21360,7 +21408,7 @@ function ensureV3Css(){
     // (v14.57) ⓪ a DAY — HOD/LOD. Stats table on top, READ box underneath, per the operator's
     // approved mockuphodlodv2.html and his ask: "give me this in the read section under the stats".
     '#gpts-body .g3day{margin-bottom:6px}'+
-    '#gpts-body .g3dayhd{font-size:8px;font-weight:900;letter-spacing:.08em;color:#8b98a9;'+
+    '#gpts-body .g3dayhd{font-size:8px;font-weight:900;letter-spacing:.08em;color:#b6c4d4;'+
       'text-transform:uppercase;margin:0 0 4px;cursor:help}'+
     '#gpts-body .g3dayg{display:table;width:100%;font-size:8.2px;margin-bottom:5px}'+
     '#gpts-body .g3dayr{display:table-row}'+
@@ -21417,7 +21465,11 @@ function ensureV3Css(){
     '#gpts-body .g3dayl{display:flex;gap:3px;margin-bottom:5px}'+
     '#gpts-body .g3daylb{flex:1;text-align:center;padding:2px 0;border-radius:3px;cursor:help;'+
       'background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06)}'+
-    '#gpts-body .g3daylb b{display:block;font-size:8.4px;font-weight:900;color:#6c7889}'+
+    // ⚠ (v15.33) BRIGHTER — operator: "make the labels a little brighter because they look dark
+    // grey". #6c7889 on the #12161f card is about 3.1:1, under the 4.5:1 readable threshold.
+    // #9fb0c4 measures ~7.4:1 and stays a muted slate, so the labels read without competing with the
+    // VALUES beside them, which are the point.
+    '#gpts-body .g3daylb b{display:block;font-size:8.4px;font-weight:900;color:#9fb0c4}'+
     '#gpts-body .g3daylb i{display:block;font-style:normal;font-size:6.4px;font-weight:800;color:#4b5563}'+
     // the ACTIVE rung — the one the standing extreme has actually earned
     '#gpts-body .g3daylb.on{background:rgba(46,194,126,.16);border-color:rgba(46,194,126,.55)}'+
@@ -21428,7 +21480,7 @@ function ensureV3Css(){
       'padding:5px 7px;cursor:help}'+
     '#gpts-body .g3dayread b{color:#2ec27e;font-weight:900}'+
     '#gpts-body .g3dayread b.g3dayin{color:#f2b45a}'+
-    '#gpts-body .g3daydim{color:#6c7889;font-weight:600}'+
+    '#gpts-body .g3daydim{color:#8b98a9;font-weight:600}'+
     '#gpts-body .g3daysub{font-size:8px;font-weight:600;color:#8b98a9;margin-top:2px;line-height:1.45}'+
     '#gpts-body .g3daysub b{color:#f2b45a}'+
       'border-radius:3px;cursor:help;border:1px solid}'+
@@ -28379,10 +28431,26 @@ function depsHealth(){
   try{
     var iage=mins(IRT_LAST&&IRT_LAST.t);
     var on=false; try{ on=!!(CFG.irt&&CFG.irt.on); }catch(eO){}
-    var built=null; try{ built=irtBuildCsv(); }catch(eB){}
-    add({ id:'irt.build', label:'IRT levels built', state:(built&&built.rows>0?'OK':'FAIL'),
-          rows:(built?built.rows:0),
-          why:(built&&built.rows>0)?'':'nothing to write — no levels resolved for the configured symbols' });
+    // ⚠⚠ (v15.33) JUDGE THE EXPORT THAT RAN, NOT A PROBE BUILD. v15.22 called `irtBuildCsv()` here
+    // as a health check — and that RE-RUNS a build whose inputs are live (the IF ladder, the ES
+    // ratio, the latched crown). A single unlucky instant returns zero rows and the check reported
+    // **FAIL: nothing to write** while the real export was fine.
+    // MEASURED on his panel 2026-09-01 while `deps()` was calling it broken:
+    //     IRT_LAST = { rows:6, how:'file', inPlace:true, err:null }
+    // The file was being written in place, six rows, no error. My check was the only thing failing.
+    // ⚠ A HEALTH CHECK MUST OBSERVE THE SYSTEM, NOT PERTURB IT. Re-running the work to see if the
+    // work is possible answers a different question — and answers it about a different moment.
+    // `IRT_LAST.rows` is what actually reached the file. The probe build is kept ONLY as a fallback
+    // for the case where no export has run yet this session, where there is nothing else to read.
+    var lastRows=(IRT_LAST && typeof IRT_LAST.rows==='number')?IRT_LAST.rows:null;
+    var built=null;
+    if(lastRows==null || !(IRT_LAST && IRT_LAST.t)){ try{ built=irtBuildCsv(); }catch(eB){} }
+    var buildRows=(lastRows!=null && IRT_LAST && IRT_LAST.t)?lastRows:(built?built.rows:0);
+    add({ id:'irt.build', label:'IRT levels built', state:(buildRows>0?'OK':'FAIL'),
+          rows:buildRows,
+          why:(buildRows>0)?'':((IRT_LAST&&IRT_LAST.t)
+              ? 'the last export wrote no rows — no levels resolved for the configured symbols'
+              : 'no export has run yet this session, and a probe build resolved no levels') });
     add({ id:'irt.export', label:'IRT file written', ageMin:iage, rows:(IRT_LAST?IRT_LAST.rows:0),
           state:(!on?'OFF':((IRT_LAST&&IRT_LAST.err)?'FAIL':((iage==null||iage>DEPS_IRT_STALE_MIN)?'STALE':'OK'))),
           why:(!on?'the IRT export is switched off in settings'
@@ -29649,8 +29717,12 @@ function secDay(sym){
       dcell('BODY',  NOREAD?Z:((bodyPct!=null)?(bodyPct+'%'):Z), '')
     ];
     h+='<div class="g3dcols">';
-    h+=dcol((NOREAD?'1ST':('1ST · '+D.first)), c1, eTip);
-    h+=dcol((NOREAD?'2ND':('2ND · '+D.second)), c2, eTip);
+    // ⚠ (v15.33) "1ST TP" / "2ND TP" — operator, 2026-09-01: "update the heading where it says
+    // 1ST HOD, to 1ST TP , which stands for first turning point .. similar to 2nd."
+    // WHICH extreme it was is not lost: it moves into the hover. A heading names the ROLE (the day's
+    // first turning point); the identity is a fact about today and belongs with the other facts.
+    h+=dcol('1ST TP', c1, (NOREAD?eTip:('THE DAY’S FIRST TURNING POINT — today that was the '+D.first+'. '+eTip)));
+    h+=dcol('2ND TP', c2, (NOREAD?eTip:('THE SECOND TURNING POINT — today that was the '+D.second+'. '+eTip)));
     h+=dcol('DAY', c3, gdTip);
     h+='</div>';
     if(CDL) h+='</div></div>';   // (v14.91) close g3daytbl + g3dayrow
@@ -29690,7 +29762,11 @@ function panelV3(sym){
   // (v14.57) ⓪a DAY sits ABOVE the numbered sections, as the mockup shows: it frames the whole
   // session before any structure is read. It is NOT one of the five steps, so it renders outside
   // the step loop and carries no step header.
-  try{ if(CFG.dayHL!==false) h+=secDay(sym); }catch(eD){ swallow('secDay-mount', eD); }
+  // ⚠ (v15.33) THE ⓪a DAY / HOD-LOD SECTION IS MOUNTED BELOW THE LADDER — operator, 2026-09-01:
+  // "move the hodlod section below the node ladder. currently its on top of it."
+  // The mount moved, not the section: `secDay()` is unchanged and still reads the same measureBars
+  // series. Only the order of two `h+=` calls changed, which is why nothing else had to.
+  var _dayHtml=''; try{ if(CFG.dayHL!==false) _dayHtml=secDay(sym); }catch(eD){ swallow('secDay-mount', eD); }
   // (v14.90) THE TREND SECTION IS OFF THE FACE — operator, 2026-08-29: "even the dntend Brk area
   // was also removed". He asked at v14.88 whether TREND could go and the question was never
   // answered with evidence; it is answered now, and the evidence was already on file:
@@ -29705,6 +29781,8 @@ function panelV3(sym){
   for(var j=0;j<secs.length;j++){
     // (v14.84) no header row — the sections butt directly against each other.
     try{ h+=secs[j](sym); }catch(eS){ swallow('section'+(j+1), eS); h+='<div class="g3b"><div class="g3rx"><span style="color:#f0616d">'+g3esc(String(eS&&eS.message||eS))+'</span></div></div>'; }
+    // ⚠ (v15.33) the ⓪a section lands here, AFTER the ladder that secLoc draws.
+    if(j===secs.length-1 && _dayHtml) h+=_dayHtml;
   }
   h+='</div>';
   return h;
@@ -29753,6 +29831,15 @@ function render(){
   // TESTING and ANALYSIS branches have already returned, so those two tabs are untouched. A slider
   // over the Analysis tab would suggest it rewinds the scorecards, which it does not: those are
   // computed over the whole recorded history and have no single moment to be parked on.
+  // ⚠⚠ (v15.33) TWO FEED LAMPS, AT THE TOP, BECAUSE BOTH FEEDS FAIL SILENTLY. Operator, 2026-09-01:
+  // "i need two additional indicators. 1 indicating that the application is writing to irt file
+  // export and another that it is getting data from Inside Finance every x minutes. keep it on the
+  // top somewhere."
+  // `deps()` has carried both verdicts since v15.22 — but it lives in a hover on the FOOTER, and a
+  // dependency you have to go looking for is one you check after something has already gone wrong.
+  // These are the same two items, read from the same `depsHealth()`, promoted to the top strip where
+  // they are seen without being sought. ⚠ ONE COMPUTATION, TWO SURFACES — never a second opinion.
+  try{ html+=feedLampsHtml(); }catch(eFL){ swallow('feedLamps', eFL); }
   try{ html+=replayBarHtml(); }catch(eRPB){ swallow('replayBarHtml', eRPB); }
   var __sync = (CFG.tapeGate===false) ? {ok:true} : tapeSync('SPY');
   // (v10.47, user-directed) One-line banner instead of a blocking panel: the app must stay
