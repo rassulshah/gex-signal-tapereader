@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.13
+// @version    15.14
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -641,7 +641,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.13';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.14';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3811,11 +3811,19 @@ function replayRolls(sym){
   var key=REPLAY.day+'|'+REPLAY.idx+'|'+sym;
   if(RP_ROLLS.key===key) return RP_ROLLS.out;
   var save=REPLAY.idx, P={ m:{} }, out=[];
+  var bkName=sym; try{ if(typeof lastBookGov==='function') bkName=lastBookGov(sym); }catch(eG){}
   try{
     var lo=Math.max(0, save-RP_ROLL_LOOKBACK+1), i, ks, kk, bk, raw, seen, key2;
     for(i=lo;i<=save;i++){
       REPLAY.idx=i;
-      bk=replayBook(sym); if(!bk || !bk.pct) continue;
+      // ⚠⚠ (v15.14) SCAN THE BOOK velAt WILL ACTUALLY SERVE. `rollLatched` is called with the CHART
+      // symbol ('SPY'), but `velAt` in replay reads `replayBook(lastBookGov(activeSym()))` — the
+      // GOVERNING book, which for SPY is SPXW. v15.13 handed rollScan the SPY strikes (767…) while
+      // velAt looked every one of them up in the SPXW book (7700…), found nothing, and returned no
+      // rolls at all. Measured on his panel: rollLane 0, rollPaths 0, with a perfectly good frame.
+      // ⚠ Two lookups of "the book" that disagree is the same defect as two computations of "which
+      // nodes matter" (DECISIONS v13.2) — they must read the SAME selector, not matching rules.
+      bk=replayBook(bkName); if(!bk || !bk.pct) continue;
       ks=[]; for(kk in bk.pct){ var kn=parseFloat(kk); if(kn>0) ks.push(kn); }
       raw=rollScan(ks)||[]; seen={};
       raw.forEach(function(r){
@@ -24657,6 +24665,14 @@ function ktTick(EB, sym){
       for(var i=0;i<KG.length;i++){ if(KG[i].book===bk && KG[i].kind==='basis'){ K=KG[i]; break; } }
       if(!K || typeof K.raw!=='number' || !(K.raw>0)) return;
       var arr=KTRACK.b[bk] || (KTRACK.b[bk]=[]);
+      // ⚠⚠ (v15.14) SEED THE FIRST OBSERVATION. Operator, 2026-09-01: "i dont see the king lane with
+      // the movement the kings made." The track only ever recorded MIGRATIONS, so on a day the crown
+      // did not move — measured 2026-08-28 as SPXW 0 durable moves, SPY 1 — `pts` was empty and the
+      // lane drew its "no migration recorded" placeholder. That reads as BROKEN when the truth is
+      // "it has held one strike all session", which is itself information and is what the run is for.
+      // ⚠ NO DWELL ON THE FIRST POINT: dwell exists to confirm a CHANGE, and there is no change to
+      // confirm — this is the origin the later steps are measured from.
+      if(!arr.length){ arr.push({ t:Date.now(), k:K.raw, e:exp, seed:true }); dirty=true; return; }
       var last=arr.length?arr[arr.length-1].k:null;
       if(last===K.raw){ delete KT_PEND[bk]; return; }          // unchanged — clear any probation
       var pd=KT_PEND[bk];
@@ -24671,7 +24687,39 @@ function ktTick(EB, sym){
     if(dirty) ktSave();
   }catch(e){}
 }
-function ktOf(book){ try{ return (KTRACK.b&&KTRACK.b[book])?KTRACK.b[book]:[]; }catch(e){ return []; } }
+// ⚠⚠ (v15.14) IN REPLAY THE KING'S JOURNEY IS REBUILT FROM THE FRAMES. `KTRACK` is TODAY's live
+// latch: on a replayed day it holds the wrong session, and on today it holds only what the panel
+// happened to see. Every frame records `tri.<book>.king`, so the whole journey — including days the
+// panel was not running when a migration happened — is derivable, and it is derivable with the SAME
+// dwell rule, so a flicker is still not a migration.
+// ⚠ Memoised per (day, idx, book): the lane is drawn on every render and this walks the session.
+var RP_KT={ key:null, out:[] };
+function replayKingTrack(book){
+  if(typeof replayOn!=='function' || !replayOn()) return [];
+  var key=REPLAY.day+'|'+REPLAY.idx+'|'+book;
+  if(RP_KT.key===key) return RP_KT.out;
+  var out=[], pend=null, i, f, k, last=null;
+  try{
+    for(i=0;i<=REPLAY.idx && i<REPLAY.frames.length;i++){
+      f=REPLAY.frames[i];
+      k=(f && f.tri && f.tri[book] && typeof f.tri[book].king==='number') ? f.tri[book].king : null;
+      if(!(k>0)) continue;
+      if(last===null){ out.push({ t:f.t, k:k, e:(f.exp!=null?String(f.exp):null), seed:true }); last=k; pend=null; continue; }
+      if(k===last){ pend=null; continue; }
+      if(!pend || pend.k!==k){ pend={ k:k, n:1 }; continue; }   // new candidate, on probation
+      pend.n++;
+      if(pend.n<KT_DWELL) continue;                             // a flicker is not a migration
+      pend=null; last=k;
+      if(out.length<KT_MAX) out.push({ t:f.t, k:k, e:(f.exp!=null?String(f.exp):null) });
+    }
+  }catch(e){ try{ swallow('replayKingTrack', e); }catch(e2){} }
+  RP_KT={ key:key, out:out };
+  return out;
+}
+function ktOf(book){
+  try{ if(typeof replayOn==='function' && replayOn()) return replayKingTrack(book); }catch(e0){}
+  try{ return (KTRACK.b&&KTRACK.b[book])?KTRACK.b[book]:[]; }catch(e){ return []; }
+}
 
 function ladderKings(EB, sym){
   var out=[];

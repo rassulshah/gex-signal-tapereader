@@ -426,9 +426,81 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
      'c3 the index is restored in a FINALLY — a throw must never leave the panel parked elsewhere');
   ok(/e3\.count<ROLL_SIG_N/.test(rr), 'c4 one sighting is noise and is never drawn, exactly as live');
   ok(/RP_ROLLS\.key===key/.test(rr), 'c5 memoised per (day, idx, sym) — dragging does not rescan the session');
+  // ⚠⚠ v15.13 SHIPPED WITH THE BOOKS MISMATCHED AND HIS PANEL SHOWED IT: rollLane 0, rollPaths 0.
+  // rollLatched is called with the CHART symbol ('SPY') while velAt in replay serves the GOVERNING
+  // book (SPXW), so rollScan was handed SPY strikes and looked them up in the SPX book.
+  ok(/lastBookGov\(sym\)/.test(rr), 'c7 replayRolls resolves the GOVERNING book, as velAt does');
+  ok(/replayBook\(bkName\)/.test(rr), 'c8 ...and scans THAT book, so the strikes and the lookups agree');
+  ok(!/replayBook\(sym\)/.test(rr), 'c9 ...never the chart symbol, which would find nothing');
   const rl=decomment(ex('rollLatched'));
   const rIdx=rl.indexOf('replayRolls'), lIdx=rl.indexOf('ROLL_LATCH');
   ok(rIdx>-1 && lIdx>rIdx, 'c6 rollLatched serves the REPLAYED set before touching today\'s live latch');
+}
+
+// ---- 15 · (v15.14) THE KING LANE — the crown's MOVEMENT through the day -----------------------
+// Operator, asked twice: "i dont see the king lane with the movement the kings made". `ktOf()` was
+// returning [] so the lane drew its "no migration recorded" placeholder — which reads as broken.
+{
+  global.KT_DWELL=2; global.KT_MAX=40;
+  global.KTRACK={ v:1, day:'2026-08-31', b:{} };
+  // ⚠ the memo object lives at module scope and the memo check sits OUTSIDE the function's try, so
+  // an undefined RP_KT throws straight past it into ktOf's catch and returns [] — a green-looking
+  // empty. Stub it, or this whole block tests the fallback instead of the feature.
+  global.RP_KT={ key:null, out:[] };
+  eval(ex('replayKingTrack')); eval(ex('ktOf'));
+  REPLAY.on=true; REPLAY.frames=FR; REPLAY.idx=2; REPLAY.day='2026-08-31';
+  const J=ktOf('SPXW');
+  ok(J.length>0, 'kt1 the lane has points in replay where the live latch had none', J.length);
+  ok(J[0].seed===true, 'kt2 the FIRST point is a seed — the origin a run is measured from');
+  ok(J[0].k===FR[0].tri.SPXW.king, 'kt3 ...and it is the crown recorded in the first frame', J[0].k);
+  ok(J.every(p=>typeof p.t==='number' && p.k>0), 'kt4 every point carries a time and a strike');
+  // the SPY book is its own journey, not a copy
+  const JY=ktOf('SPY');
+  ok(JY.length>0 && JY[0].k===FR[0].tri.SPY.king, 'kt5 the SPY lane is the SPY book\'s own crown', JY[0].k);
+  ok(JY[0].k!==J[0].k, 'kt6 ...and the two books do not share a journey');
+  // ⚠ THE DWELL RULE SURVIVES: a strike seen ONCE is a flicker and is not a migration.
+  {
+    const mk=(t,kk)=>({t:t, tri:{SPXW:{king:kk}}, exp:null});
+    REPLAY.frames=[mk(1,7700),mk(2,7700),mk(3,7705),mk(4,7700),mk(5,7700)];
+    REPLAY.idx=4; RP_KT.key=null;
+    const F=ktOf('SPXW');
+    ok(F.length===1, 'kt7 a strike seen ONCE and reverting is a FLICKER, not a migration', F.length);
+    REPLAY.frames=[mk(1,7700),mk(2,7700),mk(3,7705),mk(4,7705),mk(5,7705)];
+    REPLAY.idx=4; RP_KT.key=null;
+    const M=ktOf('SPXW');
+    ok(M.length===2 && M[1].k===7705, 'kt8 ...but held for KT_DWELL observations it IS one', M.map(x=>x.k));
+    // ⚠⚠ kt7/kt8 CANNOT SEE WHETHER KT_DWELL IS HONOURED — at 2 the loop structurally needs two
+    // sightings to reach the push, so deleting the dwell check changes nothing and survived mutation.
+    // The property is that the CONSTANT governs, not that the code happens to need two passes.
+    // ⚠ MY FIRST VERSION OF kt8b WAS WRONG, NOT THE CODE: it reused kt8's fixture, which has THREE
+    // sightings of 7705 — at dwell 3 that IS a migration. The case has to have exactly two.
+    global.KT_DWELL=3; RP_KT.key=null;
+    REPLAY.frames=[mk(1,7700),mk(2,7700),mk(3,7705),mk(4,7705)];
+    REPLAY.idx=3;
+    const T3=ktOf('SPXW');
+    ok(T3.length===1, 'kt8b at KT_DWELL=3, two sightings are NOT yet a migration — the constant governs', T3.length);
+    REPLAY.frames=[mk(1,7700),mk(2,7700),mk(3,7705),mk(4,7705),mk(5,7705),mk(6,7705)];
+    REPLAY.idx=5; RP_KT.key=null;
+    const T3b=ktOf('SPXW');
+    ok(T3b.length===2, 'kt8c ...and three sightings are', T3b.length);
+    global.KT_DWELL=2;
+  }
+  // and the journey grows as the handle moves
+  REPLAY.frames=FR; RP_KT.key=null; REPLAY.idx=0;
+  const early=ktOf('SPXW').length; RP_KT.key=null; REPLAY.idx=2;
+  const later=ktOf('SPXW').length;
+  ok(later>=early, 'kt9 dragging forward can only ADD to the journey, never lose it', [early,later]);
+  // live must still read the live latch
+  REPLAY.on=false;
+  global.KTRACK={ v:1, day:'x', b:{ SPXW:[{t:1,k:7777}] } };
+  ok(ktOf('SPXW')[0].k===7777, 'kt10 live still reads KTRACK, untouched');
+  REPLAY.on=true;
+}
+{
+  const kt=decomment(ex('ktTick'));
+  ok(/if\(!arr\.length\)\{ arr\.push\(/.test(kt),
+     'kt11 the LIVE track seeds its first observation, so a crown that never moves still draws a run');
+  ok(/recorderBlind\(\)/.test(kt), 'kt12 ...and the track still never writes during a replay');
 }
 
 console.log('test_replay: '+pass+' passed, '+fail+' failed');

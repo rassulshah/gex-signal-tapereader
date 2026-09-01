@@ -1,3 +1,52 @@
+## v15.14 — the king lane draws the crown's journey, and the arrows find their book
+
+### ⚠⚠ v15.13 SHIPPED THE ARROWS WITH THE BOOKS MISMATCHED, AND HIS PANEL SHOWED IT
+
+    rollLane 0   rollPaths 0   — on a good frame, in replay, with the ladder now fully visible
+
+`rollLatched()` is called with the CHART symbol (`SPY`), but `velAt()` in replay serves the
+**GOVERNING** book — `lastBookGov('SPY')` = SPXW. So `replayRolls` handed `rollScan` the SPY strikes
+(767…) and every lookup went to the SPX book (7700…), found nothing, and returned no rolls at all.
+⚠ **Two lookups of "the book" that disagree** is the same defect as two computations of "which nodes
+matter" (DECISIONS v13.2): they must read the SAME selector, not matching rules.
+
+
+> "i dont see the king lane with the movement the kings made" — asked twice
+
+**The lane's renderer was already complete.** It draws runs, steps and knots with hovers. It showed
+nothing because `ktOf()` returned an empty array, for two separate reasons.
+
+### 1 · IT ONLY EVER RECORDED MIGRATIONS, NEVER A STARTING POINT
+
+On a day the crown does not move there is no migration, so `pts` was empty and the lane drew its
+"no migration recorded" placeholder — which reads as broken when the truth is *"one strike has held
+the crown all session"*, itself a fact worth seeing. The first observation is now **seeded**.
+⚠ No dwell on the seed: dwell exists to confirm a CHANGE, and there is no change to confirm.
+
+### 2 · IN REPLAY IT READ TODAY'S LATCH
+
+`KTRACK` is the live accumulator — on a replayed day it holds the wrong session, and on today only
+what the panel happened to see. Every frame records `tri.<book>.king`, so the journey is now rebuilt
+from the frames with the **same `KT_DWELL` rule**, which also recovers days the panel was not running
+when a migration happened.
+
+**Measured on 2026-08-31, and it is not a thin picture:**
+
+    SPXW   08:30 7710 → 7650 → 7700 → 7650 → 7700 → 7650 → 7700 → 7675 → 7700    8 migrations
+    SPY    08:30  760 →  765 →  760 →  765 →  766 →  765 →  766 →  765 → 767 …   10 migrations
+
+⚠ That is the RECORDED trinity crown under a 2-observation dwell. It is a different instrument from
+the latched crown the resume note measured at "SPXW 0 durable moves" on 2026-08-28 over a truncated
+window — **do not read one number as refuting the other.**
+
+### testing
+
+`test_replay.js` at **129**. 5 mutations, and the one that survived exposed a real gap: at
+`KT_DWELL=2` the loop structurally needs two sightings, so deleting the dwell check changed nothing.
+Re-tested at **KT_DWELL=3**, which proves the CONSTANT governs rather than an accident of the loop.
+⚠ And my first version of that assertion was wrong, not the code — it reused a fixture with three
+sightings. **When a new assertion fails, suspect the assertion first; it is younger than the code.**
+
 ## v15.13 — the ladder fits the panel, and the arrows replay
 
 > "i dont see the king lane with the movement the kings made and i dont see the arrows and i dont

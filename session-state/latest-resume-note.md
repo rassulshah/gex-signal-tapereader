@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-08-31 · panel v15.13 · companion v1.16 · supersedes every earlier resume note_
+_written 2026-08-31 · panel v15.14 · companion v1.16 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.13, and what the face carries
+## 2 · WHERE WE ARE — v15.14, and what the face carries
 
-**Panel v15.13 · companion v1.16.** Suite **129 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.14 · companion v1.16.** Suite **129 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -120,9 +120,14 @@ beside them. `ladderFit()` now grows the panel by exactly the overflow. ⚠ **Th
 the columns that exist.** The arrows also REPLAY now, by re-running the live `rollScan` over the
 frames, and `rollsLive()`/`velOk()` no longer exclude a replayed bar.
 
-⚠⚠ **STILL NOT BUILT AND HE HAS ASKED TWICE: THE KING LANE showing the crown's MOVEMENT through the
-day.** `__gptsDebug.kingTrack()` returns 0 points. The three crowns on the rail are the three BOOKS'
-kings (v15.11), which is a different thing. **Build this next.**
+⚠⚠ **v15.14 — THE KING LANE NOW DRAWS THE CROWN'S JOURNEY.** Its renderer was always complete; it
+had nothing to draw. The track recorded MIGRATIONS but never an ORIGIN, so a crown holding one strike
+all day gave an empty array and the "no migration recorded" placeholder — **an empty series and a
+series with one long run mean opposite things.** The first observation is seeded now, and in replay
+the journey is rebuilt from `tri.<book>.king` under the same `KT_DWELL` rule. Measured 2026-08-31:
+**8 SPXW migrations, 10 SPY.** ⚠ That is the RECORDED trinity crown at dwell 2 — a DIFFERENT
+instrument from the latched crown measured at "SPXW 0 durable moves" on 08-28 over a truncated
+window. Neither number refutes the other; say which one you mean.
 
 **FIRST THING TO DO: drag it on the live panel.** Check the ladder, kings and ⓪a move together, the
 clock reads the parked bar, ◀ reaches Friday, and `__gptsDebug.storage()` shows no new writes.

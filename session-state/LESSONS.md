@@ -131,6 +131,39 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.14 · 2026-09-01 · **THE FEATURE WAS BUILT; IT HAD NOTHING TO DRAW**
+
+⚠⚠ **AND v15.13'S ARROWS WERE WIRED TO THE WRONG BOOK — HIS PANEL CAUGHT IT, NOT THE SUITE.**
+`rollLatched(sym)` is called with the CHART symbol while `velAt()` in replay serves the GOVERNING
+book, so `rollScan` got SPY strikes and looked every one up in the SPX book. Zero rolls, on a
+perfectly good frame. **I tested that replayRolls reused the live scan and that it restored the
+index — I never tested that the strikes it scans are the strikes velAt can answer.** The tell was
+available without him: two functions resolving "the book" independently, which DECISIONS v13.2
+already names as a defect class.
+
+
+The king lane's renderer has been complete for versions — runs, steps, knots, hovers. It drew
+nothing because `ktOf()` returned `[]`, and I spent two messages describing the crown journey as
+"not built" when what was missing was **data, not a drawing**.
+
+⚠⚠ **THE TRACK RECORDED MIGRATIONS AND NEVER AN ORIGIN.** On a day the crown holds one strike there
+is no migration, so the array stayed empty and the lane drew "no migration recorded". **An empty
+series and a series with one long run mean opposite things**, and the code could only express the
+first. Seeding the first observation costs one line and turns a placeholder into a reading.
+
+⚠⚠ **AND THE REAL JOURNEY WAS IN THE FRAMES ALL ALONG.** Rebuilt from `tri.<book>.king`, 2026-08-31
+shows **8 SPXW migrations and 10 SPY** — a rich picture that was sitting in every recorded day while
+the live latch held nothing. ⚠ It is a DIFFERENT instrument from the latched crown measured at
+"SPXW 0 durable moves" on 08-28; do not let one refute the other without saying which is which.
+
+⚠ **A MUTATION SURVIVED AND IT WAS A REAL GAP, NOT A LOOSE TEST.** Deleting the `KT_DWELL` check
+changed nothing, because at dwell 2 the loop already needs two sightings to reach the push — the
+constant was decorative. Re-tested at dwell 3 it bites. **A guard whose value happens to equal what
+the control flow already enforces is not being tested by any case at that value.**
+
+⚠ And my first version of that assertion was wrong, not the code: it reused a fixture with three
+sightings, where a migration at dwell 3 is correct. **Suspect the new assertion first.**
+
 ### v15.13 · 2026-09-01 · **I SHIPPED A FEATURE INTO 105 PIXELS HE COULD NOT SEE, THEN EXPLAINED IT TWICE**
 
 > "how many times do i have to tell you to implement. what the hell?"
