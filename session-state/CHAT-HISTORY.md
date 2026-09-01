@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-01 · v15.30 · session `5e8d34b5`
+## 2026-09-01 · v15.31 · session `5e8d34b5`
 
-_38 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_40 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -567,8 +567,50 @@ And the run from v15.24 to v15.28 was rough — blank ladder, then scrambled, th
 **me (17:54):** Three findings — and the grip one is concrete: the panel's width is **capped at 560px** while yours is already 673.
 H1's "catch" was an unrelated assertion — the grip cap has no test. Making the bounds a function so it can be executed.
 The test's constant extractor is matching `LAD_W===` inside my new helper — the documented `val()` landmine. Rewriting the comparison so it can't.
+**The grip was never broken — the cap was.**
+
+```
+makeResizable:  if(nw > 560) nw = 560;
+your panel:     673px wide
+```
+
+The first pixel of drag snapped it from 673 **down** to 560 and pinned it there, so widening was impossible and the whole gesture felt dead. 560 was correct back when the ladder was 588px; `ladderFit()` has been growing the panel past it for builds, so the cap and the layout have been fighting with the layout winning — until you touched the grip.
+
+The bounds are a function now, so a test can actually run them: **floor = the ladder's own width** (anything narrower just hides columns), **ceiling = your viewport**.
+
+**TAPS is gone and the roll arrows have its slot** — x 344, beside MARK, instead of the far right edge where they were as far from the rows as the layout allowed. `LAD_W` came *down* 640 → 618; the freed 20px went back rather than being kept. The tap **count** isn't deleted, only its badge — the STATE hover still says *"tested N× today — the next test holds ~X% historically"*.
+
+**"Always show EH to EL"** is now asserted in a real browser as a **span** — both rails inside the visible box at once. My earlier checks tested each label separately, which passes a view holding one edge and not the other.
+
+Two things worth flagging about my own work: two existing tests failed on this change, and both had pinned a *position* (`LAD_ROLL=620`, `LAD_W=640`) rather than a *proper …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 23 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (18:01):** 23 commits, clean tree, push blocked by the proxy for this repo — unchanged all session. Running `installv1530.bat` pushes them from your machine.
+
+**OPERATOR:**
+> in the now column draw the daily candle in the background.  make it that just like the nodeladder needs to show the expected high and expected low, it also has to always show the entire daily column. get rid of the IBH and IBL from the level column. it is not a key level.  Also the ladder looks like it is missing strikes, maybe thats the problem also
+
+**me (18:54):** The tape has 100 strikes at 5-point spacing; the ladder draws 11. That's the 20%-of-King filter — real, but it reads as missing. Let me find each piece.
+Now all four changes.
+Now the daily candle behind the NOW column, and the missing strikes.
+The candle draws. Now the missing strikes — every strike below 20% of King is filtered out, so the ladder reads as gappy.
+08-28 was already empty at that minute — I broke nothing. On 08-31: 5 node rows, **6 minor ticks**, and the candle. Now the tests.
+Three survivors — two are loose assertions of mine, one is genuinely redundant code.
 
 ### DECISIONS
+
+**v15.31 · the candle, the strike grid, IBH/IBL.**
+- **The "missing strikes" were below the 20%-of-King threshold** — 100 on the tape, 11 drawn. The
+  filter is right; the display was ambiguous. Every in-frame strike now draws a faint tick, so a GAP
+  reads as a gap (the air pocket) instead of as data loss.
+- **The day is drawn as one candle behind the NOW column**, from the same numbers the band is
+  anchored on, so the two can never describe different sessions.
+- **IBH/IBL are off the level rail** at both call sites, still measured by sessionLevels.
+- **Two of my candle assertions passed a wrong candle** — "agreeing" and "inside" are not checks
+  against the data. One surviving mutation is left standing and recorded as honest.
 
 **v15.30 · the grip, the TAPS column, the band span.**
 - **The grip was never broken — the width cap was 560 while his panel was 673**, so the first pixel
@@ -739,6 +781,10 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.31** — the daily candle behind NOW; the minor-strike grid; the view guaranteed to hold the
+whole day; IBH/IBL off the level rail. `test_replay_face` → 136. Six mutations, five caught, one
+recorded as an honest survivor. Suite 135 green / 6 baseline red.
+
 **v15.30** — `panelWidthBounds()`; the roll lane at 344 and TAPS retired; LAD_W 640 → 618; the L7b
 band-span assertion. `test_replay_face` +5, `test_ladder_layout` +2. Seven mutations, seven caught.
 Suite 135 green / 6 baseline red.
@@ -806,6 +852,10 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. **Install v15.31.**
+2. Layout questions go through Chromium (`tools/measure-ladder.js`), never jsdom.
+3. Proximity weighting and time-of-day windowing remain unshipped studies.
 
 1. **Install v15.30** — the grip works, the columns are as he asked.
 2. Any layout question goes through Chromium (`tools/measure-ladder.js`), not jsdom.
@@ -889,6 +939,7 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+3745d82 v15.30: the grip was capped at 560 while his panel was 673
 9155067 v15.29: the EL really was cut off — and only a real browser could show it
 f8f574e v15.28: the expected low was clipped on the frame's edge, and in replay the band was a sliver
 8beb190 v15.27: scaleUsed has two meanings and I changed the one with ten consumers
@@ -900,7 +951,6 @@ c5f29a7 study: keep the script that chose KT_DWELL_MIN
 d245994 test: Z5 survived mutation — a refusal nothing can reach is not a refusal
 00e2bbb build: the installer size gate measures the .bat, not a proxy for it
 0e971ef v15.22: the far-side line had never drawn, and the dependencies now have a live check
-22de227 v15.21 + companion v1.17: PT mixed two price scales, and the ladder never had headers
 ```
 
 ---

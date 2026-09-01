@@ -1,3 +1,52 @@
+## v15.31 — the day as a candle, the strike grid behind the nodes, and IBH/IBL off the rail
+
+> "in the now column draw the daily candle in the background" · "it also has to always show the
+> entire daily column" · "get rid of the IBH and IBL from the level column. it is not a key level" ·
+> "the ladder looks like it is missing strikes, maybe thats the problem also"
+
+### THE STRIKES WERE NOT MISSING — THEY WERE BELOW THE THRESHOLD
+
+Measured on his panel: the tape carried **100 SPXW strikes on a 5-point grid** and the ladder drew
+**eleven** — 7615, 7625, 7655, 7665, 7670 all absent BETWEEN drawn rows. Nothing was broken:
+`emPiles` keeps only strikes at or above `CFG.nodeThresh` (20% of King), which is the right filter
+for what counts as a NODE.
+⚠ But a price axis with holes in it reads as data loss, and *"is this missing or is it empty"* is not
+a question the face should leave open. Every in-frame strike now draws a **1px tick at 18% opacity**,
+its width its own %King. No labels, no pointer events, no threshold changed anywhere.
+⚠ **A GAP IS INFORMATION.** Where the grid is drawn and the bars are absent, there is no dealer mass
+between two levels — the air pocket his own doctrine names, and it could not be seen before because
+the rows simply were not there.
+
+### THE DAY AS ONE CANDLE, BEHIND THE NOW COLUMN
+
+Wick = the session's high to its low. Body = the open to the last price. Green when the day is up.
+⚠ Every number is one the ⓪a section already measures — `EB.hiWater` / `EB.loWater` are the session
+extremes on this chart's scale and `EB.open` is the anchor the band is built from — **so the candle
+and the band can never describe different sessions.** Drawn behind everything at low opacity with no
+pointer events: it takes no row from anyone.
+
+### "ALWAYS SHOW THE ENTIRE DAILY COLUMN"
+
+The view already carried `hiWater`/`loWater` in its excursion list, so the day was in frame — the
+rule is now STATED in one line rather than implied by a list, and asserted directly: **c3** checks
+the whole candle is inside the view, the way **L7b** checks the band is.
+
+### IBH / IBL ARE OFF THE LEVEL RAIL
+
+Both call sites. ⚠ They are still MEASURED — `sessionLevels()` computes them and the ⓪a section reads
+them; what goes is their claim on a row in a column reserved for structure he trades off. Removing a
+label must never remove the measurement behind it (v11.95), and `c4b` pins that.
+
+### verification
+`test_replay_face.js` → **136**. Six mutations run individually, five caught after two rounds.
+⚠ Two survived the first pass and both were loose assertions of mine: `c1c` checked the wick and body
+**agreed** on direction, which a hard-coded "up" satisfies; and `c1d` checked the body was **inside**
+the wick, which `body === wick` satisfies — a candle with no wick at all, called correct. Now `c1e`
+checks the colour against the measured open, and `c1f` that the body is strictly smaller.
+⚠ One survivor is left standing and recorded as honest: the explicit "the view may never cut the day"
+line is redundant, because the excursion list already carries the session extremes. It stays because
+it states the rule in one place — and the survival is the truthful answer, not a hole.
+
 ## v15.30 — the grip was capped at 560 while his panel was 673
 
 > "get rid of the TA... column and move the roll arrows there instead" · "you must at all times show

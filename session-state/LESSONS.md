@@ -131,6 +131,27 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.31 — "agreeing" and "inside" are not the assertions I thought they were
+
+**1 · Two candle assertions passed a candle that was wrong.** `c1c` checked the wick and body AGREED
+on direction — satisfied by hard-coding both to "up". `c1d` checked the body was INSIDE the wick —
+satisfied by `body === wick`, which is a block with no wick at all. ⚠ **A relational assertion
+between two drawn things cannot tell you either one is right.** At least one of them has to be
+checked against the DATA: the colour against the measured open, the body strictly smaller than the
+range.
+
+**2 · The strikes were never missing — they were below a deliberate threshold.** 100 strikes on the
+tape, 11 drawn, `nodeThresh` at 20% of King. The filter is correct and the DISPLAY was ambiguous:
+nothing distinguished "no node here" from "nothing drawn here". ⚠ **When a filter removes rows from a
+SCALE, draw what it removed faintly** — otherwise the axis lies by omission, and the gap that is
+itself a signal becomes invisible.
+
+**3 · A survivor can be the honest answer.** The explicit "the view may never cut the day" line is
+redundant — the excursion list already carries the session extremes — so deleting it changes nothing
+and the mutation survives. It stays because it states the rule in one place, and the survival is
+recorded rather than papered over with a contrived test. ⚠ **Not every surviving mutation is a gap;
+some are proof the property is guaranteed twice.** Say which.
+
 ### v15.30 — a constant that stops matching the layout it was chosen for
 
 **1 · The grip "did not work" because a cap from five builds ago fought the layout.** Width was

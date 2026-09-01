@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.30
+// @version    15.31
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.30';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.31';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -21169,6 +21169,16 @@ function ensureV3Css(){
     '#gpts-body .g3ldnow.kSPXW{background:#e3c341;color:#2a2408}'+
     '#gpts-body .g3ldnow.kSPY{background:#cdb4fa;color:#1b1030}'+
     '#gpts-body .g3ldnow.kQQQ{background:#5fd3bc;color:#08221d}'+
+    // (v15.31) THE DAY'S CANDLE, behind the NOW column. Wick 3px, body 15px, both centred in the
+    // chute, both z-index 0 so every pill draws on top and nothing loses a row to it.
+    // (v15.31) the minor strikes — the grid the nodes sit on, so a GAP is visible as a gap.
+    '#gpts-body .g3ldmin{position:absolute;left:'+LAD_NODE+'px;height:1px;background:#8b98a9;'+
+      'opacity:.18;pointer-events:none;z-index:0;transform:translateY(-50%)}'+
+    '#gpts-body .g3lddc{position:absolute;pointer-events:none;z-index:0;border-radius:1px}'+
+    '#gpts-body .g3lddcw{left:'+(LAD_CH+Math.round(LAD_CHW/2)-1)+'px;width:3px;opacity:.45}'+
+    '#gpts-body .g3lddcb{left:'+(LAD_CH+Math.round((LAD_CHW-15)/2))+'px;width:15px;opacity:.22}'+
+    '#gpts-body .g3lddc.up{background:#2ec27e}'+
+    '#gpts-body .g3lddc.dn{background:#f0616d}'+
     '#gpts-body .g3ldnowarm{position:absolute;left:'+LAD_PXC+'px;right:6px;height:1px;background:rgba(255,255,255,.12);transform:translateY(-50%)}'+
     // levels · price
     // (v14.83) RIGHT-ALIGNED AND HARD AGAINST THE PRICE, so the pair reads as one token: "PDC 7741".
@@ -25741,15 +25751,34 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       if(typeof EB.low==='number' && typeof EB.high==='number' && EB.high>EB.low){
         viewLo=EB.low; viewHi=EB.high;
         // "adjust based on price movement taking out either side" — the excursion, not the nodes.
+        // ⚠⚠ (v15.31) THE WHOLE DAILY CANDLE IS ALWAYS IN VIEW. Operator, 2026-09-01: "just like the
+        // node ladder needs to show the expected high and expected low, it also has to always show
+        // the entire daily column." `hiWater`/`loWater` ARE the session's high and low on this
+        // chart's scale, so the day's range is already in this list — what was missing is that it
+        // was optional: the pad could be trimmed and the clamp to [lo,hi] could cut it. Both bounds
+        // are now taken before any trimming, and the clamp below can only WIDEN past them.
         var _pl=[now, EB.nowLive, EB.loWater].filter(function(v){ return typeof v==='number' && v>0; });
         var _ph=[now, EB.nowLive, EB.hiWater].filter(function(v){ return typeof v==='number' && v>0; });
         if(_pl.length) viewLo=Math.min(viewLo, Math.min.apply(null,_pl));
         if(_ph.length) viewHi=Math.max(viewHi, Math.max.apply(null,_ph));
         // a little air so the edge rows are not flush against the border
+        // the day's true extremes, which the view may never cut
+        var _dayLo=(_pl.length)?Math.min.apply(null,_pl):viewLo;
+        var _dayHi=(_ph.length)?Math.max.apply(null,_ph):viewHi;
         var _pad=(viewHi-viewLo)*0.04;
         viewLo-=_pad; viewHi+=_pad;
+        // ⚠ THE CLAMP MAY ONLY WIDEN. `lo`/`hi` are the CONTENT bounds and always contain the band
+        // and the day, so clamping INTO them cannot cut either — but writing it as a max/min makes
+        // that a property of the code rather than a property of today's numbers.
         if(viewLo<lo) viewLo=lo;
         if(viewHi>hi) viewHi=hi;
+        // ⚠ REDUNDANT BY CONSTRUCTION, AND KEPT ON PURPOSE. `_pl`/`_ph` already carry `loWater` and
+        // `hiWater`, so the day's range is inside the view before this line runs — a mutation that
+        // deletes it changes nothing, and that survival is the honest answer rather than a gap.
+        // It stays because it states the RULE in one place: the view may never cut the band or the
+        // day. If the excursion list is ever narrowed, this is what keeps the promise.
+        viewLo=Math.min(viewLo, _dayLo, EB.low);
+        viewHi=Math.max(viewHi, _dayHi, EB.high);
       }
     }catch(eVW){}
     // the window in PIXELS of the same frame everything is drawn in
@@ -25850,7 +25879,34 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
        g3tip('The session open — the anchor the expected-move band is built from.')+'></i>';
 
     // ---- the nodes ----------------------------------------------------------------------------
+    // ⚠⚠ (v15.31) THE MINOR STRIKES ARE DRAWN, FAINTLY. Operator, 2026-09-01: "the ladder looks like
+    // it is missing strikes, maybe thats the problem also."
+    // MEASURED on his panel: the tape carried 100 SPXW strikes on a 5-point grid and the ladder drew
+    // ELEVEN — 7615, 7625, 7655, 7665, 7670 all absent BETWEEN drawn rows. Nothing was broken:
+    // `emPiles` keeps only strikes at or above CFG.nodeThresh (20%) of King, which is the right
+    // filter for what counts as a NODE. But a price axis with holes in it reads as data loss, and
+    // "is this missing or is it empty" is not a question the face should leave open.
+    // ⚠ A GAP IS INFORMATION. Where the grid is drawn and the bars are absent, there is no dealer
+    // mass between two levels — the air pocket his own doctrine names. It could not be seen before
+    // because the rows simply were not there.
+    // ⚠ FAINT AND BEHIND EVERYTHING: 1px ticks at 18% opacity, no labels, no pointer events. They
+    // are a scale, not a claim, and no threshold anywhere else changes.
     var NROW={};
+    try{
+      var _tp=tapeMap('SPXW');
+      if(_tp && _tp.pct && dsc>0){
+        var _drawn={}, _pi2;
+        for(_pi2=0;_pi2<PS.length;_pi2++) if(PS[_pi2]) _drawn[PS[_pi2].k]=1;
+        var _ks=Object.keys(_tp.pct), _kn, _kd, _kp;
+        for(_pi2=0;_pi2<_ks.length;_pi2++){
+          _kn=+_ks[_pi2]; if(!(_kn>0) || _drawn[_kn]) continue;
+          _kd=_kn*dsc; if(!inFrame(_kd)) continue;
+          _kp=Math.abs(_tp.pct[_kn]||0);
+          h+='<i class="g3ldmin" style="top:'+Y(_kd).toFixed(1)+'px;width:'+
+             Math.max(3, Math.round(_kp/100*LAD_NMAX))+'px"></i>';
+        }
+      }
+    }catch(eMin){}
     for(var i=0;i<PS.length;i++){
       var P=PS[i];
       if(!inFrame(P.disp)){ OFF.push({n:'node '+frameNum(P.disp), at:P.disp}); continue; }
@@ -26027,8 +26083,12 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
     // ---- the levels, snapped to a node's row when they are within a couple of points ------------
     var LV=[];
     if(SESSL){
-      [['IBH',SESSL.ibSet?SESSL.ibH:null],['IBL',SESSL.ibSet?SESSL.ibL:null],
-       ['PDH',SESSL.pdh],['PDL',SESSL.pdl],['PDC',SESSL.pdc]].forEach(function(sd){
+      // ⚠ (v15.31) IBH/IBL ARE OUT OF THE LEVEL COLUMN — operator, 2026-09-01: "get rid of the IBH
+      // and IBL from the level column. it is not a key level."
+      // They are still MEASURED (`sessionLevels` computes them and `secDay` reads them); what goes is
+      // their claim on a row in the ladder's level rail, which is reserved for structure he trades
+      // off. Removing a label must never remove the measurement behind it (v11.95).
+      [['PDH',SESSL.pdh],['PDL',SESSL.pdl],['PDC',SESSL.pdc]].forEach(function(sd){
         if(sd[1]!=null) LV.push({n:sd[0], at:sd[1], tip:'Session structure, RTH bars only.'}); });
     }
     // (v14.48) the SPY King is no longer a LEVEL NAME here — it is one of the three KING PILLS in
@@ -26176,6 +26236,36 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
         : (onK ? ('Price now — LIVE, and TESTING the '+onK.book+' King at '+frameNum(onK.at)+'.'+
                   (onK.kind==='proportional'?' \u26a0 that crown is a proportional bearing, not a basis conversion — a bearing, never a level.':''))
                : 'Price now — LIVE.');
+      // ⚠⚠ (v15.31) THE DAY'S CANDLE, DRAWN BEHIND THE NOW COLUMN. Operator, 2026-09-01: "in the now
+      // column draw the daily candle in the background."
+      // It is the session as a single bar on the ladder's OWN price axis: the wick spans the day's
+      // high to its low, the body spans the open to the last price, green when the day is up and red
+      // when it is down. Every number is one the ⓪a section already measures — `EB.hiWater` /
+      // `EB.loWater` are the session extremes on this chart's scale and `EB.open` is the anchor the
+      // band is built from — so the candle and the band cannot disagree about the same session.
+      // ⚠ BEHIND, NOT BESIDE: it is the backdrop the price pill and the crowns sit on, at low opacity
+      // and with no pointer events, so it adds a frame of reference without taking a row from anyone.
+      try{
+        var _dH=(typeof EB.hiWater==='number')?EB.hiWater:null;
+        var _dL=(typeof EB.loWater==='number')?EB.loWater:null;
+        var _dO=(typeof EB.open==='number')?EB.open:null;
+        if(_dH!=null && _dL!=null && _dH>_dL){
+          var yH=Y(_dH), yL=Y(_dL);
+          var bodyA=(_dO!=null)?Y(_dO):yL, bodyB=tn;
+          var bTop=Math.min(bodyA,bodyB), bH=Math.max(1.5, Math.abs(bodyB-bodyA));
+          var up=(_dO==null)?true:(now>=_dO);
+          h+='<i class="g3lddc g3lddcw'+(up?' up':' dn')+'" style="top:'+yH.toFixed(1)+
+             'px;height:'+Math.max(1,(yL-yH)).toFixed(1)+'px"'+
+             g3tip('THE SESSION AS ONE CANDLE, on this ladder\u2019s own price axis. Wick '+
+               frameNum(_dL)+' to '+frameNum(_dH)+' \u2014 the day\u2019s range. Body '+
+               (_dO!=null?(frameNum(_dO)+' to '+frameNum(now)):'open to now')+
+               '. \u26a0 The same numbers the \u24ea a DAY section measures and the same the expected-move '+
+               'band is anchored on, so the candle and the band can never describe different sessions.')+
+             '></i>'+
+             '<i class="g3lddc g3lddcb'+(up?' up':' dn')+'" style="top:'+bTop.toFixed(1)+
+             'px;height:'+bH.toFixed(1)+'px"></i>';
+        }
+      }catch(eDC){}
       h+='<i class="g3ldnowarm" style="top:'+tn.toFixed(1)+'px"></i>'+
          '<span class="g3ldnow'+nowCls+'" style="top:'+tn.toFixed(1)+'px"'+
          g3tip(nowTip)+'>'+g3esc(frameNum(now))+'</span>';
@@ -26268,8 +26358,12 @@ function railLevelsLine(EB, RB, RAILPS, SESSL, sym){
     var frNow=(typeof EB.nowLive==='number')?EB.nowLive:EB.now;
     var LV=[];
     if(SESSL){
-      [['IBH',SESSL.ibSet?SESSL.ibH:null],['IBL',SESSL.ibSet?SESSL.ibL:null],
-       ['PDH',SESSL.pdh],['PDL',SESSL.pdl],['PDC',SESSL.pdc]].forEach(function(sd){
+      // ⚠ (v15.31) IBH/IBL ARE OUT OF THE LEVEL COLUMN — operator, 2026-09-01: "get rid of the IBH
+      // and IBL from the level column. it is not a key level."
+      // They are still MEASURED (`sessionLevels` computes them and `secDay` reads them); what goes is
+      // their claim on a row in the ladder's level rail, which is reserved for structure he trades
+      // off. Removing a label must never remove the measurement behind it (v11.95).
+      [['PDH',SESSL.pdh],['PDL',SESSL.pdl],['PDC',SESSL.pdc]].forEach(function(sd){
         if(sd[1]!=null) LV.push({ n:sd[0], at:sd[1] }); });
     }
     try{

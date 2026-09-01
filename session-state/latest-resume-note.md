@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-01 · panel v15.30 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-01 · panel v15.31 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.30, and what the face carries
+## 2 · WHERE WE ARE — v15.31, and what the face carries
 
-**Panel v15.30 · companion v1.17.** Suite **135 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.31 · companion v1.17.** Suite **135 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -177,6 +177,17 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠ **v15.31 — THE STRIKES WERE NEVER MISSING; THEY WERE BELOW `nodeThresh` (20% of King).**
+Measured: 100 SPXW strikes on the tape, ELEVEN drawn. The filter is right — a NODE is a strike with
+mass — but a price axis with holes reads as data loss. Every in-frame strike now draws a 1px tick at
+18% opacity, width = its own %King. ⚠ **A GAP IS INFORMATION**: grid drawn with no bar = no dealer
+mass between two levels, the air pocket, previously invisible because the row was absent.
+⚠ **THE DAY IS A CANDLE BEHIND THE NOW COLUMN** — wick = `hiWater`..`loWater`, body = `open`..now,
+green when up. Every number is one the ⓪a section already measures and the band is anchored on, so
+the candle and the band can never describe different sessions.
+⚠ **THE VIEW MUST HOLD THE WHOLE DAY** as well as the band — asserted by c3 the way L7b asserts the band.
+⚠ **IBH/IBL ARE OFF THE LEVEL RAIL** (both call sites) and still MEASURED by `sessionLevels`.
 
 ⚠⚠ **v15.30 — THE GRIP WAS CAPPED AT 560 WHILE HIS PANEL WAS 673.** The first pixel of drag snapped
 it DOWN and pinned it, so widening was impossible and the gesture read as dead. 560 was right when

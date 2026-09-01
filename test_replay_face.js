@@ -561,5 +561,64 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
   ok(!/nw>560|nw<240/.test(mr), 'g5 ...and keeps no cap of its own to drift out of step');
 }
 
+// ---- 16 · (v15.31) THE DAY'S CANDLE, THE STRIKE GRID, AND IBH/IBL OUT OF THE LEVELS ----------
+// Operator, 2026-09-01: "in the now column draw the daily candle in the background" · "it also has
+// to always show the entire daily column" · "get rid of the IBH and IBL from the level column" ·
+// "the ladder looks like it is missing strikes".
+{
+  // a · the candle is the SESSION, on the ladder's own axis
+  const wick=R.html.match(/class="g3lddc g3lddcw (up|dn)" style="top:([\d.]+)px;height:([\d.]+)px"/);
+  const body=R.html.match(/class="g3lddc g3lddcb (up|dn)" style="top:([\d.]+)px;height:([\d.]+)px"/);
+  ok(!!wick, 'c1 the day is drawn as a candle behind the NOW column', wick&&wick[0]);
+  ok(!!body, 'c1b ...with a body as well as a wick');
+  if(wick&&body){
+    ok(wick[1]===body[1], 'c1c ...and both halves agree on the day\'s direction', [wick[1],body[1]]);
+    // ⚠ AGREEING IS NOT BEING RIGHT. c1c passes when both are hard-coded 'up' — it survived that
+    // mutation. The direction is a FACT about the session: green only when the last price is at or
+    // above the open.
+    const dir=JSON.parse(R.run('JSON.stringify((function(){var b=emBand("SPY");var cs=measureBars("SPY").bars||[];var n=cs.length?cs[cs.length-1].c*(b.scaleUsed||1):null;return {open:b.open, now:(typeof b.nowLive===\'number\')?b.nowLive:b.now};})())'));
+    if(dir.open!=null && dir.now!=null)
+      ok(wick[1]===((dir.now>=dir.open)?'up':'dn'),
+         'c1e ...and the colour is the DAY\'s direction, measured, not assumed',
+         {drawn:wick[1], open:dir.open, now:dir.now});
+    const wTop=+wick[2], wH=+wick[3], bTop=+body[2], bH=+body[3];
+    ok(bTop>=wTop-0.5 && (bTop+bH)<=(wTop+wH)+0.5,
+       'c1d ...the body is INSIDE the wick, which is what a candle means', {wTop,wH,bTop,bH});
+    // ⚠ AND STRICTLY SMALLER, on a session that actually has wicks. `body ⊆ wick` is satisfied by
+    // body === wick, which is what a mutation that drew the body from high to low produced — a
+    // candle with no wick at all, and c1d called it correct.
+    ok(bH < wH - 1,
+       'c1f ...and SMALLER than it: a body spanning the whole range is not a candle, it is a block',
+       {bodyH:bH, wickH:wH});
+    // ⚠ EXECUTED against the band: the wick must be the session's own high and low, not a guess
+    const EBc=JSON.parse(R.run('JSON.stringify((function(){var b=emBand("SPY");return {hw:b.hiWater,lw:b.loWater,open:b.open};})())'));
+    ok(EBc.hw!=null && EBc.lw!=null,
+       'c2 the band carries the session extremes the candle is drawn from', EBc);
+  }
+  // b · the whole day is inside the VIEW, not merely inside the frame
+  const wrap2=R.html.match(/data-vtop="(\d+)" style="max-height:(\d+)px"/);
+  if(wrap2&&wick){
+    const vtop=+wrap2[1], vh=+wrap2[2], wTop=+wick[2], wH=+wick[3];
+    ok(wTop>=vtop-1 && (wTop+wH)<=vtop+vh+1,
+       'c3 the ENTIRE daily range is inside the view, exactly as the band is',
+       {candle:[wTop, +(wTop+wH).toFixed(1)], view:[vtop, vtop+vh]});
+  }
+  // c · IBH / IBL are gone from the level rail — but still MEASURED
+  const railTxt=(R.html.match(/class="g3ll"[\s\S]*?<\/div>/)||[''])[0].replace(/<[^>]+>/g,' ');
+  ok(!/\bIBH\b/.test(railTxt) && !/\bIBL\b/.test(railTxt),
+     'c4 IBH and IBL no longer claim a row in the level column', railTxt.slice(0,90));
+  ok(/function sessionLevels/.test(src) && /out\.ibH=ibH\*sc/.test(src),
+     'c4b ...while sessionLevels still COMPUTES them — a label removed is not a measurement removed');
+  // d · the strike grid: the ladder is a scale, so a gap reads as a gap
+  const mins=[...R.html.matchAll(/class="g3ldmin" style="top:([\d.]+)px;width:(\d+)px"/g)];
+  ok(mins.length>0, 'c5 the minor strikes are drawn, so the ladder reads as a continuous scale', mins.length);
+  const pxRows=[...R.html.matchAll(/class="g3ldpx"/g)].length;
+  ok(mins.length>=pxRows*0.5,
+     'c5b ...and there are enough of them to show where mass is ABSENT — the air pocket',
+     {ticks:mins.length, nodes:pxRows});
+  ok(/g3ldmin\{[^}]*opacity:\.18/.test(src),
+     'c5c ...faintly: they are a scale, not a claim');
+}
+
 console.log('test_replay_face: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
