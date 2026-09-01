@@ -131,6 +131,44 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.19 — a test suite that cannot DRAW the thing cannot tell you it is broken
+
+**1 · The false thing, and it is about my own method.** I believed a green suite meant the replayed
+face worked. Every test in this project executes a FUNCTION — which proves a function returns the
+right value and proves nothing about whether the section that calls it survives to draw. A section
+that refuses is swallowed BY DESIGN. So **a broken replay and a quiet one are the same picture**, and
+for nine consecutive defects the only instrument capable of telling them apart was the operator's
+eyes. `tools/render-face.js` renders the real userscript in jsdom against a real recorded minute;
+`test_replay_face.js` asserts on the result. It reproduced his entire list in ONE run. ⚠ The rule:
+**for anything with a face, one test must be the face.**
+
+**2 · A measurement that superseded an earlier one, and it was mine.** The resume note stated that
+`dispScale` was NOT recoverable from stored days. It is: a frame carries `px` and `xm.SPXW.px`, and
+their ratio is the basis, stored every minute since the recorder began. My evidence for the claim was
+"a frame has no ES price" — true, and irrelevant to the question. ⚠ **A negative finding needs the
+same standard of proof as a positive one.** I wrote "not recoverable" into the one document the next
+context is required to trust, and it would have stopped anyone from looking again.
+
+**3 · Failure-pattern recurrence: ONE REFUSAL UPSTREAM HIDES EVERY SURFACE BELOW IT.** `emBand`
+returned "no EM" and took the ladder, the node states, the percentages, the king lanes, the roll
+arrows and the ROC column with it. Second instance in four builds (`SK_MIN_STRIKES`, v15.16), one
+gate further out. ⚠ **When several unrelated surfaces vanish at once, do not look for several bugs.
+Walk UP to the nearest thing they share and ask what it refused.**
+
+**4 · A new leak class with no seam to catch it: THE CLOCK.** `Date.now()` is not a feed, so no
+freshness gate, provenance check or seam review notices it. `sessionPhase()` said AFTER HOURS on a
+14:12 bar — and that branch RETIRES the roll arrows — while the king lane's axis ran from the
+replayed open to tonight and crushed a session's journey into six pixels. Neither threw, neither
+looked wrong in code review, and the second one was invisible to a test that COUNTED the elements:
+they were all emitted, at the wrong x. `clockNow()` exists now. ⚠ **A wrong position is not a
+missing element, and a count cannot tell you which one you have.**
+
+**5 · Four of fifteen mutations survived, and all four were weak assertions of mine** — a whole-body
+grep for "not Skylit" that a different hover satisfied; a lane spread measured across both columns
+instead of within each; a futures stub with the wrong keys (`on` instead of `fam`/`ok`) so the branch
+under test was never entered. ⚠ **A stub that does not satisfy the predicate under test makes the
+whole assertion decorative**, and it reads exactly like a passing test.
+
 ### v15.18 — a threshold's DENOMINATOR has a provenance too
 
 **1 · Something that turned out to be false.** I had treated the replay seam as covering the *data*
@@ -173,7 +211,16 @@ AGAINST EACH OTHER, not each against my expectation.** `tools/audit-replay-face.
 side by side for any minute of any recorded day, which is the check I should have been able to run
 before he had to ask.
 
-**6 · A source grep survived mutation. Again.** q8 asserted `/tapsN=null; tapsKnown=false/` against
+**6 · A build left the tree dirty every single time and nobody had fixed it.** `install.bat` is an
+INTERMEDIATE — every delivery is one of the versioned copies — and it is listed in `.gitignore`, but
+it has been TRACKED since v10.43, so the ignore never applied and each build rewrote a tracked file
+with 36,000 lines of fresh base64. The end of every build therefore offered a context two bad
+choices: commit the blob, or "tidy up" by deleting a file the build scripts and docs still name. The
+builder now restores it from HEAD itself. ⚠ Deliberately NOT `git rm --cached`: that deletes the file
+out of the operator's own repo on his next pull, and **the installer can only add files, never
+restore one** — an irreversible cleanup on someone else's machine is not a cleanup.
+
+**7 · A source grep survived mutation. Again.** q8 asserted `/tapsN=null; tapsKnown=false/` against
 the source. Wrapping the assignment in `if(false){…}` leaves the text untouched, so the assertion
 passed against code that could never run. This is the *fourth* recorded instance in this project
 (v13.4 `if(false && …)`, v15.14 `/LIVE/` matching "LIVE LIVE", v15.16 the deleted background). The

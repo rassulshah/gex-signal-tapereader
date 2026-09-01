@@ -1,3 +1,92 @@
+## v15.19 — one refusal upstream was hiding six surfaces, and nothing here could draw the face
+
+> "there are things that are missing , even the headings are missing , the king path in the king
+> lanes are missing. i cant scroll up or down either." · "my patience with you is running dry"
+
+### ⚠⚠ FIRST, THE REAL FAILURE: NINE DEFECTS FOUND BY HIM, NONE BY ME, BECAUSE NOTHING RENDERED
+
+Every test in this project executes a FUNCTION. That proves a function returns the right value and
+proves **nothing** about whether the section that calls it survives to draw. A refusing section is
+swallowed by design, so a broken replay looks exactly like a quiet one.
+**`tools/render-face.js` + `test_replay_face.js` load the real userscript into jsdom, park it on a
+real recorded minute, render, and assert on what came out.** It reproduced his entire list in one
+run. Every defect below was then found in minutes, by looking.
+
+### ⚠⚠ `emBand` REFUSED, AND SIX SURFACES WENT WITH IT
+
+The expected-move band is pinned ONCE per session from the live 0DTE straddle, keyed to the session
+being shown. A replayed day has no such record, so the code fell through to `ifChain(...)` — TODAY's
+chain, which after hours does not quote — and returned:
+
+    no EM — both straddle legs do not quote at one strike near spot
+
+**The ladder, the node states, the percentages, the king lanes, the roll arrows and the ROC column
+all live inside that section.** One refusal, six surfaces, no error anywhere. Same shape as
+`SK_MIN_STRIKES` at v15.16, one gate further out.
+The recorder has stored the whole band per frame as `feat.emband` — `{ok, em:3.49, open:771.74, k,
+est}` — since long before replay existed. That IS the pin, measured that day on that day's chain, so
+replay uses it. ⚠ The floor heal (which killed his pin at v15.12 for being on the wrong ruler) does
+not re-litigate a recorded band, and `test_replay_face` asserts that on a **futures-scaled** chart.
+
+### ⚠⚠ `sessionPhase()` READ THE WALL CLOCK, AND IT RETIRES THE ARROWS
+
+Fifteen call sites ask it what time it is. Parked at 14:12 on a Monday the face said
+**AFTER HOURS · EM EXPIRED**, and that branch does not merely mislabel — it **retires the target, the
+budget figures and the roll arrows.** It also decides OPEN·CHARM / MORNING / MIDDAY / POWER HOUR, the
+expiry-day text, and `pct`/`leftMin`, which is the day's budget. All of it describing an evening he
+was not looking at. It now defaults to the parked frame's own epoch millisecond.
+
+### ⚠⚠ THE KING LANE'S TIME AXIS RAN TO TONIGHT
+
+`nowMs = Date.now()`, so the axis spanned the replayed open → the actual present and a whole
+session's journey was crushed into the first few pixels. The runs were always there. Measured, SPXW
+lane, 14:12 on 08-31:
+
+    Date.now()   run starts x = 4.0 4.2 4.9 5.3 5.5 7.2 7.4 10.5   ← a morning in 6.5px
+    clockNow()   run starts x = 4.0 4.7 6.3 7.3 8.0 12.5 13.2 21.3
+
+`clockNow()` is now the clock for anything rendering a session duration, span or age.
+
+### the ladder's scale was recoverable all along — I recorded that it was not
+
+`dispScale` converts every SPXW strike onto the chart, and it was built from the LIVE SPY price and
+the LIVE chain's spot. **My own resume note said it was not recoverable from stored days. That was
+wrong, and measured wrong**: a frame carries `px` (764.86) and `xm.SPXW.px` (7677.55), and their
+ratio IS the basis (0.099775), stored every minute since the recorder began. "A frame has no ES
+price" was true and irrelevant.
+⚠ The LEVELS stay absent: replay returns **no** level rows rather than drawing today's PDH/CW0/FLIP
+over a past session. Rule 2 of this feature — refuse, never fall through.
+
+### the ROC column draws in replay, under its own name
+
+Left empty since v15.10 because `p15` means Skylit's `percent15Min` and the hover credits them for
+it. It now draws `rp*` — this panel's own change in MASS — in italics, with a hover that says so.
+An empty column on a face full of numbers reads as a fault, which is how he reported it.
+
+### "I cannot scroll" — the third report, and now a CSS invariant
+
+v12.2, v12.5, v15.17, and every time the same thing: the body scrolls correctly and the PANEL is
+taller than the window, so its top and bottom are off-screen and there is nothing to scroll. v15.17
+answered with `panelFit()`, a JS clamp that runs after render — which leaves every path that reaches
+the DOM before or without it still broken. The panel now carries **`max-height: calc(100vh - 16px)`
+in its own style**, which holds with no code running. `panelFit()` stays for the case CSS cannot fix:
+a panel dragged off the top edge.
+
+### and the answer to his first question
+
+HOD/LOD, the candle and the DAY columns **do** replay, verified across three parked minutes:
+
+    09:00   LOD 08:48   HL RNG 4.4   EFF —     KING 763.28
+    11:30   LOD 09:30   HL RNG 5.1   EFF 34%   KING 768.10
+    14:12   LOD 09:30   HL RNG 5.1   EFF 23%   KING 765.77
+
+### verification
+`test_replay_face.js` is new: **36 assertions, every one against a rendered panel.** Fifteen
+mutations run individually; four survived the first pass and all four were MY assertions being weak —
+a whole-body grep for "not Skylit" that another hover satisfied, a lane spread measured across both
+columns instead of each, and a futures stub with the wrong keys so the branch was never entered.
+All four rewritten, all fifteen now caught. Suite 132 green / 6 baseline red.
+
 ## v15.18 — the arrows were pointing backwards, and the states could only say two things
 
 > "how is it that the stats of all except 1 is spent and only 1 is weakening.. something is not right"

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.18
+// @version    15.19
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -641,7 +641,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.18';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.19';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4102,6 +4102,51 @@ function peakTick(sym){
 // yet from that bar's point of view.
 // ⚠ Memoised per (day, idx) because the state column calls this once per row, every render.
 var RP_PEAK={ key:null, m:null };
+// ⚠⚠ (v15.18) THE EXPECTED-MOVE PIN OF A REPLAYED DAY COMES FROM THAT DAY'S OWN FRAME.
+// This is the gate that was blanking everything the operator listed — "the headings are missing, the
+// king path in the king lanes are missing", no statuses, no percentages. `emBand` pins the day's
+// expected move ONCE from the live 0DTE straddle and keys the record to the SESSION BEING SHOWN. On
+// a replayed day that record is either absent or belongs to another session, so the code fell
+// through to `ifChain(...)` — today's chain, which on a weekend or after hours does not quote at all
+// — and returned `no EM — both straddle legs do not quote at one strike near spot`.
+// ⚠ AND THE LADDER, THE NODE STATES, THE KING LANES, THE ROLL ARROWS AND THE SECTION HEADINGS ALL
+// LIVE INSIDE THAT SECTION. One refusal upstream, and the face loses six surfaces at once with no
+// error anywhere — the same shape as SK_MIN_STRIKES at v15.16, one gate further out.
+// The recorder has stored the whole band per frame as `feat.emband` since long before replay
+// existed: {ok, em, open, k, est}. That IS the pin — measured that day, on that day's chain — so
+// replay uses it instead of asking today's market about a day that is over.
+// ⚠ rr is 1 BY CONSTRUCTION, not by assumption: `feat.emband.open` was written post-scale
+// (`out.open`) while `em` is in the book's own points, which is exactly the shape `{openU, rr:1}`
+// feeds back into. Do not "fix" this by multiplying in the live ratio — that is the v11.65 error
+// (one scale, applied twice) and the v15.12 error (a SPY-captured pin judged on an ES ruler).
+function replayEmPin(){
+  try{
+    var F=replayFrame(); if(!F) return null;
+    var b=F.feat && F.feat.emband;
+    if(!b || b.ok!==true) return null;
+    if(!(typeof b.em==='number' && b.em>0)) return null;
+    return { em:b.em, emK:b.em, k:b.k, rr:1, fam:'replay', replay:true,
+             // `est` is the frame's own verdict on its capture; capMin is only its carrier
+             capMin:(b.est===false)?0:null, t:F.t,
+             openU:(typeof b.open==='number' && b.open>0)?b.open:null, openSo:null };
+  }catch(e){ return null; }
+}
+// ⚠⚠ (v15.18) THE CLOCK A REPLAYED FACE SHOULD BELIEVE. `Date.now()` is the single most common
+// live leak in this build: it is not a feed, so no freshness gate or seam catches it, and the
+// symptom is never an error — it is a time AXIS that runs from the replayed open to tonight, so a
+// whole day's journey is squeezed into the first pixel of a lane and reads as "missing".
+// Use this anywhere a rendered duration, span or age is about the SESSION being shown.
+// ⚠ NOT a replacement for Date.now() where the question really is "how old is this data right now"
+// — a staleness check on the live feed still means the wall clock.
+function clockNow(){
+  try{
+    if(typeof replayOn==='function' && replayOn()){
+      var F=replayFrame();
+      if(F && typeof F.t==='number') return F.t;
+    }
+  }catch(e){}
+  return Date.now();
+}
 function replayPeakOf(k){
   try{
     // ⚠ THE PARKED FRAME'S OWN TIMESTAMP IS PART OF THE KEY, NOT JUST day|idx. A day can be
@@ -7005,6 +7050,16 @@ function buildPanel(){
     background:PAL.bg, color:PAL.ink, font:'12px/1.4 Inter,Arial,sans-serif',
     border:'1px solid '+PAL.line, borderRadius:'10px', zIndex:'999999',
     boxShadow:'0 8px 28px rgba(0,0,0,0.6)', userSelect:'none', overflow:'hidden',
+    // ⚠⚠ (v15.18) THE PANEL CAN NEVER BE TALLER THAN THE WINDOW, BY CSS, NOT BY MEASUREMENT.
+    // "I cannot scroll up or down" has now been reported THREE times (v12.2, v12.5, v15.17) and the
+    // cause has been the same every time: the body scrolls correctly, but the PANEL is taller than
+    // the viewport, so its top and bottom are off-screen and there is nothing to scroll. v15.17
+    // answered with panelFit(), a JS clamp that runs after render — which leaves every path that
+    // reaches the DOM before or without it (a restored size, a window resize, a render that returns
+    // early, a load where the first measurement happens before layout settles) still broken.
+    // A max-height in the panel's own style holds in all of those cases, with no code running.
+    // panelFit() stays: it also pulls a panel dragged off the top back into view, which CSS cannot.
+    maxHeight:'calc(100vh - 16px)',
     display:'flex', flexDirection:'column'});
   var hdr=document.createElement('div');
   hdr.id='gpts-hdr';
@@ -20310,7 +20365,23 @@ function wireBodyDelegation(){
 // hour on an expiry day is when gamma erodes and pins stop working.
 function sessionPhase(now){
   try{
-    var d=now||new Date();
+    // ⚠⚠ (v15.18) IN REPLAY THE SESSION PHASE IS THE PARKED MINUTE'S, NOT THIS INSTANT'S.
+    // Fifteen call sites ask this function what time it is, and on a replayed bar every one of them
+    // was answered with the wall clock. Parked at 14:12 on a Monday the face said
+    // "AFTER HOURS · EM EXPIRED — re-anchors at the open", and that chip does not merely mislabel:
+    // the after-hours branch RETIRES the target, the budget figures and THE ROLL ARROWS. It also
+    // decides OPEN·CHARM / MORNING / MIDDAY / POWER HOUR, the expiry-day text, and `pct`/`leftMin`,
+    // which is the day's budget — all of it describing an evening the operator was not looking at.
+    // The frame carries a real epoch millisecond, so this is exact rather than approximate.
+    // ⚠ An explicit `now` still wins: callers that pass a date are asking about THAT date.
+    var d=now;
+    if(!d){
+      try{ if(typeof replayOn==='function' && replayOn()){
+             var _rf=replayFrame();
+             if(_rf && typeof _rf.t==='number') d=new Date(_rf.t);
+           } }catch(eRP){}
+    }
+    if(!d) d=new Date();
     var ct=new Date(d.toLocaleString('en-US',{timeZone:'America/Chicago'}));
     var mins=ct.getHours()*60+ct.getMinutes();
     var dow=ct.getDay();
@@ -21099,6 +21170,9 @@ function ensureV3Css(){
     '#gpts-body .g3ldmkATTRACTING{color:#4fd1e0;box-shadow:inset 0 0 0 1px rgba(79,209,224,.5)}'+
     '#gpts-body .g3ldmkINPLAY{color:#c9d1da}'+
     '#gpts-body .g3ldmkT{color:#4fd1e0}'+
+    // ⚠ a replayed ROC cell is THIS PANEL'S measure, not Skylit's, and is marked so the two are
+    // never mistaken for each other on a screenshot.
+    '#gpts-body .g3ldrocr{font-style:italic;opacity:.92}'+
     '#gpts-body .g3ldroc{position:absolute;left:'+LAD_ROC+'px;font-size:8.4px;font-weight:800;'+
       'transform:translateY(-50%);white-space:nowrap;cursor:help}'+
     '#gpts-body .g3ldup{color:#2ec27e}#gpts-body .g3lddn{color:#e0645f}#gpts-body .g3ldfl{color:#5b6675}'+
@@ -21697,8 +21771,42 @@ function confTier(C, k, tol){
     return { tier:0, g:gs, d:dsc };
   }catch(e){ return null; }
 }
+// ⚠⚠ (v15.18) A REPLAYED LADDER GETS ITS SCALE FROM THE FRAME AND ITS LEVELS FROM NOWHERE.
+// TWO things were wrong here and they pulled in opposite directions.
+//   THE SCALE. `dispScale = undPx/theirSpot` is built from the LIVE SPY price and the LIVE chain's
+//   SPX spot, and it is what converts every SPXW strike onto the chart. On a replayed bar it was
+//   today's basis applied to a past book. I recorded in the resume note that this was NOT
+//   recoverable — that was WRONG, and measured wrong: a frame carries `px` (764.86) and
+//   `xm.SPXW.px` (7677.55), whose ratio IS the basis (0.099775), stored every minute since the
+//   recorder began. The claim "a frame has no ES price" was true and irrelevant; the basis never
+//   needed one.
+//   THE LEVELS. `rows` are the SPX chain's own rows — PDH, CW0, FLIP, the walls — fetched live by
+//   the companion. There is no version of those for a past day in any frame, so replay returns NONE
+//   rather than drawing TODAY's levels over a past session. That is rule 2 of this feature: refuse,
+//   never fall through. A level line is a claim about where the market was; today's line on
+//   Friday's book is a lie no consumer downstream can detect.
+// ⚠ So a replayed ladder is correctly scaled and has no level rows, and the face says so.
+function replayLadder(sym){
+  try{
+    var F=replayFrame(); if(!F) return null;
+    var und=(typeof F.px==='number' && F.px>0)?F.px:null;
+    var spx=(F.xm && F.xm.SPXW && typeof F.xm.SPXW.px==='number' && F.xm.SPXW.px>0)?F.xm.SPXW.px:null;
+    if(!(und>0 && spx>0)) return null;
+    var sc=und/spx;
+    return { px:und, undPx:und, theirSpot:spx, srcSym:'replay', spotSrc:'frame',
+             dispScale:+sc.toFixed(6), undScale:+sc.toFixed(6), scaleSrc:'replay',
+             rows:[], src:'replay', ageMin:0, rolled:false, nExps:null, n:null, maxPain:null,
+             replay:true, err:null };
+  }catch(e){ return null; }
+}
 function ifLadder(sym){
   sym=sym||'SPY';
+  try{
+    if(typeof replayOn==='function' && replayOn()){
+      var _rl=replayLadder(sym);
+      return _rl || { err:'this frame carries no price pair to scale the ladder with' };
+    }
+  }catch(eRL){}
   try{
     // (v11.31) THE LADDER READS SPX AND CONVERTS BY THE LIVE BASIS.
     // SPY levels reached ES through a ~10.05 multiplier, so every half-point of disagreement with
@@ -21979,6 +22087,16 @@ function emBand(sym){
     var emKey=sym+'|'+emFam;
     var rec=S.sym[emKey]||null;
     if(!rec && S.sym[sym] && emFam==='cash') rec=S.sym[sym];        // pre-v15.12 pins were cash-only
+    // ⚠⚠ (v15.18) REPLAY PINS FROM THE FRAME — see replayEmPin(). It is taken BEFORE the seed, the
+    // schema check and the two heals, because every one of those reasons about a record captured
+    // TODAY and would discard a perfectly good recorded band for being none of today's business.
+    try{
+      if(typeof replayOn==='function' && replayOn()){
+        var _rp=replayEmPin();
+        if(_rp){ rec=_rp; out.replayPin=true; }
+        else { out.why='this frame carries no expected-move band — the day was recorded before the band was stored, or the band refused at that minute'; return out; }
+      }
+    }catch(eRPin){}
     if(!rec){
       var sibKey=null, sk;
       for(sk in S.sym){ if(sk===emKey) continue; if(sk.split('|')[0]===sym){ sibKey=sk; break; } }
@@ -22000,7 +22118,7 @@ function emBand(sym){
       }
     }
     // belt and braces: even a stamped record is refused if the field the pin depends on is absent
-    if(rec && !(typeof rec.rr==='number' && rec.rr>0)){ rec=null; out.recaptured=true; }
+    if(rec && !rec.replay && !(typeof rec.rr==='number' && rec.rr>0)){ rec=null; out.recaptured=true; }
     // (v14.16) EM SANITY FLOOR — the poisoned-pin lesson, again, one field over. On 2026-08-27 the
     // once-per-session capture fired just past midnight while the IF dte0 chain still held the
     // EXPIRED book: an ATM straddle on expired options is ~$2.5 of residue, and that was PINNED as
@@ -22009,7 +22127,10 @@ function emBand(sym){
     // "the heavy vol nodes aren't even shown on the rail." An EM below 0.1% of the anchor is not a
     // market, it is a dead straddle; discard the record (heal) and refuse to re-pin one like it.
     var emFloor=(openU>0?openU:1)*((rr>0)?rr:1)*EM_MIN_FRAC;
-    if(rec && typeof rec.em==='number' && !(rec.em>=emFloor)){ rec=null; out.emHealed=true; }
+    // ⚠ the floor is computed with the LIVE ratio, so a recorded pin in the book's own points would
+    // be healed away on an ES chart exactly as the operator's real pin was at v15.12. A frame's band
+    // already passed this test on the day it was captured; it is not re-litigated here.
+    if(rec && !rec.replay && typeof rec.em==='number' && !(rec.em>=emFloor)){ rec=null; out.emHealed=true; }
 
     if(!(rec && typeof rec.em==='number')){
       var ec=null; try{ ec=ifChain((sym==='QQQ')?'QQQ':'SPX'); }catch(eC){}
@@ -25004,7 +25125,11 @@ function ladderKingCols(EB, sym, Y, lo, hi, H){
     // sessionPhase() for an `openMs` it does not have — a fallback chain whose first link could
     // never fire, which reads like robustness and is dead code. closedCandles() is already filtered
     // to today from 08:30 CT (the same fact emBand relies on for its anchor).
-    var openMs=null, nowMs=Date.now();
+    // ⚠ (v15.18) THE LANE'S CLOCK IS THE PARKED MINUTE'S. With Date.now() the axis spanned from the
+    // replayed open to the actual present, so every run in a recorded day landed inside the first
+    // pixel and the crown's journey was invisible — reported as "the king path in the king lanes are
+    // missing". The runs were there; the axis was hours or days too long.
+    var openMs=null, nowMs=clockNow();
     try{ var cs=closedCandles(sym)||[]; if(cs.length) openMs=cs[0].t; }catch(e1){}
     var span=(openMs!=null && nowMs>openMs)?(nowMs-openMs):0;
     var dsc=0; try{ dsc=ifDispScale()||0; }catch(eD){}
@@ -25323,12 +25448,25 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
         if(mk) h+='<span class="g3ldmk g3ldmk'+mk.m.replace(/[^A-Z]/g,'')+'" style="top:'+t.toFixed(1)+'px"'+
           g3tip(mk.m+' — '+mk.why+'.')+'>'+g3esc(mk.m)+'</span>';
       }catch(eMk){}
-      if(vv && typeof vv.p5==='number' && typeof vv.p15==='number'){
-        var arg=(typeof vv.p60==='number' && vv.p15!==0 && vv.p60!==0 && (vv.p15>0)!==(vv.p60>0));
-        h+='<span class="g3ldroc" style="top:'+t.toFixed(1)+'px"'+
-           g3tip('Skylit’s own rate of change for this strike — the same numbers their strike popup shows. 5m '+Math.round(vv.p5)+'%, 15m '+Math.round(vv.p15)+'%'+(typeof vv.p60==='number'?(', 60m '+Math.round(vv.p60)+'%'):'')+'.'+
+      // ⚠ (v15.18) THE ROC COLUMN DRAWS IN REPLAY TOO — under a DIFFERENT tooltip, because the
+      // numbers are a different measurement. Live it is Skylit's `percent15Min`, and the tip credits
+      // them by name. A recorded row has no percents at all, so replay draws `rp*` — this panel's
+      // own change in MASS — and the tip says so. Leaving the column blank (the v15.10 decision) was
+      // right while there was nothing honest to put in it; now there is, and an empty column on a
+      // face full of numbers reads as a fault, which is how the operator reported it.
+      var R5=(vv&&typeof vv.p5==='number')?vv.p5:((vv&&typeof vv.rp5==='number')?vv.rp5:null);
+      var R15=(vv&&typeof vv.p15==='number')?vv.p15:((vv&&typeof vv.rp15==='number')?vv.rp15:null);
+      var R60=(vv&&typeof vv.p60==='number')?vv.p60:((vv&&typeof vv.rp60==='number')?vv.rp60:null);
+      var Rmine=!!(vv && vv.replayPct && typeof vv.p15!=='number');
+      if(typeof R5==='number' && typeof R15==='number'){
+        var arg=(typeof R60==='number' && R15!==0 && R60!==0 && (R15>0)!==(R60>0));
+        h+='<span class="g3ldroc'+(Rmine?' g3ldrocr':'')+'" style="top:'+t.toFixed(1)+'px"'+
+           g3tip((Rmine
+             ? 'Rate of change measured by THIS PANEL from the recorded 5m/15m/60m dollar deltas — the change in MASS (|value|), not Skylit\u2019s own percent, which a recorded frame does not carry. '
+             : 'Skylit\u2019s own rate of change for this strike — the same numbers their strike popup shows. ')+
+           '5m '+Math.round(R5)+'%, 15m '+Math.round(R15)+'%'+(typeof R60==='number'?(', 60m '+Math.round(R60)+'%'):'')+'.'+
            (arg?' The HOUR DISAGREES with the 15m — that is the TURNING condition, which is why it is printed here and nowhere else.':''))+'>'+
-           ldNum(vv.p5)+' '+ldNum(vv.p15)+(arg?(' <b class="g3ld60">'+(vv.p60>0?'▲':'▼')+Math.abs(Math.round(vv.p60))+'%</b>'):'')+'</span>';
+           ldNum(R5)+' '+ldNum(R15)+(arg?(' <b class="g3ld60">'+(R60>0?'▲':'▼')+Math.abs(Math.round(R60))+'%</b>'):'')+'</span>';
       }
     }
 

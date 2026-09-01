@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-01 · panel v15.18 · companion v1.16 · supersedes every earlier resume note_
+_written 2026-09-01 · panel v15.19 · companion v1.16 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.18, and what the face carries
+## 2 · WHERE WE ARE — v15.19, and what the face carries
 
-**Panel v15.18 · companion v1.16.** Suite **132 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.19 · companion v1.16.** Suite **132 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -159,10 +159,9 @@ what it assumes. Skipping that read cost six builds.
 ⚠⚠ **STILL LIVE IN A REPLAYED FACE — AND MEASURED, SO NOBODY PROMISES WHAT CANNOT BE DELIVERED.**
 Traced 2026-09-01 against a real frame; **neither is fully recoverable from the days already stored:**
 
-    dispScale   the ES/SPX basis. ifLadder derives it from the LIVE chain + Atlas's own spot. A frame
-                stores xm.SPXW.px (the INDEX price, 7682.59) but NO ES price, so the basis cannot be
-                reconstructed. It is slow-moving (~1.002), so using the live one on a replayed bar is
-                defensible — but say so. Recording it is ONE FIELD and fixes it from the next session.
+    dispScale   ⚠ WITHDRAWN AT v15.19 — THIS WAS WRONG. The basis IS in every frame: px / xm.SPXW.px
+                (764.86 / 7677.55 = 0.099775). `ifLadder` reads it from the frame in replay now. The
+                stated evidence ("a frame has no ES price") was true and did not bear on the claim.
     the LEVELS  the frame's `lev` holds cr/cr0/ps/ps0/mag at SPY SCALE (767/765) — the SPY book's
                 walls, NOT the SPX chain rows the ladder draws (PDH, CW0, FLIP…). Those come from
                 ifLadder.rows + sessionLevels and are not in a frame at all.
@@ -178,6 +177,50 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠⚠ **v15.19 — READ THIS BEFORE TOUCHING ANY REPLAYED SURFACE. THERE IS NOW A TEST THAT DRAWS.**
+`node tools/render-face.js 2026-08-31 14:12` renders the REAL userscript in jsdom, parked on a real
+recorded minute, and prints what the body contains plus every swallowed error. `test_replay_face.js`
+is the same harness with 36 assertions. **Run it before claiming any replayed surface works.** Nine
+defects in a row were found by the operator instead of by me for one reason: every other test in this
+project executes a FUNCTION, a refusing section is swallowed by design, and so a broken replay and a
+quiet one are the same picture.
+
+⚠⚠ **v15.19a — ONE REFUSAL UPSTREAM WAS HIDING SIX SURFACES.** `emBand` pins the day's expected move
+once from the LIVE 0DTE straddle, keyed to the session shown; a replayed day has no such record, so it
+fell through to today's chain, which after hours does not quote, and returned `no EM`. **The ladder,
+the node states, the percentages, the king lanes, the roll arrows and the ROC column all live inside
+that section.** The band IS recorded — `feat.emband` = `{ok, em, open, k, est}` — and replay now pins
+from it. ⚠ When several unrelated surfaces vanish at once, **walk UP to the nearest thing they share.**
+
+⚠⚠ **v15.19b — THE CLOCK IS A LEAK CLASS WITH NO SEAM TO CATCH IT.** `Date.now()` is not a feed, so
+no freshness gate or provenance check sees it. `sessionPhase()` said **AFTER HOURS · EM EXPIRED** on a
+14:12 Monday bar — and that branch RETIRES the target, the budget and **the roll arrows** — and the
+king lane's axis ran from the replayed open to tonight, crushing a session's journey into 6.5px
+(measured: run starts 4.0→10.5 instead of 4.0→21.3). Both now use **`clockNow()`**. ⚠ A wrong
+position is not a missing element, and a test that COUNTS elements cannot tell the two apart.
+
+⚠⚠ **v15.19c — CORRECTION TO THIS NOTE: `dispScale` IS RECOVERABLE. The earlier claim was wrong.**
+A frame carries `px` (764.86) and `xm.SPXW.px` (7677.55); their ratio IS the basis (0.099775), stored
+every minute since the recorder began. My evidence — "a frame has no ES price" — was true and
+irrelevant to the question asked. ⚠ **A negative finding needs the same standard of proof as a
+positive one**; this one sat in the file the next context is required to trust.
+⚠ **THE LEVELS REMAIN ABSENT AND THAT IS DELIBERATE.** `ifLadder` in replay returns the frame's scale
+and NO rows: today's PDH/CW0/FLIP drawn over a past session is the mislabelling this project keeps
+paying for. Recording `ifLadder.rows` per frame fixes it going forward only.
+
+⚠ **THE ROC COLUMN DRAWS IN REPLAY** as `rp*` — this panel's own change in MASS, italicised, with a
+hover that says so. `p15` still means SKYLIT's `percent15Min` and nothing else may ever be written to
+that name.
+
+⚠⚠ **"I CANNOT SCROLL" IS SETTLED IN CSS, NOT IN JS.** Reported at v12.2, v12.5 and v15.17; every time
+the body scrolled correctly and the PANEL was taller than the window. The panel now carries
+`max-height: calc(100vh - 16px)` in its own style, which holds with no code running. `panelFit()`
+stays only for what CSS cannot do: pulling a panel dragged off the top edge back into view.
+
+✅ **AND WHAT HE ASKED FIRST, ANSWERED BY MEASUREMENT:** HOD/LOD, the candle and the DAY columns DO
+replay — 09:00 / 11:30 / 14:12 give LOD 08:48 / 09:30 / 09:30, HL RNG 4.4 / 5.1 / 5.1, EFF — / 34% /
+23%, KING 763.28 / 768.10 / 765.77.
 
 ⚠⚠ **v15.18 — A THRESHOLD'S DENOMINATOR HAS A PROVENANCE TOO, AND THAT IS THE TENTH INSTANCE.**
 Four of five levels read **SPENT** on a replayed bar. `levelStateOf` divides the frame's mass by
@@ -236,7 +279,7 @@ tapsN=null; … }` leaves the text intact. Fourth recorded instance in this proj
 profile is exact at 14:12 strike for strike, and "only five nodes" is every SPXW strike at or above
 the 20% threshold, the same filter the live ladder applies.
 
-**FIRST THING TO DO: drag it on the live panel — v15.17 AND v15.18 HAVE NEVER BEEN SEEN WORKING.** Check the ladder, kings and ⓪a move together, the
+**FIRST THING TO DO: drag it on the live panel — v15.17, v15.18 AND v15.19 HAVE NEVER BEEN SEEN WORKING.** Check the ladder, kings and ⓪a move together, the
 clock reads the parked bar, ◀ reaches Friday, and `__gptsDebug.storage()` shows no new writes.
 
 ### the rest of the face

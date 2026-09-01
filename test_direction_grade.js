@@ -161,6 +161,6 @@ ok(/HARD-CAP|HARD-CAPS/.test(src), '10a the mid-range cap is documented in sourc
 ok(/DECISION_MATRIX/.test(src),    '10b the matrix exists');
 ok(!/directionGrade[^]{0,3000}(buy|sell|long side entry)/i.test(src.slice(src.indexOf('function directionGrade'), src.indexOf('function directionGrade')+2000)), '10c no trade words inside directionGrade');
 ok(/drift NEVER overrides the direction/i.test(src), '10d the hierarchy rule is stated in source');
-ok(/@version\s+15.18/.test(src), '10e version pinned to the shipping version');
+ok(/@version\s+15.19/.test(src), '10e version pinned to the shipping version');
 
 console.log('\n'+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);

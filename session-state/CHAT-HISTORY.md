@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-01 · v15.18 · session `5e8d34b5`
+## 2026-09-01 · v15.19 · session `5e8d34b5`
 
-_5 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_7 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -56,8 +56,62 @@ The vendor's percent convention isn't observable offline, and the ROC tooltip cl
 The arrows are backwards on the negative side of the book — and that's live code, not replay. At 14:12 the drawn arrow says 7675 shed into 7670; the data says 7670 shed **into** 7675.
 The memo key exposed a real staleness trap — same day and index, different frames.
 The generator was destroying the hand-written sections on every rebuild. Fixing that rather than retyping them.
+You were right on both counts, and neither was a small thing.
+
+**The arrows were backwards.** `rollScan` tested the *signed* delta — a source needed `d15 < -$40K`. That's correct on the positive side of the book and exactly inverted on the negative side, where a strike **gaining** mass carries a negative delta. At 14:12 on 08-31:
+
+```
+7675   |cur| 59.6M -> 82.0M   d15 -22.4M   GAINED 22.4M   <- was called the SOURCE
+7670   |cur| 40.2M -> 1 …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+
+**me (03:51):** Both commits are in locally, and the tree is clean. The push is blocked — this repo isn't in the session's authorized set, so the proxy won't hand over a credential:
+
+```
+remote: rassulshah/gex-signal-tapereader is not in this session's authorized repository set
+## main...origin/main [ahead 7, behind 5]
+```
+
+That's the normal path for this project rather than a new problem: the installer is what carries the code to your machine, and it commits on your side — which is also why we're 5 behind. `installv1518.bat` is unchanged by any of this (payload re-verified: 296 files, v15.18, byte-identical to the working tree, CRLF, no PowerShell).
+
+The one thing worth knowing: **every build has been leaving a dirty tree and I'd been stepping over it.** `install.bat` is only an intermediate — the deliverable is always the versioned copy — and it's in `.gitignore`, but it's been *tracked* since v10.43, so the ignore never applied and each build rewrote a tracked file with 36,000 lines of fresh base64. The builder now restores it from HEAD itself. I did **not** `git rm --cached` it: that would delete the file out of your repo on your next pull, and the installer can only add files, never restore one.
+
+**OPERATOR:**
+> when i select a time, do the values change in the hod/lod section, the candle values, what about the candle ?  also , you need to check the status and the percentages in teh node section . there are things that are missing , even the headings are missing , the king path in the king lanes are missing. i cant scroll up or down either.  double check and fiugure out.. my patience with you is running dry . how could you have so many faults with implementing this feature is remarkable
+
+**me (04:31):** The symptom set — missing headings, missing king path, missing statuses, and no scroll — is the signature of sections throwing silently mid-render. I need to actually render the face offline instead of reasoning about it.
+The harness reproduces it exactly — and shows the cause. `no EM` collapses everything below it.
+`feat.emband` is recorded per frame — the whole band, including its piles.
+The band is the gate everything below it lives inside — and it's recorded. Wiring replay to the frame's own pin.
+`AFTER HOURS · EM EXPIRED` while parked at 14:12 — the band section is on the live clock.
+`sessionPhase()` reads the wall clock, and 15 call sites depend on it — including the one that retires the roll arrows after hours.
+`dispScale` **is** recoverable — the frame carries both prices. My resume note says otherwise; that was wrong.
+`dispScale` is derivable from the frame, and showing today's levels on a past day is the mislabelling this project keeps paying for. Both get settled in one place.
+The node section is complete now — percentages match the frame's recorded top exactly. Checking whether the values actually move with the slider.
+`nowMs = Date.now()` — the lane's time axis runs from the replayed open to *tonight*, so the whole journey collapses into a sliver.
+A CSS invariant beats a JS measurement for the scroll. But first — the missing headings.
+The harness needs to become a test, not a one-off script.
+Four survivors — three weak assertions of mine and one case the harness doesn't reach. Fixing the tests.
+Now the record, then the build.
 
 ### DECISIONS
+
+**v15.19 · the face renders now.**
+- **The real failure was that nothing here could DRAW the panel.** Every test executes a function; a
+  refusing section is swallowed by design, so a broken replay and a quiet one are the same picture.
+  `tools/render-face.js` + `test_replay_face.js` render the real script in jsdom on a real recorded
+  minute. It reproduced his entire list in one run.
+- **`emBand` refused and took six surfaces with it** — ladder, states, percentages, king lanes, roll
+  arrows, ROC column. The band is recorded per frame (`feat.emband`); replay pins from it.
+- **`sessionPhase()` read the wall clock**, so a 14:12 bar said AFTER HOURS — the branch that RETIRES
+  the roll arrows. **The king lane's axis ran to tonight**, crushing a session into 6.5px.
+- **Withdrew my own finding that `dispScale` is not recoverable.** It is, from every frame.
+- **Refused to draw the ladder's LEVELS in replay** — today's lines over a past day is mislabelling.
+- **"Cannot scroll" is now a CSS invariant**, not a JS clamp that runs after render.
+- **Four of fifteen mutations survived and all four were weak assertions of mine.** Rewritten.
 
 **v15.18 · the arrows and the states.**
 - **The SPENT epidemic was a clock error, not a market reading.** `levelStateOf` divided the parked
@@ -99,6 +153,11 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.19** — the frame-pinned EM band; `clockNow()` and `sessionPhase()` on the parked minute; the
+king lane's axis; `ifLadder` scaled from the frame with no invented levels; the ROC column drawing
+`rp*`; `max-height:calc(100vh - 16px)` on the panel. New `test_replay_face.js` (36 assertions, all
+against a rendered panel) and `tools/render-face.js`. Fifteen mutations, fifteen caught.
+
 **v15.18** — `replayPeakOf()` + `peakOf()` routing; `rp5/rp15/rp60` on replayed rows and the state
 engine's vendor-first resolution; `rollScan` measuring MASS rather than the signed delta;
 `tapsN/tapsKnown`; the peak memo keyed on the parked frame itself. New `tools/audit-replay-face.js`.
@@ -111,6 +170,11 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. **v15.17, v15.18 AND v15.19 have never been seen on his live panel.**
+2. **Run `node tools/render-face.js <day> <hh:mm>` before claiming any replayed surface works.**
+3. The ladder's LEVELS still do not replay, deliberately — recording `ifLadder.rows` per frame fixes
+   it going forward only.
 
 1. **v15.17 AND v15.18 have never been seen on his live panel.** Drag the slider first, then check
    the arrows against `node tools/audit-replay-face.js <day> <hh:mm>` — ⚠ its clock is CENTRAL.
@@ -141,6 +205,8 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+2e74842 build: the installer no longer leaves a tracked 36k-line blob in the tree
+3b5701a v15.18: the arrows were pointing backwards, and the states could only say two things
 74c0b55 v15.17: arrows point at rows the ladder draws; the panel fits the window
 9ebaf19 v15.16: one constant was refusing 93% of every replayed session
 7b4d09e v15.15: the band centres on the replayed bar; the sync gate stands down; rolls get their strike
@@ -151,8 +217,6 @@ b25ebdd v15.11: replay reads the frame for the crowns and the accumulation
 5ae134d v15.10: the replay slider; the version in the header; the read removed
 a48e704 record: WITHDRAW F-10b - the morning is not shed; the reads were complete all along
 a278846 record: the F-10 storage fix IS built - the real bug is that the budget sheds the morning
-30d1892 data: daily export 31-Mon-08
-a1c6a88 v15.09: roll arrows and the corrected pullback unit
 ```
 
 ---

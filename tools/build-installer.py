@@ -583,3 +583,24 @@ print('**Tampermonkey — update ONLY what changed:**')
 print('- **Tapereader v%s** %s — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js' % (V, _panel_verdict()))
 print('- Companion v%s%s' % (VC, _compan_verdict('—')))
 print('Then wait ~5 min (raw CDN cache) and RELOAD the Atlas tab — footer must say v%s.' % V)
+
+# ---- LEAVE THE TREE CLEAN --------------------------------------------------------------------
+# ⚠ `install.bat` is an INTERMEDIATE, not a deliverable: everything shipped is one of the versioned
+# copies above, and nothing below the copy step reads it. It is also listed in .gitignore — but it
+# has been TRACKED since v10.43, so the ignore never applied and every single build rewrote a
+# tracked file with 36,000 lines of fresh base64. That showed up as a dirty tree at the end of each
+# build, inviting a context to either commit the blob or "clean up" by deleting a file the build
+# scripts and docs still name. Restoring it from HEAD costs nothing and removes the choice.
+# ⚠ Deliberately NOT `git rm --cached`: that would delete the file out of the operator's own repo on
+# his next pull, and the installer can only add files, never restore one.
+import subprocess as _sp
+try:
+    _tracked = _sp.run(['git', 'ls-files', '--error-unmatch', 'install.bat'],
+                       capture_output=True).returncode == 0
+    if _tracked and _sp.run(['git', 'diff', '--quiet', '--', 'install.bat']).returncode != 0:
+        _sp.run(['git', 'checkout', '--', 'install.bat'], check=True)
+        print('')
+        print('(install.bat restored from HEAD — it is an intermediate; the delivery is install%s.bat)'
+              % V.replace('.', ''))
+except Exception as _e:
+    print('WARN: could not restore install.bat (%s)' % _e)
