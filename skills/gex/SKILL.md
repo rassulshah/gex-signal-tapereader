@@ -285,6 +285,20 @@ not merely what changed. "save gex" remains valid as an explicit trigger, but it
 Persist everything a fresh session needs. The cloud workspace is EPHEMERAL — saving means
 getting files to the USER (SendUserFile) and into the git repo (source of truth), NOT Drive.
 
+0-bis. ⚠⚠ **EVERY BUILD MESSAGE CARRIES TWO BLOCKS THE BUILDER PRINTS. PASTE BOTH, VERBATIM.**
+   Operator-mandated 2026-08-30, restated 2026-09-01: *"i dont see the tamper monkey links or save
+   confirmations which you are supposed to give me everytime there is a build telling me the files
+   that were saved (eg chat history, lessons learned etc.)"*
+   `tools/build-installer.py` ends by printing them:
+   - **`==== PASTE THIS WITH THE INSTALL FILE ====`** — the Tampermonkey links for BOTH scripts, with
+     CHANGED / UNCHANGED against what is already on origin.
+   - **`==== SAVE CONFIRMATION — PASTE THIS TOO ====`** — chat history, lessons, changelog and
+     resume note, each marked `saved` or `MISSING`, read from `git show --stat HEAD` rather than
+     from memory.
+   ⚠ **THE BUILDER HAS PRINTED THE LINKS SINCE v14.3 AND THEY STILL WENT MISSING FOR SEVERAL BUILDS,
+   because pasting them lived only in a context's head.** Scroll to the end of the build output and
+   copy both blocks. A build message without them is incomplete, however good the build is.
+
 0. **REGENERATE `session-state/CHAT-HISTORY.md`** — `python3 tools/chat-history.py --title "<what
    this context was about>"`, then fill in DECISIONS / SHIPPED / OPEN AT CLOSE by hand before
    committing. Operator-mandated: every build updates it, and the next `load gex` reads it.

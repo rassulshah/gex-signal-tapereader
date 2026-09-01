@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-01 · panel v15.31 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-01 · panel v15.32 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.31, and what the face carries
+## 2 · WHERE WE ARE — v15.32, and what the face carries
 
-**Panel v15.31 · companion v1.17.** Suite **135 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.32 · companion v1.17.** Suite **135 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -177,6 +177,20 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠⚠ **v15.32 — EVERY BUILD MESSAGE CARRIES TWO BLOCKS THE BUILDER PRINTS. PASTE BOTH.**
+Operator, twice: *"i dont see the tamper monkey links or save confirmations."* Scroll to the END of
+`python3 tools/build-installer.py` output and copy:
+
+    ==== PASTE THIS WITH THE INSTALL FILE ====     both Tampermonkey links, CHANGED/UNCHANGED
+    ==== SAVE CONFIRMATION — PASTE THIS TOO ====   chat history · lessons · changelog · resume note
+
+The save list is read from `git show --stat HEAD`, so it cannot be written from memory, and each
+mandated file is marked `saved` or **`MISSING`**. `skills/gex/SKILL.md` step 0-bis requires both.
+⚠⚠ **THE LINKS HAVE PRINTED SINCE v14.3 AND STILL WENT MISSING FOR SEVERAL BUILDS**, because pasting
+them lived only in a context's head. **The only rules this project keeps are the ones something
+prints or something fails on** — and I read that sentence in LESSONS §0 this session and still
+let the step lapse.
 
 ⚠⚠ **v15.31 — THE STRIKES WERE NEVER MISSING; THEY WERE BELOW `nodeThresh` (20% of King).**
 Measured: 100 SPXW strikes on the tape, ELEVEN drawn. The filter is right — a NODE is a strike with

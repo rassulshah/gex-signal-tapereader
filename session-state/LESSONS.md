@@ -131,6 +131,25 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.32 — a step that lives only in my head is a step with no mechanism
+
+**1 · The operator had to ask twice for something the builder already prints.** The Tampermonkey
+links have been printed at the end of every build since v14.3; I stopped pasting them, and I never
+listed the record files at all. `test_delivery` pinned that the BUILDER emits them — nothing pinned
+that the MESSAGE carries them. ⚠ **The only rules this project keeps are the ones something prints or
+something fails on.** That sentence is already in LESSONS §0 and in test_chat_history's header. I
+read both this session and still let a hand-carried step lapse. **Reading a lesson is not keeping it.**
+
+**2 · The confirmation is read from the commit, not written from memory.** A hand-written list of
+"what I saved" drops whatever the writer forgets — the ITEM 18 failure exactly. `git show --stat
+HEAD` cannot forget, and each mandated file is marked `saved` or `MISSING` against it. ⚠ **A claim
+about what happened should be derived from the artefact, not from the intention.**
+
+**3 · I wrote the oldest bug in this project again.** `S4` greped for the word `MISSING`, which also
+appears in the comment explaining the check — so deleting the conditional left the word and the
+assertion passed. Ninth recorded instance of a grep matching its own explanation. ⚠ **Bind to the
+EXPRESSION. If the string you are matching also appears in prose, the assertion is already broken.**
+
 ### v15.31 — "agreeing" and "inside" are not the assertions I thought they were
 
 **1 · Two candle assertions passed a candle that was wrong.** `c1c` checked the wick and body AGREED

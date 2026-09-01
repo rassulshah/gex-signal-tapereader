@@ -1,3 +1,38 @@
+## v15.32 — the delivery message carries the links and the save confirmation, because the builder prints both
+
+> "i dont see the tamper monky links or save confirmations which yuou are suppose to give me
+> everytime there is a build telling me the files that were save (eg chat history, lessons learned
+> etc.)"
+
+### ⚠⚠ THE FAILURE WAS MINE, AND IT IS THE ONE THIS PROJECT KEEPS RECORDING
+
+The Tampermonkey block has printed at the end of every build since **v14.3**. For several builds
+running I did not paste it, and I never listed the record files at all. `test_delivery` pins that the
+BUILDER emits the links — nothing pinned that the MESSAGE carries them, because that step lived only
+in a context's head.
+⚠ **The only rules this project keeps are the ones something prints or something fails on.** That is
+already written in `LESSONS.md` §0 about the resume note, and in `test_chat_history`'s own header. I
+read both this session and still let a hand-carried step lapse.
+
+### WHAT SHIPS NOW, AT THE END OF EVERY BUILD
+
+    ==== PASTE THIS WITH THE INSTALL FILE ====     the Tampermonkey links, both scripts,
+                                                    each marked CHANGED or UNCHANGED
+    ==== SAVE CONFIRMATION — PASTE THIS TOO ====   chat history · lessons · changelog · resume note
+
+⚠ The save confirmation is read from **`git show --stat HEAD`**, never written from memory — a
+hand-written list drops whatever the writer forgets, which is exactly how ITEM 18 was lost. Each
+mandated file is checked off against what was actually committed and marked **`saved`** or
+**`MISSING`**; if the commit cannot be read it says so rather than claiming a save that did not
+happen.
+`skills/gex/SKILL.md` step 0-bis now requires both blocks in the build message, in those words.
+
+### verification
+`test_delivery.js` → **44**. Three mutations run individually, three caught.
+⚠ `S4` first greped for the word `MISSING`, which also appears in the comment explaining it — so
+deleting the conditional left the word behind and the assertion green. **This project's oldest
+recurring fault and I wrote it again**; it is bound to the expression now.
+
 ## v15.31 — the day as a candle, the strike grid behind the nodes, and IBH/IBL off the rail
 
 > "in the now column draw the daily candle in the background" · "it also has to always show the

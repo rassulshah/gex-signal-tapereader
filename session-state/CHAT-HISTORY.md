@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-01 · v15.31 · session `5e8d34b5`
+## 2026-09-01 · v15.32 · session `5e8d34b5`
 
-_40 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_42 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -599,8 +599,36 @@ Now the daily candle behind the NOW column, and the missing strikes.
 The candle draws. Now the missing strikes — every strike below 20% of King is filtered out, so the ladder reads as gappy.
 08-28 was already empty at that minute — I broke nothing. On 08-31: 5 node rows, **6 minor ticks**, and the candle. Now the tests.
 Three survivors — two are loose assertions of mine, one is genuinely redundant code.
+**On the missing strikes — you were seeing something real, but nothing was broken.** Measured on your panel: the tape carried **100 SPXW strikes on a 5-point grid** and the ladder drew **eleven**. 7615, 7625, 7655, 7665, 7670 were all absent *between* drawn rows. That's `nodeThresh` — only strikes at or above 20% of King count as a node, which is the right filter for what a node *is*.
+
+But a price axis with holes in it reads as data loss, and "is this missing or is it empty" isn't a question the face should leave open. Every in-frame strike now draws a faint 1px tick, its width its own %King. **A gap is now visible as a gap** — grid drawn with no bar means no dealer mass between two levels, which is the air pocket your own doctrine names and which was previously invisible because the row simply wasn't there.
+
+**The day's candle is behind the NOW column** — wick from the session high to low, body from the open to the last price, green when up. Every number comes from what the ⓪a section already measures and the band is anchored on, so the candle and the band can never describe different sessions. It sits behind everything at low opacity and takes no row from anything.
+
+**The view now holds the whole …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 24 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (19:01):** 24 commits, clean tree. Push blocked by the proxy for this repo, as all session — `installv1531.bat` pushes them from your machine.
+
+**OPERATOR:**
+> i dont see the tamper monky links or save confirmations which yuou are suppose to give me everytime there is a build telling me the files that were save (eg chat history, lessons learned  etc.)
+
+**me (19:29):** You're right, and it's been missing for several builds. The builder prints that block; I stopped pasting it. Let me fix the cause first, then give you the one you're owed.
 
 ### DECISIONS
+
+**v15.32 · the delivery message.**
+- **He had to ask twice for something the builder already prints.** The Tampermonkey links have
+  printed since v14.3; I stopped pasting them and never listed the record files at all. Pinned that
+  the BUILDER emits them; nothing pinned that the MESSAGE carries them.
+- **The save confirmation is now printed too, read from `git show --stat HEAD`** — never from
+  memory — with each mandated file marked `saved` or `MISSING`.
+- **The gex skill's SAVE procedure requires both blocks** (step 0-bis).
+- **I wrote the oldest bug in this project again**: S4 greped for the word "MISSING", which its own
+  comment contains.
 
 **v15.31 · the candle, the strike grid, IBH/IBL.**
 - **The "missing strikes" were below the 20%-of-King threshold** — 100 on the tape, 11 drawn. The
@@ -781,6 +809,9 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.32** — the builder's save-confirmation block; `skills/gex/SKILL.md` step 0-bis.
+`test_delivery` → 44. Three mutations, three caught. Suite 135 green / 6 baseline red.
+
 **v15.31** — the daily candle behind NOW; the minor-strike grid; the view guaranteed to hold the
 whole day; IBH/IBL off the level rail. `test_replay_face` → 136. Six mutations, five caught, one
 recorded as an honest survivor. Suite 135 green / 6 baseline red.
@@ -852,6 +883,10 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. **Every build message: paste BOTH blocks from the end of the builder's output.**
+2. Install v15.32.
+3. Proximity weighting and time-of-day windowing remain unshipped studies.
 
 1. **Install v15.31.**
 2. Layout questions go through Chromium (`tools/measure-ladder.js`), never jsdom.
@@ -939,6 +974,7 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+d19aa28 v15.31: the day as a candle, the strike grid behind the nodes, IBH/IBL off the level rail
 3745d82 v15.30: the grip was capped at 560 while his panel was 673
 9155067 v15.29: the EL really was cut off — and only a real browser could show it
 f8f574e v15.28: the expected low was clipped on the frame's edge, and in replay the band was a sliver
@@ -950,7 +986,6 @@ c5f29a7 study: keep the script that chose KT_DWELL_MIN
 265bc27 v15.23: the EM band was anchored on yesterday's open, and dwell was a count on two clocks
 d245994 test: Z5 survived mutation — a refusal nothing can reach is not a refusal
 00e2bbb build: the installer size gate measures the .bat, not a proxy for it
-0e971ef v15.22: the far-side line had never drawn, and the dependencies now have a live check
 ```
 
 ---
