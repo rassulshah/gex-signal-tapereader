@@ -131,6 +131,43 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.39 — I committed the project's oldest bug inside the fix for it
+
+**1 · A scale-invariant fact and a coordinate are different things, and I unified both.** Two candles
+disagreed about the day's colour, so I gave them one `sessionBody()`. Correct for the DIRECTION —
+`close > open` holds in any positive scale. **Wrong for the DRAWING**: `sessionBody` reports BAR
+prices and the ladder is EM space, bar × `emRr` = 1.0031195570. The body then hung below its own
+wick, and the expected move collapsed to 1% of the view — **v15.28's exact fault, reintroduced by
+the build whose subject was two surfaces disagreeing.** ⚠ **Ask what is scale-invariant before
+sharing anything between surfaces.** Share the fact; convert the coordinate.
+
+**2 · An invisible conversion is a trap for every future caller, and `scaleUsed` actively lied.**
+`emBand` multiplied every price it returned by `useRr` and published nothing — while reporting
+`scaleUsed: 1`, so a caller checking for a conversion is told there is none. ⚠ **A field that
+answers a question wrongly is worse than no field**: I checked the scale, got 1, and proceeded.
+It now publishes `emRr`. ⚠ And `test_em_band`'s standing rule — *every band field the face reads is
+also on the debug hook* — caught the omission before it shipped. A generic invariant caught a
+specific bug nobody had imagined.
+
+**3 · The disagreement was 6× the thing it described.** Body +0.50 on a 52.25 range. Measured over
+284 sessions: median body is 43% of range, but **13% of sessions have a body smaller than the 3.25
+point error**. ⚠ **Size the error against the signal, not against the price.** 3.25 points on 7647
+is 0.04% and sounds like nothing; against the body it was decisive one day in eight.
+
+**4 · The freeze guarded every WRITE and no READ.** `recorderBlind()` gates all nine write paths.
+The NOW candle *read* the live after-hours tape onto a book frozen at 14:59 and nothing objected.
+⚠ **A freeze is a property of what is DISPLAYED, not only of what is STORED.**
+
+**5 · A test that encodes one surface's formula cannot notice that surface is wrong.**
+`test_replay_face` c1e compared the drawn colour to `emBand.open` vs `nowLive` — the exact pair that
+was wrong — and passed throughout, because the fixture's anchor and open happened to agree.
+⚠ **Assert the FACT, not the FORMULA.** Fifth instance of an assertion pinning a broken design.
+
+**6 · Two harnesses, two different bugs, neither found by the other.** jsdom found the body escaping
+its wick (geometry within an element); real Chromium found the band collapsing to 1% of the view
+(layout across elements). ⚠ Neither is redundant, and **the operator's eye was still the thing that
+found the original defect** — both harnesses had been green on it for eight builds.
+
 ### v15.38 — an assertion satisfied by the survivor of what you deleted is not an assertion
 
 **1 · Two of twenty-four mutations passed, and both for the same reason.** I asserted that the words

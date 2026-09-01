@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.38
+// @version    15.39
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.38';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.39';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -22696,6 +22696,16 @@ function emBand(sym){
     // rendered identically before this. The bar index of each extreme is all it takes.
     out.hiFirst = (hiAt>=0 && loAt>=0) ? (hiAt<loAt) : null;
     if(isFinite(hiU) && isFinite(loU)){
+      // ⚠⚠ (v15.39c) PUBLISH THE RATIO. Every price this function returns — `now`, `open`,
+      // `hiWater`, `loWater`, `low`, `high` — is a BAR price times `useRr`, and NOTHING said so.
+      // Measured 2026-08-31 in the harness: bars high 769.88, `hiWater` 772.28, ratio 1.0031195570.
+      // `scaleUsed` reads 1, so anyone checking a scale field is told there is no conversion.
+      // ⚠ I WALKED STRAIGHT INTO IT: v15.39 drew the candle from `sessionBody()` (BAR space) onto
+      // this rail (bar space x 1.0031) and the body hung below its own wick. The project's oldest
+      // failure — a value used outside the assumption it was created under — committed by the build
+      // whose entire subject was two surfaces disagreeing. An UNPUBLISHED conversion is a trap for
+      // every future caller, so it is published.
+      out.emRr=useRr;
       out.hiWater=hiU*useRr; out.loWater=loU*useRr;
       out.upExc=Math.max(0,(out.hiWater-open)/rec.em);      // excursion ABOVE the open, in EM
       out.dnExc=Math.max(0,(open-out.loWater)/rec.em);      // excursion BELOW it
@@ -24451,12 +24461,71 @@ function hlEff(sym, D){
   }catch(e){ return null; }
 }
 
+// ⚠⚠⚠ (v15.39) THE SESSION'S OPEN AND CLOSE, DECIDED IN EXACTLY ONE PLACE.
+// Operator, 2026-09-01: "look at the candles they look different in the app. in the now column you
+// have a red candle and in the hod lod section you have a green candle."
+//
+// ⚠ THEY WERE BOTH DRAWING TODAY AND THEY DISAGREED ABOUT ITS DIRECTION. Measured on his panel:
+//
+//     surface        open                          close                          body    colour
+//     NOW column     EB.open      7647.25          the LIVE tape   7644.25        -3.00   RED
+//     ⓪a HOD/LOD     hodLod.open  7647.00          last RTH bar    7647.50        +0.50   GREEN
+//
+// ⚠⚠ FOUR FAULTS IN THREE LINES OF CODE, and each is the same shape as an earlier one here:
+//  1. TWO "NOW"s — the live tick vs the last CLOSED bar, 3.25 points apart.
+//  2. ⚠ AND THE PANEL WAS FROZEN. The badge said "frozen 2:59 pm", the AFTER HOURS chip was up,
+//     and the NOW candle was still following the live AFTER-HOURS tape. A frozen session's candle
+//     must end at the 15:59 print. `recorderBlind()` governs every WRITE path; nothing governed
+//     this READ, so the one surface that says "the day is over" kept moving after it was.
+//  3. TWO OPENS — `EB.open` is the band's ANCHOR (snapped, 7647.25); `hodLod.open` is the first RTH
+//     bar's actual open (7647.00). One tick apart, and neither knew about the other.
+//  4. ⚠⚠ THE DAY WAS FLAT: +0.50 on a 52.25 range — a 1% body. THE DISAGREEMENT (3.25) WAS SIX AND
+//     A HALF TIMES THE BODY IT WAS DESCRIBING. On a flat day the choice of inputs does not shade
+//     the answer, it DECIDES it — which is exactly when a confident colour misleads most.
+//
+// ⚠⚠ AND THE TOOLTIP ASSERTED THE INVARIANT IT WAS BREAKING — verbatim from the running panel:
+// "The same numbers the ⓪a DAY section measures ... so the candle and the band can never describe
+// different sessions." It said `Body 7647 to 7644` while ⓪a drew 7647.00 to 7647.50.
+// ⚠ A COMMENT CLAIMS; ONLY A SHARED FUNCTION GUARANTEES. Prose cannot enforce an invariant, and
+// this is at least the third time in four builds that a comment described a property nothing held.
+//
+// So: ONE function, in CHART space, and both surfaces call it. There is no second opinion to drift.
+function sessionBody(sym){
+  try{
+    var D=null; try{ D=hodLod(sym); }catch(eD){ return null; }
+    if(!D || !D.ok || D.open==null) return null;
+    // ⚠ the SAME rr `dayCandleSvg` uses — `hodLod` reports in BAR space and carries its own scale.
+    // On an ES chart that is 1; on a cash chart it is not, and hard-coding either has burned this
+    // file before (v15.24: a stored ratio of 10.0353 against a series already at scale 1).
+    var rr=(typeof D.scale==='number' && D.scale>0)?D.scale:1;
+    var A=null; try{ A=gdActual(sym); }catch(eA){ return null; }
+    if(!A || typeof A.now!=='number') return null;
+    // ⚠⚠ (v15.39b) THE WICK COMES FROM HERE TOO, AND LEAVING IT OUT BROKE THE CANDLE.
+    // My first cut moved only the BODY onto this call and left the NOW column's wick on
+    // `EB.hiWater`/`EB.loWater`. Those are the same quantity from the same bars — and in the jsdom
+    // fixture they were not equal, so the body rendered from 163 to 255 inside a wick of 82 to 225:
+    // **a body hanging below its own low.** `test_replay_face` c1d caught it; I did not.
+    // ⚠ FIXING HALF OF A TWO-SOURCE BUG LEAVES A TWO-SOURCE BUG. The open and the close agreeing
+    // with each other is worth nothing if the RANGE they are drawn inside comes from somewhere else.
+    // One object now carries all four prices, so a body cannot escape its wick by construction.
+    var O=D.open*rr, C=A.now*rr, HI=D.hod*rr, LO=D.lod*rr, rng=HI-LO;
+    // ⚠ `gdActual` reads the last CLOSED bar, and `measureBars` is already truncated by the replay /
+    // frozen-book path — so this is the session's close on a frozen day and the newest closed bar on
+    // a live one, WITHOUT this function needing to know which. That is why it does not ask.
+    return { open:O, close:C, hi:HI, lo:LO, pts:C-O, up:(C>O), rng:rng,
+             pctOfRange:(rng>0)?Math.abs(C-O)/rng:null, scale:rr };
+  }catch(e){ return null; }
+}
 function dayCandleSvg(sym, D, PTL){
   try{
     if(!D || !D.ok || D.open==null) return '';
     var rr=(typeof D.scale==='number' && D.scale>0)?D.scale:1;
-    var H=D.hod*rr, L=D.lod*rr, O=D.open*rr;
-    var A=gdActual(sym); var C=(A&&A.now!=null)?A.now*rr:null;
+    var H=D.hod*rr, L=D.lod*rr;
+    // ⚠ (v15.39) OPEN AND CLOSE COME FROM `sessionBody()`, NOT FROM LOCAL ARITHMETIC — it is the one
+    // place they are decided, and the NOW-column candle reads the same call. See the header above.
+    var SB=sessionBody(sym);
+    if(!SB) return '';
+    var O=SB.open, C=SB.close;
     var rng=H-L;
     if(!(rng>0) || C==null) return '';
     // ⚠ (v14.98) THE MONEY. "how much money could have been made" — the full HOD-to-LOD move. It
@@ -25976,8 +26045,20 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
         // chart's scale, so the day's range is already in this list — what was missing is that it
         // was optional: the pad could be trimmed and the clamp to [lo,hi] could cut it. Both bounds
         // are now taken before any trimming, and the clamp below can only WIDEN past them.
-        var _pl=[now, EB.nowLive, EB.loWater].filter(function(v){ return typeof v==='number' && v>0; });
-        var _ph=[now, EB.nowLive, EB.hiWater].filter(function(v){ return typeof v==='number' && v>0; });
+        // ⚠⚠ (v15.39b) THE CANDLE'S OWN EXTREMES ARE IN THIS LIST, NOT A SECOND READ OF THEM.
+        // The promise is "the whole daily candle is always in view" — so the list must contain the
+        // numbers THE CANDLE IS DRAWN FROM. It contained `EB.hiWater`/`EB.loWater`, which are the
+        // same quantity measured by a different path, and v15.39's move of the candle onto
+        // `sessionBody()` made the two disagree: measured in the jsdom fixture, the candle spanned
+        // 148 to 291 in a view of 0 to 246 — the day's low hanging below the window, on the build
+        // whose whole subject was the two halves agreeing. `test_replay_face` c3 caught it.
+        // ⚠ A GUARANTEE ABOUT X MUST BE WRITTEN IN TERMS OF X. "The view contains the session's
+        // high" and "the view contains the candle's high" are the same sentence only while two
+        // measurements agree — which is the assumption this entire build exists to stop making.
+        var _SBv=null; try{ var _s0=sessionBody(sym); if(_s0 && typeof EB.emRr==='number' && EB.emRr>0)
+          _SBv={ hi:_s0.hi*EB.emRr, lo:_s0.lo*EB.emRr, open:_s0.open*EB.emRr, close:_s0.close*EB.emRr }; }catch(eSBv){}
+        var _pl=[now, EB.nowLive, EB.loWater, (_SBv?_SBv.lo:null), (_SBv?_SBv.close:null)].filter(function(v){ return typeof v==='number' && v>0; });
+        var _ph=[now, EB.nowLive, EB.hiWater, (_SBv?_SBv.hi:null), (_SBv?_SBv.open:null)].filter(function(v){ return typeof v==='number' && v>0; });
         if(_pl.length) viewLo=Math.min(viewLo, Math.min.apply(null,_pl));
         if(_ph.length) viewHi=Math.max(viewHi, Math.max.apply(null,_ph));
         // a little air so the edge rows are not flush against the border
@@ -26465,21 +26546,51 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       // ⚠ BEHIND, NOT BESIDE: it is the backdrop the price pill and the crowns sit on, at low opacity
       // and with no pointer events, so it adds a frame of reference without taking a row from anyone.
       try{
+        // ⚠⚠ (v15.39c) THE WICK STAYS ON `EB.hiWater`/`EB.loWater` BECAUSE THIS RAIL IS EM SPACE.
+        // `sessionBody()` reports BAR prices; every price on this ladder is a bar price x `EB.emRr`
+        // (1.0031 on 2026-08-31). v15.39b "fixed" the disagreement by putting bar prices on an EM
+        // rail — which is not a fix, it is the same class of fault pointing the other way, and the
+        // real browser caught it: the expected move collapsed to 1% of the view.
+        // ⚠ THE COLOUR IS SCALE-INVARIANT AND THE COORDINATES ARE NOT. `close > open` is true in
+        // both spaces, so the DIRECTION could always be shared; only the DRAWING needed converting.
+        // Unifying the coordinates as well was over-reach, and it broke two of his standing rules
+        // at once (v15.28 "open on the expected move", v15.31 "always show the whole daily column").
+        // ⚠⚠ (v15.39) OPEN AND CLOSE FROM `sessionBody()` — NOT `EB.open` AND NOT THE LIVE PRICE.
+        // This block used the band's ANCHOR for the open and the LIVE tape for the close, so it drew
+        // 7647.25 → 7644.25 (RED) while ⓪a drew the same session 7647.00 → 7647.50 (GREEN). The two
+        // faults compounded: a snapped anchor one tick off the real open, and a "close" that kept
+        // moving after the session ended — the panel was FROZEN and this candle was not.
+        // ⚠ `sessionBody()` returns CHART space, the same space `hiWater`/`loWater` are already in
+        // (`out.hiWater = hiU*useRr`), so nothing is converted here. A conversion at the call site is
+        // how the second opinion gets back in.
+        var _SB=sessionBody(sym);
+        // ⚠ ONE ratio, taken from the band that owns this rail — never derived here, and never 1
+        // "because it usually is". A missing ratio means we cannot place the body, so we draw none.
+        var _rr=(typeof EB.emRr==='number' && EB.emRr>0)?EB.emRr:null;
         var _dH=(typeof EB.hiWater==='number')?EB.hiWater:null;
         var _dL=(typeof EB.loWater==='number')?EB.loWater:null;
-        var _dO=(typeof EB.open==='number')?EB.open:null;
-        if(_dH!=null && _dL!=null && _dH>_dL){
+        var _dO=(_SB && _rr)?_SB.open*_rr:null;
+        var _dC=(_SB && _rr)?_SB.close*_rr:null;
+        if(_SB && _rr && _dH!=null && _dL!=null && _dH>_dL){
           var yH=Y(_dH), yL=Y(_dL);
-          var bodyA=(_dO!=null)?Y(_dO):yL, bodyB=tn;
+          var bodyA=Y(_dO), bodyB=Y(_dC);
           var bTop=Math.min(bodyA,bodyB), bH=Math.max(1.5, Math.abs(bodyB-bodyA));
-          var up=(_dO==null)?true:(now>=_dO);
+          var up=_SB.up;
           h+='<i class="g3lddc g3lddcw'+(up?' up':' dn')+'" style="top:'+yH.toFixed(1)+
              'px;height:'+Math.max(1,(yL-yH)).toFixed(1)+'px"'+
              g3tip('THE SESSION AS ONE CANDLE, on this ladder\u2019s own price axis. Wick '+
                frameNum(_dL)+' to '+frameNum(_dH)+' \u2014 the day\u2019s range. Body '+
-               (_dO!=null?(frameNum(_dO)+' to '+frameNum(now)):'open to now')+
-               '. \u26a0 The same numbers the \u24ea a DAY section measures and the same the expected-move '+
-               'band is anchored on, so the candle and the band can never describe different sessions.')+
+               frameNum(_dO)+' to '+frameNum(_dC)+', '+
+               (_SB.pts>=0?'+':'\u2212')+Math.abs(_SB.pts).toFixed(2)+'pts'+
+               ((_SB.pctOfRange!=null)?(' \u2014 '+Math.round(100*_SB.pctOfRange)+'% of the day\u2019s range'):'')+
+               '. \u26a0 The open is the first RTH bar\u2019s OPEN and the close is the last CLOSED bar \u2014 '+
+               'not the band\u2019s anchor and not the live tick, so on a frozen or replayed day this '+
+               'candle STOPS where the session did. \u26a0 The \u24ea a DAY candle is drawn from the SAME '+
+               'sessionBody() call, so the two cannot disagree \u2014 they did, until v15.39: this one '+
+               'read the anchor and the live tape and printed RED on a day \u24ea a printed GREEN.'+
+               ((_SB.pctOfRange!=null && _SB.pctOfRange<0.02)
+                 ? ' \u26a0 A body this small is a FLAT day \u2014 the colour is a real sign but a weak claim.'
+                 : ''))+
              '></i>'+
              '<i class="g3lddc g3lddcb'+(up?' up':' dn')+'" style="top:'+bTop.toFixed(1)+
              'px;height:'+bH.toFixed(1)+'px"></i>';
@@ -27125,7 +27236,14 @@ function emPos(B, v){
 // The track rescales to hold price with a margin, and the ORIGINAL boundary becomes a marked line, so
 // the expected move stays visible as a level rather than being quietly redefined as the edge.
 var EM_RAIL_PAD = 0.25;    // ⚖ hand-set: a quarter of the band's own width beyond price
-function emRailBounds(B, piles){
+// ⚠⚠ (v15.39b) `sb` — THE SESSION CANDLE'S OWN FOUR PRICES. The frame is what the WINDOW opens
+// onto, so anything drawn must fit inside it; v15.39 moved the candle onto `sessionBody()` and left
+// this frame on `B.hiWater`/`B.loWater`, and the window then measured 312px onto a 300px frame —
+// asked to show more than the frame holds. `test_replay_face` y8g/y8h caught it.
+// ⚠ THE FRAME MUST BE BUILT FROM THE NUMBERS THAT WILL BE DRAWN, not from a second measurement of
+// the same idea. Three surfaces now take the candle's extremes from one object: the candle, the
+// view, and this frame. That is the whole correction, applied consistently instead of twice.
+function emRailBounds(B, piles, sb){
   var out={ lo:B.low, hi:B.high, over:false, under:false, span:(B.high-B.low) };
   try{
     var span=B.high-B.low; if(!(span>0)) return out;
@@ -27138,6 +27256,16 @@ function emRailBounds(B, piles){
     var nl=(typeof B.nowLive==='number')?B.nowLive:B.now;
     var hiRef=Math.max(B.now, nl, (B.hiWater!=null?B.hiWater:B.now));
     var loRef=Math.min(B.now, nl, (B.loWater!=null?B.loWater:B.now));
+    // ⚠ the candle's own high/low AND its body ends — the body can sit outside the wick's own
+    // measurement when the two came from different reads, which is exactly the fault being fixed.
+    if(sb){
+      ['hi','lo','open','close'].forEach(function(k){
+        var v=sb[k];
+        if(typeof v!=='number' || !isFinite(v) || !(v>0)) return;
+        if(v>hiRef) hiRef=v;
+        if(v<loRef) loRef=v;
+      });
+    }
     if(hiRef>B.high){ out.hi=hiRef+pad; out.over=true; }
     if(loRef<B.low){  out.lo=loRef-pad; out.under=true; }
     // (v14.16) THE RAIL HOLDS EVERY NODE ATLAS DRAWS. With the band clip gone from skPiles, a node
@@ -27321,7 +27449,12 @@ function secFrame(sym){
     // RB is the drawn track, which grows once a boundary has been run so "how far past" is visible.
     // (v14.16) ...and grows to hold every pile, so the un-clipped node set is actually drawable —
     // RAILPS therefore computes FIRST. One RB serves the rail AND the profile beneath it.
-    var RB=emRailBounds(EB, RAILPS);
+    // ⚠ CONVERTED into this rail's space before it is handed over — an unconverted body here is
+    // exactly what blew the frame open in v15.39b.
+    var RB=emRailBounds(EB, RAILPS, (function(){ try{
+      var b=sessionBody(sym); if(!b || !(EB.emRr>0)) return null;
+      return { hi:b.hi*EB.emRr, lo:b.lo*EB.emRr, open:b.open*EB.emRr, close:b.close*EB.emRr };
+    }catch(eRB){ return null; } })());
     // (v13.9) THE RAIL DRAWS THE LATCH TOO — the same list the NODES section draws, or the two
     // surfaces disagree about which rolls exist, which is the exact drift the shared-array rule
     // forbids. GAVE BACK entries are excluded here: an arrow on the rail claims structure, and a
@@ -29391,6 +29524,11 @@ window.__gptsDebug.emBand = function(sy){
       // (v11.59) the shape fields. Added to emBand() at v11.57 and never surfaced here, so the only way
       // to check them was to read pixels — which is how the anchor drift went unnoticed.
       shape:B.shape||null, hiWater:B.hiWater, loWater:B.loWater,
+      // ⚠ (v15.39c) THE RATIO EVERY PRICE ABOVE HAS ALREADY BEEN MULTIPLIED BY. It was applied
+      // invisibly and `scaleUsed` reads 1, so a caller checking for a conversion is told there
+      // isn't one — which is how v15.39b put bar prices on this rail. test_em_band caught the
+      // omission from this hook before it shipped, which is the whole point of that assertion.
+      emRr:B.emRr,
       upExc:B.upExc, dnExc:B.dnExc, giveBack:B.giveBack, hiFirst:B.hiFirst,
       roomUp:B.roomUp, roomDn:B.roomDn, roomAhead:B.roomAhead,
       gamma:B.gamma, stretched:B.stretched, scaleUsed:B.scaleUsed, openHealed:!!B.openHealed,
@@ -29520,6 +29658,19 @@ window.__gptsDebug.session = function(){
 // failed. A mode that silently does not engage is as bad as one that silently does.
 // (v14.83) the King track, so "how many times did it move" can be answered from the console
 // without exporting a day file — and so the flicker suppression can be seen working.
+// (v15.39) the session's body, and WHICH surfaces agree about it — so "the two candles disagree"
+// is a question the console answers in one call instead of a screenshot comparison.
+window.__gptsDebug.sessionBody = function(sym){
+  try{
+    var S=sessionBody(sym||'SPY');
+    if(!S) return { err:'no session body — no RTH bars yet, or no measureBars source' };
+    return { open:S.open, close:S.close, pts:+S.pts.toFixed(2), up:S.up,
+             rng:+S.rng.toFixed(2), pctOfRange:(S.pctOfRange!=null)?+(100*S.pctOfRange).toFixed(1):null,
+             flat:(S.pctOfRange!=null && S.pctOfRange<0.02),
+             scale:S.scale,
+             note:'BOTH the NOW-column candle and the \u24eaa candle read this one call (v15.39).' };
+  }catch(e){ return { err:String(e&&e.message||e) }; }
+};
 window.__gptsDebug.kingTrack = function(){
   try{
     ktLoad();

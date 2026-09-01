@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-01 · v15.38 · session `5e8d34b5`
+## 2026-09-01 · v15.39 · session `5e8d34b5`
 
-_37 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_39 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -401,7 +401,54 @@ Two settings that matter on those pages:
 **OPERATOR:**
 > I want you to hold this implementation detail somewhere , maybe in a roadmap document . We will come back to it once the applciaiton with the current markets is optimal
 
+**me (23:22):** Parked. **`design/spec-futures-gamma-markets.md`** — 275 lines, and no panel behaviour changed; the only edit to the userscript is the version string, shipped that way because the installer is the only channel that gets the file onto your machine.
+
+**The spec exists to preserve the three traps, not the plan.** Each was found by measuring, each would have shipped a wrong number, and none is visible from reasoning:
+
+1. `*1` (nearest) vs `*0` (most active) — `*1` puts **gold and copper on September**. It matches 3 of your 5 symbols, and a rule that's right for 3 of 5 looks right in testing.
+2. The DTN root map is **hand-written, never derived** — copper is `CPE` not `HGE`, euro is `E6` with no suffix, and Barchart's root is `E6` so `6EU26` 404s. That's a way to build the whole feature against a dead symbol and never see data.
+3. The chain is **not in the raw HTML** — 466,227 bytes, `"strike":` appears zero times. That single fact is the entire reason delivery is a reader userscript rather than a fetch.
+
+The negatives are in there too, because they cost the most to establish and nothing else records them: Skylit returns zero snapshots for every futures symbol *including ES*, InsiderFinance is equity-only, and the ETF route is dropped and explicitly **not** a fallback. Plus the sizing insight — open interest is a once-a-day exchange number, so there is nothing to poll, which is also why the paid vendors' futures levels are EOD.
+
+`load gex` step **1a-1** routes a future context there with two instructions attached: never re-research it, and **don't start it unprompted**. The roadmap gains a PARKED block and now declares its own staleness — it still said "current shipped v10.29" while the panel was v15.37.
+
+`test_parked_specs.js` (36 assertions) fails the build if any of that …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 31 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (23:23):** Push is blocked again — the git proxy won't issue a credential for `rassulshah/gex-signal-tapereader` (403). Unchanged all session; nothing I can do from this container.
+
+All **31 commits** are inside `installv1538.bat`. Running it writes them into `C:\Dev\gex-signal-tapereader` and pushes from your machine, where the credential lives. The raw.githubusercontent link updates a few minutes after that lands.
+
+**OPERATOR:**
+> lets get back to the application.. look at the candles they look different in the app . in the now column you have a red candle and in the hod lod section you have a green candle
+
+**me (23:26):** Both confirmed live: NOW column is `dn` (red `rgb(240,97,109)`), HOD/LOD body is `#2ec27e` (green). Two different computations of the same fact.
+Found it — and the tooltip is the smoking gun. Let me confirm the scale handling before I change anything.
+Both confirmed. Implementing the fix.
+Measured over 284 recorded sessions — the number that matters:
+A real geometry break, caught by the render harness — the body escaped the wick. Same bug in the half I hadn't fixed.
+Real Chromium caught a regression — I over-widened. Let me measure the actual disagreement rather than paper over it.
+The fixture disagreement is real, not an artifact — two session highs 2.4 points apart. Let me find which is right.
+Found the real cause — and it's a scale mismatch I introduced. Let me confirm the ratio.
+A pre-existing guard caught the omission — `emRr` must be on the debug hook too.
+
 ### DECISIONS
+
+**v15.39 · two candles, one session, two colours.**
+- NOW column drew `EB.open`(7647.25) → LIVE TAPE(7644.25) = RED; ⓪a drew `hodLod.open`(7647.00) →
+  last CLOSED bar(7647.50) = GREEN. **The panel was FROZEN and the NOW candle still tracked the
+  after-hours tape** — recorderBlind gates every WRITE, gated no READ.
+- The day was FLAT: +0.50 on 52.25. **The disagreement was 6× the body.** Over 284 sessions, 13%
+  have a body smaller than that 3.25pt error.
+- The tooltip asserted "the candle and the band can never describe different sessions" while they did.
+- ⚠ **I then committed the project's oldest bug inside the fix**: `sessionBody` is BAR space, the
+  ladder is EM space (×`emRr`=1.00312, applied invisibly with `scaleUsed` reading 1). jsdom caught
+  the body escaping its wick; real Chromium caught the band collapsing to 1% of the view.
+- **The colour is scale-invariant; the coordinates are not.** `emBand` now publishes `emRr`.
 
 **v15.38 · the futures-gamma research, parked.**
 - He asked to hold the implementation detail *"until the application with the current markets is
@@ -653,6 +700,11 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.39** — `sessionBody(sym)` owns the session's open/close/hi/lo; both candles read it, the NOW
+column converting by the published `emRr`. `__gptsDebug.sessionBody()`. `test_session_body.js` (46),
+`test_replay_face` 151→157, `test_em_band` caught `emRr` missing from the debug hook.
+30 mutations / 30 caught. Suite 134 green / 6 baseline red.
+
 **v15.38** — documentation only; no panel behaviour changed. `design/spec-futures-gamma-markets.md`
 (275 lines), a PARKED block + self-declared staleness in `PRODUCT-ROADMAP.md`, step 1a-1 in the gex
 skill, and `test_parked_specs.js` (36). 24 mutations / 24 caught after fixing two loose greps.
@@ -752,6 +804,11 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. **Two session highs still exist** — `emBand.hiWater` vs `hodLod.hod`, consistent only via
+   `emRr`. Labelled, not unified.
+2. The futures-gamma build stays parked (v15.38 spec).
+3. Copper (`HG`/`CPEZ26`) inclusion asked twice, never answered.
 
 1. **The futures-gamma build is parked** — unparks on his word, not a context's initiative.
 2. Copper (`HG` / `CPEZ26`) inclusion asked twice, never answered.
@@ -871,6 +928,7 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+bebec5f v15.38: the futures-gamma research, parked where it cannot rot
 8b76b71 v15.37: YF and FF lamps — two integrations that ran 27 builds with nothing on the face
 8edb3e0 v15.36: the king lane is not a census, and I read the count off the lane
 b3d9451 v15.35: the freeze badge was printing a 1970 timestamp
@@ -882,7 +940,6 @@ d19aa28 v15.31: the day as a candle, the strike grid behind the nodes, IBH/IBL o
 9155067 v15.29: the EL really was cut off — and only a real browser could show it
 f8f574e v15.28: the expected low was clipped on the frame's edge, and in replay the band was a sliver
 8beb190 v15.27: scaleUsed has two meanings and I changed the one with ten consumers
-2a1fc9c v15.26: fix the blank ladder I shipped at v15.24 — a stored scale outlived its series
 ```
 
 ---

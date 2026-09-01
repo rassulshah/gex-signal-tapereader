@@ -576,11 +576,28 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
     // ⚠ AGREEING IS NOT BEING RIGHT. c1c passes when both are hard-coded 'up' — it survived that
     // mutation. The direction is a FACT about the session: green only when the last price is at or
     // above the open.
-    const dir=JSON.parse(R.run('JSON.stringify((function(){var b=emBand("SPY");var cs=measureBars("SPY").bars||[];var n=cs.length?cs[cs.length-1].c*(b.scaleUsed||1):null;return {open:b.open, now:(typeof b.nowLive===\'number\')?b.nowLive:b.now};})())'));
-    if(dir.open!=null && dir.now!=null)
-      ok(wick[1]===((dir.now>=dir.open)?'up':'dn'),
-         'c1e ...and the colour is the DAY\'s direction, measured, not assumed',
-         {drawn:wick[1], open:dir.open, now:dir.now});
+    // ⚠⚠ (v15.39) THIS ASSERTION USED TO DEFEND THE BUG. It compared the drawn colour against
+    // `emBand.open` vs `nowLive` — the band's ANCHOR against the LIVE tape — which is precisely the
+    // pair that printed RED on 2026-09-01 while the ⓪a candle printed GREEN off the same session.
+    // It passed the whole time, because the fixture's anchor and open happened to agree.
+    // ⚠ AN ASSERTION THAT ENCODES ONE SURFACE'S FORMULA CANNOT NOTICE THAT SURFACE IS WRONG. The
+    // colour is a fact about the SESSION — first RTH bar's open against the last CLOSED bar — and
+    // that fact has exactly one owner now.
+    const dir=JSON.parse(R.run('JSON.stringify((function(){var s=sessionBody("SPY");return s?{open:s.open, close:s.close, up:s.up}:null;})())'));
+    ok(dir!=null, 'c1e0 sessionBody() resolves in the rendered face', dir);
+    if(dir)
+      ok(wick[1]===(dir.up?'up':'dn'),
+         'c1e ...and the colour is the SESSION\'s direction, from the one call both candles read',
+         {drawn:wick[1], open:dir.open, close:dir.close});
+    // ⚠ and the ⓪a candle is drawn from the SAME object, so this is an identity, not a coincidence
+    const hlFill=(R.html.match(/<svg class="g3cdl"[\s\S]*?<\/svg>/)||[''])[0];
+    if(hlFill && dir){
+      const bodyStroke=(hlFill.match(/<rect x="37"[^>]*stroke="(#[0-9a-f]{6})"/i)||[])[1];
+      if(bodyStroke)
+        ok(bodyStroke===(dir.up?'#2ec27e':'#f0616d'),
+           'c1e2 ...and the ⓪a candle carries the SAME direction, because it is the same call',
+           {hodlod:bodyStroke, nowColumn:wick[1], up:dir.up});
+    }
     const wTop=+wick[2], wH=+wick[3], bTop=+body[2], bH=+body[3];
     ok(bTop>=wTop-0.5 && (bTop+bH)<=(wTop+wH)+0.5,
        'c1d ...the body is INSIDE the wick, which is what a candle means', {wTop,wH,bTop,bH});
@@ -591,6 +608,25 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
        'c1f ...and SMALLER than it: a body spanning the whole range is not a candle, it is a block',
        {bodyH:bH, wickH:wH});
     // ⚠ EXECUTED against the band: the wick must be the session's own high and low, not a guess
+    // ⚠⚠ (v15.39c) THE CONVERSION, PROVEN IN THE RENDERED FACE — not asserted from the source.
+    // Every price emBand returns is a BAR price x `emRr`. If the candle is converted correctly it is
+    // ALREADY inside the frame, so the frame guard never fires; hand it BAR prices and the guard
+    // fires, which is the fault v15.39b shipped. Both halves are executed here.
+    const conv=JSON.parse(R.run('JSON.stringify((function(){'+
+      'var b=emBand("SPY"), s=sessionBody("SPY"); if(!s||!(b.emRr>0)) return null;'+
+      'var c={hi:s.hi*b.emRr, lo:s.lo*b.emRr, open:s.open*b.emRr, close:s.close*b.emRr};'+
+      'var A=emRailBounds(b,null,null), B=emRailBounds(b,null,c), C=emRailBounds(b,null,s);'+
+      'return {emRr:b.emRr, hiMatches:Math.abs(c.hi-b.hiWater)<1e-6, loMatches:Math.abs(c.lo-b.loWater)<1e-6,'+
+      ' inert:(A.lo===B.lo && A.hi===B.hi), rawWidens:(A.lo!==C.lo || A.hi!==C.hi)};})())'));
+    ok(conv!=null, 'c2a emBand publishes emRr and sessionBody resolves', conv);
+    if(conv){
+      ok(conv.emRr!==1, 'c2b the ratio is NOT 1 — an unconverted candle really is on the wrong axis', conv.emRr);
+      ok(conv.hiMatches && conv.loMatches,
+         'c2c EXECUTED: sessionBody\u00d7emRr reproduces hiWater/loWater EXACTLY \u2014 one session, two spaces', conv);
+      ok(conv.inert, 'c2d ...so a CONVERTED candle is already inside the frame and the guard never fires', conv);
+      ok(conv.rawWidens,
+         'c2e ...while BAR prices DO distort it \u2014 the v15.39b fault, still detectable', conv);
+    }
     const EBc=JSON.parse(R.run('JSON.stringify((function(){var b=emBand("SPY");return {hw:b.hiWater,lw:b.loWater,open:b.open};})())'));
     ok(EBc.hw!=null && EBc.lw!=null,
        'c2 the band carries the session extremes the candle is drawn from', EBc);

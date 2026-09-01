@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-01 · panel v15.38 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-01 · panel v15.39 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.38, and what the face carries
+## 2 · WHERE WE ARE — v15.39, and what the face carries
 
-**Panel v15.38 · companion v1.17.** Suite **133 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.39 · companion v1.17.** Suite **134 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -177,6 +177,24 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠⚠ **v15.39 — `emBand` MULTIPLIES EVERY PRICE IT RETURNS BY `emRr`, AND UNTIL NOW SAID NOTHING.**
+Measured 2026-08-31: bars high **769.88**, `EB.hiWater` **772.28**, ratio **1.0031195570**. And
+`scaleUsed` reads **1**, so a caller checking for a conversion is told there is none. ⚠ **THE LADDER
+IS EM SPACE; `hodLod`/`sessionBody` ARE BAR SPACE.** Anything moving between them must multiply.
+I walked into this INSIDE the fix for it — v15.39b put bar prices on the EM rail, the body hung
+below its own wick (jsdom) and the expected move collapsed to 1% of the view (real Chromium), which
+is v15.28's exact fault reintroduced. ⚠ **THE COLOUR IS SCALE-INVARIANT; THE COORDINATES ARE NOT** —
+share the FACT, convert the COORDINATE. `emBand` now publishes `emRr`; use it, never derive it.
+⚠⚠ **THE ORIGINAL DEFECT:** the NOW-column candle drew `EB.open`→LIVE TAPE (RED) while ⓪a drew
+`hodLod.open`→last CLOSED bar (GREEN), on the same session. **The panel was FROZEN and the NOW
+candle was still following the after-hours tape** — `recorderBlind()` gates every WRITE and gated no
+READ. ⚠ The day was FLAT (+0.50 on 52.25) so **the disagreement was 6× the body**.
+✅ `sessionBody(sym)` now owns the session's open/close/hi/lo; both candles read it. `__gptsDebug.sessionBody()`.
+📏 **MEASURED over 284 sessions:** median body 43% of range; **13% of sessions have a body smaller
+than the 3.25pt error** — one day in eight it decided the colour.
+⚠ **FOUND, NOT FIXED:** the panel carries TWO session highs — `emBand.hiWater` and `hodLod.hod` —
+consistent only through `emRr`. Now labelled, not yet unified.
 
 ⚠⚠⚠ **v15.38 — THE FUTURES-GAMMA WORK IS PARKED, NOT ABANDONED, AND NOT YOURS TO START.**
 `design/spec-futures-gamma-markets.md` — gamma levels for **CL · NG · GC · E6 (· HG pending)** from

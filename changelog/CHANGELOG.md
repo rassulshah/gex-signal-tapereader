@@ -1,3 +1,76 @@
+## v15.39 — two candles, one session, and they disagreed about its colour
+
+> "look at the candles they look different in the app. in the now column you have a red candle and
+> in the hod lod section you have a green candle."
+
+### WHAT EACH ONE WAS ACTUALLY DRAWING — measured on his panel
+
+    surface        open                         close                        body    colour
+    NOW column     EB.open       7647.25        the LIVE tape    7644.25     -3.00   RED
+    ⓪a HOD/LOD     hodLod.open   7647.00        last CLOSED bar  7647.50     +0.50   GREEN
+
+**Four faults in three lines**, and each is a shape this file has met before:
+
+1. **Two "now"s** — the live tick against the last *closed* bar. 3.25 points apart.
+2. ⚠⚠ **AND THE PANEL WAS FROZEN.** The badge read "frozen 2:59 pm", the AFTER HOURS chip was up,
+   and the NOW candle was still following the **after-hours tape**. `recorderBlind()` guards every
+   WRITE path; nothing guarded this READ, so the one surface whose job is to say *the day is over*
+   kept moving after it was.
+3. **Two opens** — `EB.open` is the band's snapped ANCHOR (7647.25); `hodLod.open` is the first RTH
+   bar's actual open (7647.00).
+4. ⚠⚠ **THE DAY WAS FLAT: +0.50 on a 52.25 range — a 1% body. The disagreement was SIX TIMES the
+   body it described.** On a flat day the choice of inputs does not shade the answer, it *decides*
+   it — which is exactly when a confident colour misleads most.
+
+⚠⚠ **AND THE TOOLTIP ASSERTED THE INVARIANT IT WAS BREAKING**, verbatim off the running panel:
+*"The same numbers the ⓪a DAY section measures … so the candle and the band can never describe
+different sessions."* It printed `Body 7647 to 7644` while ⓪a drew 7647.00 → 7647.50.
+**A COMMENT CLAIMS; ONLY A SHARED FUNCTION GUARANTEES.** Third time in four builds.
+
+### MEASURED — 284 recorded sessions — how often this mattered
+
+    median body                        43% of the day's range
+    body under 2% of range              2.8% of sessions   ← his day, at 1%
+    median |close - open|              19.25 ES points
+    |close - open| < 3.25 points       13.0% OF SESSIONS   ← the size of the disagreement
+
+**One session in eight had a body smaller than the error.** Not a today-only fluke.
+
+### THE FIX — `sessionBody(sym)`, and both candles read it
+
+One function owns the session's open, close, high and low. ⓪a draws from it directly; the NOW column
+draws from it converted onto its own rail.
+
+### ⚠⚠ AND I COMMITTED THE PROJECT'S OLDEST BUG WHILE FIXING IT
+
+v15.39b put `sessionBody()`'s **BAR** prices straight onto the ladder, which is **EM space** — every
+price `emBand` returns is a bar price × `useRr` (**1.0031195570** measured 2026-08-31), applied
+invisibly, with `scaleUsed` reading **1** so anyone checking for a conversion is told there is none.
+
+    jsdom      the body drew from 163 to 255 inside a wick of 82 to 225 — hanging below its own low
+    Chromium   the expected move collapsed to 1% of the view — v15.28's exact fault, reintroduced
+
+⚠ **THE COLOUR IS SCALE-INVARIANT AND THE COORDINATES ARE NOT.** `close > open` holds in both
+spaces, so the *direction* could always be shared; only the *drawing* needed converting. Unifying
+the coordinates as well broke two standing rules at once (v15.28 "open on the expected move",
+v15.31 "always show the whole daily column").
+✅ `emBand` now **publishes `emRr`** rather than applying it silently — and `test_em_band`'s existing
+"every field the face reads is on the debug hook" assertion caught it missing before it shipped.
+
+`test_session_body.js` (**46**) and `test_replay_face` (**157**, was 151) — including an executed
+proof that `sessionBody × emRr` reproduces `hiWater`/`loWater` exactly, so a correctly converted
+candle is *already* inside the frame and the guard never fires, while bar prices distort it.
+⚠ `test_replay_face` **c1e used to defend the bug** — it compared the drawn colour against the
+anchor and the live tape. An assertion that encodes one surface's formula cannot notice that surface
+is wrong. **30 mutations, 30 caught** (after two fixes). Suite **134 green / 6 baseline red**.
+
+### ⚠ FOUND, NOT FIXED — logged for the next session
+
+`emBand.hiWater` and `hodLod.hod` are the same session's high measured twice: **769.88 vs 772.28**
+in the 2026-08-31 fixture. They differ by exactly `emRr`, so they are consistent — but the panel
+carries **two session highs in two spaces** and only now says which is which.
+
+
 ## v15.38 — the futures-gamma research, parked where it cannot rot
 
 > "I want you to hold this implementation detail somewhere, maybe in a roadmap document. We will
