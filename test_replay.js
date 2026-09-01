@@ -470,7 +470,10 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
   // an undefined RP_KT throws straight past it into ktOf's catch and returns [] — a green-looking
   // empty. Stub it, or this whole block tests the fallback instead of the feature.
   global.RP_KT={ key:null, out:[] };
-  eval(ex('replayKingTrack')); eval(ex('ktOf'));
+  // ⚠ (v15.24) ktFilterDwell too — ktOf calls it, and without it every call falls through ktOf's
+  // own catch and returns [], which reads as "the lane has no points" rather than "the harness is
+  // missing a function". The same swallow-shaped failure the seam lessons keep producing.
+  eval(ex('replayKingTrack')); eval(ex('ktFilterDwell')); eval(ex('ktOf'));
   REPLAY.on=true; REPLAY.frames=FR; REPLAY.idx=2; REPLAY.day='2026-08-31';
   const J=ktOf('SPXW');
   ok(J.length>0, 'kt1 the lane has points in replay where the live latch had none', J.length);
@@ -493,12 +496,22 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
     // ⚠⚠ AT 20 MINUTES, THREE MORE 3-MINUTE BARS IS SIX MINUTES — NOT a migration. The old fixture
     // asserted that two sightings promoted a strike, which was only ever true because the constant
     // was a COUNT of 2. A duration cannot be satisfied by adding one bar.
-    ok(run(7700,7700,7705,7705,7705).length===1,
-       'kt8 a strike held SIX minutes is still a flicker at a 20-minute dwell');
-    const held=[7700,7700].concat(new Array(9).fill(7705));   // 7705 held from bar 2 to bar 10 = 24m
+    // ⚠⚠ (v15.24) THE LAST POINT IS ALWAYS DRAWN, AND THAT IS DELIBERATE. Since the dwell rule
+    // moved to READ time, the final point is the crown's CURRENT seat — its run has not finished, so
+    // its duration is not yet decided, and refusing to draw it would leave the lane ending in empty
+    // space while the crown is plainly somewhere. It is a position, not yet a migration claim.
+    // A flicker therefore survives only while it is the LAST point, which costs at most one run.
+    const six=run(7700,7700,7705,7705,7705);
+    ok(six.length===2 && six[1].k===7705,
+       'kt8 a six-minute hold is drawn while it is the CURRENT seat', six.map(x=>x.k));
+    const later=run(7700,7700,7705,7705,7705,7700,7700,7700,7700);
+    ok(later.length===1,
+       'kt8b ...and once it has been REPLACED, a six-minute hold is dropped as the flicker it was',
+       later.map(x=>x.k));
+    const held=[7700,7700].concat(new Array(9).fill(7705)).concat([7700,7700]);
     const M=run.apply(null, held);
-    ok(M.length===2 && M[1].k===7705,
-       'kt8 ...and held past twenty minutes it IS a migration', M.map(x=>x.k));
+    ok(M.length===3 && M[1].k===7705,
+       'kt8c ...while a 24-minute hold survives being replaced', M.map(x=>x.k));
     // ⚠⚠ kt7/kt8 CANNOT SEE WHETHER KT_DWELL IS HONOURED — at 2 the loop structurally needs two
     // sightings to reach the push, so deleting the dwell check changes nothing and survived mutation.
     // The property is that the CONSTANT governs, not that the code happens to need two passes.
@@ -506,20 +519,54 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
     // sightings of 7705 — at dwell 3 that IS a migration. The case has to have exactly two.
     // ⚠ THE CONSTANT MUST GOVERN, not the loop's shape. Same fixture, two thresholds, two answers.
     global.KT_DWELL_MIN=60; RP_KT.key=null;
+    // `held` ends on 7700, so the 24-minute 7705 run has been REPLACED and is judged: at 60 minutes
+    // it is a flicker, and only the seed plus the current seat survive — which are the same strike,
+    // so the lane collapses to one point. That is the correct answer and my first expectation of 2
+    // was simply wrong about the fixture.
     ok(run.apply(null, held).length===1,
-       'kt8b at a 60-minute dwell the same 24-minute hold is NOT a migration — the constant governs');
+       'kt8d at a 60-minute dwell the 24-minute hold is dropped — the constant governs',
+       run.apply(null, held).map(x=>x.k));
     global.KT_DWELL_MIN=5; RP_KT.key=null;
-    ok(run(7700,7700,7705,7705,7705).length===2,
-       'kt8c ...and at five minutes a six-minute hold IS one');
+    ok(run(7700,7700,7705,7705,7705,7700,7700,7700).length===3,
+       'kt8e ...and at five minutes the same six-minute hold survives replacement');
     // ⚠ A GAP IN THE RECORDING MUST NOT PROMOTE A FLICKER. Two frames far apart are two sightings,
     // not a long hold — which is precisely the confusion a COUNT could never notice.
     global.KT_DWELL_MIN=20; RP_KT.key=null;
     REPLAY.frames=[mk(0,7700), mk(1,7700), mk(2,7705), {t:T0+3*3600000, tri:{SPXW:{king:7705}}, exp:null}];
     REPLAY.idx=3; RP_KT.key=null;
     const G=ktOf('SPXW');
-    ok(G.length===2, 'kt8d two sightings THREE HOURS apart do satisfy a duration — it is a real hold', G.length);
+    ok(G.length===2, 'kt8f two sightings THREE HOURS apart do satisfy a duration — it is a real hold', G.length);
     global.KT_DWELL_MIN=20;
   }
+  // ---- (v15.24) THE RULE IS ENFORCED WHERE THE LANE IS READ ---------------------------------
+  // v15.23 made dwell a duration in both WRITE paths, and the operator's lane stayed erratic:
+  // KTRACK already held the day's points, recorded under the old ~6-second rule, and a threshold
+  // enforced only at write time cannot reach a record that already exists.
+  {
+    const T0=Date.parse('2026-08-31T14:00:00Z'), M=60000;
+    // a track as the OLD rule would have written it: three flickers and two real holds
+    const stored=[ {t:T0,           k:7700, seed:true},
+                   {t:T0+2*M,       k:7705},          // held 2 minutes  → flicker
+                   {t:T0+4*M,       k:7710},          // held 3 minutes  → flicker
+                   {t:T0+7*M,       k:7715},          // held 40 minutes → REAL
+                   {t:T0+47*M,      k:7720},          // held 1 minute   → flicker
+                   {t:T0+48*M,      k:7725} ];        // last point, still holding → kept
+    global.KT_DWELL_MIN=20;
+    const F=ktFilterDwell(stored);
+    ok(F.length===3, 'kt13 EXECUTED: a track written under the old rule is filtered when it is READ', F.map(p=>p.k));
+    ok(F[0].seed===true, 'kt13b ...the seed survives — it is an origin, not a migration');
+    ok(F[1].k===7715, 'kt13c ...the 40-minute hold survives', F.map(p=>p.k));
+    ok(F[2].k===7725, 'kt13d ...and the LAST point survives: it is still holding, so its run is not yet decided');
+    ok(F.every(p=>p.k!==7705 && p.k!==7710 && p.k!==7720), 'kt13e ...and every flicker is gone', F.map(p=>p.k));
+    // ⚠ the live lane must obey it too, not only replay — that is the case he was looking at
+    REPLAY.on=false;
+    global.KTRACK={ v:1, day:'x', b:{ SPXW:stored } };
+    ok(ktOf('SPXW').length===3, 'kt14 the LIVE lane is filtered by the same rule', ktOf('SPXW').length);
+    global.KT_DWELL_MIN=0;
+    ok(ktOf('SPXW').length===stored.length, 'kt14b ...and at a zero dwell nothing is dropped, so the filter is the constant');
+    global.KT_DWELL_MIN=20; REPLAY.on=true;
+  }
+
   // and the journey grows as the handle moves
   REPLAY.frames=FR; RP_KT.key=null; REPLAY.idx=0;
   const early=ktOf('SPXW').length; RP_KT.key=null; REPLAY.idx=2;
@@ -768,6 +815,60 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
   ok(s9.st==='HOLDING',
      's9 ...and the state engine simply says nothing about a rate it does not have', s9);
   REPLAY.on=true;
+}
+
+// ---- 16 · (v15.24) A FRAME WITH NO BOOK IS NOT A SNAPSHOT ------------------------------------
+// Operator, 2026-09-01: "why the replay feature currently cannot capture a snapshot of the day".
+// MEASURED on his recording that morning: 34 frames and EIGHT of them carried no `tri`, no `vend`,
+// no `px` — empty shells written on bars where the tape had nothing. The slider offered them as
+// seekable ticks, so the handle landed on one and the face went blank. That reads as "replay is
+// broken" rather than "nothing was recorded at 09:46".
+{
+  eval(ex('replayUsable'));
+  const full={ t:1, px:766, tri:{SPXW:{king:7675}}, vend:{ rows:[[7675,1,0,0,0,0]] } };
+  ok(replayUsable(full)===true, 'u1 a frame with a book is usable');
+  ok(replayUsable(Object.assign({},full,{tri:null}))===false, 'u2 ...without tri it is not');
+  ok(replayUsable(Object.assign({},full,{vend:{rows:[]}}))===false, 'u3 ...nor with an empty vendor list');
+  ok(replayUsable(Object.assign({},full,{px:null}))===false, 'u4 ...nor without a price');
+  ok(replayUsable(null)===false, 'u5 ...and a missing frame is not usable');
+  // ⚠ THE TEST IS THE BOOK, NOT THE PRICE: a pre-open frame can carry a price and no book, and it
+  // is still useless to every surface replay draws.
+  ok(replayUsable({ t:1, px:766, tri:{SPXW:{king:7675}}, vend:{rows:[]} })===false,
+     'u6 a price with no book is still not a snapshot');
+  // ⚠ AND THE LOADER MUST DROP THE ONES ALREADY ON DISK. The write guard cannot reach the eighteen
+  // days already recorded, where the slider would still offer ticks that lead to a blank face.
+  // This SURVIVED its first mutation because nothing executed the loader — the assertions above only
+  // exercised the predicate, and a predicate nobody calls filters nothing.
+  {
+    // ⚠ REAL TIMESTAMPS. `replaySecOf` is eval'd from the source at the top of this file, so
+    // assigning global.replaySecOf shadows nothing — the real one runs, reads `f.t`, and a fixture
+    // stamped t:1000 lands in 1970 and is filtered out as after-hours. The first cut of u8 read 0
+    // frames for that reason and looked like the new filter dropping everything.
+    const T=Date.parse('2026-08-31T14:00:00Z');           // 09:00 CT
+    const good=[{t:T, px:766, tri:{SPXW:{king:7675}}, vend:{rows:[[7675,1,0,0,0,0]]}},
+                {t:T+360000, px:767, tri:{SPXW:{king:7680}}, vend:{rows:[[7680,1,0,0,0,0]]}}];
+    const empty={t:T+180000};
+    const mixed=[good[0], empty, good[1]];
+    global.repoDay=(date,cb)=>cb({ snaps:{ SPY:mixed } });
+    global.replayDayLabel=()=>'a day';
+    global.RP_OPEN_SEC=8*3600+30*60; global.RP_CLOSE_SEC=15*3600;
+    global.render=()=>{};
+    eval(ex('replayLoadDay'));
+    let n=null; replayLoadDay('2026-08-31', c=>{ n=c; });
+    ok(n===2, 'u8 EXECUTED: loading a day drops the frames that carry no book', n);
+    ok(REPLAY.frames.every(replayUsable), 'u8b ...so every tick on the track leads to a face');
+    ok(REPLAY.skipped===1, 'u8c ...and it reports how many it dropped rather than hiding them', REPLAY.skipped);
+    // a day of nothing BUT empties must say so, not read as "no frames recorded"
+    global.repoDay=(date,cb)=>cb({ snaps:{ SPY:[empty] } });
+    replayLoadDay('2026-08-31', ()=>{});
+    ok(/carry no book/.test(REPLAY.err||''),
+       'u9 a day of empty frames says the frames carry no book, not that none were recorded', REPLAY.err);
+  }
+
+  // and the WRITE path refuses to store one in the first place
+  const rec=src.slice(src.indexOf('A FRAME WITH NO BOOK IS NOT A SNAPSHOT'));
+  ok(/var _hasBook=[\s\S]{0,220}if\(!_hasBook\)\{[\s\S]{0,160}return;/.test(rec),
+     'u7 the recorder returns instead of pushing an empty frame');
 }
 
 console.log('test_replay: '+pass+' passed, '+fail+' failed');

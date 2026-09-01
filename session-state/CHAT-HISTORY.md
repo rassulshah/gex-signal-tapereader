@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-01 · v15.23 · session `5e8d34b5`
+## 2026-09-01 · v15.25 · session `5e8d34b5`
 
-_18 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_22 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -267,8 +267,102 @@ KT_DWELL is a *count*, applied to two streams with completely different rates �
 **20 minutes**, measured across 11 sessions. Implementing it in both paths so live and replay agree.
 Now the ROC column — dropping 5m, keeping 15m.
 X1 survived because that branch is unreachable — `anchor==='open'` already implies a first bar exists.
+**EH/EL: the width was right, the anchor was yesterday's.** Read off your panel:
+
+```
+stored pin      openU 768.6968  ×  rr 10.0353   →  anchor 7714
+today's open    ES 7647 (courier, 08:30 bar) · SPY 761.93 (first closed candle)
+```
+
+The band sat **67 points above the session**, so price was below EL from the first bar — and that ⤓ on the EL pill is the *broken below* marker. That's what you're reading as crossed out. Nothing is struck through; the band was never near the market.
+
+To your two questions: **yes**, the width is InsiderFinance's 0DTE ATM straddle, captured once per session; **yes**, …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+
+**me (15:30):** The probe measured a shipped constant — that belongs in `tools/`, not deleted.
+Tree is clean. The stray probe I'd left in the repo root became `tools/study-kingdwell.js` — the dwell table in the changelog is a number that ships in the panel, so it should be re-derivable once you have more sessions rather than inherited on trust. `node tools/study-kingdwell.js` reprints it.
+
+Push is still refused for this repo by the proxy, unchanged all session; the installer carries the 16 commits to your machine.
+
+**OPERATOR:**
+> check everything . also determine that when i use the replay feature and go back during the day , it will look like this  in terms of what will be displayed. you need to cross examine to see why the replay feature currently cannot capture a snapshot of the day and fix that. so really examine what is being diaplsyed to ensure consistencty
+
+**me (15:37):** Only 32 frames today. Capturing the live face first, then I'll replay the same minute headlessly and diff.
+Two live faults. Measuring both precisely.
+The pin healed but onto **759.57** while the 08:30 bar now reads **761.95** — the SPY series is *derived*, so its open moves with the basis. The band must anchor on the same series the ⓪a section measures.
+Now the king lane — the stored track still carries pre-v15.23 flickers, so the dwell must apply at read time.
+x4b caught a real regression: the v15.23 heal is clobbering the replayed pin.
+Y5 survived because the rule was being applied twice. Making the read the single place it lives.
+One thing left from his ask — why the day isn't fully captured. Checking the recorder's cadence.
+That's the answer to his last question — three concrete defects.
+Those clear when I write the record. Mutating the new changes first.
+**Why replay couldn't capture the day — measured on your own recording at 10:42:**
+
+```
+34 frames · first 09:03 · last 10:42
+gaps          09:41→09:45 (5m) · 09:46→10:09 (24m)
+EIGHT frames  no tri, no vend, no px, no h/l, no xm — empty shells
+vendRows      min 0, max 90
+```
+
+**Eight of thirty-four frames carried no book at all.** The slider offered them as seekable ticks, so the handle lands on one and the face goes blank — which reads as *replay is broken* rather than *nothing was recorded at 09:46*. The recorder now refuses to write them, and since that can't reach the days already on disk, the loader drops them too and says which case it's in.
+
+Also worth knowing: **your recording started at 09:03, not 08:30.** The recorder only runs while the panel is open, so the first 33 minutes of that session simply aren't there. Not a bug — a limit, and the reason the slider won't go back further than the panel was.
+
+**The …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 17 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (15:47):** 17 commits, tree clean. Push still refused for this repo by the proxy — same as every turn this session, and not fixable from inside the sandbox. Running `installv1524.bat` commits and pushes them from your machine.
+
+**OPERATOR:**
+> are you sure the expected high and low are valid . did you get the expected move from that and add it to the open and subtracted from the open to get the expected high and low. double check.  why is thatere a amber/yellow line that crosses some of the pills . sometimes it crosses the expected high a d sometimes it crosses the king nodes. you need to check and fix.  explain the 15m delta state and roc  and explain if it is in sync.  the roc 15 has up and dn arrows indicateing the change , which i think should be color coded. also i see that the values constantly change, maybe update every 1 min. i need this feature of the delta profile to be stable and not changing every few seconds but at the same time be informative. figure out the updating time interval that is valid for identifying nodes that are growing and decreasing that can represent future support and resistance and magnets  and kings.   for example the delta profile , state and roc is 15 min but updates every min, is that valid or can you come up with something that you believe is better. Remeber my business requiremetn is to identify potential new support or resistance as well as where it is likely to fail and finding where it can be magnetic to attract price. the entire application is about predicting  support resistance and potential direction and this seciton fo the delta profile tries to do this by identifying the change in gamma.   finalyy judge how this feature can be enhanced for my business requiremetns and you may use online resources to help judge this.
+
+**me (15:50):** The arithmetic checks out — let me show you, then find the line.
+Found it — `.g3ldem`, the EM rails. Reading how they're placed against their labels.
+The rail is drawn at the true price *inside the pill chute* — so when its label gets nudged away, an unlabelled amber stub crosses whatever pill is there. Making it structurally impossible.
+The arrows exist — 6 of them. The question is whether you can *see* the lane.
+The lane is visible but it's 20px of thin blue at the far edge, with nothing saying *from where, to where*. Making the roll explicit on the rows.
+The chips are landing on top of the lane. Giving them their own column.
+The test says the next column must argue for its width here. It doesn't need to — the ROC column lost its 5m and is now oversized.
+Now the cadence question — measuring what update interval actually identifies durable nodes.
+The edge measurement is the important one — let me test whether a bigger move predicts better.
+Magnitude doesn't help; **proximity does** — 56.9% within 25 points of spot vs 51.7% further out. Checking the literature before I recommend anything.
+Measured: **5-minute hysteresis** cuts display churn by a third with no loss of edge; 10 minutes halves churn but destroys it. Implementing that plus the 1-minute clock.
+A7 survived — nothing executes the hysteresis over time. Fixing that.
 
 ### DECISIONS
+
+**v15.25 · the amber line, the rolls, and the cadence.**
+- **EH/EL arithmetic verified from his own pin** — 759.5653 × 10.0353 = 7622.4, ±32.31 → 7655/7590.
+  The width is IF's 0DTE straddle at the open, added and subtracted from the open. The anchor was
+  the fault, fixed in v15.24, which he had not yet installed.
+- **The amber line was the EM rail drawn inside the pill chute** — right place, wrong column. Two
+  segments that stop either side of it now.
+- **The rolls were always drawn** — four real ones in a 20px lane with no strike named. "It renders"
+  is not "it is readable". Each row now says ⇢7675 or ⇠7650.
+- **Measured the cadence rather than guessing:** 5-minute hysteresis removes a third of the state
+  changes for no measurable edge; 10 minutes takes the signal to a coin.
+- **Said the uncomfortable number:** BUILDING is 52.8% vs a coin, and does not improve with size.
+  The only differentiator is distance from spot — 56.9% within 25 points.
+
+**v15.24 · the cross-examination.**
+- **Checked the replayed face against the RECORDING** (`tri.top`, `tri.king`, `feat.emband`) rather
+  than against my expectation — and it caught v15.23's heal overwriting the replayed anchor, 771.74
+  recorded vs 769.34 drawn. Both plausible; only the recording knows.
+- **Why replay could not capture the day:** 8 of his 34 frames carried no book at all — empty shells
+  the slider offered as ticks. The recorder refuses to write them; the loader drops the ones already
+  stored. His recording also started at 09:03, not 08:30 — the recorder only runs while the panel is.
+- **The king lane was still erratic (23 runs)** because KTRACK held points written under the old
+  rule. The dwell is applied where the lane is READ now, and only there.
+- **The band's anchor moved to `measureBars()`** — the underlying series is derived and its own 08:30
+  open changed from 759.5653 to 761.9526 during the session.
+- **Three mutations survived and all three were faults in my tests, not the code.**
 
 **v15.23 · the band, the king lane, the ROC.**
 - **The EM band was anchored on YESTERDAY's open** — 7714 against a real ES open of 7647 — because
@@ -366,6 +460,16 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.25** — the EM rail in two segments; the per-row roll chip (paid for by ROC's slack);
+`LVL_HOLD_MIN=5` hysteresis; the 60m arrow colour-coded. New `tools/study-deltacadence.js`.
+`test_replay_face` 79 → 93. 12 mutations, 12 caught. Suite 134 green / 6 baseline red.
+
+**v15.24** — the replay cross-examination (x1-x6); `replayUsable` + the recorder's empty-frame
+refusal; `ktFilterDwell` at read time and the build no longer filtering; the band anchored on
+`measureBars()`; the heal skipping a replay pin.
+`test_replay` → 207, `test_replay_face` → 79, `test_em_band` → 637. 14 mutations, 14 caught.
+Suite 134 green / 6 baseline red.
+
 **v15.23** — the EM warm-up guard on `t`/`so` and an RTH bar; the openSo heal reachable; `_openSec`
 at function scope; `KT_DWELL_MIN=20` as a duration in both paths; the ROC column at 15m.
 `test_em_band` 625 → 632, `test_replay` → 188. Nine mutations, nine caught.
@@ -401,6 +505,16 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. **Time-of-day weighting for the delta window is the next study** — 0DTE gamma decay is
+   non-linear, so a fixed 15m window means something different at 09:00 than at 14:30. Not shipped.
+2. **Proximity weighting** — the one measured differentiator (56.9% vs 51.7%) is not yet on the face.
+3. `deps()` still reports `if.SPY` stale and `irt.build` with nothing to write.
+
+1. **His KTRACK still holds today's old points** — the read filter fixes the display immediately.
+2. **`deps()` still reports `if.SPY` stale and `irt.build` with nothing to write** — the IRT one
+   means his king levels are not reaching the CSV.
+3. The REPLAY side has still never been dragged on his real panel.
 
 1. **His panel is still carrying the bad pin until it reloads** — the heal repairs it on the next
    render after v15.23 is installed.
@@ -453,6 +567,9 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+1f3539f v15.24: cross-examine the replayed face against the recording; stop storing frames with no book
+c5f29a7 study: keep the script that chose KT_DWELL_MIN
+265bc27 v15.23: the EM band was anchored on yesterday's open, and dwell was a count on two clocks
 d245994 test: Z5 survived mutation — a refusal nothing can reach is not a refusal
 00e2bbb build: the installer size gate measures the .bat, not a proxy for it
 0e971ef v15.22: the far-side line had never drawn, and the dependencies now have a live check
@@ -462,9 +579,6 @@ d245994 test: Z5 survived mutation — a refusal nothing can reach is not a refu
 e58c333 v15.19: one refusal upstream was hiding six surfaces, and nothing here could draw the face
 2e74842 build: the installer no longer leaves a tracked 36k-line blob in the tree
 3b5701a v15.18: the arrows were pointing backwards, and the states could only say two things
-74c0b55 v15.17: arrows point at rows the ladder draws; the panel fits the window
-9ebaf19 v15.16: one constant was refusing 93% of every replayed session
-7b4d09e v15.15: the band centres on the replayed bar; the sync gate stands down; rolls get their strike
 ```
 
 ---

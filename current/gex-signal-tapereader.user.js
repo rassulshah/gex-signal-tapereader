@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.23
+// @version    15.25
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.23';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.25';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -1029,6 +1029,14 @@ function replayLoadDays(cb){
   try{ repoCoverage(function(c){ REPLAY.days=(c&&c.days)||[]; if(cb) cb(REPLAY.days); }); }
   catch(e){ REPLAY.days=[]; if(cb) cb([]); }
 }
+// ⚠⚠ (v15.24) FRAMES ALREADY RECORDED AS EMPTY ARE DROPPED WHEN A DAY IS LOADED. The write guard
+// above stops new ones, and cannot reach the eighteen days already on disk — where the slider would
+// still offer ticks that lead to a blank face. Same shape as the king lane's dwell: a rule that only
+// runs at write time cannot fix a record that already exists, so it is enforced where it is READ.
+function replayUsable(f){
+  return !!(f && typeof f.t==='number' && f.tri && f.vend && f.vend.rows && f.vend.rows.length &&
+            typeof f.px==='number' && f.px>0);
+}
 function replayLoadDay(date, cb){
   REPLAY.loading=true; REPLAY.err=null;
   try{
@@ -1039,9 +1047,16 @@ function replayLoadDay(date, cb){
       // track is two-thirds after-hours is a slider that is mostly useless. The frames are not
       // deleted, they are simply not on the track.
       arr=arr.filter(function(f){ var s=replaySecOf(f); return s!=null && s>=RP_OPEN_SEC && s<=RP_CLOSE_SEC; });
+      // ⚠ (v15.24) and then the EMPTY ones — see replayUsable(). A tick the handle can land on must
+      // lead to a face, or the slider teaches the operator that replay is unreliable.
+      var _raw=arr.length;
+      arr=arr.filter(replayUsable);
+      REPLAY.skipped=_raw-arr.length;
       REPLAY.frames=arr; REPLAY.day=date; REPLAY.loading=false;
       REPLAY.idx=arr.length?arr.length-1:-1;
-      if(!arr.length) REPLAY.err='no RTH frames recorded for '+replayDayLabel(date);
+      if(!arr.length) REPLAY.err=(_raw
+        ? ('the '+_raw+' frames recorded for '+replayDayLabel(date)+' carry no book — nothing to replay')
+        : ('no RTH frames recorded for '+replayDayLabel(date)));
       if(cb) cb(arr.length);
       try{ render(); }catch(eR){}
     });
@@ -4835,6 +4850,21 @@ function recordNodeSnapshot(sym){
       out5:null,   // {mfe,mae,net,pxEnd,hitKing,revUp,revDn} over next 5 bars (15m)
       out10:null   // ...over next 10 bars (30m)
     };
+    // ⚠⚠ (v15.24) A FRAME WITH NO BOOK IS NOT A SNAPSHOT — DO NOT STORE IT. Operator, 2026-09-01:
+    // "why the replay feature currently cannot capture a snapshot of the day".
+    // MEASURED on his recording that morning: 34 frames, and EIGHT of them carried no `tri`, no
+    // `vend`, no `px`, no `h`/`l` and no `xm` — empty shells written on bars where the tape had
+    // nothing to give. They cost storage, they drag the day's median depth down, and worst of all
+    // the slider offers them as seekable ticks: the handle lands on one and the face goes blank,
+    // which reads as "replay is broken" rather than "nothing was recorded at 09:46".
+    // ⚠ THE TEST IS THE BOOK, NOT THE PRICE. A frame can legitimately have a price and no book
+    // (pre-open), and that frame is still useless to every surface replay draws.
+    var _hasBook=!!(snap && snap.tri && snap.vend && snap.vend.rows && snap.vend.rows.length &&
+                    typeof snap.px==='number' && snap.px>0);
+    if(!_hasBook){
+      try{ RECORDER._skipped=(RECORDER._skipped||0)+1; }catch(eSk){}
+      return;
+    }
     var db=recorderLoad(); var day=recorderDay(db);
     var arr=day.snaps[sym]||(day.snaps[sym]=[]);
     arr.push(snap);
@@ -21043,7 +21073,22 @@ function ensureV3Css(){
       'background:rgba(255,255,255,.035);border-left:1px solid #333e4d;border-right:1px solid #333e4d}'+
     '#gpts-body .g3ldrange{position:absolute;left:'+(LAD_CH+1)+'px;width:'+(LAD_CHW-2)+'px;'+
       'background:rgba(124,199,255,.10);border-top:1px solid rgba(124,199,255,.3);border-bottom:1px solid rgba(124,199,255,.3);cursor:help}'+
-    '#gpts-body .g3ldem{position:absolute;left:'+(LAD_CH-6)+'px;width:'+(LAD_CHW+12)+'px;height:1px;background:#f2b45a;opacity:.75}'+
+    // ⚠⚠ (v15.25) THE EM RAIL IS DRAWN IN TWO SEGMENTS THAT STOP EITHER SIDE OF THE CHUTE.
+    // Operator, 2026-09-01: "why is there an amber/yellow line that crosses some of the pills.
+    // sometimes it crosses the expected high and sometimes it crosses the king nodes."
+    // It was ONE stub 78px wide sitting INSIDE the pill chute, at the band edge's true price — and
+    // the EM label is nudged down in 15px steps to avoid the crowns and the price pill, or dropped
+    // entirely when there is nowhere clear. So the line stayed on the true row while its label went
+    // elsewhere, and an unlabelled amber stub in the middle of the chute reads as a line struck
+    // THROUGH whatever pill happens to be at that height.
+    // ⚠ The line was never wrong — it is the band edge, on its own row, and the doctrine that a
+    // clamped position is a false position is why the label moves and the line does not. The fault
+    // was drawing it in the one column reserved for pills. Two segments that stop 6px short of the
+    // chute on each side CANNOT cross a pill, and reading across the whole ladder is what a band
+    // edge is for: it now looks like a boundary rather than a strike-through.
+    '#gpts-body .g3ldem{position:absolute;height:0;border-top:1px dashed #f2b45a;opacity:.55}'+
+    '#gpts-body .g3ldemL{left:'+LAD_LVL+'px;width:'+(LAD_CH-6-LAD_LVL)+'px}'+
+    '#gpts-body .g3ldemR{left:'+(LAD_CH+LAD_CHW+6)+'px;width:'+((LAD_ROC+LAD_ROCW)-(LAD_CH+LAD_CHW+6))+'px}'+
     '#gpts-body .g3ldeml{position:absolute;left:'+(LAD_CH+LAD_CHW+8)+'px;font-size:7.4px;font-weight:900;'+
       'color:#f2b45a;transform:translateY(-50%);white-space:nowrap;cursor:help}'+
     '#gpts-body .g3ldopn{position:absolute;left:'+(LAD_CH+1)+'px;width:'+(LAD_CHW-2)+'px;height:1px;background:#8b98a9;opacity:.6;cursor:help}'+
@@ -21187,6 +21232,13 @@ function ensureV3Css(){
     '#gpts-body .g3ldrolls svg{position:absolute;left:0;top:0;overflow:visible}'+
     '@keyframes g3ldflow{to{stroke-dashoffset:-18}}'+
     // (v15.09) the roll lane. ⚠ `fill:none` or the stepped path fills as a wedge.
+    // (v15.25) the row's own roll chip — it names the OTHER strike, so a glance answers "where is
+    // this going" without tracing a 20px lane. Out is amber (mass leaving), in is blue (arriving),
+    // matching the lane's own arrow colours.
+    '#gpts-body .g3ldrl{position:absolute;left:'+LAD_RLC+'px;width:'+LAD_RLCW+'px;font-size:7.5px;font-weight:800;'+
+      'white-space:nowrap;letter-spacing:.02em;cursor:help}'+
+    '#gpts-body .g3ldrlout{color:#f2b45a}'+
+    '#gpts-body .g3ldrlin{color:#7cc7ff}'+
     '#gpts-body .g3ldroll{position:absolute;left:'+LAD_ROLL+'px;top:0;width:'+LAD_ROLLW+'px;height:100%;pointer-events:auto;cursor:help}'+
     '#gpts-body .g3ldrl{fill:none;stroke-width:1.5;stroke-linecap:square;stroke-linejoin:miter}'+
     '#gpts-body .g3ldrl.g3ldflow{stroke-dasharray:4 3}'+
@@ -21222,6 +21274,9 @@ function ensureV3Css(){
       'transform:translateY(-50%);white-space:nowrap;cursor:help}'+
     '#gpts-body .g3ldup{color:#2ec27e}#gpts-body .g3lddn{color:#e0645f}#gpts-body .g3ldfl{color:#5b6675}'+
     '#gpts-body .g3ld60{color:#cdb4fa;font-weight:900}'+
+    // (v15.25) coloured by ITS OWN direction — green up, red down, the panel's direction colours.
+    '#gpts-body .g3ld60u{color:#2ec27e}'+
+    '#gpts-body .g3ld60d{color:#f0616d}'+
     '#gpts-body .g3ldoff{font-size:8px;color:#5b6675;margin:1px 0 3px;cursor:help}'+
     // (v14.57) ⓪ a DAY — HOD/LOD. Stats table on top, READ box underneath, per the operator's
     // approved mockuphodlodv2.html and his ask: "give me this in the read section under the stats".
@@ -22077,8 +22132,25 @@ function emBand(sym){
     // ⚠ NOT mul() — the band tests eval this function in isolation and do not define it; a bare
     // call throws inside emBand's own try and reads downstream as "the band refused".
     var _openSec=8*3600+30*60;
-    var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(eR){}
-    var cs=closedCandles(sym)||[];
+    // ⚠⚠ (v15.24) THE BAND ANCHORS ON THE SAME SERIES THE ⓪a SECTION MEASURES, AND THAT IS THE
+    // WHOLE FIX. `closedCandles(sym)` is the UNDERLYING book — and on a futures chart that series is
+    // DERIVED, rebuilt from ES through a basis that moves. Measured on his panel 2026-09-01: the
+    // 08:30 bar's own open read 759.5653 when the pin was healed and 761.9526 an hour later. Same
+    // bar, same `so`, different open. So pinning the session anchor from it captures whatever the
+    // basis happened to be at that instant, and EH/EL end up on a different ruler from the HOD and
+    // LOD they are compared against: the band drew 7590-7655 while ES had opened at 7647 and was
+    // trading 7663 — ABOVE the expected high, with the ⤓ to say so.
+    // `measureBars()` serves TRUE ES bars on a futures chart (the courier's, the same ones hodLod
+    // measures) and falls back to the underlying book otherwise, carrying the scale that converts
+    // it. One series, one scale, one anchor — the same lesson as v15.21's hlPT, one function over.
+    // ⚠ typeof-guarded: the band tests eval this function without measureBars, and a bare call would
+    // throw inside emBand's own try and read downstream as "the band refused".
+    var MB=null; try{ if(typeof measureBars==='function') MB=measureBars(sym); }catch(eMB){}
+    var cs=(MB && MB.bars && MB.bars.length) ? MB.bars : (closedCandles(sym)||[]);
+    // the scale that takes THIS series to chart space: 1 when the bars are already ES.
+    var rr=1;
+    if(MB && MB.bars && MB.bars.length && typeof MB.scale==='number' && MB.scale>0) rr=MB.scale;
+    else { try{ rr=dispIsFut()?dispR():1; }catch(eR){} }
     var openU=null, nowU=null;
     if(cs.length && cs[0].o>0){
       openU=cs[0].o; nowU=cs[cs.length-1].c; out.anchor='open';
@@ -22281,7 +22353,15 @@ function emBand(sym){
     // PERMANENT for the whole session: the guard let it in, and the heal could not reach it.
     // A missing openSo is "we do not know which bar this came from", which is the strongest reason
     // to replace it with one we do, not a reason to keep it.
-    if(cs.length && typeof cs[0].so==='number' && cs[0].so>=_openSec && cs[0].o>0 &&
+    // ⚠⚠ (v15.24) NOT A REPLAY PIN. The v15.23 heal treats a missing `openSo` as "we do not know
+    // which bar this came from, so replace it" — and a REPLAY pin has no openSo by construction: it
+    // is built from the frame's own recorded band, where the anchor is a stored number and not a bar
+    // index. So the heal fired on every replayed render and overwrote the recorded anchor with the
+    // reconstructed first bar: measured, 771.74 (recorded) became 769.34 (rebuilt). The band moved
+    // 2.4 SPY points — 24 ES points — away from where it actually sat that day.
+    // Caught by the cross-examination against `feat.emband`, which is the only check that could see
+    // it: both numbers are plausible and only the RECORDING knows which is right.
+    if(!rec.replay && cs.length && typeof cs[0].so==='number' && cs[0].so>=_openSec && cs[0].o>0 &&
        (typeof rec.openSo!=='number' || cs[0].so<rec.openSo)){
       rec.openU=cs[0].o; rec.openSo=cs[0].so;
       try{ S.sym[emKey]=rec; localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eU){}
@@ -24758,6 +24838,40 @@ function pocketOnPath(pockets, from, to){
 // and should be EARNED rather than chosen once there is enough data. Do not read them as findings.
 var LVL_BUILD_P15=8;    // ⚖ % of own mass gained in 15m that says BUILDING
 var LVL_SPENT_PEAK=0.5; // ⚖ retention of own day peak below which a level is SPENT
+// ⚠⚠ (v15.25) THE STATE IS HELD STILL FOR FIVE MINUTES BEFORE IT CHANGES ITS MIND.
+// Operator, 2026-09-01: "i see that the values constantly change, maybe update every 1 min. i need
+// this feature of the delta profile to be stable and not changing every few seconds but at the same
+// time be informative."
+// The panel renders every few seconds, so the state was recomputed and REDRAWN at that rate — and a
+// label that flips between renders is not a claim about anything.
+// ⚠ MEASURED over the 13 recorded sessions (2026-08-17..08-31), reading every minute on a 15-minute
+// window, `tools/study-deltacadence.js`:
+//     hold    state changes per read    BUILDING still bigger 30m later
+//       0m           14.1%                       52.8%
+//       3m           11.5%                       52.2%
+//       5m            9.3%                       52.2%   ← shipped
+//      10m            5.6%                       50.6%   ← churn halves and the edge becomes a coin
+// Five minutes removes a third of the changes and costs nothing measurable. Ten removes another
+// third and costs the whole signal, which is the point at which "stable" has become "wrong".
+// ⚠⚠ AND THE HEADLINE NUMBER IS 53%, NOT 80%. Of the BUILDING calls, 52.8% held MORE mass thirty
+// minutes later, against a 50% coin — and that does NOT improve with a bigger move (+4-10% scores
+// 52.1%, +100%+ scores 52.5%). The one thing that does move it is DISTANCE: within 25 points of
+// spot BUILDING is 56.9% (n=1266) against 51.7% further out (n=3999). Say that, do not dress it up.
+var LVL_HOLD_MIN=5;             // ⚖ measured above — a new state must hold this long to be shown
+var LVL_HOLD={};                // k -> { shown, pend, pendT }
+function levelHold(k, raw){
+  try{
+    // ⚠ replay must NOT accumulate hysteresis: the slider jumps between minutes and a cache keyed
+    // only by strike would carry a state across a two-hour leap. A parked frame shows its own truth.
+    if(typeof replayOn==='function' && replayOn()) return raw;
+    var now=Date.now(), h=LVL_HOLD[k];
+    if(!h){ LVL_HOLD[k]={ shown:raw, pend:null, pendT:0 }; return raw; }
+    if(raw===h.shown){ h.pend=null; return h.shown; }
+    if(h.pend!==raw){ h.pend=raw; h.pendT=now; return h.shown; }
+    if((now-h.pendT)/60000 >= LVL_HOLD_MIN){ h.shown=raw; h.pend=null; return raw; }
+    return h.shown;
+  }catch(e){ return raw; }
+}
 function levelStateOf(k, rollsCtx){
   try{
     var v=null; try{ v=velAt(k); }catch(e0){}
@@ -24773,7 +24887,13 @@ function levelStateOf(k, rollsCtx){
     var pk=null; try{ pk=peakOf(k); }catch(e1){}
     var ret=(pk&&vv&&typeof vv.cur==='number'&&pk>0)?Math.abs(vv.cur)/pk:null;
     var isSrc=rollsCtx&&rollsCtx.src&&rollsCtx.src[k], isDst=rollsCtx&&rollsCtx.dst&&rollsCtx.dst[k];
-    function out(st,why){ return { st:st, why:why, taps:tapsN }; }
+    // ⚠ the hold is applied to the STATE only. `why` still describes the raw reading, so the hover
+    // always explains the number that is actually there — a held label with an invented reason
+    // would be worse than a flickering one.
+    function out(st,why){
+      var shown=st; try{ shown=levelHold(k, st); }catch(eH){}
+      return { st:shown, why:why, raw:st, held:(shown!==st), taps:tapsN };
+    }
     // 1 · SPENT — terminal. The mass has gone, whoever took it. 19/19 measured pass-throughs when
     //     price returned to a drained level: never treat it as support, never park a stop behind it.
     if(ret!=null && ret<LVL_SPENT_PEAK)
@@ -25009,7 +25129,13 @@ var LAD_W=640,
     LAD_CH=226, LAD_CHW=66, LAD_PILLW=62,
     LAD_MK=294, LAD_MKW=46, LAD_TAP=344, LAD_TAPW=20,
     LAD_DAX=424, LAD_DMAX=56, LAD_DLAB=428, LAD_DLABW=44,
-    LAD_ST=476, LAD_STW=54, LAD_ROC=534, LAD_ROCW=84,
+    LAD_ST=476, LAD_STW=54, LAD_ROC=534,
+    // ⚠⚠ (v15.25) ROC 84 -> 50, AND THAT IS WHERE THE ROLL COLUMN'S WIDTH COMES FROM. w1b in
+    // test_ladder says "640 IS NOW THE CAP. The next column that wants width argues for it here."
+    // It does not need to: the ROC column stopped printing the 5m at v15.23, so a cell that read
+    // "+12% +38% ▼45%" now reads "+38% ▼45%" and 84px was 34px of air. The column that lost content
+    // gives the width up. **A cap is only a cap if the answer to "I need more" is to find it.**
+    LAD_ROCW=50,
     // ⚠⚠ (v15.09) THE ROLL LANE. Operator's sketch: a dot at the SOURCE, out to the right, across,
     // then back in with the head at the DESTINATION — stepped, never diagonal, so two rolls at
     // neighbouring strikes nest instead of crossing. It sits after ROC so it can never overwrite a
@@ -25023,6 +25149,8 @@ var LAD_W=640,
     // three. The guard did its job: the decision is now deliberate rather than accidental.
     // The lane is squeezed to 20px so the total lands EXACTLY on w1's 640 ceiling. w1b's 618 is
     // amended once, in the open, with the reason — never widened again without the same argument.
+    // (v15.25) the row's own roll chip: its own column, before the lane, paid for by ROC's 34px.
+    LAD_RLC=586, LAD_RLCW=32,
     LAD_ROLL=620, LAD_ROLLW=20;
 // ⚠⚠ (v14.54) LAD_ROCW WAS 56 AND THE COLUMN NEEDS 84 — AND THAT IS THE 24px NOBODY COULD EXPLAIN.
 // LOCKED-ITEMS recorded ".g3lad scrollWidth 656 / clientWidth 632 = 24px over its own LAD_W" as an
@@ -25175,28 +25303,57 @@ function replayKingTrack(book){
   if(typeof replayOn!=='function' || !replayOn()) return [];
   var key=REPLAY.day+'|'+REPLAY.idx+'|'+book;
   if(RP_KT.key===key) return RP_KT.out;
-  var out=[], pend=null, i, f, k, last=null;
+  var out=[], i, f, k, last=null;
   try{
     for(i=0;i<=REPLAY.idx && i<REPLAY.frames.length;i++){
       f=REPLAY.frames[i];
       k=(f && f.tri && f.tri[book] && typeof f.tri[book].king==='number') ? f.tri[book].king : null;
       if(!(k>0)) continue;
-      if(last===null){ out.push({ t:f.t, k:k, e:(f.exp!=null?String(f.exp):null), seed:true }); last=k; pend=null; continue; }
-      if(k===last){ pend=null; continue; }
-      if(!pend || pend.k!==k){ pend={ k:k, t0:f.t }; continue; }   // new candidate, on probation
-      // ⚠ THE FRAME'S OWN CLOCK, so a gap in the recording cannot promote a flicker: two frames six
-      // minutes apart across a lunch gap is not twenty minutes of holding.
-      if((f.t-pend.t0)/60000 < KT_DWELL_MIN) continue;          // a flicker is not a migration
-      pend=null; last=k;
+      if(last===null){ out.push({ t:f.t, k:k, e:(f.exp!=null?String(f.exp):null), seed:true }); last=k; continue; }
+      if(k===last){ continue; }
+      // ⚠⚠ (v15.24) THE RAW JOURNEY, UNFILTERED. The dwell rule lives in exactly ONE place —
+      // `ktFilterDwell`, applied where the lane is READ — because the live track is written by
+      // whatever version was running and can only be trusted if the rule is enforced at read time.
+      // Applying it here TOO looked like belt and braces and was worse than either: two copies of
+      // one rule that can drift apart, and a mutation that removed this one changed nothing, so no
+      // test could tell whether it was doing anything. One rule, one place, both paths.
+      last=k;
       if(out.length<KT_MAX) out.push({ t:f.t, k:k, e:(f.exp!=null?String(f.exp):null) });
     }
   }catch(e){ try{ swallow('replayKingTrack', e); }catch(e2){} }
   RP_KT={ key:key, out:out };
   return out;
 }
+// ⚠⚠ (v15.24) THE DWELL RULE IS APPLIED WHEN THE LANE IS READ, NOT ONLY WHEN IT IS WRITTEN.
+// v15.23 made dwell a 20-minute duration in both write paths — and the operator's lane stayed
+// erratic, because `KTRACK` ALREADY HELD the day's points, recorded under the old ~6-second rule.
+// A threshold enforced only at write time cannot reach a record that already exists, so the fix
+// arrives for tomorrow and the face he is looking at today is unchanged.
+// ⚠ THIS IS GENERAL, NOT A ONE-OFF MIGRATION: the stored track is written by whatever version was
+// running, so the ONLY way the lane can be trusted to obey the current rule is to enforce it where
+// it is drawn. Filtering at read also makes live and replay identical by construction — the replay
+// rebuild applies the same duration to the same shape.
+// A point survives if it HELD for KT_DWELL_MIN before the next one — plus the seed (an origin, not
+// a migration) and the last point (still holding; its duration is not yet decided).
+function ktFilterDwell(pts){
+  try{
+    if(!pts || pts.length<2) return pts||[];
+    var out=[pts[0]], i;
+    for(i=1;i<pts.length;i++){
+      var isLast=(i===pts.length-1);
+      var held=isLast ? Infinity : ((pts[i+1].t - pts[i].t)/60000);
+      // ⚠ measured from the point it REPLACED, so a run that was itself a flicker cannot anchor the
+      // next one: `last` walks the KEPT points, not the raw array.
+      var prev=out[out.length-1];
+      if(prev && prev.k===pts[i].k) continue;                 // collapsed into the run before it
+      if(held>=KT_DWELL_MIN) out.push(pts[i]);
+    }
+    return out;
+  }catch(e){ return pts||[]; }
+}
 function ktOf(book){
-  try{ if(typeof replayOn==='function' && replayOn()) return replayKingTrack(book); }catch(e0){}
-  try{ return (KTRACK.b&&KTRACK.b[book])?KTRACK.b[book]:[]; }catch(e){ return []; }
+  try{ if(typeof replayOn==='function' && replayOn()) return ktFilterDwell(replayKingTrack(book)); }catch(e0){}
+  try{ return ktFilterDwell((KTRACK.b&&KTRACK.b[book])?KTRACK.b[book]:[]); }catch(e){ return []; }
 }
 
 function ladderKings(EB, sym){
@@ -25429,7 +25586,8 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       [LAD_TAP, LAD_TAPW, 'TAPS', 'How many times price has tested this level today'],
       [LAD_DAX, LAD_DMAX, '\u039415m','Dollars of dealer exposure gained or lost at this strike over 15 minutes'],
       [LAD_ST,  LAD_STW,  'STATE','The level\u2019s own condition: BUILDING, WEAKENING, TURN, SPENT'],
-      [LAD_ROC, LAD_ROCW, 'ROC 15m','Rate of change over 15 minutes, matching the \u0394 column beside it. Live this is Skylit\u2019s own percent; in replay it is this panel\u2019s measure of MASS and is italic. The 5m and 60m are in the hover \u2014 the 60m shows here only when it DISAGREES with the 15m, which is the TURN condition']
+      [LAD_ROC, LAD_ROCW, 'ROC 15m','Rate of change over 15 minutes, matching the \u0394 column beside it. Live this is Skylit\u2019s own percent; in replay it is this panel\u2019s measure of MASS and is italic. The 5m and 60m are in the hover \u2014 the 60m shows here only when it DISAGREES with the 15m, which is the TURN condition'],
+      [LAD_RLC, LAD_RLCW, 'ROLL','Where this strike\u2019s mass is going (\u21e2, amber: leaving) or coming from (\u21e0, blue: arriving), with the other strike named. The lane to the right draws the same rolls as stepped arrows so two of them nest instead of crossing']
     ];
     var hd='<div class="g3ladhd">';
     for(var hi2=0; hi2<LADHD.length; hi2++){
@@ -25503,7 +25661,8 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
     (emAH?[]:[['EH',EB.high,RB.over],['EL',EB.low,RB.under]]).forEach(function(e){
       if(!inFrame(e[1])) return;
       var t=Y(e[1]);
-      h+='<i class="g3ldem" style="top:'+t.toFixed(1)+'px"></i>';
+      h+='<i class="g3ldem g3ldemL" style="top:'+t.toFixed(1)+'px"></i>'+
+         '<i class="g3ldem g3ldemR" style="top:'+t.toFixed(1)+'px"></i>';
       EMQ.push({ t:t,
         lab:(EB.est?'~':'')+e[0]+' '+g3esc(frameNum(e[1]))+(e[2]?' \u2913':''),
         tip:(e[0]==='EH'?'Expected high':'Expected low')+' — the open '+(e[0]==='EH'?'plus':'minus')+
@@ -25637,6 +25796,37 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       // own change in MASS — and the tip says so. Leaving the column blank (the v15.10 decision) was
       // right while there was nothing honest to put in it; now there is, and an empty column on a
       // face full of numbers reads as a fault, which is how the operator reported it.
+      // ⚠⚠ (v15.25) THE ROLL IS SAID ON THE ROW, IN WORDS. Operator, 2026-09-01: "i need to be able
+      // to detect rolls. right now i dont see the roll arrows or any indication that shows where the
+      // gamma is coming from and where its going so i dont know of whether there is a roll going on."
+      // MEASURED on his panel that morning: the lane WAS drawing four real rolls — 7645→7665,
+      // 7650→7665, 7650→7675, 7640→7665 — as stepped blue paths in a TWENTY-PIXEL column at the
+      // extreme right of a 640px ladder. Present, correct, and unreadable: nothing named a strike,
+      // nothing said which way, and the rows themselves carried no mark at all.
+      // ⚠ THE LANE IS KEPT — it is the only thing that shows two rolls nesting rather than crossing.
+      // What was missing is the row saying, in its own line, WHERE ITS MASS WENT or CAME FROM.
+      var rollChip='';
+      try{
+        var _rs=null, _rd=null, _ri;
+        for(_ri=0; _ri<(ROLLS||[]).length; _ri++){
+          if(ROLLS[_ri].from===P.k) _rs=ROLLS[_ri];
+          if(ROLLS[_ri].to===P.k)   _rd=ROLLS[_ri];
+        }
+        if(_rs || _rd){
+          var _r=_rs||_rd, _out=!!_rs;
+          var _amt=Math.abs(_r.amt||_r.lost||0);
+          rollChip='<span class="g3ldrl '+(_out?'g3ldrlout':'g3ldrlin')+'" style="top:'+t.toFixed(1)+'px"'+
+            g3tip((_out?'MASS IS LEAVING THIS STRIKE':'MASS IS ARRIVING AT THIS STRIKE')+' — '+
+              usdBig(_amt)+' over 15 minutes, '+(_out?('into '+_r.to):('from '+_r.from))+'. '+
+              'A roll is measured as a move of MASS (|value|), not of the signed number: the source must be '+
+              'LOSING size and the destination GAINING it, within '+ROLL_MAX_DIST+' points, and the receiver must take '+
+              'at least '+Math.round(ROLL_MIN_RATIO*100)+'% of what the source shed. ⚠ It is not conservation of mass — several '+
+              'strikes can feed one destination and fresh positioning arrives at the same time. ⚠ A roll says where dealers are '+
+              'MOVING their exposure, which is where the next support or resistance is being built; it does not say price will go there.')+
+            '>'+(_out?('\u21e2'+_r.to):('\u21e0'+_r.from))+'</span>';
+        }
+      }catch(eRC){}
+      h+=rollChip;
       var R5=(vv&&typeof vv.p5==='number')?vv.p5:((vv&&typeof vv.rp5==='number')?vv.rp5:null);
       var R15=(vv&&typeof vv.p15==='number')?vv.p15:((vv&&typeof vv.rp15==='number')?vv.rp15:null);
       var R60=(vv&&typeof vv.p60==='number')?vv.p60:((vv&&typeof vv.rp60==='number')?vv.rp60:null);
@@ -25655,7 +25845,10 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
            // as one series. ⚠ THE 5m IS STILL COMPUTED AND STILL USED: the TURN state requires the
            // 5m and 15m to agree AND both to have flipped against the hour. Removing it from the
            // DISPLAY does not remove it from the decision, and the hover still carries all three.
-           ldNum(R15)+(arg?(' <b class="g3ld60">'+(R60>0?'▲':'▼')+Math.abs(Math.round(R60))+'%</b>'):'')+'</span>';
+           ldNum(R15)+// ⚠ (v15.25) COLOUR-CODED — operator: "the roc 15 has up and dn arrows indicating the
+           // change, which i think should be color coded." Green up, red down: the SAME two colours
+           // the rest of the panel uses for direction, so an arrow here means what it means anywhere.
+           (arg?(' <b class="g3ld60 '+(R60>0?'g3ld60u':'g3ld60d')+'">'+(R60>0?'▲':'▼')+Math.abs(Math.round(R60))+'%</b>'):'')+'</span>';
       }
     }
 

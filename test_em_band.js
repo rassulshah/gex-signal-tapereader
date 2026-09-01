@@ -1877,5 +1877,41 @@ eval(ex('emBand'));
   global.__cands=save; global.dispIsFut=saveFut;
 }
 
+// ---- (v15.24) THE ANCHOR COMES FROM THE MEASURED SERIES, NOT THE UNDERLYING BOOK ------------
+// On a futures chart the underlying series is DERIVED — rebuilt from ES through a basis that moves —
+// so the SAME 08:30 bar read 759.5653 when the pin was healed and 761.9526 an hour later. Anchoring
+// from it put EH/EL on a different ruler from the HOD/LOD they are compared against: measured on his
+// panel, the band drew 7590-7655 while ES had opened at 7647 and was trading 7663, ABOVE the
+// expected high. measureBars() is the series hodLod already measures.
+{
+  const saveMB=global.measureBars, saveCC=global.closedCandles, saveFut=global.dispIsFut;
+  global.localStorage.setItem('gpts_emopen_v1', JSON.stringify({ v:0, date:'1970-01-01', sym:{} }));
+  global.dispIsFut=()=>true; global.dispR=()=>10.0353;
+  global.__chain={ err:null, dte0:{ em:{ em:32.5, k:7685 } }, toFri:{ em:{ em:70, k:7685 } } };
+  global.ifLadder=()=>({ err:null, dispScale:1 });
+  // the DERIVED underlying series — wrong open, and it is what the old code read
+  global.closedCandles=()=>RTH([ {o:759.5653,h:760.1,l:759.0,c:759.8}, {o:759.8,h:760.4,l:759.2,c:760.1} ]);
+  // the TRUE ES bars the ⓪a section measures
+  global.measureBars=()=>({ bars:RTH([ {o:7647,h:7652,l:7644,c:7650}, {o:7650,h:7655,l:7648,c:7653} ]),
+                            scale:1, src:'ES', day:'x' });
+  const B=emBand('SPY');
+  ok(B.ok===true, 'm1 the band pins from the measured series', B.why);
+  ok(Math.abs(B.open-7647)<0.01,
+     'm2 EXECUTED: the anchor is the ES open the ⓪a section measures, not the derived book', B.open);
+  ok(Math.abs(B.low-(7647-32.5))<0.01 && Math.abs(B.high-(7647+32.5))<0.01,
+     'm3 ...so EH/EL bracket the session the HOD and LOD are measured in', [B.low,B.high]);
+  ok(Math.abs(B.scaleUsed-1)<1e-9,
+     'm4 ...and the scale is the series\' own — ES bars are already chart space, so no 10x', B.scaleUsed);
+
+  // and with NO courier the fallback is the underlying book, converted — behaviour unchanged
+  global.localStorage.setItem('gpts_emopen_v1', JSON.stringify({ v:0, date:'1970-01-01', sym:{} }));
+  global.measureBars=()=>({ bars:RTH([ {o:761.95,h:762.4,l:761.1,c:762.0} ]), scale:10.0353, src:'SPY' });
+  const B2=emBand('SPY');
+  ok(B2.ok===true && Math.abs(B2.open-(761.95*10.0353))<0.05,
+     'm5 with no ES bars the underlying book is used and converted by ITS scale', B2.open);
+
+  global.measureBars=saveMB; global.closedCandles=saveCC; global.dispIsFut=saveFut;
+}
+
 console.log((fail? 'FAIL ':'')+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

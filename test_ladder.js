@@ -341,8 +341,19 @@ ok(/Math\.abs\(u-t\)<15/.test(src),
 // nothing. Nudging the CROWN instead (my first fix) is backwards — a crown has no line behind it.
 ok(/var EMQ=\[\]/.test(src) && /EMQ\.push/.test(src) && /EMQ\.forEach/.test(src),
    'k11b the EM pills are QUEUED and emitted last, after the crowns and price');
-ok(/h\+='<i class="g3ldem" style="top:'\+t\.toFixed\(1\)\+'px"><\/i>';/.test(src),
+// ⚠⚠ (v15.25) THE LINE IS TWO SEGMENTS NOW, AND THE REASON IS THE OPERATOR'S: "why is there an
+// amber/yellow line that crosses some of the pills. sometimes it crosses the expected high and
+// sometimes it crosses the king nodes." It was one 78px stub drawn INSIDE the pill chute at the
+// band edge's true price — while the LABEL is nudged 15px at a time to clear the crowns and the
+// price pill, or dropped when there is nowhere clear. So an unlabelled amber stub sat in the middle
+// of the chute, reading as a line struck THROUGH whatever pill was at that height.
+// ⚠ The line was never in the wrong place; it was in the wrong COLUMN. Two segments that stop 6px
+// short of the chute on each side cannot cross a pill, and a rule that reads across the ladder
+// looks like a band edge instead of a strike-through.
+ok(/h\+='<i class="g3ldem g3ldemL" style="top:'\+t\.toFixed\(1\)\+'px"><\/i>'\+/.test(src),
    'k11c ...while the amber LINE is drawn immediately, at the true price');
+ok(/g3ldemL\{left:'\+LAD_LVL/.test(src) && /g3ldemR\{left:'\+\(LAD_CH\+LAD_CHW\+6\)/.test(src),
+   'k11d ...in two segments that stop either side of the pill chute, so it cannot cross a pill');
 ok(/CHUTEY\.push\(tn\)/.test(src),
    'k11d PRICE is a chute occupant the EM label must clear — the two-columns defect');
 ok(/var KG=ladderKings\(EB, sym\), used=\[\];/.test(src),

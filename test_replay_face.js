@@ -291,5 +291,119 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
      'p5 ...and BUILDING and WEAKENING are decided on the 15m, matching the Δ column');
 }
 
+// ---- 12 · THE CROSS-EXAMINATION: DOES THE REPLAYED FACE MATCH WHAT WAS RECORDED AS LIVE? -----
+// Operator, 2026-09-01: "determine that when i use the replay feature and go back during the day, it
+// will look like this in terms of what will be displayed ... really examine what is being displayed
+// to ensure consistency."
+// ⚠⚠ THE FRAME IS THE WITNESS. Every frame stores what the LIVE face was reading at that minute —
+// `tri.<book>.top` (the ladder's own %King rows), `tri.<book>.king` (the crowns) and `feat.emband`
+// (the band). So the replayed render can be checked against the recording rather than against my
+// expectation of it. Anything that disagrees is a surface reading a live source behind the seam.
+{
+  const F=FR[R.idx];
+  // a · the ladder rows ARE the recorded rows, strike for strike
+  const drawn=[...R.html.matchAll(/class="g3ldpx"[^>]*>([\d.]+)</g)].map(m=>+m[1]);
+  ok(drawn.length>0, 'x1 the replayed ladder draws rows', drawn.length);
+  const scale=F.px/F.xm.SPXW.px;
+  F.tri.SPXW.top.slice(0,5).forEach(function(row){
+    const disp=+(row[0]*scale).toFixed(0);
+    ok(drawn.some(p=>Math.abs(p-disp)<=1),
+       'x2·'+row[0]+' the recorded strike '+row[0]+' is on the rail at '+disp, drawn);
+  });
+  // b · the CROWNS are the frame's, not today's
+  ['SPXW','SPY'].forEach(function(bk){
+    const k=F.tri[bk] && F.tri[bk].king;
+    if(!(k>0)) return;
+    const disp=(bk==='SPXW') ? +(k*scale).toFixed(0) : k;
+    ok(R.html.indexOf(String(disp))>=0,
+       'x3·'+bk+' the '+bk+' crown drawn is the one the FRAME recorded ('+k+' → '+disp+')');
+  });
+  // c · the BAND is the frame's own recorded band
+  const eb=F.feat && F.feat.emband;
+  if(eb && eb.ok){
+    const B=JSON.parse(R.run('JSON.stringify((function(){var b=emBand("SPY");return {em:b.em,open:b.open,ok:b.ok};})())'));
+    ok(Math.abs(B.em-eb.em)<0.01,
+       'x4 the replayed EM width IS the width recorded at that minute', [B.em, eb.em]);
+    ok(Math.abs(B.open-eb.open)<0.01,
+       'x4b ...and so is the anchor, so EH/EL sit where they sat', [B.open, eb.open]);
+  }
+  // d · the CLOCK on the face is the parked minute, not this instant
+  const clockCT=new Date(F.t).toLocaleTimeString('en-US',
+      {timeZone:'America/Chicago',hour12:false,hour:'2-digit',minute:'2-digit'});
+  ok(R.text.indexOf(clockCT)>=0, 'x5 the ⓪a clock reads the parked minute', clockCT);
+  // e · and NOTHING on the replayed face may carry a live timestamp
+  ok(!/LIVE/.test((R.html.match(/class="g3rp"[\s\S]{0,400}?<\/div>/)||[''])[0]),
+     'x6 the strip says REPLAY, not LIVE, while the handle is parked');
+}
+
+// ---- 13 · (v15.25) THE ROLL IS NAMED ON THE ROW, AND THE 60m ARROW IS COLOUR-CODED -----------
+// Operator, 2026-09-01: "i need to be able to detect rolls. right now i dont see the roll arrows or
+// any indication that shows where the gamma is coming from and where its going" — measured on his
+// panel, the lane WAS drawing four real rolls as stepped paths in a 20px column at the far right,
+// with no strike named anywhere. And: "the roc 15 has up and dn arrows ... should be color coded."
+{
+  const chips=[...R.html.matchAll(/class="g3ldrl g3ldrl(\w+)"[^>]*>([^<]+)</g)].map(m=>[m[1],m[2]]);
+  ok(chips.length>0, 'q1 the ladder names the roll on the row it belongs to', chips.length);
+  ok(chips.some(c=>c[0]==='out'&&/\u21e2\d{4}/.test(c[1])),
+     'q2 ...a source says WHERE ITS MASS WENT, with the strike', chips);
+  ok(chips.every(c=>/\d{4}/.test(c[1])), 'q3 ...and every chip names the other strike', chips);
+  // ⚠ the lane is KEPT: it is the only thing that shows two rolls nesting rather than crossing
+  ok(/marker-end/.test(R.html), 'q4 ...while the stepped lane still draws them too');
+  const hd=(R.html.match(/<div class="g3ladhd">([\s\S]*?)<\/div>/)||[])[1]||'';
+  ok(/ROLL/.test(hd), 'q5 ...and the column is labelled');
+  // colour: green up, red down, the panel's own direction colours
+  const arrows=[...R.html.matchAll(/g3ld60 (g3ld60[ud])"[^>]*>([\u25b2\u25bc])/g)].map(m=>[m[1],m[2]]);
+  if(arrows.length){
+    ok(arrows.every(a=>(a[0]==='g3ld60u')===(a[1]==='\u25b2')),
+       'q6 the 60m arrow is coloured by ITS OWN direction, not by the row', arrows);
+  }
+  ok(/g3ld60u\{color:#2ec27e\}/.test(src) && /g3ld60d\{color:#f0616d\}/.test(src),
+     'q7 ...green up and red down, the same two colours the rest of the panel uses');
+  // and the state is held still, with the measured constant
+  ok(/var LVL_HOLD_MIN=5;/.test(src), 'q8 a new state must hold five measured minutes before it shows');
+  // ⚠⚠ EXECUTED OVER TIME. q8 greps the constant, and a constant nothing reads is decoration —
+  // removing the levelHold() call from out() survived that assertion. This drives the clock.
+  const seq=JSON.parse(R.run(`(function(){
+    REPLAY.on=false; LVL_HOLD={};
+    var a=levelHold(7000,'HOLDING');          // seeds
+    var b=levelHold(7000,'BUILDING');         // probation opens — must still show the old state
+    var c=levelHold(7000,'BUILDING');         // still inside the hold
+    LVL_HOLD[7000].pendT -= 6*60000;          // six minutes later
+    var d=levelHold(7000,'BUILDING');         // now it switches
+    var e=levelHold(7000,'HOLDING');          // and a flip back opens its own probation
+    REPLAY.on=true;
+    return JSON.stringify([a,b,c,d,e]);
+  })()`));
+  ok(seq[0]==='HOLDING' && seq[1]==='HOLDING' && seq[2]==='HOLDING',
+     'q8b EXECUTED: a new state does NOT show while it is inside the hold', seq);
+  ok(seq[3]==='BUILDING', 'q8c ...and DOES once it has held past five minutes', seq);
+  ok(seq[4]==='BUILDING', 'q8d ...and flipping back starts its own probation, so it cannot oscillate', seq);
+  // ⚠⚠ AND THROUGH levelStateOf, NOT just levelHold. A7 survived its first mutation because the
+  // assertions above call the helper DIRECTLY — so deleting the call from out() left them green
+  // while the face went back to flickering. The state engine is what the face reads; drive that.
+  const via=JSON.parse(R.run(`(function(){
+    REPLAY.on=false; LVL_HOLD={}; PEAK={m:{7000:1000}};
+    var row=function(p15){ return { v:{ k:7000, cur:1000, p5:p15, p15:p15, p60:0 }, age:0, stale:false }; };
+    var saved=velAt;
+    velAt=function(){ return row(0); };   var a=levelStateOf(7000,null).st;   // HOLDING
+    velAt=function(){ return row(40); };  var b=levelStateOf(7000,null).st;   // wants BUILDING
+    var c=levelStateOf(7000,null).st;                                          // still inside the hold
+    // ⚠ if levelStateOf never routes through levelHold, this cache is empty — report that as an
+    // ANSWER rather than throwing, so the assertion fails for its own reason instead of crashing.
+    if(!LVL_HOLD[7000]) return JSON.stringify([a,b,c,'NOT-HELD']);
+    LVL_HOLD[7000].pendT -= 6*60000;
+    var d=levelStateOf(7000,null).st;                                          // now it may switch
+    velAt=saved; REPLAY.on=true;
+    return JSON.stringify([a,b,c,d]);
+  })()`));
+  ok(via[0]==='HOLDING' && via[1]==='HOLDING' && via[2]==='HOLDING',
+     'q8e EXECUTED THROUGH levelStateOf: the face holds its state while the reading flips', via);
+  ok(via[3]==='BUILDING', 'q8f ...and changes once the new reading has held', via);
+  // ⚠ this file has no ex() — it renders the panel rather than extracting functions. Read the source.
+  const lh=(src.match(/function levelHold\([\s\S]*?\n\}/)||[''])[0];
+  ok(/replayOn\(\)\) return raw;/.test(lh),
+     'q9 ...and replay is exempt: the slider jumps, so a per-strike cache would carry state across a leap');
+}
+
 console.log('test_replay_face: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

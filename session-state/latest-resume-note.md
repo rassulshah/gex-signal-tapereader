@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-01 · panel v15.23 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-01 · panel v15.25 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.23, and what the face carries
+## 2 · WHERE WE ARE — v15.25, and what the face carries
 
-**Panel v15.23 · companion v1.17.** Suite **134 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.25 · companion v1.17.** Suite **134 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -177,6 +177,56 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠⚠ **v15.25a — THE DELTA PROFILE'S REAL EDGE, MEASURED. DO NOT OVERSTATE IT AGAIN.**
+`tools/study-deltacadence.js`, 13 sessions (08-17..08-31): **BUILDING is 52.8% against a 50% coin**
+at a 30-minute horizon, and it does NOT improve with a bigger move (+4-10% → 52.1%, +100%+ → 52.5%).
+**The only differentiator is DISTANCE: within 25 points of spot 56.9% (n=1266) vs 51.7% further out
+(n=3999).** The measured parts of this section are the ROLL and SPENT (19/19 pass-throughs), not the
+15m change. ⚠ His business requirement is support/resistance prediction — say 53% when it is 53%.
+
+⚠⚠ **v15.25b — THE STATE IS HELD FIVE MINUTES BEFORE IT CHANGES (`LVL_HOLD_MIN=5`).** Measured:
+hold 0m → 14.1% of reads change state, 52.8% edge · **5m → 9.3%, 52.2%** · 10m → 5.6%, **50.6% (a
+coin)**. Five removes a third of the churn for nothing; ten takes the signal. ⚠ Replay is EXEMPT —
+the slider jumps between minutes and a per-strike cache would carry state across a two-hour leap.
+
+⚠⚠ **v15.25c — THE ROLLS WERE ALWAYS DRAWN AND NOBODY COULD READ THEM.** Four real rolls
+(7645→7665 $18M, 7650→7665 $16M …) as stepped paths in a 20px column at the far right, no strike
+named. Each row now carries `⇢7675` (amber, leaving) or `⇠7650` (blue, arriving). ⚠ **"It renders"
+is not "it is readable".** Its 32px came from the ROC column, which lost the 5m at v15.23.
+
+⚠ **THE AMBER LINE crossing pills was the EM rail drawn INSIDE the pill chute** at the band edge's
+true price, while its label steps away to clear the crowns. Two dashed segments now stop either side
+of the chute. ⚠ The line was in the right place and the wrong column.
+
+✅ **EH/EL ARITHMETIC VERIFIED on his pin:** `openU 759.5653 × rr 10.0353 = 7622.4`, `± em 32.31` →
+**7655 / 7590**, matching the face exactly. The width IS InsiderFinance's 0DTE ATM straddle captured
+at the open; it is added to and subtracted from the open. The ANCHOR was the fault (v15.24).
+
+⚠⚠⚠ **v15.24a — THE CROSS-EXAMINATION IS THE STRONGEST TEST THIS PROJECT HAS. USE IT.** Every frame
+records what the LIVE face was reading — `tri.<book>.top`, `tri.<book>.king`, `feat.emband` — so a
+replayed render is checked against THE RECORDING, not against my expectation. `test_replay_face`
+does this (x1-x6) and caught a regression on its first run: v15.23's own heal was overwriting the
+replayed pin, 771.74 recorded vs 769.34 drawn. **Both plausible; only the recording knows.**
+
+⚠⚠ **v15.24b — WHY REPLAY COULD NOT CAPTURE THE DAY.** Measured on his recording: 34 frames, and
+**EIGHT carried no `tri`, no `vend`, no `px`** — empty shells the slider offered as seekable ticks,
+so the handle landed on one and the face went blank. The recorder refuses to write them now, and
+`replayLoadDay` drops the ones already on disk (`replayUsable`), reports the count, and distinguishes
+"the frames carry no book" from "none were recorded".
+⚠ His recording that day also STARTED AT 09:03, not 08:30 — the recorder only runs while the panel is
+open. Not a defect; a limit to state when the slider will not go back further.
+
+⚠⚠ **v15.24c — A RULE ENFORCED ONLY AT WRITE TIME CANNOT FIX WHAT IS ALREADY STORED.** Twice in one
+build: the king lane's dwell (KTRACK already held the day's flickers — his lane still showed **23
+runs** after v15.23) and the empty frames. Both now enforced where the data is READ.
+⚠ And the replay rebuild NO LONGER filters as it builds: **one rule, one place, both paths.** Two
+copies looked like belt and braces and were invisible to mutation.
+
+⚠⚠ **v15.24d — THE BAND ANCHORS ON `measureBars()`, NOT `closedCandles()`.** On a futures chart the
+underlying series is DERIVED — rebuilt from ES through a moving basis — so the same 08:30 bar read
+759.5653 and later 761.9526. The band drew 7590-7655 against a real ES open of 7647 with price at
+7663, ABOVE the expected high. **A value recomputed from a moving input is not a record of anything.**
 
 ⚠⚠ **v15.23a — THE EM BAND WAS ANCHORED ON YESTERDAY'S OPEN AND NOBODY COULD SEE IT.** Measured
 on his panel: pin `openU 768.6968 · rr 10.0353` → anchor **7714**, against a real ES open of **7647**

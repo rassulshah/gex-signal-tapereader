@@ -1,3 +1,170 @@
+## v15.25 — the amber line, the roll you could not see, and a measured answer on cadence
+
+> "why is there a amber/yellow line that crosses some of the pills" · "i need to be able to detect
+> rolls ... i dont know of whether there is a roll going on" · "the values constantly change ...
+> figure out the updating time interval that is valid" · "judge how this feature can be enhanced"
+
+### EH/EL — CHECKED, AND THE ARITHMETIC IS EXACTLY WHAT HE ASKED ABOUT
+
+Read off his live pin, 2026-09-01:
+
+    em 32.313255  ·  openU 759.5653  ·  rr 10.0353
+    open  = 759.5653 × 10.0353 = 7622.4
+    EH    = 7622.4 + 32.31     = 7654.7   → drawn 7655   ✓
+    EL    = 7622.4 − 32.31     = 7590.1   → drawn 7590   ✓
+
+**Yes: the width is InsiderFinance's 0DTE ATM straddle, captured once at the open, and yes, it is
+added to and subtracted from the open.** `emK` 32.5 is their number in SPX points; `em` is that on
+chart scale. (Their live 0DTE EM now reads 14.8 — it decays through the session, and the band
+deliberately keeps the OPEN's capture as a fixed reference.) **The arithmetic was never the problem;
+the ANCHOR was, and v15.24 fixed it — he is still on v15.23.**
+
+### ⚠⚠ THE AMBER LINE WAS THE BAND EDGE, DRAWN IN THE PILL COLUMN
+
+`.g3ldem` is the EH/EL rail, one **78px stub inside the pill chute**, at the band edge's true price.
+The LABEL steps down 15px at a time to clear the crowns and the price pill — and is dropped entirely
+when nothing is free. So the line stayed on its own row while its label went elsewhere, and an
+unlabelled amber stub in the middle of the chute reads as a line struck **through** whatever pill is
+at that height. Measured: rails at y 186 and 393, EH pill at 180, EL pill at 386.
+⚠ **The line was never in the wrong place — it was in the wrong COLUMN.** It is now two dashed
+segments that stop 6px short of the chute on either side, so it cannot cross a pill and it reads as
+a boundary across the ladder instead of a strike-through.
+
+### ⚠⚠ THE ROLLS WERE THERE. NOTHING NAMED THEM.
+
+Measured on his panel at 10:50 — the lane was drawing **four real rolls** as stepped blue paths:
+
+    7640→7665  ·  7645→7665 ($18M)  ·  7650→7665 ($16M)  ·  7650→7675
+
+in a **twenty-pixel column at the extreme right of a 640px ladder**, with no strike named anywhere
+and no mark on the rows themselves. Present, correct, unreadable.
+Every row that is a roll source or destination now carries a chip in its own line: **`⇢7675`** in
+amber when mass is leaving, **`⇠7650`** in blue when it is arriving, with the dollar amount and the
+whole rule in the hover. The lane is kept — it is the only thing that shows two rolls nesting rather
+than crossing.
+⚠ Its 32px came from the **ROC column**, which stopped printing the 5m at v15.23 and was carrying
+34px of air. `test_ladder` w1b says "640 IS NOW THE CAP. The next column that wants width argues for
+it here." It did not have to: **a cap is only a cap if the answer to "I need more" is to find it.**
+
+### the 15m Δ, STATE and ROC — are they in sync? yes, and here is exactly how
+
+| column | window | what it is |
+|---|---|---|
+| **Δ15m** | 15 min | dollars of dealer exposure gained or lost at that strike |
+| **STATE** | 15 min | BUILDING at ≥ +4%, WEAKENING at ≤ −8% — the same 15m change, as a percentage |
+| **ROC 15m** | 15 min | that percentage, printed |
+| **TURN** | 5m + 15m + 60m | the one state that is NOT purely 15m: the 5m and 15m must agree AND both flip against the hour |
+| **SPENT** | the day | mass against its own peak — a different question entirely |
+
+So Δ, STATE and ROC are the **same measurement in three forms**. The 60m arrow is now **green up /
+red down**, the panel's own direction colours.
+
+### ⚠⚠ CADENCE: MEASURED, AND THE HONEST ANSWER IS UNCOMFORTABLE
+
+`tools/study-deltacadence.js`, 13 recorded sessions (2026-08-17..08-31):
+
+    hold    state changes per read    BUILDING still bigger 30m later
+      0m           14.1%                       52.8%
+      3m           11.5%                       52.2%
+      5m            9.3%                       52.2%    ← shipped
+     10m            5.6%                       50.6%    ← churn halves, the edge becomes a coin
+
+**A new state must now hold five minutes before the face changes it.** That removes a third of the
+changes and costs nothing measurable; ten minutes removes another third and costs the whole signal.
+⚠ **AND THE HEADLINE: BUILDING is ~53% against a 50% coin.** It does not improve with a bigger move
+(+4-10% scores 52.1%, +100%+ scores 52.5%). **The one thing that moves it is DISTANCE: within 25
+points of spot, 56.9% (n=1266) against 51.7% further out (n=3999).**
+
+### how this feature can be enhanced — judged, not asserted
+
+1. **Weight by proximity.** The only measured differentiator in his own data. A build 10 points from
+   spot is worth more than the same build 60 points out, and the face does not currently say so.
+2. **Stop treating the 15m change as a forecast.** At 53% it is a description of what is happening,
+   not a prediction. The parts of this section that ARE measured — the roll (where mass is moving)
+   and SPENT (19/19 pass-throughs at drained levels) — deserve the emphasis.
+3. **Time-of-day weighting is worth testing next.** 0DTE gamma decay is non-linear, roughly doubling
+   by 2pm and reaching 4-5× the morning rate by 3:30pm, so a fixed 15m window means something
+   different at 09:00 than at 14:30. That is a study, not a guess, and it is not shipped here.
+
+### verification
+`test_replay_face.js` 79 → **93**, including the hysteresis driven through `levelStateOf` over a
+moving clock. **Twelve mutations run individually, twelve caught.** Two survived first: the rail
+assertion pinned the old single-stub markup, and the hysteresis was only ever called DIRECTLY by the
+test — so deleting it from the state engine left the assertions green while the face went back to
+flickering.
+
+## v15.24 — the cross-examination: the replayed face now matches what was recorded as live, and the recorder stops writing frames with no book
+
+> "check everything ... determine that when i use the replay feature and go back during the day, it
+> will look like this in terms of what will be displayed. you need to cross examine to see why the
+> replay feature currently cannot capture a snapshot of the day and fix that."
+
+### ⚠⚠ WHY REPLAY COULD NOT CAPTURE THE DAY — MEASURED ON HIS OWN RECORDING
+
+Read off his panel at 10:42 CT:
+
+    34 frames · first 09:03 · last 10:42
+    gaps            09:41→09:45 (5m) · 09:46→10:09 (24m)
+    EIGHT frames    no `tri`, no `vend`, no `px`, no `h`/`l`, no `xm` — empty shells
+    vendRows        min 0, max 90
+
+**Eight of thirty-four frames carried no book at all.** They cost storage, they drag the day's depth
+down, and the slider offered them as seekable ticks — so the handle lands on one, the face goes
+blank, and that reads as *replay is broken* rather than *nothing was recorded at 09:46*.
+The recorder now **refuses to write a frame with no book**, and — because a write-time rule cannot
+reach the eighteen days already on disk — `replayLoadDay` drops them at LOAD too, reports how many,
+and a day of nothing but empties says *the frames carry no book* instead of *none were recorded*.
+⚠ Same shape as the king lane below: **a rule enforced only where data is written cannot fix a
+record that already exists.**
+⚠ The recording also starts at **09:03**, not 08:30 — the recorder only records while the panel is
+open, so the first 33 minutes of that session are simply not there. Not a defect; a limit worth
+knowing when the slider will not go back further.
+
+### ⚠⚠ THE CROSS-EXAMINATION FOUND A REGRESSION I HAD JUST SHIPPED
+
+Every frame stores what the LIVE face was reading at that minute — `tri.<book>.top`,
+`tri.<book>.king`, `feat.emband` — so a replayed render can be checked against **the recording**
+rather than against my expectation of it. `test_replay_face` now does exactly that, and immediately
+caught v15.23's own heal overwriting the replayed pin:
+
+    recorded anchor   771.74        what the band actually sat on that day
+    replayed anchor   769.34        the reconstructed first bar, written over it by the heal
+
+The heal treats a missing `openSo` as *"we do not know which bar this came from, so replace it"* —
+and a REPLAY pin has no `openSo` by construction, because its anchor is a stored number, not a bar
+index. So it fired on every replayed render and moved the band 24 ES points from where it sat.
+**Both numbers are plausible; only the recording knows which is right.**
+
+### ⚠⚠ AND THE BAND'S ANCHOR WAS STILL WRONG LIVE — THE UNDERLYING SERIES IS DERIVED
+
+v15.23 fixed the guard; the anchor was still taken from `closedCandles()`, which on a futures chart
+is **rebuilt from ES through a basis that moves**. Measured on his panel: the same 08:30 bar read
+**759.5653** when the pin healed and **761.9526** an hour later. Same bar, same `so`, different open.
+So the band drew **7590–7655** while ES had opened at **7647** and was trading **7663 — above the
+expected high**, wearing the ⤓.
+It now anchors on `measureBars()` — the true ES bars the ⓪a section already measures — with that
+series' own scale. **One series, one scale, one anchor**, which is the v15.21 lesson one function
+over.
+
+### the king lane obeys the rule where it is DRAWN
+
+v15.23 made dwell a 20-minute duration in both write paths and his lane stayed erratic — **23 runs at
+10:38** — because `KTRACK` already held the day's points, recorded under the old ~6-second rule.
+`ktFilterDwell()` now applies the duration where the lane is READ, so live and replay are identical
+by construction and a track written by any earlier version is displayed under the current rule.
+⚠ The replay rebuild no longer filters as it builds: **one rule, one place.** Applying it twice
+looked like belt and braces and was worse — a mutation that removed one copy changed nothing, so no
+test could tell whether it did anything.
+⚠ The LAST point is always drawn: it is the crown's current seat, not yet a migration claim.
+
+### verification
+`test_replay.js` 188 → **207**, `test_replay_face.js` 67 → **79** (including the cross-examination
+against `tri.top`, `tri.king`, `feat.emband` and the parked clock), `test_em_band.js` → **637**.
+**Fourteen mutations run individually, fourteen caught.** Three survived first and all three were my
+tests, not the code: a predicate asserted but never executed by the loader, a rule applied in two
+places so removing one was invisible, and a fixture stamped `t:1000` that landed in 1970 and read as
+the new filter dropping everything.
+
 ## v15.23 — the expected-move band was anchored on yesterday's open, and the king lane's dwell was a count applied to two different clocks
 
 > "why is the expected high (EH) and expected low crossed out .. did you determine the values from

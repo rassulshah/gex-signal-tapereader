@@ -131,6 +131,69 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.25 — present, correct and unreadable is a defect
+
+**1 · The rolls were being drawn the whole time.** Four real ones, as stepped blue paths in a 20px
+column at the far right of a 640px ladder, with no strike named and no mark on the rows. The
+operator's report — "i dont see the roll arrows or any indication that shows where the gamma is
+coming from" — was about LEGIBILITY, and I would have dismissed it as a data bug if I had not
+measured the lane first. ⚠ **"It renders" is not "it is readable". A feature the operator cannot use
+has not shipped**, and the test that proves the element exists cannot tell the difference.
+
+**2 · The amber line was in the right place and the wrong column.** It sits at the band edge's true
+price INSIDE the pill chute, while the label steps away to avoid the crowns — so an unlabelled stub
+crossed whatever pill was at that height. The doctrine that a clamped position is a false position
+is why the label moves and the line does not; nothing said the line should not be drawn in the one
+column reserved for labels. ⚠ **A rule about the y-axis said nothing about x, and the gap is where
+the confusion lived.**
+
+**3 · Measure the cadence question, then say the uncomfortable number.** BUILDING is **52.8%**
+against a 50% coin at thirty minutes, and it does NOT improve with a bigger move. Five minutes of
+hysteresis removes a third of the state changes for no measurable cost; ten removes another third
+and takes the signal with it. ⚠ **The stability the operator wants and the edge he needs are traded
+against each other, and only a measurement can price the trade.** Guessing an interval would have
+been indistinguishable from listening.
+
+**4 · The one real finding is the one I was not looking for.** Distance: within 25 points of spot
+BUILDING scores 56.9% (n=1266) against 51.7% further out (n=3999). It came out of a bucket I added
+almost as an afterthought. ⚠ **When a headline signal is weak, the useful question is not "is it
+real" but "for WHICH subset is it real".**
+
+**5 · A helper called only by its test is not covered.** The hysteresis assertions invoked
+`levelHold` directly, so deleting the call from `levelStateOf` left them green while the face went
+back to flickering. ⚠ **Assert through the function the FACE calls, not the helper you wrote.**
+
+### v15.24 — the recording is the only witness to what the face used to say
+
+**1 · A new class of test, and it caught a regression on its first run.** Every frame stores what the
+LIVE face was reading at that minute — `tri.top`, `tri.king`, `feat.emband`. So a replayed render can
+be checked against **the recording** instead of against my expectation of it, and that is the only
+check that could have seen v15.23's heal overwriting the replayed anchor: 771.74 recorded, 769.34
+drawn. **Both numbers are plausible. Only the recording knows which is right.** ⚠ Where a stored
+record exists of what a surface said, assert against THAT, not against a value computed twice.
+
+**2 · A rule enforced only where data is WRITTEN cannot fix a record that already exists.** Twice in
+one build: the king lane's dwell (KTRACK already held the day's flickers, so the v15.23 fix arrived
+for tomorrow and today's lane stayed erratic at 23 runs) and the recorder's empty frames (eighteen
+days already on disk). Both are now enforced where the data is READ. ⚠ **Ask of every threshold: what
+does it do about the data that is already there?**
+
+**3 · One rule in two places is worse than either.** The replay rebuild filtered by dwell as it built
+AND the reader filtered again. It looked like belt and braces; mutation proved it was invisible —
+removing one copy changed no test — and two copies of a rule can drift apart silently. One rule, one
+place, both paths.
+
+**4 · A derived series has no stable history.** `closedCandles()` on a futures chart is rebuilt from
+ES through a moving basis, so the SAME 08:30 bar read 759.5653 and then 761.9526. Pinning a
+once-per-session anchor from it captures whatever the basis was at that instant. ⚠ **A value that is
+recomputed from a moving input is not a record of anything; anchor on the series you MEASURE.**
+
+**5 · Three mutations survived and all three were faults in my tests, not the code** — a predicate
+asserted but never executed by its caller, a rule applied twice so removing one was invisible, and a
+fixture stamped `t:1000` that landed in 1970 and read as the new filter dropping everything. ⚠ Second
+consecutive build where the surviving mutations were test faults. **When a mutation survives, suspect
+the assertion before the code.**
+
 ### v15.23 — a fixture that omits a field cannot fail on a bug about that field
 
 **1 · The false thing.** The EM band's warm-up guard read `cs[0].time`. **The candles have no
