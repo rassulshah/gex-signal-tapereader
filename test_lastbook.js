@@ -166,5 +166,29 @@ const PSD = ex('pickSessionDay');
 ok(/if\(todayHas\) return out;/.test(PSD), 'p1 pickSessionDay still returns today when today has bars');
 ok(/if\(P && P\.rth\) return out;/.test(PSD), 'p2 ...and still never substitutes during RTH');
 
+// ---- (v15.35) THE FREEZE BADGE'S CLOCK -------------------------------------------------------
+// ⚠⚠ IT PRINTED A 1970 TIMESTAMP AND THE OPERATOR BELIEVED IT. `LB.ts` is epoch MILLISECONDS and
+// `fmtClock(ts)` does `new Date(ts)` — also milliseconds. The call divided by 1000 first, so
+// `new Date` read SECONDS as milliseconds: a book latched at 14:59 on 2026-09-01 rendered as
+// "frozen 10:44 am", which is 1970-01-21 in Chicago. He saw it on his panel and reported the freeze
+// as wrong — it was not; the LABEL was.
+// ⚠ A stale-book badge exists to answer "how old is this". A wrong answer there is worse than no
+// badge: it turns a disclosure into a false reassurance.
+{
+  const fc = (src.match(/function fmtClock\([\s\S]*?\n\}/) || [''])[0];
+  ok(/new Date\(ts\)/.test(fc), 'f1 fmtClock takes EPOCH MILLISECONDS — that is its contract', fc.slice(0, 60));
+  // EXECUTED: the same milliseconds must come back as the same wall clock
+  const fmtClock = eval('(' + fc + ')');
+  const ms = Date.parse('2026-09-01T19:59:00Z');            // 14:59 CT
+  ok(/2:59|14:59/.test(fmtClock(ms)), 'f2 EXECUTED: a real latch time formats as its own clock', fmtClock(ms));
+  ok(/10:44/.test(fmtClock(Math.floor(ms / 1000))),
+     'f2b ...and the /1000 form lands in 1970 — this is exactly what he was shown', fmtClock(Math.floor(ms/1000)));
+  // and the CALL SITE must not do the division
+  ok(/lbT=fmtClock\(LB\.ts\|\|0\)/.test(src),
+     'f3 the freeze badge passes the timestamp UNCONVERTED');
+  ok(!/fmtClock\(Math\.floor\(\(LB\.ts/.test(src),
+     'f3b ...with the millisecond-to-second conversion gone, not merely commented');
+}
+
 console.log('test_lastbook: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

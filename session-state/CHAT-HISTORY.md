@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-01 · v15.34 · session `5e8d34b5`
+## 2026-09-01 · v15.35 · session `5e8d34b5`
 
-_48 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_50 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -731,8 +731,64 @@ Standing by for the next QA item. Worth noting the market closes in ~10 minutes,
 Freeze first — the close is minutes away.
 Freeze is armed — I'll confirm the details in a moment. Moving the lamps into the header now.
 The lamp styles are scoped to `#gpts-body` — they'd be unstyled in the header.
+**The freeze is armed** — checked at 14:57, three minutes before the close:
+
+```
+CFG.lastBook       true
+gpts_lastbook_v1   SPXW king 7625, 100 strikes, stamped 14:57:39 — writing live
+recorder today     31 frames, 13:39 → 14:57
+```
+
+The close-of-session book is being latched every render, so after 15:00 the panel serves that frozen book and you can keep working. Today's slider covers **13:39 → close** — the panel was reloaded at 13:39 and the recorder only runs while it's open, so nothing earlier exists to replay.
+
+**King rolls today, 2026-09-01:**
+
+| book | recorded | drawn on the lane | path |
+|---|---|---|---|
+| **SPXW** | **5** | 4 | 7690 → 7675 → 7640 → 7650 → 7655 → 7680 → 7635 → 7630 |
+| **SPY** | **3** | 2 | 767 → 766 → 765 → 766 → 764 → 762 |
+| **QQQ** | **not tracked** | — | — |
+
+Recorded vs drawn differ because the 20-minute dwell filter runs at read time: 7690→7675 held **3 minutes** and 7640→7650 held **16**, so both are flickers and don't draw. The ones that survive held 87, 32, 105 and 101 minutes.
+
+Two things worth flagging. **QQQ has no king track at all** — `KT_BOOKS` is SPXW and SPY only, even though the ladder draws a QQQ crown. You asked about "each type of king", so that's a gap, not a decision. And **Atlas publishes no roll count** — it shows only a live King-distance chip per symbol (`SPXW King 0.0%↑`, `QQQ King 0.1%↑`), so there's nothing on their side to reconcile these against. If you want consistency with Atlas on movement, we'd be defining it, not mat …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 27 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (20:00):** The close just happened and the freeze engaged — checked at 15:00:48:
+
+```
+AFTER HOURS badge   showing
+last frame          15:00:45  (recorded right up to the bell)
+replay strip        ◀ Tue 1 Sep ▶  08:30 — 15:00
+```
+
+One correction to what I told you 20 minutes ago, because it's better news: the recorder now reports **24 frames from 14:00 to 15:00**, not 13:39 onward. The store trims to a rolling window, so the earliest frames aged out as new ones landed. Today's slider will cover roughly **14:00 → 15:00** rather than 13:39 → close. Still a one-hour window, not the full session — the panel wasn't open for the morning.
+
+You're on **v15.33** in that reading; v15.34 (lamps in the header) is the installer I just sent, and it's not urgent — nothing in it affects the freeze or the replay data.
+
+On the git note: 27 commits, clean tree, push refused here for this repo as it has been all session. They reach origin when you run the installer.
+
+**OPERATOR:**
+> check everything.. i reloaded
+
+**me (20:21):** v15.34 is up and the lamps are in the header. But two things look wrong — the frozen book says **10:44**, and the ladder has almost no nodes.
+The latch itself is correct — **14:59:00, king 7630, 100 strikes**. So the footer's "frozen 10:44 am" is a mislabel. Finding it.
+`LB.ts` is epoch **milliseconds** being passed through `/1000` into a clock formatter. Let me see what that formatter expects.
+Found it — and it's a unit error in the one label that tells you which book you're looking at.
 
 ### DECISIONS
+
+**v15.35 · the freeze badge lied, the freeze did not.**
+- **"2026-09-01 book — frozen 10:44 am" on a book latched at 14:59.** `LB.ts` is epoch ms and
+  `fmtClock` takes ms; the call divided by 1000, so `new Date` read seconds as ms → 1970-01-21 →
+  10:44 am CT. The latch itself was perfect (SPXW 7630, 100 strikes, 14:59:00, right expiry).
+- **The failure mode was PLAUSIBILITY** — 10:44 is a time a book could freeze at, so nothing
+  screamed. A disclosure that lies is worse than none.
+- **Everything else post-close checked correct**: lamps in the header (IRT 1m / IF 1m), AFTER HOURS
+  chip, ⓪a below the ladder, 1ST TP / 2ND TP, no render errors. Only `if.SPY` fails, as expected.
 
 **v15.34 · lamps to the header, freeze verified.**
 - **The lamps moved into the header** to save a row; their CSS had to be re-scoped from `#gpts-body`
@@ -942,6 +998,9 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.35** — the freeze badge's clock (`fmtClock(LB.ts)`, no /1000). `test_lastbook` → 53, executing
+fmtClock on a real latch time. One mutation, one caught. Suite 136 green / 6 baseline red.
+
 **v15.34** — the feed lamps in the header (`#gpts-hdrlamps`), CSS scoped to the panel.
 Three mutations, three caught. Suite 135 green / 6 baseline red.
 
@@ -1023,6 +1082,10 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. **QQQ still has no king track** (`KT_BOOKS` is SPXW + SPY) — he asked about "each type of king".
+2. Today's slider covers roughly 14:00 → close; the recorder trims to a rolling window.
+3. Proximity weighting and time-of-day windowing remain unshipped studies.
 
 1. **QQQ has no king track** — `KT_BOOKS` is SPXW + SPY. He asked about "each type of king", so this
    is an open gap, not a decision.
@@ -1124,6 +1187,7 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+23a5317 v15.34: the feed lamps move into the header, and the close-of-day freeze is verified live
 0e1bfd1 v15.33: ⓪a below the ladder, 1ST/2ND TP, brighter labels, and two feed lamps up top
 cc12ac1 v15.32: the build message carries the links AND a save confirmation, because the builder prints both
 d19aa28 v15.31: the day as a candle, the strike grid behind the nodes, IBH/IBL off the level rail
@@ -1135,7 +1199,6 @@ f8f574e v15.28: the expected low was clipped on the frame's edge, and in replay 
 62f706f v15.25: the amber line, the roll nobody could see, and a measured answer on cadence
 1f3539f v15.24: cross-examine the replayed face against the recording; stop storing frames with no book
 c5f29a7 study: keep the script that chose KT_DWELL_MIN
-265bc27 v15.23: the EM band was anchored on yesterday's open, and dwell was a count on two clocks
 ```
 
 ---

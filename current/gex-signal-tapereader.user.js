@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.34
+// @version    15.35
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.34';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.35';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -18936,7 +18936,17 @@ function feedStatusHtml(){
     if(showingStaleBook()){
       var LB=null; try{ LB=lastBookLoad(lastBookGov(activeSym())); }catch(eLB){}
       LB=LB||{};
-      var lbT=''; try{ lbT=fmtClock(Math.floor((LB.ts||0)/1000)); }catch(eLT){}
+      // ⚠⚠⚠ (v15.35) THE FREEZE BADGE WAS PRINTING A 1970 TIMESTAMP. `LB.ts` is epoch MILLISECONDS
+      // and `fmtClock(ts)` does `new Date(ts)` — also milliseconds. Dividing by 1000 first handed it
+      // SECONDS, which `new Date` reads as milliseconds: 1788296340000 → 1788296340 → 1970-01-21,
+      // which renders in Chicago as **10:44 am**. The operator saw "2026-09-01 book — frozen 10:44
+      // am" on a book actually latched at 14:59, and 10:44 is plausible enough to be believed.
+      // ⚠ THE ONE LABEL THAT SAYS WHICH BOOK YOU ARE LOOKING AT WAS THE ONE THAT LIED. A stale-book
+      // badge exists to answer "how old is this" — a wrong answer there is worse than no badge,
+      // because it converts a disclosure into a false reassurance.
+      // ⚠ The comment two lines up says it "names the SESSION and the CLOCK TIME the book froze at".
+      // It did name them. It just converted the units on the way, and nothing checked the output.
+      var lbT=''; try{ lbT=fmtClock(LB.ts||0); }catch(eLT){}
       warn+=(warn?' ':'')+'<span title="THE MARKET IS CLOSED AND THE LIVE BOOK HAS ROLLED. Skylit drops the expired chain at the close, so the ladder on the page is the NEXT expiry with every rate of change at zero. What you are looking at is the last healthy reading of the '+
         (LB.day||'')+' session, frozen at '+lbT+' \u2014 real numbers, not live ones. Nothing is recorded while this shows: the recorder is blind to it by construction (recorderBlind), so it can never enter data/*.json as though it were live. Turn it off in the gear to watch the overnight book instead."'+
         ' style="color:#7cc7ff;font-weight:800">\u25cf '+(LB.day||'last session')+' book \u2014 frozen '+lbT+'</span>';

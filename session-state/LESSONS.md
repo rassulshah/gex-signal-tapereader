@@ -131,6 +131,29 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.35 — a disclosure that lies is worse than no disclosure
+
+**1 · The freeze badge printed a 1970 timestamp and it looked like a real one.** `LB.ts` is epoch
+milliseconds; `fmtClock` takes milliseconds; the call site divided by 1000 in between, so a book
+latched at 14:59 rendered as "frozen 10:44 am" — 1970-01-21 in Chicago. ⚠ **The failure mode is not
+that it was wrong, it is that it was PLAUSIBLE.** 10:44 am is a time a book could have frozen at, so
+there was nothing to notice. A timestamp that lands in 1970 usually screams; converted through a
+timezone it whispers.
+
+**2 · The badge whose job is disclosure was the thing that misled.** The stale-book chip exists to
+answer "how old is this book" — it is the panel's own honesty mechanism. ⚠ **Check the OUTPUT of
+every disclosure, not just its presence.** A wrong answer there is worse than silence: silence
+prompts a question, a wrong number ends one.
+
+**3 · The comment described the intent and the code converted the units.** Two lines above the bug:
+"it names the SESSION and the CLOCK TIME the book froze at". True, and it still printed 1970. ⚠ A
+comment states what was MEANT; only a test states what HAPPENS. Ninth or tenth time this session.
+
+**4 · The thing he reported was not the thing that was broken.** He saw "frozen 10:44" and reasonably
+read the freeze as failing. The latch was perfect — 14:59:00, 100 strikes, right expiry. ⚠ **When he
+reports a symptom, verify the underlying state before believing the surface** — I nearly went looking
+for a broken latch.
+
 ### v15.34 — a selector that encodes where something used to live
 
 **1 · Moving an element broke its styling, and the CSS was the reason.** `.g3fl` was scoped

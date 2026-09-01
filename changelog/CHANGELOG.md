@@ -1,3 +1,40 @@
+## v15.35 — the freeze badge was printing a 1970 timestamp
+
+> "check everything.. i reloaded"
+
+### ⚠⚠⚠ "2026-09-01 book — frozen 10:44 am" ON A BOOK LATCHED AT 14:59
+
+    LB.ts                        epoch MILLISECONDS
+    fmtClock(ts)                 does `new Date(ts)` — also milliseconds
+    the call site                fmtClock(Math.floor(LB.ts/1000))   ← seconds, read as milliseconds
+
+    1788296340000  →  /1000  →  1788296340  →  new Date(…)  →  1970-01-21T16:44Z  →  10:44 am CT
+
+The latch itself was **correct all along** — measured on his panel: `SPXW king 7630, 100 strikes,
+ts 14:59:00, exp 2026-09-01`. The close-of-session book is exactly what he asked for and exactly what
+was stored. **Only the label lied.**
+⚠ **THE ONE LABEL THAT SAYS WHICH BOOK YOU ARE LOOKING AT WAS THE ONE THAT WAS WRONG.** A stale-book
+badge exists to answer *how old is this* — a wrong answer there is worse than no badge, because it
+converts a disclosure into a false reassurance. And 10:44 am is plausible enough to be believed.
+⚠ The comment two lines above the bug says the badge "names the SESSION and the CLOCK TIME the book
+froze at". It did name them. It converted the units on the way, and nothing checked the output.
+
+### WHAT ELSE THE POST-CLOSE CHECK FOUND — all correct
+
+    header        Tapereader v15.34 · IRT 1m · IF 1m      the lamps, in the header
+    freeze        AFTER HOURS · EM EXPIRED chip showing
+    latch         SPXW 7630 / QQQ 708, both stamped 14:59:00, 100 strikes each
+    layout        ⓪a below the ladder · 1ST TP / 2ND TP · brighter labels
+    deps          one failure left: `if.SPY: missing expected move` — expected under the SPX pin
+    render errors none
+
+⚠ **The IRT lamp reads `IRT 1m`, green.** That is the v15.33 fix working: the old check re-ran
+`irtBuildCsv()` as a probe and called a working export dead. It reads what reached the file now.
+
+### verification
+`test_lastbook.js` → **53**, executing `fmtClock` on a real latch time and asserting the `/1000` form
+lands in 1970 — the exact string he was shown. One mutation, one caught.
+
 ## v15.34 — the feed lamps move into the header, and the close-of-day freeze is verified live
 
 > "put the irt and if indicators in the tapereader header to conserve space" · "Make sure you freeze

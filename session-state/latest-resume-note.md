@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-01 · panel v15.34 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-01 · panel v15.35 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.34, and what the face carries
+## 2 · WHERE WE ARE — v15.35, and what the face carries
 
-**Panel v15.34 · companion v1.17.** Suite **135 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.35 · companion v1.17.** Suite **136 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -177,6 +177,18 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠⚠ **v15.35 — THE FREEZE BADGE PRINTED A 1970 TIMESTAMP AND IT LOOKED REAL.** `LB.ts` is epoch
+MILLISECONDS, `fmtClock(ts)` does `new Date(ts)` (also ms), and the call site divided by 1000 in
+between: `1788296340000 → 1788296340 → 1970-01-21 → **10:44 am CT**`. A book latched at **14:59:00**
+displayed as "frozen 10:44 am".
+**THE LATCH WAS ALWAYS CORRECT** — SPXW king 7630, 100 strikes, ts 14:59:00, exp 2026-09-01. Only the
+label lied, and 10:44 am is plausible enough to be believed. ⚠ **A disclosure that lies is worse than
+no disclosure**: silence prompts a question, a wrong number ends one. ⚠ And the comment two lines
+above says the badge "names the SESSION and the CLOCK TIME" — it did, and still printed 1970.
+✅ **EVERYTHING ELSE POST-CLOSE CHECKED CORRECT:** lamps in the header (`IRT 1m · IF 1m`), AFTER HOURS
+chip, ⓪a below the ladder, 1ST TP / 2ND TP, brighter labels, zero render errors. `deps` has one
+failure left — `if.SPY: missing expected move` — which is EXPECTED under the v15.06 SPX pin.
 
 ⚠⚠ **v15.34 — THE FEED LAMPS ARE IN THE HEADER** beside the version chip (they cost a 13px row on
 the top strip). `render()` paints `#gpts-hdrlamps` each pass. ⚠ Their CSS is scoped to `#gpts-panel`,
