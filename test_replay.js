@@ -371,5 +371,65 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
      'k6 the replay branch RETURNS — it cannot fall through and append today\'s crowns as well');
 }
 
+// ---- 14 · (v15.13) THE THREE REASONS HE COULD NOT SEE THE ARROWS ------------------------------
+// Operator, 2026-09-01, having asked twice: "i dont see the king lane ... i dont see the arrows and
+// i dont see the node profile except 1". MEASURED: .g3ladwrap scrollWidth 640, clientWidth 535 —
+// 105px off the right edge, scrollLeft 0. The roll lane is at x 620-640, ENTIRELY inside that strip.
+{
+  // --- a · the panel grows to fit the ladder ---
+  global.CFG={}; global.window={innerWidth:2314};
+  let PANW=560, saved={};
+  global.PANEL={ style:{width:'560px',height:''}, getBoundingClientRect:()=>({width:PANW}) };
+  global.elBody={ querySelector:()=>({scrollWidth:640, clientWidth:535}) };
+  global.localStorage={ getItem:k=>(k in saved?saved[k]:null), setItem:(k,v)=>{saved[k]=String(v);} };
+  global.SIZE_KEY='gpts_panelsize_v7';
+  eval(ex('ladderFit'));
+  ladderFit();
+  ok(PANEL.style.width==='667px', 'w1 the panel grows by exactly the overflow (+2), 560 -> 667', PANEL.style.width);
+  ok(saved['gpts_ladfit_v1']==='667', 'w2 ...and remembers the target so it cannot re-fire every render');
+  // once it fits, it must never touch the width again
+  PANW=667; PANEL.style.width='667px';
+  global.elBody={ querySelector:()=>({scrollWidth:640, clientWidth:665}) };
+  ladderFit();
+  ok(PANEL.style.width==='667px', 'w3 a ladder that FITS is left alone — no growth, ever', PANEL.style.width);
+  // and a manual shrink is not fought on the same target
+  PANW=560; PANEL.style.width='560px';
+  global.elBody={ querySelector:()=>({scrollWidth:640, clientWidth:535}) };
+  ladderFit();
+  ok(PANEL.style.width==='560px', 'w4 ...and it does not fight a manual resize back to the same target', PANEL.style.width);
+  // bounded by the viewport rather than growing off screen
+  saved={}; PANW=560; PANEL.style.width='560px'; global.window={innerWidth:600};
+  ladderFit();
+  ok(parseInt(PANEL.style.width,10)<=588, 'w5 the growth is capped by the viewport, not the ladder', PANEL.style.width);
+}
+{
+  // --- b · rolls and velocities are live in a replayed session ---
+  global.VEL_META={ ok:false, n:0 };
+  global.sessionPhase=()=>({rth:false});          // after hours, exactly his case
+  eval(ex('velOk')); eval(ex('rollsLive'));
+  REPLAY.on=false;
+  ok(velOk()===false,    'v1 live + no harvest: velocities are not ok, as before');
+  ok(rollsLive()===false,'v2 live + after hours: rolls do not draw, as before');
+  REPLAY.on=true; REPLAY.frames=FR; REPLAY.idx=1;
+  ok(velOk()===true,     'v3 REPLAY: the frame carries vend, so velocities ARE ok');
+  ok(rollsLive()===true, 'v4 REPLAY: a replayed bar is inside RTH by construction — arrows may draw');
+  REPLAY.frames=[{t:FR[1].t,px:1,h:1,l:1}]; REPLAY.idx=0;
+  ok(velOk()===false,    'v5 ...but a frame with NO vend is still not ok — no inventing velocities');
+  REPLAY.frames=FR; REPLAY.idx=1;
+}
+{
+  // --- c · the replayed roll latch reuses the LIVE scan, and restores the index ---
+  const rr=decomment(ex('replayRolls'));
+  ok(/rollScan\(/.test(rr), 'c1 it calls the LIVE rollScan — no second roll geometry');
+  ok(/rollLatchKey\(/.test(rr), 'c2 ...and the live key, so from>to pairs match');
+  ok(/finally\{ REPLAY\.idx=save; \}/.test(rr),
+     'c3 the index is restored in a FINALLY — a throw must never leave the panel parked elsewhere');
+  ok(/e3\.count<ROLL_SIG_N/.test(rr), 'c4 one sighting is noise and is never drawn, exactly as live');
+  ok(/RP_ROLLS\.key===key/.test(rr), 'c5 memoised per (day, idx, sym) — dragging does not rescan the session');
+  const rl=decomment(ex('rollLatched'));
+  const rIdx=rl.indexOf('replayRolls'), lIdx=rl.indexOf('ROLL_LATCH');
+  ok(rIdx>-1 && lIdx>rIdx, 'c6 rollLatched serves the REPLAYED set before touching today\'s live latch');
+}
+
 console.log('test_replay: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

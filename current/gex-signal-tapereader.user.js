@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.12
+// @version    15.13
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -641,7 +641,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.12';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.13';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3691,7 +3691,14 @@ function velAt(k){
     return { v:v, age:age, stale:(age>VEL_STALE_MS) };
   }catch(e){ return null; }
 }
-function velOk(){ return !!(VEL_META && VEL_META.ok && VEL_META.n>0); }
+// ⚠ (v15.13) IN REPLAY THE VELOCITIES COME FROM THE FRAME, NOT THE LIVE HARVEST. velOk() asks
+// "is the DOM harvest healthy" and gates rollScan and several ladder columns on it — true live, and
+// wrong in replay, where velAt() is already serving recorded numbers and the harvest is irrelevant.
+// Without this the arrows could never draw on a replayed bar however good the frame was.
+function velOk(){
+  try{ if(typeof replayOn==='function' && replayOn()) return !!(replayFrame()&&replayFrame().vend); }catch(e){}
+  return !!(VEL_META && VEL_META.ok && VEL_META.n>0);
+}
 
 // ⚠⚠ (v13.3) THE HARVEST RUNS ON ITS OWN CLOCK, AND v13.1 GOT THIS WRONG.
 // v13.1 called velHarvest() inside `if(haveFeed){ ... }` — the NETWORK FEED branch — directly beneath
@@ -3785,6 +3792,64 @@ var ROLL_HOLD_FRAC = 0.60; // destination must keep this share of its at-confirm
 var ROLL_LATCH_KEY = 'gpts_rolllatch_v1';
 var ROLL_LATCH = { day:null, per:{} };
 function rollLatchKey(r){ return r.from+'>'+r.to; }
+// ⚠⚠ (v15.13) THE ARROWS IN REPLAY. Operator, 2026-09-01, having asked twice: "i dont see the
+// arrows". Three separate reasons, all now closed — they were drawn at x 620-640 of a 640px ladder in
+// a 535px window (see ladderFit), `rollsLive()` gated them to RTH, and `ROLL_LATCH` is a stateful
+// accumulator built during the live session that no frame carries.
+//
+// This rebuilds the latch BY REPLAYING IT: walk the frames up to the parked one, run the SAME
+// `rollScan` on each, and accumulate with the SAME count / miss / gone semantics as `rollLatchTick`.
+// ⚠ It reuses rollScan rather than reimplementing the geometry — a second roll detector wearing the
+// same words is the mislabelling this project keeps paying for. The trick that makes it possible is
+// that `velAt()` already serves the frame at `REPLAY.idx`, so stepping the index steps the whole
+// scan; the index is restored in a `finally` so a throw can never leave the panel parked elsewhere.
+// ⚠ Memoised on (day, idx, sym): dragging one bar must not rescan the session on every render.
+var RP_ROLLS={ key:null, out:[] };
+var RP_ROLL_LOOKBACK=40;               // frames of history the counts are built from (~2h of 3m bars)
+function replayRolls(sym){
+  if(typeof replayOn!=='function' || !replayOn()) return [];
+  var key=REPLAY.day+'|'+REPLAY.idx+'|'+sym;
+  if(RP_ROLLS.key===key) return RP_ROLLS.out;
+  var save=REPLAY.idx, P={ m:{} }, out=[];
+  try{
+    var lo=Math.max(0, save-RP_ROLL_LOOKBACK+1), i, ks, kk, bk, raw, seen, key2;
+    for(i=lo;i<=save;i++){
+      REPLAY.idx=i;
+      bk=replayBook(sym); if(!bk || !bk.pct) continue;
+      ks=[]; for(kk in bk.pct){ var kn=parseFloat(kk); if(kn>0) ks.push(kn); }
+      raw=rollScan(ks)||[]; seen={};
+      raw.forEach(function(r){
+        var k=rollLatchKey(r); seen[k]=1;
+        var e=P.m[k];
+        if(!e){ P.m[k]={ from:r.from, to:r.to, dir:r.dir, firstI:i, lastI:i, count:1, miss:0,
+                         amt:r.amt, got:r.got, lost:r.lost, gone:0 }; }
+        else { e.count++; e.miss=0; e.lastI=i; e.gone=0;
+               if(r.amt>e.amt) e.amt=r.amt; e.got=r.got; e.lost=r.lost; }
+      });
+      for(key2 in P.m){
+        if(seen[key2]) continue;
+        var e2=P.m[key2]; e2.miss++;
+        if(e2.count<ROLL_SIG_N  && e2.miss>=ROLL_MISS_DROP)   { delete P.m[key2]; continue; }
+        if(e2.count<ROLL_CONF_N && e2.miss>=ROLL_MISS_DROP+1) { delete P.m[key2]; continue; }
+      }
+    }
+  }catch(e){ try{ swallow('replayRolls', e); }catch(e3){} }
+  finally{ REPLAY.idx=save; }
+  try{
+    var barMs=3*60000;
+    for(var k3 in P.m){
+      var e3=P.m[k3];
+      if(e3.count<ROLL_SIG_N) continue;                      // noise is never drawn, exactly as live
+      out.push({ from:e3.from, to:e3.to, dir:e3.dir, amt:e3.amt, got:e3.got, lost:e3.lost,
+                 count:e3.count, conf:(e3.count>=ROLL_CONF_N), live:(e3.miss===0), gone:!!e3.gone,
+                 ageMin:Math.max(1, Math.round(((save-e3.firstI)*barMs)/60000)),
+                 lastT:(REPLAY.frames[e3.lastI]||{}).t||0, replay:true });
+    }
+    out.sort(function(a,b){ return (b.live?1:0)-(a.live?1:0) || b.lastT-a.lastT; });
+  }catch(e4){}
+  RP_ROLLS={ key:key, out:out };
+  return out;
+}
 function rollLatchSave(){ try{ localStorage.setItem(ROLL_LATCH_KEY, JSON.stringify(ROLL_LATCH)); }catch(e){} }
 // today's latched rolls survive a reload — an install mid-session must not erase the morning's story
 function rollLatchLoad(){ try{ var s=JSON.parse(localStorage.getItem(ROLL_LATCH_KEY)||'null');
@@ -3837,10 +3902,19 @@ function rollLatchTick(sym){
 // (v14.6) rolls are an RTH story. After the close the 0DTE book they came from has expired, and
 // the operator caught yesterday's arrows still animating over tonight's rail ("there is no roll
 // now"). Every DISPLAY of the latch gates on this; the latch itself keeps recording as before.
-function rollsLive(){ try{ var P=sessionPhase(); return !!(P&&P.rth); }catch(e){ return true; } }
+// ⚠ (v15.13) A REPLAYED SESSION IS A SESSION. `rollsLive()` gates the arrows to RTH so a dead
+// after-hours book cannot draw stale rolls — correct live, and wrong for replay, where the parked bar
+// IS inside RTH by construction (the track only carries 08:30-15:00 frames).
+function rollsLive(){
+  try{ if(typeof replayOn==='function' && replayOn()) return true; }catch(e0){}
+  try{ var P=sessionPhase(); return !!(P&&P.rth); }catch(e){ return true; }
+}
 // the display list: what the NODES section and the rail both draw. NEVER a raw rollScan.
 function rollLatched(sym){
   var out=[];
+  // ⚠ (v15.13) replay first: ROLL_LATCH is TODAY's live accumulator and would draw today's arrows
+  // over a replayed bar — mislabelling, the same class as the crowns in v15.11.
+  try{ if(typeof replayOn==='function' && replayOn()) return replayRolls(sym||'SPY'); }catch(e0){}
   try{
     var P=(ROLL_LATCH.per||{})[sym||'SPY']; if(!P) return out;
     for(var key in P.m){
@@ -7065,6 +7139,44 @@ function restorePos(){
       else if(left>window.innerWidth-minVisible) PANEL.style.left=(window.innerWidth-minVisible)+'px';
     }
   }catch(e2){}
+}
+// ⚠⚠ (v15.13) THE LADDER MUST FIT THE PANEL, AND FOR EIGHTEEN VERSIONS IT DID NOT.
+// Operator, 2026-09-01: "i dont see the king lane ... i dont see the arrows and i dont see the node
+// profile except 1". MEASURED on his panel: `.g3ladwrap` scrollWidth 640, clientWidth 535 — 105px off
+// the right edge with scrollLeft 0, so he had NEVER seen it. The roll lane sits at x 620-640, which
+// is entirely inside that hidden strip: I shipped the arrows at v15.09 into the one part of the
+// ladder he cannot see, and the ROC column and most node bars were in there with them.
+//
+// ⚠ THE WIDTH HAS BEEN "HIS CALL" IN LOCKED-ITEMS SINCE v14.54 AND THAT WAS THE WRONG PLACE TO LEAVE
+// IT. The decision that needed him was "which columns matter"; the decision that did NOT need him is
+// "the panel should be wide enough to show the columns that exist". Leaving both to him meant a
+// feature was invisible for eighteen versions while the ledger recorded it as a preference.
+//
+// It grows ONCE per width, never shrinks, never fights a manual resize (a later drag is saved and
+// this only fires when the ladder still overflows), and is bounded by the viewport.
+function ladderFit(){
+  try{
+    if(CFG.ladderFit===false) return;
+    if(!PANEL || !elBody) return;
+    var w=elBody.querySelector('.g3ladwrap');
+    if(!w) return;
+    var over=w.scrollWidth-w.clientWidth;
+    if(!(over>2)) return;                         // already fits: nothing to do, ever
+    var cur=Math.round(PANEL.getBoundingClientRect().width);
+    if(!(cur>0)) return;
+    var want=cur+over+2;                          // +2 so a rounding hair cannot re-trigger it
+    var cap=Math.max(320, Math.floor((window.innerWidth||1200)*0.98));
+    if(want>cap) want=cap;
+    if(want<=cur) return;
+    // ⚠ ONCE PER TARGET WIDTH. Without this key a panel the viewport cannot fit would try to grow on
+    // every render — 4 renders a minute, forever — and any future column would silently re-trigger it.
+    var K='gpts_ladfit_v1', done=null;
+    try{ done=localStorage.getItem(K); }catch(e0){}
+    if(done===String(want)) return;
+    PANEL.style.width=want+'px';
+    try{ localStorage.setItem(K, String(want));
+         localStorage.setItem(SIZE_KEY, JSON.stringify({w:want+'px', h:PANEL.style.height||''})); }catch(e1){}
+  }catch(e){ try{ swallow('ladderFit', e); }catch(e2){} }
 }
 function restoreSize(){
   try{ var s=JSON.parse(localStorage.getItem(SIZE_KEY)||'null');
@@ -28519,6 +28631,8 @@ function render(){
   // re-create it and re-wire the info icons each render.
   ensureStepPop();
   wireStepIcons();
+  // ⚠ AFTER innerHTML, not before — the wrapper has no scrollWidth until it is laid out.
+  try{ ladderFit(); }catch(eLF){}
   // King path defaults to the latest (rightmost) chip in view.
   // (v10.8) King path is now an SVG sparkline, not a horizontal chip scroller —
   // the old scroll-to-latest snippet is no longer needed.

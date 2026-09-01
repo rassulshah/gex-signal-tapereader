@@ -1,3 +1,48 @@
+## v15.13 — the ladder fits the panel, and the arrows replay
+
+> "i dont see the king lane with the movement the kings made and i dont see the arrows and i dont
+> see the node profile except 1" · "how many times do i have to tell you to implement"
+
+**He asked twice and got analysis twice. That was the failure.** Three separate causes, all closed.
+
+### ⚠⚠ 1 · HE COULD NOT SEE THEM BECAUSE THEY WERE OFF THE RIGHT EDGE
+
+    .g3ladwrap   scrollWidth 640   clientWidth 535   hidden 105px   scrollLeft 0
+
+**The roll lane sits at x 620-640 — entirely inside that hidden strip.** The arrows shipped at v15.09
+into the one part of the ladder he cannot see, with the ROC column and most node bars beside them.
+That is why "the node profile except 1".
+
+`ladderFit()` grows the panel by exactly the overflow, once per target width, never shrinking, capped
+by the viewport, and never fighting a manual resize.
+
+⚠ **THE WIDTH WAS LOGGED AS "HIS CALL" SINCE v14.54 AND THAT WAS THE WRONG PLACE TO LEAVE IT.** The
+decision needing him was *which columns matter*. The decision that never needed him is *the panel
+should be wide enough to show the columns that exist*. Leaving both to him kept a feature invisible
+for eighteen versions while the ledger recorded it as a preference.
+
+### 2 · THE ARROWS NOW REPLAY
+
+`ROLL_LATCH` is a live accumulator no frame carries, so replay **re-runs it**: walk the frames to the
+parked one, call the SAME `rollScan` on each, accumulate with the SAME count/miss semantics.
+⚠ It reuses the live scan rather than reimplementing the geometry — a second detector wearing the
+same words is the mislabelling this project keeps paying for. `velAt()` already serves the frame at
+`REPLAY.idx`, so stepping the index steps the whole scan; the index is restored in a `finally`.
+Memoised per (day, idx, sym) so dragging one bar does not rescan the session.
+
+### 3 · TWO GATES THAT SILENTLY EXCLUDED REPLAY
+
+`rollsLive()` gated the arrows to RTH and `velOk()` asked whether the LIVE DOM harvest was healthy —
+both correct live, both wrong on a replayed bar where the velocities come from the frame. A replayed
+bar is inside RTH by construction; the track only carries 08:30-15:00 frames.
+⚠ `velOk()` still refuses a frame with no `vend` — no inventing velocities.
+
+### testing
+
+`test_replay.js` at **115** assertions. 9 mutations run individually, **8 caught**; the survivor is
+benign — a redundant early return the `want<=cur` check already covers, which is defence in depth
+rather than a gap.
+
 ## v15.12 — the expected-move pin survives a chart switch
 
 > "when i switch to es, it doesn't work.. do i have to be on the spy"

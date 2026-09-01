@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-08-31 · panel v15.12 · companion v1.16 · supersedes every earlier resume note_
+_written 2026-08-31 · panel v15.13 · companion v1.16 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.12, and what the face carries
+## 2 · WHERE WE ARE — v15.13, and what the face carries
 
-**Panel v15.10 · companion v1.16.** Suite **129 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.13 · companion v1.16.** Suite **129 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -111,6 +111,18 @@ refused and **the ladder, which lives inside that section, went with it.** The r
 `sym|cash` / `sym|fut`, and a family with no pin SEEDS from the other using `emK`, the straddle in
 the BOOK's own points. ⚠ Pins written before v15.12 have no `emK` and use the ratio rescale, which
 is flagged `seedApprox`. **A stored value in DISPLAY units is a trap whenever the display can change.**
+
+⚠⚠ **v15.13 — THE LADDER WAS 105px WIDER THAN HIS PANEL AND HE HAD NEVER SEEN THE RIGHT EDGE.**
+`.g3ladwrap` measured 640 against 535 with scrollLeft 0, and the roll lane is at x 620-640 — so the
+arrows shipped at v15.09 into the one strip he could not see, with the ROC column and most node bars
+beside them. `ladderFit()` now grows the panel by exactly the overflow. ⚠ **The width was logged as
+"his call" since v14.54; that applies to WHICH COLUMNS MATTER, never to whether the panel can show
+the columns that exist.** The arrows also REPLAY now, by re-running the live `rollScan` over the
+frames, and `rollsLive()`/`velOk()` no longer exclude a replayed bar.
+
+⚠⚠ **STILL NOT BUILT AND HE HAS ASKED TWICE: THE KING LANE showing the crown's MOVEMENT through the
+day.** `__gptsDebug.kingTrack()` returns 0 points. The three crowns on the rail are the three BOOKS'
+kings (v15.11), which is a different thing. **Build this next.**
 
 **FIRST THING TO DO: drag it on the live panel.** Check the ladder, kings and ⓪a move together, the
 clock reads the parked bar, ◀ reaches Friday, and `__gptsDebug.storage()` shows no new writes.
