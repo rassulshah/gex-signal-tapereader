@@ -93,8 +93,17 @@ ok(/inRails/.test(src) && /edgeHi/.test(src), 'GUARD: focused domain with edge-t
 ok(/▲ /.test(src),                            'GUARD: above-window rails render as ▲ edge tag');
 ok(/placed\.push\(ly\)/.test(src),            'GUARD: rail-label anti-collision nudging');
 ok(/var MINGAP=15/.test(src),                 'GUARD: history-gutter min gap raised to 15px');
-ok(src.indexOf('white-space:nowrap;overflow:hidden;text-overflow:ellipsis')===-1,
-                                              'GUARD: tiles wrap instead of ellipsizing');
+// ⚠ (v15.21) SCOPED TO THE TILES. This searched the WHOLE FILE for the ellipsis declaration, so it
+// failed the moment an unrelated component — the ladder's new column headers, where truncating a
+// label IS the right behaviour — used the same three properties. A guard about how KING PROJECTION
+// TILES behave has to read the tiles' own CSS; a file-wide grep makes one component's rule a law
+// for every component, and the failure it produces points at the wrong place entirely.
+{
+  const tileCss=(src.match(/\.g3kptile\{[^}]*\}/g)||[]).join(' ') +
+                (src.match(/\.g3kpt[a-z]*\{[^}]*\}/g)||[]).join(' ');
+  ok(tileCss.indexOf('text-overflow:ellipsis')===-1,
+     'GUARD: tiles wrap instead of ellipsizing', tileCss.slice(0,120));
+}
 
 console.log('\n'+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

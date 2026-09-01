@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GEX · InsiderFinance levels
 // @namespace    gpts
-// @version      1.16
+// @version      1.17
 // @description  Fetches the option chain InsiderFinance embeds in its page, computes CR/PS/Mag/MaxPain for 0DTE and through-Friday, and hands the result to the Tapereader via localStorage. Deliberately a SEPARATE script so the Tapereader can keep @grant none.
 // @match        https://app.skylit.ai/atlas*
 // @grant        GM_xmlhttpRequest
@@ -598,7 +598,28 @@ var FUT_MARKETS=[
   // book is already rendered by Skylit: that gives the live level but cannot backfill history.
 ];
 var FUT_WIN_A=13*3600, FUT_WIN_B=21*3600+30*60;   // the generous UTC window described above
-var FUT_POLL_MS=60*60*1000;                        // hourly is plenty for a daily corpus
+// ⚠⚠ (v1.17) THE CADENCE IS 5 MINUTES INSIDE RTH, HOURLY OUTSIDE IT.
+// Hourly was right when these bars existed ONLY to build a nightly corpus — the comment said so:
+// "hourly is plenty for a daily corpus". Since panel v15.08 the ⓪a DAY / HOD-LOD section MEASURES
+// the session off these very bars on a futures chart, which makes them a LIVE input, and an hourly
+// courier can leave the operator's HOD, LOD, range and PT up to an hour behind the market.
+// Operator, 2026-09-01: "can you backfill the data in this hod lod section to ensure it is in sync
+// with the day". Measured on his panel that morning: courier fetched 09:24, last bar 09:14, clock
+// 09:30 — and that was a LUCKY moment in the hourly cycle.
+// ⚠ THE REASON A CONSTANT WAS CHOSEN CAN EXPIRE WITHOUT THE CONSTANT LOOKING WRONG. Nothing about
+// `60*60*1000` changed when its consumer did; it simply stopped being enough, silently.
+// The request is `range=5d` either way, so every poll BACKFILLS the whole session — opening the
+// panel at noon still fills 08:30 onward. Cadence only governs how fresh the tail is.
+var FUT_POLL_RTH_MS=5*60*1000;
+var FUT_POLL_OFF_MS=60*60*1000;
+function futPollMs(){
+  try{
+    var d=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Chicago'}));
+    var dow=d.getDay(), mins=d.getHours()*60+d.getMinutes();
+    var rth=(dow>=1&&dow<=5&&mins>=8*60+30&&mins<15*60);
+    return rth?FUT_POLL_RTH_MS:FUT_POLL_OFF_MS;
+  }catch(e){ return FUT_POLL_OFF_MS; }
+}
 var futLast=0;
 function futParse(txt){
   try{
@@ -663,7 +684,7 @@ function futPull(m){
 }
 function futCourier(){
   try{
-    if(Date.now()-futLast < FUT_POLL_MS) return;
+    if(Date.now()-futLast < futPollMs()) return;
     futLast=Date.now();
     for(var i=0;i<FUT_MARKETS.length;i++) futPull(FUT_MARKETS[i]);
   }catch(e){ log('futCourier threw', e.message); }

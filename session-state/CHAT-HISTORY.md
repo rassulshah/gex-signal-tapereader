@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-01 · v15.20 · session `5e8d34b5`
+## 2026-09-01 · v15.21 · session `5e8d34b5`
 
-_10 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_14 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -140,8 +140,83 @@ Now a full audit of the live panel while it's running.
 Live panel is clean — and it confirms the arrow fix matters today: `7615` and `7655` are negative strikes whose signed delta says *receiving* while their mass says *shedding*.
 The audit flagged `undefined` on the replayed face — the live panel is clean, so that's replay-specific. Finding it.
 The audit throws on `innerText` — a real robustness hole, not just a jsdom quirk.
+I checked your actual panel rather than guessing. **v15.19 is running and healthy:**
+
+```
+audit             ok, 0 violations        render errors  0
+velocity harvest  ok, 1212 objects / 2678 scanned
+ladder            17 rows drawing         replay strip   present (Tue 1 Sep, LIVE)
+storage           2,753KB of 10,240 (27%) · 0 shed · 0 quota hits
+panel             651px in an 837px window · body 962 / 621 — it scrolls
+```
+
+**The read: you were right, and I removed the wrong line the first time.** What you're seeing is `.g3tread` — *"EVENT day · Trinity 2-of-3 (Kings above price; QQQ dissents) — reduced conviction. KING 7664 (brake) holds…"*. At v15.10 I took something else out and never checked it against the screen. It's off in v15.20 as `CFG.read = false` — a setting, not a deletion, since you said you might come back to it. Everything that builds it still runs, so turning it back on is a toggle.
+
+**And finding it exposed a worse thing.** The render audit — the surface whose whole job is telling me the face is sound — read `body.innerText`, which any DOM without layout returns `undefined` for. It was testing the string "undefined" against itself, reporting *"the face prints undefined somewhere"*, and then crashing on the …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (14:07):** Still blocked, same reason as before — the proxy won't issue a credential for this repo, and that's a session permission I can't change from in here. Working tree is clean; all 10 commits are made locally.
+
+`installv1520.bat` carries the whole tree and pushes from your machine when you run it, so nothing is stranded.
+
+**OPERATOR:**
+> check everythign
+
+**me (14:21):** v15.20 is clean — read gone, audit ok, no render errors. But one real defect: the panel's **bottom is 41px below your window** and the body isn't scrolling.
+Everything checks out on v15.20. Full read of your live panel just now:
+
+```
+version        v15.20 (header and footer agree)
+audit          ok — 0 violations          render errors   0
+the read       gone (.g3tread absent)     replay strip    present, Tue 1 Sep, LIVE
+ladder         13 rows · 10 states · 10 ROC cells · 15 king-lane runs
+harvest        ok — 1,198 objects of 2,664 scanned
+recorder       758 frames stored for today · 832KB · 0 shed · 0 quota hits · 34% full
+panel          751px tall, top 78, bottom 829 in an 837px window — 8px of clearance
+body           scrollHeight 769 / client 721 — it scrolls
+```
+
+One correction to something I said thirty seconds ago: I reported the panel hanging 41px below your window. **That was my own measurement error** — I sampled between the innerHTML write and the `panelFit()` call at the end of the same render pass, so I caught it mid-render. Measured after the pass completes it's 751px with 8px to spare, exactly as intended. Nothing to fix; I'd rather flag that than leave a false alarm standing.
+
+States read 9 BUILDING, 1 TURN DN, 1 SPENT — coherent with a morning grinding up, and nothing like the "everything SPENT" you saw yesterday.
+
+**The one thing I have not verified is the slider itself**, and I deliberately didn't touch it — dragging it swaps your live face for a past minute while you're in a trade. It's reversible in one click and it's badged ⟲ REPLAY, but that's your call, not mine. Say the word and I'll drag it, check the arrows and states against the recorded book for that minute, and put it back on LIVE. Otherwise it's the natural thing to test after the close, w …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 10 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (14:22):** Unchanged from the last two turns — 10 commits, clean tree, push refused by the proxy because this repo isn't in the session's authorized set. Nothing new to try from here; the installer carries them to your machine.
+
+**OPERATOR:**
+> check the candle construction as well.  is this candle construction based on the RTH session. are its values correct. if i open the application later after the market opens, can you backfill the data in this hod lod section to ensure it is in sync with the day, this includes the fields and the image of the candle.
+
+**me (14:30):** The courier pulls `interval=1m&range=5d`, so ES bars can backfill. Checking what his panel actually holds right now.
+Two things at once — and the face is showing a broken value.
+`PT 6895.0pts` and `OF BAR 35818%` are wrong — that's an ES price minus a SPY price. Finding it.
+`closedCandles(sym)` — SPY bars — while `secP` comes from `measureBars()`, the ES bars. 7661 − 766 = 6895. That's the printed number exactly.
+That's the bug — and it's the v15.08 lesson recurring one function over.
+The ⓪a headers are there — it's the **ladder's** column headers that are missing. Checking whether they ever existed.
+The ladder never had headers — the node profile it replaced at v14.46 had them (`g3ndhd`), and the replacement didn't carry them over. Adding them from the same column constants.
+The existing tests were source greps encoding the *pre-v15.08* model — which is exactly why this survived. Replacing them with an executing one.
+The ES bars backfill the whole day, but the courier only refreshes them **hourly** — that's the sync gap.
+Three tests broke — one is a stale version pin, two are over-broad assertions of mine.
+Back to baseline plus the save-procedure four. Writing the record and shipping.
 
 ### DECISIONS
+
+**v15.21 · the candle, the headers, the courier.**
+- **PT was subtracting a SPY price from an ES price** — "PT 6895.0pts", "OF BAR 35818%" on his live
+  chart. `hlPT` read `closedCandles()` while `hodLod` measured ES bars. And `test_hodlod` p7/p7b
+  DEFENDED it, asserting a model that stopped being true at v15.08.
+- **The ladder's headers were never lost, never carried over** from the node profile at v14.46.
+- **The ⓪a candle is RTH-only and backfills on ES** — but the courier polled hourly, so it could be
+  an hour stale. Companion v1.17 polls every 5 min inside RTH.
+- **Stated rather than fixed:** a CASH chart has no backfill; the courier carries no cash bars.
+- **Three unrelated tests broke and all three were over-broad assertions of mine.**
 
 **v15.20 · the read, and the auditor.**
 - **The read is out — `CFG.read=false`.** The v15.10 removal took the wrong line; the one he meant is
@@ -206,6 +281,10 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.21 · companion v1.17** — `hlPT` on `measureBars`; the ladder's column header row; the
+RTH-aware futures cadence. `test_hodlod` +6, `test_futbars` +7, `test_replay_face` 44 → 57.
+Sixteen mutations, sixteen caught. Suite 133 green / 6 baseline red.
+
 **v15.20** — `CFG.read` (off); the render audit's `itxt()` and its read-aware checks.
 `test_replay_face.js` 36 → 44 assertions; six mutations, six caught. Suite 132 green / 6 baseline red.
 
@@ -226,6 +305,10 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. **The REPLAY side has still never been dragged on his real panel.**
+2. **A CASH chart's ⓪a does not backfill** — only what the panel saw since opening.
+3. The ladder's LEVELS still do not replay, deliberately.
 
 1. **The REPLAY side has still never been dragged on his real panel** — the live face is confirmed
    good as of 08:58 CT today, the slider is not.
@@ -265,6 +348,7 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+487048c v15.20: the read is out, and the render audit was inventing a fault out of its own probe
 4a9b011 build: name the delivery file correctly in the builder's own note
 e58c333 v15.19: one refusal upstream was hiding six surfaces, and nothing here could draw the face
 2e74842 build: the installer no longer leaves a tracked 36k-line blob in the tree
@@ -276,7 +360,6 @@ e58c333 v15.19: one refusal upstream was hiding six surfaces, and nothing here c
 8cf003b v15.13: the ladder fits the panel, and the arrows replay
 6806ea9 v15.12: the expected-move pin survives a chart switch
 b25ebdd v15.11: replay reads the frame for the crowns and the accumulation
-5ae134d v15.10: the replay slider; the version in the header; the read removed
 ```
 
 ---

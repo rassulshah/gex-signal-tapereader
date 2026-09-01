@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.20
+// @version    15.21
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.20';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.21';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -20993,6 +20993,12 @@ function ensureV3Css(){
     // the rule that keeps price from ever being overlapped, which is why it is a walled column and
     // not merely a marker.
     '#gpts-body .g3ladwrap{overflow-x:auto;overflow-y:hidden;margin:2px 0 3px}'+
+    // (v15.21) the column headers. Same left/width as the columns themselves, set inline from
+    // the LAD_* constants, so they cannot drift apart.
+    '#gpts-body .g3ladhd{position:relative;height:11px;width:'+LAD_W+'px;margin:0 0 1px}'+
+    '#gpts-body .g3ladhd span{position:absolute;top:0;font-size:7px;font-weight:800;'+
+      'letter-spacing:.06em;color:#8b98a9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'+
+      'text-transform:uppercase;cursor:help}'+
     '#gpts-body .g3ladwrap::-webkit-scrollbar{height:5px}'+
     '#gpts-body .g3ladwrap::-webkit-scrollbar-thumb{background:#2a3340;border-radius:3px}'+
     // ⚠ (v15.02) THE LADDER IS 618px WIDE BY CONSTRUCTION (LAD_ROC 534 + LAD_ROCW 84) AND HIS PANEL IS
@@ -23563,8 +23569,20 @@ function hlPT(sym, D){
   try{
     if(!D || !D.ok){ out.why=(D&&D.why)||'no session read'; return out; }
     if(D.secondT==null || D.secondT>D.clock){ out.why='second extreme not in'; return out; }
-    var cs=closedCandles(sym)||[];
-    var rr=(typeof D.scale==='number' && D.scale>0)?D.scale:1;
+    // ⚠⚠ (v15.21) THE SAME BAR SERIES hodLod MEASURED, NOT closedCandles(). THIS SHIPPED WRONG AND
+    // THE OPERATOR SAW IT ON A LIVE ES CHART: "PT 6895.0pts" and "OF BAR 35818%".
+    // `secP` is D.hod/D.lod, which since v15.08 comes from measureBars() — TRUE ES bars, ~7661.
+    // This line read closedCandles(), which is the UNDERLYING book — SPY, ~766. So
+    // `Math.abs(secP-advP)` subtracted a SPY price from an ES price: 7661 − 766 = 6895, printed as
+    // a pullback in points, and ptWickPct (ptPts/rngPts) turned it into 35818%.
+    // ⚠ v15.08 moved hodLod onto measureBars and left THIS function, which consumes hodLod's own
+    // output, on the old source. **Changing where a value comes from is not finished until every
+    // consumer that COMPARES against it moves with it.** Same lesson as the replay seam, in live code.
+    var MB=measureBars(sym);
+    var cs=MB.bars||[];
+    // MB.scale and D.scale are the same number by construction (D.scale is assigned from it) — read
+    // it off MB so the series and its scale can never come from two different calls.
+    var rr=(typeof MB.scale==='number' && MB.scale>0)?MB.scale:((typeof D.scale==='number' && D.scale>0)?D.scale:1);
     var secondIsHOD=(D.second==='HOD');
     var secP=secondIsHOD?D.hod:D.lod;
     var advP=null, advT=null, lastC=null, lastT=null;
@@ -25261,7 +25279,36 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
     function inFrame(p){ return typeof p==='number' && p>=lo && p<=hi; }
     var now=(typeof EB.nowLive==='number')?EB.nowLive:EB.now;
     var dsc=1; try{ dsc=ifDispScale()||1; }catch(eD){}
-    var h='<div class="g3ladwrap"><div class="g3lad" style="height:'+H+'px">';
+    // ⚠⚠ (v15.21) THE LADDER HAS COLUMN HEADERS AGAIN. Operator, 2026-09-01: "there are also no
+    // headers ? what happened to them."
+    // ANSWER, because it matters for the next surface that gets replaced: they were never LOST —
+    // they were never CARRIED OVER. v14.46 replaced the horizontal rail + node profile with this
+    // ladder, and the profile's header row (`g3ndhd`: Node · %K · 5m · 15m · 60m · Day) went with
+    // the surface it belonged to. Ten columns arrived unlabelled and nothing failed, because a
+    // missing label throws nothing and greps as nothing.
+    // ⚠ EVERY x AND WIDTH BELOW IS THE COLUMN'S OWN CONSTANT. Hard-coding a header's position is
+    // how a header ends up naming its neighbour after someone nudges a column by 4px — the
+    // strongest possible version of "one source" for a label and the thing it labels.
+    var LADHD=[
+      [LAD_KS,  LAD_KSW,  'S',    'SPXW King migration \u2014 where that crown has sat today, top to bottom by price, left to right by time'],
+      [LAD_KY,  LAD_KYW,  'Y',    'SPY King migration, same axes'],
+      [LAD_LVL, LAD_LVLW, 'LEVEL','Session and chain structure: IB, prior day, the SPY King, and InsiderFinance\u2019s own levels in italics'],
+      [LAD_PXC, LAD_PXW,  'PRICE','The strike\u2019s price on THIS chart\u2019s scale'],
+      [LAD_NODE,LAD_NMAX, 'NODE \u00b7 %KING','Dealer exposure at that strike as a share of the King\u2019s. Colour is polarity: purple accelerator, yellow brake, grey balanced'],
+      [LAD_CH,  LAD_CHW,  'NOW',  'Price and the three crowns, on the ladder\u2019s own scale'],
+      [LAD_MK,  LAD_MKW,  'MARK', 'This level\u2019s relationship to PRICE \u2014 IN PLAY, DEFENDING, BREAKING, ATTRACTING'],
+      [LAD_TAP, LAD_TAPW, 'TAPS', 'How many times price has tested this level today'],
+      [LAD_DAX, LAD_DMAX, '\u039415m','Dollars of dealer exposure gained or lost at this strike over 15 minutes'],
+      [LAD_ST,  LAD_STW,  'STATE','The level\u2019s own condition: BUILDING, WEAKENING, TURN, SPENT'],
+      [LAD_ROC, LAD_ROCW, 'ROC 5m/15m','Rate of change. Live these are Skylit\u2019s own percents; in replay they are this panel\u2019s measure of MASS and are italic']
+    ];
+    var hd='<div class="g3ladhd">';
+    for(var hi2=0; hi2<LADHD.length; hi2++){
+      var C=LADHD[hi2];
+      hd+='<span style="left:'+C[0]+'px;width:'+C[1]+'px"'+g3tip(C[3])+'>'+g3esc(C[2])+'</span>';
+    }
+    hd+='</div>';
+    var h='<div class="g3ladwrap">'+hd+'<div class="g3lad" style="height:'+H+'px">';
     var OFF=[];
     // every row the chute is already using — the crowns, then the price pill. The EM labels are
     // drawn last and step around all of it.

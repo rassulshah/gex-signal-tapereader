@@ -83,7 +83,7 @@ ok(/REJECTED:/.test(src),                    'and a rejected value is RECORDED, 
   ok(/spot\*0\.5/.test(g) && /spot\*2/.test(g), 'the gate is a band around spot', g.slice(0,160));
   ok(/isLevel/.test(src),                    'ratios, IV and slopes are NOT gated — they are not prices');
 }
-ok(/@version\s+1\.16/.test(src),             'companion pinned to 1.16');
+ok(/@version\s+1\.17/.test(src),             'companion pinned to 1.17');
 
 console.log((fail?'FAIL ':'')+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

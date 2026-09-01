@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-01 · panel v15.20 · companion v1.16 · supersedes every earlier resume note_
+_written 2026-09-01 · panel v15.21 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.20, and what the face carries
+## 2 · WHERE WE ARE — v15.21, and what the face carries
 
-**Panel v15.20 · companion v1.16.** Suite **132 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.21 · companion v1.17.** Suite **133 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -177,6 +177,29 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠ **v15.21 — `hlPT` WAS SUBTRACTING A SPY PRICE FROM AN ES PRICE, LIVE.** The face printed
+**PT 6895.0pts** and **OF BAR 35818%** (and `LC RNG 6894.2`): `hodLod` has measured true ES bars
+since v15.08 while `hlPT`, which consumes hodLod's own output, still read `closedCandles()` — the
+SPY book. 7661 − 766 = 6895. Both now read `measureBars(sym).bars`.
+⚠⚠ **AND THE TEST DEFENDED IT.** `test_hodlod` p7/p7b asserted in a comment that "closedCandles() is
+the UNDERLYING book" — true before v15.08, false after — and passed throughout. **A source grep
+freezes the model that was true when it was written; when a value's SOURCE changes, the tests that
+describe that source are part of the change.**
+
+⚠⚠ **THE LADDER'S COLUMN HEADERS WERE NEVER LOST — NEVER CARRIED OVER.** v14.46 replaced the rail +
+node profile with the ladder and the profile's header row (`g3ndhd`) went with the old surface. Ten
+columns unlabelled for seven builds, because **a missing label throws nothing and greps as nothing.**
+Now: S · Y · LEVEL · PRICE · NODE %KING · NOW · MARK · TAPS · Δ15m · STATE · ROC. ⚠ Every x and width
+is the column's own `LAD_*` constant, and the test asserts THAT, not just the words.
+
+✅ **THE ⓪a CANDLE, ANSWERED:** it is **RTH-only** (`hodLod` skips `so < 08:30 CT`, clamps to 15:00),
+and on a FUTURES chart it **backfills the whole session** — the courier asks `interval=1m&range=5d`,
+so opening at noon still fills from 08:30. ⚠ It was up to an HOUR stale: `FUT_POLL_MS` was hourly,
+chosen when these bars only fed a nightly corpus. **Companion v1.17 polls every 5 minutes inside RTH,
+hourly outside.** ⚠ **The reason a constant was chosen can expire without the constant looking wrong.**
+⚠ On a CASH chart there is NO backfill — `measureBars` falls back to `closedCandles()`, which holds
+only what the panel has seen since it opened. Stated, not fixed; the courier carries no cash bars.
 
 ⚠⚠ **v15.20 — THE READ IS OFF (`CFG.read=false`) AND THE FIRST REMOVAL TOOK THE WRONG LINE.**
 He asked at v15.10 ("take out the read … where it say Range day - Trinity"); something else went and

@@ -1,3 +1,67 @@
+## v15.21 — PT was subtracting a SPY price from an ES price, and the ladder never had headers
+
+> "check the candle construction as well. is this candle construction based on the RTH session. are
+> its values correct." · "there are also no headers ? what happened to them." · "can you backfill
+> the data in this hod lod section to ensure it is in sync with the day"
+
+### ⚠⚠ PT 6895.0pts · OF BAR 35818% — TWO PRICE SCALES IN ONE SUBTRACTION, ON HIS LIVE CHART
+
+`hodLod` has measured TRUE ES bars since v15.08 (`measureBars`, ~7661). `hlPT` — which consumes
+`hodLod`'s own output — was left reading `closedCandles()`, the UNDERLYING book (SPY, ~766). So:
+
+    out.ptPts = |secP − advP|      secP from the ES series, advP from the SPY series
+    7661 − 766 = 6895              printed as a pullback in points
+    ptWickPct = ptPts / rngPts     6895 / 19.3 → OF BAR 35818%
+
+`LC RNG 6894.2` on his panel is the same subtraction. Both now read `measureBars(sym).bars` — the
+same series, from one call, with its own scale.
+⚠⚠ **Changing where a value comes from is not finished until every consumer that COMPARES against it
+moves with it.** v15.08 moved `hodLod` and left the function beside it behind. This is the replay
+seam lesson occurring in live code.
+⚠⚠ **AND THE TEST DEFENDED THE BUG.** `p7`/`p7b` asserted, in a comment, that "closedCandles() is the
+UNDERLYING book; D.scale converts to chart points" — true before v15.08, false after, and both
+assertions kept passing because both lines were still present and still multiplied by `rr`. **A
+source grep encodes the model the code had when the test was written.** Replaced with an execution
+that puts both scales in the same room: ES bars through `futBarsLoad`, SPY through `closedCandles`,
+and PT must come out ~6 points, not 6,895.
+
+### THE LADDER'S COLUMN HEADERS — NEVER LOST, NEVER CARRIED OVER
+
+v14.46 replaced the horizontal rail + node profile with the ladder. The profile had a header row
+(`g3ndhd`: Node · %K · 5m · 15m · 60m · Day) and it went with the surface it belonged to. **Ten
+columns have been unlabelled since**, and nothing failed, because a missing label throws nothing and
+greps as nothing. The ladder now draws: **S · Y · LEVEL · PRICE · NODE %KING · NOW · MARK · TAPS ·
+Δ15m · STATE · ROC 5m/15m**, each with its own hover.
+⚠ Every `left` and `width` is the column's own `LAD_*` constant. A header at a hard-coded x is a
+header that names its neighbour the first time someone nudges a column by 4px, and it would still
+pass a test that only checked the words were present — so the test checks the positions too.
+
+### THE ⓪a CANDLE: RTH-ONLY, AND NOW IN SYNC WITHIN 5 MINUTES
+
+**Is it RTH?** Yes. `hodLod` skips every bar with `so < 08:30 CT` and clamps its clock to 15:00 CT.
+Overnight bars are never in the high, the low, the range or the open.
+**Does it backfill if he opens late?** On a futures chart, **yes, and it always did** — the courier
+requests `interval=1m&range=5d`, so the first poll after opening fills the session from 08:30.
+**But it was up to an hour stale**, and that is now fixed: `FUT_POLL_MS` was hourly, chosen when
+these bars only fed a nightly corpus — *"hourly is plenty for a daily corpus"*. Panel v15.08 made
+them a LIVE input and nothing about the constant looked wrong when its consumer changed.
+Companion **v1.17** polls every **5 minutes inside RTH**, hourly outside.
+⚠ **The reason a constant was chosen can expire without the constant looking wrong.**
+⚠ On a CASH (SPY/QQQ) chart there is no backfill: `measureBars` falls back to `closedCandles()`,
+which is only what the panel has seen since it was opened. Stated, not fixed — the courier carries
+no cash bars.
+
+### verification
+`test_hodlod.js` +6 executing assertions (the two scales, in one room). `test_futbars.js` +7,
+executing the companion's own `futPollMs()` at frozen instants. `test_replay_face.js` 44 → **57**,
+including that each header's x comes from its column's constant. **Sixteen mutations run
+individually, sixteen caught** — one survived first (a cadence function that was correct and unused,
+the v13.1 "right requirement, wrong wiring" shape) and now the CALLER is asserted too.
+⚠ Three unrelated tests went red and all three were over-broad assertions of mine: a companion
+version pin, an adjacency test that could not tell a header row from an unhooked scroller, and a
+WHOLE-FILE grep for `text-overflow:ellipsis` guarding a rule about king-projection tiles — which the
+ladder's headers legitimately tripped. All three scoped to what they are actually about.
+
 ## v15.20 — the read is out, and the auditor was inventing a fault out of its own probe
 
 > "i said to remove the read , where it says event day. double check and make sure everything is

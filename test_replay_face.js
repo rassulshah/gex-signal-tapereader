@@ -226,5 +226,35 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
   R.run('CFG.read=false; render();');
 }
 
+// ---- 10 · THE LADDER'S COLUMN HEADERS -------------------------------------------------------
+// Operator, 2026-09-01: "there are also no headers ? what happened to them."
+// They were never lost — never CARRIED OVER. v14.46 replaced the rail + node profile with the
+// ladder, and the profile's header row (.g3ndhd) went with the surface it belonged to. Ten columns
+// arrived unlabelled, and nothing failed, because a missing label throws nothing.
+{
+  const hd=(R.html.match(/<div class="g3ladhd">([\s\S]*?)<\/div>/)||[])[1]||'';
+  ok(!!hd, 'h1 the ladder draws a header row');
+  const labels=[...hd.matchAll(/>([^<>]{1,16})<\/span>/g)].map(m=>m[1]);
+  ok(labels.length>=10, 'h2 ...one label per column', labels.length);
+  ['LEVEL','PRICE','MARK','TAPS','STATE'].forEach(function(w){
+    ok(labels.indexOf(w)>=0, 'h2·'+w+' ...including '+w, labels);
+  });
+  // ⚠ THE POSITIONS COME FROM THE COLUMNS' OWN CONSTANTS. A header at a hard-coded x is a header
+  // that names its neighbour the moment someone nudges a column, and it would still pass a test
+  // that only checked the WORDS were present.
+  const xs=[...hd.matchAll(/left:(\d+)px;width:(\d+)px/g)].map(m=>[+m[1],+m[2]]);
+  ok(xs.length===labels.length, 'h3 every header carries an explicit left and width', xs.length);
+  const K=n=>R.run(n);
+  [['LEVEL','LAD_LVL','LAD_LVLW'],['PRICE','LAD_PXC','LAD_PXW'],
+   ['STATE','LAD_ST','LAD_STW'],['TAPS','LAD_TAP','LAD_TAPW']].forEach(function(t){
+    const i=labels.indexOf(t[0]);
+    ok(i>=0 && xs[i][0]===K(t[1]) && xs[i][1]===K(t[2]),
+       'h4·'+t[0]+' ...taken from '+t[1]+'/'+t[2]+', so the label cannot drift off its column',
+       {header:xs[i], column:[K(t[1]),K(t[2])]});
+  });
+  ok(xs.every((p,i)=> i===0 || p[0]>=xs[i-1][0]),
+     'h5 ...and they run left to right in column order', xs.map(p=>p[0]));
+}
+
 console.log('test_replay_face: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

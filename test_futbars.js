@@ -220,5 +220,61 @@ const clear = () => { delete STORE[global.HLBASE_KEY]; };
      'f41 the older architecture doc carries the supersede banner — two docs, one answer');
 }
 
+// ---- (v1.17) THE CADENCE IS RTH-AWARE, BECAUSE THESE BARS ARE NOW A LIVE INPUT ---------------
+// Operator, 2026-09-01: "can you backfill the data in this hod lod section to ensure it is in sync
+// with the day". These bars became a live input at panel v15.08, when hodLod started MEASURING the
+// session off them on a futures chart — but the courier was still on the hourly cadence chosen when
+// they only fed a nightly corpus. An hourly poll can leave HOD, LOD, range and PT an hour stale.
+// ⚠ EXECUTED against the companion's own function, at fixed instants, rather than grepped.
+{
+  const cs = fs.readFileSync('./current/gex-if-levels.user.js', 'utf8');
+  function exC(n){ const m=new RegExp('function\\s+'+n+'\\s*\\(','g').exec(cs);
+    let i=cs.indexOf('{',m.index),d=0; for(let k=i;k<cs.length;k++){ if(cs[k]==='{')d++;
+      else if(cs[k]==='}'){ d--; if(!d) return cs.slice(m.index,k+1); } } }
+  const numC=n=>eval(new RegExp('var\\s+'+n+'\\s*=\\s*([0-9*]+)').exec(cs)[1]);
+  global.FUT_POLL_RTH_MS=numC('FUT_POLL_RTH_MS');
+  global.FUT_POLL_OFF_MS=numC('FUT_POLL_OFF_MS');
+  eval(exC('futPollMs'));
+  ok(FUT_POLL_RTH_MS < FUT_POLL_OFF_MS, 'f42 the RTH cadence is faster than the off-hours one',
+     [FUT_POLL_RTH_MS, FUT_POLL_OFF_MS]);
+  ok(FUT_POLL_RTH_MS <= 5*60*1000, 'f43 ...at most 5 minutes, so the HOD/LOD tail cannot go stale',
+     FUT_POLL_RTH_MS);
+  const RealDate = Date;
+  function at(iso){                       // freeze the clock at a known CT instant
+    global.Date = class extends RealDate {
+      constructor(...a){ super(...(a.length?a:[iso])); }
+      static now(){ return new RealDate(iso).getTime(); }
+    };
+    const v = futPollMs();
+    global.Date = RealDate;
+    return v;
+  }
+  // 2026-09-01 is a Tuesday. 14:00Z = 09:00 CT (RTH); 02:00Z = 21:00 CT Monday (closed).
+  ok(at('2026-09-01T14:00:00Z')===FUT_POLL_RTH_MS,
+     'f44 EXECUTED: inside RTH it polls on the fast cadence', at('2026-09-01T14:00:00Z'));
+  ok(at('2026-09-01T02:00:00Z')===FUT_POLL_OFF_MS,
+     'f45 ...and outside it, on the slow one', at('2026-09-01T02:00:00Z'));
+  // ⚠ 2026-09-05 is a SATURDAY, not a Friday — my first cut asserted it was a session and the test
+  // caught me. Friday is the 4th.
+  ok(at('2026-09-04T14:00:00Z')===FUT_POLL_RTH_MS && at('2026-09-06T14:00:00Z')===FUT_POLL_OFF_MS,
+     'f46 ...and a Sunday at the same hour is not a session',
+     [at('2026-09-04T14:00:00Z'), at('2026-09-06T14:00:00Z')]);
+  ok(at('2026-09-01T13:25:00Z')===FUT_POLL_OFF_MS && at('2026-09-01T13:35:00Z')===FUT_POLL_RTH_MS,
+     'f47 ...and the boundary is the 08:30 CT open, not the top of the hour',
+     [at('2026-09-01T13:25:00Z'), at('2026-09-01T13:35:00Z')]);
+  // ⚠ AND THE POLL MUST ACTUALLY CONSULT IT. A cadence function that is correct and unused is the
+  // "right requirement wired to the wrong place" failure (v13.1) — this SURVIVED its first mutation
+  // because every assertion above tested futPollMs() in isolation and none tested the caller.
+  const fc = exC('futCourier');
+  ok(/futPollMs\(\)/.test(fc),
+     'f47b the courier gates on futPollMs(), not on a fixed constant', fc.slice(0,140));
+  ok(!/FUT_POLL_OFF_MS|FUT_POLL_RTH_MS/.test(fc),
+     'f47c ...and reads no cadence constant of its own, so there is one decision, in one place');
+
+  // the request must still ask for the whole window, or a faster poll would BACKFILL LESS
+  ok(/interval=1m&range=5d/.test(cs),
+     'f48 every poll still asks for 5 days, so opening late still fills the session from 08:30');
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

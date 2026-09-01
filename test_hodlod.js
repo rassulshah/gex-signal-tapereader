@@ -586,15 +586,52 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
      'p5 no PT until the second extreme has actually printed — clock half included');
   ok(/b\.so<D\.secondT\) continue/.test(PT), 'p6 ...and only bars AT OR AFTER it are considered');
 
-  // closedCandles() is the UNDERLYING book (SPY ~765); D.scale converts to chart points. Forgetting
-  // it would report a 28-point ES excursion as 2.8 — landmine L-F, two price spaces mixed.
-  // ⚠ FAKE ON FIRST WRITING, caught by mutation: /\*rr;/ matched the LC line, so dropping the scale
-  // from PT alone left it green — and a 28-point ES excursion would have printed as 2.8. Bind to
-  // EACH conversion, by name.
+  // ⚠⚠ (v15.21) THESE TWO ASSERTIONS USED TO SAY "closedCandles() is the UNDERLYING book; D.scale
+  // converts to chart points" — TRUE BEFORE v15.08 AND FALSE AFTER IT, and they kept passing while
+  // the face printed "PT 6895.0pts" and "OF BAR 35818%" on the operator's live ES chart. v15.08
+  // moved hodLod onto measureBars() (true ES bars, ~7661) and left hlPT reading closedCandles()
+  // (SPY, ~766), so |secP − advP| subtracted one scale from the other: 7661 − 766 = 6895.
+  // A source grep cannot see that, because both lines were still there and still multiplied by rr.
+  // **The test encoded the model the code used to have, so it defended the bug.** Replaced with an
+  // execution that puts the two scales in the same room and checks the answer.
   ok(/out\.ptPts=Math\.abs\(secP-advP\)\*rr;/.test(PT),
-     'p7 the PT distance is converted from the underlying book to chart points');
+     'p7 the PT distance is converted to chart points');
   ok(/out\.lcPts=Math\.abs\(secP-lastC\)\*rr;/.test(PT),
      'p7b ...and so is the LC distance, separately');
+  {
+    // an ES chart: measureBars serves TRUE ES bars, closedCandles still serves the SPY book.
+    const ES=[], SPY=[];
+    for(let m=0;m<360;m+=3){
+      const so=8*3600+30*60+m*60;
+      // ES: low 7640 at the open, high 7670 at 09:14, then a 6-point pullback to 7664
+      const es=(m<44)?7640+m*0.68:(m<60?7670:7664);
+      ES.push({ so:so, t:1788269400000+m*60000, o:es, h:es+0.5, l:es-0.5, c:es });
+      SPY.push({ so:so, t:1788269400000+m*60000, o:es/10.04, h:(es+0.5)/10.04, l:(es-0.5)/10.04, c:es/10.04 });
+    }
+    // ⚠ the REAL measureBars is exercised, not a stub of it: `measureBars` is eval'd into this
+    // file's own scope at the top, so assigning global.measureBars would shadow nothing and the
+    // assertion would quietly measure the SPY series. The courier is stubbed instead, which is the
+    // input measureBars actually reads on a futures chart.
+    const savedCC=global.closedCandles, savedFB=global.futBarsLoad, savedFut=FUT;
+    global.closedCandles=()=>SPY;                       // the underlying book — the WRONG series here
+    global.futBarsLoad=()=>({ ES:{ rows:ES.map(b=>[b.t/1000, b.o, b.h, b.l, b.c]) } });
+    FUT=true;
+    eval(ex('hodLod')); eval(ex('hlPT'));
+    const D=hodLod('SPY');
+    ok(D.ok===true && D.hod>7000, 'p7c EXECUTED: hodLod is measuring the ES series', {hod:D.hod, lod:D.lod});
+    const P=hlPT('SPY', D);
+    ok(P.ok!==false || P.ptPts!=null, 'p7d ...and PT computes', P.why);
+    // the pullback is 7670 -> 7664. Six points. NOT 6,895.
+    ok(P.ptPts!=null && P.ptPts<50,
+       'p7e ...in ES POINTS, from the same series — not an ES price minus a SPY price', P.ptPts);
+    ok(P.ptPts!=null && Math.abs(P.ptPts-6)<2.5, 'p7f ...and it is the actual excursion, ~6pts', P.ptPts);
+    ok(P.lcPts!=null && P.lcPts<50, 'p7g ...and LC is on that scale too, not 6,894', P.lcPts);
+    // and the derived percentage, which is what printed 35818%
+    const pct=(D.rngPts>0)?Math.round(100*P.ptPts/D.rngPts):null;
+    ok(pct!=null && pct<=100, 'p7h ...so OF BAR is a percentage of the range, not 35818%', pct);
+    global.closedCandles=savedCC; global.futBarsLoad=savedFB; FUT=savedFut;
+    eval(ex('hodLod')); eval(ex('hlPT'));
+  }
   ok(/out\.ptUsd=D\.isFut \? out\.ptPts\*ES_USD_PER_PT/.test(PT),
      'p8 ...and dollars come from the ONE contract multiplier, only on a futures chart');
 

@@ -284,7 +284,14 @@ ok(W<=640, 'w1b the compaction holds — the ladder is no wider than 640 (was 61
 ok(ROLL+ROLLW===W, 'w1c ...and LAD_W is exactly where the last column ends, so it cannot lie again',
    {end:ROLL+ROLLW, W});
 ok(/g3ladwrap\{overflow-x:auto/.test(src), 'w2 ...and the container SCROLLS rather than clips');
-ok(/g3ladwrap"><div class="g3lad"/.test(src), 'w3 ...with the scroller actually wrapping the ladder');
+// ⚠ (v15.21) NOT AN ADJACENCY TEST ANY MORE. This asserted the two tags were literally touching,
+// which broke the moment the column HEADER ROW was added between them — a true structural change
+// that the assertion could not distinguish from the scroller being unhooked. What matters is that
+// the frame is INSIDE the scroller, so both are asserted, in order, within one wrapper.
+ok(/g3ladwrap">(?:(?!<\/div>)[\s\S])*?<div class="g3lad"/.test(src),
+   'w3 ...with the scroller actually wrapping the ladder');
+ok(/g3ladwrap">'\+hd\+'<div class="g3lad"/.test(src) || /g3ladwrap"><div class="g3lad"/.test(src),
+   'w3b ...and nothing but the header row sits between them');
 ok(/costing information|instead of costing information/.test(src), 'w4 the reasoning is recorded');
 // 2. UNITS. PEAK.m[k] is |velocity.cur|; P.usdK is THOUSANDS of dollars. Dividing one by the other
 //    gave ~1000x, clamped to 100, and drew a full-width day-peak outline on EVERY node.

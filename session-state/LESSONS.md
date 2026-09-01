@@ -131,6 +131,40 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.21 — a test can encode the model the code USED to have, and then defend the bug
+
+**1 · The false thing, and it was written in a test as a comment.** `test_hodlod`'s p7/p7b said
+"closedCandles() is the UNDERLYING book; D.scale converts to chart points". That was TRUE until
+v15.08 moved `hodLod` onto `measureBars`, and FALSE after — and both assertions kept passing, because
+both lines still existed and still multiplied by `rr`. The face printed **PT 6895.0pts** and **OF BAR
+35818%** on the operator's live chart the whole time. ⚠ **A source grep freezes the model that was
+true when it was written. When a value's SOURCE changes, the tests that describe that source are part
+of the change** — leaving them green is worse than having none, because they read as coverage.
+
+**2 · Failure-pattern recurrence, now in LIVE code: a consumer left on the old source.** v15.08 moved
+`hodLod` to ES bars and left `hlPT` — which consumes hodLod's own output — reading SPY bars, so
+`|secP − advP|` subtracted one scale from the other. This is the replay-seam pattern (eleventh
+instance) outside replay entirely. ⚠ **Changing where a value comes from is not finished until every
+consumer that COMPARES against it moves with it.**
+
+**3 · A surface can be replaced and lose a part nobody notices for seven builds.** v14.46 replaced
+the rail + node profile with the ladder; the profile's header row went with it and the ladder's ten
+columns have been unlabelled ever since. Nothing failed: **a missing label throws nothing and greps
+as nothing.** ⚠ When a surface REPLACES another, enumerate what the old one drew, not just what the
+new one computes.
+
+**4 · The reason a constant was chosen can expire without the constant looking wrong.** The futures
+courier polled hourly, and the comment beside it said why: "hourly is plenty for a daily corpus".
+Panel v15.08 made those bars a LIVE input to the ⓪a section and nothing about `60*60*1000` changed
+appearance. ⚠ **When you give an existing input a new consumer, re-read the assumptions of everything
+that PRODUCES it** — freshness, cadence, and units are all set by the old requirement.
+
+**5 · Three unrelated tests broke and all three were over-broad assertions of mine**, including a
+WHOLE-FILE grep for `text-overflow:ellipsis` guarding a rule about king-projection tiles. The
+ladder's new headers, where truncating IS correct, tripped it. ⚠ **A guard about one component must
+read that component**; a file-wide grep makes one component's rule a law for every component, and the
+failure it produces points at the wrong place.
+
 ### v15.20 — the auditor was the thing that was broken
 
 **1 · A false thing, and it had been shipping for builds.** `__gptsDebug.audit()` — the surface whose
