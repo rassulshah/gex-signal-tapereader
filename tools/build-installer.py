@@ -235,17 +235,21 @@ for _p in ['data/es-1min/BASERATES.json', 'data/es-1min/FARSIDE.json', 'data/es-
 # earlier sessions reported it lost. Ship it so a fresh clone has the spec beside its transcription.
 FILES += sorted(f for f in os.listdir('.') if f.startswith('mockuphodlod') and f.endswith('.html'))
 
-# --- size guard: fail LOUDLY before shipping a payload cmd.exe cannot digest --------------------
-# `more +n` walks the whole file line by line; past a few MB of base64 it is minutes, not seconds,
-# and the user reads that as a hang. 6MB of payload ≈ 80K lines ≈ the v13.x sizes that worked.
-_PAYLOAD_CAP = 6 * 1024 * 1024
+# --- size ADVISORY on the raw tree ------------------------------------------------------------
+# ⚠⚠ (v15.22) THIS USED TO BE THE HARD GATE AND IT MEASURED THE WRONG THING. What `more +n` walks is
+# the FINISHED .bat — lines of base64 — and the raw tree size is only a proxy for it across gzip
+# (~4x on text) and base64 (+33%). On 2026-09-01 it refused a 6.3 MB tree whose real artefact was
+# ~2.9 MB, the same size as the installer that had shipped an hour earlier and worked.
+# **A proxy that blocks a good build costs as much as one that passes a bad one.** The hard gate is
+# now on the artefact itself, where it is measured; this stays as a heads-up that the tree is growing.
+_PAYLOAD_ADVISORY = 6 * 1024 * 1024
 _total = sum(os.path.getsize(p) for p in FILES)
-if _total > _PAYLOAD_CAP:
+if _total > _PAYLOAD_ADVISORY:
     _big = sorted(((os.path.getsize(p), p) for p in FILES), reverse=True)[:10]
-    print('PAYLOAD TOO BIG: %.1f MB raw against a %.0f MB cap. Largest members:' % (_total/1e6, _PAYLOAD_CAP/1e6))
+    print('PAYLOAD ADVISORY: %.1f MB raw, past the %.0f MB advisory. Largest members:' % (_total/1e6, _PAYLOAD_ADVISORY/1e6))
     for _s, _p in _big:
         print('  %8.2f MB  %s' % (_s/1e6, _p))
-    raise SystemExit('refusing to build an installer that will hang on extraction — trim the manifest')
+    print('  ADVISORY only — the hard gate is the finished .bat, measured after it is written.')
 
 buf = io.BytesIO()
 # mtime=0 so an unchanged tree produces an identical payload - a diffable installer
@@ -400,6 +404,27 @@ header = render(n)
 assert header.count('\n') == n, 'HDRLINES did not converge'
 
 out = header.replace('\n', '\r\n') + '\r\n'.join(B64_LINES) + '\r\n'
+
+# --- THE HARD SIZE GATE, ON THE THING `more` ACTUALLY WALKS ------------------------------------
+# ⚠⚠ (v15.22) MEASURED, NOT MODELLED. `more +n` reads the FINISHED .bat line by line, so the .bat's
+# own size and line count are the quantity that decides whether extraction feels instant or hangs.
+# The raw-tree cap above was a proxy for this across gzip and base64, and on 2026-09-01 it refused a
+# build whose real artefact was ~2.9 MB — the same size as the one that shipped an hour earlier.
+# ⚠ The reference is not a guess: v13.x through v15.21 all extracted correctly, and v15.21 measured
+# 2.89 MB across 37,106 lines. The cap is set at roughly double that, which is the largest artefact
+# this delivery path has evidence for surviving. Raise it only with a build that actually ran.
+_BAT_BYTES_CAP = 6 * 1024 * 1024
+_BAT_LINES_CAP = 80000
+_bat_bytes = len(out.encode('ascii'))
+_bat_lines = out.count('\r\n')
+if _bat_bytes > _BAT_BYTES_CAP or _bat_lines > _BAT_LINES_CAP:
+    print('INSTALLER TOO BIG: %.2f MB / %d lines (caps %.0f MB / %d lines)'
+          % (_bat_bytes/1e6, _bat_lines, _BAT_BYTES_CAP/1e6, _BAT_LINES_CAP))
+    _big = sorted(((os.path.getsize(p), p) for p in FILES), reverse=True)[:10]
+    for _s, _p in _big:
+        print('  %8.2f MB  %s' % (_s/1e6, _p))
+    raise SystemExit('refusing to build an installer that will hang on extraction — trim the manifest')
+
 with open('install.bat', 'wb') as fh:
     fh.write(out.encode('ascii'))
 
@@ -567,7 +592,13 @@ print('   (fallback only, if he reports the .bat failed: %s + %s)' % (ZIPNAME, B
 print('')
 print('   PASTE THESE WITH IT, EVERY TIME:')
 print('   - Tapereader v%s %s - https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js' % (V, _panel_verdict()))
-print('   - Companion v%s%s' % (VC, _compan_verdict('-')))
+# ⚠⚠ (v15.22) THE COMPANION LINE CARRIES ITS URL TOO. Operator, 2026-09-01: "why is there not
+# companion link.. you should give me that because a change is required." The panel's link has been
+# printed here since v14.3 and the companion's never was — so on every build that changed the
+# companion he was told to update it and handed no way to. The rule the panel link exists for
+# ("give me the tampermonkey link every time") was never about the panel; it was about being able
+# to install what changed.
+print('   - Companion v%s%s - https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js' % (VC, _compan_verdict('-')))
 print('   - Then: wait ~5 min (CDN) -> CLICK THE LINK -> reload Atlas. TM auto-update is')
 print('     ONCE A DAY by default, so the click is the reliable step. "Reinstall" means he')
 print('     already has it, which is fine, not a failure.')
@@ -581,7 +612,7 @@ print('')
 print('==== PASTE THIS WITH THE INSTALL FILE — EVERY TIME ====')
 print('**Tampermonkey — update ONLY what changed:**')
 print('- **Tapereader v%s** %s — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js' % (V, _panel_verdict()))
-print('- Companion v%s%s' % (VC, _compan_verdict('—')))
+print('- **Companion v%s**%s — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js' % (VC, _compan_verdict('—')))
 print('Then wait ~5 min (raw CDN cache) and RELOAD the Atlas tab — footer must say v%s.' % V)
 
 # ---- LEAVE THE TREE CLEAN --------------------------------------------------------------------

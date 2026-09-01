@@ -401,7 +401,9 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   // both extremes were already in, which the grep could never see. Execute the clause instead.
   eval(ex('hlFarClause'));
   const FC = hlFarClause;
-  const fcAhead = FC({ second:'HOD', secondT: 400*60, clock: 200*60 }, { far:0.42 });
+  // ⚠ (v15.22) the CALL now needs `in`, because the clause is gated on the table's IN call rather
+  // than on a running extreme. A fixture without it is testing the refusal, not the clause.
+  const fcAhead = FC({ second:'HOD', secondT: 400*60, clock: 200*60 }, { far:0.42, in:true });
   ok(/42%/.test(fcAhead) && /HOD/.test(fcAhead) && !/still ahead/.test(fcAhead),
      't22 the range clause names the extreme it measures TO, and no longer claims travel', fcAhead);
   ok(FC({ second:'HOD', secondT: 100*60, clock: 200*60 }, { far:0.01 }) === '',
@@ -480,11 +482,29 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
   ok(mid && mid.in === false && mid.notIn === false,
      'u7 the middle is STANDING — neither call', mid && mid.p);
 
-  // ⚠ THE CLAUSE THAT WAS WRONG BEFORE: "toward HOD" must be conditional on the far side being ahead
-  ok(/D\.secondT>D\.clock/.test(SD),
-     'u8 the far-side clause is gated on the second extreme not having printed');
-  ok(/both extremes in/.test(SD),
-     'u9 ...and says so plainly when it already has, instead of pointing at a finished move');
+  // ⚠⚠ (v15.22) THESE TWO ASSERTIONS PINNED THE BROKEN DESIGN AND KEPT IT ALIVE FOR EIGHT BUILDS.
+  // They demanded the gate `D.secondT > D.clock` and the words "both extremes in" — and that
+  // comparison is FALSE from the third bar of every session, because a session has a running high
+  // and a running low almost immediately. So the far-side line ("LOD after 1:30pm — 80%") could
+  // never draw, "both extremes in — the range is set" printed from mid-morning about a range with
+  // hours left to run, and the "% of the range" clause never rendered at all. Three clauses, one
+  // wrong idea about what `secondT` means, and two green assertions holding it in place.
+  // ⚠ A RUNNING EXTREME IS NOT A FINISHED ONE. What these clauses need is "is the far side still
+  // being made", and the table's IN call is the panel's own statement of that, printed beside them.
+  // ⚠ STRIP THE COMMENTS FIRST. Every one of these assertions forbids a string that the CODE no
+  // longer contains — and the comment explaining WHY it was removed quotes it. Three of these
+  // failed on first writing against a correct build, for exactly that reason. This project already
+  // names the pattern: a comment that quotes the thing it explains has produced nine false results.
+  const noc = t => t.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+  const FC = noc(ex('hlFarClause')), FR2 = noc(ex('fsRead')), SDn = noc(SD);
+  ok(/CALL\.in===true/.test(FC) && !/secondT>D\.clock/.test(FC),
+     'u8 the "% of the range" clause is gated on the TABLE\'s IN call, not on a running extreme');
+  ok(/CALLIN===true/.test(FR2) && !/both extremes in/.test(FR2),
+     'u8b ...and so is the far-side model, through the same fact');
+  ok(/the session is over/.test(SDn) && !/both extremes in/.test(SDn),
+     'u9 ...and "the range is set" is only claimed once the SESSION is over, which is when it is true');
+  ok(/D\.clock>=mul\(15,3600\)/.test(SDn),
+     'u9b ...tested against the close, explicitly');
   // (v14.72) WHEN-TO-EXPECT-IT moved off the ladder tier and onto the far-side line, where it is
   // measured rather than borrowed from the unconditional E-row median. The property is unchanged:
   // the face must say WHEN, and must show the SPREAD rather than a single clock time.

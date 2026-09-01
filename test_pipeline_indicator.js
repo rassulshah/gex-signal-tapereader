@@ -223,7 +223,15 @@ ok(lastTradingDay(1)==='2026-08-18', '3d Wednesday -> Tuesday', lastTradingDay(1
   ok(pipeColor('grey')===PAL.sub, '5e unknown renders grey, not red');
   // and a stage set is still produced (render is never blocked)
   var stErr=pipeStages();
-  ok(stErr.length===4, '5f the indicator still renders four stages after a failure', stErr.length);
+  // ⚠ (v15.22) THE POINT IS THAT RENDER IS NEVER BLOCKED, NOT THAT THERE ARE EXACTLY FOUR CHIPS.
+  // A count broke the moment the `deps` chip was added — a change that cannot make the indicator
+  // stop rendering, which is what this assertion is about. It now checks that the four PIPELINE
+  // stages are all still produced, by name, and that adding a chip beside them is not a failure.
+  var keys=stErr.map(function(x){ return x.key; });
+  ['rec','saved','pushed','review'].forEach(function(k){
+    ok(keys.indexOf(k)>=0, '5f·'+k+' the '+k+' stage still renders after a failure', keys);
+  });
+  ok(stErr.length>=4, '5f the indicator is never blocked by a failed check', stErr.length);
 
   // a hard throw from fetch itself (not a rejection) is also soft
   reset(); FAKE_NOW=RealDate.parse('2026-08-17T16:00:00Z');
@@ -376,7 +384,7 @@ ok(lastTradingDay(1)==='2026-08-18', '3d Wednesday -> Tuesday', lastTradingDay(1
   ok(/PIPE_TTL_MS=600000/.test(src), '8f the remote check is throttled to 10 minutes');
   ok(/visibilityState/.test(ex('pipeCheck')), '8g pipeCheck skips a hidden tab');
   ok(/pipeCheck\(\);/.test(ex('tick')), '8h the render loop drives pipeCheck');
-  ok(/@version\s+15.21/.test(src) && /v'\+GPTS_VERSION\+' part1 loaded/.test(src) && />v'\+GPTS_VERSION\+'<\/span>/.test(src),
+  ok(/@version\s+15.22/.test(src) && /v'\+GPTS_VERSION\+' part1 loaded/.test(src) && />v'\+GPTS_VERSION\+'<\/span>/.test(src),
      '8i version stamped in all three spots');
   ok(/pipeReviewLine\(RV\)/.test(ex('briefLine')), '8j the pre-open brief may cite one review line');
 

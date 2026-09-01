@@ -1,3 +1,88 @@
+## v15.22 — one wrong idea about `secondT` had three clauses dead for eight builds, and the dependencies now have a check
+
+> "the basic format is to identify if one extremity is in and when to expect the next extremity to be
+> in" · "why is there not companion link" · "you need to make sure ... there is some type of test to
+> check insider finance ... it is fundamental to the application"
+
+### ⚠⚠ "LOD IN 74% · HOD after 1:30 — 80%" — THE LINE HE ASKED FOR EXISTS AND HAS NEVER DRAWN
+
+The far-side model (F-13/F-14/F-15, 197 sessions) shipped at v14.72 gated on `D.secondT > D.clock`
+— "the second extreme has not printed yet". **`secondT` is the clock of the LATER of the two RUNNING
+extremes, and a session has a running high and a running low within its first two bars.** Measured
+on 2026-08-31: at **08:45**, fifteen minutes in, `secondT` was **08:39**. The gate was false from the
+third bar of every session, every day, so:
+
+    the far-side line       could never draw            → he never saw "HOD after 1:30 — 80%"
+    "both extremes in"      printed from mid-morning    → about a range with hours left to run
+    "% of the range" clause never drew at all
+
+**Three clauses, one wrong idea, eight builds.** ⚠ And two assertions in `test_hodlod` DEMANDED that
+gate and those words, holding the broken design in place. The condition they meant is "is the far
+side still being made", and the panel already prints its own statement of that — the table's IN call.
+Rendered on the recorded 08-31:
+
+    09:00   HOD STANDING 40%                              (no anchor yet — a real refusal)
+    10:00   HOD IN 76% · LOD after 11:01am — 80%
+    12:00   HOD IN 89% · 22% of the range to today’s LOD so far · LOD after 1:01pm — 80%
+    14:12   HOD IN 98% · LOD — not enough session left: the 80% floor is 3:13pm, past the close
+
+⚠ The floor was also anchored on `ctNowSecOfDay()` — the WALL clock — so a replayed 10:00 and a
+replayed 14:12 produced the SAME floor. It uses `D.clock` now. **A leak that is correct in the case
+you look at is still a leak.**
+⚠ And a floor past the close is a refusal, not a time: printing "after 3:13pm" invites a reading the
+model never makes.
+
+### ⚠⚠ THE DEPENDENCIES NOW HAVE A CHECK, AND IT FOUND ONE IMMEDIATELY
+
+`__gptsDebug.deps()` and a **`deps` dot on the footer strip** check, live, every render:
+
+- **InsiderFinance** per symbol — the **call wall**, the **put wall** and the **expected move** by
+  name, present *and* plausible (a wall a decade from spot is the other book in this slot), with the
+  age judged against the clock;
+- **the ES courier** — age and row count, what the ⓪a candle is measured from;
+- **IRT** — the BUILD and the WRITE reported separately, because they fail differently, with the
+  permission error verbatim;
+- **the recorder** — whether another frame can still be written.
+
+⚠⚠ **IT FOUND A FAULT THE MOMENT IT EXISTED.** On his live panel the stored **SPY chain was 15,328
+minutes old** — payload **2026-08-21**, eleven days — with a **null expected move**, while SPX and
+QQQ were three minutes old. Its own `stale` flag read **false**, because that flag is computed when
+the record is WRITTEN and never re-evaluated. Nothing on the face said so.
+**Freshness is judged against the clock when it is asked, never from a stored flag.**
+⚠ Under the v15.06 SPX pin the companion stops fetching SPY, so a stale SPY is expected — the overall
+verdict asks "is there a usable book", not "is every symbol fresh". **A check that is red every day
+is a check nobody reads.**
+
+**`design/DEPENDENCIES.md` is new and `load gex` is required to read it** (pinned by `test_deps.js`).
+It states the thing that matters most: **no test file can tell you the system is working.** They run
+in Node, where there is no companion, no browser and no market. They prove the CHECK is right; only
+the panel can prove the SYSTEM is.
+
+### and the size guard was measuring a proxy, and refused a good build
+
+The installer's cap was on the RAW TREE at 6 MB, standing in for the finished `.bat` across gzip and
+base64. This build came to 6.3 MB raw and was refused — and its real artefact is **2.92 MB across
+37,490 lines**, against v15.21's **2.89 MB / 37,106** which shipped an hour earlier and worked.
+The hard gate is now on the `.bat` itself, in its own bytes and lines, measured after it is written.
+The raw total stays as an advisory that still prints, so a growing tree is not invisible.
+⚠ **A proxy that blocks a good build costs as much as one that passes a bad one.**
+
+### the companion link ships with every build
+
+The panel's raw link has printed since v14.3 and the companion's never did — so on every build that
+changed the companion he was told to update it and handed no way to. Both links now print in both
+places. The rule was never about the panel; it was about being able to install what changed.
+
+### verification
+`test_deps.js` is new: **33 assertions**, each failure mode separately (each of the three IF fields
+alone, staleness against the clock, a wall on the wrong scale, IRT build vs write vs OFF, and that a
+stale symbol nothing reads does **not** redden the verdict). `test_hodlod` +3, `test_delivery` +3.
+**Fifteen mutations run individually, fifteen caught.**
+⚠ Four tests broke and all four pinned an implementation detail rather than a behaviour: two demanded
+the dead `secondT` gate; one counted the footer chips (`length===4`) and broke when a fifth was
+added; one bounded a regex at 1,400 characters and stopped matching when the block it wanted got
+*longer*. All four rewritten to assert the behaviour.
+
 ## v15.21 — PT was subtracting a SPY price from an ES price, and the ladder never had headers
 
 > "check the candle construction as well. is this candle construction based on the RTH session. are

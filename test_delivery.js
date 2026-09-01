@@ -66,7 +66,12 @@ ok(/ZIPNAME\s*=\s*'gexdrop%s\.zip'/.test(BUILDER) && /BATNAME\s*=\s*'applygex%s\
 // DAY and nothing prompted him to force it. The links used to print sixty lines below the filename,
 // in a block easy to scroll past. They must print INSIDE the delivery block, welded to the filename.
 {
-  const blk = /==== DELIVER EXACTLY ONE FILE[\s\S]{0,1400}?round-trip/.exec(BUILDER);
+  // ⚠ (v15.22) THE BOUND IS ABOUT THE BLOCK, NOT ABOUT ITS LENGTH. At {0,1400} this stopped
+  // matching the moment the companion's raw URL and the comment explaining it were added — a change
+  // that PUT MORE OF WHAT THIS TEST WANTS inside the block, and it read as the block disappearing.
+  // A character budget standing in for "these lines are together" fails on exactly the edits it
+  // should pass. Bounded by the block's own end marker instead.
+  const blk = /==== DELIVER EXACTLY ONE FILE[\s\S]*?round-trip/.exec(BUILDER);
   ok(!!blk, 'd2f the delivery block is identifiable in the builder');
   ok(blk && /raw\.githubusercontent\.com/.test(blk[0]),
      'd2g the Tampermonkey raw URL prints INSIDE the delivery block, not sixty lines below it');
@@ -108,6 +113,46 @@ ok(fs.existsSync('test_chat_history.js'),
    'd5a the chat-history gate this rule cites is a real test file, not a claim');
 ok(fs.existsSync('tools/chat-history.py'),
    'd5b ...and the generator it names actually exists');
+
+// ---- (v15.22) BOTH LINKS, EVERY BUILD --------------------------------------------------------
+// Operator, 2026-09-01: "why is there not companion link.. you should give me that because a change
+// is required." The panel's raw link has printed since v14.3 and the companion's never did — so on
+// every build that changed the companion he was told to update it and handed no way to. The rule
+// was never about the panel; it was about being able to install what changed.
+{
+  const bi = fs.readFileSync('./tools/build-installer.py', 'utf8');
+  const paste = bi.slice(bi.indexOf('PASTE THIS WITH THE INSTALL FILE'));
+  ok(/current\/gex-signal-tapereader\.user\.js/.test(paste),
+     'L1 the delivery block carries the PANEL\'s raw link');
+  ok(/current\/gex-if-levels\.user\.js/.test(paste),
+     'L2 ...and the COMPANION\'s, which it never did before v15.22');
+  // and in the terminal block too, which is what a context reads while writing the message
+  const term = bi.slice(bi.indexOf('PASTE THESE WITH IT, EVERY TIME'), bi.indexOf('PASTE THIS WITH THE INSTALL FILE'));
+  ok(/current\/gex-if-levels\.user\.js/.test(term),
+     'L3 ...in both places, so forgetting requires ignoring both');
+}
+
+// ---- (v15.22) THE SIZE GATE MEASURES THE ARTEFACT, NOT A PROXY FOR IT ------------------------
+// It used to cap the RAW TREE at 6MB as a stand-in for the finished .bat, across gzip and base64.
+// On 2026-09-01 it refused a 6.3MB tree whose real installer was 2.92MB / 37,490 lines — the same
+// size as the one that had shipped an hour earlier and worked. A proxy that blocks a good build
+// costs as much as one that passes a bad one.
+{
+  const bi = fs.readFileSync('./tools/build-installer.py', 'utf8');
+  ok(/_BAT_BYTES_CAP/.test(bi) && /_BAT_LINES_CAP/.test(bi),
+     'Z1 the hard gate is expressed in the .bat\'s own bytes and lines');
+  ok(/_bat_bytes = len\(out\.encode\('ascii'\)\)/.test(bi),
+     'Z2 ...measured on the finished text, not estimated from the tree');
+  ok(/_PAYLOAD_ADVISORY/.test(bi) && !/_PAYLOAD_CAP/.test(bi),
+     'Z3 ...and the raw-tree number is an ADVISORY, which cannot refuse a build');
+  // the advisory must still PRINT, or a growing tree becomes invisible
+  ok(/PAYLOAD ADVISORY/.test(bi), 'Z4 ...but it still reports, so growth is not silent');
+  // ⚠ Z5 SURVIVED ITS FIRST MUTATION: it looked for the `raise` line, which stays exactly where it
+  // is when the CONDITION above it is disabled. A refusal nothing can reach is not a refusal, and
+  // greping for the throw cannot tell the two apart. Bind to the condition and the throw TOGETHER.
+  ok(/if _bat_bytes > _BAT_BYTES_CAP or _bat_lines > _BAT_LINES_CAP:[\s\S]{0,600}?raise SystemExit\('refusing to build an installer that will hang/.test(bi),
+     'Z5 and the artefact gate does still refuse — the condition reaches the throw');
+}
 
 console.log('test_delivery: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

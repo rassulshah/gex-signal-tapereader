@@ -131,6 +131,50 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.22 — one wrong idea about a variable can disable three features and look like a design
+
+**1 · The false thing, and it survived eight builds.** `D.secondT` was read as "the clock at which
+the day's second extreme printed". It is the clock of the later of the two RUNNING extremes, and a
+session has a running high and a running low within two bars — so `D.secondT > D.clock` was FALSE
+from the third bar of every session. Three clauses were gated on it: the far-side line the operator
+asked for in his own words at v14.72, the "% of the range" clause, and "both extremes in — the range
+is set", which therefore printed all day about a range with hours left. ⚠ **A predicate that is
+always false and one that is always true both read as working code; neither throws, and the surfaces
+they gate simply never appear.** When a feature "has shipped" and has never been seen, check whether
+its gate can be true.
+
+**2 · Two assertions were holding the broken design in place.** `test_hodlod` u8/u9 demanded the
+`secondT>D.clock` gate and the words "both extremes in". They were written when the misreading was
+believed, so they encoded it, and the only way to fix the feature was to change them. ⚠ Second
+consecutive build where a test defended a bug (v15.21 was `p7`). **A test written from the same
+wrong model as the code agrees with the code and proves nothing.**
+
+**3 · A dependency that fails silently needs a check that runs where it fails.** InsiderFinance, the
+ES courier and the IRT export all live outside the script and all fail without an error. No test
+file can see any of them — they run in Node with no browser, no companion and no market. `deps()`
+checks the SYSTEM from the panel; `test_deps.js` checks the CHECK. ⚠ **A green suite has never once
+meant the dependencies were up**, and until now nothing said otherwise.
+
+**4 · The check found an 11-day-old book on the first run.** The stored SPY chain was 15,328 minutes
+old with a null expected move while SPX and QQQ were three minutes old — and its own `stale` field
+read `false`, because that flag was computed when the record was written. ⚠ **Freshness is a
+question about the clock NOW; a stored freshness flag only tells you the flag exists.**
+
+**5 · A check that is red every day is a check nobody reads.** Under the SPX pin the companion stops
+fetching SPY, so the overall verdict asks "is there a usable book" rather than "is every symbol
+fresh", while still reporting the stale symbol. Crying wolf is a way of having no alarm.
+
+**6 · Four tests broke and all four pinned an implementation detail instead of a behaviour** — two on
+the dead gate, one counting footer chips (`length===4`, broken by adding a fifth), one bounding a
+regex at 1,400 characters and failing when the block it wanted got LONGER. ⚠ **A count or a
+character budget standing in for "these things are together" fails on exactly the edits it should
+pass.**
+
+**7 · A rule stated for one thing was really about a class of thing.** "Give me the tampermonkey link
+every time" produced a panel link in the builder and never a companion link — so every build that
+changed the companion told him to update it and gave him no way to. The rule was never about the
+panel; it was about being able to install what changed.
+
 ### v15.21 — a test can encode the model the code USED to have, and then defend the bug
 
 **1 · The false thing, and it was written in a test as a comment.** `test_hodlod`'s p7/p7b said

@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-01 · v15.21 · session `5e8d34b5`
+## 2026-09-01 · v15.22 · session `5e8d34b5`
 
-_14 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_16 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -205,8 +205,53 @@ The existing tests were source greps encoding the *pre-v15.08* model — which i
 The ES bars backfill the whole day, but the courier only refreshes them **hourly** — that's the sync gap.
 Three tests broke — one is a stale version pin, two are over-broad assertions of mine.
 Back to baseline plus the save-procedure four. Writing the record and shipping.
+**Your instinct was right — the values were wrong.** Reading your live panel:
+
+```
+PT       6895.0pts        ← 7661 (ES) − 766 (SPY)
+OF BAR   35818%           ← that number ÷ the range
+LC RNG   6894.2           ← same subtraction
+```
+
+`hodLod` has measured true ES bars since v15.08. `hlPT` — which consumes hodLod's own output — was still reading `closedCandles()`, the SPY book. So it subtracted one price scale from the other. Both now read the same series from one call.
+
+Worse: **the test defended it.** `test_hodlod` asserted, in a comment, that "closedCandles() is the underlying book" — …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 11 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (14:40):** Same as before — 11 commits, tree clean, push blocked by the proxy for this repo. The installer carries them.
+
+**OPERATOR:**
+> Also the mesaaging at the top currently says LOD in 74% , but it should say somehting like  LOD IN 74%, HOD after 1:30 75% .  this is just an example.  the basic format is to indentify if one extremity is in and when to expect the next extremity to be in.  why is there not companion link.. you should give me that because a change is required.  Also , you need to make sure that when the application is working , there is some type of test to check insider finance to ensure we are getting data from it like the call wall, put wall , expected values, and you need to ensure that the application is writing to the king levels to the server for irt.  these tests need to be done to ensure they are working, you need to ensrue this is in some document as well becasue the next context needs to be aware of these dependencies for the applicaiton to work properly.  it is fundamental to the application. So again, the next context window must know this when i use the load gex command and the context comes upto speed on the architectural dependencies.
+
+**me (14:45):** The format he's describing already exists — I need to check whether it actually fires. Rendering a recorded day at several times.
+Found it — and it explains why you've never seen that line.
+It fires now — "HOD IN 76% · LOD after 10:48 — 80%". But the *other* clause was gated on the same dead comparison.
+One thing's still wrong: at 14:12 it says "after 10:48am" — a floor already in the past.
+`ctNowSecOfDay()` — the wall clock again, in a section that has a session clock.
+Now the dependency health checks he called fundamental.
+**The InsiderFinance chain is 10 days stale.** Verifying per symbol before I claim it.
+Now the dependency health check itself.
+Now the test for the check, and the document `load gex` must read.
+A third clause was riding the same dead gate — and two tests were pinning the broken design.
+All three are my own comments quoting the strings the assertions forbid — the trap this project already has a name for.
+Baseline plus the save-procedure four. Fixing the missing companion link, then the record.
 
 ### DECISIONS
+
+**v15.22 · the headline, the dependencies, the companion link.**
+- **"LOD IN 74% · HOD after 1:30 — 80%" had never drawn.** `secondT` is the later of the two RUNNING
+  extremes, so the gate `secondT > clock` was false from the third bar of every session. Three
+  clauses dead for eight builds — and two assertions in `test_hodlod` demanded that gate.
+- **The dependencies now have a live check** (`__gptsDebug.deps()` + a `deps` dot) and a document
+  `load gex` is required to read. It found an **11-day-old SPY chain** with a null expected move on
+  its first run, whose own `stale` flag read false.
+- **Refused to make one stale symbol turn the dot red** — under the SPX pin the companion stops
+  fetching SPY, and a check that is red every day is a check nobody reads.
+- **The companion's Tampermonkey link now ships with every build.** It never had.
+- **Four tests broke and all four pinned an implementation detail, not a behaviour.**
 
 **v15.21 · the candle, the headers, the courier.**
 - **PT was subtracting a SPY price from an ES price** — "PT 6895.0pts", "OF BAR 35818%" on his live
@@ -281,6 +326,12 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.22 · companion v1.17** — the far-side gate on the table's IN call; the floor on `D.clock`;
+a floor past the close as a refusal; `depsHealth()` + `__gptsDebug.deps()` + the `deps` footer chip;
+`design/DEPENDENCIES.md` wired into the gex skill's LOAD; both raw links in the delivery block.
+New `test_deps.js` (33). `test_hodlod` +3, `test_delivery` +3. 15 mutations, 15 caught.
+Suite 134 green / 6 baseline red.
+
 **v15.21 · companion v1.17** — `hlPT` on `measureBars`; the ladder's column header row; the
 RTH-aware futures cadence. `test_hodlod` +6, `test_futbars` +7, `test_replay_face` 44 → 57.
 Sixteen mutations, sixteen caught. Suite 133 green / 6 baseline red.
@@ -305,6 +356,10 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. **Run `__gptsDebug.deps()` on his panel** — the SPY chain was 11 days stale and may still be.
+2. **The REPLAY side has still never been dragged on his real panel.**
+3. A CASH chart's ⓪a does not backfill; the courier carries no cash bars.
 
 1. **The REPLAY side has still never been dragged on his real panel.**
 2. **A CASH chart's ⓪a does not backfill** — only what the panel saw since opening.
@@ -348,6 +403,7 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+22de227 v15.21 + companion v1.17: PT mixed two price scales, and the ladder never had headers
 487048c v15.20: the read is out, and the render audit was inventing a fault out of its own probe
 4a9b011 build: name the delivery file correctly in the builder's own note
 e58c333 v15.19: one refusal upstream was hiding six surfaces, and nothing here could draw the face
@@ -359,7 +415,6 @@ e58c333 v15.19: one refusal upstream was hiding six surfaces, and nothing here c
 7ec0a4e v15.14: the king lane draws the crown's journey
 8cf003b v15.13: the ladder fits the panel, and the arrows replay
 6806ea9 v15.12: the expected-move pin survives a chart switch
-b25ebdd v15.11: replay reads the frame for the crowns and the accumulation
 ```
 
 ---

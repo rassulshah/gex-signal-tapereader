@@ -89,7 +89,13 @@ ok(fsNormalise(trunc) === null, 'n5 a truncated payload is REFUSED rather than h
 
 // ---- the face: the numbers it prints must come from the model, not from prose --------------------
 const SD = ex('secDay');
-ok(/fsRead\(sym, ?D\)/.test(SD), 'f1 the section computes the far side from the model');
+// ⚠ (v15.22) the call carries the table's IN call now — that gate is the whole reason the block can
+// draw at all (the old `secondT<=clock` was true from the third bar of every session). Asserting the
+// exact old argument list would have failed on a change that FIXED it, which is the shape of a test
+// that pins an implementation detail instead of the behaviour.
+ok(/fsRead\(sym, ?D\b/.test(SD), 'f1 the section computes the far side from the model');
+ok(/fsRead\(sym, D, !!\(CALL&&CALL\.in\)\)/.test(SD),
+   'f1b ...gated on the TABLE\'s IN call, the same fact the headline prints beside it');
 // ⚠⚠ STRIP COMMENTS FIRST. f2 kept passing after the wording changed because the v14.86 comment
 // EXPLAINING the change contains the phrase "not before" — the assertion was satisfied by the note
 // describing what it was supposed to be checking. Third time this exact shape has appeared this

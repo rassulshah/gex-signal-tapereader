@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.21
+// @version    15.22
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.21';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.22';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -5838,7 +5838,37 @@ function pipeStages(){
       (rev==='yes'&&loaded) ? ('yes — review/'+(P.reviewDay||'?')+'.json is loaded into the Analysis tab.'+(P.reviewLine?(' It says: '+P.reviewLine):''))
     : rev==='yes'          ? 'the file exists but could not be parsed into the panel.'
     : rev==='no'           ? ('no review file for '+(P.reviewDay||'the last session')+' yet — it is written after the close.')
-                           : 'unknown — the check has not run or the network call failed.') });
+                           : 'unknown \u2014 the check has not run or the network call failed.') });
+
+  // 5. deps \u2014 the things OUTSIDE this script that it cannot work without.
+  // ⚠⚠ (v15.22) THIS CHIP EXISTS BECAUSE NONE OF THESE FAILURES ANNOUNCE THEMSELVES. A companion
+  // that stopped, a chain that quietly stopped refreshing for one symbol, an IRT directory
+  // permission Chrome dropped on reload \u2014 every one of them leaves a panel that looks entirely
+  // normal and is reading an old book. Operator, 2026-09-01: "it is fundamental to the application."
+  // The dot is the summary; the hover names every dependency, its age, and what is wrong with it.
+  try{
+    var DH=depsHealth();
+    var lines=DH.items.map(function(it){
+      var bits=[];
+      if(it.ageMin!=null) bits.push(it.ageMin+'m old');
+      if(it.cw!=null) bits.push('CW '+it.cw);
+      if(it.pw!=null) bits.push('PW '+it.pw);
+      if(it.em!=null) bits.push('EM '+it.em);
+      if(it.rows!=null) bits.push(it.rows+' rows');
+      return it.state+'  '+it.label+(bits.length?(' \u00b7 '+bits.join(' \u00b7 ')):'')+(it.why?(' \u2014 '+it.why):'');
+    });
+    out.push({ key:'deps', label:(DH.ok?'deps':('deps '+DH.fails.length+'\u2715')),
+      state:(DH.ok?(DH.stales.length?'amber':'green'):'red'),
+      tip:'THE DEPENDENCIES THIS PANEL CANNOT WORK WITHOUT, checked live every render. '+
+          'InsiderFinance supplies the call wall, the put wall and the expected move \u2014 the EM band, '+
+          'the ladder\u2019s levels and every node the rail clips to depend on it. The ES courier supplies '+
+          'the 1-minute bars the \u24ea a DAY section measures. The IRT export writes the king levels to '+
+          'the file IRT polls. The recorder is what makes replay and the corpus possible. '+
+          '\u26a0 A dot is a summary; read the list. \u2022 '+lines.join(' \u2022 ') });
+  }catch(eDP){
+    out.push({ key:'deps', label:'deps ?', state:'red',
+      tip:'the dependency check itself threw: '+(eDP&&eDP.message||eDP) });
+  }
   return out;
 }
 // Console access is kept: setReview/loadReview still work, and pipe() forces a check.
@@ -14228,7 +14258,9 @@ function registerCoreFeatures(){
       var D=null, F=null;
       try{ D=hodLod(sym); }catch(e1){}
       if(!D || !D.ok) return { ok:0, why:(D&&D.why)||'no read' };
-      try{ F=fsRead(sym, D); }catch(e2){}
+      // the recorder asks the same question the face does, through the same gate
+      var _ci=false; try{ var _c=lodhodCall(D); _ci=!!(_c&&_c.in); }catch(eC0){}
+      try{ F=fsRead(sym, D, _ci); }catch(e2){}
       if(!F || !F.ok) return { ok:0, why:(F&&F.why)||'no far-side read' };
       var lv=[];
       for(var i=0;i<F.levels.length && i<3;i++){
@@ -23224,7 +23256,13 @@ function hlVerdict(D, CALL, T){
 function hlFarClause(D, CALL){
   try{
     if(!D || !CALL || CALL.far==null) return '';
-    if(!(D.secondT>D.clock)) return '';
+    // ⚠⚠ (v15.22) THE SAME DEAD GATE, THIRD INSTANCE. `D.secondT > D.clock` is false from the third
+    // bar of every session — a session has a running high and a running low almost immediately — so
+    // this clause has never once rendered since v14.72, and neither had the far-side line it was
+    // written to agree with. One wrong idea about what `secondT` means disabled three clauses.
+    // The condition it MEANT to express is "the far side is still being made", and the table's IN
+    // call is the panel's own statement of exactly that, printed on the same line.
+    if(!(CALL.in===true)) return '';
     return ' \u00b7 <b>'+Math.round(100*CALL.far)+'% of the range to today\u2019s '+D.second+' so far</b>';
   }catch(e){ return ''; }
 }
@@ -23483,11 +23521,29 @@ function fsLevels(sym, dir, pxDisp, sigDisp, base){
 }
 // THE WHOLE BLOCK, as data. Extracted from the renderer so a test can EXECUTE it - a grep over
 // markup tests the vocabulary, not the logic (landmine L-O, sixth occurrence).
-function fsRead(sym, D){
+// ⚠ `CALLIN` is the table's own IN call, passed in rather than recomputed — one decision, one
+// place. Recomputing it here is how two surfaces end up disagreeing about the same session.
+function fsRead(sym, D, CALLIN){
   var out={ ok:false, why:'' };
   try{
     if(!D || !D.ok){ out.why=(D&&D.why)||'no session read'; return out; }
-    if(D.secondT!=null && D.secondT<=D.clock){ out.why='both extremes in'; return out; }
+    // ⚠⚠ (v15.22) THIS GATE WAS DEAD AND THE WHOLE FAR-SIDE LINE WITH IT. Operator, 2026-09-01:
+    // "the basic format is to identify if one extremity is in and when to expect the next
+    // extremity to be in" — a line the panel has been unable to draw since v14.72.
+    // `D.secondT` is the clock of the LATER of the two RUNNING extremes, and a session has a
+    // running high and a running low within its first two bars. Measured on 2026-08-31: at 08:45,
+    // fifteen minutes into the session, secondT was 08:39 — so `secondT <= clock` was TRUE, the
+    // function returned 'both extremes in', and it kept returning it for the rest of the day.
+    // Every session, every day, from the third bar onward. The clause shipped at v14.72 and has
+    // essentially never rendered.
+    // ⚠ A RUNNING EXTREME IS NOT A FINISHED ONE. The question this block answers is "the standing
+    // extreme is called IN — when does the OTHER side get made", and the other side is being made
+    // until the close whatever provisional print it currently holds. So the gate is the TABLE'S
+    // call, which is the same fact the headline already prints, rather than a mechanical
+    // comparison that is true by construction.
+    // ⚠ When the table has NOT called the standing extreme in, there is no anchor to reason from
+    // and the block stays silent — that is a real refusal, unlike the old one.
+    if(!(CALLIN===true)){ out.why='the standing extreme is not called IN yet — no anchor to project from'; return out; }
     var S=fsSigma(sym);
     if(!S.ok){ out.why=S.why; return out; }
     var rr=1; try{ rr=(dispIsFut() && dispR()>0)?dispR():1; }catch(eR){}
@@ -23509,10 +23565,23 @@ function fsRead(sym, D){
     out.no=null;
     for(var w=0;w<rated.length;w++) if(rated[w].p<=20){ out.no=rated[w]; break; }
     // the 80% floor and the middle-half window, both anchored on NOW
-    var nowMin=Math.round(ctNowSecOfDay()/60);
+    // ⚠⚠ (v15.22) "NOW" IS THE SESSION CLOCK, NOT THE WALL CLOCK. `ctNowSecOfDay()` is this
+    // instant; `D.clock` is the minute the ⓪a section is reading — the last closed bar, the parked
+    // frame in replay, and capped at 15:00 so it never runs past the close. With the wall clock a
+    // replayed 10:00 and a replayed 14:12 produced the SAME floor, because the anchor never moved:
+    // measured on 2026-08-31, "LOD after 10:48am" at both. Every number in this block is an offset
+    // from now, so an anchor from another clock makes all of them describe a different session.
+    // ⚠ Live the two agree to within a bar, which is exactly why this survived: a leak that is
+    // correct in the case you look at is still a leak.
+    var nowMin=Math.round(((typeof D.clock==='number' && D.clock>0)?D.clock:ctNowSecOfDay())/60);
     out.floorMin=base.floor.p80; out.q25=base.floor.q25; out.q75=base.floor.q75;
     out.floorAt=nowMin+base.floor.p80; out.winA=nowMin+base.floor.q25; out.winB=nowMin+base.floor.q75;
     out.haz=fsHazard(nowMin, base);
+    // ⚠ (v15.22) A FLOOR PAST THE CLOSE IS NOT A TIME, IT IS A REFUSAL. Late in the session the 80%
+    // first-passage floor can land after 15:00 — measured 2026-08-31 at 14:12: floor 3:13pm with 48
+    // minutes left. Printing "LOD after 3:13pm — 80%" invites a reading the model never makes, that
+    // the far side prints after the close. The face says what this actually means instead.
+    out.pastClose = (out.floorAt >= 15*60);
     return out;
   }catch(e){ out.why='threw: '+(e&&e.message||e); return out; }
 }
@@ -27667,6 +27736,124 @@ function swallow(tag, e){
   }catch(e2){}
 }
 window.__gptsDebug=window.__gptsDebug||{};
+// ============================================================================================
+// (v15.22) THE DEPENDENCY HEALTH CHECK — `__gptsDebug.deps()` and the DEPS chip on the footer.
+//
+// Operator-mandated 2026-09-01, verbatim: "you need to make sure that when the application is
+// working , there is some type of test to check insider finance to ensure we are getting data from
+// it like the call wall, put wall , expected values, and you need to ensure that the application is
+// writing to the king levels to the server for irt ... it is fundamental to the application."
+//
+// ⚠⚠ WHY A HEALTH CHECK AND NOT A TEST FILE. Every dependency below lives OUTSIDE this script and
+// can fail while every line of code here is correct: a companion that stopped, a chain that stopped
+// refreshing for one symbol, a directory permission Chrome dropped on reload. A unit test can never
+// see any of that — it runs in Node with no browser, no companion and no market. **The only place
+// these can be checked is the running panel**, so the check lives here and the face carries its
+// verdict. `test_deps.js` asserts the CHECK is correct; only `deps()` can say the SYSTEM is.
+//
+// ⚠ IT FOUND ONE THE MOMENT IT EXISTED: on 2026-09-01 the SPY chain was **15,328 minutes old**
+// (payload 2026-08-21) while SPX and QQQ were three minutes old. Nothing on the face said so, and
+// its own `stale` flag read false because that flag was computed when the record was WRITTEN.
+// Under the v15.06 SPX pin nothing should be reading SPY — but "should" is not a measurement, and
+// an 11-day-old book with a null expected move sitting in the same store as two live ones is a
+// loaded gun. Staleness is judged HERE, against the clock, every time it is asked.
+var DEPS_IF_STALE_MIN=20;      // ⚖ IFC_STALE_MIN — a chain older than this is not intraday
+var DEPS_FUT_STALE_MIN=20;     // ⚖ the courier polls every 5m in RTH; 4 misses is a fault
+var DEPS_IRT_STALE_MIN=10;     // ⚖ the export runs on its own timer; 10m without one is a fault
+function depsHealth(){
+  var out={ ok:true, checkedAt:Date.now(), items:[] };
+  function add(o){
+    out.items.push(o);
+    if(o.state==='FAIL') out.ok=false;
+    return o;
+  }
+  var mins=function(t){ return (typeof t==='number' && t>0) ? Math.round((Date.now()-t)/60000) : null; };
+  // ---- 1 · INSIDERFINANCE: the chain, per symbol, with the three fields he named ---------------
+  try{
+    var raw=null; try{ raw=localStorage.getItem(IFC_KEY); }catch(e0){}
+    if(!raw){
+      add({ id:'if.chain', label:'InsiderFinance chain', state:'FAIL',
+            why:'no chain in storage at all — the companion is not running, or has never fetched' });
+    } else {
+      var all=JSON.parse(raw)||{}, syms=['SPX','SPY','QQQ'], any=false, i, sym, d;
+      for(i=0;i<syms.length;i++){
+        sym=syms[i]; d=all[sym];
+        if(!d){ add({ id:'if.'+sym, label:'IF '+sym, state:'SKIP', why:'not fetched for this symbol' }); continue; }
+        var age=mins(d.asOf);
+        var lv=(d.dte0 && d.dte0.lv) ? d.dte0.lv : null;
+        var em=(d.dte0 && d.dte0.em) ? d.dte0.em : null;
+        // ⚠ THE THREE FIELDS HE NAMED, CHECKED FOR PRESENCE **AND** PLAUSIBILITY. A call wall of
+        // null and a call wall of 0 are different failures and both read as "no wall" downstream.
+        var miss=[];
+        if(!lv || !(lv.cr>0)) miss.push('call wall');
+        if(!lv || !(lv.ps>0)) miss.push('put wall');
+        if(!em || !(em.em>0)) miss.push('expected move');
+        var spot=(typeof d.spot==='number' && d.spot>0)?d.spot:null;
+        // a wall must sit within a sane distance of spot, or the two are on different scales
+        if(spot && lv && lv.cr>0 && (lv.cr>spot*1.5 || lv.cr<spot/1.5)) miss.push('call wall is off-scale vs spot');
+        var stale=(age==null || age>DEPS_IF_STALE_MIN);
+        add({ id:'if.'+sym, label:'IF '+sym,
+              state:(d.err? 'FAIL' : (miss.length? 'FAIL' : (stale? 'STALE':'OK'))),
+              ageMin:age, cw:(lv?lv.cr:null), pw:(lv?lv.ps:null), em:(em?em.em:null), spot:spot,
+              why:(d.err? ('their payload errored: '+d.err)
+                   : (miss.length? ('missing: '+miss.join(', '))
+                      : (stale? ('last payload '+age+' minutes old') : ''))) });
+        if(!d.err && !miss.length && !stale) any=true;
+      }
+      // ⚠ THE VERDICT IS "IS THERE A USABLE BOOK", NOT "IS EVERY SYMBOL FRESH". Under the SPX pin
+      // the companion stops fetching SPY, and calling that a failure would cry wolf every session.
+      add({ id:'if.usable', label:'InsiderFinance overall', state:(any?'OK':'FAIL'),
+            why:(any?'at least one symbol has a fresh chain with call wall, put wall and expected move'
+                   :'NO symbol has a complete, fresh chain — the ladder\u2019s levels and the EM band are running blind') });
+    }
+  }catch(eIF){ add({ id:'if.chain', label:'InsiderFinance chain', state:'FAIL', why:'check threw: '+(eIF&&eIF.message||eIF) }); }
+  // ---- 2 · THE ES COURIER: what the \u24ea a candle is measured from --------------------------
+  try{
+    var fb=futBarsLoad();
+    var fage=fb?mins(fb._at):null;
+    var rows=0; try{ var kk=fb?Object.keys(fb).filter(function(k){ return k.charAt(0)!=='_'; }):[];
+                     rows=(fb && fb.ES && fb.ES.rows)?fb.ES.rows.length:((kk.length&&fb[kk[0]].rows)?fb[kk[0]].rows.length:0); }catch(eR){}
+    add({ id:'fut.courier', label:'ES 1-min courier', ageMin:fage, rows:rows,
+          state:(!fb?'FAIL':((fage==null||fage>DEPS_FUT_STALE_MIN)?'STALE':(rows>0?'OK':'FAIL'))),
+          why:(!fb?'no courier data — the companion is not running'
+               :((fage>DEPS_FUT_STALE_MIN)?('last pull '+fage+' minutes old')
+                 :(rows>0?'':'the courier answered with no rows'))) });
+  }catch(eF){ add({ id:'fut.courier', label:'ES 1-min courier', state:'FAIL', why:'check threw: '+(eF&&eF.message||eF) }); }
+  // ---- 3 · IRT: are the king levels actually being written -------------------------------------
+  // ⚠ "writing to the server for IRT" is a CSV written in place into a directory IRT's FlexLevels
+  // extension polls. Three things can each break it on their own and they fail differently:
+  // the directory handle (Chrome drops the permission on reload), the BUILD (no levels to write),
+  // and the WRITE itself. Each is reported separately, because "IRT is broken" is not actionable.
+  try{
+    var iage=mins(IRT_LAST&&IRT_LAST.t);
+    var on=false; try{ on=!!(CFG.irt&&CFG.irt.on); }catch(eO){}
+    var built=null; try{ built=irtBuildCsv(); }catch(eB){}
+    add({ id:'irt.build', label:'IRT levels built', state:(built&&built.rows>0?'OK':'FAIL'),
+          rows:(built?built.rows:0),
+          why:(built&&built.rows>0)?'':'nothing to write — no levels resolved for the configured symbols' });
+    add({ id:'irt.export', label:'IRT file written', ageMin:iage, rows:(IRT_LAST?IRT_LAST.rows:0),
+          state:(!on?'OFF':((IRT_LAST&&IRT_LAST.err)?'FAIL':((iage==null||iage>DEPS_IRT_STALE_MIN)?'STALE':'OK'))),
+          why:(!on?'the IRT export is switched off in settings'
+               :((IRT_LAST&&IRT_LAST.err)?String(IRT_LAST.err)
+                 :((iage==null)?'no export has run yet this session':((iage>DEPS_IRT_STALE_MIN)?('last write '+iage+' minutes old'):'')))) });
+  }catch(eI){ add({ id:'irt.export', label:'IRT file written', state:'FAIL', why:'check threw: '+(eI&&eI.message||eI) }); }
+  // ---- 4 · THE RECORDER: without it there is no replay and no corpus --------------------------
+  try{
+    var st=null; try{ st=window.__gptsDebug.storage(); }catch(eS){}
+    // ⚠ ORDER MATTERS AND MY FIRST CUT HAD IT BACKWARDS: a quota HIT is a warning, but "cannot
+    // write another frame" is the recorder stopping. The severe test goes first, or a full disk
+    // reports as amber.
+    add({ id:'rec.storage', label:'recorder', state:(!st?'FAIL':(!st.canWrite40KB?'FAIL':((st.health&&st.health.quotaHits>0)?'STALE':'OK'))),
+          pctFull:(st?st.pctFull:null), shed:(st&&st.health?st.health.shed:null),
+          why:(!st?'storage check unavailable'
+               :(!st.canWrite40KB?'localStorage cannot take another frame — the day will stop recording'
+                 :((st.health&&st.health.quotaHits>0)?('quota hit '+st.health.quotaHits+' times this session'):''))) });
+  }catch(eR2){}
+  out.fails=out.items.filter(function(x){ return x.state==='FAIL'; }).map(function(x){ return x.id+': '+x.why; });
+  out.stales=out.items.filter(function(x){ return x.state==='STALE'; }).map(function(x){ return x.id+': '+x.why; });
+  return out;
+}
+window.__gptsDebug.deps=function(){ return depsHealth(); };
 window.__gptsDebug.renderErrors=function(){ return RENDER_ERRS.slice(); };
 // (v14.59) the corpus feed and the base rates, both inspectable without editing code
 // (v14.67) why did this bar record nothing? Read it DURING a live session - the recorder is empty
@@ -28655,7 +28842,9 @@ function secDay(sym){
     // ⚠ It REFUSES rather than guesses when the cell is thin - see hlCell().
     var CALL=null; if(!NOREAD){ try{ CALL=lodhodCall(D); }catch(eC){} }
     // (v14.72) the far side - computed once, read by the timing line and the level block below
-    var FS=null; if(!NOREAD){ try{ FS=fsRead(sym, D); }catch(eF){ swallow('fsRead', eF); } }
+    // ⚠ (v15.22) CALL is computed one line above and its `in` is what gates the far side — the same
+    // fact the headline prints, so the two halves of that line can never contradict each other.
+    var FS=null; if(!NOREAD){ try{ FS=fsRead(sym, D, !!(CALL&&CALL.in)); }catch(eF){ swallow('fsRead', eF); } }
     // (v14.87) PT and the close leg — the two legs after the second extreme
     var PTL=null; if(!NOREAD){ try{ PTL=hlPT(sym, D); }catch(ePT){ swallow('hlPT', ePT); } }
     // (v14.88) what each extreme took out on its way — SLvl for the first, TLvl for the second
@@ -28742,8 +28931,17 @@ function secDay(sym){
        // something already over. Measured: at the 70% call the far side is still ahead 97% of the
        // time, so the clause is usually right - but "usually" is not a reason to print it blind.
        // `D.secondT > D.clock` is directly observable, so there is no excuse for guessing.
-       ((CALL && CALL.in && D.secondT>D.clock)
-          ? '' : ((CALL && CALL.in) ? ' \u00b7 <span class="g3daydim">both extremes in \u2014 the range is set</span>' : ''))+
+       // ⚠⚠ (v15.22) THIS CLAUSE RODE THE SAME DEAD COMPARISON AS THE FAR-SIDE BLOCK, and printed
+       // the OPPOSITE error. `D.secondT > D.clock` is false from the third bar of every session
+       // (a session has a running high and a running low almost immediately), so on EVERY day the
+       // table called IN, the face said "both extremes in — the range is set" — from mid-morning,
+       // about a range that had hours left to run. It was the reason the operator never saw the
+       // far-side line and always saw this one.
+       // ⚠ A RUNNING EXTREME IS NOT A FINISHED ONE. The range is set when the SESSION is over, and
+       // that is the only condition under which this sentence is true. Intraday it says nothing and
+       // the far-side clause below does the talking.
+       ((CALL && CALL.in && !(FS&&FS.ok) && D.clock>=mul(15,3600))
+          ? ' \u00b7 <span class="g3daydim">the session is over \u2014 the range is set</span>' : '')+
        // ---- (v14.72) THE TIMING LINE ------------------------------------------------------------
        // ⚠⚠ AN 80% CLAIM AND A 30-MINUTE BOX ARE NOT COMPATIBLE, AND THE FACE SAYS SO. Measured over
        // 197 sessions: a box +-15 min around the median lands 15% of the time, +-30 lands 24%, and a
@@ -28761,8 +28959,10 @@ function secDay(sym){
        // they keep their own true percentages.
        // ⚠ "middle half", not "most likely" — the banned-vocabulary list (f6) is not the reason;
        // it is that "middle half" is what an interquartile range IS, and it says so without hedging.
-       (FS && FS.ok ? (' \u00b7 <b'+((CALL&&CALL.in)?'':' class="g3dayin"')+'>'+g3esc(FS.side)+' after '+
-          fsClock12(FS.floorAt)+' \u2014 80%</b>') : '')+
+       (FS && FS.ok ? (' \u00b7 <b'+((CALL&&CALL.in)?'':' class="g3dayin"')+'>'+
+          (FS.pastClose
+            ? (g3esc(FS.side)+' \u2014 not enough session left: the 80% floor is '+fsClock12(FS.floorAt)+', past the close')
+            : (g3esc(FS.side)+' after '+fsClock12(FS.floorAt)+' \u2014 80%'))+'</b>') : '')+
        '<div class="g3daysub">'+
        (NOREAD ? ('<b>Today\u2019s row is empty on purpose: This is not a reading, it is no reading.</b> '+
                   'Once the first extremity prints, this line reports how often an extreme of that age was the day\u2019s \u2014 with its n. '+

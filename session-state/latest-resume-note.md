@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-01 · panel v15.21 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-01 · panel v15.22 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.21, and what the face carries
+## 2 · WHERE WE ARE — v15.22, and what the face carries
 
-**Panel v15.21 · companion v1.17.** Suite **133 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.22 · companion v1.17.** Suite **134 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -177,6 +177,36 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠⚠ **v15.22a — THE DEPENDENCIES HAVE A LIVE CHECK, AND `load gex` MUST READ
+`design/DEPENDENCIES.md`.** Operator-mandated: *"it is fundamental to the application."*
+InsiderFinance (call wall, put wall, expected move), the ES 1-minute courier, the IRT export and the
+recorder ALL live outside this script and ALL fail silently. **A green suite has never meant they
+are up** — the suite runs in Node, where none of them exist. Before diagnosing any missing surface:
+
+    __gptsDebug.deps()      ← run this FIRST. The `deps` dot on the footer carries the same verdict.
+
+⚠⚠ It found a fault on its first run: the stored **SPY chain was 15,328 minutes old** (payload
+2026-08-21) with a **null expected move**, while SPX and QQQ were three minutes old — and its own
+`stale` flag read **false**, because that flag is written once and never re-evaluated. **Freshness is
+a question about the clock NOW.** ⚠ A stale SPY is EXPECTED under the v15.06 SPX pin, so the overall
+verdict asks "is there a usable book", not "is every symbol fresh" — a check that is red every day is
+a check nobody reads.
+
+⚠⚠ **v15.22b — "LOD IN 74% · HOD after 1:30 — 80%" NOW DRAWS. IT NEVER HAD.** The far-side model
+shipped at v14.72 gated on `D.secondT > D.clock` — but **`secondT` is the later of the two RUNNING
+extremes**, and a session has a running high and low within two bars. Measured: at 08:45 on
+2026-08-31, `secondT` was 08:39. The gate was false from the third bar of every session, so the
+far-side line never drew, "both extremes in — the range is set" printed all day about an unfinished
+range, and the "% of the range" clause never appeared. **Three clauses, one wrong idea, eight
+builds** — and `test_hodlod` u8/u9 DEMANDED that gate, holding it in place.
+All three are gated on the table's own IN call now, and the floor is anchored on `D.clock` rather
+than `ctNowSecOfDay()` (with the wall clock, a replayed 10:00 and 14:12 gave the same floor).
+⚠ A floor past the close prints as a refusal, not a time.
+
+⚠ **THE COMPANION LINK SHIPS WITH EVERY BUILD NOW.** The panel's has printed since v14.3 and the
+companion's never did, so every build that changed the companion told him to update it and handed him
+no way to.
 
 ⚠⚠ **v15.21 — `hlPT` WAS SUBTRACTING A SPY PRICE FROM AN ES PRICE, LIVE.** The face printed
 **PT 6895.0pts** and **OF BAR 35818%** (and `LC RNG 6894.2`): `hodLod` has measured true ES bars
