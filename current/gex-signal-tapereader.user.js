@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.35
+// @version    15.38
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.35';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.38';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -1121,25 +1121,41 @@ function replayEnsure(){
     replayLoadDay(d);
   });
 }
-// ⚠⚠ (v15.33) THE TWO FEED LAMPS. Both read `depsHealth()`, the same check the footer's `deps` dot
-// and `__gptsDebug.deps()` use, so the three can never disagree about the same moment.
-//   IRT   is the panel WRITING the king levels to the file IRT polls — build and write reported
+// ⚠⚠ (v15.33, extended v15.37) THE FEED LAMPS — ONE PER EXTERNAL DEPENDENCY, NO EXCEPTIONS. All of
+// them read `depsHealth()`, the same check the footer's `deps` dot and `__gptsDebug.deps()` use, so
+// they can never disagree about the same moment.
+//   IRT   the panel WRITING the king levels to the file IRT polls — build and write reported
 //         separately, because they fail differently (v15.22).
-//   IF    is InsiderFinance ARRIVING — the age of the freshest usable chain, in minutes, which is
-//         what "getting data every x minutes" actually means.
-// ⚠ Each lamp states its AGE, not just a colour. A green dot with no number is a claim you cannot
-// check; "IF 3m" is one you can.
-// ⚠ `bare` = emit just the two lamps, for the header. The row wrapper is only for a body mount.
+//   IF    InsiderFinance ARRIVING — the age of the freshest usable chain, in minutes, which is what
+//         "getting data every x minutes" actually means.
+//   YF    (v15.37) YAHOO FINANCE — the ES=F 1-minute bars the ⓪a candle, the HOD/LOD section and
+//         every RTH high/low are measured from. Couriered by the companion because the page cannot
+//         reach Yahoo (measured 2026-08-27: page fetch fails, GM_xmlhttpRequest succeeds).
+//   FF    (v15.37) FOREXFACTORY — the weekly USD/high-impact calendar. The ONLY thing that knows
+//         today is an event day.
+// ⚠⚠ THE LAST TWO RAN AS UNLABELLED DEPENDENCIES FOR TWENTY-SEVEN BUILDS. Operator, 2026-09-01:
+// "add indicator for yahoo finance integration also, call it YF and forex factory, call it FF."
+// Both could stop without a mark on the face — and both degrade into a plausible face rather than
+// an error: stale Yahoo bars give a WRONG high/low, a missing calendar gives a quiet Tuesday.
+// ⚠ Each lamp states a MEASUREMENT, not just a colour. A green dot with no number is a claim you
+// cannot check; "IF 3m" is one you can.
+// ⚠⚠ AND THE MEASUREMENT MUST BE THE RIGHT ONE FOR THE FEED. IRT/IF/YF are polled, so their number
+// is an AGE. FF is delivered ONCE A DAY, so an age in minutes would be meaningless-to-alarming by
+// mid-session ("FF 340m" on a perfectly healthy calendar) — its number is the EVENT COUNT for
+// today, and `0ev` is a real answer, not a fault.
+// ⚠ `bare` = emit just the lamps, for the header. The row wrapper is only for a body mount.
 function feedLampsHtml(bare){
   try{
     if(CFG.feedLamps===false) return '';
     var H=null; try{ H=depsHealth(); }catch(e0){ return ''; }
     if(!H || !H.items) return '';
     var by={}; H.items.forEach(function(it){ by[it.id]=it; });
-    function lamp(label, it, extra){
+    // ⚠ `txt` overrides the age for a feed whose health is not measured in minutes. Passing an age
+    // for such a feed would not be a cosmetic error — it would be a number that goes red on its own.
+    function lamp(label, it, extra, txt){
       var st=it?it.state:'FAIL';
       var col=(st==='OK')?PAL.longAccent:((st==='STALE')?PAL.amber:((st==='OFF')?PAL.sub:'#f0616d'));
-      var age=(it && typeof it.ageMin==='number')?(it.ageMin+'m'):((st==='OFF')?'off':'—');
+      var age=(txt!=null)?txt:((it && typeof it.ageMin==='number')?(it.ageMin+'m'):((st==='OFF')?'off':'—'));
       return '<span class="g3fl"'+g3tip((it?(it.label+' — '+st+(it.why?(': '+it.why):'')):'not checked')+
              (extra||''))+'><i style="background:'+col+'"></i>'+label+' '+g3esc(age)+'</span>';
     }
@@ -1161,7 +1177,24 @@ function feedLampsHtml(bare){
            'extension polls; Chrome drops the directory permission on reload and the symptom is a stale '+
            'file rather than an error.')+
       lamp('IF', ifLamp, ' \u26a0 the age is the FRESHEST symbol\u2019s. Under the SPX pin the companion '+
-           'stops fetching SPY, so a stale SPY is expected and does not redden this.');
+           'stops fetching SPY, so a stale SPY is expected and does not redden this.')+
+      // YF — Yahoo ES=F 1-minute bars. ⚠ this one fails into a WRONG NUMBER, not a blank: a stale
+      // bar set still has a high and a low, and the ⓪a candle will print them without complaint.
+      lamp('YF', by['fut.courier'],
+           (function(){ var f=by['fut.courier']; return (f&&f.rows!=null)?(' \u00b7 '+f.rows+' bars held'):''; })()+
+           ' \u26a0 YAHOO FINANCE, ES=F 1-minute bars \u2014 what the \u24ea a candle, the HOD/LOD section and '+
+           'every session high/low are measured from. The PAGE cannot fetch Yahoo (measured 2026-08-27: '+
+           'CORS refuses it) so the companion couriers it via GM_xmlhttpRequest; if the companion stops, '+
+           'this goes stale and the candle keeps drawing the last bars it had.')+
+      // FF — the ForexFactory calendar. ⚠ counted, not aged: it is delivered once a day.
+      lamp('FF', by['cal.ff'],
+           ' \u26a0 FOREXFACTORY weekly calendar, USD + high-impact only \u2014 the only thing that knows '+
+           'today is an event day. Delivered ONCE A DAY, so this shows the EVENT COUNT, not an age: '+
+           '\u201c0ev\u201d is a real, healthy answer on a quiet day and the green dot is what says the '+
+           'courier ran. Amber = today\u2019s delivery never arrived and you are looking at another day\u2019s.',
+           (function(){ var c=by['cal.ff'];
+             if(!c || c.state==='FAIL') return '\u2014';
+             return ((typeof c.events==='number')?c.events:0)+'ev'; })());
     return bare ? _inner : ('<div class="g3flrow">'+_inner+'</div>');
   }catch(e){ return ''; }
 }
@@ -25428,6 +25461,108 @@ var LAD_SNAP_PTS=2;         // a level within this many points of a node shares 
 // crown "moves" — 7715→7710 and 771→760 on 2026-08-28. That is bookkeeping. The RTH gate excludes
 // it, and each point carries the expiry it was observed under so a roll can never be silently
 // redrawn as a move.
+// ⚠⚠⚠ (v15.36) THE LANE AND THE CENSUS ARE TWO DIFFERENT QUESTIONS, AND v15.35 HAD ONLY ONE ANSWER.
+// Operator, 2026-09-01: "the number of king rolls should match atlas."
+// KTRACK is THE DRAWING. It is dwell-filtered to 20 minutes because he asked for a lane that is not
+// erratic (v15.23) — which means it is LOSSY BY DESIGN, and throwing changes away is its JOB. Asked
+// "for each type of king, how many rolls were there", I read the count off the drawing. The drawing
+// is the one record in the system built to not contain that number.
+// ⚠ MEASURED over the 8 full recorded sessions 2026-08-20..2026-08-31 — median crown changes/day:
+//     sampling        SPXW   SPY   QQQ
+//       15m             6     6     7
+//        9m             7     6     8
+//        6m             9     8    12
+//        3m            12    11    17    ← the recorder's own frame cadence
+//     dwell 20m         4     5     5    ← what the LANE draws, and what I reported
+// ⚠ THE COUNT IS STILL CLIMBING AS THE SAMPLING GETS FINER, so even the 3m figure is a FLOOR, not
+// a census — a crown that changes and reverts inside one interval leaves no trace at all. Atlas
+// recomputes continuously, so Atlas will read AT OR ABOVE any number this file can produce, and the
+// honest form of the answer is "at least N", never "N".
+// ⚠ SO THE RAW SERIES IS NOW KEPT. One observation per CHANGE, at the render cadence (~15s — four
+// times finer than the recorder), stored apart from the lane so the lane stays quiet and the count
+// stays true. The dwell rule filters a VIEW of this; it no longer destroys the underlying record.
+var KR_KEY='gpts_kingraw_v1';
+var KR_SCHEMA=1;
+var KR_MAX=400;                 // a session with 400 crown changes is a broken feed, not a busy tape
+// ⚠ ALL THREE BOOKS, unlike KT_BOOKS. The lane skips QQQ because a proportional bearing must not be
+// drawn as a level — but "how many times did the QQQ king change" is a question about the BOOK, and
+// it has an answer whether or not we chose to draw it. Excluding QQQ from the lane silently excluded
+// it from the census too, so "each type of king" came back missing a king.
+var KR_BOOKS=['SPXW','SPY','QQQ'];
+var KRAW={ v:KR_SCHEMA, day:null, b:{} };
+function krLoad(){
+  try{
+    var o=JSON.parse(localStorage.getItem(KR_KEY)||'null');
+    if(o && o.v===KR_SCHEMA && o.day===ctTodayStr() && o.b) KRAW=o;
+  }catch(e){}
+  if(KRAW.day!==ctTodayStr()) KRAW={ v:KR_SCHEMA, day:ctTodayStr(), b:{} };
+}
+function krSave(){
+  try{ if(typeof lsPut==='function') lsPut(KR_KEY, KRAW, false);
+       else localStorage.setItem(KR_KEY, JSON.stringify(KRAW)); }catch(e){}
+}
+// ⚠⚠ THE DEPTH GATE IS THE WHOLE DIFFERENCE BETWEEN A CENSUS AND A NOISE LOG. A half-loaded book
+// has a king and it means nothing: the crown of five strikes is not the crown of a hundred. Without
+// this, the session's first paint writes junk and the second paint records a "roll" that never
+// happened — and because the census has no dwell to hide behind, every one of those lands.
+// SK_MIN_STRIKES is the SAME floor skPiles and the LASTBOOK latch already refuse below; a new
+// number here would be a fourth opinion about when a book is real.
+function krTick(KG){
+  try{
+    krLoad();
+    var dirty=false;
+    KR_BOOKS.forEach(function(bk){
+      var K=null, i;
+      for(i=0;i<KG.length;i++){ if(KG[i].book===bk){ K=KG[i]; break; } }
+      if(!K || typeof K.raw!=='number' || !(K.raw>0)) return;
+      if(!(K.n>=SK_MIN_STRIKES)) return;
+      var arr=KRAW.b[bk] || (KRAW.b[bk]=[]);
+      if(arr.length && arr[arr.length-1].k===K.raw) return;   // unchanged — nothing to record
+      if(arr.length>=KR_MAX) return;
+      arr.push({ t:Date.now(), k:K.raw });
+      dirty=true;
+    });
+    if(dirty) krSave();
+  }catch(e){ try{ swallow('krTick', e); }catch(e2){} }
+}
+// ⚠ In replay the census is rebuilt from the frames, exactly as the lane is — same gate, same shape,
+// so live and replay answer the same question. The frames are 3-minute, so this floor is COARSER
+// than the live one, and `kingRolls()` says so rather than letting the two be compared as equals.
+// ⚠ SK_MIN_STRIKES_REPLAY, not SK_MIN_STRIKES: a recorded frame stores a TOP-N summary, not the
+// whole book, so the live floor would reject every frame ever written.
+var RP_KR={ key:null, out:[] };
+function replayKingRaw(book){
+  if(typeof replayOn!=='function' || !replayOn()) return [];
+  var key=REPLAY.day+'|'+REPLAY.idx+'|'+book;
+  if(RP_KR.key===key) return RP_KR.out;
+  var out=[], i, f, k, n;
+  try{
+    for(i=0;i<=REPLAY.idx && i<REPLAY.frames.length;i++){
+      f=REPLAY.frames[i];
+      if(!(f && f.tri && f.tri[book])) continue;
+      k=f.tri[book].king; n=f.tri[book].n||0;
+      if(!(k>0) || !(n>=SK_MIN_STRIKES_REPLAY)) continue;
+      if(out.length && out[out.length-1].k===k) continue;
+      if(out.length>=KR_MAX) break;
+      out.push({ t:f.t, k:k });
+    }
+  }catch(e){ try{ swallow('replayKingRaw', e); }catch(e2){} }
+  RP_KR={ key:key, out:out };
+  return out;
+}
+function krOf(book){
+  try{ if(typeof replayOn==='function' && replayOn()) return replayKingRaw(book); }catch(e0){}
+  try{ krLoad(); return (KRAW.b&&KRAW.b[book])?KRAW.b[book]:[]; }catch(e){ return []; }
+}
+// ⚠ `rolls` is the number of CHANGES, so it is one less than the number of observations — the first
+// entry is where the crown started, which is not a roll. And it is reported as a FLOOR, with the
+// sampling that produced it named, because no sampled series can prove the absence of a flip.
+function kingRolls(book){
+  var a=krOf(book)||[];
+  var rp=false; try{ rp=(typeof replayOn==='function' && replayOn()); }catch(e){}
+  return { rolls:Math.max(0, a.length-1), seen:a.length, floor:true,
+           basis: rp ? '3-minute frames' : 'live observations (~15s)' };
+}
 var KT_KEY='gpts_kingtrack_v1';
 var KT_SCHEMA=1;
 // ⚠⚠ (v15.23) DWELL IS MEASURED IN MINUTES, NOT IN OBSERVATIONS. Operator, 2026-09-01: "the
@@ -25477,6 +25612,9 @@ function ktTick(EB, sym){
     if(!P || !P.rth) return;                       // RTH only — this also excludes the close roll
     ktLoad();
     var KG=[]; try{ KG=ladderKings(EB, sym)||[]; }catch(e1){ return; }
+    // ⚠ the census runs off the SAME crowns, inside the SAME RTH + recorderBlind guards, so the two
+    // records can never disagree about which session they are describing or when it started.
+    try{ krTick(KG); }catch(eKR){}
     var exp=null; try{ var tk=tapeMap('SPXW'); exp=(tk&&tk.exp!=null)?String(tk.exp):null; }catch(eE){}
     var dirty=false;
     KT_BOOKS.forEach(function(bk){
@@ -25586,16 +25724,16 @@ function ladderKings(EB, sym){
       var RKF=replayFrame(), RTri=(RKF&&RKF.tri)||{}, RXm=(RKF&&RKF.xm)||{};
       var rdsc=0; try{ rdsc=ifDispScale()||0; }catch(eRD){}
       if(RTri.SPXW && RTri.SPXW.king>0 && rdsc>0)
-        out.push({ at:RTri.SPXW.king*rdsc, book:'SPXW', raw:RTri.SPXW.king, kind:'basis',
+        out.push({ at:RTri.SPXW.king*rdsc, book:'SPXW', raw:RTri.SPXW.king, kind:'basis', n:(RTri.SPXW.n||0),
           tip:'The SPXW King as it stood at '+hlClock(replaySec())+' — read from the frame recorded at that bar, not from today’s latch.' });
       if(RTri.SPY && RTri.SPY.king>0 && typeof EB.scaleUsed==='number' && EB.scaleUsed>0)
-        out.push({ at:RTri.SPY.king*EB.scaleUsed, book:'SPY', raw:RTri.SPY.king, kind:'basis',
+        out.push({ at:RTri.SPY.king*EB.scaleUsed, book:'SPY', raw:RTri.SPY.king, kind:'basis', n:(RTri.SPY.n||0),
           tip:'The SPY King as it stood at '+hlClock(replaySec())+', converted on the same ratio the rail uses.' });
       // ⚠ QQQ stays a PROPORTIONAL BEARING here exactly as it is live — its own king against its own
       // price, never a converted level. The frame stores that price in xm.QQQ.px, so the bearing is
       // reconstructed from the same two numbers the live path uses rather than from today's tape.
       if(RTri.QQQ && RTri.QQQ.king>0 && RXm.QQQ && RXm.QQQ.px>0 && now>0)
-        out.push({ at:now*(RTri.QQQ.king/RXm.QQQ.px), book:'QQQ', raw:RTri.QQQ.king, kind:'proportional',
+        out.push({ at:now*(RTri.QQQ.king/RXm.QQQ.px), book:'QQQ', raw:RTri.QQQ.king, kind:'proportional', n:(RTri.QQQ.n||0),
           tip:'The QQQ King at '+hlClock(replaySec())+' — a proportional BEARING off QQQ’s own price ('+RXm.QQQ.px+'), never a converted price, exactly as it is drawn live.' });
       return out;
     }
@@ -25603,9 +25741,12 @@ function ladderKings(EB, sym){
     try{
       var lk=null; try{ var o=JSON.parse(localStorage.getItem(KING_LATCH_KEY)||'null');
         if(o && o.day===ctTodayStr() && typeof o.k==='number') lk=o.k; }catch(eL){}
+      // ⚠ (v15.36) the DEPTH of the book this crown came out of, carried alongside it. The crown
+      // of five strikes is not the crown of a hundred, and the census (krTick) refuses the former.
+      var lkN=0; try{ var tpN=tapeMap('SPXW'); if(tpN) lkN=tpN.count||0; }catch(eN){}
       if(lk==null){ var tp=tapeMap('SPXW'); if(tp && tp.king!=null) lk=tp.king; }
       var dsc=0; try{ dsc=ifDispScale()||0; }catch(eD){}
-      if(lk!=null && dsc>0) out.push({ at:lk*dsc, book:'SPXW', raw:lk, kind:'basis',
+      if(lk!=null && dsc>0) out.push({ at:lk*dsc, book:'SPXW', raw:lk, kind:'basis', n:lkN,
         tip:'The SPXW King — the heaviest node on Skylit’s ladder, and the crown every %King on this rail is a ratio to. SPXW '+lk+' on an ES basis, which is a real live conversion: ES is a future ON this index.' });
     }catch(e1){}
     // SPY — the other book's crown, same basis one step removed
@@ -25613,7 +25754,8 @@ function ladderKings(EB, sym){
       if(typeof LASTFEED!=='undefined' && LASTFEED.SPY && LASTFEED.SPY.j &&
          (Date.now()-(LASTFEED.SPY.ts||0))<=FEED_STALE_MS*3 && typeof EB.scaleUsed==='number' && EB.scaleUsed>0){
         var ew=extractWalls(LASTFEED.SPY.j);
-        if(ew && ew.king!=null) out.push({ at:ew.king*EB.scaleUsed, book:'SPY', raw:ew.king, kind:'basis',
+        var ewN=0; try{ var lvS=LASTFEED.SPY.j.levels; ewN=((lvS[lvS.length-1]||{}).l||[]).length; }catch(eNs){}
+        if(ew && ew.king!=null) out.push({ at:ew.king*EB.scaleUsed, book:'SPY', raw:ew.king, kind:'basis', n:ewN,
           tip:'The SPY King — the other book’s crown. Price bounces off it even when every dynamic on this rail is SPXW; proven the day it was asked for. SPY '+ew.king+' converted on the live ES/SPY ratio.' });
       }
     }catch(e2){}
@@ -25626,7 +25768,7 @@ function ladderKings(EB, sym){
         try{ qs=(STATE.QQQ||{}).price; }catch(eQ){}
         if(qs==null){ var lv=LASTFEED.QQQ.j.levels; if(lv&&lv.length && typeof lv[lv.length-1].s==='number') qs=lv[lv.length-1].s; }
         if(ewq && ewq.king!=null && qs>0){
-          out.push({ at:now*(ewq.king/qs), book:'QQQ', raw:ewq.king, kind:'proportional',
+          out.push({ at:now*(ewq.king/qs), book:'QQQ', raw:ewq.king, kind:'proportional', n:(function(){ try{ var lvQ=LASTFEED.QQQ.j.levels; return ((lvQ[lvQ.length-1]||{}).l||[]).length; }catch(eNq){ return 0; } })(),
             tip:'The QQQ King, QQQ '+ewq.king+', shown as a PROPORTIONAL BEARING on this ES scale — where ES would sit if it moved the same percentage QQQ would need to reach its crown. ⚠ NOT a basis: QQQ tracks the Nasdaq-100 and ES the S&P 500, so this assumes the two move together, which is exactly false on a tech-led day. A bearing, never a level — the tilde says so.' });
         }
       }
@@ -25664,7 +25806,7 @@ function ladderKingCols(EB, sym, Y, lo, hi, H){
                 conv:function(k){ return (typeof EB.scaleUsed==='number'&&EB.scaleUsed>0)?k*EB.scaleUsed:null; } }];
     COLS.forEach(function(C){
       h+='<i class="g3ldkc" style="left:'+C.x+'px;width:'+C.w+'px"'+
-         g3tip('Where the '+C.book+' King has sat today. Vertical position is PRICE on this ladder’s own scale — a run is LEVEL with the row it names. Time runs left to right across this column, from the open to now, so the LENGTH of a run is how long that strike held the crown. ⚠ A change that reverted before it had held '+KT_DWELL_MIN+' minutes is a FLICKER and is not drawn — two near-equal strikes trading places is not a migration. The expiry roll at the close is not drawn either.')+
+         g3tip('Where the '+C.book+' King has sat today. Vertical position is PRICE on this ladder’s own scale — a run is LEVEL with the row it names. Time runs left to right across this column, from the open to now, so the LENGTH of a run is how long that strike held the crown. ⚠ A change that reverted before it had held '+KT_DWELL_MIN+' minutes is a FLICKER and is not drawn — two near-equal strikes trading places is not a migration. The expiry roll at the close is not drawn either. '+(function(){ try{ var R=kingRolls(C.book), m=Math.max(0,ktOf(C.book).length-1); return '\u26a0 THIS LANE IS NOT A COUNT: '+m+' migration'+(m===1?'':'s')+' drawn, but at least '+R.rolls+' crown change'+(R.rolls===1?'':'s')+' actually observed on '+R.basis+' \u2014 and a change that reverted between two observations left no trace at all, so even that is a floor. Use the larger number when comparing with Atlas.'; }catch(eRT){ return ''; } })())+
          '></i>';
       var pts=ktOf(C.book);
       if(!pts.length || !span){
@@ -28482,7 +28624,30 @@ function depsHealth(){
                :((IRT_LAST&&IRT_LAST.err)?String(IRT_LAST.err)
                  :((iage==null)?'no export has run yet this session':((iage>DEPS_IRT_STALE_MIN)?('last write '+iage+' minutes old'):'')))) });
   }catch(eI){ add({ id:'irt.export', label:'IRT file written', state:'FAIL', why:'check threw: '+(eI&&eI.message||eI) }); }
-  // ---- 4 · THE RECORDER: without it there is no replay and no corpus --------------------------
+  // ---- 4 · THE FOREXFACTORY CALENDAR: the only thing that knows today is an event day ---------
+  // ⚠⚠ (v15.37) THIS RAN FOR TWENTY-SEVEN BUILDS AS AN UNCHECKED DEPENDENCY. Operator, 2026-09-01:
+  // "add indicator for yahoo finance integration also, call it YF and forex factory, call it FF.
+  // All of this integration better be mentioned somewhere." It was not mentioned anywhere: two code
+  // comments and nothing in DEPENDENCIES.md, no deps item, no lamp. A dependency nobody wrote down
+  // is one nobody notices has stopped — and this one fails SILENTLY into "no events today", which
+  // is the same face a quiet Tuesday shows.
+  // ⚠⚠ AND ZERO EVENTS IS A VALID DELIVERY. `{day:today, ev:[]}` means the courier ran and there
+  // are no USD-high releases — a real answer, and the most common one. The ONLY thing that
+  // separates it from "the courier never ran" is the `day` stamp, so the day stamp is the check.
+  // Counting events would have called every quiet day a failure.
+  try{
+    var CC=null; try{ CC=JSON.parse(localStorage.getItem(EVCAL_KEY)||'null'); }catch(eC0){}
+    var ctd=null; try{ ctd=ctTodayStr(); }catch(eC1){}
+    var nEv=(CC&&Array.isArray(CC.ev))?CC.ev.length:null;
+    var fresh=!!(CC && CC.day && ctd && CC.day===ctd && Array.isArray(CC.ev));
+    add({ id:'cal.ff', label:'ForexFactory calendar', events:nEv, day:(CC?CC.day:null),
+          state:(fresh?'OK':(CC?'STALE':'FAIL')),
+          why:(fresh?'':(CC?('delivered for '+CC.day+', not today')
+               :('today\u2019s calendar has not been delivered'+
+                 ((EVCAL_STATE&&EVCAL_STATE.err)?(' \u2014 page fetch: '+EVCAL_STATE.err+
+                   '; the companion is the courier for this'):'')))) });
+  }catch(eC){ add({ id:'cal.ff', label:'ForexFactory calendar', state:'FAIL', why:'check threw: '+(eC&&eC.message||eC) }); }
+  // ---- 5 · THE RECORDER: without it there is no replay and no corpus --------------------------
   try{
     var st=null; try{ st=window.__gptsDebug.storage(); }catch(eS){}
     // ⚠ ORDER MATTERS AND MY FIRST CUT HAD IT BACKWARDS: a quota HIT is a warning, but "cannot
@@ -29359,10 +29524,19 @@ window.__gptsDebug.kingTrack = function(){
   try{
     ktLoad();
     var out={ day:KTRACK.day, dwellMin:KT_DWELL_MIN, pending:JSON.parse(JSON.stringify(KT_PEND||{})), books:{} };
-    KT_BOOKS.forEach(function(b){
-      var a=ktOf(b);
-      out.books[b]={ migrations:Math.max(0,a.length-1),
-        points:a.map(function(p){ return ctHHMM(p.t)+' '+p.k+(p.e?(' exp'+p.e):''); }) };
+    // ⚠⚠ (v15.36) BOTH NUMBERS, ALWAYS, AND NAMED FOR WHAT THEY ARE. `migrations` is what the LANE
+    // draws — dwell-filtered, deliberately fewer. `rolls` is the CENSUS — every crown change the
+    // book actually made, and the only one of the two that is comparable to Atlas. Returning just
+    // the first is what produced an answer three times too small.
+    KR_BOOKS.forEach(function(b){
+      var R=kingRolls(b), drawn=(KT_BOOKS.indexOf(b)>=0);
+      out.books[b]={
+        rolls:R.rolls, rollsBasis:'at least '+R.rolls+', observed on '+R.basis,
+        migrations: drawn ? Math.max(0, ktOf(b).length-1) : null,
+        lane: drawn ? 'drawn' : 'not drawn (proportional bearing)',
+        points: drawn ? ktOf(b).map(function(p){ return ctHHMM(p.t)+' '+p.k+(p.e?(' exp'+p.e):''); }) : null,
+        raw: krOf(b).map(function(p){ return ctHHMM(p.t)+' '+p.k; })
+      };
     });
     return out;
   }catch(e){ return { err:String(e&&e.message||e) }; }

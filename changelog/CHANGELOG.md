@@ -1,3 +1,178 @@
+## v15.38 — the futures-gamma research, parked where it cannot rot
+
+> "I want you to hold this implementation detail somewhere, maybe in a roadmap document. We will
+> come back to it once the application with the current markets is optimal."
+
+**⚠ DOCUMENTATION ONLY. No panel behaviour changed** — the only edit to the userscript is the
+version string. Shipped as a version because the installer is the sole delivery channel to his
+machine, and a distinct filename is how he can tell the doc landed.
+
+### `design/spec-futures-gamma-markets.md` — 275 lines, all of it measured
+
+CL · NG · GC · E6 (· HG pending) — call wall, put wall and flip from the **actual CME options
+chains**, free, into the IRT export. Researched to the point of being buildable, then stopped.
+
+**⚠ THE SPEC EXISTS TO PRESERVE THREE TRAPS, NOT TO PRESERVE A PLAN.** Each was found by
+measurement, each would have shipped a wrong number, and none is visible from reasoning:
+
+    1  <ROOT>*1 (nearest) vs <ROOT>*0 (most active)
+       *1 puts GOLD and COPPER on SEPTEMBER — contracts he does not trade. THE OBVIOUS RULE IS
+       THE WRONG ONE. Measured: GC*1 -> GCU26, GC*0 -> GCZ26, and his ticker is GCEZ26.
+    2  the DTN root map is HAND-WRITTEN, never derived
+       copper is CPE, not HGE. euro is E6 with no suffix. And Barchart's euro root is E6, so
+       6EU26 returns a 404 — a way to build the whole feature against a dead symbol.
+    3  the chain is NOT in the raw HTML
+       measured: 466,227 bytes, `"strike":` appears ZERO times. GM_xmlhttpRequest gets a page
+       with no data in it. That single fact is why the delivery design is a reader userscript.
+
+### AND THE NEGATIVES, WHICH COST THE MOST TO ESTABLISH
+
+    Skylit          ZERO snapshots for GC1/GCZ26/CL1/NG1/6E1 — and for ES1. SPY: 390.
+    InsiderFinance  equity/ETF only.
+    the ETF route   FXE/GLD/USO/UNG — researched, costed, DROPPED. Wrong book, worse expiries
+                    (FXE is monthly-only, 17DTE). ⚠ Explicitly NOT a fallback: if the futures
+                    path fails the honest output is no rows, not ETF rows wearing a futures label.
+
+⚠ **An undocumented negative gets re-investigated.** Half a day went into proving those.
+
+### THE INSIGHT THAT SIZES THE BUILD
+
+**Open interest is published ONCE A DAY by the exchange. There is nothing to poll** — true for
+everyone, including the paid vendors, which is exactly why MenthorQ's *futures* levels are EOD while
+their stock/ETF levels are intraday. One pull after the open is not a compromise, it is correct, and
+it lands inside Barchart's free tier by construction. ⚠ The spec says *do not build a poller*.
+
+### KEPT FINDABLE, AND KEPT PARKED — by a test, not by a promise
+
+`load gex` step **1a-1** now routes a new context to it, with two instructions attached: **never
+re-research it**, and **do not start it unprompted**. `roadmap/PRODUCT-ROADMAP.md` gains a PARKED
+block — and now **discloses its own staleness** (it still said "current shipped v10.29" while the
+panel was v15.37; eleven builds).
+
+⚠⚠ **`test_parked_specs.js` (36) FAILS THE BUILD IF ANY OF IT IS DELETED.** This project's record on
+unenforced documents is not ambiguous: the resume note went eleven builds stale while CHAT-HISTORY
+stayed current for exactly one reason — a test went red when it wasn't. And v15.37 found
+ForexFactory undocumented for twenty-seven builds *inside the file whose §0 warns about exactly
+that*. **A rule enforced by a test is followed; a rule enforced by a document is followed until it
+is busy.**
+
+**24 mutations, 24 caught — but only after a fix.** Two passed on the first run: I had asserted
+"the words CPE and HGE appear somewhere", and deleting the bold warning still passed on the root
+table's copy of it. ⚠ **An assertion satisfied by the survivor of the thing you deleted is not an
+assertion.** Suite **133 green / 6 baseline red**.
+
+
+## v15.37 — YF and FF: two integrations that ran for 27 builds with nothing on the face
+
+> "add indicator for yahoo finance integration also , call it YF and forex factory , call it FF.
+> All of this integration better be mentioned somewhere. check where it is mentioned."
+
+### WHERE THEY WERE MENTIONED — the honest audit
+
+    YAHOO (ES=F 1-min bars)   DEPENDENCIES.md §2, but the section was titled "THE ES 1-MINUTE
+                              COURIER" and never said Yahoo in its heading.
+                              deps() item: `fut.courier` — existed. Lamp: NONE.
+    FOREXFACTORY (calendar)   TWO CODE COMMENTS. That is all.
+                              panel line 23166, companion line 524.
+                              DEPENDENCIES.md: ABSENT.  deps() item: NONE.  Lamp: NONE.
+
+⚠⚠ **`DEPENDENCIES.md` §0 opens with "every dependency below lives OUTSIDE the userscript, and every
+one of them fails SILENTLY."** ForexFactory has been an outside dependency since **v14.38** and was
+not in the file when §0 was written, nor in any of the twenty-seven builds after. **Writing the
+warning is not obeying it.**
+
+### FOUR LAMPS NOW, ONE PER EXTERNAL FEED
+
+    IRT 1m     the CSV this panel writes          age of the last write
+    IF 3m      InsiderFinance chain               age of the freshest symbol
+    YF 1m      YAHOO FINANCE, ES=F 1-min bars     age of the last pull        ← new
+    FF 2ev     FOREXFACTORY, USD/high calendar    EVENT COUNT today           ← new
+
+⚠⚠ **FF IS COUNTED, NOT AGED, AND THAT IS THE SUBSTANCE OF THE CHANGE.** It is delivered ONCE A DAY.
+An age would read **"FF 340m" on a perfectly healthy calendar** by mid-session — a number that goes
+red on its own. `lamp()` gained a text override so a feed can show the right KIND of measurement.
+
+⚠⚠ **AND ZERO EVENTS IS A VALID DELIVERY.** `{day:today, ev:[]}` means the courier ran and there are
+no USD-high releases — the most common answer of the week. The **only** thing separating it from
+"the courier never ran" is the `day` stamp, so `cal.ff` tests the DAY, never the count. A count-based
+check would have called every quiet day broken; `test_deps` d13e proves it.
+
+### HOW THEY FAIL — why a console item was not enough
+
+    YF   stale bars STILL HAVE A HIGH AND A LOW. The ⓪a candle, the HOD/LOD section and every
+         session high/low keep drawing, silently WRONG. Not blank — wrong.
+    FF   a missing calendar does not blank a section. It quietly REMOVES A CAVEAT: an event day
+         renders as a quiet Tuesday.
+
+### MEASURED, NOT ASSUMED — the header is one row and does not wrap
+
+Real Chromium, his panel width (673), shipping CSS: the four lamps occupy **185px**, ending at
+x=337; the right-hand controls begin at **x=529**. **192px of slack**, and the panel's own floor is
+652 (`panelWidthBounds()` = `LAD_W+34`). Guarded by an assertion that every label stays ≤3 chars.
+
+`DEPENDENCIES.md` gains §4 (ForexFactory), a retitled §2 (Yahoo Finance, named), a four-row lamp
+table in §0, and a four-step rule for adding the next dependency — **item, lamp, test, section** —
+with all four enforced by `test_deps.js`, now **76** (was 36). **15 mutations, 15 caught.**
+Suite **132 green / 6 baseline red**.
+
+
+## v15.36 — the king lane is not a census, and I read the count off the lane
+
+> "the number of king rolls should match atlas, can you see what you did wrong or how to improve it"
+
+### ⚠⚠⚠ THE MISTAKE WAS MINE, NOT THE FEED'S
+
+Asked *"for each type of king, how many rolls were there"* I read the numbers out of `KTRACK` — the
+**KING LANE**. The lane is dwell-filtered to 20 minutes because he asked for it to be, in v15.23:
+*"the movement of the kings in the king lanes doesn't make sense, it is too erratic."*
+
+    KTRACK   is the DRAWING.  Throwing changes away is its JOB.
+    the ask  was a CENSUS.    Keeping every change is the whole point.
+
+**I answered a counting question with the drawing's numbers.** Every part of the lane worked exactly
+as specified; the specification was "show fewer", and I quoted the output as a total.
+
+### MEASURED — 8 full recorded sessions, 2026-08-20 … 2026-08-31, median crown changes/day
+
+    sampling        SPXW   SPY   QQQ
+      15m             6     6     7
+       9m             7     6     8
+       6m             9     8    12
+       3m            12    11    17     ← the recorder's own frame cadence
+    dwell 20m         4     5     5     ← what the LANE draws, and what I reported
+
+⚠ **THE COUNT IS STILL CLIMBING AS THE SAMPLING GETS FINER.** Even 3m is a FLOOR — a crown that
+changes and reverts inside one interval leaves no trace at all. Atlas recomputes continuously, so
+**Atlas will read at or above any number this file can produce**, and the honest form of the answer
+is *"at least N"*, never *"N"*. Median ratio census : lane = **×3.0**, executed over his own days.
+
+### THREE SEPARATE THINGS WERE SUBTRACTING FROM THE NUMBER
+
+    1  dwell 20m       deliberate, ~3x               the lane's job — kept, now LABELLED
+    2  sampling        3m frames / ~15s live         a floor, and now SAID to be one
+    3  QQQ absent      KT_BOOKS is SPXW + SPY        "each type of king" came back missing a king
+
+### WHAT SHIPPED — the raw series is now kept, apart from the lane
+
+`gpts_kingraw_v1` records **one entry per crown CHANGE**, at render cadence (~15s — four times finer
+than the recorder), for **all three books**. The dwell rule now filters a *view* of this; it no longer
+destroys the underlying record. `replayKingRaw()` rebuilds the same shape from frames, so a replayed
+day answers the same question and **says its basis is coarser** rather than being compared as an equal.
+
+⚠ **AND A DEPTH GATE, WHICH IS WHERE A REAL BUG WAS HIDING.** `ktTick` had no book-depth floor at
+all: a half-loaded first paint has a king, and it is noise. The lane's 20-minute dwell was
+accidentally hiding it; a census has nothing to hide behind, so every one of those would have landed
+as a roll. `krTick` refuses below `SK_MIN_STRIKES` — the **same** floor `skPiles` and the LASTBOOK
+latch already use, not a fourth opinion about when a book is real.
+
+    __gptsDebug.kingTrack()   → per book: rolls (census, "at least N"), migrations (lane), raw[]
+    King lane tooltip         → "⚠ THIS LANE IS NOT A COUNT: N migrations drawn, at least M observed"
+    migrations: null for QQQ  → absent is not zero
+
+`test_king_census.js` → **32**, executed against the fabricated series AND against his own recorded
+sessions. **14 mutations, 14 caught.** Suite **132 green / 6 baseline red**.
+
+
 ## v15.35 — the freeze badge was printing a 1970 timestamp
 
 > "check everything.. i reloaded"

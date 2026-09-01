@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-01 · panel v15.35 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-01 · panel v15.38 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.35, and what the face carries
+## 2 · WHERE WE ARE — v15.38, and what the face carries
 
-**Panel v15.35 · companion v1.17.** Suite **136 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.38 · companion v1.17.** Suite **133 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -177,6 +177,61 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠⚠ **v15.38 — THE FUTURES-GAMMA WORK IS PARKED, NOT ABANDONED, AND NOT YOURS TO START.**
+`design/spec-futures-gamma-markets.md` — gamma levels for **CL · NG · GC · E6 (· HG pending)** from
+the real CME chains, free, into the IRT export. Operator, 2026-09-01: *"hold this implementation
+detail somewhere... we will come back to it once the application with the current markets is
+optimal."* ⚠ **DO NOT START IT, AND DO NOT RE-RESEARCH IT.** `load gex` step 1a-1 routes you there.
+⚠ **v15.38 CHANGED NO PANEL CODE** — version string only; the installer is the delivery channel.
+⚠ **THE THREE TRAPS THE SPEC EXISTS FOR** (each measured, each would ship a wrong number):
+`<ROOT>*1` (nearest) vs `<ROOT>*0` (most active) — **`*1` puts GOLD and COPPER on SEPTEMBER**, months
+he does not trade; the DTN root map is **hand-written, never derived** (copper is `CPE` not `HGE`,
+euro is `E6` with no suffix and Barchart's root is `E6` so `6EU26` 404s); and **the chain is not in
+the raw HTML** — 466,227 bytes, `"strike":` appears ZERO times, which is why delivery is a reader
+userscript rather than a fetch.
+⚠ **THE NEGATIVES, which cost the most to establish:** Skylit returns **zero snapshots** for every
+futures symbol **including ES1** (SPY returns 390); InsiderFinance is equity/ETF-only; the ETF
+conversion (FXE/GLD/USO/UNG) was **dropped and is explicitly NOT a fallback**.
+⚠ **OI IS PUBLISHED ONCE A DAY BY THE EXCHANGE — there is nothing to poll.** True for the paid
+vendors too. One pull after the open is correct, not a compromise. **Do not build a poller.**
+✅ `test_parked_specs.js` (36) fails the build if any of it is deleted. 24 mutations, 24 caught —
+**after a fix**: two passed initially because I asserted words appeared *somewhere* in a document
+that deliberately states the warning twice.
+
+⚠⚠⚠ **v15.37 — FOUR HEADER LAMPS, ONE PER EXTERNAL FEED: `IRT · IF · YF · FF`.** He asked for
+indicators for **Yahoo Finance (YF)** and **ForexFactory (FF)** and added *"All of this integration
+better be mentioned somewhere. check where it is mentioned."* ⚠ **THE AUDIT:** Yahoo was in
+`DEPENDENCIES.md` §2 but the heading never said Yahoo, and it had no lamp. **ForexFactory was in TWO
+CODE COMMENTS AND NOTHING ELSE** — no doc section, no `deps()` item, no lamp, since v14.38.
+⚠⚠ **§0 of that very file says every dependency here fails silently and must be written down.**
+Writing the warning is not obeying it; `test_deps.js` now enforces all four steps (item · lamp ·
+test · SECTION HEADING) and is **76 assertions**, up from 36.
+⚠⚠ **FF IS COUNTED, NOT AGED** — it is delivered once a day, so an age reads "FF 340m" on a healthy
+calendar by mid-session. It shows the EVENT COUNT, and **`0ev` is a real, healthy answer**; the
+green dot is what says the courier ran. `cal.ff` tests the `day` STAMP, never the count — a
+count-based check calls every quiet day broken.
+⚠ **BOTH FAIL INTO A PLAUSIBLE FACE:** stale Yahoo bars still have a high and a low (the ⓪a candle
+draws a WRONG one), and a missing calendar removes a caveat rather than blanking a section.
+📏 **MEASURED in real Chromium at 673px:** the four lamps take 185px, ending x=337; right-hand
+controls start x=529 — **192px slack**, panel floor is 652. Labels pinned to ≤3 chars.
+
+⚠⚠⚠ **v15.36 — THE KING LANE IS NOT A CENSUS AND I QUOTED IT AS ONE.** He asked "for each type of
+king, how many rolls were there" and I read the numbers off `KTRACK`, the **king lane** — which is
+dwell-filtered to 20 minutes **because he asked for it to be** (v15.23, "too erratic"). Throwing
+changes away is the lane's JOB. ⚠ **Median ratio census : lane over his own 8 recorded sessions =
+×3.0.** ⚠ And the count still CLIMBS as sampling gets finer (15m→6, 9m→7, 6m→9, 3m→12 for SPXW), so
+**every number this file can produce is a FLOOR** and Atlas, recomputing continuously, reads at or
+above all of them. ⚠ **THE HONEST FORM IS "AT LEAST N".** ⚠ MEASUREMENT WITHDRAWN: any earlier
+per-king roll count — those were lane counts.
+✅ **NOW SHIPPED:** `gpts_kingraw_v1` — one entry per crown CHANGE, ~15s cadence, **all three books**
+(QQQ included: excluding it from the DRAWING had silently excluded it from the ANSWER).
+`__gptsDebug.kingTrack()` returns `rolls` (census) *and* `migrations` (lane), and the lane tooltip
+says both. `replayKingRaw()` rebuilds the same shape from 3m frames and **declares its coarser
+basis**. ⚠ **AND A REAL BUG FELL OUT:** `ktTick` had NO book-depth floor — a half-loaded first paint
+has a king and it is noise; the dwell was absorbing it. `krTick` reuses `SK_MIN_STRIKES`, the same
+floor `skPiles` and the LASTBOOK latch use. ⚠ **A tolerant consumer makes an unguarded producer look
+correct.**
 
 ⚠⚠⚠ **v15.35 — THE FREEZE BADGE PRINTED A 1970 TIMESTAMP AND IT LOOKED REAL.** `LB.ts` is epoch
 MILLISECONDS, `fmtClock(ts)` does `new Date(ts)` (also ms), and the call site divided by 1000 in

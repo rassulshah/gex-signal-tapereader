@@ -131,6 +131,103 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.38 — an assertion satisfied by the survivor of what you deleted is not an assertion
+
+**1 · Two of twenty-four mutations passed, and both for the same reason.** I asserted that the words
+`CPE` and `HGE` appeared *somewhere* in the spec. The warning is written twice on purpose — once as
+the market's bold callout, once in the root table — so deleting the callout still passed on the
+table's copy. ⚠ **A loose assertion over a document with redundancy tests nothing**: the redundancy
+that makes the prose good makes the grep useless. Anchor on the exact sentence, and assert each
+copy separately if both are meant to survive. ⚠ Found by mutation testing, not by rereading it.
+
+**2 · The obvious rule was the wrong rule, and only measurement said so.** Resolving a futures
+contract by "front month" is what anyone would write. Measured: it puts GOLD and COPPER on
+September, months he does not trade. `<ROOT>*0` (most active) matches all five of his chart symbols;
+`<ROOT>*1` (nearest) matches three. ⚠ **A rule that is right for 3 of 5 cases looks right in
+testing and on the chart.** The two it breaks are the ones with a dead front month — a property of
+the market, not of the code, and therefore invisible from the code.
+
+**3 · An undocumented negative gets re-investigated.** Half a day went into proving that Skylit has
+no futures gamma (zero snapshots — *including for ES*), that InsiderFinance is equity-only, and that
+the ETF conversion is the wrong book. ⚠ **Negative results are more expensive to reproduce than
+positive ones and decay faster from memory.** They are now in the spec with their measurements, and
+pinned by a test.
+
+**4 · Parking work needs two instructions, not one.** "Here is the spec" invites a future context to
+start building it. The skill entry now says *never re-research it* AND *do not start it unprompted*
+— and a test asserts both sentences survive. ⚠ **Findable and dormant are different properties** and
+a document only conveys the first.
+
+**5 · A stale board that reads as current is worse than no board.** `PRODUCT-ROADMAP.md` said
+"current shipped: v10.29" while the panel was v15.37 — eleven builds. Rather than pretend to
+refresh it, it now declares its own staleness at the top, with both numbers. ⚠ Same principle as
+the v15.35 freeze badge: **a wrong number ends a question that silence would have prompted.**
+
+### v15.37 — writing the warning is not obeying it
+
+**1 · The document that warns "every dependency fails silently" was missing a dependency.**
+`DEPENDENCIES.md` §0 has said, since v15.22, that every external feed here fails silently and must
+therefore be checked and written down. **ForexFactory has been an outside dependency since v14.38**
+and was not in that file — not when §0 was written, and not in the twenty-seven builds after.
+⚠ **A rule written in the same document it is being broken in is not enforcement.** The fix is not
+a stronger sentence: `test_deps.js` now asserts each integration owns a SECTION HEADING, has a
+`deps()` item and has a lamp. Enforced by a test, like everything else that stayed true here.
+
+**2 · Asserting that a word APPEARS is not asserting that it is FINDABLE.** My first doc assertions
+checked `dep.indexOf('Yahoo')>=0` — and a mutation that retitled the whole Yahoo section still
+passed, because the word survives in a sentence inside another section. ⚠ **"Mentioned somewhere"
+means findable by someone scanning the headings.** The assertion had to be about headings.
+⚠ Caught only by mutation testing. Two of fifteen mutations were MISSED on the first pass.
+
+**3 · The right kind of measurement is part of the design, not a formatting choice.** Every lamp
+shows an age. ForexFactory is delivered ONCE A DAY, so an age would read **"FF 340m" on a perfectly
+healthy calendar** by mid-session — a number that turns itself red. It shows an EVENT COUNT.
+⚠ **A health indicator whose units do not match the feed's cadence manufactures its own false
+alarms.**
+
+**4 · Zero is a value, and it was one line away from being a failure.** `{day:today, ev:[]}` means
+the courier ran and there are no USD-high releases — the most common answer of the week. The only
+thing distinguishing it from "never delivered" is the `day` stamp. ⚠ **Checking the COUNT would have
+called every quiet day broken.** Same shape as v15.36's `migrations: null` vs `0`: **absent is not
+zero, and zero is not absent.** Twice in two builds.
+
+**5 · Both new feeds fail into a PLAUSIBLE face, not an error.** Stale Yahoo bars still have a high
+and a low, so the ⓪a candle draws a wrong one without complaint; a missing calendar does not blank a
+section, it removes a caveat and an event day renders as a quiet Tuesday. ⚠ **A dependency that
+degrades into a believable picture needs a lamp, not a console item** — nobody opens a console to
+check something that looks right.
+
+### v15.36 — I answered a counting question with a drawing's numbers
+
+**1 · A filtered view is not a record, and I quoted one as the other.** Asked "for each type of king,
+how many rolls were there" I read the count out of `KTRACK` — the KING LANE — which is dwell-filtered
+to 20 minutes *because he asked for it to be* (v15.23: "too erratic"). ⚠ **THROWING CHANGES AWAY IS
+THE LANE'S JOB.** Every part of it worked as specified; the specification was "show fewer", and I
+reported its output as a total. Median ratio census : lane, executed over his own 8 recorded
+sessions: **×3.0**. ⚠ **Before quoting a number off a surface, ask what that surface was built to
+LEAVE OUT.** This is the same shape as every scale bug this project has had — a value used outside
+the assumption it was created under — except the assumption here was a *deliberate* one I had
+written myself, thirteen builds earlier.
+
+**2 · A sampled series can never prove a flip did not happen.** Change counts by sampling interval,
+median/day: 15m→6, 9m→7, 6m→9, 3m→12 (SPXW). ⚠ **The count was still CLIMBING at the finest
+sampling I had**, which means every number here is a FLOOR, and Atlas — recomputing continuously —
+will read at or above all of them. ⚠ The honest form is **"at least N"**. I had said "N".
+⚠ MEASUREMENT WITHDRAWN: any earlier per-king roll count I gave him. They were lane counts.
+
+**3 · Excluding a book from the DRAWING silently excluded it from the ANSWER.** `KT_BOOKS` is
+SPXW + SPY — correct, because QQQ's crown is a proportional bearing and must not be drawn as a level.
+But "how many times did the QQQ king change" is a question about the BOOK, not about what we chose to
+draw, and it came back missing a king. ⚠ **A rendering decision leaked into the data model** because
+one list served both. Two questions, two lists.
+
+**4 · The de-flicker filter was hiding a real bug, and only a stricter consumer found it.** `ktTick`
+had NO book-depth floor: a half-loaded first paint has a king and it is noise. The 20-minute dwell
+was absorbing it. ⚠ **A tolerant consumer makes an unguarded producer look correct.** The census has
+nothing to hide behind, so building it surfaced the missing gate immediately — and `SK_MIN_STRIKES`
+already existed, used by `skPiles` and the LASTBOOK latch. ⚠ Reuse the floor; a new constant would
+have been a fourth opinion about when a book is real.
+
 ### v15.35 — a disclosure that lies is worse than no disclosure
 
 **1 · The freeze badge printed a 1970 timestamp and it looked like a real one.** `LB.ts` is epoch

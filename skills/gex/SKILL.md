@@ -84,6 +84,16 @@ load instruction. Then read, in order:
    ⚠ Measured 2026-09-01: the stored SPY chain was **11 days old** with a null expected move while
    SPX and QQQ were three minutes old, and its own `stale` flag read false.
 
+1a-1. **PARKED SPECS — work that is researched and deliberately NOT started.** Currently one:
+   `design/spec-futures-gamma-markets.md` (gamma levels for CL · NG · GC · E6 · HG, parked
+   2026-09-01: *"we will come back to it once the application with the current markets is optimal"*).
+   ⚠ **Read it BEFORE offering to build anything in that area, and NEVER re-research it** — it is a
+   day of live measurement against his own account, and it names the traps (`*0` vs `*1` puts gold
+   and copper on the wrong contract; the DTN root map is hand-written; the chain is not in the raw
+   HTML). ⚠ **And do not start it unprompted.** Parked means parked; he decides when it unparks.
+   `roadmap/PRODUCT-ROADMAP.md` is STALE below its PARKED block — it still says v10.29. The live
+   plan is the resume note, not that board.
+
 1a. **`session-state/PROJECT-CONSTANTS.md` — THE LANDMINES AND THE USER'S STANDING RULES.** Nine
    failure patterns that explain nearly every bug here, plus the process failure that ended the
    2026-08-24 session. ⚠ **The single most-violated rule in this project is ONE AT A TIME: discuss
