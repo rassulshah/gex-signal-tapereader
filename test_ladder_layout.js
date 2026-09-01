@@ -86,6 +86,17 @@ if (!chromium || !EXE) {
   //     happen to coincide. test_replay_face y8h compares the window against the content and does
   //     discriminate it.
   // Recorded so the next context does not "fix" a test that is already telling the truth.
+  // ---- (v15.30) THE BAND IS ALWAYS FULLY IN VIEW ---------------------------------------------
+  // Operator, 2026-09-01: "regarding the display of the ladder, you must at all times show the EH to
+  // the Expected low or beyond both." L1/L2 check each label; this checks the SPAN — both rails
+  // inside the visible box at once, which is the property he actually stated.
+  ok(m.rails && m.rails.length === 2, 'L7 both band edges are drawn', m.rails);
+  if (m.rails && m.rails.length === 2) {
+    ok(m.rails[0] >= -0.5 && m.rails[1] <= m.clientH + 0.5,
+       'L7b EXECUTED IN A BROWSER: the whole EH→EL span is inside the view, with no scrolling needed',
+       { rails: m.rails.map(r => Math.round(r)), viewH: m.clientH });
+  }
+
   console.log('test_ladder_layout: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.log('test_ladder_layout: SKIPPED — ' + e.message); process.exit(0); });

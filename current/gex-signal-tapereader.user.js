@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.29
+// @version    15.30
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.29';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.30';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -7357,6 +7357,27 @@ function makeDraggable(dragEls){
 // THE FIX IS POINTER CAPTURE. `setPointerCapture` routes every subsequent pointer event to the grip
 // no matter where the pointer goes, including outside the window entirely. Mouse events cannot do
 // this, which is why three previous attempts at this bug all missed it.
+// ⚠⚠ (v15.30) EXTRACTED SO IT CAN BE EXECUTED. The width bounds lived inline in the resize handler,
+// where the only way to check them was to grep for a number — and the number was WRONG for five
+// builds without anything noticing. A rule that decides what the operator can do with his own mouse
+// deserves a test that runs it.
+// ⚠ THE FLOOR IS THE LADDER'S WIDTH. A panel narrower than the ladder hides columns, which is the
+// exact fault v14.47's w1 exists to prevent — so the grip must not be able to create it.
+// ⚠ THE CEILING IS THE VIEWPORT. 560 was right when the ladder was 588 wide; `ladderFit()` has been
+// handing the panel widths past it ever since, so the cap and the layout were fighting and the
+// operator felt it as a grip that "did not work" — the first pixel of drag snapped 673 down to 560.
+function panelWidthBounds(){
+  var max=1400, min=240;
+  try{ max=Math.max(760, Math.min((window.innerWidth||1400)-20, 1800)); }catch(e){}
+  // ⚠ `typeof LAD_W===` WOULD BREAK THE TEST HARNESS. Its constant reader is
+  // `(?:var\s+)?\bNAME\s*=\s*([\s\S]*?);\n` — a documented landmine in this file — so any
+  // `LAD_W ===` earlier in the source than the declaration is read AS the declaration, and
+  // test_ladder then evals `(=='number'?LAD_W:240)+34)`. The comparison is written the other way
+  // round so the name is never followed by `=`.
+  var lw=240; try{ if('number'===typeof LAD_W) lw=LAD_W; }catch(e2){}
+  try{ min=Math.max(240, Math.min(lw+34, max)); }catch(e3){}
+  return { min:min, max:max };
+}
 function makeResizable(grip){
   // ⚠⚠ (v12.6) IN-PAGE ONLY, and that is a CONCLUSION, not a limitation I settled for.
   // v11.93 -> v12.4 kept rebuilding this handler so it could resize a POP-OUT window. It cannot.
@@ -7370,7 +7391,17 @@ function makeResizable(grip){
     var nh=oh+(clientY-sy);
     if(nh<160) nh=160; if(nh>2000) nh=2000;      // nothing scrolls behind the in-page panel
     var nw=ow+(clientX-sx);
-    if(nw<240) nw=240; if(nw>560) nw=560;
+    // ⚠⚠ (v15.30) THE WIDTH CAP WAS 560 AND HIS PANEL IS ALREADY 673. Operator, 2026-09-01: "i am
+    // having trouble using the grip to increase horizontal size." It was not the grip: the first
+    // pixel of drag SNAPPED the panel from 673 down to 560 and pinned it there, so widening was
+    // impossible and the whole gesture read as dead.
+    // 560 was right when the ladder was 588 wide. `ladderFit()` grows the panel to hold the ladder
+    // and has been handing it widths well past the cap ever since, so the cap and the layout have
+    // been fighting each other with the layout winning until the operator touched the grip.
+    // ⚠ THE FLOOR IS THE LADDER, NOT A CONSTANT: a panel narrower than the ladder just hides
+    // columns, which is the fault v14.47 w1 exists to prevent. The ceiling is the viewport.
+    var wb=panelWidthBounds();
+    if(nw<wb.min) nw=wb.min; if(nw>wb.max) nw=wb.max;
     PANEL.style.width=nw+'px';
     PANEL.style.height=nh+'px';
     try{ render(); }catch(e2){}
@@ -21289,7 +21320,9 @@ function ensureV3Css(){
     '#gpts-body .g3ldstSPENT{color:#6c7889}'+
     '#gpts-body .g3ldstHOLDING{display:none}'+
     // the TESTS counter — its own slot, reddening as the level is spent by testing
-    '#gpts-body .g3ldtap{position:absolute;left:'+LAD_TAP+'px;width:'+LAD_TAPW+'px;font-size:7px;font-weight:900;'+
+    // ⚠ (v15.30) the TAPS badge is retired; the rule kept its own x so the style is inert rather
+    // than referencing a constant that no longer exists.
+    '#gpts-body .g3ldtap{position:absolute;left:344px;width:20px;font-size:7px;font-weight:900;'+
       'transform:translateY(-50%);padding:0 3px;border-radius:5px;background:rgba(255,255,255,.10);cursor:help}'+
     '#gpts-body .g3ldtap1{color:#c9d1da}'+
     '#gpts-body .g3ldtap2{color:#f2b45a;background:rgba(242,180,90,.20)}'+
@@ -25194,7 +25227,7 @@ function levelDoors(rolls, dsc){
 // it means PRICE everywhere else, and at a glance the eye reads a step's height as a level. Here
 // y is price on the ladder's own scale — a run sitting on 7741 is LEVEL with "PDH 7741" — and time
 // runs left-to-right inside the 24px, so "when" is approximate and lives in the hover.
-var LAD_W=640,
+var LAD_W=618,      // ⚠ (v15.30) 640 -> 618: TAPS removed, the roll lane took its slot at 344.
     LAD_KS=2,  LAD_KSW=24,        // SPXW migration column
     LAD_KY=28, LAD_KYW=24,        // SPY migration column
     LAD_LVL=56, LAD_LVLW=46,      // the level NAME, right-aligned hard against its price
@@ -25215,7 +25248,15 @@ var LAD_W=640,
     // ⚠ Bars end at 210, so the gap before the chute is 16px. g3 asserts the %King fallback label
     // still clears it at its worst offset (207 <= 226).
     LAD_CH=226, LAD_CHW=66, LAD_PILLW=62,
-    LAD_MK=294, LAD_MKW=46, LAD_TAP=344, LAD_TAPW=20,
+    LAD_MK=294, LAD_MKW=46,
+    // ⚠⚠ (v15.30) THE TAPS COLUMN IS GONE AND THE ROLL LANE HAS ITS SLOT. Operator, 2026-09-01:
+    // "get rid of the TA... column and move the roll arrows there instead."
+    // The lane was at x 620 — the far right edge of the ladder, as far from the rows it describes as
+    // the layout allowed. At 344 it sits beside the MARK column, in the middle of the reading.
+    // ⚠ THE TAP COUNT IS NOT DELETED, ONLY ITS BADGE. `levelStateOf` still counts taps and the STATE
+    // hover still says "tested N× today — the next test holds ~X% historically". Removing a badge
+    // must never remove the measurement behind it (v11.95), and this file has paid for that before.
+    LAD_ROLL=344, LAD_ROLLW=20,
     LAD_DAX=424, LAD_DMAX=56, LAD_DLAB=428, LAD_DLABW=44,
     LAD_ST=476, LAD_STW=54, LAD_ROC=534,
     // ⚠⚠ (v15.25) ROC 84 -> 50, AND THAT IS WHERE THE ROLL COLUMN'S WIDTH COMES FROM. w1b in
@@ -25238,8 +25279,7 @@ var LAD_W=640,
     // The lane is squeezed to 20px so the total lands EXACTLY on w1's 640 ceiling. w1b's 618 is
     // amended once, in the open, with the reason — never widened again without the same argument.
     // (v15.25) the row's own roll chip: its own column, before the lane, paid for by ROC's 34px.
-    LAD_RLC=586, LAD_RLCW=32,
-    LAD_ROLL=620, LAD_ROLLW=20;
+    LAD_RLC=586, LAD_RLCW=32;
 // ⚠⚠ (v14.54) LAD_ROCW WAS 56 AND THE COLUMN NEEDS 84 — AND THAT IS THE 24px NOBODY COULD EXPLAIN.
 // LOCKED-ITEMS recorded ".g3lad scrollWidth 656 / clientWidth 632 = 24px over its own LAD_W" as an
 // unexplained discrepancy. This is it: the widest ROC string is "-100% -100% ▼99%", which measures
@@ -25671,7 +25711,7 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       [LAD_NODE,LAD_NMAX, 'NODE \u00b7 %KING','Dealer exposure at that strike as a share of the King\u2019s. Colour is polarity: purple accelerator, yellow brake, grey balanced'],
       [LAD_CH,  LAD_CHW,  'NOW',  'Price and the three crowns, on the ladder\u2019s own scale'],
       [LAD_MK,  LAD_MKW,  'MARK', 'This level\u2019s relationship to PRICE \u2014 IN PLAY, DEFENDING, BREAKING, ATTRACTING'],
-      [LAD_TAP, LAD_TAPW, 'TAPS', 'How many times price has tested this level today'],
+      [LAD_ROLL, LAD_ROLLW, '\u21c4', 'The roll ARROWS: a stepped line from the strike losing mass to the strike gaining it, so two rolls nest instead of crossing. The ROLL column further right names the other strike in words'],
       [LAD_DAX, LAD_DMAX, '\u039415m','Dollars of dealer exposure gained or lost at this strike over 15 minutes'],
       [LAD_ST,  LAD_STW,  'STATE','The level\u2019s own condition: BUILDING, WEAKENING, TURN, SPENT'],
       [LAD_ROC, LAD_ROCW, 'ROC 15m','Rate of change over 15 minutes, matching the \u0394 column beside it. Live this is Skylit\u2019s own percent; in replay it is this panel\u2019s measure of MASS and is italic. The 5m and 60m are in the hover \u2014 the 60m shows here only when it DISAGREES with the 15m, which is the TURN condition'],
@@ -25911,7 +25951,8 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       if(lvS && lvS.st && lvS.st!=='HOLDING')
         h+='<span class="g3ldst g3ldst'+lvS.st.replace(/\s+/g,'')+'" style="top:'+t.toFixed(1)+'px"'+
            g3tip(lvS.st+' — '+(lvS.why||'')+'.')+'>'+g3esc(lvS.st)+'</span>';
-      if(lvS && lvS.taps>0)
+      // ⚠ (v15.30) the TAPS badge is gone by request; the count lives on in the STATE hover.
+      if(false && lvS && lvS.taps>0)
         h+='<span class="g3ldtap g3ldtap'+Math.min(lvS.taps,3)+'" style="top:'+t.toFixed(1)+'px"'+
            g3tip('Price has TESTED this level '+lvS.taps+'× today — it reached it, left, and came back. Skylit\u2019s own lifecycle: untested reacts ~80% of the time, a second test ~66%, a third and beyond ~33% (the graveyard). The next test here holds ~'+
            (TAP_PROB[Math.min(lvS.taps,2)])+'%. An untested level is the strong one and every test spends it.')+'>'+lvS.taps+'×</span>';

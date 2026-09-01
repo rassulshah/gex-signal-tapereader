@@ -1,3 +1,52 @@
+## v15.30 — the grip was capped at 560 while his panel was 673
+
+> "get rid of the TA... column and move the roll arrows there instead" · "you must at all times show
+> the EH to the Expected low or beyond both" · "i am having trouble using the grip to increase
+> horizontal size"
+
+### ⚠⚠ THE GRIP WORKED. THE CAP DID NOT.
+
+    makeResizable:  if(nw<240) nw=240;  if(nw>560) nw=560;
+    his panel:      673px wide
+
+The first pixel of drag **snapped the panel from 673 down to 560** and pinned it there, so widening
+was impossible and the whole gesture read as dead. 560 was correct when the ladder was 588px;
+`ladderFit()` has been growing the panel past it for builds, so the cap and the layout have been
+fighting each other with the layout winning — until he touched the grip.
+The bounds are now a function, `panelWidthBounds()`, so they can be EXECUTED rather than grepped:
+the **floor is the ladder's own width** (a narrower panel just hides columns — the fault v14.47's w1
+exists to prevent) and the **ceiling is the viewport**.
+⚠ A rule that decides what the operator can do with his own mouse deserves a test that runs it. This
+one carried a wrong number for five builds with nothing to notice.
+
+### THE TAPS COLUMN IS OUT AND THE ROLL ARROWS HAVE ITS SLOT
+
+The lane was at x 620 — the far right edge, as far from the rows it describes as the layout allowed.
+It now sits at **344**, beside MARK, in the middle of the reading. `LAD_W` came **down, 640 → 618**:
+the freed 20px went back rather than being kept. A cap that only ratchets upward is not a cap.
+⚠ **The tap COUNT is not deleted, only its badge.** `levelStateOf` still counts taps and the STATE
+hover still says *"tested N× today — the next test holds ~X% historically"*. Removing a badge must
+never remove the measurement behind it (v11.95).
+
+### "AT ALL TIMES SHOW EH TO EL" — now asserted in a real browser
+
+    L7b  the whole EH→EL span is inside the view, with no scrolling needed
+
+L1 and L2 checked each label separately; that passes a view holding one edge and not the other. L7b
+checks the SPAN, which is the property he actually stated.
+
+### verification
+Seven mutations run individually, seven caught — including the cap reverting to 560, the floor
+dropping below the ladder, the ceiling collapsing, the lane returning to the far right, the TAPS
+badge coming back, and the band being allowed out of the view.
+⚠ Two existing tests failed on this change and both **pinned a POSITION rather than a property**:
+`r11` asserted the literal `LAD_ROLL=620` and `r12` the literal `LAD_W=640`, so they broke on a
+change that honoured exactly what they were written to protect. Rewritten to assert that the lane
+owns a column and that the width came down.
+⚠ And `panelWidthBounds` first tripped this file's own documented landmine: the test harness reads a
+constant with `\bNAME\s*=\s*([\s\S]*?);\n`, so a `typeof LAD_W==='number'` EARLIER in the source than
+the declaration is read AS the declaration. The comparison is written the other way round.
+
 ## v15.29 — the EL really was cut off, and jsdom could never have told me
 
 > "its not right the EL is being cut off , i cant go scroll lower or higher on the ladder.

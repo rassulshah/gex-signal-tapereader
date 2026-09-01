@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-01 · panel v15.29 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-01 · panel v15.30 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.29, and what the face carries
+## 2 · WHERE WE ARE — v15.30, and what the face carries
 
-**Panel v15.29 · companion v1.17.** Suite **135 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.30 · companion v1.17.** Suite **135 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -177,6 +177,22 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠ **v15.30 — THE GRIP WAS CAPPED AT 560 WHILE HIS PANEL WAS 673.** The first pixel of drag snapped
+it DOWN and pinned it, so widening was impossible and the gesture read as dead. 560 was right when
+the ladder was 588px; `ladderFit()` has been growing the panel past it for builds. `panelWidthBounds()`
+is a FUNCTION now — floor = the ladder's own width (narrower just hides columns), ceiling = the
+viewport — so it can be executed instead of grepped. ⚠ **A rule the operator's hands touch is
+behaviour and gets a test that runs it.**
+⚠ **THE TAPS COLUMN IS RETIRED AND THE ROLL LANE HAS ITS SLOT (x 344).** `LAD_W` came DOWN 640 → 618.
+The tap COUNT survives in the STATE hover — removing a badge must never remove the measurement.
+⚠ **"AT ALL TIMES SHOW EH TO EL"** is asserted in a real browser as a SPAN (L7b), not as two separate
+labels: checking each edge alone passes a view holding one and not the other.
+⚠⚠ **THREE BUILDS RUNNING, A LITERAL IN A TEST WAS WHAT BROKE.** r11 pinned `LAD_ROLL=620`, r12
+pinned `LAD_W=640`, and both failed on a change that honoured what they were protecting.
+**A position is a decision; a property is a fact. Assert the property.**
+⚠ And I tripped the documented `val()` landmine myself: `typeof LAD_W==='number'` earlier in the file
+than the declaration IS read as the declaration. Write `'number'===typeof X`.
 
 ⚠⚠⚠ **v15.29 — THERE IS A REAL BROWSER IN THE CONTAINER. USE IT FOR ANY LAYOUT QUESTION.**
 

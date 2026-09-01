@@ -131,6 +131,33 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.30 — a constant that stops matching the layout it was chosen for
+
+**1 · The grip "did not work" because a cap from five builds ago fought the layout.** Width was
+capped at 560; `ladderFit()` had grown his panel to 673. The first pixel of drag snapped it DOWN and
+pinned it. ⚠ **When one part of the system computes a size and another caps it, the cap has to be
+derived from the same thing the computation is.** The floor is now the ladder's width and the ceiling
+the viewport — both read at the moment they are used, neither a literal.
+
+**2 · A rule the operator's hands touch had no test at all.** It lived inline in an event handler,
+where the only check possible was a grep for a number — and the number was wrong the whole time.
+Extracted to `panelWidthBounds()` so it can be executed. ⚠ **Interaction limits are behaviour. If it
+decides what he can do, it gets a test that runs it.**
+
+**3 · Two tests broke and both pinned a POSITION, not a property.** `r11` asserted `LAD_ROLL=620` and
+`r12` asserted `LAD_W=640`, so moving the lane at his request failed the tests written to protect the
+lane. ⚠ **A position is a decision; a property is a fact. Assert that the lane owns a column and
+overlaps nothing — not the x it happens to sit at.** Third build in a row where a literal in a test
+was the thing that broke.
+
+**4 · Width came DOWN for the first time.** Retiring TAPS gave 20px back and `LAD_W` went 640 → 618
+rather than keeping the slack. ⚠ A cap that only ever ratchets upward is not a cap.
+
+**5 · I tripped this file's own documented landmine.** The harness reads a constant with
+`\bNAME\s*=\s*([\s\S]*?);\n`, so `typeof LAD_W==='number'` earlier in the source than the
+declaration IS read as the declaration. It is written up in PROJECT-CONSTANTS and I still wrote it.
+⚠ Comparisons against a constant's NAME go `'number'===typeof X`, never the other way.
+
 ### v15.29 — a test suite with no layout engine cannot answer a layout question
 
 **1 · I shipped a clamp that did not clamp, and every test agreed with me.** The EL label rendered at

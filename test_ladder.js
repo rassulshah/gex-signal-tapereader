@@ -30,8 +30,12 @@ const W=v('LAD_W'), LVL=v('LAD_LVL'), PXC=v('LAD_PXC'), PXW=v('LAD_PXW'), NODE=v
       CH=v('LAD_CH'), CHW=v('LAD_CHW'), MK=v('LAD_MK'), MKW=v('LAD_MKW'),
       KS=v('LAD_KS'), KSW=v('LAD_KSW'), KY=v('LAD_KY'), KYW=v('LAD_KYW'), LVLW=v('LAD_LVLW'),
       PILLW=v('LAD_PILLW'),
-      ST=v('LAD_ST'), STW=v('LAD_STW'), TAP=v('LAD_TAP'),
-      TAPW=v('LAD_TAPW'), ROC=v('LAD_ROC'), ROCW=v('LAD_ROCW'),
+      ST=v('LAD_ST'), STW=v('LAD_STW'),
+      // ⚠ (v15.30) LAD_TAP / LAD_TAPW are GONE — the TAPS column was retired and the roll lane took
+      // its slot. Reading a constant that no longer exists yields undefined, and `undefined <= x` is
+      // false, so the chain assertions fail for the right reason rather than passing vacuously.
+      RLC=v('LAD_RLC'), RLCW=v('LAD_RLCW'),
+      ROC=v('LAD_ROC'), ROCW=v('LAD_ROCW'),
       DAX=v('LAD_DAX'), DMAX=v('LAD_DMAX'), DLAB=v('LAD_DLAB'), DLABW=v('LAD_DLABW'),
       ROLL=v('LAD_ROLL'), ROLLW=v('LAD_ROLLW'),   // (v15.09) the roll lane, the new last column
       PCTIN=v('LAD_PCT_IN_BAR');
@@ -74,8 +78,10 @@ ok(v('LAD_KPCT')===undefined && v('LAD_PROF')===undefined,
   // numbers beside it. Ordering offsets proves nothing about what actually gets drawn.
   // (v14.54) the full left-to-right chain, every link asserting offset+width <= the next offset.
   ok(chuteR<=MK,       'g6a the chute ends before the marker column begins', {chuteR,MK});
-  ok(MK+MKW<=TAP,      'g6b the marker ends before the tests counter begins', {end:MK+MKW,TAP});
-  ok(TAP+TAPW<=DAX-DMAX,'g6c the counter ends before the longest delta bar starts', {end:TAP+TAPW,barL:DAX-DMAX});
+  // ⚠ (v15.30) the TAPS counter is retired and the ROLL LANE took its slot — operator's request.
+  // The chain is unbroken, it just runs through a different column: MARK → the lane → the Δ bar.
+  ok(MK+MKW<=ROLL,      'g6b the marker ends before the roll lane begins', {end:MK+MKW,ROLL});
+  ok(ROLL+ROLLW<=DAX-DMAX,'g6c the lane ends before the longest delta bar starts', {end:ROLL+ROLLW,barL:DAX-DMAX});
   ok(DLAB>=DAX,        'g6d the delta figure sits right of its own zero line', {DLAB,DAX});
   ok(DLAB+DLABW<=ST,   'g6e the delta figure ends before the state cell begins', {end:DLAB+DLABW,ST});
   ok(ST+STW<=ROC,      'g6f the state cell ENDS before the roc column begins', {end:ST+STW,ROC});
@@ -284,10 +290,14 @@ ok(W<=640, 'w1 the ladder stays within a resizable panel', W);
 // a column and pushes it back up has undone this build without anything else noticing." I noticed.
 // The lane was squeezed 44 -> 20px so the total lands on w1's 640 ceiling rather than sailing past
 // it. ⚠ 640 IS NOW THE CAP. The next column that wants width argues for it here, in these words.
-ok(W<=640, 'w1b the compaction holds — the ladder is no wider than 640 (was 618 + the 20px roll lane)', W);
+// ⚠⚠ (v15.30) 640 -> 618, and it went DOWN. The TAPS column was retired at the operator's request
+// and the roll lane moved into its slot at 344, so the far-right 20px came back. A cap that only
+// ever ratchets upward is not a cap; this is the first build to hand width back.
+ok(W<=640, 'w1b the compaction holds — the ladder is no wider than 640', W);
 // ⚠ the last column is the ROLL LANE now, not ROC. LAD_W must still equal where it ends, so the
 // constant cannot drift away from the layout again — that 25px discrepancy took a build to explain.
-ok(ROLL+ROLLW===W, 'w1c ...and LAD_W is exactly where the last column ends, so it cannot lie again',
+// ⚠ the last column is the ROLL CHIP now — the lane moved left into the retired TAPS slot.
+ok(RLC+RLCW===W, 'w1c ...and LAD_W is exactly where the last column ends, so it cannot lie again',
    {end:ROLL+ROLLW, W});
 ok(/g3ladwrap\{overflow-x:auto/.test(src), 'w2 ...and the container SCROLLS rather than clips');
 // ⚠ (v15.21) NOT AN ADJACENCY TEST ANY MORE. This asserted the two tags were literally touching,

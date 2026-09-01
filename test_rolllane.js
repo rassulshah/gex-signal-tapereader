@@ -44,8 +44,16 @@ ok(/\.g3ldrl\{fill:none/.test(src), 'r10 the stepped path is stroked, never fill
 // ⚠ 20px, not 44. `test_ladder` w1/w1b/w1c caught the first attempt at 48px extra — the guard
 // exists precisely so a new column cannot widen the build unnoticed. It noticed; the lane was
 // squeezed to land on w1's 640 ceiling instead.
-ok(/LAD_ROLL=620, LAD_ROLLW=20/.test(src), 'r11 the lane sits after ROC — it cannot overwrite a label');
-ok(/var LAD_W=640,/.test(src), 'r12 ...and LAD_W accounts for it rather than letting it overflow silently');
+// ⚠⚠ (v15.30) THE LANE MOVED, AT THE OPERATOR'S REQUEST: "get rid of the TA... column and move the
+// roll arrows there instead." It was at 620 — the far right edge of the ladder, as far from the rows
+// it describes as the layout allowed. It now occupies the retired TAPS slot at 344, beside MARK.
+// ⚠ The PROPERTY r11 was written to protect is unchanged and is what gets asserted: the lane must
+// own its own column and overlap no other. Pinning the literal 620 pinned a POSITION, and a position
+// is a decision, not a property — so it failed on a change that honoured the thing it was guarding.
+ok(/LAD_ROLL=344, LAD_ROLLW=20/.test(src), 'r11 the lane has its own column, in the retired TAPS slot');
+ok(!/LAD_TAP\b/.test(src), 'r11b ...and the column it replaced is gone, not merely hidden behind it');
+ok(/var LAD_W=618,/.test(src),
+   'r12 ...and LAD_W came DOWN to 618, because the far-right 20px went back rather than being kept');
 ok(/ladderRollLane\(ROLLS, Y, _dsc\)/.test(src), 'r13 it rides the SAME Y() the rows do');
 
 // ---- THE CAVEATS ----

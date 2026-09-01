@@ -242,7 +242,8 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
   ok(!!hd, 'h1 the ladder draws a header row');
   const labels=[...hd.matchAll(/>([^<>]{1,16})<\/span>/g)].map(m=>m[1]);
   ok(labels.length>=10, 'h2 ...one label per column', labels.length);
-  ['LEVEL','PRICE','MARK','TAPS','STATE'].forEach(function(w){
+  // ⚠ (v15.30) TAPS is retired at the operator's request and the roll lane took its slot.
+  ['LEVEL','PRICE','MARK','STATE','ROLL'].forEach(function(w){
     ok(labels.indexOf(w)>=0, 'h2·'+w+' ...including '+w, labels);
   });
   // ⚠ THE POSITIONS COME FROM THE COLUMNS' OWN CONSTANTS. A header at a hard-coded x is a header
@@ -252,7 +253,7 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
   ok(xs.length===labels.length, 'h3 every header carries an explicit left and width', xs.length);
   const K=n=>R.run(n);
   [['LEVEL','LAD_LVL','LAD_LVLW'],['PRICE','LAD_PXC','LAD_PXW'],
-   ['STATE','LAD_ST','LAD_STW'],['TAPS','LAD_TAP','LAD_TAPW']].forEach(function(t){
+   ['STATE','LAD_ST','LAD_STW'],['ROLL','LAD_RLC','LAD_RLCW']].forEach(function(t){
     const i=labels.indexOf(t[0]);
     ok(i>=0 && xs[i][0]===K(t[1]) && xs[i][1]===K(t[2]),
        'h4·'+t[0]+' ...taken from '+t[1]+'/'+t[2]+', so the label cannot drift off its column',
@@ -540,6 +541,24 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
      'y4 the expected-move band spans POINTS, not tens of thousands', EBn);
   if(EBn.hw!=null) ok(EBn.hw<EBn.hi*1.5 && EBn.hw>EBn.lo*0.5,
      'y5 ...and the high-water mark is on the same ruler as the band', EBn);
+}
+
+// ---- 15 · (v15.30) THE GRIP CAN ACTUALLY WIDEN THE PANEL -------------------------------------
+// Operator, 2026-09-01: "i am having trouble using the grip to increase horizontal size."
+// It was not the grip. The width was capped at 560 while `ladderFit()` had already grown his panel
+// to 673, so the first pixel of drag SNAPPED it down to 560 and pinned it — the gesture read as
+// dead. 560 was correct when the ladder was 588 wide, and the cap never moved with the layout.
+{
+  const wb=JSON.parse(R.run('JSON.stringify(panelWidthBounds())'));
+  const ladW=R.run('LAD_W');
+  ok(wb.max>=760, 'g1 EXECUTED: the panel may be widened well past the old 560 cap', wb);
+  ok(wb.min>=ladW, 'g2 ...and may NOT be narrowed below the ladder, which would hide columns',
+     {min:wb.min, ladW});
+  ok(wb.max>wb.min, 'g3 ...with a range that actually exists', wb);
+  // and the handler uses it rather than carrying its own numbers
+  const mr=(src.match(/function makeResizable\([\s\S]*?\n\}/)||[''])[0];
+  ok(/panelWidthBounds\(\)/.test(mr), 'g4 the resize handler asks for the bounds');
+  ok(!/nw>560|nw<240/.test(mr), 'g5 ...and keeps no cap of its own to drift out of step');
 }
 
 console.log('test_replay_face: '+pass+' passed, '+fail+' failed');
