@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.27
+// @version    15.26
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.27';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.26';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -22435,23 +22435,7 @@ function emBand(sym){
     // the anchor comes from the RECORD; `now` is live price on the SAME scale so the two can be subtracted
     open = (out.anchor==='open' && typeof rec.openU==='number' && rec.openU>0) ? (rec.openU*useRr) : (openU*useRr);
     now  = nowU*useRr;
-    // ⚠⚠⚠ (v15.27) `scaleUsed` IS THE UNDERLYING→CHART RATIO FOR EVERY CONSUMER, AND v15.26 SILENTLY
-    // CHANGED WHAT IT MEANT. Ten call sites multiply an UNDERLYING-book value by it to reach chart
-    // space: the SPY King flag, the prior-day levels, the dark-pool prints, `levelMarkerOf`. When
-    // the band's anchor moved onto the ES series its scale became 1, `useRr` became 1, and every one
-    // of those consumers multiplied SPY prices by ONE — so PDH drew at **768** on a ladder of ES
-    // strikes at 7630-7695. The frame then spanned 768→7700 and twelve rows crushed into six pixels
-    // with a single outlier at the bottom. The operator's words, and they are the same words the
-    // v15.05 note records for the identical shape: "it is a complete mess".
-    // ⚠ ONE NAME, TWO MEANINGS, AND I CHANGED ONE OF THEM. The band's own arithmetic needs the scale
-    // of THE SERIES IT MEASURES (`useRr`, 1 for ES bars); every other surface needs the scale that
-    // takes THE UNDERLYING BOOK to this chart (~10.0353). They were the same number until the band
-    // stopped measuring the underlying book, and nothing named the difference.
-    // ⚠ THE PUBLISHED FIELD KEEPS ITS ORIGINAL MEANING. Ten consumers are the contract; the band is
-    // the thing that changed, so the band carries the new name.
-    var _undToChart=1; try{ _undToChart=dispIsFut()?dispR():1; }catch(eU2){}
-    out.scaleUsed=_undToChart;      // UNDERLYING book -> this chart. The contract, unchanged.
-    out.seriesScale=useRr;          // the scale of the series the BAND is measured on. New, internal.
+    out.scaleUsed=useRr;
 
     out.est  = !(typeof rec.capMin==='number' && rec.capMin<=EM_FRESH_MIN);
     out.open = open;  out.em=rec.em;  out.now=now;  out.k=rec.k;  out.capMin=rec.capMin;

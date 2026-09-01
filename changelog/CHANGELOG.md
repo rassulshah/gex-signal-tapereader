@@ -1,3 +1,49 @@
+## v15.27 — `scaleUsed` had two meanings and I changed one of them
+
+> "are you insane.. look at the ladder, it is a complete mess"
+
+### ⚠⚠⚠ WHAT I BROKE, MEASURED OFF HIS SCREEN
+
+    row  7695 7690 7685 7675 7668 7665 7655 7650 7645 7640 7635 7630   tops 0.7 … 6.7
+    row  768                                                            top  636.2
+
+Twelve ES strikes crushed into **six pixels**, and one row — a **SPY-scale level, 768** — at the
+bottom, stretching the frame to ~7,000 points. `PDH` reads **7708** on his chart; 7708 ÷ 10.0353 =
+768.1. The prior-day levels, the SPY King flag and the dark-pool prints were all being drawn at the
+underlying book's scale on a ladder of ES strikes.
+
+**`EB.scaleUsed` means two different things and nothing named the difference.** Ten call sites
+multiply an UNDERLYING-book value by it to reach chart space. The band's own arithmetic needs the
+scale of THE SERIES IT MEASURES. Those were the same number for as long as the band measured the
+underlying book — and v15.24 moved it onto the ES series, where that scale is **1**. v15.26 then made
+the pin agree with the series, which is correct, and pushed `scaleUsed` to 1 with it. Every consumer
+multiplied SPY prices by one.
+
+    out.scaleUsed   = the UNDERLYING book → this chart (~10.0353)   ← the contract, restored
+    out.seriesScale = the scale of the series the band measures (1 for ES bars)   ← new, internal
+
+⚠ **Ten consumers are the contract; the band is the thing that changed, so the band takes the new
+name.** ⚠ This is the same shape as v15.05, and the operator's words are almost verbatim the ones
+recorded there: *"it is a complete mess"*.
+
+### ⚠⚠ AND MY OWN GEOMETRY GUARD PASSED IT
+
+v15.26 added y2: *"the rows are SPREAD down the frame, not stacked on one line"* — min-to-max. On the
+geometry above, min-to-max is **635px**, so it passed a ladder with everything in six pixels.
+**A RANGE IS NOT A DISTRIBUTION.** What a price axis promises is that CONSECUTIVE rows are separated:
+
+    y3b  the MEDIAN GAP between neighbours is ≥6px          (his ladder: 0.5px)
+    y3c  no tenth of the frame holds >70% of the rows        (his ladder: 12 of 13)
+    y4a/b/c  both guards run against HIS ACTUAL TOPS and must reject them,
+             with the old spread test asserted to PASS them — so nobody reinstates it as sufficient
+
+⚠ **A check that has never failed is a check nobody has tested.** The new guards are pinned against
+the real broken array, not only against a healthy one.
+
+### verification
+`test_em_band.js` → **648** (both scales asserted separately, by name).
+`test_replay_face.js` → **104**. Two mutations run individually, two caught.
+
 ## v15.26 — I collapsed the ladder onto one line, and every test was green
 
 > "you messed up the display"

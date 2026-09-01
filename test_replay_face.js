@@ -422,6 +422,43 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
   ok(distinct>=Math.min(4, tops.length),
      'y3 ...and they sit at DISTINCT heights — a price axis that maps every strike to one pixel is not an axis',
      {rows:tops.length, distinct});
+  // ⚠⚠ (v15.27) y2 MEASURED SPREAD AND A TWO-CLUSTER COLLAPSE PASSES IT. Measured on his live panel:
+  // twelve rows at tops 0.7-6.7 and ONE at 636.2 — min-to-max was 635px, so y2 said "spread" about a
+  // ladder with everything crushed into six pixels. The single outlier was a SPY-scale level (768)
+  // on a ladder of ES strikes, which stretched the frame to ~7,000 points.
+  // ⚠ **A RANGE IS NOT A DISTRIBUTION.** What a price axis actually promises is that CONSECUTIVE
+  // rows are separated, so the gaps are what gets asserted.
+  const sorted=[...tops].sort((a,b)=>a-b);
+  const gaps=sorted.slice(1).map((t,i)=>t-sorted[i]).sort((a,b)=>a-b);
+  const medGap=gaps.length?gaps[Math.floor(gaps.length/2)]:0;
+  ok(medGap>=6,
+     'y3b ...with a MEDIAN GAP between neighbours, not one outlier stretching an empty frame',
+     {medianGap:+medGap.toFixed(2), tops:sorted.map(t=>+t.toFixed(1))});
+  // and no single tenth of the frame may hold most of the ladder
+  const H=Math.max(...sorted, 1), band=H*0.1;
+  const worst=Math.max(...sorted.map(t=>sorted.filter(u=>Math.abs(u-t)<=band).length));
+  ok(worst <= Math.ceil(tops.length*0.7),
+     'y3c ...and no tenth of the frame holds more than 70% of the rows',
+     {rows:tops.length, worstCluster:worst});
+  // ⚠⚠ AND THE GUARD IS PROVEN AGAINST THE REAL BROKEN GEOMETRY, NOT ONLY AGAINST A HEALTHY ONE.
+  // A check that has never failed is a check nobody has tested. These are the ACTUAL tops read off
+  // his panel on 2026-09-01 while he was looking at it: twelve ES strikes crushed into six pixels
+  // and one SPY-scale level at 636.2 stretching the frame. y2 (min-to-max) passed this. Both new
+  // guards must reject it, or they are decoration.
+  {
+    const broken=[0.7,1.2,1.7,2.6,3.2,3.5,4.4,4.9,5.3,5.8,6.3,6.7,636.2];
+    const bs=[...broken].sort((a,b)=>a-b);
+    const bg=bs.slice(1).map((t,i)=>t-bs[i]).sort((a,b)=>a-b);
+    const bMed=bg[Math.floor(bg.length/2)];
+    ok(!(bMed>=6), 'y4a the MEDIAN-GAP guard rejects the geometry he actually saw', bMed);
+    const bH=Math.max(...bs), bBand=bH*0.1;
+    const bWorst=Math.max(...bs.map(t=>bs.filter(u=>Math.abs(u-t)<=bBand).length));
+    ok(!(bWorst<=Math.ceil(broken.length*0.7)),
+       'y4b ...and so does the CLUSTER guard', {worst:bWorst, of:broken.length});
+    // ⚠ and the guard that let it through is recorded, so nobody reinstates it as sufficient
+    ok((Math.max(...bs)-Math.min(...bs))>40,
+       'y4c ...while the old spread test PASSES it — a range is not a distribution');
+  }
   // the frame itself: a band edge and the rows it contains must be the same order of magnitude
   const EBn=JSON.parse(R.run('JSON.stringify((function(){var b=emBand("SPY");return {lo:b.low,hi:b.high,hw:b.hiWater};})())'));
   ok((EBn.hi-EBn.lo)<500,

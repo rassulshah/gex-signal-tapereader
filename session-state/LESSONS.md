@@ -131,6 +131,31 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.27 — one name, two meanings, and I changed the one with ten consumers
+
+**1 · The false thing.** I treated `EB.scaleUsed` as "the scale the band uses". It is also, for ten
+other call sites, "the ratio that takes an UNDERLYING-book price to this chart" — the SPY King flag,
+the prior-day levels, the dark-pool prints, `levelMarkerOf`. Those were the same number only while
+the band measured the underlying book. v15.24 moved it to the ES series and v15.26 made the pin
+agree, so `scaleUsed` became 1 and PDH drew at **768** on a ladder of ES strikes. ⚠ **Before changing
+what a published field CONTAINS, enumerate who reads it. Ten consumers are the contract; the thing
+that changed takes the new name.** Third build in a row broken by a scale that outlived its meaning.
+
+**2 · My own guard passed the fault it was written for.** v15.26's y2 asserted min-to-max spread.
+His ladder had twelve rows in six pixels and one outlier at 636 — spread 635px, guard green. ⚠ **A
+range is not a distribution.** The replacement asserts the MEDIAN GAP between neighbours and that no
+tenth of the frame holds most of the rows, and both are pinned against his ACTUAL measured tops.
+
+**3 · A check that has never failed is a check nobody has tested.** I wrote y2 confident it caught
+the class of fault, and it caught nothing. The new guards ship with the broken array as a fixture and
+an assertion that the OLD test passes it — so the weaker check cannot be reinstated by someone who
+reads only the name.
+
+**4 · Two builds in a row went out live-broken.** v15.24 blanked the ladder, v15.26 scrambled it. Both
+passed the full suite; both were found by the operator in one glance at a screen. ⚠ For any change to
+a scale, a unit, or a shared field, **render the face and look at it** before shipping — the harness
+exists and I did not use it.
+
 ### v15.26 — I shipped a blank ladder and the whole suite was green
 
 **1 · What I broke.** v15.24 moved the band's anchor to `measureBars()`, whose ES bars are already

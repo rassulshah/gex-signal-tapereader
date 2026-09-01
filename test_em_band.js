@@ -1905,8 +1905,14 @@ eval(ex('emBand'));
      'm2 EXECUTED: the anchor is the ES open the ⓪a section measures, not the derived book', B.open);
   ok(Math.abs(B.low-(7647-32.5))<0.01 && Math.abs(B.high-(7647+32.5))<0.01,
      'm3 ...so EH/EL bracket the session the HOD and LOD are measured in', [B.low,B.high]);
-  ok(Math.abs(B.scaleUsed-1)<1e-9,
-     'm4 ...and the scale is the series\' own — ES bars are already chart space, so no 10x', B.scaleUsed);
+  // ⚠⚠ (v15.27) TWO SCALES, TWO NAMES. `seriesScale` is the ruler the BAND is measured on (1 for ES
+  // bars, already chart space). `scaleUsed` is the UNDERLYING→chart ratio ten other surfaces use to
+  // place the SPY King, the prior-day levels and the dark-pool prints — and v15.26 collapsed them
+  // into one, so those surfaces multiplied SPY prices by 1 and PDH drew at 768 on an ES ladder.
+  ok(Math.abs(B.seriesScale-1)<1e-9,
+     'm4 the SERIES scale is 1 — ES bars are already chart space, so the band does not multiply', B.seriesScale);
+  ok(Math.abs(B.scaleUsed-10.0353)<1e-6,
+     'm4b ...while scaleUsed stays the UNDERLYING→chart ratio its ten consumers depend on', B.scaleUsed);
 
   // and with NO courier the fallback is the underlying book, converted — behaviour unchanged
   global.localStorage.setItem('gpts_emopen_v1', JSON.stringify({ v:0, date:'1970-01-01', sym:{} }));
@@ -1941,8 +1947,10 @@ eval(ex('emBand'));
   ok(B.ok===true, 's1 the band still comes back', B.why);
   ok(B.rulerRebuilt===true,
      's2 EXECUTED: a pin whose ruler disagrees with the series is REBUILT, not used', B);
-  ok(Math.abs(B.scaleUsed-1)<1e-9,
-     's3 ...on the CURRENT series\' scale, so ES prices are not multiplied by ten', B.scaleUsed);
+  ok(Math.abs(B.seriesScale-1)<1e-9,
+     's3 ...on the CURRENT series\' scale, so ES prices are not multiplied by ten', B.seriesScale);
+  ok(Math.abs(B.scaleUsed-10.0353)<1e-6,
+     's3b ...and the underlying→chart ratio is untouched, so the levels stay on the ladder', B.scaleUsed);
   ok(Math.abs(B.open-7647)<0.01, 's4 ...anchored on the ES open', B.open);
   ok(Math.abs(B.em-32.5)<0.01, 's5 ...and the WIDTH survives, rebuilt from emK', B.em);
   // ⚠⚠ THE SYMPTOM ITSELF: the water marks must stay on the ladder's scale, not ten times it.

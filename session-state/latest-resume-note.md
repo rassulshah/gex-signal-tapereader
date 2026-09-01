@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-01 · panel v15.26 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-01 · panel v15.27 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.26, and what the face carries
+## 2 · WHERE WE ARE — v15.27, and what the face carries
 
-**Panel v15.26 · companion v1.17.** Suite **134 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.27 · companion v1.17.** Suite **134 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -177,6 +177,24 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠⚠ **v15.27 — `EB.scaleUsed` HAS TWO MEANINGS. DO NOT CHANGE WHAT IT CONTAINS.**
+TEN call sites multiply an UNDERLYING-book value by it to reach chart space (the SPY King flag, the
+prior-day levels, the dark-pool prints, `levelMarkerOf`). The BAND needs the scale of the series IT
+measures. Those were the same number only while the band measured the underlying book — v15.24 moved
+it to the ES series (scale 1) and v15.26 made the pin agree, so **PDH drew at 768 on a ladder of ES
+strikes** and twelve rows crushed into six pixels.
+
+    out.scaleUsed   = UNDERLYING book → this chart (~10.0353)   ← the contract. Never repurpose it.
+    out.seriesScale = the band's own series scale (1 for ES bars) ← use this inside emBand
+
+⚠⚠ **AND v15.26's GEOMETRY GUARD PASSED THE FAULT IT WAS WRITTEN FOR.** y2 asserted min-to-max
+spread; his ladder had twelve rows in 6px and one outlier at 636 → spread 635px → green.
+**A RANGE IS NOT A DISTRIBUTION.** y3b (median gap ≥6px) and y3c (no tenth holds >70% of rows) are
+pinned against his ACTUAL measured tops, with an assertion that the old test passes them.
+⚠⚠ **TWO BUILDS IN A ROW WENT OUT LIVE-BROKEN (v15.24 blank, v15.26 scrambled), both with a green
+suite, both found by him in one glance. For any change to a scale, a unit or a shared field: RENDER
+THE FACE AND LOOK AT IT** — `node tools/render-face.js <day> <hh:mm>` exists and I did not use it.
 
 ⚠⚠⚠ **v15.26 — I SHIPPED A BLANK LADDER AT v15.24 AND THE WHOLE SUITE WAS GREEN. READ THIS BEFORE
 CHANGING WHERE ANY NUMBER COMES FROM.** v15.24 moved the band's anchor to `measureBars()` (ES bars,
