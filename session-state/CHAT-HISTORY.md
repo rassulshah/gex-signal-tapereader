@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-01 · v15.15 · session `5e8d34b5` — v15.15 - the band centres on the replayed bar
+## 2026-09-01 · v15.16 · session `5e8d34b5` — v15.16 - the strike floor refused 93% of every replayed session
 
-_39 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_41 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -803,6 +803,259 @@ Two things were still empty, and checking your panel found the cause of one of t
 There are plenty — **2406 sightings, pairs seen in 30–63 frames.** So the data is there and my code isn't using it. Found it:
 Two clear causes. "Out of sync" is a health check on the **live** tape running while the face shows a recorded frame; and the ladder's rows come from the **live** InsiderFinance chain, not the frame.
 The node count has one root cause: the EM band centres on the **live** price while the nodes are the replayed book, so almost every node falls outside the band and gets clipped. `closedCandles()` is the seam.
+**Your four symptoms were one bug.**
+
+The expected-move band takes its centre from the **live** last price, while the nodes came from the frame you're parked on — and the band *clips every node*. So a 13:12 book measured against a 21:00 band left exactly one node inside it. That's your one node bar; the statuses hang off the node rows so they went with it; and with one node there are no pairs for the roll detector, so no arrows. One cause, four symptoms, in the order you listed them.
+
+`closedCandles()` was the seam — the band, the ATR, the trend machine and the node clipper all read it. One change, not four patches.
+
+**Two more, both real:**
+
+**A missing field was silently killing every roll.** The detector compares `dst.k === src.k` to skip same-strike pairs. My replayed velocity rows had no `k`, so every comparison was `undefined === undefined` — true — and *every* candidate was thrown away as "the same strike". I checked the data: your 31 Aug holds **2,406 roll sightings**, pairs seen in 30–63 frames. Zero were drawn, …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 3 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (03:00):** Checked: the clone divergence is SHA-only — origin's v15.14 panel is byte-identical to mine. Your installer re-commits the same content under a new hash, which is normal here. v15.15 lands when you run the file I just sent.
+
+I'm going to stop building here rather than start the ladder-levels replay I flagged.
+
+Reason: v15.15 fixes four of your symptoms through one root cause, and it's unverified. If I stack another change on top and something's off, neither of us will know which build did it — and that's exactly the loop that cost you tonight.
+
+So: run `installv1515.bat`, drag the slider, and tell me what you see. If the ladder populates with statuses and arrows at the parked bar and the "out of sync" banner is gone, the remaining piece is the levels — and I'll build that next without asking.
+
+**OPERATOR:**
+> you really need to do a better job at development .. do you know the code. do you review it before making changes to see what needs to be updated.  its like you are making changes to code that you dont know. please review so you know all the code so you can properly make changes.  look at aht screen, it still has 100% for one strike, the entire node profile is missing , the arros dont make sense , thee are no statuses. total failure
+
+**me (03:08):** You're right. I've been patching symptoms and discovering each consumer only when you reported it. Let me read the ladder path properly — every input and every consumer — before touching anything else.
+Found the actual blocker, and it's a gate I never traced:
+**That's the real cause, and it's a gate I never traced.** `SK_MIN_STRIKES = 20` — "below 20 the DOM changed" — refuses **120 of your 129 frames**, because a stored frame holds a median of 17 SPXW strikes. When it refuses, there are no piles: no nodes, no states, nothing for the arrows to pair. Let me audit every other gate in that path before I touch it.
+Full map now. Two live dependencies remain in the replayed path, and one of them refuses 93% of your frames.
+G5 survived — the same grep-can't-see-a-dead-branch family. Binding the assertion to the emit statement.
+
+### DECISIONS
+
+**ONE CONSTANT REFUSED 93% OF EVERY REPLAYED SESSION.** `SK_MIN_STRIKES = 20` is a LIVE-PARSE health
+floor ("below 20 the DOM changed"). His frames hold a median of 17 SPXW strikes because `vend` was
+capped at 40 rows across four books until v15.10 — so 120 of 129 bars were refused, and a `skPiles`
+refusal returns NO PILES. That is every symptom at once: no node profile, no statuses (they hang off
+the node rows), nothing for `rollScan`, one lone strike at 100%.
+`SK_MIN_STRIKES_REPLAY = 5` judges a recorded book; **the live floor stays 20.**
+
+**THE DEPTH IS DISCLOSED.** A replayed ladder is genuinely shallower than live; without saying so,
+"the book was thin then" and "we only stored this much" are indistinguishable.
+
+⚠⚠ **THE PATTERN, AND IT IS THE RECORD OF THIS SESSION.** Five gates broke replay for the same
+reason: `rollsLive` (RTH-only), `velOk` (live harvest), `tapeSync` (live votes), `closedCandles`
+(live candles), `SK_MIN_STRIKES` (live-parse health). **Every threshold carries an implicit claim
+about where its input came from, and replay changed the provenance without changing the thresholds.**
+
+### SHIPPED
+
+**v15.16.** `SK_MIN_STRIKES_REPLAY`, the depth disclosure on the strip, and a full trace of every
+gate between the data and the pixels. `test_replay.js` at **156**.
+
+### OPEN AT CLOSE
+
+1. **v15.16 IS UNVERIFIED.** Expect the ladder populated at the parked bar, states back, arrows
+   pairing, and a small strike-count chip on the strip.
+2. **TWO LIVE DEPENDENCIES REMAIN IN A REPLAYED FACE, both now named rather than discovered:**
+   `ifLadder` supplies `dispScale` from the LIVE IF chain, and the ladder's LEVELS (PDH, CW0, FLIP…)
+   are live. Frames store `lev` and `deriv`, so both are buildable.
+3. **THE METHOD, FOR THE NEXT CONTEXT:** before claiming any replayed surface works, list every early
+   return, floor and freshness check between the source and the pixels and ask of each what it
+   assumes about provenance. That is a thirty-minute read; skipping it cost six builds and his night.
+4. Q11 and the day-export gap (F-10c) unchanged.
+
+### COMMITS THIS CONTEXT
+
+```
+7b4d09e v15.15: the band centres on the replayed bar; the sync gate stands down; rolls get their strike
+7ec0a4e v15.14: the king lane draws the crown's journey
+8cf003b v15.13: the ladder fits the panel, and the arrows replay
+6806ea9 v15.12: the expected-move pin survives a chart switch
+b25ebdd v15.11: replay reads the frame for the crowns and the accumulation
+5ae134d v15.10: the replay slider; the version in the header; the read removed
+a48e704 record: WITHDRAW F-10b - the morning is not shed; the reads were complete all along
+a278846 record: the F-10 storage fix IS built - the real bug is that the budget sheds the morning
+30d1892 data: daily export 31-Mon-08
+a1c6a88 v15.09: roll arrows and the corrected pullback unit
+aa97e8b v15.07: the vertical redesign
+2049394 v15.05: fix the frame, restore the ladder
+```
+
+---
+
+<!-- EARLIER-CONTEXTS -->
+
+# EARLIER CONTEXTS
+
+## 2026-09-01 · v15.15 · session `5e8d34b5` — v15.15 - the band centres on the replayed bar
+**OPERATOR:**
+> load gex.  i accidentally closed my last session .
+## 1 · Files loaded
+## 2 · Nothing was lost when the window closed
+## 3 · Architecture, as understood
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are uncommitted changes in the repository. Please commit and push these changes to the remote branch.
+**OPERATOR:**
+> lets take it step by step .. ask the first question or issue
+**OPERATOR:**
+> yes
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> yes
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> when i click on the tampermonkey link it tells me to reinstall . there is no update option
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> should i click the reinstall option in tampermonkey
+**OPERATOR:**
+> next
+**OPERATOR:**
+> ok
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> were you able to identify the deflections that i have circled. there is 1 deflection in each circle . this is for the current market spy , today
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> we need to continue refining the app. unfortunately i cant see the arrows on the left or the king lanes on the right.  i want to have a feature that allows me to go back during the day to examine what happened, almost like a slider that allows for a replay, so if i want to see the state of the market at 1:00pm , i can do that by dragging the slider back .   Also put the version in the header where it says Tapereader , so i know what version it is.  finally, take out the read . I might come back to it later. The read is where it say Range day  - Trinity .. ...  identify if you can imploement the replay feature.   It should also work after hours or on the weekend , so if it is saturday, i want to go back to friday and see what happened.   see if you can implement this and whether you have all the data to do this.
+**OPERATOR:**
+> yes
+> [Image: original 2480x3200, displayed at 1550x2000. Multiply coordinates by 1.60 to map to original image.]
+> Approach this as the design lead at a small studio known for their versatility, giving every client a visual identity pitched at the treatment the task actually calls for. Make deliberate choices about palette, typography, and layout that are specific to this subject, and avoid templated designs.
+> 
+> ## Read the request first
+> 
+> Calibrate treatment, not whether to design. A doc deserves the same craft as a landing page - what changes is the treatment that craft is delivered in. Format is not part of this read: author HTML, and publish Markdown only when a loaded skill explicitly instructs it - a Markdown publish keeps its filename as its title and takes almost none of the craft below, and is never a way to save time.
+> 
+> Many requests call for a more utilitarian treatment: a plan, a memo, a demo. Make it polished: include real typographic hierarchy, considered spacing, and a proper palette, but avoid over-designing. Most pages do not need a flashy, gigantic hero. Keep flourishes tasteful and limited.
+> 
+> Some requests call for an editorial treatment: a landing page, a game, an app or tool they'll keep or share.
+> 
+> When unsure: a well-composed page is never the wrong answer; an over-designed visual identity sometimes is.
+> 
+> Fundamentals below apply to everything. The editorial process after that runs only when the read above says so.
+> 
+> ## Fundamentals for every artifact
+> 
+> **Honor what's already there** Look for an existing design system first - CLAUDE.md, a tokens or theme file, existing component styles. When one exists, apply it; everything below fills gaps and never overrides. Precedence is always: the user's own words, then the project's existing system, then your choices.
+> 
+> **Ground it in the subject.** If the subject isn't already clear, pin it: one concrete subject, its audience, and the page's single job. The subject's own world - its materials, instruments, vernacular - is where distinctive choices come from. Build with real content throughout, never lorem.
+> 
+> **Pair typefaces** Typography carries the page even when the page isn't about typography. Google Fonts is the one font host the Artifact CSP admits - link it directly (`<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=...&display=swap">`); a face from anywhere else must be inlined as a @font-face data URI or it falls back silently. Either way, declare a real fallback stack. Keep running text near 65 characters wide; set a type scale and stay on it; give headings `text-wrap: balance`, body text room to breathe, and uppercase labels a touch of letter-spacing.
+> 
+> **Load libraries, don't paste them.** When the page genuinely needs a library - React, a charting or highlighting package - load its UMD build from cdnjs (only the script - a library's stylesheet still has to be inlined) with one pinned `<script src="https://cdnjs.cloudflare.com/ajax/libs/...">` placed before the inline script that uses its global, instead of inlining the library's source or hand-writing a stand-in; the Artifact tool's description lists the few other script hosts the CSP admits. The page's own CSS and JS, its images and its data ship with the page. Most pages need no library at all - reach for one only when it carries real weight.
+> 
+> **Choose neutrals, don't default to them.** A pure mid-grey reads as unconsidered; a grey with a slight hue bias toward the page's accent reads as chosen. Pure white and near-black are fine grounds when they suit the subject - the point is that the neutral was picked, not inherited.
+> 
+> **Design both themes.** The page renders in the viewer's theme, and the viewer has three states, not two: an explicit choice stamps `data-theme="dark"` / `data-theme="light"` on the root element, and the default "system" setting stamps *nothing* - most viewers see the un-stamped document, where only `prefers-color-scheme` separates light from dark. Structure the CSS token-level for all three: the bare `:root` block defines the complete light palette (for a deliberately dark-first design, swap light and dark consistently through this whole pattern); `@media (prefers-color-scheme: dark)` redefines only the tokens, guarded as `:root:not([data-theme="light"])` so an explicit light choice beats a dark OS; `:root[data-theme="dark"]` redefines them again so the toggle also wins in the other direction. Style components through the tokens, never directly inside a media or `[data-theme]` block - a color whose only definition sits behind `[data-theme]` never applies in the un-stamped state, and the page renders one theme's text on the other theme's ground. Two more rules keep each theme resolving as a set: the artifact composites over a ground the viewer paints in *its* theme, so `body` must set an explicit `background` from a token - a transparent body silently borrows the host's ground; and every element that sets a color takes it from the same token set as the surface behind it, never a literal that only works in one theme. Before publishing, scan the stylesheet for any color declared only inside a media or `[data-theme]` block - that is the classic unreadable-artifact bug. Give the second theme the same care as the first - don't naively invert; keep contrast legible and the accent working on both grounds. A design that deliberately commits to one visual world (a neon arcade screen, a letterpress invitation) may stay single-theme - then skip the media query and stamps entirely but still paint the background and every color explicitly, so the page holds on either host ground; make it a choice, not an omission.
+> 
+> **Let layout do the spacing.** Lay out sibling groups with flex or grid and `gap`, not per-element margins that silently collapse or double. Wide content - tables, code, diagrams - gets `overflow-x: auto` on its own container so the page body never scrolls sideways. Reach for `font-variant-numeric: tabular-nums` wherever digits line up in columns.
+> 
+> **Avoid AI-generated design** AI-generated design currently clusters around a few looks: warm cream (#F4F1EA) with a serif display and terracotta accent; near-black with a lone acid-green or vermilion pop; broadsheet hairline rules with dense columns; a purple-to-blue gradient hero on white; Inter or Space Grotesk as the "safe" face; emoji as section markers; everything centered; `rounded-lg` everywhere; accent bar/rail on rounded cards. Where the user pins down a visual direction, follow it exactly - their words always win, including when they ask for one of these looks. Where nothing is specified, don't spend that freedom on one of these defaults.
+> 
+> **Build cleanly** Be cognizant of overlapping elements, cascade collisions, silent font fallbacks; visual bugs hide in the gap between source and output. Close every non-void element, double-quote attributes, give keyboard focus a visible state, respect `prefers-reduced-motion`. For generative or decorative graphics, reach for Canvas or WebGL rather than hand-authoring long SVG path data.
+> 
+> **CSS rules** When writing the CSS, watch your selector specificities. It is easy to generate classes that cancel each other out - a type-based selector like `.section` fighting an element-based one like `.cta` over padding and margins between sections. Structure the cascade so it doesn't silently undo your spacing.
+> 
+> **Writing the copy** Words are design material, not decoration. Write from the user's side of the screen - name things by what people recognize, not how the system is built (a person manages *notifications*, not *webhook config*). Active voice; a control says exactly what happens ("Publish", then a toast that says "Published"). Errors explain what went wrong and how to fix it - no apologies, no vagueness. Specific beats clever.
+> 
+> **Name the page like a product, not a caption.** The `<title>` is the artifact's name in the gallery and the browser tab, and it sets the reader's first impression of care. Give the page a real name: a short noun phrase, typically two to four words, specific to the subject - or, for a page that exists to answer one question, that question itself, which is then the page's name. Stop at the name - a title that carries its own explainer after a dash or colon reads as generated filler. The name must also identify the page among many: in the gallery it sits beside dozens of other artifacts, and a generic category label that could sit on any of them fails as a name just as surely as an appended explainer. When a candidate title pairs the name with a generic word - a greeting, a category, a page-type label - the name is the half to keep; a trim that drops the identity and keeps the generic word produces exactly the title that could sit on any page. And the rule removes explainers, it does not impose brevity: a multi-word title that already reads as one specific name is finished, and shortening it further only makes it generic. The one-sentence publish `description` is where the explanation belongs; the gallery shows it right under the title.
+> 
+> **Structure is information** Structural devices, numbering, eyebrows, dividers, labels, should encode something true about the content, not decorate it. Many generic designs use numbered markers (01 / 02 / 03), but that's only appropriate if the content actually is a sequence - like a real process or a typed timeline where order carries information the reader needs. Question if choices like numbered markers actually make sense before incorporating them.
+> 
+> **When it's a UI, not a document** A dashboard or tool is scanned and operated, not read top-to-bottom, so the craft shifts from typography to information design. Surface the summary before the detail; encode state in form as well as number - a pill, a chip, a severity stripe - so what needs attention reads at a glance. Semantic color (good / warning / critical) is separate from the accent hue and doesn't count as your accent. Give sparklines and charts the same care as type: an area fill, a faint grid, an emphasized endpoint. What's interactive should look interactive.
+> 
+> 
+> 
+> ## Process
+> 
+> Before writing code, sketch a short design plan - a compact token system with color, type, and layout:
+> - **Color**: describe the palette as 4-6 named hex values.
+> - **Type**: typefaces for 2+ roles - a characterful display face used with restraint, a complementary body face, and a utility face for captions or data if needed.
+> - **Layout**: a layout concept in one or two sentences.
+> 
+> Then build, following the plan and deriving every color and type decision from it.
+> 
+> ## When the request is editorial
+> 
+> The stance shifts: the client has already rejected proposals that felt templated, and is paying for a distinctive point of view. Make opinionated calls, and take one real aesthetic risk where it serves the work.
+> 
+> Review the design plan against the subject before building: if any part of it reads like the generic default you would produce for any similar page, revise that part, and note what you changed and why. Only after you've confirmed the plan's uniqueness do you write the code, following the revised plan exactly.
+> 
+> **Principles** 
+> 
+> - The hero is a thesis: open with the most characteristic thing in the subject's world - headline, image, live demo, interactive moment. 
+> - Typography carries the personality of the page. Pair the display and body faces deliberately, not the same families you would reach for on any other project, and set a clear type scale with intentional weights, widths, and spacing. Make the type treatment itself a memorable part of the design, not a neutral delivery vehicle for the content. 
+> - Leverage motion deliberately. Think about where and if animation can serve the subject: a page-load sequence, a scroll-triggered reveal, hover micro-interactions, ambient atmosphere. An orchestrated moment usually lands harder than scattered effects; choose what the direction calls for. However, sometimes less is more, and extra animation contributes to the feeling that the design is AI-generated. 
+> - Match complexity to the vision. Maximalist directions need elaborate execution; minimal directions need precision in spacing, type, and detail. Elegance is executing the chosen vision well.
+> - Spend your boldness in one place; keep everything around it quiet. If the accent fights the ground, shift it toward analogous or drop saturation rather than replacing it.
+**OPERATOR:**
+> whre is the mockup
+**OPERATOR:**
+> im in claude for chrome and i cant see it.
+**OPERATOR:**
+> no , im not interested in a replay card.  i wanted a slider that i could slide to see how the app looked earlier on in the day.. can you do that.
+**OPERATOR:**
+> show me an actual mockup of how it will look. and make sure you dont break anything..
+**OPERATOR:**
+> perfec
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> dont you have a note somethere or some instruction that says what you have to save everytime you give me a build and give me a save confirmation too to save things like the chat history so that you can save the session and the next context can load the chat history and more .  can you check .
+> "after you give me a build, i want a confirmation something like a checkmark save done for future context. this tells me that you have updated the chat history and any relevant files that a future context would need to proceed if this context was closed."
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> this doesn't look right. the levels the king lanes the gamma profile, the status's etc.  all missing
+**OPERATOR:**
+> i dragged the slider.. yes
+**OPERATOR:**
+> yes.. can you make it exactly like it would be live, including arrows , gamma profile, status, king lanes,  the 3 kings, nodes etc..
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> when i swtich to es , it doesn't work.. do i have to be on the spy
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 2 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> go
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> check
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> have you fixed it. i dont see the king lane with the movement the kings made and i dont see the arrows and i dont see the node profile except 1
+**OPERATOR:**
+> how many times do i have to tell you to implement.  what the hell ?
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 1 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+**OPERATOR:**
+> check
 
 ### DECISIONS
 
@@ -825,12 +1078,14 @@ against a recorded frame disagreement is CORRECT. It stands down in replay and n
 **THE KING LANE DRAWS** (v15.14, confirmed on his panel: 14 runs, 12 steps, 12 knots) and **THE
 LADDER FITS** (v15.13: 560 → 667px, hidden 0).
 
+
 ### SHIPPED
 
 **v15.13 → v15.15.** `ladderFit`, `replayRolls`, `replayKingTrack`, the king-track seed, and replay
 branches on `tapeMap`, `ladderKings`, `slicesFor`, `velOk`, `rollsLive`, `rollLatched`, `ktOf`,
 `closedCandles`, `tapeSync`. `test_replay.js` at **146** assertions, each fix executed and
 mutation-tested.
+
 
 ### OPEN AT CLOSE
 
@@ -844,26 +1099,8 @@ mutation-tested.
    NODES replay; the LEVELS do not. Frames store `lev` and `deriv`, so it is buildable — unbuilt.
 4. **The gamma profile** is not on the live face (removed v14.81 at his request). Needs his word.
 
-### COMMITS THIS CONTEXT
 
-```
-7ec0a4e v15.14: the king lane draws the crown's journey
-8cf003b v15.13: the ladder fits the panel, and the arrows replay
-6806ea9 v15.12: the expected-move pin survives a chart switch
-b25ebdd v15.11: replay reads the frame for the crowns and the accumulation
-5ae134d v15.10: the replay slider; the version in the header; the read removed
-a48e704 record: WITHDRAW F-10b - the morning is not shed; the reads were complete all along
-a278846 record: the F-10 storage fix IS built - the real bug is that the budget sheds the morning
-30d1892 data: daily export 31-Mon-08
-a1c6a88 v15.09: roll arrows and the corrected pullback unit
-aa97e8b v15.07: the vertical redesign
-2049394 v15.05: fix the frame, restore the ladder
-6e58657 v15.04: ladder refuses mismatched scales
-```
-
----
-
-<!-- EARLIER-CONTEXTS -->
+_(compressed — operator prompts verbatim; replies dropped. Full detail is in git history for this file.)_
 
 # EARLIER CONTEXTS
 

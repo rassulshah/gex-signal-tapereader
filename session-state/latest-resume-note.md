@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-08-31 · panel v15.15 · companion v1.16 · supersedes every earlier resume note_
+_written 2026-08-31 · panel v15.16 · companion v1.16 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.15, and what the face carries
+## 2 · WHERE WE ARE — v15.16, and what the face carries
 
-**Panel v15.15 · companion v1.16.** Suite **129 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.16 · companion v1.16.** Suite **129 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -142,6 +142,33 @@ and discard EVERY roll as "the same strike" — 2,406 sightings, zero drawn, not
 
 ⚠ **STILL LIVE-SOURCED IN REPLAY: the ladder's LEVELS.** `ifLadder` reads `ifChain` (the live IF
 payload); the NODES replay, the LEVELS do not. Frames store `lev` and `deriv`, so it is buildable.
+
+⚠⚠ **v15.16 — THE SINGLE MOST IMPORTANT THING TO UNDERSTAND ABOUT REPLAY.** `SK_MIN_STRIKES = 20`
+is a LIVE-PARSE health floor ("below 20 the DOM changed"). His recorded frames hold a MEDIAN OF 17
+SPXW strikes, so it refused **120 of 129 bars**, and a `skPiles` refusal returns NO PILES — no nodes,
+no statuses, nothing for `rollScan`, one strike at 100%. Every symptom he reported, from one constant.
+`SK_MIN_STRIKES_REPLAY = 5` now judges a recorded book; the live floor stays 20.
+
+⚠⚠ **AND THE PATTERN BEHIND EVERY REPLAY BUG IN v15.10-v15.16:** `rollsLive` (RTH-only), `velOk`
+(live harvest), `tapeSync` (live votes), `closedCandles` (live candles), `SK_MIN_STRIKES` (live-parse
+health). **Every threshold carries an implicit claim about where its input came from, and replay
+changed the provenance without changing the thresholds.** Before claiming any replayed surface works:
+list every early return, floor and freshness check between the source and the pixels, and ask of each
+what it assumes. Skipping that read cost six builds.
+
+⚠⚠ **STILL LIVE IN A REPLAYED FACE — AND MEASURED, SO NOBODY PROMISES WHAT CANNOT BE DELIVERED.**
+Traced 2026-09-01 against a real frame; **neither is fully recoverable from the days already stored:**
+
+    dispScale   the ES/SPX basis. ifLadder derives it from the LIVE chain + Atlas's own spot. A frame
+                stores xm.SPXW.px (the INDEX price, 7682.59) but NO ES price, so the basis cannot be
+                reconstructed. It is slow-moving (~1.002), so using the live one on a replayed bar is
+                defensible — but say so. Recording it is ONE FIELD and fixes it from the next session.
+    the LEVELS  the frame's `lev` holds cr/cr0/ps/ps0/mag at SPY SCALE (767/765) — the SPY book's
+                walls, NOT the SPX chain rows the ladder draws (PDH, CW0, FLIP…). Those come from
+                ifLadder.rows + sessionLevels and are not in a frame at all.
+
+**So a replayed LEVEL set is not obtainable from the 18 recorded days.** Recording `ifLadder.rows`
+per frame would fix it going forward. ⚠ Do not tell him the levels will replay on old days.
 
 **FIRST THING TO DO: drag it on the live panel.** Check the ladder, kings and ⓪a move together, the
 clock reads the parked bar, ◀ reaches Friday, and `__gptsDebug.storage()` shows no new writes.

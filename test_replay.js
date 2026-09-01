@@ -27,6 +27,9 @@ function val(n){ const m=new RegExp('(?:var\\s+)?\\b'+n+'\\s*=\\s*([\\s\\S]*?);\
 // strip comments before any assertion about EMITTED text — a comment that quotes the thing it
 // explains has produced nine false passes in this project.
 const decomment=s=>s.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+// ⚠ numeric constant reader — val() stops at the first `;`+newline and several of these carry
+// trailing comments (the landmine beside L-K).
+const num=n=>{ const m=new RegExp('var\\s+'+n+'\\s*=\\s*(-?[0-9.]+)').exec(src); return m?parseFloat(m[1]):undefined; };
 
 const FR=JSON.parse(fs.readFileSync('./tools/fixtures/replay-frames.json','utf8'));
 
@@ -557,6 +560,46 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
   const r2=tapeSync('SPY');
   ok(r2.ok===false, 'sy4 live, three disagreeing votes still raise the banner — the guard is intact');
   REPLAY.on=true;
+}
+
+// ---- 17 · (v15.16) THE FLOOR THAT REFUSED 120 OF 129 FRAMES ------------------------------------
+// Operator: "it still has 100% for one strike, the entire node profile is missing, the arrows dont
+// make sense, there are no statuses. total failure." — and it was ONE CONSTANT.
+// `SK_MIN_STRIKES = 20` is a LIVE-PARSE health heuristic ("below 20 the DOM changed"). A recorded
+// frame's depth is not evidence of a broken parse; it is what the recorder stored, and `vend` was
+// capped at 40 rows ACROSS FOUR BOOKS until v15.10. MEASURED on 2026-08-31: 129 frames, SPXW strikes
+// min 13 / median 17 / max 40 — so the live floor refused 120 of them, and a skPiles refusal returns
+// NO PILES: no nodes, no states (they hang off the node rows), nothing for rollScan to pair.
+{
+  const sk=decomment(ex('skPiles'));
+  ok(/SK_MIN_STRIKES_REPLAY/.test(sk), 'g1 skPiles has a replay floor distinct from the live one');
+  ok(/_floor=_rp\?SK_MIN_STRIKES_REPLAY:SK_MIN_STRIKES/.test(sk),
+     'g2 ...and picks between them on replayOn(), never one for both');
+  ok(num('SK_MIN_STRIKES_REPLAY')<num('SK_MIN_STRIKES'),
+     'g3 the replay floor is LOWER — a recorded book is not judged on live-parse health',
+     [num('SK_MIN_STRIKES_REPLAY'), num('SK_MIN_STRIKES')]);
+  // ⚠ the real bar: the floor must admit the depth his 18 recorded days actually hold.
+  ok(num('SK_MIN_STRIKES_REPLAY')<=13,
+     'g4 ...and low enough for the THINNEST frame measured (13 SPXW strikes on 2026-08-31)',
+     num('SK_MIN_STRIKES_REPLAY'));
+  ok(/out\.shallow=out\.count/.test(sk),
+     'g5 a replayed book reports its DEPTH, so a shallow ladder cannot read as a thin market');
+  ok(/too few to draw a book/.test(sk),
+     'g6 ...and a genuinely empty frame still refuses, with a reason about the RECORDING');
+  // the live floor must be untouched — this is a health check and it still has to bite
+  ok(num('SK_MIN_STRIKES')===20, 'g7 the LIVE floor is unchanged at 20 — the guard still works live');
+}
+{
+  // the strip discloses the depth
+  const strip=decomment(ex('replayBarHtml'));
+  // ⚠ g8/g9 WERE SOURCE GREPS AND SURVIVED MUTATION: gating the emit with `if(false)` leaves both
+  // strings in the text. Bind to the STATEMENT that produces the output, not to words near it.
+  ok(/if\(_dp!=null\) h\+=/.test(strip),
+     'g8 the depth is EMITTED under a live condition, not merely mentioned');
+  ok(/_dp=\(_sp&&_sp\.shallow!=null\)\?_sp\.shallow:null/.test(strip),
+     'g8b ...and the value comes from skPiles\' recorded depth');
+  ok(/A LIVE ladder reads about 100/.test(strip),
+     'g9 ...and the hover says what it is being compared against, not just a bare number');
 }
 
 console.log('test_replay: '+pass+' passed, '+fail+' failed');

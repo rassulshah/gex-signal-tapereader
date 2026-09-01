@@ -1,3 +1,48 @@
+## v15.16 — one constant was refusing 93% of every replayed session
+
+> "it still has 100% for one strike, the entire node profile is missing, the arrows dont make sense,
+> there are no statuses. total failure" · "do you know the code. do you review it before making
+> changes to see what needs to be updated"
+
+**He was right about the method, and the review found it in one pass.** `skPiles()` opens with a
+health floor:
+
+    SK_MIN_STRIKES = 20   // "A healthy SPXW ladder reads 100; below 20 the DOM changed."
+
+That is a **live-parse** heuristic: thinness is evidence a markup change broke the reader. **A
+recorded frame's depth is not evidence of anything** — it is what the recorder stored, and `vend` was
+capped at 40 rows **across all four books** until v15.10.
+
+    MEASURED, 2026-08-31, 129 frames:   SPXW strikes  min 13 · median 17 · max 40
+    frames clearing the live floor of 20:  9 of 129
+
+So **120 of 129 bars were refused**, and a `skPiles` refusal returns NO PILES — which is every symptom
+he listed, from one constant: no node profile, no statuses (they hang off the node rows), nothing for
+`rollScan` to pair, and a lone surviving strike reading 100%.
+
+`SK_MIN_STRIKES_REPLAY = 5` is the floor for a recorded book — enough to still refuse a frame that is
+not a book, low enough to admit the thinnest frame measured. ⚠ **The live floor is unchanged at 20**;
+it is a real guard and still bites.
+
+### ⚠ AND THE DEPTH IS DISCLOSED, BECAUSE A SHALLOW REPLAY MUST NOT READ AS A THIN MARKET
+
+The strip carries the recorded strike count in replay, with a hover naming what it is compared
+against — a live ladder reads ~100, a pre-v15.10 frame holds ~17. Without it, "the book was thin
+then" and "we only stored this much" are indistinguishable, which is the failure this project has
+paid for repeatedly.
+
+### the review that should have come first
+
+Every gate in the ladder path was traced: `emBand` (pin, candles, EM floor), `emRailBounds`,
+`skPiles` (nine refusals), `emPilesIF`, `ifLadder`, `tradeNodes`, `ladderHtml`. Two live dependencies
+remain in a replayed face and both are now named rather than discovered: `ifLadder` still supplies
+`dispScale` from the LIVE IF chain, and the ladder's LEVELS are still live.
+
+### testing
+
+`test_replay.js` at **156**. 5 mutations; the survivor was mine again — a source grep that could not
+see `if(false)` on the disclosure emit, now bound to the statement.
+
 ## v15.15 — the band centres on the replayed bar, and the sync gate stands down
 
 > "the nodeprofile has only 1 node. no arrows, no status. nothing." · "it also says out of sync"

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.15
+// @version    15.16
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -641,7 +641,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.15';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.16';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -1125,6 +1125,17 @@ function replayBarHtml(){
         '<span style="position:absolute;top:14px;right:0;font-size:9px;color:#4a5666">'+hlClock(RP_CLOSE_SEC)+'</span>'+
        '</span>';
     h+='<span style="font-size:11.5px;color:'+(on?A:PAL.time)+';min-width:40px;text-align:right;font-variant-numeric:tabular-nums">'+g3esc(clkTxt)+'</span>';
+    // ⚠⚠ (v15.16) DISCLOSE THE DEPTH OF A REPLAYED BOOK. A live SPXW ladder reads ~100 strikes; a
+    // frame recorded before v15.10 holds a median of 17, because `vend` was capped at 40 rows across
+    // all four books. The ladder is therefore GENUINELY thinner in replay, and without this the only
+    // honest reading of a short ladder — "the book was thin then" — is indistinguishable from the
+    // true one, "we only stored this much". Absence of data is not a reading.
+    if(on){
+      var _dp=null; try{ var _sp=skPiles(emBand(activeSym()), activeSym()); _dp=(_sp&&_sp.shallow!=null)?_sp.shallow:null; }catch(eDp){}
+      if(_dp!=null) h+='<span style="font-size:9px;color:'+SUB+';font-variant-numeric:tabular-nums" title="'+
+        g3esc('This replayed book carries '+_dp+' SPXW strikes. A LIVE ladder reads about 100 — frames recorded before v15.10 stored only the 40 largest rows across all four books, so a replayed ladder is genuinely shallower than the live one it reproduces. Everything the ladder DRAWS at the P20 threshold survives; the grey minors may not. Frames recorded from v15.10 onward store 90 rows.')+
+        '">'+_dp+'k</span>';
+    }
     if(on){
       h+='<span data-grp="exit" style="font-size:9.5px;color:'+A+';background:rgba(242,180,90,0.13);padding:3px 6px;'+
          'border-radius:9px;line-height:1;cursor:pointer" title="Back to live">↺ REPLAY</span>';
@@ -22228,6 +22239,18 @@ var PILE_BAL_MIN = 15;
 // session ever renders more than ~5 and they collide — the renderer measures nothing.
 var PLAB_MIN_PCT = 20;
 var SK_MIN_STRIKES = 20;   // ⚖ hand-set. A healthy SPXW ladder reads 100; below 20 the DOM changed.
+// ⚠⚠ (v15.16) THE REPLAY FLOOR, AND THE DISTINCTION IS THE WHOLE POINT. SK_MIN_STRIKES is a LIVE
+// HEALTH heuristic — its own comment says "below 20 the DOM changed", i.e. thinness is EVIDENCE OF A
+// BROKEN PARSE. A recorded frame's depth is not evidence of anything: it is a known, fixed property
+// of what the recorder stored, and until v15.10 the recorder capped `vend` at 40 rows across all
+// four books, which leaves a median of SEVENTEEN SPXW strikes per frame.
+// MEASURED on 2026-08-31: 129 frames, SPXW strikes min 13 / median 17 / max 40 — so the live floor
+// refused **120 of 129 bars**, and a refusal in skPiles returns NO PILES: no nodes, no states (they
+// hang off the node rows), and nothing for rollScan to pair. That is the operator's "1 node, no
+// arrows, no statuses" in one constant.
+// ⚠ The floor is not removed, it is re-aimed: a replayed book still has to carry enough strikes to
+// be a book at all, and the face DISCLOSES the depth so a shallow replay never reads as a thin market.
+var SK_MIN_STRIKES_REPLAY = 5;
 // ---- (v11.81) NODE ROLES, ON SKYLIT'S OWN LADDER AND SKYLIT'S OWN CONSTANTS --------------------
 // The user asked for KING / GATE / RUG / REVERSE-RUG on the rail. v11.79 shipped ACC/BRK/BAL, which is
 // POLARITY, not ROLE — a node's polarity says how hedging behaves there; its role says what SHAPE the
@@ -22389,7 +22412,17 @@ function skPiles(B, sym){
     if(!T){ out.why='SPXW tape unreadable'; return out; }
     if(!T.pct || !Object.keys(T.pct).length){ out.why='SPXW tape has no strike map'; return out; }
     out.count=T.count||Object.keys(T.pct).length;
-    if(!(out.count>=SK_MIN_STRIKES)){ out.why='SPXW tape thin ('+out.count+' strikes)'; return out; }
+    // ⚠ a REPLAYED book is judged on "is this a book", never on live-parse health — see the note on
+    // SK_MIN_STRIKES_REPLAY. `shallow` carries the depth to the face rather than leaving a thinner
+    // ladder to be read as a thinner market.
+    var _rp=false; try{ _rp=(typeof replayOn==='function' && replayOn()); }catch(eRp){}
+    var _floor=_rp?SK_MIN_STRIKES_REPLAY:SK_MIN_STRIKES;
+    if(_rp) out.shallow=out.count;
+    if(!(out.count>=_floor)){
+      out.why=_rp ? ('the frame recorded only '+out.count+' SPXW strikes — too few to draw a book')
+                  : ('SPXW tape thin ('+out.count+' strikes)');
+      return out;
+    }
     if(T.king==null){ out.why='no King on the SPXW tape'; return out; }
 
     // ---- (v11.78) THE KING IS THE ANCHOR, SO PROVE IT BEFORE TRUSTING THE LADDER --------------------

@@ -131,6 +131,38 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.16 · 2026-09-01 · **"DO YOU KNOW THE CODE" — NO, AND THE REVIEW HE ASKED FOR FOUND IT IN ONE PASS**
+
+> "do you know the code. do you review it before making changes to see what needs to be updated. its
+> like you are making changes to code that you dont know."
+
+He was right, and the correction is method, not effort. I had shipped SIX builds of replay fixes by
+following symptoms — each one a consumer I discovered only when he reported it. **Tracing every gate
+in the ladder path took one pass and found the actual cause immediately.**
+
+    SK_MIN_STRIKES = 20    "A healthy SPXW ladder reads 100; below 20 the DOM changed."
+    his frames:            SPXW strikes  min 13 · median 17 · max 40
+    frames clearing it:    9 of 129
+
+**120 of 129 replayed bars were refused by one constant**, and a `skPiles` refusal returns no piles —
+which is every symptom he listed at once: no node profile, no statuses (they hang off the node rows),
+nothing for `rollScan` to pair, one lone strike at 100%.
+
+⚠⚠ **THE DEEPER ERROR: A HEALTH HEURISTIC APPLIED TO A DIFFERENT KIND OF INPUT.** That floor means
+"thinness is EVIDENCE the parser broke". For a recorded frame thinness is not evidence of anything —
+it is what the recorder stored. **Every threshold carries an implicit claim about where its input
+came from, and replay changed the provenance of the input without changing the thresholds.** The same
+mistake produced `rollsLive` (RTH-only), `velOk` (live harvest), `tapeSync` (live votes) and
+`closedCandles` (live candles). **Five constants and gates, one misconception.**
+
+⚠ **THE METHOD THAT WOULD HAVE FOUND ALL FIVE ON DAY ONE:** list every early return, floor and
+freshness check between the data source and the pixels, and ask of each *"what does this assume about
+where its input came from, and is that still true in replay?"* That is a thirty-minute read of one
+call path. I instead shipped six builds and made him find each one.
+
+⚠ And the depth is now DISCLOSED on the strip. A replayed ladder is genuinely shallower than the live
+one — without saying so, "the book was thin then" and "we only stored this much" look identical.
+
 ### v15.15 · 2026-09-01 · **ONE CAUSE WORE FOUR SYMPTOMS, AND I FIXED THREE OF THEM SEPARATELY FIRST**
 
 "the nodeprofile has only 1 node. no arrows, no status. nothing." — and they were **one bug**.
