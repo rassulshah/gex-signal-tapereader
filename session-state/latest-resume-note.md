@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-01 · panel v15.19 · companion v1.16 · supersedes every earlier resume note_
+_written 2026-09-01 · panel v15.20 · companion v1.16 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.19, and what the face carries
+## 2 · WHERE WE ARE — v15.20, and what the face carries
 
-**Panel v15.19 · companion v1.16.** Suite **132 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.20 · companion v1.16.** Suite **132 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -178,6 +178,29 @@ reproducing the call — match the INPUT UNIVERSE too.**
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
 
+⚠⚠ **v15.20 — THE READ IS OFF (`CFG.read=false`) AND THE FIRST REMOVAL TOOK THE WRONG LINE.**
+He asked at v15.10 ("take out the read … where it say Range day - Trinity"); something else went and
+`.g3tread` — *"EVENT day · Trinity 2-of-3 … KING 7664 (brake) holds"* — stayed, so he had to say it
+again. It is a SETTING, not a deletion ("I might come back to it later"): every producer still runs
+and the check is `===true`, so a config stored before the key existed leaves it OFF.
+⚠ **When the instruction names what is ON SCREEN, confirm against the screen** — `render-face.js`
+exists now, so there is no excuse for removing the wrong thing twice.
+
+⚠⚠ **AND `__gptsDebug.audit()` WAS INVENTING A FAULT AND THEN CRASHING.** It read `body.innerText`,
+a rendering-dependent property that a layout-free DOM returns `undefined` for, tested the string
+"undefined" against itself, reported *"the face prints undefined somewhere"*, and threw on `.split`.
+`itxt()` falls back to `textContent`. **The auditor was the broken thing, and only became visible
+once the face could be rendered in a test.**
+
+✅ **LIVE CHECK, v15.19 on his panel, 2026-09-01 08:58 CT, market open:** audit ok / 0 violations ·
+0 render errors · velocity harvest ok, 1212 objects of 2678 scanned · 17 ladder rows · storage
+2,753KB of 10,240 (27%), 0 shed, 0 quota hits · panel 651px in an 837px window, body scrollHeight
+962 / client 621 — **it scrolls.** The replay strip and tab bar are present and the day selector
+reads `Tue 1 Sep`.
+✅ **The v15.18 arrow fix is doing live work:** on his own book that morning, 7615 (`cur −4,939,537`,
+`d15 +77,796`) and 7655 (`cur −3,927,477`, `d15 +249,912`) both read as RECEIVING by sign while
+their mass was FALLING. Exactly the inversion, live.
+
 ⚠⚠⚠ **v15.19 — READ THIS BEFORE TOUCHING ANY REPLAYED SURFACE. THERE IS NOW A TEST THAT DRAWS.**
 `node tools/render-face.js 2026-08-31 14:12` renders the REAL userscript in jsdom, parked on a real
 recorded minute, and prints what the body contains plus every swallowed error. `test_replay_face.js`
@@ -279,7 +302,8 @@ tapsN=null; … }` leaves the text intact. Fourth recorded instance in this proj
 profile is exact at 14:12 strike for strike, and "only five nodes" is every SPXW strike at or above
 the 20% threshold, the same filter the live ladder applies.
 
-**FIRST THING TO DO: drag it on the live panel — v15.17, v15.18 AND v15.19 HAVE NEVER BEEN SEEN WORKING.** Check the ladder, kings and ⓪a move together, the
+**FIRST THING TO DO: drag the slider on the live panel.** v15.19 was seen working LIVE (above); the
+REPLAY side of v15.17-v15.19 has still never been dragged on his real panel. Check the ladder, kings and ⓪a move together, the
 clock reads the parked bar, ◀ reaches Friday, and `__gptsDebug.storage()` shows no new writes.
 
 ### the rest of the face

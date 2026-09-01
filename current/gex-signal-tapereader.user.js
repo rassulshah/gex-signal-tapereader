@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.19
+// @version    15.20
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -150,6 +150,12 @@ var CFG = {
   // A real setting, not a debug flag: someone studying the OVERNIGHT book wants it off.
   lastBook: true,
   dayHL: true,        // (v14.57) the ⓪ a DAY — HOD/LOD section
+  // ⚠ (v15.20) THE READ IS OFF. Operator, 2026-08-31: "take out the read. I might come back to it
+  // later" — and again 2026-09-01: "i said to remove the read , where it says event day". The first
+  // removal took the wrong line: he meant `.g3tread`, the paragraph that opens "EVENT day · Trinity
+  // 2-of-3 …". It is a SETTING and not a deletion, because he said he may want it back: everything
+  // that builds it still runs, so turning it on costs a toggle rather than a build.
+  read: false,
   ftReq: true, boPb: true, dir: 'both', nodeThresh: 20, voidBackN: 2,
   trendOn: true, trendMA: { SPY:50, QQQ:50 },
   smaShort: { SPY:9, QQQ:9 }, smaLong: { SPY:21, QQQ:21 },
@@ -210,6 +216,7 @@ function loadCfg(){
       if(typeof o.lastBook==='boolean') CFG.lastBook=o.lastBook;
       if(o.mkt==='SPX'||o.mkt==='QQQ'||o.mkt==='auto') CFG.mkt=o.mkt;
       if(typeof o.dayHL==='boolean') CFG.dayHL=o.dayHL;
+      if(typeof o.read==='boolean') CFG.read=o.read;
       if(typeof o.showSPY==='boolean') CFG.showSPY=o.showSPY;
       if(typeof o.showQQQ==='boolean') CFG.showQQQ=o.showQQQ;
       // #5 display
@@ -641,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.19';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.20';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -26668,7 +26675,9 @@ function secFrame(sym){
           }
         }
       }catch(eF6){}
-      if(FR.length){
+      // ⚠ (v15.20) OFF BY HIS INSTRUCTION — see CFG.read. Explicit `===true`, so a stored config
+      // from before this build (which has no `read` key at all) leaves it off rather than on.
+      if(FR.length && CFG.read===true){
         var frTxt=FR.map(function(fseg){ return fseg.charAt(0).toUpperCase()+fseg.slice(1); }).join('. ')+'.';
         // (v14.40) the v14.39 chip strip is GONE — its form was rejected ("the idea was to have
         // a line with small arrowheads"). The levels now hang from THE LEVELS LINE, a separate
@@ -28296,14 +28305,24 @@ window.__gptsDebug.audit = function(){
     var kc=0; crowns.forEach?crowns.forEach(function(e){ if(/\u265b/.test(e.textContent)) kc++; }):null;
     if(kc>1) v.push('TWO CROWNS in the profile ('+kc+') — the latch is being double-sourced');
     var body=document.getElementById('gpts-body');
-    var txt=body?body.innerText:'';
+    // ⚠ (v15.20) `innerText` IS NOT GUARANTEED TO EXIST. It is a rendering-dependent property: any
+    // environment without layout (a headless DOM, a detached tree) returns undefined, and this audit
+    // then tested the STRING "undefined" against itself and reported "the face prints undefined
+    // somewhere" — a violation invented by its own probe — before throwing outright on `.split` two
+    // lines down. An auditor that fabricates and then crashes is worse than no auditor.
+    var itxt=function(el){ try{ return (el&&(el.innerText||el.textContent))||''; }catch(e){ return ''; } };
+    var txt=itxt(body);
     if(/undefined/.test(txt)) v.push('the face prints "undefined" somewhere');
     if(/NaN/.test(txt)) v.push('the face prints "NaN" somewhere');
+    // ⚠ (v15.20) the read is a SETTING now, so its absence is only a violation when it is switched
+    // on. Left as-is, this audit would report a fault on every render of the face he asked for.
     var tr=document.querySelector('.g3tread');
-    if(!tr) v.push('the read line is missing');
-    else if(!/day/.test(tr.innerText.split('.')[0]||'')) v.push('the read does not open with the day type');
+    if(CFG.read===true){
+      if(!tr) v.push('the read line is missing');
+      else if(!/day/i.test((itxt(tr).split('.')[0])||'')) v.push('the read does not open with the day type');
+    } else if(tr){ v.push('the read line is drawn while CFG.read is off'); }
     var pill=document.querySelector('.g3emn');
-    if(pill && !/\d/.test(pill.innerText)) v.push('the pill carries no number');
+    if(pill && !/\d/.test(itxt(pill))) v.push('the pill carries no number');
     if(typeof IRT_LAST==='object' && IRT_LAST && IRT_LAST.err) v.push('export error: '+IRT_LAST.err);
     var spk=document.querySelectorAll('.g3spyk').length;
     if(spk>1) v.push('multiple SPY K flags ('+spk+')');

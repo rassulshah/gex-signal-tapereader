@@ -131,6 +131,27 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.20 — the auditor was the thing that was broken
+
+**1 · A false thing, and it had been shipping for builds.** `__gptsDebug.audit()` — the surface whose
+whole job is to tell me whether the face is sound — read `body.innerText`, a RENDERING-DEPENDENT
+property that a layout-free DOM returns `undefined` for. It then tested the string "undefined"
+against itself, reported *"the face prints undefined somewhere"*, and threw on `.split` two lines
+later. ⚠ **An auditor that fabricates a fault and then crashes is worse than no auditor**: the first
+costs a session chasing a defect that does not exist, the second hides every real finding behind it.
+It was invisible until v15.19 made it possible to run the audit against a rendered panel.
+
+**2 · A removal that took the wrong line, and stayed wrong for ten builds.** He said "take out the
+read … where it say Range day - Trinity" at v15.10; I removed something else and never confirmed
+against the face. He had to say it twice, the second time naming the words on screen ("where it says
+event day"). ⚠ **When the instruction names what is ON SCREEN, the confirmation has to be the screen**
+— and since v15.19 there is no excuse, because the panel can be rendered and grepped.
+
+**3 · Off is a SETTING, not a deletion, when he says he may want it back.** "I might come back to it
+later" is a requirement. `CFG.read=false` keeps every producer running, so restoring it is a toggle
+rather than a build — and the check is `===true` so a config written before the key existed does not
+silently switch it on.
+
 ### v15.19 — a test suite that cannot DRAW the thing cannot tell you it is broken
 
 **1 · The false thing, and it is about my own method.** I believed a green suite meant the replayed

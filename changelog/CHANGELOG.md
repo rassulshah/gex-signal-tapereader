@@ -1,3 +1,53 @@
+## v15.20 — the read is out, and the auditor was inventing a fault out of its own probe
+
+> "i said to remove the read , where it says event day. double check and make sure everything is
+> working right"
+
+### THE READ IS OFF — AND THE FIRST REMOVAL TOOK THE WRONG LINE
+
+At v15.10 he said "take out the read. I might come back to it later. The read is where it say Range
+day - Trinity". Something else went, and the line he meant stayed:
+
+    EVENT day · Trinity 2-of-3 (Kings above price; QQQ dissents) — reduced conviction.
+    KING 7664 (brake) holds, 12 above price. Support 7639 (27% accelerator)…
+
+That is `.g3tread`, read off his live panel this morning. It is now **`CFG.read`, defaulting to
+false** — a SETTING, not a deletion, because he said he may want it back: everything that builds the
+read still runs, so restoring it is a toggle rather than a build. ⚠ The check is `=== true`, so a
+config stored before this build (which has no `read` key) leaves it off rather than on.
+
+### ⚠⚠ AND THE RENDER AUDIT WAS FABRICATING A VIOLATION, THEN CRASHING
+
+`__gptsDebug.audit()` read `body.innerText` — a **rendering-dependent** property that any layout-free
+DOM returns `undefined` for. So it tested the string "undefined" against itself and reported
+**"the face prints undefined somewhere"** — a fault invented by its own probe — and then threw
+outright on `tr.innerText.split(...)` two lines later. Found because `test_replay_face` runs the real
+audit against a rendered panel, which nothing could do before v15.19.
+⚠ An auditor that fabricates a fault and then crashes is worse than no auditor: it costs a session
+chasing a defect that does not exist. `itxt()` falls back to `textContent` and never throws.
+The audit also now knows the read is a setting: its absence is only a violation when it is switched
+ON, and a read drawn while the setting is OFF is now itself a violation.
+
+### CHECKED ON HIS LIVE PANEL, NOT INFERRED
+
+Read off the running v15.19 at 08:58 CT with the market open:
+
+    audit            ok, 0 violations          render errors    0
+    velocity harvest ok, 1212 objects / 2678 scanned            ladder rows 17
+    storage          2,753KB of 10,240 (27%), 0 shed, 0 quota hits, 13 writes
+    panel            651px in an 837px window · body scrollHeight 962 / client 621 — SCROLLS
+
+⚠ **And the v15.18 arrow fix is doing live work today.** Two strikes on his own book right now where
+the signed delta and the mass disagree — the exact inversion:
+
+    7615   cur −4,939,537   d15 +77,796    mass −77,796    ← "receiving" by sign, SHEDDING in fact
+    7655   cur −3,927,477   d15 +249,912   mass −249,912   ← same
+
+### verification
+`test_replay_face.js` 36 → **44 assertions**. Six mutations run individually, six caught — including
+the read defaulting on, the read deleted rather than switched off, a stored config unable to bring it
+back, and the audit reverted to a bare `innerText`. Suite 132 green / 6 baseline red.
+
 ## v15.19 — one refusal upstream was hiding six surfaces, and nothing here could draw the face
 
 > "there are things that are missing , even the headings are missing , the king path in the king

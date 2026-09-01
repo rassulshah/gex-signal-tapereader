@@ -600,7 +600,7 @@ try:
     if _tracked and _sp.run(['git', 'diff', '--quiet', '--', 'install.bat']).returncode != 0:
         _sp.run(['git', 'checkout', '--', 'install.bat'], check=True)
         print('')
-        print('(install.bat restored from HEAD — it is an intermediate; the delivery is install%s.bat)'
+        print('(install.bat restored from HEAD — it is an intermediate; the delivery is installv%s.bat)'
               % V.replace('.', ''))
 except Exception as _e:
     print('WARN: could not restore install.bat (%s)' % _e)

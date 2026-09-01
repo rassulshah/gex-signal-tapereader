@@ -191,5 +191,40 @@ ok(num(A.text,/HL RNG ([\d.]+)/)!==num(B.text,/HL RNG ([\d.]+)/),
 ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
    'f11c ...and the King itself', [num(A.text,/KING ([\d.]+)/), num(B.text,/KING ([\d.]+)/)]);
 
+// ---- 9 · THE READ IS OFF, AND IT IS A SETTING RATHER THAN A DELETION -------------------------
+// Operator, 2026-08-31: "take out the read. I might come back to it later." Restated 2026-09-01:
+// "i said to remove the read , where it says event day" — the FIRST removal took the wrong line.
+// The one he means is `.g3tread`, the paragraph opening "EVENT day · Trinity 2-of-3 …".
+{
+  ok(R.html.indexOf('g3tread')<0, 'r1 the read line is NOT drawn', R.html.indexOf('g3tread'));
+  ok(!/EVENT day|RANGE day \u00b7 Trinity/.test(R.text), 'r1b ...and its opening words are nowhere on the face');
+  const cfg=JSON.parse(R.run('JSON.stringify({read:CFG.read, dayHL:CFG.dayHL})'));
+  ok(cfg.read===false, 'r2 CFG.read is off by default', cfg);
+  // ⚠ everything that BUILDS the read still runs — he may want it back, and a deletion would make
+  // that a build instead of a toggle. Turning it on must actually bring it back.
+  R.run('CFG.read=true; render();');
+  const on=R.run('elBody.innerHTML');
+  ok(on.indexOf('g3tread')>=0, 'r3 EXECUTED: switching it on brings the read back, so nothing was deleted');
+  ok(/EVENT day|RANGE day|day \u00b7/.test(on.replace(/<[^>]+>/g,' ')), 'r3b ...with its day-type opening intact');
+  // ...and the render audit must not call the deliberate absence a fault
+  R.run('CFG.read=false; render();');
+  const aud=JSON.parse(R.run('JSON.stringify(__gptsDebug.audit())'));
+  // ⚠ THIS IS WHERE THE AUDIT'S OWN BUG WAS FOUND. It read `body.innerText` — a rendering-dependent
+  // property that any layout-free DOM returns undefined for — so it tested the string "undefined"
+  // against itself, reported "the face prints undefined somewhere", and then threw on `.split`.
+  // Fixed at v15.20 (itxt()). Still scoped to the read here, because the harness has no companion
+  // and therefore legitimately has no EM pill.
+  const readViols=(aud.violations||[]).filter(v=>/read/i.test(v));
+  ok(readViols.length===0, 'r4 the render audit does not call the deliberate absence a fault', readViols);
+  ok(!(aud.violations||[]).some(v=>/prints "undefined"/.test(v)),
+     'r4c the audit no longer invents a violation out of its own missing probe', aud.violations);
+  R.run('CFG.read=true; render();');
+  const audOn=JSON.parse(R.run('JSON.stringify(__gptsDebug.audit())'));
+  ok((audOn.violations||[]).filter(v=>/read/i.test(v)).length===0,
+     'r4b ...and still checks the read properly when it IS switched on',
+     (audOn.violations||[]).filter(v=>/read/i.test(v)));
+  R.run('CFG.read=false; render();');
+}
+
 console.log('test_replay_face: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

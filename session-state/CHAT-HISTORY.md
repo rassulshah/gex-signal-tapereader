@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-01 · v15.19 · session `5e8d34b5`
+## 2026-09-01 · v15.20 · session `5e8d34b5`
 
-_7 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_10 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -96,8 +96,61 @@ A CSS invariant beats a JS measurement for the scroll. But first — the missing
 The harness needs to become a test, not a one-off script.
 Four survivors — three weak assertions of mine and one case the harness doesn't reach. Fixing the tests.
 Now the record, then the build.
+You're right to be angry, and the reason you've had to find nine of these yourself is one thing: **nothing in this project could draw the panel.** Every test executes a *function* — which proves a function returns the right number and …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 9 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (04:50):** The 9 commits are made and the tree is clean, but I can't push them from here — the proxy refuses to issue a credential for this repo:
+
+```
+remote: rassulshah/gex-signal-tapereader is not in this session's authorized repository set
+fatal: ... 403
+## main...origin/main [ahead 9, behind 6]
+```
+
+That's a session permission, not a git problem, and nothing I can change from inside the sandbox. It's also why we're 6 behind: your machine has commits this session has never seen.
+
+This doesn't affect the build. `installv1519.bat` carries the full tree, and the installer commits **and pushes** on your machine when you run it — that's the path this project has always used to reach origin. So running the installer publishes these 9 commits from your side.
+
+If you'd rather I push directly in future sessions, the repo needs adding to the session's authorized sources when you start the task; otherwise the installer remains the delivery.
+
+**OPERATOR:**
+> Market will be open in 1 minute.  Make sure you are ready
+
+**me (13:29):** Ready. Three things you need in the first minutes:
+
+**1. Confirm the build before you trade off it.** The header must read **v15.19**. If it still says 15.17 or 15.18, the roll arrows on your screen are the old ones.
+
+**2. v15.18 changed the arrows LIVE, not just in replay.** This is the one thing that will look different today. `rollScan` used to test the signed delta, which is inverted on the negative side of the book — a strike *gaining* mass was drawn as the source. Over the recorded days that was 40 arrows pointing backwards. Expect **fewer arrows** (446 → 310 across three days) and expect some to point the opposite way from what you're used to. If one looks wrong today, tell me the strike and the minute and I'll decode it against the tape rather than guess.
+
+**3. Everything else in v15.19 is replay-only** — the frame-pinned EM band, the session clock, the king-lane axis, the ladder scale. Your live face is unchanged by those. The one live cosmetic: the panel now can't grow taller than the window, so if it was clipping before, it will scroll.
+
+While you're trading I'll stay out of the way — no builds, no installs. If something looks wrong, the fastest thing you can give me is the strike, the clock time and what the panel said; I can now render your exact minute headlessly and compare it to the recorded book instead of asking you to run console commands.
+
+Today's session records as it goes, so tonight it's replayable.
+
+**OPERATOR:**
+> check everything. reloaded. also i said to remove the read , where it says event day.  double check and make sure everything is working right
+
+**me (14:01):** v15.19 is live. Scrolling the panel to see the top.
+The read is `g3tread` — "EVENT day · Trinity 2-of-3 …". Finding its emitter.
+Now a full audit of the live panel while it's running.
+Live panel is clean — and it confirms the arrow fix matters today: `7615` and `7655` are negative strikes whose signed delta says *receiving* while their mass says *shedding*.
+The audit flagged `undefined` on the replayed face — the live panel is clean, so that's replay-specific. Finding it.
+The audit throws on `innerText` — a real robustness hole, not just a jsdom quirk.
 
 ### DECISIONS
+
+**v15.20 · the read, and the auditor.**
+- **The read is out — `CFG.read=false`.** The v15.10 removal took the wrong line; the one he meant is
+  `.g3tread`, "EVENT day · Trinity 2-of-3 …". A SETTING, not a deletion, because he said he may want
+  it back.
+- **`__gptsDebug.audit()` was inventing a violation and then crashing** on `body.innerText`, which a
+  layout-free DOM returns undefined for. The auditor was the broken thing.
+- **Checked his LIVE panel rather than inferring:** audit ok, 0 render errors, harvest healthy,
+  storage 27% with 0 shed, and the body scrolls (962/621).
 
 **v15.19 · the face renders now.**
 - **The real failure was that nothing here could DRAW the panel.** Every test executes a function; a
@@ -153,6 +206,9 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.20** — `CFG.read` (off); the render audit's `itxt()` and its read-aware checks.
+`test_replay_face.js` 36 → 44 assertions; six mutations, six caught. Suite 132 green / 6 baseline red.
+
 **v15.19** — the frame-pinned EM band; `clockNow()` and `sessionPhase()` on the parked minute; the
 king lane's axis; `ifLadder` scaled from the frame with no invented levels; the ROC column drawing
 `rp*`; `max-height:calc(100vh - 16px)` on the panel. New `test_replay_face.js` (36 assertions, all
@@ -170,6 +226,10 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. **The REPLAY side has still never been dragged on his real panel** — the live face is confirmed
+   good as of 08:58 CT today, the slider is not.
+2. The ladder's LEVELS still do not replay, deliberately.
 
 1. **v15.17, v15.18 AND v15.19 have never been seen on his live panel.**
 2. **Run `node tools/render-face.js <day> <hh:mm>` before claiming any replayed surface works.**
@@ -205,6 +265,8 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+4a9b011 build: name the delivery file correctly in the builder's own note
+e58c333 v15.19: one refusal upstream was hiding six surfaces, and nothing here could draw the face
 2e74842 build: the installer no longer leaves a tracked 36k-line blob in the tree
 3b5701a v15.18: the arrows were pointing backwards, and the states could only say two things
 74c0b55 v15.17: arrows point at rows the ladder draws; the panel fits the window
@@ -215,8 +277,6 @@ seventeen caught. Suite 132 green / 6 baseline red.
 6806ea9 v15.12: the expected-move pin survives a chart switch
 b25ebdd v15.11: replay reads the frame for the crowns and the accumulation
 5ae134d v15.10: the replay slider; the version in the header; the read removed
-a48e704 record: WITHDRAW F-10b - the morning is not shed; the reads were complete all along
-a278846 record: the F-10 storage fix IS built - the real bug is that the budget sheds the morning
 ```
 
 ---
