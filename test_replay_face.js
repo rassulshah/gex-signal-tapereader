@@ -461,6 +461,81 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
   }
   // the frame itself: a band edge and the rows it contains must be the same order of magnitude
   const EBn=JSON.parse(R.run('JSON.stringify((function(){var b=emBand("SPY");return {lo:b.low,hi:b.high,hw:b.hiWater};})())'));
+  // ⚠⚠ (v15.28) AND THE BAND'S OWN LABELS MUST BE INSIDE THE FRAME. Operator: "where is the
+  // expected low". It WAS drawn — `EL 7615` at top:300px in a ladder exactly 300px tall — hanging on
+  // the boundary with its body clipped away. This is the NORMAL case, not an edge case:
+  // emRailBounds STARTS the frame at the band, so lo = EL and hi = EH, and on any day price stays
+  // inside the band both labels land exactly on an edge by construction. The expected low has been
+  // unreadable far more often than it has been readable.
+  {
+    const H=+((R.html.match(/class="g3lad" style="height:(\d+)px/)||[])[1]||0);
+    const pills=[...R.html.matchAll(/class="g3ldempill" style="top:([\d.]+)px"[^>]*>([^<]*)</g)]
+      .map(m=>({ top:+m[1], lab:m[2].trim() }));
+    ok(H>0, 'y6 the ladder declares a height', H);
+    ok(pills.length>0, 'y6b the band draws its labels', pills.map(p=>p.lab));
+    pills.forEach(function(p){
+      const nm=p.lab.split(' ')[0];
+      ok(p.top>=0 && p.top<=H-11,
+         'y6·'+nm+' the '+nm+' label is INSIDE the frame, not clipped on its edge',
+         {top:p.top, H:H, max:H-11});
+    });
+    ok(!(300<=300-11), 'y6z ...and a label at top=H in an H-tall frame is NOT inside it');
+    // ⚠⚠ HONEST LIMIT OF THE ABOVE. In EVERY recorded fixture the band sits at the TOP of the frame
+    // (rails at 0.0 and ~5), because the replayed piles push the floor far below EL — so the checks
+    // above exercise the TOP edge and never the bottom. His live case was the opposite: the frame's
+    // floor WAS the band's low, putting EL at exactly H. No recorded day reproduces it, so THIS arm
+    // is pinned on the source, and it is marked as such rather than dressed up as an execution.
+    // ⚠⚠ (v15.29) THESE THREE WERE GREPS AND THEY WERE GUARDING A CLAMP THAT DID NOT WORK.
+    // A real browser (test_ladder_layout.js) showed the EL label rendering at 299..312 in a 300px
+    // window on the build these greps called correct: the pill's `top` is its CENTRE (13px box,
+    // translateY(-50%)), the window is SHORTER than the frame, and the header row inside the scroll
+    // box ate another 12px. Three facts a grep cannot see and jsdom cannot measure.
+    // They are replaced by the browser assertions and reduced to pinning the SHAPE of the fix.
+    ok(/viewBot-EMPILL_HALF/.test(src) && /viewTop\+EMPILL_HALF/.test(src),
+       'y7 the EM label is clamped to the VISIBLE WINDOW, not to the content frame');
+    ok(/EMPILL_HALF=7/.test(src),
+       'y7b ...by the pill\'s HALF height, because its `top` is its centre (13px box, translateY(-50%))');
+    ok(/max-height:'\+\(viewH\+LADHD_H\)/.test(src),
+       'y7c ...and the window adds back the header row that shares the scroll box');
+    // ⚠⚠ (v15.28) AND THE VIEW OPENS ON THE EXPECTED MOVE. Operator: "at the open the ladder should
+    // be drawn from the expected move low to the expected move high and then from that point on
+    // should adjust its height based on price movement taking out either side as well as allowing
+    // me to scroll up and down."
+    // MEASURED BEFORE: the band was a FIVE-PIXEL sliver at the top of a 640px frame, because in
+    // replay the pin carried rr:1 while `feat.emband` is in CHART units and the frame's `px` is the
+    // UNDERLYING price — so `now`/`hiWater`/`loWater` stayed on the other ruler and emRailBounds
+    // stretched the frame from 743.95 to 7730.4, a span of 6,986 points.
+    const wrap=R.html.match(/class="g3ladwrap g3ladscroll" data-vtop="(\d+)" style="max-height:(\d+)px"/);
+    ok(!!wrap, 'y8 the ladder wrapper carries a window onto the frame', wrap&&wrap[0]);
+    if(wrap){
+      const vtop=+wrap[1], vh=+wrap[2];
+      const rails=[...R.html.matchAll(/class="g3ldem g3ldemL" style="top:([\d.]+)px"/g)].map(m=>+m[1]).sort((a,b)=>a-b);
+      ok(rails.length===2, 'y8b ...and both band edges are drawn', rails);
+      if(rails.length===2){
+        const bandPx=rails[1]-rails[0];
+        ok(bandPx>=vh*0.5,
+           'y8c EXECUTED: the expected move fills at least half the window — not a sliver at the top',
+           {bandPx:+bandPx.toFixed(1), windowH:vh, share:+(bandPx/vh).toFixed(2)});
+        ok(rails[0]>=vtop-1 && rails[1]<=vtop+vh+1,
+           'y8d ...and both edges are INSIDE the window the view opens on', {rails, vtop, vh});
+        // ⚠ THE WINDOW MUST BE A WINDOW. y8c only says the band fills its share of it — with the
+        // window set to the whole frame that is still true, so removing the windowing entirely
+        // SURVIVED its first mutation. The discriminating property is that the window is SMALLER
+        // than the content whenever the content extends past the band.
+        const Hc=+((R.html.match(/class="g3lad" style="height:(\d+)px/)||[])[1]||0);
+        ok(vh<=Hc, 'y8g the window never claims to be taller than the frame', {vh, Hc});
+        if(bandPx < Hc-20) ok(vh < Hc,
+          'y8h ...and when the content runs past the band, the window is SMALLER than the content — that is what makes it a window',
+          {bandPx:+bandPx.toFixed(1), vh, Hc});
+      }
+      ok(/g3ladscroll\{overflow-y:auto\}/.test(src),
+         'y8e ...with the rest reachable by scrolling, not clipped away');
+      // ⚠ [GREP, not executed] jsdom has no layout: scrollTop stays 0 and scrollHeight is 0, so the
+      // scroll cannot be driven here. Marked, not dressed up — the same honesty as y7.
+      ok(/w\.scrollTop=vt;/.test(src) && /data-vsig/.test(src),
+         'y8f [GREP] the view is scrolled onto the band ONCE per row-set, so a manual scroll is not fought');
+    }
+  }
   ok((EBn.hi-EBn.lo)<500,
      'y4 the expected-move band spans POINTS, not tens of thousands', EBn);
   if(EBn.hw!=null) ok(EBn.hw<EBn.hi*1.5 && EBn.hw>EBn.lo*0.5,

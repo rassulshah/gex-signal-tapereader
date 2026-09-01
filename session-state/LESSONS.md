@@ -131,6 +131,54 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.29 — a test suite with no layout engine cannot answer a layout question
+
+**1 · I shipped a clamp that did not clamp, and every test agreed with me.** The EL label rendered at
+299..312 in a 300px window on the build meant to fix it. Three compounding facts, none of them
+visible in jsdom: the pill's `top` is its CENTRE (13px box, `translateY(-50%)`), the WINDOW is
+shorter than the frame, and the header row shares the scroll box and takes 12px of it. ⚠ **For a
+layout question, only a layout engine is a witness.** Chromium was in the container the whole time.
+
+**2 · I guessed 11 for a number the stylesheet declares as 13.** It is one line away in the same
+file. ⚠ **Read the value. An estimate in a clamp is a bug with a plausible alibi** — it is close
+enough that everything looks nearly right, which is the hardest kind to see.
+
+**3 · A container's height is the sum of what is IN it.** `max-height: viewH` on a box holding the
+header AND the ladder gives the ladder `viewH − header`. Obvious stated plainly, invisible in code.
+
+**4 · `[GREP]` arms are a debt, and this one came due.** y7/y7b/y7c were marked as greps standing in
+for a browser check I could not run — and they were guarding a clamp that did not work. Marking a
+weak assertion is honest; it is not a substitute for the assertion. ⚠ **When a test is marked
+[GREP], that is a TODO with a date on it, not a resolution.**
+
+**5 · Two mutations survived and both are honest.** One stopped being a behaviour change once the
+header was accounted for; the other is invisible on that fixture and caught elsewhere. ⚠ Recorded in
+the test rather than papered over, so the next context does not "fix" a test already telling the truth.
+
+### v15.28 — a frame that starts at the band puts both its labels on an edge
+
+**1 · The expected low was never missing — it was at `top:300px` in a 300px frame.** And that is the
+NORMAL case: `emRailBounds` starts the frame AT the band, so `lo = EL` and `hi = EH`, and on any day
+price stays inside, both labels land exactly on a boundary by construction. ⚠ **When a container's
+bounds are DERIVED from the thing being labelled, the labels are on the edge by default, not by
+accident.** Only the days price ran past the band ever put them somewhere visible.
+
+**2 · A mixed ruler, fourth build running.** In replay `feat.emband` is in CHART units while the
+frame's `px` is the UNDERLYING price, and the replay pin carried `rr:1` — so the band read 7661..7730
+while its own `now` read 764.49 and the frame stretched to 6,986 points. The expected move rendered
+as FIVE PIXELS of a 640px ladder on every replayed day. ⚠ The conversion was in the frame the whole
+time: **the recorded anchor divided by the series' own open IS the ratio.** I keep reaching for a
+constant when the data already contains the relationship.
+
+**3 · "The band fills its share of the window" is not "there is a window".** y8c passed when the
+window was the entire frame, so deleting the windowing was invisible. ⚠ **A ratio assertion cannot
+detect that its denominator has become the whole thing.** y8h compares the window against the
+CONTENT, which is the property that actually distinguishes a window from a frame.
+
+**4 · Mark what cannot be executed instead of pretending.** The scroll needs layout and jsdom has
+none, so it is asserted as `[GREP]` and labelled — like the bottom-edge clamp at y7. ⚠ A test suite
+that hides which arms are greps is a suite whose green is uninterpretable.
+
 ### v15.27 — one name, two meanings, and I changed the one with ten consumers
 
 **1 · The false thing.** I treated `EB.scaleUsed` as "the scale the band uses". It is also, for ten

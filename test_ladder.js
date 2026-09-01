@@ -294,10 +294,16 @@ ok(/g3ladwrap\{overflow-x:auto/.test(src), 'w2 ...and the container SCROLLS rath
 // which broke the moment the column HEADER ROW was added between them — a true structural change
 // that the assertion could not distinguish from the scroller being unhooked. What matters is that
 // the frame is INSIDE the scroller, so both are asserted, in order, within one wrapper.
-ok(/g3ladwrap">(?:(?!<\/div>)[\s\S])*?<div class="g3lad"/.test(src),
+// ⚠ (v15.28) the wrapper now carries the VIEW WINDOW — a class, a data-vtop and a max-height —
+// because the ladder opens on the expected move and scrolls to the rest. The property this asserts
+// is unchanged: the frame is INSIDE the scroller, with only the header row between them.
+ok(/g3ladwrap g3ladscroll[\s\S]{0,160}?<div class="g3lad"/.test(src),
    'w3 ...with the scroller actually wrapping the ladder');
-ok(/g3ladwrap">'\+hd\+'<div class="g3lad"/.test(src) || /g3ladwrap"><div class="g3lad"/.test(src),
+// ⚠ (v15.29) the window adds the header's own height back, because the header shares the scroll box
+ok(/style="max-height:'\+\(viewH\+LADHD_H\)\+'px">'\+hd\+'<div class="g3lad"/.test(src),
    'w3b ...and nothing but the header row sits between them');
+ok(/g3ladscroll\{overflow-y:auto\}/.test(src),
+   'w3c ...and it scrolls vertically, so what falls outside the window is reachable, not clipped');
 ok(/costing information|instead of costing information/.test(src), 'w4 the reasoning is recorded');
 // 2. UNITS. PEAK.m[k] is |velocity.cur|; P.usdK is THOUSANDS of dollars. Dividing one by the other
 //    gave ~1000x, clamped to 100, and drew a full-width day-peak outline on EVERY node.

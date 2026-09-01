@@ -1,3 +1,111 @@
+## v15.29 — the EL really was cut off, and jsdom could never have told me
+
+> "its not right the EL is being cut off , i cant go scroll lower or higher on the ladder.
+> double check"
+
+### FIRST: HE WAS LOOKING AT v15.27
+
+    wrapClass   "g3ladwrap"        no g3ladscroll
+    overflow-y  hidden             data-vtop  null
+    EL 7615     top: 300px         in a 300px frame
+
+v15.28 was never installed. **But "double check" was the right instruction, because v15.28 was also
+wrong** — and only a real browser could show it.
+
+### ⚠⚠⚠ THREE FACTS A GREP CANNOT SEE AND JSDOM CANNOT MEASURE
+
+`test_ladder_layout.js` is new: it renders the REAL markup with the REAL CSS in Chromium (already in
+the container) and asks the browser the questions the operator asks with his eyes. On the very first
+run, against v15.28, on 2026-08-28 13:18 — a day price never traded below the expected low, so the
+window's floor IS the band's low:
+
+    EL label emitted at   top 293   (markup: correct)
+    EL label RENDERED at  299 .. 312   in a 300px window   →  CUT OFF
+
+Three compounding faults, none visible without layout:
+
+1. **The pill's `top` is its CENTRE.** The stylesheet says `height:13px; transform:translateY(-50%)`.
+   I clamped as if `top` were the top edge, and I **guessed 11** for a box the CSS declares as 13.
+2. **The frame is not the view.** The window opens on the band and is SHORTER than the content, so a
+   label inside the frame can still be off-screen. It clamps to the WINDOW now.
+3. **The header row shares the scroll box.** `max-height: viewH` on the wrapper gives the ladder
+   `viewH − 12`, because `.g3ladhd` is in there too. **A container's height is the sum of what is in
+   it.** The window adds the header's height back.
+
+⚠ Every one of these passed jsdom, passed the greps, and passed review.
+
+### verification
+`test_ladder_layout.js`: **7 assertions, all executed in Chromium** — the expected low fully visible,
+the expected high fully visible, the view scrolling, content beyond the window, the browser actually
+MOVING it, and the band filling at least half the view in real pixels. Five mutations run
+individually, three caught; **the two survivors are recorded as honest rather than patched** — one is
+no longer a behaviour change now the header is accounted for, and the other is invisible on this
+fixture but caught by `y8h` in `test_replay_face`.
+⚠ `y7`/`y7b`/`y7c` were `[GREP]` arms standing in for exactly this, and they were guarding a clamp
+that did not work. They now pin the SHAPE of the fix while the browser proves the behaviour.
+
+## v15.28 — the expected low was drawn on the edge, and the band was a five-pixel sliver
+
+> "i want you to review it and tell me if it looks right and where is the expected low" · "at the
+> open the ladder should be drawn from the expected move low to the expected move high and then
+> from that point on should adjust its height based on price movement taking out either side as
+> well as allowing me to scroll up and down"
+
+### THE REVIEW: v15.27's LADDER IS CORRECT, AND HERE IS THE PROOF
+
+    rows        10, tops 30.7 → 239, median gap 19px      — a real price axis
+    band        EH 7680  ·  EL 7615
+    ES open     7647       (courier, first RTH bar)
+    check       7647 + 32.5 = 7679.5 → 7680 ✓
+                7647 − 32.5 = 7614.5 → 7615 ✓
+
+The arithmetic is exactly what he asked me to verify: **InsiderFinance's 0DTE straddle, added to and
+subtracted from the session open.**
+
+### ⚠⚠ AND THE EXPECTED LOW WAS DRAWN AT `top: 300px` IN A 300px FRAME
+
+It was never missing. It was on the boundary with its body outside the box, clipped away.
+⚠ **This is the NORMAL case, not an edge case.** `emRailBounds` STARTS the frame at the band, so
+`lo = EL` and `hi = EH` — on any day price stays inside, both labels land exactly on an edge by
+construction. The expected low has been unreadable far more often than it has been readable.
+The label is now clamped inside the frame by its own height; the amber RAIL still sits on the true
+row, which is the whole reason they are separate elements.
+
+### ⚠⚠⚠ AND THE REAL ONE: IN REPLAY THE BAND WAS A FIVE-PIXEL SLIVER
+
+Measured on 2026-08-24 12:15:
+
+    band.low / band.high   7661.1 / 7730.4     ← CHART units
+    band.now               764.49              ← UNDERLYING units
+    hiWater / loWater      766.20 / 761.28     ← UNDERLYING units
+    frame                  743.95 → 7730.4     span 6,986 points
+
+`feat.emband` records the band in CHART units while the frame's `px` — the series `measureBars`
+rebuilds — is the UNDERLYING price. The replay pin carried **`rr: 1`**, so the anchor was chart-scale
+and everything derived from the candles stayed underlying-scale. `emRailBounds` stretched the frame
+to hold a 764 "high-water mark" beside a 7730 band, and **the entire expected move rendered as five
+pixels at the top of a 640px ladder.** Every replayed day looked like that.
+The ratio was in the frame all along: **the recorded band's own anchor divided by the series' own
+opening price IS the conversion.** Fourth build running that a mixed ruler has been the fault.
+
+### THE VIEW OPENS ON THE EXPECTED MOVE AND SCROLLS TO THE REST — his spec, implemented
+
+    content   every node, at its true price, in ONE coordinate system — nothing clipped
+    window    EL..EH, widened by price taking out either side, plus 4% of air
+    scroll    the wrapper scrolls vertically; the rest is reachable, never deleted
+
+⚠ Clipping the far nodes instead would be the v15.04 mistake — data loss to fix a layout fault — and
+this file already carries that lesson. Measured after: the band now fills 75-88% of the window on
+every recorded fixture, against ~1% before.
+⚠ The scroll is applied ONCE per row-set (`data-vsig`), so it never fights a manual scroll.
+
+### verification
+`test_replay_face.js` 104 → **119**. Five mutations run individually, five caught. Two survived first
+and both were weak assertions of mine: `y8c` (the band fills its share of the window) passes when the
+window IS the whole frame, so removing the windowing was invisible until `y8h` compared the window
+against the content; and the scroll cannot be executed in a layout-free DOM, so it is marked
+`[GREP]` rather than dressed up — as `y7` already is for the bottom-edge clamp.
+
 ## v15.27 — `scaleUsed` had two meanings and I changed one of them
 
 > "are you insane.. look at the ladder, it is a complete mess"

@@ -72,5 +72,16 @@ for(const [name,needle] of SECTIONS){
   console.log('  '+(n?'yes':'NO ')+'  '+name.padEnd(18)+(n?('x'+n):'')+'   ['+needle+']');
 }
 if(process.argv.includes('--dump')) fs.writeFileSync('/tmp/face.html', html);
+// ⚠ (v15.28) --page writes a STANDALONE document: the panel's own injected CSS plus the body, so a
+// real browser can lay it out. jsdom has no layout engine, which is why the scroll and the clamp
+// could only be greps — this is how that gap gets closed instead of excused.
+if(process.argv.includes('--page')){
+  const css=[...dom.window.document.querySelectorAll('style')].map(s=>s.textContent).join('\n');
+  const panel=run('PANEL ? PANEL.getAttribute("style") : ""');
+  fs.writeFileSync('/tmp/face-page.html',
+    '<!doctype html><meta charset="utf-8"><style>body{margin:0;background:#0b0e14}\n'+css+'</style>'+
+    '<div id="gpts-panel" style="'+panel+'"><div id="gpts-body" style="padding:9px 10px;position:relative;'+
+    'flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden">'+html+'</div></div>');
+}
 
 process.exit(0);

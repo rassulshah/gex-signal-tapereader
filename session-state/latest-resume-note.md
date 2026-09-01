@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-01 · panel v15.27 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-01 · panel v15.29 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.27, and what the face carries
+## 2 · WHERE WE ARE — v15.29, and what the face carries
 
-**Panel v15.27 · companion v1.17.** Suite **134 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.29 · companion v1.17.** Suite **135 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -177,6 +177,40 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠⚠ **v15.29 — THERE IS A REAL BROWSER IN THE CONTAINER. USE IT FOR ANY LAYOUT QUESTION.**
+
+    node tools/render-face.js <day> <hh:mm> --page     # standalone doc: panel CSS + body
+    node tools/measure-ladder.js                        # lays it out in Chromium and measures
+    node test_ladder_layout.js                          # 7 assertions, all in a real browser
+
+**jsdom has NO layout engine** — every box measures 0, `scrollTop` never moves, `max-height` does
+nothing — so every layout property was a `[GREP]` and the greps were guarding a clamp THAT DID NOT
+WORK. On the first real-browser run, v15.28's EL label rendered at **299..312 in a 300px window**.
+Three compounding faults, none visible without layout:
+1. the pill's `top` is its **CENTRE** (`height:13px; transform:translateY(-50%)`) and I had **guessed
+   11** for a box the stylesheet declares as 13 — one line away in the same file;
+2. the **frame is not the view** — the window opens on the band and is shorter than the content;
+3. the **header row shares the scroll box**, so `max-height:viewH` gives the ladder `viewH − 12`.
+⚠ **A container's height is the sum of what is IN it.** ⚠ **`[GREP]` is a debt, not a resolution.**
+
+⚠⚠⚠ **v15.28 — THE LADDER OPENS ON THE EXPECTED MOVE AND SCROLLS TO THE REST. HIS SPEC, VERBATIM:**
+"at the open the ladder should be drawn from the expected move low to the expected move high and then
+from that point on should adjust its height based on price movement taking out either side as well as
+allowing me to scroll up and down."
+    content = every node at its true price, ONE coordinate system, nothing clipped (v15.04's lesson)
+    window  = EL..EH, widened by price taking out either side, +4% air
+    scroll  = the wrapper scrolls vertically; applied ONCE per row-set so it never fights a manual scroll
+⚠⚠ **AND THE REASON IT WAS NEEDED: IN REPLAY THE BAND WAS A FIVE-PIXEL SLIVER.** `feat.emband` is
+recorded in CHART units while the frame's `px` is the UNDERLYING price, and the replay pin carried
+`rr:1` — so band 7661..7730 sat beside its own `now` of 764.49 and the frame spanned **6,986 points**.
+**The ratio was in the frame all along: recorded anchor ÷ the series' own open.** Fourth build running
+that a mixed ruler was the fault.
+⚠ **THE EXPECTED LOW WAS NEVER MISSING** — it was drawn at `top:300px` in a 300px frame. And that is
+the NORMAL case: `emRailBounds` starts the frame AT the band, so both labels land on an edge by
+construction. The label is clamped inside by its own height; the RAIL stays on the true row.
+✅ **AND THE ARITHMETIC, VERIFIED ON HIS LIVE v15.27:** ES open 7647 ± 32.5 → EH 7680 / EL 7615, drawn
+exactly. Rows spread 30.7→239 with a 19px median gap.
 
 ⚠⚠⚠ **v15.27 — `EB.scaleUsed` HAS TWO MEANINGS. DO NOT CHANGE WHAT IT CONTAINS.**
 TEN call sites multiply an UNDERLYING-book value by it to reach chart space (the SPY King flag, the

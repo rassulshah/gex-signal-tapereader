@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-01 · v15.27 · session `5e8d34b5`
+## 2026-09-01 · v15.29 · session `5e8d34b5`
 
-_30 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_34 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -454,8 +454,93 @@ One thing worth knowing while you're on v15.25: your ladder is fine *right now* 
 Found it, and it's my v15.26 fix. `768` is a SPY-scale level on an ES ladder — `scaleUsed` has two different meanings and I changed one of them.
 Now the guard that let this through — it asserted spread, not distribution.
 The guards pass on a healthy ladder — I need to prove they fail on his actual broken one.
+You're right, and it's mine. Here's what your screen was showing:
+
+```
+7695 7690 7685 7675 7668 7665 7655 7650 7645 7640 7635 7630   tops 0.7 … 6.7
+768                                                            top  636.2
+```
+
+Twelve ES strikes in **six pixels**, and one row — `768` — at the bottom holding the frame open. Your PDH reads **7708**; 7708 ÷ 10.0353 = 768.1. The prior-day levels, the SPY King flag and the dark-pool prints were being drawn at the *underlying book's* scale on a ladder of ES strikes.
+
+**`EB.scaleUsed` means two different things.** Ten call sites use it as "underlying → this chart" (~10.0353). The band's own arithmetic needs "the scale of the series I measure". Those were the same number only while the band measured the underlying book — v15.24 moved it to the ES series, where that's **1**, and my v15.26 fix made the pin agree and dragged `scaleUsed` down with it. So every one of those ten multiplied SPY prices by one.
+
+```
+out.scaleUsed   = underlying → chart (~10.0353)   ← the contract, restored
+out.seriesScale = the band's own series scale (1) ← new, internal
+```
+
+**And the guard I added yesterday for exactly this passed it.** v15.26's y2 checked min-to-max spread — with one outlier at 636 a six-pixel ladder measures 635px of "spread". A range is not a distribution. It now asserts the **median gap between neighbours** and t …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 20 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (17:01):** 20 commits, tree clean. Push refused by the proxy for this repo — unchanged all session and not fixable from here. They reach origin when your machine pushes.
+
+**OPERATOR:**
+> i want you to review it and tell me if it looks right and where is the expected low
+
+**me (17:08):** v15.27 is drawing a proper ladder. Let me check the band arithmetic and find EL.
+The ladder is healthy — and **EL is drawn, at 7615, exactly on the bottom edge of a 300px frame**, so its label is clipped out of view.
+D1 survives because the fixture's band isn't at the frame edge. Finding a minute where price stayed inside the band.
+No recorded day reproduces the bottom-edge case — his live panel had it because the frame's floor *was* the band's low. Being explicit about which arm is executed.
+That's a clean spec, and it's different from what the frame does today — it currently stretches to hold every node, which is why the band ends up as a 5px sliver at the top.
+The window isn't tightening because the *content* frame is enormous. Measuring it.
+**That's the root cause of the sliver, and it's in replay.** The band's `low/high` are chart-scale (7661/7730) while `now` and the water marks are SPY-scale (764/766) — so the frame spans 6,986 points.
+The band now fills the view instead of being a sliver. Pinning that property.
+**The review: v15.27's ladder is right, and here's the proof.**
+
+```
+rows      10, tops 30.7 → 239, median gap 19px
+band      EH 7680  ·  EL 7615
+ES open   7647  (courier, first RTH bar)
+          7647 + 32.5 = 7679.5 → 7680  ✓
+          7647 − 32.5 = 7614.5 → 7615  ✓
+```
+
+Exactly what you asked me to verify — InsiderFinance's 0DTE straddle, added to and subtracted from the open.
+
+**Where is the expected low: it was drawn, at `top: 300px` in a frame exactly 300px tall.** On the boundary, body outside the box, clipped away. And that's the *normal* case, not bad luck — `emRailBounds` starts the frame **at** the band, so `lo = EL` and `hi = EH`, and on any day price stays inside, both labels land on an edge by construction. It's now clamped inside by its own …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 21 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (17:19):** 21 commits, tree clean, push blocked by the proxy for this repo — unchanged all session. They reach origin from your machine.
+
+**OPERATOR:**
+> its not right the EL is being cut off , i cant go scroll lower or higher on the ladder. double check
+
+**me (17:30):** You're on **v15.27** — the wrapper has no scroll class, no window, and `EL 7615` is at `top:300px` in a 300px frame. v15.28 isn't loaded. But you said double-check, and my scroll test was a grep, so let me verify it in a real browser first.
+Verified in real Chromium — v15.28's ladder does exactly what you asked:
+F2 survived — that fixture's EL isn't on the edge. Finding one where it is.
+A real failure on the *unmutated* build — my clamp used the content frame, not the visible window, and guessed the pill's height.
+The pill is `height:13px` with `translateY(-50%)` — its `top` is its **centre**. I clamped as if it were its top edge, and against the content instead of the window.
+The markup is right — the pill is at 293. The browser shows 299 because **the header row lives inside the scroll box and eats 12px of the window.**
+Two survivors are fixture-specific rather than test weaknesses — recording that honestly.
 
 ### DECISIONS
+
+**v15.29 · the EL really was cut off.**
+- **He was on v15.27** (no scroll class, EL at top:300 in a 300px frame) — but "double check" was
+  right, because **v15.28 was also wrong**.
+- **Rendered the real markup in real Chromium** (it was in the container all along): v15.28's EL
+  label rendered at 299..312 in a 300px window. Three faults jsdom cannot see — the pill's `top` is
+  its centre and I GUESSED 11 for a 13px box; the window is shorter than the frame; and the header
+  row shares the scroll box and takes 12px.
+- **The `[GREP]` arms I had marked were guarding a clamp that did not work.** Marking a weak
+  assertion is honest but it is a debt, not a resolution.
+
+**v15.28 · the expected low, and the sliver.**
+- **Reviewed v15.27 and it is right:** ES open 7647 ± 32.5 = EH 7680 / EL 7615, drawn exactly; rows
+  spread with a 19px median gap.
+- **The expected low was never missing** — drawn at top:300px in a 300px frame, clipped on the edge.
+  And that is the normal case: the frame STARTS at the band, so both labels sit on a boundary.
+- **In replay the band was a five-pixel sliver** — `feat.emband` is chart-scale, the frame's `px` is
+  underlying, and the replay pin said rr:1. Frame span 6,986 points. The ratio was in the frame.
+- **Implemented his spec:** the view opens on EL..EH, widens as price takes out either side, and
+  scrolls to the rest — with nothing clipped.
 
 **v15.27 · I scrambled the ladder, he caught it in one glance.**
 - **`EB.scaleUsed` has two meanings** — the band's own series scale, and the UNDERLYING→chart ratio
@@ -597,6 +682,15 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.29** — the EM label clamped to the VISIBLE WINDOW by the pill's half-height; the window adds
+back the header's height. New `tools/measure-ladder.js`, `--page` mode, and `test_ladder_layout.js`
+(7 assertions in real Chromium). Five mutations, three caught, two recorded as honest survivors.
+Suite 135 green / 6 baseline red.
+
+**v15.28** — the EM label clamped inside the frame; the replay pin's ratio derived from the frame;
+the ladder's view window + vertical scroll. `test_replay_face` → 119. Five mutations, five caught.
+Suite 134 green / 6 baseline red.
+
 **v15.27** — `scaleUsed` restored to the underlying→chart ratio, `seriesScale` added for the band;
 y3b/y3c distribution guards pinned against his real broken geometry.
 `test_em_band` → 648, `test_replay_face` → 104. Two mutations, two caught.
@@ -651,6 +745,15 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. **Install v15.29** — v15.24/25/26 were live-broken, v15.27 fixed the scale, v15.28 fixed the
+   band but left the label cut off.
+2. **Any layout question goes through Chromium now**, not jsdom.
+3. Proximity weighting and time-of-day windowing remain unshipped studies.
+
+1. **v15.28 is the one to install** — v15.24/25/26 were live-broken, v15.27 fixed the scale.
+2. The raw URL still serves 15.25 until his push lands; the userscript file is sent directly.
+3. Proximity weighting and time-of-day windowing remain unshipped studies.
 
 1. **v15.24, v15.25 and v15.26 are all live-broken for him — v15.27 is the first good one.**
 2. **His pushes are landing but v15.26 never reached origin**, so the raw URL served 15.25 and
@@ -721,6 +824,8 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+f8f574e v15.28: the expected low was clipped on the frame's edge, and in replay the band was a sliver
+8beb190 v15.27: scaleUsed has two meanings and I changed the one with ten consumers
 2a1fc9c v15.26: fix the blank ladder I shipped at v15.24 — a stored scale outlived its series
 62f706f v15.25: the amber line, the roll nobody could see, and a measured answer on cadence
 1f3539f v15.24: cross-examine the replayed face against the recording; stop storing frames with no book
@@ -731,8 +836,6 @@ d245994 test: Z5 survived mutation — a refusal nothing can reach is not a refu
 0e971ef v15.22: the far-side line had never drawn, and the dependencies now have a live check
 22de227 v15.21 + companion v1.17: PT mixed two price scales, and the ladder never had headers
 487048c v15.20: the read is out, and the render audit was inventing a fault out of its own probe
-4a9b011 build: name the delivery file correctly in the builder's own note
-e58c333 v15.19: one refusal upstream was hiding six surfaces, and nothing here could draw the face
 ```
 
 ---

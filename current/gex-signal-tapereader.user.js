@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.27
+// @version    15.29
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.27';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.29';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4147,10 +4147,31 @@ function replayEmPin(){
     var b=F.feat && F.feat.emband;
     if(!b || b.ok!==true) return null;
     if(!(typeof b.em==='number' && b.em>0)) return null;
-    return { em:b.em, emK:b.em, k:b.k, rr:1, fam:'replay', replay:true,
+    if(!(typeof b.open==='number' && b.open>0)) return null;
+    // the series the band will be measured against, in ITS units — the first replayed bar's price
+    var _so=null;
+    try{ var _MB=(typeof measureBars==='function')?measureBars('SPY'):null;
+         if(_MB && _MB.bars && _MB.bars.length && _MB.bars[0].o>0) _so=_MB.bars[0].o; }catch(eSO){}
+    if(!(_so>0)) return null;
+    var _rr=b.open/_so;
+    if(!(_rr>0) || !isFinite(_rr)) return null;
+    // ⚠⚠⚠ (v15.28) THE REPLAY PIN CARRIES THE FRAME'S OWN UNDERLYING→CHART RATIO, NOT 1.
+    // `feat.emband` records the band in CHART units (on an ES recording: 7661..7730) while the
+    // frame's `px` — the series measureBars rebuilds from — is the UNDERLYING price (764.49). With
+    // rr:1 the anchor was chart-scale and `now`/`hiWater`/`loWater` stayed underlying-scale, so
+    // `emRailBounds` stretched the frame from 743.95 to 7730: **a span of 6,986 points**, and the
+    // whole expected move rendered as a FIVE-PIXEL sliver at the top of a 640px ladder. That is why
+    // the expected low was never where he looked for it on a replayed day.
+    // ⚠ The ratio is not guessed and not fetched: the recorded band's own anchor divided by the
+    // series' own opening price IS the conversion, by definition. Both numbers are in the frame.
+    // ⚠ If either is missing the pin is refused rather than served on a mixed ruler — a band on two
+    // scales is the failure this whole line of bugs has been, three builds running.
+    // ⚠ NOTE the replayEmPin caller passes the series open; see emBand's replay branch.
+    return { em:b.em, emK:b.em, k:b.k, rr:_rr, fam:'replay', replay:true,
              // `est` is the frame's own verdict on its capture; capMin is only its carrier
              capMin:(b.est===false)?0:null, t:F.t,
-             openU:(typeof b.open==='number' && b.open>0)?b.open:null, openSo:null };
+             // openU is in the SERIES' units; rr converts it to the chart. openU*rr === b.open.
+             openU:_so, openSo:null };
   }catch(e){ return null; }
 }
 // ⚠⚠ (v15.18) THE CLOCK A REPLAYED FACE SHOULD BELIEVE. `Date.now()` is the single most common
@@ -7456,6 +7477,16 @@ function ladderFit(){
     if(!PANEL || !elBody) return;
     var w=elBody.querySelector('.g3ladwrap');
     if(!w) return;
+    // ⚠ (v15.28) SCROLL THE WINDOW ONTO THE EXPECTED MOVE, ONCE PER RENDER. The wrapper's height is
+    // the band's window; its scrollTop is where that window starts in the full frame. Doing it here
+    // rather than in the markup is deliberate — `scrollTop` is a property, not a style, so it can
+    // only be set after the element is in the document, and re-setting it every render would fight
+    // the operator the moment he scrolls. It is applied only when the row set changes.
+    try{
+      var vt=parseInt(w.getAttribute('data-vtop')||'0',10)||0;
+      var sig=(w.getAttribute('data-vtop')||'')+'|'+w.scrollHeight;
+      if(w.getAttribute('data-vsig')!==sig){ w.setAttribute('data-vsig', sig); w.scrollTop=vt; }
+    }catch(eVS){}
     var over=w.scrollWidth-w.clientWidth;
     if(!(over>2)) return;                         // already fits: nothing to do, ever
     var cur=Math.round(PANEL.getBoundingClientRect().width);
@@ -21054,7 +21085,12 @@ function ensureV3Css(){
     // ⚠ The CHUTE is price's alone — no other element may be positioned inside its x-range. That is
     // the rule that keeps price from ever being overlapped, which is why it is a walled column and
     // not merely a marker.
+    // ⚠ (v15.28) the wrapper scrolls in BOTH directions now: horizontally as it always did, and
+    // vertically because the window opens on the expected move while the content holds every node.
     '#gpts-body .g3ladwrap{overflow-x:auto;overflow-y:hidden;margin:2px 0 3px}'+
+    '#gpts-body .g3ladscroll{overflow-y:auto}'+
+    '#gpts-body .g3ladscroll::-webkit-scrollbar{width:5px;height:5px}'+
+    '#gpts-body .g3ladscroll::-webkit-scrollbar-thumb{background:#2a3340;border-radius:3px}'+
     // (v15.21) the column headers. Same left/width as the columns themselves, set inline from
     // the LAD_* constants, so they cannot drift apart.
     '#gpts-body .g3ladhd{position:relative;height:11px;width:'+LAD_W+'px;margin:0 0 1px}'+
@@ -25647,7 +25683,50 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       hd+='<span style="left:'+C[0]+'px;width:'+C[1]+'px"'+g3tip(C[3])+'>'+g3esc(C[2])+'</span>';
     }
     hd+='</div>';
-    var h='<div class="g3ladwrap">'+hd+'<div class="g3lad" style="height:'+H+'px">';
+    // ⚠⚠⚠ (v15.28) THE VIEW OPENS ON THE EXPECTED MOVE AND SCROLLS TO THE REST.
+    // Operator, 2026-09-01: "at the open the ladder should be drawn from the expected move low to
+    // the expected move high and then from that point on should adjust its height based on price
+    // movement taking out either side as well as allowing me to scroll up and down."
+    // ⚠ WHAT IT DID INSTEAD: `emRailBounds` widens the frame to hold every PILE as well as price,
+    // so on a normal day the band is a sliver at the top — MEASURED on the recorded fixtures, the
+    // EH and EL rails sat at y 0.0 and 4.9 of a 640px frame, i.e. the whole expected move occupied
+    // FIVE PIXELS and the other 635 were nodes far outside it. That is why the expected low was
+    // never where he looked for it.
+    // ⚠ THE CONTENT RANGE IS UNCHANGED, AND DELIBERATELY SO. Clipping the far nodes would be the
+    // v15.04 mistake (data loss to fix a layout fault) and this file already carries that lesson.
+    // Everything is still drawn at its true price in one coordinate system; what changes is the
+    // WINDOW onto it — which opens on EL..EH, grows when price takes out either side, and scrolls.
+    var viewLo=lo, viewHi=hi;
+    try{
+      if(typeof EB.low==='number' && typeof EB.high==='number' && EB.high>EB.low){
+        viewLo=EB.low; viewHi=EB.high;
+        // "adjust based on price movement taking out either side" — the excursion, not the nodes.
+        var _pl=[now, EB.nowLive, EB.loWater].filter(function(v){ return typeof v==='number' && v>0; });
+        var _ph=[now, EB.nowLive, EB.hiWater].filter(function(v){ return typeof v==='number' && v>0; });
+        if(_pl.length) viewLo=Math.min(viewLo, Math.min.apply(null,_pl));
+        if(_ph.length) viewHi=Math.max(viewHi, Math.max.apply(null,_ph));
+        // a little air so the edge rows are not flush against the border
+        var _pad=(viewHi-viewLo)*0.04;
+        viewLo-=_pad; viewHi+=_pad;
+        if(viewLo<lo) viewLo=lo;
+        if(viewHi>hi) viewHi=hi;
+      }
+    }catch(eVW){}
+    // the window in PIXELS of the same frame everything is drawn in
+    var viewTop=Math.max(0, Math.min(H, Y(viewHi)));
+    var viewBot=Math.max(0, Math.min(H, Y(viewLo)));
+    var viewH=Math.max(120, Math.round(viewBot-viewTop));
+    // ⚠⚠ (v15.29) THE HEADER ROW IS INSIDE THE SCROLL BOX AND COSTS THE WINDOW ITS HEIGHT.
+    // v15.28 set `max-height: viewH` on the wrapper — which holds the HEADER as well as the ladder,
+    // so the ladder's visible window was viewH MINUS the header, and the bottom of the band fell
+    // out of view. Measured in a real browser on 2026-08-28: the EL pill is emitted at top 293 of a
+    // 300px window and RENDERED at 299..312 — twelve pixels of header pushing it past the edge.
+    // ⚠ A container's height is the sum of what is IN it. The window is a window onto the LADDER,
+    // so the box has to be the ladder's window plus everything else it carries.
+    // ⚠ jsdom cannot see this: it has no layout, so the markup looked correct and was.
+    var LADHD_H=12;                          // .g3ladhd is 11px tall with 1px of margin below
+    var h='<div class="g3ladwrap g3ladscroll" data-vtop="'+Math.round(viewTop)+'" '+
+          'style="max-height:'+(viewH+LADHD_H)+'px">'+hd+'<div class="g3lad" style="height:'+H+'px">';
     var OFF=[];
     // every row the chute is already using — the crowns, then the price pill. The EM labels are
     // drawn last and step around all of it.
@@ -26068,9 +26147,36 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
     // ⚠ PRICE IS IN THIS LIST AND THAT IS THE POINT. v14.54 moved the EM pills into the chute and
     // nothing stopped one landing on the live price — the exact "current price is in two columns"
     // defect the operator caught once already, and the reason the chute is a walled column at all.
+    // ⚠⚠ (v15.28) A PILL ON THE FRAME'S EDGE IS INVISIBLE, AND EL IS ALWAYS ON THE EDGE.
+    // Operator, 2026-09-01: "where is the expected low". It WAS drawn — measured on his panel,
+    // `EL 7615` at `top: 300px` in a ladder exactly 300px tall, so the label hung on the boundary
+    // with its body outside the box and was clipped away.
+    // ⚠ THIS IS NOT AN EDGE CASE, IT IS THE NORMAL CASE. `emRailBounds` STARTS the frame at the
+    // band: lo = EL and hi = EH. So on any day price stays inside the band, Y(EL) is exactly H and
+    // Y(EH) is exactly 0 — both labels land half outside by construction, and only the days price
+    // ran past the band pushed them somewhere visible. The expected low has been unreadable far
+    // more often than it has been readable.
+    // ⚠ The LABEL is pulled inside; the amber RAIL stays on the true row. That distinction is the
+    // whole reason the rail and the pill are separate elements: a clamped LINE would be a false
+    // price, while a clamped LABEL is the same fact placed where it can be read.
+    // ⚠⚠ (v15.29) CLAMPED TO THE VISIBLE WINDOW, AND BY THE PILL'S HALF-HEIGHT.
+    // v15.28's clamp was wrong twice and a real browser caught both — measured on 2026-08-28 13:18,
+    // a day price never traded below the expected low: the EL label rendered at top 295, bottom 308,
+    // in a view 300px tall. Cut off, exactly as he reported, on the build that was meant to fix it.
+    //   1. THE PILL'S `top` IS ITS CENTRE, not its top edge: the CSS carries `height:13px` with
+    //      `transform: translateY(-50%)`. Clamping `top` to `H-11` puts the BOX at 289..302.
+    //   2. AND THE FRAME IS NOT THE VIEW. The window opens on the band and is SHORTER than the
+    //      content, so a label inside the frame can still be outside what is on screen.
+    // ⚠ I guessed 11 for a box the stylesheet declares as 13. **Read the value, do not estimate it**
+    // — and this is why the layout test runs a real browser: jsdom would have agreed with the guess.
+    var EMPILL_HALF=7;                       // 13px box, centred on its own `top`
     EMQ.forEach(function(e){
-      var t=e.t, guard=0;
-      while(guard++<4 && CHUTEY.some(function(u){ return Math.abs(u-t)<15; })) t+=15;
+      var t=Math.max(viewTop+EMPILL_HALF, Math.min(e.t, viewBot-EMPILL_HALF));
+      e.t=t;
+      var guard=0;
+      // ⚠ and the nudge may not push it back out of the frame either — a label stepped off the
+      // bottom is exactly as unreadable as one that started there.
+      while(guard++<4 && CHUTEY.some(function(u){ return Math.abs(u-t)<15; }) && (t+15)<=(viewBot-EMPILL_HALF)) t+=15;
       // ⚠ DELIBERATE DEVIATION FROM THE MOCKUP, and it is one line. The mockup nudges up to four
       // times and then draws regardless; with three crowns AND the price pill in one chute the
       // guard can run out and the label lands back on a crown — the render audit reproduced exactly
