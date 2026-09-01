@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-08-31 · panel v15.16 · companion v1.16 · supersedes every earlier resume note_
+_written 2026-08-31 · panel v15.17 · companion v1.16 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.16, and what the face carries
+## 2 · WHERE WE ARE — v15.17, and what the face carries
 
-**Panel v15.16 · companion v1.16.** Suite **129 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.17 · companion v1.16.** Suite **129 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -169,6 +169,19 @@ Traced 2026-09-01 against a real frame; **neither is fully recoverable from the 
 
 **So a replayed LEVEL set is not obtainable from the 18 recorded days.** Recording `ifLadder.rows`
 per frame would fix it going forward. ⚠ Do not tell him the levels will replay on old days.
+
+⚠⚠ **v15.17 — TWO MORE, AND BOTH WERE FOUND BY MEASURING RATHER THAN GUESSING.**
+**The arrows were TRUE and wrong to show:** four genuine roll pairs between strikes the ladder does
+not draw (7625->7650 on an $82K shed) while the KING's own 7675->7670 at $22.4M was missing. The live
+latch scans `tradeNodes()`; replay scanned every stored strike. **Reusing a function is not
+reproducing the call — match the INPUT UNIVERSE too.**
+**"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
+`body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
+`panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+✅ **AND WHAT THE CHECK CONFIRMED AS CORRECT** — record confirmations, not only faults: the node
+profile is exact at 14:12 strike for strike, and "only five nodes" is every SPXW strike at or above
+the 20% threshold, the same filter the live ladder applies.
 
 **FIRST THING TO DO: drag it on the live panel.** Check the ladder, kings and ⓪a move together, the
 clock reads the parked bar, ◀ reaches Friday, and `__gptsDebug.storage()` shows no new writes.

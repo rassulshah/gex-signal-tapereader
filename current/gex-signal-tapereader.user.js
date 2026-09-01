@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.16
+// @version    15.17
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -641,7 +641,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.16';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.17';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -3869,7 +3869,17 @@ function replayRolls(sym){
       // ⚠ Two lookups of "the book" that disagree is the same defect as two computations of "which
       // nodes matter" (DECISIONS v13.2) — they must read the SAME selector, not matching rules.
       bk=replayBook(bkName); if(!bk || !bk.pct) continue;
-      ks=[]; for(kk in bk.pct){ var kn=parseFloat(kk); if(kn>0) ks.push(kn); }
+      // ⚠⚠ (v15.17) SCAN THE NODES THE LADDER DRAWS, NOT EVERY STORED STRIKE. The LIVE latch feeds
+      // rollScan from `tradeNodes(sym)` — the nodes that passed the %King threshold and are on the
+      // rail. v15.13-v15.16 fed it every strike in the frame, so the arrows paired rows that are not
+      // drawn: measured on his panel at 14:12, the four arrows were 7625->7650 (a $82K shed),
+      // 7630->7650, 7645->7670 and 7655->7670, while the KING's own roll 7675->7670 ($22.4M) and
+      // 7700->7685 ($15.3M) were absent. Operator: "the arrows dont make sense". They were real
+      // pairs pointing at invisible rows, which is worse than none — it is a true claim about
+      // something the face does not show.
+      var _thr=(typeof CFG!=='undefined' && CFG && typeof CFG.nodeThresh==='number') ? CFG.nodeThresh : 20;
+      ks=[]; for(kk in bk.pct){ var kn=parseFloat(kk);
+        if(kn>0 && Math.abs(bk.pct[kk])>=_thr) ks.push(kn); }
       raw=rollScan(ks)||[]; seen={};
       raw.forEach(function(r){
         var k=rollLatchKey(r); seen[k]=1;
@@ -7207,6 +7217,31 @@ function restorePos(){
 //
 // It grows ONCE per width, never shrinks, never fights a manual resize (a later drag is saved and
 // this only fires when the ladder still overflows), and is bounded by the viewport.
+// ⚠⚠ (v15.17) A PANEL TALLER THAN THE WINDOW CANNOT BE SCROLLED — operator: "I also cannot scroll
+// up and down so something is wrong." MEASURED: panel height 1016px, viewport 557px, panel top -307
+// and bottom 152px BELOW the screen. The body reported scrollHeight 986 === clientHeight 986, so
+// `overflow-y:auto` had nothing to do: the content fits the PANEL, and it is the panel that does not
+// fit the SCREEN. Everything above and below the window is simply unreachable.
+// ⚠ This is the v12.2/v12.5 lesson in a third costume ("the panel never contained its content" /
+// "height:100% against a parent with no height"). The rule from those builds stands: MEASURE THE BOX
+// AND THE THING THAT IS SUPPOSED TO CONTAIN IT before blaming the scroll.
+// ⚠ It only ever SHRINKS, and only when the panel exceeds the window — a deliberate smaller panel is
+// never grown, and a panel that already fits is untouched.
+function panelFit(){
+  try{
+    if(CFG.panelFit===false) return;
+    if(!PANEL) return;
+    var vh=window.innerHeight||0; if(!(vh>200)) return;
+    var r=PANEL.getBoundingClientRect();
+    var top=r.top;
+    // pull it back on screen first: a panel dragged above the top edge loses its header to the void
+    if(top<0){ try{ PANEL.style.top='4px'; }catch(e0){} top=4; }
+    var room=Math.max(200, vh-Math.max(0,top)-8);
+    if(r.height<=room+1) return;                       // already fits — never grow it
+    PANEL.style.height=Math.round(room)+'px';
+    try{ localStorage.setItem(SIZE_KEY, JSON.stringify({w:PANEL.style.width||'', h:PANEL.style.height})); }catch(e1){}
+  }catch(e){ try{ swallow('panelFit', e); }catch(e2){} }
+}
 function ladderFit(){
   try{
     if(CFG.ladderFit===false) return;
@@ -28748,6 +28783,9 @@ function render(){
   wireStepIcons();
   // ⚠ AFTER innerHTML, not before — the wrapper has no scrollWidth until it is laid out.
   try{ ladderFit(); }catch(eLF){}
+  // ⚠ AFTER ladderFit: widening can change the content height, so the vertical clamp reads the
+  // settled box rather than the one before the ladder was laid out.
+  try{ panelFit(); }catch(ePF){}
   // King path defaults to the latest (rightmost) chip in view.
   // (v10.8) King path is now an SVG sparkline, not a horizontal chip scroller —
   // the old scroll-to-latest snippet is no longer needed.

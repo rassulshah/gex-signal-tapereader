@@ -1,3 +1,47 @@
+## v15.17 — the arrows point at rows the ladder draws, and the panel fits the window
+
+> "see the arrows and determine if they make sense" · "I also cannot scroll up and down"
+
+### ⚠⚠ THE ARROWS WERE REAL AND POINTING AT INVISIBLE ROWS
+
+Decoded off his panel at 14:12 and checked against the recorded frame. All four were genuine roll
+pairs. All four were the wrong ones:
+
+    drawn      7625->7650 (an $82K shed) · 7630->7650 · 7645->7670 · 7655->7670
+    NOT drawn  7675->7670  the KING's own roll, $22.4M · 7700->7685, $15.3M
+
+The LIVE latch feeds `rollScan` from `tradeNodes()` — the nodes that cleared the %King threshold and
+are ON the rail. Replay fed it **every stored strike**, so it paired rows the ladder does not draw.
+**A true claim about something the face does not show is worse than silence.**
+
+### ⚠⚠ A PANEL TALLER THAN THE WINDOW CANNOT BE SCROLLED
+
+    panel height 1016px   viewport 557px   top -307   bottom 152px BELOW the screen
+    body scrollHeight 986 === clientHeight 986   ->  overflow-y:auto had nothing to do
+
+The content fits the PANEL; the panel does not fit the SCREEN, so everything above and below the
+window is simply unreachable — including the header and the replay strip, which were off the top.
+`panelFit()` pulls a panel back on screen and clamps its height to the room below it. It only ever
+SHRINKS, only when the panel exceeds the window, and runs AFTER `ladderFit` so it measures the
+settled box.
+⚠ This is the v12.2 / v12.5 lesson in a third costume. Their rule stands: **measure the box and the
+thing that is supposed to contain it before blaming the handler.**
+
+### what the check CONFIRMED as correct
+
+The node profile is faithful. Panel against the recorded 14:12 frame, strike for strike:
+
+    panel     7675 KING 100% · 7700 -63% · 7685 +42% · 7695 +24% · 7670 -22%
+    recorded  7675     -100% · 7700 -63% · 7685 +42% · 7695 +24% · 7670 -22%
+
+Five nodes is not a thin ladder — it is every SPXW strike at or above the 20% threshold in that
+frame, which is the same filter the live ladder applies. The day selector reads the latest recorded
+session (Mon 31 Aug, 08:30-15:00), which is correct while 1 Sep has no frames yet.
+
+### testing
+
+`test_replay.js` at **166**. 7 mutations, all 7 caught.
+
 ## v15.16 — one constant was refusing 93% of every replayed session
 
 > "it still has 100% for one strike, the entire node profile is missing, the arrows dont make sense,

@@ -131,6 +131,34 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.17 · 2026-09-01 · **THE ARROWS WERE TRUE AND STILL WRONG TO SHOW**
+
+Decoded his four arrows at 14:12 against the recorded frame: every one a genuine roll pair, and every
+one between strikes the ladder does not draw — 7625->7650 on an **$82K** shed, while the KING's own
+7675->7670 at **$22.4M** and 7700->7685 at $15.3M were absent.
+
+⚠⚠ **THE LIVE LATCH SCANS `tradeNodes()`; MY REPLAY SCANNED EVERY STORED STRIKE.** I reused `rollScan`
+so the GEOMETRY could not diverge, and then handed it a different UNIVERSE — which is the same class
+of error one level up. **Reusing the function is not the same as reproducing the call.** When
+replaying a computation, match its INPUTS as carefully as its code.
+
+⚠ **AND A TRUE CLAIM ABOUT AN INVISIBLE ROW IS WORSE THAN NO CLAIM.** Nothing was inaccurate; the
+arrows simply referred to rows he could not see, which reads as noise and destroys trust in the ones
+that are right.
+
+⚠⚠ **"I CANNOT SCROLL" WAS NOT A SCROLL BUG.** Panel 1016px, viewport 557px, top -307, bottom 152px
+below the screen, and `body.scrollHeight === body.clientHeight` — so `overflow-y:auto` had nothing to
+do. The content fits the panel; the PANEL does not fit the SCREEN. **Third costume of the v12.2/v12.5
+lesson** ("the panel never contained its content"), and their rule found it in one measurement:
+measure the box AND the thing meant to contain it before suspecting the handler.
+⚠ It also explains more than the scroll: the header and the replay strip were off the TOP of the
+window, so the control he was told to drag was partly unreachable.
+
+⚠ **WHAT THE CHECK ALSO PROVED — record the confirmations, not only the faults.** The node profile
+was exact at 14:12, strike for strike, and "only five nodes" is every SPXW strike at or above the 20%
+threshold in that frame. **Some of what he reported as broken was correct**, and saying so precisely,
+with the comparison, is worth as much as fixing the rest.
+
 ### v15.16 · 2026-09-01 · **"DO YOU KNOW THE CODE" — NO, AND THE REVIEW HE ASKED FOR FOUND IT IN ONE PASS**
 
 > "do you know the code. do you review it before making changes to see what needs to be updated. its

@@ -602,5 +602,47 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
      'g9 ...and the hover says what it is being compared against, not just a bare number');
 }
 
+// ---- 18 · (v15.17) THE ARROWS MUST PAIR ROWS THE LADDER ACTUALLY DRAWS ------------------------
+// Operator: "see the arrows and determine if they make sense." DECODED off his panel at 14:12 — all
+// four were REAL pairs, and all four were wrong to show: 7625->7650 (an $82K shed), 7630->7650,
+// 7645->7670, 7655->7670, while the KING's own roll 7675->7670 ($22.4M) and 7700->7685 ($15.3M)
+// were absent. The live latch feeds rollScan from tradeNodes() — the nodes ON the rail; replay fed
+// it every stored strike. **A true claim about a row the face does not show is worse than silence.**
+{
+  const rr2=decomment(ex('replayRolls'));
+  ok(/CFG\.nodeThresh/.test(rr2), 'n1 the replayed scan reads the node threshold the ladder draws by');
+  ok(/Math\.abs\(bk\.pct\[kk\]\)>=_thr/.test(rr2),
+     'n2 ...and filters strikes by it, so an arrow cannot point at an undrawn row');
+  ok(!/if\(kn>0\) ks\.push\(kn\);/.test(rr2),
+     'n3 ...never the unfiltered "every stored strike" form that shipped in v15.13-v15.16');
+}
+// ---- 19 · (v15.17) A PANEL TALLER THAN THE WINDOW CANNOT SCROLL --------------------------------
+// "I also cannot scroll up and down." MEASURED: panel 1016px, viewport 557px, top -307, bottom 152px
+// below the screen; body scrollHeight 986 === clientHeight 986, so overflow-y:auto had nothing to do.
+{
+  let H=1016, T=-307, saved={};
+  global.PANEL={ style:{width:'667px',height:'1016px',top:'-307px'},
+                 getBoundingClientRect:()=>({height:H, top:T}) };
+  global.window={innerHeight:557};
+  global.localStorage={ getItem:k=>(k in saved?saved[k]:null), setItem:(k,v)=>{saved[k]=String(v);} };
+  global.SIZE_KEY='gpts_panelsize_v7'; global.CFG={};
+  eval(ex('panelFit'));
+  panelFit();
+  ok(PANEL.style.top==='4px', 'p1 a panel dragged above the top edge is pulled back on screen', PANEL.style.top);
+  ok(parseInt(PANEL.style.height,10)<=557-4-8+1,
+     'p2 ...and its height is clamped to the room below it, so the body can scroll', PANEL.style.height);
+  ok(parseInt(PANEL.style.height,10)>200, 'p3 ...but never collapsed to nothing', PANEL.style.height);
+  ok(saved['gpts_panelsize_v7'], 'p4 the clamp is remembered, so it survives a reload');
+  // a panel that already fits must never be touched
+  H=400; T=10; PANEL.style.height='400px'; PANEL.style.top='10px';
+  panelFit();
+  ok(PANEL.style.height==='400px', 'p5 a panel that FITS is left alone — this only ever shrinks', PANEL.style.height);
+  ok(PANEL.style.top==='10px', 'p6 ...and an on-screen position is not moved');
+  // and the order matters: widening can change the content height
+  const rnd=decomment(ex('render'));
+  const lIdx=rnd.indexOf('ladderFit'), pIdx=rnd.indexOf('panelFit');
+  ok(lIdx>-1 && pIdx>lIdx, 'p7 the vertical clamp runs AFTER the width fit, on the settled box');
+}
+
 console.log('test_replay: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);
