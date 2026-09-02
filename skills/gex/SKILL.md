@@ -84,16 +84,6 @@ load instruction. Then read, in order:
    ⚠ Measured 2026-09-01: the stored SPY chain was **11 days old** with a null expected move while
    SPX and QQQ were three minutes old, and its own `stale` flag read false.
 
-1a-1. **PARKED SPECS — work that is researched and deliberately NOT started.** Currently one:
-   `design/spec-futures-gamma-markets.md` (gamma levels for CL · NG · GC · E6 · HG, parked
-   2026-09-01: *"we will come back to it once the application with the current markets is optimal"*).
-   ⚠ **Read it BEFORE offering to build anything in that area, and NEVER re-research it** — it is a
-   day of live measurement against his own account, and it names the traps (`*0` vs `*1` puts gold
-   and copper on the wrong contract; the DTN root map is hand-written; the chain is not in the raw
-   HTML). ⚠ **And do not start it unprompted.** Parked means parked; he decides when it unparks.
-   `roadmap/PRODUCT-ROADMAP.md` is STALE below its PARKED block — it still says v10.29. The live
-   plan is the resume note, not that board.
-
 1a. **`session-state/PROJECT-CONSTANTS.md` — THE LANDMINES AND THE USER'S STANDING RULES.** Nine
    failure patterns that explain nearly every bug here, plus the process failure that ended the
    2026-08-24 session. ⚠ **The single most-violated rule in this project is ONE AT A TIME: discuss
@@ -294,20 +284,6 @@ not merely what changed. "save gex" remains valid as an explicit trigger, but it
 
 Persist everything a fresh session needs. The cloud workspace is EPHEMERAL — saving means
 getting files to the USER (SendUserFile) and into the git repo (source of truth), NOT Drive.
-
-0-bis. ⚠⚠ **EVERY BUILD MESSAGE CARRIES TWO BLOCKS THE BUILDER PRINTS. PASTE BOTH, VERBATIM.**
-   Operator-mandated 2026-08-30, restated 2026-09-01: *"i dont see the tamper monkey links or save
-   confirmations which you are supposed to give me everytime there is a build telling me the files
-   that were saved (eg chat history, lessons learned etc.)"*
-   `tools/build-installer.py` ends by printing them:
-   - **`==== PASTE THIS WITH THE INSTALL FILE ====`** — the Tampermonkey links for BOTH scripts, with
-     CHANGED / UNCHANGED against what is already on origin.
-   - **`==== SAVE CONFIRMATION — PASTE THIS TOO ====`** — chat history, lessons, changelog and
-     resume note, each marked `saved` or `MISSING`, read from `git show --stat HEAD` rather than
-     from memory.
-   ⚠ **THE BUILDER HAS PRINTED THE LINKS SINCE v14.3 AND THEY STILL WENT MISSING FOR SEVERAL BUILDS,
-   because pasting them lived only in a context's head.** Scroll to the end of the build output and
-   copy both blocks. A build message without them is incomplete, however good the build is.
 
 0. **REGENERATE `session-state/CHAT-HISTORY.md`** — `python3 tools/chat-history.py --title "<what
    this context was about>"`, then fill in DECISIONS / SHIPPED / OPEN AT CLOSE by hand before

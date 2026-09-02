@@ -54,13 +54,6 @@ run(`REPLAY.on=true; REPLAY.day=${JSON.stringify(day)}; REPLAY.frames=${JSON.str
 run('RENDER_ERRS.length=0');
 try{ run('render()'); }catch(e){ console.log('render() THREW: '+e.message+'\n'+(e.stack||'').split('\n').slice(0,4).join('\n')); }
 
-// ⚠ (v15.39) --probe <expr>: evaluate one expression INSIDE the rendered page and print it. The
-// candle disagreement could only be diagnosed by asking the rendered face what it measured, and
-// re-deriving it out here would have been a fourth opinion about the same numbers.
-if(process.argv.indexOf('--probe')>=0){
-  const expr=process.argv[process.argv.indexOf('--probe')+1];
-  try{ console.log(String(run(expr))); }catch(e){ console.log('PROBE THREW: '+e.message); }
-}
 const html=run('elBody ? elBody.innerHTML : ""');
 console.log('parked '+hhmm(FR[idx].t)+' CT  frame '+idx+'/'+FR.length+'   body '+html.length+' chars\n');
 const errs=run('JSON.stringify(__gptsDebug.renderErrors())');

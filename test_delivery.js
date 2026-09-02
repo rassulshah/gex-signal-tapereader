@@ -154,31 +154,5 @@ ok(fs.existsSync('tools/chat-history.py'),
      'Z5 and the artefact gate does still refuse — the condition reaches the throw');
 }
 
-// ---- (v15.32) THE SAVE CONFIRMATION SHIPS WITH EVERY BUILD ----------------------------------
-// Operator-mandated 2026-08-30 and restated 2026-09-01: "i dont see the tamper monkey links or save
-// confirmations which you are supposed to give me everytime there is a build telling me the files
-// that were saved (eg chat history, lessons learned etc.)"
-// ⚠⚠ THE FAILURE WAS MINE, NOT THE BUILDER'S. The Tampermonkey block has printed since v14.3 and I
-// stopped pasting it; the record files were never listed at all. A rule that lives only in the
-// assistant's head has no mechanism — the same lesson test_lessons and test_chat_history encode.
-// So the builder now PRINTS the confirmation, and this pins that it does.
-{
-  const bi = fs.readFileSync('./tools/build-installer.py', 'utf8');
-  ok(/SAVE CONFIRMATION — PASTE THIS TOO/.test(bi),
-     'S1 the builder prints a save confirmation block');
-  ok(/git', 'show', '--stat'/.test(bi),
-     'S2 ...read from the COMMIT, not written from memory — a hand-written list drops what the writer forgets');
-  ['CHAT-HISTORY.md', 'LESSONS.md', 'CHANGELOG.md', 'latest-resume-note.md'].forEach(f => {
-    ok(bi.indexOf(f) >= 0, 'S3·' + f + ' ...and checks off ' + f);
-  });
-  // ⚠ BOUND TO THE EXPRESSION, NOT THE WORD. The first cut greped for "MISSING", which also appears
-  // in the comment explaining it — so deleting the conditional left the word behind and the
-  // assertion green. This project's oldest recurring fault, and I wrote it again.
-  ok(/'saved  ' if _p in _files else 'MISSING'/.test(bi),
-     'S4 ...marking a mandated file MISSING rather than omitting it silently');
-  ok(/COULD NOT READ THE COMMIT/.test(bi),
-     'S5 ...and saying so if the commit cannot be read, rather than claiming a save that did not happen');
-}
-
 console.log('test_delivery: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

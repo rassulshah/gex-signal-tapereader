@@ -635,39 +635,3 @@ try:
               % V.replace('.', ''))
 except Exception as _e:
     print('WARN: could not restore install.bat (%s)' % _e)
-
-# ---- THE SAVE CONFIRMATION, DERIVED FROM THE COMMIT ------------------------------------------
-# ⚠⚠ OPERATOR-MANDATED 2026-08-30, RESTATED 2026-09-01: "i dont see the tamper monkey links or save
-# confirmations which you are supposed to give me everytime there is a build telling me the files
-# that were saved (eg chat history, lessons learned etc.)"
-#
-# ⚠ THE FAILURE THIS CLOSES IS MINE, NOT THE BUILDER'S. The Tampermonkey block above has printed on
-# every build since v14.3 — and for several builds running I did not paste it into the message, and
-# I never listed the record files at all. A rule that lives only in my head is a rule with no
-# mechanism, which is the same lesson `test_lessons` and `test_chat_history` already encode: the
-# only rules this project keeps are the ones something prints or something fails on.
-#
-# ⚠ IT IS READ FROM `git show --stat HEAD`, NOT FROM MEMORY. A hand-written list drops whatever the
-# writer forgets — exactly how ITEM 18 was lost — so the confirmation states what was ACTUALLY
-# committed, and the mandated files are checked off against it rather than asserted.
-print('')
-print('==== SAVE CONFIRMATION — PASTE THIS TOO ====')
-try:
-    _stat = _sp.check_output(['git', 'show', '--stat', '--format=', 'HEAD'],
-                             stderr=_sp.DEVNULL).decode()
-    _files = [l.split('|')[0].strip() for l in _stat.split('\n') if '|' in l]
-    _MANDATED = [
-        ('session-state/CHAT-HISTORY.md',      'chat history (regenerated from the transcript)'),
-        ('session-state/LESSONS.md',           'lessons learned'),
-        ('changelog/CHANGELOG.md',             'changelog'),
-        ('session-state/latest-resume-note.md','resume note'),
-    ]
-    for _p, _label in _MANDATED:
-        print('  %s  %-34s %s' % ('saved  ' if _p in _files else 'MISSING', _label, _p))
-    _other = [f for f in _files if f not in [m[0] for m in _MANDATED]]
-    if _other:
-        print('  also: %s' % ', '.join(_other[:8]) + (' + %d more' % (len(_other) - 8) if len(_other) > 8 else ''))
-    print('  commit: %s' % _sp.check_output(['git', 'log', '-1', '--format=%h %s'],
-                                            stderr=_sp.DEVNULL).decode().strip()[:96])
-except Exception as _e:
-    print('  COULD NOT READ THE COMMIT (%s) — say so rather than claiming a save.' % _e)
