@@ -83,6 +83,9 @@ function ex_var(n){
       var o=Object.assign({}, b);
       if(o.so==null) o.so=so+i*180;
       if(o.t==null)  o.t=global.__dayMs()+o.so*1000;
+      // ⚠⚠ (v15.46) STAMP `day` — the real builders do, and the guard now READS it. A fixture that
+      // omits the field a guard reads is a fixture that cannot fail on that guard's bug.
+      if(o.day==null) o.day=global.__dayStrOf(o.t);
       return o;
     });
   };
@@ -93,10 +96,20 @@ function ex_var(n){
   // ⚠⚠ (v15.23) THIS STUB WAS THE SHORTCUT THAT HID THE BUG. It returned "today" for every input
   // because the fixtures carried no clock — so the one guard that had to notice a bar from another
   // day could not fail here even in principle. The fixtures carry `t` now, and this is real.
-  global.naiveDayStr=function(ms){
-    var d=(typeof ms==='number')?new Date(ms):new Date();
-    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  // ⚠⚠⚠ (v15.46) THIS STUB TOOK MILLISECONDS AND THE REAL FUNCTION TAKES SECONDS — AND THAT
+  // DISAGREEMENT IS WHAT HID THE BUG. `naiveDayStr(t){ new Date(mul(t,1000)) }` in the panel; this
+  // stub did `new Date(ms)`. So the warm-up guard, which passed it `cs[0].t` in MILLISECONDS, got a
+  // correct answer HERE and a year in the fifty-eight thousands in production. w1-w3 passed while
+  // the band refused to pin all day on his real panel (2026-09-02, "nothing displayed, no ladder").
+  // ⚠ A STUB THAT IS KINDER THAN THE REAL FUNCTION IS NOT A TEST DOUBLE, IT IS A COVER-UP. It now
+  // takes SECONDS, exactly as the panel's does.
+  global.naiveDayStr=function(sec){
+    var d=(typeof sec==='number')?new Date(sec*1000):new Date();
+    return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
   };
+  // the fixture's own ms -> day helper, kept separate so it can never be mistaken for the panel's
+  global.__dayStrOf=function(ms){ var d=new Date(ms);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
   global.ifLadder=function(){ return { err:null, dispScale:1 }; };
   // ⚠ and TODAY must be the same day RTH() stamps onto the bars, or every fixture is "yesterday".
   global.ctTodayStr=function(){ return '2026-08-24'; };
@@ -1834,14 +1847,15 @@ eval(ex('emBand'));
 
   // a · yesterday's bar, correctly shaped — must be REFUSED
   global.localStorage.setItem('gpts_emopen_v1', JSON.stringify({ v:0, date:'1970-01-01', sym:{} }));
-  global.__cands=[ Object.assign({},bar,{ so:8*3600+30*60, t:dayMs-24*3600*1000 }),
-                   Object.assign({},bar,{ so:8*3600+33*60, t:dayMs-24*3600*1000+180000 }) ];
+  // ⚠ (v15.46) the fixtures carry `day`, because the real builders do and the guard reads it.
+  global.__cands=[ Object.assign({},bar,{ so:8*3600+30*60, t:dayMs-24*3600*1000, day:global.__dayStrOf(dayMs-24*3600*1000) }),
+                   Object.assign({},bar,{ so:8*3600+33*60, t:dayMs-24*3600*1000+180000, day:global.__dayStrOf(dayMs-24*3600*1000) }) ];
   let r=emBand('SPY');
   ok(r.ok===false && /warm-up/.test(r.why||''),
      'w1 EXECUTED: a first bar dated YESTERDAY refuses the pin', r.why);
 
   // b · today's bar but from BEFORE the open (a pre-market print) — also refused
-  global.__cands=[ Object.assign({},bar,{ so:7*3600, t:dayMs+7*3600*1000 }) ];
+  global.__cands=[ Object.assign({},bar,{ so:7*3600, t:dayMs+7*3600*1000, day:global.__dayStrOf(dayMs) }) ];
   r=emBand('SPY');
   ok(r.ok===false && /warm-up/.test(r.why||''),
      'w2 ...and so does a bar from before 08:30, however well dated', r.why);

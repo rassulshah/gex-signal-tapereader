@@ -131,6 +131,31 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.46 — a stub that is kinder than the real function is not a test double, it is a cover-up
+
+**1 · The harness corrected the bug it was meant to catch.** `test_em_band` stubbed
+`naiveDayStr(ms) → new Date(ms)`; the real one is `naiveDayStr(sec) → new Date(sec*1000)`. The
+warm-up guard passed it milliseconds, got the right answer in the harness and a **year in the
+fifty-eight thousands** in production. w1–w3 passed while the band refused to pin all day.
+⚠ **A stub must be exactly as unforgiving as the function it replaces** — 648 green assertions sat
+on top of a panel that would not draw.
+
+**2 · Two producers of the same field disagreed about its units, so no call site could read it.**
+`closedCandles` stores real ms and computes its day from naive seconds; `measureBars/ES` stores real
+ms from a different origin. ⚠ **When a shared field means different things by branch, the fix is not
+a conversion — it is to ask the producer for the ANSWER instead of the INPUTS.** `measureBars` names
+the day it selected; the bars carry the day they were kept for.
+
+**3 · A guard that only runs on a cold start is a guard nobody has tested.** The capture branch is
+skipped whenever a pin already exists, so from v15.23 the fault was unreachable until the first
+new-day capture — then it took the whole panel out on the first render. ⚠ **Ask which paths run only
+once per day, per session, or per install; those are the ones the field will find first.**
+
+**4 · Every input was healthy and the panel was blank.** FUTMODE live, courier one minute old, tape
+100 strikes, zero render errors — and no ladder, because one boolean upstream refused. ⚠ **"All the
+lights are green" is not evidence when the thing that failed has no light**; the band's refusal was
+only visible by asking `emBand()` for its `why`.
+
 ### v15.45 — a mode badge says WHICH; it does not say WHAT IT COSTS
 
 **1 · Four hours of a live session recorded nothing, and the face never said so.** The strip read

@@ -1,3 +1,57 @@
+## v15.46 — the warm-up guard read `t` in the wrong units and refused the band all day
+
+> "re.laded check.. nothing displayed , no ladder"
+
+### MEASURED, MID-SESSION, ON A HEALTHY PANEL
+
+    emBand.ok   FALSE — "warm-up: candle window or ratio is not yet today's — not pinning"
+    ladder      ZERO rows
+    and yet:    FUTMODE.live true · futBars 1 min old · tape 100 strikes · renderErrors none
+                sessionBody open 7650.5 close 7679.25 — today's ES session, read correctly
+
+No band means no `skPiles`, which means **no ladder at all**. Every input was fine.
+
+### ⚠⚠⚠ TWO PRODUCERS DISAGREE ABOUT WHAT `t` MEANS
+
+    closedCandles()    pushes  t: realMs     and passes NAIVE SECONDS to naiveDayStr
+    measureBars/ES     pushes  t: r[0]*1000  — REAL epoch MILLISECONDS
+
+`naiveDayStr(t)` multiplies by 1000, so on a futures chart it received **milliseconds** and returned
+a year in the **fifty-eight thousands**. `naiveDayStr(c0t) !== ctTodayStr()` was **structurally
+unsatisfiable**, `capOK` was permanently false, and the band could never pin.
+
+⚠ **IT ONLY FIRES ON A FRESH CAPTURE.** A pin carried over from an earlier session skips the branch
+entirely — so from v15.23 until the first new-day capture, nothing exposed it. Today was that day,
+and it took out the whole panel on the first render.
+
+### ⚠⚠ AND THE TEST HARNESS WAS COVERING FOR IT
+
+`test_em_band`'s stub was `naiveDayStr(ms) → new Date(ms)`. The real function is
+`naiveDayStr(sec) → new Date(sec*1000)`. **The stub was kinder than the function it doubled**, so
+w1–w3 passed against a guard that could not work in production. That is not a test double, it is a
+cover-up, and it is why 648 green assertions sat on top of a panel that would not draw.
+
+### THE FIX — ask the producer, do not re-derive
+
+No conversion works at the call site: dividing by 1000 is right for one branch, wrong for the other,
+and wrong for the cash branch only after 19:00 CT when the UTC day rolls. So the guard now asks
+**which day the series says it selected** — `measureBars` names it (replay / futures), and each bar
+carries the day it was kept for. Formats differ (`2026-9-2` vs `2026-09-02`), so the comparison is
+numeric. When no producer names a day, the guard declines to judge rather than blocking a series
+that is already filtered at source.
+
+⚠ **The guard still does its job:** the ES branch takes the LAST day present, which pre-open is
+yesterday — v15.23's real reason — and that still refuses, as does a first bar before 08:30, as does
+a bar with no clock.
+⚠ The cash builder now **states its day**, as its sibling always has. One quantity, one source, on
+every path.
+
+`test_em_warmup.js` → **20**, executing the units fault itself (`naiveDayStr` on ms returns a
+five-digit year) and both day-selection outcomes. `test_em_band` 645 → **648** with its stub
+corrected and its fixtures carrying `day`. **8 mutations, 8 caught.**
+Suite **140 green / 6 baseline red**.
+
+
 ## v15.45 — the purpose is written down; and a replay parked on yesterday recorded nothing all morning
 
 > "are you recording .. market is open"

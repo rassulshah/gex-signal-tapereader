@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.45
+// @version    15.46
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.45';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.46';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -1382,7 +1382,11 @@ function convertFiberCandles(raw){
     if(so<openSec) continue;
     var naiveMs=mul(t,1000);
     var realMs=naiveMs+offMs;
-    out.push({ b:realMs, t:realMs, o:x.open, h:x.high, l:x.low, c:x.close, so:so });
+    // ⚠ (v15.46) STATE THE DAY. The sibling builder below has always carried `day`; this one did
+    // not, so a consumer wanting to know which session these bars describe had to re-derive it from
+    // `t` — and `t` here is REAL ms while the futures builder's is also ms but from a different
+    // origin, which is exactly how the warm-up guard came to compare today against the year 58629.
+    out.push({ b:realMs, t:realMs, o:x.open, h:x.high, l:x.low, c:x.close, so:so, day:naiveDayStr(t) });
   }
   out.sort(function(a,b){ return a.b-b.b; });
   return out;
@@ -22615,10 +22619,37 @@ function emBand(sym){
           // time this runs. My first cut opened with `if(!c0) capOK=false;` — dead defensive code,
           // and mutation proved it: disabling that line changed nothing anywhere. A branch no test
           // can reach is not caution, it is a line that reads as a check and is not one.
+          // ⚠⚠⚠ (v15.46) `cs[0].t` MEANS TWO DIFFERENT THINGS AND THIS GUARD READ IT AS ONE.
+          //     closedCandles()  pushes  t: realMs   and passes NAIVE SECONDS to naiveDayStr
+          //     measureBars/ES   pushes  t: r[0]*1000  — REAL epoch MILLISECONDS
+          // `naiveDayStr(t)` multiplies by 1000, so on a futures chart it received milliseconds and
+          // returned a year in the fifty-eight thousands. The comparison could never match, `capOK`
+          // was permanently false, and **the band refused to pin at all**.
+          // ⚠ MEASURED on his panel 2026-09-02 13:09 CT, mid-session, after a reload:
+          //     emBand.ok false · why "warm-up: candle window or ratio is not yet today's"
+          //     ZERO ladder rows. Nothing on the face. And every input was healthy —
+          //     FUTMODE.live true, futBars 1m old, tape 100 strikes, sessionBody open 7650.5.
+          // ⚠⚠ IT ONLY FIRES ON A **FRESH CAPTURE**, which is why it hid: a pin carried over from a
+          // previous session skips this branch entirely. Today was the first new-day capture since
+          // v15.23 wrote the guard, and it blocked the whole panel on the first render of the day.
+          // ⚠ NO CONVERSION CAN FIX IT AT THIS CALL SITE. The two producers disagree about the
+          // MEANING of `t` (naive vs real, seconds vs ms), so dividing by 1000 would be right for
+          // one branch and wrong for the other — and wrong for the cash branch only after 19:00 CT,
+          // when the UTC day rolls. **Ask the producer which day it chose instead of re-deriving it.**
           var c0=cs[0];
-          var c0t=(typeof c0.t==='number')?c0.t:((typeof c0.time==='number')?c0.time:null);
-          // it must be dated TODAY, and it must be at or after the RTH open.
-          if(c0t==null || naiveDayStr(c0t)!==ctTodayStr()) capOK=false;
+          // `measureBars` STATES the day it selected (replay: REPLAY.day; futures: the byDay key it
+          // used). Formats differ — "2026-9-2" vs "2026-09-02" — so compare the numbers, not the text.
+          function _dayNums(x){ try{ var m=String(x).match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+            return m?(+m[1])*10000+(+m[2])*100+(+m[3]):null; }catch(eDN){ return null; } }
+          // ⚠ EITHER LEVEL STATES IT: `measureBars` names the day it SELECTED (replay / futures),
+          // and each cash bar carries the day it was KEPT for. Prefer the series, fall back to the
+          // bar — and only decline to judge when neither says anything at all.
+          var _mbDay=(MB && MB.day)?_dayNums(MB.day):((c0 && c0.day)?_dayNums(c0.day):null);
+          var _today=_dayNums(ctTodayStr());
+          // ⚠ WHEN THE PRODUCER NAMES NO DAY IT HAS ALREADY FILTERED TO ONE: `closedCandles` drops
+          // every bar whose day is not today before it returns. Blocking there would refuse a series
+          // that is today's BY CONSTRUCTION — a guard re-checking what its input guarantees.
+          if(_mbDay!=null && _today!=null && _mbDay!==_today) capOK=false;
           else if(!(typeof c0.so==='number' && c0.so>=_openSec)) capOK=false;
         }
         if(dispIsFut() && !(typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.live)) capOK=false;

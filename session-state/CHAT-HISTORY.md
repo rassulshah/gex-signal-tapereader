@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-02 · v15.45 · session `5e8d34b5`
+## 2026-09-02 · v15.46 · session `5e8d34b5`
 
-_52 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_54 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -659,8 +659,54 @@ Tell me when you're back on live and I'll verify the frames are landing.
 Recording. `frames 0 → 1`, clock is real (`12:55 CT`, MIDDAY, RTH), deps down to the one known SPX-pin failure. Now fixing the cause.
 Sustained — frames at **12:55 and 12:57**, 90 vend rows each. Now the guard so it can't happen again.
 Now the more important thing you sent — the purpose. Writing it where it governs everything.
+**Recording, verified live.** I clicked back to LIVE and watched the store fill:
+
+```
+frames 0 → 1 → 2   at 12:55 and 12:57, 90 vend rows each
+clock  now the real one — 12:55 CT, MIDDAY, RTH
+deps   down to one known failure (if.SPY under the SPX pin)
+```
+
+**And I caused this.** I asked you to rewind the night before; the tab stayed open, crossed into Wednesday's session, and nothing handed it back. `recorderBlind()` correctly gates all nine write paths in replay — so the morning was never captured. The strip said "↺ REPLAY" the whole time, and **a mode badge says which mode you're in, not what it's costing you.** That's the real defect.
+
+Two guards now:
+- **`replayStaleDayGuard()`** — a replay of a *previous* day, still open once a live RTH session begins, hands itself back **once** and says why. Rewinding *today* mid-session is deliberate and untouched; outside RTH it stays silent.
+- **A red ⚠ NOT RECORDING banner** during live RTH, naming the session you're missing, and **the banner itself is the click back to live**.
+
+The wall-clock trap showed up twice more here — `sessionPhase()` parked on yesterday returns `rth:true` for a session that ended, so both guards would have agreed with the exact state they exist to detect. Third build running. **15 mutations, 15 caught** — four only after I fixed assertions passing on the corpse of what they guarded.
+
+---
+
+**`design/PURPOSE.md` is writt …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 38 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (18:07):** Same policy denial — 38 commits, carried by `installv1545.bat`.
+
+**OPERATOR:**
+> re.laded check.. nothing displayed , no ladder
+
+**me (18:09):** The band is refusing to pin — that's why there's no ladder. Let me find which half of the guard is failing.
+Found it — and it's a units bug that only fires on a fresh capture, which is why today is the first day it's shown.
+The bar already carries a correctly-computed `day`. Let me confirm the futures path sets it too before I use it.
+**Found it.** Two bar producers disagree about what `t` means, so the guard could never read it.
+w1 regresses on the cash path. Rather than argue it's unreachable, let me have that producer state its day too.
+The harness's `naiveDayStr` stub takes **milliseconds** while the real one takes **seconds** — the stub was papering over the exact bug.
 
 ### DECISIONS
+
+**v15.46 · reloaded mid-session, no ladder — the band refused to pin.**
+- `emBand.ok FALSE`, "warm-up: candle window or ratio is not yet today's". **Zero ladder rows** with
+  every input healthy. No band ⇒ no skPiles ⇒ no ladder.
+- ⚠ **Two producers disagree about `t`**: `closedCandles` naive-seconds-for-day vs `measureBars/ES`
+  real-ms. `naiveDayStr` got ms and returned a **five-digit year** — structurally unsatisfiable.
+- ⚠ **Only fires on a FRESH capture**, so it hid from v15.23 until the first new-day capture.
+- ⚠⚠ **The harness stub took ms while the real function takes seconds** — the double was kinder than
+  the original, so 648 green assertions sat on a panel that would not draw.
+- Fix: **ask the producer which day it selected**, compare numerically, decline to judge when none
+  is named. Both bar builders now state `day`.
 
 **v15.45 · THE PURPOSE, and a replay that recorded nothing all morning.**
 - **`design/PURPOSE.md`** — his intent, quoted: **find the day's HOD and LOD early enough to trade
@@ -993,6 +1039,10 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.46** — warm-up guard reads `MB.day` / `bar.day` instead of re-deriving from `t`; cash builder
+states `day`; `test_em_band` stub corrected to SECONDS and fixtures stamped. `test_em_warmup.js` (20),
+`test_em_band` 645 → 648. 8 mutations / 8 caught. Suite 140 green / 6 baseline red.
+
 **v15.45** — `design/PURPOSE.md` + `test_purpose.js` (26) + `load gex` 1a-00 + resume-note §0;
 `replayStaleDayGuard()`, the NOT RECORDING banner, `test_replay_guard.js` (25), `test_replay` 212.
 22 mutations / 22 caught. Suite 140 green / 6 baseline red.
@@ -1122,6 +1172,12 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. **The recorder still cannot hold a full day** — 26.5KB/frame, 64% `feat`; 3.44MB vs 3.6MB.
+   ⚠ PURPOSE §4.5 makes this purpose-level: every base rate depends on capture.
+2. Column order (⇄ vs Δ15m) — his explicit instruction vs the narrative he described. Unresolved.
+3. A king run outside the drawn frame is silently dropped from the lane.
+4. Futures-gamma parked (v15.38 spec). Copper never confirmed.
 
 1. **The recorder still cannot hold a full day** — 26.5KB/frame, 64% `feat`; 3.44MB vs 3.6MB.
    ⚠ PURPOSE §4.5 makes this a purpose-level gap, not a nicety: every base rate depends on capture.
@@ -1278,6 +1334,7 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+d9c9e26 v15.45: the PURPOSE is written down; and a replay parked on yesterday recorded nothing all morning
 1747729 v15.44: roll arrows right of the delta profile; the ROLL words column retires
 9277516 v15.43: check everything — the health check had no concept of the session
 2a0919d v15.42: the king lane ran to the wall clock; the roll lane went blank without saying why
@@ -1289,7 +1346,6 @@ bebec5f v15.38: the futures-gamma research, parked where it cannot rot
 8edb3e0 v15.36: the king lane is not a census, and I read the count off the lane
 b3d9451 v15.35: the freeze badge was printing a 1970 timestamp
 23a5317 v15.34: the feed lamps move into the header, and the close-of-day freeze is verified live
-0e1bfd1 v15.33: ⓪a below the ladder, 1ST/2ND TP, brighter labels, and two feed lamps up top
 ```
 
 ---

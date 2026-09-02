@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02 · panel v15.45 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-02 · panel v15.46 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -86,9 +86,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.45, and what the face carries
+## 2 · WHERE WE ARE — v15.46, and what the face carries
 
-**Panel v15.45 · companion v1.17.** Suite **140 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.46 · companion v1.17.** Suite **140 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -203,6 +203,26 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠⚠ **v15.46 — THE WARM-UP GUARD READ `t` IN THE WRONG UNITS AND REFUSED THE BAND ALL DAY.**
+He reloaded mid-session: *"nothing displayed, no ladder"*. `emBand.ok FALSE`, why *"warm-up: candle
+window or ratio is not yet today's"* — **zero ladder rows**, with EVERY input healthy (FUTMODE.live,
+futBars 1m old, tape 100 strikes, no render errors, `sessionBody` reading today correctly).
+⚠⚠ **TWO PRODUCERS DISAGREE ABOUT WHAT `t` MEANS:** `closedCandles` stores `t: realMs` but passes
+NAIVE SECONDS to `naiveDayStr`; `measureBars/ES` stores `t: r[0]*1000` (REAL ms). `naiveDayStr`
+multiplies by 1000, so on a futures chart it got ms and returned a **year in the fifty-eight
+thousands** — the comparison was STRUCTURALLY UNSATISFIABLE and `capOK` was permanently false.
+⚠ **IT ONLY FIRES ON A FRESH CAPTURE** — a carried-over pin skips the branch — so it hid from v15.23
+until the first new-day capture, then took the panel out on the first render.
+⚠⚠⚠ **AND THE HARNESS WAS COVERING FOR IT:** `test_em_band` stubbed `naiveDayStr(ms)` while the real
+one takes SECONDS. **A STUB KINDER THAN THE FUNCTION IT DOUBLES IS A COVER-UP** — 648 green
+assertions on a panel that would not draw. The stub now matches; fixtures carry `day`.
+✅ **ASK THE PRODUCER, NEVER RE-DERIVE.** No conversion works at the call site (right for one branch,
+wrong for the other, and wrong for cash only after 19:00 CT when the UTC day rolls). `measureBars`
+NAMES the day it selected; each bar carries the day it was kept for; compared NUMERICALLY because
+formats differ (`2026-9-2` vs `2026-09-02`). No day named ⇒ decline to judge, never block.
+⚠ The guard still refuses a stale ES day (the branch takes the LAST day present — v15.23's real
+reason), a first bar before 08:30, and a bar with no clock.
 
 ⚠⚠⚠ **v15.45 — A REPLAY PARKED ON YESTERDAY SAT THROUGH FOUR HOURS OF A LIVE SESSION AND THE PANEL
 RECORDED NOTHING.** He asked, mid-morning: *"are you recording .. market is open"*. Measured: strip
