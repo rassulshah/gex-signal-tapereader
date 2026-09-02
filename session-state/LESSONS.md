@@ -131,6 +131,32 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.49 — "the columns are missing" and "the column names are missing" are the same report
+
+**1 · Every column was present and he was still right.** All eleven headers existed, were positioned
+correctly and were inside the horizontal view — and the header ROW had scrolled off the top
+(`scrollTop 15.15`, `topRel -15`). ⚠ **Check what is VISIBLE before checking what EXISTS.** I probed
+horizontal scroll first because that was my model of "missing columns"; the answer was vertical.
+
+**2 · A `relative` header in a box that opens scrolled is never visible.** v15.28 made the ladder
+open on the expected-move band rather than at the top, so this was not an edge case — it was the
+normal first render. ⚠ **When one build changes a container's default scroll position, every
+`relative` child inside it inherits a new bug.**
+
+**3 · An empty catch makes "returned null" and "threw" identical.** The MARK column was empty with a
+row half a point from price, and nothing anywhere distinguished a refusal from a crash. ⚠ **A catch
+that discards is a decision to be undiagnosable later**; `swallow()` existed for exactly this and
+this one path did not use it.
+
+**4 · Instrument before the third guess.** I had two wrong theories about the empty MARK column. The
+honest move was to record what the marker was asked and what it answered, ship that, and read the
+evidence — not to keep reasoning from source.
+
+**5 · A threshold in "points" is not a threshold when the chart's points change size.**
+`LVL_INPLAY_PTS = 3` spans three strike gaps on cash and under half a gap on ES — the same constant,
+two entirely different tests. ⚠ Recorded and NOT changed: it redefines what IN PLAY means, and that
+is his decision, not a repair I get to make while fixing something else.
+
 ### v15.48 — a guard that cannot fire is indistinguishable from a guard that is working
 
 **1 · `sessionPhase(now)` takes a Date; I passed seconds, three times, and nothing threw.** A number

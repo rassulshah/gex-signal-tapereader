@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02 · panel v15.48 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-02 · panel v15.49 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -86,9 +86,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.48, and what the face carries
+## 2 · WHERE WE ARE — v15.49, and what the face carries
 
-**Panel v15.48 · companion v1.17.** Suite **140 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.49 · companion v1.17.** Suite **140 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -203,6 +203,23 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠ **v15.49 — "THE COLUMNS ARE MISSING" WAS THE HEADER ROW SCROLLING OFF THE TOP.** All eleven
+headers existed, were positioned right and were inside the horizontal view; `scrollTop 15.15`,
+`header.topRel -15`, `insideView FALSE`. The header was `position:relative` inside a box that
+**v15.28 made OPEN on the expected-move band** rather than at the top — so it is scrolled from the
+first render on most days. ✅ Now `position:sticky;top:0` + `z-index` + an **opaque** background
+(without the last two the rows scroll THROUGH it, which is worse than the original fault).
+⚠ **CHECK WHAT IS VISIBLE BEFORE CHECKING WHAT EXISTS** — I probed horizontal scroll first because
+that was my model of "missing columns". The answer was vertical.
+⚠⚠ **THE MARK COLUMN IS GENUINELY EMPTY AND WAS UNDIAGNOSABLE.** Zero marks with a row **0.5 points**
+from price and `LVL_INPLAY_PTS=3`; the same code marks five rows in the harness. The catch discarded
+BOTH a null return and a throw. ✅ Now `swallow('levelMarker')` + `__gptsDebug.mark()` records
+strike, disp, now, distance, threshold and verdict per row, reset each render. **READ IT NEXT
+RELOAD — do not guess a third time.**
+⚠⚠⚠ **MEASURED, NOT CHANGED: `LVL_INPLAY_PTS=3` IS SCALE-DEPENDENT.** 3 SPY points = THREE strike
+gaps (harness marks 5 rows at once); 3 ES points = under HALF a gap. **One constant, two entirely
+different tests.** Not touched — it redefines what IN PLAY means, which is HIS call.
 
 ⚠⚠⚠ **v15.48 — `sessionPhase(now)` TAKES A **DATE** AND I PASSED IT SECONDS, THREE TIMES.**
 It does `new Date(now.toLocaleString(...))`. A NUMBER has `toLocaleString`, so `48000` → `"48,000"`

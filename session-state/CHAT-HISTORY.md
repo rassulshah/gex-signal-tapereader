@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-02 · v15.48 · session `5e8d34b5`
+## 2026-09-02 · v15.49 · session `5e8d34b5`
 
-_58 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_60 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -754,8 +754,48 @@ Band pins correctly. Three findings — one of them is my fault and can't be und
 The RTH cut is dropping clockless bars — that's destructive on the replay path. Let me check what replayed bars actually carry.
 The cut must only drop what it can *prove* is pre-open. Dropping unknowns is destructive.
 The guard is now actually firing — which is correct, and it evicts the render harness's parked day. That's the fix working.
+**v15.47 worked** — `anchoredAt 7650.5`, the true RTH open. Ladder 8 rows, TP headings right, candles agreeing, no render errors.
+
+**The missing item you asked me to look for was two guards that have never run.**
+
+```
+deps.rthNow   FALSE    at 13:30 CT, mid-session
+deps.idleMin  null     (NaN)
+```
+
+`sessionPhase(now)` takes a **Date**. I passed it seconds — and a number has its own `toLocaleString`, so `48000` became `"48,000"`, `new Date("48,000")` is Invalid Date, every field NaN. **Nothing threw.**
+
+So the v15.43 session-aware staleness never engaged — and worse, **the replay stale-day guard I shipped after you lost that morning of recording had never once fired.** It would not have saved you the next day. My tests stubbed `sessionPhase`, so they never met the real signature; that's the second build running where a stub was kinder than the function it doubled. The stubs now throw on a non-Date.
+
+**The proof it works was 65 failing assertions.** The moment the clock was fixed, the guard started evicting both render harnesses — which park a past day on purpose and look …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 41 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (18:38):** Same policy denial — 41 commits, carried by `installv1548.bat`.
+
+**OPERATOR:**
+> alot of the columns are missing
+
+**me (18:43):** Headers are all present in the DOM. Let me see what's actually visible.
+All 11 columns are present and visible — the panel is 1219px wide with 608px of ladder. Let me see what you're seeing.
+**Found it.** The column header row has scrolled off the top — it's `position: relative` inside a box that opens scrolled down.
+Now the empty MARK column.
+Marks are absent on every row including one sitting on price — and the catch swallows without recording. Let me make it visible rather than guess.
+The marker works in the harness (5 rows marked, d 0.15–2.65). The instrumentation will say why it doesn't on yours. Running the suite.
 
 ### DECISIONS
+
+**v15.49 · the columns were not missing; their NAMES were.**
+- All eleven headers present, positioned right, inside the horizontal view — and the header ROW had
+  scrolled off the top (`scrollTop 15.15`, `topRel -15`). `position:relative` in a box that v15.28
+  made OPEN on the band. Now `sticky` + z-index + opaque ground.
+- ⚠ **Check what is VISIBLE before what EXISTS.** I probed horizontal scroll first; it was vertical.
+- ⚠⚠ **MARK column genuinely empty** — a row 0.5 pts from price, `LVL_INPLAY_PTS=3`, zero marks,
+  and the catch discarded both a null return AND a throw. Now recorded: `__gptsDebug.mark()`.
+- ⚠⚠⚠ **`LVL_INPLAY_PTS=3` is SCALE-DEPENDENT** — three strike gaps on cash, under half on ES.
+  Measured and **deliberately not changed**: it redefines IN PLAY, which is his call.
 
 **v15.48 · two guards that had never run, and an EM band that cannot be recovered.**
 - ✅ v15.47 verified live: `emBand.ok true`, **anchoredAt 7650.5** — the true RTH open. Ladder 8 rows,
@@ -1122,6 +1162,10 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.49** — sticky ladder header; `swallow('levelMarker')` + `__gptsDebug.mark()` instrumentation
+reset per render. `test_ladder_header.js` (20). 7 mutations / 7 caught.
+Suite 140 green / 6 baseline red.
+
 **v15.48** — `liveSessionPhase()` = `sessionPhase(new Date())` at all three sites; RTH cut inverted
 to drop-what-you-can-refute; both harnesses satisfy `RP_STALEGUARD`. `test_deps` 94 → 96,
 `test_replay_guard` 25 → 29, `test_em_warmup` 29 → 31. 5 mutations / 5 caught.
@@ -1264,6 +1308,12 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. ⚠ **MARK column empty on his panel** — instrumented, read `__gptsDebug.mark()` next reload.
+2. ⚠ **`LVL_INPLAY_PTS=3` is scale-dependent** — awaiting his call on what IN PLAY should mean.
+3. ⚠ Today's (2026-09-02) EM band unusable — pinned 299 min late. Not recoverable.
+4. **The recorder still cannot hold a full day** — 26.5KB/frame, 64% `feat`; 3.44MB vs 3.6MB.
+5. Column order (⇄ vs Δ15m); king runs off-frame dropped silently; futures-gamma parked.
 
 1. ⚠ **Today's (2026-09-02) EM band is unusable** — pinned 299 min late. Not recoverable.
 2. **The recorder still cannot hold a full day** — 26.5KB/frame, 64% `feat`; 3.44MB vs 3.6MB.
@@ -1439,6 +1489,7 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+933de40 v15.48: sessionPhase() takes a Date and I passed it seconds, three times
 2204256 v15.47: the band's series began before the open, so the anchor was never the open
 31ecb60 v15.46: the warm-up guard read `t` in the wrong units and refused the band all day
 d9c9e26 v15.45: the PURPOSE is written down; and a replay parked on yesterday recorded nothing all morning
@@ -1450,7 +1501,6 @@ d9c9e26 v15.45: the PURPOSE is written down; and a replay parked on yesterday re
 067ec1d v15.39: two candles, one session, and they disagreed about its colour
 bebec5f v15.38: the futures-gamma research, parked where it cannot rot
 8b76b71 v15.37: YF and FF lamps — two integrations that ran 27 builds with nothing on the face
-8edb3e0 v15.36: the king lane is not a census, and I read the count off the lane
 ```
 
 ---

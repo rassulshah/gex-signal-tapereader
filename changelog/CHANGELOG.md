@@ -1,3 +1,51 @@
+## v15.49 — the columns were not missing; their names were
+
+> "alot of the columns are missing"
+
+### MEASURED — every column present, and he was still right
+
+    headers   S@2 · Y@28 · LEVEL@56 · PRICE@104 · NODE·%KING@140 · NOW@226 · MARK@294
+              · Δ15m@400 · ⇄@452 · STATE@500 · ROC 15m@558     — all eleven, all `vis:true`
+    wrap      clientW 608 · panel 1219 — nothing scrolled off the side
+    BUT       scrollTop 15.15 · header.topRel **-15** · insideView **FALSE**
+
+The header row is `position: relative` inside the scrolling box, and **v15.28 made that box open on
+the expected-move band rather than at the top of the content** — so on most days it is scrolled from
+the first render and the header leaves with it.
+
+⚠ **FROM THE OUTSIDE, "the columns are missing" AND "the column names are missing" ARE THE SAME
+REPORT.** His was the accurate description of what he could see; mine was the wrong first guess
+(I checked horizontal scroll first).
+
+`position: sticky; top: 0` with a z-index and an opaque ground — the last two are not decoration:
+without them the rows scroll **through** the header, which is worse than the fault being fixed.
+
+### ⚠ AND THE MARK COLUMN IS GENUINELY EMPTY — NOW DIAGNOSABLE
+
+Zero marks on any row, with a row **0.5 points from price** and `LVL_INPLAY_PTS = 3`. The same code
+marks five rows in the render harness. There was no way to tell whether `levelMarkerOf` **returned
+null** or **threw**, because the catch discarded both.
+
+⚠ **An empty catch makes those two identical from the outside**, and every other render path in this
+file already reports through `swallow()`. Now it does too, and every row records what the marker was
+asked and what it answered — `__gptsDebug.mark()` returns strike, disp, now, distance, threshold and
+verdict for the last render. **The cause will be evidence next reload rather than my third guess.**
+
+### ⚠⚠ FOUND, MEASURED, DELIBERATELY NOT CHANGED
+
+`LVL_INPLAY_PTS` is **3 chart points** — and a chart point is not a fixed thing:
+
+    cash chart   3 SPY points  = THREE strike gaps      → the harness marks FIVE rows at once
+    ES chart     3 ES points   = under HALF a strike gap → almost nothing qualifies
+
+**The same constant is two very different tests.** That is the scale-dependence class this file
+keeps paying for. ⚠ **I have not changed it in this build**: it redefines what IN PLAY means, which
+is his call. Recorded with the measurement so the decision is his and informed.
+
+`test_ladder_header.js` → **20**, including the two-chart arithmetic executed rather than asserted.
+**7 mutations, 7 caught.** Suite **140 green / 6 baseline red**.
+
+
 ## v15.48 — `sessionPhase()` takes a Date and I passed it seconds, three times
 
 > "releoaded check .. especially for missing itmes"

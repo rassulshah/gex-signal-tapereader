@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.48
+// @version    15.49
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.48';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.49';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -21301,7 +21301,19 @@ function ensureV3Css(){
     '#gpts-body .g3ladscroll::-webkit-scrollbar-thumb{background:#2a3340;border-radius:3px}'+
     // (v15.21) the column headers. Same left/width as the columns themselves, set inline from
     // the LAD_* constants, so they cannot drift apart.
-    '#gpts-body .g3ladhd{position:relative;height:11px;width:'+LAD_W+'px;margin:0 0 1px}'+
+    // ⚠⚠⚠ (v15.49) STICKY, BECAUSE THE HEADER SHARES THE SCROLL BOX AND THE BOX OPENS SCROLLED.
+    // Operator, 2026-09-02: "alot of the columns are missing". Measured on his panel:
+    //     wrap.scrollTop 15.15 · header.topRel **-15** · insideView FALSE
+    // Every column was present, correctly positioned and inside the horizontal view — the HEADER
+    // ROW had simply scrolled off the top, so nothing said which column was which. `position:
+    // relative` scrolls with the rows, and v15.28 made the view OPEN on the expected-move band
+    // rather than at the top of the content, so it is scrolled from the first render on most days.
+    // ⚠ THE COLUMNS WERE NOT MISSING; THEIR NAMES WERE. From the outside those are the same report,
+    // and his is the accurate description of what he could see.
+    // ⚠ `z-index` and an opaque background are not decoration: without them the rows scroll THROUGH
+    // the header, which is a worse failure than the one being fixed — a legible-looking header with
+    // node bars crossing it.
+    '#gpts-body .g3ladhd{position:sticky;top:0;z-index:6;background:#0f131b;height:11px;width:'+LAD_W+'px;margin:0 0 1px}'+
     '#gpts-body .g3ladhd span{position:absolute;top:0;font-size:7px;font-weight:800;'+
       'letter-spacing:.06em;color:#8b98a9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'+
       'text-transform:uppercase;cursor:help}'+
@@ -25478,6 +25490,7 @@ function frameNumSafe(x){ try{ return frameNum(x); }catch(e){ return String(x); 
 // a node can hold the most pull all session while price walks away from it. ATTRACTING additionally
 // requires the DISTANCE TO BE CLOSING, which makes it falsifiable. Doctrine ("every node is a magnet;
 // the closer price drifts, the stronger the pull") is satisfied by the stricter test, not contradicted.
+var LVLMK_LAST=[];         // (v15.49) the last markers decided, for __gptsDebug.mark()
 var LVL_INPLAY_PTS=3;      // ⚖ how close price must be to count as standing on a level
 var LVL_CLOSE_BARS=5;      // ⚖ bars over which the distance must have closed to say ATTRACTING
 // ⚠⚠ (v14.50) THE SCALE PARAMETER IS LOAD-BEARING. The first version converted a past close with
@@ -26482,6 +26495,9 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
         }
       }
     }catch(eMin){}
+    // ⚠ (v15.49) one render, one record — otherwise the last N entries straddle two renders and the
+    // console shows a mixture of two different prices as though it were one moment.
+    try{ LVLMK_LAST.length=0; }catch(eMLc){}
     for(var i=0;i<PS.length;i++){
       var P=PS[i];
       if(!inFrame(P.disp)){ OFF.push({n:'node '+frameNum(P.disp), at:P.disp}); continue; }
@@ -26592,7 +26608,19 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
                              (EB&&typeof EB.scaleUsed==='number')?EB.scaleUsed:0);
         if(mk) h+='<span class="g3ldmk g3ldmk'+mk.m.replace(/[^A-Z]/g,'')+'" style="top:'+t.toFixed(1)+'px"'+
           g3tip(mk.m+' — '+mk.why+'.')+'>'+g3esc(mk.m)+'</span>';
-      }catch(eMk){}
+        // ⚠⚠ (v15.49) RECORD WHAT THE MARKER DECIDED, so an empty column can be diagnosed from the
+        // console instead of by reading source. The MARK column came back EMPTY on 2026-09-02 with a
+        // row sitting 0.5 points from price — inside LVL_INPLAY_PTS=3 — and there was no way to tell
+        // whether the function had returned null or thrown, because the catch below discards both.
+        try{ LVLMK_LAST.push({ k:P.k, disp:P.disp, now:now, d:+Math.abs(P.disp-now).toFixed(2),
+                               thresh:LVL_INPLAY_PTS, m:mk?mk.m:null });
+             if(LVLMK_LAST.length>40) LVLMK_LAST.shift(); }catch(eML){}
+      }catch(eMk){
+        // ⚠ AN EMPTY CATCH MADE A THROWN MARKER LOOK EXACTLY LIKE A NULL ONE. `swallow` is the
+        // project's own disclosure channel and every other render path already uses it; this one
+        // did not, so a failing MARK column left no trace anywhere.
+        try{ swallow('levelMarker', eMk); }catch(eS){}
+      }
       // ⚠ (v15.18) THE ROC COLUMN DRAWS IN REPLAY TOO — under a DIFFERENT tooltip, because the
       // numbers are a different measurement. Live it is Skylit's `percent15Min`, and the tip credits
       // them by name. A recorded row has no percents at all, so replay draws `rp*` — this panel's
@@ -29985,6 +30013,13 @@ window.__gptsDebug.session = function(){
 // without exporting a day file — and so the flicker suppression can be seen working.
 // (v15.39) the session's body, and WHICH surfaces agree about it — so "the two candles disagree"
 // is a question the console answers in one call instead of a screenshot comparison.
+// (v15.49) WHY IS THE MARK COLUMN EMPTY — answerable in one call. Records what the marker was
+// ASKED and what it ANSWERED for every row of the last render, so "no marks" can be told apart from
+// "marks refused" and from "the marker threw".
+window.__gptsDebug.mark = function(){
+  try{ return { n:LVLMK_LAST.length, thresh:LVL_INPLAY_PTS, rows:LVLMK_LAST.slice(-14) }; }
+  catch(e){ return { err:String(e&&e.message||e) }; }
+};
 window.__gptsDebug.sessionBody = function(sym){
   try{
     var S=sessionBody(sym||'SPY');
