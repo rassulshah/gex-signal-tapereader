@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.39
+// @version    15.40
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.39';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.40';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -22081,9 +22081,37 @@ function replayLadder(sym){
     var und=(typeof F.px==='number' && F.px>0)?F.px:null;
     var spx=(F.xm && F.xm.SPXW && typeof F.xm.SPXW.px==='number' && F.xm.SPXW.px>0)?F.xm.SPXW.px:null;
     if(!(und>0 && spx>0)) return null;
-    var sc=und/spx;
-    return { px:und, undPx:und, theirSpot:spx, srcSym:'replay', spotSrc:'frame',
-             dispScale:+sc.toFixed(6), undScale:+sc.toFixed(6), scaleSrc:'replay',
+    // ⚠⚠⚠ (v15.40) `dispScale` IS THE **CHART** SCALE. `und/spx` IS THE **UNDERLYING** ONE, AND
+    // v15.18 ASSIGNED IT TO BOTH — so on an ES chart every SPXW strike was converted into SPY space
+    // and then plotted on an ES rail. MEASURED on his panel 2026-09-02, replaying 2026-09-01 14:21:
+    //     dispScale 0.099775 === undScale 0.099775      (identical — that equality IS the tell)
+    //     SPXW 7630 x 0.099775 = 761.28   drawn on a ladder framed 7615..7680
+    // Every node landed ~6,880 points below the frame, `inFrame()` refused all of them, and the
+    // ladder rendered ZERO strike rows. The recorded book was PERFECT — 36 SPXW strikes, seven of
+    // them clearing 20% of King and ALL SEVEN inside the band (7630 −100, 7625 +77, 7610 +52,
+    // 7635 −48, 7620 −44, 7615 +39, 7650 +21). Nothing was missing. Nothing was mis-recorded.
+    // ⚠ **THE CAPTURE WAS NEVER THE PROBLEM.** The operator reported this three times as "you are
+    // not capturing the state"; the state was captured every minute and thrown away at draw time by
+    // one multiplication. A read fault and a write fault look identical from the face.
+    // ⚠⚠ AND THE LIVE BRANCH ALREADY CARRIED THIS EXACT LESSON, forty lines below, from v15.06:
+    // "the price pill read 7710 (ES) while every ladder level read ~770 (SPY)" — with the rule in
+    // capitals, THE FIX IS ONE SCALE, NOT A BETTER FALLBACK. `replayLadder` was written in v15.18,
+    // AFTER that, and reintroduced the fault in the one path the rule had not been applied to.
+    // A lesson recorded in a comment protects the function it sits in and nothing else.
+    var sc=und/spx;                       // SPX -> the UNDERLYING (cash), from the frame's own prices
+    var dsc=sc, ssrc='replay:cash';
+    try{
+      if(dispIsFut()){
+        var _r=dispR();
+        // ⚠ TODAY'S ES/SPY ratio applied to a PAST session — and that is disclosed, not hidden. A
+        // frame records `xm` for SPY/QQQ/SPXW/VIX and NO ES print, so the past basis is genuinely
+        // not recoverable. The ratio is an index relationship that moves in the third decimal, so
+        // this is a small approximation; being off by a FACTOR OF TEN is not.
+        if(_r>0 && _r!==1){ dsc=sc*_r; ssrc='replay:fut:ratio-today'; }
+      }
+    }catch(eS){}
+    return { px:(dsc!==sc?und*dispR():und), undPx:und, theirSpot:spx, srcSym:'replay', spotSrc:'frame',
+             dispScale:+dsc.toFixed(6), undScale:+sc.toFixed(6), scaleSrc:ssrc,
              rows:[], src:'replay', ageMin:0, rolled:false, nExps:null, n:null, maxPain:null,
              replay:true, err:null };
   }catch(e){ return null; }
@@ -30071,8 +30099,21 @@ function secDay(sym){
     // 1ST HOD, to 1ST TP , which stands for first turning point .. similar to 2nd."
     // WHICH extreme it was is not lost: it moves into the hover. A heading names the ROLE (the day's
     // first turning point); the identity is a fact about today and belongs with the other facts.
-    h+=dcol('1ST TP', c1, (NOREAD?eTip:('THE DAY’S FIRST TURNING POINT — today that was the '+D.first+'. '+eTip)));
-    h+=dcol('2ND TP', c2, (NOREAD?eTip:('THE SECOND TURNING POINT — today that was the '+D.second+'. '+eTip)));
+    // ⚠⚠ (v15.40) THE HEADING NAMES WHICH TURN IT IS. Operator, 2026-09-02: "how come below where
+    // it says 1st tp and 2nd tp, it doesn't mention HOD and LOD. you know that you are suppose to
+    // indicate which turning it is, is it a Hod turn or an LOD turn."
+    // ⚠ IT WAS ONLY IN THE HOVER — and "1ST TP" alone is unreadable, because the whole point of the
+    // pair is WHICH extreme came first. A day that made its low first and its high second is a
+    // different day from the reverse, and v11.59 already learned that about the candle: "sold off
+    // then rallied and rallied then sold off are different days and rendered identically before
+    // this." The columns knew the answer (`D.first`/`D.second`) and spent it on a tooltip.
+    // ⚠ The old headings said "1ST HOD" until v15.33, so the label LOST information when it gained
+    // the TP name. A rename must not quietly drop a fact the old name carried.
+    var t1=(!NOREAD && D.first)?(' \u00b7 '+D.first):'';
+    var t2=(!NOREAD && D.second && D.secondT!=null && D.secondT<=D.clock)?(' \u00b7 '+D.second):'';
+    h+=dcol('1ST TP'+t1, c1, (NOREAD?eTip:('THE DAY\u2019S FIRST TURNING POINT \u2014 today that was the '+D.first+', at '+hlClock(D.firstT)+'. '+eTip)));
+    h+=dcol('2ND TP'+t2, c2, (NOREAD?eTip:('THE SECOND TURNING POINT \u2014 today that was the '+D.second+
+      ((D.secondT!=null && D.secondT<=D.clock)?(', at '+hlClock(D.secondT)+'. '):'. \u26a0 IT HAS NOT PRINTED YET \u2014 the heading names it only once it has, because a second extreme that has not happened is a forecast, not a fact. ')+eTip)));
     h+=dcol('DAY', c3, gdTip);
     h+='</div>';
     if(CDL) h+='</div></div>';   // (v14.91) close g3daytbl + g3dayrow

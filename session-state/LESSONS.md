@@ -131,6 +131,35 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.40 — a lesson in a comment protects the function it sits in and nothing else
+
+**1 · The fix for this exact bug was already in the file, forty lines below the bug.** `ifLadder`'s
+live branch carries a v15.06 comment in capitals — *"the price pill read 7710 (ES) while every
+ladder level read ~770 (SPY) ... THE FIX IS ONE SCALE, NOT A BETTER FALLBACK."* `replayLadder` was
+written in **v15.18, after that**, and set `dispScale = undScale` — the same fault, in the one path
+the rule had not been applied to. ⚠ **A lesson written as prose guards its own function.** If a rule
+must hold across paths, it needs a shared function or a test that walks every path, not a warning
+sitting beside one of them.
+
+**2 · A read fault and a write fault are indistinguishable from the face.** He reported "you are not
+capturing the state" three times. The state was captured perfectly every minute — 36 SPXW strikes,
+seven above threshold, all seven inside the band — and thrown away at draw time by one
+multiplication. ⚠ **Before believing a capture complaint, read back the stored record.** I could
+have settled this in one probe on any of the three occasions.
+
+**3 · Two scale fields holding the same value is a bug signature, not a coincidence.**
+`dispScale === undScale` is only correct on a cash chart. It is a one-line check and it is now the
+first thing the test asserts. ⚠ **When two fields exist because they differ, their equality is the
+alarm.**
+
+**4 · A rename dropped a fact.** The headings said "1ST HOD" until v15.33; renaming them to "1ST TP"
+lost which extreme it was, and the information sat unused in `D.first` for seven builds. ⚠ **When a
+label is renamed, list what the old one told you and check the new one still tells it.**
+
+**5 · The whole-file grep struck again.** I asserted the source contained `D.secondT<=D.clock` — a
+condition `hlNodeAt` also contains — so deleting the guard from the heading still passed. Second
+build running. ⚠ **Anchor an assertion on the statement it is about**, never on the file.
+
 ### v15.39 — I committed the project's oldest bug inside the fix for it
 
 **1 · A scale-invariant fact and a coordinate are different things, and I unified both.** Two candles

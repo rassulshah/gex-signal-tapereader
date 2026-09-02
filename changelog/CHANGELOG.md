@@ -1,3 +1,75 @@
+## v15.40 — the replayed ladder was drawn in the wrong price space
+
+> "i rewinded and it looks like you are still not showing the state during the replay. as you can
+> see there are no nodes etc. you still haven't fixed this.. you are suppose to capture the state so
+> i can rewind and replay the day."
+
+### ⚠⚠⚠ THE CAPTURE WAS NEVER THE PROBLEM
+
+Measured on his panel, replaying **2026-09-01 14:21**. The recorded frame held a **perfect** SPXW book:
+
+    36 SPXW strikes, seven clearing 20% of King, ALL SEVEN inside the band
+    7630 −100 (King) · 7625 +77 · 7610 +52 · 7635 −48 · 7620 −44 · 7615 +39 · 7650 +21
+
+Nothing missing. Nothing mis-recorded. **`replayLadder` returned the wrong scale:**
+
+    dispScale 0.099775  ===  undScale 0.099775      ← identical, and that equality IS the tell
+    SPXW 7630 × 0.099775 = 761.28   drawn on a ladder framed 7615..7680
+
+Every node landed **~6,880 points below the frame**, `inFrame()` refused all of them, and the ladder
+rendered **zero strike rows**. `dispScale` is the **CHART** scale; `und/spx` is the **UNDERLYING**
+one; v15.18 assigned the underlying to both, so on an ES chart every SPXW strike was converted into
+SPY space and plotted on an ES rail.
+
+⚠ **He reported this three times as a capture failure, and he was right about the symptom every
+time.** A read fault and a write fault look identical from the face.
+
+⚠⚠ **AND THE LIVE BRANCH ALREADY CARRIED THIS EXACT LESSON, FORTY LINES BELOW**, from v15.06:
+*"the price pill read 7710 (ES) while every ladder level read ~770 (SPY)"* — with the rule in
+capitals: **THE FIX IS ONE SCALE, NOT A BETTER FALLBACK.** `replayLadder` was written in v15.18,
+*after* that lesson, and reintroduced the fault in the one path the rule had not been applied to.
+**A lesson recorded in a comment protects the function it sits in and nothing else.**
+
+The replayed basis now uses today's ES/SPY ratio — a frame records SPY/QQQ/SPXW/VIX and **no ES
+print**, so the past basis genuinely is not recoverable. That is *disclosed* (`scaleSrc:
+replay:fut:ratio-today`), not hidden: the ratio moves in the third decimal, being wrong by a factor
+of ten does not. With no usable ratio it stays on cash **and says so** — never a silent guess.
+⚠ v15.18's other half was right and survives untouched: a replayed ladder still returns **no level
+rows**, because today's CW0/PW0/FLIP over a past book is a lie nothing downstream can detect.
+
+### 1ST TP / 2ND TP NOW NAME WHICH TURN THEY ARE
+
+> "it doesn't mention HOD and LOD. you know that you are suppose to indicate which turning it is,
+> is it a Hod turn or an LOD turn."
+
+`1ST TP · LOD` / `2ND TP · HOD`. It was only ever in the hover — and the headings said **"1ST HOD"**
+until v15.33, so the rename to "1ST TP" silently dropped the fact. ⚠ **A rename must not quietly
+drop what the old name carried.** The columns had `D.first`/`D.second` all along and spent them on a
+tooltip; v11.59 already learned this about the candle — *"sold off then rallied"* and *"rallied then
+sold off"* are different days. The second turn is named **only once it has printed**, written the
+way v15.23's three dead clauses taught (`secondT != null && secondT <= clock`), and the hover says
+so plainly when it has not.
+
+`test_replay_scale.js` → **29**, executed in PRICES rather than ratios: all seven of his real nodes
+proven drawable. **11 mutations, 11 caught** — after one fix, where I grepped the whole file for
+`D.secondT<=D.clock`, a condition `hlNodeAt` also contains, so deleting the guard passed on the
+other function's copy. Same fault as v15.38's CPE/HGE. Suite **135 green / 6 baseline red**.
+
+### ⚠ MEASURED, NOT FIXED — how much of the day actually survives
+
+    the store holds        2026-09-01 14:00 → 15:00 — 24 frames, ONE HOUR
+    per frame              26,551 bytes, of which:
+      feat  16,961  64%    the learning-feature vector — NOT read by anything that draws
+      vend   2,731  10%    the book the replayed ladder is rebuilt FROM
+      book   2,638  10%  · sig 1,499 6% · nodes 757 3% · tri 504 2%
+    a full RTH day         130 frames x 26.5KB = 3.44 MB against a 3.6 MB budget — 96% of it
+
+**A full day barely fits, so any growth evicts the morning.** Drop `feat` from the frame — the
+learning loop scores forward outcomes, it does not need a per-minute copy — and the day costs
+**~1.2 MB (35%)**. The cleanest form is two budgets: the replay-critical slice must not be evicted
+by the learning payload. Raised as a finding; not built.
+
+
 ## v15.39 — two candles, one session, and they disagreed about its colour
 
 > "look at the candles they look different in the app. in the now column you have a red candle and

@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-01 · panel v15.39 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-02 · panel v15.40 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.39, and what the face carries
+## 2 · WHERE WE ARE — v15.40, and what the face carries
 
-**Panel v15.39 · companion v1.17.** Suite **134 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.40 · companion v1.17.** Suite **135 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -177,6 +177,29 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠⚠ **v15.40 — THE REPLAY LADDER WAS EMPTY BECAUSE OF A SCALE, NOT A CAPTURE.** He reported it
+THREE TIMES as "you are not capturing the state". ⚠ **THE STATE WAS CAPTURED PERFECTLY EVERY
+MINUTE.** Measured replaying 2026-09-01 14:21: the frame held 36 SPXW strikes, seven clearing 20% of
+King, **ALL SEVEN inside the band** (7630 −100, 7625 +77, 7610 +52, 7635 −48, 7620 −44, 7615 +39,
+7650 +21). `replayLadder` returned `dispScale 0.099775 === undScale 0.099775` — the CASH scale in
+both slots — so SPXW 7630 drew at **761.28 on a ladder framed 7615..7680**, ~6,880 points below it.
+`inFrame()` refused every node. ⚠ **`dispScale` IS THE CHART SCALE; `und/spx` IS THE UNDERLYING ONE.
+Their EQUALITY is the alarm** — it is only correct on a cash chart.
+⚠⚠ **THE FIX WAS ALREADY IN THE FILE, FORTY LINES BELOW**, v15.06, in capitals: "THE FIX IS ONE
+SCALE, NOT A BETTER FALLBACK." `replayLadder` was written in v15.18, AFTER it. **A lesson written as
+prose guards only the function it sits in.**
+⚠ **BEFORE BELIEVING A CAPTURE COMPLAINT, READ BACK THE STORED RECORD** — one probe would have
+settled this on any of the three occasions.
+✅ Replayed basis = today's ES/SPY ratio (no frame records an ES print), DISCLOSED as
+`scaleSrc:'replay:fut:ratio-today'`; no ratio ⇒ cash, and it says so. Level rows still refused.
+✅ **1ST TP · LOD / 2ND TP · HOD** — the headings name the turn. They said "1ST HOD" until v15.33, so
+the rename had silently dropped it. The second is named only once it has PRINTED.
+📏 **MEASURED, NOT FIXED — the day does not fit.** Store holds 14:00→15:00, **24 frames**. Each is
+**26,551 bytes, 64% of it `feat`** (the learning vector, which nothing that DRAWS reads); `vend` —
+what the replay ladder is rebuilt from — is 10%. A full RTH day = 130 × 26.5KB = **3.44MB against a
+3.6MB budget (96%)**, so any growth evicts the morning. Dropping `feat` from the frame ⇒ ~1.2MB.
+**Two budgets is the clean form: the replay slice must not be evicted by the learning payload.**
 
 ⚠⚠⚠ **v15.39 — `emBand` MULTIPLIES EVERY PRICE IT RETURNS BY `emRr`, AND UNTIL NOW SAID NOTHING.**
 Measured 2026-08-31: bars high **769.88**, `EB.hiWater` **772.28**, ratio **1.0031195570**. And

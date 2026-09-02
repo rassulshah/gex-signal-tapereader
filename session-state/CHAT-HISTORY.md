@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-01 · v15.39 · session `5e8d34b5`
+## 2026-09-02 · v15.40 · session `5e8d34b5`
 
-_39 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_41 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -435,8 +435,45 @@ Real Chromium caught a regression — I over-widened. Let me measure the actual 
 The fixture disagreement is real, not an artifact — two session highs 2.4 points apart. Let me find which is right.
 Found the real cause — and it's a scale mismatch I introduced. Let me confirm the ratio.
 A pre-existing guard caught the omission — `emRr` must be on the debug hook too.
+You caught two candles drawing the same day. Here's what each was actually using:
+
+| | open | close | body | colour |
+|---|---|---|---|---|
+| NOW column | `EB.open` **7647.25** (the band's *anchor*) | the **live tape** 7644.25 | −3.00 | RED |
+| ⓪a HOD/LOD | `hodLod.open` **7647.00** (first RTH bar) | last **closed** bar 7647.50 | +0.50 | GREEN |
+
+Four faults in three lines. Two different "now"s, two different opens — and **the panel was frozen**. The badge said "frozen 2:59 pm", the AFTER HOURS chip was up, and the NOW candle was still following the after-hours tape. `recorderBlind()` gates every write path and gated no *read*, so the one surface whose job is to say the day is over kept moving after it was.
+
+**The day was flat: +0.50 on a 52-point range — a 1% body. The disagreement was six times the body it was describing.** Over your 284 recorded sessions the median body is 43% of the range, but **13% of sessi …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 32 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (23:46):** Push blocked again — the git proxy refuses a credential for `rassulshah/gex-signal-tapereader` (403). Same all session; not fixable from this container.
+
+All **32 commits** are inside `installv1539.bat`. Running it writes them to `C:\Dev\gex-signal-tapereader` and pushes from your machine, where the credential lives — that's also what makes the raw.githubusercontent link serve v15.39 a few minutes later.
+
+**OPERATOR:**
+> reloaded . also  how come below where it says 1st tp and 2nd tp, it doesn t mention HOD and LOD .   you know that you are suppose to indicate which turning it is , is it a Hod turn or an LOD turn.  let me see what else i can find. i rewinded and it looks like you are still not showing the state during the replay .   as you can see there are no nodes etc.  you still haven't fixed this.. you are suppose to capture the state so i can rewind and replay the day .
+
+**me (00:06):** **Found it.** Let me confirm the truncation in the recorder.
+**Found it.** `dispScale` is 0.0998 (SPX→SPY) when the rail is in ES space — every node lands at ~761 on a ladder framed 7615–7680.
+Two separate bugs, both confirmed. Fixing the replay scale first — it's the one that empties the ladder.
+The scale fix is proven. Now measuring the second half of his complaint — how much of the day actually survives.
 
 ### DECISIONS
+
+**v15.40 · the replay ladder was empty because of a SCALE, not a capture.**
+- Reported three times as "you are not capturing the state". **The state was captured perfectly.**
+  The 14:21 frame held 36 SPXW strikes, seven above threshold, all seven inside the band.
+- `replayLadder` set `dispScale = undScale` (both the CASH scale), so SPXW 7630 drew at 761.28 on a
+  ladder framed 7615..7680. Every node off-frame, zero rows. **Their equality is the alarm.**
+- ⚠ The rule was already in the file forty lines below, from v15.06, in capitals. `replayLadder`
+  was written after it. **A lesson in a comment guards only its own function.**
+- **1ST TP · LOD / 2ND TP · HOD** — the headings said "1ST HOD" until v15.33; the rename dropped it.
+- 📏 Measured: the store holds ONE HOUR. Frames are 26.5KB, **64% `feat`** (learning, never drawn).
+  A full day = 3.44MB against a 3.6MB budget. Two budgets is the fix; raised, not built.
 
 **v15.39 · two candles, one session, two colours.**
 - NOW column drew `EB.open`(7647.25) → LIVE TAPE(7644.25) = RED; ⓪a drew `hodLod.open`(7647.00) →
@@ -700,6 +737,11 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.40** — `replayLadder` now derives the CHART scale (`sc × dispR()`), disclosed as
+`replay:fut:ratio-today`; cash fallback says so; level rows still refused. TP headings name their
+extreme, the second only once printed. `test_replay_scale.js` (29), executed in prices.
+11 mutations / 11 caught. Suite 135 green / 6 baseline red.
+
 **v15.39** — `sessionBody(sym)` owns the session's open/close/hi/lo; both candles read it, the NOW
 column converting by the published `emRr`. `__gptsDebug.sessionBody()`. `test_session_body.js` (46),
 `test_replay_face` 151→157, `test_em_band` caught `emRr` missing from the debug hook.
@@ -804,6 +846,11 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. **The recorder cannot hold a full day** — 26.5KB/frame, 64% `feat`; 3.44MB vs a 3.6MB budget.
+   Proposed: drop `feat` from the frame (⇒ ~1.2MB) or split into two budgets. NOT BUILT.
+2. Two session highs still exist (`emBand.hiWater` vs `hodLod.hod`), consistent only via `emRr`.
+3. The futures-gamma build stays parked (v15.38 spec). Copper never confirmed.
 
 1. **Two session highs still exist** — `emBand.hiWater` vs `hodLod.hod`, consistent only via
    `emRr`. Labelled, not unified.
@@ -928,6 +975,7 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+067ec1d v15.39: two candles, one session, and they disagreed about its colour
 bebec5f v15.38: the futures-gamma research, parked where it cannot rot
 8b76b71 v15.37: YF and FF lamps — two integrations that ran 27 builds with nothing on the face
 8edb3e0 v15.36: the king lane is not a census, and I read the count off the lane
@@ -939,7 +987,6 @@ d19aa28 v15.31: the day as a candle, the strike grid behind the nodes, IBH/IBL o
 3745d82 v15.30: the grip was capped at 560 while his panel was 673
 9155067 v15.29: the EL really was cut off — and only a real browser could show it
 f8f574e v15.28: the expected low was clipped on the frame's edge, and in replay the band was a sliver
-8beb190 v15.27: scaleUsed has two meanings and I changed the one with ten consumers
 ```
 
 ---
