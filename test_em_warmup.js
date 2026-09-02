@@ -85,5 +85,46 @@ ok((dayNums('2026-9-2')!==T)===false, 'f6b ...and one selecting TODAY pins');
 ok(/if\(!\(rec && typeof rec\.em==='number'\)\)/.test(src),
    'f7 the capture branch runs ONLY when no pin exists — which is why this hid until a new day');
 
+
+// ============================================================================================
+// 6 · (v15.47) AND THE REAL CAUSE WAS THE SERIES, NOT THE GUARD
+//
+// v15.46 fixed the units and the band STILL refused. Measured on his panel 13:20 CT:
+//     MB.day '2026-9-2'   — the day check PASSED
+//     cs[0].so 28800 = 08:00 CT, thirty minutes before the open, o 7640
+//     first bar at/after the open: index 30, 08:30, o 7650.5
+// The courier's window opens at 08:00 (FUT_WIN_A) and measureBars' futures branch buckets by DAY
+// without cutting to RTH, so `cs[0]` was a PRE-OPEN bar and `cs[0].so >= _openSec` was false.
+// ⚠⚠ AND THE GUARD WAS RIGHT TO REFUSE: `out.anchor` and `rec.openU` come from `cs[0]`, so relaxing
+// it would have anchored the day on 7640 instead of 7650.5 — TEN AND A HALF POINTS LOW, silently.
+// ============================================================================================
+const OPEN=8*3600+30*60;
+// his real bucket, reconstructed: 08:00 through the session
+const bucket=[]; for(let m=8*60; m<13*60; m++) bucket.push({ so:m*60, o:(m<510?7640:7650.5) });
+ok(bucket[0].so===28800 && bucket[0].so<OPEN,
+   's1 EXECUTED: the courier bucket starts at 08:00 — BEFORE the open', bucket[0].so);
+ok(!(bucket[0].so>=OPEN), 's1b ...so the old `cs[0].so>=_openSec` check was false, and capOK with it');
+const rth=bucket.filter(b=>b.so>=OPEN);
+ok(rth[0].so===OPEN && rth[0].o===7650.5,
+   's2 ...while the first RTH bar is 08:30 at 7650.5 — the anchor the band should use', rth[0]);
+// ⚠ THE COST OF RELAXING THE GUARD INSTEAD OF FIXING THE SERIES, IN POINTS
+ok(Math.abs(bucket[0].o-rth[0].o)===10.5,
+   's2b ...and anchoring on cs[0] would have been 10.5 points low, all day', bucket[0].o-rth[0].o);
+
+// ---- the fix is at the SERIES, and it is where every reader shares it ------------------------
+const cut=(src.match(/if\(typeof cs\[_ci\]\.so==='number' && cs\[_ci\]\.so>=_openSec\) _rth\.push\(cs\[_ci\]\);/)||[''])[0];
+ok(cut.length>0, 's3 the band cuts its series to RTH where the series is BUILT');
+ok(src.indexOf('_rth.push')<src.indexOf("if(cs.length && cs[0].o>0)"),
+   's3b ...before the anchor is chosen, so cs[0] IS the open');
+// ⚠ idempotent on the other two producers — this must not change the cash or replay paths
+ok(/if\(naiveDayStr\(t\)!==todayStr\) continue;/.test(src) && /if\(so<openSec\) continue;/.test(src),
+   's4 closedCandles already drops sub-open bars, so the cut is a no-op there');
+// ⚠ pre-open the cut empties the series, which is CORRECT: no open yet -> anchor on the prior close
+ok(/PRE-OPEN \/ CLOSED: there is no open yet/.test(src),
+   's5 an empty RTH series falls to the prior-session close, which already existed');
+// executed: before the open there is nothing to anchor on, and that is the right answer
+const preOpen=[{so:7*3600,o:7640},{so:8*3600,o:7641}].filter(b=>b.so>=OPEN);
+ok(preOpen.length===0, 's5b EXECUTED: pre-open, the RTH series is empty by construction');
+
 console.log('test_em_warmup: '+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

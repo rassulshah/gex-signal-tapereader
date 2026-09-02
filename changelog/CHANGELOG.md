@@ -1,3 +1,60 @@
+## v15.47 — the band's series began before the open, so the anchor was never the open
+
+> "check"
+
+**v15.46 fixed the units and the band still refused.** Measured on his panel at 13:20 CT, on v15.46:
+
+    MB.day     '2026-9-2'                    — the day check PASSED
+    cs[0].so   28800 = 08:00 CT, o 7640      — THIRTY MINUTES BEFORE THE OPEN
+    first RTH  index 30, 08:30, o 7650.5     — the bar the band should have anchored on
+    result     emBand.ok false · ZERO ladder rows
+
+The ES courier's window opens at **08:00** (`FUT_WIN_A`), and `measureBars`' futures branch buckets
+by **day** without cutting to RTH. So `cs[0]` was a pre-open print and `cs[0].so >= _openSec` was
+false. Same symptom as v15.46, entirely different cause — and I had shipped a fix for the half that
+was easier to see.
+
+### ⚠⚠ AND THE GUARD WAS RIGHT TO REFUSE
+
+`out.anchor` and `rec.openU` are both taken from `cs[0]`. Relaxing the check — the obvious move —
+would have anchored the whole session's expected-move band on the **08:00 print at 7640** instead of
+the RTH open at **7650.5**: **ten and a half points low, silently, for the day.** The refusal was
+protecting against a real fault; it just refused instead of fixing it.
+
+### THE FIX IS AT THE SERIES, NOT THE GUARD
+
+`cs` is cut to RTH where it is built, so `cs[0]` **is** the open. Every downstream reader — the
+anchor, `openU`, `openSo`, `hiWater`/`loWater` — shares one definition of the session, and `emBand`
+now agrees with `hodLod`, which has always filtered `b.so < openSec`.
+
+⚠ **Idempotent on the other two producers:** `closedCandles` already drops sub-open bars and a
+replayed series is RTH by construction, so the cut only bites on the courier path — exactly where it
+was wrong.
+⚠ **Pre-open it empties the series, which is correct** and already handled: no open yet means anchor
+on the prior close (v11.50), replaced by the first RTH bar.
+
+### THE REFUSAL MOVED UPSTREAM AND GOT MORE HONEST
+
+`w2`/`w3` used to report "warm-up"; they now report **"no prior session close to anchor on"**,
+because a fixture holding only pre-open prints has no session bar at all. ⚠ The property those tests
+protect is unchanged and is what is asserted: **it must not pin.**
+
+New case `w4` runs his actual shape — a series that *begins* pre-open — and asserts both halves: the
+band **pins**, and it pins on **765.0**, not 764.0.
+⚠ My first version of that assertion encoded my assumption about the harness's scale (I expected
+×10 and got 765 unscaled). **An assertion that bakes in a guess about the stub is testing the stub.**
+
+`test_em_band` 648 → **653**, `test_em_warmup` 20 → **29**. **5 mutations, 5 caught** — including the
+one that matters, `cs=_rth` removed, which needed a *behavioural* assertion because every grep-based
+one survived it. Suite **140 green / 6 baseline red**.
+
+### ⚠ FOUND, NOT FIXED
+
+`deps.rthNow` reported **false at 13:20 CT** with `idleMin: null` — the v15.43 wall-clock helper is
+not resolving the live phase correctly. Harmless today (an idle of 0 grades exactly as before) but
+it means the session-aware staleness is not actually engaging. Logged for the next build.
+
+
 ## v15.46 — the warm-up guard read `t` in the wrong units and refused the band all day
 
 > "re.laded check.. nothing displayed , no ladder"

@@ -1857,14 +1857,47 @@ eval(ex('emBand'));
   // b · today's bar but from BEFORE the open (a pre-market print) — also refused
   global.__cands=[ Object.assign({},bar,{ so:7*3600, t:dayMs+7*3600*1000, day:global.__dayStrOf(dayMs) }) ];
   r=emBand('SPY');
-  ok(r.ok===false && /warm-up/.test(r.why||''),
+  // ⚠⚠ (v15.47) THE REFUSAL MOVED UPSTREAM AND GOT MORE HONEST. The band's series is now cut to RTH
+  // where it is built, so a pre-open bar is not "a bad first bar" — it is NOT A SESSION BAR AT ALL,
+  // and a fixture holding only pre-open prints has no open to anchor on. The panel says exactly
+  // that. ⚠ The PROPERTY these three protect is unchanged and is what is asserted: **it must not
+  // pin**. Pinning to the fixture's `openU` would have anchored the day on a 07:00 print.
+  ok(r.ok===false && /no prior session close|warm-up/.test(r.why||''),
      'w2 ...and so does a bar from before 08:30, however well dated', r.why);
+  ok(r.ok===false, 'w2b ...refusing is the property; the REASON is now the more accurate one', r.why);
 
   // c · a bar with NO clock at all — the shape that let this through for months
   global.__cands=[ {o:770,h:770.5,l:769.5,c:770.2} ];
   r=emBand('SPY');
-  ok(r.ok===false && /warm-up/.test(r.why||''),
+  ok(r.ok===false && /no prior session close|warm-up/.test(r.why||''),
      'w3 ...and a bar carrying no clock is refused rather than trusted', r.why);
+  // ⚠ a bar with NO `so` cannot be shown to be in the session, so it is dropped rather than assumed
+  ok(r.ok===false, 'w3b ...a clockless bar is never treated as the open', r.why);
+
+  // ⚠⚠⚠ (v15.47) c2 · THE COURIER SHAPE — PRE-OPEN BARS **IN FRONT OF** THE SESSION.
+  // This is his actual data and the case none of w1-w3 covered: the ES courier's window opens at
+  // 08:00 (FUT_WIN_A), and measureBars' futures branch buckets by DAY without cutting to RTH. So
+  // `cs[0]` was the 08:00 print and `cs[0].so >= _openSec` was false — capOK false, band never
+  // pinned, ladder empty. MEASURED on his panel 2026-09-02 13:20: cs[0].so 28800, o 7640, while the
+  // first RTH bar was index 30, 08:30, o 7650.5.
+  // ⚠ AND RELAXING THE GUARD WOULD HAVE ANCHORED THE DAY ON 7640 — TEN AND A HALF POINTS LOW.
+  // The band must pin, AND it must pin on the OPEN, so both are asserted.
+  global.localStorage.setItem('gpts_emopen_v1', JSON.stringify({ v:0, date:'1970-01-01', sym:{} }));
+  global.__cands=[
+    Object.assign({},bar,{ o:764.0, so:8*3600,        t:dayMs+8*3600*1000,        day:global.__dayStrOf(dayMs) }),
+    Object.assign({},bar,{ o:764.5, so:8*3600+15*60,  t:dayMs+(8*3600+900)*1000,  day:global.__dayStrOf(dayMs) }),
+    Object.assign({},bar,{ o:765.0, so:8*3600+30*60,  t:dayMs+(8*3600+1800)*1000, day:global.__dayStrOf(dayMs) }),
+    Object.assign({},bar,{ o:765.2, so:8*3600+33*60,  t:dayMs+(8*3600+1980)*1000, day:global.__dayStrOf(dayMs) })
+  ];
+  r=emBand('SPY');
+  ok(r.ok===true, 'w4 EXECUTED: a courier series that BEGINS pre-open still pins', r.why);
+  // ⚠ I assumed the harness would scale this by dispR and asserted a ratio of 10; it came back 765
+  // unscaled, because this block's pin carries rr:1. Asserting the SCALED value would have encoded
+  // my assumption about the stub rather than the behaviour under test — so assert the anchor itself.
+  ok(Math.abs(r.open-765.0)<0.01,
+     'w4b ...anchored on the 08:30 OPEN (765.0), not the 08:00 print (764.0)', r.open);
+  ok(Math.abs(r.open-764.0)>=0.99,
+     'w4c ...and demonstrably NOT the pre-open bar', r.open);
 
   // d · today's real open — accepted, and the anchor is THAT bar's open
   global.localStorage.setItem('gpts_emopen_v1', JSON.stringify({ v:0, date:'1970-01-01', sym:{} }));

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.46
+// @version    15.47
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.46';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.47';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -22444,6 +22444,31 @@ function emBand(sym){
     // throw inside emBand's own try and read downstream as "the band refused".
     var MB=null; try{ if(typeof measureBars==='function') MB=measureBars(sym); }catch(eMB){}
     var cs=(MB && MB.bars && MB.bars.length) ? MB.bars : (closedCandles(sym)||[]);
+    // ⚠⚠⚠ (v15.47) THE SERIES IS CUT TO RTH **HERE**, AND v15.46 FIXED THE WRONG HALF.
+    // Measured on his panel 2026-09-02 13:20 CT, on v15.46, still refusing:
+    //     MB.day '2026-9-2' — the day check PASSED
+    //     cs[0].so 28800 = **08:00 CT**, thirty minutes before the open, o 7640
+    //     first bar at/after the open: index 30, 08:30, o 7650.5
+    // The courier's window opens at 08:00 (`FUT_WIN_A`), and `measureBars`' futures branch buckets
+    // by DAY without cutting to RTH — so `cs[0]` was a PRE-OPEN bar and `cs[0].so >= _openSec` was
+    // false. capOK stayed false and the band never pinned. Same symptom as v15.46, different cause.
+    // ⚠⚠ AND THE GUARD WAS RIGHT TO REFUSE. `out.anchor` and `rec.openU` are taken from `cs[0]`, so
+    // relaxing the check would have anchored the whole day's band on the **08:00 print, 7640**,
+    // instead of the RTH open **7650.5** — ten and a half points low, silently, for the session.
+    // ⚠ SO THE FIX IS NOT AT THE GUARD, IT IS AT THE SERIES: `cs[0]` must BE the open. Cutting here
+    // makes every downstream reader — anchor, openU, openSo, hiWater/loWater — agree about what the
+    // session is, and makes emBand agree with `hodLod`, which has always filtered `b.so<openSec`.
+    // ⚠ IDEMPOTENT ELSEWHERE: `closedCandles` already drops sub-open bars and a replayed series is
+    // RTH by construction, so this only bites on the courier path — exactly where it was wrong.
+    // ⚠ PRE-OPEN THIS EMPTIES `cs`, which is CORRECT and already handled: no open yet means the band
+    // anchors on the prior close (v11.50) and re-anchors on the first RTH bar.
+    try{
+      if(cs.length){
+        var _rth=[], _ci;
+        for(_ci=0;_ci<cs.length;_ci++){ if(typeof cs[_ci].so==='number' && cs[_ci].so>=_openSec) _rth.push(cs[_ci]); }
+        cs=_rth;
+      }
+    }catch(eRTH){}
     // the scale that takes THIS series to chart space: 1 when the bars are already ES.
     var rr=1;
     if(MB && MB.bars && MB.bars.length && typeof MB.scale==='number' && MB.scale>0) rr=MB.scale;

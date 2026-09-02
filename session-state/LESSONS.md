@@ -131,6 +131,32 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.47 — I fixed the half of the bug I could see, and shipped it as the fix
+
+**1 · Two independent faults produced one message, and I stopped at the first.** v15.46 corrected the
+units in the warm-up guard and the band still refused — because `cs[0]` was an 08:00 bar, not the
+08:30 open. ⚠ **A refusal message names the GUARD, not the CAUSE**, so identical symptoms can have
+unrelated causes. Re-measure after shipping a fix; "it should work now" is not a measurement.
+
+**2 · The guard was right and the data was wrong.** The obvious move — relax the check that is
+blocking everything — would have anchored the day's band **10.5 points low**, silently, all session.
+⚠ **When a guard refuses, ask what it is protecting before removing it.** Here the answer was that
+the anchor is read from the same bar the guard was rejecting.
+
+**3 · Fix the series, not the reader.** Cutting `cs` to RTH where it is built made the anchor,
+`openU`, `openSo` and the high/low watermarks share one definition of the session — and made
+`emBand` agree with `hodLod`, which had filtered correctly all along. ⚠ **When several readers each
+compensate for the same bad input, the input is the bug.**
+
+**4 · An assertion that encodes a guess about the harness is testing the harness.** I asserted the
+anchor would come back scaled ×10 because the stub sets `dispR()=10`; it came back unscaled. ⚠ Assert
+the quantity under test, not your model of the fixture around it.
+
+**5 · Only a behavioural assertion caught the real mutation.** Removing the RTH cut survived every
+grep-based check — the `_rth.push` line was still in the file. It took running `emBand` against a
+courier-shaped series and reading the anchor. ⚠ **A source grep cannot see a line that runs and does
+nothing.**
+
 ### v15.46 — a stub that is kinder than the real function is not a test double, it is a cover-up
 
 **1 · The harness corrected the bug it was meant to catch.** `test_em_band` stubbed

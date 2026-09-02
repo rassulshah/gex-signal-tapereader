@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-02 · v15.46 · session `5e8d34b5`
+## 2026-09-02 · v15.47 · session `5e8d34b5`
 
-_54 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_56 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -694,8 +694,48 @@ The bar already carries a correctly-computed `day`. Let me confirm the futures p
 **Found it.** Two bar producers disagree about what `t` means, so the guard could never read it.
 w1 regresses on the cash path. Rather than argue it's unreachable, let me have that producer state its day too.
 The harness's `naiveDayStr` stub takes **milliseconds** while the real one takes **seconds** — the stub was papering over the exact bug.
+**Install this one — the ladder will stay blank until you do.**
+
+The panel is otherwise healthy: `FUTMODE.live` true, courier 1 minute old, tape 100 strikes, zero render errors, and `sessionBody` reading today's session correctly (open 7650.5, now 7679.25). But:
+
+```
+emBand.ok  FALSE — "warm-up: candle window or ratio is not yet today's"
+ladder     ZERO rows
+```
+
+No band → no `skPiles` → no ladder. One boolean upstream took out the whole face.
+
+**Two producers disagree about what `t` means.** `closedCandles` stores real milliseconds but computes its day from *naive seconds*; `measureBars`'s futures branch stores real milliseconds from a different origin. `naiveDayStr` multiplies by 1000 — so on your ES chart it got milliseconds and returned a year in the **fifty-eight thousands**. The comparison `naiveDayStr(t) !== ctTodayStr()` was structurally unsatisfiable, so the capture was permanently refused.
+
+**Why it hid since v15.23:** that branch only runs on a *fresh* capture. Any carried-over pin skips it. Today was the first new-day capture, and it failed on the first render.
+
+**And my test harness was …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 39 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (18:17):** Same policy denial — 39 commits, carried by `installv1546.bat`.
+
+**OPERATOR:**
+> check
+
+**me (18:21):** v15.46 didn't cover it. Let me find what `cs[0]` actually is rather than reason about it.
+**Found it.** The courier's day-bucket starts at **08:00**, half an hour before the open — and the anchor is taken from that bar.
+The guard was right to refuse — the anchor really was reading an 08:00 bar. The fix is to make the series RTH.
+Both still refuse — for a better reason. Updating the assertions to the real behaviour.
 
 ### DECISIONS
+
+**v15.47 · the band's series began before the open.**
+- v15.46 fixed the units and it STILL refused. `cs[0].so 28800 = 08:00 CT, o 7640` — the courier
+  window opens at 08:00 and the futures branch buckets by DAY without cutting to RTH. First RTH bar:
+  08:30, **o 7650.5**.
+- ⚠ **The guard was RIGHT to refuse** — `anchor`/`openU` read `cs[0]`, so relaxing it would have
+  anchored the day **10.5 points low**, silently, all session.
+- Fix at the SERIES: cut to RTH where it is built, so `cs[0]` IS the open and every reader agrees.
+- ⚠ **Two faults, one message** — I shipped a fix for the first and did not re-measure.
+- ⚠ Only a BEHAVIOURAL assertion caught it; the grep-based ones all survived removing the cut.
 
 **v15.46 · reloaded mid-session, no ladder — the band refused to pin.**
 - `emBand.ok FALSE`, "warm-up: candle window or ratio is not yet today's". **Zero ladder rows** with
@@ -1039,6 +1079,10 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.47** — `emBand`'s series cut to RTH at build; `w2`/`w3` refusals moved upstream; new `w4`
+runs the courier shape and asserts the anchor is 765.0 not 764.0. `test_em_band` 648 → 653,
+`test_em_warmup` 20 → 29. 5 mutations / 5 caught. Suite 140 green / 6 baseline red.
+
 **v15.46** — warm-up guard reads `MB.day` / `bar.day` instead of re-deriving from `t`; cash builder
 states `day`; `test_em_band` stub corrected to SECONDS and fixtures stamped. `test_em_warmup.js` (20),
 `test_em_band` 645 → 648. 8 mutations / 8 caught. Suite 140 green / 6 baseline red.
@@ -1172,6 +1216,13 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. ⚠ **`deps.rthNow` FALSE at 13:20 CT, `idleMin` null** — the v15.43 wall-clock helper is not
+   resolving the live phase, so session-aware staleness is not engaging. Harmless today. FIX NEXT.
+2. **The recorder still cannot hold a full day** — 26.5KB/frame, 64% `feat`; 3.44MB vs 3.6MB.
+3. Column order (⇄ vs Δ15m) — explicit instruction vs the narrative he described. Unresolved.
+4. A king run outside the drawn frame is silently dropped from the lane.
+5. Futures-gamma parked (v15.38 spec). Copper never confirmed.
 
 1. **The recorder still cannot hold a full day** — 26.5KB/frame, 64% `feat`; 3.44MB vs 3.6MB.
    ⚠ PURPOSE §4.5 makes this purpose-level: every base rate depends on capture.
@@ -1334,6 +1385,7 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+31ecb60 v15.46: the warm-up guard read `t` in the wrong units and refused the band all day
 d9c9e26 v15.45: the PURPOSE is written down; and a replay parked on yesterday recorded nothing all morning
 1747729 v15.44: roll arrows right of the delta profile; the ROLL words column retires
 9277516 v15.43: check everything — the health check had no concept of the session
@@ -1345,7 +1397,6 @@ bebec5f v15.38: the futures-gamma research, parked where it cannot rot
 8b76b71 v15.37: YF and FF lamps — two integrations that ran 27 builds with nothing on the face
 8edb3e0 v15.36: the king lane is not a census, and I read the count off the lane
 b3d9451 v15.35: the freeze badge was printing a 1970 timestamp
-23a5317 v15.34: the feed lamps move into the header, and the close-of-day freeze is verified live
 ```
 
 ---

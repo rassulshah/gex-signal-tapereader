@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02 · panel v15.46 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-02 · panel v15.47 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -86,9 +86,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.46, and what the face carries
+## 2 · WHERE WE ARE — v15.47, and what the face carries
 
-**Panel v15.46 · companion v1.17.** Suite **140 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.47 · companion v1.17.** Suite **140 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -203,6 +203,25 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠⚠ **v15.47 — THE BAND'S SERIES BEGAN BEFORE THE OPEN, SO THE ANCHOR WAS NEVER THE OPEN.**
+v15.46 fixed the units and the band STILL refused. Measured 13:20 CT: `MB.day '2026-9-2'` passed,
+but **`cs[0].so 28800 = 08:00 CT, o 7640`** — the ES courier's window opens at 08:00 (`FUT_WIN_A`)
+and `measureBars`' futures branch buckets by DAY **without cutting to RTH**. The first RTH bar was
+index 30, 08:30, **o 7650.5**.
+⚠⚠ **THE GUARD WAS RIGHT TO REFUSE.** `out.anchor` and `rec.openU` both read `cs[0]`, so relaxing
+the check would have anchored the day on **7640 instead of 7650.5 — 10.5 points low, silently.**
+✅ **CUT THE SERIES TO RTH WHERE IT IS BUILT**, so `cs[0]` IS the open and every reader (anchor,
+openU, openSo, hiWater/loWater) shares one definition of the session. `emBand` now agrees with
+`hodLod`, which had filtered `b.so<openSec` all along. Idempotent on the cash and replay paths;
+pre-open it empties `cs`, which correctly falls to the prior-close anchor (v11.50).
+⚠ **TWO INDEPENDENT FAULTS PRODUCED ONE MESSAGE** and I shipped a fix for the first. **RE-MEASURE
+AFTER SHIPPING** — "it should work now" is not a measurement.
+⚠ **ONLY A BEHAVIOURAL ASSERTION CAUGHT IT**: removing the cut survives every grep, because the line
+is still there. `test_em_band` w4 runs a courier-shaped series and reads the anchor.
+⚠⚠ **FOUND, NOT FIXED: `deps.rthNow` reported FALSE at 13:20 CT with `idleMin:null`** — the v15.43
+wall-clock helper is not resolving the live phase, so the session-aware staleness is NOT engaging.
+Harmless today (idle 0 grades as before). **Fix next.**
 
 ⚠⚠⚠ **v15.46 — THE WARM-UP GUARD READ `t` IN THE WRONG UNITS AND REFUSED THE BAND ALL DAY.**
 He reloaded mid-session: *"nothing displayed, no ladder"*. `emBand.ok FALSE`, why *"warm-up: candle
