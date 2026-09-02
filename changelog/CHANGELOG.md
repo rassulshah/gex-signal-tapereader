@@ -1,3 +1,54 @@
+## v15.41 — a replay pin outlived the replay and flattened the ladder
+
+> "i think you messed it up again."
+
+**He is right, and the trap was one I walked him into**: I asked him to rewind. That rewind wrote a
+pin the live panel could never repair.
+
+### MEASURED ON HIS LIVE PANEL
+
+    pin  SPY|fut = { openU: 761.79, rr: 1, fam:'replay', replay:true }
+    band  anchoredAt 761.79 · low 729.29 · high 794.29       ← SPY space
+    band  now 7647.50 · hiWater 7673.75 · loWater 7621.50    ← ES space
+
+`emRailBounds` **starts** the frame at `B.low`, so the rail spanned **729 → 7674 — 6,944 points**,
+and the day's whole 52-point range occupied **0.75% of it**. Every row on the ladder collapsed onto
+one line at the top. That is the v15.24 symptom described in a comment twenty lines above the fault,
+reached by a different road.
+
+### ⚠⚠ ONE UNGUARDED WRITE, FOUR OVER-GUARDED READS
+
+    replayEmPin()        v15.24  builds a pin from the frame so the band survives a rewind
+    four read-side heals v15.26  refuse to repair a `replay:true` pin  — correct, and unscoped
+    the RATIO heal       v14.19  does `S.sym[emKey]=rec` and PERSISTS it — NO replay guard at all
+
+The ratio heal wrote the in-memory replay pin into the **live** key; the four read heals were then
+forbidden from ever repairing it. **Each rule was individually correct. None asked whether the
+replay was still happening.** A rewind is all it takes to close the loop.
+
+### THE FIX — one predicate, and one guard that needs no flag
+
+`rpPin(r)` = `r.replay && replayOn()` — *exempt right now*, not *born in replay*. All **five** sites
+call it, including the write. ⚠ **When the same condition is restated at five call sites, the bug is
+not in the four that got it slightly wrong — it is in there being five.**
+
+And a second guard that trusts no field at all: **an anchor and a price on one chart cannot be a
+factor of two apart.** 761.79 against 7647.50 is a factor of ten. It measures the symptom, overrides
+every exemption, and is disclosed as `rulerOff`. Every scale disaster this file has had — v11.65,
+v15.12, v15.24, v15.26, this one — would have tripped it, including the ones nobody had imagined.
+
+⚠ **AND AN EXISTING TEST CAUGHT MY FIRST ATTEMPT AT IT.** I scaled `rec.openU` before comparing;
+`test_em_band` pins openU as *"scaled in exactly two places and never chained"* and went red. It was
+right, and the correction is the better test: both values are SERIES numbers, so comparing them RAW
+is the honest check — scaling first would compare two numbers *after applying the very ratio in
+doubt*.
+
+`test_em_pin_ruler.js` → **31**, executed on his exact pair and on both boundaries. **15 mutations,
+15 caught.** Suite **139 green / 6 baseline red**.
+
+⚠ The poisoned pin self-heals on the first render after install — nothing to clear by hand.
+
+
 ## v15.40 — the replayed ladder was drawn in the wrong price space
 
 > "i rewinded and it looks like you are still not showing the state during the replay. as you can

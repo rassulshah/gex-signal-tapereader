@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.40
+// @version    15.41
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.40';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.41';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -22459,8 +22459,18 @@ function emBand(sym){
         }
       }
     }
+    // ⚠⚠⚠ (v15.41) `rpPin()` — A REPLAY PIN IS EXEMPT FROM THE HEALS ONLY WHILE REPLAYING.
+    // Four separate heals wrote `!rec.replay`, each correctly not wanting to re-litigate a frame's
+    // own recorded band — and none of them asked whether the replay was still happening. So a pin
+    // written during a rewind sat in the LIVE key and escaped EVERY heal, forever. Measured on his
+    // panel 2026-09-02: `{ openU:761.79, rr:1, replay:true }` against a live ES series, band low
+    // 729.29 / high 794.29 against now 7647.50, frame span 6,944 points, ladder flattened.
+    // ⚠ ONE PREDICATE, FOUR CALL SITES. Written out four times it drifted four ways; the whole
+    // reason this bug existed is that the same condition was restated instead of shared.
+    var _inRp=false; try{ _inRp=(typeof replayOn==='function' && replayOn()); }catch(eIR){}
+    function rpPin(r){ return !!(r && r.replay && _inRp); }   // exempt from the heals RIGHT NOW
     // belt and braces: even a stamped record is refused if the field the pin depends on is absent
-    if(rec && !rec.replay && !(typeof rec.rr==='number' && rec.rr>0)){ rec=null; out.recaptured=true; }
+    if(rec && !rpPin(rec) && !(typeof rec.rr==='number' && rec.rr>0)){ rec=null; out.recaptured=true; }
     // (v14.16) EM SANITY FLOOR — the poisoned-pin lesson, again, one field over. On 2026-08-27 the
     // once-per-session capture fired just past midnight while the IF dte0 chain still held the
     // EXPIRED book: an ATM straddle on expired options is ~$2.5 of residue, and that was PINNED as
@@ -22472,7 +22482,7 @@ function emBand(sym){
     // ⚠ the floor is computed with the LIVE ratio, so a recorded pin in the book's own points would
     // be healed away on an ES chart exactly as the operator's real pin was at v15.12. A frame's band
     // already passed this test on the day it was captured; it is not re-litigated here.
-    if(rec && !rec.replay && typeof rec.em==='number' && !(rec.em>=emFloor)){ rec=null; out.emHealed=true; }
+    if(rec && !rpPin(rec) && typeof rec.em==='number' && !(rec.em>=emFloor)){ rec=null; out.emHealed=true; }
 
     if(!(rec && typeof rec.em==='number')){
       var ec=null; try{ ec=ifChain((sym==='QQQ')?'QQQ':'SPX'); }catch(eC){}
@@ -22582,7 +22592,40 @@ function emBand(sym){
     // `src` is the recording, not a series measured now. Rebuilding it replaces the recorded anchor
     // and width with reconstructed ones — caught by the cross-examination (x4/x4b), which compares
     // the replayed band against `feat.emband`. Both numbers look plausible; only the recording knows.
-    if(rec && !rec.replay && (rec.src!==_srcNow || !(Math.abs((rec.rr||0)/(rr||1)-1)<0.001))){
+    // ⚠⚠⚠ (v15.41) THE REPLAY EXEMPTION WAS UNSCOPED, AND A REPLAY PIN OUTLIVED THE REPLAY.
+    // Measured on his LIVE panel 2026-09-02, after he rewound and came back:
+    //     pin  SPY|fut = { openU: 761.79, rr: 1, fam:'replay', replay:true }
+    //     band  anchoredAt 761.79 · low 729.29 · high 794.29     ← SPY space
+    //     band  now 7647.50 · hiWater 7673.75 · loWater 7621.50  ← ES space
+    // `emRailBounds` starts the frame at `B.low`, so the rail spanned 729 → 7674: SEVEN THOUSAND
+    // POINTS, and every row on the ladder collapsed onto one line at the top. That is the v15.24
+    // symptom described twenty lines above, reached by a different road.
+    // ⚠⚠ TWO CORRECT RULES COMBINED INTO A TRAP. `replayEmPin()` (v15.24) writes a pin so the band
+    // survives a rewind; this guard (v15.26) refuses to rebuild a REPLAY pin against a live series,
+    // for a good and still-valid reason. Neither asked whether the replay was still happening, so
+    // the replayed pin sat in the LIVE key and no rebuild would ever touch it.
+    // ⚠ THE EXEMPTION IS FOR REPLAYING, NOT FOR PINS THAT WERE BORN IN REPLAY. Scope it to the
+    // state it is about: in live, a replay pin is not exempt — it is poison.
+    var _exempt=rpPin(rec);
+    // ⚠⚠ AND A SECOND GUARD THAT NEEDS NO FLAG AT ALL. Flags describe intent; this measures the
+    // symptom. An anchor and a price on the same chart cannot be a factor of two apart — 761.79
+    // against 7647.50 is a factor of TEN, which is a ruler mismatch whatever any field claims.
+    // Every scale disaster this file has had (v11.65, v15.12, v15.24, v15.26, this one) would have
+    // been caught here, including the ones nobody had imagined yet.
+    // ⚠ COMPARED RAW, BEFORE ANY SCALING — and my first cut got this wrong in a way an existing
+    // test caught: it multiplied `rec.openU` by a ratio, which made a THIRD place that scales
+    // openU, and `test_em_band` pins that number at TWO ("scaled in exactly two places and never
+    // chained"). It was right and the fix is better: `rec.openU` and `nowU` are both SERIES values,
+    // so if the pin is on the series the numbers are actually on they are comparable AS THEY ARE.
+    // Scaling them first would have compared two numbers after applying the very ratio in doubt.
+    var _rulerOff=false;
+    try{
+      var _a=(typeof rec.openU==='number' && rec.openU>0)?rec.openU:null;
+      var _n=(typeof nowU==='number' && nowU>0)?nowU:null;
+      if(_a>0 && _n>0){ var _q=_a/_n; if(_q>2 || _q<0.5) _rulerOff=true; }
+    }catch(eRO){}
+    if(_rulerOff) out.rulerOff=true;
+    if(rec && (!_exempt || _rulerOff) && (_rulerOff || rec.src!==_srcNow || !(Math.abs((rec.rr||0)/(rr||1)-1)<0.001))){
       var _emK=(typeof rec.emK==='number' && rec.emK>0) ? rec.emK : null;
       var _emNow=_emK!=null ? (_emK*dsc) : null;
       if(_emNow>0 && cs.length && cs[0].o>0){
@@ -22614,7 +22657,7 @@ function emBand(sym){
     // 2.4 SPY points — 24 ES points — away from where it actually sat that day.
     // Caught by the cross-examination against `feat.emband`, which is the only check that could see
     // it: both numbers are plausible and only the RECORDING knows which is right.
-    if(!rec.replay && cs.length && typeof cs[0].so==='number' && cs[0].so>=_openSec && cs[0].o>0 &&
+    if(!rpPin(rec) && cs.length && typeof cs[0].so==='number' && cs[0].so>=_openSec && cs[0].o>0 &&
        (typeof rec.openSo!=='number' || cs[0].so<rec.openSo)){
       rec.openU=cs[0].o; rec.openSo=cs[0].so;
       try{ S.sym[emKey]=rec; localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eU){}
@@ -22629,7 +22672,17 @@ function emBand(sym){
     // a permanent 0.1%+ offset. So: live ratio disagreeing with the pin by >0.1%, SUSTAINED for five
     // minutes, from a live-trusted source, re-pins — once, loudly (`rrHealed`), never per-render.
     try{
-      if(dispIsFut() && rr>0 && typeof rec.rr==='number' && rec.rr>0 &&
+      // ⚠⚠⚠ (v15.41) AND THIS ONE HAD NO REPLAY GUARD AT ALL — IT IS THE WRITE THAT POISONS.
+      // In replay `rec` is the IN-MEMORY pin from `replayEmPin()` (`replay:true`, the frame's own
+      // anchor in the frame's own units). This heal then does `S.sym[emKey]=rec` and PERSISTS it —
+      // writing a replayed band into the LIVE key, where the four read-side heals were forbidden
+      // from ever repairing it. That is the whole loop: one unguarded WRITE plus four over-guarded
+      // READS, and a rewind is all it takes to close it.
+      // ⚠ THE OTHER FOUR WERE FIXED BY SCOPING A GUARD; THIS ONE NEEDED A GUARD TO EXIST. When the
+      // same condition is restated at five call sites, the bug is not in the four that got it
+      // slightly wrong — it is in there being five.
+      if(!rpPin(rec) && !(rec&&rec.replay) &&
+         dispIsFut() && rr>0 && typeof rec.rr==='number' && rec.rr>0 &&
          (typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.live && FUTMODE.ratioSrc==='live')){
         // (v14.19, ledger #7) THE 5-MINUTE CLOCK SURVIVES RELOADS. It was in-memory, and on a
         // build-iteration morning every install reload reset it — the heal that existed since

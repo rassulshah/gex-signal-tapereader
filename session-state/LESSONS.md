@@ -131,6 +131,36 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.41 — when one condition is restated at five call sites, the bug is the five
+
+**1 · Two individually correct rules formed a trap because neither asked about STATE.**
+`replayEmPin()` builds a pin so the band survives a rewind. Four heals refuse to repair a
+`replay:true` pin. Both right; both silent about whether the replay was still happening. So a pin
+born in a rewind sat in the LIVE key, exempt from every repair, forever. ⚠ **An exemption must name
+the STATE it is for, not the ORIGIN of the thing it exempts.** "Exempt while replaying" and "exempt
+because it came from a replay" read the same and are not.
+
+**2 · The write had no guard at all, and it was the one that mattered.** Four reads were
+over-guarded; the ratio heal did `S.sym[emKey]=rec` with no replay check whatsoever. ⚠ **Audit the
+WRITE paths first** — an over-guarded read makes a stale value survive; an unguarded write is what
+puts it there.
+
+**3 · Five copies of one condition is the defect.** The four that were wrong were wrong in the same
+way, and the fifth was missing entirely. One `rpPin()` now serves all five. ⚠ **Count the call
+sites before fixing the logic**; a condition restated N times will drift N ways.
+
+**4 · A guard that needs no flag catches the bugs nobody imagined.** An anchor and a price on one
+chart cannot be a factor of two apart. That single check would have caught v11.65, v15.12, v15.24,
+v15.26 and this one. ⚠ **Assert the invariant of the DOMAIN, not the correctness of the mechanism.**
+
+**5 · An existing test caught my fix.** I scaled `rec.openU` before comparing; `test_em_band` pins
+that count at two and went red. ⚠ **A red test on a fix is information, not an obstacle** — and here
+the correction was strictly better: both values are series numbers, so comparing them RAW avoids
+applying the very ratio in doubt.
+
+**6 · I walked him into it.** I asked him to rewind, and the rewind is what wrote the pin. ⚠ **When
+a report follows an instruction I gave, suspect the instruction.**
+
 ### v15.40 — a lesson in a comment protects the function it sits in and nothing else
 
 **1 · The fix for this exact bug was already in the file, forty lines below the bug.** `ifLadder`'s

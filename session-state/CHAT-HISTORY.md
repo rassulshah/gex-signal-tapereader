@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-02 · v15.40 · session `5e8d34b5`
+## 2026-09-02 · v15.41 · session `5e8d34b5`
 
-_41 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_43 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -461,8 +461,64 @@ All **32 commits** are inside `installv1539.bat`. Running it writes them to `C:\
 **Found it.** `dispScale` is 0.0998 (SPX→SPY) when the rail is in ES space — every node lands at ~761 on a ladder framed 7615–7680.
 Two separate bugs, both confirmed. Fixing the replay scale first — it's the one that empties the ladder.
 The scale fix is proven. Now measuring the second half of his complaint — how much of the day actually survives.
+**You were right about the symptom three times, and I was wrong about the cause every time. The state was captured perfectly.**
+
+I read back the frame you were parked on — 2026-09-01 14:21 — and it held a complete SPXW book:
+
+```
+7630 −100 (King) · 7625 +77 · 7610 +52 · 7635 −48 · 7620 −44 · 7615 +39 · 7650 +21
+```
+
+Seven strikes clearing the 20% threshold, **all seven inside the band.** Nothing missing, nothing mis-recorded. `replayLadder` returned:
+
+```
+dispScale 0.099775  ===  undScale 0.099775
+SPXW 7630 × 0.099775 = 761.28    on a ladder framed 7615..7680
+```
+
+`dispScale` is the **chart** scale; `und/spx` is the **underlying** one. v15.18 assigned the underlying to both, so every SPXW strike was converted into SPY space and plotted on an ES rail — ~6,880 points below the frame. `inFrame()` refused all of them. Their being equal is only correct on a cash chart; that equality was the alarm and nothing was watching for it.
+
+**The fix was already in the file, forty lines below the bug**, from v15.06, in capitals: *"THE FIX IS ONE SCALE, NOT A BETTER FALLBACK."* `replayLadder` was written after that lesson and reintroduced the fault in the one path the rule hadn't been applied to. A lesson written as prose guards only the function it sits in.
+
+And the honest part: **one probe of the stored record would have settled this on any of the three occasions.** A read fault an …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 33 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (00:14):** Push is a policy denial, not a transient failure — the proxy's own guidance is to report it rather than retry, so I won't keep attempting it.
+
+```
+remote: rassulshah/gex-signal-tapereader is not in this session's
+        authorized repository set — the proxy will not inject a credential
+fatal: HTTP 403
+```
+
+**33 commits** (v15.09 → v15.40) are all inside `installv1540.bat`. Running it writes them into `C:\Dev\gex-signal-tapereader` and pushes from your machine, which is also what makes the raw.githubusercontent link serve v15.40.
+
+If you'd rather I stop surfacing this each turn, the fix on your side is to add the repo to this session's sources — otherwise the installer remains the delivery path and everything is preserved until you run it.
+
+**OPERATOR:**
+> i think you messed it up again
+
+**me (00:49):** Measured — and this is a scale split I need to trace before I touch anything.
+**Found it, and it's a trap I walked you into.** The stored EM pin:
+Three more heals carry the same unscoped exemption. Same trap, three more places.
+**That's the writer** — a fifth heal with no replay guard at all, and it persists `rec` to the live key.
+A standing guard caught it — I'd added a third place that scales `openU`. Comparing the raw values is both correct and simpler.
 
 ### DECISIONS
+
+**v15.41 · a replay pin outlived the replay and flattened the ladder.**
+- Measured LIVE after his rewind: pin `{openU:761.79, rr:1, replay:true}` in the **live** key. Band
+  low/high in SPY space (729/794) against now/hiWater in ES (7647/7674). `emRailBounds` starts at
+  `B.low`, so the frame spanned **6,944 points** — every row on one line.
+- **One unguarded WRITE, four over-guarded READS.** The ratio heal persisted the replay pin into the
+  live key; the four read heals were forbidden from repairing it. Each rule correct alone.
+- Fix: `rpPin() = replay && replayOn()` at **all five** sites, plus a flag-free guard — an anchor and
+  a price cannot be 2x apart. v11.65/v15.12/v15.24/v15.26 would all have tripped it.
+- ⚠ `test_em_band` caught my first attempt (I scaled `openU`, making a third scale site).
+- ⚠ **I asked him to rewind.** The instruction caused the report.
 
 **v15.40 · the replay ladder was empty because of a SCALE, not a capture.**
 - Reported three times as "you are not capturing the state". **The state was captured perfectly.**
@@ -737,6 +793,10 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.41** — `rpPin()` shared across five heals, the ratio heal (the WRITE) guarded for the first
+time, and a `rulerOff` factor-of-two check that overrides every exemption. `test_em_pin_ruler.js`
+(31). 15 mutations / 15 caught. Suite 139 green / 6 baseline red.
+
 **v15.40** — `replayLadder` now derives the CHART scale (`sc × dispR()`), disclosed as
 `replay:fut:ratio-today`; cash fallback says so; level rows still refused. TP headings name their
 extreme, the second only once printed. `test_replay_scale.js` (29), executed in prices.
@@ -846,6 +906,11 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. **The recorder still cannot hold a full day** — 26.5KB/frame, 64% `feat`; 3.44MB vs 3.6MB.
+   Proposed: drop `feat` from the frame, or two budgets. NOT BUILT.
+2. Two session highs still exist (`emBand.hiWater` vs `hodLod.hod`), consistent only via `emRr`.
+3. The futures-gamma build stays parked (v15.38 spec). Copper never confirmed.
 
 1. **The recorder cannot hold a full day** — 26.5KB/frame, 64% `feat`; 3.44MB vs a 3.6MB budget.
    Proposed: drop `feat` from the frame (⇒ ~1.2MB) or split into two budgets. NOT BUILT.
@@ -975,6 +1040,7 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+2725280 v15.40: the replayed ladder was drawn in the wrong price space
 067ec1d v15.39: two candles, one session, and they disagreed about its colour
 bebec5f v15.38: the futures-gamma research, parked where it cannot rot
 8b76b71 v15.37: YF and FF lamps — two integrations that ran 27 builds with nothing on the face
@@ -986,7 +1052,6 @@ cc12ac1 v15.32: the build message carries the links AND a save confirmation, bec
 d19aa28 v15.31: the day as a candle, the strike grid behind the nodes, IBH/IBL off the level rail
 3745d82 v15.30: the grip was capped at 560 while his panel was 673
 9155067 v15.29: the EL really was cut off — and only a real browser could show it
-f8f574e v15.28: the expected low was clipped on the frame's edge, and in replay the band was a sliver
 ```
 
 ---

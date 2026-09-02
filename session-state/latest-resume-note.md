@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02 · panel v15.40 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-02 · panel v15.41 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.40, and what the face carries
+## 2 · WHERE WE ARE — v15.41, and what the face carries
 
-**Panel v15.40 · companion v1.17.** Suite **135 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.41 · companion v1.17.** Suite **139 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -177,6 +177,27 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠⚠ **v15.41 — A REPLAY PIN OUTLIVED THE REPLAY AND FLATTENED THE LADDER.** Measured LIVE after he
+rewound: pin `SPY|fut = {openU:761.79, rr:1, fam:'replay', replay:true}` → band `low 729.29 /
+high 794.29` (SPY) against `now 7647.50 / hiWater 7673.75` (ES). `emRailBounds` STARTS the frame at
+`B.low`, so the rail spanned **6,944 points** and every row collapsed onto one line.
+⚠⚠ **ONE UNGUARDED WRITE, FOUR OVER-GUARDED READS.** `replayEmPin()` (v15.24) builds the pin; four
+heals refuse to repair a `replay:true` pin (v15.26, correct but UNSCOPED); and the **ratio heal**
+(v14.19) does `S.sym[emKey]=rec` with **no replay guard at all** — it PERSISTED the replay pin into
+the LIVE key where nothing could repair it. Each rule individually correct; **none asked whether the
+replay was still happening.**
+✅ **`rpPin(r) = r.replay && replayOn()`** — *exempt RIGHT NOW*, not *born in replay*. **All FIVE**
+sites call it, the write included. ⚠ **When one condition is restated at five call sites, the bug is
+the five.**
+✅ **AND A GUARD THAT TRUSTS NO FIELD:** an anchor and a price on one chart cannot be a factor of
+two apart. Overrides every exemption, disclosed as `rulerOff`. **v11.65, v15.12, v15.24, v15.26 and
+this one would all have tripped it.**
+⚠ **COMPARE THE RAW SERIES VALUES** — my first cut scaled `rec.openU` and `test_em_band` went red
+("openU is scaled in exactly TWO places"). It was right: scaling first compares two numbers AFTER
+applying the very ratio in doubt.
+⚠ **I ASKED HIM TO REWIND, AND THE REWIND WROTE THE PIN.** When a report follows an instruction I
+gave, suspect the instruction.
 
 ⚠⚠⚠ **v15.40 — THE REPLAY LADDER WAS EMPTY BECAUSE OF A SCALE, NOT A CAPTURE.** He reported it
 THREE TIMES as "you are not capturing the state". ⚠ **THE STATE WAS CAPTURED PERFECTLY EVERY
