@@ -1,3 +1,69 @@
+## v15.48 — `sessionPhase()` takes a Date and I passed it seconds, three times
+
+> "releoaded check .. especially for missing itmes"
+
+### ✅ FIRST, WHAT v15.47 FIXED — verified live
+
+    emBand.ok    true
+    anchoredAt   7650.5      ← the true 08:30 RTH open, exactly as predicted
+    ladder       8 rows · 5 bars · 5 states · 5 ROC
+    headings     "1ST TP · LOD"  "2ND TP · HOD"
+    candles      one call, both agree · render errors none
+
+### ⚠⚠⚠ AND THE MISSING ITEM HE ASKED FOR — TWO GUARDS THAT HAVE NEVER RUN
+
+    deps.rthNow  FALSE   at 13:30 CT, mid-session
+    deps.idleMin null    (NaN, serialised)
+
+`sessionPhase(now)` does `new Date(now.toLocaleString('en-US',{timeZone:'America/Chicago'}))`. **A
+number has its own `toLocaleString`**, so `48000` became the string `"48,000"`, `new Date("48,000")`
+is **Invalid Date**, and every field came back NaN. **Nothing threw.**
+
+⚠⚠ **SO BOTH GUARDS I SHIPPED FOR HIM WERE INERT.** The v15.43 session-aware staleness never
+engaged — and far worse, **the v15.45 replay stale-day guard has never once fired.** The protection
+written the same day he lost a morning of recording would not have saved the next morning.
+
+⚠ **AND MY TESTS STUBBED `sessionPhase`, so they never met the real signature** — the same
+kinder-than-real stub as v15.46, one build later. The stubs now **throw on a non-Date**, exactly as
+the real function's behaviour implies, and the failure mode itself is executed as an assertion.
+
+`new Date()` **is** the wall clock; passing it explicitly is the only reason these callers pass
+anything. One `liveSessionPhase()` now serves all three sites.
+
+### ⚠⚠ AND THE MOMENT THE GUARD COULD FIRE, IT EVICTED THE TEST HARNESSES
+
+65 assertions failed in `test_replay_face` — **because the guard finally worked.** Both harnesses
+park a past day on purpose and are indistinguishable from the state the guard exists to end. They
+now set the latch to today: the same "already handed back once" state a real panel reaches, so the
+guard is **satisfied rather than patched out**.
+
+⚠ That is the proof it works. It could not have been demonstrated any other way.
+
+### AND ONE MORE THING v15.47 GOT WRONG
+
+The RTH cut was written as *"keep what I can verify"* (`so >= _openSec`), which silently **discarded
+every bar carrying no clock** — and an emptied series takes the band, the ladder, the crowns and ⓪a
+with it (the v15.24 blackout). It is now *"drop what I can refute"*: only bars **provably** before
+the open are removed. ⚠ A clockless bar is still refused as the **anchor** — it is simply not
+**erased** on the way there.
+
+`test_deps` 94 → **96**, `test_replay_guard` 25 → **29**, `test_em_warmup` 29 → **31**.
+**5 mutations, 5 caught.** Suite **140 green / 6 baseline red**.
+
+### ⚠⚠⚠ TODAY'S EXPECTED-MOVE BAND CANNOT BE RECOVERED, AND THAT IS MY FAULT
+
+    em        9.66 points        capMin 299 — captured 299 MINUTES AFTER THE OPEN
+    band      7640.84 … 7660.16  — 19.3 points wide
+    the day   7643 … 7691.25     — 48.25 points, and price is 22 above the expected high
+
+The band could not pin from 08:30 because of the v15.46/47 faults. By the time it could — 13:29 —
+the 0DTE straddle had decayed to a fraction of its opening value, so the pin is the **remainder**,
+not the **expectation**. The panel flags it (`est: true`, `over: true`) and the hover says
+*"captured late, so this band is narrower than the open's was"* — but **it is not usable today, and
+no fix can recover it**: the 08:30 straddle is gone and nothing recorded it.
+⚠ **Tomorrow's band will be correct from the first bar.** Today's should be ignored.
+
+
 ## v15.47 — the band's series began before the open, so the anchor was never the open
 
 > "check"

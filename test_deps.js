@@ -367,12 +367,18 @@ ok(/function eff\(a\)\{ return \(typeof a==='number'\) \? Math\.max\(0, a-_idle\
 // feeds against the REPLAYED session would call correctly-idle overnight couriers broken the moment
 // he rewinds — a bug I would have shipped by writing the obvious `sessionPhase()`.
 const idleFn=ex('depsSessionIdleMin');
-ok(/sessionPhase\(\(\(wall%86400\)\+86400\)%86400\)/.test(idleFn),
-   'd21 the idle clock passes an EXPLICIT wall-clock second-of-day to sessionPhase()');
-ok(/Date\.now\(\)\/1000 - ctOffsetSec\(\)/.test(idleFn),
-   'd21b ...built from Date.now(), which the replay slider cannot move');
-ok(!/sessionPhase\(\)/.test(idleFn),
-   'd21c ...and NEVER calls the bare, replay-aware sessionPhase()');
+ok(/liveSessionPhase\(\)/.test(idleFn), 'd21 the idle clock asks for the LIVE phase');
+ok(!/sessionPhase\(\)/.test(idleFn), 'd21b ...and NEVER the bare, replay-aware call');
+// ⚠⚠ (v15.48) AND IT HANDS OVER A **DATE**. v15.43 passed a NUMBER OF SECONDS and nothing threw —
+// Number.prototype.toLocaleString made "48,000", `new Date("48,000")` was Invalid Date, every field
+// came back NaN, and MEASURED on his panel at 13:30 CT mid-RTH: rthNow FALSE, idleMin null.
+// The whole session-aware staleness was inert for a build, and so was the replay guard beside it.
+const lspFn=ex('liveSessionPhase');
+ok(/sessionPhase\(new Date\(\)\)/.test(lspFn), 'd21c liveSessionPhase passes a real Date');
+ok(!/%86400/.test(lspFn) && !/ctOffsetSec/.test(lspFn),
+   'd21d ...with no hand-rolled clock arithmetic — new Date() IS the wall clock');
+ok(isNaN(new Date((48000).toLocaleString('en-US')).getTime()),
+   'd21e EXECUTED: a NUMBER becomes Invalid Date without throwing — why this hid for a build');
 // weekends walk back to the previous trading day rather than to "yesterday"
 ok(/d=\(d\+6\)%7; back\+=1440; if\(d>=1 && d<=5\) break;/.test(idleFn),
    'd22 pre-open it walks back to the previous TRADING day, so Monday counts the weekend');

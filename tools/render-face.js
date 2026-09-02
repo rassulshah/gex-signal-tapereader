@@ -50,7 +50,15 @@ FR.forEach((f,i)=>{ const d=Math.abs(mins(hhmm(f.t))-mins(want)); if(d<best){bes
 
 const run=code=>vm.runInContext(code, ctx);
 run('typeof buildPanel==="function" ? buildPanel() : (typeof boot==="function" ? boot() : 0)');
+// ⚠⚠ (v15.48) DISARM THE STALE-DAY GUARD FOR THE HARNESS. v15.45 added `replayStaleDayGuard()`,
+// which hands a replay of a PREVIOUS day back to live once a live RTH session is running — the fix
+// for the morning he lost. It could not fire until v15.48 corrected the clock; the moment it could,
+// it started evicting THIS harness, which parks a past day on purpose and looks identical to the
+// state the guard exists to end. 65 assertions failed and the cause was the guard working.
+// ⚠ Setting the latch to today is the honest disarm: it is the same "already handled once" state a
+// real panel reaches after handing back, so the guard is not patched out, it is satisfied.
 run(`REPLAY.on=true; REPLAY.day=${JSON.stringify(day)}; REPLAY.frames=${JSON.stringify(FR)}; REPLAY.idx=${idx};`);
+try{ run('RP_STALEGUARD=(typeof sessionDayStr==="function")?sessionDayStr():0;'); }catch(e){}
 run('RENDER_ERRS.length=0');
 try{ run('render()'); }catch(e){ console.log('render() THREW: '+e.message+'\n'+(e.stack||'').split('\n').slice(0,4).join('\n')); }
 

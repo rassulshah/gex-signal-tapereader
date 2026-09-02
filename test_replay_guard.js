@@ -27,7 +27,17 @@ let PHASE={ rth:true, label:'MIDDAY', leftMin:125 };
 let exited=0;
 global.ctOffsetSec=()=>5*3600;
 global.sessionDayStr=()=>TODAY;
-global.sessionPhase=()=>PHASE;
+// ⚠⚠ (v15.48) THE STUB NOW REFUSES WHAT THE REAL FUNCTION REFUSES. `sessionPhase(now)` does
+// `new Date(now.toLocaleString(...))` — a NUMBER has toLocaleString, so 48000 became "48,000",
+// `new Date("48,000")` was Invalid Date, and every field came back NaN WITHOUT THROWING. Both
+// guards I shipped were inert for a build. A permissive stub is how that survived a test suite.
+let PHASE_ARGS=[];
+global.sessionPhase=(now)=>{
+  PHASE_ARGS.push(now);
+  if(!(now instanceof Date)) throw new TypeError('sessionPhase expects a Date, got '+typeof now);
+  return PHASE;
+};
+eval("global.liveSessionPhase=function(){ try{ return sessionPhase(new Date()); }catch(e){ return null; } };");
 global.replayExit=()=>{ exited++; REPLAY.on=false; REPLAY.frames=[]; REPLAY.idx=-1; };
 Object.defineProperty(global,'REPLAY',{get:()=>REPLAY,set:v=>{REPLAY=v;},configurable:true});
 let RP_STALEGUARD=0;
@@ -76,10 +86,22 @@ ok(replayStaleDayGuard()===null, 'g5b a replay with no day resolves to nothing r
 // exists to detect, and the banner would show on a quiet evening and vanish during the live open.
 // Same trap as v15.43's deps clock, two builds later.
 const gfn=ex('replayStaleDayGuard');
-ok(/sessionPhase\(\(\(wall%86400\)\+86400\)%86400\)/.test(gfn),
-   'g6 the guard passes an EXPLICIT wall-clock second-of-day');
-ok(/Date\.now\(\)\/1000 - ctOffsetSec\(\)/.test(gfn), 'g6b ...built from Date.now()');
-ok(!/sessionPhase\(\)/.test(gfn), 'g6c ...and NEVER the bare replay-aware call');
+ok(/liveSessionPhase\(\)/.test(gfn), 'g6 the guard asks for the LIVE phase');
+ok(!/sessionPhase\(\)/.test(gfn), 'g6b ...and NEVER the bare replay-aware call');
+// ⚠⚠ (v15.48) AND `liveSessionPhase` MUST HAND OVER A **DATE**. I passed seconds for a build and
+// nothing threw: Number.prototype.toLocaleString made "48,000", `new Date("48,000")` was Invalid
+// Date, and rth came back false in the middle of RTH — so this guard NEVER FIRED.
+const lsp=ex('liveSessionPhase');
+ok(/sessionPhase\(new Date\(\)\)/.test(lsp), 'g6c liveSessionPhase passes a real Date');
+ok(!/ctOffsetSec/.test(lsp) && !/%86400/.test(lsp),
+   'g6d ...with no hand-rolled clock arithmetic — new Date() IS the wall clock');
+// EXECUTED against a stub that refuses a non-Date, exactly as the real function's behaviour implies
+PHASE_ARGS=[]; reset(); replayStaleDayGuard();
+ok(PHASE_ARGS.length>0 && PHASE_ARGS[0] instanceof Date,
+   'g6e EXECUTED: what actually reaches sessionPhase is a Date', typeof PHASE_ARGS[0]);
+// ⚠ the failure mode itself, run: a number does NOT throw, it silently becomes Invalid Date
+ok(isNaN(new Date((48000).toLocaleString('en-US')).getTime()),
+   'g6f ...and a NUMBER would have become Invalid Date without throwing — why this hid');
 // ⚠⚠ AND IT MUST ACTUALLY RUN. A guard nobody calls is a guard that does not exist — this was the
 // one mutation the first suite missed, and it is the mutation that reproduces the original bug.
 const rnd=ex('render');
@@ -101,8 +123,9 @@ ok(banner.length>0, 'b1c the banner div itself carries data-grp="exit" — the f
 ok(/cursor:pointer/.test(banner), 'b1c2 ...and looks clickable');
 ok(/rgba\(240,97,109/.test(bar), 'b1d ...in the panel’s own red, not another amber pill among a dozen');
 // ⚠ the wall clock again — a banner on the replay clock would be exactly backwards
-ok(/var _wl=Math\.floor\(Date\.now\(\)\/1000 - ctOffsetSec\(\)\)/.test(bar),
-   'b2 the banner is gated on the WALL clock, not the parked minute');
+ok(/var _lp=liveSessionPhase\(\);/.test(bar),
+   'b2 the banner is gated on the LIVE phase, not the parked minute');
+ok(!/ctOffsetSec/.test(bar), 'b2a ...through the shared helper, with no clock arithmetic of its own');
 ok(/if\(on && _lp && _lp\.rth\)/.test(bar), 'b2b ...and only while replaying during a live RTH session');
 // and the handback announces itself rather than silently changing what he was looking at
 // ⚠ gated on the flag, not merely present in the file — an `if(false)` around it left the string

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.47
+// @version    15.48
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.47';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.48';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -1101,8 +1101,7 @@ function replayStaleDayGuard(){
     if(!REPLAY.on || !REPLAY.day) return null;
     var today=null; try{ today=sessionDayStr(); }catch(e0){ return null; }
     if(!today || REPLAY.day===today) return null;          // rewinding TODAY is deliberate
-    var wall=Math.floor(Date.now()/1000 - ctOffsetSec());
-    var P=sessionPhase(((wall%86400)+86400)%86400);
+    var P=liveSessionPhase();
     if(!P || !P.rth) return null;                          // outside RTH nothing is being missed
     if(RP_STALEGUARD===today) return null;                 // already handed back once today
     RP_STALEGUARD=today;
@@ -1315,8 +1314,7 @@ function replayBarHtml(){
     // ⚠ THE WALL CLOCK, not sessionPhase() — parked on yesterday that returns RTH for a session that
     // is over, and the banner would appear on a quiet evening and vanish during the live open.
     try{
-      var _wl=Math.floor(Date.now()/1000 - ctOffsetSec());
-      var _lp=sessionPhase(((_wl%86400)+86400)%86400);
+      var _lp=liveSessionPhase();
       if(on && _lp && _lp.rth){
         h+='<div data-grp="exit" style="padding:5px 8px;font-size:10px;font-weight:800;cursor:pointer;'+
            'color:#ffd9dc;background:rgba(240,97,109,0.20);border-bottom:1px solid rgba(240,97,109,0.5)">'+
@@ -22465,7 +22463,19 @@ function emBand(sym){
     try{
       if(cs.length){
         var _rth=[], _ci;
-        for(_ci=0;_ci<cs.length;_ci++){ if(typeof cs[_ci].so==='number' && cs[_ci].so>=_openSec) _rth.push(cs[_ci]); }
+        // ⚠⚠ (v15.48) DROP ONLY WHAT IS **PROVABLY** PRE-OPEN. v15.47 kept bars with `so>=_openSec`,
+        // which silently DISCARDED every bar carrying no clock — and a series that loses all its bars
+        // takes the band, the ladder, the crowns and the ⓪a section with it (the v15.24 blackout).
+        // Caught by `test_replay_face` f2, not by reading. A filter written as "keep what I can
+        // verify" deletes the unknown; written as "drop what I can refute" it does not.
+        // ⚠ The clockless bar is still refused as an ANCHOR — the capOK guard below requires
+        // `c0.so` to be a number — so nothing is trusted that should not be. It is simply not
+        // ERASED on the way there.
+        for(_ci=0;_ci<cs.length;_ci++){
+          var _bso=cs[_ci].so;
+          if(typeof _bso==='number' && _bso<_openSec) continue;   // provably before the open
+          _rth.push(cs[_ci]);
+        }
         cs=_rth;
       }
     }catch(eRTH){}
@@ -28935,10 +28945,24 @@ var DEPS_IRT_STALE_MIN=10;     // ⚖ the export runs on its own timer; 10m with
 // `rth:true, POWER HOUR, 54 min left` while the real time is 04:52. Grading the LIVE feeds against
 // the REPLAYED session would call correctly-idle overnight couriers broken the moment he rewinds.
 // The deps are about the live world; they get the live clock, passed explicitly.
+// ⚠⚠⚠ (v15.48) `sessionPhase(now)` TAKES A **DATE**, AND I PASSED IT SECONDS — THREE TIMES.
+// It does `new Date(d.toLocaleString('en-US',{timeZone:'America/Chicago'}))`. A NUMBER has its own
+// `toLocaleString`, so 48000 became the string "48,000", `new Date("48,000")` is **Invalid Date**,
+// and every field came back NaN. Nothing threw. MEASURED on his panel 2026-09-02 13:30 CT, mid-RTH:
+//     deps.rthNow  FALSE          idleMin  null  (NaN, serialised)
+// ⚠⚠ SO BOTH GUARDS I SHIPPED FOR THIS WERE INERT: the v15.43 session-aware staleness never
+// engaged, and — far worse — **the v15.45 replay stale-day guard has never once fired.** The
+// protection written after he lost a morning of recording would not have saved the next morning.
+// ⚠ AND MY TESTS STUBBED `sessionPhase`, so they never met the real signature. Same fault as
+// v15.46's kinder-than-real stub, one build later: a double that accepts what the original refuses.
+// ⚠ `new Date()` IS the wall clock. Passing it explicitly is what skips the replay branch — the
+// only reason these callers pass anything at all.
+function liveSessionPhase(){
+  try{ return sessionPhase(new Date()); }catch(e){ return null; }
+}
 function depsSessionIdleMin(){
   try{
-    var wall=Math.floor(Date.now()/1000 - ctOffsetSec());
-    var P=sessionPhase(((wall%86400)+86400)%86400);
+    var P=liveSessionPhase();
     if(!P || P.rth) return { idle:0, P:P };
     var dow=P.dow, mins=P.mins, close=P.close;
     // after today's close, on a trading day

@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-02 · v15.47 · session `5e8d34b5`
+## 2026-09-02 · v15.48 · session `5e8d34b5`
 
-_56 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_58 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -724,8 +724,51 @@ No band → no `skPiles` → no ladder. One boolean upstream took out the whole 
 **Found it.** The courier's day-bucket starts at **08:00**, half an hour before the open — and the anchor is taken from that bar.
 The guard was right to refuse — the anchor really was reading an 08:00 bar. The fix is to make the series RTH.
 Both still refuse — for a better reason. Updating the assertions to the real behaviour.
+**Still refusing on v15.46 — I fixed the wrong half and shipped it as the fix.**
+
+```
+MB.day     '2026-9-2'                  — the day check PASSED (v15.46 worked)
+cs[0].so   28800 = 08:00 CT, o 7640    — thirty minutes BEFORE the open
+first RTH  index 30, 08:30, o 7650.5
+result     emBand.ok false · zero ladder rows
+```
+
+The ES courier's window opens at **08:00**, and `measureBars`' futures branch buckets by *day* without cutting to RTH. So `cs[0]` was a pre-open print and the `so >= openSec` half of the guard was false. Same message, entirely different cause. I should have re-measured after shipping v15.46 rather than assuming it was done.
+
+**The guard was right to refuse.** `out.anchor` and `rec.openU` both read `cs[0]` — so relaxing the check, the obvious move, would have anchored the whole session's expected-move band on **7640 instead of 7650.5. Ten and a half points low, silently, all day.** The refusal was protecting a real fault; it just refused instead of fixing it.
+
+So the fix is at the **series**, not the guard: `cs` is cut to RTH where it's built, so `cs[0]` *is* the open and the anchor, `openU`, `openSo` and the high/low watermarks all share one definition of the session. `emBand` now agrees with `hodLod`, which had filtered correctly all along. It's a no-op on the cash and replay paths, and pre-open it correctly falls back to the prior close. …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 40 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (18:26):** Same policy denial — 40 commits, carried by `installv1547.bat`.
+
+**OPERATOR:**
+> releoaded check .. especially for missing itmes
+
+**me (18:30):** Band pins correctly now — `anchoredAt 7650.5`, the true RTH open. But three things are missing or wrong.
+Band pins correctly. Three findings — one of them is my fault and can't be undone today.
+**Found a serious one.** `sessionPhase(now)` expects a **Date** — I passed seconds. `Number.toLocaleString()` doesn't throw, so it silently became `Invalid Date` → NaN → false.
+The RTH cut is dropping clockless bars — that's destructive on the replay path. Let me check what replayed bars actually carry.
+The cut must only drop what it can *prove* is pre-open. Dropping unknowns is destructive.
+The guard is now actually firing — which is correct, and it evicts the render harness's parked day. That's the fix working.
 
 ### DECISIONS
+
+**v15.48 · two guards that had never run, and an EM band that cannot be recovered.**
+- ✅ v15.47 verified live: `emBand.ok true`, **anchoredAt 7650.5** — the true RTH open. Ladder 8 rows,
+  TP headings right, no render errors.
+- ⚠⚠ **`sessionPhase(now)` takes a DATE and I passed seconds.** A number has `toLocaleString`, so
+  `48000` → `"48,000"` → Invalid Date → NaN, silently. `deps.rthNow FALSE` at 13:30 mid-RTH.
+  **Both guards inert — including the v15.45 replay guard, which had NEVER fired.**
+- ⚠ **Stubs kinder than the real function, second build running.** They now throw on a non-Date.
+- ⚠⚠ **65 failing assertions were the PROOF it works** — the guard started evicting the harnesses,
+  which park a past day. They now satisfy the latch rather than patch it out.
+- ⚠ v15.47's cut deleted clockless bars; now it drops only what it can REFUTE.
+- ⚠⚠⚠ **Today's EM band is unusable and it is my fault**: pinned at 13:29 (`capMin 299`), 9.66 pts
+  against a 48-pt day. The open's straddle decayed and nothing recorded it. Tomorrow is fine.
 
 **v15.47 · the band's series began before the open.**
 - v15.46 fixed the units and it STILL refused. `cs[0].so 28800 = 08:00 CT, o 7640` — the courier
@@ -1079,6 +1122,11 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.48** — `liveSessionPhase()` = `sessionPhase(new Date())` at all three sites; RTH cut inverted
+to drop-what-you-can-refute; both harnesses satisfy `RP_STALEGUARD`. `test_deps` 94 → 96,
+`test_replay_guard` 25 → 29, `test_em_warmup` 29 → 31. 5 mutations / 5 caught.
+Suite 140 green / 6 baseline red.
+
 **v15.47** — `emBand`'s series cut to RTH at build; `w2`/`w3` refusals moved upstream; new `w4`
 runs the courier shape and asserts the anchor is 765.0 not 764.0. `test_em_band` 648 → 653,
 `test_em_warmup` 20 → 29. 5 mutations / 5 caught. Suite 140 green / 6 baseline red.
@@ -1216,6 +1264,12 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. ⚠ **Today's (2026-09-02) EM band is unusable** — pinned 299 min late. Not recoverable.
+2. **The recorder still cannot hold a full day** — 26.5KB/frame, 64% `feat`; 3.44MB vs 3.6MB.
+3. Column order (⇄ vs Δ15m) — explicit instruction vs the narrative he described. Unresolved.
+4. A king run outside the drawn frame is silently dropped from the lane.
+5. Futures-gamma parked (v15.38 spec). Copper never confirmed.
 
 1. ⚠ **`deps.rthNow` FALSE at 13:20 CT, `idleMin` null** — the v15.43 wall-clock helper is not
    resolving the live phase, so session-aware staleness is not engaging. Harmless today. FIX NEXT.
@@ -1385,6 +1439,7 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+2204256 v15.47: the band's series began before the open, so the anchor was never the open
 31ecb60 v15.46: the warm-up guard read `t` in the wrong units and refused the band all day
 d9c9e26 v15.45: the PURPOSE is written down; and a replay parked on yesterday recorded nothing all morning
 1747729 v15.44: roll arrows right of the delta profile; the ROLL words column retires
@@ -1396,7 +1451,6 @@ d9c9e26 v15.45: the PURPOSE is written down; and a replay parked on yesterday re
 bebec5f v15.38: the futures-gamma research, parked where it cannot rot
 8b76b71 v15.37: YF and FF lamps — two integrations that ran 27 builds with nothing on the face
 8edb3e0 v15.36: the king lane is not a census, and I read the count off the lane
-b3d9451 v15.35: the freeze badge was printing a 1970 timestamp
 ```
 
 ---

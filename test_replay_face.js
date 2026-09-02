@@ -61,6 +61,14 @@ function renderAt(want, opts){
   const idx=frameAt(want);
   run(`REPLAY.on=${opts.live?'false':'true'}; REPLAY.day=${JSON.stringify(DAY)};
        REPLAY.frames=${JSON.stringify(FR)}; REPLAY.idx=${idx};`);
+  // ⚠⚠ (v15.48) SATISFY THE STALE-DAY GUARD. v15.45's `replayStaleDayGuard()` hands a replay of a
+  // PREVIOUS day back to live once a live RTH session is running — the fix for the morning he lost.
+  // It could not fire until v15.48 corrected its clock; the moment it could, it began evicting THIS
+  // fixture, which parks a past day on purpose and is indistinguishable from the state the guard
+  // exists to end. 65 assertions failed, and the cause was the guard finally working.
+  // ⚠ Setting the latch to today is the honest disarm: it is the same "already handed back once"
+  // state a real panel reaches, so the guard is SATISFIED rather than patched out.
+  try{ run('RP_STALEGUARD=(typeof sessionDayStr==="function")?sessionDayStr():0;'); }catch(e){}
   run('RENDER_ERRS.length=0');
   let threw=null;
   try{ run('render()'); }catch(e){ threw=e.message; }

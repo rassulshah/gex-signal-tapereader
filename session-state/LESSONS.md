@@ -131,6 +131,40 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.48 — a guard that cannot fire is indistinguishable from a guard that is working
+
+**1 · `sessionPhase(now)` takes a Date; I passed seconds, three times, and nothing threw.** A number
+has `toLocaleString`, so `48000` became `"48,000"` and `new Date("48,000")` is Invalid Date — every
+field NaN, silently. ⚠ **JavaScript's coercion means a wrong-typed argument often fails as a wrong
+ANSWER rather than an error.** Check the parameter's expected type by reading the callee, not by
+seeing whether the call throws.
+
+**2 · Both guards I shipped for him were inert, including the one that mattered.** The v15.45 replay
+stale-day guard — written the day he lost a morning of recording — **had never once fired.** ⚠ **A
+guard is not shipped when it is written; it is shipped when it has been observed to fire.** I had
+tests, and they passed, and it did nothing.
+
+**3 · The stub was kinder than the real function. Again.** Second build running (v15.46 was the
+first). The stubs now THROW on a non-Date, which is what the real function's behaviour implies.
+⚠ **When a double accepts input the original would choke on, the test is measuring the double.**
+
+**4 · The proof it works was 65 failing assertions.** The moment the clock was fixed, the guard began
+evicting both render harnesses — which park a past day on purpose and look exactly like the state it
+exists to end. ⚠ **A guard that starts breaking things is evidence it was previously dead**, and the
+honest fix is to SATISFY it in the fixture (set the once-per-day latch) rather than patch it out.
+
+**5 · "Keep what I can verify" deletes the unknown.** v15.47's RTH cut kept bars with
+`so >= _openSec`, silently discarding every clockless bar and emptying whole series. Written as
+"drop what I can refute" it is safe. ⚠ **A filter's default for uncertain input decides whether it
+is conservative or destructive** — and the anchor guard downstream was already refusing clockless
+bars, so nothing was gained by erasing them.
+
+**6 · Some damage is not recoverable and must be said plainly.** Today's expected move pinned at
+13:29 (`capMin 299`) at 9.66 points against a 48-point day, because my earlier bugs stopped it
+pinning at the open. The 0DTE straddle had decayed; the opening value is gone and nothing recorded
+it. ⚠ **Say "today's band is unusable and tomorrow's will be right" rather than quietly shipping a
+fix and letting him trade off a number that is wrong for reasons he cannot see.**
+
 ### v15.47 — I fixed the half of the bug I could see, and shipped it as the fix
 
 **1 · Two independent faults produced one message, and I stopped at the first.** v15.46 corrected the

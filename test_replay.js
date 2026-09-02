@@ -260,7 +260,10 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
   // ⚠ Stubbing them also EXERCISES the new banner instead of letting its own try/catch hide it.
   global.RP_STALEMSG=null;
   global.ctOffsetSec=()=>5*3600;
+  // ⚠ (v15.48) the banner asks `liveSessionPhase()`, which passes a real Date — the harness must
+  // provide it, or the banner's own try/catch swallows and the strip looks merely quiet.
   global.sessionPhase=()=>({ rth:false, label:'CLOSED', leftMin:null });
+  global.liveSessionPhase=()=>global.sessionPhase(new Date());
   global.replayDayLabel=d=>String(d);
   eval(ex('replayBarHtml'));
   REPLAY.on=false; REPLAY.frames=FR; REPLAY.idx=2; REPLAY.day='2026-08-31'; REPLAY.days=['2026-08-28','2026-08-31']; REPLAY.err=null;

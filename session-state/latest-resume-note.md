@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02 · panel v15.47 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-02 · panel v15.48 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -86,9 +86,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.47, and what the face carries
+## 2 · WHERE WE ARE — v15.48, and what the face carries
 
-**Panel v15.47 · companion v1.17.** Suite **140 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.48 · companion v1.17.** Suite **140 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -203,6 +203,28 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠⚠ **v15.48 — `sessionPhase(now)` TAKES A **DATE** AND I PASSED IT SECONDS, THREE TIMES.**
+It does `new Date(now.toLocaleString(...))`. A NUMBER has `toLocaleString`, so `48000` → `"48,000"`
+→ **Invalid Date** → every field NaN, **and nothing threw**. Measured 13:30 CT mid-RTH:
+`deps.rthNow FALSE`, `idleMin null`.
+⚠⚠ **SO BOTH GUARDS WERE INERT — INCLUDING THE ONE THAT MATTERED: the v15.45 replay stale-day guard
+had NEVER ONCE FIRED.** The protection written the day he lost a morning of recording would not have
+saved the next morning. ✅ One `liveSessionPhase()` = `sessionPhase(new Date())` serves all three.
+⚠ **`new Date()` IS the wall clock** — no `ctOffsetSec`, no `%86400` arithmetic. Never rebuild it.
+⚠⚠ **THE STUBS WERE KINDER THAN THE REAL FUNCTION — SECOND BUILD RUNNING** (v15.46 was the first).
+They now THROW on a non-Date. **A double that accepts what the original refuses tests the double.**
+⚠⚠ **THE PROOF IT WORKS WAS 65 FAILING ASSERTIONS** — the moment the clock was fixed the guard began
+evicting both render harnesses, which park a past day on purpose. They now SATISFY the guard by
+setting `RP_STALEGUARD` to today (the same state a real panel reaches), never patch it out.
+⚠ **v15.47's RTH cut was "keep what I can verify" and deleted every CLOCKLESS bar**, emptying whole
+series (the v15.24 blackout). Now "drop what I can **refute**" — only provably pre-open bars go. The
+anchor guard still refuses a clockless bar; it is simply not ERASED on the way there.
+⚠⚠⚠ **2026-09-02's EM BAND IS UNRECOVERABLE AND IT IS MY FAULT.** `capMin 299` — pinned at 13:29,
+`em 9.66` against a 48.25-point day, price 22 above the expected high. My v15.46/47 faults stopped it
+pinning at 08:30; by 13:29 the 0DTE straddle had decayed, so the pin is the REMAINDER, not the
+EXPECTATION. Flagged `est`/`over` on the face. **Nothing recorded the open's straddle — it is gone.**
+Tomorrow's is correct from the first bar.
 
 ⚠⚠⚠ **v15.47 — THE BAND'S SERIES BEGAN BEFORE THE OPEN, SO THE ANCHOR WAS NEVER THE OPEN.**
 v15.46 fixed the units and the band STILL refused. Measured 13:20 CT: `MB.day '2026-9-2'` passed,

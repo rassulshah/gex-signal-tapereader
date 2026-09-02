@@ -112,8 +112,15 @@ ok(Math.abs(bucket[0].o-rth[0].o)===10.5,
    's2b ...and anchoring on cs[0] would have been 10.5 points low, all day', bucket[0].o-rth[0].o);
 
 // ---- the fix is at the SERIES, and it is where every reader shares it ------------------------
-const cut=(src.match(/if\(typeof cs\[_ci\]\.so==='number' && cs\[_ci\]\.so>=_openSec\) _rth\.push\(cs\[_ci\]\);/)||[''])[0];
-ok(cut.length>0, 's3 the band cuts its series to RTH where the series is BUILT');
+// ⚠⚠ (v15.48) THE CUT DROPS ONLY WHAT IT CAN **REFUTE**. v15.47 wrote it as "keep what I can
+// verify" (`so>=_openSec`), which silently discarded every bar carrying no clock — and an emptied
+// series takes the band, the ladder, the crowns and ⓪a with it. `test_replay_face` caught it.
+const cut=(src.match(/if\(typeof _bso==='number' && _bso<_openSec\) continue;/)||[''])[0];
+ok(cut.length>0, 's3 the cut drops only bars PROVABLY before the open');
+ok(/_rth\.push\(cs\[_ci\]\);/.test(src), 's3a ...and keeps everything else, including clockless bars');
+// ⚠ and the clockless bar is still refused as an ANCHOR — not erased, just not trusted
+ok(/typeof c0\.so==='number' && c0\.so>=_openSec/.test(src),
+   's3a2 ...while the capOK guard still refuses a clockless bar as the OPEN');
 ok(src.indexOf('_rth.push')<src.indexOf("if(cs.length && cs[0].o>0)"),
    's3b ...before the anchor is chosen, so cs[0] IS the open');
 // ⚠ idempotent on the other two producers — this must not change the cash or replay paths
