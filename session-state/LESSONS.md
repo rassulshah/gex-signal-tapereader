@@ -131,6 +131,39 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.42 — a bug that grows with the clock looks fine when you build it
+
+**1 · The king lane was never empty; it was one pixel wide.** The axis ran from the open to the WALL
+CLOCK, so at 19:50 the crown that was merely *still there* took 57% of a 24px lane and five real
+migrations rendered at 1.0–2.5px. ⚠ **A defect proportional to elapsed time is invisible during the
+session and obvious in the evening** — which is precisely when he looks at it and I do not. Test it
+at more than one hour: the assertion here checks 15:00, 19:50 and midnight so it cannot pass at the
+hour it was written and fail later.
+
+**2 · "Empty" was an accurate report of the pixels.** He said the lanes were empty. They were
+drawn, populated and correct — and unreadable. ⚠ **When a report says "empty", measure the ELEMENT
+GEOMETRY before checking the data.** I went to the data first, twice.
+
+**3 · The v15.18 lesson covered replay and not the wall clock.** The comment ten lines from the
+fault says a journey "squeezed into the first pixel of a lane reads as MISSING". It was written
+about `Date.now()` in replay; `clockNow()` fixed that path and left the after-hours one. ⚠ Second
+build running that a lesson guarded only the case it was written for.
+
+**4 · One face, two opinions about which session is on screen.** After the close the panel serves
+the close-of-session book — nodes, states, ROC — and blanked that same book's ROLLS, because
+`rollsLive()` asked `rth` while everything else asked `showingStaleBook()`. ⚠ **When one surface
+decides "which session am I showing", every surface must ask the same question.**
+
+**5 · An empty element must name its silence.** `return ''` made "no rolls today", "retired at the
+close" and "the latch is empty" render identically. ⚠ **Absence is not self-explanatory**, and this
+face already knew that everywhere else — skPiles carries its `why`, the off-frame line lists what it
+dropped. The roll lane was the exception, and the exception is what he reported.
+
+**6 · I claimed 2x and the measurement said 1.7x.** My own test caught me rounding a fix up to a
+nicer number. ⚠ **Assert the measured value, not the pleasing one** — and when a first assertion
+fails ("at most one run under 3px" → there were two), the honest move is to state the residual, not
+to loosen the test until the claim survives.
+
 ### v15.41 — when one condition is restated at five call sites, the bug is the five
 
 **1 · Two individually correct rules formed a trap because neither asked about STATE.**

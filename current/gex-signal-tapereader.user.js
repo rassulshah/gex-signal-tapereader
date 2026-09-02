@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.41
+// @version    15.42
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.41';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.42';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -4108,8 +4108,22 @@ function rollLatchTick(sym){
 // ⚠ (v15.13) A REPLAYED SESSION IS A SESSION. `rollsLive()` gates the arrows to RTH so a dead
 // after-hours book cannot draw stale rolls — correct live, and wrong for replay, where the parked bar
 // IS inside RTH by construction (the track only carries 08:30-15:00 frames).
+// ⚠⚠⚠ (v15.42) THE ARROWS BELONG TO THE BOOK ON SCREEN, AND AFTER THE CLOSE THAT IS THE LATCH.
+// Operator, 2026-09-02: "the roll column is also empty." It was empty BY DESIGN — `rth` is false
+// after 15:00, so `RAILROLLS` came back `[]`. But the rest of the face was serving the CLOSE-OF-
+// SESSION book (v14.55, `showingStaleBook()`): the ladder drew the close's nodes, its states, its
+// ROC — and blanked the close's ROLLS. **The face was describing one book and hiding one column
+// of it.** Two surfaces disagreeing about which session is on screen, which is the failure this
+// project keeps paying for.
+// ⚠ THIS IS NOT A NEW CLAIM. The arrows are the LATCH, and the latch is the same session the nodes
+// beside them come from — serving it is CONSISTENCY, not extrapolation. What would be a new claim
+// is drawing today's arrows over a replayed bar, and `rollLatched()` already refuses that.
+// ⚠ AND AN EMPTY COLUMN THAT MEANS "RETIRED" LOOKS EXACTLY LIKE ONE THAT MEANS "BROKEN". He read
+// it as broken and he was right to: nothing on the face distinguished them. Every other refusal
+// here names itself — skPiles says why, the off-frame line lists what it dropped.
 function rollsLive(){
   try{ if(typeof replayOn==='function' && replayOn()) return true; }catch(e0){}
+  try{ if(typeof showingStaleBook==='function' && showingStaleBook()) return true; }catch(e0b){}
   try{ var P=sessionPhase(); return !!(P&&P.rth); }catch(e){ return true; }
 }
 // the display list: what the NODES section and the rail both draw. NEVER a raw rollScan.
@@ -25947,8 +25961,25 @@ function ladderKingCols(EB, sym, Y, lo, hi, H){
     // replayed open to the actual present, so every run in a recorded day landed inside the first
     // pixel and the crown's journey was invisible — reported as "the king path in the king lanes are
     // missing". The runs were there; the axis was hours or days too long.
-    var openMs=null, nowMs=clockNow();
-    try{ var cs=closedCandles(sym)||[]; if(cs.length) openMs=cs[0].t; }catch(e1){}
+    // ⚠⚠⚠ (v15.42) THE LANE'S AXIS RAN TO THE WALL CLOCK AND ATE ITSELF ALL EVENING.
+    // `clockNow()` fixed the REPLAY case at v15.18 and left the after-hours case: live at 19:50 CT
+    // the axis spanned 08:30 → 19:50, so the crown that had simply been HOLDING since 14:27 took
+    // 57% of the lane and the day's real journey was crushed into the rest.
+    // MEASURED on his panel, a 24px lane, six SPXW runs of 15/103/32/105/102 minutes:
+    //     widths 1.0 · 2.5 · 1.0 · 2.5 · 2.4 · 11.4px      ← the last one is the "still there" run
+    // Five migrations rendered as one-to-two-pixel ticks. He read it as "the king node paths are
+    // still empty", and at 1px that is the correct reading. ⚠ By 23:00 it would have been worse:
+    // the fault GROWS every hour the tab stays open, which is why it looked fine during the session.
+    // ⚠⚠ THIS IS THE v15.18 LESSON, VERBATIM, IN THE ONE CASE IT DID NOT COVER — the comment ten
+    // lines below says "a whole day's journey is squeezed into the first pixel of a lane and reads
+    // as MISSING". It was written about replay. The wall clock does the same thing after the close.
+    // ⚠ The END OF THE DAY IS DATA, NOT ARITHMETIC: the last closed bar is where the session
+    // stopped, from the same series the lane's start comes from. No clock maths, no timezone.
+    var openMs=null, lastMs=null, nowMs=clockNow();
+    try{ var cs=closedCandles(sym)||[];
+         if(cs.length){ openMs=cs[0].t; lastMs=cs[cs.length-1].t; } }catch(e1){}
+    try{ var _P=sessionPhase();
+         if(_P && !_P.rth && lastMs!=null && nowMs>lastMs) nowMs=lastMs; }catch(e1b){}
     var span=(openMs!=null && nowMs>openMs)?(nowMs-openMs):0;
     var dsc=0; try{ dsc=ifDispScale()||0; }catch(eD){}
     var COLS=[{ book:'SPXW', x:LAD_KS, w:LAD_KSW, cls:'S', conv:function(k){ return dsc>0?k*dsc:null; } },
@@ -26016,7 +26047,23 @@ function ktDur(a,b){
 // moving a drawing is a mistake this project has made three times.
 function ladderRollLane(rolls, Y, dsc){
   try{
-    if(!rolls || !rolls.length) return '';
+    // ⚠⚠ (v15.42) AN EMPTY LANE MUST SAY WHY. Returning '' made "no rolls today", "the arrows are
+    // retired at the close" and "the latch is empty" render IDENTICALLY — as nothing. He read the
+    // blank as broken and there was no way to tell that it was not. Every other refusal on this face
+    // names itself: skPiles carries its `why`, the off-frame line lists what it dropped.
+    if(!rolls || !rolls.length){
+      var _why;
+      try{
+        var _P=sessionPhase(), _rp=(typeof replayOn==='function' && replayOn());
+        var _stale=false; try{ _stale=(typeof showingStaleBook==='function' && showingStaleBook()); }catch(eSB){}
+        _why = _rp ? 'No roll had been latched by this minute of the replayed session.'
+             : (_stale ? 'No roll survived to the close. These arrows are the LATCH and this is the close-of-session book \u2014 an empty lane means the day ended with nothing holding, not that the lane is broken.'
+             : ((_P && !_P.rth) ? 'Outside RTH, and no close-of-session book is being served, so there is no session for an arrow to describe.'
+             : 'No roll has cleared the noise floor yet today \u2014 a roll must be seen '+ROLL_SIG_N+' times before it is drawn at all.'));
+      }catch(eW){ _why='No rolls to draw.'; }
+      return '<div class="g3ldroll"'+g3tip('ROLL ARROWS \u2014 EMPTY, AND HERE IS WHY. '+_why+
+             ' \u26a0 This lane draws only LATCHED rolls, never a raw scan, so it is quiet by design far more often than it is broken.')+'></div>';
+    }
     var h='', n=0, i;
     var tip='WHERE DID THE GAMMA GO? A dot marks the strike that SHED, the arrow the strike that '+
       'GAINED. ⚠⚠ INFERRED from paired changes, never an observed transfer: nobody publishes that a '+

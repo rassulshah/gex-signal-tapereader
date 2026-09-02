@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02 · panel v15.41 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-02 · panel v15.42 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -60,9 +60,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.41, and what the face carries
+## 2 · WHERE WE ARE — v15.42, and what the face carries
 
-**Panel v15.41 · companion v1.17.** Suite **139 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.42 · companion v1.17.** Suite **137 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -177,6 +177,24 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠⚠ **v15.42 — THE KING LANE WAS NEVER EMPTY; IT WAS ONE PIXEL WIDE.** The axis ran open → WALL
+CLOCK, so at 19:50 the crown merely *still there* took **57% of a 24px lane** and five real
+migrations drew at **1.0–2.5px**. Measured widths `1.0 · 2.5 · 1.0 · 2.5 · 2.4 · 11.4`.
+⚠⚠ **A DEFECT PROPORTIONAL TO ELAPSED TIME IS INVISIBLE WHEN YOU BUILD IT AND OBVIOUS IN THE
+EVENING.** Test at more than one hour — the test checks 15:00, 19:50 AND midnight.
+⚠ **WHEN HE SAYS "EMPTY", MEASURE THE ELEMENT GEOMETRY BEFORE THE DATA.** I went to the data first,
+twice. The lanes were drawn, populated and correct — and unreadable.
+✅ The axis now ends at the **last closed bar** (data, not clock arithmetic); shrinks only, only once
+RTH is over. Long runs gain ~1.7×; the "still there" run drops 57% → 19%.
+⚠ **RESIDUAL, NOT FIXED:** a 15-minute run out of 390 is still sub-pixel in 24px. Floored at 1px so
+it is faint, never absent.
+⚠⚠ **THE ROLL LANE: `rollsLive()` ASKED `rth` WHILE THE REST OF THE FACE ASKED `showingStaleBook()`.**
+After the close the panel serves the close-of-session book — nodes, states, ROC — and blanked that
+same book's ROLLS. **One face, two opinions about which session is on screen.** Now `rollsLive()`
+also returns true for the frozen book; `rollLatched()` still refuses live arrows over a replayed bar.
+✅ **AN EMPTY ROLL LANE NOW NAMES ITS SILENCE** — four distinct cases, four sentences. `return ''`
+had made "no rolls today", "retired at the close" and "the latch is empty" identical.
 
 ⚠⚠⚠ **v15.41 — A REPLAY PIN OUTLIVED THE REPLAY AND FLATTENED THE LADDER.** Measured LIVE after he
 rewound: pin `SPY|fut = {openU:761.79, rr:1, fam:'replay', replay:true}` → band `low 729.29 /

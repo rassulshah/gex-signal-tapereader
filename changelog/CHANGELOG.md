@@ -1,3 +1,57 @@
+## v15.42 — the king lane's axis ran to the wall clock; the roll lane went blank without saying why
+
+> "the king node paths are still empty. the roll column is also empty"
+
+### 1 · THE KING LANE — drawn, but one to two pixels wide
+
+Measured on his panel at **19:50 CT**, a 24px lane holding six SPXW runs of 15 / 103 / 32 / 105 /
+102 minutes plus the one still holding since 14:27:
+
+    widths   1.0 · 2.5 · 1.0 · 2.5 · 2.4 · 11.4 px
+
+The axis spanned **08:30 → 19:50**, so the crown that was merely **still there** took **57% of the
+lane** and five real migrations rendered as one-to-two-pixel ticks. At 1px "empty" is the correct
+reading — he was describing the pixels accurately.
+
+⚠⚠ **THE FAULT GROWS EVERY HOUR THE TAB STAYS OPEN**, which is exactly why it looks fine during the
+session and broken by the evening. ⚠ And this is the **v15.18 lesson in the one case it did not
+cover** — the comment ten lines below the fault says *"a whole day's journey is squeezed into the
+first pixel of a lane and reads as MISSING"*. It was written about replay. The wall clock does the
+same thing after the close.
+
+**The axis now ends where the day did**, taken from the **last closed bar** — the same series its
+start comes from. No clock arithmetic, no timezone maths: the end of the day is data. It only ever
+shrinks the axis, and only once RTH is over, so nothing changes intraday.
+
+    clamped   0.7 · 5.0 · 1.6 · 5.1 · 5.0 · 2.6 px
+    the long runs gain ~1.7x · the "still there" run drops from 57% of the lane to 19%
+
+⚠ **AND THE RESIDUAL, STATED RATHER THAN HIDDEN:** a 15-minute run out of 390 is **still sub-pixel**
+in a 24px lane, and no clamp can change that. Every run is floored at 1px so a short one is faint
+but never absent. My first assertion claimed "at most one run under 3px" and failed at two — the
+test now asserts what was measured, including the limit.
+
+### 2 · THE ROLL LANE — empty by design, and indistinguishable from broken
+
+`rollsLive()` returns `P.rth`, which is false after 15:00, so `RAILROLLS` came back `[]`. **But the
+rest of the face was serving the CLOSE-OF-SESSION book** (v14.55): the ladder drew that book's
+nodes, its states, its ROC — and blanked its **rolls**. One face, two opinions about which session
+is on screen.
+
+The arrows are the **latch**, and the latch is the same session as the nodes beside them, so serving
+it is consistency rather than extrapolation. `rollLatched()` still refuses to draw today's arrows
+over a replayed bar, so no live leak is introduced.
+
+⚠⚠ **AND AN EMPTY LANE NOW NAMES ITS SILENCE.** Returning `''` made *"no rolls today"*, *"retired at
+the close"* and *"the latch is empty"* render **identically — as nothing**. He read the blank as
+broken and nothing on the face could tell him otherwise. Four cases, four sentences, and the actual
+threshold named rather than implied.
+
+`test_lane_axis.js` → **24**, executed as geometry: his exact six runs, both axes, and the growth
+over time (15:00 > 19:50 > midnight) so a test written at one hour cannot pass at another.
+**7 mutations, 7 caught.** Suite **137 green / 6 baseline red**.
+
+
 ## v15.41 — a replay pin outlived the replay and flattened the ladder
 
 > "i think you messed it up again."

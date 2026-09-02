@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-02 · v15.41 · session `5e8d34b5`
+## 2026-09-02 · v15.42 · session `5e8d34b5`
 
-_43 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_45 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -506,8 +506,58 @@ If you'd rather I stop surfacing this each turn, the fix on your side is to add 
 Three more heals carry the same unscoped exemption. Same trap, three more places.
 **That's the writer** — a fifth heal with no replay guard at all, and it persists `rec` to the live key.
 A standing guard caught it — I'd added a third place that scales `openU`. Comparing the raw values is both correct and simpler.
+**Yes — and I walked you into it. I asked you to rewind, and the rewind is what broke it.**
+
+Your live panel:
+
+```
+pin  SPY|fut = { openU: 761.79, rr: 1, fam:'replay', replay:true }
+band  low 729.29 · high 794.29      ← SPY space
+band  now 7647.50 · hiWater 7673.75 ← ES space
+```
+
+`emRailBounds` **starts** the frame at `B.low`, so the ladder was asked to span **729 → 7674 — 6,944 points.** The day's entire 52-point range was 0.75% of that, which is why every row piled onto one line at the top.
+
+**One unguarded write, four over-guarded reads:**
+
+- `replayEmPin()` builds a pin so the band survives a rewind — correct.
+- Four heals refuse to repair a `replay:true` pin — correct, and unscoped.
+- **The ratio heal does `S.sym[emKey]=rec` and persists it, with no replay guard at all.**
+
+So the replay pin got written into the *live* key, and the four heals were then forbidden from ever repairing it. Every rule was right on its own. None of them asked whether the replay was still happening.
+
+The fix is one predicate — `rpPin(r) = r.replay && replayOn()`, meaning *exempt right now*, not *born in replay* — called at **all five** sites including the write. When the same condition is restated five times, the bug isn't the four that got it slightly wrong; it's that there are five.
+
+And a second guard that trusts no field at all: **a …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 34 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (00:57):** Still blocked by the same policy denial (34 commits now) — all of them are inside `installv1541.bat`, so nothing is at risk; they reach GitHub when you run it.
+
+**OPERATOR:**
+> the king node paths are still empty . the roll column is also empty
+
+**me (02:35):** v15.41 fixed the ladder — 19 rows drawing now. Let me measure the two that are still empty.
+I probed the wrong function — `__gptsDebug.rolls` is a different detector. Let me find what actually feeds the ladder's ROLL column.
+The ROLL column is empty *by design* after the close — but the rest of the face is still serving the close-of-session book. Let me check the king lanes before I decide.
+Both measured. The king lane's x-axis runs to the wall clock, so the last crown eats 57% of the lane and the day's journey is squeezed into 1–3px runs.
+Both root causes measured. Implementing.
+The clamp doubles the long runs but a 15-minute run in a 24px lane is genuinely sub-pixel. Asserting what's actually true.
 
 ### DECISIONS
+
+**v15.42 · the king lane was never empty — it was one pixel wide.**
+- Axis ran open → WALL CLOCK. At 19:50 the "still there" crown took **57% of a 24px lane**; five real
+  migrations drew at 1.0–2.5px. Measured: `1.0 · 2.5 · 1.0 · 2.5 · 2.4 · 11.4`.
+- ⚠ **The fault grows every hour the tab stays open** — invisible when built, obvious by evening.
+- ⚠ **"Empty" was an accurate report of the pixels.** Measure element geometry before data.
+- Axis now ends at the last closed bar. Long runs +1.7×; the last run 57% → 19%. Residual stated:
+  a 15-minute run out of 390 is still sub-pixel in 24px.
+- **Roll lane:** `rollsLive()` asked `rth` while the rest of the face asked `showingStaleBook()` —
+  the panel drew the close book's nodes/states/ROC and blanked its rolls. One face, two opinions.
+- An empty roll lane now names its silence — four cases, four sentences.
 
 **v15.41 · a replay pin outlived the replay and flattened the ladder.**
 - Measured LIVE after his rewind: pin `{openU:761.79, rr:1, replay:true}` in the **live** key. Band
@@ -793,6 +843,10 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.42** — lane axis clamped to the last closed bar; `rollsLive()` also true for the frozen book;
+labelled empty-roll state. `test_lane_axis.js` (24), executed as geometry across three clock times.
+7 mutations / 7 caught. Suite 137 green / 6 baseline red.
+
 **v15.41** — `rpPin()` shared across five heals, the ratio heal (the WRITE) guarded for the first
 time, and a `rulerOff` factor-of-two check that overrides every exemption. `test_em_pin_ruler.js`
 (31). 15 mutations / 15 caught. Suite 139 green / 6 baseline red.
@@ -906,6 +960,11 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. **The recorder still cannot hold a full day** — 26.5KB/frame, 64% `feat`; 3.44MB vs 3.6MB.
+2. v15.40's replay-scale fix is still unverified on a LIVE futures chart (unit-tested only).
+3. Two session highs still exist (`emBand.hiWater` vs `hodLod.hod`), consistent only via `emRr`.
+4. Futures-gamma parked (v15.38 spec). Copper never confirmed.
 
 1. **The recorder still cannot hold a full day** — 26.5KB/frame, 64% `feat`; 3.44MB vs 3.6MB.
    Proposed: drop `feat` from the frame, or two budgets. NOT BUILT.
@@ -1040,6 +1099,7 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+6202bfb v15.41: a replay pin outlived the replay and flattened the ladder
 2725280 v15.40: the replayed ladder was drawn in the wrong price space
 067ec1d v15.39: two candles, one session, and they disagreed about its colour
 bebec5f v15.38: the futures-gamma research, parked where it cannot rot
@@ -1051,7 +1111,6 @@ b3d9451 v15.35: the freeze badge was printing a 1970 timestamp
 cc12ac1 v15.32: the build message carries the links AND a save confirmation, because the builder prints both
 d19aa28 v15.31: the day as a candle, the strike grid behind the nodes, IBH/IBL off the level rail
 3745d82 v15.30: the grip was capped at 560 while his panel was 673
-9155067 v15.29: the EL really was cut off — and only a real browser could show it
 ```
 
 ---
