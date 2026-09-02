@@ -26,8 +26,24 @@ running panel can prove the SYSTEM is:
 
     __gptsDebug.deps()        the full verdict, per dependency, with ages and the three IF fields
     the `deps` dot            on the footer strip — red on a failure, amber on staleness
+    the HEADER LAMPS          IRT · IF · YF · FF — one per external feed, each with a measurement
 
 ⚠ **A green suite has never once meant the dependencies are up.** Ask the panel.
+
+### THE FOUR HEADER LAMPS — the whole outside world, in one line
+
+| lamp | the integration | its number | fails into |
+|---|---|---|---|
+| **IRT** | the CSV this panel writes for IRT's FlexLevels extension | age of the last write | a stale file, not an error |
+| **IF** | **InsiderFinance** — the chain, the walls, the expected move | age of the freshest symbol | an 11-day-old book that renders normally |
+| **YF** | **Yahoo Finance** — `ES=F` 1-minute bars (§2) | age of the last pull | a WRONG high/low, drawn without complaint |
+| **FF** | **ForexFactory** — the USD/high-impact calendar (§4) | **event count today**, not an age | a quiet Tuesday |
+
+⚠ **FF IS COUNTED, NOT AGED.** It is delivered once a day, so an age would read "340m" on a
+perfectly healthy calendar by mid-session. **`0ev` is a real, healthy answer** — the green dot is
+what says the courier ran, not the number.
+⚠ **Every lamp reads `depsHealth()`**, the same call the footer dot and `__gptsDebug.deps()` use, so
+the three can never disagree about the same moment.
 
 ---
 
@@ -69,7 +85,7 @@ red every day is a check nobody reads.
 
 ---
 
-## 2 · THE ES 1-MINUTE COURIER — what the ⓪a candle is measured from
+## 2 · YAHOO FINANCE (**YF**) — the ES 1-minute bars the ⓪a candle is measured from
 
 **What it supplies.** Yahoo `ES=F` 1-minute bars into `localStorage.gpts_futbars_v1`, verbatim.
 On a futures chart `measureBars()` serves these, so **the HOD, the LOD, the range, the open, PT, the
@@ -85,7 +101,12 @@ expire without the constant looking wrong.**
 ⚠ **On a CASH chart there is no backfill.** `measureBars()` falls back to `closedCandles()`, which
 holds only what the panel has seen since it was opened. The courier carries no cash bars.
 
-**How to check it.** `deps()` → `fut.courier` (age, row count).
+⚠ **WHY IT IS COURIERED AND NOT FETCHED HERE.** Measured live from the Atlas page 2026-08-27: a page
+`fetch()` of `query1.finance.yahoo.com` **fails** — the panel runs `@grant none` by necessity (the
+fiber harvest needs page context), so it has no privileged transport. The companion's
+`GM_xmlhttpRequest` is past CORS and CSP, and it is the only reason these bars exist here.
+
+**How to check it.** `deps()` → `fut.courier` (age, row count), or the **YF** lamp in the header.
 
 ---
 
@@ -112,7 +133,37 @@ BUILD and the WRITE as separate items:**
 
 ---
 
-## 4 · THE RECORDER — no replay and no corpus without it
+## 4 · FOREXFACTORY (**FF**) — the only thing that knows today is an event day
+
+**What it supplies.** ForexFactory's free weekly feed, `https://nfs.faireconomy.media/ff_calendar_thisweek.json`
+— no key, impact-rated — filtered to **USD + high-impact only** and cached as
+`localStorage.gpts_evcal_v1` = `{day, ev:[{t,title}]}`. `evCalActive()` reads it: **FOMC-family
+events stamp the WHOLE day**; everything else is active within **±90 minutes** of its release
+(`EVCAL_WIN_MIN`).
+
+**What consumes it.** The event-day state on the read. An event day changes what the panel is
+willing to say, so a missing calendar does not blank a section — **it quietly removes a caveat.**
+
+**Cadence.** Once per day. Both sides can deliver it: the panel tries a plain `fetch` (the feed is
+CDN-served for browser widgets and normally sends CORS) and **companion v1.14+ couriers it via
+`GM_xmlhttpRequest` into the same key** — whichever arrives first wins, because both write
+`{day, ev}` and both skip the work if today's is already there.
+
+⚠⚠ **ZERO EVENTS IS A VALID DELIVERY, AND THIS IS THE ONLY SUBTLE PART.** `{day:today, ev:[]}` means
+the courier ran and there are no USD-high releases — a real answer, and the most common one. The
+**only** thing separating it from "the courier never ran" is the `day` stamp, which is why the check
+tests the day and not the count. Counting events would have called every quiet day a failure.
+
+⚠ **IT RAN AS AN UNCHECKED DEPENDENCY FROM v14.38 TO v15.37** — two code comments, nothing in this
+file, no `deps()` item, no lamp. It could have been dead for a month without a mark on the face.
+That is exactly the failure mode §0 describes, and it survived the writing of §0.
+
+**How to check it.** `deps()` → `cal.ff` (state, event count, the day it was delivered for), or the
+**FF** lamp in the header.
+
+---
+
+## 5 · THE RECORDER — no replay and no corpus without it
 
 Writes 3-minute frames into `localStorage.gpts_recorder_v7`, later exported to `data/YYYY-MM-DD.json`
 and read by the replay slider and every study in `tools/`.
@@ -121,14 +172,22 @@ and read by the replay slider and every study in `tools/`.
 
 ---
 
-## 5 · THE CHECK ITSELF
+## 6 · THE CHECK ITSELF
 
 | | |
 |---|---|
 | live verdict | `__gptsDebug.deps()` — run it before diagnosing anything else |
-| on the face | the `deps` dot on the footer strip; the hover lists every item |
+| on the face | the four header lamps (IRT · IF · YF · FF), and the `deps` dot on the footer strip |
 | the check is tested by | `test_deps.js` — that it notices each failure, and does not cry wolf |
 | the code | `depsHealth()`, beside `__gptsDebug.deps` |
 
-**Adding a dependency?** Add it to `depsHealth()`, give it a case in `test_deps.js`, and write it
-here. A dependency nobody can see the state of is one nobody will check.
+**Adding a dependency?** Four steps, and `test_deps.js` enforces all four:
+1. an item in `depsHealth()`,
+2. a **lamp** in `feedLampsHtml()` — with the right KIND of number for that feed (an age for a
+   polled feed, a count for a once-a-day delivery),
+3. a case in `test_deps.js` proving the check notices its failure and does not cry wolf,
+4. **a section in this file.**
+
+⚠ A dependency nobody can see the state of is one nobody will check — and ForexFactory proved that
+writing the warning is not the same as obeying it. It sat undocumented for twenty-seven builds
+*after* §0 was written.

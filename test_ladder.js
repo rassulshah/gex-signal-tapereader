@@ -34,13 +34,23 @@ const W=v('LAD_W'), LVL=v('LAD_LVL'), PXC=v('LAD_PXC'), PXW=v('LAD_PXW'), NODE=v
       // ⚠ (v15.30) LAD_TAP / LAD_TAPW are GONE — the TAPS column was retired and the roll lane took
       // its slot. Reading a constant that no longer exists yields undefined, and `undefined <= x` is
       // false, so the chain assertions fail for the right reason rather than passing vacuously.
-      RLC=v('LAD_RLC'), RLCW=v('LAD_RLCW'),
+      // ⚠ (v15.44) LAD_RLC / LAD_RLCW are GONE — the ROLL words column is retired. Reading a
+      // constant that no longer exists would make `v()` return NaN and every comparison against it
+      // silently TRUE, which is how a deleted column keeps passing its own layout tests.
       ROC=v('LAD_ROC'), ROCW=v('LAD_ROCW'),
       DAX=v('LAD_DAX'), DMAX=v('LAD_DMAX'), DLAB=v('LAD_DLAB'), DLABW=v('LAD_DLABW'),
       ROLL=v('LAD_ROLL'), ROLLW=v('LAD_ROLLW'),   // (v15.09) the roll lane, the new last column
       PCTIN=v('LAD_PCT_IN_BAR');
-ok([W,LVL,LVLW,PXC,NODE,NMAX,CH,CHW,MK,MKW,KS,KSW,KY,KYW,ST,ROC,DAX,DMAX,DLAB,PCTIN].every(x=>typeof x==='number'),
+const ALLC={W,LVL,LVLW,PXC,PXW,NODE,NMAX,CH,CHW,PILLW,MK,MKW,KS,KSW,KY,KYW,ST,STW,ROC,ROCW,DAX,DMAX,DLAB,DLABW,ROLL,ROLLW,PCTIN};
+ok(Object.keys(ALLC).every(k=>typeof ALLC[k]==='number'),
    'g1 every column offset is a named constant, not a magic number in the markup');
+// ⚠⚠ (v15.44) AND EVERY ONE IS FINITE. `v()` on a constant that no longer exists returns NaN, and
+// EVERY comparison against NaN is false — so `a <= NaN` fails loudly but `!(a > NaN)` passes, and a
+// test written the second way would keep certifying the layout of a column that had been deleted.
+// This is the "assert on the statement, not the file" fault in numeric form, and it is one line.
+const NANC=Object.keys(ALLC).filter(k=>!Number.isFinite(ALLC[k]));
+ok(NANC.length===0,
+   'g1b ...and every one is a FINITE number — a deleted constant reads NaN and passes silently', NANC);
 // ⚠ (v14.54) THE COLUMN THAT WAS DELETED MUST STAY DELETED. %King moved inside its own bar; if a
 // later build reinstates LAD_KPCT the 42px comes back and the arithmetic below silently loosens.
 ok(v('LAD_KPCT')===undefined && v('LAD_PROF')===undefined,
@@ -78,12 +88,18 @@ ok(v('LAD_KPCT')===undefined && v('LAD_PROF')===undefined,
   // numbers beside it. Ordering offsets proves nothing about what actually gets drawn.
   // (v14.54) the full left-to-right chain, every link asserting offset+width <= the next offset.
   ok(chuteR<=MK,       'g6a the chute ends before the marker column begins', {chuteR,MK});
-  // ⚠ (v15.30) the TAPS counter is retired and the ROLL LANE took its slot — operator's request.
-  // The chain is unbroken, it just runs through a different column: MARK → the lane → the Δ bar.
-  ok(MK+MKW<=ROLL,      'g6b the marker ends before the roll lane begins', {end:MK+MKW,ROLL});
-  ok(ROLL+ROLLW<=DAX-DMAX,'g6c the lane ends before the longest delta bar starts', {end:ROLL+ROLLW,barL:DAX-DMAX});
-  ok(DLAB>=DAX,        'g6d the delta figure sits right of its own zero line', {DLAB,DAX});
-  ok(DLAB+DLABW<=ST,   'g6e the delta figure ends before the state cell begins', {end:DLAB+DLABW,ST});
+  // ⚠⚠ (v15.44) THE CHAIN NOW RUNS MARK → the Δ BAR → the LANE → STATE. Operator, 2026-09-02:
+  // "move the roll arrows to the right of the delta profile." The lane was between MARK and the
+  // bars; a roll IS the 15-minute delta, so it now reads immediately after the bars that measure it.
+  // ⚠ THE Δ BAR IS PLACED BY ITS **AXIS**, AND ITS INK GROWS LEFT. `DAX-DMAX`, not `DAX`, is where
+  // the column starts — my first cut used DAX and g4 caught a bar growing into the price chute.
+  ok(MK+MKW<=DAX-DMAX,  'g6b the marker ends before the longest delta bar starts', {end:MK+MKW,barL:DAX-DMAX});
+  ok(DLAB>=DAX,        'g6c the delta figure sits right of its own zero line', {DLAB,DAX});
+  ok(DLAB+DLABW<=ROLL, 'g6d the delta figure ends before the roll lane begins', {end:DLAB+DLABW,ROLL});
+  ok(ROLL+ROLLW<=ST,   'g6e the roll lane ends before the state cell begins', {end:ROLL+ROLLW,ST});
+  // ⚠ the lane got its designed width back when the words column went — 20px was a compromise
+  // forced by the 640 cap (v15.09), not a design. A circle, a step and an arrowhead need room.
+  ok(ROLLW>=40,        'g6e2 ...and the lane is wide enough to draw a circle, a step and a head', ROLLW);
   ok(ST+STW<=ROC,      'g6f the state cell ENDS before the roc column begins', {end:ST+STW,ROC});
   ok(ROC+ROCW<=W,      'g6g the roc column ends inside the ladder', {end:ROC+ROCW,W});
   ok(STW>=50,          'g6h the state cell is wide enough for the longest word (WEAKENING)', STW);
@@ -294,11 +310,14 @@ ok(W<=640, 'w1 the ladder stays within a resizable panel', W);
 // and the roll lane moved into its slot at 344, so the far-right 20px came back. A cap that only
 // ever ratchets upward is not a cap; this is the first build to hand width back.
 ok(W<=640, 'w1b the compaction holds — the ladder is no wider than 640', W);
-// ⚠ the last column is the ROLL LANE now, not ROC. LAD_W must still equal where it ends, so the
-// constant cannot drift away from the layout again — that 25px discrepancy took a build to explain.
-// ⚠ the last column is the ROLL CHIP now — the lane moved left into the retired TAPS slot.
-ok(RLC+RLCW===W, 'w1c ...and LAD_W is exactly where the last column ends, so it cannot lie again',
-   {end:ROLL+ROLLW, W});
+// ⚠ (v15.44) THE LAST COLUMN IS ROC AGAIN — the ROLL WORDS column is retired ("the arrows are
+// suppose to show the roll"). LAD_W must still equal where the last column ends, so the constant
+// cannot drift away from the layout again; that 25px discrepancy took a whole build to explain.
+ok(ROC+ROCW===W, 'w1c ...and LAD_W is exactly where the last column ends, so it cannot lie again',
+   {end:ROC+ROCW, W});
+// ⚠ AND THE LADDER GOT NARROWER. He has raised horizontal space twice; a column that repeated its
+// neighbour was costing him width he had already complained about. 618 -> 608.
+ok(W<618, 'w1d ...and this build HANDS WIDTH BACK rather than taking it', W);
 ok(/g3ladwrap\{overflow-x:auto/.test(src), 'w2 ...and the container SCROLLS rather than clips');
 // ⚠ (v15.21) NOT AN ADJACENCY TEST ANY MORE. This asserted the two tags were literally touching,
 // which broke the moment the column HEADER ROW was added between them — a true structural change

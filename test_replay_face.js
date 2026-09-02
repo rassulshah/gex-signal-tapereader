@@ -243,7 +243,8 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
   const labels=[...hd.matchAll(/>([^<>]{1,16})<\/span>/g)].map(m=>m[1]);
   ok(labels.length>=10, 'h2 ...one label per column', labels.length);
   // ⚠ (v15.30) TAPS is retired at the operator's request and the roll lane took its slot.
-  ['LEVEL','PRICE','MARK','STATE','ROLL'].forEach(function(w){
+  // ⚠ (v15.44) 'ROLL' is retired — the arrows carry it now, so the header is the ⇄ glyph.
+  ['LEVEL','PRICE','MARK','STATE','\u21c4'].forEach(function(w){
     ok(labels.indexOf(w)>=0, 'h2·'+w+' ...including '+w, labels);
   });
   // ⚠ THE POSITIONS COME FROM THE COLUMNS' OWN CONSTANTS. A header at a hard-coded x is a header
@@ -253,7 +254,7 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
   ok(xs.length===labels.length, 'h3 every header carries an explicit left and width', xs.length);
   const K=n=>R.run(n);
   [['LEVEL','LAD_LVL','LAD_LVLW'],['PRICE','LAD_PXC','LAD_PXW'],
-   ['STATE','LAD_ST','LAD_STW'],['ROLL','LAD_RLC','LAD_RLCW']].forEach(function(t){
+   ['STATE','LAD_ST','LAD_STW'],['\u21c4','LAD_ROLL','LAD_ROLLW']].forEach(function(t){
     const i=labels.indexOf(t[0]);
     ok(i>=0 && xs[i][0]===K(t[1]) && xs[i][1]===K(t[2]),
        'h4·'+t[0]+' ...taken from '+t[1]+'/'+t[2]+', so the label cannot drift off its column',
@@ -343,15 +344,34 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
 // panel, the lane WAS drawing four real rolls as stepped paths in a 20px column at the far right,
 // with no strike named anywhere. And: "the roc 15 has up and dn arrows ... should be color coded."
 {
-  const chips=[...R.html.matchAll(/class="g3ldrl g3ldrl(\w+)"[^>]*>([^<]+)</g)].map(m=>[m[1],m[2]]);
-  ok(chips.length>0, 'q1 the ladder names the roll on the row it belongs to', chips.length);
-  ok(chips.some(c=>c[0]==='out'&&/\u21e2\d{4}/.test(c[1])),
-     'q2 ...a source says WHERE ITS MASS WENT, with the strike', chips);
-  ok(chips.every(c=>/\d{4}/.test(c[1])), 'q3 ...and every chip names the other strike', chips);
-  // ⚠ the lane is KEPT: it is the only thing that shows two rolls nesting rather than crossing
-  ok(/marker-end/.test(R.html), 'q4 ...while the stepped lane still draws them too');
+  // ⚠⚠ (v15.44) THE ROW CHIPS ARE RETIRED. Operator, 2026-09-02: "remove the roll column because
+  // the arrows are suppose to show the roll, the from node (little circle) and the to node (arrow
+  // head)." He is right that it was ONE FACT TOLD TWICE — the chip read "⇢7655" while the lane drew
+  // an arrow from that row to 7655, thirty-two pixels apart.
+  // ⚠ SO THE ASSERTIONS INVERT: what q1-q3 demanded is now what must NOT exist, and the burden
+  // moves to proving the ARROWS carry it. A removal is only safe if the survivor is checked.
+  const chips=[...R.html.matchAll(/class="g3ldrl g3ldrl(\w+)"[^>]*>([^<]+)</g)];
+  ok(chips.length===0, 'q1 the roll WORDS chips are gone — one fact, told once', chips.length);
+  ok(!/LAD_RLC/.test(src), 'q1b ...and their column constant with them');
+  // the arrows must still be there, and must still carry BOTH ends of the roll
+  ok(/marker-end/.test(R.html), 'q2 the stepped lane still draws every roll');
+  // ⚠ SCOPED TO THE LANE. Counting `<circle` across the whole face gave 7 against 4 heads — the
+  // rail draws circles of its own elsewhere. A count is only an assertion if it counts the right
+  // things, and a global grep for a common tag is not that.
+  const laneHtml=(R.html.match(/<div class="g3ldroll"[\s\S]*?<\/div>/)||[''])[0];
+  const circles=(laneHtml.match(/<circle cx=/g)||[]).length;
+  const heads=(laneHtml.match(/marker-end="url\(#g3rlh[ud]\)"/g)||[]).length;
+  ok(circles>0 && circles===heads,
+     'q3 ...with a SOURCE CIRCLE for every ARROWHEAD — the from-node and the to-node he described',
+     {circles, heads});
   const hd=(R.html.match(/<div class="g3ladhd">([\s\S]*?)<\/div>/)||[])[1]||'';
-  ok(/ROLL/.test(hd), 'q5 ...and the column is labelled');
+  ok(/\u21c4/.test(hd) && !/>ROLL</.test(hd), 'q4 ...the header is the ⇄ glyph, and ROLL is gone', hd.slice(0,120));
+  // ⚠⚠ AND THE RULE THE CHIP'S HOVER CARRIED MUST SURVIVE IT. Removing a display must never remove
+  // the measurement or the sentences that make it interpretable (v11.95).
+  ok(/HOW A ROLL IS DECIDED/.test(src), 'q5 the lane inherited the chip’s statement of the roll rule');
+  ['move of MASS','NOT CONSERVATION OF MASS','does not say price will go there'].forEach(function(w){
+    ok(src.indexOf(w)>=0, 'q5·'+w.slice(0,18)+' ...including "'+w+'"');
+  });
   // colour: green up, red down, the panel's own direction colours
   const arrows=[...R.html.matchAll(/g3ld60 (g3ld60[ud])"[^>]*>([\u25b2\u25bc])/g)].map(m=>[m[1],m[2]]);
   if(arrows.length){
@@ -576,11 +596,28 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
     // ⚠ AGREEING IS NOT BEING RIGHT. c1c passes when both are hard-coded 'up' — it survived that
     // mutation. The direction is a FACT about the session: green only when the last price is at or
     // above the open.
-    const dir=JSON.parse(R.run('JSON.stringify((function(){var b=emBand("SPY");var cs=measureBars("SPY").bars||[];var n=cs.length?cs[cs.length-1].c*(b.scaleUsed||1):null;return {open:b.open, now:(typeof b.nowLive===\'number\')?b.nowLive:b.now};})())'));
-    if(dir.open!=null && dir.now!=null)
-      ok(wick[1]===((dir.now>=dir.open)?'up':'dn'),
-         'c1e ...and the colour is the DAY\'s direction, measured, not assumed',
-         {drawn:wick[1], open:dir.open, now:dir.now});
+    // ⚠⚠ (v15.39) THIS ASSERTION USED TO DEFEND THE BUG. It compared the drawn colour against
+    // `emBand.open` vs `nowLive` — the band's ANCHOR against the LIVE tape — which is precisely the
+    // pair that printed RED on 2026-09-01 while the ⓪a candle printed GREEN off the same session.
+    // It passed the whole time, because the fixture's anchor and open happened to agree.
+    // ⚠ AN ASSERTION THAT ENCODES ONE SURFACE'S FORMULA CANNOT NOTICE THAT SURFACE IS WRONG. The
+    // colour is a fact about the SESSION — first RTH bar's open against the last CLOSED bar — and
+    // that fact has exactly one owner now.
+    const dir=JSON.parse(R.run('JSON.stringify((function(){var s=sessionBody("SPY");return s?{open:s.open, close:s.close, up:s.up}:null;})())'));
+    ok(dir!=null, 'c1e0 sessionBody() resolves in the rendered face', dir);
+    if(dir)
+      ok(wick[1]===(dir.up?'up':'dn'),
+         'c1e ...and the colour is the SESSION\'s direction, from the one call both candles read',
+         {drawn:wick[1], open:dir.open, close:dir.close});
+    // ⚠ and the ⓪a candle is drawn from the SAME object, so this is an identity, not a coincidence
+    const hlFill=(R.html.match(/<svg class="g3cdl"[\s\S]*?<\/svg>/)||[''])[0];
+    if(hlFill && dir){
+      const bodyStroke=(hlFill.match(/<rect x="37"[^>]*stroke="(#[0-9a-f]{6})"/i)||[])[1];
+      if(bodyStroke)
+        ok(bodyStroke===(dir.up?'#2ec27e':'#f0616d'),
+           'c1e2 ...and the ⓪a candle carries the SAME direction, because it is the same call',
+           {hodlod:bodyStroke, nowColumn:wick[1], up:dir.up});
+    }
     const wTop=+wick[2], wH=+wick[3], bTop=+body[2], bH=+body[3];
     ok(bTop>=wTop-0.5 && (bTop+bH)<=(wTop+wH)+0.5,
        'c1d ...the body is INSIDE the wick, which is what a candle means', {wTop,wH,bTop,bH});
@@ -591,6 +628,25 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
        'c1f ...and SMALLER than it: a body spanning the whole range is not a candle, it is a block',
        {bodyH:bH, wickH:wH});
     // ⚠ EXECUTED against the band: the wick must be the session's own high and low, not a guess
+    // ⚠⚠ (v15.39c) THE CONVERSION, PROVEN IN THE RENDERED FACE — not asserted from the source.
+    // Every price emBand returns is a BAR price x `emRr`. If the candle is converted correctly it is
+    // ALREADY inside the frame, so the frame guard never fires; hand it BAR prices and the guard
+    // fires, which is the fault v15.39b shipped. Both halves are executed here.
+    const conv=JSON.parse(R.run('JSON.stringify((function(){'+
+      'var b=emBand("SPY"), s=sessionBody("SPY"); if(!s||!(b.emRr>0)) return null;'+
+      'var c={hi:s.hi*b.emRr, lo:s.lo*b.emRr, open:s.open*b.emRr, close:s.close*b.emRr};'+
+      'var A=emRailBounds(b,null,null), B=emRailBounds(b,null,c), C=emRailBounds(b,null,s);'+
+      'return {emRr:b.emRr, hiMatches:Math.abs(c.hi-b.hiWater)<1e-6, loMatches:Math.abs(c.lo-b.loWater)<1e-6,'+
+      ' inert:(A.lo===B.lo && A.hi===B.hi), rawWidens:(A.lo!==C.lo || A.hi!==C.hi)};})())'));
+    ok(conv!=null, 'c2a emBand publishes emRr and sessionBody resolves', conv);
+    if(conv){
+      ok(conv.emRr!==1, 'c2b the ratio is NOT 1 — an unconverted candle really is on the wrong axis', conv.emRr);
+      ok(conv.hiMatches && conv.loMatches,
+         'c2c EXECUTED: sessionBody\u00d7emRr reproduces hiWater/loWater EXACTLY \u2014 one session, two spaces', conv);
+      ok(conv.inert, 'c2d ...so a CONVERTED candle is already inside the frame and the guard never fires', conv);
+      ok(conv.rawWidens,
+         'c2e ...while BAR prices DO distort it \u2014 the v15.39b fault, still detectable', conv);
+    }
     const EBc=JSON.parse(R.run('JSON.stringify((function(){var b=emBand("SPY");return {hw:b.hiWater,lw:b.loWater,open:b.open};})())'));
     ok(EBc.hw!=null && EBc.lw!=null,
        'c2 the band carries the session extremes the candle is drawn from', EBc);
@@ -618,6 +674,49 @@ ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
      {ticks:mins.length, nodes:pxRows});
   ok(/g3ldmin\{[^}]*opacity:\.18/.test(src),
      'c5c ...faintly: they are a scale, not a claim');
+}
+
+// ---- 17 · (v15.33) THE ⓪a SECTION, ITS HEADINGS, AND THE TWO FEED LAMPS ----------------------
+// Operator, 2026-09-01: "move the hodlod section below the node ladder" · "update the heading where
+// it says 1ST HOD, to 1ST TP , which stands for first turning point" · "make the labels a little
+// brighter" · "i need two additional indicators ... keep it on the top somewhere."
+{
+  const txt=R.html.replace(/<[^>]+>/g,' ');
+  // a · the ⓪a section is BELOW the ladder
+  const iLad=R.html.indexOf('g3ladwrap'), iDay=R.html.indexOf('\u24ea a DAY');
+  ok(iLad>=0 && iDay>=0, 'd1 both the ladder and the ⓪a section are drawn', {iLad, iDay});
+  ok(iLad<iDay, 'd2 EXECUTED: the ⓪a HOD/LOD section is mounted BELOW the ladder', {iLad, iDay});
+  // b · the turning-point headings
+  ok(/\b1ST TP\b/.test(txt) && /\b2ND TP\b/.test(txt),
+     'd3 the columns are headed 1ST TP and 2ND TP');
+  ok(!/1ST \u00b7 (HOD|LOD)/.test(txt), 'd3b ...and no longer name the extreme in the heading');
+  // ⚠ the identity is not LOST, it moves to the hover — a heading names the role, the hover the fact
+  ok(/FIRST TURNING POINT \u2014 today that was the (HOD|LOD)/.test(R.html),
+     'd3c ...while the hover still says WHICH extreme it was today');
+  // c · brighter labels, asserted as the colour actually shipped
+  ok(/g3daylb b\{[^}]*color:#9fb0c4/.test(src),
+     'd4 the ⓪a labels are the brighter slate, not the 3:1 grey');
+  ok(!/g3daylb b\{[^}]*color:#6c7889/.test(src), 'd4b ...with the dark value gone, not overridden');
+  // d · the two feed lamps, at the top, from the SAME depsHealth the footer uses
+  // ⚠ (v15.34) THE LAMPS MOVED INTO THE HEADER to conserve vertical space, so they are no longer in
+  // the BODY html at all — they are painted into #gpts-hdrlamps each render. Asserting against
+  // R.html would now be asserting they are absent from where they are not supposed to be.
+  const lampRow=R.run('(document.getElementById("gpts-hdrlamps")||{}).innerHTML||""');
+  ok(!!lampRow, 'd5 the feed lamps are drawn, in the header');
+  ok(/IRT/.test(lampRow) && /IF/.test(lampRow), 'd5b ...one for IRT and one for InsiderFinance', lampRow.slice(0,80));
+  ok(R.html.indexOf('g3flrow')<0,
+     'd5c ...and they no longer take a row in the body — that was the point of moving them');
+  ok(/#gpts-panel \.g3fl\{/.test(src),
+     'd5c2 ...with a selector scoped to the PANEL, not the body they left');
+  const fl=(src.match(/function feedLampsHtml\([\s\S]*?\n\}/)||[''])[0];
+  ok(/depsHealth\(\)/.test(fl),
+     'd5d ...reading the SAME check the footer dot and __gptsDebug.deps() read — never a second opinion');
+  // ⚠ BOUND TO THE RENDERED TEXT, not to the word `ageMin` in the source — blanking the age string
+  // left `ageMin` in the expression that computes it and the grep stayed green. Survived mutation.
+  ok(/ageMin/.test(fl), 'd5e the lamp computes an age');
+  ok(/IRT\s+\S/.test(lampRow.replace(/<[^>]+>/g,' ')) && /IF\s+\S/.test(lampRow.replace(/<[^>]+>/g,' ')),
+     'd5f ...and PRINTS it beside the label — a green dot with no number is a claim you cannot check',
+     lampRow.replace(/<[^>]+>/g,' ').trim().slice(0,40));
 }
 
 console.log('test_replay_face: '+pass+' passed, '+fail+' failed');

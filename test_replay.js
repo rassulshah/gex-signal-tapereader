@@ -254,6 +254,14 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
   global.g3esc=x=>String(x==null?'':x).replace(/"/g,'&quot;').replace(/</g,'&lt;');
   global.g3tip=t=>t?(' title="'+g3esc(t)+'"'):'';
   global.replayEnsure=()=>{};
+  // ⚠⚠ (v15.45) THE HARNESS MUST SUPPLY THE MODULE'S GLOBALS, OR THE OUTER CATCH EATS THE RENDER.
+  // `replayBarHtml` swallows and returns '' — so a missing global does not look like an error, it
+  // looks like an empty strip, and x1 caught exactly that when the NOT RECORDING banner landed.
+  // ⚠ Stubbing them also EXERCISES the new banner instead of letting its own try/catch hide it.
+  global.RP_STALEMSG=null;
+  global.ctOffsetSec=()=>5*3600;
+  global.sessionPhase=()=>({ rth:false, label:'CLOSED', leftMin:null });
+  global.replayDayLabel=d=>String(d);
   eval(ex('replayBarHtml'));
   REPLAY.on=false; REPLAY.frames=FR; REPLAY.idx=2; REPLAY.day='2026-08-31'; REPLAY.days=['2026-08-28','2026-08-31']; REPLAY.err=null;
   const live=replayBarHtml();
@@ -264,6 +272,21 @@ ok(replayDayLabel('')==='',                     'd3 a missing day does not rende
   ok((live.match(/LIVE/g)||[]).length===1, 'x2 the word LIVE appears ONCE, on the badge only',
      (live.match(/LIVE/g)||[]).length);
   ok(!/REPLAY<\/span>/.test(live), 'x2b ...and it does not say REPLAY while live');
+  // ⚠⚠ (v15.45) AND THE NOT-RECORDING BANNER, EXECUTED ON ALL FOUR COMBINATIONS. He lost a whole
+  // morning to a replay parked on yesterday during a live session, with nothing on the face saying
+  // the cost. A banner that appears in the wrong state is worse than none, so each state is run.
+  ok(!/NOT RECORDING/.test(live), 'x2c live + closed: no banner');
+  global.sessionPhase=()=>({ rth:true, label:'MIDDAY', leftMin:125 });
+  ok(!/NOT RECORDING/.test(replayBarHtml()), 'x2d live + RTH: still no banner — it is recording');
+  REPLAY.on=true;
+  const warn=replayBarHtml();
+  ok(/NOT RECORDING/.test(warn), 'x2e REPLAY + live RTH: the banner FIRES');
+  ok(/MIDDAY/.test(warn) && /125 min left/.test(warn),
+     'x2f ...naming the session he is missing, so it is a fact and not a scold');
+  global.sessionPhase=()=>({ rth:false, label:'AFTER HOURS', leftMin:null });
+  ok(!/NOT RECORDING/.test(replayBarHtml()),
+     'x2g REPLAY + market closed: silent — studying a past day at night is the point');
+  REPLAY.on=false; global.sessionPhase=()=>({ rth:false, label:'CLOSED', leftMin:null });
   ok(/14:45/.test(live), 'x2c the clock shows the NEWEST recorded frame, so the store\'s age is visible');
   ok((live.match(/<i style="position:absolute/g)||[]).length===3, 'x3 one tick per loaded frame', (live.match(/<i style="position:absolute/g)||[]).length);
   ok(/Mon 31 Aug/.test(live), 'x4 the day reads as a weekday');

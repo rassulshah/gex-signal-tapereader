@@ -1,0 +1,97 @@
+# PURPOSE — what this application is FOR
+
+**Operator, 2026-09-02, in his own words.** Quoted, not paraphrased, because every design argument in
+this project should be settled against it:
+
+> "The purpose of the application is to be able to identify two key turning points which are the
+> high of the day and low of day, in order to profit from the move from high to low or low to high.
+> As a side objective, it is also to identify pullback turning points (aka reversals or
+> deflections). In order to do this I am relying on gamma levels. What we see repeatedly is a node
+> with gamma that causes the deflection creating a reversal — either the trend reversal from the
+> high of day or low of day, or a pullback reversal that stops the pullback leading the market into
+> trend continuation.
+>
+> The approach that I am taking is twofold. First, create statistics that measure the day including
+> the turning points and more — this is what is identified in the HOD/LOD section. Second, the node
+> ladder, which tracks the king movements, which has the ability to attract price as well as deflect
+> it. On the other side of the ladder are the roll arrows and the delta along with ROC and
+> qualifiers. The purpose of this is to track gamma movement so that when gamma is building on a
+> pullback, it may be a pullback node that causes the reversal and trend continuation. Furthermore
+> the gamma node may come at a high or low causing a HOD or LOD deflection."
+
+> ⚠ **READ THIS BEFORE PROPOSING, PRIORITISING OR CUTTING ANYTHING.** It is registered in
+> `skills/gex/SKILL.md` and pinned by `test_purpose.js`, so a context that skips it fails the suite.
+
+---
+
+## 1 · THE ONE SENTENCE
+
+**Find the day's turning points — the HOD and the LOD — early enough to trade the move between them.
+Secondarily, find the pullback turning points that resume a trend rather than end it.**
+
+Everything else in this panel is instrumentation for that. A feature that does not help locate a
+turning point, or help judge whether one is forming, is decoration.
+
+## 2 · THE MECHANISM HE IS TRADING
+
+**A gamma node deflects price, and the deflection is the turning point.** That is the causal claim
+the whole panel rests on. Two kinds:
+
+    TREND REVERSAL     a node at the extreme turns the day     -> the HOD or the LOD
+    PULLBACK REVERSAL  a node stops a counter-move             -> trend CONTINUATION, not an end
+
+⚠ **THE SECOND ONE IS EASY TO MISREAD AS THE FIRST, AND CONFUSING THEM IS THE EXPENSIVE ERROR** —
+the two call for opposite trades: a pullback deflection means *stay in*, a HOD/LOD deflection means
+*turn around*. Any read the
+panel emits about a deflection should be explicit about which it thinks it is seeing.
+
+## 3 · THE TWO HALVES, AND WHAT EACH IS FOR
+
+### A · The ⓪a HOD/LOD section — **measure the day**
+Statistics about the turning points and the shape of the session: which extreme printed first, how
+long it took, how long it has stood, the wick family, the gap between extremes, the MUD leg, the
+range and what it was worth. **A over E** — every live figure against its own base rate, so "is this
+turn unusual" is answerable rather than felt.
+
+### B · The node ladder — **watch the gamma that causes the turn**
+The king and its migrations: a node **attracts** price as well as **deflects** it. The lane shows
+where the crown has sat and when it moved.
+
+### C · The right-hand columns — **track gamma MOVEMENT**, in his stated order
+> *"the arrow column shows the movement of gamma rolling from one strike to another, the delta
+> profile shows how much gamma is moving, the state says it in words by classifying it, the roc
+> gives you a percentage."*
+
+    ⇄ arrows   WHERE gamma is rolling, strike to strike
+    Δ15m       HOW MUCH is moving
+    STATE      WHAT IT MEANS, classified in words
+    ROC 15m    AS A RATE
+
+⚠ **This is one narrative and the order is his.** Do not reorder these without asking him.
+
+**Why it exists:** *gamma BUILDING on a pullback may be the node that causes the reversal and the
+trend continuation; gamma building at a high or a low may be the node that causes the HOD or LOD
+deflection.* So the question the columns answer is **"is a deflection being built right now, and
+where?"** — which is the leading indicator for the turning points §1 is about.
+
+## 4 · WHAT THIS MEANS FOR EVERY FUTURE DECISION
+
+1. **A feature earns its place by helping call a turning point.** If it cannot be traced to §1 or
+   §2, it is decoration — and this panel has already cut a gamma profile, a TAPS column, four badges
+   and a ROLL words column for exactly that reason.
+2. **Building gamma is the leading signal; the deflection is the event; the HOD/LOD statistic is the
+   scorecard.** Those are three different time horizons and a surface should be clear which it is on.
+3. **Distinguish the two reversal kinds, always.** See §2.
+4. ⚠ **The mechanism is a HYPOTHESIS HE IS TRADING, not a proven law.** "What we see repeatedly" is
+   his observation. The panel should keep making it *checkable* — base rates, hit rates, the A-over-E
+   table — rather than asserting it. A surface that assumes the claim and cannot be scored against it
+   is the thing to be suspicious of.
+5. **Recording is not a side feature.** Every base rate in §3A and every replay of a forming
+   turn depends on the recorder having captured the session. On 2026-09-02 a replay left parked on
+   the previous day cost four hours of capture — the fix (v15.45) is a purpose-level fix, not a UI one.
+
+## 5 · WHAT THIS FILE IS NOT
+
+It is not a roadmap (`roadmap/PRODUCT-ROADMAP.md`), not a decision log (`session-state/DECISIONS.md`)
+and not a dependency list (`design/DEPENDENCIES.md`). It is the standard those three are judged
+against. If one of them conflicts with this file, **this file wins and the other one is wrong.**

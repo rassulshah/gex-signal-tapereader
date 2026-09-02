@@ -131,6 +131,399 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.45 — a mode badge says WHICH; it does not say WHAT IT COSTS
+
+**1 · Four hours of a live session recorded nothing, and the face never said so.** The strip read
+"↺ REPLAY" the whole time. ⚠ **A MODE INDICATOR IS NOT A WARNING.** It answers "which mode am I in",
+not "what am I losing by being in it", and a small pill among a dozen chips loses that argument
+every time. The banner now names the session being missed and is itself the click that fixes it.
+
+**2 · I caused it.** I asked him to rewind the evening before, and nothing handed the panel back
+when the next session opened. ⚠ **An instruction that changes a persistent mode owes a way back** —
+second time this session that a report followed from something I told him to do (v15.41 was the
+first).
+
+**3 · State that survives a session boundary needs an opinion about the boundary.** `REPLAY` is in
+memory, so a reload would have cleared it — the tab just never closed. ⚠ **"It resets on reload" is
+not a safety property**; a tab open across two trading days is the normal case for someone who
+watches a market.
+
+**4 · The replay-aware clock trap, twice more in one build.** `sessionPhase()` parked on yesterday
+returns `rth:true` for a session that ended, so both the guard and the banner would have agreed with
+the state they exist to detect. ⚠ Third build running (v15.43 was the first). **Any check about the
+LIVE world must pass an explicit wall-clock time.**
+
+**5 · Four assertions passed on the corpse of what they guarded.** A guard nobody calls; a banner
+with its click handler removed; an `if(false)` around a string the grep still found; an `||` that
+gave two chances to be satisfied by the half I had not broken. ⚠ **Assert on the STATEMENT — that it
+is reached, that it is wired, that its condition is live** — not that its text exists in the file.
+Fourth build running for this family.
+
+**6 · The purpose was never written down.** Forty-five builds of instrumentation and no document
+saying what any of it is FOR. ⚠ **A statement of purpose is the one document every other document is
+judged against**, and it should have existed before the roadmap did. It is quoted rather than
+paraphrased, and it records the mechanism as a HYPOTHESIS HE IS TRADING — because a purpose file that
+asserted the claim would licence surfaces that assume it and cannot be scored.
+
+### v15.44 — a column that grows toward its neighbour cannot be placed by its own left edge
+
+**1 · The delta bars hang LEFT from their axis, and I placed them by the axis.** Sliding the profile
+into the slot the roll lane vacated (`LAD_DAX=344`) put the far end of a full-width negative bar at
+288, inside the price chute at 292. `test_ladder` g4 caught it in the first render. ⚠ **For any
+column whose ink grows away from its declared offset, the constant is not where the column starts.**
+The pairwise bounding-box check (PROJECT-CONSTANTS L-D) exists for exactly this and earned its keep.
+
+**2 · Deleting a display shifts the burden onto the survivor.** Retiring the ROLL words column meant
+three assertions that demanded the chips exist had to INVERT — demand they are gone AND prove the
+arrows carry both ends. ⚠ **A removal is only safe if the thing that remains is checked**, including
+the prose: the chip's hover held the only statement of how a roll is decided, and that had to move
+before the chip could go.
+
+**3 · A count is only an assertion if it counts the right things.** I grepped `<circle` across the
+whole face and got 7 against 4 arrowheads, because the rail draws circles elsewhere. ⚠ **Scope a
+tag count to the element under test**; a global grep for a common tag measures the page, not the
+feature.
+
+**4 · A deleted constant reads as NaN and passes silently.** `v('LAD_RLC')` on a retired constant
+returns NaN, and every comparison against NaN is false — so an assertion written as `!(a > x)`
+keeps certifying the layout of a column that no longer exists. Now every ladder constant must be
+finite. ⚠ Same shape as the whole-file grep, in arithmetic.
+
+**5 · A compromise recorded as a constant should say it was a compromise.** The lane was 20px only
+to fit the 640 cap; the comment said so, which is the only reason I knew to hand the 24px back
+rather than preserving a number that had never been a design.
+
+### v15.43 — an alarm that is right most of the time is an alarm nobody reads
+
+**1 · The health check had no concept of the session.** At 04:52 CT it reported four STALE feeds and
+"running blind" — all of which were the correct overnight state after fourteen hours of a shut
+market. ⚠ **The deps dot was red roughly seventeen hours a day.** A signal that is red most of the
+time carries no information, and this is the failure `if.usable`'s own comment forbids in writing
+("would cry wolf every session"). It guarded the SPX pin and never considered the clock.
+⚠ **A health check needs to know when the thing it watches is SUPPOSED to be idle.**
+
+**2 · And the fix must not mute the night.** "Ignore staleness when closed" would hide a courier that
+died at 10:00 — the failure the check exists for, on the day it exists for. The rule is **was it
+fresh when the session ENDED**: measure back from the close, never hide the age.
+
+**3 · The obvious clock was the wrong clock, and I nearly used it.** `sessionPhase()` is
+replay-aware by design (v15.18): parked at 14:06 it returned `rth:true, POWER HOUR` while the real
+time was 04:52. Grading LIVE feeds against a REPLAYED session would call idle overnight couriers
+broken the moment he rewinds. ⚠ **When a helper was deliberately made context-sensitive, every new
+caller must be asked which context it wants** — the convenience of the bare call is exactly the trap.
+
+**4 · A defensive line that survives mutation should be admitted, not dressed up.** Removing
+`Math.max(0, …)` changed no verdict, so no behavioural test could catch it. Pinning it with a
+comment saying it is defensive is honest; inventing a scenario to make it look load-bearing is not.
+
+**5 · A sweep should report what it found GREEN, in numbers.** Six fixes from the last four builds
+were confirmed live — the replay `dispScale` at 1.0019 closed an unknown I had flagged as unverified
+two builds earlier. ⚠ **"Check everything" is also an opportunity to retire uncertainty**, not only
+to find faults.
+
+### v15.42 — a bug that grows with the clock looks fine when you build it
+
+**1 · The king lane was never empty; it was one pixel wide.** The axis ran from the open to the WALL
+CLOCK, so at 19:50 the crown that was merely *still there* took 57% of a 24px lane and five real
+migrations rendered at 1.0–2.5px. ⚠ **A defect proportional to elapsed time is invisible during the
+session and obvious in the evening** — which is precisely when he looks at it and I do not. Test it
+at more than one hour: the assertion here checks 15:00, 19:50 and midnight so it cannot pass at the
+hour it was written and fail later.
+
+**2 · "Empty" was an accurate report of the pixels.** He said the lanes were empty. They were
+drawn, populated and correct — and unreadable. ⚠ **When a report says "empty", measure the ELEMENT
+GEOMETRY before checking the data.** I went to the data first, twice.
+
+**3 · The v15.18 lesson covered replay and not the wall clock.** The comment ten lines from the
+fault says a journey "squeezed into the first pixel of a lane reads as MISSING". It was written
+about `Date.now()` in replay; `clockNow()` fixed that path and left the after-hours one. ⚠ Second
+build running that a lesson guarded only the case it was written for.
+
+**4 · One face, two opinions about which session is on screen.** After the close the panel serves
+the close-of-session book — nodes, states, ROC — and blanked that same book's ROLLS, because
+`rollsLive()` asked `rth` while everything else asked `showingStaleBook()`. ⚠ **When one surface
+decides "which session am I showing", every surface must ask the same question.**
+
+**5 · An empty element must name its silence.** `return ''` made "no rolls today", "retired at the
+close" and "the latch is empty" render identically. ⚠ **Absence is not self-explanatory**, and this
+face already knew that everywhere else — skPiles carries its `why`, the off-frame line lists what it
+dropped. The roll lane was the exception, and the exception is what he reported.
+
+**6 · I claimed 2x and the measurement said 1.7x.** My own test caught me rounding a fix up to a
+nicer number. ⚠ **Assert the measured value, not the pleasing one** — and when a first assertion
+fails ("at most one run under 3px" → there were two), the honest move is to state the residual, not
+to loosen the test until the claim survives.
+
+### v15.41 — when one condition is restated at five call sites, the bug is the five
+
+**1 · Two individually correct rules formed a trap because neither asked about STATE.**
+`replayEmPin()` builds a pin so the band survives a rewind. Four heals refuse to repair a
+`replay:true` pin. Both right; both silent about whether the replay was still happening. So a pin
+born in a rewind sat in the LIVE key, exempt from every repair, forever. ⚠ **An exemption must name
+the STATE it is for, not the ORIGIN of the thing it exempts.** "Exempt while replaying" and "exempt
+because it came from a replay" read the same and are not.
+
+**2 · The write had no guard at all, and it was the one that mattered.** Four reads were
+over-guarded; the ratio heal did `S.sym[emKey]=rec` with no replay check whatsoever. ⚠ **Audit the
+WRITE paths first** — an over-guarded read makes a stale value survive; an unguarded write is what
+puts it there.
+
+**3 · Five copies of one condition is the defect.** The four that were wrong were wrong in the same
+way, and the fifth was missing entirely. One `rpPin()` now serves all five. ⚠ **Count the call
+sites before fixing the logic**; a condition restated N times will drift N ways.
+
+**4 · A guard that needs no flag catches the bugs nobody imagined.** An anchor and a price on one
+chart cannot be a factor of two apart. That single check would have caught v11.65, v15.12, v15.24,
+v15.26 and this one. ⚠ **Assert the invariant of the DOMAIN, not the correctness of the mechanism.**
+
+**5 · An existing test caught my fix.** I scaled `rec.openU` before comparing; `test_em_band` pins
+that count at two and went red. ⚠ **A red test on a fix is information, not an obstacle** — and here
+the correction was strictly better: both values are series numbers, so comparing them RAW avoids
+applying the very ratio in doubt.
+
+**6 · I walked him into it.** I asked him to rewind, and the rewind is what wrote the pin. ⚠ **When
+a report follows an instruction I gave, suspect the instruction.**
+
+### v15.40 — a lesson in a comment protects the function it sits in and nothing else
+
+**1 · The fix for this exact bug was already in the file, forty lines below the bug.** `ifLadder`'s
+live branch carries a v15.06 comment in capitals — *"the price pill read 7710 (ES) while every
+ladder level read ~770 (SPY) ... THE FIX IS ONE SCALE, NOT A BETTER FALLBACK."* `replayLadder` was
+written in **v15.18, after that**, and set `dispScale = undScale` — the same fault, in the one path
+the rule had not been applied to. ⚠ **A lesson written as prose guards its own function.** If a rule
+must hold across paths, it needs a shared function or a test that walks every path, not a warning
+sitting beside one of them.
+
+**2 · A read fault and a write fault are indistinguishable from the face.** He reported "you are not
+capturing the state" three times. The state was captured perfectly every minute — 36 SPXW strikes,
+seven above threshold, all seven inside the band — and thrown away at draw time by one
+multiplication. ⚠ **Before believing a capture complaint, read back the stored record.** I could
+have settled this in one probe on any of the three occasions.
+
+**3 · Two scale fields holding the same value is a bug signature, not a coincidence.**
+`dispScale === undScale` is only correct on a cash chart. It is a one-line check and it is now the
+first thing the test asserts. ⚠ **When two fields exist because they differ, their equality is the
+alarm.**
+
+**4 · A rename dropped a fact.** The headings said "1ST HOD" until v15.33; renaming them to "1ST TP"
+lost which extreme it was, and the information sat unused in `D.first` for seven builds. ⚠ **When a
+label is renamed, list what the old one told you and check the new one still tells it.**
+
+**5 · The whole-file grep struck again.** I asserted the source contained `D.secondT<=D.clock` — a
+condition `hlNodeAt` also contains — so deleting the guard from the heading still passed. Second
+build running. ⚠ **Anchor an assertion on the statement it is about**, never on the file.
+
+### v15.39 — I committed the project's oldest bug inside the fix for it
+
+**1 · A scale-invariant fact and a coordinate are different things, and I unified both.** Two candles
+disagreed about the day's colour, so I gave them one `sessionBody()`. Correct for the DIRECTION —
+`close > open` holds in any positive scale. **Wrong for the DRAWING**: `sessionBody` reports BAR
+prices and the ladder is EM space, bar × `emRr` = 1.0031195570. The body then hung below its own
+wick, and the expected move collapsed to 1% of the view — **v15.28's exact fault, reintroduced by
+the build whose subject was two surfaces disagreeing.** ⚠ **Ask what is scale-invariant before
+sharing anything between surfaces.** Share the fact; convert the coordinate.
+
+**2 · An invisible conversion is a trap for every future caller, and `scaleUsed` actively lied.**
+`emBand` multiplied every price it returned by `useRr` and published nothing — while reporting
+`scaleUsed: 1`, so a caller checking for a conversion is told there is none. ⚠ **A field that
+answers a question wrongly is worse than no field**: I checked the scale, got 1, and proceeded.
+It now publishes `emRr`. ⚠ And `test_em_band`'s standing rule — *every band field the face reads is
+also on the debug hook* — caught the omission before it shipped. A generic invariant caught a
+specific bug nobody had imagined.
+
+**3 · The disagreement was 6× the thing it described.** Body +0.50 on a 52.25 range. Measured over
+284 sessions: median body is 43% of range, but **13% of sessions have a body smaller than the 3.25
+point error**. ⚠ **Size the error against the signal, not against the price.** 3.25 points on 7647
+is 0.04% and sounds like nothing; against the body it was decisive one day in eight.
+
+**4 · The freeze guarded every WRITE and no READ.** `recorderBlind()` gates all nine write paths.
+The NOW candle *read* the live after-hours tape onto a book frozen at 14:59 and nothing objected.
+⚠ **A freeze is a property of what is DISPLAYED, not only of what is STORED.**
+
+**5 · A test that encodes one surface's formula cannot notice that surface is wrong.**
+`test_replay_face` c1e compared the drawn colour to `emBand.open` vs `nowLive` — the exact pair that
+was wrong — and passed throughout, because the fixture's anchor and open happened to agree.
+⚠ **Assert the FACT, not the FORMULA.** Fifth instance of an assertion pinning a broken design.
+
+**6 · Two harnesses, two different bugs, neither found by the other.** jsdom found the body escaping
+its wick (geometry within an element); real Chromium found the band collapsing to 1% of the view
+(layout across elements). ⚠ Neither is redundant, and **the operator's eye was still the thing that
+found the original defect** — both harnesses had been green on it for eight builds.
+
+### v15.38 — an assertion satisfied by the survivor of what you deleted is not an assertion
+
+**1 · Two of twenty-four mutations passed, and both for the same reason.** I asserted that the words
+`CPE` and `HGE` appeared *somewhere* in the spec. The warning is written twice on purpose — once as
+the market's bold callout, once in the root table — so deleting the callout still passed on the
+table's copy. ⚠ **A loose assertion over a document with redundancy tests nothing**: the redundancy
+that makes the prose good makes the grep useless. Anchor on the exact sentence, and assert each
+copy separately if both are meant to survive. ⚠ Found by mutation testing, not by rereading it.
+
+**2 · The obvious rule was the wrong rule, and only measurement said so.** Resolving a futures
+contract by "front month" is what anyone would write. Measured: it puts GOLD and COPPER on
+September, months he does not trade. `<ROOT>*0` (most active) matches all five of his chart symbols;
+`<ROOT>*1` (nearest) matches three. ⚠ **A rule that is right for 3 of 5 cases looks right in
+testing and on the chart.** The two it breaks are the ones with a dead front month — a property of
+the market, not of the code, and therefore invisible from the code.
+
+**3 · An undocumented negative gets re-investigated.** Half a day went into proving that Skylit has
+no futures gamma (zero snapshots — *including for ES*), that InsiderFinance is equity-only, and that
+the ETF conversion is the wrong book. ⚠ **Negative results are more expensive to reproduce than
+positive ones and decay faster from memory.** They are now in the spec with their measurements, and
+pinned by a test.
+
+**4 · Parking work needs two instructions, not one.** "Here is the spec" invites a future context to
+start building it. The skill entry now says *never re-research it* AND *do not start it unprompted*
+— and a test asserts both sentences survive. ⚠ **Findable and dormant are different properties** and
+a document only conveys the first.
+
+**5 · A stale board that reads as current is worse than no board.** `PRODUCT-ROADMAP.md` said
+"current shipped: v10.29" while the panel was v15.37 — eleven builds. Rather than pretend to
+refresh it, it now declares its own staleness at the top, with both numbers. ⚠ Same principle as
+the v15.35 freeze badge: **a wrong number ends a question that silence would have prompted.**
+
+### v15.37 — writing the warning is not obeying it
+
+**1 · The document that warns "every dependency fails silently" was missing a dependency.**
+`DEPENDENCIES.md` §0 has said, since v15.22, that every external feed here fails silently and must
+therefore be checked and written down. **ForexFactory has been an outside dependency since v14.38**
+and was not in that file — not when §0 was written, and not in the twenty-seven builds after.
+⚠ **A rule written in the same document it is being broken in is not enforcement.** The fix is not
+a stronger sentence: `test_deps.js` now asserts each integration owns a SECTION HEADING, has a
+`deps()` item and has a lamp. Enforced by a test, like everything else that stayed true here.
+
+**2 · Asserting that a word APPEARS is not asserting that it is FINDABLE.** My first doc assertions
+checked `dep.indexOf('Yahoo')>=0` — and a mutation that retitled the whole Yahoo section still
+passed, because the word survives in a sentence inside another section. ⚠ **"Mentioned somewhere"
+means findable by someone scanning the headings.** The assertion had to be about headings.
+⚠ Caught only by mutation testing. Two of fifteen mutations were MISSED on the first pass.
+
+**3 · The right kind of measurement is part of the design, not a formatting choice.** Every lamp
+shows an age. ForexFactory is delivered ONCE A DAY, so an age would read **"FF 340m" on a perfectly
+healthy calendar** by mid-session — a number that turns itself red. It shows an EVENT COUNT.
+⚠ **A health indicator whose units do not match the feed's cadence manufactures its own false
+alarms.**
+
+**4 · Zero is a value, and it was one line away from being a failure.** `{day:today, ev:[]}` means
+the courier ran and there are no USD-high releases — the most common answer of the week. The only
+thing distinguishing it from "never delivered" is the `day` stamp. ⚠ **Checking the COUNT would have
+called every quiet day broken.** Same shape as v15.36's `migrations: null` vs `0`: **absent is not
+zero, and zero is not absent.** Twice in two builds.
+
+**5 · Both new feeds fail into a PLAUSIBLE face, not an error.** Stale Yahoo bars still have a high
+and a low, so the ⓪a candle draws a wrong one without complaint; a missing calendar does not blank a
+section, it removes a caveat and an event day renders as a quiet Tuesday. ⚠ **A dependency that
+degrades into a believable picture needs a lamp, not a console item** — nobody opens a console to
+check something that looks right.
+
+### v15.36 — I answered a counting question with a drawing's numbers
+
+**1 · A filtered view is not a record, and I quoted one as the other.** Asked "for each type of king,
+how many rolls were there" I read the count out of `KTRACK` — the KING LANE — which is dwell-filtered
+to 20 minutes *because he asked for it to be* (v15.23: "too erratic"). ⚠ **THROWING CHANGES AWAY IS
+THE LANE'S JOB.** Every part of it worked as specified; the specification was "show fewer", and I
+reported its output as a total. Median ratio census : lane, executed over his own 8 recorded
+sessions: **×3.0**. ⚠ **Before quoting a number off a surface, ask what that surface was built to
+LEAVE OUT.** This is the same shape as every scale bug this project has had — a value used outside
+the assumption it was created under — except the assumption here was a *deliberate* one I had
+written myself, thirteen builds earlier.
+
+**2 · A sampled series can never prove a flip did not happen.** Change counts by sampling interval,
+median/day: 15m→6, 9m→7, 6m→9, 3m→12 (SPXW). ⚠ **The count was still CLIMBING at the finest
+sampling I had**, which means every number here is a FLOOR, and Atlas — recomputing continuously —
+will read at or above all of them. ⚠ The honest form is **"at least N"**. I had said "N".
+⚠ MEASUREMENT WITHDRAWN: any earlier per-king roll count I gave him. They were lane counts.
+
+**3 · Excluding a book from the DRAWING silently excluded it from the ANSWER.** `KT_BOOKS` is
+SPXW + SPY — correct, because QQQ's crown is a proportional bearing and must not be drawn as a level.
+But "how many times did the QQQ king change" is a question about the BOOK, not about what we chose to
+draw, and it came back missing a king. ⚠ **A rendering decision leaked into the data model** because
+one list served both. Two questions, two lists.
+
+**4 · The de-flicker filter was hiding a real bug, and only a stricter consumer found it.** `ktTick`
+had NO book-depth floor: a half-loaded first paint has a king and it is noise. The 20-minute dwell
+was absorbing it. ⚠ **A tolerant consumer makes an unguarded producer look correct.** The census has
+nothing to hide behind, so building it surfaced the missing gate immediately — and `SK_MIN_STRIKES`
+already existed, used by `skPiles` and the LASTBOOK latch. ⚠ Reuse the floor; a new constant would
+have been a fourth opinion about when a book is real.
+
+### v15.35 — a disclosure that lies is worse than no disclosure
+
+**1 · The freeze badge printed a 1970 timestamp and it looked like a real one.** `LB.ts` is epoch
+milliseconds; `fmtClock` takes milliseconds; the call site divided by 1000 in between, so a book
+latched at 14:59 rendered as "frozen 10:44 am" — 1970-01-21 in Chicago. ⚠ **The failure mode is not
+that it was wrong, it is that it was PLAUSIBLE.** 10:44 am is a time a book could have frozen at, so
+there was nothing to notice. A timestamp that lands in 1970 usually screams; converted through a
+timezone it whispers.
+
+**2 · The badge whose job is disclosure was the thing that misled.** The stale-book chip exists to
+answer "how old is this book" — it is the panel's own honesty mechanism. ⚠ **Check the OUTPUT of
+every disclosure, not just its presence.** A wrong answer there is worse than silence: silence
+prompts a question, a wrong number ends one.
+
+**3 · The comment described the intent and the code converted the units.** Two lines above the bug:
+"it names the SESSION and the CLOCK TIME the book froze at". True, and it still printed 1970. ⚠ A
+comment states what was MEANT; only a test states what HAPPENS. Ninth or tenth time this session.
+
+**4 · The thing he reported was not the thing that was broken.** He saw "frozen 10:44" and reasonably
+read the freeze as failing. The latch was perfect — 14:59:00, 100 strikes, right expiry. ⚠ **When he
+reports a symptom, verify the underlying state before believing the surface** — I nearly went looking
+for a broken latch.
+
+### v15.34 — a selector that encodes where something used to live
+
+**1 · Moving an element broke its styling, and the CSS was the reason.** `.g3fl` was scoped
+`#gpts-body .g3fl`; the lamps moved to the header and would have rendered unstyled. ⚠ **A selector
+scoped to a PARENT encodes a location, and locations change.** Scope to the widest container the
+element could reasonably live in — here `#gpts-panel` — or the next move silently breaks it.
+
+**2 · Two stores, two answers about the same day.** The recorder started at 13:39 (panel reloaded);
+the king track starts at 08:30, because it is a separate day-keyed localStorage latch that survived
+the reload. ⚠ **"What does the panel remember about today" has more than one answer** — say which
+store when reporting coverage, or a true statement about one reads as a false one about the other.
+
+### v15.33 — a health check that re-runs the work is measuring a different moment
+
+**1 · My own check was the only thing failing.** `deps()` reported `irt.build: nothing to write`
+while `IRT_LAST` held `{rows:6, how:'file', inPlace:true, err:null}` — the export was writing six
+rows to the file in place. v15.22's check called `irtBuildCsv()` as a probe, and that rebuild depends
+on live inputs, so one unlucky instant reads as a dead export. ⚠ **A health check must OBSERVE the
+system, not perturb it.** Read the artefact the work produced (`IRT_LAST.rows`), not a fresh attempt
+at the work. And I caught it only because I read the live state before building the lamp he asked
+for — had I shipped the lamp on top of the check, it would have glowed red all day over nothing.
+
+**2 · A label names a ROLE; the identity belongs with the facts.** "1ST · HOD" put today's answer in
+a heading. "1ST TP" names what the column always is, and which extreme it was moves into the hover.
+⚠ Nothing is lost, and the heading stops changing meaning between sessions.
+
+**3 · Contrast is a measurement, not a preference.** #6c7889 on the card is ~3.1:1, under the 4.5:1
+readable threshold — his "they look dark grey" was an accurate report of a number. #9fb0c4 is ~7.4:1.
+⚠ When he describes something as hard to see, compute the ratio rather than nudging the hex.
+
+**4 · Two mutations survived and both were greps against the SOURCE, not the OUTPUT.** `d5e` matched
+`ageMin` in the expression that computes the age, so blanking the printed string kept it green. ⚠
+**Assert what the face SHOWS. A name in the code is not a number on the screen** — the tenth
+recorded instance of this shape.
+
+### v15.32 — a step that lives only in my head is a step with no mechanism
+
+**1 · The operator had to ask twice for something the builder already prints.** The Tampermonkey
+links have been printed at the end of every build since v14.3; I stopped pasting them, and I never
+listed the record files at all. `test_delivery` pinned that the BUILDER emits them — nothing pinned
+that the MESSAGE carries them. ⚠ **The only rules this project keeps are the ones something prints or
+something fails on.** That sentence is already in LESSONS §0 and in test_chat_history's header. I
+read both this session and still let a hand-carried step lapse. **Reading a lesson is not keeping it.**
+
+**2 · The confirmation is read from the commit, not written from memory.** A hand-written list of
+"what I saved" drops whatever the writer forgets — the ITEM 18 failure exactly. `git show --stat
+HEAD` cannot forget, and each mandated file is marked `saved` or `MISSING` against it. ⚠ **A claim
+about what happened should be derived from the artefact, not from the intention.**
+
+**3 · I wrote the oldest bug in this project again.** `S4` greped for the word `MISSING`, which also
+appears in the comment explaining the check — so deleting the conditional left the word and the
+assertion passed. Ninth recorded instance of a grep matching its own explanation. ⚠ **Bind to the
+EXPRESSION. If the string you are matching also appears in prose, the assertion is already broken.**
+
 ### v15.31 — "agreeing" and "inside" are not the assertions I thought they were
 
 **1 · Two candle assertions passed a candle that was wrong.** `c1c` checked the wick and body AGREED

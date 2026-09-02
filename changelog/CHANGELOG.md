@@ -1,3 +1,776 @@
+## v15.45 — the purpose is written down; and a replay parked on yesterday recorded nothing all morning
+
+> "are you recording .. market is open"
+
+### ⚠⚠⚠ NO. THE PANEL HAD RECORDED ZERO FRAMES.
+
+    strip    "◀ Tue 1 Sep ▶ … 13:57 ↺ REPLAY"      parked on the PREVIOUS day
+    real     Wednesday 12:54 CT, RTH, 4h+ into the session
+    store    day 2026-09-02:  **0 FRAMES**
+
+`recorderBlind()` gates all nine write paths while replaying — correctly — so the entire morning was
+never captured. He had rewound the evening before **at my request**, the tab stayed open, and
+nothing on the face said what it was costing.
+
+⚠ **THE BADGE SAID WHICH MODE. IT NEVER SAID THE COST.** A small amber pill among a dozen other
+chips is not a warning, and he watched it for four hours without registering it.
+⚠ **AND IT IS NOT PERSISTED STATE.** `REPLAY` lives in memory, so a reload would have cleared it —
+the tab simply never closed. **This is a SESSION-BOUNDARY bug, not a storage one:** the panel crossed
+from one trading day into the next holding the old one, and had no opinion about that.
+
+**Recovered live and verified:** frames **0 → 1 → 2** at 12:55 and 12:57, 90 vend rows each.
+
+### THE FIX, NARROW ON PURPOSE
+
+`replayStaleDayGuard()` — a replay of a **previous** day, still open once a **live RTH** session has
+begun, hands itself back **once** and announces it. ⚠ Rewinding **today** mid-session is deliberate
+and is never touched; outside RTH nothing is being missed, so it stays silent there too. ⚠ **Once**,
+so re-entering a past day works immediately — a guard that fought him every render would be worse
+than the bug.
+
+A red **⚠ NOT RECORDING** banner whenever replay is on during live RTH, naming the session being
+missed (`MIDDAY, 125 min left`) and the mechanism ("every write path is blind while replaying") — and
+**the banner itself is the click target** that returns to live, so the fix is where the warning is.
+
+⚠⚠ **WALL CLOCK, NOT `sessionPhase()`.** Parked on yesterday at 13:57 it returns `rth:true` for a
+session that ended — the guard would have agreed with the very state it exists to detect, and the
+banner would have shown on a quiet evening and vanished during the live open. **Third build running
+that this trap has appeared** (v15.43 deps, and twice here).
+
+`test_replay_guard.js` → **25**, all four clock/day combinations executed. `test_replay` 212, with
+the banner run in all four states — its harness had to stub the module's globals, because
+`replayBarHtml` swallows and a missing global looks like an *empty strip*, not an error.
+**15 mutations, 15 caught** — four only after fixing assertions that passed on the corpse of what
+they were meant to guard (a guard nobody calls; a banner with its handler removed; an `if(false)`
+around a string the grep still found; an `||` giving two chances to be satisfied).
+
+### AND THE THING THAT MATTERS MORE — `design/PURPOSE.md`
+
+> "i wanted to explain the purpose of the application, which should guide you and future context…
+> From this point on you should know what my intentions are, document them so you and your future
+> context know and can help make the application better around these goals."
+
+**Find the day's HOD and LOD early enough to trade the move between them; secondarily the pullback
+turning points that resume a trend.** The mechanism: **a gamma node deflects price, and the
+deflection IS the turning point** — a trend reversal at the extreme, or a pullback reversal leading
+to continuation. ⚠ **Confusing those two is the expensive error: they call for opposite trades.**
+
+    ⓪a HOD/LOD              MEASURES the day — turning points and their base rates
+    the node ladder         the king ATTRACTS price as well as DEFLECTS it
+    ⇄ · Δ15m · STATE · ROC  where · how much · what it means · as a rate
+
+Those columns answer **"is a deflection being built right now, and where?"** — the leading signal for
+the turning points above.
+
+⚠ **It is quoted, not paraphrased**, because a paraphrase is where intent quietly drifts. ⚠ It
+**outranks** the roadmap, DECISIONS and DEPENDENCIES when they conflict. ⚠ And the mechanism is
+recorded as a **hypothesis he is trading, not a proven law** — the panel must keep it *checkable*
+(base rates, A over E) rather than assert it, or it will grow surfaces that assume the claim and
+cannot be scored against it.
+
+Registered as `load gex` step **1a-00, read first**, placed at the top of the resume note as §0, and
+pinned by `test_purpose.js` (**26**, 7 mutations, 7 caught) — including that the column narrative
+stays **in his order**. Suite **140 green / 6 baseline red**.
+
+
+## v15.44 — the roll arrows move right of the delta profile, and the ROLL words column retires
+
+> "move the roll arrows to the right of the delta profile. currently its on the left side of it..
+> remove the roll column because the arrows are suppose to show the roll, the from node (little
+> circle) and the to node (arrow head)."
+
+### THE COLUMN ORDER, RENDERED AND MEASURED
+
+    S@2 · Y@28 · LEVEL@56 · PRICE@104 · NODE·%KING@140 · NOW@226 · MARK@294
+      · Δ15m@400 · ⇄@452 · STATE@500 · ROC 15m@558              LAD_W 618 → 608
+
+### THE WORDS COLUMN WAS ONE FACT TOLD TWICE
+
+The chip read `⇢7655` while the lane drew an arrow from that same row to 7655 — **thirty-two pixels
+apart**. The arrow is the better telling: it draws the relationship BETWEEN two rows, where both of
+them already are, instead of naming the far end in text beside one of them. The **circle** marks the
+strike that shed and the **arrowhead** the strike that gained, exactly as he described.
+
+⚠ **NOTHING LEFT THE RECORD.** `ROLLS` is untouched and the lane reads the same array. Every
+sentence the chip's hover carried — the mass rule, the distance cap, the receive ratio, *"it is not
+conservation of mass"*, *"it does not say price will go there"* — now lives on the lane's own hover.
+Removing a display must never remove the measurement or the sentences that make it interpretable
+(v11.95), and `test_replay_face` q5 fails the build if any of those sentences goes missing.
+
+⚠ **THE LANE GOT ITS DESIGNED WIDTH BACK: 20px → 44px.** It was squeezed to 20 in v15.09 purely to
+land on the 640 cap — not a design decision. Retiring the words column paid for the 24px the sketch
+originally asked for, **and the ladder still got narrower**: 618 → 608. He has raised horizontal
+space twice, and a column repeating its neighbour was costing him width he had already complained
+about.
+
+### ⚠⚠ AND `test_ladder` CAUGHT A COLLISION I WOULD HAVE SHIPPED
+
+My first cut slid the delta profile into the slot the lane vacated (`LAD_DAX=344`). g4 failed
+instantly: **the delta bars hang LEFT from their axis**, so a full-width negative bar reaches
+`DAX-DMAX` = 288 and the price chute's right edge is 292 — the bar would have grown into the chute
+and across MARK.
+⚠ **A COLUMN THAT GROWS TOWARD ITS NEIGHBOUR CANNOT BE PLACED BY ITS OWN LEFT EDGE.** `DAX=400`
+puts the far end of the longest bar at 344, four pixels clear of MARK's 340.
+
+### THE ASSERTIONS INVERT RATHER THAN RELAX
+
+q1–q3 demanded the chips exist; they now demand the chips are **gone** and that the arrows carry
+both ends — **a source circle for every arrowhead**, counted inside the lane. ⚠ My first count
+grepped `<circle` across the whole face and got 7 against 4 heads, because the rail draws circles of
+its own: **a count is only an assertion if it counts the right things.**
+New guard `g1b`: every ladder constant must be **finite**. `v()` on a deleted constant returns NaN,
+and a comparison written the wrong way round passes silently against it — which is how a removed
+column keeps certifying its own layout.
+
+`test_ladder` **156 → 162**, `test_rolllane` 20, `test_replay_face` 161. **7 mutations, 7 caught.**
+Suite **137 green / 6 baseline red**.
+
+
+## v15.43 — "check everything": the health check had no concept of the session, so it failed all night
+
+> "check everything"
+
+### WHAT THE SWEEP FOUND GREEN — measured on his running panel, v15.42, parked at 14:06
+
+    render errors        none
+    ladder               10 node rows, %KING · MARK · Δ15M · STATE · ROC all populated
+    roll lane            11 arrows, 4 named rolls          ← v15.42 fix confirmed live
+    king lanes           runs 2.1 / 1.9 / 5.0 / 10.2px     ← readable, was 1.0–2.5
+    TP headings          "1ST TP · HOD"  "2ND TP · LOD"    ← v15.40 fix confirmed live
+    candles              NOW column dn · ⓪a #f0616d        ← both red, one call (v15.39)
+    EM band              low 7614.75 · high 7679.75 · now 7639.21 · hiWater 7675.75
+                         all ES, all one ruler             ← v15.41 pin fix holding
+    replayed ladder      dispScale 1.0019 · undScale 0.0998 · scaleSrc replay:fut:ratio-today
+
+⚠ **That last line closes an open unknown.** v15.40's replay-scale fix had only ever been proven by
+unit test and in cash mode; this is the first confirmation **on a live futures chart** that
+`dispScale` is the ES scale (1.0019) and not the cash one (0.0998).
+
+### ⚠⚠⚠ AND WHAT IT FOUND RED — `deps 2✕`, every night, for hours
+
+Measured at **04:52 CT**:
+
+    if.SPX 386m · if.QQQ 385m · fut.courier 426m · irt.export 294m     all STALE
+    if.usable  FAIL — "NO symbol has a complete, fresh chain … running blind"
+
+**Every one of those is the correct overnight state.** The market had been shut for fourteen hours.
+The deps dot is therefore red for roughly **seventeen hours a day** — and a light that is red most
+of the time is one he stops reading.
+
+⚠ **`if.usable`'s OWN COMMENT FORBIDS THIS**, two screens down: *"calling that a failure would cry
+wolf every session."* It was written to protect the SPX pin. It never considered the clock.
+
+**The rule is NOT "ignore staleness when closed"** — that would hide a courier that died at 10:00.
+It is **WAS IT FRESH WHEN THE SESSION ENDED?** Staleness is now measured back from the close, so a
+feed last seen at 14:59 is healthy at 04:52 and one last seen at 10:00 is still a fault and still
+says so. **The age is never hidden; only the clock it is judged against changes.**
+
+### ⚠⚠ AND THE CLOCK IS THE WALL CLOCK, WHICH IS THE TRAP I ALMOST WALKED INTO
+
+`sessionPhase()` with no argument is **replay-aware by design** (v15.18). Measured this minute,
+parked at 14:06, it returns `rth:true · POWER HOUR · 54 min left` while the real time was **04:52**.
+Writing the obvious `sessionPhase()` here would have graded the **live** feeds against the
+**replayed** session — calling correctly-idle overnight couriers broken the moment he rewinds.
+`depsSessionIdleMin()` builds a second-of-day from `Date.now()` and passes it in explicitly.
+
+Pre-open it walks back to the previous **trading** day, so a Monday morning counts the weekend.
+⚠ **Holidays are not modelled** — that understates the idle span, so a feed reads *staler* than it
+is, which errs toward noise rather than silence. Stated rather than left to be discovered.
+
+`test_deps.js` **76 → 94**, including his exact overnight ages, a courier that died 300 minutes
+before the close (still fails, still reports its true age), and both sides of the boundary.
+**11 mutations, 11 caught** — the eleventh only after admitting the zero-clamp is defensive and
+pinning it as such rather than pretending a behavioural test covers it.
+Suite **140 green / 6 baseline red**.
+
+### RAISED, NOT FIXED
+
+A king run whose price falls outside the drawn frame is **silently dropped** from the lane — the
+ladder names what it drops on its "off frame" line; the king lane has no equivalent, so the journey
+under-reports without saying so.
+
+
+## v15.42 — the king lane's axis ran to the wall clock; the roll lane went blank without saying why
+
+> "the king node paths are still empty. the roll column is also empty"
+
+### 1 · THE KING LANE — drawn, but one to two pixels wide
+
+Measured on his panel at **19:50 CT**, a 24px lane holding six SPXW runs of 15 / 103 / 32 / 105 /
+102 minutes plus the one still holding since 14:27:
+
+    widths   1.0 · 2.5 · 1.0 · 2.5 · 2.4 · 11.4 px
+
+The axis spanned **08:30 → 19:50**, so the crown that was merely **still there** took **57% of the
+lane** and five real migrations rendered as one-to-two-pixel ticks. At 1px "empty" is the correct
+reading — he was describing the pixels accurately.
+
+⚠⚠ **THE FAULT GROWS EVERY HOUR THE TAB STAYS OPEN**, which is exactly why it looks fine during the
+session and broken by the evening. ⚠ And this is the **v15.18 lesson in the one case it did not
+cover** — the comment ten lines below the fault says *"a whole day's journey is squeezed into the
+first pixel of a lane and reads as MISSING"*. It was written about replay. The wall clock does the
+same thing after the close.
+
+**The axis now ends where the day did**, taken from the **last closed bar** — the same series its
+start comes from. No clock arithmetic, no timezone maths: the end of the day is data. It only ever
+shrinks the axis, and only once RTH is over, so nothing changes intraday.
+
+    clamped   0.7 · 5.0 · 1.6 · 5.1 · 5.0 · 2.6 px
+    the long runs gain ~1.7x · the "still there" run drops from 57% of the lane to 19%
+
+⚠ **AND THE RESIDUAL, STATED RATHER THAN HIDDEN:** a 15-minute run out of 390 is **still sub-pixel**
+in a 24px lane, and no clamp can change that. Every run is floored at 1px so a short one is faint
+but never absent. My first assertion claimed "at most one run under 3px" and failed at two — the
+test now asserts what was measured, including the limit.
+
+### 2 · THE ROLL LANE — empty by design, and indistinguishable from broken
+
+`rollsLive()` returns `P.rth`, which is false after 15:00, so `RAILROLLS` came back `[]`. **But the
+rest of the face was serving the CLOSE-OF-SESSION book** (v14.55): the ladder drew that book's
+nodes, its states, its ROC — and blanked its **rolls**. One face, two opinions about which session
+is on screen.
+
+The arrows are the **latch**, and the latch is the same session as the nodes beside them, so serving
+it is consistency rather than extrapolation. `rollLatched()` still refuses to draw today's arrows
+over a replayed bar, so no live leak is introduced.
+
+⚠⚠ **AND AN EMPTY LANE NOW NAMES ITS SILENCE.** Returning `''` made *"no rolls today"*, *"retired at
+the close"* and *"the latch is empty"* render **identically — as nothing**. He read the blank as
+broken and nothing on the face could tell him otherwise. Four cases, four sentences, and the actual
+threshold named rather than implied.
+
+`test_lane_axis.js` → **24**, executed as geometry: his exact six runs, both axes, and the growth
+over time (15:00 > 19:50 > midnight) so a test written at one hour cannot pass at another.
+**7 mutations, 7 caught.** Suite **137 green / 6 baseline red**.
+
+
+## v15.41 — a replay pin outlived the replay and flattened the ladder
+
+> "i think you messed it up again."
+
+**He is right, and the trap was one I walked him into**: I asked him to rewind. That rewind wrote a
+pin the live panel could never repair.
+
+### MEASURED ON HIS LIVE PANEL
+
+    pin  SPY|fut = { openU: 761.79, rr: 1, fam:'replay', replay:true }
+    band  anchoredAt 761.79 · low 729.29 · high 794.29       ← SPY space
+    band  now 7647.50 · hiWater 7673.75 · loWater 7621.50    ← ES space
+
+`emRailBounds` **starts** the frame at `B.low`, so the rail spanned **729 → 7674 — 6,944 points**,
+and the day's whole 52-point range occupied **0.75% of it**. Every row on the ladder collapsed onto
+one line at the top. That is the v15.24 symptom described in a comment twenty lines above the fault,
+reached by a different road.
+
+### ⚠⚠ ONE UNGUARDED WRITE, FOUR OVER-GUARDED READS
+
+    replayEmPin()        v15.24  builds a pin from the frame so the band survives a rewind
+    four read-side heals v15.26  refuse to repair a `replay:true` pin  — correct, and unscoped
+    the RATIO heal       v14.19  does `S.sym[emKey]=rec` and PERSISTS it — NO replay guard at all
+
+The ratio heal wrote the in-memory replay pin into the **live** key; the four read heals were then
+forbidden from ever repairing it. **Each rule was individually correct. None asked whether the
+replay was still happening.** A rewind is all it takes to close the loop.
+
+### THE FIX — one predicate, and one guard that needs no flag
+
+`rpPin(r)` = `r.replay && replayOn()` — *exempt right now*, not *born in replay*. All **five** sites
+call it, including the write. ⚠ **When the same condition is restated at five call sites, the bug is
+not in the four that got it slightly wrong — it is in there being five.**
+
+And a second guard that trusts no field at all: **an anchor and a price on one chart cannot be a
+factor of two apart.** 761.79 against 7647.50 is a factor of ten. It measures the symptom, overrides
+every exemption, and is disclosed as `rulerOff`. Every scale disaster this file has had — v11.65,
+v15.12, v15.24, v15.26, this one — would have tripped it, including the ones nobody had imagined.
+
+⚠ **AND AN EXISTING TEST CAUGHT MY FIRST ATTEMPT AT IT.** I scaled `rec.openU` before comparing;
+`test_em_band` pins openU as *"scaled in exactly two places and never chained"* and went red. It was
+right, and the correction is the better test: both values are SERIES numbers, so comparing them RAW
+is the honest check — scaling first would compare two numbers *after applying the very ratio in
+doubt*.
+
+`test_em_pin_ruler.js` → **31**, executed on his exact pair and on both boundaries. **15 mutations,
+15 caught.** Suite **139 green / 6 baseline red**.
+
+⚠ The poisoned pin self-heals on the first render after install — nothing to clear by hand.
+
+
+## v15.40 — the replayed ladder was drawn in the wrong price space
+
+> "i rewinded and it looks like you are still not showing the state during the replay. as you can
+> see there are no nodes etc. you still haven't fixed this.. you are suppose to capture the state so
+> i can rewind and replay the day."
+
+### ⚠⚠⚠ THE CAPTURE WAS NEVER THE PROBLEM
+
+Measured on his panel, replaying **2026-09-01 14:21**. The recorded frame held a **perfect** SPXW book:
+
+    36 SPXW strikes, seven clearing 20% of King, ALL SEVEN inside the band
+    7630 −100 (King) · 7625 +77 · 7610 +52 · 7635 −48 · 7620 −44 · 7615 +39 · 7650 +21
+
+Nothing missing. Nothing mis-recorded. **`replayLadder` returned the wrong scale:**
+
+    dispScale 0.099775  ===  undScale 0.099775      ← identical, and that equality IS the tell
+    SPXW 7630 × 0.099775 = 761.28   drawn on a ladder framed 7615..7680
+
+Every node landed **~6,880 points below the frame**, `inFrame()` refused all of them, and the ladder
+rendered **zero strike rows**. `dispScale` is the **CHART** scale; `und/spx` is the **UNDERLYING**
+one; v15.18 assigned the underlying to both, so on an ES chart every SPXW strike was converted into
+SPY space and plotted on an ES rail.
+
+⚠ **He reported this three times as a capture failure, and he was right about the symptom every
+time.** A read fault and a write fault look identical from the face.
+
+⚠⚠ **AND THE LIVE BRANCH ALREADY CARRIED THIS EXACT LESSON, FORTY LINES BELOW**, from v15.06:
+*"the price pill read 7710 (ES) while every ladder level read ~770 (SPY)"* — with the rule in
+capitals: **THE FIX IS ONE SCALE, NOT A BETTER FALLBACK.** `replayLadder` was written in v15.18,
+*after* that lesson, and reintroduced the fault in the one path the rule had not been applied to.
+**A lesson recorded in a comment protects the function it sits in and nothing else.**
+
+The replayed basis now uses today's ES/SPY ratio — a frame records SPY/QQQ/SPXW/VIX and **no ES
+print**, so the past basis genuinely is not recoverable. That is *disclosed* (`scaleSrc:
+replay:fut:ratio-today`), not hidden: the ratio moves in the third decimal, being wrong by a factor
+of ten does not. With no usable ratio it stays on cash **and says so** — never a silent guess.
+⚠ v15.18's other half was right and survives untouched: a replayed ladder still returns **no level
+rows**, because today's CW0/PW0/FLIP over a past book is a lie nothing downstream can detect.
+
+### 1ST TP / 2ND TP NOW NAME WHICH TURN THEY ARE
+
+> "it doesn't mention HOD and LOD. you know that you are suppose to indicate which turning it is,
+> is it a Hod turn or an LOD turn."
+
+`1ST TP · LOD` / `2ND TP · HOD`. It was only ever in the hover — and the headings said **"1ST HOD"**
+until v15.33, so the rename to "1ST TP" silently dropped the fact. ⚠ **A rename must not quietly
+drop what the old name carried.** The columns had `D.first`/`D.second` all along and spent them on a
+tooltip; v11.59 already learned this about the candle — *"sold off then rallied"* and *"rallied then
+sold off"* are different days. The second turn is named **only once it has printed**, written the
+way v15.23's three dead clauses taught (`secondT != null && secondT <= clock`), and the hover says
+so plainly when it has not.
+
+`test_replay_scale.js` → **29**, executed in PRICES rather than ratios: all seven of his real nodes
+proven drawable. **11 mutations, 11 caught** — after one fix, where I grepped the whole file for
+`D.secondT<=D.clock`, a condition `hlNodeAt` also contains, so deleting the guard passed on the
+other function's copy. Same fault as v15.38's CPE/HGE. Suite **135 green / 6 baseline red**.
+
+### ⚠ MEASURED, NOT FIXED — how much of the day actually survives
+
+    the store holds        2026-09-01 14:00 → 15:00 — 24 frames, ONE HOUR
+    per frame              26,551 bytes, of which:
+      feat  16,961  64%    the learning-feature vector — NOT read by anything that draws
+      vend   2,731  10%    the book the replayed ladder is rebuilt FROM
+      book   2,638  10%  · sig 1,499 6% · nodes 757 3% · tri 504 2%
+    a full RTH day         130 frames x 26.5KB = 3.44 MB against a 3.6 MB budget — 96% of it
+
+**A full day barely fits, so any growth evicts the morning.** Drop `feat` from the frame — the
+learning loop scores forward outcomes, it does not need a per-minute copy — and the day costs
+**~1.2 MB (35%)**. The cleanest form is two budgets: the replay-critical slice must not be evicted
+by the learning payload. Raised as a finding; not built.
+
+
+## v15.39 — two candles, one session, and they disagreed about its colour
+
+> "look at the candles they look different in the app. in the now column you have a red candle and
+> in the hod lod section you have a green candle."
+
+### WHAT EACH ONE WAS ACTUALLY DRAWING — measured on his panel
+
+    surface        open                         close                        body    colour
+    NOW column     EB.open       7647.25        the LIVE tape    7644.25     -3.00   RED
+    ⓪a HOD/LOD     hodLod.open   7647.00        last CLOSED bar  7647.50     +0.50   GREEN
+
+**Four faults in three lines**, and each is a shape this file has met before:
+
+1. **Two "now"s** — the live tick against the last *closed* bar. 3.25 points apart.
+2. ⚠⚠ **AND THE PANEL WAS FROZEN.** The badge read "frozen 2:59 pm", the AFTER HOURS chip was up,
+   and the NOW candle was still following the **after-hours tape**. `recorderBlind()` guards every
+   WRITE path; nothing guarded this READ, so the one surface whose job is to say *the day is over*
+   kept moving after it was.
+3. **Two opens** — `EB.open` is the band's snapped ANCHOR (7647.25); `hodLod.open` is the first RTH
+   bar's actual open (7647.00).
+4. ⚠⚠ **THE DAY WAS FLAT: +0.50 on a 52.25 range — a 1% body. The disagreement was SIX TIMES the
+   body it described.** On a flat day the choice of inputs does not shade the answer, it *decides*
+   it — which is exactly when a confident colour misleads most.
+
+⚠⚠ **AND THE TOOLTIP ASSERTED THE INVARIANT IT WAS BREAKING**, verbatim off the running panel:
+*"The same numbers the ⓪a DAY section measures … so the candle and the band can never describe
+different sessions."* It printed `Body 7647 to 7644` while ⓪a drew 7647.00 → 7647.50.
+**A COMMENT CLAIMS; ONLY A SHARED FUNCTION GUARANTEES.** Third time in four builds.
+
+### MEASURED — 284 recorded sessions — how often this mattered
+
+    median body                        43% of the day's range
+    body under 2% of range              2.8% of sessions   ← his day, at 1%
+    median |close - open|              19.25 ES points
+    |close - open| < 3.25 points       13.0% OF SESSIONS   ← the size of the disagreement
+
+**One session in eight had a body smaller than the error.** Not a today-only fluke.
+
+### THE FIX — `sessionBody(sym)`, and both candles read it
+
+One function owns the session's open, close, high and low. ⓪a draws from it directly; the NOW column
+draws from it converted onto its own rail.
+
+### ⚠⚠ AND I COMMITTED THE PROJECT'S OLDEST BUG WHILE FIXING IT
+
+v15.39b put `sessionBody()`'s **BAR** prices straight onto the ladder, which is **EM space** — every
+price `emBand` returns is a bar price × `useRr` (**1.0031195570** measured 2026-08-31), applied
+invisibly, with `scaleUsed` reading **1** so anyone checking for a conversion is told there is none.
+
+    jsdom      the body drew from 163 to 255 inside a wick of 82 to 225 — hanging below its own low
+    Chromium   the expected move collapsed to 1% of the view — v15.28's exact fault, reintroduced
+
+⚠ **THE COLOUR IS SCALE-INVARIANT AND THE COORDINATES ARE NOT.** `close > open` holds in both
+spaces, so the *direction* could always be shared; only the *drawing* needed converting. Unifying
+the coordinates as well broke two standing rules at once (v15.28 "open on the expected move",
+v15.31 "always show the whole daily column").
+✅ `emBand` now **publishes `emRr`** rather than applying it silently — and `test_em_band`'s existing
+"every field the face reads is on the debug hook" assertion caught it missing before it shipped.
+
+`test_session_body.js` (**46**) and `test_replay_face` (**157**, was 151) — including an executed
+proof that `sessionBody × emRr` reproduces `hiWater`/`loWater` exactly, so a correctly converted
+candle is *already* inside the frame and the guard never fires, while bar prices distort it.
+⚠ `test_replay_face` **c1e used to defend the bug** — it compared the drawn colour against the
+anchor and the live tape. An assertion that encodes one surface's formula cannot notice that surface
+is wrong. **30 mutations, 30 caught** (after two fixes). Suite **134 green / 6 baseline red**.
+
+### ⚠ FOUND, NOT FIXED — logged for the next session
+
+`emBand.hiWater` and `hodLod.hod` are the same session's high measured twice: **769.88 vs 772.28**
+in the 2026-08-31 fixture. They differ by exactly `emRr`, so they are consistent — but the panel
+carries **two session highs in two spaces** and only now says which is which.
+
+
+## v15.38 — the futures-gamma research, parked where it cannot rot
+
+> "I want you to hold this implementation detail somewhere, maybe in a roadmap document. We will
+> come back to it once the application with the current markets is optimal."
+
+**⚠ DOCUMENTATION ONLY. No panel behaviour changed** — the only edit to the userscript is the
+version string. Shipped as a version because the installer is the sole delivery channel to his
+machine, and a distinct filename is how he can tell the doc landed.
+
+### `design/spec-futures-gamma-markets.md` — 275 lines, all of it measured
+
+CL · NG · GC · E6 (· HG pending) — call wall, put wall and flip from the **actual CME options
+chains**, free, into the IRT export. Researched to the point of being buildable, then stopped.
+
+**⚠ THE SPEC EXISTS TO PRESERVE THREE TRAPS, NOT TO PRESERVE A PLAN.** Each was found by
+measurement, each would have shipped a wrong number, and none is visible from reasoning:
+
+    1  <ROOT>*1 (nearest) vs <ROOT>*0 (most active)
+       *1 puts GOLD and COPPER on SEPTEMBER — contracts he does not trade. THE OBVIOUS RULE IS
+       THE WRONG ONE. Measured: GC*1 -> GCU26, GC*0 -> GCZ26, and his ticker is GCEZ26.
+    2  the DTN root map is HAND-WRITTEN, never derived
+       copper is CPE, not HGE. euro is E6 with no suffix. And Barchart's euro root is E6, so
+       6EU26 returns a 404 — a way to build the whole feature against a dead symbol.
+    3  the chain is NOT in the raw HTML
+       measured: 466,227 bytes, `"strike":` appears ZERO times. GM_xmlhttpRequest gets a page
+       with no data in it. That single fact is why the delivery design is a reader userscript.
+
+### AND THE NEGATIVES, WHICH COST THE MOST TO ESTABLISH
+
+    Skylit          ZERO snapshots for GC1/GCZ26/CL1/NG1/6E1 — and for ES1. SPY: 390.
+    InsiderFinance  equity/ETF only.
+    the ETF route   FXE/GLD/USO/UNG — researched, costed, DROPPED. Wrong book, worse expiries
+                    (FXE is monthly-only, 17DTE). ⚠ Explicitly NOT a fallback: if the futures
+                    path fails the honest output is no rows, not ETF rows wearing a futures label.
+
+⚠ **An undocumented negative gets re-investigated.** Half a day went into proving those.
+
+### THE INSIGHT THAT SIZES THE BUILD
+
+**Open interest is published ONCE A DAY by the exchange. There is nothing to poll** — true for
+everyone, including the paid vendors, which is exactly why MenthorQ's *futures* levels are EOD while
+their stock/ETF levels are intraday. One pull after the open is not a compromise, it is correct, and
+it lands inside Barchart's free tier by construction. ⚠ The spec says *do not build a poller*.
+
+### KEPT FINDABLE, AND KEPT PARKED — by a test, not by a promise
+
+`load gex` step **1a-1** now routes a new context to it, with two instructions attached: **never
+re-research it**, and **do not start it unprompted**. `roadmap/PRODUCT-ROADMAP.md` gains a PARKED
+block — and now **discloses its own staleness** (it still said "current shipped v10.29" while the
+panel was v15.37; eleven builds).
+
+⚠⚠ **`test_parked_specs.js` (36) FAILS THE BUILD IF ANY OF IT IS DELETED.** This project's record on
+unenforced documents is not ambiguous: the resume note went eleven builds stale while CHAT-HISTORY
+stayed current for exactly one reason — a test went red when it wasn't. And v15.37 found
+ForexFactory undocumented for twenty-seven builds *inside the file whose §0 warns about exactly
+that*. **A rule enforced by a test is followed; a rule enforced by a document is followed until it
+is busy.**
+
+**24 mutations, 24 caught — but only after a fix.** Two passed on the first run: I had asserted
+"the words CPE and HGE appear somewhere", and deleting the bold warning still passed on the root
+table's copy of it. ⚠ **An assertion satisfied by the survivor of the thing you deleted is not an
+assertion.** Suite **133 green / 6 baseline red**.
+
+
+## v15.37 — YF and FF: two integrations that ran for 27 builds with nothing on the face
+
+> "add indicator for yahoo finance integration also , call it YF and forex factory , call it FF.
+> All of this integration better be mentioned somewhere. check where it is mentioned."
+
+### WHERE THEY WERE MENTIONED — the honest audit
+
+    YAHOO (ES=F 1-min bars)   DEPENDENCIES.md §2, but the section was titled "THE ES 1-MINUTE
+                              COURIER" and never said Yahoo in its heading.
+                              deps() item: `fut.courier` — existed. Lamp: NONE.
+    FOREXFACTORY (calendar)   TWO CODE COMMENTS. That is all.
+                              panel line 23166, companion line 524.
+                              DEPENDENCIES.md: ABSENT.  deps() item: NONE.  Lamp: NONE.
+
+⚠⚠ **`DEPENDENCIES.md` §0 opens with "every dependency below lives OUTSIDE the userscript, and every
+one of them fails SILENTLY."** ForexFactory has been an outside dependency since **v14.38** and was
+not in the file when §0 was written, nor in any of the twenty-seven builds after. **Writing the
+warning is not obeying it.**
+
+### FOUR LAMPS NOW, ONE PER EXTERNAL FEED
+
+    IRT 1m     the CSV this panel writes          age of the last write
+    IF 3m      InsiderFinance chain               age of the freshest symbol
+    YF 1m      YAHOO FINANCE, ES=F 1-min bars     age of the last pull        ← new
+    FF 2ev     FOREXFACTORY, USD/high calendar    EVENT COUNT today           ← new
+
+⚠⚠ **FF IS COUNTED, NOT AGED, AND THAT IS THE SUBSTANCE OF THE CHANGE.** It is delivered ONCE A DAY.
+An age would read **"FF 340m" on a perfectly healthy calendar** by mid-session — a number that goes
+red on its own. `lamp()` gained a text override so a feed can show the right KIND of measurement.
+
+⚠⚠ **AND ZERO EVENTS IS A VALID DELIVERY.** `{day:today, ev:[]}` means the courier ran and there are
+no USD-high releases — the most common answer of the week. The **only** thing separating it from
+"the courier never ran" is the `day` stamp, so `cal.ff` tests the DAY, never the count. A count-based
+check would have called every quiet day broken; `test_deps` d13e proves it.
+
+### HOW THEY FAIL — why a console item was not enough
+
+    YF   stale bars STILL HAVE A HIGH AND A LOW. The ⓪a candle, the HOD/LOD section and every
+         session high/low keep drawing, silently WRONG. Not blank — wrong.
+    FF   a missing calendar does not blank a section. It quietly REMOVES A CAVEAT: an event day
+         renders as a quiet Tuesday.
+
+### MEASURED, NOT ASSUMED — the header is one row and does not wrap
+
+Real Chromium, his panel width (673), shipping CSS: the four lamps occupy **185px**, ending at
+x=337; the right-hand controls begin at **x=529**. **192px of slack**, and the panel's own floor is
+652 (`panelWidthBounds()` = `LAD_W+34`). Guarded by an assertion that every label stays ≤3 chars.
+
+`DEPENDENCIES.md` gains §4 (ForexFactory), a retitled §2 (Yahoo Finance, named), a four-row lamp
+table in §0, and a four-step rule for adding the next dependency — **item, lamp, test, section** —
+with all four enforced by `test_deps.js`, now **76** (was 36). **15 mutations, 15 caught.**
+Suite **132 green / 6 baseline red**.
+
+
+## v15.36 — the king lane is not a census, and I read the count off the lane
+
+> "the number of king rolls should match atlas, can you see what you did wrong or how to improve it"
+
+### ⚠⚠⚠ THE MISTAKE WAS MINE, NOT THE FEED'S
+
+Asked *"for each type of king, how many rolls were there"* I read the numbers out of `KTRACK` — the
+**KING LANE**. The lane is dwell-filtered to 20 minutes because he asked for it to be, in v15.23:
+*"the movement of the kings in the king lanes doesn't make sense, it is too erratic."*
+
+    KTRACK   is the DRAWING.  Throwing changes away is its JOB.
+    the ask  was a CENSUS.    Keeping every change is the whole point.
+
+**I answered a counting question with the drawing's numbers.** Every part of the lane worked exactly
+as specified; the specification was "show fewer", and I quoted the output as a total.
+
+### MEASURED — 8 full recorded sessions, 2026-08-20 … 2026-08-31, median crown changes/day
+
+    sampling        SPXW   SPY   QQQ
+      15m             6     6     7
+       9m             7     6     8
+       6m             9     8    12
+       3m            12    11    17     ← the recorder's own frame cadence
+    dwell 20m         4     5     5     ← what the LANE draws, and what I reported
+
+⚠ **THE COUNT IS STILL CLIMBING AS THE SAMPLING GETS FINER.** Even 3m is a FLOOR — a crown that
+changes and reverts inside one interval leaves no trace at all. Atlas recomputes continuously, so
+**Atlas will read at or above any number this file can produce**, and the honest form of the answer
+is *"at least N"*, never *"N"*. Median ratio census : lane = **×3.0**, executed over his own days.
+
+### THREE SEPARATE THINGS WERE SUBTRACTING FROM THE NUMBER
+
+    1  dwell 20m       deliberate, ~3x               the lane's job — kept, now LABELLED
+    2  sampling        3m frames / ~15s live         a floor, and now SAID to be one
+    3  QQQ absent      KT_BOOKS is SPXW + SPY        "each type of king" came back missing a king
+
+### WHAT SHIPPED — the raw series is now kept, apart from the lane
+
+`gpts_kingraw_v1` records **one entry per crown CHANGE**, at render cadence (~15s — four times finer
+than the recorder), for **all three books**. The dwell rule now filters a *view* of this; it no longer
+destroys the underlying record. `replayKingRaw()` rebuilds the same shape from frames, so a replayed
+day answers the same question and **says its basis is coarser** rather than being compared as an equal.
+
+⚠ **AND A DEPTH GATE, WHICH IS WHERE A REAL BUG WAS HIDING.** `ktTick` had no book-depth floor at
+all: a half-loaded first paint has a king, and it is noise. The lane's 20-minute dwell was
+accidentally hiding it; a census has nothing to hide behind, so every one of those would have landed
+as a roll. `krTick` refuses below `SK_MIN_STRIKES` — the **same** floor `skPiles` and the LASTBOOK
+latch already use, not a fourth opinion about when a book is real.
+
+    __gptsDebug.kingTrack()   → per book: rolls (census, "at least N"), migrations (lane), raw[]
+    King lane tooltip         → "⚠ THIS LANE IS NOT A COUNT: N migrations drawn, at least M observed"
+    migrations: null for QQQ  → absent is not zero
+
+`test_king_census.js` → **32**, executed against the fabricated series AND against his own recorded
+sessions. **14 mutations, 14 caught.** Suite **132 green / 6 baseline red**.
+
+
+## v15.35 — the freeze badge was printing a 1970 timestamp
+
+> "check everything.. i reloaded"
+
+### ⚠⚠⚠ "2026-09-01 book — frozen 10:44 am" ON A BOOK LATCHED AT 14:59
+
+    LB.ts                        epoch MILLISECONDS
+    fmtClock(ts)                 does `new Date(ts)` — also milliseconds
+    the call site                fmtClock(Math.floor(LB.ts/1000))   ← seconds, read as milliseconds
+
+    1788296340000  →  /1000  →  1788296340  →  new Date(…)  →  1970-01-21T16:44Z  →  10:44 am CT
+
+The latch itself was **correct all along** — measured on his panel: `SPXW king 7630, 100 strikes,
+ts 14:59:00, exp 2026-09-01`. The close-of-session book is exactly what he asked for and exactly what
+was stored. **Only the label lied.**
+⚠ **THE ONE LABEL THAT SAYS WHICH BOOK YOU ARE LOOKING AT WAS THE ONE THAT WAS WRONG.** A stale-book
+badge exists to answer *how old is this* — a wrong answer there is worse than no badge, because it
+converts a disclosure into a false reassurance. And 10:44 am is plausible enough to be believed.
+⚠ The comment two lines above the bug says the badge "names the SESSION and the CLOCK TIME the book
+froze at". It did name them. It converted the units on the way, and nothing checked the output.
+
+### WHAT ELSE THE POST-CLOSE CHECK FOUND — all correct
+
+    header        Tapereader v15.34 · IRT 1m · IF 1m      the lamps, in the header
+    freeze        AFTER HOURS · EM EXPIRED chip showing
+    latch         SPXW 7630 / QQQ 708, both stamped 14:59:00, 100 strikes each
+    layout        ⓪a below the ladder · 1ST TP / 2ND TP · brighter labels
+    deps          one failure left: `if.SPY: missing expected move` — expected under the SPX pin
+    render errors none
+
+⚠ **The IRT lamp reads `IRT 1m`, green.** That is the v15.33 fix working: the old check re-ran
+`irtBuildCsv()` as a probe and called a working export dead. It reads what reached the file now.
+
+### verification
+`test_lastbook.js` → **53**, executing `fmtClock` on a real latch time and asserting the `/1000` form
+lands in 1970 — the exact string he was shown. One mutation, one caught.
+
+## v15.34 — the feed lamps move into the header, and the close-of-day freeze is verified live
+
+> "put the irt and if indicators in the tapereader header to conserve space" · "Make sure you freeze
+> the app so that i can continue working because the market is about to close very soon"
+
+### THE LAMPS RIDE THE HEADER NOW
+
+v15.33 gave them their own row on the top strip, which cost 13px of the panel's scarcest dimension.
+They sit beside the version chip instead — same computation (`feedLampsHtml`), same `depsHealth()`
+the footer dot and `__gptsDebug.deps()` read, different home.
+⚠ The header is built ONCE and `render()` paints `#gpts-hdrlamps` each pass, so the lamps stay live
+without the row being rebuilt.
+⚠ **THE STYLE RULE IS SCOPED TO `#gpts-panel`, NOT `#gpts-body`.** A selector scoped to the body
+would have left them unstyled the moment they moved — a rule that encodes WHERE something used to
+live is a bug waiting for the next move, and this panel has paid for that shape before.
+
+### THE FREEZE — CHECKED ON HIS LIVE PANEL AT 14:57, THREE MINUTES BEFORE THE CLOSE
+
+    CFG.lastBook          true
+    gpts_lastbook_v1      SPXW king 7625, 100 strikes, stamped 14:57:39 — writing live
+    recorder today        31 frames, 13:39 → 14:57
+
+So the close-of-session book is being latched every render and will be there to serve after 15:00.
+⚠ **The recorder started at 13:39, not 08:30** — the panel was reloaded then and the recorder only
+runs while it is open. Today's slider covers **13:39 → the close** and nothing earlier. Nothing is
+recoverable before that; it was never written.
+⚠ The KING TRACK is a different store (`gpts_kingtrack_v1`, day-keyed) and it DID survive the
+reload — its points start at 08:30, so the king's journey covers the whole session even though the
+frames do not.
+
+### verification
+Three mutations run individually, three caught — the lamps not painted into the header, the header
+span never created, and the style reverting to body scope.
+
+## v15.33 — the day section moves under the ladder, two feed lamps go up top, and my own IRT check was the thing failing
+
+> "move the hodlod section below the node ladder" · "update the heading where it says 1ST HOD, to
+> 1ST TP , which stands for first turning point" · "make the labels a little brighter" · "i need two
+> additional indicators. 1 indicating that the application is writing to irt file export and another
+> that it is getting data from Inside Finance every x minutes. keep it on the top somewhere."
+
+### ⚠⚠ MY `deps()` CHECK WAS CALLING IRT BROKEN WHILE IRT WAS WORKING
+
+Before building the lamp he asked for, I read the live state — and the check that would have driven
+it was wrong:
+
+    deps() said:   irt.build — "nothing to write, no levels resolved"
+    IRT_LAST was:  { rows: 6, how: 'file', inPlace: true, err: null }
+
+Six rows, written in place, no error. **v15.22's check re-ran `irtBuildCsv()` as a probe** — and that
+rebuild depends on live inputs (the IF ladder, the ES ratio, the latched crown), so one unlucky
+instant returns zero rows and reports the export as dead.
+⚠ **A HEALTH CHECK MUST OBSERVE THE SYSTEM, NOT PERTURB IT.** Re-running the work to see whether the
+work is possible answers a different question, about a different moment. It reads `IRT_LAST.rows` —
+what actually reached the file — and only probes when no export has run yet this session.
+Had I shipped the lamp on top of that check, it would have glowed red at him all day over nothing.
+
+### THE TWO LAMPS, TOP OF THE PANEL
+
+    IRT 2m      is the panel WRITING the king levels to the file IRT polls
+    IF 3m       is InsiderFinance ARRIVING — the age of the freshest usable chain
+
+⚠ Both read the **same `depsHealth()`** the footer dot and `__gptsDebug.deps()` read, so the three can
+never disagree about the same moment. ⚠ Each states its **age**, not just a colour: a green dot with
+no number is a claim you cannot check. The IF lamp reports the *freshest* symbol, because under the
+SPX pin the companion stops fetching SPY and a stale SPY is expected.
+
+### THE THREE LAYOUT CHANGES
+
+- **⓪a HOD/LOD is mounted below the ladder.** The mount moved, not the section — `secDay()` is
+  untouched and still reads the same `measureBars` series.
+- **`1ST TP` / `2ND TP`.** ⚠ Which extreme it was is not lost, it moves to the hover: *"THE DAY'S
+  FIRST TURNING POINT — today that was the LOD"*. A heading names the ROLE; the identity is a fact
+  about today and belongs with the other facts.
+- **Brighter labels.** `#6c7889` on the `#12161f` card is about **3.1:1**, under the 4.5:1 readable
+  threshold. `#9fb0c4` measures **~7.4:1** and stays a muted slate, so the labels read without
+  competing with the values beside them.
+
+### verification
+`test_replay_face.js` → **151**, `test_deps.js` → **36**. Eleven mutations run individually, eleven
+caught after two rounds. ⚠ Two survived first and both were greps against the SOURCE rather than the
+rendered output: `d5e` matched the word `ageMin` in the expression that computes the age, so blanking
+the printed string left it green. Bound to the drawn text now.
+
+## v15.32 — the delivery message carries the links and the save confirmation, because the builder prints both
+
+> "i dont see the tamper monky links or save confirmations which yuou are suppose to give me
+> everytime there is a build telling me the files that were save (eg chat history, lessons learned
+> etc.)"
+
+### ⚠⚠ THE FAILURE WAS MINE, AND IT IS THE ONE THIS PROJECT KEEPS RECORDING
+
+The Tampermonkey block has printed at the end of every build since **v14.3**. For several builds
+running I did not paste it, and I never listed the record files at all. `test_delivery` pins that the
+BUILDER emits the links — nothing pinned that the MESSAGE carries them, because that step lived only
+in a context's head.
+⚠ **The only rules this project keeps are the ones something prints or something fails on.** That is
+already written in `LESSONS.md` §0 about the resume note, and in `test_chat_history`'s own header. I
+read both this session and still let a hand-carried step lapse.
+
+### WHAT SHIPS NOW, AT THE END OF EVERY BUILD
+
+    ==== PASTE THIS WITH THE INSTALL FILE ====     the Tampermonkey links, both scripts,
+                                                    each marked CHANGED or UNCHANGED
+    ==== SAVE CONFIRMATION — PASTE THIS TOO ====   chat history · lessons · changelog · resume note
+
+⚠ The save confirmation is read from **`git show --stat HEAD`**, never written from memory — a
+hand-written list drops whatever the writer forgets, which is exactly how ITEM 18 was lost. Each
+mandated file is checked off against what was actually committed and marked **`saved`** or
+**`MISSING`**; if the commit cannot be read it says so rather than claiming a save that did not
+happen.
+`skills/gex/SKILL.md` step 0-bis now requires both blocks in the build message, in those words.
+
+### verification
+`test_delivery.js` → **44**. Three mutations run individually, three caught.
+⚠ `S4` first greped for the word `MISSING`, which also appears in the comment explaining it — so
+deleting the conditional left the word behind and the assertion green. **This project's oldest
+recurring fault and I wrote it again**; it is bound to the expression now.
+
 ## v15.31 — the day as a candle, the strike grid behind the nodes, and IBH/IBL off the rail
 
 > "in the now column draw the daily candle in the background" · "it also has to always show the

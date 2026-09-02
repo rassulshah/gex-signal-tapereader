@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.31
+// @version    15.45
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.31';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.45';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -1074,6 +1074,43 @@ function replayEnter(){
   });
   try{ render(); }catch(e3){}
 }
+// ⚠⚠⚠ (v15.45) A REPLAY PARKED ON YESTERDAY SAT THROUGH FOUR HOURS OF A LIVE SESSION.
+// Operator, 2026-09-02, market open: "are you recording .. market is open". Measured on his panel:
+//     strip   "◀ Tue 1 Sep ▶ … 13:57 ↺ REPLAY"    parked on the PREVIOUS day
+//     real    12:54 CT Wednesday, RTH, 2h+ into the session
+//     recorder store, day 2026-09-02:  **0 FRAMES**
+// `recorderBlind()` gates all nine write paths while replaying — correctly — so the whole morning
+// was never captured. He had rewound the evening before at my request, the tab stayed open, and
+// nothing on the face said the cost.
+// ⚠ IT IS NOT PERSISTED STATE. `REPLAY` is in memory, so a reload would have cleared it; the tab
+// simply never closed. That makes this a SESSION-BOUNDARY bug, not a storage one: the panel crossed
+// from one trading day into the next while holding the old one, and had no opinion about that.
+//
+// ⚠⚠ THE FIX IS NARROW ON PURPOSE. Rewinding DURING today's session is deliberate and must not be
+// yanked away — that gets a loud warning instead. But a replay of a PREVIOUS day still open after a
+// NEW session has begun is a decision nobody made, so it returns to live ONCE and says why.
+// ⚠ ONCE. The latch means re-entering a past day is honoured immediately afterwards; a guard that
+// fought him every render would be worse than the bug.
+// ⚠⚠ AND THE CLOCK IS THE WALL CLOCK. `sessionPhase()` with no argument follows the slider (v15.18)
+// — parked at 13:57 it reported RTH for a session that ended yesterday. Asking it here would have
+// made the guard agree with the very state it exists to detect. Same trap as v15.43's deps clock.
+var RP_STALEGUARD=0;      // the day we have already auto-returned for; never fires twice for it
+var RP_STALEMSG=null;     // the day we handed back FROM, so the face can say what it did and why
+function replayStaleDayGuard(){
+  try{
+    if(!REPLAY.on || !REPLAY.day) return null;
+    var today=null; try{ today=sessionDayStr(); }catch(e0){ return null; }
+    if(!today || REPLAY.day===today) return null;          // rewinding TODAY is deliberate
+    var wall=Math.floor(Date.now()/1000 - ctOffsetSec());
+    var P=sessionPhase(((wall%86400)+86400)%86400);
+    if(!P || !P.rth) return null;                          // outside RTH nothing is being missed
+    if(RP_STALEGUARD===today) return null;                 // already handed back once today
+    RP_STALEGUARD=today;
+    var was=REPLAY.day;
+    replayExit();
+    return was;
+  }catch(e){ return null; }
+}
 function replayExit(){
   REPLAY.on=false; REPLAY.frames=[]; REPLAY.idx=-1; REPLAY.err=null;
   try{ render(); }catch(e){}
@@ -1120,6 +1157,83 @@ function replayEnsure(){
     if(!d || days.indexOf(d)<0) d=days[days.length-1];
     replayLoadDay(d);
   });
+}
+// ⚠⚠ (v15.33, extended v15.37) THE FEED LAMPS — ONE PER EXTERNAL DEPENDENCY, NO EXCEPTIONS. All of
+// them read `depsHealth()`, the same check the footer's `deps` dot and `__gptsDebug.deps()` use, so
+// they can never disagree about the same moment.
+//   IRT   the panel WRITING the king levels to the file IRT polls — build and write reported
+//         separately, because they fail differently (v15.22).
+//   IF    InsiderFinance ARRIVING — the age of the freshest usable chain, in minutes, which is what
+//         "getting data every x minutes" actually means.
+//   YF    (v15.37) YAHOO FINANCE — the ES=F 1-minute bars the ⓪a candle, the HOD/LOD section and
+//         every RTH high/low are measured from. Couriered by the companion because the page cannot
+//         reach Yahoo (measured 2026-08-27: page fetch fails, GM_xmlhttpRequest succeeds).
+//   FF    (v15.37) FOREXFACTORY — the weekly USD/high-impact calendar. The ONLY thing that knows
+//         today is an event day.
+// ⚠⚠ THE LAST TWO RAN AS UNLABELLED DEPENDENCIES FOR TWENTY-SEVEN BUILDS. Operator, 2026-09-01:
+// "add indicator for yahoo finance integration also, call it YF and forex factory, call it FF."
+// Both could stop without a mark on the face — and both degrade into a plausible face rather than
+// an error: stale Yahoo bars give a WRONG high/low, a missing calendar gives a quiet Tuesday.
+// ⚠ Each lamp states a MEASUREMENT, not just a colour. A green dot with no number is a claim you
+// cannot check; "IF 3m" is one you can.
+// ⚠⚠ AND THE MEASUREMENT MUST BE THE RIGHT ONE FOR THE FEED. IRT/IF/YF are polled, so their number
+// is an AGE. FF is delivered ONCE A DAY, so an age in minutes would be meaningless-to-alarming by
+// mid-session ("FF 340m" on a perfectly healthy calendar) — its number is the EVENT COUNT for
+// today, and `0ev` is a real answer, not a fault.
+// ⚠ `bare` = emit just the lamps, for the header. The row wrapper is only for a body mount.
+function feedLampsHtml(bare){
+  try{
+    if(CFG.feedLamps===false) return '';
+    var H=null; try{ H=depsHealth(); }catch(e0){ return ''; }
+    if(!H || !H.items) return '';
+    var by={}; H.items.forEach(function(it){ by[it.id]=it; });
+    // ⚠ `txt` overrides the age for a feed whose health is not measured in minutes. Passing an age
+    // for such a feed would not be a cosmetic error — it would be a number that goes red on its own.
+    function lamp(label, it, extra, txt){
+      var st=it?it.state:'FAIL';
+      var col=(st==='OK')?PAL.longAccent:((st==='STALE')?PAL.amber:((st==='OFF')?PAL.sub:'#f0616d'));
+      var age=(txt!=null)?txt:((it && typeof it.ageMin==='number')?(it.ageMin+'m'):((st==='OFF')?'off':'—'));
+      return '<span class="g3fl"'+g3tip((it?(it.label+' — '+st+(it.why?(': '+it.why):'')):'not checked')+
+             (extra||''))+'><i style="background:'+col+'"></i>'+label+' '+g3esc(age)+'</span>';
+    }
+    // the freshest symbol is what decides whether IF data is arriving at all
+    var ifBest=null;
+    ['if.SPX','if.SPY','if.QQQ'].forEach(function(k){
+      var it=by[k]; if(!it || typeof it.ageMin!=='number') return;
+      if(!ifBest || it.ageMin<ifBest.ageMin) ifBest=it;
+    });
+    var ifOverall=by['if.usable'];
+    var ifLamp=ifBest?{ label:'InsiderFinance', state:(ifOverall?ifOverall.state:ifBest.state),
+                        ageMin:ifBest.ageMin,
+                        why:(ifOverall&&ifOverall.why)?ifOverall.why:ifBest.why }:null;
+    var irt=by['irt.export'], build=by['irt.build'];
+    var irtExtra=build?(' \u00b7 levels built: '+build.state+(build.rows!=null?(' ('+build.rows+' rows)'):'')+
+                        (build.why?(' \u2014 '+build.why):'')):'';
+    var _inner=
+      lamp('IRT', irt, irtExtra+' \u26a0 IRT is a CSV written in place into the folder its FlexLevels '+
+           'extension polls; Chrome drops the directory permission on reload and the symptom is a stale '+
+           'file rather than an error.')+
+      lamp('IF', ifLamp, ' \u26a0 the age is the FRESHEST symbol\u2019s. Under the SPX pin the companion '+
+           'stops fetching SPY, so a stale SPY is expected and does not redden this.')+
+      // YF — Yahoo ES=F 1-minute bars. ⚠ this one fails into a WRONG NUMBER, not a blank: a stale
+      // bar set still has a high and a low, and the ⓪a candle will print them without complaint.
+      lamp('YF', by['fut.courier'],
+           (function(){ var f=by['fut.courier']; return (f&&f.rows!=null)?(' \u00b7 '+f.rows+' bars held'):''; })()+
+           ' \u26a0 YAHOO FINANCE, ES=F 1-minute bars \u2014 what the \u24ea a candle, the HOD/LOD section and '+
+           'every session high/low are measured from. The PAGE cannot fetch Yahoo (measured 2026-08-27: '+
+           'CORS refuses it) so the companion couriers it via GM_xmlhttpRequest; if the companion stops, '+
+           'this goes stale and the candle keeps drawing the last bars it had.')+
+      // FF — the ForexFactory calendar. ⚠ counted, not aged: it is delivered once a day.
+      lamp('FF', by['cal.ff'],
+           ' \u26a0 FOREXFACTORY weekly calendar, USD + high-impact only \u2014 the only thing that knows '+
+           'today is an event day. Delivered ONCE A DAY, so this shows the EVENT COUNT, not an age: '+
+           '\u201c0ev\u201d is a real, healthy answer on a quiet day and the green dot is what says the '+
+           'courier ran. Amber = today\u2019s delivery never arrived and you are looking at another day\u2019s.',
+           (function(){ var c=by['cal.ff'];
+             if(!c || c.state==='FAIL') return '\u2014';
+             return ((typeof c.events==='number')?c.events:0)+'ev'; })());
+    return bare ? _inner : ('<div class="g3flrow">'+_inner+'</div>');
+  }catch(e){ return ''; }
 }
 function replayBarHtml(){
   try{
@@ -1194,6 +1308,32 @@ function replayBarHtml(){
          '<span style="width:6px;height:6px;border-radius:50%;background:'+PAL.longAccent+';display:inline-block"></span>LIVE</span>';
     }
     h+='</div>';
+    // ⚠⚠⚠ (v15.45) WHILE THE LIVE SESSION IS RUNNING, REPLAY MEANS **NOT RECORDING** — SAY IT LOUD.
+    // He watched this panel for over four hours on 2026-09-02 with the strip reading "↺ REPLAY" and
+    // did not register it, because a small amber pill among a dozen other chips is not a warning.
+    // The store held ZERO frames for the day. ⚠ The badge said WHICH MODE; it never said the COST.
+    // ⚠ THE WALL CLOCK, not sessionPhase() — parked on yesterday that returns RTH for a session that
+    // is over, and the banner would appear on a quiet evening and vanish during the live open.
+    try{
+      var _wl=Math.floor(Date.now()/1000 - ctOffsetSec());
+      var _lp=sessionPhase(((_wl%86400)+86400)%86400);
+      if(on && _lp && _lp.rth){
+        h+='<div data-grp="exit" style="padding:5px 8px;font-size:10px;font-weight:800;cursor:pointer;'+
+           'color:#ffd9dc;background:rgba(240,97,109,0.20);border-bottom:1px solid rgba(240,97,109,0.5)">'+
+           '\u26a0 NOT RECORDING \u2014 the live session is running ('+g3esc(_lp.label||'RTH')+
+           ', '+(_lp.leftMin!=null?(_lp.leftMin+' min left'):'open')+') and this panel is parked in replay'+
+           (REPLAY.day?(' on '+g3esc(replayDayLabel(REPLAY.day))):'')+
+           '. Every write path is blind while replaying. \u2014 CLICK HERE FOR LIVE.</div>';
+      }
+    }catch(eNR){}
+    // ⚠ (v15.45) and when the guard handed a STALE day back on its own, the face says so rather
+    // than silently changing what he was looking at.
+    if(RP_STALEMSG){
+      h+='<div style="padding:5px 8px;font-size:10px;color:'+PAL.longAccent+';background:rgba(46,194,126,0.10);'+
+         'border-bottom:1px solid '+PAL.line+'">\u21ba RETURNED TO LIVE \u2014 this panel was still replaying '+
+         g3esc(replayDayLabel(RP_STALEMSG))+' when today\u2019s session opened, and nothing was being '+
+         'recorded. Rewind again whenever you like; it will not hand itself back a second time today.</div>';
+    }
     // ⚠ AN EMPTY DAY REFUSES AND NAMES ITSELF. "8 frames, all after hours" is a fact about the
     // RECORDING, not about the market, and the two must never look the same.
     if(REPLAY.err){
@@ -4031,8 +4171,22 @@ function rollLatchTick(sym){
 // ⚠ (v15.13) A REPLAYED SESSION IS A SESSION. `rollsLive()` gates the arrows to RTH so a dead
 // after-hours book cannot draw stale rolls — correct live, and wrong for replay, where the parked bar
 // IS inside RTH by construction (the track only carries 08:30-15:00 frames).
+// ⚠⚠⚠ (v15.42) THE ARROWS BELONG TO THE BOOK ON SCREEN, AND AFTER THE CLOSE THAT IS THE LATCH.
+// Operator, 2026-09-02: "the roll column is also empty." It was empty BY DESIGN — `rth` is false
+// after 15:00, so `RAILROLLS` came back `[]`. But the rest of the face was serving the CLOSE-OF-
+// SESSION book (v14.55, `showingStaleBook()`): the ladder drew the close's nodes, its states, its
+// ROC — and blanked the close's ROLLS. **The face was describing one book and hiding one column
+// of it.** Two surfaces disagreeing about which session is on screen, which is the failure this
+// project keeps paying for.
+// ⚠ THIS IS NOT A NEW CLAIM. The arrows are the LATCH, and the latch is the same session the nodes
+// beside them come from — serving it is CONSISTENCY, not extrapolation. What would be a new claim
+// is drawing today's arrows over a replayed bar, and `rollLatched()` already refuses that.
+// ⚠ AND AN EMPTY COLUMN THAT MEANS "RETIRED" LOOKS EXACTLY LIKE ONE THAT MEANS "BROKEN". He read
+// it as broken and he was right to: nothing on the face distinguished them. Every other refusal
+// here names itself — skPiles says why, the off-frame line lists what it dropped.
 function rollsLive(){
   try{ if(typeof replayOn==='function' && replayOn()) return true; }catch(e0){}
+  try{ if(typeof showingStaleBook==='function' && showingStaleBook()) return true; }catch(e0b){}
   try{ var P=sessionPhase(); return !!(P&&P.rth); }catch(e){ return true; }
 }
 // the display list: what the NODES section and the rail both draw. NEVER a raw rollScan.
@@ -7172,6 +7326,17 @@ function buildPanel(){
   css(tver,{color:PAL.sub, fontSize:'9.5px', fontWeight:'700', letterSpacing:'0.2px',
     marginLeft:'5px', fontFamily:'ui-monospace,monospace', whiteSpace:'nowrap'});
   ttl.appendChild(tver);
+  // ⚠ (v15.34) THE TWO FEED LAMPS RIDE THE HEADER — operator, 2026-09-01: "put the irt and if
+  // indicators in the tapereader header to conserve space." v15.33 gave them their own row on the
+  // top strip, which cost 13px of a panel whose vertical space is the scarce thing. The header
+  // already carries the version and has room beside it, and the lamps are two words each.
+  // ⚠ The header is built ONCE; render() fills this span each pass, so the lamps stay live without
+  // the row being rebuilt. Same computation as before — `feedLampsHtml()` — just a different home.
+  var tlamp=document.createElement('span');
+  tlamp.id='gpts-hdrlamps';
+  css(tlamp,{marginLeft:'9px', display:'inline-flex', gap:'8px', alignItems:'center',
+    fontSize:'8px', fontWeight:'800', letterSpacing:'.04em', color:'#b6c4d4', whiteSpace:'nowrap'});
+  ttl.appendChild(tlamp);
   hdr.appendChild(ttl);
   var right=document.createElement('span');
   css(right,{display:'flex', alignItems:'center', gap:'6px'});
@@ -18881,7 +19046,17 @@ function feedStatusHtml(){
     if(showingStaleBook()){
       var LB=null; try{ LB=lastBookLoad(lastBookGov(activeSym())); }catch(eLB){}
       LB=LB||{};
-      var lbT=''; try{ lbT=fmtClock(Math.floor((LB.ts||0)/1000)); }catch(eLT){}
+      // ⚠⚠⚠ (v15.35) THE FREEZE BADGE WAS PRINTING A 1970 TIMESTAMP. `LB.ts` is epoch MILLISECONDS
+      // and `fmtClock(ts)` does `new Date(ts)` — also milliseconds. Dividing by 1000 first handed it
+      // SECONDS, which `new Date` reads as milliseconds: 1788296340000 → 1788296340 → 1970-01-21,
+      // which renders in Chicago as **10:44 am**. The operator saw "2026-09-01 book — frozen 10:44
+      // am" on a book actually latched at 14:59, and 10:44 is plausible enough to be believed.
+      // ⚠ THE ONE LABEL THAT SAYS WHICH BOOK YOU ARE LOOKING AT WAS THE ONE THAT LIED. A stale-book
+      // badge exists to answer "how old is this" — a wrong answer there is worse than no badge,
+      // because it converts a disclosure into a false reassurance.
+      // ⚠ The comment two lines up says it "names the SESSION and the CLOCK TIME the book froze at".
+      // It did name them. It just converted the units on the way, and nothing checked the output.
+      var lbT=''; try{ lbT=fmtClock(LB.ts||0); }catch(eLT){}
       warn+=(warn?' ':'')+'<span title="THE MARKET IS CLOSED AND THE LIVE BOOK HAS ROLLED. Skylit drops the expired chain at the close, so the ladder on the page is the NEXT expiry with every rate of change at zero. What you are looking at is the last healthy reading of the '+
         (LB.day||'')+' session, frozen at '+lbT+' \u2014 real numbers, not live ones. Nothing is recorded while this shows: the recorder is blind to it by construction (recorderBlind), so it can never enter data/*.json as though it were live. Turn it off in the gear to watch the overnight book instead."'+
         ' style="color:#7cc7ff;font-weight:800">\u25cf '+(LB.day||'last session')+' book \u2014 frozen '+lbT+'</span>';
@@ -21172,6 +21347,14 @@ function ensureV3Css(){
     // (v15.31) THE DAY'S CANDLE, behind the NOW column. Wick 3px, body 15px, both centred in the
     // chute, both z-index 0 so every pill draws on top and nothing loses a row to it.
     // (v15.31) the minor strikes — the grid the nodes sit on, so a GAP is visible as a gap.
+    // (v15.33) the two feed lamps on the top strip
+    '#gpts-body .g3flrow{display:flex;gap:10px;align-items:center;padding:2px 2px 3px;font-size:8px;'+
+      'font-weight:800;letter-spacing:.04em;color:#b6c4d4}'+
+    // ⚠ (v15.34) NOT SCOPED TO #gpts-body — the lamps live in the HEADER now. A rule scoped to the
+    // body would have left them unstyled the moment they moved, which is a class of bug this panel
+    // has already paid for: a selector that encodes WHERE something used to be.
+    '#gpts-panel .g3fl{display:inline-flex;align-items:center;gap:4px;cursor:help;white-space:nowrap}'+
+    '#gpts-panel .g3fl i{width:6px;height:6px;border-radius:50%;display:inline-block;flex:0 0 auto}'+
     '#gpts-body .g3ldmin{position:absolute;left:'+LAD_NODE+'px;height:1px;background:#8b98a9;'+
       'opacity:.18;pointer-events:none;z-index:0;transform:translateY(-50%)}'+
     '#gpts-body .g3lddc{position:absolute;pointer-events:none;z-index:0;border-radius:1px}'+
@@ -21312,10 +21495,9 @@ function ensureV3Css(){
     // (v15.25) the row's own roll chip — it names the OTHER strike, so a glance answers "where is
     // this going" without tracing a 20px lane. Out is amber (mass leaving), in is blue (arriving),
     // matching the lane's own arrow colours.
-    '#gpts-body .g3ldrl{position:absolute;left:'+LAD_RLC+'px;width:'+LAD_RLCW+'px;font-size:7.5px;font-weight:800;'+
-      'white-space:nowrap;letter-spacing:.02em;cursor:help}'+
-    '#gpts-body .g3ldrlout{color:#f2b45a}'+
-    '#gpts-body .g3ldrlin{color:#7cc7ff}'+
+    // ⚠ (v15.44) the ROLL WORDS chip is gone — the arrows say it. `.g3ldrl` now means ONE thing,
+    // the SVG path in the lane; it used to mean the chip AND the path, which is how a class ends up
+    // with a `position:absolute` rule and a `stroke-width` rule sitting four lines apart.
     '#gpts-body .g3ldroll{position:absolute;left:'+LAD_ROLL+'px;top:0;width:'+LAD_ROLLW+'px;height:100%;pointer-events:auto;cursor:help}'+
     '#gpts-body .g3ldrl{fill:none;stroke-width:1.5;stroke-linecap:square;stroke-linejoin:miter}'+
     '#gpts-body .g3ldrl.g3ldflow{stroke-dasharray:4 3}'+
@@ -21360,7 +21542,7 @@ function ensureV3Css(){
     // (v14.57) ⓪ a DAY — HOD/LOD. Stats table on top, READ box underneath, per the operator's
     // approved mockuphodlodv2.html and his ask: "give me this in the read section under the stats".
     '#gpts-body .g3day{margin-bottom:6px}'+
-    '#gpts-body .g3dayhd{font-size:8px;font-weight:900;letter-spacing:.08em;color:#8b98a9;'+
+    '#gpts-body .g3dayhd{font-size:8px;font-weight:900;letter-spacing:.08em;color:#b6c4d4;'+
       'text-transform:uppercase;margin:0 0 4px;cursor:help}'+
     '#gpts-body .g3dayg{display:table;width:100%;font-size:8.2px;margin-bottom:5px}'+
     '#gpts-body .g3dayr{display:table-row}'+
@@ -21417,7 +21599,11 @@ function ensureV3Css(){
     '#gpts-body .g3dayl{display:flex;gap:3px;margin-bottom:5px}'+
     '#gpts-body .g3daylb{flex:1;text-align:center;padding:2px 0;border-radius:3px;cursor:help;'+
       'background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06)}'+
-    '#gpts-body .g3daylb b{display:block;font-size:8.4px;font-weight:900;color:#6c7889}'+
+    // ⚠ (v15.33) BRIGHTER — operator: "make the labels a little brighter because they look dark
+    // grey". #6c7889 on the #12161f card is about 3.1:1, under the 4.5:1 readable threshold.
+    // #9fb0c4 measures ~7.4:1 and stays a muted slate, so the labels read without competing with the
+    // VALUES beside them, which are the point.
+    '#gpts-body .g3daylb b{display:block;font-size:8.4px;font-weight:900;color:#9fb0c4}'+
     '#gpts-body .g3daylb i{display:block;font-style:normal;font-size:6.4px;font-weight:800;color:#4b5563}'+
     // the ACTIVE rung — the one the standing extreme has actually earned
     '#gpts-body .g3daylb.on{background:rgba(46,194,126,.16);border-color:rgba(46,194,126,.55)}'+
@@ -21428,7 +21614,7 @@ function ensureV3Css(){
       'padding:5px 7px;cursor:help}'+
     '#gpts-body .g3dayread b{color:#2ec27e;font-weight:900}'+
     '#gpts-body .g3dayread b.g3dayin{color:#f2b45a}'+
-    '#gpts-body .g3daydim{color:#6c7889;font-weight:600}'+
+    '#gpts-body .g3daydim{color:#8b98a9;font-weight:600}'+
     '#gpts-body .g3daysub{font-size:8px;font-weight:600;color:#8b98a9;margin-top:2px;line-height:1.45}'+
     '#gpts-body .g3daysub b{color:#f2b45a}'+
       'border-radius:3px;cursor:help;border:1px solid}'+
@@ -21971,9 +22157,37 @@ function replayLadder(sym){
     var und=(typeof F.px==='number' && F.px>0)?F.px:null;
     var spx=(F.xm && F.xm.SPXW && typeof F.xm.SPXW.px==='number' && F.xm.SPXW.px>0)?F.xm.SPXW.px:null;
     if(!(und>0 && spx>0)) return null;
-    var sc=und/spx;
-    return { px:und, undPx:und, theirSpot:spx, srcSym:'replay', spotSrc:'frame',
-             dispScale:+sc.toFixed(6), undScale:+sc.toFixed(6), scaleSrc:'replay',
+    // ⚠⚠⚠ (v15.40) `dispScale` IS THE **CHART** SCALE. `und/spx` IS THE **UNDERLYING** ONE, AND
+    // v15.18 ASSIGNED IT TO BOTH — so on an ES chart every SPXW strike was converted into SPY space
+    // and then plotted on an ES rail. MEASURED on his panel 2026-09-02, replaying 2026-09-01 14:21:
+    //     dispScale 0.099775 === undScale 0.099775      (identical — that equality IS the tell)
+    //     SPXW 7630 x 0.099775 = 761.28   drawn on a ladder framed 7615..7680
+    // Every node landed ~6,880 points below the frame, `inFrame()` refused all of them, and the
+    // ladder rendered ZERO strike rows. The recorded book was PERFECT — 36 SPXW strikes, seven of
+    // them clearing 20% of King and ALL SEVEN inside the band (7630 −100, 7625 +77, 7610 +52,
+    // 7635 −48, 7620 −44, 7615 +39, 7650 +21). Nothing was missing. Nothing was mis-recorded.
+    // ⚠ **THE CAPTURE WAS NEVER THE PROBLEM.** The operator reported this three times as "you are
+    // not capturing the state"; the state was captured every minute and thrown away at draw time by
+    // one multiplication. A read fault and a write fault look identical from the face.
+    // ⚠⚠ AND THE LIVE BRANCH ALREADY CARRIED THIS EXACT LESSON, forty lines below, from v15.06:
+    // "the price pill read 7710 (ES) while every ladder level read ~770 (SPY)" — with the rule in
+    // capitals, THE FIX IS ONE SCALE, NOT A BETTER FALLBACK. `replayLadder` was written in v15.18,
+    // AFTER that, and reintroduced the fault in the one path the rule had not been applied to.
+    // A lesson recorded in a comment protects the function it sits in and nothing else.
+    var sc=und/spx;                       // SPX -> the UNDERLYING (cash), from the frame's own prices
+    var dsc=sc, ssrc='replay:cash';
+    try{
+      if(dispIsFut()){
+        var _r=dispR();
+        // ⚠ TODAY'S ES/SPY ratio applied to a PAST session — and that is disclosed, not hidden. A
+        // frame records `xm` for SPY/QQQ/SPXW/VIX and NO ES print, so the past basis is genuinely
+        // not recoverable. The ratio is an index relationship that moves in the third decimal, so
+        // this is a small approximation; being off by a FACTOR OF TEN is not.
+        if(_r>0 && _r!==1){ dsc=sc*_r; ssrc='replay:fut:ratio-today'; }
+      }
+    }catch(eS){}
+    return { px:(dsc!==sc?und*dispR():und), undPx:und, theirSpot:spx, srcSym:'replay', spotSrc:'frame',
+             dispScale:+dsc.toFixed(6), undScale:+sc.toFixed(6), scaleSrc:ssrc,
              rows:[], src:'replay', ageMin:0, rolled:false, nExps:null, n:null, maxPain:null,
              replay:true, err:null };
   }catch(e){ return null; }
@@ -22321,8 +22535,18 @@ function emBand(sym){
         }
       }
     }
+    // ⚠⚠⚠ (v15.41) `rpPin()` — A REPLAY PIN IS EXEMPT FROM THE HEALS ONLY WHILE REPLAYING.
+    // Four separate heals wrote `!rec.replay`, each correctly not wanting to re-litigate a frame's
+    // own recorded band — and none of them asked whether the replay was still happening. So a pin
+    // written during a rewind sat in the LIVE key and escaped EVERY heal, forever. Measured on his
+    // panel 2026-09-02: `{ openU:761.79, rr:1, replay:true }` against a live ES series, band low
+    // 729.29 / high 794.29 against now 7647.50, frame span 6,944 points, ladder flattened.
+    // ⚠ ONE PREDICATE, FOUR CALL SITES. Written out four times it drifted four ways; the whole
+    // reason this bug existed is that the same condition was restated instead of shared.
+    var _inRp=false; try{ _inRp=(typeof replayOn==='function' && replayOn()); }catch(eIR){}
+    function rpPin(r){ return !!(r && r.replay && _inRp); }   // exempt from the heals RIGHT NOW
     // belt and braces: even a stamped record is refused if the field the pin depends on is absent
-    if(rec && !rec.replay && !(typeof rec.rr==='number' && rec.rr>0)){ rec=null; out.recaptured=true; }
+    if(rec && !rpPin(rec) && !(typeof rec.rr==='number' && rec.rr>0)){ rec=null; out.recaptured=true; }
     // (v14.16) EM SANITY FLOOR — the poisoned-pin lesson, again, one field over. On 2026-08-27 the
     // once-per-session capture fired just past midnight while the IF dte0 chain still held the
     // EXPIRED book: an ATM straddle on expired options is ~$2.5 of residue, and that was PINNED as
@@ -22334,7 +22558,7 @@ function emBand(sym){
     // ⚠ the floor is computed with the LIVE ratio, so a recorded pin in the book's own points would
     // be healed away on an ES chart exactly as the operator's real pin was at v15.12. A frame's band
     // already passed this test on the day it was captured; it is not re-litigated here.
-    if(rec && !rec.replay && typeof rec.em==='number' && !(rec.em>=emFloor)){ rec=null; out.emHealed=true; }
+    if(rec && !rpPin(rec) && typeof rec.em==='number' && !(rec.em>=emFloor)){ rec=null; out.emHealed=true; }
 
     if(!(rec && typeof rec.em==='number')){
       var ec=null; try{ ec=ifChain((sym==='QQQ')?'QQQ':'SPX'); }catch(eC){}
@@ -22444,7 +22668,40 @@ function emBand(sym){
     // `src` is the recording, not a series measured now. Rebuilding it replaces the recorded anchor
     // and width with reconstructed ones — caught by the cross-examination (x4/x4b), which compares
     // the replayed band against `feat.emband`. Both numbers look plausible; only the recording knows.
-    if(rec && !rec.replay && (rec.src!==_srcNow || !(Math.abs((rec.rr||0)/(rr||1)-1)<0.001))){
+    // ⚠⚠⚠ (v15.41) THE REPLAY EXEMPTION WAS UNSCOPED, AND A REPLAY PIN OUTLIVED THE REPLAY.
+    // Measured on his LIVE panel 2026-09-02, after he rewound and came back:
+    //     pin  SPY|fut = { openU: 761.79, rr: 1, fam:'replay', replay:true }
+    //     band  anchoredAt 761.79 · low 729.29 · high 794.29     ← SPY space
+    //     band  now 7647.50 · hiWater 7673.75 · loWater 7621.50  ← ES space
+    // `emRailBounds` starts the frame at `B.low`, so the rail spanned 729 → 7674: SEVEN THOUSAND
+    // POINTS, and every row on the ladder collapsed onto one line at the top. That is the v15.24
+    // symptom described twenty lines above, reached by a different road.
+    // ⚠⚠ TWO CORRECT RULES COMBINED INTO A TRAP. `replayEmPin()` (v15.24) writes a pin so the band
+    // survives a rewind; this guard (v15.26) refuses to rebuild a REPLAY pin against a live series,
+    // for a good and still-valid reason. Neither asked whether the replay was still happening, so
+    // the replayed pin sat in the LIVE key and no rebuild would ever touch it.
+    // ⚠ THE EXEMPTION IS FOR REPLAYING, NOT FOR PINS THAT WERE BORN IN REPLAY. Scope it to the
+    // state it is about: in live, a replay pin is not exempt — it is poison.
+    var _exempt=rpPin(rec);
+    // ⚠⚠ AND A SECOND GUARD THAT NEEDS NO FLAG AT ALL. Flags describe intent; this measures the
+    // symptom. An anchor and a price on the same chart cannot be a factor of two apart — 761.79
+    // against 7647.50 is a factor of TEN, which is a ruler mismatch whatever any field claims.
+    // Every scale disaster this file has had (v11.65, v15.12, v15.24, v15.26, this one) would have
+    // been caught here, including the ones nobody had imagined yet.
+    // ⚠ COMPARED RAW, BEFORE ANY SCALING — and my first cut got this wrong in a way an existing
+    // test caught: it multiplied `rec.openU` by a ratio, which made a THIRD place that scales
+    // openU, and `test_em_band` pins that number at TWO ("scaled in exactly two places and never
+    // chained"). It was right and the fix is better: `rec.openU` and `nowU` are both SERIES values,
+    // so if the pin is on the series the numbers are actually on they are comparable AS THEY ARE.
+    // Scaling them first would have compared two numbers after applying the very ratio in doubt.
+    var _rulerOff=false;
+    try{
+      var _a=(typeof rec.openU==='number' && rec.openU>0)?rec.openU:null;
+      var _n=(typeof nowU==='number' && nowU>0)?nowU:null;
+      if(_a>0 && _n>0){ var _q=_a/_n; if(_q>2 || _q<0.5) _rulerOff=true; }
+    }catch(eRO){}
+    if(_rulerOff) out.rulerOff=true;
+    if(rec && (!_exempt || _rulerOff) && (_rulerOff || rec.src!==_srcNow || !(Math.abs((rec.rr||0)/(rr||1)-1)<0.001))){
       var _emK=(typeof rec.emK==='number' && rec.emK>0) ? rec.emK : null;
       var _emNow=_emK!=null ? (_emK*dsc) : null;
       if(_emNow>0 && cs.length && cs[0].o>0){
@@ -22476,7 +22733,7 @@ function emBand(sym){
     // 2.4 SPY points — 24 ES points — away from where it actually sat that day.
     // Caught by the cross-examination against `feat.emband`, which is the only check that could see
     // it: both numbers are plausible and only the RECORDING knows which is right.
-    if(!rec.replay && cs.length && typeof cs[0].so==='number' && cs[0].so>=_openSec && cs[0].o>0 &&
+    if(!rpPin(rec) && cs.length && typeof cs[0].so==='number' && cs[0].so>=_openSec && cs[0].o>0 &&
        (typeof rec.openSo!=='number' || cs[0].so<rec.openSo)){
       rec.openU=cs[0].o; rec.openSo=cs[0].so;
       try{ S.sym[emKey]=rec; localStorage.setItem(EMOPEN_KEY, JSON.stringify(S)); }catch(eU){}
@@ -22491,7 +22748,17 @@ function emBand(sym){
     // a permanent 0.1%+ offset. So: live ratio disagreeing with the pin by >0.1%, SUSTAINED for five
     // minutes, from a live-trusted source, re-pins — once, loudly (`rrHealed`), never per-render.
     try{
-      if(dispIsFut() && rr>0 && typeof rec.rr==='number' && rec.rr>0 &&
+      // ⚠⚠⚠ (v15.41) AND THIS ONE HAD NO REPLAY GUARD AT ALL — IT IS THE WRITE THAT POISONS.
+      // In replay `rec` is the IN-MEMORY pin from `replayEmPin()` (`replay:true`, the frame's own
+      // anchor in the frame's own units). This heal then does `S.sym[emKey]=rec` and PERSISTS it —
+      // writing a replayed band into the LIVE key, where the four read-side heals were forbidden
+      // from ever repairing it. That is the whole loop: one unguarded WRITE plus four over-guarded
+      // READS, and a rewind is all it takes to close it.
+      // ⚠ THE OTHER FOUR WERE FIXED BY SCOPING A GUARD; THIS ONE NEEDED A GUARD TO EXIST. When the
+      // same condition is restated at five call sites, the bug is not in the four that got it
+      // slightly wrong — it is in there being five.
+      if(!rpPin(rec) && !(rec&&rec.replay) &&
+         dispIsFut() && rr>0 && typeof rec.rr==='number' && rec.rr>0 &&
          (typeof FUTMODE!=='undefined' && FUTMODE && FUTMODE.live && FUTMODE.ratioSrc==='live')){
         // (v14.19, ledger #7) THE 5-MINUTE CLOCK SURVIVES RELOADS. It was in-memory, and on a
         // build-iteration morning every install reload reset it — the heal that existed since
@@ -22586,6 +22853,16 @@ function emBand(sym){
     // rendered identically before this. The bar index of each extreme is all it takes.
     out.hiFirst = (hiAt>=0 && loAt>=0) ? (hiAt<loAt) : null;
     if(isFinite(hiU) && isFinite(loU)){
+      // ⚠⚠ (v15.39c) PUBLISH THE RATIO. Every price this function returns — `now`, `open`,
+      // `hiWater`, `loWater`, `low`, `high` — is a BAR price times `useRr`, and NOTHING said so.
+      // Measured 2026-08-31 in the harness: bars high 769.88, `hiWater` 772.28, ratio 1.0031195570.
+      // `scaleUsed` reads 1, so anyone checking a scale field is told there is no conversion.
+      // ⚠ I WALKED STRAIGHT INTO IT: v15.39 drew the candle from `sessionBody()` (BAR space) onto
+      // this rail (bar space x 1.0031) and the body hung below its own wick. The project's oldest
+      // failure — a value used outside the assumption it was created under — committed by the build
+      // whose entire subject was two surfaces disagreeing. An UNPUBLISHED conversion is a trap for
+      // every future caller, so it is published.
+      out.emRr=useRr;
       out.hiWater=hiU*useRr; out.loWater=loU*useRr;
       out.upExc=Math.max(0,(out.hiWater-open)/rec.em);      // excursion ABOVE the open, in EM
       out.dnExc=Math.max(0,(open-out.loWater)/rec.em);      // excursion BELOW it
@@ -24341,12 +24618,71 @@ function hlEff(sym, D){
   }catch(e){ return null; }
 }
 
+// ⚠⚠⚠ (v15.39) THE SESSION'S OPEN AND CLOSE, DECIDED IN EXACTLY ONE PLACE.
+// Operator, 2026-09-01: "look at the candles they look different in the app. in the now column you
+// have a red candle and in the hod lod section you have a green candle."
+//
+// ⚠ THEY WERE BOTH DRAWING TODAY AND THEY DISAGREED ABOUT ITS DIRECTION. Measured on his panel:
+//
+//     surface        open                          close                          body    colour
+//     NOW column     EB.open      7647.25          the LIVE tape   7644.25        -3.00   RED
+//     ⓪a HOD/LOD     hodLod.open  7647.00          last RTH bar    7647.50        +0.50   GREEN
+//
+// ⚠⚠ FOUR FAULTS IN THREE LINES OF CODE, and each is the same shape as an earlier one here:
+//  1. TWO "NOW"s — the live tick vs the last CLOSED bar, 3.25 points apart.
+//  2. ⚠ AND THE PANEL WAS FROZEN. The badge said "frozen 2:59 pm", the AFTER HOURS chip was up,
+//     and the NOW candle was still following the live AFTER-HOURS tape. A frozen session's candle
+//     must end at the 15:59 print. `recorderBlind()` governs every WRITE path; nothing governed
+//     this READ, so the one surface that says "the day is over" kept moving after it was.
+//  3. TWO OPENS — `EB.open` is the band's ANCHOR (snapped, 7647.25); `hodLod.open` is the first RTH
+//     bar's actual open (7647.00). One tick apart, and neither knew about the other.
+//  4. ⚠⚠ THE DAY WAS FLAT: +0.50 on a 52.25 range — a 1% body. THE DISAGREEMENT (3.25) WAS SIX AND
+//     A HALF TIMES THE BODY IT WAS DESCRIBING. On a flat day the choice of inputs does not shade
+//     the answer, it DECIDES it — which is exactly when a confident colour misleads most.
+//
+// ⚠⚠ AND THE TOOLTIP ASSERTED THE INVARIANT IT WAS BREAKING — verbatim from the running panel:
+// "The same numbers the ⓪a DAY section measures ... so the candle and the band can never describe
+// different sessions." It said `Body 7647 to 7644` while ⓪a drew 7647.00 to 7647.50.
+// ⚠ A COMMENT CLAIMS; ONLY A SHARED FUNCTION GUARANTEES. Prose cannot enforce an invariant, and
+// this is at least the third time in four builds that a comment described a property nothing held.
+//
+// So: ONE function, in CHART space, and both surfaces call it. There is no second opinion to drift.
+function sessionBody(sym){
+  try{
+    var D=null; try{ D=hodLod(sym); }catch(eD){ return null; }
+    if(!D || !D.ok || D.open==null) return null;
+    // ⚠ the SAME rr `dayCandleSvg` uses — `hodLod` reports in BAR space and carries its own scale.
+    // On an ES chart that is 1; on a cash chart it is not, and hard-coding either has burned this
+    // file before (v15.24: a stored ratio of 10.0353 against a series already at scale 1).
+    var rr=(typeof D.scale==='number' && D.scale>0)?D.scale:1;
+    var A=null; try{ A=gdActual(sym); }catch(eA){ return null; }
+    if(!A || typeof A.now!=='number') return null;
+    // ⚠⚠ (v15.39b) THE WICK COMES FROM HERE TOO, AND LEAVING IT OUT BROKE THE CANDLE.
+    // My first cut moved only the BODY onto this call and left the NOW column's wick on
+    // `EB.hiWater`/`EB.loWater`. Those are the same quantity from the same bars — and in the jsdom
+    // fixture they were not equal, so the body rendered from 163 to 255 inside a wick of 82 to 225:
+    // **a body hanging below its own low.** `test_replay_face` c1d caught it; I did not.
+    // ⚠ FIXING HALF OF A TWO-SOURCE BUG LEAVES A TWO-SOURCE BUG. The open and the close agreeing
+    // with each other is worth nothing if the RANGE they are drawn inside comes from somewhere else.
+    // One object now carries all four prices, so a body cannot escape its wick by construction.
+    var O=D.open*rr, C=A.now*rr, HI=D.hod*rr, LO=D.lod*rr, rng=HI-LO;
+    // ⚠ `gdActual` reads the last CLOSED bar, and `measureBars` is already truncated by the replay /
+    // frozen-book path — so this is the session's close on a frozen day and the newest closed bar on
+    // a live one, WITHOUT this function needing to know which. That is why it does not ask.
+    return { open:O, close:C, hi:HI, lo:LO, pts:C-O, up:(C>O), rng:rng,
+             pctOfRange:(rng>0)?Math.abs(C-O)/rng:null, scale:rr };
+  }catch(e){ return null; }
+}
 function dayCandleSvg(sym, D, PTL){
   try{
     if(!D || !D.ok || D.open==null) return '';
     var rr=(typeof D.scale==='number' && D.scale>0)?D.scale:1;
-    var H=D.hod*rr, L=D.lod*rr, O=D.open*rr;
-    var A=gdActual(sym); var C=(A&&A.now!=null)?A.now*rr:null;
+    var H=D.hod*rr, L=D.lod*rr;
+    // ⚠ (v15.39) OPEN AND CLOSE COME FROM `sessionBody()`, NOT FROM LOCAL ARITHMETIC — it is the one
+    // place they are decided, and the NOW-column candle reads the same call. See the header above.
+    var SB=sessionBody(sym);
+    if(!SB) return '';
+    var O=SB.open, C=SB.close;
     var rng=H-L;
     if(!(rng>0) || C==null) return '';
     // ⚠ (v14.98) THE MONEY. "how much money could have been made" — the full HOD-to-LOD move. It
@@ -25237,7 +25573,7 @@ function levelDoors(rolls, dsc){
 // it means PRICE everywhere else, and at a glance the eye reads a step's height as a level. Here
 // y is price on the ladder's own scale — a run sitting on 7741 is LEVEL with "PDH 7741" — and time
 // runs left-to-right inside the 24px, so "when" is approximate and lives in the hover.
-var LAD_W=618,      // ⚠ (v15.30) 640 -> 618: TAPS removed, the roll lane took its slot at 344.
+var LAD_W=608,      // ⚠ (v15.44) 618 -> 608: the ROLL words column is gone; the lane took 24 of its 32px.
     LAD_KS=2,  LAD_KSW=24,        // SPXW migration column
     LAD_KY=28, LAD_KYW=24,        // SPY migration column
     LAD_LVL=56, LAD_LVLW=46,      // the level NAME, right-aligned hard against its price
@@ -25266,30 +25602,40 @@ var LAD_W=618,      // ⚠ (v15.30) 640 -> 618: TAPS removed, the roll lane took
     // ⚠ THE TAP COUNT IS NOT DELETED, ONLY ITS BADGE. `levelStateOf` still counts taps and the STATE
     // hover still says "tested N× today — the next test holds ~X% historically". Removing a badge
     // must never remove the measurement behind it (v11.95), and this file has paid for that before.
-    LAD_ROLL=344, LAD_ROLLW=20,
-    LAD_DAX=424, LAD_DMAX=56, LAD_DLAB=428, LAD_DLABW=44,
-    LAD_ST=476, LAD_STW=54, LAD_ROC=534,
+    // ⚠⚠⚠ (v15.44) THE ARROWS SIT RIGHT OF THE DELTA PROFILE, AND THE ROLL WORDS COLUMN IS GONE.
+    // Operator, 2026-09-02: "move the roll arrows to the right of the delta profile. currently its
+    // on the left side of it.. remove the roll column because the arrows are suppose to show the
+    // roll, the from node (little circle) and the to node (arrow head)."
+    // ⚠ HE IS RIGHT THAT IT WAS SAYING THE SAME THING TWICE. The chip read "⇢7655" and the lane drew
+    // an arrow from this row to 7655 — one fact, two columns, 32px apart. The ARROW is the better
+    // telling: the circle marks the strike that SHED and the head the strike that GAINED, so the
+    // relationship is drawn where both rows already are instead of named in text beside one of them.
+    // ⚠ AND THE DELTA IS WHAT THE ARROW IS ABOUT — mass leaving one strike and arriving at another
+    // IS the 15-minute delta, so the arrow now reads immediately after the bars that measure it
+    // rather than three columns earlier.
+    // ⚠⚠ THE LANE GOES BACK TO 44px — the width v15.09's sketch asked for and was squeezed out of.
+    // It was cut to 20px ONLY to land on test_ladder w1's 640 ceiling; dropping the words column
+    // returns 32px and the tighter order returns more, so the arrows get the room they were
+    // designed for AND the ladder gets NARROWER. ⚠ 618 -> 564: he has asked about horizontal space
+    // twice ("i am having trouble using the grip to increase horizontal size"), so a column that
+    // repeated its neighbour was costing him width he had already complained about.
+    // ⚠⚠ THE DELTA BARS HANG **LEFT** FROM THEIR AXIS, WHICH IS WHY DAX IS 400 AND NOT 344.
+    // My first cut slid the profile into the slot the roll lane vacated (344) and `test_ladder` g4
+    // caught it immediately: a full-width negative bar reaches `DAX-DMAX` = 288, and the price
+    // chute's right edge is 292 — the bar would have grown INTO the chute and over the MARK column.
+    // ⚠ A COLUMN THAT GROWS TOWARD ITS NEIGHBOUR CANNOT BE PLACED BY ITS OWN LEFT EDGE. The axis is
+    // at DAX; the ink starts at DAX-DMAX. 400 puts the far end of the longest bar at 344, four
+    // pixels clear of MARK's 340. This is exactly the pairwise-bounding-box check L-D mandates, and
+    // it found the fault in the first render rather than on his screen.
+    LAD_DAX=400, LAD_DMAX=56, LAD_DLAB=404, LAD_DLABW=44,
+    LAD_ROLL=452, LAD_ROLLW=44,
+    LAD_ST=500, LAD_STW=54, LAD_ROC=558,
     // ⚠⚠ (v15.25) ROC 84 -> 50, AND THAT IS WHERE THE ROLL COLUMN'S WIDTH COMES FROM. w1b in
     // test_ladder says "640 IS NOW THE CAP. The next column that wants width argues for it here."
     // It does not need to: the ROC column stopped printing the 5m at v15.23, so a cell that read
     // "+12% +38% ▼45%" now reads "+38% ▼45%" and 84px was 34px of air. The column that lost content
     // gives the width up. **A cap is only a cap if the answer to "I need more" is to find it.**
-    LAD_ROCW=50,
-    // ⚠⚠ (v15.09) THE ROLL LANE. Operator's sketch: a dot at the SOURCE, out to the right, across,
-    // then back in with the head at the DESTINATION — stepped, never diagonal, so two rolls at
-    // neighbouring strikes nest instead of crossing. It sits after ROC so it can never overwrite a
-    // label, which is what he asked for.
-    // ⚠ It costs 44px and the ladder was already 618 against his 560px panel. `.g3ladwrap` scrolls,
-    // so the column is reachable rather than lost — but the panel wants widening and this makes
-    // that plainer.
-    // ⚠⚠ 20px, NOT 44. `test_ladder` w1 caps the ladder at 640 ("must fit, or scroll — never clip")
-    // and w1b at 618 ("the build must not get wider; a later change that adds a column and pushes it
-    // back up has undone this build without anything else noticing"). I added 48px and tripped all
-    // three. The guard did its job: the decision is now deliberate rather than accidental.
-    // The lane is squeezed to 20px so the total lands EXACTLY on w1's 640 ceiling. w1b's 618 is
-    // amended once, in the open, with the reason — never widened again without the same argument.
-    // (v15.25) the row's own roll chip: its own column, before the lane, paid for by ROC's 34px.
-    LAD_RLC=586, LAD_RLCW=32;
+    LAD_ROCW=50;
 // ⚠⚠ (v14.54) LAD_ROCW WAS 56 AND THE COLUMN NEEDS 84 — AND THAT IS THE 24px NOBODY COULD EXPLAIN.
 // LOCKED-ITEMS recorded ".g3lad scrollWidth 656 / clientWidth 632 = 24px over its own LAD_W" as an
 // unexplained discrepancy. This is it: the widest ROC string is "-100% -100% ▼99%", which measures
@@ -25351,6 +25697,108 @@ var LAD_SNAP_PTS=2;         // a level within this many points of a node shares 
 // crown "moves" — 7715→7710 and 771→760 on 2026-08-28. That is bookkeeping. The RTH gate excludes
 // it, and each point carries the expiry it was observed under so a roll can never be silently
 // redrawn as a move.
+// ⚠⚠⚠ (v15.36) THE LANE AND THE CENSUS ARE TWO DIFFERENT QUESTIONS, AND v15.35 HAD ONLY ONE ANSWER.
+// Operator, 2026-09-01: "the number of king rolls should match atlas."
+// KTRACK is THE DRAWING. It is dwell-filtered to 20 minutes because he asked for a lane that is not
+// erratic (v15.23) — which means it is LOSSY BY DESIGN, and throwing changes away is its JOB. Asked
+// "for each type of king, how many rolls were there", I read the count off the drawing. The drawing
+// is the one record in the system built to not contain that number.
+// ⚠ MEASURED over the 8 full recorded sessions 2026-08-20..2026-08-31 — median crown changes/day:
+//     sampling        SPXW   SPY   QQQ
+//       15m             6     6     7
+//        9m             7     6     8
+//        6m             9     8    12
+//        3m            12    11    17    ← the recorder's own frame cadence
+//     dwell 20m         4     5     5    ← what the LANE draws, and what I reported
+// ⚠ THE COUNT IS STILL CLIMBING AS THE SAMPLING GETS FINER, so even the 3m figure is a FLOOR, not
+// a census — a crown that changes and reverts inside one interval leaves no trace at all. Atlas
+// recomputes continuously, so Atlas will read AT OR ABOVE any number this file can produce, and the
+// honest form of the answer is "at least N", never "N".
+// ⚠ SO THE RAW SERIES IS NOW KEPT. One observation per CHANGE, at the render cadence (~15s — four
+// times finer than the recorder), stored apart from the lane so the lane stays quiet and the count
+// stays true. The dwell rule filters a VIEW of this; it no longer destroys the underlying record.
+var KR_KEY='gpts_kingraw_v1';
+var KR_SCHEMA=1;
+var KR_MAX=400;                 // a session with 400 crown changes is a broken feed, not a busy tape
+// ⚠ ALL THREE BOOKS, unlike KT_BOOKS. The lane skips QQQ because a proportional bearing must not be
+// drawn as a level — but "how many times did the QQQ king change" is a question about the BOOK, and
+// it has an answer whether or not we chose to draw it. Excluding QQQ from the lane silently excluded
+// it from the census too, so "each type of king" came back missing a king.
+var KR_BOOKS=['SPXW','SPY','QQQ'];
+var KRAW={ v:KR_SCHEMA, day:null, b:{} };
+function krLoad(){
+  try{
+    var o=JSON.parse(localStorage.getItem(KR_KEY)||'null');
+    if(o && o.v===KR_SCHEMA && o.day===ctTodayStr() && o.b) KRAW=o;
+  }catch(e){}
+  if(KRAW.day!==ctTodayStr()) KRAW={ v:KR_SCHEMA, day:ctTodayStr(), b:{} };
+}
+function krSave(){
+  try{ if(typeof lsPut==='function') lsPut(KR_KEY, KRAW, false);
+       else localStorage.setItem(KR_KEY, JSON.stringify(KRAW)); }catch(e){}
+}
+// ⚠⚠ THE DEPTH GATE IS THE WHOLE DIFFERENCE BETWEEN A CENSUS AND A NOISE LOG. A half-loaded book
+// has a king and it means nothing: the crown of five strikes is not the crown of a hundred. Without
+// this, the session's first paint writes junk and the second paint records a "roll" that never
+// happened — and because the census has no dwell to hide behind, every one of those lands.
+// SK_MIN_STRIKES is the SAME floor skPiles and the LASTBOOK latch already refuse below; a new
+// number here would be a fourth opinion about when a book is real.
+function krTick(KG){
+  try{
+    krLoad();
+    var dirty=false;
+    KR_BOOKS.forEach(function(bk){
+      var K=null, i;
+      for(i=0;i<KG.length;i++){ if(KG[i].book===bk){ K=KG[i]; break; } }
+      if(!K || typeof K.raw!=='number' || !(K.raw>0)) return;
+      if(!(K.n>=SK_MIN_STRIKES)) return;
+      var arr=KRAW.b[bk] || (KRAW.b[bk]=[]);
+      if(arr.length && arr[arr.length-1].k===K.raw) return;   // unchanged — nothing to record
+      if(arr.length>=KR_MAX) return;
+      arr.push({ t:Date.now(), k:K.raw });
+      dirty=true;
+    });
+    if(dirty) krSave();
+  }catch(e){ try{ swallow('krTick', e); }catch(e2){} }
+}
+// ⚠ In replay the census is rebuilt from the frames, exactly as the lane is — same gate, same shape,
+// so live and replay answer the same question. The frames are 3-minute, so this floor is COARSER
+// than the live one, and `kingRolls()` says so rather than letting the two be compared as equals.
+// ⚠ SK_MIN_STRIKES_REPLAY, not SK_MIN_STRIKES: a recorded frame stores a TOP-N summary, not the
+// whole book, so the live floor would reject every frame ever written.
+var RP_KR={ key:null, out:[] };
+function replayKingRaw(book){
+  if(typeof replayOn!=='function' || !replayOn()) return [];
+  var key=REPLAY.day+'|'+REPLAY.idx+'|'+book;
+  if(RP_KR.key===key) return RP_KR.out;
+  var out=[], i, f, k, n;
+  try{
+    for(i=0;i<=REPLAY.idx && i<REPLAY.frames.length;i++){
+      f=REPLAY.frames[i];
+      if(!(f && f.tri && f.tri[book])) continue;
+      k=f.tri[book].king; n=f.tri[book].n||0;
+      if(!(k>0) || !(n>=SK_MIN_STRIKES_REPLAY)) continue;
+      if(out.length && out[out.length-1].k===k) continue;
+      if(out.length>=KR_MAX) break;
+      out.push({ t:f.t, k:k });
+    }
+  }catch(e){ try{ swallow('replayKingRaw', e); }catch(e2){} }
+  RP_KR={ key:key, out:out };
+  return out;
+}
+function krOf(book){
+  try{ if(typeof replayOn==='function' && replayOn()) return replayKingRaw(book); }catch(e0){}
+  try{ krLoad(); return (KRAW.b&&KRAW.b[book])?KRAW.b[book]:[]; }catch(e){ return []; }
+}
+// ⚠ `rolls` is the number of CHANGES, so it is one less than the number of observations — the first
+// entry is where the crown started, which is not a roll. And it is reported as a FLOOR, with the
+// sampling that produced it named, because no sampled series can prove the absence of a flip.
+function kingRolls(book){
+  var a=krOf(book)||[];
+  var rp=false; try{ rp=(typeof replayOn==='function' && replayOn()); }catch(e){}
+  return { rolls:Math.max(0, a.length-1), seen:a.length, floor:true,
+           basis: rp ? '3-minute frames' : 'live observations (~15s)' };
+}
 var KT_KEY='gpts_kingtrack_v1';
 var KT_SCHEMA=1;
 // ⚠⚠ (v15.23) DWELL IS MEASURED IN MINUTES, NOT IN OBSERVATIONS. Operator, 2026-09-01: "the
@@ -25400,6 +25848,9 @@ function ktTick(EB, sym){
     if(!P || !P.rth) return;                       // RTH only — this also excludes the close roll
     ktLoad();
     var KG=[]; try{ KG=ladderKings(EB, sym)||[]; }catch(e1){ return; }
+    // ⚠ the census runs off the SAME crowns, inside the SAME RTH + recorderBlind guards, so the two
+    // records can never disagree about which session they are describing or when it started.
+    try{ krTick(KG); }catch(eKR){}
     var exp=null; try{ var tk=tapeMap('SPXW'); exp=(tk&&tk.exp!=null)?String(tk.exp):null; }catch(eE){}
     var dirty=false;
     KT_BOOKS.forEach(function(bk){
@@ -25509,16 +25960,16 @@ function ladderKings(EB, sym){
       var RKF=replayFrame(), RTri=(RKF&&RKF.tri)||{}, RXm=(RKF&&RKF.xm)||{};
       var rdsc=0; try{ rdsc=ifDispScale()||0; }catch(eRD){}
       if(RTri.SPXW && RTri.SPXW.king>0 && rdsc>0)
-        out.push({ at:RTri.SPXW.king*rdsc, book:'SPXW', raw:RTri.SPXW.king, kind:'basis',
+        out.push({ at:RTri.SPXW.king*rdsc, book:'SPXW', raw:RTri.SPXW.king, kind:'basis', n:(RTri.SPXW.n||0),
           tip:'The SPXW King as it stood at '+hlClock(replaySec())+' — read from the frame recorded at that bar, not from today’s latch.' });
       if(RTri.SPY && RTri.SPY.king>0 && typeof EB.scaleUsed==='number' && EB.scaleUsed>0)
-        out.push({ at:RTri.SPY.king*EB.scaleUsed, book:'SPY', raw:RTri.SPY.king, kind:'basis',
+        out.push({ at:RTri.SPY.king*EB.scaleUsed, book:'SPY', raw:RTri.SPY.king, kind:'basis', n:(RTri.SPY.n||0),
           tip:'The SPY King as it stood at '+hlClock(replaySec())+', converted on the same ratio the rail uses.' });
       // ⚠ QQQ stays a PROPORTIONAL BEARING here exactly as it is live — its own king against its own
       // price, never a converted level. The frame stores that price in xm.QQQ.px, so the bearing is
       // reconstructed from the same two numbers the live path uses rather than from today's tape.
       if(RTri.QQQ && RTri.QQQ.king>0 && RXm.QQQ && RXm.QQQ.px>0 && now>0)
-        out.push({ at:now*(RTri.QQQ.king/RXm.QQQ.px), book:'QQQ', raw:RTri.QQQ.king, kind:'proportional',
+        out.push({ at:now*(RTri.QQQ.king/RXm.QQQ.px), book:'QQQ', raw:RTri.QQQ.king, kind:'proportional', n:(RTri.QQQ.n||0),
           tip:'The QQQ King at '+hlClock(replaySec())+' — a proportional BEARING off QQQ’s own price ('+RXm.QQQ.px+'), never a converted price, exactly as it is drawn live.' });
       return out;
     }
@@ -25526,9 +25977,12 @@ function ladderKings(EB, sym){
     try{
       var lk=null; try{ var o=JSON.parse(localStorage.getItem(KING_LATCH_KEY)||'null');
         if(o && o.day===ctTodayStr() && typeof o.k==='number') lk=o.k; }catch(eL){}
+      // ⚠ (v15.36) the DEPTH of the book this crown came out of, carried alongside it. The crown
+      // of five strikes is not the crown of a hundred, and the census (krTick) refuses the former.
+      var lkN=0; try{ var tpN=tapeMap('SPXW'); if(tpN) lkN=tpN.count||0; }catch(eN){}
       if(lk==null){ var tp=tapeMap('SPXW'); if(tp && tp.king!=null) lk=tp.king; }
       var dsc=0; try{ dsc=ifDispScale()||0; }catch(eD){}
-      if(lk!=null && dsc>0) out.push({ at:lk*dsc, book:'SPXW', raw:lk, kind:'basis',
+      if(lk!=null && dsc>0) out.push({ at:lk*dsc, book:'SPXW', raw:lk, kind:'basis', n:lkN,
         tip:'The SPXW King — the heaviest node on Skylit’s ladder, and the crown every %King on this rail is a ratio to. SPXW '+lk+' on an ES basis, which is a real live conversion: ES is a future ON this index.' });
     }catch(e1){}
     // SPY — the other book's crown, same basis one step removed
@@ -25536,7 +25990,8 @@ function ladderKings(EB, sym){
       if(typeof LASTFEED!=='undefined' && LASTFEED.SPY && LASTFEED.SPY.j &&
          (Date.now()-(LASTFEED.SPY.ts||0))<=FEED_STALE_MS*3 && typeof EB.scaleUsed==='number' && EB.scaleUsed>0){
         var ew=extractWalls(LASTFEED.SPY.j);
-        if(ew && ew.king!=null) out.push({ at:ew.king*EB.scaleUsed, book:'SPY', raw:ew.king, kind:'basis',
+        var ewN=0; try{ var lvS=LASTFEED.SPY.j.levels; ewN=((lvS[lvS.length-1]||{}).l||[]).length; }catch(eNs){}
+        if(ew && ew.king!=null) out.push({ at:ew.king*EB.scaleUsed, book:'SPY', raw:ew.king, kind:'basis', n:ewN,
           tip:'The SPY King — the other book’s crown. Price bounces off it even when every dynamic on this rail is SPXW; proven the day it was asked for. SPY '+ew.king+' converted on the live ES/SPY ratio.' });
       }
     }catch(e2){}
@@ -25549,7 +26004,7 @@ function ladderKings(EB, sym){
         try{ qs=(STATE.QQQ||{}).price; }catch(eQ){}
         if(qs==null){ var lv=LASTFEED.QQQ.j.levels; if(lv&&lv.length && typeof lv[lv.length-1].s==='number') qs=lv[lv.length-1].s; }
         if(ewq && ewq.king!=null && qs>0){
-          out.push({ at:now*(ewq.king/qs), book:'QQQ', raw:ewq.king, kind:'proportional',
+          out.push({ at:now*(ewq.king/qs), book:'QQQ', raw:ewq.king, kind:'proportional', n:(function(){ try{ var lvQ=LASTFEED.QQQ.j.levels; return ((lvQ[lvQ.length-1]||{}).l||[]).length; }catch(eNq){ return 0; } })(),
             tip:'The QQQ King, QQQ '+ewq.king+', shown as a PROPORTIONAL BEARING on this ES scale — where ES would sit if it moved the same percentage QQQ would need to reach its crown. ⚠ NOT a basis: QQQ tracks the Nasdaq-100 and ES the S&P 500, so this assumes the two move together, which is exactly false on a tech-led day. A bearing, never a level — the tilde says so.' });
         }
       }
@@ -25578,8 +26033,25 @@ function ladderKingCols(EB, sym, Y, lo, hi, H){
     // replayed open to the actual present, so every run in a recorded day landed inside the first
     // pixel and the crown's journey was invisible — reported as "the king path in the king lanes are
     // missing". The runs were there; the axis was hours or days too long.
-    var openMs=null, nowMs=clockNow();
-    try{ var cs=closedCandles(sym)||[]; if(cs.length) openMs=cs[0].t; }catch(e1){}
+    // ⚠⚠⚠ (v15.42) THE LANE'S AXIS RAN TO THE WALL CLOCK AND ATE ITSELF ALL EVENING.
+    // `clockNow()` fixed the REPLAY case at v15.18 and left the after-hours case: live at 19:50 CT
+    // the axis spanned 08:30 → 19:50, so the crown that had simply been HOLDING since 14:27 took
+    // 57% of the lane and the day's real journey was crushed into the rest.
+    // MEASURED on his panel, a 24px lane, six SPXW runs of 15/103/32/105/102 minutes:
+    //     widths 1.0 · 2.5 · 1.0 · 2.5 · 2.4 · 11.4px      ← the last one is the "still there" run
+    // Five migrations rendered as one-to-two-pixel ticks. He read it as "the king node paths are
+    // still empty", and at 1px that is the correct reading. ⚠ By 23:00 it would have been worse:
+    // the fault GROWS every hour the tab stays open, which is why it looked fine during the session.
+    // ⚠⚠ THIS IS THE v15.18 LESSON, VERBATIM, IN THE ONE CASE IT DID NOT COVER — the comment ten
+    // lines below says "a whole day's journey is squeezed into the first pixel of a lane and reads
+    // as MISSING". It was written about replay. The wall clock does the same thing after the close.
+    // ⚠ The END OF THE DAY IS DATA, NOT ARITHMETIC: the last closed bar is where the session
+    // stopped, from the same series the lane's start comes from. No clock maths, no timezone.
+    var openMs=null, lastMs=null, nowMs=clockNow();
+    try{ var cs=closedCandles(sym)||[];
+         if(cs.length){ openMs=cs[0].t; lastMs=cs[cs.length-1].t; } }catch(e1){}
+    try{ var _P=sessionPhase();
+         if(_P && !_P.rth && lastMs!=null && nowMs>lastMs) nowMs=lastMs; }catch(e1b){}
     var span=(openMs!=null && nowMs>openMs)?(nowMs-openMs):0;
     var dsc=0; try{ dsc=ifDispScale()||0; }catch(eD){}
     var COLS=[{ book:'SPXW', x:LAD_KS, w:LAD_KSW, cls:'S', conv:function(k){ return dsc>0?k*dsc:null; } },
@@ -25587,7 +26059,7 @@ function ladderKingCols(EB, sym, Y, lo, hi, H){
                 conv:function(k){ return (typeof EB.scaleUsed==='number'&&EB.scaleUsed>0)?k*EB.scaleUsed:null; } }];
     COLS.forEach(function(C){
       h+='<i class="g3ldkc" style="left:'+C.x+'px;width:'+C.w+'px"'+
-         g3tip('Where the '+C.book+' King has sat today. Vertical position is PRICE on this ladder’s own scale — a run is LEVEL with the row it names. Time runs left to right across this column, from the open to now, so the LENGTH of a run is how long that strike held the crown. ⚠ A change that reverted before it had held '+KT_DWELL_MIN+' minutes is a FLICKER and is not drawn — two near-equal strikes trading places is not a migration. The expiry roll at the close is not drawn either.')+
+         g3tip('Where the '+C.book+' King has sat today. Vertical position is PRICE on this ladder’s own scale — a run is LEVEL with the row it names. Time runs left to right across this column, from the open to now, so the LENGTH of a run is how long that strike held the crown. ⚠ A change that reverted before it had held '+KT_DWELL_MIN+' minutes is a FLICKER and is not drawn — two near-equal strikes trading places is not a migration. The expiry roll at the close is not drawn either. '+(function(){ try{ var R=kingRolls(C.book), m=Math.max(0,ktOf(C.book).length-1); return '\u26a0 THIS LANE IS NOT A COUNT: '+m+' migration'+(m===1?'':'s')+' drawn, but at least '+R.rolls+' crown change'+(R.rolls===1?'':'s')+' actually observed on '+R.basis+' \u2014 and a change that reverted between two observations left no trace at all, so even that is a floor. Use the larger number when comparing with Atlas.'; }catch(eRT){ return ''; } })())+
          '></i>';
       var pts=ktOf(C.book);
       if(!pts.length || !span){
@@ -25647,7 +26119,23 @@ function ktDur(a,b){
 // moving a drawing is a mistake this project has made three times.
 function ladderRollLane(rolls, Y, dsc){
   try{
-    if(!rolls || !rolls.length) return '';
+    // ⚠⚠ (v15.42) AN EMPTY LANE MUST SAY WHY. Returning '' made "no rolls today", "the arrows are
+    // retired at the close" and "the latch is empty" render IDENTICALLY — as nothing. He read the
+    // blank as broken and there was no way to tell that it was not. Every other refusal on this face
+    // names itself: skPiles carries its `why`, the off-frame line lists what it dropped.
+    if(!rolls || !rolls.length){
+      var _why;
+      try{
+        var _P=sessionPhase(), _rp=(typeof replayOn==='function' && replayOn());
+        var _stale=false; try{ _stale=(typeof showingStaleBook==='function' && showingStaleBook()); }catch(eSB){}
+        _why = _rp ? 'No roll had been latched by this minute of the replayed session.'
+             : (_stale ? 'No roll survived to the close. These arrows are the LATCH and this is the close-of-session book \u2014 an empty lane means the day ended with nothing holding, not that the lane is broken.'
+             : ((_P && !_P.rth) ? 'Outside RTH, and no close-of-session book is being served, so there is no session for an arrow to describe.'
+             : 'No roll has cleared the noise floor yet today \u2014 a roll must be seen '+ROLL_SIG_N+' times before it is drawn at all.'));
+      }catch(eW){ _why='No rolls to draw.'; }
+      return '<div class="g3ldroll"'+g3tip('ROLL ARROWS \u2014 EMPTY, AND HERE IS WHY. '+_why+
+             ' \u26a0 This lane draws only LATCHED rolls, never a raw scan, so it is quiet by design far more often than it is broken.')+'></div>';
+    }
     var h='', n=0, i;
     var tip='WHERE DID THE GAMMA GO? A dot marks the strike that SHED, the arrow the strike that '+
       'GAINED. ⚠⚠ INFERRED from paired changes, never an observed transfer: nobody publishes that a '+
@@ -25656,7 +26144,17 @@ function ladderRollLane(rolls, Y, dsc){
       'tested 2026-08-31 on 12 pullbacks over 7 sessions '+
       '(NEW / MORE / ROLLING land in cells of 1-6), which cannot resolve anything. gx-004 asks for '+
       '150 sessions. ⚠ A LIVE roll flows; a LATCHED one is a still line with its age, because it '+
-      'is a fact about the past rather than something happening now.';
+      'is a fact about the past rather than something happening now.'+
+      // ⚠⚠ (v15.44) THE RULE ITSELF, INHERITED FROM THE RETIRED CHIP. When the ROLL words column
+      // went, its hover carried the only statement of HOW a roll is decided. A display can be
+      // removed; the sentences that make its numbers interpretable cannot go with it (v11.95).
+      ' \u2014\u2014 HOW A ROLL IS DECIDED: it is a move of MASS (|value|), never of the signed '+
+      'number \u2014 the source must be LOSING size and the destination GAINING it, within '+
+      ROLL_MAX_DIST+' points, and the receiver must take at least '+Math.round(ROLL_MIN_RATIO*100)+
+      '% of what the source shed. \u26a0 IT IS NOT CONSERVATION OF MASS: several strikes can feed one '+
+      'destination, and fresh positioning arrives at the same time. \u26a0 A roll says where dealers '+
+      'are MOVING their exposure, which is where the next support or resistance is being BUILT \u2014 '+
+      'it does not say price will go there.';
     for(i=0;i<rolls.length && n<4;i++){
       var r=rolls[i];
       if(!r || r.from==null || r.to==null) continue;
@@ -25721,11 +26219,10 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       [LAD_NODE,LAD_NMAX, 'NODE \u00b7 %KING','Dealer exposure at that strike as a share of the King\u2019s. Colour is polarity: purple accelerator, yellow brake, grey balanced'],
       [LAD_CH,  LAD_CHW,  'NOW',  'Price and the three crowns, on the ladder\u2019s own scale'],
       [LAD_MK,  LAD_MKW,  'MARK', 'This level\u2019s relationship to PRICE \u2014 IN PLAY, DEFENDING, BREAKING, ATTRACTING'],
-      [LAD_ROLL, LAD_ROLLW, '\u21c4', 'The roll ARROWS: a stepped line from the strike losing mass to the strike gaining it, so two rolls nest instead of crossing. The ROLL column further right names the other strike in words'],
       [LAD_DAX, LAD_DMAX, '\u039415m','Dollars of dealer exposure gained or lost at this strike over 15 minutes'],
+      [LAD_ROLL, LAD_ROLLW, '\u21c4', 'THE ROLLS, AND THE ONLY PLACE THEY ARE SHOWN. A stepped line runs from the strike that SHED mass to the strike that GAINED it \u2014 the little CIRCLE marks the source, the ARROWHEAD the destination. Stepped, never diagonal, so two rolls at neighbouring strikes nest instead of crossing. It sits immediately right of the \u039415m bars because a roll IS that delta: the same dollars leaving one row and arriving at another. \u26a0 A dashed line is still flowing; a solid one has stopped and carries how long ago. \u26a0 An empty lane names its own reason on hover rather than leaving you to guess.'],
       [LAD_ST,  LAD_STW,  'STATE','The level\u2019s own condition: BUILDING, WEAKENING, TURN, SPENT'],
-      [LAD_ROC, LAD_ROCW, 'ROC 15m','Rate of change over 15 minutes, matching the \u0394 column beside it. Live this is Skylit\u2019s own percent; in replay it is this panel\u2019s measure of MASS and is italic. The 5m and 60m are in the hover \u2014 the 60m shows here only when it DISAGREES with the 15m, which is the TURN condition'],
-      [LAD_RLC, LAD_RLCW, 'ROLL','Where this strike\u2019s mass is going (\u21e2, amber: leaving) or coming from (\u21e0, blue: arriving), with the other strike named. The lane to the right draws the same rolls as stepped arrows so two of them nest instead of crossing']
+      [LAD_ROC, LAD_ROCW, 'ROC 15m','Rate of change over 15 minutes, matching the \u0394 column beside it. Live this is Skylit\u2019s own percent; in replay it is this panel\u2019s measure of MASS and is italic. The 5m and 60m are in the hover \u2014 the 60m shows here only when it DISAGREES with the 15m, which is the TURN condition']
     ];
     var hd='<div class="g3ladhd">';
     for(var hi2=0; hi2<LADHD.length; hi2++){
@@ -25757,8 +26254,20 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
         // chart's scale, so the day's range is already in this list — what was missing is that it
         // was optional: the pad could be trimmed and the clamp to [lo,hi] could cut it. Both bounds
         // are now taken before any trimming, and the clamp below can only WIDEN past them.
-        var _pl=[now, EB.nowLive, EB.loWater].filter(function(v){ return typeof v==='number' && v>0; });
-        var _ph=[now, EB.nowLive, EB.hiWater].filter(function(v){ return typeof v==='number' && v>0; });
+        // ⚠⚠ (v15.39b) THE CANDLE'S OWN EXTREMES ARE IN THIS LIST, NOT A SECOND READ OF THEM.
+        // The promise is "the whole daily candle is always in view" — so the list must contain the
+        // numbers THE CANDLE IS DRAWN FROM. It contained `EB.hiWater`/`EB.loWater`, which are the
+        // same quantity measured by a different path, and v15.39's move of the candle onto
+        // `sessionBody()` made the two disagree: measured in the jsdom fixture, the candle spanned
+        // 148 to 291 in a view of 0 to 246 — the day's low hanging below the window, on the build
+        // whose whole subject was the two halves agreeing. `test_replay_face` c3 caught it.
+        // ⚠ A GUARANTEE ABOUT X MUST BE WRITTEN IN TERMS OF X. "The view contains the session's
+        // high" and "the view contains the candle's high" are the same sentence only while two
+        // measurements agree — which is the assumption this entire build exists to stop making.
+        var _SBv=null; try{ var _s0=sessionBody(sym); if(_s0 && typeof EB.emRr==='number' && EB.emRr>0)
+          _SBv={ hi:_s0.hi*EB.emRr, lo:_s0.lo*EB.emRr, open:_s0.open*EB.emRr, close:_s0.close*EB.emRr }; }catch(eSBv){}
+        var _pl=[now, EB.nowLive, EB.loWater, (_SBv?_SBv.lo:null), (_SBv?_SBv.close:null)].filter(function(v){ return typeof v==='number' && v>0; });
+        var _ph=[now, EB.nowLive, EB.hiWater, (_SBv?_SBv.hi:null), (_SBv?_SBv.open:null)].filter(function(v){ return typeof v==='number' && v>0; });
         if(_pl.length) viewLo=Math.min(viewLo, Math.min.apply(null,_pl));
         if(_ph.length) viewHi=Math.max(viewHi, Math.max.apply(null,_ph));
         // a little air so the edge rows are not flush against the border
@@ -26031,30 +26540,17 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       // 7650→7665, 7650→7675, 7640→7665 — as stepped blue paths in a TWENTY-PIXEL column at the
       // extreme right of a 640px ladder. Present, correct, and unreadable: nothing named a strike,
       // nothing said which way, and the rows themselves carried no mark at all.
-      // ⚠ THE LANE IS KEPT — it is the only thing that shows two rolls nesting rather than crossing.
-      // What was missing is the row saying, in its own line, WHERE ITS MASS WENT or CAME FROM.
-      var rollChip='';
-      try{
-        var _rs=null, _rd=null, _ri;
-        for(_ri=0; _ri<(ROLLS||[]).length; _ri++){
-          if(ROLLS[_ri].from===P.k) _rs=ROLLS[_ri];
-          if(ROLLS[_ri].to===P.k)   _rd=ROLLS[_ri];
-        }
-        if(_rs || _rd){
-          var _r=_rs||_rd, _out=!!_rs;
-          var _amt=Math.abs(_r.amt||_r.lost||0);
-          rollChip='<span class="g3ldrl '+(_out?'g3ldrlout':'g3ldrlin')+'" style="top:'+t.toFixed(1)+'px"'+
-            g3tip((_out?'MASS IS LEAVING THIS STRIKE':'MASS IS ARRIVING AT THIS STRIKE')+' — '+
-              usdBig(_amt)+' over 15 minutes, '+(_out?('into '+_r.to):('from '+_r.from))+'. '+
-              'A roll is measured as a move of MASS (|value|), not of the signed number: the source must be '+
-              'LOSING size and the destination GAINING it, within '+ROLL_MAX_DIST+' points, and the receiver must take '+
-              'at least '+Math.round(ROLL_MIN_RATIO*100)+'% of what the source shed. ⚠ It is not conservation of mass — several '+
-              'strikes can feed one destination and fresh positioning arrives at the same time. ⚠ A roll says where dealers are '+
-              'MOVING their exposure, which is where the next support or resistance is being built; it does not say price will go there.')+
-            '>'+(_out?('\u21e2'+_r.to):('\u21e0'+_r.from))+'</span>';
-        }
-      }catch(eRC){}
-      h+=rollChip;
+      // ⚠⚠ (v15.44) THE ROLL CHIP IS GONE. Operator, 2026-09-02: "remove the roll column because the
+      // arrows are suppose to show the roll, the from node (little circle) and the to node (arrow
+      // head)." He is right that it was one fact told twice — the chip read "⇢7655" while the lane
+      // drew an arrow from this row to 7655, thirty-two pixels apart. The ARROW is the better
+      // telling: it draws the relationship BETWEEN two rows, where both of them already are, rather
+      // than naming the far end in text beside one of them.
+      // ⚠ NOTHING IS LOST FROM THE RECORD. `ROLLS` is untouched, the lane reads the same array, and
+      // every sentence the chip's hover carried — the mass rule, the distance cap, the receive
+      // ratio, "it is not conservation of mass", "it does not say price will go there" — now lives
+      // on the lane's own hover. Removing a display must never remove the measurement behind it
+      // (v11.95), and this file has paid for that before.
       var R5=(vv&&typeof vv.p5==='number')?vv.p5:((vv&&typeof vv.rp5==='number')?vv.rp5:null);
       var R15=(vv&&typeof vv.p15==='number')?vv.p15:((vv&&typeof vv.rp15==='number')?vv.rp15:null);
       var R60=(vv&&typeof vv.p60==='number')?vv.p60:((vv&&typeof vv.rp60==='number')?vv.rp60:null);
@@ -26246,21 +26742,51 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
       // ⚠ BEHIND, NOT BESIDE: it is the backdrop the price pill and the crowns sit on, at low opacity
       // and with no pointer events, so it adds a frame of reference without taking a row from anyone.
       try{
+        // ⚠⚠ (v15.39c) THE WICK STAYS ON `EB.hiWater`/`EB.loWater` BECAUSE THIS RAIL IS EM SPACE.
+        // `sessionBody()` reports BAR prices; every price on this ladder is a bar price x `EB.emRr`
+        // (1.0031 on 2026-08-31). v15.39b "fixed" the disagreement by putting bar prices on an EM
+        // rail — which is not a fix, it is the same class of fault pointing the other way, and the
+        // real browser caught it: the expected move collapsed to 1% of the view.
+        // ⚠ THE COLOUR IS SCALE-INVARIANT AND THE COORDINATES ARE NOT. `close > open` is true in
+        // both spaces, so the DIRECTION could always be shared; only the DRAWING needed converting.
+        // Unifying the coordinates as well was over-reach, and it broke two of his standing rules
+        // at once (v15.28 "open on the expected move", v15.31 "always show the whole daily column").
+        // ⚠⚠ (v15.39) OPEN AND CLOSE FROM `sessionBody()` — NOT `EB.open` AND NOT THE LIVE PRICE.
+        // This block used the band's ANCHOR for the open and the LIVE tape for the close, so it drew
+        // 7647.25 → 7644.25 (RED) while ⓪a drew the same session 7647.00 → 7647.50 (GREEN). The two
+        // faults compounded: a snapped anchor one tick off the real open, and a "close" that kept
+        // moving after the session ended — the panel was FROZEN and this candle was not.
+        // ⚠ `sessionBody()` returns CHART space, the same space `hiWater`/`loWater` are already in
+        // (`out.hiWater = hiU*useRr`), so nothing is converted here. A conversion at the call site is
+        // how the second opinion gets back in.
+        var _SB=sessionBody(sym);
+        // ⚠ ONE ratio, taken from the band that owns this rail — never derived here, and never 1
+        // "because it usually is". A missing ratio means we cannot place the body, so we draw none.
+        var _rr=(typeof EB.emRr==='number' && EB.emRr>0)?EB.emRr:null;
         var _dH=(typeof EB.hiWater==='number')?EB.hiWater:null;
         var _dL=(typeof EB.loWater==='number')?EB.loWater:null;
-        var _dO=(typeof EB.open==='number')?EB.open:null;
-        if(_dH!=null && _dL!=null && _dH>_dL){
+        var _dO=(_SB && _rr)?_SB.open*_rr:null;
+        var _dC=(_SB && _rr)?_SB.close*_rr:null;
+        if(_SB && _rr && _dH!=null && _dL!=null && _dH>_dL){
           var yH=Y(_dH), yL=Y(_dL);
-          var bodyA=(_dO!=null)?Y(_dO):yL, bodyB=tn;
+          var bodyA=Y(_dO), bodyB=Y(_dC);
           var bTop=Math.min(bodyA,bodyB), bH=Math.max(1.5, Math.abs(bodyB-bodyA));
-          var up=(_dO==null)?true:(now>=_dO);
+          var up=_SB.up;
           h+='<i class="g3lddc g3lddcw'+(up?' up':' dn')+'" style="top:'+yH.toFixed(1)+
              'px;height:'+Math.max(1,(yL-yH)).toFixed(1)+'px"'+
              g3tip('THE SESSION AS ONE CANDLE, on this ladder\u2019s own price axis. Wick '+
                frameNum(_dL)+' to '+frameNum(_dH)+' \u2014 the day\u2019s range. Body '+
-               (_dO!=null?(frameNum(_dO)+' to '+frameNum(now)):'open to now')+
-               '. \u26a0 The same numbers the \u24ea a DAY section measures and the same the expected-move '+
-               'band is anchored on, so the candle and the band can never describe different sessions.')+
+               frameNum(_dO)+' to '+frameNum(_dC)+', '+
+               (_SB.pts>=0?'+':'\u2212')+Math.abs(_SB.pts).toFixed(2)+'pts'+
+               ((_SB.pctOfRange!=null)?(' \u2014 '+Math.round(100*_SB.pctOfRange)+'% of the day\u2019s range'):'')+
+               '. \u26a0 The open is the first RTH bar\u2019s OPEN and the close is the last CLOSED bar \u2014 '+
+               'not the band\u2019s anchor and not the live tick, so on a frozen or replayed day this '+
+               'candle STOPS where the session did. \u26a0 The \u24ea a DAY candle is drawn from the SAME '+
+               'sessionBody() call, so the two cannot disagree \u2014 they did, until v15.39: this one '+
+               'read the anchor and the live tape and printed RED on a day \u24ea a printed GREEN.'+
+               ((_SB.pctOfRange!=null && _SB.pctOfRange<0.02)
+                 ? ' \u26a0 A body this small is a FLAT day \u2014 the colour is a real sign but a weak claim.'
+                 : ''))+
              '></i>'+
              '<i class="g3lddc g3lddcb'+(up?' up':' dn')+'" style="top:'+bTop.toFixed(1)+
              'px;height:'+bH.toFixed(1)+'px"></i>';
@@ -26906,7 +27432,14 @@ function emPos(B, v){
 // The track rescales to hold price with a margin, and the ORIGINAL boundary becomes a marked line, so
 // the expected move stays visible as a level rather than being quietly redefined as the edge.
 var EM_RAIL_PAD = 0.25;    // ⚖ hand-set: a quarter of the band's own width beyond price
-function emRailBounds(B, piles){
+// ⚠⚠ (v15.39b) `sb` — THE SESSION CANDLE'S OWN FOUR PRICES. The frame is what the WINDOW opens
+// onto, so anything drawn must fit inside it; v15.39 moved the candle onto `sessionBody()` and left
+// this frame on `B.hiWater`/`B.loWater`, and the window then measured 312px onto a 300px frame —
+// asked to show more than the frame holds. `test_replay_face` y8g/y8h caught it.
+// ⚠ THE FRAME MUST BE BUILT FROM THE NUMBERS THAT WILL BE DRAWN, not from a second measurement of
+// the same idea. Three surfaces now take the candle's extremes from one object: the candle, the
+// view, and this frame. That is the whole correction, applied consistently instead of twice.
+function emRailBounds(B, piles, sb){
   var out={ lo:B.low, hi:B.high, over:false, under:false, span:(B.high-B.low) };
   try{
     var span=B.high-B.low; if(!(span>0)) return out;
@@ -26919,6 +27452,16 @@ function emRailBounds(B, piles){
     var nl=(typeof B.nowLive==='number')?B.nowLive:B.now;
     var hiRef=Math.max(B.now, nl, (B.hiWater!=null?B.hiWater:B.now));
     var loRef=Math.min(B.now, nl, (B.loWater!=null?B.loWater:B.now));
+    // ⚠ the candle's own high/low AND its body ends — the body can sit outside the wick's own
+    // measurement when the two came from different reads, which is exactly the fault being fixed.
+    if(sb){
+      ['hi','lo','open','close'].forEach(function(k){
+        var v=sb[k];
+        if(typeof v!=='number' || !isFinite(v) || !(v>0)) return;
+        if(v>hiRef) hiRef=v;
+        if(v<loRef) loRef=v;
+      });
+    }
     if(hiRef>B.high){ out.hi=hiRef+pad; out.over=true; }
     if(loRef<B.low){  out.lo=loRef-pad; out.under=true; }
     // (v14.16) THE RAIL HOLDS EVERY NODE ATLAS DRAWS. With the band clip gone from skPiles, a node
@@ -27102,7 +27645,12 @@ function secFrame(sym){
     // RB is the drawn track, which grows once a boundary has been run so "how far past" is visible.
     // (v14.16) ...and grows to hold every pile, so the un-clipped node set is actually drawable —
     // RAILPS therefore computes FIRST. One RB serves the rail AND the profile beneath it.
-    var RB=emRailBounds(EB, RAILPS);
+    // ⚠ CONVERTED into this rail's space before it is handed over — an unconverted body here is
+    // exactly what blew the frame open in v15.39b.
+    var RB=emRailBounds(EB, RAILPS, (function(){ try{
+      var b=sessionBody(sym); if(!b || !(EB.emRr>0)) return null;
+      return { hi:b.hi*EB.emRr, lo:b.lo*EB.emRr, open:b.open*EB.emRr, close:b.close*EB.emRr };
+    }catch(eRB){ return null; } })());
     // (v13.9) THE RAIL DRAWS THE LATCH TOO — the same list the NODES section draws, or the two
     // surfaces disagree about which rolls exist, which is the exact drift the shared-array rule
     // forbids. GAVE BACK entries are excluded here: an arrow on the rail claims structure, and a
@@ -28312,8 +28860,54 @@ window.__gptsDebug=window.__gptsDebug||{};
 var DEPS_IF_STALE_MIN=20;      // ⚖ IFC_STALE_MIN — a chain older than this is not intraday
 var DEPS_FUT_STALE_MIN=20;     // ⚖ the courier polls every 5m in RTH; 4 misses is a fault
 var DEPS_IRT_STALE_MIN=10;     // ⚖ the export runs on its own timer; 10m without one is a fault
+// ⚠⚠⚠ (v15.43) THE HEALTH CHECK HAD NO CONCEPT OF THE SESSION, SO IT FAILED ALL NIGHT.
+// Measured on his panel at 04:52 CT: `deps 2✕` on the footer, with
+//     if.SPX 386m · if.QQQ 385m · fut.courier 426m · irt.export 294m   all STALE
+//     if.usable FAIL — "NO symbol has a complete, fresh chain ... running blind"
+// Every one of those is the CORRECT overnight state. The market had been shut for fourteen hours.
+// ⚠ THE DOT IS RED ROUGHLY SEVENTEEN HOURS A DAY, and a light that is red most of the time is one
+// he stops reading — which is the exact failure `if.usable`'s own comment forbids two screens down:
+// "calling that a failure would cry wolf every session." It guarded the SPX pin and not the clock.
+//
+// ⚠⚠ THE RULE IS NOT "IGNORE STALENESS WHEN CLOSED" — that would hide a courier that died at 10:00.
+// It is: **WAS IT FRESH WHEN THE SESSION ENDED?** Staleness is measured back from the CLOSE, so a
+// feed last seen at 14:59 is healthy at 04:52 and one last seen at 10:00 is still a fault and still
+// says so. The age is never hidden; only the clock it is judged against changes.
+//
+// ⚠⚠⚠ AND IT MUST BE THE WALL CLOCK, NEVER `sessionPhase()` WITH NO ARGUMENT. That function is
+// REPLAY-AWARE BY DESIGN (v15.18) — measured this minute, parked at 14:06, it returns
+// `rth:true, POWER HOUR, 54 min left` while the real time is 04:52. Grading the LIVE feeds against
+// the REPLAYED session would call correctly-idle overnight couriers broken the moment he rewinds.
+// The deps are about the live world; they get the live clock, passed explicitly.
+function depsSessionIdleMin(){
+  try{
+    var wall=Math.floor(Date.now()/1000 - ctOffsetSec());
+    var P=sessionPhase(((wall%86400)+86400)%86400);
+    if(!P || P.rth) return { idle:0, P:P };
+    var dow=P.dow, mins=P.mins, close=P.close;
+    // after today's close, on a trading day
+    if(dow>=1 && dow<=5 && mins>close) return { idle:mins-close, P:P };
+    // otherwise walk back to the previous TRADING day's close
+    var back=0, d=dow;
+    for(var i=0;i<5;i++){ d=(d+6)%7; back+=1440; if(d>=1 && d<=5) break; }
+    // ⚠ HOLIDAYS ARE NOT MODELLED. On a market holiday this understates the idle span, so a feed
+    // reads STALER than it is — which errs toward NOISE, not toward silence. That is the right way
+    // round for a health check and it is stated rather than left to be discovered.
+    return { idle:Math.max(0, mins+back-close), P:P };
+  }catch(e){ return { idle:0, P:null }; }
+}
 function depsHealth(){
   var out={ ok:true, checkedAt:Date.now(), items:[] };
+  var _S=depsSessionIdleMin(), _idle=_S.idle;
+  out.idleMin=_idle;
+  out.rthNow=!!(_S.P && _S.P.rth);
+  // ⚠ the age a staleness verdict is judged on. During RTH it is the raw age and nothing changes.
+  function eff(a){ return (typeof a==='number') ? Math.max(0, a-_idle) : a; }
+  function idleWhy(a){
+    return (_idle>0 && typeof a==='number' && a<=_idle)
+      ? (' \u2014 expected: the market has been closed '+Math.round(_idle/60)+'h and this feed idles with it')
+      : '';
+  }
   function add(o){
     out.items.push(o);
     if(o.state==='FAIL') out.ok=false;
@@ -28343,19 +28937,22 @@ function depsHealth(){
         var spot=(typeof d.spot==='number' && d.spot>0)?d.spot:null;
         // a wall must sit within a sane distance of spot, or the two are on different scales
         if(spot && lv && lv.cr>0 && (lv.cr>spot*1.5 || lv.cr<spot/1.5)) miss.push('call wall is off-scale vs spot');
-        var stale=(age==null || age>DEPS_IF_STALE_MIN);
+        var stale=(age==null || eff(age)>DEPS_IF_STALE_MIN);
         add({ id:'if.'+sym, label:'IF '+sym,
               state:(d.err? 'FAIL' : (miss.length? 'FAIL' : (stale? 'STALE':'OK'))),
               ageMin:age, cw:(lv?lv.cr:null), pw:(lv?lv.ps:null), em:(em?em.em:null), spot:spot,
               why:(d.err? ('their payload errored: '+d.err)
                    : (miss.length? ('missing: '+miss.join(', '))
-                      : (stale? ('last payload '+age+' minutes old') : ''))) });
+                      : (stale? ('last payload '+age+' minutes old') : idleWhy(age).replace(/^ \u2014 /,'')))) });
         if(!d.err && !miss.length && !stale) any=true;
       }
       // ⚠ THE VERDICT IS "IS THERE A USABLE BOOK", NOT "IS EVERY SYMBOL FRESH". Under the SPX pin
       // the companion stops fetching SPY, and calling that a failure would cry wolf every session.
+      // ⚠ (v15.43) `any` now inherits the session-aware staleness above, so the overnight state is
+      // OK rather than "running blind" — and a chain that genuinely died mid-session still fails.
       add({ id:'if.usable', label:'InsiderFinance overall', state:(any?'OK':'FAIL'),
-            why:(any?'at least one symbol has a fresh chain with call wall, put wall and expected move'
+            why:(any?('at least one symbol has a fresh chain with call wall, put wall and expected move'+
+                      (_idle>0?' (judged against the close — the market has been shut '+Math.round(_idle/60)+'h)':''))
                    :'NO symbol has a complete, fresh chain — the ladder\u2019s levels and the EM band are running blind') });
     }
   }catch(eIF){ add({ id:'if.chain', label:'InsiderFinance chain', state:'FAIL', why:'check threw: '+(eIF&&eIF.message||eIF) }); }
@@ -28366,10 +28963,10 @@ function depsHealth(){
     var rows=0; try{ var kk=fb?Object.keys(fb).filter(function(k){ return k.charAt(0)!=='_'; }):[];
                      rows=(fb && fb.ES && fb.ES.rows)?fb.ES.rows.length:((kk.length&&fb[kk[0]].rows)?fb[kk[0]].rows.length:0); }catch(eR){}
     add({ id:'fut.courier', label:'ES 1-min courier', ageMin:fage, rows:rows,
-          state:(!fb?'FAIL':((fage==null||fage>DEPS_FUT_STALE_MIN)?'STALE':(rows>0?'OK':'FAIL'))),
+          state:(!fb?'FAIL':((fage==null||eff(fage)>DEPS_FUT_STALE_MIN)?'STALE':(rows>0?'OK':'FAIL'))),
           why:(!fb?'no courier data — the companion is not running'
-               :((fage>DEPS_FUT_STALE_MIN)?('last pull '+fage+' minutes old')
-                 :(rows>0?'':'the courier answered with no rows'))) });
+               :((eff(fage)>DEPS_FUT_STALE_MIN)?('last pull '+fage+' minutes old')
+                 :(rows>0?(idleWhy(fage).replace(/^ \u2014 /,'')):'the courier answered with no rows'))) });
   }catch(eF){ add({ id:'fut.courier', label:'ES 1-min courier', state:'FAIL', why:'check threw: '+(eF&&eF.message||eF) }); }
   // ---- 3 · IRT: are the king levels actually being written -------------------------------------
   // ⚠ "writing to the server for IRT" is a CSV written in place into a directory IRT's FlexLevels
@@ -28379,17 +28976,56 @@ function depsHealth(){
   try{
     var iage=mins(IRT_LAST&&IRT_LAST.t);
     var on=false; try{ on=!!(CFG.irt&&CFG.irt.on); }catch(eO){}
-    var built=null; try{ built=irtBuildCsv(); }catch(eB){}
-    add({ id:'irt.build', label:'IRT levels built', state:(built&&built.rows>0?'OK':'FAIL'),
-          rows:(built?built.rows:0),
-          why:(built&&built.rows>0)?'':'nothing to write — no levels resolved for the configured symbols' });
+    // ⚠⚠ (v15.33) JUDGE THE EXPORT THAT RAN, NOT A PROBE BUILD. v15.22 called `irtBuildCsv()` here
+    // as a health check — and that RE-RUNS a build whose inputs are live (the IF ladder, the ES
+    // ratio, the latched crown). A single unlucky instant returns zero rows and the check reported
+    // **FAIL: nothing to write** while the real export was fine.
+    // MEASURED on his panel 2026-09-01 while `deps()` was calling it broken:
+    //     IRT_LAST = { rows:6, how:'file', inPlace:true, err:null }
+    // The file was being written in place, six rows, no error. My check was the only thing failing.
+    // ⚠ A HEALTH CHECK MUST OBSERVE THE SYSTEM, NOT PERTURB IT. Re-running the work to see if the
+    // work is possible answers a different question — and answers it about a different moment.
+    // `IRT_LAST.rows` is what actually reached the file. The probe build is kept ONLY as a fallback
+    // for the case where no export has run yet this session, where there is nothing else to read.
+    var lastRows=(IRT_LAST && typeof IRT_LAST.rows==='number')?IRT_LAST.rows:null;
+    var built=null;
+    if(lastRows==null || !(IRT_LAST && IRT_LAST.t)){ try{ built=irtBuildCsv(); }catch(eB){} }
+    var buildRows=(lastRows!=null && IRT_LAST && IRT_LAST.t)?lastRows:(built?built.rows:0);
+    add({ id:'irt.build', label:'IRT levels built', state:(buildRows>0?'OK':'FAIL'),
+          rows:buildRows,
+          why:(buildRows>0)?'':((IRT_LAST&&IRT_LAST.t)
+              ? 'the last export wrote no rows — no levels resolved for the configured symbols'
+              : 'no export has run yet this session, and a probe build resolved no levels') });
     add({ id:'irt.export', label:'IRT file written', ageMin:iage, rows:(IRT_LAST?IRT_LAST.rows:0),
-          state:(!on?'OFF':((IRT_LAST&&IRT_LAST.err)?'FAIL':((iage==null||iage>DEPS_IRT_STALE_MIN)?'STALE':'OK'))),
+          state:(!on?'OFF':((IRT_LAST&&IRT_LAST.err)?'FAIL':((iage==null||eff(iage)>DEPS_IRT_STALE_MIN)?'STALE':'OK'))),
           why:(!on?'the IRT export is switched off in settings'
                :((IRT_LAST&&IRT_LAST.err)?String(IRT_LAST.err)
-                 :((iage==null)?'no export has run yet this session':((iage>DEPS_IRT_STALE_MIN)?('last write '+iage+' minutes old'):'')))) });
+                 :((iage==null)?'no export has run yet this session':((eff(iage)>DEPS_IRT_STALE_MIN)?('last write '+iage+' minutes old'):idleWhy(iage).replace(/^ \u2014 /,''))))) });
   }catch(eI){ add({ id:'irt.export', label:'IRT file written', state:'FAIL', why:'check threw: '+(eI&&eI.message||eI) }); }
-  // ---- 4 · THE RECORDER: without it there is no replay and no corpus --------------------------
+  // ---- 4 · THE FOREXFACTORY CALENDAR: the only thing that knows today is an event day ---------
+  // ⚠⚠ (v15.37) THIS RAN FOR TWENTY-SEVEN BUILDS AS AN UNCHECKED DEPENDENCY. Operator, 2026-09-01:
+  // "add indicator for yahoo finance integration also, call it YF and forex factory, call it FF.
+  // All of this integration better be mentioned somewhere." It was not mentioned anywhere: two code
+  // comments and nothing in DEPENDENCIES.md, no deps item, no lamp. A dependency nobody wrote down
+  // is one nobody notices has stopped — and this one fails SILENTLY into "no events today", which
+  // is the same face a quiet Tuesday shows.
+  // ⚠⚠ AND ZERO EVENTS IS A VALID DELIVERY. `{day:today, ev:[]}` means the courier ran and there
+  // are no USD-high releases — a real answer, and the most common one. The ONLY thing that
+  // separates it from "the courier never ran" is the `day` stamp, so the day stamp is the check.
+  // Counting events would have called every quiet day a failure.
+  try{
+    var CC=null; try{ CC=JSON.parse(localStorage.getItem(EVCAL_KEY)||'null'); }catch(eC0){}
+    var ctd=null; try{ ctd=ctTodayStr(); }catch(eC1){}
+    var nEv=(CC&&Array.isArray(CC.ev))?CC.ev.length:null;
+    var fresh=!!(CC && CC.day && ctd && CC.day===ctd && Array.isArray(CC.ev));
+    add({ id:'cal.ff', label:'ForexFactory calendar', events:nEv, day:(CC?CC.day:null),
+          state:(fresh?'OK':(CC?'STALE':'FAIL')),
+          why:(fresh?'':(CC?('delivered for '+CC.day+', not today')
+               :('today\u2019s calendar has not been delivered'+
+                 ((EVCAL_STATE&&EVCAL_STATE.err)?(' \u2014 page fetch: '+EVCAL_STATE.err+
+                   '; the companion is the courier for this'):'')))) });
+  }catch(eC){ add({ id:'cal.ff', label:'ForexFactory calendar', state:'FAIL', why:'check threw: '+(eC&&eC.message||eC) }); }
+  // ---- 5 · THE RECORDER: without it there is no replay and no corpus --------------------------
   try{
     var st=null; try{ st=window.__gptsDebug.storage(); }catch(eS){}
     // ⚠ ORDER MATTERS AND MY FIRST CUT HAD IT BACKWARDS: a quota HIT is a warning, but "cannot
@@ -29133,6 +29769,11 @@ window.__gptsDebug.emBand = function(sy){
       // (v11.59) the shape fields. Added to emBand() at v11.57 and never surfaced here, so the only way
       // to check them was to read pixels — which is how the anchor drift went unnoticed.
       shape:B.shape||null, hiWater:B.hiWater, loWater:B.loWater,
+      // ⚠ (v15.39c) THE RATIO EVERY PRICE ABOVE HAS ALREADY BEEN MULTIPLIED BY. It was applied
+      // invisibly and `scaleUsed` reads 1, so a caller checking for a conversion is told there
+      // isn't one — which is how v15.39b put bar prices on this rail. test_em_band caught the
+      // omission from this hook before it shipped, which is the whole point of that assertion.
+      emRr:B.emRr,
       upExc:B.upExc, dnExc:B.dnExc, giveBack:B.giveBack, hiFirst:B.hiFirst,
       roomUp:B.roomUp, roomDn:B.roomDn, roomAhead:B.roomAhead,
       gamma:B.gamma, stretched:B.stretched, scaleUsed:B.scaleUsed, openHealed:!!B.openHealed,
@@ -29262,14 +29903,36 @@ window.__gptsDebug.session = function(){
 // failed. A mode that silently does not engage is as bad as one that silently does.
 // (v14.83) the King track, so "how many times did it move" can be answered from the console
 // without exporting a day file — and so the flicker suppression can be seen working.
+// (v15.39) the session's body, and WHICH surfaces agree about it — so "the two candles disagree"
+// is a question the console answers in one call instead of a screenshot comparison.
+window.__gptsDebug.sessionBody = function(sym){
+  try{
+    var S=sessionBody(sym||'SPY');
+    if(!S) return { err:'no session body — no RTH bars yet, or no measureBars source' };
+    return { open:S.open, close:S.close, pts:+S.pts.toFixed(2), up:S.up,
+             rng:+S.rng.toFixed(2), pctOfRange:(S.pctOfRange!=null)?+(100*S.pctOfRange).toFixed(1):null,
+             flat:(S.pctOfRange!=null && S.pctOfRange<0.02),
+             scale:S.scale,
+             note:'BOTH the NOW-column candle and the \u24eaa candle read this one call (v15.39).' };
+  }catch(e){ return { err:String(e&&e.message||e) }; }
+};
 window.__gptsDebug.kingTrack = function(){
   try{
     ktLoad();
     var out={ day:KTRACK.day, dwellMin:KT_DWELL_MIN, pending:JSON.parse(JSON.stringify(KT_PEND||{})), books:{} };
-    KT_BOOKS.forEach(function(b){
-      var a=ktOf(b);
-      out.books[b]={ migrations:Math.max(0,a.length-1),
-        points:a.map(function(p){ return ctHHMM(p.t)+' '+p.k+(p.e?(' exp'+p.e):''); }) };
+    // ⚠⚠ (v15.36) BOTH NUMBERS, ALWAYS, AND NAMED FOR WHAT THEY ARE. `migrations` is what the LANE
+    // draws — dwell-filtered, deliberately fewer. `rolls` is the CENSUS — every crown change the
+    // book actually made, and the only one of the two that is comparable to Atlas. Returning just
+    // the first is what produced an answer three times too small.
+    KR_BOOKS.forEach(function(b){
+      var R=kingRolls(b), drawn=(KT_BOOKS.indexOf(b)>=0);
+      out.books[b]={
+        rolls:R.rolls, rollsBasis:'at least '+R.rolls+', observed on '+R.basis,
+        migrations: drawn ? Math.max(0, ktOf(b).length-1) : null,
+        lane: drawn ? 'drawn' : 'not drawn (proportional bearing)',
+        points: drawn ? ktOf(b).map(function(p){ return ctHHMM(p.t)+' '+p.k+(p.e?(' exp'+p.e):''); }) : null,
+        raw: krOf(b).map(function(p){ return ctHHMM(p.t)+' '+p.k; })
+      };
     });
     return out;
   }catch(e){ return { err:String(e&&e.message||e) }; }
@@ -29649,8 +30312,25 @@ function secDay(sym){
       dcell('BODY',  NOREAD?Z:((bodyPct!=null)?(bodyPct+'%'):Z), '')
     ];
     h+='<div class="g3dcols">';
-    h+=dcol((NOREAD?'1ST':('1ST · '+D.first)), c1, eTip);
-    h+=dcol((NOREAD?'2ND':('2ND · '+D.second)), c2, eTip);
+    // ⚠ (v15.33) "1ST TP" / "2ND TP" — operator, 2026-09-01: "update the heading where it says
+    // 1ST HOD, to 1ST TP , which stands for first turning point .. similar to 2nd."
+    // WHICH extreme it was is not lost: it moves into the hover. A heading names the ROLE (the day's
+    // first turning point); the identity is a fact about today and belongs with the other facts.
+    // ⚠⚠ (v15.40) THE HEADING NAMES WHICH TURN IT IS. Operator, 2026-09-02: "how come below where
+    // it says 1st tp and 2nd tp, it doesn't mention HOD and LOD. you know that you are suppose to
+    // indicate which turning it is, is it a Hod turn or an LOD turn."
+    // ⚠ IT WAS ONLY IN THE HOVER — and "1ST TP" alone is unreadable, because the whole point of the
+    // pair is WHICH extreme came first. A day that made its low first and its high second is a
+    // different day from the reverse, and v11.59 already learned that about the candle: "sold off
+    // then rallied and rallied then sold off are different days and rendered identically before
+    // this." The columns knew the answer (`D.first`/`D.second`) and spent it on a tooltip.
+    // ⚠ The old headings said "1ST HOD" until v15.33, so the label LOST information when it gained
+    // the TP name. A rename must not quietly drop a fact the old name carried.
+    var t1=(!NOREAD && D.first)?(' \u00b7 '+D.first):'';
+    var t2=(!NOREAD && D.second && D.secondT!=null && D.secondT<=D.clock)?(' \u00b7 '+D.second):'';
+    h+=dcol('1ST TP'+t1, c1, (NOREAD?eTip:('THE DAY\u2019S FIRST TURNING POINT \u2014 today that was the '+D.first+', at '+hlClock(D.firstT)+'. '+eTip)));
+    h+=dcol('2ND TP'+t2, c2, (NOREAD?eTip:('THE SECOND TURNING POINT \u2014 today that was the '+D.second+
+      ((D.secondT!=null && D.secondT<=D.clock)?(', at '+hlClock(D.secondT)+'. '):'. \u26a0 IT HAS NOT PRINTED YET \u2014 the heading names it only once it has, because a second extreme that has not happened is a forecast, not a fact. ')+eTip)));
     h+=dcol('DAY', c3, gdTip);
     h+='</div>';
     if(CDL) h+='</div></div>';   // (v14.91) close g3daytbl + g3dayrow
@@ -29690,7 +30370,11 @@ function panelV3(sym){
   // (v14.57) ⓪a DAY sits ABOVE the numbered sections, as the mockup shows: it frames the whole
   // session before any structure is read. It is NOT one of the five steps, so it renders outside
   // the step loop and carries no step header.
-  try{ if(CFG.dayHL!==false) h+=secDay(sym); }catch(eD){ swallow('secDay-mount', eD); }
+  // ⚠ (v15.33) THE ⓪a DAY / HOD-LOD SECTION IS MOUNTED BELOW THE LADDER — operator, 2026-09-01:
+  // "move the hodlod section below the node ladder. currently its on top of it."
+  // The mount moved, not the section: `secDay()` is unchanged and still reads the same measureBars
+  // series. Only the order of two `h+=` calls changed, which is why nothing else had to.
+  var _dayHtml=''; try{ if(CFG.dayHL!==false) _dayHtml=secDay(sym); }catch(eD){ swallow('secDay-mount', eD); }
   // (v14.90) THE TREND SECTION IS OFF THE FACE — operator, 2026-08-29: "even the dntend Brk area
   // was also removed". He asked at v14.88 whether TREND could go and the question was never
   // answered with evidence; it is answered now, and the evidence was already on file:
@@ -29705,6 +30389,8 @@ function panelV3(sym){
   for(var j=0;j<secs.length;j++){
     // (v14.84) no header row — the sections butt directly against each other.
     try{ h+=secs[j](sym); }catch(eS){ swallow('section'+(j+1), eS); h+='<div class="g3b"><div class="g3rx"><span style="color:#f0616d">'+g3esc(String(eS&&eS.message||eS))+'</span></div></div>'; }
+    // ⚠ (v15.33) the ⓪a section lands here, AFTER the ladder that secLoc draws.
+    if(j===secs.length-1 && _dayHtml) h+=_dayHtml;
   }
   h+='</div>';
   return h;
@@ -29718,6 +30404,9 @@ function render(){
   // release, so the two surfaces can be compared by toggling this one class.
   try{ elBody.classList.toggle('g3ladon', CFG.ladder!==false); }catch(eLdC){}
   try{ wireBodyDelegation(); }catch(eWD){}
+  // ⚠ (v15.45) BEFORE ANYTHING IS DRAWN: a replay of a PREVIOUS day, still open after a NEW live
+  // session has begun, hands itself back. It cost him a whole morning of recording once.
+  try{ var _sg=replayStaleDayGuard(); if(_sg) RP_STALEMSG=_sg; }catch(eSG){}
   RENDER_SEQ++;   // (v10.14) new tick: srBattle memoizes per render so its
                   // crossover state isn't corrupted by being called twice.
   var html='';
@@ -29753,6 +30442,19 @@ function render(){
   // TESTING and ANALYSIS branches have already returned, so those two tabs are untouched. A slider
   // over the Analysis tab would suggest it rewinds the scorecards, which it does not: those are
   // computed over the whole recorded history and have no single moment to be parked on.
+  // ⚠⚠ (v15.33) TWO FEED LAMPS, AT THE TOP, BECAUSE BOTH FEEDS FAIL SILENTLY. Operator, 2026-09-01:
+  // "i need two additional indicators. 1 indicating that the application is writing to irt file
+  // export and another that it is getting data from Inside Finance every x minutes. keep it on the
+  // top somewhere."
+  // `deps()` has carried both verdicts since v15.22 — but it lives in a hover on the FOOTER, and a
+  // dependency you have to go looking for is one you check after something has already gone wrong.
+  // These are the same two items, read from the same `depsHealth()`, promoted to the top strip where
+  // they are seen without being sought. ⚠ ONE COMPUTATION, TWO SURFACES — never a second opinion.
+  // ⚠ (v15.34) the lamps are painted into the HEADER, not appended to the body — see buildPanel.
+  try{
+    var _lampEl=document.getElementById('gpts-hdrlamps');
+    if(_lampEl) _lampEl.innerHTML=feedLampsHtml(true);
+  }catch(eFL){ swallow('feedLamps', eFL); }
   try{ html+=replayBarHtml(); }catch(eRPB){ swallow('replayBarHtml', eRPB); }
   var __sync = (CFG.tapeGate===false) ? {ok:true} : tapeSync('SPY');
   // (v10.47, user-directed) One-line banner instead of a blocking panel: the app must stay

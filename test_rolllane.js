@@ -50,10 +50,19 @@ ok(/\.g3ldrl\{fill:none/.test(src), 'r10 the stepped path is stroked, never fill
 // ⚠ The PROPERTY r11 was written to protect is unchanged and is what gets asserted: the lane must
 // own its own column and overlap no other. Pinning the literal 620 pinned a POSITION, and a position
 // is a decision, not a property — so it failed on a change that honoured the thing it was guarding.
-ok(/LAD_ROLL=344, LAD_ROLLW=20/.test(src), 'r11 the lane has its own column, in the retired TAPS slot');
+// ⚠⚠ (v15.44) THE LANE MOVED RIGHT OF THE Δ PROFILE AND GOT ITS DESIGNED WIDTH BACK. Operator:
+// "move the roll arrows to the right of the delta profile ... remove the roll column because the
+// arrows are suppose to show the roll." A roll IS the 15-minute delta — the same dollars leaving one
+// row and arriving at another — so the arrows now read immediately after the bars that measure it.
+ok(/LAD_ROLL=452, LAD_ROLLW=44/.test(src), 'r11 the lane sits right of the delta profile, 44px wide');
+ok(/LAD_DAX=400, LAD_DMAX=56, LAD_DLAB=404, LAD_DLABW=44,/.test(src) && (404+44)<=452,
+   'r11a ...with the delta FIGURE (404..448) sitting between the bars and the lane');
+// ⚠ 20px was a compromise forced by the 640 cap in v15.09, not a design. Retiring the words column
+// paid for the 24px the sketch originally asked for.
+ok(!/LAD_ROLLW=20\b/.test(src), 'r11c ...and the 20px squeeze is gone');
 ok(!/LAD_TAP\b/.test(src), 'r11b ...and the column it replaced is gone, not merely hidden behind it');
-ok(/var LAD_W=618,/.test(src),
-   'r12 ...and LAD_W came DOWN to 618, because the far-right 20px went back rather than being kept');
+ok(/var LAD_W=608,/.test(src),
+   'r12 ...and LAD_W came DOWN again — 618 -> 608 — because the words column handed its width back');
 ok(/ladderRollLane\(ROLLS, Y, _dsc\)/.test(src), 'r13 it rides the SAME Y() the rows do');
 
 // ---- THE CAVEATS ----
