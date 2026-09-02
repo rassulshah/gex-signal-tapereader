@@ -131,6 +131,29 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.50 — a roadmap's job is to say which work is not worth doing yet
+
+**1 · The inventory had to be measured, not recalled.** I had spent the whole session on the
+Dashboard and would have written the Analysis and Testing sections from imagination. Querying the
+running panel gave `ANSWERED (0) · TESTING (83)` — **the single most important fact in the roadmap**
+— and I did not know it an hour earlier. ⚠ **Never write a plan for a surface you have not opened.**
+
+**2 · The measurement that hurts is the one that must lead.** The touch has no edge: t=+0.41 and
+t=−0.32, both null, 56% break. A roadmap that opened with features would have been a build list for a
+confident face over a coin-flip. ⚠ **Put the disconfirming number at the top and let the plan follow
+from it** — and pin it with a test, because it is the line most likely to be softened later.
+
+**3 · Sequencing IS the deliverable.** Twenty-one good items in the wrong order is a worse document
+than ten in the right one. The whole value of the roadmap is "C follows B, and here is why".
+
+**4 · The critical path was an hour of HIS time, not weeks of mine.** Precision is unmeasurable until
+one session is labelled exhaustively. ⚠ **Check whether the blocker is engineering or a decision
+before proposing engineering** — most of section B cannot start without it.
+
+**5 · Some pending work is not pending, it is impossible.** G5's families resolve to `n = 0` by
+construction and can never clear the bar. ⚠ **"In progress" and "unanswerable" look identical on a
+queue**, and 83 open questions with 0 answered is what that looks like from outside.
+
 ### v15.49 — "the columns are missing" and "the column names are missing" are the same report
 
 **1 · Every column was present and he was still right.** All eleven headers existed, were positioned

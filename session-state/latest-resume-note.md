@@ -1,5 +1,5 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02 · panel v15.49 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-02 · panel v15.50 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
@@ -86,9 +86,9 @@ And the frame for ⓪a, which he had to tell me and which reorganised the whole 
 
 ---
 
-## 2 · WHERE WE ARE — v15.49, and what the face carries
+## 2 · WHERE WE ARE — v15.50, and what the face carries
 
-**Panel v15.49 · companion v1.17.** Suite **140 green / 6 baseline red** (`expiry_profile`,
+**Panel v15.50 · companion v1.17.** Suite **142 green / 6 baseline red** (`expiry_profile`,
 `node_map`, `sma_cont`, `tapeking` (needs jsdom), `trendbadge`, `v1126_process`).
 
 ### ⚠⚠ THE REPLAY SLIDER IS THE NEW THING, AND IT HAS NOT BEEN SEEN LIVE YET
@@ -203,6 +203,23 @@ reproducing the call — match the INPUT UNIVERSE too.**
 **"Cannot scroll" was not a scroll bug:** panel 1016px in a 557px window, top -307, and
 `body.scrollHeight === clientHeight`. The content fits the panel; the panel does not fit the screen.
 `panelFit()` clamps it. Third costume of the v12.2/v12.5 lesson.
+
+⚠⚠⚠ **v15.50 — `roadmap/DEFLECTION-ROADMAP.md` IS NOW THE BUILD ORDER.** `load gex` step 1a-01.
+21 items across Dashboard / Analysis / Testing + the foundation, pinned by `test_roadmap.js` (35).
+⚠⚠ **ITS HEADLINE: THE TOUCH ITSELF HAS NO EDGE.** 79 deflections / 25 breaks, **56% break**,
+mirror-image excursions (+0.92/+0.26 vs +0.29/+0.86), **t=+0.41** top-5 and **t=−0.32** kings —
+BOTH NULL. The panel can say a node was TESTED; it cannot say which way it resolves, **and that is
+the entire trade**. `OPEN-QUESTIONS` **Q11** is the product and IS NOT BUILT.
+⚠ **EVERY DASHBOARD FEATURE IS COSMETIC UNTIL Q11 HAS AN ANSWER.**
+⚠⚠ **MEASURED ON THE TESTING TAB: `ANSWERED (0)` · `TESTING (83)`** across 21 families — the loop has
+never resolved one question, and G5's families (`node.tap.*`, `node.pol.*`, `drift.conf`, `kill.*`)
+are **unanswerable by construction** (n=0 always), not pending.
+⚠⚠ **Q11 IS BLOCKED ON HIM, NOT ON ENGINEERING:** precision is unmeasurable until **one session is
+labelled exhaustively** (recall is 100% of checkable marks), and the **re-arm distance** is his
+judgement. ⚠ Do not tune it to make a number look good.
+⚠⚠⚠ **DO NOT BUILD THE LIVE DEFLECTION SURFACE FIRST** — a confident face over a t=0.41 signal is
+exactly what `PURPOSE §4.4` forbids. **The one exception is the MARK fix** (correctness:
+`LVL_INPLAY_PTS=3` is fixed chart-points while deflection is ATR-scaled).
 
 ⚠⚠ **v15.49 — "THE COLUMNS ARE MISSING" WAS THE HEADER ROW SCROLLING OFF THE TOP.** All eleven
 headers existed, were positioned right and were inside the horizontal view; `scrollTop 15.15`,

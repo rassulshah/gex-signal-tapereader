@@ -97,6 +97,17 @@ load instruction. Then read, in order:
    ⚠ Measured 2026-09-01: the stored SPY chain was **11 days old** with a null expected move while
    SPX and QQQ were three minutes old, and its own `stale` flag read false.
 
+1a-01. **`roadmap/DEFLECTION-ROADMAP.md` — WHAT TO BUILD NEXT, AND IN WHAT ORDER.** Written
+   2026-09-02 against `design/PURPOSE.md`. ⚠ **Its headline is that the touch itself has NO EDGE**
+   (79 deflections / 25 breaks, 56% break, t=+0.41 top-5 and t=-0.32 kings — both null), so the
+   ex-ante deflect/break discriminator (`OPEN-QUESTIONS.md` Q11) is the product, and it is NOT BUILT.
+   ⚠ Q11 is blocked on two things only he can supply: **one session labelled exhaustively** (until
+   then precision has no denominator) and **the re-arm distance**. ⚠ The recorder cannot hold a full
+   day (3.44MB vs a 3.6MB budget), and every base rate depends on capture.
+   ⚠⚠ **DO NOT BUILD THE LIVE DEFLECTION SURFACE FIRST.** A confident face over a t=0.41 signal is
+   the exact failure `PURPOSE §4.4` forbids. The one exception is the MARK fix, which is a
+   correctness repair.
+
 1a-1. **PARKED SPECS — work that is researched and deliberately NOT started.** Currently one:
    `design/spec-futures-gamma-markets.md` (gamma levels for CL · NG · GC · E6 · HG, parked
    2026-09-01: *"we will come back to it once the application with the current markets is optimal"*).

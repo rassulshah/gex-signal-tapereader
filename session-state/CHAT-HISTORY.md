@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-02 · v15.49 · session `5e8d34b5`
+## 2026-09-02 · v15.50 · session `5e8d34b5`
 
-_60 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_65 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -784,8 +784,102 @@ All 11 columns are present and visible — the panel is 1219px wide with 608px o
 Now the empty MARK column.
 Marks are absent on every row including one sitting on price — and the catch swallows without recording. Let me make it visible rather than guess.
 The marker works in the harness (5 rows marked, d 0.15–2.65). The instrumentation will say why it doesn't on yours. Running the suite.
+**Every column is present — it's the header row that's gone.**
+
+```
+headers    all eleven, all vis:true, correctly positioned
+wrap       clientW 608 · panel 1219 — nothing off the side
+BUT        scrollTop 15.15 · header.topRel −15 · insideView FALSE
+```
+
+The header is `position: relative` inside the scrolling box, and v15.28 made that box **open on the expected-move band** rather than at the top — so it's scrolled from the first render on most days and the header leaves with the rows. You had no labels, which is a fair description of "the columns are missing". I checked horizontal scroll first because that was my model of the words; the answer was vertical.
+
+It's `sticky` now, with a z-index and an opaque background — those two aren't cosmetic: without them the node bars scroll *through* the header, which reads worse than no header at all.
+
+**The MARK column is genuinely empty, and I've stopped guessing at why.** Zero marks with a row **0.5 points** from price and the threshold at 3 — while the same code marks five rows in the render harness. The catch there discarded *both* a null return and a thrown error, so from outside they looked identical. It now …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 42 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (18:49):** Same policy denial — 42 commits, carried by `installv1549.bat`.
+
+**OPERATOR:**
+> based on what i have explained to you , do you understand my objective with this applicaiton
+
+**me (21:41):** Yes. In one line: **you're trying to catch the day's high and low early enough to trade the move between them — and the gamma nodes are your leading indicator for when a turn is happening.**
+
+The mechanism you're trading is that a node with enough gamma *deflects* price, and that deflection **is** the turning point. Two kinds, and they demand opposite trades:
+
+- a node at the extreme turns the day → that's your **HOD or LOD**, you reverse
+- a node that stops a pullback → that's **continuation**, you stay in
+
+So the panel has to do three different jobs on three different clocks, and I think this is the part that matters most:
+
+| | question | horizon |
+|---|---|---|
+| ⇄ · Δ15m · STATE · ROC | is gamma **building** somewhere? | **leading** — before the turn |
+| the node ladder / king | is price **at** that node now? | **the event** |
+| ⓪a HOD/LOD | did it turn, and is this turn unusual? | **the scorecard**, after |
+
+The right-hand columns are the only part that can be *early*. That's why "gamma building on a pullback" and "gamma building at the extreme" are the two readings you named — same signal, opposite trade, and the difference is *where* it's building relative to the day's range.
+
+**Where the app currently doesn't serve that**, honestly:
+
+- **MARK is empty** — the column that says "price is standing on this node" is the exact moment a deflection would be happening, and it's showing nothing. That's the most purpose-relevant bug open.
+- **`LVL_INPLAY_PTS = 3`** is a chart-space constant. On ES that's under half a strike gap, so "price is on the level" almost never fires. If you're watching for a deflection *as it happens*, that threshold is the trigger — and it's currently set by accident rather than by what a deflection looks like on ES.
+- **The recorder holds about a …[trimmed]
+
+**OPERATOR:**
+> regarding deflection, in past context i had gone over this extensively and provided multiple screenshots.  can you search for the definition of the deflection and the rule around detecting it
+
+**me (21:44):** Found it. Let me pull the full rule and its calibration.
+Found it — it's fully specified and calibrated. Here's the record.
+
+**Your definition** (2026-08-29): *"a lodN (lod node) and hodN (hod node) which are nodes that the extreme TESTED BEFORE REVERSING. it usually tests it or even penetrates it a little and then reverses."* And on which node counts: *"we are looking for 1 of the three kings, either a spy node, spxy node or a qqq node to have caused a deflection."*
+
+**The geometry — your words, then tightened on evidence:**
+
+> *"in a downmove the low of the candle has to be within 1 atr of the high of the node but cannot be more than 2 atr below the node."*
+
+```
+DEFL_NEAR = 1.0 ATR   may stop this far SHORT of the node and still count as a test
+DEFL_THRU = 1.5 ATR   may penetrate this far THROUGH it and still count
+trigger   = the WICK, never the close
+```
+
+Asymmetric on purpose — tight on the approach side, loose through it. The tuning is recorded: **1.25 ATR** adds 34% more events and *drops* the turn rate 59.2% → 57.6% (it admits visits that tested nothing); **0.75** only loses events; **2.0 penetration** isn't wrong, it just never bites — only 3% of tests reach past 1 ATR.
+
+**Why the wick and not the close** — this is the case that settled it. Close-as-trigger won *every* aggregate metric (40% fewer events, same turn rate, better adverse excursion) and was still wrong: on **2026-08-25 you circled 763.20 at node 763**, where the low was 763.28 and the close was 764.80. A 1.5-point rejection wick — a textbook deflection — discarded by a close rule. The selectivity gain *was* the cost of dropping the sharpest instances.
+
+**The split that matters, and it answers my earlier question:** the **wick** says price *tested* the node; the **close** says whether it *deflected …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 42 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (21:45):** Nothing new to push — still the same 42 commits blocked by the proxy policy, carried by `installv1549.bat`.
+
+**OPERATOR:**
+> now that you understand my intention of being able to identify deflections (reversals) either at the hod or lod or on pullbacks for trading opportunities, i want you to create a complete feature enhancement roadmap of what needs to be done. it can use this application as a baseline to work from and enhance its features to be better at accomplishing the goal as well as create new features.  It should include all sections which include the dashboard , analysis and testing tabs .  ofcourse some of the stuff we have created will be archived or deleted and the majority will be enhanced and new.  do you understand ..
+
+**me (22:13):** Yes. Deflection is the product; everything else is instrumentation for it. Before I write the roadmap I need an accurate inventory of all three tabs rather than a plausible-sounding one — the Analysis and Testing tabs I've barely touched this session.
+Inventory complete. Three facts reframe the whole roadmap:
 
 ### DECISIONS
+
+**v15.50 · the deflection roadmap.**
+- `roadmap/DEFLECTION-ROADMAP.md` — 21 items across Dashboard/Analysis/Testing + foundation, in a
+  build ORDER with the reason for the order. `load gex` 1a-01, pinned by `test_roadmap.js` (35).
+- ⚠⚠ **Headline: the touch has NO EDGE** — 56% break, mirror excursions, t=+0.41 / −0.32 both null.
+  **Q11 (deflect vs break, ex-ante) is the product and is not built. Everything else is cosmetic
+  until it is answered.**
+- ⚠⚠ Testing tab measured: **ANSWERED (0), TESTING (83)**. G5 families are unanswerable (n=0), not
+  pending. A loop that never concludes is a queue.
+- ⚠ **Blocked on HIM:** one exhaustively-labelled session (precision has no denominator) and the
+  re-arm distance.
+- ⚠ Build order: FOUNDATION → ANSWER → FACE → RECORD. The face comes last on purpose; the MARK fix
+  is the one exception (correctness — fixed 3 chart-points vs ATR-scaled deflection).
 
 **v15.49 · the columns were not missing; their NAMES were.**
 - All eleven headers present, positioned right, inside the horizontal view — and the header ROW had
@@ -1162,6 +1256,9 @@ same filter the live ladder applies. The day selector correctly reads the latest
 
 ### SHIPPED
 
+**v15.50** — `roadmap/DEFLECTION-ROADMAP.md` + `test_roadmap.js` (35) + `load gex` 1a-01.
+7 mutations / 7 caught. Suite 142 green / 6 baseline red.
+
 **v15.49** — sticky ladder header; `swallow('levelMarker')` + `__gptsDebug.mark()` instrumentation
 reset per render. `test_ladder_header.js` (20). 7 mutations / 7 caught.
 Suite 140 green / 6 baseline red.
@@ -1308,6 +1405,13 @@ seventeen caught. Suite 132 green / 6 baseline red.
 **166**; 7 mutations, all caught.
 
 ### OPEN AT CLOSE
+
+1. ⚠ **Q11 — the ex-ante deflect/break discriminator.** THE product gap. Blocked on an
+   exhaustively-labelled session and the re-arm distance — both his.
+2. ⚠ MARK column empty; `LVL_INPLAY_PTS=3` fixed vs ATR-scaled deflection. Roadmap item 1.
+3. ⚠ Recorder cannot hold a full day (3.44MB vs 3.6MB). Roadmap item 19.
+4. ⚠ Testing tab: 0 of 83 answered. Roadmap items 15-17.
+5. Today's (2026-09-02) EM band unusable — pinned 299 min late.
 
 1. ⚠ **MARK column empty on his panel** — instrumented, read `__gptsDebug.mark()` next reload.
 2. ⚠ **`LVL_INPLAY_PTS=3` is scale-dependent** — awaiting his call on what IN PLAY should mean.
@@ -1489,6 +1593,7 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+2687bb7 v15.49: the columns were not missing; their names were
 933de40 v15.48: sessionPhase() takes a Date and I passed it seconds, three times
 2204256 v15.47: the band's series began before the open, so the anchor was never the open
 31ecb60 v15.46: the warm-up guard read `t` in the wrong units and refused the band all day
@@ -1500,7 +1605,6 @@ d9c9e26 v15.45: the PURPOSE is written down; and a replay parked on yesterday re
 2725280 v15.40: the replayed ladder was drawn in the wrong price space
 067ec1d v15.39: two candles, one session, and they disagreed about its colour
 bebec5f v15.38: the futures-gamma research, parked where it cannot rot
-8b76b71 v15.37: YF and FF lamps — two integrations that ran 27 builds with nothing on the face
 ```
 
 ---

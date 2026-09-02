@@ -1,3 +1,67 @@
+## v15.50 — the deflection roadmap, and the headline it is built around
+
+> "create a complete feature enhancement roadmap of what needs to be done... include all sections
+> which include the dashboard, analysis and testing tabs. some of the stuff we have created will be
+> archived or deleted and the majority will be enhanced and new."
+
+`roadmap/DEFLECTION-ROADMAP.md` — 21 numbered items across all three tabs, plus the foundation, in a
+build order with the reason for the order. Registered as `load gex` step **1a-01** and pinned by
+`test_roadmap.js` (**35**, 7 mutations / 7 caught).
+
+### THE INVENTORY IT IS BUILT ON — measured on his running panel, not recalled
+
+    Dashboard   replay strip · 4 feed lamps · EM rail · 11-column ladder · read · ⓪a · footer
+    Analysis    ① HEADLINE ② WHAT CHANGED ③ DIRECTION FACTORS ④ DEFLECTIONS ⑤ YOUR CALLS
+                ⑥ REVIEW ⑦ NODES
+    Testing     ① QUESTION QUEUE ② PROPOSALS ③ CHALLENGERS ④ KILL LIST ⑤ SELF-TEST
+                ⑥ DATA COVERAGE          — 21 feature families
+
+### ⚠⚠⚠ THREE MEASUREMENTS REFRAMED THE WHOLE THING
+
+**1 · THE TOUCH ITSELF HAS NO EDGE.** 79 deflections / 25 breaks over 8 sessions, **56% break**.
+Deflections +0.92 MFE / +0.26 MAE; breaks +0.29 / +0.86 — **mirror images that cancel**.
+**t = +0.41** (top-5), **t = −0.32** (kings). Both null.
+So the panel can say a node was TESTED and cannot say which way it resolves — **and that is the
+entire trade**. `OPEN-QUESTIONS` **Q11** is the product, and it is not built.
+⚠ **Every dashboard feature is cosmetic until Q11 has an answer.**
+
+**2 · `ANSWERED (0)` · `TESTING (83)`.** Eighty-three questions in flight across 21 families and not
+one has ever resolved. **A learning loop that never concludes is a queue, not a loop** — and it is
+the mechanism that would tell him whether anything else works. Worse, `ARCHITECTURE-AUDIT` G5 shows
+whole families (`node.tap.*`, `node.pol.*`, `drift.conf`, `kill.*`) fall through to `byKey[id]` →
+**n = 0 always**. They are not pending; they are **unanswerable**.
+
+**3 · PRECISION HAS NO DENOMINATOR.** Recall is 100% of checkable marks. Precision is
+**unmeasurable** because no session has been labelled exhaustively — so Q11 is blocked on one hour of
+his time, not on engineering.
+
+### THE ORDER, AND WHY
+
+    A FOUNDATION   recorder capacity · one labelled session · the re-arm distance
+    B THE ANSWER   the Q11 bench · the deflection ledger · walk-forward
+    C THE FACE     MARK on deflection geometry · DEFLECTION WATCH · approach vector
+    D THE RECORD   ⓪a ledger · ④ promoted · split HOD/LOD vs PULLBACK · agreement scorecard
+    E THE CLEAROUT continuous, never a phase
+
+⚠⚠ **C DELIBERATELY FOLLOWS B.** Building the live deflection surface first would produce a confident
+face over a **t = 0.41** signal — a panel that looks decisive about something the data calls a
+coin-flip. That is precisely the failure `PURPOSE §4.4` exists to prevent.
+⚠ **The one exception is the MARK fix**, which is a correctness repair: the column is empty on his
+panel today because `LVL_INPLAY_PTS = 3` is a fixed chart-point threshold — three strike gaps on
+cash, **under half a gap on ES** — while deflection is ATR-scaled. The same concept, measured two
+incompatible ways.
+
+### AND WHAT IT REFUSES TO DECIDE
+
+The re-arm distance (his charts are ground truth, and ⚠ *do not tune it to make a number look good*);
+whether a deflection requires price to TOUCH the node; how to tell a node building AT the extreme
+from one at a pullback low; whether ③ DIRECTION FACTORS earns its place at all.
+
+⚠ **The mechanism stays a HYPOTHESIS.** The roadmap is built to make it checkable, and
+**a null result is an acceptable outcome — the failure would be a panel that looks confident anyway.**
+Suite **142 green / 6 baseline red**.
+
+
 ## v15.49 — the columns were not missing; their names were
 
 > "alot of the columns are missing"
