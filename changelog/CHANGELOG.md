@@ -1,3 +1,53 @@
+## v15.51 — the loop measures nothing: a scorer that can fail, and a ledger that survives
+
+> "i want you to consider the application, its entire machinery, my objective, all the tabs, to come
+> up with updates that will help me reach my objective... you must include data collection analysis,
+> testing and the entire self improvement process."
+
+**Nothing in the panel can be improved until the thing that grades it can fail.** This build fixes
+the grader. Four changes, `test_v1551.js` (**38**, 11 mutations / 11 caught), full suite 147 green /
+6 baseline red, smoke clean.
+
+### 1 · `lodhod` is scored AT THE CLOSE, on the session label
+Measured on his 11-day export: ⓪a's HOD/LOD call — the ONLY surface with a real backtest, AUC 0.879
+over 284 sessions — scored **362/362 = 100%** live, **including 5 of 5 in the cell where the table
+predicts 0-19%**. The scorer compared a 30-minute excursion to the WHOLE session range
+(`fwd.mae > -rngPts`). It cannot fail. Corrected to the right threshold it read 97.5% and was **still
+flat across every cell**, because **a bar-level scorer cannot test a session-level claim at any
+threshold.** New: a `toClose` feature flag — the resolver waits for 15:00 CT, then scores on every
+remaining bar (full window by definition, `atClose:true`, never `partial`). The outcome compares the
+lowest later low / highest later high to the **recorded extreme itself**. `1c` is the assertion where
+the old scorer said HELD and the new one says 0.
+⚠ **The live rate is NOT on the face** and must not be until it has accumulated at the close.
+
+### 2 · `hitNull` — a scorer that threw and one that declined are different records
+`resolved=true` was set unconditionally and the outcome catch was empty. All 2,706 unscored records
+in the export turned out to be honest declines — but that could only be established by reading `out`
+by hand. Now `r.hitNull` = `threw` / `declined` / `null`, and a throw is reported through `swallow()`.
+
+### 3 · `repoUpsertDefl` — the event-level ledger survives eviction
+`day.defl` is the only ledger with ONE ROW PER FRESH TAP — the shape Q11 needs (feat is per-bar: 62 of
+94 node episodes carried contradictory labels). It was the only one never mirrored to IndexedDB, and
+`recorderSave`'s eviction deletes non-today days first, so every past day of it was destroyed. IDB
+bumps to v3 with a `defl` store; rows keyed `sym|date|sig|tapBar` so the labelled pass overwrites.
+`__gptsDebug.deflArchive()` reads it back. **`PREREGISTER.md` H5 waits on this accumulating.**
+
+### 4 · One geometry for "price is at the node"
+`LVL_INPLAY_PTS=3` and `reactDefence`'s `bd>3` were both fixed chart-points in DISPLAY space (verified:
+`tradeNodes().es` is display, every caller agrees) — ~4-7 ATR on a SPY chart, well under one on ES.
+Both now take `nodeBandDisp()` = `atr × scaleUsed × DEFL_NEAR`, the deflection band settled on
+2026-08-29. Not a new tunable. Legacy 3 only before two closed bars exist, and the row says `legacy`.
+⚠ **NOT claimed: that this fills MARK.** `LVLMK_LAST` showed a row 0.5 from price INSIDE the old
+threshold and still empty on 2026-09-02. `__gptsDebug.mark()` decides that; run it after install.
+
+### Tests touched, deliberately
+Four `@version` pins → 15.51. `test_ladder_header m2c` now asserts the row records the band it used.
+`test_feature_enrollment 9g` counts `toClose` features as pending-by-design.
+
+### What this build does NOT do
+No dashboard changes. No new predictions. The mockup's hierarchy (ladder above ⓪a) is recorded as
+backwards in the resume note and is not built.
+
 ## v15.50 — the deflection roadmap, and the headline it is built around
 
 > "create a complete feature enhancement roadmap of what needs to be done... include all sections

@@ -15,856 +15,408 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-02 · v15.50 · session `5e8d34b5`
+## 2026-09-03 · v15.51 · session `5e8d34b5` — v15.51 — the loop measures nothing: a scorer that can fail
 
-_65 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_23 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
-**OPERATOR:**
-> we need to continue refining the app… i cant see the arrows on the left or the king lanes on the right…
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+**me (23:46):** Noted — no `APPROACHING`. Worth one line on the consequence: the state becomes **coincident** rather than early. Your early read stays in the ⇄ / Δ15m / STATE / ROC group — gamma building into a node you can see price walking toward — and the state only speaks once price is actually there. That's coherent, and it's the more honest of the two.
+
+Writing the spec now.
+Spec written, nothing built. It's everything we just agreed, in your words where you gave them.
+
+The parts most worth your eye:
+
+**§7 — the cuts.** King lanes out (52px), but the migration track keeps recording and becomes a *"king for 3h"* clause — node age is a new Q11 candidate nobody had listed. `%KING` bar becomes a top-5 rank badge, which is your own rule applied. **You'd lose one thing**: at-a-glance *gaps* between node sizes — the rank tells you the order, not whether #1 is twice #2. The number moves to the hover. Say if that's a bad trade.
+
+**§10 — what this build may not claim.** The touch has no edge: 56% break, t = +0.41 / −0.32, both null. This build makes the test *visible and recorded*. It does not predict the resolution, and I've written in that no wording on the face may suggest it does. That's the constraint I'd most want you to push back on if you disagree with it.
+
+**§9 — absorption, parked but written down** with the limit that travels with it: total volume, not bid/ask, so it can say *heavy volume, no progress through the node* and cannot say *buyers absorbed sellers*.
+
+Two things I recorded as consequences rather than decisions, so nobody undoes them by accident: declining `APPROACHING` makes the state **coincident, not early** — your early read stays in the ⇄/Δ/STATE/ROC group. And the 3m close means confirmation arrives up to three minutes after the low prints. Both follow from your c …[trimmed]
 
 **OPERATOR:**
-> you really need to do a better job at development .. do you know the code…
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 44 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (23:48):** Same policy denial — 44 commits now. They're all in `installv1550.bat`; the spec I just sent is committed on top and will ride the next installer.
 
 **OPERATOR:**
-> how is it that the stats of all except 1 is spent and only is weakening.. something is not right
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+> you know my requirement and the objective of this application. i need you to help me get there with everything we have.. di you review the hod  lod stats and how that can assist you ,  how sweeps can assist you  etc..   you must consider everything we have and integrate it into achieving my objective !
+
+**me (23:50):** You're right, and I've been under-using what's already there. Let me actually go look rather than reason from memory.
+`bd>3` — the *same* fixed-point gate as `LVL_INPLAY_PTS`. Let me check the rest.
+Found the thing you're pointing at. Three measurement systems in this panel that have **never been connected to each other**.
+You were right to push. The audit found something I'd missed completely, and it changes the order of the work.
+
+**The panel already contains a validated probability engine and a gamma map, and they have never been multiplied together.**
+
+**1 · The HOD/LOD table is already two-thirds of Q11.** `HLTAB` — 284 sessions, 44,302 observations, AUC **0.879** on two axes: `posr` (how far price has travelled off the extreme, as a fraction of range) and the clock. At the HOD/LOD, *"will this extreme hold?"* and Q11's *"deflect or break?"* **are the same question**. I've been writing Q11 up as unbuilt and blocked — it shipped in v14. It just doesn't know gamma exists.
+
+And the strong call is the one neither of us quotes: **NOT-IN at 20% → the extreme broke 85% of the time**, n=230, median 08:40 CT, against a ~57% base. Stronger *and* earlier than the IN call.
+
+So Q11 stops being "build a discriminator from a blank page" and becomes: **does the node move the cell?** A question with a corpus and a number to beat.
+
+**2 · Sweeps — the honest answer, then the reframe.** They were measured and rejected: AUC 0.559, 48%, *below* their own base rate. They don't work. **But every rejected feature was measured in open air** — sweeps, the 50-SMA, IB30/60, both divergences. **The node was never the conditioning variable in any of those studies.** A sweep at a top-5 king is not the same event as a sweep in a vacuum, and we've only ever measured the vacuum. That's your thesis s …[trimmed]
 
 **OPERATOR:**
-> look at the arrows and compare to the data and tell me if it makes sense. same with the status… look at the time that i selected and compare what it shows to the data and you will see clear errors.
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 45 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (23:55):** Still the proxy policy denial — 45 commits now, both new design files included. Per the README I'm reporting it rather than retrying; they'll ship in the next installer.
+`0 days` most likely means I gave you the wrong key, not that nothing recorded — frames were vending fine yesterday. Let me check the source rather than guess.
+My probe was wrong — the key is `gpts_recorder_v7`, not `v1`. And note how it failed: a missing key parsed to `{}`, yielded `0 days`, and **looked exactly like an empty recorder**. Same failure mode we keep hitting — a plausible zero instead of an error.
+Confirmed, and it **partly retracts what I told you yesterday**. `snaps` and `feat` are both archived to IndexedDB. `defl` is not — there is no `repoUpsertDefl`. And `recorderSave`'s eviction ladder deletes **non-today days first**.
+
+So the deflection corpus is **today-only by construction**. Every past day's deflections were evicted to make room. I said "months may have been accumulating" — that was wrong.
+
+Correcting the file:
+Two things, one of them a retraction.
+
+**The probe was mine and it was broken.** Wrong key (`v1`, not `v7`). A missing key parses to `{}`, `.days` is undefined, and you get `0 days · 0 deflections` — **no error**. A wrong key and a genuinely empty recorder returned the *identical string*. I nearly filed "the corpus is empty" off an instrument that couldn't tell "nothing there" from "I looked in the wrong place." Same family as the empty catch and the guard that can't fire.
+
+**And the thing it was probing, I'd got wrong too.** I told you labelled deflections might have been piling up for months. They haven't, and they couldn't have:
+
+```
+repoUpsertSnaps()   snaps → IndexedDB   survives
+repoUpsertFeat()    feat  → IndexedDB   survives
+repoUpsertDefl()    does not exist
+``` …[trimmed]
 
 **OPERATOR:**
-> there are also no headers ? what happened to them. fix this
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 46 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
 
-**OPERATOR:**
-> i said to remove the read , where it says event day. double check and make sure everything is working right
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+**me (00:09):** 46 commits, same organization policy denial on push (403). Per the README I'm reporting rather than retrying — the two design files and this correction will ship in the next installer alongside the code.
+Your console has a filter active — the box next to the funnel says **`history`**, and the top right says **3,167 hidden**. The probe ran fine (Promise fulfilled); its `console.log` lines were filtered out before they reached you.
 
-**OPERATOR:**
-> check everythign
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
+Third variant of the same lesson in two days: output suppressed downstream looks identical to output never produced.
 
-**OPERATOR:**
-> check the candle construction as well. is this candle construction based on the RTH session. are its values correct. if i open the application later after the market opens, can you backfill the data in this hod lod section…
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**OPERATOR:**
-> why is the expected high (EH) and expected low crossed out .. did you determine the values from insider finance . did you draw them from the open… the movement of the kings in the king lanes doesn't make sense, it is too erratic… lets get rid of the 5m roc and keep the 15m roc… is the state also looking at 15 min?
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**OPERATOR:**
-> one thing i forgot is i need to be ablie to detect rolls . right now i dont see the roll arrows…
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**OPERATOR:**
-> Also the mesaaging at the top currently says LOD in 74% , but it should say somehting like LOD IN 74%, HOD after 1:30 75%… why is there no companion link… you need to make sure that when the applicaiton is working , there is some type of test to check insider finance… and you need to ensure that the application is writing to the king levels to the server for irt… it is fundamental to the application.
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**OPERATOR:**
-> you messed up the display
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**OPERATOR:**
-> i think the push failed
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**OPERATOR:**
-> the tampermonkey link did not update and only gave a reinstall option
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**OPERATOR:**
-> are you insane.. look at the laddeer , it is a complete mess
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**OPERATOR:**
-> i want you to review it and tell me if it looks right and where is the expected low
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**OPERATOR:**
-> its not right the EL is being cut off , i cant go scroll lower or higher on the ladder. double check
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**OPERATOR:**
-> give me the latest install
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**OPERATOR:**
-> get rid of the TA... column and move the roll arrows there instead. regarding the the display of the ladder, you must at all times show the EH to the Expected low or beyond both. . also i am having trouble using the grip to increase horizontal size.
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**OPERATOR:**
-> in the now column draw the daily candle in the background. make it that just like the nodeladder needs to show the expected high and expected low, it also has to always show the entire daily column. get rid of the IBH and IBL from the level column. it is not a key level. Also the ladder looks like it is missing strikes, maybe thats the problem also
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**OPERATOR:**
-> i dont see the tamper monky links or save confirmations which yuou are suppose to give me everytime there is a build telling me the files that were save (eg chat history, lessons learned etc.)
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**OPERATOR:**
-> why is there no update in tampermonkey .its only reinstall
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**OPERATOR:**
-> ok..1 thing to remember here is that the market is going to close soon and i need you to ensure that the application goes into freeze and i can replay it at various points fo the day by using the slider. at this point, I am now going to qa the application with you step by step to identify changes that are needed. first change is to move the hodlod section bellow the node ladder… update the heading where it says 1ST0 HOD , to 1ST TP , which stands for first turning point .. similar to 2nd. also make the labels a little brighter… go and build , make sure you give me thes save confirmation , check the documentation on how the save confirmaiton is suppose to look… make sure the chat history is saved so next context becomes aware quickly. Also in the build i need two additional indicators . 1 indicating tha the applicaiton is writing to irt file export and another that it is getting data from Inside Finnace every x minutes. keep it on the top somehwere.
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**OPERATOR:**
-> check atlas and tell me for each type of king, how many rolls were there
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**OPERATOR:**
-> put the irt and if indicators in the tapereader header to consserve space. Make sure you freeze the app so that i can continue working because the market is aobut to close very soon.
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**OPERATOR:**
-> check everything.. i reloaded
-> 
-> _[RECOVERED from the compaction summary — this context was compacted and the transcript no longer holds the turn itself]_
-
-**me (20:27):** **v15.35 — the freeze badge lied, the freeze did not.**
-
-Your footer read `2026-09-01 book — frozen 10:44 am`. I probed the latch on your panel and it was perfect: SPXW king **7630**, 100 strikes, ts **14:59:00**, expiry 2026-09-01. Only the label was wrong.
+Clear that filter box, or just run this version — it *returns* the value, so it renders as the evaluation result and the filter can't touch it:
 
 ```js
-// LB.ts is epoch MILLISECONDS.  fmtClock(ts) does new Date(ts) — also milliseconds.
-// The call site divided by 1000 in between:
-1788296340000  →  1788296340  →  1970-01-21T16:44Z  →  "10:44 am" CT
+await (async()=>{const K='gpts_recorder_v7',raw=localStorage.getItem(K);
+if(raw===null)return'❌ '+K+' MISSING';
+const db=JSON.parse(raw),days=db.days||{},ds=Object.keys(days).sort();
+const o=[K+' '+(raw.length/1024|0)+'KB · days: '+(ds.join(', ')||'(none)')];
+for(const d of ds){const s=days[d].defl||{};let n=0,l=0;
+for(const y in s){n+=s[y].length;l+=s[y].filter(e=>e.cont!=null).length;}
+o.push(d+' · defl '+n+' ('+l+' labelled)');}
+const idb=await new Promise(r=>{const q=indexedDB.open('gpts_repo_v1',2);q.onsuccess=e=>r(e.target.result);q.onerror=()=>r(null);});
+if(!idb)o.push('❌ IDB unavailable');
+else{const c={};await new Promise(r=>{idb.transaction('feat').objectStore('feat').openCursor().onsuccess=e=>{const x=e.target.result;if(x){c[x.value.date]=(c[x.value.date]||0)+1;x.continue();}else r();};});
+const k=Object.keys(c).sort();o.push('IDB feat · '+k.length+'d · '+k.reduce((a,b)=>a+c[b],0)+' recs · '+(k[0]||'-')+' → '+(k.at(-1)||'-'));}
+return o.join('  |  ');})()
 ```
 
-The dangerous part isn't that it was wrong, it's that **10:44 am is a plausible freeze time** — nothing prompted a question. The one widget whose entire job is disclosure ("how old is this book?") was the thing misleading you. `test_lastbook` now executes `fmtClock` on a real latch time and asserts the `/1000` form lands in 1970 — the exact string you saw. 53 assertions, one mutation, caught.
-
-Everything else post-close checked correct: lamps in the header (`IRT 1m · IF 1m`), AFTER HOURS chip, ⓪a below the ladder, 1ST TP / 2ND TP, brighter labels, zero render errors. `deps` has one failure left — `if.SPY: missing expected move` — expected under the SPX pin. Suite **136 green / 6 baseline red**.
-
-**Tampermonkey — update ONLY what changed:**
-- **Tapereader v15.35** (changed) — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
-- **Companion v1.17** — UNCHANGED, do not reinstall — https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js
-
-Then wait ~5 min (raw CDN cache) → **click the link** → reload the Atlas tab. Footer must say v15.35. TM auto-update is once a day by default, so the click is the reliable step; "Reinstall" just means you already have it.
-
-**SAVE CONFIRMATION**
-```
-  saved    chat history (reg …[trimmed]
+Separately — that red **2,747** errors badge. Once we've got the corpus number, I'd like to see what's throwi …[trimmed]
 
 **OPERATOR:**
 > Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 28 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> [~/.claude/stop-hook-git-check.sh]: There are 47 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
 
-**me (20:27):** The push is blocked the same way it has been all session — the git proxy won't inject a credential for `rassulshah/gex-signal-tapereader` (403, "not in this session's authorized repository set"). Nothing I can do from here.
-
-That's fine and expected: all **28 commits** are in the installer payload. When you run `installv1535.bat` it writes them into `C:\Dev\gex-signal-tapereader` and pushes from your machine, which is where the credential lives. The raw.githubusercontent links go live a few minutes after that push lands.
+**me (00:48):** 47 commits, same 403 policy denial on push — reporting per the README rather than retrying.
 
 **OPERATOR:**
-> the number of king rolls should match atlas, can you see what you did wrong or how to improve it
+> @"/root/.claude/uploads/5e8d34b5-d55e-5fa6-938c-1f55548b25ee/0964327c-featexport.json" [files attached]
 
-**me (20:44):** **What I did wrong: I read the count off the drawing.**
+**me (00:49):** `out.held` / `out.broke` — **that's the deflect/break label, on 1,151 rows with a full feature vector.** That's Q11's dataset. Let me look at the other keys' shapes before analysing.
+`out.mfe`/`out.mae` are **populated on the unscored records too** — only `hit` is null. So those 7,500 aren't missing data, they're unlabelled data with the raw material still present. Now the main analysis:
+**48% held / 52% broke** — and `hit` *is* the held/broke label. But look at the denominator:
+The rejection wick — **grader #1 in my own spec** — is already measured on 970 records: `confirmed` 49.1% vs `weak` 48.6%. Flat. Writing this up:
+First time Q11 has been asked of data rather than argued. Four things came out, and one of them refutes something I proposed to you two days ago.
 
-`KTRACK` is the **king lane**, and it is dwell-filtered to 20 minutes *because you asked for it to be* in v15.23 — "the movement of the kings doesn't make sense, it is too erratic." Throwing changes away is its job. You asked a **counting** question and I answered it with the lane's numbers. Every part of it worked as specified; the specification was "show fewer."
+**Your base rate is confirmed by a second, independent sample.** 49 of 94 episodes held — **52.1%** [42–62%]. The hand study said 56% break; this says 47.9%. Same conclusion from different data: the touch is a coin. That number is now much harder to argue with.
 
-Measured over your own 8 recorded sessions (2026-08-20 → 08-31), median crown changes per day:
+**But 1,151 rows are only 94 episodes.** Every bar re-records the same node with an overlapping 10-bar window — 12.2 rows each. Treating them as independent would have inflated every interval about 3.5× and manufactured significance out of nothing.
 
-```
-sampling        SPXW   SPY   QQQ
-  15m             6     6     7
-   9m             7     6     8
-   6m             9     8    12
-   3m            12    11    17    ← the recorder's own cadence
-dwell 20m         4     5     5    ← what the lane draws, and what I told you
-```
+**And the label is the wrong shape for your question.** 62 of the 94 episodes carry *internally contradictory* labels — the same node, the same day, held on some bars and broke on others. That isn't noise, it's the definition: `hit` answers *"did price move favourably over the next 10 bars from this bar,"* re-asked every bar. You're asking *"when price tested this node, did it deflect or break"* — which has a discrete event in it.
 
-Median ratio census : lane = **×3.0**. And notice the count is **still climbing** as the sampling gets finer — so even the 3m number is a floor. Atlas recomputes continuously, so **Atlas will read at or above anything this app can produce.** The honest answer form is "at least N", not "N". I'm withdrawing every per-king roll count I gave you; they were lane counts.
-
-Three things were subtracting: the dwell filter (~3×, deliberate), the sampling (a floor), and **QQQ had no answer at all** — `KT_BOOKS` excludes it, correctly for *drawing* (a proportional bearing must not be drawn as a level), but that rendering decision had leaked into the data model.
-
-**What shipped.** `gpts_kingraw_v1` now keeps the raw series — one entry per crown change, at render cadence (~15s, four times finer than the recorder), for all three books. The dwell rule now filters a *view* of it instead of destroying it. `__gptsDebug.kingTrack()` returns `rolls` (the census) *and* `migrations` (the lane), and the king …[trimmed]
+That reverses what I told you an hour ago. `day.defl` dedups by strike wit …[trimmed]
 
 **OPERATOR:**
 > Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 29 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> [~/.claude/stop-hook-git-check.sh]: There are 48 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
 
-**me (20:44):** Push is still blocked — the git proxy won't issue a credential for `rassulshah/gex-signal-tapereader` (403). Same as every build this session; nothing I can do from this container.
-
-All **29 commits** are inside `installv1536.bat`. Running it writes them into `C:\Dev\gex-signal-tapereader` and pushes from your machine, where the credential lives. The raw.githubusercontent link updates a few minutes after that push lands.
+**me (00:52):** 48 commits held locally — same 403 organization policy denial on push, reported not retried per the README. The three new design/findings docs are among them and will ship in the next installer.
 
 **OPERATOR:**
-> add indicator for yahoo finance integration also , call it YF and forex factory , call if FF.  All of this integration better be mentioned somewhere. check where it is mentioned.
+> how many more features.. are you ready to build
 
-**me (22:17):** Now the tests.
-Before I build this, two things I found that change the spec — I checked all four books on InsiderFinance just now:
+**me (00:54):** **Zero more features.** 49 are registered and all of them are recording — that was never the shortage. The shortage is 94 episodes and a label at the wrong granularity. Adding features to a 94-episode corpus just adds cells to search, which is how you find something that isn't there.
 
-| ETF | nearest expiry available | 0DTE? | total OI |
-|---|---|---|---|
-| **GLD** | Sep 1 · **0DTE** | ✅ daily expiries | large |
-| **USO** | Sep 2 · **1DTE** | ❌ | 1.3M |
-| **UNG** | Sep 2 · **1DTE** | ❌ | 413.6K (no zero-gamma published) |
-| **FXE** | Sep 18 · **17DTE** | ❌ | 24.1K — **monthly only, no weeklies at all** |
+Yes, ready. Three changes, all mechanical, none of them a new prediction. Let me check the `hit==null` cause before I commit to fixing it.
+`r.resolved=true` is set **unconditionally** — even when `f.outcome()` returned null or threw, and that catch is empty. Let me test which of the two it was, because it changes whether I was right about "recoverable".
+All 2,706 declined. **Zero threw.** And the reasons are legitimate — I was wrong, in the unhelpful direction this time.
+I have to retract something I told you an hour ago before we build on it.
 
-USO and UNG land exactly where you predicted (1DTE, fine). **FXE is the outlier** — its nearest chain is 17 days out, so its walls are a positioning marker, not an intraday magnet. Worth deciding deliberately rather than letting my "nearest expiry" rule quietly export it as if it were comparable.
+**The "7,500 discarded records" were not discarded evidence.** I checked all 2,706 in the export instead of assuming: **zero** threw. All 2,706 *declined*, and the declines are correct —
 
-Good news on the plumbing: the companion **already** couriers `GC=F` and `CL=F` from Yahoo, so gold and crude ratios can be measured live rather than assumed — which matters enormously for USO and UNG, whose ETF-to-futures ratio drifts every single day from roll decay. A hardcoded multiplier would be wrong within a week. I'll add `6E=F` and `NG=F` and derive every ratio live per session.
-Good instinct — that would be strictly better than converting. Let me check.
-Researched. Here's the landscape, separating what I **measured myself** from what I **read**.
+```
+defl.trigger   state:""  dir:"none"  latchedBar:null   nothing was latched
+dir.kingRoll   vote:0    voting:false                  no vote was cast
+defl_ant       fired:false                             it never fired
+```
 
-**Measured, just now, on your account:**
+Those rows are the feature saying *"I had nothing to say on this bar."* Scoring them would count non-events as events and **poison** the corpus, not double it. `defl.trigger` isn't losing 73% of its evidence — on 73% of bars there was no trigger to have evidence about.
 
-Skylit's GEX endpoint returns HTTP 200 but **zero snapshots** for `GC1`, `GCZ26`, `CL1`, `NG1`, `6E1` — and for `ES1` too — while `SPY` returns 390 snapshots across 50 strikes. So Skylit charts futures but only *computes* gamma from equity/ETF/index chains. Your read was right, and it's broader than you thought: they don't have ES gamma either, which is why this whole panel converts SPX→ES rather than reading ES directly.
+**So the corpus is 94 episodes. There's no free doubling.** §4's conclusion stands and is now the only one.
 
-InsiderFin …[trimmed]
+Worth naming the pattern in my own three corrections today, because it bears directly on the warning I gave you:
+
+```
+"months of labelled deflections may exist"   → none …[trimmed]
 
 **OPERATOR:**
 > Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 30 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> [~/.claude/stop-hook-git-check.sh]: There are 49 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
 
-**me (22:32):** Working tree is clean — all 30 commits are committed locally, the push just can't leave this container (the git proxy won't issue a credential for your repo; I tried again after v15.36). They ride out in `installv1537.bat`, which pushes from your machine when you run it.
-
-Nothing is at risk of being lost. Standing by on the two answers — FXE, and the IRT symbols for gold/crude/natgas/euro — and on what feed your Investor RT runs, since IQFeed would change the whole plan.
+**me (00:55):** 49 commits, same 403 policy denial — reported per the README, not retried.
 
 **OPERATOR:**
-> first tell me free options
+> you know my objective .. tell me what it is and how you plan on helping me accomplish it.  Tell me how, what are you using , what are you doing. Tell me the plan .
 
-**me (22:34):** Found something good. Let me verify one more thing.
-Checked live, no login, just now:
+**me (00:56):** Your objective, in your words:
 
-## 1. Barchart's free pages — and they're *better* than the ETF conversion, not just cheaper
+> *"identify two key turning points which are the high of the day and low of day, in order to profit from the move from high to low or low to high"* — and secondarily the **pullback** turning points, the ones that stop a counter-move and resume the trend rather than end it.
 
-Two sibling pages per contract, both free and both rendering fully without an account:
+The mechanism you're trading: **a gamma node deflects price, and that deflection is the turning point.** Two kinds, and confusing them is the expensive error — a pullback deflection means stay in, a HOD/LOD deflection means turn around.
 
-- **Options Prices** → Strike · Open · High · Low · Latest · Bid · Ask · Volume · **Open Int**
-- **Volatility & Greeks** → Strike · IV · Delta · **Gamma** · Theta · Vega · IV Skew
+**Where the evidence actually stands, because my plan has to start here.** Your touch has now been measured twice, independently: your 8-session hand study said 56% break; the 11-day archive said 47.9%. Overlapping intervals, same answer. **Price arriving at a top-5 gamma node, on its own, is a coin.** Not a weak edge — no edge. And the rejection wick, which I proposed to you as the leading discriminator, is 49.1% vs 48.6% on 970 rows.
 
-Verified on **CL** (Crude Oil WTI Oct '26) and **GC** (Gold Dec '26) — real per-strike gamma and open interest for CME options on futures. That's everything GEX needs: Σ(gamma × OI × multiplier), the same arithmetic this panel already does on the SPX ladder. Delayed 15 minutes per exchange rules.
+That does **not** mean you're wrong. It means the node alone isn't the signal, and a panel that says `DEFLECTING` in confident type over a 52% event is the exact failure your own §4.4 names.
 
-**The part that changes your plan:** CL's expiry dropdown offers **Monday, Tuesday, Wednesday, Thursday and Friday weekly options**. The actual crude book has near-daily expiries. USO's book does not — its nearest is 1DTE and it's the *wrong instrument's* positioning anyway. Same story for 6E versus FXE's 17-day monthly. So reading the real futures chain isn't a downgrade from the ETF conversion; the ETF conversion was the compromise.
+**What I'm using — the assets that already exist and were never joined:**
 
-Caveats, honestly: free tier throttles page views for non-logged-in visitors, the CSV "download" button appears to want a login, and automating the scrape is a terms question — though your companion already scrapes InsiderFinance exactly this way, so it's a consistency call, not a new one.
-
-## 2. CME Group's own daily data — free, unambiguous, EOD
-
-Daily Bulletin and settlement files carry open interest by strike. End-of-day only.
-
-**But here's the thing that makes that less of a compromise than it sounds:** the exchange publishes open interest **once a day**. There is no intraday OI, for anyone — includ …[trimmed]
-
-**OPERATOR:**
-> i dont have iqfeed.  yes check ng and 6e
-
-**me (22:42):** Checked all four. Verified live on the free pages:
-
-| contract | Barchart symbol | weeklies listed | front option | per-strike gamma | per-strike OI |
-|---|---|---|---|---|---|
-| Crude WTI | `CLV26` | **Mon/Tue/Wed/Thu/Fri** + European + Avg Price | 09/17 monthly, weeklies live | ✅ | ✅ |
-| Nat Gas | `NGV26` | **Mon/Tue/Wed/Thu/Fri** + European + Fri Weekly European | 09/25 monthly | ✅ | ✅ |
-| Gold | `GCZ26` | Mon–Fri | — | ✅ | ✅ |
-| Euro FX | **`E6`**`U26` — note it's `E6`, not `6E` | Mon–Fri listed | **09/04 — 3 days out** | ✅ | ✅ |
-
-Two things I found that matter more than the checkmarks:
-
-**The euro weeklies are listed but not traded.** I selected the Oct 2 Friday weekly on `E6Z26` and every single field came back N/A — no bid, no ask, no OI. The product exists; nobody uses it. So for 6E the real book is the front serial, currently **3DTE**. Still far better than FXE's 17-day monthly, but don't expect a daily 0DTE there the way CL and NG have one.
-
-**Barchart's free throttle is real, and I triggered it.** After roughly eight to ten page views a signup wall dropped over the page — twice. That's the binding constraint on any courier, not the data itself.
-
-**But the throttle turns out not to matter, and here's why.** Open interest is published **once a day** by the exchange. There is nothing to poll. One pull per contract at the open is not a compromise — it's the correct architecture. Four contracts × two pages × two pulls a day is ~16 page views, comfortably inside even the un-registered limit, and a free Barchart account raises it further and appears to enable the CSV download button.
-
-So the free path is: free Barchart account → pull the two tables per contract shortly after the open → compute Σ(gamma × OI × multiplier) ourselves, same math the panel already runs on …[trimmed]
-
-**OPERATOR:**
-> i'll go withyour recommendation. also i need you to have checks to always know the current contract. see if you can determine this from the sources we have now like  barchart or cme or something else.
-
-**me (23:00):** Got the symbols — DTN convention: `EPU26` ES, `ENQU26` NQ, `E6U26` euro, `GCEZ26` gold, `CLEV26` crude, `NGEV26` natgas, and **`CPEZ26` copper**, which wasn't in your original four. Copper has CME options too (`HG`) — say the word and it comes along.
-
-Now the roll detection.
-That check just earned its keep — it caught a real error before a single line was written.
-**The contract check works — and it caught a real error on its first run.**
-
-Barchart has two continuation notations, and they are not the same thing:
-
-| root | `*1` = nearest by date | `*0` = **most active** | your ticker | which is right |
-|---|---|---|---|---|
-| CL | CLV26 Oct | CLV26 Oct | CLE**V26** | either |
-| NG | NGV26 Oct | NGV26 Oct | NGE**V26** | either |
-| E6 | E6U26 Sep | E6U26 Sep | E6**U26** | either |
-| **GC** | **GCU26 Sep** ❌ | **GCZ26 Dec** ✅ | GCE**Z26** | **only `*0`** |
-| **HG** | **HGU26 Sep** ❌ | **HGZ26 Dec** ✅ | CPE**Z26** | **only `*0`** |
-
-The obvious rule — "front month" — would have put gold and copper levels on **September**, a nearly dead month, while you trade December. `*0` matches all five of your tickers exactly. That's the resolver: one page view per product, and the contract code comes straight out of the `<h1>`.
-
-There's a free second opinion too. `GC*1` (Sep) prints **4,328.0**; Yahoo's `GC=F`, already flowing into your companion, prints **4,375.70** — the Dec contract. So Yahoo independently agrees with `*0`, and a price disagreement beyond a tick or two becomes the alarm: *we resolved a contract whose price doesn't match the tape*. That costs no extra request, and it's a measurement rather than an assumption.
-
-One more thing the check has to keep separate: **the contract roll and the option-expiry roll are different events.** CL's October options expire mid-September …[trimmed]
-
-**OPERATOR:**
-> what is the proposed approach for each market . give me a list like 1. GC   2. CL
-
-**me (23:14):** Per market. Everything marked ✅ I verified live today; ⚠ is a known risk or an unknown I have not measured.
-
----
-
-### 1. GC — Gold → `GCEZ26`
-
-- **Contract resolver:** `GC*0` → **GCZ26 (Dec '26)** ✅ matches your ticker
-- ⚠ **`GC*1` returns GCU26 (Sep) — wrong.** September gold is nearly dead; you trade December. This market is the reason the resolver has to be "most active", not "front month"
-- **Cross-check:** Yahoo `GC=F` = 4,375.70 = the Dec contract. GCU26 printed 4,328.0 — that **$47 gap is the alarm**: if the resolved contract's price doesn't match the tape, we say so instead of drawing
-- **Levels:** Barchart per-strike Gamma ✅ + Open Int ✅, both free
-- ⚠ **Unverified:** gold's near-dated weekly liquidity. The Z26 *monthly* is 84 DTE, so the 0–1DTE levels have to come off weeklies I haven't priced yet
-- **DTN:** `GCE` + `Z26`. Tick 0.10
-
-### 2. CL — Crude Oil WTI → `CLEV26`
-
-- **Contract resolver:** `CL*0` → **CLV26 (Oct '26)**, last 90.82 ✅
-- **Expiries:** Monthly, European-Style, Average Price, and **Monday/Tuesday/Wednesday/Thursday/Friday weeklies** ✅ — genuine near-daily 0–1DTE
-- **Levels:** full free coverage confirmed — Strike, Volume, **Open Int**, plus IV, Delta, **Gamma**, Theta, Vega ✅
-- **Cross-check:** Yahoo `CL=F` = 90.68 vs Barchart 90.82 ✅ agrees
-- **DTN:** `CLE` + `V26`. Tick 0.01
-- **This is the best-covered market of the set** — start here, prove the pipeline on it, then extend
-
-### 3. NG — Natural Gas → `NGEV26`
-
-- **Contract resolver:** `NG*0` → **NGV26 (Oct '26)** ✅
-- **Expiries:** Monthly, European-Style, Friday Weekly European-Style, and **Mon/Tue/Wed/Thu/Fri weeklies** ✅
-- **Levels:** Gamma ✅, Open Int ✅
-- ⚠ **`NG=F` is not in the courier yet** — needs adding, or NG ships with no price cross-check
-- **DTN:** `NGE` + `V26`. Tick 0.001
-
-### …[trimmed]
-
-**OPERATOR:**
-> where to get CL from ?
-
-**me (23:16):** Three URLs, all Barchart, all free without login. I just pulled a live CL chain to confirm.
-
-**1 — Which contract are we on?**
-```
-barchart.com/futures/quotes/CL*0/overview
-```
-Returns `Crude Oil WTI Oct '26 (CLV26)` in the `<h1>`. That's the whole roll detector: one page view, contract code out of the heading. `*0` = most active. Runs once a day.
-
-**2 — Open interest per strike**
-```
-barchart.com/futures/quotes/CLV26/options
-```
-**3 — Gamma per strike**
-```
-barchart.com/futures/quotes/CLV26/volatility-greeks
-```
-Same table, same strikes, different columns. GEX = gamma × OI, joined on strike.
-
-**Here is what that actually returns right now**, Friday weekly, **3 days to expiration on 09/04/26**:
-
-| strike | volume | open int |
-|---|---|---|
-| 88.50C | 9 | 78 |
-| 89.00C | 113 | **371** |
-| 90.00C | 220 | **353** |
-| 91.00C | 1 | 64 |
-| 92.50C | 2 | **1,432** |
-| 93.00C | 72 | 210 |
-
-Real traded open interest at 3DTE on 0.25-wide strikes. Crude's weeklies are genuinely liquid — this isn't the euro situation.
-
-Two settings that matter on those pages:
-
-- **Options Type → `Friday Weekly Options`** (or Mon/Tue/Wed/Thu), then **Week 1: Sep 2026**. Leaving it on `Monthly Options` gives you 09/17 — sixteen days out, the wrong book entirely.
-- **Moneyness → `Show All`**, not the default `Near the Money`. A gamma flip computed off a truncated chain is wrong, and wrong in a way that looks fine.
-
-**Fourth input, already flowing:** Yahoo `CL=F`, which your companion is holding right now at 90.68. Barchart's page says 90.79. Agreement inside a couple of ticks is the confirmation we resolved the right contract — that's the check that catches gold pointing at September.
-
-**How it reaches the panel.** The two chain pages build their tables in the browser after load — I fetched the greeks …[trimmed]
-
-**OPERATOR:**
-> I want you to hold this implementation detail somewhere , maybe in a roadmap document . We will come back to it once the applciaiton with the current markets is optimal
-
-**me (23:22):** Parked. **`design/spec-futures-gamma-markets.md`** — 275 lines, and no panel behaviour changed; the only edit to the userscript is the version string, shipped that way because the installer is the only channel that gets the file onto your machine.
-
-**The spec exists to preserve the three traps, not the plan.** Each was found by measuring, each would have shipped a wrong number, and none is visible from reasoning:
-
-1. `*1` (nearest) vs `*0` (most active) — `*1` puts **gold and copper on September**. It matches 3 of your 5 symbols, and a rule that's right for 3 of 5 looks right in testing.
-2. The DTN root map is **hand-written, never derived** — copper is `CPE` not `HGE`, euro is `E6` with no suffix, and Barchart's root is `E6` so `6EU26` 404s. That's a way to build the whole feature against a dead symbol and never see data.
-3. The chain is **not in the raw HTML** — 466,227 bytes, `"strike":` appears zero times. That single fact is the entire reason delivery is a reader userscript rather than a fetch.
-
-The negatives are in there too, because they cost the most to establish and nothing else records them: Skylit returns zero snapshots for every futures symbol *including ES*, InsiderFinance is equity-only, and the ETF route is dropped and explicitly **not** a fallback. Plus the sizing insight — open interest is a once-a-day exchange number, so there is nothing to poll, which is also why the paid vendors' futures levels are EOD.
-
-`load gex` step **1a-1** routes a future context there with two instructions attached: never re-research it, and **don't start it unprompted**. The roadmap gains a PARKED block and now declares its own staleness — it still said "current shipped v10.29" while the panel was v15.37.
-
-`test_parked_specs.js` (36 assertions) fails the build if any of that …[trimmed]
+- **`HLTAB`** — 284 sessions, 44,302 observations, AUC **0.879** on *"has the day's extreme already printed?"* This is the one thing in the panel with a real edge, and its strong call is one nobody quotes: **NOT-IN at 20% → the extreme broke 85% of the time**, n=230, firing at 08:40 CT against a ~57% base. That is *directly* your §1 objective, already working.
+- **The node ladder** — where gamma is, which node is king, how it's rolling. A location, with no probability attached.
+- **`posr`** = (price − extreme) / range — the table's winning …[trimmed]
 
 **OPERATOR:**
 > Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 31 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> [~/.claude/stop-hook-git-check.sh]: There are 49 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
 
-**me (23:23):** Push is blocked again — the git proxy won't issue a credential for `rassulshah/gex-signal-tapereader` (403). Unchanged all session; nothing I can do from this container.
-
-All **31 commits** are inside `installv1538.bat`. Running it writes them into `C:\Dev\gex-signal-tapereader` and pushes from your machine, where the credential lives. The raw.githubusercontent link updates a few minutes after that lands.
+**me (00:56):** Still 49 — no new commits that turn. Same 403 policy denial standing on push; reported, not retried.
 
 **OPERATOR:**
-> lets get back to the application.. look at the candles they look different in the app . in the now column you have a red candle and in the hod lod section you have a green candle
+> ok, give me the mockup
 
-**me (23:26):** Both confirmed live: NOW column is `dn` (red `rgb(240,97,109)`), HOD/LOD body is `#2ec27e` (green). Two different computations of the same fact.
-Found it — and the tooltip is the smoking gun. Let me confirm the scale handling before I change anything.
-Both confirmed. Implementing the fix.
-Measured over 284 recorded sessions — the number that matters:
-A real geometry break, caught by the render harness — the body escaped the wick. Same bug in the half I hadn't fixed.
-Real Chromium caught a regression — I over-widened. Let me measure the actual disagreement rather than paper over it.
-The fixture disagreement is real, not an artifact — two session highs 2.4 points apart. Let me find which is right.
-Found the real cause — and it's a scale mismatch I introduced. Let me confirm the ratio.
-A pre-existing guard caught the omission — `emRr` must be on the debug hook too.
-You caught two candles drawing the same day. Here's what each was actually using:
-
-| | open | close | body | colour |
-|---|---|---|---|---|
-| NOW column | `EB.open` **7647.25** (the band's *anchor*) | the **live tape** 7644.25 | −3.00 | RED |
-| ⓪a HOD/LOD | `hodLod.open` **7647.00** (first RTH bar) | last **closed** bar 7647.50 | +0.50 | GREEN |
-
-Four faults in three lines. Two different "now"s, two different opens — and **the panel was frozen**. The badge said "frozen 2:59 pm", the AFTER HOURS chip was up, and the NOW candle was still following the after-hours tape. `recorderBlind()` gates every write path and gated no *read*, so the one surface whose job is to say the day is over kept moving after it was.
-
-**The day was flat: +0.50 on a 52-point range — a 1% body. The disagreement was six times the body it was describing.** Over your 284 recorded sessions the median body is 43% of the range, but **13% of sessi …[trimmed]
+**me (00:58):** Good — real geometry and palette. Now the header columns and some **actual 09-02 data**, so the mockup isn't invented:
+Real 09-02 data: price **764.85**, sitting on the 765 Gate, King at 767, and the 764 Floor building hard (+317). That's a live TESTING scenario — I'll build the mockup on it rather than inventing numbers.
 
 **OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 32 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> Approach this as the design lead at a small studio known for their versatility, giving every client a visual identity pitched at the treatment the task actually calls for. Make deliberate choices about palette, typography, and layout that are specific to this subject, and avoid templated designs.
+> 
+> ## Read the request first
+> 
+> Calibrate treatment, not whether to design. A doc deserves the same craft as a landing page - what changes is the treatment that craft is delivered in. Format is not part of this read: author HTML, and publish Markdown only when a loaded skill explicitly instructs it - a Markdown publish keeps its filename as its title and takes almost none of the craft below, and is never a way to save time.
+> 
+> Many requests call for a more utilitarian treatment: a plan, a memo, a demo. Make it polished: include real typographic hierarchy, considered spacing, and a proper palette, but avoid over-designing. Most pages do not need a flashy, gigantic hero. Keep flourishes tasteful and limited.
+> 
+> Some requests call for an editorial treatment: a landing page, a game, an app or tool they'll keep or share.
+> 
+> When unsure: a well-composed page is never the wrong answer; an over-designed visual identity sometimes is.
+> 
+> Fundamentals below apply to everything. The editorial process after that runs only when the read above says so.
+> 
+> ## Fundamentals for every artifact
+> 
+> **Honor what's already there** Look for an existing design system first - CLAUDE.md, a tokens or theme file, existing component styles. When one exists, apply it; everything below fills gaps and never overrides. Precedence is always: the user's own words, then the project's existing system, then your choices.
+> 
+> **Ground it in the subject.** If the subject isn't already clear, pin it: one concrete subject, its audience, and the page's single job. The subject's own world - its materials, instruments, vernacular - is where distinctive choices come from. Whatever the treatment, carry at least one detail only this subject would have - its real units and scales, its document conventions, its terms of art - as content, not ornament; it costs a plain page nothing. Build with real content throughout, never lorem.
+> 
+> **Pair typefaces** Typography carries the page even when the page isn't about typography. Google Fonts is the one font host the Artifact CSP admits - link it directly (`<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=...&display=swap">`); a face from anywhere else must be inlined as a @font-face data URI or it falls back silently. Either way, declare a real fallback stack. Keep running text near 65 characters wide; set a type scale and stay on it; give headings `text-wrap: balance`, body text room to breathe, and uppercase labels a touch of letter-spacing.
+> 
+> **Load libraries, don't paste them.** When the page genuinely needs a library - React, a charting or highlighting package - load its UMD build from cdnjs (only the script - a library's stylesheet still has to be inlined) with one pinned `<script src="https://cdnjs.cloudflare.com/ajax/libs/...">` placed before the inline script that uses its global, instead of inlining the library's source or hand-writing a stand-in; the Artifact tool's description lists the few other script hosts the CSP admits. The page's own CSS and JS, its images and its data ship with the page. Most pages need no library at all - reach for one only when it carries real weight.
+> 
+> **Choose neutrals, don't default to them.** A pure mid-grey reads as unconsidered; a grey with a slight hue bias toward the page's accent reads as chosen. Pure white and near-black are fine grounds when they suit the subject - the point is that the neutral was picked, not inherited.
+> 
+> **Design both themes.** The page renders in the viewer's theme, and the viewer has three states, not two: an explicit choice stamps `data-theme="dark"` / `data-theme="light"` on the root element, and the default "system" setting stamps *nothing* - most viewers see the un-stamped document, where only `prefers-color-scheme` separates light from dark. Structure the CSS token-level for all three: the bare `:root` block defines the complete light palette (for a deliberately dark-first design, swap light and dark consistently through this whole pattern); `@media (prefers-color-scheme: dark)` redefines only the tokens, guarded as `:root:not([data-theme="light"])` so an explicit light choice beats a dark OS; `:root[data-theme="dark"]` redefines them again so the toggle also wins in the other direction. Style components through the tokens, never directly inside a media or `[data-theme]` block - a color whose only definition sits behind `[data-theme]` never applies in the un-stamped state, and the page renders one theme's text on the other theme's ground. Two more rules keep each theme resolving as a set: the artifact composites over a ground the viewer paints in *its* theme, so `body` must set an explicit `background` from a token - a transparent body silently borrows the host's ground; and every element that sets a color takes it from the same token set as the surface behind it, never a literal that only works in one theme. Declare every token in the bare `:root` block before any media or `[data-theme]` block redefines it - a color that exists only inside one of those blocks is the classic unreadable-artifact bug. Give the second theme the same care as the first - don't naively invert; keep contrast legible and the accent working on both grounds. A design that deliberately commits to one visual world (a neon arcade screen, a letterpress invitation) may stay single-theme - then skip the media query and stamps entirely but still paint the background and every color explicitly, so the page holds on either host ground; make it a choice, not an omission.
+> 
+> **Let layout do the spacing.** Lay out sibling groups with flex or grid and `gap`, not per-element margins that silently collapse or double. Wide content - tables, code, diagrams - gets `overflow-x: auto` on its own container so the page body never scrolls sideways. Reach for `font-variant-numeric: tabular-nums` wherever digits line up in columns.
+> 
+> **Compose repeated things as one object.** Cards in a row, label/value pairs down a list, badges on siblings: same edges, baselines and inner padding from one to the next, and a recurring element sits in the same place on each. Let content set a container's height and pick a column count the items fill, so nothing stretches over dead space or sits alone in a row. Text that can outgrow its track wraps or scrolls in its own container; clipped text is a bug.
+> 
+> **Not everything is a card.** Border, fill, radius and shadow each say "separate object" - spend them by role, lifting the one thing that needs it, instead of one radius and one shadow stamped on every block, which flattens the hierarchy. Lead with big-number tiles only when those figures are the point of the page.
+> 
+> **Draw charts to the scale.** One scale places marks, ticks and labels, and every label names a value the chart reaches; chart text takes its color from the theme tokens so it reads in both themes; marks, labels and edges stay clear of one another and inside the drawing's bounds - in SVG, leave room in the viewBox for the outermost labels and give every drawn shape an explicit fill.
+> 
+> **Show the page at rest.** Everything meant to be read is visible once the page has loaded, without scrolling to trigger it - that first still frame is what a thumbnail, a shared link, and a skimming reader all get. A section may animate in, but from a visible resting state, never parked at `opacity: 0` waiting on an observer. Size a hero to what it holds, not to the viewport; a `100vh` opener pushes the page itself out of that first frame. A tool or app opens in a realistic working state - the user's real data where it exists, otherwise example rows, a loaded sample, a form someone plausibly filled, plainly marked as examples and never passed off as the user's own figures - so the first look shows what it does; an empty shell waiting for input shows nothing.
+> 
+> **Avoid AI-generated design** AI-generated design currently clusters around a few looks: warm cream (#F4F1EA) with a serif display and terracotta accent; near-black with a lone acid-green or vermilion pop; broadsheet hairline rules with dense columns; a purple-to-blue gradient hero on white; Inter or Space Grotesk as the "safe" face; emoji as section markers; everything centered; `rounded-lg` everywhere; accent bar/rail on rounded cards. Where the user pins down a visual direction, follow it exactly - their words always win, including when they ask for one of these looks. Where nothing is specified, don't spend that freedom on one of these defaults.
+> 
+> **Build cleanly** Be cognizant of overlapping elements, cascade collisions, silent font fallbacks. Close every non-void element, double-quote attributes, give keyboard focus a visible state, respect `prefers-reduced-motion`. For generative or decorative graphics, reach for Canvas or WebGL rather than hand-authoring long SVG path data.
+> 
+> **CSS rules** When writing the CSS, watch your selector specificities. It is easy to generate classes that cancel each other out - a type-based selector like `.section` fighting an element-based one like `.cta` over padding and margins between sections. Structure the cascade so it doesn't silently undo your spacing.
+> 
+> **Writing the copy** Words are design material, not decoration. Write from the user's side of the screen - name things by what people recognize, not how the system is built (a person manages *notifications*, not *webhook config*). Active voice; a control says exactly what happens ("Publish", then a toast that says "Published"). Errors explain what went wrong and how to fix it - no apologies, no vagueness. Specific beats clever.
+> 
+> **Name the page like a product, not a caption.** The `<title>` is the artifact's name in the gallery and the browser tab, and it sets the reader's first impression of care. Give the page a real name: a short noun phrase, typically two to four words, specific to the subject - or, for a page that exists to answer one question, that question itself, which is then the page's name. Stop at the name - a title that carries its own explainer after a dash or colon reads as generated filler. The name must also identify the page among many: in the gallery it sits beside dozens of other artifacts, and a generic category label that could sit on any of them fails as a name just as surely as an appended explainer. When a candidate title pairs the name with a generic word - a greeting, a category, a page-type label - the name is the half to keep; a trim that drops the identity and keeps the generic word produces exactly the title that could sit on any page. And the rule removes explainers, it does not impose brevity: a multi-word title that already reads as one specific name is finished, and shortening it further only makes it generic. The one-sentence publish `description` is where the explanation belongs; the gallery shows it right under the title.
+> 
+> **Structure is information** Structural devices, numbering, eyebrows, dividers, labels, should encode something true about the content, not decorate it. Many generic designs use numbered markers (01 / 02 / 03), but that's only appropriate if the content actually is a sequence - like a real process or a typed timeline where order carries information the reader needs. Question if choices like numbered markers actually make sense before incorporating them.
+> 
+> **When it's a UI, not a document** A dashboard or tool is scanned and operated, not read top-to-bottom, so the craft shifts from typography to information design. Surface the summary before the detail; encode state in form as well as number - a pill, a chip, a severity stripe - so what needs attention reads at a glance. Semantic color (good / warning / critical) is separate from the accent hue and doesn't count as your accent. Give sparklines and charts the same care as type: an area fill, a faint grid, an emphasized endpoint. What's interactive should look interactive.
+> 
+> 
+> 
+> ## Process
+> 
+> Before writing code, sketch a short design plan - a compact token system with color, type, and layout:
+> - **Color**: describe the palette as 4-6 named hex values.
+> - **Type**: typefaces for 2+ roles - a characterful display face used with restraint, a complementary body face, and a utility face for captions or data if needed.
+> - **Layout**: a layout concept in one or two sentences.
+> 
+> Then build, following the plan and deriving every color and type decision from it.
+> 
+> **Write, look once, publish.** Before publishing you may look at the rendered page once - one screenshot of the local file, or the Artifact tool's preview where it offers one - then one pass of edits for what it shows, without a second look. For a page that charts real numbers, take that look rather than skip it, and spend it on the chart. Don't build a test loop around your own file: no repeated screenshots, no pulling the script out to run it through node, no scripts that probe the DOM. That loop spends the session re-checking what a careful write already settled, while the user waits for a link. Then publish, check once any `window.claude` call the preview couldn't run, and stop: the live page is the review surface, and further polish is the user's to ask for. If the user reports something visibly broken - a clipped column, unreadable text, a control that does nothing - fix that and republish once.
+> 
+> ## When the request is editorial
+> 
+> The stance shifts: the client has already rejected proposals that felt templated, and is paying for a distinctive point of view. Make opinionated calls, and take one real aesthetic risk where it serves the work.
+> 
+> Review the design plan against the subject before building: if any part of it reads like the generic default you would produce for any similar page, revise that part, and note what you changed and why. Only after you've confirmed the plan's uniqueness do you write the code, following the revised plan exactly.
+> 
+> **Principles** 
+> 
+> - The hero is a thesis: open with the most characteristic thing in the subject's world - headline, image, live demo, interactive moment. 
+> - Typography carries the personality of the page. Pair the display and body faces deliberately, not the same families you would reach for on any other project, and set a clear type scale with intentional weights, widths, and spacing. Make the type treatment itself a memorable part of the design, not a neutral delivery vehicle for the content. 
+> - Leverage motion deliberately. Think about where and if animation can serve the subject: a page-load sequence, hover micro-interactions, ambient atmosphere. An orchestrated moment usually lands harder than scattered effects; choose what the direction calls for. However, sometimes less is more, and extra animation contributes to the feeling that the design is AI-generated. 
+> - Match complexity to the vision. Maximalist directions need elaborate execution; minimal directions need precision in spacing, type, and detail. Elegance is executing the chosen vision well.
+> - Spend your boldness in one place; keep everything around it quiet. If the accent fights the ground, shift it toward analogous or drop saturation rather than replacing it.
 
-**me (23:46):** Push blocked again — the git proxy refuses a credential for `rassulshah/gex-signal-tapereader` (403). Same all session; not fixable from this container.
+**me (00:59):** Building it on his real 09-02 ladder, in his own palette, at the panel's true 608px.
+The mockup's published — four panel states at the real 608px, in your palette, built on your actual 09-02 ladder.
 
-All **32 commits** are inside `installv1539.bat`. Running it writes them to `C:\Dev\gex-signal-tapereader` and pushes from your machine, where the credential lives — that's also what makes the raw.githubusercontent link serve v15.39 a few minutes later.
+**The data is your own where it can be.** Price 764.85, strikes 761–768, the roles, polarity, grades and growth figures all come out of the 11-day export. The 765 gate shedding while the 764 floor builds hard underneath is the real shape of that afternoon — which is why I used that bar. The Δ dollars, ROC percentages, wick depths and ledger times are illustrative and flagged as such on the page; the export carries since-open growth, not those.
 
-**OPERATOR:**
-> reloaded . also  how come below where it says 1st tp and 2nd tp, it doesn t mention HOD and LOD .   you know that you are suppose to indicate which turning it is , is it a Hod turn or an LOD turn.  let me see what else i can find. i rewinded and it looks like you are still not showing the state during the replay .   as you can see there are no nodes etc.  you still haven't fixed this.. you are suppose to capture the state so i can rewind and replay the day .
+**The layout decision I'd most like you to check:** the right-hand group doesn't move. `DAX 400 · ROLL 452 · ST 500 · ROC 558` keep the exact offsets `test_ladder` already pins. All 110 freed pixels — 52 from the king lanes, 58 from `%KING` becoming a rank badge — go **left**, where MARK needs room for a word and the price chute has been cramped since v14.46. A cut that buys a feature without disturbing verified geometry beats one that frees more pixels.
 
-**me (00:06):** **Found it.** Let me confirm the truncation in the recorder.
-**Found it.** `dispScale` is 0.0998 (SPX→SPY) when the rail is in ES space — every node lands at ~761 on a ladder framed 7615–7680.
-Two separate bugs, both confirmed. Fixing the replay scale first — it's the one that empties the ladder.
-The scale fix is proven. Now measuring the second half of his complaint — how much of the day actually survives.
-**You were right about the symptom three times, and I was wrong about the cause every time. The state was captured perfectly.**
+Four states: **silent** (callout blank, MARK empty — and the line holds its 15px so the ladder never jumps), **testing**, **deflected**, **broke**, plus the ⓪a ledger. That ledger is the piece that doesn't exist in any form today, which is exactly why the deflection question has been argued instead of counted.
 
-I read back the frame you were parked on — 2026-09-01 14:21 — and it held a complete SPXW book:
-
-```
-7630 −100 (King) · 7625 +77 · 7610 +52 · 7635 −48 · 7620 −44 · 7615 +39 · 7650 +21
-```
-
-Seven strikes clearing the 20% threshold, **all seven inside the band.** Nothing missing, nothing mis-recorded. `replayLadder` returned:
-
-```
-dispScale 0.099775  ===  undScale 0.099775
-SPXW 7630 × 0.099775 = 761.28    on a ladder framed 7615..7680
-```
-
-`dispScale` is the **chart** scale; `und/spx` is the **underlying** one. v15.18 assigned the underlying to both, so every SPXW strike was converted into SPY space and plotted on an ES rail — ~6,880 points below the frame. `inFrame()` refused all of them. Their being equal is only correct on a cash chart; that equality was the alarm and nothing was watching for it.
-
-**The fix was already in the file, forty lines below the bug**, from v15.06, in capitals: *"THE FIX IS ONE SCALE, NOT A BETTER FALLBACK."* `replayLadder` was written after that lesson and reintroduced the fault in the one path the rule hadn't been applied to. A lesson written as prose guards only the function it sits in.
-
-And the honest part: **one probe of the stored record would have settled this on any of the three occasions.** A read fault an …[trimmed]
-
-**OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 33 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (00:14):** Push is a policy denial, not a transient failure — the proxy's own guidance is to report it rather than retry, so I won't keep attempting it.
-
-```
-remote: rassulshah/gex-signal-tapereader is not in this session's
-        authorized repository set — the proxy will not inject a credential
-fatal: HTTP 403
-```
-
-**33 commits** (v15.09 → v15.40) are all inside `installv1540.bat`. Running it writes them into `C:\Dev\gex-signal-tapereader` and pushes from your machine, which is also what makes the raw.githubusercontent link serve v15.40.
-
-If you'd rather I stop surfacing this each turn, the fix on your side is to add the repo to this session's sources — otherwise the installer remains the delivery path and everything is preserved until you run it.
-
-**OPERATOR:**
-> i think you messed it up again
-
-**me (00:49):** Measured — and this is a scale split I need to trace before I touch anything.
-**Found it, and it's a trap I walked you into.** The stored EM pin:
-Three more heals carry the same unscoped exemption. Same trap, three more places.
-**That's the writer** — a fifth heal with no replay guard at all, and it persists `rec` to the live key.
-A standing guard caught it — I'd added a third place that scales `openU`. Comparing the raw values is both correct and simpler.
-**Yes — and I walked you into it. I asked you to rewind, and the rewind is what broke it.**
-
-Your live panel:
-
-```
-pin  SPY|fut = { openU: 761.79, rr: 1, fam:'replay', replay:true }
-band  low 729.29 · high 794.29      ← SPY space
-band  now 7647.50 · hiWater 7673.75 ← ES space
-```
-
-`emRailBounds` **starts** the frame at `B.low`, so the ladder was asked to span **729 → 7674 — 6,944 points.** The day's entire 52-point range was 0.75% of that, which is why every row piled onto one line at the top.
-
-**One unguarded write, four over-guarded reads:**
-
-- `replayEmPin()` builds a pin so the band survives a rewind — correct.
-- Four heals refuse to repair a `replay:true` pin — correct, and unscoped.
-- **The ratio heal does `S.sym[emKey]=rec` and persists it, with no replay guard at all.**
-
-So the replay pin got written into the *live* key, and the four heals were then forbidden from ever repairing it. Every rule was right on its own. None of them asked whether the replay was still happening.
-
-The fix is one predicate — `rpPin(r) = r.replay && replayOn()`, meaning *exempt right now*, not *born in replay* — called at **all five** sites including the write. When the same condition is restated five times, the bug isn't the four that got it slightly wrong; it's that there are five.
-
-And a second guard that trusts no field at all: **a …[trimmed]
+Two things I deliberately held back. **The wick clause is reported, not weighted** — it's on the line because it describes what happened, but it gets no colour, no emphasis and no vote, because `reaction` has it at 49.1% vs 48.6% on 970 rows. And **the callout never says which way price goes.** It gives you geometry, polarity, the direction gamma is moving, and the test count …[trimmed]
 
 **OPERATOR:**
 > Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 34 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> [~/.claude/stop-hook-git-check.sh]: There are 50 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
 
-**me (00:57):** Still blocked by the same policy denial (34 commits now) — all of them are inside `installv1541.bat`, so nothing is at risk; they reach GitHub when you run it.
+**me (01:02):** 50 commits, same 403 policy denial standing — reported, not retried.
 
 **OPERATOR:**
-> the king node paths are still empty . the roll column is also empty
+> i cant open in google chrome
 
-**me (02:35):** v15.41 fixed the ladder — 19 rows drawing now. Let me measure the two that are still empty.
-I probed the wrong function — `__gptsDebug.rolls` is a different detector. Let me find what actually feeds the ladder's ROLL column.
-The ROLL column is empty *by design* after the close — but the rest of the face is still serving the close-of-session book. Let me check the king lanes before I decide.
-Both measured. The king lane's x-axis runs to the wall clock, so the last crown eats 57% of the lane and the day's journey is squeezed into 1–3px runs.
-Both root causes measured. Implementing.
-The clamp doubles the long runs but a 15-minute run in a 24px lane is genuinely sub-pixel. Asserting what's actually true.
-**The king lanes were never empty — they were one pixel wide.** Measured on your panel:
+**me (01:03):** Here it is as a standalone file you can open directly — no hosting involved.
+That should preview right in the conversation, and downloading it gives you a normal `.html` that opens in Chrome with no login or hosting involved.
 
-```
-24px lane, six SPXW runs of 15 / 103 / 32 / 105 / 102 minutes
-widths:  1.0 · 2.5 · 1.0 · 2.5 · 2.4 · 11.4 px
-```
+The reason the first one didn't: what I published is a page *fragment* — the Artifact tool adds the `<head>` and `<body>` when it hosts it, so as a local file it was relying on the browser to patch it up. This copy is a complete document. It's generated from the same source file rather than retyped, so the two can't drift apart.
 
-The axis ran **08:30 → 19:50 (the wall clock)**, so the crown that was merely *still there* since 14:27 took **57% of the lane**, and five real migrations drew as 1–2px ticks. At that size "empty" is an accurate report of the pixels — and I went looking at the data first, twice, when I should have measured the elements.
-
-Worth noting how it hid: **the fault grows every hour the tab stays open.** It looks fine while you're trading and broken by the evening. The test now checks 15:00, 19:50 *and* midnight so it can't pass at the hour it was written.
-
-The axis now ends where the day did, taken from the **last closed bar** — data, not clock arithmetic. Long runs gain ~1.7×, the "still there" run drops from 57% of the lane to 19%.
-
-**One thing I'm not going to overstate:** a 15-minute run out of 390 is *still* sub-pixel in a 24px lane. Clamping can't fix that. Every run is fl …[trimmed]
+If the artifact link itself is what failed rather than the file, tell me what you saw and I'll dig into that separately — but either way you can judge the mockup now.
 
 **OPERATOR:**
 > Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 35 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> [~/.claude/stop-hook-git-check.sh]: There are 51 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
 
-**me (02:42):** Same policy denial — 35 commits, all inside `installv1542.bat`, which is what carries them to GitHub when you run it.
+**me (01:04):** 51 commits, same 403 policy denial — reported, not retried.
 
 **OPERATOR:**
-> check everything
+> looks good to me but what i want to know is that have you tried your best in using all the data i have and have you integrated a process of self improvement that includes the analysis and testing to better the application ?
 
-**me (09:50):** v15.42 is in and the ladder, rolls and TP labels are all populated now. Let me sweep systematically.
-The v15.40 replay-scale fix is confirmed working on a live futures chart (`dispScale 1.0019`, not 0.0998) and the v15.41 pin fix holds. Continuing the sweep.
-The clock is 04:52 CT — and `sessionPhase()` reports RTH because it follows the replay. That's a trap for anything health-related.
-Two real findings. The bigger one: the health check has no concept of the session, so it fails all night.
-All 11 mutations caught, 140 green. Shipping.
-Swept the running panel. **Six fixes from the last four builds confirmed live** — including one I'd flagged as unverified:
+**me (01:06):** Both fair questions, and I should check rather than tell you. Let me look at what I actually used versus what exists, and whether the self-improvement loop is real or just present.
+⚠ Forty `study-*` scripts and a `tools/nightly/` — there's far more analysis machinery than I've been using. Let me check whether these already answer things I proposed today as new.
+That changes my answer. `study-nodeatextreme.py` and `study-kingdeflect.py` **already ask the question I pitched to you today as the new idea** — and they read `tri.<SYM>.top`, the full ranked book in `snaps`, which I never opened.
+No on the first, and only partly on the second. I checked instead of answering, and both were uncomfortable.
 
-| | measured |
-|---|---|
-| replayed ladder | `dispScale 1.0019` / `undScale 0.0998`, `scaleSrc replay:fut:ratio-today` |
-| EM band | low 7614.75 · high 7679.75 · now 7639.21 · hiWater 7675.75 — **all one ruler** |
-| roll lane | 11 arrows, 4 named rolls |
-| king lanes | runs 2.1 / 1.9 / 5.0 / 10.2px (were 1.0–2.5) |
-| TP headings | `1ST TP · HOD` · `2ND TP · LOD` |
-| candles | NOW `dn`, ⓪a `#f0616d` — both red, one call |
-| render errors | none |
+**Have I used all your data? Not close.** I used `feat` — 10 of 49 feature keys, one of about 56 stores. I never opened `snaps`, which carries `tri.<SYM>.top`: the **full ranked node book for SPY, QQQ, SPXW and VIX, every bar, archived**. Also untouched: `gpts_nodeevents_v1` (3.2 MB), the four king-tracking stores, `gpts_promo_v1`, `gpts_nodehist_v1`, `gpts_peak_v1`.
 
-That first row closes the v15.40 unknown: the replay scale had only ever been proven by unit test and in cash mode. It's now confirmed on a live futures chart.
+Worse — **I pitched you an idea that's already written.** `study-nodeatextreme.py` and `study-kingdeflect.py` ask exactly *"was the extreme at a node"* and *"did a king cause the deflection"*, and they read the ranked book I ignored. And `study-nodeatextreme`'s own header records a previous context making my precise mistake: reading `tri.king`, the single crown, and concluding *"no node was there"* from a one-line view of a full book. **Same error, same project, second time — and you were the one who caught it then too.**
 
-**What the sweep found broken: `deps 2✕` — and it's red every night.**
-
-At 04:52 CT: `if.SPX 386m`, `if.QQQ 385m`, `fut.courier 426m`, `irt.export 294m` all STALE, and `if.usable` failing with *"running blind"*. **Every one of those is the correct overnight state** — the market had been shut fourteen hours. The dot is red roughly **seventeen hours a day**, and a light that's red most of the time is one you stop reading.
-
-`if.usable`'s own comment forbids exactly this, two screens down: *"calling that a failure would …[trimmed]
+**Is there a self-improvement loop? Yes, and it's more developed than I've been treating it.** Features record → resolve → `featStats` → `ruleTier` → a promotion bar **re-derived in code** so a …[trimmed]
 
 **OPERATOR:**
 > Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 36 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> [~/.claude/stop-hook-git-check.sh]: There are 52 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
 
-**me (09:58):** Same policy denial — 36 commits, carried by `installv1543.bat`.
+**me (01:09):** 52 commits, same 403 policy denial — reported, not retried.
 
-**OPERATOR:**
-> move the roll arrows to the right of the delta profile . currently its on the left side of it..  remove the roll column because the arrows are suppose to show the roll , the from node (little circle) and the to node (arrow head).
-
-**me (10:59):** Three width guards fired — one is a real collision I'd have shipped.
-Rendered order confirmed: `… MARK@294 · Δ15m@400 · ⇄@452 · STATE@500 · ROC@558`, zero roll chips, 4 arrows with 4 source circles.
-Both failures are assertions pinning the old layout. Updating them to the new design — and to check nothing was lost.
-Rendered and measured:
-
-```
-S@2 · Y@28 · LEVEL@56 · PRICE@104 · NODE·%KING@140 · NOW@226 · MARK@294
-  · Δ15m@400 · ⇄@452 · STATE@500 · ROC 15m@558          LAD_W 618 → 608
-```
-
-**One flag before you install.** Your second message describes the group as *arrow → delta → state → roc* — where, how much, what it means, as a rate. That's the order it was in *before* this change. I've followed the explicit instruction ("right of the delta profile"), so the arrows now sit at 452 and the delta at 400. If you meant keep the narrative order and something else was wrong, say so — it's two constants and I'll flip it back. I've written your description into the resume note either way, so a future context won't reorder these on a whim.
-
-**The words column was one fact told twice.** The chip read `⇢7655` while the lane drew an arrow from that same row to 7655, thirty-two pixels away. The arrow draws the relationship *between* two rows, where both already are — circle on the strike that shed, arrowhead on the strike that gained, exactly as you described.
-
-Nothing left the record: the chip's hover held the only statement of **how a roll is decided** — the mass rule, the distance cap, the receive ratio, "it is not conservation of mass", "it does not say price will go there". All of it moved to the lane, and a test fails the build if any sentence goes missing.
-
-The lane also got its designed width back, **20px → 44px**. It was only ever squeezed to 20 to fit the 640 cap in v15. …[trimmed]
+Since I just called this a real break rather than a nuisance: I can bundle the 52 commits into a single file (`git bundle`), send it to you, and you'd pull and push from your own machine in two commands. That would close the transport and let the nightly see everything from the last few days. Say the word and I'll generate it.
 
 **OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 37 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> you know my objective , you need to figure out what to display on the dashboard and how the analysis and testing pipleline will help self improve this objective.
 
-**me (11:05):** Same policy denial — 37 commits, carried by `installv1544.bat`.
+**me (01:11):** Then the answer starts with something the mockup gets wrong. Let me measure the one feature that claims an edge, live.
+⚠⚠ **362 of 362. One hundred percent — including the cell where the table predicts 0–19%.** That's not an edge, that's a broken scorer. Let me confirm.
+The scorer compares a 30-minute excursion against **the entire session range** — `fwd.mae > -rngPts`. That can essentially never fail. Let me recompute it against the distance that actually matters:
+⚠⚠ Even corrected it's flat — **the table says 0–19% and reality is 100%; it says 80–99% and reality is 94.6%.** No calibration at all. The reason matters, and it answers your question.
+Answering your two questions properly, and the second one changes the first.
 
-**OPERATOR:**
-> are you recording .. market is open
+**What the dashboard should display — and the mockup gets the hierarchy backwards.**
 
-**me (15:39):** **Not recording.** The panel is still parked in replay.
-**No — click "↺ REPLAY" in the replay strip right now.** That's the "back to live" toggle.
+Your objective is the HOD and the LOD: *profit from the move from high to low or low to high.* The deflection ladder I put at the top serves the **secondary** objective, and it's the part measured null — 52% on 94 episodes. Meanwhile ⓪a, sitting below it, holds the only validated edge in the application: **AUC 0.879 over 284 sessions**, whose NOT-IN call breaks the extreme 85% of the time on n=230, at 08:40 CT.
 
-Your panel is parked in replay on **Tue 1 Sep, 13:57**, while the real time is 10:39 CT on Sep 2. Replay sets `recorderBlind()`, which gates all nine write paths by design — so:
+**I led with what doesn't work and buried what does.** The face should open with *which extreme is standing, has it printed, and where the other side is expected* — that's literally your sentence. The ladder goes underneath as the supporting read: where a turn could happen, what gamma is building there. It gets promoted above the fold when H5 pays, not before.
 
-```
-recorder store, day 2026-09-02:  0 frames
-```
+**How the pipeline self-improves — right now, it doesn't, and I can show you exactly where it stops.**
 
-**Nothing from this morning has been captured.** The session is ~2h10m in.
-
-I tried to click it for you but the browser extension errored twice; I'm not going to keep retrying while the clock runs. It's the `↺ REPLAY` badge at the right end of the strip that currently reads `◀ Tue 1 Sep ▶ … 13:57 ↺ REPLAY`.
-
-Once you're back on LIVE, confirm the strip says **LIVE** and today's date, and the frame count will start climbing within about three minutes.
-
-Two things worth knowing while you're at it:
-
-- You're still on **v15.42** — v15.43 (the deps dot that was red all night) and v15.44 (the roll arrows / column move) aren't installed. Not urgent mid-session; the installer's there when you want it.
-- The recorder still can't hold a full day at 26.5KB per frame against a 3.6MB budget, so even once recording resumes, the morning will start getting evicted late in the session. That's the fix I flagged twice — say the word after the close and I'll do it.
-
-Tell me when you're back on live and I'll verify the frames are landing.
-
-**OPERATOR:**
-> ok fix it
-
-**me (17:55):** Back on LIVE. Verifying the recorder actually starts writing.
-Recording. `frames 0 → 1`, clock is real (`12:55 CT`, MIDDAY, RTH), deps down to the one known SPX-pin failure. Now fixing the cause.
-Sustained — frames at **12:55 and 12:57**, 90 vend rows each. Now the guard so it can't happen again.
-Now the more important thing you sent — the purpose. Writing it where it governs everything.
-**Recording, verified live.** I clicked back to LIVE and watched the store fill:
-
-```
-frames 0 → 1 → 2   at 12:55 and 12:57, 90 vend rows each
-clock  now the real one — 12:55 CT, MIDDAY, RTH
-deps   down to one known failure (if.SPY under the SPX pin)
-```
-
-**And I caused this.** I asked you to rewind the night before; the tab stayed open, crossed into Wednesday's session, and nothing handed it back. `recorderBlind()` correctly gates all nine write paths in replay — so the morning was never captured. The strip said "↺ REPLAY" the whole time, and **a mode badge says which mode you're in, not what it's costing you.** That's the real defect.
-
-Two guards now:
-- **`replayStaleDayGuard()`** — a replay of a *previous* day, still open once a live RTH session begins, hands itself back **once** and says why. Rewinding *today* mid-session is deliberate and untouched; outside RTH it stays silent.
-- **A red ⚠ NOT RECORDING banner** during live RTH, naming the session you're missing, and **the banner itself is the click back to live**.
-
-The wall-clock trap showed up twice more here — `sessionPhase()` parked on yesterday returns `rth:true` for a session that ended, so both guards would have agreed with the exact state they exist to detect. Third build running. **15 mutations, 15 caught** — four only after I fixed assertions passing on the corpse of what they guarded.
-
----
-
-**`design/PURPOSE.md` is writt …[trimmed]
+`lodhod` is enrolled correctly, "from its first line of code," as the mandate requires. Over fou …[trimmed]
 
 **OPERATOR:**
 > Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 38 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> [~/.claude/stop-hook-git-check.sh]: There are 53 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
 
-**me (18:07):** Same policy denial — 38 commits, carried by `installv1545.bat`.
+**me (01:14):** Rather than report this again, let me just make the bundle so you can close the loop whenever you want.
+101 MB — that's the full history. Let me bundle only the 53 commits.
+53 commits bundled — 1.2 MB, verified against your `origin/main`. From your repo:
+
+```
+git fetch /path/to/gex-unpushed.bundle main:from-cloud
+git merge --ff-only from-cloud
+git push
+```
+
+It's a thin bundle keyed to `6806ea9`, so it'll refuse to apply to the wrong base rather than make a mess.
+
+That closes the transport — which matters more than the hook nagging suggests, since the nightly is the only consumer that can grade a session-level claim, and it's had nothing for the whole session.
 
 **OPERATOR:**
-> re.laded check.. nothing displayed , no ladder
+> why didnt you give me an install
 
-**me (18:09):** The band is refusing to pin — that's why there's no ladder. Let me find which half of the guard is failing.
-Found it — and it's a units bug that only fires on a fresh capture, which is why today is the first day it's shown.
-The bar already carries a correctly-computed `day`. Let me confirm the futures path sets it too before I use it.
-**Found it.** Two bar producers disagree about what `t` means, so the guard could never read it.
-w1 regresses on the cash path. Rather than argue it's unreachable, let me have that producer state its day too.
-The harness's `naiveDayStr` stub takes **milliseconds** while the real one takes **seconds** — the stub was papering over the exact bug.
-**Install this one — the ladder will stay blank until you do.**
+**me (01:16):** Because I haven't changed a line of code — I've been writing specs and analysis while you were waiting for a build. That's on me. Let me do it properly now.
+`es` is "display price, already on the rail's scale" and every caller passes display space — consistent, so both fixed gates live in the same space. One helper fixes both.
+Yes — and that handoff is exactly what this project's save procedure is for. But it's stale right now: 53 commits of findings and I haven't regenerated the chat history or resume note this session, so a fresh context would start from v15.35-era assumptions. Let me fix that first, since it's also step zero of the build checklist.
+Two answers.
 
-The panel is otherwise healthy: `FUTMODE.live` true, courier 1 minute old, tape 100 strikes, zero render errors, and `sessionBody` reading today's session correctly (open 7650.5, now 7679.25). But:
+**Why no install:** because I haven't changed a line of the userscript. The panel is still v15.50. You said "are you ready to build," I said yes, and then spent the session writing analysis instead. That's a fair hit and I'd rather say so plainly than ship you a rebuilt v15.50 to look busy.
 
-```
-emBand.ok  FALSE — "warm-up: candle window or ratio is not yet today's"
-ladder     ZERO rows
-```
+**Yes, you can switch** — the model picker is in the client (`/model`). But the handoff doesn't depend on which model; it depends on the documents being current, and they weren't. **They are now.**
 
-No band → no `skPiles` → no ladder. One boolean upstream took out the whole face.
+✅ **SAVE DONE**
+- `session-state/CHAT-HISTORY.md` — regenerated from the real transcript, 21 prompts, 686 KB
+- `session-state/latest-resume-note.md` — amended with a 2026-09-03 block that reads first
+- `session-state/2026-09-03_resume-v15.50.md` — dated archive
+- `test_savedone.js` — 19/19 green
 
-**Two producers disagree about what `t` means.** `closedCandles` stores real milliseconds but computes its day from *naive seconds*; `measureBars`'s futures branch stores real milliseconds from a different origin. `naiveDayStr` multiplies by 1000 — so on your ES chart it got milliseconds and returned a year in the **fifty-eight thousands**. The comparison `naiveDayStr(t) !== ctTodayStr()` was structurally unsatisfiable, so the capture was permanently refused.
-
-**Why it hid since v15.23:** that branch only runs on a *fresh* capture. Any carried-over pin skips it. Today was the first new-day capture, and it failed on the first render.
-
-**And my test harness was …[trimmed]
+The new block carries what a fresh context would otherwise re-derive expensively: the four findings ending with the loop measuring nothing; **the three corrections I made in one day**, written down so the next context doesn't repeat them; the fact that I never opened `snaps` — which holds the full ranked node book every bar — and that …[trimmed]
 
 **OPERATOR:**
 > Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 39 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> [~/.claude/stop-hook-git-check.sh]: There are 54 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
 
-**me (18:17):** Same policy denial — 39 commits, carried by `installv1546.bat`.
-
-**OPERATOR:**
-> check
-
-**me (18:21):** v15.46 didn't cover it. Let me find what `cs[0]` actually is rather than reason about it.
-**Found it.** The courier's day-bucket starts at **08:00**, half an hour before the open — and the anchor is taken from that bar.
-The guard was right to refuse — the anchor really was reading an 08:00 bar. The fix is to make the series RTH.
-Both still refuse — for a better reason. Updating the assertions to the real behaviour.
-**Still refusing on v15.46 — I fixed the wrong half and shipped it as the fix.**
-
-```
-MB.day     '2026-9-2'                  — the day check PASSED (v15.46 worked)
-cs[0].so   28800 = 08:00 CT, o 7640    — thirty minutes BEFORE the open
-first RTH  index 30, 08:30, o 7650.5
-result     emBand.ok false · zero ladder rows
-```
-
-The ES courier's window opens at **08:00**, and `measureBars`' futures branch buckets by *day* without cutting to RTH. So `cs[0]` was a pre-open print and the `so >= openSec` half of the guard was false. Same message, entirely different cause. I should have re-measured after shipping v15.46 rather than assuming it was done.
-
-**The guard was right to refuse.** `out.anchor` and `rec.openU` both read `cs[0]` — so relaxing the check, the obvious move, would have anchored the whole session's expected-move band on **7640 instead of 7650.5. Ten and a half points low, silently, all day.** The refusal was protecting a real fault; it just refused instead of fixing it.
-
-So the fix is at the **series**, not the guard: `cs` is cut to RTH where it's built, so `cs[0]` *is* the open and the anchor, `openU`, `openSo` and the high/low watermarks all share one definition of the session. `emBand` now agrees with `hodLod`, which had filtered correctly all along. It's a no-op on the cash and replay paths, and pre-open it correctly falls back to the prior close. …[trimmed]
+**me (01:19):** 54 commits — the bundle I sent covers 53 of them; this save commit is the 54th. If you'd rather have one clean file, I'll regenerate the bundle before you push.
 
 **OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 40 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+> i have switched to fable 5.1 . i want you to give it what it needs to help me reach my objective.
 
-**me (18:26):** Same policy denial — 40 commits, carried by `installv1547.bat`.
-
-**OPERATOR:**
-> releoaded check .. especially for missing itmes
-
-**me (18:30):** Band pins correctly now — `anchoredAt 7650.5`, the true RTH open. But three things are missing or wrong.
-Band pins correctly. Three findings — one of them is my fault and can't be undone today.
-**Found a serious one.** `sessionPhase(now)` expects a **Date** — I passed seconds. `Number.toLocaleString()` doesn't throw, so it silently became `Invalid Date` → NaN → false.
-The RTH cut is dropping clockless bars — that's destructive on the replay path. Let me check what replayed bars actually carry.
-The cut must only drop what it can *prove* is pre-open. Dropping unknowns is destructive.
-The guard is now actually firing — which is correct, and it evicts the render harness's parked day. That's the fix working.
-**v15.47 worked** — `anchoredAt 7650.5`, the true RTH open. Ladder 8 rows, TP headings right, candles agreeing, no render errors.
-
-**The missing item you asked me to look for was two guards that have never run.**
-
-```
-deps.rthNow   FALSE    at 13:30 CT, mid-session
-deps.idleMin  null     (NaN)
-```
-
-`sessionPhase(now)` takes a **Date**. I passed it seconds — and a number has its own `toLocaleString`, so `48000` became `"48,000"`, `new Date("48,000")` is Invalid Date, every field NaN. **Nothing threw.**
-
-So the v15.43 session-aware staleness never engaged — and worse, **the replay stale-day guard I shipped after you lost that morning of recording had never once fired.** It would not have saved you the next day. My tests stubbed `sessionPhase`, so they never met the real signature; that's the second build running where a stub was kinder than the function it doubled. The stubs now throw on a non-Date.
-
-**The proof it works was 65 failing assertions.** The moment the clock was fixed, the guard started evicting both render harnesses — which park a past day on purpose and look …[trimmed]
-
-**OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 41 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (18:38):** Same policy denial — 41 commits, carried by `installv1548.bat`.
-
-**OPERATOR:**
-> alot of the columns are missing
-
-**me (18:43):** Headers are all present in the DOM. Let me see what's actually visible.
-All 11 columns are present and visible — the panel is 1219px wide with 608px of ladder. Let me see what you're seeing.
-**Found it.** The column header row has scrolled off the top — it's `position: relative` inside a box that opens scrolled down.
-Now the empty MARK column.
-Marks are absent on every row including one sitting on price — and the catch swallows without recording. Let me make it visible rather than guess.
-The marker works in the harness (5 rows marked, d 0.15–2.65). The instrumentation will say why it doesn't on yours. Running the suite.
-**Every column is present — it's the header row that's gone.**
-
-```
-headers    all eleven, all vis:true, correctly positioned
-wrap       clientW 608 · panel 1219 — nothing off the side
-BUT        scrollTop 15.15 · header.topRel −15 · insideView FALSE
-```
-
-The header is `position: relative` inside the scrolling box, and v15.28 made that box **open on the expected-move band** rather than at the top — so it's scrolled from the first render on most days and the header leaves with the rows. You had no labels, which is a fair description of "the columns are missing". I checked horizontal scroll first because that was my model of the words; the answer was vertical.
-
-It's `sticky` now, with a z-index and an opaque background — those two aren't cosmetic: without them the node bars scroll *through* the header, which reads worse than no header at all.
-
-**The MARK column is genuinely empty, and I've stopped guessing at why.** Zero marks with a row **0.5 points** from price and the threshold at 3 — while the same code marks five rows in the render harness. The catch there discarded *both* a null return and a thrown error, so from outside they looked identical. It now …[trimmed]
-
-**OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 42 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (18:49):** Same policy denial — 42 commits, carried by `installv1549.bat`.
-
-**OPERATOR:**
-> based on what i have explained to you , do you understand my objective with this applicaiton
-
-**me (21:41):** Yes. In one line: **you're trying to catch the day's high and low early enough to trade the move between them — and the gamma nodes are your leading indicator for when a turn is happening.**
-
-The mechanism you're trading is that a node with enough gamma *deflects* price, and that deflection **is** the turning point. Two kinds, and they demand opposite trades:
-
-- a node at the extreme turns the day → that's your **HOD or LOD**, you reverse
-- a node that stops a pullback → that's **continuation**, you stay in
-
-So the panel has to do three different jobs on three different clocks, and I think this is the part that matters most:
-
-| | question | horizon |
-|---|---|---|
-| ⇄ · Δ15m · STATE · ROC | is gamma **building** somewhere? | **leading** — before the turn |
-| the node ladder / king | is price **at** that node now? | **the event** |
-| ⓪a HOD/LOD | did it turn, and is this turn unusual? | **the scorecard**, after |
-
-The right-hand columns are the only part that can be *early*. That's why "gamma building on a pullback" and "gamma building at the extreme" are the two readings you named — same signal, opposite trade, and the difference is *where* it's building relative to the day's range.
-
-**Where the app currently doesn't serve that**, honestly:
-
-- **MARK is empty** — the column that says "price is standing on this node" is the exact moment a deflection would be happening, and it's showing nothing. That's the most purpose-relevant bug open.
-- **`LVL_INPLAY_PTS = 3`** is a chart-space constant. On ES that's under half a strike gap, so "price is on the level" almost never fires. If you're watching for a deflection *as it happens*, that threshold is the trigger — and it's currently set by accident rather than by what a deflection looks like on ES.
-- **The recorder holds about a …[trimmed]
-
-**OPERATOR:**
-> regarding deflection, in past context i had gone over this extensively and provided multiple screenshots.  can you search for the definition of the deflection and the rule around detecting it
-
-**me (21:44):** Found it. Let me pull the full rule and its calibration.
-Found it — it's fully specified and calibrated. Here's the record.
-
-**Your definition** (2026-08-29): *"a lodN (lod node) and hodN (hod node) which are nodes that the extreme TESTED BEFORE REVERSING. it usually tests it or even penetrates it a little and then reverses."* And on which node counts: *"we are looking for 1 of the three kings, either a spy node, spxy node or a qqq node to have caused a deflection."*
-
-**The geometry — your words, then tightened on evidence:**
-
-> *"in a downmove the low of the candle has to be within 1 atr of the high of the node but cannot be more than 2 atr below the node."*
-
-```
-DEFL_NEAR = 1.0 ATR   may stop this far SHORT of the node and still count as a test
-DEFL_THRU = 1.5 ATR   may penetrate this far THROUGH it and still count
-trigger   = the WICK, never the close
-```
-
-Asymmetric on purpose — tight on the approach side, loose through it. The tuning is recorded: **1.25 ATR** adds 34% more events and *drops* the turn rate 59.2% → 57.6% (it admits visits that tested nothing); **0.75** only loses events; **2.0 penetration** isn't wrong, it just never bites — only 3% of tests reach past 1 ATR.
-
-**Why the wick and not the close** — this is the case that settled it. Close-as-trigger won *every* aggregate metric (40% fewer events, same turn rate, better adverse excursion) and was still wrong: on **2026-08-25 you circled 763.20 at node 763**, where the low was 763.28 and the close was 764.80. A 1.5-point rejection wick — a textbook deflection — discarded by a close rule. The selectivity gain *was* the cost of dropping the sharpest instances.
-
-**The split that matters, and it answers my earlier question:** the **wick** says price *tested* the node; the **close** says whether it *deflected …[trimmed]
-
-**OPERATOR:**
-> Stop hook feedback:
-> [~/.claude/stop-hook-git-check.sh]: There are 42 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
-
-**me (21:45):** Nothing new to push — still the same 42 commits blocked by the proxy policy, carried by `installv1549.bat`.
-
-**OPERATOR:**
-> now that you understand my intention of being able to identify deflections (reversals) either at the hod or lod or on pullbacks for trading opportunities, i want you to create a complete feature enhancement roadmap of what needs to be done. it can use this application as a baseline to work from and enhance its features to be better at accomplishing the goal as well as create new features.  It should include all sections which include the dashboard , analysis and testing tabs .  ofcourse some of the stuff we have created will be archived or deleted and the majority will be enhanced and new.  do you understand ..
-
-**me (22:13):** Yes. Deflection is the product; everything else is instrumentation for it. Before I write the roadmap I need an accurate inventory of all three tabs rather than a plausible-sounding one — the Analysis and Testing tabs I've barely touched this session.
-Inventory complete. Three facts reframe the whole roadmap:
+**me (01:22):** Context carried over with the switch — I have the whole conversation, and the resume note I just wrote covers any cold start. What Fable needs isn't another briefing; it's to ship the build that's been owed since this morning. Starting now.
+Everything I need is in view. Applying the four changes with a patch that refuses to run unless every anchor matches exactly once — the safest way to edit a 29k-line file.
+17 anchors, each matched exactly once; the file parses. Now the tests — they have to execute the code, not grep it, and then I mutate the source to prove each assertion can fail.
+38/38 green. Now the part the project trusts — mutate the source and prove the assertions actually fire:
+M3 printed nothing — that's a test that either crashed or didn't run, and either way it isn't a pass. Checking rather than assuming:
+That mutant didn't parse (the dangling `else`), so it proves nothing. A proper one:
+All eleven mutants killed. Now the full suite and the smoke test:
+16 red against a baseline of 6. Some will be version-drift gates (chat history, resume note still say 15.50) — but I need to see each one, not assume.
+Baseline confirmed at exactly the 6 known reds. `rules_v2` and `read_v1047` were green at v15.50 and aren't now — so six to read, not four:
+Six green. Smoke test — the one that catches what a render's own catch swallowed:
+Smoke clean. Now the save procedure — changelog, lessons, findings, resume note, then chat history last:
 
 ### DECISIONS
 
@@ -1593,18 +1145,18 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
-2687bb7 v15.49: the columns were not missing; their names were
-933de40 v15.48: sessionPhase() takes a Date and I passed it seconds, three times
-2204256 v15.47: the band's series began before the open, so the anchor was never the open
-31ecb60 v15.46: the warm-up guard read `t` in the wrong units and refused the band all day
-d9c9e26 v15.45: the PURPOSE is written down; and a replay parked on yesterday recorded nothing all morning
-1747729 v15.44: roll arrows right of the delta profile; the ROLL words column retires
-9277516 v15.43: check everything — the health check had no concept of the session
-2a0919d v15.42: the king lane ran to the wall clock; the roll lane went blank without saying why
-6202bfb v15.41: a replay pin outlived the replay and flattened the ladder
-2725280 v15.40: the replayed ladder was drawn in the wrong price space
-067ec1d v15.39: two candles, one session, and they disagreed about its colour
-bebec5f v15.38: the futures-gamma research, parked where it cannot rot
+678125a save: chat history + resume note current, so a new context (or model) starts from today's evidence
+74f68a6 FINDING: the self-improvement loop is complete and measures nothing
+5d63118 process: check in the corpus analysis and pre-register the hypotheses
+e8a0e07 mockup: standalone copy (doctype/head/body) for opening directly in a browser
+7fb90d4 mockup: v16 node ladder, true 608px, on his real 2026-09-02 ladder
+74fef45 RETRACTION: the "7,500 discarded records" were correct declines, not lost evidence
+1e70b28 Q11 first analysis on real data: the touch is a coin, and the label is the wrong shape
+45882af SECOND correction: the corpus exists, under a different key — and 7,500 records are being discarded
+3d963aa correction: the deflection corpus is TODAY-ONLY and is being evicted daily
+9a08f31 integration audit: the panel already holds a 0.879 engine and a gamma map, unjoined
+71942c2 spec (DRAFT): dashboard deflection build, agreed in conversation
+39fb392 v15.50: the deflection roadmap, and the headline it is built around
 ```
 
 ---

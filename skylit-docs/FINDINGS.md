@@ -572,3 +572,35 @@ shedder is ruled out by the snapshots being intact, since it trims both arrays t
 this needs a measurement, not a third reading of the source.** `__gptsDebug.featHealth()` and
 `__gptsDebug.storage()` both exist and answer it live, on his panel, in one call each.
 
+
+
+## F-11 · THE LIVE HOD/LOD SCORER COULD NOT FAIL (measured 2026-09-03, fixed v15.51)
+
+`lodhod` over 4 live sessions, 362 scored rows, in his own IndexedDB export:
+
+    table cell   0-19%   20-39%   40-59%   60-79%   80-99%   100%+
+    live "held"  100%    100%     100%     100%     100%     100%      (n = 5/35/33/73/167/47)
+
+The outcome tested `fwd.mae > -rngPts` — a 30-minute excursion against the WHOLE session range.
+Corrected to `posr × rngPts` (distance back to the standing extreme): 97.5%, and **still flat**:
+
+    table cell   0-19%   20-39%   40-59%   60-79%   80-99%   100%+
+    corrected    100%    100%     100%     100%     94.6%    100%
+
+**A bar-level scorer cannot test a session-level claim.** The 284-session backtest (F-5, AUC 0.879)
+therefore has had **no forward test at all** — every live number recorded against it is void. v15.51
+scores at the close; the forward rate restarts from zero on 2026-09-03 and is not on the face.
+
+## F-12 · THE TOUCH IS A COIN — second, independent sample (2026-09-03)
+
+11-day feature archive, `node` key, clustered to **94 episodes** (1,151 rows, 12.2 per episode):
+held **52.1% [42-62%]**. F-7's 8-session hand study said 56% break. Same answer, different data.
+~37 cells searched across 9 features, 2 flagged, chance predicts 1.9. **Nothing survived.**
+⚠ 62 of 94 episodes carried contradictory per-bar labels — the label is per-bar, Q11 needs
+per-event, which is why `repoUpsertDefl` shipped. Full method: `tools/study-corpus-episodes.py`.
+
+## F-13 · THE REJECTION WICK DOES NOT DISCRIMINATE (2026-09-03)
+
+`reaction` quality over 970 rows: `confirmed` (a real rejection wick) **49.1%** vs `weak` **48.6%**.
+Episode level: 33.3% (n=12) vs 55.6% (n=63). It is REPORTED on the face and never WEIGHTED, per
+`PREREGISTER.md` H4.

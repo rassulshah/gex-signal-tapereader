@@ -131,6 +131,27 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.51 — a test that cannot fail is the most expensive test in the project
+
+**What happened.** The one feature with a validated backtest (`lodhod`, AUC 0.879) had a live scorer
+that compared a 30-minute excursion to the whole session range. It read 100% for four sessions,
+including 5/5 in the 0-19% cell. `featStats` would have aggregated it, `ruleTier` would have cleared
+it, and the face would have shown it beside the panel's most trusted claim.
+
+**Why.** Two reasons, and the second is the lesson. (1) The threshold was wrong. (2) **Fixing the
+threshold did not help** — 97.5%, still flat — because a bar-level window cannot see a session-level
+answer. The scorer was not mis-tuned; it was asking a question whose answer is ~97% "yes" regardless.
+
+**The rule.** *A scorer must be checked for whether it CAN fail before its rate means anything.* The
+check is one line: does the rate move across the cells that are supposed to predict it? If a 0-19%
+cell and a 80-99% cell score the same, the scorer is measuring something else. **Ask this of every
+feature before its number goes near the face.**
+
+**Also this build, three corrections in one day** (see the resume note): each was stated before the
+one-command check that refuted it. The rule already existed for code — *an instrument that cannot
+tell "nothing there" from "I looked in the wrong place" reports both as nothing* — and it applies
+to the analyst.
+
 ### v15.50 — a roadmap's job is to say which work is not worth doing yet
 
 **1 · The inventory had to be measured, not recalled.** I had spent the whole session on the

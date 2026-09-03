@@ -216,7 +216,8 @@ ok(resolveFeatureOutcomes('SPY')===0, '9e FORWARD-ONLY: nothing resolves before 
 for(var b9=0;b9<9;b9++) cs.push({o:774,h:774.3,l:773.9,c:774.1});
 ok(resolveFeatureOutcomes('SPY')===0, '9f 9 bars is still short of fwd=10');
 cs.push({o:774.1,h:775.2,l:774.0,c:775.2});                       // +1.2 up move closes the window
-var long9=FEATURES.filter(function(f){ return (f.fwd||FEAT_FWD)>10; }).length;   // (v11.1) nextStop.60 has a 20-bar window
+// (v15.51) a toClose feature (lodhod) waits for 15:00 CT by design — it is pending here on purpose.
+var long9=FEATURES.filter(function(f){ return (f.fwd||FEAT_FWD)>10 || f.toClose; }).length;   // (v11.1) nextStop.60 has a 20-bar window
 ok(resolveFeatureOutcomes('SPY')===FEATURES.length-long9, '9g the window closes and every 10-bar record resolves (longer-window features stay pending)');
 ok(resolveFeatureOutcomes('SPY')===0, '9h IDEMPOTENT: a resolved record is never re-scored');
 var q9=recorderDay(recorderLoad()).feat.SPY;

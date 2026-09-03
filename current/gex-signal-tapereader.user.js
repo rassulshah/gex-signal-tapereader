@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.50
+// @version    15.51
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -648,7 +648,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.50';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.51';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -5110,14 +5110,20 @@ var REPO_DB_NAME='gpts_repo_v1', REPO_DB=null;
 function repoOpen(cb){
   if(REPO_DB){ cb(REPO_DB); return; }
   try{
-    var req=indexedDB.open(REPO_DB_NAME, 2);
+    var req=indexedDB.open(REPO_DB_NAME, 3);
     req.onupgradeneeded=function(e){ var db=e.target.result;
       if(!db.objectStoreNames.contains('snaps')){ var st=db.createObjectStore('snaps',{keyPath:'id'}); st.createIndex('date','date',{unique:false}); st.createIndex('sym','sym',{unique:false}); }
       if(!db.objectStoreNames.contains('kv')) db.createObjectStore('kv',{keyPath:'k'});
       // (v11.0 audit G4/G9) RESOLVED FEATURE RECORDS, per day. localStorage keeps ≤10 days and
       // evicts under quota; local truth (effN, promotion, the tabs) used to be that window and
       // nothing else. Every resolved record is mirrored here and merged back into featStats.
-      if(!db.objectStoreNames.contains('feat')){ var ft=db.createObjectStore('feat',{keyPath:'id'}); ft.createIndex('date','date',{unique:false}); ft.createIndex('sym','sym',{unique:false}); } };
+      if(!db.objectStoreNames.contains('feat')){ var ft=db.createObjectStore('feat',{keyPath:'id'}); ft.createIndex('date','date',{unique:false}); ft.createIndex('sym','sym',{unique:false}); }
+      // (v15.51) EVENT-LEVEL DEFLECTIONS. day.defl is the only ledger with ONE ROW PER FRESH TAP —
+      // deduped by sig within DEFL_FWD_BARS — which is the shape Q11 needs (feat is per-BAR: 62 of
+      // 94 node episodes carried contradictory labels on 2026-09-03). It was also the only ledger
+      // never mirrored here, and recorderSave's eviction deletes non-today days FIRST — so every
+      // past day of it was destroyed. Measured 2026-09-03: one day survived, 15 events.
+      if(!db.objectStoreNames.contains('defl')){ var df=db.createObjectStore('defl',{keyPath:'id'}); df.createIndex('date','date',{unique:false}); df.createIndex('sym','sym',{unique:false}); } };
     req.onsuccess=function(e){ REPO_DB=e.target.result; cb(REPO_DB); };
     req.onerror=function(){ cb(null); };
   }catch(e){ cb(null); }
@@ -5127,6 +5133,26 @@ function repoUpsertSnaps(sym, date, snaps){
     try{ var tx=db.transaction('snaps','readwrite'); var st=tx.objectStore('snaps');
       snaps.forEach(function(sn){ if(!sn||!sn.t) return; var rec=JSON.parse(JSON.stringify(sn)); rec.id=sym+'|'+sn.t; rec.sym=sym; rec.date=date; st.put(rec); });
     }catch(e){} });
+}
+// (v15.51) Mirror day.defl to IndexedDB. Keyed by sig+tapBar so the later pass that fills `cont`
+// OVERWRITES the unlabelled row instead of duplicating it. ⚠ This is the ledger PREREGISTER H5 waits
+// on; every session it did not exist was a session of labelled deflections thrown away.
+function repoUpsertDefl(sym, date, events){
+  repoOpen(function(db){ if(!db) return;
+    try{ if(!db.objectStoreNames.contains('defl')) return;
+      var tx=db.transaction('defl','readwrite'); var st=tx.objectStore('defl');
+      (events||[]).forEach(function(e){ if(!e||!e.sig) return; var rec=JSON.parse(JSON.stringify(e));
+        rec.id=sym+'|'+date+'|'+e.sig+'|'+(e.tapBar!=null?e.tapBar:0); rec.sym=sym; rec.date=date; st.put(rec); });
+    }catch(e){} });
+}
+function repoLoadDeflArchive(cb){   // -> {sym:{date:[event...]}}
+  repoOpen(function(db){ if(!db){ if(cb) cb({}); return; }
+    try{ if(!db.objectStoreNames.contains('defl')){ if(cb) cb({}); return; }
+      var out={};
+      db.transaction('defl').objectStore('defl').openCursor().onsuccess=function(e){ var c=e.target.result;
+        if(c){ var r=c.value; var bySym=out[r.sym]||(out[r.sym]={}); (bySym[r.date]||(bySym[r.date]=[])).push(r); c.continue(); }
+        else { if(cb) cb(out); } };
+    }catch(e){ if(cb) cb({}); } });
 }
 var FEAT_ARCHIVE={};   // {sym:{date:[FEATREC...]}} — IDB-backed, loaded at boot, merged by featStats
 function repoUpsertFeat(sym, date, recs){
@@ -9854,7 +9880,10 @@ function recordDeflections(sym){
     if(arr.length>RECORDER_MAX_EVENTS) day.defl[sym]=arr.slice(arr.length-RECORDER_MAX_EVENTS);
     // score forward outcomes for events whose window has now elapsed
     if(labelDeflectionOutcomes(sym, day)) changed=true;
-    if(changed) recorderSave(db);
+    if(changed){
+      recorderSave(db);
+      try{ repoUpsertDefl(sym, day.date||TODAY, day.defl[sym]); }catch(eU){}   // (v15.51) survives eviction
+    }
   }catch(e){}
 }
 
@@ -14453,7 +14482,7 @@ function registerCoreFeatures(){
   // (v14.64) ⓪a's call, enrolled from its FIRST line of code. The 2026-08-17 mandate says no feature
   // ships un-enrolled, and this one needs it more than most: every rate on it is a BACKTEST over 284
   // sessions of one instrument with no forward test. The live rate has to accumulate beside it.
-  registerFeature({ key:'lodhod', label:'Has the LOD/HOD already printed?', phase:'dashboard', fwd:FEAT_FWD,
+  registerFeature({ key:'lodhod', label:'Has the LOD/HOD already printed?', phase:'dashboard', fwd:FEAT_FWD, toClose:true,
     record:function(sym, ctx){
       var D=null, C=null;
       try{ D=hodLod(sym); }catch(e1){}
@@ -14471,19 +14500,23 @@ function registerCoreFeatures(){
                // the extremes themselves, so the nightly review can compute the TRUE session label
                lod:D.lod, hod:D.hod, lodT:D.lodT, hodT:D.hodT, rngPts:+((D.rngPts||0).toFixed(2)) };
     },
-    // ⚠ THIS OUTCOME IS A PROXY AND MUST BE READ AS ONE. The true label - "was this the day's
-    // extreme" - is only knowable AT THE CLOSE, which no forward window can see. What is scored here
-    // is whether the standing extreme SURVIVED the forward window. A bar-level scorer cannot do
-    // better; the session-level truth is recomputed nightly from lod/hod/lodT/hodT above.
+    // (v15.51) SCORED AT THE CLOSE, ON THE SESSION LABEL. The previous outcome compared a 30-minute
+    // excursion against the WHOLE session range (`fwd.mae > -rngPts`) — a test that cannot fail —
+    // and read 362/362 = 100% over four live sessions, including 5 of 5 in the 0-19% cell. That
+    // number would have gone on the face beside the panel's most trusted claim. With toClose the
+    // window is the rest of the session, so the question is the real one: did any later bar print
+    // BEYOND the standing extreme? px0+mae is the lowest low after the record; px0+mfe the highest
+    // high. ⚠ Compared to the recorded extreme itself, never to the range.
     outcome:function(rec, fwd){
       var held=null;
       try{
-        if(rec && rec.ok && fwd){
-          held = (rec.side==='LOD') ? ((fwd.mae!=null) ? (fwd.mae > -(rec.rngPts||0)*0.999 ? 1 : 0) : null)
-                                    : ((fwd.mfe!=null) ? (fwd.mfe <  (rec.rngPts||0)*0.999 ? 1 : 0) : null);
+        if(rec && rec.ok && fwd && typeof fwd.px0==='number'){
+          var TOL=0.005;
+          if(rec.side==='LOD' && typeof rec.lod==='number' && fwd.mae!=null) held = ((fwd.px0+fwd.mae) >= rec.lod-TOL) ? 1 : 0;
+          if(rec.side==='HOD' && typeof rec.hod==='number' && fwd.mfe!=null) held = ((fwd.px0+fwd.mfe) <= rec.hod+TOL) ? 1 : 0;
         }
       }catch(e){}
-      return { hit:held, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null };
+      return { hit:held, mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null, atClose:true };
     },
     questions:[
       { id:'lodhod_table_calibrated', when:[{f:'called',v:1}], outcome:'hold',
@@ -16276,8 +16309,17 @@ function resolveFeatureOutcomes(sym){
       // is aggregable and can never be mistaken for a full-window result.
       var avail=n-startIdx;
       var partial=false;
-      if(avail < fwdN){
-        var late=false; try{ late=(ctNowSecOfDay()>=15*3600); }catch(eL){ late=false; }
+      var late=false; try{ late=(ctNowSecOfDay()>=15*3600); }catch(eL){ late=false; }
+      // (v15.51) A SESSION-LEVEL CLAIM RESOLVES AT THE CLOSE, NOT ON A 30-MINUTE PROXY. lodhod asks
+      // "will this be the DAY's extreme"; its 10-bar window asked "did it survive half an hour" —
+      // a ~97% base-rate question — and scored 362/362 = 100%, including 5/5 in the cell where the
+      // table predicts 0-19%. No threshold fixes a window that cannot see the answer. A feature
+      // flagged toClose waits for 15:00 CT and is then scored on EVERY remaining bar; it is a full
+      // window by definition, never partial.
+      if(f.toClose){
+        if(!late || avail<1) return;
+        fwdN=avail;
+      } else if(avail < fwdN){
         if(!(late && avail>=3)) return;                  // window not closed yet
         partial=true;
       }
@@ -16298,9 +16340,18 @@ function resolveFeatureOutcomes(sym){
                 net:+(pxEnd-px0).toFixed(2), n:endIdx-startIdx, first:first, kingReached:kingReached,
                 partial:partial, path:path,
                 frame:frameOutcome(r.rec, cs, startIdx, endIdx) };
-      var res=null;
-      try{ res=f.outcome(r.rec, fwd); }catch(eO){ res=null; }
+      var res=null, oErr=null;
+      try{ res=f.outcome(r.rec, fwd); }catch(eO){ res=null; oErr=eO; }
       r.hit=(res && res.hit!=null)?(res.hit?1:0):null;
+      // (v15.51) WHY hit IS NULL. resolved=true is set below regardless, so a scorer that THREW and
+      // one that DECLINED used to land identically — and the catch above was empty. On 2026-09-03
+      // all 2,706 unscored records in an 11-day export were honest declines (no trigger latched, no
+      // vote cast); that could only be established by reading `out` by hand, because the record
+      // could not say. Now it says, and a throw is reported instead of swallowed.
+      if(r.hit==null) r.hitNull = oErr ? 'threw' : (res ? 'declined' : 'null');
+      else if(r.hitNull) delete r.hitNull;
+      if(oErr){ try{ swallow('feat.outcome:'+f.key, oErr); }catch(eS){} }
+      if(f.toClose) r.atClose=true;
       r.mfe=(res && res.mfe!=null)?res.mfe:fwd.mfe;
       r.mae=(res && res.mae!=null)?res.mae:fwd.mae;
       r.out=res||null;
@@ -25491,7 +25542,22 @@ function frameNumSafe(x){ try{ return frameNum(x); }catch(e){ return String(x); 
 // requires the DISTANCE TO BE CLOSING, which makes it falsifiable. Doctrine ("every node is a magnet;
 // the closer price drifts, the stronger the pull") is satisfied by the stricter test, not contradicted.
 var LVLMK_LAST=[];         // (v15.49) the last markers decided, for __gptsDebug.mark()
-var LVL_INPLAY_PTS=3;      // ⚖ how close price must be to count as standing on a level
+var LVL_INPLAY_PTS=3;      // ⚠ LEGACY FALLBACK ONLY (v15.51) — used before two closed bars exist. See nodeBandDisp.
+// (v15.51) ONE GEOMETRY FOR "PRICE IS AT THE NODE". Two fixed 3-point gates lived in DISPLAY space —
+// this one and reactDefence's `bd>3` — and a fixed chart-point is a different test on every
+// instrument: ~4-7 ATR on a SPY chart, well under one on ES. Both now take the deflection band the
+// project already settled (DEFL_NEAR, ATR-scaled), converted underlying->chart by the band's own
+// scaleUsed, the same ratio the ATTRACTING branch below already uses. ⚠ Not a new tunable: the
+// multiple is the one fixed on 2026-08-29, chosen for consistency, not for how MARK looks.
+function nodeBandDisp(sym, undScale){
+  try{
+    var cs=closedCandles(sym)||[]; if(cs.length<2) return null;      // atr() would return its 0.1 sentinel
+    var a=atr(sym); if(!(a>0)) return null;
+    var s=(typeof undScale==='number' && undScale>0)?undScale:null;
+    if(s==null){ try{ var B=emBand(sym); s=(B && typeof B.scaleUsed==='number' && B.scaleUsed>0)?B.scaleUsed:1; }catch(e2){ s=1; } }
+    return a*s*DEFL_NEAR;
+  }catch(e){ return null; }
+}
 var LVL_CLOSE_BARS=5;      // ⚖ bars over which the distance must have closed to say ATTRACTING
 // ⚠⚠ (v14.50) THE SCALE PARAMETER IS LOAD-BEARING. The first version converted a past close with
 // ifDispScale(), which is the SPX→ES BASIS (~1.002) — but closedCandles() returns the UNDERLYING
@@ -25505,13 +25571,15 @@ function levelMarkerOf(dispPrice, now, sym, isTopPull, undScale){
   try{
     if(typeof dispPrice!=='number' || typeof now!=='number') return null;
     var d=Math.abs(dispPrice-now);
-    if(d<=LVL_INPLAY_PTS){
+    var band=null; try{ band=nodeBandDisp(sym, undScale); }catch(eB){ band=null; }
+    var legacy=(band==null); if(legacy) band=LVL_INPLAY_PTS;
+    if(d<=band){
       var rd=null; try{ rd=reactDefence(sym, dispPrice); }catch(e0){}
       if(rd && rd.verdict==='DEFENDING')
-        return { m:'DEFENDING', why:'price is on it and it is ABSORBING the test \u2014 15m building while price sits here' };
+        return { m:'DEFENDING', band:band, legacy:legacy, why:'price is on it and it is ABSORBING the test \u2014 15m building while price sits here' };
       if(rd && rd.verdict==='ABANDONING')
-        return { m:'BREAKING', why:'price is on it and it is being ABANDONED \u2014 the level is shedding mass under the test. \u26a0 This is the LEVEL failing, not a claim that price has broken through' };
-      return { m:'IN PLAY', why:'price is on it; the tape shows no clear reaction either way yet' };
+        return { m:'BREAKING', band:band, legacy:legacy, why:'price is on it and it is being ABANDONED \u2014 the level is shedding mass under the test. \u26a0 This is the LEVEL failing, not a claim that price has broken through' };
+      return { m:'IN PLAY', band:band, legacy:legacy, why:'price is on it; the tape shows no clear reaction either way yet' };
     }
     if(isTopPull){
       var closing=null;
@@ -26612,8 +26680,9 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
         // console instead of by reading source. The MARK column came back EMPTY on 2026-09-02 with a
         // row sitting 0.5 points from price — inside LVL_INPLAY_PTS=3 — and there was no way to tell
         // whether the function had returned null or thrown, because the catch below discards both.
-        try{ LVLMK_LAST.push({ k:P.k, disp:P.disp, now:now, d:+Math.abs(P.disp-now).toFixed(2),
-                               thresh:LVL_INPLAY_PTS, m:mk?mk.m:null });
+        try{ var _bd=null; try{ _bd=nodeBandDisp(sym, (EB&&typeof EB.scaleUsed==='number')?EB.scaleUsed:0); }catch(eBd){}
+             LVLMK_LAST.push({ k:P.k, disp:P.disp, now:now, d:+Math.abs(P.disp-now).toFixed(2),
+                               thresh:(_bd!=null)?+_bd.toFixed(3):LVL_INPLAY_PTS, band:(_bd!=null)?'atr':'legacy', m:mk?mk.m:null });
              if(LVLMK_LAST.length>40) LVLMK_LAST.shift(); }catch(eML){}
       }catch(eMk){
         // ⚠ AN EMPTY CATCH MADE A THROWN MARKER LOOK EXACTLY LIKE A NULL ONE. `swallow` is the
@@ -29290,7 +29359,10 @@ function reactDefence(sym, subjES){
       var d=Math.abs(TN[i].es-subjES);
       if(d<bd){ bd=d; best=TN[i]; }
     }
-    if(!best || bd>3 || !best.vel) return null;
+    // (v15.51) the same band as levelMarkerOf — see nodeBandDisp. `bd>3` was a fixed chart-point.
+    var band=null; try{ band=nodeBandDisp(sym, null); }catch(eB){ band=null; }
+    if(band==null) band=LVL_INPLAY_PTS;
+    if(!best || bd>band || !best.vel) return null;
     var v=best.vel;
     if(typeof v.d15!=='number' || typeof v.d5!=='number') return null;
     var verdict, cls;
@@ -29303,7 +29375,7 @@ function reactDefence(sym, subjES){
         ? '60m still '+velD(v.d60).txt+' \u2014 the defence is 15 minutes old, not an hour old.'
         : '60m still '+velD(v.d60).txt+' \u2014 it is bleeding now but was building on the hour.';
     }
-    return { node:best, v:v, verdict:verdict, cls:cls, caveat:caveat, stale:best.velStale, age:best.velAge };
+    return { node:best, v:v, verdict:verdict, cls:cls, caveat:caveat, stale:best.velStale, age:best.velAge, band:band, dist:+bd.toFixed(3) };
   }catch(e){ return null; }
 }
 
@@ -30016,8 +30088,10 @@ window.__gptsDebug.session = function(){
 // (v15.49) WHY IS THE MARK COLUMN EMPTY — answerable in one call. Records what the marker was
 // ASKED and what it ANSWERED for every row of the last render, so "no marks" can be told apart from
 // "marks refused" and from "the marker threw".
+// (v15.51) read the event-level deflection archive: __gptsDebug.deflArchive(function(a){ console.log(a); })
+window.__gptsDebug.deflArchive = function(cb){ try{ repoLoadDeflArchive(cb||function(a){ console.log(a); }); return 'loading\u2026'; }catch(e){ return { err:String(e&&e.message||e) }; } };
 window.__gptsDebug.mark = function(){
-  try{ return { n:LVLMK_LAST.length, thresh:LVL_INPLAY_PTS, rows:LVLMK_LAST.slice(-14) }; }
+  try{ return { n:LVLMK_LAST.length, legacyThresh:LVL_INPLAY_PTS, geometry:'atr x scaleUsed x DEFL_NEAR ('+DEFL_NEAR+')', rows:LVLMK_LAST.slice(-14) }; }
   catch(e){ return { err:String(e&&e.message||e) }; }
 };
 window.__gptsDebug.sessionBody = function(sym){

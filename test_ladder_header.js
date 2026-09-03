@@ -42,8 +42,10 @@ ok(/swallow\('levelMarker', eMk\)/.test(src),
 ok(/LVLMK_LAST\.push\(\{ k:P\.k, disp:P\.disp, now:now/.test(src),
    'm2 ...and every row records what the marker was ASKED');
 ok(/m:mk\?mk\.m:null/.test(src), 'm2b ...and what it ANSWERED, including null');
-ok(/d:\+Math\.abs\(P\.disp-now\)\.toFixed\(2\)/.test(src) && /thresh:LVL_INPLAY_PTS/.test(src),
-   'm2c ...with the distance AND the threshold, so a refusal explains itself');
+// (v15.51) the threshold is now the ATR band when one exists, and the row says WHICH it used —
+// a refusal at "thresh 3" and one at "thresh 0.48 (atr)" are different refusals.
+ok(/d:\+Math\.abs\(P\.disp-now\)\.toFixed\(2\)/.test(src) && /thresh:\(_bd!=null\)\?\+_bd\.toFixed\(3\):LVL_INPLAY_PTS/.test(src) && /band:\(_bd!=null\)\?'atr':'legacy'/.test(src),
+   'm2c ...with the distance AND the threshold it actually used (atr band, or legacy and says so), so a refusal explains itself');
 ok(/window\.__gptsDebug\.mark = function/.test(src), 'm3 __gptsDebug.mark() answers it in one call');
 // ⚠ one render, one record — otherwise the last N entries straddle two renders and the console
 // shows two different prices as though they were one moment.
