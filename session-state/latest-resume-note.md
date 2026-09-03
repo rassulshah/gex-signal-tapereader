@@ -1,9 +1,36 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-03 · panel v15.58 · companion v1.18 · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-03 · panel v15.59 · companion v1.18 · supersedes every earlier resume note_
+
+
+# ⚠⚠⚠ THE WHAT AND THE HOW — STANDING, EVERY CONTEXT, BEFORE ANYTHING ELSE
+
+**THE WHAT** (`design/PURPOSE.md`, his words): identify the two turning points — the HOD and the LOD — to profit from
+the move between them; secondarily the pullback turning points (deflections that resume a trend), relying on gamma
+levels: **a gamma node deflects price, and the deflection IS the turning point.** Confusing the pullback deflection
+(stay in) with the HOD/LOD deflection (turn around) is the expensive error.
+
+**THE HOW** (`design/PROCESS.md`): the loop ① RECORD → ② EXPORT → ③ PUSH → ④ NIGHTLY → ⑤ REVIEW → ⑥ REGISTRY →
+⑦ BUILD → ⑧ INSTALL → ⑨ GATE → ⑩ DASHBOARD / THE READ → ⑪ SCORE. Dashboard = act, Analysis = ask and read (the
+registry + TRACK), Testing = trust and promote (the register, the gate, what the ladder renders and why). Every rate
+with its n; a scorer must be able to fail; a hypothesis is written before the data and read once at minN; a first
+read is never a verdict; every file the panel fetches rides the installer; probe the live panel after every install.
+**THE PLAN** is `roadmap/ROADMAP.md` and the 🗺 Roadmap tab (v15.59 the ⚙ Architecture + 🗺 Roadmap tabs · v15.60 score the READ · v15.61 the TAP record). **The WHAT and the HOW are INSIDE THE APP from v15.59** (⚙ Architecture tab, rendered from `learning/plan.json` = `tools/plan-seed.py`; the seed, the file and the docs are pinned equal by `test_v1559.js`). Edit the plan in `tools/plan-seed.py`, run it, re-splice `PLAN_SEED`, update the docs.
+**Tighten and harden the machinery over time** — PROCESS.md §5 is the standing backlog; add to it when something
+breaks, and say what broke in LESSONS.
 
 ---
 
-# ⚠⚠ 2026-09-03 (latest) — v15.58: THE READ RANKS RECLAIMED SWEEPS FIRST; A GAP OPEN IS NOT A SWEEP. INSTALLER MANIFEST FIXED.
+# ⚠⚠ 2026-09-03 (latest) — v15.59: THE ⚙ ARCHITECTURE AND 🗺 ROADMAP TABS. THE WHAT, THE HOW AND THE PLAN ARE IN THE APP.
+
+**Panel is v15.59, companion v1.18.** Two new tabs rendered from `learning/plan.json` (`tools/plan-seed.py`; `PLAN_SEED`
+pinned equal by `test_v1559.js`, which also pins every stage to PROCESS.md and every version to ROADMAP.md). Architecture =
+the objective + the loop as LIVE STATUS (a red stage = where the loop is broken today) + the tabs + the rules + hardening.
+Roadmap = NEXT (v15.60 score the READ) · AFTER THAT (v15.61 TAP record · v15.62 nightly reads the queue · v15.63 definitions
++ shipped-artifact test · v15.64 face manifest · v15.65 pullback outcome) · SHIPPED · HIS DECISIONS · CONSTRAINTS. **To
+change the plan: edit tools/plan-seed.py, run it, re-splice PLAN_SEED, update ROADMAP.md / PROCESS.md — the test fails
+until all three agree.**
+
+# (earlier) — v15.58: THE READ RANKS RECLAIMED SWEEPS FIRST; A GAP OPEN IS NOT A SWEEP. INSTALLER MANIFEST FIXED.
 
 **Panel is v15.58, companion v1.18.** Live probe of his panel found: (1) the installer manifest never carried
 learning/*.json, learning/log, data/es-1min/SWEEPS*.json — fixed by glob + `test_installer_manifest.js`; until he runs

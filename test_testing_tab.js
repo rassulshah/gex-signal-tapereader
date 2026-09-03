@@ -10,7 +10,7 @@ ok(/var TESTING_VIEW=false;/.test(src), 'TESTING_VIEW state var added');
 ok(/window\.__gptsDebug\.showTesting=function/.test(src), 'showTesting handler');
 ok(/if\(TESTING_VIEW\)\{/.test(src), 'render branch for Testing');
 ok(/tab\('\\uD83E\\uDDEA Testing', TESTING_VIEW/.test(src), 'third tab in the tab bar');
-ok(/if\(ANALYSIS_VIEW\) TESTING_VIEW=false;/.test(src) && /if\(TESTING_VIEW\) ANALYSIS_VIEW=false;/.test(src), 'tabs mutually exclusive');
+ok(/if\(ANALYSIS_VIEW\)\{ TESTING_VIEW=false; ARCH_VIEW=false; ROADMAP_VIEW=false; \}/.test(src) && /if\(TESTING_VIEW\)\{ ANALYSIS_VIEW=false; ARCH_VIEW=false; ROADMAP_VIEW=false; \}/.test(src), 'tabs mutually exclusive (v15.59: five views, each clears the other four)');
 ok(/window\.__gptsHypo=function/.test(src) && /window\.__gptsMineRun=function/.test(src) && /window\.__gptsHypoRun=function/.test(src), 'console + preset APIs exposed');
 // (v10.54 GROUP 5.2) the Testing tab was rebuilt around the learning loop: question
 // queue -> proposals -> challengers -> kill list -> self-test -> coverage. The v10.45

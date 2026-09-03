@@ -1,3 +1,39 @@
+## (docs, same day) — the WHAT and the HOW pinned; the roadmap; the dashboard inventory
+
+> "ensure you never forget my objective (the what) and the machinery and process … (the how) … tighten and harden the
+> machinery … should this process be in another tab? … inventory all the fields on the dashboard … a development roadmap"
+
+No panel change. `design/PROCESS.md` (the loop ①–⑪, the files and who writes each, the rules and their tests, what is
+thin, the hardening backlog) pinned by `test_process.js` and registered at 1a-00b in the skill, in `.gex-config.json`
+(`theWhatAndTheHow`) and in a standing block at the top of the resume note. `roadmap/ROADMAP.md` — v15.59 score the
+READ · v15.60 the ⚙ Process tab · v15.61 the TAP record · v15.62 the nightly reads the queue · v15.63 one definitions
+file + the shipped-artifact test · v15.64 the face manifest · v15.65 the pullback outcome. `design/DASHBOARD-INVENTORY.md`
+— every face element → objective → study → measured / descriptive / unmeasured, with verdicts.
+
+## v15.59 — the ⚙ Architecture and 🗺 Roadmap tabs: the WHAT, the HOW and the plan inside the app
+
+> "we have lost so much. i think there should be a tab for roadmap so its not lost and there is a record and a tab for
+> architecture (the how) which is focused on achieving my objectives. This way the future contexts will not forget about it."
+
+**Why it was wrong before.** The objective lived in one document, the machinery in four, the plan in a fifth — all in the
+repo, none in the thing he looks at every day. A future context could load the code and never see either.
+
+**Two tabs, one source.** `tools/plan-seed.py` → `learning/plan.json` (the objective in his words, the mechanism, the two
+kinds of reversal and the expensive error; the eleven stages of the loop with what each writes; the tabs' roles; the
+rules with their tests; the hardening backlog; the roadmap items with status and definition of done; his open decisions;
+the standing constraints). `PLAN_SEED` in the script renders before the first fetch; `planFetch` keeps it current.
+**⚙ Architecture** = ① THE WHAT · ② THE HOW as LIVE STATUS (every stage green / amber / red from what the panel can see:
+recording, saved, pushed, nightly read back, review files fetched, registry loaded, suite stamp, version + companion,
+gate, earned tiers, SCORE not built) · ③ the tabs · ④ the rules · ⑤ hardening. **🗺 Roadmap** = NEXT · AFTER THAT ·
+SHIPPED · HIS DECISIONS · STANDING CONSTRAINTS, the running version marked. A red stage on Architecture is where the
+loop is broken today — the manifest bug would have been visible on day one.
+
+**Pinned equal.** `test_v1559.js` (46; 6 of 6 mutations): the seed equals the file byte for byte; every stage is in
+PROCESS.md; every unshipped version is in ROADMAP.md and vice versa; the tabs render with data and with nothing fetched
+(the seeds draw the WHAT; REGISTRY / REVIEW / NIGHTLY go red). `test_process.js` pins PROCESS.md itself.
+
+**The roadmap re-ordered** on his ask: the tabs first (v15.59), then score the READ (v15.60), the TAP record (v15.61).
+
 ## v15.58 — the READ reads sweeps, not gaps · the Testing tab as mocked
 
 > "you also didn't implement the testing tab as you mocked up"

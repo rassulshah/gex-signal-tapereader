@@ -131,6 +131,23 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.59 — what must never be lost goes into the thing he looks at every day
+
+**What happened.** "We have lost so much." The objective and the machinery were documented — in the repo, pinned by
+tests, at the top of the load order — and still felt lost, because none of it was in the panel. A document a context
+must go and read is one step removed from a tab that is simply there. **The durable place for the WHAT and the HOW is the
+application itself**, rendered from one data file that the docs and the seed are pinned to. And a HOW tab must be live
+status, not prose: prose about the loop drifts; a loop drawn from what the panel can see today cannot.
+
+### 2026-09-03 — the WHAT was pinned; the HOW was not
+
+**What happened.** PURPOSE.md had a test and a place at the top of the load order since 2026-09-02. The machinery —
+the loop, its files, its rules, what is thin and what is next — lived across four design documents and a
+changelog, none of them at the top of anything, none pinned. A future context could have read the objective and
+rebuilt the pipeline from scratch without knowing it existed. **Anything a context must not forget gets the same
+three anchors: a document, a place in the load order, and a test that fails without it.** PROCESS.md, ROADMAP.md
+and test_process.js are those anchors for the HOW.
+
 ### v15.58 (Testing tab) — "as mocked" means every section, not the order of the headings
 
 **What happened.** v15.55 put the Testing tab in the mockup's loop order and built ③ from scratch, then reused the old

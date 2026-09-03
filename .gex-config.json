@@ -12,12 +12,16 @@
     "_howToRead": "⚠⚠ TIERED ON PURPOSE. The old flat list of 24 was read 'in full' — including a 607KB CHANGELOG and a 362KB CHAT-HISTORY. A context that reads everything reads nothing carefully. Read tier0 COMPLETELY and FIRST; it is small and it is the whole state of play. Then tier1. Tier2 is read PARTIALLY, per its own note. Tier3 is reference — do NOT read on load; open it when a task touches it.",
     "tier0_readFirstInFull": [
       "session-state/LESSONS.md",
+      "design/PURPOSE.md",
+      "design/PROCESS.md",
+      "roadmap/ROADMAP.md",
       "session-state/latest-resume-note.md",
       "session-state/OPEN-QUESTIONS.md",
       "session-state/LOCKED-ITEMS.md"
     ],
     "tier0_note": "These four are the state of play and total well under 100KB. LESSONS first: it names results that have been WITHDRAWN, and quoting a withdrawn number is the most expensive thing a fresh context can do because it looks like knowledge. OPEN-QUESTIONS stops you re-asking what he already answered.",
     "tier1_readInFull": [
+      "design/DASHBOARD-INVENTORY.md",
       "current/gex-signal-tapereader.user.js",
       "current/gex-if-levels.user.js",
       "design/DATA-ARCHITECTURE.md",
@@ -54,9 +58,13 @@
     ],
     "projectFiles": [
       "session-state/LESSONS.md",
+      "design/PURPOSE.md",
+      "design/PROCESS.md",
+      "roadmap/ROADMAP.md",
       "session-state/latest-resume-note.md",
       "session-state/OPEN-QUESTIONS.md",
       "session-state/LOCKED-ITEMS.md",
+      "design/DASHBOARD-INVENTORY.md",
       "current/gex-signal-tapereader.user.js",
       "current/gex-if-levels.user.js",
       "design/DATA-ARCHITECTURE.md",
@@ -161,7 +169,7 @@
     ]
   },
   "version": "2026-08-30b",
-  "lastUpdated": "2026-08-30T07:30:00Z",
+  "lastUpdated": "2026-09-03",
   "loadInstruction": "⚠ 2026-08-28: READ design/DATA-ARCHITECTURE.md - it is the ONE place that says WHO CAN REACH WHAT (the panel is @grant none and cannot fetch cross-origin; the companion holds the grants; the cloud can clone but CANNOT PUSH; git is the transport), every data source, the four transports, and the daily ES corpus pipeline. It exists because those facts used to live only in session-state/, which is rewritten in full every build - the same mechanism that lost ITEM 18 for 24 versions. design/architecture-design.md is SUPERSEDED on data sources by it. ⚠ TWO STANDING OPERATOR RULES, STATED HERE SO A LOAD CANNOT MISS THEM: (1) DELIVERY IS ONE FILE - see deliveryRule; send exactly one installvNNNN.bat and nothing else. (2) CHAT HISTORY IS REGENERATED ON EVERY BUILD and READ ON EVERY LOAD - see chatHistory; a build that skips it goes red on test_chat_history.js. ⚠ 2026-08-27: CLONE FULL (see cloneRule — never --depth 1). READ IN THIS ORDER, IN FULL, BEFORE ANYTHING ELSE: (1) session-state/latest-resume-note.md — a briefing, not a changelog; a context that skips it will re-litigate settled decisions. (2) session-state/CHAT-HISTORY.md, the CURRENT-CONTEXT entry — what was actually SAID last context: the corrections, the approaches already rejected, and the operator's exact words. The resume note says where we are; this says how we got there. (3) session-state/LOCKED-ITEMS.md — agreed work that is NOT built. It exists because the resume note lost ITEM 18 and a whole session went to re-discovering it. (4) design/DATA-ARCHITECTURE.md — who can reach what: the browser is the only participant that can fetch freely, the cloud cannot reach Yahoo and CANNOT PUSH, git is the transport between them. ⚠ master-spec.md §3.1-3.2 and design/architecture-design.md are OBSOLETE where they name AI Drive as the source of truth — both carry banners; git is the truth. TWO analyst packages inform the build (Garma = gamma-map-first, Wicks = charts-first); BUILD-PLAN.md is the master sequence across both, and is currently MISSING at HEAD. Several headline measurement rates in this project are ONE-DAY samples and at least one is contradicted by a later day — never quote a rate without its n and its date.",
   "chatHistory": {
     "file": "session-state/CHAT-HISTORY.md",
@@ -293,5 +301,15 @@
     "onLoad": "Read it in full with tier0. It is the difference between asking him something new and re-asking something he already answered. An agent that re-asks is spending the one resource this project cannot regenerate.",
     "everyBuild": "Move anything answered into the ANSWERED section with its answer and date; add anything newly blocked. An entry leaves only by being answered or explicitly dropped.",
     "rule": "NEVER guess an answer and build on it. Print an em-dash, say why, and ask."
+  },
+  "theWhatAndTheHow": {
+    "what": "design/PURPOSE.md — find the HOD and the LOD early enough to trade the move between them; secondarily the pullback turning points that resume a trend; a gamma node deflects price and the deflection IS the turning point",
+    "how": "design/PROCESS.md — the loop RECORD → EXPORT → PUSH → NIGHTLY → REVIEW → REGISTRY → BUILD → INSTALL → GATE → DASHBOARD/THE READ → SCORE; Dashboard = act, Analysis = ask and read, Testing = trust and promote; every rate with its n; a scorer must be able to fail; hypotheses written before the data, read once at minN; every fetched file rides the installer; probe the live panel after every install",
+    "plan": "roadmap/ROADMAP.md — incremental, one build at a time, each with a definition of done",
+    "mandate": "operator 2026-09-03: never forget the what and the how; update them wherever; tighten and harden the machinery over time",
+    "pinnedBy": [
+      "test_purpose.js",
+      "test_process.js"
+    ]
   }
 }

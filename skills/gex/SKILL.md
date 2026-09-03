@@ -81,6 +81,18 @@ load instruction. Then read, in order:
    ⚠ **Judge every proposal, priority and cut against that file.** If the roadmap, DECISIONS or
    DEPENDENCIES conflict with it, PURPOSE wins and the other is wrong.
 
+1a-00b. **`design/PROCESS.md` — THE HOW. READ IT RIGHT AFTER PURPOSE.** Operator, 2026-09-03: *"ensure you never
+   forget my objective (the what) and the machinery and process that is supposed to do the analysis, testing and
+   feedback into the application (the how) … tighten and harden the machinery and process over time."* The loop
+   ① RECORD → ② EXPORT → ③ PUSH → ④ NIGHTLY → ⑤ REVIEW → ⑥ REGISTRY → ⑦ BUILD → ⑧ INSTALL → ⑨ GATE → ⑩ DASHBOARD /
+   THE READ → ⑪ SCORE, the file each stage writes and who reads it, the rules the machinery enforces and the test
+   behind each, what is thin/open, and the standing hardening backlog. Pinned by `test_process.js`.
+   **Dashboard = act · Analysis = ask and read · Testing = trust and promote.** After ANY install, probe the live
+   panel (version, fetched files, companion `full`) — never assume; the installer-manifest bug was found only that way.
+1a-00c. **`roadmap/ROADMAP.md` — THE INCREMENTAL PLAN, one build at a time, each with the objective it serves and a
+   definition of done.** Pick the top item; move it to "Where we are" when shipped; re-order when a finding changes
+   the order and say why in CHANGELOG. `design/DASHBOARD-INVENTORY.md` is the field-by-field map of the face to the
+   objective and the studies (measured / descriptive / unmeasured) — the basis of the face manifest.
 1a-0. **`design/DEPENDENCIES.md` — WHAT THE PANEL CANNOT WORK WITHOUT, AND HOW TO CHECK IT.**
    Operator-mandated 2026-09-01: *"the next context needs to be aware of these dependencies for the
    application to work properly ... it is fundamental to the application."*
@@ -97,7 +109,7 @@ load instruction. Then read, in order:
    ⚠ Measured 2026-09-01: the stored SPY chain was **11 days old** with a null expected move while
    SPX and QQQ were three minutes old, and its own `stale` flag read false.
 
-1a-01. **`roadmap/DEFLECTION-ROADMAP.md` — WHAT TO BUILD NEXT, AND IN WHAT ORDER.** Written
+1a-01. **`roadmap/DEFLECTION-ROADMAP.md` — (superseded by `roadmap/ROADMAP.md` on 2026-09-03; history) — was: WHAT TO BUILD NEXT, AND IN WHAT ORDER.** Written
    2026-09-02 against `design/PURPOSE.md`. ⚠ **Its headline is that the touch itself has NO EDGE**
    (79 deflections / 25 breaks, 56% break, t=+0.41 top-5 and t=-0.32 kings — both null), so the
    ex-ante deflect/break discriminator (`OPEN-QUESTIONS.md` Q11) is the product, and it is NOT BUILT.

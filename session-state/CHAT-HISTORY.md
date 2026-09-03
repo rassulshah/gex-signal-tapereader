@@ -15,9 +15,9 @@ assistant's replies only.
 
 <!-- CURRENT-CONTEXT -->
 
-## 2026-09-03 · v15.58 · session `5e8d34b5` — v15.58: the READ ranks reclaimed sweeps first; the Testing tab as mocked; TRACK and the read confirmed live on his panel
+## 2026-09-03 · v15.59 · session `5e8d34b5` — v15.59: the Architecture and Roadmap tabs — the WHAT, the HOW and the plan inside the app
 
-_23 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
+_31 operator prompts · transcript `5e8d34b5-d55e-5fa6-938c-1f55548b25ee.jsonl`_
 
 ### THE EXCHANGE
 
@@ -252,6 +252,85 @@ Tell me when the installer has run and I'll probe the panel again to confirm all
 
 **OPERATOR:**
 > did you implement this: I want each section in the analysis tab to have a text field in which I can add something that needs to be tracked.  You can then analyze it and also consider testting it.  Basically I want to add something so i will just enter it in the text field for the appropriate section and click a button like add which will trigger you to do your part of analysis and testing.  There also needs to be a feedback mechanism that feeds back into the dashboard especially a read section.  For example if you know there is a high probability of a lid after a big node rejection from the lod because of analysis and testing and stats you can tell me in the read section as we sweep an overnight low and deflect from a node and the statistics and analysis confirm.      did you also implement the file:///C:/Dev/gex-signal-tapereader/mockupanalysisbysubjectstandalone.html  which has the analysis mockup
+
+**me (17:13):** Straight answers to both questions, checked against your live panel rather than from memory.
+
+**The TRACK field and the read section — yes, both are live in what you're running.** I probed your Atlas tab: the "TRACK SOMETHING UNDER H" field and its **+ Add** button are on the Analysis tab, and ⓪a on the dashboard is already reading today's tape — it had found this morning's sweeps (PDH, PDC, VAH, POC, IBH/IBL, VWAP, the bands) and named the last node deflection (772, Rug, pending). What it couldn't do yet is quote a single rate, because every file it fetches for that — `studies.json`, `register.json`, `SWEEPS.json`, `SWEEPS-BOOK.json`, the nightly logs — was still 404 on GitHub: the first v15.57 installer never carried them (the manifest bug from the double check). That's why the Analysis tab shows the skeleton with "0 studies · registry not fetched yet" instead of the mockup's rows and sweep table. **Run the installer below and that fills in** — no reinstall needed for the data, it arrives on the next pipeline check.
+
+**The Testing tab — you're right, and it's fixed now.** v15.55 put the tab in the mockup's order and built ③ ON THE DASHBOARD, but ①②④⑤⑥ kept their old bodies under new headings. That's not what we agreed. In v15.58 every section carries the mockup's body: ① the register with predict / refute-if / the n-minN bar / verdict per row, ② the gate summary (both bands, Δ, n per band, verdict) over the live band table, ④ the stores table (feat · defl · TAP · ES 1-min · the book corpus · kingRoll) with what's present and what the open studies still need, ⑤ last run · reads next · refreshes · ledger before the review as written, ⑥ THE SUITE with the last test run stamped by the test runner (files · green · red · which). I rendered it beside the mockup this time bef …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 80 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (17:14):** Push is denied from this environment by organization policy (403 on origin) — the 80 commits are local and go up when `installv1558.bat` runs on your machine. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> did you fix so the analysis tab looks like the mockups you provided me as well as the testing tab also looks like the mockup you provided me.  i gave you urls with the names of the mockups
+> [Image: original 1296x2450, displayed at 1058x2000. Multiply coordinates by 1.22 to map to original image.]
+> [Image: original 1296x2450, displayed at 1058x2000. Multiply coordinates by 1.22 to map to original image.]
+
+**me (18:14):** Yes — both, and the two images above are the proof: left is each mockup (`mockup-analysis-by-subject-standalone.html`, `mockup-testing-tab-standalone.html`), right is v15.58 rendered from the actual script with the data files loaded. Same subject strip, same H1/H2 sections and rows, same sweep table with the book block; same loop strip, ① register with predict / refute-if / n-minN bars, ② gate summary, ③ dashboard table, ④ stores, ⑤ nightly, ⑥ suite.
+
+**But your panel can't show that yet, and I just confirmed why on your Atlas tab:** it's on **v15.57**, and every data file the tabs need is **still 404 on GitHub** — `studies.json`, `SWEEPS.json`, `suite.json`, the register, the logs. That means `installv1558.bat` (or the rebuilt v15.57 one) hasn't been run. The first v15.57 installer you ran didn't carry those files — that was the manifest bug — so until the new one pushes them, the tabs render their skeleton: subject headings with "0 studies · registry not fetched yet", no rows, no table, no rates. The layout is there; the content isn't, because the content lives in files that never reached the repo.
+
+So the sequence is:
+
+1. **Run `installv1558.bat`** (sent last message). It pushes the panel *and* the data files.
+2. Wait ~5 min, **click the tapereader link** (v15.58) and **the companion link** (v1.18 — your ES store still shows the trimmed window, so it isn't installed either):
+   - https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-signal-tapereader.user.js
+   - https://raw.githubusercontent.com/rassulshah/gex-signal-tapereader/main/current/gex-if-levels.user.js
+3. Reload Atlas. Within a couple of minutes the pipeline check fetches the files and the tabs fill in like the right-hand images.
+
+Tell me when it's run and I'll probe the panel …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 80 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (18:15):** Push is denied from this environment by organization policy (403 on origin) — the 80 commits are local and go up when `installv1558.bat` runs on your machine. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> the tampermonkey is not giving me an update options.  i installed 15.58
+> reloaded .. double check
+
+**me (18:22):** Everything checks out now — read straight off your Atlas tab:
+
+- **Panel v15.58**, no swallowed render errors.
+- **Registry fetched**: 182 studies (no longer the seed) — the Analysis tab has its rows and the sweep table.
+- **Both sweep tables, the register and the suite stamp loaded** — the Testing tab has its data.
+- **Companion v1.18 is live**: the ES store now holds 5,311 bars with `full:true` — that's the whole Globex day, so ONH/ONL are the real overnight from now on.
+- **THE READ is quoting rates.** Right now it says: *EMH swept 10:15 · 3.35 pts through · back inside in 5 bars — not early: 22% (n=69) vs 21% control · mid depth 30% (n=139)…* and *CW0+ + KING+ swept 13:01 · 1.47 pts through · back inside in 1 bar — SHALLOW: pokes ≤3 pts printed the extreme 14% (n=228), NOT the extreme 86%…* with the lesser levels named in the trailer. That second line is the machinery doing what you asked: a sweep of the King and the 0DTE call wall, scored against the corpus, and told to you as a poke rather than a turn.
+
+One thing to note as you trade this afternoon: the Tampermonkey "no update" earlier was just the raw CDN — your installer had pushed at 18:15Z and the CDN served 15.57 for a few more minutes. Nothing to fix.
+
+If you want to test the TRACK loop, type something under a subject and click **+ Add**, then hit Save at the close — it rides in the day file, the nightly copies it into `requests.json`, and it comes back as a study row with its id.
+
+**OPERATOR:**
+> i need you to ensure you never forget my objective (the what) and the machinery and process that is supposed to do the analysis testing and feedback into the application to help me reach my objective (the how).   make sure you update it whereever, so future contexts are aware of it.  I also need you to be able to tighten and harden the machinery and process in order to improve it over time.  do you think this process how how everything works to reach my objective should be in another tab that explains it  ?   what do you think .   I also want you to inventory all the fields on the dashboard and see how they all support my objective. Basically i want the dashboard Analysis and Testing tabs working together.  I think there is still more integration here. This needs to be a data driven applciation that uses data, anlaysis and testing to drive the Dashboard , its reads and more.. I also havent seen many suggestions / recommendations from you on the what and the how , and how to enhance the whole thing. Furthermore, there shoudl be a development roadmap where we are working on this incrementally
+
+**me (18:33):** Now the pin test, the skill's load order, the resume note, project memory, and the commit.
+You're right on every count, and the honest part first: the WHAT was pinned (PURPOSE.md had a test and sat at the top of the load order since yesterday), but the HOW wasn't — it lived across four design docs and a changelog, none of them at the top of anything, none with a test. A future context could have read your objective and rebuilt the pipeline from scratch without knowing it existed. That's fixed with the same three anchors the WHAT has: a document, a place in the load order, and a test that fails without it.
+
+**Never forgetting it.** `design/PROCESS.md` is the HOW in one page: the loop ① RECORD → ② EXPORT → ③ PUSH → ④ NIGHTLY → ⑤ REVIEW → ⑥ REGISTRY → ⑦ BUILD → ⑧ INSTALL → ⑨ GATE → ⑩ DASHBOARD / THE READ → ⑪ SCORE; which file each stage writes and who reads it; the rules the machinery enforces and the test behind each; what is thin and open; and the standing hardening backlog. It's pinned by `test_process.js`, registered right after PURPOSE in the gex skill, in `.gex-config.json` (tier 0 now leads with PURPOSE, PROCESS, ROADMAP), and as a standing block at the very top of the resume note. Three anchors, same as the WHAT.
+
+**Tightening and hardening over time.** PROCESS.md §5 is the backlog, in order, and the roadmap schedules it. The first item matters most and I should have caught it myself: **the READ is not yet scored.** It says "3 of 3 conditions favour this sweep being the low" and nobody checks at the close whether it was. A read that can't be wrong can't improve. v15.59 writes each READ line to the day file, the nightly labels it, and Testing ③ shows the READ's own hit rate with n.
+
+**The Process tab — my opinion: yes, but not as an explanation.** Prose inside the a …[trimmed]
+
+**OPERATOR:**
+> Stop hook feedback:
+> [~/.claude/stop-hook-git-check.sh]: There are 84 unpushed commit(s) on branch 'main'. Please push these changes to the remote repository.
+
+**me (18:36):** Push is denied from this environment by organization policy (403 on origin) — the 84 commits are local and will go up with the next installer run on your machine. Not retrying, per the standing rule.
+
+**OPERATOR:**
+> we have lost so much. i think there should be a tab for roadmap so its not lost and there is a record and a tab for architecture (the how) which is focused on achieving my objectives.   This way the future contexts will not forget about it.   can you create a roadmap tab and and and architecture tab which lists the objective and the How  design visually , ensuring that future contexts are always aware of this .
+
+**me (18:44):** Now the pin test — the docs, the file and the seed must agree — and a render check.
+
+**OPERATOR:**
+> [Image: original 1280x2296, displayed at 1115x2000. Multiply coordinates by 1.15 to map to original image.]
 
 ### DECISIONS
 
@@ -1053,18 +1132,18 @@ seventeen caught. Suite 132 green / 6 baseline red.
 ### COMMITS THIS CONTEXT
 
 ```
+09bb216 config: LESSONS stays first in tier 0 (its test pins it); PURPOSE, PROCESS, ROADMAP follow; projectFiles = the union
+cd37df9 v15.59: chat history
+d4eeed9 v15.59: the ⚙ Architecture and 🗺 Roadmap tabs — the WHAT, the HOW (as live status) and the plan inside the app, from learning/plan.json; docs, file and seed pinned equal
+dfbd416 chat history
+f06f9c6 config: PURPOSE, PROCESS, ROADMAP lead tier 0
+bec5108 chat history
+f1f7ba1 the WHAT and the HOW pinned: design/PROCESS.md + test_process.js, roadmap/ROADMAP.md, design/DASHBOARD-INVENTORY.md; skill load order, .gex-config theWhatAndTheHow, resume-note standing block
+233f110 v15.58: chat history
 c10ac5b LESSONS: v15.58 — as mocked means every section
 f084388 v15.58: chat history
 cd5f2a7 v15.58: the Testing tab as mocked — register columns, gate summary, the stores, the nightly head, the suite stamp (learning/suite.json)
 ab2a0b2 v15.58: chat history
-b41a8d8 v15.58: the READ ranks reclaimed sweeps first, a gap open is named as opened-beyond and ranks last
-ac35f47 chat history regenerated (installer manifest fix)
-7490a88 installer manifest: every file the panel fetches rides the installer (learning/*.json, learning/log, data/es-1min/*.json) + test_installer_manifest.js; found by probing the live panel
-83bc1c6 v15.57: chat history regenerated and filled
-536a9b9 v15.57: EM edges, VWAP + bands, developing profile, London range, HVL/magnet in the sweep read; the two-line rule (tiers); corpus at 32 level types (F-16: interior levels are pullback candidates, not extremes)
-8019bfb v15.56: chat history filled (DECISIONS / SHIPPED / OPEN AT CLOSE)
-dbba41a v15.56: chat history regenerated and filled
-ec4ef7a v15.56: the book's levels in the sweep read (CW0/PW0/CW/PW/KING), the book table from the day files (H6 judged from it), the honest overnight, companion v1.18 keeps the full Globex day for ES
 ```
 
 ---

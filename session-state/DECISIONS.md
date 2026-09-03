@@ -416,3 +416,16 @@ up and down days.
   HVL/magnet. Skipped by agreement: midpoints, floor pivots, round numbers, weekly/monthly, naked POCs.
 - **The two-line rule (his):** at most two sweep lines on ⓪a, the biggest / most popular levels first (tier 1 = PDH PDL
   ONH ONL VAH VAL POC KING EMH EML), then depth; the rest named in one trailer.
+
+## 2026-09-03 — the WHAT and the HOW are both pinned; the plan is incremental
+
+- **"never forget my objective (the what) and the machinery and process (the how)":** PURPOSE.md was already pinned
+  (test_purpose.js); PROCESS.md now carries the HOW and is pinned (test_process.js); both sit at the top of the skill's
+  load order, in `.gex-config.json` (`theWhatAndTheHow`) and in a standing block at the top of the resume note.
+- **The roadmap is `roadmap/ROADMAP.md`**, versioned with a definition of done per item; older roadmaps are history.
+- **The inventory** (`design/DASHBOARD-INVENTORY.md`): every face element mapped to the objective and its study;
+  three elements (MARK, STATE, polarity colour) imply a claim they cannot back — their hovers will say so (v15.59).
+- **A ⚙ Process tab: recommended, as live status, not prose** — v15.60 in the roadmap, pending his agreement.
+- **The WHAT and the HOW live in the app (v15.59, his ask):** ⚙ Architecture (objective + the loop as live status) and
+  🗺 Roadmap tabs, from `learning/plan.json`; the roadmap re-ordered so the tabs shipped first. A HOW tab is live status,
+  not prose.
