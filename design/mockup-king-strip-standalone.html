@@ -1,0 +1,102 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The King strip and the node row</title></head><body><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{ --ink:#141821; --ink2:#3d4557; --mut:#6b7488; --rule:#d9dde5; --paper:#f4f5f8; --card:#ffffff; --acc:#8a5a2b; --good:#1d6b4a; --bad:#9b2f38;
+  --g-bg:#0b0e14; --g-panel:#0f131b; --g-card:#12161f; --g-line:#1e2530; --g-line2:#3a4150; --g-txt:#e6edf3; --g-mut:#8b98a9; --g-dim:#6c7889;
+  --g-grn:#2ec27e; --g-red:#f0616d; --g-amb:#f2b45a; --g-yel:#e3c341; --g-pur:#a371f7; --g-blu:#7cc7ff; --g-lil:#cdb4fa; --g-teal:#5fd3c4; --scale:1.55; }
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){ --ink:#e7eaf0; --ink2:#aab3c4; --mut:#7d8798; --rule:#2a3040; --paper:#101319; --card:#171b24; --acc:#d9a066; --good:#4cc38a; --bad:#e5707a; }}
+:root[data-theme="dark"]{ --ink:#e7eaf0; --ink2:#aab3c4; --mut:#7d8798; --rule:#2a3040; --paper:#101319; --card:#171b24; --acc:#d9a066; --good:#4cc38a; --bad:#e5707a; }
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:38px 26px 90px}
+h1{font-size:29px;font-weight:600;letter-spacing:-.015em;margin:0 0 6px;text-wrap:balance}
+h2{font-size:12px;font-weight:600;letter-spacing:.10em;text-transform:uppercase;color:var(--mut);margin:0 0 14px;padding-bottom:7px;border-bottom:1px solid var(--rule)}
+h2 span{color:var(--ink);font-weight:700;letter-spacing:0;text-transform:none;font-size:15px;margin-right:10px}
+p{margin:0 0 13px;max-width:68ch;color:var(--ink2)}
+.lede{font-size:16px;color:var(--ink2);max-width:70ch;margin-bottom:22px}
+section{margin-top:52px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.flag{display:flex;gap:13px;align-items:flex-start;border:1px solid var(--rule);border-left:3px solid var(--acc);background:var(--card);padding:13px 16px;border-radius:3px;margin-bottom:26px}
+.flag p{margin:0;font-size:13.5px} .flag b{color:var(--ink)}
+.tag{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.09em;text-transform:uppercase;padding:2px 7px;border:1px solid currentColor;border-radius:2px;color:var(--acc);white-space:nowrap}
+.ctl{display:flex;gap:7px;align-items:center;margin:0 0 16px;font-size:12px;color:var(--mut)}
+.ctl button{font-family:"IBM Plex Mono",monospace;font-size:11px;padding:4px 10px;cursor:pointer;background:var(--card);color:var(--ink2);border:1px solid var(--rule);border-radius:2px}
+.ctl button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.stage{background:var(--g-bg);border:1px solid var(--g-line2);border-radius:4px;padding:14px;overflow-x:auto;margin-bottom:4px}
+.scaler{width:608px;transform:scale(var(--scale));transform-origin:top left;margin-bottom:calc((var(--scale) - 1) * var(--sh,400px))}
+.pan{width:608px;background:var(--g-panel);color:var(--g-txt);font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums;font-size:8.4px;line-height:1.35}
+.tabs{display:flex;gap:2px;background:#12161f;border-bottom:1px solid var(--g-line2);padding:4px 4px 0}
+.tabs span{padding:4px 10px;font-size:9.5px;font-weight:600;color:var(--g-dim)} .tabs span.on{color:var(--g-txt);font-weight:800;border-bottom:2px solid var(--g-blu)}
+.hd{padding:5px 7px 4px;border-bottom:1px solid var(--g-line);font-size:7.6px;color:var(--g-mut)} .hd b{color:var(--g-txt);font-size:9px}
+.subj{display:flex;gap:3px;padding:4px 6px 0;flex-wrap:wrap} .subj span{font-size:7.2px;font-weight:800;letter-spacing:.06em;padding:2px 6px;border:1px solid var(--g-line2);border-radius:3px;color:var(--g-dim)} .subj span.on{color:var(--g-txt);border-color:var(--g-blu);background:#141a24}
+.sec{margin:5px 6px;border:1px solid var(--g-line);border-radius:6px;background:var(--g-card);overflow:hidden}
+.sech{display:flex;align-items:center;gap:6px;padding:4px 7px;background:#141a24;border-bottom:1px solid var(--g-line)}
+.sech .n{font-size:8.6px;font-weight:900;color:var(--g-blu);min-width:16px} .sech .t{font-size:8.4px;font-weight:800;letter-spacing:.03em;color:var(--g-txt)}
+.sech .dc{margin-left:auto;font-size:6.6px;letter-spacing:.08em;color:var(--g-teal);font-weight:800;white-space:nowrap} .sech .ct{font-size:7px;color:var(--g-dim);white-space:nowrap}
+.sech .car{color:var(--g-dim);font-size:8px}
+.secb{padding:4px 7px 5px}
+.note{font-size:7.2px;color:var(--g-mut);font-style:italic;padding:3px 0 2px;border-top:1px dashed rgba(255,255,255,.06);margin-top:3px}
+.sc{display:flex;gap:6px;padding:2.5px 0 0;font-size:7.8px;align-items:baseline;border-top:1px dashed rgba(255,255,255,.05)} .sc:first-child{border-top:0}
+.sc .id{font-family:ui-monospace,monospace;color:var(--g-dim);min-width:30px} .sc .qq{color:var(--g-txt);flex:1;min-width:0}
+.sc .de{font-size:6.2px;letter-spacing:.07em;font-weight:800;color:var(--g-teal);min-width:54px;text-align:right;white-space:nowrap}
+.sc .cl{color:var(--g-dim);min-width:40px;font-size:7px;white-space:nowrap} .sc .cp{color:var(--g-dim);min-width:74px;font-size:7px;white-space:nowrap}
+.sc .vd{min-width:56px;text-align:right;font-weight:900;letter-spacing:.05em;font-size:6.8px;white-space:nowrap}
+.rs{padding:0 0 2.5px 36px;font-size:7.4px;color:var(--g-mut)} .rs b{color:var(--g-txt);font-weight:600} .rs .ci{color:var(--g-dim);font-style:italic}
+.gr{color:var(--g-grn)} .rd{color:var(--g-red)} .am{color:var(--g-amb)} .ye{color:var(--g-yel)} .pu{color:var(--g-pur)} .bl{color:var(--g-blu)} .bl2{color:#a9dbff} .te{color:var(--g-teal)} .dm{color:var(--g-dim)} .mu{color:var(--g-mut)} .lil{color:var(--g-lil)}
+table{border-collapse:collapse;width:100%;font-size:7.6px;margin:3px 0 2px}
+th{font-size:6.4px;font-weight:800;letter-spacing:.07em;color:var(--g-dim);text-transform:uppercase;text-align:left;padding:2px 4px 3px;border-bottom:1px solid var(--g-line2)}
+td{padding:1.5px 4px;border-top:1px solid rgba(255,255,255,.04);vertical-align:top;white-space:nowrap} td.r,th.r{text-align:right}
+td.sub{padding-left:12px;color:var(--g-mut)}
+.foot{padding:5px 7px;border-top:1px solid var(--g-line);font-size:7.4px;color:var(--g-dim);display:flex;gap:9px}
+.pros{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px;max-width:900px}
+.pros div{font-size:13px;color:var(--ink2);border-top:2px solid var(--rule);padding-top:8px}
+.pros b{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin-bottom:4px}
+.verdict{margin-top:12px;font-size:13.5px;color:var(--ink);border-left:3px solid var(--acc);padding:6px 12px;background:var(--card);max-width:900px}
+.legend{font-size:12.5px;color:var(--ink2);max-width:900px;margin:0 0 18px}
+.legend code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (max-width:700px){.wrap{padding:26px 15px 70px} h1{font-size:23px} .pros{grid-template-columns:1fr}}
+
+.pan{width:640px}
+.kstrip{display:flex;gap:4px;margin:5px 6px 2px}
+.kc{flex:1;min-width:0;border:1px solid var(--g-line);border-radius:6px;background:var(--g-card);padding:4px 6px}
+.kc .bk{font-size:6.6px;letter-spacing:.09em;font-weight:900;color:var(--g-dim)}
+.kc .kx{font-size:11px;font-weight:900;color:var(--g-txt);line-height:1.15}
+.kc .kx i{font-style:normal;font-size:7px;font-weight:800;margin-left:3px}
+.kc .kl{font-size:7px;color:var(--g-mut);white-space:normal;line-height:1.35}
+.kc .kl b{color:var(--g-txt);font-weight:700}
+.kc.spx{border-color:rgba(227,195,65,.55)} .kc.spx .kx{color:#e3c341}
+.kc.spy{border-color:rgba(205,180,250,.55)} .kc.spy .kx{color:#cdb4fa}
+.kc.qqq{border-color:rgba(95,211,188,.5);border-style:dashed} .kc.qqq .kx{color:#5fd3bc}
+.taps{display:inline-block;margin-top:2px;font-size:6.6px;letter-spacing:.06em;font-weight:800;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.06);color:var(--g-txt)}
+.taps.ph{color:var(--g-dim);font-weight:600}
+.readl{margin:3px 6px 4px;padding:4px 7px;border-left:3px solid #7cc7ff;background:var(--g-card);font-size:7.6px;color:var(--g-txt);white-space:normal;line-height:1.4}
+.readl b{color:#7cc7ff}.readl .dm{font-size:6.8px}
+.lad{margin:0 6px 6px;border:1px solid var(--g-line);border-radius:6px;background:var(--g-card);overflow:hidden}
+.lh{display:grid;grid-template-columns:58px 52px 150px 1fr;gap:6px;padding:3px 7px;font-size:6.2px;letter-spacing:.08em;color:var(--g-dim);font-weight:800;border-bottom:1px solid var(--g-line2);text-transform:uppercase}
+.lr{display:grid;grid-template-columns:58px 52px 150px 1fr;gap:6px;align-items:center;padding:3px 7px;border-top:1px dashed rgba(255,255,255,.05);font-size:7.6px}
+.lr.now{background:rgba(255,255,255,.04)}
+.lr .lv{font-size:6.8px;color:var(--g-dim);white-space:nowrap} .lr .lv b{color:var(--g-txt)}
+.lr .px{font-weight:800;color:var(--g-txt);font-variant-numeric:tabular-nums} .lr .px.sub{color:var(--g-dim);font-weight:600}
+.bar{display:flex;align-items:center;height:11px;border-radius:2px;padding:0 4px;font-size:7px;font-weight:900;color:#2a2408;background:#e3c341;box-sizing:border-box;min-width:14px}
+.bar.neg{background:#a371f7;color:#1b1030} .bar.king{height:14px} .bar.sub{background:transparent;box-shadow:inset 0 0 0 1px #e3c341;color:#e3c341;opacity:.55}
+.bar.sub.neg{box-shadow:inset 0 0 0 1px #a371f7;color:#a371f7}
+.rs3{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+.tag{display:inline-block;font-size:6.6px;letter-spacing:.06em;font-weight:900;padding:1px 5px;border-radius:3px;white-space:nowrap}
+.tag.new{background:#2ec27e;color:#04120a} .tag.roll{background:rgba(124,199,255,.16);color:#7cc7ff;border:1px solid rgba(124,199,255,.5)}
+.tag.up{color:#2ec27e} .tag.dn{color:#f0616d} .tag.flat{color:var(--g-dim)} .tag.up,.tag.dn,.tag.flat{font-size:8px;padding:0;letter-spacing:0}
+.tag.tap{background:rgba(255,255,255,.06);color:var(--g-txt)} .tag.stk{color:#cdb4fa;border:1px solid rgba(205,180,250,.5)}
+.tag.kk{background:#e3c341;color:#2a2408} .tag.ky{background:#cdb4fa;color:#1b1030}
+.nowpill{display:inline-block;background:#fff;color:#0d1117;border-radius:8px;font-size:9px;font-weight:900;padding:1px 8px}
+.dim{color:var(--g-dim);font-size:6.8px}
+.legend2{font-size:12.5px;color:var(--ink2);max-width:900px;margin:12px 0 0}
+.legend2 b{color:var(--ink)}
+</style>
+<div class="wrap">
+<h1>The King strip and the node row</h1>
+<p class="lede">Feature 1 and feature 2 of the dashboard conversation, drawn on the real book of 2026-09-03 at 12:48 CT — twelve minutes after the pullback bounce you circled (Pb), twenty-four minutes before the session high at the fresh 7755. Every SPXW number is from the day file; the SPY and QQQ Kings' growth and tap counts are drawn as placeholders because the recorder does not hold them yet (v15.63).</p>
+<div class="flag"><span class="tag">His three</span><p><b>"if the node recently grew so it's a new node, whether there was a roll from a prior node, and growth."</b> The row's right side is those three, in that order: <b>NEW</b> with the age in bars, <b>⇄ from</b> with the prior strike and the amount, <b>▲ growth</b> as a share of the node over 15 minutes. The stack bracket is quiet; the tap count is the ledger's. The King strip is one cell per book — SPX (flow), SPY, QQQ — with size, sign, growth, distance, the roll and the taps today, held / broke: "track it religiously" on the face.</p></div>
+<div class="ctl"><span>Scale</span><button type="button" data-s="1" aria-pressed="false">1×</button><button type="button" data-s="1.55" aria-pressed="true">1.55×</button><button type="button" data-s="2.1" aria-pressed="false">2.1×</button></div>
+<div class="stage"><div class="scaler" style="width:640px"><div class="pan"><div class="tabs"><span class="on">Dashboard</span><span>📊 Analysis</span><span>🧪 Testing</span><span>📚 Learn</span><span>⚙ Architecture</span><span>🗺 Roadmap</span><span>📌 Open Items</span></div><div class="hd"><b>2026-09-03 · 12:48 CT</b> · ES 7756.00 · the book 12 minutes after the pullback bounce, 24 minutes before the high · REAL NUMBERS from the day file</div><div class="kstrip"><div class="kc spx"><div class="bk">SPX KING · SPXW flow book</div><div class="kx">7758.4<i>SPXW 7750</i></div><div class="kl">+γ · <b>$273M</b> · <span class="tag up">▲+3%/15m <span class="dim">(+$7M)</span></span></div><div class="kl">2.4 above price · ⇄ from 7745 at 12:30 (+$20M)</div><span class="taps">TAPS TODAY 2 HELD · 0 BROKE</span><div class="kl dim">d60 +$96M · the crown since 10:06</div></div><div class="kc spy"><div class="bk">SPY KING</div><div class="kx">7755.7<i>SPY 773</i></div><div class="kl">+γ · <b>$390M</b> · <span class="tag flat">steady</span></div><div class="kl">0.3 below price · no roll today</div><span class="taps ph">TAPS — · the per-book ledger is v15.63</span><div class="kl dim">growth not recorded for this book yet</div></div><div class="kc qqq"><div class="bk">QQQ KING · bearing</div><div class="kx">≈ 7759.7<i>QQQ 718</i></div><div class="kl">+γ · <b>$257M</b> · <span class="tag flat">steady</span></div><div class="kl">0.34 above QQQ 717.66 · no roll today</div><span class="taps ph">TAPS — · v15.63</span><div class="kl dim">a proportional bearing, not a strike</div></div></div><div class="readl"><b>price is ON the King stack</b> — SPY King 7755.7 and SPX King 7758.4, 2.7 apart, +γ both; the SPX King added $96M in the last hour and $7M in the last 15 (+3%) — growth is slowing at the tap. Under it 7740 (+26%/15m) and 7735 (+33%/15m) are the pullback floor that just held at 12:36; above it <b>7755 is NEW this bar</b> (+27%/15m). <span class="dm">descriptive — the deflection score (v15.63) will replace these words with a number and its n</span></div><div class="lad"><div class="lh"><span>level</span><span>price · strike</span><span>node · %king</span><span>what it is doing — NEW · ⇄ roll · ▲ growth into the tap · taps</span></div><div class="lr"><span class="lv"></span><span class="px sub">7773.4 <span class="dim">7765</span></span><span class="bar sub" style="width:14px"></span><span class="rs3 dim">context row — below the 20% threshold</span></div><div class="lr"><span class="lv"></span><span class="px sub">7768.4 <span class="dim">7760</span></span><span class="bar sub" style="width:14px">9%</span><span class="rs3 dim">context row — below the 20% threshold</span></div><div class="lr"><span class="lv"></span><span class="px">7763.4 <span class="dim">7755</span></span><span class="bar" style="width:30px">20%</span><span class="rs3"><span class="tag new">NEW 1b · crossed 20% this bar</span><span class="tag up">▲+27%/15m <span class="dim">(+$12M)</span></span></span></div><div class="lr"><span class="lv"><b>EMH 7743</b> ↑</span><span class="px">7758.4 <span class="dim">7750</span></span><span class="bar king" style="width:150px">100%</span><span class="rs3"><span class="tag kk">♛ SPX KING</span><span class="tag roll">⇄ from 7745 · 12:30 · +$20M</span><span class="tag up">▲+3%/15m <span class="dim">(+$7M)</span></span><span class="tag tap">taps 2 held · 0 broke</span></span></div><div class="lr"><span class="lv"></span><span class="px">7753.4 <span class="dim">7745</span></span><span class="bar" style="width:67px">45%</span><span class="rs3"><span class="tag up">▲+11%/15m <span class="dim">(+$12M)</span></span><span class="tag stk">stack 7753–7758 with SPY K · 7750</span></span></div><div class="lr now"><span class="lv">NOW</span><span class="px"><span class="nowpill">7756.00</span></span><span class="dim">SPY 773.03 · QQQ 717.66 · SPXW 7746.84</span><span class="rs3"><span class="tag ky">SPY K 773 ≈ 7755.7</span><span class="dim">price sits between the two Kings</span></span></div><div class="lr"><span class="lv">IB30H 7726</span><span class="px">7748.4 <span class="dim">7740</span></span><span class="bar" style="width:52px">35%</span><span class="rs3"><span class="tag up">▲+26%/15m <span class="dim">(+$19M)</span></span><span class="tag tap">taps 1 held · 0 broke</span></span></div><div class="lr"><span class="lv"></span><span class="px">7743.4 <span class="dim">7735</span></span><span class="bar" style="width:39px">26%</span><span class="rs3"><span class="tag up">▲+33%/15m <span class="dim">(+$17M)</span></span><span class="tag stk">stack with 7740 (5 pts)</span></span></div><div class="lr"><span class="lv"></span><span class="px sub">7738.3 <span class="dim">7730</span></span><span class="bar sub" style="width:16px">11%</span><span class="rs3 dim">context row — below the 20% threshold</span></div><div class="lr"><span class="lv"></span><span class="px sub">7733.3 <span class="dim">7725</span></span><span class="bar sub" style="width:14px">6%</span><span class="rs3 dim">context row — below the 20% threshold</span></div><div class="lr"><span class="lv"></span><span class="px sub">7728.3 <span class="dim">7720</span></span><span class="bar sub" style="width:14px">7%</span><span class="rs3 dim">context row — below the 20% threshold</span></div><div class="note">context rows (dimmed, below the 20% threshold) are drawn so the ladder never shows fewer than 8 strikes (v15.61); they carry no tags because they are not nodes.</div></div><div class="foot"><span>● rec</span><span>● saved</span><span>● pushed</span><span style="margin-left:auto">mockup · features 1 + 2 of the dashboard conversation</span></div></div></div></div>
+<p class="legend2"><b>What changed on the row.</b> The bar and its colour are unchanged (size and sign are identity). The right side no longer says BUILDING / STEADY and a dollar figure; it says what the node is doing as price arrives — the three things you named — and, once v15.63 is measured, one number with its n.</p>
+<p class="legend2"><b>What the strip adds.</b> The King's behaviour, per book: the SPX King is $273M, +3% in the last 15 minutes after +$96M in the hour — growing, but slowing at the tap; it rolled up from 7745 at 12:30; two taps held. The SPY King sits 2.7 points below it; price is between them. The QQQ King is a bearing (dashed), not a strike. The read line under the strip says it in words until the score replaces the words.</p>
+</div><script>(function(){ var b=[].slice.call(document.querySelectorAll(".ctl button")); b.forEach(function(x){ x.addEventListener("click",function(){ b.forEach(function(o){ o.setAttribute("aria-pressed", o===x?"true":"false"); }); document.documentElement.style.setProperty("--scale", x.getAttribute("data-s")); }); }); })();</script></body></html>
