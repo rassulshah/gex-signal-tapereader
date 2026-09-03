@@ -12,7 +12,7 @@ var STATE={SPY:{price:772, setups:{}}};
 function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.exec(src);let i=src.indexOf('{',m.index),d=0,e=-1;for(let k=i;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0){e=k;break;}}}return src.slice(m.index,e+1);}
 // pull AT_NODE_STRK constant too
 eval(src.match(/var AT_NODE_STRK\s*=\s*[0-9.]+;/)[0]);
-eval(['nodeAttraction','nodeOutcome','outcomeMarker'].map(ex).join('\n'));
+eval(['nodeAttraction','nodeOutcome'].map(ex).join('\n'));
 
 // ---- nodeAttraction ----
 // Building magnet ABOVE price, price emphasis 'above' (approaching) => attracting
@@ -63,11 +63,11 @@ setSetup({strike:769});
 ok(nodeOutcome('SPY',780)===null, 'setup at different strike -> null');
 
 // ---- outcomeMarker vocabulary ----
-ok(outcomeMarker('up').txt==='broke \u2191', 'marker up = broke up-arrow');
-ok(outcomeMarker('dn').txt==='broke \u2193', 'marker dn = broke down-arrow');
-ok(outcomeMarker('held').txt==='held', 'marker held');
-ok(outcomeMarker('false').txt==='FBO', 'marker false break -> FBO (v10.34 abbrev)');
-ok(outcomeMarker(null)===null, 'no outcome -> no marker');
+// (v15.53) removed: outcomeMarker archived (A-dead-else)
+// (v15.53) removed: outcomeMarker archived (A-dead-else)
+// (v15.53) removed: outcomeMarker archived (A-dead-else)
+// (v15.53) removed: outcomeMarker archived (A-dead-else)
+// (v15.53) removed: outcomeMarker archived (A-dead-else)
 
 console.log('\n'+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

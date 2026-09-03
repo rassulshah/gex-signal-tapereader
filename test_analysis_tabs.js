@@ -79,8 +79,15 @@ global.T_PRESETS=[{id:'orbit',label:'King ORBIT'}];
 eval(['effN','nTxt','pctN','_fpct','gradeMonotone','featStatsCached','featStatsInvalidate','ruleLocalRate',
       'secOpen','secToggle','tabSection','tabEmpty','tabTile','tabGuideBtn','tabHeader','tabGuide',
       'deflStats','deflTableHtml','deflectionsSectionHtml','selfTestDay','selfTestRun','selfTestHtml',
-      'unlockRowsHtml','yourCallsHtml','questionQueueHtml','proposalsQueueHtml','challengersHtml2',
-      'killListHtml2','analysisBlock','testingBlock'].map(ex).join('\n'));
+      'unlockRowsHtml','yourCallsHtml','proposalsQueueHtml','challengersHtml2',
+      'killListHtml2','featPredBand','canFailHtml','preregStats','preregHtml','wilsonCI','hodlodCalib','hodlodSectionHtml','analysisBlock','testingBlock'].map(ex).join('\n'));
+// (v15.54) ① HOD / LOD: no session read in the harness -> its own honest empty line
+global.hodLod=function(){ return { ok:false, why:'no bars' }; }; global.lodhodCall=function(){ return null; }; global.hlClock=function(){ return '—'; }; global.hlDur=function(){ return '—'; };
+global.HLTAB_META={ sessions:284, first:'2025-06-02', last:'2026-08-21', notIn:20 }; global.preregList=function(){ return []; };
+// (v15.52) the two new Testing sections and what they lean on
+global.g3esc=function(s){ return String(s==null?'':s); }; global.g3tip=function(){ return ''; };
+global.PREREG_FROM='2026-09-03'; global.DEFL_ARCH_N=0; global.FEAT_ARCHIVE={};
+global.PREREG=[{ id:'H1', claim:'x', minN:40, note:'', pick:function(s){ return s.gradeA; } }];
 global.TAB_SECTIONS={}; global.TAB_GUIDE={}; global.SELFTEST_LAST=null;
 
 function emptyStats(){ return { byKey:{}, byGrade:{dir:{},node:{},dirSide:{}}, cells:{},
@@ -92,8 +99,8 @@ function reset(){ TAB_SECTIONS={}; TAB_GUIDE={}; SELFTEST_LAST=null; STATS=empty
 reset();
 var A=analysisBlock();
 ok(typeof A==='string' && A.length>0, '1a the Analysis tab renders');
-var ASECS=[['①','HEADLINE'],['②','WHAT CHANGED'],['③','DIRECTION FACTORS'],['④','DEFLECTIONS'],
-           ['⑤','YOUR CALLS'],['⑥','REVIEW']]   /* (v11.0) ⑦ PIPELINE lives in the footer; ⑥ = nightly + weekly */;
+// (v15.54) THE TAB IN WORKFLOW ORDER — design/ARCHITECTURE-E2E-WORKFLOW.md §3
+var ASECS=[['①','HOD / LOD'],['②','DEFLECTIONS AT NODES'],['③','NODES'],['④','REVIEW'],['⑤','DIRECTION']];
 var lastAt=-1, inOrder=true;
 ASECS.forEach(function(p){
   var at=A.indexOf(p[0]+' '+p[1]);
@@ -102,14 +109,14 @@ ASECS.forEach(function(p){
   lastAt=at;
 });
 ok(inOrder, '1b ...and they appear in the spec order, top to bottom');
-ok(A.indexOf('Did the dashboard tell the truth')>=0, '1c the tab states the ONLY question it answers');
+ok(A.indexOf('Did the dashboard tell the truth')>=0 || A.indexOf('The objective, stated')>=0, '1c the tab states the question it answers (v15.54: the objective, stated)');
 
 // ================= 2. THE TESTING TAB RENDERS ①-⑥, IN ORDER =================
 reset();
 var T=testingBlock();
 ok(typeof T==='string' && T.length>0, '2a the Testing tab renders');
-var TSECS=[['①','QUESTION QUEUE'],['②','PROPOSALS'],['③','CHALLENGERS'],['④','KILL LIST'],
-           ['⑤','SELF-TEST'],['⑥','DATA COVERAGE']];
+var TSECS=[['\u2460','CAN THE SCORER FAIL?'],['\u2461','PRE-REGISTERED'],['③','PROPOSALS'],['③b','CHALLENGERS'],['④','KILL LIST'],
+           ['\u2464','DATA COVERAGE'],['⑥','SELF-TEST']];
 lastAt=-1; inOrder=true;
 TSECS.forEach(function(p){
   var at=T.indexOf(p[0]+' '+p[1]);
@@ -122,19 +129,19 @@ ok(inOrder, '2b ...and they appear in the spec order');
 // ================= 3. EVERY SECTION IS COLLAPSIBLE ==========================
 reset();
 A=analysisBlock();
-ok((A.match(/data-gsec="/g)||[]).length>=7, '3a every Analysis section carries a toggle handle (①-⑥ + ⊕; ⑦ moved to the footer in v11.0)', (A.match(/data-gsec="/g)||[]).length);
+ok((A.match(/data-gsec="/g)||[]).length>=5, '3a every Analysis section carries a toggle handle (①-⑤ since v15.54)', (A.match(/data-gsec="/g)||[]).length);
 T=testingBlock();
 ok((T.match(/data-gsec="/g)||[]).length>=7, '3b every Testing section too', (T.match(/data-gsec="/g)||[]).length);
 // a CLOSED section renders its header but not its body
 reset();
 var openA=analysisBlock();
 ok(openA.indexOf('▾')>=0, '3c an open section shows ▾');
-secToggle('a1');
+secToggle('a0');   // (v15.54) ① is HOD / LOD, id a0
 var closedA=analysisBlock();
 ok(closedA.indexOf('①')>=0, '3d a closed section still shows its header');
 ok(closedA.length<openA.length, '3e ...but its body is gone (the point of collapsing)', openA.length+' -> '+closedA.length);
 ok(closedA.indexOf('▸')>=0, '3f ...and the caret flips to ▸');
-secToggle('a1');
+secToggle('a0');   // (v15.54) ① is HOD / LOD, id a0
 ok(analysisBlock().length===openA.length, '3g toggling back restores it exactly');
 
 // ================= 4. EMPTY STATES ARE ONE HONEST LINE ======================
@@ -144,7 +151,7 @@ A=analysisBlock(); T=testingBlock();
 ['a1','a2','a3','a4','a5','a6','a7','a8'].forEach(function(id){ TAB_SECTIONS[id]=true; });
 ['t1','t2','t3','t4','t5','t6','t7'].forEach(function(id){ TAB_SECTIONS[id]=true; });
 A=analysisBlock(); T=testingBlock();
-[['nothing has resolved yet today', A, 'Analysis ① with no data'],
+[['no session read yet', A, 'Analysis ① with no data'],
  ['nothing has ever been promoted or demoted', A, 'Analysis ② with nothing promoted'],
  ['no resolved deflection records yet', A, 'Analysis ④ with no node records'],
  ['no taps logged yet', A, 'Analysis ⑤ with no taps'],
@@ -196,7 +203,7 @@ T=testingBlock();
 var badT=pctWithoutN(T);
 ok(badT.length===0, '5b nor on the Testing tab', badT.slice(0,2).join(' // '));
 // the tiles themselves refuse to show a % under the bar
-ok(/tabTile/.test(ex('analysisBlock')), '5c the headline uses the shared tile');
+ok(!/tabTile\('Direction'/.test(ex('analysisBlock')), '5c (v15.54) the headline tiles are gone from Analysis — the numbers live in ① and ②');
 var thinTile=tabTile('Direction', 64, 30, 'q');
 ok(thinTile.indexOf('64%')<0 && /recording — need 20/.test(thinTile),
    '5d a tile under eff n=20 greys out and says what it is waiting for, instead of showing a thin 64%');
@@ -209,12 +216,12 @@ var titles=(A+T).match(/title="[^"]{12,}"/g)||[];
 ok(titles.length>=10, '6a both tabs are densely hovered', titles.length);
 var qFirst=titles.filter(function(t){ return /\?/.test(t); }).length;
 ok(qFirst>=8, '6b ...and the hovers ask a QUESTION rather than restating the label', qFirst+'/'+titles.length);
-['Did the dashboard tell the truth today?','Did the model move under me?','Which inputs actually predict?',
+['The objective, stated','Which inputs actually predict?',
  'Which nodes actually hold?','Are the reads you TAKE better than the ones you PASS?',
- 'What did the review actually say?'].forEach(function(q){
+ 'What did the review actually say?','WHAT CHANGED'].forEach(function(q){
   ok(A.indexOf(q)>=0, '6·Analysis subtitle asks: '+q);
 });
-['What is open, and how far from an answer?','What is asking to change the model, and does it clear the bar?',
+['Before a feature','Hypotheses fixed on','What is asking to change the model, and does it clear the bar?',
  'What is trying to replace an incumbent, and is it actually ahead?',
  'Which conditions would void a read, and is each one ACTIVE or just written down?',
  'Does the scorer itself work?','How much have we actually got, and what unlocks when?'].forEach(function(q){
@@ -289,6 +296,6 @@ ok((both.match(/white-space:normal/g)||[]).length > (both.match(/white-space:now
 ok(/white-space:normal/.test(both), '10c ...and the explanatory lines explicitly wrap');
 ok((both.match(/<table style="width:100%/g)||[]).length===(both.match(/<table/g)||[]).length,
    '10d every table is width:100%, so nothing overflows a 250px panel');
-ok(/flex-wrap:wrap/.test(A), '10e the headline tiles wrap instead of overflowing');
+ok(true, '10e (v15.54) no headline tiles to wrap');
 
 console.log('\n'+pass+' passed, '+fail+' failed'); process.exit(fail?1:0);

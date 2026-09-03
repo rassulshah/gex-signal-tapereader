@@ -26,7 +26,7 @@ ok(/function kingFromFeed/.test(src),            'GUARD: PATH 2 (feed) exists');
 ok(/function kingFromTapeTag/.test(src),         'GUARD: PATH 1 (tape $K tag) exists');
 ok(/function kingFromTapeMax/.test(src),         'GUARD: PATH 3 (tape max %King) exists');
 ok(/function tapeSync/.test(src),                'GUARD: tapeSync gate exists');
-ok(/function outOfSyncBlock/.test(src),          'GUARD: suppression panel exists');
+// (v15.53) removed: outOfSyncBlock (the suppression panel) archived (D-zero-callers); syncBannerHtml is the live surface
 // (v11.40) v10.47 DELIBERATELY replaced the blocking gate with a one-line banner, user-directed:
 // "the app must stay visible (weekends / parse hiccups) so it can be inspected". This assertion
 // pinned the pre-v10.47 behaviour and has been failing ever since, in the bucket everyone ignores.

@@ -14,13 +14,15 @@
 // ============================================================================================
 const fs=require('fs');
 const src=fs.readFileSync('./v10.js','utf8');
+// (v15.54) the four hot readers are memoised per frame in the panel; the harness runs them straight through
+global.rmemo=function(k,f){ return f(); }; global.rmemoNext=function(){};
 let pass=0, fail=0;
 const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+JSON.stringify(g):''));} };
 const grab=(n)=>{ const i=src.indexOf('function '+n+'('); if(i<0) return ''; let d=0,st=false;
   for(let j=i;j<src.length;j++){ const c=src[j];
     if(c==='{'){d++;st=true;} else if(c==='}'){d--; if(st&&d===0) return src.slice(i,j+1);} } return ''; };
 
-const MB=grab('measureBars').replace(/\/\/[^\n]*/g,'');
+const MB=grab('measureBarsRaw').replace(/\/\/[^\n]*/g,'');
 ok(!!MB, 'x1 measureBars exists');
 ok(/dispIsFut\(\)/.test(MB), 'x2 it only prefers ES when the chart IS a future');
 ok(/futBarsLoad\(\)/.test(MB), 'x3 ...and reads the true ES 1-minute bars');

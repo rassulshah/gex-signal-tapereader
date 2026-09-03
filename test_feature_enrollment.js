@@ -46,7 +46,7 @@ global.ctNow=function(){ return new Date(2026,7,17,11,0); };
 global.render=function(){};
 
 // (v10.54, audit 1) a tier is earned LOCALLY: promoted by this panel AND locally measured.
-eval([ 'ruleSeed','rulesSeed','rulesNormalize','rulesLoad','rulesSave','ruleGet','effN','nTxt',
+eval([ 'ruleSeed','rulesSeed','rulesNormalize','rulesLoad','rulesSave','effN','nTxt',
        'featStatsCached','featStatsInvalidate','ruleLocalRate','rulePromotedApplied','promoLoad','ruleTier','rulePromoted',
        'registerFeature','featureByKey','_fwdHitDir','_fwdHitNum','frameRR','_frameRecOf',
        'registerCoreFeatures','seedQuestions',

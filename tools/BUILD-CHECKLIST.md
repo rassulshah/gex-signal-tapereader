@@ -11,6 +11,7 @@ Before sending ANY build, all of these must be current:
 - [ ] `skylit-docs/FINDINGS.md` — if any measurement changed
 - [ ] `session-state/LOCKED-ITEMS.md` — if an item opened or closed
 - [ ] `node test_savedone.js` green
+- [ ] **(v15.54) the nightly has run:** `python3 tools/nightly/run.py` — it reads `learning/register.json` and every `data/<day>.json`, writes `learning/log/<day>.json` (schema 2), and the panel reads it back into Analysis ④ REVIEW. **A loop with no clock is a design.** If the last log is older than the last day file, run it before the build.
 
 ⚠ `test_savedone.js` enforces this. The resume note went SEVEN builds stale on 2026-08-28 and then
 FOUR more the same day while the chat history stayed perfect — because a test guarded one and

@@ -1,11 +1,11 @@
 # RESUME NOTE — read this before anything else
-_written 2026-09-02, amended 2026-09-03 · panel v15.51 · companion v1.17 · supersedes every earlier resume note_
+_written 2026-09-02, amended 2026-09-03 · panel v15.54 · companion v1.17 · supersedes every earlier resume note_
 
 ---
 
 # ⚠⚠ 2026-09-03 — READ THIS BEFORE THE REST. NO CODE SHIPPED; THE PLAN CHANGED.
 
-**Panel is v15.51** (shipped late on 2026-09-03: the grader can fail, the event ledger survives, one ATR geometry, hitNull). Before that, nothing was built today. What happened is that **Q11 was asked of DATA for
+**Panel is v15.54** — THE WORKFLOW IS CLOSED: design/ARCHITECTURE-E2E-WORKFLOW.md is the spec and the status; the gate (⑤b gates), one register (learning/register.json), the nightly in one command (tools/nightly/run.py, self-tested), verdicts read back into Analysis ④, both tabs in workflow order, four hot readers memoised per frame. Its first real turn is the first session exported on this build. Next: v15.55 merges (accumulation → one, registry 48 → 28). Before that, **v15.53** — THE SIMPLIFICATION, PART 1: 31,063 → 26,830 lines, eight defects fixed (four on ⓪a), 4,233 lines in `archive/v15.53/` with reasons; his decisions recorded in DECISIONS.md (integrations untouched, dark-pool lifecycle archived, window pop-out only, ladder stays on top). Next: v15.54 merges + registry 48→28. Previously **v15.52** (2026-09-03 evening: v15.51 made the grader able to fail; v15.52 made it VISIBLE — Testing ⑤b CAN THE SCORER FAIL, ⑧ PRE-REGISTERED read-once, the gate counts SESSIONS for a to-close feature, ⓪a shows today\u2019s deflection ledger). Next: v15.53 dashboard hierarchy + enrolled TESTING/DEFLECTED/BROKE. Before that, nothing was built today. What happened is that **Q11 was asked of DATA for
 the first time**, and the answers moved the build order. Five documents, one study tool and a
 pre-registration were added; the userscript was not touched.
 

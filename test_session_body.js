@@ -15,6 +15,8 @@
 // ============================================================================================
 const fs=require('fs');
 const src=fs.readFileSync('./current/gex-signal-tapereader.user.js','utf8');
+// (v15.54) the four hot readers are memoised per frame in the panel; the harness runs them straight through
+global.rmemo=function(k,f){ return f(); }; global.rmemoNext=function(){};
 let pass=0, fail=0;
 const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+JSON.stringify(g).slice(0,180):''));} };
 function ex(n){ const m=new RegExp('function\\s+'+n+'\\s*\\(','g').exec(src);
@@ -25,7 +27,7 @@ function ex(n){ const m=new RegExp('function\\s+'+n+'\\s*\\(','g').exec(src);
 let HL=null, GD=null;
 global.hodLod=()=>HL;
 global.gdActual=()=>GD;
-eval(ex('sessionBody'));
+eval(ex('sessionBody')); eval(ex('sessionBodyRaw'));;
 
 // his numbers, 2026-09-01
 const TODAY = { ok:true, open:7647.00, hod:7673.75, lod:7621.50, scale:1 };

@@ -47,7 +47,9 @@ global.CFG={ irt:{ on:true } };
 global.IRT_LAST={ t:Date.now(), rows:12, err:null };
 global.futBarsLoad=()=>({ _at:Date.now(), ES:{ rows:new Array(400).fill([1,2,3,4,5]) } });
 global.irtBuildCsv=()=>({ csv:'x', rows:12 });
-global.window={ __gptsDebug:{ storage:()=>({ pctFull:30, canWrite40KB:true, health:{ shed:0, quotaHits:0 } }) } };
+global.window={ __gptsDebug:{} };
+// (v15.53, D5) storage health is DERIVED from the recorder's own numbers — no 20 KB probe write per render
+global.LS_CAP_KB=10240; global.LS_HEALTH={ shed:0, quotaHits:0, lastErrAt:null }; global.lsTotalKB=()=>3072;
 // ⚠ (v15.43) the session-aware clock the deps are graded on. The harness controls it directly so
 // "outside RTH" is a scenario we can RUN rather than wait for — and so the wall-clock/replay
 // distinction is testable at all.
@@ -169,7 +171,7 @@ ok(byId(depsHealth(),'fut.courier').state==='FAIL',
 global.futBarsLoad=()=>({ _at:Date.now()-60*MIN, ES:{ rows:[[1,2,3,4,5]] } });
 ok(byId(depsHealth(),'fut.courier').state==='STALE', 'd8b an hour-old pull is stale');
 global.futBarsLoad=()=>({ _at:Date.now(), ES:{ rows:new Array(400).fill([1,2,3,4,5]) } });
-global.window.__gptsDebug.storage=()=>({ pctFull:99, canWrite40KB:false, health:{ shed:3, quotaHits:2 } });
+global.lsTotalKB=()=>10200; global.LS_HEALTH={ shed:3, quotaHits:2, lastErrAt:Date.now() };   // 40 KB of headroom gone AND a recent write failure
 ok(byId(depsHealth(),'rec.storage').state==='FAIL',
    'd8c a recorder that can no longer write is a failure, not a warning');
 

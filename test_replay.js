@@ -14,6 +14,8 @@
 // ============================================================================================
 const fs=require('fs');
 const src=fs.readFileSync('./v10.js','utf8');
+// (v15.54) the four hot readers are memoised per frame in the panel; the harness runs them straight through
+global.rmemo=function(k,f){ return f(); }; global.rmemoNext=function(){};
 let pass=0, fail=0;
 const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+JSON.stringify(g):''));} };
 function ex(n){
@@ -44,8 +46,7 @@ global.RP_OPEN_SEC=mul(8,3600)+mul(30,60);
 global.RP_CLOSE_SEC=mul(15,3600);
 eval(ex('replayOn')); eval(ex('replayFrame')); eval(ex('replaySecOf')); eval(ex('replaySec'));
 eval(ex('replayBookOf')); eval(ex('replayBook')); eval(ex('replayEmptyBook'));
-eval(ex('replayDayLabel')); eval(ex('replaySeek')); eval(ex('replaySeekPct')); eval(ex('replayStep'));
-eval(ex('measureBars')); eval(ex('recorderBlind')); eval(ex('hlClock'));
+eval(ex('replayDayLabel')); eval(ex('replaySeek')); eval(ex('replaySeekPct')); eval(ex('measureBars')); eval(ex('measureBarsRaw'));; eval(ex('recorderBlind')); eval(ex('hlClock'));
 global.render=()=>{};
 global.inReplay=()=>false;
 global.showingStaleBook=()=>false;
@@ -180,7 +181,7 @@ REPLAY.idx=2;
 // swallow(), and hodLod read {ok:false} — "the session has no bars". The typeof guard is the fix
 // and it is pinned here so it cannot be tidied away.
 {
-  const mb=decomment(ex('measureBars'));
+  const mb=decomment(ex('measureBarsRaw'));
   ok(/typeof replayOn==='function' && replayOn\(\)/.test(mb),
      'r34 measureBars guards its new dependency with typeof — absent must mean ABSENT, never a throw');
 }

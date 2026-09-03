@@ -49,17 +49,11 @@ function ex(n){
   eq('1e the other three still count — one broken input does not take the tally down', bad.nConf, 3);
   eq('1f CROSS itself abstains rather than voting', bad.confirms.filter(c=>c.k==='CROSS')[0].d, null);
   ok('1g and the assembly still completed', bad.complete===true);
-  // the chip must show broken differently from quiet
-  const sb0=ex('secBias');
-  ok('1h a failed read is marked "!" not a dash', /if\(err\)\{ cls=' n'; mark='!'; \}/.test(sb0));
-  ok('1i and the hover says it is broken rather than abstaining', /it is broken, and a dash would have hidden that/.test(sb0));
+  // (v15.53) 1h/1i pinned secBias's chip, archived (C-flagged-off)
   // the STRUCTURAL backstop still zeroes a genuinely truncated assembly
   ok('1j a truncated assembly is still zeroed rather than rendered short',
      /if\(!out\.complete\)\{ out\.nConf=0; out\.nLive=0; out\.confirms=\[\]; \}/.test(ex('biasVotes')));
-  // and the renderer must say so instead of printing a count
-  const sb=ex('secBias');
-  ok('1h the face prints "confirms unavailable" rather than a tally', /confirms unavailable/.test(sb));
-  ok('1i and checks B.broke BEFORE the count', sb.indexOf('B.broke') < sb.indexOf("' of '"));
+  // (v15.53) the renderer assertions pinned secBias, archived
 }
 
 // ---------- 2. 'hold' IS A MEASUREMENT ----------

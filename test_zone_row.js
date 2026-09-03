@@ -23,14 +23,14 @@ global.FRAME_HALF=0.25; global.FRAME_FALLBACK=0.5;
 global.RR_FLOOR=3; global.RR_MIN=2;
 global.FLRCEIL_MIN_PCT=15; global.FLRCEIL_EDGE_PCT=40; global.FLRCEIL_FAR=6;
 global.fmtNum=function(x){ return (Math.round(x*100)/100).toString(); };
-eval(['zonePolCol','zoneGGlyph','zoneConfHtml','nodeBOchip','nodeActivityWord',
+eval(['zonePolCol','zoneConfHtml','nodeBOchip','nodeActivityWord',
       'frameRR','rrText','zoneMeaningful','zoneRole','inPlayBand'].map(grab).join('\n'));
 
 // ---- colored `g` by polarity: yellow (+γ) / purple (−γ) ----
 ok(zonePolCol({pos:true})==='#f2cc60','+γ g is YELLOW (gold)', zonePolCol({pos:true}));
 ok(zonePolCol({pos:false})==='#a371f7','−γ g is PURPLE', zonePolCol({pos:false}));
-ok(/#f2cc60/.test(zoneGGlyph({pos:true})) && />g<\/span>/.test(zoneGGlyph({pos:true})),'g glyph is a colored g');
-ok(/#a371f7/.test(zoneGGlyph({pos:false})),'−γ g glyph is purple');
+// (v15.53) removed: zoneGGlyph archived (D-zero-callers)
+// (v15.53) removed: zoneGGlyph archived (D-zero-callers)
 
 // ---- confluence S/Q/V order, ✓ / ✗ / – ----
 ok(zoneConfHtml({q:true,v:true,s:true}).indexOf('S✓')<zoneConfHtml({q:true,v:true,s:true}).indexOf('Q✓'),'order is S before Q');

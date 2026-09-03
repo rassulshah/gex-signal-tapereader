@@ -1,3 +1,165 @@
+## v15.54 — the workflow: the loop is closed
+
+> "did you create a tight integrated end to end workflow that spans hod lod data (including the multi month data
+> file), gamma nodes, and the analysis and testing and llm feedback into the application? did you update the
+> analysis and Testing Tabs... make sure you create the appropriate design/architecture document."
+
+The honest answer at v15.53 was **no**. This build is the yes. `design/ARCHITECTURE-E2E-WORKFLOW.md` names every
+store, every step, and its status; the four steps it found broken are built here. `test_v1554.js` (**44**,
+8 mutations / 8 caught — one of which first survived because my stub let `ruleTier` say ⚖ for the wrong reason),
+both tabs rendered in real Chromium in workflow order with zero errors, suite 122 green / 9 red (5 baseline +
+4 save gates), smoke clean.
+
+### 7 · THE GATE — ⑤b is no longer a report
+`featGated(key)`: a feature whose hit rate does not move between its own predicted bands (30+ per band) is
+**gated** — `ruleLocalRate` returns `rate:null, gated:true`, `ruleTier` can never show 📊, `pctN` prints
+"⛔ gated", and a sub-rule is gated with its feature. Thin bands are not judged. `lodhod`'s 362 proxy rows
+would have been gated on day one.
+
+### 8 · ONE REGISTER — `learning/register.json`
+Fetched by the panel like `rules.json` (`registerFetch` at boot, `gpts_register_v1`) and read by the nightly.
+The built-in `PREREG_SEED` is the fallback and is pinned equal to the file. Each hypothesis carries `written`,
+`predict`, `refuteIf`. `tools/nightly/HYPOTHESES.md` and `roadmap/PREREGISTER.md` now point at it.
+
+### 12 · THE NIGHTLY, one command — `tools/nightly/run.py`
+Reads the register and every `data/<day>.json` from the register's start date; scores every hypothesis **by
+episode** (first bar per day × strike) with a Wilson interval against the base rate over the same episodes,
+and against a **best-of-K shuffle null**; reads a hypothesis once at its minimum n and prints no rate before;
+writes `learning/log/<day>.json` schema 2 (verdicts with the bar each failed, the HOD/LOD live-vs-table
+calibration from close-scored rows, one pre-open line). `--selftest` plants a known effect in synthetic days
+and must find it, and plants nothing and must refuse it. It is a step on the build checklist now.
+
+### 13 · READ-BACK — Analysis ④ REVIEW renders schema 2
+Per hypothesis: CLEARED / REFUSED / THIN / BLOCKED with the bar; the calibration cells; the pre-open line
+leads the footer. The old shapes still render.
+
+### The two tabs, in workflow order (architecture §3)
+**Analysis:** ① HOD / LOD (today's call + **live vs table**, close-scored, per cell, with intervals) ·
+② DEFLECTIONS AT NODES (**episodes, not rows** — `deflStats` dedups per day × strike, first bar; Wilson
+interval on every cell; the **multiple-comparison ledger** printed beside the tables; YOUR CALLS folded in) ·
+③ NODES · ④ REVIEW (+ WHAT CHANGED folded in) · ⑤ DIRECTION. Archived: the HEADLINE tiles, YOUR CALLS as a
+section, the scorecards (moved to Testing ⊕). 8 → 5.
+**Testing:** ① CAN THE SCORER FAIL (says **GATED**) · ② PRE-REGISTERED · ③ PROPOSALS · ③b CHALLENGERS ·
+④ KILL LIST · ⑤ DATA COVERAGE · ⑥ SELF-TEST · ⊕ scorecards + miner. Archived: ① QUESTION QUEUE (a question
+with no n is a hypothesis; the register holds those). 9 → 8.
+
+### Faster (architecture §4)
+`ifLadder`, `emBand`, `measureBars`, `sessionBody` are memoised **once per frame** (`rmemo`; `render()` and
+`tick()` each open a frame) — they were 14–18×, 3–6×, 18–25× and 4× per render. Only readers whose results no
+caller mutates (checked). `defl` now rides in the day export.
+
+### Not in this build
+The merges (accumulation → `accumCanon` only; registry 48 → 28) — v15.55.
+
+## v15.53 — the simplification, part 1: eight defects fixed, 4,233 lines archived, nothing visible changed
+
+> "simplify the application... archived somewhere because it was an earlier idea that is not used... small,
+> efficient and sticks to the objective... take your time and do it right."
+
+**31,063 → 26,830 lines · 880 → 771 functions · 154 → 129 test files.** Every removal is in `archive/v15.53/`
+verbatim with its reason and its pinning tests; `archive/v15.53/INDEX.md` lists all of it. The plan is
+`roadmap/SIMPLIFICATION-PLAN.md`; the seven audits behind it are in the chat history.
+`test_v1553.js` (**39**, 6 mutations / 6 caught), suite 117 green / 12 red (5 known baseline + 7 that clear at
+save), smoke clean, real-Chromium render clean (panel builds, ledger rows, both Testing sections, zero errors).
+
+### His decisions, honoured
+IRT export, Yahoo Finance, InsiderFinance: **untouched** — including the dormant `ifFetch` lane and the `ifMan*`
+hand-entry prompt. Dark-pool **lifecycle** archived; the capture (`onDarkPool`) and the `darkPoolLevels` reader
+⓪a's far side uses are kept. Pop-out: **window kept, PiP archived**. Face: **the ladder stays on top.**
+
+### Eight live defects, fixed first (four on ⓪a itself)
+- **D1** `var PEAK` was declared twice in one IIFE; `peakLoad()` wiped the session peak/low store every boot.
+  The session store is now `SESSPEAK`.
+- **D2** `recNode()` hardcoded `'SPY'` — every QQQ snapshot recorded SPY's tape %King. The symbol travels in.
+- **D3** `hlNodeAt()` referenced an undeclared `kings` in its PT branch — ⓪a's **PTN cell was a permanent
+  em-dash** whenever a second extreme existed. The PT leg now uses the king at the PT time, else the current king.
+- **D4** `LAST_READ` was written only by `readBlock44`, which lived in the never-taken `else` of `render()` —
+  **every `dir` record since v11.0 carried `read:null`**; the G8 fix was inert. `readState()` now computes the
+  READ on the closed bar and the `dir` feature records it directly.
+- **D5** `depsHealth()` called the storage probe every render — a 20 KB write every 15 s in the store F-10
+  measured full. Health is now derived from size + the recorder's own recent failures.
+- **D6** `nevScan` paired rolls on the **signed** `d15` and inherited the negative-gamma inversion v15.18 fixed in
+  `rollScan`. One definition now — `velMass15()` — used by both.
+- **D7** `projReview` left the day export: it scored a surface that stopped rendering at v14, and the nightly
+  was being handed those scores.
+- **D8** the retired confluence engine's `sig.conf` is no longer graded — `analysisStats` shrank to the two
+  fields anything read (`date`, `bars`); the matrix is archived.
+
+### Archived, by group (see INDEX.md for every name)
+**A** the never-taken `else` of `render()` — `readBlock44`, `kingHeaderBlock`, `briefBlockHtml` (the pre-open
+brief had been invisible since v11.26 too), `nextStopHtml`, `gexPathHtml`, both LEVELS cards and both charts,
+`pbEntryHtml`, `accumBlock`→`nodeMapBlock` + badges, the `lvl*` helpers (1,156 lines).
+**B** the hidden EM rail — the `.g3emw` subtree built into the HTML every render and hidden since v14.46,
+`railLevelsLine`, `railRollLane`, `emPosRail` (525).
+**C** the `LOC_SHOW_*` surfaces (NODES list, level rows, node chart), `secBias`/`secReact`/`secExec` (zero callers
+since v14.32), `stepState`, `rollDetect`, `nodeChip`, `esTick`, `velP` (~750). ⚠ `nodesVerdict` kept for re-surfacing.
+**D** 61 zero-caller functions and declaration-only constants — the `kingBlock` chain, `deflectionBlock`,
+`nodeMapSentence`, both `trendBadgeHtml`, `outOfSyncBlock`, `ruleGet`, both SVGs, `driftLineHtml`… (972).
+**E** the settled Skylit payload probes (`feedShape`, `callPutProbe`) — not the integrations (167).
+**F** the v10.21 King-era analytics on Analysis ⊕ and the projection scorecard (386).
+**G** `testingInsights` (hardcoded Aug-2026 prose) and `RECO_TESTS` (~60).
+**H** write-only state: `NODEHIST`, `LAST_OK`, `SMA_CONT_FLAG`, `ACT_LAST`, IB60 (measured worthless, zero readers).
+**I** dead CSS — the v13.9 node-profile rules and the `''/*dead:…*/` slots (45).
+**J** 14 orphan `__gptsDebug.*` hooks (integration diagnostics kept).
+**K** dark-pool lifecycle · **L** PiP.
+
+### The suite, honestly
+26 tests moved to `archive/v15.53/tests/` because their subject was archived; ~30 more lost the assertions that
+guarded dead code, each marked `(v15.53) removed:` at the spot. Two surprises worth recording: `test_layout_v13`
+had never closed `ok()`'s failure branch — the whole v14.46 block sat inside the `else`, and the first failing
+assertion recursed until it looked like a hang; and `test_scaleagree` strips comments with a regex that a hover
+string `data/*.json` turned into a phantom block comment once a nearby `*/` was archived — the string now reads
+`data/<day>.json`.
+
+### Not in this build
+The merges (three accumulation engines → one, the registry 48 → 28), render memoisation, and the ⑤b gate — v15.54–56.
+
+## v15.52 — the grader becomes visible: CAN THE SCORER FAIL, PRE-REGISTERED, and the ledger in ⓪a
+
+> "consider the application, its entire machinery, my objective, all the tabs... you must include
+> data collection analysis, testing and the entire self improvement process."
+
+v15.51 made the grader able to fail. v15.52 makes it VISIBLE — and closes the gate that a tautology
+could still have cleared. `test_v1552.js` (**26**, 8 mutations / 8 caught), two DOM checks in real
+Chromium (ledger rows render; both Testing sections render, zero errors), suite 144 green / 6
+baseline red, smoke clean.
+
+### Testing tab · ⑤b CAN THE SCORER FAIL?
+One row per feature: horizon (bars / close), rows, **eff n**, sessions, the hit rate in the
+**LOW-predicted band beside the HIGH-predicted band**, a verdict, and the `hitNull` breakdown.
+`featPredBand()` reads the prediction a record carries — a table cell, a grade, a fire-grade, a wick
+quality. If both bands score within 10 points on n≥30 each: **⚠ CANNOT DISCRIMINATE**. Higher band
+lower: **⚠ INVERTED**. This is the check that would have caught F-11 on its first day. Flagged rows
+sort first. **A flagged row's number must not reach the face.**
+
+### The gate counts SESSIONS for a to-close feature
+`effN = n / FEAT_FWD` divides out a 10-bar overlap; a session-long window overlaps completely.
+`lodhod`'s 362 rows over four sessions were "eff 36" against `RULE_UNLOCK_N=20` — **the promotion
+gate would have cleared a tautology.** `ruleLocalRate` now reports distinct sessions for `toClose`
+features. Rows scored by the retired proxy (no `atClose`) are counted **void**, not evidence.
+
+### Testing tab · ⑧ PRE-REGISTERED
+`roadmap/PREREGISTER.md` rendered: H1–H5 with the n each has accumulated on sessions from
+`PREREG_FROM=2026-09-03`, one row per (day, node) episode, **first bar** (the ex-ante state).
+**The rate is deliberately not shown before the minimum n** — read once, at threshold. H5 shows
+`BLOCKED · the event ledger holds N of 50`, counted from the IndexedDB `defl` store at boot.
+
+### ⓪a · today's deflections
+Under the day columns: one row per fresh tap — time · strike · direction · distance ·
+`CONTINUED / STALLED / pending` — with the hover stating what the label means and that the touch is
+a coin (52% held, n=94 episodes). Every row is a row in the store H5 waits on. **This is the piece
+that had no form at all before.**
+
+### Also
+`featStats` buckets carry `dates`, `hitNull`, `void`, `band`, `toClose`. The two new sections'
+error handlers no longer depend on `g3esc` to report an error (a handler must not lean on the thing
+that might be missing). `test_act_once` and `test_analysis_tabs` extract the new dependencies.
+The house rule caught my own blurb rendering "100%" without its n; it now carries n=362.
+
+### Not in this build
+The dashboard hierarchy (⓪a above the ladder) and the enrolled `TESTING/DEFLECTED/BROKE` states —
+v15.53. No live `lodhod` rate on the face; it restarts at the close from tomorrow.
+
 ## v15.51 — the loop measures nothing: a scorer that can fail, and a ledger that survives
 
 > "i want you to consider the application, its entire machinery, my objective, all the tabs, to come

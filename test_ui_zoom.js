@@ -16,7 +16,6 @@ global.PANEL={ style:{} };
 global.PIPWIN=null;
 global.ZOOM_KEY='gpts_zoom_v1'; global.ZOOM_MIN=0.7; global.ZOOM_MAX=2.2; global.ZOOM_STEP=0.1;
 global.UIZOOM=1;
-eval(ex('pipOpen'));
 eval(ex('zoomLoad')); eval(ex('zoomSave')); eval(ex('zoomApply')); eval(ex('zoomBy')); eval(ex('zoomReset'));
 
 eq(UIZOOM,1,'the panel starts at 100%');
@@ -43,13 +42,7 @@ delete STORE[ZOOM_KEY]; global.UIZOOM=1;
 eq(zoomLoad(),1,'no stored value means 100%');
 
 // ---- the pop-out is sized from the SCREEN ----
-{
-  const m=src.match(/var wantW=([^\n]+)\n\s*var wantH=([^\n]+)/);
-  ok(!!m,'the pop-out computes its own size');
-  ok(/sw\s*\*/.test(m[1]),'width is derived from the available SCREEN width, not the panel\'s current width',m[1].trim());
-  ok(/Math\.max\(420/.test(m[1]),'with a floor so it can never open unusably narrow again');
-  ok(/sh\s*\*/.test(m[2]) && /Math\.min\(sh/.test(m[2]),'height fills most of the screen but stays inside it',m[2].trim());
-}
+// (v15.53) SECTION REMOVED: wantW/wantH lived in pipToggle, archived (L-pip, his decision: window pop-out only).
 // ---- the PiP stylesheet must not fight the zoom ----
 {
   ok(/max-width:100% !important/.test(src),'the panel is capped at the window width so a zoomed panel cannot scroll sideways');
@@ -114,16 +107,15 @@ ok(/\(PANEL\.ownerDocument\|\|document\)!==document\) return/.test(noc(src)),
      'and height carries NO !important, so a grip drag can still override it');
   ok(/PANEL\.style\.height=''; PANEL\.style\.width='';/.test(code),
      'entering the pop-out CLEARS the in-page inline size, or the stylesheet default can never apply');
-  ok(/if\(PIPHOST\.h\) PANEL\.style\.height=PIPHOST\.h/.test(code),
-     'and restoring puts the in-page size back');
+  // (v15.53) removed: PiP archived (L-pip); the window pop-out's zoom re-apply is pinned separately
 }
 }
 // ---- zoom is re-applied across the document move ----
 {
   const pipT=src.slice(src.indexOf('function pipToggle'), src.indexOf('function pipRestore'));
-  ok(/zoomApply\(\)/.test(pipT),'zoom is re-applied when the panel moves INTO the pop-out — it changes documents');
+  // (v15.53) removed: PiP archived (L-pip); the window pop-out's zoom re-apply is pinned separately
   const rest=src.slice(src.indexOf('function pipRestore'));
-  ok(/zoomApply\(\)/.test(rest.slice(0,600)),'and again when it comes back');
+  // (v15.53) removed: PiP archived (L-pip); the window pop-out's zoom re-apply is pinned separately
 }
 
 // ---- (v11.36) THE UNIT MISMATCH IN pickEdge --------------------------------------------------
@@ -243,7 +235,7 @@ ok(/\(PANEL\.ownerDocument\|\|document\)!==document\) return/.test(noc(src)),
 // makeResizable reads `oh` off that rect, so every downward drag began 500px past the window and hit
 // the screen clamp on pixel one. Grow was dead; shrink worked. Five versions blamed the drag handler.
 {
-  const pcs=ex('pipCopyStyles');
+  const pcs=ex('popCopyStyles');
   const wantsPct=/#gpts-panel\{[^}]*height:100%/.test(pcs);
   ok(wantsPct, 'the pop-out panel is told to fill its window');
   ok(!wantsPct || /html,body\{[^}]*height:100%/.test(pcs),
@@ -257,15 +249,12 @@ ok(/\(PANEL\.ownerDocument\|\|document\)!==document\) return/.test(noc(src)),
 // A Document PiP window cannot grow taller; a plain popup can. Both are offered because only PiP is
 // always-on-top. ⚠ PANEL is ONE DOM node — it cannot live in two windows, so each closes the other.
 {
-  const wt=ex('winToggle'), pt=ex('pipToggle'), pv=ex('panelVisible');
+  // (v15.53) PiP archived (L-pip, his decision) — the WINDOW is the one pop-out; the mutual-close rules went with it
+  const wt=ex('winToggle'), pv=ex('panelVisible');
   ok(/window\.open\('', 'gptsPanelWin'/.test(wt), 'the window pop-out uses a real popup, which has no height cap');
-  ok(/if\(pipOpen\(\)\)\{ try\{ PIPWIN\.close\(\); \}catch\(e\)\{\} \}/.test(wt),
-     'opening the window closes an open PiP — one panel, one home');
-  ok(/if\(winOpen\(\)\)\{ try\{ WINWIN\.close\(\); \}catch\(e\)\{\} \}/.test(pt),
-     'and opening the PiP closes an open window, the same rule both ways');
-  ok(/pipOpen\(\) \|\| winOpen\(\)/.test(pv),
+  ok(/winOpen\(\)/.test(pv),
      'an open window counts as VISIBLE, or the ladder stops refreshing behind a painted panel');
-  ok(/d\.body\.appendChild\(PANEL\)/.test(wt) && /pipCopyStyles\(d\)/.test(wt),
+  ok(/d\.body\.appendChild\(PANEL\)/.test(wt) && /popCopyStyles\(d\)/.test(wt),
      'the popup gets the panel and the stylesheet it needs to render');
   ok(/'pagehide', winRestore/.test(wt), 'closing the window puts the panel back in the page');
   ok(/localStorage\.setItem\(WINBOX_KEY/.test(ex('winBoxSave')), 'the window remembers its own size and position');
@@ -274,7 +263,7 @@ ok(/\(PANEL\.ownerDocument\|\|document\)!==document\) return/.test(noc(src)),
 
 // The grip must be HIDDEN in any pop-out — it cannot work in PiP and is redundant in a window.
 {
-  const pcs=ex('pipCopyStyles');
+  const pcs=ex('popCopyStyles');
   ok(/#gpts-grip\{display:none !important\}/.test(pcs), 'the grip is hidden in every pop-out');
   ok(!/#gpts-grip\{display:block/.test(noc(pcs)), 'and is never re-shown there');
 }
@@ -291,7 +280,7 @@ ok(/\(PANEL\.ownerDocument\|\|document\)!==document\) return/.test(noc(src)),
      'the popup document is given a doctype, so it renders in standards mode');
   ok(/d\.open\(\);/.test(wt) && /d\.close\(\);/.test(wt),
      'written through open/close, which is what actually replaces an about:blank document');
-  ok(wt.indexOf("d.write('<!doctype") < wt.indexOf('pipCopyStyles(d)'),
+  ok(wt.indexOf("d.write('<!doctype") < wt.indexOf('popCopyStyles(d)'),
      'and the doctype lands BEFORE the stylesheet, or the first layout is still quirks');
   // the hazard itself: classes differing only by case exist, so mode is not a cosmetic detail
   const css=src;

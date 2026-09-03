@@ -39,7 +39,7 @@ global.ctNowSecOfDay=function(){ return 7*3600; };   // pre-open: the model may 
 global.recorderLoad=function(){ return { days:{} }; };
 global.CFG={ trendMA:{SPY:50,QQQ:50} };
 eval(['ruleSeed','rulesSeed','rulesNormalize','rulesDefaultWeights','rulesDocNormalize','rulesDoc',
-      'rulesLoad','rulesIngest','rulesSave','ruleGet','effN','nTxt','pctN','featStatsCached',
+      'rulesLoad','rulesIngest','rulesSave','effN','nTxt','pctN','featStatsCached',
       'featStatsInvalidate','ruleLocalRate','rulePromotedApplied','ruleTier','rulePromoted',
       'promoLoad','promoSave','promoToday','proposalRegimeFlip','proposalFeatureKey','proposalLocalN',
       'proposalWalkForwardLocal','proposalClearsBar','promoDirWeightKey',
@@ -183,7 +183,7 @@ ok(/learning\/rules\.json/.test(ex('pipeRulesTry')), '6e pipeCheck fetches learn
 ok(/PIPE_RAW_BASE/.test(ex('pipeRulesTry')), '6f ...via the same PIPE_RAW_BASE as the review');
 ok(/pipeRulesTry\(P\);/.test(ex('pipeCheck')), '6g ...and it is wired into pipeCheck alongside the review');
 ok(/rulesIngest/.test(ex('pipeRulesTry')), '6h ...a fresh document re-runs the promotion pass');
-ok(/@version\s+15.51/.test(src) && /v'\+GPTS_VERSION\+' part1 loaded/.test(src) && />v'\+GPTS_VERSION\+'<\/span>/.test(src),
+ok(/@version\s+15.54/.test(src) && /v'\+GPTS_VERSION\+' part1 loaded/.test(src) && />v'\+GPTS_VERSION\+'<\/span>/.test(src),
    '6i version stamped in all three spots');
 // (v11.56) An unreachable update URL means Tampermonkey never offers a new version. The companion shipped
 // for releases without one and silently sat at an old version while the repo moved on.

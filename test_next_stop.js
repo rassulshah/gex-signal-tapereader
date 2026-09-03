@@ -10,7 +10,7 @@ global.PAL={longAccent:'#2ec27e',shortAccent:'#f0616d',sub:'#8b98a9',ink:'#e6edf
 global.PB_MIN_PCT=20; global.DEFLECT_ZONE=0.5; global.RULE_UNLOCK_N=20; global.FEAT_FWD=10; global.DIR_PTS=0.5;
 global.dispIsFut=()=>false; global.futMark=()=>''; global.dispR=()=>1; global.fmtFut=String; global.window={};
 global.effN=(n)=>Math.floor(n/10);
-eval(['fmtNum','fmtLvl','fmtSpan','nextStopPick','nextStopHtml'].map(ex).join('\n'));
+eval(['fmtNum','fmtLvl','fmtSpan','nextStopPick'].map(ex).join('\n'));
 // NEXTSTOP_RULES var
 eval(src.slice(src.indexOf('var NEXTSTOP_RULES='), src.indexOf('};', src.indexOf('var NEXTSTOP_RULES='))+2));
 
@@ -43,18 +43,9 @@ ns=nextStopPick('SPY');
 ok('4a price on the King → the nearer wall (767)', ns.level===767 && ns.rule==='wall.near', ns);
 // 5. nothing at all → no line (never invents)
 MODEL={levels:[],kingK:null}; ns=nextStopPick('SPY');
-ok('5a with no nodes at all there is NO Next Stop (nothing invented)', ns.ok===false && nextStopHtml('SPY')==='');
-// 6. header line
-LEG={dir:'dn',magnet:{k:766,isKing:true},pbDetected:{k:769},legId:1}; DIR={trendState:'dn',capped:null,inputs:{}}; MODEL={levels:[],kingK:766};
-const h=nextStopHtml('SPY');
-ok('6a the header reads "Next Stop: ↓ <level> −pts · 30–60m" + grade at the right, with a question-first hover', /Next Stop:/.test(h) && /↓ 766/.test(h) && /−2\.3 pts/.test(h) && /30–60m/.test(h) && /margin-left:auto[^>]*>B</.test(h) && /Why this level\?/.test(h));
-ok('6a2 the level is RED when below price (green when above)', /color:#f0616d">↓ 766/.test(h));
-ok('6b the hover shows the measured hit-rate only with n (dashes before)', /— \(eff n 0, need 20\)/.test(h));
-ok('6c descriptive, never an instruction', /never an instruction/.test(h) && !/\b(buy|sell|enter|go long|go short)\b/i.test(h.replace(/title="[^"]*"/,'')));
-// (v11.21) PATH and LEVELS now render between Next Stop and the read, so the gap is wider — but the
-// ORDER is what this pins, not the byte distance. Next Stop must still come first.
-ok('6d rendered ABOVE the read', /nextStopHtml\(__asym\)[\s\S]{0,900}readBlock44\(__asym\)/.test(src));
-ok('6d2 PATH sits directly under Next Stop — same claim, same place', /nextStopHtml\(__asym\)[\s\S]{0,120}gexPathHtml\(__asym\)/.test(src));
+// (v15.53) removed: nextStopHtml archived (A-dead-else); nextStopPick is the live subject
+// 6. header line — (v15.53) SECTION REMOVED: nextStopHtml / gexPathHtml / readBlock44 are archived (A-dead-else). The Next Stop
+// CALL (nextStopPick) is pinned in 1-5 above and its outcome in 7 below; the header that rendered it had no surface since v11.26.
 // 7. features + outcome
 ok('7a nextStop (30m) and nextStop.60 (60m) are registered, the 60m one with a 20-bar window', /registerFeature\(\{ key:'nextStop', label:[^}]*fwd:FEAT_FWD,/.test(src) && /registerFeature\(\{ key:'nextStop\.60'[^}]*fwd:FEAT_FWD\*2,/.test(src));
 eval(src.slice(src.indexOf('  function _nextStopOutcome(rec, fwd){'), src.indexOf('  registerFeature({ key:\'nextStop\', label')));

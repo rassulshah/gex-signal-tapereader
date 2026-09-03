@@ -59,11 +59,11 @@ ok(kingApproach(null, 2, 3)===null, 'missing input -> null');
 
 // ---- LAYOUT / DEMOTION GUARDS ----
 ok(src.indexOf('KING PATH \\u00b7 today')===-1, 'GUARD: old header row is GONE');
-ok(/kingReadHtml\(kingAnalyzer\(sym\), kv\)/.test(src), 'GUARD: narrative wired into kingBlock (top)');
-ok(/gpts-kp-drift/.test(src), 'GUARD: drift chip lives INSIDE the chart overlay');
-ok(/DESCRIPTIVE ONLY: 3-bar drift tested 50%/.test(src), 'GUARD: drift demotion documented at the chip');
-ok(/padR=46/.test(src), 'GUARD: right gutter reserved (padR=46)');
-ok(/x1="'\+\(W-padR\)\+'" y1="0"/.test(src), 'GUARD: gutter divider drawn');
+// (v15.53) removed: kingBlock chain archived (D-zero-callers)
+// (v15.53) removed: kingBlock chain archived (D-zero-callers)
+// (v15.53) removed: kingBlock chain archived (D-zero-callers)
+// (v15.53) removed: kingBlock chain archived (D-zero-callers)
+// (v15.53) removed: kingBlock chain archived (D-zero-callers)
 // ⚠⚠ (v14.84) THE 76% WAS WITHDRAWN — it did not reproduce on 9 recorded sessions at any horizon
 // (23% at 30m against the DRAWN crown). This guard used to check the claim carried its n; it now
 // checks the number comes from ONE constant, because the withdrawn figure had been hand-typed into
@@ -75,8 +75,8 @@ ok((src.match(/SUCC_META\./g)||[]).length>=5,
    'GUARD: every site reads that constant rather than a typed number',
    (src.match(/SUCC_META\./g)||[]).length);
 ok(/withdrawn:76/.test(src), 'GUARD: ...and the withdrawn figure is KEPT and named, not erased');
-ok(src.indexOf('outside value')>=0 && src.indexOf('(n=25)')>=0, 'GUARD: eVA outside-value read present with its n');
-ok(/measured 4d\/324 bars/.test(src), 'GUARD: base-rate provenance line present');
+// (v15.53) removed: kingBlock chain archived (D-zero-callers)
+// (v15.53) removed: kingBlock chain archived (D-zero-callers)
 
 console.log('\n'+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

@@ -22,8 +22,7 @@ global.fmtLvl=(x)=>String(x);
 eval(ex('closedCandles')); eval(ex('pickSnapshot'));
 eval(ex('sessionPhase')); eval(ex('clv')); eval(ex('paRead')); eval(ex('paReject'));
 eval(ex('isoDow')); eval(ex('isoAddDays')); eval(ex('nextWeekFriday'));
-eval(ex('expSetRollCheck')); eval(ex('expSetSpecFor')); eval(ex('rollNote'));
-eval(ex('bookNet')); eval(ex('regime2D'));
+eval(ex('expSetRollCheck')); eval(ex('expSetSpecFor')); eval(ex('bookNet')); eval(ex('regime2D'));
 
 // ---------- session phase: the panel used to be entirely time-blind ----------
 // 2026-08-17 is a Monday. CT is UTC-5 in August.

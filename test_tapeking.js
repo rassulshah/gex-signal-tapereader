@@ -23,7 +23,7 @@ fs.writeFileSync(__dirname + '/_harness.js', [
   grabVar('var KING_DOLLAR_RE ='), grabVar('var TAPE_REJECT_RE ='),
   grabVar('var ISO_DATE_RE ='), grabVar('var TAPE_TOK_RE ='),
   grab('tapeStrikeRowCount'), grab('findTapeTable'), grab('leadTok'),
-  grab('tapeCells'), grab('leadSignedPct'), grab('firstStrengthPct'),
+  grab('tapeCells'), grab('leadSignedPct'),
   grab('kingResolve'), grab('readTapeFromDOM'),
   'module.exports = { findTapeTable, readTapeFromDOM };'
 ].join('\n'));

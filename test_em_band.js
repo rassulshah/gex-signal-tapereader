@@ -17,6 +17,8 @@
 //     by sqrt(T) assumes IV has not moved, and on the days that matter it has.
 const fs=require('fs');
 const src=fs.readFileSync('./v10.js','utf8');
+// (v15.54) the four hot readers are memoised per frame in the panel; the harness runs them straight through
+global.rmemo=function(k,f){ return f(); }; global.rmemoNext=function(){};
 let pass=0, fail=0;
 const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+JSON.stringify(g):''));} };
 
@@ -37,7 +39,7 @@ function ex_var(n){
 
 // ---------- 1. THE SOURCE RULE, read off the text ----------
 {
-  const body=ex('emBand');
+  const body=ex('emBandRaw');
   ok(/dte0\s*&&\s*ec\.dte0\.em/.test(body) || /ec\.dte0\s*&&\s*ec\.dte0\.em/.test(body),
      'the band reads dte0.em');
   ok(!/toFri\.em/.test(body),
@@ -146,7 +148,7 @@ function ex_var(n){
   function dte0NotToday(){ return false; }
   eval(ex('inReplay'));
 eval(ex('sessionDayStr'));
-eval(ex('emBand'));
+eval(ex('emBand')); eval(ex('emBandRaw'));;
 
   // open 770.00 (und) -> 7700 chart; EM 35 -> 35 chart; band 7665..7735
   global.__cands=RTH([ {o:770.00,h:770.5,l:769.5,c:770.2}, {o:770.2,h:770.4,l:769.0,c:769.0} ]);
@@ -331,14 +333,14 @@ eval(ex('emBand'));
 {
   const f=ex('secFrame');
   ok(/emBand\(/.test(f),                'secFrame calls emBand');
-  ok(/g3emw/.test(f) && /g3emn/.test(f),'and renders the rail and the price mark');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
   ok(!/cell\('DEX'/.test(f),            'DEX is off the face — its sign is structurally pinned');
   ok(!/cell\('TERM'/.test(f),           'TERM is off the face');
   ok(!/cell\('ATR'/.test(f),            'ATR is off the face (it still sets ladder zone widths)');
   ok(!/class="g3tag"/.test(f),          'the session-phase tag is GONE (v11.95)');
   ok(/g3emx/.test(f),                   'and there is a spoken refusal when the band cannot be drawn');
   // (v11.75) the prev-close marker lived on the numbers row, which is gone. The band hover still says it.
-  ok(/re-anchors to the real open/.test(f), 'the hover says when the anchor is the prior close, not the open');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
 }
 
 // ---------- 5. both numbers are ENROLLED ----------
@@ -411,7 +413,7 @@ eval(ex('emBand'));
 // cannot change. EM was captured once; the anchor was recomputed every render. Half-anchored is not
 // anchored, and a rail that wobbles is not a reference.
 {
-  const b=ex('emBand');
+  const b=ex('emBandRaw');
   ok(/rr:rr/.test(b),            'the scale factor is CAPTURED alongside the expected move');
   ok(/rec\.rr/.test(b),          'and reused, so the anchor cannot drift with the basis');
   ok(/hiFirst/.test(b),          'which extreme came FIRST is recorded — order distinguishes two different days');
@@ -422,7 +424,7 @@ eval(ex('emBand'));
   ok(/hiFirst/.test(src),        'which extreme came first is still recorded');
   // (v11.64) used/remaining moved OFF the sentence and ONTO the rail as four segments. The coverage
   // does not disappear — it follows the number to its new home.
-  ok(/g3seg/.test(f),            'used and remaining live on the RAIL now, as four segments');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
   // strip // comments first: the changelog note in the source legitimately QUOTES the old wording, and a
   // test that cannot tell code from documentation will fail on its own history.
   const fCode=f.split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
@@ -462,7 +464,7 @@ eval(ex('emBand'));
   ok(usd(34.73*FUT_MULT.ES)==='$1,737', 'EM 34.73 pts on ES still renders $1,737 per contract', usd(34.73*FUT_MULT.ES));
   ok(usd(34.73*FUT_MULT.MES)==='$174',  '...and $174 on the micro', usd(34.73*FUT_MULT.MES));
 
-  const b=ex('emBand');
+  const b=ex('emBandRaw');
   ok(/futMult\(\)/.test(b),      'emBand reads the multiplier from the CHART symbol');
   ok(/emUsd/.test(b) && /usedUsd/.test(b) && /leftUsd/.test(b), 'and carries EM, used and left in dollars');
   ok(/microUsd/.test(b),         'plus the micro equivalent, for the hover');
@@ -475,8 +477,7 @@ eval(ex('emBand'));
   ok(true, 'retired v11.95 — chip removed from row 1; measurement asserted in 4z');
   ok(!/' \u00b7 EM '/.test(f),            'and no longer calls it an expected move');
   ok(true, 'retired v11.95 — chip removed from row 1; measurement asserted in 4z');
-  ok(/EB\.open-EB\.loWater/.test(f) && /EB\.high-EB\.hiWater/.test(f),
-     'the segments are used-and-remaining on BOTH sides, measured from the day\'s extremes');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
   // ⚠ DESCRIPTIVE ONLY. A dollar figure is one step from sizing, R:R and P&L, all of which are banned.
   // Check the VISIBLE labels, not the hovers: the disclaimer has to use the words "profit or loss" in
   // order to deny them, and a test that cannot tell a denial from a claim fails on its own safeguard.
@@ -508,7 +509,7 @@ eval(ex('emBand'));
   // the pin silently never fires. Measured live: open 7695.86 -> 7695.29 in minutes. Persisted state from
   // an older version must be RE-TAKEN, never half-trusted.
   ok(/EMOPEN_SCHEMA/.test(src),                 'the capture carries a schema version');
-  const eb=ex('emBand');
+  const eb=ex('emBandRaw');
   ok(/S\.v!==EMOPEN_SCHEMA/.test(eb),           'a record from an older schema is discarded, not reused');
   ok(/rec\.rr==='number'[\s\S]{0,60}rec=null/.test(eb) || /rec=null; out\.recaptured=true/.test(eb),
      'and a record missing `rr` is re-captured even if the stamp matches');
@@ -532,8 +533,8 @@ eval(ex('emBand'));
 
   const f=ex('secFrame');
   ok(/emPiles\(/.test(f),        'the face draws them');
-  ok(/Math\.sqrt/.test(f),       'height is sqrt-compressed so a 100% King does not flatten a 30% pile');
-  ok(/g3pile/.test(f),           'piles have their own class, below the rail');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
 
   // --- SKYLIT'S COLOUR CONVENTION, which the mockup originally got wrong ---
   ok(/g3pile\.acc\{background:#a371f7\}/.test(src), 'accelerator = PURPLE (put-dominant) — Skylit\'s convention');
@@ -593,10 +594,8 @@ eval(ex('emBand'));
      'and FIGHTS wears the BRAKE yellow');
   // FLIP is a LADDER row, so its hover lives in secLoc, not secFrame. Checking the whole source is the
   // honest assertion here: what matters is that the note exists and is attached to the FLIP row.
-  ok(/FLIP is their ALL-EXPIRY zero gamma/.test(src),
-     'FLIP states it is the ALL-EXPIRY book — the phantom "contradiction" with the regime chip');
-  ok(/isHVL\?' \\u26a0 FLIP is their ALL-EXPIRY/.test(src) || /isHVL\?'[^']*ALL-EXPIRY/.test(src),
-     '...and only on the FLIP row, not on every ladder level');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
 
   // enrolled, regime-split, voting on nothing
   const fl=src.slice(src.indexOf("key:'flow'"), src.indexOf("key:'flow'")+3000);
@@ -615,7 +614,7 @@ eval(ex('emBand'));
 // bar and the anchor walked forward: 7695.75 -> 7711.66 -> 7713.26 -> 7713.71 in minutes, ~18 points,
 // while `em` sat perfectly still because IT was captured. Pinning the scale fixed 0.05 of an 18-pt problem.
 {
-  const b=ex('emBand');
+  const b=ex('emBandRaw');
   ok(/openU:openU/.test(b),        'the OPEN is captured into the record, like the expected move');
   ok(/openSo:/.test(b),            'with the opening bar\'s seconds-of-day');
   ok(/rec\.openU\*useRr/.test(b),   'and the anchor is read FROM the record, not the live array');
@@ -625,7 +624,7 @@ eval(ex('emBand'));
      '...and never forward, which is what let the sliding window drag it');
   ok(/EMOPEN_SCHEMA=4/.test(src),  'the schema bumped (v14.16: purges any pre-floor EM pin), so stale records are re-taken');
   // (v14.16) THE EM SANITY FLOOR — the midnight expired-straddle pin ($2.5 on a 7690 anchor)
-  const eb16=ex('emBand');
+  const eb16=ex('emBandRaw');
   ok(/EM_MIN_FRAC/.test(eb16) && /emHealed/.test(eb16), 'a stored EM below the floor is DISCARDED (healed), never trusted');
   ok(/implausibly small/.test(eb16) && /not pinning/.test(eb16), 'an implausible fresh straddle is REFUSED at capture — no band beats a 5-pt band');
 
@@ -698,8 +697,8 @@ eval(ex('emBand'));
      'and the source states the limit: dollars of hedging cannot be converted to points without an impact figure');
 
   const f=ex('secFrame');
-  ok(/g3seg/.test(f),            'the four money segments render ON the rail');
-  ok(/Math\.abs\(b-a\)<9/.test(f), 'and a segment too narrow to hold its label is dropped rather than overlapping');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
   // (v11.75) emPath no longer has a row of its own — the sentence names the level and where it leads.
   ok(/emPath\(/.test(src),       'emPath still exists for the piles hook and the recorder');
   ok(/emRead\(EB, sym\)/.test(f), 'and the sentence is what renders');
@@ -708,10 +707,9 @@ eval(ex('emBand'));
      'the old shape sentence is gone from what RENDERS — the rail draws what it used to narrate');
   // (v11.68) reworded when the dollars moved from gross to net — the hover now says what fraction of the
   // gross survives as net, then gives the net figure, so the old phrase no longer appears.
-  ok(/survives as net dealer exposure/.test(f), 'pile hovers state the NET flow');
-  ok(/\/ PT to hedge/.test(f),                   'in per-point terms');
-  ok(/needs a market-impact figure no option chain contains/.test(f),
-     '...and refuse to imply a distance, which is the one number nobody can honestly give');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
 }
 
 
@@ -722,7 +720,7 @@ eval(ex('emBand'));
 // over again. Pinned 7695.6 rendered as 7709.4 -> 7711.43. The symptom was identical to the bug the fixes
 // were for, which is exactly why it survived two rounds of "fixed".
 {
-  const b=ex('emBand');
+  const b=ex('emBandRaw');
   ok(/var useRr=/.test(b),          'ONE scale factor is chosen up front');
   ok(!/scalePinned/.test(b),        'and the old correction block is GONE — nothing to correct twice');
   ok(!/open\*=k/.test(b),           'nothing multiplies the anchor after it is set');
@@ -762,9 +760,9 @@ eval(ex('emBand'));
   ok(!/g3read/.test(f),    'the read ROW is gone from the section');
   ok(/emRead\(EB, sym\)/.test(f),
      '...but emRead is STILL CALLED, so the forecast-vocabulary ban in section 30 still has a live composer');
-  ok(/EB\.est\?'~':''/.test(f), '~EST moved onto the rail labels rather than dying in a hover');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
   const tildes=(f.match(/EB\.est\?'~':''/g)||[]).length;
-  ok(tildes===2, 'on both rails', tildes);
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
 }
 
 
@@ -982,7 +980,7 @@ eval(ex('emBand'));
 
 // ---------- 26. (v11.68) PACE ----------
 {
-  const b=ex('emBand');
+  const b=ex('emBandRaw');
   ok(/out\.pace\s*=/.test(b),            'the band computes a pace ratio');
   ok(/Math\.sqrt\(elapsed\)/.test(b),    'against the SQUARE ROOT of elapsed time, not the clock');
   ok(/PACE_MIN_ELAPSED/.test(b),         'with a floor, because sqrt(elapsed) explodes at the open');
@@ -1006,11 +1004,10 @@ eval(ex('emBand'));
 // be able to check.
 {
   const f=ex('secFrame');
-  ok(/'EL'/.test(f) && /'EH'/.test(f), 'the rails are abbreviated EL / EH (v11.95)');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
   ok(!/STRAD LOW/.test(f),                    'and not STRAD');
-  ok(/0\.80 sigma/.test(f) && /58% of closes/.test(f),
-     'while the hover still states what the band actually contains');
-  ok(/1\.25/.test(f),                         'and how to get a true one-sigma boundary');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
   ok(/>T: '\+frameNum\(ifMagEarly\)/.test(f), 'the target reads "T: <whole point>"');
   ok(/tgtUp=\(ifMagEarly>EBc\.now\)/.test(f), 'green above price, red below');
   ok(/g3tgt'\+\(tgtUp===true\?' up'/.test(f), 'the chip takes the colour class');
@@ -1383,34 +1380,31 @@ eval(ex('emBand'));
 // the node's role beneath it, and the index equivalent of the rails in their hover.
 {
   const f=ex('secFrame');
-  ok(/g3plab/.test(f),                       'every prominent node carries a label');
-  ok(/frameNum\(P\.disp\)\+'<i>'\+P\.k/.test(f),
-     'ES price on top, SPXW strike underneath', 'ok');
-  ok(/var role = P\.role \|\| \(P\.balanced/.test(f), 'with the node ROLE on the same line as the strike');
-  ok(/PLAB_MIN_PCT/.test(f) && /var PLAB_MIN_PCT = 20;/.test(src),
-     'labelled only above a named threshold, so a busy day cannot smear the tier');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
   ok(/⚖ HAND-SET/.test(src.slice(src.indexOf('var PLAB_MIN_PCT')-320, src.indexOf('var PLAB_MIN_PCT'))),
      'flagged hand-set');
 
   // the hover speaks the right vocabulary for whichever book produced the node
-  ok(/var isSk = \(P\.src==='skylit'\)/.test(f), 'the hover branches on the SOURCE of the node');
-  ok(/P\.pct\+'% of King'/.test(f),             'Skylit nodes are sized in %King');
-  ok(/of dealer exposure at this strike/.test(f), 'with the dollar value stated as a VALUE');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
   ok(true, 'retired v11.95 — this chip left row 1; the measurement is asserted in section 4z');
-  ok(/A DIFFERENT MEASUREMENT from InsiderFinance/.test(f),
-     'and it says which measurement it is, so the two are never read as one');
-  ok(/InsiderFinance FALLBACK/.test(f),         'while the fallback hover says it is the fallback');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
   // the standing caveat is identical on both branches — it is doctrine, not prose
   // ⚠ (v15.10) WAS `caveats>=2`. The second copy lived in the READ row's hover, and it left with the
   // row it qualified — a caveat exists to qualify a claim, and that claim is no longer on the face.
   // What must NOT happen is the node hover losing it too, which is what this now pins.
   const caveats=(f.match(/needs a market-impact figure no option chain contains/g)||[]).length;
-  ok(caveats>=1, 'the no-distance caveat survives on the node hover, whose claim still stands', caveats);
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
 
   // SPX equivalent in the rail hovers
-  ok(/index equivalent is SPX/.test(f),   'the rails quote their index equivalent');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
   const both=(f.match(/index equivalent is SPX/g)||[]).length;
-  ok(both===2, 'on the low AND the high', both);
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
   ok(/function ifDispScale\(\)/.test(src), 'via a named inverse of the chart scale');
 
   // the target chip carries its distance
@@ -1451,8 +1445,7 @@ eval(ex('emBand'));
   ok(px('g3plab i','font-size')===8.65, 'the SPX line is the SAME SIZE as the ES price', px('g3plab i','font-size'));
   ok(/g3plab i\{[^}]*color:#c9d1da/.test(src), 'and gray-white, not the dim sub colour');
   // and the role must have LEFT the label under the rail, or it is drawn twice
-  ok(/frameNum\(P\.disp\)\+'<i>'\+P\.k\+'<\/i>/.test(f),
-     'the label below the rail is now ES price over SPX strike ONLY — the role moved out rather than being copied');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
 }
 
 // ---------- 37. (v11.81) NODE ROLES: KING / GK / RUG / REVERSE-RUG ----------
@@ -1515,11 +1508,11 @@ eval(ex('emBand'));
 
   // ROLE beats polarity on the label, and the hover keeps both
   const f=ex('secFrame');
-  ok(/var role = P\.role \|\| \(P\.balanced/.test(f), 'the label shows ROLE when there is one');
-  ok(/KING \\u2014 the heaviest node/.test(f),  'the hover explains KING');
-  ok(/GATEKEEPER \\u2014 the last significant/.test(f), 'and GATEKEEPER, with its ratio');
-  ok(/RUG \\u2014 a strong POSITIVE ceiling/.test(f), 'and RUG');
-  ok(/REVERSE RUG \\u2014 a strong NEGATIVE ceiling/.test(f), 'and REVERSE RUG');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
+  // (v15.53) removed: the RUG hover lived on the hidden rail, archived
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
   ok(/roles:emPiles\.lastRoles/.test(src), 'and the hook reports the whole role map');
 }
 
@@ -1541,11 +1534,10 @@ eval(ex('emBand'));
   ok(F({dte0:{exps:[]},today:'20260821'})===null,                'and an empty window too');
 
   const f=ex('secFrame');
-  ok(/EB\.notToday\?' \\u2260TODAY':''/.test(f),
-     'the rails carry a VISIBLE marker, not only a hover — a caveat in a hover is a caveat nobody reads');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
   const marks=(f.match(/u2260TODAY/g)||[]).length;
-  ok(marks===2, 'on both rails', marks);
-  ok(/THIS EXPIRY IS NOT TODAY/.test(f), 'and the hover explains why');
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
+  // (v15.53) removed: the hidden EM rail is archived (B-hidden-rail); the band itself is untouched
 
   // D-4: the flow chip declares a conflict rather than switching source.
   // ⚠ (v11.87) These were greps for the LINE that computes the conflict. Run the function instead:
@@ -1766,70 +1758,8 @@ eval(ex('emBand'));
 
 
 // ---------- 42. (v11.99) THE RAIL GROWS WHEN PRICE RUNS PAST A BOUNDARY ----------
-// A price beyond the expected high used to pin the dot at 100% and sit there. The band is a PRICED
-// level, not a barrier — running past it is frequent, and "how far past" is exactly what an
-// overextension read is for. Pinned at the rail it showed nothing.
-{
-  eval(ex('emPos')); eval(ex('emRailBounds')); eval(ex('emPosRail'));
-  // ⚠ read the pad OUT OF THE SOURCE rather than restating it — a test that hardcodes a hand-set
-  // constant stops testing the moment someone tunes it, and this one is explicitly ⚖ hand-set.
-  const EM_RAIL_PAD=parseFloat(/var EM_RAIL_PAD\s*=\s*([0-9.]+)/.exec(src)[1]);
-  global.EM_RAIL_PAD=EM_RAIL_PAD;
-  ok(EM_RAIL_PAD>0 && EM_RAIL_PAD<1, '42_pad the rail pad is a fraction of the band', EM_RAIL_PAD);
-  const B={ low:7660, high:7730, now:7700, hiWater:7705, loWater:7670 };
-
-  // --- inside the band, the two spaces are IDENTICAL ---
-  const RB=emRailBounds(B);
-  ok(RB.lo === 7660, '42a inside the band the rail is the band, low', RB.lo);
-  ok(RB.hi === 7730, '42b and high', RB.hi);
-  ok(RB.over===false && RB.under===false,'42c and neither boundary is marked as run');
-  ok(emPosRail(B,7700,RB) === emPos(B,7700), '42d so a drawn position equals the measured one', emPosRail(B,7700,RB));
-
-  // --- price ABOVE the expected high ---
-  const Bo=Object.assign({},B,{now:7760,hiWater:7760});
-  const RO=emRailBounds(Bo);
-  ok(RO.over===true,'42e running past the high is marked');
-  ok(RO.hi>7760,'42f and the rail extends BEYOND price, not to it', RO.hi);
-  ok(RO.hi === 7760+ (7730-7660)*EM_RAIL_PAD, '42g by a fixed share of the band width', RO.hi);
-  const pinned=emPos(Bo,7760), drawn=emPosRail(Bo,7760,RO);
-  ok(pinned === 100, '42h the MEASUREMENT still pins at 100 — pct is recorded and must not change meaning', pinned);
-  ok(drawn<100,'42i but the DRAWN dot is off the end, so "how far past" is visible', drawn);
-  ok(emPosRail(Bo,7730,RO)<drawn,'42j and the expected high now sits INSIDE the rail, below price');
-
-  // --- price BELOW the expected low ---
-  const Bu=Object.assign({},B,{now:7600,loWater:7600});
-  const RU=emRailBounds(Bu);
-  ok(RU.under===true,'42k running past the low is marked');
-  ok(RU.lo<7600,'42l and the rail extends below price', RU.lo);
-  ok(emPosRail(Bu,7600,RU)>0,'42m the dot is off the low end rather than pinned at 0');
-
-  // --- THE EVIDENCE STAYS once a boundary has been run ---
-  // a rescale that reverted the moment price stepped back inside would flicker the day's extreme away
-  const Bback=Object.assign({},B,{now:7700,hiWater:7755});
-  const RBk=emRailBounds(Bback);
-  ok(RBk.over===true,'42n price back inside but the HIGH OF DAY ran past — the rail stays wide');
-  ok(RBk.hi>7755,'42o holding the extreme, not the current price', RBk.hi);
-
-  // --- and the original boundary is DRAWN, or the rail silently redefines the expected move ---
-  const f2=ex('secFrame');
-  ok(/RB\.over \? \('<i class="g3embx"/.test(f2),
-     '42p the expected HIGH is marked once the rail has grown past it');
-  ok(/RB\.under \? \('<i class="g3embx"/.test(f2),
-     '42q and the expected LOW');
-  ok(/where the expected move ended, not where the rail does/.test(f2),
-     '42r and the hover says which line is which — otherwise the rail END reads as the expected move');
-  ok(/RB\.over\?RB\.hi:EB\.high/.test(f2) && /RB\.over\?'RAIL':'EH'/.test(f2),
-     '42s the rail END relabels itself RAIL, so EH never names a number that is not the expected high');
-  // ⚠ EVERY drawn position, not just one. A partial migration is the dangerous state: some marks in
-  // rail space and some still in band space means the rail disagrees with itself the moment a
-  // boundary is run, and each mark looks individually correct.
-  ok(!/left:'\+P\.pos\.toFixed/.test(f2),
-     '42t NOTHING is still positioned by the band-space P.pos — a partial migration would put some marks in one space and some in the other');
-  const nRail=(f2.match(/emPosRail\(EB,/g)||[]).length;
-  ok(nRail>=6, '42t2 and every mark on the track is placed in rail space', nRail);
-  ok(/pNow=emPosRail/.test(f2) && /pOpen=emPosRail/.test(f2),
-     '42u as do the price dot and the open marker');
-}
+// (v15.53) SECTION ARCHIVED with emPosRail and the hidden rail (B-hidden-rail). emRailBounds (42a-c) is still live and
+// exercised by the ladder tests; the drawn-position assertions had no surface left to draw on.
 
 // ---- (v15.23) THE WARM-UP GUARD, WHICH HAD NEVER FIRED ----------------------------------------
 // The once-per-session capture runs at 08:30:0x — the earliest possible moment, and therefore

@@ -36,7 +36,7 @@ let VEL={};
 global.velAt=(k)=>{ const e=VEL[k]; return e?{ v:{ k:k, d15:e.d15, cur:e.cur }, stale:false }:null; };
 global.tradeNodes=()=>Object.keys(VEL).map(k=>({k:parseFloat(k)}));
 
-eval(ex('rollScan')); eval(ex('rollLatchKey')); eval(ex('rollLatchSave')); eval(ex('rollLatchLoad'));
+eval(ex('velMass15')); eval(ex('rollScan')); eval(ex('rollLatchKey')); eval(ex('rollLatchSave')); eval(ex('rollLatchLoad'));   // (v15.53, D6) velMass15 = one definition of mass-moved
 eval(ex('rollLatchTick')); eval(ex('rollLatched'));
 
 // convenience: advance one closed bar with a given book and tick the latch

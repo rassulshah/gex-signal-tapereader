@@ -16,8 +16,11 @@ ok(/window\.__gptsHypo=function/.test(src) && /window\.__gptsMineRun=function/.t
 // queue -> proposals -> challengers -> kill list -> self-test -> coverage. The v10.45
 // hypothesis builder / pattern miner / research list are kept in a DETAIL section.
 ok(/function testingBlock\(\)/.test(src), 'testingBlock exists');
-[['①','QUESTION QUEUE'],['②','PROPOSALS'],['③','CHALLENGERS'],['④','KILL LIST'],['⑤','SELF-TEST'],['⑥','DATA COVERAGE']].forEach(function(p){
-  ok(src.indexOf("'"+p[0]+"','"+p[1]+"'")>=0, 'testing section '+p[0]+' '+p[1]+' is rendered');
+// (v15.54) the tab in WORKFLOW order — architecture §3
+[['\u2460','CAN THE SCORER FAIL?'],['\u2461','PRE-REGISTERED'],['③','PROPOSALS'],['③b','CHALLENGERS'],['④','KILL LIST'],['\u2464','DATA COVERAGE'],['⑥','SELF-TEST']].forEach(function(p){
+  // the source writes some glyphs as \uXXXX escapes and some as characters; accept either, and a title prefix
+  var esc=p[0].split('').map(function(c){ var cc=c.charCodeAt(0); return cc>127?('\\u'+cc.toString(16).padStart(4,'0')):c; }).join('');
+  ok(src.indexOf("'"+p[0]+"','"+p[1])>=0 || src.indexOf("'"+esc+"','"+p[1])>=0, 'testing section '+p[0]+' '+p[1]+' is rendered');
 });
 ok(/PATTERN MINER/.test(src) && /Hypothesis builder|hypothesis/i.test(src), 'the v10.45 exploration tools survive in DETAIL');
 ok(/gpts_mine_v1/.test(src), 'miner result cached');

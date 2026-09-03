@@ -59,7 +59,7 @@ global.ctNow=function(){ return NOW; };
 global.ctMinutesSinceMidnight=function(){ return 10*60+30; };
 global.ctTodayStr=function(){ return '2026-08-21'; };
 
-eval([ 'ruleSeed','rulesSeed','rulesNormalize','rulesLoad','rulesSave','ruleGet','ruleTier','rulePromoted',
+eval([ 'ruleSeed','rulesSeed','rulesNormalize','rulesLoad','rulesSave','ruleTier','rulePromoted',
        'registerFeature','featureByKey','_fwdHitDir','_fwdHitNum','registerCoreFeatures','seedQuestions',
        'isOpexDay','sessionBucket','eventTagNow','featRegime','featureCtx','featRecordAll','featEnqueue',
        'recorderLoad','recorderSave','recorderDay','_fpct','effN','nTxt','frameRR','_frameRecOf',

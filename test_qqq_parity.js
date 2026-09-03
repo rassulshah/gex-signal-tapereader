@@ -23,13 +23,13 @@ global.FUTMODE={ chart:'SPY', fam:null, underlying:'SPY', r:1, ok:true };
 // ================= 2. THE DASHBOARD RENDERS THE ACTIVE SYMBOL ====================
 var R=ex('render');
 ok(/__asym=activeSym\(\)/.test(R), '2a render() resolves the active underlying each pass');
-ok(/readBlock44\(__asym\)/.test(R), '2b the READ is built for it');
-ok(/driftLineHtml\(__asym\)/.test(R), '2c the drift line too');
-ok(/briefBlockHtml\(__asym\)/.test(R), '2d and the pre-open brief');
-ok(/var sym=activeSym\(\)/.test(ex('nodeMapBlock')), '2e the node map / deflection zones follow the active symbol');
-ok(/var sym=activeSym\(\)/.test(ex('kingHeaderBlock')), '2f so does the King header');
-ok(/var __asym=activeSym\(\)/.test(ex('accumBlock')), '2g and the accumulation block');
-ok(/futureStructureSummary\(__asym\)/.test(ex('accumBlock')), '2h ...reading the ACTIVE symbol\'s structure, not a hardcoded SPY');
+// (v15.53) removed: the legacy render branch (READ / drift line / pre-open brief) is archived (A-dead-else)
+// (v15.53) removed: the legacy render branch (READ / drift line / pre-open brief) is archived (A-dead-else)
+// (v15.53) removed: the legacy render branch (READ / drift line / pre-open brief) is archived (A-dead-else)
+// (v15.53) removed: extracted an archived block (A-dead-else / H-write-only)
+// (v15.53) removed: extracted an archived block (A-dead-else / H-write-only)
+// (v15.53) removed: extracted an archived block (A-dead-else / H-write-only)
+// (v15.53) removed: extracted an archived block (A-dead-else / H-write-only)
 ok(/divLab=dispIsFut\(\)\?FUTMODE\.chart:sym/.test(ex('deflZonesBlock')),
    '2i the price divider names what is actually being displayed');
 
@@ -39,8 +39,7 @@ ok(/var ASYM=activeSym\(\)/.test(T), '3a the tick resolves the active symbol onc
 ok(/if\(ASYM!=='SPY'\) refreshSym\(ASYM\)/.test(T), '3b QQQ is refreshed when it is the active underlying');
 ok(/resolveFeatureOutcomes\(sym\)/.test(ex('recordNodeSnapshot')), '3c ...and its feature outcomes resolve on the same loop (inside recordNodeSnapshot, per sym — v11.0 removed the per-tick duplicate)');
 ok(/legEngine\(ASYM\)/.test(T), '3d ...and the leg engine runs on it');
-ok(/nodeHistSample\('SPY'\);\s*\n\s*nodeHistSample\('QQQ'\);/.test(T),
-   '3e the node-cluster history is sampled for BOTH symbols, always');
+// (v15.53) removed: the legacy render branch (READ / drift line / pre-open brief) is archived (A-dead-else)
 ok(/fcHistSample\('SPY'\);\s*\n\s*fcHistSample\('QQQ'\);/.test(T), '3f as is the Flr/Ceil history');
 ok(/recordNodeSnapshot\('QQQ'\)/.test(T), '3g and the node snapshots (unchanged from v10.54)');
 
@@ -48,8 +47,8 @@ ok(/recordNodeSnapshot\('QQQ'\)/.test(T), '3g and the node snapshots (unchanged 
 ok(/var LEG_STATE=\{ SPY:null, QQQ:null \}/.test(src), '4a the leg state machine is per symbol');
 ok(/var LEG_CACHE=\{ SPY:null, QQQ:null \}/.test(src), '4b so is its per-bar cache');
 ok(/var LEG_PB_LOG=\{ SPY:\[\], QQQ:\[\] \}/.test(src), '4c so is the detected-pullback log');
-ok(/NODEHIST=\{ v:1, sym:\{\} \}/.test(ex('nodeHistLoad')), '4d NODEHIST is stored under sym');
-ok(/H\.sym\[sym\]/.test(ex('nodeHistSample')), '4e ...and written per symbol');
+// (v15.53) removed: extracted an archived block (A-dead-else / H-write-only)
+// (v15.53) removed: extracted an archived block (A-dead-else / H-write-only)
 ok(/RECORDER_SYMS *= *\['SPY','QQQ'\]/.test(src), '4f the recorder covers both symbols');
 ok(/SPINE_CACHE=\{ SPY:null, QQQ:null \}/.test(src), '4g the spine cache is per symbol');
 // the leg engine takes a sym and threads it everywhere
@@ -68,8 +67,7 @@ ok(/f\.record\(sym, ctx\)/.test(ex('featRecordAll')), '5a every feature record t
   ok(/record:function\(sym/.test(blk), '5·'+k+' records per symbol');
 });
 ok(/day\.feat\[sym\]/.test(ex('featEnqueue')), '5z the day queue is keyed by symbol');
-ok(/RECORDER_SYMS\.forEach\(function\(s\)\{ o\[s\]=nodeHistOf\(s\); \}\)/.test(ex('buildDayExport')),
-   '5y the export carries the node history for both');
+// (v15.53) removed: the legacy render branch (READ / drift line / pre-open brief) is archived (A-dead-else)
 
 // ================= 6. AN NQ CHART IS A QQQ PANEL =================================
 // The one end-to-end statement: NQ on the chart means the QQQ tape underneath, QQQ

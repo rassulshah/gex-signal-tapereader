@@ -372,3 +372,13 @@ effN 10 against a 21% baseline over 2 sessions, it has not earned promotion.
 
 **Would change it:** drift clearing the promotion path it has always had — n≥20 effN, 3 sessions, both
 up and down days.
+
+
+## 2026-09-03 — the simplification (v15.53)
+
+- **IRT export, Yahoo Finance, InsiderFinance: "i need the irt export it is very important, also the yahoo
+  finance, insider finance so dont mess with the integrations."** Protected in full, including dormant lanes.
+- **Dark-pool lifecycle: archive it.** Capture and the level reader stay.
+- **Pop-out: keep the window only.** PiP archived.
+- **Face hierarchy: keep the ladder on top.** ⓪a stays below it (my recommendation was the reverse; his call).
+- **"perform the simplification"** — go, in the plan's order: defects + dead code first (v15.53), merges next.

@@ -17,7 +17,7 @@ global.window={__gptsDebug:{}};
 global.SNAP_MAX_STEPBACK=8;
 global.localStorage={_d:{},getItem(k){return this._d[k]===undefined?null:this._d[k];},setItem(k,v){this._d[k]=v;},removeItem(k){delete this._d[k];}};
 eval([vo('LVL_COL'),vo('LVL_NAME'),vo('LVL_WHAT'),vo('PAL')].join('\n'));
-eval(['pickSnapshot','gexLevels','cpFromPayload','lvlUnified','levelsHtmlV2','levelsChartV2','lvlFmt','lvlSpanFmt','ifManLevels','ifChain','ifChainRows'].map(ex).join('\n'));
+eval(['pickSnapshot','gexLevels','cpFromPayload','lvlUnified','ifManLevels','ifChain'].map(ex).join('\n'));
 global.LVL_UI={open:true,chart:false}; global.IFMAN=null; global.LASTFEED={};
 global.IFC_KEY='gpts_if_chain_v1'; global.IFC_STALE_MIN=20;
 global.fmtLvl=x=>x==null?'–':String(x); global.fmtSpan=x=>x==null?'–':String(x);
@@ -110,37 +110,10 @@ global.STATE={SPY:{price:762.57, king:760}};
   ok(U.rows[0].k>=U.rows[1].k && U.rows[4].k>=U.rows[5].k,'still ordered by price',U.rows.map(r=>r.k));
 }
 // ---------- THE SCALE BUG: one instrument, no second-scale tail ----------
-{
-  FULL={ cr:775, crGex:9e8, ps:755, psGex:8e8, hvl:766, mag:760, ratio:0.36, n:250, nExps:12, ageMin:3 };
-  DTE0=null; PASSIVE=null;
-  global.dispIsFut=()=>true; global.dispR=()=>10.05;
-  const h=levelsHtmlV2('SPY');
-  ok(h.indexOf('LEVELS')>0,'the card renders');
-  ok(h.indexOf('SPY 7')<0 && h.indexOf('>SPY <')<0,'NO "SPY nnn" tail anywhere — the chart is on ES',h.indexOf('SPY'));
-  ok(h.indexOf('SPX ')<0,'and no SPX tail either');
-  ok(h.indexOf('7789')>0,'levels are converted to the chart instrument (775 x 10.05)',h.indexOf('7789'));
-  ok((h.match(/>CR</g)||[]).length===1,'CR appears exactly once',(h.match(/>CR</g)||[]).length);
-  ok((h.match(/>PS</g)||[]).length===1,'PS appears exactly once');
-  ok(h.indexOf('12 exps')>0,'the source is stated on the face',h.indexOf('12 exps'));
-  global.dispIsFut=()=>false; global.dispR=()=>1;
-}
-{
-  // and only ONE block is emitted — the v11.16 card stacked three
-  FULL={ cr:775, ps:755, hvl:766, mag:760, n:250, nExps:12 };
-  const h=levelsHtmlV2('SPY');
-  ok((h.match(/data-glvl="open"/g)||[]).length===1,'exactly one LEVELS header');
-  ok(h.indexOf('OURS · SPX')<0,'the broken SPX block is gone');
-  ok(h.indexOf('CALL\/PUT · derived')<0,'and the separate call/put block is gone — it IS the levels now');
-}
+// (v15.53) section removed: levelsHtmlV2 (the LEVELS card) archived (A-dead-else); lvlUnified — the live subject — is pinned above
+// (v15.53) section removed: levelsHtmlV2 (the LEVELS card) archived (A-dead-else); lvlUnified — the live subject — is pinned above
 // ---------- their numbers stay theirs ----------
-{
-  global.IFMAN={ cw:7900, pw:7640, zg:7660.22, mag:7645, scale:'SPY', t:Date.now() };
-  const h=levelsHtmlV2('SPY');
-  ok(h.indexOf('INSIDERFINANCE')>0,'an entered IF set still renders, separately');
-  ok(h.indexOf('font-style:italic')>0,'and is styled apart from ours');
-  global.IFMAN=null;
-  ok(levelsHtmlV2('SPY').indexOf('INSIDERFINANCE')<0,'and vanishes when cleared');
-}
+// (v15.53) section removed: levelsHtmlV2 (the LEVELS card) archived (A-dead-else); lvlUnified — the live subject — is pinned above
 // ---------- (v11.17.1) the two bugs the live card exposed ----------
 {
   // ZERO GAMMA must be the crossing NEAREST SPOT. Over the real 241-strike / 345-1180 chain the cumulative
@@ -155,21 +128,7 @@ global.STATE={SPY:{price:762.57, king:760}};
   ok(L.hvl>755 && L.hvl<766,'the FLIP chosen is the crossing NEAREST SPOT, not the first from the bottom',L.hvl);
   ok(Math.abs(L.hvl-762.57) < Math.abs(L.crossings[0]-762.57),'and it beats the first crossing on distance to spot',[L.hvl,L.crossings]);
 }
-{
-  // LABEL MERGE: two levels on one strike print as one row carrying both names, never one silently dropped.
-  // The live card showed CR / Mag / FLIP with NO put support at all, because PS and Mag were both 760.
-  FULL={ cr:765, crGex:1.7e8, ps:760, psGex:2.8e8, hvl:766, mag:760, n:241, nExps:34 };
-  DTE0=null; PASSIVE=null;
-  const U=lvlUnified('SPY');
-  const merged=U.rows.filter(r=>r.k===760)[0];
-  ok(!!merged,'the shared strike still has a row',U.rows.map(r=>r.id+':'+r.k));
-  ok(merged.id.indexOf('Mag')>=0 && merged.id.indexOf('PS')>=0,'and it carries BOTH labels',merged.id);
-  ok(U.rows.filter(r=>r.k===760).length===1,'exactly one row for that strike',U.rows.length);
-  ok(U.rows.some(r=>r.id==='CR'),'the other levels are untouched');
-  ok(merged.gex===2.8e8,'the merged row keeps the gamma it was given',merged.gex);
-  const h=levelsHtmlV2('SPY');
-  ok(h.indexOf('Mag·PS')>0 || h.indexOf('PS·Mag')>0,'and the merged label reaches the card',h.indexOf('·'));
-}
+// (v15.53) section removed: levelsHtmlV2 (the LEVELS card) archived (A-dead-else); lvlUnified — the live subject — is pinned above
 // ---------- (v11.19) A WALL NEEDS A SIDE WITH REAL GAMMA IN IT ----------
 {
   // Live 0DTE book: 169 strikes, call/put ratio 0.00 — essentially no call gamma on expiry day — and we
@@ -202,94 +161,18 @@ global.STATE={SPY:{price:762.57, king:760}};
   ok(L.cr!==null && L.ps!==null,'a two-sided book keeps both walls',[L.cr,L.ps]);
   ok(L.crSuppressed===null && L.psSuppressed===null,'and nothing is suppressed');
 }
-{
-  // and the card explains the gap rather than just omitting a row
-  FULL={ cr:null, crSuppressed:{k:792, share:0.4}, callShare:0.4, putShare:99.6,
-         ps:760, psGex:3e8, hvl:766, mag:760, n:169, nExps:1 };
-  DTE0=null; PASSIVE=null;
-  const U=lvlUnified('SPY');
-  ok(U.crSuppressed!==null,'the suppression reaches the unified read',U.crSuppressed);
-  ok(!U.rows.some(r=>r.id.indexOf('CR')>=0),'no CR row is printed',U.rows.map(r=>r.id));
-  const h=levelsHtmlV2('SPY');
-  ok(h.indexOf('% of book')>0,'and the card states WHY the level is absent',h.indexOf('% of book'));
-}
+// (v15.53) section removed: levelsHtmlV2 (the LEVELS card) archived (A-dead-else); lvlUnified — the live subject — is pinned above
 // ---------- (v11.19) THE PRICE ACTION OWNS THE CHART SCALE ----------
-{
-  // The live chart had one wall 30 points above everything else; the range stretched to reach it and the
-  // price line plus every real level collapsed into the bottom fifth.
-  global.closedCandles=()=>{ const out=[]; for(let i=0;i<40;i++) out.push({c:762+Math.sin(i/5)*1.2, h:763.5, l:761}); return out; };
-  FULL={ cr:765, crGex:1, ps:760, psGex:1, hvl:766, mag:760, n:241, nExps:34 };
-  DTE0={ cr:792, crGex:1, ps:762, psGex:1, n:169, nExps:1 };
-  PASSIVE=null;
-  const U=lvlUnified('SPY');
-  ok(U.rows.some(r=>r.k===792),'the far level is still IN the read',U.rows.map(r=>r.id+':'+r.k));
-  const svg=levelsChartV2('SPY',U);
-  ok(!!svg,'the chart renders');
-  ok(svg.indexOf('▲')>0,'the far level is drawn as an EDGE MARKER, not by stretching the axis',svg.indexOf('▲'));
-  ok(svg.indexOf('CR0')>0,'and it is still labelled so it is not lost');
-  ok(svg.indexOf('polyline')>0,'the price line is still drawn');
-  // the near levels must occupy real vertical space rather than being squashed together
-  const ys=(svg.match(/<line x1="0" y1="([\d.]+)"/g)||[]).map(m=>parseFloat(m.match(/y1="([\d.]+)"/)[1]));
-  ok(ys.length>=2,'several level lines are drawn',ys);
-  ok(Math.max.apply(null,ys)-Math.min.apply(null,ys) > 20,'and they are spread apart, not collapsed',ys);
-  global.closedCandles=()=>[];
-}
+// (v15.53) section removed: levelsChartV2 archived with the LEVELS card
 // ---------- (v11.20) A FLIP NOWHERE NEAR PRICE IS NOT A FLIP ----------
-{
-  // The live 0DTE set is essentially all put, so its cumulative only crosses out in the tail — 687.09
-  // against a spot of 762.57, ten percent away. A gamma flip is a statement about where price IS.
-  const R=[ {k:500,v:100,net:100}, {k:700,v:300,net:-300}, {k:900,v:50,net:50} ];
-  const L=cpFromPayload({levels:[{l:R.map(r=>({k:r.k,v:r.v,net:r.net,d:1}))}]}, 762.57);
-  ok(L.hvl===null,'a crossing far from price is NOT reported as the flip',L.hvl);
-  ok(L.hvlFar && L.hvlFar.k>500 && L.hvlFar.k<700,'the strike it would have named is kept for the explanation',L.hvlFar);
-  ok(L.hvlFar.pct>3,'along with how far away it was',L.hvlFar&&L.hvlFar.pct);
-  FULL={ cr:765, crGex:1, ps:760, psGex:1, hvl:null, hvlFar:{k:687.09,pct:9.9}, mag:760, n:169, nExps:1 };
-  DTE0=null; PASSIVE=null;
-  const h=levelsHtmlV2('SPY');
-  ok(h.indexOf('tail, not a flip')>0,'and the card says so rather than just omitting the row',h.indexOf('tail'));
-}
+// (v15.53) section removed: levelsHtmlV2 (the LEVELS card) archived (A-dead-else); lvlUnified — the live subject — is pinned above
 // ---------- (v11.20) THE 0DTE SET CAN CARRY THE CARD ALONE ----------
-{
-  // Right after a reload the full-chain set is still in flight and the passive feed has not arrived. The
-  // 0DTE set had already landed — and the card rendered BLANK, because dte0 was only ever an extra row.
-  FULL=null; PASSIVE=null;
-  DTE0={ cr:768, crGex:1, ps:760, psGex:1, hvl:763, mag:762, n:169, nExps:1, ratio:0.4 };
-  const U=lvlUnified('SPY');
-  ok(U!==null,'the card is NOT blank when only the 0DTE set has arrived',U);
-  ok(U.src==='0dte','and it names 0DTE as the source',U.src);
-  ok(U.rows.length===4,'all four levels come from it',U.rows.map(r=>r.id));
-  const ks=U.rows.map(r=>r.k);
-  ok(new Set(ks).size===ks.length,'and nothing is added to itself',ks);
-  const h=levelsHtmlV2('SPY');
-  ok(h.indexOf('0DTE only')>0,'the face says the read is today-only, never passing it off as structural',h.indexOf('0DTE only'));
-  // and the full chain still wins the moment it lands
-  FULL={ cr:775, crGex:1, ps:755, psGex:1, hvl:766, mag:760, n:241, nExps:34 };
-  const U2=lvlUnified('SPY');
-  ok(U2.src==='week','the weekly set takes precedence as soon as it exists',U2.src);
-  ok(U2.rows.some(r=>r.id.indexOf('CR0')>=0),'and the 0DTE walls come back as their own rows',U2.rows.map(r=>r.id));
-}
+// (v15.53) section removed: levelsHtmlV2 (the LEVELS card) archived (A-dead-else); lvlUnified — the live subject — is pinned above
 // ---------- (v11.22) NOTHING GOES MISSING SILENTLY ----------
 // Live report: "i dont see CR0 and PS". PS was present but buried inside a "Mag·PS" label with the magnet
 // first; CR0 was legitimately absent (0DTE book had no call-dominant strike above spot) but the row was
 // simply omitted, so it read as broken rather than as a finding.
-{
-  FULL={ cr:765, crGex:1, ps:760, psGex:2, hvl:null, mag:760, n:208, nExps:2, ratio:0.52 };
-  DTE0={ cr:null, crSuppressed:{k:792,share:0.2}, ps:762, psGex:1, n:169, nExps:1, ratio:0 };
-  PASSIVE=null;
-  const U=lvlUnified('SPY');
-  const merged=U.rows.filter(r=>r.k===760)[0];
-  ok(merged.id==='PS·Mag','the WALL is named first — "PS·Mag", not "Mag·PS"',merged.id);
-  ok(U.rows.some(r=>r.id==='PS0' && r.k===762),'PS0 keeps its own row when it differs',U.rows.map(r=>r.id));
-  ok(Array.isArray(U.absent),'an absent roster exists');
-  ok(U.absent.some(a=>a.id==='CR0'),'CR0 is ACCOUNTED FOR rather than omitted',U.absent);
-  ok(/all put/.test(U.absent.filter(a=>a.id==='CR0')[0].why),'with the reason it is missing',U.absent);
-  ok(!U.absent.some(a=>a.id==='PS'),'PS is NOT listed absent — it is present inside the merged row',U.absent);
-  ok(!U.absent.some(a=>a.id==='CR'),'nor CR');
-  ok(!U.absent.some(a=>a.id==='Mag'),'nor Mag');
-  const h=levelsHtmlV2('SPY');
-  ok(h.indexOf('PS·Mag')>0,'the merged label reaches the card wall-first',h.indexOf('·'));
-  ok(h.indexOf('all put')>0,'and the absent CR0 is explained on the face');
-}
+// (v15.53) section removed: levelsHtmlV2 (the LEVELS card) archived (A-dead-else); lvlUnified — the live subject — is pinned above
 {
   // when the 0DTE wall lands on the SAME strike as the weekly one, say so rather than printing it twice
   FULL={ cr:765, crGex:1, ps:760, psGex:1, hvl:766, mag:758, n:208, nExps:2 };
@@ -310,83 +193,14 @@ global.STATE={SPY:{price:762.57, king:760}};
   ok(U.absent.some(a=>a.id==='CR0' && /not loaded/.test(a.why)),'"not loaded" is distinguished from "none today"',U.absent);
 }
 // ---------- (v11.24) A DEGENERATE PAYLOAD MUST NOT LOOK AUTHORITATIVE ----------
-{
-  // After the close every frame reads net = +/-v, so there is no call/put split to read. The magnet still
-  // works (it only needs |net|), but the walls are magnitude-only and must be flagged as provisional.
-  const pure=(k,v)=>({k:k, v:v, d:1, net:v});
-  const j={ levels:[{t:1,s:762,l:[pure(755,1e8),pure(760,4e8),pure(765,2e8),pure(775,3e8)]}], expirations:['2026-08-20'] };
-  const L=cpFromPayload(j, 762.57);
-  ok(L!==null,'a degenerate payload still yields something — the magnet survives',!!L);
-  ok(L.degenerate===true,'but it is FLAGGED',L.degenerate);
-  ok(L.mag===760,'and the magnet is still the largest |net|',L.mag);
-  FULL=Object.assign({}, L, {nExps:1, n:4});
-  DTE0=null; PASSIVE=null;
-  const U=lvlUnified('SPY');
-  ok(U.degenerate===true,'the flag reaches the unified read',U.degenerate);
-  const h=levelsHtmlV2('SPY');
-  ok(h.indexOf('no split')>0,'and the CARD says so — a provisional level must never look measured',h.indexOf('no split'));
-}
-{
-  // a healthy payload carries no warning
-  const mixed=(k,v,n)=>({k:k, v:v, d:1, net:n});
-  const j={ levels:[{t:1,s:762,l:[mixed(755,1e8,6e7),mixed(760,4e8,3e8),mixed(765,2e8,-1e8),mixed(775,3e8,-2e8)]}], expirations:['2026-08-20'] };
-  const L=cpFromPayload(j, 762.57);
-  ok(L.degenerate===false,'a payload with real decomposition is not flagged',L.degenerate);
-  FULL=Object.assign({}, L, {nExps:1, n:4});
-  ok(levelsHtmlV2('SPY').indexOf('no split')<0,'and the card carries no warning');
-}
+// (v15.53) section removed: levelsHtmlV2 (the LEVELS card) archived (A-dead-else); lvlUnified — the live subject — is pinned above
+// (v15.53) section removed: levelsHtmlV2 (the LEVELS card) archived (A-dead-else); lvlUnified — the live subject — is pinned above
 // ---------- (v11.26) THEIR CHAIN LEVELS, from the companion script ----------
 // The companion userscript writes finished levels to localStorage on this origin; we only read. Values
 // below are the REAL ones it produced against their live page on 2026-08-20, spot 761.14 — verified
 // against their published figures: to-Friday CR 775 / PS 760 / Mag 760 / ratio 0.40, and 0DTE CR
 // suppressed at a 2.18% call share, which is exactly the case their page prints as N/A.
-{
-  const chain={ SPY:{ spot:761.14, asOf:Date.now(), today:20260820, friday:20260821,
-    dte0:{ exps:[20260820], lv:{cr:null, ps:760, mag:760, maxPain:763, ratio:0.02, pcOI:55.49,
-                                crSuppressed:{k:763, share:2.18}} },
-    toFri:{ exps:[20260820,20260821], lv:{cr:775, ps:760, mag:760, maxPain:758, ratio:0.4, pcOI:5.18,
-                                          crSuppressed:null} } } };
-  global.localStorage.setItem('gpts_if_chain_v1', JSON.stringify(chain));
-  const C=ifChainRows('SPY','toFri');
-  ok(C!==null,'the panel reads the companion script\'s output',!!C);
-  ok(C.rows.length===4,'CR, Mag, PS and Max Pain',C.rows.map(r=>r.id));
-  ok(C.rows[0].id==='CR' && C.rows[0].k===775,'their call wall, ordered by price',C.rows[0]);
-  ok(C.rows.some(r=>r.id==='MP*' && r.k===758),'Max Pain rides along, starred because it is OURS not their published figure',C.rows);
-  ok(C.lv.pcOI===5.18,'as does the put/call OI ratio',C.lv.pcOI);
-  const C0=ifChainRows('SPY','dte0');
-  ok(C0.rows.every(r=>r.id!=='CR'),'the 0DTE window names no call wall',C0.rows.map(r=>r.id));
-  ok(C0.lv.crSuppressed.share===2.18,'and reports the share that disqualified it',C0.lv.crSuppressed);
-
-  FULL={ cr:765, crGex:1, ps:760, psGex:1, hvl:766, mag:760, n:208, nExps:2, ratio:0.52 };
-  DTE0=null; PASSIVE=null;
-  const h=levelsHtmlV2('SPY');
-  ok(h.indexOf('CHAIN · IF')>0,'the card shows their lane',h.indexOf('CHAIN'));
-  ok(h.indexOf('font-style:italic')>0,'styled apart from ours — a DIFFERENT measurement, never a check on ours');
-  // freshness must be visible: a stale lane silently showing yesterday's walls is the worst case
-  const old=JSON.parse(JSON.stringify(chain)); old.SPY.asOf=Date.now()-45*60000;
-  global.localStorage.setItem('gpts_if_chain_v1', JSON.stringify(old));
-  ok(ifChainRows('SPY','toFri').stale===true,'a lane older than 20 minutes is flagged stale');
-  ok(levelsHtmlV2('SPY').indexOf('⚠')>0,'and the card warns',levelsHtmlV2('SPY').indexOf('⚠'));
-  // an error from the companion is surfaced, not silently treated as "no data"
-  global.localStorage.setItem('gpts_if_chain_v1', JSON.stringify({SPY:{err:'no __NEXT_DATA__ block', asOf:Date.now()}}));
-  ok(ifChain('SPY').err!=null,'a companion error is readable',ifChain('SPY').err);
-  ok(ifChainRows('SPY','toFri')===null,'and yields no rows rather than stale ones');
-  global.localStorage.removeItem('gpts_if_chain_v1');
-  ok(ifChain('SPY')===null,'no companion installed, no lane');
-}
-{
-  // AUTO WINS, HAND ENTRY IS THE FALLBACK — never both, or the card shows their levels twice
-  global.IFMAN={ cw:800, pw:760, zg:766, mag:null, scale:'SPY', t:Date.now() };
-  FULL={ cr:765, crGex:1, ps:760, psGex:1, hvl:766, mag:760, n:208, nExps:2 };
-  let h=levelsHtmlV2('SPY');
-  ok(h.indexOf('INSIDERFINANCE')>0,'with no companion, the hand-entered lane renders');
-  const chain2={ SPY:{ spot:761.14, asOf:Date.now(),
-    toFri:{ exps:[20260820], lv:{cr:775, ps:760, mag:760, maxPain:758, ratio:0.4, crSuppressed:null} } } };
-  global.localStorage.setItem('gpts_if_chain_v1', JSON.stringify(chain2));
-  h=levelsHtmlV2('SPY');
-  ok(h.indexOf('CHAIN · IF')>0,'with a companion, the AUTO lane renders');
-  ok(h.indexOf('INSIDERFINANCE')<0,'and the hand-entered lane steps aside — never both');
-  global.localStorage.removeItem('gpts_if_chain_v1'); global.IFMAN=null;
-}
+// (v15.53) section removed: levelsHtmlV2 (the LEVELS card) archived (A-dead-else); lvlUnified — the live subject — is pinned above
+// (v15.53) section removed: levelsHtmlV2 (the LEVELS card) archived (A-dead-else); lvlUnified — the live subject — is pinned above
 console.log('\n'+pass+' passed, '+fail+' failed');
 process.exit(fail?1:0);

@@ -17,7 +17,7 @@ function ex(n){const re=new RegExp('function\\s+'+n+'\\s*\\(','g');const m=re.ex
 // ---- recNode carries pos + abs ----
 global.livePctAt=function(){ return 42; };
 eval(ex('recNode'));
-var r1=recNode({k:780, pos:true, abs:1.25e9, role:'King', side:'above', pct:100, state:{label:'Steady'}});
+var r1=recNode({k:780, pos:true, abs:1.25e9, role:'King', side:'above', pct:100, state:{label:'Steady'}}, 'SPY');   // (v15.53, D2) sym is explicit
 ok(r1.pos===true,            'recNode records pos=true (+gamma)');
 ok(r1.abs===1.25e9,          'recNode records signed/abs magnitude');
 var r2=recNode({k:775, pos:false, abs:8.49e8, side:'below', pct:45});

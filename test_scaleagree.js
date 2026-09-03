@@ -13,12 +13,14 @@
 // ============================================================================================
 const fs=require('fs');
 const src=fs.readFileSync('./v10.js','utf8');
+// (v15.54) the four hot readers are memoised per frame in the panel; the harness runs them straight through
+global.rmemo=function(k,f){ return f(); }; global.rmemoNext=function(){};
 let pass=0, fail=0;
 const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+JSON.stringify(g):''));} };
 const grab=(n)=>{ const i=src.indexOf('function '+n+'('); if(i<0) return ''; let d=0,st=false;
   for(let j=i;j<src.length;j++){ const c=src[j];
     if(c==='{'){d++;st=true;} else if(c==='}'){d--; if(st&&d===0) return src.slice(i,j+1);} } return ''; };
-const LAD=grab('ifLadder').replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
+const LAD=grab('ifLadderRaw').replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
 
 ok(/scaleSrc/.test(LAD), 's1 ifLadder declares which scale it used');
 ok(/dispIsFut\(\)/.test(LAD), 's2 ...and it reads the same switch emBand does');
@@ -34,7 +36,7 @@ ok(/scaleSrc:\s*scaleSrc/.test(LAD), 's5b ...and scaleSrc is actually RETURNED, 
 ok(!/if\(dispIsFut\(\) && FUTMODE\.futPx!=null && FUTMODE\.futPx>0\)\{[^}]*\}\s*\}catch/.test(LAD),
    's6 the silent cash fallback is gone');
 // emBand's own switch is unchanged and still ratio-based
-const EB=grab('emBand').replace(/\/\/[^\n]*/g,'');
+const EB=grab('emBandRaw').replace(/\/\/[^\n]*/g,'');
 ok(/dispIsFut\(\)\?dispR\(\):1/.test(EB), 's7 emBand still scales by dispR() — the path ifLadder now matches');
 
 // ---- BEHAVIOUR: simulate the after-hours state and check the two agree -----------------------

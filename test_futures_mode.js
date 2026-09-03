@@ -41,7 +41,7 @@ global.FUTMODE={ chart:'SPY', fam:null, underlying:'SPY', r:1, live:true, approx
 global.FUT_TICK={ES:0.25,NQ:0.25};
 eval(['mul','fmtNum','futTick','fmtFut','futCfgLoad','futCfgSave','chartSymFromText','chartPxFromText',
       'futRatioStep','feedUnderlyingPx','futDetect','futModeCompute','futModeRefresh','futMode',
-      'activeSym','dispIsFut','dispR','dispVal','futMark','fmtLvl','fmtSpan',
+      'activeSym','dispIsFut','dispR','futMark','fmtLvl','fmtSpan',
       'futCandlesToUnderlying','futRawCandles','futUnderlyingPx','futRatioText','futUnavailableHtml'].map(ex).join('\n'));
 
 // ================= 1. SYMBOL DETECTION ============================================
@@ -127,11 +127,9 @@ ok(/fmtSpan\(Math\.abs\(px-L\.k\)\)/.test(DZ), '4l ...and so does the distance')
 ok(/fmtLvl\(leg\.magnet\.k\)/.test(ex('legVoice')) && /fmtLvl\(leg\.pbDetected\.k\)/.test(ex('legVoice')),
    '4m the READ speaks the magnet and the pullback node in the displayed instrument too');
 ok(/fmtLvl\(leg\.pbDetected\.k\)/.test(ex('legDecisionLine')), '4n ...and the decision line');
-ok(/fmtLvl\(kingK\)/.test(ex('kingHeaderBlock')) && /fmtLvl\(gkK\)/.test(ex('kingHeaderBlock')),
-   '4o the King strike and the gatekeeper strike convert');
-ok(/fmtLvl\(node\.k\)/.test(ex('kingHeaderBlock')), '4p ...and the SUP / RES magnets');
-ok(/fmtLvl\(d\.gvwap\)/.test(ex('driftLineHtml')) && /fmtLvl\(d\.vvwap\)/.test(ex('driftLineHtml')),
-   '4q the GEX / VEX drift centres convert too');
+// (v15.53) removed: kingHeaderBlock / driftLineHtml archived (A-dead-else, D-zero-callers)
+// (v15.53) removed: kingHeaderBlock / driftLineHtml archived (A-dead-else, D-zero-callers)
+// (v15.53) removed: kingHeaderBlock / driftLineHtml archived (A-dead-else, D-zero-callers)
 ok(/'R:R '\+rr\.toFixed\(1\)/.test(ex('rrText')), '4r R:R is a RATIO — it is unitless and must NOT be scaled');
 
 // ================= 5. THE UNDERLYING IS RECONSTRUCTED FROM THE FUTURES CHART ======
@@ -152,7 +150,7 @@ ok(/var raw=futRawCandles\(sym\)/.test(ex('refreshSym')), '5g refreshSym reads t
 // ================= 6. RECORDING STAYS IN THE UNDERLYING'S STRIKES =================
 // This is the whole safety property: the conversion is a DISPLAY concern. If any record
 // path converted, four days of learning would be in two different unit systems.
-['featRecordAll','featEnqueue','fcHistSample','nodeHistSample','tradeFrame','legStep'].forEach(function(fn){
+['featRecordAll','featEnqueue','fcHistSample','tradeFrame','legStep'].forEach(function(fn){
   ok(!/fmtLvl|dispVal\(/.test(ex(fn)), '6·'+fn+' does not convert — it records in '+'underlying strikes');
 });
 ok(/recording stays in|Recording stays in/i.test(src), '6z the invariant is written down in the source');

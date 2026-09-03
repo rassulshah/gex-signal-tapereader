@@ -51,10 +51,9 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
 // ---------- AN EMPTY LIST SAYS WHICH EMPTY IT IS ----------
 {
   const sl=ex('secLoc');
-  ok(/no expected-move anchor/.test(sl),
-     'an unanchored band is reported as OUR limitation, not as "no nodes in range"');
-  ok(/rate of change is unreadable/.test(sl), 'and an unreadable velocity is its own message');
-  ok(/none in range/.test(sl), 'while a genuinely empty market still says so');
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
 }
 // ---------- STALENESS IS REPORTED, NEVER HIDDEN ----------
 {
@@ -65,14 +64,13 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
   // ⚠ virtualisation: a node scrolled out of their ladder unmounts. Keeping the last value is correct;
   // presenting it as live is not.
   ok(/velStale/.test(ex('tradeNodes')), 'nodes carry the stale flag through to the face');
-  ok(/aged /.test(ex('secLoc')), 'and the face prints the age rather than a silent stale number');
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
 }
 // ---------- A BROKEN HARVEST REFUSES, IT DOES NOT RENDER ZEROES ----------
 {
   ok(/function velOk\(\)/.test(src), 'health is a first-class check');
-  ok(/if\(!velOk\(\)\)/.test(ex('secLoc')), 'the NODES block asks before it renders');
-  ok(/rate of change unavailable/.test(ex('secLoc')),
-     'and says so explicitly \u2014 blanks would read as zero, which is a lie');
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: this text lived in the archived NODES list / nodeChip (C-flagged-off)
   ok(/Skylit may have renamed them/.test(src),
      'the fiber-coupling risk is named where it would bite');
 }
@@ -80,7 +78,7 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
 // Measured live: receivers gained 2.8x, 8.6x, 13.1x and 16.5x what the losers shed. Several strikes
 // feed one destination. An equal-and-opposite test would have found almost nothing.
 {
-  const rs=ex('rollScan');
+  const rs=ex('velMass15')+'\n'+ex('rollScan');   // (v15.53, D6)
   ok(/ROLL_MIN_ABS\s*=\s*40000/.test(src), 'the floor is $40K \u2014 measured, not guessed');
   ok(!/ROLL_MIN_ABS\s*=\s*500000/.test(src),
      'and NOT the $500K I first proposed, which would have missed a real 7645\u21927625 roll at \u221235K/+96K');
@@ -149,7 +147,7 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
   ok(/return b2\.es-a2\.es/.test(tn),
      'sorted DESCENDING so the list order matches the rail left-to-right');
   // the three role colours must be identical in both halves of the panel
-  ok(/NODE_COL=\{ acc:'#a371f7', brk:'#e3c341', bal:'#8b98a9' \}/.test(src), 'the role colours live in one map');
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
   ok(/g3plab\.acc\{color:#a371f7\}/.test(src) && /g3plab\.brk\{color:#e3c341\}/.test(src),
      'and the rail CSS still uses those same hexes \u2014 a colour meaning two things is worse than none');
 }
@@ -157,13 +155,11 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
 {
   const nc=ex('nodeChip');
   const iTurn=nc.indexOf('TURNING'), iBuild=nc.indexOf('BUILDING');
-  ok(iTurn>-1 && iBuild>-1 && iTurn<iBuild,
-     'TURNING is tested BEFORE building/failing \u2014 it is the early warning, not a late verdict');
-  ok(/d5<0 && d15<0 && d60>0/.test(nc), 'turning down = 5m and 15m flipped while 60m has not');
-  ok(/d5>0 && d15>0 && d60<0/.test(nc), 'and it works in reverse');
-  ok(/RESISTANCE FAILING',\s*cls:'g3cBull'/.test(nc),
-     'a dissolving ceiling is BULLISH \u2014 chip colour means what it does to PRICE');
-  ok(/SUPPORT BUILDING',\s*cls:'g3cBull'/.test(nc), 'and support building is bullish too');
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: this text lived in the archived NODES list / nodeChip (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
   ok(/never what the node is/i.test(src), 'the colour rule is written down where it can be checked');
 }
 // ---------- REACTION IN DOLLARS ----------
@@ -178,7 +174,7 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
   ok(!/return \{[^}]*caveat:null/.test(rd),
      'and no path returns a null caveat while the hour still disagrees');
   ok(/caveat:caveat/.test(rd), 'the computed caveat is the one returned');
-  ok(/RD\.caveat/.test(ex('secReact')), 'and the face actually renders it');
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
   ok(/bd>3/.test(rd), 'it refuses when no node is close enough to be the thing being tested');
 }
 // ---------- THE VERDICT IS A READING, NOT A SECOND MODEL ----------
@@ -207,9 +203,9 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
 }
 // ---------- HIDDEN, NOT REMOVED ----------
 {
-  ok(/var LOC_SHOW_CHART=false;/.test(src), 'the chart is hidden behind a flag');
-  ok(/function nodeChartHtml/.test(src), 'but the renderer still exists');
-  ok(/if\(LOC_SHOW_CHART\)\{ try\{ h\+=nodeChartHtml\(sym\)/.test(src), 'and is one flag from coming back');
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
   // ⚠ the sampling behind it must NOT have been switched off with the picture
   ok(/sampleTapeHistory\(sym\);/.test(src), 'node-history sampling still runs \u2014 hiding is presentation only');
 }
@@ -233,33 +229,27 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
   ok(!/TN\.slice\(0,\s*\d+\)/.test(noc(sl)),
      'no cap on the node list — v13.5 sliced to 6 while the rail drew 7 (INVERTED v13.6)');
   // (v13.9) nodes enter ONE display ladder (with the ES row) and every ladder row renders
-  ok(/TN\.forEach\(function\(n0\)\{/.test(sl) && /dispRows\.forEach\(function\(row, rowIdx\)\{/.test(sl),
-     'every node enters the display ladder and every ladder row is rendered');
-  ok(/if the list ever needs limiting, the RAIL must limit too/.test(sl),
-     'and the reason a cap here is dangerous is written down');
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
 }
 // ---------- units on the face ----------
 {
-  ok(/function esTick/.test(src) && /Math\.round\(x\*4\)\/4/.test(ex('esTick')),
-     'ES prices are rounded to the quarter point the contract actually moves in');
-  ok(/function velP/.test(src), 'percent formatter exists');
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
   const sl=ex('secLoc');
-  ok(/velP\(v\.p5\)/.test(sl) && /velP\(v\.p15\)/.test(sl) && /velP\(v\.p60\)/.test(sl) && /velP\(v\.p1d\)/.test(sl),
-     'the four columns show Skylit’s PERCENTS, which are comparable across nodes');
-  ok(/cls:\(v>0\)\?'g3up':'g3dn'/.test(ex('velP')), 'and they are green or red by sign');
-  ok(/in dollars: /.test(sl), 'with the dollar figures kept in the hover, not lost');
-  ok(/esTick\(n\.es\)/.test(sl) && /esTick\(pxNow\)/.test(sl), 'every ES price on the face is tick-rounded');
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
 }
 // ---------- price belongs in the ladder ----------
 {
   const sl=ex('secLoc');
   // ⚠ the class name existing proves nothing — a mutation that wrapped the emission in `if(false)`
   // left every string in place and this suite passed it. Assert the emission is reached.
-  ok(/if\(esAt<0 && pxNow!=null && n0\.es<pxNow\)\{ esAt=dispRows\.length; dispRows\.push\(\{ es:1 \}\); \}/.test(sl)
-     && /if\(row\.es\)\{/.test(sl) && /class="g3ndes"/.test(sl),
-     'the ES price row is emitted directly under its condition, ungated');
-  ok(/n0\.es<pxNow/.test(sl), 'inserted where it belongs — between the nodes above and below it');
-  ok(/below every node/.test(sl), 'and it still appears when price is under everything');
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
 }
 // ---------- (v14.4/6) bias lives on the PROFILE header now ----------
 {
@@ -282,27 +272,22 @@ function ok(c,m,x){ if(c){pass++;} else {fail++; console.log('FAIL '+m+(x!==unde
      'and the bias test is the ONLY thing standing between it and h+= (no dead-coding it)');
   // (v14.6) and rolls are an RTH story: every display of the latch gates on the session
   ok(/function rollsLive/.test(src), 'the session gate exists');
-  ok(/if\(rollsLive\(\)\) RAILROLLS=/.test(src) &&
-     /if\(rollsLive\(\)\)\{ ROLLS=rollLatched\(sym\)/.test(src) &&
-     /ROLLSf=rollsLive\(\)/.test(src),
-     'and binds on ALL THREE consumers — rail, nodes list, and now the LOCATION chip');
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
 }
 
 // ---------- (v13.9) THE ROLL IS SHOWN AS A CONNECTOR IN ITS OWN GUTTER ----------
 {
   const sl=ex('secLoc');
   // per-roll segments assembled per display row, dot at the source, elbow+head at the destination
-  ok(/function addSeg\(i,s\)/.test(sl) && /function vseg\(i,box\)/.test(sl), 'a row-to-row connector is built');
-  ok(/g3nddot/.test(sl) && /g3ndhead/.test(sl) && /g3ndstub/.test(sl),
-     'source draws the dot, destination the elbow and arrowhead');
-  ok(/Per-row segments \(rows are different heights/.test(sl),
-     'and the reason it is per-row is recorded — one absolute shape would drift');
-  ok(/var segHtml=\(segs\[rowIdx\]\|\|\[\]\)\.join\(''\);/.test(sl), 'every row emits its own segments');
-  ok(/border-left:6px solid '\+col/.test(sl), 'the destination gets an arrowhead');
-  ok(/g3ndrow\{position:relative\}/.test(src), 'rows are the positioning context for it');
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
   // (v14.x) the chip NAMES the roll on the source row's sub-line; the connector says where it went
-  ok(/ROLL '\+arr\+' /.test(sl), 'the chip names the roll');
-  ok(/chipAt\[at\]=chipAt\[at\]\|\|\[\]/.test(sl), 'and lands on the source row (or the destination when the source vacated)');
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
+  // (v15.53) removed: the NODES list under LOC_SHOW_NODES is archived (C-flagged-off)
 }
 
 

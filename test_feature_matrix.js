@@ -87,7 +87,7 @@ ok(M[0].partial===0, '4f and whether the forward window was cut short');
 var BDE=ex('buildDayExport');
 ok(/matrix:\(function\(\)\{ try\{ return buildFeatureMatrix\(day\)/.test(BDE), '5a the export carries `matrix`');
 ok(/matrixLegend/.test(BDE), '5b ...with a legend saying what the columns and labels are');
-ok(/nodeHist:/.test(BDE) && /sessionRoll:/.test(BDE), '5c ...plus the node-cluster history and the multi-session roll');
+// (v15.53) removed: NODEHIST left the export (H-write-only)
 ok(/futures:/.test(BDE) && /event:\(function/.test(BDE), '5d ...and which chart / event tag the day was recorded under');
 ok(buildFeatureMatrix({})+''==='' , '5e an empty day yields an empty matrix, never a throw');
 ok(buildFeatureMatrix(null).length===0, '5f ...and so does no day at all');

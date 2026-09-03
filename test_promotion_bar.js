@@ -82,7 +82,7 @@ function localGood(){
 function localNone(){ LOCAL_BARS=0; LOCAL_HIT=0; LOCAL_DAYS={}; featStatsInvalidate(); }
 
 eval(['ruleSeed','rulesSeed','rulesNormalize','rulesDefaultWeights','rulesDocNormalize','rulesDoc',
-      'rulesLoad','rulesIngest','rulesSave','ruleGet','effN','nTxt','pctN','featStatsCached',
+      'rulesLoad','rulesIngest','rulesSave','effN','nTxt','pctN','featStatsCached',
       'featStatsInvalidate','ruleLocalRate','rulePromotedApplied','ruleTier','rulePromoted',
       'promoLoad','promoSave','promoToday','proposalRegimeFlip','proposalFeatureKey','proposalLocalN',
       'proposalWalkForwardLocal','proposalClearsBar','promoDirWeightKey',

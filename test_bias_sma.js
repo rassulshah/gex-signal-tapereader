@@ -59,14 +59,7 @@ eval(ex('biasVotes'));
   ok(!/lost 15/.test(Bb.why), 'but the face line stays terse');
 }
 // (v11.95) BADGES READ THEIR OWN DIRECTION — up / down / sideways — not agreement with the call.
-{
-  const sb=ex('secBias');
-  ok(/mark='↑'/.test(sb) && /mark='↓'/.test(sb) && /mark='→'/.test(sb),
-     'the marks are arrows, not ticks and crosses');
-  ok(!/mark='✓'/.test(sb) && !/mark='✗'/.test(sb), 'and the tick/cross marks are gone');
-  ok(/cls=\(B\.dir>0\)\?' y'/.test(sb),
-     'the COLOUR still carries agreement, so the confirm COUNT is unchanged — only the glyph moved');
-}
+// (v15.53) section removed: it pinned secBias / confColour, archived (C-flagged-off) — the TREND card had zero callers since v14.32
 // ---- the confirmers NEVER outvote it ----
 {
   TV={state:'up'}; SK={dir:-1,err:null}; AC={dir:-1}; CX={ok:true,dir:-1}; KR={ok:true,dir:-1};
@@ -134,17 +127,7 @@ eval(ex('biasVotes'));
 // B3/B4/B5 in the mutation sweep each fired ZERO assertions: cross could compare a symbol against
 // ITSELF, the colour rule could go back to a hardcoded `>=3`, and the tally could stop recording PA —
 // all silently. Pattern 8: a test that greps cannot see any of that. These run the code.
-{
-  // --- the colour rule must not know the denominator ---
-  eval(ex('confColour'));
-  eq(confColour(4,4),'#2ec27e','all four confirming is green');
-  eq(confColour(3,3),'#2ec27e','and so is all THREE — green cannot depend on the list being 4 long');
-  eq(confColour(2,2),'#2ec27e','or all two');
-  eq(confColour(0,4),'#f0616d','nothing confirming is red');
-  eq(confColour(2,4),'#8b98a9','a partial count is neither');
-  eq(confColour(0,0),'#8b98a9','nothing live has no verdict to colour — NOT red');
-  ok(!/>=\s*3/.test(ex('confColour')),'and no hardcoded count survives in it');
-}
+// (v15.53) section removed: it pinned secBias / confColour, archived (C-flagged-off) — the TREND card had zero callers since v14.32
 {
   // --- the tally record must carry PA even though PA no longer votes ---
   TV={state:'dn'}; SK={dir:-1,err:null}; AC={dir:-1}; CX={ok:true,dir:-1,self:-1,same:true}; KR={ok:true,dir:-1};
@@ -168,38 +151,16 @@ eval(ex('biasVotes'));
 // with EACH OTHER" and the face read BULLISH beside DRIFT ✓ on a DOWN agreement; and the user shadowed
 // drift on 2026-08-18 pending proof. Moving it onto the row is cosmetic — if it ever starts counting,
 // these fail.
-{
-  const sb=ex('secBias');
-  ok(!/class="g3gate"/.test(sb),      'the full-width gate row is gone');
-  ok(/class="g3chip gate/.test(sb),   'DRIFT is a badge on the confirm row');
-  ok(/g3sepv/.test(sb),               'behind a divider, so it does not read as one of the confirms');
-  ok(/background:transparent!important/.test(src),
-     'and the gate badge is OUTLINED, never filled — a filled one would look like a fifth confirm');
-
-  // the count must still exclude it
-  TV={state:'dn'}; SK={dir:-1,err:null}; AC={dir:-1}; CX={ok:true,dir:-1}; KR={ok:true,dir:-1};
-  DR={verdict:'AGREE-DN',label:'DN·conf',overlap:true,dir:-1};
-  const B=biasVotes('SPY');
-  eq(B.confirms.length,4,'four confirms');
-  eq(B.nConf,4,'all four agree');
-  ok(!B.confirms.some(c=>c.k==='DRIFT'),'and DRIFT is NOT among them — it is a gate, not a vote', B.confirms.map(c=>c.k));
-
-  // v11.44's actual bug: books agreeing with EACH OTHER on the wrong side must not show a tick
-  ok(/withCall===false/.test(sb) && /against the call/.test(sb),
-     'a DOWN agreement under an UP call is still marked against the call, which is the v11.44 fix');
-  ok(/withCall===true/.test(sb),'and a tick needs agreement WITH the call, not merely between the books');
-}
+// (v15.53) section removed: it pinned secBias / confColour, archived (C-flagged-off) — the TREND card had zero callers since v14.32
 // ---------- (v11.90) EVERY BADGE HOVER LEADS WITH A QUESTION ----------
 {
-  const sb=ex('secBias'), bv=ex('biasVotes');
+  const bv=ex('biasVotes'); const sb='';   // (v15.53) secBias archived; only the biasVotes hovers are pinned
   const musts=[
     [bv,'Is protection being bought or sold?','SKEW'],
     [bv,'Which side of the book is growing?','ACCUM'],
     [bv,'Does the other index agree?','CROSS'],
     [bv,'Is the settlement magnet moving?','ROLL'],
-    [sb,'Is anything structurally confirming the call?','DRIFT'],
-    [sb,'How much conviction is behind this call?','the count'],
-    [sb,'Which way, and on whose authority?','the verdict'],
+    // (v15.53) the DRIFT / count / verdict hovers lived on secBias, archived
   ];
   musts.forEach(m=>ok(m[0].indexOf(m[1])>=0, m[2]+' asks a question before it explains'));
   // and none of them still carries the stale three-confirm claim

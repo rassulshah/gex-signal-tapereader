@@ -131,6 +131,59 @@ the raw sign.** Skew got it. DEX did not, because DEX was never recorded — so 
 
 ## 2 · THE LESSON LOG — newest first, one entry per build
 
+### v15.54 — a mutant that survives for the wrong reason is a test that passes for the wrong reason
+
+**What happened.** Mutating `ruleTier` to ignore the gate left all 44 assertions green. The assertion for it
+(7f) was real, but its stub had five sessions — below the unlock n — so `ruleTier` returned ⚖ for the OTHER
+reason and the gate was never the deciding factor. The assertion could not distinguish "gated" from "not yet
+unlocked".
+
+**The rule.** *An assertion must put the code in a state where only the behaviour under test can produce the
+expected answer.* When two guards share an outcome, the fixture must satisfy every guard but the one being
+tested. The mutation run is what exposes this — a green suite never would.
+
+**Also this build, the third time in two days:** the house rule *a percentage is never rendered without its n*
+caught a phrase in my empty-state prose. It is a good rule and it does not care who wrote the sentence.
+
+### v15.53 — a suite that pins dead code is a suite that defends it
+
+**What happened.** The simplification archived ~4,300 lines that nothing rendered. 68 tests went red — not
+because anything broke, but because they asserted that the dead code EXISTED: "secBias SURVIVES", "the
+suppression panel exists", "the drift line renders". The 2026-08-18 audit had warned of exactly this and 17 of
+its 42 retirements were never carried out, in part because the suite would have objected.
+
+**The rule.** *A test pins behaviour, not presence.* An assertion that a function is DECLARED, or that a string
+appears in the source, protects nothing the operator can see — it only makes removal expensive. When a surface
+is retired, its tests go to the archive WITH it (`archive/v15.53/tests/`), in the same commit.
+
+**Two harness faults surfaced by the removal, both latent for months:**
+- `test_layout_v13` never closed `ok()`'s failure branch; the whole block sat inside the `else`. Every
+  assertion had always passed, so the recursion never ran. *A test whose failure path has never executed has
+  never been tested.*
+- `test_scaleagree` strips comments with a regex; a hover string containing `data/*.json` opened a phantom
+  block comment that swallowed 2,000 lines once a nearby `*/` was archived. *A naive stripper is a hidden
+  dependency on the byte layout of the whole file.*
+
+**And the tool that made 4,300 lines safe to remove:** `tools/archive-block.py` refuses to remove a block while
+ANY reference to it remains (comments excluded), and iterates to a fixed point so dead chains fall in order.
+It refused eleven times during this build; every refusal was a real reference I had to look at. **A removal
+tool that cannot say no is a delete key.**
+
+### v15.52 — an error handler must not lean on the thing that might be missing
+
+**What happened.** The two new Testing sections were wrapped in try/catch so a throw could not take
+the tab down. Both handlers reported the error through `g3esc(...)`. In a harness where `g3esc` was
+the missing symbol, the handler itself threw — the guard failed in exactly the case it existed for.
+`test_analysis_tabs` caught it.
+
+**The rule.** *A catch block uses nothing it cannot prove exists.* Escape inline, format inline, and
+report with primitives. The same family as the empty catch: a handler that can throw is a handler
+that can silently not run.
+
+**Also caught this build, by the house rule, in my own text:** a blurb rendered "100%" without its n.
+The rule is *a percentage is never rendered without its n* — and it applies to prose in a hover as
+much as to a cell. It now reads "100% (n=362 rows, 4 sessions)".
+
 ### v15.51 — a test that cannot fail is the most expensive test in the project
 
 **What happened.** The one feature with a validated backtest (`lodhod`, AUC 0.879) had a live scorer

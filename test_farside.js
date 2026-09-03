@@ -28,9 +28,7 @@ let NOWSEC = 11*3600+30*60;
 global.ctNowSecOfDay = () => NOWSEC;
 global.localStorage = { getItem:()=>null, setItem:()=>{} };
 eval(ex('fsBin')); eval(ex('fsNormalise')); eval(ex('fsBase'));
-eval(ex('fsTouch')); eval(ex('fsTime')); eval(ex('fsHazard')); eval(ex('fsClockMin'));
-
-// ---- the table itself -------------------------------------------------------------------------
+eval(ex('fsTouch')); eval(ex('fsTime')); eval(ex('fsHazard')); // ---- the table itself -------------------------------------------------------------------------
 const B = FS_BASE;
 ok(B && B.corpus && B.corpus.sessions >= 120,
    'b1 the baked base stands on a real corpus, and says how many sessions', B&&B.corpus&&B.corpus.sessions);

@@ -54,7 +54,7 @@ var PCB=ex('proposalClearsBar');
 ok(/loc\.effN>=PROMO_MIN_N/.test(PCB), '3e the promotion bar compares against EFFECTIVE n');
 ok(/nTxt\(loc\.n\)/.test(PCB), '3f ...and the refusal states both numbers, so the shortfall is inspectable');
 var RT=ex('ruleTier');
-ok(/ruleLocalRate\(id\)\.effN >= RULE_UNLOCK_N/.test(RT), '3g the ⚖ -> 📊 tier flip needs EFFECTIVE n too');
+ok(/lr\.effN >= RULE_UNLOCK_N/.test(RT) && /if\(lr\.gated\) return '⚖'/.test(RT), '3g the ⚖ -> 📊 tier flip needs EFFECTIVE n too — and (v15.54) a gated feature never flips');
 var RLR=ex('ruleLocalRate');
 ok(/out\.effN=effN\(out\.n\)/.test(RLR), '3h the local rate carries its own effN');
 
@@ -64,8 +64,8 @@ ok(/effN\(/.test(ex('tabTile')), '4b the headline tiles are gated on effN');
 ok(/recording — need/.test(ex('tabTile')), '4c ...and say what they are waiting for instead of showing a thin %');
 ok(/nTxt\(/.test(ex('proposalsQueueHtml')), '4d the proposals queue states n the same way');
 ok(/effN\(/.test(ex('unlockRowsHtml')), '4e "what unlocks when" counts effective observations');
-ok(/RULE_UNLOCK_N-x\.en/.test(ex('questionQueueHtml')) && /nTxt\(/.test(ex('questionQueueHtml')),
-   '4f the question queue counts the shortfall in effective observations too');
+// (v15.54) 4f pinned the question queue, archived — the register (preregHtml) reports n / minN per hypothesis instead
+ok(/n\+' \/ '\+H\.minN/.test(ex('preregHtml')), '4f the register reports n against the minimum n per hypothesis');
 // the monotone check refuses to speak on a sample of one 30-minute outcome
 var thin=gradeMonotone({ A:{n:5,hit:1}, B:{n:5,hit:4}, C:{n:5,hit:5} });
 ok(thin.ok===null, '4g the monotone check stays SILENT on eff n<2 in every grade — calling the fusion wrong off one outcome is the same fiat this release closes', ''+thin.ok);

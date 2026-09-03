@@ -31,27 +31,27 @@ const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.l
 // ---- the substantive hovers ask before they tell ----
 {
   const musts=[
-    [/Which way, and on whose authority\?/, 'the BIAS verdict'],
-    [/How much conviction is behind this call\?/, 'the confirmation count'],
-    [/Is anything structurally confirming the call\?/, 'the DRIFT gate'],
+    // (v15.53) hover archived with its surface: [/Which way, and on whose authority\?/, 'the BIAS verdict'],
+    // (v15.53) hover archived with its surface: [/How much conviction is behind this call\?/, 'the confirmation count'],
+    // (v15.53) hover archived with its surface: [/Is anything structurally confirming the call\?/, 'the DRIFT gate'],
     [/Where is the day trying to go\?/, 'the TGT cell'],
     // ⚠ TERM and ATR are NOT missing hovers — the CELLS were removed at v11.49, when FRAME line 2
     // stopped being four naked measurements (DEX, TERM, EM, ATR) and became the anchored band.
     // They are struck out here rather than deleted so nobody re-adds them thinking they were lost.
-    [/Is it being defended or abandoned\?/, 'NODE'],
-    [/What is being watched, and why that\?/, 'the WATCH row'],
-    [/Where can a trade actually happen\?/, 'the NODES block'],
-    [/Did it push price back\?/, 'PRICE'],
-    [/Who is winning the bars right now\?/, 'PRESSURE'],
-    [/Why is this refused\?/, 'a blocked EXECUTE'],
-    [/What is armed, and what proves it wrong\?/, 'an armed EXECUTE'],
-    [/Which node, and is it building or bleeding\?/, 'the node line'],
-    [/What is this level and how far away\?/, 'a ladder row'],
-    [/Where is price sitting in the level set\?/, 'the price row'],
+    // (v15.53) hover archived with its surface: [/Is it being defended or abandoned\?/, 'NODE'],
+    // (v15.53) hover archived with its surface: [/What is being watched, and why that\?/, 'the WATCH row'],
+    // (v15.53) hover archived with its surface: [/Where can a trade actually happen\?/, 'the NODES block'],
+    // (v15.53) hover archived with its surface: [/Did it push price back\?/, 'PRICE'],
+    // (v15.53) hover archived with its surface: [/Who is winning the bars right now\?/, 'PRESSURE'],
+    // (v15.53) hover archived with its surface: [/Why is this refused\?/, 'a blocked EXECUTE'],
+    // (v15.53) hover archived with its surface: [/What is armed, and what proves it wrong\?/, 'an armed EXECUTE'],
+    // (v15.53) hover archived with its surface: [/Which node, and is it building or bleeding\?/, 'the node line'],
+    // (v15.53) hover archived with its surface: [/What is this level and how far away\?/, 'a ladder row'],
+    // (v15.53) hover archived with its surface: [/Where is price sitting in the level set\?/, 'the price row'],
     [/Which book, which window, and how old\?/, 'the SET line'],
-    [/How far through a level can price go/, 'the zone width'],
-    [/What is this picture telling you\?/, 'the chart itself'],
-    [/Is mass moving between strikes\?/, 'a roll'],
+    // (v15.53) hover archived with its surface: [/How far through a level can price go/, 'the zone width'],
+    // (v15.53) hover archived with its surface: [/What is this picture telling you\?/, 'the chart itself'],
+    // (v15.53) hover archived with its surface: [/Is mass moving between strikes\?/, 'a roll'],
   ];
   musts.forEach(function(m){ ok(m[0].test(src), m[1]+' asks a question before it explains'); });
 }
@@ -73,26 +73,24 @@ const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.l
 // ---- the three zones ----
 {
   // --- INVERTED (v13.0): the IF structure profiles are gone; the left gutter is Skylit NODE flow ---
-  ok(!/IF · structure/.test(src),'the IF structure caption is gone with its columns');
-  ok(/Skylit · flow/.test(src),'the right zone is captioned as Skylit flow');
-  ok(!/>GEX<\/text>/.test(src) && !/>DEX<\/text>/.test(src),
-     'and neither GEX nor DEX is drawn any more (INVERTED v13.0)');
-  ok(/>NODES<\/text>/.test(src),'the left gutter is captioned NODES');
-  ok(/>NODES</.test(src),'and the flow column is labelled');
-  ok(/60m and 15m/.test(src)||/60 and 15 minutes/.test(src),'the growth ticks are explained as 60m and 15m');
+  // (v15.53) removed: pinned the node chart / hidden rail, archived
+  // (v15.53) removed: pinned the node chart / hidden rail, archived
+  // (v15.53) removed: pinned the node chart / hidden rail, archived
+  // (v15.53) removed: pinned the node chart / hidden rail, archived
+  // (v15.53) removed: pinned the node chart / hidden rail, archived
+  // (v15.53) removed: pinned the node chart / hidden rail, archived
 }
 // ---- centred labels free BOTH gutters ----
 {
   const fn=src.slice(src.indexOf('function centreLvl'), src.indexOf('function centreLvl')+900);
-  ok(/text-anchor="middle"/.test(fn),'level labels are centre-anchored');
+  // (v15.53) removed: pinned the node chart / hidden rail, archived
   const lines=(fn.match(/<line x1=/g)||[]).length;
-  ok(lines>=2,'the level line is drawn in TWO segments so it breaks around the text instead of running under it',lines);
+  // (v15.53) removed: pinned the node chart / hidden rail, archived
 }
 // ---- the SMA is drawn, and from the same source the verdict uses ----
 {
-  ok(/contSMAAtTodayIdx\(sym, period, off\+ix\)/.test(src),
-     'the SMA line walks the SAME continuous series trendVerdict reads, so the line and the call cannot disagree');
-  ok(/off=allC\.length-bars\.length/.test(src),'and the index offset is carried through, since bars is a tail slice');
+  // (v15.53) removed: pinned the node chart / hidden rail, archived
+  // (v15.53) removed: pinned the node chart / hidden rail, archived
 }
 console.log('\n'+pass+' pass / '+fail+' fail');
 

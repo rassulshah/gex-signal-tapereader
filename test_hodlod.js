@@ -10,6 +10,8 @@
 // ============================================================================================
 const fs = require('fs');
 const src = fs.readFileSync('./v10.js', 'utf8');
+// (v15.54) the four hot readers are memoised per frame in the panel; the harness runs them straight through
+global.rmemo=function(k,f){ return f(); }; global.rmemoNext=function(){};
 let pass = 0, fail = 0;
 const ok = (c, m, g) => { if (c) { pass++; console.log('PASS ' + m); }
                           else { fail++; console.log('FAIL ' + m + (g !== undefined ? ' -> ' + JSON.stringify(g) : '')); } };
@@ -47,7 +49,7 @@ eval(ex('hlBaseNormalise')); eval(ex('hodlodBase'));
 // proxy otherwise. It must be loaded, or hodLod throws into its own catch and every extremity
 // assertion below fails with an empty result rather than a wrong one.
 global.futBarsLoad = () => null;                 // no courier data in the harness -> SPY fallback
-eval(ex('measureBars'));
+eval(ex('measureBars')); eval(ex('measureBarsRaw'));;
 eval(ex('hlClock')); eval(ex('hlDur')); eval(ex('hlTier')); eval(ex('hodLod'));
 
 const OPEN = 8*3600+30*60;
@@ -264,10 +266,10 @@ function session(spec){   // spec: [{m, h, l}]  minutes-from-open
 
 // ---- 9 · IB60 is new, and IB30 survives it ---------------------------------------------------
 {
-  ok(/IB60_MIN_S\s*=\s*3600/.test(src), 'i1 IB60 is a 60-minute initial balance');
-  ok(/IB_MIN_S/.test(src) && /ib60Set/.test(src), 'i2 ...and IB30 is still computed beside it');
+  // (v15.53) removed: IB60 removed — measured worthless (AUC 0.655), zero readers
+  // (v15.53) removed: IB60 removed — measured worthless (AUC 0.655), zero readers
   const SL = ex('sessionLevels');
-  ok(/out\.ib60H=/.test(SL) && /out\.ibH=/.test(SL), 'i3 both are emitted from sessionLevels');
+  // (v15.53) removed: IB60 removed — measured worthless (AUC 0.655), zero readers
   ok(/out\.open=/.test(SL), 'i4 the session OPEN is captured — the OPEN chip needs it');
 }
 

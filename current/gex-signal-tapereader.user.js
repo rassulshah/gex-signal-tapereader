@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gex Signal Tapereader
 // @namespace    gpts
-// @version    15.51
+// @version    15.54
 // @description  Feed-driven GEX signal state machine for SPY on Skylit Atlas (trend slope, T1/T2 target ladder, structural read, accumulation, vertical grid, Phase-1 recorder)
 // @match        https://app.skylit.ai/atlas*
 // @grant        none
@@ -21,7 +21,6 @@ var CANDLE_S = 180;
 var STAGE_MAX_MS = 1800000;
 var ES_RATIO = 10.0676;
 var TODAY = null;
-var FEED_BASE = 'https://app.skylit.ai/tv/api/gex/levels';
 var MIN_STRENGTH = 20;
 var FEED_STALE_MS = 12000;
 
@@ -79,16 +78,11 @@ function trendLastLoad(){
     return true;
   }catch(e){ return false; }
 }
-var SMA_CONT_FLAG = { SPY:false, QQQ:false };  // (v10.23 C) set when the continuous SMA failed sanity and we fell back
-var TREND_RUNMIN = 3;
+// (v15.53) SMA_CONT_FLAG removed — written on the SMA fallback, never read.  // (v10.23 C) set when the continuous SMA failed sanity and we fell back
 var TREND_BANDX = 0.25;
-var TREND_SLOPEX = 0.15;
 var ACC_WINDOW = 10;        // intraday lookback in 3m bars (~30 min) for accumulation
 var ACC_SAMPLES = 8;        // max points sampled from the window
 var ACC_SAMPLE_STEP = 1;    // sample every bar for a dense series (dip logic needs density)
-var ACC_FLOOR_PCT = 20;     // ignore nodes weaker than this %King (noise floor)
-var ACC_NET = 8;            // min %King net move for legacy paths
-var ACC_ROWS = 4;
 // --- Accumulation trend detector (absolute-value based, dip-tolerant) ---
 var ACC_DROP_BUDGET = 0.28; // a node may give back up to 28% of its recent peak and still count as building
 var ACC_CONFIRM_DOWN = 2;   // consecutive down-samples required to flip Building -> Fading
@@ -106,12 +100,10 @@ var HIST_MAX = 130;          // (v11.32) STORE ~6.5h of 3m closes so the node ch
                              // HIST is in-memory only, so this refills from empty after a reload.
 var HIST_STEADY_BAND = 6;    // <= this net %-pt move over the window = Steady
 var HIST_RAPID_STEP = 10;    // >= this jump over the last 2 samples = Rapid
-var HIST_SHARP_STEP = 8;     // a sample-over-sample %King change >= this is SHARP, colored
 // --- Session peak/low per node (context beyond the visible strip) ---
 // A node that built 20->60 over 40 min then flattened reads 'Steady' on the
 // strip but is a heavily-loaded wall. We track today's peak/low %King per node
 // so a fading-but-large node can show a '↓peak' marker and feed target scoring.
-var PEAK_OFF_MARK = 8;       // show '↓peak' only when current is >= this many pts below session peak
 // --- Adaptive proximity (relative trap read #2) ---
 // 'Not far away' overhead/underfoot resistance is judged against how far a
 // normal 12-30 min move actually travels NOW, derived from recent 3m bar range,
@@ -127,8 +119,6 @@ var TS_W_PROXIMITY = 0.8;    // weight on nearness to price
 var TS_W_STRUCT = 1.2;       // structural bonus for King / Gatekeeper roles
 var TS_MIN_PCT = 20;         // a strike must be at least this %King to be a target candidate
 var GK_MAX_DIST = 5;
-var STATS_DAYS = 5;
-var READ_NEARX = 0.25;
 // --- Recorder (DATA layer feeding LLM analytics / prediction) ---
 var RECORDER_DAYS = 10;          // rolling trading days kept in localStorage
 // (v15.10) how many vendor velocity rows each snapshot keeps, biggest first. This is the DEPTH OF A
@@ -139,7 +129,6 @@ var VEND_MAX_ROWS = 90;
 var RECORDER_MAX_SNAPS = 200;    // hard cap of node-snapshots per symbol per day
 var RECORDER_MAX_EVENTS = 300;   // hard cap of outcome events per symbol per day
 var RECORDER_SYMS = ['SPY','QQQ'];
-var READ_APPRX = 0.75;
 
 var CFG = {
   // (v13.5) rail motion. ⚠ A REAL SETTING, not a debug flag: on a second monitor during a fast tape
@@ -255,7 +244,6 @@ function loadCfg(){
 }
 function saveCfg(){ try{ localStorage.setItem(CFG_KEY, JSON.stringify(CFG)); }catch(e){} }
 
-var LAST_OK = {SPY:0, QQQ:0};
 var STATE = {
   SPY: { price:null, king:null, walls:[], candles:[], cur:null, setups:{}, lastClosedB:0 },
   QQQ: { price:null, king:null, walls:[], candles:[], cur:null, setups:{}, lastClosedB:0 }
@@ -484,126 +472,9 @@ function onFeed(sym, feed, j, viaSelf){
 }
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.feedRejects=function(){ return FEED_REJECTS; };
-// ---- (v11.13) FEED SHAPE PROBE -------------------------------------------------------------
-// The question it exists to answer: can we compute InsiderFinance's levels from the SPXW lane we
-// already receive? That turns entirely on three facts about the payload, none of which should be
-// guessed at: how many strikes the lane carries and over what range, whether it has an EXPIRY
-// dimension or is one aggregate book, and whether gamma is ever split into CALL and PUT. The last
-// one is decisive — their Call Wall is defined on call gamma specifically, so without a split it is
-// not reproducible from any amount of our data.
-// Reports SHAPE, not contents: key names, counts, ranges and two sample rows. Never dumps the payload.
-function feedKeyScan(o, want, depth, path, hits){
-  depth=depth||0; path=path||''; hits=hits||[];
-  if(!o || typeof o!=='object' || depth>4 || hits.length>=12) return hits;
-  var ks=Object.keys(o);
-  for(var i=0;i<ks.length && hits.length<12;i++){
-    var k=ks[i], p=path?(path+'.'+k):k;
-    if(want.test(k)) hits.push({ path:p, type:typeof o[k], sample:(typeof o[k]==='object'?'[obj]':o[k]) });
-    var v=o[k];
-    if(!v || typeof v!=='object') continue;
-    if(Array.isArray(v)){
-      // FIRST AND LAST, not just [0]. The feed's `levels` array is a time series whose first snapshot is
-      // routinely empty — scanning index 0 alone reported "no call/put fields" off a payload that had them.
-      if(!v.length) continue;
-      var idxs=(v.length>1)?[0, v.length-1]:[0];
-      for(var z=0;z<idxs.length;z++) feedKeyScan(v[idxs[z]], want, depth+1, p+'['+idxs[z]+']', hits);
-    } else {
-      feedKeyScan(v, want, depth+1, p, hits);
-    }
-  }
-  return hits;
-}
-function feedShape(sym){
-  try{
-    var f=LASTFEED[sym||'SPY']; if(!f || !f.j) return { err:'no feed captured yet for '+(sym||'SPY') };
-    var j=f.j;
-    function laneShape(lane){
-      try{
-        var snaps=lane.levels||[]; var last=snaps[snaps.length-1]; var l=(last&&last.l)||[];
-        var ks=l.map(function(x){ return x.k; }).filter(function(x){ return typeof x==='number'; });
-        return { snapshots:snaps.length, strikes:l.length,
-                 kMin:ks.length?Math.min.apply(null,ks):null, kMax:ks.length?Math.max.apply(null,ks):null,
-                 strikeStep:(ks.length>2)?+(Math.abs(ks[1]-ks[0])).toFixed(2):null,
-                 rowKeys:l.length?Object.keys(l[0]):null,
-                 sample:l.slice(0,2),
-                 snapKeys:last?Object.keys(last):null };
-      }catch(e){ return { err:String(e) }; }
-    }
-    var out={
-      topKeys:Object.keys(j),
-      url:LASTFEEDURL||null,
-      native:laneShape(j),
-      derivedLanes:(j.derived||[]).map(function(d){
-        return { source:d.source, ratio:d.ratio, keys:Object.keys(d), shape:laneShape(d) }; }),
-      // THE decisive question: is gamma ever split call vs put anywhere in this payload?
-      callPutKeys:feedKeyScan(j, /call|put|cGex|pGex|cOi|pOi/i),
-      expiryKeys:feedKeyScan(j, /exp|dte|maturity/i)
-    };
-    out.verdict = out.callPutKeys.length
-      ? 'call/put fields PRESENT — check whether they are per-strike or totals'
-      : 'NO call/put fields anywhere in the payload — their Call Wall is not reproducible from this feed';
-    return out;
-  }catch(e){ return { err:String(e) }; }
-}
 window.__gptsDebug=window.__gptsDebug||{};
-window.__gptsDebug.feedShape=function(s){ return feedShape(s||'SPY'); };
-// ---- (v11.15) THE CALL/PUT DECOMPOSITION PROBE --------------------------------------------------
-// I claimed the call wall was unreachable because the feed carries no call/put split. That claim skipped
-// something: the feed's strike rows carry BOTH `v` and `net`. If `v` is TOTAL gamma (call + |put|) and
-// `net` is NET gamma (call - |put|), the split is pure algebra and nothing needs to be scraped:
-//        call  = (total + net) / 2          |put| = (total - net) / 2
-// This is exactly the identity an SPX gamma page's own header satisfies — Call 8.3 + |Put| 51.7 = Total 60.0,
-// and Call 8.3 - |Put| 51.7 = Net -43.4 — so they are almost certainly deriving it the same way.
-//
-// The test that settles it, per strike:
-//        |net| <  v   -> v is TOTAL and net is NET      -> DECOMPOSABLE, call wall computable
-//        |net| == v   -> net is just the signed v       -> no extra information, not decomposable
-//        |net| >  v   -> the fields mean something else -> do not guess, report and stop
-// Reports what it finds; it never assumes the good case.
-function callPutProbe(sym){
-  try{
-    var f=LASTFEED[sym||'SPY']; if(!f||!f.j) return { err:'no feed captured yet' };
-    var snaps=f.j.levels||[]; var last=snaps[snaps.length-1]; var l=(last&&last.l)||[];
-    if(!l.length) return { err:'no strike rows in the latest snapshot' };
-    var lt=0, eq=0, gt=0, noNet=0, rows=[];
-    for(var i=0;i<l.length;i++){
-      var n=l[i];
-      if(typeof n.v!=='number' || typeof n.net!=='number'){ noNet++; continue; }
-      var v=Math.abs(n.v), nt=n.net, an=Math.abs(nt);
-      var tol=Math.max(1e-6, v*1e-6);
-      if(an < v-tol) lt++; else if(an <= v+tol) eq++; else gt++;
-      // (v11.17) same sign correction as cpRows: put=(v+net)/2. Skylit's net is POSITIVE on a
-      // put-dominated strike. Verified against a published SPY page — this convention puts the put wall
-      // on 760, exactly their number; the other one produced 756 and a call-heavy book that was not real.
-      rows.push({ k:n.k, v:v, net:nt, call:+(((v-nt)/2)).toFixed(2), put:+(((v+nt)/2)).toFixed(2) });
-    }
-    var n=rows.length;
-    var decomposable = (n>0 && lt >= Math.max(3, Math.round(n*0.2)) && gt===0);
-    var out={ strikes:l.length, withNet:n, noNet:noNet,
-              absNetLessThanV:lt, absNetEqualsV:eq, absNetGreaterThanV:gt,
-              decomposable:decomposable, sample:rows.slice(0,6) };
-    if(gt>0){ out.verdict='|net| EXCEEDS v on '+gt+' strikes — v is not a total, so do NOT decompose. The fields mean something else.'; return out; }
-    if(!decomposable){ out.verdict='|net| equals v on every strike — net is just the signed magnitude, carrying no extra information. The call/put split is genuinely absent and the call wall is not computable.'; return out; }
-    // The good case: derive call and put per strike and place the walls their way.
-    var px=(STATE[sym||'SPY']||{}).price;
-    var cw=null,cwm=-1, pw=null,pwm=-1, sumC=0, sumP=0;
-    rows.forEach(function(r){
-      sumC+=r.call; sumP+=r.put;
-      if(px!=null && r.k>px && r.call>cwm){ cwm=r.call; cw=r.k; }
-      if(px!=null && r.k<px && r.put>pwm){ pwm=r.put; pw=r.k; } });
-    out.callWall=cw; out.callWallGex=(cwm<0?null:Math.round(cwm));
-    out.putWall=pw;  out.putWallGex=(pwm<0?null:Math.round(pwm));
-    out.totalCall=Math.round(sumC); out.totalPut=Math.round(sumP);
-    out.ratio=(sumP>0)?+(sumC/sumP).toFixed(2):null;
-    out.px=px;
-    out.verdict='DECOMPOSABLE — v is total, net is net. call=(v+net)/2, put=(v-net)/2. The CALL WALL is computable from this feed, and the call/put ratio can be cross-checked against their header.';
-    return out;
-  }catch(e){ return { err:String(e) }; }
-}
 window.__gptsDebug=window.__gptsDebug||{};
-window.__gptsDebug.callPut=function(s){ return callPutProbe(s||'SPY'); };
 
-window.__gptsDebug.feedShapeJSON=function(s){ try{ return JSON.stringify(feedShape(s||'SPY')); }catch(e){ return String(e); } };
 
 window.__gptsDebug.symbolsSeen=function(){ return SYM_SEEN; };
 // (v10.48) SELF-FETCH the non-displayed mode(s). Builds its URL by swapping
@@ -648,7 +519,7 @@ function ensureFeeds(){
   }catch(e){}
 }
 
-var GPTS_VERSION='15.51';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
+var GPTS_VERSION='15.54';   // (v11.0 audit) THE ONE VERSION STRING — header, footer, export, logs all read this
 console.log('[GPTS] v'+GPTS_VERSION+' part1 loaded');
 
 function fiberKeyOf(el){
@@ -1062,18 +933,6 @@ function replayLoadDay(date, cb){
     });
   }catch(e){ REPLAY.loading=false; REPLAY.err='could not read the repository'; if(cb) cb(0); }
 }
-function replayEnter(){
-  if(REPLAY.on) return;
-  REPLAY.on=true;
-  var start=null; try{ start=sessionDayStr(); }catch(e){}
-  replayLoadDays(function(days){
-    var d=start;
-    if(!days.length){ REPLAY.err='the repository holds no recorded days'; try{ render(); }catch(e2){} return; }
-    if(days.indexOf(d)<0) d=days[days.length-1];
-    replayLoadDay(d);
-  });
-  try{ render(); }catch(e3){}
-}
 // ⚠⚠⚠ (v15.45) A REPLAY PARKED ON YESTERDAY SAT THROUGH FOUR HOURS OF A LIVE SESSION.
 // Operator, 2026-09-02, market open: "are you recording .. market is open". Measured on his panel:
 //     strip   "◀ Tue 1 Sep ▶ … 13:57 ↺ REPLAY"    parked on the PREVIOUS day
@@ -1119,7 +978,6 @@ function replaySeek(i){
   REPLAY.idx=Math.max(0, Math.min(REPLAY.frames.length-1, i|0));
   try{ render(); }catch(e){}
 }
-function replayStep(n){ replaySeek(REPLAY.idx+n); }
 // seek by FRACTION of the session clock, then snap to the nearest frame that exists.
 // ⚠ The handle lands on a RECORDED bar, never between two — asking for 13:01 gives the 13:00 book,
 // labelled 13:00. A slider that reports a time no frame was taken at is inventing a reading.
@@ -1268,7 +1126,7 @@ function replayBarHtml(){
       '⚠ One frame per closed 3-minute bar: the handle snaps to a bar that EXISTS, so asking for 13:01 '+
       'gives you the 13:00 book, labelled 13:00. ⚠ The ticks are the frames actually recorded — gaps are '+
       'real, and mean the panel was not open. ⚠⚠ REPLAY NEVER WRITES: the recorder is blind to it, '+
-      'exactly as it is to a Skylit chart replay, so nothing replayed can ever reach data/*.json. '+
+      'exactly as it is to a Skylit chart replay, so nothing replayed can ever reach data/<day>.json. '+
       '⚠ A replayed ladder is as deep as the frame was stored — every node the ladder draws survives, '+
       'the grey minors may not.';
     var h='<div class="g3rp" data-grp="bar"'+g3tip(tip)+' style="display:flex;align-items:center;gap:8px;'+
@@ -1649,7 +1507,7 @@ function smaVal(sym, period){
     // liquid index intraday; if it is, the continuous series is suspect -> fallback.
     if(px==null || Math.abs(cs-px) <= mul(px,0.05)) return cs;
     var fb=todayOnlySMA(sym, period);
-    if(fb!=null){ SMA_CONT_FLAG[sym]=true; return fb; }
+    if(fb!=null){ return fb; }
     return cs;
   }
   return todayOnlySMA(sym, period);
@@ -1823,12 +1681,6 @@ function trendColorOf(state){
   if(state==='dn') return PAL.shortAccent;
   if(state==='up-broken'||state==='dn-broken') return PAL.amber;   // caution
   return PAL.sub;
-}
-// (v10.23 Issue G) compact state code for the trend badge.
-function trendCodeOf(state){
-  return state==='up'?'UP':state==='dn'?'DN':
-         state==='up-broken'?'UP-BRK':state==='dn-broken'?'DN-BRK':
-         state==='flat'?'SIDE':'\u2013';
 }
 // (v10.23 Issue G) TREND BADGE — matches the King badge chrome (same height + pill),
 // stacked two-line: TOP = state code (colored by state); BOTTOM = dominant-side
@@ -2468,8 +2320,8 @@ function gLevels(sym){
       var fsum=futureStructureSummary(sym);
       if(fsum){
         var nds=[];
-        (fsum.above||[]).forEach(function(r){ nds.push(recNode(r)); });
-        (fsum.below||[]).forEach(function(r){ nds.push(recNode(r)); });
+        (fsum.above||[]).forEach(function(r){ nds.push(recNode(r, sym)); });
+        (fsum.below||[]).forEach(function(r){ nds.push(recNode(r, sym)); });
         deriv=deriveFactors(nds, px, (typeof S.king==='number')?S.king:null);
       }
     }catch(e2){ deriv=null; }
@@ -2780,70 +2632,6 @@ function onDarkPool(url, j){
 // wicks would retire every level on its first volatile hour. A bar is a decision — the same
 // standard the price pill and the deflection tests already use.
 var DP_TOL_PCT=0.0004;      // 0.04% — about 0.30 SPY / 3 ES at today's prices: "at the level"
-var DP_ST_SHORT={ FRESH:'fresh', HOLDING:'held', RETESTING:'retest', BROKEN:'broke',
-                  RECLAIMED:'back', FLIPPED:'flip', UNKNOWN:'?' };
-function dpLifecycleOne(px, printedAt, bars, spot){
-  var out={ st:'UNKNOWN', why:'', touches:0, obsFrom:null, crossed:false };
-  try{
-    if(!(px>0) || !bars || !bars.length) { out.why='no price history in the window'; return out; }
-    var tol=px*DP_TOL_PCT;
-    var seq=[];
-    for(var i=0;i<bars.length;i++){
-      var b=bars[i];
-      if(!b || typeof b.time!=='number') continue;
-      if(printedAt!=null && b.time*1000 < printedAt) continue;   // only what happened AFTER the print
-      if(b.high==null || b.low==null || b.close==null) continue;
-      seq.push(b);
-    }
-    if(!seq.length){ out.why='no bars since the print'; return out; }
-    out.obsFrom=seq[0].time*1000;
-    var side0=(seq[0].close>=px)?1:-1, cur=side0, flips=0, lastFlipIdx=-1, off=true;
-    for(var j=0;j<seq.length;j++){
-      var c=seq[j];
-      var touching=(c.low<=px+tol && c.high>=px-tol);
-      if(touching){ if(off){ out.touches++; off=false; } }
-      else if(Math.abs(c.close-px)>tol*3) off=true;              // must clearly leave before a re-touch counts
-      var sd=(c.close>=px)?1:-1;
-      if(sd!==cur){ cur=sd; flips++; lastFlipIdx=j; }
-    }
-    out.crossed=(flips>0);
-    var nowSide=(spot!=null)?((spot>=px)?1:-1):cur;
-    var atNow=(spot!=null && Math.abs(spot-px)<=tol);
-    if(atNow){ out.st='RETESTING'; out.why='price is on it now'; return out; }
-    if(!out.crossed){
-      if(out.touches>0){ out.st='HOLDING';
-        out.why='tested '+out.touches+' time'+(out.touches>1?'s':'')+' and never closed through'; }
-      else { out.st='FRESH'; out.why='never tested since the print'; }
-      return out;
-    }
-    if(nowSide===side0){ out.st='RECLAIMED'; out.why='closed through, then closed back to its own side'; return out; }
-    // it is broken. Did price come back and get rejected FROM THE NEW SIDE? that is the flip.
-    var tAfter=0, offF=true;
-    for(var m=lastFlipIdx+1;m<seq.length;m++){
-      var f=seq[m];
-      if(f.low<=px+tol && f.high>=px-tol){ if(offF){ tAfter++; offF=false; } }
-      else if(Math.abs(f.close-px)>tol*3) offF=true;
-    }
-    if(tAfter>0){ out.st='FLIPPED';
-      out.why='broke, then tested '+tAfter+' time'+(tAfter>1?'s':'')+' from the other side and held \u2014 '+
-              (side0>0?'support became resistance':'resistance became support'); }
-    else { out.st='BROKEN'; out.why='closed through and has stayed on the far side'; }
-    return out;
-  }catch(e){ out.why='lifecycle unreadable'; return out; }
-}
-// every captured print for `sym`, with its lifecycle. Underlying scale throughout.
-function dpLifecycle(sym){
-  try{
-    var D=darkPoolLevels(sym); if(!D) return null;
-    var bars=null; try{ bars=futRawCandles(sym); }catch(e0){}
-    var spot=null; try{ spot=(STATE[sym]||{}).price; }catch(e1){}
-    return D.prints.map(function(pr){
-      var lc=dpLifecycleOne(pr.px, pr.at, bars, spot);
-      return { px:pr.px, size:pr.size, notional:pr.notional, at:pr.at,
-               st:lc.st, why:lc.why, touches:lc.touches, obsFrom:lc.obsFrom };
-    });
-  }catch(e){ return null; }
-}
 // the levels for one underlying, newest capture, in THAT UNDERLYING'S price scale (SPY/QQQ).
 // Conversion to the chart scale is the caller's job, because only the caller knows the frame.
 function darkPoolLevels(sym){
@@ -2857,7 +2645,7 @@ function darkPoolLevels(sym){
 window.__gptsDebug.dp=function(sy){ var s2=sy||activeSym()||'SPY'; return {
   state:{t:DP_STATE.t, n:DP_STATE.n, err:DP_STATE.err},
   syms:Object.keys(DP_STATE.bySym), levels:darkPoolLevels(s2),
-  lifecycle:(function(){ try{ return dpLifecycle(s2); }catch(e){ return 'ERR '+e; } })(),
+  lifecycle:'archived v15.53 (K-dark-pool)',
   raw:DP_STATE.raw }; };
 window.__gptsDebug.ifParse=function(h,s){ return ifParse(h,s||'SPY'); };
 
@@ -3144,36 +2932,6 @@ function tapeSync(sym){
   st.last=r;
   return r;
 }
-// Operator-facing suppression panel. Shown INSTEAD of the structural read.
-// (v11.0 audit) PARKED — no live caller; kept because test_tape_sync.js pins it.
-function outOfSyncBlock(r){
-  var why={ 'no-consensus':'the three King sources disagree',
-            'no-source':'no tape and no feed could be read',
-            'single-source':'only one King source is available',
-            'parse-invariant':'the tape parse failed an internal invariant' }[r.reason] || r.reason;
-  var rows='';
-  var names=['tag','feed','tapemax'];
-  var label={tag:'tape $K tag', feed:'raw feed', tapemax:'tape max %King'};
-  for(var i=0;i<names.length;i++){
-    var v=r.votes?r.votes[names[i]]:null;
-    var shown=(typeof v==='number')?v:'—';
-    var colr=(typeof v==='number' && r.king!=null && v===r.king)?PAL.longAccent:PAL.shortAccent;
-    rows+='<div style="display:flex;justify-content:space-between;font-size:10px;padding:1px 0">'+
-      '<span style="color:'+PAL.sub+'">'+label[names[i]]+'</span>'+
-      '<span style="color:'+colr+';font-weight:600">'+shown+'</span></div>';
-  }
-  return '<div style="border:1px solid '+PAL.shortAccent+';border-radius:6px;padding:7px 8px;margin:4px 0;background:rgba(240,97,109,0.07)">'+
-    '<div style="color:'+PAL.shortAccent+';font-weight:700;font-size:11px;letter-spacing:0.3px">'+
-      '⚠ STRUCTURAL READ SUPPRESSED</div>'+
-    '<div style="color:'+PAL.sub+';font-size:10px;margin:3px 0 5px 0;line-height:1.35">'+
-      'App is out of sync with the tape — '+why+'. Node strengths, King and targets are '+
-      'hidden rather than shown wrong.'+
-      (r.recurring?' <span style="color:'+PAL.amber+';font-weight:600">RECURRING ('+r.streak+' consecutive).</span>':'')+
-    '</div>'+ rows +
-    '<div style="color:'+PAL.sub+';font-size:9px;margin-top:5px;opacity:0.8">'+
-      'Diagnose: __gptsDebug.syncReport()</div>'+
-    '</div>';
-}
 // (v10.56 PART E) THE BANNER NEEDS A SECOND OPINION. One failed reconciliation is a
 // poll landing mid-repaint, not an out-of-sync app: the banner flashed on and off all
 // session and stopped meaning anything. It now needs SYNC_GRACE consecutive failed
@@ -3217,13 +2975,6 @@ function parseKingDollarsK(txt){
   var m=(''+txt).match(/\$([\d,]+)K/);
   return m ? Math.abs(parseInt(m[1].replace(/,/g,''),10)) : null;
 }
-// (v10.44) Sign of the King's own $ figure — candidate direct polarity source
-// (negative dollars = -γ). Returned separately; evaluated vs walls-derived pol.
-// (v11.0 audit) PARKED — no live caller; kept because test_magnet_v1044.js pins it.
-function parseKingDollarSign(txt){
-  var t=(''+txt).trim(); if(!/\$[\d,]+K/.test(t)) return null;
-  return /^[\-\u2212]/.test(t) ? false : true;
-}
 // (v10.38 TAPE-SYNC FIX) %King for one tape value cell.
 // Observed live cell shapes (Skylit Atlas, 2026-08-14):
 //   "45%"               -> 45    %King only (growth chip not rendered)
@@ -3251,15 +3002,6 @@ function tapeCellPct(txt){
   if(m[1]==='-'||m[1]==='\u2212') v=-v;                 // R2: keep the sign
   return v;
 }
-// Retained for compatibility; no longer used by the tape reader.
-// (v11.0 audit) PARKED — no live caller; kept because test_tapeking.js pins it.
-function firstStrengthPct(txt){
-  if(!txt) return null;
-  txt=(''+txt).replace(/\s+/g,' ').trim();
-  var re=/([+\-\u2212]?)(\d{1,3})%/g, m, val=null;
-  while((m=re.exec(txt))!==null){ if(m[1]==='') val=parseInt(m[2],10); }
-  return val;
-}
 // Tape's King strike (what Skylit marks with the $K cell), for classification.
 function tapeKingStrike(sym){
   var tp=tapeMap(sym);
@@ -3272,7 +3014,11 @@ function tapeKingStrike(sym){
 // judged on, so the tag and the visible history can never disagree.
 var HIST = { SPY:{}, QQQ:{} };
 // Session peak/low %King per node, keyed by strike, reset per trading day.
-var PEAK = { SPY:{}, QQQ:{} };
+// (v15.53, D1) WAS `var PEAK` — the SAME NAME as the day-peak tracker declared at v14.0 further down the
+// file. One IIFE, one scope: the later declaration won, `peakLoad()` reassigned it at every boot and
+// day-roll, and this session peak/low store was silently wiped. The only duplicated top-level var in
+// 31,000 lines, found by the 2026-09-03 audit. Renamed; the day-peak tracker keeps `PEAK`.
+var SESSPEAK = { SPY:{}, QQQ:{} };
 // Live (between-close) %King per node, so the RAPID flag can read the current
 // tape value even though the strip only advances on 3m closes.
 var LIVEPCT = { SPY:{}, QQQ:{} };
@@ -3282,7 +3028,7 @@ function sampleTapeHistory(sym){
   if(!tp || !tp.pct) return;
   var now=Date.now();
   var store=HIST[sym] || (HIST[sym]={});
-  var pk=PEAK[sym] || (PEAK[sym]={});
+  var pk=SESSPEAK[sym] || (SESSPEAK[sym]={});
   var lv=LIVEPCT[sym] || (LIVEPCT[sym]={});
   var dk=todayKey();
   for(var key in tp.pct){
@@ -3457,7 +3203,7 @@ function nodeHistory(sym, k){
 }
 // Session peak/low for a strike (context beyond the visible strip). #2
 function nodePeak(sym, k){
-  var pk=PEAK[sym]; if(!pk) return null;
+  var pk=SESSPEAK[sym]; if(!pk) return null;
   var p=pk[k.toFixed(2)];
   return p || null;
 }
@@ -3969,6 +3715,11 @@ var ROLL_MIN_ABS   = 40000;    // dollars moved over 15m before a change counts 
 var ROLL_MAX_DIST  = 25;       // SPX points between source and destination
 var ROLL_MIN_RATIO = 0.40;     // receiver must take at least this share of what the loser shed
 
+// (v15.53, D6) THE ONE DEFINITION OF "MASS MOVED IN 15 MINUTES". rollScan had it right since v15.18;
+// nevScan re-implemented the pairing inline on the SIGNED d15 and inherited the exact negative-gamma
+// inversion v15.18 fixed — every ROLL event in the NEV ledger on the short side of the book named
+// source and destination backwards. Both now call this.
+function velMass15(v){ return Math.abs(v.cur) - Math.abs(v.cur - v.d15); }
 function rollScan(strikes){
   var out=[];
   try{
@@ -3991,7 +3742,7 @@ function rollScan(strikes){
       if(e && e.v && typeof e.v.d15==='number' && typeof e.v.cur==='number') rows.push(e.v);
     }
     // the 15-minute change in MASS: |now| - |15m ago|. Positive = size arrived here.
-    function m15(v){ return Math.abs(v.cur) - Math.abs(v.cur - v.d15); }
+    var m15=velMass15;   // (v15.53) ONE definition, shared with nevScan — see velMass15
     for(var a=0;a<rows.length;a++){
       var src=rows[a], sm=m15(src);
       if(!(sm < -ROLL_MIN_ABS)) continue;               // must be SHEDDING MASS, materially
@@ -4764,7 +4515,7 @@ function recorderDay(db){
   return day;
 }
 // Compact one node to the fields analytics needs (short keys to save space).
-function recNode(r){
+function recNode(r, sym){
   return {
     k:r.k,
     // (v10.39 DATA KEYSTONE) polarity + signed magnitude. Unblocks Academy Art.4
@@ -4776,7 +4527,9 @@ function recNode(r){
     role:r.role||null,
     side:r.side||null,                                   // 'above'=resistance, 'below'=support
     pct:(typeof r.pct==='number')?r.pct:null,            // %King (feed/wall)
-    tp:(function(){ var v=livePctAt('SPY', r.k); return (typeof v==='number')?v:null; })(), // tape %King (signed) — best-effort
+    // (v15.53, D2) WAS livePctAt('SPY', r.k) — every QQQ snapshot recorded SPY's tape %King. The
+    // symbol now travels in; a caller that omits it gets null, never the wrong book's number.
+    tp:(function(){ if(!sym) return null; var v=livePctAt(sym, r.k); return (typeof v==='number')?v:null; })(),
     st:(r.state&&r.state.label)||null,                   // Building/Steady/Fading
     net:(r.state&&typeof r.state.net==='number')?r.state.net:null,
     rapid:!!(r.state&&r.state.rapid),
@@ -4857,8 +4610,8 @@ function recordNodeSnapshot(sym){
     var fs=(sym==='SPY')?futureStructureSummary('SPY'):futureStructureSummary(sym);
     if(!fs) return;
     var nodes=[];
-    (fs.above||[]).forEach(function(r){ nodes.push(recNode(r)); });
-    (fs.below||[]).forEach(function(r){ nodes.push(recNode(r)); });
+    (fs.above||[]).forEach(function(r){ nodes.push(recNode(r, sym)); });
+    (fs.below||[]).forEach(function(r){ nodes.push(recNode(r, sym)); });
     // ---- SIGNAL VECTOR (v10.15 DATA layer): capture the full derived read at
     // this closed bar so the end-of-day LLM can score prediction quality of
     // EVERY signal, not just node structure. Each is wrapped in try/guard so a
@@ -5039,7 +4792,6 @@ function recordNodeSnapshot(sym){
     var _hasBook=!!(snap && snap.tri && snap.vend && snap.vend.rows && snap.vend.rows.length &&
                     typeof snap.px==='number' && snap.px>0);
     if(!_hasBook){
-      try{ RECORDER._skipped=(RECORDER._skipped||0)+1; }catch(eSk){}
       return;
     }
     var db=recorderLoad(); var day=recorderDay(db);
@@ -5225,7 +4977,6 @@ function irtColor(r,g,b){ return (r<<16)+(g<<8)+b; }   // RGB 0x00RRGGBB (empiri
 // (v11.86) only draw a successor on the chart once it is prominent enough to mean something. The
 // project's SPY backtest used 60% as the threshold where the crown rolls 76% of the time; the same cut is
 // reused here so the chart and the doctrine agree. ⚖ HAND-SET, and the 76% is a SPY number.
-var SUCC_CHART_PCT = 60;
 var IRT_COLORS={
   king:  irtColor(242,204,96),   // gold
   gate:  irtColor(255,255,255),  // white
@@ -5276,7 +5027,6 @@ function irtRatio(){
 // NQ chart. Chain: live FUTMODE (persisted) → last-good ≤14d → the settings' manual number →
 // NQ_RATIO const. '~' marks anything but live — measured live 2026-08-26: r=41.191 on NQ1
 // 29270.25 / QQQ 710.505 (the guessed 41.9 default had the lines ~480 pts off-screen).
-var SPY_DERIV_MAX_MS=300000;   // (v14.19) ⚖ hand-set: how old a derived snapshot may ship (' ~' past fresh)
 var IRT_NQRATIO_KEY='gpts_irt_nqratio_v1';
 function irtNqRatio(cfgI){
   try{ if(FUTMODE && FUTMODE.fam==='NQ' && FUTMODE.r>1 && FUTMODE.live){
@@ -5942,7 +5692,7 @@ function pipeReviewTry(P, day, allowPrior){
 }
 function pipeReviewLine(j){
   try{
-    var s=j&&(j.headline||j.brief||j.preOpen||j.preOpenBrief||j.line||j.why||j.worked||j.summary);
+    var s=j&&(j.preopen||j.headline||j.brief||j.preOpen||j.preOpenBrief||j.line||j.why||j.worked||j.summary);   // (v15.54) schema 2 leads with `preopen`
     if(!s) return null;
     s=String(s).replace(/\s+/g,' ').trim();
     return s.length>140 ? (s.slice(0,137)+'…') : s;
@@ -6306,19 +6056,23 @@ function nevScan(sym){
         else if(v.d60<0)                       out.push({ ty:'DISSIP',  w:why });
       }
       // ROLL — source shedding into a nearby destination
-      if(typeof v.d15==='number' && v.d15 < -ROLL_MIN_ABS){
-        var best=null;
+      // (v15.53, D6) mass, not the signed delta — see velMass15
+      var sm15=(typeof v.d15==='number' && typeof v.cur==='number')?velMass15(v):0;
+      if(sm15 < -ROLL_MIN_ABS){
+        var best=null, bestM=0;
         for(j=0;j<TN.length;j++){
           var m=TN[j]; if(!m.vel || m.k===n.k) continue;
           if(Math.abs(m.k-n.k)>NEV_MAXD) continue;
-          if(!(m.vel.d15 > ROLL_MIN_ABS)) continue;
-          if(m.vel.d15/Math.abs(v.d15) < NEV_RATIO) continue;
-          if(!best || m.vel.d15>best.vel.d15) best=m;
+          if(typeof m.vel.d15!=='number' || typeof m.vel.cur!=='number') continue;
+          var dm15=velMass15(m.vel);
+          if(!(dm15 > ROLL_MIN_ABS)) continue;
+          if(dm15/Math.abs(sm15) < NEV_RATIO) continue;
+          if(!best || dm15>bestM){ best=m; bestM=dm15; }
         }
         if(best){
           out.push({ ty:'ROLL', w:why,
                      to:best.k, toEs:best.es, toPct:best.pct, toCur:Math.round(best.vel.cur||0),
-                     got:Math.round(best.vel.d15||0), lost:Math.round(v.d15||0),
+                     got:Math.round(bestM), lost:Math.round(sm15),
                      dir:(best.k>n.k)?'up':'dn',
                      // ⚠ context only. F6: the destination being largest adds ~7 points, and the
                      // CONTROL showed the pairing itself adds nothing over plain growth. Recorded so
@@ -6444,7 +6198,7 @@ function recordOutcomeEvent(sym, s){
       var near=null, best=1e9, all=(fs.above||[]).concat(fs.below||[]);
       for(var i=0;i<all.length;i++){ var d=Math.abs(all[i].k-s.strike); if(d<best){best=d; near=all[i];} }
       ctx={ inplay:(fs.inPlay?{k:fs.inPlay.k,role:fs.inPlay.role,side:fs.inPlay.side}:null),
-            nearStrikeNode:(near?recNode(near):null) };
+            nearStrikeNode:(near?recNode(near, sym):null) };
     }
     var ev={
       t:Date.now(),
@@ -6945,7 +6699,8 @@ function buildDayExport(dateKey){
     // (v10.42) FEEDBACK LOOP payload: the projection scorecard + auto tuning
     // recommendations ride in the export so the end-of-day LLM review consumes
     // them with zero extra steps. proj per-bar records live in snaps[].proj.
-    projReview:(function(){ try{ var sc=projScorecard(); return {scorecard:sc, recommendations:projRecs(sc)}; }catch(ePE){ return null; } })(),
+    // (v15.53, D7) projReview REMOVED from the export: it scored `snap.proj`, produced by the projected
+    // King chart that stopped rendering at v14 — the nightly was being handed scores for a dead surface.
     // (v10.54, audit 5) the export version was frozen at '10.15' for 39 releases, so no
     // consumer could tell which panel wrote a file. It is the real version now.
     version:VERSION_STR(),
@@ -6978,13 +6733,14 @@ function buildDayExport(dateKey){
     // (v10.49 B/H) the feature-registry layer: per-bar records under snaps[].feat, the
     // resolved outcome queue here, plus the operator's take/pass log.
     feat:day.feat||{},
+    defl:day.defl||{},           // (v15.54) the EVENT-level deflection ledger — what H5 is scored on
     act:day.act||{},
     // (v10.55 PART F) the same records, ENGINE-READY: one row per bar per symbol.
     matrix:(function(){ try{ return buildFeatureMatrix(day); }catch(eMx){ return []; } })(),
     matrixLegend:'one row per (sym, bar); columns are feature.field of every recorded input/vote plus regime/session/model; labels dirHit (direction travelled DIR_PTS), deflHit (node/pullback held), contHit (roll continued), tgtHit (frame target before invalidation), with MFE/MAE',
     // (v10.55 PART A/D) the per-bar node-cluster history the leg engine reads, and the
     // multi-session rolling read derived from FCHIST.
-    nodeHist:(function(){ try{ var o={}; RECORDER_SYMS.forEach(function(s){ o[s]=nodeHistOf(s); }); return o; }catch(eNh){ return null; } })(),
+    // (v15.53) nodeHist left the export with NODEHIST (H-write-only)
     // (v11.0) THE NODE LEDGER — every node's life, touches, reactions, influence (layer 1)
     ledger:(function(){ try{ var o={}; RECORDER_SYMS.forEach(function(s){ o[s]=ledgerExport(s); }); return o; }catch(eLd){ return null; } })(),
     sessionRoll:(function(){ try{ var o={}; RECORDER_SYMS.forEach(function(s){ o[s]=sessionRoll(s); }); return o; }catch(eSr){ return null; } })(),
@@ -7066,7 +6822,6 @@ function zoomApply(){
     if(!PANEL) return;
     PANEL.style.zoom = (UIZOOM===1) ? '' : String(UIZOOM);
     var lbl=document.getElementById('gpts-zoomlbl')
-      || (pipOpen() && PIPWIN.document.getElementById('gpts-zoomlbl'))
       || (winOpen() && WINWIN.document.getElementById('gpts-zoomlbl'));
     if(lbl) lbl.textContent=Math.round(UIZOOM*100)+'%';
   }catch(e){}
@@ -7087,8 +6842,6 @@ function zoomReset(){ UIZOOM=1; zoomSave(); zoomApply(); }
 // backgrounding Atlas — the entire point of popping out — would silently stop the ladder refreshing while
 // the panel kept displaying its last values. `panelVisible()` therefore treats an open PiP window as
 // visible, and every visibility check goes through it.
-var PIPWIN=null, PIPHOST=null;
-function pipOpen(){ return !!(PIPWIN && !PIPWIN.closed); }
 
 // ---- (v12.6) OPEN IN A NORMAL WINDOW — because Chrome will NOT let a PiP window grow taller ----
 // Measured live 2026-08-24 on the user's machine: `resizeTo()` on a Document PiP window needs user
@@ -7123,8 +6876,7 @@ function winBoxSave(){
 function winToggle(){
   try{
     if(winOpen()){ try{ WINWIN.close(); }catch(e){} return; }
-    // ⚠ ONE PANEL, ONE HOME. PANEL is a single DOM node; it cannot be in two windows at once.
-    if(pipOpen()){ try{ PIPWIN.close(); }catch(e){} }
+    // ⚠ ONE PANEL, ONE HOME. (v15.53) PiP is archived (L-pip); the window is the one pop-out.
     var box=winBoxLoad();
     var w=window.open('', 'gptsPanelWin',
       'popup=yes,width='+box.w+',height='+box.h+',left='+box.x+',top='+box.y);
@@ -7148,7 +6900,7 @@ function winToggle(){
     }catch(eW){}
     try{ d.title='Tapereader'; }catch(eT){}
     try{ if(d.body) d.body.innerHTML=''; }catch(eB){}
-    pipCopyStyles(d);
+    popCopyStyles(d);
     WINHOST={ parent:PANEL.parentNode, next:PANEL.nextSibling,
               h:PANEL.style.height, w:PANEL.style.width };
     d.body.appendChild(PANEL);
@@ -7177,13 +6929,11 @@ function winRestore(){
 function panelVisible(){
   // ⚠ (v12.6) THE WINDOW COUNTS TOO. Our own code returns early when Atlas is hidden, so a panel
   // living in a pop-out would keep PAINTING while the ladder silently stopped refreshing behind it.
-  try{ if(pipOpen() || winOpen()) return true; }catch(e){}
+  try{ if(winOpen()) return true; }catch(e){}
   try{ return document.visibilityState==='visible'; }catch(e2){ return true; }
 }
-function pipSupported(){
-  try{ return !!(window.documentPictureInPicture && window.documentPictureInPicture.requestWindow); }catch(e){ return false; }
-}
-function pipCopyStyles(doc){
+// (v15.53) was pipCopyStyles — shared by the window pop-out, which is the one that stays
+function popCopyStyles(doc){
   try{
     // the PiP window is a separate document with no stylesheets of its own
     var sheets=document.styleSheets;
@@ -7253,56 +7003,6 @@ function pipCopyStyles(doc){
       '#gpts-grip{display:none !important}';
     doc.head.appendChild(base);
   }catch(e){}
-}
-function pipToggle(){
-  try{
-    if(pipOpen()){ try{ PIPWIN.close(); }catch(e){} return; }
-    if(winOpen()){ try{ WINWIN.close(); }catch(e){} }   // one panel, one home
-    if(!pipSupported()){
-      alert('This Chrome does not expose Document Picture-in-Picture.\n\nUse Chrome 116+ , or drag the tab out into its own window.');
-      return;
-    }
-    // (v11.35) Size from the SCREEN, not from the panel's current width. Opening at ~369px on a 2032px
-    // monitor was the whole complaint: the window could be dragged bigger, but nothing in it grew.
-    var r=PANEL?PANEL.getBoundingClientRect():{width:440,height:700};
-    var sw=(screen&&screen.availWidth)||1440, sh=(screen&&screen.availHeight)||900;
-    var wantW=Math.round(Math.max(420, Math.min(900, Math.max(r.width||440, sw*0.26))));
-    var wantH=Math.round(Math.max(600, Math.min(sh-80, sh*0.88)));
-    window.documentPictureInPicture.requestWindow({ width:wantW, height:wantH }).then(function(w){
-      PIPWIN=w;
-      pipCopyStyles(w.document);
-      // remember where the panel came from so it goes back to exactly that spot
-      PIPHOST={ parent:PANEL.parentNode, next:PANEL.nextSibling,
-                 h:PANEL.style.height, w:PANEL.style.width };   // (v11.96) remember the in-page size
-      w.document.body.appendChild(PANEL);
-      // (v11.96) CLEAR THE IN-PAGE INLINE SIZE. restoreSize() writes an explicit height for the
-      // in-page panel; carried into the pop-out it overrides the stylesheet and pins the panel to the
-      // old height inside a window that has nothing to do with it. The pop-out starts at content
-      // height and the grip can then set its own.
-      try{ PANEL.style.height=''; PANEL.style.width=''; }catch(eSz){}
-      w.addEventListener('pagehide', pipRestore);
-      try{ zoomApply(); }catch(eZ){}
-      try{ render(); }catch(e2){}
-    }).catch(function(err){
-      // requestWindow rejects without a user gesture, and that is the usual cause
-      try{ console.warn('[GPTS] pop-out refused:', err && err.message); }catch(e3){}
-    });
-  }catch(e){}
-}
-function pipRestore(){
-  try{
-    if(PANEL && PIPHOST && PIPHOST.parent){
-      if(PIPHOST.next && PIPHOST.next.parentNode===PIPHOST.parent) PIPHOST.parent.insertBefore(PANEL, PIPHOST.next);
-      else PIPHOST.parent.appendChild(PANEL);
-      // the inline geometry the panel had before it was moved is restored by restorePos/restoreSize
-      PANEL.style.position='fixed';
-      // (v11.96) the in-page size the pop-out cleared
-      try{ if(PIPHOST.h) PANEL.style.height=PIPHOST.h; if(PIPHOST.w) PANEL.style.width=PIPHOST.w; }catch(eR){}
-      try{ restorePos(); restoreSize(); zoomApply(); }catch(e1){}
-    }
-  }catch(e){}
-  PIPWIN=null; PIPHOST=null;
-  try{ render(); }catch(e2){}
 }
 function buildPanel(){
   if(document.getElementById('gpts-panel')) return;
@@ -7405,14 +7105,7 @@ function buildPanel(){
   zIn.addEventListener('mousedown', function(e){ e.stopPropagation(); });
   zIn.addEventListener('click', function(e){ e.stopPropagation(); zoomBy(ZOOM_STEP); });
   right.appendChild(zIn);
-  var pip=document.createElement('span');
-  pip.id='gpts-pip';
-  pip.innerHTML='&#8599;';
-  pip.title='Pop the panel out into its own always-on-top window, which you can drag to another monitor. The Atlas tab must stay open — it is what captures the feed — but it no longer has to be the tab you are looking at.';
-  css(pip,{cursor:'pointer', color:PAL.sub, fontSize:'14px', lineHeight:'1', padding:'0 2px'});
-  pip.addEventListener('mousedown', function(e){ e.stopPropagation(); });
-  pip.addEventListener('click', function(e){ e.stopPropagation(); pipToggle(); });
-  right.appendChild(pip);
+  // (v15.53) the PiP button is archived (L-pip) — his decision: keep the window pop-out only.
   var win=document.createElement('span');
   win.id='gpts-win';
   win.innerHTML='&#10697;';
@@ -7984,10 +7677,6 @@ function frameNum(x){
 }
 function dispIsFut(){ try{ return !!(FUTMODE && FUTMODE.fam && FUTMODE.ok); }catch(e){ return false; } }
 function dispR(){ try{ return (dispIsFut() && FUTMODE.r>0) ? FUTMODE.r : 1; }catch(e){ return 1; } }
-// A LEVEL as the user should read it on THIS chart. In SPY/QQQ mode this is exactly
-// fmtNum, so nothing about the cash panel changes.
-// (v11.0 audit) PARKED — no live caller; kept because test_futures_mode.js pins it.
-function dispVal(x){ if(x==null) return null; return dispIsFut()? mul(x, dispR()) : x; }
 function futMark(){ return (dispIsFut() && FUTMODE.approx) ? '≈' : ''; }
 function fmtLvl(x){
   if(x==null) return '–';
@@ -8099,13 +7788,6 @@ var STEP_TEXT = {
     '<p>By playing <b>direct deflections off key nodes</b>, you\u2019re trading <b>ahead of the reshuffle</b>.</p>'+
     '<div class="gs-sub">Our rule</div><p>Accumulation only <b>attracts</b> price to a node. We make <b>no</b> deflect/break call \u2014 the breakout tracker resolves the outcome (broke \u2191 / broke \u2193 / held / false break).</p>'}
 };
-// small circular icon; data-gstep drives the delegated click handler in the panel.
-// (v11.0 audit) PARKED — no live caller; kept because PARKED kingBlock chain pins it.
-function stepIcon(n, extraStyle){
-  return '<span class="gs-ico" data-gstep="'+n+'" title="Step '+n+' \u2014 click for the method" '+
-    'style="width:16px;height:16px;border-radius:50%;border:1px solid '+PAL.sub+';color:'+PAL.sub+';'+
-    'font-size:9.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;'+(extraStyle||'')+'">'+n+'</span>';
-}
 var STEP_POP_OPEN = 0;   // which step's popover is open (0 = none)
 function ensureStepPop(){
   if(!elBody) return;
@@ -8158,7 +7840,6 @@ function wireStepIcons(){
 
 
 
-function sep(){ return '<div style="border-top:1px solid '+PAL.line+';margin:6px 0"></div>'; }
 
 function segBtn(val, label, tip){
   var on = CFG.dir===val;
@@ -8238,7 +7919,7 @@ function cfgHtml(){
     '<span>Compact node cells</span>'+
     '<input type="checkbox" class="gpts-compact" '+cmpChk+' style="cursor:pointer"></div>';
   var lbChk = (CFG.lastBook!==false) ? 'checked' : '';
-  html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 4px" title="AFTER THE CLOSE, SHOW THE LAST SESSION\u2019S BOOK. Skylit drops the expired chain when the market closes, so the ladder becomes the NEXT expiry with every rate of change at zero \u2014 the panel goes flat, not blank. With this on, the last healthy reading of the closed session is served instead, badged in the footer with the time it froze. \u26a0 The recorder is blind to it by construction, so nothing latched can ever reach data/*.json. Turn it OFF to watch the overnight book build.">'+
+  html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:2px 4px" title="AFTER THE CLOSE, SHOW THE LAST SESSION\u2019S BOOK. Skylit drops the expired chain when the market closes, so the ladder becomes the NEXT expiry with every rate of change at zero \u2014 the panel goes flat, not blank. With this on, the last healthy reading of the closed session is served instead, badged in the footer with the time it froze. \u26a0 The recorder is blind to it by construction, so nothing latched can ever reach data/<day>.json. Turn it OFF to watch the overnight book build.">'+
     '<span>Show last session\u2019s book after the close</span>'+
     '<input type="checkbox" class="gpts-lastbook" '+lbChk+' style="cursor:pointer"></div>';
   var _mk=(CFG.mkt||'SPX');
@@ -8478,14 +8159,6 @@ function trendStateInfo(){
   else if(v.state==='na') label='NA';
   else label='No trend';
   return { label:label, color:col, verdict:v, word:trendWordOf(v.state) };
-}
-function trendBadgeHtml(){
-  var info=trendStateInfo();
-  var v=info.verdict||{};
-  var counter = v.win ? (v.up+'/'+v.win) : '';
-  var slopeTxt = (typeof v.slope==='number') ? ((v.slope>0?'+':'')+(Math.round(mul(v.slope,100))/100)) : 'n/a';
-  var tip='Trend state from closes vs SMA'+CFG.trendMA.SPY+' over the last '+(v.win||0)+' closed 3m bars plus SMA slope. Counter = closes on the dominant side ('+counter+'). Slope '+slopeTxt+'.';
-  return '<span title="'+tip.replace(/"/g,'')+'" style="color:'+info.color+';font-weight:700;font-size:10px;padding:1px 8px;border:1px solid '+info.color+';border-radius:20px;background:rgba(255,255,255,0.02)">'+info.label+'</span>';
 }
 
 // #1 CONFLUENCE TARGET SCORING.
@@ -9325,13 +8998,6 @@ function nodeOutcome(sym, k){
   if(broke) return (best.dir==='long')?'up':'dn';           // clean break in its direction
   return null;                                              // still forming (BO only) -> unresolved
 }
-function outcomeMarker(o){
-  if(o==='up')   return {txt:'broke \u2191', col:PAL.longAccent};
-  if(o==='dn')   return {txt:'broke \u2193', col:PAL.shortAccent};
-  if(o==='held') return {txt:'held', col:PAL.gold};
-  if(o==='false')return {txt:'FBO', col:PAL.amber};   // (v10.34) false breakout
-  return null;
-}
 // (v10.31) BARNEY DETECTOR: a dense region of NEGATIVE-gamma nodes. Skylit Academy
 // (SOURCE OF TRUTH, heatseeker-patterns): a dense purple/negative region is NOT a
 // Pika Cloud — "a different animal — Barney." Where a Pika Cloud pins/chops, a
@@ -9614,171 +9280,11 @@ function nodeMapModel(sym){
   return out;
 }
 
-// ---- NODE MAP renderer (v10.24) ----
-// Two-sided price-anchored ladder: resistance above (highest first) -> SPOT -> support
-// below. Strongest floor/ceiling get a ★; the King gets 👑; the emphasis side (travel
-// direction) is subtly highlighted. Each row shows strike, %King, state arrow, and
-// its reaction verdict. Verdict color = directional meaning (locked rule).
-function nmVerdictColor(v, side){
-  // Bounce off a floor(below) = bullish(green); off a ceiling(above) = bearish(red).
-  // Break-through DOWN through support = bearish(red); UP through resistance = bullish(green).
-  if(v==='Bounce')        return side==='below'?PAL.longAccent:PAL.shortAccent;
-  if(v==='Break-through') return side==='below'?PAL.shortAccent:PAL.longAccent;
-  if(v==='Pullback')      return PAL.blue;
-  return PAL.sub;   // Forming
-}
-// (v10.25 Step 4) white castle-gate (portcullis) SVG icon, stroke tunable.
-// (v10.47) small castle-gate for row pills (the gatekeeper icon is ALWAYS this arch, never a door)
-function gateSvgSm(stroke){
-  return '<svg width="12" height="11" viewBox="0 0 20 18" fill="none" stroke="'+stroke+'" stroke-width="1.8" stroke-linecap="round" style="vertical-align:middle">'+
-    '<path d="M3 16 V7 a7 7 0 0 1 14 0 V16"/><line x1="3" y1="16" x2="17" y2="16"/>'+
-    '<line x1="7" y1="16" x2="7" y2="6"/><line x1="10" y1="16" x2="10" y2="4.2"/><line x1="13" y1="16" x2="13" y2="6"/>'+
-    '<line x1="4.5" y1="10" x2="15.5" y2="10"/></svg>';
-}
 function gateSvg(stroke){
   return '<svg width="18" height="16" viewBox="0 0 20 18" fill="none" stroke="'+stroke+'" stroke-width="1.4" stroke-linecap="round" style="vertical-align:middle">'+
     '<path d="M3 16 V7 a7 7 0 0 1 14 0 V16"/><line x1="3" y1="16" x2="17" y2="16"/>'+
     '<line x1="7" y1="16" x2="7" y2="6"/><line x1="10" y1="16" x2="10" y2="4.2"/><line x1="13" y1="16" x2="13" y2="6"/>'+
     '<line x1="4.5" y1="10" x2="15.5" y2="10"/></svg>';
-}
-// (v10.26-prep Step 5) NODE STATUS = the doc's flow read. Building->Acm (green,
-// strengthening), Fading->Diss (red, weakening), Steady->grey. RAPID = the doc's
-// 'Reshuffling' state: append \uD83D\uDD25 (rapid Acm) / \u2744 (rapid Diss).
-function nodeStatusTag(L){
-  // (v10.44) STATE = Acm / Dec / Steady (Diss RENAMED Dec; Acm kept — Step 5 doctrine)
-  // + the node's ▲/▼% vs its own session open (same convention as %KCH). Threshold-
-  // colored: |chg|>=15 bright, else dim. Measured note in the hover: Building walls within
-  // 1.5 strikes were reached only 15% of the time (n=167) vs Fading 23% (📊 4d study).
-  var lab = L.state==='Building' ? 'Acm' : (L.state==='Fading' ? 'Dec' : 'Steady');
-  var col = L.state==='Building' ? PAL.longAccent : (L.state==='Fading' ? PAL.shortAccent : PAL.sub);
-  var reshuf='';
-  if(L.rapid){
-    var ic = (L.rapidDir>0) ? '\uD83D\uDD25' : '\u2744';
-    reshuf=' <span title="Reshuffling \u2014 rapid exposure change (new structure forming)." style="font-size:9px">'+ic+'</span>';
-  }
-  var tip = (lab==='Acm'?'Accumulation \u2014 dealers building here \u2192 stronger magnet. \uD83D\uDCCA Acm walls within 1.5 strikes were reached only 15% of the time in 30m (n=167) \u2014 the sturdiest walls.':
-            (lab==='Dec'?'Decumulation \u2014 dealers closing here \u2192 weakening magnet. \uD83D\uDCCA Fading walls reached 23% (n=99) \u2014 the leakiest.':
-            'Steady \u2014 holding, no net build/decay. \uD83D\uDCCA reached 20% (n=508).'));
-  var chgHtml='';
-  if(typeof L.chg==='number' && L.chg!==0){
-    var big=Math.abs(L.chg)>=15;
-    var ccol=L.chg>0?PAL.longAccent:PAL.shortAccent;
-    chgHtml=' <span title="'+(L.chg>0?'\u25b2':'\u25bc')+Math.abs(L.chg)+'% \u2014 this node\u2019s magnitude vs its first reading today (quote-page %change convention). \u00b115% = big.'+'" style="color:'+ccol+';font-size:8px;font-weight:'+(big?'800':'600')+';opacity:'+(big?'1':'.65')+'">'+(L.chg>0?'\u25b2':'\u25bc')+Math.abs(L.chg)+'%</span>';
-  }
-  // (v10.47 A.3, approved mockup) plain text, no pill: "Acm ▲12%" / "Dec ▼8%" / "Steady"
-  return '<span title="'+tip+'" style="color:'+col+';font-size:8.5px;font-weight:800;white-space:nowrap">'+lab+'</span>'+chgHtml+reshuf;
-}
-// (v10.33) NODE LIFECYCLE tag — Skylit Academy: Fresh (target these) / Tested / Delivered
-// (graveyard) / Decaying. Shows tap count + the Academy tap-reaction probability. FACTUAL
-// (how many times price has tested it), never a buy/sell call.
-function nodeLifecycleTag(L){
-  var lc=L.lifecycle; if(!lc || !lc.stage) return '';
-  var map={
-    Fresh:    { lab:'Fresh',  col:PAL.longAccent, tip:'FRESH \u2014 untested this session; full strength (~80% reaction on 1st tap). Academy: target fresh positioning.' },
-    Tested:   { lab:'Tested', col:PAL.gold,       tip:'TESTED \u2014 tapped once, held; partially absorbed (~66% on the 2nd tap).' },
-    Delivered:{ lab:'Used',   col:PAL.sub,        tip:'DELIVERED \u2014 tapped '+lc.taps+'\u00d7 (graveyard); reaction largely spent (~33% on a 3rd tap). Academy: do NOT target used levels.' },
-    Decaying: { lab:'Decay',  col:PAL.shortAccent,tip:'DECAYING \u2014 weakening with no interaction (quiet death); positioning rolling off.' }
-  };
-  var m=map[lc.stage]; if(!m) return '';
-  // (v10.35) compact DOT form: single letter, % + full note in the hover (not on the face).
-  var letter={Fresh:'F',Tested:'T',Delivered:'U',Decaying:'D'}[lc.stage]||'?';
-  var pr=(lc.prob!=null)?(' \u00b7 ~'+lc.prob+'% reaction'):'';
-  // (v10.47 A.3, approved mockup) compact "● T2" (letter + tap count), no circle border
-  return '<span title="'+m.tip.replace(/"/g,'')+pr+'" style="color:'+m.col+';font-size:8px;font-weight:800;white-space:nowrap">\u25CF '+letter+(lc.taps?lc.taps:'')+'</span>';
-}
-// (v10.26-prep Step 5) NODE TYPE = gamma polarity. +\u03b3 positive-gamma (pinning /
-// mean-reverting, yellow); \u2212\u03b3 negative-gamma (accelerant / breakout-prone,
-// purple). Same axis that drives Rug detection.
-// (v11.0 audit) PARKED — no live caller; kept because test_node_identity.js pins it.
-function nodeTypeTag(L){
-  if(L.pos===true){
-    return '<span title="Positive-gamma node \u2014 dealers dampen moves here (pinning / mean-reverting). Yellow." style="color:'+PAL.gold+';font-size:8.5px;font-weight:800">+\u03b3</span>';
-  }
-  if(L.pos===false){
-    return '<span title="Negative-gamma node \u2014 dealers amplify moves here (accelerant / breakout-prone). Purple." style="color:#b58bff;font-size:8.5px;font-weight:800">\u2212\u03b3</span>';
-  }
-  return '';
-}
-// (v10.26-prep) NODE ROLE/SETUP badge \u2014 REPLACES the removed predictive verdict pill
-// (Bounce/Pullback/Break-through, which VIOLATED the attraction-only honesty rule).
-// This is FACTUAL: what the node IS, never what it might DO. Priority order picks the
-// single top badge (King > Gatekeeper > Rug > Floor/Ceiling); secondary role -> tooltip.
-// Cluster + Double-Stack are FUTURE detectors (slot reserved in the priority list).
-function nodeRoleBadge(L){
-  var label=null, col=PAL.sub, tip='';
-  if(L.isKing){
-    label='King'+(L.isFlr?' \u00b7 Flr':(L.isCeil?' \u00b7 Ceil':'')); col=PAL.gold; tip='King \u2014 the strongest magnet on the board (largest |dealer exposure|); settlement anchor. \uD83D\uDCCA pulls price 55% at 30m (n=299) \u2014 69% at 2 strikes (n=59), 74% in the 11am CT hour (n=42); inside 1 strike price ORBITS (50%).'+(L.isFlr?' Also the range Floor.':(L.isCeil?' Also the range Ceiling.':''));
-  } else if(L.isGatekeeper){
-    label='Gate'; col=PAL.amber; tip='Gatekeeper \u2014 deflection zone where trend shifts often begin; can block the path to the King.';
-  } else if(L.isFlr){   // (v10.47b) range edges outrank rug/cluster labels (those ride in the hover + cards)
-    label='\u26F0 Flr'; col=PAL.longAccent; tip='FLOOR \u2014 the LARGEST magnet BELOW price (Skylit: the range edge is where price consistently reverses); lower boundary of the live range (Step 3).'+(L.isRugFloor?' Also a Rug floor.':'');
-  } else if(L.isCeil){
-    label='\u2594 Ceil'; col=PAL.shortAccent; tip='CEILING \u2014 the LARGEST magnet ABOVE price (Skylit: the range edge is where price consistently reverses); upper boundary of the live range (Step 3).'+(L.isRugCeil?' Also a Rug ceiling.':'');
-  } else if(L.isRugCeil){
-    var rr=(L.rugType==='Reverse-Rug'); label=rr?'RRugF':'RugC'; col='#b58bff';
-    // (v10.29) live geometry + state + targets folded into the hover (callout removed).
-    var rd=L.rugDetail||{};
-    var geo=(rd.ceilK!=null&&rd.floorK!=null)?(fmtNum(rd.ceilK)+' over '+fmtNum(rd.floorK)):'';
-    var st=rd.shown?(rd.confirmed?'forming':'forming (unconfirmed \u2014 flow not yet aligned)'):'candidate \u2014 verify polarity';
-    var tg=(rd.targets&&rd.targets.length)?(' \u00b7 targets '+rd.targets.map(fmtNum).join(', ')):'';
-    tip=(rr?'Reverse-Rug':'Rug')+' ceiling'+(geo?(' \u00b7 '+geo):'')+' \u00b7 '+st+tg+' \u2014 positive-gamma cap over a negative-gamma floor; '+(rr?'bullish squeeze.':'bearish nosedive risk.');
-  } else if(L.isRugFloor){
-    var rr2=(L.rugType==='Reverse-Rug'); label=rr2?'RRugC':'RugF'; col='#b58bff';
-    var rd2=L.rugDetail||{};
-    var geo2=(rd2.ceilK!=null&&rd2.floorK!=null)?(fmtNum(rd2.ceilK)+' over '+fmtNum(rd2.floorK)):'';
-    var st2=rd2.shown?(rd2.confirmed?'forming':'forming (unconfirmed \u2014 flow not yet aligned)'):'candidate \u2014 verify polarity';
-    var tg2=(rd2.targets&&rd2.targets.length)?(' \u00b7 targets '+rd2.targets.map(fmtNum).join(', ')):'';
-    tip=(rr2?'Reverse-Rug':'Rug')+' floor'+(geo2?(' \u00b7 '+geo2):'')+' \u00b7 '+st2+tg2+' \u2014 negative-gamma target below the positive-gamma cap.';
-  } else if(L.isStack){
-    label='DStk'; col=PAL.longAccent;
-    var sd=L.stackDetail;
-    var sspan=sd?(sd.lo===sd.hi?fmtNum(sd.lo):(fmtNum(sd.lo)+'\u2013'+fmtNum(sd.hi))):'';
-    tip='Double-Stack'+(sspan?(' '+sspan):'')+(sd?(' ('+sd.n+' nodes)'):'')+' \u2014 adjacent stacked nodes forming a strong-BOUNCE shelf; price tends to bounce cleanly off it (fade into it).';
-  } else if(L.isCluster){
-    label='Pika'; col=PAL.blue;
-    var cd=L.clusterDetail;
-    var cspan=cd?(fmtNum(cd.lo)+'\u2013'+fmtNum(cd.hi)):'';
-    tip='Pika Cloud'+(cspan?(' '+cspan):'')+(cd?(' ('+cd.n+' +gamma nodes)'):'')+' \u2014 dense cluster of POSITIVE-gamma nodes; acts as a gravity well, price PINS / ROTATES / CHOPS here (poor R:R \u2014 avoid the middle, fade the edges).';
-  } else if(L.isBarney){
-    label='Barn'; col=PAL.shortAccent;
-    var bd=L.barneyDetail;
-    var bspan=bd?(fmtNum(bd.lo)+'\u2013'+fmtNum(bd.hi)):'';
-    tip='Barney'+(bspan?(' '+bspan):'')+(bd?(' ('+bd.n+' \u2212gamma nodes)'):'')+' \u2014 dense cluster of NEGATIVE-gamma nodes (NOT a Pika Cloud); an instability / acceleration zone: moves amplify, wicky/violent, overshoots common. Trade with, not against.';
-  } else if(L.isFlr){
-    label='\u26F0 Flr'; col=PAL.longAccent; tip='FLOOR \u2014 the LARGEST magnet BELOW price (Skylit: the range edge is where price consistently reverses): the lower boundary of the live range (Step 3). A magnet, not a promise: it pulls, holds, or repels \u2014 see ACTIVITY. \uD83D\uDCCA non-King mass repelled price 57% of the time (n=350).';
-  } else if(L.isCeil){
-    label='\u2594 Ceil'; col=PAL.shortAccent; tip='CEILING \u2014 the LARGEST magnet ABOVE price (Skylit: the range edge is where price consistently reverses): the upper boundary of the live range (Step 3). A magnet, not a promise: see ACTIVITY for pull/push. \uD83D\uDCCA non-King mass repelled price 57% (n=350).';
-  } else if(L.isStrongMag && L.isNext){
-    label='\u2605 Mag \u00b7 next'; col=PAL.sub; tip='Next target \u2014 a strong magnet BEYOND the range edge: where price goes if the ceiling/floor breaks.';
-  } else if(L.isStrongMag){
-    label='\u2605 Mag'; col=PAL.sub; tip='Strong magnet (>= '+FLRCEIL_MIN_PCT+'% of King mass) inside the range. No directional word by design \u2014 which side of price it sits on is the ladder; what it is doing is ACTIVITY.';
-  } else {
-    label='Mag'; col=PAL.sub; tip='Minor magnet (< '+FLRCEIL_MIN_PCT+'% of King mass).';
-  }
-  if(!label) return '';
-  // (v10.44) Skylit convention: NEGATIVE-gamma identity renders PURPLE (incl. a -γ King).
-  if(L.pos===false){ col='#b58bff'; tip+=' \u2212\u03B3 (purple): dealers hedge WITH the move here \u2014 wicky contact, overshoot-prone accelerant.'; }
-  else if(L.pos===true){ tip+=' +\u03B3: dealers hedge AGAINST the move \u2014 sticky contact, pin-prone.'; }
-  // secondary-role note in tooltip (e.g. a King that is also a rug participant)
-  var extra=[];
-  if(!L.isKing && L.isGatekeeper===false){}
-  if(L.isRugTarget && !L.isRugCeil && !L.isRugFloor) extra.push('rug-target');
-  var fullTip = tip + (extra.length?(' Also: '+extra.join(', ')+'.'):'');
-  return '<span title="'+fullTip.replace(/"/g,'')+'" style="color:'+col+';font-size:8px;font-weight:800;border:1px solid '+col+';border-radius:10px;padding:0 5px;white-space:nowrap">'+label+'</span>';
-}
-// (v10.35) IDENTITY PILL — merges the role ICON (★/👑/🚪/🧶) with the role WORD into ONE
-// pill, killing the old duplication (icon in the strike column AND a separate word badge).
-// Reuses nodeRoleBadge for the word+color, then prefixes the icons. Full-word role names
-// (King/Gatekeeper/Rug Floor/...) for readability.
-function nodeRolePill(L){
-  var badge=nodeRoleBadge(L); if(!badge) return '';
-  // pull the label + color out of the badge span (cheap: re-derive from nodeRoleBadge's rules)
-  // (v10.36) crown-only for the King (drop the ★ when 👑 present, for column alignment);
-  // ★ still marks a strongest floor/ceiling that is NOT the King.
-  var icon=(L.isKing?'\uD83D\uDC51':'')+(L.isGatekeeper?gateSvgSm(PAL.amber):'')+((L.isRugTarget||L.isRugCeil||L.isRugFloor)?'\uD83E\uDDF6':'');
-  if(!icon) return badge; // Floor/Ceiling/Pika/Barn have no icon — the word badge stands alone
-  // inject the icon right after the opening '>' of the badge span
-  return badge.replace(/>([^<]*)<\/span>$/, function(_,txt){ return '>'+icon+' '+txt+'</span>'; });
 }
 // ============================================================================
 // (v10.36) DEFLECTION SIGNALS  — section rendered ABOVE the Node Map.
@@ -9799,8 +9305,6 @@ function nodeRolePill(L){
 
 var DEFL_FWD_BARS   = 10;    // forward window (closed 3m bars) to score continuation
 var DEFL_CONT_PTS   = 0.30;  // price must extend >= this many strikes in the deflect dir to count as "continued"
-var DEFL_UNLOCK_MIN = 5;     // floor for the auto-tuned unlock sample size
-var DEFL_UNLOCK_MAX = 25;    // cap for the auto-tuned unlock sample size
 
 // Classify a confirmed deflection at level L into a setup label + confluence chips.
 // dir: +1 = deflected UP off the node (bounce), -1 = deflected DOWN off it (rejection).
@@ -9909,113 +9413,12 @@ function labelDeflectionOutcomes(sym, day){
   return changed;
 }
 
-// Auto-tuned unlock sample size: the more setups you record per day, the higher
-// the bar we can afford (cheap to reach) — capped both ways. Recommended, not final.
-// (v11.0 audit) PARKED — no live caller; kept because test_defl_signals.js (and PARKED deflectionBlock) pins it.
-function deflUnlockN(perDayCount){
-  if(!perDayCount || perDayCount<=0) return DEFL_UNLOCK_MIN;
-  var n=Math.round(perDayCount*3);               // ~3 trading days' worth
-  return Math.max(DEFL_UNLOCK_MIN, Math.min(DEFL_UNLOCK_MAX, n));
-}
-
-// Continuation rate -> letter grade (thresholds match the mockup legend).
-function deflGrade(rate){
-  if(rate>=75) return {g:'A+',col:PAL.longAccent};
-  if(rate>=68) return {g:'A', col:PAL.longAccent};
-  if(rate>=58) return {g:'B', col:PAL.blue};
-  if(rate>=45) return {g:'C', col:PAL.amber};
-  return {g:'D', col:PAL.shortAccent};
-}
 
 
 
-// The Deflection Signals section (rendered above the Node Map).
-// (v10.37) DEFLECTIONS strip: ONE-line header ("Deflections") + a horizontally
-// scrolling row of compact cards. Newest deflection sits on the LEFT and the strip
-// starts scrolled fully left. No unlock message (saves vertical space for the Node
-// Map below). Per-card data for now: node type (setup name) + strike + direction.
-// Grades stay HIDDEN until the setup has enough recorded outcomes (data-earned).
-// (v11.0 audit) PARKED — no live caller; kept because test_layout_2col.js/test_read_v1047.js pins it.
-function deflectionBlock(){
-  var sym='SPY';
-  var m=nodeMapModel(sym); if(!m||!m.ok) return '';
-  var stats=deflStats(sym);
-  var unlockN=deflUnlockN(stats.perDayCount);
-
-  // collect LIVE confirmed deflections right now
-  var rows=[];
-  (m.levels||[]).forEach(function(L){
-    var d=deflectionAt(sym, L.k); if(!d) return;
-    var cls=classifyDeflection(sym, L, d.dir);
-    var key=deflSetupKey(cls, d.dir);
-    var b=stats.perKey[key]||{n:0,hit:0};
-    rows.push({L:L, d:d, cls:cls, key:key, n:b.n, hit:b.hit, bars:d.bars});
-  });
-  // NEWEST-LEFT: fewest bars-since-tap = most recent deflection => leftmost.
-  rows.sort(function(a,b){ if(a.bars!==b.bars) return a.bars-b.bars; return b.cls.prio-a.cls.prio; });
-
-  // single-line header (no right-side unlock text)
-  var html='<div style="display:flex;align-items:center;gap:6px;margin:2px 2px 4px">'+
-    '<span title="A deflection = price taps a node then reverses away (\u2265'+DEFLECT_CONFIRM+' bars). Newest is leftmost. Grades appear once a setup has enough recorded outcomes." '+
-      'style="font-size:11px;font-weight:800;color:'+PAL.ink+';letter-spacing:.2px">\u26a1 Deflections</span>'+
-    '<span style="font-size:9px;color:'+PAL.sub+'">'+rows.length+' live</span></div>';
-
-  if(!rows.length){
-    html+='<div style="color:'+PAL.sub+';font-size:9px;padding:0 2px 3px">none</div>';
-    return html;
-  }
-
-  // horizontal-scroll strip; direction:ltr so scrollLeft:0 shows the leftmost (newest) card.
-  var cards='';
-  rows.forEach(function(r){
-    var up=(r.d.dir>0);
-    var dirTxt=up?'\u25b2':'\u25bc';
-    var dirCol=up?PAL.longAccent:PAL.shortAccent;
-    // (v10.47) abbreviated card name "Defl · Gate" + Step-5 context chips at the moment of the event
-    var star=/^\u2b51/.test(r.cls.name)?'\u2b51 ':'';
-    var roleAb = r.L.isKing?'King':(r.L.isGatekeeper?'Gate':(r.L.isRugCeil||r.L.isRugFloor||r.L.isRugTarget)?((r.cls.name.indexOf('Reverse')>=0)?'RRug':'Rug'):(r.L.role==='Pika'?'Pika':(r.L.role==='Barn'?'Barn':(up?'Flr':'Ceil'))));
-    var name=star+'Defl \u00b7 '+roleAb+(r.cls.brokeFT?' \u00b7 BO\u00b7FT':'')+(r.cls.isFBO?' \u00b7 FBO':'');
-    var ctx=[];
-    var stW=_nmAcc(r.L); if(stW!=='steady') ctx.push(stW.replace('accumulating','Acm').replace('decreasing','Dec').replace(/[()]/g,'')); else ctx.push('Steady');
-    if(r.L.pos===true) ctx.push('+\u03B3'); else if(r.L.pos===false) ctx.push('\u2212\u03B3');
-    var tp_=r.L.taps||0; if(tp_) ctx.push((tp_===1?'1st':tp_===2?'2nd':tp_===3?'3rd':tp_+'th')+' tap');
-    var chipsHtml=ctx.map(function(t){ var red=/^(3rd|[4-9]th|\d\dth) tap$/.test(t); return '<span style="font-size:8px;border:1px solid '+(red?PAL.shortAccent:PAL.line)+';color:'+(red?PAL.shortAccent:PAL.sub)+';border-radius:9px;padding:0 4px">'+t+'</span>'; }).join(' ');
-    // grade: HIDDEN until unlock; else earned letter
-    var gradeHtml;
-    if(r.n>=unlockN){
-      var rate=Math.round(100*r.hit/r.n);
-      var g=deflGrade(rate);
-      gradeHtml='<span style="font-size:14px;font-weight:800;color:'+g.col+'">'+g.g+'</span> <span style="font-size:8.5px;color:'+PAL.sub+'">'+rate+'% n'+r.n+'</span>';
-    } else {
-      gradeHtml='<span style="font-size:8.5px;font-weight:700;color:'+PAL.sub+';border:1px dashed '+PAL.sub+';border-radius:999px;padding:0 5px">\u25cf rec n'+r.n+'</span>';
-    }
-    cards+='<div style="flex:0 0 auto;min-width:120px;background:'+PAL.card+';border:1px solid '+dirCol+';border-radius:8px;padding:5px 8px;scroll-snap-align:start">'+
-      '<div style="display:flex;align-items:baseline;gap:5px"><span style="font-size:14px;font-weight:800;color:'+PAL.ink+';font-variant-numeric:tabular-nums">'+fmtNum(r.L.k)+'</span>'+
-        '<span style="font-size:10px;color:'+dirCol+';font-weight:800">'+dirTxt+'</span></div>'+
-      '<div style="font-size:10px;font-weight:700;color:'+PAL.ink+';white-space:nowrap;margin:1px 0 3px">'+name+'</div>'+
-      '<div style="display:flex;gap:3px;white-space:nowrap;margin-bottom:3px">'+chipsHtml+'</div>'+
-      '<div>'+gradeHtml+'</div>'+
-    '</div>';
-  });
-  html+='<div style="display:flex;gap:8px;overflow-x:auto;overflow-y:hidden;padding:0 2px 6px;scroll-snap-type:x proximity;direction:ltr">'+cards+'</div>';
-  return html;
-}
 
 
-// ============================================================================
-// (v10.47) NODE MAP SENTENCE — the middle tense of the tool. Top READ = direction & structure;
-// this = what is happening at the node price is engaging (continuation vs deflection) and WHY,
-// in Step-5 vocabulary (accumulating / decreasing / reshuffling); Deflections = what happened.
-// Locked templates (user, 2026-08-16):
-//  "CONTINUATION through 774.50 toward the King at 775.38 because the gate is decreasing (▼8%),
-//   while the King above is accumulating (▲12%) and pulling harder. Support at 773.25 is
-//   accumulating too so the floor under the move is firm."
-//  "REVERSAL likely at 776.50 — the ceiling is accumulating (▲14%) and has held twice, and
-//   777.75 behind it is accumulating as well, so resistance is stacking. Nothing below price is
-//   decreasing, so a deflection here would have support to fall back on."
-// Numbers only for Acm/Dec. Levels always named. Never "mass". No trade language.
-// (v11.0 audit) PARKED — no live caller; kept because test_read_v1047.js pins it.
-function _nmRole(L){ if(!L) return 'node'; if(L.isKing) return 'King'; if(L.isGatekeeper) return 'gate'; if(L.isFlr) return 'floor'; if(L.isCeil) return 'ceiling'; return 'node'; }
+
 // (v11.0 audit) PARKED — no live caller; kept because test_read_v1047.js pins it.
 function _nmAcc(L){ // 'accumulating (▲12%)' | 'decreasing (▼8%)' | 'steady'
   if(!L) return 'steady';
@@ -10026,473 +9429,9 @@ function _nmAcc(L){ // 'accumulating (▲12%)' | 'decreasing (▼8%)' | 'steady'
 }
 function _nmIsAcc(L){ return !!L && (L.state==='Building' || (typeof L.chg==='number' && L.chg>=8)); }
 function _nmIsDec(L){ return !!L && (L.state==='Fading' || (typeof L.chg==='number' && L.chg<=-8)); }
-// (v11.0 audit) PARKED — no live caller; kept because test_read_v1047.js pins it.
-function _nmB(t,c){ return '<b style="color:'+(c||PAL.ink)+'">'+t+'</b>'; }
-// (v11.0 audit) PARKED — no live caller; kept because test_read_v1047.js/test_accum_canon.js pins it.
-function nodeMapSentence(m, sym, tagFn){
-  // (v10.47 A.2, user-directed) BARE BONES. e.g. "CONT thru Gate 774.50 → King 775.38: Gate Dec ▼8%, King Acm ▲12%. Sup 773.25 Acm."
-  var px=m.px, lv=(m.levels||[]).slice();
-  var b=_nmB, N=fmtNum;
-  if(!lv.length) return {verdict:'NONE', text:''};
-  var eng=null, how=null;
-  lv.forEach(function(L){ if(L.deflection && L.deflection.bars<=DEFLECT_CONFIRM+EP_DEFL_HANDOFF && (!eng || L.dist<eng.dist)){ eng=L; how='defl'; } });
-  if(!eng) lv.forEach(function(L){ var ep=L.ep||{}; if(ep.state==='BOw' && (!eng||L.dist<eng.dist)){ eng=L; how='bow'; } });
-  if(!eng) lv.forEach(function(L){ var ep=L.ep||{}; if(ep.state==='Push' && (!eng||L.dist<eng.dist)){ eng=L; how='push'; } });
-  if(!eng) lv.forEach(function(L){ var ep=L.ep||{}; if(ep.state==='Pull' && L.dist<=1.5 && (!eng||L.dist<eng.dist)){ eng=L; how='pull'; } });
-  if(!eng) return {verdict:'NO NODE IN PLAY', text:''};
-  var side=eng.side;
-  var above=lv.filter(function(L){return L.k>px;}).sort(function(a,c){return a.k-c.k;});
-  var below=lv.filter(function(L){return L.k<px;}).sort(function(a,c){return c.k-a.k;});
-  var beyond=(side==='above'?above:below).filter(function(L){ return L!==eng && (side==='above'?L.k>eng.k:L.k<eng.k); })[0]||null;
-  var oppEdge = side==='above' ? m.flr : m.ceil;
-  function nm(L){ return (L.isKing?'King ':(L.isGatekeeper?'Gate ':(L.isFlr?'Flr ':(L.isCeil?'Ceil ':''))))+b(N(L.k),L.isKing?PAL.gold:PAL.ink); }
-  function stt(L){ // 'Acm ▲12%' | 'Dec ▼8%' | 'steady'
-    var c=(typeof L.chg==='number')?L.chg:0;
-    var acc=_nmIsAcc(L), dec=_nmIsDec(L);
-    // (v10.49 I) accumCanon is THE single Acm source — the sentence and the zone rows read
-    // the SAME numbers, so "Acm" here and "Dec" there can no longer contradict each other.
-    try{ var __a=accumCanon(sym, L.k);
-         if(__a && __a.session && typeof __a.session.pct==='number'){ c=__a.session.pct; acc=(__a.session.label==='Acm'); dec=(__a.session.label==='Dec'); } }catch(eAC){}
-    if(acc) return 'Acm'+(c>0?(' ▲'+Math.round(c)+'%'):'');
-    if(dec) return 'Dec'+(c<0?(' ▼'+Math.round(Math.abs(c))+'%'):'');
-    return 'steady';
-  }
-  var taps=eng.taps||0, third=taps>=2, purple=(eng.pos===false);
-  var why=[];
-  var verdict, text;
-  if(how==='defl'){
-    var up=eng.deflection.dir>0;
-    verdict='DEFL';
-    why.push(nm(eng)+' '+stt(eng)); if(taps) why.push((taps===1?'1st':taps===2?'2nd':taps===3?'3rd':taps+'th')+' tap'); if(purple) why.push('−γ');
-    text=(up?'↑':'↓')+' off '+nm(eng)+': '+why.slice(1).concat([stt(eng)]).join(', ')+'.';
-    return {verdict:verdict, text:text, node:eng};
-  }
-  var boft = /FT/.test((typeof tagFn==='function')?(tagFn(eng.k)||''):'');
-  var engAcc=_nmIsAcc(eng), engDec=_nmIsDec(eng);
-  var cont = boft || engDec || third || (!engAcc && beyond && _nmIsAcc(beyond) && beyond.isKing);   // 3rd+ tap always flips to continuation (Skylit ~33%)
-  var rev  = !cont && (engAcc || (taps>=1 && !engDec));
-  var oppTxt = oppEdge ? ((side==='above'?'Sup ':'Res ')+b(N(oppEdge.k))+' '+stt(oppEdge)+'.') : '';
-  if(cont){
-    verdict='CONT';
-    why.push(stt(eng)+((third && !engDec)?((engAcc?' but':',')+' held '+taps+'× — 3rd tap usually fails'):''));
-    if(beyond) why.push(nm(beyond)+' '+stt(beyond)+(beyond.isKing&&_nmIsAcc(beyond)?' pulling':''));
-    if(purple) why.push('−γ fast');
-    text='thru '+nm(eng)+(beyond?(' → '+nm(beyond)):'')+': '+why.join(', ')+'.'+(oppTxt?(' '+oppTxt):'');
-  } else if(rev){
-    verdict='REV';
-    why.push(stt(eng)+(taps?(', held '+taps+'×'):''));
-    if(beyond && _nmIsAcc(beyond)) why.push(nm(beyond)+' '+stt(beyond)+' behind');
-    if(purple) why.push('−γ, counter-character');
-    text='at '+nm(eng)+': '+why.join(', ')+'.'+(oppTxt?(' '+oppTxt):'');
-  } else {
-    verdict='TBD';
-    text='at '+nm(eng)+': '+stt(eng)+(beyond?(', '+nm(beyond)+' behind'):'')+'.'+(oppTxt?(' '+oppTxt):'');
-  }
-  return {verdict:verdict, text:text, node:eng};
-}
-// (v11.0 audit) PARKED — no live caller; kept because test_read_v1047.js pins it.
-function nodeMapSentenceHtml(m, sym, tagFn, tip){
-  var r=(m&&m.ok)?nodeMapSentence(m, sym, tagFn):{verdict:'NONE',text:''};
-  // (v10.47b) nothing engaged => no sentence at all (space); the ⑤ icon rides on the column header
-  if(r.verdict==='NONE' || r.verdict==='NO NODE IN PLAY') return '';
-  var col={CONT:PAL.longAccent, REV:PAL.shortAccent, DEFL:PAL.shortAccent, TBD:PAL.gold, 'NO NODE IN PLAY':PAL.sub, NONE:PAL.sub}[r.verdict]||PAL.sub;
-  if(r.node && r.node.side==='below' && (r.verdict==='CONT')) col=PAL.shortAccent;   // continuing DOWN through a floor = bearish
-  if(r.node && r.node.side==='below' && (r.verdict==='REV'||r.verdict==='DEFL')) col=PAL.longAccent; // bouncing off a floor = bullish
-  return '<div title="'+(tip||'').replace(/"/g,'')+' Full text: '+(r.verdict+' '+r.text).replace(/<[^>]+>/g,'').replace(/"/g,'')+'" style="margin:4px 2px 3px;font-size:9.5px;line-height:1.4;color:'+PAL.ink+';display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">'+
-    '<b style="color:'+col+'">'+r.verdict+'</b> '+r.text+'</div>';
-}
 
-function nodeMapBlock(){
-  var sym=activeSym();   // (v10.55 PART G) whichever underlying is active (SPY, or QQQ under an NQ/QQQ chart)
-  var m=nodeMapModel(sym);
-  if(!m || !m.ok){ return '<div style="color:'+PAL.sub+';padding:2px 6px;font-size:11px">Node Map \u2014 waiting on node data\u2026</div>'; }
-  // (v10.50) The single Deflection-zones ladder IS the Node Map body now. The Node-Map
-  // sentence, the air-pocket standalone line, the "\u21A9 King behind" snapback line, the
-  // regime/range chips and the legacy two-sided ladder are RETIRED from the live render
-  // (their doctrine folded into the relevant hovers). deflZonesBlock is the whole body.
-  var __zonesEarly=''; try{ __zonesEarly=deflZonesBlock(sym); }catch(eZE){ __zonesEarly=''; }
-  if(__zonesEarly) return __zonesEarly;
-  // ---- FALLBACK (no node meaningful enough to zone): the legacy ladder, WITHOUT the
-  // retired sentence/airpocket/snapback narration. ----
-  var hdrTip=('NODE MAP \u2014 every magnet price will meet on both sides. IDENTITY: \uD83D\uDC51 King (strongest) \u00b7 \uD83D\uDEAA Gate \u00b7 \u2594 Ceil / \u26F0 Flr = the live range \u00b7 \u2605 Mag strong \u00b7 purple = \u2212\u03B3. STATE: Acm/Dec/Steady + %chg. ACTIVITY: Pull \u00b7 BOw \u00b7 BO\u00b7FT \u00b7 Defl \u00b7 Push. Nodes are magnets: they attract and repel; the ladder shows which side, ACTIVITY shows what it is doing. The highlighted side is where price is currently heading (trend + momentum); the other side is still shown. Verdicts sharpen once polarity lands.').replace(/"/g,'');
-  // (v10.24) REGIME chip in the header = whole-board GEX-structure read, colored by
-  // direction; its instruction (fade edges / stand aside / pullbacks) rides below.
-  var rg=m.regime||{label:'Forming',dir:0,conf:'low',why:''};
-  var rgCol = rg.dir>0?PAL.longAccent:(rg.dir<0?PAL.shortAccent:(rg.label==='Whipsaw'?PAL.amber:PAL.sub));
-  var rgChip = '<span title="'+(rg.why||'').replace(/"/g,'')+'" style="color:'+rgCol+';font-size:9px;font-weight:800;padding:1px 7px;border:1px solid '+rgCol+';border-radius:20px">'+rg.label+(rg.skew!=null&&/Trend/.test(rg.label)?(' '+rg.skew+'\u00d7'):'')+'</span>';
-  // (v10.28) \u2464 Step-5 icon in the Node Map header (Map the Flow). Rendered inside
-  // the header title so it clicks open the Step-5 popover like the other step icons.
-  // (v10.44) RANGE chip = ⛰Flr–▔Ceil (nearest strong magnets each side) + inside/OUT.
-  var rangeChip='';
-  if(m.range){ var rin=m.range.inside; rangeChip='<span title="Live range = nearest strong magnet below (Flr) to nearest strong magnet above (Ceil), each >= '+FLRCEIL_MIN_PCT+'% of King mass. Inside = rotation between two magnets; outside = the range is being redefined (a break + FT re-anchors it to the next strong magnet)." style="color:'+(rin?PAL.ink:PAL.amber)+';font-size:9px;font-weight:700;padding:1px 7px;border:1px solid '+PAL.line+';border-radius:20px;margin-right:4px">Range <b>'+fmtLvl(m.range.lo)+'\u2013'+fmtLvl(m.range.hi)+'</b> \u00b7 '+(rin?'inside':'OUT')+'</span>'; }
-  // (v10.47, user-directed) The header is ONE plain sentence: CONTINUATION / REVERSAL / TBD /
-  // NO NODE IN PLAY at the engaged node, and WHY in Step-5 vocabulary (accumulating / decreasing).
-  // Range + pattern chips retired from the header (they ride in the hover); imbalance line folded in.
-  // (v10.50) Node-Map sentence RETIRED from live render — fallback body is the legacy ladder only.
-  var html='';
-  // (v10.50) air-pocket standalone line RETIRED (concept preserved by tradeFrame (air) tag on
-  // tgt/inval); the snapback "King behind" line RETIRED (folded into the READ layer).
-  // (v10.29) Pattern instruction line REMOVED \u2014 the Pattern BADGE in the header (Trend/
-  // Whipsaw/Rainbow Road) already names it, and its stance rides in the badge hover.
-  // ('regime' renamed to 'Pattern' per Skylit's Patternpedia vocabulary.)
-  // (v10.27) S/R IMBALANCE net-read FOLDED IN here (standalone section removed).
-  // This is the Step-5 flow conclusion: the DIVERGENCE in build-RATE between the two
-  // sides near price (not who is bigger). srBattle is render-cached, so this matches
-  // the same value the old section showed. Below it: the tradeable crossover banner.
-  // (v10.47) imbalance sentence + crossover banner REMOVED from here — the header sentence carries the flow read.
-  // strongest headline (preserves old PROJ job): strongest Sup + strongest Res.
-  function strongChip(c, word, col){
-    if(!c) return '<span style="color:'+PAL.sub+';font-size:10px">'+word+' \u2013</span>';
-    return '<span title="Strongest '+(word==='Sup'?'floor below':'ceiling above')+' (size+build-rate+nearness blend)" style="display:inline-flex;align-items:center;gap:3px;color:'+col+';font-weight:800;font-size:10px;padding:1px 7px;border:1px solid '+col+';border-radius:20px">\u2605 '+word+' '+fmtLvl(c.k)+'<span style="color:'+PAL.sub+';font-weight:600;font-size:9px">'+c.pct+'%</span></span>';
-  }
-  // (v10.27) Strongest Sup/Res chips REMOVED here \u2014 redundant with the King
-  // 3-magnet header (\u2605SUP \u2190 \uD83D\uDC51 \u2192 \u2605RES). Snapback warning retained.
-  // (v10.50) snapback "King behind" line RETIRED from live render.
-  // (v10.24) RUG flag: the polarity-gated nosedive/squeeze. Shows a hard flag once
-  // polarity is verified; until then, a dimmed 'candidate (verify polarity)' note.
-  // (v10.29) RUG callout line REMOVED \u2014 geometry / forming-state / targets now live in
-  // the RugC/RugF (RRugC/RRugF) per-node BADGE HOVER. m.rug still drives those badges.
-  // (v10.37) gatekeeper instruction line REMOVED - the gatekeeper strike + distance now
-  // rides in the King badge bottom row (kingBlock). Standalone section also removed.
-  // (v10.29) DOUBLE-STACK + CLUSTER callout lines REMOVED \u2014 fully redundant with the
-  // per-node DStk / Clst badges; span + node-count + meaning now ride in the badge HOVER.
-  // (v10.27) PER-NODE BO TAG: the breakout-pullback lifecycle now rides on the node
-  // it belongs to (standalone BO section removed). Finds the most-advanced non-voided
-  // setup at this strike and renders its stage chain (BO / BO\u00b7FT / BO\u00b7FT\u00b7TST\u2026),
-  // colored by direction (long=green, short=red). Empty when no live setup here.
-  function setupTagForNode(k){
-    var S=STATE[sym]; if(!S||!S.setups) return '';
-    var STAGES=['BO','FT','TST','CONF','GO'];
-    // (v10.43 BO-TAG FIX, user-reported) The old selector took the HIGHEST-STAGE
-    // setup ever seen at the strike — so a finished GO setup from the morning
-    // showed "BO·FT·TST·CONF·GO" all day while the LIVE setup was only at BO·FT.
-    // Now: terminal setups (T2/FAILED/EXPIRED) are skipped entirely (the Node
-    // Map's resolved-outcome echo already shows those), and among LIVE setups
-    // the MOST RECENT wins — the chip reflects what is happening NOW.
-    var best=null, bestT=-1;
-    for(var key in S.setups){
-      var s=S.setups[key];
-      if(!s || s.voided || s.strike!==k) continue;
-      if(s.outcome==='T2'||s.outcome==='FAILED'||s.outcome==='EXPIRED') continue;
-      var tSel=(s.updated||s.ts||0);
-      if(tSel>bestT){ bestT=tSel; best=s; }
-    }
-    var bestRank=best?STAGES.indexOf(best.stage):-1;
-    if(!best || bestRank<0) return '';
-    // (v10.44, user-directed) Only TWO chips are ever displayed: BOw (initial break,
-    // pre-FT) and BO·FT (follow-through confirmed). TST/CONF/GO keep running internally
-    // for the scorecard but are NOT shown as a chain.
-    var col = best.dir==='long'?PAL.longAccent:PAL.shortAccent;
-    var isFT = bestRank>=1;
-    var chain = isFT ? 'BO\u00b7FT' : 'BOw';
-    var tip = (best.dir==='long'?'Long':'Short')+' breakout at '+fmtLvl(k)+' \u2014 '+(isFT?('FOLLOW-THROUGH confirmed'+(best.ftLenient?' (lenient rule: two progressing closes beyond)':' (bar held fully beyond)')+'. Internal stage: '+best.stage+'.'):'initial break \u2014 first close beyond the node; watching for FT (a bar holding fully beyond, OR two consecutive progressing closes beyond).')+' Requires a '+BO_HL_LOOKBACK+'-bar '+(best.dir==='long'?'high':'low')+' at breakout.';
-    return '<span title="'+tip.replace(/"/g,'')+'" style="color:'+col+';font-size:8px;font-weight:800;letter-spacing:.3px;border:1px solid '+col+';border-radius:9px;padding:0 4px;white-space:nowrap">'+chain+'</span>';
-  }
-  // the two-sided ladder
-  function row(L){
-    var isPx=false;
-    var col=nmVerdictColor(L.verdict, L.side);
-    // (v10.26-prep Step 5) node STATUS (Acm/Diss/Steady + reshuffle) and TYPE (+\u03b3/\u2212\u03b3)
-    // replace the old bare directional arrow with an explicit, doc-vocabulary identity.
-    var statusHtml = nodeStatusTag(L);
-    var typeHtml = '';   // (v10.44) ±γ text DROPPED — purple/default identity color carries polarity
-    // (v10.33) lifecycle tag: show for tested/used/decaying always; for FRESH only on
-    // structurally important nodes (King/Gatekeeper/strong) so untouched minor nodes
-    // don't spam a 'Fresh' badge on every row.
-    var lcStage=(L.lifecycle&&L.lifecycle.stage)||'';
-    var lcImportant=(L.isKing||L.isGatekeeper||L.isStrong);
-    var lifeHtml=(lcStage && (lcStage!=='Fresh' || lcImportant)) ? nodeLifecycleTag(L) : '';
-    var marks=(L.isStrong?'\u2605':'')+(L.isKing?'\uD83D\uDC51':'')+(L.isGatekeeper?'\uD83D\uDEAA':'')+(L.isRugTarget&&m.rug&&m.rug.shown?'\uD83E\uDDF6':'');
-    var bg = L.onEmphasis ? (L.side==='above'?'rgba(240,97,109,0.06)':'rgba(46,194,126,0.06)') : 'transparent';
-    // (v10.26-prep) ROLE/SETUP badge replaces the removed predictive verdict pill.
-    // Factual (what the node IS), never a Bounce/Break prediction. 'forming' fallback
-    // only when the node has too little history to classify AND carries no role.
-    var roleBadge = nodeRoleBadge(L);
-    var vtag = roleBadge ? roleBadge
-      : (L.forming ? '<span style="color:'+PAL.sub+';font-size:8px;font-weight:700">forming</span>' : '');
-    // (v10.25 Step 5) ATTRACTION-ONLY stage + resolved-OUTCOME echo. NO deflect/break
-    // prediction: accumulation only ATTRACTS. Stage says where price is vs the magnet;
-    // the outcome (broke/held/false) is a report the BO state machine resolves over time.
-    var stageHtml='';
-    var om = outcomeMarker(L.outcome);
-    // (v10.34) DEFLECTION takes PRECEDENCE — it is the actionable event (a setup is
-    // 'meaningless until there is a deflection'). It is a DETECTED reversal off this
-    // node, reported after confirmation, never predicted.
-    if(L.deflection){
-      var df=L.deflection;
-      var dcol=(df.dir>0)?PAL.longAccent:PAL.shortAccent;
-      var darrow=(df.dir>0)?'\u2191':'\u2193';
-      var roleName=(L.isKing?'King':(L.isGatekeeper?'Gatekeeper':(L.role||'node')));
-      var flav=(df.pos===false)?' \u2014 note: \u2212gamma node (accelerant), a deflection here is counter-character'
-              :(df.pos===true?' \u2014 +gamma node (deflection expected)':'');
-      var dtip=('DEFLECTION off the '+roleName+' at '+fmtLvl(L.k)+' \u2014 price tapped it and reversed '+(df.dir>0?'UP (bounce off support)':'DOWN (rejection off resistance)')+', ~'+df.awayPts+' strikes over '+df.bars+' bars. Detected event (reported after confirmation), not a prediction.'+flav).replace(/"/g,'');
-      stageHtml='<span title="'+dtip+'" style="color:'+dcol+';font-size:8.5px;font-weight:800">Defl '+darrow+'</span>';
-    } else if(om){
-      // resolved: the node echoes what actually happened (report, not prediction).
-      stageHtml='<span style="color:'+om.col+';font-size:8.5px;font-weight:800">'+om.txt+'</span>';
-    } else if(L.attract && L.attract.stage==='at-node'){
-      stageHtml='<span style="color:'+PAL.gold+';font-size:8.5px;font-weight:800">at node \u00b7 watch BO</span>';
-    } else if(L.attract && L.attract.stage==='attracting'){
-      stageHtml='<span style="color:'+PAL.blue+';font-size:8.5px;font-weight:700">attracting</span>';
-    }
-    // (v10.27) per-node BO lifecycle chain (BO\u00b7FT\u00b7TST\u00b7CONF\u00b7GO)
-    var boTag = setupTagForNode(L.k);
-    // ---- (v10.35) 4-ZONE ROW REDESIGN ----------------------------------------
-    // ZONE 1 IDENTITY: one merged role pill (icon+word), no duplication.
-    var idPill = nodeRolePill(L) || (L.forming ? '<span style="color:'+PAL.sub+';font-size:8px;font-weight:700">forming</span>' : '');
-    // (v10.44) ZONE 4 ACTIVITY — magnet vocabulary, ONE chip by priority:
-    //   fresh Defl (event) > BO·FT > BOw > Push > Pull > resolved echo > blank.
-    // Pull/Push carry the toward-share % (fraction of the last EP_TW_BARS closes that
-    // moved NEARER the node). Push off a node BELOW price = green (bullish bounce),
-    // above = red. Every chip carries the episode timeline in its hover.
-    var ep=L.ep||{};
-    var epTip=('Episode @ '+fmtLvl(L.k)+' \u2014 zone '+ep.zone+(ep.dist!=null?(' ('+ep.dist+' strikes)'):'')+
-      (ep.tw!=null?(' \u00b7 toward-share '+ep.tw+'% of last '+EP_TW_BARS+' bars'):'')+
-      (ep.tagged!=null?(' \u00b7 last tag '+ep.tagged+' bars ago'):' \u00b7 no tag in window')+
-      (ep.crosses?(' \u00b7 crossings '+ep.crosses):'')+
-      '. Pull >= '+EP_PULL_TW+'% (baseline 54\u201360% \uD83D\uDCCA) \u00b7 Push <= '+EP_PUSH_TW+'% after contact \u00b7 BOw = at the node (watch / initial break) \u00b7 BO\u00b7FT = confirmed follow-through.').replace(/"/g,'');
-    var deflFresh = !!(L.deflection && L.deflection.bars<=DEFLECT_CONFIRM+EP_DEFL_HANDOFF);
-    var boChip = setupTagForNode(L.k);   // '' | BOw | BO·FT
-    var activity='';
-    if(deflFresh){ activity=stageHtml; }
-    else if(boChip && /FT/.test(boChip)){ activity=boChip; }
-    else if(boChip || ep.state==='BOw'){ activity = boChip || ('<span title="'+epTip+' At the node now \u2014 breakout WATCH: first close beyond = initial break; FT confirms." style="color:'+PAL.gold+';font-size:8.5px;font-weight:800;border:1px solid '+PAL.gold+';border-radius:9px;padding:0 5px">BOw</span>'); }
-    else if(ep.state==='Push'){ var pcol=(L.side==='below')?PAL.longAccent:PAL.shortAccent; var parr=(L.side==='below')?'\u2191':'\u2193';
-      activity='<span title="'+epTip+' PUSH \u2014 price tagged this magnet and is being repelled (don\u2019t fade the exit). \uD83D\uDCCA non-King mass repels 57% at 30m (n=350)." style="color:'+pcol+';font-size:8.5px;font-weight:800;border:1px solid '+pcol+';border-radius:9px;padding:0 5px">Push '+parr+'</span>'; }
-    else if(ep.state==='Pull'){ activity='<span title="'+epTip+' PULL \u2014 price closing in on this magnet. \uD83D\uDCCA King pull 69% at 2 strikes (n=59), 74% in the 11am hour." style="color:'+PAL.blue+';font-size:8.5px;font-weight:700;border:1px solid '+PAL.blue+';border-radius:9px;padding:0 5px">Pull</span>'; }
-    else if(L.deflection){ activity=stageHtml; }
-    else if(om){ activity='<span style="color:'+om.col+';font-size:8.5px;font-weight:800">'+om.txt+'</span>'; }
-    var kcol=(L.isKing?PAL.gold:PAL.ink);
-    // (v10.47b, user-directed) ONE LINE per node, fixed aligned columns, nothing wraps.
-    return '<div style="display:grid;grid-template-columns:96px 66px 78px 1fr;align-items:center;column-gap:4px;font-size:9.5px;padding:2px 5px;border-radius:5px;background:'+bg+';white-space:nowrap">'+
-      '<span style="display:flex;align-items:center;gap:3px;overflow:hidden;text-overflow:ellipsis;min-width:0">'+idPill+'</span>'+
-      '<span style="font-variant-numeric:tabular-nums;font-weight:700;color:'+PAL.sub+';overflow:hidden"><b style="color:'+kcol+'">'+fmtLvl(L.k)+'</b> \u00b7 '+L.pct+'%</span>'+
-      '<span style="display:flex;align-items:center;gap:3px;overflow:hidden">'+statusHtml+typeHtml+'</span>'+
-      '<span style="display:flex;align-items:center;justify-content:flex-end;gap:5px;overflow:hidden">'+
-        (activity?'<span>'+activity+'</span>':'')+
-        (lifeHtml||'')+
-      '</span></div>';
-  }
-  var px=m.px;
-  // (v10.50) zones already returned early above; this legacy ladder is the last-resort
-  // fallback. Step icon ⑤ RETIRED from the column header (doctrine folded into hovers).
-  html+='<div style="display:grid;grid-template-columns:96px 66px 78px 1fr;column-gap:4px;font-size:7px;letter-spacing:.3px;text-transform:uppercase;color:'+PAL.sub+';font-weight:800;padding:0 5px 2px;white-space:nowrap">'+
-    '<span style="display:flex;align-items:center;gap:3px">Identity</span>'+
-    '<span>Strike \u00b7 %</span>'+
-    '<span title="Acm / Dec / Steady + the node\u2019s \u25b2\u25bc% vs its session open">State</span>'+
-    '<span style="text-align:right" title="Pull \u00b7 BOw \u00b7 BO\u00b7FT \u00b7 Defl \u00b7 Push \u00b7 echoes (broke/held/FBO) \u2014 then the lifecycle dot">Activity \u00b7 Life</span></div>';
-  var printed=false;
-  m.levels.forEach(function(L, i){
-    if(!printed && L.k<=px){
-      html+='<div title="Current SPY price." style="display:flex;justify-content:center;align-items:center;height:14px;margin:1px 0;background:'+PAL.card+';border:1px dashed '+PAL.blue+';border-radius:6px;color:'+PAL.blue+';font-size:9px;font-weight:800">\u2014 SPY '+fmtLvl(px)+' \u2014</div>';
-      printed=true;
-    }
-    html+=row(L);
-  });
-  if(!printed){ // price is below every mapped level
-    html+='<div style="display:flex;justify-content:center;align-items:center;height:16px;margin:2px 0;background:'+PAL.card+';border:1px dashed '+PAL.blue+';border-radius:6px;color:'+PAL.blue+';font-size:10px;font-weight:800">\u2014 SPY '+fmtLvl(px)+' \u2014</div>';
-  }
-  return html;
-}
 
-// ---- King session bounds (CT cash session 8:30\u201315:00) as epoch ms today ----
-// (v11.0 audit) PARKED — no live caller; kept because PARKED kingBlock chain pins it.
-function sessionBoundsCT(){
-  var d=ctNow();
-  function atCT(h,m){
-    // Build an epoch ms for today's h:m America/Chicago. ctNow() already returns
-    // a Date whose fields are CT wall-clock; reconstruct via the same offset.
-    var real=new Date();
-    var ctMs=ctNow().getTime();
-    var offset=real.getTime()-ctMs;              // realUTC - CTwall
-    var wall=new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m, 0, 0).getTime();
-    return wall+offset;
-  }
-  return { start:atCT(8,30), end:atCT(15,0) };
-}
 
-// ---- KING PATH SPARKLINE (v10.8) ----
-// Stepped SVG of King STRIKE (y) vs real CLOCK TIME (x) across the cash session.
-// Honest staircase: hold flat, jump at each confirmed roll's timestamp, flat to
-// 'now'. Time axis => a King that held all morning is a long flat left segment;
-// a burst of rolls is a tight cluster (correctly signals instability). Faint
-// current-price reference line overlaid; gold dot on the current King.
-// (v10.43, user request) SIGNIFICANT King moves get their own price label on the
-// path — not just the latest strike. A move is significant when the step is >=2
-// strikes OR the level then held >=15 min. Capped at 5, last vertex excluded
-// (the gutter 👑 already labels it). PURE for testability.
-// (v11.0 audit) PARKED — no live caller; kept because test_kingpath.js/test_bo_tag_labels.js pins it.
-function kingPathSigMoves(pts, now){
-  var out=[];
-  for(var v=1; v<pts.length-0; v++){
-    if(v===pts.length-1) continue;                        // last = gutter's job
-    var step=Math.abs(pts[v].k-pts[v-1].k);
-    var dwell=((v+1<pts.length)?pts[v+1].t:now)-pts[v].t;
-    if(step>=2 || dwell>=15*60000) out.push({i:v, k:pts[v].k, up:pts[v].k>pts[v-1].k, step:step, dwellM:Math.round(dwell/60000)});
-  }
-  if(out.length>5){                                        // keep the 5 most significant
-    out.sort(function(a,b){ return (b.step*30+b.dwellM)-(a.step*30+a.dwellM); });
-    out=out.slice(0,5);
-    out.sort(function(a,b){ return a.i-b.i; });
-  }
-  return out;
-}
-// (v11.0 audit) PARKED — no live caller; kept because test_kingpath.js pins it.
-function kingSparkline(mv, kingK, px, now, sess, verdictCol){
-  // (v10.23 Issue A) +33% taller so the drift shape + always-on price line are legible.
-  // (v10.40) padR widened into a reserved RIGHT GUTTER: price + King labels live
-  // there, OUTSIDE the plot, so the dashed price line can never run under its own
-  // label again (the old collision). Plot ends at W-padR; labels start after it.
-  var W=262, H=112, padL=4, padR=46, padT=10, padB=10;
-  var t0=sess.start, t1=sess.end;
-  var firstT = mv.length ? mv[0].t : now;
-  var xMin = Math.max(t0, firstT - 3*60000);
-  if(xMin > now) xMin = t0;
-  var xMax = Math.min(Math.max(now, xMin+60000), (t1>now?t1:now));
-  if(xMax<=xMin) xMax=xMin+60000;
-  var pts=[];
-  for(var i=0;i<mv.length;i++){ var m=mv[i]; if(pts.length && Math.abs(pts[pts.length-1].k-m.k)<0.001) continue; pts.push({t:m.t,k:m.k}); }
-  if(!pts.length) pts.push({t:xMin,k:(kingK!=null?kingK:0)});
-  if(pts[0].t>xMin) pts.unshift({t:xMin,k:pts[0].k});
-  var ks=pts.map(function(p){return p.k;});
-  var yLo=Math.min.apply(null,ks), yHi=Math.max.apply(null,ks);
-  // (v10.23 Issue A) GUARANTEE price sits inside the axis with real headroom, so the
-  // dashed price line NEVER falls outside the padded window and gets dropped. Fold px
-  // in BEFORE padding AND force >=1 strike of margin beyond it on the relevant side.
-  var pxRef = (px!=null) ? px : (STATE.SPY? STATE.SPY.price : null);   // last-known fallback if null
-  var pxStale = (px==null);
-  if(pxRef!=null){
-    yLo=Math.min(yLo, pxRef-1);
-    yHi=Math.max(yHi, pxRef+1);
-  }
-  if(yHi-yLo<1){ yLo-=1; yHi+=1; }
-  var yPad=(yHi-yLo)*0.15; yLo-=yPad; yHi+=yPad;
-  function X(t){ return padL+(t-xMin)/(xMax-xMin)*(W-padL-padR); }
-  function Y(k){ return padT+(yHi-k)/(yHi-yLo)*(H-padT-padB); }
-  var netDir=pts[pts.length-1].k-pts[0].k;
-  // (v10.11) PER-SEGMENT coloring: each staircase step is colored by ITS OWN
-  // local direction \u2014 green where the King stepped UP, red where it stepped DOWN,
-  // gray for the flat baseline holds \u2014 so the line shows that the King was, say,
-  // bearish (red) most of the session and only turned flat recently, instead of
-  // painting the whole path one current-verdict color. (verdictCol is no longer
-  // used for the stroke; kept in the signature for compatibility.)
-  function segColor(dv){ return dv>0?PAL.longAccent : (dv<0?PAL.shortAccent : PAL.sub); }
-  // (v10.18) HYSTERESIS regime: the LINE color reflects the King's running trend,
-  // and only flips when the King reclaims the prior pivot (>=1 strike beyond it),
-  // so minor 1-strike wiggles inside a clear trend don't recolor the line. The
-  // regime per vertex is precomputed here; segments below use it instead of the
-  // raw local jump. (Dots keep their own local up/down color.)
-  var BUF=2;   // strikes beyond the prior pivot required to flip regime (>=2 = ignore single-strike wiggles)
-  var regimeAt=new Array(pts.length);
-  (function(){
-    var reg=0, pivotHi=pts[0].k, pivotLo=pts[0].k;
-    regimeAt[0]=0;
-    for(var q=1;q<pts.length;q++){
-      var k=pts[q].k;
-      if(k>pivotHi) pivotHi=k;
-      if(k<pivotLo) pivotLo=k;
-      if(reg>=0 && k <= pivotHi-BUF){ reg=-1; pivotLo=k; pivotHi=k; }        // fell a strike below the run's high -> down regime
-      else if(reg<=0 && k >= pivotLo+BUF){ reg=1; pivotHi=k; pivotLo=k; }    // reclaimed a strike above the run's low -> up regime
-      else if(reg===0){ reg = k>pts[0].k?1:(k<pts[0].k?-1:0); }
-      regimeAt[q]=reg;
-    }
-  })();
-  function regColor(r){ return r>0?PAL.longAccent : (r<0?PAL.shortAccent : PAL.sub); }
-  var svg='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto">';
-  svg+='<line x1="'+(W-padR)+'" y1="0" x2="'+(W-padR)+'" y2="'+H+'" stroke="'+PAL.line+'" stroke-width="1"/>';
-  // faint neutral fill under the whole staircase (context only, direction-agnostic)
-  var baseY=(H-padB).toFixed(1);
-  var fullD='M '+X(pts[0].t).toFixed(1)+' '+Y(pts[0].k).toFixed(1);
-  for(var j=1;j<pts.length;j++){ fullD+=' H '+X(pts[j].t).toFixed(1)+' V '+Y(pts[j].k).toFixed(1); }
-  fullD+=' H '+X(xMax).toFixed(1);
-  var fillD=fullD+' L '+X(xMax).toFixed(1)+' '+baseY+' L '+X(pts[0].t).toFixed(1)+' '+baseY+' Z';
-  svg+='<path d="'+fillD+'" fill="'+PAL.sub+'" opacity="0.05" stroke="none"/>';
-  // (v10.23 Issue A) ALWAYS draw the price line. Clamp to the axis edge (with a small
-  // caret) if price is beyond the padded range; dim it when price is stale (px null).
-  var priceLineY=null;
-  if(pxRef!=null){
-    var clampedPx = Math.max(yLo, Math.min(yHi, pxRef));
-    var beyond = (pxRef<yLo) ? -1 : (pxRef>yHi ? 1 : 0);
-    var yp = Y(clampedPx);
-    priceLineY = yp;
-    var lineOp = pxStale ? 0.35 : 0.85;
-    // (v10.27) price line made more distinct so it reads separately from the gold
-    // King staircase even when they sit within a strike of each other: thicker,
-    // longer dash, higher opacity, + a small blue price marker on the right end.
-    svg+='<line x1="'+padL+'" y1="'+yp.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+yp.toFixed(1)+'" stroke="'+PAL.blue+'" stroke-width="1.4" stroke-dasharray="4 3" opacity="'+lineOp+'"/>';
-    if(beyond===0){ svg+='<circle cx="'+padL+'" cy="'+yp.toFixed(1)+'" r="2.2" fill="'+PAL.blue+'" opacity="'+lineOp+'"/>'; }
-    if(beyond!==0){ // caret marking the line is clamped (real price is off-axis)
-      var cX=(W-padR-10), cY=yp, dir=(beyond<0?1:-1);
-      svg+='<path d="M '+cX+' '+(cY+dir*3).toFixed(1)+' L '+(cX+4)+' '+cY.toFixed(1)+' L '+(cX+8)+' '+(cY+dir*3).toFixed(1)+'" fill="none" stroke="'+PAL.blue+'" stroke-width="1" opacity="'+lineOp+'"/>'; }
-  }
-  // Draw each segment as its own colored stroke. Segment s (from vertex s-1 to s)
-  // = a flat hold at pts[s-1].k then a vertical jump to pts[s].k; color by the
-  // jump direction. The final hold (last vertex -> now) keeps the last direction.
-  function strokeSeg(x1,y1,x2,y2,col){ return '<path d="M '+x1.toFixed(1)+' '+y1.toFixed(1)+' L '+x2.toFixed(1)+' '+y2.toFixed(1)+'" fill="none" stroke="'+col+'" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>'; }
-  var lastSegCol=PAL.sub;
-  for(var s=1;s<pts.length;s++){
-    var col=regColor(regimeAt[s]);                // (v10.18) color by hysteresis regime, not local dv
-    var xPrev=X(pts[s-1].t), xCur=X(pts[s].t), yPrev=Y(pts[s-1].k), yCur=Y(pts[s].k);
-    svg+=strokeSeg(xPrev,yPrev,xCur,yPrev,col);   // flat hold at previous strike
-    svg+=strokeSeg(xCur,yPrev,xCur,yCur,col);     // vertical jump to new strike
-    lastSegCol=col;
-  }
-  // trailing flat from the last vertex to 'now', in the last move's color
-  var xl=X(pts[pts.length-1].t), yl=Y(pts[pts.length-1].k), xn=X(xMax);
-  svg+=strokeSeg(xl,yl,xn,yl,lastSegCol);
-  // roll vertices + gold current-King dot
-  for(var v=1;v<pts.length;v++){ var cx=X(pts[v].t).toFixed(1), cy=Y(pts[v].k).toFixed(1); var up=pts[v].k>pts[v-1].k;
-    svg+='<circle cx="'+cx+'" cy="'+cy+'" r="1.6" fill="'+(up?PAL.longAccent:PAL.shortAccent)+'"/>'; }
-  // (v10.43) price labels at SIGNIFICANT moves so the path reads without hovering.
-  var sig=kingPathSigMoves(pts, xMax);
-  var lastLabX=-99;
-  for(var g=0; g<sig.length; g++){ var sv=sig[g];
-    var gx=X(pts[sv.i].t), gy=Y(pts[sv.i].k);
-    if(gx-lastLabX<22) continue;                          // x-collision: skip crowded
-    lastLabX=gx;
-    var above=sv.up;                                       // label on the far side of the step
-    var ty=above? Math.max(padT+7, gy-4) : Math.min(H-padB-2, gy+9);
-    svg+='<text x="'+gx.toFixed(1)+'" y="'+ty.toFixed(1)+'" text-anchor="middle" fill="'+(sv.up?PAL.longAccent:PAL.shortAccent)+'" style="font-size:7.5px;font-weight:700;font-variant-numeric:tabular-nums">'+fmtNum(sv.k)+'</text>';
-  }
-  var lx=X(xMax).toFixed(1), ly=Y(pts[pts.length-1].k).toFixed(1);
-  svg+='<circle cx="'+lx+'" cy="'+ly+'" r="3" fill="'+PAL.gold+'" stroke="'+PAL.card+'" stroke-width="1"/>';
-  // (v10.27) King + price labels: place them so they NEVER collide even when King and
-  // price are within a strike of each other (the case that stacked them before).
-  //   - King label rides at the gold dot's Y (right-anchored, gold, crown).
-  //   - Price label rides at the price line's Y (right-anchored, blue).
-  //   - If the two Ys are within a min gap, push them APART vertically (King toward
-  //     its own line side, price the other way) so both stay legible and separate.
-  var curK = pts[pts.length-1].k;
-  function clampY(y){ return Math.max(padT+8, Math.min(H-padB-2, y)); }
-  var kingLineY = parseFloat(ly);
-  var kingLabelY = clampY(kingLineY);
-  var priceLabelY = (priceLineY!=null) ? clampY(priceLineY) : null;
-  var MINGAP=15;   // (v10.43) raised: 13px price pill was overlapping the King label
-  if(priceLabelY!=null && Math.abs(kingLabelY - priceLabelY) < MINGAP){
-    // Too close -> separate around their midpoint: whichever sits HIGHER on the axis
-    // (smaller Y) gets pinned MINGAP/2 above the midpoint, the other MINGAP/2 below.
-    // Guarantees exactly >=MINGAP px between the two labels regardless of order.
-    var mid = (kingLineY + priceLineY)/2;
-    if(kingLineY <= priceLineY){ kingLabelY = clampY(mid - MINGAP/2); priceLabelY = clampY(mid + MINGAP/2); }
-    else                       { priceLabelY = clampY(mid - MINGAP/2); kingLabelY = clampY(mid + MINGAP/2); }
-  }
-  // (v10.40) King label in the GUTTER at the King's Y, with a tick into the plot.
-  svg+='<line x1="'+(W-padR-3)+'" y1="'+kingLineY.toFixed(1)+'" x2="'+(W-padR+2)+'" y2="'+kingLineY.toFixed(1)+'" stroke="'+PAL.gold+'" stroke-width="1.4"/>';
-  svg+='<text x="'+(W-padR+5)+'" y="'+(kingLabelY+3).toFixed(1)+'" text-anchor="start" fill="'+PAL.gold+'" style="font-size:9px;font-weight:800;font-variant-numeric:tabular-nums">\uD83D\uDC51'+fmtNum(curK)+'</text>';
-  // Price label (blue) at the RIGHT end: value + signed offset vs King, e.g. '777.1 (+1.2)'.
-  if(pxRef!=null && priceLabelY!=null){
-    // (v10.40) price PILL in the gutter at the price line's Y — never overdrawn.
-    var pOp=pxStale?0.5:1;
-    svg+='<line x1="'+(W-padR-3)+'" y1="'+priceLineY.toFixed(1)+'" x2="'+(W-padR+2)+'" y2="'+priceLineY.toFixed(1)+'" stroke="'+PAL.blue+'" stroke-width="1.4" opacity="'+pOp+'"/>';
-    svg+='<rect x="'+(W-padR+3)+'" y="'+(priceLabelY-6.5).toFixed(1)+'" width="'+(padR-6)+'" height="13" rx="3" fill="rgba(74,144,217,0.12)" stroke="rgba(74,144,217,0.45)" opacity="'+pOp+'"/>';
-    svg+='<text x="'+(W-padR+5)+'" y="'+(priceLabelY+3).toFixed(1)+'" text-anchor="start" fill="'+PAL.blue+'" style="font-size:9px;font-weight:700;font-variant-numeric:tabular-nums" opacity="'+pOp+'">'+fmtNum(pxRef)+'</text>';
-    // signed offset vs King under the pill (kept from v10.27 — tested behavior)
-    if(kingK!=null){ var offv=pxRef-kingK;
-      svg+='<text x="'+(W-padR+5)+'" y="'+(priceLabelY+13.5).toFixed(1)+'" text-anchor="start" fill="'+PAL.sub+'" style="font-size:7.5px;font-variant-numeric:tabular-nums" opacity="'+pOp+'">('+(offv>=0?'+':'\u2212')+Math.abs(offv).toFixed(1)+')</text>'; }
-  }
-  svg+='</svg>';
-  return { svg:svg, yLo:yLo, yHi:yHi, netDir:netDir, firstK:pts[0].k, lastK:pts[pts.length-1].k };
-}
 
 // ---- KING VERDICT (v10.10): a bull/bear read from King positioning ----
 // Combines the three independent King signals into ONE directional call plus a
@@ -10676,71 +9615,6 @@ function kingAnalyzer(sym){
   }catch(e){ A.ok=false; A.err=String(e).slice(0,60); }
   return A;
 }
-// (v11.0 audit) PARKED — no live caller; kept because test_king_analyzer.js pins it.
-function kingReadHtml(A, kv){
-  if(!A || !A.ok) return '';
-  // (v10.42) KING CONSOLE: prose blob -> labeled indicator TILES + 2-line
-  // STRUCTURE/READ. Every element carries a hover tooltip that explains it.
-  function tile(label, value, tip, hot){
-    return '<div title="'+(tip||'').replace(/"/g,'&quot;')+'" style="background:'+(hot?'rgba(242,180,90,0.07)':'rgba(255,255,255,0.025)')+
-      ';border:1px solid '+(hot?'rgba(242,180,90,0.55)':PAL.line)+';border-radius:6px;padding:3px 6px;min-width:0">'+
-      '<div style="font-size:7px;letter-spacing:.6px;color:'+PAL.sub+'">'+label+'</div>'+
-      '<div style="font-size:10.5px;font-weight:700;color:'+PAL.ink+';font-variant-numeric:tabular-nums;line-height:1.25">'+value+'</div></div>';
-  }
-  var g=function(t,c){ return '<b style="color:'+(c||PAL.ink)+'">'+t+'</b>'; };
-  var polV=(A.pol===true)?fmtNum(A.king)+' <span style="color:'+PAL.longAccent+';font-size:8.5px">+γ</span>'
-         :(A.pol===false)?fmtNum(A.king)+' <span style="color:#b48ce3;font-size:8.5px">−γ</span>'
-         :fmtNum(A.king);
-  var kdV=(A.kd!=null)?(fmtKd(A.kd)+(A.kdChg!=null?' <span style="color:'+(A.kdChg>=0?PAL.longAccent:PAL.shortAccent)+'">'+fmtChg(A.kdChg)+'</span>':'')):'—';
-  var distV=(A.dist===0)?'AT':(Math.abs(Math.round(A.dist))+(A.dist>0?'↑':'↓'))+(A.grav?' <span style="color:'+PAL.sub+';font-size:8px">grav≤3</span>':' <span style="color:'+PAL.amber+';font-size:8px">out</span>');
-  var evaV=(A.eva)?(fmtNum(A.eva.lo)+'–'+fmtNum(A.eva.hi)+' <span style="color:'+(A.inVA?PAL.longAccent:PAL.amber)+';font-size:8px">'+(A.inVA?'in':'OUT')+'</span>'):'—';
-  var succV=(A.succ)?(fmtNum(A.succ.k)+' · '+A.succ.a+'%'):'—';
-  var alignV='QQQ '+(A.qqq==null?'—':(A.qqq?'<span style="color:'+PAL.longAccent+'">✓</span>':'<span style="color:'+PAL.shortAccent+'">✗</span>'))+' <span style="color:'+PAL.sub+';font-size:8px">VIX —</span>';
-  var tiles='<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:3px">'+
-    tile('KING', polV, 'The King: strike with the LARGEST ABSOLUTE dealer exposure (Academy: settlement anchor, one per session). +γ = dealers long gamma there (friction/pin behavior); −γ = pro-cyclical hedging (fuel/overshoot behavior).')+
-    tile('K$ · TODAY', kdV, 'King dollar magnitude parsed from the tape ($K row) and its change vs session open. Growth = real directional intent; bleed = hedge decay, pin thesis weakening (Academy node-lifecycle). Recorded every bar.')+
-    tile('DIST', distV, 'Strikes between price and King. Gravity gate: on our recorded data the toward-King edge exists only within 3 strikes (54-60% inside vs 47%/0% beyond) — outside it, pull claims are suppressed.')+
-    tile('VALUE 70%', evaV, 'Exposure Value Area: the tightest strike band around the King holding ~70% of total dealer mass (POC concept). Inside = rotation regime (57% toward-King, n=260). OUTSIDE = imbalance — continuation, do NOT fade (n=25).')+
-    tile('SUCCESSION'+(A.succHot?' ⚠':''), (A.succHot?'<span style="color:'+PAL.amber+'">'+succV+'</span>':succV), 'Strongest non-King strike as % of King mass \u2014 who is second in line. \u26a0 THIS TILE CLAIMED '+SUCC_META.withdrawn+'% UNTIL 2026-08-29 AND IT DID NOT REPRODUCE. Re-measured on 9 recorded sessions against the crown the panel actually DRAWS (the latched one, not the raw tape that flaps between near-equal strikes): at \u226560% the crown moved to that strike '+SUCC_META.hz30+'% of the time within 30 minutes, '+SUCC_META.hz60+'% within an hour, and never above '+SUCC_META.hzDay+'% at ANY horizon. The original 76% was 4 days scored against the raw tape, where a one-snapshot flicker counted as a succession. \u26a0 What DOES separate is the node\u2019s own STATE, on the same 9 sessions at \u226580%: BUILDING '+SUCC_META.stBuild+'% and FADING '+SUCC_META.stFade+'% within 30m, but STEADY only '+SUCC_META.stSteady+'% \u2014 below the '+SUCC_META.chance+'% base rate for any ranked strike. Motion is the signal, stasis is the anti-signal, and SIZE ALONE is the weakest of the three. Read the state chip on that node\u2019s own row before reading this number.', A.succHot)+
-    tile('TAPS · CROSS', A.taps+' · '+A.cross, 'Tap episodes at the King today and side crossings. Academy freshness claim: 1st tap ~80% reaction, 2nd ~66%, 3rd ~33% (unverified). Many crossings = chop axis, not a wall.')+
-    tile('PHASE', A.phase+(A.toClose?' · '+A.toClose+'m':''), 'Session phase (CT): OPEN 8:30-9:30 · MID · LUNCH 11:30-1:00 · POWER = last 30m (forced-flow volatility; pin window when near the King). Minutes shown = to the 15:00 close.')+
-    tile('ALIGN', alignV, 'Cross-market King agreement: is QQQ\'s King on the same side of its own price as SPY\'s? Aligned = system-wide pull. VIX confirmation chip pending the ladder spike.')+
-  '</div>';
-  // STRUCTURE / READ
-  var polTxt=(A.pol===true)?('+γ — dealers '+g('buy dips / sell rips into it')+' → friction, absorption')
-            :(A.pol===false)?('−γ — dealers hedge '+g('pro-cyclically')+' → fuel, overshoot risk')
-            :'polarity unknown';
-  var P=[];
-  if(A.over) P.push(g('OVERSHOOT of +γ King',PAL.amber)+' without a 14-bar high — stretch not break; reversion through '+fmtNum(A.king)+' favored ⚖');
-  if(A.succHot && A.succ) P.push(g('SUCCESSION: '+fmtNum(A.succ.k)+' at '+A.succ.a+'%',PAL.amber)+' \u2014 \ud83d\udcca '+SUCC_META.hz30+'% crowned \u226430m, '+SUCC_META.hz60+'% \u226460m (n='+SUCC_META.n+') \u2014 read the node\u2019s STATE');
-  if(!A.grav) P.push('outside gravity (>3) — pull '+g('unsupported')+' 📊');
-  else if(A.appr && A.appr.approaching) P.push('approaching — 📊 63% continue; ETA ~'+(A.appr.etaBars*3)+'m'+((A.phase==='POWER'&&A.adist<=1.5)?' · '+g('PIN WINDOW',PAL.gold)+' ⚖':''));
-  if(A.inVA===false) P.push(g('outside value',PAL.amber)+' — imbalance: don’t fade 📊 (n=25)');
-  if(A.kdChg!=null && A.kdChg<=-15) P.push('magnet '+g('bleeding '+fmtChg(A.kdChg),PAL.shortAccent)+' — reshuffle risk ⚖');
-  if(A.kdChg!=null && A.kdChg>=15) P.push('magnet '+g('building '+fmtChg(A.kdChg),PAL.longAccent)+' — conviction rising ⚖');
-  if(!P.length) P.push('no active King signal — watching');
-  return '<div style="padding:4px 8px 5px 8px;border-left:2px solid '+PAL.gold+';margin:3px 0 4px 0">'+
-    tiles+
-    '<div title="What the structure IS right now — polarity-driven dealer mechanics at the King. Descriptive, not predictive." style="font-size:9.5px;line-height:1.45;color:'+PAL.ink+';margin-top:5px"><span style="color:'+PAL.gold+';font-weight:800">STRUCTURE ▸</span> +'+
-      ('γ'==='γ'?'':'')+'King '+g(fmtNum(A.king),PAL.gold)+' ('+polTxt+') · '+(A.dist===0?'AT price':(Math.abs(Math.round(A.dist))+' '+(A.dist>0?'above':'below')))+(A.eva?(A.inVA?' · inside value':' · outside value'):'')+'</div>'+
-    '<div title="What is LIKELY next, priority-ordered. ⚖ = Skylit Academy doctrine claim. 📊 = measured on our recorded bars, n shown. These labels re-read from the live Projection Scorecard as it unlocks." style="font-size:9.5px;line-height:1.45;color:'+PAL.ink+';margin-top:2px"><span style="color:'+PAL.gold+';font-weight:800">READ ▸</span> '+P.slice(0,3).join(' · ')+'</div>'+
-    '<div title="Provenance: what backs these claims. Drift was demoted to descriptive after testing at 50% (n=68) — a coin flip." style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;opacity:.85">⚖ Academy · 📊 measured 4d/324 bars — sharpens nightly in Analysis ▸ 🎯 · drift descriptive-only (50%, n=68)</div>'+
-  '</div>';
-}
-// ===================== (v10.42) KING PROJECTION + FEEDBACK LOOP =====================
-// The projected-path chart draws ONLY data-backed elements; every projection is
-// RECORDED per bar (snap.proj) and SCORED nightly (projScorecard) so the panel's
-// own claims tighten with evidence. projRecs() turns scores into concrete tuning
-// recommendations -> Analysis tab + day export -> end-of-day LLM review closes
-// the loop automatically.
-function fmtKd(kd){                       // kd arrives in $K units from the tape
-  if(typeof kd!=='number') return null;
-  if(kd>=1e6) return '$'+(kd/1e6).toFixed(2)+'B';
-  if(kd>=1e3) return '$'+Math.round(kd/1e3)+'M';
-  return '$'+Math.round(kd)+'K';
-}
-function fmtChg(chg){ if(typeof chg!=='number') return null;
-  return (chg>=0?'▲':'▼')+Math.abs(chg)+'%'; }
 // PURE. A = kingAnalyzer output; ctx = {gateK, hod, lod, avgRange, phase, toClose, evaLo, evaHi}
 function kingProjection(A, ctx){
   if(!A || !A.ok) return null;
@@ -10787,115 +9661,6 @@ function kingProjectionLive(sym, A){
     return kingProjection(A, { gateK:gk, hod:hod, lod:lod, avgRange:(n?rs/n:null),
       phase:A.phase, toClose:A.toClose, evaLo:(A.eva?A.eva.lo:null), evaHi:(A.eva?A.eva.hi:null) });
   }catch(e){ return null; }
-}
-// (v10.43) PURE: cone half-width with POST-ETA TAPER. Before arrival the
-// envelope widens with sqrt(bars); after the projected arrival it TAPERS into a
-// pin range (floor 0.5) instead of ballooning forever — the "black wedge" fix.
-// (v11.0 audit) PARKED — no live caller; kept because test_king_projection.js pins it.
-function projTaperHalf(b, etaBars, barsLeft, halfFn){
-  if(etaBars==null || b<=etaBars){
-    // no ETA: still cap growth at the 10-bar envelope so a flat projection
-    // cannot blow the y-domain.
-    return (etaBars==null && b>10) ? halfFn(10) : halfFn(b);
-  }
-  var hEta=halfFn(etaBars);
-  var span=Math.max(1,(barsLeft-etaBars));
-  var frac=Math.min(1,(b-etaBars)/span);
-  return Math.max(0.5, hEta*(1-0.5*frac));
-}
-// ---- the projected-path chart (SVG <title> children = native hover tooltips) ----
-// (v11.0 audit) PARKED — no live caller; kept because test_king_projection.js pins it.
-function projChartHtml(A, P){
-  if(!A||!A.ok||!P) return '';
-  var W=262,H=118,padL=4,padR=46,padT=8,padB=14;
-  var barsLeft=Math.max(4, Math.round((A.toClose||30)/3));
-  function half(b){ return projTaperHalf(b, P.etaBars, barsLeft, P.cone.half); }
-  // ---- (v10.43) FOCUSED Y-DOMAIN: scale to the price<->target ACTION, not to
-  // every rail. Rails outside the window collapse into edge tags so a far HOD
-  // can no longer squash the projection into the bottom fifth of the chart.
-  var ys=[A.px, P.tgt, A.px+half(barsLeft), A.px-half(barsLeft), P.tgt+0.6, P.tgt-0.6];
-  if(P.t1!=null) ys.push(P.t1);
-  var aLo=Math.min.apply(null,ys), aHi=Math.max.apply(null,ys);
-  var inRails=[], edgeHi=[], edgeLo=[];
-  for(var rI=0;rI<P.rails.length;rI++){ var R0=P.rails[rI];
-    if(R0.k>=aLo-1.2 && R0.k<=aHi+1.2) inRails.push(R0);
-    else if(R0.k>aHi) edgeHi.push(R0.label+' '+fmtNum(R0.k));
-    else edgeLo.push(R0.label+' '+fmtNum(R0.k));
-  }
-  for(var rj=0;rj<inRails.length;rj++){ ys.push(inRails[rj].k); }
-  var yLo=Math.min.apply(null,ys)-0.5, yHi=Math.max.apply(null,ys)+0.5;
-  function Y(k){ return padT+(yHi-k)/(yHi-yLo)*(H-padT-padB); }
-  function X(b){ return padL+(b/barsLeft)*(W-padL-padR); }
-  function esc(t){ return (''+t).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
-  function tt(t){ return '<title>'+esc(t)+'</title>'; }
-  var svg='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto">';
-  svg+='<line x1="'+(W-padR)+'" y1="0" x2="'+(W-padR)+'" y2="'+H+'" stroke="'+PAL.line+'"/>';
-  // edge tags for out-of-window rails
-  if(edgeHi.length){ svg+='<g>'+tt('Above this view: '+edgeHi.join(' · ')+'. Rails outside the action window are tagged here instead of stretching the axis.')+
-    '<text x="'+(padL+2)+'" y="8" fill="'+PAL.blue+'" opacity="0.9">▲ '+esc(edgeHi.join(' · '))+'</text></g>'; }
-  if(edgeLo.length){ svg+='<g>'+tt('Below this view: '+edgeLo.join(' · '))+
-    '<text x="'+(padL+2)+'" y="'+(H-3)+'" fill="'+PAL.sub+'" opacity="0.9">▼ '+esc(edgeLo.join(' · '))+'</text></g>'; }
-  // rails with LABEL ANTI-COLLISION (nudge to >=9px separation)
-  var explain={tgt:'T2 target = the operative King. Targets cap at the King (doctrine — no T3).',
-    t1:'T1 = the gatekeeper between price and the King — first structural checkpoint.',
-    eva:'Exposure value-area edge (70% of dealer mass). Inside = rotation; outside = imbalance — don’t fade (measured).',
-    ref:'Session reference level (HOD/LOD).'};
-  var placed=[];
-  inRails.sort(function(a,b){ return Y(a.k)-Y(b.k); });
-  for(var r2=0;r2<inRails.length;r2++){ var RR=inRails[r2]; var y=Y(RR.k);
-    var col=RR.cls==='tgt'?PAL.gold:(RR.cls==='t1'?PAL.sub:(RR.cls==='eva'?PAL.blue:PAL.sub));
-    var ly=y-2;
-    for(var pQ=0;pQ<placed.length;pQ++){ if(Math.abs(ly-placed[pQ])<9) ly=placed[pQ]+9; }
-    ly=Math.max(padT+6, Math.min(H-padB-2, ly)); placed.push(ly);
-    svg+='<g>'+tt(RR.label+' '+fmtNum(RR.k)+' — '+(explain[RR.cls]||''))+
-      '<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'" stroke="'+col+'" stroke-width="1" stroke-dasharray="2,3" opacity="0.6"/>'+
-      '<text x="'+(padL+2)+'" y="'+ly.toFixed(1)+'" fill="'+col+'" opacity="0.9">'+RR.label+' '+fmtNum(RR.k)+'</text></g>';
-  }
-  // current King rail + projected step
-  var yK=Y(A.king).toFixed(1);
-  if(P.projKing!=null){
-    var xStep=X(Math.min(4,barsLeft*0.3)).toFixed(1), yP=Y(P.projKing).toFixed(1);
-    svg+='<g>'+tt('Current King '+fmtNum(A.king)+'. Solid = where the crown is now.')+
-      '<path d="M '+padL+' '+yK+' H '+xStep+'" stroke="'+PAL.gold+'" stroke-width="2"/></g>';
-    svg+='<g>'+tt('PROJECTED King roll → '+fmtNum(P.projKing)+'. Drawn only because Succession ≥ 60% of King mass. Base rate: '+(P.basis.succ||''))+
-      '<path d="M '+xStep+' '+yK+' V '+yP+' H '+(W-padR)+'" stroke="'+PAL.gold+'" stroke-width="2" stroke-dasharray="5,4"/></g>';
-  } else {
-    svg+='<g>'+tt('King rail '+fmtNum(A.king)+' — no hot succession candidate; crown projected to hold.')+
-      '<path d="M '+padL+' '+yK+' H '+(W-padR)+'" stroke="'+PAL.gold+'" stroke-width="2" stroke-dasharray="6,4"/></g>';
-  }
-  // price cone (tapered) + center path + ETA
-  var x0=padL, y0=Y(A.px), steps=10, up=[],dn=[],mid=[];
-  for(var sI=0;sI<=steps;sI++){ var b=barsLeft*sI/steps; var x=X(b);
-    var drift=(P.etaBars!=null)?(P.tgt-A.px)*Math.min(1,b/P.etaBars):0;
-    var cph=half(b);
-    mid.push([x, Y(A.px+drift)]); up.push([x, Y(A.px+drift+cph)]); dn.push([x, Y(A.px+drift-cph)]);
-  }
-  function path(pts){ var d0=''; for(var q=0;q<pts.length;q++){ d0+=(q?' L ':'M ')+pts[q][0].toFixed(1)+' '+pts[q][1].toFixed(1);} return d0; }
-  var cone=path(up); for(var q2=dn.length-1;q2>=0;q2--){ cone+=' L '+dn[q2][0].toFixed(1)+' '+dn[q2][1].toFixed(1); } cone+=' Z';
-  svg+='<g>'+tt('Volatility cone: recent avg 3m bar range ('+P.cone.r.toFixed(2)+') widening with √bars until arrival, then TAPERING into the pin range. An envelope of normal movement — NOT a forecast band. Coverage scored nightly (target ~70%).')+
-    '<path d="'+cone+'" fill="rgba(74,144,217,0.12)" stroke="rgba(74,144,217,0.30)" stroke-width="0.6"/></g>';
-  svg+='<g>'+tt('Projected price path toward '+fmtNum(P.tgt)+(P.etaBars!=null?' at the measured 3-bar approach rate. '+(P.basis.eta||''):' — no approach in progress; flat projection.'))+
-    '<path d="'+path(mid)+'" stroke="'+PAL.blue+'" stroke-width="1.6" stroke-dasharray="4,3" fill="none"/></g>';
-  svg+='<circle cx="'+x0+'" cy="'+y0.toFixed(1)+'" r="2.6" fill="'+PAL.blue+'">'+tt('Price now: '+fmtNum(A.px))+'</circle>';
-  if(P.etaBars!=null && P.etaBars<=barsLeft){
-    var xe=X(P.etaBars).toFixed(1), ye=Y(P.tgt).toFixed(1);
-    svg+='<circle cx="'+xe+'" cy="'+ye+'" r="3.2" fill="none" stroke="'+PAL.blue+'" stroke-width="1.4">'+
-      tt('ETA at target ≈ '+(P.etaBars*3)+' min at current approach rate. ETA error is scored nightly.')+'</circle>';
-  }
-  if(P.pin){
-    var yT=Y(P.tgt+0.5).toFixed(1), hB=(Y(P.tgt-0.5)-Y(P.tgt+0.5)).toFixed(1);
-    svg+='<g>'+tt('PIN BAND ±0.5: POWER phase + proximity — settlement gravity at the King. '+(P.basis.pin||''))+
-      '<rect x="'+X(barsLeft*0.72).toFixed(1)+'" y="'+yT+'" width="'+(W-padR-X(barsLeft*0.72)).toFixed(1)+'" height="'+hB+'" fill="rgba(227,195,65,0.10)" stroke="rgba(227,195,65,0.4)" stroke-dasharray="2,2"/></g>';
-  }
-  svg+='<text x="'+(W-padR+4)+'" y="'+(Y(P.tgt)+3).toFixed(1)+'" fill="'+PAL.gold+'" font-weight="800">'+fmtNum(P.tgt)+'</text>';
-  svg+='<text x="'+(W-padR+4)+'" y="'+(H-3)+'" fill="'+PAL.sub+'">close</text>';
-  svg+='</svg>';
-  return '<div title="Projected path from now to the close. Every element explains itself on hover; every projection is recorded this bar and scored nightly in Analysis ▸ 🎯." '+
-    'style="padding:4px 6px;background:'+PAL.card+';border:1px solid '+PAL.line+';border-radius:8px;margin-top:4px">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">'+
-      '<span style="color:'+PAL.sub+';font-size:8px;font-weight:700;letter-spacing:.5px">🎯 KING PATH · PROJECTED</span>'+
-      '<span title="Every projection drawn here is stored with this bar and scored after the fact — reach rate, ETA error, cone coverage, pin hits — in Analysis ▸ 🎯 Projection Scorecard." style="font-size:7.5px;color:'+PAL.sub+'">scored nightly 📊</span>'+
-    '</div>'+svg+'</div>';
 }
 // ---- per-bar compact record of what was projected (for scoring) ----
 function projSnapshotRecord(sym){
@@ -11125,8 +9890,6 @@ function rulesSave(){
   try{ localStorage.setItem(RULES_KEY, JSON.stringify({v:1, at:Date.now(), rules:RULES})); }catch(e){}
   try{ localStorage.setItem(RULES2_KEY, JSON.stringify({v:2, at:Date.now(), doc:RULES_DOC})); }catch(e2){}
 }
-// (v11.0 audit) PARKED — no live caller; kept because test_rules_v2.js et al. pins it.
-function ruleGet(id){ var R=rulesLoad(); return (R && R[id]) || null; }
 // ============================================================================
 // (v10.54, audit 1/4/6) EFFECTIVE N — THE ONLY N THAT COUNTS.
 // A feature is recorded once per 3-minute BAR, and every record is scored over the
@@ -11135,6 +9898,20 @@ function ruleGet(id){ var R=rulesLoad(); return (R && R[id]) || null; }
 // Counting them as ten inflated every n on the panel by ~10x and let the promotion
 // bar be cleared by a single afternoon. effN divides that out.
 // ============================================================================
+// (v15.52) WHICH PREDICTED BAND A RECORD SITS IN. The CAN-IT-FAIL check asks one question of every
+// feature: does its hit rate MOVE between the records it predicted low and the ones it predicted
+// high? A table cell, a grade, a fire-grade and a wick quality are all predictions; if the rate is
+// the same in both bands the scorer is measuring something else (F-11: lodhod, 100% in both).
+function featPredBand(rec){
+  try{
+    if(!rec) return null;
+    if(typeof rec.p==='number') return (rec.p<50)?'lo':'hi';
+    if(rec.grade==='A') return 'hi';        if(rec.grade==='C') return 'lo';
+    if(rec.gradeAtFire==='A') return 'hi';  if(rec.gradeAtFire==='C') return 'lo';
+    if(rec.quality==='confirmed') return 'hi'; if(rec.quality==='weak') return 'lo';
+  }catch(e){}
+  return null;
+}
 function effN(n){
   n=(typeof n==='number' && n>0)?n:0;
   var f=(typeof FEAT_FWD==='number' && FEAT_FWD>0)?FEAT_FWD:10;
@@ -11146,9 +9923,36 @@ function nTxt(n){
   return 'n='+n+' bars → eff '+effN(n);
 }
 // A % is never rendered without its n. pctN(null,...) says "recording", never "–%".
-function pctN(rate, n){
+function pctN(rate, n, gated){
+  if(gated) return '\u26d4 gated \u2014 the scorer cannot fail ('+nTxt(n)+')';   // (v15.54) step 7
   if(rate==null) return '● recording ('+nTxt(n)+')';
   return rate+'% ('+nTxt(n)+')';
+}
+// (v15.54) THE GATE — workflow step 7. ⑤b CAN THE SCORER FAIL flags a feature whose hit rate does not move
+// between the records it predicted LOW and the ones it predicted HIGH (lodhod read 100% in both for four
+// sessions). Until this build that was a REPORT. A flagged feature now cannot promote (ruleTier -> ⚖) and its
+// rate cannot render as a number (ruleLocalRate.rate -> null, pctN -> "gated"). Thin bands are NOT gated —
+// a feature is judged only once both bands hold 30 records. The gate is per FEATURE KEY; a sub-rule of a
+// gated feature is gated with it.
+function featGated(key, sym){
+  try{
+    var st=featStatsCached(sym||'SPY'); var b=st&&st.byKey&&st.byKey[key]; if(!b) return null;
+    var lo=(b.band&&b.band.lo)||{n:0,hit:0}, hi=(b.band&&b.band.hi)||{n:0,hit:0};
+    if(lo.n<30 || hi.n<30) return { gated:false, thin:true };
+    var rl=100*lo.hit/lo.n, rh=100*hi.hit/hi.n;
+    if(Math.abs(rh-rl)<10) return { gated:true, why:'CANNOT DISCRIMINATE \u2014 '+Math.round(rl)+'% in its low band, '+Math.round(rh)+'% in its high (n '+lo.n+'/'+hi.n+')' };
+    if(rh<rl) return { gated:true, why:'INVERTED \u2014 the high band scores '+Math.round(rh)+'% against the low band\u2019s '+Math.round(rl)+'% (n '+lo.n+'/'+hi.n+')' };
+    return { gated:false };
+  }catch(e){ return null; }
+}
+// the FEATURES key a rule id is measured by — the gate is applied at this key
+function ruleFeatKey(id){
+  id=String(id||'');
+  if(/^dir\.[ABC]$/.test(id)) return 'dir';
+  if(/^node\./.test(id) || /^kill\.(tap3|negGammaWide)$/.test(id)) return 'node';
+  if(/^kill\./.test(id)) return 'dir';
+  if(/^decision\./.test(id)) return 'decision';
+  return id;
 }
 // ---- LOCAL TRUTH: what THIS machine has actually measured for a rule ----------
 // featStats is the only source. A rule with no local record is UNMEASURED, whatever
@@ -11202,6 +10006,13 @@ function ruleLocalRate(id, sym){
     out.n=b.n||0; out.hit=b.hit||0;
     out.rate=(out.n>0)?Math.round(100*out.hit/out.n):null;
     out.effN=effN(out.n);
+    // (v15.54) THE GATE: a feature ⑤b flagged has no rate here, whatever it measured
+    try{ var _g=featGated(ruleFeatKey(fk||id), sym); if(_g && _g.gated){ out.gated=true; out.gatedWhy=_g.why; out.rate=null; } }catch(eG){}
+    // (v15.52) A TO-CLOSE FEATURE'S RECORDS ARE ALL VIEWS OF ONE SESSION OUTCOME. n/FEAT_FWD divides
+    // out a 10-bar overlap; a session-long window overlaps completely. lodhod's 362 rows over four
+    // sessions were "eff 36" against an unlock bar of 20 — the gate would have cleared a tautology.
+    // The honest n is the number of SESSIONS.
+    if(b && b.toClose && b.dates) out.effN=Object.keys(b.dates).length;
   }catch(e){}
   return out;
 }
@@ -11224,7 +10035,9 @@ function rulePromotedApplied(id){
 function ruleTier(id){
   if(!id) return '⚖';
   if(!rulePromotedApplied(id)) return '⚖';
-  return (ruleLocalRate(id).effN >= RULE_UNLOCK_N) ? '📊' : '⚖';
+  var lr=ruleLocalRate(id);
+  if(lr.gated) return '⚖';                                   // (v15.54) a gated feature cannot be 📊
+  return (lr.effN >= RULE_UNLOCK_N) ? '📊' : '⚖';
 }
 function rulePromoted(id){ return ruleTier(id)==='📊'; }
 
@@ -11759,71 +10572,6 @@ function driftSideArrow(ctr, px){
     return '';
   }catch(e){ return ''; }
 }
-// ONE line under the King header cluster. Shows the two centres; the verdict chip is
-// an INPUT to the Direction spine, never a rival verdict (layer spec S0).
-function driftLineHtml(sym){
-  sym=sym||'SPY';
-  var d;
-  try{ d=driftRead(sym); }catch(e){ return ''; }
-  if(!d) return '';
-  var up=(d.dir>0), dn=(d.dir<0);
-  var arrow = up?'↗':(dn?'↘':'→');
-  var acol  = up?PAL.longAccent:(dn?PAL.shortAccent:PAL.sub);
-  var chipCol = (d.verdict==='NONE')?PAL.sub:(up?PAL.longAccent:(dn?PAL.shortAccent:PAL.amber));
-  var chipBg  = (d.verdict==='NONE')?'transparent':(up?'rgba(46,194,126,.14)':(dn?'rgba(240,97,109,.14)':'rgba(242,180,90,.14)'));
-  // (v10.50) SIMPLE, question-first hover — no confidence clause.
-  var gA=(d.gvwap!=null && d.px!=null && d.gvwap>d.px), gB=(d.gvwap!=null && d.px!=null && d.gvwap<d.px);
-  var vA=(d.vvwap!=null && d.px!=null && d.vvwap>d.px), vB=(d.vvwap!=null && d.px!=null && d.vvwap<d.px);
-  var lead='Which way do GEX & VEX lean? ';
-  var tip;
-  if(d.verdict==='NONE' || d.vvwap==null) tip=lead+'Waiting on VEX.';
-  else if(gA && vA) tip=lead+'Both above price — supporting higher prices.';
-  else if(gB && vB) tip=lead+'Both below price — pressuring lower prices.';
-  else tip=lead+'They disagree, no clean lean, expect chop.';
-  tip=tip.replace(/"/g,'');
-  var line='<div title="'+tip+'" style="display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:10px;margin:5px 0 3px;overflow:hidden">'+
-    '<span style="color:'+acol+';font-weight:800">'+arrow+'</span>'+
-    '<span style="color:'+PAL.sub+';font-weight:700">Drift</span>'+
-    '<span style="padding:0 5px;border-radius:3px;font-size:9px;font-weight:700;color:'+chipCol+';background:'+chipBg+'">'+d.label+'</span>'+
-    '<span style="color:'+PAL.line+'">·</span>'+
-    // (v10.56 PART E) EACH CENTRE SAYS WHICH SIDE OF PRICE IT IS ON. "G768.7" alone made
-    // the reader hold the price in their head to know whether gamma was pulling up or
-    // down; the arrow answers it on the face — ↓ below price (red), ↑ above (green).
-    '<span style="color:'+PAL.gold+';font-weight:700">G'+(d.gvwap!=null?fmtLvl(d.gvwap):'–')+driftSideArrow(d.gvwap,d.px)+'</span>'+
-    '<span style="color:'+PAL.line+'">·</span>'+
-    '<span style="color:#a371f7;font-weight:700">V'+(d.vvwap!=null?fmtLvl(d.vvwap):'–')+driftSideArrow(d.vvwap,d.px)+'</span>'+
-  '</div>';
-  // (v10.51.1 FIX) THIN BAR — TWO LANES: gold GEX band on top, purple VEX band below,
-  // each with a brighter centre tick (GVWAP / VVWAP), and a WHITE price line spanning both.
-  // SCALE BUG (v10.50): the domain was the Flr..Ceil range, which does NOT contain the ±1σ
-  // bands — on 2026-08-18 that clamped VEX to 0-100% and GEX to 66%, so the two smeared into
-  // one wash and only the price tick was legible. The domain is now the UNION of both bands
-  // and price (padded), so the bands always fit and their true positions are comparable.
-  // Separate lanes (not overlaid at 50% opacity) keep both readable when they overlap.
-  var bar='';
-  try{
-    var xs=[d.px,d.gLo,d.gHi,d.vLo,d.vHi].filter(function(x){return typeof x==='number';});
-    if(xs.length>=2){
-      var lo=Math.min.apply(null,xs), hi=Math.max.apply(null,xs);
-      var pad=Math.max(0.15,(hi-lo)*0.08);
-      lo-=pad; hi+=pad;
-      var span=hi-lo;
-      var P=function(x){ return Math.max(0,Math.min(100,(x-lo)/span*100)); };
-      function laneHtml(bLo,bHi,ctr,col,top,label){
-        if(bLo==null||bHi==null) return '';
-        var l=P(bLo), w=Math.max(2,P(bHi)-l);
-        var h='<div title="'+label+'" style="position:absolute;top:'+top+'px;height:3px;border-radius:2px;opacity:.55;background:'+col+';left:'+l.toFixed(1)+'%;width:'+w.toFixed(1)+'%"></div>';
-        if(ctr!=null) h+='<div style="position:absolute;top:'+top+'px;height:3px;width:2px;border-radius:1px;background:'+col+';left:'+P(ctr).toFixed(1)+'%"></div>';
-        return h;
-      }
-      var lanes=laneHtml(d.gLo,d.gHi,d.gvwap,PAL.gold,1,'GEX (gamma) band '+(d.gLo!=null?d.gLo+'-'+d.gHi:'')+', centre '+(d.gvwap!=null?d.gvwap:'-'))
-               +laneHtml(d.vLo,d.vHi,d.vvwap,'#a371f7',6,'VEX (vanna) band '+(d.vLo!=null?d.vLo+'-'+d.vHi:'')+', centre '+(d.vvwap!=null?d.vvwap:'-'));
-      var pxl=(d.px!=null)?('<div title="price '+d.px+'" style="position:absolute;top:-1px;height:12px;width:2px;background:#ffffff;border-radius:1px;left:'+P(d.px).toFixed(1)+'%"></div>'):'';
-      bar='<div title="'+tip+'" style="position:relative;height:10px;border-radius:3px;background:#161b22;margin:0 2px 6px">'+lanes+pxl+'</div>';
-    }
-  }catch(eBar){}
-  return line+bar;
-}
 
 // ============================================================================
 // (I) ACM CANONICAL — ONE accumulation source with two LABELLED horizons, so the
@@ -12008,62 +10756,12 @@ function accumCanon(sym, k){
 // is an air pocket). Rolling detection and PB detection are ONE mechanism seen from
 // two angles. The SMA still OWNS the direction — this engine never chooses it.
 // ============================================================================
-var NODEHIST_KEY='gpts_nodehist_v1';           // NEW key; nothing existing is renamed
-var NODEHIST_MAX=400;
-var NODEHIST=null;
+           // NEW key; nothing existing is renamed
 var PB_MIN_PCT=20;        // a PB node must be at least this % of the King to count
 var PB_LEG_PTS=0.5;       // price must travel this far off a PB before a NEW leg starts
 var PB_REACH=5;           // a PB node beyond this many strikes is not this leg's PB
 var LEG_ROLL_SIGNAL=2;    // 2 consecutive PB nodes rolling the same way = signal
 var LEG_ROLL_CONFIRM=3;   // 3 = confirmation (Academy count rule)
-function nodeHistLoad(){
-  if(NODEHIST) return NODEHIST;
-  try{ NODEHIST=JSON.parse(localStorage.getItem(NODEHIST_KEY)||'null'); }catch(e){ NODEHIST=null; }
-  if(!NODEHIST || typeof NODEHIST!=='object') NODEHIST={ v:1, sym:{} };
-  if(!NODEHIST.sym) NODEHIST.sym={};
-  return NODEHIST;
-}
-function nodeHistSave(){ try{ localStorage.setItem(NODEHIST_KEY, JSON.stringify(NODEHIST)); }catch(e){} }
-// PURE: the nearest MEANINGFUL ceiling above and floor below price on this bar. This
-// is the per-bar cluster memory PB detection needs: a node that was not here last bar
-// and is here now APPEARED, and that is the whole detection.
-function nodeHistRow(m){
-  var out={ px:null, ceil:null, flr:null };
-  try{
-    if(!m || m.px==null) return out;
-    var px=m.px; out.px=+px.toFixed(2);
-    (m.levels||[]).forEach(function(L){
-      if(!L || typeof L.k!=='number') return;
-      var pct=(typeof L.pct==='number')?Math.abs(L.pct):(L.isKing?100:0);
-      if(!(L.isKing || pct>=PB_MIN_PCT)) return;
-      if(L.k>px+0.001){ if(!out.ceil || L.k<out.ceil.k) out.ceil={ k:L.k, pct:pct, state:L.state||null }; }
-      else if(L.k<px-0.001){ if(!out.flr || L.k>out.flr.k) out.flr={ k:L.k, pct:pct, state:L.state||null }; }
-    });
-  }catch(e){}
-  return out;
-}
-// Idempotent per (day, closed bar) — same contract as fcHistSample.
-function nodeHistSample(sym, m){
-  try{
-    sym=sym||'SPY';
-    if(!m){ try{ m=nodeMapModel(sym); }catch(e1){ m=null; } }
-    if(!m || !m.ok) return null;
-    var row=nodeHistRow(m);
-    if(row.px==null) return null;
-    var H=nodeHistLoad();
-    var arr=H.sym[sym]||(H.sym[sym]=[]);
-    var bar=(STATE[sym]||{}).lastClosedB||0;
-    var last=arr.length?arr[arr.length-1]:null;
-    var rec={ d:TODAY, t:Date.now(), bar:bar, px:row.px, ceil:row.ceil, flr:row.flr };
-    if(last && last.d===TODAY && last.bar===bar) arr[arr.length-1]=rec;
-    else arr.push(rec);
-    if(arr.length>NODEHIST_MAX) H.sym[sym]=arr.slice(arr.length-NODEHIST_MAX);
-    nodeHistSave();
-    var a2=H.sym[sym];
-    return a2[a2.length-1];
-  }catch(e){ return null; }
-}
-function nodeHistOf(sym){ var H=nodeHistLoad(); return (H.sym && H.sym[sym]) || []; }
 
 function legStepWord(n){ return n===1?'1st':(n===2?'2nd':(n===3?'3rd':(n+'th'))); }
 // ============================================================================
@@ -12082,8 +10780,6 @@ function legStepWord(n){ return n===1?'1st':(n===2?'2nd':(n===3?'3rd':(n+'th')))
 var ACM_UP   = 8;    // m15 %King change at/above this = ACCUMULATING (acm)
 var ACM_DN   = -8;   // m15 %King change at/below this = DISSIPATING (dec)
 var ACM_DROP = 25;   // ...or this much off the node's SESSION PEAK = dec
-var HANDOFF_DEC  = ACM_DN;    // aliases kept for the leg engine's vocabulary
-var HANDOFF_DROP = ACM_DROP;
 var HANDOFF_ACM  = ACM_UP;
 // PURE: is this level bleeding? (level rows carry acm15 / pctPeak from accumCanon)
 function legNodeDissipating(L){
@@ -13465,12 +12161,10 @@ function actRecord(sym, action){
     day.act[sym].push(rec);
     if(day.act[sym].length>400) day.act[sym]=day.act[sym].slice(-400);
     recorderSave(db);
-    ACT_LAST={sym:sym, t:rec.t, action:rec.action};
     try{ render(); }catch(eR){}
     return rec;
   }catch(e){ return null; }
 }
-var ACT_LAST=null;
 function actToday(sym){
   try{ var db=recorderLoad(); var day=recorderDay(db); return ((day.act||{})[sym])||[]; }catch(e){ return []; }
 }
@@ -13506,7 +12200,6 @@ function actButtonsHtml(sym, k){
 // %King is read from the FEED (feedStructMap), never from the DOM heatmap, so the
 // numbers survive a GEX/VEX/GEX+VEX display toggle.
 // ============================================================================
-var DEFLZONES_N=3;
 function zoneRole(L){
   if(!L) return '';
   if(L.isKing) return 'King';
@@ -13557,13 +12250,8 @@ function nodeActivityWord(sym, L){
     return '';
   }catch(e){ return ''; }
 }
-var ACTIVITY_TIP=('What is the node doing? Pull = closing in · Push = repelled · Defl = tapped & reversed · '+
-  'BOw = at the node, break watch · BO·FT = break with follow-through.');
 // A colored `g` = node polarity: YELLOW g (+γ, clean bounce) / PURPLE g (−γ, sharp/violent).
-var GPOL_TIP='What kind of node? Yellow g = +γ clean bounce; purple g = −γ sharp/violent.';
 function zonePolCol(L){ return (L.pos===false)?'#a371f7':PAL.gold; }
-// (v11.0 audit) PARKED — no live caller; kept because test_zone_row.js pins it.
-function zoneGGlyph(L){ return '<span title="'+GPOL_TIP+'" style="color:'+zonePolCol(L)+';font-weight:800">g</span>'; }
 function zoneGradePill(ng, tip){
   var g=ng.grade||'C'; var col=g==='A'?PAL.longAccent:(g==='B'?PAL.blue:PAL.amber);
   var bg =g==='A'?'rgba(63,185,80,.15)':(g==='B'?'rgba(88,166,255,.15)':'rgba(210,153,34,.15)');
@@ -13661,7 +12349,6 @@ function mapTransfersOf(nodes, px){
 // it was dissipating, did price travel away. PURE given (series, candles); recomputed per bar
 // (the feed carries the whole session, so a reload loses nothing); exported per day.
 // ============================================================================
-var LEDGER_TOUCH_ZONE=null;      // null = DEFLECT_ZONE
 var LEDGER_INFL_BARS=5;          // influence horizon: |px−k| change over the next 5 closed bars
 var LEDGER_CACHE={};
 function ledgerStateAt(v, i){
@@ -14061,10 +12748,6 @@ function mapSentence(sym, legR, trendConfirmed, opts){
   out.s=s?(s+cav):''; out.html=h?(h+(cav?'<span style="color:'+PAL.sub+'">'+cav+'</span>':'')):''; out.id=id; out.lean=f.lean;
   return out;
 }
-// kept for the recorder (LAST_READ.map) and older callers: plain text of the structure sentence
-function mapLineText(sym, legR, trendConfirmed){
-  try{ var m=mapSentence(sym, legR, trendConfirmed, {}); return { s:m.s, html:m.html, lean:m.lean, id:m.id }; }catch(e){ return { s:'', html:'', lean:'none' }; }
-}
 
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.map=function(s){ try{ return nodeFlow(s||'SPY'); }catch(e){ return String(e); } };
@@ -14321,18 +13004,6 @@ function briefLine(sym){
        if(rl) parts.push('review: '+rl); }catch(e5){}
   return 'Brief · '+parts.join(' · ');
 }
-function briefBlockHtml(sym){
-  try{
-    var sb=sessionBucket();
-    if(!BRIEF_FORCE && sb.bucket!=='pre-open') return '';
-    var txt=briefLine(sym);
-    var tip=('PRE-OPEN BRIEF — a descriptive snapshot of the map before the bell plus how yesterday’s grade-A direction calls '+
-      'actually resolved. Click to expand. No forecast, no plan, no levels to act on: it is orientation only. Force it any time with __gptsDebug.brief().').replace(/"/g,'');
-    return '<div class="gpts-brief" data-gbrief="1" title="'+tip+'" style="cursor:pointer;font-size:9px;color:'+PAL.sub+';background:'+PAL.card+';border:1px solid '+PAL.line+';border-radius:6px;padding:2px 6px;margin:2px 2px 3px;'+
-      (BRIEF_OPEN?'white-space:normal;line-height:1.45':'overflow:hidden;white-space:nowrap;text-overflow:ellipsis')+'">'+
-      (BRIEF_OPEN?'▾ ':'▸ ')+txt+'</div>';
-  }catch(e){ return ''; }
-}
 window.__gptsDebug.brief=function(){ BRIEF_FORCE=!BRIEF_FORCE; BRIEF_OPEN=BRIEF_FORCE; try{ render(); }catch(e){} return briefLine('SPY'); };
 
 // ============================================================================
@@ -14457,8 +13128,9 @@ function registerCoreFeatures(){
                session:(d.inputs.session&&d.inputs.session.bucket)||null,
                opex:!!(d.inputs.session&&d.inputs.session.opex),
                // (v11.0 G8) what the READ actually said on this bar
-               read:(typeof LAST_READ!=='undefined' && LAST_READ[sym])?{ voiceId:LAST_READ[sym].voiceId, sentence:LAST_READ[sym].sentence,
-                     legDir:LAST_READ[sym].legDir, legPhase:LAST_READ[sym].legPhase, dirSrc:LAST_READ[sym].dirSrc, map:LAST_READ[sym].map }:null };
+               // (v15.53, D4) computed here, on the closed bar — not read back from a render that never ran
+               read:(function(){ try{ var r=readState(sym); return r?{ voiceId:r.voiceId, sentence:r.sentence, verdict:r.verdict,
+                     legDir:r.legDir, legPhase:r.legPhase, dirSrc:r.dirSrc, map:r.map, structureId:r.structureId }:null; }catch(eR){ return null; } })() };
     },
     outcome:function(rec, fwd){
       return { hit:_fwdHitDir(fwd, rec&&rec.verdict), mfe:fwd?fwd.mfe:null, mae:fwd?fwd.mae:null,
@@ -15401,8 +14073,8 @@ function registerCoreFeatures(){
       try{
         var fsum=futureStructureSummary(sym);
         var nodes=[];
-        ((fsum&&fsum.above)||[]).forEach(function(r){ nodes.push(recNode(r)); });
-        ((fsum&&fsum.below)||[]).forEach(function(r){ nodes.push(recNode(r)); });
+        ((fsum&&fsum.above)||[]).forEach(function(r){ nodes.push(recNode(r, sym)); });
+        ((fsum&&fsum.below)||[]).forEach(function(r){ nodes.push(recNode(r, sym)); });
         var pxN=(ctx&&ctx.px!=null)?ctx.px:((STATE[sym]||{}).price);
         d=deriveFactors(nodes, pxN, (typeof (STATE[sym]||{}).king==='number')?STATE[sym].king:null);
       }catch(e){ d=null; }
@@ -16391,6 +15063,7 @@ function featStats(sym){
   var out={ byKey:{}, byGrade:{dir:{},node:{},dirSide:{}}, cells:{},
             act:{take:{n:0,hit:0,mfe:0,mae:0,mn:0},pass:{n:0,hit:0,mfe:0,mae:0,mn:0}},
             frame:{}, partial:0, days:0, dayKeys:[] };
+  var fdefs={};   // (v15.52) feature defs by key, resolved once per stats pass
   var seenAct={};
   try{
     var db=recorderLoad(); var days=(db&&db.days)||{};
@@ -16403,9 +15076,21 @@ function featStats(sym){
       if(!arr.length) arr=arch[dk]||[];
       if(arr.length){ out.days++; out.dayKeys.push(dk); }
       arr.forEach(function(r){
-        var b=out.byKey[r.key]||(out.byKey[r.key]={n:0,hit:0,pending:0,mfe:0,mae:0,mn:0,partial:0});
+        var b=out.byKey[r.key]||(out.byKey[r.key]={n:0,hit:0,pending:0,mfe:0,mae:0,mn:0,partial:0,
+            // (v15.52) what the CAN-IT-FAIL check and the honest n need
+            dates:{}, hitNull:{threw:0,declined:0,'null':0}, void:0, band:{lo:{n:0,hit:0},hi:{n:0,hit:0}}, toClose:false});
+        b.dates[dk]=1;
+        var fdef=fdefs[r.key]; if(fdef===undefined){ try{ fdef=featureByKey(r.key)||null; }catch(eF){ fdef=null; } fdefs[r.key]=fdef; }
+        if(fdef && fdef.toClose){
+          b.toClose=true;
+          // (v15.52) rows scored by the retired 30-minute proxy are VOID (FINDINGS F-11), not evidence.
+          // They read 100% for four sessions and would otherwise sit in this bucket forever.
+          if(r.resolved && !r.atClose){ b.void++; return; }
+        }
+        if(r.hitNull && b.hitNull[r.hitNull]!=null) b.hitNull[r.hitNull]++;
         if(!r.resolved || r.hit==null){ b.pending++; }
-        else { b.n++; if(r.hit) b.hit++; }
+        else { b.n++; if(r.hit) b.hit++;
+          var pb=featPredBand(r.rec); if(pb){ b.band[pb].n++; if(r.hit) b.band[pb].hit++; } }
         if(r.partial) { b.partial++; out.partial++; }
         if(r.mfe!=null){ b.mfe+=r.mfe; b.mae+=(r.mae||0); b.mn++; }
         // (v10.54, audit 3) the FRAME outcome is tallied per feature key beside the drift
@@ -17074,34 +15759,6 @@ function nextStopPick(sym){
   }catch(e){}
   return out;
 }
-// the header line above the read
-function nextStopHtml(sym){
-  try{
-    var ns=nextStopPick(sym); if(!ns.ok || ns.level==null) return '';
-    var st=null; try{ st=featStatsCached(sym); }catch(e){}
-    var b30=(st&&st.byKey&&st.byKey['nextStop'])||{n:0,hit:0}, b60=(st&&st.byKey&&st.byKey['nextStop.60'])||{n:0,hit:0};
-    var r30=b30.n?Math.round(100*b30.hit/b30.n):null, r60=b60.n?Math.round(100*b60.hit/b60.n):null;
-    var e30=effN(b30.n), e60=effN(b60.n);
-    var gcol=ns.grade==='A'?PAL.longAccent:(ns.grade==='B'?PAL.blue:PAL.amber);
-    var gbg=ns.grade==='A'?'rgba(46,194,126,.15)':(ns.grade==='B'?'rgba(74,144,217,.15)':'rgba(242,180,90,.15)');
-    // (v11.1.1) the level is GREEN when above price, RED when below; the distance is signed points
-    var upSide=(ns.dir>0);
-    var lvlCol=upSide?PAL.longAccent:PAL.shortAccent;
-    var ptsTxt=(upSide?'+':'−')+fmtSpan(ns.dist)+' pts';
-    var tip=('Why this level? '+ns.why+' — '+fmtSpan(ns.dist)+' '+(ns.dir>0?'above':'below')+' price. Confidence '+ns.grade+' (B = leg and SMA-50 agree and the level is within ~30 min of travel; C = structure-only, chop or mid-range; A only after promotion). '+
-      'Measured here: reached within 30m '+(r30!=null&&e30>=RULE_UNLOCK_N?(r30+'% (eff n '+e30+')'):('— (eff n '+e30+', need '+RULE_UNLOCK_N+')'))+
-      ' · within 60m '+(r60!=null&&e60>=RULE_UNLOCK_N?(r60+'% (eff n '+e60+')'):('— (eff n '+e60+')'))+
-      '. Rule-based until measured; the nightly review grades each rule and proposes re-ordering through the promotion bar. Descriptive — a level, never an instruction.').replace(/"/g,'');
-    return '<div title="'+tip+'" style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:'+PAL.ink+';padding:1px 7px;margin:2px 0 1px;white-space:nowrap">'+
-      '<span style="color:'+PAL.sub+'">Next Stop:</span>'+
-      '<span style="font-size:12px;color:'+lvlCol+'">'+(upSide?'↑ ':'↓ ')+fmtLvl(ns.level)+'</span>'+
-      '<span style="color:'+lvlCol+';font-weight:700;font-size:9.5px">'+ptsTxt+'</span>'+
-      '<span style="color:'+PAL.sub+';font-weight:600;font-size:9px">· '+ns.horizon+'</span>'+
-      (r30!=null&&e30>=RULE_UNLOCK_N?('<span style="color:'+PAL.sub+';font-weight:600;font-size:9px">· '+r30+'% @30m</span>'):'')+
-      '<span style="margin-left:auto;color:'+gcol+';background:'+gbg+';padding:0 5px;border-radius:3px;font-size:10px">'+ns.grade+'</span>'+
-    '</div>';
-  }catch(e){ return ''; }
-}
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.nextStop=function(s){ try{ return nextStopPick(s||'SPY'); }catch(e){ return String(e); } };
 // ============================================================================
@@ -17183,35 +15840,6 @@ function pbEntryPick(sym){
 // ---- (v11.8) THE LEVELS CARD + CHART ----------------------------------------
 // Six lines, in price order, each with what it is and how far away. The 0DTE pair is drawn dashed and
 // dimmer than the structural pair so today-only walls are never mistaken for structure at a glance.
-var LVL_UI_LS='gpts_levels_ui_v1';
-var LVL_UI=(function(){ try{ var o=JSON.parse(localStorage.getItem(LVL_UI_LS)||'null'); if(o&&typeof o==='object') return o; }catch(e){}
-  return { open:true, chart:true }; })();
-function lvlUiSave(){ try{ localStorage.setItem(LVL_UI_LS, JSON.stringify(LVL_UI)); }catch(e){} }
-var LVL_COL={ cr:'#f0616d', cr0:'#f0616d', ps:'#2ec27e', ps0:'#2ec27e', hvl:'#f2b45a', mag:'#e3c341' };
-var LVL_NAME={ cr:'CR', cr0:'CR0', ps:'PS', ps0:'PS0', hvl:'FLIP', mag:'Mag' };
-var LVL_WHAT={
-  cr:'Call Resistance — heaviest strike above price across the expirations we can see. Dealers long gamma here sell rallies into it.',
-  cr0:'Call Resistance 0DTE — the same wall in TODAY\'S expiry only. It can sit nowhere near the structural one, and it evaporates at the close.',
-  ps:'Put Support — heaviest strike below price across the expirations we can see.',
-  ps0:'Put Support 0DTE — today\'s floor only.',
-  hvl:'High Vol Level — the gamma flip (zero gamma). ABOVE it dealers hedge against the move and dampen volatility; BELOW it they hedge with it and amplify. This is the volatility level, and it is a REGIME line, not a target.',
-  mag:'Magnet — the heaviest strike in the book. Price tends to gravitate toward it into expiry.'
-};
-// price-ordered level rows for a level set
-// (v11.9, user: "just round it") In futures mode every level is a CASH level multiplied by a live EMA
-// ratio, so "7689.75" is arithmetic residue, not a futures price anyone quotes. The ratio itself is only
-// good to a point or two, so the decimals claim precision the number does not have. Round to whole points
-// on the futures scale; the cash strike it came from rides in the tooltip so the level stays traceable.
-function lvlFmt(x){
-  if(x==null) return '–';
-  try{ if(typeof dispIsFut==='function' && dispIsFut()) return (typeof futMark==='function'?futMark():'')+String(Math.round(mul(x, dispR()))); }catch(e){}
-  return fmtLvl(x);
-}
-function lvlSpanFmt(x){
-  if(x==null) return '–';
-  try{ if(typeof dispIsFut==='function' && dispIsFut()) return (typeof futMark==='function'?futMark():'')+String(Math.round(mul(x, dispR()))); }catch(e){}
-  return fmtSpan(x);
-}
 // (v11.10, user) BOTH SCALES ON EVERY LEVEL. The user trades ES but thinks in SPY strikes — "so I can
 // quickly see what key wall it is near". Whichever instrument the chart is on is the PRIMARY number; the
 // other rides beside it, dimmed and labelled. Cash mode uses irtRatio()'s fallback chain (live ES EMA ->
@@ -17643,25 +16271,8 @@ function ifChain(sym){
     return d;
   }catch(e){ return null; }
 }
-// Their levels are on the CASH scale of the symbol they were fetched for (SPY dollars). fmtLvl/lvlFmt
-// convert to whatever the chart is showing, so nothing else has to know.
-function ifChainRows(sym, which){
-  try{
-    var d=ifChain(sym); if(!d || d.err) return null;
-    var w=d[which||'toFri']; if(!w || !w.lv) return null;
-    var L=w.lv, out=[];
-    if(L.cr!=null)  out.push({ id:'CR',  k:L.cr,  gex:null });
-    if(L.mag!=null) out.push({ id:'Mag', k:L.mag, gex:null });
-    if(L.ps!=null)  out.push({ id:'PS',  k:L.ps,  gex:null });
-    if(L.maxPain!=null) out.push({ id:'MP*', k:L.maxPain, gex:null });
-    out.sort(function(a,b){ return b.k-a.k; });
-    return { rows:out, lv:L, exps:w.exps, which:(which||'toFri'),
-             ageMin:d.ageMin, stale:d.stale, spot:d.spot };
-  }catch(e){ return null; }
-}
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.ifChain=function(s){ return ifChain(s||'SPY'); };
-window.__gptsDebug.ifChainRows=function(s,w){ return ifChainRows(s||'SPY', w); };
 
 function ifManParse(txt){
   try{
@@ -17708,102 +16319,6 @@ window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.ifMan=function(){ return { stored:IFMAN, onOurScale:ifManLevels() }; };
 window.__gptsDebug.ifManSet=function(txt){ var p=ifManParse(txt); if(p){ ifManSave(p); try{ render(); }catch(e){} } return p; };
 
-function lvlSpx(x){
-  if(x==null) return null;
-  try{ var R=spxRatio(); if(!R.r) return null; return Math.round(x*R.r); }catch(e){ return null; }
-}
-function lvlAlt(x){
-  if(x==null) return null;
-  try{
-    var fut=(typeof dispIsFut==='function') && dispIsFut();
-    if(fut) return { label:'SPY', txt:(+x).toFixed(2).replace(/\.?0+$/,''), approx:false };
-    var R=irtRatio(); if(!R || !R.r) return null;
-    return { label:'ES', txt:String(Math.round(mul(x, R.r))), approx:!R.live };
-  }catch(e){ return null; }
-}
-function lvlRows(L){
-  if(!L) return [];
-  var rows=[];
-  ['cr','cr0','hvl','mag','ps0','ps'].forEach(function(id){ var v=L[id]; if(v && v.k!=null) rows.push({id:id, k:v.k, dist:v.dist, distPct:v.distPct, src:v.src}); });
-  rows.sort(function(a,b){ return b.k-a.k; });
-  return rows;
-}
-// (v11.10) The FLIP is the one level whose ABSENCE is information. When the cumulative gamma curve never
-// changes sign there is no flip to find — and silently dropping the row reads as "we forgot to compute it"
-// rather than "this book has no flip". Returns the reason so the card can say which it is.
-function lvlHvlMissing(L){
-  if(!L || (L.hvl && L.hvl.k!=null)) return null;
-  if(L.nNat==null || L.nNat===0) return 'no native nodes read';
-  return 'no flip in this book — cumulative γ never changes sign'+(L.regime==='posGamma'?' (net +γ throughout)':(L.regime==='negGamma'?' (net −γ throughout)':''));
-}
-function levelsChartSvg(sym, L){
-  try{
-    var cs=[]; try{ cs=(closedCandles(sym)||[]).slice(-90); }catch(e){}
-    var px=L.px;
-    var rows=lvlRows(L); if(!rows.length) return '';
-    var lo=null, hi=null;
-    cs.forEach(function(c){ var a=(c.l!=null?c.l:c.c), b=(c.h!=null?c.h:c.c);
-      if(a!=null){ lo=(lo==null||a<lo)?a:lo; } if(b!=null){ hi=(hi==null||b>hi)?b:hi; } });
-    if(px!=null){ lo=(lo==null||px<lo)?px:lo; hi=(hi==null||px>hi)?px:hi; }
-    rows.forEach(function(r){ lo=(lo==null||r.k<lo)?r.k:lo; hi=(hi==null||r.k>hi)?r.k:hi; });
-    // Their walls sit far out by nature (SPX 7900 against 7642 spot). Including them in the range would
-    // squash the whole session's price action into a few pixels, so the SCALE stays ours and any of their
-    // levels outside it simply is not drawn — the row list still carries the number and its distance.
-
-    if(lo==null||hi==null||!(hi>lo)) return '';
-    var pad=(hi-lo)*0.06; lo-=pad; hi+=pad;
-    // (v11.9, user) Labels sit ON the line, centred, at a legible size — a 7px tag in a right-hand gutter
-    // was unreadable and the gutter cost chart width. Levels that coincide get their labels staggered
-    // horizontally so one never hides another (CR and CR0 on the same strike is a normal case, not a rare one).
-    var W=320, H=132, R=2, T=8, B=6;
-    function y(v){ return T+(H-T-B)*(1-(v-lo)/(hi-lo)); }
-    function x(i,n){ return (n<2)?0:((W-R)*i/(n-1)); }
-    var placed=[];
-    var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">';
-    svg+='<rect x="0" y="0" width="'+W+'" height="'+H+'" fill="'+PAL.card+'"/>';
-    // level lines first, so price draws over them
-    rows.forEach(function(r){
-      var yy=y(r.k), c=LVL_COL[r.id]||PAL.sub, z=(r.id==='cr0'||r.id==='ps0');
-      svg+='<line x1="0" y1="'+yy.toFixed(1)+'" x2="'+(W-R)+'" y2="'+yy.toFixed(1)+'" stroke="'+c+'" stroke-width="'+(z?0.8:1.3)+'"'+(z?' stroke-dasharray="4,3"':'')+' opacity="'+(z?0.6:0.95)+'"/>';
-      // stagger when this label would land on top of one already drawn
-      var slot=0; for(var q=0;q<placed.length;q++){ if(Math.abs(placed[q].y-yy)<9) slot=Math.max(slot, placed[q].slot+1); }
-      var lx=(W*0.5)+(slot%3)*46-46, nm=LVL_NAME[r.id];
-      placed.push({y:yy, slot:slot});
-      var wBox=nm.length*6.2+6;
-      svg+='<rect x="'+(lx-wBox/2).toFixed(1)+'" y="'+(yy-6.2).toFixed(1)+'" width="'+wBox.toFixed(1)+'" height="12" rx="2" fill="'+PAL.card+'" opacity="0.88"/>';
-      svg+='<text x="'+lx.toFixed(1)+'" y="'+(yy+3.4).toFixed(1)+'" fill="'+c+'" font-size="10" font-weight="700" text-anchor="middle" font-family="ui-monospace,monospace" opacity="'+(z?0.85:1)+'">'+nm+'</text>';
-    });
-    // (v11.12) THEIR levels, dotted and dimmer than anything of ours, label prefixed so the two can never
-    // be read as one set. Drawn under the price line like ours.
-    try{
-      var IFC=ifManLevels();
-      if(IFC && !IFC.err){
-        [['CR',IFC.cw,LVL_COL.cr],['FLIP',IFC.zg,LVL_COL.hvl],['Mag',IFC.mag,LVL_COL.mag],['PS',IFC.pw,LVL_COL.ps]]
-          .filter(function(r){ return r[1]!=null && r[1]>=lo && r[1]<=hi; })
-          .forEach(function(r){
-            var yy=y(r[1]);
-            svg+='<line x1="0" y1="'+yy.toFixed(1)+'" x2="'+(W-R)+'" y2="'+yy.toFixed(1)+'" stroke="'+r[2]+'" stroke-width="0.7" stroke-dasharray="1,4" opacity="0.5"/>';
-            var slot2=0; for(var q2=0;q2<placed.length;q2++){ if(Math.abs(placed[q2].y-yy)<9) slot2=Math.max(slot2, placed[q2].slot+1); }
-            var lx2=(W*0.5)+(slot2%3)*46-46, nm2='IF·'+r[0];
-            placed.push({y:yy, slot:slot2});
-            svg+='<text x="'+lx2.toFixed(1)+'" y="'+(yy+3.2).toFixed(1)+'" fill="'+r[2]+'" font-size="8" font-style="italic" text-anchor="middle" font-family="ui-monospace,monospace" opacity="0.72">'+nm2+'</text>';
-          });
-      }
-    }catch(eIFC){}
-    // price
-    if(cs.length>1){
-      var pts=[]; cs.forEach(function(c,i){ if(c.c!=null) pts.push(x(i,cs.length).toFixed(1)+','+y(c.c).toFixed(1)); });
-      if(pts.length>1) svg+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="'+PAL.ink+'" stroke-width="1.2" opacity="0.95"/>';
-    }
-    if(px!=null){
-      var yp=y(px).toFixed(1);
-      svg+='<circle cx="'+(W-R-1)+'" cy="'+yp+'" r="1.8" fill="'+PAL.time+'"/>';
-      svg+='<line x1="0" y1="'+yp+'" x2="'+(W-R)+'" y2="'+yp+'" stroke="'+PAL.time+'" stroke-width="0.5" stroke-dasharray="1,3" opacity="0.5"/>';
-    }
-    svg+='</svg>';
-    return svg;
-  }catch(e){ return ''; }
-}
 // ============ (v11.17) ONE BLOCK. ONE SCALE. NO DUPLICATES. ============
 // The v11.16 card printed the same levels three times — a %King block, a call/put block and a broken
 // SPX block — with "SPY 765" hung off every row while the chart was on ES. The user's instruction was
@@ -18025,415 +16540,13 @@ function gexSanity(sym){
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.sanity=function(s){ return gexSanity(s||'SPY'); };
 
-function gexPathHtml(sym){
-  try{
-    var P=gexPath(sym); if(!P || !P.mag) return '';
-    var col=(P.state==='pinned')?PAL.gold:((P.dir>0)?PAL.longAccent:PAL.shortAccent);
-    var tip=('Where the gamma structure points. Mag is the strike with the largest absolute gamma — the one dealers hedge around hardest, so price tends to be drawn to it. PS is the floor and CR the ceiling: the two places a deflection is most likely. '+
-      (P.cage?('Price sits '+P.cage.pos+'% of the way up a '+P.cage.span+'-wide cage from '+fmtLvl(P.cage.lo)+' to '+fmtLvl(P.cage.hi)+'. '):'')+
-      (P.through?('The magnet lies BEYOND '+P.through+', so that edge gets tested on the way. '):'')+
-      (P.agree===false?'Recent bars are moving AWAY from the magnet, so the pull is not confirmed by the tape. ':'')+
-      (P.agree===true?'Recent bars agree with the direction. ':'')+
-      'Descriptive only, never an instruction, and it carries no weight in the direction vote until it has earned one.').replace(/"/g,'');
-    var h='<div title="'+tip+'" style="display:flex;align-items:center;gap:6px;font-size:10.5px;line-height:1.5;padding:1px 7px 2px;white-space:nowrap">'+
-      '<span style="color:'+PAL.sub+';font-weight:800;font-size:9px">PATH</span>'+
-      '<span style="color:'+col+';font-weight:800">'+P.line+'</span>'+
-      (P.magDist!=null&&P.state!=='pinned'?('<span style="color:'+PAL.sub+';font-size:9px">'+(P.magDist>0?'+':'')+fmtSpan(P.magDist)+'</span>'):'')+
-      (P.agree===false?('<span style="color:'+PAL.gold+';font-size:9px">tape disagrees</span>'):'')+
-      (P.reversalAt?('<span style="margin-left:auto;color:'+PAL.sub+';font-size:9px">'+P.reversalAt+' '+fmtLvl(P.reversalK)+(P.reversalDist!=null?(' · '+fmtSpan(Math.abs(P.reversalDist))):'')+'</span>'):'')+
-      '</div>';
-    if(P.cage){
-      var pos=P.cage.pos;
-      h+='<div title="The cage: PS below, CR above, price where the marker sits." style="padding:0 7px 3px">'+
-         '<div style="position:relative;height:4px;border-radius:2px;background:linear-gradient(90deg,'+LVL_COL.ps+'55,'+PAL.line+','+LVL_COL.cr+'55)">'+
-         '<div style="position:absolute;left:'+pos+'%;top:-2px;width:2px;height:8px;background:'+PAL.time+';border-radius:1px;transform:translateX(-1px)"></div>'+
-         '</div></div>';
-    }
-    return h;
-  }catch(e){ return ''; }
-}
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.path=function(s){ return gexPath(s||'SPY'); };
 
-function levelsHtmlV2(sym){
-  try{
-    var U=lvlUnified(sym); if(!U || !U.rows.length) return '';
-    var srcTxt = (U.src==='week') ? ('to Fri · '+(U.nExps||'?')+' exps · '+(U.n||'?')+' strikes')
-               : (U.src==='0dte')  ? ('0DTE only · '+(U.n||'?')+' strikes')
-               : ('feed only · '+(U.n||'?')+' strikes · top-60');
-    var regTxt = U.regime==='posGamma'?'<span style="color:'+PAL.longAccent+'">+γ</span> damp'
-               :(U.regime==='negGamma'?'<span style="color:'+PAL.shortAccent+'">−γ</span> amp':'');
-    var tip=('Levels computed from our own feed, calls and puts separated: the payload carries v (TOTAL gamma) '+
-      'and net (NET gamma), so call=(v-net)/2 and put=(v+net)/2. CR is Call Resistance on CALL gamma and PS is '+
-      'Put Support on PUT gamma — the same definitions a third-party GEX page uses. '+
-      (U.src==='chain'
-        ? ('Read from a self-fetched full-chain request: '+(U.nExps||'?')+' expirations, '+(U.n||'?')+' strikes'+(U.ageMin!=null?(', '+U.ageMin+'m old'):'')+'.')
-        : 'Read from the passive feed, which is a ranked top-60 subset over four expirations — the walls are real but far levels may be outside it.')+
-      (U.ratio!=null?(' Call/put ratio '+U.ratio+' — compare against a third-party header to check the decomposition.'):'')+
-      ' Every value is on this chart\'s instrument. Descriptive only; scored nightly, no weight until earned.').replace(/"/g,'');
-    var h='<div style="padding:2px 7px 3px;margin:0 0 1px">';
-    h+='<div title="'+tip+'" style="display:flex;align-items:center;gap:6px;font-size:10px;font-weight:800;color:'+PAL.sub+';white-space:nowrap">'+
-       '<span data-glvl="open" style="cursor:pointer;color:'+PAL.ink+'">'+(LVL_UI.open?'▾':'▸')+' LEVELS</span>'+
-       '<span style="font-weight:600">'+srcTxt+'</span>'+
-       (U.degenerate?('<span title="The newest feed frames carry no call/put decomposition — every strike reads net = +/-v. That happens outside regular hours, when the latest bar is still forming. The walls below are read from magnitude only and the call/put split is NOT measured. Treat them as provisional." style="color:'+PAL.gold+';font-weight:800">⚠ no split</span>'):'')+
-       (U.snapBack?('<span title="Stepped back '+U.snapBack+' frame(s) to the most recent snapshot that carries a real decomposition." style="color:'+PAL.sub+'">−'+U.snapBack+'f</span>'):'')+
-       (regTxt?('<span style="font-weight:700">'+regTxt+'</span>'):'')+
-       '<span data-glvl="ifman" title="InsiderFinance levels, entered by hand — their page blocks cross-origin reads." style="margin-left:auto;cursor:pointer;color:'+(IFMAN?PAL.blue:PAL.sub)+';font-size:9px">IF</span>'+
-       '<span data-glvl="chart" style="cursor:pointer;color:'+(LVL_UI.chart?PAL.blue:PAL.sub)+';font-size:9px">chart</span>'+
-       '</div>';
-    if(LVL_UI.open){
-      h+='<div style="margin-top:2px">';
-      U.rows.forEach(function(r){
-        var base=r.id.split('·')[0].replace('0','');
-        var c=(r.id.indexOf('·')>0)?PAL.gold:(LVL_COL[base.toLowerCase()]||LVL_COL[r.id.toLowerCase()]||PAL.sub);
-        var z=!!r.tag;
-        var dc=(r.dist>0)?PAL.longAccent:((r.dist<0)?PAL.shortAccent:PAL.sub);
-        h+='<div title="'+((LVL_WHAT[base.toLowerCase()]||'')+(r.gex?(' Gamma here: '+Math.round(r.gex/1e6)+'M.'):'')).replace(/"/g,'')+'" '+
-           'style="display:flex;align-items:center;gap:6px;font-size:10.5px;line-height:1.5;white-space:nowrap">'+
-           '<span style="display:inline-block;min-width:30px;color:'+c+';font-weight:800;opacity:'+(z?0.75:1)+'">'+r.id+'</span>'+
-           '<span style="color:'+PAL.ink+';font-weight:700;font-size:11.5px;font-variant-numeric:tabular-nums">'+lvlFmt(r.k)+'</span>'+
-           (r.gex?('<span style="color:'+PAL.sub+';font-size:9px">'+Math.round(r.gex/1e6)+'M</span>'):'')+
-           '<span style="margin-left:auto;color:'+dc+';font-weight:700;font-size:9.5px;font-variant-numeric:tabular-nums">'+((r.dist>0?'+':'')+lvlSpanFmt(r.dist))+'</span>'+
-           '<span style="color:'+PAL.sub+';font-size:9px;width:36px;text-align:right">'+((r.distPct>0?'+':'')+r.distPct+'%')+'</span>'+
-           '</div>';
-      });
-      if(U.absent && U.absent.length){
-        h+='<div title="Every level on the roster is accounted for. A level with no value is a FINDING, not a gap: a 0DTE book with no call-dominant strike above spot has no call wall, and a published GEX page reports N/A in exactly that case. \'same as CR\' means the 0DTE wall landed on the identical strike, so it is not printed twice." '+
-           'style="display:flex;align-items:center;gap:5px;font-size:9px;line-height:1.5;color:'+PAL.sub+';white-space:nowrap;overflow:hidden">'+
-           '<span style="font-weight:800">—</span>'+
-           '<span style="overflow:hidden;text-overflow:ellipsis">'+
-           U.absent.map(function(a){ return '<span style="color:'+(LVL_COL[a.id.replace('0','').toLowerCase()]||PAL.sub)+';font-weight:700">'+a.id+'</span> '+a.why; }).join(' · ')+
-           '</span></div>';
-      }
-      if(U.crSuppressed || U.psSuppressed){
-        var sup=U.crSuppressed?'CR':'PS', shr=U.crSuppressed?U.callShare:U.putShare;
-        h+='<div title="No wall is named on this side because the side barely exists: '+(U.crSuppressed?'call':'put')+' gamma is '+shr+'% of the book. On expiry day almost all gamma is on one side, and the heaviest strike on the empty side is a rounding artefact rather than a level — the strike it would have named was '+((U.crSuppressed?U.crSuppressed.k:U.psSuppressed.k))+'. A third-party GEX page reports N/A in the same situation." '+
-           'style="display:flex;align-items:center;gap:6px;font-size:10px;line-height:1.45;white-space:nowrap">'+
-           '<span style="display:inline-block;min-width:30px;color:'+(U.crSuppressed?LVL_COL.cr:LVL_COL.ps)+';font-weight:800;opacity:.55">'+sup+'</span>'+
-           '<span style="color:'+PAL.sub+'">—</span>'+
-           '<span style="color:'+PAL.sub+';font-size:9px;overflow:hidden;text-overflow:ellipsis">'+(U.crSuppressed?'call':'put')+' side only '+shr+'% of book</span></div>';
-      }
-      if(U.hvlMissing){
-        h+='<div title="The FLIP is the gamma flip — where cumulative gamma crosses zero and dealers stop dampening and start amplifying. It is absent because the cumulative never changes sign across the strikes we hold. That is a fact about the book, not a gap in the read." '+
-           'style="display:flex;align-items:center;gap:6px;font-size:10px;line-height:1.45;white-space:nowrap">'+
-           '<span style="display:inline-block;width:30px;color:'+LVL_COL.hvl+';font-weight:800;opacity:.55">FLIP</span>'+
-           '<span style="color:'+PAL.sub+'">—</span>'+
-           '<span style="color:'+PAL.sub+';font-size:9px;overflow:hidden;text-overflow:ellipsis">'+
-           (U.hvlFar?('nearest flip '+U.hvlFar.pct+'% away — tail, not a flip'):'no flip in these strikes')+'</span></div>';
-      }
-      h+='</div>';
-      if(LVL_UI.chart){ var sv=null; try{ sv=levelsChartV2(sym,U); }catch(eC){} if(sv) h+='<div style="margin-top:3px;border:1px solid '+PAL.line+';border-radius:3px;overflow:hidden">'+sv+'</div>'; }
-      // their numbers, when entered, kept visibly separate
-      // (v11.25) THEIR levels, computed from their own chain by the companion script. Auto when present;
-      // the hand-entered lane below is the fallback for when the companion is not installed.
-      try{
-        var CH=ifChainRows(sym,'toFri'), CH0=ifChainRows(sym,'dte0');
-        if(CH && CH.rows.length){
-          h+='<div style="border-top:1px dotted '+PAL.line+';margin:3px 0 1px"></div>';
-          h+='<div title="InsiderFinance levels, recomputed from the option chain their page embeds — gamma x open interest, not scraped from their header. Window: '+(CH.exps||[]).join(', ')+'. Call/put ratio '+(CH.lv.ratio)+', Max Pain '+(CH.lv.maxPain)+', put/call OI '+(CH.lv.pcOI)+'. THIS IS A DIFFERENT MEASUREMENT FROM OURS: theirs is where exposure SITS in the chain, ours is live dealer positioning that accumulates intraday. Neither is a check on the other." '+
-             'style="display:flex;align-items:center;gap:6px;font-size:9px;color:'+PAL.sub+';white-space:nowrap">'+
-             '<span style="font-weight:800;color:'+PAL.blue+'">CHAIN · IF</span>'+
-             '<span>to Fri · r '+(CH.lv.ratio==null?'–':CH.lv.ratio)+'</span>'+
-             '<span style="margin-left:auto">'+(CH.stale?'⚠ ':'')+CH.ageMin+'m</span></div>';
-          CH.rows.forEach(function(r){
-            var base=(r.id==='MP'||r.id==='MP*')?'mag':r.id.toLowerCase();
-            var c=(r.id==='MP'||r.id==='MP*')?PAL.sub:(LVL_COL[base]||PAL.sub);
-            var d0=+(r.k-U.px).toFixed(2), dc=(d0>0)?PAL.longAccent:((d0<0)?PAL.shortAccent:PAL.sub);
-            var alt=(CH0&&CH0.rows.filter(function(x){return x.id===r.id;})[0]);
-            h+='<div title="'+(r.id==='MP*'?'Max Pain, RECOMPUTED BY US from their chain over our expiry window — NOT the max pain InsiderFinance publish, which covers all expiries and is a different number (7350 on 2026-08-21). The strike minimising total payout to option holders at expiry. Needs open interest, which is why it is impossible from the Skylit feed and free here.':('InsiderFinance '+r.id+', from their chain.'))+'" '+
-               'style="display:flex;align-items:center;gap:5px;font-size:10px;line-height:1.4;white-space:nowrap;opacity:.85">'+
-               '<span style="display:inline-block;min-width:30px;color:'+c+';font-weight:700;font-style:italic">'+r.id+'</span>'+
-               '<span style="color:'+PAL.ink+';font-weight:600;font-variant-numeric:tabular-nums">'+lvlFmt(r.k)+'</span>'+
-               ((alt&&Math.abs(alt.k-r.k)>0.005)?('<span style="color:'+PAL.sub+';font-size:9px">0dte '+lvlFmt(alt.k)+'</span>'):'')+
-               '<span style="margin-left:auto;color:'+dc+';font-weight:700;font-size:9px;font-variant-numeric:tabular-nums">'+((d0>0?'+':'')+lvlSpanFmt(d0))+'</span></div>';
-          });
-          if(CH.lv.crSuppressed) h+='<div style="font-size:9px;color:'+PAL.sub+';padding-left:2px">CR — none, call side '+CH.lv.crSuppressed.share+'% of book</div>';
-        }
-      }catch(eCH){}
-      try{
-        var IFL=(ifChain(sym)?null:ifManLevels());
-        if(IFL && !IFL.err){
-          var agTx=(IFL.ageMin<60)?(IFL.ageMin+'m'):(Math.round(IFL.ageMin/60)+'h');
-          h+='<div style="border-top:1px dotted '+PAL.line+';margin:3px 0 1px"></div>';
-          h+='<div style="display:flex;align-items:center;gap:6px;font-size:9px;color:'+PAL.sub+';white-space:nowrap">'+
-             '<span style="font-weight:800;color:'+PAL.blue+'">INSIDERFINANCE</span><span>'+IFL.scale+' · '+agTx+'</span>'+
-             '<span style="margin-left:auto;cursor:pointer" data-glvl="ifman">edit</span></div>';
-          [['CR',IFL.cw,LVL_COL.cr],['FLIP',IFL.zg,LVL_COL.hvl],['Mag',IFL.mag,LVL_COL.mag],['PS',IFL.pw,LVL_COL.ps]]
-            .filter(function(r){ return r[1]!=null; }).sort(function(a,b){ return b[1]-a[1]; })
-            .forEach(function(r){
-              var d=+(r[1]-U.px).toFixed(2), dc2=(d>0)?PAL.longAccent:PAL.shortAccent;
-              h+='<div style="display:flex;align-items:center;gap:6px;font-size:10px;line-height:1.4;white-space:nowrap;opacity:.8">'+
-                 '<span style="display:inline-block;width:30px;color:'+r[2]+';font-weight:700;font-style:italic">'+r[0]+'</span>'+
-                 '<span style="color:'+PAL.ink+';font-weight:600;font-variant-numeric:tabular-nums">'+lvlFmt(r[1])+'</span>'+
-                 '<span style="margin-left:auto;color:'+dc2+';font-weight:700;font-size:9px">'+((d>0?'+':'')+lvlSpanFmt(d))+'</span></div>';
-            });
-        } else if(IFL && IFL.err){ h+='<div style="font-size:9px;color:'+PAL.sub+';margin-top:2px">IF: '+IFL.err+'</div>'; }
-      }catch(eIF2){}
-    }
-    h+='</div>';
-    return h;
-  }catch(e){ return ''; }
-}
-function levelsChartV2(sym, U){
-  try{
-    var cs=[]; try{ cs=(closedCandles(sym)||[]).slice(-90); }catch(e){}
-    var px=U.px, lo=null, hi=null;
-    cs.forEach(function(c){ var a=(c.l!=null?c.l:c.c), b=(c.h!=null?c.h:c.c);
-      if(a!=null){ lo=(lo==null||a<lo)?a:lo; } if(b!=null){ hi=(hi==null||b>hi)?b:hi; } });
-    if(px!=null){ lo=(lo==null||px<lo)?px:lo; hi=(hi==null||px>hi)?px:hi; }
-    // (v11.19) THE PRICE ACTION OWNS THE SCALE. Letting every level stretch the range is what flattened
-    // the live chart: a single wall 30 points above everything pulled the top out, and the price line plus
-    // every real level collapsed into the bottom fifth. The range grows for a level only up to a bounded
-    // multiple of the price range; anything beyond that is drawn as an edge marker instead, so it is still
-    // visible and still labelled, but it can never squash what actually matters.
-    var pxLo=lo, pxHi=hi;
-    if(pxLo==null||pxHi==null) return '';
-    var span=Math.max(pxHi-pxLo, (px!=null?px*0.0015:0.5));
-    var maxLo=pxLo-span*1.1, maxHi=pxHi+span*1.1;
-    var outside=[];
-    U.rows.forEach(function(r){
-      if(r.k<maxLo || r.k>maxHi){ outside.push({ id:r.id, k:r.k, above:(r.k>maxHi) }); return; }
-      lo=(lo==null||r.k<lo)?r.k:lo; hi=(hi==null||r.k>hi)?r.k:hi; });
-    if(lo==null||hi==null||!(hi>lo)) return '';
-    var pad=(hi-lo)*0.10; lo-=pad; hi+=pad;
-    var W=320,H=132,R=2,T=8,B=6, placed=[];
-    function y(v){ return T+(H-T-B)*(1-(v-lo)/(hi-lo)); }
-    var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">';
-    svg+='<rect width="'+W+'" height="'+H+'" fill="'+PAL.card+'"/>';
-    U.rows.forEach(function(r){
-      if(r.k<lo || r.k>hi) return;                     // drawn as an edge marker below instead
-      var base=r.id.split('·')[0].replace('0','').toLowerCase();
-      var c=(r.id.indexOf('·')>0)?PAL.gold:(LVL_COL[base]||PAL.sub), z=!!r.tag, yy=y(r.k);
-      svg+='<line x1="0" y1="'+yy.toFixed(1)+'" x2="'+(W-R)+'" y2="'+yy.toFixed(1)+'" stroke="'+c+'" stroke-width="'+(z?0.8:1.3)+'"'+(z?' stroke-dasharray="4,3"':'')+' opacity="'+(z?0.6:0.95)+'"/>';
-      var slot=0; for(var q=0;q<placed.length;q++){ if(Math.abs(placed[q].y-yy)<9) slot=Math.max(slot, placed[q].slot+1); }
-      var lx=(W*0.5)+(slot%3)*48-48; placed.push({y:yy, slot:slot});
-      var w=r.id.length*6.4+6;
-      svg+='<rect x="'+(lx-w/2).toFixed(1)+'" y="'+(yy-6.2).toFixed(1)+'" width="'+w.toFixed(1)+'" height="12" rx="2" fill="'+PAL.card+'" opacity="0.88"/>';
-      svg+='<text x="'+lx.toFixed(1)+'" y="'+(yy+3.4).toFixed(1)+'" fill="'+c+'" font-size="10" font-weight="700" text-anchor="middle" font-family="ui-monospace,monospace" opacity="'+(z?0.85:1)+'">'+r.id+'</text>';
-    });
-    if(cs.length>1){
-      var pts=[]; cs.forEach(function(c,i){ if(c.c!=null) pts.push(((W-R)*i/(cs.length-1)).toFixed(1)+','+y(c.c).toFixed(1)); });
-      if(pts.length>1) svg+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="'+PAL.ink+'" stroke-width="1.2" opacity="0.95"/>';
-    }
-    // edge markers for whatever sits outside the price-driven range
-    outside.forEach(function(o, oi){
-      var base=o.id.split('·')[0].replace('0','').toLowerCase();
-      var c=(o.id.indexOf('·')>0)?PAL.gold:(LVL_COL[base]||PAL.sub);
-      var yy=o.above?(T+3+oi*11):(H-B-3-oi*11);
-      var lbl=(o.above?'▲ ':'▼ ')+o.id+' '+lvlFmt(o.k);
-      var w=lbl.length*5.6+6;
-      svg+='<rect x="'+(W-R-w-2).toFixed(1)+'" y="'+(yy-6).toFixed(1)+'" width="'+w.toFixed(1)+'" height="11" rx="2" fill="'+PAL.card+'" opacity="0.9"/>';
-      svg+='<text x="'+(W-R-4).toFixed(1)+'" y="'+(yy+2.5).toFixed(1)+'" fill="'+c+'" font-size="8.5" font-weight="700" text-anchor="end" font-family="ui-monospace,monospace" opacity="0.85">'+lbl+'</text>';
-    });
-    // (v11.25) THEIR chain levels — dotted, italic, prefixed. A different measurement, so it must be
-    // impossible to confuse with ours at a glance. Out-of-range ones join the edge markers.
-    try{
-      var CHc=ifChainRows(sym,'toFri');
-      if(CHc && CHc.rows.length){
-        CHc.rows.forEach(function(r){
-          var base=(r.id==='MP'||r.id==='MP*')?'mag':r.id.toLowerCase();
-          var c=(r.id==='MP'||r.id==='MP*')?PAL.sub:(LVL_COL[base]||PAL.sub);
-          if(r.k<lo || r.k>hi){ outside.push({ id:'IF·'+r.id, k:r.k, above:(r.k>hi) }); return; }
-          var yy=y(r.k);
-          svg+='<line x1="0" y1="'+yy.toFixed(1)+'" x2="'+(W-R)+'" y2="'+yy.toFixed(1)+'" stroke="'+c+'" stroke-width="0.8" stroke-dasharray="1,4" opacity="0.55"/>';
-          var slot3=0; for(var q3=0;q3<placed.length;q3++){ if(Math.abs(placed[q3].y-yy)<9) slot3=Math.max(slot3, placed[q3].slot+1); }
-          var lx3=(W*0.5)+(slot3%3)*48-48; placed.push({y:yy, slot:slot3});
-          svg+='<text x="'+lx3.toFixed(1)+'" y="'+(yy+3.2).toFixed(1)+'" fill="'+c+'" font-size="8.5" font-style="italic" text-anchor="middle" font-family="ui-monospace,monospace" opacity="0.8">IF·'+r.id+'</text>';
-        });
-      }
-    }catch(eCHc){}
-    if(px!=null){ var yp=y(px).toFixed(1);
-      svg+='<line x1="0" y1="'+yp+'" x2="'+(W-R)+'" y2="'+yp+'" stroke="'+PAL.time+'" stroke-width="0.5" stroke-dasharray="1,3" opacity="0.5"/>';
-      svg+='<circle cx="'+(W-R-2)+'" cy="'+yp+'" r="1.8" fill="'+PAL.time+'"/>'; }
-    return svg+'</svg>';
-  }catch(e){ return ''; }
-}
 window.__gptsDebug=window.__gptsDebug||{};
 window.__gptsDebug.unified=function(s){ return lvlUnified(s||'SPY'); };
 
-// (v11.17 PARKED) SUPERSEDED by levelsHtmlV2, which renders ONE block on the chart's own instrument.
-// This three-block version is what the user saw printing the same levels three times with a "SPY 765"
-// tail on an ES chart. It is no longer rendered anywhere; it stays only because test_levels.js pins the
-// helpers it shares with V2 (lvlFmt/lvlSpanFmt/lvlRows/lvlAlt/lvlHvlMissing). Do not wire it back up.
-function levelsHtml(sym){
-  try{
-    var L=null; try{ L=gLevels(sym); }catch(e){}
-    if(!L) return '';
-    var rows=lvlRows(L); if(!rows.length) return '';
-    var reachTxt=({ '0dte':'today only', week:'≤1 week', month:'≤1 month', chain:'full chain', unknown:'reach unknown' })[L.reach]||L.reach;
-    // (v11.10) "+γ dampening" is a claim about WHERE PRICE SITS relative to the flip. When there is no flip
-    // the regime came from the net-gamma SIGN instead, which is a different (weaker) statement — so the card
-    // now says which one answered rather than presenting both as the same read.
-    var regSrcTxt=(L.regimeSrc==='hvl')?'':' <span style="font-weight:600;opacity:.75">(net)</span>';
-    var regTxt=L.regime==='posGamma'?('<span style="color:'+PAL.longAccent+'">+γ</span> dampening'+regSrcTxt)
-             :(L.regime==='negGamma'?('<span style="color:'+PAL.shortAccent+'">−γ</span> amplifying'+regSrcTxt):'');
-    // The honesty line. Our chain is not MenthorQ's chain and the card says so on its face.
-    var caveat=('These are computed from OUR tape, not scraped. CR/PS reach '+reachTxt+' ('+(L.nCols||1)+' expiry column'+((L.nCols||1)===1?'':'s')+
-      (L.exps&&L.exps.length?(', '+L.exps[0]+'→'+L.exps[L.exps.length-1]):'')+') — MenthorQ and InsiderFinance aggregate the whole chain out years, so our CR/PS is the structural wall WE CAN SEE, not an all-expiration wall. '+
-      'The 0DTE pair (dashed) is today\'s expiry alone. Basis '+(L.basis||'?')+(L.nSkipped?(', '+L.nSkipped+' derived lane'+(L.nSkipped===1?'':'s')+' excluded'):'')+'. '+
-      'Descriptive only — every level here is scored nightly like any other factor and carries no weight until it earns one.').replace(/"/g,'');
-    var h='<div style="padding:2px 7px 3px;margin:0 0 1px">';
-    h+='<div title="'+caveat+'" style="display:flex;align-items:center;gap:6px;font-size:10px;font-weight:800;color:'+PAL.sub+';white-space:nowrap">'+
-       '<span data-glvl="open" style="cursor:pointer;color:'+PAL.ink+'">'+(LVL_UI.open?'▾':'▸')+' LEVELS</span>'+
-       '<span style="font-weight:600;color:'+PAL.sub+'">'+reachTxt+'</span>'+
-       (regTxt?('<span style="font-weight:700">'+regTxt+'</span>'):'')+
-       '<span data-glvl="ifman" title="InsiderFinance levels, entered by hand. Their server blocks cross-origin reads (verified in the console: BLOCKED Failed to fetch), and the @grant that would work sandboxes this script and kills the tape reader. Their walls barely move — the SPX call wall held 7900 all afternoon on 2026-08-20 while SPX fell 66 points — so hand entry costs little. Click to set or clear. SPX or SPY both work; the scale is detected." '+
-         'style="margin-left:auto;cursor:pointer;color:'+(IFMAN?PAL.blue:PAL.sub)+';font-size:9px">IF</span>'+
-       '<span data-glvl="chart" style="cursor:pointer;color:'+(LVL_UI.chart?PAL.blue:PAL.sub)+';font-size:9px">chart</span>'+
-       '</div>';
-    if(LVL_UI.open){
-      h+='<div style="margin-top:2px">';
-      rows.forEach(function(r){
-        var c=LVL_COL[r.id]||PAL.sub, z=(r.id==='cr0'||r.id==='ps0');
-        var dcol=(r.dist>0)?PAL.longAccent:((r.dist<0)?PAL.shortAccent:PAL.sub);
-        var dtxt=(r.dist==null)?'':((r.dist>0?'+':'')+lvlSpanFmt(r.dist));
-        var cashTip=''; try{ if(dispIsFut()) cashTip=' Cash level actually read: '+(+r.k).toFixed(2)+' (shown converted at ratio '+(+dispR()).toFixed(3)+', rounded).'; }catch(eCt){}
-        // (v11.11) the SPX equivalent, from Skylit's own SPXW ratio — so this level can be put straight
-        // beside an SPX gamma page without arithmetic. Scale only; see spxRatio() on why that is not the
-        // same as claiming their SPX book has a wall here.
-        try{ var sx=lvlSpx(r.k); if(sx!=null) cashTip+=' On the SPX scale: '+sx+' (via Skylit\'s own '+(spxRatio().src||'SPXW')+' ratio, scale conversion only — an SPX gamma page reads a different chain).'; }catch(eSx){}
-        var alt=lvlAlt(r.k);
-        var altTxt=alt?('<span style="color:'+PAL.sub+';font-size:9px;font-variant-numeric:tabular-nums">'+alt.label+' '+(alt.approx?'≈':'')+alt.txt+'</span>'):'';
-        h+='<div title="'+(LVL_WHAT[r.id]||'').replace(/"/g,'')+' Source: '+(r.src||'—')+'.'+cashTip+'" '+
-           'style="display:flex;align-items:center;gap:5px;font-size:10.5px;line-height:1.45;white-space:nowrap">'+
-           '<span style="display:inline-block;width:26px;color:'+c+';font-weight:800;opacity:'+(z?0.72:1)+'">'+LVL_NAME[r.id]+'</span>'+
-           '<span style="color:'+PAL.ink+';font-weight:700;font-variant-numeric:tabular-nums">'+lvlFmt(r.k)+'</span>'+
-           altTxt+
-           '<span style="margin-left:auto;color:'+dcol+';font-weight:700;font-size:9.5px;font-variant-numeric:tabular-nums">'+dtxt+'</span>'+
-           '<span style="color:'+PAL.sub+';font-size:9px;width:36px;text-align:right">'+(r.distPct!=null?((r.distPct>0?'+':'')+r.distPct+'%'):'')+'</span>'+
-           '</div>';
-      });
-      var hm=lvlHvlMissing(L);
-      if(hm){
-        h+='<div title="The FLIP is the gamma flip — the zero-gamma strike, where dealers stop dampening and start amplifying. It is the same thing MenthorQ calls the High Vol Level and InsiderFinance labels Support/Resistance with the note that dynamics change if breached. It is absent here because the cumulative gamma curve in this book never crosses zero, so there is no flip to place. That is a fact about the book, not a gap in the read." '+
-             'style="display:flex;align-items:center;gap:5px;font-size:10.5px;line-height:1.45;white-space:nowrap">'+
-             '<span style="display:inline-block;width:26px;color:'+LVL_COL.hvl+';font-weight:800;opacity:0.55">FLIP</span>'+
-             '<span style="color:'+PAL.sub+';font-weight:700">—</span>'+
-             '<span style="color:'+PAL.sub+';font-size:9px;overflow:hidden;text-overflow:ellipsis">'+hm+'</span>'+
-             '</div>';
-      }
-      // ---- (v11.16) THE REAL WALLS, from the call/put decomposition. This is the block that answers
-      //      "can we compute what they show" — CR here is Call Resistance on CALL gamma, their definition.
-      try{
-        var CP=cpLevels(sym);
-        if(CP && CP.err){ h+='<div style="font-size:9px;color:'+PAL.sub+';margin-top:3px">call/put: '+CP.err+'</div>'; }
-        else if(CP){
-          var sxr=null; try{ sxr=spxRatio().r; }catch(eR2){}
-          h+='<div style="border-top:1px dotted '+PAL.line+';margin:3px 0 1px"></div>';
-          h+='<div title="Calls and puts separated from the feed itself: v is TOTAL gamma and net is NET gamma, so call=(v+net)/2 and put=(v-net)/2. Verified on the live book — |net| was never greater than v across the whole strike set. These are the walls on CALL and PUT gamma specifically, the same definitions a third-party GEX page uses. CAVEAT: the app requests the top '+CP.n+' nodes, a RANKED SUBSET of the chain, so the walls are real but the TOTALS are subset totals and will not equal a full-chain page. The ratio is shown so that gap stays visible." '+
-             'style="display:flex;align-items:center;gap:6px;font-size:9px;color:'+PAL.sub+';white-space:nowrap">'+
-             '<span style="font-weight:800;color:'+PAL.longAccent+'">CALL/PUT · derived</span>'+
-             '<span>C '+(CP.totalCall/1e9).toFixed(1)+'B · P '+(CP.totalPut/1e9).toFixed(1)+'B · ratio '+CP.ratio+'</span>'+
-             '<span style="margin-left:auto">top '+CP.n+' nodes</span></div>';
-          [['CR',CP.callWall,LVL_COL.cr,CP.callWallGex],['FLIP',CP.zg,LVL_COL.hvl,null],['PS',CP.putWall,LVL_COL.ps,CP.putWallGex]]
-            .filter(function(r){ return r[1]!=null; })
-            .sort(function(a,b){ return b[1]-a[1]; })
-            .forEach(function(r){
-              var d=+(r[1]-CP.px).toFixed(2);
-              var dc=(d>0)?PAL.longAccent:((d<0)?PAL.shortAccent:PAL.sub);
-              var sx=(sxr?Math.round(r[1]*sxr):null);
-              h+='<div title="'+(r[0]==='CR'?'Call Resistance — the strike carrying the most CALL gamma above spot. Their definition, computed from our own feed.':(r[0]==='PS'?'Put Support — the strike carrying the most PUT gamma below spot.':'Zero gamma from the net series.'))+'" '+
-                 'style="display:flex;align-items:center;gap:5px;font-size:10.5px;line-height:1.45;white-space:nowrap">'+
-                 '<span style="display:inline-block;width:26px;color:'+r[2]+';font-weight:800">'+r[0]+'</span>'+
-                 '<span style="color:'+PAL.ink+';font-weight:700;font-variant-numeric:tabular-nums">'+lvlFmt(r[1])+'</span>'+
-                 (sx?('<span style="color:'+PAL.sub+';font-size:9px">SPX '+sx+'</span>'):'')+
-                 (r[3]?('<span style="color:'+PAL.sub+';font-size:9px">'+Math.round(r[3]/1e6)+'M</span>'):'')+
-                 '<span style="margin-left:auto;color:'+dc+';font-weight:700;font-size:9.5px;font-variant-numeric:tabular-nums">'+((d>0?'+':'')+lvlSpanFmt(d))+'</span>'+
-                 '</div>';
-            });
-        }
-      }catch(eCP){}
-      // ---- (v11.12) THEIR levels, kept visibly separate from ours ----
-      try{
-        var IFL=ifManLevels();
-        if(IFL && IFL.err){ h+='<div style="font-size:9px;color:'+PAL.sub+';margin-top:3px">IF: '+IFL.err+'</div>'; }
-        else if(IFL){
-          var agTx=(IFL.ageMin<60)?(IFL.ageMin+'m'):(Math.round(IFL.ageMin/60)+'h');
-          var stale=IFL.ageMin>180;
-          h+='<div style="border-top:1px dotted '+PAL.line+';margin:3px 0 1px"></div>';
-          h+='<div style="display:flex;align-items:center;gap:6px;font-size:9px;color:'+PAL.sub+';white-space:nowrap">'+
-             '<span style="font-weight:800;color:'+(stale?PAL.sub:PAL.blue)+'">INSIDERFINANCE</span>'+
-             '<span>'+IFL.scale+' · '+agTx+' old'+(stale?' ⚠':'')+'</span>'+
-             '<span style="margin-left:auto;cursor:pointer;color:'+PAL.sub+'" data-glvl="ifman">edit</span></div>';
-          [['CR',IFL.cw,LVL_COL.cr],['FLIP',IFL.zg,LVL_COL.hvl],['Mag',IFL.mag,LVL_COL.mag],['PS',IFL.pw,LVL_COL.ps]]
-            .filter(function(r){ return r[1]!=null; })
-            .sort(function(a,b){ return b[1]-a[1]; })
-            .forEach(function(r){
-              var d=(L.px!=null)?+(r[1]-L.px).toFixed(2):null;
-              var dc=(d>0)?PAL.longAccent:((d<0)?PAL.shortAccent:PAL.sub);
-              var al=lvlAlt(r[1]);
-              h+='<div title="InsiderFinance '+r[0]+' — THEIR number, not ours. Full option chain, and their Call Wall uses call gamma specifically, which our feed does not decompose. Shown converted from '+IFL.scale+' to this chart\'s scale. Reference only: it never feeds direction and is not scored as ours." '+
-                 'style="display:flex;align-items:center;gap:5px;font-size:10px;line-height:1.4;white-space:nowrap;opacity:.82">'+
-                 '<span style="display:inline-block;width:26px;color:'+r[2]+';font-weight:700;font-style:italic">'+r[0]+'</span>'+
-                 '<span style="color:'+PAL.ink+';font-weight:600;font-variant-numeric:tabular-nums">'+lvlFmt(r[1])+'</span>'+
-                 (al?('<span style="color:'+PAL.sub+';font-size:9px">'+al.label+' '+(al.approx?'≈':'')+al.txt+'</span>'):'')+
-                 '<span style="margin-left:auto;color:'+dc+';font-weight:700;font-size:9px;font-variant-numeric:tabular-nums">'+(d==null?'':((d>0?'+':'')+lvlSpanFmt(d)))+'</span>'+
-                 '</div>';
-            });
-        }
-      }catch(eIF){}
-      h+='</div>';
-      if(LVL_UI.chart){ var sv=levelsChartSvg(sym,L); if(sv) h+='<div style="margin-top:3px;border:1px solid '+PAL.line+';border-radius:3px;overflow:hidden">'+sv+'</div>'; }
-      // the cross-check lane, only when it has something to say
-      try{
-        var X=L.ext;
-        if(X && X.on){
-          if(X.err){ h+='<div style="font-size:9px;color:'+PAL.sub+';margin-top:2px">IF cross-check: '+X.err+'</div>'; }
-          else {
-            var agTxt=X.ageMs!=null?(Math.round(X.ageMs/60000)+'m'):'';
-            h+='<div title="InsiderFinance, all expirations. Cross-check only — it never overrides a native level." style="font-size:9px;color:'+(X.stale?PAL.sub:PAL.blue)+';margin-top:2px;white-space:nowrap">'+
-               'IF chain: CR '+(X.cw!=null?X.cw:'–')+' · PS '+(X.pw!=null?X.pw:'–')+' · FLIP '+(X.zg!=null?X.zg:'–')+
-               (X.callGex!=null&&X.putGex!=null?(' · C/P '+X.callGex+'B/'+X.putGex+'B'):'')+
-               (agTxt?(' · '+agTxt+' old'):'')+(X.stale?' (stale)':'')+(X.suspect?(' ⚠ '+X.suspect):'')+'</div>';
-          }
-        }
-      }catch(eX2){}
-    }
-    h+='</div>';
-    return h;
-  }catch(e){ return ''; }
-}
 
-function pbEntryHtml(sym){
-  try{
-    var pe=pbEntryPick(sym); if(!pe.ok || pe.level==null) return '';
-    var st=null; try{ st=featStatsCached(sym); }catch(e){}
-    var b30=(st&&st.byKey&&st.byKey['pbEntry'])||{n:0,hit:0}, b60=(st&&st.byKey&&st.byKey['pbEntry.60'])||{n:0,hit:0};
-    var r30=b30.n?Math.round(100*b30.hit/b30.n):null, r60=b60.n?Math.round(100*b60.hit/b60.n):null;
-    var e30=effN(b30.n), e60=effN(b60.n);
-    var gcol=pe.grade==='A'?PAL.longAccent:(pe.grade==='B'?PAL.blue:PAL.amber);
-    var gbg=pe.grade==='A'?'rgba(46,194,126,.15)':(pe.grade==='B'?'rgba(74,144,217,.15)':'rgba(242,180,90,.15)');
-    var above=(pe.level>pe.px);
-    var lvlCol=above?PAL.longAccent:PAL.shortAccent;
-    var ptsTxt=(above?'+':'−')+fmtSpan(pe.dist)+' pts';
-    var stTxt=pe.state==='acm'?'<span style="color:'+PAL.longAccent+'">Acm</span>':(pe.state==='dec'?'<span style="color:'+PAL.shortAccent+'">Dec</span>':(pe.state==='gone'?'<span style="color:'+PAL.sub+'">gone</span>':''));
-    var deflTxt=(pe.dir<0?'defl ↓':'defl ↑')+(pe.nextStop!=null?(' → '+fmtLvl(pe.nextStop)):'');
-    var zoneTxt=(pe.zoneLo!=null&&pe.zoneHi!=null&&pe.rule==='leg.pbZone')?(' (zone '+fmtLvl(pe.zoneLo)+'–'+fmtLvl(pe.zoneHi)+', forming)'):'';
-    // (v11.3.1) stacked pullback nodes: name the zone across the stack so the level is read as an AREA
-    try{ var cxS=_pbCtx(sym,pe); if(cxS&&cxS.stack&&cxS.stack.n>=2){ var mks=cxS.stack.members.map(function(mm){return mm.k;});
-      zoneTxt+=' (stack of '+cxS.stack.n+': '+fmtLvl(Math.min.apply(null,mks))+'–'+fmtLvl(Math.max.apply(null,mks))+')'; } }catch(eZs){}
-    var latch=pe.latched?(' '+pe.latched):'';
-    var tip=('PB Entry — where to look for the pullback. '+pe.why+' — '+fmtSpan(pe.dist)+' '+(above?'above':'below')+' price; the expected move off it is '+(pe.dir<0?'DOWN':'UP')+(pe.nextStop!=null?(' toward the Next Stop '+fmtLvl(pe.nextStop)):'')+'. Node state '+(pe.state||'—')+(pe.pol?(', polarity '+pe.pol+'γ'):'')+'. '+
-      'Confidence '+pe.grade+' (B = leg active, node accumulating, SMA-50 agrees, within reach; C = structure-only / chop / mid-range; A only after promotion). '+
-      'Measured here: touched-and-deflected within 30m '+(r30!=null&&e30>=RULE_UNLOCK_N?(r30+'% (eff n '+e30+')'):('— (eff n '+e30+', need '+RULE_UNLOCK_N+')'))+
-      ' · within 60m '+(r60!=null&&e60>=RULE_UNLOCK_N?(r60+'% (eff n '+e60+')'):('— (eff n '+e60+')'))+
-      '. Scored as: price touched the level (contact zone) and then moved '+DIR_PTS+' in the deflection direction before closing through it. Rule-based until measured; graded nightly by rule, state and polarity. Descriptive — a level to watch, never an instruction.').replace(/"/g,'');
-    // (v11.3.2, user) TWO LINES: the level line stays tight; the gray context (deflection target, zone,
-    // stack, measured rate) moves to a smaller second line that WRAPS instead of running off the panel.
-    var line2=('· '+deflTxt)+zoneTxt+latch+
-      (r30!=null&&e30>=RULE_UNLOCK_N?(' · '+r30+'% @30m'):'');
-    return '<div title="'+tip+'" style="padding:1px 7px;margin:0 0 1px">'+
-      '<div style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:'+PAL.ink+';white-space:nowrap">'+
-        '<span style="color:'+PAL.sub+'">PB Entry:</span>'+
-        '<span style="font-size:12px;color:'+lvlCol+'">'+(above?'↑ ':'↓ ')+fmtLvl(pe.level)+'</span>'+
-        '<span style="color:'+lvlCol+';font-weight:700;font-size:9.5px">'+ptsTxt+'</span>'+
-        (stTxt?('<span style="font-weight:700;font-size:9.5px">· '+stTxt+'</span>'):'')+
-        '<span style="margin-left:auto;color:'+gcol+';background:'+gbg+';padding:0 5px;border-radius:3px;font-size:10px">'+pe.grade+'</span>'+
-      '</div>'+
-      '<div style="font-size:8.5px;font-weight:600;color:'+PAL.sub+';white-space:normal;line-height:1.35;margin-top:1px">'+line2+'</div>'+
-    '</div>';
-  }catch(e){ return ''; }
-}
 
 // (v11.3.1, user-directed) PULLBACK CONTEXT — recorded on every pbEntry record so the hit rate can be sliced by the
 // STRENGTH/WEAKNESS OF THE PULLBACK and the QUALITY OF THE NODE. The user's frame: how deep is the pullback, how far
@@ -18506,19 +16619,23 @@ function _pbCtx(sym, pe){
 }
 window.__gptsDebug.pbEntry=function(s){ try{ return pbEntryPick(s||'SPY'); }catch(e){ return String(e); } };
 
-var LAST_READ={};   // (v11.0 G8) the last rendered READ per sym — recorded on the dir feature
+var LAST_READ={};   // (v11.0 G8) the last READ per sym — now written by readState(), not by a render
 var READ_SYM='SPY';  // (v11.0.1) the sym read3Beat is speaking for (it has no sym parameter)
-function readBlock44(sym){
+// (v15.53, D4) THE READ IS COMPUTED, NOT RENDERED-THEN-REMEMBERED. Until this build LAST_READ was
+// written only inside readBlock44 — which lives in the `else` of render() that CFG.panelV3 never lets
+// run. So every `dir` record since v11.0 carried read:null, READ_SYM was never set, and the G8 fix
+// ("the sentence the user saw is on the record") was inert from the day it shipped. The `dir`
+// feature now calls this directly on the closed bar; the face is free to draw it or not.
+function readState(sym){
   sym=sym||'SPY';
-  var S=STATE[sym]||{}; var px=S.price; if(px==null) return '';
-  var m=nodeMapModel(sym); if(!m||!m.ok) return '';
+  var S=STATE[sym]||{}; var px=S.price; if(px==null) return null;
+  var m=nodeMapModel(sym); if(!m||!m.ok) return null;
   var sp=null; try{ sp=spineOf(sym); }catch(eSp){}
   var d=(sp&&sp.dir)||(function(){ try{ return directionGrade(sym); }catch(e){ return {dir:'SIDE',grade:'C',disp:'C',inputs:{}}; } })();
   var L=(sp&&sp.inPlay); if(L==null){ try{ L=inPlayZone(sym); }catch(eL){ L=null; } }
   var dr; try{ dr=driftRead(sym); }catch(eDr){ dr={dir:0,verdict:'NONE'}; }
   var dirWord=d.dir||'SIDE';
   var dirNum=dirWord==='UP'?1:(dirWord==='DN'?-1:0);
-  // POTENTIAL target = next node in the direction, capped at the King (from the frame).
   var tgtK=null, tgtRole='';
   try{
     if(L){ var fr=tradeFrame(sym,L,dirNum||nodeHoldDir(L,px));
@@ -18529,464 +16646,18 @@ function readBlock44(sym){
   if(!legR){ try{ legR=legEngine(sym); }catch(eLg){ legR=null; } }
   READ_SYM=sym;
   var v=read3Beat(dirWord, L, px, m.flr, m.ceil, dr, tgtK, tgtRole, d.relation||null, legR, d.capped||null);
-  // (v11.0 audit G8) THE READ IS ON THE RECORD. The sentence the user actually saw (and the leg
-  // voice id) was never recorded, so the brief's contradiction #1 (READ vs direction) was
-  // vacuous. LAST_READ is picked up by the `dir` feature record on the closed bar.
-  try{ LAST_READ[sym]={ t:Date.now(), verdict:v.verdict, sentence:String(v.sentence||'').slice(0,240), voiceId:v.voiceId||null,
-                        legDir:legR?legR.dir:'none', legPhase:legR?legR.phase:'none', dirSrc:legR?(legR.dirSrc||'sma'):null,
-                        map:String(v.structure||'').slice(0,240), structureId:v.structureId||null }; }catch(eLR){}
-  var vcol={BULLISH:PAL.longAccent,BEARISH:PAL.shortAccent,SIDEWAYS:PAL.sub}[v.verdict]||PAL.sub;
-  // Direction grade chip — letter only, NO ⚖ (the tier + regime live in the hover).
-  var g=d.grade||'C', gdisp=d.disp||g;
-  var gcol=g==='A'?PAL.longAccent:(g==='B'?PAL.blue:PAL.amber);
-  var gbg =g==='A'?'rgba(46,194,126,.15)':(g==='B'?'rgba(74,144,217,.15)':'rgba(242,180,90,.15)');
-  var di=d.inputs||{};
-  // (v10.51) QUESTION-FIRST direction hover: the hierarchy, stated in one breath, then
-  // this bar's actual values. The grade is a confidence read on the TREND, not a blend.
-  var dTip=((DRIFT_LIVE
-    ? ('Which way, and how sure? SMA-50 sets the trend (15/20 closes); GEX/VEX drift confirms it or diverges from it. '+
-       'Trend UP + drift UP = confirmed. Trend UP + drift DOWN = divergence, caution. No trend = drift gives a tentative lean, never better than C. ')
-    : ('Which way, and how sure? SMA-50 sets the trend (15/20 closes): a confirmed trend is a B, a confirmed roll adds a point, mid-range and chop cap at C, no trend = SIDE at C. '+
-       'GEX/VEX drift is in SHADOW mode — recorded every bar and reviewed nightly, not shown and not voting until it clears the promotion bar. '))+
-    'Now: trend '+(d.trendState||'?')+' ('+((di.trend&&di.trend.up)||0)+' up / '+((di.trend&&di.trend.dn)||0)+' dn of '+((di.trend&&di.trend.win)||0)+') '+
-    '· drift '+((di.drift&&di.drift.verdict)||'?')+' → '+(d.relation||'?')+' → '+(dirWord==='UP'?'Up':(dirWord==='DN'?'Down':'Sideways'))+' '+gdisp+
-    '. Score '+(d.score!=null?d.score:'?')+' (live cut points A≥'+DIR_WEIGHTS.gradeA+', B≥'+DIR_WEIGHTS.gradeB+', else C)'+(d.capped?('; hard-capped to C by '+d.capped):'')+
-    '. '+((function(){ var R=di.roll; if(!R || R.dir==='none') return 'No leg engine reading (no confirmed trend). ';
-      var w=(R.dir==='dn')?'lower':'higher';
-      var s='Roll: '+R.count+' pullback node'+(R.count===1?'':'s')+' '+w+(R.confirmed?' — confirmed (+1)':(R.signal?' — signal':''))+
-            (R.weakening?(' · PB rolled AGAINST the trend — weakening ('+(R.vote||-1)+')'):(R.vote>0?'':''))+
-            (R.pb!=null?(' · PB '+fmtLvl(R.pb)):'')+(R.magnet!=null?(' · magnet '+fmtLvl(R.magnet)):'')+
-            '. Multi-session rolling '+(R.session&&R.session.ready?('votes '+R.session.vote):('records only — '+((R.session&&R.session.note)||'needs 3 sessions')))+'. ';
-      return s; })())+
-    'Structure '+((di.structAsym&&di.structAsym.bias)||'?')+' and King roll are RECORDED, not voted, until measured. '+
-    ((d.tier==='⚖')?('Hand-set \u2696 \u2014 becomes \uD83D\uDCCA only when this panel has promoted it past the bar AND measured eff n\u2265'+RULE_UNLOCK_N+' locally.'):'Measured \uD83D\uDCCA on local evidence.')).replace(/"/g,'');
-  // Session badge — dim normally; HIGHLIGHT only power hour / OPEX.
-  var sb=sessionBucket();
-  var hot=(sb.bucket==='power'||sb.opex);
-  var sTip=('What part of the day? '+sb.bucket+(sb.opex?' · OPEX (3rd Friday)':'')+
-    '. The same structure means different things at 08:35 and 14:45'+(sb.capOdds?' — power-hour/open-drive flows are mechanical, so no odds claim is made now.':'.')).replace(/"/g,'');
-  var sBadge='<span title="'+sTip+'" style="font-size:8px;font-weight:700;color:'+(hot?PAL.gold:PAL.sub)+';border:1px solid '+(hot?PAL.gold:PAL.line)+';border-radius:8px;padding:0 4px">'+(SESSION_ABBR[sb.bucket]||sb.bucket)+(sb.opex?' opex':'')+'</span>';
-  // Model-heat — show ONLY when cold (the tool grading itself poorly on this tape).
-  var heat=modelHeat(sym); var hBadge='';
-  if(heat.state==='cold'){
-    hBadge='<span title="Is the model reading this tape well? The last '+heat.n+' resolved direction/node grades were '+heat.rate+'% right (below 40% = cold). Descriptive self-report, never a forecast." style="font-size:8px;font-weight:700;color:'+PAL.shortAccent+';border:1px solid '+PAL.shortAccent+';border-radius:8px;padding:0 4px">model cold</span>';
-  }
-  var rTip=('Which way is the tape leaning, and where can it go? '+v.verdict+' — '+v.sentence+
-    ' · Structure: every meaningful node within '+PB_REACH+' strikes (SPY strikes and the SPXW lanes) is read for accumulation — Acm = %King up ≥'+MAP_ACM+'% over 15m, Dec = down ≥'+(-MAP_DEC)+'% or ≥'+MAP_DROP+'% off its session peak or dropped out of the book; a Dec node with an Acm neighbour on the same side = the ceiling/floor rolling. Descriptive, never an instruction.').replace(/"/g,'');
-  // (v11.0.1) the bar a pullback node lands: the read takes the ⚑ style (red down / green up)
-  var evt=!!v.event; var evCol=evt?((legR&&legR.dir==='dn')?PAL.shortAccent:PAL.longAccent):PAL.gold;
-  var evBg=evt?((legR&&legR.dir==='dn')?'rgba(240,97,109,.07)':'rgba(63,185,80,.07)'):PAL.card;
-  if(evt){ try{ fireAlert('pbNode', String(legR.pbDetected.k), evCol); }catch(eA){} }
-  var bodyHtml=(v.sentenceHtml||v.sentence);
-  if(evt){ var cut=bodyHtml.indexOf('. Deflection expected'); if(cut>0) bodyHtml='<b style="color:'+evCol+'">⚑ '+bodyHtml.slice(0,cut+1)+'</b>'+bodyHtml.slice(cut+1); else bodyHtml='<b style="color:'+evCol+'">⚑</b> '+bodyHtml; }
-  return '<div style="border-left:2px solid '+evCol+';background:'+evBg+';border-radius:0 8px 8px 0;padding:3px 7px;margin:2px 0 5px">'+
-    '<div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:800;white-space:nowrap;overflow:hidden;margin-bottom:1px">'+
-      '<span title="'+dTip+'" style="color:'+vcol+'">'+v.arrow+' '+v.verdict+'</span>'+
-      '<span style="color:'+PAL.line+'">·</span>'+sBadge+hBadge+
-      // (v11.1.1) the grade sits at the RIGHT edge, level with the Next Stop grade above it
-      '<span title="'+dTip+'" style="margin-left:auto;color:'+gcol+';background:'+gbg+';padding:0 5px;border-radius:3px;font-size:10px">'+gdisp+'</span>'+
-    '</div>'+
-    '<div title="'+rTip+'" style="font-size:9.5px;line-height:1.35;color:'+PAL.ink+';display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden">'+bodyHtml+'</div>'+
-  '</div>';
-  // (v11.0.1) the separate ⚑ banner and the "Map:" line are folded INTO the read above.
+  var out={ t:Date.now(), verdict:v.verdict, sentence:String(v.sentence||'').slice(0,240), voiceId:v.voiceId||null,
+            legDir:legR?legR.dir:'none', legPhase:legR?legR.phase:'none', dirSrc:legR?(legR.dirSrc||'sma'):null,
+            map:String(v.structure||'').slice(0,240), structureId:v.structureId||null,
+            _v:v, _d:d, _L:L, _m:m, _legR:legR, _dr:dr, _px:px, _tgtK:tgtK, _tgtRole:tgtRole };
+  LAST_READ[sym]=out;
+  return out;
 }
 window.__gptsStudyRun=function(){ studyRun(function(r){ try{ render(); }catch(e){} }); };
 window.__gptsRepoExport=function(d){ repoExportDay(d||TODAY,false); };
 window.__gptsRepoPick=function(){ repoPickFolder(); };
 window.__gptsRepoCoverage=function(){ repoCoverage(function(c){ console.log('[GEX repo]',c); }); };
-// ---- nightly scoring over recorded days ----
-function projScorecard(){
-  var db=recorderLoad(); var days=(db&&db.days)||{};
-  var sc={reachN:0,reach:0, etaErrs:[], covN:0,cov:0, succN:0,succ:0, pinN:0,pin:0, days:0};
-  for(var d in days){ if(!days.hasOwnProperty(d)) continue;
-    var spy=((days[d]||{}).snaps||{}).SPY||[]; var had=false;
-    for(var i=0;i<spy.length;i++){ var pr=spy[i].proj; if(!pr) continue; had=true;
-      // target reached by close?
-      var reached=null, firstAt=null;
-      for(var j=i+1;j<spy.length;j++){ var pj=spy[j].px;
-        if(typeof pj==='number' && Math.abs(pj-pr.tgt)<=0.5){ reached=true; if(firstAt==null) firstAt=j-i; break; } }
-      if(spy.length-i>=5){ sc.reachN++; if(reached) sc.reach++; }
-      if(pr.eta!=null && firstAt!=null){ sc.etaErrs.push((firstAt-pr.eta)*3); }
-      // cone coverage at eta (or 10 bars)
-      var hb=(pr.eta!=null?pr.eta:10);
-      if(i+hb<spy.length && typeof spy[i+hb].px==='number'){
-        sc.covN++; var drift=pr.tgt-pr.px, frac=1; var exp=pr.px+drift*Math.min(1,hb/(pr.eta||hb));
-        if(Math.abs(spy[i+hb].px-exp)<=pr.ch) sc.cov++; }
-      // succession scoring
-      if(pr.sa!=null && pr.sa>=60 && pr.sk!=null){
-        var hit=false; for(var q=i+1;q<Math.min(i+21,spy.length);q++){ if(spy[q].tking===pr.sk){ hit=true; break; } }
-        if(spy.length-i>=5){ sc.succN++; if(hit) sc.succ++; } }
-      // pin scoring: only score the LAST projection of the day that flagged pin
-      if(pr.pin && i>=spy.length-3){ var lastPx=spy[spy.length-1].px;
-        if(typeof lastPx==='number'){ sc.pinN++; if(Math.abs(lastPx-pr.tgt)<=0.5) sc.pin++; } }
-    }
-    if(had) sc.days++;
-  }
-  sc.etaErrs.sort(function(a,b){return a-b;});
-  sc.etaMed=sc.etaErrs.length?sc.etaErrs[Math.floor(sc.etaErrs.length/2)]:null;
-  return sc;
-}
-// ---- rule-based recommendations = the automatic feedback loop ----
-function projRecs(sc){
-  var recs=[];
-  function pct(a,b){ return b?Math.round(100*a/b):null; }
-  if(sc.covN>=20){ var cv=pct(sc.cov,sc.covN);
-    if(cv<60) recs.push({sev:'high', t:'Cone too narrow: coverage '+cv+'% < 70% target — raise cone multiplier (0.8 → ~1.0).'});
-    else if(cv>85) recs.push({sev:'low', t:'Cone too wide: coverage '+cv+'% — tighten multiplier for a more informative band.'});
-    else recs.push({sev:'ok', t:'Cone coverage '+cv+'% — within target band.'});
-  } else recs.push({sev:'info', t:'Cone coverage: recording ('+sc.covN+'/20 samples to unlock).'});
-  if(sc.etaMed!=null && sc.etaErrs.length>=15){
-    if(sc.etaMed>6) recs.push({sev:'med', t:'ETA runs late (median +'+sc.etaMed+'m): approach-rate window too short — try 5-bar rate.'});
-    else if(sc.etaMed<-6) recs.push({sev:'med', t:'ETA runs early (median '+sc.etaMed+'m): price accelerates into targets — consider convexity term.'});
-    else recs.push({sev:'ok', t:'ETA error median '+sc.etaMed+'m — acceptable.'});
-  } else recs.push({sev:'info', t:'ETA error: recording ('+sc.etaErrs.length+'/15).'});
-  if(sc.succN>=10){ var sr=pct(sc.succ,sc.succN);
-    if(sr<SUCC_META.hz30) recs.push({sev:'high', t:'Succession hit '+sr+'% < the measured '+SUCC_META.hz30+'% — check the node STATE split before touching the 60% threshold; size alone is the weakest of the three.'});
-    else recs.push({sev:'ok', t:'Succession hit '+sr+'% (n='+sc.succN+') — at or above the measured '+SUCC_META.hz30+'% (n='+SUCC_META.n+'); the live rate replaces the label.'});
-  } else recs.push({sev:'info', t:'Succession: '+sc.succN+'/10 live samples — label uses the '+SUCC_META.sessions+'-session measurement ('+SUCC_META.hz30+'% <=30m, n='+SUCC_META.n+').'});
-  if(sc.pinN>=5){ var pr=pct(sc.pin,sc.pinN);
-    recs.push({sev:(pr>=60?'ok':'med'), t:'Pin-band hit '+pr+'% (n='+sc.pinN+').'+(pr<60?' Widen band to ±0.75 or require taps<3.':'')});
-  } else recs.push({sev:'info', t:'Pin band: '+sc.pinN+'/5 flagged closes recorded.'});
-  if(sc.reachN>=20){ recs.push({sev:'ok', t:'Target reach by close: '+pct(sc.reach,sc.reachN)+'% (n='+sc.reachN+').'}); }
-  return recs;
-}
-function projScorecardHtml(){
-  var sc=projScorecard(); var recs=projRecs(sc);
-  function row(l,v,tip){ return '<div title="'+(tip||'')+'" style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed rgba(255,255,255,0.05);font-size:10px">'+
-    '<span style="color:'+PAL.sub+'">'+l+'</span><span style="color:'+PAL.ink+';font-weight:600">'+v+'</span></div>'; }
-  function pct(a,b){ return b?Math.round(100*a/b)+'%':'● recording'; }
-  var h='<div style="padding:5px 8px;background:'+PAL.card+';border:1px solid '+PAL.line+';border-radius:8px;margin:4px 0">'+
-    '<div title="Scores every projection the Dashboard drew, after the fact. This is the sharpening loop: the projected chart’s labels re-read from these live rates once they unlock." style="color:'+PAL.gold+';font-size:9px;font-weight:800;letter-spacing:.5px;margin-bottom:3px">🎯 PROJECTION SCORECARD <span style="color:'+PAL.sub+';font-weight:400">('+sc.days+'d recorded)</span></div>'+
-    row('Succession ≥60% → crowned ≤30m', (sc.succN?pct(sc.succ,sc.succN)+' n='+sc.succN:'● recording'), 'Live version of the measured '+SUCC_META.hz30+'% (n='+SUCC_META.n+', '+SUCC_META.sessions+' sessions). ⚠ The withdrawn '+SUCC_META.withdrawn+'% claim was scored against the RAW tape, where a one-snapshot flicker counted as a succession.')+
-    row('Target reached by close', pct(sc.reach,sc.reachN)+(sc.reachN?' n='+sc.reachN:''), 'Any later bar within ±0.5 of the projected target.')+
-    row('ETA error (median)', (sc.etaMed!=null?(sc.etaMed>0?'+':'')+sc.etaMed+'m n='+sc.etaErrs.length:'● recording'), 'First-touch time minus projected ETA.')+
-    row('Cone coverage', pct(sc.cov,sc.covN)+(sc.covN?' n='+sc.covN:''), 'Price within the volatility cone at the projection horizon. Target ~70%.')+
-    row('Pin-band hit', pct(sc.pin,sc.pinN)+(sc.pinN?' n='+sc.pinN:''), 'Close within ±0.5 of target when a pin band was flagged.')+
-    '<div style="color:'+PAL.gold+';font-size:8.5px;font-weight:700;margin:4px 0 2px 0">🔧 RECOMMENDATIONS (auto)</div>';
-  for(var i=0;i<recs.length;i++){ var r=recs[i];
-    var col=r.sev==='high'?PAL.shortAccent:(r.sev==='med'?PAL.amber:(r.sev==='ok'?PAL.longAccent:PAL.sub));
-    h+='<div style="font-size:9px;color:'+PAL.ink+';padding:1px 0"><span style="color:'+col+'">▪</span> '+r.t+'</div>'; }
-  h+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;opacity:.8">included in the day export → consumed by the end-of-day LLM review automatically</div></div>';
-  return h;
-}
-// (v10.47) KING HEADER — restored per user: ★SUP | 👑 King (+ gate row) | ★RES, then the 5-STEP
-// ①②③ icons. This is the top slice of kingBlock() (which stays unrendered: no charts/verdict pill).
-function kingHeaderBlock(){
-  var sym=activeSym();   // (v10.55 PART G) keyed by sym like everything else
-  var tp=tapeMap(sym);
-  var kingK = (tp && typeof tp.king==='number') ? tp.king : null;
-  var px = STATE[sym] ? STATE[sym].price : null;
-  // (v10.47b) fall back to the model's King (S.king / last-known) so the pill never says "Waiting on tape" while the ladder shows a King
-  if(kingK==null){ try{ var _m0=nodeMapModel(sym); if(_m0 && _m0.kingK!=null) kingK=_m0.kingK; }catch(e0){} }
-  // (v10.50) step icons \u2460\u2461\u2462 RETIRED from the header pills (their doctrine folded into
-  // the King / SUP / RES hovers). stepMini kept as a no-op so nothing downstream breaks.
-  var stepMini=function(n){ return ''; };
-  var offRaw = (px!=null && kingK!=null) ? (kingK - px) : null;
-  var off = (offRaw!=null) ? Math.round(offRaw) : null;
-  // (v10.37) King badge REDESIGN: two stacked rows inside ONE gold pill.
-  //   TOP  = 👑 crown + King strike + signed offset-vs-price arrow ('−3↓' etc.)
-  //   BELOW = white gate icon + GATEKEEPER strike + signed distance FROM PRICE
-  //           (was SPY price). No gatekeeper => a dimmed placeholder row (empty space).
-  // The standalone Gatekeeper section is removed — its price now lives here.
-  function signedOff(delta){                 // delta = level - price (rounded)
-    if(delta==null) return null;
-    var d=Math.round(delta);
-    if(d===0) return {sign:'', num:'0', arr:'', col:PAL.gold};
-    var above=d>0;
-    return { sign:above?'+':'\u2212', num:String(Math.abs(d)), arr:above?'\u2191':'\u2193',
-             col:above?PAL.longAccent:PAL.shortAccent };
-  }
-  var gkNow = (typeof gatekeeper==='function') ? (function(){ try{return gatekeeper(sym);}catch(e){return null;} })() : null;
-  var gkK = (gkNow && gkNow.ok && typeof gkNow.k==='number') ? gkNow.k : null;
-  var kingPxBadge='';
-  if(kingK!=null){
-    var ko=signedOff(offRaw);
-    var kArr = (ko && ko.arr) ? ('<span title="King is '+ko.num+' vs price (+ above, \u2212 below)." style="color:'+ko.col+';font-weight:800;font-size:11px;line-height:1;font-variant-numeric:tabular-nums;margin-left:3px">'+ko.sign+ko.num+ko.arr+'</span>') : '';
-    // bottom row: gatekeeper strike + signed distance from PRICE
-    var gkRow;
-    if(gkK!=null){
-      var go=signedOff((px!=null)?(gkK-px):null);
-      var gArr = (go && go.arr) ? ('<span title="Gatekeeper is '+go.num+' vs price (+ above, \u2212 below)." style="color:'+go.col+';font-weight:800;font-size:10px;line-height:1;font-variant-numeric:tabular-nums;margin-left:3px">'+go.sign+go.num+go.arr+'</span>') : '';
-      gkRow='<span style="display:inline-flex;align-items:center;gap:3px;line-height:1">'+gateSvg(PAL.ink)+
-        '<span style="color:'+PAL.ink+';font-weight:700;font-size:10px;font-variant-numeric:tabular-nums">'+fmtLvl(gkK)+'</span>'+gArr+'</span>';
-    } else {
-      // no gatekeeper => keep the row height, dim placeholder (clear path)
-      gkRow='<span title="No gatekeeper \u2014 clear path to the King." style="display:inline-flex;align-items:center;gap:3px;line-height:1;opacity:.45">'+gateSvg(PAL.sub)+
-        '<span style="color:'+PAL.sub+';font-size:10px">\u2013</span></span>';
-    }
-    kingPxBadge=
-      '<span title="TOP: 👑 King strike '+fmtLvl(kingK)+' + offset vs price. BELOW: gatekeeper strike + its distance from price (no gatekeeper => clear path)." '+
-        'style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;padding:3px 8px;border:1.5px solid '+PAL.gold+';border-radius:14px;background:'+PAL.card+';flex:0 1 auto;min-width:0">'+
-        '<span style="display:inline-flex;align-items:center;line-height:1">'+
-          '<span style="font-size:12px;line-height:1">\uD83D\uDC51</span>'+
-          '<span style="color:'+PAL.gold+';font-weight:800;font-size:13px;font-variant-numeric:tabular-nums;margin-left:3px">'+fmtLvl(kingK)+'</span>'+
-          kArr+
-        '</span>'+
-        '<span style="width:100%;height:1px;background:'+PAL.line+';margin:1px 0"></span>'+
-        gkRow+
-      '</span>';
-  } else {
-    kingPxBadge='<span style="color:'+PAL.sub+';font-size:11px">Waiting on tape\u2026</span>';
-  }
-  // ---- Header (v10.25): centered 3-MAGNET CLUSTER — green ★ strongest SUPPORT (left),
-  // 👑 King (middle), red ★ strongest RESISTANCE (right). Trend badge REMOVED (the
-  // regime/instruction line in the Node Map carries trend now). Below: the ①②③ icons.
-  var nm = (typeof nodeMapModel==='function') ? (function(){ try{return nodeMapModel(sym);}catch(e){return null;} })() : null;
-  function sideMagnet(node, isSup){
-    var col = isSup?PAL.longAccent:PAL.shortAccent;
-    var lbl = (isSup?'\u2605 SUP':'\u2605 RES');
-    if(!node){ return '<span style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 6px;min-height:40px;box-sizing:border-box;border-radius:14px;background:'+PAL.card+';border:1.5px solid '+PAL.line+';opacity:.6;flex:0 1 auto;min-width:0"><span style="font-size:7.5px;font-weight:800;line-height:1;color:'+PAL.sub+';letter-spacing:.3px">'+lbl+'</span><span style="width:100%;height:1px;background:'+PAL.line+';margin:2px 0"></span><span style="color:'+PAL.sub+';font-size:10px;line-height:1">\u2013</span></span>'; }
-    var tip=(isSup?'Strongest SUPPORT magnet below price':'Strongest RESISTANCE magnet above price')+' \u2014 '+fmtLvl(node.k)+' at '+node.pct+'% of King (size+build-rate+nearness blend). A strong magnet attracts price toward it.';
-    return '<span title="'+tip.replace(/"/g,'')+'" style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 6px;min-height:40px;box-sizing:border-box;border-radius:14px;background:'+PAL.card+';border:1.5px solid '+col+';flex:0 1 auto;min-width:0">'+
-      '<span style="font-size:7.5px;font-weight:800;line-height:1;color:'+col+';letter-spacing:.3px">'+lbl+'</span>'+
-      '<span style="width:100%;height:1px;background:'+PAL.line+';margin:2px 0"></span>'+
-      '<span style="line-height:1;white-space:nowrap"><span style="font-weight:800;font-size:12.5px;color:'+col+';font-variant-numeric:tabular-nums">'+fmtLvl(node.k)+'</span> <span style="color:'+PAL.sub+';font-size:8.5px;font-weight:600;font-variant-numeric:tabular-nums">'+node.pct+'%</span></span>'+
-    '</span>';
-  }
-  var supBadge = sideMagnet(nm?nm.strongSup:null, true);
-  var resBadge = sideMagnet(nm?nm.strongRes:null, false);
-  // (v10.51.2) STEPS 1-5 restored as a tiny clickable line ABOVE the cluster. Each numeral
-  // opens its OWN popover (Skylit's 5-step method) via the existing .gs-ico/data-gstep
-  // delegation in wireStepIcons(). Deliberately its own row so the SUP/King/RES pill
-  // alignment below is untouched. v10.50 had retired these; the doctrine text (STEP_TEXT)
-  // was still in the file but had no caller, i.e. unreachable.
-  var stepsLine=(function(){
-    var STEP_LBL={1:'Magnets',2:'King',3:'Range',4:'Gatekeepers',5:'Flow'};
-    // (v10.56 PART E) CENTRED. It sits above a centred three-badge cluster; left-aligned
-    // it read as a stray label rather than the header of what is under it.
-    var s='<div style="display:flex;align-items:center;justify-content:center;text-align:center;gap:4px;font-size:8px;line-height:1;color:'+PAL.sub+';margin:1px 0 2px;white-space:nowrap">'+
-          '<span style="font-weight:700;letter-spacing:.3px">Steps</span>';
-    for(var n=1;n<=5;n++){
-      s+='<span class="gs-ico" data-gstep="'+n+'" title="Step '+n+' \u2014 '+STEP_LBL[n]+' (click for the method)" '+
-         'style="cursor:pointer;font-size:8px;font-weight:800;color:'+PAL.blue+';padding:0 1px;border-bottom:1px dotted '+PAL.blue+'">'+n+'</span>';
-    }
-    return s+'</div>';
-  })();
-  var html=stepsLine+
-  '<div style="display:flex;justify-content:space-between;align-items:center;gap:4px;margin:4px 0 3px 0;width:100%;box-sizing:border-box;padding:0 2px">'+
-    supBadge+
-    '<span title="KING: the strike with the largest absolute dealer exposure \u2014 the day\u2019s EOD settlement magnet." style="display:inline-flex;flex:0 1 auto;min-width:0">'+kingPxBadge+'</span>'+
-    resBadge+
-  '</div>';
-  return html;
-}
-// (v11.0 audit) PARKED — no live caller; kept because test_magnet_v1044.js pins it.
-function kingBlock(){
-  var sym='SPY';
-  var tp=tapeMap(sym);
-  var kingK = (tp && typeof tp.king==='number') ? tp.king : null;
-  var px = STATE[sym] ? STATE[sym].price : null;
-  var kd=kingDay(sym);
-  var mv = (kd && kd.moves) ? kd.moves : [];
-  var moveCount = kd ? (kd.count||0) : 0;
-  var now=Date.now();
 
-  // ---- Stacked King/price badge (v10.15): one pill, King strike on top with a
-  // signed offset vs. price, SPY price below. Replaces the old 3-badge cluster
-  // (gold King price + distance chip + net-drift chip). Offset = King - price
-  // rounded; color: King above price = resistance (red), below = support
-  // (green), equal = gold/neutral \u2014 same convention as the sparkline dots.
-  // (v10.19) King header redesign: NO "King" title text, badge CENTERED, crown
-  // INSIDE the badge next to the King price. Offset shown as an ARROW only
-  // (\u2191 King above price = green, \u2193 below = red), NOTHING when King == price.
-  // Color fix: above=green (magnet pulls up), below=red (was inverted before).
-  var offRaw = (px!=null && kingK!=null) ? (kingK - px) : null;
-  var off = (offRaw!=null) ? Math.round(offRaw) : null;
-  // (v10.37) King badge REDESIGN: two stacked rows inside ONE gold pill.
-  //   TOP  = 👑 crown + King strike + signed offset-vs-price arrow ('−3↓' etc.)
-  //   BELOW = white gate icon + GATEKEEPER strike + signed distance FROM PRICE
-  //           (was SPY price). No gatekeeper => a dimmed placeholder row (empty space).
-  // The standalone Gatekeeper section is removed — its price now lives here.
-  function signedOff(delta){                 // delta = level - price (rounded)
-    if(delta==null) return null;
-    var d=Math.round(delta);
-    if(d===0) return {sign:'', num:'0', arr:'', col:PAL.gold};
-    var above=d>0;
-    return { sign:above?'+':'\u2212', num:String(Math.abs(d)), arr:above?'\u2191':'\u2193',
-             col:above?PAL.longAccent:PAL.shortAccent };
-  }
-  var gkNow = (typeof gatekeeper==='function') ? (function(){ try{return gatekeeper(sym);}catch(e){return null;} })() : null;
-  var gkK = (gkNow && gkNow.ok && typeof gkNow.k==='number') ? gkNow.k : null;
-  var kingPxBadge='';
-  if(kingK!=null){
-    var ko=signedOff(offRaw);
-    var kArr = (ko && ko.arr) ? ('<span title="King is '+ko.num+' vs price (+ above, \u2212 below)." style="color:'+ko.col+';font-weight:800;font-size:11px;line-height:1;font-variant-numeric:tabular-nums;margin-left:3px">'+ko.sign+ko.num+ko.arr+'</span>') : '';
-    // bottom row: gatekeeper strike + signed distance from PRICE
-    var gkRow;
-    if(gkK!=null){
-      var go=signedOff((px!=null)?(gkK-px):null);
-      var gArr = (go && go.arr) ? ('<span title="Gatekeeper is '+go.num+' vs price (+ above, \u2212 below)." style="color:'+go.col+';font-weight:800;font-size:10px;line-height:1;font-variant-numeric:tabular-nums;margin-left:3px">'+go.sign+go.num+go.arr+'</span>') : '';
-      gkRow='<span style="display:inline-flex;align-items:center;gap:3px;line-height:1">'+gateSvg(PAL.ink)+
-        '<span style="color:'+PAL.ink+';font-weight:700;font-size:10px;font-variant-numeric:tabular-nums">'+fmtNum(gkK)+'</span>'+gArr+'</span>';
-    } else {
-      // no gatekeeper => keep the row height, dim placeholder (clear path)
-      gkRow='<span title="No gatekeeper \u2014 clear path to the King." style="display:inline-flex;align-items:center;gap:3px;line-height:1;opacity:.45">'+gateSvg(PAL.sub)+
-        '<span style="color:'+PAL.sub+';font-size:10px">\u2013</span></span>';
-    }
-    kingPxBadge=
-      '<span title="TOP: 👑 King strike '+fmtNum(kingK)+' + offset vs price. BELOW: gatekeeper strike + its distance from price (no gatekeeper => clear path)." '+
-        'style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;padding:3px 8px;border:1.5px solid '+PAL.gold+';border-radius:14px;background:'+PAL.card+';flex:0 1 auto;min-width:0">'+
-        '<span style="display:inline-flex;align-items:center;line-height:1">'+
-          '<span style="font-size:12px;line-height:1">\uD83D\uDC51</span>'+
-          '<span style="color:'+PAL.gold+';font-weight:800;font-size:13px;font-variant-numeric:tabular-nums;margin-left:3px">'+fmtNum(kingK)+'</span>'+
-          kArr+
-        '</span>'+
-        '<span style="width:100%;height:1px;background:'+PAL.line+';margin:1px 0"></span>'+
-        gkRow+
-      '</span>';
-  } else {
-    kingPxBadge='<span style="color:'+PAL.sub+';font-size:11px">Waiting on tape\u2026</span>';
-  }
-  // ---- Header (v10.25): centered 3-MAGNET CLUSTER — green ★ strongest SUPPORT (left),
-  // 👑 King (middle), red ★ strongest RESISTANCE (right). Trend badge REMOVED (the
-  // regime/instruction line in the Node Map carries trend now). Below: the ①②③ icons.
-  var nm = (typeof nodeMapModel==='function') ? (function(){ try{return nodeMapModel(sym);}catch(e){return null;} })() : null;
-  function sideMagnet(node, isSup){
-    var col = isSup?PAL.longAccent:PAL.shortAccent;
-    var lbl = isSup?'\u2605 SUP':'\u2605 RES';
-    if(!node){ return '<span style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 6px;min-height:40px;box-sizing:border-box;border-radius:14px;background:'+PAL.card+';border:1.5px solid '+PAL.line+';opacity:.6;flex:0 1 auto;min-width:0"><span style="font-size:7.5px;font-weight:800;line-height:1;color:'+PAL.sub+';letter-spacing:.3px">'+lbl+'</span><span style="width:100%;height:1px;background:'+PAL.line+';margin:2px 0"></span><span style="color:'+PAL.sub+';font-size:10px;line-height:1">\u2013</span></span>'; }
-    var tip=(isSup?'Strongest SUPPORT magnet below price':'Strongest RESISTANCE magnet above price')+' \u2014 '+fmtNum(node.k)+' at '+node.pct+'% of King (size+build-rate+nearness blend). A strong magnet attracts price toward it.';
-    return '<span title="'+tip.replace(/"/g,'')+'" style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 6px;min-height:40px;box-sizing:border-box;border-radius:14px;background:'+PAL.card+';border:1.5px solid '+col+';flex:0 1 auto;min-width:0">'+
-      '<span style="font-size:7.5px;font-weight:800;line-height:1;color:'+col+';letter-spacing:.3px">'+lbl+'</span>'+
-      '<span style="width:100%;height:1px;background:'+PAL.line+';margin:2px 0"></span>'+
-      '<span style="line-height:1;white-space:nowrap"><span style="font-weight:800;font-size:12.5px;color:'+col+';font-variant-numeric:tabular-nums">'+fmtNum(node.k)+'</span> <span style="color:'+PAL.sub+';font-size:8.5px;font-weight:600;font-variant-numeric:tabular-nums">'+node.pct+'%</span></span>'+
-    '</span>';
-  }
-  var supBadge = sideMagnet(nm?nm.strongSup:null, true);
-  var resBadge = sideMagnet(nm?nm.strongRes:null, false);
-  var html='<div style="display:flex;justify-content:space-between;align-items:center;gap:4px;margin:4px 0 3px 0;width:100%;box-sizing:border-box;padding:0 2px">'+
-    supBadge+
-    '<span title="KING: the strike with the largest absolute dealer exposure \u2014 the day\u2019s EOD settlement magnet." style="display:inline-flex;flex:0 1 auto;min-width:0">'+kingPxBadge+'</span>'+
-    resBadge+
-  '</div>'+
-  // ①②③ info icons (Magnets / King / Range \u2014 the header trio)
-  '<div style="display:flex;gap:5px;align-items:center;justify-content:center;margin:0 0 5px">'+
-    '<span style="font-size:8.5px;color:'+PAL.sub+';font-weight:700;letter-spacing:.3px;margin-right:2px">5-STEP</span>'+
-    stepIcon(1)+stepIcon(2)+stepIcon(3)+
-  '</div>';
-  if(kingK==null){
-    html+='<div style="color:'+PAL.sub+';padding:2px 6px;font-size:11px">Waiting on tape\u2026</div>';
-    return html;
-  }
-
-  // ---- Derived: pinned time still used for the CURRENT chip's hover only ----
-  var lastRollT = mv.length ? mv[mv.length-1].t : null;
-  var pinnedMs = (lastRollT!=null) ? (now-lastRollT) : null;
-  function mins(ms){ return ms==null?null:Math.max(0,Math.round(ms/60000)); }
-  var pinnedM = mins(pinnedMs);
-  var pinnedTxt = (pinnedM==null)?'\u2013':(pinnedM>=60?((pinnedM/60).toFixed(1)+'h'):(pinnedM+'m'));
-
-  // ---- KING PATH SPARKLINE (v10.8): stepped King-strike-vs-clock-time chart. ----
-  // Replaces the old chip row. The staircase's SHAPE is the day's King trend:
-  // climbing = bullish migration, descending = bearish, flat = pinned, sawtooth
-  // = chop. X is real time (a 2h hold is a long flat left segment), so pace is
-  // honest. Faint dashed line = current price; gold dot = current King.
-  var sess=sessionBoundsCT();
-  // ---- KING VERDICT (v10.10): bull/bear read from drift + magnet + stability ----
-  var kv = kingVerdict(mv, kingK, px, now);
-  var vCol = kv.cls==='bull'?PAL.longAccent : (kv.cls==='bear'?PAL.shortAccent : PAL.gold);
-  var spark=kingSparkline(mv, kingK, px, now, sess, vCol);
-  // Session-drift summary words for the title.
-  var driftWord = spark.netDir>0?'up':(spark.netDir<0?'down':'flat');
-  var driftCol  = spark.netDir>0?PAL.longAccent:(spark.netDir<0?PAL.shortAccent:PAL.sub);
-  var nRolls = moveCount;
-  var loStrike = fmtNum(Math.ceil(spark.yLo));
-  var hiStrike = fmtNum(Math.floor(spark.yHi));
-  // ---- Magnet-target read: the single most actionable King output. ----
-  var magWord = kv.magnet>0 ? 'up' : (kv.magnet<0?'down':'');
-  var magStr = Math.round(Math.abs(kv.gap));
-  var magnetRead = kv.atMagnet
-    ? ('Price is AT the King \u2014 pinned; expect it to act as a magnet/range center until the King rolls.')
-    : ('King magnet pulls price '+magWord+' toward '+fmtNum(kingK)+' ('+magStr+' strike'+(magStr===1?'':'s')+' '+(kv.magnet>0?'above':'below')+').');
-  // Verdict tooltip: spell out how drift + magnet + stability combined.
-  var vWhy = (kv.word+' \u00b7 '+kv.regime+'. '+
-    'Drift '+(kv.drift>0?'+':'')+kv.drift+' strike'+(Math.abs(kv.drift)===1?'':'s')+' ('+(kv.drift>0?'dealers migrating higher = bullish':kv.drift<0?'dealers migrating lower = bearish':'no migration')+'); '+
-    'magnet '+(kv.magnet>0?'above price (pull up)':kv.magnet<0?'below price (pull down)':'at price (no pull)')+'; '+
-    (kv.regime==='trending'?'actively rolling ('+kv.rolls60+' in 60m) = momentum regime, go WITH the drift':kv.regime==='range-pinned'?'pinned '+(kv.pinnedM||0)+'m with no drift = range regime, fade the extremes toward the King':'settling')+'.'+
-    (kv.mixed?' NOTE: drift and magnet disagree \u2014 migration says one way while the immediate magnet pulls the other; treat as mixed until they align.':'')).replace(/"/g,'');
-  var sparkTip=('King path today \u2014 strike vs. clock time across the cash session (8:30\u201315:00 CT). '+
-    'Staircase steps at each confirmed roll, holds flat between, so a long flat = pinned and a tight cluster = rapid rolling. '+
-    'Net drift '+fmtNum(spark.firstK)+' \u2192 '+fmtNum(spark.lastK)+' ('+driftWord+', '+nRolls+' roll'+(nRolls===1?'':'s')+'). '+
-    'Line color = King verdict (green bullish, red bearish, yellow neutral/flat). Gold dot = current King; dashed = current price. '+vWhy).replace(/"/g,'');
-  html+='<div id="gpts-kingpath" title="'+sparkTip+'" style="padding:5px 8px;background:'+PAL.card+';border:1px solid '+PAL.line+';border-radius:8px;margin:2px 0">'+
-    // (v10.40) NARRATIVE FIRST — replaces the old "KING PATH · today · drift ·
-    // verdict" header row AND the old bottom magnet-read line. Drift/rolls moved
-    // INSIDE the chart (overlay, descriptive-only: tested 50% n=68).
-    kingReadHtml(kingAnalyzer(sym), kv)+
-    '<div style="display:flex;align-items:stretch;gap:4px">'+
-      '<div style="flex:1;min-width:0;position:relative">'+spark.svg+
-        '<span title="Y-axis extent of today\'s King path (strikes)." style="position:absolute;top:14px;left:5px;font-size:7.5px;color:'+PAL.sub+'">'+hiStrike+'</span>'+
-        '<span style="position:absolute;bottom:14px;left:5px;font-size:7.5px;color:'+PAL.sub+'">'+loStrike+'</span>'+
-        '<span id="gpts-kp-drift" title="Session King migration — DESCRIPTIVE ONLY: 3-bar drift tested 50% vs next-30m direction (n=68). Not a prediction." '+
-          'style="position:absolute;top:3px;left:5px;font-size:8px;font-weight:700;color:'+driftCol+';background:rgba(11,14,20,.72);border-radius:4px;padding:0 4px">drift '+driftWord+' · '+nRolls+' roll'+(nRolls===1?'':'s')+'</span>'+
-        '<span title="'+vWhy+'" style="position:absolute;top:3px;right:5px;font-size:8.5px;font-weight:800;color:'+vCol+';background:rgba(11,14,20,.72);border:1px solid '+vCol+';border-radius:20px;padding:0 6px">'+kv.word+'</span>'+
-        '<span style="position:absolute;bottom:3px;left:5px;font-size:7.5px;color:'+PAL.sub+';background:rgba(11,14,20,.72);border-radius:4px;padding:0 4px">'+fmtClock(spark.firstK!=null && mv.length?mv[0].t:sess.start)+' — now · pinned '+pinnedTxt+'</span>'+
-      '</div>'+
-    '</div>'+
-  '</div>';
-  // (v10.42) PROJECTED path chart below the history chart.
-  try{ var __A2=kingAnalyzer(sym); html+=projChartHtml(__A2, kingProjectionLive(sym,__A2)); }catch(ePJ){}'</div>';
-  return html;
-}
-
-function accumBlock(){
-  var __asym=activeSym();   // (v10.55 PART G)
-  var fs = futureStructureSummary(__asym);
-  // #5 ONLY SHOW STRIKES THAT MATTER. Instead of a fixed 3-above / 3-below
-  // ladder padded with Steady placeholders, surface only nodes a trader needs
-  // to act on: those actively Accumulating (Building) or Dissipating (Fading),
-  // plus the in-play node and the King even if Steady (structural anchors).
-  var inPlayK = (fs.inPlay && fs.inPlay.k!=null) ? fs.inPlay.k : null;
-  function matters(r){
-    if(r.state.label==='Building' || r.state.label==='Fading') return true; // something is happening
-    if(r.role==='King') return true;                                        // structural anchor
-    if(inPlayK!=null && Math.abs(r.k-inPlayK)<0.001) return true;            // the in-play node
-    return false;                                                            // skip idle/Steady filler
-  }
-  // Cap each side so a very active tape can't blow the panel out; the vertical
-  // scrollbar handles overflow beyond this.
-  var rowsAbove = fs.above.filter(matters).slice(0,5);
-  var rowsBelow = fs.below.filter(matters).slice(0,5);
-  // DISPLAY order = price ladder, highest strike at top descending to lowest.
-  // Resistance (above) must render highest-first, so reverse it (774,775,776 ->
-  // 776,775,774). Support (below) is already descending (773,772,771). The
-  // whole panel then reads: 776 775 774 [SPY] 773 772 771.
-  rowsAbove = rowsAbove.slice().sort(function(a,b){ return b.k-a.k; });
-  rowsBelow = rowsBelow.slice().sort(function(a,b){ return b.k-a.k; });
-  var px = (STATE[__asym]||STATE.SPY).price;
-  // ===== MERGED S/R BIAS BLOCK =====
-  // #4 (v10.6) Combined into ONE header: "S/R Bias". The board-tilt headline
-  // (Support-heavy / Resistance-heavy N\u00d7) rides on the right of this single
-  // header \u2014 the separate "\u2696 Bias" sub-header was removed.
-  // BOARD = srBattle() (v10.14): a DISSIPATION-DOMINANT support-vs-resistance
-  // FORCE model (validated on the user's real tape). Unlike the old
-  // netPositioning (which only summed BUILDING nodes and sat green all the way
-  // down a grind), srBattle weights the NEAREST level DISSIPATING heavily \u2014 so
-  // the bar flips red exactly at a bear-pullback high (floor giving way) and
-  // green at a bounce low (ceiling giving way). It also emits a CROSSOVER flag.
-  var srb = srBattle('SPY');
-  var haveSrb = !!srb;
-  var supPct = haveSrb ? srb.supPct : 50;
-  var resPct = haveSrb ? srb.resPct : 50;
-  var srDir = !haveSrb ? 0 : (srb.dom==='support'?1:(srb.dom==='resistance'?-1:0));
-  var netCol = srDir>0?PAL.longAccent:(srDir<0?PAL.shortAccent:PAL.sub);
-  // (v10.27) S/R IMBALANCE standalone section REMOVED. Its net-read ("Bearish/
-  // Bullish imbalance \u2014 resistance X building, support Y fading") + the tradeable
-  // crossover banner are now FOLDED INTO the Node Map header (see nodeMapBlock),
-  // per the Step-5 consolidation. srb/haveSrb kept above for downstream reference.
-  var html='';
-
-  // #3 (v10.24 Issue I) NODE MAP replaces the abbreviated PROJ row. The Node Map
-  // is the reshaped Projected-S/R: a two-sided price-anchored dealer-positioning
-  // map (strongest ★ headline + per-level Bounce/Pullback/Break-through verdicts +
-  // King marker + travel-emphasis). strongestAccumulator kept for back-compat refs.
-  var haveProj = true;
-  // (v10.50) legacy "Deflections" section RETIRED from the live render — its history +
-  // forward scoring live on in Analysis only (recordDeflections still runs every bar).
-  html+=nodeMapBlock();
-
-  return html;   // (v10.27) old two-sided ladder + PROJ block REMOVED — fully superseded by nodeMapBlock() (Step-5 identity). accumBlock is now just the Node Map wrapper.
-}
 
 // #7 STALE-FEED GUARD. Freshness state from the age of the last feed update,
 // with thresholds ADAPTIVE to the observed cadence (amber ~2x, red ~4x), so it
@@ -19111,7 +16782,7 @@ function feedStatusHtml(){
       // It did name them. It just converted the units on the way, and nothing checked the output.
       var lbT=''; try{ lbT=fmtClock(LB.ts||0); }catch(eLT){}
       warn+=(warn?' ':'')+'<span title="THE MARKET IS CLOSED AND THE LIVE BOOK HAS ROLLED. Skylit drops the expired chain at the close, so the ladder on the page is the NEXT expiry with every rate of change at zero. What you are looking at is the last healthy reading of the '+
-        (LB.day||'')+' session, frozen at '+lbT+' \u2014 real numbers, not live ones. Nothing is recorded while this shows: the recorder is blind to it by construction (recorderBlind), so it can never enter data/*.json as though it were live. Turn it off in the gear to watch the overnight book instead."'+
+        (LB.day||'')+' session, frozen at '+lbT+' \u2014 real numbers, not live ones. Nothing is recorded while this shows: the recorder is blind to it by construction (recorderBlind), so it can never enter data/<day>.json as though it were live. Turn it off in the gear to watch the overnight book instead."'+
         ' style="color:#7cc7ff;font-weight:800">\u25cf '+(LB.day||'last session')+' book \u2014 frozen '+lbT+'</span>';
     }else{
       // ⚠⚠ (v15.03) THE EMPTY LADDER NOW EXPLAINS ITSELF. He was handed a blank ladder after the
@@ -19403,7 +17074,6 @@ window.__gptsDebug.syncReport=function(sym){
   };
 };
 window.__gptsDebug.tapeSync=function(sym){ return tapeSync(sym||'SPY'); };
-window.__gptsDebug.projReport=function(){ var sc=projScorecard(); return {scorecard:sc, recommendations:projRecs(sc)}; };
 window.__gptsDebug.setTapeGate=function(on){ CFG.tapeGate=(on!==false); if(typeof render==='function') render(); return 'tapeGate='+CFG.tapeGate; };
 
 // ============================================================================
@@ -19418,286 +17088,21 @@ function A_num(x){ return (typeof x==='number' && isFinite(x)) ? x : null; }
 function A_pct(hit,n){ return n>0 ? Math.round(100*hit/n) : null; }
 function A_sideOf(node, px){ var k=A_num(node.k); if(k==null||px==null) return null; if(k<px-0.001) return 'below'; if(k>px+0.001) return 'above'; return null; }
 
-// ---- KING BEHAVIOR: path, rolls (lead/lag), offset posture, reach, pin, converge
-function A_kingBehavior(day, sym){
-  sym=sym||'SPY';
-  var snaps=(day&&day.snaps&&day.snaps[sym])?day.snaps[sym]:[];
-  var out={ sym:sym, pts:0, levels:[], distinct:0, firstK:null, lastK:null, netDrift:null,
-            rolls:0, rollUp:0, rollDn:0, avgRollSize:null, regimes:[],
-            reachRate:null, reachN:0, reachHit:0, avgTimeToReach:null, convergeRate:null,
-            offsetAvg:null, aboveBars:0, belowBars:0, atBars:0, pullDir:null,
-            pinned:null, pinDist:null, pinTiming:null, closeK:null, closePx:null };
-  if(!snaps.length) return out;
-  var path=[]; snaps.forEach(function(s,i){ var k=A_num(s.tking), p=A_num(s.px); if(k==null) return; path.push({i:i,bar:s.bar,k:k,px:p}); });
-  out.pts=path.length; if(!path.length) return out;
-  out.firstK=path[0].k; out.lastK=path[path.length-1].k; out.netDrift=+(out.lastK-out.firstK).toFixed(2);
-  var kset={}, dwell={}; path.forEach(function(p){ kset[p.k]=1; dwell[p.k]=(dwell[p.k]||0)+1; });
-  out.levels=Object.keys(kset).map(Number).sort(function(a,b){return a-b;}); out.distinct=out.levels.length;
-  out.dwell=dwell;
-  // CORE = strikes the King actually HELD (>=2 bars), ignoring 1-bar outliers like
-  // an EOD pin-roll. Range/tightness for regime classification uses the core.
-  var core=out.levels.filter(function(k){ return dwell[k]>=2; }); if(!core.length) core=out.levels.slice();
-  out.core=core; out.coreRange=core.length?(core[core.length-1]-core[0]):0; out.coreCount=core.length;
-  var rollSizes=[], prev=null;
-  path.forEach(function(p){ if(prev!=null && p.k!==prev){ out.rolls++; var d=p.k-prev; rollSizes.push(Math.abs(d)); if(d>0) out.rollUp++; else out.rollDn++; } prev=p.k; });
-  out.avgRollSize=rollSizes.length? +(rollSizes.reduce(function(a,b){return a+b;},0)/rollSizes.length).toFixed(2):null;
-  var offs=[]; path.forEach(function(p){ if(p.px==null) return; var off=p.k-p.px; offs.push(off); if(off>0.001) out.aboveBars++; else if(off<-0.001) out.belowBars++; else out.atBars++; });
-  if(offs.length){ out.offsetAvg=+(offs.reduce(function(a,b){return a+b;},0)/offs.length).toFixed(2); out.pullDir=out.offsetAvg>0.1?'up':(out.offsetAvg<-0.1?'down':'flat'); }
-  var regimes=[], cur=null;
-  path.forEach(function(p){ if(!cur||p.k!==cur.k){ if(cur) regimes.push(cur); cur={k:p.k,startI:p.i,bars:0,reached:false,reachBars:null,gapStart:null,gapEnd:null}; } cur.bars++; if(p.px!=null){ var gap=Math.abs(p.k-p.px); if(cur.gapStart==null)cur.gapStart=gap; cur.gapEnd=gap; if(gap<=0.25&&!cur.reached){ cur.reached=true; cur.reachBars=cur.bars-1; } } });
-  if(cur) regimes.push(cur); out.regimes=regimes;
-  var reachN=0,reachHit=0,ttr=[],conv=0,convN=0;
-  regimes.forEach(function(r){ if(r.gapStart!=null&&r.gapStart>0.25){ reachN++; if(r.reached){ reachHit++; if(r.reachBars!=null)ttr.push(r.reachBars);} if(r.gapEnd!=null){ convN++; if(r.gapEnd<r.gapStart)conv++; } } });
-  out.reachN=reachN; out.reachHit=reachHit; out.reachRate=A_pct(reachHit,reachN);
-  out.avgTimeToReach=ttr.length? +(ttr.reduce(function(a,b){return a+b;},0)/ttr.length).toFixed(1):null;
-  out.convergeRate=A_pct(conv,convN);
-  // PIN: where did price CLOSE vs the day's final King (doc: late reach=pin, early=drive-off)
-  var lastWithPx=null; for(var i=path.length-1;i>=0;i--){ if(path[i].px!=null){ lastWithPx=path[i]; break; } }
-  if(lastWithPx){ out.closeK=lastWithPx.k; out.closePx=lastWithPx.px; out.pinDist=+Math.abs(lastWithPx.k-lastWithPx.px).toFixed(2);
-    out.pinned=out.pinDist<=1.0; // ~0.5-1.0pt SPY zone (docs: ~5-10pt SPX)
-    var lastReg=regimes[regimes.length-1]; var frac=lastReg&&path.length? (lastReg.startI/(path.length-1)) : 1;
-    out.pinTiming=(frac>=0.66)?'late':(frac<=0.33?'early':'mid');
-  }
-  return out;
-}
 
-// ---- ACCUMULATION / DISSIPATION EDGE (validated on 8/11) ----
-function A_accumEdge(day, sym, mode){
-  sym=sym||'SPY'; var snaps=(day&&day.snaps&&day.snaps[sym])?day.snaps[sym]:[];
-  var B={ sup:{n:0,dh:0,sh:0,mfe:0,mae:0}, res:{n:0,dh:0,sh:0,mfe:0,mae:0} };
-  var baseN=0, baseUp=0;
-  snaps.forEach(function(s){ var o=s.out10; if(!o) return; var px=A_num(s.px); if(px==null) return; baseN++; if(o.net>0) baseUp++;
-    (s.nodes||[]).forEach(function(nd){ var side=A_sideOf(nd,px); if(!side) return; var net=A_num(nd.net); if(net==null) return;
-      var want=(mode==='accum')?(net>0):(net<0); if(!want) return;
-      var expUp=(mode==='accum')?(side==='below'):(side==='above');
-      var b=(side==='below')?B.sup:B.res; b.n++;
-      var hit=expUp?(o.net>0):(o.net<0); if(hit) b.dh++;
-      var mfe=A_num(o.mfe)||0, mae=A_num(o.mae)||0; b.mfe+=mfe; b.mae+=mae;
-      var sw=expUp?(mfe> -mae):(-mae>mfe); if(sw) b.sh++;
-    }); });
-  function pk(b){ return { n:b.n, dirHit:A_pct(b.dh,b.n), swingHit:A_pct(b.sh,b.n), avgMFE:b.n?+(b.mfe/b.n).toFixed(2):null, avgMAE:b.n?+(b.mae/b.n).toFixed(2):null }; }
-  return { mode:mode, baseline:A_pct(baseUp,baseN), baseN:baseN, support:pk(B.sup), resistance:pk(B.res) };
-}
 
-// ---- COMBINED / INTERACTION EDGE ----
-function A_combinedEdge(day, sym){
-  sym=sym||'SPY'; var snaps=(day&&day.snaps&&day.snaps[sym])?day.snaps[sym]:[];
-  var trap={n:0,hit:0}, lift={n:0,hit:0}, comp={n:0,range:0}, flow={n:0,hit:0}; var baseN=0,baseUp=0;
-  snaps.forEach(function(s){ var o=s.out10; if(!o) return; var px=A_num(s.px); if(px==null) return; baseN++; if(o.net>0) baseUp++;
-    var rB=false,rF=false,sB=false,sF=false,pol=0;
-    (s.nodes||[]).forEach(function(nd){ var side=A_sideOf(nd,px); var net=A_num(nd.net); if(!side||net==null) return;
-      if(side==='above'){ if(net>0){rB=true;pol-=Math.abs(net);} else if(net<0){rF=true;pol+=Math.abs(net);} }
-      else { if(net>0){sB=true;pol+=Math.abs(net);} else if(net<0){sF=true;pol-=Math.abs(net);} } });
-    if(rB&&sF){ trap.n++; if(o.net<0) trap.hit++; }
-    if(sB&&rF){ lift.n++; if(o.net>0) lift.hit++; }
-    if(sB&&rB){ comp.n++; if(Math.abs(o.net)<0.15||(o.revUp&&o.revDn)) comp.range++; }
-    if(Math.abs(pol)>0.001){ flow.n++; var pu=pol>0; if((pu&&o.net>0)||(!pu&&o.net<0)) flow.hit++; } });
-  return { baseline:A_pct(baseUp,baseN), baseN:baseN,
-    trapdoor:{n:trap.n,hit:A_pct(trap.hit,trap.n)}, liftoff:{n:lift.n,hit:A_pct(lift.hit,lift.n)},
-    compression:{n:comp.n,rangeRate:A_pct(comp.range,comp.n)},
-    dualVsSingle:{dualN:trap.n+lift.n,dualHit:A_pct(trap.hit+lift.hit,trap.n+lift.n)},
-    netFlow:{n:flow.n,dirHit:A_pct(flow.hit,flow.n)} };
-}
 
-// ---- REGIME CLASSIFIER: compose primitives into the docs' day-types.
-// Trend / Whipsaw / Rainbow Road (+ tradeability). Returns {label,conf,why}.
-function A_regime(day, sym){
-  sym=sym||'SPY'; var kb=A_kingBehavior(day,sym); var ce=A_combinedEdge(day,sym);
-  var snaps=(day&&day.snaps&&day.snaps[sym])?day.snaps[sym]:[];
-  if(kb.pts<6) return { label:'Forming', conf:'low', why:'Not enough King bars yet to classify the day ('+kb.pts+' pts).', kb:kb };
-  // node dispersion: are heavy nodes concentrated at two edges (Whipsaw) or scattered (Rainbow)?
-  var strikes={}; snaps.forEach(function(s){ (s.nodes||[]).forEach(function(nd){ var k=A_num(nd.k),v=Math.abs(A_num(nd.pct)||0); if(k!=null&&v>0){ strikes[k]=Math.max(strikes[k]||0,v); } }); });
-  var arr=Object.keys(strikes).map(function(k){return {k:+k,v:strikes[k]};}).sort(function(a,b){return b.v-a.v;});
-  var heavy=arr.filter(function(x){return x.v>=20;}); // significant nodes
-  var spread=heavy.length? (Math.max.apply(null,heavy.map(function(x){return x.k;}))-Math.min.apply(null,heavy.map(function(x){return x.k;}))) : 0;
-  // TREND: net drift dominates rolls (rolls mostly one way) + leading + flow polarity aligns
-  var oneWayRolls = kb.rolls>0 ? Math.abs(kb.rollUp-kb.rollDn)/kb.rolls : 0;
-  // King-core tightness: how narrow the band of King strikes actually visited is.
-  // A tight core (few distinct strikes over a small range) = a defined range even
-  // if many heavy nodes exist elsewhere on the board (Whipsaw, not Rainbow).
-  var kingRange = kb.coreRange!=null? kb.coreRange : (kb.levels.length? (kb.levels[kb.levels.length-1]-kb.levels[0]) : 0);
-  var tightCore = (kb.coreCount!=null?kb.coreCount:kb.distinct)<=4 && kingRange<=4;
-  var trending = Math.abs(kb.netDrift)>=2 && oneWayRolls>=0.5 && kb.rolls>=2;
-  // WHIPSAW: flip-flop King (balanced rolls) held to a tight core, small net drift.
-  // The heavy-node count no longer gates it \u2014 an oscillating King in a tight band
-  // IS a range regardless of how many significant nodes sit around it.
-  var whipsaw = kb.rolls>=2 && oneWayRolls<0.6 && tightCore;
-  // RAINBOW: genuinely scattered \u2014 wide King wander OR wide heavy spread AND no tight
-  // core AND poor reach (the doc's "no clear range, vague positioning").
-  var rainbow = !tightCore && (kingRange>=5 || spread>=10) && (kb.reachRate==null||kb.reachRate<40);
-  var label, conf, why;
-  if(trending){ label=(kb.netDrift<0?'Trend \u2193':'Trend \u2191'); conf=oneWayRolls>=0.7?'high':'medium';
-    why='King drifted '+kb.netDrift+' via mostly one-way rolls ('+kb.rollUp+'\u2191/'+kb.rollDn+'\u2193) \u2014 leading relocation, the doc\u2019s stair-step trend. Trade pullbacks.'; }
-  else if(whipsaw){ label='Whipsaw'; conf='medium';
-    why='King flip-flopped ('+kb.rollUp+'\u2191/'+kb.rollDn+'\u2193) in a tight '+(kb.core&&kb.core.length?(kb.core[0]+'\u2013'+kb.core[kb.core.length-1]):(kb.levels[0]+'\u2013'+kb.levels[kb.levels.length-1]))+' core \u2014 a defined range. Fade the edges, avoid the middle.'; }
-  else if(rainbow){ label='Rainbow Road'; conf='low';
-    why=heavy.length+' heavy nodes scattered over ~'+spread+' strikes with no clear edges'+(kb.reachRate!=null?(' and low King reach ('+kb.reachRate+'%)'):'')+'. Vague positioning \u2014 stand aside.'; }
-  else { label='Mixed'; conf='low'; why='No dominant structure: net drift '+kb.netDrift+', '+kb.rolls+' rolls, '+heavy.length+' heavy nodes. Treat as low-conviction.'; }
-  return { label:label, conf:conf, why:why, kb:kb, ce:ce, heavy:heavy.length, spread:spread };
-}
 
-// tooltip helper: attaches a coherence explanation (title=) naming the item's
-// ROLE in the King\u2192price\u2192S/R\u2192nodes story, not just a definition.
-function A_tip(t){ return t? (' title="'+String(t).replace(/"/g,'&quot;')+'"') : ''; }
 
-// ---- pure analytics from labeled snapshots -------------------------------
-function _pct(n,d){ return d>0 ? Math.round(100*n/d) : null; }
-function _dirOf(sig){
-  // net directional lean of a snapshot's read: prefer confluence, else King+trend blend
-  if(!sig) return 0;
-  if(sig.conf && typeof sig.conf.dir==='number' && sig.conf.dir!==0) return sig.conf.dir>0?1:-1;
-  var s=0;
-  if(sig.king && typeof sig.king.drift==='number') s+=(sig.king.drift>0?1:(sig.king.drift<0?-1:0));
-  if(sig.trend){ if(sig.trend.state==='up')s+=1; else if(sig.trend.state==='down')s-=1; }
-  return s>0?1:(s<0?-1:0);
-}
 function analysisStats(sym){
-  var day=A_day(); // loaded day if set, else live
+  // (v15.53) the sig-accuracy matrix is archived (F-king-era-analytics/analysisStats.js) — it graded the RETIRED
+  // confluence engine (D8). Every live caller read two fields; those are what it returns.
+  var day=A_day();
   var snaps=(day && day.snaps && day.snaps[sym]) ? day.snaps[sym] : [];
-  var out={ date:day?day.date:TODAY, bars:snaps.length, ready:0,
-            dirHit5:null, dirHit10:null, revCatch:null, targetHit:null, targetN:0,
-            perSig:{}, lead:{}, matrix:{}, nodes:[] };
-  if(!snaps.length) return out;
-  // signal keys we score for accuracy
-  var keys=['king','trend','srb','conf'];
-  var acc={}, leadSum={}, leadN={};
-  keys.forEach(function(k){ acc[k]={hit:0,n:0}; leadSum[k]=0; leadN[k]=0; });
-  var dh5={hit:0,n:0}, dh10={hit:0,n:0}, rev={hit:0,n:0}, tgt={hit:0,n:0};
-  var mtx={}; // aligned-count -> {dir:{hit,n}, tgt:{hit,n}}
-  snaps.forEach(function(s){
-    var o10=s.out10, o5=s.out5, sig=s.sig; if(!sig) return;
-    // overall direction hit (does the read's lean match net move?)
-    var lean=_dirOf(sig);
-    if(o5 && lean!==0){ dh5.n++; if((o5.net>0&&lean>0)||(o5.net<0&&lean<0)) dh5.hit++; }
-    if(o10 && lean!==0){ out.ready++; dh10.n++; if((o10.net>0&&lean>0)||(o10.net<0&&lean<0)) dh10.hit++; }
-    // reversal catch: did a reversal flag in sig line up with revUp/revDn in outcome?
-    if(o10){ var flagged=(sig.srb&&sig.srb.cross)?1:0; var actual=(o10.revUp||o10.revDn)?1:0;
-             if(actual){ rev.n++; if(flagged) rev.hit++; } }
-    // target: King magnet — did price reach the King within 10 bars?
-    if(o10){ tgt.n++; if(o10.hitKing) tgt.hit++; }
-    // per-signal accuracy vs 10-bar net
-    if(o10){
-      keys.forEach(function(k){
-        var d=0;
-        if(k==='king'&&sig.king) d=(sig.king.drift>0?1:(sig.king.drift<0?-1:0));
-        else if(k==='trend'&&sig.trend) d=(sig.trend.state==='up'?1:(sig.trend.state==='down'?-1:0));
-        else if(k==='srb'&&sig.srb) d=(sig.srb.dom==='support'?1:(sig.srb.dom==='resistance'?-1:0));
-        else if(k==='conf'&&sig.conf) d=(sig.conf.dir||0);
-        if(d!==0){ acc[k].n++; if((o10.net>0&&d>0)||(o10.net<0&&d<0)) acc[k].hit++; }
-      });
-    }
-    // confluence-outcome matrix by aligned count
-    if(o10 && sig.conf && typeof sig.conf.aligned==='number'){
-      var a=sig.conf.aligned; if(!mtx[a]) mtx[a]={dir:{hit:0,n:0},tgt:{hit:0,n:0}};
-      var cd=sig.conf.dir||0;
-      if(cd!==0){ mtx[a].dir.n++; if((o10.net>0&&cd>0)||(o10.net<0&&cd<0)) mtx[a].dir.hit++; }
-      mtx[a].tgt.n++; if(o10.hitKing) mtx[a].tgt.hit++;
-    }
-  });
-  out.dirHit5=_pct(dh5.hit,dh5.n); out.dirHit10=_pct(dh10.hit,dh10.n);
-  out.revCatch=_pct(rev.hit,rev.n); out.targetHit=_pct(tgt.hit,tgt.n); out.targetN=tgt.n; out.targetHitRaw=tgt.hit;
-  keys.forEach(function(k){ out.perSig[k]=_pct(acc[k].hit,acc[k].n); });
-  out.matrix=mtx;
-  // node lifecycle: aggregate each strike's role + net trajectory across the day
-  var byK={};
-  snaps.forEach(function(s){ (s.nodes||[]).forEach(function(n){
-    if(n.k==null) return; if(!byK[n.k]) byK[n.k]={k:n.k, roles:{}, firstNet:null, lastNet:null, lastSt:null, side:n.side};
-    var e=byK[n.k]; if(n.role) e.roles[n.role]=(e.roles[n.role]||0)+1;
-    var net=(typeof n.net==='number')?n.net:null;
-    if(net!=null){ if(e.firstNet==null)e.firstNet=net; e.lastNet=net; }
-    if(n.st) e.lastSt=n.st;
-  }); });
-  out.nodes=Object.keys(byK).map(function(k){ return byK[k]; })
-    .sort(function(a,b){ return b.k-a.k; });
-  return out;
+  return { date:day?day.date:TODAY, bars:snaps.length };
 }
 
-// (v11.0 audit) PARKED — no live caller; kept because test_render.js pins it.
-function _accBar(pct,label,note){
-  var col = pct==null?PAL.sub : (pct>=70?PAL.longAccent:(pct>=55?PAL.amber:PAL.shortAccent));
-  var w = pct==null?0:pct;
-  return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #161b26">'+
-    '<div style="flex:0 0 92px;font-size:11px;font-weight:700">'+label+'</div>'+
-    '<div style="flex:1;height:8px;background:#0b0e14;border-radius:6px;overflow:hidden"><div style="width:'+w+'%;height:100%;background:'+col+'"></div></div>'+
-    '<div style="flex:0 0 34px;text-align:right;font-size:11px;font-weight:800;color:'+col+'">'+(pct==null?'\u2013':pct+'%')+'</div>'+
-    '<div style="flex:0 0 74px;font-size:9px;color:'+PAL.sub+';text-align:right">'+(note||'')+'</div>'+
-  '</div>';
-}
-function _step(n,title){
-  return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'+
-    '<div style="flex:0 0 22px;height:22px;border-radius:50%;background:'+PAL.gold+';color:#0b0e14;font-weight:800;font-size:12px;text-align:center;line-height:22px">'+n+'</div>'+
-    '<div style="font-size:12px;font-weight:800">'+title+'</div>'+
-    '<div style="flex:1;height:1px;background:'+PAL.line+'"></div>'+
-  '</div>';
-}
-function _await(txt){ return '<div style="margin:0 0 14px 14px;font-size:10px;color:'+PAL.sub+';background:#0d1420;border-left:2px solid '+PAL.blue+';padding:6px 8px;border-radius:0 6px 6px 0">'+txt+'</div>'; }
 
-// (v10.21) an edge row: label + hit% vs baseline + swing% + MFE/MAE payoff + n,
-// with a coherence tooltip. Honest: null hit => '\u2013 (insufficient)'.
-function A_edgeRow(label, edge, baseline, tip){
-  var dh=edge.dirHit, sw=edge.swingHit, n=edge.n;
-  var lift=(dh!=null&&baseline!=null)?(dh-baseline):null;
-  var col = dh==null?PAL.sub:(dh>=60?PAL.longAccent:(dh>=50?PAL.amber:PAL.shortAccent));
-  var liftTxt = lift==null?'':(' <span style="color:'+(lift>0?PAL.longAccent:PAL.sub)+'">('+(lift>0?'+':'')+lift+' vs base)</span>');
-  var payoff = (edge.avgMFE!=null&&edge.avgMAE!=null)? (' \u00b7 MFE '+edge.avgMFE+' / MAE '+edge.avgMAE) : '';
-  return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #161b26"'+A_tip(tip)+'>'+
-    '<span style="flex:0 0 128px;font-size:10px;color:#c8d3df">'+label+'</span>'+
-    '<span style="flex:1;font-size:10px;color:'+col+';font-weight:700">'+(dh==null?'\u2013 (insufficient)':dh+'%')+liftTxt+
-      '<span style="color:'+PAL.sub+';font-weight:400"> \u00b7 swing '+(sw==null?'\u2013':sw+'%')+payoff+' \u00b7 n'+n+'</span></span></div>';
-}
 
-// (v10.21) the coherent TOP of the Analysis tab: regime chip + King behavior +
-// accumulation/dissipation/combined edges. Reads the causal chain in order and
-// every item carries a role-in-the-story tooltip. Rendered ABOVE the legacy
-// 7-step review so the tab tells ONE argument top-to-bottom.
-function A_renderTop(sym){
-  var day=A_day(); var reg=A_regime(day,sym); var kb=reg.kb||A_kingBehavior(day,sym);
-  var h='';
-  if(!kb || kb.pts<1) return h; // nothing to say yet; legacy block shows the await note
-  // --- REGIME CHIP (the headline: what KIND of day is this) ---
-  var rc = /Trend/.test(reg.label)?(/\u2193/.test(reg.label)?PAL.shortAccent:PAL.longAccent)
-         : reg.label==='Whipsaw'?PAL.amber : reg.label==='Rainbow Road'?PAL.sub : PAL.blue;
-  h+='<div style="margin:0 0 12px 0;background:#12161f;border:1px solid '+PAL.line+';border-left:3px solid '+rc+';border-radius:8px;padding:8px 10px"'+
-     A_tip('REGIME sets the frame for everything below. Trend=trade pullbacks; Whipsaw=fade the range edges, avoid the middle; Rainbow Road=stand aside; the metrics below are read THROUGH this.')+'>'+
-     '<div style="display:flex;justify-content:space-between;align-items:center">'+
-       '<span style="font-size:13px;font-weight:800;color:'+rc+'">'+reg.label+'</span>'+
-       '<span style="font-size:9px;color:'+PAL.sub+';text-transform:uppercase;letter-spacing:.5px">'+reg.conf+' confidence</span></div>'+
-     '<div style="font-size:10px;color:#c8d3df;line-height:1.5;margin-top:3px">'+reg.why+'</div></div>';
-  // --- KING BEHAVIOR (the anchor: where the magnet lived + did price obey) ---
-  h+=_step(1,'\uD83D\uDC51 King behavior \u2014 the anchor');
-  var pullTxt = kb.pullDir==='down'?'pulling DOWN (mostly below price)':kb.pullDir==='up'?'pulling UP (mostly above price)':'balanced';
-  var pinTxt;
-  if(kb.pinDist==null) pinTxt='\u2013';
-  else if(kb.pinned) pinTxt='<span style="color:'+PAL.longAccent+'">PINNED</span> ('+kb.pinDist+'pt, '+kb.pinTiming+')';
-  else pinTxt='<span style="color:'+PAL.amber+'">not pinned</span> ('+kb.pinDist+'pt off, '+(kb.pinTiming||'')+')';
-  h+='<div style="margin:0 0 14px 14px;background:#12161f;border:1px solid '+PAL.line+';border-radius:10px;padding:8px 10px;font-size:10px;color:#c8d3df;line-height:1.7">'+
-    '<div'+A_tip('The King is the settlement magnet \u2014 the direction price is \u201Csupposed\u201D to follow. Its net drift + which side of price it sat is the day\u2019s directional pull.')+'>Path: <b>'+(kb.core?kb.core.join('\u2192'):kb.levels.join('\u2192'))+'</b> \u00b7 net drift <b>'+kb.netDrift+'</b> \u00b7 '+pullTxt+'</div>'+
-    '<div'+A_tip('Rolls = King relocations. Mostly one-way rolls that LEAD price = a trend (stair-step). Balanced flip-flop rolls = a range (Whipsaw).')+'>Rolls: <b>'+kb.rolls+'</b> ('+kb.rollUp+'\u2191/'+kb.rollDn+'\u2193, avg '+(kb.avgRollSize==null?'\u2013':kb.avgRollSize)+' strikes)</div>'+
-    '<div'+A_tip('Reach = did price actually tag a held King level (the pull WORKING). Doc rule: early reach \u2192 dealers drive price off; late reach \u2192 settlement pin.')+'>Reach: <b>'+(kb.reachRate==null?'\u2013':kb.reachRate+'%')+'</b> ('+kb.reachHit+'/'+kb.reachN+' levels)'+(kb.avgTimeToReach!=null?(' \u00b7 ~'+kb.avgTimeToReach+' bars to tag'):'')+' \u00b7 gap converged '+(kb.convergeRate==null?'\u2013':kb.convergeRate+'%')+'</div>'+
-    '<div'+A_tip('The payoff of the pull: did price CLOSE on the King (a settlement pin) or get driven off? Late pin confirms the magnet; a far close = magnet ignored/decoy.')+'>Close vs King: '+pinTxt+' \u00b7 King '+kb.closeK+' / px '+(kb.closePx!=null?(+kb.closePx).toFixed(2):'\u2013')+'</div>'+
-  '</div>';
-  // --- EDGE FAMILIES (regime-aware; on range days directional edges are noise) ---
-  var acc=A_accumEdge(day,sym,'accum'), fade=A_accumEdge(day,sym,'fade'), ce=reg.ce||A_combinedEdge(day,sym);
-  var isRange = (reg.label==='Whipsaw'||reg.label==='Rainbow Road');
-  h+=_step(2,'\uD83D\uDCC8 Did accumulation mark price?');
-  if(isRange) h+=_await('This was a '+reg.label+' \u2014 a range/no-edge day. Directional accumulation edges below are LOW-signal here (the right read was fade-the-edges, not follow-through). Shown for completeness.');
-  h+='<div style="margin:0 0 14px 14px;background:#12161f;border:1px solid '+PAL.line+';border-radius:10px;padding:8px 10px">'+
-    A_edgeRow('Support building \u2192 up', acc.support, acc.baseline, 'Building support BELOW price should pull price UP toward it. This is the King\u2019s magnet logic at the node level.')+
-    A_edgeRow('Resistance building \u2192 dn', acc.resistance, acc.baseline, 'Building resistance ABOVE (a forming ceiling) should cap and press price DOWN.')+
-    '<div style="font-size:9px;color:'+PAL.sub+';margin-top:5px">baseline up-rate '+(acc.baseline==null?'\u2013':acc.baseline+'%')+' \u00b7 lift over baseline is the real edge, not raw %</div></div>';
-  h+=_step(3,'\uD83D\uDCC9 Did dissipation move price?');
-  h+='<div style="margin:0 0 14px 14px;background:#12161f;border:1px solid '+PAL.line+';border-radius:10px;padding:8px 10px">'+
-    A_edgeRow('Support fading \u2192 dn', fade.support, fade.baseline, 'A floor BLEEDING OUT below price removes support \u2014 price falls THROUGH the vacated level. Doc: rolling floors = bearish evidence.')+
-    A_edgeRow('Resistance fading \u2192 up', fade.resistance, fade.baseline, 'A ceiling DISSOLVING above frees price to run UP. Doc: rolling ceilings/unwind = the move accelerating.')+
-    '<div style="font-size:9px;color:'+PAL.sub+';margin-top:5px">dissipation is directional \u2014 not just \u201Cabsence of support\u201D</div></div>';
-  h+=_step(4,'\uD83E\uDDE9 When both sides move (confluence)');
-  h+='<div style="margin:0 0 16px 14px;background:#12161f;border:1px solid '+PAL.line+';border-radius:10px;padding:8px 10px;font-size:10px;color:#c8d3df;line-height:1.7">'+
-    '<div'+A_tip('TRAPDOOR = resistance building overhead WHILE support fades below \u2014 the doc\u2019s coherent bearish stack. Should predict DOWN.')+'>Trapdoor (res build + sup fade \u2192 dn): <b>'+(ce.trapdoor.hit==null?'\u2013':ce.trapdoor.hit+'%')+'</b> <span style="color:'+PAL.sub+'">n'+ce.trapdoor.n+'</span></div>'+
-    '<div'+A_tip('LIFTOFF = support building below WHILE resistance fades above \u2014 the bullish mirror. Should predict UP.')+'>Liftoff (sup build + res fade \u2192 up): <b>'+(ce.liftoff.hit==null?'\u2013':ce.liftoff.hit+'%')+'</b> <span style="color:'+PAL.sub+'">n'+ce.liftoff.n+'</span></div>'+
-    '<div'+A_tip('BOTH sides building = compression \u2192 range/chop, NOT direction. High range-rate here means \u201Cdon\u2019t trade direction.\u201D')+'>Compression (both build \u2192 range): <b>'+(ce.compression.rangeRate==null?'\u2013':ce.compression.rangeRate+'%')+'</b> <span style="color:'+PAL.sub+'">n'+ce.compression.n+'</span></div>'+
-    '<div'+A_tip('The whole thesis: does stacking reads (dual-confirmation) beat a single signal? If dual > single, confluence pays.')+'>Dual-confirmation dir hit: <b>'+(ce.dualVsSingle.dualHit==null?'\u2013':ce.dualVsSingle.dualHit+'%')+'</b> <span style="color:'+PAL.sub+'">n'+ce.dualVsSingle.dualN+'</span> \u00b7 net-flow polarity '+(ce.netFlow.dirHit==null?'\u2013':ce.netFlow.dirHit+'%')+'</div></div>';
-  return h;
-}
 
 // ============================================================================
 // (v10.54 GROUP 5) THE ANALYSIS + TESTING TABS, REBUILT AROUND THE TRADER'S
@@ -19781,6 +17186,7 @@ function tabGuide(which){
     ];
   } else {
     rows=[
+      ['Can we trust it, and what is queued?','(v15.54) The tab in workflow order: \u2460 CAN THE SCORER FAIL is a GATE \u2014 a flagged feature cannot promote and its rate cannot render; \u2461 the REGISTER, read once at minimum n; then the proposals that could change the model, the kills, coverage, the self-test.'],
       ['What is being tested, and what would settle it?','This tab is the queue: open questions, the proposals they turn into, the challengers waiting to replace an incumbent, and the conditions that void a read.'],
       ['the bar','A proposal only applies at eff n ≥ '+PROMO_MIN_N+' MEASURED HERE, a walk-forward hold on '+PROMO_WF_SESSIONS+' NEW locally recorded sessions, and no regime flip. The weekly run only PROPOSES.'],
       ['walk-forward','Sessions recorded on this machine AFTER the proposal was made, on which the rate stayed over its baseline. Days before it was made are in-sample and do not count.'],
@@ -19805,6 +17211,7 @@ function deflStats(sym){
   // and kill.noConf read the dir slices. Before this they mapped to nothing and could never
   // leave "proposed" — the tabs said "● recording" forever.
   var out={ grade:{}, tap:{}, pol:{}, session:{}, rocDay:{}, negGammaAir:{}, dirZone:{}, dirNoConf:{}, n:0 };
+  var _seenEp={};
   try{
     var db=recorderLoad(); var days=(db&&db.days)||{};
     var arch=(typeof FEAT_ARCHIVE!=='undefined' && FEAT_ARCHIVE && FEAT_ARCHIVE[sym])||{};
@@ -19812,6 +17219,7 @@ function deflStats(sym){
     Object.keys(allDays).forEach(function(dk){
       var arr=((days[dk]||{}).feat||{})[sym]||[];
       if(!arr.length) arr=arch[dk]||[];
+      arr=arr.slice().sort(function(x,y){ return (x&&x.t||0)-(y&&y.t||0); });   // (v15.54) first bar first
       arr.forEach(function(r){
         if(!r || !r.resolved || r.hit==null || !r.rec) return;
         if(r.key==='dir'){
@@ -19825,6 +17233,10 @@ function deflStats(sym){
           return;
         }
         if(r.key!=='node') return;
+        // (v15.54) ONE ROW PER EPISODE. Every bar re-records the same node with an overlapping window: 1,151
+        // rows were 94 (day, strike) episodes on 2026-09-03. Only the FIRST bar of an episode counts — the
+        // ex-ante state — so a slice's n is a count of independent tests, not of bars.
+        var _ek=dk+'|'+r.rec.k; if(_seenEp[_ek]) return; _seenEp[_ek]=1;
         out.n++;
         function bump(m, k){
           if(k==null || k==='') return;
@@ -19851,24 +17263,33 @@ function deflTableHtml(title, m, question){
   keys.sort();
   var h='<div title="'+String(question||'').replace(/"/g,'&quot;')+'" style="font-size:8.5px;font-weight:700;color:'+PAL.sub+';margin-top:4px">'+title+'</div>'+
     '<table style="width:100%;border-collapse:collapse;font-size:8.5px">'+
-    '<tr style="color:'+PAL.sub+'"><td>slice</td><td style="text-align:right">rate</td><td style="text-align:right">eff n</td>'+
+    '<tr style="color:'+PAL.sub+'"><td>slice</td><td style="text-align:right">held [95% CI]</td><td style="text-align:right">episodes</td>'+
     '<td title="Did the card’s own target print before its own invalidation?" style="text-align:right">frame</td>'+
     '<td style="text-align:right">MFE/MAE</td></tr>';
   keys.forEach(function(k){
     var b=m[k];
-    var p=_fpct(b.hit,b.n), en=effN(b.n);
-    var ready=(p!=null && en>=RULE_UNLOCK_N);
+    // (v15.54) n IS EPISODES NOW (deflStats dedups per day x strike), so the honest interval is a Wilson
+    // interval on n itself — not n/FEAT_FWD. A slice reads only at 15 episodes and carries its interval.
+    var p=_fpct(b.hit,b.n), en=b.n;
+    var ci=wilsonCI(b.hit,b.n);
+    var ready=(p!=null && en>=15);
     var col=ready?(p>=57?PAL.longAccent:(p<=43?PAL.shortAccent:PAL.ink)):PAL.sub;
     var fr=b.fn?Math.round(100*b.ftgt/b.fn):null;
-    h+='<tr title="'+nTxt(b.n).replace(/"/g,'')+'" style="border-top:1px solid rgba(255,255,255,.04)">'+
+    h+='<tr title="'+('n='+b.n+' episodes'+(ci?(' · 95% CI '+ci[0]+'\u2013'+ci[1]+'%'):'')).replace(/"/g,'')+'" style="border-top:1px solid rgba(255,255,255,.04)">'+
       '<td style="color:'+PAL.ink+'">'+k+'</td>'+
-      '<td style="text-align:right;color:'+col+';font-weight:700">'+(ready?(p+'%'):'● rec')+'</td>'+
+      '<td style="text-align:right;color:'+col+';font-weight:700">'+(ready?(p+'% <i style="font-weight:400;color:'+PAL.sub+'">['+ci[0]+'\u2013'+ci[1]+']</i>'):'thin ('+b.n+')')+'</td>'+
       '<td style="text-align:right;color:'+PAL.sub+'">'+en+'</td>'+
       '<td style="text-align:right;color:'+PAL.sub+'">'+(fr==null?'–':(fr+'% ('+nTxt(b.fn).replace('n=','').replace(' bars → eff ',' b/')+')'))+'</td>'+
       '<td style="text-align:right;color:'+PAL.sub+'">'+(b.mn?((b.mfe/b.mn).toFixed(2)+'/'+(b.mae/b.mn).toFixed(2)):'–')+'</td>'+
     '</tr>';
   });
   return h+'</table>';
+}
+// (v15.54) a Wilson interval, the house interval for every rate on these tabs
+function wilsonCI(k,n,z){
+  if(!(n>0)) return null; z=z||1.96;
+  var p=k/n, den=1+z*z/n, c=(p+z*z/(2*n))/den, h=z*Math.sqrt(p*(1-p)/n+z*z/(4*n*n))/den;
+  return [Math.max(0,Math.round(100*(c-h))), Math.min(100,Math.round(100*(c+h)))];
 }
 function deflectionsSectionHtml(sym){
   var d=deflStats(sym);
@@ -19878,6 +17299,57 @@ function deflectionsSectionHtml(sym){
   h+=deflTableHtml('by TAP #', d.tap, 'Does the Academy 80/66/33 tap decay hold on SPY? 1st tap should beat 2nd should beat 3rd.');
   h+=deflTableHtml('by POLARITY', d.pol, 'Do +γ nodes deflect cleanly while −γ nodes accelerate through? Compare the MAE column as much as the rate.');
   h+=deflTableHtml('by SESSION', d.session, 'Does the same structure mean the same thing at 08:35 and 14:45? Power hour is the bucket to watch.');
+  // (v15.54) THE MULTIPLE-COMPARISON LEDGER — printed beside the tables, every time. 37 cells were searched on
+  // 2026-09-03 and 2 flagged, which is what chance predicts at alpha 0.05. Without this line a table of this
+  // many cells always looks like it contains something.
+  try{
+    var base=null, held=0, n=0; Object.keys(d.grade||{}).forEach(function(k){ held+=d.grade[k].hit; n+=d.grade[k].n; }); if(n) base=held/n;
+    var cells=0, flags=0;
+    ['grade','tap','pol','session'].forEach(function(f){ Object.keys(d[f]||{}).forEach(function(k){ var b=d[f][k]; if(b.n<15) return; cells++; var ci=wilsonCI(b.hit,b.n); if(ci && base!=null && (ci[0]/100>base || ci[1]/100<base)) flags++; }); });
+    h+='<div style="margin-top:5px;font-size:8px;color:'+PAL.sub+';white-space:normal;border-top:1px solid rgba(255,255,255,.06);padding-top:3px">'+
+       '<b style="color:'+PAL.ink+'">'+d.n+' episodes</b> · base held '+(base==null?'\u2014':Math.round(100*base)+'%')+' · '+cells+' cells read · <b>'+flags+' exclude the base</b> · chance alone predicts '+(cells*0.05).toFixed(1)+
+       ((cells && flags<=cells*0.05+1)?' \u2014 <b style="color:'+PAL.amber+'">nothing here is a finding</b>; a hypothesis goes to the register and is read on unseen sessions':'')+'</div>';
+  }catch(eML){}
+  return h;
+}
+// ---- (v15.54) ① HOD / LOD — the objective, and how its call has scored LIVE ----------------------
+function hodlodCalib(sym){
+  // close-scored lodhod records only (atClose, v15.51+), grouped by the table's own cell: live held vs the table
+  var cells={}, sessions={};
+  try{
+    var db=recorderLoad(); var days=(db&&db.days)||{};
+    var arch=(typeof FEAT_ARCHIVE!=='undefined' && FEAT_ARCHIVE && FEAT_ARCHIVE[sym])||{};
+    var all={}; Object.keys(days).forEach(function(d){ all[d]=1; }); Object.keys(arch).forEach(function(d){ all[d]=1; });
+    Object.keys(all).forEach(function(dk){
+      var arr=((days[dk]||{}).feat||{})[sym]||[]; if(!arr.length) arr=arch[dk]||[];
+      arr.forEach(function(r){
+        if(!r || r.key!=='lodhod' || !r.atClose || r.hit==null || !r.rec || typeof r.rec.p!=='number') return;
+        var b=Math.floor(r.rec.p/20)*20, key=b+'\u2013'+(b+19); var c=cells[key]||(cells[key]={n:0,hit:0,p:0}); c.n++; if(r.hit) c.hit++; c.p+=r.rec.p; sessions[dk]=1;
+      });
+    });
+  }catch(e){}
+  return { cells:cells, sessions:Object.keys(sessions).length };
+}
+function hodlodSectionHtml(sym){
+  var h='';
+  var D=null, C=null; try{ D=hodLod(sym); if(D&&D.ok) C=lodhodCall(D); }catch(e0){}
+  if(D && D.ok){
+    h+='<div style="font-size:9px;line-height:1.4;color:'+PAL.ink+';white-space:normal">'+
+       '<b>'+g3esc(D.first||'?')+' standing</b> since '+g3esc(hlClock(D.first==='HOD'?D.hodT:D.lodT))+' · stood '+g3esc(hlDur(D.stood))+' · travelled '+Math.round(100*(D.posr||0))+'% off it'+
+       ((C&&C.p!=null)?(' · table cell <b>'+Math.round(C.p)+'%</b> (n '+(C.n||0)+')'):' · cell too thin to quote')+
+       ((C&&C.in)?' · <b style="color:'+PAL.longAccent+'">IN called</b>':((C&&C.p!=null&&C.p<=HLTAB_META.notIn)?' · <b style="color:'+PAL.shortAccent+'">NOT-IN called</b>':''))+'</div>';
+  } else h+=tabEmpty('no session read yet \u2014 the HOD/LOD engine needs ES 1-minute bars from the courier.');
+  var cal=hodlodCalib(sym); var keys=Object.keys(cal.cells).sort();
+  h+='<div style="margin-top:5px;font-size:8px;font-weight:700;color:'+PAL.sub+'">LIVE vs TABLE · close-scored · '+cal.sessions+' session'+(cal.sessions===1?'':'s')+'</div>';
+  if(!keys.length){
+    h+=tabEmpty('no close-scored sessions yet. lodhod is scored AT THE CLOSE since v15.51; before that its scorer read 100% (n=362 rows, 4 sessions) in every cell and could not fail (FINDINGS F-11). The first honest row arrives with the first full session on this build.');
+  } else {
+    h+='<table style="width:100%;border-collapse:collapse;font-size:8.5px"><tr style="color:'+PAL.sub+'"><td>table cell</td><td style="text-align:right">table says</td><td style="text-align:right">live held</td><td style="text-align:right">n</td></tr>';
+    keys.forEach(function(k){ var c=cal.cells[k]; var live=Math.round(100*c.hit/c.n), tab=Math.round(c.p/c.n); var ci=wilsonCI(c.hit,c.n);
+      h+='<tr style="border-top:1px solid rgba(255,255,255,.04)"><td>'+g3esc(k)+'%</td><td style="text-align:right;color:'+PAL.sub+'">'+tab+'%</td><td style="text-align:right;font-weight:700">'+live+'%'+(ci?' <i style="font-weight:400;color:'+PAL.sub+'">['+ci[0]+'\u2013'+ci[1]+']</i>':'')+'</td><td style="text-align:right;color:'+PAL.sub+'">'+c.n+'</td></tr>'; });
+    h+='</table><div style="font-size:7.5px;color:'+PAL.sub+';margin-top:2px;white-space:normal">a live column that does not rise with the table column means the scorer cannot fail \u2014 Testing \u2460 would flag it</div>';
+  }
+  h+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:4px;white-space:normal">The table: '+HLTAB_META.sessions+' sessions of ES 1-minute ('+HLTAB_META.first+' \u2192 '+HLTAB_META.last+'), price only \u2014 <b>no gamma book</b>. Nothing about nodes has been tested against it; that is H5 in the register.</div>';
   return h;
 }
 
@@ -20063,43 +17535,6 @@ function analysisBlock(){
   h+=tabHeader('analysis','📊 Analysis',
      'Did the dashboard tell the truth? '+sym+' · '+st.date+' · '+st.bars+' bars · '+((fs&&fs.days)||0)+'d recorded · '+srcLabel);
 
-  // ---- ① HEADLINE -----------------------------------------------------------
-  var dirB=(fs&&fs.byKey&&fs.byKey.dir)||{n:0,hit:0};
-  var nodeG=(fs&&fs.byGrade&&fs.byGrade.node)||{};
-  var mono=gradeMonotone(nodeG);
-  var takeN=0, takeHit=0;
-  try{
-    Object.keys((fs&&fs.cells)||{}).forEach(function(c){
-      var lbl=(DECISION_MATRIX[c.charAt(0)]||{})[c.charAt(2)]||'';
-      if(/skip|stand aside|wait/.test(lbl)) return;
-      takeN+=fs.cells[c].n; takeHit+=fs.cells[c].hit;
-    });
-  }catch(eT){}
-  var tiles='<div style="display:flex;flex-wrap:wrap;gap:4px">'+
-    tabTile('Direction', _fpct(dirB.hit,dirB.n), dirB.n,
-      'Did the direction grade resolve the way it said? Scored as: price travelled '+DIR_PTS+' in the stated direction within '+FEAT_FWD+' bars (SIDE bars are scored the opposite way and kept separate).')+
-    tabTile('Node A', _fpct((nodeG.A||{}).hit,(nodeG.A||{}).n), (nodeG.A||{}).n||0, 'Did grade-A nodes hold? A must beat B must beat C or the fusion is wrong.')+
-    tabTile('Node B', _fpct((nodeG.B||{}).hit,(nodeG.B||{}).n), (nodeG.B||{}).n||0, 'Did grade-B nodes hold?')+
-    tabTile('Node C', _fpct((nodeG.C||{}).hit,(nodeG.C||{}).n), (nodeG.C||{}).n||0, 'Did grade-C nodes hold? They should be the WORST — that is what makes the grade mean something.')+
-    tabTile('Take cells', _fpct(takeHit,takeN), takeN,
-      'Of the matrix cells labelled as takes, how many worked? Take cells are scored on the FRAME the card drew (target before invalidation), not on a generic drift.')+
-    // (v11.1) the one forward call, at both horizons
-    tabTile('Next Stop 30m', _fpct(((fs&&fs.byKey&&fs.byKey['nextStop'])||{}).hit,((fs&&fs.byKey&&fs.byKey['nextStop'])||{}).n), ((fs&&fs.byKey&&fs.byKey['nextStop'])||{}).n||0,
-      'Did price reach the Next Stop level (within the contact zone) inside 30 minutes? By rule and grade in the ⊕ scorecard.')+
-    tabTile('Next Stop 60m', _fpct(((fs&&fs.byKey&&fs.byKey['nextStop.60'])||{}).hit,((fs&&fs.byKey&&fs.byKey['nextStop.60'])||{}).n), ((fs&&fs.byKey&&fs.byKey['nextStop.60'])||{}).n||0,
-      'The same call with 60 minutes: how much of a 30-minute miss is just time?')+
-    // (v11.3) PB Entry — touched AND deflected, both horizons (never-touched records are null, not misses)
-    tabTile('PB Entry 30m', _fpct(((fs&&fs.byKey&&fs.byKey['pbEntry'])||{}).hit,((fs&&fs.byKey&&fs.byKey['pbEntry'])||{}).n), ((fs&&fs.byKey&&fs.byKey['pbEntry'])||{}).n||0,
-      'Of the bars where price reached the PB Entry level within 30 minutes, how often did it deflect '+DIR_PTS+' before closing through? (Never-touched bars are not counted either way — see the ⊕ scorecard for touch rate.)')+
-    tabTile('PB Entry 60m', _fpct(((fs&&fs.byKey&&fs.byKey['pbEntry.60'])||{}).hit,((fs&&fs.byKey&&fs.byKey['pbEntry.60'])||{}).n), ((fs&&fs.byKey&&fs.byKey['pbEntry.60'])||{}).n||0,
-      'The same call with 60 minutes.')+
-  '</div>'+
-  '<div style="font-size:8px;color:'+(mono.ok===false?PAL.shortAccent:PAL.sub)+';margin-top:4px;white-space:normal">'+
-    (mono.ok===false ? '⚠ node grades are NOT monotone (A '+(mono.a==null?'–':mono.a+'%')+' · B '+(mono.b==null?'–':mono.b+'%')+' · C '+(mono.c==null?'–':mono.c+'%')+') — the fusion is wrong, not the tape.'
-     : mono.ok===true ? '✓ node grades are monotone A·B·C — the grade is carrying real information.'
-     : '● monotone check recording — needs eff n≥2 in at least two grades before it can say anything.')+'</div>';
-  if(!dirB.n && !takeN) tiles=tabEmpty('nothing has resolved yet today. Records are written every closed 3-minute bar and scored '+FEAT_FWD+' bars later, so the first numbers appear about 30 minutes after the open.')+tiles;
-  h+=tabSection('a1','①','HEADLINE','Did the dashboard tell the truth today? Every tile greys out until it has eff n≥'+RULE_UNLOCK_N+' — a % with no n beside it is not shown anywhere on this tab.', tiles);
 
   // ---- ② WHAT CHANGED -------------------------------------------------------
   var ev=[]; try{ ev=promoEvents(); }catch(eE){}
@@ -20123,22 +17558,22 @@ function analysisBlock(){
   } else {
     wc+=tabEmpty('nothing has ever been promoted or demoted on this machine — every weight is still the hand-set hypothesis ⚖.');
   }
-  h+=tabSection('a2','②','WHAT CHANGED','Did the model move under me? Only proposals THIS panel promoted past the local bar can move anything; a fetched rules.json changes nothing on its own. Proposals, challengers and the kill list are in the Testing tab.', wc);
+  var S_changed=wc;   // (v15.54) folded into ④ REVIEW — 'did the model move' is the reimplementation step
 
   // ---- ③ DIRECTION FACTORS --------------------------------------------------
   var df='';
   try{ df=dirFactorsHtml(sym); }catch(eDF){ df=tabEmpty('the direction-factor table could not be rendered.'); }
-  h+=tabSection('a3','③','DIRECTION FACTORS','Which inputs actually predict? Sorted by LIFT — rate alone rewards a factor that simply voted with a one-way day. Parked (non-voting) candidates get the same columns, because that is what a promotion decision needs.', df, false);
+  var S_dir=tabSection('a3','⑤','DIRECTION','Which inputs actually predict? Sorted by LIFT — rate alone rewards a factor that simply voted with a one-way day. Parked (non-voting) candidates get the same columns, because that is what a promotion decision needs.', df, false);
 
   // ---- ④ DEFLECTIONS --------------------------------------------------------
   var dz='';
   try{ dz=deflectionsSectionHtml(sym); }catch(eDZ){ dz=tabEmpty('the deflection tables could not be rendered.'); }
-  h+=tabSection('a4','④','DEFLECTIONS','Which nodes actually hold? Sliced by grade, tap number, polarity and session bucket — each with its own n, its MFE/MAE, and the frame outcome (did the card’s own target print before its own invalidation).', dz, false);
+  var S_deflBody=dz, S_deflQ='Which nodes actually hold? Sliced by grade, tap number, polarity and session bucket — each with its own n, its MFE/MAE, and the frame outcome (did the card’s own target print before its own invalidation).';
 
   // ---- ⑤ YOUR CALLS ---------------------------------------------------------
   var yc='';
   try{ yc=yourCallsHtml(fs||{act:{take:{n:0,hit:0},pass:{n:0,hit:0}}}); }catch(eY){ yc=tabEmpty('selection quality could not be computed.'); }
-  h+=tabSection('a5','⑤','YOUR CALLS','Are the reads you TAKE better than the ones you PASS? Passes are the control group — without them a take rate on its own says nothing at all.', yc, false);
+  var S_defl=tabSection('a4','②','DEFLECTIONS AT NODES', S_deflQ+' YOUR CALLS — Are the reads you TAKE better than the ones you PASS? Passes are the control group.', S_deflBody+'<div style="margin-top:5px;font-size:8px;font-weight:700;color:'+PAL.sub+'">YOUR CALLS</div>'+yc, false);
 
   // ---- ⑥ REVIEW (nightly log + weekly review) ---------------------------------
   // (v11.0 audit G2/G3) renders BOTH files as they are actually shaped: the nightly
@@ -20160,6 +17595,21 @@ function analysisBlock(){
     nr+='<div style="font-size:8px;color:'+PAL.sub+';margin-bottom:2px">NIGHTLY · '+((Pp&&Pp.nightlyDay)||N.date||'last session')+' · read back from GitHub</div>';
     var nl=null; try{ nl=pipeReviewLine(N); }catch(eNL){}
     if(nl) nr+='<div style="font-size:9px;line-height:1.4;color:'+PAL.ink+';white-space:normal">'+nl+'</div>';
+    // (v15.54) schema 2: the nightly's VERDICTS on the register — workflow step 13
+    if(Array.isArray(N.hypotheses) && N.hypotheses.length){
+      nr+='<div style="margin-top:3px;font-size:8px;font-weight:700;color:'+PAL.blue+'">VERDICTS \u00b7 sessions from '+g3esc(N.from||PREREG_FROM)+'</div>';
+      N.hypotheses.forEach(function(H){
+        var col=(H.verdict==='cleared')?PAL.longAccent:((H.verdict==='refused')?PAL.shortAccent:PAL.sub);
+        nr+='<div style="font-size:8.5px;line-height:1.35;color:'+PAL.sub+'"><b style="color:'+col+'">'+g3esc(H.id||'')+' '+g3esc((H.verdict||'thin').toUpperCase())+'</b> \u00b7 '+g3esc(H.claim||'')+
+            ' \u00b7 n '+g3esc(String(H.n!=null?H.n:'\u2014'))+'/'+g3esc(String(H.minN!=null?H.minN:'\u2014'))+
+            ((H.rate!=null)?(' \u00b7 '+g3esc(String(H.rate))+'%'+((H.base!=null)?(' vs base '+g3esc(String(H.base))+'%'):'')):'')+
+            ((H.bar)?(' \u00b7 <i>'+g3esc(String(H.bar))+'</i>'):'')+'</div>';
+      });
+    }
+    if(N.lodhod && N.lodhod.cells && N.lodhod.cells.length){
+      nr+='<div style="margin-top:3px;font-size:8px;font-weight:700;color:#b58ce0">HOD/LOD \u00b7 LIVE vs TABLE (close-scored, '+g3esc(String(N.lodhod.sessions||0))+' sessions)</div>';
+      nr+='<div style="font-size:8.5px;line-height:1.35;color:'+PAL.sub+'">'+N.lodhod.cells.map(function(c){ return g3esc(String(c.cell))+': '+g3esc(String(c.live))+'% vs '+g3esc(String(c.table))+'% (n '+g3esc(String(c.n))+')'; }).join(' \u00b7 ')+'</div>';
+    }
     nr+=revList('CONTRADICTIONS', N.contradictions, PAL.shortAccent, revStr);
     nr+=revList('FACTORS', N.factors||N.features, PAL.blue, function(f){ return revStr(f)+((f&&f.n!=null)?(' · n '+f.n):'')+((f&&f.rate!=null)?(' · '+f.rate+'%'):''); });
     nr+=revList('OPEN QUESTIONS', N.questions, PAL.amber, revStr);
@@ -20183,22 +17633,19 @@ function analysisBlock(){
   if(!N && !R){
     nr=tabEmpty('no review has come back yet. The nightly log (learning/log/<day>.json) and the weekly review (review/<day>.json) are written from the day file this panel exports and read back automatically from GitHub — if nothing arrives, check the footer pipeline dots.');
   }
-  h+=tabSection('a6','⑥','REVIEW','What did the review actually say? Nightly log and weekly review, quoted as written — never summarised into a forecast.', nr, false);
+  var S_review=tabSection('a6','④','REVIEW','What did the review actually say? Nightly log and weekly review, quoted as written — never summarised into a forecast.'+' WHAT CHANGED: only proposals THIS panel promoted past the local bar can move anything.', nr+'<div style="margin-top:6px;font-size:8px;font-weight:700;color:'+PAL.sub+'">WHAT CHANGED · the model on this machine</div>'+S_changed, false);
 
   // ---- ⑦ NODES (the ledger) ---------------------------------------------------
   // (v11.0) layer 1 on the tab: every meaningful node's life today, its touches and reactions,
   // and its influence — with n on every number, nothing without n.
   var nl='';
   try{ nl=ledgerSectionHtml(sym); }catch(eNL){ nl=tabEmpty('the node ledger could not be rendered.'); }
-  h+=tabSection('a7','⑦','NODES','What did each node do today, and did price respect it? Life (born → peak → now), touches with the reaction on each, and influence: while it accumulated did price come toward it, while it dissipated did price move away. n on everything.', nl, false);
+  var S_nodes=tabSection('a7','③','NODES','What did each node do today, and did price respect it? Life (born → peak → now), touches with the reaction on each, and influence: while it accumulated did price come toward it, while it dissipated did price move away. n on everything.', nl, false);
 
-  // ---- the legacy detail, kept but folded away -------------------------------
-  var legacy='';
-  try{ legacy+=featureScorecardsHtml(sym); }catch(eFS){}
-  try{ legacy+=projScorecardHtml(); }catch(ePS){}
-  try{ legacy+=A_renderTop(sym); }catch(eAT){}
-  if(!legacy) legacy=tabEmpty('no detailed scorecards yet.');
-  h+=tabSection('a8','⊕','DETAIL · every enrolled feature','One scorecard per FEATURES entry, the projection scorecard and the per-day breakdown. Folded away by default: the sections above are the summary of exactly this data.', legacy, false);
+  // (v15.54) the feature scorecards moved to Testing ⊕ — they are a trust question, not an analysis one.
+  // ---- (v15.54) THE TAB IN WORKFLOW ORDER — design/ARCHITECTURE-E2E-WORKFLOW.md §3 ----
+  var S_hodlod=''; try{ S_hodlod=tabSection('a0','①','HOD / LOD','The objective, stated: which extreme is standing, has it printed, and how has the call scored LIVE against the 284-session table? The live column exists only from v15.51 (close-scored); before that the scorer could not fail.', hodlodSectionHtml(sym), true); }catch(eH0){ S_hodlod=tabSection('a0','①','HOD / LOD','',tabEmpty('the HOD/LOD section could not be rendered: '+String(eH0&&eH0.message||eH0).replace(/[<>&]/g,'')), true); }
+  h+=S_hodlod+S_defl+S_nodes+S_review+S_dir;
 
   // ---- save banner (the tab IS the trigger) ---------------------------------
   if(st.bars){
@@ -20212,70 +17659,6 @@ function analysisBlock(){
     }
   }
   return h;
-}
-// small KPI card
-// (v11.0 audit) PARKED — no live caller; kept because test_render.js pins it.
-function _kpi(label,val,sub,pct){
-  var col = pct==null?PAL.ink:(pct>=70?PAL.longAccent:(pct>=55?PAL.amber:PAL.shortAccent));
-  return '<div style="background:#12161f;border:1px solid '+PAL.line+';border-radius:8px;padding:6px 8px"><div style="font-size:9px;color:'+PAL.sub+'">'+label+'</div><div style="font-size:15px;font-weight:800;color:'+col+'">'+val+'</div><div style="font-size:8px;color:'+PAL.sub+'">'+sub+'</div></div>';
-}
-// timeline SVG from real snapshots (King gold, price light, S/R band)
-// panel inner width (px) for responsive SVG sizing; falls back to 280 if unknown.
-// (v11.0 audit) PARKED — no live caller; kept because test_render.js pins it.
-function _bodyW(){ try{ var w=elBody?elBody.clientWidth:0; return (w&&w>60)?(w-24):280; }catch(e){ return 280; } }
-// (v11.0 audit) PARKED — no live caller; kept because test_render.js pins it.
-function timelineSvg(sym,st){
-  var day=A_day(); var snaps=(day.snaps&&day.snaps[sym])||[];
-  if(snaps.length<2) return '<svg width="280" height="60" viewBox="0 0 280 60" style="display:block;width:100%"><text x="6" y="32" fill="'+PAL.sub+'" font-size="11">not enough bars yet \u2014 need \u22652</text></svg>';
-  // Responsive width: fit the panel, but give each bar >=6px; scroll only if wider.
-  var fitW=_bodyW(); var W=Math.max(fitW, snaps.length*6); var H=132, padT=10, padB=32, padL=4, padR=4;
-  var ks=[],ps=[]; snaps.forEach(function(s){ if(typeof s.king==='number')ks.push(s.king); if(typeof s.px==='number')ps.push(s.px); });
-  var all=ks.concat(ps); var lo=Math.min.apply(null,all), hi=Math.max.apply(null,all);
-  // pad the range so a nearly-flat King/price don't collapse onto one line
-  var span=hi-lo; if(span<0.5){ var mid=(hi+lo)/2; lo=mid-0.5; hi=mid+0.5; span=1; } else { lo-=span*0.12; hi+=span*0.12; }
-  function X(i){ return padL + (i/(snaps.length-1))*(W-padL-padR); }
-  function Y(v){ return padT + (1-(v-lo)/(hi-lo))*(H-padT-padB); }
-  var bw=(W-padL-padR)/snaps.length;
-  var svg='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" style="display:block;'+(W<=fitW?'width:100%':'')+'">';
-  // S/R dominance band per bar — VISIBLE tint (green support / red resistance)
-  snaps.forEach(function(s,i){ if(!s.sig||!s.sig.srb) return;
-    var c=(s.sig.srb.dom==='support')?'#2ec27e':(s.sig.srb.dom==='resistance')?'#f0616d':null; if(!c) return;
-    svg+='<rect x="'+(X(i)-bw/2).toFixed(1)+'" y="'+padT+'" width="'+bw.toFixed(1)+'" height="'+(H-padT-padB)+'" fill="'+c+'" opacity="0.13"/>'; });
-  // price line first (under King), light + slightly thicker so both read
-  var pp=''; snaps.forEach(function(s,i){ if(typeof s.px!=='number')return; pp+=(pp?' L ':'M ')+X(i).toFixed(1)+' '+Y(s.px).toFixed(1); });
-  svg+='<path d="'+pp+'" fill="none" stroke="#c8d3df" stroke-width="1.6" opacity="0.9"/>';
-  // King staircase on top, gold
-  var kp=''; snaps.forEach(function(s,i){ if(typeof s.king!=='number')return; kp+=(kp?' L ':'M ')+X(i).toFixed(1)+' '+Y(s.king).toFixed(1); });
-  svg+='<path d="'+kp+'" fill="none" stroke="'+PAL.gold+'" stroke-width="2.2"/>';
-  // crossover markers
-  snaps.forEach(function(s,i){ if(s.sig&&s.sig.srb&&s.sig.srb.cross){ var c=s.sig.srb.cross==='bears'?PAL.shortAccent:PAL.longAccent;
-    svg+='<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(s.px||s.king).toFixed(1)+'" r="3.5" fill="'+c+'" stroke="#0b0e14" stroke-width="0.8"/>'; } });
-  // compact single-row legend at the bottom
-  var ly=H-9;
-  svg+='<line x1="'+padL+'" y1="'+ly+'" x2="'+(padL+14)+'" y2="'+ly+'" stroke="'+PAL.gold+'" stroke-width="2.2"/><text x="'+(padL+18)+'" y="'+(ly+3)+'" fill="'+PAL.sub+'" font-size="9">King</text>'+
-       '<line x1="'+(padL+50)+'" y1="'+ly+'" x2="'+(padL+64)+'" y2="'+ly+'" stroke="#c8d3df" stroke-width="1.6"/><text x="'+(padL+68)+'" y="'+(ly+3)+'" fill="'+PAL.sub+'" font-size="9">price</text>'+
-       '<rect x="'+(padL+102)+'" y="'+(ly-4)+'" width="8" height="8" fill="'+PAL.longAccent+'" opacity="0.5"/><text x="'+(padL+113)+'" y="'+(ly+3)+'" fill="'+PAL.sub+'" font-size="9">sup</text>'+
-       '<rect x="'+(padL+138)+'" y="'+(ly-4)+'" width="8" height="8" fill="'+PAL.shortAccent+'" opacity="0.5"/><text x="'+(padL+149)+'" y="'+(ly+3)+'" fill="'+PAL.sub+'" font-size="9">res</text>';
-  svg+='</svg>'; return svg;
-}
-// King-minus-price gap over the day
-// (v11.0 audit) PARKED — no live caller; kept because test_render.js pins it.
-function convergenceSvg(sym,st){
-  var day=A_day(); var snaps=(day.snaps&&day.snaps[sym])||[];
-  var gaps=[]; snaps.forEach(function(s){ if(typeof s.king==='number'&&typeof s.px==='number') gaps.push({i:gaps.length,g:s.king-s.px}); });
-  if(gaps.length<2) return '<svg width="280" height="50" viewBox="0 0 280 50" style="display:block;width:100%"><text x="6" y="28" fill="'+PAL.sub+'" font-size="11">not enough bars yet</text></svg>';
-  var fitW=_bodyW(); var W=Math.max(fitW, gaps.length*6), H=72, mid=36, padL=4, padR=4;
-  var mx=1; gaps.forEach(function(p){ mx=Math.max(mx,Math.abs(p.g)); });
-  function X(i){ return padL+(i/(gaps.length-1))*(W-padL-padR); }
-  function Y(g){ return mid - (g/mx)*(mid-10); }
-  var svg='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" style="display:block;'+(W<=fitW?'width:100%':'')+'">';
-  svg+='<line x1="0" y1="'+mid+'" x2="'+W+'" y2="'+mid+'" stroke="'+PAL.line+'" stroke-dasharray="3 3"/>';
-  svg+='<text x="4" y="11" fill="'+PAL.sub+'" font-size="8">King above price (+)</text>';
-  svg+='<text x="4" y="'+(H-4)+'" fill="'+PAL.sub+'" font-size="8">King below price (\u2212)</text>';
-  // shade area between gap line and zero (green when converging toward 0 handled visually by proximity)
-  var p=''; gaps.forEach(function(pt){ p+=(p?' L ':'M ')+X(pt.i).toFixed(1)+' '+Y(pt.g).toFixed(1); });
-  svg+='<path d="'+p+'" fill="none" stroke="#b58ce0" stroke-width="2"/>';
-  svg+='</svg>'; return svg;
 }
 // ============================================================================
 // (v10.45) 🧪 TESTING TAB — hypothesis engine over the IndexedDB repository.
@@ -20360,115 +17743,13 @@ var T_PRESETS=[
   { id:'chop',    label:'Regime CHOP → up? (expect ~50)',      spec:{when:[{f:'regime',v:'chop'}], outcome:'up'} },
   { id:'below_toward', label:'King BELOW price → toward King', spec:{when:[{f:'kside',v:'below'}], outcome:'toward'} }
 ];
-// ---- INSIGHTS: rule engine over the cached study -> 4 buckets of text.
-function testingInsights(){
-  var s=studyLoad(), out={says:[],change:[],improve:[],next:[]};
-  var kp=studyPct(s.kingPull&&s.kingPull.all); if(kp!=null) out.says.push('King pulls price '+kp+'% at 30m (n='+s.kingPull.all.n+') — everything else repels.');
-  var d2=s.kingPull&&s.kingPull.byDist&&s.kingPull.byDist['2']; if(d2&&d2.n){ out.says.push('Pull peaks at 2 strikes ('+studyPct(d2)+'%, n='+d2.n+'); inside 1 strike price orbits.'); }
-  var h11=s.kingPull&&s.kingPull.byHour&&s.kingPull.byHour['11']; if(h11&&h11.n){ out.says.push('The 11am CT hour is the strongest pull window ('+studyPct(h11)+'%, n='+h11.n+').'); }
-  var orep=studyPct(s.othersRepel); if(orep!=null) out.says.push('Non-King mass repels '+orep+'% (n='+s.othersRepel.n+').');
-  var rB=s.reached&&s.reached.Building, rF=s.reached&&s.reached.Fading;
-  if(rB&&rB.n&&rF&&rF.n) out.says.push('Acm walls are sturdiest (reached '+studyPct(rB)+'%) vs Fading '+studyPct(rF)+'% — keep Acm in STATE.');
-  out.change.push('READ arms Pull only in the 1.5–3 strike zone; ORBIT shows contact, not direction.');
-  out.change.push('Suppress trend/confluence/King-verdict direction claims when regime=CHOP (they ran contrarian).');
-  out.improve.push('Most buckets are ⚖ (n<20 per day) — needs ~15 sessions before rates are trusted.');
-  out.improve.push('QQQ/VIX now recording every bar; cross-market confluence becomes testable in ~2 weeks.');
-  out.improve.push('Episode records (snap.ep) let us separate repel-at-contact from drift-from-distance — add that split.');
-  out.next.push('Does a +γ Ceil push harder than a −γ one? (polarity recorded since 08-14)');
-  out.next.push('Does the 11am pull window survive 10 more days, or is it a 4-day artifact?');
-  out.next.push('Contender ≥60% + King bleeding → does price go to the contender AFTER the crown relocates?');
-  out.next.push('Acm wall on FIRST touch → hold rate vs later touches (tap-decay).');
-  return out;
-}
 
 // (v10.46) RECOMMENDED TESTS — curated from research (Barbon-Buraschi gamma fragility;
 // SpotGamma/MenthorQ level defs; Skylit VEX). Each: theme, hypothesis, support tier, the
 // data it needs, and whether that data is recorded yet. 📗 evidenced · 📙 plausible ·
 // 📕 folklore (test-hard). Rendered as Testing block ⑥. The VEX/multi-symbol/VIX rows go
 // live once the market-open session records those fields.
-var RECO_TESTS=[
-  {th:'GEX regime', t:'Negative-gamma regime (spot below zero-gamma) → higher realized vol + trend continuation next 15–30m', s:'📗', need:'deriv', ready:true},
-  {th:'GEX regime', t:'Positive-gamma + spot near King → mean-reversion to King; smaller |move| (the pin)', s:'📗', need:'deriv+King', ready:true},
-  {th:'GEX regime', t:'Gamma-flip crossing → regime change; 30m range expands vs the 30m before the cross', s:'📙', need:'deriv.zg', ready:true},
-  {th:'GEX level', t:'Call Wall rejects from below / Put Wall breaks are more violent than Call breaks (asymmetry)', s:'📕', need:'deriv.cw/pw', ready:true},
-  {th:'Concentration', t:'High gamma concentration (HHI top tercile) → pins win; low HHI → momentum wins', s:'📙', need:'deriv.hhi', ready:true},
-  {th:'Imbalance', t:'Above/below gamma imbalance predicts break direction (heavier side repels)', s:'📙', need:'deriv.imb', ready:true},
-  {th:'Accumulation', t:'A strike whose gamma mass is BUILDING is a stronger pin than one bleeding out (15–30m)', s:'📙', need:'chg', ready:true},
-  {th:'Accumulation', t:'King mass FALLING while spot sits on it → elevated pin-break probability within 30m', s:'📙', need:'chg+King', ready:true},
-  {th:'Accumulation', t:'King migration up/down (successive Kings at higher/lower strikes) = structural drift tell', s:'📙', need:'tking series', ready:true},
-  {th:'Time-of-day', t:'Vanna at open + charm in last 90m; midday quiet — vol/drift by session bucket', s:'📙', need:'time', ready:true},
-  {th:'VEX (vanna)', t:'VEX King and GEX King co-located → stronger, tighter pull to that level (superposition)', s:'📕', need:'VEX', ready:false},
-  {th:'VEX (vanna)', t:'Net VEX +near spot AND VIX falling → melt-up drift toward the VEX King', s:'📙', need:'VEX+VIX', ready:false},
-  {th:'VEX (vanna)', t:'GEX pins locally but drift bleeds toward the VEX King in the IV-move direction (tug)', s:'📙', need:'VEX+VIX', ready:false},
-  {th:'VEX (vanna)', t:'Zero-Vanna level flips the sign of the IV→spot response (untested anywhere)', s:'📕', need:'VEX', ready:false},
-  {th:'VEX (vanna)', t:'BUILDING VEX under falling VIX → stronger/longer melt than a static VEX King (hours)', s:'📕', need:'VEX Δ+VIX', ready:false},
-  {th:'DTE gate', t:'VEX signals only fire when 30–90 DTE OI present; on 0DTE bars VEX≈0 (enforce as filter)', s:'📗', need:'VEX', ready:false},
-  {th:'Confluence', t:'SPY & QQQ Kings same side + VIX falling → SPY continues toward its King (30m)', s:'📙', need:'multi-sym+VIX', ready:false},
-  {th:'Confluence', t:'QQQ leads SPY on turns — QQQ King-flip/break precedes SPY by ≥1 bar (test the lead is real)', s:'📕', need:'multi-sym', ready:false},
-  {th:'Confluence', t:'SPX breaks SPXW vol-trigger + SPY net-GEX<0 → SPY down-trend + vol expansion (cascade)', s:'📙', need:'multi-sym', ready:false},
-  {th:'Confluence', t:'VIX backwardation (VIX/VIX3M>1) → raise vol expectation, down-weight pin signals', s:'📗', need:'VIX term', ready:false},
-  {th:'Expiration', t:'On OPEX days, close clusters at/near the King vs non-OPEX (Ni-Pearson-Poteshman pinning)', s:'📗', need:'OPEX flag+King', ready:true},
-  {th:'End-of-day', t:'Charm: OPEX + spot near high-mass King at 14:30 → close pulls to the King', s:'📙', need:'OPEX+time', ready:true}
-];
-function recoTestsHtml(){
-  var themes={}; RECO_TESTS.forEach(function(r){ (themes[r.th]=themes[r.th]||[]).push(r); });
-  var readyN=RECO_TESTS.filter(function(r){return r.ready;}).length;
-  var h='<div style="font-size:9.5px;font-weight:700;color:'+PAL.gold+';margin:7px 0 2px">⑥ Recommended tests <span style="font-size:8px;font-weight:400;color:'+PAL.sub+'">— '+readyN+'/'+RECO_TESTS.length+' runnable on recorded data · 📗 evidenced · 📙 plausible · 📕 folklore</span></div>';
-  Object.keys(themes).forEach(function(th){
-    h+='<div style="font-size:8px;letter-spacing:.4px;color:'+PAL.sub+';font-weight:700;margin:4px 0 1px;text-transform:uppercase">'+th+'</div>';
-    themes[th].forEach(function(r){
-      var col=r.ready?PAL.ink:PAL.sub; var badge=r.ready?'<span style="color:'+PAL.longAccent+'">✅</span>':'<span style="color:'+PAL.amber+'" title="needs data recorded at market open">⏳ '+r.need+'</span>';
-      h+='<div style="font-size:9px;line-height:1.45;color:'+col+';padding:1px 0;display:flex;gap:5px"><span>'+r.s+'</span><span style="flex:1">'+r.t+'</span><span style="white-space:nowrap;font-size:8px">'+badge+'</span></div>';
-    });
-  });
-  h+='<div style="font-size:7.5px;color:'+PAL.sub+';margin-top:3px;opacity:.85">⏳ rows unlock when the market-open session records VEX / multi-symbol / VIX-term fields. Sources: Barbon–Buraschi (gamma fragility), Ni–Pearson–Poteshman (pinning), SpotGamma/MenthorQ level defs, Skylit VEX. VEX/vanna directional claims are mechanistic but unbacktested — this tab is how we measure them.</div>';
-  return h;
-}
 
-// ---- RENDER: self-contained card, mirrors projScorecardHtml. Async computes populate
-// from cache + a re-run button (same pattern as the READ block's studyRun).
-// ============================================================================
-// (v10.54 GROUP 5.2) THE TESTING TAB — "What is being tested, and what would settle it?"
-// Six collapsible sections in the order the learning loop actually runs:
-//   ① QUESTION QUEUE  what is open
-//   ② PROPOSALS       what is asking to change the model, and how far off the bar
-//   ③ CHALLENGERS     what is trying to replace an incumbent
-//   ④ KILL LIST       what would void a read, and whether it is ACTIVE
-//   ⑤ SELF-TEST       does the scorer itself work
-//   ⑥ DATA COVERAGE   what unlocks when
-// The v10.45 hypothesis builder / pattern miner / research table are kept, folded into
-// a DETAIL section: they are exploration, not the loop.
-// ============================================================================
-function questionQueueHtml(){
-  var qs=[];
-  try{ qs=seedQuestions(); }catch(e){ qs=[]; }
-  if(!qs.length) return tabEmpty('no questions in the queue — the queue is DERIVED from FEATURES[].questions, so it is empty only if nothing is enrolled.');
-  var byState={ answered:[], testing:[], proposed:[] };
-  qs.forEach(function(q){
-    var st=null; try{ st=ruleLocalRate(q.feature); }catch(e1){ st=null; }
-    var en=st?st.effN:0;
-    var rate=st?st.rate:null;
-    var promoted=false; try{ promoted=rulePromoted(q.feature); }catch(e2){}
-    var state = (promoted && en>=RULE_UNLOCK_N) ? 'answered' : (en>0 ? 'testing' : 'proposed');
-    byState[state].push({ q:q, en:en, rate:rate, n:st?st.n:0 });
-  });
-  var h='';
-  [['answered','📊 ANSWERED',PAL.longAccent],['testing','◐ TESTING',PAL.blue],['proposed','⚖ PROPOSED',PAL.sub]].forEach(function(g){
-    var arr=byState[g[0]];
-    h+='<div style="font-size:8px;font-weight:700;color:'+g[2]+';margin-top:4px">'+g[1]+' ('+arr.length+')</div>';
-    if(!arr.length){ h+=tabEmpty('none in this state.'); return; }
-    arr.forEach(function(x){
-      var need=Math.max(0, RULE_UNLOCK_N-x.en);
-      h+='<div title="'+String(x.q.note||'').replace(/"/g,'&quot;')+'" style="font-size:8.5px;line-height:1.35;border-top:1px solid rgba(255,255,255,.04);padding:2px 0;white-space:normal">'+
-        '<b style="color:'+PAL.ink+'">'+x.q.id+'</b> <span style="color:'+PAL.sub+'">'+x.q.feature+'</span>'+
-        '<div style="color:'+PAL.sub+'">condition: '+((x.q.when||[]).map(function(w){ return w.f+'='+w.v; }).join(' & ')||'—')+' → outcome '+(x.q.outcome||'—')+'</div>'+
-        '<div style="color:'+PAL.sub+'">'+(x.rate==null?('● recording · '+nTxt(x.n)):(x.rate+'% · '+nTxt(x.n)))+
-          (need>0?(' · need '+need+' more effective observations (~'+Math.ceil(need*FEAT_FWD/100)+' more sessions)'):' · unlocked')+'</div>'+
-      '</div>';
-    });
-  });
-  return h;
-}
 function proposalsQueueHtml(){
   var doc=null; try{ doc=rulesDoc(); }catch(e){}
   var props=(doc&&doc.proposals)||[];
@@ -20539,33 +17820,143 @@ function killListHtml2(){
   return h;
 }
 // ---- RENDER ---------------------------------------------------------------
+// ---- (v15.52) ⑤b · CAN THE SCORER FAIL? -------------------------------------------------------
+// The check that would have caught F-11 on its first day. One row per feature: horizon, rows, the
+// honest n, sessions, the hit rate in the LOW-predicted band beside the HIGH-predicted band, and a
+// verdict. A flagged row's number must not reach the face.
+function canFailHtml(){
+  var st=null; try{ st=featStatsCached('SPY'); }catch(e){}
+  if(!st || !st.byKey) return '<div style="color:'+PAL.sub+'">no recorded outcomes yet</div>';
+  var rows=[];
+  Object.keys(st.byKey).forEach(function(k){
+    var b=st.byKey[k]||{}; var lo=(b.band&&b.band.lo)||{n:0,hit:0}, hi=(b.band&&b.band.hi)||{n:0,hit:0};
+    var rl=lo.n?Math.round(100*lo.hit/lo.n):null, rh=hi.n?Math.round(100*hi.hit/hi.n):null;
+    var v='', c=PAL.sub, rank=3;
+    if(b.toClose && !b.n){ v='restarted at the close \u00b7 '+(b.void||0)+' proxy rows void'; c='#f2b45a'; rank=1; }
+    else if(!lo.n && !hi.n){ v='no predicted band recorded'; rank=4; }
+    else if(lo.n<30 || hi.n<30){ v='thin \u00b7 lo '+lo.n+' / hi '+hi.n; rank=3; }
+    else if(Math.abs(rh-rl)<10){ v='\u26d4 GATED \u00b7 cannot discriminate'; c='#f0616d'; rank=0; }
+    else if(rh<rl){ v='\u26d4 GATED \u00b7 inverted'; c='#f0616d'; rank=0; }
+    else { v='\u2713 discriminates'; c='#2ec27e'; rank=2; }
+    var hn=b.hitNull||{}; var hnTxt=[hn.threw?('threw '+hn.threw):null, hn.declined?('declined '+hn.declined):null].filter(Boolean).join(' \u00b7 ');
+    var sessions=b.dates?Object.keys(b.dates).length:0;
+    var en=(b.toClose)?sessions:effN(b.n||0);
+    rows.push({ k:k, rank:rank, n:b.n||0, html:'<tr><td style="font-weight:700">'+g3esc(k)+'</td><td>'+(b.toClose?'close':(FEAT_FWD+' bars'))+'</td>'+
+      '<td style="text-align:right">'+(b.n||0)+'</td><td style="text-align:right">'+en+'</td><td style="text-align:right">'+sessions+'</td>'+
+      '<td style="text-align:right">'+(rl==null?'\u2014':(rl+'% <i style="color:'+PAL.sub+'">n'+lo.n+'</i>'))+'</td>'+
+      '<td style="text-align:right">'+(rh==null?'\u2014':(rh+'% <i style="color:'+PAL.sub+'">n'+hi.n+'</i>'))+'</td>'+
+      '<td style="color:'+c+';font-weight:800">'+v+'</td><td style="color:'+PAL.sub+'">'+g3esc(hnTxt)+'</td></tr>' });
+  });
+  rows.sort(function(a,b){ return (a.rank-b.rank) || (b.n-a.n); });
+  var h='<table style="width:100%;border-collapse:collapse;font-size:10px"><tr style="color:'+PAL.sub+';font-size:9px;letter-spacing:.06em;text-transform:uppercase">'+
+    '<th style="text-align:left">feature</th><th style="text-align:left">horizon</th><th>rows</th><th>eff n</th><th>days</th><th>lo band</th><th>hi band</th><th style="text-align:left">verdict</th><th style="text-align:left">hit null</th></tr>';
+  rows.forEach(function(r){ h+=r.html; });
+  return h+'</table>';
+}
+// ---- (v15.52) ⑧ · PRE-REGISTERED ---------------------------------------------------------------
+// roadmap/PREREGISTER.md, rendered. Each hypothesis carries the n it has accumulated on sessions
+// from PREREG_FROM onward and is READ ONCE at its minimum n. ⚠ THE RATE IS DELIBERATELY NOT SHOWN
+// BEFORE THAT: a hypothesis peeked at early becomes a search, and the exploratory pass that produced
+// these found exactly what chance predicts (37 cells, 2 flags, 1.9 expected).
+var PREREG_FROM='2026-09-03';
+var DEFL_ARCH_N=0;     // events in the IndexedDB defl store, counted at boot (H5's blocker)
+// (v15.54) THE ONE REGISTER — workflow step 8. learning/register.json is fetched like rules.json and is what
+// the nightly (tools/nightly/run.py) reads too, so the panel and the nightly can never test different lists.
+// The built-in copy below is the SEED: used until the fetch lands, and pinned equal to the file by a test.
+var REGISTER_KEY='gpts_register_v1';
+var PREREG_PICK={ gradeA:function(s){ return s.gradeA; }, tap1:function(s){ return s.tap1; }, pol:function(s){ return s.pol; },
+                  wick:function(s){ return s.wick; }, defl:function(s){ return s.defl; } };
+var PREREG_SEED=[
+  { id:'H1', claim:'grade A holds LESS often than the base rate', pick:'gradeA', minN:40, note:'exploratory 32% on n=34 \u2014 the INVERSE of the grade\u2019s purpose. Known confound: A may be assigned in strong trends. If it survives, test the confound BEFORE touching the grade.' },
+  { id:'H2', claim:'a node\u2019s 2nd test holds MORE often than its 1st', pick:'tap1', minN:30, note:'exploratory 73% on n=22 vs 47% first tests.' },
+  { id:'H3', claim:'NULL \u00b7 polarity does not discriminate', pick:'pol', gap:true, minN:40, note:'exploratory +\u03b3 52.2% / \u2212\u03b3 52.1%. Registered as a null ON PURPOSE.' },
+  { id:'H4', claim:'NULL \u00b7 the rejection wick does not discriminate', pick:'wick', gap:true, minN:40, note:'measured 49.1% confirmed vs 48.6% weak on 970 rows. While this stands the wick is REPORTED, never WEIGHTED.' },
+  { id:'H5', claim:'a top-5 gamma node moves the HOD/LOD cell', pick:'defl', blocked:true, minN:50, note:'THE question the panel exists for. Baseline HLTAB AUC 0.879. Definition fixed in advance: within DEFL_NEAR of a top-5-by-dollars node, wick-triggered. Needs the EVENT-level ledger.' }
+];
+function preregList(){
+  var list=null;
+  try{ var raw=JSON.parse(localStorage.getItem(REGISTER_KEY)||'null'); if(raw && raw.schema===1 && Array.isArray(raw.hypotheses) && raw.hypotheses.length) list=raw.hypotheses; }catch(e){}
+  if(!list) list=PREREG_SEED;
+  return list.map(function(H){ var o={}; for(var k in H) o[k]=H[k]; o.pickFn=PREREG_PICK[H.pick]||function(){ return null; }; return o; });
+}
+function registerFetch(){
+  try{ pipeFetch(PIPE_RAW_BASE+'/learning/register.json').then(function(r){
+    if(r && r.ok && typeof r.json==='function') r.json().then(function(j){
+      if(j && j.schema===1 && Array.isArray(j.hypotheses)){ try{ localStorage.setItem(REGISTER_KEY, JSON.stringify(j)); }catch(e){} if(j.from) PREREG_FROM=j.from; }
+    }).catch(function(){}); }).catch(function(){}); }catch(e){}
+}
+function preregStats(sym){
+  var out={ gradeA:{n:0,hit:0}, tap1:{n:0,hit:0}, pol:{a:{n:0,hit:0},b:{n:0,hit:0},la:'+\u03b3',lb:'\u2212\u03b3'}, wick:{a:{n:0,hit:0},b:{n:0,hit:0},la:'confirmed',lb:'weak'}, defl:{n:DEFL_ARCH_N||0,hit:0} };
+  try{
+    var db=recorderLoad(); var days=(db&&db.days)||{};
+    var arch=(typeof FEAT_ARCHIVE!=='undefined' && FEAT_ARCHIVE && FEAT_ARCHIVE[sym])||{};
+    var all={}; Object.keys(days).forEach(function(d){ all[d]=1; }); Object.keys(arch).forEach(function(d){ all[d]=1; });
+    var first={};   // (day|key|k) -> earliest resolved record: the EX-ANTE state, one row per episode
+    Object.keys(all).forEach(function(dk){
+      if(dk<PREREG_FROM) return;
+      var arr=((days[dk]||{}).feat||{})[sym]||[]; if(!arr.length) arr=arch[dk]||[];
+      arr.forEach(function(r){
+        if(!r || !r.resolved || r.hit==null || !r.rec) return;
+        if(r.key!=='node' && r.key!=='reaction') return;
+        var id=dk+'|'+r.key+'|'+r.rec.k; if(!first[id] || r.t<first[id].t) first[id]=r;
+      });
+    });
+    Object.keys(first).forEach(function(id){
+      var r=first[id], rc=r.rec;
+      if(r.key==='node'){
+        if(rc.grade==='A'){ out.gradeA.n++; if(r.hit) out.gradeA.hit++; }
+        if(typeof rc.tap==='number' && rc.tap>=1){ out.tap1.n++; if(r.hit) out.tap1.hit++; }
+        if(rc.pol==='+'){ out.pol.a.n++; if(r.hit) out.pol.a.hit++; } else if(rc.pol==='-'){ out.pol.b.n++; if(r.hit) out.pol.b.hit++; }
+      } else if(r.key==='reaction'){
+        if(rc.quality==='confirmed'){ out.wick.a.n++; if(r.hit) out.wick.a.hit++; } else if(rc.quality==='weak'){ out.wick.b.n++; if(r.hit) out.wick.b.hit++; }
+      }
+    });
+  }catch(e){}
+  return out;
+}
+function preregHtml(){
+  var s=preregStats('SPY');
+  var h='<table style="width:100%;border-collapse:collapse;font-size:10px"><tr style="color:'+PAL.sub+';font-size:9px;letter-spacing:.06em;text-transform:uppercase"><th style="text-align:left">id</th><th style="text-align:left">claim</th><th>n / min</th><th style="text-align:left">status</th></tr>';
+  preregList().forEach(function(H){
+    var v=H.pickFn(s)||{}; var n, status, c=PAL.sub;
+    if(H.blocked){ n=v.n||0; status=(n>=H.minN)?'ledger has '+n+' events \u2014 ready to run':('BLOCKED \u00b7 the event ledger holds '+n+' of '+H.minN); c='#f2b45a'; }
+    else if(H.gap){ n=Math.min(v.a.n,v.b.n); if(n>=H.minN){ var ra=Math.round(100*v.a.hit/v.a.n), rb=Math.round(100*v.b.hit/v.b.n); status='READ \u00b7 '+v.la+' '+ra+'% vs '+v.lb+' '+rb+'% \u00b7 gap '+Math.abs(ra-rb)+' pts'; c='#e6edf3'; } else status='thin \u2014 not read ('+v.la+' '+v.a.n+' / '+v.lb+' '+v.b.n+')'; }
+    else { n=v.n||0; if(n>=H.minN){ status='READ \u00b7 held '+Math.round(100*v.hit/v.n)+'%'; c='#e6edf3'; } else status='thin \u2014 not read'; }
+    h+='<tr'+g3tip(H.note||'')+'><td style="font-weight:800">'+g3esc(H.id)+'</td><td>'+H.claim+'</td><td style="text-align:right">'+n+' / '+H.minN+'</td><td style="color:'+c+'">'+status+'</td></tr>';
+  });
+  return h+'</table><div style="margin-top:4px;color:'+PAL.sub+';font-size:9px">sessions from '+PREREG_FROM+' only \u00b7 one row per (day, node) episode, first bar \u00b7 a rate appears only at the minimum n</div>';
+}
 function testingBlock(){
   var h='';
   var cov=null; try{ cov=featStatsCached('SPY'); }catch(e){}
   h+=tabHeader('testing','🧪 Testing',
     'What is being tested, and what would settle it? '+((cov&&cov.days)||0)+' recorded day'+(((cov&&cov.days)||0)===1?'':'s')+' on this machine.');
 
-  var q=''; try{ q=questionQueueHtml(); }catch(e1){ q=tabEmpty('the question queue could not be rendered.'); }
-  h+=tabSection('t1','①','QUESTION QUEUE','What is open, and how far from an answer? proposed → testing → answered(📊). Each row shows the exact condition, the rate measured HERE, its effective n and how many more observations it needs.', q);
+  // (v15.54) ① QUESTION QUEUE is archived — a question with no n is a hypothesis; the register (②) holds those.
+  // (the question queue's section text is in archive/v15.54/T-question-queue)
 
   var pr=''; try{ pr=proposalsQueueHtml(); }catch(e2){ pr=tabEmpty('the proposals queue could not be rendered.'); }
-  h+=tabSection('t2','②','PROPOSALS','What is asking to change the model, and does it clear the bar? The bar is LOCAL: eff n≥'+PROMO_MIN_N+' measured here, '+PROMO_WF_SESSIONS+' locally recorded walk-forward sessions, no regime flip.', pr);
+  var T_prop=tabSection('t2','③','PROPOSALS','What is asking to change the model, and does it clear the bar? The bar is LOCAL: eff n≥'+PROMO_MIN_N+' measured here, '+PROMO_WF_SESSIONS+' locally recorded walk-forward sessions, no regime flip.', pr);
 
   var ch=''; try{ ch=challengersHtml2(); }catch(e3){ ch=tabEmpty('the challenger table could not be rendered.'); }
-  h+=tabSection('t3','③','CHALLENGERS','What is trying to replace an incumbent, and is it actually ahead? Both are scored on the SAME bars, and the one-line reading says whether the gap is decisive yet.', ch, false);
+  var T_chal=tabSection('t3','③b','CHALLENGERS · vs incumbent','What is trying to replace an incumbent, and is it actually ahead? Both are scored on the SAME bars, and the one-line reading says whether the gap is decisive yet.', ch, false);
 
   var kl=''; try{ kl=killListHtml2(); }catch(e4){ kl=tabEmpty('the kill list could not be rendered.'); }
-  h+=tabSection('t4','④','KILL LIST','Which conditions would void a read, and is each one ACTIVE or just written down? A hand-set kill changes nothing.', kl, false);
+  var T_kill=tabSection('t4','④','KILL LIST','Which conditions would void a read, and is each one ACTIVE or just written down? A hand-set kill changes nothing.', kl, false);
 
   var stt=''; try{ stt=selfTestHtml(); }catch(e5){ stt=tabEmpty('the self-test could not be rendered.'); }
-  h+=tabSection('t5','⑤','SELF-TEST','Does the scorer itself work? A synthetic day with three properties planted at known strengths is run through this panel’s own arithmetic: it must FIND the edge, FLAG the 1-way trap, and SPLIT the regime-dependent rule.', stt);
+  var T_self=tabSection('t5','⑥','SELF-TEST','Does the scorer itself work? A synthetic day with three properties planted at known strengths is run through this panel’s own arithmetic: it must FIND the edge, FLAG the 1-way trap, and SPLIT the regime-dependent rule.', stt);
+  // (v15.52) the check ⑤ could not make: not "does the arithmetic work" but "can THIS feature's scorer fail"
+  var cf=''; try{ cf=canFailHtml(); }catch(eCF){ cf='<div style="color:#f0616d">canFail threw: '+String(eCF&&eCF.message||eCF).replace(/[<>&]/g,'')+'</div>'; }
+  var T_canfail=tabSection('t5b','\u2460','CAN THE SCORER FAIL?','Before a feature\u2019s rate means anything: does that rate MOVE between the records it predicted LOW and the ones it predicted HIGH? lodhod read 100% (n=362 rows, 4 sessions) in BOTH bands \u2014 a scorer that cannot fail (FINDINGS F-11). A flagged row is measuring something other than what it claims, and its number must not reach the face. eff n counts SESSIONS for a to-close feature.', cf);
 
   var dcv=''; try{ dcv=unlockRowsHtml('SPY'); }catch(e6){ dcv=tabEmpty('coverage could not be computed.'); }
   dcv+='<div id="gpts-tcov" style="font-size:8px;color:'+PAL.sub+';margin-top:4px;white-space:normal">repository: computing… <span data-gtcov="1" style="cursor:pointer;text-decoration:underline">refresh</span></div>';
-  h+=tabSection('t6','⑥','DATA COVERAGE','How much have we actually got, and what unlocks when? The honest answer to "why is everything still ⚖" is almost always "not enough recorded days" — this says exactly which threshold each capability is waiting on.', dcv);
+  var T_cov=tabSection('t6','\u2464','DATA COVERAGE','How much have we actually got, and what unlocks when? The honest answer to "why is everything still ⚖" is almost always "not enough recorded days" — this says exactly which threshold each capability is waiting on.', dcv);
 
   // ---- exploration, folded away: it is not part of the loop ------------------
   var det='';
+  try{ det+='<div style="font-size:8px;font-weight:700;color:'+PAL.sub+';margin-bottom:3px">FEATURE SCORECARDS \u00b7 one per enrolled feature</div>'+featureScorecardsHtml('SPY'); }catch(eFS){}   // (v15.54) moved here from Analysis ⊕
   try{
     var s=studyLoad();
     det+='<div style="font-size:8px;color:'+PAL.sub+';margin-bottom:3px;white-space:normal">measured on '+(s.src||'local repo')+(s.bars?(' · '+s.bars+' bars'):'')+'. These are EXPLORATION: leads, not findings. A lead becomes a question only after it survives re-runs on new days.</div>';
@@ -20587,14 +17978,14 @@ function testingBlock(){
       });
       det+='</table>';
     } else { det+=tabEmpty('not run yet — needs ≥30 outcome-labelled bars in the repository.'); }
-    var ins=testingInsights();
-    [['What the data says',ins.says,PAL.ink],['Change the product',ins.change,PAL.longAccent],['Improve the testing',ins.improve,PAL.amber],['Test next',ins.next,PAL.blue]].forEach(function(p){
-      if(!p[1] || !p[1].length) return;
-      det+='<div style="font-size:8.5px;line-height:1.4;margin-top:3px;white-space:normal"><b style="color:'+p[2]+'">'+p[0]+':</b> <span style="color:'+PAL.sub+'">'+p[1].join(' · ')+'</span></div>';
-    });
-    det+=recoTestsHtml();
+    // (v15.53) testingInsights (hardcoded Aug-2026 prose presented as findings) and recoTestsHtml (a static list, 12 of
+    // 22 rows permanently 'not ready') are ARCHIVED (G-testing-prose). The miner above is the exploration that stays.
   }catch(eD){ det=tabEmpty('the exploration tools could not be rendered.'); }
-  h+=tabSection('t7','⊕','DETAIL · exploration','Hypothesis builder, pattern miner and the research-curated test list. Exploration, not the loop: nothing here can promote anything.', det, false);
+  var pg=''; try{ pg=preregHtml(); }catch(ePG){ pg='<div style="color:#f0616d">prereg threw: '+String(ePG&&ePG.message||ePG).replace(/[<>&]/g,'')+'</div>'; }
+  var T_prereg=tabSection('t8','\u2461','PRE-REGISTERED','Hypotheses fixed on '+PREREG_FROM+' BEFORE the data that tests them existed (roadmap/PREREGISTER.md). Each is read ONCE, at its minimum n, on sessions from that date only. Until then the rate is deliberately not shown \u2014 a hypothesis peeked at early is a search, not a test. The exploratory pass behind these found exactly what chance predicts.', pg);
+  var T_detail=tabSection('t7','⊕','DETAIL · exploration + scorecards','Hypothesis builder, pattern miner and the research-curated test list. Exploration, not the loop: nothing here can promote anything.', det, false);
+  // (v15.54) THE TAB IN WORKFLOW ORDER — design/ARCHITECTURE-E2E-WORKFLOW.md §3: gate, register, promotion, kills, coverage, self-test, detail
+  h+=T_canfail+T_prereg+T_prop+T_chal+T_kill+T_cov+T_self+T_detail;
   return h;
 }
 // tab bar shown above every view
@@ -20681,13 +18072,13 @@ function wireBodyDelegation(){
           if(t.getAttribute && t.getAttribute('data-gbrief')){
             ev.stopPropagation(); BRIEF_OPEN=!BRIEF_OPEN; try{ render(); }catch(eRb){} return;
           }
-          // (v11.8) LEVELS card: collapse the list, or hide the chart
+          // (v11.8) LEVELS card controls. (v15.53) the card is archived (A-dead-else); only the
+          // InsiderFinance manual-entry prompt survives here, because that integration is protected.
           if(t.getAttribute && t.getAttribute('data-glvl')){
             ev.stopPropagation();
             var lw=t.getAttribute('data-glvl');
             if(lw==='ifman'){ try{ ifManPrompt(); }catch(eIm){} return; }
-            if(lw==='open') LVL_UI.open=!LVL_UI.open; else if(lw==='chart') LVL_UI.chart=!LVL_UI.chart;
-            lvlUiSave(); try{ render(); }catch(eLv){} return;
+            return;
           }
           // (v10.54 GROUP 5) the Analysis / Testing tabs: collapsible sections, the "?"
           // guide, the self-test button and the async coverage refresh.
@@ -20952,10 +18343,6 @@ function expSetRollCheck(sym){
   }catch(e){}
 }
 
-function rollNote(sym){
-  try{ var R=EXPSET_ROLL[sym]; if(!R) return null;
-       return 'rolled to '+R.to.slice(5).replace('-','/'); }catch(e){ return null; }
-}
 
 // ---- (v11.88) CROSS-SYMBOL AGREEMENT ------------------------------------------------------------
 // The panel has read SPY and QQQ side by side for months and never once compared them. Every other
@@ -21223,12 +18610,7 @@ function ensureV3Css(){
     // day's priced range, so the dot's position and the percentage beside it are the same fact and
     // cannot drift apart. Marks clamp at the rail rather than escaping it.
     '#gpts-body .g3emw{display:inline-flex;align-items:center;gap:6px;flex:1;min-width:210px}'+
-    ''/*dead:.g3emk*/+
-    ''/*dead:.g3emt*/+
-    ''/*dead:.g3emr*/+
-    ''/*dead:.g3emf*/+
     '#gpts-body .g3emf.g3over{background:rgba(240,97,109,.55)}'+
-    ''/*dead:.g3emo*/+
     '#gpts-body .g3emg{position:absolute;top:0;width:0;height:0;border-left:3px solid transparent;'+
       'border-right:3px solid transparent;border-bottom:4px solid #e3c341;transform:translateX(-3px)}'+
     '#gpts-body .g3emn{position:absolute;top:2px;width:10px;height:10px;border-radius:50%;background:#fff;'+
@@ -21244,15 +18626,9 @@ function ensureV3Css(){
     '#gpts-body .g3emk{font-size:10.5px;font-weight:800;color:#e6edf3;line-height:1;white-space:nowrap}'+
     '#gpts-body .g3emk small{display:block;font-size:6px;font-weight:800;letter-spacing:.09em;color:#6c7889;margin-top:1px}'+
     // WHERE THE DAY HAS BEEN. Dim on purpose: it is context behind the live marks, never competing with them.
-    ''/*dead:.g3emx2*/+
-    ''/*dead:.g3emw2*/+
     // T beats a triangle: it says what it is without a legend.
     '#gpts-body .g3emT{position:absolute;top:0;font-size:9px;font-weight:800;color:#e3c341;transform:translateX(-50%);'+
       'line-height:13px;text-shadow:0 0 3px #0b0e14,0 0 3px #0b0e14}'+
-    ''/*dead:.g3emT.out*/+
-    ''/*dead:.g3emn.g3str*/+
-    ''/*dead:.g3emf.g3str*/+
-    ''/*dead:.g3f2 b.g3str*/+
     '#gpts-body .g3shape{display:flex;align-items:center;flex-wrap:wrap;gap:5px;font-size:8px;color:#8b98a9;margin-top:3px;letter-spacing:.02em}'+
     '#gpts-body .g3pct{font-size:9.5px;font-weight:800;color:#e6edf3;letter-spacing:-.2px}'+
     '#gpts-body .g3shape b.g3str{color:#f0616d}'+
@@ -21261,7 +18637,6 @@ function ensureV3Css(){
     // measurement -> path -> which session, and never reflows the two that carry numbers.
     '#gpts-body .g3sbg{margin-left:auto;display:inline-flex;align-items:center;gap:4px}'+
     '#gpts-body .g3shape b{color:#e6edf3;font-weight:800}'+
-    ''/*dead:.g3shape b.warn*/+
     '#gpts-body .g3shape .g3usd{color:#2ec27e;font-weight:800}'+
     // (v11.61) THREE TIERS THAT CANNOT COLLIDE: money above the rail, ticks and price on it, gamma piles
     // hanging below. A pile can never overlap a dollar label because they occupy different bands.
@@ -21634,6 +19009,12 @@ function ensureV3Css(){
     // (v15.07) three columns, equal width, separated by a 1px rule one shade off the surface —
     // never a table grid. Values wear INK; colour is reserved for what it MEANS.
     '#gpts-body .g3dcols{display:flex;flex:1;min-width:0}'+
+    // (v15.52) today's deflection ledger under the ⓪a columns
+    '#gpts-body .g3dfl{margin:4px 0 0;padding:3px 6px;border:1px solid #1e2530;border-radius:6px;font-size:8.4px;cursor:help}'+
+    '#gpts-body .g3dflh{font-size:6.6px;font-weight:800;letter-spacing:.09em;color:#6c7889;text-transform:uppercase;margin-bottom:2px}'+
+    '#gpts-body .g3dflr0{display:flex;gap:8px;line-height:13px;color:#8b98a9;font-variant-numeric:tabular-nums}'+
+    '#gpts-body .g3dflr0 span:nth-child(1){min-width:32px}#gpts-body .g3dflr0 span:nth-child(2){font-weight:700;color:#e6edf3;min-width:44px}#gpts-body .g3dflr0 span:nth-child(3){min-width:28px}#gpts-body .g3dflr0 span:nth-child(4){min-width:60px}'+
+    '#gpts-body .g3dflg{color:#2ec27e;font-weight:900}#gpts-body .g3dflx{color:#f0616d;font-weight:900}#gpts-body .g3dflp{color:#6c7889;font-style:italic}'+
     '#gpts-body .g3dcol{flex:1 1 0;min-width:0;padding:0 10px}'+
     '#gpts-body .g3dcol:first-child{padding-left:0}'+
     '#gpts-body .g3dcol:last-child{padding-right:0}'+
@@ -21844,7 +19225,6 @@ function ensureV3Css(){
     '#gpts-body .g3emT{position:absolute;top:21px;font-size:9px;font-weight:800;color:#4fd1e0;'+
       'transform:translateX(-50%);line-height:12px;text-shadow:0 0 3px #0b0e14,0 0 3px #0b0e14}'+
     '#gpts-body .g3emT.out{color:#6c7889}'+
-    ''/*dead:.g3tgt*/+
     // SKYLIT POLARITY: purple = put-dominant = negative gamma = accelerator. Yellow = call-dominant =
     // positive gamma = brake. Same convention as their heatmap, so the two never read as different things.
     // (v13.5) NODES ARE CIRCLES. A bar encodes size in one dimension and reads as a chart element;
@@ -22007,61 +19387,32 @@ function ensureV3Css(){
     // are on the face, 0 when the tape is quiet — a quiet day pays no width for an empty lane. The
     // v13.8 connector hugged left:2px, where it collided with the watch row's inset bar and the
     // marker glyphs; a column of its own can never touch text.
-    '#gpts-body .g3ndhd,#gpts-body .g3ndr1{display:grid;grid-template-columns:var(--g3gut,0px) 11px 1fr 40px 44px 44px 44px 50px;gap:3px;align-items:baseline}'+
-    '#gpts-body .g3ndhd{font-size:6.5px;font-weight:800;letter-spacing:.06em;color:#5b6675;text-transform:uppercase;padding:3px 1px 3px}'+
-    '#gpts-body .g3ndhd span:nth-child(n+4),#gpts-body .g3ndr1 span:nth-child(n+4){text-align:right}'+
     // a real rule between nodes, so rows read as discrete objects rather than one block of numbers
-    '#gpts-body .g3ndrow{padding:5px 1px 4px;border-top:1px solid #232a36}'+
-    '#gpts-body .g3ndwatch{background:rgba(124,199,255,.055);border-top-color:#2f4a5e;box-shadow:inset 2px 0 0 #7cc7ff;border-radius:2px}'+
-    '#gpts-body .g3ndmk{font-size:8.5px;color:#7cc7ff;font-weight:800}'+
-    '#gpts-body .g3ndpx{font-size:12.5px;font-weight:800;letter-spacing:-.02em}'+
-    '#gpts-body .g3ndpct{font-size:9.5px;font-weight:800}'+
-    '#gpts-body .g3ndd{font-size:9px;font-weight:700}'+
     // ⚠ (v13.6) THE SUB-LINE IS WHITE, matching the rail where the strike beneath each node is white
     // against the coloured price. Grey read as disabled text for the one row carrying the strike, the
     // role and the size.
     // ⚠ r2 SHARES r1's GRID (v13.8) — as a flex row it drifted with the width of the text beside it.
     // (v13.9) the roll badge moved INTO the sub-line: the connector arrow now says where the roll
     // went, so the badge only has to NAME it, beside the node's other chips.
-    '#gpts-body .g3ndr2{display:grid;grid-template-columns:var(--g3gut,0px) 11px 1fr 40px 44px 44px 44px 50px;gap:3px;'+
       'align-items:center;margin-top:1px}'+
-    '#gpts-body .g3ndsub .g3ndchip{margin-left:3px}'+
-    '#gpts-body .g3ndsub{font-size:7.5px;color:#c9d4e2;font-weight:700;letter-spacing:.02em}'+
-    '#gpts-body .g3ndsub i{font-style:normal;color:#f2b45a}'+
-    '#gpts-body .g3ndage{color:#f2b45a}'+
     // badges share the sub-line rather than owning a third row — one line saved per node
-    '#gpts-body .g3ndchips{display:flex;gap:3px;flex-wrap:wrap;margin-left:auto}'+
     // ---- (v13.9) THE ROLL CONNECTOR, REDRAWN AS THE RAIL'S ARROW TURNED VERTICAL ----
     // Each row still draws its own segment (rows are different heights — one absolute shape would
     // drift, the v13.8 lesson that survives). What changed: a dot marks the SOURCE, the line travels
     // the gutter — THROUGH the ES price row, which now draws a pass-through segment instead of
     // breaking the line — and an elbow drives INTO the destination row, arrowhead landing at the
     // gutter's right edge pointing at the node it fed. Lanes 6px apart; three rolls stay separate.
-    '#gpts-body .g3ndrow{position:relative}'+
-    '#gpts-body .g3ndgut{position:absolute;width:0;pointer-events:none}'+
     // the moving dashes say IN FLIGHT; a latched roll that stuck is a solid, calm line
-    '#gpts-body .g3ndflow{position:absolute;width:2px;margin-left:-1px;pointer-events:none;opacity:.9;'+
       'background:repeating-linear-gradient(to bottom,currentColor 0 4px,transparent 4px 14px);'+
       'background-size:100% 28px;animation:g3flowY 1.6s linear infinite}'+
     '@keyframes g3flowY{from{background-position-y:0}to{background-position-y:-28px}}'+
-    '@media (prefers-reduced-motion: reduce){#gpts-body .g3ndflow{animation:none}}'+
-    '#gpts-body .g3nddot{position:absolute;width:5px;height:5px;border-radius:50%;'+
       'transform:translate(-50%,-50%);pointer-events:none}'+
-    '#gpts-body .g3ndstub{position:absolute;height:0;pointer-events:none;transform:translateY(-50%)}'+
-    '#gpts-body .g3ndhead{position:absolute;transform:translateY(-50%);width:0;height:0;pointer-events:none;'+
       'border-top:4px solid transparent;border-bottom:4px solid transparent}'+
-    '#gpts-body .g3ndmkc{text-align:center}'+
     // where price sits in the ladder — position:relative so pass-through segments can ride it
-    '#gpts-body .g3ndes{display:grid;grid-template-columns:var(--g3gut,0px) 11px 1fr auto;gap:4px;align-items:baseline;'+
       'padding:3px 1px;border-top:1px solid #2f3846;border-bottom:1px solid #2f3846;'+
       'background:rgba(230,237,243,.05);margin:1px 0;position:relative}'+
-    '#gpts-body .g3ndes span:nth-child(2){color:#e6edf3;font-size:8px}'+
-    '#gpts-body .g3ndes span:nth-child(3){color:#e6edf3;font-size:12px;font-weight:800;letter-spacing:-.02em}'+
-    '#gpts-body .g3ndes span:nth-child(4){color:#8b98a9;font-size:7px;font-weight:800;letter-spacing:.08em}'+
     // the bias line, now at the TOP and red — it describes the whole book, not one node
-    '#gpts-body .g3ndbiasTop{margin:4px 0 2px;color:#e0645f;background:rgba(224,100,95,.10);'+
       'border:1px solid rgba(224,100,95,.42)}'+
-    '#gpts-body .g3ndchip{font-size:7px;font-weight:800;padding:1px 4px;border-radius:3px;letter-spacing:.03em;white-space:nowrap}'+
     // ⚠ CHIP COLOUR = WHAT IT MEANS FOR PRICE, never what the node is. A call node dissolving is BULL.
     '#gpts-body .g3cBull{color:#2ec27e;background:rgba(46,194,126,.13);border:1px solid rgba(46,194,126,.38)}'+
     '#gpts-body .g3cBear{color:#e0645f;background:rgba(224,100,95,.13);border:1px solid rgba(224,100,95,.38)}'+
@@ -22073,11 +19424,8 @@ function ensureV3Css(){
     // a destination that returned its mass: grey, because the claim it carried is withdrawn
     '#gpts-body .g3cGone{color:#7d8794;background:rgba(125,135,148,.10);border:1px solid rgba(125,135,148,.30)}'+
     '#gpts-body .g3cWatch{color:#7cc7ff;background:rgba(124,199,255,.18);border:1px solid #7cc7ff}'+
-    '#gpts-body .g3ndbias{margin-top:7px;padding:3px 6px;border-radius:3px;font-size:9px;font-weight:800;'+
       'background:rgba(139,152,169,.08);border:1px solid rgba(139,152,169,.25)}'+
-    '#gpts-body .g3ndverd{margin-top:5px;padding:5px 6px;border-left:2px solid #e3c341;'+
       'background:rgba(227,195,65,.06);font-size:10px;color:#d7dde6;border-radius:0 3px 3px 0}'+
-    '#gpts-body .g3ndverd b{color:#e3c341}'+
     '#gpts-body .g3node{background:rgba(139,152,169,.05)}'+
     '#gpts-body .g3pb{background:rgba(242,180,90,.10);border-left:2px solid #f2b45a}'+
     '#gpts-body .g3atlvl{font-size:6.5px;font-weight:800;padding:0 3px;border-radius:2px;background:rgba(242,180,90,.2);color:#f2b45a}'+
@@ -22257,7 +19605,16 @@ function replayLadder(sym){
              replay:true, err:null };
   }catch(e){ return null; }
 }
-function ifLadder(sym){
+// (v15.54) PER-FRAME MEMO — architecture §4 "faster to update". ifLadder was rebuilt 14-18x per render,
+// measureBars re-bucketed the courier's rows 18-25x, emBand re-parsed localStorage 3-6x, sessionBody ran 4x.
+// Each is now computed ONCE per frame; render() and tick() each open a new frame. Only functions whose
+// results no caller mutates are memoised (checked 2026-09-03: no `EB.x=` / `IFL.x=` writes anywhere).
+var RMEMO={ id:0, m:{} };
+function rmemo(key, fn){ var k=RMEMO.id+'|'+key; if(Object.prototype.hasOwnProperty.call(RMEMO.m,k)) return RMEMO.m[k]; var v=fn(); RMEMO.m[k]=v; return v; }
+function rmemoNext(){ RMEMO.id++; RMEMO.m={}; }
+window.__gptsDebug.memo=function(){ return { frame:RMEMO.id, keys:Object.keys(RMEMO.m).length }; };
+function ifLadder(sym){ return rmemo('ifLadder|'+sym, function(){ return ifLadderRaw(sym); }); }
+function ifLadderRaw(sym){
   sym=sym||'SPY';
   try{
     if(typeof replayOn==='function' && replayOn()){
@@ -22478,8 +19835,8 @@ function dte0NotToday(sym){
   }catch(e){ return null; }
 }
 // (v13.9) per-symbol first-disagreement timestamps for the scale-pin self-heal below
-var EMBAND_RRBAD={};
-function emBand(sym){
+function emBand(sym){ return rmemo('emBand|'+sym, function(){ return emBandRaw(sym); }); }
+function emBandRaw(sym){
   var out={ ok:false, why:'', est:false };
   try{
     // ⚠⚠ (v15.23) DECLARED HERE, NOT INSIDE THE CAPTURE BRANCH. My first cut put it beside the
@@ -23566,14 +20923,13 @@ var IB_MIN_S=1800;   // ⚖ the 30-minute IB window, in seconds (Garma-verbatim;
 // after sessionLevels; `var` hoists so production was fine, but a test that evals the function alone
 // hit a ReferenceError swallowed by its own try/catch and returned an all-null result that looked
 // like missing data. That is failure pattern #5 exactly, and it cost a green suite.
-var IB60_MIN_S=3600;
 var ES_USD_PER_PT=50;   // the ES contract multiplier: HL RNG prints points AND dollars
 function sessionLevels(sym, scale){
   // (v14.57) IB60 joins IB30. The approved HOD/LOD mockup lists IB60 as one of its five
   // confirmation chips and the codebase had ZERO hits for it — `IB_MIN_S=1800` is a THIRTY minute
   // initial balance. Both are kept: the operator asked for a sweep testing IB30 AND IB60 breaks,
   // which is impossible if one replaces the other.
-  var out={ ibH:null, ibL:null, ibSet:false, ib60H:null, ib60L:null, ib60Set:false,
+  var out={ ibH:null, ibL:null, ibSet:false,   // (v15.53) ib60* removed: measured worthless (AUC 0.655), zero readers
             pdh:null, pdl:null, pdc:null, open:null };
   try{
     var sc=(typeof scale==='number'&&scale>0)?scale:1;
@@ -23582,8 +20938,7 @@ function sessionLevels(sym, scale){
     // IB — from the closed-candle store, which is TODAY-ONLY by construction (convertFiberCandles
     // filters to the session day and stamps `so`, not `day` — v14.36 fix: the first cut checked a
     // day field these candles never carried, so the ticks never drew).
-    var ib60End=openSec+IB60_MIN_S;
-    var cs=closedCandles(sym)||[], i, ibH=null, ibL=null, i6H=null, i6L=null, op=null, opSo=1e9;
+    var cs=closedCandles(sym)||[], i, ibH=null, ibL=null, op=null, opSo=1e9;
     for(i=0;i<cs.length;i++){ var b=cs[i];
       if(!b || typeof b.so!=='number' || b.so<openSec) continue;
       if(b.so<opSo && b.o!=null){ opSo=b.so; op=b.o; }        // the session's opening print
@@ -23591,17 +20946,10 @@ function sessionLevels(sym, scale){
         if(b.h!=null && (ibH==null||b.h>ibH)) ibH=b.h;
         if(b.l!=null && (ibL==null||b.l<ibL)) ibL=b.l;
       }
-      if(b.so<ib60End){
-        if(b.h!=null && (i6H==null||b.h>i6H)) i6H=b.h;
-        if(b.l!=null && (i6L==null||b.l<i6L)) i6L=b.l;
-      }
     }
     out.ibSet=(ctNowSecOfDay()>=ibEnd) && ibH!=null && ibL!=null;
     if(ibH!=null) out.ibH=ibH*sc;
     if(ibL!=null) out.ibL=ibL*sc;
-    out.ib60Set=(ctNowSecOfDay()>=ib60End) && i6H!=null && i6L!=null;
-    if(i6H!=null) out.ib60H=i6H*sc;
-    if(i6L!=null) out.ib60L=i6L*sc;
     if(op!=null) out.open=op*sc;
     // Prior day H/L/C — from the RAW fiber window, which spans days and carries timestamps.
     // RTH bars only (same gate as everything), the LATEST prior session in the window.
@@ -24242,7 +21590,6 @@ function fsRead(sym, D, CALLIN){
     return out;
   }catch(e){ out.why='threw: '+(e&&e.message||e); return out; }
 }
-function fsClockMin(m){ try{ m=Math.round(m); return Math.floor(m/60)+':'+two(m%60); }catch(e){ return '—'; } }
 // (v14.86) THE READ LINE SPEAKS 12-HOUR. Operator, 2026-08-29: "LOD after 1:30pm — 80%". The stats
 // table above keeps 24-hour (10:00, 12:09) because it is a table of measurements and columns of
 // 24-hour times sort and align; the READ is a sentence and reads as one. Two formats on one face is
@@ -24776,7 +22123,8 @@ function hlEff(sym, D){
 // this is at least the third time in four builds that a comment described a property nothing held.
 //
 // So: ONE function, in CHART space, and both surfaces call it. There is no second opinion to drift.
-function sessionBody(sym){
+function sessionBody(sym){ return rmemo('sessionBody|'+sym, function(){ return sessionBodyRaw(sym); }); }
+function sessionBodyRaw(sym){
   try{
     var D=null; try{ D=hodLod(sym); }catch(eD){ return null; }
     if(!D || !D.ok || D.open==null) return null;
@@ -25043,7 +22391,12 @@ function hlNodeAt(sym, D, PTL){
     if(PTL && PTL.ok && PTL.ptPx!=null){
       // PT runs AGAINST the second extreme, so it is a high when the second was a low
       var ptUp=(D.second==='LOD');
-      out.pt=deflNodeAt(PTL.ptPx*rr, ptUp, kings, aD);
+      // (v15.53, D3) WAS `kings` — undeclared. Threw a ReferenceError on every render where a second
+      // extreme existed, the outer catch returned ok:false, and PTN rendered an em-dash permanently
+      // (HodN/LodN survived only because they were assigned before the throw). The PT leg is recent,
+      // so the king as it stands now is the right one; a journey lookup is used when the PT time is known.
+      var kPT=(typeof PTL.ptMs==='number')?deflKingsAt(sym, rr, PTL.ptMs):[]; if(!kPT.length) kPT=deflKings(sym, rr);
+      out.pt=deflNodeAt(PTL.ptPx*rr, ptUp, kPT, aD);
     }
     out.ok=true;
     return out;
@@ -25071,7 +22424,8 @@ function hlNodeAt(sym, D, PTL){
 // ⚠ Returns bars ALREADY IN CHART SCALE, so the caller's `scale` is 1 and no conversion runs.
 // ⚠ Falls back to the SPY proxy and SAYS WHICH IT USED in `src`: a measurement whose instrument is
 // unknown is not a measurement.
-function measureBars(sym){
+function measureBars(sym){ return rmemo('measureBars|'+sym, function(){ return measureBarsRaw(sym); }); }
+function measureBarsRaw(sym){
   // ⚠⚠ (v15.10) IN REPLAY THE BARS COME FROM THE FRAMES THEMSELVES, not from futBars or the chart.
   // They have to: on a PAST day the ES courier holds only the most recent session and the chart
   // holds today, so reading either would put TODAY'S candle under FRIDAY'S ladder — the two-sources-
@@ -25258,27 +22612,6 @@ function hodLod(sym){
 }
 // the confluence check the read uses: the nearest session level within reach of a price
 var SESS_CONFL_PTS=2.0;   // ⚖ hand-set: "nodes are zones" (Garma r29) — 2 ES pts counts as ON it
-// (v14.42) the confluence namer also knows the dark pools, so the S&R clause can say "on the dark
-// pool" the same way it says "on the IB low". Still no lifecycle claim \u2014 only the NAME of the
-// thing price is sitting on.
-function dpConfluence(sym, disp, scale){
-  try{
-    var D=darkPoolLevels(sym);
-    if(!D || !(scale>0) || typeof disp!=='number') return null;
-    // (v14.44) the S&R clause speaks the STATE too, because "on the dark pool" and "on a dark pool
-    // that already broke" are opposite pieces of advice. GM-DP-003: a broken level only becomes
-    // resistance after a rejection — which is exactly what FLIPPED means and BROKEN does not.
-    var LC=null; try{ LC=dpLifecycle(sym); }catch(e0){}
-    var best=null, bd=SESS_CONFL_PTS;
-    D.prints.forEach(function(pr, i){
-      var at=pr.px*scale, d=Math.abs(at-disp);
-      if(d<=bd){ bd=d;
-        var st=(LC&&LC[i]&&LC[i].st&&LC[i].st!=='UNKNOWN')?LC[i].st:null;
-        best={ name:'the dark pool '+frameNum(at)+(st?(' ('+st.toLowerCase()+')'):''), at:at, d:d, st:st }; }
-    });
-    return best;
-  }catch(e){ return null; }
-}
 function sessConfluence(SL, disp){
   try{
     if(!SL) return null;
@@ -25529,7 +22862,6 @@ function levelStateOf(k, rollsCtx){
       (TAP_PROB[Math.min(tapsN,2)])+'% historically'):(tapsKnown?'':' \u2014 tap count is not recorded per frame, so it is not claimed here')));
   }catch(e){ return { st:'HOLDING', why:'', taps:0 }; }
 }
-function frameNumSafe(x){ try{ return frameNum(x); }catch(e){ return String(x); } }
 // THE MARKER — this level's relationship to PRICE, which is a different kind of fact from its own
 // condition and therefore gets its own slot. Naturally exclusive: price cannot be arriving at and
 // standing on the same level.
@@ -26752,16 +24084,8 @@ function ladderHtml(EB, RB, sym, PS, ROLLS, SESSL, LVLST, TGT){
     }
     // (v14.48) the SPY King is no longer a LEVEL NAME here — it is one of the three KING PILLS in
     // the price column, beside SPXW's and QQQ's, so all three can be read against price at once.
-    try{
-      var DL=darkPoolLevels(sym), DC=null; try{ DC=dpLifecycle(sym); }catch(eL){}
-      if(DL && typeof EB.scaleUsed==='number' && EB.scaleUsed>0){
-        DL.prints.forEach(function(pr,ix){
-          var st=(DC&&DC[ix]&&DC[ix].st&&DC[ix].st!=='UNKNOWN')?DC[ix].st:null;
-          LV.push({n:'DP'+(st?(' '+(DP_ST_SHORT[st]||'')):''), at:pr.px*EB.scaleUsed, cls:'dp',
-            tip:'Dark pool — Skylit’s own level set, the top prints over a 45-day lookback. A cash-equity print, which is why it is quoted on '+sym+' and converted here.'+(DC&&DC[ix]?(' STATE: '+DC[ix].st+' — '+DC[ix].why+'.'):'')});
-        });
-      }
-    }catch(eDp){}
+    // (v15.53, his decision) DARK-POOL ROWS ARCHIVED from the ladder (archive/v15.53/K-dark-pool). Skylit's prints are
+    // still CAPTURED (onDarkPool → DP_STATE) and still feed ⓪a's far-side level set; only the lifecycle and its render went.
     try{
       var IFL=ifLadder(sym);
       if(IFL && !IFL.err){
@@ -27041,218 +24365,6 @@ function ldNum(v){ v=Math.round(v||0);
 // ⚠ ROLLS / rollLatched / rollBias are UNTOUCHED. A display went, not a measurement (v11.95).
 
 
-function railLevelsLine(EB, RB, RAILPS, SESSL, sym){
-  try{
-    if(!EB || !EB.ok) return '';
-    var frNow=(typeof EB.nowLive==='number')?EB.nowLive:EB.now;
-    var LV=[];
-    if(SESSL){
-      // ⚠ (v15.31) IBH/IBL ARE OUT OF THE LEVEL COLUMN — operator, 2026-09-01: "get rid of the IBH
-      // and IBL from the level column. it is not a key level."
-      // They are still MEASURED (`sessionLevels` computes them and `secDay` reads them); what goes is
-      // their claim on a row in the ladder's level rail, which is reserved for structure he trades
-      // off. Removing a label must never remove the measurement behind it (v11.95).
-      [['PDH',SESSL.pdh],['PDL',SESSL.pdl],['PDC',SESSL.pdc]].forEach(function(sd){
-        if(sd[1]!=null) LV.push({ n:sd[0], at:sd[1] }); });
-    }
-    try{
-      if(CFG.spyFlag!==false && typeof LASTFEED!=='undefined' && LASTFEED.SPY && LASTFEED.SPY.j &&
-         (Date.now()-(LASTFEED.SPY.ts||0))<=FEED_STALE_MS*3 && typeof EB.scaleUsed==='number'){
-        var ewL=null; try{ ewL=extractWalls(LASTFEED.SPY.j); }catch(eLa){}
-        if(ewL && ewL.king!=null) LV.push({ n:'SPY K', at:ewL.king*EB.scaleUsed, spyk:true });
-      }
-    }catch(eLb){}
-    // (v14.42, PHASE A1) THE DARK POOLS hang here like every other structural level. Their prints
-    // are in the UNDERLYING's scale (SPY/QQQ), so they cross to the chart by EB.scaleUsed — the same
-    // multiplier the SPY King flag uses, and for the same reason: it is the only book that can carry
-    // a cash print. NO LIFECYCLE STATE IS CLAIMED YET (phase A2): a level is drawn and named, and
-    // what it has DONE is left unsaid rather than guessed. The hover carries the print's size and age
-    // so the level is never a bare number.
-    try{
-      var DPL=darkPoolLevels(sym);
-      var DPLC=null; try{ DPLC=dpLifecycle(sym); }catch(eLc){}
-      if(DPL && typeof EB.scaleUsed==='number' && EB.scaleUsed>0){
-        DPL.prints.forEach(function(pr, iDp){
-          // (v14.44) the LIFECYCLE rides the name, so the level says what it has DONE, not just
-          // where it is. Underlying scale in, chart scale out — the conversion happens HERE and
-          // nowhere else.
-          var lc=(DPLC && DPLC[iDp]) ? DPLC[iDp] : null;
-          var tag=(lc && lc.st && lc.st!=='UNKNOWN') ? (' '+(DP_ST_SHORT[lc.st]||'')) : '';
-          LV.push({ n:'DP'+tag, at:pr.px*EB.scaleUsed, dp:true, size:pr.size, notional:pr.notional,
-                    at0:pr.px, when:pr.at, stale:DPL.stale, lc:lc });
-        });
-      }
-    }catch(eDp){}
-    // the IF levels, moved here off the main rail (v14.40). Chart scale via the Atlas-anchored
-    // basis (ifLadder.dispScale). MP* stays off the line — the read already names max pain on an
-    // OPEX day, and our recomputed number beside their published walls would invite confusion.
-    try{
-      var IFL=ifLadder(sym);
-      if(IFL && !IFL.err){
-        var IFN={ CR:'CW', PS:'PW', CR0:'CW0', PS0:'PW0', Mag:'T', FLIP:'FLIP', 'FLIP*':'FLIP*' };
-        IFL.rows.forEach(function(r){
-          var toks=String(r.id).split('\u00b7').map(function(t){ return IFN[t]||null; }).filter(Boolean);
-          if(!toks.length) return;
-          LV.push({ n:'IF '+toks.join('\u00b7'), at:r.disp, iff:true });
-        });
-      }
-    }catch(eLc){}
-    if(!LV.length) return '';
-    LV.forEach(function(L){
-      L.d=L.at-frNow;
-      L.x=emPosRail(EB, L.at, RB);
-      L.confl=false;
-      try{ for(var cL=0;cL<RAILPS.length;cL++){ if(Math.abs(RAILPS[cL].disp-L.at)<=SESS_CONFL_PTS){ L.confl=true; break; } } }catch(eLd){}
-    });
-    // ⚠⚠ (v14.43) A CLAMPED POSITION IS A FALSE POSITION, AND THE DARK POOLS PROVED IT ON DAY ONE.
-    // emPosRail CLAMPS to 0..100 by design (it protects the rail's own drawing), so any level
-    // outside the frame lands ON THE EDGE. The first live capture put three dark pools 115-220 pts
-    // below the rail: all three pinned at 0% and MERGED with the SPY King (also off-frame) into one
-    // stack reading "SPY K·DP·DP·DP 7632" — four levels named, ONE price shown, and that price
-    // belonging to none of the dark pools. A level drawn where it is not is worse than a level not
-    // drawn. Off-frame levels therefore LEAVE THE LINE and are DISCLOSED instead: the count and the
-    // nearest few ride the bar's hover, which keeps the information without faking a position.
-    var OFF=[];
-    LV=LV.filter(function(L){
-      if(!isFinite(L.x)) return false;
-      if(RB && typeof RB.lo==='number' && typeof RB.hi==='number' && (L.at<RB.lo || L.at>RB.hi)){ OFF.push(L); return false; }
-      return true;
-    });
-    if(!LV.length && !OFF.length) return '';
-    LV.sort(function(a,b){ return a.x-b.x; });
-    var GRP=[];
-    LV.forEach(function(L){
-      var g=GRP.length?GRP[GRP.length-1]:null;
-      if(g && (L.x-g.m[g.m.length-1].x)<=4.5) g.m.push(L);
-      else GRP.push({ m:[L] });
-    });
-    var offTxt='';
-    if(OFF.length){
-      OFF.sort(function(a,b){ return Math.abs(a.d)-Math.abs(b.d); });
-      offTxt=' \u2014 '+OFF.length+' level'+(OFF.length>1?'s':'')+' OFF THIS FRAME, not drawn because a clamped position would be a false one: '+
-        OFF.slice(0,4).map(function(L){ return L.n+' '+frameNum(L.at)+' ('+(L.d>0?'+':'')+Math.round(L.d)+')'; }).join(', ')+
-        (OFF.length>4?(', and '+(OFF.length-4)+' more'):'')+'.';
-    }
-    if(!LV.length) return '<div class="g3ll"><i class="g3llbar"'+g3tip('THE LEVELS LINE \u2014 nothing in frame.'+offTxt)+'></i></div>';
-    var h='<i class="g3llbar"'+g3tip('THE LEVELS LINE \u2014 session structure (30-min IB, prior day), the SPY King, and the InsiderFinance levels (italics \u2014 THEIR numbers), each hanging under the line with its arrowhead pointing at the spot on the rail below where that price lives. BLUE = a gamma node sits on it. Overlapping levels merge into one stack \u2014 hover for each exact price. The white notch is price now.'+offTxt)+'></i>';
-    var pN=emPosRail(EB, frNow, RB);
-    if(isFinite(pN)) h+='<i class="g3llpx" style="left:'+pN.toFixed(1)+'%"'+g3tip('Price now \u2014 '+frameNum(frNow))+'></i>';
-    GRP.forEach(function(g){
-      var pick=g.m[0];
-      g.m.forEach(function(L){ if(Math.abs(L.d)<Math.abs(pick.d)) pick=L; });
-      var x=0; g.m.forEach(function(L){ x+=L.x; }); x/=g.m.length;
-      var name=g.m.map(function(L){ return L.n; }).join('\u00b7');
-      var spyk=g.m.some(function(L){ return L.spyk; });
-      var confl=g.m.some(function(L){ return L.confl; });
-      var iff=g.m.every(function(L){ return L.iff; });
-      var isdp=g.m.some(function(L){ return L.dp; });
-      var cls='g3llv '+(pick.d>0?'g3llvup':'g3llvdn')+(confl?' g3llvc':'')+(spyk?' g3llvk':'')+(isdp?' g3llvdp':'')+(iff?' g3llvif':'');
-      var edge=(x>94)?';transform:translateX(-100%)':((x<6)?';transform:translateX(0)':'');
-      var tip=g.m.map(function(L){ return L.n+' '+frameNum(L.at)+' ('+(L.d>0?'+':'')+Math.round(L.d)+')'; }).join(' \u00b7 ')+
-              '. \u25b4 The head points at where this price sits on the rail below.'+
-              (confl?' A GAMMA NODE sits on this level \u2014 structure and gamma stacked (Garma r22).':'')+
-              (spyk?' The OTHER book\'s crown \u2014 price bounces off it even when every dynamic here is SPXW.':'')+
-              (iff?' InsiderFinance\'s numbers, not ours \u2014 open-interest gamma, a stock not a flow.':'')+
-              (isdp?(' DARK POOL \u2014 Skylit\'s own level set: the top prints over a 45-day lookback, a CASH-EQUITY print (which is why it is quoted on '+g3esc(sym)+' and converted here). '+
-                (function(){ var d=null; g.m.forEach(function(L){ if(L.dp) d=L; }); if(!d) return '';
-                  return (d.at0!=null?(g3esc(sym)+' '+d.at0+'. '):'')+
-                         (d.notional!=null?('Print '+(usdBig(d.notional)||d.notional)+'. '):(d.size!=null?('Print '+d.size+' shares. '):''))+
-                         (d.when!=null?('Printed '+Math.max(0,Math.round((Date.now()-d.when)/86400000))+'d ago. '):'')+
-                         (d.stale?'\u26a0 capture is over a day old. ':''); })()+
-                (function(){ var d2=null; g.m.forEach(function(L){ if(L.dp&&L.lc) d2=L.lc; });
-                  if(!d2) return 'Lifecycle unavailable \u2014 no price history to judge it by.';
-                  return 'STATE: '+d2.st+' \u2014 '+d2.why+'.'+
-                    (d2.touches>0?(' Tested '+d2.touches+'x in the observed window.'):'')+
-                    (d2.obsFrom?(' \u26a0 Judged only on bars we actually watched (since '+
-                      (new Date(d2.obsFrom)).toISOString().slice(0,10)+') \u2014 their lookback is 45 days and ours is the chart window, so anything before that is unseen, not assumed.'):'')+
-                    ' BROKEN needs a CLOSE through, never a wick.'; })()):'');
-      h+='<span class="'+cls+'" style="left:'+x.toFixed(1)+'%'+edge+'"'+g3tip(tip)+'>'+
-         g3esc(name)+'<b>'+g3esc(frameNum(pick.at))+(confl?' \u00b7node':'')+'</b><i></i></span>';
-    });
-    return '<div class="g3ll">'+h+'</div>';
-  }catch(e){ return ''; }
-}
-function railRollLane(EB, RB, rolls, piles){
-  try{
-    if(!rolls || !rolls.length) return '';
-    var show=rolls.slice(0, 3), h='', svg='', i;
-    var dsc=1; try{ dsc=ifDispScale()||1; }catch(e0){}
-    // (v14.23, operator-caught: "one of the red arrows shows a blank source") a roll's SOURCE has
-    // usually drained below the node threshold — that is what a roll IS — so it has no post and no
-    // label, and the arrow rose out of blank track. The origin now names itself: a small tag at
-    // the rise, drawn ONLY when no post stands there (the v14.0 no-lane-text rule holds elsewhere).
-    var pileAt={}; try{ (piles||[]).forEach(function(pp){ pileAt[pp.k]=1; }); }catch(ePA){}
-    // (v14.30) TWO TIERS. KING-CLASS arrows (source or destination is the latched crown) draw
-    // bold — the succession chain is the one migration that moves the DESTINATION itself
-    // (successor >=60% -> 76% crown roll within 20 bars, n=148). FIELD arrows under $5M do not
-    // draw at all (latched and recorded, just not worth eyes); the rest draw dim. Pairing
-    // quality — how much of the shed mass the destination accounts for — rides every hover.
-    var latchK=null; try{ var lkJ=JSON.parse(localStorage.getItem('gpts_kinglatch_v1')||'null'); if(lkJ) latchK=lkJ.k; }catch(eLK){}
-    for(i=0;i<show.length;i++){
-      var r=show[i];
-      var kingClass=(latchK!=null && (r.from===latchK || r.to===latchK));
-      if(!kingClass && typeof r.amt==='number' && Math.abs(r.amt)<5e6) continue;   // ⚖ field floor
-      var pq=null; try{ if(r.got&&r.lost){ var g2=Math.abs(r.got), l2=Math.abs(r.lost);
-        if(g2>0&&l2>0) pq=Math.round(100*Math.min(g2,l2)/Math.max(g2,l2)); } }catch(ePq){}
-      var xFrom=emPosRail(EB, r.from*dsc, RB), xTo=emPosRail(EB, r.to*dsc, RB);
-      if(!isFinite(xFrom)||!isFinite(xTo)) continue;
-      if(!pileAt[r.from]){
-        h+='<span style="position:absolute;left:'+xFrom.toFixed(1)+'%;top:-1px;transform:translateX(-50%);'+
-             'font-size:6px;font-weight:800;color:'+((r.dir==='up')?'#7cc7ff':'#e0645f')+';opacity:.8;white-space:nowrap"'+
-           g3tip('The roll\'s SOURCE — '+frameNum(r.from*dsc)+' (SPXW '+r.from+'). It shed '+(function(){try{return usdBig(Math.abs(r.lost))||'its mass';}catch(eU){return 'its mass';}})()+
-                 ' into '+frameNum(r.to*dsc)+' and now sits below the node threshold, which is why no post stands here: a completed roll empties its origin.'+
-                 // ⚠⚠ (v14.83) THIS CAVEAT MOVED HERE RATHER THAN DYING WITH ladderRolls. It was the
-                 // roll-amount hover's, and that drawer was retired when its lane became the King
-                 // columns — which would have silently deleted the one sentence saying a roll is an
-                 // INFERENCE. Nobody publishes that a position moved between strikes; we pair a fall
-                 // at one node with a rise at another and call it a roll. Losing an honesty caveat
-                 // as a side effect of deleting a drawing is exactly the failure this project keeps
-                 // catching, so it is re-homed to the surviving roll hover, not re-typed shorter.
-                 ' \u26a0 INFERRED from paired changes, never an observed transfer: nobody publishes that a position moved between strikes, so this is a fall at one node matched to a rise at another. Pairing quality is what decides whether that match is trustworthy.')+
-           '>'+g3esc(frameNum(r.from*dsc))+'</span>';
-      }
-      var col=(r.dir==='up')?'#7cc7ff':'#e0645f';
-      // (v13.9) IN FLIGHT vs STUCK, the same grammar as the node list: a live roll moves (dashes), a
-      // latched roll that stuck is a solid calm line with its age on the label.
-      // (v14.29, operator-caught: "how is a solid arrow different from a moving arrow —
-      // something is wrong") the moving dashes CLAIM live flow, so they key STRICTLY off r.live.
-      // The old test (conf && !live) animated a signal-level roll that had already stopped —
-      // motion asserted where none was happening. Solid = latched, whatever its count.
-      var stuck=!r.live;
-      var yTop=16-i*5;                                   // each roll gets its own lane height
-      var x1=xFrom*10, x2=xTo*10;                        // viewBox is 0..1000 so percent maps directly
-      var d='M'+x1.toFixed(1)+' 22 L'+x1.toFixed(1)+' '+yTop+' L'+x2.toFixed(1)+' '+yTop+' L'+x2.toFixed(1)+' 20';
-      // (v14.24, operator-directed) the SOURCE gets a marker like the destination gets a head:
-      // a small circle at the rise, so both ends of every roll are anchored to the eye.
-      var wBase=kingClass?(stuck?2.2:1.8):(stuck?1.4:1);
-      var oBase=kingClass?(stuck?.95:.6):(stuck?.55:.28);
-      svg+='<circle cx="'+x1.toFixed(1)+'" cy="20" r="'+(kingClass?'3':'2.4')+'" fill="'+col+'" opacity="'+(stuck?'.85':'.55')+'"/>'+
-           '<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="'+wBase+'" opacity="'+oBase+'" vector-effect="non-scaling-stroke"/>'+
-           (stuck?'':('<path class="fl" d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.6" stroke-linecap="round" '+
-             'stroke-dasharray="5 27" vector-effect="non-scaling-stroke"/>'));
-      var amt=''; try{ amt=usdBig(Math.abs(r.amt))||''; }catch(e1){}
-      var ageL=(stuck && typeof r.ageMin==='number')?(' · '+(r.ageMin<60?(r.ageMin+'m'):(Math.floor(r.ageMin/60)+'h'+(r.ageMin%60)+'m'))):'';
-      // (v14.0, user-directed) NO TEXT ON THE LANE. The v13.7 edge-clamp fought label collisions the
-      // user still saw ("it gets overlapped and i get the idea from just looking at the arrows"), so
-      // the label is GONE, not repositioned - direction and endpoints carry the meaning, and every
-      // number the label held lives in the arrowhead's hover, age included. The hover target is a
-      // padded 14x12px box around the head, because a 6px triangle alone is unhittable.
-      h+='<span style="position:absolute;left:'+xTo.toFixed(1)+'%;top:11px;transform:translateX(-50%);'+
-           'width:14px;height:12px;display:flex;align-items:flex-end;justify-content:center"'+
-         g3tip('ROLL '+(r.dir==='up'?'↑':'↓')+' '+frameNum(r.to*dsc)+(amt?(' · '+amt):'')+ageL+
-               (kingClass?' · KING-CLASS — the crown itself is part of this migration; the succession chain is the one roll that moves the session destination.':'')+
-               (pq!=null?(' · '+pq+'% paired — the share of shed mass the destination accounts for; low pairing is evaporation in a roll costume.'):'')+
-               ' — '+r.from+' shed '+(usdBig(Math.abs(r.lost))||'')+' while '+
-               r.to+' took '+(usdBig(Math.abs(r.got))||'')+', seen on '+(r.count||'?')+' bars'+
-               (stuck?'. The window has slid past but the destination still holds what it received: the roll STUCK.':(r.live?'. Still in flight.':'.'))+
-               ' ⚠ Measured on our own data, a roll destination holds no better than a node that is simply GROWING — the pairing tells you WHERE size went, which is a story, not independent evidence. See FINDINGS F6.')+
-         '><i style="width:0;height:0;border-left:3px solid transparent;border-right:3px solid transparent;'+
-           'border-top:4px solid '+col+'"></i></span>';
-    }
-    if(!svg) return '';
-    return '<div class="g3rl"><svg viewBox="0 0 1000 22" preserveAspectRatio="none">'+svg+'</svg>'+h+'</div>';
-  }catch(e){ return ''; }
-}
 // ---- (v14.81) THE GAMMA PROFILE WAS REMOVED — operator, 2026-08-28 ---------------------------
 // > "i dont think we need the bottom section where it says gamma profile and lists a bunch of
 // >  levels below" ... "just remove it."
@@ -27287,7 +24399,6 @@ function railRollLane(EB, RB, rolls, piles){
 // The day-peak tracker (PEAK / peakOf) is UNTOUCHED — the rail's bar outlines and the roll arrows
 // read it. Deleting a display must never delete the measurement behind it (v11.95's lesson).
 
-function gpInfo(txt){ return '<i class="g3inf"'+g3tip(txt)+'>i</i>'; }
 
 function emPiles(B, sym){
   // SKYLIT FIRST — the nodes are theirs. IF is a NAMED fallback, not a silent one.
@@ -27654,15 +24765,6 @@ function emRailBounds(B, piles, sb){
   }catch(e){}
   return out;
 }
-// Position on the DRAWN rail. Identical to emPos while price is inside the band; only differs once a
-// boundary has been run, which is the whole point.
-function emPosRail(B, v, RB){
-  try{
-    RB=RB||emRailBounds(B);
-    var span=RB.hi-RB.lo; if(!(span>0)) return 0;
-    return Math.max(0, Math.min(1, (v-RB.lo)/span))*100;
-  }catch(e){ return 0; }
-}
 // ---- (v11.58) THE FOUR REGIME CELLS, LISTED ------------------------------------------------------
 // The chip showed one cell's verdict and the hover explained only that cell, so there was no way to see
 // what the OTHER three would have meant — or that the 2x2 is a 2x2 at all. Native title attributes render
@@ -27848,12 +24950,7 @@ function secFrame(sym){
       // states to the profile's ROC state row. LVLST itself stays; the rail reads it.
       LVLDOORS=levelDoors(RAILROLLS, lvDsc);
     }catch(eLE){}
-    var str=!!EB.stretched, pOpen=emPosRail(EB,EB.open,RB),
-        pNow=emPosRail(EB,(typeof EB.nowLive==='number')?EB.nowLive:EB.now,RB);
-    var fa=Math.min(pOpen,pNow), fb=Math.max(pOpen,pNow);
-    var gTxt2=(EB.gamma==null)?'gamma unknown'
-             :(EB.gamma>0?'positive gamma — dealers hedge AGAINST the move, so range compresses and levels tend to hold'
-                         :'negative gamma — dealers hedge WITH the move, so ranges expand and the edge is where overshoot happens');
+    // (v15.53) the rail-position locals (pOpen/pNow/fa/fb/gTxt2) went with the .g3emw subtree — nothing left reads them.
     if(AH) h+='<div class="g3ahchip"'+g3tip('The expected move was priced by TODAY\'S straddle, which expired at the close — after hours it forecasts nothing. The band is kept as "where yesterday\'s band was", dimmed and struck through; the target, budget figures and roll arrows retire with it. Everything re-anchors from the fresh straddle at the next open.')+'>AFTER HOURS · EM EXPIRED — re-anchors at the open</div>';
     // (v14.24, operator-directed: "a read area above the arrows that is analyzing the tape —
     // the flow as described by the arrows, rolls, king movement and more, basically all what you
@@ -27935,8 +25032,6 @@ function secFrame(sym){
               t+=(fv.v.d15>0?', building':', draining'); }
           // (v14.35, Garma r22: structure + node stacked beats either alone) name the confluence
           try{ var cf=sessConfluence(SESSL, P.disp); if(cf) t+=' \u2014 on '+cf.name; }catch(eCf){}
-          try{ var dcf=dpConfluence(sym, P.disp, (EB&&typeof EB.scaleUsed==='number')?EB.scaleUsed:0);
-               if(dcf) t+=' \u2014 on '+dcf.name; }catch(eDc){}
           if(Math.abs(P.disp-frNow)<=2.6){
             var frRv=null; try{ frRv=reactDefence(sym, P.disp); }catch(eR3){}
             if(frRv && frRv.verdict==='DEFENDING') t+=', being DEFENDED';
@@ -28071,310 +25166,8 @@ function secFrame(sym){
     if(CFG.ladder!==false){
       try{ h+=ladderHtml(EB, RB, sym, RAILPS, RAILROLLS, SESSL, LVLST, RAILTGT); }catch(eLAD){ swallow('ladder', eLAD); }
     }
-    h+='<span class="g3emw"'+g3tip('Where today can go, where it is, and how much is left. The rail is '+(EB.anchor==='prevClose'?'the prior close':'the open')+' plus and minus the expected move, fixed for the session. Notch = anchor, white dot = price now, T = target, dim span = where the day has been.'+(EB.est?' ~EST: captured late, so this band is narrower than the open\'s was.':'')+(EB.anchor==='prevClose'?' Pre-open: re-anchors to the real open on the first bar.':''))+'>';
-    // (v11.68) THE ROW IS NAMED FOR WHAT IT IS. The ATM straddle is ~0.80 sigma, not 1.00 — Brenner and
-    // Subrahmanyam, and every vendor guide that bothers to say so puts the conversion at x1.25. A row
-    // labelled EM implies ~68% containment; this band delivers ~58%. The WIDTH IS UNCHANGED and every
-    // level sits exactly where it did — only the claim has been corrected.
-    // (v14.82) not dimmed-and-struck after hours — not drawn. See the EMQ note in ladderHtml.
-    var EL_LAB=AH?'':('<span class="g3emk"'+g3tip('Expected low — the open minus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.low/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a floor.')+'>'+g3esc(frameNum(RB.under?RB.lo:EB.low))+'<small>'+(EB.est?'~':'')+(RB.under?'RAIL':'EL')+(EB.notToday?' \u2260TODAY':'')+'</small></span>');
-    h+=EL_LAB;
-    var laneHtml=railRollLane(EB, RB, RAILROLLS, RAILPS);
-    var lvlLineHtml=''; try{ lvlLineHtml=railLevelsLine(EB, RB, RAILPS, SESSL, sym); }catch(eLL){}
-    h+='<span class="g3emt'+(laneHtml?' g3haslane':'')+(lvlLineHtml?' g3haslvl':'')+'">'+lvlLineHtml+laneHtml+
-       '<i class="g3emr"></i>'+
-       ((EB.hiWater!=null&&EB.loWater!=null)?('<i class="g3emx2" style="left:'+emPosRail(EB,EB.loWater,RB).toFixed(1)+'%;width:'+Math.max(0,emPosRail(EB,EB.hiWater,RB)-emPosRail(EB,EB.loWater,RB)).toFixed(1)+'%"></i>'+
-         '<i class="g3emw2" style="left:'+emPosRail(EB,EB.loWater,RB).toFixed(1)+'%"></i>'+
-         '<i class="g3emw2" style="left:'+emPosRail(EB,EB.hiWater,RB).toFixed(1)+'%"></i>'):'')+
-       '<i class="g3emf'+(str?' g3str':'')+'" style="left:'+fa.toFixed(1)+'%;width:'+Math.max(0,fb-fa).toFixed(1)+'%'+(AH?';opacity:.3':'')+'"></i>'+
-       // (v11.64) USED AND REMAINING, BOTH SIDES, ON THE RAIL. Each side of the anchor holds one full
-       // expected move of budget, split by how far the day actually got that way. Defined by the
-       // EXTREMES, not the dot, so the four figures sit still and only change when a new high or low
-       // prints — a retrace does not hand budget back, because the day has already spent that range.
-       (AH?'':(function(){
-         if(!EB.mult || EB.hiWater==null || EB.loWater==null) return '';
-         var pLo=emPosRail(EB,EB.loWater,RB), pHi=emPosRail(EB,EB.hiWater,RB), pOp=emPosRail(EB,EB.open,RB), t='';
-         function seg(a,b,val,cls,tip){
-           if(val==null || Math.abs(b-a)<9) return '';        // too narrow to hold a label
-           return '<span class="g3seg '+cls+'" style="left:'+((a+b)/2).toFixed(1)+'%"'+g3tip(tip)+'>'+usd(val)+'</span>';
-         }
-         var M=EB.mult;
-         t+=seg(0,pLo,(EB.loWater-EB.low)*M,'g3lft','Downside still available: from the low of day to the expected low.');
-         t+=seg(pLo,pOp,(EB.open-EB.loWater)*M,'g3used','Downside already used: the open to the low of day.');
-         t+=seg(pOp,pHi,(EB.hiWater-EB.open)*M,'g3used','Upside already used: the open to the high of day.');
-         t+=seg(pHi,100,(EB.high-EB.hiWater)*M,'g3lft','Upside still available: from the high of day to the expected high.');
-         return t;
-       })())+
-       '<i class="g3emo" style="left:'+pOpen.toFixed(1)+'%"></i>'+
-       // (v11.99) where the expected move ACTUALLY ended, once the rail has grown beyond it. Without
-       // this the rescale would quietly redefine the rail END as the expected move, which is the one
-       // thing the band must never be allowed to become.
-       (RB.over ? ('<i class="g3embx" style="left:'+emPosRail(EB,EB.high,RB).toFixed(1)+'%"'+g3tip('The expected high. Price has run PAST it — the rail was widened to hold price, so this line is where the expected move ended, not where the rail does.')+'></i>'+
-                   '<span class="g3embl" style="left:'+emPosRail(EB,EB.high,RB).toFixed(1)+'%">EH '+g3esc(frameNum(EB.high))+'</span>') : '')+
-       (RB.under ? ('<i class="g3embx" style="left:'+emPosRail(EB,EB.low,RB).toFixed(1)+'%"'+g3tip('The expected low. Price has run PAST it — the rail was widened to hold price, so this line is where the expected move ended, not where the rail does.')+'></i>'+
-                   '<span class="g3embl" style="left:'+emPosRail(EB,EB.low,RB).toFixed(1)+'%">EL '+g3esc(frameNum(EB.low))+'</span>') : '')+
-       // (v11.75) SAME COLOUR TEST AS THE CHIP ON ROW 1. Two marks for one level that disagreed about
-       // its colour was worse than either colour alone.
-       // (v14.40, operator: "remove the IF levels from the main rail and put it on the levels
-       // rail") the T mark left the rail — it hangs from THE LEVELS LINE as "IF T", with every
-       // other InsiderFinance level. The row-1 chip still names it.
-
-       // (v14.4, operator-directed) THE DOT IS NOW A PILL: the rounded ES price with an arrowhead
-       // for which way the last bar closed. Direction from the last two CLOSED candles — a per-tick
-       // wiggle would make the arrow flicker; a bar is a decision. Edge-clamped like every label.
-       (function(){
-         var d0=0; try{ var csP=closedCandles(sym)||[];
-           if(csP.length>=2 && typeof csP[csP.length-1].c==='number' && typeof csP[csP.length-2].c==='number')
-             d0=csP[csP.length-1].c-csP[csP.length-2].c; }catch(ePd){}
-         // (v14.6, operator-directed) the tip is part of the pill's SILHOUETTE on the travel side —
-         // green on the right = moving up-rail, red on the left = moving down. Inside: only the price.
-         var arr=(d0>0)?'<i class="g3ptipR"></i>':(d0<0?'<i class="g3ptipL"></i>':'');
-         var pEdge=(pNow>92)?';transform:translateX(-100%)':((pNow<8)?';transform:translateX(0)':'');
-         return '<span class="g3emn'+(str?' g3str':'')+'" style="left:'+pNow.toFixed(1)+'%'+pEdge+'"'+
-                g3tip('Price now: '+frameNum((typeof EB.nowLive==='number')?EB.nowLive:EB.now)+' — LIVE (v14.19), no longer the last bar\'s close. The arrow is still the LAST CLOSED BAR\'s direction — up green, down red, absent when flat.'+(str?' RED PILL: price is beyond the expected move — STRETCHED.':''))+
-                '>'+g3esc(frameNum((typeof EB.nowLive==='number')?EB.nowLive:EB.now))+arr+'</span>';
-       })()+
-       // (v11.61) gamma piles hang BELOW the rail — the fuel and the friction between price and the rails
-       (function(){
-         var ps=[]; try{ ps=emPiles(EB, sym)||[]; }catch(eP){ return ''; }
-         var h2='';
-         // ⚠⚠ (v13.5) MOTION IS RATIONED, AND THE RATIONING IS THE DESIGN. Decide ONCE, for the whole
-         // rail, which nodes may animate — never per-node inside the loop, or every node qualifies and
-         // the rail turns into a fairground. Priority: RECEIVING beats GROWING on a node doing both,
-         // because "size is arriving here" is the rarer and more actionable fact; growth is implied by
-         // it anyway. DISSIPATING never animates: it is the node you are leaving.
-         var G3_MOTION_MAX=3;
-         var motion={}, rollsNow=[];
-         try{
-           var mv=[];
-           for(var mi=0; mi<ps.length; mi++){
-             var mk=ps[mi].k, ve=velAt(mk);
-             if(ve && ve.v && !ve.stale && typeof ve.v.d15==='number') mv.push({k:mk, d15:ve.v.d15, d60:ve.v.d60});
-           }
-           rollsNow = RAILROLLS;   // ⚠ shared, never recomputed — see the note beside RAILROLLS
-           // (v13.9) only LIVE rolls animate the receiver — a latched roll that stuck weeks of bars
-           // ago is structure, not motion, and animating it would claim size is arriving NOW
-           var recvSet={}; rollsNow.forEach(function(r){ if(r.live) recvSet[r.to]=1; });
-           // rank by how decisive the 15m move is — the rarest, largest changes earn the attention
-           mv.sort(function(a,b){ return Math.abs(b.d15)-Math.abs(a.d15); });
-           var used=0;
-           for(var mj=0; mj<mv.length; mj++){
-             var m=mv[mj];
-             if(recvSet[m.k]){ if(used<G3_MOTION_MAX){ motion[m.k]='recv'; used++; } continue; }
-             if(m.d15>0 && used<G3_MOTION_MAX){ motion[m.k]='grow'; used++; continue; }
-             if(typeof m.d60==='number' && m.d60<0) motion[m.k]='fade';   // static, costs no attention
-           }
-         }catch(eMo){}
-         // (v14.6) WHO IS PRICE ON? The nearest pile inside the deflection zone is IN PLAY, and its
-         // MEASURED reaction picks the effect: DEFENDING = fast green rings (deflect forming),
-         // ABANDONING = fracture (break forming), otherwise the calm breathe.
-         var IPK=null, IPST='g3inplay';
-         try{
-           var ipBest=2.6, ipP=null;
-           for(var ipI=0;ipI<ps.length;ipI++){ var ipD=Math.abs(ps[ipI].disp-EB.now);
-             if(ipD<ipBest){ ipBest=ipD; ipP=ps[ipI]; } }
-           if(ipP){ IPK=ipP.k;
-             var rDf=reactDefence(sym, ipP.disp);
-             IPST=(rDf&&rDf.verdict==='DEFENDING')?'g3defl':((rDf&&rDf.verdict==='ABANDONING')?'g3broke':'g3inplay'); }
-         }catch(eIP){}
-         // (v14.7) THE TRACTOR — attract made visible. Doctrine: every node is a magnet and pull
-         // grows as price converges; nevWhy has RECORDED pull = size/distance since v13.4. The ONE
-         // dominant attractor — outside the deflection zone, pull >= 2x the runner-up — draws a
-         // directional flow on the track: dashes drifting from price INTO the node. First
-         // measurement (2026-08-25): price moved toward the top-pull node within 30m in 36/47
-         // samples (77%) — ONE day, magnet-day flattered; the `attract` feature keeps score nightly.
-         var AT=null;
-         try{
-           var atBest=null, atSecond=null;
-           for(var atI=0;atI<ps.length;atI++){
-             var atP=ps[atI], atD=Math.abs(atP.disp-EB.now);
-             if(atD<2.6 || atD>60) continue;
-             var atUsd=(atP.usdK!=null)?Math.abs(atP.usdK*1000):((atP.pct||0)*1e6);
-             var atPull=atUsd/atD;
-             if(!atBest || atPull>atBest.pull){ atSecond=atBest; atBest={p:atP,pull:atPull}; }
-             else if(!atSecond || atPull>atSecond.pull) atSecond={p:atP,pull:atPull};
-           }
-           if(atBest && (!atSecond || atBest.pull>=2*atSecond.pull)) AT=atBest.p;
-         }catch(eAT){}
-         if(AT){
-           var atX=emPosRail(EB,AT.disp,RB);
-           var atLo=Math.min(pNow,atX), atHi=Math.max(pNow,atX);
-           if(isFinite(atLo) && (atHi-atLo)>1.5){
-             var atCol=AT.balanced?'#8b98a9':(AT.accel?'#a371f7':'#e3c341');
-             h2+='<i class="g3tractor'+(atX>pNow?' g3tR':' g3tL')+'" style="left:'+atLo.toFixed(1)+'%;width:'+(atHi-atLo).toFixed(1)+'%;color:'+atCol+'"'+
-                 g3tip('ATTRACT — the dominant magnet. '+frameNum(AT.disp)+' out-pulls every other node at least 2-to-1 (pull = size ÷ distance, the metric recorded on every event since v13.4). Doctrine: the closer price drifts, the stronger the pull. The dashes drift TOWARD the node. First measurement 2026-08-25: price moved toward the top-pull node within 30m in 77% of samples — one day only; the attract feature records this every bar so the nightly review keeps honest score.')+'></i>';
-           }
-         }
-         // (v14.5) NEIGHBOUR LABEL THINNING. 7655 and 7660 are 2.5% of the rail apart tonight, and
-         // their labels rendered as one mashed string ("76557660", operator-caught). The bigger pile
-         // keeps its label; a smaller one within 4% of an already-labelled pile stays label-less —
-         // its dot, bar and hover are untouched, only the text yields.
-         // ⚠⚠ (v14.46, operator-caught: "there are more flags than strikes") EVERY POST GETS ITS
-         // NUMBER. v14.5 suppressed any label within 4% of an already-labelled one to stop "76557660"
-         // mashing, and on a normal ladder that silently blanks half the rail: adjacent 5-point
-         // strikes sit ~3.7% apart, just inside the rule, so the operator was looking at 15 posts
-         // and 9 numbers. Six bars with no identity is a worse failure than two labels touching —
-         // a post you cannot name is a post you cannot trade.
-         // THE FIX IS A SECOND ROW, not a wider gap: labels alternate between two tiers, so each
-         // tier only needs ~7.4% of clearance and the whole ladder fits at its natural spacing. A
-         // label is only suppressed now if BOTH tiers are still occupied within 4% — genuinely
-         // impossible, rather than merely tight. The ROLE tags keep the old single-tier thinning:
-         // the number is what identifies a post, the role is a bonus, and stacking roles too would
-         // put text into the track.
-         var LBLOK={}, LBLTIER={}, ROLEOK={};
-         try{
-           var lblCand=ps.filter(function(pL){ return pL.pct>=PLAB_MIN_PCT; })
-                         .sort(function(a,b){ return b.pct-a.pct; });
-           var tierX=[[],[]], roleX=[];
-           lblCand.forEach(function(pL){
-             var xL=emPosRail(EB, pL.disp, RB), q;
-             // roles: unchanged single-tier thinning
-             var rOK=true;
-             for(q=0;q<roleX.length;q++) if(Math.abs(roleX[q]-xL)<4){ rOK=false; break; }
-             if(rOK){ roleX.push(xL); ROLEOK[pL.k]=1; }
-             // labels: first tier with room wins; bigger piles are placed first, so the strongest
-             // node keeps the top row and the eye reads size before it reads position
-             for(var t=0;t<2;t++){
-               var clash=false;
-               for(q=0;q<tierX[t].length;q++) if(Math.abs(tierX[t][q]-xL)<4){ clash=true; break; }
-               if(!clash){ tierX[t].push(xL); LBLOK[pL.k]=1; LBLTIER[pL.k]=t; return; }
-             }
-           });
-         }catch(eLT){ ps.forEach(function(pL){ LBLOK[pL.k]=1; LBLTIER[pL.k]=0; ROLEOK[pL.k]=1; }); }
-         for(var pi=0;pi<ps.length;pi++){
-           var P=ps[pi];
-           // sqrt so a 100% King does not flatten a 30% pile into invisibility
-           var hgt=Math.max(3, Math.round(Math.sqrt(P.pct/100)*10));
-           var w=(P.pct>=60?5:4);
-           // (v11.68) three states, not two. BALANCED is drawn — the gamma is really there — but hollow,
-           // because a strike whose legs cancel has no side and colouring it would assert one.
-           var pcls = P.balanced ? 'bal' : (P.accel ? 'acc' : 'brk');
-           // (v11.79) SKYLIT-SHAPED NODES carry `pct` (%King) and `usdK`; the InsiderFinance fallback
-           // carries `gexM`/`netFrac`/`perPt`. One render, two vocabularies — and the hover must never
-           // print Skylit's node VALUE with "/PT", which is IF's per-point unit.
-           var isSk = (P.src==='skylit');
-           var sizeTxt = isSk ? (P.pct+'% of King') : (usdBig(P.gexM*1e6)+' of gamma');
-           var tip = frameNum(P.disp)+' (SPXW '+P.k+') \u2014 '+sizeTxt+'. ';
-           if(isSk){
-             tip += (P.usdK!=null ? ('About '+usdBig(P.usdK*1000)+' of dealer exposure at this strike. ') : '')+
-                    (P.accel
-                      ? 'NEGATIVE gamma: dealers are short here, so crossing it a hedge trades WITH the move \u2014 an ACCELERATOR.'
-                      : 'POSITIVE gamma: dealers are long here, so a hedge leans against price \u2014 a BRAKE.')+
-                    ' From SKYLIT\'s live SPXW ladder: accumulated dealer positioning, which builds and drains intraday.'+
-                    (P.role==='KING' ? ' KING \u2014 the heaviest node on the ladder; every other %King on this rail is a ratio to it.' : '')+
-                    (P.role==='GK' ? (' GATEKEEPER \u2014 the last significant node between price and the King beyond it. Strength vs that King '+(P.gkRatio!=null?P.gkRatio:'?')+'x'+
-                       (P.gkVerdict==='stall' ? ' \u2014 at or above 1.8x, which is where price tends to STALL rather than pass.' : ' \u2014 below the 1.8x that would say stall, so this one is passable.')) : '')+
-                    (P.role==='RUG' ? ' RUG \u2014 a strong POSITIVE ceiling sitting directly over a strong NEGATIVE node with no significant floor beneath. If the cap unwinds, the node below accelerates the drop.' : '')+
-                    (P.role==='RRUG' ? ' REVERSE RUG \u2014 a strong NEGATIVE ceiling over a strong POSITIVE floor with nothing significant capping it above. The squeeze mirror of a rug.' : '')+
-                    ' \u26a0 A DIFFERENT MEASUREMENT from InsiderFinance\'s open-interest gamma \u2014 a flow, not a stock.'+
-                    ' \u26a0 The SIZE of the pressure, never a distance: turning it into points needs a market-impact figure no option chain contains.';
-           } else {
-             tip += 'of which '+P.netFrac+'% survives as net dealer exposure: '+usdBigSp(P.perPt)+' / PT to hedge. '+
-                    (P.balanced
-                      ? 'BALANCED \u2014 the call and put legs very nearly cancel, so there is no side to lean on. The SIZE is real; the DIRECTION is not.'
-                      : (P.accel
-                        ? 'NEGATIVE net gamma: dealers are short here, so crossing it they must trade WITH the move \u2014 an ACCELERATOR.'
-                        : 'POSITIVE net gamma: dealers are long here, so they trade AGAINST the move \u2014 a BRAKE.'))+
-                    ' From the '+gexWindowNote(P.window)+
-                    ' \u26a0 InsiderFinance FALLBACK \u2014 the Skylit tape could not be read.';
-           }
-           // (v13.1) the cap comes from SKYLIT'S OWN 60m delta for this strike, never from our sampling
-           var capCls=''; try{
-             var vE=velAt(P.k);
-             if(vE && vE.v && typeof vE.v.d60==='number' && !vE.stale){
-               if(vE.v.d60>0) capCls=' g3grow'; else if(vE.v.d60<0) capCls=' g3bleed';
-             }
-           }catch(eCap){}
-           // (v14.6) A POST, NOT A DISC. Height from sqrt(%King) — the same scaling, one axis —
-           // BEHIND the pill (z 1 vs 3), top-aligned under the role tier. King is thicker and wears
-           // the lone diamond cap. The disc's motion grammar (recv/grow/fade) rides the post as-is.
-           var pw=(P.role==='KING')?4:3;
-           var ph=Math.max(20, Math.round(Math.sqrt(P.pct/100)*44));
-           var mo=motion[P.k]||'';
-           var moCls = (mo==='recv') ? ' g3recv' : (mo==='grow' ? ' g3grow' : (mo==='fade' ? ' g3fade' : ''));
-           var ipCls=(IPK!=null && P.k===IPK)?(' g3ip '+IPST):'';
-           // (v14.30) the level's STATE styles the post and rides the hover
-           var lvS=LVLST[P.k]||null;
-           var lvCls=lvS?(' g3lv'+lvS.st):'';
-           if(lvS && lvS.st!=='HOLDING') tip+=' \u25c6 STATE: '+lvS.st+' \u2014 '+lvS.why+'.';
-           h2+='<i class="g3pile '+pcls+capCls+moCls+ipCls+lvCls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%;width:'+pw+'px;height:'+ph+'px"'+g3tip(tip
-                 +(mo==='recv'?' — SIZE IS ARRIVING HERE: another strike is shedding into it.'
-                  :(mo==='grow'?' — ACCUMULATING: adding size right now.'
-                  :(mo==='fade'?' — DISSIPATING: coming apart.':'')))
-                 +(ipCls?(IPST==='g3defl'?' ⚡ PRICE IS ON THIS NODE and it is DEFENDING — deflect forming.'
-                        :(IPST==='g3broke'?' ⚡ PRICE IS ON THIS NODE and it is being ABANDONED — break forming.'
-                        :' ⚡ PRICE IS ON THIS NODE — in play.')):''))+'>'+
-                ((P.role==='KING')?'<i class="g3kcap"></i>':'')+'</i>';
-           // (v11.79) THE LABEL THE USER ASKED FOR, TWICE, AND I MOCKED TWICE WITHOUT BUILDING:
-           // ES price on top (the number they trade), SPXW strike and the node's role beneath it.
-           // (v11.81) ROLE beats polarity on the label. A King is still an accelerator; the hover keeps
-           // both, but "KING" is the word that changes what you do and "ACC" is not.
-           var role = P.role || (P.balanced ? 'BAL' : (P.accel ? 'ACC' : 'BRK'));
-           if(P.pct>=PLAB_MIN_PCT && ROLEOK[P.k]){
-             // (v11.93) THE ROLE MOVES ABOVE THE RAIL, into its own tier between the money amounts and
-             // the track. Below the rail it was sharing one line with the SPX strike, so on a crowded
-             // ladder "7645 ACC" and "7665 KING" competed for width against their neighbours and the
-             // role — the word that actually changes what you do — was the half that got clipped.
-             // ⚠ The money tier is 0-9 and the rail is at 19; the role sits at 11-17 and NEVER enters
-             // either. A role within ~6% of an end right-aligns inward, the same rule the labels use,
-             // so it stays over its own node instead of being pulled off it.
-             var rEdge = (P.pos>94) ? ';transform:translateX(-100%)' : ((P.pos<6) ? ';transform:translateX(0)' : '');
-             h2+='<span class="g3prole '+pcls+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%'+rEdge+'"'+g3tip(tip)+'>'+
-                 g3esc(role)+'</span>';
-           }
-           if(P.pct>=PLAB_MIN_PCT && LBLOK[P.k]){
-             var lvWord=(lvS && lvS.st!=='HOLDING')?('<em class="g3lvw g3lvw'+lvS.st+'">'+lvS.st.slice(0,4)+'</em>'):'';
-             h2+='<span class="g3plab '+pcls+(LBLTIER[P.k]?' g3t2':'')+'" style="left:'+emPosRail(EB,P.disp,RB).toFixed(1)+'%"'+g3tip(tip)+'>'+
-                 frameNum(P.disp)+'<i>'+P.k+'</i>'+lvWord+'</span>';
-           }
-         }
-         // (v14.30) THE DOORS — drained roll sources, no longer piles at all. A ghost outline
-         // where the post used to stand: 19/19 measured pass-throughs; never S/R again.
-         try{
-           LVLDOORS.forEach(function(dd){
-             var xD=emPosRail(EB, dd.disp, RB);
-             if(!isFinite(xD)) return;
-             h2+='<i class="g3door" style="left:'+xD.toFixed(1)+'%"'+
-                 g3tip('DOOR \u2014 '+frameNum(dd.disp)+' (SPXW '+dd.k+') was the SOURCE of the roll into '+dd.to+' and now holds only '+Math.round(dd.ret*100)+'% of its own day peak. A vacated strike is a door, not a wall: measured 19/19 pass-throughs when price returned to a drained source. Do not park a stop behind it; a pullback into it along the flow is an entry cue, not a reversal warning.')+
-                 '><em>DOOR</em></i>';
-           });
-         }catch(eDo){}
-         // (v14.39) the session TICKS are RETIRED — the approved levels strip replaced them ("the rail
-         // seems cluttered… have the levels on its own section below the read"). sessionLevels()
-         // and the read's confluence naming live on; only the rail marks left.
-         // (v14.23, operator requirement: "have some line or flag show the spy king even though
-         // all the dynamics are from the spxw — sometimes there are bounces based on the spy
-         // king") THE SPY KING FLAG. Full-height dashed line at the SPY crown's price, in the SPY
-         // shades (light purple when its crown is negative, light yellow when positive), tag on
-         // top clear of the SPXW labels. Deliberately NOT a post: it is the other book's crown,
-         // not SPXW structure. Source: the self-fetched SPY feed (<=36s), so it is always live.
-         // Proven the day it was asked for: price bounced on ES 7682 = SPY 765 in an SPXW gap.
-         try{
-           if(CFG.spyFlag!==false && typeof LASTFEED!=='undefined'){
-             var FYF=LASTFEED.SPY;
-             if(FYF && FYF.j && (Date.now()-(FYF.ts||0))<=FEED_STALE_MS*3){
-               var ewF=null; try{ ewF=extractWalls(FYF.j); }catch(eEF){}
-               if(ewF && ewF.king!=null && EB && typeof EB.scaleUsed==='number' && EB.scaleUsed>0){
-                 var negF=false; try{ (ewF.walls||[]).forEach(function(wF){ if(wF.k===ewF.king && wF.pos===false) negF=true; }); }catch(eSF){}
-                 var dispF=ewF.king*EB.scaleUsed;
-                 var xF=emPosRail(EB, dispF, RB);
-                 if(isFinite(xF)){
-                   // (v14.29, operator-directed) the PRICE sits BELOW the line, ES-mapped; the
-                   // tag on top carries only the name so neither collides with the rail labels.
-                   h2+='<i class="g3spyk'+(negF?'':' g3spykY')+'" style="left:'+xF.toFixed(1)+'%"'+
-                       g3tip('THE SPY KING — SPY '+ewF.king+' = '+frameNum(dispF)+' on this chart. The OTHER book\'s crown ('+(negF?'negative gamma — a reactive magnet; moves through it run':'positive gamma — dealers lean against price here')+'), drawn because price bounces off it even when every dynamic on this rail is SPXW. Not an SPXW node — the dashes and the shade say whose it is. Live from the self-fetched SPY feed; the crown is latched like every crown.')+
-                       '><b>SPY K</b><u>'+g3esc(frameNum(dispF))+'</u></i>';
-                 }
-               }
-             }
-           }
-         }catch(eSPYK){}
-         return h2;
-       })()+
-       '</span>';
-    var EH_LAB=AH?'':('<span class="g3emk"'+g3tip('Expected high — the open plus the at-the-money straddle.' + (EB.notToday ? (' \u26a0 THIS EXPIRY IS NOT TODAY \u2014 InsiderFinance drop an expiry once it has expired, so the nearest live one is '+EB.notToday+', and the band is pricing THAT session rather than the one on the chart.') : '') + '' + ((typeof ifDispScale==='function' && ifDispScale()>0) ? (' This is an ES price; the index equivalent is SPX '+dispNum(EB.high/ifDispScale())+'.') : '') + ' \u26a0 The straddle is about 0.80 sigma, NOT one: this band contains roughly 58% of closes, not 68%. Multiply by 1.25 for a true one-sigma boundary. A priced level, not a ceiling.')+'>'+g3esc(frameNum(RB.over?RB.hi:EB.high))+'<small>'+(EB.est?'~':'')+(RB.over?'RAIL':'EH')+(EB.notToday?' \u2260TODAY':'')+'</small></span>');
-    h+=EH_LAB;
-    h+='</span>';
+    // (v15.53) THE OLD EM RAIL (.g3emw) IS ARCHIVED — archive/v15.53/B-hidden-rail. It had been built into
+    // the HTML every render and hidden by the g3ladon body class since v14.46. The ladder above is the surface.
   } else {
     h+='<span class="g3emx"'+g3tip('Where can today go? The band needs an opening bar and a two-sided at-the-money straddle in today\'s expiry. A one-sided straddle is not a straddle and half a band would be worse than none, so it says why instead of drawing something.')+'>'+g3esc(EB.why)+'</span>';
   }
@@ -28436,81 +25229,6 @@ function secFrame(sym){
   return h;
 }
 
-// (v11.88) THE CONFIRM COUNT'S COLOUR, AND IT MUST NOT KNOW HOW MANY CONFIRMS THERE ARE.
-// It was `nConf>=3` for green and `nConf<=1` for red — hardcoded to a three-confirm tally. The moment
-// PA came out and CROSS/ROLL went in, green would have been unreachable and every 1-of-4 would have
-// read red. Judge the FRACTION of what is actually live; a hardcoded denominator in a renderer is a
-// silent bug the first time the list changes length.
-function confColour(nConf, nLive){
-  if(!(nLive>0)) return '#8b98a9';          // nothing live: no verdict to colour
-  if(nConf===nLive) return '#2ec27e';       // everything that could confirm, did
-  if(nConf===0)     return '#f0616d';       // nothing confirming
-  return '#8b98a9';
-}
-// ---- ② BIAS: the direction call and what is behind it ----
-function secBias(sym){
-  var B=biasVotes(sym);
-  var col=B.dir>0?'g3up':(B.dir<0?'g3dn':'');
-  var h='<div class="g3b">';
-  // (v13.1) THE TREND WORD STAYS ON ONE LINE. `UPTREND BRK` wrapping to two lines cost a whole row of
-  // vertical space and made the most important word on the panel read as two half-words.
-  h+='<div class="g3vd2"'+g3tip('Which way, and on whose authority?\nThe 50-SMA decides. Nothing below can overrule it.\n⚠ A new trend needs 15 of 20 bars; a reversal out of a broken trend needs 11.'+
-     (B.whyLong?('\n⚠ This one is BROKEN'+String(B.whyLong).replace(/^ — /,': ')+'.'):'')+
-     '\n⚠ FLAT means the SMA has no side — it is never assembled out of the confirms.')+'>'+
-     '<b class="'+col+'"'+g3tip('Which way, and on whose authority?\nThe 50-SMA decides. The reads below confirm it or they do not.\n⚠ The old tally let them outvote it and printed NEUTRAL on a 2-2 split while the trend was plainly on the chart.')+'>'+
-     arrow(B.dir)+' '+B.verdict+'</b>'+
-     '<span class="g3why">'+g3esc(B.why)+'</span></div>';
-  h+='<div class="g3cf">';
-  B.confirms.forEach(function(c){
-    var cls='', mark='—';
-    // (v11.94) a read that THREW is not a read that abstained
-    var err=(B.errs&&B.errs[c.k])||null;
-    // (v11.95) EVERY BADGE READS ITS OWN DIRECTION — up, down or sideways — instead of agreement with
-    // the call. A tick said "this agrees with the SMA" and hid WHAT the read actually said; two reads
-    // could both show ✓ while pointing opposite ways on a flat call. The COLOUR still carries
-    // agreement, so the count is unchanged: green agrees, red disagrees, grey has no side.
-    if(err){ cls=' n'; mark='!'; }
-    else if(c.d==null){ cls=''; mark='—'; }                       // no reading at all
-    else if(c.d>0){ mark='↑'; cls=(B.dir>0)?' y':((B.dir<0)?' n':''); }
-    else if(c.d<0){ mark='↓'; cls=(B.dir<0)?' y':((B.dir>0)?' n':''); }
-    else { mark='→'; cls=''; }                                    // sideways: a real reading, no side
-    h+='<span class="g3chip'+cls+'"'+g3tip(err?('This read FAILED — '+g3esc(err)+'.\nIt is not abstaining, it is broken, and a dash would have hidden that.\n\n'+c.tip):c.tip)+'>'+c.k+' '+mark+'</span>';
-  });
-  // (v11.90) DRIFT MOVES ONTO THE CONFIRM ROW AS A BADGE — BUT IT STILL DOES NOT VOTE.
-  // Two things are true at once and both have to survive this change:
-  //  1. v11.44 pulled drift OUT of the confirm row because its tick meant "the two books agree with
-  //     EACH OTHER" — and the live face read "↑ BULLISH" beside "DRIFT ✓ DN·conf": they agreed on DOWN,
-  //     against an up call, and the tick said everything was fine. Agreement is only confirmation when
-  //     it points the SAME WAY as the SMA, and that test is still applied below.
-  //  2. The user shadowed drift on 2026-08-18 — "remove it until it is tested and proven" — and
-  //     DRIFT_LIVE is still false. Measured 2026-08-24: AGREE-UP 25% on effN 10 against a 21% baseline
-  //     over 2 sessions. It has NOT earned promotion.
-  // So it is drawn as a badge for consistency and to save a row, but OUTLINED rather than filled and
-  // behind a divider, and it is NOT in `nConf`. Drawn identically it would read as a fifth confirm and
-  // inflate the very count that only started being recorded at v11.88.
-  var dr=B.drift, vd=(dr&&dr.verdict)?dr.verdict:'NONE';
-  var dDir=(dr&&typeof dr.dir==='number')?dr.dir:0;
-  var books=/^AGREE/.test(vd)?'agree':(/^LEAN/.test(vd)?'lean':(vd==='SPLIT'?'split':'none'));
-  var withCall=(B.dir!==0 && dDir!==0) ? (dDir===B.dir) : null;
-  var agree, mark2, gtxt;
-  if(books==='none'){ agree=null; mark2='·'; gtxt='both books not in yet'; }
-  else if(books==='split'){ agree=false; mark2='✗'; gtxt='gamma and vanna lean opposite ways — nothing confirming'; }
-  else if(withCall===false){ agree=false; mark2='✗'; gtxt='books '+books+' '+(dDir>0?'UP':'DOWN')+' — against the call'; }
-  else if(withCall===true){ agree=true; mark2=(books==='agree')?'✓':'~'; gtxt=(dr.label||vd)+' · '+(dr.overlap?'bands overlap':'bands apart'); }
-  else { agree=null; mark2='·'; gtxt=(dr.label||vd)+' · no side to confirm'; }
-  var dcls=(agree===true)?' y':((agree===false)?' n':'');
-  h+='<i class="g3sepv"></i>';
-  h+='<span class="g3chip gate'+dcls+'"'+g3tip('Is anything structurally confirming the call?\nGamma and vanna either lean the same way relative to price, or they split. '+g3esc(gtxt)+'.\n⚠ A GATE, not a vote — it is not in the count. Gamma says HOW price moves, never which way.\n⚠ A tick means the books agree AND point with the call. Agreeing with each other on the wrong side is a cross.')+'>DRIFT '+mark2+'</span>';
-
-  var cnt, ccol;
-  if(B.broke){ cnt='confirms unavailable'; ccol='#f0616d'; }   // (v11.94) never a tally off a partial assembly
-  else if(B.dir===0){ cnt='no side to confirm'; ccol='#8b98a9'; }
-  else { cnt=B.nConf+' of '+B.confirms.length+' confirm'; ccol=confColour(B.nConf, B.nLive); }
-  h+='<span class="g3cnt" style="color:'+ccol+'"'+g3tip('How much conviction is behind this call?\nHow many live confirms agree with the 50-SMA that owns the direction.\n⚠ Green only when EVERY live one agrees. A dash means that read had nothing to give, which is not the same as disagreeing.\n⚠ TREND alone measured 34%. Whether the count improves on that has never been tested — it only started being recorded at v11.88.')+'>'+cnt+'</span>';
-  h+='</div>';
-  h+='</div>';
-  return h;
-}
 
 // ---- ③ TRADE LOCATION: the ladder, with price in it ----
 
@@ -28530,7 +25248,7 @@ function secBias(sym){
 //
 // SCALE: nodes and candles are both on the UNDERLYING scale, so the chart is computed there and only
 // the axis labels are converted to the chart instrument.
-var NCHART_MIN=90;                 // minutes of session in view
+                 // minutes of session in view
 var NCHART_H=132;                  // px
 
 
@@ -28635,345 +25353,6 @@ function skewRead(sym){
 var ACCUM_WIN_MIN=30, ACCUM_REACH=12, ACCUM_MIN_SHARE=0.20;
 var ROLL_WIN_MIN=30, ROLL_TH=0.50, ROLL_MIN_V=40e6, ROLL_REACH=5;
 function rollMedian(a){ if(!a.length) return 0; var b=a.slice().sort(function(x,y){return x-y;}); return b[Math.floor(b.length/2)]; }
-function rollDetect(sym){
-  sym=sym||'SPY';
-  try{
-    var f=LASTFEED[sym]; if(!f||!f.j) return null;
-    // (v11.53) A feed that EXISTS but is too short must SAY SO. Returning bare null made it
-    // indistinguishable from "no feed at all", which is the one case null is reserved for — and
-    // saying why is the refusal doctrine everywhere else in this file. accumAsym keeps its own
-    // null: it is a value, not a read, and has no refusal channel to speak through.
-    var snaps=f.j.levels||[]; if(snaps.length<12) return { err:'not enough session yet' };
-    var last=snaps.length-1, tL=snaps[last].t;
-    if(typeof tL!=='number') return null;
-    // `t` is SECONDS in this payload. Walk back by time, not by index, so a cadence change cannot
-    // silently turn a 30-minute window into a 5-minute one.
-    var target=tL-ROLL_WIN_MIN*60, a=-1;
-    for(var i=last;i>=0;i--){ if(typeof snaps[i].t==='number' && snaps[i].t<=target){ a=i; break; } }
-    if(a<0 || last-a<5) return { err:'not enough session yet' };
-    function mapOf(ix){ var m={}, l=(snaps[ix]&&snaps[ix].l)||[];
-      for(var q=0;q<l.length;q++){ var r=l[q]; if(typeof r.v==='number') m[r.k]=Math.abs(r.v); } return m; }
-    var m0=mapOf(a), m1=mapOf(last);
-    var px=(STATE[sym]||{}).price;
-    if(typeof px!=='number'){ px=(typeof snaps[last].s==='number')?snaps[last].s:null; }
-    if(px==null) return { err:'no price' };
-    var cand=[], pcs=[];
-    for(var k in m1){
-      var kk=parseFloat(k); if(!isFinite(kk)) continue;
-      if(Math.abs(kk-px)>ROLL_REACH) continue;
-      var v0=m0[k], v1=m1[k];
-      if(v0==null||v1==null||v0<ROLL_MIN_V) continue;
-      var pc=(v1-v0)/v0;
-      cand.push({k:kk, pc:pc, v0:v0, v1:v1}); pcs.push(pc);
-    }
-    if(cand.length<4) return { err:'book too thin to compare' };
-    var base=rollMedian(pcs);
-    var out={ base:+(base*100).toFixed(0), n:cand.length, winMin:ROLL_WIN_MIN, ceil:null, flr:null, err:null };
-    ['ceil','flr'].forEach(function(side){
-      var up=(side==='ceil');
-      var pool=cand.filter(function(c){ return up ? c.k>px : c.k<px; });
-      var diss=null, acc=null;
-      pool.forEach(function(c){
-        var rel=c.pc-base;
-        if(rel<=-ROLL_TH && (!diss||rel<diss.rel)) diss={k:c.k, rel:rel, v0:c.v0, v1:c.v1};
-        if(rel>= ROLL_TH && c.v1>=ROLL_MIN_V && (!acc||rel>acc.rel)) acc={k:c.k, rel:rel, v0:c.v0, v1:c.v1};
-      });
-      // A node dying with nothing growing is a wall EVAPORATING, not a roll. It gets no arrow —
-      // an arrow to nowhere is a claim we cannot support.
-      if(!diss || !acc || Math.abs(diss.k-acc.k)<0.5) return;
-      out[side]={ from:diss.k, to:acc.k,
-                  fromPct:Math.round(diss.rel*100), toPct:Math.round(acc.rel*100),
-                  toward: up ? (acc.k<diss.k) : (acc.k>diss.k) };
-    });
-    return out;
-  }catch(e){ return { err:String(e&&e.message||e) }; }
-}
-function nodeChartHtml(sym){
-  try{
-    sym=sym||'SPY';
-    var cs=closedCandles(sym)||[];
-    if(cs.length<4) return '';
-    var now=Date.now();
-    var t1=cs[cs.length-1].t||now, t0=t1-NCHART_MIN*60000;
-    var bars=cs.filter(function(c){ return (c.t||0)>=t0; });
-    if(bars.length<3) bars=cs.slice(-30);
-    if(bars.length<3) return '';
-    t0=bars[0].t; t1=bars[bars.length-1].t;
-    if(!(t1>t0)) return '';
-    var lo=Infinity, hi=-Infinity;
-    bars.forEach(function(c){ if(c.l<lo) lo=c.l; if(c.h>hi) hi=c.h; });
-    var H=(HIST[sym]||{}), keys=[];
-    for(var k in H){
-      var kk=parseFloat(k); if(!isFinite(kk)) continue;
-      var seq=(H[k]&&H[k].seq)||[]; if(!seq.length) continue;
-      if(kk < lo-(hi-lo)*0.9 || kk > hi+(hi-lo)*0.9) continue;
-      var peak=0;
-      for(var q=0;q<seq.length;q++){ var vv=seq[q]&&seq[q].v; if(typeof vv==='number' && Math.abs(vv)>peak) peak=Math.abs(vv); }
-      keys.push({k:kk, seq:seq, peak:peak});
-    }
-    keys.forEach(function(o){ if(o.k<lo) lo=o.k; if(o.k>hi) hi=o.k; });
-    var pad=(hi-lo)*0.06 || 0.2; lo-=pad; hi+=pad;
-    if(!(hi>lo)) return '';
-
-    // (v11.38) THREE ZONES. Left is InsiderFinance STRUCTURE (net GEX, then net DEX) — the chain,
-    // refreshed once a day, telling you where the walls are. Right is Skylit FLOW — live node strength
-    // with 60m and 15m growth ticks, telling you what is happening to them now. The middle is price,
-    // and level labels sit ON their own lines so neither gutter is spent on text.
-    var W=416, HGT=NCHART_H+38, TOP=8, BOT=24;
-    // (v13.0, user-directed) TWO ZONES, not three. The InsiderFinance GEX and DEX profiles are gone;
-    // the Skylit NODE flow profile takes the left gutter they occupied, and the price plot takes back
-    // the whole right side. ⚠ THE BARS NOW GROW RIGHTWARD from the left edge, so they still point IN
-    // toward price — anchoring them at the gutter's right edge would have pointed them away from it.
-    var SX=3, SW=56;                             // flow (NODES), left — was right
-    var PL=64, PR=410;                           // price, taking the space the flow column vacated
-    var ih=HGT-TOP-BOT, iw=PR-PL;
-    function X(t){ return PL + ((t-t0)/(t1-t0))*iw; }
-    function Y(p){ return TOP + (1-((p-lo)/(hi-lo)))*ih; }
-    var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(e9){}
-    var g='';
-
-    // ---------- (v13.0) THE IF STRUCTURE PROFILES ARE REMOVED ----------
-    // Two gutter columns of once-a-day open-interest stock, competing for width with the live
-    // tape. `ifChain`/`ifLadder` still feed the LEVELS engine and the depth tiers; only these two
-    // drawn profiles are gone, so nothing that reads the chain lost its input.
-
-    // ---------- RIGHT: Skylit flow, pointing INWARD, drawn as growth segments ----------
-    // (v11.39) Two corrections. The bars now grow LEFTWARD from the right edge, so both profiles point
-    // in toward price and the chart reads as a spine rather than two unrelated columns. And growth is
-    // the SEGMENTS, not a tick mark: the oldest portion is dim, 60m→15m is mid, and the last 15 minutes
-    // is bright. A node that is accumulating shows a bright leading edge; one that is bleeding shows
-    // dim length with nothing new on the front. That is the brightest-newest encoding from the design.
-    var flowN=0, SXA=SX;                          // LEFT edge — bars anchor here and grow toward price
-    g+='<line x1="'+(SX+SW)+'" y1="'+TOP+'" x2="'+(SX+SW)+'" y2="'+(TOP+ih)+'" stroke="#1e2530" stroke-width="0.7"/>';
-    (function(){
-      function at(seq, msBack){
-        var cut=t1-msBack, best=null;
-        for(var q=0;q<seq.length;q++){ var pt=seq[q]; if(!pt||typeof pt.v!=='number') continue; if(pt.t<=cut) best=pt.v; }
-        return best;
-      }
-      // Normalise across CURRENT AND HISTORICAL values. Scaling on current alone means a node that has
-      // shrunk has a past larger than the axis, so its history clips to full width and the whole bar
-      // renders as one dim block — decay becomes invisible, which is the opposite of the point.
-      var mx=0;
-      keys.forEach(function(o){
-        var lastv=null;
-        for(var q=o.seq.length-1;q>=0;q--){ if(o.seq[q]&&typeof o.seq[q].v==='number'){ lastv=o.seq[q].v; break; } }
-        o.now=lastv;
-        o.v60=at(o.seq,60*60000); o.v15=at(o.seq,15*60000);
-        [lastv,o.v60,o.v15].forEach(function(v){ if(v!=null && Math.abs(v)>mx) mx=Math.abs(v); });
-      });
-      if(!(mx>0)) return;
-      var maxW=SW-4;
-      keys.forEach(function(o){
-        if(o.now==null) return;
-        var av=Math.abs(o.now); if(av<3) return;
-        var y=Y(o.k)-2.2, col=(o.now>0)?'#a371f7':'#e3c341';
-        var wNow=Math.max(1.2,(av/mx)*maxW);
-        var v60=o.v60, v15=o.v15;
-        // RAW widths first. Clamping these to wNow would erase the only case the shrink marker exists
-        // for — a node that is smaller now than it was 15 minutes ago.
-        var r60=(v60==null)?0:Math.max(0,Math.min(maxW,(Math.abs(v60)/mx)*maxW));
-        var r15=(v15==null)?r60:Math.max(0,Math.min(maxW,(Math.abs(v15)/mx)*maxW));
-        var w60=Math.min(r60,wNow), w15=Math.max(w60,Math.min(r15,wNow));
-        function seg(from,to,op){
-          if(to<=from) return;
-          g+='<rect x="'+(SXA+from).toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+(to-from).toFixed(1)+
-             '" height="4.4" fill="'+col+'" opacity="'+op+'"/>';
-        }
-        seg(0,   w60, '0.30');                     // held for over an hour
-        seg(w60, w15, '0.58');                     // added between 60m and 15m ago
-        seg(w15, wNow,'0.95');                     // added in the last 15 minutes — the live edge
-        // a node that SHRANK has its lost ground marked, so decay is visible rather than merely absent
-        if(r15>wNow+0.6){
-          g+='<line x1="'+(SXA+Math.min(maxW,r15)).toFixed(1)+'" y1="'+(y+0.4).toFixed(1)+'" x2="'+(SXA+wNow).toFixed(1)+
-             '" y2="'+(y+3.8).toFixed(1)+'" stroke="'+col+'" stroke-width="0.7" opacity="0.35"/>';
-        }
-        flowN++;
-      });
-    })();
-
-    // ---------- CENTRE: node bands, candles, rolls, centred level labels ----------
-    // (v11.46) A NODE MUST BE VISIBLE WITH ONE SAMPLE. This drew a marker only where a history sample
-    // fell inside the CANDLE window — so after any reload you saw a growing sliver, and with the market
-    // closed (candles stop at the last close while sampleTapeHistory keeps writing "now") every sample
-    // fell outside and NOTHING drew at all. Absence of history was rendering as absence of node, which
-    // is the opposite of the truth. History still draws the lifecycle; the node's CURRENT state now
-    // always draws at the right edge regardless.
-    var drawn=0;
-    keys.forEach(function(o){
-      var y=Y(o.k); o.shown=0;
-      o.seq.forEach(function(pt){
-        if(pt==null||typeof pt.v!=='number') return;
-        if(pt.t<t0-90000||pt.t>t1+90000) return;
-        var x=X(Math.max(t0,Math.min(t1,pt.t))), av=Math.abs(pt.v);
-        if(av<3) return;
-        var op=Math.max(0.14,Math.min(0.95,av/100)), put=(pt.v>0), col=put?'#a371f7':'#e3c341', w=2.5, hh=2.1;
-        g+= put
-          ? '<path d="M'+(x-w)+' '+(y-hh)+' L'+(x+w)+' '+(y-hh)+' L'+x+' '+(y+hh)+' Z" fill="'+col+'" opacity="'+op.toFixed(2)+'"/>'
-          : '<path d="M'+(x-w)+' '+(y+hh)+' L'+(x+w)+' '+(y+hh)+' L'+x+' '+(y-hh)+' Z" fill="'+col+'" opacity="'+op.toFixed(2)+'"/>';
-        drawn++; o.shown++;
-      });
-      // the live edge: whatever the node reads NOW, drawn at the right of the plot
-      var nowv=null;
-      for(var q=o.seq.length-1;q>=0;q--){ if(o.seq[q]&&typeof o.seq[q].v==='number'){ nowv=o.seq[q].v; break; } }
-      if(nowv!=null && Math.abs(nowv)>=3){
-        var av2=Math.abs(nowv), op2=Math.max(0.20,Math.min(0.95,av2/100));
-        var put2=(nowv>0), col2=put2?'#a371f7':'#e3c341', xE=PR-3, w2=2.9, h2=2.4;
-        g+= put2
-          ? '<path d="M'+(xE-w2)+' '+(y-h2)+' L'+(xE+w2)+' '+(y-h2)+' L'+xE+' '+(y+h2)+' Z" fill="'+col2+'" opacity="'+op2.toFixed(2)+'"/>'
-          : '<path d="M'+(xE-w2)+' '+(y+h2)+' L'+(xE+w2)+' '+(y+h2)+' L'+xE+' '+(y-h2)+' Z" fill="'+col2+'" opacity="'+op2.toFixed(2)+'"/>';
-        drawn++; o.shown++;
-      }
-    });
-    var bw=Math.max(1.2, Math.min(5, (iw/bars.length)*0.62));
-    bars.forEach(function(c){
-      var x=X(c.t), up=(c.c>=c.o), col=up?'#2ec27e':'#f0616d';
-      g+='<line x1="'+x.toFixed(1)+'" y1="'+Y(c.h).toFixed(1)+'" x2="'+x.toFixed(1)+'" y2="'+Y(c.l).toFixed(1)+'" stroke="'+col+'" stroke-width="0.7" opacity="0.74"/>';
-      var yo=Y(c.o), yc=Y(c.c), yt=Math.min(yo,yc), hb=Math.max(0.8,Math.abs(yc-yo));
-      g+='<rect x="'+(x-bw/2).toFixed(1)+'" y="'+yt.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+hb.toFixed(1)+'" fill="'+col+'" opacity="0.8"/>';
-    });
-    // (v11.38) THE 50-SMA IS THE PRIMARY READ AND IT WAS NEVER ON OUR CHART — the verdict came from us
-    // while the line itself was only on Atlas. contSMAAtTodayIdx walks the CONTINUOUS series at each of
-    // today's closed-bar indices, which is what trendVerdict reads, so the line and the call cannot
-    // disagree. `bars` is a tail slice of closedCandles, so the index offset has to be carried through.
-    try{
-      var period=(function(){ var mp=parseInt(CFG.trendMA[sym],10); return (isNaN(mp)||mp<1)?50:mp; })();
-      var allC=closedCandles(sym)||[], off=allC.length-bars.length;
-      var prev=null;
-      bars.forEach(function(c,ix){
-        var v=contSMAAtTodayIdx(sym, period, off+ix);
-        if(typeof v!=='number' || v<lo || v>hi){ prev=null; return; }
-        var pt=[X(c.t), Y(v)];
-        if(prev) g+='<line x1="'+prev[0].toFixed(1)+'" y1="'+prev[1].toFixed(1)+'" x2="'+pt[0].toFixed(1)+'" y2="'+pt[1].toFixed(1)+'" stroke="#e06c4f" stroke-width="1.2" opacity="0.9"/>';
-        prev=pt;
-      });
-    }catch(eSm){}
-    // rolls
-    var RL=null; try{ RL=rollDetect(sym); }catch(eR){}
-    var rollLines=[];
-    if(RL && !RL.err){
-      [['ceil','#f0616d','g3ad'],['flr','#2ec27e','g3au']].forEach(function(cfg){
-        var e=RL[cfg[0]]; if(!e||!e.toward) return;
-        if(e.from<lo||e.from>hi||e.to<lo||e.to>hi) return;
-        var yF=Y(e.from), yT=Y(e.to); if(Math.abs(yT-yF)<6) return;
-        var xa=PL+iw*0.30, xb=PL+iw*0.62, dn=(yT>yF);
-        g+='<path d="M'+xa.toFixed(1)+' '+(yF+(dn?3:-3)).toFixed(1)+' C'+(xa+8).toFixed(1)+' '+((yF+yT)/2).toFixed(1)+
-           ' '+(xb-8).toFixed(1)+' '+((yF+yT)/2).toFixed(1)+' '+xb.toFixed(1)+' '+(yT+(dn?-4:4)).toFixed(1)+
-           '" fill="none" stroke="'+cfg[1]+'" stroke-width="1.5" opacity="0.9" marker-end="url(#'+cfg[2]+')"/>';
-        g+='<text x="'+(xb+4).toFixed(1)+'" y="'+(yF+2.2).toFixed(1)+'" font-size="7" fill="'+cfg[1]+'" font-weight="500" opacity="0.45">'+dispNum(e.from*rr)+'</text>';
-        g+='<text x="'+(xb+4).toFixed(1)+'" y="'+(yT+2.2).toFixed(1)+'" font-size="8" fill="'+cfg[1]+'" font-weight="800">'+dispNum(e.to*rr)+'</text>';
-        rollLines.push({side:cfg[0], col:cfg[1], from:e.from, to:e.to, fromPct:e.fromPct, toPct:e.toPct});
-      });
-    }
-    // centred level labels — the line BREAKS around the text instead of running under it
-    // `p` positions the line on the UNDERLYING scale; `disp` is what gets printed. They are passed
-    // separately on purpose: an IF row already carries a display value computed from the live SPX->ES
-    // basis, and re-deriving it here through the SPY->ES ratio is a second conversion path that
-    // disagrees by a point or two. Never recompute a number the source already gave you.
-    function centreLvl(p, disp, name, col){
-      if(p==null||p<lo||p>hi) return;
-      var y=Y(p), txt=(name?name+' ':'')+dispNum(disp), tw=txt.length*4.0+6, cx=(PL+PR)/2;
-      g+='<line x1="'+PL+'" y1="'+y.toFixed(1)+'" x2="'+(cx-tw/2).toFixed(1)+'" y2="'+y.toFixed(1)+'" stroke="'+col+'" stroke-width="0.7" stroke-dasharray="5,4" opacity="0.5"/>';
-      g+='<line x1="'+(cx+tw/2).toFixed(1)+'" y1="'+y.toFixed(1)+'" x2="'+PR+'" y2="'+y.toFixed(1)+'" stroke="'+col+'" stroke-width="0.7" stroke-dasharray="5,4" opacity="0.5"/>';
-      g+='<text x="'+cx.toFixed(1)+'" y="'+(y+2.5).toFixed(1)+'" font-size="7.5" fill="'+col+'" font-weight="700" text-anchor="middle">'+g3esc(txt)+'</text>';
-    }
-    // one centred-label pass so IF levels, strong nodes and price cannot overprint each other
-    var taken=[];
-    function free(y){ for(var i=0;i<taken.length;i++){ if(Math.abs(taken[i]-y)<8) return false; } taken.push(y); return true; }
-    var px0=(STATE[sym]||{}).price;
-    if(typeof px0==='number' && px0>=lo && px0<=hi) taken.push(Y(px0));   // price wins the middle
-    var IL=null; try{ IL=ifLadder(sym); }catch(e0){}
-    if(IL && !IL.err && IL.rows){
-      IL.rows.slice().sort(function(a,b2){ return Math.abs(a.und-(px0||0))-Math.abs(b2.und-(px0||0)); })
-      .forEach(function(r){
-        if(r.und==null||r.und<lo||r.und>hi) return;
-        if(!free(Y(r.und))) return;
-        var isC=/CR/.test(r.id), isP=/PS/.test(r.id);
-        centreLvl(r.und, r.disp, r.id.split('·')[0], isC?'#f0616d':(isP?'#2ec27e':'#8b98a9'));
-      });
-    }
-    // (v11.38) STRONG NODES KEEP THEIR PRICE. The redesign moved labels off the gutters and briefly took
-    // the node prices with them — a band you cannot read the price of is a shape, not a level.
-    keys.slice().sort(function(a,b2){ return b2.peak-a.peak; }).forEach(function(o){
-      if(o.peak<25 || !o.shown) return;
-      if(!free(Y(o.k))) return;
-      var lastv=null;
-      for(var q=o.seq.length-1;q>=0;q--){ if(o.seq[q]&&typeof o.seq[q].v==='number'){ lastv=o.seq[q].v; break; } }
-      centreLvl(o.k, o.k*rr, '', (lastv>0)?'#a371f7':'#e3c341');   // nodes are underlying-scale
-    });
-    var px=(STATE[sym]||{}).price;
-    if(typeof px==='number' && px>=lo && px<=hi){
-      var yp=Y(px), cx=(PL+PR)/2;
-      g+='<line x1="'+PL+'" y1="'+yp.toFixed(1)+'" x2="'+PR+'" y2="'+yp.toFixed(1)+'" stroke="#f3f6fa" stroke-width="0.8" opacity="0.8"/>';
-      g+='<rect x="'+(cx-18)+'" y="'+(yp-5).toFixed(1)+'" width="36" height="10" rx="2" fill="#0b0e14" opacity="0.9"/>';
-      g+='<text x="'+cx+'" y="'+(yp+2.6).toFixed(1)+'" font-size="7.5" fill="#f3f6fa" font-weight="800" text-anchor="middle">'+dispNum(px*rr)+'</text>';
-    }
-    // ---------- AXES ----------
-    // (v11.42) A chart without scales is a picture. Price ticks run down the inside of the plot's left
-    // edge and time along the bottom, both dim enough to read past. Ticks land on ROUND numbers, chosen
-    // from the range rather than by dividing it, so they stay stable as the window scrolls instead of
-    // renumbering on every bar.
-    (function(){
-      var span=hi-lo;
-      var steps=[1,2,2.5,5,10,20,25,50,100];
-      var raw=span/4, stepv=steps[steps.length-1];
-      for(var si=0;si<steps.length;si++){ if(steps[si]>=raw){ stepv=steps[si]; break; } }
-      var first=Math.ceil(lo/stepv)*stepv;
-      for(var pv=first; pv<=hi; pv+=stepv){
-        var y=Y(pv);
-        if(y<TOP+6 || y>TOP+ih-4) continue;
-        g+='<line x1="'+PL+'" y1="'+y.toFixed(1)+'" x2="'+(PL+4)+'" y2="'+y.toFixed(1)+'" stroke="#2a3140" stroke-width="0.7"/>';
-        g+='<text x="'+(PL+6)+'" y="'+(y+2.2).toFixed(1)+'" font-size="6" fill="#5b6675">'+dispNum(pv*rr)+'</text>';
-      }
-      // time: a mark every 30 minutes of the window, labelled in the chart's own clock
-      var mins=(t1-t0)/60000, stepM=(mins>75)?30:15;
-      var d0=new Date(t0);
-      var m0=d0.getMinutes(), roll=(stepM-(m0%stepM))%stepM;
-      for(var tt=t0+roll*60000; tt<=t1; tt+=stepM*60000){
-        var x=X(tt);
-        if(x<PL+10||x>PR-10) continue;
-        g+='<line x1="'+x.toFixed(1)+'" y1="'+(TOP+ih)+'" x2="'+x.toFixed(1)+'" y2="'+(TOP+ih+3)+'" stroke="#2a3140" stroke-width="0.7"/>';
-        var dt=new Date(tt), hh=dt.getHours(), mm=dt.getMinutes();
-        g+='<text x="'+x.toFixed(1)+'" y="'+(TOP+ih+9)+'" font-size="6" fill="#5b6675" text-anchor="middle">'+
-           (hh<10?'0':'')+hh+':'+(mm<10?'0':'')+mm+'</text>';
-      }
-      g+='<line x1="'+PL+'" y1="'+(TOP+ih)+'" x2="'+PR+'" y2="'+(TOP+ih)+'" stroke="#1e2530" stroke-width="0.7"/>';
-    })();
-    // zone captions
-    g+='<text x="'+SX+'" y="'+(HGT-5)+'" font-size="6" fill="#8b98a9" font-weight="700">NODES</text>';
-    g+='<text x="'+(PR-2)+'" y="'+(HGT-5)+'" font-size="6" fill="#5b6675" text-anchor="end">Skylit · flow</text>';
-
-    var tip='What is this picture telling you? LEFT is Skylit NODE FLOW — live node strength, drawn as growth segments. '+
-            'A bar is a level the market is holding options against, and its LENGTH is how much. Bars grow toward price, so the longest reach nearest the candles. '+
-            'The dim portion is what the node has held for over an hour, the mid portion is what it added between 60 and 15 minutes ago, and the bright leading edge is the last 15 minutes. '+
-            'A bright front edge is accumulation happening NOW; a bar with no bright edge is bleeding, and a thin diagonal marks ground it has actually lost. '+
-            'That is the level being defended or abandoned, in real time. '+
-            'RIGHT is price on the same vertical scale, so a candle meeting a bar is a test of that node. '+
-            'Node rows brighten as they strengthen and an arrow appears when mass transfers between strikes. '+
-            'KEY — yellow node markers are call-dominant and purple put-dominant; '+
-            'the orange line is the 50-SMA; on the flow bars the dim portion is what a node has held for over an hour, the mid portion is what it added between 60 and 15 minutes ago, '+
-            'and the bright leading edge is the last 15 minutes. A bright front edge is accumulation happening now.';
-    var defs='<defs>'+
-      '<marker id="g3ad" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#f0616d"/></marker>'+
-      '<marker id="g3au" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#2ec27e"/></marker></defs>';
-    var out='<div class="g3b" style="padding-top:2px">';
-    out+='<svg viewBox="0 0 '+W+' '+HGT+'" width="100%" height="'+HGT+'" preserveAspectRatio="none"'+g3tip(tip)+'>'+defs+g+'</svg>';
-    // (v11.39) the legend row is gone — the panel has no vertical space to spend on a key.
-    // Everything it said is in the chart hover, which is where a legend belongs.
-    rollLines.forEach(function(r){
-      var down=(r.side==='ceil');
-      out+='<div style="display:flex;align-items:center;gap:6px;font-size:8.5px;color:#8b98a9;margin-top:3px;padding:2px 5px;border-radius:3px;background:'+
-           (down?'rgba(240,97,109,.09)':'rgba(46,194,126,.09)')+'"'+
-           g3tip('Is mass moving between strikes? One node is dissipating while another on the same side accumulates — that is a wall relocating, not just weakening. Measured in dollars over '+ROLL_WIN_MIN+' minutes and against the session median, because the typical strike grows 10-15% every half hour on its own. Direction is NOT yet a vote: on the days measured it had no proven edge and every archived day was a down day, so nothing could be settled.')+
-           '><b style="color:'+r.col+';font-weight:800">'+(down?'CEIL ROLL ↓ ':'FLOOR ROLL ↑ ')+dispNum(r.from*rr)+' → '+dispNum(r.to*rr)+'</b>'+
-           '<span>'+r.fromPct+'% / +'+r.toPct+'%</span>'+
-           '<span style="margin-left:auto;color:#8b98a9">shadow · not voting</span></div>';
-    });
-    if(!drawn) out+='<div style="text-align:center;font-size:7.5px;color:#8b98a9;margin-top:1px">node history still filling — it rebuilds from empty after a reload</div>';
-    out+='</div>';
-    return out;
-  }catch(e){ swallow('nodeChartHtml', e); return ''; }
-}
 
 // ---- (v11.46) NODES ARE WHERE THE TRADE IS ----
 // THE NODE RULE says levels are context and the trade is at a node. The panel had been showing the
@@ -28981,7 +25360,6 @@ function nodeChartHtml(sym){
 // This joins them. A node that sits AT a level is the strongest thing this panel can find — live
 // positioning on structure that matters. A node in open space is weaker. A level with no node is not a
 // trade at all.
-var NODE_MIN_PCT=20;
 // ---- (v11.48) THE SWALLOW MUST NOT BE SILENT ----
 // Twice in two builds a section rendered empty because an inner try/catch ate a ReferenceError: once a
 // function that was never defined (tradeNodes), once a variable from another scope (rr). Both times the
@@ -29204,7 +25582,14 @@ function depsHealth(){
   }catch(eC){ add({ id:'cal.ff', label:'ForexFactory calendar', state:'FAIL', why:'check threw: '+(eC&&eC.message||eC) }); }
   // ---- 5 · THE RECORDER: without it there is no replay and no corpus --------------------------
   try{
-    var st=null; try{ st=window.__gptsDebug.storage(); }catch(eS){}
+    // (v15.53, D5) WAS __gptsDebug.storage(), which writes and deletes a 20 KB probe key — a 20 KB write
+    // every 15-second render, in the store F-10 measured full. Health reads the size; the probe is on demand.
+    var st=null; try{ var _kb=lsTotalKB(); var _room=LS_CAP_KB-_kb;
+      // canWrite40KB is now DERIVED, not probed: 40 KB of headroom, and no recorder write failure in the
+      // last 5 minutes (LS_HEALTH is the ground truth — the recorder's own setItem calls).
+      var _recentFail=!!(LS_HEALTH && LS_HEALTH.lastErrAt && (Date.now()-LS_HEALTH.lastErrAt)<5*60e3);
+      st={ totalKB:_kb, capKB:LS_CAP_KB, headroomKB:_room, pctFull:Math.round(100*_kb/LS_CAP_KB), health:LS_HEALTH,
+           canWrite40KB:(_room>=40 && !_recentFail) }; }catch(eS){}
     // ⚠ ORDER MATTERS AND MY FIRST CUT HAD IT BACKWARDS: a quota HIT is a warning, but "cannot
     // write another frame" is the recorder stopping. The severe test goes first, or a full disk
     // reports as amber.
@@ -29316,28 +25701,9 @@ function tradeNodes(sym){
 // the rail's three role colours, in ONE place. ⚠ These hexes are duplicated in the CSS for .g3plab /
 // .g3prole / .g3pile; test_velocity_policy.js asserts they still match, because a colour that means
 // "accelerator" in one half of the panel and something else in the other is worse than no colour.
-var NODE_COL={ acc:'#a371f7', brk:'#e3c341', bal:'#8b98a9' };
 // (v14.30) the level-engine state map, published by the rail render each pass so the profile's
 // state row reads the SAME states the rail wears (one computation, two consumers).
 
-// ---- how a node reads: SIDE x DIRECTION OF CHANGE, and nothing else ----
-// That pair IS the support/resistance question. Everything the face shows about a node is this.
-// ⚠ TURNING is checked FIRST and deliberately: 5m and 15m flipping while 60m has not is the earliest
-// honest warning that a node is changing hands, and it is a HEADS-UP, not a verdict — which is why it
-// gets its own colour rather than being folded into building/failing.
-function nodeChip(nd){
-  var v=nd&&nd.vel; if(!v) return null;
-  var d5=v.d5, d15=v.d15, d60=v.d60;
-  if(typeof d5!=='number'||typeof d15!=='number'||typeof d60!=='number') return null;
-  var above=(nd.side==='above');
-  if(d5<0 && d15<0 && d60>0) return { txt:'TURNING \u2193 \u00b7 5m then 15m', cls:'g3cTurn' };
-  if(d5>0 && d15>0 && d60<0) return { txt:'TURNING \u2191 \u00b7 5m then 15m', cls:'g3cTurn' };
-  if(d60>0) return above ? { txt:'RESISTANCE BUILDING', cls:'g3cBear' }
-                         : { txt:'SUPPORT BUILDING',    cls:'g3cBull' };
-  if(d60<0) return above ? { txt:'RESISTANCE FAILING',  cls:'g3cBull' }
-                         : { txt:'SUPPORT FAILING',     cls:'g3cBear' };
-  return { txt:(above?'CAP':'FLOOR')+' \u00b7 HOLDING', cls:'g3cNeut' };
-}
 // ⚠ CHIP COLOUR MEANS WHAT IT DOES TO PRICE, NOT WHAT THE NODE IS.
 // A yellow call node carries a GREEN chip when it is dissolving, because a dying ceiling is bullish.
 // Polarity is already told by the price colour; making the chip repeat it would spend the strongest
@@ -29420,24 +25786,6 @@ function nodesVerdict(TN, ROLLS, BIAS){
     return parts.join(' ');
   }catch(e){ return null; }
 }
-// (v13.6) ES TRADES IN QUARTER POINTS. Printing 7672.69 implies a precision the instrument does not
-// have and cannot be compared to a DOM. Round to the tick the contract actually moves in.
-function esTick(x){
-  if(typeof x!=='number' || !isFinite(x)) return null;
-  var q=Math.round(x*4)/4;
-  // (v14.0, user-directed) a trailing .00 is noise — 7709.00 reads as 7709. A REAL tick keeps its
-  // decimals: 7706.50 stays 7706.50, distances like -22.75 are untouched.
-  var s=q.toFixed(2);
-  return (s.slice(-3)==='.00') ? s.slice(0,-3) : s;
-}
-// (v13.6) PERCENT IS THE COMPARABLE UNIT. +140K means nothing without knowing the node is $50M;
-// +0.3% is instantly readable and is what Skylit's own popup leads with. Dollars move to the hover.
-function velP(v){
-  if(typeof v!=='number' || !isFinite(v)) return { txt:'\u2014', cls:'' };
-  if(v===0) return { txt:'0%', cls:'g3flat' };
-  var a=Math.abs(v), t=(a>=100)?Math.round(a)+'':(a>=10?a.toFixed(0):a.toFixed(1));
-  return { txt:((v>0)?'+':'\u2212')+t+'%', cls:(v>0)?'g3up':'g3dn' };
-}
 // signed, compact, and it never hides the sign — a delta whose sign you cannot see is not a delta
 function velD(v){
   if(typeof v!=='number' || !isFinite(v)) return { txt:'\u2014', cls:'' };
@@ -29456,14 +25804,11 @@ function pbNodeK(sym){
 // ⚠ THE LOOP STILL RUNS. `atLevel` from that loop is what sets G3_AT_LEVEL, and G3_AT_LEVEL is what
 // steps ③ REACTION and ④ EXECUTE are computed from. Deleting the loop to hide the rows would have
 // silently disarmed the bottom half of the panel. Only the row HTML is suppressed.
-var LOC_SHOW_LEVELS=false;
-var LOC_SHOW_CHART=false;
 // (v14.32, operator-directed: "i don't think i need the nodes section below") THE NODES LIST IS
 // HIDDEN, NOT REMOVED — the LOC_SHOW_CHART precedent: every computation behind it still runs
 // (tradeNodes, rolls, watch, history) because the read, the rail, the profile and the enrolled
 // features all drink from the same wells. Only the presentation is off. The rail + profile +
 // read now carry everything the list showed (roles, states, ROC, rolls, walls).
-var LOC_SHOW_NODES=false;
 function secLoc(sym){
   var L=null; try{ L=ifLadder(sym); }catch(e){ L={err:String(e&&e.message||e)}; }
   // ① FRAME's badges, target, EL/EH rail and read line now open this section
@@ -29481,212 +25826,21 @@ function secLoc(sym){
   // the zone is an ATR band; ATR is measured on the UNDERLYING, so scale it the same way the levels were
   var zone=null;
   try{ var av=atr(sym); if(av>0) zone=Math.max(av*0.6,0.05)*(L.undScale>0?(L.dispScale/L.undScale):1); }catch(e){}
-  var C=null; try{ C=levelDepth(sym); }catch(eC){}
-  var placed=false, atLevel=null;
+  // (v15.53) the level rows' HTML is archived (C-flagged-off/secLoc-level-rows.js) — LOC_SHOW_LEVELS was a
+  // hard false. What survives is the one thing downstream reads: WHICH level price is sitting on (G3_AT_LEVEL).
+  var atLevel=null;
   rows.forEach(function(r){
-    if(!placed && r.disp<px){
-      if(LOC_SHOW_LEVELS) h+='<div class="g3prow"'+g3tip('Where is price sitting in the level set? Everything above this row is overhead structure, everything below is support. Between two levels there is no trade location yet — this whole step stays unlit until price reaches one.')+'><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+dispNum(px)+'</span></div>';
-      placed=true;
-    }
     var d=r.disp-px;
-    var near=(zone!=null && Math.abs(d)<=zone);
-    if(near && !atLevel) atLevel=r;
-    var isMag=/Mag/.test(r.id), isCR=/CR/.test(r.id), isPS=/PS/.test(r.id), isMP=/MP/.test(r.id), isHVL=/FLIP/.test(r.id);
-    var col=isCR?'#f0616d':(isPS?'#2ec27e':(isMag?'#e3c341':(isMP?'#a371f7':'#f2b45a')));
-    var far=(zone!=null && Math.abs(d)>zone*14)?' g3far':'';
-    var band=isMag?' g3band':'';
-    var pulse=near?' g3pulse':'';
-    if(LOC_SHOW_LEVELS) h+='<div class="g3r'+far+band+'"'+g3tip('What is this level and how far away? '+g3esc(r.id)+' from InsiderFinance\'s chain, shown on this chart\'s scale, with the distance from price on the right. The band is a zone, not a line. A diamond means the strike is heavy in their gamma book, their delta book, or both — and both is the hardest kind of level to pass.')+'>'+
-       '<span class="g3nm'+pulse+'" style="color:'+col+'">'+g3esc(r.id)+'</span>'+
-       '<span class="g3v'+pulse+'"'+g3tip('Their strike is '+r.k+' on '+L.srcSym+'; shown here at '+r.disp+' using the live basis '+L.dispScale+'.')+'>'+dispNum(r.disp)+'</span>'+
-       (zone!=null?'<span class="g3zn"'+g3tip('How far through a level can price go before it has failed? A level is a zone, not a line. This band is scaled from ATR, so it widens when the tape is fast. Price can trade inside it and the level still holds; a close beyond it is a break.')+'>±'+dispNum(zone)+'</span>':'')+
-       '<span class="g3sr"'+g3tip(isHVL
-         ? (/\*/.test(r.id)
-            ? 'Where does the gamma regime flip? DERIVED, not theirs — their payload carried no zero-gamma level, so this is computed by re-pricing total gamma at candidate spots and finding where the book crosses from long to short. The asterisk is there so it is never mistaken for their number.'
-            : 'Where does the gamma regime flip? Their PUBLISHED Zero Gamma, taken from the payload rather than recomputed. Above it dealers are long gamma and levels hold; below it they are short and moves extend.')
-         : 'Which book is this from? InsiderFinance, computed from the '+L.srcSym+' chain embedded in their own page. Their open interest refreshes once a day, so these are structural levels rather than intraday ones.'+(isHVL?' \u26a0 FLIP is their ALL-EXPIRY zero gamma, while the regime chip reads the NEAR-DATED book. The two can disagree about which side of the flip price is on and BOTH be right \u2014 the near book is negative gamma while the full chain is positive.':''))+'>'+(isHVL?(/\*/.test(r.id)?'calc':'IF·pub'):'IF')+'</span>'+
-       (function(){
-         var t=confTier(C, r.und);
-         if(!t||!t.tier) return '';
-         return '<span class="g3cf'+t.tier+'"'+g3tip('How hard is this level to pass? '+
-           (t.tier>1 ? 'It carries heavy dealer GAMMA and heavy dealer DELTA — gamma decides how price behaves here, delta decides how much hedging must happen to get through. Both loaded is the strongest structure the two books can agree on.'
-                     : 'It is heavy in one book. Real, but a level carrying only gamma is easier to pass than one carrying both.'))+
-           '>'+(t.tier>1?'\u25c6\u25c6':'\u25c6')+'</span>';
-       })()+
-       '<span class="g3d '+dcls(d)+'">'+(d>0?'+':'')+dispNum(+d.toFixed(2))+'</span></div>';
+    if(zone!=null && Math.abs(d)<=zone && !atLevel) atLevel=r;
   });
-  if(!placed && LOC_SHOW_LEVELS) h+='<div class="g3prow"'+g3tip('Where is price sitting in the level set? Below every level shown, so all of this structure is overhead.')+'><span class="g3nm">► '+g3esc(dispIsFut()?(FUTMODE.chart||'ES'):sym)+'</span><span class="g3v">'+dispNum(px)+'</span></div>';
   var bits=[L.srcSym];
   bits.push(L.rolled?'to next Fri (rolled)':'to Fri');
   if(L.nExps) bits.push(L.nExps+' exps');
   if(L.n) bits.push(L.n+' strikes');
   if(L.ageMin!=null) bits.push(L.ageMin+'m old');
-  // ---- NODES: the tradeable objects, read off SKYLIT'S OWN NUMBERS ----
-  // ⚠ POLICY: every figure in this block is Skylit's, captured verbatim — their dollar value and their
-  // published 5m/15m/60m/1d deltas. We compute NOTHING they already publish. That is what makes their
-  // strike popup a live oracle for this panel: click 7650 in their ladder, and these numbers must match.
-  try{
-    var TN=tradeNodes(sym), pbK=pbNodeK(sym);
-    var rrN=1; try{ rrN=dispIsFut()?dispR():1; }catch(eR){}
-    var pbES=(pbK!=null)?pbK*rrN:null;   // pbEntryPick works in underlying space; the list is in ES
-    // (v13.9) THE FACE DRAWS THE LATCH, NOT THE SCAN. rollScan is one look through a sliding window:
-    // it shows a roll only while mass is mid-flight, and the 10:00–10:23 migration that built the
-    // 7665 shelf had vanished from the face by the time price bounced off it — the operator's report.
-    // rollLatched() applies the doctrine count (1 noise / 2 signal / 3 confirmation) and keeps a
-    // confirmed roll while its destination holds. BIAS reads the same list minus GAVE BACK entries —
-    // a withdrawn roll is not evidence the book is migrating.
-    var ROLLS=[], BIAS=null;
-    try{ if(rollsLive()){ ROLLS=rollLatched(sym); BIAS=rollBias(ROLLS.filter(function(r0){ return !r0.gone; })); } }catch(eRS){}
-    if(LOC_SHOW_NODES && TN.length){
-      h+='<div class="g3nodehd" style="display:flex;align-items:center;gap:4px"'+g3tip('Where can a trade actually happen? Per the rule the trade is off a NODE. These are Skylit\'s SPXW nodes shown at ES prices, with their strike beneath. The four columns are Skylit\'s OWN published rate-of-change — the same numbers their strike popup shows — so this panel can be checked against their ladder directly.')+'>NODES '+
-         gpInfo('NODES — how to read a node, the three-axis model. SIZE (the $ value, %King) is magnet strength: how hard it pulls. POLARITY is its character ON CONTACT: +gamma is a brake/wall, -gamma is an accelerator/fuel. RATE OF CHANGE (5m/15m/60m/Day) is the arbiter between wall and door: a node being DEFENDED (growing into a test) tends to hold; a node being ABANDONED (draining) is a door — price passes through what nobody defends, and the vacated strike leaves air. Rolls are S/R relocating: the arrow shows where size went; a destination UNDER price is candidate support whichever way it rolled. Chip colours say what it means for PRICE, not what the node is.')+'</div>';
-      if(!velOk()){
-        h+='<div class="g3rx"><em></em><span style="color:#f2b45a">rate of change unavailable \u2014 '+
-           g3esc((VEL_META&&VEL_META.why)||'no velocity')+'</span></div>';
-      }
-      // (v14.4 -> v14.81) ROLL BIAS lived on the GAMMA PROFILE header by his direction ("the one
-      // whole-book line belongs on it. One home."). The profile was cut 2026-08-28; the chip was
-      // rehomed to the ② LOCATION row rather than dropped with it. Still one home.
-      // ⚠ EVERY NODE THE RAIL DRAWS. v13.5 sliced to 6 and the rail drew 7, so a node was visible on
-      // the rail and absent from the list — the exact inconsistency the shared-array fix existed to end.
-      // A cap here silently reintroduces it; if the list ever needs limiting, the RAIL must limit too.
-      var pxNow=null; try{ var Bp=emBand(sym); pxNow=(Bp&&Bp.ok)?Bp.now:null; }catch(ePx){}
-      // ---- (v13.9) ONE DISPLAY LADDER: the nodes plus the ES price row, in one index space ----
-      // The ES row is part of the ladder now, so a connector passing it draws THROUGH it — the v13.8
-      // line broke at exactly that row because only node rows drew segments.
-      var dispRows=[], esAt=-1;
-      TN.forEach(function(n0){
-        if(esAt<0 && pxNow!=null && n0.es<pxNow){ esAt=dispRows.length; dispRows.push({ es:1 }); }
-        dispRows.push({ n:n0 });
-      });
-      if(esAt<0 && pxNow!=null){ esAt=dispRows.length; dispRows.push({ es:1, below:1 }); }
-      var idxOf={}; dispRows.forEach(function(r1,i1){ if(r1.n) idxOf[r1.n.k]=i1; });
-      // ---- the connector: the rail's roll arrow, turned vertical. At most three lanes, 6px apart.
-      // Per-row segments (rows are different heights — one absolute shape would drift, the v13.8
-      // lesson that survives). Dot = source; the line travels the gutter; an elbow drives INTO the
-      // destination row with the arrowhead landing at the gutter's right edge, pointing at the node
-      // it fed. In-flight rolls carry the rail's moving dashes; a latched STUCK roll is solid and
-      // calm; GAVE BACK is grey. When two rolls land on one row, the one arriving from above lands
-      // high and the one from below lands low, so the heads never touch.
-      var SHOW=(ROLLS||[]).slice(0,3);
-      var segs={}, chipAt={};
-      function addSeg(i,s){ if(i!=null) (segs[i]=segs[i]||[]).push(s); }
-      var srcAt={}, headN={};
-      SHOW.forEach(function(r2){ var b0=idxOf[r2.to]; if(b0!=null) headN[b0]=(headN[b0]||0)+1;
-                                 var a0=idxOf[r2.from]; if(a0!=null) srcAt[a0]=1; });
-      var dscC=1; try{ dscC=ifDispScale()||1; }catch(eDC){}
-      SHOW.forEach(function(r,ri){
-        var b=idxOf[r.to]; var a=idxOf[r.from];
-        if(a!=null && a===b) a=null;
-        var lane=6+ri*6;
-        var col=r.gone?'#7d8794':(r.dir==='up'?'#7cc7ff':'#e0645f');
-        var op=r.live?0.35:(r.gone?0.5:(r.conf?0.85:0.45));
-        var flow=(r.live&&!r.gone);
-        // the chip that NAMES the roll — on the source row, or on the destination when the source has
-        // already vacated the list, which is precisely the dissipated-node case worth labelling
-        var at=(a!=null)?a:b;
-        if(at!=null){
-          var arr=(r.dir==='up')?'↑':'↓';
-          var amt=''; try{ amt=usdBig(Math.abs(r.amt))||''; }catch(eA){}
-          var age=(r.conf&&!r.live&&!r.gone)?(' · '+(r.ageMin<60?(r.ageMin+'m'):(Math.floor(r.ageMin/60)+'h'+(r.ageMin%60)+'m'))):'';
-          var txt='ROLL '+arr+' '+((a!=null)?esTick(r.to*dscC):('from '+esTick(r.from*dscC)))+
-                  (amt?(' · '+amt):'')+age+(r.gone?' · GAVE BACK':'');
-          var cls=r.gone?'g3cGone':(r.dir==='up'?'g3cRoll':'g3cRollDn');
-          var tip='Size moved between strikes: '+r.from+' shed into '+r.to+', seen on '+r.count+' bars ('+
-                  (r.conf?'CONFIRMED — three sightings latch it':'SIGNAL — two sightings; one sighting is noise and is never drawn')+').'+
-                  (r.gone?' The destination has since GIVEN BACK what it received — the claim is withdrawn and this retires in a few bars.'
-                         :(r.live?' Still in flight this bar.'
-                                 :' The velocity window has slid past, but the destination still holds ≥'+Math.round(ROLL_HOLD_FRAC*100)+'% of what it received — the roll STUCK, which is what makes it structure.'))+
-                  ' ⚠ F6: a roll destination holds no better than a node that is simply growing — this says WHERE size went, not that it will hold.';
-          (chipAt[at]=chipAt[at]||[]).push('<span class="g3ndchip '+cls+'"'+g3tip(tip)+'>'+txt+'</span>');
-        }
-        if(b==null) return;                 // no destination row on the face — the chip alone carries it
-        var fromAbove=(a!=null)?(a<b):(r.dir==='dn');
-        var land=((headN[b]>1)||srcAt[b])?(fromAbove?35:65):50;
-        function vseg(i,box){
-          addSeg(i,'<i class="g3ndgut" style="left:'+lane+'px;'+box+';border-left:1.5px solid '+col+';opacity:'+op+'"></i>'+
-                   (flow?'<i class="g3ndflow" style="left:'+lane+'px;'+box+';color:'+col+'"></i>':''));
-        }
-        if(a!=null){
-          vseg(a,(b>a)?'top:50%;bottom:0':'top:0;bottom:50%');
-          addSeg(a,'<i class="g3nddot" style="left:'+lane+'px;top:50%;background:'+col+'"></i>');
-          for(var mi=Math.min(a,b)+1; mi<Math.max(a,b); mi++) vseg(mi,'top:0;bottom:0');
-        }
-        vseg(b, fromAbove?('top:0;height:'+land+'%'):('top:'+land+'%;bottom:0'));
-        if(lane<18) addSeg(b,'<i class="g3ndstub" style="left:'+lane+'px;top:'+land+'%;width:'+(18-lane)+
-                             'px;border-top:1.5px solid '+col+';opacity:'+(r.live?0.9:op)+'"></i>');
-        addSeg(b,'<i class="g3ndhead" style="left:18px;top:'+land+'%;border-left:6px solid '+col+'"></i>');
-      });
-      // the gutter collapses to nothing on a quiet tape — no rolls, no reserved width
-      h+='<div style="--g3gut:'+(SHOW.length?26:0)+'px">';
-      h+='<div class="g3ndhd"><span></span><span></span><span>Node</span><span>%K</span><span>5m</span><span>15m</span><span>60m</span><span>Day</span></div>';
-      dispRows.forEach(function(row, rowIdx){
-        var segHtml=(segs[rowIdx]||[]).join('');
-        if(row.es){
-          // (v13.6) THE ES PRICE SITS IN THE LADDER WHERE IT BELONGS, between the nodes above and below.
-          h+='<div class="g3ndes"'+g3tip('Where price is sitting in the node ladder. Everything above this row is overhead, everything below is underfoot.')+'>'+segHtml+
-             '<span></span><span>▶</span><span>'+esTick(pxNow)+'</span><span>ES'+(row.below?' · below every node':'')+'</span></div>';
-          return;
-        }
-        var n=row.n;
-        var isPB=(pbES!=null && Math.abs(pbES-n.es)<=1.5);
-        var col=NODE_COL[n.cls]||'#8b98a9';
-        var v=n.vel||{};
-        // ⚠ PERCENT, NOT DOLLARS. +140K is unreadable without knowing the node is $50M; the percent is
-        // comparable across nodes and is what Skylit's own popup leads with. Dollars live in the hover.
-        var d5=velP(v.p5), d15=velP(v.p15), d60=velP(v.p60), d1d=velP(v.p1d);
-        var chip=nodeChip(n);
-        h+='<div class="g3ndrow'+(isPB?' g3ndwatch':'')+'"'+g3tip(
-             'Is this a place to trade? '+Math.round(n.pct)+'% of the King node. The same list the rail draws — Skylit\'s SPXW nodes at ES prices, coloured by role. '+
-             'SPXW strike '+n.k+' shown at '+esTick(n.es)+'. Percentages are Skylit\'s own published rate of change; in dollars: '+
-             '5m '+velD(v.d5).txt+' · 15m '+velD(v.d15).txt+' · 60m '+velD(v.d60).txt+' · day '+velD(v.d1d).txt+
-             (n.velStale?' — AGED: this node is not currently rendered in their ladder, so these are the last values seen':'')+
-             (isPB?'. The pullback engine has selected this one, so it is what EXECUTE is armed against.':'')) + '>';
-        h+= segHtml;
-        h+= '<div class="g3ndr1">'+
-              '<span></span>'+
-              '<span class="g3ndmkc">'+(isPB?'<span class="g3ndmk">▶</span>':'')+'</span>'+
-              '<span class="g3ndpx" style="color:'+col+'">'+esTick(n.es)+'</span>'+
-              '<span class="g3ndpct" style="color:'+col+'">'+Math.round(n.pct)+'%'+(n.side==='above'?'▲':'▼')+'</span>'+
-              '<span class="g3ndd '+d5.cls+'">'+d5.txt+'</span>'+
-              '<span class="g3ndd '+d15.cls+'">'+d15.txt+'</span>'+
-              '<span class="g3ndd '+d60.cls+'">'+d60.txt+'</span>'+
-              '<span class="g3ndd '+d1d.cls+'">'+d1d.txt+'</span>'+
-            '</div>';
-        var sizeTxt=(typeof v.cur==='number')?usdBig(Math.abs(v.cur)):null;
-        // ⚠ (v13.6) BADGES SHARE THE SUB-LINE instead of owning a third row, and the sub-line is WHITE
-        // to match the rail, where the strike beneath each node is white against the coloured price.
-        // (v13.9) the roll chip rides the sub-line too — the CONNECTOR says where the roll went, so
-        // the chip only has to name it, beside the node's other chips. The v13.8 badge-under-the-5m
-        // placement and the ⇢-in receiver badge are retired: the arrowhead marks the receiver.
-        h+= '<div class="g3ndr2">'+
-              '<span></span><span></span>'+
-              '<span class="g3ndsub">'+n.k+(n.role?(' · '+g3esc(n.role)):'')+(n.isKing?' · King':'')+
-                (sizeTxt?(' · '+sizeTxt):'')+' · '+((n.dist>0?'+':'')+esTick(n.dist))+
-                (n.velStale?' · <i class="g3ndage">aged '+Math.round((n.velAge||0)/1000)+'s</i>':'')+
-                (chip?(' <span class="g3ndchip '+chip.cls+'">'+chip.txt+'</span>'):'')+
-                ((chipAt[rowIdx]||[]).length?(' '+chipAt[rowIdx].join(' ')):'')+
-              '</span>'+
-            '</div>';
-        h+='</div>';
-      });
-      h+='</div>';
-      // (v13.9) the verdict must not say "draining into" about a roll whose destination GAVE BACK
-      var vd=null; try{ vd=nodesVerdict(TN, ROLLS.filter(function(rV){ return !rV.gone; }), BIAS); }catch(eV){}
-      if(vd) h+='<div class="g3ndverd">'+vd+'</div>';
-    } else {
-      // ⚠ SAY WHICH EMPTY THIS IS. "none in range" is a claim about the market; an unanchored band is a
-      // claim about US. Printing the first when the second is true sends the trader looking for nodes
-      // that were never computed.
-      var whyEmpty='none in range \u2014 levels are context only';
-      try{
-        var EBc=emBand(sym);
-        if(!EBc || !EBc.ok) whyEmpty='no expected-move anchor \u2014 the rail and this list both need it';
-        else if(!velOk()) whyEmpty='nodes drawn, but Skylit\'s rate of change is unreadable';
-      }catch(eWE){}
-      if(LOC_SHOW_NODES) h+='<div class="g3rx"'+g3tip('Why is there nothing here? Either no node is within reach and above the strength floor — in which case levels are context only and there is no trade — or the expected-move band has no anchor yet, which happens before the first session data arrives. Those are different situations and this says which one it is.')+'><em>NODES</em><span>'+g3esc(whyEmpty)+'</span></div>';
-    }
-  }catch(eTN){ swallow("secLoc.nodes", eTN); }
+  // (v15.53) THE NODES LIST IS ARCHIVED — archive/v15.53/C-flagged-off/secLoc-nodes-list.js. It rendered only
+  // under LOC_SHOW_NODES, a hard false since v14.33, while its inputs were computed every render. The ladder is
+  // the node surface; nodesVerdict() is kept for re-surfacing there.
   h+='<div class="g3rx" style="margin-top:3px"'+g3tip('Which book, which window, and how old? The expiration set these levels were computed from, the strike count behind them, and the age of the fetch. A stale set is refused outright rather than shown.')+'><em>SET</em><span'+g3tip('Which book, which window, how many strikes, and how old. The basis used to put their '+L.srcSym+' levels on this chart is '+L.dispScale+', computed from their own spot against the live futures price.')+'>'+g3esc(bits.join(' · '))+'</span></div>';
   (L.suppressed||[]).forEach(function(t){
     h+='<div class="g3rx"><em></em><span style="color:#f2b45a">'+g3esc(t)+'</span></div>'; });
@@ -29695,200 +25849,24 @@ function secLoc(sym){
   // ⚠ nodeChartHtml() still EXISTS and the node-history sampling behind it still runs. That history
   // feeds the causality work, and switching off collection to hide a picture would cost us data we
   // cannot retro-fill. Hiding is presentation only.
-  if(LOC_SHOW_CHART){ try{ h+=nodeChartHtml(sym); }catch(eNC){ swallow("nodeChart", eNC); } }
+  // (v15.53) nodeChartHtml is archived (C-flagged-off); LOC_SHOW_CHART had been a hard false since v13.1.
   G3_AT_LEVEL=atLevel;
   return h;
 }
 
 var G3_AT_LEVEL=null;
 
-// ---- ④ REACTION: is the level actually defending itself ----
-function secReact(sym){
-  var h='<div class="g3b">';
-  // (v11.46) REACTION READS THE NODE, NOT THE LEVEL. Under the node rule the trade is at a node, so
-  // "is it holding?" has to be asked of the node being traded. Asking it of the nearest LEVEL answered
-  // a question nobody was about to act on.
-  var pb=null; try{ pb=pbEntryPick(sym); }catch(e0){}
-  var nodeK=(pb&&pb.ok&&pb.level!=null)?pb.level:null;
-  var L=G3_AT_LEVEL;
-  var subj=(nodeK!=null)?nodeK:(L?(L.und!=null?L.und:L.k):null);
-  var rr=1; try{ rr=dispIsFut()?dispR():1; }catch(e1){}
-  var isNode=(nodeK!=null);
 
-  h+='<div class="g3rx"'+g3tip('What is being watched, and why that? Under the node rule the trade is at a NODE, so the reaction that matters is the node\'s. When there is no node in play this falls back to the nearest level and says so — but a level reacting is context, not a trigger.')+
-     '><em>WATCH</em><span>'+(subj!=null
-        ? ((isNode?'node ':'level ')+'<b>'+dispNum(subj*rr)+'</b>'+(isNode&&pb.rule?(' · '+g3esc(pb.rule)):'')+(isNode?'':' — context only, not a trigger'))
-        : 'nothing in range')+'</span></div>';
 
-  // is the thing being watched growing or bleeding, in dollars
-  var ac=null; try{ ac=accumAsym(sym); }catch(e2){}
-  var nodeState=null;
-  try{ if(nodeK!=null){ var acn=accumCanon(sym,nodeK); nodeState=(acn&&acn.m15)?acn.m15.label:null; } }catch(e3){}
-  // (v13.1) SKYLIT'S OWN DOLLARS FIRST. The accumulation read below stays as corroboration — two
-  // independent readings agreeing is worth more than one, and when they DISAGREE that is a finding.
-  var RD=null; try{ RD=reactDefence(sym, (subj!=null)?subj*rr:null); }catch(eRD){}
-  if(RD){
-    h+='<div class="g3rx"'+g3tip('Is the level defending itself, in dollars? This is Skylit\'s own published change for the exact node price is testing. A node ADDING size while price sits on it is being defended as it is tested — the setup this whole process exists to find. One SHEDDING size as price arrives is being walked away from. Flat is not a trade, however good the location looked.')+
-       '><em>DEFENCE</em><span><b class="'+RD.cls+'" style="font-size:12px">'+RD.verdict+'</b>'+
-       ' \u00b7 5m '+velD(RD.v.d5).txt+' \u00b7 15m '+velD(RD.v.d15).txt+
-       ' <span style="color:#5b6675">on '+dispNum(RD.node.es)+'</span>'+
-       (RD.stale?' <span style="color:#f2b45a">\u00b7 aged '+Math.round((RD.age||0)/1000)+'s</span>':'')+
-       '</span></div>';
-    if(RD.caveat){
-      h+='<div class="g3rx"><em></em><span style="color:#f2b45a">\u26a0 '+g3esc(RD.caveat)+'</span></div>';
-    }
-  }
-  var nodeTxt;
-  if(isNode && nodeState) nodeTxt='the node is <b>'+g3esc(String(nodeState).toLowerCase())+'</b>'+(ac&&ac.txt?(' · book '+g3esc(ac.txt)):'');
-  else if(ac) nodeTxt=g3esc(ac.txt);
-  else nodeTxt='%King only — no dollars';
-  h+='<div class="g3rx"'+g3tip('Is it being defended or abandoned? A node ACCUMULATING as price arrives is dealers adding — the level is being reinforced exactly when it is tested, and that is the setup this whole process exists to find. One bleeding as price approaches is being walked away from and will probably not hold.')+
-     '><em>NODE</em><span>'+nodeTxt+'</span></div>';
-
-  var rj=null; try{ rj=paReject(sym, subj); }catch(e4){}
-  var pa=null; try{ pa=paRead(sym); }catch(e5){}
-  var ptxt;
-  if(rj) ptxt=g3esc(rj.txt)+' — <span class="g3ok">rejected</span>';
-  else if(subj!=null) ptxt='at '+dispNum(subj*rr)+', no rejection bar yet';
-  else ptxt=(pa&&pa.ok)?('nothing in range · '+g3esc(pa.label)+' ('+pa.clv+')'):'nothing in range';
-  h+='<div class="g3rx"'+g3tip('Did it push price back? A rejection is a bar that trades THROUGH and closes back on the side it came from. Without order flow this is the confirmation available, and it is the trigger — price merely arriving is not a signal. A close beyond the zone is the opposite reading.')+
-     '><em>PRICE</em><span>'+ptxt+'</span></div>';
-
-  try{
-    if(subj!=null){
-      var Cx=levelDepth(sym), t=confTier(Cx, subj);
-      if(t){
-        var dTxt=(t.d>=0.55)?'heavy':((t.d>=0.25)?'moderate':'thin');
-        var gTxt=(t.g>=0.55)?'heavy':((t.g>=0.25)?'moderate':'thin');
-        h+='<div class="g3rx"'+g3tip('What is standing behind it? Dealer delta and gamma at this strike, against the heaviest in their book. Heavy delta means a lot of hedging has to happen for price to pass; thin means it is mostly a gamma effect and cheaper to break.')+
-           '><em>DEPTH</em><span>delta <b>'+dTxt+'</b> · gamma <b>'+gTxt+'</b>'+(t.tier>1?' — <span class="g3ok">both loaded</span>':'')+'</span></div>';
-      }
-    }
-  }catch(e6){}
-
-  if(pa&&pa.ok){
-    h+='<div class="g3rx"'+g3tip('Who is winning the bars right now? Where each bar CLOSES inside its own range, the closest honest stand-in for a TICK reading. A run of upper-third closes is buyers finishing each bar in control; the structure tag breaks the tie when closes are mid-range.')+
-       '><em>PRESSURE</em><span><b>'+pa.upBars+'</b> upper / <b>'+pa.dnBars+'</b> lower of '+pa.bars+' · '+g3esc(pa.struct)+'</span></div>';
-  }
-  h+='</div>';
-  return h;
-}
-
-// ---- ⑤ EXECUTE: the trade, or the honest refusal ----
-function secExec(sym){
-  var h='<div class="g3b">';
-  var R=regime2D(sym), B=biasVotes(sym);
-  var pb=null; try{ pb=pbEntryPick(sym); }catch(e){}
-  var L=G3_AT_LEVEL;
-  // ================= THE NODE RULE (user-mandated 2026-08-22) =================
-  // A TRADE IS OFF A NODE. Levels give CONTEXT — they tell you where structure sits and what the day
-  // is shaped like — but the entry itself has to be at a node, preferably a PULLBACK node. Price sitting
-  // at a level with no node behind it is information, not a setup.
-  // This section previously read `pb.entry`, a field pbEntryPick has never returned (it returns `level`),
-  // so EXECUTE could not arm at ALL: a valid node-based entry sat in the object while the face showed
-  // "no setup". Dead since v11.26 and silent, because reading an absent property is not an error.
-  var hasNode=!!(pb && pb.ok && pb.level!=null);
-  var isPB=!!(pb && /pb/i.test(pb.rule||''));
-  var entry=hasNode?pb.level:null;
-  // stop sits beyond the far edge of the node's own zone; target is the next structural stop
-  var stop=null, target=null, rr=null;
-  try{
-    if(hasNode){
-      var pad=0.1; try{ var av=atr(sym); if(av>0) pad=Math.max(av*0.35,0.05); }catch(e0){}
-      stop = (pb.dir>0) ? ((pb.zoneLo!=null?pb.zoneLo:entry)-pad) : ((pb.zoneHi!=null?pb.zoneHi:entry)+pad);
-      target = (pb.nextStop!=null)?pb.nextStop:null;
-      if(target!=null && stop!=null){
-        var risk=Math.abs(entry-stop), rew=Math.abs(target-entry);
-        if(risk>0) rr=+(rew/risk).toFixed(2);
-      }
-    }
-  }catch(e1){}
-  var rr2=1; try{ rr2=dispIsFut()?dispR():1; }catch(e2){}
-  var blocked=null;
-  if(!hasNode){
-    blocked={ why:'NO NODE — NO TRADE',
-              sub:(L? 'price is at '+dispNum((L.und!=null?L.und:L.k)*rr2)+', which is a level, not a node — context only'
-                    : 'no pullback node in range') };
-  } else if(R.g!=null && R.g<0 && !isPB){
-    blocked={ why:'FADE BLOCKED — '+(R.danger?'−G/−V':'−G'),
-              sub:'momentum regime · dealers hedge with the move' };
-  } else if(rr!=null && rr<2.0){
-    blocked={ why:'R:R UNDER FLOOR', sub:'R '+rr+' below the 2.0 floor'+(target==null?' · no target':'') };
-  } else if(B.dir!==0 && pb.dir!==0 && pb.dir!==B.dir){
-    blocked={ why:'AGAINST THE CALL', sub:'the node sets up '+(pb.dir>0?'long':'short')+' while the SMA reads '+B.verdict.toLowerCase() };
-  }
-  if(blocked){
-    h+='<div class="g3blk"'+g3tip('Why is this refused? A trade has to be off a NODE — levels are context, the node is where the trade lives. Beyond that the regime can veto a fade, the reward-to-risk floor can veto a thin one, and a node setting up against the SMA is not a trade. A refusal is a result: the panel will not dress a bad setup as a good one to fill the space.')+
-       '><b>'+g3esc(blocked.why)+'</b><span>'+g3esc(blocked.sub)+'</span></div>';
-  } else {
-    h+='<div class="g3arm"'+g3tip('What is armed, and what proves it wrong? The entry is a NODE — the '+(isPB?'pullback node the leg engine picked':'node in range')+' — with the stop beyond its own zone and the target at the next structural stop. Decide now whether you would actually take that stop, before price is moving.')+
-       '><b>ARMED '+arrow(pb.dir)+' '+dispNum(entry*rr2)+'</b><span>'+
-       (isPB?'pullback node':'node')+(pb.state?(' · '+pb.state):'')+(pb.grade?(' · '+pb.grade):'')+
-       ' · stop '+(stop!=null?dispNum(stop*rr2):'—')+
-       ' · target '+(target!=null?dispNum(target*rr2):'—')+
-       (rr!=null?(' · '+rr+'R'):'')+'</span></div>';
-  }
-  // what the node is doing, always — armed or not
-  if(hasNode){
-    h+='<div class="g3alt"'+g3tip('Which node, and is it building or bleeding? A pullback node that is accumulating as price comes back to it is the setup this whole process exists to find. One that is decaying is a node the market is walking away from.')+
-       '>node <b>'+dispNum(pb.level*rr2)+'</b>'+(pb.rule?(' · '+g3esc(pb.rule)):'')+
-       (pb.dist!=null?(' · '+dispNum(pb.dist*rr2)+' away'):'')+'</div>';
-  }
-  var alt=[];
-  try{ if(B.path&&B.path.line) alt.push(g3esc(B.path.line)); }catch(e3){}
-  if(alt.length) h+='<div class="g3alt"'+g3tip('Where is the gamma structure pointing? Context for the trade above, not a signal on its own.')+'>path: <b>'+alt.join(' · ')+'</b></div>';
-  h+='</div>';
-  return h;
-}
-
-// ---- which step are we actually on ----
-function stepState(sym){
-  // (v13.0) FOUR steps: TREND, LOCATION, REACTION, EXECUTE.
-  // ⚠ THE GAMMA BOOK IS STILL A PRECONDITION, it just is not a STEP. Regime decides which playbook is
-  // legal; it is not something the trader waits to complete. It gates the `wait` message and nothing
-  // else, so a missing gamma book still says so instead of silently reading as "trend not ready".
-  var st=[false,false,false,false], wait='';
-  try{
-    var R=regime2D(sym), B=biasVotes(sym), U=null;
-    try{ U=lvlUnified(sym); }catch(e){}
-    st[0]=(B.live>=3 && B.dir!==0);
-    st[1]=!!(U&&U.rows&&U.rows.length && G3_AT_LEVEL);
-    var rj=null; try{ rj=G3_AT_LEVEL?paReject(sym,G3_AT_LEVEL.k):null; }catch(e){}
-    st[2]=!!rj;
-    var pb=null; try{ pb=pbEntryPick(sym); }catch(e){}
-    st[3]=!!(pb && pb.ok && pb.level!=null);   // (v11.45) a trade is off a NODE — `entry` never existed
-    if(R.g==null) wait='waiting on the <b>gamma book</b>';
-    else if(!st[0]) wait=(B.live<3)?'waiting on <b>more inputs</b> — '+B.live+' of 6 live':'trend is <b>neutral</b> — no side yet';
-    else if(!st[1]) wait='price is <b>between levels</b> — no trade location';
-    else if(!st[2]) wait='at <b>'+g3esc(G3_AT_LEVEL?fmtLvl(G3_AT_LEVEL.k):'the level')+'</b> — waiting on a reaction';
-    else if(!st[3]) wait='reaction confirmed — <b>waiting on a node</b>';
-    else wait='<b>armed</b> — all four steps satisfied';
-  }catch(e){}
-  var cur=0; for(var i=0;i<st.length;i++){ if(st[i]) cur=i+1; else break; }
-  return { done:st, cur:cur, wait:wait };
-}
 
 // ---- the face ----
 // (v11.26) DEBUG SURFACE for the five-step face, so the live panel can be verified from the
 // console the same way the level engine is: every step's input inspected on its own.
 window.__gptsDebug=window.__gptsDebug||{};
-window.__gptsDebug.phase   = function(){ return sessionPhase(); };
-window.__gptsDebug.regime2 = function(s){ return regime2D(s||activeSym()); };
-window.__gptsDebug.pa      = function(s){ return paRead(s||activeSym()); };
-window.__gptsDebug.bias    = function(s){ return biasVotes(s||activeSym()); };
 window.__gptsDebug.trend   = function(s){ return trendVerdict(s||activeSym()); };
 // (v11.92) the series ledgerBuild actually consumed, so an empty ledger can be diagnosed in one call
-window.__gptsDebug.series  = function(s){ var a=feedSeriesAll(s||'SPY'); var src='feed';
-  if(!a){ a=tapeSeriesAll(s||'SPY'); src='tape-history'; }
-  return a?{ src:src, n:a.n, strikes:Object.keys(a.k).length, tFirst:a.t[0], tLast:a.t[a.t.length-1] }
-          :{ src:'none', n:0, strikes:0 }; };
 window.__gptsDebug.trendRec= function(s){ return trendMachineRecord(s||activeSym()); };
 // (v11.88) cross-symbol agreement, and the raw snapshot trend both sides are measured with
-window.__gptsDebug.cross   = function(s){ return crossRead(s||activeSym()); };
-window.__gptsDebug.snapTrend = function(s){ return snapTrend(s||activeSym()); };
-window.__gptsDebug.steps   = function(s){ return stepState(s||activeSym()); };
-window.__gptsDebug.roll    = function(s){ s=s||activeSym(); try{ expSetRollCheck(s); }catch(e){} return { roll:EXPSET_ROLL[s]||null, note:rollNote(s) }; };
-window.__gptsDebug.face    = function(s){ return panelV3(s||activeSym()).length; };
 window.__gptsDebug.ifLadder= function(s){ return ifLadder(s||activeSym()); };
 // (v11.36) The one question that decides whether DEX and a computed skew exist at all: what fields
 // does a single option in their payload actually carry?
@@ -30176,12 +26154,6 @@ window.__gptsDebug.optKeys = function(sy){
   try{ var c2=ifChain(sy||'SPX'); out.published=(c2&&c2.pub)||null; }catch(e2){}
   return out;
 };
-window.__gptsDebug.skew    = function(s){ return skewRead(s||activeSym()); };
-window.__gptsDebug.accum   = function(s){ return accumAsym(s||activeSym()); };
-window.__gptsDebug.rolls    = function(s){ return rollDetect(s||activeSym()); };
-window.__gptsDebug.nodeChart= function(s){ var sy=s||activeSym(); var H=HIST[sy]||{}; var n=0,pts=0;
-  for(var k in H){ var q=(H[k].seq||[]).length; if(q){ n++; pts+=q; } }
-  return { strikes:n, points:pts, svgChars:nodeChartHtml(sy).length, histMax:HIST_MAX, windowMin:NCHART_MIN }; };
 // (v13.0) FOUR STEPS. ① FRAME is dissolved: it was never a place you DID anything, it was context
 // for everything below it. Its badges, target and read line now sit at the top of ② LOCATION,
 // beside the chart they describe. BIAS is renamed TREND, because that is the word for what it
@@ -30530,6 +26502,24 @@ function secDay(sym){
     // looking. This is the removal the note was describing.
     // ⚠ farSide() IS KEPT and still feeds the READ LINE's hover — the one-sided-floor clause and
     // the 80%/50% distinction live there. Only the standalone table is gone.
+    // ---- (v15.52) TODAY'S DEFLECTIONS — the event ledger, visible ---------------------------
+    // One row per fresh tap of a node (day.defl, deduped by strike within DEFL_FWD_BARS), scored
+    // DEFL_FWD_BARS closed 3m bars later on whether price CONTINUED in the deflection direction by
+    // DEFL_CONT_PTS strikes. Every row here is a row in the IndexedDB defl store since v15.51 — the
+    // ledger PREREGISTER H5 waits on. ⚠ A LIST, NOT A VERDICT: the touch is a coin (52% held, n=94).
+    try{
+      var _ddb=recorderLoad(); var _dday=(_ddb.days||{})[TODAY]; var _ev=(_dday&&_dday.defl&&_dday.defl[sym])||[];
+      if(_ev.length){
+        h+='<div class="g3dfl"'+g3tip('TODAY\u2019S DEFLECTIONS \u2014 one row per fresh tap of a node, scored '+DEFL_FWD_BARS+' closed 3m bars later: did price CONTINUE away from the node by \u2265'+DEFL_CONT_PTS+' strikes? CONTINUED = it did; STALLED = it did not (which is NOT the same as breaking through). These rows persist in IndexedDB since v15.51 and are the event-level ledger H5 waits on. \u26a0 A list, not a verdict: the touch is a coin \u2014 52% held over 94 episodes.')+'>';
+        h+='<div class="g3dflh">deflections today \u00b7 '+_ev.length+'</div>';
+        _ev.slice(-6).reverse().forEach(function(e){
+          var tm=''; try{ tm=new Date(e.t).toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',timeZone:'America/Chicago'}); }catch(eT){}
+          var res=(e.cont==null)?'<span class="g3dflp">pending</span>':(e.cont?'<span class="g3dflg">CONTINUED</span>':'<span class="g3dflx">STALLED</span>');
+          h+='<div class="g3dflr0"><span>'+g3esc(tm)+'</span><span>'+g3esc(String(e.strike))+'</span><span>'+g3esc(String(e.dir||''))+'</span><span>'+((typeof e.awayPts==='number')?(e.awayPts.toFixed(2)+' away'):'')+'</span>'+res+'</div>';
+        });
+        h+='</div>';
+      }
+    }catch(eDf){ try{ swallow('deflLedger', eDf); }catch(e2){} }
     /* PROB-BLOCK-END */
     return h+'</div>';
   }catch(e){ swallow('secDay', e); return ''; }
@@ -30537,7 +26527,7 @@ function secDay(sym){
 
 function panelV3(sym){
   ensureV3Css();
-  var S=stepState(sym);
+  // (v15.53) stepState() archived (C-flagged-off): its result was assigned here and never read; the recorder did not read it either.
   var h='<div class="g3">';
   // ⚠⚠ (v14.84) THE STEP BAR AND THE SECTION HEADERS ARE GONE — operator, 2026-08-29: "why is trend
   // and location at the top headers. lets remove that too."
@@ -30586,6 +26576,7 @@ function panelV3(sym){
 }
 
 function render(){
+  rmemoNext();   // (v15.54) a new frame: every memoised reader recomputes once
   if(!elBody) return;
   // (v13.5) one class governs all rail motion; CSS does the rest
   try{ elBody.classList.toggle('g3nomo', CFG.motion===false); }catch(eMoC){}
@@ -30676,20 +26667,12 @@ function render(){
     elBody.innerHTML=html;
     return;
   }
-  // (v11.26) THE FIVE-STEP FACE. The old stack of independent cards is kept behind
-  // CFG.panelV3===false so a bad build can be reverted from the gear without a reinstall.
-  if(CFG.panelV3!==false){
-    try{ html+=panelV3(__asym); }catch(eV3){ html+='<div style="color:#f0616d;padding:6px;font-size:10px">panel: '+eV3+'</div>'; }
-  } else {
-    try{ html+=kingHeaderBlock(); }catch(eH){}          // (v10.47) header cluster + ①②③ restored
-    try{ html+=briefBlockHtml(__asym); }catch(eBr){}    // (v10.49 J) pre-open brief (collapsible)
-    if(DRIFT_LIVE){ try{ html+=driftLineHtml(__asym); }catch(eD49){} }   // (v10.57) shadow mode: off the face until proven
-    try{ html+=nextStopHtml(__asym); }catch(eNS){}   // (v11.1) NEXT STOP — the one forward call, above the read
-    try{ html+=gexPathHtml(__asym); }catch(ePA){}   // (v11.21) PATH — where the gamma structure points
-    try{ html+=levelsHtmlV2(__asym); }catch(eLV){}   // (v11.17) LEVELS — ONE block, the chart's instrument only
-    try{ html+=pbEntryHtml(__asym); }catch(ePE){}    // (v11.3) PB ENTRY — where to look for the pullback / deflection, under Next Stop
-    try{ html+=readBlock44(__asym); }catch(eR){}
-  }
+  // (v11.26) THE FIVE-STEP FACE. ⚠ (v15.53) The `else` that used to follow — the pre-v11.26 stack of
+  // independent cards (kingHeaderBlock, briefBlockHtml, nextStopHtml, gexPathHtml, levelsHtmlV2,
+  // pbEntryHtml, readBlock44) — is ARCHIVED. It was gated on CFG.panelV3===false, and CFG.panelV3 was
+  // never set anywhere in the file, so it had not rendered since v11.26. Everything it produced that
+  // still matters is on the record another way (readState → the dir feature, D4). archive/v15.53/A-dead-else.
+  try{ html+=panelV3(__asym); }catch(eV3){ html+='<div style="color:#f0616d;padding:6px;font-size:10px">panel: '+eV3+'</div>'; }
   // (v10.37) standalone gatekeeperBlock() REMOVED - gatekeeper strike + distance now in King badge.
   // (v10.27) Standalone BO / SPY Signals section REMOVED. The breakout-pullback
   // lifecycle is now shown as a per-node tag (BO / BO\u00b7FT\u00b7\u2026) on the Node Map row it
@@ -30698,7 +26681,6 @@ function render(){
   // (v14.33, operator's "check everything" pass) the Node Map line was the NODES section's last
   // survivor — same retirement, same rule: display off, nodeMapModel/recordDeflections keep
   // running (Analysis + features read them).
-  if(LOC_SHOW_NODES) html+=accumBlock();           // Deflections + Node Map (retired display)
   html+='</div>';               // close single column
   html+='<div style="border-top:1px solid '+PAL.line+';margin:6px 0 3px 0"></div>';
   html+=feedStatusHtml();
@@ -30807,7 +26789,6 @@ function refreshSym(sym){
       sampleTapeHistory(sym);
       updateTaps(sym);   // (v10.33) advance per-node tap counters for lifecycle
       if(sym===activeSym()) try{ trackSpxwNodes(); }catch(eSX){}   // (v11.84) SPX nodes ride the same cadence
-      LAST_OK[sym]=Date.now();
       runMachine(sym);
       return;
     }
@@ -30820,13 +26801,13 @@ function refreshSym(sym){
       sampleTapeHistory(sym);
       updateTaps(sym);   // (v10.33) advance per-node tap counters for lifecycle
       if(sym===activeSym()) try{ trackSpxwNodes(); }catch(eSX2){}   // (v11.84)
-      LAST_OK[sym]=Date.now();
       runMachine(sym);
     }
   }catch(e){}
 }
 
 function tick(){
+  rmemoNext();   // (v15.54) the data path gets its own frame, never a render's leftovers
   // (v10.52) PIPELINE — at most one remote check per 10 min, skipped on a hidden tab,
   // fails soft. Runs BEFORE the session gate so the pre-open brief can already cite
   // last session's review.
@@ -30852,8 +26833,7 @@ function tick(){
   try{ peakTick(activeSym()); }catch(ePk){}
   // (v10.55 PART A) the per-bar node-cluster memory the leg engine reads, then the
   // engine itself — evaluated once per closed bar and cached beside the spine.
-  nodeHistSample('SPY');
-  nodeHistSample('QQQ');
+  // (v15.53) NODEHIST sampling archived (H-write-only): written every tick, read only by the export; nodeLedger supersedes it.
   try{ legEngine(ASYM); }catch(eLg){}
   // (v10.56 PART C) the ✓/✗ latch advances ONCE per closed bar, whether or not the node
   // it belongs to happens to be the one being rendered.
@@ -30891,12 +26871,14 @@ function boot(){
   pbLogRestore();              // (v11.0 G7) today's pullback-node log survives a reload
   repoMigrateOnce();           // (v10.44) localStorage recorder -> IndexedDB repository (once)
   repoLoadFeatArchive();       // (v11.0 G4/G9) resolved outcomes beyond the localStorage window
+  try{ repoLoadDeflArchive(function(a){ var n=0; Object.keys(a||{}).forEach(function(sy){ Object.keys(a[sy]||{}).forEach(function(d){ n+=(a[sy][d]||[]).length; }); }); DEFL_ARCH_N=n; }); }catch(eDA){}   // (v15.52) H5's blocker, counted
   studyLoad();                 // (v10.44) cached measured rates for READ ▸ / hovers
   registerCoreFeatures();      // (v10.49 B) enroll every feature in DATA/ANALYSIS/TESTING/LEARNING
   trendLastLoad();             // (v10.54) rehydrate today's confirmed-trend memory (gpts_trendlast_v1)
   rollLatchLoad();             // (v13.9) today's latched rolls survive a reload (gpts_rolllatch_v1)
   peakLoad();                  // (v14.0) day peaks survive a reload AND seed from today's recorded bars
   rulesLoad();                 // (v10.49 K) the mental model: localStorage + learning/rules.json
+  registerFetch();             // (v15.54) the ONE register, shared with the nightly
   rulesApply(true);            // (v10.54) BOOT is one of the only two moments the model may move
   render();
   tick();

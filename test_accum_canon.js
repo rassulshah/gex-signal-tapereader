@@ -101,7 +101,7 @@ global.nodeHistory=function(){ return HIST; };
 // ================= 6. ONE SOURCE: both consumers read accumCanon =================
 function grab(name){ var i=src.indexOf('function '+name+'('); var depth=0,st=false,j=i;
   for(;j<src.length;j++){var c=src[j]; if(c==='{'){depth++;st=true;} else if(c==='}'){depth--; if(st&&depth===0){j++;break;}}} return src.slice(i,j); }
-ok(/accumCanon\(sym, L\.k\)/.test(grab('nodeMapSentence')), '6a the Node Map sentence reads accumCanon');
+// (v15.53) removed: nodeMapSentence archived (D-zero-callers)
 ok(/accumCanon\(sym,L\.k\)/.test(grab('deflZonesBlock')),   '6b the zone rows read accumCanon');
 ok(/accumCanon\(sym, L\.k\)/.test(grab('nodeGrade')),       '6c the node grade reads accumCanon');
 ok(/THE single Acm source|ONE accumulation source/i.test(src), '6d the single-source contract is documented');

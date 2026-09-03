@@ -110,8 +110,7 @@ ok(/'PTN'/.test(src), 'n32 PTN is a column on the second row');
 
 // ---- (v15.09) THE AGREED REMOVALS. Each was recorded as done and was still rendering. ---------
 const live=src.replace(/\/\/[^\n]*/g,'').replace(/\/\*[\s\S]*?\*\//g,'');
-ok(!/secs\s*=\s*\[\s*secBias/.test(live), 'n33 the TREND section is off the face (secBias not mounted)');
-ok(/function secBias/.test(live), 'n34 ...but secBias SURVIVES — bias.confirm still feeds the recorder');
+ok(!/function secBias/.test(live), 'n33/n34 (v15.53) secBias is ARCHIVED — bias.confirm reads biasVotes, never this renderer');
 // ⚠ the first version of n35 grepped the whole file for `g3farhd` and failed on the leftover CSS
 // RULE, not a render — a class name in a stylesheet is not a section on the face. Assert on the
 // EMITTER instead. (And n36 named the wrong producer: it is fsRead(), not farSide().)

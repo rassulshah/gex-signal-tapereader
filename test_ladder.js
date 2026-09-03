@@ -502,8 +502,7 @@ ok(/keys\[mi\]=keys\[mi-1\]/.test(LH),
 // is a puzzle. After hours the band is simply absent; the AFTER HOURS chip says why in words.
 ok(/\(emAH\?\[\]:\[\['EH',EB\.high,RB\.over\],\['EL',EB\.low,RB\.under\]\]\)/.test(LH),
    'x18 after hours the ladder draws NO EM lines and NO EM pills');
-ok(/var EL_LAB=AH\?'':\(/.test(src) && /var EH_LAB=AH\?'':\(/.test(src),
-   'x19 ...and the rail markers are absent rather than struck through');
+// (v15.53) removed: rail markers went with the hidden rail (B-hidden-rail)
 ok(!/g3ahdim/.test(src.replace(/^[ \t]*\/\/.*$/gm,'').replace(/'#gpts-body \.g3ahdim[^']*'/,'')),
    'x20 nothing still ASKS for the struck-through styling');
 // ⚠ the MEASUREMENT must survive the removal of its drawing (v11.95).

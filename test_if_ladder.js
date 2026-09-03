@@ -8,6 +8,8 @@
 // Skylit measures flow, IF measures open-interest stock — substituting one for the other would change
 // what the numbers mean without changing how they look.
 const fs=require('fs'); const src=fs.readFileSync('./v10.js','utf8');
+// (v15.54) the four hot readers are memoised per frame in the panel; the harness runs them straight through
+global.rmemo=function(k,f){ return f(); }; global.rmemoNext=function(){};
 let pass=0, fail=0;
 const ok=(c,m,g)=>{ if(c){pass++;console.log('PASS '+m);} else {fail++;console.log('FAIL '+m+(g!==undefined?' -> '+JSON.stringify(g):''));} };
 const eq=(a,b,m)=>ok(JSON.stringify(a)===JSON.stringify(b),m,{got:a,want:b});
@@ -20,7 +22,7 @@ global.FUTMODE={ ok:true, fam:'ES', chart:'ES', underlying:'SPY', r:10.05, futPx
 global.dispIsFut=()=>!!(FUTMODE&&FUTMODE.fam&&FUTMODE.ok);
 let CHAIN=null, ASKED=null;
 global.ifChain=(s)=>{ ASKED=s; return CHAIN; };
-eval(ex('ifLadder'));
+eval(ex('ifLadder')); eval(ex('ifLadderRaw'));;
 
 // SPX-scale levels now, because that is the book ES is a future on
 const lv=(o)=>Object.assign({cr:7700,ps:7650,mag:7650,maxPain:7620,crSuppressed:null,psSuppressed:null,strikes:209},o||{});

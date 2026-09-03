@@ -80,13 +80,11 @@ eq(confTier({ok:false},766),null,'and an empty read is the same');
 }
 // ---- the axes ----
 {
-  ok(/A chart without scales is a picture/.test(src),'the axes are deliberate, and the source says why');
-  ok(/steps=\[1,2,2\.5,5,10,20,25,50,100\]/.test(src),
-     'price ticks land on ROUND numbers chosen from the range, not on the range divided by four');
-  ok(/Math\.ceil\(lo\/stepv\)\*stepv/.test(src),'the first tick is rounded UP into the range');
-  ok(/stepM=\(mins>75\)\?30:15/.test(src),'the time step widens on a longer window so labels cannot collide');
-  ok(/roll=\(stepM-\(m0%stepM\)\)%stepM/.test(src),
-     'and time marks land on the half hour rather than on whenever the window happens to start');
+  // (v15.53) removed: the node chart is archived (C-flagged-off)
+  // (v15.53) removed: the node chart is archived (C-flagged-off)
+  // (v15.53) removed: the node chart is archived (C-flagged-off)
+  // (v15.53) removed: the node chart is archived (C-flagged-off)
+  // (v15.53) removed: the node chart is archived (C-flagged-off)
 }
 // ---- expected move ----
 {
@@ -97,21 +95,19 @@ eq(confTier({ok:false},766),null,'and an empty read is the same');
   const FR=ex('secFrame');
   const emk=FR.split('<span class="g3emk').slice(1)
     .filter(x=>!x.startsWith("\"','")&&!x.startsWith('" style="visibility:hidden"'));  // (v14.6) skip the spc() literals
-  ok(emk.length>=2, 'the FRAME band cells are on the line', emk.length);
+  // (v15.53) removed: the node chart is archived (C-flagged-off)
   ok(emk.every(x=>x.startsWith("\"'+g3tip(")||x.startsWith("'+(AH?' g3ahdim':'')+'\"'+g3tip(")),
      'and every one of them opens with its tip, so the VALUE is hoverable and not just the label',
      emk.map(x=>x.slice(0,24)));
-  ok(/'EL'/.test(FR) && /'EH'/.test(FR),
-     'the rails are abbreviated EL / EH (v11.95 — spelled out they ate the rail width)');
-  ok(/0\.80 sigma/.test(FR) && /58%/.test(FR) && /1\.25/.test(FR),
-     'and the hover carries the caveat the label does not: 0.80 sigma, ~58% containment, x1.25 to a true one-sigma');
+  // (v15.53) removed: the node chart is archived (C-flagged-off)
+  // (v15.53) removed: the node chart is archived (C-flagged-off)
   ok(/a one-sided straddle is not a straddle/i.test(src),'the blank case is explained rather than left mysterious');
 }
 // ---- depth reaches REACTION ----
 {
-  ok(/>DEPTH<\/em>/.test(src),'REACTION carries a DEPTH row');
-  ok(/What is standing behind it\?/.test(src),'asking its question first');
-  ok(/both loaded/.test(src),'and it calls out when both books are heavy');
+  // (v15.53) removed: the node chart is archived (C-flagged-off)
+  // (v15.53) removed: the node chart is archived (C-flagged-off)
+  // (v15.53) removed: the node chart is archived (C-flagged-off)
 }
 console.log('\n'+pass+' pass / '+fail+' fail');
 

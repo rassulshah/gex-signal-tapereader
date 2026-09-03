@@ -127,12 +127,10 @@ ok(/DP_KEY='gpts_darkpool_v1'/.test(src) && /localStorage\.setItem\(DP_KEY/.test
 ok(/TOP N PRINTS OVER A 45-DAY/.test(src) && /THEIR DEFINITION, NOT OURS/.test(src),
    'd18 their definition is recorded verbatim; we do no clustering of our own');
 ok(/CASH-EQUITY PRINTS, AND THAT IS WHY ticker=SPY/.test(src), 'd19 the SPY-not-SPX reason is written down');
-ok(/at:pr\.px\*EB\.scaleUsed/.test(src), 'd20 prints cross to the chart on the SPY King flag\'s own scale');
+// (v15.53) removed: dark-pool lifecycle archived by his decision (K-dark-pool); emPosRail with the rail
 ok(/g3llvdp/.test(src), 'd21 dark pools get their own colour on the levels line');
-ok(/NO lifecycle state is claimed yet/.test(src) || /NO LIFECYCLE STATE IS CLAIMED YET/.test(src),
-   'd22 A1 claims NO lifecycle — held-or-broken is A2, and a guess would be worse than silence');
-ok(/function dpConfluence/.test(src) && /'the dark pool '\+frameNum/.test(src),
-   'd23 the S&R clause can name a dark pool the way it names the IB low');
+// (v15.53) removed: dark-pool lifecycle archived by his decision (K-dark-pool); emPosRail with the rail
+// (v15.53) removed: dark-pool lifecycle archived by his decision (K-dark-pool); emPosRail with the rail
 ok(/__gptsDebug\.dp=/.test(src) && /raw:DP_STATE\.raw/.test(src),
    'd24 a RAW SAMPLE is kept — reading the real shape is the whole point of A1');
 
@@ -158,69 +156,16 @@ ok(dpParse([{price:660,ts:1787702400000}]).prints[0].at===1787702400000, 'r6 a m
 // emPosRail CLAMPS to 0..100. The first live capture put three dark pools 115-220 pts below the
 // rail, so all three pinned at 0% and MERGED with the (also off-frame) SPY King into one stack
 // reading "SPY K·DP·DP·DP 7632" — four levels named, one price shown, belonging to none of them.
-ok(/A CLAMPED POSITION IS A FALSE POSITION/.test(src), 'f1 the lesson is recorded where the fix lives');
-ok(/OFF\.push\(L\)/.test(src) && /L\.at<RB\.lo \|\| L\.at>RB\.hi/.test(src),
-   'f2 a level outside the rail frame leaves the line rather than pinning to its edge');
-ok(/OFF THIS FRAME, not drawn because a clamped position would be a false one/.test(src),
-   'f3 ...and is DISCLOSED in the hover, so the information is kept without faking a position');
-ok(/if\(!LV\.length && !OFF\.length\) return ''/.test(src),
-   'f4 an all-off-frame set still draws the bar and explains itself');
-ok(/offTxt\)\+'><\/i>'/.test(src), 'f5 the disclosure reaches the live hover, not just a variable');
+// (v15.53) removed: dark-pool lifecycle archived by his decision (K-dark-pool); emPosRail with the rail
+// (v15.53) removed: dark-pool lifecycle archived by his decision (K-dark-pool); emPosRail with the rail
+// (v15.53) removed: dark-pool lifecycle archived by his decision (K-dark-pool); emPosRail with the rail
+// (v15.53) removed: dark-pool lifecycle archived by his decision (K-dark-pool); emPosRail with the rail
+// (v15.53) removed: dark-pool lifecycle archived by his decision (K-dark-pool); emPosRail with the rail
 
 
 // ================= (v14.44) PHASE A2 — THE DARK-POOL LIFECYCLE =================
-// The state machine runs entirely in the UNDERLYING's scale, so these fixtures are SPY prices and
-// SPY bars — exactly what the live code compares. A ratio never enters the machine.
-global.DP_TOL_PCT=v('DP_TOL_PCT');
-eval(ex('dpLifecycleOne'));
-const P=754.6936, T=Date.parse('2026-07-15T20:28:00Z');
-const bar=(day,l,h,c)=>({time:Date.parse('2026-08-'+day+'T15:00:00Z')/1000, low:l, high:h, close:c});
-
-// FRESH — price stayed well above, never came near it
-ok(dpLifecycleOne(P,T,[bar('20',770,775,772),bar('21',768,774,771)],772).st==='FRESH',
-   'l1 never tested in the window = FRESH — the strong one');
-// HOLDING — came down, wicked it, closed back above
-let HOLD=dpLifecycleOne(P,T,[bar('20',770,775,772),bar('21',754.5,760,758),bar('22',765,770,768)],768);
-ok(HOLD.st==='HOLDING' && HOLD.touches===1, 'l2 wicked and closed back above = HOLDING, one test', HOLD);
-// ...and a second, distinct test increments the count (wear, per the tap doctrine)
-let H2=dpLifecycleOne(P,T,[bar('20',754.5,760,758),bar('21',768,772,770),bar('22',754.4,759,757)],770);
-ok(H2.st==='HOLDING' && H2.touches===2, 'l3 two distinct tests = two taps of wear', H2);
-// ⚠ A WICK IS NOT A BREAK
-let WICK=dpLifecycleOne(P,T,[bar('20',770,775,772),bar('21',740,772,760),bar('22',765,770,768)],768);
-ok(WICK.st==='HOLDING', 'l4 a deep WICK through is NOT a break — a bar is a decision', WICK.st);
-// BROKEN — closed through and stayed there
-let BRK=dpLifecycleOne(P,T,[bar('20',770,775,772),bar('21',745,760,748),bar('22',740,750,742)],742);
-ok(BRK.st==='BROKEN', 'l5 a CLOSE through, still on the far side = BROKEN', BRK);
-// RECLAIMED — closed through, then closed back to its origin side
-let RCL=dpLifecycleOne(P,T,[bar('20',770,775,772),bar('21',745,760,748),bar('22',760,775,770)],770);
-ok(RCL.st==='RECLAIMED', 'l6 broke then closed back above = RECLAIMED, the break failed', RCL);
-// FLIPPED — broke below, came back up to it from underneath, was rejected
-let FLP=dpLifecycleOne(P,T,[bar('20',770,775,772),bar('21',745,760,748),bar('22',750,754.8,751),bar('23',740,748,744)],744);
-ok(FLP.st==='FLIPPED' && /support became resistance/.test(FLP.why),
-   'l7 broke, retested from the new side, held = FLIPPED', FLP);
-// RETESTING — price is on it right now, and that outranks everything
-ok(dpLifecycleOne(P,T,[bar('20',770,775,772),bar('21',745,760,748)],754.7).st==='RETESTING',
-   'l8 price sitting on the level reads RETESTING, whatever the history');
-
-// ⚠ WE ONLY CLAIM WHAT WE WATCHED
-ok(dpLifecycleOne(P,T,[],772).st==='UNKNOWN', 'l9 no history at all = UNKNOWN, never a guess');
-ok(dpLifecycleOne(P,T,[bar('20',770,775,772)].map(b=>({...b,time:Date.parse('2026-07-01T15:00:00Z')/1000})),772).st==='UNKNOWN',
-   'l10 bars that all PREDATE the print say nothing about it');
-let OBS=dpLifecycleOne(P,T,[bar('20',770,775,772),bar('21',768,774,771)],772);
-ok(OBS.obsFrom===Date.parse('2026-08-20T15:00:00Z'),
-   'l11 the observed window start is reported, so the hover can disclose the gap', OBS.obsFrom);
-ok(/WE ONLY EVER CLAIM WHAT WE WATCHED/.test(src), 'l12 the limit is documented where the machine lives');
-ok(/BROKEN NEEDS A CLOSE, NOT A WICK/.test(src), 'l13 ...as is the close-not-wick rule');
-ok(/EVERYTHING HERE IS COMPUTED IN THE UNDERLYING'S OWN SCALE/.test(src),
-   'l14 ...and the no-ratio-in-the-state-machine rule');
-
-// the face and the read both carry the state
-ok(/DP_ST_SHORT/.test(src) && /n:'DP'\+tag/.test(src), 'l15 the level name carries its state on the line');
-ok(/the dark pool '\+frameNum\(at\)\+\(st\?/.test(src), 'l16 the S&R clause names the state too');
-ok(/a broken level only becomes[\s\S]{0,80}resistance after a rejection/.test(src),
-   'l17 GM-DP-003 recorded: BROKEN is not yet resistance, FLIPPED is');
-ok(/lifecycle:\(function\(\)\{ try\{ return dpLifecycle/.test(src), 'l18 __gptsDebug.dp() exposes the lifecycle');
-
+// (v15.53) SECTION ARCHIVED with dpLifecycle/dpLifecycleOne/dpConfluence (K-dark-pool, his decision). The verbatim
+// section is in archive/v15.53/tests/test_garma_v2-dark-pool-section.js.
 
 // ================= (v14.45) PHASE B — ROLLING STRUCTURE =================
 // V2 (GM-ROLL-001/2/3) unblocks a refusal that stood since v10.51: FCHIST has SAMPLED the dominant

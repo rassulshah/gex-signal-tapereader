@@ -27,7 +27,7 @@ global.MAP_ACM=8; global.MAP_DEC=-8; global.MAP_DROP=25;   // (v11.0) one thresh
 eval(['mapNodeState','mul','fmtNum','fmtFut','dispIsFut','dispR','futMark','fmtLvl',
       'legStepWord','legNodeDissipating','legNodeBuilding','legBlank','legClone','legStep',
       'legVoiceRef','legVoice','legSentence','legDecisionLine','legZoneTag',
-      'nodeHistRow','rollRun'].map(ex).join('\n'));
+      'rollRun'].map(ex).join('\n'));
 
 function replay(bars, seed){
   var st=seed||null, trail=[];
@@ -173,14 +173,13 @@ var IDLE=replay([{ bar:1, t:1, px:775, close:775, dirIn:'none', kingK:773, level
 ok(IDLE.phase==='none' && IDLE.magnet===null && IDLE.predictedPB===false,
    '6a with no confirmed trend the engine IDLES — it never invents a leg', IDLE.phase);
 ok(legSentence(IDLE)==='', '6b ...and says nothing at all');
-var NH=nodeHistRow({ px:775.6, levels:[{k:776,pct:45},{k:777,pct:60},{k:773,pct:100,isKing:true},{k:775,pct:8}] });
-ok(NH.ceil.k===776 && NH.flr.k===773, '6c NODEHIST keeps the NEAREST meaningful ceiling above / floor below', NH.ceil.k+'/'+NH.flr.k);
-ok(NH.px===775.6, '6d ...anchored to the bar\'s price');
+// (v15.53) removed: NODEHIST archived (H-write-only)
+// (v15.53) removed: NODEHIST archived (H-write-only)
+// (v15.53) removed: NODEHIST archived (H-write-only)
 
 // ================= 7. THE PERSISTED SHAPE ==========================================
-ok(/gpts_nodehist_v1/.test(src), '7a NODEHIST uses a NEW localStorage key, renaming nothing');
-ok(/function nodeHistSample/.test(src) && /last\.d===TODAY && last\.bar===bar/.test(ex('nodeHistSample')),
-   '7b the sample is idempotent per (day, closed bar) like fcHistSample');
+// (v15.53) removed: NODEHIST archived (H-write-only)
+// (v15.53) removed: NODEHIST archived (H-write-only)
 ok(/val\.leg=legEngine\(sym\)/.test(ex('spineOf')), '7c the engine hangs off the per-bar spine cache (one evaluation per bar)');
 ok(/legBarKey\(sym\)/.test(ex('legEngine')) && !/spineBarKey/.test(ex('legEngine')),
    '7e ...keyed on the CLOSED BAR, not the live price — one node can never count as several roll steps');

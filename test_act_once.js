@@ -67,11 +67,11 @@ global.PAL={sub:'#8b98a9'};
 var ACTS=[];
 global.actToday=function(){ return ACTS; };
 
-eval([ 'ruleSeed','rulesSeed','rulesNormalize','rulesLoad','rulesSave','ruleGet','effN','nTxt',
+eval([ 'ruleSeed','rulesSeed','rulesNormalize','rulesLoad','rulesSave','effN','nTxt',
        'registerFeature','featureByKey','_fwdHitDir','_fwdHitNum','_trend5Vote','frameRR','_frameRecOf',
        'weightsHash','modelStamp','registerCoreFeatures','seedQuestions','isOpexDay','sessionBucket',
        'eventTagNow','featRegime','featureCtx','featRecordAll','featEnqueue',
-       'recorderLoad','recorderSave','recorderDay','_fpct','featStats','nodeHoldDir' ].map(ex).join('\n'));
+       'recorderLoad','recorderSave','recorderDay','_fpct','featPredBand','featStats','nodeHoldDir' ].map(ex).join('\n'));   // (v15.52) featStats now bands by prediction
 
 registerCoreFeatures();
 const ACT=featureByKey('act');

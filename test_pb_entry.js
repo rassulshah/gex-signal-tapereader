@@ -7,7 +7,7 @@ function v(n){ return src.match(new RegExp('var '+n+'\\s*=[\\s\\S]*?;\\n'))[0]; 
 global.window={__gptsDebug:{}}; global.PB_REACH=5; global.PB_MIN_PCT=20; global.DEFLECT_ZONE=0.5; global.DIR_PTS=0.5; global.RULE_UNLOCK_N=20; global.FEAT_FWD=10;
 global.PAL={ink:'#fff',sub:'#999',longAccent:'#2ec27e',shortAccent:'#f0616d',blue:'#4a90d9',amber:'#f2b45a'};
 global.fmtLvl=(x)=>String(x); global.fmtSpan=(x)=>String(x); global.effN=(n)=>Math.floor(n/10); global.featStatsCached=()=>({byKey:{}});
-eval(v('PBENTRY_RULES')); eval(['pbEntryPick','pbEntryHtml','_pbEntryRecord','_pbEntryOutcome'].map(ex).join('\n'));
+eval(v('PBENTRY_RULES')); eval(['pbEntryPick','_pbEntryRecord','_pbEntryOutcome'].map(ex).join('\n'));
 global.STATE={SPY:{price:7712}};
 let LEG, DIR, MAP, FLOW, NS, TRIG;
 global.legEngine=()=>LEG; global.directionGrade=()=>DIR; global.nodeMapModel=()=>MAP; global.nodeFlow=()=>FLOW; global.nextStopPick=()=>NS; global.deflTriggerState=()=>TRIG;
@@ -40,11 +40,7 @@ reset(); LEG={dir:'dn',legId:3,pbDetected:{k:7716,step:2}}; FLOW.nodes[0].state=
 ok(p.grade==='C' && p.state==='dec', '1l a Dec pullback node is never B', [p.grade,p.state]);
 
 // ---- 2. face line
-reset(); LEG={dir:'dn',legId:3,pbDetected:{k:7716,step:2}};
-const h=pbEntryHtml('SPY');
-ok(/PB Entry:/.test(h) && /↑ 7716/.test(h) && /\+4 pts/.test(h) && /Acm/.test(h) && /defl ↓ → 7710/.test(h) && />B</.test(h) && /white-space:normal/.test(h), '2a two lines: level line tight, gray context on a wrapping second line', null);
-ok(/title="PB Entry — where to look for the pullback/.test(h) && /never an instruction/.test(h) && /eff n 0, need 20/.test(h), '2b hover: why this level, how it is scored, no % without n, descriptive', null);
-ok(!/\bbuy\b|\bsell\b|stop loss|position|\bR:R\b/i.test(h), '2c no trade language on the face or hover');
+// (v15.53) section 2a-2c removed: pbEntryHtml archived (A-dead-else); pbEntryPick — the live subject — is pinned above and below
 
 // ---- 3. record shape
 reset(); LEG={dir:'dn',legId:3,pbDetected:{k:7716,step:2}};

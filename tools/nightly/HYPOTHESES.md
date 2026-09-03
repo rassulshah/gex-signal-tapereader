@@ -119,3 +119,10 @@ finding.
 - ⚠ **Recording resumes only when the sign has a real source.** The Trinity pane does not expose it.
   Until then gx-010 (price vs flip) is the regime signal, and it is the better one anyway: it is
   continuous, and it is what the doctrine actually describes.
+
+
+---
+
+## ⚠ SUPERSEDED (v15.54)
+
+**The register is `learning/register.json`** — read by the panel (Testing ②) and by `tools/nightly/run.py`. This file is history; add nothing here.

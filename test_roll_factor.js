@@ -73,7 +73,7 @@ var weak=G();
 ok(weak.score===base.score-1, '2a a pullback node that rolled AGAINST the trend costs a point', weak.score);
 ok(weak.weakening===true && weak.inputs.roll.weakening===true, '2b ...and the read is flagged weakening', weak.weakening);
 ok(weak.dir==='DN', '2c ...without changing the direction — the SMA still owns it', weak.dir);
-ok(/weakening/.test(ex('readBlock44')), '2d the direction hover says the word out loud');
+// (v15.53) removed: readBlock44 archived (A-dead-else); the hover word lives in readState now
 
 // ================= 3. THE ROLL MAY NEVER CHANGE THE DIRECTION =====================
 // Every combination: trend up/down, roll up/down, confirmed or weakening. `dir` is the

@@ -202,8 +202,9 @@ ok(num(A.text,/LOD (\d{2}:\d{2})/)!==num(B.text,/LOD (\d{2}:\d{2})/),
 ok(num(A.text,/HL RNG ([\d.]+)/)!==num(B.text,/HL RNG ([\d.]+)/),
    'f11b ...and so are the candle/DAY figures',
    [num(A.text,/HL RNG ([\d.]+)/), num(B.text,/HL RNG ([\d.]+)/)]);
-ok(num(A.text,/KING ([\d.]+)/)!==num(B.text,/KING ([\d.]+)/),
-   'f11c ...and the King itself', [num(A.text,/KING ([\d.]+)/), num(B.text,/KING ([\d.]+)/)]);
+// (v15.53) the 'KING nnnn' text came from the hidden rail, archived; the King is the ladder's ♛ pill: ♛<b>7655</b><i>S</i>
+ok(num(A.text,/\u265b\s*~?\s*([\d.]+)\s*S\b/)!==num(B.text,/\u265b\s*~?\s*([\d.]+)\s*S\b/),
+   'f11c ...and the King itself', [num(A.text,/\u265b\s*~?\s*([\d.]+)\s*S\b/), num(B.text,/\u265b\s*~?\s*([\d.]+)\s*S\b/)]);
 
 // ---- 9 · THE READ IS OFF, AND IT IS A SETTING RATHER THAN A DELETION -------------------------
 // Operator, 2026-08-31: "take out the read. I might come back to it later." Restated 2026-09-01:
